@@ -1,1 +1,0 @@
-window.SIDEBAR_ITEMS = {"fn":["encode_value","json_dump","json_dumps","json_load","json_loads"]};

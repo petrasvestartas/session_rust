@@ -1,1 +1,0 @@
-window.SIDEBAR_ITEMS = {"constant":["PI","SCALE","TO_DEGREES","TO_RADIANS"],"static":["TOL"],"struct":["Tolerance"]};

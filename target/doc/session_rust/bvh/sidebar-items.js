@@ -1,1 +1,0 @@
-window.SIDEBAR_ITEMS = {"fn":["calculate_morton_code","expand_bits"],"struct":["BVH","BVHNode"]};
