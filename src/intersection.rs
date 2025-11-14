@@ -474,3 +474,63 @@ pub fn ray_triangle(
         origin.z() + t * direction.z(),
     ))
 }
+
+//==========================================================================================
+// NURBS Curve Intersection Functions
+//==========================================================================================
+
+use crate::{NurbsCurve, Plane};
+
+/// Find all intersections between NURBS curve and plane
+pub fn curve_plane(curve: &NurbsCurve, plane: &Plane, tolerance: Option<f64>) -> Vec<f64> {
+    curve.intersect_plane(plane, tolerance)
+}
+
+/// Find all intersection points between NURBS curve and plane
+pub fn curve_plane_points(curve: &NurbsCurve, plane: &Plane, tolerance: Option<f64>) -> Vec<Point> {
+    curve.intersect_plane_points(plane, tolerance)
+}
+
+/// Curve-plane intersection using Bézier clipping (advanced method)
+pub fn curve_plane_bezier_clipping(curve: &NurbsCurve, plane: &Plane, tolerance: Option<f64>) -> Vec<f64> {
+    // Not yet implemented in Rust - delegate to standard method
+    curve.intersect_plane(plane, tolerance)
+}
+
+/// Curve-plane intersection using algebraic/hodograph method
+pub fn curve_plane_algebraic(curve: &NurbsCurve, plane: &Plane, tolerance: Option<f64>) -> Vec<f64> {
+    // Not yet implemented in Rust - delegate to standard method
+    curve.intersect_plane(plane, tolerance)
+}
+
+/// Curve-plane intersection using production CAD kernel method
+pub fn curve_plane_production(curve: &NurbsCurve, plane: &Plane, tolerance: Option<f64>) -> Vec<f64> {
+    // Not yet implemented in Rust - delegate to standard method
+    curve.intersect_plane(plane, tolerance)
+}
+
+/// Find closest point on NURBS curve to test point
+pub fn curve_closest_point(curve: &NurbsCurve, test_point: &Point, t0: f64, t1: f64) -> (f64, f64) {
+    // Not yet implemented in Rust - return placeholder
+    let (domain_t0, domain_t1) = curve.domain();
+    let t_start = if t0 == 0.0 { domain_t0 } else { t0 };
+    let t_end = if t1 == 0.0 { domain_t1 } else { t1 };
+    
+    // Simple grid search for now
+    let samples = 100;
+    let dt = (t_end - t_start) / samples as f64;
+    let mut best_t = t_start;
+    let mut best_dist = f64::MAX;
+    
+    for i in 0..=samples {
+        let t = t_start + i as f64 * dt;
+        let pt = curve.point_at(t);
+        let dist = pt.distance(test_point);
+        if dist < best_dist {
+            best_dist = dist;
+            best_t = t;
+        }
+    }
+    
+    (best_t, best_dist)
+}

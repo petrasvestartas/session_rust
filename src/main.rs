@@ -1,5 +1,5 @@
 use session_rust::{
-    read_obj, BoundingBox, Line, Mesh, Plane, Point, Session, Tolerance, Vector, BVH,
+    read_obj, BoundingBox, Line, Mesh, NurbsCurve, Plane, Point, Session, Tolerance, Vector, BVH,
 };
 use std::path::Path;
 use std::time::Instant;
@@ -364,6 +364,53 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             bvh_ms,
             candidate_ids.len()
         );
+    }
+
+    println!("\n=== NURBS Curve-Plane Intersection Test (Rust) ===");
+    
+    // Create NURBS curve from 3 points with degree 2
+    let p0 = Point::new(0.0, 0.0, -453.0);
+    let p1 = Point::new(1500.0, 0.0, -147.0);
+    let p2 = Point::new(3000.0, 0.0, -147.0);
+    
+    let points = vec![p0, p1, p2];
+    let degree = 2;
+    
+    // Create a clamped NURBS curve
+    if let Some(curve) = NurbsCurve::create(false, degree, &points) {
+        println!("Created NURBS curve: degree={}, cv_count={}", curve.degree(), curve.cv_count());
+        
+        // Create planes perpendicular to X-axis at regular intervals
+        let mut planes = Vec::new();
+        for i in 0..7 {
+            let origin = Point::new(i as f64 * 500.0, 0.0, 0.0);
+            let normal = Vector::new(1.0, 0.0, 0.0);
+            planes.push(Plane::from_point_normal(origin, normal));
+        }
+        
+        println!("\nIntersecting curve with {} planes:", planes.len());
+        
+        // Intersect curve with each plane using intersection module
+        let mut sampled_points = Vec::new();
+        for plane in &planes {
+            let intersection_points = session_rust::intersection::curve_plane_points(&curve, plane, None);
+            
+            if !intersection_points.is_empty() {
+                sampled_points.push(intersection_points[0].clone());
+                println!("  Plane at x={}: ({:.2}, {:.2}, {:.2})",
+                    plane.origin().x(),
+                    intersection_points[0].x(),
+                    intersection_points[0].y(),
+                    intersection_points[0].z()
+                );
+            } else {
+                println!("  Plane at x={}: No intersection", plane.origin().x());
+            }
+        }
+        
+        println!("\nTotal sampled points: {}", sampled_points.len());
+    } else {
+        println!("Failed to create NURBS curve");
     }
 
     Ok(())
