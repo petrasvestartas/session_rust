@@ -384,3 +384,59 @@ mod tests {
         }
     }
 }
+
+#[cfg(test)]
+mod short_surface_center_test {
+    use crate::nurbssurface::NurbsSurface;
+    use crate::point::Point;
+
+    #[test]
+    fn test_nurbssurface_center_point_numeric_3dec() {
+        let mut srf = NurbsSurface::create(3, false, 4, 4, 5, 5).unwrap();
+        srf.make_clamped_uniform_knot_vector(0, 1.0);
+        srf.make_clamped_uniform_knot_vector(1, 1.0);
+
+        srf.set_cv(0, 0, &Point::new(0.0, 0.0, -2.5));
+        srf.set_cv(0, 1, &Point::new(0.0, 1.0, 0.0));
+        srf.set_cv(0, 2, &Point::new(0.0, 2.0, 0.0));
+        srf.set_cv(0, 3, &Point::new(0.0, 3.0, 0.0));
+        srf.set_cv(0, 4, &Point::new(0.0, 4.0, -2.5));
+
+        srf.set_cv(1, 0, &Point::new(1.0, 0.0, 0.0));
+        srf.set_cv(1, 1, &Point::new(1.0, 1.0, 0.0));
+        srf.set_cv(1, 2, &Point::new(1.0, 2.0, 5.0));
+        srf.set_cv(1, 3, &Point::new(1.0, 3.0, 0.0));
+        srf.set_cv(1, 4, &Point::new(1.0, 4.0, 0.0));
+
+        srf.set_cv(2, 0, &Point::new(2.0, 0.0, 0.0));
+        srf.set_cv(2, 1, &Point::new(2.0, 1.0, 0.0));
+        srf.set_cv(2, 2, &Point::new(2.0, 2.0, 0.0));
+        srf.set_cv(2, 3, &Point::new(2.0, 3.0, 0.0));
+        srf.set_cv(2, 4, &Point::new(2.0, 4.0, 0.0));
+
+        srf.set_cv(3, 0, &Point::new(3.0, 0.0, 0.0));
+        srf.set_cv(3, 1, &Point::new(3.0, 1.0, 0.0));
+        srf.set_cv(3, 2, &Point::new(3.0, 2.0, 0.0));
+        srf.set_cv(3, 3, &Point::new(3.0, 3.0, 0.0));
+        srf.set_cv(3, 4, &Point::new(3.0, 4.0, 0.0));
+
+        srf.set_cv(4, 0, &Point::new(4.0, 0.0, -2.5));
+        srf.set_cv(4, 1, &Point::new(4.0, 1.0, 0.0));
+        srf.set_cv(4, 2, &Point::new(4.0, 2.0, 0.0));
+        srf.set_cv(4, 3, &Point::new(4.0, 3.0, 0.0));
+        srf.set_cv(4, 4, &Point::new(4.0, 4.0, -2.5));
+
+        let (u_min, u_max) = srf.domain(0).unwrap();
+        let (v_min, v_max) = srf.domain(1).unwrap();
+        let u_mid = 0.5 * (u_min + u_max);
+        let v_mid = 0.5 * (v_min + v_max);
+
+        let pt = srf.point_at(u_mid, v_mid).unwrap();
+        let ax = (pt.x() * 1000.0).round() / 1000.0;
+        let ay = (pt.y() * 1000.0).round() / 1000.0;
+        let az = (pt.z() * 1000.0).round() / 1000.0;
+        assert!((ax - 2.000).abs() < 0.001);
+        assert!((ay - 2.000).abs() < 0.001);
+        assert!((az - 0.625).abs() < 0.001);
+    }
+}

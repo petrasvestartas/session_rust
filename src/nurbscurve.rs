@@ -531,6 +531,52 @@ impl NurbsCurve {
         tangent.normalize()
     }
 
+    /// Evaluate point and derivatives on curve at parameter t.
+    /// Returns [point, d1, d2] depending on derivative_count.
+    pub fn evaluate(&self, t: f64, derivative_count: usize) -> Vec<Vector> {
+        let mut result = Vec::new();
+        if !self.is_valid() {
+            result.push(Vector::new(0.0, 0.0, 0.0));
+            return result;
+        }
+
+        let p = self.point_at(t);
+        result.push(Vector::new(p.x(), p.y(), p.z()));
+
+        if derivative_count == 0 {
+            return result;
+        }
+
+        // Numerical derivatives (consistent with tangent_at semantics)
+        let (t0, t1) = self.domain();
+        let eps = (t1 - t0) * 1e-8;
+        let ta = (t - eps).max(t0);
+        let tb = (t + eps).min(t1);
+
+        let pa = self.point_at(ta);
+        let pb = self.point_at(tb);
+
+        let d1 = Vector::new(
+            (pb.x() - pa.x()) / (tb - ta),
+            (pb.y() - pa.y()) / (tb - ta),
+            (pb.z() - pa.z()) / (tb - ta),
+        );
+        result.push(d1.clone());
+
+        if derivative_count > 1 {
+            // Central second derivative approximation
+            // d2 ~ (C(t+eps) - 2*C(t) + C(t-eps)) / eps^2
+            let d2 = Vector::new(
+                (pb.x() - 2.0 * p.x() + pa.x()) / (eps * eps),
+                (pb.y() - 2.0 * p.y() + pa.y()) / (eps * eps),
+                (pb.z() - 2.0 * p.z() + pa.z()) / (eps * eps),
+            );
+            result.push(d2);
+        }
+
+        result
+    }
+
     /// Check if curve is closed (start point == end point)
     pub fn is_closed(&self) -> bool {
         if !self.is_valid() {

@@ -2,6 +2,7 @@ use crate::point::Point;
 use crate::nurbscurve::NurbsCurve;
 use crate::xform::Xform;
 use crate::color::Color;
+use crate::vector::Vector;
 
 /// Non-Uniform Rational B-Spline (NURBS) surface implementation
 /// 
@@ -378,7 +379,6 @@ impl NurbsSurface {
         }
         
         let order = self.m_order[dir];
-        let cv_count = self.m_cv_count[dir];
         
         if end == 0 || end == 2 {
             // Check start: first 'order' knots should be equal
@@ -405,6 +405,98 @@ impl NurbsSurface {
         }
         
         true
+    }
+
+    /// Evaluate point and first derivatives at (u, v)
+    /// Returns [point, du, dv] if num_derivs > 0, else [point]
+    pub fn evaluate(&self, u: f64, v: f64, num_derivs: usize) -> Vec<Vector> {
+        let mut result = Vec::new();
+
+        if !self.is_valid() {
+            result.push(Vector::new(0.0, 0.0, 0.0));
+            return result;
+        }
+
+        let pt_opt = self.point_at(u, v);
+        if pt_opt.is_none() {
+            result.push(Vector::new(0.0, 0.0, 0.0));
+            return result;
+        }
+        let pt = pt_opt.unwrap();
+        result.push(Vector::new(pt.x(), pt.y(), pt.z()));
+
+        if num_derivs > 0 {
+            // Finite difference step (match Python implementation semantics)
+            let h = 1e-6;
+            let (_, u1) = match self.domain(0) { Some(d) => d, None => (u - h, u + h) };
+            let (_, v1) = match self.domain(1) { Some(d) => d, None => (v - h, v + h) };
+
+            // du derivative (forward if possible, else backward)
+            let du_vec = if u + h <= u1 {
+                if let Some(pt_u) = self.point_at(u + h, v) {
+                    Vector::new(
+                        (pt_u.x() - pt.x()) / h,
+                        (pt_u.y() - pt.y()) / h,
+                        (pt_u.z() - pt.z()) / h,
+                    )
+                } else {
+                    Vector::new(0.0, 0.0, 0.0)
+                }
+            } else {
+                if let Some(pt_um) = self.point_at(u - h, v) {
+                    Vector::new(
+                        (pt.x() - pt_um.x()) / h,
+                        (pt.y() - pt_um.y()) / h,
+                        (pt.z() - pt_um.z()) / h,
+                    )
+                } else {
+                    Vector::new(0.0, 0.0, 0.0)
+                }
+            };
+            result.push(du_vec);
+
+            // dv derivative (forward if possible, else backward)
+            let dv_vec = if v + h <= v1 {
+                if let Some(pt_v) = self.point_at(u, v + h) {
+                    Vector::new(
+                        (pt_v.x() - pt.x()) / h,
+                        (pt_v.y() - pt.y()) / h,
+                        (pt_v.z() - pt.z()) / h,
+                    )
+                } else {
+                    Vector::new(0.0, 0.0, 0.0)
+                }
+            } else {
+                if let Some(pt_vm) = self.point_at(u, v - h) {
+                    Vector::new(
+                        (pt.x() - pt_vm.x()) / h,
+                        (pt.y() - pt_vm.y()) / h,
+                        (pt.z() - pt_vm.z()) / h,
+                    )
+                } else {
+                    Vector::new(0.0, 0.0, 0.0)
+                }
+            };
+            result.push(dv_vec);
+        }
+
+        result
+    }
+
+    /// Get normal vector at parameter (u, v)
+    pub fn normal_at(&self, u: f64, v: f64) -> Vector {
+        let derivs = self.evaluate(u, v, 1);
+        if derivs.len() < 3 {
+            return Vector::new(0.0, 0.0, 1.0);
+        }
+        let du = &derivs[1];
+        let dv = &derivs[2];
+        let n = du.cross(dv);
+        if n.compute_length() < 1e-14 {
+            Vector::new(0.0, 0.0, 1.0)
+        } else {
+            n.normalize()
+        }
     }
 
     /// Find span index for parameter value (OpenNURBS algorithm)
