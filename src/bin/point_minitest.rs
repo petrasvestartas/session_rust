@@ -159,11 +159,99 @@ fn run_point_equality_not_equal() -> TestResult {
     }
 }
 
+fn run_color_constructor() -> TestResult {
+    let line = line!();
+    let start = Instant::now();
+    let mut checks = Vec::new();
+    let mut failures = Vec::new();
+    let mut passed = true;
+
+    let result: Result<(), String> = (|| {
+        let mut red = Color::new(255, 0, 0, 255);
+        red.name = "red".to_string();
+
+        MINI_CHECK!(checks, red.name == "red");
+        MINI_CHECK!(checks, !red.guid.to_string().is_empty());
+        MINI_CHECK!(checks, red.r == 255);
+        MINI_CHECK!(checks, red.g == 0);
+        MINI_CHECK!(checks, red.b == 0);
+        MINI_CHECK!(checks, red.a == 255);
+        Ok(())
+    })();
+
+    if let Err(msg) = result {
+        passed = false;
+        failures.push(json!({ "error": msg }));
+    }
+
+    let elapsed_ms = start.elapsed().as_secs_f64() * 1000.0;
+    let time_ms = (elapsed_ms * 1000.0).round() / 1000.0;
+
+    let code = "    let mut red = Color::new(255, 0, 0, 255);\n    red.name = \"red\".to_string();";
+
+    TestResult {
+        test_name: "constructor",
+        passed,
+        time_ms,
+        line,
+        code,
+        checks,
+        failures,
+    }
+}
+
+fn run_color_json_roundtrip() -> TestResult {
+    let line = line!();
+    let start = Instant::now();
+    let mut checks = Vec::new();
+    let mut failures = Vec::new();
+    let mut passed = true;
+
+    let result: Result<(), String> = (|| {
+        let mut original = Color::new(128, 64, 192, 255);
+        original.name = "purple".to_string();
+
+        let json_string = original.jsondump().map_err(|e| e.to_string())?;
+        let restored = Color::jsonload(&json_string).map_err(|e| e.to_string())?;
+
+        MINI_CHECK!(checks, restored.r == original.r);
+        MINI_CHECK!(checks, restored.g == original.g);
+        MINI_CHECK!(checks, restored.b == original.b);
+        MINI_CHECK!(checks, restored.a == original.a);
+        MINI_CHECK!(checks, restored.name == original.name);
+        Ok(())
+    })();
+
+    if let Err(msg) = result {
+        passed = false;
+        failures.push(json!({ "error": msg }));
+    }
+
+    let elapsed_ms = start.elapsed().as_secs_f64() * 1000.0;
+    let time_ms = (elapsed_ms * 1000.0).round() / 1000.0;
+
+    let code = "    let mut original = Color::new(128, 64, 192, 255);\n    original.name = \"purple\".to_string();\n    let json_string = original.jsondump()?;\n    let restored = Color::jsonload(&json_string)?;";
+
+    TestResult {
+        test_name: "json_roundtrip",
+        passed,
+        time_ms,
+        line,
+        code,
+        checks,
+        failures,
+    }
+}
+
 fn main() -> Result<(), Box<dyn std::error::Error>> {
-    let mut results = Vec::new();
-    results.push(run_point_constructor());
-    results.push(run_point_equality_equal());
-    results.push(run_point_equality_not_equal());
+    let mut point_results = Vec::new();
+    point_results.push(run_point_constructor());
+    point_results.push(run_point_equality_equal());
+    point_results.push(run_point_equality_not_equal());
+
+    let mut color_results = Vec::new();
+    color_results.push(run_color_constructor());
+    color_results.push(run_color_json_roundtrip());
 
     let manifest_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     let repo_root = manifest_dir
@@ -171,10 +259,14 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         .ok_or("Failed to find repo root from CARGO_MANIFEST_DIR")?;
     let out_dir = repo_root.join("session_tests").join("session_rust");
     fs::create_dir_all(&out_dir)?;
-    let out_path = out_dir.join("point_test.json");
 
-    let json = serde_json::to_string_pretty(&results)?;
-    fs::write(out_path, json)?;
+    let point_path = out_dir.join("point_test.json");
+    let point_json = serde_json::to_string_pretty(&point_results)?;
+    fs::write(point_path, point_json)?;
+
+    let color_path = out_dir.join("color_test.json");
+    let color_json = serde_json::to_string_pretty(&color_results)?;
+    fs::write(color_path, color_json)?;
 
     Ok(())
 }
