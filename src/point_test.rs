@@ -16,6 +16,17 @@ mod tests {
         assert_eq!(point.pointcolor.g, Color::white().g);
         assert_eq!(point.pointcolor.b, Color::white().b);
         assert_eq!(point.pointcolor.a, Color::white().a);
+        
+        // Benchmark (run with: cargo test --release -- --nocapture)
+        use std::time::Instant;
+        let iterations = 100_000;
+        let start = Instant::now();
+        for _ in 0..iterations {
+            let _ = Point::new(1.0, 2.0, 3.0);
+        }
+        let duration = start.elapsed();
+        println!("  Point construction: {:.2?} per op ({} iterations)", 
+                 duration / iterations, iterations);
     }
 
     #[test]
@@ -109,6 +120,17 @@ mod tests {
         assert_eq!(point[0], 1.0);
         assert_eq!(point[1], 2.0);
         assert_eq!(point[2], 3.0);
+        
+        // Benchmark
+        use std::time::Instant;
+        let iterations = 100_000;
+        let start = Instant::now();
+        for _ in 0..iterations {
+            let _ = point[0] + point[1] + point[2];
+        }
+        let duration = start.elapsed();
+        println!("  Point indexing: {:.2?} per op ({} iterations)", 
+                 duration / iterations, iterations);
     }
 
     #[test]
@@ -219,6 +241,17 @@ mod tests {
         assert_eq!((mid.x() * 1000000.0).round() / 1000000.0, 0.5);
         assert_eq!((mid.y() * 1000000.0).round() / 1000000.0, 0.0);
         assert_eq!((mid.z() * 1000000.0).round() / 1000000.0, 0.0);
+        
+        // Benchmark
+        use std::time::Instant;
+        let iterations = 100_000;
+        let start = Instant::now();
+        for _ in 0..iterations {
+            let _ = p1.mid_point(&p2);
+        }
+        let duration = start.elapsed();
+        println!("  Point midpoint: {:.2?} per op ({} iterations)", 
+                 duration / iterations, iterations);
     }
 
     #[test]
@@ -226,6 +259,17 @@ mod tests {
         let p1 = Point::new(0.0, 0.0, 0.0);
         let p2 = Point::new(1.0, 0.0, 0.0);
         assert_eq!((p1.distance(&p2) * 1000000.0).round() / 1000000.0, 1.0);
+        
+        // Benchmark
+        use std::time::Instant;
+        let iterations = 100_000;
+        let start = Instant::now();
+        for _ in 0..iterations {
+            let _ = p1.distance(&p2);
+        }
+        let duration = start.elapsed();
+        println!("  Point distance: {:.2?} per op ({} iterations)", 
+                 duration / iterations, iterations);
     }
 
     #[test]
@@ -251,4 +295,5 @@ mod tests {
         assert_eq!((centroid.y() * 1000000.0).round() / 1000000.0, 0.5);
         assert_eq!((centroid.z() * 1000000.0).round() / 1000000.0, 0.0);
     }
+
 }
