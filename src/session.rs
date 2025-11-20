@@ -422,9 +422,9 @@ impl Session {
 
         let far = 1e6f64;
         let ray_end = Point::new(
-            origin.x() + dir_unit.x() * far,
-            origin.y() + dir_unit.y() * far,
-            origin.z() + dir_unit.z() * far,
+            origin[0] + dir_unit.x() * far,
+            origin[1] + dir_unit.y() * far,
+            origin[2] + dir_unit.z() * far,
         );
         let ray_line = Line::from_points(origin, &ray_end);
 
@@ -486,9 +486,9 @@ impl Session {
                                 &seg,
                                 Tolerance::APPROXIMATION,
                             ) {
-                                let dx = p.x() - origin.x();
-                                let dy = p.y() - origin.y();
-                                let dz = p.z() - origin.z();
+                                let dx = p[0] - origin[0];
+                                let dy = p[1] - origin[1];
+                                let dz = p[2] - origin[2];
                                 let t = dx * dir_unit.x() + dy * dir_unit.y() + dz * dir_unit.z();
                                 if t >= 0.0 && t < best_t {
                                     best_t = t;
@@ -525,9 +525,9 @@ impl Session {
                     }
                 }
                 Geometry::Point(p) => {
-                    let vx = p.x() - origin.x();
-                    let vy = p.y() - origin.y();
-                    let vz = p.z() - origin.z();
+                    let vx = p[0] - origin[0];
+                    let vy = p[1] - origin[1];
+                    let vz = p[2] - origin[2];
                     let cross_x = vy * dir_unit.z() - vz * dir_unit.y();
                     let cross_y = vz * dir_unit.x() - vx * dir_unit.z();
                     let cross_z = vx * dir_unit.y() - vy * dir_unit.x();
@@ -536,9 +536,9 @@ impl Session {
                         let t = vx * dir_unit.x() + vy * dir_unit.y() + vz * dir_unit.z();
                         if t >= 0.0 {
                             let hp = Point::new(
-                                origin.x() + dir_unit.x() * t,
-                                origin.y() + dir_unit.y() * t,
-                                origin.z() + dir_unit.z() * t,
+                                origin[0] + dir_unit.x() * t,
+                                origin[1] + dir_unit.y() * t,
+                                origin[2] + dir_unit.z() * t,
                             );
                             hit_point = Some(hp);
                         }
@@ -548,9 +548,9 @@ impl Session {
             }
 
             if let Some(hp) = hit_point {
-                let dx = hp.x() - origin.x();
-                let dy = hp.y() - origin.y();
-                let dz = hp.z() - origin.z();
+                let dx = hp[0] - origin[0];
+                let dy = hp[1] - origin[1];
+                let dz = hp[2] - origin[2];
                 let forward = dx * dir_unit.x() + dy * dir_unit.y() + dz * dir_unit.z();
                 if forward >= 0.0 {
                     let dist = (dx * dx + dy * dy + dz * dz).sqrt();

@@ -140,21 +140,21 @@ mod tests {
     fn test_line_point_at() {
         let line = Line::new(0.0, 0.0, 0.0, 10.0, 10.0, 10.0);
         let p = line.point_at(0.5);
-        assert!((p.x() - 5.0).abs() < 1e-5);
+        assert!((p[0] - 5.0).abs() < 1e-5);
     }
 
     #[test]
     fn test_line_start() {
         let line = Line::new(1.0, 2.0, 3.0, 4.0, 5.0, 6.0);
         let p = line.start();
-        assert_eq!(p.x(), 1.0);
+        assert_eq!(p[0], 1.0);
     }
 
     #[test]
     fn test_line_end() {
         let line = Line::new(1.0, 2.0, 3.0, 4.0, 5.0, 6.0);
         let p = line.end();
-        assert_eq!(p.x(), 4.0);
+        assert_eq!(p[0], 4.0);
     }
 
     #[test]

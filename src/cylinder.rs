@@ -114,11 +114,11 @@ impl Cylinder {
         let scale = Xform::scale_xyz(radius * 2.0, radius * 2.0, length);
         let rotation = Xform::from_cols(x_axis, y_axis, z_axis);
         let center = Point::new(
-            (start.x() + end.x()) * 0.5,
-            (start.y() + end.y()) * 0.5,
-            (start.z() + end.z()) * 0.5,
+            (start[0] + end[0]) * 0.5,
+            (start[1] + end[1]) * 0.5,
+            (start[2] + end[2]) * 0.5,
         );
-        let translation = Xform::translation(center.x(), center.y(), center.z());
+        let translation = Xform::translation(center[0], center[1], center[2]);
 
         &translation * &(&rotation * &scale)
     }

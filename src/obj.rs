@@ -5,7 +5,7 @@ pub fn write_obj(mesh: &Mesh, filepath: &str) -> io::Result<()> {
     let (vertices, faces) = mesh.to_vertices_and_faces();
     let mut s = String::new();
     for p in vertices {
-        s.push_str(&format!("v {} {} {}\n", p.x(), p.y(), p.z()));
+        s.push_str(&format!("v {} {} {}\n", p[0], p[1], p[2]));
     }
     for f in faces {
         if f.len() >= 3 {

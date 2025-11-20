@@ -59,9 +59,9 @@ pub struct VertexData {
 impl VertexData {
     pub fn new(point: Point) -> Self {
         Self {
-            x: point.x(),
-            y: point.y(),
-            z: point.z(),
+            x: point[0],
+            y: point[1],
+            z: point[2],
             attributes: HashMap::new(),
         }
     }
@@ -71,9 +71,9 @@ impl VertexData {
     }
 
     pub fn set_position(&mut self, point: Point) {
-        self.x = point.x();
-        self.y = point.y();
-        self.z = point.z();
+        self.x = point[0];
+        self.y = point[1];
+        self.z = point[2];
     }
 
     pub fn color(&self) -> [f64; 3] {
@@ -320,8 +320,8 @@ impl Mesh {
         let p1 = self.vertex_position(vertices[1])?;
         let p2 = self.vertex_position(vertices[2])?;
 
-        let u = Vector::new(p1.x() - p0.x(), p1.y() - p0.y(), p1.z() - p0.z());
-        let v = Vector::new(p2.x() - p0.x(), p2.y() - p0.y(), p2.z() - p0.z());
+        let u = Vector::new(p1[0] - p0[0], p1[1] - p0[1], p1[2] - p0[2]);
+        let v = Vector::new(p2[0] - p0[0], p2[1] - p0[1], p2[2] - p0[2]);
 
         let mut normal = u.cross(&v);
         let len = normal.magnitude();
@@ -393,8 +393,8 @@ impl Mesh {
             let p1 = self.vertex_position(vertices[i])?;
             let p2 = self.vertex_position(vertices[i + 1])?;
 
-            let u = Vector::new(p1.x() - p0.x(), p1.y() - p0.y(), p1.z() - p0.z());
-            let v = Vector::new(p2.x() - p0.x(), p2.y() - p0.y(), p2.z() - p0.z());
+            let u = Vector::new(p1[0] - p0[0], p1[1] - p0[1], p1[2] - p0[2]);
+            let v = Vector::new(p2[0] - p0[0], p2[1] - p0[1], p2[2] - p0[2]);
 
             area += u.cross(&v).magnitude() * 0.5;
         }
@@ -415,14 +415,14 @@ impl Mesh {
         let next_pos = self.vertex_position(next_vertex)?;
 
         let mut u = Vector::new(
-            prev_pos.x() - center.x(),
-            prev_pos.y() - center.y(),
-            prev_pos.z() - center.z(),
+            prev_pos[0] - center[0],
+            prev_pos[1] - center[1],
+            prev_pos[2] - center[2],
         );
         let mut v = Vector::new(
-            next_pos.x() - center.x(),
-            next_pos.y() - center.y(),
-            next_pos.z() - center.z(),
+            next_pos[0] - center[0],
+            next_pos[1] - center[1],
+            next_pos[2] - center[2],
         );
 
         let u_len = u.magnitude();
@@ -502,9 +502,9 @@ impl Mesh {
 
         let mut get_vkey = |p: &Point, mesh: &mut Mesh| -> usize {
             if use_eps {
-                let kx = (p.x() / eps).round() as i64;
-                let ky = (p.y() / eps).round() as i64;
-                let kz = (p.z() / eps).round() as i64;
+                let kx = (p[0] / eps).round() as i64;
+                let ky = (p[1] / eps).round() as i64;
+                let kz = (p[2] / eps).round() as i64;
                 let key = (kx, ky, kz);
                 if let Some(&vk) = map_eps.get(&key) {
                     return vk;
@@ -513,7 +513,7 @@ impl Mesh {
                 map_eps.insert(key, vk);
                 vk
             } else {
-                let key = (p.x().to_bits(), p.y().to_bits(), p.z().to_bits());
+                let key = (p[0].to_bits(), p[1].to_bits(), p[2].to_bits());
                 if let Some(&vk) = map_exact.get(&key) {
                     return vk;
                 }
@@ -621,9 +621,9 @@ impl Mesh {
             let v1 = &self.tri_vertices[tri[1]];
             let v2 = &self.tri_vertices[tri[2]];
             if let Some(p) = crate::intersection::ray_triangle(ray, v0, v1, v2, epsilon) {
-                let dx = p.x() - origin.x();
-                let dy = p.y() - origin.y();
-                let dz = p.z() - origin.z();
+                let dx = p[0] - origin[0];
+                let dy = p[1] - origin[1];
+                let dz = p[2] - origin[2];
                 let t = dx * dir_unit.x() + dy * dir_unit.y() + dz * dir_unit.z();
                 if t >= 0.0 && t < best_t {
                     best_t = t;
@@ -672,9 +672,9 @@ impl Mesh {
         for v in self.vertex.values_mut() {
             let mut pt = Point::new(v.x, v.y, v.z);
             xform.transform_point(&mut pt);
-            v.x = pt.x();
-            v.y = pt.y();
-            v.z = pt.z();
+            v.x = pt[0];
+            v.y = pt[1];
+            v.z = pt[2];
         }
         self.xform = Xform::identity();
         self.invalidate_triangle_bvh();

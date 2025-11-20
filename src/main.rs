@@ -11,7 +11,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let l1 = Line::new(13.195, 234.832, 534.315, 986.805, 421.775, 403.416);
 
     if let Some(p) = session_rust::intersection::line_line(&l0, &l1, Tolerance::APPROXIMATION) {
-        println!("1. line_line: {}, {}, {}", p.x(), p.y(), p.z());
+        println!("1. line_line: {}, {}, {}", p[0], p[1], p[2]);
     }
 
     if let Some((t0, t1)) = session_rust::intersection::line_line_parameters(
@@ -44,15 +44,15 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     }
 
     if let Some(lp) = session_rust::intersection::line_plane(&l0, &pl0, true) {
-        println!("4. line_plane: {}, {}, {}", lp.x(), lp.y(), lp.z());
+        println!("4. line_plane: {}, {}, {}", lp[0], lp[1], lp[2]);
     }
 
     if let Some(ppp) = session_rust::intersection::plane_plane_plane(&pl0, &pl1, &pl2) {
         println!(
             "5. plane_plane_plane: {}, {}, {}",
-            ppp.x(),
-            ppp.y(),
-            ppp.z()
+            ppp[0],
+            ppp[1],
+            ppp[2]
         );
     }
 
@@ -398,13 +398,13 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             if !intersection_points.is_empty() {
                 sampled_points.push(intersection_points[0].clone());
                 println!("  Plane at x={}: ({:.2}, {:.2}, {:.2})",
-                    plane.origin().x(),
-                    intersection_points[0].x(),
-                    intersection_points[0].y(),
-                    intersection_points[0].z()
+                    plane.origin()[0],
+                    intersection_points[0][0],
+                    intersection_points[0][1],
+                    intersection_points[0][2]
                 );
             } else {
-                println!("  Plane at x={}: No intersection", plane.origin().x());
+                println!("  Plane at x={}: No intersection", plane.origin()[0]);
             }
         }
         

@@ -29,9 +29,9 @@ mod tests {
         
         // Get the CV back
         let retrieved = srf.get_cv(2, 2).unwrap();
-        assert!((retrieved.x() - 1.0).abs() < 1e-10);
-        assert!((retrieved.y() - 2.0).abs() < 1e-10);
-        assert!((retrieved.z() - 3.0).abs() < 1e-10);
+        assert!((retrieved[0] - 1.0).abs() < 1e-10);
+        assert!((retrieved[1] - 2.0).abs() < 1e-10);
+        assert!((retrieved[2] - 3.0).abs() < 1e-10);
     }
 
     #[test]
@@ -51,9 +51,9 @@ mod tests {
         
         // Evaluate at center
         let pt = srf.point_at(1.0, 1.0).unwrap();
-        assert!((pt.x() - 2.0).abs() < 1e-10);
-        assert!((pt.y() - 2.0).abs() < 1e-10);
-        assert!((pt.z() - 0.0).abs() < 1e-10);
+        assert!((pt[0] - 2.0).abs() < 1e-10);
+        assert!((pt[1] - 2.0).abs() < 1e-10);
+        assert!((pt[2] - 0.0).abs() < 1e-10);
     }
 
     #[test]
@@ -145,9 +145,9 @@ mod tests {
                 let (exp_x, exp_y, exp_z) = expected[idx];
                 
                 // Round to 3 decimals for comparison
-                let actual_x = (pt.x() * 1000.0).round() / 1000.0;
-                let actual_y = (pt.y() * 1000.0).round() / 1000.0;
-                let actual_z = (pt.z() * 1000.0).round() / 1000.0;
+                let actual_x = (pt[0] * 1000.0).round() / 1000.0;
+                let actual_y = (pt[1] * 1000.0).round() / 1000.0;
+                let actual_z = (pt[2] * 1000.0).round() / 1000.0;
                 
                 assert!((actual_x - exp_x).abs() < 0.001, 
                     "Point {} x mismatch: {} != {}", idx, actual_x, exp_x);
@@ -432,9 +432,9 @@ mod short_surface_center_test {
         let v_mid = 0.5 * (v_min + v_max);
 
         let pt = srf.point_at(u_mid, v_mid).unwrap();
-        let ax = (pt.x() * 1000.0).round() / 1000.0;
-        let ay = (pt.y() * 1000.0).round() / 1000.0;
-        let az = (pt.z() * 1000.0).round() / 1000.0;
+        let ax = (pt[0] * 1000.0).round() / 1000.0;
+        let ay = (pt[1] * 1000.0).round() / 1000.0;
+        let az = (pt[2] * 1000.0).round() / 1000.0;
         assert!((ax - 2.000).abs() < 0.001);
         assert!((ay - 2.000).abs() < 0.001);
         assert!((az - 0.625).abs() < 0.001);

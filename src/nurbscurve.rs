@@ -179,12 +179,12 @@ impl NurbsCurve {
         }
 
         let idx = index * self.m_cv_stride;
-        self.m_cv[idx] = point.x();
+        self.m_cv[idx] = point[0];
         if self.m_dim > 1 {
-            self.m_cv[idx + 1] = point.y();
+            self.m_cv[idx + 1] = point[1];
         }
         if self.m_dim > 2 {
-            self.m_cv[idx + 2] = point.z();
+            self.m_cv[idx + 2] = point[2];
         }
     }
 
@@ -522,9 +522,9 @@ impl NurbsCurve {
         let p2 = self.point_at((t + eps).min(t1));
         
         let tangent = Vector::new(
-            (p2.x() - p1.x()) / (2.0 * eps),
-            (p2.y() - p1.y()) / (2.0 * eps),
-            (p2.z() - p1.z()) / (2.0 * eps),
+            (p2[0] - p1[0]) / (2.0 * eps),
+            (p2[1] - p1[1]) / (2.0 * eps),
+            (p2[2] - p1[2]) / (2.0 * eps),
         );
         
         // Normalize
@@ -541,7 +541,7 @@ impl NurbsCurve {
         }
 
         let p = self.point_at(t);
-        result.push(Vector::new(p.x(), p.y(), p.z()));
+        result.push(Vector::new(p[0], p[1], p[2]));
 
         if derivative_count == 0 {
             return result;
@@ -557,9 +557,9 @@ impl NurbsCurve {
         let pb = self.point_at(tb);
 
         let d1 = Vector::new(
-            (pb.x() - pa.x()) / (tb - ta),
-            (pb.y() - pa.y()) / (tb - ta),
-            (pb.z() - pa.z()) / (tb - ta),
+            (pb[0] - pa[0]) / (tb - ta),
+            (pb[1] - pa[1]) / (tb - ta),
+            (pb[2] - pa[2]) / (tb - ta),
         );
         result.push(d1.clone());
 
@@ -567,9 +567,9 @@ impl NurbsCurve {
             // Central second derivative approximation
             // d2 ~ (C(t+eps) - 2*C(t) + C(t-eps)) / eps^2
             let d2 = Vector::new(
-                (pb.x() - 2.0 * p.x() + pa.x()) / (eps * eps),
-                (pb.y() - 2.0 * p.y() + pa.y()) / (eps * eps),
-                (pb.z() - 2.0 * p.z() + pa.z()) / (eps * eps),
+                (pb[0] - 2.0 * p[0] + pa[0]) / (eps * eps),
+                (pb[1] - 2.0 * p[1] + pa[1]) / (eps * eps),
+                (pb[2] - 2.0 * p[2] + pa[2]) / (eps * eps),
             );
             result.push(d2);
         }
@@ -612,7 +612,7 @@ impl NurbsCurve {
         let p0 = self.get_cv(0).unwrap();
         let p1 = self.get_cv(self.m_cv_count - 1).unwrap();
         
-        let line_vec = Vector::new(p1.x() - p0.x(), p1.y() - p0.y(), p1.z() - p0.z());
+        let line_vec = Vector::new(p1[0] - p0[0], p1[1] - p0[1], p1[2] - p0[2]);
         let line_len = line_vec.compute_length();
         
         if line_len < tol {
@@ -621,7 +621,7 @@ impl NurbsCurve {
 
         for i in 1..(self.m_cv_count - 1) {
             let p = self.get_cv(i).unwrap();
-            let v = Vector::new(p.x() - p0.x(), p.y() - p0.y(), p.z() - p0.z());
+            let v = Vector::new(p[0] - p0[0], p[1] - p0[1], p[2] - p0[2]);
             
             // Cross product to check collinearity
             let cross = line_vec.cross(&v);
@@ -732,9 +732,9 @@ impl NurbsCurve {
 
         let signed_distance = |p: &Point| -> f64 {
             let v = Vector::new(
-                p.x() - plane.origin().x(),
-                p.y() - plane.origin().y(),
-                p.z() - plane.origin().z(),
+                p[0] - plane.origin()[0],
+                p[1] - plane.origin()[1],
+                p[2] - plane.origin()[2],
             );
             v.dot(&plane.z_axis())
         };

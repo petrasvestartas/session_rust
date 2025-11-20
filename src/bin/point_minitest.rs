@@ -50,9 +50,9 @@ fn run_point_constructor() -> TestResult {
 
         MINI_CHECK!(checks, point.name == "my_point");
         MINI_CHECK!(checks, !point.guid.is_empty());
-        MINI_CHECK!(checks, point.x() == 10.0);
-        MINI_CHECK!(checks, point.y() == 2.0);
-        MINI_CHECK!(checks, point.z() == 3.0);
+        MINI_CHECK!(checks, point[0] == 10.0);
+        MINI_CHECK!(checks, point[1] == 2.0);
+        MINI_CHECK!(checks, point[2] == 3.0);
         MINI_CHECK!(checks, point.width == 1.0);
         MINI_CHECK!(checks, point.pointcolor == Color::white());
         Ok(())

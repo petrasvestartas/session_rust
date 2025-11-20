@@ -172,7 +172,7 @@ impl Serialize for PointCloud {
         let points_flat: Vec<f64> = self
             .points
             .iter()
-            .flat_map(|p| vec![p.x(), p.y(), p.z()])
+            .flat_map(|p| vec![p[0], p[1], p[2]])
             .collect();
         state.serialize_field("points", &points_flat)?;
 

@@ -172,9 +172,9 @@ impl Xform {
         xform.m[6] = -f.y();
         xform.m[10] = -f.z();
 
-        xform.m[12] = -s.dot(&Vector::new(eye.x(), eye.y(), eye.z()));
-        xform.m[13] = -u.dot(&Vector::new(eye.x(), eye.y(), eye.z()));
-        xform.m[14] = f.dot(&Vector::new(eye.x(), eye.y(), eye.z()));
+        xform.m[12] = -s.dot(&Vector::new(eye[0], eye[1], eye[2]));
+        xform.m[13] = -u.dot(&Vector::new(eye[0], eye[1], eye[2]));
+        xform.m[14] = f.dot(&Vector::new(eye[0], eye[1], eye[2]));
 
         xform
     }
@@ -199,9 +199,9 @@ impl Xform {
         xform.m[10] = z_axis.z();
 
         // Set the origin
-        xform.m[12] = origin.x();
-        xform.m[13] = origin.y();
-        xform.m[14] = origin.z();
+        xform.m[12] = origin[0];
+        xform.m[13] = origin[1];
+        xform.m[14] = origin[2];
 
         xform
     }
@@ -263,13 +263,13 @@ impl Xform {
 
     pub fn transformed_point(&self, point: &Point) -> Point {
         let m = &self.m;
-        let w = m[3] * point.x() + m[7] * point.y() + m[11] * point.z() + m[15];
+        let w = m[3] * point[0] + m[7] * point[1] + m[11] * point[2] + m[15];
         let w_inv = if w.abs() > 1e-10 { 1.0 / w } else { 1.0 };
 
         Point::new(
-            (m[0] * point.x() + m[4] * point.y() + m[8] * point.z() + m[12]) * w_inv,
-            (m[1] * point.x() + m[5] * point.y() + m[9] * point.z() + m[13]) * w_inv,
-            (m[2] * point.x() + m[6] * point.y() + m[10] * point.z() + m[14]) * w_inv,
+            (m[0] * point[0] + m[4] * point[1] + m[8] * point[2] + m[12]) * w_inv,
+            (m[1] * point[0] + m[5] * point[1] + m[9] * point[2] + m[13]) * w_inv,
+            (m[2] * point[0] + m[6] * point[1] + m[10] * point[2] + m[14]) * w_inv,
         )
     }
 
@@ -469,8 +469,8 @@ impl Xform {
         m_xform.m[6] = r[2][4];
         m_xform.m[10] = r[2][5];
 
-        let t0 = Self::translation(-origin_1.x(), -origin_1.y(), -origin_1.z());
-        let t2 = Self::translation(origin_0.x(), origin_0.y(), origin_0.z());
+        let t0 = Self::translation(-origin_1[0], -origin_1[1], -origin_1[2]);
+        let t2 = Self::translation(origin_0[0], origin_0[1], origin_0[2]);
         &t2 * &(&m_xform * &t0)
     }
 
@@ -498,7 +498,7 @@ impl Xform {
         y1.normalize_self();
         z1.normalize_self();
 
-        let t0 = Self::translation(-origin_0.x(), -origin_0.y(), -origin_0.z());
+        let t0 = Self::translation(-origin_0[0], -origin_0[1], -origin_0[2]);
 
         let mut f0 = Self::identity();
         f0.m[0] = x0.x();
@@ -523,7 +523,7 @@ impl Xform {
         f1.m[10] = z1.z();
 
         let r = &f1 * &f0;
-        let t1 = Self::translation(origin_1.x(), origin_1.y(), origin_1.z());
+        let t1 = Self::translation(origin_1[0], origin_1[1], origin_1[2]);
         &t1 * &(&r * &t0)
     }
 
@@ -535,7 +535,7 @@ impl Xform {
         y.normalize_self();
         z.normalize_self();
 
-        let t = Self::translation(-origin.x(), -origin.y(), -origin.z());
+        let t = Self::translation(-origin[0], -origin[1], -origin[2]);
         let mut f = Self::identity();
         f.m[0] = x.x();
         f.m[1] = x.y();
@@ -568,7 +568,7 @@ impl Xform {
         f.m[6] = y.z();
         f.m[10] = z.z();
 
-        let t = Self::translation(origin.x(), origin.y(), origin.z());
+        let t = Self::translation(origin[0], origin[1], origin[2]);
         &t * &f
     }
 
@@ -581,16 +581,16 @@ impl Xform {
     }
 
     pub fn scale_uniform(origin: &Point, scale_value: f64) -> Self {
-        let t0 = Self::translation(-origin.x(), -origin.y(), -origin.z());
+        let t0 = Self::translation(-origin[0], -origin[1], -origin[2]);
         let t1 = Self::scaling(scale_value, scale_value, scale_value);
-        let t2 = Self::translation(origin.x(), origin.y(), origin.z());
+        let t2 = Self::translation(origin[0], origin[1], origin[2]);
         &t2 * &(&t1 * &t0)
     }
 
     pub fn scale_non_uniform(origin: &Point, scale_x: f64, scale_y: f64, scale_z: f64) -> Self {
-        let t0 = Self::translation(-origin.x(), -origin.y(), -origin.z());
+        let t0 = Self::translation(-origin[0], -origin[1], -origin[2]);
         let t1 = Self::scale_xyz(scale_x, scale_y, scale_z);
-        let t2 = Self::translation(origin.x(), origin.y(), origin.z());
+        let t2 = Self::translation(origin[0], origin[1], origin[2]);
         &t2 * &(&t1 * &t0)
     }
 

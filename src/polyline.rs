@@ -213,20 +213,20 @@ impl Polyline {
         let t_f32 = t;
         let s_f32 = s;
         Point::new(
-            if start.x() == end.x() {
-                start.x()
+            if start[0] == end[0] {
+                start[0]
             } else {
-                s_f32 * start.x() + t_f32 * end.x()
+                s_f32 * start[0] + t_f32 * end[0]
             },
-            if start.y() == end.y() {
-                start.y()
+            if start[1] == end[1] {
+                start[1]
             } else {
-                s_f32 * start.y() + t_f32 * end.y()
+                s_f32 * start[1] + t_f32 * end[1]
             },
-            if start.z() == end.z() {
-                start.z()
+            if start[2] == end[2] {
+                start[2]
             } else {
-                s_f32 * start.z() + t_f32 * end.z()
+                s_f32 * start[2] + t_f32 * end[2]
             },
         )
     }
@@ -283,14 +283,14 @@ impl Polyline {
         line1_end: &Point,
     ) -> (Point, Point) {
         let output_start = Point::new(
-            (line0_start.x() + line1_start.x()) * 0.5,
-            (line0_start.y() + line1_start.y()) * 0.5,
-            (line0_start.z() + line1_start.z()) * 0.5,
+            (line0_start[0] + line1_start[0]) * 0.5,
+            (line0_start[1] + line1_start[1]) * 0.5,
+            (line0_start[2] + line1_start[2]) * 0.5,
         );
         let output_end = Point::new(
-            (line0_end.x() + line1_end.x()) * 0.5,
-            (line0_end.y() + line1_end.y()) * 0.5,
-            (line0_end.z() + line1_end.z()) * 0.5,
+            (line0_end[0] + line1_end[0]) * 0.5,
+            (line0_end[1] + line1_end[1]) * 0.5,
+            (line0_end[2] + line1_end[2]) * 0.5,
         );
         (output_start, output_end)
     }
@@ -309,24 +309,24 @@ impl Polyline {
             (line_a, line_b)
         {
             let mid_line0_start = Point::new(
-                (line_a_start.x() + line_b_start.x()) * 0.5,
-                (line_a_start.y() + line_b_start.y()) * 0.5,
-                (line_a_start.z() + line_b_start.z()) * 0.5,
+                (line_a_start[0] + line_b_start[0]) * 0.5,
+                (line_a_start[1] + line_b_start[1]) * 0.5,
+                (line_a_start[2] + line_b_start[2]) * 0.5,
             );
             let mid_line0_end = Point::new(
-                (line_a_end.x() + line_b_end.x()) * 0.5,
-                (line_a_end.y() + line_b_end.y()) * 0.5,
-                (line_a_end.z() + line_b_end.z()) * 0.5,
+                (line_a_end[0] + line_b_end[0]) * 0.5,
+                (line_a_end[1] + line_b_end[1]) * 0.5,
+                (line_a_end[2] + line_b_end[2]) * 0.5,
             );
             let mid_line1_start = Point::new(
-                (line_a_start.x() + line_b_end.x()) * 0.5,
-                (line_a_start.y() + line_b_end.y()) * 0.5,
-                (line_a_start.z() + line_b_end.z()) * 0.5,
+                (line_a_start[0] + line_b_end[0]) * 0.5,
+                (line_a_start[1] + line_b_end[1]) * 0.5,
+                (line_a_start[2] + line_b_end[2]) * 0.5,
             );
             let mid_line1_end = Point::new(
-                (line_a_end.x() + line_b_start.x()) * 0.5,
-                (line_a_end.y() + line_b_start.y()) * 0.5,
-                (line_a_end.z() + line_b_start.z()) * 0.5,
+                (line_a_end[0] + line_b_start[0]) * 0.5,
+                (line_a_end[1] + line_b_start[1]) * 0.5,
+                (line_a_end[2] + line_b_start[2]) * 0.5,
             );
 
             let mid0_vec = mid_line0_end.clone() - mid_line0_start.clone();
@@ -427,9 +427,9 @@ impl Polyline {
         let mut sum_z = 0.0;
 
         for i in 0..n {
-            sum_x += self.points[i].x();
-            sum_y += self.points[i].y();
-            sum_z += self.points[i].z();
+            sum_x += self.points[i][0];
+            sum_y += self.points[i][1];
+            sum_z += self.points[i][2];
         }
 
         Point::new(sum_x / n as f64, sum_y / n as f64, sum_z / n as f64)
@@ -438,7 +438,7 @@ impl Polyline {
     /// Calculate center as vector
     pub fn center_vec(&self) -> Vector {
         let center = self.center();
-        Vector::new(center.x(), center.y(), center.z())
+        Vector::new(center[0], center[1], center[2])
     }
 
     /// Get average plane from polyline points
@@ -481,14 +481,14 @@ impl Polyline {
         line1_end: &Point,
     ) -> (Point, Point) {
         let p0 = Point::new(
-            (line0_start.x() + line1_start.x()) * 0.5,
-            (line0_start.y() + line1_start.y()) * 0.5,
-            (line0_start.z() + line1_start.z()) * 0.5,
+            (line0_start[0] + line1_start[0]) * 0.5,
+            (line0_start[1] + line1_start[1]) * 0.5,
+            (line0_start[2] + line1_start[2]) * 0.5,
         );
         let p1 = Point::new(
-            (line0_end.x() + line1_end.x()) * 0.5,
-            (line0_end.y() + line1_end.y()) * 0.5,
-            (line0_end.z() + line1_end.z()) * 0.5,
+            (line0_end[0] + line1_end[0]) * 0.5,
+            (line0_end[1] + line1_end[1]) * 0.5,
+            (line0_end[2] + line1_end[2]) * 0.5,
         );
         (p0, p1)
     }
@@ -625,7 +625,7 @@ impl Polyline {
         for i in 0..n {
             let current = &self.points[i];
             let next = &self.points[(i + 1) % n];
-            sum += (next.x() - current.x()) * (next.y() + current.y());
+            sum += (next[0] - current[0]) * (next[1] + current[1]);
         }
 
         sum > 0.0

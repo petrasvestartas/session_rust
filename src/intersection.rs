@@ -98,9 +98,9 @@ pub fn line_line(line0: &Line, line1: &Line, tolerance: f64) -> Option<Point> {
     let p1 = line1.point_at(t1);
 
     Some(Point::new(
-        (p0.x() + p1.x()) * 0.5,
-        (p0.y() + p1.y()) * 0.5,
-        (p0.z() + p1.z()) * 0.5,
+        (p0[0] + p1[0]) * 0.5,
+        (p0[1] + p1[1]) * 0.5,
+        (p0[2] + p1[2]) * 0.5,
     ))
 }
 
@@ -119,9 +119,9 @@ pub fn plane_plane(plane0: &crate::Plane, plane1: &crate::Plane) -> Option<Line>
     let origin0 = plane0.origin();
     let origin1 = plane1.origin();
     let p = Point::new(
-        (origin0.x() + origin1.x()) * 0.5,
-        (origin0.y() + origin1.y()) * 0.5,
-        (origin0.z() + origin1.z()) * 0.5,
+        (origin0[0] + origin1[0]) * 0.5,
+        (origin0[1] + origin1[1]) * 0.5,
+        (origin0[2] + origin1[2]) * 0.5,
     );
 
     let plane2 = crate::Plane::from_point_normal(p, d.clone());
@@ -129,17 +129,17 @@ pub fn plane_plane(plane0: &crate::Plane, plane1: &crate::Plane) -> Option<Line>
     let output_p = plane_plane_plane(plane0, plane1, &plane2)?;
 
     Some(Line::new(
-        output_p.x(),
-        output_p.y(),
-        output_p.z(),
-        output_p.x() + d.x(),
-        output_p.y() + d.y(),
-        output_p.z() + d.z(),
+        output_p[0],
+        output_p[1],
+        output_p[2],
+        output_p[0] + d.x(),
+        output_p[1] + d.y(),
+        output_p[2] + d.z(),
     ))
 }
 
 fn plane_value_at(plane: &crate::Plane, point: &Point) -> f64 {
-    plane.a() * point.x() + plane.b() * point.y() + plane.c() * point.z() + plane.d()
+    plane.a() * point[0] + plane.b() * point[1] + plane.c() * point[2] + plane.d()
 }
 
 /// Find intersection point between a line and a plane.
@@ -274,22 +274,22 @@ pub fn ray_box(line: &Line, box_: &crate::BoundingBox, t0: f64, t1: f64) -> Opti
     };
 
     // Calculate intersections with X slabs
-    let tx1 = (box_min.x() - origin.x()) * inv_dir_x;
-    let tx2 = (box_max.x() - origin.x()) * inv_dir_x;
+    let tx1 = (box_min[0] - origin[0]) * inv_dir_x;
+    let tx2 = (box_max[0] - origin[0]) * inv_dir_x;
 
     let mut tmin = tx1.min(tx2);
     let mut tmax = tx1.max(tx2);
 
     // Calculate intersections with Y slabs
-    let ty1 = (box_min.y() - origin.y()) * inv_dir_y;
-    let ty2 = (box_max.y() - origin.y()) * inv_dir_y;
+    let ty1 = (box_min[1] - origin[1]) * inv_dir_y;
+    let ty2 = (box_max[1] - origin[1]) * inv_dir_y;
 
     tmin = tmin.max(ty1.min(ty2));
     tmax = tmax.min(ty1.max(ty2));
 
     // Calculate intersections with Z slabs
-    let tz1 = (box_min.z() - origin.z()) * inv_dir_z;
-    let tz2 = (box_max.z() - origin.z()) * inv_dir_z;
+    let tz1 = (box_min[2] - origin[2]) * inv_dir_z;
+    let tz2 = (box_max[2] - origin[2]) * inv_dir_z;
 
     tmin = tmin.max(tz1.min(tz2));
     tmax = tmax.min(tz1.max(tz2));
@@ -305,15 +305,15 @@ pub fn ray_box(line: &Line, box_: &crate::BoundingBox, t0: f64, t1: f64) -> Opti
 
     // Calculate actual intersection points
     let entry = Point::new(
-        origin.x() + direction.x() * tmin,
-        origin.y() + direction.y() * tmin,
-        origin.z() + direction.z() * tmin,
+        origin[0] + direction.x() * tmin,
+        origin[1] + direction.y() * tmin,
+        origin[2] + direction.z() * tmin,
     );
 
     let exit = Point::new(
-        origin.x() + direction.x() * tmax,
-        origin.y() + direction.y() * tmax,
-        origin.z() + direction.z() * tmax,
+        origin[0] + direction.x() * tmax,
+        origin[1] + direction.y() * tmax,
+        origin[2] + direction.z() * tmax,
     );
 
     Some(vec![entry, exit])
@@ -337,9 +337,9 @@ pub fn ray_sphere(line: &Line, center: &Point, radius: f64) -> Option<Vec<Point>
     let direction = line.to_vector();
 
     // Vector from origin to center
-    let o_x = origin.x() - center.x();
-    let o_y = origin.y() - center.y();
-    let o_z = origin.z() - center.z();
+    let o_x = origin[0] - center[0];
+    let o_y = origin[1] - center[1];
+    let o_z = origin[2] - center[2];
 
     // Quadratic equation coefficients
     let a = direction.x() * direction.x()
@@ -376,18 +376,18 @@ pub fn ray_sphere(line: &Line, center: &Point, radius: f64) -> Option<Vec<Point>
 
     // First intersection
     let p0 = Point::new(
-        origin.x() + direction.x() * t0,
-        origin.y() + direction.y() * t0,
-        origin.z() + direction.z() * t0,
+        origin[0] + direction.x() * t0,
+        origin[1] + direction.y() * t0,
+        origin[2] + direction.z() * t0,
     );
     points.push(p0);
 
     // Second intersection (if different from first)
     if (t1 - t0).abs() > 1e-10 {
         let p1 = Point::new(
-            origin.x() + direction.x() * t1,
-            origin.y() + direction.y() * t1,
-            origin.z() + direction.z() * t1,
+            origin[0] + direction.x() * t1,
+            origin[1] + direction.y() * t1,
+            origin[2] + direction.z() * t1,
         );
         points.push(p1);
     }
@@ -418,13 +418,13 @@ pub fn ray_triangle(
     let direction = line.to_vector();
 
     // Möller-Trumbore algorithm
-    let edge1_x = v1.x() - v0.x();
-    let edge1_y = v1.y() - v0.y();
-    let edge1_z = v1.z() - v0.z();
+    let edge1_x = v1[0] - v0[0];
+    let edge1_y = v1[1] - v0[1];
+    let edge1_z = v1[2] - v0[2];
 
-    let edge2_x = v2.x() - v0.x();
-    let edge2_y = v2.y() - v0.y();
-    let edge2_z = v2.z() - v0.z();
+    let edge2_x = v2[0] - v0[0];
+    let edge2_y = v2[1] - v0[1];
+    let edge2_z = v2[2] - v0[2];
 
     // pvec = direction.cross(edge2)
     let pvec_x = direction.y() * edge2_z - direction.z() * edge2_y;
@@ -441,9 +441,9 @@ pub fn ray_triangle(
     let inv_det = 1.0 / det;
 
     // tvec = origin - v0
-    let tvec_x = origin.x() - v0.x();
-    let tvec_y = origin.y() - v0.y();
-    let tvec_z = origin.z() - v0.z();
+    let tvec_x = origin[0] - v0[0];
+    let tvec_y = origin[1] - v0[1];
+    let tvec_z = origin[2] - v0[2];
 
     // u = tvec.dot(pvec) * inv_det
     let u = (tvec_x * pvec_x + tvec_y * pvec_y + tvec_z * pvec_z) * inv_det;
@@ -469,9 +469,9 @@ pub fn ray_triangle(
 
     // Calculate intersection point: origin + t * direction
     Some(Point::new(
-        origin.x() + t * direction.x(),
-        origin.y() + t * direction.y(),
-        origin.z() + t * direction.z(),
+        origin[0] + t * direction.x(),
+        origin[1] + t * direction.y(),
+        origin[2] + t * direction.z(),
     ))
 }
 

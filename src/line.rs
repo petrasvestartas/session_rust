@@ -59,7 +59,7 @@ impl Line {
     }
 
     pub fn from_points(p1: &Point, p2: &Point) -> Self {
-        Self::new(p1.x(), p1.y(), p1.z(), p2.x(), p2.y(), p2.z())
+        Self::new(p1[0], p1[1], p1[2], p2[0], p2[1], p2[2])
     }
 
     pub fn with_name(name: &str, x0: f64, y0: f64, z0: f64, x1: f64, y1: f64, z1: f64) -> Self {
@@ -286,12 +286,12 @@ impl Line {
         xform.transform_point(&mut start);
         xform.transform_point(&mut end);
 
-        self._x0 = start.x();
-        self._y0 = start.y();
-        self._z0 = start.z();
-        self._x1 = end.x();
-        self._y1 = end.y();
-        self._z1 = end.z();
+        self._x0 = start[0];
+        self._y0 = start[1];
+        self._z0 = start[2];
+        self._x1 = end[0];
+        self._y1 = end[1];
+        self._z1 = end[2];
         self.xform = Xform::identity();
     }
 

@@ -225,9 +225,9 @@ impl NurbsSurface {
         let dim = self.m_dim;
         
         if let Some(cv) = self.cv_mut(i, j) {
-            cv[0] = point.x();
-            if cv.len() > 1 { cv[1] = point.y(); }
-            if cv.len() > 2 { cv[2] = point.z(); }
+            cv[0] = point[0];
+            if cv.len() > 1 { cv[1] = point[1]; }
+            if cv.len() > 2 { cv[2] = point[2]; }
             if is_rat && cv.len() > dim {
                 cv[dim] = 1.0; // Set weight to 1.0
             }
@@ -423,7 +423,7 @@ impl NurbsSurface {
             return result;
         }
         let pt = pt_opt.unwrap();
-        result.push(Vector::new(pt.x(), pt.y(), pt.z()));
+        result.push(Vector::new(pt[0], pt[1], pt[2]));
 
         if num_derivs > 0 {
             // Finite difference step (match Python implementation semantics)
@@ -435,9 +435,9 @@ impl NurbsSurface {
             let du_vec = if u + h <= u1 {
                 if let Some(pt_u) = self.point_at(u + h, v) {
                     Vector::new(
-                        (pt_u.x() - pt.x()) / h,
-                        (pt_u.y() - pt.y()) / h,
-                        (pt_u.z() - pt.z()) / h,
+                        (pt_u[0] - pt[0]) / h,
+                        (pt_u[1] - pt[1]) / h,
+                        (pt_u[2] - pt[2]) / h,
                     )
                 } else {
                     Vector::new(0.0, 0.0, 0.0)
@@ -445,9 +445,9 @@ impl NurbsSurface {
             } else {
                 if let Some(pt_um) = self.point_at(u - h, v) {
                     Vector::new(
-                        (pt.x() - pt_um.x()) / h,
-                        (pt.y() - pt_um.y()) / h,
-                        (pt.z() - pt_um.z()) / h,
+                        (pt[0] - pt_um[0]) / h,
+                        (pt[1] - pt_um[1]) / h,
+                        (pt[2] - pt_um[2]) / h,
                     )
                 } else {
                     Vector::new(0.0, 0.0, 0.0)
@@ -459,9 +459,9 @@ impl NurbsSurface {
             let dv_vec = if v + h <= v1 {
                 if let Some(pt_v) = self.point_at(u, v + h) {
                     Vector::new(
-                        (pt_v.x() - pt.x()) / h,
-                        (pt_v.y() - pt.y()) / h,
-                        (pt_v.z() - pt.z()) / h,
+                        (pt_v[0] - pt[0]) / h,
+                        (pt_v[1] - pt[1]) / h,
+                        (pt_v[2] - pt[2]) / h,
                     )
                 } else {
                     Vector::new(0.0, 0.0, 0.0)
@@ -469,9 +469,9 @@ impl NurbsSurface {
             } else {
                 if let Some(pt_vm) = self.point_at(u, v - h) {
                     Vector::new(
-                        (pt.x() - pt_vm.x()) / h,
-                        (pt.y() - pt_vm.y()) / h,
-                        (pt.z() - pt_vm.z()) / h,
+                        (pt[0] - pt_vm[0]) / h,
+                        (pt[1] - pt_vm[1]) / h,
+                        (pt[2] - pt_vm[2]) / h,
                     )
                 } else {
                     Vector::new(0.0, 0.0, 0.0)
@@ -995,13 +995,13 @@ impl NurbsSurface {
         };
         
         // Compute plane normal
-        let v1_x = p1.x() - p0.x();
-        let v1_y = p1.y() - p0.y();
-        let v1_z = p1.z() - p0.z();
-        
-        let v2_x = p2.x() - p0.x();
-        let v2_y = p2.y() - p0.y();
-        let v2_z = p2.z() - p0.z();
+        let v1_x = p1[0] - p0[0];
+        let v1_y = p1[1] - p0[1];
+        let v1_z = p1[2] - p0[2];
+
+        let v2_x = p2[0] - p0[0];
+        let v2_y = p2[1] - p0[1];
+        let v2_z = p2[2] - p0[2];
         
         let nx = v1_y * v2_z - v1_z * v2_y;
         let ny = v1_z * v2_x - v1_x * v2_z;
@@ -1020,9 +1020,9 @@ impl NurbsSurface {
         for i in 0..self.m_cv_count[0] {
             for j in 0..self.m_cv_count[1] {
                 if let Some(p) = self.get_cv(i, j) {
-                    let dx = p.x() - p0.x();
-                    let dy = p.y() - p0.y();
-                    let dz = p.z() - p0.z();
+                    let dx = p[0] - p0[0];
+                    let dy = p[1] - p0[1];
+                    let dz = p[2] - p0[2];
                     let dist = (nx * dx + ny * dy + nz * dz).abs();
                     
                     if dist > tolerance {

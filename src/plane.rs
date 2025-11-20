@@ -57,7 +57,7 @@ impl Plane {
         let a = z_axis.x();
         let b = z_axis.y();
         let c = z_axis.z();
-        let d = -(a * point.x() + b * point.y() + c * point.z());
+        let d = -(a * point[0] + b * point[1] + c * point[2]);
 
         Self {
             guid: Uuid::new_v4().to_string(),
@@ -85,7 +85,7 @@ impl Plane {
         let a = z_axis.x();
         let b = z_axis.y();
         let c = z_axis.z();
-        let d = -(a * point.x() + b * point.y() + c * point.z());
+        let d = -(a * point[0] + b * point[1] + c * point[2]);
 
         Self {
             guid: Uuid::new_v4().to_string(),
@@ -115,7 +115,7 @@ impl Plane {
         let a = z_axis.x();
         let b = z_axis.y();
         let c = z_axis.z();
-        let d = -(a * origin.x() + b * origin.y() + c * origin.z());
+        let d = -(a * origin[0] + b * origin[1] + c * origin[2]);
 
         Self {
             guid: Uuid::new_v4().to_string(),
@@ -154,7 +154,7 @@ impl Plane {
         let a = z_axis.x();
         let b = z_axis.y();
         let c = z_axis.z();
-        let d = -(a * origin.x() + b * origin.y() + c * origin.z());
+        let d = -(a * origin[0] + b * origin[1] + c * origin[2]);
 
         Self {
             guid: Uuid::new_v4().to_string(),
@@ -187,7 +187,7 @@ impl Plane {
         let a = z_axis.x();
         let b = z_axis.y();
         let c = z_axis.z();
-        let d = -(a * origin.x() + b * origin.y() + c * origin.z());
+        let d = -(a * origin[0] + b * origin[1] + c * origin[2]);
 
         Self {
             guid: Uuid::new_v4().to_string(),
@@ -292,7 +292,7 @@ impl Plane {
         self._b = self._z_axis.y();
         self._c = self._z_axis.z();
         self._d =
-            -(self._a * self._origin.x() + self._b * self._origin.y() + self._c * self._origin.z());
+            -(self._a * self._origin[0] + self._b * self._origin[1] + self._c * self._origin[2]);
     }
 
     pub fn rotate(&mut self, angles_in_radians: f64) {
@@ -305,20 +305,6 @@ impl Plane {
         self._x_axis = new_x;
         self._y_axis = new_y;
 
-        self._a = self._z_axis.x();
-        self._b = self._z_axis.y();
-        self._c = self._z_axis.z();
-        self._d =
-            -(self._a * self._origin.x() + self._b * self._origin.y() + self._c * self._origin.z());
-    }
-
-    pub fn is_right_hand(&self) -> bool {
-        let x_copy = self._x_axis.clone();
-        let y_copy = self._y_axis.clone();
-        let z_copy = self._z_axis.clone();
-        let cross = x_copy.cross(&y_copy);
-        let dot_product = cross.dot(&z_copy);
-        dot_product > 0.999
     }
 
     pub fn is_same_direction(plane0: &Plane, plane1: &Plane, can_be_flipped: bool) -> bool {
@@ -335,15 +321,15 @@ impl Plane {
     }
 
     pub fn is_same_position(plane0: &Plane, plane1: &Plane) -> bool {
-        let dist0 = (plane0._a * plane1._origin.x()
-            + plane0._b * plane1._origin.y()
-            + plane0._c * plane1._origin.z()
+        let dist0 = (plane0._a * plane1._origin[0]
+            + plane0._b * plane1._origin[1]
+            + plane0._c * plane1._origin[2]
             + plane0._d)
             .abs();
 
-        let dist1 = (plane1._a * plane0._origin.x()
-            + plane1._b * plane0._origin.y()
-            + plane1._c * plane0._origin.z()
+        let dist1 = (plane1._a * plane0._origin[0]
+            + plane1._b * plane0._origin[1]
+            + plane1._c * plane0._origin[2]
             + plane1._d)
             .abs();
 
@@ -383,7 +369,7 @@ impl std::ops::AddAssign<Vector> for Plane {
     fn add_assign(&mut self, other: Vector) {
         self._origin += other;
         self._d =
-            -(self._a * self._origin.x() + self._b * self._origin.y() + self._c * self._origin.z());
+            -(self._a * self._origin[0] + self._b * self._origin[1] + self._c * self._origin[2]);
     }
 }
 
@@ -391,7 +377,7 @@ impl std::ops::SubAssign<Vector> for Plane {
     fn sub_assign(&mut self, other: Vector) {
         self._origin -= other;
         self._d =
-            -(self._a * self._origin.x() + self._b * self._origin.y() + self._c * self._origin.z());
+            -(self._a * self._origin[0] + self._b * self._origin[1] + self._c * self._origin[2]);
     }
 }
 

@@ -47,29 +47,6 @@ impl Point {
             ..Default::default()
         }
     }
-
-    /// Getters for coordinates
-    pub fn x(&self) -> f64 {
-        self._x
-    }
-    pub fn y(&self) -> f64 {
-        self._y
-    }
-    pub fn z(&self) -> f64 {
-        self._z
-    }
-
-    /// Setters for coordinates
-    pub fn set_x(&mut self, v: f64) {
-        self._x = v;
-    }
-    pub fn set_y(&mut self, v: f64) {
-        self._y = v;
-    }
-    pub fn set_z(&mut self, v: f64) {
-        self._z = v;
-    }
-
     ///////////////////////////////////////////////////////////////////////////////////////////
     // JSON
     ///////////////////////////////////////////////////////////////////////////////////////////

@@ -75,12 +75,12 @@ impl BoundingBox {
         let mut max_z = f64::MIN;
 
         for pt in points {
-            min_x = min_x.min(pt.x());
-            min_y = min_y.min(pt.y());
-            min_z = min_z.min(pt.z());
-            max_x = max_x.max(pt.x());
-            max_y = max_y.max(pt.y());
-            max_z = max_z.max(pt.z());
+            min_x = min_x.min(pt[0]);
+            min_y = min_y.min(pt[1]);
+            min_z = min_z.min(pt[2]);
+            max_x = max_x.max(pt[0]);
+            max_y = max_y.max(pt[1]);
+            max_z = max_z.max(pt[2]);
         }
 
         let center = Point::new(
@@ -117,25 +117,25 @@ impl BoundingBox {
 
     pub fn point_at(&self, x: f64, y: f64, z: f64) -> Point {
         Point::new(
-            self.center.x() + x * self.x_axis.x() + y * self.y_axis.x() + z * self.z_axis.x(),
-            self.center.y() + x * self.x_axis.y() + y * self.y_axis.y() + z * self.z_axis.y(),
-            self.center.z() + x * self.x_axis.z() + y * self.y_axis.z() + z * self.z_axis.z(),
+            self.center[0] + x * self.x_axis.x() + y * self.y_axis.x() + z * self.z_axis.x(),
+            self.center[1] + x * self.x_axis.y() + y * self.y_axis.y() + z * self.z_axis.y(),
+            self.center[2] + x * self.x_axis.z() + y * self.y_axis.z() + z * self.z_axis.z(),
         )
     }
 
     pub fn min_point(&self) -> Point {
         Point::new(
-            self.center.x() - self.half_size.x(),
-            self.center.y() - self.half_size.y(),
-            self.center.z() - self.half_size.z(),
+            self.center[0] - self.half_size.x(),
+            self.center[1] - self.half_size.y(),
+            self.center[2] - self.half_size.z(),
         )
     }
 
     pub fn max_point(&self) -> Point {
         Point::new(
-            self.center.x() + self.half_size.x(),
-            self.center.y() + self.half_size.y(),
-            self.center.z() + self.half_size.z(),
+            self.center[0] + self.half_size.x(),
+            self.center[1] + self.half_size.y(),
+            self.center[2] + self.half_size.z(),
         )
     }
 
@@ -205,8 +205,8 @@ impl BoundingBox {
     }
 
     pub fn collides_with(&self, other: &BoundingBox) -> bool {
-        let center_vec = Vector::new(self.center.x(), self.center.y(), self.center.z());
-        let other_center_vec = Vector::new(other.center.x(), other.center.y(), other.center.z());
+        let center_vec = Vector::new(self.center[0], self.center[1], self.center[2]);
+        let other_center_vec = Vector::new(other.center[0], other.center[1], other.center[2]);
         let relative_position = Vector::from_start_and_end(&center_vec, &other_center_vec);
 
         !(Self::separating_plane_exists(&relative_position, &self.x_axis, self, other)

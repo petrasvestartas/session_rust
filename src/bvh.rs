@@ -48,9 +48,9 @@ impl BvhAABB {
     #[inline(always)]
     fn from_bbox(b: &BoundingBox) -> Self {
         BvhAABB {
-            cx: b.center.x(),
-            cy: b.center.y(),
-            cz: b.center.z(),
+            cx: b.center[0],
+            cy: b.center[1],
+            cz: b.center[2],
             hx: b.half_size.x(),
             hy: b.half_size.y(),
             hz: b.half_size.z(),
@@ -157,15 +157,15 @@ impl BVH {
         let mut max_extent = 0.0f64;
         for bbox in bounding_boxes {
             // Find maximum absolute coordinate in any dimension
-            let x_extent = (bbox.center.x() + bbox.half_size.x())
+            let x_extent = (bbox.center[0] + bbox.half_size.x())
                 .abs()
-                .max((bbox.center.x() - bbox.half_size.x()).abs());
-            let y_extent = (bbox.center.y() + bbox.half_size.y())
+                .max((bbox.center[0] - bbox.half_size.x()).abs());
+            let y_extent = (bbox.center[1] + bbox.half_size.y())
                 .abs()
-                .max((bbox.center.y() - bbox.half_size.y()).abs());
-            let z_extent = (bbox.center.z() + bbox.half_size.z())
+                .max((bbox.center[1] - bbox.half_size.y()).abs());
+            let z_extent = (bbox.center[2] + bbox.half_size.z())
                 .abs()
-                .max((bbox.center.z() - bbox.half_size.z()).abs());
+                .max((bbox.center[2] - bbox.half_size.z()).abs());
 
             max_extent = max_extent.max(x_extent).max(y_extent).max(z_extent);
         }
@@ -220,9 +220,9 @@ impl BVH {
             .enumerate()
             .map(|(i, bbox)| {
                 let morton_code = calculate_morton_code(
-                    bbox.center.x(),
-                    bbox.center.y(),
-                    bbox.center.z(),
+                    bbox.center[0],
+                    bbox.center[1],
+                    bbox.center[2],
                     self.world_size,
                 );
                 ObjectInfo { id: i, morton_code }
@@ -503,18 +503,18 @@ impl BVH {
     pub fn merge_aabb(&self, aabb1: &BoundingBox, aabb2: &BoundingBox) -> BoundingBox {
         // Calculate min and max corners
         let min_x =
-            (aabb1.center.x() - aabb1.half_size.x()).min(aabb2.center.x() - aabb2.half_size.x());
+            (aabb1.center[0] - aabb1.half_size.x()).min(aabb2.center[0] - aabb2.half_size.x());
         let min_y =
-            (aabb1.center.y() - aabb1.half_size.y()).min(aabb2.center.y() - aabb2.half_size.y());
+            (aabb1.center[1] - aabb1.half_size.y()).min(aabb2.center[1] - aabb2.half_size.y());
         let min_z =
-            (aabb1.center.z() - aabb1.half_size.z()).min(aabb2.center.z() - aabb2.half_size.z());
+            (aabb1.center[2] - aabb1.half_size.z()).min(aabb2.center[2] - aabb2.half_size.z());
 
         let max_x =
-            (aabb1.center.x() + aabb1.half_size.x()).max(aabb2.center.x() + aabb2.half_size.x());
+            (aabb1.center[0] + aabb1.half_size.x()).max(aabb2.center[0] + aabb2.half_size.x());
         let max_y =
-            (aabb1.center.y() + aabb1.half_size.y()).max(aabb2.center.y() + aabb2.half_size.y());
+            (aabb1.center[1] + aabb1.half_size.y()).max(aabb2.center[1] + aabb2.half_size.y());
         let max_z =
-            (aabb1.center.z() + aabb1.half_size.z()).max(aabb2.center.z() + aabb2.half_size.z());
+            (aabb1.center[2] + aabb1.half_size.z()).max(aabb2.center[2] + aabb2.half_size.z());
 
         // Calculate new center and half_size
         let center = Point::new(
@@ -591,19 +591,19 @@ impl BVH {
 
     pub fn aabb_intersect(&self, aabb1: &BoundingBox, aabb2: &BoundingBox) -> bool {
         // Calculate min/max for both boxes
-        let min1_x = aabb1.center.x() - aabb1.half_size.x();
-        let max1_x = aabb1.center.x() + aabb1.half_size.x();
-        let min1_y = aabb1.center.y() - aabb1.half_size.y();
-        let max1_y = aabb1.center.y() + aabb1.half_size.y();
-        let min1_z = aabb1.center.z() - aabb1.half_size.z();
-        let max1_z = aabb1.center.z() + aabb1.half_size.z();
+        let min1_x = aabb1.center[0] - aabb1.half_size.x();
+        let max1_x = aabb1.center[0] + aabb1.half_size.x();
+        let min1_y = aabb1.center[1] - aabb1.half_size.y();
+        let max1_y = aabb1.center[1] + aabb1.half_size.y();
+        let min1_z = aabb1.center[2] - aabb1.half_size.z();
+        let max1_z = aabb1.center[2] + aabb1.half_size.z();
 
-        let min2_x = aabb2.center.x() - aabb2.half_size.x();
-        let max2_x = aabb2.center.x() + aabb2.half_size.x();
-        let min2_y = aabb2.center.y() - aabb2.half_size.y();
-        let max2_y = aabb2.center.y() + aabb2.half_size.y();
-        let min2_z = aabb2.center.z() - aabb2.half_size.z();
-        let max2_z = aabb2.center.z() + aabb2.half_size.z();
+        let min2_x = aabb2.center[0] - aabb2.half_size.x();
+        let max2_x = aabb2.center[0] + aabb2.half_size.x();
+        let min2_y = aabb2.center[1] - aabb2.half_size.y();
+        let max2_y = aabb2.center[1] + aabb2.half_size.y();
+        let min2_z = aabb2.center[2] - aabb2.half_size.z();
+        let max2_z = aabb2.center[2] + aabb2.half_size.z();
 
         // Check for overlap on all three axes
         min1_x <= max2_x
@@ -765,18 +765,18 @@ impl BVH {
             1.0 / direction.z()
         };
 
-        let tx1 = (min_x - origin.x()) * invx;
-        let tx2 = (max_x - origin.x()) * invx;
+        let tx1 = (min_x - origin[0]) * invx;
+        let tx2 = (max_x - origin[0]) * invx;
         let mut tmin = tx1.min(tx2);
         let mut tmax = tx1.max(tx2);
 
-        let ty1 = (min_y - origin.y()) * invy;
-        let ty2 = (max_y - origin.y()) * invy;
+        let ty1 = (min_y - origin[1]) * invy;
+        let ty2 = (max_y - origin[1]) * invy;
         tmin = tmin.max(ty1.min(ty2));
         tmax = tmax.min(ty1.max(ty2));
 
-        let tz1 = (min_z - origin.z()) * invz;
-        let tz2 = (max_z - origin.z()) * invz;
+        let tz1 = (min_z - origin[2]) * invz;
+        let tz2 = (max_z - origin[2]) * invz;
         tmin = tmin.max(tz1.min(tz2));
         tmax = tmax.min(tz1.max(tz2));
 
