@@ -48,9 +48,9 @@ impl Point {
         }
     }
     /// Deep copy this point but regenerate the guid, mirroring the behavior of
-    /// the C++ copy constructor / Python deepcopy which duplicate all data
+    /// the C++ copy constructor / Python duplicate which duplicate all data
     /// except the unique identifier.
-    pub fn deepcopy(&self) -> Self {
+    pub fn duplicate(&self) -> Self {
         let mut copy = self.clone();
         copy.guid = Uuid::new_v4().to_string();
         copy
@@ -107,12 +107,16 @@ impl Point {
         (c._y - a._y) * (b._x - a._x) > (b._y - a._y) * (c._x - a._x)
     }
 
+    pub fn is_ccw(a: &Point, b: &Point, c: &Point) -> bool {
+        Self::ccw(a, b, c)
+    }
+
     /// Calculate the mid point between this point and another point.
-    pub fn mid_point(&self, p: &Point) -> Point {
+    pub fn mid_point(a: &Point, b: &Point) -> Point {
         Point::new(
-            (self._x + p._x) / 2.0,
-            (self._y + p._y) / 2.0,
-            (self._z + p._z) / 2.0,
+            (a._x + b._x) / 2.0,
+            (a._y + b._y) / 2.0,
+            (a._z + b._z) / 2.0,
         )
     }
 
@@ -140,6 +144,32 @@ impl Point {
             dx * (1.0 + dy * dy + dz * dz).sqrt()
         } else if dx > 0.0 && dx.is_finite() {
             dx
+        } else {
+            0.0
+        }
+    }
+
+    pub fn squared_distance(&self, p: &Point) -> f64 {
+        self.squared_distance_with_min(p, 1e-12)
+    }
+
+    pub fn squared_distance_with_min(&self, p: &Point, double_min: f64) -> f64 {
+        let mut dx = (self[0] - p[0]).abs();
+        let mut dy = (self[1] - p[1]).abs();
+        let mut dz = (self[2] - p[2]).abs();
+
+        if dy >= dx && dy >= dz {
+            std::mem::swap(&mut dx, &mut dy);
+        } else if dz >= dx && dz >= dy {
+            std::mem::swap(&mut dx, &mut dz);
+        }
+
+        if dx > double_min {
+            dy /= dx;
+            dz /= dx;
+            dx * dx * (1.0 + dy * dy + dz * dz)
+        } else if dx > 0.0 && dx.is_finite() {
+            dx * dx
         } else {
             0.0
         }

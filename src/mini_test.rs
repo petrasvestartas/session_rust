@@ -1,8 +1,9 @@
 use serde::Serialize;
 use serde_json::Value;
+use std::cell::RefCell;
+use std::collections::BTreeMap;
 use std::fs;
 use std::path::PathBuf;
-use std::collections::BTreeMap;
 
 /// Shared per-check metadata for the Rust mini-test framework.
 #[derive(Serialize)]
@@ -22,6 +23,27 @@ pub struct TestResult {
     pub code: String,
     pub checks: Vec<CheckRecord>,
     pub failures: Vec<Value>,
+}
+
+std::thread_local! {
+    static CURRENT_CHECKS: RefCell<Vec<CheckRecord>> = RefCell::new(Vec::new());
+}
+
+pub fn start_checks() {
+    CURRENT_CHECKS.with(|c| c.borrow_mut().clear());
+}
+
+pub fn push_check(line: u32, code_line: &'static str, passed: bool) {
+    CURRENT_CHECKS.with(|c| {
+        c.borrow_mut().push(CheckRecord { line, code_line, passed });
+    });
+}
+
+pub fn take_checks() -> Vec<CheckRecord> {
+    CURRENT_CHECKS.with(|c| {
+        let mut v = c.borrow_mut();
+        std::mem::take(&mut *v)
+    })
 }
 
 /// Generic helper to extract the timed body of a mini-test from source.
@@ -88,6 +110,13 @@ pub fn extract_timed_body(file: &str, macro_line: u32, checks: &[CheckRecord]) -
 
 #[macro_export]
 macro_rules! MINI_CHECK {
+    ($expr:expr) => {{
+        let passed = $expr;
+        $crate::mini_test::push_check(line!(), stringify!($expr), passed);
+        if !passed {
+            return Err(format!("expression is not true: {}", stringify!($expr)));
+        }
+    }};
     ($checks:expr, $expr:expr) => {{
         let passed = $expr;
         $checks.push($crate::mini_test::CheckRecord {
@@ -103,6 +132,37 @@ macro_rules! MINI_CHECK {
 
 #[macro_export]
 macro_rules! MINI_TEST {
+    // New, simpler form: body is a block that can use the local `checks` Vec
+    ($test_name:expr, $body:block) => {{
+        let line = line!();
+        let start = std::time::Instant::now();
+        let mut failures = Vec::new();
+        let mut passed = true;
+
+        $crate::mini_test::start_checks();
+        let result: Result<(), String> = (|| -> Result<(), String> { $body; Ok(()) })();
+
+        if let Err(msg) = result {
+            passed = false;
+            failures.push(serde_json::json!({ "error": msg }));
+        }
+
+        let elapsed_ms = start.elapsed().as_secs_f64() * 1000.0;
+        let time_ms = (elapsed_ms * 1000.0).round() / 1000.0;
+        let checks = $crate::mini_test::take_checks();
+        let code = $crate::mini_test::extract_timed_body(file!(), line, &checks);
+
+        $crate::mini_test::TestResult {
+            test_name: $test_name,
+            passed,
+            time_ms,
+            line,
+            code,
+            checks,
+            failures,
+        }
+    }};
+    // Backwards-compatible form: explicit closure that receives &mut checks
     ($test_name:expr, $body:expr) => {{
         let line = line!();
         let start = std::time::Instant::now();
@@ -173,7 +233,7 @@ macro_rules! MINI_TEST_CASE {
 macro_rules! MINI_TEST_FN {
     ($group:expr, $name:expr, $fn_name:ident, $body:block) => {
         pub fn $fn_name() -> $crate::mini_test::TestResult {
-            $crate::MINI_TEST!($name, |checks: &mut Vec<_>| $body)
+            $crate::MINI_TEST!($name, $body)
         }
 
         $crate::REGISTER_MINI_TEST!($group, $name, $fn_name);
