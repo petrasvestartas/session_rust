@@ -33,6 +33,7 @@ impl Tolerance {
     pub const LINEARDEFLECTION: f64 = 1e-3;
     pub const ANGULARDEFLECTION: f64 = 1e-1;
     pub const ANGLE_TOLERANCE_DEGREES: f64 = 0.11;
+    pub const ROUNDING: i32 = 6;
     pub const ZERO_TOLERANCE: f64 = 1e-12;
 
     pub fn new(unit: &str) -> Self {

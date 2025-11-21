@@ -26,6 +26,7 @@ pub mod obj;
 pub mod objects;
 pub mod plane;
 pub mod point;
+pub mod mini_test;
 pub mod pointcloud;
 pub mod polyline;
 pub mod quaternion;
@@ -36,6 +37,7 @@ pub mod treenode;
 pub mod vector;
 pub mod vertex;
 pub mod xform;
+pub mod point_test;
 
 pub use arrow::Arrow;
 pub use boundingbox::BoundingBox;

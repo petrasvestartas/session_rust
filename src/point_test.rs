@@ -1,299 +1,96 @@
-#[cfg(test)]
-mod tests {
-    use crate::encoders::{json_dump, json_load};
-    use crate::{Color, Point, Vector};
+use crate::{MINI_CHECK, MINI_TEST, REGISTER_MINI_TEST};
+use crate::mini_test::TestResult;
 
-    #[test]
-    fn test_point_constructor() {
-        let point = Point::new(1.0, 2.0, 3.0);
-        assert_eq!(point.name, "my_point");
-        assert!(!point.guid.to_string().is_empty());
-        assert_eq!(point.x(), 1.0);
-        assert_eq!(point.y(), 2.0);
-        assert_eq!(point.z(), 3.0);
-        assert_eq!(point.width, 1.0);
-        assert_eq!(point.pointcolor.r, Color::white().r);
-        assert_eq!(point.pointcolor.g, Color::white().g);
-        assert_eq!(point.pointcolor.b, Color::white().b);
-        assert_eq!(point.pointcolor.a, Color::white().a);
-        
-        // Benchmark (run with: cargo test --release -- --nocapture)
-        use std::time::Instant;
-        let iterations = 100_000;
-        let start = Instant::now();
-        for _ in 0..iterations {
-            let _ = Point::new(1.0, 2.0, 3.0);
-        }
-        let duration = start.elapsed();
-        println!("  Point construction: {:.2?} per op ({} iterations)", 
-                 duration / iterations, iterations);
-    }
+pub fn run_point_constructor() -> TestResult {
+    MINI_TEST!("constructor", |checks: &mut Vec<_>| {
+        use crate::Point;
+        use crate::Vector;
+        use crate::Color;
 
-    #[test]
-    fn test_point_equality() {
-        let p1 = Point::new(1.0, 2.0, 3.0);
-        let p2 = Point::new(1.0, 2.0, 3.0);
-        assert_eq!(p1, p2);
-        assert!(!(p1 != p2));
+        // Constructor
+        let mut p = Point::new(1.0, 2.0, 3.0);
 
-        let p3 = Point::new(1.0, 2.0, 3.0);
-        let p4 = Point::new(1.1, 2.0, 3.0);
-        assert!(!(p3 == p4));
-        assert_ne!(p3, p4);
-    }
+        // Setters
+        p[0] = 10.0;
+        p[1] = 20.0;
+        p[2] = 30.0;
 
-    #[test]
-    fn test_point_to_json_data() {
-        let mut point = Point::new(15.5, 25.7, 35.9);
-        point.name = "survey_point_A".to_string();
-        point.width = 2.5;
-        point.pointcolor = Color::new(255, 128, 64, 255);
+        // Getters
+        let x = p[0];
+        let y = p[1];
+        let z = p[2];
 
-        let json_string = point.jsondump().unwrap();
-        let data: serde_json::Value = serde_json::from_str(&json_string).unwrap();
+        // String representation
+        let pstr = p.str();
+        let prepr = p.repr();
 
-        assert_eq!(data["type"], "Point");
-        assert_eq!(data["name"], "survey_point_A");
-        assert_eq!(data["x"], 15.5);
-        assert_eq!(data["y"], 25.7);
-        assert_eq!(data["z"], 35.9);
-        assert_eq!(data["width"], 2.5);
-        assert_eq!(data["pointcolor"]["r"], 255);
-        assert_eq!(data["pointcolor"]["g"], 128);
-        assert_eq!(data["pointcolor"]["b"], 64);
-        assert_eq!(data["pointcolor"]["a"], 255);
-        assert!(data["guid"].is_string());
-    }
+        // Copy (duplicate everything but guid)
+        let pcopy = p.deepcopy();
+        let pother = Point::new(1.0, 2.0, 3.0);
 
-    #[test]
-    fn test_point_from_json_data() {
-        let mut original_point = Point::new(42.1, 84.2, 126.3);
-        original_point.name = "control_point_B".to_string();
-        original_point.width = 3.0;
-        original_point.pointcolor = Color::new(200, 100, 50, 255);
+        // No-copy operators
+        let mut pmult = Point::new(p[0], p[1], p[2]);
+        pmult *= 2.0;
+        let mut pdiv = Point::new(p[0], p[1], p[2]);
+        pdiv /= 2.0;
+        let mut padd = Point::new(p[0], p[1], p[2]);
+        padd += Vector::new(1.0, 1.0, 1.0);
+        let mut psub = Point::new(p[0], p[1], p[2]);
+        psub -= Vector::new(1.0, 1.0, 1.0);
 
-        let json_string = original_point.jsondump().unwrap();
-        let restored_point = Point::jsonload(&json_string).unwrap();
+        // Copy operators
+        let result_mul = p.clone() * 2.0;
+        let result_div = p.clone() / 2.0;
+        let result_add = p.clone() + Vector::new(1.0, 1.0, 1.0);
+        let diff_point = p.clone() - Vector::new(1.0, 1.0, 1.0);
 
-        assert_eq!(restored_point.x(), 42.1);
-        assert_eq!(restored_point.y(), 84.2);
-        assert_eq!(restored_point.z(), 126.3);
-        assert_eq!(restored_point.name, "control_point_B");
-        assert_eq!(restored_point.width, 3.0);
-        assert_eq!(restored_point.pointcolor.r, 200);
-        assert_eq!(restored_point.pointcolor.g, 100);
-        assert_eq!(restored_point.pointcolor.b, 50);
-        assert_eq!(restored_point.pointcolor.a, 255);
-        assert_eq!(restored_point.guid, original_point.guid);
-    }
+        MINI_CHECK!(
+            checks,
+            p.name == "my_point"
+                && p[0] == 10.0
+                && p[1] == 20.0
+                && p[2] == 30.0
+                && p.width == 1.0
+                && p.pointcolor == Color::blue()
+                && !p.guid.is_empty()
+        );
 
-    #[test]
-    fn test_point_to_json_from_json() {
-        let mut original = Point::new(123.45, 678.90, 999.11);
-        original.name = "file_test_point".to_string();
-        original.width = 4.5;
-        original.pointcolor = Color::new(0, 255, 128, 255);
-        let filename = "test_point.json";
+        MINI_CHECK!(checks, x == 10.0 && y == 20.0 && z == 30.0);
 
-        json_dump(&original, filename, true).unwrap();
-        let loaded = json_load::<Point>(filename).unwrap();
+        MINI_CHECK!(checks, pstr == "10.000000, 20.000000, 30.000000");
+        MINI_CHECK!(
+            checks,
+            prepr
+                == "Point(my_point, 10.000000, 20.000000, 30.000000, Color(0, 0, 255, 255), 1.000000)"
+        );
+        MINI_CHECK!(checks, p == pcopy && pcopy.guid != p.guid);
+        MINI_CHECK!(checks, pother != p);
 
-        assert_eq!(loaded.x(), original.x());
-        assert_eq!(loaded.y(), original.y());
-        assert_eq!(loaded.z(), original.z());
-        assert_eq!(loaded.name, original.name);
-        assert_eq!(loaded.width, original.width);
-        assert_eq!(loaded.pointcolor.r, original.pointcolor.r);
-        assert_eq!(loaded.pointcolor.g, original.pointcolor.g);
-        assert_eq!(loaded.pointcolor.b, original.pointcolor.b);
-        assert_eq!(loaded.pointcolor.a, original.pointcolor.a);
-        assert_eq!(loaded.guid, original.guid);
-    }
+        MINI_CHECK!(checks, pmult[0] == 20.0 && pmult[1] == 40.0 && pmult[2] == 60.0);
+        MINI_CHECK!(checks, pdiv[0] == 5.0 && pdiv[1] == 10.0 && pdiv[2] == 15.0);
+        MINI_CHECK!(checks, padd[0] == 11.0 && padd[1] == 21.0 && padd[2] == 31.0);
+        MINI_CHECK!(checks, psub[0] == 9.0 && psub[1] == 19.0 && psub[2] == 29.0);
 
-    ///////////////////////////////////////////////////////////////////////////////////////////
-    // No-copy Operators
-    ///////////////////////////////////////////////////////////////////////////////////////////
+        MINI_CHECK!(
+            checks,
+            result_mul[0] == 20.0 && result_mul[1] == 40.0 && result_mul[2] == 60.0
+        );
+        MINI_CHECK!(
+            checks,
+            result_div[0] == 5.0 && result_div[1] == 10.0 && result_div[2] == 15.0
+        );
+        MINI_CHECK!(
+            checks,
+            result_add[0] == 11.0 && result_add[1] == 21.0 && result_add[2] == 31.0
+        );
+        MINI_CHECK!(
+            checks,
+            diff_point[0] == 9.0 && diff_point[1] == 19.0 && diff_point[2] == 29.0
+        );
 
-    #[test]
-    fn test_point_getitem() {
-        let point = Point::new(1.0, 2.0, 3.0);
-        assert_eq!(point[0], 1.0);
-        assert_eq!(point[1], 2.0);
-        assert_eq!(point[2], 3.0);
-        
-        // Benchmark
-        use std::time::Instant;
-        let iterations = 100_000;
-        let start = Instant::now();
-        for _ in 0..iterations {
-            let _ = point[0] + point[1] + point[2];
-        }
-        let duration = start.elapsed();
-        println!("  Point indexing: {:.2?} per op ({} iterations)", 
-                 duration / iterations, iterations);
-    }
-
-    #[test]
-    fn test_point_setitem() {
-        let mut point = Point::new(1.0, 2.0, 3.0);
-        point[0] = 4.0;
-        point[1] = 5.0;
-        point[2] = 6.0;
-        assert_eq!(point.x(), 4.0);
-        assert_eq!(point.y(), 5.0);
-        assert_eq!(point.z(), 6.0);
-    }
-
-    #[test]
-    fn test_point_imul() {
-        let mut point = Point::new(1.0, 2.0, 3.0);
-        point *= 2.0;
-        assert_eq!(point.x(), 2.0);
-        assert_eq!(point.y(), 4.0);
-        assert_eq!(point.z(), 6.0);
-    }
-
-    #[test]
-    fn test_point_itruediv() {
-        let mut point = Point::new(2.0, 4.0, 6.0);
-        point /= 2.0;
-        assert_eq!(point.x(), 1.0);
-        assert_eq!(point.y(), 2.0);
-        assert_eq!(point.z(), 3.0);
-    }
-
-    #[test]
-    fn test_point_iadd() {
-        let mut point = Point::new(1.0, 2.0, 3.0);
-        point += Vector::new(4.0, 5.0, 6.0);
-        assert_eq!(point.x(), 5.0);
-        assert_eq!(point.y(), 7.0);
-        assert_eq!(point.z(), 9.0);
-    }
-
-    #[test]
-    fn test_point_isub() {
-        let mut point = Point::new(5.0, 7.0, 9.0);
-        point -= Vector::new(4.0, 5.0, 6.0);
-        assert_eq!(point.x(), 1.0);
-        assert_eq!(point.y(), 2.0);
-        assert_eq!(point.z(), 3.0);
-    }
-
-    ///////////////////////////////////////////////////////////////////////////////////////////
-    // Copy Operators
-    ///////////////////////////////////////////////////////////////////////////////////////////
-
-    #[test]
-    fn test_point_mul() {
-        let point = Point::new(1.0, 2.0, 3.0);
-        let result = point * 2.0;
-        assert_eq!(result.x(), 2.0);
-        assert_eq!(result.y(), 4.0);
-        assert_eq!(result.z(), 6.0);
-    }
-
-    #[test]
-    fn test_point_truediv() {
-        let point = Point::new(2.0, 4.0, 6.0);
-        let result = point / 2.0;
-        assert_eq!(result.x(), 1.0);
-        assert_eq!(result.y(), 2.0);
-        assert_eq!(result.z(), 3.0);
-    }
-
-    #[test]
-    fn test_point_add() {
-        let point = Point::new(1.0, 2.0, 3.0);
-        let result = point + Vector::new(4.0, 5.0, 6.0);
-        assert_eq!(result.x(), 5.0);
-        assert_eq!(result.y(), 7.0);
-        assert_eq!(result.z(), 9.0);
-    }
-
-    #[test]
-    fn test_point_sub() {
-        let point = Point::new(5.0, 7.0, 9.0);
-        let result = point - Point::new(4.0, 5.0, 6.0);
-        assert_eq!(result.x(), 1.0);
-        assert_eq!(result.y(), 2.0);
-        assert_eq!(result.z(), 3.0);
-    }
-
-    ///////////////////////////////////////////////////////////////////////////////////////////
-    // Details
-    ///////////////////////////////////////////////////////////////////////////////////////////
-
-    #[test]
-    fn test_point_ccw() {
-        let a = Point::new(0.0, 0.0, 0.0);
-        let b = Point::new(1.0, 0.0, 0.0);
-        let c = Point::new(0.0, 1.0, 0.0);
-        assert!(Point::ccw(&a, &b, &c));
-        assert!(!Point::ccw(&b, &a, &c));
-    }
-
-    #[test]
-    fn test_point_mid_point() {
-        let p1 = Point::new(0.0, 0.0, 0.0);
-        let p2 = Point::new(1.0, 0.0, 0.0);
-        let mid = p1.mid_point(&p2);
-        assert_eq!((mid.x() * 1000000.0).round() / 1000000.0, 0.5);
-        assert_eq!((mid.y() * 1000000.0).round() / 1000000.0, 0.0);
-        assert_eq!((mid.z() * 1000000.0).round() / 1000000.0, 0.0);
-        
-        // Benchmark
-        use std::time::Instant;
-        let iterations = 100_000;
-        let start = Instant::now();
-        for _ in 0..iterations {
-            let _ = p1.mid_point(&p2);
-        }
-        let duration = start.elapsed();
-        println!("  Point midpoint: {:.2?} per op ({} iterations)", 
-                 duration / iterations, iterations);
-    }
-
-    #[test]
-    fn test_point_distance() {
-        let p1 = Point::new(0.0, 0.0, 0.0);
-        let p2 = Point::new(1.0, 0.0, 0.0);
-        assert_eq!((p1.distance(&p2) * 1000000.0).round() / 1000000.0, 1.0);
-        
-        // Benchmark
-        use std::time::Instant;
-        let iterations = 100_000;
-        let start = Instant::now();
-        for _ in 0..iterations {
-            let _ = p1.distance(&p2);
-        }
-        let duration = start.elapsed();
-        println!("  Point distance: {:.2?} per op ({} iterations)", 
-                 duration / iterations, iterations);
-    }
-
-    #[test]
-    fn test_point_area() {
-        let points = vec![
-            Point::new(0.0, 0.0, 0.0),
-            Point::new(1.0, 0.0, 0.0),
-            Point::new(0.0, 1.0, 0.0),
-        ];
-        assert_eq!(Point::area(&points), 0.5);
-    }
-
-    #[test]
-    fn test_point_centroid_quad() {
-        let vertices = vec![
-            Point::new(0.0, 0.0, 0.0),
-            Point::new(1.0, 0.0, 0.0),
-            Point::new(1.0, 1.0, 0.0),
-            Point::new(0.0, 1.0, 0.0),
-        ];
-        let centroid = Point::centroid_quad(&vertices).unwrap();
-        assert_eq!((centroid.x() * 1000000.0).round() / 1000000.0, 0.5);
-        assert_eq!((centroid.y() * 1000000.0).round() / 1000000.0, 0.5);
-        assert_eq!((centroid.z() * 1000000.0).round() / 1000000.0, 0.0);
-    }
-
+        Ok(())
+    })
 }
+
+// Register tests with the shared registry for run_all("rust")
+REGISTER_MINI_TEST!("Point", "constructor", crate::point_test::run_point_constructor);

@@ -30,7 +30,7 @@ impl Default for Point {
             _z: 0.0,
             guid: Uuid::new_v4().to_string(),
             name: "my_point".to_string(),
-            pointcolor: Color::white(),
+            pointcolor: Color::blue(),
             width: 1.0,
             xform: Xform::identity(),
         }
@@ -46,6 +46,14 @@ impl Point {
             _z: z,
             ..Default::default()
         }
+    }
+    /// Deep copy this point but regenerate the guid, mirroring the behavior of
+    /// the C++ copy constructor / Python deepcopy which duplicate all data
+    /// except the unique identifier.
+    pub fn deepcopy(&self) -> Self {
+        let mut copy = self.clone();
+        copy.guid = Uuid::new_v4().to_string();
+        copy
     }
     ///////////////////////////////////////////////////////////////////////////////////////////
     // JSON
@@ -181,6 +189,36 @@ impl Point {
 
         let result = centroid_sum / total_area;
         Ok(Point::new(result.x(), result.y(), result.z()))
+    }
+
+    /// Simple string form (like Python __str__): just coordinates
+    pub fn str(&self) -> String {
+        use crate::tolerance::TOL;
+        let prec = Some(crate::tolerance::Tolerance::ROUNDING);
+        format!(
+            "{}, {}, {}",
+            TOL.format_number(self._x, prec),
+            TOL.format_number(self._y, prec),
+            TOL.format_number(self._z, prec),
+        )
+    }
+
+    /// Detailed representation (like Python __repr__)
+    pub fn repr(&self) -> String {
+        use crate::tolerance::TOL;
+        let prec = Some(crate::tolerance::Tolerance::ROUNDING);
+        format!(
+            "Point({}, {}, {}, {}, Color({}, {}, {}, {}), {})",
+            self.name,
+            TOL.format_number(self._x, prec),
+            TOL.format_number(self._y, prec),
+            TOL.format_number(self._z, prec),
+            self.pointcolor.r,
+            self.pointcolor.g,
+            self.pointcolor.b,
+            self.pointcolor.a,
+            TOL.format_number(self.width, prec),
+        )
     }
 }
 
