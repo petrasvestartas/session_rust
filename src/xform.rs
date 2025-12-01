@@ -5,7 +5,7 @@ use std::ops::{Index, IndexMut, Mul, MulAssign};
 use uuid::Uuid;
 
 /// A 4x4 column-major transformation matrix in 3D space
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename = "Xform")]
 pub struct Xform {
     #[serde(rename = "type")]
@@ -679,6 +679,20 @@ impl Default for Xform {
         Self::identity()
     }
 }
+
+/// Custom PartialEq that compares only matrix values (with tolerance), ignoring guid and name
+impl PartialEq for Xform {
+    fn eq(&self, other: &Self) -> bool {
+        for i in 0..16 {
+            if (self.m[i] - other.m[i]).abs() > 1e-10 {
+                return false;
+            }
+        }
+        true
+    }
+}
+
+impl Eq for Xform {}
 
 // Implement Index trait for accessing matrix elements with [(row, col)] syntax
 impl Index<(usize, usize)> for Xform {

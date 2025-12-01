@@ -5,6 +5,11 @@
 // Usage: session_rust::point::Point
 #![allow(static_mut_refs)]
 
+#[cfg(feature = "protobuf")]
+pub mod proto {
+    include!(concat!(env!("OUT_DIR"), "/session_proto.rs"));
+}
+
 pub mod arrow;
 pub mod boundingbox;
 pub mod bvh;

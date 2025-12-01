@@ -99,6 +99,83 @@ impl Point {
     }
 
     ///////////////////////////////////////////////////////////////////////////////////////////
+    // Protobuf Serialization
+    ///////////////////////////////////////////////////////////////////////////////////////////
+
+    #[cfg(feature = "protobuf")]
+    /// Convert to protobuf binary format.
+    pub fn to_protobuf(&self) -> Vec<u8> {
+        use prost::Message;
+        
+        let proto = crate::proto::Point {
+            guid: self.guid.clone(),
+            name: self.name.clone(),
+            x: self._x,
+            y: self._y,
+            z: self._z,
+            width: self.width,
+            pointcolor: Some(crate::proto::Color {
+                name: self.pointcolor.name.clone(),
+                r: self.pointcolor.r as i32,
+                g: self.pointcolor.g as i32,
+                b: self.pointcolor.b as i32,
+                a: self.pointcolor.a as i32,
+            }),
+            xform: Some(crate::proto::Xform {
+                name: self.xform.name.clone(),
+                matrix: self.xform.m.to_vec(),
+            }),
+        };
+        proto.encode_to_vec()
+    }
+
+    #[cfg(feature = "protobuf")]
+    /// Create Point from protobuf binary data.
+    pub fn from_protobuf(data: &[u8]) -> Result<Self, Box<dyn std::error::Error>> {
+        use prost::Message;
+        
+        let proto = crate::proto::Point::decode(data)?;
+        
+        let mut pt = Self::new(proto.x, proto.y, proto.z);
+        pt.guid = proto.guid;
+        pt.name = proto.name;
+        pt.width = proto.width;
+        
+        if let Some(color) = proto.pointcolor {
+            pt.pointcolor.name = color.name;
+            pt.pointcolor.r = color.r as u8;
+            pt.pointcolor.g = color.g as u8;
+            pt.pointcolor.b = color.b as u8;
+            pt.pointcolor.a = color.a as u8;
+        }
+        
+        if let Some(xform) = proto.xform {
+            pt.xform.name = xform.name;
+            for (i, val) in xform.matrix.iter().enumerate() {
+                if i < 16 {
+                    pt.xform.m[i] = *val;
+                }
+            }
+        }
+        
+        Ok(pt)
+    }
+
+    #[cfg(feature = "protobuf")]
+    /// Write protobuf to file.
+    pub fn protobuf_dump(&self, filepath: &str) {
+        let data = self.to_protobuf();
+        std::fs::write(filepath, data).expect("Failed to write protobuf file");
+    }
+
+    #[cfg(feature = "protobuf")]
+    /// Read protobuf from file.
+    pub fn protobuf_load(filepath: &str) -> Self {
+        let data = std::fs::read(filepath).expect("Failed to read protobuf file");
+        Self::from_protobuf(&data).expect("Failed to parse protobuf")
+    }
+
+    ///////////////////////////////////////////////////////////////////////////////////////////
     // Details
     ///////////////////////////////////////////////////////////////////////////////////////////
 

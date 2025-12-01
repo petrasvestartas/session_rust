@@ -263,6 +263,12 @@ impl Tolerance {
         }
         0
     }
+
+    /// Round a value to a given number of decimal places (like Python's round(value, ndigits))
+    pub fn round_to(value: f64, ndigits: i32) -> f64 {
+        let factor = 10f64.powi(ndigits);
+        (value * factor).round() / factor
+    }
 }
 
 impl Default for Tolerance {

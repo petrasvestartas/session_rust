@@ -27,16 +27,28 @@ pub struct TestResult {
 
 std::thread_local! {
     static CURRENT_CHECKS: RefCell<Vec<CheckRecord>> = RefCell::new(Vec::new());
+    static CURRENT_ASSERTION_TIME: RefCell<f64> = RefCell::new(0.0);
 }
 
 pub fn start_checks() {
     CURRENT_CHECKS.with(|c| c.borrow_mut().clear());
+    CURRENT_ASSERTION_TIME.with(|t| *t.borrow_mut() = 0.0);
 }
 
-pub fn push_check(line: u32, code_line: &'static str, passed: bool) {
+pub fn push_check(line: u32, code_line: &'static str, passed: bool, start: std::time::Instant) {
     CURRENT_CHECKS.with(|c| {
         c.borrow_mut().push(CheckRecord { line, code_line, passed });
     });
+    let elapsed = start.elapsed().as_secs_f64() * 1000.0;
+    CURRENT_ASSERTION_TIME.with(|t| *t.borrow_mut() += elapsed);
+}
+
+pub fn take_assertion_time() -> f64 {
+    CURRENT_ASSERTION_TIME.with(|t| {
+        let v = *t.borrow();
+        *t.borrow_mut() = 0.0;
+        v
+    })
 }
 
 pub fn take_checks() -> Vec<CheckRecord> {
@@ -111,8 +123,9 @@ pub fn extract_timed_body(file: &str, macro_line: u32, checks: &[CheckRecord]) -
 #[macro_export]
 macro_rules! MINI_CHECK {
     ($expr:expr) => {{
+        let _check_start = std::time::Instant::now();
         let passed = $expr;
-        $crate::mini_test::push_check(line!(), stringify!($expr), passed);
+        $crate::mini_test::push_check(line!(), stringify!($expr), passed, _check_start);
         if !passed {
             return Err(format!("expression is not true: {}", stringify!($expr)));
         }
@@ -148,7 +161,9 @@ macro_rules! MINI_TEST {
         }
 
         let elapsed_ms = start.elapsed().as_secs_f64() * 1000.0;
-        let time_ms = (elapsed_ms * 1000.0).round() / 1000.0;
+        let assertion_time = $crate::mini_test::take_assertion_time();
+        let effective_ms = (elapsed_ms - assertion_time).max(0.0);
+        let time_ms = (effective_ms * 1000.0).round() / 1000.0;
         let checks = $crate::mini_test::take_checks();
         let code = $crate::mini_test::extract_timed_body(file!(), line, &checks);
 
@@ -179,6 +194,7 @@ macro_rules! MINI_TEST {
 
         let elapsed_ms = start.elapsed().as_secs_f64() * 1000.0;
         let time_ms = (elapsed_ms * 1000.0).round() / 1000.0;
+        // Note: backwards-compatible form doesn't subtract assertion time
         let code = $crate::mini_test::extract_timed_body(file!(), line, &checks);
 
         $crate::mini_test::TestResult {
