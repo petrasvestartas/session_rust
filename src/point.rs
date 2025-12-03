@@ -115,6 +115,7 @@ impl Point {
             z: self._z,
             width: self.width,
             pointcolor: Some(crate::proto::Color {
+                guid: self.pointcolor.guid.clone(),
                 name: self.pointcolor.name.clone(),
                 r: self.pointcolor.r as i32,
                 g: self.pointcolor.g as i32,
