@@ -16,6 +16,7 @@ pub mod bvh;
 #[cfg(test)]
 mod bvh_test;
 pub mod color;
+pub mod color_test;
 pub mod cylinder;
 pub mod edge;
 pub mod encoders;

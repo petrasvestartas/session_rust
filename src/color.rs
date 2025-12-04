@@ -1,5 +1,6 @@
 use serde::{ser::Serialize as SerTrait, Deserialize, Serialize};
 use std::fmt;
+use std::ops::{Index, IndexMut};
 use uuid::Uuid;
 
 /// A color with RGBA values and JSON serialization support.
@@ -15,16 +16,54 @@ pub struct Color {
 }
 
 impl Color {
-    /// Create new color.
+    /// Create new color with optional name.
     pub fn new(r: u8, g: u8, b: u8, a: u8) -> Self {
         Color {
             guid: Uuid::new_v4().to_string(),
-            name: "Color".to_string(),
+            name: "my_color".to_string(),
             r,
             g,
             b,
             a,
         }
+    }
+
+    /// Create new color with custom name.
+    pub fn with_name(r: u8, g: u8, b: u8, a: u8, name: &str) -> Self {
+        Color {
+            guid: Uuid::new_v4().to_string(),
+            name: name.to_string(),
+            r,
+            g,
+            b,
+            a,
+        }
+    }
+
+    ///////////////////////////////////////////////////////////////////////////////////////////
+    // Operators
+    ///////////////////////////////////////////////////////////////////////////////////////////
+
+    /// Duplicate the color (creates a copy with new guid).
+    pub fn duplicate(&self) -> Self {
+        Color {
+            guid: Uuid::new_v4().to_string(),
+            name: self.name.clone(),
+            r: self.r,
+            g: self.g,
+            b: self.b,
+            a: self.a,
+        }
+    }
+
+    /// Simple string representation (like Python __str__): "r, g, b, a"
+    pub fn str(&self) -> String {
+        format!("{}, {}, {}, {}", self.r, self.g, self.b, self.a)
+    }
+
+    /// Detailed representation (like Python __repr__): "Color(name, r, g, b, a)"
+    pub fn repr(&self) -> String {
+        format!("Color({}, {}, {}, {}, {})", self.name, self.r, self.g, self.b, self.a)
     }
 
     ///////////////////////////////////////////////////////////////////////////////////////////
@@ -186,6 +225,53 @@ impl Color {
     }
 
     ///////////////////////////////////////////////////////////////////////////////////////////
+    // Protobuf Serialization
+    ///////////////////////////////////////////////////////////////////////////////////////////
+
+    #[cfg(feature = "protobuf")]
+    /// Convert to protobuf binary format.
+    pub fn to_protobuf(&self) -> Vec<u8> {
+        use prost::Message;
+        
+        let proto = crate::proto::Color {
+            guid: self.guid.clone(),
+            name: self.name.clone(),
+            r: self.r as i32,
+            g: self.g as i32,
+            b: self.b as i32,
+            a: self.a as i32,
+        };
+        proto.encode_to_vec()
+    }
+
+    #[cfg(feature = "protobuf")]
+    /// Create Color from protobuf binary data.
+    pub fn from_protobuf(data: &[u8]) -> Result<Self, Box<dyn std::error::Error>> {
+        use prost::Message;
+        
+        let proto = crate::proto::Color::decode(data)?;
+        
+        let mut color = Self::new(proto.r as u8, proto.g as u8, proto.b as u8, proto.a as u8);
+        color.guid = proto.guid;
+        color.name = proto.name;
+        Ok(color)
+    }
+
+    #[cfg(feature = "protobuf")]
+    /// Write protobuf to file.
+    pub fn protobuf_dump(&self, filepath: &str) {
+        let data = self.to_protobuf();
+        std::fs::write(filepath, data).expect("Failed to write protobuf file");
+    }
+
+    #[cfg(feature = "protobuf")]
+    /// Read protobuf from file.
+    pub fn protobuf_load(filepath: &str) -> Self {
+        let data = std::fs::read(filepath).expect("Failed to read protobuf file");
+        Self::from_protobuf(&data).expect("Failed to parse protobuf")
+    }
+
+    ///////////////////////////////////////////////////////////////////////////////////////////
     // Details
     ///////////////////////////////////////////////////////////////////////////////////////////
 
@@ -248,12 +334,39 @@ impl Default for Color {
 }
 
 impl fmt::Display for Color {
+    /// Display format matches Python __str__: "r, g, b, a"
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(
-            f,
-            "Color(r={}, g={}, b={}, a={}, name={})",
-            self.r, self.g, self.b, self.a, self.name
-        )
+        write!(f, "{}, {}, {}, {}", self.r, self.g, self.b, self.a)
+    }
+}
+
+///////////////////////////////////////////////////////////////////////////////////////////
+// Index Access (like Python __getitem__ / __setitem__)
+///////////////////////////////////////////////////////////////////////////////////////////
+
+impl Index<usize> for Color {
+    type Output = u8;
+
+    fn index(&self, index: usize) -> &Self::Output {
+        match index {
+            0 => &self.r,
+            1 => &self.g,
+            2 => &self.b,
+            3 => &self.a,
+            _ => panic!("Index out of range"),
+        }
+    }
+}
+
+impl IndexMut<usize> for Color {
+    fn index_mut(&mut self, index: usize) -> &mut Self::Output {
+        match index {
+            0 => &mut self.r,
+            1 => &mut self.g,
+            2 => &mut self.b,
+            3 => &mut self.a,
+            _ => panic!("Index out of range"),
+        }
     }
 }
 

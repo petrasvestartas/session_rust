@@ -109,12 +109,17 @@ pub fn run_point_is_ccw() -> TestResult {
 pub fn run_point_mid_point() -> TestResult {
     MINI_TEST!("mid_point", {
         use crate::Point;
+        use crate::Tolerance;
 
         let p0 = Point::new(0.0, 2.0, 1.0);
         let p1 = Point::new(1.0, 5.0, 3.0);
         let mid = Point::mid_point(&p0, &p1);
 
-        MINI_CHECK!(mid[0] == 0.5 && mid[1] == 3.5 && mid[2] == 2.0);
+        let x = Tolerance::round_to(mid[0], Tolerance::ROUNDING);
+        let y = Tolerance::round_to(mid[1], Tolerance::ROUNDING);
+        let z = Tolerance::round_to(mid[2], Tolerance::ROUNDING);
+
+        MINI_CHECK!(x == 0.5 && y == 3.5 && z == 2.0);
     })
 }
 
@@ -125,8 +130,7 @@ pub fn run_point_distance() -> TestResult {
 
         let p0 = Point::new(0.0, 2.0, 1.0);
         let p1 = Point::new(1.0, 5.0, 3.0);
-        let factor = 10f64.powi(Tolerance::ROUNDING);
-        let d = (p0.distance(&p1) * factor).round() / factor;
+        let d = Tolerance::round_to(p0.distance(&p1), Tolerance::ROUNDING);
 
         MINI_CHECK!(d == 3.741657);
     })
@@ -139,8 +143,7 @@ pub fn run_point_squared_distance() -> TestResult {
 
         let p0 = Point::new(0.0, 2.0, 1.0);
         let p1 = Point::new(1.0, 5.0, 3.0);
-        let factor = 10f64.powi(Tolerance::ROUNDING);
-        let d = (p0.squared_distance(&p1) * factor).round() / factor;
+        let d = Tolerance::round_to(p0.squared_distance(&p1), Tolerance::ROUNDING);
 
         MINI_CHECK!(d == 14.0);
     })
@@ -172,10 +175,9 @@ pub fn run_point_centroid_quad() -> TestResult {
         let p2 = Point::new(2.0, 2.0, 2.0);
         let p3 = Point::new(0.0, 2.0, 1.0);
         let centroid = Point::centroid_quad(&vec![p0, p1, p2, p3]).unwrap();
-        let factor = 10f64.powi(Tolerance::ROUNDING);
-        let x = (centroid[0] * factor).round() / factor;
-        let y = (centroid[1] * factor).round() / factor;
-        let z = (centroid[2] * factor).round() / factor;
+        let x = Tolerance::round_to(centroid[0], Tolerance::ROUNDING);
+        let y = Tolerance::round_to(centroid[1], Tolerance::ROUNDING);
+        let z = Tolerance::round_to(centroid[2], Tolerance::ROUNDING);
 
         MINI_CHECK!(x == 1.0 && y == 1.0 && z == 1.0);
     })
@@ -185,16 +187,14 @@ pub fn run_point_json_roundtrip() -> TestResult {
     MINI_TEST!("json_roundtrip", {
         use crate::Point;
         use crate::Color;
-        use crate::encoders;
 
-        let mut p = Point::new(1.5, 2.5, 3.5);
-        p.name = "test_point".to_string();
+        let mut p = Point::with_name(1.5, 2.5, 3.5, "test_point");
         p.width = 2.0;
         p.pointcolor = Color::new(255, 128, 64, 255);
 
         let filename = "test_point.json";
-        encoders::json_dump(&p, filename, true).unwrap();
-        let loaded: Point = encoders::json_load(filename).unwrap();
+        p.to_json(filename).unwrap();
+        let loaded = Point::from_json(filename).unwrap();
 
         MINI_CHECK!(loaded.name == p.name);
         MINI_CHECK!(loaded[0] == p[0]);

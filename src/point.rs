@@ -47,6 +47,18 @@ impl Point {
             ..Default::default()
         }
     }
+
+    /// Creates a new Point with specified coordinates and name.
+    pub fn with_name(x: f64, y: f64, z: f64, name: &str) -> Self {
+        Self {
+            _x: x,
+            _y: y,
+            _z: z,
+            name: name.to_string(),
+            ..Default::default()
+        }
+    }
+
     /// Deep copy this point but regenerate the guid, mirroring the behavior of
     /// the C++ copy constructor / Python duplicate which duplicate all data
     /// except the unique identifier.
