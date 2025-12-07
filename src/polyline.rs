@@ -380,7 +380,7 @@ impl Polyline {
             let t = Self::closest_point_to_line(point, &self.points[i], &self.points[i + 1]);
             let point_on_segment =
                 Self::point_at_parameter(&self.points[i], &self.points[i + 1], t);
-            let distance = point.distance(&point_on_segment);
+            let distance = point.distance(&point_on_segment, None);
 
             if distance < closest_distance {
                 closest_distance = distance;
@@ -406,7 +406,7 @@ impl Polyline {
         self.points
             .first()
             .unwrap()
-            .distance(self.points.last().unwrap())
+            .distance(self.points.last().unwrap(), None)
             < Tolerance::ZERO_TOLERANCE
     }
 

@@ -53,7 +53,7 @@ pub fn line_line_parameters(
         if tolerance > 0.0 {
             let pt0 = line0.point_at(t0);
             let pt1 = line1.point_at(t1);
-            if pt0.distance(&pt1) > tolerance {
+            if pt0.distance(&pt1, None) > tolerance {
                 return None;
             }
         }
@@ -72,7 +72,7 @@ pub fn line_line_parameters(
     if tolerance > 0.0 {
         let pt0 = line0.point_at(t0);
         let pt1 = line1.point_at(t1);
-        if pt0.distance(&pt1) > tolerance {
+        if pt0.distance(&pt1, None) > tolerance {
             return None;
         }
     }
@@ -525,7 +525,7 @@ pub fn curve_closest_point(curve: &NurbsCurve, test_point: &Point, t0: f64, t1: 
     for i in 0..=samples {
         let t = t_start + i as f64 * dt;
         let pt = curve.point_at(t);
-        let dist = pt.distance(test_point);
+        let dist = pt.distance(test_point, None);
         if dist < best_dist {
             best_dist = dist;
             best_t = t;

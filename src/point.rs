@@ -211,12 +211,12 @@ impl Point {
     }
 
     /// Calculate the distance between this point and another point.
-    pub fn distance(&self, p: &Point) -> f64 {
-        self.distance_with_min(p, 1e-12)
-    }
-
-    /// Calculate the distance between this point and another point with custom minimum.
-    pub fn distance_with_min(&self, p: &Point, double_min: f64) -> f64 {
+    /// 
+    /// # Arguments
+    /// * `p` - The other point
+    /// * `double_min` - Optional minimum value for distance calculation. Defaults to 1e-12.
+    pub fn distance(&self, p: &Point, double_min: Option<f64>) -> f64 {
+        let double_min = double_min.unwrap_or(1e-12);
         let mut dx = (self[0] - p[0]).abs();
         let mut dy = (self[1] - p[1]).abs();
         let mut dz = (self[2] - p[2]).abs();
@@ -239,11 +239,13 @@ impl Point {
         }
     }
 
-    pub fn squared_distance(&self, p: &Point) -> f64 {
-        self.squared_distance_with_min(p, 1e-12)
-    }
-
-    pub fn squared_distance_with_min(&self, p: &Point, double_min: f64) -> f64 {
+    /// Calculate the squared distance between this point and another point.
+    /// 
+    /// # Arguments
+    /// * `p` - The other point
+    /// * `double_min` - Optional minimum value for distance calculation. Defaults to 1e-12.
+    pub fn squared_distance(&self, p: &Point, double_min: Option<f64>) -> f64 {
+        let double_min = double_min.unwrap_or(1e-12);
         let mut dx = (self[0] - p[0]).abs();
         let mut dy = (self[1] - p[1]).abs();
         let mut dz = (self[2] - p[2]).abs();
