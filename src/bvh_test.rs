@@ -304,8 +304,8 @@ mod tests {
         let merged = bvh.merge_aabb(&bbox1, &bbox2);
 
         // Merged box should encompass both
-        assert!((merged.center.x() - 2.5).abs() < 0.001); // Midpoint between 0 and 5
-        assert!((merged.half_size.x() - 3.5).abs() < 0.001); // Half of distance from -1 to 6
+        assert!((merged.center[0] - 2.5).abs() < 0.001); // Midpoint between 0 and 5
+        assert!((merged.half_size[0] - 3.5).abs() < 0.001); // Half of distance from -1 to 6
     }
 
     #[test]
@@ -387,12 +387,12 @@ mod tests {
             println!(
                 "Box {} - Min: ({}, {}, {}), Max: ({}, {}, {})",
                 i + 1,
-                min_corner.x(),
-                min_corner.y(),
-                min_corner.z(),
-                max_corner.x(),
-                max_corner.y(),
-                max_corner.z()
+                min_corner[0],
+                min_corner[1],
+                min_corner[2],
+                max_corner[0],
+                max_corner[1],
+                max_corner[2]
             );
         }
 

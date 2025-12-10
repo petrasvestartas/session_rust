@@ -24,9 +24,9 @@ impl Serialize for Quaternion {
         state.serialize_field("guid", &self.guid)?;
         state.serialize_field("name", &self.name)?;
         state.serialize_field("s", &self.s)?;
-        state.serialize_field("x", &self.v.x())?;
-        state.serialize_field("y", &self.v.y())?;
-        state.serialize_field("z", &self.v.z())?;
+        state.serialize_field("x", &self.v[0])?;
+        state.serialize_field("y", &self.v[1])?;
+        state.serialize_field("z", &self.v[2])?;
         state.end()
     }
 }
@@ -92,7 +92,7 @@ impl Quaternion {
     }
 
     pub fn from_axis_angle(axis: Vector, angle: f64) -> Self {
-        let axis = axis.normalize();
+        let axis = axis.normalized();
         let half_angle = angle * 0.5;
         let s = half_angle.cos();
         let v = axis * half_angle.sin();
@@ -114,9 +114,9 @@ impl Quaternion {
 
     pub fn magnitude(&self) -> f64 {
         (self.s * self.s
-            + self.v.x() * self.v.x()
-            + self.v.y() * self.v.y()
-            + self.v.z() * self.v.z())
+            + self.v[0] * self.v[0]
+            + self.v[1] * self.v[1]
+            + self.v[2] * self.v[2])
         .sqrt()
     }
 

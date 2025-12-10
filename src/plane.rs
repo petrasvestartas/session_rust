@@ -47,16 +47,16 @@ impl Default for Plane {
 
 impl Plane {
     pub fn new(point: Point, mut x_axis: Vector, mut y_axis: Vector) -> Self {
-        x_axis.normalize_self();
+        x_axis.normalize();
         let dot_product = y_axis.dot(&x_axis);
         y_axis -= x_axis.clone() * dot_product;
-        y_axis.normalize_self();
+        y_axis.normalize();
         let mut z_axis = x_axis.cross(&y_axis);
-        z_axis.normalize_self();
+        z_axis.normalize();
 
-        let a = z_axis.x();
-        let b = z_axis.y();
-        let c = z_axis.z();
+        let a = z_axis[0];
+        let b = z_axis[1];
+        let c = z_axis[2];
         let d = -(a * point[0] + b * point[1] + c * point[2]);
 
         Self {
@@ -75,16 +75,16 @@ impl Plane {
     }
 
     pub fn with_name(point: Point, mut x_axis: Vector, mut y_axis: Vector, name: String) -> Self {
-        x_axis.normalize_self();
+        x_axis.normalize();
         let dot_product = y_axis.dot(&x_axis);
         y_axis -= x_axis.clone() * dot_product;
-        y_axis.normalize_self();
+        y_axis.normalize();
         let mut z_axis = x_axis.cross(&y_axis);
-        z_axis.normalize_self();
+        z_axis.normalize();
 
-        let a = z_axis.x();
-        let b = z_axis.y();
-        let c = z_axis.z();
+        let a = z_axis[0];
+        let b = z_axis[1];
+        let c = z_axis[2];
         let d = -(a * point[0] + b * point[1] + c * point[2]);
 
         Self {
@@ -105,16 +105,16 @@ impl Plane {
     pub fn from_point_normal(point: Point, normal: Vector) -> Self {
         let origin = point.clone();
         let mut z_axis = normal;
-        z_axis.normalize_self();
+        z_axis.normalize();
         let mut x_axis = Vector::default();
         x_axis.perpendicular_to(&z_axis);
-        x_axis.normalize_self();
+        x_axis.normalize();
         let mut y_axis = z_axis.cross(&x_axis);
-        y_axis.normalize_self();
+        y_axis.normalize();
 
-        let a = z_axis.x();
-        let b = z_axis.y();
-        let c = z_axis.z();
+        let a = z_axis[0];
+        let b = z_axis[1];
+        let c = z_axis[2];
         let d = -(a * origin[0] + b * origin[1] + c * origin[2]);
 
         Self {
@@ -143,17 +143,17 @@ impl Plane {
         let v1 = point2.clone() - point1.clone();
         let v2 = point3.clone() - point1.clone();
         let mut z_axis = v1.cross(&v2);
-        z_axis.normalize_self();
+        z_axis.normalize();
         let mut x_axis = Vector::default();
         x_axis.perpendicular_to(&z_axis);
-        x_axis.normalize_self();
+        x_axis.normalize();
         let mut y_axis = z_axis.cross(&x_axis);
-        y_axis.normalize_self();
+        y_axis.normalize();
         let origin = point1.clone();
 
-        let a = z_axis.x();
-        let b = z_axis.y();
-        let c = z_axis.z();
+        let a = z_axis[0];
+        let b = z_axis[1];
+        let c = z_axis[2];
         let d = -(a * origin[0] + b * origin[1] + c * origin[2]);
 
         Self {
@@ -175,18 +175,18 @@ impl Plane {
         let origin = point1.clone();
 
         let mut direction = point2.clone() - point1.clone();
-        direction.normalize_self();
+        direction.normalize();
         let mut z_axis = Vector::default();
         z_axis.perpendicular_to(&direction);
-        z_axis.normalize_self();
+        z_axis.normalize();
 
         let x_axis = direction;
         let mut y_axis = z_axis.cross(&x_axis);
-        y_axis.normalize_self();
+        y_axis.normalize();
 
-        let a = z_axis.x();
-        let b = z_axis.y();
-        let c = z_axis.z();
+        let a = z_axis[0];
+        let b = z_axis[1];
+        let c = z_axis[2];
         let d = -(a * origin[0] + b * origin[1] + c * origin[2]);
 
         Self {
@@ -268,6 +268,18 @@ impl Plane {
         self._z_axis.clone()
     }
 
+    /// Check if the plane coordinate system is right-handed.
+    ///
+    /// A coordinate system is right-handed if z_axis = x_axis × y_axis.
+    ///
+    /// # Returns
+    ///
+    /// `true` if the plane is right-handed, `false` otherwise.
+    pub fn is_right_hand(&self) -> bool {
+        let cross = self._x_axis.cross(&self._y_axis);
+        cross.dot(&self._z_axis) > 0.0
+    }
+
     pub fn a(&self) -> f64 {
         self._a
     }
@@ -288,9 +300,9 @@ impl Plane {
         std::mem::swap(&mut self._x_axis, &mut self._y_axis);
         self._z_axis.reverse();
 
-        self._a = self._z_axis.x();
-        self._b = self._z_axis.y();
-        self._c = self._z_axis.z();
+        self._a = self._z_axis[0];
+        self._b = self._z_axis[1];
+        self._c = self._z_axis[2];
         self._d =
             -(self._a * self._origin[0] + self._b * self._origin[1] + self._c * self._origin[2]);
     }
@@ -411,7 +423,7 @@ impl Plane {
     /// Translate (move) a plane along its normal direction by a specified distance
     pub fn translate_by_normal(&self, distance: f64) -> Plane {
         let mut normal = self._z_axis.clone();
-        normal.normalize_self();
+        normal.normalize();
 
         let new_origin = self._origin.clone() + (normal * distance);
 

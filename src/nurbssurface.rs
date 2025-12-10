@@ -492,10 +492,10 @@ impl NurbsSurface {
         let du = &derivs[1];
         let dv = &derivs[2];
         let n = du.cross(dv);
-        if n.compute_length() < 1e-14 {
+        if n.magnitude() < 1e-14 {
             Vector::new(0.0, 0.0, 1.0)
         } else {
-            n.normalize()
+            n.normalized()
         }
     }
 

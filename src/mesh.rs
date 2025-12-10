@@ -327,9 +327,9 @@ impl Mesh {
         let len = normal.magnitude();
         if len > Tolerance::ZERO_TOLERANCE {
             Some(Vector::new(
-                normal.x() / len,
-                normal.y() / len,
-                normal.z() / len,
+                normal[0] / len,
+                normal[1] / len,
+                normal[2] / len,
             ))
         } else {
             None
@@ -362,18 +362,18 @@ impl Mesh {
                     NormalWeighting::Uniform => 1.0,
                 };
 
-                normal_acc.set_x(normal_acc.x() + face_normal.x() * weight);
-                normal_acc.set_y(normal_acc.y() + face_normal.y() * weight);
-                normal_acc.set_z(normal_acc.z() + face_normal.z() * weight);
+                normal_acc[0] = normal_acc[0] + face_normal[0] * weight;
+                normal_acc[1] = normal_acc[1] + face_normal[1] * weight;
+                normal_acc[2] = normal_acc[2] + face_normal[2] * weight;
             }
         }
 
         let len = normal_acc.magnitude();
         if len > Tolerance::ZERO_TOLERANCE {
             Some(Vector::new(
-                normal_acc.x() / len,
-                normal_acc.y() / len,
-                normal_acc.z() / len,
+                normal_acc[0] / len,
+                normal_acc[1] / len,
+                normal_acc[2] / len,
             ))
         } else {
             None
@@ -597,11 +597,11 @@ impl Mesh {
 
         let origin = ray.start();
         let dir = ray.to_vector();
-        let len = dir.compute_length();
+        let len = dir.magnitude();
         if len <= Tolerance::ZERO_TOLERANCE {
             return None;
         }
-        let dir_unit = Vector::new(dir.x() / len, dir.y() / len, dir.z() / len);
+        let dir_unit = Vector::new(dir[0] / len, dir[1] / len, dir[2] / len);
 
         let mut candidate_ids: Vec<usize> = Vec::new();
         bvh.ray_cast(&origin, &dir_unit, &mut candidate_ids, true);
@@ -624,7 +624,7 @@ impl Mesh {
                 let dx = p[0] - origin[0];
                 let dy = p[1] - origin[1];
                 let dz = p[2] - origin[2];
-                let t = dx * dir_unit.x() + dy * dir_unit.y() + dz * dir_unit.z();
+                let t = dx * dir_unit[0] + dy * dir_unit[1] + dz * dir_unit[2];
                 if t >= 0.0 && t < best_t {
                     best_t = t;
                     best_p = Some(p);

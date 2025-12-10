@@ -9,9 +9,9 @@ fn test_plane_default_constructor() {
     let x = plane.x_axis();
     let y = plane.y_axis();
     let z = plane.z_axis();
-    assert_eq!((x.x(), x.y(), x.z()), (1.0, 0.0, 0.0));
-    assert_eq!((y.x(), y.y(), y.z()), (0.0, 1.0, 0.0));
-    assert_eq!((z.x(), z.y(), z.z()), (0.0, 0.0, 1.0));
+    assert_eq!((x[0], x[1], x[2]), (1.0, 0.0, 0.0));
+    assert_eq!((y[0], y[1], y[2]), (0.0, 1.0, 0.0));
+    assert_eq!((z[0], z[1], z[2]), (0.0, 0.0, 1.0));
     assert_eq!(plane.a(), 0.0);
     assert_eq!(plane.b(), 0.0);
     assert_eq!(plane.c(), 1.0);
@@ -35,7 +35,7 @@ fn test_plane_from_point_normal() {
     let n = Vector::new(0.0, 0.0, 1.0);
     let plane = Plane::from_point_normal(p.clone(), n);
     assert_eq!(plane.origin(), p);
-    assert!((plane.z_axis().z() - 1.0).abs() < 1e-5);
+    assert!((plane.z_axis()[2] - 1.0).abs() < 1e-5);
     assert!((plane.d() + 5.0).abs() < 1e-5);
 }
 
@@ -103,9 +103,9 @@ fn test_plane_operator_index() {
     let x = &plane[0];
     let y = &plane[1];
     let z = &plane[2];
-    assert_eq!((x.x(), x.y(), x.z()), (1.0, 0.0, 0.0));
-    assert_eq!((y.x(), y.y(), y.z()), (0.0, 1.0, 0.0));
-    assert_eq!((z.x(), z.y(), z.z()), (0.0, 0.0, 1.0));
+    assert_eq!((x[0], x[1], x[2]), (1.0, 0.0, 0.0));
+    assert_eq!((y[0], y[1], y[2]), (0.0, 1.0, 0.0));
+    assert_eq!((z[0], z[1], z[2]), (0.0, 0.0, 1.0));
 }
 
 #[test]
@@ -113,9 +113,9 @@ fn test_plane_operator_add_assign_translation() {
     let mut plane = Plane::xy_plane();
     let offset = Vector::new(1.0, 2.0, 3.0);
     plane += offset;
-    assert_eq!(plane.origin().x(), 1.0);
-    assert_eq!(plane.origin().y(), 2.0);
-    assert_eq!(plane.origin().z(), 3.0);
+    assert_eq!(plane.origin()[0], 1.0);
+    assert_eq!(plane.origin()[1], 2.0);
+    assert_eq!(plane.origin()[2], 3.0);
     assert!((plane.d() + 3.0).abs() < 1e-5);
 }
 
@@ -124,9 +124,9 @@ fn test_plane_operator_sub_assign_translation() {
     let mut plane = Plane::xy_plane();
     let offset = Vector::new(1.0, 2.0, 3.0);
     plane -= offset;
-    assert_eq!(plane.origin().x(), -1.0);
-    assert_eq!(plane.origin().y(), -2.0);
-    assert_eq!(plane.origin().z(), -3.0);
+    assert_eq!(plane.origin()[0], -1.0);
+    assert_eq!(plane.origin()[1], -2.0);
+    assert_eq!(plane.origin()[2], -3.0);
 }
 
 #[test]
@@ -134,8 +134,8 @@ fn test_plane_operator_add_translation() {
     let plane = Plane::xy_plane();
     let offset = Vector::new(1.0, 2.0, 3.0);
     let moved = plane.clone() + offset;
-    assert_eq!(moved.origin().z(), 3.0);
-    assert_eq!(plane.origin().z(), 0.0);
+    assert_eq!(moved.origin()[2], 3.0);
+    assert_eq!(plane.origin()[2], 0.0);
 }
 
 #[test]
@@ -143,7 +143,7 @@ fn test_plane_operator_sub_translation() {
     let plane = Plane::xy_plane();
     let offset = Vector::new(1.0, 2.0, 3.0);
     let moved = plane - offset;
-    assert_eq!(moved.origin().z(), -3.0);
+    assert_eq!(moved.origin()[2], -3.0);
 }
 
 #[test]
@@ -189,7 +189,7 @@ fn test_plane_rotate() {
     let mut plane = Plane::xy_plane();
     let angle = PI / 2.0;
     plane.rotate(angle);
-    assert!((plane.x_axis().y() - 1.0).abs() < 1e-5);
+    assert!((plane.x_axis()[1] - 1.0).abs() < 1e-5);
 }
 
 #[test]
@@ -250,25 +250,25 @@ fn test_plane_translate_by_normal() {
 
     // Translate along positive normal (Z direction)
     let translated = plane.translate_by_normal(5.0);
-    assert_eq!(translated.origin().x(), 0.0);
-    assert_eq!(translated.origin().y(), 0.0);
-    assert_eq!(translated.origin().z(), 5.0);
+    assert_eq!(translated.origin()[0], 0.0);
+    assert_eq!(translated.origin()[1], 0.0);
+    assert_eq!(translated.origin()[2], 5.0);
 
     // Normal should remain the same
-    assert_eq!(translated.z_axis().x(), plane.z_axis().x());
-    assert_eq!(translated.z_axis().y(), plane.z_axis().y());
-    assert_eq!(translated.z_axis().z(), plane.z_axis().z());
+    assert_eq!(translated.z_axis()[0], plane.z_axis()[0]);
+    assert_eq!(translated.z_axis()[1], plane.z_axis()[1]);
+    assert_eq!(translated.z_axis()[2], plane.z_axis()[2]);
 
     // Translate along negative normal
     let translated_neg = plane.translate_by_normal(-3.0);
-    assert_eq!(translated_neg.origin().x(), 0.0);
-    assert_eq!(translated_neg.origin().y(), 0.0);
-    assert_eq!(translated_neg.origin().z(), -3.0);
+    assert_eq!(translated_neg.origin()[0], 0.0);
+    assert_eq!(translated_neg.origin()[1], 0.0);
+    assert_eq!(translated_neg.origin()[2], -3.0);
 
     // Test with YZ plane
     let yz_plane = Plane::yz_plane();
     let yz_translated = yz_plane.translate_by_normal(2.0);
-    assert_eq!(yz_translated.origin().x(), 2.0);
-    assert_eq!(yz_translated.origin().y(), 0.0);
-    assert_eq!(yz_translated.origin().z(), 0.0);
+    assert_eq!(yz_translated.origin()[0], 2.0);
+    assert_eq!(yz_translated.origin()[1], 0.0);
+    assert_eq!(yz_translated.origin()[2], 0.0);
 }

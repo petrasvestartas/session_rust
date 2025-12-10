@@ -9,15 +9,15 @@ mod tests {
     #[test]
     fn test_box_default() {
         let b = BoundingBox::default();
-        assert_eq!(b.center.x(), 0.0);
-        assert_eq!(b.center.y(), 0.0);
-        assert_eq!(b.center.z(), 0.0);
-        assert_eq!(b.x_axis.x(), 1.0);
-        assert_eq!(b.y_axis.y(), 1.0);
-        assert_eq!(b.z_axis.z(), 1.0);
-        assert_eq!(b.half_size.x(), 0.5);
-        assert_eq!(b.half_size.y(), 0.5);
-        assert_eq!(b.half_size.z(), 0.5);
+        assert_eq!(b.center[0], 0.0);
+        assert_eq!(b.center[1], 0.0);
+        assert_eq!(b.center[2], 0.0);
+        assert_eq!(b.x_axis[0], 1.0);
+        assert_eq!(b.y_axis[1], 1.0);
+        assert_eq!(b.z_axis[2], 1.0);
+        assert_eq!(b.half_size[0], 0.5);
+        assert_eq!(b.half_size[1], 0.5);
+        assert_eq!(b.half_size[2], 0.5);
         assert!(!b.guid.is_empty());
     }
 
@@ -31,12 +31,12 @@ mod tests {
 
         let b = BoundingBox::new(center, x_axis, y_axis, z_axis, half_size);
 
-        assert_eq!(b.center.x(), 1.0);
-        assert_eq!(b.center.y(), 2.0);
-        assert_eq!(b.center.z(), 3.0);
-        assert_eq!(b.half_size.x(), 2.0);
-        assert_eq!(b.half_size.y(), 3.0);
-        assert_eq!(b.half_size.z(), 4.0);
+        assert_eq!(b.center[0], 1.0);
+        assert_eq!(b.center[1], 2.0);
+        assert_eq!(b.center[2], 3.0);
+        assert_eq!(b.half_size[0], 2.0);
+        assert_eq!(b.half_size[1], 3.0);
+        assert_eq!(b.half_size[2], 4.0);
     }
 
     #[test]
@@ -48,10 +48,10 @@ mod tests {
         );
         let b = BoundingBox::from_plane(&plane, 4.0, 6.0, 8.0);
 
-        assert_eq!(b.center.x(), 0.0);
-        assert_eq!(b.half_size.x(), 2.0);
-        assert_eq!(b.half_size.y(), 3.0);
-        assert_eq!(b.half_size.z(), 4.0);
+        assert_eq!(b.center[0], 0.0);
+        assert_eq!(b.half_size[0], 2.0);
+        assert_eq!(b.half_size[1], 3.0);
+        assert_eq!(b.half_size[2], 4.0);
     }
 
     #[test]
@@ -66,9 +66,9 @@ mod tests {
         let corners = b.corners();
 
         assert_eq!(corners.len(), 8);
-        assert_eq!(corners[0].x(), 1.0);
-        assert_eq!(corners[0].y(), 1.0);
-        assert_eq!(corners[0].z(), -1.0);
+        assert_eq!(corners[0][0], 1.0);
+        assert_eq!(corners[0][1], 1.0);
+        assert_eq!(corners[0][2], -1.0);
     }
 
     #[test]
@@ -83,9 +83,9 @@ mod tests {
         let rects = b.two_rectangles();
 
         assert_eq!(rects.len(), 10);
-        assert_eq!(rects[0].x(), rects[4].x());
-        assert_eq!(rects[0].y(), rects[4].y());
-        assert_eq!(rects[0].z(), rects[4].z());
+        assert_eq!(rects[0][0], rects[4][0]);
+        assert_eq!(rects[0][1], rects[4][1]);
+        assert_eq!(rects[0][2], rects[4][2]);
     }
 
     #[test]
@@ -164,12 +164,12 @@ mod tests {
         let data = original.jsondump().unwrap();
         let loaded = BoundingBox::jsonload(&data).unwrap();
 
-        assert_eq!(loaded.center.x(), original.center.x());
-        assert_eq!(loaded.center.y(), original.center.y());
-        assert_eq!(loaded.center.z(), original.center.z());
-        assert_eq!(loaded.half_size.x(), original.half_size.x());
-        assert_eq!(loaded.half_size.y(), original.half_size.y());
-        assert_eq!(loaded.half_size.z(), original.half_size.z());
+        assert_eq!(loaded.center[0], original.center[0]);
+        assert_eq!(loaded.center[1], original.center[1]);
+        assert_eq!(loaded.center[2], original.center[2]);
+        assert_eq!(loaded.half_size[0], original.half_size[0]);
+        assert_eq!(loaded.half_size[1], original.half_size[1]);
+        assert_eq!(loaded.half_size[2], original.half_size[2]);
         assert_eq!(loaded.name, original.name);
     }
 
@@ -185,9 +185,9 @@ mod tests {
 
         b.inflate(0.5);
 
-        assert_eq!(b.half_size.x(), 1.5);
-        assert_eq!(b.half_size.y(), 2.5);
-        assert_eq!(b.half_size.z(), 3.5);
+        assert_eq!(b.half_size[0], 1.5);
+        assert_eq!(b.half_size[1], 2.5);
+        assert_eq!(b.half_size[2], 3.5);
     }
 
     #[test]
@@ -195,12 +195,12 @@ mod tests {
         let pt = Point::new(1.0, 2.0, 3.0);
         let b = BoundingBox::from_point(pt, 0.0);
 
-        assert_eq!(b.center.x(), 1.0);
-        assert_eq!(b.center.y(), 2.0);
-        assert_eq!(b.center.z(), 3.0);
-        assert_eq!(b.half_size.x(), 0.0);
-        assert_eq!(b.half_size.y(), 0.0);
-        assert_eq!(b.half_size.z(), 0.0);
+        assert_eq!(b.center[0], 1.0);
+        assert_eq!(b.center[1], 2.0);
+        assert_eq!(b.center[2], 3.0);
+        assert_eq!(b.half_size[0], 0.0);
+        assert_eq!(b.half_size[1], 0.0);
+        assert_eq!(b.half_size[2], 0.0);
     }
 
     #[test]
@@ -208,12 +208,12 @@ mod tests {
         let pt = Point::new(1.0, 2.0, 3.0);
         let b = BoundingBox::from_point(pt, 0.5);
 
-        assert_eq!(b.center.x(), 1.0);
-        assert_eq!(b.center.y(), 2.0);
-        assert_eq!(b.center.z(), 3.0);
-        assert_eq!(b.half_size.x(), 0.5);
-        assert_eq!(b.half_size.y(), 0.5);
-        assert_eq!(b.half_size.z(), 0.5);
+        assert_eq!(b.center[0], 1.0);
+        assert_eq!(b.center[1], 2.0);
+        assert_eq!(b.center[2], 3.0);
+        assert_eq!(b.half_size[0], 0.5);
+        assert_eq!(b.half_size[1], 0.5);
+        assert_eq!(b.half_size[2], 0.5);
     }
 
     #[test]
@@ -221,12 +221,12 @@ mod tests {
         let points = vec![Point::new(0.0, 0.0, 0.0), Point::new(2.0, 4.0, 6.0)];
         let b = BoundingBox::from_points(&points, 0.0);
 
-        assert_eq!(b.center.x(), 1.0);
-        assert_eq!(b.center.y(), 2.0);
-        assert_eq!(b.center.z(), 3.0);
-        assert_eq!(b.half_size.x(), 1.0);
-        assert_eq!(b.half_size.y(), 2.0);
-        assert_eq!(b.half_size.z(), 3.0);
+        assert_eq!(b.center[0], 1.0);
+        assert_eq!(b.center[1], 2.0);
+        assert_eq!(b.center[2], 3.0);
+        assert_eq!(b.half_size[0], 1.0);
+        assert_eq!(b.half_size[1], 2.0);
+        assert_eq!(b.half_size[2], 3.0);
     }
 
     #[test]
@@ -234,12 +234,12 @@ mod tests {
         let points = vec![Point::new(0.0, 0.0, 0.0), Point::new(2.0, 4.0, 6.0)];
         let b = BoundingBox::from_points(&points, 0.5);
 
-        assert_eq!(b.center.x(), 1.0);
-        assert_eq!(b.center.y(), 2.0);
-        assert_eq!(b.center.z(), 3.0);
-        assert_eq!(b.half_size.x(), 1.5);
-        assert_eq!(b.half_size.y(), 2.5);
-        assert_eq!(b.half_size.z(), 3.5);
+        assert_eq!(b.center[0], 1.0);
+        assert_eq!(b.center[1], 2.0);
+        assert_eq!(b.center[2], 3.0);
+        assert_eq!(b.half_size[0], 1.5);
+        assert_eq!(b.half_size[1], 2.5);
+        assert_eq!(b.half_size[2], 3.5);
     }
 
     #[test]
@@ -247,10 +247,10 @@ mod tests {
         let line = crate::line::Line::new(0.0, 0.0, 0.0, 10.0, 0.0, 0.0);
         let b = BoundingBox::from_line(&line, 0.0);
 
-        assert_eq!(b.center.x(), 5.0);
-        assert_eq!(b.center.y(), 0.0);
-        assert_eq!(b.center.z(), 0.0);
-        assert_eq!(b.half_size.x(), 5.0);
+        assert_eq!(b.center[0], 5.0);
+        assert_eq!(b.center[1], 0.0);
+        assert_eq!(b.center[2], 0.0);
+        assert_eq!(b.half_size[0], 5.0);
     }
 
     #[test]
@@ -258,12 +258,12 @@ mod tests {
         let line = crate::line::Line::new(0.0, 0.0, 0.0, 10.0, 0.0, 0.0);
         let b = BoundingBox::from_line(&line, 1.0);
 
-        assert_eq!(b.center.x(), 5.0);
-        assert_eq!(b.center.y(), 0.0);
-        assert_eq!(b.center.z(), 0.0);
-        assert_eq!(b.half_size.x(), 6.0);
-        assert_eq!(b.half_size.y(), 1.0);
-        assert_eq!(b.half_size.z(), 1.0);
+        assert_eq!(b.center[0], 5.0);
+        assert_eq!(b.center[1], 0.0);
+        assert_eq!(b.center[2], 0.0);
+        assert_eq!(b.half_size[0], 6.0);
+        assert_eq!(b.half_size[1], 1.0);
+        assert_eq!(b.half_size[2], 1.0);
     }
 
     #[test]
@@ -276,12 +276,12 @@ mod tests {
         let polyline = crate::polyline::Polyline::new(points);
         let b = BoundingBox::from_polyline(&polyline, 0.0);
 
-        assert_eq!(b.center.x(), 0.5);
-        assert_eq!(b.center.y(), 0.5);
-        assert_eq!(b.center.z(), 0.0);
-        assert_eq!(b.half_size.x(), 0.5);
-        assert_eq!(b.half_size.y(), 0.5);
-        assert_eq!(b.half_size.z(), 0.0);
+        assert_eq!(b.center[0], 0.5);
+        assert_eq!(b.center[1], 0.5);
+        assert_eq!(b.center[2], 0.0);
+        assert_eq!(b.half_size[0], 0.5);
+        assert_eq!(b.half_size[1], 0.5);
+        assert_eq!(b.half_size[2], 0.0);
     }
 
     #[test]
@@ -294,12 +294,12 @@ mod tests {
         let polyline = crate::polyline::Polyline::new(points);
         let b = BoundingBox::from_polyline(&polyline, 0.5);
 
-        assert_eq!(b.center.x(), 0.5);
-        assert_eq!(b.center.y(), 0.5);
-        assert_eq!(b.center.z(), 0.0);
-        assert_eq!(b.half_size.x(), 1.0);
-        assert_eq!(b.half_size.y(), 1.0);
-        assert_eq!(b.half_size.z(), 0.5);
+        assert_eq!(b.center[0], 0.5);
+        assert_eq!(b.center[1], 0.5);
+        assert_eq!(b.center[2], 0.0);
+        assert_eq!(b.half_size[0], 1.0);
+        assert_eq!(b.half_size[1], 1.0);
+        assert_eq!(b.half_size[2], 0.5);
     }
 
     #[test]
@@ -316,12 +316,12 @@ mod tests {
         json_dump(&original, filename, true).unwrap();
         let loaded = json_load::<BoundingBox>(filename).unwrap();
 
-        assert_eq!(loaded.center.x(), original.center.x());
-        assert_eq!(loaded.center.y(), original.center.y());
-        assert_eq!(loaded.center.z(), original.center.z());
-        assert_eq!(loaded.half_size.x(), original.half_size.x());
-        assert_eq!(loaded.half_size.y(), original.half_size.y());
-        assert_eq!(loaded.half_size.z(), original.half_size.z());
+        assert_eq!(loaded.center[0], original.center[0]);
+        assert_eq!(loaded.center[1], original.center[1]);
+        assert_eq!(loaded.center[2], original.center[2]);
+        assert_eq!(loaded.half_size[0], original.half_size[0]);
+        assert_eq!(loaded.half_size[1], original.half_size[1]);
+        assert_eq!(loaded.half_size[2], original.half_size[2]);
         assert_eq!(loaded.name, original.name);
         assert_eq!(loaded.guid, original.guid);
     }

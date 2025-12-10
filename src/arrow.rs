@@ -46,27 +46,27 @@ impl Arrow {
         let line_vec = line.to_vector();
         let length = line.length();
 
-        let z_axis = line_vec.normalize();
-        let x_axis = if z_axis.z().abs() < 0.9 {
-            Vector::new(0.0, 0.0, 1.0).cross(&z_axis).normalize()
+        let z_axis = line_vec.normalized();
+        let x_axis = if z_axis[2].abs() < 0.9 {
+            Vector::new(0.0, 0.0, 1.0).cross(&z_axis).normalized()
         } else {
-            Vector::new(1.0, 0.0, 0.0).cross(&z_axis).normalize()
+            Vector::new(1.0, 0.0, 0.0).cross(&z_axis).normalized()
         };
-        let y_axis = z_axis.cross(&x_axis).normalize();
+        let y_axis = z_axis.cross(&x_axis).normalized();
 
         let cone_length = length * 0.2;
         let body_length = length * 0.8;
 
         let body_center = Point::new(
-            start[0] + line_vec.x() * 0.4,
-            start[1] + line_vec.y() * 0.4,
-            start[2] + line_vec.z() * 0.4,
+            start[0] + line_vec[0] * 0.4,
+            start[1] + line_vec[1] * 0.4,
+            start[2] + line_vec[2] * 0.4,
         );
 
         let cone_base_center = Point::new(
-            start[0] + line_vec.x() * 0.9,
-            start[1] + line_vec.y() * 0.9,
-            start[2] + line_vec.z() * 0.9,
+            start[0] + line_vec[0] * 0.9,
+            start[1] + line_vec[1] * 0.9,
+            start[2] + line_vec[2] * 0.9,
         );
 
         let body_scale = Xform::scale_xyz(radius * 2.0, radius * 2.0, body_length);

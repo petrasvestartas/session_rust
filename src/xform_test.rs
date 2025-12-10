@@ -32,7 +32,7 @@ mod xform_tests {
     fn test_xform_identity_transformed_point() {
         let p = Point::new(1.0, 2.0, 3.0);
         let t = Xform::identity().transformed_point(&p);
-        assert_eq!((t.x(), t.y(), t.z()), (1.0, 2.0, 3.0));
+        assert_eq!((t[0], t[1], t[2]), (1.0, 2.0, 3.0));
     }
 
     #[test]
@@ -40,7 +40,7 @@ mod xform_tests {
         let t = Xform::translation(1.0, 2.0, 3.0);
         let p = Point::new(4.0, 5.0, 6.0);
         let tp = t.transformed_point(&p);
-        assert_eq!((tp.x(), tp.y(), tp.z()), (5.0, 7.0, 9.0));
+        assert_eq!((tp[0], tp[1], tp[2]), (5.0, 7.0, 9.0));
     }
 
     #[test]
@@ -56,7 +56,7 @@ mod xform_tests {
         let s = Xform::scaling(2.0, 3.0, 4.0);
         let p = Point::new(1.0, -2.0, 0.5);
         let sp = s.transformed_point(&p);
-        assert_eq!((sp.x(), sp.y(), sp.z()), (2.0, -6.0, 2.0));
+        assert_eq!((sp[0], sp[1], sp[2]), (2.0, -6.0, 2.0));
     }
 
     #[test]
@@ -72,9 +72,9 @@ mod xform_tests {
         let r = Xform::rotation_z(std::f64::consts::FRAC_PI_2);
         let p = Point::new(1.0, 0.0, 0.0);
         let rp = r.transformed_point(&p);
-        assert!(approx_f32(rp.x(), 0.0));
-        assert!(approx_f32(rp.y(), 1.0));
-        assert!(approx_f32(rp.z(), 0.0));
+        assert!(approx_f32(rp[0], 0.0));
+        assert!(approx_f32(rp[1], 1.0));
+        assert!(approx_f32(rp[2], 0.0));
     }
 
     #[test]
@@ -85,9 +85,9 @@ mod xform_tests {
         let p = Point::new(1.0, 0.0, 0.0);
         let p1 = r1.transformed_point(&p);
         let p2 = r2.transformed_point(&p);
-        assert!(approx_f32(p1.x(), p2.x()));
-        assert!(approx_f32(p1.y(), p2.y()));
-        assert!(approx_f32(p1.z(), p2.z()));
+        assert!(approx_f32(p1[0], p2[0]));
+        assert!(approx_f32(p1[1], p2[1]));
+        assert!(approx_f32(p1[2], p2[2]));
     }
 
     #[test]
@@ -120,9 +120,9 @@ mod xform_tests {
         let cb = Xform::change_basis_alt(&o1, &x, &y, &z, &o0, &x, &y, &z);
         let p = Point::new(1.0, 1.0, 1.0);
         let tp = cb.transformed_point(&p);
-        assert!(approx_f32(tp.x(), p.x() + 3.0));
-        assert!(approx_f32(tp.y(), p.y() + 3.0));
-        assert!(approx_f32(tp.z(), p.z() + 3.0));
+        assert!(approx_f32(tp[0], p[0] + 3.0));
+        assert!(approx_f32(tp[1], p[1] + 3.0));
+        assert!(approx_f32(tp[2], p[2] + 3.0));
     }
 
     #[test]
@@ -137,9 +137,9 @@ mod xform_tests {
         let z1 = Vector::new(0.0, 0.0, 1.0);
         let m = Xform::plane_to_plane(&o0, &x0, &y0, &z0, &o1, &x1, &y1, &z1);
         let mapped = m.transformed_point(&o0);
-        assert!(approx_f32(mapped.x(), o1.x()));
-        assert!(approx_f32(mapped.y(), o1.y()));
-        assert!(approx_f32(mapped.z(), o1.z()));
+        assert!(approx_f32(mapped[0], o1[0]));
+        assert!(approx_f32(mapped[1], o1[1]));
+        assert!(approx_f32(mapped[2], o1[2]));
     }
 
     #[test]
@@ -187,9 +187,9 @@ mod xform_tests {
         let r = Xform::rotation_x(std::f64::consts::FRAC_PI_2);
         let p = Point::new(0.0, 1.0, 0.0);
         let rp = r.transformed_point(&p);
-        assert!(approx_f32(rp.x(), 0.0));
-        assert!(approx_f32(rp.y(), 0.0));
-        assert!(approx_f32(rp.z(), 1.0));
+        assert!(approx_f32(rp[0], 0.0));
+        assert!(approx_f32(rp[1], 0.0));
+        assert!(approx_f32(rp[2], 1.0));
     }
 
     #[test]
@@ -197,9 +197,9 @@ mod xform_tests {
         let r = Xform::rotation_y(std::f64::consts::FRAC_PI_2);
         let p = Point::new(1.0, 0.0, 0.0);
         let rp = r.transformed_point(&p);
-        assert!(approx_f32(rp.x(), 0.0));
-        assert!(approx_f32(rp.y(), 0.0));
-        assert!(approx_f32(rp.z(), -1.0));
+        assert!(approx_f32(rp[0], 0.0));
+        assert!(approx_f32(rp[1], 0.0));
+        assert!(approx_f32(rp[2], -1.0));
     }
 
     #[test]
@@ -208,9 +208,9 @@ mod xform_tests {
         let r = Xform::rotation(&axis, std::f64::consts::FRAC_PI_2);
         let p = Point::new(1.0, 0.0, 0.0);
         let rp = r.transformed_point(&p);
-        assert!(approx_f32(rp.x(), 0.0));
-        assert!(approx_f32(rp.y(), 1.0));
-        assert!(approx_f32(rp.z(), 0.0));
+        assert!(approx_f32(rp[0], 0.0));
+        assert!(approx_f32(rp[1], 1.0));
+        assert!(approx_f32(rp[2], 0.0));
     }
 
     #[test]
@@ -233,9 +233,9 @@ mod xform_tests {
         let z = Vector::new(0.0, 0.0, 1.0);
         let m = Xform::plane_to_xy(&o, &x, &y, &z);
         let mapped = m.transformed_point(&o);
-        assert!(approx_f32(mapped.x(), 0.0));
-        assert!(approx_f32(mapped.y(), 0.0));
-        assert!(approx_f32(mapped.z(), 0.0));
+        assert!(approx_f32(mapped[0], 0.0));
+        assert!(approx_f32(mapped[1], 0.0));
+        assert!(approx_f32(mapped[2], 0.0));
     }
 
     #[test]
@@ -247,9 +247,9 @@ mod xform_tests {
         let m = Xform::xy_to_plane(&o, &x, &y, &z);
         let origin = Point::new(0.0, 0.0, 0.0);
         let mapped = m.transformed_point(&origin);
-        assert!(approx_f32(mapped.x(), o.x()));
-        assert!(approx_f32(mapped.y(), o.y()));
-        assert!(approx_f32(mapped.z(), o.z()));
+        assert!(approx_f32(mapped[0], o[0]));
+        assert!(approx_f32(mapped[1], o[1]));
+        assert!(approx_f32(mapped[2], o[2]));
     }
 
     #[test]
@@ -257,7 +257,7 @@ mod xform_tests {
         let s = Xform::scale_xyz(2.0, 3.0, 4.0);
         let p = Point::new(1.0, 1.0, 1.0);
         let sp = s.transformed_point(&p);
-        assert_eq!((sp.x(), sp.y(), sp.z()), (2.0, 3.0, 4.0));
+        assert_eq!((sp[0], sp[1], sp[2]), (2.0, 3.0, 4.0));
     }
 
     #[test]
@@ -266,9 +266,9 @@ mod xform_tests {
         let s = Xform::scale_uniform(&o, 2.0);
         let p = Point::new(2.0, 2.0, 2.0);
         let sp = s.transformed_point(&p);
-        assert!(approx_f32(sp.x(), 3.0));
-        assert!(approx_f32(sp.y(), 3.0));
-        assert!(approx_f32(sp.z(), 3.0));
+        assert!(approx_f32(sp[0], 3.0));
+        assert!(approx_f32(sp[1], 3.0));
+        assert!(approx_f32(sp[2], 3.0));
     }
 
     #[test]
@@ -277,7 +277,7 @@ mod xform_tests {
         let s = Xform::scale_non_uniform(&o, 2.0, 3.0, 4.0);
         let p = Point::new(1.0, 1.0, 1.0);
         let sp = s.transformed_point(&p);
-        assert_eq!((sp.x(), sp.y(), sp.z()), (2.0, 3.0, 4.0));
+        assert_eq!((sp[0], sp[1], sp[2]), (2.0, 3.0, 4.0));
     }
 
     #[test]
@@ -293,7 +293,7 @@ mod xform_tests {
         let t = Xform::translation(1.0, 2.0, 3.0);
         let p = Point::new(0.0, 0.0, 0.0);
         let tp = t.transformed_point(&p);
-        assert_eq!((tp.x(), tp.y(), tp.z()), (1.0, 2.0, 3.0));
+        assert_eq!((tp[0], tp[1], tp[2]), (1.0, 2.0, 3.0));
     }
 
     #[test]
@@ -309,7 +309,7 @@ mod xform_tests {
         let t = Xform::translation(1.0, 2.0, 3.0);
         let mut p = Point::new(0.0, 0.0, 0.0);
         t.transform_point(&mut p);
-        assert_eq!((p.x(), p.y(), p.z()), (1.0, 2.0, 3.0));
+        assert_eq!((p[0], p[1], p[2]), (1.0, 2.0, 3.0));
     }
 
     #[test]
@@ -381,21 +381,20 @@ mod xform_tests {
         let col_z = Vector::new(7.0, 8.0, 9.0);
         let x = Xform::from_cols(col_x, col_y, col_z);
 
-        let retrieved_x = x.x();
-        let retrieved_y = x.y();
-        let retrieved_z = x.z();
+        // Column 0
+        assert_eq!(x[(0, 0)], 1.0);
+        assert_eq!(x[(1, 0)], 2.0);
+        assert_eq!(x[(2, 0)], 3.0);
 
-        assert_eq!(retrieved_x.x(), 1.0);
-        assert_eq!(retrieved_x.y(), 2.0);
-        assert_eq!(retrieved_x.z(), 3.0);
+        // Column 1
+        assert_eq!(x[(0, 1)], 4.0);
+        assert_eq!(x[(1, 1)], 5.0);
+        assert_eq!(x[(2, 1)], 6.0);
 
-        assert_eq!(retrieved_y.x(), 4.0);
-        assert_eq!(retrieved_y.y(), 5.0);
-        assert_eq!(retrieved_y.z(), 6.0);
-
-        assert_eq!(retrieved_z.x(), 7.0);
-        assert_eq!(retrieved_z.y(), 8.0);
-        assert_eq!(retrieved_z.z(), 9.0);
+        // Column 2
+        assert_eq!(x[(0, 2)], 7.0);
+        assert_eq!(x[(1, 2)], 8.0);
+        assert_eq!(x[(2, 2)], 9.0);
 
         assert_eq!(x[(0, 0)], 1.0);
         assert_eq!(x[(1, 0)], 2.0);

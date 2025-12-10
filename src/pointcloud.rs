@@ -180,7 +180,7 @@ impl Serialize for PointCloud {
         let normals_flat: Vec<f64> = self
             .normals
             .iter()
-            .flat_map(|n| vec![n.x(), n.y(), n.z()])
+            .flat_map(|n| vec![n[0], n[1], n[2]])
             .collect();
         state.serialize_field("normals", &normals_flat)?;
 

@@ -357,9 +357,9 @@ mod tests {
         for (idx, (exp_x, exp_y, exp_z)) in expected_iso_v.iter().enumerate() {
             let t = crv_domain.0 + (crv_domain.1 - crv_domain.0) * (idx as f64) / 49.0;
             let pt = iso_v_curve.point_at(t);
-            assert!((pt.x() - exp_x).abs() < 0.001, "iso-v curve point {} x mismatch", idx);
-            assert!((pt.y() - exp_y).abs() < 0.001, "iso-v curve point {} y mismatch", idx);
-            assert!((pt.z() - exp_z).abs() < 0.001, "iso-v curve point {} z mismatch", idx);
+            assert!((pt[0] - exp_x).abs() < 0.001, "iso-v curve point {} x mismatch", idx);
+            assert!((pt[1] - exp_y).abs() < 0.001, "iso-v curve point {} y mismatch", idx);
+            assert!((pt[2] - exp_z).abs() < 0.001, "iso-v curve point {} z mismatch", idx);
         }
         
         // Extract iso-u curve (v varies, u constant) using iso_curve method
@@ -378,9 +378,9 @@ mod tests {
         for (idx, (exp_x, exp_y, exp_z)) in expected_iso_u.iter().enumerate() {
             let t = crv_domain.0 + (crv_domain.1 - crv_domain.0) * (idx as f64) / 49.0;
             let pt = iso_u_curve.point_at(t);
-            assert!((pt.x() - exp_x).abs() < 0.001, "iso-u curve point {} x mismatch", idx);
-            assert!((pt.y() - exp_y).abs() < 0.001, "iso-u curve point {} y mismatch", idx);
-            assert!((pt.z() - exp_z).abs() < 0.001, "iso-u curve point {} z mismatch", idx);
+            assert!((pt[0] - exp_x).abs() < 0.001, "iso-u curve point {} x mismatch", idx);
+            assert!((pt[1] - exp_y).abs() < 0.001, "iso-u curve point {} y mismatch", idx);
+            assert!((pt[2] - exp_z).abs() < 0.001, "iso-u curve point {} z mismatch", idx);
         }
     }
 }

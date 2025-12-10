@@ -64,9 +64,9 @@ mod tests {
 
         let loaded: Point = json_load(filepath).unwrap();
 
-        assert_eq!(loaded.x(), original.x());
-        assert_eq!(loaded.y(), original.y());
-        assert_eq!(loaded.z(), original.z());
+        assert_eq!(loaded[0], original[0]);
+        assert_eq!(loaded[1], original[1]);
+        assert_eq!(loaded[2], original[2]);
         assert_eq!(loaded.name, original.name);
 
         std::fs::remove_file(filepath).ok();
@@ -83,9 +83,9 @@ mod tests {
 
         let loaded: Vector = json_loads(&json_str).unwrap();
 
-        assert_eq!(loaded.x(), original.x());
-        assert_eq!(loaded.y(), original.y());
-        assert_eq!(loaded.z(), original.z());
+        assert_eq!(loaded[0], original[0]);
+        assert_eq!(loaded[1], original[1]);
+        assert_eq!(loaded[2], original[2]);
         assert_eq!(loaded.name, original.name);
     }
 
@@ -102,9 +102,9 @@ mod tests {
 
         let loaded: Vec<Point> = json_loads(&json_str).unwrap();
         assert_eq!(loaded.len(), 3);
-        assert_eq!(loaded[0].x(), 1.0);
-        assert_eq!(loaded[1].y(), 5.0);
-        assert_eq!(loaded[2].z(), 9.0);
+        assert_eq!(loaded[0][0], 1.0);
+        assert_eq!(loaded[1][1], 5.0);
+        assert_eq!(loaded[2][2], 9.0);
     }
 
     #[test]
@@ -118,8 +118,8 @@ mod tests {
         let loaded: Vec<Line> = json_loads(&json_str).unwrap();
 
         assert_eq!(loaded.len(), 2);
-        assert_eq!(loaded[0].end().x(), 1.0);
-        assert_eq!(loaded[1].end().y(), 1.0);
+        assert_eq!(loaded[0].end()[0], 1.0);
+        assert_eq!(loaded[1].end()[1], 1.0);
     }
 
     #[test]
@@ -136,9 +136,9 @@ mod tests {
         let loaded: Vec<Vector> = json_load(filepath).unwrap();
 
         assert_eq!(loaded.len(), 3);
-        assert_eq!(loaded[0].x(), 1.0);
-        assert_eq!(loaded[1].y(), 1.0);
-        assert_eq!(loaded[2].z(), 1.0);
+        assert_eq!(loaded[0][0], 1.0);
+        assert_eq!(loaded[1][1], 1.0);
+        assert_eq!(loaded[2][2], 1.0);
 
         std::fs::remove_file(filepath).ok();
     }
@@ -157,8 +157,8 @@ mod tests {
         let loaded_pretty: Point = json_loads(&pretty).unwrap();
         let loaded_compact: Point = json_loads(&compact).unwrap();
 
-        assert_eq!(loaded_pretty.x(), 1.0);
-        assert_eq!(loaded_compact.x(), 1.0);
+        assert_eq!(loaded_pretty[0], 1.0);
+        assert_eq!(loaded_compact[0], 1.0);
     }
 
     #[test]
@@ -195,8 +195,8 @@ mod tests {
         let json_str = json_dumps(&points, false).unwrap();
         let loaded: Vec<Point> = json_loads(&json_str).unwrap();
         assert_eq!(loaded.len(), 2);
-        assert_eq!(loaded[0].x(), 1.0);
-        assert_eq!(loaded[1].x(), 4.0);
+        assert_eq!(loaded[0][0], 1.0);
+        assert_eq!(loaded[1][0], 4.0);
     }
 
     #[test]
@@ -214,7 +214,7 @@ mod tests {
         let vec = Vector::new(1.0, 2.0, 3.0);
         let json_str = json_dumps(&vec, false).unwrap();
         let loaded: Vector = json_loads(&json_str).unwrap();
-        assert_eq!(loaded.x(), 1.0);
+        assert_eq!(loaded[0], 1.0);
     }
 
     #[test]
@@ -248,7 +248,7 @@ mod tests {
 
         let loaded_points: Vec<Point> = serde_json::from_value(loaded["points"].clone()).unwrap();
         assert_eq!(loaded_points.len(), 2);
-        assert_eq!(loaded_points[0].x(), 1.0);
+        assert_eq!(loaded_points[0][0], 1.0);
     }
 
     #[test]
@@ -271,7 +271,7 @@ mod tests {
         assert_eq!(loaded[1]["value"], 20);
 
         let loaded_point: Point = serde_json::from_value(loaded[2]["geometry"].clone()).unwrap();
-        assert_eq!(loaded_point.z(), 3.0);
+        assert_eq!(loaded_point[2], 3.0);
     }
 
     #[test]
@@ -302,7 +302,7 @@ mod tests {
             serde_json::from_value(loaded["geometry"]["point"].clone()).unwrap();
         let loaded_vec: Vector =
             serde_json::from_value(loaded["geometry"]["vector"].clone()).unwrap();
-        assert_eq!(loaded_point.x(), 1.0);
-        assert_eq!(loaded_vec.z(), 1.0);
+        assert_eq!(loaded_point[0], 1.0);
+        assert_eq!(loaded_vec[2], 1.0);
     }
 }

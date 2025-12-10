@@ -44,7 +44,7 @@ fn main() {
         let u = u_min + (u_max - u_min) * 0.0 / 9.0;
         let v = v_min + (v_max - v_min) * (j as f64) / 9.0;
         let pt = srf.point_at(u, v).unwrap();
-        println!("({:.3}, {:.3}, {:.3})", pt.x(), pt.y(), pt.z());
+        println!("({:.3}, {:.3}, {:.3})", pt[0], pt[1], pt[2]);
     }
 
     println!("\nNext 10 points (row 1):");
@@ -52,7 +52,7 @@ fn main() {
         let u = u_min + (u_max - u_min) * 1.0 / 9.0;
         let v = v_min + (v_max - v_min) * (j as f64) / 9.0;
         let pt = srf.point_at(u, v).unwrap();
-        println!("({:.3}, {:.3}, {:.3})", pt.x(), pt.y(), pt.z());
+        println!("({:.3}, {:.3}, {:.3})", pt[0], pt[1], pt[2]);
     }
 
     println!("\nRow 2 points:");
@@ -60,6 +60,6 @@ fn main() {
         let u = u_min + (u_max - u_min) * 2.0 / 9.0;
         let v = v_min + (v_max - v_min) * (j as f64) / 9.0;
         let pt = srf.point_at(u, v).unwrap();
-        println!("({:.3}, {:.3}, {:.3})", pt.x(), pt.y(), pt.z());
+        println!("({:.3}, {:.3}, {:.3})", pt[0], pt[1], pt[2]);
     }
 }

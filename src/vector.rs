@@ -1,5 +1,7 @@
+use crate::point::Point;
 use crate::tolerance::{Tolerance, SCALE, TO_DEGREES, TO_RADIANS};
 use serde::{ser::Serialize as SerTrait, Deserialize, Serialize};
+use std::cell::Cell;
 use std::fmt;
 use std::ops::{
     Add, AddAssign, Div, DivAssign, Index, IndexMut, Mul, MulAssign, Neg, Sub, SubAssign,
@@ -7,7 +9,28 @@ use std::ops::{
 use uuid::Uuid;
 
 /// A 3D vector with visual properties and JSON serialization support.
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+///
+/// The Vector struct represents a mathematical vector in 3D space with
+/// x, y, z components. It includes caching for magnitude calculations and
+/// supports various geometric operations like dot product, cross product,
+/// normalization, and angle calculations.
+///
+/// # Attributes
+///
+/// * `guid` - Unique identifier for the vector.
+/// * `name` - Name of the vector.
+/// * `_x` - X component (private, use indexing to access).
+/// * `_y` - Y component (private, use indexing to access).
+/// * `_z` - Z component (private, use indexing to access).
+///
+/// # Examples
+///
+/// ```
+/// # use session_rust::Vector;
+/// let v = Vector::new(1.0, 2.0, 3.0);
+/// let unit = v.normalized();
+/// ```
+#[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(tag = "type", rename = "Vector")]
 pub struct Vector {
     pub guid: String,
@@ -19,26 +42,123 @@ pub struct Vector {
     #[serde(rename = "z")]
     _z: f64,
     #[serde(skip)]
-    _length: f64,
+    _magnitude: Cell<f64>,
     #[serde(skip)]
-    _has_length: bool,
+    _has_magnitude: Cell<bool>,
+}
+
+impl Default for Vector {
+    fn default() -> Self {
+        Self{
+            _x: 0.0,
+            _y: 0.0,
+            _z: 0.0,
+            guid: Uuid::new_v4().to_string(),
+            name: "my_vector".to_string(),
+            _magnitude: Cell::new(0.0),
+            _has_magnitude: Cell::new(false),
+        }
+    }
 }
 
 impl Vector {
     /// Creates a new Vector with specified coordinates.
+    ///
+    /// # Arguments
+    ///
+    /// * `x` - X component of the vector.
+    /// * `y` - Y component of the vector.
+    /// * `z` - Z component of the vector.
+    ///
+    /// # Returns
+    ///
+    /// A new Vector with the specified coordinates and a unique GUID.
     pub fn new(x: f64, y: f64, z: f64) -> Self {
         Self {
             _x: x,
             _y: y,
             _z: z,
-            guid: Uuid::new_v4().to_string(),
-            name: "my_vector".to_string(),
-            _length: 0.0,
-            _has_length: false,
+            ..Default::default()
         }
     }
 
+    /// Creates a new Vector with specified coordinates and name.
+    ///
+    /// # Arguments
+    ///
+    /// * `x` - X component of the vector.
+    /// * `y` - Y component of the vector.
+    /// * `z` - Z component of the vector.
+    /// * `name` - Name for the vector.
+    ///
+    /// # Returns
+    ///
+    /// A new Vector with the specified coordinates, name, and a unique GUID.
+    pub fn with_name(x: f64, y: f64, z: f64, name: &str) -> Self {
+        Self {
+            _x: x,
+            _y: y,
+            _z: z,
+            name: name.to_string(),
+            ..Default::default()
+        }
+    }
+
+    /// Deep copy this vector with a new GUID.
+    ///
+    /// Creates a clone of this vector with all properties copied
+    /// but assigns a new unique GUID.
+    ///
+    /// # Returns
+    ///
+    /// A new Vector with identical values but a different GUID.
+    pub fn duplicate(&self) -> Self {
+        let mut copy = self.clone();
+        copy.guid = Uuid::new_v4().to_string();
+        copy
+    }
+
+
+    /// Simple string form (like Python __str__): just coordinates.
+    ///
+    /// # Returns
+    ///
+    /// A string in the format "x, y, z".
+    pub fn str(&self) -> String {
+        use crate::tolerance::TOL;
+        let prec = Some(crate::tolerance::Tolerance::ROUNDING);
+        format!(
+            "{}, {}, {}",
+            TOL.format_number(self._x, prec),
+            TOL.format_number(self._y, prec),
+            TOL.format_number(self._z, prec),
+        )
+    }
+
+    /// Detailed representation (like Python __repr__).
+    ///
+    /// # Returns
+    ///
+    /// A string with full vector details including name, coordinates, magnitude.
+    pub fn repr(&mut self) -> String {
+        use crate::tolerance::TOL;
+        let prec = Some(crate::tolerance::Tolerance::ROUNDING);
+        let mag = self.magnitude(); // compute first to avoid borrow conflict
+        format!(
+            "Vector({}, {}, {}, {}, {})",
+            self.name,
+            TOL.format_number(self._x, prec),
+            TOL.format_number(self._y, prec),
+            TOL.format_number(self._z, prec),
+            TOL.format_number(mag, prec),
+        )
+    }
+
     /// Creates a zero vector.
+    ///
+    /// # Returns
+    ///
+    /// A Vector with all components set to 0.0.
     pub fn zero() -> Self {
         Self::new(0.0, 0.0, 0.0)
     }
@@ -63,31 +183,6 @@ impl Vector {
         Self::new(0.0, 1.0, 0.0)
     }
 
-    /// Getters for coordinates
-    pub fn x(&self) -> f64 {
-        self._x
-    }
-    pub fn y(&self) -> f64 {
-        self._y
-    }
-    pub fn z(&self) -> f64 {
-        self._z
-    }
-
-    /// Setters for coordinates (invalidate cached length)
-    pub fn set_x(&mut self, v: f64) {
-        self._x = v;
-        self.invalidate_length_cache();
-    }
-    pub fn set_y(&mut self, v: f64) {
-        self._y = v;
-        self.invalidate_length_cache();
-    }
-    pub fn set_z(&mut self, v: f64) {
-        self._z = v;
-        self.invalidate_length_cache();
-    }
-
     /// Creates a unit vector along Z-axis.
     ///
     /// Returns
@@ -98,80 +193,94 @@ impl Vector {
         Self::new(0.0, 0.0, 1.0)
     }
 
-    /// Creates a vector from start point to end point.
+    /// Creates a vector from two points (p1 - p0).
     ///
     /// Parameters
     /// ----------
-    /// start : &Vector
-    ///     The starting point.
-    /// end : &Vector
-    ///     The ending point.
+    /// p0 : &Point
+    ///     The start point.
+    /// p1 : &Point
+    ///     The end point.
     ///
     /// Returns
     /// -------
     /// Vector
-    ///     The vector from start to end (end - start).
-    pub fn from_start_and_end(start: &Vector, end: &Vector) -> Self {
-        Self::new(end._x - start._x, end._y - start._y, end._z - start._z)
+    ///     The vector from p0 to p1 (p1 - p0).
+    pub fn from_points(p0: &Point, p1: &Point) -> Self {
+        Self::new(p1[0] - p0[0], p1[1] - p0[1], p1[2] - p0[2])
     }
 
     ///////////////////////////////////////////////////////////////////////////////////////////
     // Vector Operations
     ///////////////////////////////////////////////////////////////////////////////////////////
 
-    /// Invalidates the cached length when coordinates change.
-    fn invalidate_length_cache(&mut self) {
-        self._has_length = false;
+    /// Invalidates the cached magnitude when coordinates change.
+    fn invalidate_magnitude_cache(&self) {
+        self._has_magnitude.set(false);
     }
 
-    /// Computes the length (magnitude) of the vector without caching.
-    ///
-    /// Returns
-    /// -------
-    /// f64
-    ///     The length of the vector.
-    pub fn compute_length(&self) -> f64 {
+    /// Computes the magnitude of the vector (internal, not cached).
+    fn compute_magnitude(&self) -> f64 {
         (self._x * self._x + self._y * self._y + self._z * self._z).sqrt()
     }
 
-    /// Gets the (cached) magnitude. Avoids recalculating if unchanged.
+    /// Gets the magnitude of the vector (cached).
     ///
-    /// Returns
-    /// -------
-    /// f64
-    ///     The magnitude (length) of the vector.
-    pub fn magnitude(&mut self) -> f64 {
-        if !self._has_length {
-            self._length = self.compute_length();
-            self._has_length = true;
+    /// The magnitude is computed once and cached. When coordinates change,
+    /// the cache is automatically invalidated and recomputed on next call.
+    ///
+    /// # Returns
+    ///
+    /// The magnitude (length) of the vector.
+    pub fn magnitude(&self) -> f64 {
+        if !self._has_magnitude.get() {
+            self._magnitude.set(self.compute_magnitude());
+            self._has_magnitude.set(true);
         }
-        self._length
+        self._magnitude.get()
     }
 
-    /// Computes the squared length of the vector (avoids sqrt for performance).
-    pub fn length_squared(&self) -> f64 {
+    /// Computes the squared magnitude of the vector (avoids sqrt for performance).
+    ///
+    /// This is more efficient than `magnitude()` when only comparing magnitudes,
+    /// as it avoids the square root computation.
+    ///
+    /// # Returns
+    ///
+    /// The squared magnitude of the vector (x² + y² + z²).
+    pub fn magnitude_squared(&self) -> f64 {
         self._x * self._x + self._y * self._y + self._z * self._z
     }
 
     /// Normalizes the vector in place.
-    pub fn normalize_self(&mut self) {
-        let len = self.magnitude();
+    ///
+    /// Modifies this vector to have unit magnitude (magnitude = 1.0).
+    /// If the vector has zero magnitude, it remains unchanged.
+    pub fn normalize(&mut self) {
+        let len = self.compute_magnitude();
         if len > Tolerance::ZERO_TOLERANCE {
             self._x /= len;
             self._y /= len;
             self._z /= len;
-            self.invalidate_length_cache();
+            self.invalidate_magnitude_cache();
         }
     }
 
     /// Returns a normalized copy of the vector.
-    pub fn normalize(&self) -> Self {
+    ///
+    /// # Returns
+    ///
+    /// A new Vector with unit magnitude pointing in the same direction.
+    pub fn normalized(&self) -> Self {
         let mut result = self.clone();
-        result.normalize_self();
+        result.normalize();
         result
     }
 
     /// Reverses the vector direction in place.
+    ///
+    /// Negates all components of the vector, effectively pointing it
+    /// in the opposite direction. The magnitude remains unchanged.
     pub fn reverse(&mut self) {
         self._x = -self._x;
         self._y = -self._y;
@@ -180,19 +289,27 @@ impl Vector {
     }
 
     /// Scales the vector by a factor.
+    ///
+    /// # Arguments
+    ///
+    /// * `factor` - The scaling factor to apply to all components.
     pub fn scale(&mut self, factor: f64) {
         self._x *= factor;
         self._y *= factor;
         self._z *= factor;
-        self.invalidate_length_cache();
+        self.invalidate_magnitude_cache();
     }
 
     /// Scales the vector up by the global scale factor.
+    ///
+    /// Multiplies all components by the global SCALE constant.
     pub fn scale_up(&mut self) {
         self.scale(SCALE);
     }
 
     /// Scales the vector down by the global scale factor.
+    ///
+    /// Divides all components by the global SCALE constant.
     pub fn scale_down(&mut self) {
         self.scale(1.0 / SCALE);
     }
@@ -232,9 +349,20 @@ impl Vector {
     }
 
     /// Computes the angle between this vector and another in degrees.
+    ///
+    /// # Arguments
+    ///
+    /// * `other` - The other vector to compute angle with.
+    /// * `sign_by_cross_product` - If true, the sign of the angle is determined
+    ///   by the z-component of the cross product.
+    ///
+    /// # Returns
+    ///
+    /// The angle between the vectors in degrees. Returns 0.0 if either vector
+    /// has zero length.
     pub fn angle(&self, other: &Vector, sign_by_cross_product: bool) -> f64 {
         let dotp = self.dot(other);
-        let len_product = self.compute_length() * other.compute_length();
+        let len_product = self.compute_magnitude() * other.compute_magnitude();
 
         if len_product < Tolerance::ZERO_TOLERANCE {
             return 0.0;
@@ -245,7 +373,7 @@ impl Vector {
 
         if sign_by_cross_product {
             let cp = self.cross(other);
-            if cp.z() < 0.0 {
+            if cp[2] < 0.0 {
                 angle = -angle;
             }
         }
@@ -266,7 +394,7 @@ impl Vector {
 
     /// Same as `projection` but allows specifying a tolerance.
     pub fn projection_with(&self, onto: &Vector, tolerance: f64) -> (Vector, f64, Vector, f64) {
-        let onto_len_sq = onto.length_squared();
+        let onto_len_sq = onto.magnitude_squared();
 
         if onto_len_sq < tolerance {
             return (Vector::zero(), 0.0, Vector::zero(), 0.0);
@@ -290,15 +418,24 @@ impl Vector {
             self._y - projection_vec._y,
             self._z - projection_vec._z,
         );
-        let perp_len = perp_vec.compute_length();
+        let perp_len = perp_vec.compute_magnitude();
 
         (projection_vec, projected_len, perp_vec, perp_len)
     }
 
     /// Checks if this vector is parallel to another vector.
-    /// Returns: 1 for parallel, -1 for antiparallel, 0 for not parallel.
+    ///
+    /// # Arguments
+    ///
+    /// * `other` - The other vector to check parallelism with.
+    ///
+    /// # Returns
+    ///
+    /// * `1` - Vectors are parallel (same direction).
+    /// * `-1` - Vectors are antiparallel (opposite direction).
+    /// * `0` - Vectors are not parallel.
     pub fn is_parallel_to(&self, other: &Vector) -> i32 {
-        let len_product = self.compute_length() * other.compute_length();
+        let len_product = self.compute_magnitude() * other.compute_magnitude();
 
         if len_product <= 0.0 {
             return 0;
@@ -317,10 +454,26 @@ impl Vector {
         }
     }
 
-    /// Gets a leveled vector (replicates statics bug with degrees passed to cos).
+    /// Gets a leveled vector scaled by vertical height.
+    ///
+    /// Creates a normalized copy of this vector and scales it based on
+    /// the vertical height and the angle with the Z-axis.
+    ///
+    /// # Arguments
+    ///
+    /// * `vertical_height` - The target vertical height for scaling.
+    ///
+    /// # Returns
+    ///
+    /// A new Vector scaled according to the vertical height.
+    ///
+    /// # Note
+    ///
+    /// This method replicates a known bug where degrees are passed directly
+    /// to cos (which expects radians).
     pub fn get_leveled_vector(&self, vertical_height: f64) -> Vector {
         let mut copy = self.clone();
-        copy.normalize_self();
+        copy.normalize();
 
         if vertical_height != 0.0 {
             let reference = Vector::z_axis();
@@ -333,8 +486,19 @@ impl Vector {
         copy
     }
 
-    /// Set this vector to be perpendicular to `v` (matches Python semantics).
-    /// Returns true on success, false otherwise.
+    /// Set this vector to be perpendicular to the given vector.
+    ///
+    /// Modifies this vector to be perpendicular to `v`. The algorithm
+    /// chooses the perpendicular direction based on the dominant component
+    /// of the input vector.
+    ///
+    /// # Arguments
+    ///
+    /// * `v` - The reference vector to be perpendicular to.
+    ///
+    /// # Returns
+    ///
+    /// `true` if successful, `false` if the input vector is zero.
     pub fn perpendicular_to(&mut self, v: &Vector) -> bool {
         // Ported from Python implementation to ensure identical behavior
         let i: usize;
@@ -343,50 +507,50 @@ impl Vector {
         let a: f64;
         let b: f64;
 
-        if v.y().abs() > v.x().abs() {
-            if v.z().abs() > v.y().abs() {
+        if v[1].abs() > v[0].abs() {
+            if v[2].abs() > v[1].abs() {
                 // |v.z| > |v.y| > |v.x|
                 i = 2;
                 j = 1;
                 k = 0;
-                a = v.z();
-                b = -v.y();
-            } else if v.z().abs() >= v.x().abs() {
+                a = v[2];
+                b = -v[1];
+            } else if v[2].abs() >= v[0].abs() {
                 // |v.y| >= |v.z| >= |v.x|
                 i = 1;
                 j = 2;
                 k = 0;
-                a = v.y();
-                b = -v.z();
+                a = v[1];
+                b = -v[2];
             } else {
                 // |v.y| > |v.x| > |v.z|
                 i = 1;
                 j = 0;
                 k = 2;
-                a = v.y();
-                b = -v.x();
+                a = v[1];
+                b = -v[0];
             }
-        } else if v.z().abs() > v.x().abs() {
+        } else if v[2].abs() > v[0].abs() {
             // |v.z| > |v.x| >= |v.y|
             i = 2;
             j = 0;
             k = 1;
-            a = v.z();
-            b = -v.x();
-        } else if v.z().abs() > v.y().abs() {
+            a = v[2];
+            b = -v[0];
+        } else if v[2].abs() > v[1].abs() {
             // |v.x| >= |v.z| > |v.y|
             i = 0;
             j = 2;
             k = 1;
-            a = v.x();
-            b = -v.z();
+            a = v[0];
+            b = -v[2];
         } else {
             // |v.x| >= |v.y| >= |v.z|
             i = 0;
             j = 1;
             k = 2;
-            a = v.x();
-            b = -v.y();
+            a = v[0];
+            b = -v[1];
         }
 
         let mut coords = [0.0, 0.0, 0.0];
@@ -397,7 +561,7 @@ impl Vector {
         self._x = coords[0];
         self._y = coords[1];
         self._z = coords[2];
-        self.invalidate_length_cache();
+        self.invalidate_magnitude_cache();
 
         a != 0.0
     }
@@ -406,7 +570,21 @@ impl Vector {
     // Static Methods
     ///////////////////////////////////////////////////////////////////////////////////////////
 
-    /// Computes the cosine law for triangle edge length.
+    /// Computes the third side of a triangle using the cosine law.
+    ///
+    /// Given two sides and the angle between them, calculates the length
+    /// of the third side: c² = a² + b² - 2ab·cos(C)
+    ///
+    /// # Arguments
+    ///
+    /// * `triangle_edge_length_a` - Length of side a.
+    /// * `triangle_edge_length_b` - Length of side b.
+    /// * `angle_in_degrees_between_edges` - Angle between sides a and b.
+    /// * `degrees` - If true, angle is in degrees; otherwise radians.
+    ///
+    /// # Returns
+    ///
+    /// Length of the third side.
     pub fn cosine_law(
         triangle_edge_length_a: f64,
         triangle_edge_length_b: f64,
@@ -424,7 +602,21 @@ impl Vector {
         .sqrt()
     }
 
-    /// Computes the sine law for triangle angle.
+    /// Computes an angle of a triangle using the sine law.
+    ///
+    /// Given two sides and the angle opposite to one of them, calculates
+    /// the angle opposite to the other side: sin(A)/a = sin(B)/b
+    ///
+    /// # Arguments
+    ///
+    /// * `triangle_edge_length_a` - Length of side a.
+    /// * `angle_in_degrees_in_front_of_a` - Angle opposite to side a.
+    /// * `triangle_edge_length_b` - Length of side b.
+    /// * `degrees` - If true, angles are in degrees; otherwise radians.
+    ///
+    /// # Returns
+    ///
+    /// The angle opposite to side b.
     pub fn sine_law_angle(
         triangle_edge_length_a: f64,
         angle_in_degrees_in_front_of_a: f64,
@@ -447,7 +639,21 @@ impl Vector {
         }
     }
 
-    /// Computes the sine law for triangle edge length.
+    /// Computes a side length of a triangle using the sine law.
+    ///
+    /// Given one side and two angles, calculates the length of another side:
+    /// a/sin(A) = b/sin(B)
+    ///
+    /// # Arguments
+    ///
+    /// * `triangle_edge_length_a` - Length of side a.
+    /// * `angle_in_degrees_in_front_of_a` - Angle opposite to side a.
+    /// * `angle_in_degrees_in_front_of_b` - Angle opposite to side b.
+    /// * `degrees` - If true, angles are in degrees; otherwise radians.
+    ///
+    /// # Returns
+    ///
+    /// Length of side b.
     pub fn sine_law_length(
         triangle_edge_length_a: f64,
         angle_in_degrees_in_front_of_a: f64,
@@ -470,6 +676,17 @@ impl Vector {
     }
 
     /// Computes the angle between vector XY components in degrees.
+    ///
+    /// Calculates atan2(y, x) to get the angle of the vector's projection
+    /// onto the XY plane, measured from the positive X-axis.
+    ///
+    /// # Arguments
+    ///
+    /// * `vector` - The vector to compute the angle for.
+    ///
+    /// # Returns
+    ///
+    /// The angle in degrees.
     pub fn angle_between_vector_xy_components(vector: &Vector) -> f64 {
         vector._y.atan2(vector._x) * TO_DEGREES
     }
@@ -480,7 +697,15 @@ impl Vector {
         Self::angle_between_vector_xy_components(vector)
     }
 
-    /// Sums a collection of vectors.
+    /// Sums a collection of vectors component-wise.
+    ///
+    /// # Arguments
+    ///
+    /// * `vectors` - Slice of vectors to sum.
+    ///
+    /// # Returns
+    ///
+    /// A new Vector containing the component-wise sum of all input vectors.
     pub fn sum_of_vectors(vectors: &[Vector]) -> Vector {
         let mut result = Vector::zero();
         for vector in vectors {
@@ -491,9 +716,66 @@ impl Vector {
         result
     }
 
-    /// Computes coordinate direction angles (alpha, beta, gamma) in degrees.
+    /// Computes the average of a collection of vectors.
+    ///
+    /// # Arguments
+    ///
+    /// * `vectors` - Slice of vectors to average.
+    ///
+    /// # Returns
+    ///
+    /// A new Vector representing the component-wise average.
+    /// Returns a zero vector if the slice is empty.
+    pub fn average(vectors: &[Vector]) -> Vector {
+        if vectors.is_empty() {
+            return Vector::zero();
+        }
+        let sum = Self::sum_of_vectors(vectors);
+        let count = vectors.len() as f64;
+        Vector::new(sum._x / count, sum._y / count, sum._z / count)
+    }
+
+    /// Checks if this vector is perpendicular to another vector.
+    ///
+    /// Two vectors are perpendicular if their dot product is zero
+    /// (within tolerance).
+    ///
+    /// # Arguments
+    ///
+    /// * `other` - The other vector to check against.
+    ///
+    /// # Returns
+    ///
+    /// `true` if the vectors are perpendicular, `false` otherwise.
+    pub fn is_perpendicular_to(&self, other: &Vector) -> bool {
+        self.dot(other).abs() < Tolerance::ZERO_TOLERANCE
+    }
+
+    /// Checks if this vector is a zero vector.
+    ///
+    /// A vector is considered zero if its length is less than the
+    /// zero tolerance.
+    ///
+    /// # Returns
+    ///
+    /// `true` if the vector is effectively zero, `false` otherwise.
+    pub fn is_zero(&self) -> bool {
+        self.compute_magnitude() < Tolerance::ZERO_TOLERANCE
+    }
+
+    /// Computes coordinate direction angles (alpha, beta, gamma).
+    ///
+    /// These are the angles between the vector and each coordinate axis.
+    ///
+    /// # Arguments
+    ///
+    /// * `degrees` - If true, return angles in degrees; otherwise radians.
+    ///
+    /// # Returns
+    ///
+    /// An array [alpha, beta, gamma] representing angles with X, Y, Z axes.
     pub fn coordinate_direction_3angles(&self, degrees: bool) -> [f64; 3] {
-        let length = self.compute_length();
+        let length = self.compute_magnitude();
         if length < Tolerance::ZERO_TOLERANCE {
             return [0.0, 0.0, 0.0];
         }
@@ -513,10 +795,21 @@ impl Vector {
         }
     }
 
-    /// Computes coordinate direction angles (phi, theta) in degrees.
+    /// Computes spherical coordinate angles (phi, theta).
+    ///
+    /// * phi - Azimuthal angle in the XY plane from the X-axis.
+    /// * theta - Polar angle from the XY plane.
+    ///
+    /// # Arguments
+    ///
+    /// * `degrees` - If true, return angles in degrees; otherwise radians.
+    ///
+    /// # Returns
+    ///
+    /// An array [phi, theta] representing spherical coordinate angles.
     pub fn coordinate_direction_2angles(&self, degrees: bool) -> [f64; 2] {
         let length_xy = (self._x * self._x + self._y * self._y).sqrt();
-        let length = self.compute_length();
+        let length = self.compute_magnitude();
 
         if length < Tolerance::ZERO_TOLERANCE {
             return [0.0, 0.0];
@@ -537,6 +830,10 @@ impl Vector {
     ///////////////////////////////////////////////////////////////////////////////////////////
 
     /// Serializes the Vector to a JSON string.
+    ///
+    /// # Returns
+    ///
+    /// A Result containing the pretty-printed JSON string or an error.
     pub fn jsondump(&self) -> Result<String, Box<dyn std::error::Error>> {
         let mut buf = Vec::new();
         let formatter = serde_json::ser::PrettyFormatter::with_indent(b"    ");
@@ -546,11 +843,27 @@ impl Vector {
     }
 
     /// Deserializes a Vector from a JSON string.
+    ///
+    /// # Arguments
+    ///
+    /// * `json_data` - JSON string containing vector data.
+    ///
+    /// # Returns
+    ///
+    /// A Result containing the deserialized Vector or an error.
     pub fn jsonload(json_data: &str) -> Result<Self, Box<dyn std::error::Error>> {
         Ok(serde_json::from_str(json_data)?)
     }
 
     /// Serializes the Vector to a JSON file.
+    ///
+    /// # Arguments
+    ///
+    /// * `filepath` - Path to the output file.
+    ///
+    /// # Returns
+    ///
+    /// A Result indicating success or an error.
     pub fn to_json(&self, filepath: &str) -> Result<(), Box<dyn std::error::Error>> {
         let json = self.jsondump()?;
         std::fs::write(filepath, json)?;
@@ -558,15 +871,95 @@ impl Vector {
     }
 
     /// Deserializes a Vector from a JSON file.
+    ///
+    /// # Arguments
+    ///
+    /// * `filepath` - Path to the JSON file.
+    ///
+    /// # Returns
+    ///
+    /// A Result containing the deserialized Vector or an error.
     pub fn from_json(filepath: &str) -> Result<Self, Box<dyn std::error::Error>> {
         let json = std::fs::read_to_string(filepath)?;
         Self::jsonload(&json)
     }
+
+    ///////////////////////////////////////////////////////////////////////////////////////////
+    // Protobuf Serialization
+    ///////////////////////////////////////////////////////////////////////////////////////////
+
+    #[cfg(feature = "protobuf")]
+    /// Convert to protobuf binary format.
+    ///
+    /// # Returns
+    ///
+    /// A Vec<u8> containing the serialized protobuf data.
+    pub fn to_protobuf(&self) -> Vec<u8> {
+        use prost::Message;
+        
+        let proto = crate::proto::Vector {
+            x: self._x,
+            y: self._y,
+            z: self._z,
+            name: self.name.clone(),
+        };
+        proto.encode_to_vec()
+    }
+
+    #[cfg(feature = "protobuf")]
+    /// Create Vector from protobuf binary data.
+    ///
+    /// # Arguments
+    ///
+    /// * `data` - Byte slice containing protobuf-encoded vector data.
+    ///
+    /// # Returns
+    ///
+    /// A Result containing the deserialized Vector or an error.
+    pub fn from_protobuf(data: &[u8]) -> Result<Self, Box<dyn std::error::Error>> {
+        use prost::Message;
+        
+        let proto = crate::proto::Vector::decode(data)?;
+        
+        let mut v = Self::new(proto.x, proto.y, proto.z);
+        v.name = proto.name;
+        
+        Ok(v)
+    }
+
+    #[cfg(feature = "protobuf")]
+    /// Write protobuf to file.
+    ///
+    /// # Arguments
+    ///
+    /// * `filepath` - Path to the output file.
+    pub fn protobuf_dump(&self, filepath: &str) {
+        let data = self.to_protobuf();
+        std::fs::write(filepath, data).expect("Failed to write protobuf file");
+    }
+
+    #[cfg(feature = "protobuf")]
+    /// Read protobuf from file.
+    ///
+    /// # Arguments
+    ///
+    /// * `filepath` - Path to the protobuf file.
+    ///
+    /// # Returns
+    ///
+    /// The deserialized Vector.
+    pub fn protobuf_load(filepath: &str) -> Self {
+        let data = std::fs::read(filepath).expect("Failed to read protobuf file");
+        Self::from_protobuf(&data).expect("Failed to parse protobuf")
+    }
 }
 
-impl Default for Vector {
-    fn default() -> Self {
-        Self::new(0.0, 0.0, 0.0)
+impl PartialEq for Vector {
+    fn eq(&self, other: &Self) -> bool {
+        self.name == other.name
+            && (self._x * 1000000.0).round() == (other._x * 1000000.0).round()
+            && (self._y * 1000000.0).round() == (other._y * 1000000.0).round()
+            && (self._z * 1000000.0).round() == (other._z * 1000000.0).round()
     }
 }
 
@@ -586,7 +979,7 @@ impl Index<usize> for Vector {
 
 impl IndexMut<usize> for Vector {
     fn index_mut(&mut self, index: usize) -> &mut Self::Output {
-        self.invalidate_length_cache();
+        self.invalidate_magnitude_cache();
         match index {
             0 => &mut self._x,
             1 => &mut self._y,
@@ -602,9 +995,9 @@ impl Add for Vector {
 
     fn add(self, other: Vector) -> Vector {
         Vector::new(
-            self.x() + other.x(),
-            self.y() + other.y(),
-            self.z() + other.z(),
+            self[0] + other[0],
+            self[1] + other[1],
+            self[2] + other[2],
         )
     }
 }
@@ -614,9 +1007,21 @@ impl Add for &Vector {
 
     fn add(self, other: &Vector) -> Vector {
         Vector::new(
-            self.x() + other.x(),
-            self.y() + other.y(),
-            self.z() + other.z(),
+            self[0] + other[0],
+            self[1] + other[1],
+            self[2] + other[2],
+        )
+    }
+}
+
+impl Add<Vector> for &Vector {
+    type Output = Vector;
+
+    fn add(self, other: Vector) -> Vector {
+        Vector::new(
+            self[0] + other[0],
+            self[1] + other[1],
+            self[2] + other[2],
         )
     }
 }
@@ -626,9 +1031,9 @@ impl Sub for Vector {
 
     fn sub(self, other: Vector) -> Vector {
         Vector::new(
-            self.x() - other.x(),
-            self.y() - other.y(),
-            self.z() - other.z(),
+            self[0] - other[0],
+            self[1] - other[1],
+            self[2] - other[2],
         )
     }
 }
@@ -638,9 +1043,21 @@ impl Sub for &Vector {
 
     fn sub(self, other: &Vector) -> Vector {
         Vector::new(
-            self.x() - other.x(),
-            self.y() - other.y(),
-            self.z() - other.z(),
+            self[0] - other[0],
+            self[1] - other[1],
+            self[2] - other[2],
+        )
+    }
+}
+
+impl Sub<Vector> for &Vector {
+    type Output = Vector;
+
+    fn sub(self, other: Vector) -> Vector {
+        Vector::new(
+            self[0] - other[0],
+            self[1] - other[1],
+            self[2] - other[2],
         )
     }
 }
@@ -649,7 +1066,7 @@ impl Mul<f64> for Vector {
     type Output = Vector;
 
     fn mul(self, scalar: f64) -> Vector {
-        Vector::new(self.x() * scalar, self.y() * scalar, self.z() * scalar)
+        Vector::new(self[0] * scalar, self[1] * scalar, self[2] * scalar)
     }
 }
 
@@ -657,7 +1074,7 @@ impl Mul<f64> for &Vector {
     type Output = Vector;
 
     fn mul(self, scalar: f64) -> Vector {
-        Vector::new(self.x() * scalar, self.y() * scalar, self.z() * scalar)
+        Vector::new(self[0] * scalar, self[1] * scalar, self[2] * scalar)
     }
 }
 
@@ -665,7 +1082,7 @@ impl Div<f64> for Vector {
     type Output = Vector;
 
     fn div(self, scalar: f64) -> Vector {
-        Vector::new(self.x() / scalar, self.y() / scalar, self.z() / scalar)
+        Vector::new(self[0] / scalar, self[1] / scalar, self[2] / scalar)
     }
 }
 
@@ -673,7 +1090,7 @@ impl Div<f64> for &Vector {
     type Output = Vector;
 
     fn div(self, scalar: f64) -> Vector {
-        Vector::new(self.x() / scalar, self.y() / scalar, self.z() / scalar)
+        Vector::new(self[0] / scalar, self[1] / scalar, self[2] / scalar)
     }
 }
 
@@ -681,7 +1098,7 @@ impl Neg for Vector {
     type Output = Vector;
 
     fn neg(self) -> Vector {
-        Vector::new(-self.x(), -self.y(), -self.z())
+        Vector::new(-self[0], -self[1], -self[2])
     }
 }
 
@@ -689,56 +1106,56 @@ impl Neg for &Vector {
     type Output = Vector;
 
     fn neg(self) -> Vector {
-        Vector::new(-self.x(), -self.y(), -self.z())
+        Vector::new(-self[0], -self[1], -self[2])
     }
 }
 
 // Compound assignment operators
 impl AddAssign for Vector {
     fn add_assign(&mut self, other: Vector) {
-        self.set_x(self.x() + other.x());
-        self.set_y(self.y() + other.y());
-        self.set_z(self.z() + other.z());
+        self[0] += other[0];
+        self[1] += other[1];
+        self[2] += other[2];
     }
 }
 
 impl AddAssign<&Vector> for Vector {
     fn add_assign(&mut self, other: &Vector) {
-        self.set_x(self.x() + other.x());
-        self.set_y(self.y() + other.y());
-        self.set_z(self.z() + other.z());
+        self[0] += other[0];
+        self[1] += other[1];
+        self[2] += other[2];
     }
 }
 
 impl SubAssign for Vector {
     fn sub_assign(&mut self, other: Vector) {
-        self.set_x(self.x() - other.x());
-        self.set_y(self.y() - other.y());
-        self.set_z(self.z() - other.z());
+        self[0] -= other[0];
+        self[1] -= other[1];
+        self[2] -= other[2];
     }
 }
 
 impl SubAssign<&Vector> for Vector {
     fn sub_assign(&mut self, other: &Vector) {
-        self.set_x(self.x() - other.x());
-        self.set_y(self.y() - other.y());
-        self.set_z(self.z() - other.z());
+        self[0] -= other[0];
+        self[1] -= other[1];
+        self[2] -= other[2];
     }
 }
 
 impl MulAssign<f64> for Vector {
     fn mul_assign(&mut self, scalar: f64) {
-        self.set_x(self.x() * scalar);
-        self.set_y(self.y() * scalar);
-        self.set_z(self.z() * scalar);
+        self[0] *= scalar;
+        self[1] *= scalar;
+        self[2] *= scalar;
     }
 }
 
 impl DivAssign<f64> for Vector {
     fn div_assign(&mut self, scalar: f64) {
-        self.set_x(self.x() / scalar);
-        self.set_y(self.y() / scalar);
-        self.set_z(self.z() / scalar);
+        self[0] /= scalar;
+        self[1] /= scalar;
+        self[2] /= scalar;
     }
 }
 
@@ -747,9 +1164,9 @@ impl fmt::Display for Vector {
         write!(
             f,
             "Vector({}, {}, {}, {}, {})",
-            self.x(),
-            self.y(),
-            self.z(),
+            self[0],
+            self[1],
+            self[2],
             self.guid,
             self.name
         )

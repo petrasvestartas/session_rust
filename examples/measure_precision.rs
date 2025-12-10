@@ -60,9 +60,9 @@ fn main() {
             let (exp_x, exp_y, exp_z) = expected[idx];
             
             // Compute raw errors (before rounding)
-            let error_x = (pt.x() - exp_x).abs();
-            let error_y = (pt.y() - exp_y).abs();
-            let error_z = (pt.z() - exp_z).abs();
+            let error_x = (pt[0] - exp_x).abs();
+            let error_y = (pt[1] - exp_y).abs();
+            let error_z = (pt[2] - exp_z).abs();
             let max_component_error = error_x.max(error_y).max(error_z);
             
             if max_component_error > max_error {
@@ -71,7 +71,7 @@ fn main() {
             }
             
             println!("Point {}: actual=({:.10}, {:.10}, {:.10}) expected=({:.3}, {:.3}, {:.3})",
-                idx, pt.x(), pt.y(), pt.z(), exp_x, exp_y, exp_z);
+                idx, pt[0], pt[1], pt[2], exp_x, exp_y, exp_z);
             println!("  Errors: x={:.2e}, y={:.2e}, z={:.2e}", error_x, error_y, error_z);
             
             idx += 1;

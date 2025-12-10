@@ -117,69 +117,69 @@ impl BoundingBox {
 
     pub fn point_at(&self, x: f64, y: f64, z: f64) -> Point {
         Point::new(
-            self.center[0] + x * self.x_axis.x() + y * self.y_axis.x() + z * self.z_axis.x(),
-            self.center[1] + x * self.x_axis.y() + y * self.y_axis.y() + z * self.z_axis.y(),
-            self.center[2] + x * self.x_axis.z() + y * self.y_axis.z() + z * self.z_axis.z(),
+            self.center[0] + x * self.x_axis[0] + y * self.y_axis[0] + z * self.z_axis[0],
+            self.center[1] + x * self.x_axis[1] + y * self.y_axis[1] + z * self.z_axis[1],
+            self.center[2] + x * self.x_axis[2] + y * self.y_axis[2] + z * self.z_axis[2],
         )
     }
 
     pub fn min_point(&self) -> Point {
         Point::new(
-            self.center[0] - self.half_size.x(),
-            self.center[1] - self.half_size.y(),
-            self.center[2] - self.half_size.z(),
+            self.center[0] - self.half_size[0],
+            self.center[1] - self.half_size[1],
+            self.center[2] - self.half_size[2],
         )
     }
 
     pub fn max_point(&self) -> Point {
         Point::new(
-            self.center[0] + self.half_size.x(),
-            self.center[1] + self.half_size.y(),
-            self.center[2] + self.half_size.z(),
+            self.center[0] + self.half_size[0],
+            self.center[1] + self.half_size[1],
+            self.center[2] + self.half_size[2],
         )
     }
 
     pub fn corners(&self) -> [Point; 8] {
         [
-            self.point_at(self.half_size.x(), self.half_size.y(), -self.half_size.z()),
-            self.point_at(-self.half_size.x(), self.half_size.y(), -self.half_size.z()),
+            self.point_at(self.half_size[0], self.half_size[1], -self.half_size[2]),
+            self.point_at(-self.half_size[0], self.half_size[1], -self.half_size[2]),
             self.point_at(
-                -self.half_size.x(),
-                -self.half_size.y(),
-                -self.half_size.z(),
+                -self.half_size[0],
+                -self.half_size[1],
+                -self.half_size[2],
             ),
-            self.point_at(self.half_size.x(), -self.half_size.y(), -self.half_size.z()),
-            self.point_at(self.half_size.x(), self.half_size.y(), self.half_size.z()),
-            self.point_at(-self.half_size.x(), self.half_size.y(), self.half_size.z()),
-            self.point_at(-self.half_size.x(), -self.half_size.y(), self.half_size.z()),
-            self.point_at(self.half_size.x(), -self.half_size.y(), self.half_size.z()),
+            self.point_at(self.half_size[0], -self.half_size[1], -self.half_size[2]),
+            self.point_at(self.half_size[0], self.half_size[1], self.half_size[2]),
+            self.point_at(-self.half_size[0], self.half_size[1], self.half_size[2]),
+            self.point_at(-self.half_size[0], -self.half_size[1], self.half_size[2]),
+            self.point_at(self.half_size[0], -self.half_size[1], self.half_size[2]),
         ]
     }
 
     pub fn two_rectangles(&self) -> [Point; 10] {
         [
-            self.point_at(self.half_size.x(), self.half_size.y(), -self.half_size.z()),
-            self.point_at(-self.half_size.x(), self.half_size.y(), -self.half_size.z()),
+            self.point_at(self.half_size[0], self.half_size[1], -self.half_size[2]),
+            self.point_at(-self.half_size[0], self.half_size[1], -self.half_size[2]),
             self.point_at(
-                -self.half_size.x(),
-                -self.half_size.y(),
-                -self.half_size.z(),
+                -self.half_size[0],
+                -self.half_size[1],
+                -self.half_size[2],
             ),
-            self.point_at(self.half_size.x(), -self.half_size.y(), -self.half_size.z()),
-            self.point_at(self.half_size.x(), self.half_size.y(), -self.half_size.z()),
-            self.point_at(self.half_size.x(), self.half_size.y(), self.half_size.z()),
-            self.point_at(-self.half_size.x(), self.half_size.y(), self.half_size.z()),
-            self.point_at(-self.half_size.x(), -self.half_size.y(), self.half_size.z()),
-            self.point_at(self.half_size.x(), -self.half_size.y(), self.half_size.z()),
-            self.point_at(self.half_size.x(), self.half_size.y(), self.half_size.z()),
+            self.point_at(self.half_size[0], -self.half_size[1], -self.half_size[2]),
+            self.point_at(self.half_size[0], self.half_size[1], -self.half_size[2]),
+            self.point_at(self.half_size[0], self.half_size[1], self.half_size[2]),
+            self.point_at(-self.half_size[0], self.half_size[1], self.half_size[2]),
+            self.point_at(-self.half_size[0], -self.half_size[1], self.half_size[2]),
+            self.point_at(self.half_size[0], -self.half_size[1], self.half_size[2]),
+            self.point_at(self.half_size[0], self.half_size[1], self.half_size[2]),
         ]
     }
 
     pub fn inflate(&mut self, amount: f64) {
         self.half_size = Vector::new(
-            self.half_size.x() + amount,
-            self.half_size.y() + amount,
-            self.half_size.z() + amount,
+            self.half_size[0] + amount,
+            self.half_size[1] + amount,
+            self.half_size[2] + amount,
         );
     }
 
@@ -191,23 +191,23 @@ impl BoundingBox {
     ) -> bool {
         let dot_rp = relative_position.dot(axis).abs();
 
-        let v1 = box1.x_axis.clone() * box1.half_size.x();
-        let v2 = box1.y_axis.clone() * box1.half_size.y();
-        let v3 = box1.z_axis.clone() * box1.half_size.z();
+        let v1 = box1.x_axis.clone() * box1.half_size[0];
+        let v2 = box1.y_axis.clone() * box1.half_size[1];
+        let v3 = box1.z_axis.clone() * box1.half_size[2];
         let proj1 = v1.dot(axis).abs() + v2.dot(axis).abs() + v3.dot(axis).abs();
 
-        let v4 = box2.x_axis.clone() * box2.half_size.x();
-        let v5 = box2.y_axis.clone() * box2.half_size.y();
-        let v6 = box2.z_axis.clone() * box2.half_size.z();
+        let v4 = box2.x_axis.clone() * box2.half_size[0];
+        let v5 = box2.y_axis.clone() * box2.half_size[1];
+        let v6 = box2.z_axis.clone() * box2.half_size[2];
         let proj2 = v4.dot(axis).abs() + v5.dot(axis).abs() + v6.dot(axis).abs();
 
         dot_rp > (proj1 + proj2)
     }
 
     pub fn collides_with(&self, other: &BoundingBox) -> bool {
-        let center_vec = Vector::new(self.center[0], self.center[1], self.center[2]);
-        let other_center_vec = Vector::new(other.center[0], other.center[1], other.center[2]);
-        let relative_position = Vector::from_start_and_end(&center_vec, &other_center_vec);
+        let center_pt = Point::new(self.center[0], self.center[1], self.center[2]);
+        let other_center_pt = Point::new(other.center[0], other.center[1], other.center[2]);
+        let relative_position = Vector::from_points(&center_pt, &other_center_pt);
 
         !(Self::separating_plane_exists(&relative_position, &self.x_axis, self, other)
             || Self::separating_plane_exists(&relative_position, &self.y_axis, self, other)

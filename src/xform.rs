@@ -50,15 +50,15 @@ impl Xform {
 
     pub fn from_cols(col_x: Vector, col_y: Vector, col_z: Vector) -> Self {
         let mut xform = Self::identity();
-        xform.m[0] = col_x.x();
-        xform.m[1] = col_x.y();
-        xform.m[2] = col_x.z();
-        xform.m[4] = col_y.x();
-        xform.m[5] = col_y.y();
-        xform.m[6] = col_y.z();
-        xform.m[8] = col_z.x();
-        xform.m[9] = col_z.y();
-        xform.m[10] = col_z.z();
+        xform.m[0] = col_x[0];
+        xform.m[1] = col_x[1];
+        xform.m[2] = col_x[2];
+        xform.m[4] = col_y[0];
+        xform.m[5] = col_y[1];
+        xform.m[6] = col_y[2];
+        xform.m[8] = col_z[0];
+        xform.m[9] = col_z[1];
+        xform.m[10] = col_z[2];
         xform
     }
 
@@ -124,53 +124,53 @@ impl Xform {
     }
 
     pub fn rotation(axis: &Vector, angle_radians: f64) -> Self {
-        let axis = axis.normalize();
+        let axis = axis.normalized();
 
         let mut xform = Self::identity();
         let cos_angle = angle_radians.cos();
         let sin_angle = angle_radians.sin();
         let one_minus_cos = 1.0 - cos_angle;
 
-        let xx = axis.x() * axis.x();
-        let xy = axis.x() * axis.y();
-        let xz = axis.x() * axis.z();
-        let yy = axis.y() * axis.y();
-        let yz = axis.y() * axis.z();
-        let zz = axis.z() * axis.z();
+        let xx = axis[0] * axis[0];
+        let xy = axis[0] * axis[1];
+        let xz = axis[0] * axis[2];
+        let yy = axis[1] * axis[1];
+        let yz = axis[1] * axis[2];
+        let zz = axis[2] * axis[2];
 
         xform.m[0] = cos_angle + xx * one_minus_cos;
-        xform.m[1] = xy * one_minus_cos + axis.z() * sin_angle;
-        xform.m[2] = xz * one_minus_cos - axis.y() * sin_angle;
+        xform.m[1] = xy * one_minus_cos + axis[2] * sin_angle;
+        xform.m[2] = xz * one_minus_cos - axis[1] * sin_angle;
 
-        xform.m[4] = xy * one_minus_cos - axis.z() * sin_angle;
+        xform.m[4] = xy * one_minus_cos - axis[2] * sin_angle;
         xform.m[5] = cos_angle + yy * one_minus_cos;
-        xform.m[6] = yz * one_minus_cos + axis.x() * sin_angle;
+        xform.m[6] = yz * one_minus_cos + axis[0] * sin_angle;
 
-        xform.m[8] = xz * one_minus_cos + axis.y() * sin_angle;
-        xform.m[9] = yz * one_minus_cos - axis.x() * sin_angle;
+        xform.m[8] = xz * one_minus_cos + axis[1] * sin_angle;
+        xform.m[9] = yz * one_minus_cos - axis[0] * sin_angle;
         xform.m[10] = cos_angle + zz * one_minus_cos;
 
         xform
     }
 
     pub fn look_at_rh(eye: &Point, target: &Point, up: &Vector) -> Self {
-        let f = (target.clone() - eye.clone()).normalize();
-        let s = f.cross(&up.normalize()).normalize();
+        let f = (target.clone() - eye.clone()).normalized();
+        let s = f.cross(&up.normalized()).normalized();
         let u = s.cross(&f);
 
         let mut xform = Self::identity();
 
-        xform.m[0] = s.x();
-        xform.m[4] = s.y();
-        xform.m[8] = s.z();
+        xform.m[0] = s[0];
+        xform.m[4] = s[1];
+        xform.m[8] = s[2];
 
-        xform.m[1] = u.x();
-        xform.m[5] = u.y();
-        xform.m[9] = u.z();
+        xform.m[1] = u[0];
+        xform.m[5] = u[1];
+        xform.m[9] = u[2];
 
-        xform.m[2] = -f.x();
-        xform.m[6] = -f.y();
-        xform.m[10] = -f.z();
+        xform.m[2] = -f[0];
+        xform.m[6] = -f[1];
+        xform.m[10] = -f[2];
 
         xform.m[12] = -s.dot(&Vector::new(eye[0], eye[1], eye[2]));
         xform.m[13] = -u.dot(&Vector::new(eye[0], eye[1], eye[2]));
@@ -180,23 +180,23 @@ impl Xform {
     }
 
     pub fn change_basis(origin: &Point, x_axis: &Vector, y_axis: &Vector, z_axis: &Vector) -> Self {
-        let x_axis = x_axis.normalize();
-        let y_axis = y_axis.normalize();
-        let z_axis = z_axis.normalize();
+        let x_axis = x_axis.normalized();
+        let y_axis = y_axis.normalized();
+        let z_axis = z_axis.normalized();
 
         let mut xform = Self::identity();
 
-        xform.m[0] = x_axis.x();
-        xform.m[1] = x_axis.y();
-        xform.m[2] = x_axis.z();
+        xform.m[0] = x_axis[0];
+        xform.m[1] = x_axis[1];
+        xform.m[2] = x_axis[2];
 
-        xform.m[4] = y_axis.x();
-        xform.m[5] = y_axis.y();
-        xform.m[6] = y_axis.z();
+        xform.m[4] = y_axis[0];
+        xform.m[5] = y_axis[1];
+        xform.m[6] = y_axis[2];
 
-        xform.m[8] = z_axis.x();
-        xform.m[9] = z_axis.y();
-        xform.m[10] = z_axis.z();
+        xform.m[8] = z_axis[0];
+        xform.m[9] = z_axis[1];
+        xform.m[10] = z_axis[2];
 
         // Set the origin
         xform.m[12] = origin[0];
@@ -277,9 +277,9 @@ impl Xform {
         let m = &self.m;
 
         Vector::new(
-            m[0] * vector.x() + m[4] * vector.y() + m[8] * vector.z(),
-            m[1] * vector.x() + m[5] * vector.y() + m[9] * vector.z(),
-            m[2] * vector.x() + m[6] * vector.y() + m[10] * vector.z(),
+            m[0] * vector[0] + m[4] * vector[1] + m[8] * vector[2],
+            m[1] * vector[0] + m[5] * vector[1] + m[9] * vector[2],
+            m[2] * vector[0] + m[6] * vector[1] + m[10] * vector[2],
         )
     }
 
@@ -491,36 +491,36 @@ impl Xform {
         let mut x1 = x_axis_1.clone();
         let mut y1 = y_axis_1.clone();
         let mut z1 = z_axis_1.clone();
-        x0.normalize_self();
-        y0.normalize_self();
-        z0.normalize_self();
-        x1.normalize_self();
-        y1.normalize_self();
-        z1.normalize_self();
+        x0.normalize();
+        y0.normalize();
+        z0.normalize();
+        x1.normalize();
+        y1.normalize();
+        z1.normalize();
 
         let t0 = Self::translation(-origin_0[0], -origin_0[1], -origin_0[2]);
 
         let mut f0 = Self::identity();
-        f0.m[0] = x0.x();
-        f0.m[1] = x0.y();
-        f0.m[2] = x0.z();
-        f0.m[4] = y0.x();
-        f0.m[5] = y0.y();
-        f0.m[6] = y0.z();
-        f0.m[8] = z0.x();
-        f0.m[9] = z0.y();
-        f0.m[10] = z0.z();
+        f0.m[0] = x0[0];
+        f0.m[1] = x0[1];
+        f0.m[2] = x0[2];
+        f0.m[4] = y0[0];
+        f0.m[5] = y0[1];
+        f0.m[6] = y0[2];
+        f0.m[8] = z0[0];
+        f0.m[9] = z0[1];
+        f0.m[10] = z0[2];
 
         let mut f1 = Self::identity();
-        f1.m[0] = x1.x();
-        f1.m[4] = x1.y();
-        f1.m[8] = x1.z();
-        f1.m[1] = y1.x();
-        f1.m[5] = y1.y();
-        f1.m[9] = y1.z();
-        f1.m[2] = z1.x();
-        f1.m[6] = z1.y();
-        f1.m[10] = z1.z();
+        f1.m[0] = x1[0];
+        f1.m[4] = x1[1];
+        f1.m[8] = x1[2];
+        f1.m[1] = y1[0];
+        f1.m[5] = y1[1];
+        f1.m[9] = y1[2];
+        f1.m[2] = z1[0];
+        f1.m[6] = z1[1];
+        f1.m[10] = z1[2];
 
         let r = &f1 * &f0;
         let t1 = Self::translation(origin_1[0], origin_1[1], origin_1[2]);
@@ -531,21 +531,21 @@ impl Xform {
         let mut x = x_axis.clone();
         let mut y = y_axis.clone();
         let mut z = z_axis.clone();
-        x.normalize_self();
-        y.normalize_self();
-        z.normalize_self();
+        x.normalize();
+        y.normalize();
+        z.normalize();
 
         let t = Self::translation(-origin[0], -origin[1], -origin[2]);
         let mut f = Self::identity();
-        f.m[0] = x.x();
-        f.m[1] = x.y();
-        f.m[2] = x.z();
-        f.m[4] = y.x();
-        f.m[5] = y.y();
-        f.m[6] = y.z();
-        f.m[8] = z.x();
-        f.m[9] = z.y();
-        f.m[10] = z.z();
+        f.m[0] = x[0];
+        f.m[1] = x[1];
+        f.m[2] = x[2];
+        f.m[4] = y[0];
+        f.m[5] = y[1];
+        f.m[6] = y[2];
+        f.m[8] = z[0];
+        f.m[9] = z[1];
+        f.m[10] = z[2];
         &f * &t
     }
 
@@ -553,20 +553,20 @@ impl Xform {
         let mut x = x_axis.clone();
         let mut y = y_axis.clone();
         let mut z = z_axis.clone();
-        x.normalize_self();
-        y.normalize_self();
-        z.normalize_self();
+        x.normalize();
+        y.normalize();
+        z.normalize();
 
         let mut f = Self::identity();
-        f.m[0] = x.x();
-        f.m[4] = y.x();
-        f.m[8] = z.x();
-        f.m[1] = x.y();
-        f.m[5] = y.y();
-        f.m[9] = z.y();
-        f.m[2] = x.z();
-        f.m[6] = y.z();
-        f.m[10] = z.z();
+        f.m[0] = x[0];
+        f.m[4] = y[0];
+        f.m[8] = z[0];
+        f.m[1] = x[1];
+        f.m[5] = y[1];
+        f.m[9] = z[1];
+        f.m[2] = x[2];
+        f.m[6] = y[2];
+        f.m[10] = z[2];
 
         let t = Self::translation(origin[0], origin[1], origin[2]);
         &t * &f
@@ -597,9 +597,9 @@ impl Xform {
     pub fn axis_rotation(angle: f64, axis: &Vector) -> Self {
         let c = angle.cos();
         let s = angle.sin();
-        let ux = axis.x();
-        let uy = axis.y();
-        let uz = axis.z();
+        let ux = axis[0];
+        let uy = axis[1];
+        let uz = axis[2];
         let t = 1.0 - c;
 
         let mut xform = Self::identity();

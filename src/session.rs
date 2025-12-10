@@ -286,9 +286,9 @@ impl Session {
                 // Inflate existing bounding box
                 let mut inflated = bb.clone();
                 inflated.half_size = crate::Vector::new(
-                    inflated.half_size.x() + inflate,
-                    inflated.half_size.y() + inflate,
-                    inflated.half_size.z() + inflate,
+                    inflated.half_size[0] + inflate,
+                    inflated.half_size[1] + inflate,
+                    inflated.half_size[2] + inflate,
                 );
                 inflated
             }
@@ -304,9 +304,9 @@ impl Session {
                 // Inflate by cylinder radius
                 let radius = c.radius;
                 bbox.half_size = crate::Vector::new(
-                    bbox.half_size.x() + radius,
-                    bbox.half_size.y() + radius,
-                    bbox.half_size.z() + radius,
+                    bbox.half_size[0] + radius,
+                    bbox.half_size[1] + radius,
+                    bbox.half_size[2] + radius,
                 );
                 bbox
             }
@@ -317,9 +317,9 @@ impl Session {
                 // Inflate by arrow radius
                 let radius = a.radius;
                 bbox.half_size = crate::Vector::new(
-                    bbox.half_size.x() + radius,
-                    bbox.half_size.y() + radius,
-                    bbox.half_size.z() + radius,
+                    bbox.half_size[0] + radius,
+                    bbox.half_size[1] + radius,
+                    bbox.half_size[2] + radius,
                 );
                 bbox
             }
@@ -410,21 +410,21 @@ impl Session {
         direction: &crate::Vector,
         tolerance: f64,
     ) -> Vec<RayHit> {
-        let dir_len = direction.compute_length();
+        let dir_len = direction.magnitude();
         if dir_len <= 0.0 {
             return Vec::new();
         }
         let dir_unit = crate::Vector::new(
-            direction.x() / dir_len,
-            direction.y() / dir_len,
-            direction.z() / dir_len,
+            direction[0] / dir_len,
+            direction[1] / dir_len,
+            direction[2] / dir_len,
         );
 
         let far = 1e6f64;
         let ray_end = Point::new(
-            origin[0] + dir_unit.x() * far,
-            origin[1] + dir_unit.y() * far,
-            origin[2] + dir_unit.z() * far,
+            origin[0] + dir_unit[0] * far,
+            origin[1] + dir_unit[1] * far,
+            origin[2] + dir_unit[2] * far,
         );
         let ray_line = Line::from_points(origin, &ray_end);
 
@@ -489,7 +489,7 @@ impl Session {
                                 let dx = p[0] - origin[0];
                                 let dy = p[1] - origin[1];
                                 let dz = p[2] - origin[2];
-                                let t = dx * dir_unit.x() + dy * dir_unit.y() + dz * dir_unit.z();
+                                let t = dx * dir_unit[0] + dy * dir_unit[1] + dz * dir_unit[2];
                                 if t >= 0.0 && t < best_t {
                                     best_t = t;
                                     best_p = Some(p);
@@ -528,17 +528,17 @@ impl Session {
                     let vx = p[0] - origin[0];
                     let vy = p[1] - origin[1];
                     let vz = p[2] - origin[2];
-                    let cross_x = vy * dir_unit.z() - vz * dir_unit.y();
-                    let cross_y = vz * dir_unit.x() - vx * dir_unit.z();
-                    let cross_z = vx * dir_unit.y() - vy * dir_unit.x();
+                    let cross_x = vy * dir_unit[2] - vz * dir_unit[1];
+                    let cross_y = vz * dir_unit[0] - vx * dir_unit[2];
+                    let cross_z = vx * dir_unit[1] - vy * dir_unit[0];
                     let dist = (cross_x * cross_x + cross_y * cross_y + cross_z * cross_z).sqrt();
                     if dist <= tolerance {
-                        let t = vx * dir_unit.x() + vy * dir_unit.y() + vz * dir_unit.z();
+                        let t = vx * dir_unit[0] + vy * dir_unit[1] + vz * dir_unit[2];
                         if t >= 0.0 {
                             let hp = Point::new(
-                                origin[0] + dir_unit.x() * t,
-                                origin[1] + dir_unit.y() * t,
-                                origin[2] + dir_unit.z() * t,
+                                origin[0] + dir_unit[0] * t,
+                                origin[1] + dir_unit[1] * t,
+                                origin[2] + dir_unit[2] * t,
                             );
                             hit_point = Some(hp);
                         }
@@ -551,7 +551,7 @@ impl Session {
                 let dx = hp[0] - origin[0];
                 let dy = hp[1] - origin[1];
                 let dz = hp[2] - origin[2];
-                let forward = dx * dir_unit.x() + dy * dir_unit.y() + dz * dir_unit.z();
+                let forward = dx * dir_unit[0] + dy * dir_unit[1] + dz * dir_unit[2];
                 if forward >= 0.0 {
                     let dist = (dx * dx + dy * dy + dz * dz).sqrt();
                     hits_all.push(RayHit {

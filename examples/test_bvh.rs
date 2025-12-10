@@ -39,12 +39,12 @@ fn main() {
         println!(
             "Box {} - Min: ({:.6}, {:.6}, {:.6}), Max: ({:.6}, {:.6}, {:.6})",
             i + 1,
-            min_corner.x(),
-            min_corner.y(),
-            min_corner.z(),
-            max_corner.x(),
-            max_corner.y(),
-            max_corner.z()
+            min_corner[0],
+            min_corner[1],
+            min_corner[2],
+            max_corner[0],
+            max_corner[1],
+            max_corner[2]
         );
     }
 

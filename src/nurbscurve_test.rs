@@ -23,7 +23,7 @@ mod tests {
         // Normal plane (plane normal = tangent)
         let T = crv.tangent_at(t);
         assert!((T.compute_length() - 1.0).abs() < 1e-6);
-        let fallback = if T.z() .abs() < 0.9 { Vector::new(0.0, 0.0, 1.0) } else { Vector::new(0.0, 1.0, 0.0) };
+        let fallback = if T[2] .abs() < 0.9 { Vector::new(0.0, 0.0, 1.0) } else { Vector::new(0.0, 1.0, 0.0) };
         let e1 = T.cross(&fallback).normalize();
         let e2 = T.cross(&e1).normalize();
         assert!((e1.compute_length() - 1.0).abs() < 1e-6);

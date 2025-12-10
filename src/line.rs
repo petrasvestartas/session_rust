@@ -185,23 +185,23 @@ impl IndexMut<usize> for Line {
 
 impl AddAssign<&Vector> for Line {
     fn add_assign(&mut self, other: &Vector) {
-        self._x0 += other.x();
-        self._y0 += other.y();
-        self._z0 += other.z();
-        self._x1 += other.x();
-        self._y1 += other.y();
-        self._z1 += other.z();
+        self._x0 += other[0];
+        self._y0 += other[1];
+        self._z0 += other[2];
+        self._x1 += other[0];
+        self._y1 += other[1];
+        self._z1 += other[2];
     }
 }
 
 impl SubAssign<&Vector> for Line {
     fn sub_assign(&mut self, other: &Vector) {
-        self._x0 -= other.x();
-        self._y0 -= other.y();
-        self._z0 -= other.z();
-        self._x1 -= other.x();
-        self._y1 -= other.y();
-        self._z1 -= other.z();
+        self._x0 -= other[0];
+        self._y0 -= other[1];
+        self._z0 -= other[2];
+        self._x1 -= other[0];
+        self._y1 -= other[1];
+        self._z1 -= other[2];
     }
 }
 

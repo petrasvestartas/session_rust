@@ -40,9 +40,9 @@ fn test_pointcloud_add_assign_vector() {
     );
     let v = Vector::new(4.0, 5.0, 6.0);
     cloud += v;
-    assert_eq!(cloud.points[0].x(), 5.0);
-    assert_eq!(cloud.points[0].y(), 7.0);
-    assert_eq!(cloud.points[0].z(), 9.0);
+    assert_eq!(cloud.points[0][0], 5.0);
+    assert_eq!(cloud.points[0][1], 7.0);
+    assert_eq!(cloud.points[0][2], 9.0);
 }
 
 #[test]
@@ -54,9 +54,9 @@ fn test_pointcloud_add_vector() {
     );
     let v = Vector::new(4.0, 5.0, 6.0);
     let cloud2 = cloud + v;
-    assert_eq!(cloud2.points[0].x(), 5.0);
-    assert_eq!(cloud2.points[0].y(), 7.0);
-    assert_eq!(cloud2.points[0].z(), 9.0);
+    assert_eq!(cloud2.points[0][0], 5.0);
+    assert_eq!(cloud2.points[0][1], 7.0);
+    assert_eq!(cloud2.points[0][2], 9.0);
 }
 
 #[test]
@@ -68,9 +68,9 @@ fn test_pointcloud_sub_assign_vector() {
     );
     let v = Vector::new(4.0, 5.0, 6.0);
     cloud -= v;
-    assert_eq!(cloud.points[0].x(), -3.0);
-    assert_eq!(cloud.points[0].y(), -3.0);
-    assert_eq!(cloud.points[0].z(), -3.0);
+    assert_eq!(cloud.points[0][0], -3.0);
+    assert_eq!(cloud.points[0][1], -3.0);
+    assert_eq!(cloud.points[0][2], -3.0);
 }
 
 #[test]
@@ -82,9 +82,9 @@ fn test_pointcloud_sub_vector() {
     );
     let v = Vector::new(4.0, 5.0, 6.0);
     let cloud2 = cloud - v;
-    assert_eq!(cloud2.points[0].x(), -3.0);
-    assert_eq!(cloud2.points[0].y(), -3.0);
-    assert_eq!(cloud2.points[0].z(), -3.0);
+    assert_eq!(cloud2.points[0][0], -3.0);
+    assert_eq!(cloud2.points[0][1], -3.0);
+    assert_eq!(cloud2.points[0][2], -3.0);
 }
 
 #[test]
@@ -108,9 +108,9 @@ fn test_pointcloud_json_serialization() {
     );
     let json = cloud.jsondump().unwrap();
     let cloud2 = PointCloud::jsonload(&json).unwrap();
-    assert_eq!(cloud2.points[0].x(), 1.0);
-    assert_eq!(cloud2.points[0].y(), 2.0);
-    assert_eq!(cloud2.points[0].z(), 3.0);
+    assert_eq!(cloud2.points[0][0], 1.0);
+    assert_eq!(cloud2.points[0][1], 2.0);
+    assert_eq!(cloud2.points[0][2], 3.0);
 }
 
 #[test]
@@ -134,9 +134,9 @@ fn test_pointcloud_json_file() {
     );
     json_dump(&cloud, "test_pointcloud.json", true).unwrap();
     let cloud2 = json_load::<PointCloud>("test_pointcloud.json").unwrap();
-    assert_eq!(cloud2.points[0].x(), 1.0);
-    assert_eq!(cloud2.points[1].y(), 5.0);
-    assert_eq!(cloud2.points[2].z(), 9.0);
+    assert_eq!(cloud2.points[0][0], 1.0);
+    assert_eq!(cloud2.points[1][1], 5.0);
+    assert_eq!(cloud2.points[2][2], 9.0);
     assert_eq!(cloud2.len(), 3);
 }
 
@@ -163,10 +163,10 @@ fn test_pointcloud_json_multiple_points() {
     let cloud2 = PointCloud::jsonload(&json).unwrap();
 
     assert_eq!(cloud2.len(), 3);
-    assert_eq!(cloud2.points[0].x(), 1.0);
-    assert_eq!(cloud2.points[1].y(), 5.0);
-    assert_eq!(cloud2.points[2].z(), 9.0);
-    assert_eq!(cloud2.normals[0].z(), 1.0);
+    assert_eq!(cloud2.points[0][0], 1.0);
+    assert_eq!(cloud2.points[1][1], 5.0);
+    assert_eq!(cloud2.points[2][2], 9.0);
+    assert_eq!(cloud2.normals[0][2], 1.0);
     assert_eq!(cloud2.colors[1].g, 255);
     // Verify alpha is always 255 after deserialization
     assert_eq!(cloud2.colors[0].a, 255);

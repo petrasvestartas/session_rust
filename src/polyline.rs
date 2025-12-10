@@ -198,11 +198,11 @@ impl Polyline {
     }
 
     /// Calculate squared length of polyline (faster, no sqrt)
-    pub fn length_squared(&self) -> f64 {
+    pub fn magnitude_squared(&self) -> f64 {
         let mut length = 0.0f64;
         for i in 0..self.segment_count() {
             let segment = self.points[i + 1].clone() - self.points[i].clone();
-            length += segment.length_squared();
+            length += segment.magnitude_squared();
         }
         length
     }
@@ -234,11 +234,11 @@ impl Polyline {
     /// Find closest point on line segment to given point, returns parameter t
     pub fn closest_point_to_line(point: &Point, line_start: &Point, line_end: &Point) -> f64 {
         let d = line_end.clone() - line_start.clone();
-        let dod = d.length_squared();
+        let dod = d.magnitude_squared();
 
         if dod > 0.0 {
-            if (point.clone() - line_start.clone()).length_squared()
-                <= (point.clone() - line_end.clone()).length_squared()
+            if (point.clone() - line_start.clone()).magnitude_squared()
+                <= (point.clone() - line_end.clone()).magnitude_squared()
             {
                 (point.clone() - line_start.clone()).dot(&d) / dod
             } else {
@@ -332,7 +332,7 @@ impl Polyline {
             let mid0_vec = mid_line0_end.clone() - mid_line0_start.clone();
             let mid1_vec = mid_line1_end.clone() - mid_line1_start.clone();
 
-            if mid0_vec.length_squared() > mid1_vec.length_squared() {
+            if mid0_vec.magnitude_squared() > mid1_vec.magnitude_squared() {
                 (mid_line0_start, mid_line0_end)
             } else {
                 (mid_line1_start, mid_line1_end)
@@ -447,7 +447,7 @@ impl Polyline {
 
         let x_axis = if self.points.len() >= 2 {
             let mut x = self.points[1].clone() - self.points[0].clone();
-            x.normalize_self();
+            x.normalize();
             x
         } else {
             Vector::new(1.0, 0.0, 0.0)
@@ -455,7 +455,7 @@ impl Polyline {
 
         let z_axis = self.average_normal();
         let mut y_axis = z_axis.cross(&x_axis);
-        y_axis.normalize_self();
+        y_axis.normalize();
 
         (origin, x_axis, y_axis, z_axis)
     }
@@ -501,7 +501,7 @@ impl Polyline {
         distance1: f64,
     ) {
         let mut v = line_end.clone() - line_start.clone();
-        v.normalize_self();
+        v.normalize();
 
         *line_start = line_start.clone() - (v.clone() * distance0);
         *line_end = line_end.clone() + (v * distance1);
@@ -535,7 +535,7 @@ impl Polyline {
             p0 -= v.clone() * proportion0;
             p1 += v * proportion1;
         } else {
-            let v_norm = v.normalize();
+            let v_norm = v.normalized();
             p0 -= v_norm.clone() * dist0;
             p1 += v_norm * dist1;
         }
@@ -573,7 +573,7 @@ impl Polyline {
             *segment_end = segment_end.clone() + (v * proportion);
         } else {
             let mut v_norm = v;
-            v_norm.normalize_self();
+            v_norm.normalize();
             *segment_start = segment_start.clone() - (v_norm.clone() * dist);
             *segment_end = segment_end.clone() + (v_norm * dist);
         }
@@ -656,13 +656,13 @@ impl Polyline {
             let next = if current == n - 1 { 0 } else { current + 1 };
 
             let mut dir0 = self.points[current].clone() - self.points[prev].clone();
-            dir0.normalize_self();
+            dir0.normalize();
 
             let mut dir1 = self.points[next].clone() - self.points[current].clone();
-            dir1.normalize_self();
+            dir1.normalize();
 
             let mut cross = dir0.cross(&dir1);
-            cross.normalize_self();
+            cross.normalize();
 
             let dot = cross.dot(&normal);
             let is_convex = dot >= 0.0;
@@ -716,7 +716,7 @@ impl Polyline {
             average_normal += &cross;
         }
 
-        average_normal.normalize_self();
+        average_normal.normalize();
         average_normal
     }
 }

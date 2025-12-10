@@ -528,7 +528,7 @@ impl NurbsCurve {
         );
         
         // Normalize
-        tangent.normalize()
+        tangent.normalized()
     }
 
     /// Evaluate point and derivatives on curve at parameter t.
@@ -613,7 +613,7 @@ impl NurbsCurve {
         let p1 = self.get_cv(self.m_cv_count - 1).unwrap();
         
         let line_vec = Vector::new(p1[0] - p0[0], p1[1] - p0[1], p1[2] - p0[2]);
-        let line_len = line_vec.compute_length();
+        let line_len = line_vec.magnitude();
         
         if line_len < tol {
             return true; // Degenerate to a point
@@ -626,7 +626,7 @@ impl NurbsCurve {
             // Cross product to check collinearity
             let cross = line_vec.cross(&v);
             
-            if cross.compute_length() > tol * line_len {
+            if cross.magnitude() > tol * line_len {
                 return false;
             }
         }

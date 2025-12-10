@@ -10,9 +10,9 @@ mod tests {
 
         let p = line_line(&l0, &l1, Tolerance::APPROXIMATION).expect("Should find intersection");
 
-        assert!((p.x() - 500.0).abs() < 0.1);
-        assert!((p.y() - 328.303).abs() < 0.1);
-        assert!((p.z() - 468.866).abs() < 0.1);
+        assert!((p[0] - 500.0).abs() < 0.1);
+        assert!((p[1] - 328.303).abs() < 0.1);
+        assert!((p[2] - 468.866).abs() < 0.1);
     }
 
     #[test]
@@ -46,13 +46,13 @@ mod tests {
         let start = intersection_line.start();
         let end = intersection_line.end();
 
-        assert!((start.x() - 252.4632).abs() < 0.01);
-        assert!((start.y() - 495.32248).abs() < 0.01);
-        assert!((start.z() - (-10.002656)).abs() < 0.01);
+        assert!((start[0] - 252.4632).abs() < 0.01);
+        assert!((start[1] - 495.32248).abs() < 0.01);
+        assert!((start[2] - (-10.002656)).abs() < 0.01);
 
-        assert!((end.x() - 253.01033).abs() < 0.01);
-        assert!((end.y() - 496.1218).abs() < 0.01);
-        assert!((end.z() - (-9.888727)).abs() < 0.01);
+        assert!((end[0] - 253.01033).abs() < 0.01);
+        assert!((end[1] - 496.1218).abs() < 0.01);
+        assert!((end[2] - (-9.888727)).abs() < 0.01);
     }
 
     #[test]
@@ -75,9 +75,9 @@ mod tests {
 
         let ppp = plane_plane_plane(&pl0, &pl1, &pl2).expect("Should find intersection");
 
-        assert!((ppp.x() - 300.5).abs() < 0.1);
-        assert!((ppp.y() - 565.5).abs() < 0.1);
-        assert!((ppp.z() - 0.0).abs() < 0.1);
+        assert!((ppp[0] - 300.5).abs() < 0.1);
+        assert!((ppp[1] - 565.5).abs() < 0.1);
+        assert!((ppp[2] - 0.0).abs() < 0.1);
     }
 
     #[test]
@@ -92,9 +92,9 @@ mod tests {
 
         let lp = line_plane(&l0, &pl0, true).expect("Should find intersection");
 
-        assert!((lp.x() - 500.0).abs() < 0.1);
-        assert!((lp.y() - 77.7531).abs() < 0.01);
-        assert!((lp.z() - 111.043).abs() < 0.01);
+        assert!((lp[0] - 500.0).abs() < 0.1);
+        assert!((lp[1] - 77.7531).abs() < 0.01);
+        assert!((lp[2] - 111.043).abs() < 0.01);
     }
 
     #[test]
@@ -110,14 +110,14 @@ mod tests {
         assert_eq!(points.len(), 2);
 
         // Entry point
-        assert!((points[0].x() - 500.0).abs() < 0.1);
-        assert!((points[0].y() - 338.9).abs() < 0.1);
-        assert!((points[0].z() - 484.0).abs() < 0.1);
+        assert!((points[0][0] - 500.0).abs() < 0.1);
+        assert!((points[0][1] - 338.9).abs() < 0.1);
+        assert!((points[0][2] - 484.0).abs() < 0.1);
 
         // Exit point
-        assert!((points[1].x() - 500.0).abs() < 0.1);
-        assert!((points[1].y() - 557.365).abs() < 0.1);
-        assert!((points[1].z() - 796.0).abs() < 0.1);
+        assert!((points[1][0] - 500.0).abs() < 0.1);
+        assert!((points[1][1] - 557.365).abs() < 0.1);
+        assert!((points[1][2] - 796.0).abs() < 0.1);
     }
 
     #[test]
@@ -144,14 +144,14 @@ mod tests {
         assert_eq!(points.len(), 2);
 
         // First intersection point
-        assert!((points[0].x() - 500.0).abs() < 0.1);
-        assert!((points[0].y() - 12.08).abs() < 0.1);
-        assert!((points[0].z() - 17.25).abs() < 0.1);
+        assert!((points[0][0] - 500.0).abs() < 0.1);
+        assert!((points[0][1] - 12.08).abs() < 0.1);
+        assert!((points[0][2] - 17.25).abs() < 0.1);
 
         // Second intersection point
-        assert!((points[1].x() - 500.0).abs() < 0.1);
-        assert!((points[1].y() - 308.77).abs() < 0.1);
-        assert!((points[1].z() - 440.97).abs() < 0.1);
+        assert!((points[1][0] - 500.0).abs() < 0.1);
+        assert!((points[1][1] - 308.77).abs() < 0.1);
+        assert!((points[1][2] - 440.97).abs() < 0.1);
     }
 
     #[test]
@@ -176,9 +176,9 @@ mod tests {
         let triangle_hit = ray_triangle(&l0, &p1, &p2, &p3, crate::Tolerance::APPROXIMATION)
             .expect("Should find intersection");
 
-        assert!((triangle_hit.x() - 500.0).abs() < 0.1);
-        assert!((triangle_hit.y() - 340.616).abs() < 0.01);
-        assert!((triangle_hit.z() - 486.451).abs() < 0.01);
+        assert!((triangle_hit[0] - 500.0).abs() < 0.1);
+        assert!((triangle_hit[1] - 340.616).abs() < 0.01);
+        assert!((triangle_hit[2] - 486.451).abs() < 0.01);
     }
 
     #[test]

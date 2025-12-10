@@ -9,16 +9,16 @@ mod quaternion_tests {
     }
 
     fn vectors_close(a: &Vector, b: &Vector) -> bool {
-        approx_f32(a.x(), b.x()) && approx_f32(a.y(), b.y()) && approx_f32(a.z(), b.z())
+        approx_f32(a[0], b[0]) && approx_f32(a[1], b[1]) && approx_f32(a[2], b[2])
     }
 
     #[test]
     fn test_quaternion_identity() {
         let q = Quaternion::identity();
         assert_eq!(q.s, 1.0);
-        assert_eq!(q.v.x(), 0.0);
-        assert_eq!(q.v.y(), 0.0);
-        assert_eq!(q.v.z(), 0.0);
+        assert_eq!(q.v[0], 0.0);
+        assert_eq!(q.v[1], 0.0);
+        assert_eq!(q.v[2], 0.0);
     }
 
     #[test]
@@ -28,7 +28,7 @@ mod quaternion_tests {
         let q = Quaternion::from_axis_angle(axis, angle);
 
         assert!(approx_f32(q.s, (PI / 4.0).cos()));
-        assert!(approx_f32(q.v.z(), (PI / 4.0).sin()));
+        assert!(approx_f32(q.v[2], (PI / 4.0).sin()));
     }
 
     #[test]
@@ -94,9 +94,9 @@ mod quaternion_tests {
         let conj = q.conjugate();
 
         assert_eq!(conj.s, 0.5);
-        assert_eq!(conj.v.x(), -0.5);
-        assert_eq!(conj.v.y(), -0.5);
-        assert_eq!(conj.v.z(), -0.5);
+        assert_eq!(conj.v[0], -0.5);
+        assert_eq!(conj.v[1], -0.5);
+        assert_eq!(conj.v[2], -0.5);
     }
 
     #[test]

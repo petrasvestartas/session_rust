@@ -4,6 +4,26 @@ use std::ops::{Index, IndexMut};
 use uuid::Uuid;
 
 /// A color with RGBA values and JSON serialization support.
+///
+/// The Color struct represents a color using 8-bit RGBA components (0-255).
+/// It includes preset colors and conversion utilities for normalized float values.
+///
+/// # Attributes
+///
+/// * `guid` - Unique identifier for the color.
+/// * `name` - Name of the color.
+/// * `r` - Red component (0-255).
+/// * `g` - Green component (0-255).
+/// * `b` - Blue component (0-255).
+/// * `a` - Alpha component (0-255).
+///
+/// # Examples
+///
+/// ```
+/// # use session_rust::Color;
+/// let red = Color::red();
+/// let custom = Color::new(128, 64, 32, 255);
+/// ```
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(tag = "type", rename = "Color")]
 pub struct Color {
@@ -16,7 +36,18 @@ pub struct Color {
 }
 
 impl Color {
-    /// Create new color with optional name.
+    /// Create a new color with RGBA values.
+    ///
+    /// # Arguments
+    ///
+    /// * `r` - Red component (0-255).
+    /// * `g` - Green component (0-255).
+    /// * `b` - Blue component (0-255).
+    /// * `a` - Alpha component (0-255).
+    ///
+    /// # Returns
+    ///
+    /// A new Color with the specified RGBA values and a unique GUID.
     pub fn new(r: u8, g: u8, b: u8, a: u8) -> Self {
         Color {
             guid: Uuid::new_v4().to_string(),
@@ -28,7 +59,19 @@ impl Color {
         }
     }
 
-    /// Create new color with custom name.
+    /// Create a new color with RGBA values and custom name.
+    ///
+    /// # Arguments
+    ///
+    /// * `r` - Red component (0-255).
+    /// * `g` - Green component (0-255).
+    /// * `b` - Blue component (0-255).
+    /// * `a` - Alpha component (0-255).
+    /// * `name` - Name for the color.
+    ///
+    /// # Returns
+    ///
+    /// A new Color with the specified RGBA values, name, and a unique GUID.
     pub fn with_name(r: u8, g: u8, b: u8, a: u8, name: &str) -> Self {
         Color {
             guid: Uuid::new_v4().to_string(),
@@ -44,7 +87,11 @@ impl Color {
     // Operators
     ///////////////////////////////////////////////////////////////////////////////////////////
 
-    /// Duplicate the color (creates a copy with new guid).
+    /// Duplicate the color (creates a copy with new GUID).
+    ///
+    /// # Returns
+    ///
+    /// A new Color with identical RGBA values but a different GUID.
     pub fn duplicate(&self) -> Self {
         Color {
             guid: Uuid::new_v4().to_string(),
@@ -56,12 +103,20 @@ impl Color {
         }
     }
 
-    /// Simple string representation (like Python __str__): "r, g, b, a"
+    /// Simple string representation (like Python __str__).
+    ///
+    /// # Returns
+    ///
+    /// A string in the format "r, g, b, a".
     pub fn str(&self) -> String {
         format!("{}, {}, {}, {}", self.r, self.g, self.b, self.a)
     }
 
-    /// Detailed representation (like Python __repr__): "Color(name, r, g, b, a)"
+    /// Detailed representation (like Python __repr__).
+    ///
+    /// # Returns
+    ///
+    /// A string in the format "Color(name, r, g, b, a)".
     pub fn repr(&self) -> String {
         format!("Color({}, {}, {}, {}, {})", self.name, self.r, self.g, self.b, self.a)
     }
@@ -230,6 +285,10 @@ impl Color {
 
     #[cfg(feature = "protobuf")]
     /// Convert to protobuf binary format.
+    ///
+    /// # Returns
+    ///
+    /// A Vec<u8> containing the serialized protobuf data.
     pub fn to_protobuf(&self) -> Vec<u8> {
         use prost::Message;
         
@@ -246,6 +305,14 @@ impl Color {
 
     #[cfg(feature = "protobuf")]
     /// Create Color from protobuf binary data.
+    ///
+    /// # Arguments
+    ///
+    /// * `data` - Byte slice containing protobuf-encoded color data.
+    ///
+    /// # Returns
+    ///
+    /// A Result containing the deserialized Color or an error.
     pub fn from_protobuf(data: &[u8]) -> Result<Self, Box<dyn std::error::Error>> {
         use prost::Message;
         
@@ -259,6 +326,10 @@ impl Color {
 
     #[cfg(feature = "protobuf")]
     /// Write protobuf to file.
+    ///
+    /// # Arguments
+    ///
+    /// * `filepath` - Path to the output file.
     pub fn protobuf_dump(&self, filepath: &str) {
         let data = self.to_protobuf();
         std::fs::write(filepath, data).expect("Failed to write protobuf file");
@@ -266,6 +337,14 @@ impl Color {
 
     #[cfg(feature = "protobuf")]
     /// Read protobuf from file.
+    ///
+    /// # Arguments
+    ///
+    /// * `filepath` - Path to the protobuf file.
+    ///
+    /// # Returns
+    ///
+    /// The deserialized Color.
     pub fn protobuf_load(filepath: &str) -> Self {
         let data = std::fs::read(filepath).expect("Failed to read protobuf file");
         Self::from_protobuf(&data).expect("Failed to parse protobuf")
@@ -275,7 +354,11 @@ impl Color {
     // Details
     ///////////////////////////////////////////////////////////////////////////////////////////
 
-    /// Convert to float array [0-1].
+    /// Convert to normalized float array [0-1].
+    ///
+    /// # Returns
+    ///
+    /// An array [r, g, b, a] with values normalized to the range [0.0, 1.0].
     pub fn to_float_array(&self) -> [f64; 4] {
         [
             self.r as f64 / 255.0,
@@ -285,7 +368,18 @@ impl Color {
         ]
     }
 
-    /// Create from float values [0-1].
+    /// Create color from normalized float values [0-1].
+    ///
+    /// # Arguments
+    ///
+    /// * `r` - Red component (0.0-1.0).
+    /// * `g` - Green component (0.0-1.0).
+    /// * `b` - Blue component (0.0-1.0).
+    /// * `a` - Alpha component (0.0-1.0).
+    ///
+    /// # Returns
+    ///
+    /// A new Color with values converted to 0-255 range.
     pub fn from_float(r: f64, g: f64, b: f64, a: f64) -> Self {
         Color::new(
             (r * 255.0).round() as u8,
@@ -299,7 +393,11 @@ impl Color {
     // JSON
     ///////////////////////////////////////////////////////////////////////////////////////////
 
-    /// Serialize to JSON string (for cross-language compatibility)
+    /// Serialize to JSON string (for cross-language compatibility).
+    ///
+    /// # Returns
+    ///
+    /// A Result containing the pretty-printed JSON string or an error.
     pub fn jsondump(&self) -> Result<String, Box<dyn std::error::Error>> {
         let mut buf = Vec::new();
         let formatter = serde_json::ser::PrettyFormatter::with_indent(b"    ");
@@ -308,19 +406,43 @@ impl Color {
         Ok(String::from_utf8(buf)?)
     }
 
-    /// Deserialize from JSON string (for cross-language compatibility)
+    /// Deserialize from JSON string (for cross-language compatibility).
+    ///
+    /// # Arguments
+    ///
+    /// * `json_data` - JSON string containing color data.
+    ///
+    /// # Returns
+    ///
+    /// A Result containing the deserialized Color or an error.
     pub fn jsonload(json_data: &str) -> Result<Self, Box<dyn std::error::Error>> {
         Ok(serde_json::from_str(json_data)?)
     }
 
-    /// Serialize to JSON file
+    /// Serialize to JSON file.
+    ///
+    /// # Arguments
+    ///
+    /// * `filepath` - Path to the output file.
+    ///
+    /// # Returns
+    ///
+    /// A Result indicating success or an error.
     pub fn to_json(&self, filepath: &str) -> Result<(), Box<dyn std::error::Error>> {
         let json = self.jsondump()?;
         std::fs::write(filepath, json)?;
         Ok(())
     }
 
-    /// Deserialize from JSON file
+    /// Deserialize from JSON file.
+    ///
+    /// # Arguments
+    ///
+    /// * `filepath` - Path to the JSON file.
+    ///
+    /// # Returns
+    ///
+    /// A Result containing the deserialized Color or an error.
     pub fn from_json(filepath: &str) -> Result<Self, Box<dyn std::error::Error>> {
         let json = std::fs::read_to_string(filepath)?;
         Self::jsonload(&json)

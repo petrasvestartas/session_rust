@@ -167,8 +167,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         let mut candidate_ids: Vec<usize> = Vec::new();
         let origin = zaxis.start();
         let dir = zaxis.to_vector();
-        let len = dir.compute_length();
-        let dir_unit = Vector::new(dir.x() / len, dir.y() / len, dir.z() / len);
+        let len = dir.magnitude();
+        let dir_unit = Vector::new(dir[0] / len, dir[1] / len, dir[2] / len);
         tri_bvh.ray_cast(&origin, &dir_unit, &mut candidate_ids, true);
         let mut bvh_hits = 0usize;
         for idx in candidate_ids.iter() {

@@ -5,6 +5,26 @@ use std::ops::{Add, AddAssign, Div, DivAssign, Index, IndexMut, Mul, MulAssign, 
 use uuid::Uuid;
 
 /// A 3D point with visual properties and JSON serialization support.
+///
+/// The Point struct represents a location in 3D space with x, y, z coordinates.
+/// It includes visual properties like color and width for display purposes,
+/// as well as transformation matrix support.
+///
+/// # Attributes
+///
+/// * `guid` - Unique identifier for the point.
+/// * `name` - Name of the point.
+/// * `width` - Width of the point for display.
+/// * `pointcolor` - Color of the point.
+/// * `xform` - Transformation matrix.
+///
+/// # Examples
+///
+/// ```
+/// # use session_rust::Point;
+/// let p = Point::new(1.0, 2.0, 3.0);
+/// let dist = p.distance(&Point::new(4.0, 5.0, 6.0), None);
+/// ```
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(tag = "type", rename = "Point")]
 pub struct Point {
@@ -39,6 +59,16 @@ impl Default for Point {
 
 impl Point {
     /// Creates a new Point with specified coordinates.
+    ///
+    /// # Arguments
+    ///
+    /// * `x` - X coordinate of the point.
+    /// * `y` - Y coordinate of the point.
+    /// * `z` - Z coordinate of the point.
+    ///
+    /// # Returns
+    ///
+    /// A new Point with the specified coordinates and a unique GUID.
     pub fn new(x: f64, y: f64, z: f64) -> Self {
         Self {
             _x: x,
@@ -49,6 +79,17 @@ impl Point {
     }
 
     /// Creates a new Point with specified coordinates and name.
+    ///
+    /// # Arguments
+    ///
+    /// * `x` - X coordinate of the point.
+    /// * `y` - Y coordinate of the point.
+    /// * `z` - Z coordinate of the point.
+    /// * `name` - Name for the point.
+    ///
+    /// # Returns
+    ///
+    /// A new Point with the specified coordinates, name, and a unique GUID.
     pub fn with_name(x: f64, y: f64, z: f64, name: &str) -> Self {
         Self {
             _x: x,
@@ -59,19 +100,95 @@ impl Point {
         }
     }
 
-    /// Deep copy this point but regenerate the guid, mirroring the behavior of
-    /// the C++ copy constructor / Python duplicate which duplicate all data
-    /// except the unique identifier.
+    /// Deep copy this point with a new GUID.
+    ///
+    /// Creates a clone of this point with all properties copied
+    /// but assigns a new unique GUID.
+    ///
+    /// # Returns
+    ///
+    /// A new Point with identical values but a different GUID.
     pub fn duplicate(&self) -> Self {
         let mut copy = self.clone();
         copy.guid = Uuid::new_v4().to_string();
         copy
     }
+
+    /// Returns a new point that is the sum of two points.
+    ///
+    /// # Arguments
+    ///
+    /// * `p0` - First point.
+    /// * `p1` - Second point.
+    ///
+    /// # Returns
+    ///
+    /// A new Point with coordinates (p0.x + p1.x, p0.y + p1.y, p0.z + p1.z).
+    pub fn sum(p0: &Point, p1: &Point) -> Self {
+        Point::new(p0._x + p1._x, p0._y + p1._y, p0._z + p1._z)
+    }
+
+    /// Returns a new point that is the difference of two points.
+    ///
+    /// # Arguments
+    ///
+    /// * `p0` - First point.
+    /// * `p1` - Second point.
+    ///
+    /// # Returns
+    ///
+    /// A new Point with coordinates (p0.x - p1.x, p0.y - p1.y, p0.z - p1.z).
+    pub fn sub(p0: &Point, p1: &Point) -> Self {
+        Point::new(p0._x - p1._x, p0._y - p1._y, p0._z - p1._z)
+    }
+
+    /// Simple string form (like Python __str__): just coordinates.
+    ///
+    /// # Returns
+    ///
+    /// A string in the format "x, y, z".
+    pub fn str(&self) -> String {
+        use crate::tolerance::TOL;
+        let prec = Some(crate::tolerance::Tolerance::ROUNDING);
+        format!(
+            "{}, {}, {}",
+            TOL.format_number(self._x, prec),
+            TOL.format_number(self._y, prec),
+            TOL.format_number(self._z, prec),
+        )
+    }
+
+    /// Detailed representation (like Python __repr__).
+    ///
+    /// # Returns
+    ///
+    /// A string with full point details including name, coordinates, color, and width.
+    pub fn repr(&self) -> String {
+        use crate::tolerance::TOL;
+        let prec = Some(crate::tolerance::Tolerance::ROUNDING);
+        format!(
+            "Point({}, {}, {}, {}, Color({}, {}, {}, {}), {})",
+            self.name,
+            TOL.format_number(self._x, prec),
+            TOL.format_number(self._y, prec),
+            TOL.format_number(self._z, prec),
+            self.pointcolor.r,
+            self.pointcolor.g,
+            self.pointcolor.b,
+            self.pointcolor.a,
+            TOL.format_number(self.width, prec),
+        )
+    }
+
     ///////////////////////////////////////////////////////////////////////////////////////////
     // JSON
     ///////////////////////////////////////////////////////////////////////////////////////////
 
     /// Serializes the Point to a JSON string.
+    ///
+    /// # Returns
+    ///
+    /// A Result containing the pretty-printed JSON string or an error.
     pub fn jsondump(&self) -> Result<String, Box<dyn std::error::Error>> {
         let mut buf = Vec::new();
         let formatter = serde_json::ser::PrettyFormatter::with_indent(b"    ");
@@ -81,23 +198,50 @@ impl Point {
     }
 
     /// Deserializes a Point from a JSON string.
+    ///
+    /// # Arguments
+    ///
+    /// * `json_data` - JSON string containing point data.
+    ///
+    /// # Returns
+    ///
+    /// A Result containing the deserialized Point or an error.
     pub fn jsonload(json_data: &str) -> Result<Self, Box<dyn std::error::Error>> {
         Ok(serde_json::from_str(json_data)?)
     }
 
     /// Serializes the Point to a JSON file.
+    ///
+    /// # Arguments
+    ///
+    /// * `filepath` - Path to the output file.
+    ///
+    /// # Returns
+    ///
+    /// A Result indicating success or an error.
     pub fn to_json(&self, filepath: &str) -> Result<(), Box<dyn std::error::Error>> {
         let json = self.jsondump()?;
         std::fs::write(filepath, json)?;
         Ok(())
     }
 
+    /// Apply the stored xform transformation to the point coordinates.
+    ///
+    /// Transforms the point in-place and resets xform to identity.
     pub fn transform(&mut self) {
         let xform = self.xform.clone();
         xform.transform_point(self);
         self.xform = Xform::identity();
     }
 
+    /// Return a transformed copy of the point.
+    ///
+    /// Returns a new point with the transformation applied.
+    /// The original point and its xform remain unchanged.
+    ///
+    /// # Returns
+    ///
+    /// A new transformed Point.
     pub fn transformed(&self) -> Self {
         let mut result = self.clone();
         result.transform();
@@ -105,6 +249,14 @@ impl Point {
     }
 
     /// Deserializes a Point from a JSON file.
+    ///
+    /// # Arguments
+    ///
+    /// * `filepath` - Path to the JSON file.
+    ///
+    /// # Returns
+    ///
+    /// A Result containing the deserialized Point or an error.
     pub fn from_json(filepath: &str) -> Result<Self, Box<dyn std::error::Error>> {
         let json = std::fs::read_to_string(filepath)?;
         Self::jsonload(&json)
@@ -116,6 +268,10 @@ impl Point {
 
     #[cfg(feature = "protobuf")]
     /// Convert to protobuf binary format.
+    ///
+    /// # Returns
+    ///
+    /// A Vec<u8> containing the serialized protobuf data.
     pub fn to_protobuf(&self) -> Vec<u8> {
         use prost::Message;
         
@@ -144,6 +300,14 @@ impl Point {
 
     #[cfg(feature = "protobuf")]
     /// Create Point from protobuf binary data.
+    ///
+    /// # Arguments
+    ///
+    /// * `data` - Byte slice containing protobuf-encoded point data.
+    ///
+    /// # Returns
+    ///
+    /// A Result containing the deserialized Point or an error.
     pub fn from_protobuf(data: &[u8]) -> Result<Self, Box<dyn std::error::Error>> {
         use prost::Message;
         
@@ -176,6 +340,10 @@ impl Point {
 
     #[cfg(feature = "protobuf")]
     /// Write protobuf to file.
+    ///
+    /// # Arguments
+    ///
+    /// * `filepath` - Path to the output file.
     pub fn protobuf_dump(&self, filepath: &str) {
         let data = self.to_protobuf();
         std::fs::write(filepath, data).expect("Failed to write protobuf file");
@@ -183,6 +351,14 @@ impl Point {
 
     #[cfg(feature = "protobuf")]
     /// Read protobuf from file.
+    ///
+    /// # Arguments
+    ///
+    /// * `filepath` - Path to the protobuf file.
+    ///
+    /// # Returns
+    ///
+    /// The deserialized Point.
     pub fn protobuf_load(filepath: &str) -> Self {
         let data = std::fs::read(filepath).expect("Failed to read protobuf file");
         Self::from_protobuf(&data).expect("Failed to parse protobuf")
@@ -192,16 +368,46 @@ impl Point {
     // Details
     ///////////////////////////////////////////////////////////////////////////////////////////
 
-    /// Check if the points are in counter-clockwise order.
+    /// Check if the points are in counter-clockwise order on the XY plane.
+    ///
+    /// # Arguments
+    ///
+    /// * `a` - First point.
+    /// * `b` - Second point.
+    /// * `c` - Third point.
+    ///
+    /// # Returns
+    ///
+    /// `true` if the points are in counter-clockwise order, `false` otherwise.
     pub fn ccw(a: &Point, b: &Point, c: &Point) -> bool {
         (c._y - a._y) * (b._x - a._x) > (b._y - a._y) * (c._x - a._x)
     }
 
+    /// Alias for `ccw` - check if points are in counter-clockwise order.
+    ///
+    /// # Arguments
+    ///
+    /// * `a` - First point.
+    /// * `b` - Second point.
+    /// * `c` - Third point.
+    ///
+    /// # Returns
+    ///
+    /// `true` if the points are in counter-clockwise order, `false` otherwise.
     pub fn is_ccw(a: &Point, b: &Point, c: &Point) -> bool {
         Self::ccw(a, b, c)
     }
 
-    /// Calculate the mid point between this point and another point.
+    /// Calculate the mid point between two points.
+    ///
+    /// # Arguments
+    ///
+    /// * `a` - First point.
+    /// * `b` - Second point.
+    ///
+    /// # Returns
+    ///
+    /// A new Point at the midpoint between `a` and `b`.
     pub fn mid_point(a: &Point, b: &Point) -> Point {
         Point::new(
             (a._x + b._x) / 2.0,
@@ -267,7 +473,15 @@ impl Point {
         }
     }
 
-    /// Calculate the area of a polygon.
+    /// Calculate the area of a 2D polygon using the shoelace formula.
+    ///
+    /// # Arguments
+    ///
+    /// * `points` - Slice of points defining the polygon vertices.
+    ///
+    /// # Returns
+    ///
+    /// The area of the polygon.
     pub fn area(points: &[Point]) -> f64 {
         let n = points.len();
         let mut area = 0.0;
@@ -282,6 +496,14 @@ impl Point {
     }
 
     /// Calculate the centroid of a quadrilateral.
+    ///
+    /// # Arguments
+    ///
+    /// * `vertices` - Slice of exactly 4 points defining the quadrilateral.
+    ///
+    /// # Returns
+    ///
+    /// A Result containing the centroid Point, or an error if not 4 vertices.
     pub fn centroid_quad(vertices: &[Point]) -> Result<Point, &'static str> {
         if vertices.len() != 4 {
             return Err("Polygon must have exactly 4 vertices.");
@@ -310,38 +532,10 @@ impl Point {
         }
 
         let result = centroid_sum / total_area;
-        Ok(Point::new(result.x(), result.y(), result.z()))
+        Ok(Point::new(result[0], result[1], result[2]))
     }
 
-    /// Simple string form (like Python __str__): just coordinates
-    pub fn str(&self) -> String {
-        use crate::tolerance::TOL;
-        let prec = Some(crate::tolerance::Tolerance::ROUNDING);
-        format!(
-            "{}, {}, {}",
-            TOL.format_number(self._x, prec),
-            TOL.format_number(self._y, prec),
-            TOL.format_number(self._z, prec),
-        )
-    }
-
-    /// Detailed representation (like Python __repr__)
-    pub fn repr(&self) -> String {
-        use crate::tolerance::TOL;
-        let prec = Some(crate::tolerance::Tolerance::ROUNDING);
-        format!(
-            "Point({}, {}, {}, {}, Color({}, {}, {}, {}), {})",
-            self.name,
-            TOL.format_number(self._x, prec),
-            TOL.format_number(self._y, prec),
-            TOL.format_number(self._z, prec),
-            self.pointcolor.r,
-            self.pointcolor.g,
-            self.pointcolor.b,
-            self.pointcolor.a,
-            TOL.format_number(self.width, prec),
-        )
-    }
+ 
 }
 
 impl fmt::Display for Point {
@@ -418,17 +612,17 @@ impl DivAssign<f64> for Point {
 
 impl AddAssign<Vector> for Point {
     fn add_assign(&mut self, rhs: Vector) {
-        self._x += rhs.x();
-        self._y += rhs.y();
-        self._z += rhs.z();
+        self._x += rhs[0];
+        self._y += rhs[1];
+        self._z += rhs[2];
     }
 }
 
 impl SubAssign<Vector> for Point {
     fn sub_assign(&mut self, rhs: Vector) {
-        self._x -= rhs.x();
-        self._y -= rhs.y();
-        self._z -= rhs.z();
+        self._x -= rhs[0];
+        self._y -= rhs[1];
+        self._z -= rhs[2];
     }
 }
 
@@ -464,7 +658,7 @@ impl Add<Vector> for Point {
     type Output = Point;
 
     fn add(self, rhs: Vector) -> Self::Output {
-        Point::new(self._x + rhs.x(), self._y + rhs.y(), self._z + rhs.z())
+        Point::new(self._x + rhs[0], self._y + rhs[1], self._z + rhs[2])
     }
 }
 
@@ -472,7 +666,64 @@ impl Sub<Vector> for Point {
     type Output = Point;
 
     fn sub(self, rhs: Vector) -> Self::Output {
-        Point::new(self._x - rhs.x(), self._y - rhs.y(), self._z - rhs.z())
+        Point::new(self._x - rhs[0], self._y - rhs[1], self._z - rhs[2])
+    }
+}
+
+// Reference operators (avoid cloning)
+impl Mul<f64> for &Point {
+    type Output = Point;
+
+    fn mul(self, rhs: f64) -> Self::Output {
+        Point::new(self._x * rhs, self._y * rhs, self._z * rhs)
+    }
+}
+
+impl Div<f64> for &Point {
+    type Output = Point;
+
+    fn div(self, rhs: f64) -> Self::Output {
+        Point::new(self._x / rhs, self._y / rhs, self._z / rhs)
+    }
+}
+
+impl Add<Vector> for &Point {
+    type Output = Point;
+
+    fn add(self, rhs: Vector) -> Self::Output {
+        Point::new(self._x + rhs[0], self._y + rhs[1], self._z + rhs[2])
+    }
+}
+
+impl Add<&Vector> for &Point {
+    type Output = Point;
+
+    fn add(self, rhs: &Vector) -> Self::Output {
+        Point::new(self._x + rhs[0], self._y + rhs[1], self._z + rhs[2])
+    }
+}
+
+impl Sub<Vector> for &Point {
+    type Output = Point;
+
+    fn sub(self, rhs: Vector) -> Self::Output {
+        Point::new(self._x - rhs[0], self._y - rhs[1], self._z - rhs[2])
+    }
+}
+
+impl Sub<&Vector> for &Point {
+    type Output = Point;
+
+    fn sub(self, rhs: &Vector) -> Self::Output {
+        Point::new(self._x - rhs[0], self._y - rhs[1], self._z - rhs[2])
+    }
+}
+
+impl Sub<&Point> for &Point {
+    type Output = Vector;
+
+    fn sub(self, rhs: &Point) -> Self::Output {
+        Vector::new(self._x - rhs._x, self._y - rhs._y, self._z - rhs._z)
     }
 }
 

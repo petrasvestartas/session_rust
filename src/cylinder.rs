@@ -103,13 +103,13 @@ impl Cylinder {
         let line_vec = line.to_vector();
         let length = line.length();
 
-        let z_axis = line_vec.normalize();
-        let x_axis = if z_axis.z().abs() < 0.9 {
-            Vector::new(0.0, 0.0, 1.0).cross(&z_axis).normalize()
+        let z_axis = line_vec.normalized();
+        let x_axis = if z_axis[2].abs() < 0.9 {
+            Vector::new(0.0, 0.0, 1.0).cross(&z_axis).normalized()
         } else {
-            Vector::new(1.0, 0.0, 0.0).cross(&z_axis).normalize()
+            Vector::new(1.0, 0.0, 0.0).cross(&z_axis).normalized()
         };
-        let y_axis = z_axis.cross(&x_axis).normalize();
+        let y_axis = z_axis.cross(&x_axis).normalized();
 
         let scale = Xform::scale_xyz(radius * 2.0, radius * 2.0, length);
         let rotation = Xform::from_cols(x_axis, y_axis, z_axis);

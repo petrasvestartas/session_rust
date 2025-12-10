@@ -120,8 +120,8 @@ mod tests {
     fn test_line_to_vector() {
         let line = Line::new(1.0, 2.0, 3.0, 4.0, 6.0, 9.0);
         let v = line.to_vector();
-        assert_eq!(v.x(), 3.0);
-        assert_eq!(v.z(), 6.0);
+        assert_eq!(v[0], 3.0);
+        assert_eq!(v[2], 6.0);
     }
 
     #[test]

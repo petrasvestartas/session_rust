@@ -132,9 +132,9 @@ pub fn plane_plane(plane0: &crate::Plane, plane1: &crate::Plane) -> Option<Line>
         output_p[0],
         output_p[1],
         output_p[2],
-        output_p[0] + d.x(),
-        output_p[1] + d.y(),
-        output_p[2] + d.z(),
+        output_p[0] + d[0],
+        output_p[1] + d[1],
+        output_p[2] + d[2],
     ))
 }
 
@@ -232,7 +232,7 @@ pub fn plane_plane_plane(
     let inv_det = 1.0 / det;
     let p = (n1.cross(&n2) * (-d0) + n2.cross(&n0) * (-d1) + n0.cross(&n1) * (-d2)) * inv_det;
 
-    Some(Point::new(p.x(), p.y(), p.z()))
+    Some(Point::new(p[0], p[1], p[2]))
 }
 
 /// Find intersection points between a line and an axis-aligned bounding box.
@@ -257,18 +257,18 @@ pub fn ray_box(line: &Line, box_: &crate::BoundingBox, t0: f64, t1: f64) -> Opti
     let box_max = box_.max_point();
 
     // Calculate inverse direction (avoid division by zero)
-    let inv_dir_x = if direction.x() != 0.0 {
-        1.0 / direction.x()
+    let inv_dir_x = if direction[0] != 0.0 {
+        1.0 / direction[0]
     } else {
         f64::INFINITY
     };
-    let inv_dir_y = if direction.y() != 0.0 {
-        1.0 / direction.y()
+    let inv_dir_y = if direction[1] != 0.0 {
+        1.0 / direction[1]
     } else {
         f64::INFINITY
     };
-    let inv_dir_z = if direction.z() != 0.0 {
-        1.0 / direction.z()
+    let inv_dir_z = if direction[2] != 0.0 {
+        1.0 / direction[2]
     } else {
         f64::INFINITY
     };
@@ -305,15 +305,15 @@ pub fn ray_box(line: &Line, box_: &crate::BoundingBox, t0: f64, t1: f64) -> Opti
 
     // Calculate actual intersection points
     let entry = Point::new(
-        origin[0] + direction.x() * tmin,
-        origin[1] + direction.y() * tmin,
-        origin[2] + direction.z() * tmin,
+        origin[0] + direction[0] * tmin,
+        origin[1] + direction[1] * tmin,
+        origin[2] + direction[2] * tmin,
     );
 
     let exit = Point::new(
-        origin[0] + direction.x() * tmax,
-        origin[1] + direction.y() * tmax,
-        origin[2] + direction.z() * tmax,
+        origin[0] + direction[0] * tmax,
+        origin[1] + direction[1] * tmax,
+        origin[2] + direction[2] * tmax,
     );
 
     Some(vec![entry, exit])
@@ -342,10 +342,10 @@ pub fn ray_sphere(line: &Line, center: &Point, radius: f64) -> Option<Vec<Point>
     let o_z = origin[2] - center[2];
 
     // Quadratic equation coefficients
-    let a = direction.x() * direction.x()
-        + direction.y() * direction.y()
-        + direction.z() * direction.z();
-    let b = 2.0 * (direction.x() * o_x + direction.y() * o_y + direction.z() * o_z);
+    let a = direction[0] * direction[0]
+        + direction[1] * direction[1]
+        + direction[2] * direction[2];
+    let b = 2.0 * (direction[0] * o_x + direction[1] * o_y + direction[2] * o_z);
     let c = o_x * o_x + o_y * o_y + o_z * o_z - radius * radius;
 
     // Discriminant
@@ -376,18 +376,18 @@ pub fn ray_sphere(line: &Line, center: &Point, radius: f64) -> Option<Vec<Point>
 
     // First intersection
     let p0 = Point::new(
-        origin[0] + direction.x() * t0,
-        origin[1] + direction.y() * t0,
-        origin[2] + direction.z() * t0,
+        origin[0] + direction[0] * t0,
+        origin[1] + direction[1] * t0,
+        origin[2] + direction[2] * t0,
     );
     points.push(p0);
 
     // Second intersection (if different from first)
     if (t1 - t0).abs() > 1e-10 {
         let p1 = Point::new(
-            origin[0] + direction.x() * t1,
-            origin[1] + direction.y() * t1,
-            origin[2] + direction.z() * t1,
+            origin[0] + direction[0] * t1,
+            origin[1] + direction[1] * t1,
+            origin[2] + direction[2] * t1,
         );
         points.push(p1);
     }
@@ -427,9 +427,9 @@ pub fn ray_triangle(
     let edge2_z = v2[2] - v0[2];
 
     // pvec = direction.cross(edge2)
-    let pvec_x = direction.y() * edge2_z - direction.z() * edge2_y;
-    let pvec_y = direction.z() * edge2_x - direction.x() * edge2_z;
-    let pvec_z = direction.x() * edge2_y - direction.y() * edge2_x;
+    let pvec_x = direction[1] * edge2_z - direction[2] * edge2_y;
+    let pvec_y = direction[2] * edge2_x - direction[0] * edge2_z;
+    let pvec_z = direction[0] * edge2_y - direction[1] * edge2_x;
 
     // det = edge1.dot(pvec)
     let det = edge1_x * pvec_x + edge1_y * pvec_y + edge1_z * pvec_z;
@@ -458,7 +458,7 @@ pub fn ray_triangle(
     let qvec_z = tvec_x * edge1_y - tvec_y * edge1_x;
 
     // v = direction.dot(qvec) * inv_det
-    let v = (direction.x() * qvec_x + direction.y() * qvec_y + direction.z() * qvec_z) * inv_det;
+    let v = (direction[0] * qvec_x + direction[1] * qvec_y + direction[2] * qvec_z) * inv_det;
 
     if v < -epsilon || u + v > 1.0 + epsilon {
         return None;
@@ -469,9 +469,9 @@ pub fn ray_triangle(
 
     // Calculate intersection point: origin + t * direction
     Some(Point::new(
-        origin[0] + t * direction.x(),
-        origin[1] + t * direction.y(),
-        origin[2] + t * direction.z(),
+        origin[0] + t * direction[0],
+        origin[1] + t * direction[1],
+        origin[2] + t * direction[2],
     ))
 }
 

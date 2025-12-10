@@ -51,9 +51,9 @@ impl BvhAABB {
             cx: b.center[0],
             cy: b.center[1],
             cz: b.center[2],
-            hx: b.half_size.x(),
-            hy: b.half_size.y(),
-            hz: b.half_size.z(),
+            hx: b.half_size[0],
+            hy: b.half_size[1],
+            hz: b.half_size[2],
         }
     }
 
@@ -157,15 +157,15 @@ impl BVH {
         let mut max_extent = 0.0f64;
         for bbox in bounding_boxes {
             // Find maximum absolute coordinate in any dimension
-            let x_extent = (bbox.center[0] + bbox.half_size.x())
+            let x_extent = (bbox.center[0] + bbox.half_size[0])
                 .abs()
-                .max((bbox.center[0] - bbox.half_size.x()).abs());
-            let y_extent = (bbox.center[1] + bbox.half_size.y())
+                .max((bbox.center[0] - bbox.half_size[0]).abs());
+            let y_extent = (bbox.center[1] + bbox.half_size[1])
                 .abs()
-                .max((bbox.center[1] - bbox.half_size.y()).abs());
-            let z_extent = (bbox.center[2] + bbox.half_size.z())
+                .max((bbox.center[1] - bbox.half_size[1]).abs());
+            let z_extent = (bbox.center[2] + bbox.half_size[2])
                 .abs()
-                .max((bbox.center[2] - bbox.half_size.z()).abs());
+                .max((bbox.center[2] - bbox.half_size[2]).abs());
 
             max_extent = max_extent.max(x_extent).max(y_extent).max(z_extent);
         }
@@ -503,18 +503,18 @@ impl BVH {
     pub fn merge_aabb(&self, aabb1: &BoundingBox, aabb2: &BoundingBox) -> BoundingBox {
         // Calculate min and max corners
         let min_x =
-            (aabb1.center[0] - aabb1.half_size.x()).min(aabb2.center[0] - aabb2.half_size.x());
+            (aabb1.center[0] - aabb1.half_size[0]).min(aabb2.center[0] - aabb2.half_size[0]);
         let min_y =
-            (aabb1.center[1] - aabb1.half_size.y()).min(aabb2.center[1] - aabb2.half_size.y());
+            (aabb1.center[1] - aabb1.half_size[1]).min(aabb2.center[1] - aabb2.half_size[1]);
         let min_z =
-            (aabb1.center[2] - aabb1.half_size.z()).min(aabb2.center[2] - aabb2.half_size.z());
+            (aabb1.center[2] - aabb1.half_size[2]).min(aabb2.center[2] - aabb2.half_size[2]);
 
         let max_x =
-            (aabb1.center[0] + aabb1.half_size.x()).max(aabb2.center[0] + aabb2.half_size.x());
+            (aabb1.center[0] + aabb1.half_size[0]).max(aabb2.center[0] + aabb2.half_size[0]);
         let max_y =
-            (aabb1.center[1] + aabb1.half_size.y()).max(aabb2.center[1] + aabb2.half_size.y());
+            (aabb1.center[1] + aabb1.half_size[1]).max(aabb2.center[1] + aabb2.half_size[1]);
         let max_z =
-            (aabb1.center[2] + aabb1.half_size.z()).max(aabb2.center[2] + aabb2.half_size.z());
+            (aabb1.center[2] + aabb1.half_size[2]).max(aabb2.center[2] + aabb2.half_size[2]);
 
         // Calculate new center and half_size
         let center = Point::new(
@@ -591,19 +591,19 @@ impl BVH {
 
     pub fn aabb_intersect(&self, aabb1: &BoundingBox, aabb2: &BoundingBox) -> bool {
         // Calculate min/max for both boxes
-        let min1_x = aabb1.center[0] - aabb1.half_size.x();
-        let max1_x = aabb1.center[0] + aabb1.half_size.x();
-        let min1_y = aabb1.center[1] - aabb1.half_size.y();
-        let max1_y = aabb1.center[1] + aabb1.half_size.y();
-        let min1_z = aabb1.center[2] - aabb1.half_size.z();
-        let max1_z = aabb1.center[2] + aabb1.half_size.z();
+        let min1_x = aabb1.center[0] - aabb1.half_size[0];
+        let max1_x = aabb1.center[0] + aabb1.half_size[0];
+        let min1_y = aabb1.center[1] - aabb1.half_size[1];
+        let max1_y = aabb1.center[1] + aabb1.half_size[1];
+        let min1_z = aabb1.center[2] - aabb1.half_size[2];
+        let max1_z = aabb1.center[2] + aabb1.half_size[2];
 
-        let min2_x = aabb2.center[0] - aabb2.half_size.x();
-        let max2_x = aabb2.center[0] + aabb2.half_size.x();
-        let min2_y = aabb2.center[1] - aabb2.half_size.y();
-        let max2_y = aabb2.center[1] + aabb2.half_size.y();
-        let min2_z = aabb2.center[2] - aabb2.half_size.z();
-        let max2_z = aabb2.center[2] + aabb2.half_size.z();
+        let min2_x = aabb2.center[0] - aabb2.half_size[0];
+        let max2_x = aabb2.center[0] + aabb2.half_size[0];
+        let min2_y = aabb2.center[1] - aabb2.half_size[1];
+        let max2_y = aabb2.center[1] + aabb2.half_size[1];
+        let min2_z = aabb2.center[2] - aabb2.half_size[2];
+        let max2_z = aabb2.center[2] + aabb2.half_size[2];
 
         // Check for overlap on all three axes
         min1_x <= max2_x
@@ -749,20 +749,20 @@ impl BVH {
         let min_z = aabb.cz - aabb.hz;
         let max_z = aabb.cz + aabb.hz;
 
-        let invx = if direction.x() == 0.0 {
+        let invx = if direction[0] == 0.0 {
             f64::INFINITY
         } else {
-            1.0 / direction.x()
+            1.0 / direction[0]
         };
-        let invy = if direction.y() == 0.0 {
+        let invy = if direction[1] == 0.0 {
             f64::INFINITY
         } else {
-            1.0 / direction.y()
+            1.0 / direction[1]
         };
-        let invz = if direction.z() == 0.0 {
+        let invz = if direction[2] == 0.0 {
             f64::INFINITY
         } else {
-            1.0 / direction.z()
+            1.0 / direction[2]
         };
 
         let tx1 = (min_x - origin[0]) * invx;
