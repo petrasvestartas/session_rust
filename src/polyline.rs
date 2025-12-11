@@ -81,7 +81,7 @@ impl Polyline {
     pub fn length(&self) -> f64 {
         let mut total_length = 0.0;
         for i in 0..self.segment_count() {
-            let mut segment_vector = self.points[i + 1].clone() - self.points[i].clone();
+            let segment_vector = self.points[i + 1].clone() - self.points[i].clone();
             total_length += segment_vector.magnitude();
         }
         total_length

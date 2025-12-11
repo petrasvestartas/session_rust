@@ -148,13 +148,13 @@ impl Point {
     ///
     /// A string in the format "x, y, z".
     pub fn str(&self) -> String {
-        use crate::tolerance::TOL;
+        use crate::tolerance::TOLERANCE;
         let prec = Some(crate::tolerance::Tolerance::ROUNDING);
         format!(
             "{}, {}, {}",
-            TOL.format_number(self._x, prec),
-            TOL.format_number(self._y, prec),
-            TOL.format_number(self._z, prec),
+            TOLERANCE.format_number(self._x, prec),
+            TOLERANCE.format_number(self._y, prec),
+            TOLERANCE.format_number(self._z, prec),
         )
     }
 
@@ -164,19 +164,19 @@ impl Point {
     ///
     /// A string with full point details including name, coordinates, color, and width.
     pub fn repr(&self) -> String {
-        use crate::tolerance::TOL;
+        use crate::tolerance::TOLERANCE;
         let prec = Some(crate::tolerance::Tolerance::ROUNDING);
         format!(
             "Point({}, {}, {}, {}, Color({}, {}, {}, {}), {})",
             self.name,
-            TOL.format_number(self._x, prec),
-            TOL.format_number(self._y, prec),
-            TOL.format_number(self._z, prec),
+            TOLERANCE.format_number(self._x, prec),
+            TOLERANCE.format_number(self._y, prec),
+            TOLERANCE.format_number(self._z, prec),
             self.pointcolor.r,
             self.pointcolor.g,
             self.pointcolor.b,
             self.pointcolor.a,
-            TOL.format_number(self.width, prec),
+            TOLERANCE.format_number(self.width, prec),
         )
     }
 
@@ -540,13 +540,13 @@ impl Point {
 
 impl fmt::Display for Point {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        use crate::tolerance::TOL;
+        use crate::tolerance::TOLERANCE;
         write!(
             f,
             "Point(x={}, y={}, z={})",
-            TOL.format_number(self._x, None),
-            TOL.format_number(self._y, None),
-            TOL.format_number(self._z, None)
+            TOLERANCE.format_number(self._x, None),
+            TOLERANCE.format_number(self._y, None),
+            TOLERANCE.format_number(self._z, None)
         )
     }
 }

@@ -1,5 +1,5 @@
 use crate::point::Point;
-use crate::tolerance::{Tolerance, SCALE, TO_DEGREES, TO_RADIANS};
+use crate::tolerance::{Tolerance, TO_DEGREES, TO_RADIANS};
 use serde::{ser::Serialize as SerTrait, Deserialize, Serialize};
 use std::cell::Cell;
 use std::fmt;
@@ -125,13 +125,13 @@ impl Vector {
     ///
     /// A string in the format "x, y, z".
     pub fn str(&self) -> String {
-        use crate::tolerance::TOL;
+        use crate::tolerance::TOLERANCE;
         let prec = Some(crate::tolerance::Tolerance::ROUNDING);
         format!(
             "{}, {}, {}",
-            TOL.format_number(self._x, prec),
-            TOL.format_number(self._y, prec),
-            TOL.format_number(self._z, prec),
+            TOLERANCE.format_number(self._x, prec),
+            TOLERANCE.format_number(self._y, prec),
+            TOLERANCE.format_number(self._z, prec),
         )
     }
 
@@ -141,16 +141,16 @@ impl Vector {
     ///
     /// A string with full vector details including name, coordinates, magnitude.
     pub fn repr(&mut self) -> String {
-        use crate::tolerance::TOL;
+        use crate::tolerance::TOLERANCE;
         let prec = Some(crate::tolerance::Tolerance::ROUNDING);
         let mag = self.magnitude(); // compute first to avoid borrow conflict
         format!(
             "Vector({}, {}, {}, {}, {})",
             self.name,
-            TOL.format_number(self._x, prec),
-            TOL.format_number(self._y, prec),
-            TOL.format_number(self._z, prec),
-            TOL.format_number(mag, prec),
+            TOLERANCE.format_number(self._x, prec),
+            TOLERANCE.format_number(self._y, prec),
+            TOLERANCE.format_number(self._z, prec),
+            TOLERANCE.format_number(mag, prec),
         )
     }
 
@@ -288,31 +288,6 @@ impl Vector {
         // Length magnitude stays the same, no need to invalidate cache
     }
 
-    /// Scales the vector by a factor.
-    ///
-    /// # Arguments
-    ///
-    /// * `factor` - The scaling factor to apply to all components.
-    pub fn scale(&mut self, factor: f64) {
-        self._x *= factor;
-        self._y *= factor;
-        self._z *= factor;
-        self.invalidate_magnitude_cache();
-    }
-
-    /// Scales the vector up by the global scale factor.
-    ///
-    /// Multiplies all components by the global SCALE constant.
-    pub fn scale_up(&mut self) {
-        self.scale(SCALE);
-    }
-
-    /// Scales the vector down by the global scale factor.
-    ///
-    /// Divides all components by the global SCALE constant.
-    pub fn scale_down(&mut self) {
-        self.scale(1.0 / SCALE);
-    }
 
     /// Computes the dot product with another vector.
     ///
@@ -381,6 +356,23 @@ impl Vector {
         angle
     }
 
+
+    /// Computes the angle between vector XY components in degrees.
+    ///
+    /// Calculates atan2(y, x) to get the angle of the vector's projection
+    /// onto the XY plane, measured from the positive X-axis.
+    ///
+    /// # Arguments
+    ///
+    /// * `vector` - The vector to compute the angle for.
+    ///
+    /// # Returns
+    ///
+    /// The angle in degrees.
+    pub fn angle_between_vector_xy_components(vector: &Vector) -> f64 {
+        vector._y.atan2(vector._x) * TO_DEGREES
+    }
+
     /// Projects this vector onto another vector and returns detailed results.
     ///
     /// Returns a tuple of:
@@ -389,14 +381,9 @@ impl Vector {
     /// - perpendicular projected vector (self - projection)
     /// - perpendicular projected vector length
     pub fn projection(&self, onto: &Vector) -> (Vector, f64, Vector, f64) {
-        self.projection_with(onto, Tolerance::ZERO_TOLERANCE)
-    }
-
-    /// Same as `projection` but allows specifying a tolerance.
-    pub fn projection_with(&self, onto: &Vector, tolerance: f64) -> (Vector, f64, Vector, f64) {
         let onto_len_sq = onto.magnitude_squared();
 
-        if onto_len_sq < tolerance {
+        if onto_len_sq < Tolerance::ZERO_TOLERANCE {
             return (Vector::zero(), 0.0, Vector::zero(), 0.0);
         }
 
@@ -454,37 +441,25 @@ impl Vector {
         }
     }
 
-    /// Gets a leveled vector scaled by vertical height.
+
+
+    /// Checks if this vector is perpendicular to another vector.
     ///
-    /// Creates a normalized copy of this vector and scales it based on
-    /// the vertical height and the angle with the Z-axis.
+    /// Two vectors are perpendicular if their dot product is zero
+    /// (within tolerance).
     ///
     /// # Arguments
     ///
-    /// * `vertical_height` - The target vertical height for scaling.
+    /// * `other` - The other vector to check against.
     ///
     /// # Returns
     ///
-    /// A new Vector scaled according to the vertical height.
-    ///
-    /// # Note
-    ///
-    /// This method replicates a known bug where degrees are passed directly
-    /// to cos (which expects radians).
-    pub fn get_leveled_vector(&self, vertical_height: f64) -> Vector {
-        let mut copy = self.clone();
-        copy.normalize();
-
-        if vertical_height != 0.0 {
-            let reference = Vector::z_axis();
-            let angle = copy.angle(&reference, true); // returns degrees
-                                                      // CRITICAL: statics bug - passes degrees directly to cos (expects radians)
-            let inclined_offset_by_vertical_distance = vertical_height / angle.cos();
-            copy.scale(inclined_offset_by_vertical_distance);
-        }
-
-        copy
+    /// `true` if the vectors are perpendicular, `false` otherwise.
+    pub fn is_perpendicular_to(&self, other: &Vector) -> bool {
+        self.dot(other).abs() < Tolerance::ZERO_TOLERANCE
     }
+
+
 
     /// Set this vector to be perpendicular to the given vector.
     ///
@@ -566,6 +541,38 @@ impl Vector {
         a != 0.0
     }
 
+
+    /// Gets a leveled vector scaled by vertical height.
+    ///
+    /// Creates a normalized copy of this vector and scales it based on
+    /// the vertical height and the angle with the Z-axis.
+    ///
+    /// # Arguments
+    ///
+    /// * `vertical_height` - The target vertical height for scaling.
+    ///
+    /// # Returns
+    ///
+    /// A new Vector scaled according to the vertical height.
+    ///
+    /// # Note
+    ///
+    /// Computes the inclined distance needed to achieve a given vertical rise.
+    pub fn get_leveled_vector(&self, vertical_height: f64) -> Vector {
+        let mut copy = self.clone();
+        copy.normalize();
+
+        if vertical_height != 0.0 {
+            let reference = Vector::z_axis();
+            let angle_deg = copy.angle(&reference, false); // returns degrees (unsigned)
+            let angle_rad = angle_deg * TO_RADIANS;
+            let inclined_offset_by_vertical_distance = vertical_height / angle_rad.cos();
+            copy *= inclined_offset_by_vertical_distance;
+        }
+
+        copy
+    }
+
     ///////////////////////////////////////////////////////////////////////////////////////////
     // Static Methods
     ///////////////////////////////////////////////////////////////////////////////////////////
@@ -600,6 +607,42 @@ impl Vector {
         (triangle_edge_length_a.powi(2) + triangle_edge_length_b.powi(2)
             - 2.0 * triangle_edge_length_a * triangle_edge_length_b * angle.cos())
         .sqrt()
+    }
+
+    /// Computes an angle of a triangle using the inverse cosine law.
+    ///
+    /// Given all three sides, calculates the angle opposite to the third side:
+    /// cos(C) = (a² + b² - c²) / (2ab)
+    ///
+    /// # Arguments
+    ///
+    /// * `triangle_edge_length_a` - Length of side a (adjacent to angle C).
+    /// * `triangle_edge_length_b` - Length of side b (adjacent to angle C).
+    /// * `triangle_edge_length_c` - Length of side c (opposite to angle C).
+    /// * `degrees` - If true, returns angle in degrees; otherwise radians.
+    ///
+    /// # Returns
+    ///
+    /// The angle opposite to side c.
+    pub fn angle_from_cosine_law(
+        triangle_edge_length_a: f64,
+        triangle_edge_length_b: f64,
+        triangle_edge_length_c: f64,
+        degrees: bool,
+    ) -> f64 {
+        let a = triangle_edge_length_a;
+        let b = triangle_edge_length_b;
+        let c = triangle_edge_length_c;
+
+        // cos(C) = (a² + b² - c²) / (2ab)
+        let cos_c = (a.powi(2) + b.powi(2) - c.powi(2)) / (2.0 * a * b);
+        let angle_rad = cos_c.acos();
+
+        if degrees {
+            angle_rad * TO_DEGREES
+        } else {
+            angle_rad
+        }
     }
 
     /// Computes an angle of a triangle using the sine law.
@@ -675,26 +718,41 @@ impl Vector {
         (triangle_edge_length_a * angle_b.sin()) / angle_a.sin()
     }
 
-    /// Computes the angle between vector XY components in degrees.
+    /// Computes a side length of a triangle using the sine law (alternative signature).
     ///
-    /// Calculates atan2(y, x) to get the angle of the vector's projection
-    /// onto the XY plane, measured from the positive X-axis.
+    /// Given two angles and one side, calculates the length of another side:
+    /// a/sin(A) = b/sin(B)  =>  a = b·sin(A)/sin(B)
     ///
     /// # Arguments
     ///
-    /// * `vector` - The vector to compute the angle for.
+    /// * `angle_in_front_of_result_side` - Angle opposite to the side we want to find.
+    /// * `angle_in_front_of_known_side` - Angle opposite to the known side.
+    /// * `known_side_length` - Length of the known side.
+    /// * `degrees` - If true, angles are in degrees; otherwise radians.
     ///
     /// # Returns
     ///
-    /// The angle in degrees.
-    pub fn angle_between_vector_xy_components(vector: &Vector) -> f64 {
-        vector._y.atan2(vector._x) * TO_DEGREES
-    }
+    /// Length of the side opposite to the first angle.
+    pub fn side_from_sine_law(
+        angle_in_front_of_result_side: f64,
+        angle_in_front_of_known_side: f64,
+        known_side_length: f64,
+        degrees: bool,
+    ) -> f64 {
+        let angle_a = if degrees {
+            angle_in_front_of_result_side * TO_RADIANS
+        } else {
+            angle_in_front_of_result_side
+        };
 
-    /// Deprecated: use `angle_between_vector_xy_components`.
-    #[allow(dead_code)]
-    pub fn angle_between_vector_xy_components_degrees(vector: &Vector) -> f64 {
-        Self::angle_between_vector_xy_components(vector)
+        let angle_b = if degrees {
+            angle_in_front_of_known_side * TO_RADIANS
+        } else {
+            angle_in_front_of_known_side
+        };
+
+        // a = b·sin(A)/sin(B)
+        (known_side_length * angle_a.sin()) / angle_b.sin()
     }
 
     /// Sums a collection of vectors component-wise.
@@ -733,22 +791,6 @@ impl Vector {
         let sum = Self::sum_of_vectors(vectors);
         let count = vectors.len() as f64;
         Vector::new(sum._x / count, sum._y / count, sum._z / count)
-    }
-
-    /// Checks if this vector is perpendicular to another vector.
-    ///
-    /// Two vectors are perpendicular if their dot product is zero
-    /// (within tolerance).
-    ///
-    /// # Arguments
-    ///
-    /// * `other` - The other vector to check against.
-    ///
-    /// # Returns
-    ///
-    /// `true` if the vectors are perpendicular, `false` otherwise.
-    pub fn is_perpendicular_to(&self, other: &Vector) -> bool {
-        self.dot(other).abs() < Tolerance::ZERO_TOLERANCE
     }
 
     /// Checks if this vector is a zero vector.
@@ -870,6 +912,11 @@ impl Vector {
         Ok(())
     }
 
+    /// Alias for `to_json` to match C++ API naming convention.
+    pub fn json_dump(&self, filepath: &str) -> Result<(), Box<dyn std::error::Error>> {
+        self.to_json(filepath)
+    }
+
     /// Deserializes a Vector from a JSON file.
     ///
     /// # Arguments
@@ -882,6 +929,11 @@ impl Vector {
     pub fn from_json(filepath: &str) -> Result<Self, Box<dyn std::error::Error>> {
         let json = std::fs::read_to_string(filepath)?;
         Self::jsonload(&json)
+    }
+
+    /// Alias for `from_json` to match C++ API naming convention.
+    pub fn json_load(filepath: &str) -> Result<Self, Box<dyn std::error::Error>> {
+        Self::from_json(filepath)
     }
 
     ///////////////////////////////////////////////////////////////////////////////////////////

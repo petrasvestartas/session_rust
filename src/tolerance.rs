@@ -123,48 +123,41 @@ impl Tolerance {
         (a - b).abs() <= self.tolerance(b, rtol, atol)
     }
 
-    pub fn is_zero(&self, a: f64, tol: Option<f64>) -> bool {
-        let tol = tol.unwrap_or(self.absolute());
-        a.abs() <= tol
+    pub fn is_zero(&self, a: f64) -> bool {
+        a.abs() <= self.absolute()
     }
 
-    pub fn is_positive(&self, a: f64, tol: Option<f64>) -> bool {
-        let tol = tol.unwrap_or(self.absolute());
-        a > tol
+    pub fn is_positive(&self, a: f64) -> bool {
+        a > self.absolute()
     }
 
-    pub fn is_negative(&self, a: f64, tol: Option<f64>) -> bool {
-        let tol = tol.unwrap_or(self.absolute());
-        a < -tol
+    pub fn is_negative(&self, a: f64) -> bool {
+        a < -self.absolute()
     }
 
-    pub fn is_between(&self, value: f64, minval: f64, maxval: f64, atol: Option<f64>) -> bool {
-        let atol = atol.unwrap_or(self.absolute());
+    pub fn is_between(&self, value: f64, minval: f64, maxval: f64) -> bool {
+        let atol = self.absolute();
         minval - atol <= value && value <= maxval + atol
     }
 
-    pub fn is_close(&self, a: f64, b: f64, rtol: Option<f64>, atol: Option<f64>) -> bool {
-        let rtol = rtol.unwrap_or(self.relative());
-        let atol = atol.unwrap_or(self.absolute());
-        self.compare(a, b, rtol, atol)
+    pub fn is_close(&self, a: f64, b: f64) -> bool {
+        self.compare(a, b, self.relative(), self.absolute())
     }
 
-    pub fn is_allclose(&self, a: &[f64], b: &[f64], rtol: Option<f64>, atol: Option<f64>) -> bool {
-        let rtol = rtol.unwrap_or(self.relative());
-        let atol = atol.unwrap_or(self.absolute());
+    pub fn is_allclose(&self, a: &[f64], b: &[f64]) -> bool {
+        let rtol = self.relative();
+        let atol = self.absolute();
         a.iter()
             .zip(b.iter())
             .all(|(x, y)| self.compare(*x, *y, rtol, atol))
     }
 
-    pub fn is_angle_zero(&self, a: f64, tol: Option<f64>) -> bool {
-        let tol = tol.unwrap_or(self.angular());
-        a.abs() <= tol
+    pub fn is_angle_zero(&self, a: f64) -> bool {
+        a.abs() <= self.angular()
     }
 
-    pub fn is_angles_close(&self, a: f64, b: f64, tol: Option<f64>) -> bool {
-        let tol = tol.unwrap_or(self.angular());
-        (a - b).abs() <= tol
+    pub fn is_angles_close(&self, a: f64, b: f64) -> bool {
+        (a - b).abs() <= self.angular()
     }
 
     pub fn geometric_key(&self, xyz: [f64; 3], precision: Option<i32>) -> String {
@@ -277,7 +270,7 @@ impl Default for Tolerance {
     }
 }
 
-pub static TOL: Lazy<Tolerance> = Lazy::new(Tolerance::default);
+pub static TOLERANCE: Lazy<Tolerance> = Lazy::new(Tolerance::default);
 
 #[cfg(test)]
 #[path = "tolerance_test.rs"]

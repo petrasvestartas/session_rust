@@ -323,7 +323,7 @@ impl Mesh {
         let u = Vector::new(p1[0] - p0[0], p1[1] - p0[1], p1[2] - p0[2]);
         let v = Vector::new(p2[0] - p0[0], p2[1] - p0[1], p2[2] - p0[2]);
 
-        let mut normal = u.cross(&v);
+        let normal = u.cross(&v);
         let len = normal.magnitude();
         if len > Tolerance::ZERO_TOLERANCE {
             Some(Vector::new(
@@ -414,12 +414,12 @@ impl Mesh {
         let prev_pos = self.vertex_position(prev_vertex)?;
         let next_pos = self.vertex_position(next_vertex)?;
 
-        let mut u = Vector::new(
+        let u = Vector::new(
             prev_pos[0] - center[0],
             prev_pos[1] - center[1],
             prev_pos[2] - center[2],
         );
-        let mut v = Vector::new(
+        let v = Vector::new(
             next_pos[0] - center[0],
             next_pos[1] - center[1],
             next_pos[2] - center[2],
