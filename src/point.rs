@@ -149,7 +149,7 @@ impl Point {
     /// A string in the format "x, y, z".
     pub fn str(&self) -> String {
         use crate::tolerance::TOLERANCE;
-        let prec = Some(crate::tolerance::Tolerance::ROUNDING);
+        let prec = crate::tolerance::Tolerance::ROUNDING;
         format!(
             "{}, {}, {}",
             TOLERANCE.format_number(self._x, prec),
@@ -165,7 +165,7 @@ impl Point {
     /// A string with full point details including name, coordinates, color, and width.
     pub fn repr(&self) -> String {
         use crate::tolerance::TOLERANCE;
-        let prec = Some(crate::tolerance::Tolerance::ROUNDING);
+        let prec = crate::tolerance::Tolerance::ROUNDING;
         format!(
             "Point({}, {}, {}, {}, Color({}, {}, {}, {}), {})",
             self.name,
@@ -544,9 +544,9 @@ impl fmt::Display for Point {
         write!(
             f,
             "Point(x={}, y={}, z={})",
-            TOLERANCE.format_number(self._x, None),
-            TOLERANCE.format_number(self._y, None),
-            TOLERANCE.format_number(self._z, None)
+            TOLERANCE.format_number(self._x, -999),
+            TOLERANCE.format_number(self._y, -999),
+            TOLERANCE.format_number(self._z, -999)
         )
     }
 }

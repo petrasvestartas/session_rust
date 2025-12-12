@@ -126,7 +126,7 @@ impl Vector {
     /// A string in the format "x, y, z".
     pub fn str(&self) -> String {
         use crate::tolerance::TOLERANCE;
-        let prec = Some(crate::tolerance::Tolerance::ROUNDING);
+        let prec = crate::tolerance::Tolerance::ROUNDING;
         format!(
             "{}, {}, {}",
             TOLERANCE.format_number(self._x, prec),
@@ -142,7 +142,7 @@ impl Vector {
     /// A string with full vector details including name, coordinates, magnitude.
     pub fn repr(&mut self) -> String {
         use crate::tolerance::TOLERANCE;
-        let prec = Some(crate::tolerance::Tolerance::ROUNDING);
+        let prec = crate::tolerance::Tolerance::ROUNDING;
         let mag = self.magnitude(); // compute first to avoid borrow conflict
         format!(
             "Vector({}, {}, {}, {}, {})",

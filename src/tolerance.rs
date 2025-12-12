@@ -160,8 +160,8 @@ impl Tolerance {
         (a - b).abs() <= self.angular()
     }
 
-    pub fn geometric_key(&self, xyz: [f64; 3], precision: Option<i32>) -> String {
-        let precision = precision.unwrap_or_else(|| self.precision());
+    pub fn key(&self, xyz: [f64; 3], precision: i32) -> String {
+        let precision = if precision == -999 { self.precision() } else { precision };
         let [mut x, mut y, mut z] = xyz;
 
         if precision == -1 {
@@ -199,8 +199,8 @@ impl Tolerance {
         )
     }
 
-    pub fn geometric_key_xy(&self, xy: [f64; 2], precision: Option<i32>) -> String {
-        let precision = precision.unwrap_or_else(|| self.precision());
+    pub fn key_xy(&self, xy: [f64; 2], precision: i32) -> String {
+        let precision = if precision == -999 { self.precision() } else { precision };
         let [mut x, mut y] = xy;
 
         if precision == -1 {
@@ -228,8 +228,8 @@ impl Tolerance {
         format!("{:.prec$},{:.prec$}", x, y, prec = precision as usize)
     }
 
-    pub fn format_number(&self, number: f64, precision: Option<i32>) -> String {
-        let precision = precision.unwrap_or_else(|| self.precision());
+    pub fn format_number(&self, number: f64, precision: i32) -> String {
+        let precision = if precision == -999 { self.precision() } else { precision };
 
         if precision == -1 {
             return format!("{}", number.round() as i64);

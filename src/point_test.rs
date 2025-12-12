@@ -113,43 +113,38 @@ pub fn run_point_is_ccw() -> TestResult {
 pub fn run_point_mid_point() -> TestResult {
     MINI_TEST!("mid_point", {
         use crate::Point;
-        use crate::Tolerance;
 
         let p0 = Point::new(0.0, 2.0, 1.0);
         let p1 = Point::new(1.0, 5.0, 3.0);
         let mid = Point::mid_point(&p0, &p1);
 
-        let x = Tolerance::round_to(mid[0], Tolerance::ROUNDING);
-        let y = Tolerance::round_to(mid[1], Tolerance::ROUNDING);
-        let z = Tolerance::round_to(mid[2], Tolerance::ROUNDING);
-
-        MINI_CHECK!(x == 0.5 && y == 3.5 && z == 2.0);
+        MINI_CHECK!(mid[0] == 0.5 && mid[1] == 3.5 && mid[2] == 2.0);
     })
 }
 
 pub fn run_point_distance() -> TestResult {
     MINI_TEST!("distance", {
         use crate::Point;
-        use crate::Tolerance;
+        use crate::tolerance::TOLERANCE;
 
         let p0 = Point::new(0.0, 2.0, 1.0);
         let p1 = Point::new(1.0, 5.0, 3.0);
-        let d = Tolerance::round_to(p0.distance(&p1, None), Tolerance::ROUNDING);
+        let d = p0.distance(&p1, None);
 
-        MINI_CHECK!(d == 3.741657);
+        MINI_CHECK!(TOLERANCE.is_close(d, 3.741657));
     })
 }
 
 pub fn run_point_squared_distance() -> TestResult {
     MINI_TEST!("squared_distance", {
         use crate::Point;
-        use crate::Tolerance;
+        use crate::tolerance::TOLERANCE;
 
         let p0 = Point::new(0.0, 2.0, 1.0);
         let p1 = Point::new(1.0, 5.0, 3.0);
-        let d = Tolerance::round_to(p0.squared_distance(&p1, None), Tolerance::ROUNDING);
+        let d = p0.squared_distance(&p1, None);
 
-        MINI_CHECK!(d == 14.0);
+        MINI_CHECK!(TOLERANCE.is_close(d, 14.0));
     })
 }
 
@@ -161,9 +156,7 @@ pub fn run_point_area() -> TestResult {
         let p1 = Point::new(2.0, 0.0, 0.0);
         let p2 = Point::new(2.0, 2.0, 0.0);
         let p3 = Point::new(0.0, 2.0, 0.0);
-
-        let pts = vec![p0, p1, p2, p3];
-        let area = Point::area(&pts);
+        let area = Point::area(&vec![p0, p1, p2, p3]);
 
         MINI_CHECK!(area == 4.0);
     })
@@ -172,18 +165,17 @@ pub fn run_point_area() -> TestResult {
 pub fn run_point_centroid_quad() -> TestResult {
     MINI_TEST!("centroid_quad", {
         use crate::Point;
-        use crate::Tolerance;
+        use crate::tolerance::TOLERANCE;
 
         let p0 = Point::new(0.0, 0.0, 0.0);
         let p1 = Point::new(2.0, 0.0, 1.0);
         let p2 = Point::new(2.0, 2.0, 2.0);
         let p3 = Point::new(0.0, 2.0, 1.0);
         let centroid = Point::centroid_quad(&vec![p0, p1, p2, p3]).unwrap();
-        let x = Tolerance::round_to(centroid[0], Tolerance::ROUNDING);
-        let y = Tolerance::round_to(centroid[1], Tolerance::ROUNDING);
-        let z = Tolerance::round_to(centroid[2], Tolerance::ROUNDING);
 
-        MINI_CHECK!(x == 1.0 && y == 1.0 && z == 1.0);
+        MINI_CHECK!(TOLERANCE.is_close(centroid[0], 1.0));
+        MINI_CHECK!(TOLERANCE.is_close(centroid[1], 1.0));
+        MINI_CHECK!(TOLERANCE.is_close(centroid[2], 1.0));
     })
 }
 

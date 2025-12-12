@@ -209,16 +209,16 @@ pub fn run_color_constructor() -> TestResult {
 pub fn run_color_conversion() -> TestResult {
     MINI_TEST!("conversion", {
         use crate::Color;
-        use crate::Tolerance;
+        use crate::tolerance::TOLERANCE;
 
         let color = Color::new(255, 128, 64, 255);
         let flts = color.to_float_array();
         let ints = Color::from_float(flts[0], flts[1], flts[2], flts[3]);
 
-        MINI_CHECK!(Tolerance::round_to(flts[0], Tolerance::ROUNDING) == 1.0);
-        MINI_CHECK!(Tolerance::round_to(flts[1], Tolerance::ROUNDING) == 0.501961);
-        MINI_CHECK!(Tolerance::round_to(flts[2], Tolerance::ROUNDING) == 0.25098);
-        MINI_CHECK!(Tolerance::round_to(flts[3], Tolerance::ROUNDING) == 1.0);
+        MINI_CHECK!(TOLERANCE.is_close(flts[0], 1.0));
+        MINI_CHECK!(TOLERANCE.is_close(flts[1], 0.501961));
+        MINI_CHECK!(TOLERANCE.is_close(flts[2], 0.25098));
+        MINI_CHECK!(TOLERANCE.is_close(flts[3], 1.0));
         MINI_CHECK!(ints == color);
     })
 }

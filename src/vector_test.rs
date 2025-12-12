@@ -110,8 +110,6 @@ pub fn run_vector_normalize() -> TestResult {
     })
 }
 
-
-
 pub fn run_vector_reverse() -> TestResult {
     MINI_TEST!("reverse", {
         use crate::Vector;
@@ -137,12 +135,12 @@ pub fn run_vector_dot_product() -> TestResult {
         let dot_paral = v1.dot(&v3);
 
         // Projection of a onto b
-        // Scalar projection: 
-        // (a • b) / ||b|| (here ||b||=1, so just a_x = 3.0)
-        // Projection coefficient: 
-        // (a • b) / ||b||² = 6/4 = 1.5 (how many b2's fit in projection)
-        let a = Vector::new(3.0, 4.0, 0.0); // Vector to project
-        let b = Vector::new(1.0, 0.0, 0.0); // Unit vector along x
+        // Scalar projection:
+        // (a . b) / ||b|| (here ||b||=1, so just a_x = 3.0)
+        // Projection coefficient:
+        // (a . b) / ||b||^2 = 6/4 = 1.5 (how many b2's fit in projection)
+        let a = Vector::new(3.0, 4.0, 0.0);
+        let b = Vector::new(1.0, 0.0, 0.0);
         let b2 = Vector::new(2.0, 0.0, 0.0);
         let proj_scalar = a.dot(&b) / (b[0].powi(2) + b[1].powi(2) + b[2].powi(2)).sqrt();
         let proj_coeff = a.dot(&b2) / (b2[0].powi(2) + b2[1].powi(2) + b2[2].powi(2));
@@ -288,7 +286,8 @@ pub fn run_vector_get_leveled_vector() -> TestResult {
 
         // Scale vector along its direction so its Z-component equals vertical_height.
         let v = Vector::new(1.0, 1.0, 1.0);
-        let v_leveled = v.get_leveled_vector(1.0);
+        let vertical_height = 1.0;
+        let v_leveled = v.get_leveled_vector(vertical_height);
 
         MINI_CHECK!(TOLERANCE.is_close(v_leveled.magnitude(), 3.0_f64.sqrt()));
     })
