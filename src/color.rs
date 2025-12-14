@@ -83,10 +83,6 @@ impl Color {
         }
     }
 
-    ///////////////////////////////////////////////////////////////////////////////////////////
-    // Operators
-    ///////////////////////////////////////////////////////////////////////////////////////////
-
     /// Duplicate the color (creates a copy with new GUID).
     ///
     /// # Returns
@@ -101,24 +97,6 @@ impl Color {
             b: self.b,
             a: self.a,
         }
-    }
-
-    /// Simple string representation (like Python __str__).
-    ///
-    /// # Returns
-    ///
-    /// A string in the format "r, g, b, a".
-    pub fn str(&self) -> String {
-        format!("{}, {}, {}, {}", self.r, self.g, self.b, self.a)
-    }
-
-    /// Detailed representation (like Python __repr__).
-    ///
-    /// # Returns
-    ///
-    /// A string in the format "Color(name, r, g, b, a)".
-    pub fn repr(&self) -> String {
-        format!("Color({}, {}, {}, {}, {})", self.name, self.r, self.g, self.b, self.a)
     }
 
     ///////////////////////////////////////////////////////////////////////////////////////////
@@ -351,45 +329,6 @@ impl Color {
     }
 
     ///////////////////////////////////////////////////////////////////////////////////////////
-    // Details
-    ///////////////////////////////////////////////////////////////////////////////////////////
-
-    /// Convert to normalized float array [0-1].
-    ///
-    /// # Returns
-    ///
-    /// An array [r, g, b, a] with values normalized to the range [0.0, 1.0].
-    pub fn to_float_array(&self) -> [f64; 4] {
-        [
-            self.r as f64 / 255.0,
-            self.g as f64 / 255.0,
-            self.b as f64 / 255.0,
-            self.a as f64 / 255.0,
-        ]
-    }
-
-    /// Create color from normalized float values [0-1].
-    ///
-    /// # Arguments
-    ///
-    /// * `r` - Red component (0.0-1.0).
-    /// * `g` - Green component (0.0-1.0).
-    /// * `b` - Blue component (0.0-1.0).
-    /// * `a` - Alpha component (0.0-1.0).
-    ///
-    /// # Returns
-    ///
-    /// A new Color with values converted to 0-255 range.
-    pub fn from_float(r: f64, g: f64, b: f64, a: f64) -> Self {
-        Color::new(
-            (r * 255.0).round() as u8,
-            (g * 255.0).round() as u8,
-            (b * 255.0).round() as u8,
-            (a * 255.0).round() as u8,
-        )
-    }
-
-    ///////////////////////////////////////////////////////////////////////////////////////////
     // JSON
     ///////////////////////////////////////////////////////////////////////////////////////////
 
@@ -446,6 +385,63 @@ impl Color {
     pub fn from_json(filepath: &str) -> Result<Self, Box<dyn std::error::Error>> {
         let json = std::fs::read_to_string(filepath)?;
         Self::jsonload(&json)
+    }
+
+    /// Simple string representation (like Python __str__).
+    ///
+    /// # Returns
+    ///
+    /// A string in the format "r, g, b, a".
+    pub fn str(&self) -> String {
+        format!("{}, {}, {}, {}", self.r, self.g, self.b, self.a)
+    }
+
+    /// Detailed representation (like Python __repr__).
+    ///
+    /// # Returns
+    ///
+    /// A string in the format "Color(name, r, g, b, a)".
+    pub fn repr(&self) -> String {
+        format!("Color({}, {}, {}, {}, {})", self.name, self.r, self.g, self.b, self.a)
+    }
+
+    ///////////////////////////////////////////////////////////////////////////////////////////
+    // Details
+    ///////////////////////////////////////////////////////////////////////////////////////////
+
+    /// Convert to normalized float array [0-1].
+    ///
+    /// # Returns
+    ///
+    /// An array [r, g, b, a] with values normalized to the range [0.0, 1.0].
+    pub fn to_float_array(&self) -> [f64; 4] {
+        [
+            self.r as f64 / 255.0,
+            self.g as f64 / 255.0,
+            self.b as f64 / 255.0,
+            self.a as f64 / 255.0,
+        ]
+    }
+
+    /// Create color from normalized float values [0-1].
+    ///
+    /// # Arguments
+    ///
+    /// * `r` - Red component (0.0-1.0).
+    /// * `g` - Green component (0.0-1.0).
+    /// * `b` - Blue component (0.0-1.0).
+    /// * `a` - Alpha component (0.0-1.0).
+    ///
+    /// # Returns
+    ///
+    /// A new Color with values converted to 0-255 range.
+    pub fn from_float(r: f64, g: f64, b: f64, a: f64) -> Self {
+        Color::new(
+            (r * 255.0).round() as u8,
+            (g * 255.0).round() as u8,
+            (b * 255.0).round() as u8,
+            (a * 255.0).round() as u8,
+        )
     }
 }
 

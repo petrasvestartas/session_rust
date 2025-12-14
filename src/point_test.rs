@@ -93,6 +93,59 @@ pub fn run_point_transformation() -> TestResult {
     })
 }
 
+pub fn run_point_json_roundtrip() -> TestResult {
+    MINI_TEST!("json_roundtrip", {
+        use crate::Point;
+        use crate::Color;
+
+        let mut p = Point::with_name(1.5, 2.5, 3.5, "test_point");
+        p.width = 2.0;
+        p.pointcolor = Color::new(255, 128, 64, 255);
+
+        let filename = "test_point.json";
+        p.to_json(filename).unwrap();
+        let loaded = Point::from_json(filename).unwrap();
+
+        MINI_CHECK!(loaded.name == p.name);
+        MINI_CHECK!(loaded[0] == p[0]);
+        MINI_CHECK!(loaded[1] == p[1]);
+        MINI_CHECK!(loaded[2] == p[2]);
+        MINI_CHECK!(loaded.width == p.width);
+        MINI_CHECK!(loaded.pointcolor.r == 255);
+        MINI_CHECK!(loaded.pointcolor.g == 128);
+        MINI_CHECK!(loaded.pointcolor.b == 64);
+        MINI_CHECK!(loaded.pointcolor.a == 255);
+
+    })
+}
+
+#[cfg(feature = "protobuf")]
+pub fn run_point_protobuf_roundtrip() -> TestResult {
+    MINI_TEST!("protobuf_roundtrip", {
+        use crate::Point;
+        use crate::Color;
+
+        let mut p = Point::new(1.5, 2.5, 3.5);
+        p.name = "test_point".to_string();
+        p.width = 2.0;
+        p.pointcolor = Color::new(255, 128, 64, 255);
+
+        let filename = "test_point.bin";
+        p.protobuf_dump(filename);
+        let loaded = Point::protobuf_load(filename);
+
+        MINI_CHECK!(loaded.name == p.name);
+        MINI_CHECK!(loaded[0] == p[0]);
+        MINI_CHECK!(loaded[1] == p[1]);
+        MINI_CHECK!(loaded[2] == p[2]);
+        MINI_CHECK!(loaded.width == p.width);
+        MINI_CHECK!(loaded.pointcolor.r == 255);
+        MINI_CHECK!(loaded.pointcolor.g == 128);
+        MINI_CHECK!(loaded.pointcolor.b == 64);
+        MINI_CHECK!(loaded.pointcolor.a == 255);
+    })
+}
+
 pub fn run_point_is_ccw() -> TestResult {
     MINI_TEST!("is_ccw", {
         use crate::Point;
@@ -179,68 +232,15 @@ pub fn run_point_centroid_quad() -> TestResult {
     })
 }
 
-pub fn run_point_json_roundtrip() -> TestResult {
-    MINI_TEST!("json_roundtrip", {
-        use crate::Point;
-        use crate::Color;
-
-        let mut p = Point::with_name(1.5, 2.5, 3.5, "test_point");
-        p.width = 2.0;
-        p.pointcolor = Color::new(255, 128, 64, 255);
-
-        let filename = "test_point.json";
-        p.to_json(filename).unwrap();
-        let loaded = Point::from_json(filename).unwrap();
-
-        MINI_CHECK!(loaded.name == p.name);
-        MINI_CHECK!(loaded[0] == p[0]);
-        MINI_CHECK!(loaded[1] == p[1]);
-        MINI_CHECK!(loaded[2] == p[2]);
-        MINI_CHECK!(loaded.width == p.width);
-        MINI_CHECK!(loaded.pointcolor.r == 255);
-        MINI_CHECK!(loaded.pointcolor.g == 128);
-        MINI_CHECK!(loaded.pointcolor.b == 64);
-        MINI_CHECK!(loaded.pointcolor.a == 255);
-
-    })
-}
-
-#[cfg(feature = "protobuf")]
-pub fn run_point_protobuf_roundtrip() -> TestResult {
-    MINI_TEST!("protobuf_roundtrip", {
-        use crate::Point;
-        use crate::Color;
-
-        let mut p = Point::new(1.5, 2.5, 3.5);
-        p.name = "test_point".to_string();
-        p.width = 2.0;
-        p.pointcolor = Color::new(255, 128, 64, 255);
-
-        let filename = "test_point.bin";
-        p.protobuf_dump(filename);
-        let loaded = Point::protobuf_load(filename);
-
-        MINI_CHECK!(loaded.name == p.name);
-        MINI_CHECK!(loaded[0] == p[0]);
-        MINI_CHECK!(loaded[1] == p[1]);
-        MINI_CHECK!(loaded[2] == p[2]);
-        MINI_CHECK!(loaded.width == p.width);
-        MINI_CHECK!(loaded.pointcolor.r == 255);
-        MINI_CHECK!(loaded.pointcolor.g == 128);
-        MINI_CHECK!(loaded.pointcolor.b == 64);
-        MINI_CHECK!(loaded.pointcolor.a == 255);
-    })
-}
-
 // Register tests with the shared registry for run_all("rust")
 REGISTER_MINI_TEST!("Point", "constructor", crate::point_test::run_point_constructor);
 REGISTER_MINI_TEST!("Point", "transformation", crate::point_test::run_point_transformation);
+REGISTER_MINI_TEST!("Point", "json_roundtrip", crate::point_test::run_point_json_roundtrip);
+#[cfg(feature = "protobuf")]
+REGISTER_MINI_TEST!("Point", "protobuf_roundtrip", crate::point_test::run_point_protobuf_roundtrip);
 REGISTER_MINI_TEST!("Point", "is_ccw", crate::point_test::run_point_is_ccw);
 REGISTER_MINI_TEST!("Point", "mid_point", crate::point_test::run_point_mid_point);
 REGISTER_MINI_TEST!("Point", "distance", crate::point_test::run_point_distance);
 REGISTER_MINI_TEST!("Point", "squared_distance", crate::point_test::run_point_squared_distance);
 REGISTER_MINI_TEST!("Point", "area", crate::point_test::run_point_area);
 REGISTER_MINI_TEST!("Point", "centroid_quad", crate::point_test::run_point_centroid_quad);
-REGISTER_MINI_TEST!("Point", "json_roundtrip", crate::point_test::run_point_json_roundtrip);
-#[cfg(feature = "protobuf")]
-REGISTER_MINI_TEST!("Point", "protobuf_roundtrip", crate::point_test::run_point_protobuf_roundtrip);

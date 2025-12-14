@@ -206,6 +206,44 @@ pub fn run_color_constructor() -> TestResult {
     })
 }
 
+pub fn run_color_json_roundtrip() -> TestResult {
+    MINI_TEST!("json_roundtrip", {
+        use crate::Color;
+
+        let color = Color::with_name(255, 128, 64, 255, "test_color");
+
+        let filename = "test_color.json";
+        color.to_json(filename).unwrap();
+        let loaded = Color::from_json(filename).unwrap();
+
+        MINI_CHECK!(loaded.name == "test_color");
+        MINI_CHECK!(loaded.r == 255);
+        MINI_CHECK!(loaded.g == 128);
+        MINI_CHECK!(loaded.b == 64);
+        MINI_CHECK!(loaded.a == 255);
+    })
+}
+
+#[cfg(feature = "protobuf")]
+pub fn run_color_protobuf_roundtrip() -> TestResult {
+    MINI_TEST!("protobuf_roundtrip", {
+        use crate::Color;
+
+        let mut color = Color::new(255, 128, 64, 255);
+        color.name = "test_color".to_string();
+
+        let filename = "test_color.bin";
+        color.protobuf_dump(filename);
+        let loaded = Color::protobuf_load(filename);
+
+        MINI_CHECK!(loaded.name == "test_color");
+        MINI_CHECK!(loaded.r == 255);
+        MINI_CHECK!(loaded.g == 128);
+        MINI_CHECK!(loaded.b == 64);
+        MINI_CHECK!(loaded.a == 255);
+    })
+}
+
 pub fn run_color_conversion() -> TestResult {
     MINI_TEST!("conversion", {
         use crate::Color;
@@ -216,8 +254,8 @@ pub fn run_color_conversion() -> TestResult {
         let ints = Color::from_float(flts[0], flts[1], flts[2], flts[3]);
 
         MINI_CHECK!(TOLERANCE.is_close(flts[0], 1.0));
-        MINI_CHECK!(TOLERANCE.is_close(flts[1], 0.501961));
-        MINI_CHECK!(TOLERANCE.is_close(flts[2], 0.25098));
+        MINI_CHECK!(TOLERANCE.is_close(flts[1], 0.50196078));
+        MINI_CHECK!(TOLERANCE.is_close(flts[2], 0.25098039));
         MINI_CHECK!(TOLERANCE.is_close(flts[3], 1.0));
         MINI_CHECK!(ints == color);
     })
@@ -275,48 +313,10 @@ pub fn run_color_presets() -> TestResult {
     })
 }
 
-pub fn run_color_json_roundtrip() -> TestResult {
-    MINI_TEST!("json_roundtrip", {
-        use crate::Color;
-
-        let color = Color::with_name(255, 128, 64, 255, "test_color");
-
-        let filename = "test_color.json";
-        color.to_json(filename).unwrap();
-        let loaded = Color::from_json(filename).unwrap();
-
-        MINI_CHECK!(loaded.name == "test_color");
-        MINI_CHECK!(loaded.r == 255);
-        MINI_CHECK!(loaded.g == 128);
-        MINI_CHECK!(loaded.b == 64);
-        MINI_CHECK!(loaded.a == 255);
-    })
-}
-
-#[cfg(feature = "protobuf")]
-pub fn run_color_protobuf_roundtrip() -> TestResult {
-    MINI_TEST!("protobuf_roundtrip", {
-        use crate::Color;
-
-        let mut color = Color::new(255, 128, 64, 255);
-        color.name = "test_color".to_string();
-
-        let filename = "test_color.bin";
-        color.protobuf_dump(filename);
-        let loaded = Color::protobuf_load(filename);
-
-        MINI_CHECK!(loaded.name == "test_color");
-        MINI_CHECK!(loaded.r == 255);
-        MINI_CHECK!(loaded.g == 128);
-        MINI_CHECK!(loaded.b == 64);
-        MINI_CHECK!(loaded.a == 255);
-    })
-}
-
 // Register tests with the shared registry for run_all("rust")
 REGISTER_MINI_TEST!("Color", "constructor", crate::color_test::run_color_constructor);
-REGISTER_MINI_TEST!("Color", "conversion", crate::color_test::run_color_conversion);
-REGISTER_MINI_TEST!("Color", "presets", crate::color_test::run_color_presets);
 REGISTER_MINI_TEST!("Color", "json_roundtrip", crate::color_test::run_color_json_roundtrip);
 #[cfg(feature = "protobuf")]
 REGISTER_MINI_TEST!("Color", "protobuf_roundtrip", crate::color_test::run_color_protobuf_roundtrip);
+REGISTER_MINI_TEST!("Color", "conversion", crate::color_test::run_color_conversion);
+REGISTER_MINI_TEST!("Color", "presets", crate::color_test::run_color_presets);

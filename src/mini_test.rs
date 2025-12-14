@@ -281,7 +281,18 @@ pub fn run_all(language: &str) -> Result<(), Box<dyn std::error::Error>> {
     fs::create_dir_all(&out_dir)?;
 
     // For each group, run its tests and emit <group>_test.json (lowercased).
-    for (group, tests) in groups {
+    for (group, mut tests) in groups {
+        tests.sort_by_key(|t| {
+            let pri = match t.name {
+                "constructor" => 0,
+                "transformation" => 1,
+                "json_roundtrip" => 2,
+                "protobuf_roundtrip" => 3,
+                _ => 100,
+            };
+            (pri, t.name)
+        });
+
         let mut results = Vec::new();
         for t in tests {
             let res = (t.func)();

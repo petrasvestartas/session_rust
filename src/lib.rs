@@ -46,6 +46,8 @@ pub mod color_test;
 pub mod point_test;
 pub mod vector_test;
 pub mod tolerance_test;
+pub mod line_test;
+pub mod polyline_test;
 
 pub use arrow::Arrow;
 pub use boundingbox::BoundingBox;

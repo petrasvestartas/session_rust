@@ -1,20 +1,23 @@
 use crate::{Color, Plane, Point, Tolerance, Vector, Xform};
-use serde::{Deserialize, Serialize};
+use serde::{Deserialize, Deserializer, Serialize, Serializer};
+use serde_json::Value;
 use std::fmt;
 use std::ops::{Add, AddAssign, Sub, SubAssign};
 use uuid::Uuid;
 
-/// A polyline defined by a collection of points with an associated plane.
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(tag = "type", rename = "Polyline")]
+/// A polyline defined by a collection of coordinates with an associated plane.
+///
+/// Internally stores coordinates as a flat array [x0, y0, z0, x1, y1, z1, ...] for
+/// efficient serialization. Provides Point-based API for compatibility.
+#[derive(Debug, Clone)]
 pub struct Polyline {
     pub guid: String,
     pub name: String,
-    pub points: Vec<Point>,
+    /// Flat coordinate array [x0, y0, z0, x1, y1, z1, ...]
+    pub coords: Vec<f64>,
     pub plane: Plane,
     pub width: f64,
     pub linecolor: Color,
-    #[serde(default = "Xform::identity")]
     pub xform: Xform,
 }
 
@@ -23,7 +26,7 @@ impl Default for Polyline {
         Self {
             guid: Uuid::new_v4().to_string(),
             name: "my_polyline".to_string(),
-            points: Vec::new(),
+            coords: Vec::new(),
             plane: Plane::default(),
             width: 1.0,
             linecolor: Color::white(),
@@ -37,11 +40,19 @@ impl Polyline {
     ///
     /// # Arguments
     ///
-    /// * `points` - The collection of points.
+    /// * `points` - The collection of points (converted to flat coords internally).
     pub fn new(points: Vec<Point>) -> Self {
+        // Convert points to flat coords
+        let mut coords = Vec::with_capacity(points.len() * 3);
+        for p in &points {
+            coords.push(p[0]);
+            coords.push(p[1]);
+            coords.push(p[2]);
+        }
+        
         // Delegate plane computation to Plane::from_points
         let plane = if points.len() >= 3 {
-            Plane::from_points(points.clone())
+            Plane::from_points(points)
         } else {
             Plane::default()
         };
@@ -49,7 +60,7 @@ impl Polyline {
         Self {
             guid: Uuid::new_v4().to_string(),
             name: "my_polyline".to_string(),
-            points,
+            coords,
             plane,
             width: 1.0,
             linecolor: Color::white(),
@@ -57,73 +68,150 @@ impl Polyline {
         }
     }
 
+    /// Creates a Polyline from a flat coordinate array.
+    pub fn from_coords(coords: Vec<f64>) -> Self {
+        let mut pl = Self {
+            guid: Uuid::new_v4().to_string(),
+            name: "my_polyline".to_string(),
+            coords,
+            plane: Plane::default(),
+            width: 1.0,
+            linecolor: Color::white(),
+            xform: Xform::identity(),
+        };
+        pl.recompute_plane_if_needed();
+        pl
+    }
+
+    /// Returns detailed string representation (like Python __repr__).
+    pub fn repr(&self) -> String {
+        format!("Polyline({}, {} points)", self.name, self.point_count())
+    }
+
+    /// Creates a deep copy with a new GUID.
+    pub fn duplicate(&self) -> Self {
+        Self {
+            guid: Uuid::new_v4().to_string(),
+            name: self.name.clone(),
+            coords: self.coords.clone(),
+            plane: self.plane.clone(),
+            width: self.width,
+            linecolor: self.linecolor.clone(),
+            xform: self.xform.clone(),
+        }
+    }
+
     /// Returns the number of points in the polyline.
+    pub fn point_count(&self) -> usize {
+        self.coords.len() / 3
+    }
+
+    /// Returns the number of points in the polyline (alias for point_count).
     pub fn len(&self) -> usize {
-        self.points.len()
+        self.point_count()
     }
 
     /// Returns true if the polyline has no points.
     pub fn is_empty(&self) -> bool {
-        self.points.is_empty()
+        self.coords.is_empty()
     }
 
     /// Returns the number of segments in the polyline.
     /// A polyline with n points has n-1 segments.
     pub fn segment_count(&self) -> usize {
-        if self.points.len() > 1 {
-            self.points.len() - 1
-        } else {
-            0
+        let n = self.point_count();
+        if n > 1 { n - 1 } else { 0 }
+    }
+
+    /// Returns all points as Point objects.
+    pub fn get_points(&self) -> Vec<Point> {
+        let mut points = Vec::with_capacity(self.point_count());
+        for i in 0..self.point_count() {
+            let idx = i * 3;
+            points.push(Point::new(
+                self.coords[idx],
+                self.coords[idx + 1],
+                self.coords[idx + 2],
+            ));
         }
+        points
     }
 
     /// Calculates the total length of the polyline.
     pub fn length(&self) -> f64 {
         let mut total_length = 0.0;
         for i in 0..self.segment_count() {
-            let segment_vector = self.points[i + 1].clone() - self.points[i].clone();
-            total_length += segment_vector.magnitude();
+            let idx0 = i * 3;
+            let idx1 = (i + 1) * 3;
+            let dx = self.coords[idx1] - self.coords[idx0];
+            let dy = self.coords[idx1 + 1] - self.coords[idx0 + 1];
+            let dz = self.coords[idx1 + 2] - self.coords[idx0 + 2];
+            total_length += (dx * dx + dy * dy + dz * dz).sqrt();
         }
         total_length
     }
 
-    /// Returns a reference to the point at the given index.
-    pub fn get_point(&self, index: usize) -> Option<&Point> {
-        self.points.get(index)
+    /// Returns a copy of the point at the given index.
+    pub fn get_point(&self, index: usize) -> Option<Point> {
+        if index < self.point_count() {
+            let idx = index * 3;
+            Some(Point::new(
+                self.coords[idx],
+                self.coords[idx + 1],
+                self.coords[idx + 2],
+            ))
+        } else {
+            None
+        }
     }
 
-    /// Returns a mutable reference to the point at the given index.
-    pub fn get_point_mut(&mut self, index: usize) -> Option<&mut Point> {
-        self.points.get_mut(index)
+    /// Sets the point at the given index.
+    pub fn set_point(&mut self, index: usize, point: &Point) {
+        if index < self.point_count() {
+            let idx = index * 3;
+            self.coords[idx] = point[0];
+            self.coords[idx + 1] = point[1];
+            self.coords[idx + 2] = point[2];
+        }
     }
 
     /// Adds a point to the end of the polyline.
     pub fn add_point(&mut self, point: Point) {
-        self.points.push(point);
+        self.coords.push(point[0]);
+        self.coords.push(point[1]);
+        self.coords.push(point[2]);
         // Recompute plane if we have at least 3 points
-        if self.points.len() == 3 {
-            self.plane = Plane::from_points(self.points.clone());
+        if self.point_count() == 3 {
+            self.recompute_plane_if_needed();
         }
     }
 
     /// Inserts a point at the specified index.
     pub fn insert_point(&mut self, index: usize, point: Point) {
-        self.points.insert(index, point);
-        // Recompute plane if we have at least 3 points
-        if self.points.len() == 3 {
-            self.plane = Plane::from_points(self.points.clone());
+        let idx = index * 3;
+        if idx <= self.coords.len() {
+            self.coords.insert(idx, point[2]);
+            self.coords.insert(idx, point[1]);
+            self.coords.insert(idx, point[0]);
+            // Recompute plane if we have at least 3 points
+            if self.point_count() == 3 {
+                self.recompute_plane_if_needed();
+            }
         }
     }
 
     /// Removes and returns the point at the specified index.
     pub fn remove_point(&mut self, index: usize) -> Option<Point> {
-        if index < self.points.len() {
-            let point = self.points.remove(index);
+        if index < self.point_count() {
+            let idx = index * 3;
+            let z = self.coords.remove(idx + 2);
+            let y = self.coords.remove(idx + 1);
+            let x = self.coords.remove(idx);
             // Recompute plane if we still have at least 3 points
-            if self.points.len() == 3 {
-                self.plane = Plane::from_points(self.points.clone());
+            if self.point_count() == 3 {
+                self.recompute_plane_if_needed();
             }
-            Some(point)
+            Some(Point::new(x, y, z))
         } else {
             None
         }
@@ -131,7 +219,19 @@ impl Polyline {
 
     /// Reverses the order of points in the polyline.
     pub fn reverse(&mut self) {
-        self.points.reverse();
+        let n = self.point_count();
+        if n <= 1 {
+            return;
+        }
+        // Reverse in groups of 3
+        let mut new_coords = Vec::with_capacity(self.coords.len());
+        for i in (0..n).rev() {
+            let idx = i * 3;
+            new_coords.push(self.coords[idx]);
+            new_coords.push(self.coords[idx + 1]);
+            new_coords.push(self.coords[idx + 2]);
+        }
+        self.coords = new_coords;
         self.plane.reverse();
     }
 
@@ -144,8 +244,13 @@ impl Polyline {
 
     pub fn transform(&mut self) {
         let xform = self.xform.clone();
-        for pt in &mut self.points {
-            xform.transform_point(pt);
+        let points = self.get_points();
+        self.coords.clear();
+        for mut pt in points {
+            xform.transform_point(&mut pt);
+            self.coords.push(pt[0]);
+            self.coords.push(pt[1]);
+            self.coords.push(pt[2]);
         }
         self.xform = Xform::identity();
     }
@@ -156,14 +261,115 @@ impl Polyline {
         result
     }
 
-    /// Serializes the Polyline to a JSON string.
-    pub fn jsondump(&self) -> Result<String, Box<dyn std::error::Error>> {
-        let mut buf = Vec::new();
-        let formatter = serde_json::ser::PrettyFormatter::with_indent(b"    ");
-        let mut ser = serde_json::Serializer::with_formatter(&mut buf, formatter);
-        self.serialize(&mut ser)?;
-        Ok(String::from_utf8(buf)?)
-    }
+     /// Recompute plane if we have at least 3 points
+     fn recompute_plane_if_needed(&mut self) {
+         if self.point_count() >= 3 {
+             self.plane = Plane::from_points(self.get_points());
+         }
+     }
+
+ }
+
+ impl Serialize for Polyline {
+     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+     where
+         S: Serializer,
+     {
+         use serde::ser::SerializeMap;
+         let mut map = serializer.serialize_map(Some(7))?;
+         map.serialize_entry("type", "Polyline")?;
+         map.serialize_entry("guid", &self.guid)?;
+         map.serialize_entry("name", &self.name)?;
+         map.serialize_entry("coords", &self.coords)?;
+         map.serialize_entry("width", &self.width)?;
+         map.serialize_entry("linecolor", &self.linecolor)?;
+         map.serialize_entry("xform", &self.xform)?;
+         map.end()
+     }
+ }
+
+ impl<'de> Deserialize<'de> for Polyline {
+     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+     where
+         D: Deserializer<'de>,
+     {
+         let value: Value = Value::deserialize(deserializer)?;
+
+         let guid = value
+             .get("guid")
+             .and_then(|v| v.as_str())
+             .map(|s| s.to_string())
+             .unwrap_or_else(|| Uuid::new_v4().to_string());
+
+         let name = value
+             .get("name")
+             .and_then(|v| v.as_str())
+             .map(|s| s.to_string())
+             .unwrap_or_else(|| "my_polyline".to_string());
+
+         // Support both coords format and legacy points format
+         let coords = if let Some(coords_val) = value.get("coords") {
+             coords_val
+                 .as_array()
+                 .map(|arr| arr.iter().filter_map(|v| v.as_f64()).collect())
+                 .unwrap_or_default()
+         } else if let Some(points_val) = value.get("points") {
+             // Legacy format with full Point objects
+             let mut coords = Vec::new();
+             if let Some(arr) = points_val.as_array() {
+                 for pt_val in arr {
+                     if let (Some(x), Some(y), Some(z)) = (
+                         pt_val.get("x").or_else(|| pt_val.get("_x")).and_then(|v| v.as_f64()),
+                         pt_val.get("y").or_else(|| pt_val.get("_y")).and_then(|v| v.as_f64()),
+                         pt_val.get("z").or_else(|| pt_val.get("_z")).and_then(|v| v.as_f64()),
+                     ) {
+                         coords.push(x);
+                         coords.push(y);
+                         coords.push(z);
+                     }
+                 }
+             }
+             coords
+         } else {
+             Vec::new()
+         };
+
+         let width = value.get("width").and_then(|v| v.as_f64()).unwrap_or(1.0);
+
+         let linecolor = value
+             .get("linecolor")
+             .map(|v| serde_json::from_value(v.clone()).unwrap_or_else(|_| Color::white()))
+             .unwrap_or_else(Color::white);
+
+         let xform = value
+             .get("xform")
+             .map(|v| serde_json::from_value(v.clone()).unwrap_or_else(|_| Xform::identity()))
+             .unwrap_or_else(Xform::identity);
+
+         let mut polyline = Polyline {
+             guid,
+             name,
+             coords,
+             plane: Plane::default(),
+             width,
+             linecolor,
+             xform,
+         };
+         polyline.recompute_plane_if_needed();
+         Ok(polyline)
+     }
+ }
+
+ impl Polyline {
+
+     /// Serializes the Polyline to a JSON string.
+     pub fn jsondump(&self) -> Result<String, Box<dyn std::error::Error>> {
+         let mut buf = Vec::new();
+         let formatter = serde_json::ser::PrettyFormatter::with_indent(b"    ");
+         let mut ser = serde_json::Serializer::with_formatter(&mut buf, formatter);
+         self.serialize(&mut ser)?;
+         Ok(String::from_utf8(buf)?)
+     }
 
     /// Deserializes a Polyline from a JSON string.
     pub fn jsonload(json_data: &str) -> Result<Self, Box<dyn std::error::Error>> {
@@ -184,25 +390,138 @@ impl Polyline {
     }
 
     ///////////////////////////////////////////////////////////////////////////////////////////
+    // Protobuf Serialization
+    ///////////////////////////////////////////////////////////////////////////////////////////
+
+    #[cfg(feature = "protobuf")]
+    /// Convert to protobuf binary format.
+    ///
+    /// # Returns
+    ///
+    /// A Vec<u8> containing the serialized protobuf data.
+    pub fn to_protobuf(&self) -> Vec<u8> {
+        use prost::Message;
+
+        let proto = crate::proto::Polyline {
+            guid: self.guid.clone(),
+            name: self.name.clone(),
+            coords: self.coords.clone(),
+            width: self.width,
+            linecolor: Some(crate::proto::Color {
+                guid: self.linecolor.guid.clone(),
+                name: self.linecolor.name.clone(),
+                r: self.linecolor.r as i32,
+                g: self.linecolor.g as i32,
+                b: self.linecolor.b as i32,
+                a: self.linecolor.a as i32,
+            }),
+            xform: Some(crate::proto::Xform {
+                name: self.xform.name.clone(),
+                matrix: self.xform.m.to_vec(),
+            }),
+        };
+        proto.encode_to_vec()
+    }
+
+    #[cfg(feature = "protobuf")]
+    /// Create Polyline from protobuf binary data.
+    ///
+    /// # Arguments
+    ///
+    /// * `data` - Byte slice containing protobuf-encoded polyline data.
+    ///
+    /// # Returns
+    ///
+    /// A Result containing the deserialized Polyline or an error.
+    pub fn from_protobuf(data: &[u8]) -> Result<Self, Box<dyn std::error::Error>> {
+        use prost::Message;
+
+        let proto = crate::proto::Polyline::decode(data)?;
+
+        let mut pl = Self::from_coords(proto.coords);
+        pl.guid = proto.guid;
+        pl.name = proto.name;
+        pl.width = proto.width;
+
+        if let Some(color) = proto.linecolor {
+            pl.linecolor.guid = color.guid;
+            pl.linecolor.name = color.name;
+            pl.linecolor.r = color.r as u8;
+            pl.linecolor.g = color.g as u8;
+            pl.linecolor.b = color.b as u8;
+            pl.linecolor.a = color.a as u8;
+        }
+
+        if let Some(xform) = proto.xform {
+            pl.xform.name = xform.name;
+            for (i, val) in xform.matrix.iter().enumerate() {
+                if i < 16 {
+                    pl.xform.m[i] = *val;
+                }
+            }
+        }
+
+        Ok(pl)
+    }
+
+    #[cfg(feature = "protobuf")]
+    /// Write protobuf to file.
+    ///
+    /// # Arguments
+    ///
+    /// * `filepath` - Path to the output file.
+    pub fn protobuf_dump(&self, filepath: &str) {
+        let data = self.to_protobuf();
+        std::fs::write(filepath, data).expect("Failed to write protobuf file");
+    }
+
+    #[cfg(feature = "protobuf")]
+    /// Read protobuf from file.
+    ///
+    /// # Arguments
+    ///
+    /// * `filepath` - Path to the protobuf file.
+    ///
+    /// # Returns
+    ///
+    /// The deserialized Polyline.
+    pub fn protobuf_load(filepath: &str) -> Self {
+        let data = std::fs::read(filepath).expect("Failed to read protobuf file");
+        Self::from_protobuf(&data).expect("Failed to parse protobuf")
+    }
+
+    ///////////////////////////////////////////////////////////////////////////////////////////
     // Geometric Utilities
     ///////////////////////////////////////////////////////////////////////////////////////////
 
     /// Shift polyline points by specified number of positions
     pub fn shift(&mut self, times: i32) {
-        if self.points.is_empty() {
+        if self.coords.is_empty() {
             return;
         }
-        let len = self.points.len();
-        let shift_amount = ((times % len as i32) + len as i32) % len as i32;
-        self.points.rotate_left(shift_amount as usize);
+        let n = self.point_count();
+        let shift_amount = ((times % n as i32) + n as i32) % n as i32;
+        // Rotate coords in groups of 3
+        let mut new_coords = Vec::with_capacity(self.coords.len());
+        for i in 0..n {
+            let src_idx = ((i + shift_amount as usize) % n) * 3;
+            new_coords.push(self.coords[src_idx]);
+            new_coords.push(self.coords[src_idx + 1]);
+            new_coords.push(self.coords[src_idx + 2]);
+        }
+        self.coords = new_coords;
     }
 
     /// Calculate squared length of polyline (faster, no sqrt)
     pub fn magnitude_squared(&self) -> f64 {
         let mut length = 0.0f64;
         for i in 0..self.segment_count() {
-            let segment = self.points[i + 1].clone() - self.points[i].clone();
-            length += segment.magnitude_squared();
+            let idx0 = i * 3;
+            let idx1 = (i + 1) * 3;
+            let dx = self.coords[idx1] - self.coords[idx0];
+            let dy = self.coords[idx1 + 1] - self.coords[idx0 + 1];
+            let dz = self.coords[idx1 + 2] - self.coords[idx0 + 2];
+            length += dx * dx + dy * dy + dz * dz;
         }
         length
     }
@@ -375,11 +694,11 @@ impl Polyline {
         let mut edge_id = 0;
         let mut closest_distance = f64::MAX;
         let mut best_t = 0.0;
+        let points = self.get_points();
 
         for i in 0..self.segment_count() {
-            let t = Self::closest_point_to_line(point, &self.points[i], &self.points[i + 1]);
-            let point_on_segment =
-                Self::point_at_parameter(&self.points[i], &self.points[i + 1], t);
+            let t = Self::closest_point_to_line(point, &points[i], &points[i + 1]);
+            let point_on_segment = Self::point_at_parameter(&points[i], &points[i + 1], t);
             let distance = point.distance(&point_on_segment, None);
 
             if distance < closest_distance {
@@ -393,43 +712,39 @@ impl Polyline {
             }
         }
 
-        let closest_point =
-            Self::point_at_parameter(&self.points[edge_id], &self.points[edge_id + 1], best_t);
+        let closest_point = Self::point_at_parameter(&points[edge_id], &points[edge_id + 1], best_t);
         (closest_distance, edge_id, closest_point)
     }
 
     /// Check if polyline is closed (first and last points are the same)
     pub fn is_closed(&self) -> bool {
-        if self.points.len() < 2 {
+        let n = self.point_count();
+        if n < 2 {
             return false;
         }
-        self.points
-            .first()
-            .unwrap()
-            .distance(self.points.last().unwrap(), None)
-            < Tolerance::ZERO_TOLERANCE
+        let first = self.get_point(0).unwrap();
+        let last = self.get_point(n - 1).unwrap();
+        first.distance(&last, None) < Tolerance::ZERO_TOLERANCE
     }
 
     /// Calculate center point of polyline
     pub fn center(&self) -> Point {
-        if self.points.is_empty() {
+        if self.coords.is_empty() {
             return Point::new(0.0, 0.0, 0.0);
         }
 
-        let n = if self.is_closed() && self.points.len() > 1 {
-            self.points.len() - 1
-        } else {
-            self.points.len()
-        };
+        let total = self.point_count();
+        let n = if self.is_closed() && total > 1 { total - 1 } else { total };
 
         let mut sum_x = 0.0;
         let mut sum_y = 0.0;
         let mut sum_z = 0.0;
 
         for i in 0..n {
-            sum_x += self.points[i][0];
-            sum_y += self.points[i][1];
-            sum_z += self.points[i][2];
+            let idx = i * 3;
+            sum_x += self.coords[idx];
+            sum_y += self.coords[idx + 1];
+            sum_z += self.coords[idx + 2];
         }
 
         Point::new(sum_x / n as f64, sum_y / n as f64, sum_z / n as f64)
@@ -444,9 +759,10 @@ impl Polyline {
     /// Get average plane from polyline points
     pub fn get_average_plane(&self) -> (Point, Vector, Vector, Vector) {
         let origin = self.center();
+        let points = self.get_points();
 
-        let x_axis = if self.points.len() >= 2 {
-            let mut x = self.points[1].clone() - self.points[0].clone();
+        let x_axis = if points.len() >= 2 {
+            let mut x = points[1].clone() - points[0].clone();
             x.normalize();
             x
         } else {
@@ -462,8 +778,8 @@ impl Polyline {
 
     /// Get fast plane calculation from polyline
     pub fn get_fast_plane(&self) -> (Point, Plane) {
-        let origin = if !self.points.is_empty() {
-            self.points[0].clone()
+        let origin = if !self.coords.is_empty() {
+            self.get_point(0).unwrap()
         } else {
             Point::new(0.0, 0.0, 0.0)
         };
@@ -527,8 +843,8 @@ impl Polyline {
             return;
         }
 
-        let mut p0 = self.points[segment_id].clone();
-        let mut p1 = self.points[segment_id + 1].clone();
+        let mut p0 = self.get_point(segment_id).unwrap();
+        let mut p1 = self.get_point(segment_id + 1).unwrap();
         let v = p1.clone() - p0.clone();
 
         if proportion0 != 0.0 || proportion1 != 0.0 {
@@ -540,17 +856,17 @@ impl Polyline {
             p1 += v_norm * dist1;
         }
 
-        self.points[segment_id] = p0;
-        self.points[segment_id + 1] = p1;
+        self.set_point(segment_id, &p0);
+        self.set_point(segment_id + 1, &p1);
 
         if self.is_closed() {
-            let len = self.points.len();
+            let len = self.point_count();
             if segment_id == 0 {
-                let first = self.points[0].clone();
-                self.points[len - 1] = first;
+                let first = self.get_point(0).unwrap();
+                self.set_point(len - 1, &first);
             } else if segment_id + 1 == len - 1 {
-                let last = self.points[len - 1].clone();
-                self.points[0] = last;
+                let last = self.get_point(len - 1).unwrap();
+                self.set_point(0, &last);
             }
         }
     }
@@ -585,47 +901,49 @@ impl Polyline {
             return;
         }
 
-        // Extract points to avoid borrowing issues
-        let mut start = self.points[segment_id].clone();
-        let mut end = self.points[segment_id + 1].clone();
+        let mut start = self.get_point(segment_id).unwrap();
+        let mut end = self.get_point(segment_id + 1).unwrap();
         Self::extend_segment_equally_static(&mut start, &mut end, dist, proportion);
-        self.points[segment_id] = start;
-        self.points[segment_id + 1] = end;
+        self.set_point(segment_id, &start);
+        self.set_point(segment_id + 1, &end);
 
-        if self.points.len() > 2 && self.is_closed() {
-            let len = self.points.len();
+        if self.point_count() > 2 && self.is_closed() {
+            let len = self.point_count();
             if segment_id == 0 {
-                self.points[len - 1] = self.points[0].clone();
+                let first = self.get_point(0).unwrap();
+                self.set_point(len - 1, &first);
             } else if segment_id + 1 == len - 1 {
-                self.points[0] = self.points[len - 1].clone();
+                let last = self.get_point(len - 1).unwrap();
+                self.set_point(0, &last);
             }
         }
     }
 
     /// Move polyline by direction vector
     pub fn move_by(&mut self, direction: &Vector) {
-        for point in &mut self.points {
-            *point += direction.clone();
+        for i in 0..self.point_count() {
+            let idx = i * 3;
+            self.coords[idx] += direction[0];
+            self.coords[idx + 1] += direction[1];
+            self.coords[idx + 2] += direction[2];
         }
     }
 
     /// Check if polyline is clockwise oriented
     pub fn is_clockwise(&self, _plane: &Plane) -> bool {
-        if self.points.len() < 3 {
+        let total = self.point_count();
+        if total < 3 {
             return false;
         }
 
         let mut sum = 0.0;
-        let n = if self.is_closed() {
-            self.points.len() - 1
-        } else {
-            self.points.len()
-        };
+        let n = if self.is_closed() { total - 1 } else { total };
 
         for i in 0..n {
-            let current = &self.points[i];
-            let next = &self.points[(i + 1) % n];
-            sum += (next[0] - current[0]) * (next[1] + current[1]);
+            let idx_curr = i * 3;
+            let idx_next = ((i + 1) % n) * 3;
+            sum += (self.coords[idx_next] - self.coords[idx_curr])
+                * (self.coords[idx_next + 1] + self.coords[idx_curr + 1]);
         }
 
         sum > 0.0
@@ -633,32 +951,30 @@ impl Polyline {
 
     /// Flip polyline direction (reverse point order)
     pub fn flip(&mut self) {
-        self.points.reverse();
+        self.reverse();
     }
 
     /// Get convex/concave corners of polyline
     pub fn get_convex_corners(&self) -> Vec<bool> {
-        if self.points.len() < 3 {
+        let total = self.point_count();
+        if total < 3 {
             return Vec::new();
         }
 
         let closed = self.is_closed();
         let normal = self.average_normal();
-        let n = if closed {
-            self.points.len() - 1
-        } else {
-            self.points.len()
-        };
+        let n = if closed { total - 1 } else { total };
         let mut convex_corners = Vec::with_capacity(n);
+        let points = self.get_points();
 
         for current in 0..n {
             let prev = if current == 0 { n - 1 } else { current - 1 };
             let next = if current == n - 1 { 0 } else { current + 1 };
 
-            let mut dir0 = self.points[current].clone() - self.points[prev].clone();
+            let mut dir0 = points[current].clone() - points[prev].clone();
             dir0.normalize();
 
-            let mut dir1 = self.points[next].clone() - self.points[current].clone();
+            let mut dir1 = points[next].clone() - points[current].clone();
             dir1.normalize();
 
             let mut cross = dir0.cross(&dir1);
@@ -678,17 +994,21 @@ impl Polyline {
         polyline1: &Polyline,
         weight: f64,
     ) -> Polyline {
-        if polyline0.points.len() != polyline1.points.len() {
+        if polyline0.point_count() != polyline1.point_count() {
             return polyline0.clone();
         }
 
         let mut result = Polyline::default();
-        result.points.reserve(polyline0.points.len());
+        result.coords.reserve(polyline0.coords.len());
 
-        for i in 0..polyline0.points.len() {
-            let diff = polyline1.points[i].clone() - polyline0.points[i].clone();
-            let interpolated = polyline0.points[i].clone() + (diff * weight);
-            result.points.push(interpolated);
+        for i in 0..polyline0.point_count() {
+            let idx = i * 3;
+            let x = polyline0.coords[idx] + (polyline1.coords[idx] - polyline0.coords[idx]) * weight;
+            let y = polyline0.coords[idx + 1] + (polyline1.coords[idx + 1] - polyline0.coords[idx + 1]) * weight;
+            let z = polyline0.coords[idx + 2] + (polyline1.coords[idx + 2] - polyline0.coords[idx + 2]) * weight;
+            result.coords.push(x);
+            result.coords.push(y);
+            result.coords.push(z);
         }
 
         result
@@ -696,13 +1016,14 @@ impl Polyline {
 
     /// Calculate average normal from polyline points
     fn average_normal(&self) -> Vector {
-        let len = self.points.len();
-        if len < 3 {
+        let total = self.point_count();
+        if total < 3 {
             return Vector::new(0.0, 0.0, 1.0);
         }
 
         let closed = self.is_closed();
-        let n = if closed && len > 1 { len - 1 } else { len };
+        let n = if closed && total > 1 { total - 1 } else { total };
+        let points = self.get_points();
 
         let mut average_normal = Vector::new(0.0, 0.0, 0.0);
 
@@ -710,8 +1031,8 @@ impl Polyline {
             let prev = if i == 0 { n - 1 } else { i - 1 };
             let next = (i + 1) % n;
 
-            let v1 = self.points[prev].clone() - self.points[i].clone();
-            let v2 = self.points[i].clone() - self.points[next].clone();
+            let v1 = points[prev].clone() - points[i].clone();
+            let v2 = points[i].clone() - points[next].clone();
             let cross = v1.cross(&v2);
             average_normal += &cross;
         }
@@ -723,13 +1044,12 @@ impl Polyline {
 
 impl AddAssign<&Vector> for Polyline {
     /// Translates all points in the polyline by a vector.
-    ///
-    /// # Arguments
-    ///
-    /// * `other` - The translation vector.
     fn add_assign(&mut self, other: &Vector) {
-        for p in &mut self.points {
-            *p += other.clone();
+        for i in 0..self.point_count() {
+            let idx = i * 3;
+            self.coords[idx] += other[0];
+            self.coords[idx + 1] += other[1];
+            self.coords[idx + 2] += other[2];
         }
         // Update plane origin
         self.plane = Plane::new(
@@ -744,10 +1064,6 @@ impl Add<&Vector> for Polyline {
     type Output = Polyline;
 
     /// Translates the polyline by a vector and returns a new polyline.
-    ///
-    /// # Arguments
-    ///
-    /// * `other` - The translation vector.
     fn add(self, other: &Vector) -> Polyline {
         let mut result = self.clone();
         result += other;
@@ -757,13 +1073,12 @@ impl Add<&Vector> for Polyline {
 
 impl SubAssign<&Vector> for Polyline {
     /// Translates all points in the polyline by the negative of a vector.
-    ///
-    /// # Arguments
-    ///
-    /// * `other` - The vector to subtract.
     fn sub_assign(&mut self, other: &Vector) {
-        for p in &mut self.points {
-            *p -= other.clone();
+        for i in 0..self.point_count() {
+            let idx = i * 3;
+            self.coords[idx] -= other[0];
+            self.coords[idx + 1] -= other[1];
+            self.coords[idx + 2] -= other[2];
         }
         // Update plane origin
         self.plane = Plane::new(
@@ -778,10 +1093,6 @@ impl Sub<&Vector> for Polyline {
     type Output = Polyline;
 
     /// Translates the polyline by the negative of a vector and returns a new polyline.
-    ///
-    /// # Arguments
-    ///
-    /// * `other` - The vector to subtract.
     fn sub(self, other: &Vector) -> Polyline {
         let mut result = self.clone();
         result -= other;
@@ -796,7 +1107,7 @@ impl fmt::Display for Polyline {
             "Polyline(guid={}, name={}, points={})",
             self.guid,
             self.name,
-            self.points.len()
+            self.point_count()
         )
     }
 }

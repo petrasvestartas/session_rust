@@ -112,7 +112,7 @@ impl BoundingBox {
     }
 
     pub fn from_polyline(polyline: &crate::polyline::Polyline, inflate: f64) -> Self {
-        Self::from_points(&polyline.points, inflate)
+        Self::from_points(&polyline.get_points(), inflate)
     }
 
     pub fn point_at(&self, x: f64, y: f64, z: f64) -> Point {

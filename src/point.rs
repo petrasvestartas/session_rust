@@ -114,70 +114,27 @@ impl Point {
         copy
     }
 
-    /// Returns a new point that is the sum of two points.
+    /// Apply the stored xform transformation to the point coordinates.
     ///
-    /// # Arguments
-    ///
-    /// * `p0` - First point.
-    /// * `p1` - Second point.
-    ///
-    /// # Returns
-    ///
-    /// A new Point with coordinates (p0.x + p1.x, p0.y + p1.y, p0.z + p1.z).
-    pub fn sum(p0: &Point, p1: &Point) -> Self {
-        Point::new(p0._x + p1._x, p0._y + p1._y, p0._z + p1._z)
+    /// Transforms the point in-place and resets xform to identity.
+    pub fn transform(&mut self) {
+        let xform = self.xform.clone();
+        xform.transform_point(self);
+        self.xform = Xform::identity();
     }
 
-    /// Returns a new point that is the difference of two points.
+    /// Return a transformed copy of the point.
     ///
-    /// # Arguments
-    ///
-    /// * `p0` - First point.
-    /// * `p1` - Second point.
+    /// Returns a new point with the transformation applied.
+    /// The original point and its xform remain unchanged.
     ///
     /// # Returns
     ///
-    /// A new Point with coordinates (p0.x - p1.x, p0.y - p1.y, p0.z - p1.z).
-    pub fn sub(p0: &Point, p1: &Point) -> Self {
-        Point::new(p0._x - p1._x, p0._y - p1._y, p0._z - p1._z)
-    }
-
-    /// Simple string form (like Python __str__): just coordinates.
-    ///
-    /// # Returns
-    ///
-    /// A string in the format "x, y, z".
-    pub fn str(&self) -> String {
-        use crate::tolerance::TOLERANCE;
-        let prec = crate::tolerance::Tolerance::ROUNDING;
-        format!(
-            "{}, {}, {}",
-            TOLERANCE.format_number(self._x, prec),
-            TOLERANCE.format_number(self._y, prec),
-            TOLERANCE.format_number(self._z, prec),
-        )
-    }
-
-    /// Detailed representation (like Python __repr__).
-    ///
-    /// # Returns
-    ///
-    /// A string with full point details including name, coordinates, color, and width.
-    pub fn repr(&self) -> String {
-        use crate::tolerance::TOLERANCE;
-        let prec = crate::tolerance::Tolerance::ROUNDING;
-        format!(
-            "Point({}, {}, {}, {}, Color({}, {}, {}, {}), {})",
-            self.name,
-            TOLERANCE.format_number(self._x, prec),
-            TOLERANCE.format_number(self._y, prec),
-            TOLERANCE.format_number(self._z, prec),
-            self.pointcolor.r,
-            self.pointcolor.g,
-            self.pointcolor.b,
-            self.pointcolor.a,
-            TOLERANCE.format_number(self.width, prec),
-        )
+    /// A new transformed Point.
+    pub fn transformed(&self) -> Self {
+        let mut result = self.clone();
+        result.transform();
+        result
     }
 
     ///////////////////////////////////////////////////////////////////////////////////////////
@@ -223,29 +180,6 @@ impl Point {
         let json = self.jsondump()?;
         std::fs::write(filepath, json)?;
         Ok(())
-    }
-
-    /// Apply the stored xform transformation to the point coordinates.
-    ///
-    /// Transforms the point in-place and resets xform to identity.
-    pub fn transform(&mut self) {
-        let xform = self.xform.clone();
-        xform.transform_point(self);
-        self.xform = Xform::identity();
-    }
-
-    /// Return a transformed copy of the point.
-    ///
-    /// Returns a new point with the transformation applied.
-    /// The original point and its xform remain unchanged.
-    ///
-    /// # Returns
-    ///
-    /// A new transformed Point.
-    pub fn transformed(&self) -> Self {
-        let mut result = self.clone();
-        result.transform();
-        result
     }
 
     /// Deserializes a Point from a JSON file.
@@ -362,6 +296,72 @@ impl Point {
     pub fn protobuf_load(filepath: &str) -> Self {
         let data = std::fs::read(filepath).expect("Failed to read protobuf file");
         Self::from_protobuf(&data).expect("Failed to parse protobuf")
+    }
+
+    /// Simple string form (like Python __str__): just coordinates.
+    ///
+    /// # Returns
+    ///
+    /// A string in the format "x, y, z".
+    pub fn str(&self) -> String {
+        use crate::tolerance::TOLERANCE;
+        let prec = crate::tolerance::Tolerance::ROUNDING;
+        format!(
+            "{}, {}, {}",
+            TOLERANCE.format_number(self._x, prec),
+            TOLERANCE.format_number(self._y, prec),
+            TOLERANCE.format_number(self._z, prec),
+        )
+    }
+
+    /// Detailed representation (like Python __repr__).
+    ///
+    /// # Returns
+    ///
+    /// A string with full point details including name, coordinates, color, and width.
+    pub fn repr(&self) -> String {
+        use crate::tolerance::TOLERANCE;
+        let prec = crate::tolerance::Tolerance::ROUNDING;
+        format!(
+            "Point({}, {}, {}, {}, Color({}, {}, {}, {}), {})",
+            self.name,
+            TOLERANCE.format_number(self._x, prec),
+            TOLERANCE.format_number(self._y, prec),
+            TOLERANCE.format_number(self._z, prec),
+            self.pointcolor.r,
+            self.pointcolor.g,
+            self.pointcolor.b,
+            self.pointcolor.a,
+            TOLERANCE.format_number(self.width, prec),
+        )
+    }
+
+    /// Returns a new point that is the sum of two points.
+    ///
+    /// # Arguments
+    ///
+    /// * `p0` - First point.
+    /// * `p1` - Second point.
+    ///
+    /// # Returns
+    ///
+    /// A new Point with coordinates (p0.x + p1.x, p0.y + p1.y, p0.z + p1.z).
+    pub fn sum(p0: &Point, p1: &Point) -> Self {
+        Point::new(p0._x + p1._x, p0._y + p1._y, p0._z + p1._z)
+    }
+
+    /// Returns a new point that is the difference of two points.
+    ///
+    /// # Arguments
+    ///
+    /// * `p0` - First point.
+    /// * `p1` - Second point.
+    ///
+    /// # Returns
+    ///
+    /// A new Point with coordinates (p0.x - p1.x, p0.y - p1.y, p0.z - p1.z).
+    pub fn sub(p0: &Point, p1: &Point) -> Self {
+        Point::new(p0._x - p1._x, p0._y - p1._y, p0._z - p1._z)
     }
 
     ///////////////////////////////////////////////////////////////////////////////////////////

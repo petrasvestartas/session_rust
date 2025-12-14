@@ -267,7 +267,7 @@ impl Session {
                 let points = vec![l.start(), l.end()];
                 BoundingBox::from_points(&points, inflate)
             }
-            Geometry::Polyline(pl) => BoundingBox::from_points(&pl.points, inflate),
+            Geometry::Polyline(pl) => BoundingBox::from_points(&pl.get_points(), inflate),
             Geometry::PointCloud(pc) => BoundingBox::from_points(&pc.points, inflate),
             Geometry::Mesh(m) => {
                 // Extract vertices from mesh vertex data
@@ -478,9 +478,10 @@ impl Session {
                 Geometry::Polyline(pl) => {
                     let mut best_t = f64::INFINITY;
                     let mut best_p: Option<Point> = None;
-                    if pl.points.len() >= 2 {
-                        for i in 0..(pl.points.len() - 1) {
-                            let seg = Line::from_points(&pl.points[i], &pl.points[i + 1]);
+                    let pl_points = pl.get_points();
+                    if pl_points.len() >= 2 {
+                        for i in 0..(pl_points.len() - 1) {
+                            let seg = Line::from_points(&pl_points[i], &pl_points[i + 1]);
                             if let Some(p) = crate::intersection::line_line(
                                 &ray_line,
                                 &seg,
