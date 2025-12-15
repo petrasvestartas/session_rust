@@ -268,7 +268,7 @@ impl Session {
                 BoundingBox::from_points(&points, inflate)
             }
             Geometry::Polyline(pl) => BoundingBox::from_points(&pl.get_points(), inflate),
-            Geometry::PointCloud(pc) => BoundingBox::from_points(&pc.points, inflate),
+            Geometry::PointCloud(pc) => BoundingBox::from_points(&pc.get_points(), inflate),
             Geometry::Mesh(m) => {
                 // Extract vertices from mesh vertex data
                 let points: Vec<Point> = m
