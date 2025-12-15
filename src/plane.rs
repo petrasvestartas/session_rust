@@ -1,30 +1,100 @@
 use crate::{Point, Vector, Xform};
-use serde::{Deserialize, Serialize};
+use serde::{Deserialize, Deserializer, Serialize, Serializer};
+use serde::ser::SerializeMap;
 use uuid::Uuid;
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(tag = "type", rename = "Plane")]
+#[derive(Debug, Clone)]
 pub struct Plane {
     pub guid: String,
     pub name: String,
-    #[serde(rename = "origin")]
+    pub width: f64,
     _origin: Point,
-    #[serde(rename = "x_axis")]
     _x_axis: Vector,
-    #[serde(rename = "y_axis")]
     _y_axis: Vector,
-    #[serde(rename = "z_axis")]
     _z_axis: Vector,
-    #[serde(rename = "a")]
     _a: f64,
-    #[serde(rename = "b")]
     _b: f64,
-    #[serde(rename = "c")]
     _c: f64,
-    #[serde(rename = "d")]
     _d: f64,
-    #[serde(default = "Xform::identity")]
     pub xform: Xform,
+}
+
+// Custom serialization to use single flat frame array of 12 numbers
+// [ox, oy, oz, xx, xy, xz, yx, yy, yz, zx, zy, zz]
+// Plane equation coefficients (a, b, c, d) are computed on load, not stored
+impl Serialize for Plane {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        let mut map = serializer.serialize_map(Some(6))?;
+        map.serialize_entry("type", "Plane")?;
+        map.serialize_entry("guid", &self.guid)?;
+        map.serialize_entry("name", &self.name)?;
+        // Single flat frame array of 12 numbers: origin + x_axis + y_axis + z_axis
+        map.serialize_entry("frame", &[
+            self._origin[0], self._origin[1], self._origin[2],
+            self._x_axis[0], self._x_axis[1], self._x_axis[2],
+            self._y_axis[0], self._y_axis[1], self._y_axis[2],
+            self._z_axis[0], self._z_axis[1], self._z_axis[2],
+        ])?;
+        map.serialize_entry("width", &self.width)?;
+        map.serialize_entry("xform", &self.xform)?;
+        map.end()
+    }
+}
+
+// Custom deserialization to parse flat frame array of 12 numbers
+// Plane equation coefficients (a, b, c, d) are computed from z_axis and origin
+impl<'de> Deserialize<'de> for Plane {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        #[derive(Deserialize)]
+        struct PlaneData {
+            guid: String,
+            name: String,
+            frame: [f64; 12],  // [ox, oy, oz, xx, xy, xz, yx, yy, yz, zx, zy, zz]
+            #[serde(default = "default_width")]
+            width: f64,
+            #[serde(default)]
+            xform: Option<Xform>,
+        }
+
+        fn default_width() -> f64 {
+            1.0
+        }
+
+        let data = PlaneData::deserialize(deserializer)?;
+
+        // Parse frame array
+        let origin = Point::new(data.frame[0], data.frame[1], data.frame[2]);
+        let x_axis = Vector::new(data.frame[3], data.frame[4], data.frame[5]);
+        let y_axis = Vector::new(data.frame[6], data.frame[7], data.frame[8]);
+        let z_axis = Vector::new(data.frame[9], data.frame[10], data.frame[11]);
+
+        // Compute plane equation coefficients from z_axis (normal) and origin
+        let a = z_axis[0];
+        let b = z_axis[1];
+        let c = z_axis[2];
+        let d = -(a * origin[0] + b * origin[1] + c * origin[2]);
+
+        Ok(Plane {
+            guid: data.guid,
+            name: data.name,
+            width: data.width,
+            _origin: origin,
+            _x_axis: x_axis,
+            _y_axis: y_axis,
+            _z_axis: z_axis,
+            _a: a,
+            _b: b,
+            _c: c,
+            _d: d,
+            xform: data.xform.unwrap_or_else(Xform::identity),
+        })
+    }
 }
 
 impl Default for Plane {
@@ -32,6 +102,7 @@ impl Default for Plane {
         Self {
             guid: Uuid::new_v4().to_string(),
             name: "my_plane".to_string(),
+            width: 1.0,
             _origin: Point::default(),
             _x_axis: Vector::x_axis(),
             _y_axis: Vector::y_axis(),
@@ -62,6 +133,7 @@ impl Plane {
         Self {
             guid: Uuid::new_v4().to_string(),
             name: "my_plane".to_string(),
+            width: 1.0,
             _origin: point,
             _x_axis: x_axis,
             _y_axis: y_axis,
@@ -90,6 +162,7 @@ impl Plane {
         Self {
             guid: Uuid::new_v4().to_string(),
             name,
+            width: 1.0,
             _origin: point,
             _x_axis: x_axis,
             _y_axis: y_axis,
@@ -120,6 +193,7 @@ impl Plane {
         Self {
             guid: Uuid::new_v4().to_string(),
             name: "my_plane".to_string(),
+            width: 1.0,
             _origin: origin,
             _x_axis: x_axis,
             _y_axis: y_axis,
@@ -159,6 +233,7 @@ impl Plane {
         Self {
             guid: Uuid::new_v4().to_string(),
             name: "my_plane".to_string(),
+            width: 1.0,
             _origin: origin,
             _x_axis: x_axis,
             _y_axis: y_axis,
@@ -192,6 +267,7 @@ impl Plane {
         Self {
             guid: Uuid::new_v4().to_string(),
             name: "my_plane".to_string(),
+            width: 1.0,
             _origin: origin,
             _x_axis: x_axis,
             _y_axis: y_axis,
@@ -208,6 +284,7 @@ impl Plane {
         Self {
             guid: Uuid::new_v4().to_string(),
             name: "xy_plane".to_string(),
+            width: 1.0,
             _origin: Point::new(0.0, 0.0, 0.0),
             _x_axis: Vector::x_axis(),
             _y_axis: Vector::y_axis(),
@@ -224,6 +301,7 @@ impl Plane {
         Self {
             guid: Uuid::new_v4().to_string(),
             name: "yz_plane".to_string(),
+            width: 1.0,
             _origin: Point::new(0.0, 0.0, 0.0),
             _x_axis: Vector::y_axis(),
             _y_axis: Vector::z_axis(),
@@ -240,6 +318,7 @@ impl Plane {
         Self {
             guid: Uuid::new_v4().to_string(),
             name: "xz_plane".to_string(),
+            width: 1.0,
             _origin: Point::new(0.0, 0.0, 0.0),
             _x_axis: Vector::x_axis(),
             _y_axis: Vector::new(0.0, 0.0, -1.0),
@@ -413,9 +492,13 @@ impl std::ops::Sub<Vector> for Plane {
     }
 }
 
-impl PartialEq<Point> for Plane {
-    fn eq(&self, other: &Point) -> bool {
-        self._origin == *other
+impl PartialEq for Plane {
+    fn eq(&self, other: &Self) -> bool {
+        self.name == other.name &&
+        self._origin == other._origin &&
+        self._x_axis == other._x_axis &&
+        self._y_axis == other._y_axis &&
+        self._z_axis == other._z_axis
     }
 }
 
@@ -457,12 +540,143 @@ impl Plane {
         result
     }
 
+    /// Create a deep copy with a new GUID.
+    pub fn duplicate(&self) -> Self {
+        let mut result = self.clone();
+        result.guid = Uuid::new_v4().to_string();
+        result
+    }
+
+    /// Minimal string representation.
+    pub fn str(&self) -> String {
+        use crate::tolerance::TOLERANCE;
+        let prec = crate::tolerance::Tolerance::ROUNDING;
+        format!(
+            "{}, {}, {}",
+            TOLERANCE.format_number(self._origin[0], prec),
+            TOLERANCE.format_number(self._origin[1], prec),
+            TOLERANCE.format_number(self._origin[2], prec),
+        )
+    }
+
+    /// Full string representation.
+    pub fn repr(&self) -> String {
+        use crate::tolerance::TOLERANCE;
+        let prec = crate::tolerance::Tolerance::ROUNDING;
+        format!(
+            "Plane({}, {}, {}, {}, {}, {}, {})",
+            self.name,
+            TOLERANCE.format_number(self._origin[0], prec),
+            TOLERANCE.format_number(self._origin[1], prec),
+            TOLERANCE.format_number(self._origin[2], prec),
+            TOLERANCE.format_number(self._z_axis[0], prec),
+            TOLERANCE.format_number(self._z_axis[1], prec),
+            TOLERANCE.format_number(self._z_axis[2], prec),
+        )
+    }
+
     pub fn jsondump(&self) -> Result<String, Box<dyn std::error::Error>> {
         Ok(serde_json::to_string_pretty(self)?)
     }
 
     pub fn jsonload(json_data: &str) -> Result<Self, Box<dyn std::error::Error>> {
         Ok(serde_json::from_str(json_data)?)
+    }
+
+    /// Write JSON to file.
+    pub fn json_dump(&self, filepath: &str) -> Result<(), Box<dyn std::error::Error>> {
+        let json = self.jsondump()?;
+        std::fs::write(filepath, json)?;
+        Ok(())
+    }
+
+    /// Read JSON from file.
+    pub fn json_load(filepath: &str) -> Result<Self, Box<dyn std::error::Error>> {
+        let json = std::fs::read_to_string(filepath)?;
+        Self::jsonload(&json)
+    }
+}
+
+// Protobuf serialization (requires "protobuf" feature)
+#[cfg(feature = "protobuf")]
+impl Plane {
+    /// Convert to protobuf binary format.
+    pub fn to_protobuf(&self) -> Vec<u8> {
+        use prost::Message;
+        // Use single flat frame array of 12 numbers
+        let proto = crate::proto::Plane {
+            guid: self.guid.clone(),
+            name: self.name.clone(),
+            frame: vec![
+                self._origin[0], self._origin[1], self._origin[2],
+                self._x_axis[0], self._x_axis[1], self._x_axis[2],
+                self._y_axis[0], self._y_axis[1], self._y_axis[2],
+                self._z_axis[0], self._z_axis[1], self._z_axis[2],
+            ],
+            width: self.width,
+            xform: Some(crate::proto::Xform {
+                matrix: self.xform.m.to_vec(),
+                name: self.xform.name.clone(),
+            }),
+        };
+        proto.encode_to_vec()
+    }
+
+    /// Create Plane from protobuf binary data.
+    pub fn from_protobuf(data: &[u8]) -> Result<Self, prost::DecodeError> {
+        use prost::Message;
+        let proto = crate::proto::Plane::decode(data)?;
+
+        // Parse frame array
+        let origin = Point::new(proto.frame[0], proto.frame[1], proto.frame[2]);
+        let x_axis = Vector::new(proto.frame[3], proto.frame[4], proto.frame[5]);
+        let y_axis = Vector::new(proto.frame[6], proto.frame[7], proto.frame[8]);
+        let z_axis = Vector::new(proto.frame[9], proto.frame[10], proto.frame[11]);
+
+        // Compute plane equation coefficients
+        let a = z_axis[0];
+        let b = z_axis[1];
+        let c = z_axis[2];
+        let d = -(a * origin[0] + b * origin[1] + c * origin[2]);
+
+        // Load xform if present
+        let xform = if let Some(proto_xform) = proto.xform {
+            let mut x = Xform::identity();
+            x.name = proto_xform.name;
+            if proto_xform.matrix.len() == 16 {
+                x.m.copy_from_slice(&proto_xform.matrix);
+            }
+            x
+        } else {
+            Xform::identity()
+        };
+
+        Ok(Plane {
+            guid: proto.guid,
+            name: proto.name,
+            width: if proto.width > 0.0 { proto.width } else { 1.0 },
+            _origin: origin,
+            _x_axis: x_axis,
+            _y_axis: y_axis,
+            _z_axis: z_axis,
+            _a: a,
+            _b: b,
+            _c: c,
+            _d: d,
+            xform,
+        })
+    }
+
+    /// Write protobuf to file.
+    pub fn protobuf_dump(&self, filepath: &str) {
+        let data = self.to_protobuf();
+        std::fs::write(filepath, data).expect("Failed to write protobuf file");
+    }
+
+    /// Read protobuf from file.
+    pub fn protobuf_load(filepath: &str) -> Self {
+        let data = std::fs::read(filepath).expect("Failed to read protobuf file");
+        Self::from_protobuf(&data).expect("Failed to parse protobuf")
     }
 }
 

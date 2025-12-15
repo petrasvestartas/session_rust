@@ -2,7 +2,7 @@ use crate::{Color, Plane, Point, Tolerance, Vector, Xform};
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use serde_json::Value;
 use std::fmt;
-use std::ops::{Add, AddAssign, Sub, SubAssign};
+use std::ops::{Add, AddAssign, Div, DivAssign, Mul, MulAssign, Neg, Sub, SubAssign};
 use uuid::Uuid;
 
 /// A polyline defined by a collection of coordinates with an associated plane.
@@ -527,7 +527,7 @@ impl Polyline {
     }
 
     /// Get point at parameter t along a line segment (t=0 is start, t=1 is end)
-    pub fn point_at_parameter(start: &Point, end: &Point, t: f64) -> Point {
+    pub fn point_at(start: &Point, end: &Point, t: f64) -> Point {
         let s = 1.0 - t;
         let t_f32 = t;
         let s_f32 = s;
@@ -586,8 +586,8 @@ impl Polyline {
 
         if do_overlap && overlap_valid {
             Some((
-                Self::point_at_parameter(line0_start, line0_end, t[1]),
-                Self::point_at_parameter(line0_start, line0_end, t[2]),
+                Self::point_at(line0_start, line0_end, t[1]),
+                Self::point_at(line0_start, line0_end, t[2]),
             ))
         } else {
             None
@@ -678,9 +678,9 @@ impl Polyline {
 
         t_values.sort_by(|a, b| a.partial_cmp(b).unwrap());
 
-        let output_start = Self::point_at_parameter(line_start, line_end, t_values[0]);
+        let output_start = Self::point_at(line_start, line_end, t_values[0]);
         let output_end =
-            Self::point_at_parameter(line_start, line_end, t_values[t_values.len() - 1]);
+            Self::point_at(line_start, line_end, t_values[t_values.len() - 1]);
 
         if (t_values[0] - t_values[t_values.len() - 1]).abs() > Tolerance::ZERO_TOLERANCE {
             Some((output_start, output_end))
@@ -698,7 +698,7 @@ impl Polyline {
 
         for i in 0..self.segment_count() {
             let t = Self::closest_point_to_line(point, &points[i], &points[i + 1]);
-            let point_on_segment = Self::point_at_parameter(&points[i], &points[i + 1], t);
+            let point_on_segment = Self::point_at(&points[i], &points[i + 1], t);
             let distance = point.distance(&point_on_segment, None);
 
             if distance < closest_distance {
@@ -712,7 +712,7 @@ impl Polyline {
             }
         }
 
-        let closest_point = Self::point_at_parameter(&points[edge_id], &points[edge_id + 1], best_t);
+        let closest_point = Self::point_at(&points[edge_id], &points[edge_id + 1], best_t);
         (closest_distance, edge_id, closest_point)
     }
 
@@ -787,26 +787,6 @@ impl Polyline {
         let average_normal = self.average_normal();
         let plane = Plane::from_point_normal(origin.clone(), average_normal);
         (origin, plane)
-    }
-
-    /// Calculate middle line between two line segments
-    pub fn get_middle_line(
-        line0_start: &Point,
-        line0_end: &Point,
-        line1_start: &Point,
-        line1_end: &Point,
-    ) -> (Point, Point) {
-        let p0 = Point::new(
-            (line0_start[0] + line1_start[0]) * 0.5,
-            (line0_start[1] + line1_start[1]) * 0.5,
-            (line0_start[2] + line1_start[2]) * 0.5,
-        );
-        let p1 = Point::new(
-            (line0_end[0] + line1_end[0]) * 0.5,
-            (line0_end[1] + line1_end[1]) * 0.5,
-            (line0_end[2] + line1_end[2]) * 0.5,
-        );
-        (p0, p1)
     }
 
     /// Extend line segment by specified distances at both ends
@@ -1097,6 +1077,55 @@ impl Sub<&Vector> for Polyline {
         let mut result = self.clone();
         result -= other;
         result
+    }
+}
+
+impl MulAssign<f64> for Polyline {
+    /// Multiply all coordinates by scalar in place.
+    fn mul_assign(&mut self, factor: f64) {
+        for coord in self.coords.iter_mut() {
+            *coord *= factor;
+        }
+    }
+}
+
+impl Mul<f64> for Polyline {
+    type Output = Polyline;
+
+    /// Multiply polyline by scalar and return new polyline.
+    fn mul(self, factor: f64) -> Polyline {
+        let mut result = self.clone();
+        result *= factor;
+        result
+    }
+}
+
+impl DivAssign<f64> for Polyline {
+    /// Divide all coordinates by scalar in place.
+    fn div_assign(&mut self, factor: f64) {
+        for coord in self.coords.iter_mut() {
+            *coord /= factor;
+        }
+    }
+}
+
+impl Div<f64> for Polyline {
+    type Output = Polyline;
+
+    /// Divide polyline by scalar and return new polyline.
+    fn div(self, factor: f64) -> Polyline {
+        let mut result = self.clone();
+        result /= factor;
+        result
+    }
+}
+
+impl Neg for Polyline {
+    type Output = Polyline;
+
+    /// Negate polyline (reverse point order).
+    fn neg(self) -> Polyline {
+        self.reversed()
     }
 }
 

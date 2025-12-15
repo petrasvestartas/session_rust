@@ -294,6 +294,26 @@ impl Line {
         self.point_at(t)
     }
 
+    /// Calculate middle line between two line segments
+    pub fn get_middle_line(
+        line0_start: &Point,
+        line0_end: &Point,
+        line1_start: &Point,
+        line1_end: &Point,
+    ) -> (Point, Point) {
+        let p0 = Point::new(
+            (line0_start[0] + line1_start[0]) * 0.5,
+            (line0_start[1] + line1_start[1]) * 0.5,
+            (line0_start[2] + line1_start[2]) * 0.5,
+        );
+        let p1 = Point::new(
+            (line0_end[0] + line1_end[0]) * 0.5,
+            (line0_end[1] + line1_end[1]) * 0.5,
+            (line0_end[2] + line1_end[2]) * 0.5,
+        );
+        (p0, p1)
+    }
+
     pub fn jsondump(&self) -> Result<String, Box<dyn std::error::Error>> {
         Ok(serde_json::to_string_pretty(self)?)
     }
