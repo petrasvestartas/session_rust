@@ -615,8 +615,9 @@ impl Plane {
             ],
             width: self.width,
             xform: Some(crate::proto::Xform {
-                matrix: self.xform.m.to_vec(),
+                guid: self.xform.guid.clone(),
                 name: self.xform.name.clone(),
+                matrix: self.xform.m.to_vec(),
             }),
         };
         proto.encode_to_vec()
@@ -642,6 +643,7 @@ impl Plane {
         // Load xform if present
         let xform = if let Some(proto_xform) = proto.xform {
             let mut x = Xform::identity();
+            x.guid = proto_xform.guid;
             x.name = proto_xform.name;
             if proto_xform.matrix.len() == 16 {
                 x.m.copy_from_slice(&proto_xform.matrix);

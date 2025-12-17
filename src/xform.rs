@@ -1,4 +1,4 @@
-use crate::{Point, Vector};
+use crate::{Plane, Point, Vector};
 use serde::{ser::Serialize as SerTrait, Deserialize, Serialize};
 use std::fmt;
 use std::ops::{Index, IndexMut, Mul, MulAssign};
@@ -179,35 +179,6 @@ impl Xform {
         xform
     }
 
-    pub fn change_basis(origin: &Point, x_axis: &Vector, y_axis: &Vector, z_axis: &Vector) -> Self {
-        let x_axis = x_axis.normalized();
-        let y_axis = y_axis.normalized();
-        let z_axis = z_axis.normalized();
-
-        let mut xform = Self::identity();
-
-        // World-to-local transform: transpose of rotation matrix
-        // Row 0 = x_axis, Row 1 = y_axis, Row 2 = z_axis
-        xform.m[0] = x_axis[0];
-        xform.m[4] = x_axis[1];
-        xform.m[8] = x_axis[2];
-
-        xform.m[1] = y_axis[0];
-        xform.m[5] = y_axis[1];
-        xform.m[9] = y_axis[2];
-
-        xform.m[2] = z_axis[0];
-        xform.m[6] = z_axis[1];
-        xform.m[10] = z_axis[2];
-
-        // Translation = -R^T * origin
-        xform.m[12] = -(x_axis[0] * origin[0] + x_axis[1] * origin[1] + x_axis[2] * origin[2]);
-        xform.m[13] = -(y_axis[0] * origin[0] + y_axis[1] * origin[1] + y_axis[2] * origin[2]);
-        xform.m[14] = -(z_axis[0] * origin[0] + z_axis[1] * origin[1] + z_axis[2] * origin[2]);
-
-        xform
-    }
-
     pub fn inverse(&self) -> Option<Xform> {
         let a00 = self[(0, 0)];
         let a01 = self[(0, 1)];
@@ -332,7 +303,7 @@ impl Xform {
     }
 
     #[allow(clippy::too_many_arguments)]
-    pub fn change_basis_alt(
+    pub fn change_basis(
         origin_1: &Point,
         x_axis_1: &Vector,
         y_axis_1: &Vector,
@@ -476,29 +447,23 @@ impl Xform {
         &t2 * &(&m_xform * &t0)
     }
 
-    #[allow(clippy::too_many_arguments)]
-    pub fn plane_to_plane(
-        origin_0: &Point,
-        x_axis_0: &Vector,
-        y_axis_0: &Vector,
-        z_axis_0: &Vector,
-        origin_1: &Point,
-        x_axis_1: &Vector,
-        y_axis_1: &Vector,
-        z_axis_1: &Vector,
-    ) -> Self {
-        let mut x0 = x_axis_0.clone();
-        let mut y0 = y_axis_0.clone();
-        let mut z0 = z_axis_0.clone();
-        let mut x1 = x_axis_1.clone();
-        let mut y1 = y_axis_1.clone();
-        let mut z1 = z_axis_1.clone();
+    /// Transform mapping one plane to another.
+    pub fn plane_to_plane(plane_from: &Plane, plane_to: &Plane) -> Self {
+        let mut x0 = plane_from.x_axis();
+        let mut y0 = plane_from.y_axis();
+        let mut z0 = plane_from.z_axis();
+        let mut x1 = plane_to.x_axis();
+        let mut y1 = plane_to.y_axis();
+        let mut z1 = plane_to.z_axis();
         x0.normalize();
         y0.normalize();
         z0.normalize();
         x1.normalize();
         y1.normalize();
         z1.normalize();
+
+        let origin_0 = plane_from.origin();
+        let origin_1 = plane_to.origin();
 
         let t0 = Self::translation(-origin_0[0], -origin_0[1], -origin_0[2]);
 
@@ -645,6 +610,110 @@ impl Xform {
     pub fn from_json(filepath: &str) -> Result<Self, Box<dyn std::error::Error>> {
         let json = std::fs::read_to_string(filepath)?;
         Self::jsonload(&json)
+    }
+
+    ///////////////////////////////////////////////////////////////////////////////////////////
+    // Protobuf Serialization
+    ///////////////////////////////////////////////////////////////////////////////////////////
+
+    #[cfg(feature = "protobuf")]
+    /// Convert to protobuf binary format.
+    ///
+    /// # Returns
+    ///
+    /// A Vec<u8> containing the serialized protobuf data.
+    pub fn to_protobuf(&self) -> Vec<u8> {
+        use prost::Message;
+
+        let proto = crate::proto::Xform {
+            guid: self.guid.clone(),
+            name: self.name.clone(),
+            matrix: self.m.to_vec(),
+        };
+        proto.encode_to_vec()
+    }
+
+    #[cfg(feature = "protobuf")]
+    /// Create Xform from protobuf binary data.
+    ///
+    /// # Arguments
+    ///
+    /// * `data` - Byte slice containing protobuf-encoded xform data.
+    ///
+    /// # Returns
+    ///
+    /// A Result containing the deserialized Xform or an error.
+    pub fn from_protobuf(data: &[u8]) -> Result<Self, Box<dyn std::error::Error>> {
+        use prost::Message;
+
+        let proto = crate::proto::Xform::decode(data)?;
+
+        let mut xform = Self::identity();
+        xform.guid = proto.guid;
+        xform.name = proto.name;
+        for (i, val) in proto.matrix.iter().enumerate() {
+            if i < 16 {
+                xform.m[i] = *val;
+            }
+        }
+        Ok(xform)
+    }
+
+    #[cfg(feature = "protobuf")]
+    /// Write protobuf to file.
+    ///
+    /// # Arguments
+    ///
+    /// * `filepath` - Path to the output file.
+    pub fn protobuf_dump(&self, filepath: &str) {
+        let data = self.to_protobuf();
+        std::fs::write(filepath, data).expect("Failed to write protobuf file");
+    }
+
+    #[cfg(feature = "protobuf")]
+    /// Read protobuf from file.
+    ///
+    /// # Arguments
+    ///
+    /// * `filepath` - Path to the protobuf file.
+    ///
+    /// # Returns
+    ///
+    /// The deserialized Xform.
+    pub fn protobuf_load(filepath: &str) -> Self {
+        let data = std::fs::read(filepath).expect("Failed to read protobuf file");
+        Self::from_protobuf(&data).expect("Failed to parse protobuf")
+    }
+
+    ///////////////////////////////////////////////////////////////////////////////////////////
+    // String Representations
+    ///////////////////////////////////////////////////////////////////////////////////////////
+
+    /// Minimal string representation (matrix rows)
+    pub fn str(&self) -> String {
+        let mut rows = Vec::new();
+        for i in 0..4 {
+            rows.push(format!(
+                "[{:.6}, {:.6}, {:.6}, {:.6}]",
+                self.m[i],
+                self.m[4 + i],
+                self.m[8 + i],
+                self.m[12 + i]
+            ));
+        }
+        rows.join("\n")
+    }
+
+    /// Full string representation (name and guid prefix)
+    pub fn repr(&self) -> String {
+        format!("Xform({}, {})", self.name, &self.guid[..8])
+    }
+
+    /// Create a copy with a new GUID
+    pub fn duplicate(&self) -> Self {
+        let mut copy = Self::from_matrix(self.m);
+        copy.name = self.name.clone();
+        copy
     }
 }
 

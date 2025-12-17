@@ -1,7 +1,7 @@
 use crate::{MINI_CHECK, MINI_TEST, REGISTER_MINI_TEST};
 use crate::mini_test::TestResult;
 use crate::tolerance::TOLERANCE;
-use std::f64::consts::PI;
+use crate::tolerance::PI;
 
 
 pub fn run_plane_constructor() -> TestResult {

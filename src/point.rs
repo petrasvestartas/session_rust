@@ -225,6 +225,7 @@ impl Point {
                 a: self.pointcolor.a as i32,
             }),
             xform: Some(crate::proto::Xform {
+                guid: self.xform.guid.clone(),
                 name: self.xform.name.clone(),
                 matrix: self.xform.m.to_vec(),
             }),
@@ -261,6 +262,7 @@ impl Point {
         }
         
         if let Some(xform) = proto.xform {
+            pt.xform.guid = xform.guid;
             pt.xform.name = xform.name;
             for (i, val) in xform.matrix.iter().enumerate() {
                 if i < 16 {

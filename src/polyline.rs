@@ -416,6 +416,7 @@ impl Polyline {
                 a: self.linecolor.a as i32,
             }),
             xform: Some(crate::proto::Xform {
+                guid: self.xform.guid.clone(),
                 name: self.xform.name.clone(),
                 matrix: self.xform.m.to_vec(),
             }),
@@ -453,6 +454,7 @@ impl Polyline {
         }
 
         if let Some(xform) = proto.xform {
+            pl.xform.guid = xform.guid;
             pl.xform.name = xform.name;
             for (i, val) in xform.matrix.iter().enumerate() {
                 if i < 16 {

@@ -300,6 +300,7 @@ impl PointCloud {
         use prost::Message;
 
         let mut proto_xform = proto::Xform::default();
+        proto_xform.guid = self.xform.guid.clone();
         proto_xform.name = self.xform.name.clone();
         proto_xform.matrix = self.xform.m.to_vec();
 
@@ -333,6 +334,7 @@ impl PointCloud {
         pc.point_size = if proto.point_size > 0.0 { proto.point_size } else { 1.0 };
 
         if let Some(xform_proto) = proto.xform {
+            pc.xform.guid = xform_proto.guid;
             pc.xform.name = xform_proto.name;
             for (i, &val) in xform_proto.matrix.iter().enumerate() {
                 if i < 16 {
