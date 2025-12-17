@@ -243,14 +243,14 @@ impl Polyline {
     }
 
     pub fn transform(&mut self) {
-        let xform = self.xform.clone();
-        let points = self.get_points();
-        self.coords.clear();
-        for mut pt in points {
-            xform.transform_point(&mut pt);
-            self.coords.push(pt[0]);
-            self.coords.push(pt[1]);
-            self.coords.push(pt[2]);
+        // Transform coordinates in-place without creating Point objects
+        for i in 0..self.point_count() {
+            let idx = i * 3;
+            let mut pt = Point::new(self.coords[idx], self.coords[idx + 1], self.coords[idx + 2]);
+            self.xform.transform_point(&mut pt);
+            self.coords[idx] = pt[0];
+            self.coords[idx + 1] = pt[1];
+            self.coords[idx + 2] = pt[2];
         }
         self.xform = Xform::identity();
     }
@@ -554,16 +554,30 @@ impl Polyline {
 
     /// Find closest point on line segment to given point, returns parameter t
     pub fn closest_point_to_line(point: &Point, line_start: &Point, line_end: &Point) -> f64 {
-        let d = line_end.clone() - line_start.clone();
-        let dod = d.magnitude_squared();
+        // Direction vector (no clone needed - use direct coordinate access)
+        let dx = line_end[0] - line_start[0];
+        let dy = line_end[1] - line_start[1];
+        let dz = line_end[2] - line_start[2];
+        let dod = dx * dx + dy * dy + dz * dz;
 
         if dod > 0.0 {
-            if (point.clone() - line_start.clone()).magnitude_squared()
-                <= (point.clone() - line_end.clone()).magnitude_squared()
-            {
-                (point.clone() - line_start.clone()).dot(&d) / dod
+            // Vector from line_start to point
+            let px = point[0] - line_start[0];
+            let py = point[1] - line_start[1];
+            let pz = point[2] - line_start[2];
+            
+            // Vector from line_end to point
+            let qx = point[0] - line_end[0];
+            let qy = point[1] - line_end[1];
+            let qz = point[2] - line_end[2];
+            
+            let dist_start_sq = px * px + py * py + pz * pz;
+            let dist_end_sq = qx * qx + qy * qy + qz * qz;
+            
+            if dist_start_sq <= dist_end_sq {
+                (px * dx + py * dy + pz * dz) / dod
             } else {
-                1.0 + (point.clone() - line_end.clone()).dot(&d) / dod
+                1.0 + (qx * dx + qy * dy + qz * dz) / dod
             }
         } else {
             0.0
@@ -650,10 +664,18 @@ impl Polyline {
                 (line_a_end[2] + line_b_start[2]) * 0.5,
             );
 
-            let mid0_vec = mid_line0_end.clone() - mid_line0_start.clone();
-            let mid1_vec = mid_line1_end.clone() - mid_line1_start.clone();
+            // Compute magnitude_squared directly without cloning
+            let mid0_dx = mid_line0_end[0] - mid_line0_start[0];
+            let mid0_dy = mid_line0_end[1] - mid_line0_start[1];
+            let mid0_dz = mid_line0_end[2] - mid_line0_start[2];
+            let mid0_mag_sq = mid0_dx * mid0_dx + mid0_dy * mid0_dy + mid0_dz * mid0_dz;
+            
+            let mid1_dx = mid_line1_end[0] - mid_line1_start[0];
+            let mid1_dy = mid_line1_end[1] - mid_line1_start[1];
+            let mid1_dz = mid_line1_end[2] - mid_line1_start[2];
+            let mid1_mag_sq = mid1_dx * mid1_dx + mid1_dy * mid1_dy + mid1_dz * mid1_dz;
 
-            if mid0_vec.magnitude_squared() > mid1_vec.magnitude_squared() {
+            if mid0_mag_sq > mid1_mag_sq {
                 (mid_line0_start, mid_line0_end)
             } else {
                 (mid_line1_start, mid_line1_end)

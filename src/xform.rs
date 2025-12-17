@@ -154,7 +154,13 @@ impl Xform {
     }
 
     pub fn look_at_rh(eye: &Point, target: &Point, up: &Vector) -> Self {
-        let f = (target.clone() - eye.clone()).normalized();
+        // Use direct coordinate access to avoid cloning Points
+        let fx = target[0] - eye[0];
+        let fy = target[1] - eye[1];
+        let fz = target[2] - eye[2];
+        let f_len = (fx * fx + fy * fy + fz * fz).sqrt();
+        let f = Vector::new(fx / f_len, fy / f_len, fz / f_len);
+        
         let s = f.cross(&up.normalized()).normalized();
         let u = s.cross(&f);
 

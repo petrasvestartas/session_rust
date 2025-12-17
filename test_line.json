@@ -1,6 +1,6 @@
 {
   "type": "Line",
-  "guid": "ab85b3fa-a38c-43ac-a26e-62a2401c7958",
+  "guid": "7eba763f-3a54-473b-9579-947b460b8592",
   "name": "test_line",
   "x0": 42.1,
   "y0": 84.2,
@@ -11,7 +11,7 @@
   "width": 1.0,
   "linecolor": {
     "type": "Color",
-    "guid": "fdcc8746-bfa3-46fd-bc38-bb6bd81ddf01",
+    "guid": "a6b586d0-c936-4326-bfbf-e91faeecb54b",
     "name": "white",
     "r": 255,
     "g": 255,
@@ -20,7 +20,7 @@
   },
   "xform": {
     "type": "Xform",
-    "guid": "f4c48646-1ccf-4ff0-b310-be8e49191670",
+    "guid": "31d325a9-a4bb-4c1e-8f9d-fcab3b5bd105",
     "name": "my_xform",
     "m": [
       1.0,

@@ -185,9 +185,9 @@ impl Line {
         let mut start = Point::new(self._x0, self._y0, self._z0);
         let mut end = Point::new(self._x1, self._y1, self._z1);
 
-        let xform = self.xform.clone();
-        xform.transform_point(&mut start);
-        xform.transform_point(&mut end);
+        // No clone needed - transform_point takes &self
+        self.xform.transform_point(&mut start);
+        self.xform.transform_point(&mut end);
 
         self._x0 = start[0];
         self._y0 = start[1];

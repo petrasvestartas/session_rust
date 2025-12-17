@@ -335,16 +335,36 @@ impl Plane {
         self._origin.clone()
     }
 
+    /// Returns a reference to the origin point (avoids clone).
+    pub fn origin_ref(&self) -> &Point {
+        &self._origin
+    }
+
     pub fn x_axis(&self) -> Vector {
         self._x_axis.clone()
+    }
+
+    /// Returns a reference to the x-axis (avoids clone).
+    pub fn x_axis_ref(&self) -> &Vector {
+        &self._x_axis
     }
 
     pub fn y_axis(&self) -> Vector {
         self._y_axis.clone()
     }
 
+    /// Returns a reference to the y-axis (avoids clone).
+    pub fn y_axis_ref(&self) -> &Vector {
+        &self._y_axis
+    }
+
     pub fn z_axis(&self) -> Vector {
         self._z_axis.clone()
+    }
+
+    /// Returns a reference to the z-axis (avoids clone).
+    pub fn z_axis_ref(&self) -> &Vector {
+        &self._z_axis
     }
 
     /// Check if the plane coordinate system is right-handed.
@@ -526,11 +546,11 @@ impl std::fmt::Display for Plane {
 
 impl Plane {
     pub fn transform(&mut self) {
-        let xform = self.xform.clone();
-        xform.transform_point(&mut self._origin);
-        xform.transform_vector(&mut self._x_axis);
-        xform.transform_vector(&mut self._y_axis);
-        xform.transform_vector(&mut self._z_axis);
+        // No clone needed - transform methods take &self
+        self.xform.transform_point(&mut self._origin);
+        self.xform.transform_vector(&mut self._x_axis);
+        self.xform.transform_vector(&mut self._y_axis);
+        self.xform.transform_vector(&mut self._z_axis);
         self.xform = Xform::identity();
     }
 
