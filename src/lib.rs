@@ -51,6 +51,8 @@ pub mod polyline_test;
 pub mod plane_test;
 pub mod pointcloud_test;
 pub mod xform_test;
+pub mod mesh_test;
+pub mod nurbscurve_test;
 
 pub use arrow::Arrow;
 pub use boundingbox::BoundingBox;

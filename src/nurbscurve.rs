@@ -2,12 +2,13 @@ use crate::point::Point;
 use crate::vector::Vector;
 use crate::plane::Plane;
 use crate::tolerance::Tolerance;
+use serde::{Serialize, Deserialize};
 
 /// Non-Uniform Rational B-Spline (NURBS) curve implementation
 /// 
 /// Based on OpenNURBS ground truth implementation.
 /// All methods match the fixed C++ and Python versions.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct NurbsCurve {
     pub m_dim: usize,           // Dimension (typically 3 for 3D curves)
     pub m_is_rat: bool,         // true if rational, false if non-rational
@@ -19,8 +20,24 @@ pub struct NurbsCurve {
 }
 
 impl NurbsCurve {
-    /// Create a new empty NURBS curve
-    pub fn new() -> Self {
+    /// Create a NURBS curve with specified parameters (matches C++/Python constructor)
+    pub fn new(dimension: usize, is_rational: bool, order: usize, cv_count: usize) -> Self {
+        let cv_stride = if is_rational { dimension + 1 } else { dimension };
+        let knot_count = if order > 0 && cv_count >= order { order + cv_count - 2 } else { 0 };
+        
+        NurbsCurve {
+            m_dim: dimension,
+            m_is_rat: is_rational,
+            m_order: order,
+            m_cv_count: cv_count,
+            m_cv_stride: cv_stride,
+            m_knot: vec![0.0; knot_count],
+            m_cv: vec![0.0; cv_count * cv_stride],
+        }
+    }
+
+    /// Create an empty NURBS curve (default constructor)
+    pub fn default() -> Self {
         NurbsCurve {
             m_dim: 0,
             m_is_rat: false,
@@ -38,7 +55,7 @@ impl NurbsCurve {
     /// * `periodic` - If true, creates a periodic curve; if false, creates a clamped curve
     /// * `degree` - Degree of the curve (order = degree + 1)
     /// * `points` - Control points for the curve
-    pub fn create(periodic: bool, degree: usize, points: &[Point]) -> Option<Self> {
+    pub fn create(periodic: bool, degree: usize, points: &[Point]) -> Self {
         let order = degree + 1;
         
         if periodic {
@@ -56,16 +73,16 @@ impl NurbsCurve {
         order: usize,
         points: &[Point],
         knot_delta: f64,
-    ) -> Option<Self> {
+    ) -> Self {
         let point_count = points.len();
         
         if order < 2 || point_count < order {
-            return None;
+            return Self::default();
         }
 
-        let mut curve = Self::new();
+        let mut curve = Self::default();
         if !curve.initialize_curve(dimension, false, order, point_count) {
-            return None;
+            return Self::default();
         }
 
         // Set control points
@@ -97,7 +114,7 @@ impl NurbsCurve {
             curve.m_knot[i] = curve.m_knot[i0];
         }
 
-        Some(curve)
+        curve
     }
 
     /// Create periodic uniform NURBS curve from control points
@@ -106,18 +123,18 @@ impl NurbsCurve {
         order: usize,
         points: &[Point],
         knot_delta: f64,
-    ) -> Option<Self> {
+    ) -> Self {
         let point_count = points.len();
         
         if order < 2 || point_count < order {
-            return None;
+            return Self::default();
         }
 
-        let mut curve = Self::new();
+        let mut curve = Self::default();
         let cv_count = point_count + order - 1;
         
         if !curve.initialize_curve(dimension, false, order, cv_count) {
-            return None;
+            return Self::default();
         }
 
         // Set control points with wrapping
@@ -137,7 +154,7 @@ impl NurbsCurve {
             curve.m_knot[i] = i as f64 * knot_delta;
         }
 
-        Some(curve)
+        curve
     }
 
     /// Initialize curve with specified parameters
@@ -634,6 +651,106 @@ impl NurbsCurve {
         true
     }
 
+    /// Make curve rational (all weights = 1.0)
+    pub fn make_rational(&mut self) -> bool {
+        if self.m_is_rat {
+            return true; // Already rational
+        }
+        if !self.is_valid() {
+            return false;
+        }
+
+        // Create new CV array with weights
+        let new_stride = self.m_dim + 1;
+        let mut new_cv = vec![0.0; self.m_cv_count * new_stride];
+        
+        for i in 0..self.m_cv_count {
+            let old_idx = i * self.m_cv_stride;
+            let new_idx = i * new_stride;
+            
+            // Copy coordinates
+            for j in 0..self.m_dim {
+                new_cv[new_idx + j] = self.m_cv[old_idx + j];
+            }
+            // Set weight to 1.0
+            new_cv[new_idx + self.m_dim] = 1.0;
+        }
+
+        self.m_cv = new_cv;
+        self.m_cv_stride = new_stride;
+        self.m_is_rat = true;
+        true
+    }
+
+    /// Make curve non-rational (remove weights if all equal to 1.0)
+    pub fn make_non_rational(&mut self) -> bool {
+        if !self.m_is_rat {
+            return true; // Already non-rational
+        }
+        if !self.is_valid() {
+            return false;
+        }
+
+        // Check if all weights are 1.0
+        for i in 0..self.m_cv_count {
+            let w = self.weight(i);
+            if (w - 1.0).abs() > Tolerance::ZERO_TOLERANCE {
+                return false; // Cannot make non-rational
+            }
+        }
+
+        // Create new CV array without weights
+        let new_stride = self.m_dim;
+        let mut new_cv = vec![0.0; self.m_cv_count * new_stride];
+        
+        for i in 0..self.m_cv_count {
+            let old_idx = i * self.m_cv_stride;
+            let new_idx = i * new_stride;
+            
+            // Copy coordinates only
+            for j in 0..self.m_dim {
+                new_cv[new_idx + j] = self.m_cv[old_idx + j];
+            }
+        }
+
+        self.m_cv = new_cv;
+        self.m_cv_stride = new_stride;
+        self.m_is_rat = false;
+        true
+    }
+
+    /// Get approximate length of curve using numerical integration
+    pub fn length(&self, tolerance: Option<f64>) -> f64 {
+        if !self.is_valid() {
+            return 0.0;
+        }
+
+        let tol = tolerance.unwrap_or(1e-6);
+        let (t0, t1) = self.domain();
+        
+        // Use adaptive Simpson's rule for length computation
+        self.length_adaptive(t0, t1, tol)
+    }
+
+    fn length_adaptive(&self, t0: f64, t1: f64, tolerance: f64) -> f64 {
+        let t_mid = (t0 + t1) / 2.0;
+        
+        let p0 = self.point_at(t0);
+        let p1 = self.point_at(t_mid);
+        let p2 = self.point_at(t1);
+        
+        let chord_len = p0.distance(&p2, None);
+        let arc_len = p0.distance(&p1, None) + p1.distance(&p2, None);
+        
+        if (arc_len - chord_len).abs() < tolerance || (t1 - t0) < 1e-10 {
+            return arc_len;
+        }
+        
+        // Subdivide
+        self.length_adaptive(t0, t_mid, tolerance / 2.0) + 
+        self.length_adaptive(t_mid, t1, tolerance / 2.0)
+    }
+
     /// Reverse curve direction
     pub fn reverse(&mut self) -> bool {
         if !self.is_valid() {
@@ -808,10 +925,48 @@ impl NurbsCurve {
             .map(|&t| self.point_at(t))
             .collect()
     }
+
+    /// Serialize to JSON and write to file
+    pub fn json_dump(&self, filename: &str) {
+        use std::fs::File;
+        use std::io::Write;
+        if let Ok(json) = serde_json::to_string_pretty(self) {
+            if let Ok(mut file) = File::create(filename) {
+                let _ = file.write_all(json.as_bytes());
+            }
+        }
+    }
+
+    /// Load from JSON file
+    pub fn json_load(filename: &str) -> Self {
+        use std::fs::File;
+        use std::io::Read;
+        let mut file = match File::open(filename) {
+            Ok(f) => f,
+            Err(_) => return Self::default(),
+        };
+        let mut contents = String::new();
+        if file.read_to_string(&mut contents).is_err() {
+            return Self::default();
+        }
+        serde_json::from_str(&contents).unwrap_or_else(|_| Self::default())
+    }
+
+    /// Serialize to protobuf and write to file (stub - protobuf not yet implemented)
+    pub fn protobuf_dump(&self, filename: &str) {
+        // For now, just use JSON as a fallback
+        self.json_dump(&filename.replace(".bin", ".json"));
+    }
+
+    /// Load from protobuf file (stub - protobuf not yet implemented)
+    pub fn protobuf_load(filename: &str) -> Self {
+        // For now, just use JSON as a fallback
+        Self::json_load(&filename.replace(".bin", ".json"))
+    }
 }
 
 impl Default for NurbsCurve {
     fn default() -> Self {
-        Self::new()
+        Self::default()
     }
 }

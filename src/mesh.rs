@@ -834,6 +834,228 @@ impl Mesh {
             std::io::Error::new(std::io::ErrorKind::InvalidData, "Invalid mesh data")
         })
     }
+
+    ///////////////////////////////////////////////////////////////////////////////////////////
+    // Protobuf Serialization
+    ///////////////////////////////////////////////////////////////////////////////////////////
+
+    #[cfg(feature = "protobuf")]
+    pub fn to_protobuf(&self) -> Vec<u8> {
+        use prost::Message;
+        use std::collections::HashMap;
+
+        let mut vertices: HashMap<u64, crate::proto::VertexData> = HashMap::new();
+        for (&vkey, vdata) in &self.vertex {
+            let mut attrs: HashMap<String, f64> = HashMap::new();
+            for (k, v) in &vdata.attributes {
+                attrs.insert(k.clone(), *v);
+            }
+            vertices.insert(vkey as u64, crate::proto::VertexData {
+                x: vdata.x,
+                y: vdata.y,
+                z: vdata.z,
+                attributes: attrs,
+            });
+        }
+
+        let mut faces: HashMap<u64, crate::proto::FaceData> = HashMap::new();
+        for (&fkey, fverts) in &self.face {
+            let mut attrs: HashMap<String, f64> = HashMap::new();
+            if let Some(fdata) = self.facedata.get(&fkey) {
+                for (k, v) in fdata {
+                    attrs.insert(k.clone(), *v);
+                }
+            }
+            faces.insert(fkey as u64, crate::proto::FaceData {
+                vertices: fverts.iter().map(|&v| v as u64).collect(),
+                attributes: attrs,
+            });
+        }
+
+        let mut halfedges: HashMap<u64, crate::proto::HalfedgeMap> = HashMap::new();
+        for (&u, neighbors) in &self.halfedge {
+            let mut neighbor_map: HashMap<u64, u64> = HashMap::new();
+            for (&v, &fkey_opt) in neighbors {
+                neighbor_map.insert(v as u64, fkey_opt.unwrap_or(usize::MAX) as u64);
+            }
+            halfedges.insert(u as u64, crate::proto::HalfedgeMap {
+                neighbors: neighbor_map,
+            });
+        }
+
+        let mut edge_data_vec: Vec<crate::proto::EdgeData> = Vec::new();
+        for ((v1, v2), attrs) in &self.edgedata {
+            let mut attr_map: HashMap<String, f64> = HashMap::new();
+            for (k, v) in attrs {
+                attr_map.insert(k.clone(), *v);
+            }
+            edge_data_vec.push(crate::proto::EdgeData {
+                vertex1: *v1 as u64,
+                vertex2: *v2 as u64,
+                attributes: attr_map,
+            });
+        }
+
+        let pointcolors: Vec<crate::proto::Color> = self.pointcolors.iter().map(|c| {
+            crate::proto::Color {
+                guid: c.guid.clone(),
+                name: c.name.clone(),
+                r: c.r as i32,
+                g: c.g as i32,
+                b: c.b as i32,
+                a: c.a as i32,
+            }
+        }).collect();
+
+        let facecolors: Vec<crate::proto::Color> = self.facecolors.iter().map(|c| {
+            crate::proto::Color {
+                guid: c.guid.clone(),
+                name: c.name.clone(),
+                r: c.r as i32,
+                g: c.g as i32,
+                b: c.b as i32,
+                a: c.a as i32,
+            }
+        }).collect();
+
+        let linecolors: Vec<crate::proto::Color> = self.linecolors.iter().map(|c| {
+            crate::proto::Color {
+                guid: c.guid.clone(),
+                name: c.name.clone(),
+                r: c.r as i32,
+                g: c.g as i32,
+                b: c.b as i32,
+                a: c.a as i32,
+            }
+        }).collect();
+
+        let proto = crate::proto::Mesh {
+            guid: self.guid.clone(),
+            name: self.name.clone(),
+            vertices,
+            faces,
+            halfedges,
+            edge_data: edge_data_vec,
+            default_vertex_attributes: self.default_vertex_attributes.clone(),
+            default_face_attributes: self.default_face_attributes.clone(),
+            default_edge_attributes: self.default_edge_attributes.clone(),
+            pointcolors,
+            facecolors,
+            linecolors,
+            widths: self.widths.clone(),
+            xform: Some(crate::proto::Xform {
+                guid: self.xform.guid.clone(),
+                name: self.xform.name.clone(),
+                matrix: self.xform.m.to_vec(),
+            }),
+        };
+        proto.encode_to_vec()
+    }
+
+    #[cfg(feature = "protobuf")]
+    pub fn from_protobuf(data: &[u8]) -> Result<Self, Box<dyn std::error::Error>> {
+        use prost::Message;
+
+        let proto = crate::proto::Mesh::decode(data)?;
+        let mut mesh = Self::new();
+        mesh.guid = proto.guid;
+        mesh.name = proto.name;
+
+        for (vkey, vdata) in proto.vertices {
+            let mut attrs: std::collections::HashMap<String, f64> = std::collections::HashMap::new();
+            for (k, v) in vdata.attributes {
+                attrs.insert(k, v);
+            }
+            mesh.vertex.insert(vkey as usize, VertexData {
+                x: vdata.x,
+                y: vdata.y,
+                z: vdata.z,
+                attributes: attrs,
+            });
+            mesh.halfedge.entry(vkey as usize).or_insert_with(std::collections::HashMap::new);
+        }
+
+        for (fkey, fdata) in proto.faces {
+            let verts: Vec<usize> = fdata.vertices.iter().map(|&v| v as usize).collect();
+            mesh.face.insert(fkey as usize, verts);
+            if !fdata.attributes.is_empty() {
+                mesh.facedata.insert(fkey as usize, fdata.attributes);
+            }
+        }
+
+        for (u, hmap) in proto.halfedges {
+            let mut neighbors: std::collections::HashMap<usize, Option<usize>> = std::collections::HashMap::new();
+            for (v, fkey) in hmap.neighbors {
+                let fkey_opt = if fkey == u64::MAX { None } else { Some(fkey as usize) };
+                neighbors.insert(v as usize, fkey_opt);
+            }
+            mesh.halfedge.insert(u as usize, neighbors);
+        }
+
+        for edata in proto.edge_data {
+            let key = (edata.vertex1 as usize, edata.vertex2 as usize);
+            mesh.edgedata.insert(key, edata.attributes);
+        }
+
+        mesh.default_vertex_attributes = proto.default_vertex_attributes;
+        mesh.default_face_attributes = proto.default_face_attributes;
+        mesh.default_edge_attributes = proto.default_edge_attributes;
+
+        mesh.pointcolors = proto.pointcolors.iter().map(|c| {
+            let mut color = Color::new(c.r as u8, c.g as u8, c.b as u8, c.a as u8);
+            color.guid = c.guid.clone();
+            color.name = c.name.clone();
+            color
+        }).collect();
+
+        mesh.facecolors = proto.facecolors.iter().map(|c| {
+            let mut color = Color::new(c.r as u8, c.g as u8, c.b as u8, c.a as u8);
+            color.guid = c.guid.clone();
+            color.name = c.name.clone();
+            color
+        }).collect();
+
+        mesh.linecolors = proto.linecolors.iter().map(|c| {
+            let mut color = Color::new(c.r as u8, c.g as u8, c.b as u8, c.a as u8);
+            color.guid = c.guid.clone();
+            color.name = c.name.clone();
+            color
+        }).collect();
+
+        mesh.widths = proto.widths;
+
+        if let Some(xform) = proto.xform {
+            mesh.xform.guid = xform.guid;
+            mesh.xform.name = xform.name;
+            for (i, val) in xform.matrix.iter().enumerate() {
+                if i < 16 {
+                    mesh.xform.m[i] = *val;
+                }
+            }
+        }
+
+        // Update max_vertex and max_face
+        if let Some(&max_v) = mesh.vertex.keys().max() {
+            mesh.max_vertex = max_v + 1;
+        }
+        if let Some(&max_f) = mesh.face.keys().max() {
+            mesh.max_face = max_f + 1;
+        }
+
+        Ok(mesh)
+    }
+
+    #[cfg(feature = "protobuf")]
+    pub fn protobuf_dump(&self, filepath: &str) {
+        let data = self.to_protobuf();
+        std::fs::write(filepath, data).expect("Failed to write protobuf file");
+    }
+
+    #[cfg(feature = "protobuf")]
+    pub fn protobuf_load(filepath: &str) -> Self {
+        let data = std::fs::read(filepath).expect("Failed to read protobuf file");
+        Self::from_protobuf(&data).expect("Failed to parse protobuf")
+    }
 }
 
 #[cfg(test)]

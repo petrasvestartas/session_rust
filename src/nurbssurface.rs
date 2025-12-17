@@ -704,7 +704,7 @@ impl NurbsSurface {
         }
 
         // Create output curve
-        let mut nurbs_crv = NurbsCurve::new();
+        let mut nurbs_crv = NurbsCurve::default();
         nurbs_crv.m_dim = self.m_dim;
         nurbs_crv.m_is_rat = self.m_is_rat;
         nurbs_crv.m_order = self.m_order[dir];
