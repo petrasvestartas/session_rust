@@ -1,14 +1,14 @@
 fn main() {
-    // Use shared proto files from root session_proto/
     let proto_dir = "../session_proto";
-    
-    // Tell Cargo to re-run this build script if build.rs or any proto file changes
+
     println!("cargo:rerun-if-changed=build.rs");
     println!("cargo:rerun-if-changed={}", proto_dir);
 
     #[cfg(feature = "protobuf")]
     {
-        // Auto-discover all .proto files in the proto directory
+        // Use bundled protoc from protobuf-src
+        std::env::set_var("PROTOC", protobuf_src::protoc());
+
         let proto_files: Vec<String> = std::fs::read_dir(proto_dir)
             .expect("Failed to read proto directory")
             .filter_map(|entry| {
