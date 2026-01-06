@@ -405,7 +405,7 @@ pub fn run_vector_json_roundtrip() -> TestResult {
         v.name = "test_vector".to_string();
 
         // json_dump(filename) / json_load(filename) - file-based serialization
-        let filename = "test_vector.json";
+        let filename = "serialization/test_vector.json";
         v.json_dump(filename).unwrap();
         let loaded = Vector::json_load(filename).unwrap();
 
@@ -425,7 +425,7 @@ pub fn run_vector_protobuf_roundtrip() -> TestResult {
         v.name = "test_vector".to_string();
 
         // Test protobuf_dump / protobuf_load (file-based)
-        let filename = "test_vector.bin";
+        let filename = "serialization/test_vector.bin";
         v.protobuf_dump(filename);
         let loaded = Vector::protobuf_load(filename);
 

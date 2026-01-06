@@ -290,7 +290,7 @@ pub fn run_xform_json_roundtrip() -> TestResult {
         xform.name = "test_xform".to_string();
 
         // json_dump(filename) / json_load(filename) - file-based serialization
-        let filename = "test_xform.json";
+        let filename = "serialization/test_xform.json";
         xform.to_json(filename).unwrap();
         let loaded = Xform::from_json(filename).unwrap();
 
@@ -311,7 +311,7 @@ pub fn run_xform_protobuf_roundtrip() -> TestResult {
         xform.name = "test_xform_proto".to_string();
 
         // protobuf_dump(filename) / protobuf_load(filename) - file-based serialization
-        let filename = "test_xform.bin";
+        let filename = "serialization/test_xform.bin";
         xform.protobuf_dump(filename);
         let loaded = Xform::protobuf_load(filename);
 

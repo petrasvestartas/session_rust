@@ -58,7 +58,7 @@ mod tests {
         let line = Line::new(0.0, 0.0, 0.0, 0.0, 0.0, 8.0);
         let arrow = Arrow::new(line, 1.0);
 
-        let filepath = "test_arrow.json";
+        let filepath = "serialization/test_arrow.json";
         json_dump(&arrow, filepath, true).unwrap();
 
         let loaded = json_load::<Arrow>(filepath).unwrap();

@@ -22,7 +22,7 @@ mod tests {
 
         // File I/O test
         json_dump(&edge, "test_edge.json", true).unwrap();
-        let from_file: Edge = json_load("test_edge.json").unwrap();
+        let from_file: Edge = json_load("serialization/test_edge.json").unwrap();
         assert_eq!(from_file.name, edge.name);
     }
 }

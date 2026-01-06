@@ -181,7 +181,7 @@ mod tests {
         tree.add(&branch2, Some(&root));
         tree.add(&leaf, Some(&branch1));
 
-        let filename = "test_tree.json";
+        let filename = "serialization/test_tree.json";
 
         json_dump(&tree, filename, true).unwrap();
         let loaded_tree = json_load::<Tree>(filename).unwrap();

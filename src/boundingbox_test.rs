@@ -311,7 +311,7 @@ mod tests {
             Vector::new(0.0, 0.0, 1.0),
             Vector::new(2.0, 3.0, 4.0),
         );
-        let filename = "test_boundingbox.json";
+        let filename = "serialization/test_boundingbox.json";
 
         json_dump(&original, filename, true).unwrap();
         let loaded = json_load::<BoundingBox>(filename).unwrap();

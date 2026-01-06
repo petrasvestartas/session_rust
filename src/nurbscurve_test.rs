@@ -14,10 +14,24 @@ pub fn run_nurbscurve_constructor() -> TestResult {
 
         let curve = NurbsCurve::create(false, 2, &points);
 
+        // Minimal and Full String Representation
+        let cstr = curve.str();
+        let crepr = curve.repr();
+
+        // Copy (duplicates everything except guid)
+        let ccopy = curve.duplicate();
+        let cother = NurbsCurve::create(false, 2, &points);
+
         MINI_CHECK!(curve.is_valid() == true);
         MINI_CHECK!(curve.cv_count() == 3);
         MINI_CHECK!(curve.degree() == 2);
         MINI_CHECK!(curve.order() == 3);
+        MINI_CHECK!(curve.name == "my_nurbscurve");
+        MINI_CHECK!(!curve.guid.is_empty());
+        MINI_CHECK!(cstr == "degree=2, cvs=3");
+        MINI_CHECK!(crepr == "NurbsCurve(my_nurbscurve, dim=3, order=3, cvs=3, rational=false)");
+        MINI_CHECK!(ccopy.cv_count() == curve.cv_count());
+        MINI_CHECK!(ccopy.guid != curve.guid);
     })
 }
 
@@ -360,7 +374,7 @@ pub fn run_nurbscurve_json_roundtrip() -> TestResult {
 
         let curve = NurbsCurve::create(false, 2, &points);
 
-        let filename = "test_nurbscurve.json";
+        let filename = "serialization/test_nurbscurve.json";
         curve.json_dump(filename);
         let loaded = NurbsCurve::json_load(filename);
 
@@ -384,7 +398,7 @@ pub fn run_nurbscurve_protobuf_roundtrip() -> TestResult {
 
         let curve = NurbsCurve::create(false, 2, &points);
 
-        let filename = "test_nurbscurve.bin";
+        let filename = "serialization/test_nurbscurve.bin";
         curve.protobuf_dump(filename);
         let loaded = NurbsCurve::protobuf_load(filename);
 

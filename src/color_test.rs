@@ -68,7 +68,7 @@ mod tests {
     fn test_color_to_json_from_json() {
         let mut original = Color::new(255, 128, 64, 255);
         original.name = "sunset_orange".to_string();
-        let filename = "test_color.json";
+        let filename = "serialization/test_color.json";
 
         json_dump(&original, filename, true).unwrap();
         let loaded = json_load::<Color>(filename).unwrap();
@@ -212,7 +212,7 @@ pub fn run_color_json_roundtrip() -> TestResult {
 
         let color = Color::with_name(255, 128, 64, 255, "test_color");
 
-        let filename = "test_color.json";
+        let filename = "serialization/test_color.json";
         color.to_json(filename).unwrap();
         let loaded = Color::from_json(filename).unwrap();
 
@@ -232,7 +232,7 @@ pub fn run_color_protobuf_roundtrip() -> TestResult {
         let mut color = Color::new(255, 128, 64, 255);
         color.name = "test_color".to_string();
 
-        let filename = "test_color.bin";
+        let filename = "serialization/test_color.bin";
         color.protobuf_dump(filename);
         let loaded = Color::protobuf_load(filename);
 

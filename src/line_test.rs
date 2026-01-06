@@ -122,7 +122,7 @@ pub fn run_line_json_roundtrip() -> TestResult {
         l.name = "test_line".to_string();
 
         // json_dump(fname) / json_load(fname) - file-based serialization
-        let fname = "test_line.json";
+        let fname = "serialization/test_line.json";
         l.json_dump(fname).unwrap();
         let loaded = Line::json_load(fname).unwrap();
 
@@ -145,7 +145,7 @@ pub fn run_line_protobuf_roundtrip() -> TestResult {
         l.name = "test_line".to_string();
 
         // protobuf_dump(fname) / protobuf_load(fname) - file-based serialization
-        let fname = "test_line.bin";
+        let fname = "serialization/test_line.bin";
         l.protobuf_dump(fname);
         let loaded = Line::protobuf_load(fname);
 

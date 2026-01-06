@@ -57,7 +57,7 @@ mod tests {
         let point2 = Point::new(400.0, 500.0, 600.0);
         let point3 = Point::new(700.0, 800.0, 900.0);
         objects.points = vec![point1, point2, point3];
-        let filename = "test_objects.json";
+        let filename = "serialization/test_objects.json";
 
         // Save to file
         let save_result = json_dump(&objects, filename, true);

@@ -209,7 +209,7 @@ fn test_polyline_to_json_from_json() {
         Point::new(7.0, 8.0, 9.0),
     ]);
 
-    let filepath = "test_polyline.json";
+    let filepath = "serialization/test_polyline.json";
     json_dump(&polyline, filepath, true).unwrap();
     let loaded = json_load::<Polyline>(filepath).unwrap();
 
@@ -714,7 +714,7 @@ pub fn run_polyline_json_roundtrip() -> TestResult {
         pl.name = "test_polyline".to_string();
 
         // json_dump(fname) / json_load(fname) - file-based serialization
-        let fname = "test_polyline.json";
+        let fname = "serialization/test_polyline.json";
         json_dump(&pl, fname, true).unwrap();
         let loaded: Polyline = json_load(fname).unwrap();
 
@@ -737,7 +737,7 @@ pub fn run_polyline_protobuf_roundtrip() -> TestResult {
         pl.name = "test_polyline".to_string();
 
         // protobuf_dump(fname) / protobuf_load(fname) - file-based serialization
-        let fname = "test_polyline.bin";
+        let fname = "serialization/test_polyline.bin";
         pl.protobuf_dump(fname);
         let loaded = Polyline::protobuf_load(fname);
 

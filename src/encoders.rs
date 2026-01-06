@@ -59,7 +59,7 @@ mod tests {
         let mut original = Point::new(1.5, 2.5, 3.5);
         original.name = "test_point".to_string();
 
-        let filepath = "test_encoders_point.json";
+        let filepath = "serialization/test_encoders_point.json";
         json_dump(&original, filepath, true).unwrap();
 
         let loaded: Point = json_load(filepath).unwrap();
@@ -130,7 +130,7 @@ mod tests {
             Vector::new(0.0, 0.0, 1.0),
         ];
 
-        let filepath = "test_encoders_collection.json";
+        let filepath = "serialization/test_encoders_collection.json";
         json_dump(&vectors, filepath, true).unwrap();
 
         let loaded: Vec<Vector> = json_load(filepath).unwrap();

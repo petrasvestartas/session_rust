@@ -140,7 +140,7 @@ mod quaternion_tests {
         let angle = PI / 4.0;
         let orig = Quaternion::from_axis_angle(axis, angle);
 
-        let filepath = "test_quaternion.json";
+        let filepath = "serialization/test_quaternion.json";
         json_dump(&orig, filepath, true).unwrap();
         let loaded = json_load::<Quaternion>(filepath).unwrap();
 

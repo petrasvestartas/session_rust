@@ -1,4 +1,6 @@
 {
+  "guid": "08756e24-754a-43f4-8ff5-b99d25ee2792",
+  "name": "my_nurbscurve",
   "m_dim": 3,
   "m_is_rat": false,
   "m_order": 3,

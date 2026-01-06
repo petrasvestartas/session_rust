@@ -161,7 +161,7 @@ mod tests {
     fn test_graph_from_json_data() {
         let data = r#"{
             "type": "Graph",
-            "name": "test_graph",
+            "name": "serialization/test_graph",
             "guid": "test-guid-123",
             "vertex_count": 3,
             "edge_count": 2,
@@ -203,7 +203,7 @@ mod tests {
         graph.add_edge("A", "B", "edge_AB");
         graph.add_edge("B", "C", "edge_BC");
         graph.add_edge("C", "D", "edge_CD");
-        let filename = "test_graph.json";
+        let filename = "serialization/test_graph.json";
 
         json_dump(&graph, filename, true).unwrap();
         let loaded_graph = json_load::<Graph>(filename).unwrap();

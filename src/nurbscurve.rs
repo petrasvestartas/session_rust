@@ -3,13 +3,16 @@ use crate::vector::Vector;
 use crate::plane::Plane;
 use crate::tolerance::Tolerance;
 use serde::{Serialize, Deserialize};
+use uuid::Uuid;
 
 /// Non-Uniform Rational B-Spline (NURBS) curve implementation
-/// 
+///
 /// Based on OpenNURBS ground truth implementation.
 /// All methods match the fixed C++ and Python versions.
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct NurbsCurve {
+    pub guid: String,
+    pub name: String,
     pub m_dim: usize,           // Dimension (typically 3 for 3D curves)
     pub m_is_rat: bool,         // true if rational, false if non-rational
     pub m_order: usize,         // Order = degree + 1 (order >= 2)
@@ -24,8 +27,10 @@ impl NurbsCurve {
     pub fn new(dimension: usize, is_rational: bool, order: usize, cv_count: usize) -> Self {
         let cv_stride = if is_rational { dimension + 1 } else { dimension };
         let knot_count = if order > 0 && cv_count >= order { order + cv_count - 2 } else { 0 };
-        
+
         NurbsCurve {
+            guid: Uuid::new_v4().to_string(),
+            name: "my_nurbscurve".to_string(),
             m_dim: dimension,
             m_is_rat: is_rational,
             m_order: order,
@@ -39,6 +44,8 @@ impl NurbsCurve {
     /// Create an empty NURBS curve (default constructor)
     pub fn default() -> Self {
         NurbsCurve {
+            guid: Uuid::new_v4().to_string(),
+            name: "my_nurbscurve".to_string(),
             m_dim: 0,
             m_is_rat: false,
             m_order: 0,
@@ -47,6 +54,35 @@ impl NurbsCurve {
             m_knot: Vec::new(),
             m_cv: Vec::new(),
         }
+    }
+
+    /// Duplicate the curve (creates a copy with new GUID).
+    pub fn duplicate(&self) -> Self {
+        NurbsCurve {
+            guid: Uuid::new_v4().to_string(),
+            name: self.name.clone(),
+            m_dim: self.m_dim,
+            m_is_rat: self.m_is_rat,
+            m_order: self.m_order,
+            m_cv_count: self.m_cv_count,
+            m_cv_stride: self.m_cv_stride,
+            m_knot: self.m_knot.clone(),
+            m_cv: self.m_cv.clone(),
+        }
+    }
+
+    /// Simple string representation (like Python __str__).
+    pub fn str(&self) -> String {
+        format!("degree={}, cvs={}", self.degree(), self.m_cv_count)
+    }
+
+    /// Detailed representation (like Python __repr__).
+    pub fn repr(&self) -> String {
+        let rational_str = if self.m_is_rat { "true" } else { "false" };
+        format!(
+            "NurbsCurve({}, dim={}, order={}, cvs={}, rational={})",
+            self.name, self.m_dim, self.m_order, self.m_cv_count, rational_str
+        )
     }
 
     /// Create NURBS curve from points (unified API)
@@ -967,6 +1003,16 @@ impl NurbsCurve {
 
 impl Default for NurbsCurve {
     fn default() -> Self {
-        Self::default()
+        NurbsCurve {
+            guid: Uuid::new_v4().to_string(),
+            name: "my_nurbscurve".to_string(),
+            m_dim: 0,
+            m_is_rat: false,
+            m_order: 0,
+            m_cv_count: 0,
+            m_cv_stride: 0,
+            m_knot: Vec::new(),
+            m_cv: Vec::new(),
+        }
     }
 }

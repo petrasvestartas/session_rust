@@ -58,7 +58,7 @@ mod tests {
         let line = Line::new(0.0, 0.0, 0.0, 0.0, 0.0, 8.0);
         let pipe = Cylinder::new(line, 1.0);
 
-        let filepath = "test_cylinder.json";
+        let filepath = "serialization/test_cylinder.json";
         json_dump(&pipe, filepath, true).unwrap();
 
         let loaded = json_load::<Cylinder>(filepath).unwrap();

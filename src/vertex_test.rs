@@ -15,7 +15,7 @@ mod tests {
 
         // File I/O test
         json_dump(&vertex, "test_vertex.json", true).unwrap();
-        let from_file: Vertex = json_load("test_vertex.json").unwrap();
+        let from_file: Vertex = json_load("serialization/test_vertex.json").unwrap();
         assert_eq!(from_file.name, vertex.name);
     }
 }

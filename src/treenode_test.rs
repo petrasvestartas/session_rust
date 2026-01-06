@@ -65,7 +65,7 @@ mod tests {
 
         // File I/O test
         json_dump(&original_root, "test_treenode.json", true).unwrap();
-        let from_file: TreeNode = json_load("test_treenode.json").unwrap();
+        let from_file: TreeNode = json_load("serialization/test_treenode.json").unwrap();
         assert_eq!(from_file.name(), original_root.name());
     }
 

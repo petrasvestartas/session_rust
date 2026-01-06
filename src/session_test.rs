@@ -9,7 +9,7 @@ mod tests {
     #[test]
     fn test_session_serialization_with_all_geometry_types() {
         // Create a session with all geometry types
-        let mut my_session = Session::new("test_session");
+        let mut my_session = Session::new("serialization/test_session");
 
         // Create all geometry types that Objects class can handle
         let point = Point::new(1., 2., 3.);
@@ -129,7 +129,7 @@ mod tests {
 
         // File I/O
         json_dump(&my_session, "test_session.json", true).unwrap();
-        let from_file: Session = json_load("test_session.json").unwrap();
+        let from_file: Session = json_load("serialization/test_session.json").unwrap();
         assert!(!from_file.objects.points.is_empty());
     }
 
