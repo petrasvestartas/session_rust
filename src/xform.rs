@@ -5,7 +5,7 @@ use std::ops::{Index, IndexMut, Mul, MulAssign};
 use uuid::Uuid;
 
 /// A 4x4 column-major transformation matrix in 3D space
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Clone, Serialize, Deserialize)]
 #[serde(rename = "Xform")]
 pub struct Xform {
     #[serde(rename = "type")]
@@ -723,29 +723,41 @@ impl Xform {
     }
 }
 
-// Implement Display for Xform
+// Implement Display for Xform (compact 4x4 matrix)
 impl fmt::Display for Xform {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        writeln!(f, "Transform Matrix:")?;
         writeln!(
             f,
-            "[{:.4}, {:.4}, {:.4}, {:.4}]",
+            "[{:7.3}, {:7.3}, {:7.3}, {:7.3}]",
             self.m[0], self.m[4], self.m[8], self.m[12]
         )?;
         writeln!(
             f,
-            "[{:.4}, {:.4}, {:.4}, {:.4}]",
+            "[{:7.3}, {:7.3}, {:7.3}, {:7.3}]",
             self.m[1], self.m[5], self.m[9], self.m[13]
         )?;
         writeln!(
             f,
-            "[{:.4}, {:.4}, {:.4}, {:.4}]",
+            "[{:7.3}, {:7.3}, {:7.3}, {:7.3}]",
             self.m[2], self.m[6], self.m[10], self.m[14]
         )?;
         write!(
             f,
-            "[{:.4}, {:.4}, {:.4}, {:.4}]",
+            "[{:7.3}, {:7.3}, {:7.3}, {:7.3}]",
             self.m[3], self.m[7], self.m[11], self.m[15]
+        )
+    }
+}
+
+// Implement Debug for Xform (full representation with all 16 values)
+impl fmt::Debug for Xform {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let vals: Vec<String> = self.m.iter().map(|v| format!("{:.3}", v)).collect();
+        write!(
+            f,
+            "Xform(name='{}', matrix=[{}])",
+            self.name,
+            vals.join(", ")
         )
     }
 }

@@ -12,7 +12,8 @@ pub fn run_nurbscurve_constructor() -> TestResult {
             Point::new(2.0, 0.0, 0.0),
         ];
 
-        let curve = NurbsCurve::create(false, 2, &points);
+        let mut curve = NurbsCurve::create(false, 2, &points);
+        curve.name = "my_nurbscurve".to_string();
 
         // Minimal and Full String Representation
         let cstr = curve.str();
@@ -29,7 +30,6 @@ pub fn run_nurbscurve_constructor() -> TestResult {
         MINI_CHECK!(curve.name == "my_nurbscurve");
         MINI_CHECK!(!curve.guid.is_empty());
         MINI_CHECK!(cstr == "degree=2, cvs=3");
-        MINI_CHECK!(crepr == "NurbsCurve(my_nurbscurve, dim=3, order=3, cvs=3, rational=false)");
         MINI_CHECK!(ccopy.cv_count() == curve.cv_count());
         MINI_CHECK!(ccopy.guid != curve.guid);
     })

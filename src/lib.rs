@@ -23,6 +23,8 @@ pub mod graph;
 pub mod intersection;
 #[cfg(test)]
 mod intersection_test;
+pub mod knot;
+pub mod knot_test;
 pub mod line;
 pub mod mesh;
 pub mod nurbscurve;
@@ -53,6 +55,7 @@ pub mod pointcloud_test;
 pub mod xform_test;
 pub mod mesh_test;
 pub mod nurbscurve_test;
+pub mod nurbssurface_test;
 
 pub use arrow::Arrow;
 pub use boundingbox::BoundingBox;

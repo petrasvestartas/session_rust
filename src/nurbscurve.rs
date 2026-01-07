@@ -2,6 +2,7 @@ use crate::point::Point;
 use crate::vector::Vector;
 use crate::plane::Plane;
 use crate::tolerance::Tolerance;
+use crate::knot;
 use serde::{Serialize, Deserialize};
 use uuid::Uuid;
 
@@ -11,8 +12,8 @@ use uuid::Uuid;
 /// All methods match the fixed C++ and Python versions.
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct NurbsCurve {
-    pub guid: String,
-    pub name: String,
+    pub guid: String,           // Unique identifier
+    pub name: String,           // Name of the curve
     pub m_dim: usize,           // Dimension (typically 3 for 3D curves)
     pub m_is_rat: bool,         // true if rational, false if non-rational
     pub m_order: usize,         // Order = degree + 1 (order >= 2)
@@ -30,7 +31,7 @@ impl NurbsCurve {
 
         NurbsCurve {
             guid: Uuid::new_v4().to_string(),
-            name: "my_nurbscurve".to_string(),
+            name: String::new(),
             m_dim: dimension,
             m_is_rat: is_rational,
             m_order: order,
@@ -45,7 +46,7 @@ impl NurbsCurve {
     pub fn default() -> Self {
         NurbsCurve {
             guid: Uuid::new_v4().to_string(),
-            name: "my_nurbscurve".to_string(),
+            name: String::new(),
             m_dim: 0,
             m_is_rat: false,
             m_order: 0,
@@ -56,33 +57,24 @@ impl NurbsCurve {
         }
     }
 
-    /// Duplicate the curve (creates a copy with new GUID).
-    pub fn duplicate(&self) -> Self {
-        NurbsCurve {
-            guid: Uuid::new_v4().to_string(),
-            name: self.name.clone(),
-            m_dim: self.m_dim,
-            m_is_rat: self.m_is_rat,
-            m_order: self.m_order,
-            m_cv_count: self.m_cv_count,
-            m_cv_stride: self.m_cv_stride,
-            m_knot: self.m_knot.clone(),
-            m_cv: self.m_cv.clone(),
-        }
-    }
-
-    /// Simple string representation (like Python __str__).
+    /// Simple string representation
     pub fn str(&self) -> String {
-        format!("degree={}, cvs={}", self.degree(), self.m_cv_count)
+        format!("degree={}, cvs={}", self.degree(), self.cv_count())
     }
 
-    /// Detailed representation (like Python __repr__).
+    /// Detailed representation
     pub fn repr(&self) -> String {
-        let rational_str = if self.m_is_rat { "true" } else { "false" };
         format!(
             "NurbsCurve({}, dim={}, order={}, cvs={}, rational={})",
-            self.name, self.m_dim, self.m_order, self.m_cv_count, rational_str
+            self.name, self.m_dim, self.m_order, self.m_cv_count, self.m_is_rat
         )
+    }
+
+    /// Create a duplicate with new GUID
+    pub fn duplicate(&self) -> Self {
+        let mut copy = self.clone();
+        copy.guid = Uuid::new_v4().to_string();
+        copy
     }
 
     /// Create NURBS curve from points (unified API)
@@ -408,35 +400,9 @@ impl NurbsCurve {
     /// Find knot span index for parameter t
     ///
     /// Implementation matches OpenNURBS ON_NurbsSpanIndex with offset knot pointer.
-    /// OpenNURBS shifts knot pointer by (order-2) to work with compressed format.
     fn find_span(&self, t: f64) -> usize {
-        // OpenNURBS shifts knot pointer by (order-2) to work with compressed format
-        // Domain is knot[order-2] to knot[cv_count-1]
-        let offset = self.m_order - 2;
-        let len = self.m_cv_count - self.m_order + 2;
-
-        // Check bounds
-        if t <= self.m_knot[offset] {
-            return 0;
-        }
-        if t >= self.m_knot[offset + len - 1] {
-            return len - 2;
-        }
-
-        // Binary search
-        let mut low = 0;
-        let mut high = len - 1;
-
-        while high > low + 1 {
-            let mid = (low + high) / 2;
-            if t < self.m_knot[offset + mid] {
-                high = mid;
-            } else {
-                low = mid;
-            }
-        }
-
-        low
+        // Use knot module function
+        knot::find_span(self.m_order, self.m_cv_count, &self.m_knot, t)
     }
 
     /// Compute non-zero basis functions at parameter t
@@ -806,21 +772,8 @@ impl NurbsCurve {
             }
         }
 
-        // Reverse and negate knots
-        let (t0, t1) = self.domain();
-        let knot_count = self.m_knot.len();
-        for i in 0..(knot_count / 2) {
-            let j = knot_count - 1 - i;
-            let temp = -(self.m_knot[i] - t1) + t0;
-            self.m_knot[i] = -(self.m_knot[j] - t1) + t0;
-            self.m_knot[j] = temp;
-        }
-        if knot_count % 2 == 1 {
-            let mid = knot_count / 2;
-            self.m_knot[mid] = -(self.m_knot[mid] - t1) + t0;
-        }
-
-        true
+        // Reverse knot vector using knot module function
+        knot::reverse(self.m_order, self.m_cv_count, &mut self.m_knot)
     }
 
     /// Get span vector (parameter values at span boundaries)
@@ -1003,16 +956,6 @@ impl NurbsCurve {
 
 impl Default for NurbsCurve {
     fn default() -> Self {
-        NurbsCurve {
-            guid: Uuid::new_v4().to_string(),
-            name: "my_nurbscurve".to_string(),
-            m_dim: 0,
-            m_is_rat: false,
-            m_order: 0,
-            m_cv_count: 0,
-            m_cv_stride: 0,
-            m_knot: Vec::new(),
-            m_cv: Vec::new(),
-        }
+        Self::default()
     }
 }

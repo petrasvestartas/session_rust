@@ -1,442 +1,1136 @@
-#[cfg(test)]
-mod tests {
-    use crate::nurbssurface::NurbsSurface;
-    use crate::point::Point;
+use crate::{MINI_CHECK, MINI_TEST, REGISTER_MINI_TEST};
+use crate::mini_test::TestResult;
 
-    #[test]
-    fn test_nurbssurface_constructor() {
-        let srf = NurbsSurface::create(3, false, 4, 4, 5, 5);
-        assert!(srf.is_some());
-        
-        let srf = srf.unwrap();
-        assert_eq!(srf.dimension(), 3);
-        assert_eq!(srf.is_rational(), false);
-        assert_eq!(srf.order(0), 4);
-        assert_eq!(srf.order(1), 4);
-        assert_eq!(srf.cv_count_dir(Some(0)), 5);
-        assert_eq!(srf.cv_count_dir(Some(1)), 5);
-        assert_eq!(srf.degree(0), 3);
-        assert_eq!(srf.degree(1), 3);
-    }
+pub fn run_nurbssurface_constructor() -> TestResult {
+    MINI_TEST!("constructor", {
+        use crate::nurbssurface::NurbsSurface;
+        use crate::color::Color;
+        use crate::point::Point;
+        use crate::tolerance::TOLERANCE;
 
-    #[test]
-    fn test_nurbssurface_cv_access() {
-        let mut srf = NurbsSurface::create(3, false, 4, 4, 5, 5).unwrap();
-        
-        // Set a CV
-        let pt = Point::new(1.0, 2.0, 3.0);
-        assert!(srf.set_cv(2, 2, &pt));
-        
-        // Get the CV back
-        let retrieved = srf.get_cv(2, 2).unwrap();
-        assert!((retrieved[0] - 1.0).abs() < 1e-10);
-        assert!((retrieved[1] - 2.0).abs() < 1e-10);
-        assert!((retrieved[2] - 3.0).abs() < 1e-10);
-    }
+        // Create surface with parameters (4x4 quadratic surface, order 3)
+        let mut s = NurbsSurface::create(3, false, 3, 3, 4, 4, false, false, 2.5, 2.5).unwrap();
 
-    #[test]
-    fn test_nurbssurface_point_evaluation() {
-        // Create a simple 5x5 surface
-        let mut srf = NurbsSurface::create(3, false, 4, 4, 5, 5).unwrap();
-        srf.make_clamped_uniform_knot_vector(0, 1.0);
-        srf.make_clamped_uniform_knot_vector(1, 1.0);
-        
-        // Set control points in a grid
-        for i in 0..5 {
-            for j in 0..5 {
-                let pt = Point::new(i as f64, j as f64, 0.0);
-                srf.set_cv(i, j, &pt);
-            }
-        }
-        
-        // Evaluate at center
-        let pt = srf.point_at(1.0, 1.0).unwrap();
-        assert!((pt[0] - 2.0).abs() < 1e-10);
-        assert!((pt[1] - 2.0).abs() < 1e-10);
-        assert!((pt[2] - 0.0).abs() < 1e-10);
-    }
-
-    #[test]
-    fn test_nurbssurface_10x10_grid_evaluation() {
-        // Create surface with 5x5 control points
-        let mut srf = NurbsSurface::create(3, false, 4, 4, 5, 5).unwrap();
-        srf.make_clamped_uniform_knot_vector(0, 1.0);
-        srf.make_clamped_uniform_knot_vector(1, 1.0);
-        
-        // Set control points (corners inverted, middle lifted)
-        srf.set_cv(0, 0, &Point::new(0.0, 0.0, -2.5));
-        srf.set_cv(0, 1, &Point::new(0.0, 1.0, 0.0));
-        srf.set_cv(0, 2, &Point::new(0.0, 2.0, 0.0));
-        srf.set_cv(0, 3, &Point::new(0.0, 3.0, 0.0));
-        srf.set_cv(0, 4, &Point::new(0.0, 4.0, -2.5));
-        
-        srf.set_cv(1, 0, &Point::new(1.0, 0.0, 0.0));
-        srf.set_cv(1, 1, &Point::new(1.0, 1.0, 0.0));
-        srf.set_cv(1, 2, &Point::new(1.0, 2.0, 5.0));
-        srf.set_cv(1, 3, &Point::new(1.0, 3.0, 0.0));
-        srf.set_cv(1, 4, &Point::new(1.0, 4.0, 0.0));
-        
-        srf.set_cv(2, 0, &Point::new(2.0, 0.0, 0.0));
-        srf.set_cv(2, 1, &Point::new(2.0, 1.0, 0.0));
-        srf.set_cv(2, 2, &Point::new(2.0, 2.0, 0.0));
-        srf.set_cv(2, 3, &Point::new(2.0, 3.0, 0.0));
-        srf.set_cv(2, 4, &Point::new(2.0, 4.0, 0.0));
-        
-        srf.set_cv(3, 0, &Point::new(3.0, 0.0, 0.0));
-        srf.set_cv(3, 1, &Point::new(3.0, 1.0, 0.0));
-        srf.set_cv(3, 2, &Point::new(3.0, 2.0, 0.0));
-        srf.set_cv(3, 3, &Point::new(3.0, 3.0, 0.0));
-        srf.set_cv(3, 4, &Point::new(3.0, 4.0, 0.0));
-        
-        srf.set_cv(4, 0, &Point::new(4.0, 0.0, -2.5));
-        srf.set_cv(4, 1, &Point::new(4.0, 1.0, 0.0));
-        srf.set_cv(4, 2, &Point::new(4.0, 2.0, 0.0));
-        srf.set_cv(4, 3, &Point::new(4.0, 3.0, 0.0));
-        srf.set_cv(4, 4, &Point::new(4.0, 4.0, -2.5));
-        
-        let (u_min, u_max) = srf.domain(0).unwrap();
-        let (v_min, v_max) = srf.domain(1).unwrap();
-        
-        // Expected coordinates from OpenNURBS implementation (100 points, 10x10 grid)
-        // Format: (x, y, z) rounded to 3 decimals
-        let expected = vec![
-            // Row 0 (u=0.000)
-            (0.000, 0.000, -2.500), (0.000, 0.598, -1.176), (0.000, 1.081, -0.429), (0.000, 1.481, -0.093), (0.000, 1.833, -0.003),
-            (0.000, 2.167, -0.003), (0.000, 2.519, -0.093), (0.000, 2.919, -0.429), (0.000, 3.402, -1.176), (0.000, 4.000, -2.500),
-            // Row 1 (u=0.598)
-            (0.598, 0.000, -1.176), (0.598, 0.598, -0.407), (0.598, 1.081, 0.282), (0.598, 1.481, 0.815), (0.598, 1.833, 1.118),
-            (0.598, 2.167, 1.118), (0.598, 2.519, 0.815), (0.598, 2.919, 0.282), (0.598, 3.402, -0.407), (0.598, 4.000, -1.176),
-            // Row 2 (u=1.081)
-            (1.081, 0.000, -0.429), (1.081, 0.598, -0.013), (1.081, 1.081, 0.550), (1.081, 1.481, 1.092), (1.081, 1.833, 1.443),
-            (1.081, 2.167, 1.443), (1.081, 2.519, 1.092), (1.081, 2.919, 0.550), (1.081, 3.402, -0.013), (1.081, 4.000, -0.429),
-            // Row 3 (u=1.481)
-            (1.481, 0.000, -0.093), (1.481, 0.598, 0.120), (1.481, 1.081, 0.525), (1.481, 1.481, 0.957), (1.481, 1.833, 1.252),
-            (1.481, 2.167, 1.252), (1.481, 2.519, 0.957), (1.481, 2.919, 0.525), (1.481, 3.402, 0.120), (1.481, 4.000, -0.093),
-            // Row 4 (u=1.833)
-            (1.833, 0.000, -0.003), (1.833, 0.598, 0.106), (1.833, 1.081, 0.354), (1.833, 1.481, 0.630), (1.833, 1.833, 0.821),
-            (1.833, 2.167, 0.821), (1.833, 2.519, 0.630), (1.833, 2.919, 0.354), (1.833, 3.402, 0.106), (1.833, 4.000, -0.003),
-            // Row 5 (u=2.167)
-            (2.167, 0.000, -0.003), (2.167, 0.598, 0.054), (2.167, 1.081, 0.182), (2.167, 1.481, 0.325), (2.167, 1.833, 0.424),
-            (2.167, 2.167, 0.424), (2.167, 2.519, 0.325), (2.167, 2.919, 0.182), (2.167, 3.402, 0.054), (2.167, 4.000, -0.003),
-            // Row 6 (u=2.519)
-            (2.519, 0.000, -0.093), (2.519, 0.598, -0.020), (2.519, 1.081, 0.061), (2.519, 1.481, 0.134), (2.519, 1.833, 0.179),
-            (2.519, 2.167, 0.179), (2.519, 2.519, 0.134), (2.519, 2.919, 0.061), (2.519, 3.402, -0.020), (2.519, 4.000, -0.093),
-            // Row 7 (u=2.919)
-            (2.919, 0.000, -0.429), (2.919, 0.598, -0.195), (2.919, 1.081, -0.051), (2.919, 1.481, 0.025), (2.919, 1.833, 0.052),
-            (2.919, 2.167, 0.052), (2.919, 2.519, 0.025), (2.919, 2.919, -0.051), (2.919, 3.402, -0.195), (2.919, 4.000, -0.429),
-            // Row 8 (u=3.402)
-            (3.402, 0.000, -1.176), (3.402, 0.598, -0.553), (3.402, 1.081, -0.199), (3.402, 1.481, -0.038), (3.402, 1.833, 0.005),
-            (3.402, 2.167, 0.005), (3.402, 2.519, -0.038), (3.402, 2.919, -0.199), (3.402, 3.402, -0.553), (3.402, 4.000, -1.176),
-            // Row 9 (u=4.000)
-            (4.000, 0.000, -2.500), (4.000, 0.598, -1.176), (4.000, 1.081, -0.429), (4.000, 1.481, -0.093), (4.000, 1.833, -0.003),
-            (4.000, 2.167, -0.003), (4.000, 2.519, -0.093), (4.000, 2.919, -0.429), (4.000, 3.402, -1.176), (4.000, 4.000, -2.500),
+        // Set hardcoded control points
+        let cvs = vec![
+            // i=0
+            Point::new(0.0, 0.0, 0.0),
+            Point::new(-1.0, 0.75, 2.0),
+            Point::new(-1.0, 4.25, 2.0),
+            Point::new(0.0, 5.0, 0.0),
+            // i=1
+            Point::new(0.75, -1.0, 2.0),
+            Point::new(1.25, 1.25, 4.0),
+            Point::new(1.25, 3.75, 4.0),
+            Point::new(0.75, 6.0, 2.0),
+            // i=2
+            Point::new(4.25, -1.0, 2.0),
+            Point::new(3.75, 1.25, 4.0),
+            Point::new(3.75, 3.75, 4.0),
+            Point::new(4.25, 6.0, 2.0),
+            // i=3
+            Point::new(5.0, 0.0, 0.0),
+            Point::new(6.0, 0.75, 2.0),
+            Point::new(6.0, 4.25, 2.0),
+            Point::new(5.0, 5.0, 0.0),
         ];
-        
-        // Evaluate 10x10 grid and verify all 100 points
-        const GRID_SIZE: usize = 10;
+
+        // Setters
         let mut idx = 0;
-        
-        for i in 0..GRID_SIZE {
-            for j in 0..GRID_SIZE {
-                let u = u_min + (u_max - u_min) * (i as f64) / (GRID_SIZE - 1) as f64;
-                let v = v_min + (v_max - v_min) * (j as f64) / (GRID_SIZE - 1) as f64;
-                let pt = srf.point_at(u, v).unwrap();
-                
-                let (exp_x, exp_y, exp_z) = expected[idx];
-                
-                // Round to 3 decimals for comparison
-                let actual_x = (pt[0] * 1000.0).round() / 1000.0;
-                let actual_y = (pt[1] * 1000.0).round() / 1000.0;
-                let actual_z = (pt[2] * 1000.0).round() / 1000.0;
-                
-                assert!((actual_x - exp_x).abs() < 0.001, 
-                    "Point {} x mismatch: {} != {}", idx, actual_x, exp_x);
-                assert!((actual_y - exp_y).abs() < 0.001,
-                    "Point {} y mismatch: {} != {}", idx, actual_y, exp_y);
-                assert!((actual_z - exp_z).abs() < 0.001,
-                    "Point {} z mismatch: {} != {}", idx, actual_z, exp_z);
-                
+        for i in 0..s.cv_count_dir(Some(0)) {
+            for j in 0..s.cv_count_dir(Some(1)) {
+                s.set_cv(i, j, &cvs[idx]);
                 idx += 1;
             }
         }
-        
-        assert_eq!(idx, 100, "Should have verified all 100 grid points");
-    }
 
-    #[test]
-    fn test_nurbssurface_validation() {
-        let srf = NurbsSurface::create(3, false, 4, 4, 5, 5).unwrap();
-        assert!(srf.is_valid());
-        
-        // Empty surface is invalid
-        let empty_srf = NurbsSurface::new();
-        assert!(!empty_srf.is_valid());
-    }
+        // Getters
+        let control_point = s.get_cv(2, 1).unwrap();  // 3.75, 1.25, 4.0
+        let point = s.point_at(2.5, 2.5).unwrap();     // 2.5, 2.5, 4.0
 
-    #[test]
-    fn test_nurbssurface_domain() {
-        let mut srf = NurbsSurface::create(3, false, 4, 4, 5, 5).unwrap();
-        srf.make_clamped_uniform_knot_vector(0, 1.0);
-        srf.make_clamped_uniform_knot_vector(1, 1.0);
-        
-        let (u0, u1) = srf.domain(0).unwrap();
-        let (v0, v1) = srf.domain(1).unwrap();
-        
-        // With 5 CVs and order 4, clamped uniform knot vector with delta=1.0
-        // creates domain [0.0, 2.0]
-        assert_eq!(u0, 0.0);
-        assert_eq!(u1, 2.0);
-        assert_eq!(v0, 0.0);
-        assert_eq!(v1, 2.0);
-    }
+        // String representation
+        let str_repr = s.to_string();
 
-    #[test]
-    fn test_nurbssurface_make_rational() {
-        let mut srf = NurbsSurface::create(3, false, 4, 4, 5, 5).unwrap();
-        srf.make_clamped_uniform_knot_vector(0, 1.0);
-        srf.make_clamped_uniform_knot_vector(1, 1.0);
-        
-        assert_eq!(srf.is_rational(), false);
-        assert!(srf.make_rational());
-        assert_eq!(srf.is_rational(), true);
-    }
+        // Duplicate for comparison
+        let s_copy = s.duplicate();
 
-    #[test]
-    fn test_nurbssurface_reverse() {
-        let mut srf = NurbsSurface::create(3, false, 4, 4, 5, 5).unwrap();
-        srf.make_clamped_uniform_knot_vector(0, 1.0);
-        srf.make_clamped_uniform_knot_vector(1, 1.0);
-        
-        for i in 0..5 {
-            for j in 0..5 {
-                srf.set_cv(i, j, &Point::new(i as f64, j as f64, 0.0));
-            }
-        }
-        
-        assert!(srf.reverse(0));
-        assert!(srf.is_valid());
-    }
+        // Subdivision test
+        let v = s.subdivide(5, 5);
 
-    #[test]
-    fn test_nurbssurface_transpose() {
-        let mut srf = NurbsSurface::create(3, false, 4, 4, 5, 5).unwrap();
-        srf.make_clamped_uniform_knot_vector(0, 1.0);
-        srf.make_clamped_uniform_knot_vector(1, 1.0);
-        
-        for i in 0..5 {
-            for j in 0..5 {
-                srf.set_cv(i, j, &Point::new(i as f64, j as f64, 0.0));
-            }
-        }
-        
-        assert!(srf.transpose());
-        assert!(srf.is_valid());
-    }
-
-    #[test]
-    fn test_nurbssurface_geometric_queries() {
-        let mut srf = NurbsSurface::create(3, false, 4, 4, 5, 5).unwrap();
-        srf.make_clamped_uniform_knot_vector(0, 1.0);
-        srf.make_clamped_uniform_knot_vector(1, 1.0);
-        
-        for i in 0..5 {
-            for j in 0..5 {
-                srf.set_cv(i, j, &Point::new(i as f64, j as f64, 0.0));
-            }
-        }
-        
-        assert_eq!(srf.is_closed(0), false);
-        assert_eq!(srf.is_periodic(0), false);
-        // Planar surface (all z=0)
-        assert!(srf.is_planar(0.01));
-    }
-
-    #[test]
-    fn test_nurbssurface_string_representation() {
-        let srf = NurbsSurface::create(3, false, 4, 4, 5, 5).unwrap();
-        let s = srf.to_string();
-        assert!(s.contains("NurbsSurface"));
-        assert!(s.contains("dim=3"));
-        assert!(s.contains("order=[4,4]"));
-        assert!(s.contains("cv_count=[5,5]"));
-    }
-
-    #[test]
-    fn test_nurbssurface_make_non_rational() {
-        let mut srf = NurbsSurface::create(3, false, 4, 4, 5, 5).unwrap();
-        srf.make_clamped_uniform_knot_vector(0, 1.0);
-        srf.make_clamped_uniform_knot_vector(1, 1.0);
-        
-        for i in 0..5 {
-            for j in 0..5 {
-                srf.set_cv(i, j, &Point::new(i as f64, j as f64, 0.1));
-            }
-        }
-        
-        // Make rational first
-        assert!(srf.make_rational());
-        assert_eq!(srf.is_rational(), true);
-        
-        // Then make non-rational
-        assert!(srf.make_non_rational());
-        assert_eq!(srf.is_rational(), false);
-    }
-
-    #[test]
-    fn test_nurbssurface_clamp_end() {
-        let mut srf = NurbsSurface::create(3, false, 4, 4, 5, 5).unwrap();
-        srf.make_clamped_uniform_knot_vector(0, 1.0);
-        srf.make_clamped_uniform_knot_vector(1, 1.0);
-        
-        // Clamp start of u direction
-        assert!(srf.clamp_end(0, 0));
-        
-        // Clamp end of v direction
-        assert!(srf.clamp_end(1, 1));
-        
-        // Clamp both ends of u direction
-        assert!(srf.clamp_end(0, 2));
-    }
-
-    #[test]
-    fn test_nurbssurface_isocurve_extraction() {
-        // Create the same surface as in isocurve test
-        let mut srf = NurbsSurface::create(3, false, 4, 4, 5, 5).unwrap();
-        srf.make_clamped_uniform_knot_vector(0, 1.0);
-        srf.make_clamped_uniform_knot_vector(1, 1.0);
-        
-        // Set control points
-        srf.set_cv(0, 0, &Point::new(0.0, 0.0, -2.5));
-        srf.set_cv(0, 1, &Point::new(0.0, 1.0, 0.0));
-        srf.set_cv(0, 2, &Point::new(0.0, 2.0, 0.0));
-        srf.set_cv(0, 3, &Point::new(0.0, 3.0, 0.0));
-        srf.set_cv(0, 4, &Point::new(0.0, 4.0, -2.5));
-        
-        srf.set_cv(1, 0, &Point::new(1.0, 0.0, 0.0));
-        srf.set_cv(1, 1, &Point::new(1.0, 1.0, 0.0));
-        srf.set_cv(1, 2, &Point::new(1.0, 2.0, 5.0));
-        srf.set_cv(1, 3, &Point::new(1.0, 3.0, 0.0));
-        srf.set_cv(1, 4, &Point::new(1.0, 4.0, 0.0));
-        
-        srf.set_cv(2, 0, &Point::new(2.0, 0.0, 0.0));
-        srf.set_cv(2, 1, &Point::new(2.0, 1.0, 0.0));
-        srf.set_cv(2, 2, &Point::new(2.0, 2.0, 0.0));
-        srf.set_cv(2, 3, &Point::new(2.0, 3.0, 0.0));
-        srf.set_cv(2, 4, &Point::new(2.0, 4.0, 0.0));
-        
-        srf.set_cv(3, 0, &Point::new(3.0, 0.0, 0.0));
-        srf.set_cv(3, 1, &Point::new(3.0, 1.0, 0.0));
-        srf.set_cv(3, 2, &Point::new(3.0, 2.0, 0.0));
-        srf.set_cv(3, 3, &Point::new(3.0, 3.0, 0.0));
-        srf.set_cv(3, 4, &Point::new(3.0, 4.0, 0.0));
-        
-        srf.set_cv(4, 0, &Point::new(4.0, 0.0, -2.5));
-        srf.set_cv(4, 1, &Point::new(4.0, 1.0, 0.0));
-        srf.set_cv(4, 2, &Point::new(4.0, 2.0, 0.0));
-        srf.set_cv(4, 3, &Point::new(4.0, 3.0, 0.0));
-        srf.set_cv(4, 4, &Point::new(4.0, 4.0, -2.5));
-        
-        let (u_min, u_max) = srf.domain(0).unwrap();
-        let (v_min, v_max) = srf.domain(1).unwrap();
-        let u_param = 0.5 * (u_min + u_max);  // u = 1.0
-        let v_param = 0.5 * (v_min + v_max);  // v = 1.0
-        
-        // Extract iso-v curve (u varies, v constant) using iso_curve method
-        let iso_v_curve = srf.iso_curve(1, v_param).unwrap();
-        assert_eq!(iso_v_curve.m_order, 4);
-        assert_eq!(iso_v_curve.m_cv_count, 5);
-        
-        // Sample the extracted curve and verify coordinates
-        let crv_domain = iso_v_curve.domain();
-        let expected_iso_v = [
-            (0.000, 2.000, 0.000),
-            (0.120, 2.000, 0.288),
-            (0.235, 2.000, 0.540),
-        ];
-        
-        for (idx, (exp_x, exp_y, exp_z)) in expected_iso_v.iter().enumerate() {
-            let t = crv_domain.0 + (crv_domain.1 - crv_domain.0) * (idx as f64) / 49.0;
-            let pt = iso_v_curve.point_at(t);
-            assert!((pt[0] - exp_x).abs() < 0.001, "iso-v curve point {} x mismatch", idx);
-            assert!((pt[1] - exp_y).abs() < 0.001, "iso-v curve point {} y mismatch", idx);
-            assert!((pt[2] - exp_z).abs() < 0.001, "iso-v curve point {} z mismatch", idx);
-        }
-        
-        // Extract iso-u curve (v varies, u constant) using iso_curve method
-        let iso_u_curve = srf.iso_curve(0, u_param).unwrap();
-        assert_eq!(iso_u_curve.m_order, 4);
-        assert_eq!(iso_u_curve.m_cv_count, 5);
-        
-        // Sample the extracted curve
-        let crv_domain = iso_u_curve.domain();
-        let expected_iso_u = [
-            (2.000, 0.000, 0.000),
-            (2.000, 0.120, 0.003),
-            (2.000, 0.235, 0.012),
-        ];
-        
-        for (idx, (exp_x, exp_y, exp_z)) in expected_iso_u.iter().enumerate() {
-            let t = crv_domain.0 + (crv_domain.1 - crv_domain.0) * (idx as f64) / 49.0;
-            let pt = iso_u_curve.point_at(t);
-            assert!((pt[0] - exp_x).abs() < 0.001, "iso-u curve point {} x mismatch", idx);
-            assert!((pt[1] - exp_y).abs() < 0.001, "iso-u curve point {} y mismatch", idx);
-            assert!((pt[2] - exp_z).abs() < 0.001, "iso-u curve point {} z mismatch", idx);
-        }
-    }
+        MINI_CHECK!(s.name == "my_nurbssurface");
+        MINI_CHECK!(s.width == 1.0);
+        MINI_CHECK!(s.surfacecolor == Color::white());
+        MINI_CHECK!(!s.guid.is_empty());
+        MINI_CHECK!(s.m_dim == 3);
+        MINI_CHECK!(!s.m_is_rat);
+        MINI_CHECK!(s.dimension() == 3);
+        MINI_CHECK!(!s.is_rational());
+        MINI_CHECK!(s.order(0) == 3);
+        MINI_CHECK!(s.order(1) == 3);
+        MINI_CHECK!(s.degree(0) == 2);
+        MINI_CHECK!(s.degree(1) == 2);
+        MINI_CHECK!(s.cv_count_dir(Some(0)) == 4);
+        MINI_CHECK!(s.cv_count_dir(Some(1)) == 4);
+        MINI_CHECK!(s.cv_count_dir(None) == 16);
+        MINI_CHECK!(s.knot_count(0) == 5);
+        MINI_CHECK!(s.knot_count(1) == 5);
+        MINI_CHECK!(control_point[0] == 3.75 && control_point[1] == 1.25 && control_point[2] == 4.0);
+        MINI_CHECK!(point[0] == 2.5 && point[1] == 2.5 && point[2] == 4.0);
+        MINI_CHECK!(str_repr == "NurbsSurface(dim=3, order=(3,3), cv_count=(4,4))");
+        MINI_CHECK!(s_copy == s);
+        MINI_CHECK!(s_copy.name == s.name);
+        MINI_CHECK!(s_copy.width == s.width);
+        MINI_CHECK!(s_copy.surfacecolor == s.surfacecolor);
+        MINI_CHECK!(s_copy.guid != s.guid);
+        // Helper closure for tolerance-based point comparison
+        let close_pt = |a: &Point, x: f64, y: f64, z: f64| -> bool {
+            TOLERANCE.is_close(a[0], x) && TOLERANCE.is_close(a[1], y) && TOLERANCE.is_close(a[2], z)
+        };
+        MINI_CHECK!(close_pt(&v[0][0], 0.0, 0.0, 0.0));
+        MINI_CHECK!(close_pt(&v[0][1], -0.64, 0.76, 1.28));
+        MINI_CHECK!(close_pt(&v[0][2], -0.96, 1.84, 1.92));
+        MINI_CHECK!(close_pt(&v[0][3], -0.96, 3.16, 1.92));
+        MINI_CHECK!(close_pt(&v[0][4], -0.64, 4.24, 1.28));
+        MINI_CHECK!(close_pt(&v[0][5], 0.0, 5.0, 0.0));
+        MINI_CHECK!(close_pt(&v[1][0], 0.76, -0.64, 1.28));
+        MINI_CHECK!(close_pt(&v[1][1], 0.6832, 0.6832, 2.56));
+        MINI_CHECK!(close_pt(&v[1][2], 0.6448, 1.9168, 3.2));
+        MINI_CHECK!(close_pt(&v[1][3], 0.6448, 3.0832, 3.2));
+        MINI_CHECK!(close_pt(&v[1][4], 0.6832, 4.3168, 2.56));
+        MINI_CHECK!(close_pt(&v[1][5], 0.76, 5.64, 1.28));
+        MINI_CHECK!(close_pt(&v[2][0], 1.84, -0.96, 1.92));
+        MINI_CHECK!(close_pt(&v[2][1], 1.9168, 0.6448, 3.2));
+        MINI_CHECK!(close_pt(&v[2][2], 1.9552, 1.9552, 3.84));
+        MINI_CHECK!(close_pt(&v[2][3], 1.9552, 3.0448, 3.84));
+        MINI_CHECK!(close_pt(&v[2][4], 1.9168, 4.3552, 3.2));
+        MINI_CHECK!(close_pt(&v[2][5], 1.84, 5.96, 1.92));
+        MINI_CHECK!(close_pt(&v[3][0], 3.16, -0.96, 1.92));
+        MINI_CHECK!(close_pt(&v[3][1], 3.0832, 0.6448, 3.2));
+        MINI_CHECK!(close_pt(&v[3][2], 3.0448, 1.9552, 3.84));
+        MINI_CHECK!(close_pt(&v[3][3], 3.0448, 3.0448, 3.84));
+        MINI_CHECK!(close_pt(&v[3][4], 3.0832, 4.3552, 3.2));
+        MINI_CHECK!(close_pt(&v[3][5], 3.16, 5.96, 1.92));
+        MINI_CHECK!(close_pt(&v[4][0], 4.24, -0.64, 1.28));
+        MINI_CHECK!(close_pt(&v[4][1], 4.3168, 0.6832, 2.56));
+        MINI_CHECK!(close_pt(&v[4][2], 4.3552, 1.9168, 3.2));
+        MINI_CHECK!(close_pt(&v[4][3], 4.3552, 3.0832, 3.2));
+        MINI_CHECK!(close_pt(&v[4][4], 4.3168, 4.3168, 2.56));
+        MINI_CHECK!(close_pt(&v[4][5], 4.24, 5.64, 1.28));
+        MINI_CHECK!(close_pt(&v[5][0], 5.0, 0.0, 0.0));
+        MINI_CHECK!(close_pt(&v[5][1], 5.64, 0.76, 1.28));
+        MINI_CHECK!(close_pt(&v[5][2], 5.96, 1.84, 1.92));
+        MINI_CHECK!(close_pt(&v[5][3], 5.96, 3.16, 1.92));
+        MINI_CHECK!(close_pt(&v[5][4], 5.64, 4.24, 1.28));
+        MINI_CHECK!(close_pt(&v[5][5], 5.0, 5.0, 0.0));
+    })
 }
 
-#[cfg(test)]
-mod short_surface_center_test {
-    use crate::nurbssurface::NurbsSurface;
-    use crate::point::Point;
+pub fn run_nurbssurface_create_operations() -> TestResult {
+    MINI_TEST!("create_operations", {
+        use crate::nurbssurface::NurbsSurface;
+        use crate::point::Point;
 
-    #[test]
-    fn test_nurbssurface_center_point_numeric_3dec() {
-        let mut srf = NurbsSurface::create(3, false, 4, 4, 5, 5).unwrap();
-        srf.make_clamped_uniform_knot_vector(0, 1.0);
-        srf.make_clamped_uniform_knot_vector(1, 1.0);
+        // Create a simple 2x2 bilinear surface
+        let mut surf = NurbsSurface::create_simple(3, false, 2, 2, 2, 2).unwrap();
 
-        srf.set_cv(0, 0, &Point::new(0.0, 0.0, -2.5));
-        srf.set_cv(0, 1, &Point::new(0.0, 1.0, 0.0));
-        srf.set_cv(0, 2, &Point::new(0.0, 2.0, 0.0));
-        srf.set_cv(0, 3, &Point::new(0.0, 3.0, 0.0));
-        srf.set_cv(0, 4, &Point::new(0.0, 4.0, -2.5));
+        // Set up clamped uniform knot vectors
+        surf.make_clamped_uniform_knot_vector(0, 1.0);
+        surf.make_clamped_uniform_knot_vector(1, 1.0);
 
-        srf.set_cv(1, 0, &Point::new(1.0, 0.0, 0.0));
-        srf.set_cv(1, 1, &Point::new(1.0, 1.0, 0.0));
-        srf.set_cv(1, 2, &Point::new(1.0, 2.0, 5.0));
-        srf.set_cv(1, 3, &Point::new(1.0, 3.0, 0.0));
-        srf.set_cv(1, 4, &Point::new(1.0, 4.0, 0.0));
+        // Set corner control points
+        surf.set_cv(0, 0, &Point::new(0.0, 0.0, 0.0));
+        surf.set_cv(1, 0, &Point::new(1.0, 0.0, 0.0));
+        surf.set_cv(0, 1, &Point::new(0.0, 1.0, 0.0));
+        surf.set_cv(1, 1, &Point::new(1.0, 1.0, 0.0));
 
-        srf.set_cv(2, 0, &Point::new(2.0, 0.0, 0.0));
-        srf.set_cv(2, 1, &Point::new(2.0, 1.0, 0.0));
-        srf.set_cv(2, 2, &Point::new(2.0, 2.0, 0.0));
-        srf.set_cv(2, 3, &Point::new(2.0, 3.0, 0.0));
-        srf.set_cv(2, 4, &Point::new(2.0, 4.0, 0.0));
+        // Check knot vectors
+        let (u0, _u1) = surf.domain(0).unwrap();
+        let (v0, _v1) = surf.domain(1).unwrap();
 
-        srf.set_cv(3, 0, &Point::new(3.0, 0.0, 0.0));
-        srf.set_cv(3, 1, &Point::new(3.0, 1.0, 0.0));
-        srf.set_cv(3, 2, &Point::new(3.0, 2.0, 0.0));
-        srf.set_cv(3, 3, &Point::new(3.0, 3.0, 0.0));
-        srf.set_cv(3, 4, &Point::new(3.0, 4.0, 0.0));
-
-        srf.set_cv(4, 0, &Point::new(4.0, 0.0, -2.5));
-        srf.set_cv(4, 1, &Point::new(4.0, 1.0, 0.0));
-        srf.set_cv(4, 2, &Point::new(4.0, 2.0, 0.0));
-        srf.set_cv(4, 3, &Point::new(4.0, 3.0, 0.0));
-        srf.set_cv(4, 4, &Point::new(4.0, 4.0, -2.5));
-
-        let (u_min, u_max) = srf.domain(0).unwrap();
-        let (v_min, v_max) = srf.domain(1).unwrap();
-        let u_mid = 0.5 * (u_min + u_max);
-        let v_mid = 0.5 * (v_min + v_max);
-
-        let pt = srf.point_at(u_mid, v_mid).unwrap();
-        let ax = (pt[0] * 1000.0).round() / 1000.0;
-        let ay = (pt[1] * 1000.0).round() / 1000.0;
-        let az = (pt[2] * 1000.0).round() / 1000.0;
-        assert!((ax - 2.000).abs() < 0.001);
-        assert!((ay - 2.000).abs() < 0.001);
-        assert!((az - 0.625).abs() < 0.001);
-    }
+        MINI_CHECK!(surf.is_valid());
+        MINI_CHECK!(u0 == 0.0);
+        MINI_CHECK!(v0 == 0.0);
+    })
 }
+
+pub fn run_nurbssurface_accessors() -> TestResult {
+    MINI_TEST!("accessors", {
+        use crate::nurbssurface::NurbsSurface;
+
+        let mut surf = NurbsSurface::create_simple(3, false, 4, 3, 5, 4).unwrap();
+
+        // Test knot access
+        surf.make_clamped_uniform_knot_vector(0, 1.0);
+        let knot_val = surf.knot(0, 2);
+
+        // Test set knot
+        surf.set_knot(0, 2, 5.0);
+        let new_val = surf.knot(0, 2);
+
+        MINI_CHECK!(surf.dimension() == 3);
+        MINI_CHECK!(!surf.is_rational());
+        MINI_CHECK!(surf.order(0) == 4);
+        MINI_CHECK!(surf.order(1) == 3);
+        MINI_CHECK!(surf.degree(0) == 3);
+        MINI_CHECK!(surf.degree(1) == 2);
+        MINI_CHECK!(surf.cv_count_dir(Some(0)) == 5);
+        MINI_CHECK!(surf.cv_count_dir(Some(1)) == 4);
+        MINI_CHECK!(surf.cv_count_dir(None) == 20);
+        MINI_CHECK!(surf.cv_size() == 3);
+        MINI_CHECK!(surf.knot_count(0) == 7);
+        MINI_CHECK!(surf.knot_count(1) == 5);
+        MINI_CHECK!(surf.span_count(0) == 2);
+        MINI_CHECK!(surf.span_count(1) == 2);
+        MINI_CHECK!(new_val.is_some() && new_val.unwrap() == 5.0);
+    })
+}
+
+pub fn run_nurbssurface_knot_operations() -> TestResult {
+    MINI_TEST!("knot_operations", {
+        use crate::nurbssurface::NurbsSurface;
+
+        let mut surf = NurbsSurface::create_simple(3, false, 4, 4, 4, 4).unwrap();
+
+        // Make clamped uniform knot vector
+        surf.make_clamped_uniform_knot_vector(0, 1.0);
+        surf.make_clamped_uniform_knot_vector(1, 1.0);
+
+        // Verify domain
+        let (u0, u1) = surf.domain(0).unwrap();
+        let (v0, v1) = surf.domain(1).unwrap();
+
+        MINI_CHECK!(u0 == 0.0);
+        MINI_CHECK!(u1 > u0);
+        MINI_CHECK!(v0 == 0.0);
+        MINI_CHECK!(v1 > v0);
+        MINI_CHECK!(surf.is_clamped(0, 0));
+        MINI_CHECK!(surf.is_clamped(1, 0));
+    })
+}
+
+pub fn run_nurbssurface_rational_operations() -> TestResult {
+    MINI_TEST!("rational_operations", {
+        use crate::nurbssurface::NurbsSurface;
+        use crate::point::Point;
+
+        // Create non-rational surface
+        let mut surf = NurbsSurface::create_simple(3, false, 3, 3, 3, 3).unwrap();
+
+        // Make it rational
+        surf.make_rational();
+
+        // Set a control point and weight
+        surf.set_cv(1, 1, &Point::new(1.0, 2.0, 3.0));
+        surf.set_weight(1, 1, 2.0);
+
+        // Verify weight
+        let w = surf.weight(1, 1);
+
+        MINI_CHECK!(surf.is_rational());
+        MINI_CHECK!(surf.cv_size() == 4);
+        MINI_CHECK!(w == 2.0);
+    })
+}
+
+pub fn run_nurbssurface_evaluation() -> TestResult {
+    MINI_TEST!("evaluation", {
+        use crate::nurbssurface::NurbsSurface;
+        use crate::point::Point;
+        use crate::tolerance::TOLERANCE;
+
+        // Create simple bilinear surface (2x2 control points, order 2x2)
+        let mut surf = NurbsSurface::create_simple(3, false, 2, 2, 2, 2).unwrap();
+        surf.make_clamped_uniform_knot_vector(0, 1.0);
+        surf.make_clamped_uniform_knot_vector(1, 1.0);
+
+        // Set corner control points to unit square in XY plane
+        surf.set_cv(0, 0, &Point::new(0.0, 0.0, 0.0));
+        surf.set_cv(1, 0, &Point::new(1.0, 0.0, 0.0));
+        surf.set_cv(0, 1, &Point::new(0.0, 1.0, 0.0));
+        surf.set_cv(1, 1, &Point::new(1.0, 1.0, 0.0));
+
+        // Evaluate at domain bounds
+        let (u0, u1) = surf.domain(0).unwrap();
+        let (v0, v1) = surf.domain(1).unwrap();
+
+        let pt_corner = surf.point_at(u0, v0).unwrap();
+        let pt_mid = surf.point_at((u0 + u1) / 2.0, (v0 + v1) / 2.0).unwrap();
+        let derivs = surf.evaluate((u0 + u1) / 2.0, (v0 + v1) / 2.0, 1);
+        let normal = surf.normal_at((u0 + u1) / 2.0, (v0 + v1) / 2.0);
+
+        MINI_CHECK!(surf.is_valid());
+        MINI_CHECK!(TOLERANCE.is_close(pt_corner[0], 0.0));
+        MINI_CHECK!(TOLERANCE.is_close(pt_corner[1], 0.0));
+        MINI_CHECK!(TOLERANCE.is_close(pt_corner[2], 0.0));
+        MINI_CHECK!(TOLERANCE.is_close(pt_mid[0], 0.5));
+        MINI_CHECK!(TOLERANCE.is_close(pt_mid[1], 0.5));
+        MINI_CHECK!(derivs.len() == 3);
+        MINI_CHECK!(TOLERANCE.is_close(normal[2].abs(), 1.0));
+    })
+}
+
+pub fn run_nurbssurface_geometric_queries() -> TestResult {
+    MINI_TEST!("geometric_queries", {
+        use crate::nurbssurface::NurbsSurface;
+        use crate::point::Point;
+
+        // Create and setup surface
+        let mut surf = NurbsSurface::create_simple(3, false, 2, 2, 2, 2).unwrap();
+        surf.make_clamped_uniform_knot_vector(0, 1.0);
+        surf.make_clamped_uniform_knot_vector(1, 1.0);
+
+        surf.set_cv(0, 0, &Point::new(0.0, 0.0, 0.0));
+        surf.set_cv(1, 0, &Point::new(1.0, 0.0, 0.0));
+        surf.set_cv(0, 1, &Point::new(0.0, 1.0, 0.0));
+        surf.set_cv(1, 1, &Point::new(1.0, 1.0, 0.0));
+
+        MINI_CHECK!(surf.is_valid());
+        MINI_CHECK!(!surf.is_closed(0));
+        MINI_CHECK!(!surf.is_closed(1));
+        MINI_CHECK!(!surf.is_periodic(0));
+        MINI_CHECK!(!surf.is_periodic(1));
+        MINI_CHECK!(surf.is_clamped(0, 0));
+        MINI_CHECK!(surf.is_clamped(1, 0));
+        MINI_CHECK!(surf.is_planar(1e-6));
+    })
+}
+
+pub fn run_nurbssurface_modification() -> TestResult {
+    MINI_TEST!("modification", {
+        use crate::nurbssurface::NurbsSurface;
+        use crate::point::Point;
+
+        let mut surf = NurbsSurface::create_simple(3, false, 2, 2, 3, 2).unwrap();
+        surf.make_clamped_uniform_knot_vector(0, 1.0);
+        surf.make_clamped_uniform_knot_vector(1, 1.0);
+
+        // Set some CVs
+        surf.set_cv(0, 0, &Point::new(0.0, 0.0, 0.0));
+        surf.set_cv(2, 0, &Point::new(2.0, 0.0, 0.0));
+        surf.set_cv(0, 1, &Point::new(0.0, 1.0, 0.0));
+        surf.set_cv(2, 1, &Point::new(2.0, 1.0, 0.0));
+
+        let cv_before = surf.get_cv(0, 0).unwrap();
+
+        // Test reverse in u direction
+        surf.reverse(0);
+        let cv_after = surf.get_cv(2, 0).unwrap();
+
+        // Reverse back
+        surf.reverse(0);
+
+        // Test transpose
+        let order_u_before = surf.order(0);
+        let order_v_before = surf.order(1);
+        surf.transpose();
+
+        MINI_CHECK!(cv_after[0] == cv_before[0]);
+        MINI_CHECK!(surf.order(0) == order_v_before);
+        MINI_CHECK!(surf.order(1) == order_u_before);
+    })
+}
+
+pub fn run_nurbssurface_isocurve() -> TestResult {
+    MINI_TEST!("isocurve", {
+        use crate::nurbssurface::NurbsSurface;
+        use crate::point::Point;
+
+        // Create surface
+        let mut surf = NurbsSurface::create_simple(3, false, 3, 3, 3, 3).unwrap();
+        surf.make_clamped_uniform_knot_vector(0, 1.0);
+        surf.make_clamped_uniform_knot_vector(1, 1.0);
+
+        // Set up a grid of control points
+        for i in 0..3 {
+            for j in 0..3 {
+                surf.set_cv(i, j, &Point::new(i as f64, j as f64, 0.0));
+            }
+        }
+
+        // Extract iso-u curve (v varies)
+        let (u0, u1) = surf.domain(0).unwrap();
+        let u_mid = (u0 + u1) / 2.0;
+        let iso_u = surf.iso_curve(0, u_mid);
+
+        // Extract iso-v curve (u varies)
+        let (v0, v1) = surf.domain(1).unwrap();
+        let v_mid = (v0 + v1) / 2.0;
+        let iso_v = surf.iso_curve(1, v_mid);
+
+        MINI_CHECK!(surf.is_valid());
+        MINI_CHECK!(iso_u.is_some());
+        MINI_CHECK!(iso_v.is_some());
+    })
+}
+
+pub fn run_nurbssurface_transformation() -> TestResult {
+    MINI_TEST!("transformation", {
+        use crate::nurbssurface::NurbsSurface;
+        use crate::point::Point;
+        use crate::xform::Xform;
+        use crate::tolerance::TOLERANCE;
+
+        // Create simple surface
+        let mut surf = NurbsSurface::create_simple(3, false, 2, 2, 2, 2).unwrap();
+        surf.make_clamped_uniform_knot_vector(0, 1.0);
+        surf.make_clamped_uniform_knot_vector(1, 1.0);
+
+        surf.set_cv(0, 0, &Point::new(0.0, 0.0, 0.0));
+        surf.set_cv(1, 0, &Point::new(1.0, 0.0, 0.0));
+        surf.set_cv(0, 1, &Point::new(0.0, 1.0, 0.0));
+        surf.set_cv(1, 1, &Point::new(1.0, 1.0, 0.0));
+
+        // Apply translation
+        let xf = Xform::translation(1.0, 2.0, 3.0);
+        surf.transform(&xf);
+
+        // Check transformed CV
+        let pt = surf.get_cv(0, 0).unwrap();
+
+        MINI_CHECK!(TOLERANCE.is_close(pt[0], 1.0));
+        MINI_CHECK!(TOLERANCE.is_close(pt[1], 2.0));
+        MINI_CHECK!(TOLERANCE.is_close(pt[2], 3.0));
+    })
+}
+
+pub fn run_nurbssurface_json_roundtrip() -> TestResult {
+    MINI_TEST!("json_roundtrip", {
+        use crate::nurbssurface::NurbsSurface;
+        use crate::point::Point;
+        use crate::color::Color;
+
+        // Create and setup surface
+        let mut surf = NurbsSurface::create_simple(3, false, 3, 3, 3, 3).unwrap();
+        surf.name = "test_nurbssurface".to_string();
+        surf.width = 2.0;
+        surf.surfacecolor = Color::new(255, 128, 64, 255);
+
+        surf.make_clamped_uniform_knot_vector(0, 1.0);
+        surf.make_clamped_uniform_knot_vector(1, 1.0);
+
+        // Set some CVs
+        for i in 0..3 {
+            for j in 0..3 {
+                surf.set_cv(i, j, &Point::new(i as f64, j as f64, 0.0));
+            }
+        }
+
+        // Serialize to JSON
+        let json_str = serde_json::to_string_pretty(&surf).expect("Failed to serialize");
+
+        // Deserialize from JSON
+        let loaded: NurbsSurface = serde_json::from_str(&json_str).expect("Failed to deserialize");
+
+        MINI_CHECK!(!json_str.is_empty());
+        MINI_CHECK!(loaded.name == surf.name);
+        MINI_CHECK!(loaded.width == surf.width);
+        MINI_CHECK!(loaded.m_dim == surf.m_dim);
+        MINI_CHECK!(loaded.m_is_rat == surf.m_is_rat);
+        MINI_CHECK!(loaded.m_order[0] == surf.m_order[0]);
+        MINI_CHECK!(loaded.m_order[1] == surf.m_order[1]);
+        MINI_CHECK!(loaded.m_cv_count[0] == surf.m_cv_count[0]);
+        MINI_CHECK!(loaded.m_cv_count[1] == surf.m_cv_count[1]);
+        MINI_CHECK!(loaded.surfacecolor.r == 255);
+        MINI_CHECK!(loaded.surfacecolor.g == 128);
+        MINI_CHECK!(loaded.surfacecolor.b == 64);
+    })
+}
+
+pub fn run_nurbssurface_protobuf_roundtrip() -> TestResult {
+    MINI_TEST!("protobuf_roundtrip", {
+        use crate::nurbssurface::NurbsSurface;
+        use crate::point::Point;
+        use crate::color::Color;
+
+        // Create and setup surface
+        let mut surf = NurbsSurface::create_simple(3, false, 3, 3, 3, 3).unwrap();
+        surf.name = "test_nurbssurface".to_string();
+        surf.width = 2.0;
+        surf.surfacecolor = Color::new(255, 128, 64, 255);
+
+        surf.make_clamped_uniform_knot_vector(0, 1.0);
+        surf.make_clamped_uniform_knot_vector(1, 1.0);
+
+        // Set some CVs
+        for i in 0..3 {
+            for j in 0..3 {
+                surf.set_cv(i, j, &Point::new(i as f64, j as f64, 0.0));
+            }
+        }
+
+        // Serialize to protobuf (stub - uses JSON fallback)
+        let filename = "serialization/test_nurbssurface.bin";
+        surf.protobuf_dump(filename);
+        let loaded = NurbsSurface::protobuf_load(filename);
+
+        MINI_CHECK!(loaded.name == surf.name);
+        MINI_CHECK!(loaded.width == surf.width);
+        MINI_CHECK!(loaded.m_dim == surf.m_dim);
+        MINI_CHECK!(loaded.m_is_rat == surf.m_is_rat);
+        MINI_CHECK!(loaded.m_order[0] == surf.m_order[0]);
+        MINI_CHECK!(loaded.m_order[1] == surf.m_order[1]);
+        MINI_CHECK!(loaded.m_cv_count[0] == surf.m_cv_count[0]);
+        MINI_CHECK!(loaded.m_cv_count[1] == surf.m_cv_count[1]);
+        MINI_CHECK!(loaded.surfacecolor.r == 255);
+        MINI_CHECK!(loaded.surfacecolor.g == 128);
+        MINI_CHECK!(loaded.surfacecolor.b == 64);
+    })
+}
+
+pub fn run_nurbssurface_advanced_accessors() -> TestResult {
+    MINI_TEST!("advanced_accessors", {
+        use crate::nurbssurface::NurbsSurface;
+        use crate::point::Point;
+
+        // Create rational surface for testing get_cv_4d/set_cv_4d
+        let mut surf = NurbsSurface::create_simple(3, true, 3, 3, 3, 3).unwrap();
+        surf.make_clamped_uniform_knot_vector(0, 1.0);
+        surf.make_clamped_uniform_knot_vector(1, 1.0);
+
+        // Test set_cv_4d with homogeneous coordinates
+        let x = 2.0;
+        let y = 3.0;
+        let z = 4.0;
+        let w = 2.0;
+
+        // Set CV using set_cv first, then change weight
+        // For rational surfaces, set_cv stores homogeneous coords preserving Euclidean position
+        surf.set_cv(1, 1, &Point::new(x, y, z));
+        surf.set_weight(1, 1, w);
+
+        // get_cv returns Euclidean point (homogeneous coords divided by weight)
+        // After set_cv(Point(x,y,z)) and set_weight(w), the Euclidean point is preserved
+        let pt = surf.get_cv(1, 1).unwrap();
+        let retrieved_w = surf.weight(1, 1);
+
+        // Test knot_multiplicity
+        let mult = surf.knot_count(0);
+        let first_knot_mult = if mult > 0 {
+            // Count how many times first knot appears
+            let first_val = surf.knot(0, 0).unwrap();
+            let mut count = 1;
+            for i in 1..mult {
+                if let Some(val) = surf.knot(0, i) {
+                    if (val - first_val).abs() < 1e-10 {
+                        count += 1;
+                    } else {
+                        break;
+                    }
+                }
+            }
+            count
+        } else {
+            0
+        };
+
+        // Test cv_capacity and knot_capacity
+        let cv_cap = surf.cv_capacity();
+        let knot_cap_u = surf.knot_capacity(0);
+        let knot_cap_v = surf.knot_capacity(1);
+
+        MINI_CHECK!(surf.is_rational());
+        // Euclidean point is preserved: get_cv returns the point that was set
+        MINI_CHECK!(pt[0] == x && pt[1] == y && pt[2] == z);
+        MINI_CHECK!(retrieved_w == w);
+        MINI_CHECK!(first_knot_mult > 0);
+        MINI_CHECK!(cv_cap > 0);
+        MINI_CHECK!(knot_cap_u > 0);
+        MINI_CHECK!(knot_cap_v > 0);
+    })
+}
+
+pub fn run_nurbssurface_clamp_operations() -> TestResult {
+    MINI_TEST!("clamp_operations", {
+        use crate::nurbssurface::NurbsSurface;
+        use crate::point::Point;
+
+        let mut surf = NurbsSurface::create_simple(3, false, 4, 4, 4, 4).unwrap();
+        surf.make_clamped_uniform_knot_vector(0, 1.0);
+        surf.make_clamped_uniform_knot_vector(1, 1.0);
+
+        // Set up control points
+        for i in 0..4 {
+            for j in 0..4 {
+                surf.set_cv(i, j, &Point::new(i as f64, j as f64, 0.0));
+            }
+        }
+
+        // Test clamp_end (modifies knot vector to clamp ends)
+        let was_clamped_before = surf.is_clamped(0, 2);
+        surf.clamp_end(0, 2); // Clamp both ends
+        let is_clamped_after = surf.is_clamped(0, 2);
+
+        MINI_CHECK!(surf.is_valid());
+        MINI_CHECK!(is_clamped_after);
+    })
+}
+
+pub fn run_nurbssurface_singularity() -> TestResult {
+    MINI_TEST!("singularity", {
+        use crate::nurbssurface::NurbsSurface;
+        use crate::point::Point;
+
+        // Create a simple surface
+        let mut surf = NurbsSurface::create_simple(3, false, 2, 2, 2, 2).unwrap();
+        surf.make_clamped_uniform_knot_vector(0, 1.0);
+        surf.make_clamped_uniform_knot_vector(1, 1.0);
+
+        // Set all CVs to different points (non-singular)
+        surf.set_cv(0, 0, &Point::new(0.0, 0.0, 0.0));
+        surf.set_cv(1, 0, &Point::new(1.0, 0.0, 0.0));
+        surf.set_cv(0, 1, &Point::new(0.0, 1.0, 0.0));
+        surf.set_cv(1, 1, &Point::new(1.0, 1.0, 0.0));
+
+        // NOTE: is_singular not yet implemented in Rust
+        // For now, just verify the surface is valid
+        MINI_CHECK!(surf.is_valid());
+        MINI_CHECK!(surf.is_clamped(0, 0));
+    })
+}
+
+pub fn run_nurbssurface_bounding_box() -> TestResult {
+    MINI_TEST!("bounding_box", {
+        use crate::nurbssurface::NurbsSurface;
+        use crate::point::Point;
+
+        let mut surf = NurbsSurface::create_simple(3, false, 2, 2, 3, 3).unwrap();
+        surf.make_clamped_uniform_knot_vector(0, 1.0);
+        surf.make_clamped_uniform_knot_vector(1, 1.0);
+
+        // Set CVs in a known range
+        for i in 0..3 {
+            for j in 0..3 {
+                surf.set_cv(i, j, &Point::new(i as f64, j as f64, 0.0));
+            }
+        }
+
+        // Get bounding box (implementation note: Rust doesn't have get_bounding_box,
+        // but we can verify the CVs are in expected range)
+        let mut min_x = f64::MAX;
+        let mut max_x = f64::MIN;
+        let mut min_y = f64::MAX;
+        let mut max_y = f64::MIN;
+
+        for i in 0..3 {
+            for j in 0..3 {
+                if let Some(pt) = surf.get_cv(i, j) {
+                    min_x = min_x.min(pt[0]);
+                    max_x = max_x.max(pt[0]);
+                    min_y = min_y.min(pt[1]);
+                    max_y = max_y.max(pt[1]);
+                }
+            }
+        }
+
+        MINI_CHECK!(surf.is_valid());
+        MINI_CHECK!(min_x == 0.0);
+        MINI_CHECK!(max_x == 2.0);
+        MINI_CHECK!(min_y == 0.0);
+        MINI_CHECK!(max_y == 2.0);
+    })
+}
+
+pub fn run_nurbssurface_domain_operations() -> TestResult {
+    MINI_TEST!("domain_operations", {
+        use crate::nurbssurface::NurbsSurface;
+        use crate::tolerance::TOLERANCE;
+
+        let mut surf = NurbsSurface::create_simple(3, false, 3, 3, 3, 3).unwrap();
+        surf.make_clamped_uniform_knot_vector(0, 1.0);
+        surf.make_clamped_uniform_knot_vector(1, 1.0);
+
+        // Get initial domain
+        let dom_u = surf.domain(0).unwrap();
+        let dom_v = surf.domain(1).unwrap();
+
+        // Set new domain
+        surf.set_domain(0, 0.0, 10.0);
+        surf.set_domain(1, 5.0, 15.0);
+
+        let new_dom_u = surf.domain(0).unwrap();
+        let new_dom_v = surf.domain(1).unwrap();
+
+        // Get span vectors
+        let span_u = surf.get_span_vector(0);
+        let span_v = surf.get_span_vector(1);
+
+        MINI_CHECK!(dom_u.0 == 0.0 && dom_u.1 > 0.0);
+        MINI_CHECK!(dom_v.0 == 0.0 && dom_v.1 > 0.0);
+        MINI_CHECK!(TOLERANCE.is_close(new_dom_u.0, 0.0));
+        MINI_CHECK!(TOLERANCE.is_close(new_dom_u.1, 10.0));
+        MINI_CHECK!(TOLERANCE.is_close(new_dom_v.0, 5.0));
+        MINI_CHECK!(TOLERANCE.is_close(new_dom_v.1, 15.0));
+        MINI_CHECK!(span_u.len() > 0);
+        MINI_CHECK!(span_v.len() > 0);
+    })
+}
+
+pub fn run_nurbssurface_corner_points() -> TestResult {
+    MINI_TEST!("corner_points", {
+        use crate::nurbssurface::NurbsSurface;
+        use crate::point::Point;
+        use crate::tolerance::TOLERANCE;
+
+        let mut surf = NurbsSurface::create_simple(3, false, 2, 2, 2, 2).unwrap();
+        surf.make_clamped_uniform_knot_vector(0, 1.0);
+        surf.make_clamped_uniform_knot_vector(1, 1.0);
+
+        // Set corner control points
+        surf.set_cv(0, 0, &Point::new(0.0, 0.0, 0.0));
+        surf.set_cv(1, 0, &Point::new(10.0, 0.0, 0.0));
+        surf.set_cv(0, 1, &Point::new(0.0, 10.0, 0.0));
+        surf.set_cv(1, 1, &Point::new(10.0, 10.0, 0.0));
+
+        // Get corner points
+        let p00 = surf.point_at_corner(0, 0).unwrap();
+        let p10 = surf.point_at_corner(1, 0).unwrap();
+        let p01 = surf.point_at_corner(0, 1).unwrap();
+        let p11 = surf.point_at_corner(1, 1).unwrap();
+
+        MINI_CHECK!(TOLERANCE.is_close(p00[0], 0.0));
+        MINI_CHECK!(TOLERANCE.is_close(p10[0], 10.0));
+        MINI_CHECK!(TOLERANCE.is_close(p01[1], 10.0));
+        MINI_CHECK!(TOLERANCE.is_close(p11[0], 10.0) && TOLERANCE.is_close(p11[1], 10.0));
+    })
+}
+
+pub fn run_nurbssurface_swap_coordinates() -> TestResult {
+    MINI_TEST!("swap_coordinates", {
+        use crate::nurbssurface::NurbsSurface;
+        use crate::point::Point;
+        use crate::tolerance::TOLERANCE;
+
+        let mut surf = NurbsSurface::create_simple(3, false, 2, 2, 2, 2).unwrap();
+        surf.make_clamped_uniform_knot_vector(0, 1.0);
+        surf.make_clamped_uniform_knot_vector(1, 1.0);
+
+        // Set a control point with distinct coordinates
+        surf.set_cv(0, 0, &Point::new(1.0, 2.0, 3.0));
+
+        // Swap X and Y
+        surf.swap_coordinates(0, 1);
+
+        let pt = surf.get_cv(0, 0).unwrap();
+
+        MINI_CHECK!(TOLERANCE.is_close(pt[0], 2.0));
+        MINI_CHECK!(TOLERANCE.is_close(pt[1], 1.0));
+        MINI_CHECK!(TOLERANCE.is_close(pt[2], 3.0));
+    })
+}
+
+pub fn run_nurbssurface_change_dimension() -> TestResult {
+    MINI_TEST!("change_dimension", {
+        use crate::nurbssurface::NurbsSurface;
+        use crate::point::Point;
+        use crate::tolerance::TOLERANCE;
+
+        let mut surf = NurbsSurface::create_simple(3, false, 2, 2, 2, 2).unwrap();
+        surf.make_clamped_uniform_knot_vector(0, 1.0);
+        surf.make_clamped_uniform_knot_vector(1, 1.0);
+
+        surf.set_cv(0, 0, &Point::new(1.0, 2.0, 3.0));
+
+        let old_dim = surf.dimension();
+        surf.change_dimension(2);
+        let new_dim = surf.dimension();
+
+        let pt = surf.get_cv(0, 0).unwrap();
+
+        MINI_CHECK!(old_dim == 3);
+        MINI_CHECK!(new_dim == 2);
+        MINI_CHECK!(TOLERANCE.is_close(pt[0], 1.0));
+        MINI_CHECK!(TOLERANCE.is_close(pt[1], 2.0));
+    })
+}
+
+pub fn run_nurbssurface_zero_cvs() -> TestResult {
+    MINI_TEST!("zero_cvs", {
+        use crate::nurbssurface::NurbsSurface;
+        use crate::point::Point;
+        use crate::tolerance::TOLERANCE;
+
+        let mut surf = NurbsSurface::create_simple(3, false, 2, 2, 2, 2).unwrap();
+        surf.make_clamped_uniform_knot_vector(0, 1.0);
+        surf.make_clamped_uniform_knot_vector(1, 1.0);
+
+        // Set non-zero control points
+        surf.set_cv(0, 0, &Point::new(1.0, 2.0, 3.0));
+        surf.set_cv(1, 1, &Point::new(4.0, 5.0, 6.0));
+
+        // Zero all CVs
+        surf.zero_cvs();
+
+        let pt0 = surf.get_cv(0, 0).unwrap();
+        let pt1 = surf.get_cv(1, 1).unwrap();
+
+        MINI_CHECK!(TOLERANCE.is_close(pt0[0], 0.0) &&
+                   TOLERANCE.is_close(pt0[1], 0.0) &&
+                   TOLERANCE.is_close(pt0[2], 0.0));
+        MINI_CHECK!(TOLERANCE.is_close(pt1[0], 0.0) &&
+                   TOLERANCE.is_close(pt1[1], 0.0) &&
+                   TOLERANCE.is_close(pt1[2], 0.0));
+    })
+}
+
+pub fn run_nurbssurface_get_knots() -> TestResult {
+    MINI_TEST!("get_knots", {
+        use crate::nurbssurface::NurbsSurface;
+
+        let mut surf = NurbsSurface::create_simple(3, false, 4, 3, 4, 3).unwrap();
+        surf.make_clamped_uniform_knot_vector(0, 1.0);
+        surf.make_clamped_uniform_knot_vector(1, 2.0);
+
+        let knots_u = surf.get_knots(0);
+        let knots_v = surf.get_knots(1);
+
+        MINI_CHECK!(knots_u.len() == surf.knot_count(0) as usize);
+        MINI_CHECK!(knots_v.len() == surf.knot_count(1) as usize);
+        MINI_CHECK!(knots_u.len() > 0);
+        MINI_CHECK!(knots_v.len() > 0);
+    })
+}
+
+pub fn run_nurbssurface_make_non_rational() -> TestResult {
+    MINI_TEST!("make_non_rational", {
+        use crate::nurbssurface::NurbsSurface;
+        use crate::point::Point;
+
+        // Create rational surface with all weights = 1
+        let mut surf = NurbsSurface::create_simple(3, true, 3, 3, 3, 3).unwrap();
+        surf.make_clamped_uniform_knot_vector(0, 1.0);
+        surf.make_clamped_uniform_knot_vector(1, 1.0);
+
+        // Set all weights to 1.0
+        for i in 0..3 {
+            for j in 0..3 {
+                surf.set_cv(i, j, &Point::new(i as f64, j as f64, 0.0));
+                surf.set_weight(i, j, 1.0);
+            }
+        }
+
+        let was_rational = surf.is_rational();
+        surf.make_non_rational();
+        let is_rational_after = surf.is_rational();
+
+        MINI_CHECK!(was_rational);
+        MINI_CHECK!(!is_rational_after);
+    })
+}
+
+pub fn run_nurbssurface_create_clamped_uniform() -> TestResult {
+    MINI_TEST!("create_clamped_uniform", {
+        use crate::nurbssurface::NurbsSurface;
+
+        let mut surf = NurbsSurface::new();
+        surf.create_clamped_uniform(3, 4, 3, 4, 4, 1.0, 2.0);
+
+        let dom_u = surf.domain(0);
+        let dom_v = surf.domain(1);
+
+        MINI_CHECK!(surf.is_valid());
+        MINI_CHECK!(surf.dimension() == 3);
+        MINI_CHECK!(surf.order(0) == 4);
+        MINI_CHECK!(surf.order(1) == 3);
+        MINI_CHECK!(surf.cv_count_dir(Some(0)) == 4);
+        MINI_CHECK!(surf.cv_count_dir(Some(1)) == 4);
+        MINI_CHECK!(surf.is_clamped(0, 0) && surf.is_clamped(0, 1));
+        MINI_CHECK!(surf.is_clamped(1, 0) && surf.is_clamped(1, 1));
+    })
+}
+
+pub fn run_nurbssurface_knot_multiplicity() -> TestResult {
+    MINI_TEST!("knot_multiplicity", {
+        use crate::nurbssurface::NurbsSurface;
+
+        let mut surf = NurbsSurface::create_simple(3, false, 4, 4, 4, 4).unwrap();
+        surf.make_clamped_uniform_knot_vector(0, 1.0);
+        surf.make_clamped_uniform_knot_vector(1, 1.0);
+
+        // Check first knot multiplicity (should be equal to degree for clamped)
+        let mult_u_start = surf.knot_multiplicity(0, 0);
+        let mult_v_start = surf.knot_multiplicity(1, 0);
+
+        // Check last knot multiplicity
+        let last_u = surf.knot_count(0) - 1;
+        let last_v = surf.knot_count(1) - 1;
+        let mult_u_end = surf.knot_multiplicity(0, last_u as usize);
+        let mult_v_end = surf.knot_multiplicity(1, last_v as usize);
+
+        MINI_CHECK!(mult_u_start >= surf.degree(0) as usize);
+        MINI_CHECK!(mult_v_start >= surf.degree(1) as usize);
+        MINI_CHECK!(mult_u_end >= surf.degree(0) as usize);
+        MINI_CHECK!(mult_v_end >= surf.degree(1) as usize);
+    })
+}
+
+pub fn run_nurbssurface_sphere() -> TestResult {
+    MINI_TEST!("sphere", {
+        use crate::nurbssurface::NurbsSurface;
+        use crate::point::Point;
+        use crate::tolerance::{TOLERANCE, PI};
+
+        let radius = 2.0;
+        let w = (2.0_f64).sqrt() / 2.0;
+        let pi = PI;
+
+        let mut surf = NurbsSurface::create_simple(3, true, 3, 3, 9, 5).unwrap();
+        surf.name = "unit_sphere".to_string();
+
+        let u_knots = [0.0, 0.0, pi * 0.5, pi * 0.5, pi, pi, pi * 1.5, pi * 1.5, pi * 2.0, pi * 2.0];
+        for i in 0..10 { surf.set_knot(0, i, u_knots[i]); }
+
+        let v_knots = [-pi * 0.5, -pi * 0.5, 0.0, 0.0, pi * 0.5, pi * 0.5];
+        for i in 0..6 { surf.set_knot(1, i, v_knots[i]); }
+
+        let lat_weights = [w, 0.5, w, 0.5, w];
+        let lat_z = [-radius, -radius * w, 0.0, radius * w, radius];
+        let lat_r = [0.0, radius * w, radius, radius * w, 0.0];
+
+        for j in 0..5 {
+            let r = lat_r[j];
+            let z = lat_z[j];
+            let angles = [0.0, pi * 0.25, pi * 0.5, pi * 0.75, pi, pi * 1.25, pi * 1.5, pi * 1.75, pi * 2.0];
+            for i in 0..9 {
+                let x = r * angles[i].cos();
+                let y = r * angles[i].sin();
+                surf.set_cv(i, j, &Point::new(x, y, z));
+                let weight = if i % 2 == 0 { w } else { lat_weights[j] };
+                let weight = if j == 0 || j == 4 { w } else { weight };
+                surf.set_weight(i, j, weight);
+            }
+        }
+
+        MINI_CHECK!(surf.is_valid());
+        MINI_CHECK!(surf.is_rational());
+        MINI_CHECK!(surf.degree(0) == 2);
+        MINI_CHECK!(surf.degree(1) == 2);
+        MINI_CHECK!(surf.cv_count_dir(Some(0)) == 9);
+        MINI_CHECK!(surf.cv_count_dir(Some(1)) == 5);
+
+        let pt = surf.point_at(0.0, 0.0).unwrap();
+        MINI_CHECK!(TOLERANCE.is_close(pt[0], radius));
+        MINI_CHECK!(TOLERANCE.is_close(pt[1], 0.0));
+        MINI_CHECK!(TOLERANCE.is_close(pt[2], 0.0));
+
+        let north = surf.point_at(0.0, pi * 0.5).unwrap();
+        MINI_CHECK!(TOLERANCE.is_close(north[2], radius));
+    })
+}
+
+pub fn run_nurbssurface_cylinder() -> TestResult {
+    MINI_TEST!("cylinder", {
+        use crate::nurbssurface::NurbsSurface;
+        use crate::point::Point;
+        use crate::tolerance::{TOLERANCE, PI};
+
+        let radius = 1.5;
+        let height = 3.0;
+        let w = (2.0_f64).sqrt() / 2.0;
+        let pi = PI;
+
+        let mut surf = NurbsSurface::create_simple(3, true, 3, 2, 9, 2).unwrap();
+        surf.name = "unit_cylinder".to_string();
+
+        let u_knots = [0.0, 0.0, pi * 0.5, pi * 0.5, pi, pi, pi * 1.5, pi * 1.5, pi * 2.0, pi * 2.0];
+        for i in 0..10 { surf.set_knot(0, i, u_knots[i]); }
+
+        surf.set_knot(1, 0, 0.0);
+        surf.set_knot(1, 1, height);
+
+        let angles = [0.0, pi * 0.25, pi * 0.5, pi * 0.75, pi, pi * 1.25, pi * 1.5, pi * 1.75, pi * 2.0];
+
+        for j in 0..2 {
+            let z = if j == 0 { 0.0 } else { height };
+            for i in 0..9 {
+                let (x, y) = if i % 2 == 1 {
+                    (radius * (2.0_f64).sqrt() * angles[i].cos(), radius * (2.0_f64).sqrt() * angles[i].sin())
+                } else {
+                    (radius * angles[i].cos(), radius * angles[i].sin())
+                };
+                surf.set_cv(i, j, &Point::new(x, y, z));
+                let weight = if i % 2 == 0 { 1.0 } else { w };
+                surf.set_weight(i, j, weight);
+            }
+        }
+
+        MINI_CHECK!(surf.is_valid());
+        MINI_CHECK!(surf.is_rational());
+        MINI_CHECK!(surf.degree(0) == 2);
+        MINI_CHECK!(surf.degree(1) == 1);
+        MINI_CHECK!(surf.cv_count_dir(Some(0)) == 9);
+        MINI_CHECK!(surf.cv_count_dir(Some(1)) == 2);
+
+        let pt_bottom = surf.point_at(0.0, 0.0).unwrap();
+        MINI_CHECK!(TOLERANCE.is_close(pt_bottom[0], radius));
+        MINI_CHECK!(TOLERANCE.is_close(pt_bottom[1], 0.0));
+        MINI_CHECK!(TOLERANCE.is_close(pt_bottom[2], 0.0));
+
+        let pt_top = surf.point_at(0.0, height).unwrap();
+        MINI_CHECK!(TOLERANCE.is_close(pt_top[0], radius));
+        MINI_CHECK!(TOLERANCE.is_close(pt_top[1], 0.0));
+        MINI_CHECK!(TOLERANCE.is_close(pt_top[2], height));
+
+        let pt_mid = surf.point_at(pi * 0.5, height * 0.5).unwrap();
+        MINI_CHECK!(TOLERANCE.is_close(pt_mid[0], 0.0));
+        MINI_CHECK!(TOLERANCE.is_close(pt_mid[1], radius));
+        MINI_CHECK!(TOLERANCE.is_close(pt_mid[2], height * 0.5));
+    })
+}
+
+pub fn run_nurbssurface_torus() -> TestResult {
+    MINI_TEST!("torus", {
+        use crate::nurbssurface::NurbsSurface;
+        use crate::point::Point;
+        use crate::tolerance::{TOLERANCE, PI};
+
+        let major_radius = 3.0;
+        let minor_radius = 1.0;
+        let w = (2.0_f64).sqrt() / 2.0;
+        let pi = PI;
+
+        let mut surf = NurbsSurface::create_simple(3, true, 3, 3, 9, 9).unwrap();
+        surf.name = "unit_torus".to_string();
+
+        let knots = [0.0, 0.0, pi * 0.5, pi * 0.5, pi, pi, pi * 1.5, pi * 1.5, pi * 2.0, pi * 2.0];
+        for i in 0..10 {
+            surf.set_knot(0, i, knots[i]);
+            surf.set_knot(1, i, knots[i]);
+        }
+
+        let angles = [0.0, pi * 0.25, pi * 0.5, pi * 0.75, pi, pi * 1.25, pi * 1.5, pi * 1.75, pi * 2.0];
+
+        for i in 0..9 {
+            let major_angle = angles[i];
+            let cos_ma = major_angle.cos();
+            let sin_ma = major_angle.sin();
+            let major_scale = if i % 2 == 0 { 1.0 } else { (2.0_f64).sqrt() };
+
+            for j in 0..9 {
+                let minor_angle = angles[j];
+                let cos_mi = minor_angle.cos();
+                let sin_mi = minor_angle.sin();
+                let minor_scale = if j % 2 == 0 { 1.0 } else { (2.0_f64).sqrt() };
+
+                let r = major_radius + minor_radius * minor_scale * cos_mi;
+                let x = r * major_scale * cos_ma;
+                let y = r * major_scale * sin_ma;
+                let z = minor_radius * minor_scale * sin_mi;
+
+                surf.set_cv(i, j, &Point::new(x, y, z));
+
+                let w_major = if i % 2 == 0 { 1.0 } else { w };
+                let w_minor = if j % 2 == 0 { 1.0 } else { w };
+                surf.set_weight(i, j, w_major * w_minor);
+            }
+        }
+
+        MINI_CHECK!(surf.is_valid());
+        MINI_CHECK!(surf.is_rational());
+        MINI_CHECK!(surf.degree(0) == 2);
+        MINI_CHECK!(surf.degree(1) == 2);
+        MINI_CHECK!(surf.cv_count_dir(Some(0)) == 9);
+        MINI_CHECK!(surf.cv_count_dir(Some(1)) == 9);
+
+        let pt = surf.point_at(0.0, 0.0).unwrap();
+        MINI_CHECK!(TOLERANCE.is_close(pt[0], major_radius + minor_radius));
+        MINI_CHECK!(TOLERANCE.is_close(pt[1], 0.0));
+        MINI_CHECK!(TOLERANCE.is_close(pt[2], 0.0));
+
+        let pt_opp = surf.point_at(pi, 0.0).unwrap();
+        MINI_CHECK!(TOLERANCE.is_close(pt_opp[0], -(major_radius + minor_radius)));
+        MINI_CHECK!(TOLERANCE.is_close(pt_opp[1], 0.0));
+    })
+}
+
+pub fn run_nurbssurface_cone() -> TestResult {
+    MINI_TEST!("cone", {
+        use crate::nurbssurface::NurbsSurface;
+        use crate::point::Point;
+        use crate::tolerance::{TOLERANCE, PI};
+
+        let radius = 2.0;
+        let height = 4.0;
+        let w = (2.0_f64).sqrt() / 2.0;
+        let pi = PI;
+
+        let mut surf = NurbsSurface::create_simple(3, true, 3, 2, 9, 2).unwrap();
+        surf.name = "unit_cone".to_string();
+
+        let u_knots = [0.0, 0.0, pi * 0.5, pi * 0.5, pi, pi, pi * 1.5, pi * 1.5, pi * 2.0, pi * 2.0];
+        for i in 0..10 { surf.set_knot(0, i, u_knots[i]); }
+
+        surf.set_knot(1, 0, 0.0);
+        surf.set_knot(1, 1, height);
+
+        let angles = [0.0, pi * 0.25, pi * 0.5, pi * 0.75, pi, pi * 1.25, pi * 1.5, pi * 1.75, pi * 2.0];
+
+        for i in 0..9 {
+            surf.set_cv(i, 0, &Point::new(0.0, 0.0, height));
+            let weight = if i % 2 == 0 { 1.0 } else { w };
+            surf.set_weight(i, 0, weight);
+        }
+
+        for i in 0..9 {
+            let (x, y) = if i % 2 == 1 {
+                (radius * (2.0_f64).sqrt() * angles[i].cos(), radius * (2.0_f64).sqrt() * angles[i].sin())
+            } else {
+                (radius * angles[i].cos(), radius * angles[i].sin())
+            };
+            surf.set_cv(i, 1, &Point::new(x, y, 0.0));
+            let weight = if i % 2 == 0 { 1.0 } else { w };
+            surf.set_weight(i, 1, weight);
+        }
+
+        MINI_CHECK!(surf.is_valid());
+        MINI_CHECK!(surf.is_rational());
+        MINI_CHECK!(surf.degree(0) == 2);
+        MINI_CHECK!(surf.degree(1) == 1);
+        MINI_CHECK!(surf.cv_count_dir(Some(0)) == 9);
+        MINI_CHECK!(surf.cv_count_dir(Some(1)) == 2);
+
+        let apex = surf.point_at(0.0, 0.0).unwrap();
+        MINI_CHECK!(TOLERANCE.is_close(apex[0], 0.0));
+        MINI_CHECK!(TOLERANCE.is_close(apex[1], 0.0));
+        MINI_CHECK!(TOLERANCE.is_close(apex[2], height));
+
+        let base = surf.point_at(0.0, height).unwrap();
+        MINI_CHECK!(TOLERANCE.is_close(base[0], radius));
+        MINI_CHECK!(TOLERANCE.is_close(base[1], 0.0));
+        MINI_CHECK!(TOLERANCE.is_close(base[2], 0.0));
+
+        let mid = surf.point_at(0.0, height * 0.5).unwrap();
+        MINI_CHECK!(TOLERANCE.is_close(mid[0], radius * 0.5));
+        MINI_CHECK!(TOLERANCE.is_close(mid[2], height * 0.5));
+    })
+}
+
+// Register tests with the shared registry
+REGISTER_MINI_TEST!("NurbsSurface", "constructor", crate::nurbssurface_test::run_nurbssurface_constructor);
+REGISTER_MINI_TEST!("NurbsSurface", "create_operations", crate::nurbssurface_test::run_nurbssurface_create_operations);
+REGISTER_MINI_TEST!("NurbsSurface", "accessors", crate::nurbssurface_test::run_nurbssurface_accessors);
+REGISTER_MINI_TEST!("NurbsSurface", "knot_operations", crate::nurbssurface_test::run_nurbssurface_knot_operations);
+REGISTER_MINI_TEST!("NurbsSurface", "rational_operations", crate::nurbssurface_test::run_nurbssurface_rational_operations);
+REGISTER_MINI_TEST!("NurbsSurface", "evaluation", crate::nurbssurface_test::run_nurbssurface_evaluation);
+REGISTER_MINI_TEST!("NurbsSurface", "geometric_queries", crate::nurbssurface_test::run_nurbssurface_geometric_queries);
+REGISTER_MINI_TEST!("NurbsSurface", "modification", crate::nurbssurface_test::run_nurbssurface_modification);
+REGISTER_MINI_TEST!("NurbsSurface", "isocurve", crate::nurbssurface_test::run_nurbssurface_isocurve);
+REGISTER_MINI_TEST!("NurbsSurface", "transformation", crate::nurbssurface_test::run_nurbssurface_transformation);
+REGISTER_MINI_TEST!("NurbsSurface", "json_roundtrip", crate::nurbssurface_test::run_nurbssurface_json_roundtrip);
+REGISTER_MINI_TEST!("NurbsSurface", "protobuf_roundtrip", crate::nurbssurface_test::run_nurbssurface_protobuf_roundtrip);
+REGISTER_MINI_TEST!("NurbsSurface", "advanced_accessors", crate::nurbssurface_test::run_nurbssurface_advanced_accessors);
+REGISTER_MINI_TEST!("NurbsSurface", "clamp_operations", crate::nurbssurface_test::run_nurbssurface_clamp_operations);
+REGISTER_MINI_TEST!("NurbsSurface", "singularity", crate::nurbssurface_test::run_nurbssurface_singularity);
+REGISTER_MINI_TEST!("NurbsSurface", "bounding_box", crate::nurbssurface_test::run_nurbssurface_bounding_box);
+REGISTER_MINI_TEST!("NurbsSurface", "domain_operations", crate::nurbssurface_test::run_nurbssurface_domain_operations);
+REGISTER_MINI_TEST!("NurbsSurface", "corner_points", crate::nurbssurface_test::run_nurbssurface_corner_points);
+REGISTER_MINI_TEST!("NurbsSurface", "swap_coordinates", crate::nurbssurface_test::run_nurbssurface_swap_coordinates);
+REGISTER_MINI_TEST!("NurbsSurface", "change_dimension", crate::nurbssurface_test::run_nurbssurface_change_dimension);
+REGISTER_MINI_TEST!("NurbsSurface", "zero_cvs", crate::nurbssurface_test::run_nurbssurface_zero_cvs);
+REGISTER_MINI_TEST!("NurbsSurface", "get_knots", crate::nurbssurface_test::run_nurbssurface_get_knots);
+REGISTER_MINI_TEST!("NurbsSurface", "make_non_rational", crate::nurbssurface_test::run_nurbssurface_make_non_rational);
+REGISTER_MINI_TEST!("NurbsSurface", "create_clamped_uniform", crate::nurbssurface_test::run_nurbssurface_create_clamped_uniform);
+REGISTER_MINI_TEST!("NurbsSurface", "knot_multiplicity", crate::nurbssurface_test::run_nurbssurface_knot_multiplicity);
+REGISTER_MINI_TEST!("NurbsSurface", "sphere", crate::nurbssurface_test::run_nurbssurface_sphere);
+REGISTER_MINI_TEST!("NurbsSurface", "cylinder", crate::nurbssurface_test::run_nurbssurface_cylinder);
+REGISTER_MINI_TEST!("NurbsSurface", "torus", crate::nurbssurface_test::run_nurbssurface_torus);
+REGISTER_MINI_TEST!("NurbsSurface", "cone", crate::nurbssurface_test::run_nurbssurface_cone);

@@ -21,7 +21,7 @@ mod tests {
         assert_eq!(loaded.attribute, "attribute");
 
         // File I/O test
-        json_dump(&edge, "test_edge.json", true).unwrap();
+        json_dump(&edge, "serialization/test_edge.json", true).unwrap();
         let from_file: Edge = json_load("serialization/test_edge.json").unwrap();
         assert_eq!(from_file.name, edge.name);
     }

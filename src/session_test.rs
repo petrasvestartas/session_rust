@@ -128,7 +128,7 @@ mod tests {
         assert!(loaded.tree.root().is_some());
 
         // File I/O
-        json_dump(&my_session, "test_session.json", true).unwrap();
+        json_dump(&my_session, "serialization/test_session.json", true).unwrap();
         let from_file: Session = json_load("serialization/test_session.json").unwrap();
         assert!(!from_file.objects.points.is_empty());
     }
