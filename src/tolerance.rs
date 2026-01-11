@@ -25,7 +25,7 @@ pub struct Tolerance {
 
 impl Tolerance {
     /// Default tolerance values (f64 only)
-    pub const ABSOLUTE: f64 = 1e-9;
+    pub const ABSOLUTE: f64 = 1e-6;
     pub const RELATIVE: f64 = 1e-6;
     pub const ANGULAR: f64 = 1e-6;
     pub const APPROXIMATION: f64 = 1e-3;

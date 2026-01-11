@@ -27,8 +27,6 @@ pub struct NurbsSurface {
     pub m_cv_stride: [usize; 2],     // Stride between control vertices in m_cv array
     pub m_knot: [Vec<f64>; 2],       // Knot vectors for u and v directions
     pub m_cv: Vec<f64>,              // Control vertex data (homogeneous if rational)
-    pub m_knot_capacity: [usize; 2], // Capacity of knot arrays
-    pub m_cv_capacity: usize,        // Capacity of CV array
 }
 
 impl NurbsSurface {
@@ -47,8 +45,6 @@ impl NurbsSurface {
             m_cv_stride: [0, 0],
             m_knot: [Vec::new(), Vec::new()],
             m_cv: Vec::new(),
-            m_knot_capacity: [0, 0],
-            m_cv_capacity: 0,
         }
     }
 
@@ -100,13 +96,10 @@ impl NurbsSurface {
         let knot_count1 = order1 + cv_count1 - 2;
         srf.m_knot[0] = vec![0.0; knot_count0];
         srf.m_knot[1] = vec![0.0; knot_count1];
-        srf.m_knot_capacity[0] = knot_count0;
-        srf.m_knot_capacity[1] = knot_count1;
 
         // Allocate CV array
-        let cv_capacity = cv_size * cv_count0 * cv_count1;
-        srf.m_cv = vec![0.0; cv_capacity];
-        srf.m_cv_capacity = cv_capacity;
+        let cv_size_total = cv_size * cv_count0 * cv_count1;
+        srf.m_cv = vec![0.0; cv_size_total];
 
         // Initialize knot vectors
         // TODO: Add make_periodic_uniform_knot_vector implementation
@@ -213,17 +206,6 @@ impl NurbsSurface {
         if dir >= 2 { return 0; }
         if self.m_cv_count[dir] < self.m_order[dir] { return 0; }
         self.m_cv_count[dir] - self.m_order[dir] + 1
-    }
-    
-    /// Get CV capacity
-    pub fn cv_capacity(&self) -> usize {
-        self.m_cv_capacity
-    }
-    
-    /// Get knot capacity in specified direction
-    pub fn knot_capacity(&self, dir: usize) -> usize {
-        if dir >= 2 { return 0; }
-        self.m_knot_capacity[dir]
     }
 
     /// Get knot value at index in specified direction
@@ -873,11 +855,10 @@ impl NurbsSurface {
         self.m_is_rat = true;
         self.m_cv_stride[0] = new_cv_size;
         self.m_cv_stride[1] = new_cv_size * self.m_cv_count[0];
-        self.m_cv_capacity = new_cv_size * cv_count_total;
-        
+
         true
     }
-    
+
     /// Make surface non-rational if all weights are equal
     pub fn make_non_rational(&mut self) -> bool {
         if !self.m_is_rat {
@@ -924,11 +905,10 @@ impl NurbsSurface {
         self.m_is_rat = false;
         self.m_cv_stride[0] = new_cv_size;
         self.m_cv_stride[1] = new_cv_size * self.m_cv_count[0];
-        self.m_cv_capacity = new_cv_size * cv_count_total;
-        
+
         true
     }
-    
+
     /// Reverse surface direction
     pub fn reverse(&mut self, dir: usize) -> bool {
         if dir >= 2 || !self.is_valid() {
@@ -1011,7 +991,6 @@ impl NurbsSurface {
 
         // Swap knot vectors
         self.m_knot.swap(0, 1);
-        self.m_knot_capacity.swap(0, 1);
 
         true
     }
@@ -1514,8 +1493,6 @@ impl Clone for NurbsSurface {
             m_cv_stride: self.m_cv_stride,
             m_knot: self.m_knot.clone(),
             m_cv: self.m_cv.clone(),
-            m_knot_capacity: self.m_knot_capacity,
-            m_cv_capacity: self.m_cv_capacity,
         }
     }
 }

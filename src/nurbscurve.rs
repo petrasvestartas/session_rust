@@ -3,6 +3,7 @@ use crate::vector::Vector;
 use crate::plane::Plane;
 use crate::tolerance::Tolerance;
 use crate::knot;
+use crate::knot::CurveKnotStyle;
 use serde::{Serialize, Deserialize};
 use uuid::Uuid;
 
@@ -85,12 +86,151 @@ impl NurbsCurve {
     /// * `points` - Control points for the curve
     pub fn create(periodic: bool, degree: usize, points: &[Point]) -> Self {
         let order = degree + 1;
-        
+
         if periodic {
             Self::create_periodic_uniform(3, order, points, 1.0)
         } else {
             Self::create_clamped_uniform(3, order, points, 1.0)
         }
+    }
+
+    /// Create interpolated curve through points (matches Rhino TL_CubicNurbThroughPoints)
+    /// knot_style: 0=uniform, 1=chord-length (default), 2=centripetal
+    pub fn create_interpolated(points: &[Point], degree: usize, closed: bool, knot_style: i32) -> Self {
+        let n = points.len();
+        if n < 2 {
+            return Self::default();
+        }
+
+        let mut degree = degree;
+        if degree < 1 {
+            degree = 3;
+        }
+        if degree > n - 1 {
+            degree = n - 1;
+        }
+
+        // Currently only cubic open curves
+        if degree != 3 || closed {
+            return Self::create(closed, degree, points);
+        }
+
+        let order = degree + 1;
+
+        // Step 1: Compute parameters
+        let mut params = vec![0.0; n];
+        let mut max_dist = 0.0_f64;
+        let mut min_dist = f64::MAX;
+
+        for i in 1..n {
+            let dx = points[i][0] - points[i - 1][0];
+            let dy = points[i][1] - points[i - 1][1];
+            let dz = points[i][2] - points[i - 1][2];
+            let dist = (dx * dx + dy * dy + dz * dz).sqrt();
+
+            if dist > max_dist {
+                max_dist = dist;
+            }
+            if dist < min_dist && dist > 0.0 {
+                min_dist = dist;
+            }
+
+            let delta = match knot_style {
+                0 => 1.0,
+                2 => dist.sqrt(),
+                _ => dist,
+            };
+
+            params[i] = params[i - 1] + delta;
+        }
+
+        if min_dist <= max_dist * 1.49e-08 {
+            return Self::create(false, degree, points);
+        }
+
+        // Step 2: Build clamped knot vector
+        let mut knots = vec![0.0; n + order];
+
+        for i in 0..order {
+            knots[i] = params[0];
+            knots[n + order - 1 - i] = params[n - 1];
+        }
+
+        // Interior knots from averaging parameters
+        for j in 1..=(n - order) {
+            let mut sum = 0.0;
+            for i in j..(j + degree) {
+                sum += params[i];
+            }
+            knots[j + degree] = sum / degree as f64;
+        }
+
+        // Step 3: Build and solve interpolation system
+        let mut n_matrix = vec![vec![0.0; n]; n];
+        let mut rhs_x = vec![0.0; n];
+        let mut rhs_y = vec![0.0; n];
+        let mut rhs_z = vec![0.0; n];
+
+        for row in 0..n {
+            let t = params[row];
+            let span = find_interp_span(t, n, degree, &knots);
+            let basis = evaluate_cubic_basis(t, span, &knots);
+
+            for j in 0..=degree {
+                let col = span as i32 - degree as i32 + j as i32;
+                if col >= 0 && (col as usize) < n {
+                    n_matrix[row][col as usize] = basis[j];
+                }
+            }
+
+            rhs_x[row] = points[row][0];
+            rhs_y[row] = points[row][1];
+            rhs_z[row] = points[row][2];
+        }
+
+        // Extract tridiagonal for Thomas algorithm
+        let mut lower = vec![0.0; n];
+        let mut diag = vec![0.0; n];
+        let mut upper = vec![0.0; n];
+
+        for i in 0..n {
+            if i > 0 {
+                lower[i] = n_matrix[i][i - 1];
+            }
+            diag[i] = n_matrix[i][i];
+            if i < n - 1 {
+                upper[i] = n_matrix[i][i + 1];
+            }
+        }
+
+        // Solve for each dimension
+        let cv_x = match solve_tridiagonal(n, &lower, &diag, &upper, &rhs_x) {
+            Some(sol) => sol,
+            None => return Self::create(false, degree, points),
+        };
+        let cv_y = match solve_tridiagonal(n, &lower, &diag, &upper, &rhs_y) {
+            Some(sol) => sol,
+            None => return Self::create(false, degree, points),
+        };
+        let cv_z = match solve_tridiagonal(n, &lower, &diag, &upper, &rhs_z) {
+            Some(sol) => sol,
+            None => return Self::create(false, degree, points),
+        };
+
+        // Step 4: Create curve
+        let mut result = Self::default();
+        result.initialize_curve(3, false, order, n);
+
+        for i in 0..n {
+            result.set_cv(i, &Point::new(cv_x[i], cv_y[i], cv_z[i]));
+        }
+
+        // Set knots (stored knots = cv_count + order - 2)
+        for i in 0..(n + order - 2) {
+            result.m_knot[i] = knots[i + 1];
+        }
+
+        result
     }
 
     /// Create clamped uniform NURBS curve from control points
@@ -153,14 +293,14 @@ impl NurbsCurve {
         knot_delta: f64,
     ) -> Self {
         let point_count = points.len();
-        
+
         if order < 2 || point_count < order {
             return Self::default();
         }
 
         let mut curve = Self::default();
         let cv_count = point_count + order - 1;
-        
+
         if !curve.initialize_curve(dimension, false, order, cv_count) {
             return Self::default();
         }
@@ -169,7 +309,7 @@ impl NurbsCurve {
         for (i, point) in points.iter().enumerate() {
             curve.set_cv(i, point);
         }
-        
+
         // Wrap control points for periodicity
         for i in 0..(order - 1) {
             let idx = i % point_count;
@@ -958,4 +1098,97 @@ impl Default for NurbsCurve {
     fn default() -> Self {
         Self::default()
     }
+}
+
+// Helper functions for create_interpolated
+fn solve_tridiagonal(n: usize, lower: &[f64], diag: &[f64], upper: &[f64], rhs: &[f64]) -> Option<Vec<f64>> {
+    if n < 1 {
+        return None;
+    }
+
+    let mut c_prime = vec![0.0; n];
+    let mut d_prime = vec![0.0; n];
+
+    // Forward sweep
+    if diag[0].abs() < 1e-14 {
+        return None;
+    }
+    c_prime[0] = upper[0] / diag[0];
+    d_prime[0] = rhs[0] / diag[0];
+
+    for i in 1..n {
+        let denom = diag[i] - lower[i] * c_prime[i - 1];
+        if denom.abs() < 1e-14 {
+            return None;
+        }
+
+        if i < n - 1 {
+            c_prime[i] = upper[i] / denom;
+        }
+
+        d_prime[i] = (rhs[i] - lower[i] * d_prime[i - 1]) / denom;
+    }
+
+    // Back substitution
+    let mut solution = vec![0.0; n];
+    solution[n - 1] = d_prime[n - 1];
+
+    for i in (0..n - 1).rev() {
+        solution[i] = d_prime[i] - c_prime[i] * solution[i + 1];
+    }
+
+    Some(solution)
+}
+
+fn find_interp_span(t: f64, cv_count: usize, degree: usize, knots: &[f64]) -> usize {
+    let n = cv_count - 1;
+    if t >= knots[n + 1] {
+        return n;
+    }
+    if t <= knots[degree] {
+        return degree;
+    }
+
+    let mut low = degree;
+    let mut high = n + 1;
+    let mut mid = (low + high) / 2;
+
+    while t < knots[mid] || t >= knots[mid + 1] {
+        if t < knots[mid] {
+            high = mid;
+        } else {
+            low = mid;
+        }
+        mid = (low + high) / 2;
+    }
+    mid
+}
+
+fn evaluate_cubic_basis(t: f64, span: usize, knots: &[f64]) -> [f64; 4] {
+    let mut n_basis = [0.0; 4];
+    n_basis[0] = 1.0;
+
+    let mut left = [0.0; 4];
+    let mut right = [0.0; 4];
+
+    for j in 1..4 {
+        left[j] = t - knots[span + 1 - j];
+        right[j] = knots[span + j] - t;
+
+        let mut saved = 0.0;
+        for r in 0..j {
+            let denom = right[r + 1] + left[j - r];
+            if denom.abs() > 1e-14 {
+                let temp = n_basis[r] / denom;
+                n_basis[r] = saved + right[r + 1] * temp;
+                saved = left[j - r] * temp;
+            } else {
+                n_basis[r] = saved;
+                saved = 0.0;
+            }
+        }
+        n_basis[j] = saved;
+    }
+
+    n_basis
 }

@@ -523,19 +523,11 @@ pub fn run_nurbssurface_advanced_accessors() -> TestResult {
             0
         };
 
-        // Test cv_capacity and knot_capacity
-        let cv_cap = surf.cv_capacity();
-        let knot_cap_u = surf.knot_capacity(0);
-        let knot_cap_v = surf.knot_capacity(1);
-
         MINI_CHECK!(surf.is_rational());
         // Euclidean point is preserved: get_cv returns the point that was set
         MINI_CHECK!(pt[0] == x && pt[1] == y && pt[2] == z);
         MINI_CHECK!(retrieved_w == w);
         MINI_CHECK!(first_knot_mult > 0);
-        MINI_CHECK!(cv_cap > 0);
-        MINI_CHECK!(knot_cap_u > 0);
-        MINI_CHECK!(knot_cap_v > 0);
     })
 }
 

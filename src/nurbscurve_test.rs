@@ -681,6 +681,34 @@ pub fn run_nurbscurve_intersect_plane() -> TestResult {
     })
 }
 
+pub fn run_nurbscurve_create_interpolated() -> TestResult {
+    MINI_TEST!("create_interpolated", {
+        use crate::NurbsCurve;
+        use crate::Point;
+        use crate::Tolerance;
+
+        let points = vec![
+            Point::new(0.0, 0.0, 0.0),
+            Point::new(1.0, 2.0, 0.0),
+            Point::new(3.0, 1.0, 0.0),
+            Point::new(4.0, 3.0, 0.0),
+            Point::new(6.0, 0.0, 0.0),
+        ];
+
+        let c = NurbsCurve::create_interpolated(&points, 3, false, 1);
+        let (t0, t1) = c.domain();
+
+        let p0 = c.point_at(t0);
+        let p1 = c.point_at(t1);
+
+        let tol = Tolerance::default();
+        MINI_CHECK!(tol.is_close(p0[0], 0.0));
+        MINI_CHECK!(tol.is_close(p0[1], 0.0));
+        MINI_CHECK!(tol.is_close(p1[0], 6.0));
+        MINI_CHECK!(tol.is_close(p1[1], 0.0));
+    })
+}
+
 REGISTER_MINI_TEST!("NurbsCurve", "constructor", crate::nurbscurve_test::run_nurbscurve_constructor);
 REGISTER_MINI_TEST!("NurbsCurve", "is_valid", crate::nurbscurve_test::run_nurbscurve_is_valid);
 REGISTER_MINI_TEST!("NurbsCurve", "get_cv", crate::nurbscurve_test::run_nurbscurve_get_cv);
@@ -714,3 +742,4 @@ REGISTER_MINI_TEST!("NurbsCurve", "is_periodic", crate::nurbscurve_test::run_nur
 REGISTER_MINI_TEST!("NurbsCurve", "make_non_rational", crate::nurbscurve_test::run_nurbscurve_make_non_rational);
 REGISTER_MINI_TEST!("NurbsCurve", "divide_by_count", crate::nurbscurve_test::run_nurbscurve_divide_by_count);
 REGISTER_MINI_TEST!("NurbsCurve", "intersect_plane", crate::nurbscurve_test::run_nurbscurve_intersect_plane);
+REGISTER_MINI_TEST!("NurbsCurve", "create_interpolated", crate::nurbscurve_test::run_nurbscurve_create_interpolated);

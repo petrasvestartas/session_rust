@@ -6,6 +6,27 @@
 //! These functions operate on slices and can be used independently
 //! or called by NurbsCurve and NurbsSurface.
 
+use serde::{Deserialize, Serialize};
+
+/// Knot spacing style for interpolated curves (matches Rhino's CurveKnotStyle).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
+#[repr(u8)]
+pub enum CurveKnotStyle {
+    /// Parameter spacing = 1.0
+    Uniform = 0,
+    /// Chord-length parameterization
+    #[default]
+    Chord = 1,
+    /// Centripetal (sqrt chord) parameterization
+    ChordSquareRoot = 2,
+    /// Periodic + uniform
+    UniformPeriodic = 3,
+    /// Periodic + chord
+    ChordPeriodic = 4,
+    /// Periodic + centripetal
+    ChordSquareRootPeriodic = 5,
+}
+
 /// Compute the number of knots in a knot vector.
 ///
 /// # Arguments
@@ -618,11 +639,145 @@ pub fn get_greville_abcissae(order: usize, cv_count: usize, knot: &[f64], period
     let count = if periodic { cv_count - order + 1 } else { cv_count };
     
     let mut g = vec![0.0; count];
-    
+
     for i in 0..count {
         let sum: f64 = knot[i..(i + d)].iter().sum();
         g[i] = sum / d as f64;
     }
-    
+
     g
+}
+
+/// Solve tridiagonal linear system using Thomas algorithm.
+///
+/// # Arguments
+/// * `dim` - Dimension of each variable (e.g., 3 for 3D points).
+/// * `lower` - Lower diagonal coefficients (first element unused).
+/// * `diag` - Main diagonal coefficients.
+/// * `upper` - Upper diagonal coefficients (last element unused).
+/// * `rhs` - Right-hand side values (length n * dim).
+///
+/// # Returns
+/// Solution vector (length n * dim), or None if singular.
+pub fn solve_tridiagonal(dim: usize, lower: &[f64], diag: &[f64], upper: &[f64], rhs: &[f64]) -> Option<Vec<f64>> {
+    let n = diag.len();
+    if n < 1 || dim < 1 || lower.len() < n || upper.len() < n || rhs.len() < n * dim {
+        return None;
+    }
+
+    const EPS: f64 = 1e-14;
+    let mut c_star = vec![0.0; n];
+    let mut d_star = vec![0.0; n * dim];
+    let mut solution = vec![0.0; n * dim];
+
+    if diag[0].abs() < EPS {
+        return None;
+    }
+
+    c_star[0] = upper[0] / diag[0];
+    for d in 0..dim {
+        d_star[d] = rhs[d] / diag[0];
+    }
+
+    for i in 1..n {
+        let denom = diag[i] - lower[i] * c_star[i - 1];
+        if denom.abs() < EPS {
+            return None;
+        }
+
+        c_star[i] = if i < n - 1 { upper[i] / denom } else { 0.0 };
+        for d in 0..dim {
+            d_star[i * dim + d] = (rhs[i * dim + d] - lower[i] * d_star[(i - 1) * dim + d]) / denom;
+        }
+    }
+
+    for d in 0..dim {
+        solution[(n - 1) * dim + d] = d_star[(n - 1) * dim + d];
+    }
+
+    for i in (0..n - 1).rev() {
+        for d in 0..dim {
+            solution[i * dim + d] = d_star[i * dim + d] - c_star[i] * solution[(i + 1) * dim + d];
+        }
+    }
+
+    Some(solution)
+}
+
+/// Compute parameters for interpolation based on knot style.
+///
+/// # Arguments
+/// * `points` - Input points (flat array: x0,y0,z0,x1,y1,z1,...).
+/// * `dim` - Dimension (2 or 3).
+/// * `style` - Knot style (Uniform, Chord, or ChordSquareRoot).
+///
+/// # Returns
+/// Parameter values for each point.
+pub fn compute_parameters(points: &[f64], dim: usize, style: CurveKnotStyle) -> Vec<f64> {
+    let point_count = points.len() / dim;
+    let mut params = vec![0.0; point_count];
+    if point_count < 2 {
+        return params;
+    }
+
+    let base_style = (style as u8) % 3;  // 0=Uniform, 1=Chord, 2=ChordSquareRoot
+
+    for i in 1..point_count {
+        let mut dist_sq = 0.0;
+        for d in 0..dim {
+            let diff = points[i * dim + d] - points[(i - 1) * dim + d];
+            dist_sq += diff * diff;
+        }
+        let dist = dist_sq.sqrt();
+
+        let delta = match base_style {
+            0 => 1.0,           // Uniform
+            1 => dist,          // Chord
+            2 => dist.sqrt(),   // ChordSquareRoot (centripetal)
+            _ => dist,
+        };
+
+        params[i] = params[i - 1] + delta;
+    }
+
+    params
+}
+
+/// Build clamped knot vector from parameters for interpolation.
+///
+/// # Arguments
+/// * `params` - Parameter values for each input point.
+/// * `degree` - Curve degree.
+///
+/// # Returns
+/// Knot vector for interpolated curve.
+pub fn build_interp_knots(params: &[f64], degree: usize) -> Vec<f64> {
+    let n = params.len();
+    if n < 2 || degree < 1 {
+        return Vec::new();
+    }
+
+    let order = degree + 1;
+    let cv_count = n + 2;  // Natural end conditions add 2 CVs
+    let kc = knot_count(order, cv_count);
+
+    let mut knots = vec![0.0; kc];
+    let t_max = params[n - 1];
+
+    // Clamped start: first (order-1) knots = 0
+    for i in 0..(order - 1) {
+        knots[i] = 0.0;
+    }
+
+    // Interior knots from parameters (skip first and last)
+    for i in 1..(n - 1) {
+        knots[order - 2 + i] = params[i];
+    }
+
+    // Clamped end: last (order-1) knots = t_max
+    for i in 0..(order - 1) {
+        knots[kc - 1 - i] = t_max;
+    }
+
+    knots
 }
