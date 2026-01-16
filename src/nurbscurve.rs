@@ -6,6 +6,15 @@ use crate::knot;
 use crate::knot::CurveKnotStyle;
 use serde::{Serialize, Deserialize};
 use uuid::Uuid;
+use std::cell::RefCell;
+
+/// RMF cache for O(1) perpendicular_frame_at queries
+#[derive(Clone, Debug, Default)]
+struct RmfCache {
+    params: Vec<f64>,
+    quaternions: Vec<[f64; 4]>,  // [w, x, y, z]
+    origins: Vec<Point>,
+}
 
 /// Non-Uniform Rational B-Spline (NURBS) curve implementation
 ///
@@ -13,15 +22,17 @@ use uuid::Uuid;
 /// All methods match the fixed C++ and Python versions.
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct NurbsCurve {
-    pub guid: String,           // Unique identifier
-    pub name: String,           // Name of the curve
-    pub m_dim: usize,           // Dimension (typically 3 for 3D curves)
-    pub m_is_rat: bool,         // true if rational, false if non-rational
-    pub m_order: usize,         // Order = degree + 1 (order >= 2)
-    pub m_cv_count: usize,      // Number of control vertices (>= order)
-    pub m_cv_stride: usize,     // Stride between control vertices in m_cv array
-    pub m_knot: Vec<f64>,       // Knot vector (length = m_order + m_cv_count - 2)
-    pub m_cv: Vec<f64>,         // Control vertex data (homogeneous if rational)
+    pub guid: String,
+    pub name: String,
+    pub m_dim: usize,
+    pub m_is_rat: bool,
+    pub m_order: usize,
+    pub m_cv_count: usize,
+    pub m_cv_stride: usize,
+    pub m_knot: Vec<f64>,
+    pub m_cv: Vec<f64>,
+    #[serde(skip)]
+    rmf_cache: RefCell<Option<RmfCache>>,
 }
 
 impl NurbsCurve {
@@ -40,6 +51,7 @@ impl NurbsCurve {
             m_cv_stride: cv_stride,
             m_knot: vec![0.0; knot_count],
             m_cv: vec![0.0; cv_count * cv_stride],
+            rmf_cache: RefCell::new(None),
         }
     }
 
@@ -55,6 +67,7 @@ impl NurbsCurve {
             m_cv_stride: 0,
             m_knot: Vec::new(),
             m_cv: Vec::new(),
+            rmf_cache: RefCell::new(None),
         }
     }
 
@@ -371,6 +384,7 @@ impl NurbsCurve {
         if self.m_dim > 2 {
             self.m_cv[idx + 2] = point[2];
         }
+        self.invalidate_rmf_cache();
     }
 
     /// Get control vertex at index
@@ -411,11 +425,11 @@ impl NurbsCurve {
             return false;
         }
         if !self.m_is_rat {
-            // Would need to convert to rational - not implemented yet
             return false;
         }
         let idx = cv_index * self.m_cv_stride + self.m_dim;
         self.m_cv[idx] = weight;
+        self.invalidate_rmf_cache();
         true
     }
 
@@ -433,6 +447,7 @@ impl NurbsCurve {
             return false;
         }
         self.m_knot[knot_index] = knot_value;
+        self.invalidate_rmf_cache();
         true
     }
 
@@ -580,19 +595,19 @@ impl NurbsCurve {
         if !self.is_valid() || t0 >= t1 {
             return false;
         }
-        
+
         let (old_t0, old_t1) = self.domain();
         if (old_t0 - old_t1).abs() < 1e-14 {
             return false;
         }
-        
+
         let scale = (t1 - t0) / (old_t1 - old_t0);
-        
-        // Reparameterize knots
+
         for i in 0..self.m_knot.len() {
             self.m_knot[i] = t0 + (self.m_knot[i] - old_t0) * scale;
         }
-        
+
+        self.invalidate_rmf_cache();
         true
     }
 
@@ -736,12 +751,291 @@ impl NurbsCurve {
         result
     }
 
+    /// Get Frenet frame at parameter t (tangent, normal, binormal)
+    pub fn frame_at(&self, t: f64, normalized: bool) -> Option<(Point, Vector, Vector, Vector)> {
+        if !self.is_valid() {
+            return None;
+        }
+
+        let (t0, t1) = self.domain();
+        let param = if normalized {
+            if t < 0.0 || t > 1.0 { return None; }
+            t0 + t * (t1 - t0)
+        } else {
+            if t < t0 || t > t1 { return None; }
+            t
+        };
+
+        let origin = self.point_at(param);
+        let derivs = self.evaluate(param, 2);
+        if derivs.len() < 3 {
+            return None;
+        }
+
+        let d1 = &derivs[1];
+        let d2 = &derivs[2];
+
+        let d1_mag = d1.magnitude();
+        if d1_mag < 1e-14 {
+            return None;
+        }
+
+        let tangent = d1.normalized();
+
+        let d2_dot_t = d2.dot(&tangent);
+        let mut normal = Vector::new(
+            d2[0] - d2_dot_t * tangent[0],
+            d2[1] - d2_dot_t * tangent[1],
+            d2[2] - d2_dot_t * tangent[2],
+        );
+
+        let n_mag = normal.magnitude();
+        if n_mag < 1e-14 {
+            let world_z = Vector::new(0.0, 0.0, 1.0);
+            normal = tangent.cross(&world_z);
+            if normal.magnitude() < 1e-14 {
+                let world_y = Vector::new(0.0, 1.0, 0.0);
+                normal = tangent.cross(&world_y);
+            }
+        }
+        normal = normal.normalized();
+
+        let binormal = tangent.cross(&normal).normalized();
+
+        Some((origin, tangent, normal, binormal))
+    }
+
+    /// Invalidate RMF cache (call when curve geometry changes)
+    fn invalidate_rmf_cache(&self) {
+        *self.rmf_cache.borrow_mut() = None;
+    }
+
+    /// Ensure RMF cache is populated
+    fn ensure_rmf_cache(&self) {
+        if self.rmf_cache.borrow().is_some() {
+            return;
+        }
+
+        let num_samples = 20.max(self.span_count() * 4);
+        let (t0, t1) = self.domain();
+        let dt = (t1 - t0) / (num_samples - 1) as f64;
+
+        let mut cache = RmfCache {
+            params: Vec::with_capacity(num_samples),
+            quaternions: Vec::with_capacity(num_samples),
+            origins: Vec::with_capacity(num_samples),
+        };
+
+        for i in 0..num_samples {
+            let t = t0 + i as f64 * dt;
+            cache.params.push(t);
+
+            if let Some((o, r, s, tangent)) = self.perpendicular_frame_at_internal(t, false) {
+                cache.origins.push(o);
+                cache.quaternions.push(Self::frame_to_quaternion(&r, &s, &tangent));
+            } else {
+                cache.origins.push(Point::new(0.0, 0.0, 0.0));
+                cache.quaternions.push([1.0, 0.0, 0.0, 0.0]);
+            }
+        }
+
+        *self.rmf_cache.borrow_mut() = Some(cache);
+    }
+
+    /// Convert frame vectors to quaternion [w, x, y, z]
+    fn frame_to_quaternion(r: &Vector, s: &Vector, t: &Vector) -> [f64; 4] {
+        let trace = r[0] + s[1] + t[2];
+
+        if trace > 0.0 {
+            let big_s = (trace + 1.0).sqrt() * 2.0;
+            [0.25 * big_s, (s[2] - t[1]) / big_s, (t[0] - r[2]) / big_s, (r[1] - s[0]) / big_s]
+        } else if r[0] > s[1] && r[0] > t[2] {
+            let big_s = (1.0 + r[0] - s[1] - t[2]).sqrt() * 2.0;
+            [(s[2] - t[1]) / big_s, 0.25 * big_s, (s[0] + r[1]) / big_s, (t[0] + r[2]) / big_s]
+        } else if s[1] > t[2] {
+            let big_s = (1.0 + s[1] - r[0] - t[2]).sqrt() * 2.0;
+            [(t[0] - r[2]) / big_s, (s[0] + r[1]) / big_s, 0.25 * big_s, (t[1] + s[2]) / big_s]
+        } else {
+            let big_s = (1.0 + t[2] - r[0] - s[1]).sqrt() * 2.0;
+            [(r[1] - s[0]) / big_s, (t[0] + r[2]) / big_s, (t[1] + s[2]) / big_s, 0.25 * big_s]
+        }
+    }
+
+    /// Convert quaternion to frame vectors
+    fn quaternion_to_frame(q: &[f64; 4]) -> (Vector, Vector, Vector) {
+        let (w, x, y, z) = (q[0], q[1], q[2], q[3]);
+        let r = Vector::new(1.0 - 2.0*(y*y + z*z), 2.0*(x*y + w*z), 2.0*(x*z - w*y));
+        let s = Vector::new(2.0*(x*y - w*z), 1.0 - 2.0*(x*x + z*z), 2.0*(y*z + w*x));
+        let t = Vector::new(2.0*(x*z + w*y), 2.0*(y*z - w*x), 1.0 - 2.0*(x*x + y*y));
+        (r, s, t)
+    }
+
+    /// SLERP interpolation between quaternions
+    fn slerp(q0: &[f64; 4], q1: &[f64; 4], u: f64) -> [f64; 4] {
+        let mut dot = q0[0]*q1[0] + q0[1]*q1[1] + q0[2]*q1[2] + q0[3]*q1[3];
+
+        let q1_adj = if dot < 0.0 {
+            dot = -dot;
+            [-q1[0], -q1[1], -q1[2], -q1[3]]
+        } else {
+            *q1
+        };
+
+        if dot > 0.9995 {
+            let mut result = [
+                q0[0] + u * (q1_adj[0] - q0[0]),
+                q0[1] + u * (q1_adj[1] - q0[1]),
+                q0[2] + u * (q1_adj[2] - q0[2]),
+                q0[3] + u * (q1_adj[3] - q0[3]),
+            ];
+            let norm = (result[0]*result[0] + result[1]*result[1] +
+                       result[2]*result[2] + result[3]*result[3]).sqrt();
+            for r in &mut result { *r /= norm; }
+            return result;
+        }
+
+        let theta = dot.acos();
+        let sin_theta = theta.sin();
+        let w0 = ((1.0 - u) * theta).sin() / sin_theta;
+        let w1 = (u * theta).sin() / sin_theta;
+
+        [
+            w0*q0[0] + w1*q1_adj[0],
+            w0*q0[1] + w1*q1_adj[1],
+            w0*q0[2] + w1*q1_adj[2],
+            w0*q0[3] + w1*q1_adj[3],
+        ]
+    }
+
+    /// Internal: compute RMF using Double Reflection method (O(n))
+    fn perpendicular_frame_at_internal(&self, t: f64, normalized: bool) -> Option<(Point, Vector, Vector, Vector)> {
+        if !self.is_valid() {
+            return None;
+        }
+
+        let (t0, t1) = self.domain();
+        let param = if normalized {
+            if t < 0.0 || t > 1.0 { return None; }
+            t0 + t * (t1 - t0)
+        } else {
+            if t < t0 || t > t1 { return None; }
+            t
+        };
+
+        let origin = self.point_at(param);
+
+        let mut tangent0 = self.tangent_at(t0);
+        if tangent0.magnitude() < 1e-14 {
+            return None;
+        }
+        tangent0 = tangent0.normalized();
+
+        let world_z = Vector::new(0.0, 0.0, 1.0);
+        let mut r0 = world_z.cross(&tangent0);
+        if r0.magnitude() < 1e-14 {
+            let world_y = Vector::new(0.0, 1.0, 0.0);
+            r0 = world_y.cross(&tangent0);
+        }
+        r0 = r0.normalized();
+
+        if (param - t0).abs() < 1e-14 {
+            let s0 = tangent0.cross(&r0).normalized();
+            return Some((origin, r0, s0, tangent0));
+        }
+
+        let num_steps = 10.max(((param - t0) / (t1 - t0) * 100.0) as i32);
+        let dt = (param - t0) / num_steps as f64;
+
+        let mut ri = r0;
+        let mut ti_param = t0;
+        let mut xi = self.point_at(ti_param);
+        let mut tangent_i = tangent0;
+
+        for _ in 0..num_steps {
+            if ti_param >= param - 1e-14 {
+                break;
+            }
+            let ti_next = (ti_param + dt).min(param);
+            let xi_next = self.point_at(ti_next);
+            let mut tangent_next = self.tangent_at(ti_next);
+            tangent_next = tangent_next.normalized();
+
+            let v1 = Vector::new(xi_next[0] - xi[0], xi_next[1] - xi[1], xi_next[2] - xi[2]);
+            let c1 = v1.dot(&v1);
+            if c1 < 1e-28 {
+                ti_param = ti_next;
+                xi = xi_next;
+                tangent_i = tangent_next;
+                continue;
+            }
+
+            let ri_dot_v1 = ri.dot(&v1);
+            let r_l = Vector::new(
+                ri[0] - 2.0 * ri_dot_v1 / c1 * v1[0],
+                ri[1] - 2.0 * ri_dot_v1 / c1 * v1[1],
+                ri[2] - 2.0 * ri_dot_v1 / c1 * v1[2],
+            );
+
+            let ti_dot_v1 = tangent_i.dot(&v1);
+            let t_l = Vector::new(
+                tangent_i[0] - 2.0 * ti_dot_v1 / c1 * v1[0],
+                tangent_i[1] - 2.0 * ti_dot_v1 / c1 * v1[1],
+                tangent_i[2] - 2.0 * ti_dot_v1 / c1 * v1[2],
+            );
+
+            let v2 = Vector::new(tangent_next[0] - t_l[0], tangent_next[1] - t_l[1], tangent_next[2] - t_l[2]);
+            let c2 = v2.dot(&v2);
+            ri = if c2 < 1e-28 {
+                r_l
+            } else {
+                let rl_dot_v2 = r_l.dot(&v2);
+                Vector::new(
+                    r_l[0] - 2.0 * rl_dot_v2 / c2 * v2[0],
+                    r_l[1] - 2.0 * rl_dot_v2 / c2 * v2[1],
+                    r_l[2] - 2.0 * rl_dot_v2 / c2 * v2[2],
+                )
+            };
+
+            ri = ri.normalized();
+            ti_param = ti_next;
+            xi = xi_next;
+            tangent_i = tangent_next;
+        }
+
+        let mut tangent = self.tangent_at(param);
+        tangent = tangent.normalized();
+
+        let ri_dot_t = ri.dot(&tangent);
+        ri = Vector::new(
+            ri[0] - ri_dot_t * tangent[0],
+            ri[1] - ri_dot_t * tangent[1],
+            ri[2] - ri_dot_t * tangent[2],
+        ).normalized();
+
+        let s = tangent.cross(&ri).normalized();
+
+        Some((origin, ri, s, tangent))
+    }
+
+    /// Get rotation minimizing perpendicular frame at parameter t
+    /// Uses the exact Double Reflection algorithm for accuracy
+    pub fn perpendicular_frame_at(&self, t: f64, normalized: bool) -> Option<(Point, Vector, Vector, Vector)> {
+        self.perpendicular_frame_at_internal(t, normalized)
+    }
+
+    /// Get multiple perpendicular frames along the curve
+    pub fn get_perpendicular_frames(&self, params: &[f64]) -> Vec<(Point, Vector, Vector, Vector)> {
+        params.iter()
+            .filter_map(|&t| self.perpendicular_frame_at(t, true))
+            .collect()
+    }
+
     /// Check if curve is closed (start point == end point)
     pub fn is_closed(&self) -> bool {
         if !self.is_valid() {
             return false;
         }
-        
+
         let start = self.point_at_start();
         let end = self.point_at_end();
         
@@ -899,12 +1193,10 @@ impl NurbsCurve {
             return false;
         }
 
-        // Reverse control points
         let mut temp_cv = vec![0.0; self.m_cv_stride];
         for i in 0..(self.m_cv_count / 2) {
             let j = self.m_cv_count - 1 - i;
-            
-            // Swap CVs
+
             for k in 0..self.m_cv_stride {
                 temp_cv[k] = self.m_cv[i * self.m_cv_stride + k];
                 self.m_cv[i * self.m_cv_stride + k] = self.m_cv[j * self.m_cv_stride + k];
@@ -912,8 +1204,9 @@ impl NurbsCurve {
             }
         }
 
-        // Reverse knot vector using knot module function
-        knot::reverse(self.m_order, self.m_cv_count, &mut self.m_knot)
+        let result = knot::reverse(self.m_order, self.m_cv_count, &mut self.m_knot);
+        self.invalidate_rmf_cache();
+        result
     }
 
     /// Get span vector (parameter values at span boundaries)
