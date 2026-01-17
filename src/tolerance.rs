@@ -1,4 +1,6 @@
+use crate::point::Point;
 use once_cell::sync::Lazy;
+use parking_lot::RwLock;
 use serde::{Deserialize, Serialize};
 use std::f64::consts::PI as STD_PI;
 
@@ -25,7 +27,7 @@ pub struct Tolerance {
 
 impl Tolerance {
     /// Default tolerance values (f64 only)
-    pub const ABSOLUTE: f64 = 1e-6;
+    pub const ABSOLUTE: f64 = 1e-9;
     pub const RELATIVE: f64 = 1e-6;
     pub const ANGULAR: f64 = 1e-6;
     pub const APPROXIMATION: f64 = 1e-3;
@@ -160,6 +162,13 @@ impl Tolerance {
         (a - b).abs() <= self.angular()
     }
 
+    pub fn is_point_close(&self, a: &Point, b: &Point) -> bool {
+        let dx = b[0] - a[0];
+        let dy = b[1] - a[1];
+        let dz = b[2] - a[2];
+        (dx * dx + dy * dy + dz * dz) <= self.absolute() * self.absolute()
+    }
+
     pub fn key(&self, xyz: [f64; 3], precision: i32) -> String {
         let precision = if precision == -999 { self.precision() } else { precision };
         let [mut x, mut y, mut z] = xyz;
@@ -270,7 +279,82 @@ impl Default for Tolerance {
     }
 }
 
-pub static TOLERANCE: Lazy<Tolerance> = Lazy::new(Tolerance::default);
+/// Thread-safe wrapper for global Tolerance with transparent method access
+pub struct GlobalTolerance {
+    inner: RwLock<Tolerance>,
+}
+
+impl GlobalTolerance {
+    pub fn new() -> Self {
+        Self {
+            inner: RwLock::new(Tolerance::default()),
+        }
+    }
+
+    // Setters (require write lock)
+    pub fn set_absolute(&self, value: f64) { self.inner.write().set_absolute(value); }
+    pub fn set_relative(&self, value: f64) { self.inner.write().set_relative(value); }
+    pub fn set_angular(&self, value: f64) { self.inner.write().set_angular(value); }
+    pub fn set_approximation(&self, value: f64) { self.inner.write().set_approximation(value); }
+    pub fn set_precision(&self, value: i32) { self.inner.write().set_precision(value); }
+    pub fn set_lineardeflection(&self, value: f64) { self.inner.write().set_lineardeflection(value); }
+    pub fn set_angulardeflection(&self, value: f64) { self.inner.write().set_angulardeflection(value); }
+    pub fn reset(&self) { self.inner.write().reset(); }
+
+    // Getters (require read lock)
+    pub fn absolute(&self) -> f64 { self.inner.read().absolute() }
+    pub fn relative(&self) -> f64 { self.inner.read().relative() }
+    pub fn angular(&self) -> f64 { self.inner.read().angular() }
+    pub fn approximation(&self) -> f64 { self.inner.read().approximation() }
+    pub fn precision(&self) -> i32 { self.inner.read().precision() }
+    pub fn lineardeflection(&self) -> f64 { self.inner.read().lineardeflection() }
+    pub fn angulardeflection(&self) -> f64 { self.inner.read().angulardeflection() }
+
+    // Operations (require read lock)
+    pub fn tolerance(&self, truevalue: f64, rtol: f64, atol: f64) -> f64 {
+        self.inner.read().tolerance(truevalue, rtol, atol)
+    }
+    pub fn compare(&self, a: f64, b: f64, rtol: f64, atol: f64) -> bool {
+        self.inner.read().compare(a, b, rtol, atol)
+    }
+    pub fn is_zero(&self, a: f64) -> bool { self.inner.read().is_zero(a) }
+    pub fn is_positive(&self, a: f64) -> bool { self.inner.read().is_positive(a) }
+    pub fn is_negative(&self, a: f64) -> bool { self.inner.read().is_negative(a) }
+    pub fn is_between(&self, value: f64, minval: f64, maxval: f64) -> bool {
+        self.inner.read().is_between(value, minval, maxval)
+    }
+    pub fn is_close(&self, a: f64, b: f64) -> bool { self.inner.read().is_close(a, b) }
+    pub fn is_allclose(&self, a: &[f64], b: &[f64]) -> bool { self.inner.read().is_allclose(a, b) }
+    pub fn is_angle_zero(&self, a: f64) -> bool { self.inner.read().is_angle_zero(a) }
+    pub fn is_angles_close(&self, a: f64, b: f64) -> bool { self.inner.read().is_angles_close(a, b) }
+    pub fn is_point_close(&self, a: &Point, b: &Point) -> bool { self.inner.read().is_point_close(a, b) }
+    pub fn key(&self, xyz: [f64; 3], precision: i32) -> String { self.inner.read().key(xyz, precision) }
+    pub fn key_xy(&self, xy: [f64; 2], precision: i32) -> String { self.inner.read().key_xy(xy, precision) }
+    pub fn format_number(&self, number: f64, precision: i32) -> String {
+        self.inner.read().format_number(number, precision)
+    }
+    pub fn precision_from_tolerance(&self, tol: Option<f64>) -> i32 {
+        self.inner.read().precision_from_tolerance(tol)
+    }
+}
+
+pub static TOLERANCE: Lazy<GlobalTolerance> = Lazy::new(GlobalTolerance::new);
+
+/// Helper to read from global TOLERANCE
+pub fn with_tolerance<F, R>(f: F) -> R
+where
+    F: FnOnce(&Tolerance) -> R,
+{
+    f(&TOLERANCE.inner.read())
+}
+
+/// Helper to write to global TOLERANCE
+pub fn with_tolerance_mut<F, R>(f: F) -> R
+where
+    F: FnOnce(&mut Tolerance) -> R,
+{
+    f(&mut TOLERANCE.inner.write())
+}
 
 #[cfg(test)]
 #[path = "tolerance_test.rs"]

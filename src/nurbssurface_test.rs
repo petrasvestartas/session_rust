@@ -161,7 +161,7 @@ pub fn run_nurbssurface_accessors() -> TestResult {
 
         // Test knot access
         surf.make_clamped_uniform_knot_vector(0, 1.0);
-        let knot_val = surf.knot(0, 2);
+        let _knot_val = surf.knot(0, 2);
 
         // Test set knot
         surf.set_knot(0, 2, 5.0);
@@ -548,7 +548,7 @@ pub fn run_nurbssurface_clamp_operations() -> TestResult {
         }
 
         // Test clamp_end (modifies knot vector to clamp ends)
-        let was_clamped_before = surf.is_clamped(0, 2);
+        let _was_clamped_before = surf.is_clamped(0, 2);
         surf.clamp_end(0, 2); // Clamp both ends
         let is_clamped_after = surf.is_clamped(0, 2);
 
@@ -816,8 +816,8 @@ pub fn run_nurbssurface_create_clamped_uniform() -> TestResult {
         let mut surf = NurbsSurface::new();
         surf.create_clamped_uniform(3, 4, 3, 4, 4, 1.0, 2.0);
 
-        let dom_u = surf.domain(0);
-        let dom_v = surf.domain(1);
+        let _dom_u = surf.domain(0);
+        let _dom_v = surf.domain(1);
 
         MINI_CHECK!(surf.is_valid());
         MINI_CHECK!(surf.dimension() == 3);
