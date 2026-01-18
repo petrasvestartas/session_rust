@@ -341,12 +341,16 @@ pub fn run_nurbscurve_perpendicular_frame_at() -> TestResult {
 
         let curve = NurbsCurve::create(false, 2, &points);
 
+        // RMF with Frenet initialization (matches Rhino)
         let result = curve.perpendicular_frame_at(0.5, true);
         MINI_CHECK!(result.is_some());
-        let (o, _, _, _) = result.unwrap();
+        let (o, t, n, b) = result.unwrap();
+        let tol = Tolerance::default();
 
-        MINI_CHECK!(Tolerance::default().is_close(o[0], 3.156927375000000));
-        MINI_CHECK!(Tolerance::default().is_close(o[1], 1.335111500000000));
+        MINI_CHECK!(tol.is_point_close(&o, &Point::new(3.156927, 1.335111, 0.130489)));
+        MINI_CHECK!(tol.is_close(t[0], 0.632708) && tol.is_close(t[1], -0.703687) && tol.is_close(t[2], 0.323272));
+        MINI_CHECK!(tol.is_close(n[0], 0.327335) && tol.is_close(n[1], -0.135297) && tol.is_close(n[2], -0.935172));
+        MINI_CHECK!(tol.is_close(b[0], 0.701806) && tol.is_close(b[1], 0.697509) && tol.is_close(b[2], 0.144738));
 
         MINI_CHECK!(curve.perpendicular_frame_at(-0.1, true).is_none());
         MINI_CHECK!(curve.perpendicular_frame_at(1.1, true).is_none());

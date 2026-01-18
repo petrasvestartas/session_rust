@@ -768,7 +768,7 @@ impl NurbsCurve {
         Some((origin, tangent, normal, binormal))
     }
 
-    /// Internal: compute RMF using Double Reflection method (O(n))
+    /// Internal: compute RMF with Frenet initialization (matches Rhino)
     fn perpendicular_frame_at_internal(&self, t: f64, normalized: bool) -> Option<(Point, Vector, Vector, Vector)> {
         if !self.is_valid() {
             return None;
@@ -783,27 +783,49 @@ impl NurbsCurve {
             t
         };
 
-        let origin = self.point_at(param);
+        // Get initial frame at t0 using Frenet (curvature-based)
+        let derivs0 = self.evaluate(t0, 2);
+        let d1_0 = &derivs0[1];
+        let d2_0 = &derivs0[2];
 
-        let mut tangent0 = self.tangent_at(t0);
-        if tangent0.magnitude() < 1e-14 {
+        let d1_0_mag = d1_0.magnitude();
+        if d1_0_mag < 1e-14 {
             return None;
         }
-        tangent0 = tangent0.normalized();
 
-        let world_z = Vector::new(0.0, 0.0, 1.0);
-        let mut r0 = world_z.cross(&tangent0);
-        if r0.magnitude() < 1e-14 {
-            let world_y = Vector::new(0.0, 1.0, 0.0);
-            r0 = world_y.cross(&tangent0);
+        let tangent0 = d1_0.normalized();
+
+        // Initial normal from curvature (Frenet)
+        let d2_dot_d1 = d2_0.dot(d1_0);
+        let d1_0_mag_sq = d1_0_mag * d1_0_mag;
+        let mut n0_unnorm = Vector::new(
+            d2_0[0] - (d2_dot_d1 / d1_0_mag_sq) * d1_0[0],
+            d2_0[1] - (d2_dot_d1 / d1_0_mag_sq) * d1_0[1],
+            d2_0[2] - (d2_dot_d1 / d1_0_mag_sq) * d1_0[2],
+        );
+
+        let mut n0_mag = n0_unnorm.magnitude();
+        if n0_mag < 1e-14 {
+            let world_z = Vector::new(0.0, 0.0, 1.0);
+            n0_unnorm = world_z.cross(&tangent0);
+            n0_mag = n0_unnorm.magnitude();
+            if n0_mag < 1e-14 {
+                let world_y = Vector::new(0.0, 1.0, 0.0);
+                n0_unnorm = world_y.cross(&tangent0);
+                n0_mag = n0_unnorm.magnitude();
+            }
         }
-        r0 = r0.normalized();
+        let r0 = Vector::new(n0_unnorm[0] / n0_mag, n0_unnorm[1] / n0_mag, n0_unnorm[2] / n0_mag);
 
+        let origin = self.point_at(param);
+
+        // If at start, return Frenet frame directly
         if (param - t0).abs() < 1e-14 {
             let s0 = tangent0.cross(&r0).normalized();
             return Some((origin, r0, s0, tangent0));
         }
 
+        // Propagate frame using Double Reflection (RMF) algorithm
         let num_steps = 10.max(((param - t0) / (t1 - t0) * 100.0) as i32);
         let dt = (param - t0) / num_steps as f64;
 
