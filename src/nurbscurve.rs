@@ -31,7 +31,7 @@ impl NurbsCurve {
 
         NurbsCurve {
             guid: Uuid::new_v4().to_string(),
-            name: String::new(),
+            name: "my_nurbscurve".to_string(),
             m_dim: dimension,
             m_is_rat: is_rational,
             m_order: order,
@@ -46,7 +46,7 @@ impl NurbsCurve {
     pub fn default() -> Self {
         NurbsCurve {
             guid: Uuid::new_v4().to_string(),
-            name: String::new(),
+            name: "my_nurbscurve".to_string(),
             m_dim: 0,
             m_is_rat: false,
             m_order: 0,
@@ -394,6 +394,126 @@ impl NurbsCurve {
         let t0 = self.m_knot[self.m_order - 2];
         let t1 = self.m_knot[self.m_cv_count - 1];
         (t0, t1)
+    }
+
+    /// Get start of domain
+    pub fn domain_start(&self) -> f64 {
+        self.domain().0
+    }
+
+    /// Get end of domain
+    pub fn domain_end(&self) -> f64 {
+        self.domain().1
+    }
+
+    /// Get middle of domain
+    pub fn domain_middle(&self) -> f64 {
+        let (t0, t1) = self.domain();
+        (t0 + t1) * 0.5
+    }
+
+    /// Get raw CV data at index (like C++ double* cv(int))
+    pub fn cv(&self, cv_index: usize) -> Option<&[f64]> {
+        if cv_index >= self.m_cv_count {
+            return None;
+        }
+        let idx = cv_index * self.m_cv_stride;
+        Some(&self.m_cv[idx..idx + self.m_cv_stride])
+    }
+
+    /// Get control point at index as homogeneous point (x, y, z, w)
+    pub fn get_cv_4d(&self, cv_index: usize) -> Option<(f64, f64, f64, f64)> {
+        if cv_index >= self.m_cv_count {
+            return None;
+        }
+        let idx = cv_index * self.m_cv_stride;
+        let x = self.m_cv[idx];
+        let y = if self.m_dim > 1 { self.m_cv[idx + 1] } else { 0.0 };
+        let z = if self.m_dim > 2 { self.m_cv[idx + 2] } else { 0.0 };
+        let w = if self.m_is_rat { self.m_cv[idx + self.m_dim] } else { 1.0 };
+        Some((x, y, z, w))
+    }
+
+    /// Set control point at index from homogeneous coordinates
+    pub fn set_cv_4d(&mut self, cv_index: usize, x: f64, y: f64, z: f64, w: f64) -> bool {
+        if cv_index >= self.m_cv_count {
+            return false;
+        }
+
+        // Make rational if w != 1.0 (matches C++ implementation)
+        if !self.m_is_rat && w != 1.0 {
+            self.make_rational();
+        }
+
+        let idx = cv_index * self.m_cv_stride;
+        self.m_cv[idx] = x;
+        if self.m_dim > 1 { self.m_cv[idx + 1] = y; }
+        if self.m_dim > 2 { self.m_cv[idx + 2] = z; }
+        if self.m_is_rat { self.m_cv[idx + self.m_dim] = w; }
+        true
+    }
+
+    /// Get knot multiplicity at index
+    pub fn knot_multiplicity(&self, knot_index: usize) -> usize {
+        if knot_index >= self.m_knot.len() {
+            return 0;
+        }
+        let val = self.m_knot[knot_index];
+        let mut count = 1;
+        // Count forward
+        let mut i = knot_index + 1;
+        while i < self.m_knot.len() && (self.m_knot[i] - val).abs() < Tolerance::ZERO_TOLERANCE {
+            count += 1;
+            i += 1;
+        }
+        // Count backward
+        let mut j = knot_index;
+        while j > 0 {
+            j -= 1;
+            if (self.m_knot[j] - val).abs() < Tolerance::ZERO_TOLERANCE {
+                count += 1;
+            } else {
+                break;
+            }
+        }
+        count
+    }
+
+    /// Get superfluous knot value at end (0=start, 1=end)
+    pub fn superfluous_knot(&self, end: usize) -> f64 {
+        if !self.is_valid() {
+            return 0.0;
+        }
+        let kc = self.knot_count();
+        if end == 0 {
+            // First superfluous knot: reflect first knot across knot[order-2]
+            return 2.0 * self.m_knot[0] - self.m_knot[self.m_order - 2];
+        } else {
+            // Last superfluous knot: reflect last knot across knot[cv_count-order]
+            return 2.0 * self.m_knot[kc - 1] - self.m_knot[self.m_cv_count - self.m_order];
+        }
+    }
+
+    /// Check if knot vector is valid
+    pub fn is_valid_knot_vector(&self) -> bool {
+        if self.m_knot.len() != self.m_order + self.m_cv_count - 2 {
+            return false;
+        }
+        // Check non-decreasing
+        for i in 1..self.m_knot.len() {
+            if self.m_knot[i] < self.m_knot[i - 1] - Tolerance::ZERO_TOLERANCE {
+                return false;
+            }
+        }
+        // Check valid domain exists
+        if self.m_order >= 2 && self.m_cv_count >= self.m_order {
+            let idx1 = self.m_order - 2;
+            let idx2 = self.m_cv_count - 1;
+            if idx2 < self.m_knot.len() && self.m_knot[idx1] >= self.m_knot[idx2] {
+                return false;
+            }
+        }
+        true
     }
 
     /// Find knot span index for parameter t
@@ -826,6 +946,251 @@ impl NurbsCurve {
         }
 
         true
+    }
+
+    /// Check if curve is planar (all CVs lie in a single plane)
+    pub fn is_planar(&self, tolerance: Option<f64>) -> bool {
+        let tol = tolerance.unwrap_or(Tolerance::ZERO_TOLERANCE);
+        if !self.is_valid() || self.m_cv_count < 3 {
+            return true;
+        }
+        let p0 = self.get_cv(0).unwrap();
+        let p1 = self.get_cv(1).unwrap();
+        let mut normal = None;
+        for i in 2..self.m_cv_count {
+            let p = self.get_cv(i).unwrap();
+            let v1 = Vector::new(p1[0] - p0[0], p1[1] - p0[1], p1[2] - p0[2]);
+            let v2 = Vector::new(p[0] - p0[0], p[1] - p0[1], p[2] - p0[2]);
+            let cross = v1.cross(&v2);
+            if cross.magnitude() > tol {
+                if normal.is_none() {
+                    normal = Some(cross.normalized());
+                } else {
+                    let n = normal.as_ref().unwrap();
+                    if (1.0 - n.dot(&cross.normalized()).abs()).abs() > tol {
+                        return false;
+                    }
+                }
+            }
+        }
+        true
+    }
+
+    /// Check if curve is an arc (matches C++ is_arc stub)
+    pub fn is_arc(&self, _tolerance: Option<f64>) -> bool {
+        false
+    }
+
+    /// Check if curve lies entirely in a given plane
+    pub fn is_in_plane(&self, plane: &Plane, tolerance: Option<f64>) -> bool {
+        let tol = tolerance.unwrap_or(Tolerance::ZERO_TOLERANCE);
+        if !self.is_valid() {
+            return false;
+        }
+        for i in 0..self.m_cv_count {
+            let p = self.get_cv(i).unwrap();
+            let v = Vector::new(
+                p[0] - plane.origin()[0],
+                p[1] - plane.origin()[1],
+                p[2] - plane.origin()[2],
+            );
+            if v.dot(&plane.z_axis()).abs() > tol {
+                return false;
+            }
+        }
+        true
+    }
+
+    /// Check if curve has "natural" end conditions (zero 2nd derivative at endpoints)
+    pub fn is_natural(&self) -> bool {
+        if !self.is_valid() {
+            return false;
+        }
+
+        let tol_factor = 1e-8;
+        let (t0, t1) = self.domain();
+
+        // Check both endpoints
+        for pass in 0..2 {
+            let t = if pass == 0 { t0 } else { t1 };
+
+            // Evaluate 2nd derivative
+            let derivs = self.evaluate(t, 2);
+            if derivs.len() < 3 {
+                return false;
+            }
+
+            let d2 = &derivs[2];
+            let d2_len = d2.magnitude();
+
+            // Get control polygon length for tolerance
+            let (cv0, cv2) = if pass == 0 {
+                (self.get_cv(0), self.get_cv(2.min(self.m_cv_count - 1)))
+            } else {
+                (self.get_cv(self.m_cv_count - 1), self.get_cv(0.max(self.m_cv_count as i32 - 3) as usize))
+            };
+
+            if cv0.is_none() || cv2.is_none() {
+                return false;
+            }
+
+            let tol = cv0.unwrap().distance(&cv2.unwrap(), None) * tol_factor;
+
+            if d2_len > tol {
+                return false;
+            }
+        }
+
+        true
+    }
+
+    /// Check if curve is a polyline (all CVs connected by straight segments)
+    pub fn is_polyline(&self, _tolerance: Option<f64>) -> bool {
+        if !self.is_valid() {
+            return false;
+        }
+        self.degree() == 1
+    }
+
+    /// Convert curve to polyline using adaptive subdivision
+    pub fn to_polyline_adaptive(
+        &self,
+        angle_tolerance: f64,
+        min_edge_length: f64,
+        max_edge_length: f64,
+    ) -> (Vec<Point>, Vec<f64>) {
+        let mut points = Vec::new();
+        let mut params = Vec::new();
+
+        if !self.is_valid() {
+            return (points, params);
+        }
+
+        let angle_tol = if angle_tolerance <= 0.0 { 0.1 } else { angle_tolerance };
+
+        let (t0, t1) = self.domain();
+        let curve_len = self.length(Some(1e-6));
+
+        let max_len = if max_edge_length <= 0.0 { curve_len / 10.0 } else { max_edge_length };
+        let mut min_len = if min_edge_length <= 0.0 { curve_len / 1000.0 } else { min_edge_length };
+        if min_len > max_len {
+            min_len = max_len * 0.1;
+        }
+
+        // Collect (param, point) pairs, then sort by param
+        let mut samples: Vec<(f64, Point)> = Vec::new();
+        samples.push((t0, self.point_at(t0)));
+        samples.push((t1, self.point_at(t1)));
+
+        // Work queue: segments to potentially subdivide (ta, tb)
+        let mut work_queue: Vec<(f64, f64)> = Vec::new();
+        work_queue.push((t0, t1));
+
+        const MAX_ITERATIONS: i32 = 10000;
+        let mut iterations = 0;
+
+        while !work_queue.is_empty() && iterations < MAX_ITERATIONS {
+            iterations += 1;
+            let (ta, tb) = work_queue.pop().unwrap();
+
+            let pa = self.point_at(ta);
+            let pb = self.point_at(tb);
+            let chord_length = pa.distance(&pb, None);
+
+            if chord_length < min_len {
+                continue;
+            }
+
+            let tm = (ta + tb) * 0.5;
+            let pm = self.point_at(tm);
+
+            // Check deviation: distance from midpoint to chord
+            let chord = Vector::new(pb[0] - pa[0], pb[1] - pa[1], pb[2] - pa[2]);
+            let to_mid = Vector::new(pm[0] - pa[0], pm[1] - pa[1], pm[2] - pa[2]);
+            let chord_len_sq = chord.dot(&chord);
+            let mut deviation = 0.0;
+
+            if chord_len_sq > 1e-20 {
+                let proj = to_mid.dot(&chord) / chord_len_sq;
+                let projected = Point::new(
+                    pa[0] + proj * chord[0],
+                    pa[1] + proj * chord[1],
+                    pa[2] + proj * chord[2],
+                );
+                deviation = pm.distance(&projected, None);
+            }
+
+            // Convert angle tolerance to approximate deviation tolerance
+            // For small angles: deviation ≈ chord_length * sin(angle/2) ≈ chord_length * angle/2
+            let deviation_tolerance = chord_length * angle_tol * 0.5;
+
+            let need_subdivide = (deviation > deviation_tolerance) || (chord_length > max_len);
+
+            if need_subdivide {
+                samples.push((tm, pm));
+                work_queue.push((ta, tm));
+                work_queue.push((tm, tb));
+            }
+        }
+
+        // Sort by parameter
+        samples.sort_by(|a, b| a.0.partial_cmp(&b.0).unwrap());
+
+        // Extract results
+        for (t, p) in samples {
+            points.push(p);
+            params.push(t);
+        }
+
+        (points, params)
+    }
+
+    /// Divide curve by arc length
+    pub fn divide_by_length(&self, segment_length: f64) -> (Vec<Point>, Vec<f64>) {
+        let mut points = Vec::new();
+        let mut params = Vec::new();
+
+        if !self.is_valid() || segment_length <= 0.0 {
+            return (points, params);
+        }
+
+        let total_length = self.length(Some(1e-6));
+        if total_length < segment_length {
+            let (t0, t1) = self.domain();
+            points.push(self.point_at(t0));
+            params.push(t0);
+            points.push(self.point_at(t1));
+            params.push(t1);
+            return (points, params);
+        }
+
+        let (t0, t1) = self.domain();
+        let _current_t = t0;
+        let mut accumulated_length = 0.0;
+
+        points.push(self.point_at(t0));
+        params.push(t0);
+
+        let num_samples = 1000;
+        let dt = (t1 - t0) / num_samples as f64;
+        let mut prev_p = self.point_at(t0);
+
+        for i in 1..=num_samples {
+            let t = t0 + i as f64 * dt;
+            let p = self.point_at(t);
+            let seg_len = prev_p.distance(&p, None);
+            accumulated_length += seg_len;
+
+            if accumulated_length >= segment_length {
+                points.push(p.clone());
+                params.push(t);
+                accumulated_length = 0.0;
+            }
+
+            prev_p = p;
+        }
+
+        (points, params)
     }
 
     /// Make curve rational (all weights = 1.0)
