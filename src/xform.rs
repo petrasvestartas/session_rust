@@ -545,6 +545,21 @@ impl Xform {
         &t * &f
     }
 
+    /// Transform from world XY to target frame/plane (same as COMPAS from_frame)
+    pub fn to_frame(frame: &Plane) -> Self {
+        let x = frame.x_axis().normalized();
+        let y = frame.y_axis().normalized();
+        let z = frame.z_axis().normalized();
+        let o = frame.origin();
+
+        let mut xf = Self::identity();
+        xf.m[0] = x[0]; xf.m[4] = y[0]; xf.m[8]  = z[0]; xf.m[12] = o[0];
+        xf.m[1] = x[1]; xf.m[5] = y[1]; xf.m[9]  = z[1]; xf.m[13] = o[1];
+        xf.m[2] = x[2]; xf.m[6] = y[2]; xf.m[10] = z[2]; xf.m[14] = o[2];
+        xf.m[3] = 0.0;  xf.m[7] = 0.0;  xf.m[11] = 0.0;  xf.m[15] = 1.0;
+        xf
+    }
+
     pub fn scale_xyz(scale_x: f64, scale_y: f64, scale_z: f64) -> Self {
         let mut xform = Self::identity();
         xform.m[0] = scale_x;
