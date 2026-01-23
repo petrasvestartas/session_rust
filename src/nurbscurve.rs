@@ -554,6 +554,86 @@ impl NurbsCurve {
         basis
     }
 
+    /// Compute basis functions and their derivatives at parameter t
+    /// Returns ders[k][j] = k-th derivative of j-th basis function
+    fn basis_functions_derivatives(&self, span: usize, t: f64, deriv_order: usize) -> Vec<Vec<f64>> {
+        let p = self.degree();
+        let n_der = deriv_order.min(p);
+
+        let mut ders = vec![vec![0.0; p + 1]; n_der + 1];
+        let mut left = vec![0.0; p + 1];
+        let mut right = vec![0.0; p + 1];
+        let mut ndu = vec![vec![0.0; p + 1]; p + 1];
+
+        // Use same knot offset as basis_functions
+        let offset = self.m_order - 2 + span;
+
+        ndu[0][0] = 1.0;
+        for j in 1..=p {
+            left[j] = t - self.m_knot[offset + 1 - j];
+            right[j] = self.m_knot[offset + j] - t;
+            let mut saved = 0.0;
+            for r in 0..j {
+                ndu[j][r] = right[r + 1] + left[j - r];
+                let temp = ndu[r][j - 1] / ndu[j][r];
+                ndu[r][j] = saved + right[r + 1] * temp;
+                saved = left[j - r] * temp;
+            }
+            ndu[j][j] = saved;
+        }
+
+        // Load basis functions
+        for j in 0..=p {
+            ders[0][j] = ndu[j][p];
+        }
+
+        // Compute derivatives using Eq. 2.10 from The NURBS Book
+        let mut a = vec![vec![0.0; p + 1]; 2];
+        for r in 0..=p {
+            let mut s1 = 0usize;
+            let mut s2 = 1usize;
+            a[0][0] = 1.0;
+
+            for k in 1..=n_der {
+                let mut d = 0.0;
+                let rk = r as i32 - k as i32;
+                let pk = p as i32 - k as i32;
+
+                if r >= k {
+                    a[s2][0] = a[s1][0] / ndu[(pk + 1) as usize][rk as usize];
+                    d = a[s2][0] * ndu[rk as usize][pk as usize];
+                }
+
+                let j1 = if rk >= -1 { 1 } else { (-rk) as usize };
+                let j2 = if (r as i32 - 1) <= pk { k - 1 } else { p - r };
+
+                for j in j1..=j2 {
+                    a[s2][j] = (a[s1][j] - a[s1][j - 1]) / ndu[(pk + 1) as usize][(rk + j as i32) as usize];
+                    d += a[s2][j] * ndu[(rk + j as i32) as usize][pk as usize];
+                }
+
+                if r <= pk as usize {
+                    a[s2][k] = -a[s1][k - 1] / ndu[(pk + 1) as usize][r];
+                    d += a[s2][k] * ndu[r][pk as usize];
+                }
+
+                ders[k][r] = d;
+                std::mem::swap(&mut s1, &mut s2);
+            }
+        }
+
+        // Apply factorial scaling: p!/(p-k)!
+        let mut scale = p as f64;
+        for k in 1..=n_der {
+            for j in 0..=p {
+                ders[k][j] *= scale;
+            }
+            scale *= (p - k) as f64;
+        }
+
+        ders
+    }
+
     /// Set curve domain
     pub fn set_domain(&mut self, t0: f64, t1: f64) -> bool {
         if !self.is_valid() || t0 >= t1 {
@@ -607,12 +687,12 @@ impl NurbsCurve {
             if self.m_is_rat {
                 let weight = self.m_cv[idx + self.m_dim];
                 w += n * weight;
-                x += n * self.m_cv[idx];
+                x += n * self.m_cv[idx] * weight;
                 if self.m_dim > 1 {
-                    y += n * self.m_cv[idx + 1];
+                    y += n * self.m_cv[idx + 1] * weight;
                 }
                 if self.m_dim > 2 {
-                    z += n * self.m_cv[idx + 2];
+                    z += n * self.m_cv[idx + 2] * weight;
                 }
             } else {
                 x += n * self.m_cv[idx];
@@ -645,6 +725,158 @@ impl NurbsCurve {
         self.point_at(t1)
     }
 
+    /// Get middle point of curve
+    pub fn point_at_middle(&self) -> Point {
+        self.point_at(self.domain_middle())
+    }
+
+    /// Set the start point of the curve (modifies first CV)
+    pub fn set_start_point(&mut self, point: &Point) {
+        if self.m_cv_count > 0 {
+            self.set_cv(0, point);
+        }
+    }
+
+    /// Set the end point of the curve (modifies last CV)
+    pub fn set_end_point(&mut self, point: &Point) {
+        if self.m_cv_count > 0 {
+            self.set_cv(self.m_cv_count - 1, point);
+        }
+    }
+
+    /// Swap two coordinate indices for all CVs
+    pub fn swap_coordinates(&mut self, i: usize, j: usize) {
+        if i >= self.m_dim || j >= self.m_dim || i == j {
+            return;
+        }
+        for cv_idx in 0..self.m_cv_count {
+            let idx = cv_idx * self.m_cv_stride;
+            let temp = self.m_cv[idx + i];
+            self.m_cv[idx + i] = self.m_cv[idx + j];
+            self.m_cv[idx + j] = temp;
+        }
+    }
+
+    /// Split curve at parameter t into two curves
+    pub fn split(&self, t: f64) -> (NurbsCurve, NurbsCurve) {
+        if !self.is_valid() {
+            return (NurbsCurve::default(), NurbsCurve::default());
+        }
+
+        let (t0, t1) = self.domain();
+        if t <= t0 || t >= t1 {
+            return (NurbsCurve::default(), NurbsCurve::default());
+        }
+
+        // Simple approach: use dense point sampling and rebuild curves
+        let num_samples = (self.m_cv_count * 4).max(20);
+
+        // Left curve points
+        let mut left_points = Vec::new();
+        for i in 0..=num_samples {
+            let param = t0 + (t - t0) * (i as f64) / (num_samples as f64);
+            left_points.push(self.point_at(param));
+        }
+
+        // Right curve points
+        let mut right_points = Vec::new();
+        for i in 0..=num_samples {
+            let param = t + (t1 - t) * (i as f64) / (num_samples as f64);
+            right_points.push(self.point_at(param));
+        }
+
+        let degree = self.degree();
+        let left = NurbsCurve::create(false, degree, &left_points);
+        let right = NurbsCurve::create(false, degree, &right_points);
+
+        (left, right)
+    }
+
+    /// Extend curve domain using de Boor extrapolation (matches C++ implementation)
+    pub fn extend(&mut self, new_t0: f64, new_t1: f64) -> bool {
+        if !self.is_valid() || self.is_closed() {
+            return false;
+        }
+
+        let (d0, d1) = self.domain();
+        let cvdim = self.cv_size();
+        let mut changed = false;
+
+        // Extend start (new_t0 < current domain start)
+        if new_t0 < d0 {
+            self.clamp_end(0);
+            self.evaluate_nurbs_de_boor_inplace(cvdim, self.m_order, 0, 1, new_t0);
+            for i in 0..(self.m_order - 1) {
+                self.m_knot[i] = new_t0;
+            }
+            changed = true;
+        }
+
+        // Extend end (new_t1 > current domain end)
+        if new_t1 > d1 {
+            self.clamp_end(1);
+            let i0 = self.m_cv_count - self.m_order;
+            self.evaluate_nurbs_de_boor_inplace(cvdim, self.m_order, i0, -1, new_t1);
+            let kc = self.knot_count();
+            for i in (self.m_cv_count - 1)..kc {
+                self.m_knot[i] = new_t1;
+            }
+            changed = true;
+        }
+
+        changed
+    }
+
+    /// Internal de Boor evaluation for curve extension (modifies CVs in place)
+    fn evaluate_nurbs_de_boor_inplace(&mut self, cvdim: usize, order: usize, cv_start: usize, direction: i32, t: f64) {
+        if order < 2 {
+            return;
+        }
+
+        let stride = self.m_cv_stride;
+        for i in 1..order {
+            let k0 = if direction > 0 { cv_start + i - 1 } else { cv_start + order - i };
+            let k1 = if direction > 0 { k0 + 1 } else { k0.saturating_sub(1) };
+
+            let a = self.m_knot[cv_start + if direction > 0 { order - 1 } else { 0 }];
+            let b = self.m_knot[cv_start + if direction > 0 { i } else { order - 1 - i }];
+
+            if (b - a).abs() < 1e-14 {
+                continue;
+            }
+
+            let s = (t - a) / (b - a);
+
+            for j in 0..cvdim {
+                let cv0_val = self.m_cv[k0 * stride + j];
+                let cv1_val = self.m_cv[k1 * stride + j];
+                self.m_cv[k0 * stride + j] = cv0_val + s * (cv0_val - cv1_val);
+            }
+        }
+    }
+
+    /// Clamp curve end (0=start, 1=end)
+    pub fn clamp_end(&mut self, end: i32) {
+        if !self.is_valid() || self.m_order < 2 {
+            return;
+        }
+
+        if end == 0 {
+            // Clamp start: make first (order-1) knots equal
+            let knot_val = self.m_knot[self.m_order - 1];
+            for i in 0..(self.m_order - 1) {
+                self.m_knot[i] = knot_val;
+            }
+        } else {
+            // Clamp end: make last (order-1) knots equal
+            let kc = self.knot_count();
+            let knot_val = self.m_knot[kc - self.m_order];
+            for i in (kc - self.m_order + 1)..kc {
+                self.m_knot[i] = knot_val;
+            }
+        }
+    }
+
     /// Get tangent vector at parameter t
     pub fn tangent_at(&self, t: f64) -> Vector {
         if !self.is_valid() {
@@ -669,49 +901,105 @@ impl NurbsCurve {
     }
 
     /// Evaluate point and derivatives on curve at parameter t.
-    /// Returns [point, d1, d2] depending on derivative_count.
+    /// Returns [point, d1, d2, ...] depending on derivative_count.
+    /// Uses analytical basis function derivatives matching C++ implementation.
     pub fn evaluate(&self, t: f64, derivative_count: usize) -> Vec<Vector> {
         let mut result = Vec::new();
+
         if !self.is_valid() {
             result.push(Vector::new(0.0, 0.0, 0.0));
             return result;
         }
 
-        let p = self.point_at(t);
-        result.push(Vector::new(p[0], p[1], p[2]));
+        // Clamp derivative order to degree
+        let max_derivs = derivative_count.min(self.degree());
 
-        if derivative_count == 0 {
-            return result;
+        let span = self.find_span(t);
+        let ders = self.basis_functions_derivatives(span, t, max_derivs);
+
+        // Evaluate homogeneous coordinates and derivatives
+        let p = self.degree();
+        let mut aders: Vec<[f64; 4]> = vec![[0.0; 4]; max_derivs + 1];
+
+        for k in 0..=max_derivs {
+            for j in 0..=p {
+                let cv_idx = span + j;
+                if cv_idx >= self.m_cv_count {
+                    continue;
+                }
+                let idx = cv_idx * self.m_cv_stride;
+
+                let nx = ders[k][j];
+                let cx = self.m_cv[idx];
+                let cy = if self.m_dim > 1 { self.m_cv[idx + 1] } else { 0.0 };
+                let cz = if self.m_dim > 2 { self.m_cv[idx + 2] } else { 0.0 };
+                let wv = if self.m_is_rat { self.m_cv[idx + self.m_dim] } else { 1.0 };
+
+                aders[k][0] += nx * cx * wv;
+                aders[k][1] += nx * cy * wv;
+                aders[k][2] += nx * cz * wv;
+                aders[k][3] += nx * wv;
+            }
         }
 
-        // Numerical derivatives (consistent with tangent_at semantics)
-        let (t0, t1) = self.domain();
-        let eps = (t1 - t0) * 1e-8;
-        let ta = (t - eps).max(t0);
-        let tb = (t + eps).min(t1);
+        // Convert from homogeneous derivatives (Aders) to Cartesian derivatives
+        let mut cders: Vec<[f64; 3]> = vec![[0.0; 3]; max_derivs + 1];
 
-        let pa = self.point_at(ta);
-        let pb = self.point_at(tb);
+        if !self.m_is_rat {
+            // Non-rational: derivatives are directly Aders (w == 1)
+            for k in 0..=max_derivs {
+                cders[k] = [aders[k][0], aders[k][1], aders[k][2]];
+            }
+        } else {
+            // Rational: use standard formula (Piegl & Tiller, Eq. 2.28)
+            for k in 0..=max_derivs {
+                let w = aders[0][3];
+                let inv_w = if w != 0.0 { 1.0 / w } else { 0.0 };
 
-        let d1 = Vector::new(
-            (pb[0] - pa[0]) / (tb - ta),
-            (pb[1] - pa[1]) / (tb - ta),
-            (pb[2] - pa[2]) / (tb - ta),
-        );
-        result.push(d1.clone());
+                let mut ck_x = aders[k][0];
+                let mut ck_y = aders[k][1];
+                let mut ck_z = aders[k][2];
 
-        if derivative_count > 1 {
-            // Central second derivative approximation
-            // d2 ~ (C(t+eps) - 2*C(t) + C(t-eps)) / eps^2
-            let d2 = Vector::new(
-                (pb[0] - 2.0 * p[0] + pa[0]) / (eps * eps),
-                (pb[1] - 2.0 * p[1] + pa[1]) / (eps * eps),
-                (pb[2] - 2.0 * p[2] + pa[2]) / (eps * eps),
-            );
-            result.push(d2);
+                // Subtract contributions of weight derivatives
+                for j in 1..=k {
+                    let coeff = Self::binomial(k, j) as f64;
+                    let wj = aders[j][3];
+                    ck_x -= coeff * wj * cders[k - j][0];
+                    ck_y -= coeff * wj * cders[k - j][1];
+                    ck_z -= coeff * wj * cders[k - j][2];
+                }
+
+                cders[k] = [ck_x * inv_w, ck_y * inv_w, ck_z * inv_w];
+            }
+        }
+
+        // Fill result vectors (0th derivative = point)
+        for k in 0..=max_derivs {
+            result.push(Vector::new(cders[k][0], cders[k][1], cders[k][2]));
+        }
+
+        // If caller requested more derivatives than degree, pad with zeros
+        for _ in (max_derivs + 1)..=derivative_count {
+            result.push(Vector::new(0.0, 0.0, 0.0));
         }
 
         result
+    }
+
+    /// Binomial coefficient C(n, k)
+    fn binomial(n: usize, k: usize) -> usize {
+        if k > n {
+            return 0;
+        }
+        if k == 0 || k == n {
+            return 1;
+        }
+        let k = k.min(n - k);
+        let mut c = 1usize;
+        for i in 0..k {
+            c = c * (n - i) / (i + 1);
+        }
+        c
     }
 
     /// Get Frenet frame at parameter t (tangent, normal, binormal)
@@ -1167,7 +1455,8 @@ impl NurbsCurve {
         (points, params)
     }
 
-    /// Divide curve by arc length
+    /// Divide curve by arc length using Gauss-Legendre quadrature.
+    /// Matches C++ implementation exactly.
     pub fn divide_by_length(&self, segment_length: f64) -> (Vec<Point>, Vec<f64>) {
         let mut points = Vec::new();
         let mut params = Vec::new();
@@ -1176,40 +1465,115 @@ impl NurbsCurve {
             return (points, params);
         }
 
-        let total_length = self.length(Some(1e-6));
-        if total_length < segment_length {
-            let (t0, t1) = self.domain();
-            points.push(self.point_at(t0));
-            params.push(t0);
-            points.push(self.point_at(t1));
-            params.push(t1);
-            return (points, params);
+        let (t0, t1) = self.domain();
+        let dom_len = t1 - t0;
+        let h = dom_len * 1e-8;
+
+        // 5-point Gauss-Legendre nodes and weights for [-1, 1]
+        const GL_NODES: [f64; 5] = [-0.9061798459386640, -0.5384693101056831, 0.0, 0.5384693101056831, 0.9061798459386640];
+        const GL_WEIGHTS: [f64; 5] = [0.2369268850561891, 0.4786286704993665, 0.5688888888888889, 0.4786286704993665, 0.2369268850561891];
+
+        // Compute derivative (un-normalized) at parameter t
+        let derivative_at = |curve: &NurbsCurve, t: f64| -> Vector {
+            let (p1, p2, dt);
+            if t <= t0 + h {
+                p1 = curve.point_at(t0);
+                p2 = curve.point_at(t0 + h);
+                dt = h;
+            } else if t >= t1 - h {
+                p1 = curve.point_at(t1 - h);
+                p2 = curve.point_at(t1);
+                dt = h;
+            } else {
+                p1 = curve.point_at(t - h);
+                p2 = curve.point_at(t + h);
+                dt = 2.0 * h;
+            }
+            Vector::new((p2[0] - p1[0]) / dt, (p2[1] - p1[1]) / dt, (p2[2] - p1[2]) / dt)
+        };
+
+        // Arc length via Gauss-Legendre quadrature
+        let arc_length_gauss = |curve: &NurbsCurve, ta: f64, tb: f64| -> f64 {
+            let mid = (ta + tb) * 0.5;
+            let half = (tb - ta) * 0.5;
+            let mut sum = 0.0;
+            for i in 0..5 {
+                let t = mid + half * GL_NODES[i];
+                sum += GL_WEIGHTS[i] * derivative_at(curve, t).magnitude();
+            }
+            half * sum
+        };
+
+        // Build arc-length table with high resolution
+        let approx_len = self.length(Some(1e-6));
+        let n_samples = (1000usize).max((approx_len / segment_length) as usize * 100);
+        let dt = (t1 - t0) / n_samples as f64;
+
+        let mut t_vals = vec![0.0; n_samples + 1];
+        let mut s_vals = vec![0.0; n_samples + 1];
+
+        t_vals[0] = t0;
+        s_vals[0] = 0.0;
+
+        for i in 1..=n_samples {
+            t_vals[i] = t0 + i as f64 * dt;
+            s_vals[i] = s_vals[i - 1] + arc_length_gauss(self, t_vals[i - 1], t_vals[i]);
         }
 
-        let (t0, t1) = self.domain();
-        let _current_t = t0;
-        let mut accumulated_length = 0.0;
+        let total_len = s_vals[n_samples];
 
-        points.push(self.point_at(t0));
-        params.push(t0);
+        // Find parameter at target arc length with Newton-Raphson refinement
+        let find_t_at_s = |curve: &NurbsCurve, s_target: f64| -> f64 {
+            if s_target <= 0.0 { return t0; }
+            if s_target >= total_len { return t1; }
 
-        let num_samples = 1000;
-        let dt = (t1 - t0) / num_samples as f64;
-        let mut prev_p = self.point_at(t0);
-
-        for i in 1..=num_samples {
-            let t = t0 + i as f64 * dt;
-            let p = self.point_at(t);
-            let seg_len = prev_p.distance(&p, None);
-            accumulated_length += seg_len;
-
-            if accumulated_length >= segment_length {
-                points.push(p.clone());
-                params.push(t);
-                accumulated_length = 0.0;
+            // Binary search for bracket
+            let mut lo = 0usize;
+            let mut hi = n_samples;
+            while hi - lo > 1 {
+                let mid = (lo + hi) / 2;
+                if s_vals[mid] < s_target { lo = mid; }
+                else { hi = mid; }
             }
 
-            prev_p = p;
+            // Initial guess: linear interpolation
+            let frac = (s_target - s_vals[lo]) / (s_vals[hi] - s_vals[lo]);
+            let mut t = t_vals[lo] + frac * (t_vals[hi] - t_vals[lo]);
+
+            // Newton-Raphson refinement
+            let mut t_lo = t_vals[lo];
+            let mut t_hi = t_vals[hi];
+            for _ in 0..20 {
+                let s_cur = s_vals[lo] + arc_length_gauss(curve, t_vals[lo], t);
+                let error = s_cur - s_target;
+
+                if error.abs() < 1e-12 { break; }
+
+                let speed = derivative_at(curve, t).magnitude();
+                if speed < 1e-14 {
+                    if error > 0.0 { t_hi = t; t = (t_lo + t_hi) * 0.5; }
+                    else { t_lo = t; t = (t_lo + t_hi) * 0.5; }
+                    continue;
+                }
+
+                let t_new = t - error / speed;
+                if t_new <= t_lo || t_new >= t_hi {
+                    if error > 0.0 { t_hi = t; t = (t_lo + t_hi) * 0.5; }
+                    else { t_lo = t; t = (t_lo + t_hi) * 0.5; }
+                } else {
+                    t = t_new;
+                }
+            }
+            t
+        };
+
+        // Add points at each segment_length interval
+        let mut s = 0.0;
+        while s <= total_len + 1e-10 {
+            let t = find_t_at_s(self, s);
+            points.push(self.point_at(t));
+            params.push(t);
+            s += segment_length;
         }
 
         (points, params)
@@ -1246,32 +1610,37 @@ impl NurbsCurve {
         true
     }
 
-    /// Make curve non-rational (remove weights if all equal to 1.0)
+    /// Make curve non-rational. If force=false (default), fails when weights differ.
+    /// If force=true, sets all weights to 1.0 (changes geometry!).
     pub fn make_non_rational(&mut self) -> bool {
+        self.make_non_rational_force(false)
+    }
+
+    pub fn make_non_rational_force(&mut self, force: bool) -> bool {
         if !self.m_is_rat {
-            return true; // Already non-rational
-        }
-        if !self.is_valid() {
-            return false;
+            return true;
         }
 
-        // Check if all weights are 1.0
-        for i in 0..self.m_cv_count {
-            let w = self.weight(i);
-            if (w - 1.0).abs() > Tolerance::ZERO_TOLERANCE {
-                return false; // Cannot make non-rational
+        if force {
+            for i in 0..self.m_cv_count {
+                let idx = i * self.m_cv_stride + self.m_dim;
+                self.m_cv[idx] = 1.0;
+            }
+        } else {
+            let w0 = self.weight(0);
+            for i in 1..self.m_cv_count {
+                if (self.weight(i) - w0).abs() > Tolerance::ZERO_TOLERANCE {
+                    return false;
+                }
             }
         }
 
-        // Create new CV array without weights
         let new_stride = self.m_dim;
         let mut new_cv = vec![0.0; self.m_cv_count * new_stride];
-        
+
         for i in 0..self.m_cv_count {
             let old_idx = i * self.m_cv_stride;
             let new_idx = i * new_stride;
-            
-            // Copy coordinates only
             for j in 0..self.m_dim {
                 new_cv[new_idx + j] = self.m_cv[old_idx + j];
             }
@@ -1354,7 +1723,8 @@ impl NurbsCurve {
         spans
     }
 
-    /// Divide curve into equal parameter intervals
+    /// Divide curve into equal arc-length segments using Gauss-Legendre quadrature.
+    /// Matches C++ implementation exactly.
     ///
     /// # Arguments
     /// * `count` - Number of points to generate
@@ -1366,19 +1736,126 @@ impl NurbsCurve {
         let mut points = Vec::new();
         let mut params = Vec::new();
 
-        if !self.is_valid() || count == 0 {
+        if !self.is_valid() || count < 2 {
             return (points, params);
         }
 
         let (t0, t1) = self.domain();
-        let n = if include_endpoints { count - 1 } else { count + 1 };
-        let dt = (t1 - t0) / n as f64;
+        let dom_len = t1 - t0;
+        let h = dom_len * 1e-8;
+
+        // 5-point Gauss-Legendre nodes and weights for [-1, 1]
+        const GL_NODES: [f64; 5] = [-0.9061798459386640, -0.5384693101056831, 0.0, 0.5384693101056831, 0.9061798459386640];
+        const GL_WEIGHTS: [f64; 5] = [0.2369268850561891, 0.4786286704993665, 0.5688888888888889, 0.4786286704993665, 0.2369268850561891];
+
+        // Compute derivative (un-normalized) at parameter t
+        let derivative_at = |curve: &NurbsCurve, t: f64| -> Vector {
+            let (p1, p2, dt);
+            if t <= t0 + h {
+                p1 = curve.point_at(t0);
+                p2 = curve.point_at(t0 + h);
+                dt = h;
+            } else if t >= t1 - h {
+                p1 = curve.point_at(t1 - h);
+                p2 = curve.point_at(t1);
+                dt = h;
+            } else {
+                p1 = curve.point_at(t - h);
+                p2 = curve.point_at(t + h);
+                dt = 2.0 * h;
+            }
+            Vector::new((p2[0] - p1[0]) / dt, (p2[1] - p1[1]) / dt, (p2[2] - p1[2]) / dt)
+        };
+
+        // Arc length via Gauss-Legendre quadrature
+        let arc_length_gauss = |curve: &NurbsCurve, ta: f64, tb: f64| -> f64 {
+            let mid = (ta + tb) * 0.5;
+            let half = (tb - ta) * 0.5;
+            let mut sum = 0.0;
+            for i in 0..5 {
+                let t = mid + half * GL_NODES[i];
+                sum += GL_WEIGHTS[i] * derivative_at(curve, t).magnitude();
+            }
+            half * sum
+        };
+
+        // Build arc-length table with high resolution
+        let n_samples = (1000usize).max(count * 100);
+        let dt = (t1 - t0) / n_samples as f64;
+
+        let mut t_vals = vec![0.0; n_samples + 1];
+        let mut s_vals = vec![0.0; n_samples + 1];
+
+        t_vals[0] = t0;
+        s_vals[0] = 0.0;
+
+        for i in 1..=n_samples {
+            t_vals[i] = t0 + i as f64 * dt;
+            s_vals[i] = s_vals[i - 1] + arc_length_gauss(self, t_vals[i - 1], t_vals[i]);
+        }
+
+        let total_len = s_vals[n_samples];
+        let n_segs = if include_endpoints { count - 1 } else { count + 1 };
+        let seg_len = total_len / n_segs as f64;
+
+        // Find parameter at target arc length with Newton-Raphson refinement
+        let find_t_at_s = |curve: &NurbsCurve, s_target: f64| -> f64 {
+            if s_target <= 0.0 { return t0; }
+            if s_target >= total_len { return t1; }
+
+            // Binary search for bracket
+            let mut lo = 0usize;
+            let mut hi = n_samples;
+            while hi - lo > 1 {
+                let mid = (lo + hi) / 2;
+                if s_vals[mid] < s_target { lo = mid; }
+                else { hi = mid; }
+            }
+
+            // Initial guess: linear interpolation
+            let frac = (s_target - s_vals[lo]) / (s_vals[hi] - s_vals[lo]);
+            let mut t = t_vals[lo] + frac * (t_vals[hi] - t_vals[lo]);
+
+            // Newton-Raphson refinement
+            let mut t_lo = t_vals[lo];
+            let mut t_hi = t_vals[hi];
+            for _ in 0..20 {
+                let s_cur = s_vals[lo] + arc_length_gauss(curve, t_vals[lo], t);
+                let error = s_cur - s_target;
+
+                if error.abs() < 1e-12 { break; }
+
+                let speed = derivative_at(curve, t).magnitude();
+                if speed < 1e-14 {
+                    if error > 0.0 { t_hi = t; t = (t_lo + t_hi) * 0.5; }
+                    else { t_lo = t; t = (t_lo + t_hi) * 0.5; }
+                    continue;
+                }
+
+                let t_new = t - error / speed;
+                if t_new <= t_lo || t_new >= t_hi {
+                    if error > 0.0 { t_hi = t; t = (t_lo + t_hi) * 0.5; }
+                    else { t_lo = t; t = (t_lo + t_hi) * 0.5; }
+                } else {
+                    t = t_new;
+                }
+            }
+            t
+        };
+
+        points.reserve(count);
+        params.reserve(count);
 
         for i in 0..count {
-            let offset = if include_endpoints { 0 } else { 1 };
-            let t = t0 + (i + offset) as f64 * dt;
-            params.push(t);
+            let s_target = if include_endpoints {
+                seg_len * i as f64
+            } else {
+                seg_len * (i + 1) as f64
+            };
+
+            let t = find_t_at_s(self, s_target);
             points.push(self.point_at(t));
+            params.push(t);
         }
 
         (points, params)

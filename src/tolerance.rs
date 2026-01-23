@@ -1,4 +1,5 @@
 use crate::point::Point;
+use crate::vector::Vector;
 use once_cell::sync::Lazy;
 use parking_lot::RwLock;
 use serde::{Deserialize, Serialize};
@@ -169,6 +170,13 @@ impl Tolerance {
         (dx * dx + dy * dy + dz * dz) <= self.absolute() * self.absolute()
     }
 
+    pub fn is_vector_close(&self, a: &Vector, b: &Vector) -> bool {
+        let dx = b[0] - a[0];
+        let dy = b[1] - a[1];
+        let dz = b[2] - a[2];
+        (dx * dx + dy * dy + dz * dz) <= self.absolute() * self.absolute()
+    }
+
     pub fn key(&self, xyz: [f64; 3], precision: i32) -> String {
         let precision = if precision == -999 { self.precision() } else { precision };
         let [mut x, mut y, mut z] = xyz;
@@ -328,6 +336,7 @@ impl GlobalTolerance {
     pub fn is_angle_zero(&self, a: f64) -> bool { self.inner.read().is_angle_zero(a) }
     pub fn is_angles_close(&self, a: f64, b: f64) -> bool { self.inner.read().is_angles_close(a, b) }
     pub fn is_point_close(&self, a: &Point, b: &Point) -> bool { self.inner.read().is_point_close(a, b) }
+    pub fn is_vector_close(&self, a: &Vector, b: &Vector) -> bool { self.inner.read().is_vector_close(a, b) }
     pub fn key(&self, xyz: [f64; 3], precision: i32) -> String { self.inner.read().key(xyz, precision) }
     pub fn key_xy(&self, xy: [f64; 2], precision: i32) -> String { self.inner.read().key_xy(xy, precision) }
     pub fn format_number(&self, number: f64, precision: i32) -> String {
