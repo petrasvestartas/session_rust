@@ -115,6 +115,252 @@ impl BoundingBox {
         Self::from_points(&polyline.get_points(), inflate)
     }
 
+    pub fn from_nurbscurve(curve: &crate::nurbscurve::NurbsCurve, inflate: f64, tight: bool) -> Self {
+        if !curve.is_valid() || curve.cv_count() == 0 {
+            return BoundingBox::default();
+        }
+
+        if !tight {
+            let points: Vec<Point> = (0..curve.cv_count())
+                .filter_map(|i| curve.get_cv(i))
+                .collect();
+            return Self::from_points(&points, inflate);
+        }
+
+        let (t0, t1) = curve.domain();
+        let mut extrema_points = vec![curve.point_at(t0), curve.point_at(t1)];
+
+        let spans = curve.get_span_vector();
+        for t in spans {
+            if t > t0 && t < t1 {
+                extrema_points.push(curve.point_at(t));
+            }
+        }
+
+        const NUM_SAMPLES: usize = 20;
+        let dt = (t1 - t0) / NUM_SAMPLES as f64;
+
+        for axis in 0..3 {
+            for i in 0..NUM_SAMPLES {
+                let t_start = t0 + i as f64 * dt;
+                let t_end = t_start + dt;
+
+                let deriv_start = curve.evaluate(t_start, 1);
+                let deriv_end = curve.evaluate(t_end, 1);
+                if deriv_start.len() < 2 || deriv_end.len() < 2 {
+                    continue;
+                }
+
+                let mut d_start = deriv_start[1][axis];
+                let d_end = deriv_end[1][axis];
+
+                if d_start * d_end < 0.0 {
+                    let mut t_lo = t_start;
+                    let mut t_hi = t_end;
+                    let mut t_root = (t_lo + t_hi) * 0.5;
+
+                    for _ in 0..20 {
+                        let deriv = curve.evaluate(t_root, 2);
+                        if deriv.len() < 3 {
+                            break;
+                        }
+
+                        let f = deriv[1][axis];
+                        let fp = deriv[2][axis];
+
+                        if f.abs() < 1e-12 {
+                            break;
+                        }
+
+                        if fp.abs() > 1e-14 {
+                            let t_new = t_root - f / fp;
+                            if t_new >= t_lo && t_new <= t_hi {
+                                t_root = t_new;
+                            } else {
+                                if f * d_start < 0.0 {
+                                    t_hi = t_root;
+                                } else {
+                                    t_lo = t_root;
+                                }
+                                t_root = (t_lo + t_hi) * 0.5;
+                            }
+                        } else {
+                            t_root = (t_lo + t_hi) * 0.5;
+                        }
+
+                        let deriv_check = curve.evaluate(t_root, 1);
+                        if deriv_check.len() >= 2 {
+                            let f_check = deriv_check[1][axis];
+                            if f_check * d_start < 0.0 {
+                                t_hi = t_root;
+                            } else {
+                                t_lo = t_root;
+                                d_start = f_check;
+                            }
+                        }
+                    }
+
+                    extrema_points.push(curve.point_at(t_root));
+                }
+            }
+        }
+
+        Self::from_points(&extrema_points, inflate)
+    }
+
+    pub fn from_nurbscurve_with_plane(
+        curve: &crate::nurbscurve::NurbsCurve,
+        plane: &Plane,
+        inflate: f64,
+        tight: bool,
+    ) -> Self {
+        if !curve.is_valid() || curve.cv_count() == 0 {
+            return BoundingBox::default();
+        }
+
+        if !tight {
+            let points: Vec<Point> = (0..curve.cv_count())
+                .filter_map(|i| curve.get_cv(i))
+                .collect();
+            return Self::from_points_with_plane(&points, plane, inflate);
+        }
+
+        let (t0, t1) = curve.domain();
+        let mut extrema_points = vec![curve.point_at(t0), curve.point_at(t1)];
+
+        let spans = curve.get_span_vector();
+        for t in spans {
+            if t > t0 && t < t1 {
+                extrema_points.push(curve.point_at(t));
+            }
+        }
+
+        let axes = [plane.x_axis(), plane.y_axis(), plane.z_axis()];
+        const NUM_SAMPLES: usize = 20;
+        let dt = (t1 - t0) / NUM_SAMPLES as f64;
+
+        for axis in &axes {
+            for i in 0..NUM_SAMPLES {
+                let t_start = t0 + i as f64 * dt;
+                let t_end = t_start + dt;
+
+                let deriv_start = curve.evaluate(t_start, 1);
+                let deriv_end = curve.evaluate(t_end, 1);
+                if deriv_start.len() < 2 || deriv_end.len() < 2 {
+                    continue;
+                }
+
+                let mut d_start = deriv_start[1].dot(axis);
+                let d_end = deriv_end[1].dot(axis);
+
+                if d_start * d_end < 0.0 {
+                    let mut t_lo = t_start;
+                    let mut t_hi = t_end;
+                    let mut t_root = (t_lo + t_hi) * 0.5;
+
+                    for _ in 0..20 {
+                        let deriv = curve.evaluate(t_root, 2);
+                        if deriv.len() < 3 {
+                            break;
+                        }
+
+                        let f = deriv[1].dot(axis);
+                        let fp = deriv[2].dot(axis);
+
+                        if f.abs() < 1e-12 {
+                            break;
+                        }
+
+                        if fp.abs() > 1e-14 {
+                            let t_new = t_root - f / fp;
+                            if t_new >= t_lo && t_new <= t_hi {
+                                t_root = t_new;
+                            } else {
+                                if f * d_start < 0.0 {
+                                    t_hi = t_root;
+                                } else {
+                                    t_lo = t_root;
+                                }
+                                t_root = (t_lo + t_hi) * 0.5;
+                            }
+                        } else {
+                            t_root = (t_lo + t_hi) * 0.5;
+                        }
+
+                        let deriv_check = curve.evaluate(t_root, 1);
+                        if deriv_check.len() >= 2 {
+                            let f_check = deriv_check[1].dot(axis);
+                            if f_check * d_start < 0.0 {
+                                t_hi = t_root;
+                            } else {
+                                t_lo = t_root;
+                                d_start = f_check;
+                            }
+                        }
+                    }
+
+                    extrema_points.push(curve.point_at(t_root));
+                }
+            }
+        }
+
+        Self::from_points_with_plane(&extrema_points, plane, inflate)
+    }
+
+    pub fn from_points_with_plane(points: &[Point], plane: &Plane, inflate: f64) -> Self {
+        if points.is_empty() {
+            return BoundingBox::default();
+        }
+
+        let origin = plane.origin();
+        let x_axis = plane.x_axis();
+        let y_axis = plane.y_axis();
+        let z_axis = plane.z_axis();
+        let plane_to_xy = Xform::plane_to_xy(&origin, &x_axis, &y_axis, &z_axis);
+
+        let mut min_x = f64::MAX;
+        let mut min_y = f64::MAX;
+        let mut min_z = f64::MAX;
+        let mut max_x = f64::MIN;
+        let mut max_y = f64::MIN;
+        let mut max_z = f64::MIN;
+
+        for pt in points {
+            let local_pt = plane_to_xy.transformed_point(pt);
+            min_x = min_x.min(local_pt[0]);
+            min_y = min_y.min(local_pt[1]);
+            min_z = min_z.min(local_pt[2]);
+            max_x = max_x.max(local_pt[0]);
+            max_y = max_y.max(local_pt[1]);
+            max_z = max_z.max(local_pt[2]);
+        }
+
+        let local_center = Point::new(
+            (min_x + max_x) * 0.5,
+            (min_y + max_y) * 0.5,
+            (min_z + max_z) * 0.5,
+        );
+        let half_size = Vector::new(
+            (max_x - min_x) * 0.5 + inflate,
+            (max_y - min_y) * 0.5 + inflate,
+            (max_z - min_z) * 0.5 + inflate,
+        );
+
+        let xy_to_plane = Xform::xy_to_plane(&origin, &x_axis, &y_axis, &z_axis);
+        let world_center = xy_to_plane.transformed_point(&local_center);
+
+        BoundingBox {
+            center: world_center,
+            x_axis,
+            y_axis,
+            z_axis,
+            half_size,
+            guid: Uuid::new_v4().to_string(),
+            name: String::new(),
+            xform: Xform::identity(),
+        }
+    }
+
     pub fn point_at(&self, x: f64, y: f64, z: f64) -> Point {
         Point::new(
             self.center[0] + x * self.x_axis[0] + y * self.y_axis[0] + z * self.z_axis[0],

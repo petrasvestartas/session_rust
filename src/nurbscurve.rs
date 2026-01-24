@@ -2,6 +2,7 @@ use crate::point::Point;
 use crate::vector::Vector;
 use crate::plane::Plane;
 use crate::tolerance::Tolerance;
+use crate::xform::Xform;
 use crate::knot;
 use serde::{Serialize, Deserialize};
 use uuid::Uuid;
@@ -21,6 +22,7 @@ pub struct NurbsCurve {
     pub m_cv_stride: usize,
     pub m_knot: Vec<f64>,
     pub m_cv: Vec<f64>,
+    pub xform: Xform,
 }
 
 impl NurbsCurve {
@@ -39,6 +41,7 @@ impl NurbsCurve {
             m_cv_stride: cv_stride,
             m_knot: vec![0.0; knot_count],
             m_cv: vec![0.0; cv_count * cv_stride],
+            xform: Xform::identity(),
         }
     }
 
@@ -54,6 +57,7 @@ impl NurbsCurve {
             m_cv_stride: 0,
             m_knot: Vec::new(),
             m_cv: Vec::new(),
+            xform: Xform::identity(),
         }
     }
 
@@ -742,6 +746,40 @@ impl NurbsCurve {
         if self.m_cv_count > 0 {
             self.set_cv(self.m_cv_count - 1, point);
         }
+    }
+
+    /// Apply stored xform to the curve (in-place)
+    pub fn transform(&mut self) {
+        self.transform_by(&self.xform.clone());
+    }
+
+    /// Apply provided xform to the curve (in-place)
+    pub fn transform_by(&mut self, xf: &Xform) -> bool {
+        for i in 0..self.m_cv_count {
+            if let Some(p) = self.get_cv(i) {
+                let x = xf.m[0] * p[0] + xf.m[4] * p[1] + xf.m[8] * p[2] + xf.m[12];
+                let y = xf.m[1] * p[0] + xf.m[5] * p[1] + xf.m[9] * p[2] + xf.m[13];
+                let z = xf.m[2] * p[0] + xf.m[6] * p[1] + xf.m[10] * p[2] + xf.m[14];
+                self.set_cv(i, &Point::new(x, y, z));
+            }
+        }
+        true
+    }
+
+    /// Get copy with stored xform applied
+    pub fn transformed(&self) -> NurbsCurve {
+        let mut result = self.clone();
+        result.guid = Uuid::new_v4().to_string();
+        result.transform();
+        result
+    }
+
+    /// Get copy with provided xform applied
+    pub fn transformed_by(&self, xf: &Xform) -> NurbsCurve {
+        let mut result = self.clone();
+        result.guid = Uuid::new_v4().to_string();
+        result.transform_by(xf);
+        result
     }
 
     /// Swap two coordinate indices for all CVs
@@ -1652,36 +1690,53 @@ impl NurbsCurve {
         true
     }
 
-    /// Get approximate length of curve using numerical integration
-    pub fn length(&self, tolerance: Option<f64>) -> f64 {
+    /// Get curve length using Gauss-Legendre quadrature
+    pub fn length(&self, _tolerance: Option<f64>) -> f64 {
         if !self.is_valid() {
             return 0.0;
         }
 
-        let tol = tolerance.unwrap_or(1e-6);
-        let (t0, t1) = self.domain();
-        
-        // Use adaptive Simpson's rule for length computation
-        self.length_adaptive(t0, t1, tol)
-    }
+        const GL_X: [f64; 10] = [
+            -0.9739065285171717, -0.8650633666889845, -0.6794095682990244,
+            -0.4333953941292472, -0.1488743389816312,
+             0.1488743389816312,  0.4333953941292472,  0.6794095682990244,
+             0.8650633666889845,  0.9739065285171717
+        ];
+        const GL_W: [f64; 10] = [
+            0.0666713443086881, 0.1494513491505806, 0.2190863625159820,
+            0.2692667193099963, 0.2955242247147529,
+            0.2955242247147529, 0.2692667193099963, 0.2190863625159820,
+            0.1494513491505806, 0.0666713443086881
+        ];
 
-    fn length_adaptive(&self, t0: f64, t1: f64, tolerance: f64) -> f64 {
-        let t_mid = (t0 + t1) / 2.0;
-        
-        let p0 = self.point_at(t0);
-        let p1 = self.point_at(t_mid);
-        let p2 = self.point_at(t1);
-        
-        let chord_len = p0.distance(&p2, None);
-        let arc_len = p0.distance(&p1, None) + p1.distance(&p2, None);
-        
-        if (arc_len - chord_len).abs() < tolerance || (t1 - t0) < 1e-10 {
-            return arc_len;
+        let mut total = 0.0;
+        let n_spans = self.span_count();
+        const SUBDIVISIONS: usize = 4;
+
+        for span in 0..n_spans {
+            let span_a = self.m_knot[self.m_order - 2 + span];
+            let span_b = self.m_knot[self.m_order - 1 + span];
+            if span_b <= span_a {
+                continue;
+            }
+
+            let span_width = (span_b - span_a) / SUBDIVISIONS as f64;
+            for sub in 0..SUBDIVISIONS {
+                let a = span_a + sub as f64 * span_width;
+                let b = a + span_width;
+                let mid = (a + b) * 0.5;
+                let half = (b - a) * 0.5;
+                let mut s = 0.0;
+
+                for i in 0..10 {
+                    let t = mid + half * GL_X[i];
+                    let derivs = self.evaluate(t, 1);
+                    s += GL_W[i] * derivs[1].magnitude();
+                }
+                total += half * s;
+            }
         }
-        
-        // Subdivide
-        self.length_adaptive(t0, t_mid, tolerance / 2.0) + 
-        self.length_adaptive(t_mid, t1, tolerance / 2.0)
+        total
     }
 
     /// Reverse curve direction
@@ -1859,96 +1914,6 @@ impl NurbsCurve {
         }
 
         (points, params)
-    }
-
-    /// Find all intersections between curve and plane
-    ///
-    /// Implementation matches C++ version with span-based subdivision and endpoint checking.
-    pub fn intersect_plane(&self, plane: &Plane, tolerance: Option<f64>) -> Vec<f64> {
-        let tol = tolerance.unwrap_or(Tolerance::ZERO_TOLERANCE);
-        let mut results = Vec::new();
-
-        if !self.is_valid() {
-            return results;
-        }
-
-        let signed_distance = |p: &Point| -> f64 {
-            let v = Vector::new(
-                p[0] - plane.origin()[0],
-                p[1] - plane.origin()[1],
-                p[2] - plane.origin()[2],
-            );
-            v.dot(&plane.z_axis())
-        };
-
-        let (_t_start, t_end) = self.domain();
-        let span_params = self.get_span_vector();
-
-        // Check each span for intersections
-        for i in 0..(span_params.len() - 1) {
-            let t0 = span_params[i];
-            let t1 = span_params[i + 1];
-
-            // Skip zero-length spans
-            if (t1 - t0).abs() < tol {
-                continue;
-            }
-
-            // Check for sign change (intersection) in this span
-            let d0 = signed_distance(&self.point_at(t0));
-            let d1 = signed_distance(&self.point_at(t1));
-
-            // Check if span crosses plane
-            if d0 * d1 < 0.0 {
-                // Sign change - there's an intersection
-                // Use bisection to find it
-                let mut ta = t0;
-                let mut tb = t1;
-                let mut tm = 0.0;
-                
-                for _ in 0..50 {
-                    tm = (ta + tb) * 0.5;
-                    let dm = signed_distance(&self.point_at(tm));
-                    if dm.abs() < tol {
-                        break;
-                    }
-                    if dm * d0 < 0.0 {
-                        tb = tm;
-                    } else {
-                        ta = tm;
-                    }
-                }
-                results.push(tm);
-            } else if d0.abs() < tol {
-                // Start point is on plane
-                // Avoid duplicates
-                if results.is_empty() || (results.last().unwrap() - t0).abs() >= tol {
-                    results.push(t0);
-                }
-            }
-        }
-
-        // Check end point explicitly
-        let d_end = signed_distance(&self.point_at(t_end));
-        if d_end.abs() < tol {
-            if results.is_empty() || (results.last().unwrap() - t_end).abs() >= tol {
-                results.push(t_end);
-            }
-        }
-
-        // Sort and remove any remaining duplicates
-        results.sort_by(|a, b| a.partial_cmp(b).unwrap());
-        results.dedup_by(|a, b| (*a - *b).abs() < tol * 2.0);
-
-        results
-    }
-
-    /// Find all intersection points between curve and plane
-    pub fn intersect_plane_points(&self, plane: &Plane, tolerance: Option<f64>) -> Vec<Point> {
-        self.intersect_plane(plane, tolerance)
-            .iter()
-            .map(|&t| self.point_at(t))
-            .collect()
     }
 
     /// Serialize to JSON and write to file
