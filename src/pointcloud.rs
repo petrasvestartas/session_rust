@@ -294,7 +294,6 @@ impl PointCloud {
     // Protobuf Serialization
     ///////////////////////////////////////////////////////////////////////////////////////////
 
-    #[cfg(feature = "protobuf")]
     pub fn to_protobuf(&self) -> Vec<u8> {
         use crate::proto;
         use prost::Message;
@@ -317,7 +316,6 @@ impl PointCloud {
         proto.encode_to_vec()
     }
 
-    #[cfg(feature = "protobuf")]
     pub fn from_protobuf(data: &[u8]) -> Self {
         use crate::proto;
         use prost::Message;
@@ -346,36 +344,14 @@ impl PointCloud {
         pc
     }
 
-    #[cfg(feature = "protobuf")]
     pub fn protobuf_dump(&self, filepath: &str) {
         let data = self.to_protobuf();
         std::fs::write(filepath, data).expect("Failed to write protobuf file");
     }
 
-    #[cfg(feature = "protobuf")]
     pub fn protobuf_load(filepath: &str) -> Self {
         let data = std::fs::read(filepath).expect("Failed to read protobuf file");
         Self::from_protobuf(&data)
-    }
-
-    #[cfg(not(feature = "protobuf"))]
-    pub fn to_protobuf(&self) -> Vec<u8> {
-        panic!("Protobuf support not enabled")
-    }
-
-    #[cfg(not(feature = "protobuf"))]
-    pub fn from_protobuf(_data: &[u8]) -> Self {
-        panic!("Protobuf support not enabled")
-    }
-
-    #[cfg(not(feature = "protobuf"))]
-    pub fn protobuf_dump(&self, _filepath: &str) {
-        panic!("Protobuf support not enabled")
-    }
-
-    #[cfg(not(feature = "protobuf"))]
-    pub fn protobuf_load(_filepath: &str) -> Self {
-        panic!("Protobuf support not enabled")
     }
 }
 

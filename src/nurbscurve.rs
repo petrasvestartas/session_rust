@@ -3,18 +3,23 @@ use crate::vector::Vector;
 use crate::plane::Plane;
 use crate::tolerance::Tolerance;
 use crate::xform::Xform;
+use crate::color::Color;
 use crate::knot;
-use serde::{Serialize, Deserialize};
+use serde::{Serialize, Deserialize, Serializer, Deserializer};
+use serde::ser::SerializeMap;
 use uuid::Uuid;
 
 /// Non-Uniform Rational B-Spline (NURBS) curve implementation
 ///
 /// Based on OpenNURBS ground truth implementation.
 /// All methods match the fixed C++ and Python versions.
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug)]
 pub struct NurbsCurve {
     pub guid: String,
     pub name: String,
+    pub width: f64,
+    pub linecolor: Color,
+    pub xform: Xform,
     pub m_dim: usize,
     pub m_is_rat: bool,
     pub m_order: usize,
@@ -22,7 +27,92 @@ pub struct NurbsCurve {
     pub m_cv_stride: usize,
     pub m_knot: Vec<f64>,
     pub m_cv: Vec<f64>,
-    pub xform: Xform,
+}
+
+impl Serialize for NurbsCurve {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        let mut map = serializer.serialize_map(Some(12))?;
+        let control_points: Vec<Vec<f64>> = (0..self.m_cv_count)
+            .map(|i| {
+                if let Some(p) = self.get_cv(i) {
+                    vec![p[0], p[1], p[2]]
+                } else {
+                    vec![0.0, 0.0, 0.0]
+                }
+            })
+            .collect();
+        // Fields in alphabetical order (per CLAUDE.md)
+        map.serialize_entry("control_points", &control_points)?;
+        map.serialize_entry("cv_count", &self.m_cv_count)?;
+        map.serialize_entry("cv_stride", &self.m_cv_stride)?;
+        map.serialize_entry("dimension", &self.m_dim)?;
+        map.serialize_entry("guid", &self.guid)?;
+        map.serialize_entry("is_rational", &self.m_is_rat)?;
+        map.serialize_entry("knots", &self.m_knot)?;
+        map.serialize_entry("linecolor", &self.linecolor)?;
+        map.serialize_entry("name", &self.name)?;
+        map.serialize_entry("order", &self.m_order)?;
+        map.serialize_entry("width", &self.width)?;
+        map.serialize_entry("xform", &self.xform)?;
+        map.end()
+    }
+}
+
+impl<'de> Deserialize<'de> for NurbsCurve {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        #[derive(Deserialize)]
+        struct NurbsCurveData {
+            control_points: Vec<Vec<f64>>,
+            cv_count: usize,
+            #[serde(default)]
+            cv_stride: Option<usize>,
+            dimension: usize,
+            guid: String,
+            is_rational: bool,
+            knots: Vec<f64>,
+            #[serde(default)]
+            linecolor: Option<Color>,
+            name: String,
+            order: usize,
+            #[serde(default)]
+            width: Option<f64>,
+            #[serde(default)]
+            xform: Option<Xform>,
+        }
+        let data = NurbsCurveData::deserialize(deserializer)?;
+        let cv_stride = data.cv_stride.unwrap_or_else(|| {
+            if data.is_rational { data.dimension + 1 } else { data.dimension }
+        });
+        let mut m_cv = Vec::with_capacity(data.cv_count * cv_stride);
+        for cp in &data.control_points {
+            for j in 0..cv_stride.min(cp.len()) {
+                m_cv.push(cp[j]);
+            }
+            for _ in cp.len()..cv_stride {
+                m_cv.push(0.0);
+            }
+        }
+        Ok(NurbsCurve {
+            guid: data.guid,
+            name: data.name,
+            width: data.width.unwrap_or(1.0),
+            linecolor: data.linecolor.unwrap_or_else(Color::white),
+            xform: data.xform.unwrap_or_else(Xform::identity),
+            m_dim: data.dimension,
+            m_is_rat: data.is_rational,
+            m_order: data.order,
+            m_cv_count: data.cv_count,
+            m_cv_stride: cv_stride,
+            m_knot: data.knots,
+            m_cv,
+        })
+    }
 }
 
 impl NurbsCurve {
@@ -34,6 +124,9 @@ impl NurbsCurve {
         NurbsCurve {
             guid: Uuid::new_v4().to_string(),
             name: "my_nurbscurve".to_string(),
+            width: 1.0,
+            linecolor: Color::white(),
+            xform: Xform::identity(),
             m_dim: dimension,
             m_is_rat: is_rational,
             m_order: order,
@@ -41,7 +134,6 @@ impl NurbsCurve {
             m_cv_stride: cv_stride,
             m_knot: vec![0.0; knot_count],
             m_cv: vec![0.0; cv_count * cv_stride],
-            xform: Xform::identity(),
         }
     }
 
@@ -50,6 +142,9 @@ impl NurbsCurve {
         NurbsCurve {
             guid: Uuid::new_v4().to_string(),
             name: "my_nurbscurve".to_string(),
+            width: 1.0,
+            linecolor: Color::white(),
+            xform: Xform::identity(),
             m_dim: 0,
             m_is_rat: false,
             m_order: 0,
@@ -57,21 +152,33 @@ impl NurbsCurve {
             m_cv_stride: 0,
             m_knot: Vec::new(),
             m_cv: Vec::new(),
-            xform: Xform::identity(),
         }
     }
 
     /// Simple string representation
     pub fn str(&self) -> String {
-        format!("degree={}, cvs={}", self.degree(), self.cv_count())
+        format!("NurbsCurve(degree={}, cvs={})", self.degree(), self.cv_count())
     }
 
     /// Detailed representation
     pub fn repr(&self) -> String {
-        format!(
-            "NurbsCurve({}, dim={}, order={}, cvs={}, rational={})",
-            self.name, self.m_dim, self.m_order, self.m_cv_count, self.m_is_rat
-        )
+        let mut lines = vec![
+            "NurbsCurve(".to_string(),
+            format!("  name={},", self.name),
+            format!("  dim={},", self.m_dim),
+            format!("  order={},", self.m_order),
+            format!("  cvs={},", self.m_cv_count),
+            format!("  rational={},", self.m_is_rat),
+            "  control_points=[".to_string(),
+        ];
+        for i in 0..self.m_cv_count {
+            if let Some(p) = self.get_cv(i) {
+                lines.push(format!("    cv[{}]: {}, {}, {}", i, p[0], p[1], p[2]));
+            }
+        }
+        lines.push("  ]".to_string());
+        lines.push(")".to_string());
+        lines.join("\n")
     }
 
     /// Create a duplicate with new GUID
@@ -496,6 +603,15 @@ impl NurbsCurve {
             // Last superfluous knot: reflect last knot across knot[cv_count-order]
             return 2.0 * self.m_knot[kc - 1] - self.m_knot[self.m_cv_count - self.m_order];
         }
+    }
+
+    /// Create a clamped uniform knot vector for this curve
+    pub fn make_clamped_uniform_knot_vector(&mut self, delta: f64) -> bool {
+        if delta <= 0.0 || self.m_dim == 0 || self.m_order < 2 || self.m_cv_count < self.m_order {
+            return false;
+        }
+        self.m_knot = knot::make_clamped_uniform(self.m_order, self.m_cv_count, delta);
+        !self.m_knot.is_empty()
     }
 
     /// Check if knot vector is valid
@@ -1942,16 +2058,73 @@ impl NurbsCurve {
         serde_json::from_str(&contents).unwrap_or_else(|_| Self::default())
     }
 
-    /// Serialize to protobuf and write to file (stub - protobuf not yet implemented)
-    pub fn protobuf_dump(&self, filename: &str) {
-        // For now, just use JSON as a fallback
-        self.json_dump(&filename.replace(".bin", ".json"));
+    /// Convert to protobuf binary format
+    pub fn to_protobuf(&self) -> Vec<u8> {
+        use prost::Message;
+        let proto = crate::proto::NurbsCurve {
+            guid: self.guid.clone(),
+            name: self.name.clone(),
+            dimension: self.m_dim as i32,
+            is_rational: self.m_is_rat,
+            order: self.m_order as i32,
+            cv_count: self.m_cv_count as i32,
+            cv_stride: self.m_cv_stride as i32,
+            knots: self.m_knot.clone(),
+            cvs: self.m_cv.clone(),
+            width: 1.0,
+            linecolor: Some(crate::proto::Color {
+                guid: String::new(),
+                name: "white".to_string(),
+                r: 255,
+                g: 255,
+                b: 255,
+                a: 255,
+            }),
+            xform: Some(crate::proto::Xform {
+                guid: self.xform.guid.clone(),
+                name: self.xform.name.clone(),
+                matrix: self.xform.m.to_vec(),
+            }),
+        };
+        proto.encode_to_vec()
     }
 
-    /// Load from protobuf file (stub - protobuf not yet implemented)
+    /// Create NurbsCurve from protobuf binary data
+    pub fn from_protobuf(data: &[u8]) -> Result<Self, Box<dyn std::error::Error>> {
+        use prost::Message;
+        let proto = crate::proto::NurbsCurve::decode(data)?;
+        let mut curve = Self::new(
+            proto.dimension as usize,
+            proto.is_rational,
+            proto.order as usize,
+            proto.cv_count as usize,
+        );
+        curve.guid = proto.guid;
+        curve.name = proto.name;
+        curve.m_knot = proto.knots;
+        curve.m_cv = proto.cvs;
+        if let Some(xform) = proto.xform {
+            curve.xform.guid = xform.guid;
+            curve.xform.name = xform.name;
+            for (i, val) in xform.matrix.iter().enumerate() {
+                if i < 16 {
+                    curve.xform.m[i] = *val;
+                }
+            }
+        }
+        Ok(curve)
+    }
+
+    /// Serialize to protobuf and write to file
+    pub fn protobuf_dump(&self, filename: &str) {
+        let data = self.to_protobuf();
+        std::fs::write(filename, data).expect("Failed to write protobuf file");
+    }
+
+    /// Load from protobuf file
     pub fn protobuf_load(filename: &str) -> Self {
-        // For now, just use JSON as a fallback
-        Self::json_load(&filename.replace(".bin", ".json"))
+        let data = std::fs::read(filename).expect("Failed to read protobuf file");
+        Self::from_protobuf(&data).expect("Failed to parse protobuf")
     }
 }
 

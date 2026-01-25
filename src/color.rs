@@ -261,7 +261,6 @@ impl Color {
     // Protobuf Serialization
     ///////////////////////////////////////////////////////////////////////////////////////////
 
-    #[cfg(feature = "protobuf")]
     /// Convert to protobuf binary format.
     ///
     /// # Returns
@@ -281,7 +280,6 @@ impl Color {
         proto.encode_to_vec()
     }
 
-    #[cfg(feature = "protobuf")]
     /// Create Color from protobuf binary data.
     ///
     /// # Arguments
@@ -302,7 +300,6 @@ impl Color {
         Ok(color)
     }
 
-    #[cfg(feature = "protobuf")]
     /// Write protobuf to file.
     ///
     /// # Arguments
@@ -313,7 +310,6 @@ impl Color {
         std::fs::write(filepath, data).expect("Failed to write protobuf file");
     }
 
-    #[cfg(feature = "protobuf")]
     /// Read protobuf from file.
     ///
     /// # Arguments

@@ -224,7 +224,6 @@ pub fn run_color_json_roundtrip() -> TestResult {
     })
 }
 
-#[cfg(feature = "protobuf")]
 pub fn run_color_protobuf_roundtrip() -> TestResult {
     MINI_TEST!("protobuf_roundtrip", {
         use crate::Color;
@@ -316,7 +315,6 @@ pub fn run_color_presets() -> TestResult {
 // Register tests with the shared registry for run_all("rust")
 REGISTER_MINI_TEST!("Color", "constructor", crate::color_test::run_color_constructor);
 REGISTER_MINI_TEST!("Color", "json_roundtrip", crate::color_test::run_color_json_roundtrip);
-#[cfg(feature = "protobuf")]
 REGISTER_MINI_TEST!("Color", "protobuf_roundtrip", crate::color_test::run_color_protobuf_roundtrip);
 REGISTER_MINI_TEST!("Color", "conversion", crate::color_test::run_color_conversion);
 REGISTER_MINI_TEST!("Color", "presets", crate::color_test::run_color_presets);

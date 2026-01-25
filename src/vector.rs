@@ -940,7 +940,6 @@ impl Vector {
     // Protobuf Serialization
     ///////////////////////////////////////////////////////////////////////////////////////////
 
-    #[cfg(feature = "protobuf")]
     /// Convert to protobuf binary format.
     ///
     /// # Returns
@@ -958,7 +957,6 @@ impl Vector {
         proto.encode_to_vec()
     }
 
-    #[cfg(feature = "protobuf")]
     /// Create Vector from protobuf binary data.
     ///
     /// # Arguments
@@ -979,7 +977,6 @@ impl Vector {
         Ok(v)
     }
 
-    #[cfg(feature = "protobuf")]
     /// Write protobuf to file.
     ///
     /// # Arguments
@@ -990,7 +987,6 @@ impl Vector {
         std::fs::write(filepath, data).expect("Failed to write protobuf file");
     }
 
-    #[cfg(feature = "protobuf")]
     /// Read protobuf from file.
     ///
     /// # Arguments

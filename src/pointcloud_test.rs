@@ -138,7 +138,6 @@ pub fn run_pointcloud_json_roundtrip() -> TestResult {
     })
 }
 
-#[cfg(feature = "protobuf")]
 pub fn run_pointcloud_protobuf_roundtrip() -> TestResult {
     MINI_TEST!("protobuf_roundtrip", {
         use crate::PointCloud;
@@ -168,5 +167,4 @@ pub fn run_pointcloud_protobuf_roundtrip() -> TestResult {
 REGISTER_MINI_TEST!("PointCloud", "constructor", crate::pointcloud_test::run_pointcloud_constructor);
 REGISTER_MINI_TEST!("PointCloud", "transform", crate::pointcloud_test::run_pointcloud_transform);
 REGISTER_MINI_TEST!("PointCloud", "json_roundtrip", crate::pointcloud_test::run_pointcloud_json_roundtrip);
-#[cfg(feature = "protobuf")]
 REGISTER_MINI_TEST!("PointCloud", "protobuf_roundtrip", crate::pointcloud_test::run_pointcloud_protobuf_roundtrip);

@@ -6,35 +6,31 @@ fn main() {
     println!("cargo:rerun-if-changed=build.rs");
     println!("cargo:rerun-if-changed={}", proto_dir);
 
-    #[cfg(feature = "protobuf")]
-    {
-        let protoc_path = download_protoc();
-        std::env::set_var("PROTOC", &protoc_path);
+    let protoc_path = download_protoc();
+    std::env::set_var("PROTOC", &protoc_path);
 
-        let proto_files: Vec<String> = std::fs::read_dir(proto_dir)
-            .expect("Failed to read proto directory")
-            .filter_map(|entry| {
-                let entry = entry.ok()?;
-                let path = entry.path();
-                if path.extension()? == "proto" {
-                    Some(path.to_string_lossy().into_owned())
-                } else {
-                    None
-                }
-            })
-            .collect();
+    let proto_files: Vec<String> = std::fs::read_dir(proto_dir)
+        .expect("Failed to read proto directory")
+        .filter_map(|entry| {
+            let entry = entry.ok()?;
+            let path = entry.path();
+            if path.extension()? == "proto" {
+                Some(path.to_string_lossy().into_owned())
+            } else {
+                None
+            }
+        })
+        .collect();
 
-        if !proto_files.is_empty() {
-            prost_build::compile_protos(
-                &proto_files.iter().map(|s| s.as_str()).collect::<Vec<_>>(),
-                &[proto_dir],
-            )
-            .expect("Failed to compile protobuf files");
-        }
+    if !proto_files.is_empty() {
+        prost_build::compile_protos(
+            &proto_files.iter().map(|s| s.as_str()).collect::<Vec<_>>(),
+            &[proto_dir],
+        )
+        .expect("Failed to compile protobuf files");
     }
 }
 
-#[cfg(feature = "protobuf")]
 fn download_protoc() -> PathBuf {
     use std::io::Read;
 

@@ -233,7 +233,6 @@ pub fn run_plane_json_roundtrip() -> TestResult {
     })
 }
 
-#[cfg(feature = "protobuf")]
 pub fn run_plane_protobuf_roundtrip() -> TestResult {
     MINI_TEST!("protobuf_roundtrip", {
         use crate::Plane;
@@ -260,5 +259,4 @@ REGISTER_MINI_TEST!("Plane", "is_right_hand", crate::plane_test::run_plane_is_ri
 REGISTER_MINI_TEST!("Plane", "is_coplanar", crate::plane_test::run_plane_is_coplanar);
 REGISTER_MINI_TEST!("Plane", "transform", crate::plane_test::run_plane_transform);
 REGISTER_MINI_TEST!("Plane", "json_roundtrip", crate::plane_test::run_plane_json_roundtrip);
-#[cfg(feature = "protobuf")]
 REGISTER_MINI_TEST!("Plane", "protobuf_roundtrip", crate::plane_test::run_plane_protobuf_roundtrip);

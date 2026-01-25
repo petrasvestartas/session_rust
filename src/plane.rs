@@ -618,7 +618,6 @@ impl Plane {
 }
 
 // Protobuf serialization (requires "protobuf" feature)
-#[cfg(feature = "protobuf")]
 impl Plane {
     /// Convert to protobuf binary format.
     pub fn to_protobuf(&self) -> Vec<u8> {

@@ -453,53 +453,80 @@ pub fn run_nurbscurve_modifications() -> TestResult {
 
 pub fn run_nurbscurve_json_roundtrip() -> TestResult {
     MINI_TEST!("json_roundtrip", {
+        // use crate::NurbsCurve;
+        // use crate::Point;
+        // use crate::Tolerance;
+        // use std::path::PathBuf;
         use crate::NurbsCurve;
         use crate::Point;
+        use crate::Tolerance;
+        use std::path::PathBuf;
 
         let points = vec![
             Point::new(0.0, 0.0, 0.0),
-            Point::new(1.0, 1.0, 0.0),
+            Point::new(1.0, 2.0, 0.0),
             Point::new(2.0, 0.0, 0.0),
+            Point::new(3.0, 2.0, 0.0),
+            Point::new(4.0, 0.0, 0.0),
         ];
+        let curve = NurbsCurve::create(false, 2, &points);
 
-        let mut curve = NurbsCurve::create(false, 2, &points);
-        curve.set_domain(0.0, 1.0);
-        curve.set_domain(0.0, 1.0);
+        let src_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+        let filename = src_dir.join("serialization").join("test_nurbscurve.json");
+        curve.json_dump(filename.to_str().unwrap());
+        let loaded = NurbsCurve::json_load(filename.to_str().unwrap());
 
-        let filename = "serialization/test_nurbscurve.json";
-        curve.json_dump(filename);
-        let loaded = NurbsCurve::json_load(filename);
-
+        MINI_CHECK!(loaded.name == curve.name);
+        MINI_CHECK!(Tolerance::default().is_close(loaded.width, curve.width));
+        MINI_CHECK!(loaded.linecolor[0] == curve.linecolor[0]);
+        MINI_CHECK!(loaded.linecolor[1] == curve.linecolor[1]);
+        MINI_CHECK!(loaded.linecolor[2] == curve.linecolor[2]);
+        MINI_CHECK!(loaded.dimension() == curve.dimension());
         MINI_CHECK!(loaded.is_valid() == true);
-        MINI_CHECK!(loaded.cv_count() == 3);
-        MINI_CHECK!(loaded.degree() == 2);
-        MINI_CHECK!(loaded.order() == 3);
+        MINI_CHECK!(Tolerance::default().is_point_close(&loaded.get_cv(0).unwrap(), &points[0]));
+        MINI_CHECK!(Tolerance::default().is_point_close(&loaded.get_cv(1).unwrap(), &points[1]));
+        MINI_CHECK!(Tolerance::default().is_point_close(&loaded.get_cv(2).unwrap(), &points[2]));
+        MINI_CHECK!(Tolerance::default().is_point_close(&loaded.get_cv(3).unwrap(), &points[3]));
+        MINI_CHECK!(Tolerance::default().is_point_close(&loaded.get_cv(4).unwrap(), &points[4]));
     })
 }
 
 pub fn run_nurbscurve_protobuf_roundtrip() -> TestResult {
     MINI_TEST!("protobuf_roundtrip", {
+        // use crate::NurbsCurve;
+        // use crate::Point;
+        // use crate::Tolerance;
+        // use std::path::PathBuf;
         use crate::NurbsCurve;
         use crate::Point;
+        use crate::Tolerance;
+        use std::path::PathBuf;
 
         let points = vec![
             Point::new(0.0, 0.0, 0.0),
-            Point::new(1.0, 1.0, 0.0),
+            Point::new(1.0, 2.0, 0.0),
             Point::new(2.0, 0.0, 0.0),
+            Point::new(3.0, 2.0, 0.0),
+            Point::new(4.0, 0.0, 0.0),
         ];
+        let curve = NurbsCurve::create(false, 2, &points);
 
-        let mut curve = NurbsCurve::create(false, 2, &points);
-        curve.set_domain(0.0, 1.0);
-        curve.set_domain(0.0, 1.0);
+        let src_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+        let filename = src_dir.join("serialization").join("test_nurbscurve.bin");
+        curve.protobuf_dump(filename.to_str().unwrap());
+        let loaded = NurbsCurve::protobuf_load(filename.to_str().unwrap());
 
-        let filename = "serialization/test_nurbscurve.bin";
-        curve.protobuf_dump(filename);
-        let loaded = NurbsCurve::protobuf_load(filename);
-
+        MINI_CHECK!(loaded.name == curve.name);
+        MINI_CHECK!(Tolerance::default().is_close(loaded.width, curve.width));
+        MINI_CHECK!(loaded.linecolor[0] == curve.linecolor[0]);
+        MINI_CHECK!(loaded.linecolor[1] == curve.linecolor[1]);
+        MINI_CHECK!(loaded.linecolor[2] == curve.linecolor[2]);
         MINI_CHECK!(loaded.is_valid() == true);
-        MINI_CHECK!(loaded.cv_count() == 3);
-        MINI_CHECK!(loaded.degree() == 2);
-        MINI_CHECK!(loaded.order() == 3);
+        MINI_CHECK!(Tolerance::default().is_point_close(&loaded.get_cv(0).unwrap(), &points[0]));
+        MINI_CHECK!(Tolerance::default().is_point_close(&loaded.get_cv(1).unwrap(), &points[1]));
+        MINI_CHECK!(Tolerance::default().is_point_close(&loaded.get_cv(2).unwrap(), &points[2]));
+        MINI_CHECK!(Tolerance::default().is_point_close(&loaded.get_cv(3).unwrap(), &points[3]));
+        MINI_CHECK!(Tolerance::default().is_point_close(&loaded.get_cv(4).unwrap(), &points[4]));
     })
 }
 

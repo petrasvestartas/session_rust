@@ -136,7 +136,6 @@ pub fn run_line_json_roundtrip() -> TestResult {
     })
 }
 
-#[cfg(feature = "protobuf")]
 pub fn run_line_protobuf_roundtrip() -> TestResult {
     MINI_TEST!("protobuf_roundtrip", {
         use crate::Line;
@@ -285,7 +284,6 @@ pub fn run_line_subdivide() -> TestResult {
 REGISTER_MINI_TEST!("Line", "constructor", crate::line_test::run_line_constructor);
 REGISTER_MINI_TEST!("Line", "transformation", crate::line_test::run_line_transformation);
 REGISTER_MINI_TEST!("Line", "json_roundtrip", crate::line_test::run_line_json_roundtrip);
-#[cfg(feature = "protobuf")]
 REGISTER_MINI_TEST!("Line", "protobuf_roundtrip", crate::line_test::run_line_protobuf_roundtrip);
 REGISTER_MINI_TEST!("Line", "length", crate::line_test::run_line_length);
 REGISTER_MINI_TEST!("Line", "to_vector", crate::line_test::run_line_to_vector);

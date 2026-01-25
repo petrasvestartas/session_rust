@@ -569,7 +569,6 @@ fn test_polyline_tween_two_polylines() {
     assert!((result.get_points()[1][1] - 1.0).abs() < 1e-5);
 }
 
-#[cfg(feature = "protobuf")]
 #[test]
 fn test_polyline_protobuf_roundtrip() {
     let mut polyline = Polyline::new(vec![
@@ -727,7 +726,6 @@ pub fn run_polyline_json_roundtrip() -> TestResult {
     })
 }
 
-#[cfg(feature = "protobuf")]
 pub fn run_polyline_protobuf_roundtrip() -> TestResult {
     MINI_TEST!("protobuf_roundtrip", {
         use crate::Polyline;
@@ -997,7 +995,6 @@ pub fn run_polyline_average_plane() -> TestResult {
 REGISTER_MINI_TEST!("Polyline", "constructor", crate::polyline_test::run_polyline_constructor);
 REGISTER_MINI_TEST!("Polyline", "transformation", crate::polyline_test::run_polyline_transformation);
 REGISTER_MINI_TEST!("Polyline", "json_roundtrip", crate::polyline_test::run_polyline_json_roundtrip);
-#[cfg(feature = "protobuf")]
 REGISTER_MINI_TEST!("Polyline", "protobuf_roundtrip", crate::polyline_test::run_polyline_protobuf_roundtrip);
 REGISTER_MINI_TEST!("Polyline", "length", crate::polyline_test::run_polyline_length);
 REGISTER_MINI_TEST!("Polyline", "center", crate::polyline_test::run_polyline_center);

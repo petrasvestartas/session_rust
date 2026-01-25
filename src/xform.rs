@@ -637,7 +637,6 @@ impl Xform {
     // Protobuf Serialization
     ///////////////////////////////////////////////////////////////////////////////////////////
 
-    #[cfg(feature = "protobuf")]
     /// Convert to protobuf binary format.
     ///
     /// # Returns
@@ -654,7 +653,6 @@ impl Xform {
         proto.encode_to_vec()
     }
 
-    #[cfg(feature = "protobuf")]
     /// Create Xform from protobuf binary data.
     ///
     /// # Arguments
@@ -680,7 +678,6 @@ impl Xform {
         Ok(xform)
     }
 
-    #[cfg(feature = "protobuf")]
     /// Write protobuf to file.
     ///
     /// # Arguments
@@ -691,7 +688,6 @@ impl Xform {
         std::fs::write(filepath, data).expect("Failed to write protobuf file");
     }
 
-    #[cfg(feature = "protobuf")]
     /// Read protobuf from file.
     ///
     /// # Arguments

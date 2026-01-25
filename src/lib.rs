@@ -5,7 +5,6 @@
 // Usage: session_rust::point::Point
 #![allow(static_mut_refs)]
 
-#[cfg(feature = "protobuf")]
 pub mod proto {
     include!(concat!(env!("OUT_DIR"), "/session_proto.rs"));
 }
@@ -36,6 +35,7 @@ pub mod plane;
 pub mod point;
 pub mod pointcloud;
 pub mod polyline;
+pub mod primitives;
 pub mod quaternion;
 pub mod session;
 pub mod tolerance;
@@ -57,6 +57,7 @@ pub mod xform_test;
 pub mod mesh_test;
 pub mod nurbscurve_test;
 pub mod nurbssurface_test;
+pub mod primitives_test;
 
 pub use arrow::Arrow;
 pub use boundingbox::BoundingBox;
@@ -76,6 +77,7 @@ pub use plane::Plane;
 pub use point::Point;
 pub use pointcloud::PointCloud;
 pub use polyline::Polyline;
+pub use primitives::Primitives;
 pub use quaternion::Quaternion;
 pub use session::{Geometry, Session};
 pub use tolerance::Tolerance;

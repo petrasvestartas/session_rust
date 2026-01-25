@@ -416,7 +416,6 @@ pub fn run_vector_json_roundtrip() -> TestResult {
     })
 }
 
-#[cfg(feature = "protobuf")]
 pub fn run_vector_protobuf_roundtrip() -> TestResult {
     MINI_TEST!("protobuf_roundtrip", {
         use crate::Vector;
@@ -453,5 +452,4 @@ REGISTER_MINI_TEST!("Vector", "sum_of_vectors", crate::vector_test::run_vector_s
 REGISTER_MINI_TEST!("Vector", "average", crate::vector_test::run_vector_average);
 REGISTER_MINI_TEST!("Vector", "is_zero", crate::vector_test::run_vector_is_zero);
 REGISTER_MINI_TEST!("Vector", "json_roundtrip", crate::vector_test::run_vector_json_roundtrip);
-#[cfg(feature = "protobuf")]
 REGISTER_MINI_TEST!("Vector", "protobuf_roundtrip", crate::vector_test::run_vector_protobuf_roundtrip);

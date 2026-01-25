@@ -393,7 +393,6 @@ impl Polyline {
     // Protobuf Serialization
     ///////////////////////////////////////////////////////////////////////////////////////////
 
-    #[cfg(feature = "protobuf")]
     /// Convert to protobuf binary format.
     ///
     /// # Returns
@@ -424,7 +423,6 @@ impl Polyline {
         proto.encode_to_vec()
     }
 
-    #[cfg(feature = "protobuf")]
     /// Create Polyline from protobuf binary data.
     ///
     /// # Arguments
@@ -466,7 +464,6 @@ impl Polyline {
         Ok(pl)
     }
 
-    #[cfg(feature = "protobuf")]
     /// Write protobuf to file.
     ///
     /// # Arguments
@@ -477,7 +474,6 @@ impl Polyline {
         std::fs::write(filepath, data).expect("Failed to write protobuf file");
     }
 
-    #[cfg(feature = "protobuf")]
     /// Read protobuf from file.
     ///
     /// # Arguments

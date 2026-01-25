@@ -119,7 +119,6 @@ pub fn run_point_json_roundtrip() -> TestResult {
     })
 }
 
-#[cfg(feature = "protobuf")]
 pub fn run_point_protobuf_roundtrip() -> TestResult {
     MINI_TEST!("protobuf_roundtrip", {
         use crate::Point;
@@ -236,7 +235,6 @@ pub fn run_point_centroid_quad() -> TestResult {
 REGISTER_MINI_TEST!("Point", "constructor", crate::point_test::run_point_constructor);
 REGISTER_MINI_TEST!("Point", "transformation", crate::point_test::run_point_transformation);
 REGISTER_MINI_TEST!("Point", "json_roundtrip", crate::point_test::run_point_json_roundtrip);
-#[cfg(feature = "protobuf")]
 REGISTER_MINI_TEST!("Point", "protobuf_roundtrip", crate::point_test::run_point_protobuf_roundtrip);
 REGISTER_MINI_TEST!("Point", "is_ccw", crate::point_test::run_point_is_ccw);
 REGISTER_MINI_TEST!("Point", "mid_point", crate::point_test::run_point_mid_point);

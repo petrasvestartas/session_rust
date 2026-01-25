@@ -301,7 +301,6 @@ pub fn run_xform_json_roundtrip() -> TestResult {
     })
 }
 
-#[cfg(feature = "protobuf")]
 pub fn run_xform_protobuf_roundtrip() -> TestResult {
     MINI_TEST!("protobuf_roundtrip", {
         use crate::Xform;
@@ -332,5 +331,4 @@ REGISTER_MINI_TEST!("Xform", "change_basis", crate::xform_test::run_xform_change
 REGISTER_MINI_TEST!("Xform", "plane_to_plane", crate::xform_test::run_xform_plane_to_plane);
 REGISTER_MINI_TEST!("Xform", "look_at_rh", crate::xform_test::run_xform_look_at_rh);
 REGISTER_MINI_TEST!("Xform", "json_roundtrip", crate::xform_test::run_xform_json_roundtrip);
-#[cfg(feature = "protobuf")]
 REGISTER_MINI_TEST!("Xform", "protobuf_roundtrip", crate::xform_test::run_xform_protobuf_roundtrip);

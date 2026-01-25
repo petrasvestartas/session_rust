@@ -839,7 +839,6 @@ impl Mesh {
     // Protobuf Serialization
     ///////////////////////////////////////////////////////////////////////////////////////////
 
-    #[cfg(feature = "protobuf")]
     pub fn to_protobuf(&self) -> Vec<u8> {
         use prost::Message;
         use std::collections::HashMap;
@@ -952,7 +951,6 @@ impl Mesh {
         proto.encode_to_vec()
     }
 
-    #[cfg(feature = "protobuf")]
     pub fn from_protobuf(data: &[u8]) -> Result<Self, Box<dyn std::error::Error>> {
         use prost::Message;
 
@@ -1045,13 +1043,11 @@ impl Mesh {
         Ok(mesh)
     }
 
-    #[cfg(feature = "protobuf")]
     pub fn protobuf_dump(&self, filepath: &str) {
         let data = self.to_protobuf();
         std::fs::write(filepath, data).expect("Failed to write protobuf file");
     }
 
-    #[cfg(feature = "protobuf")]
     pub fn protobuf_load(filepath: &str) -> Self {
         let data = std::fs::read(filepath).expect("Failed to read protobuf file");
         Self::from_protobuf(&data).expect("Failed to parse protobuf")

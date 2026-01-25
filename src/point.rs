@@ -200,7 +200,6 @@ impl Point {
     // Protobuf Serialization
     ///////////////////////////////////////////////////////////////////////////////////////////
 
-    #[cfg(feature = "protobuf")]
     /// Convert to protobuf binary format.
     ///
     /// # Returns
@@ -233,7 +232,6 @@ impl Point {
         proto.encode_to_vec()
     }
 
-    #[cfg(feature = "protobuf")]
     /// Create Point from protobuf binary data.
     ///
     /// # Arguments
@@ -274,7 +272,6 @@ impl Point {
         Ok(pt)
     }
 
-    #[cfg(feature = "protobuf")]
     /// Write protobuf to file.
     ///
     /// # Arguments
@@ -285,7 +282,6 @@ impl Point {
         std::fs::write(filepath, data).expect("Failed to write protobuf file");
     }
 
-    #[cfg(feature = "protobuf")]
     /// Read protobuf from file.
     ///
     /// # Arguments

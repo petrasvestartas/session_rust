@@ -1287,7 +1287,6 @@ impl NurbsSurface {
         serde_json::from_str(&contents).unwrap_or_else(|_| Self::default())
     }
 
-    #[cfg(feature = "protobuf")]
     /// Serialize to protobuf binary data.
     ///
     /// # Returns
@@ -1328,7 +1327,6 @@ impl NurbsSurface {
         proto.encode_to_vec()
     }
 
-    #[cfg(feature = "protobuf")]
     /// Create NurbsSurface from protobuf binary data.
     ///
     /// # Arguments
@@ -1403,7 +1401,6 @@ impl NurbsSurface {
         Ok(surface)
     }
 
-    #[cfg(feature = "protobuf")]
     /// Write protobuf to file.
     ///
     /// # Arguments
@@ -1414,7 +1411,6 @@ impl NurbsSurface {
         std::fs::write(filepath, data).expect("Failed to write protobuf file");
     }
 
-    #[cfg(feature = "protobuf")]
     /// Read protobuf from file.
     ///
     /// # Arguments
@@ -1427,20 +1423,6 @@ impl NurbsSurface {
     pub fn protobuf_load(filepath: &str) -> Self {
         let data = std::fs::read(filepath).expect("Failed to read protobuf file");
         Self::from_protobuf(&data).expect("Failed to parse protobuf")
-    }
-
-    #[cfg(not(feature = "protobuf"))]
-    /// Serialize to protobuf and write to file (stub - protobuf feature not enabled)
-    pub fn protobuf_dump(&self, filename: &str) {
-        // Fallback: use JSON when protobuf feature is not enabled
-        self.json_dump(&filename.replace(".bin", ".json"));
-    }
-
-    #[cfg(not(feature = "protobuf"))]
-    /// Load from protobuf file (stub - protobuf feature not enabled)
-    pub fn protobuf_load(filename: &str) -> Self {
-        // Fallback: use JSON when protobuf feature is not enabled
-        Self::json_load(&filename.replace(".bin", ".json"))
     }
 }
 

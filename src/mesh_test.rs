@@ -287,7 +287,6 @@ pub fn run_mesh_json_roundtrip() -> TestResult {
     })
 }
 
-#[cfg(feature = "protobuf")]
 pub fn run_mesh_protobuf_roundtrip() -> TestResult {
     MINI_TEST!("protobuf_roundtrip", {
         use crate::Mesh;
@@ -383,5 +382,4 @@ REGISTER_MINI_TEST!("Mesh", "vertex_position", crate::mesh_test::run_mesh_vertex
 REGISTER_MINI_TEST!("Mesh", "vertex_normal", crate::mesh_test::run_mesh_vertex_normal);
 REGISTER_MINI_TEST!("Mesh", "to_vertices_and_faces", crate::mesh_test::run_mesh_to_vertices_and_faces);
 REGISTER_MINI_TEST!("Mesh", "json_roundtrip", crate::mesh_test::run_mesh_json_roundtrip);
-#[cfg(feature = "protobuf")]
 REGISTER_MINI_TEST!("Mesh", "protobuf_roundtrip", crate::mesh_test::run_mesh_protobuf_roundtrip);
