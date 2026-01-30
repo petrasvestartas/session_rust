@@ -68,7 +68,7 @@ mod tests {
     fn test_color_to_json_from_json() {
         let mut original = Color::new(255, 128, 64, 255);
         original.name = "sunset_orange".to_string();
-        let filename = "serialization/test_color.json";
+        let filename = "serialization/test_color_roundtrip.json";
 
         json_dump(&original, filename, true).unwrap();
         let loaded = json_load::<Color>(filename).unwrap();

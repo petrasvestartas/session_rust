@@ -161,7 +161,7 @@ mod tests {
     fn test_graph_from_json_data() {
         let data = r#"{
             "type": "Graph",
-            "name": "serialization/test_graph",
+            "name": "test_graph",
             "guid": "test-guid-123",
             "vertex_count": 3,
             "edge_count": 2,

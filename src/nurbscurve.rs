@@ -116,6 +116,10 @@ impl<'de> Deserialize<'de> for NurbsCurve {
 }
 
 impl NurbsCurve {
+    // =========================================================================
+    // Constructors
+    // =========================================================================
+
     /// Create a NURBS curve with specified parameters (matches C++/Python constructor)
     pub fn new(dimension: usize, is_rational: bool, order: usize, cv_count: usize) -> Self {
         let cv_stride = if is_rational { dimension + 1 } else { dimension };
@@ -155,9 +159,13 @@ impl NurbsCurve {
         }
     }
 
+    // =========================================================================
+    // String Representation
+    // =========================================================================
+
     /// Simple string representation
     pub fn str(&self) -> String {
-        format!("NurbsCurve(degree={}, cvs={})", self.degree(), self.cv_count())
+        format!("NurbsCurve(name={}, degree={}, cvs={})", self.name, self.degree(), self.cv_count())
     }
 
     /// Detailed representation
@@ -165,15 +173,14 @@ impl NurbsCurve {
         let mut lines = vec![
             "NurbsCurve(".to_string(),
             format!("  name={},", self.name),
-            format!("  dim={},", self.m_dim),
-            format!("  order={},", self.m_order),
+            format!("  degree={},", self.degree()),
             format!("  cvs={},", self.m_cv_count),
             format!("  rational={},", self.m_is_rat),
             "  control_points=[".to_string(),
         ];
         for i in 0..self.m_cv_count {
             if let Some(p) = self.get_cv(i) {
-                lines.push(format!("    cv[{}]: {}, {}, {}", i, p[0], p[1], p[2]));
+                lines.push(format!("    {}, {}, {}", p[0], p[1], p[2]));
             }
         }
         lines.push("  ]".to_string());
@@ -187,6 +194,10 @@ impl NurbsCurve {
         copy.guid = Uuid::new_v4().to_string();
         copy
     }
+
+    // =========================================================================
+    // Static Factory Methods
+    // =========================================================================
 
     /// Create NURBS curve from points (unified API)
     ///
@@ -296,6 +307,10 @@ impl NurbsCurve {
         curve
     }
 
+    // =========================================================================
+    // Initialization & Creation
+    // =========================================================================
+
     /// Initialize curve with specified parameters
     fn initialize_curve(
         &mut self,
@@ -327,6 +342,10 @@ impl NurbsCurve {
 
         true
     }
+
+    // =========================================================================
+    // Control Vertex Access
+    // =========================================================================
 
     /// Set control vertex at index
     fn set_cv(&mut self, index: usize, point: &Point) {
@@ -389,6 +408,10 @@ impl NurbsCurve {
         true
     }
 
+    // =========================================================================
+    // Knot Access
+    // =========================================================================
+
     /// Get knot value at index
     pub fn knot(&self, knot_index: usize) -> Option<f64> {
         if knot_index >= self.m_knot.len() {
@@ -405,6 +428,10 @@ impl NurbsCurve {
         self.m_knot[knot_index] = knot_value;
         true
     }
+
+    // =========================================================================
+    // Accessors
+    // =========================================================================
 
     /// Get dimension
     pub fn dimension(&self) -> usize {
@@ -478,6 +505,10 @@ impl NurbsCurve {
         &mut self.m_cv
     }
 
+    // =========================================================================
+    // Validation
+    // =========================================================================
+
     /// Check if curve is valid
     pub fn is_valid(&self) -> bool {
         if self.m_order < 2 || self.m_cv_count < self.m_order {
@@ -496,6 +527,10 @@ impl NurbsCurve {
         }
         true
     }
+
+    // =========================================================================
+    // Domain & Parameterization
+    // =========================================================================
 
     /// Get curve domain [t_start, t_end]
     pub fn domain(&self) -> (f64, f64) {
@@ -636,6 +671,10 @@ impl NurbsCurve {
         true
     }
 
+    // =========================================================================
+    // Internal Helpers
+    // =========================================================================
+
     /// Find knot span index for parameter t
     ///
     /// Implementation matches OpenNURBS ON_NurbsSpanIndex with offset knot pointer.
@@ -774,6 +813,10 @@ impl NurbsCurve {
         true
     }
 
+    // =========================================================================
+    // Evaluation
+    // =========================================================================
+
     /// Evaluate point at parameter t
     ///
     /// Implementation matches OpenNURBS evaluation approach.
@@ -864,6 +907,10 @@ impl NurbsCurve {
         }
     }
 
+    // =========================================================================
+    // Transformation
+    // =========================================================================
+
     /// Apply stored xform to the curve (in-place)
     pub fn transform(&mut self) {
         self.transform_by(&self.xform.clone());
@@ -897,6 +944,10 @@ impl NurbsCurve {
         result.transform_by(xf);
         result
     }
+
+    // =========================================================================
+    // Modification Operations
+    // =========================================================================
 
     /// Swap two coordinate indices for all CVs
     pub fn swap_coordinates(&mut self, i: usize, j: usize) {
@@ -1009,26 +1060,183 @@ impl NurbsCurve {
         }
     }
 
-    /// Clamp curve end (0=start, 1=end)
+    /// Clamp curve end (0=start, 1=end, 2=both)
     pub fn clamp_end(&mut self, end: i32) {
         if !self.is_valid() || self.m_order < 2 {
             return;
         }
 
-        if end == 0 {
-            // Clamp start: make first (order-1) knots equal
-            let knot_val = self.m_knot[self.m_order - 1];
-            for i in 0..(self.m_order - 1) {
-                self.m_knot[i] = knot_val;
-            }
-        } else {
-            // Clamp end: make last (order-1) knots equal
-            let kc = self.knot_count();
-            let knot_val = self.m_knot[kc - self.m_order];
-            for i in (kc - self.m_order + 1)..kc {
+        // Clamp start
+        if end == 0 || end == 2 {
+            let knot_val = self.m_knot[self.m_order - 2];
+            for i in 0..(self.m_order - 2) {
                 self.m_knot[i] = knot_val;
             }
         }
+
+        // Clamp end
+        if end == 1 || end == 2 {
+            let kc = self.knot_count();
+            let knot_val = self.m_knot[self.m_cv_count - 1];
+            for i in self.m_cv_count..kc {
+                self.m_knot[i] = knot_val;
+            }
+        }
+    }
+
+    /// Check if knot vector is clamped at ends (0=start, 1=end, 2=both)
+    pub fn is_clamped(&self, end: i32) -> bool {
+        if !self.is_valid() {
+            return false;
+        }
+        knot::is_clamped(self.m_order, self.m_cv_count, &self.m_knot, end)
+    }
+
+    /// Get Greville abcissa for a control point (aligned with opennurbs)
+    pub fn greville_abcissa(&self, cv_index: usize) -> f64 {
+        if cv_index >= self.m_cv_count {
+            return 0.0;
+        }
+
+        let knot = &self.m_knot[cv_index..];
+        let order = self.m_order;
+
+        if order <= 2 || knot[0] == knot[order - 2] {
+            return knot[0];
+        }
+
+        let p = order - 1;
+        let k0 = knot[0];
+        let k = knot[p / 2];
+        let k1 = knot[p - 1];
+        let tol = (k1 - k0) * 1.490116119385e-8_f64;
+        let dp = p as f64;
+
+        let mut g: f64 = knot[..p].iter().sum();
+        g /= dp;
+
+        // Snap to exact middle knot for uniform knot vectors
+        if (2.0 * k - (k0 + k1)).abs() <= tol
+            && (g - k).abs() <= (g.abs() * 1.490116119385e-8_f64 + tol)
+        {
+            g = k;
+        }
+
+        g
+    }
+
+    /// Get all Greville abcissae
+    pub fn get_greville_abcissae(&self) -> Vec<f64> {
+        (0..self.m_cv_count).map(|i| self.greville_abcissa(i)).collect()
+    }
+
+    /// Insert knot into curve (Boehm's algorithm)
+    pub fn insert_knot(&mut self, knot_value: f64, knot_multiplicity: usize) -> bool {
+        if !self.is_valid() {
+            return false;
+        }
+
+        let p = self.degree();
+        if knot_multiplicity < 1 || knot_multiplicity > p {
+            return false;
+        }
+
+        let (d0, d1) = self.domain();
+        if knot_value < d0 || knot_value > d1 {
+            return false;
+        }
+
+        // Handle end knots
+        if knot_value == d0 {
+            if knot_multiplicity == p { self.clamp_end(0); return true; }
+            if knot_multiplicity == 1 { return true; }
+            return false;
+        }
+        if knot_value == d1 {
+            if knot_multiplicity == p { self.clamp_end(1); return true; }
+            if knot_multiplicity == 1 { return true; }
+            return false;
+        }
+
+        let mut n = self.m_cv_count - 1;
+        let mut full_knot_count = self.m_cv_count + self.m_order;
+
+        for _insert_iter in 0..knot_multiplicity {
+            // Build full knot vector
+            let mut u = vec![0.0f64; full_knot_count];
+            u[0] = self.m_knot[0];
+            for i in 0..self.m_knot.len() {
+                u[i + 1] = self.m_knot[i];
+            }
+            u[full_knot_count - 1] = *self.m_knot.last().unwrap();
+
+            // Count current multiplicity
+            let tol = (d0.abs() + d1.abs() + (d1 - d0).abs()) * f64::EPSILON.sqrt();
+            let mult = u.iter().filter(|&&v| (v - knot_value).abs() <= tol).count();
+            if mult >= p {
+                return false;
+            }
+
+            // Find span
+            let span = self.find_span(knot_value);
+            let k = span + self.m_order - 1;
+
+            let m_full = full_knot_count - 1;
+            let new_full_knot_count = full_knot_count + 1;
+            let new_cv_count = self.m_cv_count + 1;
+
+            let mut u_new = vec![0.0f64; new_full_knot_count];
+            let mut cv_new = vec![0.0f64; new_cv_count * self.m_cv_stride];
+
+            // Copy unaffected knots
+            for i in 0..=k {
+                u_new[i] = u[i];
+            }
+            u_new[k + 1] = knot_value;
+            for i in (k + 1)..=m_full {
+                u_new[i + 1] = u[i];
+            }
+
+            // Copy unaffected CVs before
+            for i in 0..=(k - p) {
+                let src = i * self.m_cv_stride;
+                let dst = i * self.m_cv_stride;
+                cv_new[dst..dst + self.m_cv_stride].copy_from_slice(&self.m_cv[src..src + self.m_cv_stride]);
+            }
+
+            // Copy unaffected CVs after
+            for i in (k + 1)..=(n + 1) {
+                let src = (i - 1) * self.m_cv_stride;
+                let dst = i * self.m_cv_stride;
+                cv_new[dst..dst + self.m_cv_stride].copy_from_slice(&self.m_cv[src..src + self.m_cv_stride]);
+            }
+
+            // Compute new CVs in affected region
+            for i in (k - p + 1)..=(k) {
+                let denom = u[i + p] - u[i];
+                let alpha = if denom != 0.0 { (knot_value - u[i]) / denom } else { 0.0 };
+
+                let src_prev = (i - 1) * self.m_cv_stride;
+                let src_curr = i * self.m_cv_stride;
+                let dst = i * self.m_cv_stride;
+
+                for d in 0..self.m_cv_stride {
+                    cv_new[dst + d] = (1.0 - alpha) * self.m_cv[src_prev + d] + alpha * self.m_cv[src_curr + d];
+                }
+            }
+
+            // Update internal state
+            self.m_cv_count = new_cv_count;
+            self.m_cv = cv_new;
+
+            let new_compressed = self.m_order + self.m_cv_count - 2;
+            self.m_knot = (0..new_compressed).map(|i| u_new[i + 1]).collect();
+
+            full_knot_count = new_full_knot_count;
+            n = self.m_cv_count - 1;
+        }
+
+        true
     }
 
     /// Get tangent vector at parameter t
@@ -1355,6 +1563,10 @@ impl NurbsCurve {
             .collect()
     }
 
+    // =========================================================================
+    // Geometric Queries
+    // =========================================================================
+
     /// Check if curve is closed (start point == end point)
     pub fn is_closed(&self) -> bool {
         if !self.is_valid() {
@@ -1515,6 +1727,10 @@ impl NurbsCurve {
         }
         self.degree() == 1
     }
+
+    // =========================================================================
+    // Conversion Methods
+    // =========================================================================
 
     /// Convert curve to polyline using adaptive subdivision
     pub fn to_polyline_adaptive(
@@ -2031,6 +2247,10 @@ impl NurbsCurve {
 
         (points, params)
     }
+
+    // =========================================================================
+    // JSON Serialization
+    // =========================================================================
 
     /// Serialize to JSON and write to file
     pub fn json_dump(&self, filename: &str) {

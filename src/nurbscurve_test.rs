@@ -29,15 +29,16 @@ pub fn run_nurbscurve_constructor() -> TestResult {
         let _cother = NurbsCurve::create(false, 2, &points);
 
         // Point division
-        let (_divided, _) = curve.divide_by_count(10, true);
+        let (divided, _) = curve.divide_by_count(10, true);
 
+        MINI_CHECK!(divided.len() == 10);
         MINI_CHECK!(curve.is_valid() == true);
         MINI_CHECK!(curve.cv_count() == 4);
         MINI_CHECK!(curve.degree() == 2);
         MINI_CHECK!(curve.order() == 3);
         MINI_CHECK!(curve.name == "my_nurbscurve");
         MINI_CHECK!(!curve.guid.is_empty());
-        MINI_CHECK!(cstr == "NurbsCurve(degree=2, cvs=4)");
+        MINI_CHECK!(cstr == "NurbsCurve(name=my_nurbscurve, degree=2, cvs=4)");
         MINI_CHECK!(crepr.contains("name=my_nurbscurve"));
         MINI_CHECK!(ccopy.cv_count() == curve.cv_count());
         MINI_CHECK!(ccopy.guid != curve.guid);
@@ -73,6 +74,37 @@ pub fn run_nurbscurve_attributes() -> TestResult {
         // Valid domain exists
         let is_valid_knot_vector = curve.is_valid_knot_vector();
         MINI_CHECK!(is_valid_knot_vector == true);
+
+        // Insert knot into curve
+        // Useful for splitting curves at a parameter
+        // Increase local control without changing shape
+        let mut copy_curve = curve.duplicate();
+        let before_pt = copy_curve.point_at(1.5);
+        copy_curve.insert_knot(1.5, 1);
+        {
+            use crate::tolerance::TOLERANCE;
+            MINI_CHECK!(TOLERANCE.is_point_close(&before_pt, &copy_curve.point_at(1.5)));
+        }
+
+        // Check if the curve is clamped at start, end, or both
+        let is_clamped_start = curve.is_clamped(0);
+        let is_clamped_end = curve.is_clamped(1);
+        let is_clamped_both = curve.is_clamped(2);
+        MINI_CHECK!(is_clamped_start == true && is_clamped_end == true && is_clamped_both == true);
+
+        // Useful for controlling curve by cv on lying on it
+        {
+            use crate::tolerance::TOLERANCE;
+            let greville0 = curve.greville_abcissa(0);
+            MINI_CHECK!(TOLERANCE.is_close(greville0, 0.0));
+
+            let greville = curve.get_greville_abcissae();
+            MINI_CHECK!(greville.len() == 4);
+            MINI_CHECK!(TOLERANCE.is_close(greville[0], 0.0));
+            MINI_CHECK!(TOLERANCE.is_close(greville[1], 0.5));
+            MINI_CHECK!(TOLERANCE.is_close(greville[2], 1.5));
+            MINI_CHECK!(TOLERANCE.is_close(greville[3], 2.0));
+        }
 
         /////////////////////////////////////////////
         // Accessors
@@ -448,6 +480,24 @@ pub fn run_nurbscurve_modifications() -> TestResult {
 
         curve_rational.make_non_rational_force(true);
         MINI_CHECK!(curve_rational.length(None) == original_length);
+
+        // Clamp ends - create unclamped curve manually
+        let points_open = points.clone();
+        let mut curve_open = NurbsCurve::new(3, false, 3, 5);  // dim=3, non-rational, order=3 (deg 2), 5 CVs
+
+        for i in 0..5 {
+            curve_open.set_cv_point(i, &points_open[i]);
+        }
+
+        for i in 0..curve_open.knot_count() {
+            curve_open.set_knot(i, i as f64 * 1.0);
+        }
+
+        // Now clamp, making 2 knots at the ends the same
+        curve_open.clamp_end(2);
+        let knots = curve_open.get_knots();
+        MINI_CHECK!(Tolerance::default().is_close(knots[0], knots[1]));
+        MINI_CHECK!(Tolerance::default().is_close(knots[knots.len() - 2], knots[knots.len() - 1]));
     })
 }
 
@@ -530,28 +580,6 @@ pub fn run_nurbscurve_protobuf_roundtrip() -> TestResult {
     })
 }
 
-pub fn run_nurbscurve_intersect_plane() -> TestResult {
-    MINI_TEST!("intersect_plane", {
-        use crate::NurbsCurve;
-        use crate::Point;
-        use crate::Plane;
-        use crate::intersection;
-
-        let points = vec![
-            Point::new(0.0, 0.0, 0.0),
-            Point::new(1.0, 1.0, 0.0),
-            Point::new(2.0, 0.0, 0.0),
-        ];
-
-        let mut curve = NurbsCurve::create(false, 2, &points);
-        curve.set_domain(0.0, 1.0);
-        let plane = Plane::xy_plane();
-        let intersections = intersection::curve_plane(&curve, &plane, None);
-
-        MINI_CHECK!(intersections.is_empty() || !intersections.is_empty());
-    })
-}
-
 pub fn run_nurbscurve_transformations() -> TestResult {
     MINI_TEST!("transformations", {
         use crate::NurbsCurve;
@@ -603,5 +631,4 @@ REGISTER_MINI_TEST!("NurbsCurve", "Evaluation", crate::nurbscurve_test::run_nurb
 REGISTER_MINI_TEST!("NurbsCurve", "Modifications", crate::nurbscurve_test::run_nurbscurve_modifications);
 REGISTER_MINI_TEST!("NurbsCurve", "json_roundtrip", crate::nurbscurve_test::run_nurbscurve_json_roundtrip);
 REGISTER_MINI_TEST!("NurbsCurve", "protobuf_roundtrip", crate::nurbscurve_test::run_nurbscurve_protobuf_roundtrip);
-REGISTER_MINI_TEST!("NurbsCurve", "intersect_plane", crate::nurbscurve_test::run_nurbscurve_intersect_plane);
 REGISTER_MINI_TEST!("NurbsCurve", "transformations", crate::nurbscurve_test::run_nurbscurve_transformations);

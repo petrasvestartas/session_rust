@@ -29,7 +29,7 @@
   "cv_count": 5,
   "cv_stride": 3,
   "dimension": 3,
-  "guid": "1ddf046e-2dc9-49a0-8151-269a35ef5390",
+  "guid": "c635526c-09fd-449b-ba6f-8c763f54ef96",
   "is_rational": false,
   "knots": [
     0.0,
@@ -41,7 +41,7 @@
   ],
   "linecolor": {
     "type": "Color",
-    "guid": "ae7b083e-6737-4260-bd19-5c003e02ef4a",
+    "guid": "394809ce-0910-49b3-a290-99a2ccc3fd30",
     "name": "white",
     "r": 255,
     "g": 255,
@@ -53,7 +53,7 @@
   "width": 1.0,
   "xform": {
     "type": "Xform",
-    "guid": "a516a67a-3b39-4758-a0c8-52423fe972cc",
+    "guid": "8442969b-3de6-404e-b82f-9cf7b7b4ffd9",
     "name": "my_xform",
     "m": [
       1.0,

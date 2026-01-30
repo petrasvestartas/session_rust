@@ -138,18 +138,14 @@ impl Primitives {
         let num_segments = 8;
         let cv_count = num_segments + 1;
 
-        let mut curve = NurbsCurve::new(3, false, 4, cv_count);
+        let points: Vec<Point> = (0..cv_count)
+            .map(|i| {
+                let t = -extent + 2.0 * extent * (i as f64) / (num_segments as f64);
+                Point::new(center[0] + a * t.cosh(), center[1] + b * t.sinh(), center[2])
+            })
+            .collect();
 
-        for i in 0..cv_count {
-            let t = -extent + 2.0 * extent * (i as f64) / (num_segments as f64);
-            let x = center[0] + a * t.cosh();
-            let y = center[1] + b * t.sinh();
-            let z = center[2];
-            curve.set_cv_point(i, &Point::new(x, y, z));
-        }
-
-        curve.make_clamped_uniform_knot_vector(1.0);
-        curve
+        NurbsCurve::create_clamped_uniform(3, 4, &points, 1.0)
     }
 
     /// Create a spiral (helix with varying radius)
@@ -157,22 +153,17 @@ impl Primitives {
         let segments_per_turn = 8;
         let total_segments = ((turns * segments_per_turn as f64) as usize).max(4);
         let cv_count = total_segments + 1;
-
-        let mut curve = NurbsCurve::new(3, false, 4, cv_count);
-
         let total_angle = turns * 2.0 * PI;
 
-        for i in 0..cv_count {
-            let t = (i as f64) / (total_segments as f64);
-            let angle = t * total_angle;
-            let r = start_radius + t * (end_radius - start_radius);
-            let x = r * angle.cos();
-            let y = r * angle.sin();
-            let z = t * turns * pitch;
-            curve.set_cv_point(i, &Point::new(x, y, z));
-        }
+        let points: Vec<Point> = (0..cv_count)
+            .map(|i| {
+                let t = (i as f64) / (total_segments as f64);
+                let angle = t * total_angle;
+                let r = start_radius + t * (end_radius - start_radius);
+                Point::new(r * angle.cos(), r * angle.sin(), t * turns * pitch)
+            })
+            .collect();
 
-        curve.make_clamped_uniform_knot_vector(1.0);
-        curve
+        NurbsCurve::create_clamped_uniform(3, 4, &points, 1.0)
     }
 }
