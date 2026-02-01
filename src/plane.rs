@@ -314,6 +314,51 @@ impl Plane {
         }
     }
 
+    /// Create an invalid plane (all zeros)
+    pub fn invalid() -> Self {
+        Self {
+            guid: Uuid::new_v4().to_string(),
+            name: "my_plane".to_string(),
+            width: 1.0,
+            _origin: Point::new(0.0, 0.0, 0.0),
+            _x_axis: Vector::new(0.0, 0.0, 0.0),
+            _y_axis: Vector::new(0.0, 0.0, 0.0),
+            _z_axis: Vector::new(0.0, 0.0, 0.0),
+            _a: 0.0,
+            _b: 0.0,
+            _c: 0.0,
+            _d: 0.0,
+            xform: Xform::identity(),
+        }
+    }
+
+    /// Check if plane is valid
+    pub fn is_valid(&self) -> bool {
+        self._x_axis.magnitude() > 1e-14 && self._y_axis.magnitude() > 1e-14 && self._z_axis.magnitude() > 1e-14
+    }
+
+    /// Create plane from frame (origin, x, y, z) without normalization
+    pub fn from_frame(origin: Point, x_axis: Vector, y_axis: Vector, z_axis: Vector) -> Self {
+        let a = z_axis[0];
+        let b = z_axis[1];
+        let c = z_axis[2];
+        let d = -(a * origin[0] + b * origin[1] + c * origin[2]);
+        Self {
+            guid: Uuid::new_v4().to_string(),
+            name: "my_plane".to_string(),
+            width: 1.0,
+            _origin: origin,
+            _x_axis: x_axis,
+            _y_axis: y_axis,
+            _z_axis: z_axis,
+            _a: a,
+            _b: b,
+            _c: c,
+            _d: d,
+            xform: Xform::identity(),
+        }
+    }
+
     pub fn xz_plane() -> Self {
         Self {
             guid: Uuid::new_v4().to_string(),
@@ -572,10 +617,19 @@ impl Plane {
         use crate::tolerance::TOLERANCE;
         let prec = crate::tolerance::Tolerance::ROUNDING;
         format!(
-            "{}, {}, {}",
+            "{}, {}, {}\n{}, {}, {}\n{}, {}, {}\n{}, {}, {}",
             TOLERANCE.format_number(self._origin[0], prec),
             TOLERANCE.format_number(self._origin[1], prec),
             TOLERANCE.format_number(self._origin[2], prec),
+            TOLERANCE.format_number(self._x_axis[0], prec),
+            TOLERANCE.format_number(self._x_axis[1], prec),
+            TOLERANCE.format_number(self._x_axis[2], prec),
+            TOLERANCE.format_number(self._y_axis[0], prec),
+            TOLERANCE.format_number(self._y_axis[1], prec),
+            TOLERANCE.format_number(self._y_axis[2], prec),
+            TOLERANCE.format_number(self._z_axis[0], prec),
+            TOLERANCE.format_number(self._z_axis[1], prec),
+            TOLERANCE.format_number(self._z_axis[2], prec),
         )
     }
 

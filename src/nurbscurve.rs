@@ -144,11 +144,18 @@ impl NurbsCurve {
     pub fn create(periodic: bool, degree: usize, points: &[Point]) -> Self {
         let order = degree + 1;
 
-        if periodic {
+        let mut curve = if periodic {
             Self::create_periodic_uniform(3, order, points, 1.0)
         } else {
             Self::create_clamped_uniform(3, order, points, 1.0)
+        };
+        if curve.is_valid() {
+            let l = curve.length(Some(1e-6));
+            if l > 0.0 {
+                curve.set_domain(0.0, l);
+            }
         }
+        curve
     }
 
 
@@ -1763,24 +1770,24 @@ impl NurbsCurve {
 
 
     /// Get Frenet frame at parameter t (tangent, normal, binormal)
-    pub fn frame_at(&self, t: f64, normalized: bool) -> Option<(Point, Vector, Vector, Vector)> {
+    pub fn plane_at(&self, t: f64, normalized: bool) -> Plane {
         if !self.is_valid() {
-            return None;
+            return Plane::invalid();
         }
 
         let (t0, t1) = self.domain();
         let param = if normalized {
-            if t < 0.0 || t > 1.0 { return None; }
+            if t < 0.0 || t > 1.0 { return Plane::invalid(); }
             t0 + t * (t1 - t0)
         } else {
-            if t < t0 || t > t1 { return None; }
+            if t < t0 || t > t1 { return Plane::invalid(); }
             t
         };
 
         let origin = self.point_at(param);
         let derivs = self.evaluate(param, 2);
         if derivs.len() < 3 {
-            return None;
+            return Plane::invalid();
         }
 
         let d1 = &derivs[1];
@@ -1788,7 +1795,7 @@ impl NurbsCurve {
 
         let d1_mag = d1.magnitude();
         if d1_mag < 1e-14 {
-            return None;
+            return Plane::invalid();
         }
 
         let tangent = d1.normalized();
@@ -1813,22 +1820,23 @@ impl NurbsCurve {
 
         let binormal = tangent.cross(&normal).normalized();
 
-        Some((origin, tangent, normal, binormal))
+        Plane::from_frame(origin, tangent, normal, binormal)
     }
 
 
-    /// Internal: compute RMF with Frenet initialization (matches Rhino)
-    fn perpendicular_frame_at_internal(&self, t: f64, normalized: bool) -> Option<(Point, Vector, Vector, Vector)> {
+    /// Get rotation minimizing perpendicular plane at parameter t
+    /// Uses the exact Double Reflection algorithm for accuracy
+    pub fn perpendicular_plane_at(&self, t: f64, normalized: bool) -> Plane {
         if !self.is_valid() {
-            return None;
+            return Plane::invalid();
         }
 
         let (t0, t1) = self.domain();
         let param = if normalized {
-            if t < 0.0 || t > 1.0 { return None; }
+            if t < 0.0 || t > 1.0 { return Plane::invalid(); }
             t0 + t * (t1 - t0)
         } else {
-            if t < t0 || t > t1 { return None; }
+            if t < t0 || t > t1 { return Plane::invalid(); }
             t
         };
 
@@ -1839,7 +1847,7 @@ impl NurbsCurve {
 
         let d1_0_mag = d1_0.magnitude();
         if d1_0_mag < 1e-14 {
-            return None;
+            return Plane::invalid();
         }
 
         let tangent0 = d1_0.normalized();
@@ -1871,7 +1879,7 @@ impl NurbsCurve {
         // If at start, return Frenet frame directly
         if (param - t0).abs() < 1e-14 {
             let s0 = tangent0.cross(&r0).normalized();
-            return Some((origin, r0, s0, tangent0));
+            return Plane::from_frame(origin, r0, s0, tangent0);
         }
 
         // Propagate frame using Double Reflection (RMF) algorithm
@@ -1946,21 +1954,15 @@ impl NurbsCurve {
 
         let s = tangent.cross(&ri).normalized();
 
-        Some((origin, ri, s, tangent))
+        Plane::from_frame(origin, ri, s, tangent)
     }
 
 
-    /// Get rotation minimizing perpendicular frame at parameter t
-    /// Uses the exact Double Reflection algorithm for accuracy
-    pub fn perpendicular_frame_at(&self, t: f64, normalized: bool) -> Option<(Point, Vector, Vector, Vector)> {
-        self.perpendicular_frame_at_internal(t, normalized)
-    }
-
-
-    /// Get multiple perpendicular frames along the curve
-    pub fn get_perpendicular_frames(&self, params: &[f64], normalized: bool) -> Vec<(Point, Vector, Vector, Vector)> {
+    /// Get multiple perpendicular planes along the curve
+    pub fn get_perpendicular_planes(&self, count: usize) -> Vec<Plane> {
+        let (_pts, params) = self.divide_by_count(count + 1, true);
         params.iter()
-            .filter_map(|&t| self.perpendicular_frame_at(t, normalized))
+            .map(|&t| self.perpendicular_plane_at(t, false))
             .collect()
     }
 
@@ -2470,12 +2472,24 @@ impl NurbsCurve {
         Self::from_protobuf(&data).expect("Failed to parse protobuf")
     }
 
+    pub fn jsondump(&self) -> Result<String, Box<dyn std::error::Error>> {
+        let mut buf = Vec::new();
+        let formatter = serde_json::ser::PrettyFormatter::with_indent(b"    ");
+        let mut ser = serde_json::Serializer::with_formatter(&mut buf, formatter);
+        serde::Serialize::serialize(self, &mut ser)?;
+        Ok(String::from_utf8(buf)?)
+    }
+
+    pub fn jsonload(json_data: &str) -> Result<Self, Box<dyn std::error::Error>> {
+        Ok(serde_json::from_str(json_data)?)
+    }
+
     pub fn json_dumps(&self) -> String {
-        serde_json::to_string_pretty(self).unwrap_or_default()
+        self.jsondump().unwrap_or_default()
     }
 
     pub fn json_loads(s: &str) -> Self {
-        serde_json::from_str(s).unwrap_or_else(|_| Self::default())
+        Self::jsonload(s).unwrap_or_else(|_| Self::default())
     }
 
     pub fn pb_dumps(&self) -> Vec<u8> {

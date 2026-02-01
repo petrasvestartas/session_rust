@@ -1,55 +1,44 @@
 {
   "type": "Graph",
-  "guid": "48e137cb-ad43-47e7-99e4-3a1052525a89",
+  "guid": "7c69072c-1cc6-4a75-beed-6d01c1a33637",
   "name": "my_graph",
   "vertex_count": 4,
   "edge_count": 3,
   "vertices": {
     "A": {
       "type": "Vertex",
-      "guid": "6d7dcd33-7dbe-430d-a9e7-de2809626020",
+      "guid": "63f5944f-b5ff-44fd-b6af-6da9e35a0e1b",
       "name": "A",
       "attribute": "vertex_A",
       "index": 0
     },
-    "C": {
+    "B": {
       "type": "Vertex",
-      "guid": "775e219d-e556-4aa7-af7f-f9667656e00e",
-      "name": "C",
-      "attribute": "vertex_C",
-      "index": 2
+      "guid": "ca54bf51-bd33-4a4a-ae98-405cf477a8c8",
+      "name": "B",
+      "attribute": "vertex_B",
+      "index": 1
     },
     "D": {
       "type": "Vertex",
-      "guid": "50b2ff08-9899-4986-8c26-42a62a88aab1",
+      "guid": "48f7b952-91bb-49b9-8b72-59c5d9b87a2b",
       "name": "D",
       "attribute": "vertex_D",
       "index": 3
     },
-    "B": {
+    "C": {
       "type": "Vertex",
-      "guid": "fac1c779-71fa-4715-98d4-74c3c8779608",
-      "name": "B",
-      "attribute": "vertex_B",
-      "index": 1
+      "guid": "11be1f0a-e36f-421a-b869-14c0ea1c9c17",
+      "name": "C",
+      "attribute": "vertex_C",
+      "index": 2
     }
   },
   "edges": {
-    "A": {
-      "B": {
-        "type": "Edge",
-        "guid": "f471916e-2975-4adb-b3dc-11616ab8d2e3",
-        "name": "my_edge",
-        "v0": "A",
-        "v1": "B",
-        "attribute": "edge_AB",
-        "index": 0
-      }
-    },
     "D": {
       "C": {
         "type": "Edge",
-        "guid": "b75b5165-61ae-406d-a9d8-93a2ad4f1d91",
+        "guid": "b86f8bb6-3626-4ffd-aea2-e28689721725",
         "name": "my_edge",
         "v0": "C",
         "v1": "D",
@@ -60,7 +49,7 @@
     "C": {
       "B": {
         "type": "Edge",
-        "guid": "f4558c2d-1fcb-4738-87bf-71062c7f8d87",
+        "guid": "1ec1ecaf-24c9-44dc-8f93-87a44a8c47cc",
         "name": "my_edge",
         "v0": "B",
         "v1": "C",
@@ -69,7 +58,7 @@
       },
       "D": {
         "type": "Edge",
-        "guid": "b75b5165-61ae-406d-a9d8-93a2ad4f1d91",
+        "guid": "b86f8bb6-3626-4ffd-aea2-e28689721725",
         "name": "my_edge",
         "v0": "C",
         "v1": "D",
@@ -77,24 +66,35 @@
         "index": 2
       }
     },
-    "B": {
-      "C": {
+    "A": {
+      "B": {
         "type": "Edge",
-        "guid": "f4558c2d-1fcb-4738-87bf-71062c7f8d87",
-        "name": "my_edge",
-        "v0": "B",
-        "v1": "C",
-        "attribute": "edge_BC",
-        "index": 1
-      },
-      "A": {
-        "type": "Edge",
-        "guid": "f471916e-2975-4adb-b3dc-11616ab8d2e3",
+        "guid": "2c045e5c-54bc-40a2-bc2b-41c1ccd660c3",
         "name": "my_edge",
         "v0": "A",
         "v1": "B",
         "attribute": "edge_AB",
         "index": 0
+      }
+    },
+    "B": {
+      "A": {
+        "type": "Edge",
+        "guid": "2c045e5c-54bc-40a2-bc2b-41c1ccd660c3",
+        "name": "my_edge",
+        "v0": "A",
+        "v1": "B",
+        "attribute": "edge_AB",
+        "index": 0
+      },
+      "C": {
+        "type": "Edge",
+        "guid": "1ec1ecaf-24c9-44dc-8f93-87a44a8c47cc",
+        "name": "my_edge",
+        "v0": "B",
+        "v1": "C",
+        "attribute": "edge_BC",
+        "index": 1
       }
     }
   }

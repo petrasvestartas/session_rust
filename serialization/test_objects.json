@@ -1,11 +1,11 @@
 {
   "type": "Objects",
-  "guid": "7e9fb576-1148-4fda-955a-1588916f7120",
+  "guid": "84bbb75a-838e-4303-9e18-2fe96947a18b",
   "name": "my_objects",
   "points": [
     {
       "type": "Point",
-      "guid": "fb8ad521-b2a7-4ced-8a69-4c36feede334",
+      "guid": "a93ad860-5bd2-4e9f-8b62-390d7c25cd1a",
       "name": "my_point",
       "x": 100.0,
       "y": 200.0,
@@ -13,7 +13,7 @@
       "width": 1.0,
       "pointcolor": {
         "type": "Color",
-        "guid": "adb0b690-c8f9-42a1-b0f3-29194fd52594",
+        "guid": "efcac028-7510-4110-84d4-d46aa96e4040",
         "name": "blue",
         "r": 0,
         "g": 0,
@@ -22,7 +22,7 @@
       },
       "xform": {
         "type": "Xform",
-        "guid": "9a3317cf-21e7-4f8d-bafe-4df0ab85ef70",
+        "guid": "a053edf2-7669-440b-bd0d-643e15e757fb",
         "name": "my_xform",
         "m": [
           1.0,
@@ -46,7 +46,7 @@
     },
     {
       "type": "Point",
-      "guid": "23a6cc8a-55d5-4b78-a6f8-60d9588eb247",
+      "guid": "4c55a4bc-2b8c-4ae0-9c71-039512e80802",
       "name": "my_point",
       "x": 400.0,
       "y": 500.0,
@@ -54,7 +54,7 @@
       "width": 1.0,
       "pointcolor": {
         "type": "Color",
-        "guid": "346839aa-7a97-4561-9f26-75b0d790e316",
+        "guid": "e7bbd69e-568b-4151-8d4c-33f521689a26",
         "name": "blue",
         "r": 0,
         "g": 0,
@@ -63,7 +63,7 @@
       },
       "xform": {
         "type": "Xform",
-        "guid": "372817f5-0fe2-4642-a292-7064bd3d850d",
+        "guid": "cdfa87a6-64ab-40da-a4be-5f33629897b8",
         "name": "my_xform",
         "m": [
           1.0,
@@ -87,7 +87,7 @@
     },
     {
       "type": "Point",
-      "guid": "1da41cf4-1789-4010-ac8f-0e9fef5d686f",
+      "guid": "f0fbca3a-afe6-42b7-843c-3bf3b01b0d8f",
       "name": "my_point",
       "x": 700.0,
       "y": 800.0,
@@ -95,7 +95,7 @@
       "width": 1.0,
       "pointcolor": {
         "type": "Color",
-        "guid": "3af35efb-9386-4a8c-ad6c-6d48887ebd3e",
+        "guid": "840a7049-f1f2-4d3e-8c62-db36645480c1",
         "name": "blue",
         "r": 0,
         "g": 0,
@@ -104,7 +104,7 @@
       },
       "xform": {
         "type": "Xform",
-        "guid": "63db038f-de65-42ae-8b38-3fc5bcad1edb",
+        "guid": "4a719e8c-1fa1-4d89-8c0f-8ef7ff160dc1",
         "name": "my_xform",
         "m": [
           1.0,
