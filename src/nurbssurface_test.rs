@@ -59,7 +59,7 @@ pub fn run_nurbssurface_constructor() -> TestResult {
 
         MINI_CHECK!(s.name == "my_nurbssurface");
         MINI_CHECK!(s.width == 1.0);
-        MINI_CHECK!(s.surfacecolor == Color::white());
+        MINI_CHECK!(s.surfacecolor == Color::black());
         MINI_CHECK!(!s.guid.is_empty());
         MINI_CHECK!(s.m_dim == 3);
         MINI_CHECK!(!s.m_is_rat);
@@ -415,6 +415,11 @@ pub fn run_nurbssurface_json_roundtrip() -> TestResult {
             }
         }
 
+        //   json_dumps()    │ String       │ to JSON string
+        //   json_loads(s)   │ String       │ from JSON string
+        //   json_dump(path) │ file         │ write to file
+        //   json_load(path) │ file         │ read from file
+
         // Serialize to JSON
         let json_str = serde_json::to_string_pretty(&surf).expect("Failed to serialize");
 
@@ -460,8 +465,8 @@ pub fn run_nurbssurface_protobuf_roundtrip() -> TestResult {
 
         // Serialize to protobuf (stub - uses JSON fallback)
         let filename = "serialization/test_nurbssurface.bin";
-        surf.protobuf_dump(filename);
-        let loaded = NurbsSurface::protobuf_load(filename);
+        surf.pb_dump(filename);
+        let loaded = NurbsSurface::pb_load(filename);
 
         MINI_CHECK!(loaded.name == surf.name);
         MINI_CHECK!(loaded.width == surf.width);
@@ -707,31 +712,6 @@ pub fn run_nurbssurface_swap_coordinates() -> TestResult {
         MINI_CHECK!(TOLERANCE.is_close(pt[0], 2.0));
         MINI_CHECK!(TOLERANCE.is_close(pt[1], 1.0));
         MINI_CHECK!(TOLERANCE.is_close(pt[2], 3.0));
-    })
-}
-
-pub fn run_nurbssurface_change_dimension() -> TestResult {
-    MINI_TEST!("change_dimension", {
-        use crate::nurbssurface::NurbsSurface;
-        use crate::point::Point;
-        use crate::tolerance::TOLERANCE;
-
-        let mut surf = NurbsSurface::create_simple(3, false, 2, 2, 2, 2).unwrap();
-        surf.make_clamped_uniform_knot_vector(0, 1.0);
-        surf.make_clamped_uniform_knot_vector(1, 1.0);
-
-        surf.set_cv(0, 0, &Point::new(1.0, 2.0, 3.0));
-
-        let old_dim = surf.dimension();
-        surf.change_dimension(2);
-        let new_dim = surf.dimension();
-
-        let pt = surf.get_cv(0, 0).unwrap();
-
-        MINI_CHECK!(old_dim == 3);
-        MINI_CHECK!(new_dim == 2);
-        MINI_CHECK!(TOLERANCE.is_close(pt[0], 1.0));
-        MINI_CHECK!(TOLERANCE.is_close(pt[1], 2.0));
     })
 }
 
@@ -1116,7 +1096,6 @@ REGISTER_MINI_TEST!("NurbsSurface", "bounding_box", crate::nurbssurface_test::ru
 REGISTER_MINI_TEST!("NurbsSurface", "domain_operations", crate::nurbssurface_test::run_nurbssurface_domain_operations);
 REGISTER_MINI_TEST!("NurbsSurface", "corner_points", crate::nurbssurface_test::run_nurbssurface_corner_points);
 REGISTER_MINI_TEST!("NurbsSurface", "swap_coordinates", crate::nurbssurface_test::run_nurbssurface_swap_coordinates);
-REGISTER_MINI_TEST!("NurbsSurface", "change_dimension", crate::nurbssurface_test::run_nurbssurface_change_dimension);
 REGISTER_MINI_TEST!("NurbsSurface", "zero_cvs", crate::nurbssurface_test::run_nurbssurface_zero_cvs);
 REGISTER_MINI_TEST!("NurbsSurface", "get_knots", crate::nurbssurface_test::run_nurbssurface_get_knots);
 REGISTER_MINI_TEST!("NurbsSurface", "make_non_rational", crate::nurbssurface_test::run_nurbssurface_make_non_rational);

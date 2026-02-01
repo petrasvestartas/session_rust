@@ -822,12 +822,21 @@ impl Mesh {
         Some(mesh)
     }
 
-    pub fn to_json(&self, filename: &str) -> std::io::Result<()> {
+    pub fn json_dumps(&self) -> String {
+        serde_json::to_string_pretty(&self.jsondump()).unwrap_or_default()
+    }
+
+    pub fn json_loads(json_string: &str) -> Self {
+        let data: serde_json::Value = serde_json::from_str(json_string).unwrap_or_default();
+        Self::jsonload(&data).unwrap_or_else(|| Self::new())
+    }
+
+    pub fn json_dump(&self, filename: &str) -> std::io::Result<()> {
         let data = self.jsondump();
         std::fs::write(filename, serde_json::to_string_pretty(&data)?)
     }
 
-    pub fn from_json(filename: &str) -> std::io::Result<Self> {
+    pub fn json_load(filename: &str) -> std::io::Result<Self> {
         let content = std::fs::read_to_string(filename)?;
         let data: serde_json::Value = serde_json::from_str(&content)?;
         Self::jsonload(&data).ok_or_else(|| {
@@ -839,7 +848,7 @@ impl Mesh {
     // Protobuf Serialization
     ///////////////////////////////////////////////////////////////////////////////////////////
 
-    pub fn to_protobuf(&self) -> Vec<u8> {
+    pub fn pb_dumps(&self) -> Vec<u8> {
         use prost::Message;
         use std::collections::HashMap;
 
@@ -951,7 +960,7 @@ impl Mesh {
         proto.encode_to_vec()
     }
 
-    pub fn from_protobuf(data: &[u8]) -> Result<Self, Box<dyn std::error::Error>> {
+    pub fn pb_loads(data: &[u8]) -> Result<Self, Box<dyn std::error::Error>> {
         use prost::Message;
 
         let proto = crate::proto::Mesh::decode(data)?;
@@ -1043,14 +1052,14 @@ impl Mesh {
         Ok(mesh)
     }
 
-    pub fn protobuf_dump(&self, filepath: &str) {
-        let data = self.to_protobuf();
+    pub fn pb_dump(&self, filepath: &str) {
+        let data = self.pb_dumps();
         std::fs::write(filepath, data).expect("Failed to write protobuf file");
     }
 
-    pub fn protobuf_load(filepath: &str) -> Self {
+    pub fn pb_load(filepath: &str) -> Self {
         let data = std::fs::read(filepath).expect("Failed to read protobuf file");
-        Self::from_protobuf(&data).expect("Failed to parse protobuf")
+        Self::pb_loads(&data).expect("Failed to parse protobuf")
     }
 }
 

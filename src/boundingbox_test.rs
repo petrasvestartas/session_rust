@@ -138,6 +138,11 @@ mod tests {
             Vector::new(2.0, 3.0, 4.0),
         );
 
+        //   json_dumps()    │ String       │ to JSON string
+        //   json_loads(s)   │ String       │ from JSON string
+        //   json_dump(path) │ file         │ write to file
+        //   json_load(path) │ file         │ read from file
+
         let data = b.jsondump().unwrap();
         assert!(data.contains("\"type\""));
         assert!(data.contains("\"BoundingBox\""));

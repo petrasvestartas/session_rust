@@ -126,9 +126,9 @@ impl Primitives {
             2.0 * p1[2] - (p0[2] + p2[2]) / 2.0
         );
 
-        curve.set_cv_point(0, p0);
-        curve.set_cv_point(1, &cv1);
-        curve.set_cv_point(2, p2);
+        curve.set_cv(0, p0);
+        curve.set_cv(1, &cv1);
+        curve.set_cv(2, p2);
 
         curve
     }

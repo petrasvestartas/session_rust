@@ -19,6 +19,11 @@ mod tests {
         let point3 = Point::new(7.0, 8.0, 9.0);
         objects.points = vec![point1, point2, point3];
 
+        //   json_dumps()    │ String       │ to JSON string
+        //   json_loads(s)   │ String       │ from JSON string
+        //   json_dump(path) │ file         │ write to file
+        //   json_load(path) │ file         │ read from file
+
         let json_result = objects.jsondump();
         assert!(json_result.is_ok());
 

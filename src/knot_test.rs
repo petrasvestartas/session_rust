@@ -163,7 +163,7 @@ pub fn run_set_domain() -> TestResult {
     MINI_TEST!("set_domain", {
         use crate::knot;
 
-        // Create and reparameterize knot vector
+        // Create knot vector and set domain
         let mut k = knot::make_clamped_uniform(4, 4, 1.0);
         let set_result = knot::set_domain(4, 4, &mut k, 5.0, 10.0);
         let (t0, t1) = knot::get_domain(4, 4, &k);

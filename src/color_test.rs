@@ -212,9 +212,14 @@ pub fn run_color_json_roundtrip() -> TestResult {
 
         let color = Color::with_name(255, 128, 64, 255, "test_color");
 
+        //   json_dumps()    │ String       │ to JSON string
+        //   json_loads(s)   │ String       │ from JSON string
+        //   json_dump(path) │ file         │ write to file
+        //   json_load(path) │ file         │ read from file
+
         let filename = "serialization/test_color.json";
-        color.to_json(filename).unwrap();
-        let loaded = Color::from_json(filename).unwrap();
+        color.json_dump(filename).unwrap();
+        let loaded = Color::json_load(filename).unwrap();
 
         MINI_CHECK!(loaded.name == "test_color");
         MINI_CHECK!(loaded.r == 255);
@@ -232,8 +237,8 @@ pub fn run_color_protobuf_roundtrip() -> TestResult {
         color.name = "test_color".to_string();
 
         let filename = "serialization/test_color.bin";
-        color.protobuf_dump(filename);
-        let loaded = Color::protobuf_load(filename);
+        color.pb_dump(filename);
+        let loaded = Color::pb_load(filename);
 
         MINI_CHECK!(loaded.name == "test_color");
         MINI_CHECK!(loaded.r == 255);

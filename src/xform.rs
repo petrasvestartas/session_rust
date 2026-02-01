@@ -622,13 +622,21 @@ impl Xform {
         Ok(serde_json::from_str(json_data)?)
     }
 
-    pub fn to_json(&self, filepath: &str) -> Result<(), Box<dyn std::error::Error>> {
+    pub fn json_dumps(&self) -> String {
+        self.jsondump().unwrap_or_default()
+    }
+
+    pub fn json_loads(json_string: &str) -> Self {
+        Self::jsonload(json_string).unwrap_or_else(|_| Self::default())
+    }
+
+    pub fn json_dump(&self, filepath: &str) -> Result<(), Box<dyn std::error::Error>> {
         let json = self.jsondump()?;
         std::fs::write(filepath, json)?;
         Ok(())
     }
 
-    pub fn from_json(filepath: &str) -> Result<Self, Box<dyn std::error::Error>> {
+    pub fn json_load(filepath: &str) -> Result<Self, Box<dyn std::error::Error>> {
         let json = std::fs::read_to_string(filepath)?;
         Self::jsonload(&json)
     }
@@ -642,7 +650,7 @@ impl Xform {
     /// # Returns
     ///
     /// A Vec<u8> containing the serialized protobuf data.
-    pub fn to_protobuf(&self) -> Vec<u8> {
+    pub fn pb_dumps(&self) -> Vec<u8> {
         use prost::Message;
 
         let proto = crate::proto::Xform {
@@ -662,7 +670,7 @@ impl Xform {
     /// # Returns
     ///
     /// A Result containing the deserialized Xform or an error.
-    pub fn from_protobuf(data: &[u8]) -> Result<Self, Box<dyn std::error::Error>> {
+    pub fn pb_loads(data: &[u8]) -> Result<Self, Box<dyn std::error::Error>> {
         use prost::Message;
 
         let proto = crate::proto::Xform::decode(data)?;
@@ -683,8 +691,8 @@ impl Xform {
     /// # Arguments
     ///
     /// * `filepath` - Path to the output file.
-    pub fn protobuf_dump(&self, filepath: &str) {
-        let data = self.to_protobuf();
+    pub fn pb_dump(&self, filepath: &str) {
+        let data = self.pb_dumps();
         std::fs::write(filepath, data).expect("Failed to write protobuf file");
     }
 
@@ -697,9 +705,9 @@ impl Xform {
     /// # Returns
     ///
     /// The deserialized Xform.
-    pub fn protobuf_load(filepath: &str) -> Self {
+    pub fn pb_load(filepath: &str) -> Self {
         let data = std::fs::read(filepath).expect("Failed to read protobuf file");
-        Self::from_protobuf(&data).expect("Failed to parse protobuf")
+        Self::pb_loads(&data).expect("Failed to parse protobuf")
     }
 
     ///////////////////////////////////////////////////////////////////////////////////////////

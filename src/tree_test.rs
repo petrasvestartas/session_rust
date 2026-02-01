@@ -126,6 +126,11 @@ mod tests {
         tree.add(&child2, Some(&root_node));
         tree.add(&grandchild, Some(&child1));
 
+        //   json_dumps()    │ String       │ to JSON string
+        //   json_loads(s)   │ String       │ from JSON string
+        //   json_dump(path) │ file         │ write to file
+        //   json_load(path) │ file         │ read from file
+
         let data = tree.jsondump().unwrap();
         let json_value: serde_json::Value = serde_json::from_str(&data).unwrap();
 

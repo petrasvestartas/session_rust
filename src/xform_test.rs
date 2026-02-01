@@ -289,10 +289,14 @@ pub fn run_xform_json_roundtrip() -> TestResult {
         let mut xform = Xform::translation(1.0, 2.0, 3.0);
         xform.name = "test_xform".to_string();
 
-        // json_dump(filename) / json_load(filename) - file-based serialization
+        //   json_dumps()    │ String       │ to JSON string
+        //   json_loads(s)   │ String       │ from JSON string
+        //   json_dump(path) │ file         │ write to file
+        //   json_load(path) │ file         │ read from file
+
         let filename = "serialization/test_xform.json";
-        xform.to_json(filename).unwrap();
-        let loaded = Xform::from_json(filename).unwrap();
+        xform.json_dump(filename).unwrap();
+        let loaded = Xform::json_load(filename).unwrap();
 
         MINI_CHECK!(loaded.name == "test_xform");
         MINI_CHECK!(TOLERANCE.is_close(loaded.m[12], 1.0));
@@ -309,10 +313,10 @@ pub fn run_xform_protobuf_roundtrip() -> TestResult {
         let mut xform = Xform::translation(1.0, 2.0, 3.0);
         xform.name = "test_xform_proto".to_string();
 
-        // protobuf_dump(filename) / protobuf_load(filename) - file-based serialization
+        // pb_dump(filename) / pb_load(filename) - file-based serialization
         let filename = "serialization/test_xform.bin";
-        xform.protobuf_dump(filename);
-        let loaded = Xform::protobuf_load(filename);
+        xform.pb_dump(filename);
+        let loaded = Xform::pb_load(filename);
 
         MINI_CHECK!(loaded.name == "test_xform_proto");
         MINI_CHECK!(TOLERANCE.is_close(loaded.m[12], 1.0));

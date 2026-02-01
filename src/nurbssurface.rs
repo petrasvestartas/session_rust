@@ -36,7 +36,7 @@ impl NurbsSurface {
             guid: uuid::Uuid::new_v4().to_string(),
             name: "my_nurbssurface".to_string(),
             width: 1.0,
-            surfacecolor: Color::white(),
+            surfacecolor: Color::black(),
             xform: Xform::identity(),
             m_dim: 0,
             m_is_rat: false,
@@ -1015,48 +1015,6 @@ impl NurbsSurface {
         true
     }
 
-    /// Change dimension of surface
-    pub fn change_dimension(&mut self, desired_dimension: usize) -> bool {
-        if desired_dimension < 1 || desired_dimension == self.m_dim {
-            return false;
-        }
-
-        let cv_count_total = self.m_cv_count[0] * self.m_cv_count[1];
-        let new_cv_size = if self.m_is_rat {
-            desired_dimension + 1
-        } else {
-            desired_dimension
-        };
-
-        let mut new_cv = vec![0.0; new_cv_size * cv_count_total];
-
-        // Copy existing coordinates
-        for i in 0..self.m_cv_count[0] {
-            for j in 0..self.m_cv_count[1] {
-                let old_idx = i * self.m_cv_stride[0] + j * self.m_cv_stride[1];
-                let new_idx = i * new_cv_size * self.m_cv_count[1] + j * new_cv_size;
-
-                // Copy coordinates up to min(old_dim, new_dim)
-                let copy_count = desired_dimension.min(self.m_dim);
-                for k in 0..copy_count {
-                    new_cv[new_idx + k] = self.m_cv[old_idx + k];
-                }
-
-                // If rational, copy weight
-                if self.m_is_rat {
-                    new_cv[new_idx + desired_dimension] = self.m_cv[old_idx + self.m_dim];
-                }
-            }
-        }
-
-        self.m_dim = desired_dimension;
-        self.m_cv = new_cv;
-        self.m_cv_stride[0] = new_cv_size * self.m_cv_count[1];
-        self.m_cv_stride[1] = new_cv_size;
-
-        true
-    }
-
     /// Zero all control vertices (set weights to 1 if rational)
     pub fn zero_cvs(&mut self) -> bool {
         if !self.is_valid() {
@@ -1272,6 +1230,14 @@ impl NurbsSurface {
         }
     }
 
+    pub fn json_dumps(&self) -> String {
+        serde_json::to_string_pretty(self).unwrap_or_default()
+    }
+
+    pub fn json_loads(json_string: &str) -> Self {
+        serde_json::from_str(json_string).unwrap_or_else(|_| Self::default())
+    }
+
     /// Load from JSON file
     pub fn json_load(filename: &str) -> Self {
         use std::fs::File;
@@ -1292,7 +1258,7 @@ impl NurbsSurface {
     /// # Returns
     ///
     /// A Vec<u8> containing the serialized protobuf data.
-    pub fn to_protobuf(&self) -> Vec<u8> {
+    pub fn pb_dumps(&self) -> Vec<u8> {
         use prost::Message;
 
         let proto = crate::proto::NurbsSurface {
@@ -1336,7 +1302,7 @@ impl NurbsSurface {
     /// # Returns
     ///
     /// A Result containing the deserialized NurbsSurface or an error.
-    pub fn from_protobuf(data: &[u8]) -> Result<Self, Box<dyn std::error::Error>> {
+    pub fn pb_loads(data: &[u8]) -> Result<Self, Box<dyn std::error::Error>> {
         use prost::Message;
 
         let proto = crate::proto::NurbsSurface::decode(data)?;
@@ -1406,8 +1372,8 @@ impl NurbsSurface {
     /// # Arguments
     ///
     /// * `filepath` - Path to the output file.
-    pub fn protobuf_dump(&self, filepath: &str) {
-        let data = self.to_protobuf();
+    pub fn pb_dump(&self, filepath: &str) {
+        let data = self.pb_dumps();
         std::fs::write(filepath, data).expect("Failed to write protobuf file");
     }
 
@@ -1420,9 +1386,9 @@ impl NurbsSurface {
     /// # Returns
     ///
     /// The deserialized NurbsSurface.
-    pub fn protobuf_load(filepath: &str) -> Self {
+    pub fn pb_load(filepath: &str) -> Self {
         let data = std::fs::read(filepath).expect("Failed to read protobuf file");
-        Self::from_protobuf(&data).expect("Failed to parse protobuf")
+        Self::pb_loads(&data).expect("Failed to parse protobuf")
     }
 }
 

@@ -584,11 +584,11 @@ fn test_polyline_protobuf_roundtrip() {
     polyline.linecolor.b = 64;
 
     // Serialize to protobuf
-    let data = polyline.to_protobuf();
+    let data = polyline.pb_dumps();
     assert!(!data.is_empty());
 
     // Deserialize from protobuf
-    let loaded = Polyline::from_protobuf(&data).unwrap();
+    let loaded = Polyline::pb_loads(&data).unwrap();
 
     // Verify all fields
     assert_eq!(loaded.guid, "test-guid-12345");
@@ -712,7 +712,11 @@ pub fn run_polyline_json_roundtrip() -> TestResult {
         let mut pl = Polyline::new(vec![Point::new(1.0, 2.0, 3.0), Point::new(4.0, 5.0, 6.0), Point::new(7.0, 8.0, 9.0), Point::new(10.0, 11.0, 12.0)]);
         pl.name = "test_polyline".to_string();
 
-        // json_dump(fname) / json_load(fname) - file-based serialization
+        //   json_dumps()    │ String       │ to JSON string
+        //   json_loads(s)   │ String       │ from JSON string
+        //   json_dump(path) │ file         │ write to file
+        //   json_load(path) │ file         │ read from file
+
         let fname = "serialization/test_polyline.json";
         json_dump(&pl, fname, true).unwrap();
         let loaded: Polyline = json_load(fname).unwrap();
@@ -734,10 +738,10 @@ pub fn run_polyline_protobuf_roundtrip() -> TestResult {
         let mut pl = Polyline::new(vec![Point::new(1.0, 2.0, 3.0), Point::new(4.0, 5.0, 6.0), Point::new(7.0, 8.0, 9.0), Point::new(10.0, 11.0, 12.0)]);
         pl.name = "test_polyline".to_string();
 
-        // protobuf_dump(fname) / protobuf_load(fname) - file-based serialization
+        // pb_dump(fname) / pb_load(fname) - file-based serialization
         let fname = "serialization/test_polyline.bin";
-        pl.protobuf_dump(fname);
-        let loaded = Polyline::protobuf_load(fname);
+        pl.pb_dump(fname);
+        let loaded = Polyline::pb_load(fname);
 
         MINI_CHECK!(loaded.name == "test_polyline");
         MINI_CHECK!(loaded.len() == 4);

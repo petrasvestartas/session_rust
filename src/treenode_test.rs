@@ -25,6 +25,11 @@ mod tests {
         folder1.add(&file1);
         folder2.add(&file2);
 
+        //   json_dumps()    │ String       │ to JSON string
+        //   json_loads(s)   │ String       │ from JSON string
+        //   json_dump(path) │ file         │ write to file
+        //   json_load(path) │ file         │ read from file
+
         let data = root.jsondump().unwrap();
         let json_value: serde_json::Value = serde_json::from_str(&data).unwrap();
 

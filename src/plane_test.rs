@@ -223,6 +223,11 @@ pub fn run_plane_json_roundtrip() -> TestResult {
         let mut pl = Plane::xy_plane();
         pl.name = "test_plane".to_string();
 
+        //   json_dumps()    │ String       │ to JSON string
+        //   json_loads(s)   │ String       │ from JSON string
+        //   json_dump(path) │ file         │ write to file
+        //   json_load(path) │ file         │ read from file
+
         let fname = "serialization/test_plane.json";
         pl.json_dump(fname).unwrap();
         let loaded = Plane::json_load(fname).unwrap();
@@ -240,10 +245,10 @@ pub fn run_plane_protobuf_roundtrip() -> TestResult {
         let mut pl = Plane::xy_plane();
         pl.name = "test_plane".to_string();
 
-        // protobuf_dump(fname) / protobuf_load(fname) - file-based serialization
+        // pb_dump(fname) / pb_load(fname) - file-based serialization
         let fname = "serialization/test_plane.bin";
-        pl.protobuf_dump(fname);
-        let loaded = Plane::protobuf_load(fname);
+        pl.pb_dump(fname);
+        let loaded = Plane::pb_load(fname);
 
         MINI_CHECK!(loaded.name == "test_plane");
         MINI_CHECK!(TOLERANCE.is_close(loaded.c(), 1.0));

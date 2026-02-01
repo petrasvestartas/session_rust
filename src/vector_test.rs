@@ -404,7 +404,11 @@ pub fn run_vector_json_roundtrip() -> TestResult {
         let mut v = Vector::new(42.1, 84.2, 126.3);
         v.name = "test_vector".to_string();
 
-        // json_dump(filename) / json_load(filename) - file-based serialization
+        //   json_dumps()    │ String       │ to JSON string
+        //   json_loads(s)   │ String       │ from JSON string
+        //   json_dump(path) │ file         │ write to file
+        //   json_load(path) │ file         │ read from file
+
         let filename = "serialization/test_vector.json";
         v.json_dump(filename).unwrap();
         let loaded = Vector::json_load(filename).unwrap();
@@ -423,10 +427,10 @@ pub fn run_vector_protobuf_roundtrip() -> TestResult {
         let mut v = Vector::new(42.1, 84.2, 126.3);
         v.name = "test_vector".to_string();
 
-        // Test protobuf_dump / protobuf_load (file-based)
+        // Test pb_dump / pb_load (file-based)
         let filename = "serialization/test_vector.bin";
-        v.protobuf_dump(filename);
-        let loaded = Vector::protobuf_load(filename);
+        v.pb_dump(filename);
+        let loaded = Vector::pb_load(filename);
 
         MINI_CHECK!(loaded.name == "test_vector");
         MINI_CHECK!(TOLERANCE.is_close(loaded[0], 42.1));

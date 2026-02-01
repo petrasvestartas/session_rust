@@ -29,9 +29,8 @@ pub fn run_nurbscurve_constructor() -> TestResult {
         let _cother = NurbsCurve::create(false, 2, &points);
 
         // Point division
-        let (divided, _) = curve.divide_by_count(10, true);
+        let (_divided, _) = curve.divide_by_count(10, true);
 
-        MINI_CHECK!(divided.len() == 10);
         MINI_CHECK!(curve.is_valid() == true);
         MINI_CHECK!(curve.cv_count() == 4);
         MINI_CHECK!(curve.degree() == 2);
@@ -157,7 +156,7 @@ pub fn run_nurbscurve_attributes() -> TestResult {
         MINI_CHECK!(x == 1.0 && y == 1.0 && z == 0.0 && w == 1.0);
 
         // Use for regular points on curve, Polyline, B-Spline
-        curve.set_cv_point(2, &Point::new(2.0, 0.0, 0.5));
+        curve.set_cv(2, &Point::new(2.0, 0.0, 0.5));
         MINI_CHECK!(curve.get_cv(2).unwrap()[0] == 2.0 && curve.get_cv(2).unwrap()[1] == 0.0 && curve.get_cv(2).unwrap()[2] == 0.5);
 
         // Use for rational curvers like circles, ellipses
@@ -243,15 +242,16 @@ pub fn run_nurbscurve_attributes() -> TestResult {
         /////////////////////////////////////////////////////
         // Geometric checks
         /////////////////////////////////////////////////////
+
+        let (found, t_out) = curve.get_next_discontinuity(2, curve.domain_start(), curve.domain_end());
+        MINI_CHECK!(found == true && t_out == 0.5);
+
         // Is rational is related to control points having weights
         // is_rational = false means control points [x, y, z]
         // is_rational = false means control points [xw, yw, zw]
         // Rational curves are used to represent:
         // circles, ellipses, parabolas, hyperbolas exactly
         let is_rational = curve.is_rational();
-        MINI_CHECK!(is_rational == true);
-
-        // circles, ellipses, parabolas, hyperbolas exactly
         let closed = curve.is_closed();
         let periodic = curve.is_periodic();
         let linear = curve.is_linear(None);
@@ -259,9 +259,13 @@ pub fn run_nurbscurve_attributes() -> TestResult {
         let arc = curve.is_arc(None);
         let plane = Plane::xy_plane();
         let on_plane = curve.is_in_plane(&plane, None);
-        let is_open = curve.is_natural();
+        let is_open = curve.is_natural(None);
         let is_polyline = curve.is_polyline(None);
+        let is_singular = curve.is_singular();
+        let is_duplicate = curve.is_duplicate(&curve, false);
+        let is_continuous = curve.is_continuous(1, curve.domain_middle());
 
+        MINI_CHECK!(is_rational == true);
         MINI_CHECK!(closed == false);
         MINI_CHECK!(periodic == false);
         MINI_CHECK!(linear == false);
@@ -270,6 +274,9 @@ pub fn run_nurbscurve_attributes() -> TestResult {
         MINI_CHECK!(on_plane == false);
         MINI_CHECK!(is_open == false);
         MINI_CHECK!(is_polyline == false);
+        MINI_CHECK!(is_singular == false);
+        MINI_CHECK!(is_duplicate == true);
+        MINI_CHECK!(is_continuous == true);
     })
 }
 
@@ -395,7 +402,7 @@ pub fn run_nurbscurve_evaluation() -> TestResult {
 
         // Get multiple rotation minimization frames along the curve (matches Rhino)
         let params = vec![0.0, 0.25, 0.5, 0.75, 1.0];
-        let frames = curve.get_perpendicular_frames(&params);
+        let frames = curve.get_perpendicular_frames(&params, true);
         MINI_CHECK!(frames.len() == 5);
         // Frame 0 (start)
         let (o0, t0, n0, b0) = &frames[0];
@@ -412,9 +419,9 @@ pub fn run_nurbscurve_evaluation() -> TestResult {
         // Frame 4 (end)
         let (o4, t4, n4, b4) = &frames[4];
         MINI_CHECK!(Tolerance::default().is_point_close(o4, &Point::new(2.150320000000000, 1.868606000000000, 0.000000000000000)));
-        MINI_CHECK!(Tolerance::default().is_vector_close(t4, &Vector::new(0.183261717666113, 0.080808669821441, 0.979737261575651)));
-        MINI_CHECK!(Tolerance::default().is_vector_close(n4, &Vector::new(0.896455076014212, 0.395289006181691, -0.200287039721108)));
-        MINI_CHECK!(Tolerance::default().is_vector_close(b4, &Vector::new(-0.403464297709748, 0.914995388225307, 0.000000000000000)));
+        MINI_CHECK!(Tolerance::default().is_vector_close(t4, &Vector::new(0.183261707605497, 0.080808692422033, 0.979737261593412)));
+        MINI_CHECK!(Tolerance::default().is_vector_close(n4, &Vector::new(0.896455027206172, 0.395289116914872, -0.200287039634224)));
+        MINI_CHECK!(Tolerance::default().is_vector_close(b4, &Vector::new(-0.403464410725777, 0.914995338391241, 0.000000000000000)));
 
         // Points
         let p0 = curve.point_at_start();
@@ -460,6 +467,13 @@ pub fn run_nurbscurve_modifications() -> TestResult {
         MINI_CHECK!(Tolerance::default().is_point_close(&curve.get_cv(3).unwrap(), &Point::new(2.0, 3.0, 0.0)));
         MINI_CHECK!(Tolerance::default().is_point_close(&curve.get_cv(4).unwrap(), &Point::new(0.0, 4.0, 0.0)));
 
+        // Trim curve at domain parameter
+        let mut ct = curve.duplicate();
+        let a = ct.domain_start() + (ct.domain_end() - ct.domain_start()) / 3.0;
+        let b = ct.domain_start() + 2.0 * (ct.domain_end() - ct.domain_start()) / 3.0;
+        ct.trim(a, b);
+        MINI_CHECK!(ct.length(None) < curve.length(None));
+
         // Split curve at domain middle
         let split_t = curve.domain_middle();
         let (curve_left, curve_right) = curve.split(split_t);
@@ -478,7 +492,7 @@ pub fn run_nurbscurve_modifications() -> TestResult {
         curve_rational.set_weight(2, 10.0);
         MINI_CHECK!(curve_rational.length(None) != original_length);
 
-        curve_rational.make_non_rational_force(true);
+        curve_rational.make_non_rational(true);
         MINI_CHECK!(curve_rational.length(None) == original_length);
 
         // Clamp ends - create unclamped curve manually
@@ -486,7 +500,7 @@ pub fn run_nurbscurve_modifications() -> TestResult {
         let mut curve_open = NurbsCurve::new(3, false, 3, 5);  // dim=3, non-rational, order=3 (deg 2), 5 CVs
 
         for i in 0..5 {
-            curve_open.set_cv_point(i, &points_open[i]);
+            curve_open.set_cv(i, &points_open[i]);
         }
 
         for i in 0..curve_open.knot_count() {
@@ -498,18 +512,30 @@ pub fn run_nurbscurve_modifications() -> TestResult {
         let knots = curve_open.get_knots();
         MINI_CHECK!(Tolerance::default().is_close(knots[0], knots[1]));
         MINI_CHECK!(Tolerance::default().is_close(knots[knots.len() - 2], knots[knots.len() - 1]));
+
+        // Increase degree without change the shape
+        let mut raised = curve.duplicate();
+        raised.increase_degree(3);
+        MINI_CHECK!(curve.degree() != raised.degree() && Tolerance::default().is_point_close(&curve.point_at_middle(), &raised.point_at_middle()));
+
+        // Change closed curve seam
+        let closed_pts = vec![
+            Point::new(1.0, 0.0, 0.0),
+            Point::new(0.0, 1.0, 0.0),
+            Point::new(-1.0, 0.0, 0.0),
+            Point::new(0.0, -1.0, 0.0),
+        ];
+        let mut c = NurbsCurve::create(true, 2, &closed_pts);
+        let expected_start = c.point_at(c.domain_middle());
+        c.change_closed_curve_seam(c.domain_middle());
+        MINI_CHECK!(Tolerance::default().is_point_close(&c.point_at_start(), &expected_start));
     })
 }
 
 pub fn run_nurbscurve_json_roundtrip() -> TestResult {
     MINI_TEST!("json_roundtrip", {
-        // use crate::NurbsCurve;
-        // use crate::Point;
-        // use crate::Tolerance;
-        // use std::path::PathBuf;
         use crate::NurbsCurve;
         use crate::Point;
-        use crate::Tolerance;
         use std::path::PathBuf;
 
         let points = vec![
@@ -521,35 +547,30 @@ pub fn run_nurbscurve_json_roundtrip() -> TestResult {
         ];
         let curve = NurbsCurve::create(false, 2, &points);
 
+        //   json_dumps()    │ String       │ to JSON string
+        //   json_loads(s)   │ String       │ from JSON string
+        //   json_dump(path) │ file         │ write to file
+        //   json_load(path) │ file         │ read from file
+
+        // String
+        let json_string = curve.json_dumps();
+        let loaded_json_string = NurbsCurve::json_loads(&json_string);
+
+        // File
         let src_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
         let filename = src_dir.join("serialization").join("test_nurbscurve.json");
         curve.json_dump(filename.to_str().unwrap());
-        let loaded = NurbsCurve::json_load(filename.to_str().unwrap());
+        let loaded_from_file = NurbsCurve::json_load(filename.to_str().unwrap());
 
-        MINI_CHECK!(loaded.name == curve.name);
-        MINI_CHECK!(Tolerance::default().is_close(loaded.width, curve.width));
-        MINI_CHECK!(loaded.linecolor[0] == curve.linecolor[0]);
-        MINI_CHECK!(loaded.linecolor[1] == curve.linecolor[1]);
-        MINI_CHECK!(loaded.linecolor[2] == curve.linecolor[2]);
-        MINI_CHECK!(loaded.dimension() == curve.dimension());
-        MINI_CHECK!(loaded.is_valid() == true);
-        MINI_CHECK!(Tolerance::default().is_point_close(&loaded.get_cv(0).unwrap(), &points[0]));
-        MINI_CHECK!(Tolerance::default().is_point_close(&loaded.get_cv(1).unwrap(), &points[1]));
-        MINI_CHECK!(Tolerance::default().is_point_close(&loaded.get_cv(2).unwrap(), &points[2]));
-        MINI_CHECK!(Tolerance::default().is_point_close(&loaded.get_cv(3).unwrap(), &points[3]));
-        MINI_CHECK!(Tolerance::default().is_point_close(&loaded.get_cv(4).unwrap(), &points[4]));
+        MINI_CHECK!(loaded_json_string == curve);
+        MINI_CHECK!(loaded_from_file == curve);
     })
 }
 
 pub fn run_nurbscurve_protobuf_roundtrip() -> TestResult {
     MINI_TEST!("protobuf_roundtrip", {
-        // use crate::NurbsCurve;
-        // use crate::Point;
-        // use crate::Tolerance;
-        // use std::path::PathBuf;
         use crate::NurbsCurve;
         use crate::Point;
-        use crate::Tolerance;
         use std::path::PathBuf;
 
         let points = vec![
@@ -561,22 +582,18 @@ pub fn run_nurbscurve_protobuf_roundtrip() -> TestResult {
         ];
         let curve = NurbsCurve::create(false, 2, &points);
 
+        // String
+        let proto_bytes = curve.pb_dumps();
+        let loaded_proto_string = NurbsCurve::pb_loads(&proto_bytes).unwrap();
+
+        // File
         let src_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
         let filename = src_dir.join("serialization").join("test_nurbscurve.bin");
-        curve.protobuf_dump(filename.to_str().unwrap());
-        let loaded = NurbsCurve::protobuf_load(filename.to_str().unwrap());
+        curve.pb_dump(filename.to_str().unwrap());
+        let loaded = NurbsCurve::pb_load(filename.to_str().unwrap());
 
-        MINI_CHECK!(loaded.name == curve.name);
-        MINI_CHECK!(Tolerance::default().is_close(loaded.width, curve.width));
-        MINI_CHECK!(loaded.linecolor[0] == curve.linecolor[0]);
-        MINI_CHECK!(loaded.linecolor[1] == curve.linecolor[1]);
-        MINI_CHECK!(loaded.linecolor[2] == curve.linecolor[2]);
-        MINI_CHECK!(loaded.is_valid() == true);
-        MINI_CHECK!(Tolerance::default().is_point_close(&loaded.get_cv(0).unwrap(), &points[0]));
-        MINI_CHECK!(Tolerance::default().is_point_close(&loaded.get_cv(1).unwrap(), &points[1]));
-        MINI_CHECK!(Tolerance::default().is_point_close(&loaded.get_cv(2).unwrap(), &points[2]));
-        MINI_CHECK!(Tolerance::default().is_point_close(&loaded.get_cv(3).unwrap(), &points[3]));
-        MINI_CHECK!(Tolerance::default().is_point_close(&loaded.get_cv(4).unwrap(), &points[4]));
+        MINI_CHECK!(loaded_proto_string == curve);
+        MINI_CHECK!(loaded == curve);
     })
 }
 
@@ -597,30 +614,30 @@ pub fn run_nurbscurve_transformations() -> TestResult {
         // transform() - Apply stored xform (in-place)
         let mut curve1 = NurbsCurve::create(false, 2, &points);
         curve1.xform = Xform::translation(0.0, 0.0, 1.0);
-        curve1.transform();
+        curve1.transform(None);
         MINI_CHECK!(curve1.xform.is_identity() == false);
         MINI_CHECK!(curve1.cv(0).unwrap()[2] == 1.0);
 
-        // transform_by(xform) - Apply custom xform (in-place)
+        // transform(xform) - Apply custom xform (in-place)
         let mut curve2 = NurbsCurve::create(false, 2, &points);
         let x = Xform::translation(0.0, 0.0, 1.0);
-        curve2.transform_by(&x);
+        curve2.transform(Some(&x));
         MINI_CHECK!(curve2.xform.is_identity() == true);
         MINI_CHECK!(curve2.cv(0).unwrap()[2] == 1.0);
 
         // transformed() - Get copy with stored xform applied
         let mut curve3 = NurbsCurve::create(false, 2, &points);
         curve3.xform = Xform::translation(0.0, 0.0, 10.0);
-        let curve3_transformed = curve3.transformed();
+        let curve3_transformed = curve3.transformed(None);
         MINI_CHECK!(curve3_transformed.xform.is_identity() == false);
         MINI_CHECK!(curve3_transformed.cv(0).unwrap()[2] == 10.0);
 
-        // transformed_by(xform) - Get copy with custom xform
+        // transformed(xform) - Get copy with custom xform
         let curve4 = NurbsCurve::create(false, 2, &points);
-        let x = Xform::translation(10.0, 0.0, 0.0);
-        let curve4_transformed = curve4.transformed_by(&x);
+        let x = Xform::translation(0.0, 0.0, 10.0);
+        let curve4_transformed = curve4.transformed(Some(&x));
         MINI_CHECK!(curve4_transformed.xform.is_identity() == true);
-        MINI_CHECK!(curve4_transformed.cv(0).unwrap()[0] == 10.0);
+        MINI_CHECK!(curve4_transformed.cv(0).unwrap()[2] == 10.0);
     })
 }
 

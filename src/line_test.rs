@@ -121,7 +121,11 @@ pub fn run_line_json_roundtrip() -> TestResult {
         let mut l = Line::new(42.1, 84.2, 126.3, 168.4, 210.5, 252.6);
         l.name = "test_line".to_string();
 
-        // json_dump(fname) / json_load(fname) - file-based serialization
+        //   json_dumps()    │ String       │ to JSON string
+        //   json_loads(s)   │ String       │ from JSON string
+        //   json_dump(path) │ file         │ write to file
+        //   json_load(path) │ file         │ read from file
+
         let fname = "serialization/test_line.json";
         l.json_dump(fname).unwrap();
         let loaded = Line::json_load(fname).unwrap();
@@ -143,10 +147,10 @@ pub fn run_line_protobuf_roundtrip() -> TestResult {
         let mut l = Line::new(42.1, 84.2, 126.3, 168.4, 210.5, 252.6);
         l.name = "test_line".to_string();
 
-        // protobuf_dump(fname) / protobuf_load(fname) - file-based serialization
+        // pb_dump(fname) / pb_load(fname) - file-based serialization
         let fname = "serialization/test_line.bin";
-        l.protobuf_dump(fname);
-        let loaded = Line::protobuf_load(fname);
+        l.pb_dump(fname);
+        let loaded = Line::pb_load(fname);
 
         MINI_CHECK!(loaded.name == "test_line");
         MINI_CHECK!(TOLERANCE.is_close(loaded[0], 42.1));

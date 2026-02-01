@@ -102,9 +102,14 @@ pub fn run_point_json_roundtrip() -> TestResult {
         p.width = 2.0;
         p.pointcolor = Color::new(255, 128, 64, 255);
 
+        //   json_dumps()    │ String       │ to JSON string
+        //   json_loads(s)   │ String       │ from JSON string
+        //   json_dump(path) │ file         │ write to file
+        //   json_load(path) │ file         │ read from file
+
         let filename = "serialization/test_point.json";
-        p.to_json(filename).unwrap();
-        let loaded = Point::from_json(filename).unwrap();
+        p.json_dump(filename).unwrap();
+        let loaded = Point::json_load(filename).unwrap();
 
         MINI_CHECK!(loaded.name == p.name);
         MINI_CHECK!(loaded[0] == p[0]);
@@ -130,8 +135,8 @@ pub fn run_point_protobuf_roundtrip() -> TestResult {
         p.pointcolor = Color::new(255, 128, 64, 255);
 
         let filename = "serialization/test_point.bin";
-        p.protobuf_dump(filename);
-        let loaded = Point::protobuf_load(filename);
+        p.pb_dump(filename);
+        let loaded = Point::pb_load(filename);
 
         MINI_CHECK!(loaded.name == p.name);
         MINI_CHECK!(loaded[0] == p[0]);

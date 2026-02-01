@@ -21,6 +21,11 @@ mod tests {
         let line = Line::new(0.0, 0.0, 0.0, 5.0, 0.0, 0.0);
         let arrow = Arrow::new(line, 2.0);
 
+        //   json_dumps()    │ String       │ to JSON string
+        //   json_loads(s)   │ String       │ from JSON string
+        //   json_dump(path) │ file         │ write to file
+        //   json_load(path) │ file         │ read from file
+
         let json = serde_json::to_string(&arrow).unwrap();
         let deserialized: Arrow = serde_json::from_str(&json).unwrap();
 

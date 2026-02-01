@@ -126,6 +126,11 @@ pub fn run_pointcloud_json_roundtrip() -> TestResult {
         );
         pc.name = "test_pointcloud".to_string();
 
+        //   json_dumps()    │ String       │ to JSON string
+        //   json_loads(s)   │ String       │ from JSON string
+        //   json_dump(path) │ file         │ write to file
+        //   json_load(path) │ file         │ read from file
+
         let fname = "serialization/test_pointcloud.json";
         pc.json_dump(fname).unwrap();
         let loaded = PointCloud::json_load(fname).unwrap();
@@ -153,8 +158,8 @@ pub fn run_pointcloud_protobuf_roundtrip() -> TestResult {
         pc.name = "test_pointcloud".to_string();
 
         let fname = "serialization/test_pointcloud.bin";
-        pc.protobuf_dump(fname);
-        let loaded = PointCloud::protobuf_load(fname);
+        pc.pb_dump(fname);
+        let loaded = PointCloud::pb_load(fname);
 
         MINI_CHECK!(loaded.name == "test_pointcloud");
         MINI_CHECK!(loaded.len() == 2);

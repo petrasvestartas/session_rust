@@ -38,7 +38,7 @@ impl Default for Line {
             _z1: 1.0,
             guid: Uuid::new_v4().to_string(),
             name: "my_line".to_string(),
-            linecolor: Color::white(),
+            linecolor: Color::black(),
             width: 1.0,
             xform: Xform::identity(),
         }
@@ -322,27 +322,25 @@ impl Line {
         Ok(serde_json::from_str(json_data)?)
     }
 
-    /// Serialize to JSON file
-    pub fn to_json(&self, filepath: &str) -> Result<(), Box<dyn std::error::Error>> {
+    pub fn json_dumps(&self) -> String {
+        self.jsondump().unwrap_or_default()
+    }
+
+    pub fn json_loads(json_string: &str) -> Self {
+        Self::jsonload(json_string).unwrap_or_else(|_| Self::default())
+    }
+
+    /// Serialize to JSON file.
+    pub fn json_dump(&self, filepath: &str) -> Result<(), Box<dyn std::error::Error>> {
         let json = self.jsondump()?;
         std::fs::write(filepath, json)?;
         Ok(())
     }
 
-    /// Alias for `to_json` to match C++ API naming convention.
-    pub fn json_dump(&self, filepath: &str) -> Result<(), Box<dyn std::error::Error>> {
-        self.to_json(filepath)
-    }
-
-    /// Deserialize from JSON file
-    pub fn from_json(filepath: &str) -> Result<Self, Box<dyn std::error::Error>> {
+    /// Deserialize from JSON file.
+    pub fn json_load(filepath: &str) -> Result<Self, Box<dyn std::error::Error>> {
         let json = std::fs::read_to_string(filepath)?;
         Self::jsonload(&json)
-    }
-
-    /// Alias for `from_json` to match C++ API naming convention.
-    pub fn json_load(filepath: &str) -> Result<Self, Box<dyn std::error::Error>> {
-        Self::from_json(filepath)
     }
 
     ///////////////////////////////////////////////////////////////////////////////////////////
@@ -350,7 +348,7 @@ impl Line {
     ///////////////////////////////////////////////////////////////////////////////////////////
 
     /// Convert to protobuf binary format.
-    pub fn to_protobuf(&self) -> Vec<u8> {
+    pub fn pb_dumps(&self) -> Vec<u8> {
         use prost::Message;
         let proto = crate::proto::Line {
             start: Some(crate::proto::Point {
@@ -381,7 +379,7 @@ impl Line {
     }
 
     /// Create from protobuf binary data.
-    pub fn from_protobuf(data: &[u8]) -> Result<Self, prost::DecodeError> {
+    pub fn pb_loads(data: &[u8]) -> Result<Self, prost::DecodeError> {
         use prost::Message;
         let proto = crate::proto::Line::decode(data)?;
         let start = proto.start.unwrap_or_default();
@@ -393,15 +391,15 @@ impl Line {
     }
 
     /// Write protobuf to file.
-    pub fn protobuf_dump(&self, filepath: &str) {
-        let data = self.to_protobuf();
+    pub fn pb_dump(&self, filepath: &str) {
+        let data = self.pb_dumps();
         std::fs::write(filepath, data).expect("Failed to write protobuf file");
     }
 
     /// Read protobuf from file.
-    pub fn protobuf_load(filepath: &str) -> Self {
+    pub fn pb_load(filepath: &str) -> Self {
         let data = std::fs::read(filepath).expect("Failed to read protobuf file");
-        Self::from_protobuf(&data).expect("Failed to parse protobuf")
+        Self::pb_loads(&data).expect("Failed to parse protobuf")
     }
 
     /// Short string representation.

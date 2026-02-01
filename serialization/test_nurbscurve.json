@@ -29,7 +29,7 @@
   "cv_count": 5,
   "cv_stride": 3,
   "dimension": 3,
-  "guid": "c635526c-09fd-449b-ba6f-8c763f54ef96",
+  "guid": "27400982-4d38-4b74-9203-f24584c1148c",
   "is_rational": false,
   "knots": [
     0.0,
@@ -41,11 +41,11 @@
   ],
   "linecolor": {
     "type": "Color",
-    "guid": "394809ce-0910-49b3-a290-99a2ccc3fd30",
-    "name": "white",
-    "r": 255,
-    "g": 255,
-    "b": 255,
+    "guid": "a6dc20da-8c93-4136-ae6a-f9dac0869791",
+    "name": "black",
+    "r": 0,
+    "g": 0,
+    "b": 0,
     "a": 255
   },
   "name": "my_nurbscurve",
@@ -53,7 +53,7 @@
   "width": 1.0,
   "xform": {
     "type": "Xform",
-    "guid": "8442969b-3de6-404e-b82f-9cf7b7b4ffd9",
+    "guid": "88d1ce7b-bfbf-4561-bad6-eaa5e5cf75af",
     "name": "my_xform",
     "m": [
       1.0,

@@ -203,6 +203,11 @@ mod tests {
         graph.add_edge("A", "B", "edge_AB");
         graph.add_edge("B", "C", "edge_BC");
         graph.add_edge("C", "D", "edge_CD");
+        //   json_dumps()    │ String       │ to JSON string
+        //   json_loads(s)   │ String       │ from JSON string
+        //   json_dump(path) │ file         │ write to file
+        //   json_load(path) │ file         │ read from file
+
         let filename = "serialization/test_graph.json";
 
         json_dump(&graph, filename, true).unwrap();

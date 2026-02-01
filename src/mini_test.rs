@@ -396,9 +396,15 @@ pub fn run_all(language: &str) -> Result<(), Box<dyn std::error::Error>> {
         }
 
         let filename = format!("{}_test.json", group.to_lowercase());
-        let path = out_dir.join(filename);
+        let path = out_dir.join(&filename);
+        let tmp_path = out_dir.join(format!("{}.tmp", &filename));
         let json = serde_json::to_string_pretty(&results)?;
-        fs::write(path, json)?;
+        fs::write(&tmp_path, &json)?;
+        if let Err(_) = fs::rename(&tmp_path, &path) {
+            // rename failed (Windows lock), fall back to remove + rename
+            let _ = fs::remove_file(&path);
+            fs::rename(&tmp_path, &path).or_else(|_| fs::write(&path, &json))?;
+        }
     }
 
     Ok(())

@@ -84,6 +84,11 @@ mod tests {
         let original_tree_nodes = my_session.tree.nodes();
         assert_eq!(original_tree_nodes.len(), 13);
 
+        //   json_dumps()    │ String       │ to JSON string
+        //   json_loads(s)   │ String       │ from JSON string
+        //   json_dump(path) │ file         │ write to file
+        //   json_load(path) │ file         │ read from file
+
         // Serialize session using custom jsondump (not serde's Serialize trait)
         let s = my_session.jsondump().unwrap();
 

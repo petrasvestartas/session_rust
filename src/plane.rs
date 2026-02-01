@@ -603,6 +603,14 @@ impl Plane {
         Ok(serde_json::from_str(json_data)?)
     }
 
+    pub fn json_dumps(&self) -> String {
+        self.jsondump().unwrap_or_default()
+    }
+
+    pub fn json_loads(json_string: &str) -> Self {
+        Self::jsonload(json_string).unwrap_or_else(|_| Self::default())
+    }
+
     /// Write JSON to file.
     pub fn json_dump(&self, filepath: &str) -> Result<(), Box<dyn std::error::Error>> {
         let json = self.jsondump()?;
@@ -620,7 +628,7 @@ impl Plane {
 // Protobuf serialization (requires "protobuf" feature)
 impl Plane {
     /// Convert to protobuf binary format.
-    pub fn to_protobuf(&self) -> Vec<u8> {
+    pub fn pb_dumps(&self) -> Vec<u8> {
         use prost::Message;
         // Use single flat frame array of 12 numbers
         let proto = crate::proto::Plane {
@@ -643,7 +651,7 @@ impl Plane {
     }
 
     /// Create Plane from protobuf binary data.
-    pub fn from_protobuf(data: &[u8]) -> Result<Self, prost::DecodeError> {
+    pub fn pb_loads(data: &[u8]) -> Result<Self, prost::DecodeError> {
         use prost::Message;
         let proto = crate::proto::Plane::decode(data)?;
 
@@ -689,15 +697,15 @@ impl Plane {
     }
 
     /// Write protobuf to file.
-    pub fn protobuf_dump(&self, filepath: &str) {
-        let data = self.to_protobuf();
+    pub fn pb_dump(&self, filepath: &str) {
+        let data = self.pb_dumps();
         std::fs::write(filepath, data).expect("Failed to write protobuf file");
     }
 
     /// Read protobuf from file.
-    pub fn protobuf_load(filepath: &str) -> Self {
+    pub fn pb_load(filepath: &str) -> Self {
         let data = std::fs::read(filepath).expect("Failed to read protobuf file");
-        Self::from_protobuf(&data).expect("Failed to parse protobuf")
+        Self::pb_loads(&data).expect("Failed to parse protobuf")
     }
 }
 

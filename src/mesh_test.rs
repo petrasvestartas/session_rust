@@ -277,9 +277,14 @@ pub fn run_mesh_json_roundtrip() -> TestResult {
         let v2 = mesh.add_vertex(Point::new(0.0, 1.0, 0.0), None);
         mesh.add_face(vec![v0, v1, v2], None);
 
+        //   json_dumps()    │ String       │ to JSON string
+        //   json_loads(s)   │ String       │ from JSON string
+        //   json_dump(path) │ file         │ write to file
+        //   json_load(path) │ file         │ read from file
+
         let filename = "serialization/test_mesh.json";
-        mesh.to_json(filename).unwrap();
-        let loaded = Mesh::from_json(filename).unwrap();
+        mesh.json_dump(filename).unwrap();
+        let loaded = Mesh::json_load(filename).unwrap();
 
         MINI_CHECK!(loaded.name == mesh.name);
         MINI_CHECK!(loaded.number_of_vertices() == mesh.number_of_vertices());
@@ -300,8 +305,8 @@ pub fn run_mesh_protobuf_roundtrip() -> TestResult {
         mesh.add_face(vec![v0, v1, v2], None);
 
         let filename = "serialization/test_mesh.bin";
-        mesh.protobuf_dump(filename);
-        let loaded = Mesh::protobuf_load(filename);
+        mesh.pb_dump(filename);
+        let loaded = Mesh::pb_load(filename);
 
         MINI_CHECK!(loaded.name == mesh.name);
         MINI_CHECK!(loaded.number_of_vertices() == mesh.number_of_vertices());
