@@ -61,7 +61,7 @@ impl NurbsSurface {
     /// - `is_periodic_v`: If true, creates periodic uniform knot vector in v direction
     /// - `knot_delta_u`: Knot spacing in u direction
     /// - `knot_delta_v`: Knot spacing in v direction
-    pub fn create(
+    pub fn create_raw(
         dimension: usize,
         is_rational: bool,
         order0: usize,
@@ -116,6 +116,32 @@ impl NurbsSurface {
         Some(srf)
     }
 
+    /// Create NURBS surface from flat list of control points (row-major: u varies slowest)
+    pub fn create(
+        periodic_u: bool,
+        periodic_v: bool,
+        degree_u: usize,
+        degree_v: usize,
+        cv_count_u: usize,
+        cv_count_v: usize,
+        points: &[Point],
+    ) -> Option<Self> {
+        if cv_count_u < 2 || cv_count_v < 2 { return None; }
+        if points.len() != cv_count_u * cv_count_v { return None; }
+        let order_u = degree_u + 1;
+        let order_v = degree_v + 1;
+        let mut srf = Self::create_raw(
+            3, false, order_u, order_v, cv_count_u, cv_count_v,
+            periodic_u, periodic_v, 1.0, 1.0,
+        )?;
+        for i in 0..cv_count_u {
+            for j in 0..cv_count_v {
+                srf.set_cv(i, j, &points[i * cv_count_v + j]);
+            }
+        }
+        Some(srf)
+    }
+
     /// Create NURBS surface with default knot vectors (clamped uniform, delta=1.0)
     ///
     /// Convenience method for backward compatibility. Equivalent to:
@@ -128,7 +154,7 @@ impl NurbsSurface {
         cv_count0: usize,
         cv_count1: usize,
     ) -> Option<Self> {
-        Self::create(dimension, is_rational, order0, order1, cv_count0, cv_count1,
+        Self::create_raw(dimension, is_rational, order0, order1, cv_count0, cv_count1,
                     false, false, 1.0, 1.0)
     }
 
@@ -144,7 +170,7 @@ impl NurbsSurface {
         knot_delta1: f64,
     ) -> bool {
         // Create surface with given parameters and knot vectors
-        let srf = match Self::create(dimension, false, order0, order1, cv_count0, cv_count1,
+        let srf = match Self::create_raw(dimension, false, order0, order1, cv_count0, cv_count1,
                                      false, false, knot_delta0, knot_delta1) {
             Some(s) => s,
             None => return false,
@@ -1067,17 +1093,18 @@ impl NurbsSurface {
     ///
     /// 2D vector of points, where grid\[i\]\[j\] is the point at subdivision (i, j).
     /// Grid dimensions are (nu+1) x (nv+1).
-    pub fn subdivide(&self, nu: usize, nv: usize) -> Vec<Vec<Point>> {
+    pub fn divide_by_count(&self, nu: usize, nv: usize) -> (Vec<Vec<Point>>, Vec<Vec<(f64, f64)>>) {
         let (u0, u1) = match self.domain(0) {
             Some(d) => d,
-            None => return Vec::new(),
+            None => return (Vec::new(), Vec::new()),
         };
         let (v0, v1) = match self.domain(1) {
             Some(d) => d,
-            None => return Vec::new(),
+            None => return (Vec::new(), Vec::new()),
         };
 
         let mut grid = vec![vec![Point::new(0.0, 0.0, 0.0); nv + 1]; nu + 1];
+        let mut params = vec![vec![(0.0, 0.0); nv + 1]; nu + 1];
 
         for i in 0..=nu {
             let u = if nu > 0 {
@@ -1094,10 +1121,11 @@ impl NurbsSurface {
                 };
 
                 grid[i][j] = self.point_at(u, v).unwrap_or(Point::new(0.0, 0.0, 0.0));
+                params[i][j] = (u, v);
             }
         }
 
-        grid
+        (grid, params)
     }
 
     /// Check if surface is planar within tolerance
@@ -1308,7 +1336,7 @@ impl NurbsSurface {
         let proto = crate::proto::NurbsSurface::decode(data)?;
 
         // Create surface with correct dimensions
-        let mut surface = if let Some(srf) = Self::create(
+        let mut surface = if let Some(srf) = Self::create_raw(
             proto.dimension as usize,
             proto.is_rational,
             proto.order_u as usize,

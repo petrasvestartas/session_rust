@@ -1,7 +1,7 @@
 use session_rust::{NurbsSurface, Point};
 
 fn main() {
-    let mut srf = NurbsSurface::create(3, false, 4, 4, 5, 5).unwrap();
+    let mut srf = NurbsSurface::create_raw(3, false, 4, 4, 5, 5).unwrap();
     srf.make_clamped_uniform_knot_vector(0, 1.0);
     srf.make_clamped_uniform_knot_vector(1, 1.0);
 

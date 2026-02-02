@@ -9,7 +9,7 @@ pub fn run_nurbssurface_constructor() -> TestResult {
         use crate::tolerance::TOLERANCE;
 
         // Create surface with parameters (4x4 quadratic surface, order 3)
-        let mut s = NurbsSurface::create(3, false, 3, 3, 4, 4, false, false, 2.5, 2.5).unwrap();
+        let mut s = NurbsSurface::create_raw(3, false, 3, 3, 4, 4, false, false, 2.5, 2.5).unwrap();
 
         // Set hardcoded control points
         let cvs = vec![
@@ -55,7 +55,7 @@ pub fn run_nurbssurface_constructor() -> TestResult {
         let s_copy = s.duplicate();
 
         // Subdivision test
-        let v = s.subdivide(5, 5);
+        let (v, uv) = s.divide_by_count(5, 5);
 
         MINI_CHECK!(s.name == "my_nurbssurface");
         MINI_CHECK!(s.width == 1.0);
@@ -131,11 +131,7 @@ pub fn run_nurbssurface_create_operations() -> TestResult {
         use crate::point::Point;
 
         // Create a simple 2x2 bilinear surface
-        let mut surf = NurbsSurface::create_simple(3, false, 2, 2, 2, 2).unwrap();
-
-        // Set up clamped uniform knot vectors
-        surf.make_clamped_uniform_knot_vector(0, 1.0);
-        surf.make_clamped_uniform_knot_vector(1, 1.0);
+        let mut surf = NurbsSurface::create_raw(3, false, 2, 2, 2, 2, false, false, 1.0, 1.0).unwrap();
 
         // Set corner control points
         surf.set_cv(0, 0, &Point::new(0.0, 0.0, 0.0));
@@ -157,10 +153,9 @@ pub fn run_nurbssurface_accessors() -> TestResult {
     MINI_TEST!("accessors", {
         use crate::nurbssurface::NurbsSurface;
 
-        let mut surf = NurbsSurface::create_simple(3, false, 4, 3, 5, 4).unwrap();
+        let mut surf = NurbsSurface::create_raw(3, false, 4, 3, 5, 4, false, false, 1.0, 1.0).unwrap();
 
         // Test knot access
-        surf.make_clamped_uniform_knot_vector(0, 1.0);
         let _knot_val = surf.knot(0, 2);
 
         // Test set knot
@@ -189,11 +184,7 @@ pub fn run_nurbssurface_knot_operations() -> TestResult {
     MINI_TEST!("knot_operations", {
         use crate::nurbssurface::NurbsSurface;
 
-        let mut surf = NurbsSurface::create_simple(3, false, 4, 4, 4, 4).unwrap();
-
-        // Make clamped uniform knot vector
-        surf.make_clamped_uniform_knot_vector(0, 1.0);
-        surf.make_clamped_uniform_knot_vector(1, 1.0);
+        let surf = NurbsSurface::create_raw(3, false, 4, 4, 4, 4, false, false, 1.0, 1.0).unwrap();
 
         // Verify domain
         let (u0, u1) = surf.domain(0).unwrap();
@@ -214,7 +205,7 @@ pub fn run_nurbssurface_rational_operations() -> TestResult {
         use crate::point::Point;
 
         // Create non-rational surface
-        let mut surf = NurbsSurface::create_simple(3, false, 3, 3, 3, 3).unwrap();
+        let mut surf = NurbsSurface::create_raw(3, false, 3, 3, 3, 3, false, false, 1.0, 1.0).unwrap();
 
         // Make it rational
         surf.make_rational();
@@ -239,9 +230,7 @@ pub fn run_nurbssurface_evaluation() -> TestResult {
         use crate::tolerance::TOLERANCE;
 
         // Create simple bilinear surface (2x2 control points, order 2x2)
-        let mut surf = NurbsSurface::create_simple(3, false, 2, 2, 2, 2).unwrap();
-        surf.make_clamped_uniform_knot_vector(0, 1.0);
-        surf.make_clamped_uniform_knot_vector(1, 1.0);
+        let mut surf = NurbsSurface::create_raw(3, false, 2, 2, 2, 2, false, false, 1.0, 1.0).unwrap();
 
         // Set corner control points to unit square in XY plane
         surf.set_cv(0, 0, &Point::new(0.0, 0.0, 0.0));
@@ -275,9 +264,7 @@ pub fn run_nurbssurface_geometric_queries() -> TestResult {
         use crate::point::Point;
 
         // Create and setup surface
-        let mut surf = NurbsSurface::create_simple(3, false, 2, 2, 2, 2).unwrap();
-        surf.make_clamped_uniform_knot_vector(0, 1.0);
-        surf.make_clamped_uniform_knot_vector(1, 1.0);
+        let mut surf = NurbsSurface::create_raw(3, false, 2, 2, 2, 2, false, false, 1.0, 1.0).unwrap();
 
         surf.set_cv(0, 0, &Point::new(0.0, 0.0, 0.0));
         surf.set_cv(1, 0, &Point::new(1.0, 0.0, 0.0));
@@ -300,9 +287,7 @@ pub fn run_nurbssurface_modification() -> TestResult {
         use crate::nurbssurface::NurbsSurface;
         use crate::point::Point;
 
-        let mut surf = NurbsSurface::create_simple(3, false, 2, 2, 3, 2).unwrap();
-        surf.make_clamped_uniform_knot_vector(0, 1.0);
-        surf.make_clamped_uniform_knot_vector(1, 1.0);
+        let mut surf = NurbsSurface::create_raw(3, false, 2, 2, 3, 2, false, false, 1.0, 1.0).unwrap();
 
         // Set some CVs
         surf.set_cv(0, 0, &Point::new(0.0, 0.0, 0.0));
@@ -336,9 +321,7 @@ pub fn run_nurbssurface_isocurve() -> TestResult {
         use crate::point::Point;
 
         // Create surface
-        let mut surf = NurbsSurface::create_simple(3, false, 3, 3, 3, 3).unwrap();
-        surf.make_clamped_uniform_knot_vector(0, 1.0);
-        surf.make_clamped_uniform_knot_vector(1, 1.0);
+        let mut surf = NurbsSurface::create_raw(3, false, 3, 3, 3, 3, false, false, 1.0, 1.0).unwrap();
 
         // Set up a grid of control points
         for i in 0..3 {
@@ -371,9 +354,7 @@ pub fn run_nurbssurface_transformation() -> TestResult {
         use crate::tolerance::TOLERANCE;
 
         // Create simple surface
-        let mut surf = NurbsSurface::create_simple(3, false, 2, 2, 2, 2).unwrap();
-        surf.make_clamped_uniform_knot_vector(0, 1.0);
-        surf.make_clamped_uniform_knot_vector(1, 1.0);
+        let mut surf = NurbsSurface::create_raw(3, false, 2, 2, 2, 2, false, false, 1.0, 1.0).unwrap();
 
         surf.set_cv(0, 0, &Point::new(0.0, 0.0, 0.0));
         surf.set_cv(1, 0, &Point::new(1.0, 0.0, 0.0));
@@ -400,13 +381,10 @@ pub fn run_nurbssurface_json_roundtrip() -> TestResult {
         use crate::color::Color;
 
         // Create and setup surface
-        let mut surf = NurbsSurface::create_simple(3, false, 3, 3, 3, 3).unwrap();
+        let mut surf = NurbsSurface::create_raw(3, false, 3, 3, 3, 3, false, false, 1.0, 1.0).unwrap();
         surf.name = "test_nurbssurface".to_string();
         surf.width = 2.0;
         surf.surfacecolor = Color::new(255, 128, 64, 255);
-
-        surf.make_clamped_uniform_knot_vector(0, 1.0);
-        surf.make_clamped_uniform_knot_vector(1, 1.0);
 
         // Set some CVs
         for i in 0..3 {
@@ -415,10 +393,10 @@ pub fn run_nurbssurface_json_roundtrip() -> TestResult {
             }
         }
 
-        //   json_dumps()    │ String       │ to JSON string
-        //   json_loads(s)   │ String       │ from JSON string
-        //   json_dump(path) │ file         │ write to file
-        //   json_load(path) │ file         │ read from file
+        //   json_dumps()    | String       | to JSON string
+        //   json_loads(s)   | String       | from JSON string
+        //   json_dump(path) | file         | write to file
+        //   json_load(path) | file         | read from file
 
         // Serialize to JSON
         let json_str = serde_json::to_string_pretty(&surf).expect("Failed to serialize");
@@ -448,13 +426,10 @@ pub fn run_nurbssurface_protobuf_roundtrip() -> TestResult {
         use crate::color::Color;
 
         // Create and setup surface
-        let mut surf = NurbsSurface::create_simple(3, false, 3, 3, 3, 3).unwrap();
+        let mut surf = NurbsSurface::create_raw(3, false, 3, 3, 3, 3, false, false, 1.0, 1.0).unwrap();
         surf.name = "test_nurbssurface".to_string();
         surf.width = 2.0;
         surf.surfacecolor = Color::new(255, 128, 64, 255);
-
-        surf.make_clamped_uniform_knot_vector(0, 1.0);
-        surf.make_clamped_uniform_knot_vector(1, 1.0);
 
         // Set some CVs
         for i in 0..3 {
@@ -463,7 +438,7 @@ pub fn run_nurbssurface_protobuf_roundtrip() -> TestResult {
             }
         }
 
-        // Serialize to protobuf (stub - uses JSON fallback)
+        // Serialize to protobuf
         let filename = "serialization/test_nurbssurface.bin";
         surf.pb_dump(filename);
         let loaded = NurbsSurface::pb_load(filename);
@@ -488,9 +463,7 @@ pub fn run_nurbssurface_advanced_accessors() -> TestResult {
         use crate::point::Point;
 
         // Create rational surface for testing get_cv_4d/set_cv_4d
-        let mut surf = NurbsSurface::create_simple(3, true, 3, 3, 3, 3).unwrap();
-        surf.make_clamped_uniform_knot_vector(0, 1.0);
-        surf.make_clamped_uniform_knot_vector(1, 1.0);
+        let mut surf = NurbsSurface::create_raw(3, true, 3, 3, 3, 3, false, false, 1.0, 1.0).unwrap();
 
         // Test set_cv_4d with homogeneous coordinates
         let x = 2.0;
@@ -499,19 +472,16 @@ pub fn run_nurbssurface_advanced_accessors() -> TestResult {
         let w = 2.0;
 
         // Set CV using set_cv first, then change weight
-        // For rational surfaces, set_cv stores homogeneous coords preserving Euclidean position
         surf.set_cv(1, 1, &Point::new(x, y, z));
         surf.set_weight(1, 1, w);
 
-        // get_cv returns Euclidean point (homogeneous coords divided by weight)
-        // After set_cv(Point(x,y,z)) and set_weight(w), the Euclidean point is preserved
+        // get_cv returns Euclidean point
         let pt = surf.get_cv(1, 1).unwrap();
         let retrieved_w = surf.weight(1, 1);
 
         // Test knot_multiplicity
         let mult = surf.knot_count(0);
         let first_knot_mult = if mult > 0 {
-            // Count how many times first knot appears
             let first_val = surf.knot(0, 0).unwrap();
             let mut count = 1;
             for i in 1..mult {
@@ -529,7 +499,6 @@ pub fn run_nurbssurface_advanced_accessors() -> TestResult {
         };
 
         MINI_CHECK!(surf.is_rational());
-        // Euclidean point is preserved: get_cv returns the point that was set
         MINI_CHECK!(pt[0] == x && pt[1] == y && pt[2] == z);
         MINI_CHECK!(retrieved_w == w);
         MINI_CHECK!(first_knot_mult > 0);
@@ -541,9 +510,7 @@ pub fn run_nurbssurface_clamp_operations() -> TestResult {
         use crate::nurbssurface::NurbsSurface;
         use crate::point::Point;
 
-        let mut surf = NurbsSurface::create_simple(3, false, 4, 4, 4, 4).unwrap();
-        surf.make_clamped_uniform_knot_vector(0, 1.0);
-        surf.make_clamped_uniform_knot_vector(1, 1.0);
+        let mut surf = NurbsSurface::create_raw(3, false, 4, 4, 4, 4, false, false, 1.0, 1.0).unwrap();
 
         // Set up control points
         for i in 0..4 {
@@ -552,9 +519,9 @@ pub fn run_nurbssurface_clamp_operations() -> TestResult {
             }
         }
 
-        // Test clamp_end (modifies knot vector to clamp ends)
+        // Test clamp_end
         let _was_clamped_before = surf.is_clamped(0, 2);
-        surf.clamp_end(0, 2); // Clamp both ends
+        surf.clamp_end(0, 2);
         let is_clamped_after = surf.is_clamped(0, 2);
 
         MINI_CHECK!(surf.is_valid());
@@ -568,9 +535,7 @@ pub fn run_nurbssurface_singularity() -> TestResult {
         use crate::point::Point;
 
         // Create a simple surface
-        let mut surf = NurbsSurface::create_simple(3, false, 2, 2, 2, 2).unwrap();
-        surf.make_clamped_uniform_knot_vector(0, 1.0);
-        surf.make_clamped_uniform_knot_vector(1, 1.0);
+        let mut surf = NurbsSurface::create_raw(3, false, 2, 2, 2, 2, false, false, 1.0, 1.0).unwrap();
 
         // Set all CVs to different points (non-singular)
         surf.set_cv(0, 0, &Point::new(0.0, 0.0, 0.0));
@@ -578,8 +543,6 @@ pub fn run_nurbssurface_singularity() -> TestResult {
         surf.set_cv(0, 1, &Point::new(0.0, 1.0, 0.0));
         surf.set_cv(1, 1, &Point::new(1.0, 1.0, 0.0));
 
-        // NOTE: is_singular not yet implemented in Rust
-        // For now, just verify the surface is valid
         MINI_CHECK!(surf.is_valid());
         MINI_CHECK!(surf.is_clamped(0, 0));
     })
@@ -590,9 +553,7 @@ pub fn run_nurbssurface_bounding_box() -> TestResult {
         use crate::nurbssurface::NurbsSurface;
         use crate::point::Point;
 
-        let mut surf = NurbsSurface::create_simple(3, false, 2, 2, 3, 3).unwrap();
-        surf.make_clamped_uniform_knot_vector(0, 1.0);
-        surf.make_clamped_uniform_knot_vector(1, 1.0);
+        let mut surf = NurbsSurface::create_raw(3, false, 2, 2, 3, 3, false, false, 1.0, 1.0).unwrap();
 
         // Set CVs in a known range
         for i in 0..3 {
@@ -601,8 +562,7 @@ pub fn run_nurbssurface_bounding_box() -> TestResult {
             }
         }
 
-        // Get bounding box (implementation note: Rust doesn't have get_bounding_box,
-        // but we can verify the CVs are in expected range)
+        // Get bounding box
         let mut min_x = f64::MAX;
         let mut max_x = f64::MIN;
         let mut min_y = f64::MAX;
@@ -632,9 +592,7 @@ pub fn run_nurbssurface_domain_operations() -> TestResult {
         use crate::nurbssurface::NurbsSurface;
         use crate::tolerance::TOLERANCE;
 
-        let mut surf = NurbsSurface::create_simple(3, false, 3, 3, 3, 3).unwrap();
-        surf.make_clamped_uniform_knot_vector(0, 1.0);
-        surf.make_clamped_uniform_knot_vector(1, 1.0);
+        let mut surf = NurbsSurface::create_raw(3, false, 3, 3, 3, 3, false, false, 1.0, 1.0).unwrap();
 
         // Get initial domain
         let dom_u = surf.domain(0).unwrap();
@@ -668,9 +626,7 @@ pub fn run_nurbssurface_corner_points() -> TestResult {
         use crate::point::Point;
         use crate::tolerance::TOLERANCE;
 
-        let mut surf = NurbsSurface::create_simple(3, false, 2, 2, 2, 2).unwrap();
-        surf.make_clamped_uniform_knot_vector(0, 1.0);
-        surf.make_clamped_uniform_knot_vector(1, 1.0);
+        let mut surf = NurbsSurface::create_raw(3, false, 2, 2, 2, 2, false, false, 1.0, 1.0).unwrap();
 
         // Set corner control points
         surf.set_cv(0, 0, &Point::new(0.0, 0.0, 0.0));
@@ -697,9 +653,7 @@ pub fn run_nurbssurface_swap_coordinates() -> TestResult {
         use crate::point::Point;
         use crate::tolerance::TOLERANCE;
 
-        let mut surf = NurbsSurface::create_simple(3, false, 2, 2, 2, 2).unwrap();
-        surf.make_clamped_uniform_knot_vector(0, 1.0);
-        surf.make_clamped_uniform_knot_vector(1, 1.0);
+        let mut surf = NurbsSurface::create_raw(3, false, 2, 2, 2, 2, false, false, 1.0, 1.0).unwrap();
 
         // Set a control point with distinct coordinates
         surf.set_cv(0, 0, &Point::new(1.0, 2.0, 3.0));
@@ -721,9 +675,7 @@ pub fn run_nurbssurface_zero_cvs() -> TestResult {
         use crate::point::Point;
         use crate::tolerance::TOLERANCE;
 
-        let mut surf = NurbsSurface::create_simple(3, false, 2, 2, 2, 2).unwrap();
-        surf.make_clamped_uniform_knot_vector(0, 1.0);
-        surf.make_clamped_uniform_knot_vector(1, 1.0);
+        let mut surf = NurbsSurface::create_raw(3, false, 2, 2, 2, 2, false, false, 1.0, 1.0).unwrap();
 
         // Set non-zero control points
         surf.set_cv(0, 0, &Point::new(1.0, 2.0, 3.0));
@@ -748,9 +700,7 @@ pub fn run_nurbssurface_get_knots() -> TestResult {
     MINI_TEST!("get_knots", {
         use crate::nurbssurface::NurbsSurface;
 
-        let mut surf = NurbsSurface::create_simple(3, false, 4, 3, 4, 3).unwrap();
-        surf.make_clamped_uniform_knot_vector(0, 1.0);
-        surf.make_clamped_uniform_knot_vector(1, 2.0);
+        let surf = NurbsSurface::create_raw(3, false, 4, 3, 4, 3, false, false, 1.0, 2.0).unwrap();
 
         let knots_u = surf.get_knots(0);
         let knots_v = surf.get_knots(1);
@@ -768,9 +718,7 @@ pub fn run_nurbssurface_make_non_rational() -> TestResult {
         use crate::point::Point;
 
         // Create rational surface with all weights = 1
-        let mut surf = NurbsSurface::create_simple(3, true, 3, 3, 3, 3).unwrap();
-        surf.make_clamped_uniform_knot_vector(0, 1.0);
-        surf.make_clamped_uniform_knot_vector(1, 1.0);
+        let mut surf = NurbsSurface::create_raw(3, true, 3, 3, 3, 3, false, false, 1.0, 1.0).unwrap();
 
         // Set all weights to 1.0
         for i in 0..3 {
@@ -814,9 +762,7 @@ pub fn run_nurbssurface_knot_multiplicity() -> TestResult {
     MINI_TEST!("knot_multiplicity", {
         use crate::nurbssurface::NurbsSurface;
 
-        let mut surf = NurbsSurface::create_simple(3, false, 4, 4, 4, 4).unwrap();
-        surf.make_clamped_uniform_knot_vector(0, 1.0);
-        surf.make_clamped_uniform_knot_vector(1, 1.0);
+        let surf = NurbsSurface::create_raw(3, false, 4, 4, 4, 4, false, false, 1.0, 1.0).unwrap();
 
         // Check first knot multiplicity (should be equal to degree for clamped)
         let mult_u_start = surf.knot_multiplicity(0, 0);
@@ -845,7 +791,7 @@ pub fn run_nurbssurface_sphere() -> TestResult {
         let w = (2.0_f64).sqrt() / 2.0;
         let pi = PI;
 
-        let mut surf = NurbsSurface::create_simple(3, true, 3, 3, 9, 5).unwrap();
+        let mut surf = NurbsSurface::create_raw(3, true, 3, 3, 9, 5, false, false, 1.0, 1.0).unwrap();
         surf.name = "unit_sphere".to_string();
 
         let u_knots = [0.0, 0.0, pi * 0.5, pi * 0.5, pi, pi, pi * 1.5, pi * 1.5, pi * 2.0, pi * 2.0];
@@ -900,7 +846,7 @@ pub fn run_nurbssurface_cylinder() -> TestResult {
         let w = (2.0_f64).sqrt() / 2.0;
         let pi = PI;
 
-        let mut surf = NurbsSurface::create_simple(3, true, 3, 2, 9, 2).unwrap();
+        let mut surf = NurbsSurface::create_raw(3, true, 3, 2, 9, 2, false, false, 1.0, 1.0).unwrap();
         surf.name = "unit_cylinder".to_string();
 
         let u_knots = [0.0, 0.0, pi * 0.5, pi * 0.5, pi, pi, pi * 1.5, pi * 1.5, pi * 2.0, pi * 2.0];
@@ -960,7 +906,7 @@ pub fn run_nurbssurface_torus() -> TestResult {
         let w = (2.0_f64).sqrt() / 2.0;
         let pi = PI;
 
-        let mut surf = NurbsSurface::create_simple(3, true, 3, 3, 9, 9).unwrap();
+        let mut surf = NurbsSurface::create_raw(3, true, 3, 3, 9, 9, false, false, 1.0, 1.0).unwrap();
         surf.name = "unit_torus".to_string();
 
         let knots = [0.0, 0.0, pi * 0.5, pi * 0.5, pi, pi, pi * 1.5, pi * 1.5, pi * 2.0, pi * 2.0];
@@ -1025,7 +971,7 @@ pub fn run_nurbssurface_cone() -> TestResult {
         let w = (2.0_f64).sqrt() / 2.0;
         let pi = PI;
 
-        let mut surf = NurbsSurface::create_simple(3, true, 3, 2, 9, 2).unwrap();
+        let mut surf = NurbsSurface::create_raw(3, true, 3, 2, 9, 2, false, false, 1.0, 1.0).unwrap();
         surf.name = "unit_cone".to_string();
 
         let u_knots = [0.0, 0.0, pi * 0.5, pi * 0.5, pi, pi, pi * 1.5, pi * 1.5, pi * 2.0, pi * 2.0];
