@@ -3,6 +3,7 @@ use crate::nurbscurve::NurbsCurve;
 use crate::xform::Xform;
 use crate::color::Color;
 use crate::vector::Vector;
+use crate::boundingbox::BoundingBox;
 use crate::knot;
 use serde::{Serialize, Deserialize};
 
@@ -27,6 +28,9 @@ pub struct NurbsSurface {
     pub m_cv_stride: [usize; 2],     // Stride between control vertices in m_cv array
     pub m_knot: [Vec<f64>; 2],       // Knot vectors for u and v directions
     pub m_cv: Vec<f64>,              // Control vertex data (homogeneous if rational)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(default)]
+    pub m_outer_loop: Option<NurbsCurve>,
 }
 
 impl NurbsSurface {
@@ -45,6 +49,7 @@ impl NurbsSurface {
             m_cv_stride: [0, 0],
             m_knot: [Vec::new(), Vec::new()],
             m_cv: Vec::new(),
+            m_outer_loop: None,
         }
     }
 
@@ -181,6 +186,188 @@ impl NurbsSurface {
         true
     }
 
+    pub fn create_ruled(curve_a: &NurbsCurve, curve_b: &NurbsCurve) -> Option<Self> {
+        if !curve_a.is_valid() || !curve_b.is_valid() {
+            return None;
+        }
+
+        let mut ca = curve_a.duplicate();
+        let mut cb = curve_b.duplicate();
+
+        ca.set_domain(0.0, 1.0);
+        cb.set_domain(0.0, 1.0);
+
+        if ca.degree() < cb.degree() {
+            ca.increase_degree(cb.degree());
+        } else if cb.degree() < ca.degree() {
+            cb.increase_degree(ca.degree());
+        }
+
+        if ca.is_rational() || cb.is_rational() {
+            ca.make_rational();
+            cb.make_rational();
+        }
+
+        let knots_b = cb.get_knots();
+        let tol = 1e-10;
+
+        for &k in &knots_b {
+            let found = ca.get_knots().iter().any(|&ka| (ka - k).abs() < tol);
+            if !found {
+                ca.insert_knot(k, 1);
+            }
+        }
+
+        let knots_a = ca.get_knots();
+        for &k in &knots_a {
+            let found = cb.get_knots().iter().any(|&kb| (kb - k).abs() < tol);
+            if !found {
+                cb.insert_knot(k, 1);
+            }
+        }
+
+        let order_u = ca.order();
+        let cv_count_u = ca.cv_count();
+        let is_rat = ca.is_rational();
+
+        let mut surface = Self::create_raw(3, is_rat, order_u, 2, cv_count_u, 2, false, false, 1.0, 1.0)?;
+
+        for i in 0..ca.knot_count() {
+            if let Some(kv) = ca.knot(i) {
+                surface.set_knot(0, i, kv);
+            }
+        }
+
+        surface.set_knot(1, 0, 0.0);
+        surface.set_knot(1, 1, 1.0);
+
+        if is_rat {
+            for i in 0..cv_count_u {
+                if let Some((ax, ay, az, aw)) = ca.get_cv_4d(i) {
+                    surface.set_cv_4d(i, 0, ax, ay, az, aw);
+                }
+                if let Some((bx, by, bz, bw)) = cb.get_cv_4d(i) {
+                    surface.set_cv_4d(i, 1, bx, by, bz, bw);
+                }
+            }
+        } else {
+            for i in 0..cv_count_u {
+                if let Some(pt_a) = ca.get_cv(i) {
+                    surface.set_cv(i, 0, &pt_a);
+                }
+                if let Some(pt_b) = cb.get_cv(i) {
+                    surface.set_cv(i, 1, &pt_b);
+                }
+            }
+        }
+
+        Some(surface)
+    }
+
+    pub fn create_planar(curves: &[NurbsCurve]) -> Option<Self> {
+        if curves.is_empty() { return None; }
+
+        let mut all_pts = Vec::new();
+        for crv in curves {
+            for i in 0..crv.cv_count() {
+                if let Some(pt) = crv.get_cv(i) {
+                    all_pts.push(pt);
+                }
+            }
+        }
+        if all_pts.len() < 3 { return None; }
+
+        use crate::plane::Plane;
+        let plane = Plane::from_points_pca(all_pts.clone());
+        if plane.z_axis().magnitude() < 1e-10 { return None; }
+
+        let xax = plane.x_axis();
+        let yax = plane.y_axis();
+        let orig = plane.origin();
+
+        let mut min_u = f64::MAX;
+        let mut max_u = f64::MIN;
+        let mut min_v = f64::MAX;
+        let mut max_v = f64::MIN;
+
+        for pt in &all_pts {
+            let dx = pt[0] - orig[0];
+            let dy = pt[1] - orig[1];
+            let dz = pt[2] - orig[2];
+            let u = dx * xax[0] + dy * xax[1] + dz * xax[2];
+            let v = dx * yax[0] + dy * yax[1] + dz * yax[2];
+            if u < min_u { min_u = u; }
+            if u > max_u { max_u = u; }
+            if v < min_v { min_v = v; }
+            if v > max_v { max_v = v; }
+        }
+
+        let mut pad = (max_u - min_u).max(max_v - min_v) * 0.05;
+        if pad < 1e-6 { pad = 1.0; }
+        min_u -= pad; max_u += pad;
+        min_v -= pad; max_v += pad;
+
+        let range_u = max_u - min_u;
+        let range_v = max_v - min_v;
+
+        let mut surface = Self::create_raw(3, false, 2, 2, 2, 2, false, false, 1.0, 1.0)?;
+        surface.set_knot(0, 0, 0.0);
+        surface.set_knot(0, 1, 1.0);
+        surface.set_knot(1, 0, 0.0);
+        surface.set_knot(1, 1, 1.0);
+
+        let plane_pt = |u: f64, v: f64| -> Point {
+            Point::new(
+                orig[0] + u * xax[0] + v * yax[0],
+                orig[1] + u * xax[1] + v * yax[1],
+                orig[2] + u * xax[2] + v * yax[2],
+            )
+        };
+
+        surface.set_cv(0, 0, &plane_pt(min_u, min_v));
+        surface.set_cv(0, 1, &plane_pt(min_u, max_v));
+        surface.set_cv(1, 0, &plane_pt(max_u, min_v));
+        surface.set_cv(1, 1, &plane_pt(max_u, max_v));
+
+        let mut uv_pts = Vec::new();
+        for crv in curves {
+            let (pts3d, _params) = crv.divide_by_count(50, true);
+            for pt in &pts3d {
+                let dx = pt[0] - orig[0];
+                let dy = pt[1] - orig[1];
+                let dz = pt[2] - orig[2];
+                let pu = dx * xax[0] + dy * xax[1] + dz * xax[2];
+                let pv = dx * yax[0] + dy * yax[1] + dz * yax[2];
+                let nu = (pu - min_u) / range_u;
+                let nv = (pv - min_v) / range_v;
+                uv_pts.push(Point::new(nu, nv, 0.0));
+            }
+        }
+
+        if uv_pts.len() >= 3 {
+            let loop_crv = NurbsCurve::create(false, 3, &uv_pts);
+            surface.m_outer_loop = Some(loop_crv);
+        }
+
+        Some(surface)
+    }
+
+    pub fn set_outer_loop(&mut self, loop_crv: NurbsCurve) {
+        self.m_outer_loop = Some(loop_crv);
+    }
+
+    pub fn get_outer_loop(&self) -> Option<&NurbsCurve> {
+        self.m_outer_loop.as_ref()
+    }
+
+    pub fn is_trimmed(&self) -> bool {
+        self.m_outer_loop.as_ref().map_or(false, |c| c.is_valid())
+    }
+
+    pub fn clear_outer_loop(&mut self) {
+        self.m_outer_loop = None;
+    }
+
     ///////////////////////////////////////////////////////////////////////////////////////////
     // ACCESSORS
     ///////////////////////////////////////////////////////////////////////////////////////////
@@ -293,6 +480,31 @@ impl NurbsSurface {
                 if cv.len() > 1 { cv[1] } else { 0.0 },
                 if cv.len() > 2 { cv[2] } else { 0.0 },
             ))
+        }
+    }
+
+    /// Get control vertex as homogeneous coordinates (x, y, z, w)
+    pub fn get_cv_4d(&self, i: usize, j: usize) -> Option<(f64, f64, f64, f64)> {
+        let cv = self.cv(i, j)?;
+        let x = if cv.len() > 0 { cv[0] } else { 0.0 };
+        let y = if cv.len() > 1 { cv[1] } else { 0.0 };
+        let z = if cv.len() > 2 { cv[2] } else { 0.0 };
+        let w = if self.m_is_rat && cv.len() > self.m_dim { cv[self.m_dim] } else { 1.0 };
+        Some((x, y, z, w))
+    }
+
+    /// Set control vertex from homogeneous coordinates (x, y, z, w)
+    pub fn set_cv_4d(&mut self, i: usize, j: usize, x: f64, y: f64, z: f64, w: f64) -> bool {
+        let is_rat = self.m_is_rat;
+        let dim = self.m_dim;
+        if let Some(cv) = self.cv_mut(i, j) {
+            cv[0] = x;
+            if cv.len() > 1 { cv[1] = y; }
+            if cv.len() > 2 { cv[2] = z; }
+            if is_rat && cv.len() > dim { cv[dim] = w; }
+            true
+        } else {
+            false
         }
     }
 
@@ -609,7 +821,7 @@ impl NurbsSurface {
         }
         let du = &derivs[1];
         let dv = &derivs[2];
-        let n = du.cross(dv);
+        let n = dv.cross(du);
         if n.magnitude() < 1e-14 {
             Vector::new(0.0, 0.0, 1.0)
         } else {
@@ -1194,6 +1406,66 @@ impl NurbsSurface {
         true
     }
     
+    /// Check if a surface side is singular (all CVs along edge coincide)
+    /// side: 0=south (v=0), 1=east (u=max), 2=north (v=max), 3=west (u=0)
+    pub fn is_singular(&self, side: usize) -> bool {
+        if !self.is_valid() { return false; }
+        let tol = 1e-10;
+        let (count, get_pt): (usize, Box<dyn Fn(usize) -> Option<Point>>) = match side {
+            0 => (self.m_cv_count[0], Box::new(|i| self.get_cv(i, 0))),
+            1 => (self.m_cv_count[1], Box::new(|j| self.get_cv(self.m_cv_count[0] - 1, j))),
+            2 => (self.m_cv_count[0], Box::new(|i| self.get_cv(i, self.m_cv_count[1] - 1))),
+            3 => (self.m_cv_count[1], Box::new(|j| self.get_cv(0, j))),
+            _ => return false,
+        };
+        if count < 2 { return true; }
+        let first = match get_pt(0) { Some(p) => p, None => return false };
+        for k in 1..count {
+            if let Some(p) = get_pt(k) {
+                let dx = (p[0] - first[0]).abs();
+                let dy = (p[1] - first[1]).abs();
+                let dz = (p[2] - first[2]).abs();
+                if dx > tol || dy > tol || dz > tol { return false; }
+            }
+        }
+        true
+    }
+
+    /// Get axis-aligned bounding box from control vertices
+    pub fn get_bounding_box(&self) -> BoundingBox {
+        let mut min_pt = Point::new(f64::MAX, f64::MAX, f64::MAX);
+        let mut max_pt = Point::new(f64::MIN, f64::MIN, f64::MIN);
+        for i in 0..self.m_cv_count[0] {
+            for j in 0..self.m_cv_count[1] {
+                if let Some(pt) = self.get_cv(i, j) {
+                    if pt[0] < min_pt[0] { min_pt[0] = pt[0]; }
+                    if pt[1] < min_pt[1] { min_pt[1] = pt[1]; }
+                    if pt[2] < min_pt[2] { min_pt[2] = pt[2]; }
+                    if pt[0] > max_pt[0] { max_pt[0] = pt[0]; }
+                    if pt[1] > max_pt[1] { max_pt[1] = pt[1]; }
+                    if pt[2] > max_pt[2] { max_pt[2] = pt[2]; }
+                }
+            }
+        }
+        let center = Point::new(
+            (min_pt[0] + max_pt[0]) * 0.5,
+            (min_pt[1] + max_pt[1]) * 0.5,
+            (min_pt[2] + max_pt[2]) * 0.5,
+        );
+        let half_size = Vector::new(
+            (max_pt[0] - min_pt[0]) * 0.5,
+            (max_pt[1] - min_pt[1]) * 0.5,
+            (max_pt[2] - min_pt[2]) * 0.5,
+        );
+        BoundingBox::new(
+            center,
+            Vector::new(1.0, 0.0, 0.0),
+            Vector::new(0.0, 1.0, 0.0),
+            Vector::new(0.0, 0.0, 1.0),
+            half_size,
+        )
+    }
+
     ///////////////////////////////////////////////////////////////////////////////////////////
     // TRANSFORMATION
     ///////////////////////////////////////////////////////////////////////////////////////////
@@ -1233,13 +1505,27 @@ impl NurbsSurface {
     /// Get string representation (matches Python to_string format)
     pub fn to_string(&self) -> String {
         format!(
-            "NurbsSurface(dim={}, order=({},{}), cv_count=({},{}))",
-            self.m_dim,
-            self.m_order[0],
-            self.m_order[1],
+            "NurbsSurface(name={}, degree=({},{}), cvs=({},{}))",
+            self.name,
+            self.degree(0),
+            self.degree(1),
             self.m_cv_count[0],
             self.m_cv_count[1]
         )
+    }
+
+    pub fn repr(&self) -> String {
+        let mut result = format!("NurbsSurface(\n  name={},\n  degree=({},{}),\n  cvs=({},{}),\n  rational={},\n  control_points=[\n",
+            self.name, self.degree(0), self.degree(1), self.m_cv_count[0], self.m_cv_count[1], self.m_is_rat);
+        for i in 0..self.m_cv_count[0] {
+            for j in 0..self.m_cv_count[1] {
+                if let Some(p) = self.get_cv(i, j) {
+                    result += &format!("    {}, {}, {}\n", p[0], p[1], p[2]);
+                }
+            }
+        }
+        result += "  ]\n)";
+        result
     }
 
     /// Create a duplicate with a new GUID (copies all data except generates new GUID)
@@ -1469,6 +1755,7 @@ impl Clone for NurbsSurface {
             m_cv_stride: self.m_cv_stride,
             m_knot: self.m_knot.clone(),
             m_cv: self.m_cv.clone(),
+            m_outer_loop: self.m_outer_loop.clone(),
         }
     }
 }

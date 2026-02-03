@@ -246,6 +246,85 @@ impl Plane {
         }
     }
 
+    pub fn from_points_pca(points: Vec<Point>) -> Self {
+        if points.len() < 3 {
+            return Self::default();
+        }
+
+        let n = points.len() as f64;
+        let mut cx = 0.0_f64;
+        let mut cy = 0.0_f64;
+        let mut cz = 0.0_f64;
+        for p in &points {
+            cx += p[0]; cy += p[1]; cz += p[2];
+        }
+        cx /= n; cy /= n; cz /= n;
+
+        let (mut cxx, mut cyy, mut czz) = (0.0, 0.0, 0.0);
+        let (mut cxy, mut cxz, mut cyz) = (0.0, 0.0, 0.0);
+        for p in &points {
+            let (dx, dy, dz) = (p[0] - cx, p[1] - cy, p[2] - cz);
+            cxx += dx * dx; cyy += dy * dy; czz += dz * dz;
+            cxy += dx * dy; cxz += dx * dz; cyz += dy * dz;
+        }
+
+        let mut eigvec = [[0.0_f64; 3]; 3];
+        let mut eigval = [0.0_f64; 3];
+        let mut cov = [[cxx, cxy, cxz], [cxy, cyy, cyz], [cxz, cyz, czz]];
+
+        for e in 0..3 {
+            let (mut vx, mut vy, mut vz) = match e {
+                0 => (1.0, 0.0, 0.0),
+                1 => (0.0, 1.0, 0.0),
+                _ => (0.0, 0.0, 1.0),
+            };
+            for _ in 0..100 {
+                let nx = cov[0][0] * vx + cov[0][1] * vy + cov[0][2] * vz;
+                let ny = cov[1][0] * vx + cov[1][1] * vy + cov[1][2] * vz;
+                let nz = cov[2][0] * vx + cov[2][1] * vy + cov[2][2] * vz;
+                let mag = (nx * nx + ny * ny + nz * nz).sqrt();
+                if mag < 1e-15 { break; }
+                vx = nx / mag; vy = ny / mag; vz = nz / mag;
+            }
+            eigvec[e] = [vx, vy, vz];
+            eigval[e] = cov[0][0]*vx*vx + cov[1][1]*vy*vy + cov[2][2]*vz*vz
+                       + 2.0*cov[0][1]*vx*vy + 2.0*cov[0][2]*vx*vz + 2.0*cov[1][2]*vy*vz;
+            for i in 0..3 {
+                for j in 0..3 {
+                    cov[i][j] -= eigval[e] * eigvec[e][i] * eigvec[e][j];
+                }
+            }
+        }
+
+        let mut x_axis = Vector::new(eigvec[0][0], eigvec[0][1], eigvec[0][2]);
+        let y_tmp = Vector::new(eigvec[1][0], eigvec[1][1], eigvec[1][2]);
+        let mut z_axis = x_axis.cross(&y_tmp);
+        z_axis.normalize();
+        let mut y_axis = z_axis.cross(&x_axis);
+        y_axis.normalize();
+        x_axis.normalize();
+
+        let a = z_axis[0];
+        let b = z_axis[1];
+        let c = z_axis[2];
+        let d = -(a * cx + b * cy + c * cz);
+
+        Self {
+            guid: Uuid::new_v4().to_string(),
+            name: "my_plane".to_string(),
+            width: 1.0,
+            _origin: Point::new(cx, cy, cz),
+            _x_axis: x_axis,
+            _y_axis: y_axis,
+            _z_axis: z_axis,
+            _a: a,
+            _b: b,
+            _c: c,
+            _d: d,
+            xform: Xform::identity(),
+        }
+    }
+
     pub fn from_two_points(point1: Point, point2: Point) -> Self {
         let origin = point1.clone();
 
