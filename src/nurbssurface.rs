@@ -269,6 +269,272 @@ impl NurbsSurface {
         Some(surface)
     }
 
+    pub fn create_loft(input_curves: &[NurbsCurve], degree_v: usize) -> NurbsSurface {
+        if input_curves.len() < 2 { return NurbsSurface::new(); }
+        for c in input_curves {
+            if !c.is_valid() { return NurbsSurface::new(); }
+        }
+
+        let mut curves: Vec<NurbsCurve> = input_curves.iter().map(|c| c.duplicate()).collect();
+        Self::make_curves_compatible(&mut curves);
+        Self::make_curves_compatible(&mut curves);
+
+        let n_sections = curves.len();
+        let cv_count_u = curves[0].cv_count();
+        let order_u = curves[0].order();
+        let is_rat = curves[0].is_rational();
+
+        let mut degree_v = degree_v;
+        if degree_v >= n_sections { degree_v = n_sections - 1; }
+        if degree_v < 1 { degree_v = 1; }
+        let order_v = degree_v + 1;
+
+        let mut v_params = vec![0.0; n_sections];
+        for k in 1..n_sections {
+            let pk_prev = curves[k - 1].point_at_middle();
+            let pk_curr = curves[k].point_at_middle();
+            let dx = pk_curr[0] - pk_prev[0];
+            let dy = pk_curr[1] - pk_prev[1];
+            let dz = pk_curr[2] - pk_prev[2];
+            v_params[k] = v_params[k - 1] + (dx * dx + dy * dy + dz * dz).sqrt();
+        }
+
+        let total_len = v_params[n_sections - 1];
+        if total_len > 1e-14 {
+            for k in 0..n_sections { v_params[k] /= total_len; }
+        } else {
+            for k in 0..n_sections { v_params[k] = k as f64 / (n_sections - 1) as f64; }
+        }
+
+        let cv_count_v = n_sections;
+        let knot_count_v = order_v + cv_count_v - 2;
+        let mut knots_v = vec![0.0; knot_count_v];
+
+        if degree_v >= n_sections - 1 {
+            let d = degree_v;
+            for i in 0..d { knots_v[i] = 0.0; }
+            for i in d..knot_count_v { knots_v[i] = 1.0; }
+        } else {
+            for i in 0..(order_v - 1) { knots_v[i] = v_params[0]; }
+            for j in 1..=(n_sections - order_v) {
+                let mut sum = 0.0;
+                for i in j..(j + degree_v) { sum += v_params[i]; }
+                knots_v[order_v - 2 + j] = sum / degree_v as f64;
+            }
+            for i in (knot_count_v - order_v + 1)..knot_count_v {
+                knots_v[i] = v_params[n_sections - 1];
+            }
+        }
+
+        let mut surface = match Self::create_raw(3, is_rat, order_u, order_v, cv_count_u, cv_count_v, false, false, 1.0, 1.0) {
+            Some(s) => s,
+            None => return NurbsSurface::new(),
+        };
+
+        for i in 0..surface.knot_count(0) as usize {
+            if let Some(k) = curves[0].knot(i) {
+                surface.set_knot(0, i, k);
+            }
+        }
+        for i in 0..knots_v.len() {
+            if i < surface.knot_count(1) {
+                surface.set_knot(1, i, knots_v[i]);
+            }
+        }
+
+        let n = n_sections;
+        let mut n_matrix = vec![vec![0.0; n]; n];
+
+        for k in 0..n {
+            let mut t = v_params[k];
+            let t0 = knots_v[order_v - 2];
+            let t1 = knots_v[knot_count_v - order_v + 1];
+            if t < t0 { t = t0; }
+            if t > t1 { t = t1; }
+
+            let span = knot::find_span(order_v, cv_count_v, &knots_v, t);
+            let d = order_v - 1;
+            let knot_base = span + d;
+
+            if knots_v[knot_base - 1] == knots_v[knot_base] {
+                if t <= knots_v[knot_base] {
+                    n_matrix[k][span] = 1.0;
+                } else {
+                    n_matrix[k][span + order_v - 1] = 1.0;
+                }
+                continue;
+            }
+
+            let mut nvals = vec![0.0; order_v * order_v];
+            nvals[order_v * order_v - 1] = 1.0;
+            let mut left = vec![0.0; d];
+            let mut right = vec![0.0; d];
+            let mut n_idx = (order_v * order_v - 1) as i64;
+            let mut k_right = knot_base;
+            let mut k_left = knot_base - 1;
+
+            for j in 0..d {
+                let n0_idx = n_idx;
+                n_idx -= (order_v + 1) as i64;
+                left[j] = t - knots_v[k_left];
+                right[j] = knots_v[k_right] - t;
+                if k_left > 0 { k_left -= 1; } else { k_left = 0; }
+                k_right += 1;
+
+                let mut x = 0.0;
+                for r in 0..=j {
+                    let a0 = left[j - r];
+                    let a1 = right[r];
+                    let denom = a0 + a1;
+                    let y = if denom != 0.0 { nvals[n0_idx as usize + r] / denom } else { 0.0 };
+                    nvals[n_idx as usize + r] = x + a1 * y;
+                    x = a0 * y;
+                }
+                nvals[n_idx as usize + j + 1] = x;
+            }
+
+            for j in 0..order_v {
+                let col = span + j;
+                if col < n {
+                    n_matrix[k][col] = nvals[j];
+                }
+            }
+        }
+
+        let dim = if is_rat { 4 } else { 3 };
+        for i in 0..cv_count_u {
+            let mut rhs = vec![vec![0.0; dim]; n];
+            for k in 0..n {
+                if is_rat {
+                    if let Some((cx, cy, cz, cw)) = curves[k].get_cv_4d(i) {
+                        rhs[k] = vec![cx, cy, cz, cw];
+                    }
+                } else {
+                    if let Some(p) = curves[k].get_cv(i) {
+                        rhs[k] = vec![p[0], p[1], p[2]];
+                    }
+                }
+            }
+
+            let mut a = n_matrix.clone();
+            let mut b = rhs;
+
+            for col in 0..n {
+                let mut max_row = col;
+                let mut max_val = a[col][col].abs();
+                for row in (col + 1)..n {
+                    if a[row][col].abs() > max_val {
+                        max_val = a[row][col].abs();
+                        max_row = row;
+                    }
+                }
+                if max_val < 1e-14 { continue; }
+                a.swap(col, max_row);
+                b.swap(col, max_row);
+                for row in (col + 1)..n {
+                    let factor = a[row][col] / a[col][col];
+                    for c in col..n {
+                        a[row][c] -= factor * a[col][c];
+                    }
+                    for d2 in 0..dim {
+                        b[row][d2] -= factor * b[col][d2];
+                    }
+                }
+            }
+
+            let mut q = vec![vec![0.0; dim]; n];
+            for row in (0..n).rev() {
+                for d2 in 0..dim {
+                    q[row][d2] = b[row][d2];
+                    for c in (row + 1)..n {
+                        q[row][d2] -= a[row][c] * q[c][d2];
+                    }
+                    if a[row][row].abs() > 1e-14 {
+                        q[row][d2] /= a[row][row];
+                    }
+                }
+            }
+
+            for j in 0..n {
+                if is_rat {
+                    surface.set_cv_4d(i, j, q[j][0], q[j][1], q[j][2], q[j][3]);
+                } else {
+                    surface.set_cv(i, j, &Point::new(q[j][0], q[j][1], q[j][2]));
+                }
+            }
+        }
+
+        surface
+    }
+
+    fn merge_knot_vectors(a: &[f64], b: &[f64]) -> Vec<f64> {
+        let mut merged = Vec::new();
+        let (mut i, mut j) = (0, 0);
+        let tol = 1e-10;
+        while i < a.len() && j < b.len() {
+            if (a[i] - b[j]).abs() < tol {
+                merged.push(a[i]);
+                i += 1; j += 1;
+            } else if a[i] < b[j] {
+                merged.push(a[i]);
+                i += 1;
+            } else {
+                merged.push(b[j]);
+                j += 1;
+            }
+        }
+        while i < a.len() { merged.push(a[i]); i += 1; }
+        while j < b.len() { merged.push(b[j]); j += 1; }
+        merged
+    }
+
+    fn knot_vectors_equal(a: &[f64], b: &[f64]) -> bool {
+        if a.len() != b.len() { return false; }
+        let tol = 1e-10;
+        for i in 0..a.len() {
+            if (a[i] - b[i]).abs() > tol { return false; }
+        }
+        true
+    }
+
+    fn make_curves_compatible(curves: &mut Vec<NurbsCurve>) {
+        if curves.len() < 2 { return; }
+        let max_deg = curves.iter().map(|c| c.degree()).max().unwrap_or(0);
+        for c in curves.iter_mut() {
+            if c.degree() < max_deg { c.increase_degree(max_deg); }
+        }
+        let any_rational = curves.iter().any(|c| c.is_rational());
+        if any_rational {
+            for c in curves.iter_mut() { c.make_rational(); }
+        }
+        let mut already_compatible = true;
+        let cv0 = curves[0].cv_count();
+        let knots0 = curves[0].get_knots();
+        for i in 1..curves.len() {
+            if curves[i].cv_count() != cv0 || !Self::knot_vectors_equal(&curves[i].get_knots(), &knots0) {
+                already_compatible = false;
+                break;
+            }
+        }
+        if already_compatible { return; }
+        for c in curves.iter_mut() { c.set_domain(0.0, 1.0); }
+        let mut unified = curves[0].get_knots();
+        for i in 1..curves.len() {
+            unified = Self::merge_knot_vectors(&unified, &curves[i].get_knots());
+        }
+        let tol = 1e-10;
+        for c in curves.iter_mut() {
+            let mut cur_knots = c.get_knots();
+            for &k in &unified {
+                let found = cur_knots.iter().any(|&ck| (ck - k).abs() < tol);
+                if !found {
+                    c.insert_knot(k, 1);
+                    cur_knots = c.get_knots();
+                }
+            }
+        }
+    }
+
     pub fn create_planar(curves: &[NurbsCurve]) -> Option<Self> {
         if curves.is_empty() { return None; }
 
