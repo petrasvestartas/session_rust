@@ -364,42 +364,43 @@ pub fn run_nurbssurface_json_roundtrip() -> TestResult {
         use crate::nurbssurface::NurbsSurface;
         use crate::point::Point;
         use crate::color::Color;
-        use crate::tolerance::TOLERANCE;
+        use std::path::PathBuf;
 
-        // Create and setup surface
         let mut surf = NurbsSurface::create_raw(3, false, 3, 3, 3, 3, false, false, 1.0, 1.0).unwrap();
         surf.name = "test_nurbssurface".to_string();
         surf.width = 2.0;
         surf.surfacecolor = Color::new(255, 128, 64, 255);
 
-        // Set some CVs
         for i in 0..3 {
             for j in 0..3 {
                 surf.set_cv(i, j, &Point::new(i as f64, j as f64, 0.0));
             }
         }
 
+        //   jsondump()      │ String       │ to JSON string (internal use)
+        //   jsonload(s)     │ String       │ from JSON string (internal use)
         //   json_dumps()    │ String       │ to JSON string
         //   json_loads(s)   │ String       │ from JSON string
         //   json_dump(path) │ file         │ write to file
         //   json_load(path) │ file         │ read from file
 
-        // Serialize to JSON
-        let fname = "serialization/test_nurbssurface.json";
-        surf.json_dump(fname);
-        let loaded = NurbsSurface::json_load(fname);
+        // JSON object
+        let json = surf.jsondump().unwrap();
+        let loaded_json = NurbsSurface::jsonload(&json).unwrap();
 
-        MINI_CHECK!(loaded.name == surf.name);
-        MINI_CHECK!(TOLERANCE.is_close(loaded.width, surf.width));
-        MINI_CHECK!(loaded.surfacecolor[0] == surf.surfacecolor[0]);
-        MINI_CHECK!(loaded.surfacecolor[1] == surf.surfacecolor[1]);
-        MINI_CHECK!(loaded.surfacecolor[2] == surf.surfacecolor[2]);
-        MINI_CHECK!(loaded.dimension() == surf.dimension());
-        MINI_CHECK!(loaded.is_rational() == surf.is_rational());
-        MINI_CHECK!(loaded.order(0) == surf.order(0));
-        MINI_CHECK!(loaded.order(1) == surf.order(1));
-        MINI_CHECK!(loaded.cv_count_dir(Some(0)) == surf.cv_count_dir(Some(0)));
-        MINI_CHECK!(loaded.cv_count_dir(Some(1)) == surf.cv_count_dir(Some(1)));
+        // String
+        let json_string = surf.json_dumps();
+        let loaded_json_string = NurbsSurface::json_loads(&json_string);
+
+        // File
+        let src_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+        let filename = src_dir.join("serialization").join("test_nurbssurface.json");
+        surf.json_dump(filename.to_str().unwrap());
+        let loaded_from_file = NurbsSurface::json_load(filename.to_str().unwrap());
+
+        MINI_CHECK!(loaded_json == surf);
+        MINI_CHECK!(loaded_json_string == surf);
+        MINI_CHECK!(loaded_from_file == surf);
     })
 }
 
@@ -408,37 +409,36 @@ pub fn run_nurbssurface_protobuf_roundtrip() -> TestResult {
         use crate::nurbssurface::NurbsSurface;
         use crate::point::Point;
         use crate::color::Color;
-        use crate::tolerance::TOLERANCE;
+        use std::path::PathBuf;
 
-        // Create and setup surface
         let mut surf = NurbsSurface::create_raw(3, false, 3, 3, 3, 3, false, false, 1.0, 1.0).unwrap();
         surf.name = "test_nurbssurface".to_string();
         surf.width = 2.0;
         surf.surfacecolor = Color::new(255, 128, 64, 255);
 
-        // Set some CVs
         for i in 0..3 {
             for j in 0..3 {
                 surf.set_cv(i, j, &Point::new(i as f64, j as f64, 0.0));
             }
         }
 
-        // Serialize to protobuf
-        let path = "serialization/test_nurbssurface.bin";
-        surf.pb_dump(path);
-        let loaded = NurbsSurface::pb_load(path);
+        //   pb_dumps()      │ bytes        │ to protobuf bytes
+        //   pb_loads(b)     │ bytes        │ from protobuf bytes
+        //   pb_dump(path)   │ file         │ write to file
+        //   pb_load(path)   │ file         │ read from file
 
-        MINI_CHECK!(loaded.name == surf.name);
-        MINI_CHECK!(TOLERANCE.is_close(loaded.width, surf.width));
-        MINI_CHECK!(loaded.surfacecolor[0] == surf.surfacecolor[0]);
-        MINI_CHECK!(loaded.surfacecolor[1] == surf.surfacecolor[1]);
-        MINI_CHECK!(loaded.surfacecolor[2] == surf.surfacecolor[2]);
-        MINI_CHECK!(loaded.dimension() == surf.dimension());
-        MINI_CHECK!(loaded.is_rational() == surf.is_rational());
-        MINI_CHECK!(loaded.order(0) == surf.order(0));
-        MINI_CHECK!(loaded.order(1) == surf.order(1));
-        MINI_CHECK!(loaded.cv_count_dir(Some(0)) == surf.cv_count_dir(Some(0)));
-        MINI_CHECK!(loaded.cv_count_dir(Some(1)) == surf.cv_count_dir(Some(1)));
+        // String
+        let proto_string = surf.pb_dumps();
+        let loaded_proto_string = NurbsSurface::pb_loads(&proto_string).unwrap();
+
+        // File
+        let src_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+        let filename = src_dir.join("serialization").join("test_nurbssurface.bin");
+        surf.pb_dump(filename.to_str().unwrap());
+        let loaded = NurbsSurface::pb_load(filename.to_str().unwrap());
+
+        MINI_CHECK!(loaded_proto_string == surf);
+        MINI_CHECK!(loaded == surf);
     })
 }
 

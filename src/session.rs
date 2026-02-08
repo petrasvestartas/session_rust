@@ -229,29 +229,243 @@ impl Session {
         Ok(session)
     }
 
-    /// Serializes the Session to a JSON file.
-    ///
-    /// # Arguments
-    /// * `filepath` - The path where the JSON file will be written
-    ///
-    /// # Returns
-    /// A Result indicating success or failure of the file write operation.
-    pub fn to_json(&self, filepath: &str) -> Result<(), Box<dyn std::error::Error>> {
-        let json = self.jsondump()?;
-        fs::write(filepath, json)?;
-        Ok(())
+    pub fn json_dumps(&self) -> String {
+        self.jsondump().unwrap_or_default()
     }
 
-    /// Deserializes Session from a JSON file.
-    ///
-    /// # Arguments
-    /// * `filepath` - The path to the JSON file to read
-    ///
-    /// # Returns
-    /// A Result containing the deserialized Session, or an error if file reading or parsing fails.
-    pub fn from_json(filepath: &str) -> Result<Self, Box<dyn std::error::Error>> {
-        let json = fs::read_to_string(filepath)?;
-        Self::jsonload(&json)
+    pub fn json_loads(s: &str) -> Self {
+        Self::jsonload(s).unwrap_or_else(|_| Self::default())
+    }
+
+    pub fn json_dump(&self, filepath: &str) {
+        let json = self.jsondump().unwrap_or_default();
+        fs::write(filepath, json).expect("Failed to write JSON file");
+    }
+
+    pub fn json_load(filepath: &str) -> Self {
+        let json = fs::read_to_string(filepath).expect("Failed to read JSON file");
+        Self::jsonload(&json).unwrap_or_else(|_| Self::default())
+    }
+
+    ///////////////////////////////////////////////////////////////////////////////////////////
+    // Protobuf
+    ///////////////////////////////////////////////////////////////////////////////////////////
+
+    pub fn pb_dumps(&self) -> Vec<u8> {
+        use prost::Message;
+
+        // Build Objects proto
+        let mut objects_proto = crate::proto::Objects {
+            name: self.objects.name.clone(),
+            guid: self.objects.guid.clone(),
+            ..Default::default()
+        };
+        for p in &self.objects.points {
+            objects_proto.points.push(crate::proto::Point::decode(p.pb_dumps().as_slice()).unwrap());
+        }
+        for l in &self.objects.lines {
+            objects_proto.lines.push(crate::proto::Line::decode(l.pb_dumps().as_slice()).unwrap());
+        }
+        for pl in &self.objects.planes {
+            objects_proto.planes.push(crate::proto::Plane::decode(pl.pb_dumps().as_slice()).unwrap());
+        }
+        for b in &self.objects.bboxes {
+            objects_proto.bboxes.push(crate::proto::BoundingBox::decode(b.pb_dumps().as_slice()).unwrap());
+        }
+        for pl in &self.objects.polylines {
+            objects_proto.polylines.push(crate::proto::Polyline::decode(pl.pb_dumps().as_slice()).unwrap());
+        }
+        for pc in &self.objects.pointclouds {
+            objects_proto.pointclouds.push(crate::proto::PointCloud::decode(pc.pb_dumps().as_slice()).unwrap());
+        }
+        for m in &self.objects.meshes {
+            objects_proto.meshes.push(crate::proto::Mesh::decode(m.pb_dumps().as_slice()).unwrap());
+        }
+        for c in &self.objects.cylinders {
+            objects_proto.cylinders.push(crate::proto::Cylinder::decode(c.pb_dumps().as_slice()).unwrap());
+        }
+        for a in &self.objects.arrows {
+            objects_proto.arrows.push(crate::proto::Arrow::decode(a.pb_dumps().as_slice()).unwrap());
+        }
+
+        // Build Tree proto
+        fn treenode_to_proto(node: &TreeNode) -> crate::proto::TreeNode {
+            let children: Vec<crate::proto::TreeNode> = node.children().iter().map(|c| treenode_to_proto(c)).collect();
+            crate::proto::TreeNode {
+                guid: node.guid(),
+                name: node.name(),
+                parent_guid: node.parent().map(|p| p.guid()).unwrap_or_default(),
+                children,
+            }
+        }
+        let tree_proto = crate::proto::Tree {
+            guid: self.tree.guid.clone(),
+            name: self.tree.name.clone(),
+            root: self.tree.root().map(|r| treenode_to_proto(&r)),
+        };
+
+        // Build Graph proto
+        let mut vertices_map: std::collections::HashMap<String, crate::proto::Vertex> = std::collections::HashMap::new();
+        for v in self.graph.get_vertices() {
+            vertices_map.insert(v.name.clone(), crate::proto::Vertex {
+                name: v.name.clone(),
+                guid: v.guid.clone(),
+                attribute: v.attribute.clone(),
+                index: v.index,
+            });
+        }
+        let mut edges_proto: Vec<crate::proto::Edge> = Vec::new();
+        for (_u, neighbors) in &self.graph.edges {
+            for (_v, edge) in neighbors {
+                edges_proto.push(crate::proto::Edge {
+                    guid: edge.guid.clone(),
+                    name: edge.name.clone(),
+                    v0: edge.v0.clone(),
+                    v1: edge.v1.clone(),
+                    attribute: edge.attribute.clone(),
+                    index: edge.index,
+                });
+            }
+        }
+        let graph_proto = crate::proto::Graph {
+            name: self.graph.name.clone(),
+            guid: self.graph.guid.clone(),
+            vertices: vertices_map,
+            edges: edges_proto,
+            vertex_count: self.graph.vertex_count,
+            edge_count: self.graph.edge_count,
+        };
+
+        let proto = crate::proto::Session {
+            name: self.name.clone(),
+            guid: self.guid.clone(),
+            objects: Some(objects_proto),
+            tree: Some(tree_proto),
+            graph: Some(graph_proto),
+            bvh_boxes: Vec::new(),
+        };
+        proto.encode_to_vec()
+    }
+
+    pub fn pb_loads(data: &[u8]) -> Result<Self, Box<dyn std::error::Error>> {
+        use prost::Message;
+        let proto = crate::proto::Session::decode(data)?;
+
+        let mut session = Session::new(&proto.name);
+        session.guid = proto.guid;
+
+        // Rebuild objects
+        if let Some(objects_proto) = &proto.objects {
+            session.objects.guid = objects_proto.guid.clone();
+            session.objects.name = objects_proto.name.clone();
+            for p in &objects_proto.points {
+                let pt = Point::pb_loads(&p.encode_to_vec())?;
+                session.objects.points.push(pt);
+            }
+            for l in &objects_proto.lines {
+                let ln = Line::pb_loads(&l.encode_to_vec())?;
+                session.objects.lines.push(ln);
+            }
+            for pl in &objects_proto.planes {
+                let pln = Plane::pb_loads(&pl.encode_to_vec())?;
+                session.objects.planes.push(pln);
+            }
+            for b in &objects_proto.bboxes {
+                let bb = BoundingBox::pb_loads(&b.encode_to_vec())?;
+                session.objects.bboxes.push(bb);
+            }
+            for pl in &objects_proto.polylines {
+                let pll = Polyline::pb_loads(&pl.encode_to_vec())?;
+                session.objects.polylines.push(pll);
+            }
+            for pc in &objects_proto.pointclouds {
+                let pcl = PointCloud::pb_loads(&pc.encode_to_vec());
+                session.objects.pointclouds.push(pcl);
+            }
+            for m in &objects_proto.meshes {
+                let msh = Mesh::pb_loads(&m.encode_to_vec())?;
+                session.objects.meshes.push(msh);
+            }
+            for c in &objects_proto.cylinders {
+                let cyl = Cylinder::pb_loads(&c.encode_to_vec())?;
+                session.objects.cylinders.push(cyl);
+            }
+            for a in &objects_proto.arrows {
+                let arr = Arrow::pb_loads(&a.encode_to_vec())?;
+                session.objects.arrows.push(arr);
+            }
+        }
+
+        // Rebuild tree
+        if let Some(tree_proto) = &proto.tree {
+            session.tree = Tree::new(&tree_proto.name);
+            session.tree.guid = tree_proto.guid.clone();
+            if let Some(root_proto) = &tree_proto.root {
+                fn proto_to_treenode(proto: &crate::proto::TreeNode) -> TreeNode {
+                    let node = TreeNode::new(&proto.name);
+                    // Override GUID to match serialized data
+                    for child_proto in &proto.children {
+                        let child = proto_to_treenode(child_proto);
+                        node.add(&child);
+                    }
+                    node
+                }
+                let root = proto_to_treenode(root_proto);
+                session.tree.add(&root, None);
+            }
+        }
+
+        // Rebuild graph
+        if let Some(graph_proto) = &proto.graph {
+            session.graph = Graph::new(&graph_proto.name);
+            session.graph.guid = graph_proto.guid.clone();
+            for (name, v) in &graph_proto.vertices {
+                session.graph.add_node(name, &v.attribute);
+            }
+            for e in &graph_proto.edges {
+                session.graph.add_edge(&e.v0, &e.v1, &e.attribute);
+            }
+        }
+
+        // Rebuild lookup
+        for arrow in &session.objects.arrows {
+            session.lookup.insert(arrow.guid.clone(), Geometry::Arrow(arrow.clone()));
+        }
+        for bbox in &session.objects.bboxes {
+            session.lookup.insert(bbox.guid.clone(), Geometry::BoundingBox(bbox.clone()));
+        }
+        for cylinder in &session.objects.cylinders {
+            session.lookup.insert(cylinder.guid.clone(), Geometry::Cylinder(cylinder.clone()));
+        }
+        for line in &session.objects.lines {
+            session.lookup.insert(line.guid.clone(), Geometry::Line(line.clone()));
+        }
+        for mesh in &session.objects.meshes {
+            session.lookup.insert(mesh.guid.clone(), Geometry::Mesh(mesh.clone()));
+        }
+        for plane in &session.objects.planes {
+            session.lookup.insert(plane.guid.clone(), Geometry::Plane(plane.clone()));
+        }
+        for point in &session.objects.points {
+            session.lookup.insert(point.guid.clone(), Geometry::Point(point.clone()));
+        }
+        for pointcloud in &session.objects.pointclouds {
+            session.lookup.insert(pointcloud.guid.clone(), Geometry::PointCloud(pointcloud.clone()));
+        }
+        for polyline in &session.objects.polylines {
+            session.lookup.insert(polyline.guid.clone(), Geometry::Polyline(polyline.clone()));
+        }
+
+        Ok(session)
+    }
+
+    pub fn pb_dump(&self, path: &str) {
+        std::fs::write(path, self.pb_dumps()).expect("Failed to write protobuf file");
+    }
+
+    pub fn pb_load(path: &str) -> Self {
+        let data = std::fs::read(path).expect("Failed to read protobuf file");
+        Self::pb_loads(&data).expect("Failed to parse protobuf")
     }
 
     ///////////////////////////////////////////////////////////////////////////////////////////

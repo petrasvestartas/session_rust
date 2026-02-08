@@ -460,17 +460,113 @@ impl Graph {
         Ok(graph)
     }
 
-    /// Serializes the Graph to a JSON file.
-    pub fn to_json(&self, filepath: &str) -> Result<(), Box<dyn std::error::Error>> {
+    pub fn json_dumps(&self) -> String {
+        self.jsondump().unwrap_or_default()
+    }
+
+    pub fn json_loads(s: &str) -> Self {
+        Self::jsonload(s).unwrap_or_else(|_| Self::default())
+    }
+
+    pub fn json_dump(&self, filepath: &str) -> Result<(), Box<dyn std::error::Error>> {
         let json_data = self.jsondump()?;
         std::fs::write(filepath, json_data)?;
         Ok(())
     }
 
-    /// Deserializes a Graph from a JSON file.
-    pub fn from_json(filepath: &str) -> Result<Self, Box<dyn std::error::Error>> {
+    pub fn json_load(filepath: &str) -> Result<Self, Box<dyn std::error::Error>> {
         let json_data = std::fs::read_to_string(filepath)?;
         Self::jsonload(&json_data).map_err(|e| e.into())
+    }
+
+    ///////////////////////////////////////////////////////////////////////////////////////////
+    // Protobuf Serialization
+    ///////////////////////////////////////////////////////////////////////////////////////////
+
+    pub fn pb_dumps(&self) -> Vec<u8> {
+        use prost::Message;
+        use std::collections::HashMap as ProtoMap;
+
+        let mut proto_vertices: ProtoMap<String, crate::proto::Vertex> = ProtoMap::new();
+        for (name, vertex) in &self.vertices {
+            proto_vertices.insert(name.clone(), crate::proto::Vertex {
+                name: vertex.name.clone(),
+                guid: vertex.guid.clone(),
+                attribute: vertex.attribute.clone(),
+                index: vertex.index,
+            });
+        }
+
+        let mut proto_edges = Vec::new();
+        let mut seen = std::collections::HashSet::new();
+        for (u, neighbors) in &self.edges {
+            for (v, edge) in neighbors {
+                let key = if u < v { (u.clone(), v.clone()) } else { (v.clone(), u.clone()) };
+                if seen.insert(key) {
+                    proto_edges.push(crate::proto::Edge {
+                        guid: edge.guid.clone(),
+                        name: edge.name.clone(),
+                        v0: edge.v0.clone(),
+                        v1: edge.v1.clone(),
+                        attribute: edge.attribute.clone(),
+                        index: edge.index,
+                    });
+                }
+            }
+        }
+
+        let proto = crate::proto::Graph {
+            name: self.name.clone(),
+            guid: self.guid.clone(),
+            vertices: proto_vertices,
+            edges: proto_edges,
+            vertex_count: self.vertex_count,
+            edge_count: self.edge_count,
+        };
+        proto.encode_to_vec()
+    }
+
+    pub fn pb_loads(data: &[u8]) -> Result<Self, Box<dyn std::error::Error>> {
+        use prost::Message;
+        let proto = crate::proto::Graph::decode(data)?;
+        let mut graph = Graph::new(&proto.name);
+        graph.guid = proto.guid;
+        graph.vertex_count = proto.vertex_count;
+        graph.edge_count = proto.edge_count;
+
+        for (name, v) in &proto.vertices {
+            let vertex = Vertex {
+                guid: v.guid.clone(),
+                name: v.name.clone(),
+                attribute: v.attribute.clone(),
+                index: v.index,
+            };
+            graph.vertices.insert(name.clone(), vertex);
+        }
+
+        for e in &proto.edges {
+            let edge = Edge {
+                guid: e.guid.clone(),
+                name: e.name.clone(),
+                v0: e.v0.clone(),
+                v1: e.v1.clone(),
+                attribute: e.attribute.clone(),
+                index: e.index,
+            };
+            graph.edges.entry(e.v0.clone()).or_default().insert(e.v1.clone(), edge.clone());
+            graph.edges.entry(e.v1.clone()).or_default().insert(e.v0.clone(), edge);
+        }
+
+        Ok(graph)
+    }
+
+    pub fn pb_dump(&self, path: &str) {
+        std::fs::write(path, self.pb_dumps()).expect("Failed to write protobuf file");
+    }
+
+    pub fn pb_load(path: &str) -> Self {
+        let data = std::fs::read(path).expect("Failed to read protobuf file");
+        Self::pb_loads(&data).expect("Failed to parse protobuf")
     }
 
     /// Get or set edge attribute.

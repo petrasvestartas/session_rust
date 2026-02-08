@@ -197,14 +197,18 @@ impl Mesh {
     }
 
     pub fn add_vertex(&mut self, position: Point, key: Option<usize>) -> usize {
-        let vertex_key = key.unwrap_or_else(|| {
-            self.max_vertex += 1;
-            self.max_vertex
-        });
-
-        if vertex_key >= self.max_vertex {
-            self.max_vertex = vertex_key + 1;
-        }
+        let vertex_key = match key {
+            Some(k) => {
+                if k >= self.max_vertex {
+                    self.max_vertex = k + 1;
+                }
+                k
+            }
+            None => {
+                self.max_vertex += 1;
+                self.max_vertex
+            }
+        };
 
         let vertex_data = VertexData::new(position);
         self.vertex.insert(vertex_key, vertex_data);
@@ -231,14 +235,18 @@ impl Mesh {
             }
         }
 
-        let face_key = fkey.unwrap_or_else(|| {
-            self.max_face += 1;
-            self.max_face
-        });
-
-        if face_key >= self.max_face {
-            self.max_face = face_key + 1;
-        }
+        let face_key = match fkey {
+            Some(k) => {
+                if k >= self.max_face {
+                    self.max_face = k + 1;
+                }
+                k
+            }
+            None => {
+                self.max_face += 1;
+                self.max_face
+            }
+        };
 
         self.face.insert(face_key, vertices.clone());
         self.triangulation.remove(&face_key);

@@ -9,48 +9,36 @@ impl Primitives {
     /// Create a circle as a rational NURBS curve (9 control points)
     pub fn circle(cx: f64, cy: f64, cz: f64, radius: f64) -> NurbsCurve {
         let w = (2.0_f64).sqrt() / 2.0;
-
-        let mut curve = NurbsCurve::new(3, true, 3, 9);
-        curve.m_knot = vec![0.0, 0.0, 0.0, 1.0, 1.0, 2.0, 2.0, 3.0, 3.0, 4.0, 4.0, 4.0];
-
-        let angles = [
-            0.0, PI / 4.0, PI / 2.0, 3.0 * PI / 4.0,
-            PI, 5.0 * PI / 4.0, 3.0 * PI / 2.0,
-            7.0 * PI / 4.0, 2.0 * PI
-        ];
+        let cx_pat: [f64; 9] = [1.0, 1.0, 0.0, -1.0, -1.0, -1.0, 0.0, 1.0, 1.0];
+        let cy_pat: [f64; 9] = [0.0, 1.0, 1.0, 1.0, 0.0, -1.0, -1.0, -1.0, 0.0];
         let weights = [1.0, w, 1.0, w, 1.0, w, 1.0, w, 1.0];
 
-        for i in 0..9 {
-            let x = cx + radius * angles[i].cos();
-            let y = cy + radius * angles[i].sin();
-            let z = cz;
-            curve.set_cv_4d(i, x * weights[i], y * weights[i], z * weights[i], weights[i]);
-        }
+        let mut curve = NurbsCurve::new(3, true, 3, 9);
+        curve.m_knot = vec![0.0, 0.0, 1.0, 1.0, 2.0, 2.0, 3.0, 3.0, 4.0, 4.0];
 
+        for i in 0..9 {
+            let px = cx + radius * cx_pat[i];
+            let py = cy + radius * cy_pat[i];
+            curve.set_cv_4d(i, px * weights[i], py * weights[i], cz * weights[i], weights[i]);
+        }
         curve
     }
 
     /// Create an ellipse as a rational NURBS curve
     pub fn ellipse(cx: f64, cy: f64, cz: f64, major_radius: f64, minor_radius: f64) -> NurbsCurve {
         let w = (2.0_f64).sqrt() / 2.0;
-
-        let mut curve = NurbsCurve::new(3, true, 3, 9);
-        curve.m_knot = vec![0.0, 0.0, 0.0, 1.0, 1.0, 2.0, 2.0, 3.0, 3.0, 4.0, 4.0, 4.0];
-
-        let angles = [
-            0.0, PI / 4.0, PI / 2.0, 3.0 * PI / 4.0,
-            PI, 5.0 * PI / 4.0, 3.0 * PI / 2.0,
-            7.0 * PI / 4.0, 2.0 * PI
-        ];
+        let ex: [f64; 9] = [1.0, 1.0, 0.0, -1.0, -1.0, -1.0, 0.0, 1.0, 1.0];
+        let ey: [f64; 9] = [0.0, 1.0, 1.0, 1.0, 0.0, -1.0, -1.0, -1.0, 0.0];
         let weights = [1.0, w, 1.0, w, 1.0, w, 1.0, w, 1.0];
 
-        for i in 0..9 {
-            let x = cx + major_radius * angles[i].cos();
-            let y = cy + minor_radius * angles[i].sin();
-            let z = cz;
-            curve.set_cv_4d(i, x * weights[i], y * weights[i], z * weights[i], weights[i]);
-        }
+        let mut curve = NurbsCurve::new(3, true, 3, 9);
+        curve.m_knot = vec![0.0, 0.0, 1.0, 1.0, 2.0, 2.0, 3.0, 3.0, 4.0, 4.0];
 
+        for i in 0..9 {
+            let px = cx + major_radius * ex[i];
+            let py = cy + minor_radius * ey[i];
+            curve.set_cv_4d(i, px * weights[i], py * weights[i], cz * weights[i], weights[i]);
+        }
         curve
     }
 

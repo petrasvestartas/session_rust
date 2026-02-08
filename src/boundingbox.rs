@@ -572,6 +572,91 @@ impl BoundingBox {
         let json_string = std::fs::read_to_string(filepath)?;
         Self::jsonload(&json_string)
     }
+
+    pub fn json_dumps(&self) -> String {
+        self.jsondump().unwrap_or_default()
+    }
+
+    pub fn json_loads(s: &str) -> Self {
+        Self::jsonload(s).unwrap_or_default()
+    }
+
+    pub fn json_dump(&self, filepath: &str) {
+        let _ = self.to_json(filepath);
+    }
+
+    pub fn json_load(filepath: &str) -> Self {
+        Self::from_json(filepath).unwrap_or_default()
+    }
+
+    pub fn pb_dumps(&self) -> Vec<u8> {
+        use prost::Message;
+        let proto = crate::proto::BoundingBox {
+            center: Some(crate::proto::Point::decode(self.center.pb_dumps().as_slice()).unwrap()),
+            x_axis: Some(crate::proto::Vector::decode(self.x_axis.pb_dumps().as_slice()).unwrap()),
+            y_axis: Some(crate::proto::Vector::decode(self.y_axis.pb_dumps().as_slice()).unwrap()),
+            z_axis: Some(crate::proto::Vector::decode(self.z_axis.pb_dumps().as_slice()).unwrap()),
+            half_size: Some(crate::proto::Vector::decode(self.half_size.pb_dumps().as_slice()).unwrap()),
+            guid: self.guid.clone(),
+            name: self.name.clone(),
+            xform: Some(crate::proto::Xform {
+                guid: self.xform.guid.clone(),
+                name: self.xform.name.clone(),
+                matrix: self.xform.m.to_vec(),
+            }),
+        };
+        proto.encode_to_vec()
+    }
+
+    pub fn pb_loads(data: &[u8]) -> Result<Self, Box<dyn std::error::Error>> {
+        use prost::Message;
+        let proto = crate::proto::BoundingBox::decode(data)?;
+        let center = if let Some(p) = &proto.center {
+            crate::point::Point::pb_loads(&p.encode_to_vec())?
+        } else {
+            crate::point::Point::new(0.0, 0.0, 0.0)
+        };
+        let x_axis = if let Some(v) = &proto.x_axis {
+            crate::vector::Vector::pb_loads(&v.encode_to_vec())?
+        } else {
+            crate::vector::Vector::new(1.0, 0.0, 0.0)
+        };
+        let y_axis = if let Some(v) = &proto.y_axis {
+            crate::vector::Vector::pb_loads(&v.encode_to_vec())?
+        } else {
+            crate::vector::Vector::new(0.0, 1.0, 0.0)
+        };
+        let z_axis = if let Some(v) = &proto.z_axis {
+            crate::vector::Vector::pb_loads(&v.encode_to_vec())?
+        } else {
+            crate::vector::Vector::new(0.0, 0.0, 1.0)
+        };
+        let half_size = if let Some(v) = &proto.half_size {
+            crate::vector::Vector::pb_loads(&v.encode_to_vec())?
+        } else {
+            crate::vector::Vector::new(0.5, 0.5, 0.5)
+        };
+        let mut bbox = BoundingBox::new(center, x_axis, y_axis, z_axis, half_size);
+        bbox.guid = proto.guid;
+        bbox.name = proto.name;
+        if let Some(xform) = proto.xform {
+            bbox.xform.guid = xform.guid;
+            bbox.xform.name = xform.name;
+            for (i, val) in xform.matrix.iter().enumerate() {
+                if i < 16 { bbox.xform.m[i] = *val; }
+            }
+        }
+        Ok(bbox)
+    }
+
+    pub fn pb_dump(&self, filepath: &str) {
+        std::fs::write(filepath, self.pb_dumps()).expect("Failed to write protobuf file");
+    }
+
+    pub fn pb_load(filepath: &str) -> Self {
+        let data = std::fs::read(filepath).expect("Failed to read protobuf file");
+        Self::pb_loads(&data).expect("Failed to parse protobuf")
+    }
 }
 
 impl Default for BoundingBox {

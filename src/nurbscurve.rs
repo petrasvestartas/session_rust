@@ -1626,14 +1626,15 @@ impl NurbsCurve {
             let n = basis[i];
 
             if self.m_is_rat {
+                // CVs stored in homogeneous form: (x*w, y*w, z*w, w)
                 let weight = self.m_cv[idx + self.m_dim];
                 w += n * weight;
-                x += n * self.m_cv[idx] * weight;
+                x += n * self.m_cv[idx];
                 if self.m_dim > 1 {
-                    y += n * self.m_cv[idx + 1] * weight;
+                    y += n * self.m_cv[idx + 1];
                 }
                 if self.m_dim > 2 {
-                    z += n * self.m_cv[idx + 2] * weight;
+                    z += n * self.m_cv[idx + 2];
                 }
             } else {
                 x += n * self.m_cv[idx];
@@ -1690,9 +1691,10 @@ impl NurbsCurve {
                 let cz = if self.m_dim > 2 { self.m_cv[idx + 2] } else { 0.0 };
                 let wv = if self.m_is_rat { self.m_cv[idx + self.m_dim] } else { 1.0 };
 
-                aders[k][0] += nx * cx * wv;
-                aders[k][1] += nx * cy * wv;
-                aders[k][2] += nx * cz * wv;
+                // CVs stored in homogeneous form: cx=x*w, cy=y*w, cz=z*w
+                aders[k][0] += nx * cx;
+                aders[k][1] += nx * cy;
+                aders[k][2] += nx * cz;
                 aders[k][3] += nx * wv;
             }
         }

@@ -249,6 +249,72 @@ impl Arrow {
         let json = std::fs::read_to_string(filepath)?;
         Self::jsonload(&json)
     }
+
+    pub fn json_dumps(&self) -> String {
+        self.jsondump().unwrap_or_default()
+    }
+
+    pub fn json_loads(s: &str) -> Self {
+        Self::jsonload(s).unwrap_or_else(|_| Self::new(Line::default(), 1.0))
+    }
+
+    pub fn json_dump(&self, filepath: &str) {
+        let _ = self.to_json(filepath);
+    }
+
+    pub fn json_load(filepath: &str) -> Self {
+        Self::from_json(filepath).unwrap_or_else(|_| Self::new(Line::default(), 1.0))
+    }
+
+    pub fn pb_dumps(&self) -> Vec<u8> {
+        use prost::Message;
+        let proto = crate::proto::Arrow {
+            guid: self.guid.clone(),
+            name: self.name.clone(),
+            radius: self.radius,
+            line: Some(crate::proto::Line::decode(self.line.pb_dumps().as_slice()).unwrap()),
+            mesh: Some(crate::proto::Mesh::decode(self.mesh.pb_dumps().as_slice()).unwrap()),
+            xform: Some(crate::proto::Xform {
+                guid: self.xform.guid.clone(),
+                name: self.xform.name.clone(),
+                matrix: self.xform.m.to_vec(),
+            }),
+        };
+        proto.encode_to_vec()
+    }
+
+    pub fn pb_loads(data: &[u8]) -> Result<Self, Box<dyn std::error::Error>> {
+        use prost::Message;
+        let proto = crate::proto::Arrow::decode(data)?;
+        let line = if let Some(l) = &proto.line {
+            crate::line::Line::pb_loads(&l.encode_to_vec())?
+        } else {
+            Line::default()
+        };
+        let mut arrow = Arrow::new(line, proto.radius);
+        arrow.guid = proto.guid;
+        arrow.name = proto.name;
+        if let Some(m) = &proto.mesh {
+            arrow.mesh = crate::mesh::Mesh::pb_loads(&m.encode_to_vec())?;
+        }
+        if let Some(xform) = proto.xform {
+            arrow.xform.guid = xform.guid;
+            arrow.xform.name = xform.name;
+            for (i, val) in xform.matrix.iter().enumerate() {
+                if i < 16 { arrow.xform.m[i] = *val; }
+            }
+        }
+        Ok(arrow)
+    }
+
+    pub fn pb_dump(&self, filepath: &str) {
+        std::fs::write(filepath, self.pb_dumps()).expect("Failed to write protobuf file");
+    }
+
+    pub fn pb_load(filepath: &str) -> Self {
+        let data = std::fs::read(filepath).expect("Failed to read protobuf file");
+        Self::pb_loads(&data).expect("Failed to parse protobuf")
+    }
 }
 
 #[cfg(test)]

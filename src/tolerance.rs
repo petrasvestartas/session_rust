@@ -27,6 +27,11 @@ pub struct Tolerance {
 }
 
 impl Tolerance {
+    /// Mathematical constants
+    pub const PI: f64 = STD_PI;
+    pub const TO_DEGREES: f64 = 180.0 / STD_PI;
+    pub const TO_RADIANS: f64 = STD_PI / 180.0;
+
     /// Default tolerance values (f64 only)
     pub const ABSOLUTE: f64 = 1e-9;
     pub const RELATIVE: f64 = 1e-6;

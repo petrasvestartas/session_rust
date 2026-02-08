@@ -209,6 +209,80 @@ impl Tree {
 
         Ok(tree)
     }
+
+    pub fn json_dumps(&self) -> String {
+        self.jsondump().unwrap_or_default()
+    }
+
+    pub fn json_loads(s: &str) -> Self {
+        Self::jsonload(s).unwrap_or_else(|_| Self::default())
+    }
+
+    pub fn json_dump(&self, path: &str) -> Result<(), Box<dyn std::error::Error>> {
+        let json = self.jsondump()?;
+        std::fs::write(path, json)?;
+        Ok(())
+    }
+
+    pub fn json_load(path: &str) -> Result<Self, Box<dyn std::error::Error>> {
+        let json = std::fs::read_to_string(path)?;
+        Self::jsonload(&json)
+    }
+
+    pub fn pb_dumps(&self) -> Vec<u8> {
+        use prost::Message;
+        fn node_to_proto(node: &crate::treenode::TreeNode) -> crate::proto::TreeNode {
+            let children: Vec<crate::proto::TreeNode> =
+                node.children().iter().map(|c| node_to_proto(c)).collect();
+            crate::proto::TreeNode {
+                guid: node.guid(),
+                name: node.name(),
+                parent_guid: String::new(),
+                children,
+            }
+        }
+        let root_proto = self.root_node.as_ref().map(|r| node_to_proto(r));
+        let proto = crate::proto::Tree {
+            guid: self.guid.clone(),
+            name: self.name.clone(),
+            root: root_proto,
+        };
+        proto.encode_to_vec()
+    }
+
+    pub fn pb_loads(data: &[u8]) -> Result<Self, Box<dyn std::error::Error>> {
+        use prost::Message;
+        let proto = crate::proto::Tree::decode(data)?;
+        let mut tree = Tree::new(&proto.name);
+        tree.guid = proto.guid;
+        fn proto_to_serde(
+            proto_node: &crate::proto::TreeNode,
+        ) -> crate::treenode::TreeNodeSerde {
+            crate::treenode::TreeNodeSerde {
+                guid: proto_node.guid.clone(),
+                name: proto_node.name.clone(),
+                children: proto_node
+                    .children
+                    .iter()
+                    .map(|c| proto_to_serde(c))
+                    .collect(),
+            }
+        }
+        if let Some(root_proto) = &proto.root {
+            let serde = proto_to_serde(root_proto);
+            tree.root_node = Some(crate::treenode::TreeNode::from_serde(serde));
+        }
+        Ok(tree)
+    }
+
+    pub fn pb_dump(&self, path: &str) {
+        std::fs::write(path, self.pb_dumps()).expect("Failed to write protobuf file");
+    }
+
+    pub fn pb_load(path: &str) -> Self {
+        let data = std::fs::read(path).expect("Failed to read protobuf file");
+        Self::pb_loads(&data).expect("Failed to parse protobuf")
+    }
 }
 
 impl fmt::Display for Tree {
