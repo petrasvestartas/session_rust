@@ -1291,6 +1291,35 @@ pub fn run_nurbssurface_constructor_loft() -> TestResult {
     })
 }
 
+pub fn run_nurbssurface_create_network() -> TestResult {
+    MINI_TEST!("create_network", {
+        use crate::nurbssurface::NurbsSurface;
+        use crate::nurbscurve::NurbsCurve;
+        use crate::point::Point;
+
+        let uc0 = NurbsCurve::create(false, 2, &[Point::new(10.0,9.569076,0.0), Point::new(5.5,9.569076,3.5), Point::new(1.0,9.569076,0.0)]);
+        let uc1 = NurbsCurve::create(false, 2, &[Point::new(10.0,16.569076,0.0), Point::new(5.5,16.569076,3.5), Point::new(1.0,16.569076,0.0)]);
+        let vc0 = NurbsCurve::create(false, 3, &[Point::new(1.0,9.569076,0.0), Point::new(1.0,11.569076,3.0), Point::new(1.0,14.569076,3.0), Point::new(1.0,16.569076,0.0)]);
+        let vc1 = NurbsCurve::create(false, 2, &[Point::new(4.236484,9.569076,1.612033), Point::new(3.0,13.069076,4.250144), Point::new(3.667141,16.569076,1.459684)]);
+        let vc2 = NurbsCurve::create(false, 2, &[Point::new(7.295129,16.569076,1.471513), Point::new(8.0,13.069076,4.250144), Point::new(6.99265,9.569076,1.557456)]);
+        let vc3 = NurbsCurve::create(false, 3, &[Point::new(10.0,9.569076,0.0), Point::new(10.0,11.569076,3.0), Point::new(10.0,14.569076,3.0), Point::new(10.0,16.569076,0.0)]);
+        let srf = NurbsSurface::create_network(&[uc0, uc1], &[vc0, vc1, vc2, vc3]);
+        MINI_CHECK!(srf.cv_count_dir(Some(0)) >= 4);
+        MINI_CHECK!(srf.cv_count_dir(Some(1)) >= 4);
+        MINI_CHECK!(srf.degree(0) == 3);
+        MINI_CHECK!(srf.degree(1) == 3);
+        let p00 = srf.point_at(0.0, 0.0).unwrap();
+        let p01 = srf.point_at(0.0, 1.0).unwrap();
+        let p10 = srf.point_at(1.0, 0.0).unwrap();
+        let p11 = srf.point_at(1.0, 1.0).unwrap();
+        MINI_CHECK!((p00[0] - 10.0).abs() < 0.5);
+        MINI_CHECK!((p00[1] - 9.569076).abs() < 0.5);
+        MINI_CHECK!((p10[0] - 1.0).abs() < 0.5);
+        MINI_CHECK!((p11[0] - 1.0).abs() < 0.5);
+        MINI_CHECK!((p01[1] - 16.569076).abs() < 0.5);
+    })
+}
+
 // Register tests with the shared registry
 REGISTER_MINI_TEST!("NurbsSurface", "constructor", crate::nurbssurface_test::run_nurbssurface_constructor);
 REGISTER_MINI_TEST!("NurbsSurface", "create_operations", crate::nurbssurface_test::run_nurbssurface_create_operations);
@@ -1323,3 +1352,4 @@ REGISTER_MINI_TEST!("NurbsSurface", "cone", crate::nurbssurface_test::run_nurbss
 REGISTER_MINI_TEST!("NurbsSurface", "create_planar", crate::nurbssurface_test::run_nurbssurface_create_planar);
 REGISTER_MINI_TEST!("NurbsSurface", "constructor_ruled", crate::nurbssurface_test::run_nurbssurface_constructor_ruled);
 REGISTER_MINI_TEST!("NurbsSurface", "constructor_loft", crate::nurbssurface_test::run_nurbssurface_constructor_loft);
+REGISTER_MINI_TEST!("NurbsSurface", "create_network", crate::nurbssurface_test::run_nurbssurface_create_network);

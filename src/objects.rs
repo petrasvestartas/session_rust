@@ -3,6 +3,8 @@ use crate::boundingbox::BoundingBox;
 use crate::cylinder::Cylinder;
 use crate::line::Line;
 use crate::mesh::Mesh;
+use crate::nurbscurve::NurbsCurve;
+use crate::nurbssurface::NurbsSurface;
 use crate::plane::Plane;
 use crate::point::Point;
 use crate::pointcloud::PointCloud;
@@ -27,6 +29,8 @@ pub struct Objects {
     pub meshes: Vec<Mesh>,
     pub cylinders: Vec<Cylinder>,
     pub arrows: Vec<Arrow>,
+    pub nurbscurves: Vec<NurbsCurve>,
+    pub nurbssurfaces: Vec<NurbsSurface>,
 }
 
 impl Default for Objects {
@@ -43,6 +47,8 @@ impl Default for Objects {
             meshes: Vec::new(),
             cylinders: Vec::new(),
             arrows: Vec::new(),
+            nurbscurves: Vec::new(),
+            nurbssurfaces: Vec::new(),
         }
     }
 }
@@ -127,6 +133,12 @@ impl Objects {
             arrows: self.arrows.iter().map(|a| {
                 crate::proto::Arrow::decode(a.pb_dumps().as_slice()).unwrap()
             }).collect(),
+            nurbscurves: self.nurbscurves.iter().map(|nc| {
+                crate::proto::NurbsCurve::decode(nc.pb_dumps().as_slice()).unwrap()
+            }).collect(),
+            nurbssurfaces: self.nurbssurfaces.iter().map(|ns| {
+                crate::proto::NurbsSurface::decode(ns.pb_dumps().as_slice()).unwrap()
+            }).collect(),
         };
         proto.encode_to_vec()
     }
@@ -163,6 +175,12 @@ impl Objects {
         }
         for a in &proto.arrows {
             objects.arrows.push(crate::arrow::Arrow::pb_loads(&a.encode_to_vec())?);
+        }
+        for nc in &proto.nurbscurves {
+            objects.nurbscurves.push(crate::nurbscurve::NurbsCurve::pb_loads(&nc.encode_to_vec())?);
+        }
+        for ns in &proto.nurbssurfaces {
+            objects.nurbssurfaces.push(crate::nurbssurface::NurbsSurface::pb_loads(&ns.encode_to_vec())?);
         }
         Ok(objects)
     }

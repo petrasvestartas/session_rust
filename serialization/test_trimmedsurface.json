@@ -1,10 +1,10 @@
 {
-  "guid": "97c5b957-4607-4d64-ab82-469f382e2cf5",
+  "guid": "694348f0-9796-41dd-91a9-f7543a1f1db8",
   "name": "test_trimmedsurface",
   "width": 2.0,
   "surfacecolor": {
     "type": "Color",
-    "guid": "9643206f-8ff3-4d08-9025-b8da939baf18",
+    "guid": "f2ac6eee-2984-4364-be9d-1581ebf150bf",
     "name": "my_color",
     "r": 255,
     "g": 128,
@@ -13,7 +13,7 @@
   },
   "xform": {
     "type": "Xform",
-    "guid": "0ed37bc1-8bae-4633-ac01-9cc9c0586b3f",
+    "guid": "9ab514ce-75ce-4512-9028-95848d4176da",
     "name": "my_xform",
     "m": [
       1.0,
@@ -35,12 +35,12 @@
     ]
   },
   "m_surface": {
-    "guid": "2cd3410e-a1a1-4865-96b2-8a4d10a9e34e",
+    "guid": "e8d7cc06-1b77-4ff6-a66d-4339d5259c5d",
     "name": "my_nurbssurface",
     "width": 1.0,
     "surfacecolor": {
       "type": "Color",
-      "guid": "75e8f073-5f61-42fe-ab84-5ed66ade4c81",
+      "guid": "68bb53f4-fd87-4397-aa7b-13b1eed08e35",
       "name": "black",
       "r": 0,
       "g": 0,
@@ -49,7 +49,7 @@
     },
     "xform": {
       "type": "Xform",
-      "guid": "fc4be821-773b-4a10-bfda-a78a5b1d9383",
+      "guid": "795878b3-fb8c-4b8e-ab2b-27465482c472",
       "name": "my_xform",
       "m": [
         1.0,
@@ -140,7 +140,7 @@
     "cv_count": 5,
     "cv_stride": 3,
     "dimension": 3,
-    "guid": "32f15521-555f-4290-87ef-6662d38d8c4a",
+    "guid": "e00feb25-5fa3-464c-ade0-51a11a593550",
     "is_rational": false,
     "knots": [
       0.0,
@@ -151,7 +151,7 @@
     ],
     "linecolor": {
       "type": "Color",
-      "guid": "353257e8-a6aa-4a14-ac03-ba740e3162a2",
+      "guid": "550d3dbc-a0af-418d-ac6c-14a1e89f0b41",
       "name": "black",
       "r": 0,
       "g": 0,
@@ -163,7 +163,7 @@
     "width": 1.0,
     "xform": {
       "type": "Xform",
-      "guid": "c4022199-c09a-4f0c-891f-8ad62604c469",
+      "guid": "90bbf652-6c87-4689-8ed5-cd4d3a476e13",
       "name": "my_xform",
       "m": [
         1.0,

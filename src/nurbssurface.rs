@@ -535,6 +535,549 @@ impl NurbsSurface {
         }
     }
 
+    fn to_curve_internal(&self, dir: usize) -> Option<NurbsCurve> {
+        let dim = self.m_dim;
+        let (n_along, n_other) = if dir == 0 {
+            (self.m_cv_count[0], self.m_cv_count[1])
+        } else {
+            (self.m_cv_count[1], self.m_cv_count[0])
+        };
+        let hdim = dim * n_other;
+        let mut crv = NurbsCurve::new(hdim, false, self.m_order[dir], n_along);
+        for k in 0..self.knot_count(dir) {
+            crv.set_knot(k, self.m_knot[dir][k]);
+        }
+        for i in 0..n_along {
+            let mut cv_data = Vec::with_capacity(hdim);
+            for j in 0..n_other {
+                let p = if dir == 0 {
+                    self.get_cv(i, j)
+                } else {
+                    self.get_cv(j, i)
+                };
+                if let Some(pt) = p {
+                    cv_data.push(pt[0]);
+                    cv_data.push(pt[1]);
+                    cv_data.push(pt[2]);
+                } else {
+                    cv_data.extend_from_slice(&[0.0, 0.0, 0.0]);
+                }
+            }
+            for d in 0..hdim {
+                crv.m_cv[i * crv.m_cv_stride + d] = cv_data[d];
+            }
+        }
+        Some(crv)
+    }
+
+    fn from_curve_internal(&mut self, crv: &NurbsCurve, dir: usize) -> bool {
+        let dim = self.m_dim;
+        let n_other = if dir == 0 { self.m_cv_count[1] } else { self.m_cv_count[0] };
+        let new_n_along = crv.cv_count();
+        let new_order = crv.order();
+
+        let (order0, order1, cv0, cv1) = if dir == 0 {
+            (new_order, self.m_order[1], new_n_along, self.m_cv_count[1])
+        } else {
+            (self.m_order[0], new_order, self.m_cv_count[0], new_n_along)
+        };
+
+        let mut new_srf = match Self::create_raw(dim, false, order0, order1, cv0, cv1, false, false, 1.0, 1.0) {
+            Some(s) => s,
+            None => return false,
+        };
+
+        if dir == 0 {
+            for k in 0..crv.knot_count() {
+                if let Some(kv) = crv.knot(k) {
+                    new_srf.set_knot(0, k, kv);
+                }
+            }
+            for k in 0..self.knot_count(1) {
+                new_srf.set_knot(1, k, self.m_knot[1][k]);
+            }
+        } else {
+            for k in 0..self.knot_count(0) {
+                new_srf.set_knot(0, k, self.m_knot[0][k]);
+            }
+            for k in 0..crv.knot_count() {
+                if let Some(kv) = crv.knot(k) {
+                    new_srf.set_knot(1, k, kv);
+                }
+            }
+        }
+
+        for i in 0..new_n_along {
+            for j in 0..n_other {
+                let base = i * crv.m_cv_stride + j * dim;
+                let x = crv.m_cv[base];
+                let y = crv.m_cv[base + 1];
+                let z = crv.m_cv[base + 2];
+                if dir == 0 {
+                    new_srf.set_cv(i, j, &Point::new(x, y, z));
+                } else {
+                    new_srf.set_cv(j, i, &Point::new(x, y, z));
+                }
+            }
+        }
+
+        self.m_order = new_srf.m_order;
+        self.m_cv_count = new_srf.m_cv_count;
+        self.m_knot = new_srf.m_knot;
+        self.m_cv = new_srf.m_cv;
+        self.m_cv_stride = new_srf.m_cv_stride;
+        true
+    }
+
+    pub fn insert_knot(&mut self, dir: usize, knot_value: f64, knot_multiplicity: usize) -> bool {
+        if dir > 1 { return false; }
+        let mut crv = match self.to_curve_internal(dir) {
+            Some(c) => c,
+            None => return false,
+        };
+        for _ in 0..knot_multiplicity {
+            if !crv.insert_knot(knot_value, 1) {
+                return false;
+            }
+        }
+        self.from_curve_internal(&crv, dir)
+    }
+
+    pub fn increase_degree(&mut self, dir: usize, desired_degree: usize) -> bool {
+        if dir > 1 { return false; }
+        if desired_degree < self.degree(dir) { return false; }
+        if desired_degree == self.degree(dir) { return true; }
+        let mut crv = match self.to_curve_internal(dir) {
+            Some(c) => c,
+            None => return false,
+        };
+        if !crv.increase_degree(desired_degree) {
+            return false;
+        }
+        self.from_curve_internal(&crv, dir)
+    }
+
+    pub fn create_network(u_curves: &[NurbsCurve], v_curves: &[NurbsCurve]) -> NurbsSurface {
+        let n_u = u_curves.len();
+        let n_v = v_curves.len();
+        if n_u < 2 || n_v < 2 { return NurbsSurface::new(); }
+
+        let mut u_crvs: Vec<NurbsCurve> = u_curves.iter().map(|c| c.duplicate()).collect();
+        let mut v_crvs: Vec<NurbsCurve> = v_curves.iter().map(|c| c.duplicate()).collect();
+
+        let min_dist_sq = |crv: &NurbsCurve, pt: &Point| -> f64 {
+            let (t0, t1) = crv.domain();
+            let mut best = 1e30_f64;
+            for i in 0..=50 {
+                let t = t0 + (t1 - t0) * i as f64 / 50.0;
+                let p = crv.point_at(t);
+                let d = (p[0]-pt[0]).powi(2) + (p[1]-pt[1]).powi(2) + (p[2]-pt[2]).powi(2);
+                if d < best { best = d; }
+            }
+            best
+        };
+
+        let find_param = |crv: &NurbsCurve, pt: &Point| -> f64 {
+            let (t0, t1) = crv.domain();
+            let mut best_t = t0;
+            let mut best_d = 1e30_f64;
+            let ns = 200;
+            for i in 0..=ns {
+                let t = t0 + (t1 - t0) * i as f64 / ns as f64;
+                let p = crv.point_at(t);
+                let d = (p[0]-pt[0]).powi(2) + (p[1]-pt[1]).powi(2) + (p[2]-pt[2]).powi(2);
+                if d < best_d { best_d = d; best_t = t; }
+            }
+            for _ in 0..20 {
+                let derivs = crv.evaluate(best_t, 2);
+                let dx = derivs[0][0]-pt[0];
+                let dy = derivs[0][1]-pt[1];
+                let dz = derivs[0][2]-pt[2];
+                let f1 = 2.0*(dx*derivs[1][0] + dy*derivs[1][1] + dz*derivs[1][2]);
+                let f2 = 2.0*(derivs[1][0].powi(2) + derivs[1][1].powi(2) + derivs[1][2].powi(2)
+                             + dx*derivs[2][0] + dy*derivs[2][1] + dz*derivs[2][2]);
+                if f2.abs() < 1e-14 { break; }
+                let dt = f1 / f2;
+                best_t -= dt;
+                if best_t < t0 { best_t = t0; }
+                if best_t > t1 { best_t = t1; }
+                if dt.abs() < 1e-14 { break; }
+            }
+            best_t
+        };
+
+        // Orient v-curves: all should start near u_curve[0]
+        for vc in v_crvs.iter_mut() {
+            let vs = vc.point_at(vc.domain_start());
+            let ve = vc.point_at(vc.domain_end());
+            if min_dist_sq(&u_crvs[0], &ve) < min_dist_sq(&u_crvs[0], &vs) {
+                vc.reverse();
+            }
+        }
+
+        // Find u-params for each v-curve on u_curve[0], sort v-curves
+        let mut u_params_raw = vec![0.0; n_v];
+        for j in 0..n_v {
+            u_params_raw[j] = find_param(&u_crvs[0], &v_crvs[j].point_at(v_crvs[j].domain_start()));
+        }
+        let mut v_order: Vec<usize> = (0..n_v).collect();
+        v_order.sort_by(|&a, &b| u_params_raw[a].partial_cmp(&u_params_raw[b]).unwrap());
+        let sorted: Vec<NurbsCurve> = v_order.iter().map(|&i| v_crvs[i].duplicate()).collect();
+        v_crvs = sorted;
+
+        // Orient u-curves: all should start near first sorted v-curve
+        for uc in u_crvs.iter_mut() {
+            let us = uc.point_at(uc.domain_start());
+            let ue = uc.point_at(uc.domain_end());
+            if min_dist_sq(&v_crvs[0], &ue) < min_dist_sq(&v_crvs[0], &us) {
+                uc.reverse();
+            }
+        }
+
+        Self::make_curves_compatible(&mut u_crvs);
+        Self::make_curves_compatible(&mut v_crvs);
+        for c in u_crvs.iter_mut() { c.set_domain(0.0, 1.0); }
+        for c in v_crvs.iter_mut() { c.set_domain(0.0, 1.0); }
+
+        // Find intersection parameters for ALL (u-curve, v-curve) pairs
+        let mut t_u_ij = vec![vec![0.0; n_v]; n_u];
+        let mut t_v_ij = vec![vec![0.0; n_v]; n_u];
+        for i in 0..n_u {
+            for j in 0..n_v {
+                let approx_v = if n_u > 1 { i as f64 / (n_u - 1) as f64 } else { 0.0 };
+                let pv = v_crvs[j].point_at(approx_v);
+                t_u_ij[i][j] = find_param(&u_crvs[i], &pv);
+                let pu = u_crvs[i].point_at(t_u_ij[i][j]);
+                t_v_ij[i][j] = find_param(&v_crvs[j], &pu);
+            }
+        }
+
+        // Average intersection parameters
+        let mut u_params = vec![0.0; n_v];
+        for j in 0..n_v {
+            for i in 0..n_u { u_params[j] += t_u_ij[i][j]; }
+            u_params[j] /= n_u as f64;
+        }
+        let mut v_params = vec![0.0; n_u];
+        for i in 0..n_u {
+            for j in 0..n_v { v_params[i] += t_v_ij[i][j]; }
+            v_params[i] /= n_v as f64;
+        }
+
+        // Gaussian elimination with partial pivoting
+        let gauss_solve = |n: usize, dim: usize, a: &mut Vec<Vec<f64>>, b: &mut Vec<Vec<f64>>| {
+            for col in 0..n {
+                let mut mr = col;
+                let mut mv = a[col][col].abs();
+                for r in (col+1)..n {
+                    if a[r][col].abs() > mv { mv = a[r][col].abs(); mr = r; }
+                }
+                if mv < 1e-14 { continue; }
+                a.swap(col, mr);
+                b.swap(col, mr);
+                for r in (col+1)..n {
+                    let f = a[r][col] / a[col][col];
+                    for c in col..n { a[r][c] -= f * a[col][c]; }
+                    for d in 0..dim { b[r][d] -= f * b[col][d]; }
+                }
+            }
+            for r in (0..n).rev() {
+                for d in 0..dim {
+                    for c in (r+1)..n { b[r][d] -= a[r][c] * b[c][d]; }
+                    if a[r][r].abs() > 1e-14 { b[r][d] /= a[r][r]; }
+                }
+            }
+        };
+
+        // Build interpolation knot vector (Piegl-Tiller averaging)
+        let build_interp_knots = |n_pts: usize, deg: usize, params: &[f64]| -> Vec<f64> {
+            let ord = deg + 1;
+            let kc = ord + n_pts - 2;
+            let mut knots = vec![0.0; kc];
+            for i in 0..(ord-1) { knots[i] = params[0]; }
+            for j in 1..=(n_pts.saturating_sub(ord)) {
+                let mut sum = 0.0;
+                for i in j..(j+deg) { sum += params[i]; }
+                knots[ord - 2 + j] = sum / deg as f64;
+            }
+            for i in (kc-ord+1)..kc { knots[i] = params[n_pts-1]; }
+            knots
+        };
+
+        // Build basis function matrix
+        let build_basis_matrix = |n: usize, ord: usize, params: &[f64], knots: &[f64]| -> Vec<Vec<f64>> {
+            let mut nn = vec![vec![0.0; n]; n];
+            for row in 0..n {
+                let t = params[row];
+                let span = knot::find_span(ord, n, knots, t);
+                let d = ord - 1;
+                let kb = span + d;
+                if knots[kb - 1] == knots[kb] {
+                    if t <= knots[kb] { nn[row][span] = 1.0; }
+                    else { nn[row][span + ord - 1] = 1.0; }
+                    continue;
+                }
+                let mut nv = vec![0.0; ord * ord];
+                nv[ord * ord - 1] = 1.0;
+                let mut left = vec![0.0; d];
+                let mut right = vec![0.0; d];
+                let mut ni = (ord * ord - 1) as i64;
+                let mut kr = kb;
+                let mut kl = kb - 1;
+                for j in 0..d {
+                    let n0 = ni;
+                    ni -= (ord + 1) as i64;
+                    left[j] = t - knots[kl];
+                    right[j] = knots[kr] - t;
+                    if kl > 0 { kl -= 1; }
+                    kr += 1;
+                    let mut xv = 0.0;
+                    for r in 0..=j {
+                        let a0 = left[j - r];
+                        let a1 = right[r];
+                        let den = a0 + a1;
+                        let yv = if den != 0.0 { nv[n0 as usize + r] / den } else { 0.0 };
+                        nv[ni as usize + r] = xv + a1 * yv;
+                        xv = a0 * yv;
+                    }
+                    nv[ni as usize + j + 1] = xv;
+                }
+                for j in 0..ord {
+                    let col = span + j;
+                    if col < n { nn[row][col] = nv[j]; }
+                }
+            }
+            nn
+        };
+
+        // Reparametrize curves using monotone Hermite parameter mapping
+        let monotone_hermite_eval = |xs: &[f64], ys: &[f64], t: f64| -> f64 {
+            let n = xs.len();
+            if n < 2 { return t; }
+            if t <= xs[0] { return ys[0]; }
+            if t >= xs[n-1] { return ys[n-1]; }
+            let delta: Vec<f64> = (0..n-1).map(|k| (ys[k+1]-ys[k])/(xs[k+1]-xs[k])).collect();
+            let mut d = vec![0.0; n];
+            d[0] = delta[0]; d[n-1] = delta[n-2];
+            for k in 1..n-1 {
+                d[k] = if delta[k-1]*delta[k] <= 0.0 { 0.0 } else { (delta[k-1]+delta[k])/2.0 };
+            }
+            for k in 0..n-1 {
+                if delta[k].abs() < 1e-15 { d[k] = 0.0; d[k+1] = 0.0; continue; }
+                let mut alpha = d[k]/delta[k];
+                let mut beta = d[k+1]/delta[k];
+                if alpha < 0.0 { d[k] = 0.0; alpha = 0.0; }
+                if beta < 0.0 { d[k+1] = 0.0; beta = 0.0; }
+                let r2 = alpha*alpha + beta*beta;
+                if r2 > 9.0 {
+                    let tau = 3.0 / r2.sqrt();
+                    d[k] = tau * alpha * delta[k];
+                    d[k+1] = tau * beta * delta[k];
+                }
+            }
+            let mut ki = 0;
+            for i in 0..n-1 { if t < xs[i+1] { ki = i; break; } if i == n-2 { ki = i; } }
+            let h = xs[ki+1] - xs[ki];
+            if h < 1e-15 { return ys[ki]; }
+            let s = (t - xs[ki]) / h;
+            let s2 = s*s; let s3 = s2*s;
+            (2.0*s3-3.0*s2+1.0)*ys[ki] + (s3-2.0*s2+s)*h*d[ki]
+                + (-2.0*s3+3.0*s2)*ys[ki+1] + (s3-s2)*h*d[ki+1]
+        };
+
+        let reparametrize_curve = |crv: &NurbsCurve, target_params: &[f64], actual_params: &[f64]| -> Option<NurbsCurve> {
+            let np = target_params.len();
+            let mut mx = Vec::new();
+            let mut my = Vec::new();
+            let has0 = target_params.iter().any(|&t| t.abs() < 1e-10);
+            let has1 = target_params.iter().any(|&t| (t - 1.0).abs() < 1e-10);
+            if !has0 { mx.push(0.0); my.push(0.0); }
+            for k in 0..np { mx.push(target_params[k]); my.push(actual_params[k]); }
+            if !has1 { mx.push(1.0); my.push(1.0); }
+            let max_dev = mx.iter().zip(my.iter()).map(|(x, y)| (y - x).abs()).fold(0.0f64, f64::max);
+            if max_dev < 1e-6 { return None; }
+            let nu = (crv.cv_count() * 5).max(30);
+            let mut sample_set = std::collections::BTreeSet::new();
+            for k in 0..nu {
+                let bits = ((k as f64 / (nu - 1) as f64) * 1e15) as i64;
+                sample_set.insert(bits);
+            }
+            for k in 0..np {
+                let bits = (target_params[k] * 1e15) as i64;
+                sample_set.insert(bits);
+            }
+            let sp: Vec<f64> = sample_set.iter().map(|&b| b as f64 / 1e15).collect();
+            let ns = sp.len();
+            let mut pts = Vec::with_capacity(ns);
+            for k in 0..ns {
+                let tm = monotone_hermite_eval(&mx, &my, sp[k]).max(0.0).min(1.0);
+                pts.push(crv.point_at(tm));
+            }
+            let deg = 3.min(ns - 1);
+            let ord = deg + 1;
+            let kn = build_interp_knots(ns, deg, &sp);
+            let mut nn_mat = build_basis_matrix(ns, ord, &sp, &kn);
+            let mut rhs: Vec<Vec<f64>> = pts.iter().map(|p| vec![p[0], p[1], p[2]]).collect();
+            gauss_solve(ns, 3, &mut nn_mat, &mut rhs);
+            let mut nc = NurbsCurve::new(3, false, ord, ns);
+            for k in 0..kn.len().min(nc.knot_count()) { nc.set_knot(k, kn[k]); }
+            for k in 0..ns { nc.set_cv(k, &Point::new(rhs[k][0], rhs[k][1], rhs[k][2])); }
+            nc.set_domain(0.0, 1.0);
+            Some(nc)
+        };
+
+        for i in 0..n_u {
+            let tgt: Vec<f64> = (0..n_v).map(|j| u_params[j]).collect();
+            let act: Vec<f64> = (0..n_v).map(|j| t_u_ij[i][j]).collect();
+            if let Some(nc) = reparametrize_curve(&u_crvs[i], &tgt, &act) {
+                u_crvs[i] = nc;
+            }
+        }
+        for j in 0..n_v {
+            let tgt: Vec<f64> = (0..n_u).map(|i| v_params[i]).collect();
+            let act: Vec<f64> = (0..n_u).map(|i| t_v_ij[i][j]).collect();
+            if let Some(nc) = reparametrize_curve(&v_crvs[j], &tgt, &act) {
+                v_crvs[j] = nc;
+            }
+        }
+
+        Self::make_curves_compatible(&mut u_crvs);
+        Self::make_curves_compatible(&mut v_crvs);
+        for c in u_crvs.iter_mut() { c.set_domain(0.0, 1.0); }
+        for c in v_crvs.iter_mut() { c.set_domain(0.0, 1.0); }
+
+        // Intersection points from u-curves (ensures exact v-curve interpolation at grid points)
+        let mut p_ij = vec![vec![Point::new(0.0, 0.0, 0.0); n_v]; n_u];
+        for i in 0..n_u {
+            for j in 0..n_v {
+                p_ij[i][j] = u_crvs[i].point_at(u_params[j]);
+            }
+        }
+
+        // Skin compatible curves
+        let skin_curves = |curves: &[NurbsCurve], cross_params: &[f64], cross_degree: usize| -> NurbsSurface {
+            let nc = curves.len();
+            let cv_along = curves[0].cv_count();
+            let order_along = curves[0].order();
+            let cdeg = cross_degree.min(nc - 1);
+            let cord = cdeg + 1;
+            let cross_knots = build_interp_knots(nc, cdeg, cross_params);
+            let n_cross = build_basis_matrix(nc, cord, cross_params, &cross_knots);
+
+            let mut srf = match Self::create_raw(3, false, order_along, cord, cv_along, nc, false, false, 1.0, 1.0) {
+                Some(s) => s,
+                None => return NurbsSurface::new(),
+            };
+            for i in 0..srf.knot_count(0) {
+                if let Some(kv) = curves[0].knot(i) {
+                    srf.set_knot(0, i, kv);
+                }
+            }
+            let v_kc = cross_knots.len();
+            for i in 0..v_kc.min(srf.knot_count(1)) {
+                srf.set_knot(1, i, cross_knots[i]);
+            }
+            for j in 0..cv_along {
+                let mut a = n_cross.clone();
+                let mut rhs: Vec<Vec<f64>> = (0..nc).map(|k| {
+                    let p = curves[k].get_cv(j).unwrap_or(Point::new(0.0, 0.0, 0.0));
+                    vec![p[0], p[1], p[2]]
+                }).collect();
+                gauss_solve(nc, 3, &mut a, &mut rhs);
+                for k in 0..nc {
+                    srf.set_cv(j, k, &Point::new(rhs[k][0], rhs[k][1], rhs[k][2]));
+                }
+            }
+            srf
+        };
+
+        // Step 1: Build S_profiles (skin u-curves at v_params)
+        let mut s_profiles = skin_curves(&u_crvs, &v_params, 3);
+
+        // Step 2: Build S_guides (skin v-curves at u_params, then transpose)
+        let mut s_guides = skin_curves(&v_crvs, &u_params, 3);
+        s_guides.transpose();
+
+        // Step 3: Build S_tensor (interpolate intersection point grid)
+        let mut s_tensor;
+        {
+            let u_deg = 3_usize.min(n_v - 1);
+            let u_ord = u_deg + 1;
+            let u_knots_t = build_interp_knots(n_v, u_deg, &u_params);
+            let n_u_mat = build_basis_matrix(n_v, u_ord, &u_params, &u_knots_t);
+
+            let mut row_curves = Vec::with_capacity(n_u);
+            for i in 0..n_u {
+                let mut a = n_u_mat.clone();
+                let mut rhs: Vec<Vec<f64>> = (0..n_v).map(|j| {
+                    vec![p_ij[i][j][0], p_ij[i][j][1], p_ij[i][j][2]]
+                }).collect();
+                gauss_solve(n_v, 3, &mut a, &mut rhs);
+                let mut crv = NurbsCurve::new(3, false, u_ord, n_v);
+                for k in 0..u_knots_t.len().min(crv.knot_count()) {
+                    crv.set_knot(k, u_knots_t[k]);
+                }
+                for k in 0..n_v {
+                    crv.set_cv_point(k, &Point::new(rhs[k][0], rhs[k][1], rhs[k][2]));
+                }
+                row_curves.push(crv);
+            }
+            s_tensor = skin_curves(&row_curves, &v_params, 3);
+        }
+
+        // Step 4: Make all three surfaces compatible
+        for dir in 0..2 {
+            s_profiles.set_domain(dir, 0.0, 1.0);
+            s_guides.set_domain(dir, 0.0, 1.0);
+            s_tensor.set_domain(dir, 0.0, 1.0);
+        }
+
+        let max_deg_u = s_profiles.degree(0).max(s_guides.degree(0)).max(s_tensor.degree(0));
+        let max_deg_v = s_profiles.degree(1).max(s_guides.degree(1)).max(s_tensor.degree(1));
+
+        for srf in [&mut s_profiles, &mut s_guides, &mut s_tensor] {
+            if srf.degree(0) < max_deg_u { srf.increase_degree(0, max_deg_u); }
+            if srf.degree(1) < max_deg_v { srf.increase_degree(1, max_deg_v); }
+        }
+
+        // Unify knot vectors in both directions
+        let ktol = 1e-10;
+        for dir in 0..2 {
+            let ka = s_profiles.get_knots(dir);
+            let kb = s_guides.get_knots(dir);
+            let kc = s_tensor.get_knots(dir);
+            let unified = Self::merge_knot_vectors(&Self::merge_knot_vectors(&ka, &kb), &kc);
+            for srf in [&mut s_profiles, &mut s_guides, &mut s_tensor] {
+                let mut cur = srf.get_knots(dir);
+                for &kv in &unified {
+                    let found = cur.iter().any(|&ck| (ck - kv).abs() < ktol);
+                    if !found {
+                        srf.insert_knot(dir, kv, 1);
+                        cur = srf.get_knots(dir);
+                    }
+                }
+            }
+        }
+
+        // Step 5: Combine control points
+        let final_cv_u = s_profiles.cv_count_dir(Some(0));
+        let final_cv_v = s_profiles.cv_count_dir(Some(1));
+        let mut surface = s_profiles.duplicate();
+        for i in 0..final_cv_u {
+            for j in 0..final_cv_v {
+                let pp = s_profiles.get_cv(i, j).unwrap_or(Point::new(0.0, 0.0, 0.0));
+                let pg = s_guides.get_cv(i, j).unwrap_or(Point::new(0.0, 0.0, 0.0));
+                let pt = s_tensor.get_cv(i, j).unwrap_or(Point::new(0.0, 0.0, 0.0));
+                surface.set_cv(i, j, &Point::new(
+                    pp[0] + pg[0] - pt[0],
+                    pp[1] + pg[1] - pt[1],
+                    pp[2] + pg[2] - pt[2],
+                ));
+            }
+        }
+        surface
+    }
+
     pub fn create_planar(curves: &[NurbsCurve]) -> Option<Self> {
         if curves.is_empty() { return None; }
 
