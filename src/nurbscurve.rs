@@ -18,7 +18,8 @@ pub struct NurbsCurve {
     pub guid: String,
     pub name: String,
     pub width: f64,
-    pub linecolor: Color,
+    pub pointcolors: Vec<Color>,
+    pub linecolors: Vec<Color>,
     pub xform: Xform,
     pub m_dim: usize,
     pub m_is_rat: bool,
@@ -46,7 +47,7 @@ impl Serialize for NurbsCurve {
     where
         S: Serializer,
     {
-        let mut map = serializer.serialize_map(Some(12))?;
+        let mut map = serializer.serialize_map(Some(14))?;
         let control_points: Vec<Vec<f64>> = (0..self.m_cv_count)
             .map(|i| {
                 if let Some(p) = self.get_cv(i) {
@@ -56,7 +57,7 @@ impl Serialize for NurbsCurve {
                 }
             })
             .collect();
-        // Fields in alphabetical order (per CLAUDE.md)
+        // Fields in alphabetical order
         map.serialize_entry("control_points", &control_points)?;
         map.serialize_entry("cv_count", &self.m_cv_count)?;
         map.serialize_entry("cv_stride", &self.m_cv_stride)?;
@@ -64,9 +65,15 @@ impl Serialize for NurbsCurve {
         map.serialize_entry("guid", &self.guid)?;
         map.serialize_entry("is_rational", &self.m_is_rat)?;
         map.serialize_entry("knots", &self.m_knot)?;
-        map.serialize_entry("linecolor", &self.linecolor)?;
+        let linecolors_flat: Vec<u8> = self.linecolors.iter()
+            .flat_map(|c| vec![c.r, c.g, c.b, c.a]).collect();
+        map.serialize_entry("linecolors", &linecolors_flat)?;
         map.serialize_entry("name", &self.name)?;
         map.serialize_entry("order", &self.m_order)?;
+        let pointcolors_flat: Vec<u8> = self.pointcolors.iter()
+            .flat_map(|c| vec![c.r, c.g, c.b, c.a]).collect();
+        map.serialize_entry("pointcolors", &pointcolors_flat)?;
+        map.serialize_entry("type", "NurbsCurve")?;
         map.serialize_entry("width", &self.width)?;
         map.serialize_entry("xform", &self.xform)?;
         map.end()
@@ -89,7 +96,9 @@ impl<'de> Deserialize<'de> for NurbsCurve {
             is_rational: bool,
             knots: Vec<f64>,
             #[serde(default)]
-            linecolor: Option<Color>,
+            pointcolors: Vec<u8>,
+            #[serde(default)]
+            linecolors: Vec<u8>,
             name: String,
             order: usize,
             #[serde(default)]
@@ -110,11 +119,20 @@ impl<'de> Deserialize<'de> for NurbsCurve {
                 m_cv.push(0.0);
             }
         }
+        let pointcolors = data.pointcolors.chunks(4)
+            .filter(|c| c.len() == 4)
+            .map(|c| Color::new(c[0], c[1], c[2], c[3]))
+            .collect();
+        let linecolors = data.linecolors.chunks(4)
+            .filter(|c| c.len() == 4)
+            .map(|c| Color::new(c[0], c[1], c[2], c[3]))
+            .collect();
         Ok(NurbsCurve {
             guid: data.guid,
             name: data.name,
             width: data.width.unwrap_or(1.0),
-            linecolor: data.linecolor.unwrap_or_else(Color::white),
+            pointcolors,
+            linecolors,
             xform: data.xform.unwrap_or_else(Xform::identity),
             m_dim: data.dimension,
             m_is_rat: data.is_rational,
@@ -158,6 +176,227 @@ impl NurbsCurve {
         curve
     }
 
+    pub fn create_interpolated(points: &[Point], parameterization: knot::CurveKnotStyle) -> NurbsCurve {
+        let n = points.len();
+        if n < 2 { return NurbsCurve::new(3, false, 4, 0); }
+        let dim = 3usize;
+        let degree = 3usize;
+        let order = degree + 1;
+
+        let periodic = matches!(parameterization,
+            knot::CurveKnotStyle::UniformPeriodic |
+            knot::CurveKnotStyle::ChordPeriodic |
+            knot::CurveKnotStyle::ChordSquareRootPeriodic);
+
+        if periodic && n < 3 { return NurbsCurve::new(3, false, 4, 0); }
+
+        let pdist = |a: &Point, b: &Point| -> f64 {
+            let dx = a[0]-b[0]; let dy = a[1]-b[1]; let dz = a[2]-b[2];
+            (dx*dx + dy*dy + dz*dz).sqrt()
+        };
+
+        if periodic {
+            let cv_count = n + 3;
+            let kc = cv_count + order - 2;
+
+            let base_style = match parameterization {
+                knot::CurveKnotStyle::UniformPeriodic => knot::CurveKnotStyle::Uniform,
+                knot::CurveKnotStyle::ChordSquareRootPeriodic => knot::CurveKnotStyle::ChordSquareRoot,
+                _ => knot::CurveKnotStyle::Chord,
+            };
+
+            let mut params = vec![0.0; n + 1];
+            if matches!(base_style, knot::CurveKnotStyle::Uniform) {
+                for i in 1..=n { params[i] = i as f64; }
+            } else {
+                for i in 1..n {
+                    let mut d = pdist(&points[i-1], &points[i]);
+                    if matches!(base_style, knot::CurveKnotStyle::ChordSquareRoot) { d = d.sqrt(); }
+                    params[i] = params[i-1] + d;
+                }
+                let mut d_close = pdist(&points[n-1], &points[0]);
+                if matches!(base_style, knot::CurveKnotStyle::ChordSquareRoot) { d_close = d_close.sqrt(); }
+                params[n] = params[n-1] + d_close;
+            }
+
+            let mut dmin = 1e300_f64;
+            let mut dmax = 0.0_f64;
+            for i in 0..n {
+                let d = params[i+1] - params[i];
+                if d < dmin { dmin = d; }
+                if d > dmax { dmax = d; }
+            }
+            if dmax <= 0.0 || dmax * 1.490116119385e-8 >= dmin {
+                return NurbsCurve::new(3, false, 4, 0);
+            }
+
+            let mut knots_vec = vec![0.0; kc];
+            for i in 0..=n { knots_vec[i + 2] = params[i]; }
+            knots_vec[cv_count]     = knots_vec[3] - knots_vec[2] + knots_vec[cv_count - 1];
+            knots_vec[1]            = knots_vec[cv_count - 2] - knots_vec[cv_count - 1] + knots_vec[2];
+            knots_vec[cv_count + 1] = knots_vec[4] - knots_vec[3] + knots_vec[cv_count];
+            knots_vec[0]            = knots_vec[cv_count - 3] - knots_vec[cv_count - 2] + knots_vec[1];
+
+            let mut a = vec![vec![0.0; n]; n];
+            let mut rhs = vec![0.0; n * dim];
+
+            for i in 0..n {
+                let basis = knot::eval_basis(order, &knots_vec, i, params[i]);
+                let c0 = i % n;
+                let c1 = (i + 1) % n;
+                let c2 = (i + 2) % n;
+                a[i][c0] += basis[0];
+                a[i][c1] += basis[1];
+                a[i][c2] += basis[2];
+                for d in 0..dim { rhs[i * dim + d] = points[i][d]; }
+            }
+
+            let mut cv = vec![0.0; n * dim];
+            for i in 0..n {
+                for d in 0..dim { cv[i * dim + d] = rhs[i * dim + d]; }
+            }
+
+            for col in 0..n {
+                let mut pivot = col;
+                for row in (col+1)..n {
+                    if a[row][col].abs() > a[pivot][col].abs() { pivot = row; }
+                }
+                if pivot != col {
+                    a.swap(col, pivot);
+                    for d in 0..dim { cv.swap(col*dim+d, pivot*dim+d); }
+                }
+                if a[col][col].abs() < 1e-300 { return NurbsCurve::new(3, false, 4, 0); }
+                for row in (col+1)..n {
+                    let factor = a[row][col] / a[col][col];
+                    for j in col..n { a[row][j] -= factor * a[col][j]; }
+                    for d in 0..dim { cv[row*dim+d] -= factor * cv[col*dim+d]; }
+                }
+            }
+            for i in (0..n).rev() {
+                for d in 0..dim {
+                    let mut sum = cv[i*dim+d];
+                    for j in (i+1)..n { sum -= a[i][j] * cv[j*dim+d]; }
+                    cv[i*dim+d] = sum / a[i][i];
+                }
+            }
+
+            let mut curve = NurbsCurve::new(dim, false, order, cv_count);
+            for i in 0..kc { curve.set_knot(i, knots_vec[i]); }
+            for i in 0..n {
+                curve.set_cv(i, &Point::new(cv[i*3], cv[i*3+1], cv[i*3+2]));
+            }
+            let cv0 = curve.get_cv(0).unwrap();
+            let cv1 = curve.get_cv(1).unwrap();
+            let cv2 = curve.get_cv(2).unwrap();
+            curve.set_cv(n, &cv0);
+            curve.set_cv(n + 1, &cv1);
+            curve.set_cv(n + 2, &cv2);
+            return curve;
+        }
+
+        // Open interpolation
+        let cv_count = n + 2;
+
+        let mut pts = vec![0.0; n * dim];
+        for i in 0..n {
+            pts[i*3] = points[i][0];
+            pts[i*3+1] = points[i][1];
+            pts[i*3+2] = points[i][2];
+        }
+
+        let params = knot::compute_parameters(&pts, dim, parameterization);
+        let knots_vec = knot::build_interp_knots(&params, degree);
+        let kc = knots_vec.len();
+
+        let estimate_tangent = |i0: usize, i1: usize, i2: usize| -> Vector {
+            let d01 = pdist(&points[i0], &points[i1]);
+            let d21 = pdist(&points[i2], &points[i1]);
+            if d01 + d21 < 1e-300 { return Vector::new(0.0, 0.0, 0.0); }
+            let s = d01 / (d01 + d21);
+            let t = 1.0 - s;
+            let denom = 2.0 * s * t;
+            if denom < 1e-16 {
+                let dx = points[i1][0] - points[i0][0];
+                let dy = points[i1][1] - points[i0][1];
+                let dz = points[i1][2] - points[i0][2];
+                let len = (dx*dx + dy*dy + dz*dz).sqrt();
+                return if len > 0.0 { Vector::new(dx/len, dy/len, dz/len) } else { Vector::new(0.0, 0.0, 0.0) };
+            }
+            let cvx = (-t*t*points[i0][0] + points[i1][0] - s*s*points[i2][0]) / denom;
+            let cvy = (-t*t*points[i0][1] + points[i1][1] - s*s*points[i2][1]) / denom;
+            let cvz = (-t*t*points[i0][2] + points[i1][2] - s*s*points[i2][2]) / denom;
+            let dx = cvx - points[i0][0];
+            let dy = cvy - points[i0][1];
+            let dz = cvz - points[i0][2];
+            let len = (dx*dx + dy*dy + dz*dz).sqrt();
+            if len > 0.0 { Vector::new(dx/len, dy/len, dz/len) } else { Vector::new(0.0, 0.0, 0.0) }
+        };
+
+        let (tan_start, tan_end) = if n >= 3 {
+            let ts = estimate_tangent(0, 1, 2);
+            let er = estimate_tangent(n-1, n-2, n-3);
+            (ts, Vector::new(-er[0], -er[1], -er[2]))
+        } else {
+            let dx = points[1][0] - points[0][0];
+            let dy = points[1][1] - points[0][1];
+            let dz = points[1][2] - points[0][2];
+            let len = (dx*dx + dy*dy + dz*dz).sqrt();
+            if len > 0.0 {
+                let v = Vector::new(dx/len, dy/len, dz/len);
+                (v.clone(), v)
+            } else {
+                (Vector::new(0.0, 0.0, 0.0), Vector::new(0.0, 0.0, 0.0))
+            }
+        };
+
+        let d_start = pdist(&points[0], &points[1]);
+        let d_end = pdist(&points[n-1], &points[n-2]);
+
+        let mut cv = vec![0.0; cv_count * dim];
+        for d in 0..dim { cv[d] = points[0][d]; }
+        let s0 = d_start / 3.0;
+        for d in 0..dim { cv[dim + d] = points[0][d] + s0 * tan_start[d]; }
+        for i in 1..n-1 {
+            for d in 0..dim { cv[(i+1) * dim + d] = points[i][d]; }
+        }
+        let s1 = -d_end / 3.0;
+        for d in 0..dim { cv[n * dim + d] = points[n-1][d] + s1 * tan_end[d]; }
+        for d in 0..dim { cv[(n+1) * dim + d] = points[n-1][d]; }
+
+        let sys_n = n;
+        let mut lower = vec![0.0; sys_n];
+        let mut diag = vec![0.0; sys_n];
+        let mut upper = vec![0.0; sys_n];
+        let mut rhs = vec![0.0; sys_n * dim];
+
+        diag[0] = 1.0;
+        for d in 0..dim { rhs[d] = cv[dim + d]; }
+
+        for i in 1..n-1 {
+            let basis = knot::eval_basis(order, &knots_vec, i, params[i]);
+            lower[i] = basis[0];
+            diag[i] = basis[1];
+            upper[i] = basis[2];
+            for d in 0..dim { rhs[i * dim + d] = points[i][d]; }
+        }
+
+        diag[n-1] = 1.0;
+        for d in 0..dim { rhs[(n-1) * dim + d] = cv[n * dim + d]; }
+
+        let solution = knot::solve_tridiagonal(dim, &lower, &diag, &upper, &rhs).unwrap();
+
+        for i in 0..sys_n {
+            for d in 0..dim { cv[(i+1) * dim + d] = solution[i * dim + d]; }
+        }
+
+        let mut curve = NurbsCurve::new(dim, false, order, cv_count);
+        for i in 0..kc { curve.set_knot(i, knots_vec[i]); }
+        for i in 0..cv_count {
+            curve.set_cv(i, &Point::new(cv[i*3], cv[i*3+1], cv[i*3+2]));
+        }
+
+        curve
+    }
 
     /// Create clamped uniform NURBS curve from control points
     ///
@@ -267,7 +506,8 @@ impl NurbsCurve {
             guid: Uuid::new_v4().to_string(),
             name: "my_nurbscurve".to_string(),
             width: 1.0,
-            linecolor: Color::black(),
+            pointcolors: Vec::new(),
+            linecolors: Vec::new(),
             xform: Xform::identity(),
             m_dim: dimension,
             m_is_rat: is_rational,
@@ -286,7 +526,8 @@ impl NurbsCurve {
             guid: Uuid::new_v4().to_string(),
             name: "my_nurbscurve".to_string(),
             width: 1.0,
-            linecolor: Color::black(),
+            pointcolors: Vec::new(),
+            linecolors: Vec::new(),
             xform: Xform::identity(),
             m_dim: 0,
             m_is_rat: false,
@@ -496,7 +737,13 @@ impl NurbsCurve {
         let y = if self.m_dim > 1 { self.m_cv[idx + 1] } else { 0.0 };
         let z = if self.m_dim > 2 { self.m_cv[idx + 2] } else { 0.0 };
 
-        Some(Point::new(x, y, z))
+        if self.m_is_rat {
+            let w = self.m_cv[idx + self.m_dim];
+            if w.abs() < 1e-14 { return Some(Point::new(0.0, 0.0, 0.0)); }
+            Some(Point::new(x / w, y / w, z / w))
+        } else {
+            Some(Point::new(x, y, z))
+        }
     }
 
 
@@ -2355,7 +2602,12 @@ impl NurbsCurve {
                 let x = xform.m[0] * p[0] + xform.m[4] * p[1] + xform.m[8] * p[2] + xform.m[12];
                 let y = xform.m[1] * p[0] + xform.m[5] * p[1] + xform.m[9] * p[2] + xform.m[13];
                 let z = xform.m[2] * p[0] + xform.m[6] * p[1] + xform.m[10] * p[2] + xform.m[14];
-                self.set_cv(i, &Point::new(x, y, z));
+                if self.m_is_rat {
+                    let w = self.weight(i);
+                    self.set_cv_4d(i, x * w, y * w, z * w, w);
+                } else {
+                    self.set_cv(i, &Point::new(x, y, z));
+                }
             }
         }
     }
@@ -2415,15 +2667,15 @@ impl NurbsCurve {
             cv_stride: self.m_cv_stride as i32,
             knots: self.m_knot.clone(),
             cvs: self.m_cv.clone(),
-            width: 1.0,
-            linecolor: Some(crate::proto::Color {
-                guid: String::new(),
-                name: "white".to_string(),
-                r: 255,
-                g: 255,
-                b: 255,
-                a: 255,
-            }),
+            width: self.width,
+            pointcolors: self.pointcolors.iter().map(|c| crate::proto::Color {
+                guid: String::new(), name: String::new(),
+                r: c.r as i32, g: c.g as i32, b: c.b as i32, a: c.a as i32,
+            }).collect(),
+            linecolors: self.linecolors.iter().map(|c| crate::proto::Color {
+                guid: String::new(), name: String::new(),
+                r: c.r as i32, g: c.g as i32, b: c.b as i32, a: c.a as i32,
+            }).collect(),
             xform: Some(crate::proto::Xform {
                 guid: self.xform.guid.clone(),
                 name: self.xform.name.clone(),
@@ -2448,6 +2700,8 @@ impl NurbsCurve {
         curve.name = proto.name;
         curve.m_knot = proto.knots;
         curve.m_cv = proto.cvs;
+        curve.pointcolors = proto.pointcolors.iter().map(|c| Color::new(c.r as u8, c.g as u8, c.b as u8, c.a as u8)).collect();
+        curve.linecolors = proto.linecolors.iter().map(|c| Color::new(c.r as u8, c.g as u8, c.b as u8, c.a as u8)).collect();
         if let Some(xform) = proto.xform {
             curve.xform.guid = xform.guid;
             curve.xform.name = xform.name;

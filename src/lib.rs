@@ -9,14 +9,12 @@ pub mod proto {
     include!(concat!(env!("OUT_DIR"), "/session_proto.rs"));
 }
 
-pub mod arrow;
 pub mod boundingbox;
 pub mod bvh;
 #[cfg(test)]
 mod bvh_test;
 pub mod closest;
 pub mod color;
-pub mod cylinder;
 pub mod edge;
 pub mod encoders;
 pub mod graph;
@@ -61,12 +59,10 @@ pub mod nurbscurve_test;
 pub mod nurbssurface_test;
 pub mod primitives_test;
 
-pub use arrow::Arrow;
 pub use boundingbox::BoundingBox;
 pub use bvh::BVH;
 pub use closest::Closest;
 pub use color::Color;
-pub use cylinder::Cylinder;
 pub use edge::Edge;
 pub use graph::Graph;
 pub use line::Line;

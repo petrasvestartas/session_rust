@@ -1,68 +1,5 @@
 {
-  "guid": "eabe124e-eb25-417a-afaf-ba89db0fe409",
-  "name": "test_nurbssurface",
-  "width": 2.0,
-  "surfacecolor": {
-    "type": "Color",
-    "guid": "352bab38-2c37-42c1-b710-db12d3aac832",
-    "name": "my_color",
-    "r": 255,
-    "g": 128,
-    "b": 64,
-    "a": 255
-  },
-  "xform": {
-    "type": "Xform",
-    "guid": "1cc6bc1f-38b3-4b84-b828-7b096ded5e51",
-    "name": "my_xform",
-    "m": [
-      1.0,
-      0.0,
-      0.0,
-      0.0,
-      0.0,
-      1.0,
-      0.0,
-      0.0,
-      0.0,
-      0.0,
-      1.0,
-      0.0,
-      0.0,
-      0.0,
-      0.0,
-      1.0
-    ]
-  },
-  "m_dim": 3,
-  "m_is_rat": false,
-  "m_order": [
-    3,
-    3
-  ],
-  "m_cv_count": [
-    3,
-    3
-  ],
-  "m_cv_stride": [
-    3,
-    9
-  ],
-  "m_knot": [
-    [
-      0.0,
-      0.0,
-      1.0,
-      1.0
-    ],
-    [
-      0.0,
-      0.0,
-      1.0,
-      1.0
-    ]
-  ],
-  "m_cv": [
+  "control_points": [
     0.0,
     0.0,
     0.0,
@@ -90,5 +27,68 @@
     2.0,
     2.0,
     0.0
-  ]
+  ],
+  "cv_count_u": 3,
+  "cv_count_v": 3,
+  "dimension": 3,
+  "facecolors": [
+    255,
+    128,
+    64,
+    255
+  ],
+  "guid": "7c45c39f-e784-4118-81b9-4774f2de0c42",
+  "is_rational": false,
+  "knots_u": [
+    0.0,
+    0.0,
+    1.0,
+    1.0
+  ],
+  "knots_v": [
+    0.0,
+    0.0,
+    1.0,
+    1.0
+  ],
+  "linecolors": [
+    0,
+    0,
+    255,
+    255
+  ],
+  "name": "test_nurbssurface",
+  "order_u": 3,
+  "order_v": 3,
+  "pointcolors": [
+    0,
+    255,
+    0,
+    255
+  ],
+  "type": "NurbsSurface",
+  "width": 2.0,
+  "xform": {
+    "guid": "ca3ca904-5c21-4f8c-947e-60b7cd040133",
+    "m": [
+      1.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      1.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      1.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      1.0
+    ],
+    "name": "my_xform",
+    "type": "Xform"
+  }
 }

@@ -2,7 +2,7 @@
 mod tests {
     use crate::encoders::{json_dump, json_load};
     use crate::{
-        Arrow, BoundingBox, Cylinder, Line, Mesh, Plane, Point, PointCloud, Polyline, Session,
+        BoundingBox, Line, Mesh, Plane, Point, PointCloud, Polyline, Session,
         TreeNode, Vector, BVH,
     };
 
@@ -19,8 +19,6 @@ mod tests {
         let polyline = Polyline::new(vec![Point::new(0., 0., 0.), Point::new(1., 0., 0.)]);
         let pointcloud = PointCloud::new(vec![Point::new(0., 0., 0.)], vec![], vec![]);
         let mesh = Mesh::new();
-        let cylinder = Cylinder::new(Line::new(0., 0., 0., 0., 0., 1.), 0.5);
-        let arrow = Arrow::new(Line::new(0., 0., 0., 1., 0., 0.), 0.1);
 
         // Demonstrate 3-level tree hierarchy
         // Level 1: Root -> "geometry" folder
@@ -34,9 +32,7 @@ mod tests {
         my_session.add(&complex_folder, &geometry_folder);
 
         // Add all geometry to session - returns TreeNode for easy nesting!
-        let arrow_node = my_session.add_arrow(arrow.clone());
         let bbox_node = my_session.add_bbox(bbox.clone());
-        let cylinder_node = my_session.add_cylinder(cylinder.clone());
         let line_node = my_session.add_line(line.clone());
         let mesh_node = my_session.add_mesh(mesh.clone());
         let plane_node = my_session.add_plane(plane.clone());
@@ -50,13 +46,11 @@ mod tests {
         my_session.add(&line_node, &primitives_folder);
         my_session.add(&plane_node, &primitives_folder);
 
-        // Complex: mesh, polyline, pointcloud, bbox, cylinder, arrow
+        // Complex: mesh, polyline, pointcloud, bbox
         my_session.add(&mesh_node, &complex_folder);
         my_session.add(&polyline_node, &complex_folder);
         my_session.add(&pointcloud_node, &complex_folder);
         my_session.add(&bbox_node, &complex_folder);
-        my_session.add(&cylinder_node, &complex_folder);
-        my_session.add(&arrow_node, &complex_folder);
 
         // Add edge relationships between geometry objects
         my_session.add_edge(&point.guid, &line.guid, "point_to_line");
@@ -70,19 +64,17 @@ mod tests {
         assert_eq!(my_session.objects.polylines.len(), 1);
         assert_eq!(my_session.objects.pointclouds.len(), 1);
         assert_eq!(my_session.objects.meshes.len(), 1);
-        assert_eq!(my_session.objects.cylinders.len(), 1);
-        assert_eq!(my_session.objects.arrows.len(), 1);
-        assert_eq!(my_session.lookup.len(), 9);
+        assert_eq!(my_session.lookup.len(), 7);
 
         // Graph structure before serialization
         let original_graph_vertices = my_session.graph.number_of_vertices();
         let original_graph_edges = my_session.graph.number_of_edges();
-        assert_eq!(original_graph_vertices, 9);
+        assert_eq!(original_graph_vertices, 7);
         assert_eq!(original_graph_edges, 2);
 
-        // Tree should have: root + geometry + primitives + complex + 9 geometry nodes = 13 nodes
+        // Tree should have: root + geometry + primitives + complex + 7 geometry nodes = 11 nodes
         let original_tree_nodes = my_session.tree.nodes();
-        assert_eq!(original_tree_nodes.len(), 13);
+        assert_eq!(original_tree_nodes.len(), 11);
 
         //   json_dumps()    │ String       │ to JSON string
         //   json_loads(s)   │ String       │ from JSON string
@@ -99,12 +91,7 @@ mod tests {
         assert_eq!(loaded.name, my_session.name);
 
         // Verify all geometry objects are preserved
-        assert_eq!(loaded.objects.arrows.len(), my_session.objects.arrows.len());
         assert_eq!(loaded.objects.bboxes.len(), my_session.objects.bboxes.len());
-        assert_eq!(
-            loaded.objects.cylinders.len(),
-            my_session.objects.cylinders.len()
-        );
         assert_eq!(loaded.objects.lines.len(), my_session.objects.lines.len());
         assert_eq!(loaded.objects.meshes.len(), my_session.objects.meshes.len());
         assert_eq!(loaded.objects.planes.len(), my_session.objects.planes.len());

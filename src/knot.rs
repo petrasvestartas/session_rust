@@ -781,3 +781,38 @@ pub fn build_interp_knots(params: &[f64], degree: usize) -> Vec<f64> {
 
     knots
 }
+
+/// Evaluate B-spline basis functions at parameter t (Cox-de Boor).
+///
+/// # Arguments
+/// * `order` - Order of the B-spline (degree + 1).
+/// * `knot` - Full knot vector.
+/// * `span` - Span index (from find_span).
+/// * `t` - Parameter value.
+///
+/// # Returns
+/// Vector of `order` basis function values.
+pub fn eval_basis(order: usize, knot: &[f64], span: usize, t: f64) -> Vec<f64> {
+    let mut basis = vec![0.0; order];
+    let mut left = vec![0.0; order];
+    let mut right = vec![0.0; order];
+
+    let k_offset = order - 2 + span;
+    basis[0] = 1.0;
+
+    for j in 1..order {
+        left[j] = t - knot[k_offset + 1 - j];
+        right[j] = knot[k_offset + j] - t;
+        let mut saved = 0.0;
+
+        for r in 0..j {
+            let denom = right[r + 1] + left[j - r];
+            let temp = if denom != 0.0 { basis[r] / denom } else { 0.0 };
+            basis[r] = saved + right[r + 1] * temp;
+            saved = left[j - r] * temp;
+        }
+        basis[j] = saved;
+    }
+
+    basis
+}

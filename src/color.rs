@@ -1,31 +1,11 @@
-use serde::{ser::Serialize as SerTrait, Deserialize, Serialize};
+use serde::{Deserialize, Deserializer, Serializer};
+use serde::ser::SerializeMap;
 use std::fmt;
 use std::ops::{Index, IndexMut};
 use uuid::Uuid;
 
 /// A color with RGBA values and JSON serialization support.
-///
-/// The Color struct represents a color using 8-bit RGBA components (0-255).
-/// It includes preset colors and conversion utilities for normalized float values.
-///
-/// # Attributes
-///
-/// * `guid` - Unique identifier for the color.
-/// * `name` - Name of the color.
-/// * `r` - Red component (0-255).
-/// * `g` - Green component (0-255).
-/// * `b` - Blue component (0-255).
-/// * `a` - Alpha component (0-255).
-///
-/// # Examples
-///
-/// ```
-/// # use session_rust::Color;
-/// let red = Color::red();
-/// let custom = Color::new(128, 64, 32, 255);
-/// ```
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(tag = "type", rename = "Color")]
+#[derive(Debug, Clone)]
 pub struct Color {
     pub guid: String,
     pub name: String,
@@ -33,6 +13,56 @@ pub struct Color {
     pub g: u8,
     pub b: u8,
     pub a: u8,
+}
+
+impl serde::Serialize for Color {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        let mut map = serializer.serialize_map(Some(7))?;
+        map.serialize_entry("a", &self.a)?;
+        map.serialize_entry("b", &self.b)?;
+        map.serialize_entry("g", &self.g)?;
+        map.serialize_entry("guid", &self.guid)?;
+        map.serialize_entry("name", &self.name)?;
+        map.serialize_entry("r", &self.r)?;
+        map.serialize_entry("type", "Color")?;
+        map.end()
+    }
+}
+
+impl<'de> Deserialize<'de> for Color {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        #[derive(Deserialize)]
+        struct ColorData {
+            #[serde(default)]
+            guid: Option<String>,
+            #[serde(default)]
+            name: Option<String>,
+            #[serde(default)]
+            r: u8,
+            #[serde(default)]
+            g: u8,
+            #[serde(default)]
+            b: u8,
+            #[serde(default = "default_alpha")]
+            a: u8,
+        }
+        fn default_alpha() -> u8 { 255 }
+        let data = ColorData::deserialize(deserializer)?;
+        Ok(Color {
+            guid: data.guid.unwrap_or_else(|| Uuid::new_v4().to_string()),
+            name: data.name.unwrap_or_else(|| "my_color".to_string()),
+            r: data.r,
+            g: data.g,
+            b: data.b,
+            a: data.a,
+        })
+    }
 }
 
 impl Color {
@@ -337,7 +367,7 @@ impl Color {
         let mut buf = Vec::new();
         let formatter = serde_json::ser::PrettyFormatter::with_indent(b"    ");
         let mut ser = serde_json::Serializer::with_formatter(&mut buf, formatter);
-        SerTrait::serialize(self, &mut ser)?;
+        serde::Serialize::serialize(self, &mut ser)?;
         Ok(String::from_utf8(buf)?)
     }
 

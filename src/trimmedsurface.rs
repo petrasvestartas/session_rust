@@ -1,5 +1,6 @@
 use crate::nurbssurface::NurbsSurface;
 use crate::nurbscurve::NurbsCurve;
+use crate::primitives::Primitives;
 use crate::xform::Xform;
 use crate::color::Color;
 use crate::point::Point;
@@ -45,13 +46,29 @@ impl TrimmedSurface {
     }
 
     pub fn create_planar(boundary: &NurbsCurve) -> Option<Self> {
-        let srf = NurbsSurface::create_planar(&[boundary.clone()])?;
+        let srf = Primitives::create_planar(boundary);
+        if !srf.is_valid() { return None; }
+
+        let dom_u = srf.domain(0)?;
+        let dom_v = srf.domain(1)?;
+        let range_u = dom_u.1 - dom_u.0;
+        let range_v = dom_v.1 - dom_v.0;
+
+        let n_samples = 50usize.max(boundary.cv_count() * 4);
+        let (pts3d, _) = boundary.divide_by_count(n_samples, true);
+        let mut uv_pts = Vec::new();
+        for pt in &pts3d {
+            let (_, u, v) = srf.closest_point(pt);
+            let nu = (u - dom_u.0) / range_u;
+            let nv = (v - dom_v.0) / range_v;
+            uv_pts.push(Point::new(nu, nv, 0.0));
+        }
+
         let mut ts = Self::new();
-        ts.m_outer_loop = srf.m_outer_loop.clone();
-        let mut srf_clean = srf;
-        srf_clean.m_outer_loop = None;
-        srf_clean.m_inner_loops.clear();
-        ts.m_surface = srf_clean;
+        ts.m_surface = srf;
+        if uv_pts.len() >= 3 {
+            ts.m_outer_loop = Some(NurbsCurve::create(false, 3, &uv_pts));
+        }
         Some(ts)
     }
 
@@ -73,10 +90,24 @@ impl TrimmedSurface {
     }
 
     pub fn add_hole(&mut self, curve_3d: &NurbsCurve) {
-        let mut temp = self.m_surface.clone();
-        temp.add_hole(curve_3d);
-        if temp.inner_loop_count() > 0 {
-            self.m_inner_loops.push(temp.get_inner_loop(temp.inner_loop_count() - 1).unwrap().clone());
+        let dom = curve_3d.domain();
+        let sdom_u = self.m_surface.domain(0).unwrap_or((0.0, 1.0));
+        let sdom_v = self.m_surface.domain(1).unwrap_or((0.0, 1.0));
+        let range_u = sdom_u.1 - sdom_u.0;
+        let range_v = sdom_v.1 - sdom_v.0;
+
+        let n_samples = std::cmp::max(curve_3d.cv_count() * 4, 32);
+        let mut uv_pts = Vec::new();
+        for i in 0..n_samples {
+            let t = dom.0 + (dom.1 - dom.0) * i as f64 / n_samples as f64;
+            let pt3d = curve_3d.point_at(t);
+            let (_, u, v) = self.m_surface.closest_point(&pt3d);
+            let nu = (u - sdom_u.0) / range_u;
+            let nv = (v - sdom_v.0) / range_v;
+            uv_pts.push(Point::new(nu, nv, 0.0));
+        }
+        if uv_pts.len() >= 3 {
+            self.m_inner_loops.push(NurbsCurve::create(true, 1, &uv_pts));
         }
     }
 
@@ -98,15 +129,7 @@ impl TrimmedSurface {
     pub fn normal_at(&self, u: f64, v: f64) -> Vector { self.m_surface.normal_at(u, v) }
 
     pub fn mesh(&self) -> Mesh {
-        let mut temp = self.m_surface.clone();
-        if let Some(ref outer) = self.m_outer_loop {
-            temp.set_outer_loop(outer.clone());
-        }
-        temp.clear_inner_loops();
-        for loop_crv in &self.m_inner_loops {
-            temp.add_inner_loop(loop_crv.clone());
-        }
-        temp.mesh()
+        self.m_surface.mesh()
     }
 
     pub fn transform_self(&mut self) {

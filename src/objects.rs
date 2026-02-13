@@ -1,6 +1,4 @@
-use crate::arrow::Arrow;
 use crate::boundingbox::BoundingBox;
-use crate::cylinder::Cylinder;
 use crate::line::Line;
 use crate::mesh::Mesh;
 use crate::nurbscurve::NurbsCurve;
@@ -27,8 +25,6 @@ pub struct Objects {
     pub polylines: Vec<Polyline>,
     pub pointclouds: Vec<PointCloud>,
     pub meshes: Vec<Mesh>,
-    pub cylinders: Vec<Cylinder>,
-    pub arrows: Vec<Arrow>,
     pub nurbscurves: Vec<NurbsCurve>,
     pub nurbssurfaces: Vec<NurbsSurface>,
 }
@@ -45,8 +41,6 @@ impl Default for Objects {
             polylines: Vec::new(),
             pointclouds: Vec::new(),
             meshes: Vec::new(),
-            cylinders: Vec::new(),
-            arrows: Vec::new(),
             nurbscurves: Vec::new(),
             nurbssurfaces: Vec::new(),
         }
@@ -127,12 +121,6 @@ impl Objects {
             meshes: self.meshes.iter().map(|m| {
                 crate::proto::Mesh::decode(m.pb_dumps().as_slice()).unwrap()
             }).collect(),
-            cylinders: self.cylinders.iter().map(|c| {
-                crate::proto::Cylinder::decode(c.pb_dumps().as_slice()).unwrap()
-            }).collect(),
-            arrows: self.arrows.iter().map(|a| {
-                crate::proto::Arrow::decode(a.pb_dumps().as_slice()).unwrap()
-            }).collect(),
             nurbscurves: self.nurbscurves.iter().map(|nc| {
                 crate::proto::NurbsCurve::decode(nc.pb_dumps().as_slice()).unwrap()
             }).collect(),
@@ -169,12 +157,6 @@ impl Objects {
         }
         for m in &proto.meshes {
             objects.meshes.push(crate::mesh::Mesh::pb_loads(&m.encode_to_vec())?);
-        }
-        for c in &proto.cylinders {
-            objects.cylinders.push(crate::cylinder::Cylinder::pb_loads(&c.encode_to_vec())?);
-        }
-        for a in &proto.arrows {
-            objects.arrows.push(crate::arrow::Arrow::pb_loads(&a.encode_to_vec())?);
         }
         for nc in &proto.nurbscurves {
             objects.nurbscurves.push(crate::nurbscurve::NurbsCurve::pb_loads(&nc.encode_to_vec())?);

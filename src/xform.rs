@@ -1,19 +1,59 @@
 use crate::{Plane, Point, Vector};
-use serde::{ser::Serialize as SerTrait, Deserialize, Serialize};
+use serde::{Deserialize, Deserializer, Serializer};
+use serde::ser::SerializeMap;
 use std::fmt;
 use std::ops::{Index, IndexMut, Mul, MulAssign};
 use uuid::Uuid;
 
 /// A 4x4 column-major transformation matrix in 3D space
-#[derive(Clone, Serialize, Deserialize)]
-#[serde(rename = "Xform")]
+#[derive(Clone)]
 pub struct Xform {
-    #[serde(rename = "type")]
     pub typ: String,
     pub guid: String,
     pub name: String,
     /// The matrix elements stored in column-major order as a flattened array
     pub m: [f64; 16],
+}
+
+impl serde::Serialize for Xform {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        let mut map = serializer.serialize_map(Some(4))?;
+        map.serialize_entry("guid", &self.guid)?;
+        map.serialize_entry("m", &self.m)?;
+        map.serialize_entry("name", &self.name)?;
+        map.serialize_entry("type", "Xform")?;
+        map.end()
+    }
+}
+
+impl<'de> Deserialize<'de> for Xform {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        #[derive(Deserialize)]
+        struct XformData {
+            #[serde(default)]
+            guid: Option<String>,
+            #[serde(default)]
+            name: Option<String>,
+            #[serde(default = "default_matrix")]
+            m: [f64; 16],
+        }
+        fn default_matrix() -> [f64; 16] {
+            [1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0]
+        }
+        let data = XformData::deserialize(deserializer)?;
+        Ok(Xform {
+            typ: "Xform".to_string(),
+            guid: data.guid.unwrap_or_else(|| Uuid::new_v4().to_string()),
+            name: data.name.unwrap_or_else(|| "my_xform".to_string()),
+            m: data.m,
+        })
+    }
 }
 
 impl Xform {
@@ -614,7 +654,7 @@ impl Xform {
         let mut buf = Vec::new();
         let formatter = serde_json::ser::PrettyFormatter::with_indent(b"    ");
         let mut ser = serde_json::Serializer::with_formatter(&mut buf, formatter);
-        SerTrait::serialize(self, &mut ser)?;
+        serde::Serialize::serialize(self, &mut ser)?;
         Ok(String::from_utf8(buf)?)
     }
 

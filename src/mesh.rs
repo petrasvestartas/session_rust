@@ -703,19 +703,19 @@ impl Mesh {
         let pointcolors_flat: Vec<u8> = self
             .pointcolors
             .iter()
-            .flat_map(|c| vec![c.r, c.g, c.b])
+            .flat_map(|c| vec![c.r, c.g, c.b, c.a])
             .collect();
 
         let facecolors_flat: Vec<u8> = self
             .facecolors
             .iter()
-            .flat_map(|c| vec![c.r, c.g, c.b])
+            .flat_map(|c| vec![c.r, c.g, c.b, c.a])
             .collect();
 
         let linecolors_flat: Vec<u8> = self
             .linecolors
             .iter()
-            .flat_map(|c| vec![c.r, c.g, c.b])
+            .flat_map(|c| vec![c.r, c.g, c.b, c.a])
             .collect();
 
         serde_json::json!({
@@ -773,53 +773,38 @@ impl Mesh {
 
         // Deserialize flat color arrays
         if let Some(pointcolors_flat) = data.get("pointcolors").and_then(|v| v.as_array()) {
-            let rgb_values: Vec<u8> = pointcolors_flat
+            let rgba_values: Vec<u8> = pointcolors_flat
                 .iter()
                 .filter_map(|v| v.as_u64().map(|n| n as u8))
                 .collect();
-            mesh.pointcolors = rgb_values
-                .chunks(3)
-                .map(|chunk| {
-                    if chunk.len() == 3 {
-                        Color::new(chunk[0], chunk[1], chunk[2], 255)
-                    } else {
-                        Color::white()
-                    }
-                })
+            mesh.pointcolors = rgba_values
+                .chunks(4)
+                .filter(|c| c.len() == 4)
+                .map(|c| Color::new(c[0], c[1], c[2], c[3]))
                 .collect();
         }
 
         if let Some(facecolors_flat) = data.get("facecolors").and_then(|v| v.as_array()) {
-            let rgb_values: Vec<u8> = facecolors_flat
+            let rgba_values: Vec<u8> = facecolors_flat
                 .iter()
                 .filter_map(|v| v.as_u64().map(|n| n as u8))
                 .collect();
-            mesh.facecolors = rgb_values
-                .chunks(3)
-                .map(|chunk| {
-                    if chunk.len() == 3 {
-                        Color::new(chunk[0], chunk[1], chunk[2], 255)
-                    } else {
-                        Color::white()
-                    }
-                })
+            mesh.facecolors = rgba_values
+                .chunks(4)
+                .filter(|c| c.len() == 4)
+                .map(|c| Color::new(c[0], c[1], c[2], c[3]))
                 .collect();
         }
 
         if let Some(linecolors_flat) = data.get("linecolors").and_then(|v| v.as_array()) {
-            let rgb_values: Vec<u8> = linecolors_flat
+            let rgba_values: Vec<u8> = linecolors_flat
                 .iter()
                 .filter_map(|v| v.as_u64().map(|n| n as u8))
                 .collect();
-            mesh.linecolors = rgb_values
-                .chunks(3)
-                .map(|chunk| {
-                    if chunk.len() == 3 {
-                        Color::new(chunk[0], chunk[1], chunk[2], 255)
-                    } else {
-                        Color::white()
-                    }
-                })
+            mesh.linecolors = rgba_values
+                .chunks(4)
+                .filter(|c| c.len() == 4)
+                .map(|c| Color::new(c[0], c[1], c[2], c[3]))
                 .collect();
         }
 

@@ -1,5 +1,5 @@
 use crate::{
-    Arrow, BoundingBox, Cylinder, Graph, Line, Mesh, Objects, Plane, Point, PointCloud, Polyline,
+    BoundingBox, Graph, Line, Mesh, Objects, Plane, Point, PointCloud, Polyline,
     Tolerance, Tree, TreeNode, BVH,
 };
 use serde::{Deserialize, Serialize};
@@ -12,9 +12,7 @@ use uuid::Uuid;
 /// This is equivalent to C++'s std::variant<...> for heterogeneous geometry storage.
 #[derive(Debug, Clone)]
 pub enum Geometry {
-    Arrow(Arrow),
     BoundingBox(BoundingBox),
-    Cylinder(Cylinder),
     Line(Line),
     Mesh(Mesh),
     Plane(Plane),
@@ -27,9 +25,7 @@ impl Geometry {
     /// Get the GUID of the geometry object
     pub fn guid(&self) -> &str {
         match self {
-            Geometry::Arrow(g) => &g.guid,
             Geometry::BoundingBox(g) => &g.guid,
-            Geometry::Cylinder(g) => &g.guid,
             Geometry::Line(g) => &g.guid,
             Geometry::Mesh(g) => &g.guid,
             Geometry::Plane(g) => &g.guid,
@@ -178,14 +174,8 @@ impl Session {
 
         // Rebuild lookup table from all objects
         let mut lookup = HashMap::new();
-        for arrow in &objects.arrows {
-            lookup.insert(arrow.guid.clone(), Geometry::Arrow(arrow.clone()));
-        }
         for bbox in &objects.bboxes {
             lookup.insert(bbox.guid.clone(), Geometry::BoundingBox(bbox.clone()));
-        }
-        for cylinder in &objects.cylinders {
-            lookup.insert(cylinder.guid.clone(), Geometry::Cylinder(cylinder.clone()));
         }
         for line in &objects.lines {
             lookup.insert(line.guid.clone(), Geometry::Line(line.clone()));
@@ -280,12 +270,6 @@ impl Session {
         }
         for m in &self.objects.meshes {
             objects_proto.meshes.push(crate::proto::Mesh::decode(m.pb_dumps().as_slice()).unwrap());
-        }
-        for c in &self.objects.cylinders {
-            objects_proto.cylinders.push(crate::proto::Cylinder::decode(c.pb_dumps().as_slice()).unwrap());
-        }
-        for a in &self.objects.arrows {
-            objects_proto.arrows.push(crate::proto::Arrow::decode(a.pb_dumps().as_slice()).unwrap());
         }
 
         // Build Tree proto
@@ -386,14 +370,6 @@ impl Session {
                 let msh = Mesh::pb_loads(&m.encode_to_vec())?;
                 session.objects.meshes.push(msh);
             }
-            for c in &objects_proto.cylinders {
-                let cyl = Cylinder::pb_loads(&c.encode_to_vec())?;
-                session.objects.cylinders.push(cyl);
-            }
-            for a in &objects_proto.arrows {
-                let arr = Arrow::pb_loads(&a.encode_to_vec())?;
-                session.objects.arrows.push(arr);
-            }
         }
 
         // Rebuild tree
@@ -428,14 +404,8 @@ impl Session {
         }
 
         // Rebuild lookup
-        for arrow in &session.objects.arrows {
-            session.lookup.insert(arrow.guid.clone(), Geometry::Arrow(arrow.clone()));
-        }
         for bbox in &session.objects.bboxes {
             session.lookup.insert(bbox.guid.clone(), Geometry::BoundingBox(bbox.clone()));
-        }
-        for cylinder in &session.objects.cylinders {
-            session.lookup.insert(cylinder.guid.clone(), Geometry::Cylinder(cylinder.clone()));
         }
         for line in &session.objects.lines {
             session.lookup.insert(line.guid.clone(), Geometry::Line(line.clone()));
@@ -510,32 +480,6 @@ impl Session {
                 // Create a bounded box around plane origin (finite, test-safe)
                 // Keeping the same semantics as Python/C++ default for now.
                 BoundingBox::from_point(p.origin(), inflate * 10.0)
-            }
-            Geometry::Cylinder(c) => {
-                // Compute bounding box from cylinder line endpoints and radius
-                let points = vec![c.line.start(), c.line.end()];
-                let mut bbox = BoundingBox::from_points(&points, inflate);
-                // Inflate by cylinder radius
-                let radius = c.radius;
-                bbox.half_size = crate::Vector::new(
-                    bbox.half_size[0] + radius,
-                    bbox.half_size[1] + radius,
-                    bbox.half_size[2] + radius,
-                );
-                bbox
-            }
-            Geometry::Arrow(a) => {
-                // Compute bounding box from arrow line endpoints
-                let points = vec![a.line.start(), a.line.end()];
-                let mut bbox = BoundingBox::from_points(&points, inflate);
-                // Inflate by arrow radius
-                let radius = a.radius;
-                bbox.half_size = crate::Vector::new(
-                    bbox.half_size[0] + radius,
-                    bbox.half_size[1] + radius,
-                    bbox.half_size[2] + radius,
-                );
-                bbox
             }
         }
     }
@@ -721,24 +665,6 @@ impl Session {
                         hit_point = Some(p);
                     }
                 }
-                Geometry::Cylinder(cy) => {
-                    if let Some(p) = crate::intersection::line_line(
-                        &ray_line,
-                        &cy.line,
-                        Tolerance::APPROXIMATION,
-                    ) {
-                        hit_point = Some(p);
-                    }
-                }
-                Geometry::Arrow(ar) => {
-                    if let Some(p) = crate::intersection::line_line(
-                        &ray_line,
-                        &ar.line,
-                        Tolerance::APPROXIMATION,
-                    ) {
-                        hit_point = Some(p);
-                    }
-                }
                 Geometry::Point(p) => {
                     let vx = p[0] - origin[0];
                     let vy = p[1] - origin[1];
@@ -921,36 +847,6 @@ impl Session {
         TreeNode::new(&guid)
     }
 
-    pub fn add_cylinder(&mut self, cylinder: Cylinder) -> TreeNode {
-        let guid = cylinder.guid.clone();
-        let name = cylinder.name.clone();
-        let geometry = Geometry::Cylinder(cylinder.clone());
-
-        self.objects.cylinders.push(cylinder);
-        self.lookup.insert(guid.clone(), geometry);
-        if let Some(Geometry::Cylinder(c)) = self.lookup.get(&guid) {
-            self.cache_geometry_aabb(&guid, &Geometry::Cylinder(c.clone()));
-        }
-        self.graph.add_node(&guid, &format!("cylinder_{name}"));
-
-        TreeNode::new(&guid)
-    }
-
-    pub fn add_arrow(&mut self, arrow: Arrow) -> TreeNode {
-        let guid = arrow.guid.clone();
-        let name = arrow.name.clone();
-        let geometry = Geometry::Arrow(arrow.clone());
-
-        self.objects.arrows.push(arrow);
-        self.lookup.insert(guid.clone(), geometry);
-        if let Some(Geometry::Arrow(a)) = self.lookup.get(&guid) {
-            self.cache_geometry_aabb(&guid, &Geometry::Arrow(a.clone()));
-        }
-        self.graph.add_node(&guid, &format!("arrow_{name}"));
-
-        TreeNode::new(&guid)
-    }
-
     /// Adds a TreeNode to the tree hierarchy.
     ///
     /// # Arguments
@@ -1015,8 +911,6 @@ impl Session {
         self.objects.planes.retain(|p| p.guid != guid);
         self.objects.bboxes.retain(|b| b.guid != guid);
         self.objects.meshes.retain(|m| m.guid != guid);
-        self.objects.cylinders.retain(|c| c.guid != guid);
-        self.objects.arrows.retain(|a| a.guid != guid);
         self.objects.pointclouds.retain(|p| p.guid != guid);
 
         // Remove from lookup table
@@ -1134,12 +1028,6 @@ impl Session {
         for mesh in &transformed_objects.meshes {
             transformed_lookup.insert(mesh.guid.clone(), Geometry::Mesh(mesh.clone()));
         }
-        for cylinder in &transformed_objects.cylinders {
-            transformed_lookup.insert(cylinder.guid.clone(), Geometry::Cylinder(cylinder.clone()));
-        }
-        for arrow in &transformed_objects.arrows {
-            transformed_lookup.insert(arrow.guid.clone(), Geometry::Arrow(arrow.clone()));
-        }
 
         fn transform_node(
             node: &TreeNode,
@@ -1162,8 +1050,6 @@ impl Session {
                         Geometry::Polyline(g) => &g.xform,
                         Geometry::PointCloud(g) => &g.xform,
                         Geometry::Mesh(g) => &g.xform,
-                        Geometry::Cylinder(g) => &g.xform,
-                        Geometry::Arrow(g) => &g.xform,
                     };
 
                 // Find and update the geometry in the collections
@@ -1231,24 +1117,6 @@ impl Session {
                             g.xform = combined_xform.clone();
                         }
                     }
-                    Geometry::Cylinder(_) => {
-                        if let Some(g) = transformed_objects
-                            .cylinders
-                            .iter_mut()
-                            .find(|c| c.guid == node_name)
-                        {
-                            g.xform = combined_xform.clone();
-                        }
-                    }
-                    Geometry::Arrow(_) => {
-                        if let Some(g) = transformed_objects
-                            .arrows
-                            .iter_mut()
-                            .find(|a| a.guid == node_name)
-                        {
-                            g.xform = combined_xform.clone();
-                        }
-                    }
                 }
 
                 combined_xform
@@ -1296,12 +1164,6 @@ impl Session {
         }
         for mesh in &mut transformed_objects.meshes {
             mesh.transform();
-        }
-        for cylinder in &mut transformed_objects.cylinders {
-            cylinder.transform();
-        }
-        for arrow in &mut transformed_objects.arrows {
-            arrow.transform();
         }
 
         transformed_objects

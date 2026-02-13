@@ -6,35 +6,159 @@ use crate::vector::Vector;
 use crate::boundingbox::BoundingBox;
 use crate::mesh::Mesh;
 use crate::knot;
-use serde::{Serialize, Deserialize};
+use serde::{Deserialize, Deserializer, Serializer};
+use serde::ser::SerializeMap;
 
 /// Non-Uniform Rational B-Spline (NURBS) surface implementation
 ///
 /// Based on OpenNURBS ground truth implementation.
 /// Matches the C++ and Python implementations exactly.
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug)]
 pub struct NurbsSurface {
     // Metadata
     pub guid: String,
     pub name: String,
     pub width: f64,
-    pub surfacecolor: Color,
+    pub pointcolors: Vec<Color>,
+    pub facecolors: Vec<Color>,
+    pub linecolors: Vec<Color>,
     pub xform: Xform,
-    
+
     // Core NURBS data
-    pub m_dim: usize,                // Dimension (typically 3 for 3D surfaces)
-    pub m_is_rat: bool,              // true if rational, false if non-rational
-    pub m_order: [usize; 2],         // Order = degree + 1 (order >= 2) for u and v
-    pub m_cv_count: [usize; 2],      // Number of control vertices in u and v directions
-    pub m_cv_stride: [usize; 2],     // Stride between control vertices in m_cv array
-    pub m_knot: [Vec<f64>; 2],       // Knot vectors for u and v directions
-    pub m_cv: Vec<f64>,              // Control vertex data (homogeneous if rational)
-    #[serde(skip_serializing_if = "Option::is_none")]
-    #[serde(default)]
-    pub m_outer_loop: Option<NurbsCurve>,
-    #[serde(skip_serializing_if = "Vec::is_empty")]
-    #[serde(default)]
-    pub m_inner_loops: Vec<NurbsCurve>,
+    pub m_dim: usize,
+    pub m_is_rat: bool,
+    pub m_order: [usize; 2],
+    pub m_cv_count: [usize; 2],
+    pub m_cv_stride: [usize; 2],
+    pub m_knot: [Vec<f64>; 2],
+    pub m_cv: Vec<f64>,
+}
+
+impl serde::Serialize for NurbsSurface {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        let cv_sz = if self.m_is_rat { self.m_dim + 1 } else { self.m_dim };
+        let mut cvs: Vec<f64> = Vec::with_capacity(self.m_cv_count[0] * self.m_cv_count[1] * cv_sz);
+        for ci in 0..self.m_cv_count[0] {
+            for cj in 0..self.m_cv_count[1] {
+                let base = ci * self.m_cv_stride[1] + cj * self.m_cv_stride[0];
+                for d in 0..cv_sz {
+                    if base + d < self.m_cv.len() {
+                        cvs.push(self.m_cv[base + d]);
+                    }
+                }
+            }
+        }
+        let mut map = serializer.serialize_map(None)?;
+        // Alphabetical order
+        map.serialize_entry("control_points", &cvs)?;
+        map.serialize_entry("cv_count_u", &self.m_cv_count[0])?;
+        map.serialize_entry("cv_count_v", &self.m_cv_count[1])?;
+        map.serialize_entry("dimension", &self.m_dim)?;
+        let facecolors_flat: Vec<u8> = self.facecolors.iter()
+            .flat_map(|c| vec![c.r, c.g, c.b, c.a]).collect();
+        map.serialize_entry("facecolors", &facecolors_flat)?;
+        map.serialize_entry("guid", &self.guid)?;
+        map.serialize_entry("is_rational", &self.m_is_rat)?;
+        map.serialize_entry("knots_u", &self.m_knot[0])?;
+        map.serialize_entry("knots_v", &self.m_knot[1])?;
+        let linecolors_flat: Vec<u8> = self.linecolors.iter()
+            .flat_map(|c| vec![c.r, c.g, c.b, c.a]).collect();
+        map.serialize_entry("linecolors", &linecolors_flat)?;
+        map.serialize_entry("name", &self.name)?;
+        map.serialize_entry("order_u", &self.m_order[0])?;
+        map.serialize_entry("order_v", &self.m_order[1])?;
+        let pointcolors_flat: Vec<u8> = self.pointcolors.iter()
+            .flat_map(|c| vec![c.r, c.g, c.b, c.a]).collect();
+        map.serialize_entry("pointcolors", &pointcolors_flat)?;
+        map.serialize_entry("type", "NurbsSurface")?;
+        map.serialize_entry("width", &self.width)?;
+        map.serialize_entry("xform", &self.xform)?;
+        map.end()
+    }
+}
+
+impl<'de> Deserialize<'de> for NurbsSurface {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        #[derive(Deserialize)]
+        struct NurbsSurfaceData {
+            #[serde(default)]
+            guid: Option<String>,
+            #[serde(default)]
+            name: Option<String>,
+            #[serde(default = "default_width")]
+            width: f64,
+            #[serde(default)]
+            pointcolors: Vec<u8>,
+            #[serde(default)]
+            facecolors: Vec<u8>,
+            #[serde(default)]
+            linecolors: Vec<u8>,
+            #[serde(default)]
+            xform: Option<Xform>,
+            #[serde(default = "default_dim")]
+            dimension: usize,
+            #[serde(default)]
+            is_rational: bool,
+            #[serde(default = "default_order")]
+            order_u: usize,
+            #[serde(default = "default_order")]
+            order_v: usize,
+            #[serde(default)]
+            cv_count_u: usize,
+            #[serde(default)]
+            cv_count_v: usize,
+            #[serde(default)]
+            knots_u: Vec<f64>,
+            #[serde(default)]
+            knots_v: Vec<f64>,
+            #[serde(default)]
+            control_points: Vec<f64>,
+        }
+        fn default_width() -> f64 { 1.0 }
+        fn default_dim() -> usize { 3 }
+        fn default_order() -> usize { 4 }
+
+        let data = NurbsSurfaceData::deserialize(deserializer)?;
+        let cv_sz = if data.is_rational { data.dimension + 1 } else { data.dimension };
+        let cv_stride_u = cv_sz;
+        let cv_stride_v = cv_sz * data.cv_count_v;
+
+        let pointcolors = data.pointcolors.chunks(4)
+            .filter(|c| c.len() == 4)
+            .map(|c| Color::new(c[0], c[1], c[2], c[3]))
+            .collect();
+        let facecolors = data.facecolors.chunks(4)
+            .filter(|c| c.len() == 4)
+            .map(|c| Color::new(c[0], c[1], c[2], c[3]))
+            .collect();
+        let linecolors = data.linecolors.chunks(4)
+            .filter(|c| c.len() == 4)
+            .map(|c| Color::new(c[0], c[1], c[2], c[3]))
+            .collect();
+
+        Ok(NurbsSurface {
+            guid: data.guid.unwrap_or_else(|| uuid::Uuid::new_v4().to_string()),
+            name: data.name.unwrap_or_else(|| "my_nurbssurface".to_string()),
+            width: data.width,
+            pointcolors,
+            facecolors,
+            linecolors,
+            xform: data.xform.unwrap_or_else(Xform::identity),
+            m_dim: data.dimension,
+            m_is_rat: data.is_rational,
+            m_order: [data.order_u, data.order_v],
+            m_cv_count: [data.cv_count_u, data.cv_count_v],
+            m_cv_stride: [cv_stride_u, cv_stride_v],
+            m_knot: [data.knots_u, data.knots_v],
+            m_cv: data.control_points,
+        })
+    }
 }
 
 impl NurbsSurface {
@@ -44,7 +168,9 @@ impl NurbsSurface {
             guid: uuid::Uuid::new_v4().to_string(),
             name: "my_nurbssurface".to_string(),
             width: 1.0,
-            surfacecolor: Color::black(),
+            pointcolors: Vec::new(),
+            facecolors: Vec::new(),
+            linecolors: Vec::new(),
             xform: Xform::identity(),
             m_dim: 0,
             m_is_rat: false,
@@ -53,8 +179,6 @@ impl NurbsSurface {
             m_cv_stride: [0, 0],
             m_knot: [Vec::new(), Vec::new()],
             m_cv: Vec::new(),
-            m_outer_loop: None,
-            m_inner_loops: Vec::new(),
         }
     }
 
@@ -191,350 +315,6 @@ impl NurbsSurface {
         true
     }
 
-    pub fn create_ruled(curve_a: &NurbsCurve, curve_b: &NurbsCurve) -> Option<Self> {
-        if !curve_a.is_valid() || !curve_b.is_valid() {
-            return None;
-        }
-
-        let mut ca = curve_a.duplicate();
-        let mut cb = curve_b.duplicate();
-
-        ca.set_domain(0.0, 1.0);
-        cb.set_domain(0.0, 1.0);
-
-        if ca.degree() < cb.degree() {
-            ca.increase_degree(cb.degree());
-        } else if cb.degree() < ca.degree() {
-            cb.increase_degree(ca.degree());
-        }
-
-        if ca.is_rational() || cb.is_rational() {
-            ca.make_rational();
-            cb.make_rational();
-        }
-
-        let knots_b = cb.get_knots();
-        let tol = 1e-10;
-
-        for &k in &knots_b {
-            let found = ca.get_knots().iter().any(|&ka| (ka - k).abs() < tol);
-            if !found {
-                ca.insert_knot(k, 1);
-            }
-        }
-
-        let knots_a = ca.get_knots();
-        for &k in &knots_a {
-            let found = cb.get_knots().iter().any(|&kb| (kb - k).abs() < tol);
-            if !found {
-                cb.insert_knot(k, 1);
-            }
-        }
-
-        let order_u = ca.order();
-        let cv_count_u = ca.cv_count();
-        let is_rat = ca.is_rational();
-
-        let mut surface = Self::create_raw(3, is_rat, order_u, 2, cv_count_u, 2, false, false, 1.0, 1.0)?;
-
-        for i in 0..ca.knot_count() {
-            if let Some(kv) = ca.knot(i) {
-                surface.set_knot(0, i, kv);
-            }
-        }
-
-        surface.set_knot(1, 0, 0.0);
-        surface.set_knot(1, 1, 1.0);
-
-        if is_rat {
-            for i in 0..cv_count_u {
-                if let Some((ax, ay, az, aw)) = ca.get_cv_4d(i) {
-                    surface.set_cv_4d(i, 0, ax, ay, az, aw);
-                }
-                if let Some((bx, by, bz, bw)) = cb.get_cv_4d(i) {
-                    surface.set_cv_4d(i, 1, bx, by, bz, bw);
-                }
-            }
-        } else {
-            for i in 0..cv_count_u {
-                if let Some(pt_a) = ca.get_cv(i) {
-                    surface.set_cv(i, 0, &pt_a);
-                }
-                if let Some(pt_b) = cb.get_cv(i) {
-                    surface.set_cv(i, 1, &pt_b);
-                }
-            }
-        }
-
-        Some(surface)
-    }
-
-    pub fn create_loft(input_curves: &[NurbsCurve], degree_v: usize) -> NurbsSurface {
-        if input_curves.len() < 2 { return NurbsSurface::new(); }
-        for c in input_curves {
-            if !c.is_valid() { return NurbsSurface::new(); }
-        }
-
-        let mut curves: Vec<NurbsCurve> = input_curves.iter().map(|c| c.duplicate()).collect();
-        Self::make_curves_compatible(&mut curves);
-        Self::make_curves_compatible(&mut curves);
-
-        let n_sections = curves.len();
-        let cv_count_u = curves[0].cv_count();
-        let order_u = curves[0].order();
-        let is_rat = curves[0].is_rational();
-
-        let mut degree_v = degree_v;
-        if degree_v >= n_sections { degree_v = n_sections - 1; }
-        if degree_v < 1 { degree_v = 1; }
-        let order_v = degree_v + 1;
-
-        let mut v_params = vec![0.0; n_sections];
-        for k in 1..n_sections {
-            let pk_prev = curves[k - 1].point_at_middle();
-            let pk_curr = curves[k].point_at_middle();
-            let dx = pk_curr[0] - pk_prev[0];
-            let dy = pk_curr[1] - pk_prev[1];
-            let dz = pk_curr[2] - pk_prev[2];
-            v_params[k] = v_params[k - 1] + (dx * dx + dy * dy + dz * dz).sqrt();
-        }
-
-        let total_len = v_params[n_sections - 1];
-        if total_len > 1e-14 {
-            for k in 0..n_sections { v_params[k] /= total_len; }
-        } else {
-            for k in 0..n_sections { v_params[k] = k as f64 / (n_sections - 1) as f64; }
-        }
-
-        let cv_count_v = n_sections;
-        let knot_count_v = order_v + cv_count_v - 2;
-        let mut knots_v = vec![0.0; knot_count_v];
-
-        if degree_v >= n_sections - 1 {
-            let d = degree_v;
-            for i in 0..d { knots_v[i] = 0.0; }
-            for i in d..knot_count_v { knots_v[i] = 1.0; }
-        } else {
-            for i in 0..(order_v - 1) { knots_v[i] = v_params[0]; }
-            for j in 1..=(n_sections - order_v) {
-                let mut sum = 0.0;
-                for i in j..(j + degree_v) { sum += v_params[i]; }
-                knots_v[order_v - 2 + j] = sum / degree_v as f64;
-            }
-            for i in (knot_count_v - order_v + 1)..knot_count_v {
-                knots_v[i] = v_params[n_sections - 1];
-            }
-        }
-
-        let mut surface = match Self::create_raw(3, is_rat, order_u, order_v, cv_count_u, cv_count_v, false, false, 1.0, 1.0) {
-            Some(s) => s,
-            None => return NurbsSurface::new(),
-        };
-
-        for i in 0..surface.knot_count(0) as usize {
-            if let Some(k) = curves[0].knot(i) {
-                surface.set_knot(0, i, k);
-            }
-        }
-        for i in 0..knots_v.len() {
-            if i < surface.knot_count(1) {
-                surface.set_knot(1, i, knots_v[i]);
-            }
-        }
-
-        let n = n_sections;
-        let mut n_matrix = vec![vec![0.0; n]; n];
-
-        for k in 0..n {
-            let mut t = v_params[k];
-            let t0 = knots_v[order_v - 2];
-            let t1 = knots_v[knot_count_v - order_v + 1];
-            if t < t0 { t = t0; }
-            if t > t1 { t = t1; }
-
-            let span = knot::find_span(order_v, cv_count_v, &knots_v, t);
-            let d = order_v - 1;
-            let knot_base = span + d;
-
-            if knots_v[knot_base - 1] == knots_v[knot_base] {
-                if t <= knots_v[knot_base] {
-                    n_matrix[k][span] = 1.0;
-                } else {
-                    n_matrix[k][span + order_v - 1] = 1.0;
-                }
-                continue;
-            }
-
-            let mut nvals = vec![0.0; order_v * order_v];
-            nvals[order_v * order_v - 1] = 1.0;
-            let mut left = vec![0.0; d];
-            let mut right = vec![0.0; d];
-            let mut n_idx = (order_v * order_v - 1) as i64;
-            let mut k_right = knot_base;
-            let mut k_left = knot_base - 1;
-
-            for j in 0..d {
-                let n0_idx = n_idx;
-                n_idx -= (order_v + 1) as i64;
-                left[j] = t - knots_v[k_left];
-                right[j] = knots_v[k_right] - t;
-                if k_left > 0 { k_left -= 1; } else { k_left = 0; }
-                k_right += 1;
-
-                let mut x = 0.0;
-                for r in 0..=j {
-                    let a0 = left[j - r];
-                    let a1 = right[r];
-                    let denom = a0 + a1;
-                    let y = if denom != 0.0 { nvals[n0_idx as usize + r] / denom } else { 0.0 };
-                    nvals[n_idx as usize + r] = x + a1 * y;
-                    x = a0 * y;
-                }
-                nvals[n_idx as usize + j + 1] = x;
-            }
-
-            for j in 0..order_v {
-                let col = span + j;
-                if col < n {
-                    n_matrix[k][col] = nvals[j];
-                }
-            }
-        }
-
-        let dim = if is_rat { 4 } else { 3 };
-        for i in 0..cv_count_u {
-            let mut rhs = vec![vec![0.0; dim]; n];
-            for k in 0..n {
-                if is_rat {
-                    if let Some((cx, cy, cz, cw)) = curves[k].get_cv_4d(i) {
-                        rhs[k] = vec![cx, cy, cz, cw];
-                    }
-                } else {
-                    if let Some(p) = curves[k].get_cv(i) {
-                        rhs[k] = vec![p[0], p[1], p[2]];
-                    }
-                }
-            }
-
-            let mut a = n_matrix.clone();
-            let mut b = rhs;
-
-            for col in 0..n {
-                let mut max_row = col;
-                let mut max_val = a[col][col].abs();
-                for row in (col + 1)..n {
-                    if a[row][col].abs() > max_val {
-                        max_val = a[row][col].abs();
-                        max_row = row;
-                    }
-                }
-                if max_val < 1e-14 { continue; }
-                a.swap(col, max_row);
-                b.swap(col, max_row);
-                for row in (col + 1)..n {
-                    let factor = a[row][col] / a[col][col];
-                    for c in col..n {
-                        a[row][c] -= factor * a[col][c];
-                    }
-                    for d2 in 0..dim {
-                        b[row][d2] -= factor * b[col][d2];
-                    }
-                }
-            }
-
-            let mut q = vec![vec![0.0; dim]; n];
-            for row in (0..n).rev() {
-                for d2 in 0..dim {
-                    q[row][d2] = b[row][d2];
-                    for c in (row + 1)..n {
-                        q[row][d2] -= a[row][c] * q[c][d2];
-                    }
-                    if a[row][row].abs() > 1e-14 {
-                        q[row][d2] /= a[row][row];
-                    }
-                }
-            }
-
-            for j in 0..n {
-                if is_rat {
-                    surface.set_cv_4d(i, j, q[j][0], q[j][1], q[j][2], q[j][3]);
-                } else {
-                    surface.set_cv(i, j, &Point::new(q[j][0], q[j][1], q[j][2]));
-                }
-            }
-        }
-
-        surface
-    }
-
-    fn merge_knot_vectors(a: &[f64], b: &[f64]) -> Vec<f64> {
-        let mut merged = Vec::new();
-        let (mut i, mut j) = (0, 0);
-        let tol = 1e-10;
-        while i < a.len() && j < b.len() {
-            if (a[i] - b[j]).abs() < tol {
-                merged.push(a[i]);
-                i += 1; j += 1;
-            } else if a[i] < b[j] {
-                merged.push(a[i]);
-                i += 1;
-            } else {
-                merged.push(b[j]);
-                j += 1;
-            }
-        }
-        while i < a.len() { merged.push(a[i]); i += 1; }
-        while j < b.len() { merged.push(b[j]); j += 1; }
-        merged
-    }
-
-    fn knot_vectors_equal(a: &[f64], b: &[f64]) -> bool {
-        if a.len() != b.len() { return false; }
-        let tol = 1e-10;
-        for i in 0..a.len() {
-            if (a[i] - b[i]).abs() > tol { return false; }
-        }
-        true
-    }
-
-    fn make_curves_compatible(curves: &mut Vec<NurbsCurve>) {
-        if curves.len() < 2 { return; }
-        let max_deg = curves.iter().map(|c| c.degree()).max().unwrap_or(0);
-        for c in curves.iter_mut() {
-            if c.degree() < max_deg { c.increase_degree(max_deg); }
-        }
-        let any_rational = curves.iter().any(|c| c.is_rational());
-        if any_rational {
-            for c in curves.iter_mut() { c.make_rational(); }
-        }
-        let mut already_compatible = true;
-        let cv0 = curves[0].cv_count();
-        let knots0 = curves[0].get_knots();
-        for i in 1..curves.len() {
-            if curves[i].cv_count() != cv0 || !Self::knot_vectors_equal(&curves[i].get_knots(), &knots0) {
-                already_compatible = false;
-                break;
-            }
-        }
-        if already_compatible { return; }
-        for c in curves.iter_mut() { c.set_domain(0.0, 1.0); }
-        let mut unified = curves[0].get_knots();
-        for i in 1..curves.len() {
-            unified = Self::merge_knot_vectors(&unified, &curves[i].get_knots());
-        }
-        let tol = 1e-10;
-        for c in curves.iter_mut() {
-            let mut cur_knots = c.get_knots();
-            for &k in &unified {
-                let found = cur_knots.iter().any(|&ck| (ck - k).abs() < tol);
-                if !found {
-                    c.insert_knot(k, 1);
-                    cur_knots = c.get_knots();
-                }
-            }
-        }
-    }
-
     fn to_curve_internal(&self, dir: usize) -> Option<NurbsCurve> {
         let dim = self.m_dim;
         let (n_along, n_other) = if dir == 0 {
@@ -657,546 +437,7 @@ impl NurbsSurface {
         self.from_curve_internal(&crv, dir)
     }
 
-    pub fn create_network(u_curves: &[NurbsCurve], v_curves: &[NurbsCurve]) -> NurbsSurface {
-        let n_u = u_curves.len();
-        let n_v = v_curves.len();
-        if n_u < 2 || n_v < 2 { return NurbsSurface::new(); }
 
-        let mut u_crvs: Vec<NurbsCurve> = u_curves.iter().map(|c| c.duplicate()).collect();
-        let mut v_crvs: Vec<NurbsCurve> = v_curves.iter().map(|c| c.duplicate()).collect();
-
-        let min_dist_sq = |crv: &NurbsCurve, pt: &Point| -> f64 {
-            let (t0, t1) = crv.domain();
-            let mut best = 1e30_f64;
-            for i in 0..=50 {
-                let t = t0 + (t1 - t0) * i as f64 / 50.0;
-                let p = crv.point_at(t);
-                let d = (p[0]-pt[0]).powi(2) + (p[1]-pt[1]).powi(2) + (p[2]-pt[2]).powi(2);
-                if d < best { best = d; }
-            }
-            best
-        };
-
-        let find_param = |crv: &NurbsCurve, pt: &Point| -> f64 {
-            let (t0, t1) = crv.domain();
-            let mut best_t = t0;
-            let mut best_d = 1e30_f64;
-            let ns = 200;
-            for i in 0..=ns {
-                let t = t0 + (t1 - t0) * i as f64 / ns as f64;
-                let p = crv.point_at(t);
-                let d = (p[0]-pt[0]).powi(2) + (p[1]-pt[1]).powi(2) + (p[2]-pt[2]).powi(2);
-                if d < best_d { best_d = d; best_t = t; }
-            }
-            for _ in 0..20 {
-                let derivs = crv.evaluate(best_t, 2);
-                let dx = derivs[0][0]-pt[0];
-                let dy = derivs[0][1]-pt[1];
-                let dz = derivs[0][2]-pt[2];
-                let f1 = 2.0*(dx*derivs[1][0] + dy*derivs[1][1] + dz*derivs[1][2]);
-                let f2 = 2.0*(derivs[1][0].powi(2) + derivs[1][1].powi(2) + derivs[1][2].powi(2)
-                             + dx*derivs[2][0] + dy*derivs[2][1] + dz*derivs[2][2]);
-                if f2.abs() < 1e-14 { break; }
-                let dt = f1 / f2;
-                best_t -= dt;
-                if best_t < t0 { best_t = t0; }
-                if best_t > t1 { best_t = t1; }
-                if dt.abs() < 1e-14 { break; }
-            }
-            best_t
-        };
-
-        // Orient v-curves: all should start near u_curve[0]
-        for vc in v_crvs.iter_mut() {
-            let vs = vc.point_at(vc.domain_start());
-            let ve = vc.point_at(vc.domain_end());
-            if min_dist_sq(&u_crvs[0], &ve) < min_dist_sq(&u_crvs[0], &vs) {
-                vc.reverse();
-            }
-        }
-
-        // Find u-params for each v-curve on u_curve[0], sort v-curves
-        let mut u_params_raw = vec![0.0; n_v];
-        for j in 0..n_v {
-            u_params_raw[j] = find_param(&u_crvs[0], &v_crvs[j].point_at(v_crvs[j].domain_start()));
-        }
-        let mut v_order: Vec<usize> = (0..n_v).collect();
-        v_order.sort_by(|&a, &b| u_params_raw[a].partial_cmp(&u_params_raw[b]).unwrap());
-        let sorted: Vec<NurbsCurve> = v_order.iter().map(|&i| v_crvs[i].duplicate()).collect();
-        v_crvs = sorted;
-
-        // Orient u-curves: all should start near first sorted v-curve
-        for uc in u_crvs.iter_mut() {
-            let us = uc.point_at(uc.domain_start());
-            let ue = uc.point_at(uc.domain_end());
-            if min_dist_sq(&v_crvs[0], &ue) < min_dist_sq(&v_crvs[0], &us) {
-                uc.reverse();
-            }
-        }
-
-        Self::make_curves_compatible(&mut u_crvs);
-        Self::make_curves_compatible(&mut v_crvs);
-        for c in u_crvs.iter_mut() { c.set_domain(0.0, 1.0); }
-        for c in v_crvs.iter_mut() { c.set_domain(0.0, 1.0); }
-
-        // Find intersection parameters for ALL (u-curve, v-curve) pairs
-        let mut t_u_ij = vec![vec![0.0; n_v]; n_u];
-        let mut t_v_ij = vec![vec![0.0; n_v]; n_u];
-        for i in 0..n_u {
-            for j in 0..n_v {
-                let approx_v = if n_u > 1 { i as f64 / (n_u - 1) as f64 } else { 0.0 };
-                let pv = v_crvs[j].point_at(approx_v);
-                t_u_ij[i][j] = find_param(&u_crvs[i], &pv);
-                let pu = u_crvs[i].point_at(t_u_ij[i][j]);
-                t_v_ij[i][j] = find_param(&v_crvs[j], &pu);
-            }
-        }
-
-        // Average intersection parameters
-        let mut u_params = vec![0.0; n_v];
-        for j in 0..n_v {
-            for i in 0..n_u { u_params[j] += t_u_ij[i][j]; }
-            u_params[j] /= n_u as f64;
-        }
-        let mut v_params = vec![0.0; n_u];
-        for i in 0..n_u {
-            for j in 0..n_v { v_params[i] += t_v_ij[i][j]; }
-            v_params[i] /= n_v as f64;
-        }
-
-        // Gaussian elimination with partial pivoting
-        let gauss_solve = |n: usize, dim: usize, a: &mut Vec<Vec<f64>>, b: &mut Vec<Vec<f64>>| {
-            for col in 0..n {
-                let mut mr = col;
-                let mut mv = a[col][col].abs();
-                for r in (col+1)..n {
-                    if a[r][col].abs() > mv { mv = a[r][col].abs(); mr = r; }
-                }
-                if mv < 1e-14 { continue; }
-                a.swap(col, mr);
-                b.swap(col, mr);
-                for r in (col+1)..n {
-                    let f = a[r][col] / a[col][col];
-                    for c in col..n { a[r][c] -= f * a[col][c]; }
-                    for d in 0..dim { b[r][d] -= f * b[col][d]; }
-                }
-            }
-            for r in (0..n).rev() {
-                for d in 0..dim {
-                    for c in (r+1)..n { b[r][d] -= a[r][c] * b[c][d]; }
-                    if a[r][r].abs() > 1e-14 { b[r][d] /= a[r][r]; }
-                }
-            }
-        };
-
-        // Build interpolation knot vector (Piegl-Tiller averaging)
-        let build_interp_knots = |n_pts: usize, deg: usize, params: &[f64]| -> Vec<f64> {
-            let ord = deg + 1;
-            let kc = ord + n_pts - 2;
-            let mut knots = vec![0.0; kc];
-            for i in 0..(ord-1) { knots[i] = params[0]; }
-            for j in 1..=(n_pts.saturating_sub(ord)) {
-                let mut sum = 0.0;
-                for i in j..(j+deg) { sum += params[i]; }
-                knots[ord - 2 + j] = sum / deg as f64;
-            }
-            for i in (kc-ord+1)..kc { knots[i] = params[n_pts-1]; }
-            knots
-        };
-
-        // Build basis function matrix
-        let build_basis_matrix = |n: usize, ord: usize, params: &[f64], knots: &[f64]| -> Vec<Vec<f64>> {
-            let mut nn = vec![vec![0.0; n]; n];
-            for row in 0..n {
-                let t = params[row];
-                let span = knot::find_span(ord, n, knots, t);
-                let d = ord - 1;
-                let kb = span + d;
-                if knots[kb - 1] == knots[kb] {
-                    if t <= knots[kb] { nn[row][span] = 1.0; }
-                    else { nn[row][span + ord - 1] = 1.0; }
-                    continue;
-                }
-                let mut nv = vec![0.0; ord * ord];
-                nv[ord * ord - 1] = 1.0;
-                let mut left = vec![0.0; d];
-                let mut right = vec![0.0; d];
-                let mut ni = (ord * ord - 1) as i64;
-                let mut kr = kb;
-                let mut kl = kb - 1;
-                for j in 0..d {
-                    let n0 = ni;
-                    ni -= (ord + 1) as i64;
-                    left[j] = t - knots[kl];
-                    right[j] = knots[kr] - t;
-                    if kl > 0 { kl -= 1; }
-                    kr += 1;
-                    let mut xv = 0.0;
-                    for r in 0..=j {
-                        let a0 = left[j - r];
-                        let a1 = right[r];
-                        let den = a0 + a1;
-                        let yv = if den != 0.0 { nv[n0 as usize + r] / den } else { 0.0 };
-                        nv[ni as usize + r] = xv + a1 * yv;
-                        xv = a0 * yv;
-                    }
-                    nv[ni as usize + j + 1] = xv;
-                }
-                for j in 0..ord {
-                    let col = span + j;
-                    if col < n { nn[row][col] = nv[j]; }
-                }
-            }
-            nn
-        };
-
-        // Reparametrize curves using monotone Hermite parameter mapping
-        let monotone_hermite_eval = |xs: &[f64], ys: &[f64], t: f64| -> f64 {
-            let n = xs.len();
-            if n < 2 { return t; }
-            if t <= xs[0] { return ys[0]; }
-            if t >= xs[n-1] { return ys[n-1]; }
-            let delta: Vec<f64> = (0..n-1).map(|k| (ys[k+1]-ys[k])/(xs[k+1]-xs[k])).collect();
-            let mut d = vec![0.0; n];
-            d[0] = delta[0]; d[n-1] = delta[n-2];
-            for k in 1..n-1 {
-                d[k] = if delta[k-1]*delta[k] <= 0.0 { 0.0 } else { (delta[k-1]+delta[k])/2.0 };
-            }
-            for k in 0..n-1 {
-                if delta[k].abs() < 1e-15 { d[k] = 0.0; d[k+1] = 0.0; continue; }
-                let mut alpha = d[k]/delta[k];
-                let mut beta = d[k+1]/delta[k];
-                if alpha < 0.0 { d[k] = 0.0; alpha = 0.0; }
-                if beta < 0.0 { d[k+1] = 0.0; beta = 0.0; }
-                let r2 = alpha*alpha + beta*beta;
-                if r2 > 9.0 {
-                    let tau = 3.0 / r2.sqrt();
-                    d[k] = tau * alpha * delta[k];
-                    d[k+1] = tau * beta * delta[k];
-                }
-            }
-            let mut ki = 0;
-            for i in 0..n-1 { if t < xs[i+1] { ki = i; break; } if i == n-2 { ki = i; } }
-            let h = xs[ki+1] - xs[ki];
-            if h < 1e-15 { return ys[ki]; }
-            let s = (t - xs[ki]) / h;
-            let s2 = s*s; let s3 = s2*s;
-            (2.0*s3-3.0*s2+1.0)*ys[ki] + (s3-2.0*s2+s)*h*d[ki]
-                + (-2.0*s3+3.0*s2)*ys[ki+1] + (s3-s2)*h*d[ki+1]
-        };
-
-        let reparametrize_curve = |crv: &NurbsCurve, target_params: &[f64], actual_params: &[f64]| -> Option<NurbsCurve> {
-            let np = target_params.len();
-            let mut mx = Vec::new();
-            let mut my = Vec::new();
-            let has0 = target_params.iter().any(|&t| t.abs() < 1e-10);
-            let has1 = target_params.iter().any(|&t| (t - 1.0).abs() < 1e-10);
-            if !has0 { mx.push(0.0); my.push(0.0); }
-            for k in 0..np { mx.push(target_params[k]); my.push(actual_params[k]); }
-            if !has1 { mx.push(1.0); my.push(1.0); }
-            let max_dev = mx.iter().zip(my.iter()).map(|(x, y)| (y - x).abs()).fold(0.0f64, f64::max);
-            if max_dev < 1e-6 { return None; }
-            let nu = (crv.cv_count() * 5).max(30);
-            let mut sample_set = std::collections::BTreeSet::new();
-            for k in 0..nu {
-                let bits = ((k as f64 / (nu - 1) as f64) * 1e15) as i64;
-                sample_set.insert(bits);
-            }
-            for k in 0..np {
-                let bits = (target_params[k] * 1e15) as i64;
-                sample_set.insert(bits);
-            }
-            let sp: Vec<f64> = sample_set.iter().map(|&b| b as f64 / 1e15).collect();
-            let ns = sp.len();
-            let mut pts = Vec::with_capacity(ns);
-            for k in 0..ns {
-                let tm = monotone_hermite_eval(&mx, &my, sp[k]).max(0.0).min(1.0);
-                pts.push(crv.point_at(tm));
-            }
-            let deg = 3.min(ns - 1);
-            let ord = deg + 1;
-            let kn = build_interp_knots(ns, deg, &sp);
-            let mut nn_mat = build_basis_matrix(ns, ord, &sp, &kn);
-            let mut rhs: Vec<Vec<f64>> = pts.iter().map(|p| vec![p[0], p[1], p[2]]).collect();
-            gauss_solve(ns, 3, &mut nn_mat, &mut rhs);
-            let mut nc = NurbsCurve::new(3, false, ord, ns);
-            for k in 0..kn.len().min(nc.knot_count()) { nc.set_knot(k, kn[k]); }
-            for k in 0..ns { nc.set_cv(k, &Point::new(rhs[k][0], rhs[k][1], rhs[k][2])); }
-            nc.set_domain(0.0, 1.0);
-            Some(nc)
-        };
-
-        for i in 0..n_u {
-            let tgt: Vec<f64> = (0..n_v).map(|j| u_params[j]).collect();
-            let act: Vec<f64> = (0..n_v).map(|j| t_u_ij[i][j]).collect();
-            if let Some(nc) = reparametrize_curve(&u_crvs[i], &tgt, &act) {
-                u_crvs[i] = nc;
-            }
-        }
-        for j in 0..n_v {
-            let tgt: Vec<f64> = (0..n_u).map(|i| v_params[i]).collect();
-            let act: Vec<f64> = (0..n_u).map(|i| t_v_ij[i][j]).collect();
-            if let Some(nc) = reparametrize_curve(&v_crvs[j], &tgt, &act) {
-                v_crvs[j] = nc;
-            }
-        }
-
-        Self::make_curves_compatible(&mut u_crvs);
-        Self::make_curves_compatible(&mut v_crvs);
-        for c in u_crvs.iter_mut() { c.set_domain(0.0, 1.0); }
-        for c in v_crvs.iter_mut() { c.set_domain(0.0, 1.0); }
-
-        // Intersection points from u-curves (ensures exact v-curve interpolation at grid points)
-        let mut p_ij = vec![vec![Point::new(0.0, 0.0, 0.0); n_v]; n_u];
-        for i in 0..n_u {
-            for j in 0..n_v {
-                p_ij[i][j] = u_crvs[i].point_at(u_params[j]);
-            }
-        }
-
-        // Skin compatible curves
-        let skin_curves = |curves: &[NurbsCurve], cross_params: &[f64], cross_degree: usize| -> NurbsSurface {
-            let nc = curves.len();
-            let cv_along = curves[0].cv_count();
-            let order_along = curves[0].order();
-            let cdeg = cross_degree.min(nc - 1);
-            let cord = cdeg + 1;
-            let cross_knots = build_interp_knots(nc, cdeg, cross_params);
-            let n_cross = build_basis_matrix(nc, cord, cross_params, &cross_knots);
-
-            let mut srf = match Self::create_raw(3, false, order_along, cord, cv_along, nc, false, false, 1.0, 1.0) {
-                Some(s) => s,
-                None => return NurbsSurface::new(),
-            };
-            for i in 0..srf.knot_count(0) {
-                if let Some(kv) = curves[0].knot(i) {
-                    srf.set_knot(0, i, kv);
-                }
-            }
-            let v_kc = cross_knots.len();
-            for i in 0..v_kc.min(srf.knot_count(1)) {
-                srf.set_knot(1, i, cross_knots[i]);
-            }
-            for j in 0..cv_along {
-                let mut a = n_cross.clone();
-                let mut rhs: Vec<Vec<f64>> = (0..nc).map(|k| {
-                    let p = curves[k].get_cv(j).unwrap_or(Point::new(0.0, 0.0, 0.0));
-                    vec![p[0], p[1], p[2]]
-                }).collect();
-                gauss_solve(nc, 3, &mut a, &mut rhs);
-                for k in 0..nc {
-                    srf.set_cv(j, k, &Point::new(rhs[k][0], rhs[k][1], rhs[k][2]));
-                }
-            }
-            srf
-        };
-
-        // Step 1: Build S_profiles (skin u-curves at v_params)
-        let mut s_profiles = skin_curves(&u_crvs, &v_params, 3);
-
-        // Step 2: Build S_guides (skin v-curves at u_params, then transpose)
-        let mut s_guides = skin_curves(&v_crvs, &u_params, 3);
-        s_guides.transpose();
-
-        // Step 3: Build S_tensor (interpolate intersection point grid)
-        let mut s_tensor;
-        {
-            let u_deg = 3_usize.min(n_v - 1);
-            let u_ord = u_deg + 1;
-            let u_knots_t = build_interp_knots(n_v, u_deg, &u_params);
-            let n_u_mat = build_basis_matrix(n_v, u_ord, &u_params, &u_knots_t);
-
-            let mut row_curves = Vec::with_capacity(n_u);
-            for i in 0..n_u {
-                let mut a = n_u_mat.clone();
-                let mut rhs: Vec<Vec<f64>> = (0..n_v).map(|j| {
-                    vec![p_ij[i][j][0], p_ij[i][j][1], p_ij[i][j][2]]
-                }).collect();
-                gauss_solve(n_v, 3, &mut a, &mut rhs);
-                let mut crv = NurbsCurve::new(3, false, u_ord, n_v);
-                for k in 0..u_knots_t.len().min(crv.knot_count()) {
-                    crv.set_knot(k, u_knots_t[k]);
-                }
-                for k in 0..n_v {
-                    crv.set_cv_point(k, &Point::new(rhs[k][0], rhs[k][1], rhs[k][2]));
-                }
-                row_curves.push(crv);
-            }
-            s_tensor = skin_curves(&row_curves, &v_params, 3);
-        }
-
-        // Step 4: Make all three surfaces compatible
-        for dir in 0..2 {
-            s_profiles.set_domain(dir, 0.0, 1.0);
-            s_guides.set_domain(dir, 0.0, 1.0);
-            s_tensor.set_domain(dir, 0.0, 1.0);
-        }
-
-        let max_deg_u = s_profiles.degree(0).max(s_guides.degree(0)).max(s_tensor.degree(0));
-        let max_deg_v = s_profiles.degree(1).max(s_guides.degree(1)).max(s_tensor.degree(1));
-
-        for srf in [&mut s_profiles, &mut s_guides, &mut s_tensor] {
-            if srf.degree(0) < max_deg_u { srf.increase_degree(0, max_deg_u); }
-            if srf.degree(1) < max_deg_v { srf.increase_degree(1, max_deg_v); }
-        }
-
-        // Unify knot vectors in both directions
-        let ktol = 1e-10;
-        for dir in 0..2 {
-            let ka = s_profiles.get_knots(dir);
-            let kb = s_guides.get_knots(dir);
-            let kc = s_tensor.get_knots(dir);
-            let unified = Self::merge_knot_vectors(&Self::merge_knot_vectors(&ka, &kb), &kc);
-            for srf in [&mut s_profiles, &mut s_guides, &mut s_tensor] {
-                let mut cur = srf.get_knots(dir);
-                for &kv in &unified {
-                    let found = cur.iter().any(|&ck| (ck - kv).abs() < ktol);
-                    if !found {
-                        srf.insert_knot(dir, kv, 1);
-                        cur = srf.get_knots(dir);
-                    }
-                }
-            }
-        }
-
-        // Step 5: Combine control points
-        let final_cv_u = s_profiles.cv_count_dir(Some(0));
-        let final_cv_v = s_profiles.cv_count_dir(Some(1));
-        let mut surface = s_profiles.duplicate();
-        for i in 0..final_cv_u {
-            for j in 0..final_cv_v {
-                let pp = s_profiles.get_cv(i, j).unwrap_or(Point::new(0.0, 0.0, 0.0));
-                let pg = s_guides.get_cv(i, j).unwrap_or(Point::new(0.0, 0.0, 0.0));
-                let pt = s_tensor.get_cv(i, j).unwrap_or(Point::new(0.0, 0.0, 0.0));
-                surface.set_cv(i, j, &Point::new(
-                    pp[0] + pg[0] - pt[0],
-                    pp[1] + pg[1] - pt[1],
-                    pp[2] + pg[2] - pt[2],
-                ));
-            }
-        }
-        surface
-    }
-
-    pub fn create_planar(curves: &[NurbsCurve]) -> Option<Self> {
-        if curves.is_empty() { return None; }
-
-        let mut all_pts = Vec::new();
-        for crv in curves {
-            for i in 0..crv.cv_count() {
-                if let Some(pt) = crv.get_cv(i) {
-                    all_pts.push(pt);
-                }
-            }
-        }
-        if all_pts.len() < 3 { return None; }
-
-        use crate::plane::Plane;
-        let plane = Plane::from_points_pca(all_pts.clone());
-        if plane.z_axis().magnitude() < 1e-10 { return None; }
-
-        let xax = plane.x_axis();
-        let yax = plane.y_axis();
-        let orig = plane.origin();
-
-        let mut min_u = f64::MAX;
-        let mut max_u = f64::MIN;
-        let mut min_v = f64::MAX;
-        let mut max_v = f64::MIN;
-
-        for pt in &all_pts {
-            let dx = pt[0] - orig[0];
-            let dy = pt[1] - orig[1];
-            let dz = pt[2] - orig[2];
-            let u = dx * xax[0] + dy * xax[1] + dz * xax[2];
-            let v = dx * yax[0] + dy * yax[1] + dz * yax[2];
-            if u < min_u { min_u = u; }
-            if u > max_u { max_u = u; }
-            if v < min_v { min_v = v; }
-            if v > max_v { max_v = v; }
-        }
-
-        let mut pad = (max_u - min_u).max(max_v - min_v) * 0.05;
-        if pad < 1e-6 { pad = 1.0; }
-        min_u -= pad; max_u += pad;
-        min_v -= pad; max_v += pad;
-
-        let range_u = max_u - min_u;
-        let range_v = max_v - min_v;
-
-        let mut surface = Self::create_raw(3, false, 2, 2, 2, 2, false, false, 1.0, 1.0)?;
-        surface.set_knot(0, 0, 0.0);
-        surface.set_knot(0, 1, 1.0);
-        surface.set_knot(1, 0, 0.0);
-        surface.set_knot(1, 1, 1.0);
-
-        let plane_pt = |u: f64, v: f64| -> Point {
-            Point::new(
-                orig[0] + u * xax[0] + v * yax[0],
-                orig[1] + u * xax[1] + v * yax[1],
-                orig[2] + u * xax[2] + v * yax[2],
-            )
-        };
-
-        surface.set_cv(0, 0, &plane_pt(min_u, min_v));
-        surface.set_cv(0, 1, &plane_pt(min_u, max_v));
-        surface.set_cv(1, 0, &plane_pt(max_u, min_v));
-        surface.set_cv(1, 1, &plane_pt(max_u, max_v));
-
-        let mut uv_pts = Vec::new();
-        for crv in curves {
-            let (pts3d, _params) = crv.divide_by_count(50, true);
-            for pt in &pts3d {
-                let dx = pt[0] - orig[0];
-                let dy = pt[1] - orig[1];
-                let dz = pt[2] - orig[2];
-                let pu = dx * xax[0] + dy * xax[1] + dz * xax[2];
-                let pv = dx * yax[0] + dy * yax[1] + dz * yax[2];
-                let nu = (pu - min_u) / range_u;
-                let nv = (pv - min_v) / range_v;
-                uv_pts.push(Point::new(nu, nv, 0.0));
-            }
-        }
-
-        if uv_pts.len() >= 3 {
-            let loop_crv = NurbsCurve::create(false, 3, &uv_pts);
-            surface.m_outer_loop = Some(loop_crv);
-        }
-
-        Some(surface)
-    }
-
-    pub fn set_outer_loop(&mut self, loop_crv: NurbsCurve) {
-        self.m_outer_loop = Some(loop_crv);
-    }
-
-    pub fn get_outer_loop(&self) -> Option<&NurbsCurve> {
-        self.m_outer_loop.as_ref()
-    }
-
-    pub fn is_trimmed(&self) -> bool {
-        self.m_outer_loop.as_ref().map_or(false, |c| c.is_valid())
-    }
-
-    pub fn clear_outer_loop(&mut self) {
-        self.m_outer_loop = None;
-    }
-
-    pub fn add_inner_loop(&mut self, loop_crv: NurbsCurve) {
-        self.m_inner_loops.push(loop_crv);
-    }
-
-    pub fn get_inner_loop(&self, index: usize) -> Option<&NurbsCurve> {
-        self.m_inner_loops.get(index)
-    }
-
-    pub fn inner_loop_count(&self) -> usize {
-        self.m_inner_loops.len()
-    }
-
-    pub fn clear_inner_loops(&mut self) {
-        self.m_inner_loops.clear();
-    }
 
     pub fn closest_point(&self, point: &Point) -> (Point, f64, f64) {
         let dom_u = self.domain(0).unwrap_or((0.0, 1.0));
@@ -1256,34 +497,6 @@ impl NurbsSurface {
         (pt, u, v)
     }
 
-    pub fn add_hole(&mut self, curve_3d: &NurbsCurve) {
-        let dom = curve_3d.domain();
-        let sdom_u = self.domain(0).unwrap_or((0.0, 1.0));
-        let sdom_v = self.domain(1).unwrap_or((0.0, 1.0));
-        let range_u = sdom_u.1 - sdom_u.0;
-        let range_v = sdom_v.1 - sdom_v.0;
-
-        let n_samples = std::cmp::max(curve_3d.cv_count() * 4, 32);
-        let mut uv_pts = Vec::new();
-        for i in 0..n_samples {
-            let t = dom.0 + (dom.1 - dom.0) * i as f64 / n_samples as f64;
-            let pt3d = curve_3d.point_at(t);
-            let (_, u, v) = self.closest_point(&pt3d);
-            let nu = (u - sdom_u.0) / range_u;
-            let nv = (v - sdom_v.0) / range_v;
-            uv_pts.push(Point::new(nu, nv, 0.0));
-        }
-        if uv_pts.len() >= 3 {
-            self.add_inner_loop(NurbsCurve::create(true, 1, &uv_pts));
-        }
-    }
-
-    pub fn add_holes(&mut self, curves_3d: &[NurbsCurve]) {
-        for crv in curves_3d {
-            self.add_hole(crv);
-        }
-    }
-
     fn compute_bbox_diagonal(&self) -> f64 {
         let (mut minx, mut miny, mut minz) = (1e30f64, 1e30f64, 1e30f64);
         let (mut maxx, mut maxy, mut maxz) = (-1e30f64, -1e30f64, -1e30f64);
@@ -1303,62 +516,64 @@ impl NurbsSurface {
         (dx*dx + dy*dy + dz*dz).sqrt()
     }
 
-    fn span_flatness(&self, span_u: usize, span_v: usize) -> f64 {
+    fn span_subs(&self, dir: usize, sp: &[f64], osp: &[f64], max_angle_deg: f64, bbox_diag: f64) -> Vec<usize> {
+        let n = sp.len() - 1;
+        let n_other = osp.len() - 1;
+        let mut subs = vec![1usize; n];
         let deg_u = self.degree(0);
         let deg_v = self.degree(1);
-        let c00 = self.get_cv(span_u, span_v).unwrap_or(Point::new(0.0,0.0,0.0));
-        let c10 = self.get_cv(span_u + deg_u, span_v).unwrap_or(Point::new(0.0,0.0,0.0));
-        let c01 = self.get_cv(span_u, span_v + deg_v).unwrap_or(Point::new(0.0,0.0,0.0));
-        let c11 = self.get_cv(span_u + deg_u, span_v + deg_v).unwrap_or(Point::new(0.0,0.0,0.0));
-        let mut max_dist = 0.0f64;
-        for a in 0..=deg_u {
-            let s = if deg_u > 0 { a as f64 / deg_u as f64 } else { 0.0 };
-            for b in 0..=deg_v {
-                if (a == 0 || a == deg_u) && (b == 0 || b == deg_v) { continue; }
-                let t = if deg_v > 0 { b as f64 / deg_v as f64 } else { 0.0 };
-                if let Some(cv) = self.get_cv(span_u + a, span_v + b) {
-                    let bx = (1.0-s)*(1.0-t)*c00[0] + s*(1.0-t)*c10[0] + (1.0-s)*t*c01[0] + s*t*c11[0];
-                    let by = (1.0-s)*(1.0-t)*c00[1] + s*(1.0-t)*c10[1] + (1.0-s)*t*c01[1] + s*t*c11[1];
-                    let bz = (1.0-s)*(1.0-t)*c00[2] + s*(1.0-t)*c10[2] + (1.0-s)*t*c01[2] + s*t*c11[2];
-                    let dx = cv[0]-bx;
-                    let dy = cv[1]-by;
-                    let dz = cv[2]-bz;
-                    let d = (dx*dx + dy*dy + dz*dz).sqrt();
-                    if d > max_dist { max_dist = d; }
-                }
-            }
-        }
-        max_dist
-    }
-
-    fn span_subs(&self, dir: usize, sp: &[f64], osp: &[f64], flat: &[f64], max_angle_deg: f64, flat_tol: f64) -> Vec<usize> {
-        let n = sp.len() - 1;
-        let mut subs = vec![2usize; n];
-        let s_positions = [
-            osp[0] + (osp[osp.len()-1] - osp[0]) * 0.25,
-            (osp[0] + osp[osp.len()-1]) * 0.5,
-            osp[0] + (osp[osp.len()-1] - osp[0]) * 0.75,
-        ];
+        let degree_dir = if dir == 0 { deg_u } else { deg_v };
+        let s_positions: Vec<f64> = (0..n_other).map(|k| (osp[k] + osp[k + 1]) * 0.5).collect();
         for i in 0..n {
-            if flat[i] < flat_tol { continue; }
             let t0 = sp[i];
             let t1 = sp[i + 1];
-            let mut max_angle = 0.0f64;
-            for &s in &s_positions {
-                let mut prev_n: Option<Vector> = None;
-                let mut total_angle = 0.0f64;
-                for k in 0..=4 {
-                    let t = t0 + k as f64 * (t1 - t0) / 4.0;
-                    let nv = if dir == 0 { self.normal_at(t, s) } else { self.normal_at(s, t) };
-                    if let Some(ref pn) = prev_n {
-                        let dot = (pn[0]*nv[0] + pn[1]*nv[1] + pn[2]*nv[2]).clamp(-1.0, 1.0);
-                        total_angle += dot.acos() * 180.0 / crate::tolerance::PI;
+            if degree_dir > 1 {
+                let mut max_angle = 0.0f64;
+                for &s in &s_positions {
+                    let mut prev_n: Option<Vector> = None;
+                    let mut total_angle = 0.0f64;
+                    for k in 0..=4 {
+                        let t = t0 + k as f64 * (t1 - t0) / 4.0;
+                        let nv = if dir == 0 { self.normal_at(t, s) } else { self.normal_at(s, t) };
+                        if let Some(ref pn) = prev_n {
+                            let dot = (pn[0]*nv[0] + pn[1]*nv[1] + pn[2]*nv[2]).clamp(-1.0, 1.0);
+                            total_angle += dot.acos() * 180.0 / crate::tolerance::PI;
+                        }
+                        prev_n = Some(nv);
                     }
-                    prev_n = Some(nv);
+                    if total_angle > max_angle { max_angle = total_angle; }
                 }
-                if total_angle > max_angle { max_angle = total_angle; }
+                subs[i] = 1.max((max_angle / max_angle_deg).ceil() as usize).min(24);
             }
-            subs[i] = 2.max((max_angle / max_angle_deg).ceil() as usize).min(24);
+            // Direct chord-height deviation check
+            {
+                let chord_tol = bbox_diag * 0.005;
+                let mut max_dev = 0.0f64;
+                let nc = n_other.min(3);
+                for ci in 0..=nc {
+                    let s = osp[0] + ci as f64 * (osp[osp.len()-1] - osp[0]) / nc.max(1) as f64;
+                    let pa = if dir == 0 { self.point_at(t0, s) } else { self.point_at(s, t0) }.unwrap_or(Point::new(0.0,0.0,0.0));
+                    let pb = if dir == 0 { self.point_at(t1, s) } else { self.point_at(s, t1) }.unwrap_or(Point::new(0.0,0.0,0.0));
+                    for k in 1..=3 {
+                        let frac = k as f64 / 4.0;
+                        let tm = t0 + frac * (t1 - t0);
+                        let pm = if dir == 0 { self.point_at(tm, s) } else { self.point_at(s, tm) }.unwrap_or(Point::new(0.0,0.0,0.0));
+                        let lx = pa[0] + frac * (pb[0] - pa[0]);
+                        let ly = pa[1] + frac * (pb[1] - pa[1]);
+                        let lz = pa[2] + frac * (pb[2] - pa[2]);
+                        let dx = pm[0] - lx;
+                        let dy = pm[1] - ly;
+                        let dz = pm[2] - lz;
+                        let dev = (dx*dx + dy*dy + dz*dz).sqrt();
+                        if dev > max_dev { max_dev = dev; }
+                    }
+                }
+                if max_dev > chord_tol {
+                    let chord_subs = 2.max((max_dev / chord_tol).sqrt().ceil() as usize);
+                    subs[i] = subs[i].max(chord_subs.min(24));
+                }
+            }
+            if degree_dir > 1 { subs[i] = subs[i].max(2); }
         }
         subs
     }
@@ -1369,22 +584,43 @@ impl NurbsSurface {
         if usp.len() < 2 || vsp.len() < 2 {
             return Mesh::new();
         }
-        let ns_u = usp.len() - 1;
-        let ns_v = vsp.len() - 1;
-        let max_angle_deg = 15.0f64;
-        let bbox_diag = self.compute_bbox_diagonal();
-        let flat_tol = bbox_diag * 0.001;
-        let mut u_flat = vec![0.0f64; ns_u];
-        let mut v_flat = vec![0.0f64; ns_v];
-        for i in 0..ns_u {
-            for j in 0..ns_v {
-                let f = self.span_flatness(i, j);
-                if f > u_flat[i] { u_flat[i] = f; }
-                if f > v_flat[j] { v_flat[j] = f; }
+        if self.is_planar(1e-6) {
+            let mut result = Mesh::new();
+            let p00 = self.point_at_corner(0, 0).unwrap_or(Point::new(0.0, 0.0, 0.0));
+            let p10 = self.point_at_corner(1, 0).unwrap_or(Point::new(0.0, 0.0, 0.0));
+            let p11 = self.point_at_corner(1, 1).unwrap_or(Point::new(0.0, 0.0, 0.0));
+            let p01 = self.point_at_corner(0, 1).unwrap_or(Point::new(0.0, 0.0, 0.0));
+            let d2 = (p00[0]-p01[0]).powi(2) + (p00[1]-p01[1]).powi(2) + (p00[2]-p01[2]).powi(2);
+            let normal;
+            if d2 < 1e-20 {
+                let v0 = result.add_vertex(p00.clone(), None);
+                let v1 = result.add_vertex(p10.clone(), None);
+                let v2 = result.add_vertex(p11.clone(), None);
+                result.add_face(vec![v0, v1, v2], None);
+                let e1 = Vector::new(p10[0]-p00[0], p10[1]-p00[1], p10[2]-p00[2]);
+                let e2 = Vector::new(p11[0]-p00[0], p11[1]-p00[1], p11[2]-p00[2]);
+                normal = e1.cross(&e2);
+            } else {
+                let v0 = result.add_vertex(p00.clone(), None);
+                let v1 = result.add_vertex(p10.clone(), None);
+                let v2 = result.add_vertex(p11.clone(), None);
+                let v3 = result.add_vertex(p01.clone(), None);
+                result.add_face(vec![v0, v1, v2], None);
+                result.add_face(vec![v0, v2, v3], None);
+                let derivs = self.evaluate(0.5, 0.5, 1);
+                normal = if derivs.len() >= 3 { derivs[1].cross(&derivs[2]) } else { Vector::new(0.0, 0.0, 1.0) };
             }
+            let nlen = normal.magnitude();
+            let n = if nlen > 1e-15 { &normal * (1.0 / nlen) } else { normal };
+            for (_, v) in result.vertex.iter_mut() {
+                v.set_normal(n[0], n[1], n[2]);
+            }
+            return result;
         }
-        let mut u_subs = self.span_subs(0, &usp, &vsp, &u_flat, max_angle_deg, flat_tol);
-        let mut v_subs = self.span_subs(1, &vsp, &usp, &v_flat, max_angle_deg, flat_tol);
+        let max_angle_deg = 20.0f64;
+        let bbox_diag = self.compute_bbox_diagonal();
+        let mut u_subs = self.span_subs(0, &usp, &vsp, max_angle_deg, bbox_diag);
+        let mut v_subs = self.span_subs(1, &vsp, &usp, max_angle_deg, bbox_diag);
         let total_u: usize = u_subs.iter().sum::<usize>() + 1;
         let total_v: usize = v_subs.iter().sum::<usize>() + 1;
         let v_mid = (vsp[0] + vsp[vsp.len()-1]) * 0.5;
@@ -1415,10 +651,12 @@ impl NurbsSurface {
             let spacing_u = u_len / total_u as f64;
             let spacing_v = v_len / total_v as f64;
             let ratio = spacing_u / spacing_v;
-            if ratio > 2.0 {
+            let deg_u = self.degree(0);
+            let deg_v = self.degree(1);
+            if ratio > 2.0 && deg_u > 1 {
                 let scale = ratio.sqrt();
                 for s in u_subs.iter_mut() { *s = (((*s as f64) * scale).ceil() as usize).min(24); }
-            } else if ratio < 0.5 {
+            } else if ratio < 0.5 && deg_v > 1 {
                 let scale = (1.0 / ratio).sqrt();
                 for s in v_subs.iter_mut() { *s = (((*s as f64) * scale).ceil() as usize).min(24); }
             }
@@ -1441,8 +679,26 @@ impl NurbsSurface {
         vs.push(*vsp.last().unwrap());
         let closed_u = self.is_closed(0);
         let closed_v = self.is_closed(1);
-        if closed_u { us.pop(); }
-        if closed_v { vs.pop(); }
+        let fix_closed_gap = |params: &mut Vec<f64>, spans: &[f64], closed: bool| {
+            if !closed || params.len() < 3 { return; }
+            params.pop();
+            let domain_end = *spans.last().unwrap();
+            let wrap_gap = domain_end - *params.last().unwrap();
+            let mut max_gap = 0.0f64;
+            for i in 1..params.len() {
+                let g = params[i] - params[i - 1];
+                if g > max_gap { max_gap = g; }
+            }
+            if max_gap > 0.0 && wrap_gap > max_gap * 1.5 {
+                let extra = ((wrap_gap / max_gap).ceil() as usize).saturating_sub(1);
+                let step = wrap_gap / (extra + 1) as f64;
+                for _e in 1..=extra {
+                    params.push(params.last().unwrap() + step);
+                }
+            }
+        };
+        fix_closed_gap(&mut us, &usp, closed_u);
+        fix_closed_gap(&mut vs, &vsp, closed_v);
         let nu = us.len();
         let nv = vs.len();
         let mut result = Mesh::new();
@@ -2742,29 +1998,25 @@ impl NurbsSurface {
             knots_v: self.m_knot[1].clone(),
             cvs: self.m_cv.clone(),
             width: self.width,
-            surfacecolor: Some(crate::proto::Color {
-                guid: self.surfacecolor.guid.clone(),
-                name: self.surfacecolor.name.clone(),
-                r: self.surfacecolor.r as i32,
-                g: self.surfacecolor.g as i32,
-                b: self.surfacecolor.b as i32,
-                a: self.surfacecolor.a as i32,
-            }),
+            pointcolors: self.pointcolors.iter().map(|c| crate::proto::Color {
+                guid: String::new(), name: String::new(),
+                r: c.r as i32, g: c.g as i32, b: c.b as i32, a: c.a as i32,
+            }).collect(),
+            facecolors: self.facecolors.iter().map(|c| crate::proto::Color {
+                guid: String::new(), name: String::new(),
+                r: c.r as i32, g: c.g as i32, b: c.b as i32, a: c.a as i32,
+            }).collect(),
+            linecolors: self.linecolors.iter().map(|c| crate::proto::Color {
+                guid: String::new(), name: String::new(),
+                r: c.r as i32, g: c.g as i32, b: c.b as i32, a: c.a as i32,
+            }).collect(),
             xform: Some(crate::proto::Xform {
                 guid: self.xform.guid.clone(),
                 name: self.xform.name.clone(),
                 matrix: self.xform.m.to_vec(),
             }),
-            outer_loop: if self.is_trimmed() {
-                let data = self.m_outer_loop.as_ref().unwrap().to_protobuf();
-                Some(crate::proto::NurbsCurve::decode(data.as_slice()).unwrap())
-            } else {
-                None
-            },
-            inner_loops: self.m_inner_loops.iter().map(|c| {
-                let data = c.to_protobuf();
-                crate::proto::NurbsCurve::decode(data.as_slice()).unwrap()
-            }).collect(),
+            outer_loop: None,
+            inner_loops: Vec::new(),
         };
         proto.encode_to_vec()
     }
@@ -2819,15 +2071,9 @@ impl NurbsSurface {
             surface.m_cv = proto.cvs;
         }
 
-        // Load color
-        if let Some(color) = proto.surfacecolor {
-            surface.surfacecolor.guid = color.guid;
-            surface.surfacecolor.name = color.name;
-            surface.surfacecolor.r = color.r as u8;
-            surface.surfacecolor.g = color.g as u8;
-            surface.surfacecolor.b = color.b as u8;
-            surface.surfacecolor.a = color.a as u8;
-        }
+        surface.pointcolors = proto.pointcolors.iter().map(|c| Color::new(c.r as u8, c.g as u8, c.b as u8, c.a as u8)).collect();
+        surface.facecolors = proto.facecolors.iter().map(|c| Color::new(c.r as u8, c.g as u8, c.b as u8, c.a as u8)).collect();
+        surface.linecolors = proto.linecolors.iter().map(|c| Color::new(c.r as u8, c.g as u8, c.b as u8, c.a as u8)).collect();
 
         // Load transform
         if let Some(xform) = proto.xform {
@@ -2837,22 +2083,6 @@ impl NurbsSurface {
                 if i < 16 {
                     surface.xform.m[i] = *val;
                 }
-            }
-        }
-
-        // Load outer loop
-        if let Some(ol) = proto.outer_loop {
-            let data = ol.encode_to_vec();
-            if let Ok(crv) = NurbsCurve::from_protobuf(&data) {
-                surface.m_outer_loop = Some(crv);
-            }
-        }
-
-        // Load inner loops
-        for il in proto.inner_loops {
-            let data = il.encode_to_vec();
-            if let Ok(crv) = NurbsCurve::from_protobuf(&data) {
-                surface.m_inner_loops.push(crv);
             }
         }
 
@@ -2895,7 +2125,9 @@ impl PartialEq for NurbsSurface {
         // Compare metadata (excluding guid)
         if self.name != other.name { return false; }
         if self.width != other.width { return false; }
-        if self.surfacecolor != other.surfacecolor { return false; }
+        if self.pointcolors != other.pointcolors { return false; }
+        if self.facecolors != other.facecolors { return false; }
+        if self.linecolors != other.linecolors { return false; }
         if self.xform != other.xform { return false; }
 
         // Compare NURBS structure
@@ -2924,7 +2156,9 @@ impl Clone for NurbsSurface {
             guid: uuid::Uuid::new_v4().to_string(), // Generate new GUID
             name: self.name.clone(),
             width: self.width,
-            surfacecolor: self.surfacecolor.clone(),
+            pointcolors: self.pointcolors.clone(),
+            facecolors: self.facecolors.clone(),
+            linecolors: self.linecolors.clone(),
             xform: self.xform.clone(),
             m_dim: self.m_dim,
             m_is_rat: self.m_is_rat,
@@ -2933,8 +2167,6 @@ impl Clone for NurbsSurface {
             m_cv_stride: self.m_cv_stride,
             m_knot: self.m_knot.clone(),
             m_cv: self.m_cv.clone(),
-            m_outer_loop: self.m_outer_loop.clone(),
-            m_inner_loops: self.m_inner_loops.clone(),
         }
     }
 }
