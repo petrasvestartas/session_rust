@@ -610,7 +610,7 @@ fn test_polyline_protobuf_roundtrip() {
 
 
 pub fn run_polyline_constructor() -> TestResult {
-    MINI_TEST!("constructor", {
+    MINI_TEST!("Constructor", {
         use crate::Polyline;
         use crate::Point;
         use crate::Vector;
@@ -686,7 +686,7 @@ pub fn run_polyline_constructor() -> TestResult {
 }
 
 pub fn run_polyline_transformation() -> TestResult {
-    MINI_TEST!("transformation", {
+    MINI_TEST!("Transformation", {
         use crate::Polyline;
         use crate::Point;
         use crate::Xform;
@@ -704,7 +704,7 @@ pub fn run_polyline_transformation() -> TestResult {
 }
 
 pub fn run_polyline_json_roundtrip() -> TestResult {
-    MINI_TEST!("json_roundtrip", {
+    MINI_TEST!("Json_roundtrip", {
         use crate::Polyline;
         use crate::Point;
         use crate::encoders::{json_dump, json_load};
@@ -731,7 +731,7 @@ pub fn run_polyline_json_roundtrip() -> TestResult {
 }
 
 pub fn run_polyline_protobuf_roundtrip() -> TestResult {
-    MINI_TEST!("protobuf_roundtrip", {
+    MINI_TEST!("Protobuf_roundtrip", {
         use crate::Polyline;
         use crate::Point;
 
@@ -753,7 +753,7 @@ pub fn run_polyline_protobuf_roundtrip() -> TestResult {
 }
 
 pub fn run_polyline_length() -> TestResult {
-    MINI_TEST!("length", {
+    MINI_TEST!("Length", {
         use crate::Polyline;
         use crate::Point;
 
@@ -769,7 +769,7 @@ pub fn run_polyline_length() -> TestResult {
 }
 
 pub fn run_polyline_center() -> TestResult {
-    MINI_TEST!("center", {
+    MINI_TEST!("Center", {
         use crate::Polyline;
         use crate::Point;
 
@@ -790,7 +790,7 @@ pub fn run_polyline_center() -> TestResult {
 }
 
 pub fn run_polyline_is_closed() -> TestResult {
-    MINI_TEST!("is_closed", {
+    MINI_TEST!("Is_closed", {
         use crate::Polyline;
         use crate::Point;
 
@@ -819,7 +819,7 @@ pub fn run_polyline_is_closed() -> TestResult {
 }
 
 pub fn run_polyline_reverse() -> TestResult {
-    MINI_TEST!("reverse", {
+    MINI_TEST!("Reverse", {
         use crate::Polyline;
         use crate::Point;
 
@@ -842,7 +842,7 @@ pub fn run_polyline_reverse() -> TestResult {
 }
 
 pub fn run_polyline_closest_point() -> TestResult {
-    MINI_TEST!("closest_point", {
+    MINI_TEST!("Closest_point", {
         use crate::Polyline;
         use crate::Point;
 
@@ -861,7 +861,7 @@ pub fn run_polyline_closest_point() -> TestResult {
 }
 
 pub fn run_polyline_extend_segment() -> TestResult {
-    MINI_TEST!("extend_segment", {
+    MINI_TEST!("Extend_segment", {
         use crate::Polyline;
         use crate::Point;
 
@@ -876,7 +876,7 @@ pub fn run_polyline_extend_segment() -> TestResult {
 }
 
 pub fn run_polyline_extend_segment_equally() -> TestResult {
-    MINI_TEST!("extend_segment_equally", {
+    MINI_TEST!("Extend_segment_equally", {
         use crate::Polyline;
         use crate::Point;
 
@@ -891,7 +891,7 @@ pub fn run_polyline_extend_segment_equally() -> TestResult {
 }
 
 pub fn run_polyline_get_points() -> TestResult {
-    MINI_TEST!("get_points", {
+    MINI_TEST!("Get_points", {
         use crate::Polyline;
         use crate::Point;
 
@@ -907,7 +907,7 @@ pub fn run_polyline_get_points() -> TestResult {
 }
 
 pub fn run_polyline_shift() -> TestResult {
-    MINI_TEST!("shift", {
+    MINI_TEST!("Shift", {
         use crate::Polyline;
         use crate::Point;
 
@@ -923,7 +923,7 @@ pub fn run_polyline_shift() -> TestResult {
 }
 
 pub fn run_polyline_point_at() -> TestResult {
-    MINI_TEST!("point_at", {
+    MINI_TEST!("Point_at", {
         use crate::Polyline;
         use crate::Point;
 
@@ -938,7 +938,7 @@ pub fn run_polyline_point_at() -> TestResult {
 }
 
 pub fn run_polyline_is_clockwise() -> TestResult {
-    MINI_TEST!("is_clockwise", {
+    MINI_TEST!("Is_clockwise", {
         use crate::Polyline;
         use crate::Point;
         use crate::Plane;
@@ -955,7 +955,7 @@ pub fn run_polyline_is_clockwise() -> TestResult {
 }
 
 pub fn run_polyline_convex_corners() -> TestResult {
-    MINI_TEST!("convex_corners", {
+    MINI_TEST!("Convex_corners", {
         use crate::Polyline;
         use crate::Point;
 
@@ -967,7 +967,7 @@ pub fn run_polyline_convex_corners() -> TestResult {
 }
 
 pub fn run_polyline_tween() -> TestResult {
-    MINI_TEST!("tween", {
+    MINI_TEST!("Tween", {
         use crate::Polyline;
         use crate::Point;
 
@@ -981,7 +981,7 @@ pub fn run_polyline_tween() -> TestResult {
 }
 
 pub fn run_polyline_average_plane() -> TestResult {
-    MINI_TEST!("average_plane", {
+    MINI_TEST!("Average_plane", {
         use crate::Polyline;
         use crate::Point;
 
@@ -996,21 +996,21 @@ pub fn run_polyline_average_plane() -> TestResult {
 }
 
 // Register tests with the shared registry for run_all("rust")
-REGISTER_MINI_TEST!("Polyline", "constructor", crate::polyline_test::run_polyline_constructor);
-REGISTER_MINI_TEST!("Polyline", "transformation", crate::polyline_test::run_polyline_transformation);
-REGISTER_MINI_TEST!("Polyline", "json_roundtrip", crate::polyline_test::run_polyline_json_roundtrip);
-REGISTER_MINI_TEST!("Polyline", "protobuf_roundtrip", crate::polyline_test::run_polyline_protobuf_roundtrip);
-REGISTER_MINI_TEST!("Polyline", "length", crate::polyline_test::run_polyline_length);
-REGISTER_MINI_TEST!("Polyline", "center", crate::polyline_test::run_polyline_center);
-REGISTER_MINI_TEST!("Polyline", "is_closed", crate::polyline_test::run_polyline_is_closed);
-REGISTER_MINI_TEST!("Polyline", "reverse", crate::polyline_test::run_polyline_reverse);
-REGISTER_MINI_TEST!("Polyline", "closest_point", crate::polyline_test::run_polyline_closest_point);
-REGISTER_MINI_TEST!("Polyline", "extend_segment", crate::polyline_test::run_polyline_extend_segment);
-REGISTER_MINI_TEST!("Polyline", "extend_segment_equally", crate::polyline_test::run_polyline_extend_segment_equally);
-REGISTER_MINI_TEST!("Polyline", "get_points", crate::polyline_test::run_polyline_get_points);
-REGISTER_MINI_TEST!("Polyline", "shift", crate::polyline_test::run_polyline_shift);
-REGISTER_MINI_TEST!("Polyline", "point_at", crate::polyline_test::run_polyline_point_at);
-REGISTER_MINI_TEST!("Polyline", "is_clockwise", crate::polyline_test::run_polyline_is_clockwise);
-REGISTER_MINI_TEST!("Polyline", "convex_corners", crate::polyline_test::run_polyline_convex_corners);
-REGISTER_MINI_TEST!("Polyline", "tween", crate::polyline_test::run_polyline_tween);
-REGISTER_MINI_TEST!("Polyline", "average_plane", crate::polyline_test::run_polyline_average_plane);
+REGISTER_MINI_TEST!("Polyline", "Constructor", crate::polyline_test::run_polyline_constructor);
+REGISTER_MINI_TEST!("Polyline", "Transformation", crate::polyline_test::run_polyline_transformation);
+REGISTER_MINI_TEST!("Polyline", "Json_roundtrip", crate::polyline_test::run_polyline_json_roundtrip);
+REGISTER_MINI_TEST!("Polyline", "Protobuf_roundtrip", crate::polyline_test::run_polyline_protobuf_roundtrip);
+REGISTER_MINI_TEST!("Polyline", "Length", crate::polyline_test::run_polyline_length);
+REGISTER_MINI_TEST!("Polyline", "Center", crate::polyline_test::run_polyline_center);
+REGISTER_MINI_TEST!("Polyline", "Is_closed", crate::polyline_test::run_polyline_is_closed);
+REGISTER_MINI_TEST!("Polyline", "Reverse", crate::polyline_test::run_polyline_reverse);
+REGISTER_MINI_TEST!("Polyline", "Closest_point", crate::polyline_test::run_polyline_closest_point);
+REGISTER_MINI_TEST!("Polyline", "Extend_segment", crate::polyline_test::run_polyline_extend_segment);
+REGISTER_MINI_TEST!("Polyline", "Extend_segment_equally", crate::polyline_test::run_polyline_extend_segment_equally);
+REGISTER_MINI_TEST!("Polyline", "Get_points", crate::polyline_test::run_polyline_get_points);
+REGISTER_MINI_TEST!("Polyline", "Shift", crate::polyline_test::run_polyline_shift);
+REGISTER_MINI_TEST!("Polyline", "Point_at", crate::polyline_test::run_polyline_point_at);
+REGISTER_MINI_TEST!("Polyline", "Is_clockwise", crate::polyline_test::run_polyline_is_clockwise);
+REGISTER_MINI_TEST!("Polyline", "Convex_corners", crate::polyline_test::run_polyline_convex_corners);
+REGISTER_MINI_TEST!("Polyline", "Tween", crate::polyline_test::run_polyline_tween);
+REGISTER_MINI_TEST!("Polyline", "Average_plane", crate::polyline_test::run_polyline_average_plane);

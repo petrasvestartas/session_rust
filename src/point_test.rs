@@ -2,7 +2,7 @@ use crate::{MINI_CHECK, MINI_TEST, REGISTER_MINI_TEST};
 use crate::mini_test::TestResult;
 
 pub fn run_point_constructor() -> TestResult {
-    MINI_TEST!("constructor", {
+    MINI_TEST!("Constructor", {
         use crate::Point;
         use crate::Vector;
         use crate::Color;
@@ -78,7 +78,7 @@ pub fn run_point_constructor() -> TestResult {
 }
 
 pub fn run_point_transformation() -> TestResult {
-    MINI_TEST!("transformation", {
+    MINI_TEST!("Transformation", {
         use crate::Point;
         use crate::Xform;
 
@@ -94,7 +94,7 @@ pub fn run_point_transformation() -> TestResult {
 }
 
 pub fn run_point_json_roundtrip() -> TestResult {
-    MINI_TEST!("json_roundtrip", {
+    MINI_TEST!("Json_roundtrip", {
         use crate::Point;
         use crate::Color;
 
@@ -125,7 +125,7 @@ pub fn run_point_json_roundtrip() -> TestResult {
 }
 
 pub fn run_point_protobuf_roundtrip() -> TestResult {
-    MINI_TEST!("protobuf_roundtrip", {
+    MINI_TEST!("Protobuf_roundtrip", {
         use crate::Point;
         use crate::Color;
 
@@ -151,7 +151,7 @@ pub fn run_point_protobuf_roundtrip() -> TestResult {
 }
 
 pub fn run_point_is_ccw() -> TestResult {
-    MINI_TEST!("is_ccw", {
+    MINI_TEST!("Is_ccw", {
         use crate::Point;
 
         let p0 = Point::new(0.0, 0.0, 0.0);
@@ -168,7 +168,7 @@ pub fn run_point_is_ccw() -> TestResult {
 }
 
 pub fn run_point_mid_point() -> TestResult {
-    MINI_TEST!("mid_point", {
+    MINI_TEST!("Mid_point", {
         use crate::Point;
 
         let p0 = Point::new(0.0, 2.0, 1.0);
@@ -180,7 +180,7 @@ pub fn run_point_mid_point() -> TestResult {
 }
 
 pub fn run_point_distance() -> TestResult {
-    MINI_TEST!("distance", {
+    MINI_TEST!("Distance", {
         use crate::Point;
         use crate::tolerance::TOLERANCE;
 
@@ -193,7 +193,7 @@ pub fn run_point_distance() -> TestResult {
 }
 
 pub fn run_point_squared_distance() -> TestResult {
-    MINI_TEST!("squared_distance", {
+    MINI_TEST!("Squared_distance", {
         use crate::Point;
         use crate::tolerance::TOLERANCE;
 
@@ -206,7 +206,7 @@ pub fn run_point_squared_distance() -> TestResult {
 }
 
 pub fn run_point_area() -> TestResult {
-    MINI_TEST!("area", {
+    MINI_TEST!("Area", {
         use crate::Point;
 
         let p0 = Point::new(0.0, 0.0, 0.0);
@@ -220,7 +220,7 @@ pub fn run_point_area() -> TestResult {
 }
 
 pub fn run_point_centroid_quad() -> TestResult {
-    MINI_TEST!("centroid_quad", {
+    MINI_TEST!("Centroid_quad", {
         use crate::Point;
         use crate::tolerance::TOLERANCE;
 
@@ -237,13 +237,13 @@ pub fn run_point_centroid_quad() -> TestResult {
 }
 
 // Register tests with the shared registry for run_all("rust")
-REGISTER_MINI_TEST!("Point", "constructor", crate::point_test::run_point_constructor);
-REGISTER_MINI_TEST!("Point", "transformation", crate::point_test::run_point_transformation);
-REGISTER_MINI_TEST!("Point", "json_roundtrip", crate::point_test::run_point_json_roundtrip);
-REGISTER_MINI_TEST!("Point", "protobuf_roundtrip", crate::point_test::run_point_protobuf_roundtrip);
-REGISTER_MINI_TEST!("Point", "is_ccw", crate::point_test::run_point_is_ccw);
-REGISTER_MINI_TEST!("Point", "mid_point", crate::point_test::run_point_mid_point);
-REGISTER_MINI_TEST!("Point", "distance", crate::point_test::run_point_distance);
-REGISTER_MINI_TEST!("Point", "squared_distance", crate::point_test::run_point_squared_distance);
-REGISTER_MINI_TEST!("Point", "area", crate::point_test::run_point_area);
-REGISTER_MINI_TEST!("Point", "centroid_quad", crate::point_test::run_point_centroid_quad);
+REGISTER_MINI_TEST!("Point", "Constructor", crate::point_test::run_point_constructor);
+REGISTER_MINI_TEST!("Point", "Transformation", crate::point_test::run_point_transformation);
+REGISTER_MINI_TEST!("Point", "Json_roundtrip", crate::point_test::run_point_json_roundtrip);
+REGISTER_MINI_TEST!("Point", "Protobuf_roundtrip", crate::point_test::run_point_protobuf_roundtrip);
+REGISTER_MINI_TEST!("Point", "Is_ccw", crate::point_test::run_point_is_ccw);
+REGISTER_MINI_TEST!("Point", "Mid_point", crate::point_test::run_point_mid_point);
+REGISTER_MINI_TEST!("Point", "Distance", crate::point_test::run_point_distance);
+REGISTER_MINI_TEST!("Point", "Squared_distance", crate::point_test::run_point_squared_distance);
+REGISTER_MINI_TEST!("Point", "Area", crate::point_test::run_point_area);
+REGISTER_MINI_TEST!("Point", "Centroid_quad", crate::point_test::run_point_centroid_quad);

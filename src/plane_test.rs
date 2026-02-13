@@ -5,7 +5,7 @@ use crate::tolerance::PI;
 
 
 pub fn run_plane_constructor() -> TestResult {
-    MINI_TEST!("constructor", {
+    MINI_TEST!("Constructor", {
         use crate::Plane;
         use crate::Point;
         use crate::Vector;
@@ -96,7 +96,7 @@ pub fn run_plane_constructor() -> TestResult {
 }
 
 pub fn run_plane_reverse() -> TestResult {
-    MINI_TEST!("reverse", {
+    MINI_TEST!("Reverse", {
         use crate::Plane;
 
         // Reverse flips normal and swaps x/y axes
@@ -110,7 +110,7 @@ pub fn run_plane_reverse() -> TestResult {
 }
 
 pub fn run_plane_rotate() -> TestResult {
-    MINI_TEST!("rotate", {
+    MINI_TEST!("Rotate", {
         use crate::Plane;
 
         // Rotate plane 90 degrees around its normal
@@ -122,7 +122,7 @@ pub fn run_plane_rotate() -> TestResult {
 }
 
 pub fn run_plane_is_right_hand() -> TestResult {
-    MINI_TEST!("is_right_hand", {
+    MINI_TEST!("Is_right_hand", {
         use crate::Plane;
 
         // All standard planes should be right-handed
@@ -154,7 +154,7 @@ pub fn run_plane_is_right_hand() -> TestResult {
 }
 
 pub fn run_plane_is_coplanar() -> TestResult {
-    MINI_TEST!("is_coplanar", {
+    MINI_TEST!("Is_coplanar", {
         use crate::Plane;
         use crate::Vector;
 
@@ -196,7 +196,7 @@ pub fn run_plane_is_coplanar() -> TestResult {
 }
 
 pub fn run_plane_transform() -> TestResult {
-    MINI_TEST!("transform", {
+    MINI_TEST!("Transform", {
         use crate::Plane;
         use crate::Xform;
 
@@ -217,7 +217,7 @@ pub fn run_plane_transform() -> TestResult {
 }
 
 pub fn run_plane_json_roundtrip() -> TestResult {
-    MINI_TEST!("json_roundtrip", {
+    MINI_TEST!("Json_roundtrip", {
         use crate::Plane;
 
         let mut pl = Plane::xy_plane();
@@ -239,7 +239,7 @@ pub fn run_plane_json_roundtrip() -> TestResult {
 }
 
 pub fn run_plane_protobuf_roundtrip() -> TestResult {
-    MINI_TEST!("protobuf_roundtrip", {
+    MINI_TEST!("Protobuf_roundtrip", {
         use crate::Plane;
 
         let mut pl = Plane::xy_plane();
@@ -257,11 +257,11 @@ pub fn run_plane_protobuf_roundtrip() -> TestResult {
 }
 
 // Register tests with the shared registry for run_all("rust")
-REGISTER_MINI_TEST!("Plane", "constructor", crate::plane_test::run_plane_constructor);
-REGISTER_MINI_TEST!("Plane", "reverse", crate::plane_test::run_plane_reverse);
-REGISTER_MINI_TEST!("Plane", "rotate", crate::plane_test::run_plane_rotate);
-REGISTER_MINI_TEST!("Plane", "is_right_hand", crate::plane_test::run_plane_is_right_hand);
-REGISTER_MINI_TEST!("Plane", "is_coplanar", crate::plane_test::run_plane_is_coplanar);
-REGISTER_MINI_TEST!("Plane", "transform", crate::plane_test::run_plane_transform);
-REGISTER_MINI_TEST!("Plane", "json_roundtrip", crate::plane_test::run_plane_json_roundtrip);
-REGISTER_MINI_TEST!("Plane", "protobuf_roundtrip", crate::plane_test::run_plane_protobuf_roundtrip);
+REGISTER_MINI_TEST!("Plane", "Constructor", crate::plane_test::run_plane_constructor);
+REGISTER_MINI_TEST!("Plane", "Reverse", crate::plane_test::run_plane_reverse);
+REGISTER_MINI_TEST!("Plane", "Rotate", crate::plane_test::run_plane_rotate);
+REGISTER_MINI_TEST!("Plane", "Is_right_hand", crate::plane_test::run_plane_is_right_hand);
+REGISTER_MINI_TEST!("Plane", "Is_coplanar", crate::plane_test::run_plane_is_coplanar);
+REGISTER_MINI_TEST!("Plane", "Transform", crate::plane_test::run_plane_transform);
+REGISTER_MINI_TEST!("Plane", "Json_roundtrip", crate::plane_test::run_plane_json_roundtrip);
+REGISTER_MINI_TEST!("Plane", "Protobuf_roundtrip", crate::plane_test::run_plane_protobuf_roundtrip);

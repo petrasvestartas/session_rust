@@ -2,25 +2,23 @@
   "type": "BoundingBox",
   "center": {
     "type": "Point",
-    "guid": "337b049a-4b92-4759-a2a7-0e511af8e1fa",
+    "guid": "bc7aa9d4-a81d-42e1-9e46-fb49b7c6e543",
     "name": "my_point",
     "x": 1.0,
     "y": 2.0,
     "z": 3.0,
     "width": 1.0,
     "pointcolor": {
-      "type": "Color",
-      "guid": "404aa16d-a238-4c66-a5a5-615f221c26fc",
+      "a": 255,
+      "b": 255,
+      "g": 0,
+      "guid": "63f9e0e6-4b23-4fa3-b3b7-dda389add51d",
       "name": "blue",
       "r": 0,
-      "g": 0,
-      "b": 255,
-      "a": 255
+      "type": "Color"
     },
     "xform": {
-      "type": "Xform",
-      "guid": "1b82a64a-d9a8-4f98-b5f1-442abe4c8f1c",
-      "name": "my_xform",
+      "guid": "49c7aecc-f20b-4764-bdf0-f7f124806dee",
       "m": [
         1.0,
         0.0,
@@ -38,12 +36,14 @@
         0.0,
         0.0,
         1.0
-      ]
+      ],
+      "name": "my_xform",
+      "type": "Xform"
     }
   },
   "x_axis": {
     "type": "Vector",
-    "guid": "b186a37f-1e7b-4b3f-9687-626144f23e0b",
+    "guid": "fed53267-87dc-4198-bf53-02448df0162d",
     "name": "my_vector",
     "x": 1.0,
     "y": 0.0,
@@ -51,7 +51,7 @@
   },
   "y_axis": {
     "type": "Vector",
-    "guid": "a77e7787-ec12-4480-ae96-3146d969f6a8",
+    "guid": "41e142a7-3cd5-4dbb-ae96-fab275645cb8",
     "name": "my_vector",
     "x": 0.0,
     "y": 1.0,
@@ -59,7 +59,7 @@
   },
   "z_axis": {
     "type": "Vector",
-    "guid": "4ad57398-f379-46f4-bbd7-fdec17660e59",
+    "guid": "de46f7e7-0d1f-4f2f-9dda-9363eea77f35",
     "name": "my_vector",
     "x": 0.0,
     "y": 0.0,
@@ -67,18 +67,16 @@
   },
   "half_size": {
     "type": "Vector",
-    "guid": "57025262-b6d1-48bc-b7f0-33d7121247be",
+    "guid": "28f3d091-c95a-4fc7-ac24-dd1b38bbf279",
     "name": "my_vector",
     "x": 2.0,
     "y": 3.0,
     "z": 4.0
   },
-  "guid": "e69ac4d4-4d3c-4cc8-a24b-dc29c899ea1f",
+  "guid": "e5a87e0e-0860-4a60-a1bf-3b0a9094224a",
   "name": "my_boundingbox",
   "xform": {
-    "type": "Xform",
-    "guid": "d132503e-19ca-476f-bf81-a8fbd6c38ba8",
-    "name": "my_xform",
+    "guid": "037abc4e-ea95-4b72-9686-423881f2e50e",
     "m": [
       1.0,
       0.0,
@@ -96,6 +94,8 @@
       0.0,
       0.0,
       1.0
-    ]
+    ],
+    "name": "my_xform",
+    "type": "Xform"
   }
 }

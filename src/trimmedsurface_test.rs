@@ -2,7 +2,7 @@ use crate::{MINI_CHECK, MINI_TEST, REGISTER_MINI_TEST};
 use crate::mini_test::TestResult;
 
 pub fn run_trimmedsurface_constructor() -> TestResult {
-    MINI_TEST!("constructor", {
+    MINI_TEST!("Constructor", {
         use crate::trimmedsurface::TrimmedSurface;
         use crate::NurbsSurface;
         use crate::NurbsCurve;
@@ -43,7 +43,7 @@ pub fn run_trimmedsurface_constructor() -> TestResult {
 }
 
 pub fn run_trimmedsurface_constructor_planar() -> TestResult {
-    MINI_TEST!("constructor_planar", {
+    MINI_TEST!("Constructor_planar", {
         use crate::trimmedsurface::TrimmedSurface;
         use crate::NurbsCurve;
         use crate::Point;
@@ -89,7 +89,7 @@ pub fn run_trimmedsurface_constructor_planar() -> TestResult {
 }
 
 pub fn run_trimmedsurface_constructor_hole() -> TestResult {
-    MINI_TEST!("constructor_hole", {
+    MINI_TEST!("Constructor_hole", {
         use crate::trimmedsurface::TrimmedSurface;
         use crate::NurbsSurface;
         use crate::NurbsCurve;
@@ -132,7 +132,7 @@ pub fn run_trimmedsurface_constructor_hole() -> TestResult {
 }
 
 pub fn run_trimmedsurface_accessors() -> TestResult {
-    MINI_TEST!("accessors", {
+    MINI_TEST!("Accessors", {
         use crate::trimmedsurface::TrimmedSurface;
         use crate::NurbsSurface;
         use crate::NurbsCurve;
@@ -167,7 +167,7 @@ pub fn run_trimmedsurface_accessors() -> TestResult {
 }
 
 pub fn run_trimmedsurface_add_inner_loop() -> TestResult {
-    MINI_TEST!("add_inner_loop", {
+    MINI_TEST!("Add_inner_loop", {
         use crate::trimmedsurface::TrimmedSurface;
         use crate::NurbsSurface;
         use crate::NurbsCurve;
@@ -210,7 +210,7 @@ pub fn run_trimmedsurface_add_inner_loop() -> TestResult {
 }
 
 pub fn run_trimmedsurface_point_at() -> TestResult {
-    MINI_TEST!("point_at", {
+    MINI_TEST!("Point_at", {
         use crate::trimmedsurface::TrimmedSurface;
         use crate::NurbsSurface;
         use crate::NurbsCurve;
@@ -246,7 +246,7 @@ pub fn run_trimmedsurface_point_at() -> TestResult {
 }
 
 pub fn run_trimmedsurface_mesh() -> TestResult {
-    MINI_TEST!("mesh", {
+    MINI_TEST!("Mesh", {
         use crate::trimmedsurface::TrimmedSurface;
         use crate::NurbsSurface;
         use crate::NurbsCurve;
@@ -273,7 +273,7 @@ pub fn run_trimmedsurface_mesh() -> TestResult {
 }
 
 pub fn run_trimmedsurface_transformation() -> TestResult {
-    MINI_TEST!("transformation", {
+    MINI_TEST!("Transformation", {
         use crate::trimmedsurface::TrimmedSurface;
         use crate::NurbsSurface;
         use crate::NurbsCurve;
@@ -307,7 +307,7 @@ pub fn run_trimmedsurface_transformation() -> TestResult {
 }
 
 pub fn run_trimmedsurface_json_roundtrip() -> TestResult {
-    MINI_TEST!("json_roundtrip", {
+    MINI_TEST!("Json_roundtrip", {
         use crate::trimmedsurface::TrimmedSurface;
         use crate::NurbsSurface;
         use crate::NurbsCurve;
@@ -352,7 +352,7 @@ pub fn run_trimmedsurface_json_roundtrip() -> TestResult {
 }
 
 pub fn run_trimmedsurface_protobuf_roundtrip() -> TestResult {
-    MINI_TEST!("protobuf_roundtrip", {
+    MINI_TEST!("Protobuf_roundtrip", {
         use crate::trimmedsurface::TrimmedSurface;
         use crate::NurbsSurface;
         use crate::NurbsCurve;
@@ -392,13 +392,13 @@ pub fn run_trimmedsurface_protobuf_roundtrip() -> TestResult {
 }
 
 // Register tests with the shared registry
-REGISTER_MINI_TEST!("TrimmedSurface", "constructor", crate::trimmedsurface_test::run_trimmedsurface_constructor);
-REGISTER_MINI_TEST!("TrimmedSurface", "constructor_planar", crate::trimmedsurface_test::run_trimmedsurface_constructor_planar);
-REGISTER_MINI_TEST!("TrimmedSurface", "constructor_hole", crate::trimmedsurface_test::run_trimmedsurface_constructor_hole);
-REGISTER_MINI_TEST!("TrimmedSurface", "accessors", crate::trimmedsurface_test::run_trimmedsurface_accessors);
-REGISTER_MINI_TEST!("TrimmedSurface", "add_inner_loop", crate::trimmedsurface_test::run_trimmedsurface_add_inner_loop);
-REGISTER_MINI_TEST!("TrimmedSurface", "point_at", crate::trimmedsurface_test::run_trimmedsurface_point_at);
-REGISTER_MINI_TEST!("TrimmedSurface", "mesh", crate::trimmedsurface_test::run_trimmedsurface_mesh);
-REGISTER_MINI_TEST!("TrimmedSurface", "transformation", crate::trimmedsurface_test::run_trimmedsurface_transformation);
-REGISTER_MINI_TEST!("TrimmedSurface", "json_roundtrip", crate::trimmedsurface_test::run_trimmedsurface_json_roundtrip);
-REGISTER_MINI_TEST!("TrimmedSurface", "protobuf_roundtrip", crate::trimmedsurface_test::run_trimmedsurface_protobuf_roundtrip);
+REGISTER_MINI_TEST!("TrimmedSurface", "Constructor", crate::trimmedsurface_test::run_trimmedsurface_constructor);
+REGISTER_MINI_TEST!("TrimmedSurface", "Constructor_planar", crate::trimmedsurface_test::run_trimmedsurface_constructor_planar);
+REGISTER_MINI_TEST!("TrimmedSurface", "Constructor_hole", crate::trimmedsurface_test::run_trimmedsurface_constructor_hole);
+REGISTER_MINI_TEST!("TrimmedSurface", "Accessors", crate::trimmedsurface_test::run_trimmedsurface_accessors);
+REGISTER_MINI_TEST!("TrimmedSurface", "Add_inner_loop", crate::trimmedsurface_test::run_trimmedsurface_add_inner_loop);
+REGISTER_MINI_TEST!("TrimmedSurface", "Point_at", crate::trimmedsurface_test::run_trimmedsurface_point_at);
+REGISTER_MINI_TEST!("TrimmedSurface", "Mesh", crate::trimmedsurface_test::run_trimmedsurface_mesh);
+REGISTER_MINI_TEST!("TrimmedSurface", "Transformation", crate::trimmedsurface_test::run_trimmedsurface_transformation);
+REGISTER_MINI_TEST!("TrimmedSurface", "Json_roundtrip", crate::trimmedsurface_test::run_trimmedsurface_json_roundtrip);
+REGISTER_MINI_TEST!("TrimmedSurface", "Protobuf_roundtrip", crate::trimmedsurface_test::run_trimmedsurface_protobuf_roundtrip);

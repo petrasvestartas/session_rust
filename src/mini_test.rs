@@ -307,29 +307,29 @@ pub fn get_all_tests() -> Vec<RegisteredTest> {
 
     vec![
         // Color tests
-        RegisteredTest { group: "Color", name: "constructor", func: run_color_constructor },
+        RegisteredTest { group: "Color", name: "Constructor", func: run_color_constructor },
         // Point tests
-        RegisteredTest { group: "Point", name: "constructor", func: run_point_constructor },
+        RegisteredTest { group: "Point", name: "Constructor", func: run_point_constructor },
         // Vector tests
-        RegisteredTest { group: "Vector", name: "constructor", func: run_vector_constructor },
+        RegisteredTest { group: "Vector", name: "Constructor", func: run_vector_constructor },
         // Tolerance tests
-        RegisteredTest { group: "Tolerance", name: "is_zero", func: run_tolerance_is_zero },
+        RegisteredTest { group: "Tolerance", name: "Is_zero", func: run_tolerance_is_zero },
         // Line tests
-        RegisteredTest { group: "Line", name: "constructor", func: run_line_constructor },
+        RegisteredTest { group: "Line", name: "Constructor", func: run_line_constructor },
         // Polyline tests
-        RegisteredTest { group: "Polyline", name: "constructor", func: run_polyline_constructor },
+        RegisteredTest { group: "Polyline", name: "Constructor", func: run_polyline_constructor },
         // Plane tests
-        RegisteredTest { group: "Plane", name: "constructor", func: run_plane_constructor },
+        RegisteredTest { group: "Plane", name: "Constructor", func: run_plane_constructor },
         // Pointcloud tests
-        RegisteredTest { group: "Pointcloud", name: "constructor", func: run_pointcloud_constructor },
+        RegisteredTest { group: "Pointcloud", name: "Constructor", func: run_pointcloud_constructor },
         // Xform tests
-        RegisteredTest { group: "Xform", name: "constructor", func: run_xform_constructor },
+        RegisteredTest { group: "Xform", name: "Constructor", func: run_xform_constructor },
         // Mesh tests
-        RegisteredTest { group: "Mesh", name: "constructor", func: run_mesh_constructor },
+        RegisteredTest { group: "Mesh", name: "Constructor", func: run_mesh_constructor },
         // NurbsCurve tests
-        RegisteredTest { group: "NurbsCurve", name: "constructor", func: run_nurbscurve_constructor },
+        RegisteredTest { group: "NurbsCurve", name: "Constructor", func: run_nurbscurve_constructor },
         // NurbsSurface tests
-        RegisteredTest { group: "NurbsSurface", name: "constructor", func: run_nurbssurface_constructor },
+        RegisteredTest { group: "NurbsSurface", name: "Constructor", func: run_nurbssurface_constructor },
     ]
 }
 
@@ -380,10 +380,10 @@ pub fn run_all(language: &str) -> Result<(), Box<dyn std::error::Error>> {
     for (group, mut tests) in groups {
         tests.sort_by_key(|t| {
             let pri = match t.name {
-                "constructor" => 0,
-                "transformation" => 1,
-                "json_roundtrip" => 2,
-                "protobuf_roundtrip" => 3,
+                "Constructor" => 0,
+                "Transformation" => 1,
+                "Json_roundtrip" => 2,
+                "Protobuf_roundtrip" => 3,
                 _ => 100,
             };
             (pri, t.name)

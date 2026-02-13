@@ -3,7 +3,7 @@ use crate::mini_test::TestResult;
 use crate::tolerance::TOLERANCE;
 
 pub fn run_nurbscurve_constructor() -> TestResult {
-    MINI_TEST!("constructor", {
+    MINI_TEST!("Constructor", {
         use crate::NurbsCurve;
         use crate::Point;
 
@@ -46,7 +46,7 @@ pub fn run_nurbscurve_constructor() -> TestResult {
 }
 
 pub fn run_nurbscurve_attributes() -> TestResult {
-    MINI_TEST!("attributes", {
+    MINI_TEST!("Attributes", {
         use crate::NurbsCurve;
         use crate::Point;
         use crate::Plane;
@@ -521,7 +521,7 @@ pub fn run_nurbscurve_modifications() -> TestResult {
 }
 
 pub fn run_nurbscurve_json_roundtrip() -> TestResult {
-    MINI_TEST!("json_roundtrip", {
+    MINI_TEST!("Json_roundtrip", {
         use crate::NurbsCurve;
         use crate::Point;
         use std::path::PathBuf;
@@ -563,7 +563,7 @@ pub fn run_nurbscurve_json_roundtrip() -> TestResult {
 }
 
 pub fn run_nurbscurve_protobuf_roundtrip() -> TestResult {
-    MINI_TEST!("protobuf_roundtrip", {
+    MINI_TEST!("Protobuf_roundtrip", {
         use crate::NurbsCurve;
         use crate::Point;
         use std::path::PathBuf;
@@ -598,7 +598,7 @@ pub fn run_nurbscurve_protobuf_roundtrip() -> TestResult {
 }
 
 pub fn run_nurbscurve_transformations() -> TestResult {
-    MINI_TEST!("transformations", {
+    MINI_TEST!("Transformations", {
         use crate::NurbsCurve;
         use crate::Point;
         use crate::Xform;
@@ -642,7 +642,7 @@ pub fn run_nurbscurve_transformations() -> TestResult {
 }
 
 pub fn run_nurbscurve_create_interpolated() -> TestResult {
-    MINI_TEST!("create_interpolated", {
+    MINI_TEST!("Create_interpolated", {
         use crate::NurbsCurve;
         use crate::Point;
         use crate::knot::CurveKnotStyle;
@@ -683,12 +683,12 @@ pub fn run_nurbscurve_create_interpolated() -> TestResult {
     })
 }
 
-REGISTER_MINI_TEST!("NurbsCurve", "constructor", crate::nurbscurve_test::run_nurbscurve_constructor);
-REGISTER_MINI_TEST!("NurbsCurve", "attributes", crate::nurbscurve_test::run_nurbscurve_attributes);
+REGISTER_MINI_TEST!("NurbsCurve", "Constructor", crate::nurbscurve_test::run_nurbscurve_constructor);
+REGISTER_MINI_TEST!("NurbsCurve", "Attributes", crate::nurbscurve_test::run_nurbscurve_attributes);
 REGISTER_MINI_TEST!("NurbsCurve", "Conversions", crate::nurbscurve_test::run_nurbscurve_conversions);
 REGISTER_MINI_TEST!("NurbsCurve", "Evaluation", crate::nurbscurve_test::run_nurbscurve_evaluation);
 REGISTER_MINI_TEST!("NurbsCurve", "Modifications", crate::nurbscurve_test::run_nurbscurve_modifications);
-REGISTER_MINI_TEST!("NurbsCurve", "json_roundtrip", crate::nurbscurve_test::run_nurbscurve_json_roundtrip);
-REGISTER_MINI_TEST!("NurbsCurve", "protobuf_roundtrip", crate::nurbscurve_test::run_nurbscurve_protobuf_roundtrip);
-REGISTER_MINI_TEST!("NurbsCurve", "transformations", crate::nurbscurve_test::run_nurbscurve_transformations);
-REGISTER_MINI_TEST!("NurbsCurve", "create_interpolated", crate::nurbscurve_test::run_nurbscurve_create_interpolated);
+REGISTER_MINI_TEST!("NurbsCurve", "Json_roundtrip", crate::nurbscurve_test::run_nurbscurve_json_roundtrip);
+REGISTER_MINI_TEST!("NurbsCurve", "Protobuf_roundtrip", crate::nurbscurve_test::run_nurbscurve_protobuf_roundtrip);
+REGISTER_MINI_TEST!("NurbsCurve", "Transformations", crate::nurbscurve_test::run_nurbscurve_transformations);
+REGISTER_MINI_TEST!("NurbsCurve", "Create_interpolated", crate::nurbscurve_test::run_nurbscurve_create_interpolated);

@@ -588,7 +588,7 @@ impl NurbsCurve {
 
 
     ///////////////////////////////////////////////////////////////////////////////////////////
-    // Validation
+    // Boolean Queries
     ///////////////////////////////////////////////////////////////////////////////////////////
 
 
@@ -613,6 +613,271 @@ impl NurbsCurve {
     }
 
 
+    /// Check if curve is rational
+    pub fn is_rational(&self) -> bool {
+        self.m_is_rat
+    }
+
+
+    /// Check if curve is closed (start point == end point)
+    pub fn is_closed(&self) -> bool {
+        if !self.is_valid() {
+            return false;
+        }
+
+        let start = self.point_at_start();
+        let end = self.point_at_end();
+
+        start.distance(&end, None) < Tolerance::ZERO_TOLERANCE
+    }
+
+
+    /// Check if curve is periodic (wraps around seamlessly)
+    pub fn is_periodic(&self) -> bool {
+        // For now, return false - full implementation would check
+        // if the curve is clamped and if removing end knots makes it periodic
+        false
+    }
+
+
+    /// Check if curve is a straight line within tolerance
+    pub fn is_linear(&self, tolerance: Option<f64>) -> bool {
+        let tol = tolerance.unwrap_or(Tolerance::ZERO_TOLERANCE);
+
+        if !self.is_valid() || self.m_cv_count < 2 {
+            return false;
+        }
+
+        if self.m_cv_count == 2 {
+            return true;
+        }
+
+        // Check if all control points are collinear
+        let p0 = self.get_cv(0).unwrap();
+        let p1 = self.get_cv(self.m_cv_count - 1).unwrap();
+
+        let line_vec = Vector::new(p1[0] - p0[0], p1[1] - p0[1], p1[2] - p0[2]);
+        let line_len = line_vec.magnitude();
+
+        if line_len < tol {
+            return true; // Degenerate to a point
+        }
+
+        for i in 1..(self.m_cv_count - 1) {
+            let p = self.get_cv(i).unwrap();
+            let v = Vector::new(p[0] - p0[0], p[1] - p0[1], p[2] - p0[2]);
+
+            // Cross product to check collinearity
+            let cross = line_vec.cross(&v);
+
+            if cross.magnitude() > tol * line_len {
+                return false;
+            }
+        }
+
+        true
+    }
+
+
+    /// Check if curve is planar (all CVs lie in a single plane)
+    pub fn is_planar(&self, tolerance: Option<f64>) -> bool {
+        let tol = tolerance.unwrap_or(Tolerance::ZERO_TOLERANCE);
+        if !self.is_valid() || self.m_cv_count < 3 {
+            return true;
+        }
+        let p0 = self.get_cv(0).unwrap();
+        let p1 = self.get_cv(1).unwrap();
+        let mut normal = None;
+        for i in 2..self.m_cv_count {
+            let p = self.get_cv(i).unwrap();
+            let v1 = Vector::new(p1[0] - p0[0], p1[1] - p0[1], p1[2] - p0[2]);
+            let v2 = Vector::new(p[0] - p0[0], p[1] - p0[1], p[2] - p0[2]);
+            let cross = v1.cross(&v2);
+            if cross.magnitude() > tol {
+                if normal.is_none() {
+                    normal = Some(cross.normalized());
+                } else {
+                    let n = normal.as_ref().unwrap();
+                    if (1.0 - n.dot(&cross.normalized()).abs()).abs() > tol {
+                        return false;
+                    }
+                }
+            }
+        }
+        true
+    }
+
+
+    /// Check if curve is an arc (matches C++ is_arc stub)
+    pub fn is_arc(&self, _tolerance: Option<f64>) -> bool {
+        false
+    }
+
+
+    /// Check if curve lies entirely in a given plane
+    pub fn is_in_plane(&self, plane: &Plane, tolerance: Option<f64>) -> bool {
+        let tol = tolerance.unwrap_or(Tolerance::ZERO_TOLERANCE);
+        if !self.is_valid() {
+            return false;
+        }
+        for i in 0..self.m_cv_count {
+            let p = self.get_cv(i).unwrap();
+            let v = Vector::new(
+                p[0] - plane.origin()[0],
+                p[1] - plane.origin()[1],
+                p[2] - plane.origin()[2],
+            );
+            if v.dot(&plane.z_axis()).abs() > tol {
+                return false;
+            }
+        }
+        true
+    }
+
+
+    /// Check if curve has "natural" end conditions (zero 2nd derivative at endpoints)
+    pub fn is_natural(&self, _tolerance: Option<f64>) -> bool {
+        if !self.is_valid() {
+            return false;
+        }
+
+        let tol_factor = 1e-8;
+        let (t0, t1) = self.domain();
+
+        // Check both endpoints
+        for pass in 0..2 {
+            let t = if pass == 0 { t0 } else { t1 };
+
+            // Evaluate 2nd derivative
+            let derivs = self.evaluate(t, 2);
+            if derivs.len() < 3 {
+                return false;
+            }
+
+            let d2 = &derivs[2];
+            let d2_len = d2.magnitude();
+
+            // Get control polygon length for tolerance
+            let (cv0, cv2) = if pass == 0 {
+                (self.get_cv(0), self.get_cv(2.min(self.m_cv_count - 1)))
+            } else {
+                (self.get_cv(self.m_cv_count - 1), self.get_cv(0.max(self.m_cv_count as i32 - 3) as usize))
+            };
+
+            if cv0.is_none() || cv2.is_none() {
+                return false;
+            }
+
+            let tol = cv0.unwrap().distance(&cv2.unwrap(), None) * tol_factor;
+
+            if d2_len > tol {
+                return false;
+            }
+        }
+
+        true
+    }
+
+
+    /// Check if curve is a polyline (all CVs connected by straight segments)
+    pub fn is_polyline(&self, _tolerance: Option<f64>) -> bool {
+        if !self.is_valid() {
+            return false;
+        }
+        self.degree() == 1
+    }
+
+
+    pub fn is_singular(&self) -> bool {
+        if !self.is_valid() { return false; }
+        let sc = self.span_count();
+        for i in 0..sc {
+            if !self.span_is_singular(i) {
+                return false;
+            }
+        }
+        true
+    }
+
+    pub fn is_duplicate(&self, other: &NurbsCurve, ignore_parameterization: bool) -> bool {
+        if !self.is_valid() || !other.is_valid() { return false; }
+        if self.m_dim != other.m_dim { return false; }
+        if self.m_is_rat != other.m_is_rat { return false; }
+        if self.m_order != other.m_order { return false; }
+        if self.m_cv_count != other.m_cv_count { return false; }
+        let tolerance = Tolerance::ZERO_TOLERANCE;
+        for i in 0..self.m_cv_count {
+            if let (Some(p1), Some(p2)) = (self.get_cv(i), other.get_cv(i)) {
+                if p1.distance(&p2, None) > tolerance { return false; }
+                if self.m_is_rat && (self.weight(i) - other.weight(i)).abs() > tolerance {
+                    return false;
+                }
+            } else {
+                return false;
+            }
+        }
+        if !ignore_parameterization {
+            for i in 0..self.knot_count() {
+                if (self.m_knot[i] - other.m_knot[i]).abs() > tolerance { return false; }
+            }
+        }
+        true
+    }
+
+    pub fn is_continuous(&self, continuity_type: i32, t: f64) -> bool {
+        if !self.is_valid() { return false; }
+        let (d0, d1) = self.domain();
+        if t < d0 || t > d1 { return false; }
+        let mut at_knot = false;
+        let mut knot_idx: usize = 0;
+        for i in 0..self.knot_count() {
+            if (self.m_knot[i] - t).abs() < Tolerance::ZERO_TOLERANCE {
+                at_knot = true;
+                knot_idx = i;
+                break;
+            }
+        }
+        if !at_knot { return true; }
+        let mult = self.knot_multiplicity(knot_idx);
+        if continuity_type == 0 { return mult < self.m_order; }
+        if continuity_type == 1 { return mult < self.m_order - 1; }
+        if continuity_type == 2 { return mult < self.m_order - 2; }
+        mult < self.m_order - 1
+    }
+
+
+    /// Check if knot vector is valid
+    pub fn is_valid_knot_vector(&self) -> bool {
+        if self.m_knot.len() != self.m_order + self.m_cv_count - 2 {
+            return false;
+        }
+        // Check non-decreasing
+        for i in 1..self.m_knot.len() {
+            if self.m_knot[i] < self.m_knot[i - 1] - Tolerance::ZERO_TOLERANCE {
+                return false;
+            }
+        }
+        // Check valid domain exists
+        if self.m_order >= 2 && self.m_cv_count >= self.m_order {
+            let idx1 = self.m_order - 2;
+            let idx2 = self.m_cv_count - 1;
+            if idx2 < self.m_knot.len() && self.m_knot[idx1] >= self.m_knot[idx2] {
+                return false;
+            }
+        }
+        true
+    }
+
+
+    /// Check if knot vector is clamped at ends (0=start, 1=end, 2=both)
+    pub fn is_clamped(&self, end: i32) -> bool {
+        if !self.is_valid() {
+            return false;
+        }
+        knot::is_clamped(self.m_order, self.m_cv_count, &self.m_knot, end)
+    }
+
+
     ///////////////////////////////////////////////////////////////////////////////////////////
     // Accessors
     ///////////////////////////////////////////////////////////////////////////////////////////
@@ -622,12 +887,6 @@ impl NurbsCurve {
     /// Get dimension
     pub fn dimension(&self) -> usize {
         self.m_dim
-    }
-
-
-    /// Check if curve is rational
-    pub fn is_rational(&self) -> bool {
-        self.m_is_rat
     }
 
 
@@ -903,29 +1162,6 @@ impl NurbsCurve {
     }
 
 
-    /// Check if knot vector is valid
-    pub fn is_valid_knot_vector(&self) -> bool {
-        if self.m_knot.len() != self.m_order + self.m_cv_count - 2 {
-            return false;
-        }
-        // Check non-decreasing
-        for i in 1..self.m_knot.len() {
-            if self.m_knot[i] < self.m_knot[i - 1] - Tolerance::ZERO_TOLERANCE {
-                return false;
-            }
-        }
-        // Check valid domain exists
-        if self.m_order >= 2 && self.m_cv_count >= self.m_order {
-            let idx1 = self.m_order - 2;
-            let idx2 = self.m_cv_count - 1;
-            if idx2 < self.m_knot.len() && self.m_knot[idx1] >= self.m_knot[idx2] {
-                return false;
-            }
-        }
-        true
-    }
-
-
     /// Insert knot into curve (Boehm's algorithm)
     pub fn insert_knot(&mut self, knot_value: f64, knot_multiplicity: usize) -> bool {
         if !self.is_valid() {
@@ -1033,15 +1269,6 @@ impl NurbsCurve {
         }
 
         true
-    }
-
-
-    /// Check if knot vector is clamped at ends (0=start, 1=end, 2=both)
-    pub fn is_clamped(&self, end: i32) -> bool {
-        if !self.is_valid() {
-            return false;
-        }
-        knot::is_clamped(self.m_order, self.m_cv_count, &self.m_knot, end)
     }
 
 
@@ -1168,174 +1395,6 @@ impl NurbsCurve {
 
 
 
-    /// Check if curve is closed (start point == end point)
-    pub fn is_closed(&self) -> bool {
-        if !self.is_valid() {
-            return false;
-        }
-
-        let start = self.point_at_start();
-        let end = self.point_at_end();
-        
-        start.distance(&end, None) < Tolerance::ZERO_TOLERANCE
-    }
-
-
-    /// Check if curve is periodic (wraps around seamlessly)
-    pub fn is_periodic(&self) -> bool {
-        // For now, return false - full implementation would check
-        // if the curve is clamped and if removing end knots makes it periodic
-        false
-    }
-
-
-    /// Check if curve is a straight line within tolerance
-    pub fn is_linear(&self, tolerance: Option<f64>) -> bool {
-        let tol = tolerance.unwrap_or(Tolerance::ZERO_TOLERANCE);
-        
-        if !self.is_valid() || self.m_cv_count < 2 {
-            return false;
-        }
-
-        if self.m_cv_count == 2 {
-            return true;
-        }
-
-        // Check if all control points are collinear
-        let p0 = self.get_cv(0).unwrap();
-        let p1 = self.get_cv(self.m_cv_count - 1).unwrap();
-        
-        let line_vec = Vector::new(p1[0] - p0[0], p1[1] - p0[1], p1[2] - p0[2]);
-        let line_len = line_vec.magnitude();
-        
-        if line_len < tol {
-            return true; // Degenerate to a point
-        }
-
-        for i in 1..(self.m_cv_count - 1) {
-            let p = self.get_cv(i).unwrap();
-            let v = Vector::new(p[0] - p0[0], p[1] - p0[1], p[2] - p0[2]);
-            
-            // Cross product to check collinearity
-            let cross = line_vec.cross(&v);
-            
-            if cross.magnitude() > tol * line_len {
-                return false;
-            }
-        }
-
-        true
-    }
-
-
-    /// Check if curve is planar (all CVs lie in a single plane)
-    pub fn is_planar(&self, tolerance: Option<f64>) -> bool {
-        let tol = tolerance.unwrap_or(Tolerance::ZERO_TOLERANCE);
-        if !self.is_valid() || self.m_cv_count < 3 {
-            return true;
-        }
-        let p0 = self.get_cv(0).unwrap();
-        let p1 = self.get_cv(1).unwrap();
-        let mut normal = None;
-        for i in 2..self.m_cv_count {
-            let p = self.get_cv(i).unwrap();
-            let v1 = Vector::new(p1[0] - p0[0], p1[1] - p0[1], p1[2] - p0[2]);
-            let v2 = Vector::new(p[0] - p0[0], p[1] - p0[1], p[2] - p0[2]);
-            let cross = v1.cross(&v2);
-            if cross.magnitude() > tol {
-                if normal.is_none() {
-                    normal = Some(cross.normalized());
-                } else {
-                    let n = normal.as_ref().unwrap();
-                    if (1.0 - n.dot(&cross.normalized()).abs()).abs() > tol {
-                        return false;
-                    }
-                }
-            }
-        }
-        true
-    }
-
-
-    /// Check if curve is an arc (matches C++ is_arc stub)
-    pub fn is_arc(&self, _tolerance: Option<f64>) -> bool {
-        false
-    }
-
-
-    /// Check if curve lies entirely in a given plane
-    pub fn is_in_plane(&self, plane: &Plane, tolerance: Option<f64>) -> bool {
-        let tol = tolerance.unwrap_or(Tolerance::ZERO_TOLERANCE);
-        if !self.is_valid() {
-            return false;
-        }
-        for i in 0..self.m_cv_count {
-            let p = self.get_cv(i).unwrap();
-            let v = Vector::new(
-                p[0] - plane.origin()[0],
-                p[1] - plane.origin()[1],
-                p[2] - plane.origin()[2],
-            );
-            if v.dot(&plane.z_axis()).abs() > tol {
-                return false;
-            }
-        }
-        true
-    }
-
-
-    /// Check if curve has "natural" end conditions (zero 2nd derivative at endpoints)
-    pub fn is_natural(&self, _tolerance: Option<f64>) -> bool {
-        if !self.is_valid() {
-            return false;
-        }
-
-        let tol_factor = 1e-8;
-        let (t0, t1) = self.domain();
-
-        // Check both endpoints
-        for pass in 0..2 {
-            let t = if pass == 0 { t0 } else { t1 };
-
-            // Evaluate 2nd derivative
-            let derivs = self.evaluate(t, 2);
-            if derivs.len() < 3 {
-                return false;
-            }
-
-            let d2 = &derivs[2];
-            let d2_len = d2.magnitude();
-
-            // Get control polygon length for tolerance
-            let (cv0, cv2) = if pass == 0 {
-                (self.get_cv(0), self.get_cv(2.min(self.m_cv_count - 1)))
-            } else {
-                (self.get_cv(self.m_cv_count - 1), self.get_cv(0.max(self.m_cv_count as i32 - 3) as usize))
-            };
-
-            if cv0.is_none() || cv2.is_none() {
-                return false;
-            }
-
-            let tol = cv0.unwrap().distance(&cv2.unwrap(), None) * tol_factor;
-
-            if d2_len > tol {
-                return false;
-            }
-        }
-
-        true
-    }
-
-
-    /// Check if curve is a polyline (all CVs connected by straight segments)
-    pub fn is_polyline(&self, _tolerance: Option<f64>) -> bool {
-        if !self.is_valid() {
-            return false;
-        }
-        self.degree() == 1
-    }
-
     pub fn get_next_discontinuity(&self, continuity_type: i32, t0: f64, t1: f64) -> (bool, f64) {
         if !self.is_valid() || t0 >= t1 {
             return (false, 0.0);
@@ -1365,64 +1424,6 @@ impl NurbsCurve {
         }
         (false, 0.0)
     }
-
-    pub fn is_singular(&self) -> bool {
-        if !self.is_valid() { return false; }
-        let sc = self.span_count();
-        for i in 0..sc {
-            if !self.span_is_singular(i) {
-                return false;
-            }
-        }
-        true
-    }
-
-    pub fn is_duplicate(&self, other: &NurbsCurve, ignore_parameterization: bool) -> bool {
-        if !self.is_valid() || !other.is_valid() { return false; }
-        if self.m_dim != other.m_dim { return false; }
-        if self.m_is_rat != other.m_is_rat { return false; }
-        if self.m_order != other.m_order { return false; }
-        if self.m_cv_count != other.m_cv_count { return false; }
-        let tolerance = Tolerance::ZERO_TOLERANCE;
-        for i in 0..self.m_cv_count {
-            if let (Some(p1), Some(p2)) = (self.get_cv(i), other.get_cv(i)) {
-                if p1.distance(&p2, None) > tolerance { return false; }
-                if self.m_is_rat && (self.weight(i) - other.weight(i)).abs() > tolerance {
-                    return false;
-                }
-            } else {
-                return false;
-            }
-        }
-        if !ignore_parameterization {
-            for i in 0..self.knot_count() {
-                if (self.m_knot[i] - other.m_knot[i]).abs() > tolerance { return false; }
-            }
-        }
-        true
-    }
-
-    pub fn is_continuous(&self, continuity_type: i32, t: f64) -> bool {
-        if !self.is_valid() { return false; }
-        let (d0, d1) = self.domain();
-        if t < d0 || t > d1 { return false; }
-        let mut at_knot = false;
-        let mut knot_idx: usize = 0;
-        for i in 0..self.knot_count() {
-            if (self.m_knot[i] - t).abs() < Tolerance::ZERO_TOLERANCE {
-                at_knot = true;
-                knot_idx = i;
-                break;
-            }
-        }
-        if !at_knot { return true; }
-        let mult = self.knot_multiplicity(knot_idx);
-        if continuity_type == 0 { return mult < self.m_order; }
-        if continuity_type == 1 { return mult < self.m_order - 1; }
-        if continuity_type == 2 { return mult < self.m_order - 2; }
-        mult < self.m_order - 1
-    }
-
 
     ///////////////////////////////////////////////////////////////////////////////////////////
     // Conversion Methods

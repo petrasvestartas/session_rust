@@ -4,7 +4,7 @@ use crate::tolerance::TOLERANCE;
 
 
 pub fn run_line_constructor() -> TestResult {
-    MINI_TEST!("constructor", {
+    MINI_TEST!("Constructor", {
         use crate::Line;
         use crate::Point;
         use crate::Vector;
@@ -99,7 +99,7 @@ pub fn run_line_constructor() -> TestResult {
 }
 
 pub fn run_line_transformation() -> TestResult {
-    MINI_TEST!("transformation", {
+    MINI_TEST!("Transformation", {
         use crate::Line;
         use crate::Xform;
 
@@ -115,7 +115,7 @@ pub fn run_line_transformation() -> TestResult {
 }
 
 pub fn run_line_json_roundtrip() -> TestResult {
-    MINI_TEST!("json_roundtrip", {
+    MINI_TEST!("Json_roundtrip", {
         use crate::Line;
 
         let mut l = Line::new(42.1, 84.2, 126.3, 168.4, 210.5, 252.6);
@@ -141,7 +141,7 @@ pub fn run_line_json_roundtrip() -> TestResult {
 }
 
 pub fn run_line_protobuf_roundtrip() -> TestResult {
-    MINI_TEST!("protobuf_roundtrip", {
+    MINI_TEST!("Protobuf_roundtrip", {
         use crate::Line;
 
         let mut l = Line::new(42.1, 84.2, 126.3, 168.4, 210.5, 252.6);
@@ -163,7 +163,7 @@ pub fn run_line_protobuf_roundtrip() -> TestResult {
 }
 
 pub fn run_line_length() -> TestResult {
-    MINI_TEST!("length", {
+    MINI_TEST!("Length", {
         use crate::Line;
 
         let l = Line::new(0.0, 0.0, 0.0, 3.0, 4.0, 0.0);
@@ -176,7 +176,7 @@ pub fn run_line_length() -> TestResult {
 }
 
 pub fn run_line_to_vector() -> TestResult {
-    MINI_TEST!("to_vector", {
+    MINI_TEST!("To_vector", {
         use crate::Line;
 
         let l = Line::new(1.0, 2.0, 3.0, 4.0, 6.0, 9.0);
@@ -187,7 +187,7 @@ pub fn run_line_to_vector() -> TestResult {
 }
 
 pub fn run_line_to_direction() -> TestResult {
-    MINI_TEST!("to_direction", {
+    MINI_TEST!("To_direction", {
         use crate::Line;
 
         let l = Line::new(0.0, 0.0, 0.0, 3.0, 4.0, 0.0);
@@ -201,7 +201,7 @@ pub fn run_line_to_direction() -> TestResult {
 }
 
 pub fn run_line_point_at() -> TestResult {
-    MINI_TEST!("point_at", {
+    MINI_TEST!("Point_at", {
         use crate::Line;
 
         let l = Line::new(0.0, 0.0, 0.0, 10.0, 10.0, 10.0);
@@ -216,7 +216,7 @@ pub fn run_line_point_at() -> TestResult {
 }
 
 pub fn run_line_closest_point() -> TestResult {
-    MINI_TEST!("closest_point", {
+    MINI_TEST!("Closest_point", {
         use crate::Line;
         use crate::Point;
 
@@ -235,7 +235,7 @@ pub fn run_line_closest_point() -> TestResult {
 }
 
 pub fn run_line_start_end_center() -> TestResult {
-    MINI_TEST!("start_end_center", {
+    MINI_TEST!("Start_end_center", {
         use crate::Line;
 
         let l = Line::new(1.0, 2.0, 3.0, 4.0, 5.0, 6.0);
@@ -250,7 +250,7 @@ pub fn run_line_start_end_center() -> TestResult {
 }
 
 pub fn run_line_fit_points() -> TestResult {
-    MINI_TEST!("fit_points", {
+    MINI_TEST!("Fit_points", {
         use crate::Line;
         use crate::Point;
 
@@ -262,7 +262,7 @@ pub fn run_line_fit_points() -> TestResult {
 }
 
 pub fn run_line_subdivide() -> TestResult {
-    MINI_TEST!("subdivide", {
+    MINI_TEST!("Subdivide", {
         use crate::Line;
 
         let l = Line::new(0.0, 0.0, 0.0, 10.0, 0.0, 0.0);
@@ -285,15 +285,15 @@ pub fn run_line_subdivide() -> TestResult {
 }
 
 // Register tests with the shared registry for run_all("rust")
-REGISTER_MINI_TEST!("Line", "constructor", crate::line_test::run_line_constructor);
-REGISTER_MINI_TEST!("Line", "transformation", crate::line_test::run_line_transformation);
-REGISTER_MINI_TEST!("Line", "json_roundtrip", crate::line_test::run_line_json_roundtrip);
-REGISTER_MINI_TEST!("Line", "protobuf_roundtrip", crate::line_test::run_line_protobuf_roundtrip);
-REGISTER_MINI_TEST!("Line", "length", crate::line_test::run_line_length);
-REGISTER_MINI_TEST!("Line", "to_vector", crate::line_test::run_line_to_vector);
-REGISTER_MINI_TEST!("Line", "to_direction", crate::line_test::run_line_to_direction);
-REGISTER_MINI_TEST!("Line", "point_at", crate::line_test::run_line_point_at);
-REGISTER_MINI_TEST!("Line", "closest_point", crate::line_test::run_line_closest_point);
-REGISTER_MINI_TEST!("Line", "start_end_center", crate::line_test::run_line_start_end_center);
-REGISTER_MINI_TEST!("Line", "fit_points", crate::line_test::run_line_fit_points);
-REGISTER_MINI_TEST!("Line", "subdivide", crate::line_test::run_line_subdivide);
+REGISTER_MINI_TEST!("Line", "Constructor", crate::line_test::run_line_constructor);
+REGISTER_MINI_TEST!("Line", "Transformation", crate::line_test::run_line_transformation);
+REGISTER_MINI_TEST!("Line", "Json_roundtrip", crate::line_test::run_line_json_roundtrip);
+REGISTER_MINI_TEST!("Line", "Protobuf_roundtrip", crate::line_test::run_line_protobuf_roundtrip);
+REGISTER_MINI_TEST!("Line", "Length", crate::line_test::run_line_length);
+REGISTER_MINI_TEST!("Line", "To_vector", crate::line_test::run_line_to_vector);
+REGISTER_MINI_TEST!("Line", "To_direction", crate::line_test::run_line_to_direction);
+REGISTER_MINI_TEST!("Line", "Point_at", crate::line_test::run_line_point_at);
+REGISTER_MINI_TEST!("Line", "Closest_point", crate::line_test::run_line_closest_point);
+REGISTER_MINI_TEST!("Line", "Start_end_center", crate::line_test::run_line_start_end_center);
+REGISTER_MINI_TEST!("Line", "Fit_points", crate::line_test::run_line_fit_points);
+REGISTER_MINI_TEST!("Line", "Subdivide", crate::line_test::run_line_subdivide);

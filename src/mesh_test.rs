@@ -2,7 +2,7 @@ use crate::{MINI_CHECK, MINI_TEST, REGISTER_MINI_TEST};
 use crate::mini_test::TestResult;
 
 pub fn run_mesh_constructor() -> TestResult {
-    MINI_TEST!("constructor", {
+    MINI_TEST!("Constructor", {
         use crate::Mesh;
 
         let mesh = Mesh::new();
@@ -24,7 +24,7 @@ pub fn run_mesh_constructor() -> TestResult {
 }
 
 pub fn run_mesh_add_vertex() -> TestResult {
-    MINI_TEST!("add_vertex", {
+    MINI_TEST!("Add_vertex", {
         use crate::Mesh;
         use crate::Point;
 
@@ -44,7 +44,7 @@ pub fn run_mesh_add_vertex() -> TestResult {
 }
 
 pub fn run_mesh_add_face() -> TestResult {
-    MINI_TEST!("add_face", {
+    MINI_TEST!("Add_face", {
         use crate::Mesh;
         use crate::Point;
 
@@ -71,7 +71,7 @@ pub fn run_mesh_add_face() -> TestResult {
 }
 
 pub fn run_mesh_face_vertices() -> TestResult {
-    MINI_TEST!("face_vertices", {
+    MINI_TEST!("Face_vertices", {
         use crate::Mesh;
         use crate::Point;
 
@@ -91,7 +91,7 @@ pub fn run_mesh_face_vertices() -> TestResult {
 }
 
 pub fn run_mesh_vertex_neighbors() -> TestResult {
-    MINI_TEST!("vertex_neighbors", {
+    MINI_TEST!("Vertex_neighbors", {
         use crate::Mesh;
         use crate::Point;
 
@@ -110,7 +110,7 @@ pub fn run_mesh_vertex_neighbors() -> TestResult {
 }
 
 pub fn run_mesh_vertex_faces() -> TestResult {
-    MINI_TEST!("vertex_faces", {
+    MINI_TEST!("Vertex_faces", {
         use crate::Mesh;
         use crate::Point;
 
@@ -131,7 +131,7 @@ pub fn run_mesh_vertex_faces() -> TestResult {
 }
 
 pub fn run_mesh_is_vertex_on_boundary() -> TestResult {
-    MINI_TEST!("is_vertex_on_boundary", {
+    MINI_TEST!("Is_vertex_on_boundary", {
         use crate::Mesh;
         use crate::Point;
 
@@ -149,7 +149,7 @@ pub fn run_mesh_is_vertex_on_boundary() -> TestResult {
 }
 
 pub fn run_mesh_face_normal() -> TestResult {
-    MINI_TEST!("face_normal", {
+    MINI_TEST!("Face_normal", {
         use crate::Mesh;
         use crate::Point;
         use crate::tolerance::TOLERANCE;
@@ -169,7 +169,7 @@ pub fn run_mesh_face_normal() -> TestResult {
 }
 
 pub fn run_mesh_face_area() -> TestResult {
-    MINI_TEST!("face_area", {
+    MINI_TEST!("Face_area", {
         use crate::Mesh;
         use crate::Point;
         use crate::tolerance::TOLERANCE;
@@ -187,7 +187,7 @@ pub fn run_mesh_face_area() -> TestResult {
 }
 
 pub fn run_mesh_from_polygons() -> TestResult {
-    MINI_TEST!("from_polygons", {
+    MINI_TEST!("From_polygons", {
         use crate::Mesh;
         use crate::Point;
 
@@ -220,7 +220,7 @@ pub fn run_mesh_from_polygons() -> TestResult {
 }
 
 pub fn run_mesh_clear() -> TestResult {
-    MINI_TEST!("clear", {
+    MINI_TEST!("Clear", {
         use crate::Mesh;
         use crate::Point;
 
@@ -241,7 +241,7 @@ pub fn run_mesh_clear() -> TestResult {
 }
 
 pub fn run_mesh_transformation() -> TestResult {
-    MINI_TEST!("transformation", {
+    MINI_TEST!("Transformation", {
         use crate::Mesh;
         use crate::Point;
         use crate::Xform;
@@ -266,7 +266,7 @@ pub fn run_mesh_transformation() -> TestResult {
 }
 
 pub fn run_mesh_json_roundtrip() -> TestResult {
-    MINI_TEST!("json_roundtrip", {
+    MINI_TEST!("Json_roundtrip", {
         use crate::Mesh;
         use crate::Point;
 
@@ -293,7 +293,7 @@ pub fn run_mesh_json_roundtrip() -> TestResult {
 }
 
 pub fn run_mesh_protobuf_roundtrip() -> TestResult {
-    MINI_TEST!("protobuf_roundtrip", {
+    MINI_TEST!("Protobuf_roundtrip", {
         use crate::Mesh;
         use crate::Point;
 
@@ -316,7 +316,7 @@ pub fn run_mesh_protobuf_roundtrip() -> TestResult {
 }
 
 pub fn run_mesh_vertex_position() -> TestResult {
-    MINI_TEST!("vertex_position", {
+    MINI_TEST!("Vertex_position", {
         use crate::Mesh;
         use crate::Point;
 
@@ -332,7 +332,7 @@ pub fn run_mesh_vertex_position() -> TestResult {
 }
 
 pub fn run_mesh_vertex_normal() -> TestResult {
-    MINI_TEST!("vertex_normal", {
+    MINI_TEST!("Vertex_normal", {
         use crate::Mesh;
         use crate::Point;
 
@@ -351,7 +351,7 @@ pub fn run_mesh_vertex_normal() -> TestResult {
 }
 
 pub fn run_mesh_to_vertices_and_faces() -> TestResult {
-    MINI_TEST!("to_vertices_and_faces", {
+    MINI_TEST!("To_vertices_and_faces", {
         use crate::Mesh;
         use crate::Point;
 
@@ -371,20 +371,20 @@ pub fn run_mesh_to_vertices_and_faces() -> TestResult {
 }
 
 // Register tests with the shared registry
-REGISTER_MINI_TEST!("Mesh", "constructor", crate::mesh_test::run_mesh_constructor);
-REGISTER_MINI_TEST!("Mesh", "add_vertex", crate::mesh_test::run_mesh_add_vertex);
-REGISTER_MINI_TEST!("Mesh", "add_face", crate::mesh_test::run_mesh_add_face);
-REGISTER_MINI_TEST!("Mesh", "face_vertices", crate::mesh_test::run_mesh_face_vertices);
-REGISTER_MINI_TEST!("Mesh", "vertex_neighbors", crate::mesh_test::run_mesh_vertex_neighbors);
-REGISTER_MINI_TEST!("Mesh", "vertex_faces", crate::mesh_test::run_mesh_vertex_faces);
-REGISTER_MINI_TEST!("Mesh", "is_vertex_on_boundary", crate::mesh_test::run_mesh_is_vertex_on_boundary);
-REGISTER_MINI_TEST!("Mesh", "face_normal", crate::mesh_test::run_mesh_face_normal);
-REGISTER_MINI_TEST!("Mesh", "face_area", crate::mesh_test::run_mesh_face_area);
-REGISTER_MINI_TEST!("Mesh", "from_polygons", crate::mesh_test::run_mesh_from_polygons);
-REGISTER_MINI_TEST!("Mesh", "clear", crate::mesh_test::run_mesh_clear);
-REGISTER_MINI_TEST!("Mesh", "transformation", crate::mesh_test::run_mesh_transformation);
-REGISTER_MINI_TEST!("Mesh", "vertex_position", crate::mesh_test::run_mesh_vertex_position);
-REGISTER_MINI_TEST!("Mesh", "vertex_normal", crate::mesh_test::run_mesh_vertex_normal);
-REGISTER_MINI_TEST!("Mesh", "to_vertices_and_faces", crate::mesh_test::run_mesh_to_vertices_and_faces);
-REGISTER_MINI_TEST!("Mesh", "json_roundtrip", crate::mesh_test::run_mesh_json_roundtrip);
-REGISTER_MINI_TEST!("Mesh", "protobuf_roundtrip", crate::mesh_test::run_mesh_protobuf_roundtrip);
+REGISTER_MINI_TEST!("Mesh", "Constructor", crate::mesh_test::run_mesh_constructor);
+REGISTER_MINI_TEST!("Mesh", "Add_vertex", crate::mesh_test::run_mesh_add_vertex);
+REGISTER_MINI_TEST!("Mesh", "Add_face", crate::mesh_test::run_mesh_add_face);
+REGISTER_MINI_TEST!("Mesh", "Face_vertices", crate::mesh_test::run_mesh_face_vertices);
+REGISTER_MINI_TEST!("Mesh", "Vertex_neighbors", crate::mesh_test::run_mesh_vertex_neighbors);
+REGISTER_MINI_TEST!("Mesh", "Vertex_faces", crate::mesh_test::run_mesh_vertex_faces);
+REGISTER_MINI_TEST!("Mesh", "Is_vertex_on_boundary", crate::mesh_test::run_mesh_is_vertex_on_boundary);
+REGISTER_MINI_TEST!("Mesh", "Face_normal", crate::mesh_test::run_mesh_face_normal);
+REGISTER_MINI_TEST!("Mesh", "Face_area", crate::mesh_test::run_mesh_face_area);
+REGISTER_MINI_TEST!("Mesh", "From_polygons", crate::mesh_test::run_mesh_from_polygons);
+REGISTER_MINI_TEST!("Mesh", "Clear", crate::mesh_test::run_mesh_clear);
+REGISTER_MINI_TEST!("Mesh", "Transformation", crate::mesh_test::run_mesh_transformation);
+REGISTER_MINI_TEST!("Mesh", "Vertex_position", crate::mesh_test::run_mesh_vertex_position);
+REGISTER_MINI_TEST!("Mesh", "Vertex_normal", crate::mesh_test::run_mesh_vertex_normal);
+REGISTER_MINI_TEST!("Mesh", "To_vertices_and_faces", crate::mesh_test::run_mesh_to_vertices_and_faces);
+REGISTER_MINI_TEST!("Mesh", "Json_roundtrip", crate::mesh_test::run_mesh_json_roundtrip);
+REGISTER_MINI_TEST!("Mesh", "Protobuf_roundtrip", crate::mesh_test::run_mesh_protobuf_roundtrip);

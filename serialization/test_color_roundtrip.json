@@ -1,9 +1,9 @@
 {
-  "type": "Color",
-  "guid": "0cf40b5f-1718-4f0a-b3e3-0f3a0fc72aab",
+  "a": 255,
+  "b": 64,
+  "g": 128,
+  "guid": "e5ae2ec2-9cc8-4536-8c99-4c48263afc1a",
   "name": "sunset_orange",
   "r": 255,
-  "g": 128,
-  "b": 64,
-  "a": 255
+  "type": "Color"
 }

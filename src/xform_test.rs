@@ -4,7 +4,7 @@ use crate::tolerance::TOLERANCE;
 use crate::tolerance::PI;
 
 pub fn run_xform_constructor() -> TestResult {
-    MINI_TEST!("constructor", {
+    MINI_TEST!("Constructor", {
         use crate::Xform;
         use crate::Point;
 
@@ -62,7 +62,7 @@ pub fn run_xform_constructor() -> TestResult {
 }
 
 pub fn run_xform_translation() -> TestResult {
-    MINI_TEST!("translation", {
+    MINI_TEST!("Translation", {
         use crate::Xform;
         use crate::Point;
 
@@ -80,7 +80,7 @@ pub fn run_xform_translation() -> TestResult {
 }
 
 pub fn run_xform_scaling() -> TestResult {
-    MINI_TEST!("scaling", {
+    MINI_TEST!("Scaling", {
         use crate::Xform;
         use crate::Point;
 
@@ -98,7 +98,7 @@ pub fn run_xform_scaling() -> TestResult {
 }
 
 pub fn run_xform_rotation() -> TestResult {
-    MINI_TEST!("rotation", {
+    MINI_TEST!("Rotation", {
         use crate::Xform;
         use crate::Point;
         use crate::Vector;
@@ -137,7 +137,7 @@ pub fn run_xform_rotation() -> TestResult {
 }
 
 pub fn run_xform_inverse() -> TestResult {
-    MINI_TEST!("inverse", {
+    MINI_TEST!("Inverse", {
         use crate::Xform;
 
         // Create composite transformation
@@ -156,7 +156,7 @@ pub fn run_xform_inverse() -> TestResult {
 }
 
 pub fn run_xform_transform_geometry() -> TestResult {
-    MINI_TEST!("transform_geometry", {
+    MINI_TEST!("Transform_geometry", {
         use crate::Xform;
         use crate::Point;
         use crate::Vector;
@@ -204,7 +204,7 @@ pub fn run_xform_transform_geometry() -> TestResult {
 }
 
 pub fn run_xform_change_basis() -> TestResult {
-    MINI_TEST!("change_basis", {
+    MINI_TEST!("Change_basis", {
         use crate::Xform;
         use crate::Point;
         use crate::Vector;
@@ -235,7 +235,7 @@ pub fn run_xform_change_basis() -> TestResult {
 }
 
 pub fn run_xform_plane_to_plane() -> TestResult {
-    MINI_TEST!("plane_to_plane", {
+    MINI_TEST!("Plane_to_plane", {
         use crate::Xform;
         use crate::Point;
         use crate::Vector;
@@ -260,7 +260,7 @@ pub fn run_xform_plane_to_plane() -> TestResult {
 }
 
 pub fn run_xform_look_at_rh() -> TestResult {
-    MINI_TEST!("look_at_rh", {
+    MINI_TEST!("Look_at_rh", {
         use crate::Xform;
         use crate::Point;
         use crate::Vector;
@@ -282,7 +282,7 @@ pub fn run_xform_look_at_rh() -> TestResult {
 }
 
 pub fn run_xform_json_roundtrip() -> TestResult {
-    MINI_TEST!("json_roundtrip", {
+    MINI_TEST!("Json_roundtrip", {
         use crate::Xform;
 
         // Create a non-identity xform
@@ -306,7 +306,7 @@ pub fn run_xform_json_roundtrip() -> TestResult {
 }
 
 pub fn run_xform_protobuf_roundtrip() -> TestResult {
-    MINI_TEST!("protobuf_roundtrip", {
+    MINI_TEST!("Protobuf_roundtrip", {
         use crate::Xform;
 
         // Create a non-identity xform
@@ -325,14 +325,14 @@ pub fn run_xform_protobuf_roundtrip() -> TestResult {
     })
 }
 
-REGISTER_MINI_TEST!("Xform", "constructor", crate::xform_test::run_xform_constructor);
-REGISTER_MINI_TEST!("Xform", "translation", crate::xform_test::run_xform_translation);
-REGISTER_MINI_TEST!("Xform", "scaling", crate::xform_test::run_xform_scaling);
-REGISTER_MINI_TEST!("Xform", "rotation", crate::xform_test::run_xform_rotation);
-REGISTER_MINI_TEST!("Xform", "inverse", crate::xform_test::run_xform_inverse);
-REGISTER_MINI_TEST!("Xform", "transform_geometry", crate::xform_test::run_xform_transform_geometry);
-REGISTER_MINI_TEST!("Xform", "change_basis", crate::xform_test::run_xform_change_basis);
-REGISTER_MINI_TEST!("Xform", "plane_to_plane", crate::xform_test::run_xform_plane_to_plane);
-REGISTER_MINI_TEST!("Xform", "look_at_rh", crate::xform_test::run_xform_look_at_rh);
-REGISTER_MINI_TEST!("Xform", "json_roundtrip", crate::xform_test::run_xform_json_roundtrip);
-REGISTER_MINI_TEST!("Xform", "protobuf_roundtrip", crate::xform_test::run_xform_protobuf_roundtrip);
+REGISTER_MINI_TEST!("Xform", "Constructor", crate::xform_test::run_xform_constructor);
+REGISTER_MINI_TEST!("Xform", "Translation", crate::xform_test::run_xform_translation);
+REGISTER_MINI_TEST!("Xform", "Scaling", crate::xform_test::run_xform_scaling);
+REGISTER_MINI_TEST!("Xform", "Rotation", crate::xform_test::run_xform_rotation);
+REGISTER_MINI_TEST!("Xform", "Inverse", crate::xform_test::run_xform_inverse);
+REGISTER_MINI_TEST!("Xform", "Transform_geometry", crate::xform_test::run_xform_transform_geometry);
+REGISTER_MINI_TEST!("Xform", "Change_basis", crate::xform_test::run_xform_change_basis);
+REGISTER_MINI_TEST!("Xform", "Plane_to_plane", crate::xform_test::run_xform_plane_to_plane);
+REGISTER_MINI_TEST!("Xform", "Look_at_rh", crate::xform_test::run_xform_look_at_rh);
+REGISTER_MINI_TEST!("Xform", "Json_roundtrip", crate::xform_test::run_xform_json_roundtrip);
+REGISTER_MINI_TEST!("Xform", "Protobuf_roundtrip", crate::xform_test::run_xform_protobuf_roundtrip);

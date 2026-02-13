@@ -4,7 +4,7 @@ use crate::{MINI_CHECK, MINI_TEST, REGISTER_MINI_TEST};
 use crate::mini_test::TestResult;
 
 pub fn run_knot_count() -> TestResult {
-    MINI_TEST!("knot_count", {
+    MINI_TEST!("Knot_count", {
         use crate::knot;
 
         // Calculate knot counts for various order/cv_count combinations
@@ -23,7 +23,7 @@ pub fn run_knot_count() -> TestResult {
 }
 
 pub fn run_make_clamped_uniform() -> TestResult {
-    MINI_TEST!("make_clamped_uniform", {
+    MINI_TEST!("Make_clamped_uniform", {
         use crate::knot;
 
         // Basic clamped uniform knot vector
@@ -58,7 +58,7 @@ pub fn run_make_clamped_uniform() -> TestResult {
 }
 
 pub fn run_make_periodic_uniform() -> TestResult {
-    MINI_TEST!("make_periodic_uniform", {
+    MINI_TEST!("Make_periodic_uniform", {
         use crate::knot;
 
         // Create periodic uniform knot vector
@@ -76,7 +76,7 @@ pub fn run_make_periodic_uniform() -> TestResult {
 }
 
 pub fn run_clamp() -> TestResult {
-    MINI_TEST!("clamp", {
+    MINI_TEST!("Clamp", {
         use crate::knot;
 
         // Clamp a periodic knot vector
@@ -92,7 +92,7 @@ pub fn run_clamp() -> TestResult {
 }
 
 pub fn run_is_valid() -> TestResult {
-    MINI_TEST!("is_valid", {
+    MINI_TEST!("Is_valid", {
         use crate::knot;
 
         // Valid clamped knot vector
@@ -109,7 +109,7 @@ pub fn run_is_valid() -> TestResult {
 }
 
 pub fn run_is_clamped() -> TestResult {
-    MINI_TEST!("is_clamped", {
+    MINI_TEST!("Is_clamped", {
         use crate::knot;
 
         // Clamped knot vector
@@ -130,7 +130,7 @@ pub fn run_is_clamped() -> TestResult {
 }
 
 pub fn run_is_periodic() -> TestResult {
-    MINI_TEST!("is_periodic", {
+    MINI_TEST!("Is_periodic", {
         use crate::knot;
 
         // Periodic knot vector
@@ -147,7 +147,7 @@ pub fn run_is_periodic() -> TestResult {
 }
 
 pub fn run_get_domain() -> TestResult {
-    MINI_TEST!("get_domain", {
+    MINI_TEST!("Get_domain", {
         use crate::knot;
 
         // Get domain of clamped knot vector
@@ -160,7 +160,7 @@ pub fn run_get_domain() -> TestResult {
 }
 
 pub fn run_set_domain() -> TestResult {
-    MINI_TEST!("set_domain", {
+    MINI_TEST!("Set_domain", {
         use crate::knot;
 
         // Create knot vector and set domain
@@ -177,7 +177,7 @@ pub fn run_set_domain() -> TestResult {
 }
 
 pub fn run_reverse() -> TestResult {
-    MINI_TEST!("reverse", {
+    MINI_TEST!("Reverse", {
         use crate::knot;
 
         // Reverse knot vector
@@ -195,7 +195,7 @@ pub fn run_reverse() -> TestResult {
 }
 
 pub fn run_multiplicity() -> TestResult {
-    MINI_TEST!("multiplicity", {
+    MINI_TEST!("Multiplicity", {
         use crate::knot;
 
         // Check multiplicity at clamped ends
@@ -209,7 +209,7 @@ pub fn run_multiplicity() -> TestResult {
 }
 
 pub fn run_span_count() -> TestResult {
-    MINI_TEST!("span_count", {
+    MINI_TEST!("Span_count", {
         use crate::knot;
 
         // Single Bezier span
@@ -226,7 +226,7 @@ pub fn run_span_count() -> TestResult {
 }
 
 pub fn run_find_span() -> TestResult {
-    MINI_TEST!("find_span", {
+    MINI_TEST!("Find_span", {
         use crate::knot;
 
         // Find span in single-span knot vector
@@ -247,7 +247,7 @@ pub fn run_find_span() -> TestResult {
 }
 
 pub fn run_greville_abcissae() -> TestResult {
-    MINI_TEST!("greville_abcissae", {
+    MINI_TEST!("Greville_abcissae", {
         use crate::knot;
 
         // Get Greville abcissae (control point parameter values)
@@ -260,7 +260,7 @@ pub fn run_greville_abcissae() -> TestResult {
 }
 
 pub fn run_domain_tolerance() -> TestResult {
-    MINI_TEST!("domain_tolerance", {
+    MINI_TEST!("Domain_tolerance", {
         use crate::knot;
 
         // Calculate domain tolerance
@@ -273,18 +273,18 @@ pub fn run_domain_tolerance() -> TestResult {
 }
 
 // Register all tests
-REGISTER_MINI_TEST!("Knot", "knot_count", crate::knot_test::run_knot_count);
-REGISTER_MINI_TEST!("Knot", "make_clamped_uniform", crate::knot_test::run_make_clamped_uniform);
-REGISTER_MINI_TEST!("Knot", "make_periodic_uniform", crate::knot_test::run_make_periodic_uniform);
-REGISTER_MINI_TEST!("Knot", "clamp", crate::knot_test::run_clamp);
-REGISTER_MINI_TEST!("Knot", "is_valid", crate::knot_test::run_is_valid);
-REGISTER_MINI_TEST!("Knot", "is_clamped", crate::knot_test::run_is_clamped);
-REGISTER_MINI_TEST!("Knot", "is_periodic", crate::knot_test::run_is_periodic);
-REGISTER_MINI_TEST!("Knot", "get_domain", crate::knot_test::run_get_domain);
-REGISTER_MINI_TEST!("Knot", "set_domain", crate::knot_test::run_set_domain);
-REGISTER_MINI_TEST!("Knot", "reverse", crate::knot_test::run_reverse);
-REGISTER_MINI_TEST!("Knot", "multiplicity", crate::knot_test::run_multiplicity);
-REGISTER_MINI_TEST!("Knot", "span_count", crate::knot_test::run_span_count);
-REGISTER_MINI_TEST!("Knot", "find_span", crate::knot_test::run_find_span);
-REGISTER_MINI_TEST!("Knot", "greville_abcissae", crate::knot_test::run_greville_abcissae);
-REGISTER_MINI_TEST!("Knot", "domain_tolerance", crate::knot_test::run_domain_tolerance);
+REGISTER_MINI_TEST!("Knot", "Knot_count", crate::knot_test::run_knot_count);
+REGISTER_MINI_TEST!("Knot", "Make_clamped_uniform", crate::knot_test::run_make_clamped_uniform);
+REGISTER_MINI_TEST!("Knot", "Make_periodic_uniform", crate::knot_test::run_make_periodic_uniform);
+REGISTER_MINI_TEST!("Knot", "Clamp", crate::knot_test::run_clamp);
+REGISTER_MINI_TEST!("Knot", "Is_valid", crate::knot_test::run_is_valid);
+REGISTER_MINI_TEST!("Knot", "Is_clamped", crate::knot_test::run_is_clamped);
+REGISTER_MINI_TEST!("Knot", "Is_periodic", crate::knot_test::run_is_periodic);
+REGISTER_MINI_TEST!("Knot", "Get_domain", crate::knot_test::run_get_domain);
+REGISTER_MINI_TEST!("Knot", "Set_domain", crate::knot_test::run_set_domain);
+REGISTER_MINI_TEST!("Knot", "Reverse", crate::knot_test::run_reverse);
+REGISTER_MINI_TEST!("Knot", "Multiplicity", crate::knot_test::run_multiplicity);
+REGISTER_MINI_TEST!("Knot", "Span_count", crate::knot_test::run_span_count);
+REGISTER_MINI_TEST!("Knot", "Find_span", crate::knot_test::run_find_span);
+REGISTER_MINI_TEST!("Knot", "Greville_abcissae", crate::knot_test::run_greville_abcissae);
+REGISTER_MINI_TEST!("Knot", "Domain_tolerance", crate::knot_test::run_domain_tolerance);

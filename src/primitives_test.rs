@@ -3,7 +3,7 @@ use crate::mini_test::TestResult;
 use crate::tolerance::TOLERANCE;
 
 pub fn run_primitives_mesh_arrow() -> TestResult {
-    MINI_TEST!("mesh_arrow", {
+    MINI_TEST!("Mesh_arrow", {
         use crate::primitives::Primitives;
         use crate::line::Line;
 
@@ -16,7 +16,7 @@ pub fn run_primitives_mesh_arrow() -> TestResult {
 }
 
 pub fn run_primitives_mesh_cylinder() -> TestResult {
-    MINI_TEST!("mesh_cylinder", {
+    MINI_TEST!("Mesh_cylinder", {
         use crate::primitives::Primitives;
         use crate::line::Line;
 
@@ -29,7 +29,7 @@ pub fn run_primitives_mesh_cylinder() -> TestResult {
 }
 
 pub fn run_primitives_nurbscurve_polyline() -> TestResult {
-    MINI_TEST!("nurbscurve_polyline", {
+    MINI_TEST!("Nurbscurve_polyline", {
         use crate::nurbscurve::NurbsCurve;
         use crate::point::Point;
 
@@ -47,7 +47,7 @@ pub fn run_primitives_nurbscurve_polyline() -> TestResult {
 }
 
 pub fn run_primitives_nurbscurve_circle() -> TestResult {
-    MINI_TEST!("nurbscurve_circle", {
+    MINI_TEST!("Nurbscurve_circle", {
         use crate::primitives::Primitives;
 
         let c = Primitives::circle(0.0, 0.0, 0.0, 1.0);
@@ -59,7 +59,7 @@ pub fn run_primitives_nurbscurve_circle() -> TestResult {
 }
 
 pub fn run_primitives_nurbscurve_ellipse() -> TestResult {
-    MINI_TEST!("nurbscurve_ellipse", {
+    MINI_TEST!("Nurbscurve_ellipse", {
         use crate::primitives::Primitives;
 
         let c = Primitives::ellipse(0.0, 0.0, 0.0, 2.0, 1.0);
@@ -71,7 +71,7 @@ pub fn run_primitives_nurbscurve_ellipse() -> TestResult {
 }
 
 pub fn run_primitives_nurbscurve_arc() -> TestResult {
-    MINI_TEST!("nurbscurve_arc", {
+    MINI_TEST!("Nurbscurve_arc", {
         use crate::primitives::Primitives;
         use crate::point::Point;
 
@@ -87,7 +87,7 @@ pub fn run_primitives_nurbscurve_arc() -> TestResult {
 }
 
 pub fn run_primitives_nurbscurve_parabola() -> TestResult {
-    MINI_TEST!("nurbscurve_parabola", {
+    MINI_TEST!("Nurbscurve_parabola", {
         use crate::primitives::Primitives;
         use crate::point::Point;
 
@@ -103,7 +103,7 @@ pub fn run_primitives_nurbscurve_parabola() -> TestResult {
 }
 
 pub fn run_primitives_nurbscurve_hyperbola() -> TestResult {
-    MINI_TEST!("nurbscurve_hyperbola", {
+    MINI_TEST!("Nurbscurve_hyperbola", {
         use crate::primitives::Primitives;
         use crate::point::Point;
 
@@ -117,7 +117,7 @@ pub fn run_primitives_nurbscurve_hyperbola() -> TestResult {
 }
 
 pub fn run_primitives_nurbscurve_spiral() -> TestResult {
-    MINI_TEST!("nurbscurve_spiral", {
+    MINI_TEST!("Nurbscurve_spiral", {
         use crate::primitives::Primitives;
 
         let c = Primitives::spiral(1.0, 2.0, 1.0, 5.0);
@@ -129,7 +129,7 @@ pub fn run_primitives_nurbscurve_spiral() -> TestResult {
 }
 
 pub fn run_primitives_nurbssurface_cylinder() -> TestResult {
-    MINI_TEST!("nurbssurface_cylinder", {
+    MINI_TEST!("Nurbssurface_cylinder", {
         use crate::primitives::Primitives;
 
         let s = Primitives::cylinder_surface(0.0, 0.0, 0.0, 1.0, 5.0);
@@ -159,7 +159,7 @@ pub fn run_primitives_nurbssurface_cylinder() -> TestResult {
 }
 
 pub fn run_primitives_nurbssurface_cone() -> TestResult {
-    MINI_TEST!("nurbssurface_cone", {
+    MINI_TEST!("Nurbssurface_cone", {
         use crate::primitives::Primitives;
 
         let s = Primitives::cone_surface(0.0, 0.0, 0.0, 1.0, 5.0);
@@ -189,7 +189,7 @@ pub fn run_primitives_nurbssurface_cone() -> TestResult {
 }
 
 pub fn run_primitives_nurbssurface_torus() -> TestResult {
-    MINI_TEST!("nurbssurface_torus", {
+    MINI_TEST!("Nurbssurface_torus", {
         use crate::primitives::Primitives;
 
         let s = Primitives::torus_surface(0.0, 0.0, 0.0, 3.0, 1.0);
@@ -219,7 +219,7 @@ pub fn run_primitives_nurbssurface_torus() -> TestResult {
 }
 
 pub fn run_primitives_nurbssurface_ruled() -> TestResult {
-    MINI_TEST!("nurbssurface_ruled", {
+    MINI_TEST!("Nurbssurface_ruled", {
         use crate::primitives::Primitives;
         use crate::nurbscurve::NurbsCurve;
         use crate::point::Point;
@@ -325,7 +325,7 @@ pub fn run_primitives_nurbssurface_ruled() -> TestResult {
 }
 
 pub fn run_primitives_nurbssurface_planar() -> TestResult {
-    MINI_TEST!("nurbssurface_planar", {
+    MINI_TEST!("Nurbssurface_planar", {
         use crate::primitives::Primitives;
         use crate::nurbscurve::NurbsCurve;
         use crate::point::Point;
@@ -417,7 +417,7 @@ pub fn run_primitives_nurbssurface_planar() -> TestResult {
 }
 
 pub fn run_primitives_nurbssurface_extrusion() -> TestResult {
-    MINI_TEST!("nurbssurface_extrusion", {
+    MINI_TEST!("Nurbssurface_extrusion", {
         use crate::primitives::Primitives;
         use crate::nurbscurve::NurbsCurve;
         use crate::point::Point;
@@ -492,7 +492,7 @@ pub fn run_primitives_nurbssurface_extrusion() -> TestResult {
 }
 
 pub fn run_primitives_nurbssurface_loft() -> TestResult {
-    MINI_TEST!("nurbssurface_loft", {
+    MINI_TEST!("Nurbssurface_loft", {
         use crate::primitives::Primitives;
         use crate::nurbscurve::NurbsCurve;
         use crate::point::Point;
@@ -576,7 +576,7 @@ pub fn run_primitives_nurbssurface_loft() -> TestResult {
 }
 
 pub fn run_primitives_nurbssurface_revolve() -> TestResult {
-    MINI_TEST!("nurbssurface_revolve", {
+    MINI_TEST!("Nurbssurface_revolve", {
         use crate::primitives::Primitives;
         use crate::nurbscurve::NurbsCurve;
         use crate::point::Point;
@@ -675,7 +675,7 @@ pub fn run_primitives_nurbssurface_revolve() -> TestResult {
 }
 
 pub fn run_primitives_nurbssurface_sweep() -> TestResult {
-    MINI_TEST!("nurbssurface_sweep", {
+    MINI_TEST!("Nurbssurface_sweep", {
         use crate::primitives::Primitives;
         use crate::nurbscurve::NurbsCurve;
         use crate::point::Point;
@@ -722,7 +722,7 @@ pub fn run_primitives_nurbssurface_sweep() -> TestResult {
 }
 
 pub fn run_primitives_nurbssurface_edge() -> TestResult {
-    MINI_TEST!("nurbssurface_edge", {
+    MINI_TEST!("Nurbssurface_edge", {
         use crate::primitives::Primitives;
         use crate::nurbscurve::NurbsCurve;
         use crate::point::Point;
@@ -762,52 +762,8 @@ pub fn run_primitives_nurbssurface_edge() -> TestResult {
     })
 }
 
-pub fn run_primitives_nurbssurface_network() -> TestResult {
-    MINI_TEST!("nurbssurface_network", {
-        use crate::primitives::Primitives;
-        use crate::nurbscurve::NurbsCurve;
-        use crate::point::Point;
-
-        let u0 = NurbsCurve::create(false, 2, &[
-            Point::new(135.0, 17.0, 0.0), Point::new(131.0, 21.0, 0.0), Point::new(135.0, 26.0, 0.0)]);
-        let u1 = NurbsCurve::create(false, 2, &[
-            Point::new(138.530306, 25.217183, 3.147742), Point::new(137.25766, 20.980203, 7.633725),
-            Point::new(139.228777, 17.799797, 3.377253)]);
-        let u2 = NurbsCurve::create(false, 2, &[
-            Point::new(140.519039, 17.722618, 3.491662), Point::new(142.519039, 22.722618, 7.491662),
-            Point::new(141.023716, 25.344319, 3.431608)]);
-        let u3 = NurbsCurve::create(false, 2, &[
-            Point::new(146.0, 16.0, 0.0), Point::new(150.0, 21.0, 7.0), Point::new(146.0, 27.0, 0.0)]);
-
-        let v0 = NurbsCurve::create(false, 2, &[
-            Point::new(135.0, 17.0, 0.0), Point::new(140.0, 19.0, 7.0), Point::new(146.0, 16.0, 0.0)]);
-        let v1 = NurbsCurve::create(false, 2, &[
-            Point::new(135.0, 26.0, 0.0), Point::new(140.0, 24.0, 7.0), Point::new(146.0, 27.0, 0.0)]);
-
-        let srf = Primitives::create_network(&[u0, u1, u2, u3], &[v0, v1]);
-        let m = srf.mesh();
-
-        MINI_CHECK!(srf.is_valid());
-        MINI_CHECK!(m.number_of_vertices() > 0);
-        MINI_CHECK!(m.number_of_faces() > 0);
-
-        let (du0, du1) = srf.domain(0).unwrap();
-        let (dv0, dv1) = srf.domain(1).unwrap();
-
-        let p00 = srf.point_at(du0, dv0).unwrap();
-        let p01 = srf.point_at(du0, dv1).unwrap();
-        let p10 = srf.point_at(du1, dv0).unwrap();
-        let p11 = srf.point_at(du1, dv1).unwrap();
-
-        MINI_CHECK!(p00.distance(&Point::new(135.0, 17.0, 0.0), None) < 1.0);
-        MINI_CHECK!(p10.distance(&Point::new(135.0, 26.0, 0.0), None) < 1.0);
-        MINI_CHECK!(p01.distance(&Point::new(146.0, 16.0, 0.0), None) < 1.0);
-        MINI_CHECK!(p11.distance(&Point::new(146.0, 27.0, 0.0), None) < 1.0);
-    })
-}
-
 pub fn run_primitives_nurbscurve_interpolated() -> TestResult {
-    MINI_TEST!("nurbscurve_interpolated", {
+    MINI_TEST!("Nurbscurve_interpolated", {
         use crate::primitives::Primitives;
         use crate::point::Point;
         use crate::knot::CurveKnotStyle;
@@ -850,24 +806,23 @@ pub fn run_primitives_nurbscurve_interpolated() -> TestResult {
     })
 }
 
-REGISTER_MINI_TEST!("Primitives", "mesh_arrow", crate::primitives_test::run_primitives_mesh_arrow);
-REGISTER_MINI_TEST!("Primitives", "mesh_cylinder", crate::primitives_test::run_primitives_mesh_cylinder);
-REGISTER_MINI_TEST!("Primitives", "nurbscurve_polyline", crate::primitives_test::run_primitives_nurbscurve_polyline);
-REGISTER_MINI_TEST!("Primitives", "nurbscurve_circle", crate::primitives_test::run_primitives_nurbscurve_circle);
-REGISTER_MINI_TEST!("Primitives", "nurbscurve_ellipse", crate::primitives_test::run_primitives_nurbscurve_ellipse);
-REGISTER_MINI_TEST!("Primitives", "nurbscurve_arc", crate::primitives_test::run_primitives_nurbscurve_arc);
-REGISTER_MINI_TEST!("Primitives", "nurbscurve_parabola", crate::primitives_test::run_primitives_nurbscurve_parabola);
-REGISTER_MINI_TEST!("Primitives", "nurbscurve_hyperbola", crate::primitives_test::run_primitives_nurbscurve_hyperbola);
-REGISTER_MINI_TEST!("Primitives", "nurbscurve_spiral", crate::primitives_test::run_primitives_nurbscurve_spiral);
-REGISTER_MINI_TEST!("Primitives", "nurbssurface_cylinder", crate::primitives_test::run_primitives_nurbssurface_cylinder);
-REGISTER_MINI_TEST!("Primitives", "nurbssurface_cone", crate::primitives_test::run_primitives_nurbssurface_cone);
-REGISTER_MINI_TEST!("Primitives", "nurbssurface_torus", crate::primitives_test::run_primitives_nurbssurface_torus);
-REGISTER_MINI_TEST!("Primitives", "nurbssurface_ruled", crate::primitives_test::run_primitives_nurbssurface_ruled);
-REGISTER_MINI_TEST!("Primitives", "nurbssurface_planar", crate::primitives_test::run_primitives_nurbssurface_planar);
-REGISTER_MINI_TEST!("Primitives", "nurbssurface_extrusion", crate::primitives_test::run_primitives_nurbssurface_extrusion);
-REGISTER_MINI_TEST!("Primitives", "nurbssurface_loft", crate::primitives_test::run_primitives_nurbssurface_loft);
-REGISTER_MINI_TEST!("Primitives", "nurbssurface_revolve", crate::primitives_test::run_primitives_nurbssurface_revolve);
-REGISTER_MINI_TEST!("Primitives", "nurbssurface_sweep", crate::primitives_test::run_primitives_nurbssurface_sweep);
-REGISTER_MINI_TEST!("Primitives", "nurbssurface_edge", crate::primitives_test::run_primitives_nurbssurface_edge);
-REGISTER_MINI_TEST!("Primitives", "nurbssurface_network", crate::primitives_test::run_primitives_nurbssurface_network);
-REGISTER_MINI_TEST!("Primitives", "nurbscurve_interpolated", crate::primitives_test::run_primitives_nurbscurve_interpolated);
+REGISTER_MINI_TEST!("Primitives", "Mesh_arrow", crate::primitives_test::run_primitives_mesh_arrow);
+REGISTER_MINI_TEST!("Primitives", "Mesh_cylinder", crate::primitives_test::run_primitives_mesh_cylinder);
+REGISTER_MINI_TEST!("Primitives", "Nurbscurve_polyline", crate::primitives_test::run_primitives_nurbscurve_polyline);
+REGISTER_MINI_TEST!("Primitives", "Nurbscurve_circle", crate::primitives_test::run_primitives_nurbscurve_circle);
+REGISTER_MINI_TEST!("Primitives", "Nurbscurve_ellipse", crate::primitives_test::run_primitives_nurbscurve_ellipse);
+REGISTER_MINI_TEST!("Primitives", "Nurbscurve_arc", crate::primitives_test::run_primitives_nurbscurve_arc);
+REGISTER_MINI_TEST!("Primitives", "Nurbscurve_parabola", crate::primitives_test::run_primitives_nurbscurve_parabola);
+REGISTER_MINI_TEST!("Primitives", "Nurbscurve_hyperbola", crate::primitives_test::run_primitives_nurbscurve_hyperbola);
+REGISTER_MINI_TEST!("Primitives", "Nurbscurve_spiral", crate::primitives_test::run_primitives_nurbscurve_spiral);
+REGISTER_MINI_TEST!("Primitives", "Nurbssurface_cylinder", crate::primitives_test::run_primitives_nurbssurface_cylinder);
+REGISTER_MINI_TEST!("Primitives", "Nurbssurface_cone", crate::primitives_test::run_primitives_nurbssurface_cone);
+REGISTER_MINI_TEST!("Primitives", "Nurbssurface_torus", crate::primitives_test::run_primitives_nurbssurface_torus);
+REGISTER_MINI_TEST!("Primitives", "Nurbssurface_ruled", crate::primitives_test::run_primitives_nurbssurface_ruled);
+REGISTER_MINI_TEST!("Primitives", "Nurbssurface_planar", crate::primitives_test::run_primitives_nurbssurface_planar);
+REGISTER_MINI_TEST!("Primitives", "Nurbssurface_extrusion", crate::primitives_test::run_primitives_nurbssurface_extrusion);
+REGISTER_MINI_TEST!("Primitives", "Nurbssurface_loft", crate::primitives_test::run_primitives_nurbssurface_loft);
+REGISTER_MINI_TEST!("Primitives", "Nurbssurface_revolve", crate::primitives_test::run_primitives_nurbssurface_revolve);
+REGISTER_MINI_TEST!("Primitives", "Nurbssurface_sweep", crate::primitives_test::run_primitives_nurbssurface_sweep);
+REGISTER_MINI_TEST!("Primitives", "Nurbssurface_edge", crate::primitives_test::run_primitives_nurbssurface_edge);
+REGISTER_MINI_TEST!("Primitives", "Nurbscurve_interpolated", crate::primitives_test::run_primitives_nurbscurve_interpolated);

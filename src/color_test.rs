@@ -169,7 +169,7 @@ use crate::{MINI_CHECK, MINI_TEST, REGISTER_MINI_TEST};
 use crate::mini_test::TestResult;
 
 pub fn run_color_constructor() -> TestResult {
-    MINI_TEST!("constructor", {
+    MINI_TEST!("Constructor", {
         use crate::Color;
 
         // Constructor
@@ -207,7 +207,7 @@ pub fn run_color_constructor() -> TestResult {
 }
 
 pub fn run_color_json_roundtrip() -> TestResult {
-    MINI_TEST!("json_roundtrip", {
+    MINI_TEST!("Json_roundtrip", {
         use crate::Color;
 
         let color = Color::with_name(255, 128, 64, 255, "test_color");
@@ -230,7 +230,7 @@ pub fn run_color_json_roundtrip() -> TestResult {
 }
 
 pub fn run_color_protobuf_roundtrip() -> TestResult {
-    MINI_TEST!("protobuf_roundtrip", {
+    MINI_TEST!("Protobuf_roundtrip", {
         use crate::Color;
 
         let mut color = Color::new(255, 128, 64, 255);
@@ -249,7 +249,7 @@ pub fn run_color_protobuf_roundtrip() -> TestResult {
 }
 
 pub fn run_color_conversion() -> TestResult {
-    MINI_TEST!("conversion", {
+    MINI_TEST!("Conversion", {
         use crate::Color;
         use crate::tolerance::TOLERANCE;
 
@@ -266,7 +266,7 @@ pub fn run_color_conversion() -> TestResult {
 }
 
 pub fn run_color_presets() -> TestResult {
-    MINI_TEST!("presets", {
+    MINI_TEST!("Presets", {
         use crate::Color;
 
         let white = Color::white();
@@ -318,8 +318,8 @@ pub fn run_color_presets() -> TestResult {
 }
 
 // Register tests with the shared registry for run_all("rust")
-REGISTER_MINI_TEST!("Color", "constructor", crate::color_test::run_color_constructor);
-REGISTER_MINI_TEST!("Color", "json_roundtrip", crate::color_test::run_color_json_roundtrip);
-REGISTER_MINI_TEST!("Color", "protobuf_roundtrip", crate::color_test::run_color_protobuf_roundtrip);
-REGISTER_MINI_TEST!("Color", "conversion", crate::color_test::run_color_conversion);
-REGISTER_MINI_TEST!("Color", "presets", crate::color_test::run_color_presets);
+REGISTER_MINI_TEST!("Color", "Constructor", crate::color_test::run_color_constructor);
+REGISTER_MINI_TEST!("Color", "Json_roundtrip", crate::color_test::run_color_json_roundtrip);
+REGISTER_MINI_TEST!("Color", "Protobuf_roundtrip", crate::color_test::run_color_protobuf_roundtrip);
+REGISTER_MINI_TEST!("Color", "Conversion", crate::color_test::run_color_conversion);
+REGISTER_MINI_TEST!("Color", "Presets", crate::color_test::run_color_presets);

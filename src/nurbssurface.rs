@@ -32,6 +32,9 @@ pub struct NurbsSurface {
     pub m_cv_stride: [usize; 2],
     pub m_knot: [Vec<f64>; 2],
     pub m_cv: Vec<f64>,
+
+    // Cached mesh
+    pub m_mesh: Option<Mesh>,
 }
 
 impl serde::Serialize for NurbsSurface {
@@ -67,6 +70,11 @@ impl serde::Serialize for NurbsSurface {
         let linecolors_flat: Vec<u8> = self.linecolors.iter()
             .flat_map(|c| vec![c.r, c.g, c.b, c.a]).collect();
         map.serialize_entry("linecolors", &linecolors_flat)?;
+        if let Some(ref m) = self.m_mesh {
+            if m.number_of_vertices() > 0 {
+                map.serialize_entry("mesh", m)?;
+            }
+        }
         map.serialize_entry("name", &self.name)?;
         map.serialize_entry("order_u", &self.m_order[0])?;
         map.serialize_entry("order_v", &self.m_order[1])?;
@@ -157,6 +165,7 @@ impl<'de> Deserialize<'de> for NurbsSurface {
             m_cv_stride: [cv_stride_u, cv_stride_v],
             m_knot: [data.knots_u, data.knots_v],
             m_cv: data.control_points,
+            m_mesh: None,
         })
     }
 }
@@ -179,6 +188,7 @@ impl NurbsSurface {
             m_cv_stride: [0, 0],
             m_knot: [Vec::new(), Vec::new()],
             m_cv: Vec::new(),
+            m_mesh: None,
         }
     }
 
@@ -579,6 +589,9 @@ impl NurbsSurface {
     }
 
     pub fn mesh(&self) -> Mesh {
+        if let Some(ref m) = self.m_mesh {
+            return m.clone();
+        }
         let usp = self.get_span_vector(0);
         let vsp = self.get_span_vector(1);
         if usp.len() < 2 || vsp.len() < 2 {
@@ -661,6 +674,36 @@ impl NurbsSurface {
                 for s in v_subs.iter_mut() { *s = (((*s as f64) * scale).ceil() as usize).min(24); }
             }
         }
+        {
+            let deg_u = self.degree(0);
+            let deg_v = self.degree(1);
+            if deg_u == 1 && deg_v == 1 {
+                let ns_u = usp.len() - 1;
+                let ns_v = vsp.len() - 1;
+                let chord_tol = if bbox_diag > 0.0 { bbox_diag * 0.005 } else { 1e-6 };
+                let mut max_twist = 0.0f64;
+                for i in 0..ns_u {
+                    for j in 0..ns_v {
+                        let u0 = usp[i]; let u1 = usp[i + 1];
+                        let v0 = vsp[j]; let v1 = vsp[j + 1];
+                        let pm = self.point_at((u0 + u1) * 0.5, (v0 + v1) * 0.5).unwrap_or(Point::new(0.0,0.0,0.0));
+                        let p00 = self.point_at(u0, v0).unwrap_or(Point::new(0.0,0.0,0.0));
+                        let p11 = self.point_at(u1, v1).unwrap_or(Point::new(0.0,0.0,0.0));
+                        let mx = (p00[0] + p11[0]) * 0.5;
+                        let my = (p00[1] + p11[1]) * 0.5;
+                        let mz = (p00[2] + p11[2]) * 0.5;
+                        let dx = pm[0] - mx; let dy = pm[1] - my; let dz = pm[2] - mz;
+                        let twist = (dx*dx + dy*dy + dz*dz).sqrt();
+                        if twist > max_twist { max_twist = twist; }
+                    }
+                }
+                if max_twist > chord_tol {
+                    let twist_subs = 4.max(((2.0 * (max_twist / chord_tol).sqrt()).ceil() as usize).min(24));
+                    for s in u_subs.iter_mut() { *s = (*s).max(twist_subs); }
+                    for s in v_subs.iter_mut() { *s = (*s).max(twist_subs); }
+                }
+            }
+        }
         let mut us = Vec::new();
         for i in 0..usp.len() - 1 {
             let n = u_subs[i];
@@ -701,32 +744,65 @@ impl NurbsSurface {
         fix_closed_gap(&mut vs, &vsp, closed_v);
         let nu = us.len();
         let nv = vs.len();
+        let sing_v0 = self.is_singular(0);
+        let sing_v1 = self.is_singular(2);
+        let j_start = if sing_v0 { 1 } else { 0 };
+        let j_end = if sing_v1 { nv - 1 } else { nv };
+        let nv_grid = j_end - j_start;
         let mut result = Mesh::new();
-        let mut vkeys = Vec::with_capacity(nu * nv);
+        let mut south_pole: usize = 0;
+        let mut north_pole: usize = 0;
+        if sing_v0 {
+            let pt = self.point_at(us[0], vs[0]).unwrap_or(Point::new(0.0, 0.0, 0.0));
+            south_pole = result.add_vertex(pt, None);
+        }
+        if sing_v1 {
+            let pt = self.point_at(us[0], vs[nv - 1]).unwrap_or(Point::new(0.0, 0.0, 0.0));
+            north_pole = result.add_vertex(pt, None);
+        }
+        let mut vkeys = Vec::with_capacity(nu * nv_grid);
         for i in 0..nu {
-            for j in 0..nv {
+            for j in j_start..j_end {
                 let pt = self.point_at(us[i], vs[j]).unwrap_or(Point::new(0.0, 0.0, 0.0));
-                let vk = result.add_vertex(pt, None);
-                vkeys.push(vk);
+                vkeys.push(result.add_vertex(pt, None));
             }
         }
+        let grid_idx = |i: usize, j: usize| -> usize {
+            vkeys[i * nv_grid + (j - j_start)]
+        };
         let nu_faces = if closed_u { nu } else { nu - 1 };
-        let nv_faces = if closed_v { nv } else { nv - 1 };
-        for i in 0..nu_faces {
-            for j in 0..nv_faces {
+        if sing_v0 {
+            for i in 0..nu_faces {
                 let i1 = (i + 1) % nu;
-                let j1 = (j + 1) % nv;
-                let v00 = vkeys[i * nv + j];
-                let v10 = vkeys[i1 * nv + j];
-                let v01 = vkeys[i * nv + j1];
-                let v11 = vkeys[i1 * nv + j1];
-                if (i + j) % 2 == 0 {
+                result.add_face(vec![south_pole, grid_idx(i1, j_start), grid_idx(i, j_start)], None);
+            }
+        }
+        let nv_interior = if closed_v && !sing_v0 && !sing_v1 { nv_grid } else { nv_grid - 1 };
+        for i in 0..nu_faces {
+            for jj in 0..nv_interior {
+                let j = jj + j_start;
+                let i1 = (i + 1) % nu;
+                let j1 = if closed_v && !sing_v0 && !sing_v1 {
+                    (jj + 1) % nv_grid + j_start
+                } else {
+                    j + 1
+                };
+                let v00 = grid_idx(i, j); let v10 = grid_idx(i1, j);
+                let v01 = grid_idx(i, j1); let v11 = grid_idx(i1, j1);
+                if (i + jj) % 2 == 0 {
                     result.add_face(vec![v00, v10, v11], None);
                     result.add_face(vec![v00, v11, v01], None);
                 } else {
                     result.add_face(vec![v00, v10, v01], None);
                     result.add_face(vec![v10, v11, v01], None);
                 }
+            }
+        }
+        if sing_v1 {
+            let j_last = j_end - 1;
+            for i in 0..nu_faces {
+                let i1 = (i + 1) % nu;
+                result.add_face(vec![grid_idx(i, j_last), grid_idx(i1, j_last), north_pole], None);
             }
         }
         let nv_total = result.vertex.len();
@@ -764,19 +840,208 @@ impl NurbsSurface {
     }
 
     ///////////////////////////////////////////////////////////////////////////////////////////
-    // ACCESSORS
+    // BOOLEAN QUERIES
     ///////////////////////////////////////////////////////////////////////////////////////////
-    
-    /// Get dimension
-    pub fn dimension(&self) -> usize {
-        self.m_dim
+
+    /// Check if surface is valid
+    pub fn is_valid(&self) -> bool {
+        if self.m_dim < 1 || self.m_order[0] < 2 || self.m_order[1] < 2 {
+            return false;
+        }
+        if self.m_cv_count[0] < self.m_order[0] || self.m_cv_count[1] < self.m_order[1] {
+            return false;
+        }
+        let cv_size = self.cv_size();
+        let required_cv_size = cv_size * self.m_cv_count[0] * self.m_cv_count[1];
+        if self.m_cv.len() < required_cv_size {
+            return false;
+        }
+        for dir in 0..2 {
+            let knot_count = self.m_order[dir] + self.m_cv_count[dir] - 2;
+            if self.m_knot[dir].len() < knot_count {
+                return false;
+            }
+        }
+        true
     }
-    
+
+    /// Check if knot vector is valid in specified direction
+    pub fn is_valid_knot_vector(&self, dir: usize) -> bool {
+        if dir >= 2 { return false; }
+        let kc = self.knot_count(dir);
+        if self.m_knot[dir].len() != kc { return false; }
+        for i in 1..kc {
+            if self.m_knot[dir][i] < self.m_knot[dir][i - 1] { return false; }
+        }
+        true
+    }
+
     /// Check if surface is rational
     pub fn is_rational(&self) -> bool {
         self.m_is_rat
     }
-    
+
+    /// Check if surface is closed in specified direction
+    pub fn is_closed(&self, dir: usize) -> bool {
+        if dir >= 2 || !self.is_valid() {
+            return false;
+        }
+
+        // Check if first and last rows/columns match
+        let tol = 1e-10;
+        let cv_size = self.cv_size();
+
+        for i in 0..if dir == 0 { self.m_cv_count[1] } else { self.m_cv_count[0] } {
+            let (cv1, cv2) = if dir == 0 {
+                (self.cv(0, i), self.cv(self.m_cv_count[0] - 1, i))
+            } else {
+                (self.cv(i, 0), self.cv(i, self.m_cv_count[1] - 1))
+            };
+
+            if let (Some(c1), Some(c2)) = (cv1, cv2) {
+                for k in 0..cv_size {
+                    if (c1[k] - c2[k]).abs() > tol {
+                        return false;
+                    }
+                }
+            }
+        }
+        true
+    }
+
+    /// Check if surface is periodic in specified direction
+    pub fn is_periodic(&self, dir: usize) -> bool {
+        if dir >= 2 || !self.is_valid() {
+            return false;
+        }
+
+        // Check knot vector periodicity
+        let order = self.m_order[dir];
+        if self.m_knot[dir].len() < order * 2 {
+            return false;
+        }
+
+        let delta = self.m_knot[dir][order] - self.m_knot[dir][0];
+        let tol = 1e-10;
+
+        for i in 0..order {
+            let expected = self.m_knot[dir][i] + delta;
+            let actual = self.m_knot[dir][i + order];
+            if (expected - actual).abs() > tol {
+                return false;
+            }
+        }
+
+        // Must also be closed
+        self.is_closed(dir)
+    }
+
+    /// Check if surface is planar within tolerance
+    pub fn is_planar(&self, tolerance: f64) -> bool {
+        if !self.is_valid() || self.m_cv_count[0] < 2 || self.m_cv_count[1] < 2 {
+            return false;
+        }
+
+        // Get three non-collinear points to define plane
+        let p0 = match self.get_cv(0, 0) {
+            Some(p) => p,
+            None => return false,
+        };
+        let p1 = match self.get_cv(self.m_cv_count[0] - 1, 0) {
+            Some(p) => p,
+            None => return false,
+        };
+        let p2 = match self.get_cv(0, self.m_cv_count[1] - 1) {
+            Some(p) => p,
+            None => return false,
+        };
+
+        // Compute plane normal
+        let v1_x = p1[0] - p0[0];
+        let v1_y = p1[1] - p0[1];
+        let v1_z = p1[2] - p0[2];
+
+        let v2_x = p2[0] - p0[0];
+        let v2_y = p2[1] - p0[1];
+        let v2_z = p2[2] - p0[2];
+
+        let nx = v1_y * v2_z - v1_z * v2_y;
+        let ny = v1_z * v2_x - v1_x * v2_z;
+        let nz = v1_x * v2_y - v1_y * v2_x;
+
+        let n_len = (nx * nx + ny * ny + nz * nz).sqrt();
+        if n_len < 1e-10 {
+            return false; // Degenerate
+        }
+
+        let nx = nx / n_len;
+        let ny = ny / n_len;
+        let nz = nz / n_len;
+
+        // Check all CVs are on the plane
+        for i in 0..self.m_cv_count[0] {
+            for j in 0..self.m_cv_count[1] {
+                if let Some(p) = self.get_cv(i, j) {
+                    let dx = p[0] - p0[0];
+                    let dy = p[1] - p0[1];
+                    let dz = p[2] - p0[2];
+                    let dist = (nx * dx + ny * dy + nz * dz).abs();
+
+                    if dist > tolerance {
+                        return false;
+                    }
+                }
+            }
+        }
+
+        true
+    }
+
+    /// Check if a surface side is singular (all CVs along edge coincide)
+    /// side: 0=south (v=0), 1=east (u=max), 2=north (v=max), 3=west (u=0)
+    pub fn is_singular(&self, side: usize) -> bool {
+        if !self.is_valid() { return false; }
+        let tol = 1e-10;
+        let (count, get_pt): (usize, Box<dyn Fn(usize) -> Option<Point>>) = match side {
+            0 => (self.m_cv_count[0], Box::new(|i| self.get_cv(i, 0))),
+            1 => (self.m_cv_count[1], Box::new(|j| self.get_cv(self.m_cv_count[0] - 1, j))),
+            2 => (self.m_cv_count[0], Box::new(|i| self.get_cv(i, self.m_cv_count[1] - 1))),
+            3 => (self.m_cv_count[1], Box::new(|j| self.get_cv(0, j))),
+            _ => return false,
+        };
+        if count < 2 { return true; }
+        let first = match get_pt(0) { Some(p) => p, None => return false };
+        for k in 1..count {
+            if let Some(p) = get_pt(k) {
+                let dx = (p[0] - first[0]).abs();
+                let dy = (p[1] - first[1]).abs();
+                let dz = (p[2] - first[2]).abs();
+                if dx > tol || dy > tol || dz > tol { return false; }
+            }
+        }
+        true
+    }
+
+    /// Check if surface is clamped in specified direction (at both ends by default)
+    /// end: 0=start only, 1=end only, 2=both
+    pub fn is_clamped(&self, dir: usize, end: usize) -> bool {
+        if dir >= 2 || self.m_knot[dir].is_empty() {
+            return false;
+        }
+
+        // Use knot module function
+        knot::is_clamped(self.m_order[dir], self.m_cv_count[dir], &self.m_knot[dir], end as i32)
+    }
+
+    ///////////////////////////////////////////////////////////////////////////////////////////
+    // ACCESSORS
+    ///////////////////////////////////////////////////////////////////////////////////////////
+
+    /// Get dimension
+    pub fn dimension(&self) -> usize {
+        self.m_dim
+    }
+
     /// Get order (degree + 1) in specified direction
     pub fn order(&self, dir: usize) -> usize {
         if dir >= 2 { return 0; }
@@ -1065,72 +1330,6 @@ impl NurbsSurface {
     ///////////////////////////////////////////////////////////////////////////////////////////
     // GEOMETRIC QUERIES
     ///////////////////////////////////////////////////////////////////////////////////////////
-    
-    /// Check if surface is closed in specified direction
-    pub fn is_closed(&self, dir: usize) -> bool {
-        if dir >= 2 || !self.is_valid() {
-            return false;
-        }
-        
-        // Check if first and last rows/columns match
-        let tol = 1e-10;
-        let cv_size = self.cv_size();
-        
-        for i in 0..if dir == 0 { self.m_cv_count[1] } else { self.m_cv_count[0] } {
-            let (cv1, cv2) = if dir == 0 {
-                (self.cv(0, i), self.cv(self.m_cv_count[0] - 1, i))
-            } else {
-                (self.cv(i, 0), self.cv(i, self.m_cv_count[1] - 1))
-            };
-            
-            if let (Some(c1), Some(c2)) = (cv1, cv2) {
-                for k in 0..cv_size {
-                    if (c1[k] - c2[k]).abs() > tol {
-                        return false;
-                    }
-                }
-            }
-        }
-        true
-    }
-    
-    /// Check if surface is periodic in specified direction
-    pub fn is_periodic(&self, dir: usize) -> bool {
-        if dir >= 2 || !self.is_valid() {
-            return false;
-        }
-        
-        // Check knot vector periodicity
-        let order = self.m_order[dir];
-        if self.m_knot[dir].len() < order * 2 {
-            return false;
-        }
-        
-        let delta = self.m_knot[dir][order] - self.m_knot[dir][0];
-        let tol = 1e-10;
-        
-        for i in 0..order {
-            let expected = self.m_knot[dir][i] + delta;
-            let actual = self.m_knot[dir][i + order];
-            if (expected - actual).abs() > tol {
-                return false;
-            }
-        }
-        
-        // Must also be closed
-        self.is_closed(dir)
-    }
-    
-    /// Check if surface is clamped in specified direction (at both ends by default)
-    /// end: 0=start only, 1=end only, 2=both
-    pub fn is_clamped(&self, dir: usize, end: usize) -> bool {
-        if dir >= 2 || self.m_knot[dir].is_empty() {
-            return false;
-        }
-        
-        // Use knot module function
-        knot::is_clamped(self.m_order[dir], self.m_cv_count[dir], &self.m_knot[dir], end as i32)
-    }
 
     /// Evaluate point and first derivatives at (u, v)
     /// Returns [point, du, dv] if num_derivs > 0, else [point]
@@ -1355,28 +1554,6 @@ impl NurbsSurface {
         let v = if v_end == 0 { v0 } else { v1 };
 
         self.point_at(u, v)
-    }
-
-    /// Check if surface is valid
-    pub fn is_valid(&self) -> bool {
-        if self.m_dim < 1 || self.m_order[0] < 2 || self.m_order[1] < 2 {
-            return false;
-        }
-        if self.m_cv_count[0] < self.m_order[0] || self.m_cv_count[1] < self.m_order[1] {
-            return false;
-        }
-        let cv_size = self.cv_size();
-        let required_cv_size = cv_size * self.m_cv_count[0] * self.m_cv_count[1];
-        if self.m_cv.len() < required_cv_size {
-            return false;
-        }
-        for dir in 0..2 {
-            let knot_count = self.m_order[dir] + self.m_cv_count[dir] - 2;
-            if self.m_knot[dir].len() < knot_count {
-                return false;
-            }
-        }
-        true
     }
 
     /// Extract isoparametric curve from surface
@@ -1736,97 +1913,6 @@ impl NurbsSurface {
         (grid, params)
     }
 
-    /// Check if surface is planar within tolerance
-    pub fn is_planar(&self, tolerance: f64) -> bool {
-        if !self.is_valid() || self.m_cv_count[0] < 2 || self.m_cv_count[1] < 2 {
-            return false;
-        }
-        
-        // For 2x2 or smaller, all points define a plane (4 points always coplanar)
-        if self.m_cv_count[0] <= 2 && self.m_cv_count[1] <= 2 {
-            return true;
-        }
-        
-        // Get three non-collinear points to define plane
-        let p0 = match self.get_cv(0, 0) {
-            Some(p) => p,
-            None => return false,
-        };
-        let p1 = match self.get_cv(self.m_cv_count[0] - 1, 0) {
-            Some(p) => p,
-            None => return false,
-        };
-        let p2 = match self.get_cv(0, self.m_cv_count[1] - 1) {
-            Some(p) => p,
-            None => return false,
-        };
-        
-        // Compute plane normal
-        let v1_x = p1[0] - p0[0];
-        let v1_y = p1[1] - p0[1];
-        let v1_z = p1[2] - p0[2];
-
-        let v2_x = p2[0] - p0[0];
-        let v2_y = p2[1] - p0[1];
-        let v2_z = p2[2] - p0[2];
-        
-        let nx = v1_y * v2_z - v1_z * v2_y;
-        let ny = v1_z * v2_x - v1_x * v2_z;
-        let nz = v1_x * v2_y - v1_y * v2_x;
-        
-        let n_len = (nx * nx + ny * ny + nz * nz).sqrt();
-        if n_len < 1e-10 {
-            return false; // Degenerate
-        }
-        
-        let nx = nx / n_len;
-        let ny = ny / n_len;
-        let nz = nz / n_len;
-        
-        // Check all CVs are on the plane
-        for i in 0..self.m_cv_count[0] {
-            for j in 0..self.m_cv_count[1] {
-                if let Some(p) = self.get_cv(i, j) {
-                    let dx = p[0] - p0[0];
-                    let dy = p[1] - p0[1];
-                    let dz = p[2] - p0[2];
-                    let dist = (nx * dx + ny * dy + nz * dz).abs();
-                    
-                    if dist > tolerance {
-                        return false;
-                    }
-                }
-            }
-        }
-        
-        true
-    }
-    
-    /// Check if a surface side is singular (all CVs along edge coincide)
-    /// side: 0=south (v=0), 1=east (u=max), 2=north (v=max), 3=west (u=0)
-    pub fn is_singular(&self, side: usize) -> bool {
-        if !self.is_valid() { return false; }
-        let tol = 1e-10;
-        let (count, get_pt): (usize, Box<dyn Fn(usize) -> Option<Point>>) = match side {
-            0 => (self.m_cv_count[0], Box::new(|i| self.get_cv(i, 0))),
-            1 => (self.m_cv_count[1], Box::new(|j| self.get_cv(self.m_cv_count[0] - 1, j))),
-            2 => (self.m_cv_count[0], Box::new(|i| self.get_cv(i, self.m_cv_count[1] - 1))),
-            3 => (self.m_cv_count[1], Box::new(|j| self.get_cv(0, j))),
-            _ => return false,
-        };
-        if count < 2 { return true; }
-        let first = match get_pt(0) { Some(p) => p, None => return false };
-        for k in 1..count {
-            if let Some(p) = get_pt(k) {
-                let dx = (p[0] - first[0]).abs();
-                let dy = (p[1] - first[1]).abs();
-                let dz = (p[2] - first[2]).abs();
-                if dx > tol || dy > tol || dz > tol { return false; }
-            }
-        }
-        true
-    }
-
     /// Get axis-aligned bounding box from control vertices
     pub fn get_bounding_box(&self) -> BoundingBox {
         let mut min_pt = Point::new(f64::MAX, f64::MAX, f64::MAX);
@@ -2017,6 +2103,12 @@ impl NurbsSurface {
             }),
             outer_loop: None,
             inner_loops: Vec::new(),
+            cached_mesh: if let Some(ref m) = self.m_mesh {
+                if m.number_of_vertices() > 0 {
+                    let mesh_data = m.pb_dumps();
+                    crate::proto::Mesh::decode(mesh_data.as_slice()).ok()
+                } else { None }
+            } else { None },
         };
         proto.encode_to_vec()
     }
@@ -2082,6 +2174,17 @@ impl NurbsSurface {
             for (i, val) in xform.matrix.iter().enumerate() {
                 if i < 16 {
                     surface.xform.m[i] = *val;
+                }
+            }
+        }
+
+        // Load cached mesh
+        if let Some(cached) = proto.cached_mesh {
+            use prost::Message as _;
+            let mesh_data = cached.encode_to_vec();
+            if let Ok(m) = Mesh::pb_loads(&mesh_data) {
+                if m.number_of_vertices() > 0 {
+                    surface.m_mesh = Some(m);
                 }
             }
         }
@@ -2167,6 +2270,7 @@ impl Clone for NurbsSurface {
             m_cv_stride: self.m_cv_stride,
             m_knot: self.m_knot.clone(),
             m_cv: self.m_cv.clone(),
+            m_mesh: self.m_mesh.clone(),
         }
     }
 }

@@ -3,7 +3,7 @@ use crate::mini_test::TestResult;
 use crate::tolerance::TOLERANCE;
 
 pub fn run_pointcloud_constructor() -> TestResult {
-    MINI_TEST!("constructor", {
+    MINI_TEST!("Constructor", {
         use crate::PointCloud;
         use crate::Point;
         use crate::Vector;
@@ -91,7 +91,7 @@ pub fn run_pointcloud_constructor() -> TestResult {
 }
 
 pub fn run_pointcloud_transform() -> TestResult {
-    MINI_TEST!("transform", {
+    MINI_TEST!("Transform", {
         use crate::PointCloud;
         use crate::Point;
         use crate::Xform;
@@ -113,7 +113,7 @@ pub fn run_pointcloud_transform() -> TestResult {
 }
 
 pub fn run_pointcloud_json_roundtrip() -> TestResult {
-    MINI_TEST!("json_roundtrip", {
+    MINI_TEST!("Json_roundtrip", {
         use crate::PointCloud;
         use crate::Point;
         use crate::Vector;
@@ -144,7 +144,7 @@ pub fn run_pointcloud_json_roundtrip() -> TestResult {
 }
 
 pub fn run_pointcloud_protobuf_roundtrip() -> TestResult {
-    MINI_TEST!("protobuf_roundtrip", {
+    MINI_TEST!("Protobuf_roundtrip", {
         use crate::PointCloud;
         use crate::Point;
         use crate::Vector;
@@ -169,7 +169,7 @@ pub fn run_pointcloud_protobuf_roundtrip() -> TestResult {
     })
 }
 
-REGISTER_MINI_TEST!("PointCloud", "constructor", crate::pointcloud_test::run_pointcloud_constructor);
-REGISTER_MINI_TEST!("PointCloud", "transform", crate::pointcloud_test::run_pointcloud_transform);
-REGISTER_MINI_TEST!("PointCloud", "json_roundtrip", crate::pointcloud_test::run_pointcloud_json_roundtrip);
-REGISTER_MINI_TEST!("PointCloud", "protobuf_roundtrip", crate::pointcloud_test::run_pointcloud_protobuf_roundtrip);
+REGISTER_MINI_TEST!("PointCloud", "Constructor", crate::pointcloud_test::run_pointcloud_constructor);
+REGISTER_MINI_TEST!("PointCloud", "Transform", crate::pointcloud_test::run_pointcloud_transform);
+REGISTER_MINI_TEST!("PointCloud", "Json_roundtrip", crate::pointcloud_test::run_pointcloud_json_roundtrip);
+REGISTER_MINI_TEST!("PointCloud", "Protobuf_roundtrip", crate::pointcloud_test::run_pointcloud_protobuf_roundtrip);
