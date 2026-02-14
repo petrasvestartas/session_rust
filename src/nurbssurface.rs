@@ -942,36 +942,34 @@ impl NurbsSurface {
             return false;
         }
 
-        // Get three non-collinear points to define plane
         let p0 = match self.get_cv(0, 0) {
             Some(p) => p,
             None => return false,
         };
-        let p1 = match self.get_cv(self.m_cv_count[0] - 1, 0) {
-            Some(p) => p,
-            None => return false,
-        };
-        let p2 = match self.get_cv(0, self.m_cv_count[1] - 1) {
-            Some(p) => p,
-            None => return false,
-        };
 
-        // Compute plane normal
-        let v1_x = p1[0] - p0[0];
-        let v1_y = p1[1] - p0[1];
-        let v1_z = p1[2] - p0[2];
-
-        let v2_x = p2[0] - p0[0];
-        let v2_y = p2[1] - p0[1];
-        let v2_z = p2[2] - p0[2];
-
-        let nx = v1_y * v2_z - v1_z * v2_y;
-        let ny = v1_z * v2_x - v1_x * v2_z;
-        let nz = v1_x * v2_y - v1_y * v2_x;
-
-        let n_len = (nx * nx + ny * ny + nz * nz).sqrt();
-        if n_len < 1e-10 {
-            return false; // Degenerate
+        // Find three non-colinear CVs to define the plane
+        let (mut nx, mut ny, mut nz) = (0.0, 0.0, 0.0);
+        let mut n_len = 0.0_f64;
+        'outer: for i in 0..self.m_cv_count[0] {
+            for j in 0..self.m_cv_count[1] {
+                for ii in i..self.m_cv_count[0] {
+                    let jj_start = if ii == i { j + 1 } else { 0 };
+                    for jj in jj_start..self.m_cv_count[1] {
+                        if let (Some(pa), Some(pb)) = (self.get_cv(i, j), self.get_cv(ii, jj)) {
+                            let (ax, ay, az) = (pa[0]-p0[0], pa[1]-p0[1], pa[2]-p0[2]);
+                            let (bx, by, bz) = (pb[0]-p0[0], pb[1]-p0[1], pb[2]-p0[2]);
+                            nx = ay*bz - az*by;
+                            ny = az*bx - ax*bz;
+                            nz = ax*by - ay*bx;
+                            n_len = (nx*nx + ny*ny + nz*nz).sqrt();
+                            if n_len >= 1e-14 { break 'outer; }
+                        }
+                    }
+                }
+            }
+        }
+        if n_len < 1e-14 {
+            return true; // all CVs coincident or colinear
         }
 
         let nx = nx / n_len;

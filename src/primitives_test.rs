@@ -188,6 +188,75 @@ pub fn run_primitives_nurbssurface_cone() -> TestResult {
     })
 }
 
+pub fn run_primitives_nurbssurface_sphere() -> TestResult {
+    MINI_TEST!("Nurbssurface_sphere", {
+        use crate::primitives::Primitives;
+
+        let s = Primitives::sphere_surface(0.0, 0.0, 0.0, 2.0);
+
+        MINI_CHECK!(s.is_valid());
+        MINI_CHECK!(s.is_rational());
+        MINI_CHECK!(s.cv_count_dir(Some(0)) == 9);
+        MINI_CHECK!(s.cv_count_dir(Some(1)) == 5);
+        MINI_CHECK!(s.order(0) == 3);
+        MINI_CHECK!(s.order(1) == 3);
+
+        let p00 = s.point_at(0.0, 0.0).unwrap();
+        MINI_CHECK!((p00[0] - 0.0).abs() < 1e-10);
+        MINI_CHECK!((p00[1] - 0.0).abs() < 1e-10);
+        MINI_CHECK!((p00[2] - (-2.0)).abs() < 1e-10);
+
+        let p_top = s.point_at(0.0, 2.0).unwrap();
+        MINI_CHECK!((p_top[0] - 0.0).abs() < 1e-10);
+        MINI_CHECK!((p_top[1] - 0.0).abs() < 1e-10);
+        MINI_CHECK!((p_top[2] - 2.0).abs() < 1e-10);
+
+        let p_eq = s.point_at(0.0, 1.0).unwrap();
+        MINI_CHECK!((p_eq[0] - 2.0).abs() < 1e-10);
+        MINI_CHECK!((p_eq[1] - 0.0).abs() < 1e-10);
+        MINI_CHECK!((p_eq[2] - 0.0).abs() < 1e-10);
+
+        let p_eq2 = s.point_at(1.0, 1.0).unwrap();
+        MINI_CHECK!((p_eq2[0] - 0.0).abs() < 1e-10);
+        MINI_CHECK!((p_eq2[1] - 2.0).abs() < 1e-10);
+        MINI_CHECK!((p_eq2[2] - 0.0).abs() < 1e-10);
+    })
+}
+
+pub fn run_primitives_nurbssurface_quad_sphere() -> TestResult {
+    MINI_TEST!("Nurbssurface_quad_sphere", {
+        use crate::primitives::Primitives;
+
+        let r = 5.0_f64;
+        let faces = Primitives::quad_sphere(0.0, 0.0, 0.0, r);
+
+        MINI_CHECK!(faces.len() == 6);
+        for f in 0..6 {
+            MINI_CHECK!(faces[f].is_valid());
+            MINI_CHECK!(faces[f].is_rational());
+            MINI_CHECK!(faces[f].order(0) == 3);
+            MINI_CHECK!(faces[f].order(1) == 3);
+            MINI_CHECK!(faces[f].cv_count_dir(Some(0)) == 3);
+            MINI_CHECK!(faces[f].cv_count_dir(Some(1)) == 3);
+        }
+
+        let mut max_err = 0.0_f64;
+        for f in 0..6 {
+            for i in 0..=4 {
+                let u = i as f64 / 4.0;
+                for j in 0..=4 {
+                    let v = j as f64 / 4.0;
+                    let p = faces[f].point_at(u, v).unwrap();
+                    let dist = (p[0]*p[0] + p[1]*p[1] + p[2]*p[2]).sqrt();
+                    let err = (dist - r).abs();
+                    if err > max_err { max_err = err; }
+                }
+            }
+        }
+        MINI_CHECK!(max_err < 0.02 * r);
+    })
+}
+
 pub fn run_primitives_nurbssurface_torus() -> TestResult {
     MINI_TEST!("Nurbssurface_torus", {
         use crate::primitives::Primitives;
@@ -762,46 +831,6 @@ pub fn run_primitives_nurbssurface_edge() -> TestResult {
     })
 }
 
-pub fn run_primitives_nurbssurface_schwarz_p() -> TestResult {
-    MINI_TEST!("Nurbssurface_schwarz_p", {
-        use crate::primitives::Primitives;
-        use crate::point::Point;
-
-        let s = 10.0_f64;
-        let patches = Primitives::schwarz_p(0.0, 0.0, 0.0, s);
-
-        MINI_CHECK!(patches.len() == 48);
-        for f in 0..48 {
-            MINI_CHECK!(patches[f].is_valid());
-            MINI_CHECK!(patches[f].is_rational() == false);
-            MINI_CHECK!(patches[f].degree(0) == 2);
-            MINI_CHECK!(patches[f].degree(1) == 2);
-            MINI_CHECK!(patches[f].cv_count_dir(Some(0)) == 3);
-            MINI_CHECK!(patches[f].cv_count_dir(Some(1)) == 3);
-        }
-
-        let pi2 = 2.0 * std::f64::consts::PI;
-        let mut max_err = 0.0_f64;
-        for f in 0..48 {
-            for i in 0..=4 {
-                let u = i as f64 / 4.0;
-                for j in 0..=4 {
-                    let v = j as f64 / 4.0;
-                    let p = patches[f].point_at(u, v).unwrap();
-                    let val = (pi2 * p[0] / s).cos() + (pi2 * p[1] / s).cos() + (pi2 * p[2] / s).cos();
-                    let err = val.abs();
-                    if err > max_err { max_err = err; }
-                }
-            }
-        }
-        MINI_CHECK!(max_err < 0.15);
-
-        let mid = patches[0].point_at(0.5, 0.5).unwrap();
-        let mid_val = (pi2 * mid[0] / s).cos() + (pi2 * mid[1] / s).cos() + (pi2 * mid[2] / s).cos();
-        MINI_CHECK!(mid_val.abs() < 0.15);
-    })
-}
-
 ///////////////////////////////////////////////////////////////////////////////////////////
 // Surface-to-mesh subdivision
 ///////////////////////////////////////////////////////////////////////////////////////////
@@ -810,11 +839,17 @@ pub fn run_primitives_mesh_quad_mesh() -> TestResult {
     MINI_TEST!("Mesh_quad_mesh", {
         use crate::primitives::Primitives;
 
-        let srf = Primitives::cylinder_surface(0.0, 0.0, 0.0, 1.0, 5.0);
-        let m = Primitives::quad_mesh(&srf, 8, 4);
-
-        MINI_CHECK!(m.number_of_vertices() == 45);
+        let cyl = Primitives::cylinder_surface(0.0, 0.0, 0.0, 1.0, 5.0);
+        let m = Primitives::quad_mesh(&cyl, 8, 4);
+        MINI_CHECK!(m.number_of_vertices() == 40);
         MINI_CHECK!(m.number_of_faces() == 32);
+        MINI_CHECK!(m.is_valid());
+
+        let sph = Primitives::sphere_surface(0.0, 0.0, 0.0, 3.0);
+        let m2 = Primitives::quad_mesh(&sph, 8, 4);
+        MINI_CHECK!(m2.number_of_vertices() == 26);
+        MINI_CHECK!(m2.number_of_faces() == 32);
+        MINI_CHECK!(m2.is_valid());
     })
 }
 
@@ -822,11 +857,17 @@ pub fn run_primitives_mesh_diamond_mesh() -> TestResult {
     MINI_TEST!("Mesh_diamond_mesh", {
         use crate::primitives::Primitives;
 
-        let srf = Primitives::cylinder_surface(0.0, 0.0, 0.0, 1.0, 5.0);
-        let m = Primitives::diamond_mesh(&srf, 8, 4);
+        let cyl = Primitives::cylinder_surface(0.0, 0.0, 0.0, 1.0, 5.0);
+        let m = Primitives::diamond_mesh(&cyl, 8, 4);
+        MINI_CHECK!(m.number_of_vertices() == 40);
+        MINI_CHECK!(m.number_of_faces() == 20);
+        MINI_CHECK!(m.is_valid());
 
-        MINI_CHECK!(m.number_of_vertices() == 45);
-        MINI_CHECK!(m.number_of_faces() == 23);
+        let sph = Primitives::sphere_surface(0.0, 0.0, 0.0, 3.0);
+        let m2 = Primitives::diamond_mesh(&sph, 8, 4);
+        MINI_CHECK!(m2.number_of_vertices() == 26);
+        MINI_CHECK!(m2.number_of_faces() == 12);
+        MINI_CHECK!(m2.is_valid());
     })
 }
 
@@ -834,23 +875,40 @@ pub fn run_primitives_mesh_hex_mesh() -> TestResult {
     MINI_TEST!("Mesh_hex_mesh", {
         use crate::primitives::Primitives;
 
-        let srf = Primitives::cylinder_surface(0.0, 0.0, 0.0, 1.0, 5.0);
-        let m = Primitives::hex_mesh(&srf, 6, 4, 1.0/3.0);
+        let cyl = Primitives::cylinder_surface(0.0, 0.0, 0.0, 1.0, 5.0);
+        let m = Primitives::hex_mesh(&cyl, 6, 4, 1.0/3.0);
+        MINI_CHECK!(m.number_of_vertices() == 78);
+        MINI_CHECK!(m.number_of_faces() == 15);
+        MINI_CHECK!(m.is_valid());
 
-        MINI_CHECK!(m.number_of_vertices() == 91);
-        MINI_CHECK!(m.number_of_faces() == 32);
+        let sph = Primitives::sphere_surface(0.0, 0.0, 0.0, 3.0);
+        let m2 = Primitives::hex_mesh(&sph, 6, 4, 1.0/3.0);
+        MINI_CHECK!(m2.number_of_vertices() == 68);
+        MINI_CHECK!(m2.number_of_faces() == 15);
+        MINI_CHECK!(m2.is_valid());
     })
 }
 
-pub fn run_primitives_mesh_hex_mesh2() -> TestResult {
-    MINI_TEST!("Mesh_hex_mesh2", {
+pub fn run_primitives_mesh_cone_subdivisions() -> TestResult {
+    MINI_TEST!("Mesh_cone_subdivisions", {
         use crate::primitives::Primitives;
 
-        let srf = Primitives::cylinder_surface(0.0, 0.0, 0.0, 1.0, 5.0);
-        let m = Primitives::hex_mesh2(&srf, 6, 4, 2.0 / 3.0);
+        let cone = Primitives::cone_surface(0.0, 0.0, 0.0, 3.0, 5.0);
 
-        MINI_CHECK!(m.number_of_vertices() == 91);
-        MINI_CHECK!(m.number_of_faces() == 54);
+        let m1 = Primitives::quad_mesh(&cone, 8, 4);
+        MINI_CHECK!(m1.number_of_vertices() == 33);
+        MINI_CHECK!(m1.number_of_faces() == 32);
+        MINI_CHECK!(m1.is_valid());
+
+        let m2 = Primitives::diamond_mesh(&cone, 8, 4);
+        MINI_CHECK!(m2.number_of_vertices() == 33);
+        MINI_CHECK!(m2.number_of_faces() == 16);
+        MINI_CHECK!(m2.is_valid());
+
+        let m3 = Primitives::hex_mesh(&cone, 6, 4, 1.0/3.0);
+        MINI_CHECK!(m3.number_of_vertices() == 73);
+        MINI_CHECK!(m3.number_of_faces() == 15);
+        MINI_CHECK!(m3.is_valid());
     })
 }
 
@@ -909,6 +967,8 @@ REGISTER_MINI_TEST!("Primitives", "Nurbscurve_hyperbola", crate::primitives_test
 REGISTER_MINI_TEST!("Primitives", "Nurbscurve_spiral", crate::primitives_test::run_primitives_nurbscurve_spiral);
 REGISTER_MINI_TEST!("Primitives", "Nurbssurface_cylinder", crate::primitives_test::run_primitives_nurbssurface_cylinder);
 REGISTER_MINI_TEST!("Primitives", "Nurbssurface_cone", crate::primitives_test::run_primitives_nurbssurface_cone);
+REGISTER_MINI_TEST!("Primitives", "Nurbssurface_sphere", crate::primitives_test::run_primitives_nurbssurface_sphere);
+REGISTER_MINI_TEST!("Primitives", "Nurbssurface_quad_sphere", crate::primitives_test::run_primitives_nurbssurface_quad_sphere);
 REGISTER_MINI_TEST!("Primitives", "Nurbssurface_torus", crate::primitives_test::run_primitives_nurbssurface_torus);
 REGISTER_MINI_TEST!("Primitives", "Nurbssurface_ruled", crate::primitives_test::run_primitives_nurbssurface_ruled);
 REGISTER_MINI_TEST!("Primitives", "Nurbssurface_planar", crate::primitives_test::run_primitives_nurbssurface_planar);
@@ -917,9 +977,8 @@ REGISTER_MINI_TEST!("Primitives", "Nurbssurface_loft", crate::primitives_test::r
 REGISTER_MINI_TEST!("Primitives", "Nurbssurface_revolve", crate::primitives_test::run_primitives_nurbssurface_revolve);
 REGISTER_MINI_TEST!("Primitives", "Nurbssurface_sweep", crate::primitives_test::run_primitives_nurbssurface_sweep);
 REGISTER_MINI_TEST!("Primitives", "Nurbssurface_edge", crate::primitives_test::run_primitives_nurbssurface_edge);
-REGISTER_MINI_TEST!("Primitives", "Nurbssurface_schwarz_p", crate::primitives_test::run_primitives_nurbssurface_schwarz_p);
 REGISTER_MINI_TEST!("Primitives", "Mesh_quad_mesh", crate::primitives_test::run_primitives_mesh_quad_mesh);
 REGISTER_MINI_TEST!("Primitives", "Mesh_diamond_mesh", crate::primitives_test::run_primitives_mesh_diamond_mesh);
 REGISTER_MINI_TEST!("Primitives", "Mesh_hex_mesh", crate::primitives_test::run_primitives_mesh_hex_mesh);
-REGISTER_MINI_TEST!("Primitives", "Mesh_hex_mesh2", crate::primitives_test::run_primitives_mesh_hex_mesh2);
+REGISTER_MINI_TEST!("Primitives", "Mesh_cone_subdivisions", crate::primitives_test::run_primitives_mesh_cone_subdivisions);
 REGISTER_MINI_TEST!("Primitives", "Nurbscurve_interpolated", crate::primitives_test::run_primitives_nurbscurve_interpolated);

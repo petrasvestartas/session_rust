@@ -147,6 +147,23 @@ impl Mesh {
         self.vertex.is_empty() && self.face.is_empty()
     }
 
+    pub fn is_valid(&self) -> bool {
+        if self.vertex.is_empty() || self.face.is_empty() {
+            return false;
+        }
+        for (_fkey, vkeys) in &self.face {
+            if vkeys.len() < 3 {
+                return false;
+            }
+            for vk in vkeys {
+                if !self.vertex.contains_key(vk) {
+                    return false;
+                }
+            }
+        }
+        true
+    }
+
     pub fn clear(&mut self) {
         self.halfedge.clear();
         self.vertex.clear();

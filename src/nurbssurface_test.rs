@@ -207,6 +207,64 @@ pub fn run_nurbssurface_attributes() -> TestResult {
     })
 }
 
+pub fn run_nurbssurface_control_vertices_access() -> TestResult {
+    MINI_TEST!("Control Vertices Access", {
+        use crate::NurbsSurface;
+        use crate::Point;
+
+        let points = vec![
+            // i=0
+            Point::new(0.0, 0.0, 0.0),
+            Point::new(-1.0, 0.75, 2.0),
+            Point::new(-1.0, 4.25, 2.0),
+            Point::new(0.0, 5.0, 0.0),
+            // i=1
+            Point::new(0.75, -1.0, 2.0),
+            Point::new(1.25, 1.25, 4.0),
+            Point::new(1.25, 3.75, 4.0),
+            Point::new(0.75, 6.0, 2.0),
+            // i=2
+            Point::new(4.25, -1.0, 2.0),
+            Point::new(3.75, 1.25, 4.0),
+            Point::new(3.75, 3.75, 4.0),
+            Point::new(4.25, 6.0, 2.0),
+            // i=3
+            Point::new(5.0, 0.0, 0.0),
+            Point::new(6.0, 0.75, 2.0),
+            Point::new(6.0, 4.25, 2.0),
+            Point::new(5.0, 5.0, 0.0),
+        ];
+
+        let mut s = NurbsSurface::create(false, false, 3, 3, 4, 4, &points).unwrap();
+        s.make_rational();
+
+        // Raw CV access
+        let cv_slice = s.cv(0, 0).unwrap();
+        MINI_CHECK!(cv_slice[2] == 0.0);
+        let cv_mut_slice = s.cv_mut(0, 0).unwrap();
+        cv_mut_slice[2] = 10.0;
+        MINI_CHECK!(s.cv(0, 0).unwrap()[2] == 10.0);
+
+        // Point and Weight
+        // NOTE
+        // point is (Xw, Yw, Zw, w)
+        // cv pointer is (X, Y, Z)
+        let cv = s.get_cv(0, 0).unwrap();
+        MINI_CHECK!(cv == Point::new(0.0, 0.0, 10.0));
+        let (x, y, z, w) = s.get_cv_4d(0, 0).unwrap();
+        MINI_CHECK!(x == 0.0 && y == 0.0 && z == 10.0 && w == 1.0);
+
+        s.set_cv(0, 0, &Point::new(0.0, 0.0, 5.0));
+        MINI_CHECK!(s.get_cv(0, 0).unwrap() == Point::new(0.0, 0.0, 5.0));
+        s.set_cv_4d(0, 0, 0.0, 0.0, 4.0, 0.5);
+        MINI_CHECK!(s.get_cv(0, 0).unwrap() == Point::new(0.0, 0.0, 8.0) && s.cv(0, 0).unwrap()[2] == 4.0 && s.weight(0, 0) == 0.5);
+
+        let _w = s.weight(0, 0);
+        s.set_weight(0, 0, 1.0);
+        MINI_CHECK!(s.weight(0, 0) == 1.0);
+    })
+}
+
 pub fn run_nurbssurface_accessors() -> TestResult {
     MINI_TEST!("Accessors", {
         use crate::nurbssurface::NurbsSurface;
@@ -1191,6 +1249,7 @@ pub fn run_nurbssurface_cone() -> TestResult {
 REGISTER_MINI_TEST!("NurbsSurface", "Constructor", crate::nurbssurface_test::run_nurbssurface_constructor);
 REGISTER_MINI_TEST!("NurbsSurface", "Booleans Queries", crate::nurbssurface_test::run_nurbssurface_booleans_queries);
 REGISTER_MINI_TEST!("NurbsSurface", "Attributes", crate::nurbssurface_test::run_nurbssurface_attributes);
+REGISTER_MINI_TEST!("NurbsSurface", "Control Vertices Access", crate::nurbssurface_test::run_nurbssurface_control_vertices_access);
 REGISTER_MINI_TEST!("NurbsSurface", "Accessors", crate::nurbssurface_test::run_nurbssurface_accessors);
 REGISTER_MINI_TEST!("NurbsSurface", "Knot_operations", crate::nurbssurface_test::run_nurbssurface_knot_operations);
 REGISTER_MINI_TEST!("NurbsSurface", "Rational_operations", crate::nurbssurface_test::run_nurbssurface_rational_operations);
