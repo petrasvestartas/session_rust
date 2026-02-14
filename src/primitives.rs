@@ -500,6 +500,82 @@ impl Primitives {
         srf
     }
 
+    pub fn schwarz_p(cx: f64, cy: f64, cz: f64, size: f64) -> Vec<NurbsSurface> {
+        let half = size / 2.0;
+        let pi = std::f64::consts::PI;
+
+        // Sample 3x3 grid on level set cos(pi*x)+cos(pi*y)+cos(pi*z)=0
+        // Fundamental patch in region 0<=y<=x<=z<=1 (1/48 of cube)
+        // Parametrization: y=u*x, z=1-v*(1-x), solve for x via Newton
+        let mut pts = [[[0.0_f64; 3]; 3]; 3]; // [iu][iv][xyz]
+        for iv in 0..3 {
+            let v = iv as f64 * 0.5;
+            let mut xp = 0.5_f64;
+            for iu in 0..3 {
+                let u = iu as f64 * 0.5;
+                let mut x = xp;
+                for _ in 0..50 {
+                    let f = (pi*x).cos() + (pi*u*x).cos() - (pi*v*(1.0-x)).cos();
+                    let fp = -pi*(pi*x).sin() - pi*u*(pi*u*x).sin() - pi*v*(pi*v*(1.0-x)).sin();
+                    if fp.abs() < 1e-14 { break; }
+                    let dx = f / fp;
+                    x -= dx;
+                    x = x.clamp(0.01, 0.99);
+                    if dx.abs() < 1e-12 { break; }
+                }
+                xp = x;
+                pts[iu][iv] = [x * half, u * x * half, (1.0 - v * (1.0 - x)) * half];
+            }
+        }
+
+        // Degree-2 interpolation: compute CVs from M_inv = [[1,0,0],[-0.5,2,-0.5],[0,0,1]]
+        let mi: [[f64; 3]; 3] = [[1.0,0.0,0.0],[-0.5,2.0,-0.5],[0.0,0.0,1.0]];
+        let mut cvs = Vec::new();
+        for iu in 0..3 {
+            for iv in 0..3 {
+                let (mut px, mut py, mut pz) = (0.0, 0.0, 0.0);
+                for k in 0..3 {
+                    for l in 0..3 {
+                        let w = mi[iu][k] * mi[iv][l];
+                        if w.abs() > 1e-15 {
+                            px += w * pts[k][l][0];
+                            py += w * pts[k][l][1];
+                            pz += w * pts[k][l][2];
+                        }
+                    }
+                }
+                cvs.push(Point::new(px, py, pz));
+            }
+        }
+        let base = NurbsSurface::create(false, false, 2, 2, 3, 3, &cvs).unwrap_or_default();
+
+        let perms: [[usize; 3]; 6] = [[0,1,2],[0,2,1],[1,0,2],[1,2,0],[2,0,1],[2,1,0]];
+        let signs: [[f64; 3]; 8] = [
+            [1.0,1.0,1.0],[1.0,1.0,-1.0],[1.0,-1.0,1.0],[1.0,-1.0,-1.0],
+            [-1.0,1.0,1.0],[-1.0,1.0,-1.0],[-1.0,-1.0,1.0],[-1.0,-1.0,-1.0],
+        ];
+
+        let mut patches = Vec::new();
+        for pi_idx in 0..6 {
+            for si in 0..8 {
+                let mut srf = base.duplicate();
+                for i in 0..3 {
+                    for j in 0..3 {
+                        if let Some(p) = srf.get_cv(i, j) {
+                            let c = [p[0], p[1], p[2]];
+                            let rx = signs[si][0] * c[perms[pi_idx][0]];
+                            let ry = signs[si][1] * c[perms[pi_idx][1]];
+                            let rz = signs[si][2] * c[perms[pi_idx][2]];
+                            srf.set_cv(i, j, &Point::new(cx + rx, cy + ry, cz + rz));
+                        }
+                    }
+                }
+                patches.push(srf);
+            }
+        }
+        patches
+    }
+
     pub fn create_ruled(curve_a: &NurbsCurve, curve_b: &NurbsCurve) -> NurbsSurface {
         if !curve_a.is_valid() || !curve_b.is_valid() { return NurbsSurface::new(); }
 
@@ -1330,5 +1406,189 @@ impl Primitives {
 
     pub fn create_interpolated(points: &[Point], parameterization: knot::CurveKnotStyle) -> NurbsCurve {
         NurbsCurve::create_interpolated(points, parameterization)
+    }
+
+    pub fn quad_mesh(surface: &NurbsSurface, u_count: usize, v_count: usize) -> Mesh {
+        let mut mesh = Mesh::new();
+        let du = surface.domain(0).unwrap();
+        let dv = surface.domain(1).unwrap();
+        let nu = u_count + 1;
+        let nv = v_count + 1;
+
+        let mut vkeys = vec![vec![0usize; nv]; nu];
+        for i in 0..nu {
+            let u = du.0 + (du.1 - du.0) * i as f64 / u_count as f64;
+            for j in 0..nv {
+                let v = dv.0 + (dv.1 - dv.0) * j as f64 / v_count as f64;
+                vkeys[i][j] = mesh.add_vertex(surface.point_at(u, v).unwrap(), None);
+            }
+        }
+
+        for i in 0..u_count {
+            for j in 0..v_count {
+                mesh.add_face(vec![vkeys[i][j], vkeys[i+1][j], vkeys[i+1][j+1], vkeys[i][j+1]], None);
+            }
+        }
+        mesh
+    }
+
+    pub fn diamond_mesh(surface: &NurbsSurface, u_count: usize, v_count: usize) -> Mesh {
+        let mut mesh = Mesh::new();
+        let du = surface.domain(0).unwrap();
+        let dv = surface.domain(1).unwrap();
+        let su = (du.1 - du.0) / u_count as f64;
+        let sv = (dv.1 - dv.0) / v_count as f64;
+        let nu = u_count + 1;
+        let nv = v_count + 1;
+
+        let mut grid = vec![vec![0usize; nv]; nu];
+        for i in 0..nu {
+            let u = du.0 + su * i as f64;
+            for j in 0..nv {
+                let v = dv.0 + sv * j as f64;
+                grid[i][j] = mesh.add_vertex(surface.point_at(u, v).unwrap(), None);
+            }
+        }
+
+        for i in 0..=u_count {
+            for j in 0..=v_count {
+                if (i + j) % 2 != 0 { continue; }
+                let center = grid[i][j];
+                let left   = if i > 0       { grid[i-1][j] } else { center };
+                let bottom = if j > 0       { grid[i][j-1] } else { center };
+                let right  = if i < u_count { grid[i+1][j] } else { center };
+                let top    = if j < v_count { grid[i][j+1] } else { center };
+                let verts = [left, bottom, right, top];
+                let mut unique = Vec::new();
+                for k in 0..4 {
+                    if verts[k] != verts[(k + 1) % 4] {
+                        unique.push(verts[k]);
+                    }
+                }
+                if unique.len() >= 3 {
+                    mesh.add_face(unique, None);
+                }
+            }
+        }
+        mesh
+    }
+
+    pub fn hex_mesh(surface: &NurbsSurface, u_count: usize, v_count: usize, t: f64) -> Mesh {
+        let mut mesh = Mesh::new();
+        let du = surface.domain(0).unwrap();
+        let dv = surface.domain(1).unwrap();
+        let su = (du.1 - du.0) / u_count as f64;
+        let sv = (dv.1 - dv.0) / v_count as f64;
+
+        let nu = u_count + 1;
+        let nv = v_count + 1;
+        let mut grid = vec![vec![0usize; nv]; nu];
+        for i in 0..nu {
+            let u = du.0 + su * i as f64;
+            for j in 0..nv {
+                let v = dv.0 + sv * j as f64;
+                grid[i][j] = mesh.add_vertex(surface.point_at(u, v).unwrap(), None);
+            }
+        }
+
+        let mut mid_a = vec![vec![0usize; v_count]; nu];
+        for i in 0..nu {
+            let u = du.0 + su * i as f64;
+            for j in 0..v_count {
+                let v = dv.0 + sv * (j as f64 + t);
+                mid_a[i][j] = mesh.add_vertex(surface.point_at(u, v).unwrap(), None);
+            }
+        }
+
+        let mut mid_b = vec![vec![0usize; v_count]; nu];
+        for i in 0..nu {
+            let u = du.0 + su * i as f64;
+            for j in 0..v_count {
+                let v = dv.0 + sv * (j as f64 + (1.0 - t));
+                mid_b[i][j] = mesh.add_vertex(surface.point_at(u, v).unwrap(), None);
+            }
+        }
+
+        let dedup_face = |v: Vec<usize>| -> Vec<usize> {
+            let n = v.len();
+            let mut r = Vec::new();
+            for k in 0..n {
+                if v[k] != v[(k + 1) % n] { r.push(v[k]); }
+            }
+            r
+        };
+
+        for i in 0..=u_count {
+            for j in 0..=v_count {
+                if (i + j) % 2 != 0 { continue; }
+                let center = grid[i][j];
+                let ul = if i > 0 && j < v_count          { mid_a[i-1][j]   } else if i > 0 { grid[i-1][j] } else { center };
+                let ll = if i > 0 && j > 0                { mid_b[i-1][j-1] } else if i > 0 { grid[i-1][j] } else { center };
+                let bt = if j > 0                          { mid_a[i][j-1]   } else { center };
+                let lr = if i < u_count && j > 0           { mid_b[i+1][j-1] } else if i < u_count { grid[i+1][j] } else { center };
+                let ur = if i < u_count && j < v_count     { mid_a[i+1][j]   } else if i < u_count { grid[i+1][j] } else { center };
+                let tp = if j < v_count                    { mid_b[i][j]     } else { center };
+
+                let lq = dedup_face(vec![bt, ll, ul, tp]);
+                if lq.len() >= 3 { mesh.add_face(lq, None); }
+                let rq = dedup_face(vec![ur, lr, bt, tp]);
+                if rq.len() >= 3 { mesh.add_face(rq, None); }
+            }
+        }
+        mesh
+    }
+
+    pub fn hex_mesh2(surface: &NurbsSurface, u_count: usize, v_count: usize, t: f64) -> Mesh {
+        let mut mesh = Mesh::new();
+        let du = surface.domain(0).unwrap();
+        let dv = surface.domain(1).unwrap();
+        let su = (du.1 - du.0) / u_count as f64;
+        let sv = (dv.1 - dv.0) / v_count as f64;
+
+        let nu = u_count + 1;
+        let nv = v_count + 1;
+        let mut grid = vec![vec![0usize; nv]; nu];
+        for i in 0..nu {
+            let u = du.0 + su * i as f64;
+            for j in 0..nv {
+                let v = dv.0 + sv * j as f64;
+                grid[i][j] = mesh.add_vertex(surface.point_at(u, v).unwrap(), None);
+            }
+        }
+
+        let mut h_pts = vec![vec![[0usize; 2]; v_count]; nu];
+        for i in 0..nu {
+            let u = du.0 + su * i as f64;
+            for j in 0..v_count {
+                let v0 = dv.0 + sv * j as f64;
+                let v1 = dv.0 + sv * (j as f64 + 1.0);
+                let va = v0 + (v1 - v0) * (1.0 - t) * 0.5;
+                let vb = v0 + (v1 - v0) * (1.0 + t) * 0.5;
+                h_pts[i][j][0] = mesh.add_vertex(surface.point_at(u, va).unwrap(), None);
+                h_pts[i][j][1] = mesh.add_vertex(surface.point_at(u, vb).unwrap(), None);
+            }
+        }
+
+        for i in 0..u_count {
+            for j in 0..v_count {
+                mesh.add_face(vec![
+                    h_pts[i][j][0], h_pts[i][j][1],
+                    h_pts[i+1][j][1], h_pts[i+1][j][0]
+                ], None);
+            }
+        }
+
+        for i in 0..u_count {
+            for j in 0..v_count {
+                if j == 0 {
+                    mesh.add_face(vec![grid[i][0], h_pts[i][0][0], h_pts[i+1][0][0], grid[i+1][0]], None);
+                } else {
+                    mesh.add_face(vec![h_pts[i][j-1][1], h_pts[i][j][0], h_pts[i+1][j][0], h_pts[i+1][j-1][1]], None);
+                }
+            }
+            let jj = v_count - 1;
+            mesh.add_face(vec![h_pts[i][jj][1], grid[i][nv-1], grid[i+1][nv-1], h_pts[i+1][jj][1]], None);
+        }
+        mesh
     }
 }

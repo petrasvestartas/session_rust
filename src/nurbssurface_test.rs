@@ -139,6 +139,74 @@ pub fn run_nurbssurface_booleans_queries() -> TestResult {
     })
 }
 
+pub fn run_nurbssurface_attributes() -> TestResult {
+    MINI_TEST!("Attributes", {
+        use crate::NurbsSurface;
+        use crate::Point;
+
+        let points = vec![
+            // i=0
+            Point::new(0.0, 0.0, 0.0),
+            Point::new(-1.0, 0.75, 2.0),
+            Point::new(-1.0, 4.25, 2.0),
+            Point::new(0.0, 5.0, 0.0),
+            // i=1
+            Point::new(0.75, -1.0, 2.0),
+            Point::new(1.25, 1.25, 4.0),
+            Point::new(1.25, 3.75, 4.0),
+            Point::new(0.75, 6.0, 2.0),
+            // i=2
+            Point::new(4.25, -1.0, 2.0),
+            Point::new(3.75, 1.25, 4.0),
+            Point::new(3.75, 3.75, 4.0),
+            Point::new(4.25, 6.0, 2.0),
+            // i=3
+            Point::new(5.0, 0.0, 0.0),
+            Point::new(6.0, 0.75, 2.0),
+            Point::new(6.0, 4.25, 2.0),
+            Point::new(5.0, 5.0, 0.0),
+        ];
+
+        let s = NurbsSurface::create(false, false, 3, 3, 4, 4, &points).unwrap();
+
+        // Check the dimentions of a surface
+        // Mostly 3d
+        // But 2d can be used for: scalar field over parameter space e.g. czrvatzre map, distance field
+        // Planar geometry: texture coordinates
+        let dimensions = s.dimension();
+
+        // Degree types 1 - linear, 2 - quadratic, 3 - cubic
+        let order_u = s.order(0);
+        let order_v = s.order(1);
+
+        // Control vertex count
+        let cv_count_u = s.cv_count_dir(Some(0));
+        let cv_count_v = s.cv_count_dir(Some(1));
+        let cv_count = s.cv_count_dir(None);
+        let cv_size = s.cv_size();
+
+        // Number of knots
+        let k_count_0 = s.knot_count(0);
+        let k_count_1 = s.knot_count(1);
+
+        // Span count
+        let s_count_0 = s.span_count(0);
+        let s_count_1 = s.span_count(1);
+
+        MINI_CHECK!(dimensions == 3);
+        MINI_CHECK!(order_u == 4);
+        MINI_CHECK!(order_v == 4);
+        MINI_CHECK!(cv_count_u > 0);
+        MINI_CHECK!(cv_count_v > 0);
+        MINI_CHECK!(cv_count > 0);
+        MINI_CHECK!(cv_size > 0);
+        MINI_CHECK!(k_count_0 > 0);
+        MINI_CHECK!(k_count_1 > 0);
+        MINI_CHECK!(s_count_0 > 0);
+        MINI_CHECK!(s_count_1 > 0);
+    })
+}
+
 pub fn run_nurbssurface_accessors() -> TestResult {
     MINI_TEST!("Accessors", {
         use crate::nurbssurface::NurbsSurface;
@@ -1122,6 +1190,7 @@ pub fn run_nurbssurface_cone() -> TestResult {
 // Register tests with the shared registry
 REGISTER_MINI_TEST!("NurbsSurface", "Constructor", crate::nurbssurface_test::run_nurbssurface_constructor);
 REGISTER_MINI_TEST!("NurbsSurface", "Booleans Queries", crate::nurbssurface_test::run_nurbssurface_booleans_queries);
+REGISTER_MINI_TEST!("NurbsSurface", "Attributes", crate::nurbssurface_test::run_nurbssurface_attributes);
 REGISTER_MINI_TEST!("NurbsSurface", "Accessors", crate::nurbssurface_test::run_nurbssurface_accessors);
 REGISTER_MINI_TEST!("NurbsSurface", "Knot_operations", crate::nurbssurface_test::run_nurbssurface_knot_operations);
 REGISTER_MINI_TEST!("NurbsSurface", "Rational_operations", crate::nurbssurface_test::run_nurbssurface_rational_operations);

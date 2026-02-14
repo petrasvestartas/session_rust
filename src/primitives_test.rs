@@ -762,6 +762,98 @@ pub fn run_primitives_nurbssurface_edge() -> TestResult {
     })
 }
 
+pub fn run_primitives_nurbssurface_schwarz_p() -> TestResult {
+    MINI_TEST!("Nurbssurface_schwarz_p", {
+        use crate::primitives::Primitives;
+        use crate::point::Point;
+
+        let s = 10.0_f64;
+        let patches = Primitives::schwarz_p(0.0, 0.0, 0.0, s);
+
+        MINI_CHECK!(patches.len() == 48);
+        for f in 0..48 {
+            MINI_CHECK!(patches[f].is_valid());
+            MINI_CHECK!(patches[f].is_rational() == false);
+            MINI_CHECK!(patches[f].degree(0) == 2);
+            MINI_CHECK!(patches[f].degree(1) == 2);
+            MINI_CHECK!(patches[f].cv_count_dir(Some(0)) == 3);
+            MINI_CHECK!(patches[f].cv_count_dir(Some(1)) == 3);
+        }
+
+        let pi2 = 2.0 * std::f64::consts::PI;
+        let mut max_err = 0.0_f64;
+        for f in 0..48 {
+            for i in 0..=4 {
+                let u = i as f64 / 4.0;
+                for j in 0..=4 {
+                    let v = j as f64 / 4.0;
+                    let p = patches[f].point_at(u, v).unwrap();
+                    let val = (pi2 * p[0] / s).cos() + (pi2 * p[1] / s).cos() + (pi2 * p[2] / s).cos();
+                    let err = val.abs();
+                    if err > max_err { max_err = err; }
+                }
+            }
+        }
+        MINI_CHECK!(max_err < 0.15);
+
+        let mid = patches[0].point_at(0.5, 0.5).unwrap();
+        let mid_val = (pi2 * mid[0] / s).cos() + (pi2 * mid[1] / s).cos() + (pi2 * mid[2] / s).cos();
+        MINI_CHECK!(mid_val.abs() < 0.15);
+    })
+}
+
+///////////////////////////////////////////////////////////////////////////////////////////
+// Surface-to-mesh subdivision
+///////////////////////////////////////////////////////////////////////////////////////////
+
+pub fn run_primitives_mesh_quad_mesh() -> TestResult {
+    MINI_TEST!("Mesh_quad_mesh", {
+        use crate::primitives::Primitives;
+
+        let srf = Primitives::cylinder_surface(0.0, 0.0, 0.0, 1.0, 5.0);
+        let m = Primitives::quad_mesh(&srf, 8, 4);
+
+        MINI_CHECK!(m.number_of_vertices() == 45);
+        MINI_CHECK!(m.number_of_faces() == 32);
+    })
+}
+
+pub fn run_primitives_mesh_diamond_mesh() -> TestResult {
+    MINI_TEST!("Mesh_diamond_mesh", {
+        use crate::primitives::Primitives;
+
+        let srf = Primitives::cylinder_surface(0.0, 0.0, 0.0, 1.0, 5.0);
+        let m = Primitives::diamond_mesh(&srf, 8, 4);
+
+        MINI_CHECK!(m.number_of_vertices() == 45);
+        MINI_CHECK!(m.number_of_faces() == 23);
+    })
+}
+
+pub fn run_primitives_mesh_hex_mesh() -> TestResult {
+    MINI_TEST!("Mesh_hex_mesh", {
+        use crate::primitives::Primitives;
+
+        let srf = Primitives::cylinder_surface(0.0, 0.0, 0.0, 1.0, 5.0);
+        let m = Primitives::hex_mesh(&srf, 6, 4, 1.0/3.0);
+
+        MINI_CHECK!(m.number_of_vertices() == 91);
+        MINI_CHECK!(m.number_of_faces() == 32);
+    })
+}
+
+pub fn run_primitives_mesh_hex_mesh2() -> TestResult {
+    MINI_TEST!("Mesh_hex_mesh2", {
+        use crate::primitives::Primitives;
+
+        let srf = Primitives::cylinder_surface(0.0, 0.0, 0.0, 1.0, 5.0);
+        let m = Primitives::hex_mesh2(&srf, 6, 4, 2.0 / 3.0);
+
+        MINI_CHECK!(m.number_of_vertices() == 91);
+        MINI_CHECK!(m.number_of_faces() == 54);
+    })
+}
+
 pub fn run_primitives_nurbscurve_interpolated() -> TestResult {
     MINI_TEST!("Nurbscurve_interpolated", {
         use crate::primitives::Primitives;
@@ -825,4 +917,9 @@ REGISTER_MINI_TEST!("Primitives", "Nurbssurface_loft", crate::primitives_test::r
 REGISTER_MINI_TEST!("Primitives", "Nurbssurface_revolve", crate::primitives_test::run_primitives_nurbssurface_revolve);
 REGISTER_MINI_TEST!("Primitives", "Nurbssurface_sweep", crate::primitives_test::run_primitives_nurbssurface_sweep);
 REGISTER_MINI_TEST!("Primitives", "Nurbssurface_edge", crate::primitives_test::run_primitives_nurbssurface_edge);
+REGISTER_MINI_TEST!("Primitives", "Nurbssurface_schwarz_p", crate::primitives_test::run_primitives_nurbssurface_schwarz_p);
+REGISTER_MINI_TEST!("Primitives", "Mesh_quad_mesh", crate::primitives_test::run_primitives_mesh_quad_mesh);
+REGISTER_MINI_TEST!("Primitives", "Mesh_diamond_mesh", crate::primitives_test::run_primitives_mesh_diamond_mesh);
+REGISTER_MINI_TEST!("Primitives", "Mesh_hex_mesh", crate::primitives_test::run_primitives_mesh_hex_mesh);
+REGISTER_MINI_TEST!("Primitives", "Mesh_hex_mesh2", crate::primitives_test::run_primitives_mesh_hex_mesh2);
 REGISTER_MINI_TEST!("Primitives", "Nurbscurve_interpolated", crate::primitives_test::run_primitives_nurbscurve_interpolated);

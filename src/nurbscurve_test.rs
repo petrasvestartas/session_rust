@@ -51,7 +51,6 @@ pub fn run_nurbscurve_attributes() -> TestResult {
         use crate::Point;
         use crate::Plane;
 
-
         let points = vec![
             Point::new(0.0, 0.0, 0.0),
             Point::new(1.0, 1.0, 0.0),
@@ -62,7 +61,7 @@ pub fn run_nurbscurve_attributes() -> TestResult {
         let mut curve = NurbsCurve::create(false, 2, &points);
 
         /////////////////////////////////////////////
-        // Validation
+        // Boolean Queries
         /////////////////////////////////////////////
 
         // Whole curve
@@ -76,6 +75,48 @@ pub fn run_nurbscurve_attributes() -> TestResult {
         let is_valid_knot_vector = curve.is_valid_knot_vector();
         MINI_CHECK!(is_valid_knot_vector == true);
 
+        // Check if the curve is clamped at start, end, or both
+        let is_clamped_start = curve.is_clamped(0);
+        let is_clamped_end = curve.is_clamped(1);
+        let is_clamped_both = curve.is_clamped(2);
+        MINI_CHECK!(is_clamped_start == true && is_clamped_end == true && is_clamped_both == true);
+
+        // Is rational is related to control points having weights
+        // is_rational = false means control points [x, y, z]
+        // is_rational = false means control points [xw, yw, zw]
+        // Rational curves are used to represent:
+        // circles, ellipses, parabolas, hyperbolas exactly
+        let is_rational = curve.is_rational();
+        let closed = curve.is_closed();
+        let periodic = curve.is_periodic();
+        let linear = curve.is_linear(None);
+        let planar = curve.is_planar(None);
+        let arc = curve.is_arc(None);
+        let plane = Plane::xy_plane();
+        let on_plane = curve.is_in_plane(&plane, None);
+        let is_open = curve.is_natural(None);
+        let is_polyline = curve.is_polyline(None);
+        let is_singular = curve.is_singular();
+        let is_duplicate = curve.is_duplicate(&curve, false);
+        let is_continuous = curve.is_continuous(1, curve.domain_middle());
+
+        MINI_CHECK!(is_rational == false);
+        MINI_CHECK!(closed == false);
+        MINI_CHECK!(periodic == false);
+        MINI_CHECK!(linear == false);
+        MINI_CHECK!(planar == true);
+        MINI_CHECK!(arc == false);
+        MINI_CHECK!(on_plane == true);
+        MINI_CHECK!(is_open == false);
+        MINI_CHECK!(is_polyline == false);
+        MINI_CHECK!(is_singular == false);
+        MINI_CHECK!(is_duplicate == true);
+        MINI_CHECK!(is_continuous == true);
+
+        /////////////////////////////////////////////
+        // Knot Operations
+        /////////////////////////////////////////////
+
         // Insert knot into curve
         // Useful for splitting curves at a parameter
         // Increase local control without changing shape
@@ -83,12 +124,6 @@ pub fn run_nurbscurve_attributes() -> TestResult {
         let before_pt = copy_curve.point_at(1.5);
         copy_curve.insert_knot(1.5, 1);
         MINI_CHECK!(TOLERANCE.is_point_close(&before_pt, &copy_curve.point_at(1.5)));
-
-        // Check if the curve is clamped at start, end, or both
-        let is_clamped_start = curve.is_clamped(0);
-        let is_clamped_end = curve.is_clamped(1);
-        let is_clamped_both = curve.is_clamped(2);
-        MINI_CHECK!(is_clamped_start == true && is_clamped_end == true && is_clamped_both == true);
 
         // Useful for controlling curve by cv on lying on it
         let greville0 = curve.greville_abcissa(0);
@@ -241,38 +276,6 @@ pub fn run_nurbscurve_attributes() -> TestResult {
 
         let (found, t_out) = curve.get_next_discontinuity(2, curve.domain_start(), curve.domain_end());
         MINI_CHECK!(found == true && t_out == 0.5);
-
-        // Is rational is related to control points having weights
-        // is_rational = false means control points [x, y, z]
-        // is_rational = false means control points [xw, yw, zw]
-        // Rational curves are used to represent:
-        // circles, ellipses, parabolas, hyperbolas exactly
-        let is_rational = curve.is_rational();
-        let closed = curve.is_closed();
-        let periodic = curve.is_periodic();
-        let linear = curve.is_linear(None);
-        let planar = curve.is_planar(None);
-        let arc = curve.is_arc(None);
-        let plane = Plane::xy_plane();
-        let on_plane = curve.is_in_plane(&plane, None);
-        let is_open = curve.is_natural(None);
-        let is_polyline = curve.is_polyline(None);
-        let is_singular = curve.is_singular();
-        let is_duplicate = curve.is_duplicate(&curve, false);
-        let is_continuous = curve.is_continuous(1, curve.domain_middle());
-
-        MINI_CHECK!(is_rational == true);
-        MINI_CHECK!(closed == false);
-        MINI_CHECK!(periodic == false);
-        MINI_CHECK!(linear == false);
-        MINI_CHECK!(planar == false);
-        MINI_CHECK!(arc == false);
-        MINI_CHECK!(on_plane == false);
-        MINI_CHECK!(is_open == false);
-        MINI_CHECK!(is_polyline == false);
-        MINI_CHECK!(is_singular == false);
-        MINI_CHECK!(is_duplicate == true);
-        MINI_CHECK!(is_continuous == true);
     })
 }
 
