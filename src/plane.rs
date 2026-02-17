@@ -146,6 +146,27 @@ impl Plane {
         }
     }
 
+    pub fn from_axes(origin: Point, x_axis: Vector, y_axis: Vector, z_axis: Vector) -> Self {
+        let a = z_axis[0];
+        let b = z_axis[1];
+        let c = z_axis[2];
+        let d = -(a * origin[0] + b * origin[1] + c * origin[2]);
+        Self {
+            guid: Uuid::new_v4().to_string(),
+            name: "my_plane".to_string(),
+            width: 1.0,
+            _origin: origin,
+            _x_axis: x_axis,
+            _y_axis: y_axis,
+            _z_axis: z_axis,
+            _a: a,
+            _b: b,
+            _c: c,
+            _d: d,
+            xform: Xform::identity(),
+        }
+    }
+
     pub fn with_name(point: Point, mut x_axis: Vector, mut y_axis: Vector, name: String) -> Self {
         x_axis.normalize();
         let dot_product = y_axis.dot(&x_axis);

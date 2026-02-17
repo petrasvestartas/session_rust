@@ -279,6 +279,17 @@ impl Tolerance {
         0
     }
 
+    /// Temporarily modify tolerance, restoring original state after closure returns
+    pub fn temporary<F, R>(&mut self, f: F) -> R
+    where
+        F: FnOnce(&mut Tolerance) -> R,
+    {
+        let saved = self.clone();
+        let result = f(self);
+        *self = saved;
+        result
+    }
+
     /// Round a value to a given number of decimal places (like Python's round(value, ndigits))
     pub fn round_to(value: f64, ndigits: i32) -> f64 {
         let factor = 10f64.powi(ndigits);
@@ -349,6 +360,17 @@ impl GlobalTolerance {
     }
     pub fn precision_from_tolerance(&self, tol: Option<f64>) -> i32 {
         self.inner.read().precision_from_tolerance(tol)
+    }
+
+    /// Temporarily modify tolerance, restoring original state after closure returns
+    pub fn temporary<F, R>(&self, f: F) -> R
+    where
+        F: FnOnce(&mut Tolerance) -> R,
+    {
+        let saved = self.inner.read().clone();
+        let result = f(&mut self.inner.write());
+        *self.inner.write() = saved;
+        result
     }
 }
 

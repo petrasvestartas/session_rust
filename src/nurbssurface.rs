@@ -5,6 +5,7 @@ use crate::color::Color;
 use crate::vector::Vector;
 use crate::boundingbox::BoundingBox;
 use crate::mesh::Mesh;
+use crate::plane::Plane;
 use crate::knot;
 use serde::{Deserialize, Deserializer, Serializer};
 use serde::ser::SerializeMap;
@@ -1333,73 +1334,108 @@ impl NurbsSurface {
     /// Returns [point, du, dv] if num_derivs > 0, else [point]
     pub fn evaluate(&self, u: f64, v: f64, num_derivs: usize) -> Vec<Vector> {
         let mut result = Vec::new();
+        if !self.is_valid() || num_derivs > 2 { return result; }
+        let max_derivs = num_derivs.min(2);
 
-        if !self.is_valid() {
-            result.push(Vector::new(0.0, 0.0, 0.0));
+        let span_u = self.find_span(0, u);
+        let span_v = self.find_span(1, v);
+        if span_u < 0 || span_v < 0 { return result; }
+        let span_u = span_u as usize;
+        let span_v = span_v as usize;
+
+        let ders_u = self.basis_functions_derivatives(0, span_u, u, max_derivs);
+        let ders_v = self.basis_functions_derivatives(1, span_v, v, max_derivs);
+
+        let cv_size_val = if self.m_is_rat { self.m_dim + 1 } else { self.m_dim };
+
+        // Compute all homogeneous derivatives
+        let mut skl_all: Vec<(usize, usize, Vec<f64>)> = Vec::new();
+        for k in 0..=max_derivs {
+            for l in 0..=(max_derivs - k) {
+                let mut skl = vec![0.0; cv_size_val];
+                for i in 0..self.m_order[0] {
+                    let cv_i = span_u + i;
+                    for j in 0..self.m_order[1] {
+                        let cv_j = span_v + j;
+                        let coeff = ders_u[k][i] * ders_v[l][j];
+                        if let Some(cv_ptr) = self.cv(cv_i, cv_j) {
+                            for d in 0..cv_size_val {
+                                skl[d] += coeff * cv_ptr[d];
+                            }
+                        }
+                    }
+                }
+                skl_all.push((k, l, skl));
+            }
+        }
+
+        if !self.m_is_rat {
+            for (_, _, skl) in &skl_all {
+                result.push(Vector::new(
+                    skl[0],
+                    if self.m_dim > 1 { skl[1] } else { 0.0 },
+                    if self.m_dim > 2 { skl[2] } else { 0.0 },
+                ));
+            }
             return result;
         }
 
-        let pt_opt = self.point_at(u, v);
-        if pt_opt.is_none() {
-            result.push(Vector::new(0.0, 0.0, 0.0));
-            return result;
+        // Rational: proper quotient rule (NURBS Book A4.2)
+        let w00 = skl_all[0].2[self.m_dim];
+        if w00.abs() < 1e-14 {
+            return vec![Vector::new(0.0, 0.0, 0.0); skl_all.len()];
         }
-        let pt = pt_opt.unwrap();
-        result.push(Vector::new(pt[0], pt[1], pt[2]));
+        let dim = self.m_dim;
+        let pt = Vector::new(
+            skl_all[0].2[0] / w00,
+            if dim > 1 { skl_all[0].2[1] / w00 } else { 0.0 },
+            if dim > 2 { skl_all[0].2[2] / w00 } else { 0.0 },
+        );
+        result.push(pt.clone());
 
-        if num_derivs > 0 {
-            // Finite difference step (match Python implementation semantics)
-            let h = 1e-6;
-            let (_, u1) = match self.domain(0) { Some(d) => d, None => (u - h, u + h) };
-            let (_, v1) = match self.domain(1) { Some(d) => d, None => (v - h, v + h) };
+        // Build lookup for weight derivatives
+        let mut wders = std::collections::HashMap::new();
+        for (k, l, skl) in &skl_all {
+            wders.insert((*k, *l), skl[dim]);
+        }
 
-            // du derivative (forward if possible, else backward)
-            let du_vec = if u + h <= u1 {
-                if let Some(pt_u) = self.point_at(u + h, v) {
-                    Vector::new(
-                        (pt_u[0] - pt[0]) / h,
-                        (pt_u[1] - pt[1]) / h,
-                        (pt_u[2] - pt[2]) / h,
-                    )
-                } else {
-                    Vector::new(0.0, 0.0, 0.0)
-                }
-            } else {
-                if let Some(pt_um) = self.point_at(u - h, v) {
-                    Vector::new(
-                        (pt[0] - pt_um[0]) / h,
-                        (pt[1] - pt_um[1]) / h,
-                        (pt[2] - pt_um[2]) / h,
-                    )
-                } else {
-                    Vector::new(0.0, 0.0, 0.0)
-                }
-            };
-            result.push(du_vec);
+        // Cartesian derivatives lookup
+        let mut aders: std::collections::HashMap<(usize, usize), Vector> = std::collections::HashMap::new();
+        aders.insert((0, 0), pt);
 
-            // dv derivative (forward if possible, else backward)
-            let dv_vec = if v + h <= v1 {
-                if let Some(pt_v) = self.point_at(u, v + h) {
-                    Vector::new(
-                        (pt_v[0] - pt[0]) / h,
-                        (pt_v[1] - pt[1]) / h,
-                        (pt_v[2] - pt[2]) / h,
-                    )
-                } else {
-                    Vector::new(0.0, 0.0, 0.0)
+        fn binom(n: usize, k: usize) -> f64 {
+            if k > n { return 0.0; }
+            let mut r = 1.0;
+            for i in 0..k { r = r * (n - i) as f64 / (i + 1) as f64; }
+            r
+        }
+
+        for idx in 1..skl_all.len() {
+            let (k, l, ref skl) = skl_all[idx];
+            let mut a = [
+                skl[0],
+                if dim > 1 { skl[1] } else { 0.0 },
+                if dim > 2 { skl[2] } else { 0.0 },
+            ];
+            for i in 1..=k {
+                if let Some(prev) = aders.get(&(k - i, l)) {
+                    let c = binom(k, i) * wders.get(&(i, 0)).copied().unwrap_or(0.0);
+                    a[0] -= c * prev[0];
+                    a[1] -= c * prev[1];
+                    a[2] -= c * prev[2];
                 }
-            } else {
-                if let Some(pt_vm) = self.point_at(u, v - h) {
-                    Vector::new(
-                        (pt[0] - pt_vm[0]) / h,
-                        (pt[1] - pt_vm[1]) / h,
-                        (pt[2] - pt_vm[2]) / h,
-                    )
-                } else {
-                    Vector::new(0.0, 0.0, 0.0)
+            }
+            for j in 1..=l {
+                if let Some(prev) = aders.get(&(k, l - j)) {
+                    let c = binom(l, j) * wders.get(&(0, j)).copied().unwrap_or(0.0);
+                    a[0] -= c * prev[0];
+                    a[1] -= c * prev[1];
+                    a[2] -= c * prev[2];
                 }
-            };
-            result.push(dv_vec);
+            }
+            let v = Vector::new(a[0] / w00, a[1] / w00, a[2] / w00);
+            aders.insert((k, l), v.clone());
+            result.push(v);
         }
 
         result
@@ -1485,6 +1521,80 @@ impl NurbsSurface {
         
         // Return just the final row of basis functions
         big_n[0..order].to_vec()
+    }
+
+    fn basis_functions_derivatives(&self, dir: usize, span: usize, t: f64, deriv_order: usize) -> Vec<Vec<f64>> {
+        if dir >= 2 { return vec![]; }
+        let order = self.m_order[dir];
+        let degree = order - 1;
+        let knot = &self.m_knot[dir];
+        let knot_base = span + degree;
+
+        let mut ders = vec![vec![0.0; order]; deriv_order + 1];
+
+        if knot[knot_base - 1] == knot[knot_base] {
+            return ders;
+        }
+
+        let mut ndu = vec![vec![0.0; order]; order];
+        ndu[0][0] = 1.0;
+        let mut left = vec![0.0; degree + 1];
+        let mut right = vec![0.0; degree + 1];
+
+        for j in 1..=degree {
+            left[j] = t - knot[knot_base - j];
+            right[j] = knot[knot_base + j - 1] - t;
+            let mut saved = 0.0;
+            for r in 0..j {
+                ndu[j][r] = right[r + 1] + left[j - r];
+                let temp = ndu[r][j - 1] / ndu[j][r];
+                ndu[r][j] = saved + right[r + 1] * temp;
+                saved = left[j - r] * temp;
+            }
+            ndu[j][j] = saved;
+        }
+
+        for j in 0..=degree {
+            ders[0][j] = ndu[j][degree];
+        }
+
+        let mut a = vec![vec![0.0; order]; 2];
+        for r in 0..=degree {
+            let mut s1: usize = 0;
+            let mut s2: usize = 1;
+            a[0][0] = 1.0;
+            for k in 1..=deriv_order {
+                let mut d = 0.0;
+                let rk = r as isize - k as isize;
+                let pk = degree as isize - k as isize;
+                if r >= k {
+                    a[s2][0] = a[s1][0] / ndu[(pk + 1) as usize][rk as usize];
+                    d = a[s2][0] * ndu[rk as usize][pk as usize];
+                }
+                let j1: usize = if rk >= -1 { 1 } else { (-rk) as usize };
+                let j2: usize = if (r as isize - 1) <= pk { k - 1 } else { degree - r };
+                for j in j1..=j2 {
+                    a[s2][j] = (a[s1][j] - a[s1][j - 1]) / ndu[(pk + 1) as usize][(rk + j as isize) as usize];
+                    d += a[s2][j] * ndu[(rk + j as isize) as usize][pk as usize];
+                }
+                if r as isize <= pk {
+                    a[s2][k] = -a[s1][k - 1] / ndu[(pk + 1) as usize][r];
+                    d += a[s2][k] * ndu[r][pk as usize];
+                }
+                ders[k][r] = d;
+                std::mem::swap(&mut s1, &mut s2);
+            }
+        }
+
+        let mut factorial = degree as f64;
+        for k in 1..=deriv_order {
+            for j in 0..=degree {
+                ders[k][j] *= factorial;
+            }
+            factorial *= (degree - k) as f64;
+        }
+
+        ders
     }
 
     /// Evaluate point on surface at parameters (u, v)
@@ -1906,6 +2016,94 @@ impl NurbsSurface {
                 grid[i][j] = self.point_at(u, v).unwrap_or(Point::new(0.0, 0.0, 0.0));
                 params[i][j] = (u, v);
             }
+        }
+
+        (grid, params)
+    }
+
+    pub fn divide_by_count_points(&self, nu: usize, nv: usize) -> (Vec<Vec<Point>>, Vec<Vec<Vector>>, Vec<Vec<(f64, f64)>>) {
+        if !self.is_valid() {
+            return (Vec::new(), Vec::new(), Vec::new());
+        }
+
+        let (u0, u1) = match self.domain(0) {
+            Some(d) => d,
+            None => return (Vec::new(), Vec::new(), Vec::new()),
+        };
+        let (v0, v1) = match self.domain(1) {
+            Some(d) => d,
+            None => return (Vec::new(), Vec::new(), Vec::new()),
+        };
+
+        let mut grid = vec![vec![Point::new(0.0, 0.0, 0.0); nv + 1]; nu + 1];
+        let mut grid_vector = vec![vec![Vector::new(0.0, 0.0, 0.0); nv + 1]; nu + 1];
+        let mut params = vec![vec![(0.0, 0.0); nv + 1]; nu + 1];
+
+        for i in 0..=nu {
+            let u = if nu > 0 {
+                u0 + (u1 - u0) * (i as f64 / nu as f64)
+            } else {
+                u0
+            };
+            for j in 0..=nv {
+                let v = if nv > 0 {
+                    v0 + (v1 - v0) * (j as f64 / nv as f64)
+                } else {
+                    v0
+                };
+                grid[i][j] = self.point_at(u, v).unwrap_or(Point::new(0.0, 0.0, 0.0));
+                grid_vector[i][j] = self.normal_at(u, v);
+                params[i][j] = (u, v);
+            }
+        }
+
+        (grid, grid_vector, params)
+    }
+
+    pub fn divide_by_count_planes(&self, nu: usize, nv: usize) -> (Vec<Vec<Plane>>, Vec<Vec<(f64, f64)>>) {
+        if !self.is_valid() {
+            return (Vec::new(), Vec::new());
+        }
+
+        let (u0, u1) = match self.domain(0) {
+            Some(d) => d,
+            None => return (Vec::new(), Vec::new()),
+        };
+        let (v0, v1) = match self.domain(1) {
+            Some(d) => d,
+            None => return (Vec::new(), Vec::new()),
+        };
+
+        let mut grid = Vec::with_capacity(nu + 1);
+        let mut params = vec![vec![(0.0, 0.0); nv + 1]; nu + 1];
+
+        for i in 0..=nu {
+            let u = if nu > 0 {
+                u0 + (u1 - u0) * (i as f64 / nu as f64)
+            } else {
+                u0
+            };
+            let mut row = Vec::with_capacity(nv + 1);
+            for j in 0..=nv {
+                let v = if nv > 0 {
+                    v0 + (v1 - v0) * (j as f64 / nv as f64)
+                } else {
+                    v0
+                };
+                let origin = self.point_at(u, v).unwrap_or(Point::new(0.0, 0.0, 0.0));
+                let derivs = self.evaluate(u, v, 1);
+                let su = &derivs[2];
+                let sv = &derivs[1];
+                let mut x_axis = su.clone();
+                if x_axis.magnitude() > 1e-14 { x_axis.normalize(); }
+                let mut y_axis = sv.clone();
+                if y_axis.magnitude() > 1e-14 { y_axis.normalize(); }
+                let n = self.normal_at(u, v);
+                let plane = Plane::from_axes(origin, x_axis, y_axis, n);
+                row.push(plane);
+                params[i][j] = (u, v);
+            }
+            grid.push(row);
         }
 
         (grid, params)
