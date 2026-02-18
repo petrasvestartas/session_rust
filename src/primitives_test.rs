@@ -956,6 +956,207 @@ pub fn run_primitives_nurbscurve_interpolated() -> TestResult {
     })
 }
 
+pub fn run_primitives_mesh_tetrahedron() -> TestResult {
+    MINI_TEST!("Mesh_tetrahedron", {
+        use crate::primitives::Primitives;
+
+        let m = Primitives::tetrahedron(2.0);
+        MINI_CHECK!(m.is_valid());
+        MINI_CHECK!(m.number_of_vertices() == 4);
+        MINI_CHECK!(m.number_of_faces() == 4);
+    })
+}
+
+pub fn run_primitives_mesh_cube() -> TestResult {
+    MINI_TEST!("Mesh_cube", {
+        use crate::primitives::Primitives;
+
+        let m = Primitives::cube(2.0);
+        MINI_CHECK!(m.is_valid());
+        MINI_CHECK!(m.number_of_vertices() == 8);
+        MINI_CHECK!(m.number_of_faces() == 6);
+    })
+}
+
+pub fn run_primitives_mesh_octahedron() -> TestResult {
+    MINI_TEST!("Mesh_octahedron", {
+        use crate::primitives::Primitives;
+
+        let m = Primitives::octahedron(2.0);
+        MINI_CHECK!(m.is_valid());
+        MINI_CHECK!(m.number_of_vertices() == 6);
+        MINI_CHECK!(m.number_of_faces() == 8);
+    })
+}
+
+pub fn run_primitives_mesh_icosahedron() -> TestResult {
+    MINI_TEST!("Mesh_icosahedron", {
+        use crate::primitives::Primitives;
+
+        let m = Primitives::icosahedron(2.0);
+        MINI_CHECK!(m.is_valid());
+        MINI_CHECK!(m.number_of_vertices() == 12);
+        MINI_CHECK!(m.number_of_faces() == 20);
+    })
+}
+
+pub fn run_primitives_mesh_dodecahedron() -> TestResult {
+    MINI_TEST!("Mesh_dodecahedron", {
+        use crate::primitives::Primitives;
+
+        let m = Primitives::dodecahedron(2.0);
+        MINI_CHECK!(m.is_valid());
+        MINI_CHECK!(m.number_of_vertices() == 20);
+        MINI_CHECK!(m.number_of_faces() == 12);
+    })
+}
+
+pub fn run_primitives_nurbssurface_wave() -> TestResult {
+    MINI_TEST!("Nurbssurface_wave", {
+        use crate::primitives::Primitives;
+
+        let srf = Primitives::wave_surface(10.0, 2.0);
+        MINI_CHECK!(srf.is_valid());
+        MINI_CHECK!(srf.degree(0) == 3);
+        MINI_CHECK!(srf.degree(1) == 3);
+        MINI_CHECK!(srf.cv_count_dir(Some(0)) == 13);
+        MINI_CHECK!(srf.cv_count_dir(Some(1)) == 13);
+        let corner = srf.point_at(0.0, 0.0).unwrap();
+        MINI_CHECK!(corner[2].abs() < 0.1);
+    })
+}
+
+pub fn run_primitives_mesh_chevron() -> TestResult {
+    MINI_TEST!("Mesh_chevron", {
+        use crate::primitives::Primitives;
+
+        let surfaces = Primitives::annen_surfaces();
+        MINI_CHECK!(surfaces.len() == 23);
+        for i in 0..surfaces.len() {
+            MINI_CHECK!(surfaces[i].is_valid());
+        }
+
+        let m = Primitives::chevron_mesh(&surfaces[0], 4, 900.0, 0.5, 0.05799);
+        MINI_CHECK!(m.is_valid());
+        MINI_CHECK!(m.number_of_vertices() > 0);
+        MINI_CHECK!(m.number_of_faces() > 0);
+    })
+}
+
+pub fn run_primitives_folded_plates() -> TestResult {
+    MINI_TEST!("FoldedPlates", {
+        use crate::primitives::{Primitives, FoldedPlates};
+        use crate::point::Point;
+        use crate::vector::Vector;
+
+        let arc = Primitives::arc(&Point::new(-10.0, 0.0, 0.0), &Point::new(0.0, 0.0, 10.0), &Point::new(10.0, 0.0, 0.0));
+        let mut srf = Primitives::create_extrusion(&arc, &Vector::new(0.0, 30.0, 0.0));
+        srf.transpose();
+
+        let fp = FoldedPlates::new(&srf, 5, 2, 0.5, 0.3, &[], &[0.0]);
+
+        MINI_CHECK!(fp.mesh.is_valid());
+        MINI_CHECK!(fp.mesh.number_of_faces() > 0);
+        MINI_CHECK!(fp.mesh.number_of_vertices() > 0);
+        MINI_CHECK!(fp.flags.len() == fp.mesh.number_of_faces());
+        MINI_CHECK!(fp.adjacency.len() > 0);
+        MINI_CHECK!(fp.polylines.len() == fp.mesh.number_of_faces());
+        MINI_CHECK!(fp.insertion_lines.len() > 0);
+
+        for i in 0..fp.polylines.len() {
+            MINI_CHECK!(fp.polylines[i].len() > 0);
+            for j in 0..fp.polylines[i].len() {
+                MINI_CHECK!(fp.polylines[i][j].point_count() >= 3);
+            }
+        }
+    })
+}
+
+pub fn run_primitives_cross_connectors() -> TestResult {
+    MINI_TEST!("CrossConnectors", {
+        use crate::primitives::CrossConnectors;
+        use crate::mesh::Mesh;
+        use crate::point::Point;
+
+        let mut polys: Vec<Vec<Point>> = vec![
+            vec![Point::new(-574.485,-574.300,-182.370), Point::new(-620.030,-480.441,-136.145), Point::new(-527.510,-476.289,-53.723), Point::new(-431.548,-637.846,-118.351), Point::new(-574.485,-574.300,-182.370)],
+            vec![Point::new(-545.761,-545.585,-211.069), Point::new(-589.029,-456.419,-167.156), Point::new(-501.135,-452.475,-88.854), Point::new(-409.971,-605.954,-150.251), Point::new(-545.761,-545.585,-211.069)],
+            vec![Point::new(-224.289,-691.254,-65.097), Point::new(-125.302,-566.359,58.481), Point::new(125.182,-566.359,58.481), Point::new(212.579,-691.254,-65.097), Point::new(-224.289,-691.254,-65.097)],
+            vec![Point::new(-213.075,-656.691,-99.659), Point::new(-119.037,-538.041,17.739), Point::new(118.923,-538.041,17.739), Point::new(201.950,-656.691,-99.659), Point::new(-213.075,-656.691,-99.659)],
+            vec![Point::new(456.309,-628.504,-127.534), Point::new(523.010,-466.370,-45.103), Point::new(622.146,-472.434,-134.186), Point::new(574.882,-574.852,-181.916), Point::new(456.309,-628.504,-127.534)],
+            vec![Point::new(433.493,-597.079,-158.975), Point::new(496.859,-443.052,-80.665), Point::new(591.038,-448.812,-165.294), Point::new(546.138,-546.110,-210.638), Point::new(433.493,-597.079,-158.975)],
+            vec![Point::new(-431.100,-638.600,-118.653), Point::new(-527.510,-476.289,-53.723), Point::new(-481.982,-362.651,39.785), Point::new(-234.426,-365.823,142.950), Point::new(-125.302,-566.359,58.481), Point::new(-223.832,-690.677,-64.527), Point::new(-431.100,-638.600,-118.653)],
+            vec![Point::new(-409.545,-606.670,-150.538), Point::new(-501.135,-452.475,-88.854), Point::new(-457.883,-344.518,-0.022), Point::new(-222.705,-347.532,97.985), Point::new(-119.037,-538.041,17.739), Point::new(-212.641,-656.144,-99.118), Point::new(-409.545,-606.670,-150.538)],
+            vec![Point::new(212.526,-691.178,-65.022), Point::new(125.182,-566.359,58.481), Point::new(238.785,-380.979,136.566), Point::new(478.593,-374.909,36.915), Point::new(523.010,-466.370,-45.103), Point::new(455.692,-630.004,-128.297), Point::new(212.526,-691.178,-65.022)],
+            vec![Point::new(201.900,-656.619,-99.589), Point::new(118.923,-538.041,17.739), Point::new(226.846,-361.930,91.920), Point::new(454.664,-356.164,-2.748), Point::new(496.859,-443.052,-80.665), Point::new(432.907,-598.504,-159.699), Point::new(201.900,-656.619,-99.589)],
+            vec![Point::new(-481.982,-362.651,39.785), Point::new(-527.510,-476.289,-53.723), Point::new(-620.401,-480.458,-136.475), Point::new(-698.046,-172.509,-57.884), Point::new(-595.889,-174.723,29.899), Point::new(-481.982,-362.651,39.785)],
+            vec![Point::new(-457.883,-344.518,-0.022), Point::new(-501.135,-452.475,-88.854), Point::new(-589.381,-456.435,-167.469), Point::new(-663.144,-163.884,-92.807), Point::new(-566.094,-165.987,-9.413), Point::new(-457.883,-344.518,-0.022)],
+            vec![Point::new(-125.302,-566.359,58.481), Point::new(-234.426,-365.823,142.950), Point::new(-149.707,-204.103,211.069), Point::new(150.116,-204.103,211.069), Point::new(238.785,-380.979,136.566), Point::new(125.182,-566.359,58.481), Point::new(-125.302,-566.359,58.481)],
+            vec![Point::new(-119.037,-538.041,17.739), Point::new(-222.705,-347.532,97.985), Point::new(-142.222,-193.898,162.698), Point::new(142.610,-193.898,162.698), Point::new(226.846,-361.930,91.920), Point::new(118.923,-538.041,17.739), Point::new(-119.037,-538.041,17.739)],
+            vec![Point::new(478.593,-374.909,36.915), Point::new(596.484,-174.710,29.388), Point::new(698.046,-172.509,-57.884), Point::new(622.420,-472.451,-134.432), Point::new(523.010,-466.370,-45.103), Point::new(478.593,-374.909,36.915)],
+            vec![Point::new(454.664,-356.164,-2.748), Point::new(566.659,-165.975,-9.899), Point::new(663.144,-163.884,-92.807), Point::new(591.299,-448.828,-165.528), Point::new(496.859,-443.052,-80.665), Point::new(454.664,-356.164,-2.748)],
+            vec![Point::new(-481.982,-362.651,39.785), Point::new(-595.889,-174.723,29.899), Point::new(-515.848,-0.000,98.678), Point::new(-247.814,-0.000,211.069), Point::new(-149.707,-204.103,211.069), Point::new(-234.426,-365.823,142.950), Point::new(-481.982,-362.651,39.785)],
+            vec![Point::new(-457.883,-344.518,-0.022), Point::new(-566.094,-165.987,-9.413), Point::new(-490.055,-0.000,55.926), Point::new(-235.423,-0.000,162.698), Point::new(-142.222,-193.898,162.698), Point::new(-222.705,-347.532,97.985), Point::new(-457.883,-344.518,-0.022)],
+            vec![Point::new(238.785,-380.979,136.566), Point::new(150.116,-204.103,211.069), Point::new(252.071,0.000,211.069), Point::new(512.707,0.000,101.376), Point::new(596.484,-174.710,29.388), Point::new(478.593,-374.909,36.915), Point::new(238.785,-380.979,136.566)],
+            vec![Point::new(226.846,-361.930,91.920), Point::new(142.610,-193.898,162.698), Point::new(239.467,-0.000,162.698), Point::new(487.072,-0.000,58.490), Point::new(566.659,-165.975,-9.899), Point::new(454.664,-356.164,-2.748), Point::new(226.846,-361.930,91.920)],
+            vec![Point::new(-515.848,0.000,98.678), Point::new(-595.889,-174.723,29.899), Point::new(-698.269,-172.505,-58.075), Point::new(-698.269,172.505,-58.075), Point::new(-595.889,174.723,29.899), Point::new(-515.848,0.000,98.678)],
+            vec![Point::new(-490.055,-0.000,55.926), Point::new(-566.094,-165.987,-9.413), Point::new(-663.356,-163.879,-92.989), Point::new(-663.356,163.879,-92.989), Point::new(-566.094,165.987,-9.413), Point::new(-490.055,-0.000,55.926)],
+            vec![Point::new(-149.707,-204.103,211.069), Point::new(-247.814,0.000,211.069), Point::new(-149.707,204.103,211.069), Point::new(150.116,204.103,211.069), Point::new(252.071,0.000,211.069), Point::new(150.116,-204.103,211.069), Point::new(-149.707,-204.103,211.069)],
+            vec![Point::new(-142.222,-193.898,162.698), Point::new(-235.423,-0.000,162.698), Point::new(-142.222,193.898,162.698), Point::new(142.610,193.898,162.698), Point::new(239.467,0.000,162.698), Point::new(142.610,-193.898,162.698), Point::new(-142.222,-193.898,162.698)],
+            vec![Point::new(512.707,0.000,101.376), Point::new(596.484,174.710,29.388), Point::new(698.269,172.505,-58.075), Point::new(698.269,-172.505,-58.075), Point::new(596.484,-174.710,29.388), Point::new(512.707,0.000,101.376)],
+            vec![Point::new(487.072,0.000,58.490), Point::new(566.659,165.975,-9.899), Point::new(663.356,163.879,-92.989), Point::new(663.356,-163.879,-92.989), Point::new(566.659,-165.975,-9.899), Point::new(487.072,0.000,58.490)],
+            vec![Point::new(-515.848,-0.000,98.678), Point::new(-595.889,174.723,29.899), Point::new(-481.982,362.651,39.785), Point::new(-234.426,365.823,142.950), Point::new(-149.707,204.103,211.069), Point::new(-247.814,-0.000,211.069), Point::new(-515.848,-0.000,98.678)],
+            vec![Point::new(-490.055,-0.000,55.926), Point::new(-566.094,165.987,-9.413), Point::new(-457.883,344.518,-0.022), Point::new(-222.705,347.532,97.985), Point::new(-142.222,193.898,162.698), Point::new(-235.423,-0.000,162.698), Point::new(-490.055,-0.000,55.926)],
+            vec![Point::new(252.071,0.000,211.069), Point::new(150.116,204.103,211.069), Point::new(238.785,380.979,136.566), Point::new(478.593,374.909,36.915), Point::new(596.484,174.710,29.388), Point::new(512.707,-0.000,101.376), Point::new(252.071,0.000,211.069)],
+            vec![Point::new(239.467,-0.000,162.698), Point::new(142.610,193.898,162.698), Point::new(226.846,361.930,91.920), Point::new(454.664,356.164,-2.748), Point::new(566.659,165.975,-9.899), Point::new(487.072,-0.000,58.490), Point::new(239.467,-0.000,162.698)],
+            vec![Point::new(-481.982,362.651,39.785), Point::new(-595.889,174.723,29.899), Point::new(-698.046,172.509,-57.884), Point::new(-622.420,472.451,-134.432), Point::new(-523.550,466.403,-45.588), Point::new(-481.982,362.651,39.785)],
+            vec![Point::new(-457.883,344.518,-0.022), Point::new(-566.094,165.987,-9.413), Point::new(-663.144,163.884,-92.807), Point::new(-591.299,448.828,-165.528), Point::new(-497.372,443.083,-81.126), Point::new(-457.883,344.518,-0.022)],
+            vec![Point::new(-149.707,204.103,211.069), Point::new(-234.426,365.823,142.950), Point::new(-125.302,566.359,58.481), Point::new(125.182,566.359,58.481), Point::new(238.785,380.979,136.566), Point::new(150.116,204.103,211.069), Point::new(-149.707,204.103,211.069)],
+            vec![Point::new(-142.222,193.898,162.698), Point::new(-222.705,347.532,97.985), Point::new(-119.037,538.041,17.739), Point::new(118.923,538.041,17.739), Point::new(226.846,361.930,91.920), Point::new(142.610,193.898,162.698), Point::new(-142.222,193.898,162.698)],
+            vec![Point::new(478.593,374.909,36.915), Point::new(527.834,476.304,-54.011), Point::new(620.401,480.458,-136.475), Point::new(698.046,172.509,-57.884), Point::new(596.484,174.710,29.388), Point::new(478.593,374.909,36.915)],
+            vec![Point::new(454.664,356.164,-2.748), Point::new(501.442,452.489,-89.128), Point::new(589.381,456.435,-167.469), Point::new(663.144,163.884,-92.807), Point::new(566.659,165.975,-9.899), Point::new(454.664,356.164,-2.748)],
+            vec![Point::new(-481.982,362.651,39.785), Point::new(-523.550,466.403,-45.588), Point::new(-441.383,636.016,-121.338), Point::new(-223.832,690.677,-64.527), Point::new(-125.302,566.359,58.481), Point::new(-234.426,365.823,142.950), Point::new(-481.982,362.651,39.785)],
+            vec![Point::new(-457.883,344.518,-0.022), Point::new(-497.372,443.083,-81.126), Point::new(-419.314,604.215,-153.089), Point::new(-212.641,656.144,-99.118), Point::new(-119.037,538.041,17.739), Point::new(-222.705,347.532,97.985), Point::new(-457.883,344.518,-0.022)],
+            vec![Point::new(238.785,380.979,136.566), Point::new(125.182,566.359,58.481), Point::new(212.526,691.178,-65.022), Point::new(446.073,632.424,-125.794), Point::new(527.834,476.304,-54.011), Point::new(478.593,374.909,36.915), Point::new(238.785,380.979,136.566)],
+            vec![Point::new(226.846,361.930,91.920), Point::new(118.923,538.041,17.739), Point::new(201.900,656.619,-99.589), Point::new(423.769,600.803,-157.321), Point::new(501.442,452.489,-89.128), Point::new(454.664,356.164,-2.748), Point::new(226.846,361.930,91.920)],
+            vec![Point::new(-622.146,472.434,-134.186), Point::new(-574.882,574.852,-181.916), Point::new(-441.854,635.045,-120.904), Point::new(-523.550,466.403,-45.588), Point::new(-622.146,472.434,-134.186)],
+            vec![Point::new(-591.038,448.812,-165.294), Point::new(-546.138,546.110,-210.638), Point::new(-419.761,603.293,-152.677), Point::new(-497.372,443.083,-81.126), Point::new(-591.038,448.812,-165.294)],
+            vec![Point::new(-125.302,566.359,58.481), Point::new(-224.289,691.254,-65.097), Point::new(212.579,691.254,-65.097), Point::new(125.182,566.359,58.481), Point::new(-125.302,566.359,58.481)],
+            vec![Point::new(-119.037,538.041,17.739), Point::new(-213.075,656.691,-99.659), Point::new(201.950,656.691,-99.659), Point::new(118.923,538.041,17.739), Point::new(-119.037,538.041,17.739)],
+            vec![Point::new(527.834,476.304,-54.011), Point::new(446.780,631.075,-125.173), Point::new(574.485,574.300,-182.370), Point::new(620.030,480.441,-136.145), Point::new(527.834,476.304,-54.011)],
+            vec![Point::new(501.442,452.489,-89.128), Point::new(424.440,599.521,-156.732), Point::new(545.761,545.585,-211.069), Point::new(589.029,456.419,-167.156), Point::new(501.442,452.489,-89.128)],
+        ];
+
+        for poly in polys.iter_mut() {
+            if poly.len() > 3 && poly[0].distance(&poly[poly.len()-1], None) < 1e-6 {
+                poly.pop();
+            }
+        }
+
+        let m = Mesh::from_polygons(polys, Some(1.0));
+        let cc = CrossConnectors::new(&m, 2.0, &[0.0], 2, 10.0, 10.0, 2.0, 0.0);
+
+        MINI_CHECK!(cc.face_planes.len() == m.number_of_faces());
+        MINI_CHECK!(cc.edges.len() > 0);
+        MINI_CHECK!(cc.edge_faces.len() == cc.edges.len());
+        MINI_CHECK!(cc.face_polylines.len() == m.number_of_faces());
+        MINI_CHECK!(cc.edge_polylines.len() > 0);
+
+        for i in 0..cc.face_polylines.len() {
+            MINI_CHECK!(cc.face_polylines[i].len() >= 2);
+            for pl in &cc.face_polylines[i] {
+                MINI_CHECK!(pl.point_count() >= 4);
+            }
+        }
+
+        for i in 0..cc.edge_polylines.len() {
+            for pl in &cc.edge_polylines[i] {
+                MINI_CHECK!(pl.point_count() == 5);
+            }
+        }
+    })
+}
+
 REGISTER_MINI_TEST!("Primitives", "Mesh_arrow", crate::primitives_test::run_primitives_mesh_arrow);
 REGISTER_MINI_TEST!("Primitives", "Mesh_cylinder", crate::primitives_test::run_primitives_mesh_cylinder);
 REGISTER_MINI_TEST!("Primitives", "Nurbscurve_polyline", crate::primitives_test::run_primitives_nurbscurve_polyline);
@@ -982,3 +1183,12 @@ REGISTER_MINI_TEST!("Primitives", "Mesh_diamond_mesh", crate::primitives_test::r
 REGISTER_MINI_TEST!("Primitives", "Mesh_hex_mesh", crate::primitives_test::run_primitives_mesh_hex_mesh);
 REGISTER_MINI_TEST!("Primitives", "Mesh_cone_subdivisions", crate::primitives_test::run_primitives_mesh_cone_subdivisions);
 REGISTER_MINI_TEST!("Primitives", "Nurbscurve_interpolated", crate::primitives_test::run_primitives_nurbscurve_interpolated);
+REGISTER_MINI_TEST!("Primitives", "Mesh_tetrahedron", crate::primitives_test::run_primitives_mesh_tetrahedron);
+REGISTER_MINI_TEST!("Primitives", "Mesh_cube", crate::primitives_test::run_primitives_mesh_cube);
+REGISTER_MINI_TEST!("Primitives", "Mesh_octahedron", crate::primitives_test::run_primitives_mesh_octahedron);
+REGISTER_MINI_TEST!("Primitives", "Mesh_icosahedron", crate::primitives_test::run_primitives_mesh_icosahedron);
+REGISTER_MINI_TEST!("Primitives", "Mesh_dodecahedron", crate::primitives_test::run_primitives_mesh_dodecahedron);
+REGISTER_MINI_TEST!("Primitives", "Nurbssurface_wave", crate::primitives_test::run_primitives_nurbssurface_wave);
+REGISTER_MINI_TEST!("Primitives", "Mesh_chevron", crate::primitives_test::run_primitives_mesh_chevron);
+REGISTER_MINI_TEST!("Primitives", "FoldedPlates", crate::primitives_test::run_primitives_folded_plates);
+REGISTER_MINI_TEST!("Primitives", "CrossConnectors", crate::primitives_test::run_primitives_cross_connectors);

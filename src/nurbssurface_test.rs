@@ -505,6 +505,7 @@ pub fn run_nurbssurface_evaluation() -> TestResult {
     MINI_TEST!("Evaluation", {
         use crate::nurbssurface::NurbsSurface;
         use crate::point::Point;
+        use crate::vector::Vector;
 
         let points = vec![
             // i=0
@@ -529,7 +530,28 @@ pub fn run_nurbssurface_evaluation() -> TestResult {
             Point::new(5.0, 5.0, 0.0),
         ];
 
-        let _s = NurbsSurface::create(false, false, 3, 3, 4, 4, &points).unwrap();
+        let s = NurbsSurface::create(false, false, 3, 3, 4, 4, &points).unwrap();
+
+        let u = 0.5;
+        let v = 0.5;
+
+        // point_at(u, v) - returns Point
+        let p1 = s.point_at(u, v).unwrap();
+        MINI_CHECK!(TOLERANCE.is_point_close(&p1, &Point::new(2.5, 2.5, 3.0)));
+
+        // normal_at(u, v) - returns Vector
+        let n1 = s.normal_at(u, v);
+        MINI_CHECK!(TOLERANCE.is_vector_close(&n1, &Vector::new(0.0, 0.0, 1.0)));
+
+        // evaluate(u, v, num_derivs) - returns vector of derivatives
+        let derivs = s.evaluate(u, v, 1);
+        MINI_CHECK!(TOLERANCE.is_vector_close(&derivs[0], &Vector::new(2.5, 2.5, 3.0)));
+        MINI_CHECK!(TOLERANCE.is_vector_close(&derivs[1], &Vector::new(0.0, 6.9375, 0.0)));
+        MINI_CHECK!(TOLERANCE.is_vector_close(&derivs[2], &Vector::new(6.9375, 0.0, 0.0)));
+
+        // point_at_corner(u_end, v_end) - corner point
+        let p_corner = s.point_at_corner(1, 1).unwrap();
+        MINI_CHECK!(TOLERANCE.is_point_close(&p_corner, &Point::new(5.0, 5.0, 0.0)));
     })
 }
 
