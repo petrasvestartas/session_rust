@@ -1,5 +1,6 @@
 use crate::{MINI_CHECK, MINI_TEST, REGISTER_MINI_TEST};
 use crate::mini_test::TestResult;
+use crate::tolerance::TOLERANCE;
 
 pub fn run_point_constructor() -> TestResult {
     MINI_TEST!("Constructor", {
@@ -182,7 +183,7 @@ pub fn run_point_mid_point() -> TestResult {
 pub fn run_point_distance() -> TestResult {
     MINI_TEST!("Distance", {
         use crate::Point;
-        use crate::tolerance::TOLERANCE;
+
 
         let p0 = Point::new(0.0, 2.0, 1.0);
         let p1 = Point::new(1.0, 5.0, 3.0);
@@ -195,7 +196,7 @@ pub fn run_point_distance() -> TestResult {
 pub fn run_point_squared_distance() -> TestResult {
     MINI_TEST!("Squared_distance", {
         use crate::Point;
-        use crate::tolerance::TOLERANCE;
+
 
         let p0 = Point::new(0.0, 2.0, 1.0);
         let p1 = Point::new(1.0, 5.0, 3.0);
@@ -222,7 +223,7 @@ pub fn run_point_area() -> TestResult {
 pub fn run_point_centroid_quad() -> TestResult {
     MINI_TEST!("Centroid_quad", {
         use crate::Point;
-        use crate::tolerance::TOLERANCE;
+
 
         let p0 = Point::new(0.0, 0.0, 0.0);
         let p1 = Point::new(2.0, 0.0, 1.0);

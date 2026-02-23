@@ -816,3 +816,183 @@ pub fn eval_basis(order: usize, knot: &[f64], span: usize, t: f64) -> Vec<f64> {
 
     basis
 }
+
+pub fn build_fitted_knots(params: &[f64], num_cvs: usize, degree: usize) -> Vec<f64> {
+    let m = params.len();
+    let n_interior = num_cvs - degree - 1;
+    let order = degree + 1;
+    let kc = knot_count(order, num_cvs);
+    let mut knots = vec![0.0; kc];
+
+    for i in 0..degree {
+        knots[i] = params[0];
+    }
+
+    let d = m as f64 / (num_cvs - degree) as f64;
+    for j in 1..=n_interior {
+        let i = (j as f64 * d) as usize;
+        let alpha = j as f64 * d - i as f64;
+        knots[degree - 1 + j] = (1.0 - alpha) * params[i - 1] + alpha * params[i];
+    }
+
+    for i in (num_cvs - 1)..kc {
+        knots[i] = params[m - 1];
+    }
+
+    knots
+}
+
+pub fn build_fitted_knots_adaptive(params: &[f64], points: &[f64], dim: usize, num_cvs: usize, degree: usize, scale: f64) -> Vec<f64> {
+    let m = params.len();
+    if m < 3 || points.is_empty() {
+        return build_fitted_knots(params, num_cvs, degree);
+    }
+
+    let mut turn = vec![0.0; m];
+    for i in 1..m-1 {
+        let (mut dot, mut len1sq, mut len2sq) = (0.0, 0.0, 0.0);
+        for d in 0..dim {
+            let a = points[i*dim+d] - points[(i-1)*dim+d];
+            let b = points[(i+1)*dim+d] - points[i*dim+d];
+            dot += a * b; len1sq += a * a; len2sq += b * b;
+        }
+        let (len1, len2) = (len1sq.sqrt(), len2sq.sqrt());
+        if len1 > 1e-14 && len2 > 1e-14 {
+            let c = (dot / (len1 * len2)).clamp(-1.0, 1.0);
+            turn[i] = c.acos();
+        }
+    }
+
+    let mut cum = vec![0.0; m];
+    for i in 0..m-1 {
+        let mut chord = params[i+1] - params[i];
+        if chord < 1e-14 { chord = 1e-14; }
+        cum[i+1] = cum[i] + chord * (1.0 + scale * (turn[i] + turn[i+1]) * 0.5);
+    }
+    let total = cum[m-1];
+
+    let n_interior = num_cvs - degree - 1;
+    let order = degree + 1;
+    let kc = knot_count(order, num_cvs);
+    let mut knots = vec![0.0; kc];
+    for i in 0..degree { knots[i] = params[0]; }
+
+    for j in 1..=n_interior {
+        let target = total * j as f64 / (n_interior + 1) as f64;
+        let (mut lo, mut hi) = (0usize, m - 2);
+        while lo < hi { let mid = (lo + hi) / 2; if cum[mid+1] < target { lo = mid + 1; } else { hi = mid; } }
+        let frac = if cum[lo+1] > cum[lo] { (target - cum[lo]) / (cum[lo+1] - cum[lo]) } else { 0.0 };
+        knots[degree - 1 + j] = params[lo] + frac * (params[lo+1] - params[lo]);
+    }
+
+    for i in (num_cvs - 1)..kc { knots[i] = params[m - 1]; }
+    knots
+}
+
+pub fn build_fitted_knots_periodic_adaptive(params: &[f64], points: &[f64], n: usize, dim: usize, num_cvs: usize, degree: usize, scale: f64) -> Vec<f64> {
+    let cv_count = num_cvs + degree;
+    let order = degree + 1;
+    let kc = cv_count + order - 2;
+    let big_t = params[n];
+
+    if n < 3 || points.is_empty() {
+        let delta = big_t / num_cvs as f64;
+        return (0..kc).map(|i| (i as f64 - degree as f64 + 1.0) * delta).collect();
+    }
+
+    let mut turn = vec![0.0; n];
+    for i in 0..n {
+        let prev = (i + n - 1) % n;
+        let next = (i + 1) % n;
+        let (mut dot, mut len1sq, mut len2sq) = (0.0, 0.0, 0.0);
+        for d in 0..dim {
+            let a = points[i*dim+d] - points[prev*dim+d];
+            let b = points[next*dim+d] - points[i*dim+d];
+            dot += a * b; len1sq += a * a; len2sq += b * b;
+        }
+        let (len1, len2) = (len1sq.sqrt(), len2sq.sqrt());
+        if len1 > 1e-14 && len2 > 1e-14 {
+            let c = (dot / (len1 * len2)).clamp(-1.0, 1.0);
+            turn[i] = c.acos();
+        }
+    }
+
+    let mut cum = vec![0.0; n + 1];
+    for i in 0..n {
+        let mut chord = params[i+1] - params[i];
+        if chord < 1e-14 { chord = 1e-14; }
+        let next = (i + 1) % n;
+        cum[i+1] = cum[i] + chord * (1.0 + scale * (turn[i] + turn[next]) * 0.5);
+    }
+    let total = cum[n];
+
+    let mut base = vec![0.0; num_cvs];
+    for j in 0..num_cvs {
+        let target = total * j as f64 / num_cvs as f64;
+        let (mut lo, mut hi) = (0usize, n - 1);
+        while lo < hi { let mid = (lo + hi) / 2; if cum[mid+1] < target { lo = mid + 1; } else { hi = mid; } }
+        let frac = if cum[lo+1] > cum[lo] { (target - cum[lo]) / (cum[lo+1] - cum[lo]) } else { 0.0 };
+        base[j] = params[lo] + frac * (params[lo+1] - params[lo]);
+    }
+
+    let mut intervals = vec![0.0; num_cvs];
+    for j in 0..num_cvs-1 { intervals[j] = base[j+1] - base[j]; }
+    intervals[num_cvs - 1] = big_t - base[num_cvs - 1];
+
+    let mut knots = vec![0.0; kc];
+    knots[degree - 1] = 0.0;
+    for i in 1..degree {
+        knots[degree - 1 - i] = knots[degree - i] - intervals[num_cvs - i];
+    }
+    for i in 0..kc-degree {
+        knots[degree + i] = knots[degree - 1 + i] + intervals[i % num_cvs];
+    }
+
+    knots
+}
+
+pub fn solve_banded_spd(dim: usize, n: usize, half_bw: usize, band: &mut [f64], rhs: &mut [f64]) -> bool {
+    let bw1 = half_bw + 1;
+
+    for i in 0..n {
+        let jmin = if i >= half_bw { i - half_bw } else { 0 };
+        for j in jmin..=i {
+            let mut sum = 0.0;
+            let kmin = if i >= half_bw { i - half_bw } else { 0 };
+            for k in kmin..j {
+                sum += band[i * bw1 + (i - k)] * band[j * bw1 + (j - k)];
+            }
+            if i == j {
+                let val = band[i * bw1] - sum;
+                if val <= 1e-30 { return false; }
+                band[i * bw1] = val.sqrt();
+            } else {
+                band[i * bw1 + (i - j)] = (band[i * bw1 + (i - j)] - sum) / band[j * bw1];
+            }
+        }
+    }
+
+    for i in 0..n {
+        for d in 0..dim {
+            let mut sum = 0.0;
+            let kmin = if i >= half_bw { i - half_bw } else { 0 };
+            for k in kmin..i {
+                sum += band[i * bw1 + (i - k)] * rhs[k * dim + d];
+            }
+            rhs[i * dim + d] = (rhs[i * dim + d] - sum) / band[i * bw1];
+        }
+    }
+
+    for i in (0..n).rev() {
+        for d in 0..dim {
+            let mut sum = 0.0;
+            let kmax = std::cmp::min(n, i + half_bw + 1);
+            for k in (i + 1)..kmax {
+                sum += band[k * bw1 + (k - i)] * rhs[k * dim + d];
+            }
+            rhs[i * dim + d] = (rhs[i * dim + d] - sum) / band[i * bw1];
+        }
+    }
+
+    true
+}

@@ -10,10 +10,13 @@ pub mod proto {
 }
 
 pub mod boundingbox;
+pub mod brep;
+pub mod brep_test;
 pub mod bvh;
 #[cfg(test)]
 mod bvh_test;
 pub mod closest;
+pub mod closest_test;
 pub mod color;
 pub mod edge;
 pub mod encoders;
@@ -28,6 +31,7 @@ pub mod mesh;
 pub mod nurbscurve;
 pub mod nurbssurface;
 pub mod obj;
+pub mod triangulation_2d;
 pub mod trimmedsurface;
 pub mod trimmedsurface_test;
 pub mod objects;
@@ -60,6 +64,7 @@ pub mod nurbssurface_test;
 pub mod primitives_test;
 
 pub use boundingbox::BoundingBox;
+pub use brep::BRep;
 pub use bvh::BVH;
 pub use closest::Closest;
 pub use color::Color;

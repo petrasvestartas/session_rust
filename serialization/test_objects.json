@@ -1,11 +1,11 @@
 {
   "type": "Objects",
-  "guid": "38d21940-a7cd-4111-b3a3-b00049eb1b01",
+  "guid": "60a819f4-4e84-4490-b6c4-8b7dffb60542",
   "name": "my_objects",
   "points": [
     {
       "type": "Point",
-      "guid": "518dd73b-cd89-4041-835d-5239189b58af",
+      "guid": "ecc7214c-760f-4fc9-b87c-64a9ced77243",
       "name": "my_point",
       "x": 100.0,
       "y": 200.0,
@@ -15,13 +15,13 @@
         "a": 255,
         "b": 255,
         "g": 0,
-        "guid": "c1c0472f-eb95-45c5-a35e-aa58ad008964",
+        "guid": "c192be60-d4b1-4122-a297-9992999dd763",
         "name": "blue",
         "r": 0,
         "type": "Color"
       },
       "xform": {
-        "guid": "1e8dcf6c-e199-42b8-9fb0-724cfe28fcf5",
+        "guid": "dc50d51d-ab4a-4156-8230-2a9d78c060f7",
         "m": [
           1.0,
           0.0,
@@ -46,7 +46,7 @@
     },
     {
       "type": "Point",
-      "guid": "696e7700-ff07-46c1-9a95-1d571c238408",
+      "guid": "01430ee2-e02a-4147-8d5a-43eb308e423f",
       "name": "my_point",
       "x": 400.0,
       "y": 500.0,
@@ -56,13 +56,13 @@
         "a": 255,
         "b": 255,
         "g": 0,
-        "guid": "7bdf5122-324a-47ef-a100-0baae1b75d78",
+        "guid": "2d2aa8bb-88fa-42d3-b0a8-36bb9cdd263d",
         "name": "blue",
         "r": 0,
         "type": "Color"
       },
       "xform": {
-        "guid": "c66b4e38-3444-4684-91c2-c0a61ec236b9",
+        "guid": "f228a917-2fff-4f31-8170-f6a6aac2fba0",
         "m": [
           1.0,
           0.0,
@@ -87,7 +87,7 @@
     },
     {
       "type": "Point",
-      "guid": "e082a791-b050-4401-9c3b-92ec60c86831",
+      "guid": "0b1a510c-bc67-426f-b2fc-5e254732b288",
       "name": "my_point",
       "x": 700.0,
       "y": 800.0,
@@ -97,13 +97,13 @@
         "a": 255,
         "b": 255,
         "g": 0,
-        "guid": "db573ab9-0e35-4a0c-a2dc-4389e3b43aa0",
+        "guid": "827d7824-00c3-4a52-831e-6a4360db9500",
         "name": "blue",
         "r": 0,
         "type": "Color"
       },
       "xform": {
-        "guid": "fad32389-fb4b-4958-a20e-145455a8e1c9",
+        "guid": "199e64e4-9b09-4398-8585-e05ded7d0836",
         "m": [
           1.0,
           0.0,
@@ -134,5 +134,6 @@
   "pointclouds": [],
   "meshes": [],
   "nurbscurves": [],
-  "nurbssurfaces": []
+  "nurbssurfaces": [],
+  "breps": []
 }

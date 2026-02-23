@@ -1133,7 +1133,7 @@ pub fn run_primitives_cross_connectors() -> TestResult {
             }
         }
 
-        let m = Mesh::from_polygons(polys, Some(1.0));
+        let m = Mesh::from_polylines(polys, Some(1.0));
         let cc = CrossConnectors::new(&m, 2.0, &[0.0], 2, 10.0, 10.0, 2.0, 0.0);
 
         MINI_CHECK!(cc.face_planes.len() == m.number_of_faces());

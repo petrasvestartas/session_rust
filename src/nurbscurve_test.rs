@@ -1,6 +1,6 @@
 use crate::{MINI_CHECK, MINI_TEST, REGISTER_MINI_TEST};
 use crate::mini_test::TestResult;
-use crate::tolerance::TOLERANCE;
+use crate::tolerance::{TOLERANCE, PI};
 
 pub fn run_nurbscurve_constructor() -> TestResult {
     MINI_TEST!("Constructor", {
@@ -686,6 +686,40 @@ pub fn run_nurbscurve_create_interpolated() -> TestResult {
     })
 }
 
+pub fn run_nurbscurve_create_fitted() -> TestResult {
+    MINI_TEST!("Create_fitted", {
+        use crate::NurbsCurve;
+        use crate::Point;
+
+        // Open: 21 points on sine wave → fit with 8 CVs
+        let pts: Vec<Point> = (0..=20).map(|i| {
+            let t = i as f64 * 2.0 * PI / 20.0;
+            Point::new(t, 3.0 * t.sin(), 0.0)
+        }).collect();
+
+        let c = NurbsCurve::create_fitted(&pts, 8, 3, false);
+
+        MINI_CHECK!(c.is_valid());
+        MINI_CHECK!(c.degree() == 3);
+        MINI_CHECK!(c.cv_count() == 8);
+        let (d0, d1) = c.domain();
+        MINI_CHECK!(TOLERANCE.is_point_close(&c.point_at(d0), &pts[0]));
+        MINI_CHECK!(TOLERANCE.is_point_close(&c.point_at(d1), &pts[20]));
+
+        // Periodic: 24 points on circle → fit with 10 free CVs
+        let cpts: Vec<Point> = (0..24).map(|i| {
+            let a = i as f64 * 2.0 * PI / 24.0;
+            Point::new(a.cos(), a.sin(), 0.0)
+        }).collect();
+
+        let cp = NurbsCurve::create_fitted(&cpts, 10, 3, true);
+
+        MINI_CHECK!(cp.is_valid());
+        MINI_CHECK!(cp.is_closed());
+        MINI_CHECK!(cp.cv_count() == 13);
+    })
+}
+
 REGISTER_MINI_TEST!("NurbsCurve", "Constructor", crate::nurbscurve_test::run_nurbscurve_constructor);
 REGISTER_MINI_TEST!("NurbsCurve", "Attributes", crate::nurbscurve_test::run_nurbscurve_attributes);
 REGISTER_MINI_TEST!("NurbsCurve", "Conversions", crate::nurbscurve_test::run_nurbscurve_conversions);
@@ -695,3 +729,4 @@ REGISTER_MINI_TEST!("NurbsCurve", "Json_roundtrip", crate::nurbscurve_test::run_
 REGISTER_MINI_TEST!("NurbsCurve", "Protobuf_roundtrip", crate::nurbscurve_test::run_nurbscurve_protobuf_roundtrip);
 REGISTER_MINI_TEST!("NurbsCurve", "Transformations", crate::nurbscurve_test::run_nurbscurve_transformations);
 REGISTER_MINI_TEST!("NurbsCurve", "Create_interpolated", crate::nurbscurve_test::run_nurbscurve_create_interpolated);
+REGISTER_MINI_TEST!("NurbsCurve", "Create_fitted", crate::nurbscurve_test::run_nurbscurve_create_fitted);

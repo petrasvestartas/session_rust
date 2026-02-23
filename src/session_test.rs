@@ -249,7 +249,7 @@ mod tests {
             Point::new(30.0, 1.0, -1.0),
             Point::new(30.0, 0.0, 1.0),
         ];
-        let mesh = Mesh::from_polygons(vec![tri], None);
+        let mesh = Mesh::from_polylines(vec![tri], None);
         let mesh_guid = mesh.guid.clone();
         scene.add_mesh(mesh);
 

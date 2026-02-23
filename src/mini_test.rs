@@ -304,8 +304,12 @@ pub fn get_all_tests() -> Vec<RegisteredTest> {
     use crate::mesh_test::*;
     use crate::nurbscurve_test::*;
     use crate::nurbssurface_test::*;
+    use crate::brep_test::*;
+    use crate::closest_test::*;
 
     vec![
+        // BRep tests
+        RegisteredTest { group: "BRep", name: "Constructor", func: run_brep_constructor },
         // Color tests
         RegisteredTest { group: "Color", name: "Constructor", func: run_color_constructor },
         // Point tests
@@ -330,6 +334,13 @@ pub fn get_all_tests() -> Vec<RegisteredTest> {
         RegisteredTest { group: "NurbsCurve", name: "Constructor", func: run_nurbscurve_constructor },
         // NurbsSurface tests
         RegisteredTest { group: "NurbsSurface", name: "Constructor", func: run_nurbssurface_constructor },
+        // Closest tests
+        RegisteredTest { group: "Closest", name: "Line_point", func: run_closest_line_point },
+        RegisteredTest { group: "Closest", name: "Polyline_point", func: run_closest_polyline_point },
+        RegisteredTest { group: "Closest", name: "Curve_point", func: run_closest_curve_point },
+        RegisteredTest { group: "Closest", name: "Surface_point", func: run_closest_surface_point },
+        RegisteredTest { group: "Closest", name: "Mesh_point", func: run_closest_mesh_point },
+        RegisteredTest { group: "Closest", name: "Pointcloud_point", func: run_closest_pointcloud_point },
     ]
 }
 
@@ -351,13 +362,11 @@ pub fn run_all(language: &str) -> Result<(), Box<dyn std::error::Error>> {
     
     println!("[rust-minitest] Inventory found {} groups", groups.len());
 
-    // If inventory is empty, manually register all tests
-    if groups.is_empty() {
-        println!("[rust-minitest] Using manual test registration...");
-        let manual_tests = get_all_tests();
-        println!("[rust-minitest] Manual tests: {}", manual_tests.len());
-        for t in manual_tests {
-            groups.entry(t.group).or_default().push(t);
+    // Merge manual tests (covers modules inventory may miss on Windows)
+    for t in get_all_tests() {
+        let entry = groups.entry(t.group).or_default();
+        if !entry.iter().any(|e| e.name == t.name) {
+            entry.push(t);
         }
     }
 

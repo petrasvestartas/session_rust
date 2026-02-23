@@ -398,6 +398,162 @@ impl NurbsCurve {
         curve
     }
 
+    pub fn create_fitted(points: &[Point], num_cvs: usize, degree: usize, is_periodic: bool) -> NurbsCurve {
+        let m = points.len();
+        let dim = 3;
+        let order = degree + 1;
+
+        let pdist = |a: &Point, b: &Point| -> f64 {
+            let dx = a[0]-b[0]; let dy = a[1]-b[1]; let dz = a[2]-b[2];
+            (dx*dx + dy*dy + dz*dz).sqrt()
+        };
+
+        if is_periodic {
+            let mut n = m;
+            if n >= 2 && pdist(&points[0], &points[n-1]) < 1e-10 { n -= 1; }
+            if n <= num_cvs || num_cvs < order {
+                if n < 3 { return NurbsCurve::new(3, false, 4, 0); }
+                return NurbsCurve::create_interpolated(&points[..n], knot::CurveKnotStyle::ChordPeriodic);
+            }
+
+            let cv_count = num_cvs + degree;
+            let kc = cv_count + order - 2;
+
+            let mut params = vec![0.0; n + 1];
+            for i in 1..n {
+                params[i] = params[i-1] + pdist(&points[i-1], &points[i]);
+            }
+            params[n] = params[n-1] + pdist(&points[n-1], &points[0]);
+            let big_t = params[n];
+            if big_t < 1e-14 { return NurbsCurve::new(3, false, 4, 0); }
+
+            let mut ppts = vec![0.0; n * dim];
+            for i in 0..n {
+                ppts[i*3] = points[i][0]; ppts[i*3+1] = points[i][1]; ppts[i*3+2] = points[i][2];
+            }
+            let knots_vec = knot::build_fitted_knots_periodic_adaptive(&params, &ppts, n, dim, num_cvs, degree, 3.0);
+
+            let mut ntn = vec![vec![0.0; num_cvs]; num_cvs];
+            let mut ntq = vec![0.0; num_cvs * dim];
+
+            for k in 0..n {
+                let span = knot::find_span(order, cv_count, &knots_vec, params[k]);
+                let basis = knot::eval_basis(order, &knots_vec, span, params[k]);
+                for a in 0..order {
+                    let ci = (span + a) % num_cvs;
+                    for d in 0..dim {
+                        ntq[ci * dim + d] += basis[a] * points[k][d];
+                    }
+                    for b in 0..order {
+                        let cj = (span + b) % num_cvs;
+                        ntn[ci][cj] += basis[a] * basis[b];
+                    }
+                }
+            }
+
+            let mut cv = ntq.clone();
+
+            for col in 0..num_cvs {
+                let mut pivot = col;
+                for row in (col+1)..num_cvs {
+                    if ntn[row][col].abs() > ntn[pivot][col].abs() { pivot = row; }
+                }
+                if pivot != col {
+                    ntn.swap(col, pivot);
+                    for d in 0..dim { cv.swap(col*dim+d, pivot*dim+d); }
+                }
+                if ntn[col][col].abs() < 1e-300 { return NurbsCurve::new(3, false, 4, 0); }
+                for row in (col+1)..num_cvs {
+                    let factor = ntn[row][col] / ntn[col][col];
+                    for j in col..num_cvs { ntn[row][j] -= factor * ntn[col][j]; }
+                    for d in 0..dim { cv[row*dim+d] -= factor * cv[col*dim+d]; }
+                }
+            }
+            for i in (0..num_cvs).rev() {
+                for d in 0..dim {
+                    let mut s = cv[i*dim+d];
+                    for j in (i+1)..num_cvs { s -= ntn[i][j] * cv[j*dim+d]; }
+                    cv[i*dim+d] = s / ntn[i][i];
+                }
+            }
+
+            let mut curve = NurbsCurve::new(dim, false, order, cv_count);
+            for i in 0..kc { curve.set_knot(i, knots_vec[i]); }
+            for i in 0..num_cvs {
+                curve.set_cv(i, &Point::new(cv[i*3], cv[i*3+1], cv[i*3+2]));
+            }
+            for i in 0..degree {
+                let p = curve.get_cv(i).unwrap();
+                curve.set_cv(num_cvs + i, &p);
+            }
+            return curve;
+        }
+
+        // Open fitting
+        if m <= num_cvs || num_cvs < order {
+            return NurbsCurve::create_interpolated(points, knot::CurveKnotStyle::Chord);
+        }
+
+        let mut pts = vec![0.0; m * dim];
+        for i in 0..m {
+            pts[i*3] = points[i][0]; pts[i*3+1] = points[i][1]; pts[i*3+2] = points[i][2];
+        }
+
+        let params = knot::compute_parameters(&pts, dim, knot::CurveKnotStyle::Chord);
+        let knots_vec = knot::build_fitted_knots_adaptive(&params, &pts, dim, num_cvs, degree, 3.0);
+        let n = num_cvs - 1;
+        let sys_n = num_cvs - 2;
+        let bw = degree;
+        let bw1 = bw + 1;
+
+        let mut band = vec![0.0; sys_n * bw1];
+        let mut rhs = vec![0.0; sys_n * dim];
+
+        for k in 1..(m - 1) {
+            let span = knot::find_span(order, num_cvs, &knots_vec, params[k]);
+            let basis = knot::eval_basis(order, &knots_vec, span, params[k]);
+
+            let mut rk = [points[k][0], points[k][1], points[k][2]];
+            for a in 0..order {
+                let ci = span + a;
+                if ci == 0 {
+                    for d in 0..dim { rk[d] -= basis[a] * points[0][d]; }
+                }
+                if ci == n {
+                    for d in 0..dim { rk[d] -= basis[a] * points[m-1][d]; }
+                }
+            }
+
+            for a in 0..order {
+                let ci = span + a;
+                if ci < 1 || ci > n - 1 { continue; }
+                let ri = ci - 1;
+                for d in 0..dim {
+                    rhs[ri * dim + d] += basis[a] * rk[d];
+                }
+                for b in a..order {
+                    let cj = span + b;
+                    if cj < 1 || cj > n - 1 { continue; }
+                    let rj = cj - 1;
+                    band[rj * bw1 + (rj - ri)] += basis[a] * basis[b];
+                }
+            }
+        }
+
+        if !knot::solve_banded_spd(dim, sys_n, bw, &mut band, &mut rhs) {
+            return NurbsCurve::create_interpolated(points, knot::CurveKnotStyle::Chord);
+        }
+
+        let mut curve = NurbsCurve::new(dim, false, order, num_cvs);
+        for i in 0..knots_vec.len() { curve.set_knot(i, knots_vec[i]); }
+        curve.set_cv(0, &points[0]);
+        for i in 0..sys_n {
+            curve.set_cv(i + 1, &Point::new(rhs[i*3], rhs[i*3+1], rhs[i*3+2]));
+        }
+        curve.set_cv(n, &points[m-1]);
+        curve
+    }
+
     /// Create clamped uniform NURBS curve from control points
     ///
     /// Implementation matches OpenNURBS ON_MakeClampedUniformKnotVector exactly.

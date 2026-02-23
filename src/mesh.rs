@@ -11,7 +11,7 @@ pub enum NormalWeighting {
 }
 
 /// A halfedge mesh data structure for representing polygonal surfaces
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Clone, Serialize, Deserialize)]
 #[serde(tag = "type", rename = "Mesh")]
 pub struct Mesh {
     pub halfedge: HashMap<usize, HashMap<usize, Option<usize>>>, // Halfedge connectivity
@@ -48,7 +48,7 @@ pub struct Mesh {
 }
 
 /// Vertex data containing position and attributes
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct VertexData {
     pub x: f64,                           // X coordinate
     pub y: f64,                           // Y coordinate
@@ -518,7 +518,7 @@ impl Mesh {
         (vertices, faces)
     }
 
-    pub fn from_polygons(polygons: Vec<Vec<Point>>, precision: Option<f64>) -> Self {
+    pub fn from_polylines(polygons: Vec<Vec<Point>>, precision: Option<f64>) -> Self {
         let mut mesh = Mesh::new();
         let mut map_eps: HashMap<(i64, i64, i64), usize> = HashMap::new();
         let mut map_exact: HashMap<(u64, u64, u64), usize> = HashMap::new();
@@ -560,6 +560,142 @@ impl Mesh {
             let _ = mesh.add_face(vkeys, None);
         }
 
+        mesh
+    }
+
+    pub fn from_vertices_and_faces(vertices: Vec<Point>, faces: Vec<Vec<usize>>) -> Self {
+        let mut mesh = Mesh::new();
+        let mut vkeys: Vec<usize> = Vec::with_capacity(vertices.len());
+        for pt in vertices {
+            vkeys.push(mesh.add_vertex(pt, None));
+        }
+        for f in faces {
+            let mapped: Vec<usize> = f.iter().map(|&i| vkeys[i]).collect();
+            mesh.add_face(mapped, None);
+        }
+        mesh
+    }
+
+    pub fn from_lines(lines: &[Line], delete_boundary_face: bool, precision: Option<f64>) -> Self {
+        if lines.is_empty() {
+            return Mesh::new();
+        }
+
+        let mut all_pts: Vec<Point> = Vec::with_capacity(lines.len() * 2);
+        for ln in lines {
+            all_pts.push(ln.start());
+            all_pts.push(ln.end());
+        }
+
+        let mut eps = precision.unwrap_or(0.0);
+        if eps <= 0.0 {
+            let (mut minx, mut miny, mut minz) = (all_pts[0][0], all_pts[0][1], all_pts[0][2]);
+            let (mut maxx, mut maxy, mut maxz) = (minx, miny, minz);
+            for p in &all_pts {
+                if p[0] < minx { minx = p[0]; } if p[0] > maxx { maxx = p[0]; }
+                if p[1] < miny { miny = p[1]; } if p[1] > maxy { maxy = p[1]; }
+                if p[2] < minz { minz = p[2]; } if p[2] > maxz { maxz = p[2]; }
+            }
+            let diag = ((maxx-minx).powi(2) + (maxy-miny).powi(2) + (maxz-minz).powi(2)).sqrt();
+            eps = diag * 1e-6;
+            if eps < 1e-12 { eps = 1e-12; }
+        }
+
+        let mut vmap: HashMap<(i64, i64, i64), usize> = HashMap::new();
+        let mut verts: Vec<Point> = Vec::new();
+        let mut get_vid = |p: &Point| -> usize {
+            let kx = (p[0] / eps).round() as i64;
+            let ky = (p[1] / eps).round() as i64;
+            let kz = (p[2] / eps).round() as i64;
+            let key = (kx, ky, kz);
+            if let Some(&id) = vmap.get(&key) {
+                return id;
+            }
+            let id = verts.len();
+            verts.push(p.clone());
+            vmap.insert(key, id);
+            id
+        };
+
+        let mut adj: HashMap<usize, Vec<usize>> = HashMap::new();
+        for ln in lines {
+            let a = get_vid(&ln.start());
+            let b = get_vid(&ln.end());
+            if a == b { continue; }
+            adj.entry(a).or_default().push(b);
+            adj.entry(b).or_default().push(a);
+        }
+
+        let nv = verts.len();
+
+        for (v, nbrs) in adj.iter_mut() {
+            nbrs.sort();
+            nbrs.dedup();
+            let vx = verts[*v][0];
+            let vy = verts[*v][1];
+            nbrs.sort_by(|&a, &b| {
+                let aa = (verts[a][1] - vy).atan2(verts[a][0] - vx);
+                let ba = (verts[b][1] - vy).atan2(verts[b][0] - vx);
+                aa.partial_cmp(&ba).unwrap_or(std::cmp::Ordering::Equal)
+            });
+        }
+
+        let mut visited: HashSet<(usize, usize)> = HashSet::new();
+        let mut face_cycles: Vec<Vec<usize>> = Vec::new();
+
+        let adj_keys: Vec<usize> = {
+            let mut keys: Vec<usize> = adj.keys().copied().collect();
+            keys.sort();
+            keys
+        };
+
+        for &u in &adj_keys {
+            let nbrs: Vec<usize> = adj.get(&u).cloned().unwrap_or_default();
+            for &v in &nbrs {
+                if visited.contains(&(u, v)) { continue; }
+                let mut cycle: Vec<usize> = Vec::new();
+                let (mut cu, mut cv) = (u, v);
+                let mut valid = true;
+                loop {
+                    if visited.contains(&(cu, cv)) { break; }
+                    visited.insert((cu, cv));
+                    cycle.push(cu);
+                    let cv_nbrs = match adj.get(&cv) {
+                        Some(n) => n,
+                        None => { valid = false; break; }
+                    };
+                    let idx = match cv_nbrs.iter().position(|&x| x == cu) {
+                        Some(i) => i,
+                        None => { valid = false; break; }
+                    };
+                    let prev_idx = if idx == 0 { cv_nbrs.len() - 1 } else { idx - 1 };
+                    let nxt = cv_nbrs[prev_idx];
+                    cu = cv;
+                    cv = nxt;
+                    if cycle.len() > nv * 2 { valid = false; break; }
+                }
+                if valid && cycle.len() >= 3 {
+                    face_cycles.push(cycle);
+                }
+            }
+        }
+
+        if delete_boundary_face && !face_cycles.is_empty() {
+            let max_idx = face_cycles.iter().enumerate()
+                .max_by_key(|(_, c)| c.len())
+                .map(|(i, _)| i).unwrap();
+            face_cycles.remove(max_idx);
+        }
+
+        let mut mesh = Mesh::new();
+        let mut vkeys: Vec<usize> = Vec::with_capacity(verts.len());
+        for pt in &verts {
+            vkeys.push(mesh.add_vertex(pt.clone(), None));
+        }
+        for cycle in &face_cycles {
+            let mapped: Vec<usize> = cycle.iter().map(|&i| vkeys[i]).collect();
+            mesh.add_face(mapped, None);
+        }
         mesh
     }
 
@@ -1070,6 +1206,33 @@ impl Mesh {
     pub fn pb_load(filepath: &str) -> Self {
         let data = std::fs::read(filepath).expect("Failed to read protobuf file");
         Self::pb_loads(&data).expect("Failed to parse protobuf")
+    }
+
+    pub fn clone_with_new_guid(&self) -> Self {
+        let mut m = self.clone();
+        m.guid = uuid::Uuid::new_v4().to_string();
+        m
+    }
+}
+
+impl std::fmt::Display for Mesh {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "Mesh(name={}, vertices={}, faces={})",
+            self.name, self.number_of_vertices(), self.number_of_faces())
+    }
+}
+
+impl std::fmt::Debug for Mesh {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "Mesh(\n  name={},\n  vertices={},\n  faces={},\n  edges={}\n)",
+            self.name, self.number_of_vertices(), self.number_of_faces(), self.number_of_edges())
+    }
+}
+
+impl PartialEq for Mesh {
+    fn eq(&self, other: &Self) -> bool {
+        self.name == other.name && self.vertex == other.vertex
+            && self.face == other.face && self.xform == other.xform
     }
 }
 

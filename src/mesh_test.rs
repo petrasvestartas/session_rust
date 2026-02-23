@@ -1,11 +1,35 @@
 use crate::{MINI_CHECK, MINI_TEST, REGISTER_MINI_TEST};
 use crate::mini_test::TestResult;
+use crate::tolerance::{TOLERANCE, PI};
 
 pub fn run_mesh_constructor() -> TestResult {
     MINI_TEST!("Constructor", {
         use crate::Mesh;
+        use crate::Point;
 
-        let mesh = Mesh::new();
+        let sides = 6;
+
+        // Create hexagon vertices in XY plane
+        let mut vertices: Vec<Point> = Vec::new();
+        for i in 0..sides {
+            let angle = 2.0 * PI * i as f64 / sides as f64;
+            let x = 1.0 * angle.cos();
+            let y = 1.0 * angle.sin();
+            vertices.push(Point::new(x, y, 0.0));
+        }
+
+        // Add center point as last vertex
+        vertices.push(Point::new(0.0, 0.0, 0.0));
+        let faces = vec![
+            vec![0, 1, 6],
+            vec![1, 2, 6],
+            vec![2, 3, 6],
+            vec![3, 4, 6],
+            vec![4, 5, 6],
+            vec![5, 0, 6],
+        ];
+
+        let mesh = Mesh::from_vertices_and_faces(vertices, faces);
 
         let num_vertices = mesh.number_of_vertices();
         let num_faces = mesh.number_of_faces();
@@ -13,13 +37,25 @@ pub fn run_mesh_constructor() -> TestResult {
         let is_empty = mesh.is_empty();
         let euler = mesh.euler();
 
-        MINI_CHECK!(num_vertices == 0);
-        MINI_CHECK!(num_faces == 0);
-        MINI_CHECK!(num_edges == 0);
-        MINI_CHECK!(is_empty);
-        MINI_CHECK!(euler == 0);
+        // String representations
+        let sstr = format!("{}", mesh);
+        let srepr = format!("{:?}", mesh);
+
+        // Copy (new guid)
+        let mcopy = mesh.clone_with_new_guid();
+
+        MINI_CHECK!(num_vertices == 7);
+        MINI_CHECK!(num_faces == 6);
+        MINI_CHECK!(num_edges == 12);
+        MINI_CHECK!(!is_empty);
+        MINI_CHECK!(euler == 1);
         MINI_CHECK!(mesh.name == "my_mesh");
         MINI_CHECK!(!mesh.guid.is_empty());
+        MINI_CHECK!(sstr.contains("Mesh"));
+        MINI_CHECK!(srepr.contains("name=my_mesh"));
+        MINI_CHECK!(mcopy.guid != mesh.guid);
+        MINI_CHECK!(mcopy == mesh);
+        MINI_CHECK!(!(mcopy != mesh));
     })
 }
 
@@ -152,7 +188,7 @@ pub fn run_mesh_face_normal() -> TestResult {
     MINI_TEST!("Face_normal", {
         use crate::Mesh;
         use crate::Point;
-        use crate::tolerance::TOLERANCE;
+
 
         let mut mesh = Mesh::new();
         let v0 = mesh.add_vertex(Point::new(0.0, 0.0, 0.0), None);
@@ -172,7 +208,7 @@ pub fn run_mesh_face_area() -> TestResult {
     MINI_TEST!("Face_area", {
         use crate::Mesh;
         use crate::Point;
-        use crate::tolerance::TOLERANCE;
+
 
         let mut mesh = Mesh::new();
         let v0 = mesh.add_vertex(Point::new(0.0, 0.0, 0.0), None);
@@ -186,8 +222,8 @@ pub fn run_mesh_face_area() -> TestResult {
     })
 }
 
-pub fn run_mesh_from_polygons() -> TestResult {
-    MINI_TEST!("From_polygons", {
+pub fn run_mesh_from_polylines() -> TestResult {
+    MINI_TEST!("From_polylines", {
         use crate::Mesh;
         use crate::Point;
 
@@ -197,7 +233,7 @@ pub fn run_mesh_from_polygons() -> TestResult {
             Point::new(0.0, 1.0, 0.0),
         ];
 
-        let mesh = Mesh::from_polygons(vec![triangle], None);
+        let mesh = Mesh::from_polylines(vec![triangle], None);
         MINI_CHECK!(mesh.number_of_vertices() == 3);
         MINI_CHECK!(mesh.number_of_faces() == 1);
         MINI_CHECK!(mesh.number_of_edges() == 3);
@@ -213,7 +249,7 @@ pub fn run_mesh_from_polygons() -> TestResult {
             Point::new(1.0, 1.0, 0.0),
         ];
 
-        let mesh2 = Mesh::from_polygons(vec![tri1, tri2], None);
+        let mesh2 = Mesh::from_polylines(vec![tri1, tri2], None);
         MINI_CHECK!(mesh2.number_of_vertices() == 4);
         MINI_CHECK!(mesh2.number_of_faces() == 2);
     })
@@ -370,6 +406,26 @@ pub fn run_mesh_to_vertices_and_faces() -> TestResult {
     })
 }
 
+pub fn run_mesh_from_lines() -> TestResult {
+    MINI_TEST!("From_lines", {
+        use crate::Mesh;
+        use crate::Line;
+        use crate::Point;
+
+        // Grid of unit segments forming 4 quads (3x3 grid)
+        let mut lines: Vec<Line> = Vec::new();
+        for i in 0..=2 {
+            for j in 0..2 {
+                lines.push(Line::from_points(&Point::new(i as f64, j as f64, 0.0), &Point::new(i as f64, (j+1) as f64, 0.0)));
+                lines.push(Line::from_points(&Point::new(j as f64, i as f64, 0.0), &Point::new((j+1) as f64, i as f64, 0.0)));
+            }
+        }
+        let mesh = Mesh::from_lines(&lines, true, None);
+        MINI_CHECK!(mesh.number_of_vertices() == 9);
+        MINI_CHECK!(mesh.number_of_faces() == 4);
+    })
+}
+
 // Register tests with the shared registry
 REGISTER_MINI_TEST!("Mesh", "Constructor", crate::mesh_test::run_mesh_constructor);
 REGISTER_MINI_TEST!("Mesh", "Add_vertex", crate::mesh_test::run_mesh_add_vertex);
@@ -380,7 +436,7 @@ REGISTER_MINI_TEST!("Mesh", "Vertex_faces", crate::mesh_test::run_mesh_vertex_fa
 REGISTER_MINI_TEST!("Mesh", "Is_vertex_on_boundary", crate::mesh_test::run_mesh_is_vertex_on_boundary);
 REGISTER_MINI_TEST!("Mesh", "Face_normal", crate::mesh_test::run_mesh_face_normal);
 REGISTER_MINI_TEST!("Mesh", "Face_area", crate::mesh_test::run_mesh_face_area);
-REGISTER_MINI_TEST!("Mesh", "From_polygons", crate::mesh_test::run_mesh_from_polygons);
+REGISTER_MINI_TEST!("Mesh", "From_polylines", crate::mesh_test::run_mesh_from_polylines);
 REGISTER_MINI_TEST!("Mesh", "Clear", crate::mesh_test::run_mesh_clear);
 REGISTER_MINI_TEST!("Mesh", "Transformation", crate::mesh_test::run_mesh_transformation);
 REGISTER_MINI_TEST!("Mesh", "Vertex_position", crate::mesh_test::run_mesh_vertex_position);
@@ -388,3 +444,4 @@ REGISTER_MINI_TEST!("Mesh", "Vertex_normal", crate::mesh_test::run_mesh_vertex_n
 REGISTER_MINI_TEST!("Mesh", "To_vertices_and_faces", crate::mesh_test::run_mesh_to_vertices_and_faces);
 REGISTER_MINI_TEST!("Mesh", "Json_roundtrip", crate::mesh_test::run_mesh_json_roundtrip);
 REGISTER_MINI_TEST!("Mesh", "Protobuf_roundtrip", crate::mesh_test::run_mesh_protobuf_roundtrip);
+REGISTER_MINI_TEST!("Mesh", "From_lines", crate::mesh_test::run_mesh_from_lines);

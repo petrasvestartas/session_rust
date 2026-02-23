@@ -361,6 +361,70 @@ impl BoundingBox {
         }
     }
 
+    pub fn from_mesh(mesh: &crate::mesh::Mesh, inflate: f64) -> Self {
+        let (vertices, _) = mesh.to_vertices_and_faces();
+        Self::from_points(&vertices, inflate)
+    }
+
+    pub fn from_mesh_with_plane(mesh: &crate::mesh::Mesh, plane: &Plane, inflate: f64) -> Self {
+        let (vertices, _) = mesh.to_vertices_and_faces();
+        Self::from_points_with_plane(&vertices, plane, inflate)
+    }
+
+    pub fn from_pointcloud(pointcloud: &crate::pointcloud::PointCloud, inflate: f64) -> Self {
+        Self::from_points(&pointcloud.get_points(), inflate)
+    }
+
+    pub fn from_pointcloud_with_plane(pointcloud: &crate::pointcloud::PointCloud, plane: &Plane, inflate: f64) -> Self {
+        Self::from_points_with_plane(&pointcloud.get_points(), plane, inflate)
+    }
+
+    pub fn from_nurbssurface(surface: &crate::nurbssurface::NurbsSurface, inflate: f64) -> Self {
+        if !surface.is_valid() || surface.cv_count_dir(Some(0)) == 0 || surface.cv_count_dir(Some(1)) == 0 {
+            return BoundingBox::default();
+        }
+        let mut points = Vec::new();
+        for i in 0..surface.cv_count_dir(Some(0)) {
+            for j in 0..surface.cv_count_dir(Some(1)) {
+                if let Some(pt) = surface.get_cv(i, j) {
+                    points.push(pt);
+                }
+            }
+        }
+        Self::from_points(&points, inflate)
+    }
+
+    pub fn from_nurbssurface_with_plane(surface: &crate::nurbssurface::NurbsSurface, plane: &Plane, inflate: f64) -> Self {
+        if !surface.is_valid() || surface.cv_count_dir(Some(0)) == 0 || surface.cv_count_dir(Some(1)) == 0 {
+            return BoundingBox::default();
+        }
+        let mut points = Vec::new();
+        for i in 0..surface.cv_count_dir(Some(0)) {
+            for j in 0..surface.cv_count_dir(Some(1)) {
+                if let Some(pt) = surface.get_cv(i, j) {
+                    points.push(pt);
+                }
+            }
+        }
+        Self::from_points_with_plane(&points, plane, inflate)
+    }
+
+    pub fn aabb(&self) -> Self {
+        let ex = self.half_size[0];
+        let ey = self.half_size[1];
+        let ez = self.half_size[2];
+        let hx = self.x_axis[0].abs() * ex + self.y_axis[0].abs() * ey + self.z_axis[0].abs() * ez;
+        let hy = self.x_axis[1].abs() * ex + self.y_axis[1].abs() * ey + self.z_axis[1].abs() * ez;
+        let hz = self.x_axis[2].abs() * ex + self.y_axis[2].abs() * ey + self.z_axis[2].abs() * ez;
+        BoundingBox::new(
+            self.center.clone(),
+            Vector::new(1.0, 0.0, 0.0),
+            Vector::new(0.0, 1.0, 0.0),
+            Vector::new(0.0, 0.0, 1.0),
+            Vector::new(hx, hy, hz),
+        )
+    }
+
     pub fn point_at(&self, x: f64, y: f64, z: f64) -> Point {
         Point::new(
             self.center[0] + x * self.x_axis[0] + y * self.y_axis[0] + z * self.z_axis[0],

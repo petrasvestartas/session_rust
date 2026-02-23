@@ -1552,7 +1552,7 @@ impl Primitives {
             vec![Point::new(0.0, 0.0, z1), Point::new(0.0, r, z0), Point::new(-a, -r/2.0, z0)],
             vec![Point::new(0.0, 0.0, z1), Point::new(a, -r/2.0, z0), Point::new(0.0, r, z0)],
         ];
-        Mesh::from_polygons(faces, Some(1e-10))
+        Mesh::from_polylines(faces, Some(1e-10))
     }
 
     pub fn cube(edge: f64) -> Mesh {
@@ -1569,7 +1569,7 @@ impl Primitives {
             vec![v0.clone(), v4.clone(), v7.clone(), v3.clone()],
             vec![v1.clone(), v2.clone(), v6.clone(), v5.clone()],
         ];
-        Mesh::from_polygons(faces, Some(1e-10))
+        Mesh::from_polylines(faces, Some(1e-10))
     }
 
     pub fn octahedron(edge: f64) -> Mesh {
@@ -1583,7 +1583,7 @@ impl Primitives {
             vec![nz.clone(), py.clone(), px.clone()], vec![nz.clone(), nx.clone(), py.clone()],
             vec![nz.clone(), ny.clone(), nx.clone()], vec![nz.clone(), px.clone(), ny.clone()],
         ];
-        Mesh::from_polygons(faces, Some(1e-10))
+        Mesh::from_polylines(faces, Some(1e-10))
     }
 
     pub fn icosahedron(edge: f64) -> Mesh {
@@ -1602,7 +1602,7 @@ impl Primitives {
             [4,9,5],[2,4,11],[6,2,10],[8,6,7],[9,8,1],
         ];
         let faces: Vec<Vec<Point>> = idx.iter().map(|f| vec![verts[f[0]].clone(), verts[f[1]].clone(), verts[f[2]].clone()]).collect();
-        Mesh::from_polygons(faces, Some(1e-10))
+        Mesh::from_polylines(faces, Some(1e-10))
     }
 
     pub fn dodecahedron(edge: f64) -> Mesh {
@@ -1626,7 +1626,7 @@ impl Primitives {
             [4,18, 6,10, 8], [5, 9,11, 7,19], [6,18,19, 7,15],
         ];
         let faces: Vec<Vec<Point>> = idx.iter().map(|f| vec![verts[f[0]].clone(), verts[f[1]].clone(), verts[f[2]].clone(), verts[f[3]].clone(), verts[f[4]].clone()]).collect();
-        Mesh::from_polygons(faces, Some(1e-10))
+        Mesh::from_polylines(faces, Some(1e-10))
     }
 
     pub fn wave_surface(size: f64, amplitude: f64) -> NurbsSurface {
@@ -1646,6 +1646,7 @@ impl Primitives {
         NurbsSurface::create(false, false, 3, 3, n, n, &pts).unwrap_or_default()
     }
 
+    #[allow(unused_assignments)]
     pub fn chevron_mesh(surface: &NurbsSurface, u_divisions: usize, v_division_dist: f64, shift: f64, scale: f64) -> Mesh {
         let mut srf = surface.clone();
 
@@ -1698,11 +1699,10 @@ impl Primitives {
             let mut list_v: Vec<f64> = Vec::new();
             let mut iterations = 0;
 
-            let (mut p0, mut p1, mut p2, mut p6, mut p7, mut p8);
-            let (mut savept6, mut savept7, mut savept8);
-            p0 = Point::new(0.0,0.0,0.0); p1 = p0.clone(); p2 = p0.clone();
-            p6 = p0.clone(); p7 = p0.clone(); p8 = p0.clone();
-            savept6 = p0.clone(); savept7 = p0.clone(); savept8 = p0.clone();
+            let d = Point::new(0.0,0.0,0.0);
+            let (mut p0, mut p1, mut p2) = (d.clone(), d.clone(), d.clone());
+            let (mut p6, mut p7, mut p8) = (d.clone(), d.clone(), d.clone());
+            let (mut savept6, mut savept7, mut savept8) = (d.clone(), d.clone(), d);
 
             while running && iterations < 1000 {
                 iterations += 1;
@@ -1772,7 +1772,7 @@ impl Primitives {
             ct_u += step_u;
         }
 
-        Mesh::from_polygons(polygons, Some(0.01))
+        Mesh::from_polylines(polygons, Some(0.01))
     }
 
     pub fn annen_surfaces() -> Vec<NurbsSurface> {
@@ -1984,7 +1984,7 @@ impl FoldedPlates {
             uu += su;
         }
 
-        self.mesh = Mesh::from_polygons(tris, Some(1e-6));
+        self.mesh = Mesh::from_polylines(tris, Some(1e-6));
     }
 
     fn build_topology(&mut self) {

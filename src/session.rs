@@ -1,5 +1,5 @@
 use crate::{
-    BoundingBox, Graph, Line, Mesh, Objects, Plane, Point, PointCloud, Polyline,
+    BRep, BoundingBox, Graph, Line, Mesh, Objects, Plane, Point, PointCloud, Polyline,
     Tolerance, Tree, TreeNode, BVH,
 };
 use serde::{Deserialize, Serialize};
@@ -13,6 +13,7 @@ use uuid::Uuid;
 #[derive(Debug, Clone)]
 pub enum Geometry {
     BoundingBox(BoundingBox),
+    BRep(BRep),
     Line(Line),
     Mesh(Mesh),
     Plane(Plane),
@@ -26,6 +27,7 @@ impl Geometry {
     pub fn guid(&self) -> &str {
         match self {
             Geometry::BoundingBox(g) => &g.guid,
+            Geometry::BRep(g) => &g.guid,
             Geometry::Line(g) => &g.guid,
             Geometry::Mesh(g) => &g.guid,
             Geometry::Plane(g) => &g.guid,
@@ -198,6 +200,9 @@ impl Session {
         for polyline in &objects.polylines {
             lookup.insert(polyline.guid.clone(), Geometry::Polyline(polyline.clone()));
         }
+        for brep in &objects.breps {
+            lookup.insert(brep.guid.clone(), Geometry::BRep(brep.clone()));
+        }
 
         let session = Session {
             guid: json_obj["guid"].as_str().unwrap_or("").to_string(),
@@ -270,6 +275,9 @@ impl Session {
         }
         for m in &self.objects.meshes {
             objects_proto.meshes.push(crate::proto::Mesh::decode(m.pb_dumps().as_slice()).unwrap());
+        }
+        for b in &self.objects.breps {
+            objects_proto.breps.push(crate::proto::BRep::decode(b.pb_dumps().as_slice()).unwrap());
         }
 
         // Build Tree proto
@@ -370,6 +378,10 @@ impl Session {
                 let msh = Mesh::pb_loads(&m.encode_to_vec())?;
                 session.objects.meshes.push(msh);
             }
+            for b in &objects_proto.breps {
+                let brp = BRep::pb_loads(&b.encode_to_vec())?;
+                session.objects.breps.push(brp);
+            }
         }
 
         // Rebuild tree
@@ -425,6 +437,9 @@ impl Session {
         for polyline in &session.objects.polylines {
             session.lookup.insert(polyline.guid.clone(), Geometry::Polyline(polyline.clone()));
         }
+        for brep in &session.objects.breps {
+            session.lookup.insert(brep.guid.clone(), Geometry::BRep(brep.clone()));
+        }
 
         Ok(session)
     }
@@ -477,9 +492,15 @@ impl Session {
                 inflated
             }
             Geometry::Plane(p) => {
-                // Create a bounded box around plane origin (finite, test-safe)
-                // Keeping the same semantics as Python/C++ default for now.
                 BoundingBox::from_point(p.origin(), inflate * 10.0)
+            }
+            Geometry::BRep(b) => {
+                let points: Vec<Point> = b.m_vertices.clone();
+                if points.is_empty() {
+                    BoundingBox::from_point(Point::new(0.0, 0.0, 0.0), inflate)
+                } else {
+                    BoundingBox::from_points(&points, inflate)
+                }
             }
         }
     }
@@ -686,6 +707,7 @@ impl Session {
                     }
                 }
                 Geometry::PointCloud(_) => {}
+                Geometry::BRep(_) => {}
             }
 
             if let Some(hp) = hit_point {
@@ -847,6 +869,17 @@ impl Session {
         TreeNode::new(&guid)
     }
 
+    pub fn add_brep(&mut self, brep: BRep) -> TreeNode {
+        let guid = brep.guid.clone();
+        let name = brep.name.clone();
+
+        self.objects.breps.push(brep.clone());
+        self.lookup.insert(guid.clone(), Geometry::BRep(brep));
+        self.graph.add_node(&guid, &format!("brep_{name}"));
+
+        TreeNode::new(&guid)
+    }
+
     /// Adds a TreeNode to the tree hierarchy.
     ///
     /// # Arguments
@@ -912,6 +945,7 @@ impl Session {
         self.objects.bboxes.retain(|b| b.guid != guid);
         self.objects.meshes.retain(|m| m.guid != guid);
         self.objects.pointclouds.retain(|p| p.guid != guid);
+        self.objects.breps.retain(|b| b.guid != guid);
 
         // Remove from lookup table
         self.lookup.remove(guid);
@@ -1028,6 +1062,9 @@ impl Session {
         for mesh in &transformed_objects.meshes {
             transformed_lookup.insert(mesh.guid.clone(), Geometry::Mesh(mesh.clone()));
         }
+        for brep in &transformed_objects.breps {
+            transformed_lookup.insert(brep.guid.clone(), Geometry::BRep(brep.clone()));
+        }
 
         fn transform_node(
             node: &TreeNode,
@@ -1050,6 +1087,7 @@ impl Session {
                         Geometry::Polyline(g) => &g.xform,
                         Geometry::PointCloud(g) => &g.xform,
                         Geometry::Mesh(g) => &g.xform,
+                        Geometry::BRep(g) => &g.xform,
                     };
 
                 // Find and update the geometry in the collections
@@ -1117,6 +1155,15 @@ impl Session {
                             g.xform = combined_xform.clone();
                         }
                     }
+                    Geometry::BRep(_) => {
+                        if let Some(g) = transformed_objects
+                            .breps
+                            .iter_mut()
+                            .find(|b| b.guid == node_name)
+                        {
+                            g.xform = combined_xform.clone();
+                        }
+                    }
                 }
 
                 combined_xform
@@ -1164,6 +1211,9 @@ impl Session {
         }
         for mesh in &mut transformed_objects.meshes {
             mesh.transform();
+        }
+        for brep in &mut transformed_objects.breps {
+            brep.transform();
         }
 
         transformed_objects

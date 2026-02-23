@@ -1,3 +1,4 @@
+use crate::closest::Closest;
 use crate::nurbssurface::NurbsSurface;
 use crate::nurbscurve::NurbsCurve;
 use crate::primitives::Primitives;
@@ -22,6 +23,28 @@ pub struct TrimmedSurface {
     #[serde(skip_serializing_if = "Vec::is_empty")]
     #[serde(default)]
     pub m_inner_loops: Vec<NurbsCurve>,
+}
+
+fn point_in_polygon_2d(px: f64, py: f64, coords: &[f64]) -> bool {
+    let mut winding: i32 = 0;
+    let n = coords.len() / 2;
+    for i in 0..n {
+        let j = (i + 1) % n;
+        let y0 = coords[i * 2 + 1];
+        let y1 = coords[j * 2 + 1];
+        if y0 <= py {
+            if y1 > py {
+                let x0 = coords[i * 2];
+                let x1 = coords[j * 2];
+                if (x1 - x0) * (py - y0) - (px - x0) * (y1 - y0) > 0.0 { winding += 1; }
+            }
+        } else if y1 <= py {
+            let x0 = coords[i * 2];
+            let x1 = coords[j * 2];
+            if (x1 - x0) * (py - y0) - (px - x0) * (y1 - y0) < 0.0 { winding -= 1; }
+        }
+    }
+    winding != 0
 }
 
 impl TrimmedSurface {
@@ -58,7 +81,7 @@ impl TrimmedSurface {
         let (pts3d, _) = boundary.divide_by_count(n_samples, true);
         let mut uv_pts = Vec::new();
         for pt in &pts3d {
-            let (_, u, v) = srf.closest_point(pt);
+            let (u, v, _) = Closest::surface_point(&srf, pt, 0.0, 0.0, 0.0, 0.0);
             let nu = (u - dom_u.0) / range_u;
             let nv = (v - dom_v.0) / range_v;
             uv_pts.push(Point::new(nu, nv, 0.0));
@@ -101,7 +124,7 @@ impl TrimmedSurface {
         for i in 0..n_samples {
             let t = dom.0 + (dom.1 - dom.0) * i as f64 / n_samples as f64;
             let pt3d = curve_3d.point_at(t);
-            let (_, u, v) = self.m_surface.closest_point(&pt3d);
+            let (u, v, _) = Closest::surface_point(&self.m_surface, &pt3d, 0.0, 0.0, 0.0, 0.0);
             let nu = (u - sdom_u.0) / range_u;
             let nv = (v - sdom_v.0) / range_v;
             uv_pts.push(Point::new(nu, nv, 0.0));
@@ -129,7 +152,140 @@ impl TrimmedSurface {
     pub fn normal_at(&self, u: f64, v: f64) -> Vector { self.m_surface.normal_at(u, v) }
 
     pub fn mesh(&self) -> Mesh {
-        self.m_surface.mesh()
+        if !self.is_trimmed() { return self.m_surface.mesh(); }
+
+        // Planar: boundary-conforming ear-clip triangulation
+        if self.m_surface.is_planar(1e-6) {
+            let disc = |crv: &NurbsCurve| -> Vec<Point> {
+                let n = if crv.degree() > 1 { (crv.cv_count() * 4).max(16) } else { (crv.cv_count().saturating_sub(1)).max(4) };
+                let (pts, _) = crv.divide_by_count(n, true);
+                pts
+            };
+            let outer_loop = self.m_outer_loop.as_ref().unwrap();
+            let outer_pts = disc(outer_loop);
+            let hole_pts: Vec<Vec<Point>> = self.m_inner_loops.iter().map(|c| disc(c)).collect();
+            let mut pts3d: Vec<Point> = Vec::new();
+            let mut add_pts = |uv_list: &[Point]| {
+                let mut n = uv_list.len();
+                if n > 1 && (uv_list[0][0]-uv_list[n-1][0]).abs() < 1e-12 &&
+                   (uv_list[0][1]-uv_list[n-1][1]).abs() < 1e-12 { n -= 1; }
+                for i in 0..n {
+                    pts3d.push(self.m_surface.point_at(uv_list[i][0], uv_list[i][1])
+                        .unwrap_or(Point::new(0.0,0.0,0.0)));
+                }
+            };
+            add_pts(&outer_pts);
+            for hp in &hole_pts { add_pts(hp); }
+            let holes_ref: Option<&[Vec<Point>]> = if hole_pts.is_empty() { None } else { Some(&hole_pts) };
+            let tris = crate::triangulation_2d::triangulate(&outer_pts, holes_ref);
+            let np = pts3d.len() as i32;
+            let mut polygons: Vec<Vec<Point>> = Vec::new();
+            for &(v0, v1, v2) in &tris {
+                if v0 >= 0 && v0 < np && v1 >= 0 && v1 < np && v2 >= 0 && v2 < np {
+                    polygons.push(vec![pts3d[v0 as usize].clone(), pts3d[v1 as usize].clone(), pts3d[v2 as usize].clone()]);
+                }
+            }
+            let mut result = Mesh::from_polylines(polygons, None);
+            let dom_u = self.m_surface.domain(0).unwrap_or((0.0, 1.0));
+            let dom_v = self.m_surface.domain(1).unwrap_or((0.0, 1.0));
+            let nrm = self.m_surface.normal_at((dom_u.0+dom_u.1)/2.0, (dom_v.0+dom_v.1)/2.0);
+            for (_, vd) in result.vertex.iter_mut() {
+                vd.set_normal(nrm[0], nrm[1], nrm[2]);
+            }
+            return result;
+        }
+
+        // Non-planar: grid + point-in-polygon discard
+        let dom_u = self.m_surface.domain(0).unwrap_or((0.0, 1.0));
+        let dom_v = self.m_surface.domain(1).unwrap_or((0.0, 1.0));
+        let range_u = dom_u.1 - dom_u.0;
+        let range_v = dom_v.1 - dom_v.0;
+        if range_u < 1e-15 || range_v < 1e-15 { return self.m_surface.mesh(); }
+        let p00 = self.m_surface.point_at(dom_u.0, dom_v.0).unwrap_or(Point::new(0.0,0.0,0.0));
+        let p10 = self.m_surface.point_at(dom_u.1, dom_v.0).unwrap_or(Point::new(0.0,0.0,0.0));
+        let p01 = self.m_surface.point_at(dom_u.0, dom_v.1).unwrap_or(Point::new(0.0,0.0,0.0));
+        let u_len = ((p10[0]-p00[0]).powi(2)+(p10[1]-p00[1]).powi(2)+(p10[2]-p00[2]).powi(2)).sqrt();
+        let v_len = ((p01[0]-p00[0]).powi(2)+(p01[1]-p00[1]).powi(2)+(p01[2]-p00[2]).powi(2)).sqrt();
+        let max_dim = u_len.max(v_len);
+        let max_edge = if max_dim > 1e-10 { max_dim / 10.0 } else { 0.1 };
+        let nu = if u_len > 1e-10 { 12usize.max((u_len / max_edge).ceil() as usize + 1) } else { 12 };
+        let nv = if v_len > 1e-10 { 12usize.max((v_len / max_edge).ceil() as usize + 1) } else { 12 };
+        let us: Vec<f64> = (0..nu).map(|i| dom_u.0 + i as f64 * range_u / (nu - 1) as f64).collect();
+        let vs: Vec<f64> = (0..nv).map(|j| dom_v.0 + j as f64 * range_v / (nv - 1) as f64).collect();
+        let mut full = Mesh::new();
+        for i in 0..nu {
+            for j in 0..nv {
+                let pt = self.m_surface.point_at(us[i], vs[j]).unwrap_or(Point::new(0.0,0.0,0.0));
+                let vk = full.add_vertex(pt, None);
+                full.vertex.get_mut(&vk).unwrap().attributes.insert("u".to_string(), us[i]);
+                full.vertex.get_mut(&vk).unwrap().attributes.insert("v".to_string(), vs[j]);
+            }
+        }
+        for i in 0..nu-1 {
+            for j in 0..nv-1 {
+                let v00 = i * nv + j; let v10 = (i+1) * nv + j;
+                let v01 = i * nv + (j+1); let v11 = (i+1) * nv + (j+1);
+                if (i + j) % 2 == 0 {
+                    full.add_face(vec![v00, v10, v11], None);
+                    full.add_face(vec![v00, v11, v01], None);
+                } else {
+                    full.add_face(vec![v00, v10, v01], None);
+                    full.add_face(vec![v10, v11, v01], None);
+                }
+            }
+        }
+        let discretize = |crv: &NurbsCurve| -> Vec<f64> {
+            let n = std::cmp::max(crv.cv_count() * 4, 16);
+            let (pts, _) = crv.divide_by_count(n, true);
+            let mut coords = Vec::with_capacity(pts.len() * 2);
+            for p in &pts { coords.push(p[0]); coords.push(p[1]); }
+            coords
+        };
+        let outer_loop = self.m_outer_loop.as_ref().unwrap();
+        let outer_coords = discretize(outer_loop);
+        let inner_coords: Vec<Vec<f64>> = self.m_inner_loops.iter().map(|c| discretize(c)).collect();
+        let mut keep_verts = std::collections::HashSet::new();
+        for (&vk, vd) in &full.vertex {
+            let u_raw = vd.attributes.get("u").copied().unwrap_or(0.0);
+            let v_raw = vd.attributes.get("v").copied().unwrap_or(0.0);
+            if !point_in_polygon_2d(u_raw, v_raw, &outer_coords) { continue; }
+            let in_hole = inner_coords.iter().any(|ic| point_in_polygon_2d(u_raw, v_raw, ic));
+            if !in_hole { keep_verts.insert(vk); }
+        }
+        let mut polygons: Vec<Vec<Point>> = Vec::new();
+        for (_, fverts) in &full.face {
+            if fverts.iter().all(|vi| keep_verts.contains(vi)) {
+                let poly: Vec<Point> = fverts.iter()
+                    .filter_map(|vi| full.vertex.get(vi).map(|v| Point::new(v.x, v.y, v.z)))
+                    .collect();
+                polygons.push(poly);
+            }
+        }
+        let mut result = Mesh::from_polylines(polygons, None);
+        let nv_total = result.vertex.len();
+        let mut vnx = vec![0.0f64; nv_total + 1];
+        let mut vny = vec![0.0f64; nv_total + 1];
+        let mut vnz = vec![0.0f64; nv_total + 1];
+        for (_, vids) in &result.face {
+            if vids.len() < 3 { continue; }
+            let p0 = &result.vertex[&vids[0]];
+            let p1 = &result.vertex[&vids[1]];
+            let p2 = &result.vertex[&vids[2]];
+            let e1x = p1.x - p0.x; let e1y = p1.y - p0.y; let e1z = p1.z - p0.z;
+            let e2x = p2.x - p0.x; let e2y = p2.y - p0.y; let e2z = p2.z - p0.z;
+            let fnx = e1y*e2z - e1z*e2y;
+            let fny = e1z*e2x - e1x*e2z;
+            let fnz = e1x*e2y - e1y*e2x;
+            for &vi in vids { vnx[vi] += fnx; vny[vi] += fny; vnz[vi] += fnz; }
+        }
+        for i in 0..=nv_total {
+            let len = (vnx[i]*vnx[i] + vny[i]*vny[i] + vnz[i]*vnz[i]).sqrt();
+            if len > 1e-15 { vnx[i] /= len; vny[i] /= len; vnz[i] /= len; }
+            if let Some(v) = result.vertex.get_mut(&i) {
+                v.set_normal(vnx[i], vny[i], vnz[i]);
+            }
+        }
+        result
     }
 
     pub fn transform_self(&mut self) {

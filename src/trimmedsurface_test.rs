@@ -1,5 +1,6 @@
 use crate::{MINI_CHECK, MINI_TEST, REGISTER_MINI_TEST};
 use crate::mini_test::TestResult;
+use crate::tolerance::TOLERANCE;
 
 pub fn run_trimmedsurface_constructor() -> TestResult {
     MINI_TEST!("Constructor", {
@@ -215,7 +216,7 @@ pub fn run_trimmedsurface_point_at() -> TestResult {
         use crate::NurbsSurface;
         use crate::NurbsCurve;
         use crate::Point;
-        use crate::tolerance::TOLERANCE;
+
 
         let mut srf = NurbsSurface::create_raw(3, false, 2, 2, 2, 2, false, false, 1.0, 1.0).unwrap();
         srf.set_cv(0, 0, &Point::new(0.0, 0.0, 0.0));
@@ -279,7 +280,7 @@ pub fn run_trimmedsurface_transformation() -> TestResult {
         use crate::NurbsCurve;
         use crate::Point;
         use crate::Xform;
-        use crate::tolerance::TOLERANCE;
+
 
         let mut srf = NurbsSurface::create_raw(3, false, 2, 2, 2, 2, false, false, 1.0, 1.0).unwrap();
         srf.set_cv(0, 0, &Point::new(0.0, 0.0, 0.0));

@@ -270,21 +270,32 @@ impl NurbsSurface {
         cv_count_u: usize,
         cv_count_v: usize,
         points: &[Point],
-    ) -> Option<Self> {
-        if cv_count_u < 2 || cv_count_v < 2 { return None; }
-        if points.len() != cv_count_u * cv_count_v { return None; }
+    ) -> Result<Self, String> {
+        if degree_u < 1 || degree_v < 1 {
+            return Err(format!("NurbsSurface::create: degree must be >= 1, got degree_u={}, degree_v={}", degree_u, degree_v));
+        }
+        if cv_count_u < degree_u + 1 {
+            return Err(format!("NurbsSurface::create: cv_count_u ({}) must be >= degree_u+1 ({})", cv_count_u, degree_u + 1));
+        }
+        if cv_count_v < degree_v + 1 {
+            return Err(format!("NurbsSurface::create: cv_count_v ({}) must be >= degree_v+1 ({})", cv_count_v, degree_v + 1));
+        }
+        let expected = cv_count_u * cv_count_v;
+        if points.len() != expected {
+            return Err(format!("NurbsSurface::create: expected {} points ({}x{}), got {}", expected, cv_count_u, cv_count_v, points.len()));
+        }
         let order_u = degree_u + 1;
         let order_v = degree_v + 1;
         let mut srf = Self::create_raw(
             3, false, order_u, order_v, cv_count_u, cv_count_v,
             periodic_u, periodic_v, 1.0, 1.0,
-        )?;
+        ).ok_or_else(|| format!("NurbsSurface::create: create_raw failed for order=({},{}) cv=({},{})", order_u, order_v, cv_count_u, cv_count_v))?;
         for i in 0..cv_count_u {
             for j in 0..cv_count_v {
                 srf.set_cv(i, j, &points[i * cv_count_v + j]);
             }
         }
-        Some(srf)
+        Ok(srf)
     }
 
     /// Create NURBS surface with default knot vectors (clamped uniform, delta=1.0)
@@ -446,66 +457,6 @@ impl NurbsSurface {
             return false;
         }
         self.from_curve_internal(&crv, dir)
-    }
-
-
-
-    pub fn closest_point(&self, point: &Point) -> (Point, f64, f64) {
-        let dom_u = self.domain(0).unwrap_or((0.0, 1.0));
-        let dom_v = self.domain(1).unwrap_or((0.0, 1.0));
-
-        let nu = 16;
-        let nv = 16;
-        let mut best_dist2 = 1e300f64;
-        let mut best_u = (dom_u.0 + dom_u.1) * 0.5;
-        let mut best_v = (dom_v.0 + dom_v.1) * 0.5;
-        for i in 0..=nu {
-            let u = dom_u.0 + (dom_u.1 - dom_u.0) * i as f64 / nu as f64;
-            for j in 0..=nv {
-                let v = dom_v.0 + (dom_v.1 - dom_v.0) * j as f64 / nv as f64;
-                if let Some(pt) = self.point_at(u, v) {
-                    let dx = pt[0] - point[0];
-                    let dy = pt[1] - point[1];
-                    let dz = pt[2] - point[2];
-                    let d2 = dx * dx + dy * dy + dz * dz;
-                    if d2 < best_dist2 {
-                        best_dist2 = d2;
-                        best_u = u;
-                        best_v = v;
-                    }
-                }
-            }
-        }
-
-        let mut u = best_u;
-        let mut v = best_v;
-        for _ in 0..20 {
-            let derivs = self.evaluate(u, v, 1);
-            if derivs.len() < 3 { break; }
-            let dx = derivs[0][0] - point[0];
-            let dy = derivs[0][1] - point[1];
-            let dz = derivs[0][2] - point[2];
-            let su0 = derivs[1][0]; let su1 = derivs[1][1]; let su2 = derivs[1][2];
-            let sv0 = derivs[2][0]; let sv1 = derivs[2][1]; let sv2 = derivs[2][2];
-            let fu = dx * su0 + dy * su1 + dz * su2;
-            let fv = dx * sv0 + dy * sv1 + dz * sv2;
-            if fu.abs() < 1e-14 && fv.abs() < 1e-14 { break; }
-            let juu = su0 * su0 + su1 * su1 + su2 * su2;
-            let juv = su0 * sv0 + su1 * sv1 + su2 * sv2;
-            let jvv = sv0 * sv0 + sv1 * sv1 + sv2 * sv2;
-            let det = juu * jvv - juv * juv;
-            if det.abs() < 1e-30 { break; }
-            let du = -(jvv * fu - juv * fv) / det;
-            let dv = -(juu * fv - juv * fu) / det;
-            u += du;
-            v += dv;
-            u = u.clamp(dom_u.0, dom_u.1);
-            v = v.clamp(dom_v.0, dom_v.1);
-            if du * du + dv * dv < 1e-28 { break; }
-        }
-
-        let pt = self.point_at(u, v).unwrap_or(Point::new(0.0, 0.0, 0.0));
-        (pt, u, v)
     }
 
     fn compute_bbox_diagonal(&self) -> f64 {
@@ -756,16 +707,23 @@ impl NurbsSurface {
         if sing_v0 {
             let pt = self.point_at(us[0], vs[0]).unwrap_or(Point::new(0.0, 0.0, 0.0));
             south_pole = result.add_vertex(pt, None);
+            result.vertex.get_mut(&south_pole).unwrap().attributes.insert("u".to_string(), us[0]);
+            result.vertex.get_mut(&south_pole).unwrap().attributes.insert("v".to_string(), vs[0]);
         }
         if sing_v1 {
             let pt = self.point_at(us[0], vs[nv - 1]).unwrap_or(Point::new(0.0, 0.0, 0.0));
             north_pole = result.add_vertex(pt, None);
+            result.vertex.get_mut(&north_pole).unwrap().attributes.insert("u".to_string(), us[0]);
+            result.vertex.get_mut(&north_pole).unwrap().attributes.insert("v".to_string(), vs[nv - 1]);
         }
         let mut vkeys = Vec::with_capacity(nu * nv_grid);
         for i in 0..nu {
             for j in j_start..j_end {
                 let pt = self.point_at(us[i], vs[j]).unwrap_or(Point::new(0.0, 0.0, 0.0));
-                vkeys.push(result.add_vertex(pt, None));
+                let vk = result.add_vertex(pt, None);
+                result.vertex.get_mut(&vk).unwrap().attributes.insert("u".to_string(), us[i]);
+                result.vertex.get_mut(&vk).unwrap().attributes.insert("v".to_string(), vs[j]);
+                vkeys.push(vk);
             }
         }
         let grid_idx = |i: usize, j: usize| -> usize {
@@ -1030,6 +988,43 @@ impl NurbsSurface {
 
         // Use knot module function
         knot::is_clamped(self.m_order[dir], self.m_cv_count[dir], &self.m_knot[dir], end as i32)
+    }
+
+    pub fn is_duplicate(&self, other: &Self, ignore_parameterization: bool, tolerance: f64) -> bool {
+        if !self.is_valid() || !other.is_valid() { return false; }
+        if self.m_dim != other.m_dim { return false; }
+        if self.m_is_rat != other.m_is_rat { return false; }
+        if self.m_order[0] != other.m_order[0] || self.m_order[1] != other.m_order[1] { return false; }
+        if self.m_cv_count[0] != other.m_cv_count[0] || self.m_cv_count[1] != other.m_cv_count[1] { return false; }
+
+        for i in 0..self.m_cv_count[0] {
+            for j in 0..self.m_cv_count[1] {
+                match (self.get_cv(i, j), other.get_cv(i, j)) {
+                    (Some(p1), Some(p2)) => {
+                        if p1.distance(&p2, None) > tolerance { return false; }
+                    }
+                    _ => return false,
+                }
+                if self.m_is_rat {
+                    if (self.weight(i, j) - other.weight(i, j)).abs() > tolerance { return false; }
+                }
+            }
+        }
+
+        if !ignore_parameterization {
+            for dir in 0..2 {
+                for i in 0..self.knot_count(dir) {
+                    match (self.knot(dir, i), other.knot(dir, i)) {
+                        (Some(k1), Some(k2)) => {
+                            if (k1 - k2).abs() > tolerance { return false; }
+                        }
+                        _ => return false,
+                    }
+                }
+            }
+        }
+
+        true
     }
 
     ///////////////////////////////////////////////////////////////////////////////////////////
@@ -1780,51 +1775,30 @@ impl NurbsSurface {
 
     /// Make surface non-rational if all weights are equal
     pub fn make_non_rational(&mut self) -> bool {
-        if !self.m_is_rat {
-            return true; // Already non-rational
-        }
-        
-        if !self.is_valid() {
-            return false;
-        }
-        
-        // Check if all weights are equal (within tolerance)
-        let tol = 1e-10;
-        let first_weight = if let Some(cv) = self.cv(0, 0) {
-            cv[self.m_dim]
-        } else {
-            return false;
-        };
-        
+        if !self.m_is_rat { return true; }
+
+        let new_cv_size = self.m_dim;
+        let new_stride_0 = new_cv_size;
+        let new_stride_1 = new_cv_size * self.m_cv_count[0];
+        let total = self.m_cv_count[0] * self.m_cv_count[1] * self.m_dim;
+        let mut new_cv = vec![0.0; total];
+
         for i in 0..self.m_cv_count[0] {
             for j in 0..self.m_cv_count[1] {
-                if let Some(cv) = self.cv(i, j) {
-                    if (cv[self.m_dim] - first_weight).abs() > tol {
-                        return false; // Weights not equal
-                    }
+                let base = i * self.m_cv_stride[0] + j * self.m_cv_stride[1];
+                let w = self.m_cv[base + self.m_dim];
+                let inv_w = if w.abs() > 1e-14 { 1.0 / w } else { 1.0 };
+                let dst = i * new_stride_0 + j * new_stride_1;
+                for d in 0..self.m_dim {
+                    new_cv[dst + d] = self.m_cv[base + d] * inv_w;
                 }
             }
         }
-        
-        let old_cv_size = self.m_dim + 1;
-        let new_cv_size = self.m_dim;
-        let cv_count_total = self.m_cv_count[0] * self.m_cv_count[1];
-        
-        // Create new CV array without weights
-        let mut new_cv = vec![0.0; new_cv_size * cv_count_total];
-        
-        // Copy existing CVs (without weight)
-        for i in 0..cv_count_total {
-            for d in 0..self.m_dim {
-                new_cv[i * new_cv_size + d] = self.m_cv[i * old_cv_size + d];
-            }
-        }
-        
+
         self.m_cv = new_cv;
         self.m_is_rat = false;
-        self.m_cv_stride[0] = new_cv_size;
-        self.m_cv_stride[1] = new_cv_size * self.m_cv_count[0];
-
+        self.m_cv_stride[0] = new_stride_0;
+        self.m_cv_stride[1] = new_stride_1;
         true
     }
 
@@ -2176,6 +2150,48 @@ impl NurbsSurface {
         true
     }
     
+    pub fn transformed(&self, xform: Option<&Xform>) -> Self {
+        let mut result = self.clone();
+        match xform {
+            Some(xf) => { result.transform(xf); }
+            None => { result.transform_self(); }
+        }
+        result
+    }
+
+    pub fn make_periodic_uniform_knot_vector(&mut self, dir: usize, delta: f64) -> bool {
+        if dir > 1 || delta <= 0.0 { return false; }
+        let knots = knot::make_periodic_uniform(self.m_order[dir], self.m_cv_count[dir], delta);
+        if knots.is_empty() { return false; }
+        self.m_knot[dir] = knots;
+        true
+    }
+
+    pub fn trim(&mut self, dir: usize, domain: (f64, f64)) -> bool {
+        if dir > 1 || !self.is_valid() { return false; }
+        let mut crv = match self.to_curve_internal(dir) {
+            Some(c) => c,
+            None => return false,
+        };
+        if !crv.trim(domain.0, domain.1) { return false; }
+        self.from_curve_internal(&crv, dir)
+    }
+
+    pub fn split(&self, dir: usize, c: f64) -> (Option<Self>, Option<Self>) {
+        if dir > 1 || !self.is_valid() { return (None, None); }
+        let (t0, t1) = match self.domain(dir) {
+            Some(d) => d,
+            None => return (None, None),
+        };
+        if c <= t0 || c >= t1 { return (None, None); }
+        let mut lo = self.clone();
+        let mut hi = self.clone();
+        if !lo.trim(dir, (t0, c)) || !hi.trim(dir, (c, t1)) {
+            return (None, None);
+        }
+        (Some(lo), Some(hi))
+    }
+
     ///////////////////////////////////////////////////////////////////////////////////////////
     // STRING REPRESENTATION
     ///////////////////////////////////////////////////////////////////////////////////////////
@@ -2297,8 +2313,6 @@ impl NurbsSurface {
                 name: self.xform.name.clone(),
                 matrix: self.xform.m.to_vec(),
             }),
-            outer_loop: None,
-            inner_loops: Vec::new(),
             cached_mesh: if let Some(ref m) = self.m_mesh {
                 if m.number_of_vertices() > 0 {
                     let mesh_data = m.pb_dumps();

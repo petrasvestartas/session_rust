@@ -167,6 +167,7 @@ mod tests {
 
 use crate::{MINI_CHECK, MINI_TEST, REGISTER_MINI_TEST};
 use crate::mini_test::TestResult;
+use crate::tolerance::TOLERANCE;
 
 pub fn run_color_constructor() -> TestResult {
     MINI_TEST!("Constructor", {
@@ -251,7 +252,7 @@ pub fn run_color_protobuf_roundtrip() -> TestResult {
 pub fn run_color_conversion() -> TestResult {
     MINI_TEST!("Conversion", {
         use crate::Color;
-        use crate::tolerance::TOLERANCE;
+
 
         let color = Color::new(255, 128, 64, 255);
         let flts = color.to_float_array();
