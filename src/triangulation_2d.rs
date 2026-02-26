@@ -126,7 +126,26 @@ fn ear_clip(coords: &[f64], indices_in: &[i32]) -> Vec<(i32, i32, i32)> {
                     break;
                 }
             }
-            if !removed { break; }
+            if !removed {
+                let mut coord_map: std::collections::HashMap<(i64, i64), usize> = std::collections::HashMap::new();
+                let mut did_split = false;
+                for pos in 0..indices.len() {
+                    let kx = (coords[indices[pos] as usize * 2] * 1e8).round() as i64;
+                    let ky = (coords[indices[pos] as usize * 2 + 1] * 1e8).round() as i64;
+                    if let Some(&sf) = coord_map.get(&(kx, ky)) {
+                        let poly_a: Vec<i32> = indices[sf..pos].to_vec();
+                        let mut poly_b: Vec<i32> = indices[pos..].to_vec();
+                        poly_b.extend_from_slice(&indices[..sf]);
+                        triangles.extend(ear_clip(coords, &poly_a));
+                        triangles.extend(ear_clip(coords, &poly_b));
+                        did_split = true;
+                        break;
+                    }
+                    coord_map.insert((kx, ky), pos);
+                }
+                if did_split { indices.clear(); }
+                break;
+            }
         }
         it += 1;
     }
@@ -245,6 +264,28 @@ pub fn triangulate(outer_pts: &[Point], hole_pts_list: Option<&[Vec<Point>]>) ->
     let mut bn = outer_pts.len();
     if bn > 1 && (outer_pts[0][0] - outer_pts[bn-1][0]).abs() < 1e-12 &&
        (outer_pts[0][1] - outer_pts[bn-1][1]).abs() < 1e-12 { bn -= 1; }
+    let no_holes = hole_pts_list.map_or(true, |h| h.is_empty());
+    if no_holes {
+        if bn == 3 { return vec![(0, 1, 2)]; }
+        if bn == 4 {
+            let d02 = (outer_pts[0][0]-outer_pts[2][0]).powi(2) + (outer_pts[0][1]-outer_pts[2][1]).powi(2);
+            let d13 = (outer_pts[1][0]-outer_pts[3][0]).powi(2) + (outer_pts[1][1]-outer_pts[3][1]).powi(2);
+            return if d02 <= d13 { vec![(0, 1, 2), (0, 2, 3)] } else { vec![(0, 1, 3), (1, 2, 3)] };
+        }
+        let mut convex = true;
+        let mut first_cross = 0.0_f64;
+        for i in 0..bn {
+            let j = (i + 1) % bn;
+            let k = (i + 2) % bn;
+            let c = cross_2d(outer_pts[i][0], outer_pts[i][1], outer_pts[j][0], outer_pts[j][1], outer_pts[k][0], outer_pts[k][1]);
+            if c.abs() < 1e-12 { continue; }
+            if first_cross == 0.0 { first_cross = c; }
+            else if (c > 0.0) != (first_cross > 0.0) { convex = false; break; }
+        }
+        if convex && bn >= 5 {
+            return (1..bn as i32 - 1).map(|i| (0, i, i + 1)).collect();
+        }
+    }
     let mut boundary_indices = Vec::new();
     for i in 0..bn {
         let idx = (coords.len() / 2) as i32;

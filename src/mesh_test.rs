@@ -184,6 +184,174 @@ pub fn run_mesh_is_vertex_on_boundary() -> TestResult {
     })
 }
 
+pub fn run_mesh_vertex_edges() -> TestResult {
+    MINI_TEST!("Vertex_edges", {
+        use crate::Mesh;
+        use crate::Point;
+
+        let mut mesh = Mesh::new();
+        let v0 = mesh.add_vertex(Point::new(0.0,0.0,0.0), None);
+        let v1 = mesh.add_vertex(Point::new(1.0,0.0,0.0), None);
+        let v2 = mesh.add_vertex(Point::new(1.0,1.0,0.0), None);
+        let v3 = mesh.add_vertex(Point::new(0.0,1.0,0.0), None);
+        let v4 = mesh.add_vertex(Point::new(2.0,0.0,0.0), None);
+        mesh.add_face(vec![v0,v1,v2,v3], None);
+        mesh.add_face(vec![v1,v4,v2], None);
+
+        let edges = mesh.vertex_edges(v1);
+        MINI_CHECK!(edges.len() == 3);
+        MINI_CHECK!(edges.contains(&(v1,v0)));
+        MINI_CHECK!(edges.contains(&(v1,v2)));
+        MINI_CHECK!(edges.contains(&(v1,v4)));
+    })
+}
+
+pub fn run_mesh_face_edges() -> TestResult {
+    MINI_TEST!("Face_edges", {
+        use crate::Mesh;
+        use crate::Point;
+
+        let mut mesh = Mesh::new();
+        let v0 = mesh.add_vertex(Point::new(0.0,0.0,0.0), None);
+        let v1 = mesh.add_vertex(Point::new(1.0,0.0,0.0), None);
+        let v2 = mesh.add_vertex(Point::new(1.0,1.0,0.0), None);
+        let v3 = mesh.add_vertex(Point::new(0.0,1.0,0.0), None);
+        let v4 = mesh.add_vertex(Point::new(2.0,0.0,0.0), None);
+        let f0 = mesh.add_face(vec![v0,v1,v2,v3], None).unwrap();
+        mesh.add_face(vec![v1,v4,v2], None);
+
+        let edges = mesh.face_edges(f0);
+        MINI_CHECK!(edges.len() == 4);
+        MINI_CHECK!(edges[0] == (v0,v1));
+        MINI_CHECK!(edges[1] == (v1,v2));
+        MINI_CHECK!(edges[2] == (v2,v3));
+        MINI_CHECK!(edges[3] == (v3,v0));
+    })
+}
+
+pub fn run_mesh_face_neighbors() -> TestResult {
+    MINI_TEST!("Face_neighbors", {
+        use crate::Mesh;
+        use crate::Point;
+
+        let mut mesh = Mesh::new();
+        let v0 = mesh.add_vertex(Point::new(0.0,0.0,0.0), None);
+        let v1 = mesh.add_vertex(Point::new(1.0,0.0,0.0), None);
+        let v2 = mesh.add_vertex(Point::new(1.0,1.0,0.0), None);
+        let v3 = mesh.add_vertex(Point::new(0.0,1.0,0.0), None);
+        let v4 = mesh.add_vertex(Point::new(2.0,0.0,0.0), None);
+        let f0 = mesh.add_face(vec![v0,v1,v2,v3], None).unwrap();
+        let f1 = mesh.add_face(vec![v1,v4,v2], None).unwrap();
+
+        let nb0 = mesh.face_neighbors(f0);
+        MINI_CHECK!(nb0.len() == 1);
+        MINI_CHECK!(nb0[0] == f1);
+
+        let nb1 = mesh.face_neighbors(f1);
+        MINI_CHECK!(nb1.len() == 1);
+        MINI_CHECK!(nb1[0] == f0);
+    })
+}
+
+pub fn run_mesh_edge_vertices() -> TestResult {
+    MINI_TEST!("Edge_vertices", {
+        use crate::Mesh;
+        use crate::Point;
+
+        let mut mesh = Mesh::new();
+        let v0 = mesh.add_vertex(Point::new(0.0,0.0,0.0), None);
+        let v1 = mesh.add_vertex(Point::new(1.0,0.0,0.0), None);
+        let v2 = mesh.add_vertex(Point::new(1.0,1.0,0.0), None);
+        mesh.add_face(vec![v0,v1,v2], None);
+
+        let ev = mesh.edge_vertices(v0, v1);
+        MINI_CHECK!(ev[0] == v0);
+        MINI_CHECK!(ev[1] == v1);
+    })
+}
+
+pub fn run_mesh_edge_faces() -> TestResult {
+    MINI_TEST!("Edge_faces", {
+        use crate::Mesh;
+        use crate::Point;
+
+        let mut mesh = Mesh::new();
+        let v0 = mesh.add_vertex(Point::new(0.0,0.0,0.0), None);
+        let v1 = mesh.add_vertex(Point::new(1.0,0.0,0.0), None);
+        let v2 = mesh.add_vertex(Point::new(1.0,1.0,0.0), None);
+        let v3 = mesh.add_vertex(Point::new(0.0,1.0,0.0), None);
+        let v4 = mesh.add_vertex(Point::new(2.0,0.0,0.0), None);
+        let f0 = mesh.add_face(vec![v0,v1,v2,v3], None).unwrap();
+        let f1 = mesh.add_face(vec![v1,v4,v2], None).unwrap();
+
+        let (a, b) = mesh.edge_faces(v1, v2);
+        MINI_CHECK!(a.is_some() && b.is_some());
+        MINI_CHECK!((a == Some(f0) && b == Some(f1)) || (a == Some(f1) && b == Some(f0)));
+
+        let (c, d) = mesh.edge_faces(v0, v1);
+        MINI_CHECK!(c.is_some() != d.is_some());
+    })
+}
+
+pub fn run_mesh_edge_edges() -> TestResult {
+    MINI_TEST!("Edge_edges", {
+        use crate::Mesh;
+        use crate::Point;
+
+        let mut mesh = Mesh::new();
+        let v0 = mesh.add_vertex(Point::new(0.0,0.0,0.0), None);
+        let v1 = mesh.add_vertex(Point::new(1.0,0.0,0.0), None);
+        let v2 = mesh.add_vertex(Point::new(1.0,1.0,0.0), None);
+        let v3 = mesh.add_vertex(Point::new(0.0,1.0,0.0), None);
+        let v4 = mesh.add_vertex(Point::new(2.0,0.0,0.0), None);
+        mesh.add_face(vec![v0,v1,v2,v3], None);
+        mesh.add_face(vec![v1,v4,v2], None);
+
+        let ee = mesh.edge_edges(v1, v2);
+        MINI_CHECK!(ee.len() == 4);
+        MINI_CHECK!(!ee.contains(&(v1,v2)));
+        MINI_CHECK!(!ee.contains(&(v2,v1)));
+    })
+}
+
+pub fn run_mesh_is_edge_on_boundary() -> TestResult {
+    MINI_TEST!("Is_edge_on_boundary", {
+        use crate::Mesh;
+        use crate::Point;
+
+        let mut mesh = Mesh::new();
+        let v0 = mesh.add_vertex(Point::new(0.0,0.0,0.0), None);
+        let v1 = mesh.add_vertex(Point::new(1.0,0.0,0.0), None);
+        let v2 = mesh.add_vertex(Point::new(1.0,1.0,0.0), None);
+        let v3 = mesh.add_vertex(Point::new(0.0,1.0,0.0), None);
+        let v4 = mesh.add_vertex(Point::new(2.0,0.0,0.0), None);
+        mesh.add_face(vec![v0,v1,v2,v3], None);
+        mesh.add_face(vec![v1,v4,v2], None);
+
+        MINI_CHECK!(mesh.is_edge_on_boundary(v0, v1));
+        MINI_CHECK!(!mesh.is_edge_on_boundary(v1, v2));
+    })
+}
+
+pub fn run_mesh_is_face_on_boundary() -> TestResult {
+    MINI_TEST!("Is_face_on_boundary", {
+        use crate::Mesh;
+        use crate::Point;
+
+        let mut mesh = Mesh::new();
+        let v0 = mesh.add_vertex(Point::new(0.0,0.0,0.0), None);
+        let v1 = mesh.add_vertex(Point::new(1.0,0.0,0.0), None);
+        let v2 = mesh.add_vertex(Point::new(1.0,1.0,0.0), None);
+        let v3 = mesh.add_vertex(Point::new(0.0,1.0,0.0), None);
+        let v4 = mesh.add_vertex(Point::new(2.0,0.0,0.0), None);
+        let f0 = mesh.add_face(vec![v0,v1,v2,v3], None).unwrap();
+        let f1 = mesh.add_face(vec![v1,v4,v2], None).unwrap();
+
+        MINI_CHECK!(mesh.is_face_on_boundary(f0));
+        MINI_CHECK!(mesh.is_face_on_boundary(f1));
+    })
+}
+
 pub fn run_mesh_face_normal() -> TestResult {
     MINI_TEST!("Face_normal", {
         use crate::Mesh;
@@ -273,6 +441,31 @@ pub fn run_mesh_clear() -> TestResult {
         MINI_CHECK!(mesh.is_empty());
         MINI_CHECK!(mesh.number_of_vertices() == 0);
         MINI_CHECK!(mesh.number_of_faces() == 0);
+    })
+}
+
+pub fn run_mesh_unify_winding() -> TestResult {
+    MINI_TEST!("Unify_winding", {
+        use crate::Mesh;
+        use crate::Point;
+
+        let mut mesh = Mesh::new();
+        let v0 = mesh.add_vertex(Point::new(0.0, 0.0, 0.0), None);
+        let v1 = mesh.add_vertex(Point::new(1.0, 0.0, 0.0), None);
+        let v2 = mesh.add_vertex(Point::new(1.0, 1.0, 0.0), None);
+        let v3 = mesh.add_vertex(Point::new(0.0, 1.0, 0.0), None);
+
+        let f0 = mesh.add_face(vec![v0, v1, v2], None).unwrap();
+        let f1 = mesh.add_face(vec![v0, v3, v2], None).unwrap();
+
+        let changed = mesh.unify_winding();
+
+        let n0 = mesh.face_normal(f0).unwrap();
+        let n1 = mesh.face_normal(f1).unwrap();
+        let dot = n0[0]*n1[0] + n0[1]*n1[1] + n0[2]*n1[2];
+
+        MINI_CHECK!(changed);
+        MINI_CHECK!(TOLERANCE.is_close(dot, 1.0));
     })
 }
 
@@ -406,6 +599,28 @@ pub fn run_mesh_to_vertices_and_faces() -> TestResult {
     })
 }
 
+pub fn run_mesh_from_polygon_with_holes() -> TestResult {
+    MINI_TEST!("From_polygon_with_holes", {
+        use crate::Mesh;
+        use crate::Point;
+
+        let mesh = Mesh::from_polygon_with_holes(&[
+            vec![Point::new(0.0,0.0,0.0), Point::new(4.0,0.0,0.0), Point::new(4.0,4.0,0.0), Point::new(0.0,4.0,0.0)],
+            vec![Point::new(1.0,1.0,0.0), Point::new(3.0,1.0,0.0), Point::new(3.0,3.0,0.0), Point::new(1.0,3.0,0.0)],
+        ], false);
+        MINI_CHECK!(mesh.number_of_vertices() == 8);
+        MINI_CHECK!(mesh.number_of_faces() > 0);
+        MINI_CHECK!(mesh.is_valid());
+
+        let mesh_sorted = Mesh::from_polygon_with_holes(&[
+            vec![Point::new(1.0,1.0,0.0), Point::new(3.0,1.0,0.0), Point::new(3.0,3.0,0.0), Point::new(1.0,3.0,0.0)],
+            vec![Point::new(0.0,0.0,0.0), Point::new(4.0,0.0,0.0), Point::new(4.0,4.0,0.0), Point::new(0.0,4.0,0.0)],
+        ], true);
+        MINI_CHECK!(mesh_sorted.number_of_vertices() == 8);
+        MINI_CHECK!(mesh_sorted.number_of_faces() == mesh.number_of_faces());
+    })
+}
+
 pub fn run_mesh_from_lines() -> TestResult {
     MINI_TEST!("From_lines", {
         use crate::Mesh;
@@ -434,14 +649,24 @@ REGISTER_MINI_TEST!("Mesh", "Face_vertices", crate::mesh_test::run_mesh_face_ver
 REGISTER_MINI_TEST!("Mesh", "Vertex_neighbors", crate::mesh_test::run_mesh_vertex_neighbors);
 REGISTER_MINI_TEST!("Mesh", "Vertex_faces", crate::mesh_test::run_mesh_vertex_faces);
 REGISTER_MINI_TEST!("Mesh", "Is_vertex_on_boundary", crate::mesh_test::run_mesh_is_vertex_on_boundary);
+REGISTER_MINI_TEST!("Mesh", "Vertex_edges", crate::mesh_test::run_mesh_vertex_edges);
+REGISTER_MINI_TEST!("Mesh", "Face_edges", crate::mesh_test::run_mesh_face_edges);
+REGISTER_MINI_TEST!("Mesh", "Face_neighbors", crate::mesh_test::run_mesh_face_neighbors);
+REGISTER_MINI_TEST!("Mesh", "Edge_vertices", crate::mesh_test::run_mesh_edge_vertices);
+REGISTER_MINI_TEST!("Mesh", "Edge_faces", crate::mesh_test::run_mesh_edge_faces);
+REGISTER_MINI_TEST!("Mesh", "Edge_edges", crate::mesh_test::run_mesh_edge_edges);
+REGISTER_MINI_TEST!("Mesh", "Is_edge_on_boundary", crate::mesh_test::run_mesh_is_edge_on_boundary);
+REGISTER_MINI_TEST!("Mesh", "Is_face_on_boundary", crate::mesh_test::run_mesh_is_face_on_boundary);
 REGISTER_MINI_TEST!("Mesh", "Face_normal", crate::mesh_test::run_mesh_face_normal);
 REGISTER_MINI_TEST!("Mesh", "Face_area", crate::mesh_test::run_mesh_face_area);
 REGISTER_MINI_TEST!("Mesh", "From_polylines", crate::mesh_test::run_mesh_from_polylines);
 REGISTER_MINI_TEST!("Mesh", "Clear", crate::mesh_test::run_mesh_clear);
+REGISTER_MINI_TEST!("Mesh", "Unify_winding", crate::mesh_test::run_mesh_unify_winding);
 REGISTER_MINI_TEST!("Mesh", "Transformation", crate::mesh_test::run_mesh_transformation);
 REGISTER_MINI_TEST!("Mesh", "Vertex_position", crate::mesh_test::run_mesh_vertex_position);
 REGISTER_MINI_TEST!("Mesh", "Vertex_normal", crate::mesh_test::run_mesh_vertex_normal);
 REGISTER_MINI_TEST!("Mesh", "To_vertices_and_faces", crate::mesh_test::run_mesh_to_vertices_and_faces);
 REGISTER_MINI_TEST!("Mesh", "Json_roundtrip", crate::mesh_test::run_mesh_json_roundtrip);
 REGISTER_MINI_TEST!("Mesh", "Protobuf_roundtrip", crate::mesh_test::run_mesh_protobuf_roundtrip);
+REGISTER_MINI_TEST!("Mesh", "From_polygon_with_holes", crate::mesh_test::run_mesh_from_polygon_with_holes);
 REGISTER_MINI_TEST!("Mesh", "From_lines", crate::mesh_test::run_mesh_from_lines);

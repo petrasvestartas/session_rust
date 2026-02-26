@@ -1,11 +1,11 @@
 {
   "type": "Objects",
-  "guid": "60a819f4-4e84-4490-b6c4-8b7dffb60542",
+  "guid": "45511848-664a-4bef-afe9-d0ff702f79bf",
   "name": "my_objects",
   "points": [
     {
       "type": "Point",
-      "guid": "ecc7214c-760f-4fc9-b87c-64a9ced77243",
+      "guid": "4aef0088-fb5e-4229-be70-8b8a5d34bbb5",
       "name": "my_point",
       "x": 100.0,
       "y": 200.0,
@@ -15,13 +15,13 @@
         "a": 255,
         "b": 255,
         "g": 0,
-        "guid": "c192be60-d4b1-4122-a297-9992999dd763",
+        "guid": "876ede16-5261-4a4f-8aa8-47bd7ddba84d",
         "name": "blue",
         "r": 0,
         "type": "Color"
       },
       "xform": {
-        "guid": "dc50d51d-ab4a-4156-8230-2a9d78c060f7",
+        "guid": "281e4883-db42-4544-8b1a-c003f5055391",
         "m": [
           1.0,
           0.0,
@@ -46,7 +46,7 @@
     },
     {
       "type": "Point",
-      "guid": "01430ee2-e02a-4147-8d5a-43eb308e423f",
+      "guid": "5f475065-727f-42a7-89a3-baed11c94d89",
       "name": "my_point",
       "x": 400.0,
       "y": 500.0,
@@ -56,13 +56,13 @@
         "a": 255,
         "b": 255,
         "g": 0,
-        "guid": "2d2aa8bb-88fa-42d3-b0a8-36bb9cdd263d",
+        "guid": "51af7856-5ed6-4683-8cd7-0c82d0cf021a",
         "name": "blue",
         "r": 0,
         "type": "Color"
       },
       "xform": {
-        "guid": "f228a917-2fff-4f31-8170-f6a6aac2fba0",
+        "guid": "a68106b0-87ee-4b7a-8dc3-050e2e253dc9",
         "m": [
           1.0,
           0.0,
@@ -87,7 +87,7 @@
     },
     {
       "type": "Point",
-      "guid": "0b1a510c-bc67-426f-b2fc-5e254732b288",
+      "guid": "831231b3-8f45-45ed-b7c2-ebb14aa4e3ba",
       "name": "my_point",
       "x": 700.0,
       "y": 800.0,
@@ -97,13 +97,13 @@
         "a": 255,
         "b": 255,
         "g": 0,
-        "guid": "827d7824-00c3-4a52-831e-6a4360db9500",
+        "guid": "8dad82b6-b917-41c9-8c59-5ef41cb0ebe8",
         "name": "blue",
         "r": 0,
         "type": "Color"
       },
       "xform": {
-        "guid": "199e64e4-9b09-4398-8585-e05ded7d0836",
+        "guid": "5eedecd0-ee52-4eca-a1b2-acfdab3e538b",
         "m": [
           1.0,
           0.0,

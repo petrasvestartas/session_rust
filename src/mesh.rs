@@ -1,4 +1,6 @@
 use crate::{BoundingBox, Color, Line, Point, Tolerance, Vector, Xform, BVH};
+use crate::polyline::Polyline;
+use crate::triangulation_2d;
 use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
 
@@ -180,6 +182,81 @@ impl Mesh {
         self.invalidate_triangle_bvh();
     }
 
+    pub fn unify_winding(&mut self) -> bool {
+        if self.face.len() < 2 {
+            return false;
+        }
+
+        let mut edge_faces: HashMap<(usize, usize), Vec<(usize, usize, usize)>> = HashMap::new();
+        for (&fkey, verts) in &self.face {
+            let n = verts.len();
+            for i in 0..n {
+                let u = verts[i];
+                let v = verts[(i + 1) % n];
+                let edge = if u < v { (u, v) } else { (v, u) };
+                edge_faces.entry(edge).or_default().push((fkey, u, v));
+            }
+        }
+
+        let mut visited: HashSet<usize> = HashSet::new();
+        let mut flipped: HashSet<usize> = HashSet::new();
+        let face_keys: Vec<usize> = self.face.keys().copied().collect();
+        for seed in face_keys {
+            if visited.contains(&seed) {
+                continue;
+            }
+            visited.insert(seed);
+            let mut queue = vec![seed];
+            while let Some(f) = queue.pop() {
+                let is_flipped = flipped.contains(&f);
+                let verts = self.face[&f].clone();
+                let n = verts.len();
+                for i in 0..n {
+                    let u_orig = verts[i];
+                    let v_orig = verts[(i + 1) % n];
+                    let (eff_u, eff_v) = if is_flipped { (v_orig, u_orig) } else { (u_orig, v_orig) };
+                    let edge = if u_orig < v_orig { (u_orig, v_orig) } else { (v_orig, u_orig) };
+                    if let Some(adj_list) = edge_faces.get(&edge) {
+                        for &(adj_key, adj_u, adj_v) in adj_list {
+                            if adj_key == f || visited.contains(&adj_key) {
+                                continue;
+                            }
+                            if !(adj_u == eff_v && adj_v == eff_u) {
+                                flipped.insert(adj_key);
+                            }
+                            visited.insert(adj_key);
+                            queue.push(adj_key);
+                        }
+                    }
+                }
+            }
+        }
+
+        if flipped.is_empty() {
+            return false;
+        }
+
+        for &fkey in &flipped {
+            self.face.get_mut(&fkey).unwrap().reverse();
+        }
+
+        for neighbors in self.halfedge.values_mut() {
+            neighbors.clear();
+        }
+        let face_items: Vec<(usize, Vec<usize>)> = self.face.iter().map(|(&k, v)| (k, v.clone())).collect();
+        for (fkey, verts) in face_items {
+            let n = verts.len();
+            for i in 0..n {
+                let u = verts[i];
+                let v = verts[(i + 1) % n];
+                self.halfedge.entry(u).or_default().insert(v, Some(fkey));
+                self.halfedge.entry(v).or_default().entry(u).or_insert(None);
+            }
+        }
+
+        true
+    }
+
     pub fn number_of_vertices(&self) -> usize {
         self.vertex.len()
     }
@@ -307,13 +384,70 @@ impl Mesh {
     }
 
     pub fn vertex_faces(&self, vertex_key: usize) -> Vec<usize> {
-        let mut faces = Vec::new();
-        for (face_key, face_vertices) in &self.face {
-            if face_vertices.contains(&vertex_key) {
-                faces.push(*face_key);
+        self.halfedge
+            .get(&vertex_key)
+            .map(|neighbors| neighbors.values().filter_map(|f| *f).collect())
+            .unwrap_or_default()
+    }
+
+    pub fn vertex_edges(&self, vertex_key: usize) -> Vec<(usize, usize)> {
+        self.halfedge
+            .get(&vertex_key)
+            .map(|neighbors| neighbors.keys().map(|&u| (vertex_key, u)).collect())
+            .unwrap_or_default()
+    }
+
+    pub fn face_edges(&self, face_key: usize) -> Vec<(usize, usize)> {
+        let verts = match self.face.get(&face_key) {
+            Some(v) => v,
+            None => return vec![],
+        };
+        let n = verts.len();
+        (0..n).map(|i| (verts[i], verts[(i + 1) % n])).collect()
+    }
+
+    pub fn face_neighbors(&self, face_key: usize) -> Vec<usize> {
+        self.face_edges(face_key)
+            .into_iter()
+            .filter_map(|(u, v)| self.halfedge.get(&v)?.get(&u).copied().flatten())
+            .collect()
+    }
+
+    pub fn edge_vertices(&self, u: usize, v: usize) -> [usize; 2] {
+        [u, v]
+    }
+
+    pub fn edge_faces(&self, u: usize, v: usize) -> (Option<usize>, Option<usize>) {
+        let f0 = self.halfedge.get(&u).and_then(|m| m.get(&v)).copied().flatten();
+        let f1 = self.halfedge.get(&v).and_then(|m| m.get(&u)).copied().flatten();
+        (f0, f1)
+    }
+
+    pub fn edge_edges(&self, u: usize, v: usize) -> Vec<(usize, usize)> {
+        let mut edges = Vec::new();
+        if let Some(neighbors) = self.halfedge.get(&u) {
+            for &w in neighbors.keys() {
+                if w != v { edges.push((u, w)); }
             }
         }
-        faces
+        if let Some(neighbors) = self.halfedge.get(&v) {
+            for &w in neighbors.keys() {
+                if w != u { edges.push((v, w)); }
+            }
+        }
+        edges
+    }
+
+    pub fn is_edge_on_boundary(&self, u: usize, v: usize) -> bool {
+        let f0 = self.halfedge.get(&u).and_then(|m| m.get(&v));
+        let f1 = self.halfedge.get(&v).and_then(|m| m.get(&u));
+        f0.map_or(true, |f| f.is_none()) || f1.map_or(true, |f| f.is_none())
+    }
+
+    pub fn is_face_on_boundary(&self, face_key: usize) -> bool {
+        self.face_edges(face_key)
+            .into_iter()
+            .any(|(u, v)| self.is_edge_on_boundary(u, v))
     }
 
     pub fn is_vertex_on_boundary(&self, vertex_key: usize) -> bool {
@@ -695,6 +829,88 @@ impl Mesh {
         for cycle in &face_cycles {
             let mapped: Vec<usize> = cycle.iter().map(|&i| vkeys[i]).collect();
             mesh.add_face(mapped, None);
+        }
+        mesh
+    }
+
+    pub fn from_polygon_with_holes(polylines: &[Vec<Point>], sort_by_bbox: bool) -> Self {
+        if polylines.is_empty() { return Mesh::new(); }
+        let mut border_idx = 0usize;
+        if sort_by_bbox && polylines.len() > 1 {
+            let mut max_diag = 0.0_f64;
+            for (i, poly) in polylines.iter().enumerate() {
+                if poly.len() < 3 { continue; }
+                let (mut minx, mut miny, mut minz) = (poly[0][0], poly[0][1], poly[0][2]);
+                let (mut maxx, mut maxy, mut maxz) = (minx, miny, minz);
+                for p in poly {
+                    if p[0] < minx { minx = p[0]; } if p[0] > maxx { maxx = p[0]; }
+                    if p[1] < miny { miny = p[1]; } if p[1] > maxy { maxy = p[1]; }
+                    if p[2] < minz { minz = p[2]; } if p[2] > maxz { maxz = p[2]; }
+                }
+                let (dx, dy, dz) = (maxx - minx, maxy - miny, maxz - minz);
+                let diag = (dx*dx + dy*dy + dz*dz).sqrt();
+                if diag > max_diag { max_diag = diag; border_idx = i; }
+            }
+        }
+        let strip_close = |pts: &[Point]| -> Vec<Point> {
+            if pts.len() > 1 {
+                let f = &pts[0]; let b = &pts[pts.len()-1];
+                if (f[0]-b[0]).abs() < 1e-12 && (f[1]-b[1]).abs() < 1e-12 && (f[2]-b[2]).abs() < 1e-12 {
+                    return pts[..pts.len()-1].to_vec();
+                }
+            }
+            pts.to_vec()
+        };
+        let mut border = strip_close(&polylines[border_idx]);
+        if border.len() < 3 { return Mesh::new(); }
+        let border_pl = Polyline::new(border.clone());
+        let (origin, xaxis, yaxis, _zaxis) = border_pl.get_average_plane();
+        let project_2d = |p: &Point| -> Point {
+            let dx = p[0] - origin[0]; let dy = p[1] - origin[1]; let dz = p[2] - origin[2];
+            let u = dx * xaxis[0] + dy * xaxis[1] + dz * xaxis[2];
+            let v = dx * yaxis[0] + dy * yaxis[1] + dz * yaxis[2];
+            Point::new(u, v, 0.0)
+        };
+        let mut boundary_2d: Vec<Point> = border.iter().map(|p| project_2d(p)).collect();
+        let signed_area = |pts: &[Point]| -> f64 {
+            let n = pts.len();
+            let mut area = 0.0;
+            for i in 0..n {
+                let j = (i + 1) % n;
+                area += pts[i][0] * pts[j][1] - pts[j][0] * pts[i][1];
+            }
+            area * 0.5
+        };
+        if signed_area(&boundary_2d) < 0.0 {
+            border.reverse();
+            boundary_2d.reverse();
+        }
+        let mut holes_2d: Vec<Vec<Point>> = Vec::new();
+        let mut hole_pts_3d: Vec<Vec<Point>> = Vec::new();
+        for (i, poly) in polylines.iter().enumerate() {
+            if i == border_idx { continue; }
+            let mut hole = strip_close(poly);
+            if hole.len() < 3 { continue; }
+            let mut hole_2d: Vec<Point> = hole.iter().map(|p| project_2d(p)).collect();
+            if signed_area(&hole_2d) > 0.0 {
+                hole.reverse();
+                hole_2d.reverse();
+            }
+            holes_2d.push(hole_2d);
+            hole_pts_3d.push(hole);
+        }
+        let tris = if holes_2d.is_empty() {
+            triangulation_2d::triangulate(&boundary_2d, None)
+        } else {
+            triangulation_2d::triangulate(&boundary_2d, Some(&holes_2d))
+        };
+        let mut all_pts = border.clone();
+        for h in &hole_pts_3d { all_pts.extend(h.iter().cloned()); }
+        let mut mesh = Mesh::new();
+        let mut vkeys: Vec<usize> = Vec::with_capacity(all_pts.len());
+        for p in &all_pts { vkeys.push(mesh.add_vertex(p.clone(), None)); }
+        for t in &tris {
+            mesh.add_face(vec![vkeys[t.0 as usize], vkeys[t.1 as usize], vkeys[t.2 as usize]], None);
         }
         mesh
     }
