@@ -43,7 +43,11 @@ pub fn run_plane_constructor() -> TestResult {
         let pl_pn = Plane::from_point_normal(p, n);
 
         // From three points
-        let pts = vec![Point::new(0.0, 0.0, 0.0), Point::new(1.0, 0.0, 0.0), Point::new(0.0, 1.0, 0.0)];
+        let pts = vec![
+            Point::new(0.0, 0.0, 0.0),
+            Point::new(1.0, 0.0, 0.0),
+            Point::new(0.0, 1.0, 0.0),
+        ];
         let pl_pts = Plane::from_points(pts);
 
         // From two points
@@ -73,23 +77,40 @@ pub fn run_plane_constructor() -> TestResult {
         let pl_sub = pl_base.clone() - offset.clone();
 
         MINI_CHECK!(pl.name == "my_plane" && !pl.guid.is_empty());
-        MINI_CHECK!(TOLERANCE.is_close(origin[0], 0.0) && TOLERANCE.is_close(origin[1], 0.0) && TOLERANCE.is_close(origin[2], 0.0));
-        MINI_CHECK!(TOLERANCE.is_close(x_axis[0], 1.0) && TOLERANCE.is_close(x_axis[1], 0.0) && TOLERANCE.is_close(x_axis[2], 0.0));
-        MINI_CHECK!(TOLERANCE.is_close(y_axis[0], 0.0) && TOLERANCE.is_close(y_axis[1], 1.0) && TOLERANCE.is_close(y_axis[2], 0.0));
-        MINI_CHECK!(TOLERANCE.is_close(z_axis[0], 0.0) && TOLERANCE.is_close(z_axis[1], 0.0) && TOLERANCE.is_close(z_axis[2], 1.0));
-        MINI_CHECK!(TOLERANCE.is_close(a, 0.0) && TOLERANCE.is_close(b, 0.0) && TOLERANCE.is_close(c, 1.0) && TOLERANCE.is_close(d, 0.0));
-        MINI_CHECK!(TOLERANCE.is_close(ax0[0], 1.0) && TOLERANCE.is_close(ax1[1], 1.0) && TOLERANCE.is_close(ax2[2], 1.0));
+        MINI_CHECK!(TOLERANCE.is_close(origin[0], 0.0));
+        MINI_CHECK!(TOLERANCE.is_close(origin[1], 0.0));
+        MINI_CHECK!(TOLERANCE.is_close(origin[2], 0.0));
+        MINI_CHECK!(TOLERANCE.is_close(x_axis[0], 1.0));
+        MINI_CHECK!(TOLERANCE.is_close(x_axis[1], 0.0));
+        MINI_CHECK!(TOLERANCE.is_close(x_axis[2], 0.0));
+        MINI_CHECK!(TOLERANCE.is_close(y_axis[0], 0.0));
+        MINI_CHECK!(TOLERANCE.is_close(y_axis[1], 1.0));
+        MINI_CHECK!(TOLERANCE.is_close(y_axis[2], 0.0));
+        MINI_CHECK!(TOLERANCE.is_close(z_axis[0], 0.0));
+        MINI_CHECK!(TOLERANCE.is_close(z_axis[1], 0.0));
+        MINI_CHECK!(TOLERANCE.is_close(z_axis[2], 1.0));
+        MINI_CHECK!(TOLERANCE.is_close(a, 0.0) && TOLERANCE.is_close(b, 0.0));
+        MINI_CHECK!(TOLERANCE.is_close(c, 1.0) && TOLERANCE.is_close(d, 0.0));
+        MINI_CHECK!(TOLERANCE.is_close(ax0[0], 1.0));
+        MINI_CHECK!(TOLERANCE.is_close(ax1[1], 1.0));
+        MINI_CHECK!(TOLERANCE.is_close(ax2[2], 1.0));
         MINI_CHECK!(plstr == "0.000000, 0.000000, 0.000000\n1.000000, 0.000000, 0.000000\n0.000000, 1.000000, 0.000000\n0.000000, 0.000000, 1.000000");
         MINI_CHECK!(plrepr == "Plane(my_plane, 0.000000, 0.000000, 0.000000, 0.000000, 0.000000, 1.000000)");
         MINI_CHECK!(plcopy == pl && plcopy.guid != pl.guid);
-        MINI_CHECK!(TOLERANCE.is_close(pl_pn.origin()[2], 5.0) && TOLERANCE.is_close(pl_pn.z_axis()[2], 1.0) && TOLERANCE.is_close(pl_pn.d(), -5.0));
+        MINI_CHECK!(TOLERANCE.is_close(pl_pn.origin()[2], 5.0));
+        MINI_CHECK!(TOLERANCE.is_close(pl_pn.z_axis()[2], 1.0));
+        MINI_CHECK!(TOLERANCE.is_close(pl_pn.d(), -5.0));
         MINI_CHECK!(TOLERANCE.is_close(pl_pts.c(), 1.0) && TOLERANCE.is_close(pl_pts.d(), 0.0));
         MINI_CHECK!(TOLERANCE.is_close(pl_2pts.origin()[0], 0.0) && TOLERANCE.is_close(pl_2pts.x_axis()[0], 1.0));
         MINI_CHECK!(xy.name == "xy_plane" && TOLERANCE.is_close(xy.c(), 1.0));
         MINI_CHECK!(yz.name == "yz_plane" && TOLERANCE.is_close(yz.a(), 1.0));
         MINI_CHECK!(xz.name == "xz_plane" && TOLERANCE.is_close(xz.b(), 1.0));
-        MINI_CHECK!(TOLERANCE.is_close(pl_iadd.origin()[0], 1.0) && TOLERANCE.is_close(pl_iadd.origin()[1], 2.0) && TOLERANCE.is_close(pl_iadd.origin()[2], 3.0));
-        MINI_CHECK!(TOLERANCE.is_close(pl_isub.origin()[0], -1.0) && TOLERANCE.is_close(pl_isub.origin()[1], -2.0) && TOLERANCE.is_close(pl_isub.origin()[2], -3.0));
+        MINI_CHECK!(TOLERANCE.is_close(pl_iadd.origin()[0], 1.0));
+        MINI_CHECK!(TOLERANCE.is_close(pl_iadd.origin()[1], 2.0));
+        MINI_CHECK!(TOLERANCE.is_close(pl_iadd.origin()[2], 3.0));
+        MINI_CHECK!(TOLERANCE.is_close(pl_isub.origin()[0], -1.0));
+        MINI_CHECK!(TOLERANCE.is_close(pl_isub.origin()[1], -2.0));
+        MINI_CHECK!(TOLERANCE.is_close(pl_isub.origin()[2], -3.0));
         MINI_CHECK!(TOLERANCE.is_close(pl_add.origin()[2], 3.0) && TOLERANCE.is_close(pl_base.origin()[2], 0.0));
         MINI_CHECK!(TOLERANCE.is_close(pl_sub.origin()[2], -3.0));
     })
@@ -103,8 +124,12 @@ pub fn run_plane_reverse() -> TestResult {
         let mut pl = Plane::xy_plane();
         pl.reverse();
 
-        MINI_CHECK!(TOLERANCE.is_close(pl.x_axis()[0], 0.0) && TOLERANCE.is_close(pl.x_axis()[1], 1.0) && TOLERANCE.is_close(pl.x_axis()[2], 0.0));
-        MINI_CHECK!(TOLERANCE.is_close(pl.y_axis()[0], 1.0) && TOLERANCE.is_close(pl.y_axis()[1], 0.0) && TOLERANCE.is_close(pl.y_axis()[2], 0.0));
+        MINI_CHECK!(TOLERANCE.is_close(pl.x_axis()[0], 0.0));
+        MINI_CHECK!(TOLERANCE.is_close(pl.x_axis()[1], 1.0));
+        MINI_CHECK!(TOLERANCE.is_close(pl.x_axis()[2], 0.0));
+        MINI_CHECK!(TOLERANCE.is_close(pl.y_axis()[0], 1.0));
+        MINI_CHECK!(TOLERANCE.is_close(pl.y_axis()[1], 0.0));
+        MINI_CHECK!(TOLERANCE.is_close(pl.y_axis()[2], 0.0));
         MINI_CHECK!(TOLERANCE.is_close(pl.c(), -1.0));
     })
 }
@@ -122,7 +147,7 @@ pub fn run_plane_rotate() -> TestResult {
 }
 
 pub fn run_plane_is_right_hand() -> TestResult {
-    MINI_TEST!("Is_right_hand", {
+    MINI_TEST!("Is Right Hand", {
         use crate::Plane;
 
         // All standard planes should be right-handed
@@ -154,7 +179,7 @@ pub fn run_plane_is_right_hand() -> TestResult {
 }
 
 pub fn run_plane_is_coplanar() -> TestResult {
-    MINI_TEST!("Is_coplanar", {
+    MINI_TEST!("Is Coplanar", {
         use crate::Plane;
         use crate::Vector;
 
@@ -217,7 +242,7 @@ pub fn run_plane_transform() -> TestResult {
 }
 
 pub fn run_plane_json_roundtrip() -> TestResult {
-    MINI_TEST!("Json_roundtrip", {
+    MINI_TEST!("Json Roundtrip", {
         use crate::Plane;
 
         let mut pl = Plane::xy_plane();
@@ -239,7 +264,7 @@ pub fn run_plane_json_roundtrip() -> TestResult {
 }
 
 pub fn run_plane_protobuf_roundtrip() -> TestResult {
-    MINI_TEST!("Protobuf_roundtrip", {
+    MINI_TEST!("Protobuf Roundtrip", {
         use crate::Plane;
 
         let mut pl = Plane::xy_plane();
@@ -260,8 +285,8 @@ pub fn run_plane_protobuf_roundtrip() -> TestResult {
 REGISTER_MINI_TEST!("Plane", "Constructor", crate::plane_test::run_plane_constructor);
 REGISTER_MINI_TEST!("Plane", "Reverse", crate::plane_test::run_plane_reverse);
 REGISTER_MINI_TEST!("Plane", "Rotate", crate::plane_test::run_plane_rotate);
-REGISTER_MINI_TEST!("Plane", "Is_right_hand", crate::plane_test::run_plane_is_right_hand);
-REGISTER_MINI_TEST!("Plane", "Is_coplanar", crate::plane_test::run_plane_is_coplanar);
+REGISTER_MINI_TEST!("Plane", "Is Right Hand", crate::plane_test::run_plane_is_right_hand);
+REGISTER_MINI_TEST!("Plane", "Is Coplanar", crate::plane_test::run_plane_is_coplanar);
 REGISTER_MINI_TEST!("Plane", "Transform", crate::plane_test::run_plane_transform);
-REGISTER_MINI_TEST!("Plane", "Json_roundtrip", crate::plane_test::run_plane_json_roundtrip);
-REGISTER_MINI_TEST!("Plane", "Protobuf_roundtrip", crate::plane_test::run_plane_protobuf_roundtrip);
+REGISTER_MINI_TEST!("Plane", "Json Roundtrip", crate::plane_test::run_plane_json_roundtrip);
+REGISTER_MINI_TEST!("Plane", "Protobuf Roundtrip", crate::plane_test::run_plane_protobuf_roundtrip);

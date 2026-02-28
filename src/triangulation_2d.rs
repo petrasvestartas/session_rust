@@ -103,7 +103,8 @@ fn ear_clip(coords: &[f64], indices_in: &[i32]) -> Vec<(i32, i32, i32)> {
                 }
             }
             if is_ear {
-                triangles.push((indices[p], indices[i], indices[nx]));
+                let (ip, ii, inx) = (indices[p], indices[i], indices[nx]);
+                triangles.push((ip, ii, inx));
                 indices.remove(i);
                 reflex = build_reflex(&indices);
                 found = true;
@@ -119,7 +120,8 @@ fn ear_clip(coords: &[f64], indices_in: &[i32]) -> Vec<(i32, i32, i32)> {
                                  coords[indices[i] as usize*2], coords[indices[i] as usize*2+1],
                                  coords[indices[nx] as usize*2], coords[indices[nx] as usize*2+1]);
                 if c.abs() < 1e-12 {
-                    triangles.push((indices[p], indices[i], indices[nx]));
+                    let (ip, ii, inx) = (indices[p], indices[i], indices[nx]);
+                    triangles.push((ip, ii, inx));
                     indices.remove(i);
                     reflex = build_reflex(&indices);
                     removed = true;

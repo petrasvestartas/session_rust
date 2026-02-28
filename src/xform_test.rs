@@ -56,8 +56,10 @@ pub fn run_xform_constructor() -> TestResult {
         MINI_CHECK!(xcopy == x && xcopy.guid != x.guid);
         MINI_CHECK!(x_eq == true && x_ne == true);
         // (1,0,0) * scale(2,1,1) = (2,0,0), then translate(10,0,0) = (12,0,0)
-        MINI_CHECK!(TOLERANCE.is_close(result[0], 12.0) && TOLERANCE.is_close(result[1], 0.0) && TOLERANCE.is_close(result[2], 0.0));
-        MINI_CHECK!(TOLERANCE.is_close(result2[0], 12.0) && TOLERANCE.is_close(result2[1], 0.0) && TOLERANCE.is_close(result2[2], 0.0));
+        MINI_CHECK!(TOLERANCE.is_close(result[0], 12.0));
+        MINI_CHECK!(TOLERANCE.is_close(result[1], 0.0) && TOLERANCE.is_close(result[2], 0.0));
+        MINI_CHECK!(TOLERANCE.is_close(result2[0], 12.0));
+        MINI_CHECK!(TOLERANCE.is_close(result2[1], 0.0) && TOLERANCE.is_close(result2[2], 0.0));
     })
 }
 
@@ -129,10 +131,18 @@ pub fn run_xform_rotation() -> TestResult {
         let p = Point::new(1.0, 0.0, 0.0);
         let rp = r.transformed_point(&p);
 
-        MINI_CHECK!(TOLERANCE.is_close(rpx[0], 0.0) && TOLERANCE.is_close(rpx[1], 0.0) && TOLERANCE.is_close(rpx[2], 1.0));
-        MINI_CHECK!(TOLERANCE.is_close(rpy[0], 1.0) && TOLERANCE.is_close(rpy[1], 0.0) && TOLERANCE.is_close(rpy[2], 0.0));
-        MINI_CHECK!(TOLERANCE.is_close(rpz[0], 0.0) && TOLERANCE.is_close(rpz[1], 1.0) && TOLERANCE.is_close(rpz[2], 0.0));
-        MINI_CHECK!(TOLERANCE.is_close(rp[0], 0.0) && TOLERANCE.is_close(rp[1], 1.0) && TOLERANCE.is_close(rp[2], 0.0));
+        MINI_CHECK!(TOLERANCE.is_close(rpx[0], 0.0));
+        MINI_CHECK!(TOLERANCE.is_close(rpx[1], 0.0));
+        MINI_CHECK!(TOLERANCE.is_close(rpx[2], 1.0));
+        MINI_CHECK!(TOLERANCE.is_close(rpy[0], 1.0));
+        MINI_CHECK!(TOLERANCE.is_close(rpy[1], 0.0));
+        MINI_CHECK!(TOLERANCE.is_close(rpy[2], 0.0));
+        MINI_CHECK!(TOLERANCE.is_close(rpz[0], 0.0));
+        MINI_CHECK!(TOLERANCE.is_close(rpz[1], 1.0));
+        MINI_CHECK!(TOLERANCE.is_close(rpz[2], 0.0));
+        MINI_CHECK!(TOLERANCE.is_close(rp[0], 0.0));
+        MINI_CHECK!(TOLERANCE.is_close(rp[1], 1.0));
+        MINI_CHECK!(TOLERANCE.is_close(rp[2], 0.0));
     })
 }
 
@@ -156,7 +166,7 @@ pub fn run_xform_inverse() -> TestResult {
 }
 
 pub fn run_xform_transform_geometry() -> TestResult {
-    MINI_TEST!("Transform_geometry", {
+    MINI_TEST!("Transform Geometry", {
         use crate::Xform;
         use crate::Point;
         use crate::Vector;
@@ -182,29 +192,53 @@ pub fn run_xform_transform_geometry() -> TestResult {
         let ln_transformed = ln.transformed();
 
         // Transform Plane: origin (0,0,0) -> (10,20,30)
-        let mut pl = Plane::new(Point::new(0.0, 0.0, 0.0), Vector::new(1.0, 0.0, 0.0), Vector::new(0.0, 1.0, 0.0));
+        let mut pl = Plane::new(
+            Point::new(0.0, 0.0, 0.0),
+            Vector::new(1.0, 0.0, 0.0),
+            Vector::new(0.0, 1.0, 0.0),
+        );
         pl.xform = t.duplicate();
         let pl_transformed = pl.transformed();
 
         // Transform Polyline: 3 points translated
-        let mut poly = Polyline::new(vec![Point::new(0.0, 0.0, 0.0), Point::new(1.0, 0.0, 0.0), Point::new(1.0, 1.0, 0.0)]);
+        let mut poly = Polyline::new(vec![
+            Point::new(0.0, 0.0, 0.0),
+            Point::new(1.0, 0.0, 0.0),
+            Point::new(1.0, 1.0, 0.0),
+        ]);
         poly.xform = t.duplicate();
         let poly_transformed = poly.transformed();
         let pts = poly_transformed.get_points();
 
-        MINI_CHECK!(TOLERANCE.is_close(pt_transformed[0], 11.0) && TOLERANCE.is_close(pt_transformed[1], 22.0) && TOLERANCE.is_close(pt_transformed[2], 33.0));
-        MINI_CHECK!(TOLERANCE.is_close(v_transformed[0], 1.0) && TOLERANCE.is_close(v_transformed[1], 0.0) && TOLERANCE.is_close(v_transformed[2], 0.0));
-        MINI_CHECK!(TOLERANCE.is_close(ln_transformed[0], 10.0) && TOLERANCE.is_close(ln_transformed[1], 20.0) && TOLERANCE.is_close(ln_transformed[2], 30.0));
-        MINI_CHECK!(TOLERANCE.is_close(ln_transformed[3], 11.0) && TOLERANCE.is_close(ln_transformed[4], 20.0) && TOLERANCE.is_close(ln_transformed[5], 30.0));
-        MINI_CHECK!(TOLERANCE.is_close(pl_transformed.origin()[0], 10.0) && TOLERANCE.is_close(pl_transformed.origin()[1], 20.0) && TOLERANCE.is_close(pl_transformed.origin()[2], 30.0));
-        MINI_CHECK!(TOLERANCE.is_close(pts[0][0], 10.0) && TOLERANCE.is_close(pts[0][1], 20.0) && TOLERANCE.is_close(pts[0][2], 30.0));
-        MINI_CHECK!(TOLERANCE.is_close(pts[1][0], 11.0) && TOLERANCE.is_close(pts[1][1], 20.0) && TOLERANCE.is_close(pts[1][2], 30.0));
-        MINI_CHECK!(TOLERANCE.is_close(pts[2][0], 11.0) && TOLERANCE.is_close(pts[2][1], 21.0) && TOLERANCE.is_close(pts[2][2], 30.0));
+        MINI_CHECK!(TOLERANCE.is_close(pt_transformed[0], 11.0));
+        MINI_CHECK!(TOLERANCE.is_close(pt_transformed[1], 22.0));
+        MINI_CHECK!(TOLERANCE.is_close(pt_transformed[2], 33.0));
+        MINI_CHECK!(TOLERANCE.is_close(v_transformed[0], 1.0));
+        MINI_CHECK!(TOLERANCE.is_close(v_transformed[1], 0.0));
+        MINI_CHECK!(TOLERANCE.is_close(v_transformed[2], 0.0));
+        MINI_CHECK!(TOLERANCE.is_close(ln_transformed[0], 10.0));
+        MINI_CHECK!(TOLERANCE.is_close(ln_transformed[1], 20.0));
+        MINI_CHECK!(TOLERANCE.is_close(ln_transformed[2], 30.0));
+        MINI_CHECK!(TOLERANCE.is_close(ln_transformed[3], 11.0));
+        MINI_CHECK!(TOLERANCE.is_close(ln_transformed[4], 20.0));
+        MINI_CHECK!(TOLERANCE.is_close(ln_transformed[5], 30.0));
+        MINI_CHECK!(TOLERANCE.is_close(pl_transformed.origin()[0], 10.0));
+        MINI_CHECK!(TOLERANCE.is_close(pl_transformed.origin()[1], 20.0));
+        MINI_CHECK!(TOLERANCE.is_close(pl_transformed.origin()[2], 30.0));
+        MINI_CHECK!(TOLERANCE.is_close(pts[0][0], 10.0));
+        MINI_CHECK!(TOLERANCE.is_close(pts[0][1], 20.0));
+        MINI_CHECK!(TOLERANCE.is_close(pts[0][2], 30.0));
+        MINI_CHECK!(TOLERANCE.is_close(pts[1][0], 11.0));
+        MINI_CHECK!(TOLERANCE.is_close(pts[1][1], 20.0));
+        MINI_CHECK!(TOLERANCE.is_close(pts[1][2], 30.0));
+        MINI_CHECK!(TOLERANCE.is_close(pts[2][0], 11.0));
+        MINI_CHECK!(TOLERANCE.is_close(pts[2][1], 21.0));
+        MINI_CHECK!(TOLERANCE.is_close(pts[2][2], 30.0));
     })
 }
 
 pub fn run_xform_change_basis() -> TestResult {
-    MINI_TEST!("Change_basis", {
+    MINI_TEST!("Change Basis", {
         use crate::Xform;
         use crate::Point;
         use crate::Vector;
@@ -235,17 +269,25 @@ pub fn run_xform_change_basis() -> TestResult {
 }
 
 pub fn run_xform_plane_to_plane() -> TestResult {
-    MINI_TEST!("Plane_to_plane", {
+    MINI_TEST!("Plane To Plane", {
         use crate::Xform;
         use crate::Point;
         use crate::Vector;
         use crate::Plane;
 
         // Source plane at origin, XY plane
-        let plane_from = Plane::new(Point::new(0.0, 0.0, 0.0), Vector::new(1.0, 0.0, 0.0), Vector::new(0.0, 1.0, 0.0));
+        let plane_from = Plane::new(
+            Point::new(0.0, 0.0, 0.0),
+            Vector::new(1.0, 0.0, 0.0),
+            Vector::new(0.0, 1.0, 0.0),
+        );
 
         // Target plane translated and rotated
-        let plane_to = Plane::new(Point::new(10.0, 0.0, 0.0), Vector::new(0.0, 1.0, 0.0), Vector::new(-1.0, 0.0, 0.0));
+        let plane_to = Plane::new(
+            Point::new(10.0, 0.0, 0.0),
+            Vector::new(0.0, 1.0, 0.0),
+            Vector::new(-1.0, 0.0, 0.0),
+        );
 
         let xform = Xform::plane_to_plane(&plane_from, &plane_to);
 
@@ -260,7 +302,7 @@ pub fn run_xform_plane_to_plane() -> TestResult {
 }
 
 pub fn run_xform_look_at_rh() -> TestResult {
-    MINI_TEST!("Look_at_rh", {
+    MINI_TEST!("Look At Rh", {
         use crate::Xform;
         use crate::Point;
         use crate::Vector;
@@ -282,7 +324,7 @@ pub fn run_xform_look_at_rh() -> TestResult {
 }
 
 pub fn run_xform_json_roundtrip() -> TestResult {
-    MINI_TEST!("Json_roundtrip", {
+    MINI_TEST!("Json Roundtrip", {
         use crate::Xform;
 
         // Create a non-identity xform
@@ -306,7 +348,7 @@ pub fn run_xform_json_roundtrip() -> TestResult {
 }
 
 pub fn run_xform_protobuf_roundtrip() -> TestResult {
-    MINI_TEST!("Protobuf_roundtrip", {
+    MINI_TEST!("Protobuf Roundtrip", {
         use crate::Xform;
 
         // Create a non-identity xform
@@ -330,9 +372,9 @@ REGISTER_MINI_TEST!("Xform", "Translation", crate::xform_test::run_xform_transla
 REGISTER_MINI_TEST!("Xform", "Scaling", crate::xform_test::run_xform_scaling);
 REGISTER_MINI_TEST!("Xform", "Rotation", crate::xform_test::run_xform_rotation);
 REGISTER_MINI_TEST!("Xform", "Inverse", crate::xform_test::run_xform_inverse);
-REGISTER_MINI_TEST!("Xform", "Transform_geometry", crate::xform_test::run_xform_transform_geometry);
-REGISTER_MINI_TEST!("Xform", "Change_basis", crate::xform_test::run_xform_change_basis);
-REGISTER_MINI_TEST!("Xform", "Plane_to_plane", crate::xform_test::run_xform_plane_to_plane);
-REGISTER_MINI_TEST!("Xform", "Look_at_rh", crate::xform_test::run_xform_look_at_rh);
-REGISTER_MINI_TEST!("Xform", "Json_roundtrip", crate::xform_test::run_xform_json_roundtrip);
-REGISTER_MINI_TEST!("Xform", "Protobuf_roundtrip", crate::xform_test::run_xform_protobuf_roundtrip);
+REGISTER_MINI_TEST!("Xform", "Transform Geometry", crate::xform_test::run_xform_transform_geometry);
+REGISTER_MINI_TEST!("Xform", "Change Basis", crate::xform_test::run_xform_change_basis);
+REGISTER_MINI_TEST!("Xform", "Plane To Plane", crate::xform_test::run_xform_plane_to_plane);
+REGISTER_MINI_TEST!("Xform", "Look At Rh", crate::xform_test::run_xform_look_at_rh);
+REGISTER_MINI_TEST!("Xform", "Json Roundtrip", crate::xform_test::run_xform_json_roundtrip);
+REGISTER_MINI_TEST!("Xform", "Protobuf Roundtrip", crate::xform_test::run_xform_protobuf_roundtrip);

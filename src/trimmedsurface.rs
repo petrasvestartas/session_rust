@@ -171,7 +171,7 @@ impl TrimmedSurface {
                    (uv_list[0][1]-uv_list[n-1][1]).abs() < 1e-12 { n -= 1; }
                 for i in 0..n {
                     pts3d.push(self.m_surface.point_at(uv_list[i][0], uv_list[i][1])
-                        .unwrap_or(Point::new(0.0,0.0,0.0)));
+                        .unwrap_or(Point::new(0.0, 0.0, 0.0)));
                 }
             };
             add_pts(&outer_pts);
@@ -201,9 +201,9 @@ impl TrimmedSurface {
         let range_u = dom_u.1 - dom_u.0;
         let range_v = dom_v.1 - dom_v.0;
         if range_u < 1e-15 || range_v < 1e-15 { return self.m_surface.mesh(); }
-        let p00 = self.m_surface.point_at(dom_u.0, dom_v.0).unwrap_or(Point::new(0.0,0.0,0.0));
-        let p10 = self.m_surface.point_at(dom_u.1, dom_v.0).unwrap_or(Point::new(0.0,0.0,0.0));
-        let p01 = self.m_surface.point_at(dom_u.0, dom_v.1).unwrap_or(Point::new(0.0,0.0,0.0));
+        let p00 = self.m_surface.point_at(dom_u.0, dom_v.0).unwrap_or(Point::new(0.0, 0.0, 0.0));
+        let p10 = self.m_surface.point_at(dom_u.1, dom_v.0).unwrap_or(Point::new(0.0, 0.0, 0.0));
+        let p01 = self.m_surface.point_at(dom_u.0, dom_v.1).unwrap_or(Point::new(0.0, 0.0, 0.0));
         let u_len = ((p10[0]-p00[0]).powi(2)+(p10[1]-p00[1]).powi(2)+(p10[2]-p00[2]).powi(2)).sqrt();
         let v_len = ((p01[0]-p00[0]).powi(2)+(p01[1]-p00[1]).powi(2)+(p01[2]-p00[2]).powi(2)).sqrt();
         let max_dim = u_len.max(v_len);
@@ -215,7 +215,7 @@ impl TrimmedSurface {
         let mut full = Mesh::new();
         for i in 0..nu {
             for j in 0..nv {
-                let pt = self.m_surface.point_at(us[i], vs[j]).unwrap_or(Point::new(0.0,0.0,0.0));
+                let pt = self.m_surface.point_at(us[i], vs[j]).unwrap_or(Point::new(0.0, 0.0, 0.0));
                 let vk = full.add_vertex(pt, None);
                 full.vertex.get_mut(&vk).unwrap().attributes.insert("u".to_string(), us[i]);
                 full.vertex.get_mut(&vk).unwrap().attributes.insert("v".to_string(), vs[j]);

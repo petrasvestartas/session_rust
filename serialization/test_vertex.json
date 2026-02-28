@@ -1,7 +1,1 @@
-{
-  "type": "Vertex",
-  "guid": "06821a8b-2cfc-435b-9a48-77c927eff0b0",
-  "name": "v0",
-  "attribute": "attribute",
-  "index": -1
-}
+{"type":"Vertex","guid":"8e0824dd-dbaf-4812-a480-f506b1b88a8a","name":"v0","attribute":"./serialization/test_attribute","index":-1}

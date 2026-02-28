@@ -122,7 +122,7 @@ pub fn run_vector_reverse() -> TestResult {
 }
 
 pub fn run_vector_dot_product() -> TestResult {
-    MINI_TEST!("Dot_product", {
+    MINI_TEST!("Dot Product", {
         use crate::Vector;
 
         // Orthogonality and parallelism via dot product
@@ -153,7 +153,7 @@ pub fn run_vector_dot_product() -> TestResult {
 }
 
 pub fn run_vector_cross_product() -> TestResult {
-    MINI_TEST!("Cross_product", {
+    MINI_TEST!("Cross Product", {
         use crate::Vector;
 
         // Get normal
@@ -236,7 +236,7 @@ pub fn run_vector_projection() -> TestResult {
 }
 
 pub fn run_vector_is_parallel_to() -> TestResult {
-    MINI_TEST!("Is_parallel_to", {
+    MINI_TEST!("Is Parallel To", {
         use crate::Vector;
 
         // is_parallel_to returns: 1 (parallel), -1 (anti-parallel), 0 (not parallel)
@@ -252,7 +252,7 @@ pub fn run_vector_is_parallel_to() -> TestResult {
 }
 
 pub fn run_vector_is_perpendicular_to() -> TestResult {
-    MINI_TEST!("Is_perpendicular_to", {
+    MINI_TEST!("Is Perpendicular To", {
         use crate::Vector;
 
         // is_perpendicular_to: checks if two vectors are perpendicular (dot product ≈ 0)
@@ -281,7 +281,7 @@ pub fn run_vector_is_perpendicular_to() -> TestResult {
 }
 
 pub fn run_vector_get_leveled_vector() -> TestResult {
-    MINI_TEST!("Get_leveled_vector", {
+    MINI_TEST!("Get Leveled Vector", {
         use crate::Vector;
 
         // Scale vector along its direction so its Z-component equals vertical_height.
@@ -294,7 +294,7 @@ pub fn run_vector_get_leveled_vector() -> TestResult {
 }
 
 pub fn run_vector_cos_sin_laws() -> TestResult {
-    MINI_TEST!("Cos_sin_laws", {
+    MINI_TEST!("Cos Sin Laws", {
         use crate::Vector;
 
         // Given a 3-4-5 right triangle
@@ -343,7 +343,7 @@ pub fn run_vector_cos_sin_laws() -> TestResult {
 }
 
 pub fn run_vector_sum_of_vectors() -> TestResult {
-    MINI_TEST!("Sum_of_vectors", {
+    MINI_TEST!("Sum Of Vectors", {
         use crate::Vector;
 
         // Sum of multiple vectors
@@ -384,7 +384,7 @@ pub fn run_vector_average() -> TestResult {
 }
 
 pub fn run_vector_is_zero() -> TestResult {
-    MINI_TEST!("Is_zero", {
+    MINI_TEST!("Is Zero", {
         use crate::Vector;
 
         let zero = Vector::new(0.0, 0.0, 0.0);
@@ -398,7 +398,7 @@ pub fn run_vector_is_zero() -> TestResult {
 }
 
 pub fn run_vector_json_roundtrip() -> TestResult {
-    MINI_TEST!("Json_roundtrip", {
+    MINI_TEST!("Json Roundtrip", {
         use crate::Vector;
 
         let mut v = Vector::new(42.1, 84.2, 126.3);
@@ -421,7 +421,7 @@ pub fn run_vector_json_roundtrip() -> TestResult {
 }
 
 pub fn run_vector_protobuf_roundtrip() -> TestResult {
-    MINI_TEST!("Protobuf_roundtrip", {
+    MINI_TEST!("Protobuf Roundtrip", {
         use crate::Vector;
 
         let mut v = Vector::new(42.1, 84.2, 126.3);
@@ -444,16 +444,16 @@ REGISTER_MINI_TEST!("Vector", "Constructor", crate::vector_test::run_vector_cons
 REGISTER_MINI_TEST!("Vector", "Magnitude", crate::vector_test::run_vector_magnitude);
 REGISTER_MINI_TEST!("Vector", "Normalize", crate::vector_test::run_vector_normalize);
 REGISTER_MINI_TEST!("Vector", "Reverse", crate::vector_test::run_vector_reverse);
-REGISTER_MINI_TEST!("Vector", "Dot_product", crate::vector_test::run_vector_dot_product);
-REGISTER_MINI_TEST!("Vector", "Cross_product", crate::vector_test::run_vector_cross_product);
+REGISTER_MINI_TEST!("Vector", "Dot Product", crate::vector_test::run_vector_dot_product);
+REGISTER_MINI_TEST!("Vector", "Cross Product", crate::vector_test::run_vector_cross_product);
 REGISTER_MINI_TEST!("Vector", "Angle", crate::vector_test::run_vector_angle);
 REGISTER_MINI_TEST!("Vector", "Projection", crate::vector_test::run_vector_projection);
-REGISTER_MINI_TEST!("Vector", "Is_parallel_to", crate::vector_test::run_vector_is_parallel_to);
-REGISTER_MINI_TEST!("Vector", "Is_perpendicular_to", crate::vector_test::run_vector_is_perpendicular_to);
-REGISTER_MINI_TEST!("Vector", "Get_leveled_vector", crate::vector_test::run_vector_get_leveled_vector);
-REGISTER_MINI_TEST!("Vector", "Cos_sin_laws", crate::vector_test::run_vector_cos_sin_laws);
-REGISTER_MINI_TEST!("Vector", "Sum_of_vectors", crate::vector_test::run_vector_sum_of_vectors);
+REGISTER_MINI_TEST!("Vector", "Is Parallel To", crate::vector_test::run_vector_is_parallel_to);
+REGISTER_MINI_TEST!("Vector", "Is Perpendicular To", crate::vector_test::run_vector_is_perpendicular_to);
+REGISTER_MINI_TEST!("Vector", "Get Leveled Vector", crate::vector_test::run_vector_get_leveled_vector);
+REGISTER_MINI_TEST!("Vector", "Cos Sin Laws", crate::vector_test::run_vector_cos_sin_laws);
+REGISTER_MINI_TEST!("Vector", "Sum Of Vectors", crate::vector_test::run_vector_sum_of_vectors);
 REGISTER_MINI_TEST!("Vector", "Average", crate::vector_test::run_vector_average);
-REGISTER_MINI_TEST!("Vector", "Is_zero", crate::vector_test::run_vector_is_zero);
-REGISTER_MINI_TEST!("Vector", "Json_roundtrip", crate::vector_test::run_vector_json_roundtrip);
-REGISTER_MINI_TEST!("Vector", "Protobuf_roundtrip", crate::vector_test::run_vector_protobuf_roundtrip);
+REGISTER_MINI_TEST!("Vector", "Is Zero", crate::vector_test::run_vector_is_zero);
+REGISTER_MINI_TEST!("Vector", "Json Roundtrip", crate::vector_test::run_vector_json_roundtrip);
+REGISTER_MINI_TEST!("Vector", "Protobuf Roundtrip", crate::vector_test::run_vector_protobuf_roundtrip);

@@ -1,0 +1,683 @@
+// Constrained Delaunay Triangulation via sweep-line.
+use std::collections::HashMap;
+
+const LOOSE: u8 = 0;
+const ASCEND: u8 = 1;
+const DESCEND: u8 = 2;
+const IX_NONE: u8 = 0;
+const IX_COLLINEAR: u8 = 1;
+const IX_INTERSECT: u8 = 2;
+const EC_NEITHER: u8 = 0;
+const EC_LEFT: u8 = 1;
+const EC_RIGHT: u8 = 2;
+const NULL: usize = usize::MAX;
+
+#[derive(Clone, Copy, PartialEq, Eq, Hash)]
+struct P64 {
+    x: i64,
+    y: i64,
+}
+
+struct V2 {
+    pt: P64,
+    edges: Vec<usize>,
+    inner_lm: bool,
+}
+
+struct Edge {
+    vl: usize,
+    vr: usize,
+    vb: usize,
+    vt: usize,
+    kind: u8,
+    tri_a: usize,
+    tri_b: usize,
+    is_active: bool,
+    next_e: usize,
+    prev_e: usize,
+}
+
+struct CdtTri {
+    edges: [usize; 3],
+}
+
+fn cps(p1: P64, p2: P64, p3: P64) -> i32 {
+    let cp = (p2.x - p1.x) as f64 * (p3.y - p2.y) as f64
+           - (p2.y - p1.y) as f64 * (p3.x - p2.x) as f64;
+    if cp > 0.0 { 1 } else if cp < 0.0 { -1 } else { 0 }
+}
+
+fn sqr(x: f64) -> f64 { x * x }
+
+fn dist_sqr(a: P64, b: P64) -> f64 {
+    sqr((a.x - b.x) as f64) + sqr((a.y - b.y) as f64)
+}
+
+fn left_turning(p1: P64, p2: P64, p3: P64) -> bool { cps(p1, p2, p3) < 0 }
+fn right_turning(p1: P64, p2: P64, p3: P64) -> bool { cps(p1, p2, p3) > 0 }
+
+fn is_horiz_e(e: &Edge, vs: &[V2]) -> bool { vs[e.vb].pt.y == vs[e.vt].pt.y }
+fn is_loose_e(e: &Edge) -> bool { e.kind == LOOSE }
+fn is_left_e(e: &Edge) -> bool { e.kind == ASCEND }
+fn is_right_e(e: &Edge) -> bool { e.kind == DESCEND }
+
+fn edge_completed(e: &Edge) -> bool {
+    if e.tri_a == NULL { return false; }
+    if e.tri_b != NULL { return true; }
+    e.kind != LOOSE
+}
+
+fn edge_contains(e: &Edge, v: usize) -> u8 {
+    if e.vl == v { EC_LEFT } else if e.vr == v { EC_RIGHT } else { EC_NEITHER }
+}
+
+fn in_circle(pa: P64, pb: P64, pc: P64, pd: P64) -> f64 {
+    let m00 = (pa.x - pd.x) as f64; let m01 = (pa.y - pd.y) as f64; let m02 = sqr(m00) + sqr(m01);
+    let m10 = (pb.x - pd.x) as f64; let m11 = (pb.y - pd.y) as f64; let m12 = sqr(m10) + sqr(m11);
+    let m20 = (pc.x - pd.x) as f64; let m21 = (pc.y - pd.y) as f64; let m22 = sqr(m20) + sqr(m21);
+    m00*(m11*m22-m21*m12) - m10*(m01*m22-m21*m02) + m20*(m01*m12-m11*m02)
+}
+
+fn shortest_dist_seg(pt: P64, sp1: P64, sp2: P64) -> f64 {
+    let dx = (sp2.x - sp1.x) as f64; let dy = (sp2.y - sp1.y) as f64;
+    let ax = (pt.x - sp1.x) as f64; let ay = (pt.y - sp1.y) as f64;
+    let qnum = ax*dx + ay*dy;
+    if qnum < 0.0 { return dist_sqr(pt, sp1); }
+    let dd = dx*dx + dy*dy;
+    if qnum > dd { return dist_sqr(pt, sp2); }
+    sqr(ax*dy - dx*ay) / dd
+}
+
+fn segs_intersect(s1a: P64, s1b: P64, s2a: P64, s2b: P64) -> u8 {
+    if s1a == s2a || s1b == s2a || s1b == s2b { return IX_NONE; }
+    let dy1 = (s1b.y - s1a.y) as f64; let dx1 = (s1b.x - s1a.x) as f64;
+    let dy2 = (s2b.y - s2a.y) as f64; let dx2 = (s2b.x - s2a.x) as f64;
+    let cp = dy1*dx2 - dy2*dx1;
+    if cp == 0.0 { return IX_COLLINEAR; }
+    let t = (s1a.x - s2a.x) as f64 * dy2 - (s1a.y - s2a.y) as f64 * dx2;
+    if t >= 0.0 { if cp < 0.0 || t >= cp { return IX_NONE; } }
+    else        { if cp > 0.0 || t <= cp { return IX_NONE; } }
+    let t2 = (s1a.x - s2a.x) as f64 * dy1 - (s1a.y - s2a.y) as f64 * dx1;
+    if t2 >= 0.0 { if cp > 0.0 && t2 < cp { return IX_INTERSECT; } }
+    else         { if cp < 0.0 && t2 > cp { return IX_INTERSECT; } }
+    IX_NONE
+}
+
+fn find_loc_min_idx(path: &[P64], length: usize, start: usize) -> Option<usize> {
+    if length < 3 { return None; }
+    let i0 = start;
+    let mut idx = start;
+    let mut n = (idx + 1) % length;
+    while path[n].y <= path[idx].y {
+        idx = n; n = (n + 1) % length;
+        if idx == i0 { return None; }
+    }
+    while path[n].y >= path[idx].y {
+        idx = n; n = (n + 1) % length;
+    }
+    Some(idx)
+}
+
+fn prev_idx(idx: usize, length: usize) -> usize {
+    if idx == 0 { length - 1 } else { idx - 1 }
+}
+
+fn next_idx(idx: usize, length: usize) -> usize { (idx + 1) % length }
+
+fn remove_edge_from_vert(vs: &mut [V2], v: usize, e: usize) {
+    if let Some(pos) = vs[v].edges.iter().position(|&x| x == e) {
+        vs[v].edges.remove(pos);
+    }
+}
+
+fn find_linking_edge(vs: &[V2], es: &[Edge], vert1: usize, vert2: usize, prefer_asc: bool) -> usize {
+    let mut res = NULL;
+    for &e in &vs[vert1].edges {
+        if es[e].vl == vert2 || es[e].vr == vert2 {
+            if es[e].kind == LOOSE || ((es[e].kind == ASCEND) == prefer_asc) { return e; }
+            res = e;
+        }
+    }
+    res
+}
+
+fn path_from_tri(es: &[Edge], vs: &[V2], tri: &CdtTri) -> [P64; 3] {
+    let e0 = &es[tri.edges[0]];
+    let p0 = vs[e0.vl].pt;
+    let p1 = vs[e0.vr].pt;
+    let e1 = &es[tri.edges[1]];
+    let p2 = if vs[e1.vl].pt == p0 || vs[e1.vl].pt == p1 { vs[e1.vr].pt } else { vs[e1.vl].pt };
+    [p0, p1, p2]
+}
+
+struct Delaunay {
+    vs: Vec<V2>,
+    es: Vec<Edge>,
+    ts: Vec<CdtTri>,
+    pending: Vec<usize>,
+    horz: Vec<usize>,
+    loc_mins: Vec<usize>,
+    use_del: bool,
+    lowermost: usize,
+    first_active: usize,
+}
+
+impl Delaunay {
+    fn new(use_del: bool) -> Self {
+        Delaunay {
+            vs: Vec::new(), es: Vec::new(), ts: Vec::new(),
+            pending: Vec::new(), horz: Vec::new(), loc_mins: Vec::new(),
+            use_del, lowermost: NULL, first_active: NULL,
+        }
+    }
+
+    fn add_active(&mut self, eid: usize) {
+        if self.es[eid].is_active { return; }
+        self.es[eid].prev_e = NULL;
+        self.es[eid].next_e = self.first_active;
+        self.es[eid].is_active = true;
+        if self.first_active != NULL { self.es[self.first_active].prev_e = eid; }
+        self.first_active = eid;
+    }
+
+    fn remove_active(&mut self, eid: usize) {
+        let vb = self.es[eid].vb;
+        let vt = self.es[eid].vt;
+        remove_edge_from_vert(&mut self.vs, vb, eid);
+        remove_edge_from_vert(&mut self.vs, vt, eid);
+        let prev = self.es[eid].prev_e;
+        let nxt  = self.es[eid].next_e;
+        if nxt  != NULL { self.es[nxt].prev_e  = prev; }
+        if prev != NULL { self.es[prev].next_e  = nxt;  }
+        self.es[eid].is_active = false;
+        if self.first_active == eid { self.first_active = nxt; }
+    }
+
+    fn create_edge(&mut self, v1: usize, v2: usize, kind: u8) -> usize {
+        let eid = self.es.len();
+        let p1 = self.vs[v1].pt; let p2 = self.vs[v2].pt;
+        let (vb, vt) = if p1.y == p2.y { (v1, v2) } else if p1.y < p2.y { (v2, v1) } else { (v1, v2) };
+        let (vl, vr) = if p1.x <= p2.x { (v1, v2) } else { (v2, v1) };
+        self.es.push(Edge { vl, vr, vb, vt, kind, tri_a: NULL, tri_b: NULL,
+                            is_active: false, next_e: NULL, prev_e: NULL });
+        self.vs[v1].edges.push(eid);
+        self.vs[v2].edges.push(eid);
+        if kind == LOOSE {
+            self.pending.push(eid);
+            self.add_active(eid);
+        }
+        eid
+    }
+
+    fn create_tri(&mut self, e1: usize, e2: usize, e3: usize) -> usize {
+        let tid = self.ts.len();
+        self.ts.push(CdtTri { edges: [e1, e2, e3] });
+        for i in 0..3 {
+            let eid = self.ts[tid].edges[i];
+            if self.es[eid].tri_a != NULL {
+                self.es[eid].tri_b = tid;
+                self.remove_active(eid);
+            } else {
+                self.es[eid].tri_a = tid;
+                if !is_loose_e(&self.es[eid]) { self.remove_active(eid); }
+            }
+        }
+        tid
+    }
+
+    fn split_edge(&mut self, long_e: usize, short_e: usize) {
+        let old_t = self.es[long_e].vt;
+        let new_t = self.es[short_e].vt;
+        remove_edge_from_vert(&mut self.vs, old_t, long_e);
+        self.es[long_e].vt = new_t;
+        if self.es[long_e].vl == old_t { self.es[long_e].vl = new_t; }
+        else                            { self.es[long_e].vr = new_t; }
+        self.vs[new_t].edges.push(long_e);
+        let kind = self.es[long_e].kind;
+        self.create_edge(new_t, old_t, kind);
+    }
+
+    fn merge_dup_collinear(&mut self) {
+        let mut iter1 = 0usize;
+        let n = self.vs.len();
+        let mut iter2 = 1usize;
+        while iter2 < n {
+            if self.vs[iter1].pt != self.vs[iter2].pt {
+                iter1 = iter2; iter2 += 1; continue;
+            }
+            if !self.vs[iter1].inner_lm || !self.vs[iter2].inner_lm {
+                self.vs[iter1].inner_lm = false;
+            }
+            let edges2: Vec<usize> = self.vs[iter2].edges.clone();
+            for &e in &edges2 {
+                if self.es[e].vb == iter2 { self.es[e].vb = iter1; } else { self.es[e].vt = iter1; }
+                if self.es[e].vl == iter2 { self.es[e].vl = iter1; } else { self.es[e].vr = iter1; }
+            }
+            let mut combined = self.vs[iter1].edges.clone();
+            combined.extend(edges2);
+            self.vs[iter1].edges = combined;
+            self.vs[iter2].edges.clear();
+            let edges1: Vec<usize> = self.vs[iter1].edges.clone();
+            'outer: for &e1 in &edges1 {
+                if is_horiz_e(&self.es[e1], &self.vs) || self.es[e1].vb != iter1 { continue; }
+                let edges1b: Vec<usize> = self.vs[iter1].edges.clone();
+                for &e2 in &edges1b {
+                    if e2 == e1 || self.es[e2].vb != iter1 { continue; }
+                    let t1y = self.vs[self.es[e1].vt].pt.y;
+                    let t2y = self.vs[self.es[e2].vt].pt.y;
+                    if t1y == t2y { continue; }
+                    let pt1 = self.vs[self.es[e1].vt].pt;
+                    let pt2 = self.vs[self.es[e2].vt].pt;
+                    let pv = self.vs[iter1].pt;
+                    if cps(pt1, pv, pt2) != 0 { continue; }
+                    if t1y < t2y { self.split_edge(e1, e2); } else { self.split_edge(e2, e1); }
+                    break 'outer;
+                }
+            }
+            iter2 += 1;
+        }
+    }
+
+    fn inner_loc_min_edge(&mut self, v_above: usize) -> usize {
+        if self.first_active == NULL { return NULL; }
+        let xa = self.vs[v_above].pt.x;
+        let ya = self.vs[v_above].pt.y;
+        let mut e = self.first_active;
+        let mut e_below = NULL;
+        let mut best_d = -1.0f64;
+        while e != NULL {
+            let vl_x = self.vs[self.es[e].vl].pt.x;
+            let vr_x = self.vs[self.es[e].vr].pt.x;
+            let vb_y = self.vs[self.es[e].vb].pt.y;
+            let vb = self.es[e].vb; let vt = self.es[e].vt;
+            let vl_pt = self.vs[self.es[e].vl].pt;
+            let vr_pt = self.vs[self.es[e].vr].pt;
+            let va_pt = self.vs[v_above].pt;
+            if vl_x <= xa && vr_x >= xa && vb_y >= ya && vb != v_above && vt != v_above
+                && !left_turning(vl_pt, va_pt, vr_pt)
+            {
+                let d = shortest_dist_seg(va_pt, vl_pt, vr_pt);
+                if e_below == NULL || d < best_d { e_below = e; best_d = d; }
+            }
+            e = self.es[e].next_e;
+        }
+        if e_below == NULL { return NULL; }
+        let vt_eb = self.es[e_below].vt;
+        let vb_eb = self.es[e_below].vb;
+        let mut v_best = if self.vs[vt_eb].pt.y <= ya { vb_eb } else { vt_eb };
+        let mut x_best = self.vs[v_best].pt.x;
+        let mut y_best = self.vs[v_best].pt.y;
+        let va_pt = self.vs[v_above].pt;
+        e = self.first_active;
+        if x_best < xa {
+            while e != NULL {
+                let vr_x = self.vs[self.es[e].vr].pt.x;
+                let vl_x = self.vs[self.es[e].vl].pt.x;
+                let vb_y = self.vs[self.es[e].vb].pt.y;
+                let vt_y = self.vs[self.es[e].vt].pt.y;
+                if vr_x > x_best && vl_x < xa && vb_y > ya && vt_y < y_best {
+                    let vb_pt = self.vs[self.es[e].vb].pt;
+                    let vt_pt = self.vs[self.es[e].vt].pt;
+                    let vb2 = self.vs[v_best].pt;
+                    if segs_intersect(vb_pt, vt_pt, vb2, va_pt) == IX_INTERSECT {
+                        let et = self.es[e].vt; let eb = self.es[e].vb;
+                        v_best = if self.vs[et].pt.y > ya { et } else { eb };
+                        x_best = self.vs[v_best].pt.x;
+                        y_best = self.vs[v_best].pt.y;
+                    }
+                }
+                e = self.es[e].next_e;
+            }
+        } else {
+            while e != NULL {
+                let vr_x = self.vs[self.es[e].vr].pt.x;
+                let vl_x = self.vs[self.es[e].vl].pt.x;
+                let vb_y = self.vs[self.es[e].vb].pt.y;
+                let vt_y = self.vs[self.es[e].vt].pt.y;
+                if vr_x < x_best && vl_x > xa && vb_y > ya && vt_y < y_best {
+                    let vb_pt = self.vs[self.es[e].vb].pt;
+                    let vt_pt = self.vs[self.es[e].vt].pt;
+                    let vb2 = self.vs[v_best].pt;
+                    if segs_intersect(vb_pt, vt_pt, vb2, va_pt) == IX_INTERSECT {
+                        let et = self.es[e].vt; let eb = self.es[e].vb;
+                        v_best = if self.vs[et].pt.y > ya { et } else { eb };
+                        x_best = self.vs[v_best].pt.x;
+                        y_best = self.vs[v_best].pt.y;
+                    }
+                }
+                e = self.es[e].next_e;
+            }
+        }
+        let _ = (x_best, y_best);
+        self.create_edge(v_best, v_above, LOOSE)
+    }
+
+    fn horiz_between(&self, v1: usize, v2: usize) -> bool {
+        let y = self.vs[v1].pt.y;
+        let (l, r) = if self.vs[v1].pt.x > self.vs[v2].pt.x {
+            (self.vs[v2].pt.x, self.vs[v1].pt.x)
+        } else {
+            (self.vs[v1].pt.x, self.vs[v2].pt.x)
+        };
+        let mut e = self.first_active;
+        while e != NULL {
+            let vl = self.es[e].vl; let vr = self.es[e].vr;
+            if self.vs[vl].pt.y == y && self.vs[vr].pt.y == y
+                && self.vs[vl].pt.x >= l && self.vs[vr].pt.x <= r
+                && (self.vs[vl].pt.x != l || self.vs[vl].pt.x != r)
+            { return true; }
+            e = self.es[e].next_e;
+        }
+        false
+    }
+
+    fn tri_left(&mut self, edge: usize, pivot: usize, min_y: i64) {
+        let v = { let e = &self.es[edge]; if e.vb == pivot { e.vt } else { e.vb } };
+        let mut v_alt = NULL;
+        let mut e_alt = NULL;
+        let pivot_edges: Vec<usize> = self.vs[pivot].edges.clone();
+        for e in pivot_edges {
+            if e == edge || !self.es[e].is_active { continue; }
+            let vx = { let ep = &self.es[e]; if ep.vt == pivot { ep.vb } else { ep.vt } };
+            if vx == v { continue; }
+            let c = cps(self.vs[v].pt, self.vs[pivot].pt, self.vs[vx].pt);
+            if c == 0 {
+                let vx_px = self.vs[vx].pt.x;
+                let v_px = self.vs[v].pt.x;
+                let pv_px = self.vs[pivot].pt.x;
+                if (v_px > pv_px) == (pv_px > vx_px) { continue; }
+            } else if c > 0 || (v_alt != NULL && !left_turning(self.vs[vx].pt, self.vs[pivot].pt, self.vs[v_alt].pt)) {
+                continue;
+            }
+            v_alt = vx; e_alt = e;
+        }
+        if v_alt == NULL || self.vs[v_alt].pt.y < min_y { return; }
+        if self.vs[v_alt].pt.y < self.vs[pivot].pt.y { if is_left_e(&self.es[e_alt]) { return; } }
+        else if self.vs[v_alt].pt.y > self.vs[pivot].pt.y { if is_right_e(&self.es[e_alt]) { return; } }
+        let prefer = self.vs[v_alt].pt.y < self.vs[v].pt.y;
+        let ex = find_linking_edge(&self.vs, &self.es, v_alt, v, prefer);
+        let ex = if ex == NULL {
+            if self.vs[v_alt].pt.y == self.vs[v].pt.y && self.vs[v].pt.y == min_y && self.horiz_between(v_alt, v) { return; }
+            self.create_edge(v_alt, v, LOOSE)
+        } else { ex };
+        self.create_tri(edge, e_alt, ex);
+        if !edge_completed(&self.es[ex]) { self.tri_left(ex, v_alt, min_y); }
+    }
+
+    fn tri_right(&mut self, edge: usize, pivot: usize, min_y: i64) {
+        let v = { let e = &self.es[edge]; if e.vb == pivot { e.vt } else { e.vb } };
+        let mut v_alt = NULL;
+        let mut e_alt = NULL;
+        let pivot_edges: Vec<usize> = self.vs[pivot].edges.clone();
+        for e in pivot_edges {
+            if e == edge || !self.es[e].is_active { continue; }
+            let vx = { let ep = &self.es[e]; if ep.vt == pivot { ep.vb } else { ep.vt } };
+            if vx == v { continue; }
+            let c = cps(self.vs[v].pt, self.vs[pivot].pt, self.vs[vx].pt);
+            if c == 0 {
+                let vx_px = self.vs[vx].pt.x;
+                let v_px = self.vs[v].pt.x;
+                let pv_px = self.vs[pivot].pt.x;
+                if (v_px > pv_px) == (pv_px > vx_px) { continue; }
+            } else if c < 0 || (v_alt != NULL && !right_turning(self.vs[vx].pt, self.vs[pivot].pt, self.vs[v_alt].pt)) {
+                continue;
+            }
+            v_alt = vx; e_alt = e;
+        }
+        if v_alt == NULL || self.vs[v_alt].pt.y < min_y { return; }
+        if self.vs[v_alt].pt.y < self.vs[pivot].pt.y { if is_right_e(&self.es[e_alt]) { return; } }
+        else if self.vs[v_alt].pt.y > self.vs[pivot].pt.y { if is_left_e(&self.es[e_alt]) { return; } }
+        let prefer = self.vs[v_alt].pt.y > self.vs[v].pt.y;
+        let ex = find_linking_edge(&self.vs, &self.es, v_alt, v, prefer);
+        let ex = if ex == NULL {
+            if self.vs[v_alt].pt.y == self.vs[v].pt.y && self.vs[v].pt.y == min_y && self.horiz_between(v_alt, v) { return; }
+            self.create_edge(v_alt, v, LOOSE)
+        } else { ex };
+        self.create_tri(edge, ex, e_alt);
+        if !edge_completed(&self.es[ex]) { self.tri_right(ex, v_alt, min_y); }
+    }
+
+    fn force_legal(&mut self, edge: usize) {
+        if self.es[edge].tri_a == NULL || self.es[edge].tri_b == NULL { return; }
+        let mut vert_a = NULL; let mut vert_b = NULL;
+        let mut edges_a = [NULL; 3]; let mut edges_b = [NULL; 3];
+        let vl = self.es[edge].vl;
+        let ta = self.es[edge].tri_a;
+        let tb = self.es[edge].tri_b;
+        for i in 0..3 {
+            let eid = self.ts[ta].edges[i];
+            if eid == edge { continue; }
+            let ec = edge_contains(&self.es[eid], vl);
+            if ec == EC_LEFT   { edges_a[1] = eid; vert_a = self.es[eid].vr; }
+            else if ec == EC_RIGHT { edges_a[1] = eid; vert_a = self.es[eid].vl; }
+            else                   { edges_b[1] = eid; }
+        }
+        for i in 0..3 {
+            let eid = self.ts[tb].edges[i];
+            if eid == edge { continue; }
+            let ec = edge_contains(&self.es[eid], vl);
+            if ec == EC_LEFT   { edges_a[2] = eid; vert_b = self.es[eid].vr; }
+            else if ec == EC_RIGHT { edges_a[2] = eid; vert_b = self.es[eid].vl; }
+            else                   { edges_b[2] = eid; }
+        }
+        if vert_a == NULL || vert_b == NULL { return; }
+        let vl_pt = self.vs[vl].pt;
+        let vr_pt = self.vs[self.es[edge].vr].pt;
+        let va_pt = self.vs[vert_a].pt;
+        let vb_pt = self.vs[vert_b].pt;
+        if cps(va_pt, vl_pt, vr_pt) == 0 { return; }
+        let ict = in_circle(va_pt, vl_pt, vr_pt, vb_pt);
+        if ict == 0.0 || (right_turning(va_pt, vl_pt, vr_pt) == (ict < 0.0)) { return; }
+        self.es[edge].vl = vert_a;
+        self.es[edge].vr = vert_b;
+        self.ts[ta].edges[0] = edge;
+        for i in 1..3 {
+            let ea = edges_a[i];
+            self.ts[ta].edges[i] = ea;
+            if is_loose_e(&self.es[ea]) { self.pending.push(ea); }
+            if self.es[ea].tri_a == ta || self.es[ea].tri_b == ta { continue; }
+            if self.es[ea].tri_a == tb      { self.es[ea].tri_a = ta; }
+            else if self.es[ea].tri_b == tb { self.es[ea].tri_b = ta; }
+        }
+        self.ts[tb].edges[0] = edge;
+        for i in 1..3 {
+            let eb = edges_b[i];
+            self.ts[tb].edges[i] = eb;
+            if is_loose_e(&self.es[eb]) { self.pending.push(eb); }
+            if self.es[eb].tri_a == tb || self.es[eb].tri_b == tb { continue; }
+            if self.es[eb].tri_a == ta      { self.es[eb].tri_a = tb; }
+            else if self.es[eb].tri_b == ta { self.es[eb].tri_b = tb; }
+        }
+    }
+
+    fn add_path(&mut self, path: &[P64]) {
+        let length = path.len();
+        let i0 = match find_loc_min_idx(path, length, 0) { Some(x) => x, None => return };
+        let mut i_prev = prev_idx(i0, length);
+        while path[i_prev] == path[i0] { i_prev = prev_idx(i_prev, length); }
+        let mut i_next = next_idx(i0, length);
+        let mut i = i0;
+        while cps(path[i_prev], path[i], path[i_next]) == 0 {
+            i = match find_loc_min_idx(path, length, i) { Some(x) => x, None => return };
+            if i == i0 { return; }
+            i_prev = prev_idx(i, length);
+            while path[i_prev] == path[i] { i_prev = prev_idx(i_prev, length); }
+            i_next = next_idx(i, length);
+        }
+        let vert_cnt = self.vs.len();
+        let v0 = self.vs.len();
+        self.vs.push(V2 { pt: path[i], edges: Vec::new(), inner_lm: false });
+        if left_turning(path[i_prev], path[i], path[i_next]) { self.vs[v0].inner_lm = true; }
+        let mut v_prev = v0;
+        i = i_next;
+        loop {
+            self.loc_mins.push(v_prev);
+            let vp_pt = self.vs[v_prev].pt;
+            if self.lowermost == NULL
+                || vp_pt.y > self.vs[self.lowermost].pt.y
+                || (vp_pt.y == self.vs[self.lowermost].pt.y && vp_pt.x < self.vs[self.lowermost].pt.x)
+            { self.lowermost = v_prev; }
+            i_next = next_idx(i, length);
+            if cps(self.vs[v_prev].pt, path[i], path[i_next]) == 0 { i = i_next; continue; }
+            while path[i].y <= self.vs[v_prev].pt.y {
+                let vn = self.vs.len();
+                self.vs.push(V2 { pt: path[i], edges: Vec::new(), inner_lm: false });
+                self.create_edge(v_prev, vn, ASCEND);
+                v_prev = vn;
+                i = i_next; i_next = next_idx(i, length);
+                while cps(self.vs[v_prev].pt, path[i], path[i_next]) == 0 { i = i_next; i_next = next_idx(i, length); }
+            }
+            let mut v_prev_prev = v_prev;
+            while i != i0 && path[i].y >= self.vs[v_prev].pt.y {
+                let vn = self.vs.len();
+                self.vs.push(V2 { pt: path[i], edges: Vec::new(), inner_lm: false });
+                self.create_edge(vn, v_prev, DESCEND);
+                v_prev_prev = v_prev; v_prev = vn;
+                i = i_next; i_next = next_idx(i, length);
+                while cps(self.vs[v_prev].pt, path[i], path[i_next]) == 0 { i = i_next; i_next = next_idx(i, length); }
+            }
+            if i == i0 { break; }
+            if left_turning(self.vs[v_prev_prev].pt, self.vs[v_prev].pt, path[i]) {
+                self.vs[v_prev].inner_lm = true;
+            }
+        }
+        self.create_edge(v0, v_prev, DESCEND);
+        let n_new = self.vs.len() - vert_cnt;
+        if n_new < 3 || (n_new == 3 && (
+            dist_sqr(self.vs[vert_cnt].pt, self.vs[vert_cnt+1].pt) <= 1.0 ||
+            dist_sqr(self.vs[vert_cnt+1].pt, self.vs[vert_cnt+2].pt) <= 1.0 ||
+            dist_sqr(self.vs[vert_cnt+2].pt, self.vs[vert_cnt].pt) <= 1.0))
+        {
+            for j in vert_cnt..self.vs.len() { self.vs[j].edges.clear(); }
+        }
+    }
+
+    fn execute(mut self, paths: &[Vec<P64>]) -> Vec<[P64; 3]> {
+        let total: usize = paths.iter().map(|p| p.len()).sum();
+        if total == 0 { return Vec::new(); }
+        for path in paths { self.add_path(path); }
+        if self.vs.len() <= 2 { return Vec::new(); }
+        if self.lowermost != NULL && self.vs[self.lowermost].inner_lm {
+            for lm in &self.loc_mins { self.vs[*lm].inner_lm = !self.vs[*lm].inner_lm; }
+            for e in &mut self.es {
+                if e.kind == ASCEND { e.kind = DESCEND; } else if e.kind == DESCEND { e.kind = ASCEND; }
+            }
+        }
+        self.loc_mins.clear();
+        let n_vs = self.vs.len();
+        let mut order: Vec<usize> = (0..n_vs).collect();
+        order.sort_by(|&a, &b| self.vs[b].pt.y.cmp(&self.vs[a].pt.y).then(self.vs[a].pt.x.cmp(&self.vs[b].pt.x)));
+        let mut remap: Vec<usize> = vec![0; n_vs];
+        for (new_idx, &old_idx) in order.iter().enumerate() { remap[old_idx] = new_idx; }
+        let mut old_vs: Vec<V2> = std::mem::take(&mut self.vs);
+        self.vs = order.iter().map(|&old_idx| {
+            let v = &mut old_vs[old_idx];
+            V2 { pt: v.pt, edges: std::mem::take(&mut v.edges), inner_lm: v.inner_lm }
+        }).collect();
+        for e in &mut self.es {
+            e.vb = remap[e.vb]; e.vt = remap[e.vt]; e.vl = remap[e.vl]; e.vr = remap[e.vr];
+        }
+        if self.lowermost != NULL { self.lowermost = remap[self.lowermost]; }
+        self.merge_dup_collinear();
+        let mut curr_y = self.vs[0].pt.y;
+        let nv = self.vs.len();
+        for vi in 0..nv {
+            if self.vs[vi].edges.is_empty() { continue; }
+            if self.vs[vi].pt.y != curr_y {
+                while let Some(lm) = self.loc_mins.pop() {
+                    let e = self.inner_loc_min_edge(lm);
+                    if e == NULL { return Vec::new(); }
+                    if is_horiz_e(&self.es[e], &self.vs) {
+                        let vb = self.es[e].vb; let vl = self.es[e].vl;
+                        if vl == vb { self.tri_left(e, vb, curr_y); }
+                        else        { self.tri_right(e, vb, curr_y); }
+                    } else {
+                        let vb = self.es[e].vb;
+                        self.tri_left(e, vb, curr_y);
+                        if !edge_completed(&self.es[e]) { self.tri_right(e, vb, curr_y); }
+                    }
+                    let lm_e0 = self.vs[lm].edges[0];
+                    let lm_e1 = self.vs[lm].edges[1];
+                    self.add_active(lm_e0);
+                    self.add_active(lm_e1);
+                }
+                while let Some(e) = self.horz.pop() {
+                    if edge_completed(&self.es[e]) { continue; }
+                    let vb = self.es[e].vb; let vl = self.es[e].vl;
+                    if vb == vl {
+                        if is_left_e(&self.es[e]) { self.tri_left(e, vb, curr_y); }
+                    } else {
+                        if is_right_e(&self.es[e]) { self.tri_right(e, vb, curr_y); }
+                    }
+                }
+                curr_y = self.vs[vi].pt.y;
+            }
+            let vi_edges: Vec<usize> = self.vs[vi].edges.clone();
+            for i in (0..vi_edges.len()).rev() {
+                if i >= self.vs[vi].edges.len() { continue; }
+                let e = vi_edges[i];
+                if edge_completed(&self.es[e]) || is_loose_e(&self.es[e]) { continue; }
+                let vb = self.es[e].vb;
+                if vi == vb {
+                    if is_horiz_e(&self.es[e], &self.vs) { self.horz.push(e); }
+                    if !self.vs[vi].inner_lm { self.add_active(e); }
+                } else {
+                    if is_horiz_e(&self.es[e], &self.vs) { self.horz.push(e); }
+                    else if is_left_e(&self.es[e]) { self.tri_left(e, vb, self.vs[vi].pt.y); }
+                    else                           { self.tri_right(e, vb, self.vs[vi].pt.y); }
+                }
+            }
+            if self.vs[vi].inner_lm { self.loc_mins.push(vi); }
+        }
+        while let Some(e) = self.horz.pop() {
+            if !edge_completed(&self.es[e]) {
+                let vb = self.es[e].vb; let vl = self.es[e].vl;
+                if vb == vl { self.tri_left(e, vb, curr_y); }
+            }
+        }
+        if self.use_del {
+            while let Some(e) = self.pending.pop() { self.force_legal(e); }
+        }
+        let mut res = Vec::new();
+        for ti in 0..self.ts.len() {
+            let p = path_from_tri(&self.es, &self.vs, &self.ts[ti]);
+            let c = cps(p[0], p[1], p[2]);
+            if c == 0 { continue; }
+            if c < 0 { res.push([p[2], p[1], p[0]]); } else { res.push(p); }
+        }
+        res
+    }
+}
+
+pub fn cdt_triangulate(border_2d: &[(f64, f64)], holes_2d: &[Vec<(f64, f64)>]) -> Vec<(usize, usize, usize)> {
+    let scale = 1e6f64;
+    let mut flat: Vec<(f64, f64)> = border_2d.to_vec();
+    for h in holes_2d { flat.extend(h.iter().copied()); }
+    let mut pt_map: HashMap<(i64, i64), usize> = HashMap::new();
+    for (i, &(x, y)) in flat.iter().enumerate() {
+        let key = ((x * scale).round() as i64, (y * scale).round() as i64);
+        pt_map.entry(key).or_insert(i);
+    }
+    let make_path = |pts: &[(f64, f64)]| -> Vec<P64> {
+        let mut path: Vec<P64> = pts.iter().map(|&(x, y)| P64 {
+            x: (x * scale).round() as i64, y: (y * scale).round() as i64
+        }).collect();
+        if path.len() > 1 && path[0] == *path.last().unwrap() { path.pop(); }
+        path
+    };
+    let mut paths: Vec<Vec<P64>> = vec![make_path(border_2d)];
+    for h in holes_2d { paths.push(make_path(h)); }
+    let d = Delaunay::new(true);
+    let tris = d.execute(&paths);
+    let mut out = Vec::new();
+    for tri in tris {
+        let mut f = [0usize; 3];
+        let mut ok = true;
+        for k in 0..3 {
+            let key = (tri[k].x, tri[k].y);
+            match pt_map.get(&key) { Some(&i) => f[k] = i, None => { ok = false; break; } }
+        }
+        if ok { out.push((f[0], f[1], f[2])); }
+    }
+    out
+}

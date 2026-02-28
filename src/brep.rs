@@ -267,26 +267,34 @@ impl BRep {
         let si_top = brep.add_surface(&cap_top) as i32;
         let fi_body = brep.add_face(si_body, false) as i32;
         let li_body = brep.add_loop(fi_body, BRepLoopType::Outer) as i32;
-        let c2d_bot = NurbsCurve::create(false, 1, &[Point::new(dom_u.0,dom_v.0,0.0), Point::new(dom_u.1,dom_v.0,0.0)]);
+        let c2d_bot = NurbsCurve::create(false, 1, &[
+            Point::new(dom_u.0, dom_v.0, 0.0), Point::new(dom_u.1, dom_v.0, 0.0),
+        ]);
         let ci = brep.add_curve_2d(&c2d_bot) as i32;
         brep.add_trim(ci, ei_bot, li_body, false, BRepTrimType::Mated);
-        let c2d_sr = NurbsCurve::create(false, 1, &[Point::new(dom_u.1,dom_v.0,0.0), Point::new(dom_u.1,dom_v.1,0.0)]);
+        let c2d_sr = NurbsCurve::create(false, 1, &[
+            Point::new(dom_u.1, dom_v.0, 0.0), Point::new(dom_u.1, dom_v.1, 0.0),
+        ]);
         let ci = brep.add_curve_2d(&c2d_sr) as i32;
         brep.add_trim(ci, ei_seam, li_body, false, BRepTrimType::Seam);
-        let c2d_top = NurbsCurve::create(false, 1, &[Point::new(dom_u.1,dom_v.1,0.0), Point::new(dom_u.0,dom_v.1,0.0)]);
+        let c2d_top = NurbsCurve::create(false, 1, &[
+            Point::new(dom_u.1, dom_v.1, 0.0), Point::new(dom_u.0, dom_v.1, 0.0),
+        ]);
         let ci = brep.add_curve_2d(&c2d_top) as i32;
         brep.add_trim(ci, ei_top, li_body, true, BRepTrimType::Mated);
-        let c2d_sl = NurbsCurve::create(false, 1, &[Point::new(dom_u.0,dom_v.1,0.0), Point::new(dom_u.0,dom_v.0,0.0)]);
+        let c2d_sl = NurbsCurve::create(false, 1, &[
+            Point::new(dom_u.0, dom_v.1, 0.0), Point::new(dom_u.0, dom_v.0, 0.0),
+        ]);
         let ci = brep.add_curve_2d(&c2d_sl) as i32;
         brep.add_trim(ci, ei_seam, li_body, true, BRepTrimType::Seam);
         // Circular 2D trim in UV space: circle at (0.5,0.5) radius 0.5
         let cw = (2.0_f64).sqrt() / 2.0;
-        let ccx = [1.0,1.0,0.0,-1.0,-1.0,-1.0,0.0,1.0,1.0];
-        let ccy = [0.0,1.0,1.0,1.0,0.0,-1.0,-1.0,-1.0,0.0];
-        let cwt = [1.0,cw,1.0,cw,1.0,cw,1.0,cw,1.0];
+        let ccx = [1.0, 1.0, 0.0, -1.0, -1.0, -1.0, 0.0, 1.0, 1.0];
+        let ccy = [0.0, 1.0, 1.0, 1.0, 0.0, -1.0, -1.0, -1.0, 0.0];
+        let cwt = [1.0, cw, 1.0, cw, 1.0, cw, 1.0, cw, 1.0];
         let make_cap_circle = || {
             let mut c = NurbsCurve::new(3, true, 3, 9);
-            c.m_knot = vec![0.0,0.0,1.0,1.0,2.0,2.0,3.0,3.0,4.0,4.0];
+            c.m_knot = vec![0.0, 0.0, 1.0, 1.0, 2.0, 2.0, 3.0, 3.0, 4.0, 4.0];
             for i in 0..9 {
                 c.set_cv_4d(i, (0.5+0.5*ccx[i])*cwt[i], (0.5+0.5*ccy[i])*cwt[i], 0.0, cwt[i]);
             }
@@ -328,16 +336,24 @@ impl BRep {
         let si = brep.add_surface(&srf) as i32;
         let fi = brep.add_face(si, false) as i32;
         let li = brep.add_loop(fi, BRepLoopType::Outer) as i32;
-        let c2d_south = NurbsCurve::create(false, 1, &[Point::new(dom_u.0,dom_v.0,0.0), Point::new(dom_u.1,dom_v.0,0.0)]);
+        let c2d_south = NurbsCurve::create(false, 1, &[
+            Point::new(dom_u.0, dom_v.0, 0.0), Point::new(dom_u.1, dom_v.0, 0.0),
+        ]);
         let ci = brep.add_curve_2d(&c2d_south) as i32;
         brep.add_trim(ci, -1, li, false, BRepTrimType::Singular);
-        let c2d_sr = NurbsCurve::create(false, 1, &[Point::new(dom_u.1,dom_v.0,0.0), Point::new(dom_u.1,dom_v.1,0.0)]);
+        let c2d_sr = NurbsCurve::create(false, 1, &[
+            Point::new(dom_u.1, dom_v.0, 0.0), Point::new(dom_u.1, dom_v.1, 0.0),
+        ]);
         let ci = brep.add_curve_2d(&c2d_sr) as i32;
         brep.add_trim(ci, ei_seam, li, false, BRepTrimType::Seam);
-        let c2d_north = NurbsCurve::create(false, 1, &[Point::new(dom_u.1,dom_v.1,0.0), Point::new(dom_u.0,dom_v.1,0.0)]);
+        let c2d_north = NurbsCurve::create(false, 1, &[
+            Point::new(dom_u.1, dom_v.1, 0.0), Point::new(dom_u.0, dom_v.1, 0.0),
+        ]);
         let ci = brep.add_curve_2d(&c2d_north) as i32;
         brep.add_trim(ci, -1, li, false, BRepTrimType::Singular);
-        let c2d_sl = NurbsCurve::create(false, 1, &[Point::new(dom_u.0,dom_v.1,0.0), Point::new(dom_u.0,dom_v.0,0.0)]);
+        let c2d_sl = NurbsCurve::create(false, 1, &[
+            Point::new(dom_u.0, dom_v.1, 0.0), Point::new(dom_u.0, dom_v.0, 0.0),
+        ]);
         let ci = brep.add_curve_2d(&c2d_sl) as i32;
         brep.add_trim(ci, ei_seam, li, true, BRepTrimType::Seam);
         for ei in 0..brep.m_topology_edges.len() {
@@ -355,10 +371,14 @@ impl BRep {
         brep.name = "block_with_hole".to_string();
         let hx = sx * 0.5; let hy = sy * 0.5; let hz = sz * 0.5;
         let corners = [
-            Point::new(-hx,-hy,-hz), Point::new(hx,-hy,-hz),
-            Point::new(hx,hy,-hz), Point::new(-hx,hy,-hz),
-            Point::new(-hx,-hy,hz), Point::new(hx,-hy,hz),
-            Point::new(hx,hy,hz), Point::new(-hx,hy,hz),
+            Point::new(-hx, -hy, -hz),
+            Point::new(hx, -hy, -hz),
+            Point::new(hx, hy, -hz),
+            Point::new(-hx, hy, -hz),
+            Point::new(-hx, -hy, hz),
+            Point::new(hx, -hy, hz),
+            Point::new(hx, hy, hz),
+            Point::new(-hx, hy, hz),
         ];
         for c in &corners { brep.add_vertex(c); }
         for i in 0..8 {
@@ -385,7 +405,12 @@ impl BRep {
             }
             -1
         };
-        let uv_pts = [Point::new(0.0,0.0,0.0), Point::new(1.0,0.0,0.0), Point::new(1.0,1.0,0.0), Point::new(0.0,1.0,0.0)];
+        let uv_pts = [
+            Point::new(0.0, 0.0, 0.0),
+            Point::new(1.0, 0.0, 0.0),
+            Point::new(1.0, 1.0, 0.0),
+            Point::new(0.0, 1.0, 0.0),
+        ];
         for fv in &side_faces {
             let p00 = &corners[fv[0]]; let p10 = &corners[fv[1]];
             let p01 = &corners[fv[3]]; let p11 = &corners[fv[2]];
@@ -412,7 +437,9 @@ impl BRep {
         let li_cyl = brep.add_loop(fi_cyl, BRepLoopType::Outer) as i32;
         let circle_bot = Primitives::circle(0.0, 0.0, -hz, hole_radius);
         let circle_top = Primitives::circle(0.0, 0.0, hz, hole_radius);
-        let seam_line = NurbsCurve::create(false, 1, &[Point::new(hole_radius, 0.0, -hz), Point::new(hole_radius, 0.0, hz)]);
+        let seam_line = NurbsCurve::create(false, 1, &[
+            Point::new(hole_radius, 0.0, -hz), Point::new(hole_radius, 0.0, hz),
+        ]);
         let ci_bot = brep.add_curve_3d(&circle_bot) as i32;
         let ci_top = brep.add_curve_3d(&circle_top) as i32;
         let ci_seam = brep.add_curve_3d(&seam_line) as i32;
@@ -423,23 +450,31 @@ impl BRep {
         let ei_bot = brep.add_edge(ci_bot, 8, 8) as i32;
         let ei_top = brep.add_edge(ci_top, 9, 9) as i32;
         let ei_seam = brep.add_edge(ci_seam, 8, 9) as i32;
-        let c2d = NurbsCurve::create(false, 1, &[Point::new(dom_u.0,dom_v.0,0.0), Point::new(dom_u.1,dom_v.0,0.0)]);
+        let c2d = NurbsCurve::create(false, 1, &[
+            Point::new(dom_u.0, dom_v.0, 0.0), Point::new(dom_u.1, dom_v.0, 0.0),
+        ]);
         let ci = brep.add_curve_2d(&c2d) as i32;
         brep.add_trim(ci, ei_bot, li_cyl, false, BRepTrimType::Mated);
-        let c2d = NurbsCurve::create(false, 1, &[Point::new(dom_u.1,dom_v.0,0.0), Point::new(dom_u.1,dom_v.1,0.0)]);
+        let c2d = NurbsCurve::create(false, 1, &[
+            Point::new(dom_u.1, dom_v.0, 0.0), Point::new(dom_u.1, dom_v.1, 0.0),
+        ]);
         let ci = brep.add_curve_2d(&c2d) as i32;
         brep.add_trim(ci, ei_seam, li_cyl, false, BRepTrimType::Seam);
-        let c2d = NurbsCurve::create(false, 1, &[Point::new(dom_u.1,dom_v.1,0.0), Point::new(dom_u.0,dom_v.1,0.0)]);
+        let c2d = NurbsCurve::create(false, 1, &[
+            Point::new(dom_u.1, dom_v.1, 0.0), Point::new(dom_u.0, dom_v.1, 0.0),
+        ]);
         let ci = brep.add_curve_2d(&c2d) as i32;
         brep.add_trim(ci, ei_top, li_cyl, true, BRepTrimType::Mated);
-        let c2d = NurbsCurve::create(false, 1, &[Point::new(dom_u.0,dom_v.1,0.0), Point::new(dom_u.0,dom_v.0,0.0)]);
+        let c2d = NurbsCurve::create(false, 1, &[
+            Point::new(dom_u.0, dom_v.1, 0.0), Point::new(dom_u.0, dom_v.0, 0.0),
+        ]);
         let ci = brep.add_curve_2d(&c2d) as i32;
         brep.add_trim(ci, ei_seam, li_cyl, true, BRepTrimType::Seam);
         let cw = std::f64::consts::FRAC_1_SQRT_2;
-        let ccx = [1.0,1.0,0.0,-1.0,-1.0,-1.0,0.0,1.0,1.0];
-        let ccy = [0.0,1.0,1.0,1.0,0.0,-1.0,-1.0,-1.0,0.0];
-        let cwt = [1.0,cw,1.0,cw,1.0,cw,1.0,cw,1.0];
-        let ckn = [0.0,0.0,1.0,1.0,2.0,2.0,3.0,3.0,4.0,4.0];
+        let ccx = [1.0, 1.0, 0.0, -1.0, -1.0, -1.0, 0.0, 1.0, 1.0];
+        let ccy = [0.0, 1.0, 1.0, 1.0, 0.0, -1.0, -1.0, -1.0, 0.0];
+        let cwt = [1.0, cw, 1.0, cw, 1.0, cw, 1.0, cw, 1.0];
+        let ckn = [0.0, 0.0, 1.0, 1.0, 2.0, 2.0, 3.0, 3.0, 4.0, 4.0];
         let mut make_cap = |z: f64, reversed: bool, circle_edge_idx: i32| {
             let r = hx.max(hy);
             let mut cap = NurbsSurface::create_raw(3, false, 2, 2, 2, 2, false, false, 1.0, 1.0).unwrap();
@@ -455,7 +490,9 @@ impl BRep {
                 let v0 = (corners[fv[ei]][1] + r) / (2.0 * r);
                 let u1 = (corners[fv[nxt]][0] + r) / (2.0 * r);
                 let v1 = (corners[fv[nxt]][1] + r) / (2.0 * r);
-                let tc = NurbsCurve::create(false, 1, &[Point::new(u0,v0,0.0), Point::new(u1,v1,0.0)]);
+                let tc = NurbsCurve::create(false, 1, &[
+                    Point::new(u0, v0, 0.0), Point::new(u1, v1, 0.0),
+                ]);
                 let c2d = brep.add_curve_2d(&tc) as i32;
                 let eidx = find_edge(fv[ei], fv[nxt]);
                 let rev = edge_verts[eidx as usize][0] != fv[ei];
@@ -554,7 +591,9 @@ impl BRep {
                 let j = (i + 1) % n;
                 let u0 = (us[i] - umin) / du; let v0 = (vs[i] - vmin) / dv;
                 let u1 = (us[j] - umin) / du; let v1 = (vs[j] - vmin) / dv;
-                let tc = NurbsCurve::create(false, 1, &[Point::new(u0,v0,0.0), Point::new(u1,v1,0.0)]);
+                let tc = NurbsCurve::create(false, 1, &[
+                    Point::new(u0, v0, 0.0), Point::new(u1, v1, 0.0),
+                ]);
                 let c2d = brep.add_curve_2d(&tc) as i32;
                 let lo = vi[i].min(vi[j]); let hi = vi[i].max(vi[j]);
                 let (ei, rev) = if let Some(&existing) = edge_map.get(&(lo, hi)) {

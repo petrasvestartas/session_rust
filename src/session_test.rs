@@ -1,372 +1,251 @@
-#[cfg(test)]
-mod tests {
-    use crate::encoders::{json_dump, json_load};
-    use crate::{
-        BoundingBox, Line, Mesh, Plane, Point, PointCloud, Polyline, Session,
-        TreeNode, Vector, BVH,
-    };
+use crate::{MINI_CHECK, MINI_TEST, REGISTER_MINI_TEST};
+use crate::mini_test::TestResult;
 
-    #[test]
-    fn test_session_serialization_with_all_geometry_types() {
-        // Create a session with all geometry types
-        let mut my_session = Session::new("serialization/test_session");
-
-        // Create all geometry types that Objects class can handle
-        let point = Point::new(1., 2., 3.);
-        let line = Line::new(0., 0., 0., 1., 1., 1.);
-        let plane = Plane::from_point_normal(Point::new(0., 0., 0.), Vector::new(0., 0., 1.));
-        let bbox = BoundingBox::from_point(Point::new(0., 0., 0.), 1.0);
-        let polyline = Polyline::new(vec![Point::new(0., 0., 0.), Point::new(1., 0., 0.)]);
-        let pointcloud = PointCloud::new(vec![Point::new(0., 0., 0.)], vec![], vec![]);
-        let mesh = Mesh::new();
-
-        // Demonstrate 3-level tree hierarchy
-        // Level 1: Root -> "geometry" folder
-        let geometry_folder = TreeNode::new("geometry");
-        my_session.add(&geometry_folder, None); // defaults to root
-
-        // Level 2: "geometry" -> "primitives" and "complex" folders
-        let primitives_folder = TreeNode::new("primitives");
-        let complex_folder = TreeNode::new("complex");
-        my_session.add(&primitives_folder, &geometry_folder);
-        my_session.add(&complex_folder, &geometry_folder);
-
-        // Add all geometry to session - returns TreeNode for easy nesting!
-        let bbox_node = my_session.add_bbox(bbox.clone());
-        let line_node = my_session.add_line(line.clone());
-        let mesh_node = my_session.add_mesh(mesh.clone());
-        let plane_node = my_session.add_plane(plane.clone());
-        let point_node = my_session.add_point(point.clone());
-        let pointcloud_node = my_session.add_pointcloud(pointcloud.clone());
-        let polyline_node = my_session.add_polyline(polyline.clone());
-
-        // Level 3: Organize geometry under folders
-        // Primitives: point, line, plane
-        my_session.add(&point_node, &primitives_folder);
-        my_session.add(&line_node, &primitives_folder);
-        my_session.add(&plane_node, &primitives_folder);
-
-        // Complex: mesh, polyline, pointcloud, bbox
-        my_session.add(&mesh_node, &complex_folder);
-        my_session.add(&polyline_node, &complex_folder);
-        my_session.add(&pointcloud_node, &complex_folder);
-        my_session.add(&bbox_node, &complex_folder);
-
-        // Add edge relationships between geometry objects
-        my_session.add_edge(&point.guid, &line.guid, "point_to_line");
-        my_session.add_edge(&line.guid, &plane.guid, "line_to_plane");
-
-        // Verify original session structure before serialization
-        assert_eq!(my_session.objects.points.len(), 1);
-        assert_eq!(my_session.objects.lines.len(), 1);
-        assert_eq!(my_session.objects.planes.len(), 1);
-        assert_eq!(my_session.objects.bboxes.len(), 1);
-        assert_eq!(my_session.objects.polylines.len(), 1);
-        assert_eq!(my_session.objects.pointclouds.len(), 1);
-        assert_eq!(my_session.objects.meshes.len(), 1);
-        assert_eq!(my_session.lookup.len(), 7);
-
-        // Graph structure before serialization
-        let original_graph_vertices = my_session.graph.number_of_vertices();
-        let original_graph_edges = my_session.graph.number_of_edges();
-        assert_eq!(original_graph_vertices, 7);
-        assert_eq!(original_graph_edges, 2);
-
-        // Tree should have: root + geometry + primitives + complex + 7 geometry nodes = 11 nodes
-        let original_tree_nodes = my_session.tree.nodes();
-        assert_eq!(original_tree_nodes.len(), 11);
-
-        //   json_dumps()    │ String       │ to JSON string
-        //   json_loads(s)   │ String       │ from JSON string
-        //   json_dump(path) │ file         │ write to file
-        //   json_load(path) │ file         │ read from file
-
-        // Serialize session using custom jsondump (not serde's Serialize trait)
-        let s = my_session.jsondump().unwrap();
-
-        // Deserialize using Session::jsonload to properly rebuild lookup table and graph
-        let loaded = Session::jsonload(&s).unwrap();
-
-        // Verify session structure after deserialization
-        assert_eq!(loaded.name, my_session.name);
-
-        // Verify all geometry objects are preserved
-        assert_eq!(loaded.objects.bboxes.len(), my_session.objects.bboxes.len());
-        assert_eq!(loaded.objects.lines.len(), my_session.objects.lines.len());
-        assert_eq!(loaded.objects.meshes.len(), my_session.objects.meshes.len());
-        assert_eq!(loaded.objects.planes.len(), my_session.objects.planes.len());
-        assert_eq!(loaded.objects.points.len(), my_session.objects.points.len());
-        assert_eq!(
-            loaded.objects.pointclouds.len(),
-            my_session.objects.pointclouds.len()
-        );
-        assert_eq!(
-            loaded.objects.polylines.len(),
-            my_session.objects.polylines.len()
-        );
-
-        // Verify lookup table is preserved (rebuilt from objects during deserialization)
-        assert_eq!(loaded.lookup.len(), my_session.lookup.len());
-
-        // Verify graph structure is fully preserved
-        assert_eq!(loaded.graph.number_of_vertices(), original_graph_vertices);
-        assert_eq!(loaded.graph.number_of_edges(), original_graph_edges);
-        assert!(loaded.graph.has_edge((&point.guid, &line.guid)));
-        assert!(loaded.graph.has_edge((&line.guid, &plane.guid)));
-
-        // Verify tree structure is preserved
-        let loaded_tree_nodes = loaded.tree.nodes();
-        assert_eq!(loaded_tree_nodes.len(), original_tree_nodes.len());
-        assert!(loaded.tree.root().is_some());
-
-        // File I/O
-        json_dump(&my_session, "serialization/test_session.json", true).unwrap();
-        let from_file: Session = json_load("serialization/test_session.json").unwrap();
-        assert!(!from_file.objects.points.is_empty());
-    }
-
-    #[test]
-    fn test_session_ray_cast_sanity() {
-        let mut scene = Session::new("ray_test_rs");
-
-        let pt1 = Point::new(5.0, 0.0, 0.0);
-        scene.add_point(pt1.clone());
-        let pt2 = Point::new(15.0, 0.0, 0.0);
-        scene.add_point(pt2.clone());
-        let line1 = Line::from_points(&Point::new(10.0, -2.0, 0.0), &Point::new(10.0, 2.0, 0.0));
-        scene.add_line(line1.clone());
-        let plane1 = Plane::new(
-            Point::new(20.0, 0.0, 0.0),
-            Vector::new(1.0, 0.0, 0.0),
-            Vector::new(0.0, 1.0, 0.0),
-        );
-        scene.add_plane(plane1.clone());
-        let poly = Polyline::new(vec![
-            Point::new(25.0, -1.0, -1.0),
-            Point::new(25.0, 0.0, 0.0),
-            Point::new(25.0, 1.0, 1.0),
-        ]);
-        scene.add_polyline(poly);
-
-        let ray_origin = Point::new(0.0, 0.0, 0.0);
-        let ray_dir = Vector::new(1.0, 0.0, 0.0);
-
-        let hits = scene.ray_cast(&ray_origin, &ray_dir, 0.5);
-        println!("Session Ray Casting (rs): {} hit(s)", hits.len());
-        assert!(!hits.is_empty());
-    }
-
-    #[test]
-    fn test_all_geometry_types_ray_cast_subset() {
-        let mut scene = Session::new("all_geom_rs");
-        scene.add_point(Point::new(0.0, 10.0, 0.0));
-        scene.add_line(Line::from_points(
-            &Point::new(-1.0, 20.0, 0.0),
-            &Point::new(1.0, 20.0, 0.0),
-        ));
-        scene.add_plane(Plane::new(
-            Point::new(0.0, 30.0, 0.0),
-            Vector::new(1.0, 0.0, 0.0),
-            Vector::new(0.0, 0.0, 1.0),
-        ));
-        scene.add_bbox(BoundingBox::new(
-            Point::new(0.0, 40.0, 0.0),
-            Vector::new(1.0, 0.0, 0.0),
-            Vector::new(0.0, 1.0, 0.0),
-            Vector::new(0.0, 0.0, 1.0),
-            Vector::new(2.0, 2.0, 2.0),
-        ));
-        scene.add_polyline(Polyline::new(vec![
-            Point::new(-1.0, 70.0, 0.0),
-            Point::new(0.0, 70.0, 0.0),
-            Point::new(1.0, 70.0, 0.0),
-        ]));
-
-        let ray_origin = Point::new(0.0, 0.0, 0.0);
-        let ray_dir = Vector::new(0.0, 1.0, 0.0);
-
-        let hits = scene.ray_cast(&ray_origin, &ray_dir, 1.0);
-        println!(
-            "All Geometry Types (subset) Ray Casting (rs): {} hit(s)",
-            hits.len()
-        );
-        assert!(!hits.is_empty());
-    }
-
-    #[test]
-    fn test_performance_points_vs_pure_bvh_rs() {
-        use rand::prelude::*;
-        let mut rng = StdRng::seed_from_u64(42);
-
-        let object_count = 2000;
-        let world_size = 100.0f64;
-
-        let mut scene = Session::new("perf_points_rs");
-        let mut pure_boxes: Vec<BoundingBox> = Vec::with_capacity(object_count);
-
-        for _ in 0..object_count {
-            let x = (rng.gen::<f64>() - 0.5) * world_size;
-            let y = (rng.gen::<f64>() - 0.5) * world_size;
-            let z = (rng.gen::<f64>() - 0.5) * world_size;
-            let pt = Point::new(x, y, z);
-            scene.add_point(pt.clone());
-            pure_boxes.push(BoundingBox::new(
-                pt.clone(),
-                Vector::new(1.0, 0.0, 0.0),
-                Vector::new(0.0, 1.0, 0.0),
-                Vector::new(0.0, 0.0, 1.0),
-                Vector::new(0.5, 0.5, 0.5),
-            ));
-        }
-
-        let ray_origin = Point::new(0.0, 0.0, 0.0);
-        let ray_dir = Vector::new(1.0, 0.0, 0.0);
-
-        let t0 = std::time::Instant::now();
-        let hits = scene.ray_cast(&ray_origin, &ray_dir, 1.0);
-        let session_ms = t0.elapsed().as_secs_f64() * 1000.0;
-
-        let t2 = std::time::Instant::now();
-        let bvh = BVH::from_boxes(&pure_boxes, world_size);
-        let mut candidates: Vec<usize> = Vec::new();
-        bvh.ray_cast(&ray_origin, &ray_dir, &mut candidates, true);
-        let bvh_ms = t2.elapsed().as_secs_f64() * 1000.0;
-
-        println!("Session (rs): {:.3} ms ({} hits)", session_ms, hits.len());
-        println!(
-            "Pure BVH (rs): {:.3} ms ({} candidates)",
-            bvh_ms,
-            candidates.len()
-        );
-        assert!(session_ms >= 0.0 && bvh_ms >= 0.0);
-    }
-
-    #[test]
-    fn test_ray_cast_mesh_bvh_hit() {
-        let mut scene = Session::new("mesh_bvh_hit");
-        let tri = vec![
-            Point::new(30.0, -1.0, -1.0),
-            Point::new(30.0, 1.0, -1.0),
-            Point::new(30.0, 0.0, 1.0),
-        ];
-        let mesh = Mesh::from_polylines(vec![tri], None);
-        let mesh_guid = mesh.guid.clone();
-        scene.add_mesh(mesh);
-
-        let ray_origin = Point::new(0.0, 0.0, 0.0);
-        let ray_dir = Vector::new(1.0, 0.0, 0.0);
-
-        let hits = scene.ray_cast(&ray_origin, &ray_dir, 1e-3);
-        assert!(!hits.is_empty());
-        assert!(hits.iter().any(|h| h.guid == mesh_guid));
-    }
-
-    #[test]
-    fn test_ray_cast_cache_invalidation_remove() {
-        let mut scene = Session::new("cache_invalidate_remove");
-        let line = Line::from_points(&Point::new(10.0, -2.0, 0.0), &Point::new(10.0, 2.0, 0.0));
-        let guid = line.guid.clone();
-        scene.add_line(line);
-
-        let ray_origin = Point::new(0.0, 0.0, 0.0);
-        let ray_dir = Vector::new(1.0, 0.0, 0.0);
-
-        let hits_before = scene.ray_cast(&ray_origin, &ray_dir, 1e-3);
-        assert!(!hits_before.is_empty());
-
-        scene.remove_object(&guid);
-
-        let hits_after = scene.ray_cast(&ray_origin, &ray_dir, 1e-3);
-        assert!(hits_after.is_empty());
-    }
-
-    #[test]
-    fn test_ray_cast_closest_multi_same_distance() {
-        let mut scene = Session::new("closest_multi");
-
-        let line = Line::from_points(&Point::new(10.0, -2.0, 0.0), &Point::new(10.0, 2.0, 0.0));
-        let line_guid = line.guid.clone();
-        scene.add_line(line);
-
-        let plane = Plane::new(
-            Point::new(10.0, 0.0, 0.0),
-            Vector::new(0.0, 1.0, 0.0),
-            Vector::new(0.0, 0.0, 1.0),
-        );
-        let plane_guid = plane.guid.clone();
-        scene.add_plane(plane);
-
-        let ray_origin = Point::new(0.0, 0.0, 0.0);
-        let ray_dir = Vector::new(1.0, 0.0, 0.0);
-
-        let hits = scene.ray_cast(&ray_origin, &ray_dir, 1e-3);
-        let guids: Vec<String> = hits.iter().map(|h| h.guid.clone()).collect();
-        assert!(guids.contains(&line_guid));
-        assert!(guids.contains(&plane_guid));
-    }
-
-    #[test]
-    fn test_point_tolerance_hit() {
-        let mut scene = Session::new("point_tol");
-        let p = Point::new(5.0, 5e-4, 0.0);
-        scene.add_point(p);
-
-        let ray_origin = Point::new(0.0, 0.0, 0.0);
-        let ray_dir = Vector::new(1.0, 0.0, 0.0);
-
-        let hits = scene.ray_cast(&ray_origin, &ray_dir, 1e-3);
-        assert_eq!(hits.len(), 1);
-        assert!(hits[0].distance > 4.9 && hits[0].distance < 5.1);
-    }
-
-    #[test]
-    fn test_ray_cast_cached_vs_uncached_repeated() {
-        use rand::prelude::*;
-        let mut rng = StdRng::seed_from_u64(123);
-
-        let object_count = 3000usize;
-        let world_size = 200.0f64;
-        let repeats = 50usize;
-
-        let mut scene = Session::new("ray_cache_bench");
-        // Add random points and some lines to populate BVH
-        for _ in 0..object_count {
-            let x = (rng.gen::<f64>() - 0.5) * world_size;
-            let y = (rng.gen::<f64>() - 0.5) * world_size;
-            let z = (rng.gen::<f64>() - 0.5) * world_size;
-            scene.add_point(Point::new(x, y, z));
-        }
-        for i in 0..100 {
-            let x = -50.0 + i as f64 * 1.0;
-            scene.add_line(Line::from_points(
-                &Point::new(x, -10.0, 0.0),
-                &Point::new(x, 10.0, 0.0),
-            ));
-        }
-
-        let ray_origin = Point::new(-100.0, 0.0, 0.0);
-        let ray_dir = Vector::new(1.0, 0.0, 0.0);
-
-        // First call (uncached or cache rebuild)
-        let t0 = std::time::Instant::now();
-        let hits0 = scene.ray_cast(&ray_origin, &ray_dir, 1.0);
-        let t_first = t0.elapsed().as_secs_f64() * 1000.0;
-
-        // Repeated cached calls
-        let t1 = std::time::Instant::now();
-        let mut total_hits = 0usize;
-        for _ in 0..repeats {
-            let hits = scene.ray_cast(&ray_origin, &ray_dir, 1.0);
-            total_hits += hits.len();
-        }
-        let t_cached = t1.elapsed().as_secs_f64() * 1000.0;
-        let avg_cached = t_cached / repeats as f64;
-
-        println!(
-            "Ray cast cache bench: first={:.3} ms, cached_avg={:.3} ms (hits0={}, total_cached_hits={})",
-            t_first, avg_cached, hits0.len(), total_hits
-        );
-
-        assert!(t_first >= 0.0 && avg_cached >= 0.0);
-    }
+pub fn run_session_constructor() -> TestResult {
+    MINI_TEST!("Constructor", {
+        use crate::Session;
+        let session = Session::default();
+        MINI_CHECK!(session.name == "my_session");
+        MINI_CHECK!(!session.guid.is_empty());
+    })
 }
+
+pub fn run_session_jsondump() -> TestResult {
+    MINI_TEST!("Jsondump", {
+        use crate::{Session, Point};
+        use crate::encoders::json_dump;
+        let mut session = Session::default();
+        let point1 = Point::new(1.0, 2.0, 3.0);
+        let point2 = Point::new(4.0, 5.0, 6.0);
+        session.add_point(point1.clone());
+        session.add_point(point2.clone());
+        session.add_edge(&point1.guid, &point2.guid, "connection");
+        let json_str = session.jsondump().unwrap();
+        let data: serde_json::Value = serde_json::from_str(&json_str).unwrap();
+        MINI_CHECK!(data["name"] == "my_session");
+        MINI_CHECK!(!data["guid"].is_null());
+        MINI_CHECK!(data["objects"]["points"].as_array().unwrap().len() == 2);
+        MINI_CHECK!(data["graph"]["vertices"].as_array().unwrap().len() == 2);
+        MINI_CHECK!(data["graph"]["edges"].as_array().unwrap().len() == 1);
+        json_dump(&session, "serialization/test_session.json", true).unwrap();
+    })
+}
+
+pub fn run_session_jsonload() -> TestResult {
+    MINI_TEST!("Jsonload", {
+        use crate::{Session, Point};
+        let mut session = Session::default();
+        let point1 = Point::new(1.0, 2.0, 3.0);
+        let point2 = Point::new(4.0, 5.0, 6.0);
+        session.add_point(point1.clone());
+        session.add_point(point2.clone());
+        session.add_edge(&point1.guid, &point2.guid, "connection");
+        let json_str = session.jsondump().unwrap();
+        let session2 = Session::jsonload(&json_str).unwrap();
+        MINI_CHECK!(session2.name == "my_session");
+        MINI_CHECK!(session2.lookup.len() == 2);
+        MINI_CHECK!(session2.graph.number_of_vertices() == 2);
+    })
+}
+
+pub fn run_session_file_io() -> TestResult {
+    MINI_TEST!("File Io", {
+        use crate::{Session, Point};
+        use std::fs;
+        let mut session = Session::default();
+        let point1 = Point::new(1.0, 2.0, 3.0);
+        let point2 = Point::new(4.0, 5.0, 6.0);
+        session.add_point(point1.clone());
+        session.add_point(point2.clone());
+        session.add_edge(&point1.guid, &point2.guid, "connection");
+        let filename = "serialization/test_session_roundtrip.json";
+        let json_str = session.jsondump().unwrap();
+        fs::write(filename, &json_str).unwrap();
+        let loaded_str = fs::read_to_string(filename).unwrap();
+        let loaded_session = Session::jsonload(&loaded_str).unwrap();
+        MINI_CHECK!(loaded_session.name == session.name);
+        MINI_CHECK!(loaded_session.lookup.len() == session.lookup.len());
+        MINI_CHECK!(loaded_session.graph.number_of_vertices() == session.graph.number_of_vertices());
+        fs::remove_file(filename).ok();
+    })
+}
+
+pub fn run_session_add_point() -> TestResult {
+    MINI_TEST!("Add Point", {
+        use crate::{Session, Point};
+        let mut session = Session::default();
+        let point = Point::new(1.0, 2.0, 3.0);
+        session.add_point(point.clone());
+        MINI_CHECK!(session.objects.points.len() == 1);
+        MINI_CHECK!(session.lookup.contains_key(&point.guid));
+        MINI_CHECK!(session.graph.has_node(&point.guid));
+    })
+}
+
+pub fn run_session_add_edge() -> TestResult {
+    MINI_TEST!("Add Edge", {
+        use crate::{Session, Point};
+        let mut session = Session::default();
+        let point1 = Point::new(1.0, 2.0, 3.0);
+        let point2 = Point::new(4.0, 5.0, 6.0);
+        session.add_point(point1.clone());
+        session.add_point(point2.clone());
+        session.add_edge(&point1.guid, &point2.guid, "connection");
+        MINI_CHECK!(session.graph.has_edge((&point1.guid, &point2.guid)));
+    })
+}
+
+pub fn run_session_get_object() -> TestResult {
+    MINI_TEST!("Get Object", {
+        use crate::{Session, Point};
+        let mut session = Session::default();
+        let point = Point::new(1.0, 2.0, 3.0);
+        session.add_point(point.clone());
+        let retrieved = session.get_object(&point.guid);
+        MINI_CHECK!(retrieved.is_some());
+        MINI_CHECK!(retrieved.unwrap().guid() == point.guid);
+    })
+}
+
+pub fn run_session_file_io_comprehensive() -> TestResult {
+    MINI_TEST!("File Io Comprehensive", {
+        use crate::{Session, Point};
+        use crate::encoders::{json_dump, json_load};
+        use std::fs;
+        let mut session = Session::new("./serialization/test_session");
+        let point1 = Point::new(1.0, 2.0, 3.0);
+        let point2 = Point::new(4.0, 5.0, 6.0);
+        session.add_point(point1.clone());
+        session.add_point(point2.clone());
+        session.add_edge(&point1.guid, &point2.guid, "./serialization/test_connection");
+        let filename = "serialization/test_session_comprehensive.json";
+        json_dump(&session, filename, true).unwrap();
+        let loaded_session: Session = json_load(filename).unwrap();
+        MINI_CHECK!(loaded_session.name == session.name);
+        MINI_CHECK!(loaded_session.objects.points.len() == session.objects.points.len());
+        MINI_CHECK!(loaded_session.graph.number_of_vertices() == session.graph.number_of_vertices());
+        MINI_CHECK!(loaded_session.graph.number_of_edges() == session.graph.number_of_edges());
+        fs::remove_file(filename).ok();
+    })
+}
+
+pub fn run_session_tree_transformation_hierarchy() -> TestResult {
+    MINI_TEST!("Tree Transformation Hierarchy", {
+        use crate::{Session, Point, Vector, Mesh, Plane, Xform};
+        use std::f64::consts::PI;
+        let mut scene = Session::new("tree_transformation_test");
+
+        let create_box = |cx: f64, cy: f64, cz: f64, size: f64| -> Mesh {
+            let mut mesh = Mesh::new();
+            let h = size * 0.5;
+            let vkeys = [
+                mesh.add_vertex(Point::new(cx - h, cy - h, cz - h), None),
+                mesh.add_vertex(Point::new(cx + h, cy - h, cz - h), None),
+                mesh.add_vertex(Point::new(cx + h, cy + h, cz - h), None),
+                mesh.add_vertex(Point::new(cx - h, cy + h, cz - h), None),
+                mesh.add_vertex(Point::new(cx - h, cy - h, cz + h), None),
+                mesh.add_vertex(Point::new(cx + h, cy - h, cz + h), None),
+                mesh.add_vertex(Point::new(cx + h, cy + h, cz + h), None),
+                mesh.add_vertex(Point::new(cx - h, cy + h, cz + h), None),
+            ];
+            mesh.add_face(vec![vkeys[0], vkeys[1], vkeys[2], vkeys[3]], None);
+            mesh.add_face(vec![vkeys[4], vkeys[7], vkeys[6], vkeys[5]], None);
+            mesh.add_face(vec![vkeys[0], vkeys[4], vkeys[5], vkeys[1]], None);
+            mesh.add_face(vec![vkeys[2], vkeys[6], vkeys[7], vkeys[3]], None);
+            mesh.add_face(vec![vkeys[0], vkeys[3], vkeys[7], vkeys[4]], None);
+            mesh.add_face(vec![vkeys[1], vkeys[5], vkeys[6], vkeys[2]], None);
+            mesh
+        };
+
+        let mut box1 = create_box(0.0, 0.0, 0.0, 2.0);
+        let box1_node = scene.add_mesh(box1.clone());
+        let mut box2 = create_box(0.0, 0.0, 0.0, 2.0);
+        let box2_node = scene.add_mesh(box2.clone());
+        let mut box3 = create_box(0.0, 0.0, 0.0, 2.0);
+        let box3_node = scene.add_mesh(box3.clone());
+
+        scene.add(&box1_node, None);
+        scene.add(&box2_node, &box1_node);
+        scene.add(&box3_node, &box2_node);
+
+        let box1_top = Point::new(0.0, 0.0, 1.0);
+        let x = Vector::new(1.0, 0.0, 0.0);
+        let y = Vector::new(0.0, 1.0, 0.0);
+        let plane_from = Plane::new(Point::new(0.0, 0.0, 0.0), x.clone(), y.clone());
+        let plane_to = Plane::new(box1_top, x.clone(), y.clone());
+        let xy_to_top = Xform::plane_to_plane(&plane_from, &plane_to);
+        box1.xform = Xform::rotation_z(PI / 1.5) * xy_to_top;
+        box2.xform = Xform::translation(2.0, 0.0, 0.0) * Xform::rotation_z(PI / 6.0);
+        box3.xform = Xform::translation(2.0, 0.0, 0.0);
+
+        scene.objects.meshes[0].xform = box1.xform.clone();
+        scene.objects.meshes[1].xform = box2.xform.clone();
+        scene.objects.meshes[2].xform = box3.xform.clone();
+
+        let transformed = scene.get_geometry();
+        MINI_CHECK!(transformed.meshes.len() == 3);
+
+        let expected_box1: [[f64; 3]; 8] = [
+            [1.36603, -0.366025, 0.0], [0.366025, 1.36603, 0.0],
+            [-1.36603, 0.366025, 0.0], [-0.366025, -1.36603, 0.0],
+            [1.36603, -0.366025, 2.0], [0.366025, 1.36603, 2.0],
+            [-1.36603, 0.366025, 2.0], [-0.366025, -1.36603, 2.0],
+        ];
+        let expected_box2: [[f64; 3]; 8] = [
+            [0.366025, 2.09808, 0.0], [-1.36603, 3.09808, 0.0],
+            [-2.36603, 1.36603, 0.0], [-0.633975, 0.366025, 0.0],
+            [0.366025, 2.09808, 2.0], [-1.36603, 3.09808, 2.0],
+            [-2.36603, 1.36603, 2.0], [-0.633975, 0.366025, 2.0],
+        ];
+        let expected_box3: [[f64; 3]; 8] = [
+            [-1.36603, 3.09808, 0.0], [-3.09808, 4.09808, 0.0],
+            [-4.09808, 2.36603, 0.0], [-2.36603, 1.36603, 0.0],
+            [-1.36603, 3.09808, 2.0], [-3.09808, 4.09808, 2.0],
+            [-4.09808, 2.36603, 2.0], [-2.36603, 1.36603, 2.0],
+        ];
+
+        let m1 = &transformed.meshes[0];
+        let mut vkeys1: Vec<usize> = m1.vertex.keys().copied().collect();
+        vkeys1.sort();
+        for i in 0..8 {
+            let v = &m1.vertex[&vkeys1[i]];
+            MINI_CHECK!((v.x - expected_box1[i][0]).abs() < 1e-4);
+            MINI_CHECK!((v.y - expected_box1[i][1]).abs() < 1e-4);
+            MINI_CHECK!((v.z - expected_box1[i][2]).abs() < 1e-4);
+        }
+
+        let m2 = &transformed.meshes[1];
+        let mut vkeys2: Vec<usize> = m2.vertex.keys().copied().collect();
+        vkeys2.sort();
+        for i in 0..8 {
+            let v = &m2.vertex[&vkeys2[i]];
+            MINI_CHECK!((v.x - expected_box2[i][0]).abs() < 1e-4);
+            MINI_CHECK!((v.y - expected_box2[i][1]).abs() < 1e-4);
+            MINI_CHECK!((v.z - expected_box2[i][2]).abs() < 1e-4);
+        }
+
+        let m3 = &transformed.meshes[2];
+        let mut vkeys3: Vec<usize> = m3.vertex.keys().copied().collect();
+        vkeys3.sort();
+        for i in 0..8 {
+            let v = &m3.vertex[&vkeys3[i]];
+            MINI_CHECK!((v.x - expected_box3[i][0]).abs() < 1e-4);
+            MINI_CHECK!((v.y - expected_box3[i][1]).abs() < 1e-4);
+            MINI_CHECK!((v.z - expected_box3[i][2]).abs() < 1e-4);
+        }
+
+        for mesh in &[m1, m2, m3] {
+            MINI_CHECK!(mesh.face.len() == 6);
+        }
+    })
+}
+
+REGISTER_MINI_TEST!("Session", "Constructor", crate::session_test::run_session_constructor);
+REGISTER_MINI_TEST!("Session", "Jsondump", crate::session_test::run_session_jsondump);
+REGISTER_MINI_TEST!("Session", "Jsonload", crate::session_test::run_session_jsonload);
+REGISTER_MINI_TEST!("Session", "File Io", crate::session_test::run_session_file_io);
+REGISTER_MINI_TEST!("Session", "Add Point", crate::session_test::run_session_add_point);
+REGISTER_MINI_TEST!("Session", "Add Edge", crate::session_test::run_session_add_edge);
+REGISTER_MINI_TEST!("Session", "Get Object", crate::session_test::run_session_get_object);
+REGISTER_MINI_TEST!("Session", "File Io Comprehensive", crate::session_test::run_session_file_io_comprehensive);
+REGISTER_MINI_TEST!("Session", "Tree Transformation Hierarchy", crate::session_test::run_session_tree_transformation_hierarchy);

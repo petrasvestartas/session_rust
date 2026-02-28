@@ -637,7 +637,10 @@ pub fn run_polyline_constructor() -> TestResult {
 
         // Copy (duplicates everything except guid)
         let plcopy = pl.duplicate();
-        let plother = Polyline::new(vec![Point::new(0.0, 0.0, 0.0), Point::new(1.0, 0.0, 0.0), Point::new(1.0, 1.0, 0.0), Point::new(0.0, 1.0, 0.0)]);
+        let plother = Polyline::new(vec![
+            Point::new(0.0, 0.0, 0.0), Point::new(1.0, 0.0, 0.0),
+            Point::new(1.0, 1.0, 0.0), Point::new(0.0, 1.0, 0.0),
+        ]);
 
         // No-copy operators
         let mut plmult = pl.duplicate();
@@ -656,11 +659,17 @@ pub fn run_polyline_constructor() -> TestResult {
         let rdif = pl.clone() - &Vector::new(1.0, 1.0, 1.0);
 
         // Negation (reverse point order)
-        let plneg = Polyline::new(vec![Point::new(0.0, 0.0, 0.0), Point::new(1.0, 0.0, 0.0), Point::new(2.0, 0.0, 0.0), Point::new(3.0, 0.0, 0.0)]);
+        let plneg = Polyline::new(vec![
+            Point::new(0.0, 0.0, 0.0), Point::new(1.0, 0.0, 0.0),
+            Point::new(2.0, 0.0, 0.0), Point::new(3.0, 0.0, 0.0),
+        ]);
         let neg = -plneg;
 
         // Polyline with custom color and width
-        let mut plc = Polyline::new(vec![Point::new(0.0, 0.0, 0.0), Point::new(1.0, 0.0, 0.0), Point::new(1.0, 1.0, 0.0), Point::new(0.0, 1.0, 0.0)]);
+        let mut plc = Polyline::new(vec![
+            Point::new(0.0, 0.0, 0.0), Point::new(1.0, 0.0, 0.0),
+            Point::new(1.0, 1.0, 0.0), Point::new(0.0, 1.0, 0.0),
+        ]);
         plc.linecolor = Color::with_name(255, 0, 0, 255, "red");
         plc.width = 2.5;
 
@@ -691,12 +700,16 @@ pub fn run_polyline_transformation() -> TestResult {
         use crate::Point;
         use crate::Xform;
 
-        let mut pl = Polyline::new(vec![Point::new(0.0, 0.0, 0.0), Point::new(1.0, 0.0, 0.0), Point::new(1.0, 1.0, 0.0), Point::new(0.0, 1.0, 0.0)]);
+        let mut pl = Polyline::new(vec![
+            Point::new(0.0, 0.0, 0.0), Point::new(1.0, 0.0, 0.0),
+            Point::new(1.0, 1.0, 0.0), Point::new(0.0, 1.0, 0.0),
+        ]);
         pl.xform = Xform::translation(10.0, 0.0, 0.0);
         let pl_transformed = pl.transformed();
         pl.transform();
 
-        MINI_CHECK!(pl_transformed.get_points()[0][0] == 10.0 && pl_transformed.get_points()[1][0] == 11.0);
+        MINI_CHECK!(pl_transformed.get_points()[0][0] == 10.0);
+        MINI_CHECK!(pl_transformed.get_points()[1][0] == 11.0);
         MINI_CHECK!(pl.get_points()[0][0] == 10.0 && pl.get_points()[1][0] == 11.0);
         MINI_CHECK!(pl.xform == Xform::identity());
 
@@ -704,12 +717,15 @@ pub fn run_polyline_transformation() -> TestResult {
 }
 
 pub fn run_polyline_json_roundtrip() -> TestResult {
-    MINI_TEST!("Json_roundtrip", {
+    MINI_TEST!("Json Roundtrip", {
         use crate::Polyline;
         use crate::Point;
         use crate::encoders::{json_dump, json_load};
 
-        let mut pl = Polyline::new(vec![Point::new(1.0, 2.0, 3.0), Point::new(4.0, 5.0, 6.0), Point::new(7.0, 8.0, 9.0), Point::new(10.0, 11.0, 12.0)]);
+        let mut pl = Polyline::new(vec![
+            Point::new(1.0, 2.0, 3.0), Point::new(4.0, 5.0, 6.0),
+            Point::new(7.0, 8.0, 9.0), Point::new(10.0, 11.0, 12.0),
+        ]);
         pl.name = "test_polyline".to_string();
 
         //   json_dumps()    │ String       │ to JSON string
@@ -731,11 +747,14 @@ pub fn run_polyline_json_roundtrip() -> TestResult {
 }
 
 pub fn run_polyline_protobuf_roundtrip() -> TestResult {
-    MINI_TEST!("Protobuf_roundtrip", {
+    MINI_TEST!("Protobuf Roundtrip", {
         use crate::Polyline;
         use crate::Point;
 
-        let mut pl = Polyline::new(vec![Point::new(1.0, 2.0, 3.0), Point::new(4.0, 5.0, 6.0), Point::new(7.0, 8.0, 9.0), Point::new(10.0, 11.0, 12.0)]);
+        let mut pl = Polyline::new(vec![
+            Point::new(1.0, 2.0, 3.0), Point::new(4.0, 5.0, 6.0),
+            Point::new(7.0, 8.0, 9.0), Point::new(10.0, 11.0, 12.0),
+        ]);
         pl.name = "test_polyline".to_string();
 
         // pb_dump(fname) / pb_load(fname) - file-based serialization
@@ -758,7 +777,10 @@ pub fn run_polyline_length() -> TestResult {
         use crate::Point;
 
         // L-shaped polyline: 1 unit right, 1 unit up, 1 unit left = 3 units total
-        let pl = Polyline::new(vec![Point::new(0.0, 0.0, 0.0), Point::new(1.0, 0.0, 0.0), Point::new(1.0, 1.0, 0.0), Point::new(0.0, 1.0, 0.0)]);
+        let pl = Polyline::new(vec![
+            Point::new(0.0, 0.0, 0.0), Point::new(1.0, 0.0, 0.0),
+            Point::new(1.0, 1.0, 0.0), Point::new(0.0, 1.0, 0.0),
+        ]);
         let ln = pl.length();
         let mag_sq = pl.magnitude_squared();
 
@@ -790,7 +812,7 @@ pub fn run_polyline_center() -> TestResult {
 }
 
 pub fn run_polyline_is_closed() -> TestResult {
-    MINI_TEST!("Is_closed", {
+    MINI_TEST!("Is Closed", {
         use crate::Polyline;
         use crate::Point;
 
@@ -823,7 +845,10 @@ pub fn run_polyline_reverse() -> TestResult {
         use crate::Polyline;
         use crate::Point;
 
-        let mut pl = Polyline::new(vec![Point::new(0.0, 0.0, 0.0), Point::new(1.0, 0.0, 0.0), Point::new(2.0, 0.0, 0.0), Point::new(3.0, 0.0, 0.0)]);
+        let mut pl = Polyline::new(vec![
+            Point::new(0.0, 0.0, 0.0), Point::new(1.0, 0.0, 0.0),
+            Point::new(2.0, 0.0, 0.0), Point::new(3.0, 0.0, 0.0),
+        ]);
 
         // Test reversed() returns new polyline
         let rev = pl.reversed();
@@ -842,11 +867,14 @@ pub fn run_polyline_reverse() -> TestResult {
 }
 
 pub fn run_polyline_closest_point() -> TestResult {
-    MINI_TEST!("Closest_point", {
+    MINI_TEST!("Closest Point", {
         use crate::Polyline;
         use crate::Point;
 
-        let pl = Polyline::new(vec![Point::new(0.0, 0.0, 0.0), Point::new(2.0, 0.0, 0.0), Point::new(2.0, 2.0, 0.0), Point::new(0.0, 2.0, 0.0)]);
+        let pl = Polyline::new(vec![
+            Point::new(0.0, 0.0, 0.0), Point::new(2.0, 0.0, 0.0),
+            Point::new(2.0, 2.0, 0.0), Point::new(0.0, 2.0, 0.0),
+        ]);
         let test_pt = Point::new(1.0, 1.0, 0.0);
         let (distance, edge_id, closest) = pl.closest_distance_and_point(&test_pt);
 
@@ -861,11 +889,14 @@ pub fn run_polyline_closest_point() -> TestResult {
 }
 
 pub fn run_polyline_extend_segment() -> TestResult {
-    MINI_TEST!("Extend_segment", {
+    MINI_TEST!("Extend Segment", {
         use crate::Polyline;
         use crate::Point;
 
-        let mut pl = Polyline::new(vec![Point::new(0.0, 0.0, 0.0), Point::new(1.0, 0.0, 0.0), Point::new(2.0, 0.0, 0.0), Point::new(3.0, 0.0, 0.0)]);
+        let mut pl = Polyline::new(vec![
+            Point::new(0.0, 0.0, 0.0), Point::new(1.0, 0.0, 0.0),
+            Point::new(2.0, 0.0, 0.0), Point::new(3.0, 0.0, 0.0),
+        ]);
         pl.extend_segment(0, 0.5, 0.5, 0.0, 0.0);
         let first = pl.get_points()[0][0];
         let second = pl.get_points()[1][0];
@@ -876,11 +907,14 @@ pub fn run_polyline_extend_segment() -> TestResult {
 }
 
 pub fn run_polyline_extend_segment_equally() -> TestResult {
-    MINI_TEST!("Extend_segment_equally", {
+    MINI_TEST!("Extend Segment Equally", {
         use crate::Polyline;
         use crate::Point;
 
-        let mut pl = Polyline::new(vec![Point::new(0.0, 0.0, 0.0), Point::new(1.0, 0.0, 0.0), Point::new(2.0, 0.0, 0.0), Point::new(3.0, 0.0, 0.0)]);
+        let mut pl = Polyline::new(vec![
+            Point::new(0.0, 0.0, 0.0), Point::new(1.0, 0.0, 0.0),
+            Point::new(2.0, 0.0, 0.0), Point::new(3.0, 0.0, 0.0),
+        ]);
         pl.extend_segment_equally(0, 0.5, 0.0);
         let first = pl.get_points()[0][0];
         let second = pl.get_points()[1][0];
@@ -891,18 +925,25 @@ pub fn run_polyline_extend_segment_equally() -> TestResult {
 }
 
 pub fn run_polyline_get_points() -> TestResult {
-    MINI_TEST!("Get_points", {
+    MINI_TEST!("Get Points", {
         use crate::Polyline;
         use crate::Point;
 
-        let pl = Polyline::new(vec![Point::new(0.0, 0.0, 0.0), Point::new(1.0, 0.0, 0.0), Point::new(1.0, 1.0, 0.0), Point::new(0.0, 1.0, 0.0)]);
+        let pl = Polyline::new(vec![
+            Point::new(0.0, 0.0, 0.0), Point::new(1.0, 0.0, 0.0),
+            Point::new(1.0, 1.0, 0.0), Point::new(0.0, 1.0, 0.0),
+        ]);
         let points = pl.get_points();
 
         MINI_CHECK!(points.len() == 4);
-        MINI_CHECK!(TOLERANCE.is_close(points[0][0], 0.0) && TOLERANCE.is_close(points[0][1], 0.0));
-        MINI_CHECK!(TOLERANCE.is_close(points[1][0], 1.0) && TOLERANCE.is_close(points[1][1], 0.0));
-        MINI_CHECK!(TOLERANCE.is_close(points[2][0], 1.0) && TOLERANCE.is_close(points[2][1], 1.0));
-        MINI_CHECK!(TOLERANCE.is_close(points[3][0], 0.0) && TOLERANCE.is_close(points[3][1], 1.0));
+        MINI_CHECK!(TOLERANCE.is_close(points[0][0], 0.0));
+        MINI_CHECK!(TOLERANCE.is_close(points[0][1], 0.0));
+        MINI_CHECK!(TOLERANCE.is_close(points[1][0], 1.0));
+        MINI_CHECK!(TOLERANCE.is_close(points[1][1], 0.0));
+        MINI_CHECK!(TOLERANCE.is_close(points[2][0], 1.0));
+        MINI_CHECK!(TOLERANCE.is_close(points[2][1], 1.0));
+        MINI_CHECK!(TOLERANCE.is_close(points[3][0], 0.0));
+        MINI_CHECK!(TOLERANCE.is_close(points[3][1], 1.0));
     })
 }
 
@@ -911,7 +952,10 @@ pub fn run_polyline_shift() -> TestResult {
         use crate::Polyline;
         use crate::Point;
 
-        let mut pl = Polyline::new(vec![Point::new(0.0, 0.0, 0.0), Point::new(1.0, 0.0, 0.0), Point::new(2.0, 0.0, 0.0), Point::new(3.0, 0.0, 0.0)]);
+        let mut pl = Polyline::new(vec![
+            Point::new(0.0, 0.0, 0.0), Point::new(1.0, 0.0, 0.0),
+            Point::new(2.0, 0.0, 0.0), Point::new(3.0, 0.0, 0.0),
+        ]);
         pl.shift(1);
         let first_after_shift = pl.get_points()[0][0];
         pl.shift(-1);
@@ -923,7 +967,7 @@ pub fn run_polyline_shift() -> TestResult {
 }
 
 pub fn run_polyline_point_at() -> TestResult {
-    MINI_TEST!("Point_at", {
+    MINI_TEST!("Point At", {
         use crate::Polyline;
         use crate::Point;
 
@@ -938,15 +982,21 @@ pub fn run_polyline_point_at() -> TestResult {
 }
 
 pub fn run_polyline_is_clockwise() -> TestResult {
-    MINI_TEST!("Is_clockwise", {
+    MINI_TEST!("Is Clockwise", {
         use crate::Polyline;
         use crate::Point;
         use crate::Plane;
 
         // Clockwise square (when viewed from +Z)
-        let cw_pl = Polyline::new(vec![Point::new(0.0, 0.0, 0.0), Point::new(0.0, 1.0, 0.0), Point::new(1.0, 1.0, 0.0), Point::new(1.0, 0.0, 0.0)]);
+        let cw_pl = Polyline::new(vec![
+            Point::new(0.0, 0.0, 0.0), Point::new(0.0, 1.0, 0.0),
+            Point::new(1.0, 1.0, 0.0), Point::new(1.0, 0.0, 0.0),
+        ]);
         // Counter-clockwise square
-        let ccw_pl = Polyline::new(vec![Point::new(0.0, 0.0, 0.0), Point::new(1.0, 0.0, 0.0), Point::new(1.0, 1.0, 0.0), Point::new(0.0, 1.0, 0.0)]);
+        let ccw_pl = Polyline::new(vec![
+            Point::new(0.0, 0.0, 0.0), Point::new(1.0, 0.0, 0.0),
+            Point::new(1.0, 1.0, 0.0), Point::new(0.0, 1.0, 0.0),
+        ]);
         let plane = Plane::default();
 
         MINI_CHECK!(cw_pl.is_clockwise(&plane) == true);
@@ -955,11 +1005,14 @@ pub fn run_polyline_is_clockwise() -> TestResult {
 }
 
 pub fn run_polyline_convex_corners() -> TestResult {
-    MINI_TEST!("Convex_corners", {
+    MINI_TEST!("Convex Corners", {
         use crate::Polyline;
         use crate::Point;
 
-        let pl = Polyline::new(vec![Point::new(0.0, 0.0, 0.0), Point::new(1.0, 0.0, 0.0), Point::new(1.0, 1.0, 0.0), Point::new(0.0, 1.0, 0.0)]);
+        let pl = Polyline::new(vec![
+            Point::new(0.0, 0.0, 0.0), Point::new(1.0, 0.0, 0.0),
+            Point::new(1.0, 1.0, 0.0), Point::new(0.0, 1.0, 0.0),
+        ]);
         let corners = pl.get_convex_corners();
 
         MINI_CHECK!(corners.len() == 4);
@@ -971,8 +1024,14 @@ pub fn run_polyline_tween() -> TestResult {
         use crate::Polyline;
         use crate::Point;
 
-        let pl0 = Polyline::new(vec![Point::new(0.0, 0.0, 0.0), Point::new(1.0, 0.0, 0.0), Point::new(1.0, 1.0, 0.0), Point::new(0.0, 1.0, 0.0)]);
-        let pl1 = Polyline::new(vec![Point::new(2.0, 0.0, 0.0), Point::new(3.0, 0.0, 0.0), Point::new(3.0, 1.0, 0.0), Point::new(2.0, 1.0, 0.0)]);
+        let pl0 = Polyline::new(vec![
+            Point::new(0.0, 0.0, 0.0), Point::new(1.0, 0.0, 0.0),
+            Point::new(1.0, 1.0, 0.0), Point::new(0.0, 1.0, 0.0),
+        ]);
+        let pl1 = Polyline::new(vec![
+            Point::new(2.0, 0.0, 0.0), Point::new(3.0, 0.0, 0.0),
+            Point::new(3.0, 1.0, 0.0), Point::new(2.0, 1.0, 0.0),
+        ]);
         let tweened = Polyline::tween_two_polylines(&pl0, &pl1, 0.5);
 
         MINI_CHECK!(TOLERANCE.is_close(tweened.get_points()[0][0], 1.0));
@@ -981,11 +1040,14 @@ pub fn run_polyline_tween() -> TestResult {
 }
 
 pub fn run_polyline_average_plane() -> TestResult {
-    MINI_TEST!("Average_plane", {
+    MINI_TEST!("Average Plane", {
         use crate::Polyline;
         use crate::Point;
 
-        let pl = Polyline::new(vec![Point::new(0.0, 0.0, 0.0), Point::new(2.0, 0.0, 0.0), Point::new(2.0, 2.0, 0.0), Point::new(0.0, 2.0, 0.0)]);
+        let pl = Polyline::new(vec![
+            Point::new(0.0, 0.0, 0.0), Point::new(2.0, 0.0, 0.0),
+            Point::new(2.0, 2.0, 0.0), Point::new(0.0, 2.0, 0.0),
+        ]);
         let (origin, _x_axis, _y_axis, z_axis) = pl.get_average_plane();
         let (fast_origin, _fast_plane) = pl.get_fast_plane();
 
@@ -998,19 +1060,19 @@ pub fn run_polyline_average_plane() -> TestResult {
 // Register tests with the shared registry for run_all("rust")
 REGISTER_MINI_TEST!("Polyline", "Constructor", crate::polyline_test::run_polyline_constructor);
 REGISTER_MINI_TEST!("Polyline", "Transformation", crate::polyline_test::run_polyline_transformation);
-REGISTER_MINI_TEST!("Polyline", "Json_roundtrip", crate::polyline_test::run_polyline_json_roundtrip);
-REGISTER_MINI_TEST!("Polyline", "Protobuf_roundtrip", crate::polyline_test::run_polyline_protobuf_roundtrip);
+REGISTER_MINI_TEST!("Polyline", "Json Roundtrip", crate::polyline_test::run_polyline_json_roundtrip);
+REGISTER_MINI_TEST!("Polyline", "Protobuf Roundtrip", crate::polyline_test::run_polyline_protobuf_roundtrip);
 REGISTER_MINI_TEST!("Polyline", "Length", crate::polyline_test::run_polyline_length);
 REGISTER_MINI_TEST!("Polyline", "Center", crate::polyline_test::run_polyline_center);
-REGISTER_MINI_TEST!("Polyline", "Is_closed", crate::polyline_test::run_polyline_is_closed);
+REGISTER_MINI_TEST!("Polyline", "Is Closed", crate::polyline_test::run_polyline_is_closed);
 REGISTER_MINI_TEST!("Polyline", "Reverse", crate::polyline_test::run_polyline_reverse);
-REGISTER_MINI_TEST!("Polyline", "Closest_point", crate::polyline_test::run_polyline_closest_point);
-REGISTER_MINI_TEST!("Polyline", "Extend_segment", crate::polyline_test::run_polyline_extend_segment);
-REGISTER_MINI_TEST!("Polyline", "Extend_segment_equally", crate::polyline_test::run_polyline_extend_segment_equally);
-REGISTER_MINI_TEST!("Polyline", "Get_points", crate::polyline_test::run_polyline_get_points);
+REGISTER_MINI_TEST!("Polyline", "Closest Point", crate::polyline_test::run_polyline_closest_point);
+REGISTER_MINI_TEST!("Polyline", "Extend Segment", crate::polyline_test::run_polyline_extend_segment);
+REGISTER_MINI_TEST!("Polyline", "Extend Segment Equally", crate::polyline_test::run_polyline_extend_segment_equally);
+REGISTER_MINI_TEST!("Polyline", "Get Points", crate::polyline_test::run_polyline_get_points);
 REGISTER_MINI_TEST!("Polyline", "Shift", crate::polyline_test::run_polyline_shift);
-REGISTER_MINI_TEST!("Polyline", "Point_at", crate::polyline_test::run_polyline_point_at);
-REGISTER_MINI_TEST!("Polyline", "Is_clockwise", crate::polyline_test::run_polyline_is_clockwise);
-REGISTER_MINI_TEST!("Polyline", "Convex_corners", crate::polyline_test::run_polyline_convex_corners);
+REGISTER_MINI_TEST!("Polyline", "Point At", crate::polyline_test::run_polyline_point_at);
+REGISTER_MINI_TEST!("Polyline", "Is Clockwise", crate::polyline_test::run_polyline_is_clockwise);
+REGISTER_MINI_TEST!("Polyline", "Convex Corners", crate::polyline_test::run_polyline_convex_corners);
 REGISTER_MINI_TEST!("Polyline", "Tween", crate::polyline_test::run_polyline_tween);
-REGISTER_MINI_TEST!("Polyline", "Average_plane", crate::polyline_test::run_polyline_average_plane);
+REGISTER_MINI_TEST!("Polyline", "Average Plane", crate::polyline_test::run_polyline_average_plane);

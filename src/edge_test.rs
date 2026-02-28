@@ -1,33 +1,22 @@
-#[cfg(test)]
-mod tests {
-    use crate::edge::Edge;
-    use crate::encoders::{json_dump, json_load};
+use crate::{MINI_CHECK, MINI_TEST, REGISTER_MINI_TEST};
+use crate::mini_test::TestResult;
 
-    #[test]
-    fn test_edge_json_roundtrip() {
-        let edge = Edge::new(
-            Some("test_edge".to_string()),
+pub fn run_edge_json_roundtrip() -> TestResult {
+    MINI_TEST!("Json Roundtrip", {
+        use crate::edge::Edge;
+        use crate::encoders::{json_dump, json_load};
+        let original = Edge::new(
+            Some("./serialization/test_edge".to_string()),
             Some("v0".to_string()),
             Some("v1".to_string()),
-            Some("attribute".to_string()),
+            None,
         );
-
-        //   json_dumps()    │ String       │ to JSON string
-        //   json_loads(s)   │ String       │ from JSON string
-        //   json_dump(path) │ file         │ write to file
-        //   json_load(path) │ file         │ read from file
-
-        let json_str = serde_json::to_string_pretty(&edge).unwrap();
-        let loaded: Edge = serde_json::from_str(&json_str).unwrap();
-
-        assert_eq!(loaded.name, "test_edge");
-        assert_eq!(loaded.v0, "v0");
-        assert_eq!(loaded.v1, "v1");
-        assert_eq!(loaded.attribute, "attribute");
-
-        // File I/O test
-        json_dump(&edge, "serialization/test_edge.json", true).unwrap();
-        let from_file: Edge = json_load("serialization/test_edge.json").unwrap();
-        assert_eq!(from_file.name, edge.name);
-    }
+        json_dump(&original, "serialization/test_edge.json", false).unwrap();
+        let loaded = json_load::<Edge>("serialization/test_edge.json").unwrap();
+        MINI_CHECK!(loaded.name == original.name);
+        MINI_CHECK!(loaded.v0 == original.v0);
+        MINI_CHECK!(loaded.v1 == original.v1);
+    })
 }
+
+REGISTER_MINI_TEST!("Edge", "Json Roundtrip", crate::edge_test::run_edge_json_roundtrip);

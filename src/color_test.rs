@@ -198,7 +198,9 @@ pub fn run_color_constructor() -> TestResult {
         let mut cother = Color::new(255, 0, 0, 255);
         cother.name = "red".to_string();
 
-        MINI_CHECK!(red.name == "red" && !red.guid.is_empty() && red.r == 255 && red.g == 0 && red.b == 0 && red.a == 255);
+        MINI_CHECK!(red.name == "red");
+        MINI_CHECK!(!red.guid.is_empty());
+        MINI_CHECK!(red.r == 255 && red.g == 0 && red.b == 0 && red.a == 255);
         MINI_CHECK!(r == 255 && g == 0 && b == 0 && a == 255);
         MINI_CHECK!(cstr == "255, 0, 0, 255");
         MINI_CHECK!(crepr == "Color(red, 255, 0, 0, 255)");
@@ -208,7 +210,7 @@ pub fn run_color_constructor() -> TestResult {
 }
 
 pub fn run_color_json_roundtrip() -> TestResult {
-    MINI_TEST!("Json_roundtrip", {
+    MINI_TEST!("Json Roundtrip", {
         use crate::Color;
 
         let color = Color::with_name(255, 128, 64, 255, "test_color");
@@ -231,7 +233,7 @@ pub fn run_color_json_roundtrip() -> TestResult {
 }
 
 pub fn run_color_protobuf_roundtrip() -> TestResult {
-    MINI_TEST!("Protobuf_roundtrip", {
+    MINI_TEST!("Protobuf Roundtrip", {
         use crate::Color;
 
         let mut color = Color::new(255, 128, 64, 255);
@@ -293,34 +295,56 @@ pub fn run_color_presets() -> TestResult {
         let purple = Color::purple();
         let silver = Color::silver();
 
-        MINI_CHECK!(white.r == 255 && white.g == 255 && white.b == 255 && white.name == "white");
-        MINI_CHECK!(black.r == 0 && black.g == 0 && black.b == 0 && black.name == "black");
-        MINI_CHECK!(grey.r == 128 && grey.g == 128 && grey.b == 128 && grey.name == "grey");
-        MINI_CHECK!(red.r == 255 && red.g == 0 && red.b == 0 && red.name == "red");
-        MINI_CHECK!(orange.r == 255 && orange.g == 128 && orange.b == 0 && orange.name == "orange");
-        MINI_CHECK!(yellow.r == 255 && yellow.g == 255 && yellow.b == 0 && yellow.name == "yellow");
-        MINI_CHECK!(lime.r == 128 && lime.g == 255 && lime.b == 0 && lime.name == "lime");
-        MINI_CHECK!(green.r == 0 && green.g == 255 && green.b == 0 && green.name == "green");
-        MINI_CHECK!(mint.r == 0 && mint.g == 255 && mint.b == 128 && mint.name == "mint");
-        MINI_CHECK!(cyan.r == 0 && cyan.g == 255 && cyan.b == 255 && cyan.name == "cyan");
-        MINI_CHECK!(azure.r == 0 && azure.g == 128 && azure.b == 255 && azure.name == "azure");
-        MINI_CHECK!(blue.r == 0 && blue.g == 0 && blue.b == 255 && blue.name == "blue");
-        MINI_CHECK!(violet.r == 128 && violet.g == 0 && violet.b == 255 && violet.name == "violet");
-        MINI_CHECK!(magenta.r == 255 && magenta.g == 0 && magenta.b == 255 && magenta.name == "magenta");
-        MINI_CHECK!(pink.r == 255 && pink.g == 0 && pink.b == 128 && pink.name == "pink");
-        MINI_CHECK!(maroon.r == 128 && maroon.g == 0 && maroon.b == 0 && maroon.name == "maroon");
-        MINI_CHECK!(brown.r == 128 && brown.g == 64 && brown.b == 0 && brown.name == "brown");
-        MINI_CHECK!(olive.r == 128 && olive.g == 128 && olive.b == 0 && olive.name == "olive");
-        MINI_CHECK!(teal.r == 0 && teal.g == 128 && teal.b == 128 && teal.name == "teal");
-        MINI_CHECK!(navy.r == 0 && navy.g == 0 && navy.b == 128 && navy.name == "navy");
-        MINI_CHECK!(purple.r == 128 && purple.g == 0 && purple.b == 128 && purple.name == "purple");
-        MINI_CHECK!(silver.r == 192 && silver.g == 192 && silver.b == 192 && silver.name == "silver");
+        MINI_CHECK!(white.r == 255 && white.g == 255 && white.b == 255);
+        MINI_CHECK!(white.name == "white");
+        MINI_CHECK!(black.r == 0 && black.g == 0 && black.b == 0);
+        MINI_CHECK!(black.name == "black");
+        MINI_CHECK!(grey.r == 128 && grey.g == 128 && grey.b == 128);
+        MINI_CHECK!(grey.name == "grey");
+        MINI_CHECK!(red.r == 255 && red.g == 0 && red.b == 0);
+        MINI_CHECK!(red.name == "red");
+        MINI_CHECK!(orange.r == 255 && orange.g == 128 && orange.b == 0);
+        MINI_CHECK!(orange.name == "orange");
+        MINI_CHECK!(yellow.r == 255 && yellow.g == 255 && yellow.b == 0);
+        MINI_CHECK!(yellow.name == "yellow");
+        MINI_CHECK!(lime.r == 128 && lime.g == 255 && lime.b == 0);
+        MINI_CHECK!(lime.name == "lime");
+        MINI_CHECK!(green.r == 0 && green.g == 255 && green.b == 0);
+        MINI_CHECK!(green.name == "green");
+        MINI_CHECK!(mint.r == 0 && mint.g == 255 && mint.b == 128);
+        MINI_CHECK!(mint.name == "mint");
+        MINI_CHECK!(cyan.r == 0 && cyan.g == 255 && cyan.b == 255);
+        MINI_CHECK!(cyan.name == "cyan");
+        MINI_CHECK!(azure.r == 0 && azure.g == 128 && azure.b == 255);
+        MINI_CHECK!(azure.name == "azure");
+        MINI_CHECK!(blue.r == 0 && blue.g == 0 && blue.b == 255);
+        MINI_CHECK!(blue.name == "blue");
+        MINI_CHECK!(violet.r == 128 && violet.g == 0 && violet.b == 255);
+        MINI_CHECK!(violet.name == "violet");
+        MINI_CHECK!(magenta.r == 255 && magenta.g == 0 && magenta.b == 255);
+        MINI_CHECK!(magenta.name == "magenta");
+        MINI_CHECK!(pink.r == 255 && pink.g == 0 && pink.b == 128);
+        MINI_CHECK!(pink.name == "pink");
+        MINI_CHECK!(maroon.r == 128 && maroon.g == 0 && maroon.b == 0);
+        MINI_CHECK!(maroon.name == "maroon");
+        MINI_CHECK!(brown.r == 128 && brown.g == 64 && brown.b == 0);
+        MINI_CHECK!(brown.name == "brown");
+        MINI_CHECK!(olive.r == 128 && olive.g == 128 && olive.b == 0);
+        MINI_CHECK!(olive.name == "olive");
+        MINI_CHECK!(teal.r == 0 && teal.g == 128 && teal.b == 128);
+        MINI_CHECK!(teal.name == "teal");
+        MINI_CHECK!(navy.r == 0 && navy.g == 0 && navy.b == 128);
+        MINI_CHECK!(navy.name == "navy");
+        MINI_CHECK!(purple.r == 128 && purple.g == 0 && purple.b == 128);
+        MINI_CHECK!(purple.name == "purple");
+        MINI_CHECK!(silver.r == 192 && silver.g == 192 && silver.b == 192);
+        MINI_CHECK!(silver.name == "silver");
     })
 }
 
 // Register tests with the shared registry for run_all("rust")
 REGISTER_MINI_TEST!("Color", "Constructor", crate::color_test::run_color_constructor);
-REGISTER_MINI_TEST!("Color", "Json_roundtrip", crate::color_test::run_color_json_roundtrip);
-REGISTER_MINI_TEST!("Color", "Protobuf_roundtrip", crate::color_test::run_color_protobuf_roundtrip);
+REGISTER_MINI_TEST!("Color", "Json Roundtrip", crate::color_test::run_color_json_roundtrip);
+REGISTER_MINI_TEST!("Color", "Protobuf Roundtrip", crate::color_test::run_color_protobuf_roundtrip);
 REGISTER_MINI_TEST!("Color", "Conversion", crate::color_test::run_color_conversion);
 REGISTER_MINI_TEST!("Color", "Presets", crate::color_test::run_color_presets);

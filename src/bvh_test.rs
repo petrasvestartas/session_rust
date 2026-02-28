@@ -1,110 +1,93 @@
-use crate::boundingbox::BoundingBox;
-/// Tests for BVH (Boundary Volume Hierarchy).
-/// These tests match the Python test suite in bvh_test.py
-use crate::bvh::*;
-use crate::point::Point;
-use crate::vector::Vector;
-use rand::prelude::*;
-use std::time::Instant;
+use crate::{MINI_CHECK, MINI_TEST, REGISTER_MINI_TEST};
+use crate::mini_test::TestResult;
+use crate::tolerance::TOLERANCE;
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn test_expand_bits() {
-        // Test bit expansion for Morton codes
-        assert_eq!(expand_bits(0), 0);
-        assert_eq!(expand_bits(1), 1);
-        assert_eq!(expand_bits(2), 8);
-        assert_eq!(expand_bits(3), 9);
-
-        // 1023 in binary is 0b1111111111 (10 bits)
-        // After expansion, should have pattern with zeros inserted
+pub fn run_bvh_expand_bits() -> TestResult {
+    MINI_TEST!("Expand Bits", {
+        use crate::bvh::expand_bits;
+        MINI_CHECK!(expand_bits(0) == 0);
+        MINI_CHECK!(expand_bits(1) == 1);
+        MINI_CHECK!(expand_bits(2) == 8);
+        MINI_CHECK!(expand_bits(3) == 9);
         let result = expand_bits(1023);
-        assert!(result > 0); // Should be non-zero
-    }
+        MINI_CHECK!(result > 0);
+    })
+}
 
-    #[test]
-    fn test_morton_code_origin() {
-        // Test Morton code at world origin.
+pub fn run_bvh_morton_code_origin() -> TestResult {
+    MINI_TEST!("Morton Code Origin", {
+        use crate::bvh::calculate_morton_code;
         let code = calculate_morton_code(0.0, 0.0, 0.0, 100.0);
-        assert!(code < (1u32 << 30)); // 30-bit code
-    }
+        MINI_CHECK!(code < (1u32 << 30));
+    })
+}
 
-    #[test]
-    fn test_morton_code_corners() {
-        // Test Morton codes at world corners.
-        let world_size = 100.0;
+pub fn run_bvh_morton_code_corners() -> TestResult {
+    MINI_TEST!("Morton Code Corners", {
+        use crate::bvh::calculate_morton_code;
+        let code_min = calculate_morton_code(-50.0, -50.0, -50.0, 100.0);
+        MINI_CHECK!(code_min == 0);
+        let code_max = calculate_morton_code(50.0, 50.0, 50.0, 100.0);
+        MINI_CHECK!(code_max == 0x3FFFFFFF);
+    })
+}
 
-        // Corner at (-50, -50, -50) should give code 0
-        let code_min = calculate_morton_code(-50.0, -50.0, -50.0, world_size);
-        assert_eq!(code_min, 0);
-
-        // Corner at (50, 50, 50) should give maximum code
-        let code_max = calculate_morton_code(50.0, 50.0, 50.0, world_size);
-        assert_eq!(code_max, 0x3FFFFFFF); // Maximum 30-bit value
-    }
-
-    #[test]
-    fn test_morton_code_spatial_locality() {
-        // Test that nearby points have similar Morton codes.
-        // Two nearby points should have similar codes
+pub fn run_bvh_morton_code_spatial_locality() -> TestResult {
+    MINI_TEST!("Morton Code Spatial Locality", {
+        use crate::bvh::calculate_morton_code;
         let code1 = calculate_morton_code(10.0, 10.0, 10.0, 100.0);
         let code2 = calculate_morton_code(10.1, 10.1, 10.1, 100.0);
-
-        // Two far apart points should have different codes
         let code3 = calculate_morton_code(-40.0, -40.0, -40.0, 100.0);
-
-        // Nearby points should be closer in Morton space
         let diff_nearby = code1.abs_diff(code2);
         let diff_far = code1.abs_diff(code3);
-        assert!(diff_nearby < diff_far);
-    }
+        MINI_CHECK!(diff_nearby < diff_far);
+    })
+}
 
-    #[test]
-    fn test_bvh_node_creation() {
-        // Test BVHNode creation.
+pub fn run_bvh_node_creation() -> TestResult {
+    MINI_TEST!("Node Creation", {
+        use crate::bvh::BVHNode;
         let node = BVHNode::new();
-        assert!(!node.guid.is_empty());
-        assert!(node.left.is_none());
-        assert!(node.right.is_none());
-        assert_eq!(node.object_id, -1);
-        assert!(node.aabb.is_none());
-        assert!(!node.is_leaf());
-    }
+        MINI_CHECK!(node.left.is_none());
+        MINI_CHECK!(node.right.is_none());
+        MINI_CHECK!(node.object_id == -1);
+        MINI_CHECK!(!node.is_leaf());
+    })
+}
 
-    #[test]
-    fn test_bvh_node_leaf() {
-        // Test leaf node detection.
+pub fn run_bvh_node_leaf() -> TestResult {
+    MINI_TEST!("Node Leaf", {
+        use crate::bvh::BVHNode;
         let mut node = BVHNode::new();
-        assert!(!node.is_leaf());
-
+        MINI_CHECK!(!node.is_leaf());
         node.object_id = 5;
-        assert!(node.is_leaf());
-    }
+        MINI_CHECK!(node.is_leaf());
+    })
+}
 
-    #[test]
-    fn test_bvh_creation() {
-        // Test BVH creation.
+pub fn run_bvh_creation() -> TestResult {
+    MINI_TEST!("Creation", {
+        use crate::BVH;
         let bvh = BVH::new();
-        assert!(!bvh.guid.is_empty());
-        assert_eq!(bvh.name, "my_bvh");
-        assert!(bvh.root.is_none());
-        assert_eq!(bvh.world_size, 1000.0); // Default value
-    }
+        MINI_CHECK!(!bvh.guid.is_empty());
+        MINI_CHECK!(bvh.name == "my_bvh");
+        MINI_CHECK!(bvh.root.is_none());
+        MINI_CHECK!(TOLERANCE.is_close(bvh.world_size, 1000.0));
+    })
+}
 
-    #[test]
-    fn test_bvh_build_empty() {
-        // Test building BVH with empty list.
+pub fn run_bvh_build_empty() -> TestResult {
+    MINI_TEST!("Build Empty", {
+        use crate::{BVH, BoundingBox};
         let boxes: Vec<BoundingBox> = vec![];
         let bvh = BVH::from_boxes(&boxes, 100.0);
-        assert!(bvh.root.is_none());
-    }
+        MINI_CHECK!(bvh.root.is_none());
+    })
+}
 
-    #[test]
-    fn test_bvh_build_single() {
-        // Test building BVH with single bounding box.
+pub fn run_bvh_build_single() -> TestResult {
+    MINI_TEST!("Build Single", {
+        use crate::{BVH, BoundingBox, Point, Vector};
         let bbox = BoundingBox::new(
             Point::new(0.0, 0.0, 0.0),
             Vector::new(1.0, 0.0, 0.0),
@@ -113,315 +96,234 @@ mod tests {
             Vector::new(1.0, 1.0, 1.0),
         );
         let boxes = vec![bbox.clone()];
-
         let bvh = BVH::from_boxes(&boxes, 100.0);
-
-        // Verify BVH works by querying it
         let (collisions, _checks) = bvh.find_collisions(0, &bbox, &boxes);
-        assert_eq!(collisions.len(), 0); // Should not collide with itself
-    }
-
-    #[test]
-    fn test_bvh_build_multiple() {
-        // Test building BVH with multiple bounding boxes.
-        let bboxes = vec![
-            BoundingBox::new(
-                Point::new(-10.0, 0.0, 0.0),
-                Vector::new(1.0, 0.0, 0.0),
-                Vector::new(0.0, 1.0, 0.0),
-                Vector::new(0.0, 0.0, 1.0),
-                Vector::new(1.0, 1.0, 1.0),
-            ),
-            BoundingBox::new(
-                Point::new(10.0, 0.0, 0.0),
-                Vector::new(1.0, 0.0, 0.0),
-                Vector::new(0.0, 1.0, 0.0),
-                Vector::new(0.0, 0.0, 1.0),
-                Vector::new(1.0, 1.0, 1.0),
-            ),
-            BoundingBox::new(
-                Point::new(0.0, 10.0, 0.0),
-                Vector::new(1.0, 0.0, 0.0),
-                Vector::new(0.0, 1.0, 0.0),
-                Vector::new(0.0, 0.0, 1.0),
-                Vector::new(1.0, 1.0, 1.0),
-            ),
-        ];
-
-        let bvh = BVH::from_boxes(&bboxes, 100.0);
-
-        // Verify BVH works by performing pairwise collision detection
-        let (pairs, _indices, checks) = bvh.check_all_collisions(&bboxes);
-        assert_eq!(pairs.len(), 0); // These boxes don't overlap
-        assert!(checks > 0); // But we should have checked some nodes
-    }
-
-    #[test]
-    fn test_bvh_aabb_intersect() {
-        // Test AABB intersection detection.
-        let bvh = BVH::new();
-
-        // Overlapping boxes
-        let bbox1 = BoundingBox::new(
-            Point::new(0.0, 0.0, 0.0),
-            Vector::new(1.0, 0.0, 0.0),
-            Vector::new(0.0, 1.0, 0.0),
-            Vector::new(0.0, 0.0, 1.0),
-            Vector::new(1.0, 1.0, 1.0),
-        );
-        let bbox2 = BoundingBox::new(
-            Point::new(0.5, 0.0, 0.0),
-            Vector::new(1.0, 0.0, 0.0),
-            Vector::new(0.0, 1.0, 0.0),
-            Vector::new(0.0, 0.0, 1.0),
-            Vector::new(1.0, 1.0, 1.0),
-        );
-        assert!(bvh.aabb_intersect(&bbox1, &bbox2));
-
-        // Non-overlapping boxes
-        let bbox3 = BoundingBox::new(
-            Point::new(10.0, 0.0, 0.0),
-            Vector::new(1.0, 0.0, 0.0),
-            Vector::new(0.0, 1.0, 0.0),
-            Vector::new(0.0, 0.0, 1.0),
-            Vector::new(1.0, 1.0, 1.0),
-        );
-        assert!(!bvh.aabb_intersect(&bbox1, &bbox3));
-    }
-
-    #[test]
-    fn test_bvh_find_collisions_no_collision() {
-        // Test collision detection with no collisions.
-        let bboxes = vec![
-            BoundingBox::new(
-                Point::new(-10.0, 0.0, 0.0),
-                Vector::new(1.0, 0.0, 0.0),
-                Vector::new(0.0, 1.0, 0.0),
-                Vector::new(0.0, 0.0, 1.0),
-                Vector::new(1.0, 1.0, 1.0),
-            ),
-            BoundingBox::new(
-                Point::new(10.0, 0.0, 0.0),
-                Vector::new(1.0, 0.0, 0.0),
-                Vector::new(0.0, 1.0, 0.0),
-                Vector::new(0.0, 0.0, 1.0),
-                Vector::new(1.0, 1.0, 1.0),
-            ),
-        ];
-
-        let bvh = BVH::from_boxes(&bboxes, 100.0);
-
-        let (collisions, checks) = bvh.find_collisions(0, &bboxes[0], &bboxes);
-        assert_eq!(collisions.len(), 0);
-        assert!(checks > 0);
-    }
-
-    #[test]
-    fn test_bvh_find_collisions_with_collision() {
-        // Test collision detection with overlapping boxes.
-        let bboxes = vec![
-            BoundingBox::new(
-                Point::new(0.0, 0.0, 0.0),
-                Vector::new(1.0, 0.0, 0.0),
-                Vector::new(0.0, 1.0, 0.0),
-                Vector::new(0.0, 0.0, 1.0),
-                Vector::new(2.0, 2.0, 2.0),
-            ),
-            BoundingBox::new(
-                Point::new(1.0, 0.0, 0.0),
-                Vector::new(1.0, 0.0, 0.0),
-                Vector::new(0.0, 1.0, 0.0),
-                Vector::new(0.0, 0.0, 1.0),
-                Vector::new(2.0, 2.0, 2.0),
-            ),
-        ];
-
-        let bvh = BVH::from_boxes(&bboxes, 100.0);
-
-        let (collisions, _checks) = bvh.find_collisions(0, &bboxes[0], &bboxes);
-        assert_eq!(collisions.len(), 1);
-        assert!(collisions.contains(&1));
-    }
-
-    #[test]
-    fn test_bvh_check_all_collisions() {
-        // Test checking all pairwise collisions.
-        let bboxes = vec![
-            BoundingBox::new(
-                Point::new(0.0, 0.0, 0.0),
-                Vector::new(1.0, 0.0, 0.0),
-                Vector::new(0.0, 1.0, 0.0),
-                Vector::new(0.0, 0.0, 1.0),
-                Vector::new(1.0, 1.0, 1.0),
-            ),
-            BoundingBox::new(
-                Point::new(0.5, 0.0, 0.0),
-                Vector::new(1.0, 0.0, 0.0),
-                Vector::new(0.0, 1.0, 0.0),
-                Vector::new(0.0, 0.0, 1.0),
-                Vector::new(1.0, 1.0, 1.0),
-            ),
-            BoundingBox::new(
-                Point::new(10.0, 0.0, 0.0),
-                Vector::new(1.0, 0.0, 0.0),
-                Vector::new(0.0, 1.0, 0.0),
-                Vector::new(0.0, 0.0, 1.0),
-                Vector::new(1.0, 1.0, 1.0),
-            ),
-        ];
-
-        let bvh = BVH::from_boxes(&bboxes, 100.0);
-
-        let (collisions, colliding_indices, checks) = bvh.check_all_collisions(&bboxes);
-
-        // Boxes 0 and 1 should collide
-        assert_eq!(collisions.len(), 1);
-        assert!(collisions.contains(&(0, 1)));
-        assert_eq!(colliding_indices, vec![0, 1]);
-        assert!(checks > 0);
-    }
-
-    #[test]
-    fn test_bvh_merge_aabb() {
-        // Test AABB merging.
-        let bvh = BVH::new();
-
-        let bbox1 = BoundingBox::new(
-            Point::new(0.0, 0.0, 0.0),
-            Vector::new(1.0, 0.0, 0.0),
-            Vector::new(0.0, 1.0, 0.0),
-            Vector::new(0.0, 0.0, 1.0),
-            Vector::new(1.0, 1.0, 1.0),
-        );
-        let bbox2 = BoundingBox::new(
-            Point::new(5.0, 0.0, 0.0),
-            Vector::new(1.0, 0.0, 0.0),
-            Vector::new(0.0, 1.0, 0.0),
-            Vector::new(0.0, 0.0, 1.0),
-            Vector::new(1.0, 1.0, 1.0),
-        );
-
-        let merged = bvh.merge_aabb(&bbox1, &bbox2);
-
-        // Merged box should encompass both
-        assert!((merged.center[0] - 2.5).abs() < 0.001); // Midpoint between 0 and 5
-        assert!((merged.half_size[0] - 3.5).abs() < 0.001); // Half of distance from -1 to 6
-    }
-
-    #[test]
-    fn test_bvh_performance_many_boxes() {
-        // Test BVH performance with many boxes.
-        let mut rng = StdRng::seed_from_u64(42);
-
-        // Create 100 random boxes
-        let mut bboxes = Vec::new();
-        for _i in 0..100 {
-            let center = Point::new(
-                rng.gen_range(-40.0..40.0),
-                rng.gen_range(-40.0..40.0),
-                rng.gen_range(-40.0..40.0),
-            );
-            let half_size = Vector::new(
-                rng.gen_range(0.5..2.0),
-                rng.gen_range(0.5..2.0),
-                rng.gen_range(0.5..2.0),
-            );
-            let bbox = BoundingBox::new(
-                center,
-                Vector::new(1.0, 0.0, 0.0),
-                Vector::new(0.0, 1.0, 0.0),
-                Vector::new(0.0, 0.0, 1.0),
-                half_size,
-            );
-            bboxes.push(bbox);
-        }
-
-        // Build BVH
-        let bvh = BVH::from_boxes(&bboxes, 100.0);
-
-        // Check collisions
-        let (_collisions, _colliding_indices, checks) = bvh.check_all_collisions(&bboxes);
-
-        // BVH should perform fewer checks than naive O(n²)
-        let naive_checks = (bboxes.len() * (bboxes.len() - 1)) / 2;
-        assert!((checks as usize) < naive_checks);
-    }
-
-    #[test]
-    fn test_bvh_performance_1000_boxes() {
-        // Test BVH performance with 1000 random boxes.
-        println!("Testing BVH with 1000 random boxes...");
-
-        // Create 1000 random boxes with seed 42 for reproducibility
-        let mut rng = StdRng::seed_from_u64(42);
-
-        let mut boxes = Vec::new();
-        for _i in 0..1000 {
-            // Random center position
-            let center = Point::new(
-                rng.gen_range(-50.0..50.0),
-                rng.gen_range(-50.0..50.0),
-                rng.gen_range(-50.0..50.0),
-            );
-            // Random half-size (dimensions)
-            let half_size = Vector::new(
-                rng.gen_range(0.5..3.0),
-                rng.gen_range(0.5..3.0),
-                rng.gen_range(0.5..3.0),
-            );
-            // Create axis-aligned bounding box
-            let bbox = BoundingBox::new(
-                center,
-                Vector::new(1.0, 0.0, 0.0), // X axis
-                Vector::new(0.0, 1.0, 0.0), // Y axis
-                Vector::new(0.0, 0.0, 1.0), // Z axis
-                half_size,
-            );
-            boxes.push(bbox);
-        }
-
-        // Print min/max corners using new API for first few boxes
-        for (i, bbox) in boxes.iter().take(5).enumerate() {
-            let min_corner = bbox.min_point();
-            let max_corner = bbox.max_point();
-            println!(
-                "Box {} - Min: ({}, {}, {}), Max: ({}, {}, {})",
-                i + 1,
-                min_corner[0],
-                min_corner[1],
-                min_corner[2],
-                max_corner[0],
-                max_corner[1],
-                max_corner[2]
-            );
-        }
-
-        // Build BVH and measure time
-        let start = Instant::now();
-        let bvh = BVH::from_boxes(&boxes, 100.0);
-        let build_time = start.elapsed();
-
-        // Check collisions and measure time
-        let start = Instant::now();
-        let (collisions, colliding_indices, checks) = bvh.check_all_collisions(&boxes);
-        let collision_time = start.elapsed();
-
-        // BVH should perform fewer checks than naive O(n²)
-        let naive_checks = (boxes.len() * (boxes.len() - 1)) / 2;
-        assert!((checks as usize) < naive_checks);
-
-        println!("Collisions found: {}", collisions.len());
-        println!("Colliding objects: {}", colliding_indices.len());
-        println!("BVH build time: {build_time:?}");
-        println!("BVH collision time: {collision_time:?} ({checks} checks)");
-        println!("Naive would need: {naive_checks} checks");
-        println!(
-            "Check reduction: {:.1}%",
-            100.0 * (1.0 - checks as f64 / naive_checks as f64)
-        );
-
-        // Should find some collisions
-        assert!(!collisions.is_empty());
-        assert!(!colliding_indices.is_empty());
-    }
+        MINI_CHECK!(collisions.is_empty());
+    })
 }
+
+pub fn run_bvh_build_multiple() -> TestResult {
+    MINI_TEST!("Build Multiple", {
+        use crate::{BVH, BoundingBox, Point, Vector};
+        let bboxes = vec![
+            BoundingBox::new(Point::new(-10.0, 0.0, 0.0),
+                Vector::new(1.0, 0.0, 0.0), Vector::new(0.0, 1.0, 0.0),
+                Vector::new(0.0, 0.0, 1.0), Vector::new(1.0, 1.0, 1.0)),
+            BoundingBox::new(Point::new(10.0, 0.0, 0.0),
+                Vector::new(1.0, 0.0, 0.0), Vector::new(0.0, 1.0, 0.0),
+                Vector::new(0.0, 0.0, 1.0), Vector::new(1.0, 1.0, 1.0)),
+            BoundingBox::new(Point::new(0.0, 10.0, 0.0),
+                Vector::new(1.0, 0.0, 0.0), Vector::new(0.0, 1.0, 0.0),
+                Vector::new(0.0, 0.0, 1.0), Vector::new(1.0, 1.0, 1.0)),
+        ];
+        let bvh = BVH::from_boxes(&bboxes, 100.0);
+        let (pairs, _indices, checks) = bvh.check_all_collisions(&bboxes);
+        MINI_CHECK!(pairs.is_empty());
+        MINI_CHECK!(checks > 0);
+    })
+}
+
+pub fn run_bvh_aabb_intersect() -> TestResult {
+    MINI_TEST!("Aabb Intersect", {
+        use crate::{BVH, BoundingBox, Point, Vector};
+        let bvh = BVH::new();
+        let bbox1 = BoundingBox::new(Point::new(0.0, 0.0, 0.0),
+            Vector::new(1.0, 0.0, 0.0), Vector::new(0.0, 1.0, 0.0),
+            Vector::new(0.0, 0.0, 1.0), Vector::new(1.0, 1.0, 1.0));
+        let bbox2 = BoundingBox::new(Point::new(0.5, 0.0, 0.0),
+            Vector::new(1.0, 0.0, 0.0), Vector::new(0.0, 1.0, 0.0),
+            Vector::new(0.0, 0.0, 1.0), Vector::new(1.0, 1.0, 1.0));
+        MINI_CHECK!(bvh.aabb_intersect(&bbox1, &bbox2));
+        let bbox3 = BoundingBox::new(Point::new(10.0, 0.0, 0.0),
+            Vector::new(1.0, 0.0, 0.0), Vector::new(0.0, 1.0, 0.0),
+            Vector::new(0.0, 0.0, 1.0), Vector::new(1.0, 1.0, 1.0));
+        MINI_CHECK!(!bvh.aabb_intersect(&bbox1, &bbox3));
+    })
+}
+
+pub fn run_bvh_check_all_collisions() -> TestResult {
+    MINI_TEST!("Check All Collisions", {
+        use crate::{BVH, BoundingBox, Point, Vector};
+        let bboxes = vec![
+            BoundingBox::new(Point::new(0.0, 0.0, 0.0),
+                Vector::new(1.0, 0.0, 0.0), Vector::new(0.0, 1.0, 0.0),
+                Vector::new(0.0, 0.0, 1.0), Vector::new(1.0, 1.0, 1.0)),
+            BoundingBox::new(Point::new(0.5, 0.0, 0.0),
+                Vector::new(1.0, 0.0, 0.0), Vector::new(0.0, 1.0, 0.0),
+                Vector::new(0.0, 0.0, 1.0), Vector::new(1.0, 1.0, 1.0)),
+            BoundingBox::new(Point::new(10.0, 0.0, 0.0),
+                Vector::new(1.0, 0.0, 0.0), Vector::new(0.0, 1.0, 0.0),
+                Vector::new(0.0, 0.0, 1.0), Vector::new(1.0, 1.0, 1.0)),
+        ];
+        let bvh = BVH::from_boxes(&bboxes, 100.0);
+        let (collisions, colliding_indices, checks) = bvh.check_all_collisions(&bboxes);
+        MINI_CHECK!(collisions.len() == 1);
+        MINI_CHECK!(collisions.contains(&(0, 1)));
+        MINI_CHECK!(colliding_indices == vec![0, 1]);
+        MINI_CHECK!(checks > 0);
+    })
+}
+
+pub fn run_bvh_merge_aabb() -> TestResult {
+    MINI_TEST!("Merge Aabb", {
+        use crate::{BVH, BoundingBox, Point, Vector};
+        let bvh = BVH::new();
+        let bbox1 = BoundingBox::new(Point::new(0.0, 0.0, 0.0),
+            Vector::new(1.0, 0.0, 0.0), Vector::new(0.0, 1.0, 0.0),
+            Vector::new(0.0, 0.0, 1.0), Vector::new(1.0, 1.0, 1.0));
+        let bbox2 = BoundingBox::new(Point::new(5.0, 0.0, 0.0),
+            Vector::new(1.0, 0.0, 0.0), Vector::new(0.0, 1.0, 0.0),
+            Vector::new(0.0, 0.0, 1.0), Vector::new(1.0, 1.0, 1.0));
+        let merged = bvh.merge_aabb(&bbox1, &bbox2);
+        MINI_CHECK!((merged.center[0] - 2.5).abs() < 0.001);
+        MINI_CHECK!((merged.half_size[0] - 3.5).abs() < 0.001);
+    })
+}
+
+pub fn run_bvh_fixed_100_boxes() -> TestResult {
+    MINI_TEST!("Fixed 100 Boxes", {
+        use crate::{BVH, BoundingBox, Point, Vector};
+        let mut boxes: Vec<BoundingBox> = Vec::new();
+        let mut add = |min_x: f64, min_y: f64, min_z: f64, max_x: f64, max_y: f64, max_z: f64| {
+            let cx = (min_x + max_x) * 0.5;
+            let cy = (min_y + max_y) * 0.5;
+            let cz = (min_z + max_z) * 0.5;
+            let hx = (max_x - min_x) * 0.5;
+            let hy = (max_y - min_y) * 0.5;
+            let hz = (max_z - min_z) * 0.5;
+            boxes.push(BoundingBox::new(
+                Point::new(cx, cy, cz),
+                Vector::new(1.0, 0.0, 0.0),
+                Vector::new(0.0, 1.0, 0.0),
+                Vector::new(0.0, 0.0, 1.0),
+                Vector::new(hx, hy, hz),
+            ));
+        };
+        add(-53.1254, -0.98185, 20.5516, -46.8089, 5.89927, 26.5331);
+        add(44.4446, -1.5359, -1.49382, 50.7301, 3.99953, 7.58362);
+        add(36.9359, -7.76782, -28.7694, 43.173, -1.82645, -22.1528);
+        add(-44.2654, 26.3949, 0.745263, -35.0431, 35.0799, 6.13693);
+        add(0.239448, -40.5791, 32.6275, 7.56243, -33.2192, 39.8776);
+        add(-31.6363, -53.5568, -52.162, -21.6687, -43.9796, -43.2328);
+        add(3.72143, 23.485, 9.18924, 10.4425, 30.3631, 15.5248);
+        add(-17.4583, 10.2729, -16.5162, -12.1943, 17.9162, -10.7277);
+        add(-7.27998, -22.0384, -34.5872, -1.95631, -12.1058, -26.8567);
+        add(-45.341, 46.3634, -10.4862, -36.8332, 52.2971, -2.76774);
+        add(46.0445, -34.6013, 14.0587, 53.0414, -27.4064, 22.7938);
+        add(-34.9367, 28.5039, 27.7749, -29.4494, 33.6524, 33.4448);
+        add(9.97675, -15.7696, -27.8198, 17.5104, -8.16385, -22.3021);
+        add(45.1965, -19.307, 22.0449, 51.5233, -10.9748, 31.6205);
+        add(-7.03031, -10.8607, 38.8429, 0.306212, -0.974567, 45.443);
+        add(25.5248, 31.9848, 20.436, 33.3122, 41.1186, 28.0921);
+        add(-22.8772, -19.5722, -22.9988, -15.6443, -11.7384, -14.7361);
+        add(-46.2318, -5.27625, -7.84674, -41.1843, 3.22896, -0.905452);
+        add(-8.8814, 40.3852, -41.0122, -1.73994, 46.8478, -33.9574);
+        add(-30.4719, -15.9782, 17.3287, -20.7941, -10.8891, 24.7185);
+        add(28.6586, 0.44821, -41.9327, 35.6602, 6.09223, -32.8706);
+        add(-14.173, -45.5086, 6.29666, -7.48969, -39.2406, 13.229);
+        add(-21.8039, 6.68129, -32.5692, -15.3816, 16.6269, -26.5873);
+        add(13.3659, -1.97758, 25.4002, 19.0017, 4.81311, 31.5121);
+        add(-24.433, -37.1532, 41.849, -15.8042, -29.2066, 49.4371);
+        add(-4.54629, -16.9216, -24.2439, 2.40272, -9.87919, -17.0974);
+        add(-22.1316, -18.2577, -41.6624, -13.4863, -11.2109, -36.6118);
+        add(-19.5562, -1.13082, -35.7364, -10.2048, 8.43363, -25.912);
+        add(26.4514, -31.3635, -3.53901, 32.4376, -22.007, 5.52268);
+        add(44.2805, -20.3072, 10.0337, 52.6535, -10.845, 15.6482);
+        add(15.1756, 46.2379, 44.9662, 20.8272, 53.0835, 50.1683);
+        add(1.39766, -37.0106, -2.59787, 7.17823, -28.0455, 3.65286);
+        add(-31.882, -21.1354, 20.6053, -24.8106, -11.3482, 28.4804);
+        add(-8.54435, 10.0787, 41.0063, -1.08096, 17.3793, 46.4334);
+        add(21.317, -38.2325, 3.71512, 29.3482, -31.5114, 10.6611);
+        add(-31.9136, 27.8033, -4.48008, -23.6666, 35.3487, 0.804813);
+        add(8.52067, 14.4157, -37.4169, 17.5301, 20.4823, -32.1696);
+        add(-7.88355, 21.208, 42.2586, -0.205483, 26.4206, 50.4889);
+        add(-15.322, -4.75221, -17.9083, -8.4181, 4.47693, -8.67731);
+        add(37.1268, 2.17059, -48.8049, 45.7917, 8.4744, -40.7264);
+        add(-52.3809, -6.49423, 8.92399, -42.9845, 0.188961, 18.343);
+        add(41.5732, -7.42366, -4.54156, 51.0067, -2.29871, 0.643029);
+        add(-5.78252, 0.645065, -13.4131, 1.93946, 8.96885, -5.49512);
+        add(7.58556, -41.9641, 23.8841, 16.6142, -32.1089, 31.049);
+        add(-46.102, -9.30967, 44.8527, -36.2572, -2.2869, 51.5056);
+        add(45.8031, 27.0115, -17.4386, 52.3382, 32.367, -7.79126);
+        add(8.21008, 39.3673, 20.643, 17.4628, 45.1004, 28.0194);
+        add(-47.9111, -24.7374, -29.2773, -40.7686, -16.0819, -20.6671);
+        add(-29.8193, -10.8358, 24.5871, -21.6958, -3.36907, 33.5925);
+        add(26.9713, -26.2038, -31.9261, 35.2619, -20.0422, -25.0245);
+        add(-29.7903, 8.92347, -40.826, -21.7701, 15.776, -35.2006);
+        add(-1.39845, -13.7028, -13.4383, 8.26331, -8.56298, -7.95241);
+        add(-27.3862, 17.0337, 30.1216, -19.7585, 22.0732, 39.076);
+        add(-15.102, -39.6467, -37.4648, -8.16651, -34.4574, -31.1032);
+        add(14.1428, -34.4961, -47.6358, 22.6478, -25.6985, -42.1577);
+        add(32.7187, -0.0187469, -2.54834, 41.5605, 9.91946, 3.89622);
+        add(18.869, -24.3319, -0.588445, 27.1926, -18.2572, 6.42131);
+        add(4.33372, 6.78191, -26.4923, 12.7318, 13.5283, -19.058);
+        add(-3.88995, -20.8689, 18.4182, 4.99471, -11.484, 25.6025);
+        add(-10.2896, -22.7252, -40.4815, -3.08794, -13.9661, -30.6919);
+        add(30.2898, 7.94805, -2.19314, 35.3154, 17.6367, 5.55489);
+        add(-33.8415, 21.4915, -16.5747, -26.6066, 27.2365, -10.8669);
+        add(-22.4042, 38.4298, 21.7984, -13.9447, 47.0733, 28.4925);
+        add(-6.87762, 2.83366, 10.2831, -0.784998, 11.5311, 18.5943);
+        add(-34.4398, -36.757, 27.0559, -27.6572, -27.51, 36.7491);
+        add(35.4006, -17.8502, -21.4524, 41.7323, -10.0449, -12.5719);
+        add(28.1073, 31.8896, -16.4485, 33.4307, 37.9012, -9.80763);
+        add(13.5936, 25.9705, 8.3269, 22.4543, 32.3162, 16.4279);
+        add(28.2281, -51.9913, -14.7078, 35.0256, -42.5897, -6.77297);
+        add(-27.4511, -21.3243, 42.9791, -18.7936, -14.3339, 50.3538);
+        add(-42.0679, -47.6033, -33.2027, -32.8703, -38.8405, -26.6373);
+        add(-52.2085, -52.5573, -33.0963, -45.8755, -44.5128, -23.5496);
+        add(-11.2779, -9.99167, 24.9689, -5.92983, -0.191222, 31.1336);
+        add(33.121, 2.70727, -33.8816, 38.3024, 10.367, -26.2656);
+        add(-5.30061, -39.8595, 33.6105, 4.23731, -31.0826, 42.5769);
+        add(-0.704829, -26.0593, -30.9797, 4.64116, -16.105, -24.9783);
+        add(37.3045, 34.9896, 2.13491, 46.4151, 40.7296, 10.6969);
+        add(-27.6823, 41.9125, -36.4809, -17.7935, 47.2728, -26.7252);
+        add(34.666, 27.0233, 23.9605, 44.5308, 33.3, 30.9151);
+        add(-37.3694, -40.3928, -6.27422, -28.0124, -31.5777, -0.670845);
+        add(-34.1601, 33.6584, -28.8227, -27.286, 42.4497, -22.2408);
+        add(-30.329, -4.34317, -43.1085, -23.815, 5.64745, -35.7657);
+        add(-31.824, 8.78623, 25.1597, -24.1868, 17.2063, 31.7098);
+        add(8.9247, -12.5921, 35.2262, 16.9325, -5.38381, 44.3014);
+        add(-11.6258, 44.3936, -29.2716, -3.07673, 49.3977, -20.2529);
+        add(-27.9412, 32.9874, -20.8262, -22.5216, 39.9326, -12.0579);
+        add(39.7539, -22.0106, 31.131, 46.0297, -14.2677, 40.1578);
+        add(-10.4385, 20.3835, 5.16852, -5.23064, 28.6092, 14.2703);
+        add(19.9106, -32.364, 8.76233, 25.9003, -24.1348, 16.1047);
+        add(-0.62887, 18.0559, 41.0991, 5.37937, 23.5869, 49.7166);
+        add(20.6713, -12.7322, -19.7395, 28.0693, -3.71518, -11.0217);
+        add(42.2797, -30.3842, 8.4357, 51.5113, -24.6986, 15.3918);
+        add(-18.9658, -26.1333, -9.25188, -12.9283, -17.8373, -3.68668);
+        add(32.8414, -44.7499, -3.96548, 41.3729, -35.5501, 1.88547);
+        add(-12.0107, -43.9043, 15.2958, -6.24849, -38.452, 21.6608);
+        add(-28.9449, 35.0651, -45.8908, -23.5524, 42.0763, -39.3406);
+        add(25.2023, -12.4615, 8.84863, 30.8803, -6.57652, 18.4333);
+        add(31.7285, 31.0991, -7.73725, 39.8767, 38.2288, 0.932107);
+        add(-35.1346, -8.00369, 14.4611, -27.1614, -1.58541, 21.4893);
+        add(13.9228, -49.9973, -2.77406, 23.104, -41.5596, 4.89623);
+        MINI_CHECK!(boxes.len() == 100);
+        let bvh = BVH::from_boxes(&boxes, 100.0);
+        let (mut pairs, _colliding_indices, _checks) = bvh.check_all_collisions(&boxes);
+        pairs.sort();
+        MINI_CHECK!(pairs.len() > 0);
+        MINI_CHECK!(pairs.len() <= 26);
+        for (i, j) in &pairs {
+            MINI_CHECK!(*i < 100);
+            MINI_CHECK!(*j < 100);
+            MINI_CHECK!(*i < *j);
+        }
+    })
+}
+
+REGISTER_MINI_TEST!("BVH", "Expand Bits", crate::bvh_test::run_bvh_expand_bits);
+REGISTER_MINI_TEST!("BVH", "Morton Code Origin", crate::bvh_test::run_bvh_morton_code_origin);
+REGISTER_MINI_TEST!("BVH", "Morton Code Corners", crate::bvh_test::run_bvh_morton_code_corners);
+REGISTER_MINI_TEST!("BVH", "Morton Code Spatial Locality", crate::bvh_test::run_bvh_morton_code_spatial_locality);
+REGISTER_MINI_TEST!("BVH", "Node Creation", crate::bvh_test::run_bvh_node_creation);
+REGISTER_MINI_TEST!("BVH", "Node Leaf", crate::bvh_test::run_bvh_node_leaf);
+REGISTER_MINI_TEST!("BVH", "Creation", crate::bvh_test::run_bvh_creation);
+REGISTER_MINI_TEST!("BVH", "Build Empty", crate::bvh_test::run_bvh_build_empty);
+REGISTER_MINI_TEST!("BVH", "Build Single", crate::bvh_test::run_bvh_build_single);
+REGISTER_MINI_TEST!("BVH", "Build Multiple", crate::bvh_test::run_bvh_build_multiple);
+REGISTER_MINI_TEST!("BVH", "Aabb Intersect", crate::bvh_test::run_bvh_aabb_intersect);
+REGISTER_MINI_TEST!("BVH", "Check All Collisions", crate::bvh_test::run_bvh_check_all_collisions);
+REGISTER_MINI_TEST!("BVH", "Merge Aabb", crate::bvh_test::run_bvh_merge_aabb);
+REGISTER_MINI_TEST!("BVH", "Fixed 100 Boxes", crate::bvh_test::run_bvh_fixed_100_boxes);

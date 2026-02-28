@@ -1210,7 +1210,7 @@ impl Session {
             pointcloud.transform();
         }
         for mesh in &mut transformed_objects.meshes {
-            mesh.transform();
+            mesh.transform(None);
         }
         for brep in &mut transformed_objects.breps {
             brep.transform();
@@ -1234,6 +1234,3 @@ impl fmt::Display for Session {
     }
 }
 
-#[cfg(test)]
-#[path = "session_test.rs"]
-mod session_test;

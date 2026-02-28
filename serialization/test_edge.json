@@ -1,9 +1,1 @@
-{
-  "type": "Edge",
-  "guid": "bffe7686-a0d0-43f4-9517-f22eca52e497",
-  "name": "test_edge",
-  "v0": "v0",
-  "v1": "v1",
-  "attribute": "attribute",
-  "index": -1
-}
+{"type":"Edge","guid":"a8bb9e0d-ed91-442e-bf33-0ae4826d217a","name":"./serialization/test_edge","v0":"v0","v1":"v1","attribute":"","index":-1}

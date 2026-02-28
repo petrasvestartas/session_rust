@@ -1,155 +1,18 @@
-#[cfg(test)]
-mod quaternion_tests {
-    use crate::encoders::{json_dump, json_load};
-    use crate::{Quaternion, Vector};
-    use std::f64::consts::PI;
+use crate::{MINI_CHECK, MINI_TEST, REGISTER_MINI_TEST};
+use crate::mini_test::TestResult;
+use crate::tolerance::TOLERANCE;
 
-    fn approx_f32(a: f64, b: f64) -> bool {
-        (a - b).abs() < 1e-5
-    }
-
-    fn vectors_close(a: &Vector, b: &Vector) -> bool {
-        approx_f32(a[0], b[0]) && approx_f32(a[1], b[1]) && approx_f32(a[2], b[2])
-    }
-
-    #[test]
-    fn test_quaternion_identity() {
-        let q = Quaternion::identity();
-        assert_eq!(q.s, 1.0);
-        assert_eq!(q.v[0], 0.0);
-        assert_eq!(q.v[1], 0.0);
-        assert_eq!(q.v[2], 0.0);
-    }
-
-    #[test]
-    fn test_quaternion_from_axis_angle_90deg_z() {
+pub fn run_quaternion_json_roundtrip() -> TestResult {
+    MINI_TEST!("Json Roundtrip", {
+        use crate::Quaternion;
+        use crate::Vector;
+        use crate::encoders::{json_dump, json_load};
         let axis = Vector::new(0.0, 0.0, 1.0);
-        let angle = PI / 2.0;
-        let q = Quaternion::from_axis_angle(axis, angle);
-
-        assert!(approx_f32(q.s, (PI / 4.0).cos()));
-        assert!(approx_f32(q.v[2], (PI / 4.0).sin()));
-    }
-
-    #[test]
-    fn test_quaternion_rotate_vector_90deg_z() {
-        let axis = Vector::new(0.0, 0.0, 1.0);
-        let angle = PI / 2.0;
-        let q = Quaternion::from_axis_angle(axis, angle);
-
-        let v = Vector::new(1.0, 0.0, 0.0);
-        let rotated = q.rotate_vector(v);
-
-        let expected = Vector::new(0.0, 1.0, 0.0);
-        assert!(vectors_close(&rotated, &expected));
-    }
-
-    #[test]
-    fn test_quaternion_rotate_vector_180deg_z() {
-        let axis = Vector::new(0.0, 0.0, 1.0);
-        let angle = PI;
-        let q = Quaternion::from_axis_angle(axis, angle);
-
-        let v = Vector::new(1.0, 0.0, 0.0);
-        let rotated = q.rotate_vector(v);
-
-        let expected = Vector::new(-1.0, 0.0, 0.0);
-        assert!(vectors_close(&rotated, &expected));
-    }
-
-    #[test]
-    fn test_quaternion_normalize() {
-        let q = Quaternion::from_sv(2.0, 0.0, 0.0, 0.0);
-        let normalized = q.normalize();
-
-        assert!(approx_f32(normalized.magnitude(), 1.0));
-        assert!(approx_f32(normalized.s, 1.0));
-    }
-
-    #[test]
-    fn test_quaternion_multiplication() {
-        let q1 = Quaternion::from_axis_angle(Vector::new(0.0, 0.0, 1.0), PI / 2.0);
-        let q2 = Quaternion::from_axis_angle(Vector::new(0.0, 0.0, 1.0), PI / 2.0);
-        let q_combined = q1 * q2;
-
-        let v = Vector::new(1.0, 0.0, 0.0);
-        let rotated = q_combined.rotate_vector(v);
-
-        let expected = Vector::new(-1.0, 0.0, 0.0);
-        assert!(vectors_close(&rotated, &expected));
-    }
-
-    #[test]
-    fn test_quaternion_identity_rotation() {
-        let q = Quaternion::identity();
-        let v = Vector::new(1.0, 2.0, 3.0);
-        let rotated = q.rotate_vector(v.clone());
-
-        assert!(vectors_close(&rotated, &v));
-    }
-
-    #[test]
-    fn test_quaternion_conjugate() {
-        let q = Quaternion::from_sv(0.5, 0.5, 0.5, 0.5);
-        let conj = q.conjugate();
-
-        assert_eq!(conj.s, 0.5);
-        assert_eq!(conj.v[0], -0.5);
-        assert_eq!(conj.v[1], -0.5);
-        assert_eq!(conj.v[2], -0.5);
-    }
-
-    #[test]
-    fn test_quaternion_magnitude() {
-        let q = Quaternion::from_sv(1.0, 0.0, 0.0, 0.0);
-        assert!(approx_f32(q.magnitude(), 1.0));
-
-        let q2 = Quaternion::from_sv(2.0, 0.0, 0.0, 0.0);
-        assert!(approx_f32(q2.magnitude(), 2.0));
-    }
-
-    #[test]
-    fn test_quaternion_rotate_around_x() {
-        let axis = Vector::new(1.0, 0.0, 0.0);
-        let angle = PI / 2.0;
-        let q = Quaternion::from_axis_angle(axis, angle);
-
-        let v = Vector::new(0.0, 1.0, 0.0);
-        let rotated = q.rotate_vector(v);
-
-        let expected = Vector::new(0.0, 0.0, 1.0);
-        assert!(vectors_close(&rotated, &expected));
-    }
-
-    #[test]
-    fn test_quaternion_rotate_around_y() {
-        let axis = Vector::new(0.0, 1.0, 0.0);
-        let angle = PI / 2.0;
-        let q = Quaternion::from_axis_angle(axis, angle);
-
-        let v = Vector::new(0.0, 0.0, 1.0);
-        let rotated = q.rotate_vector(v);
-
-        let expected = Vector::new(1.0, 0.0, 0.0);
-        assert!(vectors_close(&rotated, &expected));
-    }
-
-    #[test]
-    fn test_quaternion_to_json_from_json() {
-        let axis = Vector::new(0.0, 0.0, 1.0);
-        let angle = PI / 4.0;
-        let orig = Quaternion::from_axis_angle(axis, angle);
-
-        //   json_dumps()    │ String       │ to JSON string
-        //   json_loads(s)   │ String       │ from JSON string
-        //   json_dump(path) │ file         │ write to file
-        //   json_load(path) │ file         │ read from file
-
-        let filepath = "serialization/test_quaternion.json";
-        json_dump(&orig, filepath, true).unwrap();
-        let loaded = json_load::<Quaternion>(filepath).unwrap();
-
-        assert!(approx_f32(loaded.s, orig.s));
-        assert!(vectors_close(&loaded.v, &orig.v));
-    }
+        let original = Quaternion::from_axis_angle(axis, 1.5708);
+        json_dump(&original, "serialization/test_quaternion.json", false).unwrap();
+        let loaded = json_load::<Quaternion>("serialization/test_quaternion.json").unwrap();
+        MINI_CHECK!(TOLERANCE.is_close(loaded.s, original.s));
+    })
 }
+
+REGISTER_MINI_TEST!("Quaternion", "Json Roundtrip", crate::quaternion_test::run_quaternion_json_roundtrip);

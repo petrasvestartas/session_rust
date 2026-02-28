@@ -44,34 +44,51 @@ pub fn run_trimmedsurface_constructor() -> TestResult {
 }
 
 pub fn run_trimmedsurface_constructor_planar() -> TestResult {
-    MINI_TEST!("Constructor_planar", {
+    MINI_TEST!("Constructor Planar", {
         use crate::trimmedsurface::TrimmedSurface;
         use crate::NurbsCurve;
         use crate::Point;
         use crate::tolerance::PI;
 
         // Planar curve boundary
-        let pts = vec![Point::new(0.0,0.0,0.0), Point::new(3.0,1.0,0.0), Point::new(5.0,0.5,0.0), Point::new(6.0,3.0,0.0), Point::new(4.0,5.0,0.0), Point::new(1.0,4.0,0.0)];
+        let pts = vec![
+            Point::new(0.0, 0.0, 0.0), Point::new(3.0, 1.0, 0.0), Point::new(5.0, 0.5, 0.0),
+            Point::new(6.0, 3.0, 0.0), Point::new(4.0, 5.0, 0.0), Point::new(1.0, 4.0, 0.0),
+        ];
         let bnd = NurbsCurve::create(true, 3, &pts);
         let _ts = TrimmedSurface::create_planar(&bnd).unwrap();
 
         // Rotated planar
-        let pts = vec![Point::new(0.0,0.0,0.0), Point::new(3.0,1.0,-2.0), Point::new(5.0,2.0,-3.0), Point::new(4.0,4.0,0.0), Point::new(1.0,3.0,2.0)];
+        let pts = vec![
+            Point::new(0.0, 0.0, 0.0), Point::new(3.0, 1.0, -2.0), Point::new(5.0, 2.0, -3.0),
+            Point::new(4.0, 4.0, 0.0), Point::new(1.0, 3.0, 2.0),
+        ];
         let bnd = NurbsCurve::create(true, 3, &pts);
         let _ts = TrimmedSurface::create_planar(&bnd).unwrap();
 
         // Triangle
-        let bnd = NurbsCurve::create(true, 1, &[Point::new(0.0,0.0,0.0), Point::new(6.0,3.0,3.0), Point::new(2.0,5.0,1.0)]);
+        let bnd = NurbsCurve::create(true, 1, &[
+            Point::new(0.0, 0.0, 0.0), Point::new(6.0, 3.0, 3.0), Point::new(2.0, 5.0, 1.0),
+        ]);
         let _ts = TrimmedSurface::create_planar(&bnd).unwrap();
 
         // Trapezoid
-        let bnd = NurbsCurve::create(true, 1, &[Point::new(0.0,0.0,6.0), Point::new(5.0,0.0,6.0), Point::new(4.0,4.0,2.0), Point::new(1.0,4.0,2.0)]);
+        let bnd = NurbsCurve::create(true, 1, &[
+            Point::new(0.0, 0.0, 6.0), Point::new(5.0, 0.0, 6.0),
+            Point::new(4.0, 4.0, 2.0), Point::new(1.0, 4.0, 2.0),
+        ]);
         let _ts = TrimmedSurface::create_planar(&bnd).unwrap();
 
         // Rectangle with a hole
-        let bnd = NurbsCurve::create(true, 1, &[Point::new(0.0,0.0,0.0), Point::new(6.0,0.0,0.0), Point::new(6.0,6.0,0.0), Point::new(0.0,6.0,0.0)]);
+        let bnd = NurbsCurve::create(true, 1, &[
+            Point::new(0.0, 0.0, 0.0), Point::new(6.0, 0.0, 0.0),
+            Point::new(6.0, 6.0, 0.0), Point::new(0.0, 6.0, 0.0),
+        ]);
         let mut ts = TrimmedSurface::create_planar(&bnd).unwrap();
-        ts.add_hole(&NurbsCurve::create(true, 1, &[Point::new(2.0,2.0,0.0), Point::new(4.0,2.0,0.0), Point::new(4.0,4.0,0.0), Point::new(2.0,4.0,0.0)]));
+        ts.add_hole(&NurbsCurve::create(true, 1, &[
+            Point::new(2.0, 2.0, 0.0), Point::new(4.0, 2.0, 0.0),
+            Point::new(4.0, 4.0, 0.0), Point::new(2.0, 4.0, 0.0),
+        ]));
 
         // Hexagon with 2 holes
         let r = 4.0f64;
@@ -83,14 +100,19 @@ pub fn run_trimmedsurface_constructor_planar() -> TestResult {
         let bnd = NurbsCurve::create(true, 1, &pts);
         let mut ts = TrimmedSurface::create_planar(&bnd).unwrap();
         ts.add_holes(&[
-            NurbsCurve::create(true, 1, &[Point::new(1.5,0.5,0.75), Point::new(2.5,0.5,1.25), Point::new(2.0,1.5,1.0)]),
-            NurbsCurve::create(true, 1, &[Point::new(-2.0,-0.5,-1.0), Point::new(-1.0,-0.5,-0.5), Point::new(-1.0,-1.5,-0.5), Point::new(-2.0,-1.5,-1.0)]),
+            NurbsCurve::create(true, 1, &[
+                Point::new(1.5, 0.5, 0.75), Point::new(2.5, 0.5, 1.25), Point::new(2.0, 1.5, 1.0),
+            ]),
+            NurbsCurve::create(true, 1, &[
+                Point::new(-2.0, -0.5, -1.0), Point::new(-1.0, -0.5, -0.5),
+                Point::new(-1.0, -1.5, -0.5), Point::new(-2.0, -1.5, -1.0),
+            ]),
         ]);
     })
 }
 
 pub fn run_trimmedsurface_constructor_hole() -> TestResult {
-    MINI_TEST!("Constructor_hole", {
+    MINI_TEST!("Constructor Hole", {
         use crate::trimmedsurface::TrimmedSurface;
         use crate::NurbsSurface;
         use crate::NurbsCurve;
@@ -168,7 +190,7 @@ pub fn run_trimmedsurface_accessors() -> TestResult {
 }
 
 pub fn run_trimmedsurface_add_inner_loop() -> TestResult {
-    MINI_TEST!("Add_inner_loop", {
+    MINI_TEST!("Add Inner Loop", {
         use crate::trimmedsurface::TrimmedSurface;
         use crate::NurbsSurface;
         use crate::NurbsCurve;
@@ -211,7 +233,7 @@ pub fn run_trimmedsurface_add_inner_loop() -> TestResult {
 }
 
 pub fn run_trimmedsurface_point_at() -> TestResult {
-    MINI_TEST!("Point_at", {
+    MINI_TEST!("Point At", {
         use crate::trimmedsurface::TrimmedSurface;
         use crate::NurbsSurface;
         use crate::NurbsCurve;
@@ -308,7 +330,7 @@ pub fn run_trimmedsurface_transformation() -> TestResult {
 }
 
 pub fn run_trimmedsurface_json_roundtrip() -> TestResult {
-    MINI_TEST!("Json_roundtrip", {
+    MINI_TEST!("Json Roundtrip", {
         use crate::trimmedsurface::TrimmedSurface;
         use crate::NurbsSurface;
         use crate::NurbsCurve;
@@ -353,7 +375,7 @@ pub fn run_trimmedsurface_json_roundtrip() -> TestResult {
 }
 
 pub fn run_trimmedsurface_protobuf_roundtrip() -> TestResult {
-    MINI_TEST!("Protobuf_roundtrip", {
+    MINI_TEST!("Protobuf Roundtrip", {
         use crate::trimmedsurface::TrimmedSurface;
         use crate::NurbsSurface;
         use crate::NurbsCurve;
@@ -394,12 +416,12 @@ pub fn run_trimmedsurface_protobuf_roundtrip() -> TestResult {
 
 // Register tests with the shared registry
 REGISTER_MINI_TEST!("TrimmedSurface", "Constructor", crate::trimmedsurface_test::run_trimmedsurface_constructor);
-REGISTER_MINI_TEST!("TrimmedSurface", "Constructor_planar", crate::trimmedsurface_test::run_trimmedsurface_constructor_planar);
-REGISTER_MINI_TEST!("TrimmedSurface", "Constructor_hole", crate::trimmedsurface_test::run_trimmedsurface_constructor_hole);
+REGISTER_MINI_TEST!("TrimmedSurface", "Constructor Planar", crate::trimmedsurface_test::run_trimmedsurface_constructor_planar);
+REGISTER_MINI_TEST!("TrimmedSurface", "Constructor Hole", crate::trimmedsurface_test::run_trimmedsurface_constructor_hole);
 REGISTER_MINI_TEST!("TrimmedSurface", "Accessors", crate::trimmedsurface_test::run_trimmedsurface_accessors);
-REGISTER_MINI_TEST!("TrimmedSurface", "Add_inner_loop", crate::trimmedsurface_test::run_trimmedsurface_add_inner_loop);
-REGISTER_MINI_TEST!("TrimmedSurface", "Point_at", crate::trimmedsurface_test::run_trimmedsurface_point_at);
+REGISTER_MINI_TEST!("TrimmedSurface", "Add Inner Loop", crate::trimmedsurface_test::run_trimmedsurface_add_inner_loop);
+REGISTER_MINI_TEST!("TrimmedSurface", "Point At", crate::trimmedsurface_test::run_trimmedsurface_point_at);
 REGISTER_MINI_TEST!("TrimmedSurface", "Mesh", crate::trimmedsurface_test::run_trimmedsurface_mesh);
 REGISTER_MINI_TEST!("TrimmedSurface", "Transformation", crate::trimmedsurface_test::run_trimmedsurface_transformation);
-REGISTER_MINI_TEST!("TrimmedSurface", "Json_roundtrip", crate::trimmedsurface_test::run_trimmedsurface_json_roundtrip);
-REGISTER_MINI_TEST!("TrimmedSurface", "Protobuf_roundtrip", crate::trimmedsurface_test::run_trimmedsurface_protobuf_roundtrip);
+REGISTER_MINI_TEST!("TrimmedSurface", "Json Roundtrip", crate::trimmedsurface_test::run_trimmedsurface_json_roundtrip);
+REGISTER_MINI_TEST!("TrimmedSurface", "Protobuf Roundtrip", crate::trimmedsurface_test::run_trimmedsurface_protobuf_roundtrip);

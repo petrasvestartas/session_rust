@@ -95,7 +95,7 @@ pub fn run_point_transformation() -> TestResult {
 }
 
 pub fn run_point_json_roundtrip() -> TestResult {
-    MINI_TEST!("Json_roundtrip", {
+    MINI_TEST!("Json Roundtrip", {
         use crate::Point;
         use crate::Color;
 
@@ -126,7 +126,7 @@ pub fn run_point_json_roundtrip() -> TestResult {
 }
 
 pub fn run_point_protobuf_roundtrip() -> TestResult {
-    MINI_TEST!("Protobuf_roundtrip", {
+    MINI_TEST!("Protobuf Roundtrip", {
         use crate::Point;
         use crate::Color;
 
@@ -152,7 +152,7 @@ pub fn run_point_protobuf_roundtrip() -> TestResult {
 }
 
 pub fn run_point_is_ccw() -> TestResult {
-    MINI_TEST!("Is_ccw", {
+    MINI_TEST!("Is Ccw", {
         use crate::Point;
 
         let p0 = Point::new(0.0, 0.0, 0.0);
@@ -169,7 +169,7 @@ pub fn run_point_is_ccw() -> TestResult {
 }
 
 pub fn run_point_mid_point() -> TestResult {
-    MINI_TEST!("Mid_point", {
+    MINI_TEST!("Mid Point", {
         use crate::Point;
 
         let p0 = Point::new(0.0, 2.0, 1.0);
@@ -194,7 +194,7 @@ pub fn run_point_distance() -> TestResult {
 }
 
 pub fn run_point_squared_distance() -> TestResult {
-    MINI_TEST!("Squared_distance", {
+    MINI_TEST!("Squared Distance", {
         use crate::Point;
 
 
@@ -221,7 +221,7 @@ pub fn run_point_area() -> TestResult {
 }
 
 pub fn run_point_centroid_quad() -> TestResult {
-    MINI_TEST!("Centroid_quad", {
+    MINI_TEST!("Centroid Quad", {
         use crate::Point;
 
 
@@ -240,11 +240,11 @@ pub fn run_point_centroid_quad() -> TestResult {
 // Register tests with the shared registry for run_all("rust")
 REGISTER_MINI_TEST!("Point", "Constructor", crate::point_test::run_point_constructor);
 REGISTER_MINI_TEST!("Point", "Transformation", crate::point_test::run_point_transformation);
-REGISTER_MINI_TEST!("Point", "Json_roundtrip", crate::point_test::run_point_json_roundtrip);
-REGISTER_MINI_TEST!("Point", "Protobuf_roundtrip", crate::point_test::run_point_protobuf_roundtrip);
-REGISTER_MINI_TEST!("Point", "Is_ccw", crate::point_test::run_point_is_ccw);
-REGISTER_MINI_TEST!("Point", "Mid_point", crate::point_test::run_point_mid_point);
+REGISTER_MINI_TEST!("Point", "Json Roundtrip", crate::point_test::run_point_json_roundtrip);
+REGISTER_MINI_TEST!("Point", "Protobuf Roundtrip", crate::point_test::run_point_protobuf_roundtrip);
+REGISTER_MINI_TEST!("Point", "Is Ccw", crate::point_test::run_point_is_ccw);
+REGISTER_MINI_TEST!("Point", "Mid Point", crate::point_test::run_point_mid_point);
 REGISTER_MINI_TEST!("Point", "Distance", crate::point_test::run_point_distance);
-REGISTER_MINI_TEST!("Point", "Squared_distance", crate::point_test::run_point_squared_distance);
+REGISTER_MINI_TEST!("Point", "Squared Distance", crate::point_test::run_point_squared_distance);
 REGISTER_MINI_TEST!("Point", "Area", crate::point_test::run_point_area);
-REGISTER_MINI_TEST!("Point", "Centroid_quad", crate::point_test::run_point_centroid_quad);
+REGISTER_MINI_TEST!("Point", "Centroid Quad", crate::point_test::run_point_centroid_quad);

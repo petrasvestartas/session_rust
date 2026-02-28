@@ -514,12 +514,12 @@ impl NurbsSurface {
                 let nc = n_other.min(3);
                 for ci in 0..=nc {
                     let s = osp[0] + ci as f64 * (osp[osp.len()-1] - osp[0]) / nc.max(1) as f64;
-                    let pa = if dir == 0 { self.point_at(t0, s) } else { self.point_at(s, t0) }.unwrap_or(Point::new(0.0,0.0,0.0));
-                    let pb = if dir == 0 { self.point_at(t1, s) } else { self.point_at(s, t1) }.unwrap_or(Point::new(0.0,0.0,0.0));
+                    let pa = if dir == 0 { self.point_at(t0, s) } else { self.point_at(s, t0) }.unwrap_or(Point::new(0.0, 0.0, 0.0));
+                    let pb = if dir == 0 { self.point_at(t1, s) } else { self.point_at(s, t1) }.unwrap_or(Point::new(0.0, 0.0, 0.0));
                     for k in 1..=3 {
                         let frac = k as f64 / 4.0;
                         let tm = t0 + frac * (t1 - t0);
-                        let pm = if dir == 0 { self.point_at(tm, s) } else { self.point_at(s, tm) }.unwrap_or(Point::new(0.0,0.0,0.0));
+                        let pm = if dir == 0 { self.point_at(tm, s) } else { self.point_at(s, tm) }.unwrap_or(Point::new(0.0, 0.0, 0.0));
                         let lx = pa[0] + frac * (pb[0] - pa[0]);
                         let ly = pa[1] + frac * (pb[1] - pa[1]);
                         let lz = pa[2] + frac * (pb[2] - pa[2]);
@@ -592,22 +592,22 @@ impl NurbsSurface {
         let u_mid = (usp[0] + usp[usp.len()-1]) * 0.5;
         let mut u_len = 0.0f64;
         {
-            let mut p0 = self.point_at(usp[0], v_mid).unwrap_or(Point::new(0.0,0.0,0.0));
+            let mut p0 = self.point_at(usp[0], v_mid).unwrap_or(Point::new(0.0, 0.0, 0.0));
             let n_sample = total_u.max(10);
             for i in 1..=n_sample {
                 let u = usp[0] + i as f64 * (usp[usp.len()-1] - usp[0]) / n_sample as f64;
-                let p1 = self.point_at(u, v_mid).unwrap_or(Point::new(0.0,0.0,0.0));
+                let p1 = self.point_at(u, v_mid).unwrap_or(Point::new(0.0, 0.0, 0.0));
                 u_len += ((p1[0]-p0[0]).powi(2)+(p1[1]-p0[1]).powi(2)+(p1[2]-p0[2]).powi(2)).sqrt();
                 p0 = p1;
             }
         }
         let mut v_len = 0.0f64;
         {
-            let mut p0 = self.point_at(u_mid, vsp[0]).unwrap_or(Point::new(0.0,0.0,0.0));
+            let mut p0 = self.point_at(u_mid, vsp[0]).unwrap_or(Point::new(0.0, 0.0, 0.0));
             let n_sample = total_v.max(10);
             for i in 1..=n_sample {
                 let v = vsp[0] + i as f64 * (vsp[vsp.len()-1] - vsp[0]) / n_sample as f64;
-                let p1 = self.point_at(u_mid, v).unwrap_or(Point::new(0.0,0.0,0.0));
+                let p1 = self.point_at(u_mid, v).unwrap_or(Point::new(0.0, 0.0, 0.0));
                 v_len += ((p1[0]-p0[0]).powi(2)+(p1[1]-p0[1]).powi(2)+(p1[2]-p0[2]).powi(2)).sqrt();
                 p0 = p1;
             }
@@ -638,9 +638,9 @@ impl NurbsSurface {
                     for j in 0..ns_v {
                         let u0 = usp[i]; let u1 = usp[i + 1];
                         let v0 = vsp[j]; let v1 = vsp[j + 1];
-                        let pm = self.point_at((u0 + u1) * 0.5, (v0 + v1) * 0.5).unwrap_or(Point::new(0.0,0.0,0.0));
-                        let p00 = self.point_at(u0, v0).unwrap_or(Point::new(0.0,0.0,0.0));
-                        let p11 = self.point_at(u1, v1).unwrap_or(Point::new(0.0,0.0,0.0));
+                        let pm = self.point_at((u0 + u1) * 0.5, (v0 + v1) * 0.5).unwrap_or(Point::new(0.0, 0.0, 0.0));
+                        let p00 = self.point_at(u0, v0).unwrap_or(Point::new(0.0, 0.0, 0.0));
+                        let p11 = self.point_at(u1, v1).unwrap_or(Point::new(0.0, 0.0, 0.0));
                         let mx = (p00[0] + p11[0]) * 0.5;
                         let my = (p00[1] + p11[1]) * 0.5;
                         let mz = (p00[2] + p11[2]) * 0.5;

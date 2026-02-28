@@ -1,6 +1,6 @@
 use crate::{BoundingBox, Color, Line, Point, Tolerance, Vector, Xform, BVH};
 use crate::polyline::Polyline;
-use crate::triangulation_2d;
+use crate::trimesh_cdt;
 use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
 
@@ -145,511 +145,21 @@ impl Mesh {
         }
     }
 
-    pub fn is_empty(&self) -> bool {
-        self.vertex.is_empty() && self.face.is_empty()
-    }
+    ///////////////////////////////////////////////////////////////////////////////////////////
+    // Construction
+    ///////////////////////////////////////////////////////////////////////////////////////////
 
-    pub fn is_valid(&self) -> bool {
-        if self.vertex.is_empty() || self.face.is_empty() {
-            return false;
+    pub fn from_vertices_and_faces(vertices: Vec<Point>, faces: Vec<Vec<usize>>) -> Self {
+        let mut mesh = Mesh::new();
+        let mut vkeys: Vec<usize> = Vec::with_capacity(vertices.len());
+        for pt in vertices {
+            vkeys.push(mesh.add_vertex(pt, None));
         }
-        for (_fkey, vkeys) in &self.face {
-            if vkeys.len() < 3 {
-                return false;
-            }
-            for vk in vkeys {
-                if !self.vertex.contains_key(vk) {
-                    return false;
-                }
-            }
+        for f in faces {
+            let mapped: Vec<usize> = f.iter().map(|&i| vkeys[i]).collect();
+            mesh.add_face(mapped, None);
         }
-        true
-    }
-
-    pub fn clear(&mut self) {
-        self.halfedge.clear();
-        self.vertex.clear();
-        self.face.clear();
-        self.facedata.clear();
-        self.edgedata.clear();
-        self.triangulation.clear();
-        self.max_vertex = 0;
-        self.max_face = 0;
-        self.pointcolors.clear();
-        self.facecolors.clear();
-        self.linecolors.clear();
-        self.widths.clear();
-        self.invalidate_triangle_bvh();
-    }
-
-    pub fn unify_winding(&mut self) -> bool {
-        if self.face.len() < 2 {
-            return false;
-        }
-
-        let mut edge_faces: HashMap<(usize, usize), Vec<(usize, usize, usize)>> = HashMap::new();
-        for (&fkey, verts) in &self.face {
-            let n = verts.len();
-            for i in 0..n {
-                let u = verts[i];
-                let v = verts[(i + 1) % n];
-                let edge = if u < v { (u, v) } else { (v, u) };
-                edge_faces.entry(edge).or_default().push((fkey, u, v));
-            }
-        }
-
-        let mut visited: HashSet<usize> = HashSet::new();
-        let mut flipped: HashSet<usize> = HashSet::new();
-        let face_keys: Vec<usize> = self.face.keys().copied().collect();
-        for seed in face_keys {
-            if visited.contains(&seed) {
-                continue;
-            }
-            visited.insert(seed);
-            let mut queue = vec![seed];
-            while let Some(f) = queue.pop() {
-                let is_flipped = flipped.contains(&f);
-                let verts = self.face[&f].clone();
-                let n = verts.len();
-                for i in 0..n {
-                    let u_orig = verts[i];
-                    let v_orig = verts[(i + 1) % n];
-                    let (eff_u, eff_v) = if is_flipped { (v_orig, u_orig) } else { (u_orig, v_orig) };
-                    let edge = if u_orig < v_orig { (u_orig, v_orig) } else { (v_orig, u_orig) };
-                    if let Some(adj_list) = edge_faces.get(&edge) {
-                        for &(adj_key, adj_u, adj_v) in adj_list {
-                            if adj_key == f || visited.contains(&adj_key) {
-                                continue;
-                            }
-                            if !(adj_u == eff_v && adj_v == eff_u) {
-                                flipped.insert(adj_key);
-                            }
-                            visited.insert(adj_key);
-                            queue.push(adj_key);
-                        }
-                    }
-                }
-            }
-        }
-
-        if flipped.is_empty() {
-            return false;
-        }
-
-        for &fkey in &flipped {
-            self.face.get_mut(&fkey).unwrap().reverse();
-        }
-
-        for neighbors in self.halfedge.values_mut() {
-            neighbors.clear();
-        }
-        let face_items: Vec<(usize, Vec<usize>)> = self.face.iter().map(|(&k, v)| (k, v.clone())).collect();
-        for (fkey, verts) in face_items {
-            let n = verts.len();
-            for i in 0..n {
-                let u = verts[i];
-                let v = verts[(i + 1) % n];
-                self.halfedge.entry(u).or_default().insert(v, Some(fkey));
-                self.halfedge.entry(v).or_default().entry(u).or_insert(None);
-            }
-        }
-
-        true
-    }
-
-    pub fn number_of_vertices(&self) -> usize {
-        self.vertex.len()
-    }
-
-    pub fn number_of_faces(&self) -> usize {
-        self.face.len()
-    }
-
-    pub fn number_of_edges(&self) -> usize {
-        let mut seen = HashSet::new();
-        let mut count = 0;
-
-        for u in self.halfedge.keys() {
-            if let Some(neighbors) = self.halfedge.get(u) {
-                for v in neighbors.keys() {
-                    let edge = if u < v { (*u, *v) } else { (*v, *u) };
-                    if seen.insert(edge) {
-                        count += 1;
-                    }
-                }
-            }
-        }
-
-        count
-    }
-
-    pub fn euler(&self) -> i32 {
-        let v = self.number_of_vertices() as i32;
-        let e = self.number_of_edges() as i32;
-        let f = self.number_of_faces() as i32;
-        v - e + f
-    }
-
-    pub fn add_vertex(&mut self, position: Point, key: Option<usize>) -> usize {
-        let vertex_key = match key {
-            Some(k) => {
-                if k >= self.max_vertex {
-                    self.max_vertex = k + 1;
-                }
-                k
-            }
-            None => {
-                self.max_vertex += 1;
-                self.max_vertex
-            }
-        };
-
-        let vertex_data = VertexData::new(position);
-        self.vertex.insert(vertex_key, vertex_data);
-        self.halfedge.entry(vertex_key).or_default();
-        self.pointcolors.push(Color::white());
-        self.invalidate_triangle_bvh();
-
-        vertex_key
-    }
-
-    pub fn add_face(&mut self, vertices: Vec<usize>, fkey: Option<usize>) -> Option<usize> {
-        if vertices.len() < 3 {
-            return None;
-        }
-
-        if !vertices.iter().all(|v| self.vertex.contains_key(v)) {
-            return None;
-        }
-
-        let mut unique_vertices = HashSet::new();
-        for vertex in &vertices {
-            if !unique_vertices.insert(*vertex) {
-                return None;
-            }
-        }
-
-        let face_key = match fkey {
-            Some(k) => {
-                if k >= self.max_face {
-                    self.max_face = k + 1;
-                }
-                k
-            }
-            None => {
-                self.max_face += 1;
-                self.max_face
-            }
-        };
-
-        self.face.insert(face_key, vertices.clone());
-        self.triangulation.remove(&face_key);
-        self.facecolors.push(Color::white());
-        self.invalidate_triangle_bvh();
-
-        for i in 0..vertices.len() {
-            let u = vertices[i];
-            let v = vertices[(i + 1) % vertices.len()];
-
-            self.halfedge.entry(u).or_default();
-            self.halfedge.entry(v).or_default();
-
-            let is_new_edge = !self.halfedge.get(&v).unwrap().contains_key(&u);
-
-            self.halfedge.get_mut(&u).unwrap().insert(v, Some(face_key));
-
-            if is_new_edge {
-                self.halfedge.get_mut(&v).unwrap().insert(u, None);
-                self.linecolors.push(Color::white());
-                self.widths.push(1.0);
-            }
-        }
-
-        Some(face_key)
-    }
-
-    pub fn vertex_position(&self, vertex_key: usize) -> Option<Point> {
-        self.vertex.get(&vertex_key).map(|v| v.position())
-    }
-
-    pub fn face_vertices(&self, face_key: usize) -> Option<&Vec<usize>> {
-        self.face.get(&face_key)
-    }
-
-    pub fn vertex_neighbors(&self, vertex_key: usize) -> Vec<usize> {
-        self.halfedge
-            .get(&vertex_key)
-            .map(|neighbors| neighbors.keys().copied().collect())
-            .unwrap_or_default()
-    }
-
-    pub fn vertex_faces(&self, vertex_key: usize) -> Vec<usize> {
-        self.halfedge
-            .get(&vertex_key)
-            .map(|neighbors| neighbors.values().filter_map(|f| *f).collect())
-            .unwrap_or_default()
-    }
-
-    pub fn vertex_edges(&self, vertex_key: usize) -> Vec<(usize, usize)> {
-        self.halfedge
-            .get(&vertex_key)
-            .map(|neighbors| neighbors.keys().map(|&u| (vertex_key, u)).collect())
-            .unwrap_or_default()
-    }
-
-    pub fn face_edges(&self, face_key: usize) -> Vec<(usize, usize)> {
-        let verts = match self.face.get(&face_key) {
-            Some(v) => v,
-            None => return vec![],
-        };
-        let n = verts.len();
-        (0..n).map(|i| (verts[i], verts[(i + 1) % n])).collect()
-    }
-
-    pub fn face_neighbors(&self, face_key: usize) -> Vec<usize> {
-        self.face_edges(face_key)
-            .into_iter()
-            .filter_map(|(u, v)| self.halfedge.get(&v)?.get(&u).copied().flatten())
-            .collect()
-    }
-
-    pub fn edge_vertices(&self, u: usize, v: usize) -> [usize; 2] {
-        [u, v]
-    }
-
-    pub fn edge_faces(&self, u: usize, v: usize) -> (Option<usize>, Option<usize>) {
-        let f0 = self.halfedge.get(&u).and_then(|m| m.get(&v)).copied().flatten();
-        let f1 = self.halfedge.get(&v).and_then(|m| m.get(&u)).copied().flatten();
-        (f0, f1)
-    }
-
-    pub fn edge_edges(&self, u: usize, v: usize) -> Vec<(usize, usize)> {
-        let mut edges = Vec::new();
-        if let Some(neighbors) = self.halfedge.get(&u) {
-            for &w in neighbors.keys() {
-                if w != v { edges.push((u, w)); }
-            }
-        }
-        if let Some(neighbors) = self.halfedge.get(&v) {
-            for &w in neighbors.keys() {
-                if w != u { edges.push((v, w)); }
-            }
-        }
-        edges
-    }
-
-    pub fn is_edge_on_boundary(&self, u: usize, v: usize) -> bool {
-        let f0 = self.halfedge.get(&u).and_then(|m| m.get(&v));
-        let f1 = self.halfedge.get(&v).and_then(|m| m.get(&u));
-        f0.map_or(true, |f| f.is_none()) || f1.map_or(true, |f| f.is_none())
-    }
-
-    pub fn is_face_on_boundary(&self, face_key: usize) -> bool {
-        self.face_edges(face_key)
-            .into_iter()
-            .any(|(u, v)| self.is_edge_on_boundary(u, v))
-    }
-
-    pub fn is_vertex_on_boundary(&self, vertex_key: usize) -> bool {
-        if let Some(neigh) = self.halfedge.get(&vertex_key) {
-            for (_v, face_opt) in neigh.iter() {
-                if face_opt.is_none() {
-                    return true;
-                }
-            }
-        }
-
-        for (_u, neigh) in self.halfedge.iter() {
-            if let Some(face_opt) = neigh.get(&vertex_key) {
-                if face_opt.is_none() {
-                    return true;
-                }
-            }
-        }
-        false
-    }
-
-    pub fn face_normal(&self, face_key: usize) -> Option<Vector> {
-        let vertices = self.face.get(&face_key)?;
-        if vertices.len() < 3 {
-            return None;
-        }
-
-        let p0 = self.vertex_position(vertices[0])?;
-        let p1 = self.vertex_position(vertices[1])?;
-        let p2 = self.vertex_position(vertices[2])?;
-
-        let u = Vector::new(p1[0] - p0[0], p1[1] - p0[1], p1[2] - p0[2]);
-        let v = Vector::new(p2[0] - p0[0], p2[1] - p0[1], p2[2] - p0[2]);
-
-        let normal = u.cross(&v);
-        let len = normal.magnitude();
-        if len > Tolerance::ZERO_TOLERANCE {
-            Some(Vector::new(
-                normal[0] / len,
-                normal[1] / len,
-                normal[2] / len,
-            ))
-        } else {
-            None
-        }
-    }
-
-    pub fn vertex_normal(&self, vertex_key: usize) -> Option<Vector> {
-        self.vertex_normal_weighted(vertex_key, NormalWeighting::Area)
-    }
-
-    pub fn vertex_normal_weighted(
-        &self,
-        vertex_key: usize,
-        weighting: NormalWeighting,
-    ) -> Option<Vector> {
-        let faces = self.vertex_faces(vertex_key);
-        if faces.is_empty() {
-            return None;
-        }
-
-        let mut normal_acc = Vector::new(0.0, 0.0, 0.0);
-
-        for face_key in faces {
-            if let Some(face_normal) = self.face_normal(face_key) {
-                let weight = match weighting {
-                    NormalWeighting::Area => self.face_area(face_key).unwrap_or(1.0),
-                    NormalWeighting::Angle => self
-                        .vertex_angle_in_face(vertex_key, face_key)
-                        .unwrap_or(1.0),
-                    NormalWeighting::Uniform => 1.0,
-                };
-
-                normal_acc[0] = normal_acc[0] + face_normal[0] * weight;
-                normal_acc[1] = normal_acc[1] + face_normal[1] * weight;
-                normal_acc[2] = normal_acc[2] + face_normal[2] * weight;
-            }
-        }
-
-        let len = normal_acc.magnitude();
-        if len > Tolerance::ZERO_TOLERANCE {
-            Some(Vector::new(
-                normal_acc[0] / len,
-                normal_acc[1] / len,
-                normal_acc[2] / len,
-            ))
-        } else {
-            None
-        }
-    }
-
-    pub fn face_area(&self, face_key: usize) -> Option<f64> {
-        let vertices = self.face.get(&face_key)?;
-        if vertices.len() < 3 {
-            return Some(0.0);
-        }
-
-        let mut area = 0.0;
-        let p0 = self.vertex_position(vertices[0])?;
-
-        for i in 1..(vertices.len() - 1) {
-            let p1 = self.vertex_position(vertices[i])?;
-            let p2 = self.vertex_position(vertices[i + 1])?;
-
-            let u = Vector::new(p1[0] - p0[0], p1[1] - p0[1], p1[2] - p0[2]);
-            let v = Vector::new(p2[0] - p0[0], p2[1] - p0[1], p2[2] - p0[2]);
-
-            area += u.cross(&v).magnitude() * 0.5;
-        }
-
-        Some(area)
-    }
-
-    pub fn vertex_angle_in_face(&self, vertex_key: usize, face_key: usize) -> Option<f64> {
-        let vertices = self.face.get(&face_key)?;
-        let vertex_index = vertices.iter().position(|&v| v == vertex_key)?;
-
-        let n = vertices.len();
-        let prev_vertex = vertices[(vertex_index + n - 1) % n];
-        let next_vertex = vertices[(vertex_index + 1) % n];
-
-        let center = self.vertex_position(vertex_key)?;
-        let prev_pos = self.vertex_position(prev_vertex)?;
-        let next_pos = self.vertex_position(next_vertex)?;
-
-        let u = Vector::new(
-            prev_pos[0] - center[0],
-            prev_pos[1] - center[1],
-            prev_pos[2] - center[2],
-        );
-        let v = Vector::new(
-            next_pos[0] - center[0],
-            next_pos[1] - center[1],
-            next_pos[2] - center[2],
-        );
-
-        let u_len = u.magnitude();
-        let v_len = v.magnitude();
-
-        if u_len < Tolerance::ZERO_TOLERANCE || v_len < Tolerance::ZERO_TOLERANCE {
-            return Some(0.0);
-        }
-
-        let cos_angle = u.dot(&v) / (u_len * v_len);
-        let cos_angle = cos_angle.clamp(-1.0, 1.0);
-        Some(cos_angle.acos())
-    }
-
-    pub fn face_normals(&self) -> HashMap<usize, Vector> {
-        let mut normals = HashMap::new();
-        for face_key in self.face.keys() {
-            if let Some(normal) = self.face_normal(*face_key) {
-                normals.insert(*face_key, normal);
-            }
-        }
-        normals
-    }
-
-    pub fn vertex_normals(&self) -> HashMap<usize, Vector> {
-        self.vertex_normals_weighted(NormalWeighting::Area)
-    }
-
-    pub fn vertex_normals_weighted(&self, weighting: NormalWeighting) -> HashMap<usize, Vector> {
-        let mut normals = HashMap::new();
-        for vertex_key in self.vertex.keys() {
-            if let Some(normal) = self.vertex_normal_weighted(*vertex_key, weighting) {
-                normals.insert(*vertex_key, normal);
-            }
-        }
-        normals
-    }
-
-    pub fn vertex_index(&self) -> HashMap<usize, usize> {
-        let mut keys: Vec<usize> = self.vertex.keys().copied().collect();
-        keys.sort();
-        keys.iter()
-            .enumerate()
-            .map(|(index, &key)| (key, index))
-            .collect()
-    }
-
-    pub fn to_vertices_and_faces(&self) -> (Vec<Point>, Vec<Vec<usize>>) {
-        let vertex_index = self.vertex_index();
-        let mut vertices: Vec<Point> = vec![Point::default(); self.vertex.len()];
-
-        for (&key, data) in &self.vertex {
-            let idx = vertex_index[&key];
-            vertices[idx] = data.position();
-        }
-
-        // Sort face keys to ensure consistent ordering
-        let mut face_keys: Vec<usize> = self.face.keys().copied().collect();
-        face_keys.sort();
-
-        let mut faces = Vec::new();
-        for face_key in face_keys {
-            let face_vertices = &self.face[&face_key];
-            let remapped: Vec<usize> = face_vertices.iter().map(|v| vertex_index[v]).collect();
-            faces.push(remapped);
-        }
-
-        (vertices, faces)
+        mesh
     }
 
     pub fn from_polylines(polygons: Vec<Vec<Point>>, precision: Option<f64>) -> Self {
@@ -697,17 +207,27 @@ impl Mesh {
         mesh
     }
 
-    pub fn from_vertices_and_faces(vertices: Vec<Point>, faces: Vec<Vec<usize>>) -> Self {
-        let mut mesh = Mesh::new();
-        let mut vkeys: Vec<usize> = Vec::with_capacity(vertices.len());
-        for pt in vertices {
-            vkeys.push(mesh.add_vertex(pt, None));
-        }
-        for f in faces {
-            let mapped: Vec<usize> = f.iter().map(|&i| vkeys[i]).collect();
-            mesh.add_face(mapped, None);
-        }
-        mesh
+    pub fn create_box(x: f64, y: f64, z: f64) -> Self {
+        let (hx, hy, hz) = (x * 0.5, y * 0.5, z * 0.5);
+        let vertices = vec![
+            Point::new(-hx, -hy, -hz),
+            Point::new( hx, -hy, -hz),
+            Point::new( hx,  hy, -hz),
+            Point::new(-hx,  hy, -hz),
+            Point::new(-hx, -hy,  hz),
+            Point::new( hx, -hy,  hz),
+            Point::new( hx,  hy,  hz),
+            Point::new(-hx,  hy,  hz),
+        ];
+        let faces = vec![
+            vec![0, 3, 2, 1],
+            vec![4, 5, 6, 7],
+            vec![0, 1, 5, 4],
+            vec![2, 3, 7, 6],
+            vec![0, 4, 7, 3],
+            vec![1, 2, 6, 5],
+        ];
+        Mesh::from_vertices_and_faces(vertices, faces)
     }
 
     pub fn from_lines(lines: &[Line], delete_boundary_face: bool, precision: Option<f64>) -> Self {
@@ -899,153 +419,692 @@ impl Mesh {
             holes_2d.push(hole_2d);
             hole_pts_3d.push(hole);
         }
-        let tris = if holes_2d.is_empty() {
-            triangulation_2d::triangulate(&boundary_2d, None)
-        } else {
-            triangulation_2d::triangulate(&boundary_2d, Some(&holes_2d))
-        };
+        let b2d: Vec<(f64,f64)> = boundary_2d.iter().map(|p| (p[0], p[1])).collect();
+        let h2d: Vec<Vec<(f64,f64)>> = holes_2d.iter().map(|h| h.iter().map(|p| (p[0], p[1])).collect()).collect();
+        let tris = trimesh_cdt::cdt_triangulate(&b2d, &h2d);
         let mut all_pts = border.clone();
         for h in &hole_pts_3d { all_pts.extend(h.iter().cloned()); }
         let mut mesh = Mesh::new();
         let mut vkeys: Vec<usize> = Vec::with_capacity(all_pts.len());
         for p in &all_pts { vkeys.push(mesh.add_vertex(p.clone(), None)); }
-        for t in &tris {
-            mesh.add_face(vec![vkeys[t.0 as usize], vkeys[t.1 as usize], vkeys[t.2 as usize]], None);
+        for &(a, b, c) in &tris {
+            mesh.add_face(vec![vkeys[a], vkeys[b], vkeys[c]], None);
         }
         mesh
     }
 
-    ///////////////////////////////////////////////////////////////////////////////////////////
-    // Triangle BVH cache and ray casting
-    ///////////////////////////////////////////////////////////////////////////////////////////
-
-    fn invalidate_triangle_bvh(&mut self) {
-        self.tri_bvh = None;
-        self.tri_tris.clear();
-        self.tri_vertices.clear();
-    }
-
-    fn ensure_triangle_bvh(&mut self) {
-        if self.tri_bvh.is_some() && !self.tri_tris.is_empty() && !self.tri_vertices.is_empty() {
-            return;
+    pub fn loft(polylines0: &[Polyline], polylines1: &[Polyline], cap: bool) -> Self {
+        if polylines0.is_empty() || polylines1.is_empty() || polylines0.len() != polylines1.len() {
+            return Mesh::new();
         }
-
-        let (vertices, faces) = self.to_vertices_and_faces();
-        let mut tris: Vec<[usize; 3]> = Vec::new();
-        let mut tri_boxes: Vec<BoundingBox> = Vec::new();
-
-        for face in faces {
-            if face.len() < 3 {
-                continue;
+        let mut border_idx = 0usize;
+        let mut max_diag = 0.0_f64;
+        for (i, pl) in polylines0.iter().enumerate() {
+            let pts = pl.get_points();
+            if pts.is_empty() { continue; }
+            let (mut minx, mut miny, mut minz) = (pts[0][0], pts[0][1], pts[0][2]);
+            let (mut maxx, mut maxy, mut maxz) = (minx, miny, minz);
+            for p in &pts {
+                if p[0] < minx { minx = p[0]; } if p[0] > maxx { maxx = p[0]; }
+                if p[1] < miny { miny = p[1]; } if p[1] > maxy { maxy = p[1]; }
+                if p[2] < minz { minz = p[2]; } if p[2] > maxz { maxz = p[2]; }
             }
-            let v0 = face[0];
-            for i in 1..(face.len() - 1) {
-                let t = [v0, face[i], face[i + 1]];
-                tris.push(t);
-                let pts = [
-                    vertices[t[0]].clone(),
-                    vertices[t[1]].clone(),
-                    vertices[t[2]].clone(),
-                ];
-                tri_boxes.push(BoundingBox::from_points(&pts, 0.0));
+            let (dx, dy, dz) = (maxx-minx, maxy-miny, maxz-minz);
+            let diag = (dx*dx + dy*dy + dz*dz).sqrt();
+            if diag > max_diag { max_diag = diag; border_idx = i; }
+        }
+        let get_open = |pl: &Polyline| -> Vec<Point> {
+            let mut pts = pl.get_points();
+            if pts.len() > 1 {
+                let f = pts[0].clone(); let b = pts[pts.len()-1].clone();
+                if (f[0]-b[0]).abs() < 1e-12 && (f[1]-b[1]).abs() < 1e-12 && (f[2]-b[2]).abs() < 1e-12 {
+                    pts.pop();
+                }
             }
-        }
-
-        if tris.is_empty() {
-            self.tri_bvh = None;
-            self.tri_tris.clear();
-            self.tri_vertices = vertices; // keep for consistency
-            return;
-        }
-
-        let world_size = BVH::compute_world_size(&tri_boxes);
-        let bvh = BVH::from_boxes(&tri_boxes, world_size);
-        self.tri_vertices = vertices;
-        self.tri_tris = tris;
-        self.tri_bvh = Some(bvh);
-    }
-
-    pub fn ray_cast_bvh(&mut self, ray: &Line, epsilon: f64) -> Option<Point> {
-        self.ensure_triangle_bvh();
-        let bvh = match &self.tri_bvh {
-            Some(b) => b,
-            None => return None,
+            pts
         };
-
-        let origin = ray.start();
-        let dir = ray.to_vector();
-        let len = dir.magnitude();
-        if len <= Tolerance::ZERO_TOLERANCE {
-            return None;
-        }
-        let dir_unit = Vector::new(dir[0] / len, dir[1] / len, dir[2] / len);
-
-        let mut candidate_ids: Vec<usize> = Vec::new();
-        bvh.ray_cast(&origin, &dir_unit, &mut candidate_ids, true);
-        if candidate_ids.is_empty() {
-            return None;
-        }
-
-        let mut best_t = f64::INFINITY;
-        let mut best_p: Option<Point> = None;
-
-        for idx in candidate_ids {
-            if idx >= self.tri_tris.len() {
-                continue;
+        let (origin, xaxis, yaxis, _) = polylines0[border_idx].get_average_plane();
+        let proj = |p: &Point| -> (f64, f64) {
+            let dx = p[0]-origin[0]; let dy = p[1]-origin[1]; let dz = p[2]-origin[2];
+            (dx*xaxis[0]+dy*xaxis[1]+dz*xaxis[2], dx*yaxis[0]+dy*yaxis[1]+dz*yaxis[2])
+        };
+        let sarea = |pts: &[Point]| -> f64 {
+            let n = pts.len();
+            let mut a = 0.0;
+            for i in 0..n {
+                let j = (i+1) % n;
+                let (xi, yi) = proj(&pts[i]); let (xj, yj) = proj(&pts[j]);
+                a += xi*yj - xj*yi;
             }
-            let tri = self.tri_tris[idx];
-            let v0 = &self.tri_vertices[tri[0]];
-            let v1 = &self.tri_vertices[tri[1]];
-            let v2 = &self.tri_vertices[tri[2]];
-            if let Some(p) = crate::intersection::ray_triangle(ray, v0, v1, v2, epsilon) {
-                let dx = p[0] - origin[0];
-                let dy = p[1] - origin[1];
-                let dz = p[2] - origin[2];
-                let t = dx * dir_unit[0] + dy * dir_unit[1] + dz * dir_unit[2];
-                if t >= 0.0 && t < best_t {
-                    best_t = t;
-                    best_p = Some(p);
+            a * 0.5
+        };
+        let mut order: Vec<usize> = vec![border_idx];
+        for i in 0..polylines0.len() { if i != border_idx { order.push(i); } }
+        let mut poly_infos: Vec<(usize, usize)> = Vec::new();
+        let mut all_bot: Vec<Point> = Vec::new();
+        let mut all_top: Vec<Point> = Vec::new();
+        for (oi, &idx) in order.iter().enumerate() {
+            let mut bot = get_open(&polylines0[idx]);
+            let mut top = get_open(&polylines1[idx]);
+            let n = bot.len().min(top.len());
+            bot.truncate(n); top.truncate(n);
+            let area = sarea(&bot);
+            if (oi == 0 && area < 0.0) || (oi != 0 && area > 0.0) {
+                bot.reverse(); top.reverse();
+            }
+            poly_infos.push((all_bot.len(), n));
+            all_bot.extend(bot.into_iter());
+            all_top.extend(top.into_iter());
+        }
+        let mut mesh = Mesh::new();
+        let bvk: Vec<usize> = all_bot.iter().map(|p| mesh.add_vertex(p.clone(), None)).collect();
+        let tvk: Vec<usize> = all_top.iter().map(|p| mesh.add_vertex(p.clone(), None)).collect();
+        if cap {
+            let (off0, n0) = poly_infos[0];
+            let border_2d: Vec<Point> = (off0..off0+n0).map(|i| {
+                let (u, v) = proj(&all_bot[i]); Point::new(u, v, 0.0)
+            }).collect();
+            let holes_2d: Vec<Vec<Point>> = poly_infos[1..].iter().map(|&(off, cnt)| {
+                (off..off+cnt).map(|i| { let (u, v) = proj(&all_bot[i]); Point::new(u, v, 0.0) }).collect()
+            }).collect();
+            let b2d: Vec<(f64,f64)> = border_2d.iter().map(|p| (p[0], p[1])).collect();
+            let h2d: Vec<Vec<(f64,f64)>> = holes_2d.iter().map(|h| h.iter().map(|p| (p[0], p[1])).collect()).collect();
+            let cap_tris = trimesh_cdt::cdt_triangulate(&b2d, &h2d);
+            for &(a, b, c) in &cap_tris {
+                mesh.add_face(vec![bvk[a], bvk[c], bvk[b]], None);
+            }
+            for &(a, b, c) in &cap_tris {
+                mesh.add_face(vec![tvk[a], tvk[b], tvk[c]], None);
+            }
+        }
+        for (_, &(off, n)) in poly_infos.iter().enumerate() {
+            for i in 0..n {
+                let j = (i + 1) % n;
+                let (bi, bj) = (off + i, off + j);
+                mesh.add_face(vec![bvk[bi], bvk[bj], tvk[bj], tvk[bi]], None);
+            }
+        }
+        mesh
+    }
+
+    pub fn from_polygon_with_holes_many(inputs: Vec<Vec<Vec<Point>>>, sort_by_bbox: bool, parallel: bool) -> Vec<Self> {
+        if parallel && inputs.len() > 1 {
+            use rayon::prelude::*;
+            inputs.into_par_iter().map(|input| Mesh::from_polygon_with_holes(&input, sort_by_bbox)).collect()
+        } else {
+            inputs.iter().map(|input| Mesh::from_polygon_with_holes(input, sort_by_bbox)).collect()
+        }
+    }
+
+    pub fn loft_many(pairs: Vec<(Vec<Polyline>, Vec<Polyline>)>, cap: bool, parallel: bool) -> Vec<Self> {
+        if parallel && pairs.len() > 1 {
+            use rayon::prelude::*;
+            pairs.into_par_iter().map(|(p0, p1)| Mesh::loft(&p0, &p1, cap)).collect()
+        } else {
+            pairs.iter().map(|(p0, p1)| Mesh::loft(p0, p1, cap)).collect()
+        }
+    }
+
+    ///////////////////////////////////////////////////////////////////////////////////////////
+    // Boolean Queries
+    ///////////////////////////////////////////////////////////////////////////////////////////
+
+    pub fn is_empty(&self) -> bool {
+        self.vertex.is_empty() && self.face.is_empty()
+    }
+
+    pub fn is_valid(&self) -> bool {
+        if self.vertex.is_empty() || self.face.is_empty() {
+            return false;
+        }
+        for (_fkey, vkeys) in &self.face {
+            if vkeys.len() < 3 {
+                return false;
+            }
+            for vk in vkeys {
+                if !self.vertex.contains_key(vk) {
+                    return false;
+                }
+            }
+        }
+        true
+    }
+
+    pub fn is_closed(&self) -> bool {
+        for (_, nbrs) in &self.halfedge {
+            for (_, fkey) in nbrs {
+                if fkey.is_none() { return false; }
+            }
+        }
+        !self.halfedge.is_empty()
+    }
+
+    pub fn is_vertex_on_boundary(&self, vertex_key: usize) -> bool {
+        if let Some(neigh) = self.halfedge.get(&vertex_key) {
+            for (_v, face_opt) in neigh.iter() {
+                if face_opt.is_none() {
+                    return true;
                 }
             }
         }
 
-        best_p
+        for (_u, neigh) in self.halfedge.iter() {
+            if let Some(face_opt) = neigh.get(&vertex_key) {
+                if face_opt.is_none() {
+                    return true;
+                }
+            }
+        }
+        false
+    }
+
+    pub fn is_edge_on_boundary(&self, u: usize, v: usize) -> bool {
+        let f0 = self.halfedge.get(&u).and_then(|m| m.get(&v));
+        let f1 = self.halfedge.get(&v).and_then(|m| m.get(&u));
+        f0.map_or(true, |f| f.is_none()) || f1.map_or(true, |f| f.is_none())
+    }
+
+    pub fn is_face_on_boundary(&self, face_key: usize) -> bool {
+        self.face_edges(face_key)
+            .into_iter()
+            .any(|(u, v)| self.is_edge_on_boundary(u, v))
     }
 
     ///////////////////////////////////////////////////////////////////////////////////////////
-    // Color and Width Management
+    // Basic Queries
     ///////////////////////////////////////////////////////////////////////////////////////////
 
-    pub fn set_vertex_color(&mut self, index: usize, color: Color) {
-        if index < self.pointcolors.len() {
-            self.pointcolors[index] = color;
+    pub fn number_of_vertices(&self) -> usize {
+        self.vertex.len()
+    }
+
+    pub fn number_of_faces(&self) -> usize {
+        self.face.len()
+    }
+
+    pub fn number_of_edges(&self) -> usize {
+        let mut seen = HashSet::new();
+        let mut count = 0;
+
+        for u in self.halfedge.keys() {
+            if let Some(neighbors) = self.halfedge.get(u) {
+                for v in neighbors.keys() {
+                    let edge = if u < v { (*u, *v) } else { (*v, *u) };
+                    if seen.insert(edge) {
+                        count += 1;
+                    }
+                }
+            }
+        }
+
+        count
+    }
+
+    pub fn euler(&self) -> i32 {
+        let v = self.number_of_vertices() as i32;
+        let e = self.number_of_edges() as i32;
+        let f = self.number_of_faces() as i32;
+        v - e + f
+    }
+
+    pub fn clear(&mut self) {
+        self.halfedge.clear();
+        self.vertex.clear();
+        self.face.clear();
+        self.facedata.clear();
+        self.edgedata.clear();
+        self.triangulation.clear();
+        self.max_vertex = 0;
+        self.max_face = 0;
+        self.pointcolors.clear();
+        self.facecolors.clear();
+        self.linecolors.clear();
+        self.widths.clear();
+        self.invalidate_triangle_bvh();
+    }
+
+    pub fn unify_winding(&mut self) -> bool {
+        if self.face.len() < 2 {
+            return false;
+        }
+
+        let mut edge_faces: HashMap<(usize, usize), Vec<(usize, usize, usize)>> = HashMap::new();
+        for (&fkey, verts) in &self.face {
+            let n = verts.len();
+            for i in 0..n {
+                let u = verts[i];
+                let v = verts[(i + 1) % n];
+                let edge = if u < v { (u, v) } else { (v, u) };
+                edge_faces.entry(edge).or_default().push((fkey, u, v));
+            }
+        }
+
+        let mut visited: HashSet<usize> = HashSet::new();
+        let mut flipped: HashSet<usize> = HashSet::new();
+        let face_keys: Vec<usize> = self.face.keys().copied().collect();
+        for seed in face_keys {
+            if visited.contains(&seed) {
+                continue;
+            }
+            visited.insert(seed);
+            let mut queue = vec![seed];
+            while let Some(f) = queue.pop() {
+                let is_flipped = flipped.contains(&f);
+                let verts = self.face[&f].clone();
+                let n = verts.len();
+                for i in 0..n {
+                    let u_orig = verts[i];
+                    let v_orig = verts[(i + 1) % n];
+                    let (eff_u, eff_v) = if is_flipped { (v_orig, u_orig) } else { (u_orig, v_orig) };
+                    let edge = if u_orig < v_orig { (u_orig, v_orig) } else { (v_orig, u_orig) };
+                    if let Some(adj_list) = edge_faces.get(&edge) {
+                        for &(adj_key, adj_u, adj_v) in adj_list {
+                            if adj_key == f || visited.contains(&adj_key) {
+                                continue;
+                            }
+                            if !(adj_u == eff_v && adj_v == eff_u) {
+                                flipped.insert(adj_key);
+                            }
+                            visited.insert(adj_key);
+                            queue.push(adj_key);
+                        }
+                    }
+                }
+            }
+        }
+
+        if flipped.is_empty() {
+            return false;
+        }
+
+        for &fkey in &flipped {
+            self.face.get_mut(&fkey).unwrap().reverse();
+        }
+
+        for neighbors in self.halfedge.values_mut() {
+            neighbors.clear();
+        }
+        let face_items: Vec<(usize, Vec<usize>)> = self.face.iter().map(|(&k, v)| (k, v.clone())).collect();
+        for (fkey, verts) in face_items {
+            let n = verts.len();
+            for i in 0..n {
+                let u = verts[i];
+                let v = verts[(i + 1) % n];
+                self.halfedge.entry(u).or_default().insert(v, Some(fkey));
+                self.halfedge.entry(v).or_default().entry(u).or_insert(None);
+            }
+        }
+
+        true
+    }
+
+    ///////////////////////////////////////////////////////////////////////////////////////////
+    // Vertex and Face Operations
+    ///////////////////////////////////////////////////////////////////////////////////////////
+
+    pub fn add_vertex(&mut self, position: Point, key: Option<usize>) -> usize {
+        let vertex_key = match key {
+            Some(k) => {
+                if k >= self.max_vertex {
+                    self.max_vertex = k + 1;
+                }
+                k
+            }
+            None => {
+                let k = self.max_vertex;
+                self.max_vertex += 1;
+                k
+            }
+        };
+
+        let vertex_data = VertexData::new(position);
+        self.vertex.insert(vertex_key, vertex_data);
+        self.halfedge.entry(vertex_key).or_default();
+        self.pointcolors.push(Color::white());
+        self.invalidate_triangle_bvh();
+
+        vertex_key
+    }
+
+    pub fn add_face(&mut self, vertices: Vec<usize>, fkey: Option<usize>) -> Option<usize> {
+        if vertices.len() < 3 {
+            return None;
+        }
+
+        if !vertices.iter().all(|v| self.vertex.contains_key(v)) {
+            return None;
+        }
+
+        let mut unique_vertices = HashSet::new();
+        for vertex in &vertices {
+            if !unique_vertices.insert(*vertex) {
+                return None;
+            }
+        }
+
+        let face_key = match fkey {
+            Some(k) => {
+                if k >= self.max_face {
+                    self.max_face = k + 1;
+                }
+                k
+            }
+            None => {
+                self.max_face += 1;
+                self.max_face
+            }
+        };
+
+        self.face.insert(face_key, vertices.clone());
+        self.triangulation.remove(&face_key);
+        self.facecolors.push(Color::white());
+        self.invalidate_triangle_bvh();
+
+        for i in 0..vertices.len() {
+            let u = vertices[i];
+            let v = vertices[(i + 1) % vertices.len()];
+
+            self.halfedge.entry(u).or_default();
+            self.halfedge.entry(v).or_default();
+
+            let is_new_edge = !self.halfedge.get(&v).unwrap().contains_key(&u);
+
+            self.halfedge.get_mut(&u).unwrap().insert(v, Some(face_key));
+
+            if is_new_edge {
+                self.halfedge.get_mut(&v).unwrap().insert(u, None);
+                self.linecolors.push(Color::white());
+                self.widths.push(1.0);
+            }
+        }
+
+        Some(face_key)
+    }
+
+    ///////////////////////////////////////////////////////////////////////////////////////////
+    // Connectivity Queries
+    ///////////////////////////////////////////////////////////////////////////////////////////
+
+    pub fn vertex_position(&self, vertex_key: usize) -> Option<Point> {
+        self.vertex.get(&vertex_key).map(|v| v.position())
+    }
+
+    pub fn face_vertices(&self, face_key: usize) -> Option<&Vec<usize>> {
+        self.face.get(&face_key)
+    }
+
+    pub fn vertex_neighbors(&self, vertex_key: usize) -> Vec<usize> {
+        self.halfedge
+            .get(&vertex_key)
+            .map(|neighbors| neighbors.keys().copied().collect())
+            .unwrap_or_default()
+    }
+
+    pub fn vertex_faces(&self, vertex_key: usize) -> Vec<usize> {
+        self.halfedge
+            .get(&vertex_key)
+            .map(|neighbors| neighbors.values().filter_map(|f| *f).collect())
+            .unwrap_or_default()
+    }
+
+    pub fn vertex_edges(&self, vertex_key: usize) -> Vec<(usize, usize)> {
+        self.halfedge
+            .get(&vertex_key)
+            .map(|neighbors| neighbors.keys().map(|&u| (vertex_key, u)).collect())
+            .unwrap_or_default()
+    }
+
+    pub fn face_edges(&self, face_key: usize) -> Vec<(usize, usize)> {
+        let verts = match self.face.get(&face_key) {
+            Some(v) => v,
+            None => return vec![],
+        };
+        let n = verts.len();
+        (0..n).map(|i| (verts[i], verts[(i + 1) % n])).collect()
+    }
+
+    pub fn face_neighbors(&self, face_key: usize) -> Vec<usize> {
+        self.face_edges(face_key)
+            .into_iter()
+            .filter_map(|(u, v)| self.halfedge.get(&v)?.get(&u).copied().flatten())
+            .collect()
+    }
+
+    pub fn edge_vertices(&self, u: usize, v: usize) -> [usize; 2] {
+        [u, v]
+    }
+
+    pub fn edge_faces(&self, u: usize, v: usize) -> (Option<usize>, Option<usize>) {
+        let f0 = self.halfedge.get(&u).and_then(|m| m.get(&v)).copied().flatten();
+        let f1 = self.halfedge.get(&v).and_then(|m| m.get(&u)).copied().flatten();
+        (f0, f1)
+    }
+
+    pub fn edge_edges(&self, u: usize, v: usize) -> Vec<(usize, usize)> {
+        let mut edges = Vec::new();
+        if let Some(neighbors) = self.halfedge.get(&u) {
+            for &w in neighbors.keys() {
+                if w != v { edges.push((u, w)); }
+            }
+        }
+        if let Some(neighbors) = self.halfedge.get(&v) {
+            for &w in neighbors.keys() {
+                if w != u { edges.push((v, w)); }
+            }
+        }
+        edges
+    }
+
+    ///////////////////////////////////////////////////////////////////////////////////////////
+    // Geometric Properties
+    ///////////////////////////////////////////////////////////////////////////////////////////
+
+    pub fn face_normal(&self, face_key: usize) -> Option<Vector> {
+        let vertices = self.face.get(&face_key)?;
+        if vertices.len() < 3 {
+            return None;
+        }
+
+        let p0 = self.vertex_position(vertices[0])?;
+        let p1 = self.vertex_position(vertices[1])?;
+        let p2 = self.vertex_position(vertices[2])?;
+
+        let u = Vector::new(p1[0] - p0[0], p1[1] - p0[1], p1[2] - p0[2]);
+        let v = Vector::new(p2[0] - p0[0], p2[1] - p0[1], p2[2] - p0[2]);
+
+        let normal = u.cross(&v);
+        let len = normal.magnitude();
+        if len > Tolerance::ZERO_TOLERANCE {
+            Some(Vector::new(
+                normal[0] / len,
+                normal[1] / len,
+                normal[2] / len,
+            ))
+        } else {
+            None
         }
     }
 
-    pub fn set_face_color(&mut self, index: usize, color: Color) {
-        if index < self.facecolors.len() {
-            self.facecolors[index] = color;
+    pub fn vertex_normal(&self, vertex_key: usize) -> Option<Vector> {
+        self.vertex_normal_weighted(vertex_key, NormalWeighting::Area)
+    }
+
+    pub fn vertex_normal_weighted(
+        &self,
+        vertex_key: usize,
+        weighting: NormalWeighting,
+    ) -> Option<Vector> {
+        let faces = self.vertex_faces(vertex_key);
+        if faces.is_empty() {
+            return None;
+        }
+
+        let mut normal_acc = Vector::new(0.0, 0.0, 0.0);
+
+        for face_key in faces {
+            if let Some(face_normal) = self.face_normal(face_key) {
+                let weight = match weighting {
+                    NormalWeighting::Area => self.face_area(face_key).unwrap_or(1.0),
+                    NormalWeighting::Angle => self
+                        .vertex_angle_in_face(vertex_key, face_key)
+                        .unwrap_or(1.0),
+                    NormalWeighting::Uniform => 1.0,
+                };
+
+                normal_acc[0] = normal_acc[0] + face_normal[0] * weight;
+                normal_acc[1] = normal_acc[1] + face_normal[1] * weight;
+                normal_acc[2] = normal_acc[2] + face_normal[2] * weight;
+            }
+        }
+
+        let len = normal_acc.magnitude();
+        if len > Tolerance::ZERO_TOLERANCE {
+            Some(Vector::new(
+                normal_acc[0] / len,
+                normal_acc[1] / len,
+                normal_acc[2] / len,
+            ))
+        } else {
+            None
         }
     }
 
-    pub fn set_edge_color(&mut self, index: usize, color: Color) {
-        if index < self.linecolors.len() {
-            self.linecolors[index] = color;
+    pub fn face_area(&self, face_key: usize) -> Option<f64> {
+        let vertices = self.face.get(&face_key)?;
+        if vertices.len() < 3 {
+            return Some(0.0);
         }
+
+        let mut area = 0.0;
+        let p0 = self.vertex_position(vertices[0])?;
+
+        for i in 1..(vertices.len() - 1) {
+            let p1 = self.vertex_position(vertices[i])?;
+            let p2 = self.vertex_position(vertices[i + 1])?;
+
+            let u = Vector::new(p1[0] - p0[0], p1[1] - p0[1], p1[2] - p0[2]);
+            let v = Vector::new(p2[0] - p0[0], p2[1] - p0[1], p2[2] - p0[2]);
+
+            area += u.cross(&v).magnitude() * 0.5;
+        }
+
+        Some(area)
     }
 
-    pub fn set_edge_width(&mut self, index: usize, width: f64) {
-        if index < self.widths.len() {
-            self.widths[index] = width;
+    pub fn vertex_angle_in_face(&self, vertex_key: usize, face_key: usize) -> Option<f64> {
+        let vertices = self.face.get(&face_key)?;
+        let vertex_index = vertices.iter().position(|&v| v == vertex_key)?;
+
+        let n = vertices.len();
+        let prev_vertex = vertices[(vertex_index + n - 1) % n];
+        let next_vertex = vertices[(vertex_index + 1) % n];
+
+        let center = self.vertex_position(vertex_key)?;
+        let prev_pos = self.vertex_position(prev_vertex)?;
+        let next_pos = self.vertex_position(next_vertex)?;
+
+        let u = Vector::new(
+            prev_pos[0] - center[0],
+            prev_pos[1] - center[1],
+            prev_pos[2] - center[2],
+        );
+        let v = Vector::new(
+            next_pos[0] - center[0],
+            next_pos[1] - center[1],
+            next_pos[2] - center[2],
+        );
+
+        let u_len = u.magnitude();
+        let v_len = v.magnitude();
+
+        if u_len < Tolerance::ZERO_TOLERANCE || v_len < Tolerance::ZERO_TOLERANCE {
+            return Some(0.0);
         }
+
+        let cos_angle = u.dot(&v) / (u_len * v_len);
+        let cos_angle = cos_angle.clamp(-1.0, 1.0);
+        Some(cos_angle.acos())
+    }
+
+    pub fn dihedral_angle(&self, u: usize, v: usize) -> Option<f64> {
+        let (f0_opt, f1_opt) = self.edge_faces(u, v);
+        let f0 = f0_opt?;
+        let f1 = f1_opt?;
+        let n0 = self.face_normal(f0)?;
+        let n1 = self.face_normal(f1)?;
+        let dot = n0.dot(&n1).clamp(-1.0, 1.0);
+        Some(std::f64::consts::PI - dot.acos())
+    }
+
+    pub fn face_normals(&self) -> HashMap<usize, Vector> {
+        let mut normals = HashMap::new();
+        for face_key in self.face.keys() {
+            if let Some(normal) = self.face_normal(*face_key) {
+                normals.insert(*face_key, normal);
+            }
+        }
+        normals
+    }
+
+    pub fn vertex_normals(&self) -> HashMap<usize, Vector> {
+        self.vertex_normals_weighted(NormalWeighting::Area)
+    }
+
+    pub fn vertex_normals_weighted(&self, weighting: NormalWeighting) -> HashMap<usize, Vector> {
+        let mut normals = HashMap::new();
+        for vertex_key in self.vertex.keys() {
+            if let Some(normal) = self.vertex_normal_weighted(*vertex_key, weighting) {
+                normals.insert(*vertex_key, normal);
+            }
+        }
+        normals
+    }
+
+    ///////////////////////////////////////////////////////////////////////////////////////////
+    // Export
+    ///////////////////////////////////////////////////////////////////////////////////////////
+
+    pub fn vertex_index(&self) -> HashMap<usize, usize> {
+        let mut keys: Vec<usize> = self.vertex.keys().copied().collect();
+        keys.sort();
+        keys.iter()
+            .enumerate()
+            .map(|(index, &key)| (key, index))
+            .collect()
+    }
+
+    pub fn to_vertices_and_faces(&self) -> (Vec<Point>, Vec<Vec<usize>>) {
+        let vertex_index = self.vertex_index();
+        let mut vertices: Vec<Point> = vec![Point::default(); self.vertex.len()];
+
+        for (&key, data) in &self.vertex {
+            let idx = vertex_index[&key];
+            vertices[idx] = data.position();
+        }
+
+        // Sort face keys to ensure consistent ordering
+        let mut face_keys: Vec<usize> = self.face.keys().copied().collect();
+        face_keys.sort();
+
+        let mut faces = Vec::new();
+        for face_key in face_keys {
+            let face_vertices = &self.face[&face_key];
+            let remapped: Vec<usize> = face_vertices.iter().map(|v| vertex_index[v]).collect();
+            faces.push(remapped);
+        }
+
+        (vertices, faces)
     }
 
     ///////////////////////////////////////////////////////////////////////////////////////////
     // Transformation
     ///////////////////////////////////////////////////////////////////////////////////////////
 
-    pub fn transform(&mut self) {
-        let xform = self.xform.clone();
+    pub fn transform(&mut self, xf: Option<&Xform>) {
+        let xform = match xf {
+            Some(x) => x.clone(),
+            None => self.xform.clone(),
+        };
         for v in self.vertex.values_mut() {
             let mut pt = Point::new(v.x, v.y, v.z);
             xform.transform_point(&mut pt);
@@ -1053,14 +1112,23 @@ impl Mesh {
             v.y = pt[1];
             v.z = pt[2];
         }
-        self.xform = Xform::identity();
         self.invalidate_triangle_bvh();
     }
 
-    pub fn transformed(&self) -> Self {
+    pub fn transformed(&self, xf: Option<&Xform>) -> Self {
         let mut result = self.clone();
-        result.transform();
+        result.transform(xf);
         result
+    }
+
+    pub fn duplicate(&self) -> Self {
+        self.clone_with_new_guid()
+    }
+
+    pub fn clone_with_new_guid(&self) -> Self {
+        let mut m = self.clone();
+        m.guid = uuid::Uuid::new_v4().to_string();
+        m
     }
 
     ///////////////////////////////////////////////////////////////////////////////////////////
@@ -1207,7 +1275,7 @@ impl Mesh {
     }
 
     ///////////////////////////////////////////////////////////////////////////////////////////
-    // Protobuf Serialization
+    // Protobuf
     ///////////////////////////////////////////////////////////////////////////////////////////
 
     pub fn pb_dumps(&self) -> Vec<u8> {
@@ -1424,10 +1492,147 @@ impl Mesh {
         Self::pb_loads(&data).expect("Failed to parse protobuf")
     }
 
-    pub fn clone_with_new_guid(&self) -> Self {
-        let mut m = self.clone();
-        m.guid = uuid::Uuid::new_v4().to_string();
-        m
+    ///////////////////////////////////////////////////////////////////////////////////////////
+    // Triangle BVH Cache
+    ///////////////////////////////////////////////////////////////////////////////////////////
+
+    pub fn build_triangle_bvh(&mut self) {
+        self.ensure_triangle_bvh();
+    }
+
+    fn invalidate_triangle_bvh(&mut self) {
+        self.tri_bvh = None;
+        self.tri_tris.clear();
+        self.tri_vertices.clear();
+    }
+
+    fn ensure_triangle_bvh(&mut self) {
+        if self.tri_bvh.is_some() && !self.tri_tris.is_empty() && !self.tri_vertices.is_empty() {
+            return;
+        }
+
+        let (vertices, faces) = self.to_vertices_and_faces();
+        let mut tris: Vec<[usize; 3]> = Vec::new();
+        let mut tri_boxes: Vec<BoundingBox> = Vec::new();
+
+        for face in faces {
+            if face.len() < 3 {
+                continue;
+            }
+            let v0 = face[0];
+            for i in 1..(face.len() - 1) {
+                let t = [v0, face[i], face[i + 1]];
+                tris.push(t);
+                let pts = [
+                    vertices[t[0]].clone(),
+                    vertices[t[1]].clone(),
+                    vertices[t[2]].clone(),
+                ];
+                tri_boxes.push(BoundingBox::from_points(&pts, 0.0));
+            }
+        }
+
+        if tris.is_empty() {
+            self.tri_bvh = None;
+            self.tri_tris.clear();
+            self.tri_vertices = vertices; // keep for consistency
+            return;
+        }
+
+        let world_size = BVH::compute_world_size(&tri_boxes);
+        let bvh = BVH::from_boxes(&tri_boxes, world_size);
+        self.tri_vertices = vertices;
+        self.tri_tris = tris;
+        self.tri_bvh = Some(bvh);
+    }
+
+    pub fn triangle_bvh_ray_cast(&mut self, ray: &Line, epsilon: f64) -> Option<Point> {
+        self.ray_cast_bvh(ray, epsilon)
+    }
+
+    pub fn ray_cast_bvh(&mut self, ray: &Line, epsilon: f64) -> Option<Point> {
+        self.ensure_triangle_bvh();
+        let bvh = match &self.tri_bvh {
+            Some(b) => b,
+            None => return None,
+        };
+
+        let origin = ray.start();
+        let dir = ray.to_vector();
+        let len = dir.magnitude();
+        if len <= Tolerance::ZERO_TOLERANCE {
+            return None;
+        }
+        let dir_unit = Vector::new(dir[0] / len, dir[1] / len, dir[2] / len);
+
+        let mut candidate_ids: Vec<usize> = Vec::new();
+        bvh.ray_cast(&origin, &dir_unit, &mut candidate_ids, true);
+        if candidate_ids.is_empty() {
+            return None;
+        }
+
+        let mut best_t = f64::INFINITY;
+        let mut best_p: Option<Point> = None;
+
+        for idx in candidate_ids {
+            if idx >= self.tri_tris.len() {
+                continue;
+            }
+            let tri = self.tri_tris[idx];
+            let v0 = &self.tri_vertices[tri[0]];
+            let v1 = &self.tri_vertices[tri[1]];
+            let v2 = &self.tri_vertices[tri[2]];
+            if let Some(p) = crate::intersection::ray_triangle(ray, v0, v1, v2, epsilon) {
+                let dx = p[0] - origin[0];
+                let dy = p[1] - origin[1];
+                let dz = p[2] - origin[2];
+                let t = dx * dir_unit[0] + dy * dir_unit[1] + dz * dir_unit[2];
+                if t >= 0.0 && t < best_t {
+                    best_t = t;
+                    best_p = Some(p);
+                }
+            }
+        }
+
+        best_p
+    }
+
+    ///////////////////////////////////////////////////////////////////////////////////////////
+    // Color and Width Management
+    ///////////////////////////////////////////////////////////////////////////////////////////
+
+    pub fn set_vertex_color(&mut self, index: usize, color: Color) {
+        if index < self.pointcolors.len() {
+            self.pointcolors[index] = color;
+        }
+    }
+
+    pub fn set_face_color(&mut self, index: usize, color: Color) {
+        if index < self.facecolors.len() {
+            self.facecolors[index] = color;
+        }
+    }
+
+    pub fn set_edge_color(&mut self, index: usize, color: Color) {
+        if index < self.linecolors.len() {
+            self.linecolors[index] = color;
+        }
+    }
+
+    pub fn set_edge_width(&mut self, index: usize, width: f64) {
+        if index < self.widths.len() {
+            self.widths[index] = width;
+        }
+    }
+
+    pub fn str(&self) -> String {
+        format!("Mesh(name={}, vertices={}, faces={})",
+            self.name, self.number_of_vertices(), self.number_of_faces())
+    }
+
+    pub fn repr(&self) -> String {
+        format!("Mesh(\n  name={},\n  vertices={},\n  faces={},\n  edges={}\n)",
+            self.name, self.number_of_vertices(), self.number_of_faces(), self.number_of_edges())
     }
 }
 

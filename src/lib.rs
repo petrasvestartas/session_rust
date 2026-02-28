@@ -9,21 +9,21 @@ pub mod proto {
     include!(concat!(env!("OUT_DIR"), "/session_proto.rs"));
 }
 
+pub mod aabb_test;
 pub mod boundingbox;
 pub mod brep;
 pub mod brep_test;
 pub mod bvh;
-#[cfg(test)]
-mod bvh_test;
+pub mod bvh_test;
 pub mod closest;
 pub mod closest_test;
 pub mod color;
 pub mod edge;
 pub mod encoders;
+pub mod encoders_test;
 pub mod graph;
 pub mod intersection;
-#[cfg(test)]
-mod intersection_test;
+pub mod intersection_test;
 pub mod knot;
 pub mod knot_test;
 pub mod line;
@@ -31,7 +31,10 @@ pub mod mesh;
 pub mod nurbscurve;
 pub mod nurbssurface;
 pub mod obj;
+pub mod obj_test;
 pub mod triangulation_2d;
+pub mod triangulation_2d_test;
+pub mod trimesh_cdt;
 pub mod trimmedsurface;
 pub mod trimmedsurface_test;
 pub mod objects;
@@ -62,6 +65,15 @@ pub mod mesh_test;
 pub mod nurbscurve_test;
 pub mod nurbssurface_test;
 pub mod primitives_test;
+pub mod session_test;
+pub mod quaternion_test;
+pub mod boundingbox_test;
+pub mod edge_test;
+pub mod graph_test;
+pub mod objects_test;
+pub mod tree_test;
+pub mod treenode_test;
+pub mod vertex_test;
 
 pub use boundingbox::BoundingBox;
 pub use brep::BRep;

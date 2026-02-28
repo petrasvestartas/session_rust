@@ -45,6 +45,88 @@ pub fn run_nurbscurve_constructor() -> TestResult {
     })
 }
 
+pub fn run_nurbscurve_create_interpolated() -> TestResult {
+    MINI_TEST!("Create Interpolated", {
+        use crate::NurbsCurve;
+        use crate::Point;
+        use crate::knot::CurveKnotStyle;
+
+        let points = vec![
+            Point::new(14.0, 9.0, 0.0), Point::new(21.0, 22.0, 0.0), Point::new(26.0, 10.0, 0.0),
+            Point::new(35.0, 19.0, 0.0), Point::new(41.0, 13.0, 0.0),
+        ];
+
+        let c = NurbsCurve::create_interpolated(&points, CurveKnotStyle::Chord);
+
+        MINI_CHECK!(c.is_valid());
+        MINI_CHECK!(c.degree() == 3);
+        MINI_CHECK!(c.order() == 4);
+        MINI_CHECK!(c.cv_count() == 7);
+        MINI_CHECK!(c.is_rational() == false);
+
+        let (d0, d1) = c.domain();
+        MINI_CHECK!(TOLERANCE.is_point_close(&c.point_at(d0), &points[0]));
+        MINI_CHECK!(TOLERANCE.is_point_close(&c.point_at(d1), &points[4]));
+        MINI_CHECK!(TOLERANCE.is_point_close(&c.get_cv(0).unwrap(), &points[0]));
+        MINI_CHECK!(TOLERANCE.is_point_close(&c.get_cv(6).unwrap(), &points[4]));
+
+        // Periodic closed curve
+        let closed_pts = vec![
+            Point::new(4.0, 20.0, 0.0),
+            Point::new(-2.0, 20.0, 0.0),
+            Point::new(-2.0, 25.0, 0.0),
+            Point::new(-3.0, 28.0, 0.0),
+            Point::new(-10.0, 28.0, 0.0),
+            Point::new(-10.0, 21.0, 0.0),
+            Point::new(-13.0, 16.0, 0.0),
+            Point::new(-8.0, 14.0, 0.0),
+            Point::new(-6.0, 11.0, 0.0),
+            Point::new(0.0, 15.0, 0.0),
+        ];
+
+        let cp = NurbsCurve::create_interpolated(&closed_pts, CurveKnotStyle::ChordPeriodic);
+
+        MINI_CHECK!(cp.is_valid());
+        MINI_CHECK!(cp.degree() == 3);
+        MINI_CHECK!(cp.cv_count() == 13);
+        MINI_CHECK!(cp.is_closed());
+    })
+}
+
+pub fn run_nurbscurve_create_fitted() -> TestResult {
+    MINI_TEST!("Create Fitted", {
+        use crate::NurbsCurve;
+        use crate::Point;
+
+        // Open: 21 points on sine wave → fit with 8 CVs
+        let pts: Vec<Point> = (0..=20).map(|i| {
+            let t = i as f64 * 2.0 * PI / 20.0;
+            Point::new(t, 3.0 * t.sin(), 0.0)
+        }).collect();
+
+        let c = NurbsCurve::create_fitted(&pts, 8, 3, false);
+
+        MINI_CHECK!(c.is_valid());
+        MINI_CHECK!(c.degree() == 3);
+        MINI_CHECK!(c.cv_count() == 8);
+        let (d0, d1) = c.domain();
+        MINI_CHECK!(TOLERANCE.is_point_close(&c.point_at(d0), &pts[0]));
+        MINI_CHECK!(TOLERANCE.is_point_close(&c.point_at(d1), &pts[20]));
+
+        // Periodic: 24 points on circle → fit with 10 free CVs
+        let cpts: Vec<Point> = (0..24).map(|i| {
+            let a = i as f64 * 2.0 * PI / 24.0;
+            Point::new(a.cos(), a.sin(), 0.0)
+        }).collect();
+
+        let cp = NurbsCurve::create_fitted(&cpts, 10, 3, true);
+
+        MINI_CHECK!(cp.is_valid());
+        MINI_CHECK!(cp.is_closed());
+        MINI_CHECK!(cp.cv_count() == 13);
+    })
+}
+
 pub fn run_nurbscurve_attributes() -> TestResult {
     MINI_TEST!("Attributes", {
         use crate::NurbsCurve;
@@ -188,7 +270,9 @@ pub fn run_nurbscurve_attributes() -> TestResult {
 
         // Use for regular points on curve, Polyline, B-Spline
         curve.set_cv(2, &Point::new(2.0, 0.0, 0.5));
-        MINI_CHECK!(curve.get_cv(2).unwrap()[0] == 2.0 && curve.get_cv(2).unwrap()[1] == 0.0 && curve.get_cv(2).unwrap()[2] == 0.5);
+        MINI_CHECK!(curve.get_cv(2).unwrap()[0] == 2.0);
+        MINI_CHECK!(curve.get_cv(2).unwrap()[1] == 0.0);
+        MINI_CHECK!(curve.get_cv(2).unwrap()[2] == 0.5);
 
         // Use for rational curvers like circles, ellipses
         curve.set_cv_4d(2, 2.0, 0.0, 0.5, 0.707);
@@ -239,9 +323,11 @@ pub fn run_nurbscurve_attributes() -> TestResult {
         let k0 = knots[0];
         let knot_vector = curve.get_knots();
         MINI_CHECK!(k0 == 0.0);
-        MINI_CHECK!(TOLERANCE.is_close(knot_vector[0], 0.0) && TOLERANCE.is_close(knot_vector[1], 0.0) &&
-                   TOLERANCE.is_close(knot_vector[2], 1.759744335478134) && TOLERANCE.is_close(knot_vector[3], 3.519488670956267) &&
-                   TOLERANCE.is_close(knot_vector[4], 3.519488670956267));
+        MINI_CHECK!(TOLERANCE.is_close(knot_vector[0], 0.0));
+        MINI_CHECK!(TOLERANCE.is_close(knot_vector[1], 0.0));
+        MINI_CHECK!(TOLERANCE.is_close(knot_vector[2], 1.759744335478134));
+        MINI_CHECK!(TOLERANCE.is_close(knot_vector[3], 3.519488670956267));
+        MINI_CHECK!(TOLERANCE.is_close(knot_vector[4], 3.519488670956267));
 
         // Control vertex array access
         let cvs = curve.cv_array();
@@ -260,11 +346,15 @@ pub fn run_nurbscurve_attributes() -> TestResult {
         let start = curve.domain_start();
         let middle = curve.domain_middle();
         let end = curve.domain_end();
-        MINI_CHECK!(TOLERANCE.is_close(start, 0.0) && TOLERANCE.is_close(middle, 1.759744335478134) && TOLERANCE.is_close(end, 3.519488670956267));
+        MINI_CHECK!(TOLERANCE.is_close(start, 0.0));
+        MINI_CHECK!(TOLERANCE.is_close(middle, 1.759744335478134));
+        MINI_CHECK!(TOLERANCE.is_close(end, 3.519488670956267));
 
         // Change curve domain
         curve.set_domain(0.0, 1.0);
-        MINI_CHECK!(curve.domain_start() == 0.0 && curve.domain_middle() == 0.5 && curve.domain_end() == 1.0);
+        MINI_CHECK!(curve.domain_start() == 0.0);
+        MINI_CHECK!(curve.domain_middle() == 0.5);
+        MINI_CHECK!(curve.domain_end() == 1.0);
 
         // Span of distict knot intervals
         let intervals = curve.get_span_vector();
@@ -356,26 +446,44 @@ pub fn run_nurbscurve_evaluation() -> TestResult {
 
         // Get point at parameter t
         let point_at = curve.point_at(0.5);
-        MINI_CHECK!(TOLERANCE.is_close(point_at[0], 1.463452399002842) && TOLERANCE.is_close(point_at[1], 1.680997287875395) && TOLERANCE.is_close(point_at[2], -0.124474565996108));
+        MINI_CHECK!(TOLERANCE.is_close(point_at[0], 1.463452399002842));
+        MINI_CHECK!(TOLERANCE.is_close(point_at[1], 1.680997287875395));
+        MINI_CHECK!(TOLERANCE.is_close(point_at[2], -0.124474565996108));
 
         // Get point and derivatives at parameter t
         let derivatives = curve.evaluate(0.5, 2);
         MINI_CHECK!(derivatives.len() == 3);
-        MINI_CHECK!(TOLERANCE.is_close(derivatives[0][0], 1.463452399002842) && TOLERANCE.is_close(derivatives[0][1], 1.680997287875395) && TOLERANCE.is_close(derivatives[0][2], -0.124474565996108));
-        MINI_CHECK!(TOLERANCE.is_close(derivatives[1][0], -0.311619416021204) && TOLERANCE.is_close(derivatives[1][1], 0.974021205471335) && TOLERANCE.is_close(derivatives[1][2], -0.037441955449586));
-        MINI_CHECK!(TOLERANCE.is_close(derivatives[2][0], 2.706815143892446) && TOLERANCE.is_close(derivatives[2][1], -0.429869481117820) && TOLERANCE.is_close(derivatives[2][2], -0.684219293829483));
+        MINI_CHECK!(TOLERANCE.is_close(derivatives[0][0], 1.463452399002842));
+        MINI_CHECK!(TOLERANCE.is_close(derivatives[0][1], 1.680997287875395));
+        MINI_CHECK!(TOLERANCE.is_close(derivatives[0][2], -0.124474565996108));
+        MINI_CHECK!(TOLERANCE.is_close(derivatives[1][0], -0.311619416021204));
+        MINI_CHECK!(TOLERANCE.is_close(derivatives[1][1], 0.974021205471335));
+        MINI_CHECK!(TOLERANCE.is_close(derivatives[1][2], -0.037441955449586));
+        MINI_CHECK!(TOLERANCE.is_close(derivatives[2][0], 2.706815143892446));
+        MINI_CHECK!(TOLERANCE.is_close(derivatives[2][1], -0.429869481117820));
+        MINI_CHECK!(TOLERANCE.is_close(derivatives[2][2], -0.684219293829483));
 
         // Tangent vector at parameter t
         let tangent = curve.tangent_at(0.5);
-        MINI_CHECK!(TOLERANCE.is_close(tangent[0], -0.304511941745027) && TOLERANCE.is_close(tangent[1], 0.951805546117607) && TOLERANCE.is_close(tangent[2], -0.036587972264639));
+        MINI_CHECK!(TOLERANCE.is_close(tangent[0], -0.304511941745027));
+        MINI_CHECK!(TOLERANCE.is_close(tangent[1], 0.951805546117607));
+        MINI_CHECK!(TOLERANCE.is_close(tangent[2], -0.036587972264639));
 
         // normalized=true (default): t in [0,1] mapped to domain
         let f = curve.plane_at(0.5, true);
 
-        MINI_CHECK!(TOLERANCE.is_close(f.origin()[0], 3.156927375000000) && TOLERANCE.is_close(f.origin()[1], 1.335111500000000) && TOLERANCE.is_close(f.origin()[2], 0.130488875000000));
-        MINI_CHECK!(TOLERANCE.is_close(f.x_axis()[0], 0.701806140304030) && TOLERANCE.is_close(f.x_axis()[1], 0.697509131556264) && TOLERANCE.is_close(f.x_axis()[2], 0.144738221721788));
-        MINI_CHECK!(TOLERANCE.is_close(f.y_axis()[0], -0.513930504714161) && TOLERANCE.is_close(f.y_axis()[1], 0.355053088776962) && TOLERANCE.is_close(f.y_axis()[2], 0.780905077761815));
-        MINI_CHECK!(TOLERANCE.is_close(f.z_axis()[0], 0.493298669931115) && TOLERANCE.is_close(f.z_axis()[1], -0.622429365908747) && TOLERANCE.is_close(f.z_axis()[2], 0.607649657861031));
+        MINI_CHECK!(TOLERANCE.is_close(f.origin()[0], 3.156927375000000));
+        MINI_CHECK!(TOLERANCE.is_close(f.origin()[1], 1.335111500000000));
+        MINI_CHECK!(TOLERANCE.is_close(f.origin()[2], 0.130488875000000));
+        MINI_CHECK!(TOLERANCE.is_close(f.x_axis()[0], 0.701806140304030));
+        MINI_CHECK!(TOLERANCE.is_close(f.x_axis()[1], 0.697509131556264));
+        MINI_CHECK!(TOLERANCE.is_close(f.x_axis()[2], 0.144738221721788));
+        MINI_CHECK!(TOLERANCE.is_close(f.y_axis()[0], -0.513930504714161));
+        MINI_CHECK!(TOLERANCE.is_close(f.y_axis()[1], 0.355053088776962));
+        MINI_CHECK!(TOLERANCE.is_close(f.y_axis()[2], 0.780905077761815));
+        MINI_CHECK!(TOLERANCE.is_close(f.z_axis()[0], 0.493298669931115));
+        MINI_CHECK!(TOLERANCE.is_close(f.z_axis()[1], -0.622429365908747));
+        MINI_CHECK!(TOLERANCE.is_close(f.z_axis()[2], 0.607649657861031));
 
         MINI_CHECK!(curve.plane_at(-0.1, true).is_valid() == false);
         MINI_CHECK!(curve.plane_at(1.1, true).is_valid() == false);
@@ -418,9 +526,15 @@ pub fn run_nurbscurve_evaluation() -> TestResult {
         let p0 = curve.point_at_start();
         let p1 = curve.point_at_middle();
         let p2 = curve.point_at_end();
-        MINI_CHECK!(TOLERANCE.is_close(p0[0], 1.957614) && TOLERANCE.is_close(p0[1], 1.140253) && TOLERANCE.is_close(p0[2], -0.191281));
-        MINI_CHECK!(TOLERANCE.is_close(p1[0], 3.156927375) && TOLERANCE.is_close(p1[1], 1.3351115) && TOLERANCE.is_close(p1[2], 0.130488875));
-        MINI_CHECK!(TOLERANCE.is_close(p2[0], 2.15032) && TOLERANCE.is_close(p2[1], 1.868606) && TOLERANCE.is_close(p2[2], 0.0));
+        MINI_CHECK!(TOLERANCE.is_close(p0[0], 1.957614));
+        MINI_CHECK!(TOLERANCE.is_close(p0[1], 1.140253));
+        MINI_CHECK!(TOLERANCE.is_close(p0[2], -0.191281));
+        MINI_CHECK!(TOLERANCE.is_close(p1[0], 3.156927375));
+        MINI_CHECK!(TOLERANCE.is_close(p1[1], 1.3351115));
+        MINI_CHECK!(TOLERANCE.is_close(p1[2], 0.130488875));
+        MINI_CHECK!(TOLERANCE.is_close(p2[0], 2.15032));
+        MINI_CHECK!(TOLERANCE.is_close(p2[1], 1.868606));
+        MINI_CHECK!(TOLERANCE.is_close(p2[2], 0.0));
 
         curve.set_start_point(&Point::new(1.957614, 1.140253, 2.0));
         curve.set_end_point(&Point::new(2.15032, 1.868606, 2.0));
@@ -507,7 +621,8 @@ pub fn run_nurbscurve_modifications() -> TestResult {
         // Increase degree without change the shape
         let mut raised = curve.duplicate();
         raised.increase_degree(3);
-        MINI_CHECK!(curve.degree() != raised.degree() && TOLERANCE.is_point_close(&curve.point_at_middle(), &raised.point_at_middle()));
+        MINI_CHECK!(curve.degree() != raised.degree());
+        MINI_CHECK!(TOLERANCE.is_point_close(&curve.point_at_middle(), &raised.point_at_middle()));
 
         // Change closed curve seam
         let closed_pts = vec![
@@ -520,83 +635,6 @@ pub fn run_nurbscurve_modifications() -> TestResult {
         let expected_start = c.point_at(c.domain_middle());
         c.change_closed_curve_seam(c.domain_middle());
         MINI_CHECK!(TOLERANCE.is_point_close(&c.point_at_start(), &expected_start));
-    })
-}
-
-pub fn run_nurbscurve_json_roundtrip() -> TestResult {
-    MINI_TEST!("Json_roundtrip", {
-        use crate::NurbsCurve;
-        use crate::Point;
-        use std::path::PathBuf;
-
-        let points = vec![
-            Point::new(0.0, 0.0, 0.0),
-            Point::new(1.0, 2.0, 0.0),
-            Point::new(2.0, 0.0, 0.0),
-            Point::new(3.0, 2.0, 0.0),
-            Point::new(4.0, 0.0, 0.0),
-        ];
-        let curve = NurbsCurve::create(false, 2, &points);
-
-        //   jsondump()      │ String       │ to JSON string (internal use)
-        //   jsonload(s)     │ String       │ from JSON string (internal use)
-        //   json_dumps()    │ String       │ to JSON string
-        //   json_loads(s)   │ String       │ from JSON string
-        //   json_dump(path) │ file         │ write to file
-        //   json_load(path) │ file         │ read from file
-
-        // JSON object
-        let json = curve.jsondump().unwrap();
-        let loaded_json = NurbsCurve::jsonload(&json).unwrap();
-
-        // String
-        let json_string = curve.json_dumps();
-        let loaded_json_string = NurbsCurve::json_loads(&json_string);
-
-        // File
-        let src_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-        let filename = src_dir.join("serialization").join("test_nurbscurve.json");
-        curve.json_dump(filename.to_str().unwrap());
-        let loaded_from_file = NurbsCurve::json_load(filename.to_str().unwrap());
-
-        MINI_CHECK!(loaded_json == curve);
-        MINI_CHECK!(loaded_json_string == curve);
-        MINI_CHECK!(loaded_from_file == curve);
-    })
-}
-
-pub fn run_nurbscurve_protobuf_roundtrip() -> TestResult {
-    MINI_TEST!("Protobuf_roundtrip", {
-        use crate::NurbsCurve;
-        use crate::Point;
-        use std::path::PathBuf;
-
-        let points = vec![
-            Point::new(0.0, 0.0, 0.0),
-            Point::new(1.0, 2.0, 0.0),
-            Point::new(2.0, 0.0, 0.0),
-            Point::new(3.0, 2.0, 0.0),
-            Point::new(4.0, 0.0, 0.0),
-        ];
-        let curve = NurbsCurve::create(false, 2, &points);
-
-        //   pb_dumps()      │ bytes        │ to protobuf bytes
-        //   pb_loads(b)     │ bytes        │ from protobuf bytes
-        //   pb_dump(path)   │ file         │ write to file
-        //   pb_load(path)   │ file         │ read from file
-
-        // String
-        let proto_string = curve.pb_dumps();
-        let loaded_proto_string = NurbsCurve::pb_loads(&proto_string).unwrap();
-
-        // File
-        let src_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-        let filename = src_dir.join("serialization").join("test_nurbscurve.bin");
-        curve.pb_dump(filename.to_str().unwrap());
-        let loaded = NurbsCurve::pb_load(filename.to_str().unwrap());
-
-        MINI_CHECK!(loaded_proto_string == curve);
-        MINI_CHECK!(loaded == curve);
     })
 }
 
@@ -644,89 +682,90 @@ pub fn run_nurbscurve_transformations() -> TestResult {
     })
 }
 
-pub fn run_nurbscurve_create_interpolated() -> TestResult {
-    MINI_TEST!("Create_interpolated", {
+pub fn run_nurbscurve_json_roundtrip() -> TestResult {
+    MINI_TEST!("Json Roundtrip", {
         use crate::NurbsCurve;
         use crate::Point;
-        use crate::knot::CurveKnotStyle;
+        use std::path::PathBuf;
 
         let points = vec![
-            Point::new(14.0, 9.0, 0.0), Point::new(21.0, 22.0, 0.0), Point::new(26.0, 10.0, 0.0),
-            Point::new(35.0, 19.0, 0.0), Point::new(41.0, 13.0, 0.0),
+            Point::new(0.0, 0.0, 0.0),
+            Point::new(1.0, 2.0, 0.0),
+            Point::new(2.0, 0.0, 0.0),
+            Point::new(3.0, 2.0, 0.0),
+            Point::new(4.0, 0.0, 0.0),
         ];
+        let curve = NurbsCurve::create(false, 2, &points);
 
-        let c = NurbsCurve::create_interpolated(&points, CurveKnotStyle::Chord);
+        //   jsondump()      │ String       │ to JSON string (internal use)
+        //   jsonload(s)     │ String       │ from JSON string (internal use)
+        //   json_dumps()    │ String       │ to JSON string
+        //   json_loads(s)   │ String       │ from JSON string
+        //   json_dump(path) │ file         │ write to file
+        //   json_load(path) │ file         │ read from file
 
-        MINI_CHECK!(c.is_valid());
-        MINI_CHECK!(c.degree() == 3);
-        MINI_CHECK!(c.order() == 4);
-        MINI_CHECK!(c.cv_count() == 7);
-        MINI_CHECK!(c.is_rational() == false);
+        // JSON object
+        let json = curve.jsondump().unwrap();
+        let loaded_json = NurbsCurve::jsonload(&json).unwrap();
 
-        let (d0, d1) = c.domain();
-        MINI_CHECK!(TOLERANCE.is_point_close(&c.point_at(d0), &points[0]));
-        MINI_CHECK!(TOLERANCE.is_point_close(&c.point_at(d1), &points[4]));
-        MINI_CHECK!(TOLERANCE.is_point_close(&c.get_cv(0).unwrap(), &points[0]));
-        MINI_CHECK!(TOLERANCE.is_point_close(&c.get_cv(6).unwrap(), &points[4]));
+        // String
+        let json_string = curve.json_dumps();
+        let loaded_json_string = NurbsCurve::json_loads(&json_string);
 
-        // Periodic closed curve
-        let closed_pts = vec![
-            Point::new(4.0, 20.0, 0.0), Point::new(-2.0, 20.0, 0.0), Point::new(-2.0, 25.0, 0.0),
-            Point::new(-3.0, 28.0, 0.0), Point::new(-10.0, 28.0, 0.0),
-            Point::new(-10.0, 21.0, 0.0), Point::new(-13.0, 16.0, 0.0), Point::new(-8.0, 14.0, 0.0),
-            Point::new(-6.0, 11.0, 0.0), Point::new(0.0, 15.0, 0.0),
-        ];
+        // File
+        let src_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+        let filename = src_dir.join("serialization").join("test_nurbscurve.json");
+        curve.json_dump(filename.to_str().unwrap());
+        let loaded_from_file = NurbsCurve::json_load(filename.to_str().unwrap());
 
-        let cp = NurbsCurve::create_interpolated(&closed_pts, CurveKnotStyle::ChordPeriodic);
-
-        MINI_CHECK!(cp.is_valid());
-        MINI_CHECK!(cp.degree() == 3);
-        MINI_CHECK!(cp.cv_count() == 13);
-        MINI_CHECK!(cp.is_closed());
+        MINI_CHECK!(loaded_json == curve);
+        MINI_CHECK!(loaded_json_string == curve);
+        MINI_CHECK!(loaded_from_file == curve);
     })
 }
 
-pub fn run_nurbscurve_create_fitted() -> TestResult {
-    MINI_TEST!("Create_fitted", {
+pub fn run_nurbscurve_protobuf_roundtrip() -> TestResult {
+    MINI_TEST!("Protobuf Roundtrip", {
         use crate::NurbsCurve;
         use crate::Point;
+        use std::path::PathBuf;
 
-        // Open: 21 points on sine wave → fit with 8 CVs
-        let pts: Vec<Point> = (0..=20).map(|i| {
-            let t = i as f64 * 2.0 * PI / 20.0;
-            Point::new(t, 3.0 * t.sin(), 0.0)
-        }).collect();
+        let points = vec![
+            Point::new(0.0, 0.0, 0.0),
+            Point::new(1.0, 2.0, 0.0),
+            Point::new(2.0, 0.0, 0.0),
+            Point::new(3.0, 2.0, 0.0),
+            Point::new(4.0, 0.0, 0.0),
+        ];
+        let curve = NurbsCurve::create(false, 2, &points);
 
-        let c = NurbsCurve::create_fitted(&pts, 8, 3, false);
+        //   pb_dumps()      │ bytes        │ to protobuf bytes
+        //   pb_loads(b)     │ bytes        │ from protobuf bytes
+        //   pb_dump(path)   │ file         │ write to file
+        //   pb_load(path)   │ file         │ read from file
 
-        MINI_CHECK!(c.is_valid());
-        MINI_CHECK!(c.degree() == 3);
-        MINI_CHECK!(c.cv_count() == 8);
-        let (d0, d1) = c.domain();
-        MINI_CHECK!(TOLERANCE.is_point_close(&c.point_at(d0), &pts[0]));
-        MINI_CHECK!(TOLERANCE.is_point_close(&c.point_at(d1), &pts[20]));
+        // String
+        let proto_string = curve.pb_dumps();
+        let loaded_proto_string = NurbsCurve::pb_loads(&proto_string).unwrap();
 
-        // Periodic: 24 points on circle → fit with 10 free CVs
-        let cpts: Vec<Point> = (0..24).map(|i| {
-            let a = i as f64 * 2.0 * PI / 24.0;
-            Point::new(a.cos(), a.sin(), 0.0)
-        }).collect();
+        // File
+        let src_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+        let filename = src_dir.join("serialization").join("test_nurbscurve.bin");
+        curve.pb_dump(filename.to_str().unwrap());
+        let loaded = NurbsCurve::pb_load(filename.to_str().unwrap());
 
-        let cp = NurbsCurve::create_fitted(&cpts, 10, 3, true);
-
-        MINI_CHECK!(cp.is_valid());
-        MINI_CHECK!(cp.is_closed());
-        MINI_CHECK!(cp.cv_count() == 13);
+        MINI_CHECK!(loaded_proto_string == curve);
+        MINI_CHECK!(loaded == curve);
     })
 }
 
 REGISTER_MINI_TEST!("NurbsCurve", "Constructor", crate::nurbscurve_test::run_nurbscurve_constructor);
+REGISTER_MINI_TEST!("NurbsCurve", "Create Interpolated", crate::nurbscurve_test::run_nurbscurve_create_interpolated);
+REGISTER_MINI_TEST!("NurbsCurve", "Create Fitted", crate::nurbscurve_test::run_nurbscurve_create_fitted);
 REGISTER_MINI_TEST!("NurbsCurve", "Attributes", crate::nurbscurve_test::run_nurbscurve_attributes);
 REGISTER_MINI_TEST!("NurbsCurve", "Conversions", crate::nurbscurve_test::run_nurbscurve_conversions);
 REGISTER_MINI_TEST!("NurbsCurve", "Evaluation", crate::nurbscurve_test::run_nurbscurve_evaluation);
 REGISTER_MINI_TEST!("NurbsCurve", "Modifications", crate::nurbscurve_test::run_nurbscurve_modifications);
-REGISTER_MINI_TEST!("NurbsCurve", "Json_roundtrip", crate::nurbscurve_test::run_nurbscurve_json_roundtrip);
-REGISTER_MINI_TEST!("NurbsCurve", "Protobuf_roundtrip", crate::nurbscurve_test::run_nurbscurve_protobuf_roundtrip);
 REGISTER_MINI_TEST!("NurbsCurve", "Transformations", crate::nurbscurve_test::run_nurbscurve_transformations);
-REGISTER_MINI_TEST!("NurbsCurve", "Create_interpolated", crate::nurbscurve_test::run_nurbscurve_create_interpolated);
-REGISTER_MINI_TEST!("NurbsCurve", "Create_fitted", crate::nurbscurve_test::run_nurbscurve_create_fitted);
+REGISTER_MINI_TEST!("NurbsCurve", "Json Roundtrip", crate::nurbscurve_test::run_nurbscurve_json_roundtrip);
+REGISTER_MINI_TEST!("NurbsCurve", "Protobuf Roundtrip", crate::nurbscurve_test::run_nurbscurve_protobuf_roundtrip);

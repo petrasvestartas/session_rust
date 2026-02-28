@@ -1174,8 +1174,8 @@ impl Primitives {
             if n_shapes > 1 && j + 1 < n_shapes {
                 let nc = compat_shapes[j].cv_count();
                 for c in 0..nc {
-                    let cv0 = compat_shapes[j].get_cv(c).unwrap_or(Point::new(0.0,0.0,0.0));
-                    let cv1 = compat_shapes[j + 1].get_cv(c).unwrap_or(Point::new(0.0,0.0,0.0));
+                    let cv0 = compat_shapes[j].get_cv(c).unwrap_or(Point::new(0.0, 0.0, 0.0));
+                    let cv1 = compat_shapes[j + 1].get_cv(c).unwrap_or(Point::new(0.0, 0.0, 0.0));
                     let lerped = Point::new(cv0[0]*(1.0-s) + cv1[0]*s, cv0[1]*(1.0-s) + cv1[1]*s, cv0[2]*(1.0-s) + cv1[2]*s);
                     interp_shape.set_cv(c, &lerped);
                 }
@@ -1341,19 +1341,19 @@ impl Primitives {
         let u_grev: Vec<f64> = u_grev.iter().map(|&g| if u1 > u0 { (g - u0) / (u1 - u0) } else { 0.0 }).collect();
         let v_grev: Vec<f64> = v_grev.iter().map(|&g| if v1 > v0 { (g - v0) / (v1 - v0) } else { 0.0 }).collect();
 
-        let c00 = south.get_cv(0).unwrap_or(Point::new(0.0,0.0,0.0));
-        let c01 = south.get_cv(cv_count_v - 1).unwrap_or(Point::new(0.0,0.0,0.0));
-        let c10 = north.get_cv(0).unwrap_or(Point::new(0.0,0.0,0.0));
-        let c11 = north.get_cv(cv_count_v - 1).unwrap_or(Point::new(0.0,0.0,0.0));
+        let c00 = south.get_cv(0).unwrap_or(Point::new(0.0, 0.0, 0.0));
+        let c01 = south.get_cv(cv_count_v - 1).unwrap_or(Point::new(0.0, 0.0, 0.0));
+        let c10 = north.get_cv(0).unwrap_or(Point::new(0.0, 0.0, 0.0));
+        let c11 = north.get_cv(cv_count_v - 1).unwrap_or(Point::new(0.0, 0.0, 0.0));
 
         for i in 0..cv_count_u {
             let ui = u_grev[i];
-            let wi = west.get_cv(i).unwrap_or(Point::new(0.0,0.0,0.0));
-            let ei = east.get_cv(i).unwrap_or(Point::new(0.0,0.0,0.0));
+            let wi = west.get_cv(i).unwrap_or(Point::new(0.0, 0.0, 0.0));
+            let ei = east.get_cv(i).unwrap_or(Point::new(0.0, 0.0, 0.0));
             for j in 0..cv_count_v {
                 let vj = v_grev[j];
-                let sj = south.get_cv(j).unwrap_or(Point::new(0.0,0.0,0.0));
-                let nj = north.get_cv(j).unwrap_or(Point::new(0.0,0.0,0.0));
+                let sj = south.get_cv(j).unwrap_or(Point::new(0.0, 0.0, 0.0));
+                let nj = north.get_cv(j).unwrap_or(Point::new(0.0, 0.0, 0.0));
 
                 let x = (1.0-ui)*sj[0] + ui*nj[0] + (1.0-vj)*wi[0] + vj*ei[0]
                        - (1.0-ui)*(1.0-vj)*c00[0] - (1.0-ui)*vj*c01[0]
@@ -1547,20 +1547,40 @@ impl Primitives {
         let z0 = -h / 4.0;
         let z1 = 3.0 * h / 4.0;
         let faces = vec![
-            vec![Point::new(a, -r/2.0, z0), Point::new(-a, -r/2.0, z0), Point::new(0.0, r, z0)],
-            vec![Point::new(0.0, 0.0, z1), Point::new(-a, -r/2.0, z0), Point::new(a, -r/2.0, z0)],
-            vec![Point::new(0.0, 0.0, z1), Point::new(0.0, r, z0), Point::new(-a, -r/2.0, z0)],
-            vec![Point::new(0.0, 0.0, z1), Point::new(a, -r/2.0, z0), Point::new(0.0, r, z0)],
+            vec![
+                Point::new(a, -r / 2.0, z0),
+                Point::new(-a, -r / 2.0, z0),
+                Point::new(0.0, r, z0),
+            ],
+            vec![
+                Point::new(0.0, 0.0, z1),
+                Point::new(-a, -r / 2.0, z0),
+                Point::new(a, -r / 2.0, z0),
+            ],
+            vec![
+                Point::new(0.0, 0.0, z1),
+                Point::new(0.0, r, z0),
+                Point::new(-a, -r / 2.0, z0),
+            ],
+            vec![
+                Point::new(0.0, 0.0, z1),
+                Point::new(a, -r / 2.0, z0),
+                Point::new(0.0, r, z0),
+            ],
         ];
         Mesh::from_polylines(faces, Some(1e-10))
     }
 
     pub fn cube(edge: f64) -> Mesh {
         let a = edge / 2.0;
-        let v0 = Point::new(-a,-a,-a); let v1 = Point::new(a,-a,-a);
-        let v2 = Point::new(a,a,-a);   let v3 = Point::new(-a,a,-a);
-        let v4 = Point::new(-a,-a,a);  let v5 = Point::new(a,-a,a);
-        let v6 = Point::new(a,a,a);    let v7 = Point::new(-a,a,a);
+        let v0 = Point::new(-a, -a, -a);
+        let v1 = Point::new(a, -a, -a);
+        let v2 = Point::new(a, a, -a);
+        let v3 = Point::new(-a, a, -a);
+        let v4 = Point::new(-a, -a, a);
+        let v5 = Point::new(a, -a, a);
+        let v6 = Point::new(a, a, a);
+        let v7 = Point::new(-a, a, a);
         let faces = vec![
             vec![v3.clone(), v2.clone(), v1.clone(), v0.clone()],
             vec![v4.clone(), v5.clone(), v6.clone(), v7.clone()],
@@ -1574,14 +1594,21 @@ impl Primitives {
 
     pub fn octahedron(edge: f64) -> Mesh {
         let a = edge / 2.0_f64.sqrt();
-        let px = Point::new(a,0.0,0.0); let nx = Point::new(-a,0.0,0.0);
-        let py = Point::new(0.0,a,0.0); let ny = Point::new(0.0,-a,0.0);
-        let pz = Point::new(0.0,0.0,a); let nz = Point::new(0.0,0.0,-a);
+        let px = Point::new(a, 0.0, 0.0);
+        let nx = Point::new(-a, 0.0, 0.0);
+        let py = Point::new(0.0, a, 0.0);
+        let ny = Point::new(0.0, -a, 0.0);
+        let pz = Point::new(0.0, 0.0, a);
+        let nz = Point::new(0.0, 0.0, -a);
         let faces = vec![
-            vec![pz.clone(), px.clone(), py.clone()], vec![pz.clone(), py.clone(), nx.clone()],
-            vec![pz.clone(), nx.clone(), ny.clone()], vec![pz.clone(), ny.clone(), px.clone()],
-            vec![nz.clone(), py.clone(), px.clone()], vec![nz.clone(), nx.clone(), py.clone()],
-            vec![nz.clone(), ny.clone(), nx.clone()], vec![nz.clone(), px.clone(), ny.clone()],
+            vec![pz.clone(), px.clone(), py.clone()],
+            vec![pz.clone(), py.clone(), nx.clone()],
+            vec![pz.clone(), nx.clone(), ny.clone()],
+            vec![pz.clone(), ny.clone(), px.clone()],
+            vec![nz.clone(), py.clone(), px.clone()],
+            vec![nz.clone(), nx.clone(), py.clone()],
+            vec![nz.clone(), ny.clone(), nx.clone()],
+            vec![nz.clone(), px.clone(), ny.clone()],
         ];
         Mesh::from_polylines(faces, Some(1e-10))
     }
@@ -1591,9 +1618,18 @@ impl Primitives {
         let s = edge / 2.0;
         let sp = s * phi;
         let verts = vec![
-            Point::new(-s, sp, 0.0), Point::new(s, sp, 0.0), Point::new(-s,-sp, 0.0), Point::new(s,-sp, 0.0),
-            Point::new(0.0,-s, sp), Point::new(0.0, s, sp), Point::new(0.0,-s,-sp), Point::new(0.0, s,-sp),
-            Point::new(sp, 0.0,-s), Point::new(sp, 0.0, s), Point::new(-sp, 0.0,-s), Point::new(-sp, 0.0, s),
+            Point::new(-s, sp, 0.0),
+            Point::new(s, sp, 0.0),
+            Point::new(-s, -sp, 0.0),
+            Point::new(s, -sp, 0.0),
+            Point::new(0.0, -s, sp),
+            Point::new(0.0, s, sp),
+            Point::new(0.0, -s, -sp),
+            Point::new(0.0, s, -sp),
+            Point::new(sp, 0.0, -s),
+            Point::new(sp, 0.0, s),
+            Point::new(-sp, 0.0, -s),
+            Point::new(-sp, 0.0, s),
         ];
         let idx: [[usize; 3]; 20] = [
             [0,11,5],[0,5,1],[0,1,7],[0,7,10],[0,10,11],
@@ -1610,14 +1646,26 @@ impl Primitives {
         let ip = 1.0 / phi;
         let s = edge / (2.0 * ip);
         let verts = vec![
-            Point::new( s,  s,  s), Point::new( s,  s, -s), Point::new( s, -s,  s), Point::new( s, -s, -s),
-            Point::new(-s,  s,  s), Point::new(-s,  s, -s), Point::new(-s, -s,  s), Point::new(-s, -s, -s),
-            Point::new(0.0,  s*ip,  s*phi), Point::new(0.0,  s*ip, -s*phi),
-            Point::new(0.0, -s*ip,  s*phi), Point::new(0.0, -s*ip, -s*phi),
-            Point::new( s*ip,  s*phi, 0.0), Point::new( s*ip, -s*phi, 0.0),
-            Point::new(-s*ip,  s*phi, 0.0), Point::new(-s*ip, -s*phi, 0.0),
-            Point::new( s*phi, 0.0,  s*ip), Point::new( s*phi, 0.0, -s*ip),
-            Point::new(-s*phi, 0.0,  s*ip), Point::new(-s*phi, 0.0, -s*ip),
+            Point::new(s, s, s),
+            Point::new(s, s, -s),
+            Point::new(s, -s, s),
+            Point::new(s, -s, -s),
+            Point::new(-s, s, s),
+            Point::new(-s, s, -s),
+            Point::new(-s, -s, s),
+            Point::new(-s, -s, -s),
+            Point::new(0.0, s * ip, s * phi),
+            Point::new(0.0, s * ip, -s * phi),
+            Point::new(0.0, -s * ip, s * phi),
+            Point::new(0.0, -s * ip, -s * phi),
+            Point::new(s * ip, s * phi, 0.0),
+            Point::new(s * ip, -s * phi, 0.0),
+            Point::new(-s * ip, s * phi, 0.0),
+            Point::new(-s * ip, -s * phi, 0.0),
+            Point::new(s * phi, 0.0, s * ip),
+            Point::new(s * phi, 0.0, -s * ip),
+            Point::new(-s * phi, 0.0, s * ip),
+            Point::new(-s * phi, 0.0, -s * ip),
         ];
         let idx: [[usize; 5]; 12] = [
             [0, 8,10, 2,16], [0,16,17, 1,12], [0,12,14, 4, 8],
@@ -1699,7 +1747,7 @@ impl Primitives {
             let mut list_v: Vec<f64> = Vec::new();
             let mut iterations = 0;
 
-            let d = Point::new(0.0,0.0,0.0);
+            let d = Point::new(0.0, 0.0, 0.0);
             let (mut p0, mut p1, mut p2) = (d.clone(), d.clone(), d.clone());
             let (mut p6, mut p7, mut p8) = (d.clone(), d.clone(), d.clone());
             let (mut savept6, mut savept7, mut savept8) = (d.clone(), d.clone(), d);
