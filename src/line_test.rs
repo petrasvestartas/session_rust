@@ -77,6 +77,14 @@ pub fn run_line_constructor() -> TestResult {
         lc.linecolor = Color::with_name(255, 0, 0, 255, "red");
         lc.width = 2.5;
 
+        // with_name constructor
+        let lwn = Line::with_name("custom", 0.0, 0.0, 0.0, 1.0, 0.0, 0.0);
+
+        // get_middle_line
+        let (ms, me) = Line::get_middle_line(
+            &Point::new(0.0, 0.0, 0.0), &Point::new(2.0, 0.0, 0.0),
+            &Point::new(0.0, 2.0, 0.0), &Point::new(2.0, 2.0, 0.0));
+
         MINI_CHECK!(l.name == "my_line" && !l.guid.is_empty());
         MINI_CHECK!(l[0] == 10.0 && l[1] == 20.0 && l[2] == 30.0);
         MINI_CHECK!(x0 == 10.0 && y0 == 20.0 && z0 == 30.0 && x1 == 40.0 && y1 == 50.0 && z1 == 60.0);
@@ -96,6 +104,8 @@ pub fn run_line_constructor() -> TestResult {
         MINI_CHECK!(l_pv[0] == 1.0 && l_pv[1] == 2.0 && l_pv[2] == 3.0 && l_pv[3] == 4.0 && l_pv[4] == 6.0 && l_pv[5] == 8.0);
         MINI_CHECK!(l_pdl[0] == 0.0 && l_pdl[3] == 5.0);
         MINI_CHECK!(lc.linecolor.r == 255 && lc.linecolor.g == 0 && lc.width == 2.5);
+        MINI_CHECK!(lwn.name == "custom" && lwn[3] == 1.0);
+        MINI_CHECK!(TOLERANCE.is_close(ms[1], 1.0) && TOLERANCE.is_close(me[1], 1.0));
     })
 }
 
@@ -122,11 +132,25 @@ pub fn run_line_json_roundtrip() -> TestResult {
         let mut l = Line::new(42.1, 84.2, 126.3, 168.4, 210.5, 252.6);
         l.name = "test_line".to_string();
 
+        //   jsondump()      │ String       │ to JSON string (object)
+        //   jsonload(s)     │ String       │ from JSON string (object)
         //   json_dumps()    │ String       │ to JSON string
         //   json_loads(s)   │ String       │ from JSON string
         //   json_dump(path) │ file         │ write to file
         //   json_load(path) │ file         │ read from file
 
+        // JSON object (string)
+        let js = l.jsondump().unwrap();
+        let loaded_j = Line::jsonload(&js).unwrap();
+        MINI_CHECK!(loaded_j.name == "test_line");
+
+        // String
+        let s = l.json_dumps();
+        let loaded_s = Line::json_loads(&s);
+        MINI_CHECK!(loaded_s.name == "test_line");
+        MINI_CHECK!(TOLERANCE.is_close(loaded_s[0], 42.1));
+
+        // File
         let fname = "serialization/test_line.json";
         l.json_dump(fname).unwrap();
         let loaded = Line::json_load(fname).unwrap();
@@ -148,7 +172,14 @@ pub fn run_line_protobuf_roundtrip() -> TestResult {
         let mut l = Line::new(42.1, 84.2, 126.3, 168.4, 210.5, 252.6);
         l.name = "test_line".to_string();
 
-        // pb_dump(fname) / pb_load(fname) - file-based serialization
+        // Bytes
+        let b = l.pb_dumps();
+        let loaded_s = Line::pb_loads(&b).unwrap();
+        MINI_CHECK!(loaded_s.name == "test_line");
+        MINI_CHECK!(TOLERANCE.is_close(loaded_s[0], 42.1));
+        MINI_CHECK!(loaded_s.guid == l.guid);
+
+        // File
         let fname = "serialization/test_line.bin";
         l.pb_dump(fname);
         let loaded = Line::pb_load(fname);
@@ -160,6 +191,7 @@ pub fn run_line_protobuf_roundtrip() -> TestResult {
         MINI_CHECK!(TOLERANCE.is_close(loaded[3], 168.4));
         MINI_CHECK!(TOLERANCE.is_close(loaded[4], 210.5));
         MINI_CHECK!(TOLERANCE.is_close(loaded[5], 252.6));
+        MINI_CHECK!(loaded.guid == l.guid);
     })
 }
 

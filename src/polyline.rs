@@ -755,6 +755,49 @@ impl Polyline {
         first.distance(&last, None) < Tolerance::ZERO_TOLERANCE
     }
 
+    /// Merge consecutive collinear segments in-place; closed polyline wraps around
+    pub fn merge_collinear(&mut self, tol: f64) {
+        let closed = self.is_closed();
+        let mut pts = self.get_points();
+        if closed && pts.len() > 1 {
+            pts.pop();
+        }
+        let zt2 = Tolerance::ZERO_TOLERANCE * Tolerance::ZERO_TOLERANCE;
+        let mut changed = true;
+        while changed {
+            changed = false;
+            let m = pts.len();
+            if m < 3 { break; }
+            let mut out = Vec::new();
+            for i in 0..m {
+                let p = (i + m - 1) % m;
+                let nx = (i + 1) % m;
+                if !closed && (i == 0 || i == m - 1) { out.push(pts[i].clone()); continue; }
+                let (ax, ay, az) = (pts[i][0]-pts[p][0], pts[i][1]-pts[p][1], pts[i][2]-pts[p][2]);
+                let (bx, by, bz) = (pts[nx][0]-pts[i][0], pts[nx][1]-pts[i][1], pts[nx][2]-pts[i][2]);
+                let (cx, cy, cz) = (ay*bz-az*by, az*bx-ax*bz, ax*by-ay*bx);
+                let (a2, b2) = (ax*ax+ay*ay+az*az, bx*bx+by*by+bz*bz);
+                if a2 < zt2 || b2 < zt2 || cx*cx+cy*cy+cz*cz < tol*tol*a2*b2 {
+                    changed = true;
+                } else {
+                    out.push(pts[i].clone());
+                }
+            }
+            pts = out;
+        }
+        self.coords.clear();
+        for p in &pts {
+            self.coords.push(p[0]);
+            self.coords.push(p[1]);
+            self.coords.push(p[2]);
+        }
+        if closed && !pts.is_empty() {
+            self.coords.push(pts[0][0]);
+            self.coords.push(pts[0][1]);
+            self.coords.push(pts[0][2]);
+        }
+    }
+
     /// Calculate center point of polyline
     pub fn center(&self) -> Point {
         if self.coords.is_empty() {

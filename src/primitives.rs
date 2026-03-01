@@ -332,6 +332,22 @@ impl Primitives {
         Self::transform_geometry(&unit_cyl, &xform)
     }
 
+    pub fn edge_pipes(mesh: &Mesh, radius: f64) -> Vec<Mesh> {
+        let edge_list = mesh.edges();
+        let mut result = Vec::new();
+        for (i, (u, v)) in edge_list.iter().enumerate() {
+            if i >= mesh.linecolors.len() { break; }
+            let start = mesh.vertex[u].position();
+            let end = mesh.vertex[v].position();
+            let line = Line::new(start[0], start[1], start[2], end[0], end[1], end[2]);
+            let mut pipe = Primitives::cylinder_mesh(&line, radius);
+            let color = mesh.linecolors[i].clone();
+            for c in pipe.facecolors.iter_mut() { *c = color.clone(); }
+            result.push(pipe);
+        }
+        result
+    }
+
     pub fn arrow_mesh(line: &Line, radius: f64) -> Mesh {
         let start = line.start();
         let line_vec = line.to_vector();

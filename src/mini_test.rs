@@ -518,6 +518,7 @@ pub fn get_all_tests() -> Vec<RegisteredTest> {
         RegisteredTest { group: "Closest", name: "Curve Point", func: run_closest_curve_point },
         RegisteredTest { group: "Closest", name: "Surface Point", func: run_closest_surface_point },
         RegisteredTest { group: "Closest", name: "Mesh Point", func: run_closest_mesh_point },
+        RegisteredTest { group: "Closest", name: "Mesh Point AABB", func: run_closest_mesh_point_aabb },
         RegisteredTest { group: "Closest", name: "Pointcloud Point", func: run_closest_pointcloud_point },
         // Primitives tests
         RegisteredTest { group: "Primitives", name: "Mesh Arrow", func: run_primitives_mesh_arrow },
@@ -628,7 +629,11 @@ pub fn get_all_tests() -> Vec<RegisteredTest> {
         // Quaternion tests
         RegisteredTest { group: "Quaternion", name: "Json Roundtrip", func: run_quaternion_json_roundtrip },
         // BoundingBox tests
+        RegisteredTest { group: "BoundingBox", name: "Constructor", func: run_boundingbox_constructor },
+        RegisteredTest { group: "BoundingBox", name: "Collision", func: run_boundingbox_collision },
+        RegisteredTest { group: "BoundingBox", name: "Transformation", func: run_boundingbox_transformation },
         RegisteredTest { group: "BoundingBox", name: "Json Roundtrip", func: run_boundingbox_json_roundtrip },
+        RegisteredTest { group: "BoundingBox", name: "Protobuf Roundtrip", func: run_boundingbox_protobuf_roundtrip },
         // Edge tests
         RegisteredTest { group: "Edge", name: "Json Roundtrip", func: run_edge_json_roundtrip },
         // Graph tests

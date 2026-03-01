@@ -28,6 +28,27 @@ pub fn run_primitives_mesh_cylinder() -> TestResult {
     })
 }
 
+pub fn run_primitives_mesh_edge_pipes() -> TestResult {
+    MINI_TEST!("Mesh Edge Pipes", {
+        use crate::primitives::Primitives;
+        use crate::mesh::Mesh;
+        use crate::point::Point;
+        use crate::color::Color;
+
+        let mut mesh = Mesh::new();
+        let v0 = mesh.add_vertex(Point::new(0.0, 0.0, 0.0), None);
+        let v1 = mesh.add_vertex(Point::new(1.0, 0.0, 0.0), None);
+        let v2 = mesh.add_vertex(Point::new(1.0, 1.0, 0.0), None);
+        let v3 = mesh.add_vertex(Point::new(0.0, 1.0, 0.0), None);
+        mesh.add_face(vec![v0, v1, v2, v3], None);
+        mesh.linecolors[0] = Color::red();
+
+        let pipes = Primitives::edge_pipes(&mesh, 0.1);
+        MINI_CHECK!(pipes.len() == 4);
+        MINI_CHECK!(pipes[0].facecolors[0][0] == Color::red()[0]);
+    })
+}
+
 pub fn run_primitives_nurbscurve_polyline() -> TestResult {
     MINI_TEST!("Nurbscurve Polyline", {
         use crate::nurbscurve::NurbsCurve;
@@ -1425,6 +1446,7 @@ pub fn run_primitives_cross_connectors() -> TestResult {
 
 REGISTER_MINI_TEST!("Primitives", "Mesh Arrow", crate::primitives_test::run_primitives_mesh_arrow);
 REGISTER_MINI_TEST!("Primitives", "Mesh Cylinder", crate::primitives_test::run_primitives_mesh_cylinder);
+REGISTER_MINI_TEST!("Primitives", "Mesh Edge Pipes", crate::primitives_test::run_primitives_mesh_edge_pipes);
 REGISTER_MINI_TEST!("Primitives", "Nurbscurve Polyline", crate::primitives_test::run_primitives_nurbscurve_polyline);
 REGISTER_MINI_TEST!("Primitives", "Nurbscurve Circle", crate::primitives_test::run_primitives_nurbscurve_circle);
 REGISTER_MINI_TEST!("Primitives", "Nurbscurve Ellipse", crate::primitives_test::run_primitives_nurbscurve_ellipse);

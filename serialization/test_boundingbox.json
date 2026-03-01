@@ -1,1 +1,78 @@
-{"type":"BoundingBox","center":{"type":"Point","guid":"be838981-dfac-4cb5-a7cb-639d968285d4","name":"my_point","x":1.0,"y":2.0,"z":3.0,"width":1.0,"pointcolor":{"a":255,"b":255,"g":0,"guid":"67f4aab1-0b9a-4978-b241-7e352bcb783c","name":"blue","r":0,"type":"Color"},"xform":{"guid":"a8169d53-c4d2-4d9b-84c4-59cd15500fa9","m":[1.0,0.0,0.0,0.0,0.0,1.0,0.0,0.0,0.0,0.0,1.0,0.0,0.0,0.0,0.0,1.0],"name":"my_xform","type":"Xform"}},"x_axis":{"type":"Vector","guid":"a3b2198e-7e73-4fa6-8139-f657e6d9cd80","name":"my_vector","x":1.0,"y":0.0,"z":0.0},"y_axis":{"type":"Vector","guid":"6279ee9d-a4ac-45c3-8186-533922bd2e4d","name":"my_vector","x":0.0,"y":1.0,"z":0.0},"z_axis":{"type":"Vector","guid":"031310ad-8929-4140-9b31-55e6a4fae1e5","name":"my_vector","x":0.0,"y":0.0,"z":1.0},"half_size":{"type":"Vector","guid":"94efe23d-fe49-45d7-98f4-63ceb9e8403c","name":"my_vector","x":5.0,"y":5.0,"z":5.0},"guid":"00e0be71-54e4-4ec0-9005-556dffa1267b","name":"test_bbox","xform":{"guid":"462e7990-1957-498d-97dc-a57d7e6021e1","m":[1.0,0.0,0.0,0.0,0.0,1.0,0.0,0.0,0.0,0.0,1.0,0.0,0.0,0.0,0.0,1.0],"name":"my_xform","type":"Xform"}}
+{
+  "center": {
+    "guid": "0c159f74-1e28-4862-942c-478b946f6c26",
+    "name": "my_point",
+    "pointcolor": {
+      "a": 255,
+      "b": 255,
+      "g": 0,
+      "guid": "75f5e7d3-2b35-4b9d-87ff-f29977c23e5f",
+      "name": "blue",
+      "r": 0,
+      "type": "Color"
+    },
+    "type": "Point",
+    "width": 1.0,
+    "x": 1.0,
+    "xform": {
+      "guid": "0caeb396-cab3-432d-b1ff-bfd751725d93",
+      "m": [
+        1.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        1.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        1.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "name": "my_xform",
+      "type": "Xform"
+    },
+    "y": 2.0,
+    "z": 3.0
+  },
+  "guid": "967ea016-49de-4852-af8a-8c69e80821e6",
+  "half_size": {
+    "guid": "d8fd200e-14cb-4e0d-b7ac-333b738632b5",
+    "name": "my_vector",
+    "type": "Vector",
+    "x": 5.0,
+    "y": 5.0,
+    "z": 5.0
+  },
+  "name": "test_bbox",
+  "type": "BoundingBox",
+  "x_axis": {
+    "guid": "1a263cd1-bca3-4927-ba6e-eda077b48ba1",
+    "name": "my_vector",
+    "type": "Vector",
+    "x": 1.0,
+    "y": 0.0,
+    "z": 0.0
+  },
+  "y_axis": {
+    "guid": "dfd54da1-c296-418e-8b78-973ef145a4d0",
+    "name": "my_vector",
+    "type": "Vector",
+    "x": 0.0,
+    "y": 1.0,
+    "z": 0.0
+  },
+  "z_axis": {
+    "guid": "c9c5401f-ad60-44c8-9f5f-a37a1e249363",
+    "name": "my_vector",
+    "type": "Vector",
+    "x": 0.0,
+    "y": 0.0,
+    "z": 1.0
+  }
+}

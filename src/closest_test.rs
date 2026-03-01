@@ -122,6 +122,23 @@ pub fn run_closest_mesh_point() -> TestResult {
     })
 }
 
+pub fn run_closest_mesh_point_aabb() -> TestResult {
+    MINI_TEST!("Mesh Point AABB", {
+        use crate::Closest;
+        use crate::Primitives;
+        use crate::Point;
+
+        let m = Primitives::cube(2.0);
+
+        let (cp1, _fk1, d1) = Closest::mesh_point_aabb(&m, &Point::new(0.0, 0.0, 2.0));
+        MINI_CHECK!(TOLERANCE.is_close(cp1[2], 1.0));
+        MINI_CHECK!(TOLERANCE.is_close(d1, 1.0));
+
+        let (_cp2, _fk2, d2) = Closest::mesh_point_aabb(&m, &Point::new(1.0, 1.0, 1.0));
+        MINI_CHECK!(TOLERANCE.is_close(d2, 0.0));
+    })
+}
+
 pub fn run_closest_pointcloud_point() -> TestResult {
     MINI_TEST!("Pointcloud Point", {
         use crate::Closest;
@@ -151,4 +168,5 @@ REGISTER_MINI_TEST!("Closest", "Polyline Point", crate::closest_test::run_closes
 REGISTER_MINI_TEST!("Closest", "Curve Point", crate::closest_test::run_closest_curve_point);
 REGISTER_MINI_TEST!("Closest", "Surface Point", crate::closest_test::run_closest_surface_point);
 REGISTER_MINI_TEST!("Closest", "Mesh Point", crate::closest_test::run_closest_mesh_point);
+REGISTER_MINI_TEST!("Closest", "Mesh Point AABB", crate::closest_test::run_closest_mesh_point_aabb);
 REGISTER_MINI_TEST!("Closest", "Pointcloud Point", crate::closest_test::run_closest_pointcloud_point);

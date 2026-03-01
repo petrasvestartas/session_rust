@@ -480,19 +480,17 @@ impl Mesh {
         };
         let mut order: Vec<usize> = vec![border_idx];
         for i in 0..polylines0.len() { if i != border_idx { order.push(i); } }
-        let mut poly_infos: Vec<(usize, usize)> = Vec::new();
+        let mut poly_infos: Vec<(usize, usize, usize, usize)> = Vec::new(); // (bot_off, bot_n, top_off, top_n)
         let mut all_bot: Vec<Point> = Vec::new();
         let mut all_top: Vec<Point> = Vec::new();
         for (oi, &idx) in order.iter().enumerate() {
             let mut bot = get_open(&polylines0[idx]);
             let mut top = get_open(&polylines1[idx]);
-            let n = bot.len().min(top.len());
-            bot.truncate(n); top.truncate(n);
             let area = sarea(&bot);
             if (oi == 0 && area < 0.0) || (oi != 0 && area > 0.0) {
                 bot.reverse(); top.reverse();
             }
-            poly_infos.push((all_bot.len(), n));
+            poly_infos.push((all_bot.len(), bot.len(), all_top.len(), top.len()));
             all_bot.extend(bot.into_iter());
             all_top.extend(top.into_iter());
         }
@@ -500,28 +498,75 @@ impl Mesh {
         let bvk: Vec<usize> = all_bot.iter().map(|p| mesh.add_vertex(p.clone(), None)).collect();
         let tvk: Vec<usize> = all_top.iter().map(|p| mesh.add_vertex(p.clone(), None)).collect();
         if cap {
-            let (off0, n0) = poly_infos[0];
-            let border_2d: Vec<Point> = (off0..off0+n0).map(|i| {
-                let (u, v) = proj(&all_bot[i]); Point::new(u, v, 0.0)
+            let (_, bot_n0, _, top_n0) = poly_infos[0];
+            // Bottom cap CDT
+            let b2d: Vec<(f64,f64)> = (0..bot_n0).map(|i| proj(&all_bot[i])).collect();
+            let bh2d: Vec<Vec<(f64,f64)>> = poly_infos[1..].iter().map(|&(off,cnt,_,_)| {
+                (off..off+cnt).map(|i| proj(&all_bot[i])).collect()
             }).collect();
-            let holes_2d: Vec<Vec<Point>> = poly_infos[1..].iter().map(|&(off, cnt)| {
-                (off..off+cnt).map(|i| { let (u, v) = proj(&all_bot[i]); Point::new(u, v, 0.0) }).collect()
-            }).collect();
-            let b2d: Vec<(f64,f64)> = border_2d.iter().map(|p| (p[0], p[1])).collect();
-            let h2d: Vec<Vec<(f64,f64)>> = holes_2d.iter().map(|h| h.iter().map(|p| (p[0], p[1])).collect()).collect();
-            let cap_tris = trimesh_cdt::cdt_triangulate(&b2d, &h2d);
-            for &(a, b, c) in &cap_tris {
+            for &(a, b, c) in &trimesh_cdt::cdt_triangulate(&b2d, &bh2d) {
                 mesh.add_face(vec![bvk[a], bvk[c], bvk[b]], None);
             }
-            for &(a, b, c) in &cap_tris {
+            // Top cap CDT
+            let t2d: Vec<(f64,f64)> = (0..top_n0).map(|i| proj(&all_top[i])).collect();
+            let th2d: Vec<Vec<(f64,f64)>> = poly_infos[1..].iter().map(|&(_,_,off,cnt)| {
+                (off..off+cnt).map(|i| proj(&all_top[i])).collect()
+            }).collect();
+            for &(a, b, c) in &trimesh_cdt::cdt_triangulate(&t2d, &th2d) {
                 mesh.add_face(vec![tvk[a], tvk[b], tvk[c]], None);
             }
         }
-        for (_, &(off, n)) in poly_infos.iter().enumerate() {
-            for i in 0..n {
-                let j = (i + 1) % n;
-                let (bi, bj) = (off + i, off + j);
-                mesh.add_face(vec![bvk[bi], bvk[bj], tvk[bj], tvk[bi]], None);
+        // Side faces: align by longest edge, quads for equal counts, zipper+triangles otherwise
+        let edsq = |pts: &[Point], i: usize| -> f64 {
+            let j = (i + 1) % pts.len();
+            let (dx, dy, dz) = (pts[j][0]-pts[i][0], pts[j][1]-pts[i][1], pts[j][2]-pts[i][2]);
+            dx*dx + dy*dy + dz*dz
+        };
+        for &(bot_off, bot_n, top_off, top_n) in &poly_infos {
+            let bpts = &all_bot[bot_off..bot_off+bot_n];
+            let tpts = &all_top[top_off..top_off+top_n];
+            let ia = (0..bot_n).max_by(|&a, &b| edsq(bpts, a).partial_cmp(&edsq(bpts, b)).unwrap()).unwrap_or(0);
+            let ib = (0..top_n).max_by(|&a, &b| edsq(tpts, a).partial_cmp(&edsq(tpts, b)).unwrap()).unwrap_or(0);
+            if bot_n == top_n {
+                for k in 0..bot_n {
+                    let (cb, ct) = (bot_off+(ia+k)%bot_n, top_off+(ib+k)%top_n);
+                    let (nb, nt) = (bot_off+(ia+k+1)%bot_n, top_off+(ib+k+1)%top_n);
+                    mesh.add_face(vec![bvk[cb], bvk[nb], tvk[nt], tvk[ct]], None);
+                }
+                continue;
+            }
+            let mut b_arcs = vec![0.0_f64; bot_n+1];
+            for k in 0..bot_n {
+                let (i, j) = ((ia+k)%bot_n, (ia+k+1)%bot_n);
+                let (dx, dy, dz) = (bpts[j][0]-bpts[i][0], bpts[j][1]-bpts[i][1], bpts[j][2]-bpts[i][2]);
+                b_arcs[k+1] = b_arcs[k] + (dx*dx+dy*dy+dz*dz).sqrt();
+            }
+            let mut t_arcs = vec![0.0_f64; top_n+1];
+            for k in 0..top_n {
+                let (i, j) = ((ib+k)%top_n, (ib+k+1)%top_n);
+                let (dx, dy, dz) = (tpts[j][0]-tpts[i][0], tpts[j][1]-tpts[i][1], tpts[j][2]-tpts[i][2]);
+                t_arcs[k+1] = t_arcs[k] + (dx*dx+dy*dy+dz*dz).sqrt();
+            }
+            let inv_b = if b_arcs[bot_n] > 0.0 { 1.0/b_arcs[bot_n] } else { 1.0 };
+            let inv_t = if t_arcs[top_n] > 0.0 { 1.0/t_arcs[top_n] } else { 1.0 };
+            let (mut bi, mut ti) = (0usize, 0usize);
+            while bi < bot_n || ti < top_n {
+                let (cb, ct) = (bot_off+(ia+bi)%bot_n, top_off+(ib+ti)%top_n);
+                let (nb, nt) = (bot_off+(ia+bi+1)%bot_n, top_off+(ib+ti+1)%top_n);
+                if bi >= bot_n {
+                    mesh.add_face(vec![bvk[cb], tvk[ct], tvk[nt]], None); ti += 1;
+                } else if ti >= top_n {
+                    mesh.add_face(vec![bvk[cb], bvk[nb], tvk[ct]], None); bi += 1;
+                } else {
+                    let (bp, tp) = (b_arcs[bi+1]*inv_b, t_arcs[ti+1]*inv_t);
+                    if (bp-tp).abs() < 1e-9 {
+                        mesh.add_face(vec![bvk[cb], bvk[nb], tvk[nt], tvk[ct]], None); bi += 1; ti += 1;
+                    } else if bp < tp {
+                        mesh.add_face(vec![bvk[cb], bvk[nb], tvk[ct]], None); bi += 1;
+                    } else {
+                        mesh.add_face(vec![bvk[cb], tvk[ct], tvk[nt]], None); ti += 1;
+                    }
+                }
             }
         }
         mesh
@@ -640,6 +685,22 @@ impl Mesh {
         count
     }
 
+    pub fn edges(&self) -> Vec<(usize, usize)> {
+        let mut outer: Vec<usize> = self.halfedge.keys().cloned().collect();
+        outer.sort();
+        let mut result = Vec::new();
+        for u in outer {
+            let mut inner: Vec<usize> = self.halfedge[&u].keys().cloned().collect();
+            inner.sort();
+            for v in inner {
+                if self.halfedge[&u][&v].is_none() {
+                    result.push((u, v));
+                }
+            }
+        }
+        result
+    }
+
     pub fn euler(&self) -> i32 {
         let v = self.number_of_vertices() as i32;
         let e = self.number_of_edges() as i32;
@@ -736,6 +797,19 @@ impl Mesh {
         }
 
         true
+    }
+
+    pub fn unweld(&self) -> Mesh {
+        let mut m = Mesh::new();
+        for (_fkey, vkeys) in &self.face {
+            let mut new_vkeys = Vec::new();
+            for &vk in vkeys {
+                let vd = &self.vertex[&vk];
+                new_vkeys.push(m.add_vertex(Point::new(vd.x, vd.y, vd.z), None));
+            }
+            m.add_face(new_vkeys, None);
+        }
+        m
     }
 
     ///////////////////////////////////////////////////////////////////////////////////////////

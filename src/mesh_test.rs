@@ -355,6 +355,24 @@ pub fn run_mesh_attributes() -> TestResult {
     })
 }
 
+pub fn run_mesh_edges() -> TestResult {
+    MINI_TEST!("Edges", {
+        use crate::Mesh;
+        use crate::Point;
+
+        let mut mesh = Mesh::new();
+        let v0 = mesh.add_vertex(Point::new(0.0, 0.0, 0.0), None);
+        let v1 = mesh.add_vertex(Point::new(1.0, 0.0, 0.0), None);
+        let v2 = mesh.add_vertex(Point::new(1.0, 1.0, 0.0), None);
+        let v3 = mesh.add_vertex(Point::new(0.0, 1.0, 0.0), None);
+        mesh.add_face(vec![v0, v1, v2, v3], None);
+
+        let edges = mesh.edges();
+        MINI_CHECK!(edges.len() == 4);
+        MINI_CHECK!(edges[0] == (0, 3));
+    })
+}
+
 pub fn run_mesh_vertex_and_face_operations() -> TestResult {
     MINI_TEST!("Vertex and Face Operations", {
         use crate::Mesh;
@@ -402,6 +420,21 @@ pub fn run_mesh_vertex_and_face_operations() -> TestResult {
         let n0_after = mesh.face_normal(f0).unwrap();
         let n1_after = mesh.face_normal(f1).unwrap();
         MINI_CHECK!(n0_after[0]*n1_after[0] + n0_after[1]*n1_after[1] + n0_after[2]*n1_after[2] > 0.0);
+    })
+}
+
+pub fn run_mesh_unweld() -> TestResult {
+    MINI_TEST!("Unweld", {
+        use crate::Mesh;
+
+        let box_mesh = Mesh::create_box(1.0, 1.0, 1.0);
+        let u = box_mesh.unweld();
+
+        MINI_CHECK!(u.number_of_faces() == box_mesh.number_of_faces());
+        MINI_CHECK!(u.number_of_vertices() == 24);
+        for vk in u.vertex.keys() {
+            MINI_CHECK!(u.vertex_faces(*vk).len() == 1);
+        }
     })
 }
 
@@ -665,7 +698,9 @@ REGISTER_MINI_TEST!("Mesh", "From Polygon With Holes Many", crate::mesh_test::ru
 REGISTER_MINI_TEST!("Mesh", "Loft Many", crate::mesh_test::run_mesh_loft_many);
 REGISTER_MINI_TEST!("Mesh", "Boolean Queries", crate::mesh_test::run_mesh_boolean_queries);
 REGISTER_MINI_TEST!("Mesh", "Attributes", crate::mesh_test::run_mesh_attributes);
+REGISTER_MINI_TEST!("Mesh", "Edges", crate::mesh_test::run_mesh_edges);
 REGISTER_MINI_TEST!("Mesh", "Vertex and Face Operations", crate::mesh_test::run_mesh_vertex_and_face_operations);
+REGISTER_MINI_TEST!("Mesh", "Unweld", crate::mesh_test::run_mesh_unweld);
 REGISTER_MINI_TEST!("Mesh", "Connectivity Queries", crate::mesh_test::run_mesh_connectivity_queries);
 REGISTER_MINI_TEST!("Mesh", "Geometric Properties", crate::mesh_test::run_mesh_geometric_properties);
 REGISTER_MINI_TEST!("Mesh", "Transformation", crate::mesh_test::run_mesh_transformation);
