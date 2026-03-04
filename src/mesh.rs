@@ -1,8 +1,33 @@
-use crate::{BoundingBox, Color, Line, Point, Tolerance, Vector, Xform, BVH};
+﻿use crate::{BoundingBox, Color, Line, Point, Tolerance, Vector, Xform, BVH};
 use crate::polyline::Polyline;
 use crate::trimesh_cdt;
 use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
+
+/// Active color mode for mesh rendering
+#[derive(Clone, PartialEq, Default, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum ColorMode {
+    #[default] OBJECTCOLOR,
+    POINTCOLORS,
+    FACECOLORS,
+    NONE,
+}
+
+impl ColorMode {
+    fn to_i32(&self) -> i32 {
+        match self { Self::OBJECTCOLOR => 0, Self::POINTCOLORS => 1, Self::FACECOLORS => 2, Self::NONE => 3 }
+    }
+    fn from_i32(v: i32) -> Self {
+        match v { 1 => Self::POINTCOLORS, 2 => Self::FACECOLORS, 3 => Self::NONE, _ => Self::OBJECTCOLOR }
+    }
+    fn to_str(&self) -> &'static str {
+        match self { Self::OBJECTCOLOR => "objectcolor", Self::POINTCOLORS => "pointcolors", Self::FACECOLORS => "facecolors", Self::NONE => "none" }
+    }
+    fn from_str(s: &str) -> Self {
+        match s { "pointcolors" => Self::POINTCOLORS, "facecolors" => Self::FACECOLORS, "none" => Self::NONE, _ => Self::OBJECTCOLOR }
+    }
+}
 
 /// Weighting scheme for vertex normal computation
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -31,13 +56,17 @@ pub struct Mesh {
     pub guid: String,                                            // Unique identifier
     pub name: String,                                            // Mesh name
     #[serde(skip)]
-    pub pointcolors: Vec<Color>,               // Vertex colors
+    pointcolors: Vec<Color>,                   // Vertex colors
     #[serde(skip)]
-    pub facecolors: Vec<Color>,                // Face colors
+    facecolors: Vec<Color>,                    // Face colors
     #[serde(skip)]
-    pub linecolors: Vec<Color>,                // Edge colors
+    linecolors: Vec<Color>,                    // Edge colors
     #[serde(skip)]
-    pub widths: Vec<f64>,                      // Edge widths
+    widths: Vec<f64>,                          // Edge widths
+    #[serde(skip)]
+    objectcolor: Color,                        // Object color
+    #[serde(skip)]
+    pub color_mode: ColorMode,                 // Active color mode
     #[serde(default = "Xform::identity")]
     pub xform: Xform,   // Transformation matrix
     // Cached triangle BVH for ray queries (not serialized)
@@ -138,6 +167,8 @@ impl Mesh {
             facecolors: Vec::new(),
             linecolors: Vec::new(),
             widths: Vec::new(),
+            objectcolor: Color::white(),
+            color_mode: ColorMode::OBJECTCOLOR,
             xform: Xform::identity(),
             tri_bvh: None,
             tri_tris: Vec::new(),
@@ -721,8 +752,29 @@ impl Mesh {
         self.facecolors.clear();
         self.linecolors.clear();
         self.widths.clear();
+        self.objectcolor = Color::white();
+        self.color_mode = ColorMode::OBJECTCOLOR;
         self.invalidate_triangle_bvh();
     }
+
+    pub fn set_pointcolors(&mut self, v: Vec<Color>) { self.pointcolors = v; self.color_mode = ColorMode::POINTCOLORS; }
+    pub fn set_facecolors(&mut self, v: Vec<Color>) { self.facecolors = v; self.color_mode = ColorMode::FACECOLORS; }
+    pub fn set_linecolors(&mut self, v: Vec<Color>, w: Vec<f64>) { self.linecolors = v; if !w.is_empty() { self.widths = w; } }
+    pub fn set_objectcolor(&mut self, c: Color) { self.objectcolor = c; }
+
+    pub fn get_pointcolors(&self) -> &[Color]      { &self.pointcolors }
+    pub fn get_facecolors(&self) -> &[Color]       { &self.facecolors }
+    pub fn get_linecolors(&self) -> &[Color]       { &self.linecolors }
+    pub fn widths(&self) -> &[f64]                 { &self.widths }
+    pub fn objectcolor(&self) -> &Color            { &self.objectcolor }
+    pub fn pointcolors_mut(&mut self) -> &mut [Color] { &mut self.pointcolors }
+    pub fn facecolors_mut(&mut self) -> &mut [Color]  { &mut self.facecolors }
+    pub fn linecolors_mut(&mut self) -> &mut [Color]  { &mut self.linecolors }
+    pub fn widths_mut(&mut self) -> &mut [f64]        { &mut self.widths }
+
+    pub fn clear_pointcolors(&mut self) { self.pointcolors.clear(); if self.color_mode == ColorMode::POINTCOLORS { self.color_mode = ColorMode::OBJECTCOLOR; } }
+    pub fn clear_facecolors(&mut self) { self.facecolors.clear(); if self.color_mode == ColorMode::FACECOLORS { self.color_mode = ColorMode::OBJECTCOLOR; } }
+    pub fn clear_linecolors(&mut self) { self.linecolors.clear(); self.widths.clear(); }
 
     pub fn unify_winding(&mut self) -> bool {
         if self.face.len() < 2 {
@@ -1246,6 +1298,8 @@ impl Mesh {
             "pointcolors": pointcolors_flat,
             "facecolors": facecolors_flat,
             "linecolors": linecolors_flat,
+            "objectcolor": serde_json::to_value(&self.objectcolor).unwrap_or(serde_json::Value::Null),
+            "color_mode": self.color_mode.to_str(),
             "widths": self.widths
         })
     }
@@ -1321,6 +1375,15 @@ impl Mesh {
 
         if let Some(widths) = data.get("widths").and_then(|v| v.as_array()) {
             mesh.widths = widths.iter().filter_map(|v| v.as_f64()).collect();
+        }
+
+        if let Some(oc) = data.get("objectcolor") {
+            if let Ok(color) = serde_json::from_value::<Color>(oc.clone()) {
+                mesh.objectcolor = color;
+            }
+        }
+        if let Some(cm) = data.get("color_mode").and_then(|v| v.as_str()) {
+            mesh.color_mode = ColorMode::from_str(cm);
         }
 
         Some(mesh)
@@ -1455,6 +1518,15 @@ impl Mesh {
             facecolors,
             linecolors,
             widths: self.widths.clone(),
+            objectcolor: Some(crate::proto::Color {
+                guid: self.objectcolor.guid.clone(),
+                name: self.objectcolor.name.clone(),
+                r: self.objectcolor.r as i32,
+                g: self.objectcolor.g as i32,
+                b: self.objectcolor.b as i32,
+                a: self.objectcolor.a as i32,
+            }),
+            color_mode: self.color_mode.to_i32(),
             xform: Some(crate::proto::Xform {
                 guid: self.xform.guid.clone(),
                 name: self.xform.name.clone(),
@@ -1534,6 +1606,13 @@ impl Mesh {
         }).collect();
 
         mesh.widths = proto.widths;
+
+        if let Some(oc) = proto.objectcolor {
+            mesh.objectcolor = Color::new(oc.r as u8, oc.g as u8, oc.b as u8, oc.a as u8);
+            mesh.objectcolor.guid = oc.guid;
+            mesh.objectcolor.name = oc.name;
+        }
+        mesh.color_mode = ColorMode::from_i32(proto.color_mode);
 
         if let Some(xform) = proto.xform {
             mesh.xform.guid = xform.guid;

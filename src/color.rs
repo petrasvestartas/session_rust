@@ -287,6 +287,11 @@ impl Color {
         color
     }
 
+    /// Return a palette of 12 spectral colors in order.
+    pub fn palette() -> Vec<Color> {
+        vec![Self::red(), Self::orange(), Self::yellow(), Self::lime(), Self::green(), Self::mint(), Self::cyan(), Self::azure(), Self::blue(), Self::violet(), Self::magenta(), Self::pink()]
+    }
+
     ///////////////////////////////////////////////////////////////////////////////////////////
     // Protobuf Serialization
     ///////////////////////////////////////////////////////////////////////////////////////////

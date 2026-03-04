@@ -41,11 +41,11 @@ pub fn run_primitives_mesh_edge_pipes() -> TestResult {
         let v2 = mesh.add_vertex(Point::new(1.0, 1.0, 0.0), None);
         let v3 = mesh.add_vertex(Point::new(0.0, 1.0, 0.0), None);
         mesh.add_face(vec![v0, v1, v2, v3], None);
-        mesh.linecolors[0] = Color::red();
+        mesh.linecolors_mut()[0] = Color::red();
 
         let pipes = Primitives::edge_pipes(&mesh, 0.1);
         MINI_CHECK!(pipes.len() == 4);
-        MINI_CHECK!(pipes[0].facecolors[0][0] == Color::red()[0]);
+        MINI_CHECK!(pipes[0].get_facecolors()[0][0] == Color::red()[0]);
     })
 }
 

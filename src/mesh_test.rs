@@ -1,34 +1,77 @@
-use crate::{MINI_CHECK, MINI_TEST, REGISTER_MINI_TEST};
+﻿use crate::{MINI_CHECK, MINI_TEST, REGISTER_MINI_TEST};
 use crate::mini_test::TestResult;
 use crate::tolerance::{TOLERANCE, PI};
 
 pub fn run_mesh_constructor() -> TestResult {
     MINI_TEST!("Constructor", {
         use crate::Mesh;
-        use crate::Point;
+        use crate::Polyline;
+        use crate::Color;
+        use crate::mesh::ColorMode;
 
-        let sides = 6;
-
-        // Create hexagon vertices in XY plane
-        let mut vertices: Vec<Point> = Vec::new();
-        for i in 0..sides {
-            let angle = 2.0 * PI * i as f64 / sides as f64;
-            let x = 1.0 * angle.cos();
-            let y = 1.0 * angle.sin();
-            vertices.push(Point::new(x, y, 0.0));
-        }
-
-        let faces = vec![vec![0, 1, 2, 3, 4, 5]];
-
-        let mesh = Mesh::from_vertices_and_faces(vertices, faces);
-
+        let vertices = Polyline::from_sides(6, 1.0, false).get_points();
+        let mut mesh = Mesh::from_vertices_and_faces(vertices, vec![vec![0, 1, 2, 3, 4, 5]]);
         let _sstr = mesh.str();
         let _srepr = mesh.repr();
-
-        // Copy (new guid)
         let _mcopy = mesh.duplicate();
-
         MINI_CHECK!(mesh.is_valid());
+        mesh.name = "hexagon".to_string();
+
+        let palette = Color::palette();
+
+        // set_objectcolor does not change color_mode
+        mesh.set_objectcolor(Color::grey());
+        MINI_CHECK!(mesh.color_mode == ColorMode::OBJECTCOLOR);
+
+        // set_pointcolors → color_mode = PointColors
+        let mut pc: Vec<Color> = Vec::new();
+        pc.reserve(mesh.number_of_vertices());
+        for i in 0..mesh.number_of_vertices() {
+            pc.push(palette[i % palette.len()].clone());
+        }
+        mesh.set_pointcolors(pc);
+        MINI_CHECK!(mesh.color_mode == ColorMode::POINTCOLORS);
+        MINI_CHECK!(mesh.get_pointcolors().len() == mesh.number_of_vertices());
+
+        // set_facecolors → color_mode = FaceColors
+        let mut fc: Vec<Color> = Vec::new();
+        fc.reserve(mesh.number_of_faces());
+        for i in 0..mesh.number_of_faces() {
+            fc.push(palette[i % palette.len()].clone());
+        }
+        mesh.set_facecolors(fc);
+        MINI_CHECK!(mesh.color_mode == ColorMode::FACECOLORS);
+        MINI_CHECK!(mesh.get_facecolors().len() == mesh.number_of_faces());
+
+        // set_linecolors does not change color_mode
+        let mut lc: Vec<Color> = Vec::new();
+        let lw: Vec<f64> = vec![0.1; mesh.number_of_edges()];
+        lc.reserve(mesh.number_of_edges());
+        for i in 0..mesh.number_of_edges() {
+            lc.push(palette[i % palette.len()].clone());
+        }
+        mesh.set_linecolors(lc, lw);
+        MINI_CHECK!(mesh.color_mode == ColorMode::FACECOLORS);
+        MINI_CHECK!(mesh.get_linecolors().len() == mesh.number_of_edges());
+
+        // clear_facecolors reverts color_mode only if currently FaceColors
+        mesh.color_mode = ColorMode::FACECOLORS;
+        MINI_CHECK!(mesh.color_mode == ColorMode::FACECOLORS);
+        mesh.clear_facecolors();
+        MINI_CHECK!(mesh.color_mode == ColorMode::OBJECTCOLOR);
+        MINI_CHECK!(mesh.get_facecolors().is_empty());
+
+        // clear_pointcolors does not revert if color_mode != PointColors
+        mesh.color_mode = ColorMode::FACECOLORS;
+        MINI_CHECK!(mesh.color_mode == ColorMode::FACECOLORS);
+        mesh.clear_pointcolors();
+        MINI_CHECK!(mesh.color_mode == ColorMode::FACECOLORS);
+
+        // clear_linecolors does not change color_mode
+        mesh.color_mode = ColorMode::POINTCOLORS;
+        mesh.clear_linecolors();
+        MINI_CHECK!(mesh.color_mode == ColorMode::POINTCOLORS);
+        MINI_CHECK!(mesh.get_linecolors().is_empty());
     })
 }
 
@@ -626,6 +669,7 @@ pub fn run_mesh_json_roundtrip() -> TestResult {
 
         let mut mesh = Mesh::new();
         mesh.name = "test_mesh".to_string();
+        mesh.color_mode = crate::mesh::ColorMode::FACECOLORS;
         let v0 = mesh.add_vertex(Point::new(0.0, 0.0, 0.0), None);
         let v1 = mesh.add_vertex(Point::new(1.0, 0.0, 0.0), None);
         let v2 = mesh.add_vertex(Point::new(0.0, 1.0, 0.0), None);
@@ -635,6 +679,7 @@ pub fn run_mesh_json_roundtrip() -> TestResult {
         let json = mesh.jsondump();
         let loaded_json = Mesh::jsonload(&json).unwrap();
         MINI_CHECK!(loaded_json.name == mesh.name);
+        MINI_CHECK!(loaded_json.color_mode == mesh.color_mode);
         MINI_CHECK!(loaded_json.number_of_vertices() == mesh.number_of_vertices());
         MINI_CHECK!(loaded_json.number_of_faces() == mesh.number_of_faces());
 
@@ -664,6 +709,7 @@ pub fn run_mesh_protobuf_roundtrip() -> TestResult {
 
         let mut mesh = Mesh::new();
         mesh.name = "test_mesh_proto".to_string();
+        mesh.color_mode = crate::mesh::ColorMode::FACECOLORS;
         let v0 = mesh.add_vertex(Point::new(0.0, 0.0, 0.0), None);
         let v1 = mesh.add_vertex(Point::new(1.0, 0.0, 0.0), None);
         let v2 = mesh.add_vertex(Point::new(0.0, 1.0, 0.0), None);
@@ -673,6 +719,7 @@ pub fn run_mesh_protobuf_roundtrip() -> TestResult {
         let proto_bytes = mesh.pb_dumps();
         let loaded_string = Mesh::pb_loads(&proto_bytes).unwrap();
         MINI_CHECK!(loaded_string.name == mesh.name);
+        MINI_CHECK!(loaded_string.color_mode == mesh.color_mode);
         MINI_CHECK!(loaded_string.number_of_vertices() == mesh.number_of_vertices());
 
         // File

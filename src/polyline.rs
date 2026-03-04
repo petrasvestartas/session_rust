@@ -1,3 +1,4 @@
+use crate::tolerance::PI;
 use crate::{Color, Plane, Point, Tolerance, Vector, Xform};
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use serde_json::Value;
@@ -66,6 +67,24 @@ impl Polyline {
             linecolor: Color::black(),
             xform: Xform::identity(),
         }
+    }
+
+    /// Create a regular polygon with given number of sides and radius.
+    pub fn from_sides(sides: usize, radius: f64, close: bool) -> Self {
+        let cap = if close { sides + 1 } else { sides };
+        let mut coords: Vec<f64> = Vec::with_capacity(cap * 3);
+        for i in 0..sides {
+            let angle = 2.0 * PI * i as f64 / sides as f64;
+            coords.push(radius * angle.cos());
+            coords.push(radius * angle.sin());
+            coords.push(0.0);
+        }
+        if close {
+            coords.push(coords[0]);
+            coords.push(coords[1]);
+            coords.push(coords[2]);
+        }
+        Self::from_coords(coords)
     }
 
     /// Creates a Polyline from a flat coordinate array.

@@ -332,17 +332,70 @@ impl Primitives {
         Self::transform_geometry(&unit_cyl, &xform)
     }
 
+    fn capsule_geometry(start: &Point, end: &Point, radius: f64) -> (Vec<Point>, Vec<[usize; 3]>) {
+        let n = 10usize;
+        let lat = std::f64::consts::PI / 4.0;
+        let r_hemi = radius * lat.sin();
+        let off = radius * lat.cos();
+        let (mut ax, mut ay, mut az) = (end[0]-start[0], end[1]-start[1], end[2]-start[2]);
+        let len = (ax*ax+ay*ay+az*az).sqrt();
+        if len < 1e-12 { ax=0.0; ay=0.0; az=1.0; } else { ax/=len; ay/=len; az/=len; }
+        let (mut xx, mut xy, mut xz) = if az.abs() < 0.9 { (-ay, ax, 0.0) } else { (0.0, -az, ay) };
+        let xl = (xx*xx+xy*xy+xz*xz).sqrt(); xx/=xl; xy/=xl; xz/=xl;
+        let (yx, yy, yz) = (ay*xz-az*xy, az*xx-ax*xz, ax*xy-ay*xx);
+        let ring = |cx: f64, cy: f64, cz: f64, aoff: f64, rr: f64| -> Vec<Point> {
+            (0..n).map(|i| {
+                let a = 2.0*std::f64::consts::PI*i as f64/n as f64;
+                let (ca, sa) = (a.cos(), a.sin());
+                Point::new(cx+aoff*ax+rr*(ca*xx+sa*yx),
+                           cy+aoff*ay+rr*(ca*xy+sa*yy),
+                           cz+aoff*az+rr*(ca*xz+sa*yz))
+            }).collect()
+        };
+        let mut verts: Vec<Point> = Vec::new();
+        verts.extend(ring(start[0],start[1],start[2],0.0,radius));       // 0-9
+        verts.extend(ring(end[0],  end[1],  end[2],  0.0,radius));       // 10-19
+        verts.extend(ring(start[0],start[1],start[2],-off,r_hemi));      // 20-29
+        verts.push(Point::new(start[0]-radius*ax,start[1]-radius*ay,start[2]-radius*az)); // 30
+        verts.extend(ring(end[0],end[1],end[2],off,r_hemi));             // 31-40
+        verts.push(Point::new(end[0]+radius*ax,end[1]+radius*ay,end[2]+radius*az));       // 41
+        let mut tris: Vec<[usize; 3]> = Vec::new();
+        for i in 0..n {
+            let ni = (i+1)%n;
+            tris.push([i, ni, 10+ni]);      tris.push([i, 10+ni, 10+i]);
+            tris.push([20+i, ni, i]);       tris.push([20+i, 20+ni, ni]);
+            tris.push([10+i, 10+ni, 31+ni]); tris.push([10+i, 31+ni, 31+i]);
+        }
+        for i in 0..n {
+            let ni = (i+1)%n;
+            tris.push([30, 20+ni, 20+i]);
+            tris.push([41, 31+i, 31+ni]);
+        }
+        (verts, tris)
+    }
+
+    pub fn capsule_mesh(line: &Line, radius: f64) -> Mesh {
+        let start = line.start();
+        let end = line.end();
+        let (verts, tris) = Self::capsule_geometry(&start, &end, radius);
+        let mut mesh = Mesh::new();
+        let vkeys: Vec<usize> = verts.iter().map(|v| mesh.add_vertex(v.clone(), None)).collect();
+        for t in &tris { mesh.add_face(vec![vkeys[t[0]], vkeys[t[1]], vkeys[t[2]]], None); }
+        mesh
+    }
+
     pub fn edge_pipes(mesh: &Mesh, radius: f64) -> Vec<Mesh> {
         let edge_list = mesh.edges();
         let mut result = Vec::new();
         for (i, (u, v)) in edge_list.iter().enumerate() {
-            if i >= mesh.linecolors.len() { break; }
+            if i >= mesh.get_linecolors().len() { break; }
             let start = mesh.vertex[u].position();
             let end = mesh.vertex[v].position();
             let line = Line::new(start[0], start[1], start[2], end[0], end[1], end[2]);
-            let mut pipe = Primitives::cylinder_mesh(&line, radius);
-            let color = mesh.linecolors[i].clone();
-            for c in pipe.facecolors.iter_mut() { *c = color.clone(); }
+            let mut pipe = Primitives::capsule_mesh(&line, radius);
+            let color = mesh.get_linecolors()[i].clone();
+            let nf = pipe.number_of_faces();
+            pipe.set_facecolors(vec![color; nf]);
             result.push(pipe);
         }
         result
