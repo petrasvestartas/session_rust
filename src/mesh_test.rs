@@ -105,7 +105,7 @@ pub fn run_mesh_from_polylines() -> TestResult {
                 Point::new(1.28955, 0.0, 1.127558),
                 Point::new(1.853404, 0.866025, 1.578581),
             ],
-        ], None);
+        ], Some(0.001));
         MINI_CHECK!(mesh.is_valid());
     })
 }
@@ -117,16 +117,26 @@ pub fn run_mesh_from_lines() -> TestResult {
         use crate::Point;
 
         let lines = vec![
-            Line::from_points(&Point::new(4.948083, -0.149798, 1.00765), &Point::new(4.395544, -0.996413, 1.196018)),
-            Line::from_points(&Point::new(3.866593, 0.371225, 1.376346), &Point::new(4.567265, 0.584361, 1.137476)),
-            Line::from_points(&Point::new(3.915298, -0.157402, 1.359741), &Point::new(3.282977, -0.051356, 1.575309)),
-            Line::from_points(&Point::new(4.286215, -0.224964, 1.23329), &Point::new(3.607284, -0.987075, 1.464748)),
-            Line::from_points(&Point::new(3.744351, 0.971574, 1.41802), &Point::new(3.266367, 0.841359, 1.580972)),
-            Line::from_points(&Point::new(4.567265, 0.584361, 1.137476), &Point::new(4.948083, -0.149798, 1.00765)),
-            Line::from_points(&Point::new(4.395544, -0.996413, 1.196018), &Point::new(3.607284, -0.987075, 1.464748)),
-            Line::from_points(&Point::new(3.915298, -0.157402, 1.359741), &Point::new(4.286215, -0.224964, 1.23329)),
-            Line::from_points(&Point::new(3.282977, -0.051356, 1.575309), &Point::new(3.266367, 0.841359, 1.580972)),
-            Line::from_points(&Point::new(3.744351, 0.971574, 1.41802), &Point::new(3.866593, 0.371225, 1.376346)),
+            Line::from_points(&Point::new(4.948083, -0.149798, 1.00765),
+                              &Point::new(4.395544, -0.996413, 1.196018)),
+            Line::from_points(&Point::new(3.866593, 0.371225, 1.376346),
+                              &Point::new(4.567265, 0.584361, 1.137476)),
+            Line::from_points(&Point::new(3.915298, -0.157402, 1.359741),
+                              &Point::new(3.282977, -0.051356, 1.575309)),
+            Line::from_points(&Point::new(4.286215, -0.224964, 1.23329),
+                              &Point::new(3.607284, -0.987075, 1.464748)),
+            Line::from_points(&Point::new(3.744351, 0.971574, 1.41802),
+                              &Point::new(3.266367, 0.841359, 1.580972)),
+            Line::from_points(&Point::new(4.567265, 0.584361, 1.137476),
+                              &Point::new(4.948083, -0.149798, 1.00765)),
+            Line::from_points(&Point::new(4.395544, -0.996413, 1.196018),
+                              &Point::new(3.607284, -0.987075, 1.464748)),
+            Line::from_points(&Point::new(3.915298, -0.157402, 1.359741),
+                              &Point::new(4.286215, -0.224964, 1.23329)),
+            Line::from_points(&Point::new(3.282977, -0.051356, 1.575309),
+                              &Point::new(3.266367, 0.841359, 1.580972)),
+            Line::from_points(&Point::new(3.744351, 0.971574, 1.41802),
+                              &Point::new(3.866593, 0.371225, 1.376346)),
         ];
         let mesh = Mesh::from_lines(&lines, true, None);
         MINI_CHECK!(mesh.is_valid());

@@ -379,7 +379,16 @@ impl Mesh {
         }
         for cycle in &face_cycles {
             let mapped: Vec<usize> = cycle.iter().map(|&i| vkeys[i]).collect();
-            mesh.add_face(mapped, None);
+            if let Some(fk) = mesh.add_face(mapped.clone(), None) {
+                if cycle.len() > 3 {
+                    let pts: Vec<Point> = cycle.iter().map(|&i| verts[i].clone()).collect();
+                    let tris = crate::triangulation_2d::triangulate(&pts, None);
+                    let tri_vkeys: Vec<[usize; 3]> = tris.iter().map(|&(a, b, c)| {
+                        [mapped[a as usize], mapped[b as usize], mapped[c as usize]]
+                    }).collect();
+                    mesh.triangulation.insert(fk, tri_vkeys);
+                }
+            }
         }
         mesh
     }
@@ -1665,22 +1674,37 @@ impl Mesh {
         }
 
         let (vertices, faces) = self.to_vertices_and_faces();
+        let mut vertex_keys: Vec<usize> = self.vertex.keys().cloned().collect();
+        vertex_keys.sort();
+        let vkey_to_idx: HashMap<usize, usize> = vertex_keys.iter().enumerate().map(|(i, &k)| (k, i)).collect();
+        let mut face_keys: Vec<usize> = self.face.keys().cloned().collect();
+        face_keys.sort();
         let mut tris: Vec<[usize; 3]> = Vec::new();
         let mut tri_boxes: Vec<BoundingBox> = Vec::new();
 
-        for face in faces {
+        for (fi, face) in faces.iter().enumerate() {
             if face.len() < 3 {
                 continue;
+            }
+            if face.len() >= 5 && fi < face_keys.len() {
+                let fk = face_keys[fi];
+                if let Some(stored) = self.triangulation.get(&fk) {
+                    for t in stored {
+                        let i0 = vkey_to_idx[&t[0]];
+                        let i1 = vkey_to_idx[&t[1]];
+                        let i2 = vkey_to_idx[&t[2]];
+                        tris.push([i0, i1, i2]);
+                        let pts = [vertices[i0].clone(), vertices[i1].clone(), vertices[i2].clone()];
+                        tri_boxes.push(BoundingBox::from_points(&pts, 0.0));
+                    }
+                    continue;
+                }
             }
             let v0 = face[0];
             for i in 1..(face.len() - 1) {
                 let t = [v0, face[i], face[i + 1]];
                 tris.push(t);
-                let pts = [
-                    vertices[t[0]].clone(),
-                    vertices[t[1]].clone(),
-                    vertices[t[2]].clone(),
-                ];
+                let pts = [vertices[t[0]].clone(), vertices[t[1]].clone(), vertices[t[2]].clone()];
                 tri_boxes.push(BoundingBox::from_points(&pts, 0.0));
             }
         }
