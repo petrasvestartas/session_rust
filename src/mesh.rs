@@ -366,10 +366,20 @@ impl Mesh {
         }
 
         if delete_boundary_face && !face_cycles.is_empty() {
-            let max_idx = face_cycles.iter().enumerate()
-                .max_by_key(|(_, c)| c.len())
-                .map(|(i, _)| i).unwrap();
-            face_cycles.remove(max_idx);
+            let mut min_idx = 0;
+            let mut min_area = f64::MAX;
+            for (i, cyc) in face_cycles.iter().enumerate() {
+                let cn = cyc.len();
+                let mut area = 0.0_f64;
+                for j in 0..cn {
+                    let a = cyc[j];
+                    let b = cyc[(j+1)%cn];
+                    area += verts[a][0] * verts[b][1] - verts[b][0] * verts[a][1];
+                }
+                area *= 0.5;
+                if area < min_area { min_area = area; min_idx = i; }
+            }
+            face_cycles.remove(min_idx);
         }
 
         let mut mesh = Mesh::new();
@@ -378,16 +388,14 @@ impl Mesh {
             vkeys.push(mesh.add_vertex(pt.clone(), None));
         }
         for cycle in &face_cycles {
-            let mapped: Vec<usize> = cycle.iter().map(|&i| vkeys[i]).collect();
-            if let Some(fk) = mesh.add_face(mapped.clone(), None) {
-                if cycle.len() > 3 {
-                    let pts: Vec<Point> = cycle.iter().map(|&i| verts[i].clone()).collect();
-                    let tris = crate::triangulation_2d::triangulate(&pts, None);
-                    let tri_vkeys: Vec<[usize; 3]> = tris.iter().map(|&(a, b, c)| {
-                        [mapped[a as usize], mapped[b as usize], mapped[c as usize]]
-                    }).collect();
-                    mesh.triangulation.insert(fk, tri_vkeys);
-                }
+            let fvkeys: Vec<usize> = cycle.iter().map(|&i| vkeys[i]).collect();
+            if let Some(fkey) = mesh.add_face(fvkeys, None) {
+                let pts: Vec<Point> = cycle.iter().map(|&i| verts[i].clone()).collect();
+                let tris = crate::triangulation_2d::triangulate(&pts, None);
+                let tri_list: Vec<[usize; 3]> = tris.iter().map(|&(a, b, c)| {
+                    [vkeys[cycle[a as usize]], vkeys[cycle[b as usize]], vkeys[cycle[c as usize]]]
+                }).collect();
+                mesh.triangulation.insert(fkey, tri_list);
             }
         }
         mesh
@@ -1513,6 +1521,17 @@ impl Mesh {
             }
         }).collect();
 
+        let mut triangulation_map: HashMap<u64, crate::proto::TriList> = HashMap::new();
+        for (&fkey, tris) in &self.triangulation {
+            let mut tri_list = crate::proto::TriList { vertices: Vec::new() };
+            for t in tris {
+                tri_list.vertices.push(t[0] as u64);
+                tri_list.vertices.push(t[1] as u64);
+                tri_list.vertices.push(t[2] as u64);
+            }
+            triangulation_map.insert(fkey as u64, tri_list);
+        }
+
         let proto = crate::proto::Mesh {
             guid: self.guid.clone(),
             name: self.name.clone(),
@@ -1541,6 +1560,7 @@ impl Mesh {
                 name: self.xform.name.clone(),
                 matrix: self.xform.m.to_vec(),
             }),
+            triangulation: triangulation_map,
         };
         proto.encode_to_vec()
     }
@@ -1573,6 +1593,17 @@ impl Mesh {
             if !fdata.attributes.is_empty() {
                 mesh.facedata.insert(fkey as usize, fdata.attributes);
             }
+        }
+
+        for (fkey, tri_list) in proto.triangulation {
+            let vlist = &tri_list.vertices;
+            let mut tris: Vec<[usize; 3]> = Vec::new();
+            let mut i = 0;
+            while i + 2 < vlist.len() {
+                tris.push([vlist[i] as usize, vlist[i+1] as usize, vlist[i+2] as usize]);
+                i += 3;
+            }
+            mesh.triangulation.insert(fkey as usize, tris);
         }
 
         for (u, hmap) in proto.halfedges {

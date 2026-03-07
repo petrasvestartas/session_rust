@@ -270,9 +270,21 @@ pub fn triangulate(outer_pts: &[Point], hole_pts_list: Option<&[Vec<Point>]>) ->
     if no_holes {
         if bn == 3 { return vec![(0, 1, 2)]; }
         if bn == 4 {
-            let d02 = (outer_pts[0][0]-outer_pts[2][0]).powi(2) + (outer_pts[0][1]-outer_pts[2][1]).powi(2);
-            let d13 = (outer_pts[1][0]-outer_pts[3][0]).powi(2) + (outer_pts[1][1]-outer_pts[3][1]).powi(2);
-            return if d02 <= d13 { vec![(0, 1, 2), (0, 2, 3)] } else { vec![(0, 1, 3), (1, 2, 3)] };
+            let mut quad_convex = true;
+            let mut qfirst = 0.0_f64;
+            for qi in 0..4_usize {
+                let c = cross_2d(outer_pts[qi%4][0], outer_pts[qi%4][1],
+                                 outer_pts[(qi+1)%4][0], outer_pts[(qi+1)%4][1],
+                                 outer_pts[(qi+2)%4][0], outer_pts[(qi+2)%4][1]);
+                if c.abs() < 1e-12 { continue; }
+                if qfirst == 0.0 { qfirst = c; }
+                else if (c > 0.0) != (qfirst > 0.0) { quad_convex = false; break; }
+            }
+            if quad_convex {
+                let d02 = (outer_pts[0][0]-outer_pts[2][0]).powi(2) + (outer_pts[0][1]-outer_pts[2][1]).powi(2);
+                let d13 = (outer_pts[1][0]-outer_pts[3][0]).powi(2) + (outer_pts[1][1]-outer_pts[3][1]).powi(2);
+                return if d02 <= d13 { vec![(0, 1, 2), (0, 2, 3)] } else { vec![(0, 1, 3), (1, 2, 3)] };
+            }
         }
         let mut convex = true;
         let mut first_cross = 0.0_f64;

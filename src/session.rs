@@ -3,9 +3,11 @@ use crate::{
     Tolerance, Tree, TreeNode, BVH,
 };
 use serde::{Deserialize, Serialize};
+use std::cell::RefCell;
 use std::collections::HashMap;
 use std::fmt;
 use std::fs;
+use std::rc::Rc;
 use uuid::Uuid;
 
 /// Enum representing all possible geometry types in a Session.
@@ -281,13 +283,15 @@ impl Session {
         }
 
         // Build Tree proto
-        fn treenode_to_proto(node: &TreeNode) -> crate::proto::TreeNode {
-            let children: Vec<crate::proto::TreeNode> = node.children().iter().map(|c| treenode_to_proto(c)).collect();
+        fn treenode_to_proto(node: &Rc<RefCell<TreeNode>>) -> crate::proto::TreeNode {
+            let b = node.borrow();
+            let children: Vec<crate::proto::TreeNode> = b.children().iter().map(|c| treenode_to_proto(c)).collect();
             crate::proto::TreeNode {
-                guid: node.guid(),
-                name: node.name(),
-                parent_guid: node.parent().map(|p| p.guid()).unwrap_or_default(),
+                guid: b.guid.clone(),
+                name: b.name.clone(),
+                parent_guid: b.parent().map(|p| p.borrow().guid.clone()).unwrap_or_default(),
                 children,
+                color: None,
             }
         }
         let tree_proto = crate::proto::Tree {
@@ -389,12 +393,11 @@ impl Session {
             session.tree = Tree::new(&tree_proto.name);
             session.tree.guid = tree_proto.guid.clone();
             if let Some(root_proto) = &tree_proto.root {
-                fn proto_to_treenode(proto: &crate::proto::TreeNode) -> TreeNode {
+                fn proto_to_treenode(proto: &crate::proto::TreeNode) -> Rc<RefCell<TreeNode>> {
                     let node = TreeNode::new(&proto.name);
-                    // Override GUID to match serialized data
                     for child_proto in &proto.children {
                         let child = proto_to_treenode(child_proto);
-                        node.add(&child);
+                        node.borrow_mut().add(&child);
                     }
                     node
                 }
@@ -763,7 +766,7 @@ impl Session {
     ///
     /// # Returns
     /// The TreeNode created for this point
-    pub fn add_point(&mut self, point: Point) -> TreeNode {
+    pub fn add_point(&mut self, point: Point) -> Rc<RefCell<TreeNode>> {
         let point_guid = point.guid.clone();
         let point_name = point.name.clone();
         let geometry = Geometry::Point(point.clone());
@@ -779,7 +782,7 @@ impl Session {
         TreeNode::new(&point_guid)
     }
 
-    pub fn add_line(&mut self, line: Line) -> TreeNode {
+    pub fn add_line(&mut self, line: Line) -> Rc<RefCell<TreeNode>> {
         let guid = line.guid.clone();
         let name = line.name.clone();
         let geometry = Geometry::Line(line.clone());
@@ -794,7 +797,7 @@ impl Session {
         TreeNode::new(&guid)
     }
 
-    pub fn add_plane(&mut self, plane: Plane) -> TreeNode {
+    pub fn add_plane(&mut self, plane: Plane) -> Rc<RefCell<TreeNode>> {
         let guid = plane.guid.clone();
         let name = plane.name.clone();
         let geometry = Geometry::Plane(plane.clone());
@@ -809,7 +812,7 @@ impl Session {
         TreeNode::new(&guid)
     }
 
-    pub fn add_bbox(&mut self, bbox: BoundingBox) -> TreeNode {
+    pub fn add_bbox(&mut self, bbox: BoundingBox) -> Rc<RefCell<TreeNode>> {
         let guid = bbox.guid.clone();
         let name = bbox.name.clone();
         let geometry = Geometry::BoundingBox(bbox.clone());
@@ -824,7 +827,7 @@ impl Session {
         TreeNode::new(&guid)
     }
 
-    pub fn add_polyline(&mut self, polyline: Polyline) -> TreeNode {
+    pub fn add_polyline(&mut self, polyline: Polyline) -> Rc<RefCell<TreeNode>> {
         let guid = polyline.guid.clone();
         let name = polyline.name.clone();
         let geometry = Geometry::Polyline(polyline.clone());
@@ -839,7 +842,7 @@ impl Session {
         TreeNode::new(&guid)
     }
 
-    pub fn add_pointcloud(&mut self, pointcloud: PointCloud) -> TreeNode {
+    pub fn add_pointcloud(&mut self, pointcloud: PointCloud) -> Rc<RefCell<TreeNode>> {
         let guid = pointcloud.guid.clone();
         let name = pointcloud.name.clone();
         let geometry = Geometry::PointCloud(pointcloud.clone());
@@ -854,7 +857,7 @@ impl Session {
         TreeNode::new(&guid)
     }
 
-    pub fn add_mesh(&mut self, mesh: Mesh) -> TreeNode {
+    pub fn add_mesh(&mut self, mesh: Mesh) -> Rc<RefCell<TreeNode>> {
         let guid = mesh.guid.clone();
         let name = mesh.name.clone();
         let geometry = Geometry::Mesh(mesh.clone());
@@ -869,7 +872,7 @@ impl Session {
         TreeNode::new(&guid)
     }
 
-    pub fn add_brep(&mut self, brep: BRep) -> TreeNode {
+    pub fn add_brep(&mut self, brep: BRep) -> Rc<RefCell<TreeNode>> {
         let guid = brep.guid.clone();
         let name = brep.name.clone();
 
@@ -885,9 +888,9 @@ impl Session {
     /// # Arguments
     /// * `node` - The TreeNode to add
     /// * `parent` - Optional parent TreeNode (defaults to root if None)
-    pub fn add<'a>(&mut self, node: &TreeNode, parent: impl Into<Option<&'a TreeNode>>)
+    pub fn add<'a>(&mut self, node: &Rc<RefCell<TreeNode>>, parent: impl Into<Option<&'a Rc<RefCell<TreeNode>>>>)
     where
-        TreeNode: 'a,
+        Rc<RefCell<TreeNode>>: 'a,
     {
         let parent_opt = parent.into();
         if parent_opt.is_none() {
@@ -1067,13 +1070,12 @@ impl Session {
         }
 
         fn transform_node(
-            node: &TreeNode,
+            node: &Rc<RefCell<TreeNode>>,
             parent_xform: &Xform,
             transformed_lookup: &HashMap<String, Geometry>,
             transformed_objects: &mut Objects,
         ) {
-            // Get geometry from the lookup
-            let node_name = node.name();
+            let node_name = node.borrow().name.clone();
             let geometry = transformed_lookup.get(&node_name);
 
             let current_xform = if let Some(geom) = geometry {
@@ -1171,7 +1173,7 @@ impl Session {
                 parent_xform.clone()
             };
 
-            for child in node.children() {
+            for child in node.borrow().children() {
                 transform_node(
                     &child,
                     &current_xform,

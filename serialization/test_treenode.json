@@ -1,1 +1,13 @@
-{"type":"TreeNode","guid":"0a36fd3b-b216-4a43-b386-c149ebdf3638","name":"test_node","children":[{"type":"TreeNode","guid":"58c5f449-9ed6-40d0-9fdf-dcc5bc98267a","name":"child_node","children":[]}]}
+{
+    "type": "TreeNode",
+    "guid": "4ab2d295-6d4b-45fd-8c5f-0ea903b56c6f",
+    "name": "test_node",
+    "children": [
+        {
+            "type": "TreeNode",
+            "guid": "d399dab0-6061-4d33-bbbd-893de5eb1b0d",
+            "name": "child_node",
+            "children": []
+        }
+    ]
+}

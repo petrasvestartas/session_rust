@@ -1,13 +1,15 @@
 use crate::treenode::{TreeNode, TreeNodeSerde};
 use serde::{ser::Serialize as SerTrait, Deserialize, Serialize};
+use std::cell::RefCell;
 use std::fmt;
+use std::rc::Rc;
 use uuid::Uuid;
 
 #[derive(Debug, Clone)]
 pub struct Tree {
     pub guid: String,
     pub name: String,
-    root_node: Option<TreeNode>,
+    root_node: Option<Rc<RefCell<TreeNode>>>,
 }
 
 impl Serialize for Tree {
@@ -18,7 +20,7 @@ impl Serialize for Tree {
         let serde_tree = TreeSerde {
             guid: self.guid.clone(),
             name: self.name.clone(),
-            root: self.root_node.as_ref().map(|r| r.to_serde()),
+            root: self.root_node.as_ref().map(|r| r.borrow().to_serde()),
         };
         serde_tree.serialize(serializer)
     }
@@ -59,34 +61,34 @@ impl Tree {
         }
     }
 
-    pub fn root(&self) -> Option<TreeNode> {
+    pub fn root(&self) -> Option<Rc<RefCell<TreeNode>>> {
         self.root_node.clone()
     }
 
-    pub fn add(&mut self, node: &TreeNode, parent: Option<&TreeNode>) {
+    pub fn add(&mut self, node: &Rc<RefCell<TreeNode>>, parent: Option<&Rc<RefCell<TreeNode>>>) {
         if parent.is_none() {
-            self.root_node = Some(node.clone());
+            self.root_node = Some(Rc::clone(node));
         } else if let Some(parent_node) = parent {
-            parent_node.add(node);
+            parent_node.borrow_mut().add(node);
         }
     }
 
-    pub fn nodes(&self) -> Vec<TreeNode> {
+    pub fn nodes(&self) -> Vec<Rc<RefCell<TreeNode>>> {
         if let Some(root) = &self.root_node {
-            root.nodes()
+            root.borrow().nodes()
         } else {
             vec![]
         }
     }
 
-    pub fn remove(&mut self, node: &TreeNode) -> bool {
+    pub fn remove(&mut self, node: &Rc<RefCell<TreeNode>>) -> bool {
         if let Some(root) = &self.root_node {
-            let node_guid = node.guid();
-            if root.guid() == node_guid {
+            let node_guid = node.borrow().guid.clone();
+            if root.borrow().guid == node_guid {
                 self.root_node = None;
                 true
             } else if let Some(parent) = self.find_parent_of_node(&node_guid) {
-                parent.remove(node)
+                parent.borrow_mut().remove(node)
             } else {
                 false
             }
@@ -95,7 +97,7 @@ impl Tree {
         }
     }
 
-    fn find_parent_of_node(&self, node_guid: &String) -> Option<TreeNode> {
+    fn find_parent_of_node(&self, node_guid: &String) -> Option<Rc<RefCell<TreeNode>>> {
         if let Some(root) = &self.root_node {
             Self::find_parent_recursive(root, node_guid)
         } else {
@@ -103,10 +105,14 @@ impl Tree {
         }
     }
 
-    fn find_parent_recursive(node: &TreeNode, target_guid: &String) -> Option<TreeNode> {
-        for child in node.children() {
-            if child.guid() == *target_guid {
-                return Some(node.clone());
+    fn find_parent_recursive(
+        node: &Rc<RefCell<TreeNode>>,
+        target_guid: &String,
+    ) -> Option<Rc<RefCell<TreeNode>>> {
+        let children = node.borrow().children();
+        for child in children {
+            if child.borrow().guid == *target_guid {
+                return Some(Rc::clone(node));
             }
             if let Some(found) = Self::find_parent_recursive(&child, target_guid) {
                 return Some(found);
@@ -115,42 +121,41 @@ impl Tree {
         None
     }
 
-    pub fn leaves(&self) -> Vec<TreeNode> {
-        self.nodes().into_iter().filter(|n| n.is_leaf()).collect()
+    pub fn leaves(&self) -> Vec<Rc<RefCell<TreeNode>>> {
+        self.nodes().into_iter().filter(|n| n.borrow().is_leaf()).collect()
     }
 
-    pub fn traverse(&self, strategy: &str, order: &str) -> Vec<TreeNode> {
+    pub fn traverse(&self, strategy: &str, order: &str) -> Vec<Rc<RefCell<TreeNode>>> {
         if let Some(root) = &self.root_node {
-            root.traverse(strategy, order)
+            root.borrow().traverse(strategy, order)
         } else {
             vec![]
         }
     }
 
-    pub fn get_node_by_name(&self, node_name: &str) -> Option<TreeNode> {
-        self.nodes().into_iter().find(|n| n.name() == node_name)
+    pub fn get_node_by_name(&self, node_name: &str) -> Option<Rc<RefCell<TreeNode>>> {
+        self.nodes().into_iter().find(|n| n.borrow().name == node_name)
     }
 
-    pub fn get_nodes_by_name(&self, node_name: &str) -> Vec<TreeNode> {
+    pub fn get_nodes_by_name(&self, node_name: &str) -> Vec<Rc<RefCell<TreeNode>>> {
         self.nodes()
             .into_iter()
-            .filter(|n| n.name() == node_name)
+            .filter(|n| n.borrow().name == node_name)
             .collect()
     }
 
-    pub fn find_node_by_guid(&self, node_guid: &String) -> Option<TreeNode> {
-        self.nodes().into_iter().find(|n| n.guid() == *node_guid)
+    pub fn find_node_by_guid(&self, node_guid: &String) -> Option<Rc<RefCell<TreeNode>>> {
+        self.nodes().into_iter().find(|n| n.borrow().guid == *node_guid)
     }
 
     pub fn add_child_by_guid(&mut self, parent_guid: &String, child_guid: &String) -> bool {
         let parent_node = self.find_node_by_guid(parent_guid);
         let child_node = self.find_node_by_guid(child_guid);
-
         if let (Some(parent), Some(child)) = (parent_node, child_node) {
-            if let Some(current_parent) = child.parent() {
-                current_parent.remove(&child);
+            if let Some(current_parent) = child.borrow().parent() {
+                current_parent.borrow_mut().remove(&child);
             }
-            parent.add(&child);
+            parent.borrow_mut().add(&child);
             true
         } else {
             false
@@ -159,7 +164,7 @@ impl Tree {
 
     pub fn get_children_guids(&self, node_guid: &String) -> Vec<String> {
         if let Some(node) = self.find_node_by_guid(node_guid) {
-            node.children().iter().map(|c| c.guid()).collect()
+            node.borrow().children().iter().map(|c| c.borrow().guid.clone()).collect()
         } else {
             vec![]
         }
@@ -175,11 +180,10 @@ impl Tree {
         }
     }
 
-    fn print_node(node: &TreeNode, level: usize) {
+    fn print_node(node: &Rc<RefCell<TreeNode>>, level: usize) {
         let indent = "  ".repeat(level);
-        println!("{}├── {} ({})", indent, node.name(), node.guid());
-
-        for child in node.children() {
+        println!("{}├── {} ({})", indent, node.borrow().name, node.borrow().guid);
+        for child in node.borrow().children() {
             Self::print_node(&child, level + 1);
         }
     }
@@ -188,7 +192,7 @@ impl Tree {
         let serde_tree = TreeSerde {
             guid: self.guid.clone(),
             name: self.name.clone(),
-            root: self.root_node.as_ref().map(|r| r.to_serde()),
+            root: self.root_node.as_ref().map(|r| r.borrow().to_serde()),
         };
         let mut buf = Vec::new();
         let formatter = serde_json::ser::PrettyFormatter::with_indent(b"    ");
@@ -201,12 +205,10 @@ impl Tree {
         let serde_tree: TreeSerde = serde_json::from_str(json_data)?;
         let mut tree = Tree::new(&serde_tree.name);
         tree.guid = serde_tree.guid;
-
         if let Some(root_serde) = serde_tree.root {
             let root = TreeNode::from_serde(root_serde);
             tree.root_node = Some(root);
         }
-
         Ok(tree)
     }
 
@@ -231,13 +233,22 @@ impl Tree {
 
     pub fn pb_dumps(&self) -> Vec<u8> {
         use prost::Message;
-        fn node_to_proto(node: &crate::treenode::TreeNode) -> crate::proto::TreeNode {
+        fn node_to_proto(node: &Rc<RefCell<TreeNode>>) -> crate::proto::TreeNode {
+            let b = node.borrow();
             let children: Vec<crate::proto::TreeNode> =
-                node.children().iter().map(|c| node_to_proto(c)).collect();
+                b.children().iter().map(|c| node_to_proto(c)).collect();
             crate::proto::TreeNode {
-                guid: node.guid(),
-                name: node.name(),
+                guid: b.guid.clone(),
+                name: b.name.clone(),
                 parent_guid: String::new(),
+                color: b.color.map(|c| crate::proto::Color {
+                    guid: String::new(),
+                    name: String::new(),
+                    r: c[0] as i32,
+                    g: c[1] as i32,
+                    b: c[2] as i32,
+                    a: c[3] as i32,
+                }),
                 children,
             }
         }
@@ -261,6 +272,9 @@ impl Tree {
             crate::treenode::TreeNodeSerde {
                 guid: proto_node.guid.clone(),
                 name: proto_node.name.clone(),
+                color: proto_node.color.as_ref()
+                    .filter(|c| c.a > 0)
+                    .map(|c| [c.r as u8, c.g as u8, c.b as u8, c.a as u8]),
                 children: proto_node
                     .children
                     .iter()
