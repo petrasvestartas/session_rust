@@ -1,6 +1,6 @@
 {
   "type": "Plane",
-  "guid": "a3ac88e6-8fd3-415f-acb9-1df468b49324",
+  "guid": "33519815-d2ee-4b1e-9eef-a81d7658948b",
   "name": "test_plane",
   "frame": [
     0.0,
@@ -18,7 +18,7 @@
   ],
   "width": 1.0,
   "xform": {
-    "guid": "1cc309af-0e59-443a-ab97-caaacfd9b7c6",
+    "guid": "fea6b4dd-71f0-4644-a329-8e07ff3cd75d",
     "m": [
       1.0,
       0.0,
