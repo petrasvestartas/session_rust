@@ -1,0 +1,13 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(for pb_file in session_py/src/session_py/proto/*_pb2.py)",
+      "Bash(do sed -i 's/^import \\\\\\([a-z_]*_pb2\\\\\\) as/from . import \\\\1 as/g' \"$pb_file\")",
+      "Bash(done)",
+      "Bash(cargo check:*)",
+      "Bash(cmake --build:*)",
+      "Bash(echo:*)",
+      "Bash(./build/Release/main_2.exe:*)"
+    ]
+  }
+}

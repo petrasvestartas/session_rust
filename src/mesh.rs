@@ -51,6 +51,8 @@ pub struct Mesh {
     pub default_edge_attributes: HashMap<String, f64>,           // Default edge attrs
     #[serde(skip)]
     pub triangulation: HashMap<usize, Vec<[usize; 3]>>, // Cached triangulations
+    #[serde(skip)]
+    pub face_holes: HashMap<usize, Vec<Vec<usize>>>,    // Face hole rings
     max_vertex: usize,                                           // Next vertex key
     max_face: usize,                                             // Next face key
     pub guid: String,                                            // Unique identifier
@@ -159,6 +161,7 @@ impl Mesh {
             default_face_attributes: HashMap::new(),
             default_edge_attributes: HashMap::new(),
             triangulation: HashMap::new(),
+            face_holes: HashMap::new(),
             max_vertex: 0,
             max_face: 0,
             guid: uuid::Uuid::new_v4().to_string(),
@@ -252,15 +255,16 @@ impl Mesh {
                 let nlen = (nx*nx + ny*ny + nz*nz).sqrt();
                 if nlen > 1e-12 {
                     nx /= nlen; ny /= nlen; nz /= nlen;
-                    let (mut ux, mut uy, uz) = (1.0f64, 0.0, 0.0);
-                    if nx.abs() > 0.9 { ux = 0.0; uy = 1.0; }
-                    let (mut vx, mut vy, mut vz) = (ny*uz - nz*uy, nz*ux - nx*uz, nx*uy - ny*ux);
-                    let vlen = (vx*vx + vy*vy + vz*vz).sqrt();
-                    vx /= vlen; vy /= vlen; vz /= vlen;
-                    let (wx, wy, wz) = (ny*vz - nz*vy, nz*vx - nx*vz, nx*vy - ny*vx);
+                    let (mut ux, mut uy, mut uz) = (1.0f64, 0.0, 0.0);
+                    if nx.abs() > 0.9 { ux = 0.0; uy = 1.0; uz = 0.0; }
+                    let dot = ux*nx + uy*ny + uz*nz;
+                    ux -= dot*nx; uy -= dot*ny; uz -= dot*nz;
+                    let um = (ux*ux + uy*uy + uz*uz).sqrt();
+                    ux /= um; uy /= um; uz /= um;
+                    let (vx, vy, vz) = (ny*uz - nz*uy, nz*ux - nx*uz, nx*uy - ny*ux);
                     let nk = vkeys.len();
                     let bpts: Vec<(f64, f64)> = poly[..nk].iter().map(|p| {
-                        (p[0]*wx + p[1]*wy + p[2]*wz,
+                        (p[0]*ux + p[1]*uy + p[2]*uz,
                          p[0]*vx + p[1]*vy + p[2]*vz)
                     }).collect();
                     let tris = trimesh_cdt::cdt_triangulate(&bpts, &[]);
@@ -533,8 +537,20 @@ impl Mesh {
                 mesh.triangulation.insert(fkey, tri_list);
             }
         } else {
-            for &(a, b, c) in &tris {
-                mesh.add_face(vec![vkeys[a], vkeys[b], vkeys[c]], None);
+            let fvkeys: Vec<usize> = (0..border.len()).map(|i| vkeys[i]).collect();
+            if let Some(fkey) = mesh.add_face(fvkeys, None) {
+                let mut hole_rings: Vec<Vec<usize>> = Vec::new();
+                let mut off = border.len();
+                for h in &hole_pts_3d {
+                    let ring: Vec<usize> = (off..off+h.len()).map(|i| vkeys[i]).collect();
+                    hole_rings.push(ring); off += h.len();
+                }
+                mesh.face_holes.insert(fkey, hole_rings);
+                let tri_list: Vec<[usize; 3]> = tris.iter()
+                    .filter(|&&(a, b, c)| vkeys[a] != vkeys[b] && vkeys[b] != vkeys[c] && vkeys[c] != vkeys[a])
+                    .map(|&(a, b, c)| [vkeys[a], vkeys[b], vkeys[c]])
+                    .collect();
+                mesh.triangulation.insert(fkey, tri_list);
             }
         }
         mesh
@@ -619,16 +635,34 @@ impl Mesh {
             let bh2d: Vec<Vec<(f64,f64)>> = poly_infos[1..].iter().map(|&(off,cnt,_,_)| {
                 (off..off+cnt).map(|i| proj(&all_bot[i])).collect()
             }).collect();
-            for &(a, b, c) in &trimesh_cdt::cdt_triangulate(&b2d, &bh2d) {
-                mesh.add_face(vec![bvk[a], bvk[c], bvk[b]], None);
+            let b_tris = trimesh_cdt::cdt_triangulate(&b2d, &bh2d);
+            let bot_fvkeys: Vec<usize> = (0..bot_n0).map(|i| bvk[i]).collect();
+            if let Some(fk_bot) = mesh.add_face(bot_fvkeys, None) {
+                if !bh2d.is_empty() {
+                    let hole_rings: Vec<Vec<usize>> = poly_infos[1..].iter()
+                        .map(|&(off,cnt,_,_)| (off..off+cnt).map(|i| bvk[i]).collect())
+                        .collect();
+                    mesh.face_holes.insert(fk_bot, hole_rings);
+                }
+                let tri_list: Vec<[usize;3]> = b_tris.iter().map(|&(a,b,c)| [bvk[a], bvk[c], bvk[b]]).collect();
+                mesh.triangulation.insert(fk_bot, tri_list);
             }
             // Top cap CDT
             let t2d: Vec<(f64,f64)> = (0..top_n0).map(|i| proj(&all_top[i])).collect();
             let th2d: Vec<Vec<(f64,f64)>> = poly_infos[1..].iter().map(|&(_,_,off,cnt)| {
                 (off..off+cnt).map(|i| proj(&all_top[i])).collect()
             }).collect();
-            for &(a, b, c) in &trimesh_cdt::cdt_triangulate(&t2d, &th2d) {
-                mesh.add_face(vec![tvk[a], tvk[b], tvk[c]], None);
+            let t_tris = trimesh_cdt::cdt_triangulate(&t2d, &th2d);
+            let top_fvkeys: Vec<usize> = (0..top_n0).map(|i| tvk[i]).collect();
+            if let Some(fk_top) = mesh.add_face(top_fvkeys, None) {
+                if !th2d.is_empty() {
+                    let hole_rings: Vec<Vec<usize>> = poly_infos[1..].iter()
+                        .map(|&(_,_,off,cnt)| (off..off+cnt).map(|i| tvk[i]).collect())
+                        .collect();
+                    mesh.face_holes.insert(fk_top, hole_rings);
+                }
+                let tri_list: Vec<[usize;3]> = t_tris.iter().map(|&(a,b,c)| [tvk[a], tvk[b], tvk[c]]).collect();
+                mesh.triangulation.insert(fk_top, tri_list);
             }
         }
         // Side faces: align by longest edge, quads for equal counts, zipper+triangles otherwise
@@ -830,6 +864,7 @@ impl Mesh {
         self.facedata.clear();
         self.edgedata.clear();
         self.triangulation.clear();
+        self.face_holes.clear();
         self.max_vertex = 0;
         self.max_face = 0;
         self.pointcolors.clear();
@@ -1373,12 +1408,21 @@ impl Mesh {
             tri_json.insert(fk.to_string(), serde_json::Value::Array(tri_arr));
         }
 
+        let mut face_holes_json = serde_json::Map::new();
+        for (&fk, rings) in &self.face_holes {
+            let rings_arr: Vec<serde_json::Value> = rings.iter()
+                .map(|ring| serde_json::json!(ring))
+                .collect();
+            face_holes_json.insert(fk.to_string(), serde_json::Value::Array(rings_arr));
+        }
+
         serde_json::json!({
             "type": "Mesh",
             "guid": self.guid,
             "name": self.name,
             "vertex": self.vertex,
             "face": self.face,
+            "face_holes": serde_json::Value::Object(face_holes_json),
             "halfedge": self.halfedge,
             "facedata": self.facedata,
             "edgedata": self.edgedata,
@@ -1412,6 +1456,19 @@ impl Mesh {
         }
         if let Some(face_data) = data.get("face") {
             mesh.face = serde_json::from_value(face_data.clone()).ok()?;
+        }
+        if let Some(fh_obj) = data.get("face_holes").and_then(|v| v.as_object()) {
+            for (fk_str, rings_val) in fh_obj {
+                if let Ok(fk) = fk_str.parse::<usize>() {
+                    if let Some(rings_arr) = rings_val.as_array() {
+                        let rings: Vec<Vec<usize>> = rings_arr.iter()
+                            .filter_map(|r| r.as_array().map(|a| a.iter()
+                                .filter_map(|v| v.as_u64().map(|n| n as usize)).collect()))
+                            .collect();
+                        mesh.face_holes.insert(fk, rings);
+                    }
+                }
+            }
         }
         if let Some(halfedge_data) = data.get("halfedge") {
             mesh.halfedge = serde_json::from_value(halfedge_data.clone()).ok()?;
@@ -1554,9 +1611,15 @@ impl Mesh {
                     attrs.insert(k.clone(), *v);
                 }
             }
+            let holes: Vec<crate::proto::HoleRing> = self.face_holes.get(&fkey)
+                .map(|rings| rings.iter().map(|ring| crate::proto::HoleRing {
+                    vertices: ring.iter().map(|&v| v as u64).collect(),
+                }).collect())
+                .unwrap_or_default();
             faces.insert(fkey as u64, crate::proto::FaceData {
                 vertices: fverts.iter().map(|&v| v as u64).collect(),
                 attributes: attrs,
+                holes,
             });
         }
 
@@ -1688,6 +1751,12 @@ impl Mesh {
             mesh.face.insert(fkey as usize, verts);
             if !fdata.attributes.is_empty() {
                 mesh.facedata.insert(fkey as usize, fdata.attributes);
+            }
+            if !fdata.holes.is_empty() {
+                let rings: Vec<Vec<usize>> = fdata.holes.iter()
+                    .map(|h| h.vertices.iter().map(|&v| v as usize).collect())
+                    .collect();
+                mesh.face_holes.insert(fkey as usize, rings);
             }
         }
 

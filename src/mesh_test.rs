@@ -718,6 +718,17 @@ pub fn run_mesh_json_roundtrip() -> TestResult {
         let fk = *pmesh.triangulation.keys().next().unwrap();
         MINI_CHECK!(!loaded_tri.triangulation.is_empty());
         MINI_CHECK!(loaded_tri.triangulation.contains_key(&fk));
+
+        // Face holes roundtrip
+        let hmesh = Mesh::from_polygon_with_holes(&[
+            vec![Point::new(0.0,0.0,0.0), Point::new(4.0,0.0,0.0), Point::new(4.0,4.0,0.0), Point::new(0.0,4.0,0.0)],
+            vec![Point::new(1.0,1.0,0.0), Point::new(3.0,1.0,0.0), Point::new(3.0,3.0,0.0), Point::new(1.0,3.0,0.0)],
+        ], true);
+        MINI_CHECK!(!hmesh.face_holes.is_empty());
+        let loaded_holes = Mesh::jsonload(&hmesh.jsondump()).unwrap();
+        let hfk = *hmesh.face_holes.keys().next().unwrap();
+        MINI_CHECK!(!loaded_holes.face_holes.is_empty());
+        MINI_CHECK!(loaded_holes.face_holes[&hfk] == hmesh.face_holes[&hfk]);
     })
 }
 
@@ -761,6 +772,45 @@ pub fn run_mesh_protobuf_roundtrip() -> TestResult {
         let fk = *pmesh.triangulation.keys().next().unwrap();
         MINI_CHECK!(!loaded_tri.triangulation.is_empty());
         MINI_CHECK!(loaded_tri.triangulation.contains_key(&fk));
+
+        // Face holes roundtrip
+        let hmesh = Mesh::from_polygon_with_holes(&[
+            vec![Point::new(0.0,0.0,0.0), Point::new(4.0,0.0,0.0), Point::new(4.0,4.0,0.0), Point::new(0.0,4.0,0.0)],
+            vec![Point::new(1.0,1.0,0.0), Point::new(3.0,1.0,0.0), Point::new(3.0,3.0,0.0), Point::new(1.0,3.0,0.0)],
+        ], true);
+        MINI_CHECK!(!hmesh.face_holes.is_empty());
+        let loaded_holes = Mesh::pb_loads(&hmesh.pb_dumps()).unwrap();
+        let hfk = *hmesh.face_holes.keys().next().unwrap();
+        MINI_CHECK!(!loaded_holes.face_holes.is_empty());
+        MINI_CHECK!(loaded_holes.face_holes[&hfk] == hmesh.face_holes[&hfk]);
+    })
+}
+
+pub fn run_mesh_loft_cw_top() -> TestResult {
+    MINI_TEST!("Loft CW Top", {
+        use crate::Mesh;
+        use crate::Point;
+        use crate::Polyline;
+
+        let bottom = vec![Polyline::new(vec![
+            Point::new(1809.81961, -1687.495982, 311.578722),
+            Point::new(1825.625156, -1472.493331, 358.952919),
+            Point::new(2243.354726, -1333.020513, 185.483369),
+            Point::new(2333.421648, -1473.010517, 104.339291),
+            Point::new(2018.113456, -1561.111665, 239.690615),
+            Point::new(1809.81961, -1687.495982, 311.578722),
+        ])];
+        let top = vec![Polyline::new(vec![
+            Point::new(1860.437717, -1492.555066, 451.085257),
+            Point::new(1843.734715, -1715.847809, 402.008374),
+            Point::new(2061.759806, -1583.505015, 326.795403),
+            Point::new(2380.846158, -1494.398994, 189.802436),
+            Point::new(2287.583332, -1349.613043, 273.785406),
+            Point::new(1860.437717, -1492.555066, 451.085257),
+        ])];
+        let mesh = Mesh::loft(&bottom, &top, true);
+        MINI_CHECK!(mesh.is_valid());
+        MINI_CHECK!(mesh.is_closed());
     })
 }
 
@@ -772,6 +822,7 @@ REGISTER_MINI_TEST!("Mesh", "From Polygon With Holes", crate::mesh_test::run_mes
 REGISTER_MINI_TEST!("Mesh", "Loft", crate::mesh_test::run_mesh_loft);
 REGISTER_MINI_TEST!("Mesh", "From Polygon With Holes Many", crate::mesh_test::run_mesh_from_polygon_with_holes_many);
 REGISTER_MINI_TEST!("Mesh", "Loft Many", crate::mesh_test::run_mesh_loft_many);
+REGISTER_MINI_TEST!("Mesh", "Loft CW Top", crate::mesh_test::run_mesh_loft_cw_top);
 REGISTER_MINI_TEST!("Mesh", "Boolean Queries", crate::mesh_test::run_mesh_boolean_queries);
 REGISTER_MINI_TEST!("Mesh", "Attributes", crate::mesh_test::run_mesh_attributes);
 REGISTER_MINI_TEST!("Mesh", "Edges", crate::mesh_test::run_mesh_edges);
