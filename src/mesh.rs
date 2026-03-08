@@ -232,7 +232,47 @@ impl Mesh {
                 let vk = get_vkey(p, &mut mesh);
                 vkeys.push(vk);
             }
+            if vkeys.len() > 1 && *vkeys.last().unwrap() == vkeys[0] {
+                vkeys.pop();
+            }
+            if vkeys.len() < 3 {
+                continue;
+            }
+            let np = vkeys.len();
+        if np >= 4 {
+            if let Some(fk) = mesh.add_face(vkeys.clone(), None) {
+                let (mut nx, mut ny, mut nz) = (0.0f64, 0.0, 0.0);
+                for i in 0..np {
+                    let a = &poly[i];
+                    let b = &poly[(i + 1) % np];
+                    nx += (a[1] - b[1]) * (a[2] + b[2]);
+                    ny += (a[2] - b[2]) * (a[0] + b[0]);
+                    nz += (a[0] - b[0]) * (a[1] + b[1]);
+                }
+                let nlen = (nx*nx + ny*ny + nz*nz).sqrt();
+                if nlen > 1e-12 {
+                    nx /= nlen; ny /= nlen; nz /= nlen;
+                    let (mut ux, mut uy, uz) = (1.0f64, 0.0, 0.0);
+                    if nx.abs() > 0.9 { ux = 0.0; uy = 1.0; }
+                    let (mut vx, mut vy, mut vz) = (ny*uz - nz*uy, nz*ux - nx*uz, nx*uy - ny*ux);
+                    let vlen = (vx*vx + vy*vy + vz*vz).sqrt();
+                    vx /= vlen; vy /= vlen; vz /= vlen;
+                    let (wx, wy, wz) = (ny*vz - nz*vy, nz*vx - nx*vz, nx*vy - ny*vx);
+                    let nk = vkeys.len();
+                    let bpts: Vec<(f64, f64)> = poly[..nk].iter().map(|p| {
+                        (p[0]*wx + p[1]*wy + p[2]*wz,
+                         p[0]*vx + p[1]*vy + p[2]*vz)
+                    }).collect();
+                    let tris = trimesh_cdt::cdt_triangulate(&bpts, &[]);
+                    let tri_list: Vec<[usize; 3]> = tris.iter().map(|&(a, b, c)| {
+                        [vkeys[a], vkeys[b], vkeys[c]]
+                    }).collect();
+                    mesh.triangulation.insert(fk, tri_list);
+                }
+            }
+        } else {
             let _ = mesh.add_face(vkeys, None);
+        }
         }
 
         mesh
@@ -475,8 +515,27 @@ impl Mesh {
         let mut mesh = Mesh::new();
         let mut vkeys: Vec<usize> = Vec::with_capacity(all_pts.len());
         for p in &all_pts { vkeys.push(mesh.add_vertex(p.clone(), None)); }
-        for &(a, b, c) in &tris {
-            mesh.add_face(vec![vkeys[a], vkeys[b], vkeys[c]], None);
+        if hole_pts_3d.is_empty() {
+            let fvkeys: Vec<usize> = (0..border.len()).map(|i| vkeys[i]).collect();
+            if let Some(fkey) = mesh.add_face(fvkeys, None) {
+                let mut tri_list: Vec<[usize; 3]> = Vec::new();
+                for &(a, b, c) in &tris {
+                    if vkeys[a] == vkeys[b] || vkeys[b] == vkeys[c] || vkeys[c] == vkeys[a] { continue; }
+                    tri_list.push([vkeys[a], vkeys[b], vkeys[c]]);
+                }
+                let n_vk = border.len();
+                let covered: std::collections::HashSet<usize> = tri_list.iter().flat_map(|t| t.iter().copied()).collect();
+                for m in 0..n_vk {
+                    if !covered.contains(&vkeys[m]) {
+                        tri_list.push([vkeys[(m + n_vk - 1) % n_vk], vkeys[m], vkeys[(m + 1) % n_vk]]);
+                    }
+                }
+                mesh.triangulation.insert(fkey, tri_list);
+            }
+        } else {
+            for &(a, b, c) in &tris {
+                mesh.add_face(vec![vkeys[a], vkeys[b], vkeys[c]], None);
+            }
         }
         mesh
     }
@@ -511,7 +570,15 @@ impl Mesh {
             }
             pts
         };
-        let (origin, xaxis, yaxis, _) = polylines0[border_idx].get_average_plane();
+        let (origin, xaxis, mut yaxis, zaxis) = polylines0[border_idx].get_average_plane();
+        {
+            let c0 = polylines0[border_idx].center();
+            let c1 = polylines1[border_idx].center();
+            let btt = Vector::new(c1[0]-c0[0], c1[1]-c0[1], c1[2]-c0[2]);
+            if zaxis.dot(&btt) < 0.0 {
+                yaxis = Vector::new(-yaxis[0], -yaxis[1], -yaxis[2]);
+            }
+        }
         let proj = |p: &Point| -> (f64, f64) {
             let dx = p[0]-origin[0]; let dy = p[1]-origin[1]; let dz = p[2]-origin[2];
             (dx*xaxis[0]+dy*xaxis[1]+dz*xaxis[2], dx*yaxis[0]+dy*yaxis[1]+dz*yaxis[2])
@@ -1298,6 +1365,14 @@ impl Mesh {
             .flat_map(|c| vec![c.r, c.g, c.b, c.a])
             .collect();
 
+        let mut tri_json = serde_json::Map::new();
+        for (&fk, tris) in &self.triangulation {
+            let tri_arr: Vec<serde_json::Value> = tris.iter()
+                .map(|t| serde_json::json!([t[0], t[1], t[2]]))
+                .collect();
+            tri_json.insert(fk.to_string(), serde_json::Value::Array(tri_arr));
+        }
+
         serde_json::json!({
             "type": "Mesh",
             "guid": self.guid,
@@ -1313,6 +1388,7 @@ impl Mesh {
             "max_vertex": self.max_vertex,
             "max_face": self.max_face,
             "pointcolors": pointcolors_flat,
+            "triangulation": serde_json::Value::Object(tri_json),
             "facecolors": facecolors_flat,
             "linecolors": linecolors_flat,
             "objectcolor": serde_json::to_value(&self.objectcolor).unwrap_or(serde_json::Value::Null),
@@ -1401,6 +1477,26 @@ impl Mesh {
         }
         if let Some(cm) = data.get("color_mode").and_then(|v| v.as_str()) {
             mesh.color_mode = ColorMode::from_str(cm);
+        }
+
+        if let Some(tri_obj) = data.get("triangulation").and_then(|v| v.as_object()) {
+            for (fk_str, tris_val) in tri_obj {
+                if let Ok(fk) = fk_str.parse::<usize>() {
+                    if let Some(tris_arr) = tris_val.as_array() {
+                        let tris: Vec<[usize; 3]> = tris_arr.iter()
+                            .filter_map(|t| {
+                                let a = t.as_array()?;
+                                if a.len() >= 3 {
+                                    Some([a[0].as_u64()? as usize, a[1].as_u64()? as usize, a[2].as_u64()? as usize])
+                                } else {
+                                    None
+                                }
+                            })
+                            .collect();
+                        mesh.triangulation.insert(fk, tris);
+                    }
+                }
+            }
         }
 
         Some(mesh)
