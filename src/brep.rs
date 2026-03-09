@@ -858,6 +858,7 @@ impl BRep {
             surface_index: surface_idx,
             loop_indices: Vec::new(),
             reversed,
+            facecolor: None,
         });
         self.m_faces.len() - 1
     }
@@ -1032,6 +1033,10 @@ impl BRep {
             .map(|f| crate::proto::BRepFace {
                 surface_index: f.surface_index, loop_indices: f.loop_indices.clone(),
                 reversed: f.reversed,
+                facecolor: f.facecolor.as_ref().map(|c| crate::proto::Color {
+                    guid: String::new(), name: String::new(),
+                    r: c.r as i32, g: c.g as i32, b: c.b as i32, a: c.a as i32,
+                }),
             })
             .collect();
 
@@ -1125,6 +1130,7 @@ impl BRep {
                 surface_index: f.surface_index,
                 loop_indices: f.loop_indices.clone(),
                 reversed: f.reversed,
+                facecolor: f.facecolor.as_ref().map(|c| Color::new(c.r as u8, c.g as u8, c.b as u8, c.a as u8)),
             });
         }
 
@@ -1184,6 +1190,7 @@ impl Serialize for BRep {
         map.serialize_entry("curves_3d", &self.m_curves_3d)?;
         // faces
         let faces_json: Vec<BRepFaceJson> = self.m_faces.iter().map(|f| BRepFaceJson {
+            facecolor: f.facecolor.clone(),
             loop_indices: &f.loop_indices, reversed: f.reversed, surface_index: f.surface_index,
         }).collect();
         map.serialize_entry("faces", &faces_json)?;
@@ -1231,6 +1238,8 @@ impl Serialize for BRep {
 // Helper structs for alphabetical field ordering in nested JSON objects
 #[derive(Serialize)]
 struct BRepFaceJson<'a> {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    facecolor: Option<Color>,
     loop_indices: &'a Vec<i32>,
     reversed: bool,
     surface_index: i32,
@@ -1340,6 +1349,8 @@ impl<'de> Deserialize<'de> for BRep {
             surface_index: i32,
             loop_indices: Vec<i32>,
             reversed: bool,
+            #[serde(default)]
+            facecolor: Option<Color>,
         }
 
         let data = BRepData::deserialize(deserializer)?;
@@ -1385,6 +1396,7 @@ impl<'de> Deserialize<'de> for BRep {
         if let Some(f) = data.faces {
             b.m_faces = f.into_iter().map(|f| BRepFace {
                 surface_index: f.surface_index, loop_indices: f.loop_indices, reversed: f.reversed,
+                facecolor: f.facecolor,
             }).collect();
         }
         Ok(b)
