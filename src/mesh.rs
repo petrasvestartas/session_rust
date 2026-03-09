@@ -137,10 +137,82 @@ impl VertexData {
     }
 }
 
+pub struct LoftWallFace {
+    pub face_key: usize,
+    pub is_quad: bool,
+    pub top_v0: usize,
+    pub top_v1: usize,
+    pub bot_v0: usize,
+    pub bot_v1: usize,
+}
+
+pub struct LoftPanel {
+    pub mesh: Mesh,
+    pub top_face_key: usize,
+    pub bot_face_key: usize,
+    pub wall_faces: Vec<LoftWallFace>,
+    pub orig_top_to_local: HashMap<usize, usize>,
+    pub orig_bot_to_local: HashMap<usize, usize>,
+    pub bot_pts: Vec<Point>,
+}
+
 impl Default for Mesh {
     fn default() -> Self {
         Self::new()
     }
+}
+
+fn lp_newell_normal(pts: &[Point]) -> (f64, f64, f64) {
+    let (mut nx, mut ny, mut nz) = (0.0f64, 0.0, 0.0);
+    let n = pts.len();
+    for i in 0..n {
+        let a = &pts[i]; let b = &pts[(i+1)%n];
+        nx += (a[1]-b[1]) * (a[2]+b[2]);
+        ny += (a[2]-b[2]) * (a[0]+b[0]);
+        nz += (a[0]-b[0]) * (a[1]+b[1]);
+    }
+    (nx, ny, nz)
+}
+
+fn lp_merge_collinear(pts: &mut Vec<Point>, vkeys: &mut Vec<usize>) {
+    let tol = Tolerance::APPROXIMATION;
+    let zt2 = Tolerance::ZERO_TOLERANCE * Tolerance::ZERO_TOLERANCE;
+    let mut changed = true;
+    while changed {
+        changed = false;
+        let m = pts.len();
+        if m < 3 { break; }
+        let mut np: Vec<Point> = Vec::new();
+        let mut nk: Vec<usize> = Vec::new();
+        for i in 0..m {
+            let p = (i+m-1)%m; let nx = (i+1)%m;
+            let (ax, ay, az) = (pts[i][0]-pts[p][0], pts[i][1]-pts[p][1], pts[i][2]-pts[p][2]);
+            let (bx, by, bz) = (pts[nx][0]-pts[i][0], pts[nx][1]-pts[i][1], pts[nx][2]-pts[i][2]);
+            let (cx, cy, cz) = (ay*bz-az*by, az*bx-ax*bz, ax*by-ay*bx);
+            let (a2, b2) = (ax*ax+ay*ay+az*az, bx*bx+by*by+bz*bz);
+            if a2 < zt2 || b2 < zt2 || cx*cx+cy*cy+cz*cz < tol*tol*a2*b2 {
+                changed = true;
+            } else {
+                np.push(pts[i].clone()); nk.push(vkeys[i]);
+            }
+        }
+        *pts = np; *vkeys = nk;
+    }
+}
+
+fn lp_offset_toward(p: &Point, cx: f64, cy: f64, cz: f64, gap: f64) -> Point {
+    let (mut dx, mut dy, mut dz) = (cx-p[0], cy-p[1], cz-p[2]);
+    let len = (dx*dx+dy*dy+dz*dz).sqrt();
+    if len > 1e-10 { dx *= gap/len; dy *= gap/len; dz *= gap/len; }
+    Point::new(p[0]+dx, p[1]+dy, p[2]+dz)
+}
+
+fn lp_face_centroid(m: &Mesh, fk: usize) -> Point {
+    let vkeys = m.face_vertices(fk).unwrap();
+    let (mut cx, mut cy, mut cz) = (0.0f64, 0.0, 0.0);
+    for &vk in vkeys { let p = m.vertex_position(vk).unwrap(); cx += p[0]; cy += p[1]; cz += p[2]; }
+    let n = vkeys.len() as f64;
+    Point::new(cx/n, cy/n, cz/n)
 }
 
 impl Mesh {
@@ -2006,6 +2078,225 @@ impl Mesh {
     pub fn repr(&self) -> String {
         format!("Mesh(\n  name={},\n  vertices={},\n  faces={},\n  edges={}\n)",
             self.name, self.number_of_vertices(), self.number_of_faces(), self.number_of_edges())
+    }
+
+    pub fn loft_panels(
+        top_polygons: Vec<Vec<Point>>,
+        bot_polygons: Vec<Vec<Point>>,
+        merge_precision: f64,
+        edge_gap: f64,
+        edge_match_threshold: f64,
+        add_caps: bool,
+        skip_triangles: bool,
+    ) -> Vec<LoftPanel> {
+        let top_mesh = Mesh::from_polylines(top_polygons, Some(merge_precision));
+        let bot_mesh = Mesh::from_polylines(bot_polygons, Some(merge_precision));
+        let tfks: Vec<usize> = top_mesh.face.keys().cloned().collect();
+        let bfks: Vec<usize> = bot_mesh.face.keys().cloned().collect();
+        let mut dists: Vec<(f64, usize, usize)> = Vec::with_capacity(tfks.len() * bfks.len());
+        for ti in 0..tfks.len() {
+            for bi in 0..bfks.len() {
+                let d = lp_face_centroid(&top_mesh, tfks[ti]).distance(&lp_face_centroid(&bot_mesh, bfks[bi]), None);
+                dists.push((d, ti, bi));
+            }
+        }
+        dists.sort_by(|a, b| a.0.partial_cmp(&b.0).unwrap());
+        let mut top_used = vec![false; tfks.len()];
+        let mut bot_used = vec![false; bfks.len()];
+        let mut face_match: Vec<(usize, usize)> = Vec::new();
+        for &(_, ti, bi) in &dists {
+            if top_used[ti] || bot_used[bi] { continue; }
+            face_match.push((tfks[ti], bfks[bi]));
+            top_used[ti] = true; bot_used[bi] = true;
+        }
+        face_match.sort();
+        let mut panels: Vec<LoftPanel> = Vec::with_capacity(face_match.len());
+        for (tfk, bfk) in face_match {
+            let mut panel = LoftPanel {
+                mesh: Mesh::new(), top_face_key: 0, bot_face_key: 0,
+                wall_faces: Vec::new(), orig_top_to_local: HashMap::new(),
+                orig_bot_to_local: HashMap::new(), bot_pts: Vec::new(),
+            };
+            let mut top_vkeys: Vec<usize> = top_mesh.face_vertices(tfk).unwrap().clone();
+            let mut bot_vkeys: Vec<usize> = bot_mesh.face_vertices(bfk).unwrap().clone();
+            let mut top_pts: Vec<Point> = top_vkeys.iter().map(|&vk| top_mesh.vertex_position(vk).unwrap()).collect();
+            let mut bot_pts: Vec<Point> = bot_vkeys.iter().map(|&vk| bot_mesh.vertex_position(vk).unwrap()).collect();
+            lp_merge_collinear(&mut top_pts, &mut top_vkeys);
+            lp_merge_collinear(&mut bot_pts, &mut bot_vkeys);
+            {
+                let sz = top_pts.len();
+                let mut max_te = 0.0f64;
+                for i in 0..sz { max_te = max_te.max(top_pts[i].distance(&top_pts[(i+1)%sz], None)); }
+                let stol = max_te * 0.001;
+                let mut tp: Vec<Point> = Vec::new(); let mut tk: Vec<usize> = Vec::new();
+                for i in 0..top_pts.len() {
+                    if tp.is_empty() || tp.last().unwrap().distance(&top_pts[i], None) > stol {
+                        tp.push(top_pts[i].clone()); tk.push(top_vkeys[i]);
+                    }
+                }
+                while tp.len() >= 3 && tp.last().unwrap().distance(&tp[0], None) <= stol { tp.pop(); tk.pop(); }
+                if tp.len() >= 3 { top_pts = tp; top_vkeys = tk; }
+            }
+            let n = top_pts.len(); let m = bot_pts.len();
+            let (mut tcx, mut tcy, mut tcz) = (0.0f64, 0.0, 0.0);
+            let (mut bcx, mut bcy, mut bcz) = (0.0f64, 0.0, 0.0);
+            for p in &top_pts { tcx += p[0]; tcy += p[1]; tcz += p[2]; }
+            for p in &bot_pts { bcx += p[0]; bcy += p[1]; bcz += p[2]; }
+            tcx /= n as f64; tcy /= n as f64; tcz /= n as f64;
+            bcx /= m as f64; bcy /= m as f64; bcz /= m as f64;
+            let (mut ax, mut ay, mut az) = (tcx-bcx, tcy-bcy, tcz-bcz);
+            let alen = (ax*ax+ay*ay+az*az).sqrt();
+            if alen > 1e-12 { ax /= alen; ay /= alen; az /= alen; }
+            let (tnx, tny, tnz) = lp_newell_normal(&top_pts);
+            if tnx*ax+tny*ay+tnz*az < 0.0 { top_pts.reverse(); top_vkeys.reverse(); }
+            let (bnx, bny, bnz) = lp_newell_normal(&bot_pts);
+            if bnx*ax+bny*ay+bnz*az > 0.0 { bot_pts.reverse(); bot_vkeys.reverse(); }
+            panel.bot_pts = bot_pts.clone();
+            for i in 0..n {
+                let lk = panel.mesh.add_vertex(top_pts[i].clone(), None);
+                panel.orig_top_to_local.insert(top_vkeys[i], lk);
+            }
+            for j in 0..m {
+                let lk = panel.mesh.add_vertex(bot_pts[j].clone(), None);
+                panel.orig_bot_to_local.insert(bot_vkeys[j], lk);
+            }
+            if add_caps {
+                let top_cap: Vec<usize> = top_vkeys.iter().map(|&vk| panel.orig_top_to_local[&vk]).collect();
+                let top_cap_fk = panel.mesh.add_face(top_cap.clone(), None);
+                if let Some(fk) = top_cap_fk { panel.top_face_key = fk; }
+                if let Some(fk) = top_cap_fk {
+                    if top_cap.len() >= 3 {
+                        let (mut nx, mut ny, mut nz) = lp_newell_normal(&top_pts);
+                        let mag = (nx*nx+ny*ny+nz*nz).sqrt();
+                        if mag > 1e-12 {
+                            nx /= mag; ny /= mag; nz /= mag;
+                            let (mut ux, mut uy, mut uz) = if nx.abs() > 0.9 { (0.0f64, 1.0, 0.0) } else { (1.0f64, 0.0, 0.0) };
+                            let dot = ux*nx+uy*ny+uz*nz;
+                            ux -= dot*nx; uy -= dot*ny; uz -= dot*nz;
+                            let um = (ux*ux+uy*uy+uz*uz).sqrt(); ux /= um; uy /= um; uz /= um;
+                            let (vx, vy, vz) = (ny*uz-nz*uy, nz*ux-nx*uz, nx*uy-ny*ux);
+                            let bpts: Vec<(f64,f64)> = top_pts.iter().map(|p| (p[0]*ux+p[1]*uy+p[2]*uz, p[0]*vx+p[1]*vy+p[2]*vz)).collect();
+                            let tris = trimesh_cdt::cdt_triangulate(&bpts, &[]);
+                            if !tris.is_empty() {
+                                let tri_list: Vec<[usize;3]> = tris.iter().map(|&(a,b,c)| [top_cap[a], top_cap[b], top_cap[c]]).collect();
+                                panel.mesh.triangulation.insert(fk, tri_list);
+                            }
+                        }
+                    }
+                }
+            }
+            let top_mids: Vec<Point> = (0..n).map(|i| Point::new(
+                (top_pts[i][0]+top_pts[(i+1)%n][0])*0.5,
+                (top_pts[i][1]+top_pts[(i+1)%n][1])*0.5,
+                (top_pts[i][2]+top_pts[(i+1)%n][2])*0.5)).collect();
+            let bot_mids: Vec<Point> = (0..m).map(|j| Point::new(
+                (bot_pts[j][0]+bot_pts[(j+1)%m][0])*0.5,
+                (bot_pts[j][1]+bot_pts[(j+1)%m][1])*0.5,
+                (bot_pts[j][2]+bot_pts[(j+1)%m][2])*0.5)).collect();
+            let mut bot_to_top = vec![-1i64; m]; let mut bot_dist = vec![1e300f64; m];
+            for j in 0..m {
+                for i in 0..n {
+                    let d = bot_mids[j].distance(&top_mids[i], None);
+                    if d < bot_dist[j] { bot_dist[j] = d; bot_to_top[j] = i as i64; }
+                }
+            }
+            let mut top_to_bot = vec![-1i64; n]; let mut top_dist = vec![1e300f64; n];
+            for i in 0..n {
+                for j in 0..m {
+                    let d = top_mids[i].distance(&bot_mids[j], None);
+                    if d < top_dist[i] { top_dist[i] = d; top_to_bot[i] = j as i64; }
+                }
+            }
+            let avg: f64 = bot_dist.iter().sum::<f64>() / m as f64;
+            let threshold = avg * edge_match_threshold;
+            let mut top_used_edge = vec![false; n];
+            for j in 0..m {
+                let b0 = panel.orig_bot_to_local[&bot_vkeys[j]];
+                let b1 = panel.orig_bot_to_local[&bot_vkeys[(j+1)%m]];
+                let ti = bot_to_top[j];
+                if ti >= 0 && bot_dist[j] <= threshold && top_to_bot[ti as usize] == j as i64 {
+                    let ti = ti as usize;
+                    let t0 = panel.orig_top_to_local[&top_vkeys[ti]];
+                    let t1 = panel.orig_top_to_local[&top_vkeys[(ti+1)%n]];
+                    let face_fk = if edge_gap > 0.0 {
+                        let pb0 = panel.mesh.vertex_position(b0).unwrap();
+                        let pb1 = panel.mesh.vertex_position(b1).unwrap();
+                        let pt0 = panel.mesh.vertex_position(t0).unwrap();
+                        let pt1 = panel.mesh.vertex_position(t1).unwrap();
+                        let cx = (pb0[0]+pb1[0]+pt0[0]+pt1[0])*0.25;
+                        let cy = (pb0[1]+pb1[1]+pt0[1]+pt1[1])*0.25;
+                        let cz = (pb0[2]+pb1[2]+pt0[2]+pt1[2])*0.25;
+                        let nb0 = panel.mesh.add_vertex(lp_offset_toward(&pb0, cx, cy, cz, edge_gap), None);
+                        let nb1 = panel.mesh.add_vertex(lp_offset_toward(&pb1, cx, cy, cz, edge_gap), None);
+                        panel.mesh.add_face(vec![nb0, t1, t0, nb1], None)
+                    } else {
+                        panel.mesh.add_face(vec![b0, t1, t0, b1], None)
+                    };
+                    if let Some(fk) = face_fk {
+                        panel.wall_faces.push(LoftWallFace {
+                            face_key: fk, is_quad: true,
+                            top_v0: top_vkeys[ti], top_v1: top_vkeys[(ti+1)%n],
+                            bot_v0: bot_vkeys[(j+1)%m], bot_v1: bot_vkeys[j],
+                        });
+                    }
+                    top_used_edge[ti] = true;
+                } else if !skip_triangles {
+                    let mut best_d = 1e300f64; let mut best_tv = 0usize;
+                    for i in 0..n {
+                        let d = bot_mids[j].distance(&top_pts[i], None);
+                        if d < best_d { best_d = d; best_tv = i; }
+                    }
+                    let tv = panel.orig_top_to_local[&top_vkeys[best_tv]];
+                    if let Some(fk) = panel.mesh.add_face(vec![b0, tv, b1], None) {
+                        panel.wall_faces.push(LoftWallFace { face_key: fk, is_quad: false, top_v0: 0, top_v1: 0, bot_v0: 0, bot_v1: 0 });
+                    }
+                }
+            }
+            if !skip_triangles {
+                for i in 0..n {
+                    if top_used_edge[i] { continue; }
+                    let t0 = panel.orig_top_to_local[&top_vkeys[i]];
+                    let t1 = panel.orig_top_to_local[&top_vkeys[(i+1)%n]];
+                    let mut best_d = 1e300f64; let mut best_bv = 0usize;
+                    for j in 0..m {
+                        let d = top_mids[i].distance(&bot_pts[j], None);
+                        if d < best_d { best_d = d; best_bv = j; }
+                    }
+                    let bv = panel.orig_bot_to_local[&bot_vkeys[best_bv]];
+                    if let Some(fk) = panel.mesh.add_face(vec![t1, t0, bv], None) {
+                        panel.wall_faces.push(LoftWallFace { face_key: fk, is_quad: false, top_v0: 0, top_v1: 0, bot_v0: 0, bot_v1: 0 });
+                    }
+                }
+            }
+            if add_caps {
+                let bot_cap: Vec<usize> = (0..m).map(|j| panel.orig_bot_to_local[&bot_vkeys[j]]).collect();
+                let bot_cap_fk = panel.mesh.add_face(bot_cap.clone(), None);
+                if let Some(fk) = bot_cap_fk { panel.bot_face_key = fk; }
+                if let Some(fk) = bot_cap_fk {
+                    if bot_cap.len() >= 3 {
+                        let (mut bcnx, mut bcny, mut bcnz) = lp_newell_normal(&bot_pts);
+                        let bcmag = (bcnx*bcnx+bcny*bcny+bcnz*bcnz).sqrt();
+                        if bcmag > 1e-12 {
+                            bcnx /= bcmag; bcny /= bcmag; bcnz /= bcmag;
+                            let (mut bcux, mut bcuy, mut bcuz) = if bcnx.abs() > 0.9 { (0.0f64, 1.0, 0.0) } else { (1.0f64, 0.0, 0.0) };
+                            let bcdot = bcux*bcnx+bcuy*bcny+bcuz*bcnz;
+                            bcux -= bcdot*bcnx; bcuy -= bcdot*bcny; bcuz -= bcdot*bcnz;
+                            let bcum = (bcux*bcux+bcuy*bcuy+bcuz*bcuz).sqrt();
+                            bcux /= bcum; bcuy /= bcum; bcuz /= bcum;
+                            let (bcvx, bcvy, bcvz) = (bcny*bcuz-bcnz*bcuy, bcnz*bcux-bcnx*bcuz, bcnx*bcuy-bcny*bcux);
+                            let bpts2: Vec<(f64,f64)> = bot_pts.iter().map(|p| (p[0]*bcux+p[1]*bcuy+p[2]*bcuz, p[0]*bcvx+p[1]*bcvy+p[2]*bcvz)).collect();
+                            let btris = trimesh_cdt::cdt_triangulate(&bpts2, &[]);
+                            if !btris.is_empty() {
+                                let tri_list: Vec<[usize;3]> = btris.iter().map(|&(a,b,c)| [bot_cap[a], bot_cap[b], bot_cap[c]]).collect();
+                                panel.mesh.triangulation.insert(fk, tri_list);
+                            }
+                        }
+                    }
+                }
+            }
+            panels.push(panel);
+        }
+        panels
     }
 }
 

@@ -83,7 +83,7 @@ pub use color::Color;
 pub use edge::Edge;
 pub use graph::Graph;
 pub use line::Line;
-pub use mesh::Mesh;
+pub use mesh::{Mesh, LoftPanel, LoftWallFace};
 pub use nurbscurve::NurbsCurve;
 pub use nurbssurface::NurbsSurface;
 pub use trimmedsurface::TrimmedSurface;
