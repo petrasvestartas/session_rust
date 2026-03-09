@@ -1,6 +1,6 @@
 {
   "type": "Line",
-  "guid": "7d35afa1-f3b8-4b04-a8dd-25240f52744c",
+  "guid": "c2e8e08b-bfb9-4d27-a1de-408d8e0297a7",
   "name": "test_line",
   "x0": 42.1,
   "y0": 84.2,
@@ -13,13 +13,13 @@
     "a": 255,
     "b": 0,
     "g": 0,
-    "guid": "c4e7f379-5672-4752-bcd4-9ea85ab244a6",
+    "guid": "1eaf5a2d-0253-466d-aa8f-107aaa16d893",
     "name": "black",
     "r": 0,
     "type": "Color"
   },
   "xform": {
-    "guid": "71cd900c-c18f-4c49-959f-396ce09e81a5",
+    "guid": "d480577d-f356-4cd8-b3a9-c25ac95fe6f5",
     "m": [
       1.0,
       0.0,
