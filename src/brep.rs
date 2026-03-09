@@ -58,6 +58,7 @@ pub struct BRepFace {
     pub surface_index: i32,
     pub loop_indices: Vec<i32>,
     pub reversed: bool,
+    pub facecolor: Option<Color>,
 }
 
 #[derive(Debug, Clone)]
