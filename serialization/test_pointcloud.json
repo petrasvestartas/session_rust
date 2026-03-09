@@ -1,6 +1,6 @@
 {
   "type": "PointCloud",
-  "guid": "87e400d3-b34e-41b3-b9a9-835b33f155b0",
+  "guid": "919f439d-0ed5-4551-b89b-3efcfb1bbd01",
   "name": "test_pointcloud",
   "coords": [
     1.0,
@@ -30,7 +30,7 @@
   ],
   "point_size": 1.0,
   "xform": {
-    "guid": "f7bb78eb-5f52-491b-bc3b-5dfdd13a5745",
+    "guid": "e956194b-8f2d-473a-b0fe-6e26fc5f8d65",
     "m": [
       1.0,
       0.0,
