@@ -1,12 +1,25 @@
-
 # session_rust
 
-## Development Commands
+Rust geometry kernel — mirrors the C++ and Python implementations with identical APIs.
 
-### Code Formatting
+## Build
+
 ```bash
-# Format all Rust files in the project
 cd session_rust
+cargo build --release
+```
+
+## Test
+
+```bash
+cargo test --lib
+.\target\release\minitest.exe   # Windows
+./target/release/minitest       # macOS/Linux
+```
+
+## Format & Lint
+
+```bash
 cargo fmt
 cargo clippy --fix --allow-dirty --allow-staged
 ```

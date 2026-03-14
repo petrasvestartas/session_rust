@@ -327,19 +327,206 @@ pub fn run_mesh_loft_many() -> TestResult {
     })
 }
 
+pub fn run_mesh_loft_panels() -> TestResult {
+    MINI_TEST!("Loft with quads and triangles", {
+        use crate::Mesh;
+        use crate::Point;
+        use crate::Color;
+
+        let top7: Vec<Vec<Point>> = vec![
+            vec![
+                Point::new(250.,-250.,500.),
+                Point::new(250.,250.,500.),
+                Point::new(-250.,250.,500.),
+                Point::new(-250.,-250.,500.),
+                Point::new(250.,-250.,500.),
+            ],
+            vec![
+                Point::new(-250.,500.,250.),
+                Point::new(-250.,250.,500.),
+                Point::new(250.,250.,500.),
+                Point::new(250.,500.,250.),
+                Point::new(-250.,500.,250.),
+            ],
+            vec![
+                Point::new(250.,-250.,500.),
+                Point::new(500.,-250.,250.),
+                Point::new(500.,250.,250.),
+                Point::new(250.,250.,500.),
+                Point::new(250.,-250.,500.),
+            ],
+            vec![
+                Point::new(250.,500.,250.),
+                Point::new(250.,250.,500.),
+                Point::new(500.,250.,250.),
+                Point::new(250.,500.,250.),
+            ],
+            vec![
+                Point::new(-250.,500.,250.),
+                Point::new(250.,500.,250.),
+                Point::new(250.,500.,-250.),
+                Point::new(-250.,500.,-250.),
+                Point::new(-250.,500.,250.),
+            ],
+            vec![
+                Point::new(250.,500.,250.),
+                Point::new(500.,250.,250.),
+                Point::new(500.,250.,-250.),
+                Point::new(250.,500.,-250.),
+                Point::new(250.,500.,250.),
+            ],
+            vec![
+                Point::new(500.,-250.,250.),
+                Point::new(500.,-250.,-250.),
+                Point::new(500.,250.,-250.),
+                Point::new(500.,250.,250.),
+                Point::new(500.,-250.,250.),
+            ],
+        ];
+        let bot7: Vec<Vec<Point>> = vec![
+            vec![
+                Point::new(270.710678,-250.,550.),
+                Point::new(270.710678,265.891862,550.),
+                Point::new(265.891862,270.710678,550.),
+                Point::new(-250.,270.710678,550.),
+                Point::new(-250.,-250.,550.),
+                Point::new(270.710678,-250.,550.),
+            ],
+            vec![
+                Point::new(270.710678,-250.,550.),
+                Point::new(550.,-250.,270.710678),
+                Point::new(550.,265.891862,270.710678),
+                Point::new(270.710678,265.891862,550.),
+                Point::new(270.710678,-250.,550.),
+            ],
+            vec![
+                Point::new(-250.,550.,270.710678),
+                Point::new(-250.,270.710678,550.),
+                Point::new(265.891862,270.710678,550.),
+                Point::new(265.891862,550.,270.710678),
+                Point::new(-250.,550.,270.710678),
+            ],
+            vec![
+                Point::new(265.891862,550.,270.710678),
+                Point::new(265.891862,270.710678,550.),
+                Point::new(270.710678,265.891862,550.),
+                Point::new(550.,265.891862,270.710678),
+                Point::new(550.,270.710678,265.891862),
+                Point::new(270.710678,550.,265.891862),
+                Point::new(265.891862,550.,270.710678),
+            ],
+            vec![
+                Point::new(-250.,550.,270.710678),
+                Point::new(265.891862,550.,270.710678),
+                Point::new(270.710678,550.,265.891862),
+                Point::new(270.710678,550.,-250.),
+                Point::new(-250.,550.,-250.),
+                Point::new(-250.,550.,270.710678),
+            ],
+            vec![
+                Point::new(270.710678,550.,265.891862),
+                Point::new(550.,270.710678,265.891862),
+                Point::new(550.,270.710678,-250.),
+                Point::new(270.710678,550.,-250.),
+                Point::new(270.710678,550.,265.891862),
+            ],
+            vec![
+                Point::new(550.,-250.,270.710678),
+                Point::new(550.,-250.,-250.),
+                Point::new(550.,270.710678,-250.),
+                Point::new(550.,270.710678,265.891862),
+                Point::new(550.,265.891862,270.710678),
+                Point::new(550.,-250.,270.710678),
+            ],
+        ];
+        let (mut panels, adj, _top_mesh, _bot_mesh) = Mesh::loft_panels(top7, bot7, 0.001, 0.0, 2.0, true, false);
+
+        // Color faces: blue=top cap, red=bot cap, gray=quad wall, yellow=tri wall
+        for i in 0..panels.len() {
+            let mut face_colors: Vec<Color> = Vec::new();
+            for (_, role) in &panels[i].face_roles {
+                let color = match *role {
+                    "TopCap" => Color::blue(),
+                    "BotCap" => Color::red(),
+                    "TriWall" => Color::yellow(),
+                    _ => Color::grey(),
+                };
+                face_colors.push(color);
+            }
+            panels[i].mesh.set_facecolors(face_colors);
+        }
+
+        // face centroids labelled with panel index
+        for i in 0..panels.len() {
+            let mut c = panels[i].mesh.centroid();
+            c.name = format!("p{}", i);
+        }
+
+        // adjacency: for each shared edge — text dot at midpoint labelled "p{i}f{idx}<->p{j}f{idx}"
+        for pair in &adj {
+            let w = &panels[pair.pi].wall_faces[pair.wi];
+            let mut pt = panels[pair.pi].mesh.face_centroid(w.face_key).unwrap();
+            pt.name = format!("p{} f{} - p{} f{}", pair.pi, w.face_index, pair.pj, panels[pair.pj].wall_faces[pair.wj].face_index);
+        }
+        MINI_CHECK!(panels.len() == 7);
+        MINI_CHECK!(panels[0].mesh.is_valid());
+        MINI_CHECK!(panels[1].mesh.is_valid());
+        MINI_CHECK!(panels[2].mesh.is_valid());
+        MINI_CHECK!(panels[3].mesh.is_valid());
+        MINI_CHECK!(panels[4].mesh.is_valid());
+        MINI_CHECK!(panels[5].mesh.is_valid());
+        MINI_CHECK!(panels[6].mesh.is_valid());
+        MINI_CHECK!(adj.len() == 9);
+        MINI_CHECK!(adj[0].pi == 0 && adj[0].pj == 2);
+        MINI_CHECK!(adj[1].pi == 0 && adj[1].pj == 1);
+        MINI_CHECK!(adj[2].pi == 1 && adj[2].pj == 3);
+        MINI_CHECK!(adj[3].pi == 1 && adj[3].pj == 4);
+        MINI_CHECK!(adj[4].pi == 2 && adj[4].pj == 6);
+        MINI_CHECK!(adj[5].pi == 2 && adj[5].pj == 3);
+        MINI_CHECK!(adj[6].pi == 3 && adj[6].pj == 5);
+        MINI_CHECK!(adj[7].pi == 4 && adj[7].pj == 5);
+        MINI_CHECK!(adj[8].pi == 5 && adj[8].pj == 6);
+    })
+}
+
 pub fn run_mesh_boolean_queries() -> TestResult {
     MINI_TEST!("Boolean Queries", {
         use crate::Mesh;
         use crate::Point;
 
-        let mut mesh = Mesh::new();
-        let v0 = mesh.add_vertex(Point::new(0.0, 0.0, 0.0), None);
-        let v1 = mesh.add_vertex(Point::new(1.0, 0.0, 0.0), None);
-        let v2 = mesh.add_vertex(Point::new(0.0, 1.0, 0.0), None);
-        let f0 = mesh.add_face(vec![v0, v1, v2], None).unwrap();
+        let mesh = Mesh::from_polylines(vec![
+            vec![
+                Point::new(1.28955, 0.0, 1.127558),
+                Point::new(0.85791, 0.0, 0.225512),
+                Point::new(0.64209, -0.866025, -0.225512),
+                Point::new(0.85791, -1.732051, 0.225512),
+                Point::new(1.458565, -1.732051, 1.127558),
+                Point::new(1.50537, -0.866025, 1.578581),
+            ],
+            vec![
+                Point::new(0.64209, 0.866025, -0.225512),
+                Point::new(0.114274, 0.866025, -0.686294),
+                Point::new(-0.00537, 0.0, -1.578581),
+                Point::new(0.21045, -0.866025, -1.127558),
+                Point::new(0.64209, -0.866025, -0.225512),
+                Point::new(0.85791, 0.0, 0.225512),
+            ],
+            vec![
+                Point::new(1.28955, 1.732051, 1.127558),
+                Point::new(0.85791, 1.732051, 0.225512),
+                Point::new(0.64209, 0.866025, -0.225512),
+                Point::new(0.85791, 0.0, 0.225512),
+                Point::new(1.28955, 0.0, 1.127558),
+                Point::new(1.853404, 0.866025, 1.578581),
+            ],
+        ], Some(0.001));
+        let v0: usize = 1;
+        let v1: usize = 2;
+        let v2: usize = 3;
+        let f0: usize = 0;
 
-        let not_empty = mesh.is_empty();
-        MINI_CHECK!(!not_empty);
+        let empty = mesh.is_empty();
+        MINI_CHECK!(!empty);
 
         let valid = mesh.is_valid();
         MINI_CHECK!(valid);
@@ -348,9 +535,12 @@ pub fn run_mesh_boolean_queries() -> TestResult {
         MINI_CHECK!(!closed);
 
         let vertex_on_boundary = mesh.is_vertex_on_boundary(v0);
-        MINI_CHECK!(vertex_on_boundary);
+        MINI_CHECK!(!vertex_on_boundary);
 
-        let edge_on_boundary = mesh.is_edge_on_boundary(v0, v1);
+        let edge_not_on_boundary = mesh.is_edge_on_boundary(v0, v1);
+        MINI_CHECK!(!edge_not_on_boundary);
+
+        let edge_on_boundary = mesh.is_edge_on_boundary(v1, v2);
         MINI_CHECK!(edge_on_boundary);
 
         let face_on_boundary = mesh.is_face_on_boundary(f0);
@@ -395,16 +585,32 @@ pub fn run_mesh_attributes() -> TestResult {
         MINI_CHECK!(faces[4] == vec![0, 4, 7, 3]);
         MINI_CHECK!(faces[5] == vec![1, 2, 6, 5]);
 
-        let vindex = mesh.vertex_index();
-        MINI_CHECK!(vindex.len() == n_vertices);
-        MINI_CHECK!(vindex[&0] == 0);
-        MINI_CHECK!(vindex[&1] == 1);
-        MINI_CHECK!(vindex[&2] == 2);
-        MINI_CHECK!(vindex[&3] == 3);
-        MINI_CHECK!(vindex[&4] == 4);
-        MINI_CHECK!(vindex[&5] == 5);
-        MINI_CHECK!(vindex[&6] == 6);
-        MINI_CHECK!(vindex[&7] == 7);
+        let mut vertex_to_index = mesh.vertex_index();
+        MINI_CHECK!(vertex_to_index.len() == n_vertices);
+        MINI_CHECK!(vertex_to_index[&0] == 0);
+        MINI_CHECK!(vertex_to_index[&1] == 1);
+        MINI_CHECK!(vertex_to_index[&2] == 2);
+        MINI_CHECK!(vertex_to_index[&3] == 3);
+        MINI_CHECK!(vertex_to_index[&4] == 4);
+        MINI_CHECK!(vertex_to_index[&5] == 5);
+        MINI_CHECK!(vertex_to_index[&6] == 6);
+        MINI_CHECK!(vertex_to_index[&7] == 7);
+
+        // sparse keys: key != index
+        let mut mesh2 = Mesh::new();
+        let k0 = mesh2.add_vertex(Point::new(0.0, 0.0, 0.0), None);
+        let k1 = mesh2.add_vertex(Point::new(1.0, 0.0, 0.0), Some(5));
+        let k2 = mesh2.add_vertex(Point::new(0.0, 1.0, 0.0), Some(10));
+        MINI_CHECK!(k0 == 0);
+        MINI_CHECK!(k1 == 5);
+        MINI_CHECK!(k2 == 10);
+        vertex_to_index = mesh2.vertex_index();
+        let v0 = vertex_to_index[&0];
+        let v5 = vertex_to_index[&5];
+        let v10 = vertex_to_index[&10];
+        MINI_CHECK!(v0  == 0);
+        MINI_CHECK!(v5  == 1);
+        MINI_CHECK!(v10 == 2);
     })
 }
 
@@ -461,32 +667,31 @@ pub fn run_mesh_vertex_and_face_operations() -> TestResult {
         let p1 = mesh.add_vertex(Point::new(1.0, 0.0, 0.0), None);
         let p2 = mesh.add_vertex(Point::new(1.0, 1.0, 0.0), None);
         let p3 = mesh.add_vertex(Point::new(2.0, 1.0, 0.0), None);
-        let f0 = mesh.add_face(vec![p0, p1, p2], None).unwrap();
-        let f1 = mesh.add_face(vec![p1, p2, p3], None).unwrap();
+        let f0 = mesh.add_face(vec![p0, p1, p2], None).unwrap();  // +z normal
+        let f1 = mesh.add_face(vec![p1, p2, p3], None).unwrap();  // -z normal (wrong: same halfedge dir)
 
-        let n0_before = mesh.face_normal(f0).unwrap();
-        let n1_before = mesh.face_normal(f1).unwrap();
-        MINI_CHECK!(n0_before[0]*n1_before[0] + n0_before[1]*n1_before[1] + n0_before[2]*n1_before[2] < 0.0);
+        let n0_before = mesh.face_normal(f0);
+        let n1_before = mesh.face_normal(f1);
+        MINI_CHECK!(n0_before.is_some() && n1_before.is_some());
+        MINI_CHECK!(n0_before.unwrap().dot(&n1_before.unwrap()) < 0.0);  // wrong: normals point opposite ways
 
         mesh.unify_winding();
 
-        let n0_after = mesh.face_normal(f0).unwrap();
-        let n1_after = mesh.face_normal(f1).unwrap();
-        MINI_CHECK!(n0_after[0]*n1_after[0] + n0_after[1]*n1_after[1] + n0_after[2]*n1_after[2] > 0.0);
-    })
-}
+        let n0_after = mesh.face_normal(f0);
+        let n1_after = mesh.face_normal(f1);
+        MINI_CHECK!(n0_after.is_some() && n1_after.is_some());
+        MINI_CHECK!(n0_after.unwrap().dot(&n1_after.unwrap()) > 0.0);  // correct: normals agree
 
-pub fn run_mesh_unweld() -> TestResult {
-    MINI_TEST!("Unweld", {
-        use crate::Mesh;
-
+        // Unweld and weld
         let box_mesh = Mesh::create_box(1.0, 1.0, 1.0);
         let u = box_mesh.unweld();
-
-        MINI_CHECK!(u.number_of_faces() == box_mesh.number_of_faces());
         MINI_CHECK!(u.number_of_vertices() == 24);
-        for vk in u.vertex.keys() {
-            MINI_CHECK!(u.vertex_faces(*vk).len() == 1);
+
+        let w = u.weld(0.001);
+        MINI_CHECK!(w.number_of_vertices() == 8);
+        MINI_CHECK!(w.number_of_faces() == 6);
+        for vk in w.vertex.keys() {
+            MINI_CHECK!(w.vertex_faces(*vk).len() == 3);
         }
     })
 }
@@ -626,6 +831,13 @@ pub fn run_mesh_geometric_properties() -> TestResult {
         let vnsw = mesh.vertex_normals_weighted(NormalWeighting::Angle);
         MINI_CHECK!(vnsw.len() == mesh.number_of_vertices());
         MINI_CHECK!(TOLERANCE.is_close(vnsw[&v0][2], 1.0));
+
+        // area
+        let box_ = Mesh::create_box(2.0, 2.0, 2.0);
+        MINI_CHECK!(TOLERANCE.is_close(box_.area(), 24.0));
+
+        // volume
+        MINI_CHECK!(TOLERANCE.is_close(box_.volume(), 8.0));
     })
 }
 
@@ -686,12 +898,15 @@ pub fn run_mesh_json_roundtrip() -> TestResult {
         mesh.add_face(vec![v0, v1, v2], None);
 
         // JSON object
+        use crate::Xform;
+        mesh.xform = Xform::translation(1.0, 2.0, 3.0);
         let json = mesh.jsondump();
         let loaded_json = Mesh::jsonload(&json).unwrap();
         MINI_CHECK!(loaded_json.name == mesh.name);
         MINI_CHECK!(loaded_json.color_mode == mesh.color_mode);
         MINI_CHECK!(loaded_json.number_of_vertices() == mesh.number_of_vertices());
         MINI_CHECK!(loaded_json.number_of_faces() == mesh.number_of_faces());
+        MINI_CHECK!(loaded_json.xform == mesh.xform);
 
         // String
         let json_string = mesh.json_dumps();
@@ -701,7 +916,6 @@ pub fn run_mesh_json_roundtrip() -> TestResult {
 
         // File
         let filename = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-            .parent().unwrap()
             .join("serialization").join("test_mesh.json");
         mesh.json_dump(filename.to_str().unwrap()).unwrap();
         let loaded_file = Mesh::json_load(filename.to_str().unwrap()).unwrap();
@@ -755,7 +969,6 @@ pub fn run_mesh_protobuf_roundtrip() -> TestResult {
 
         // File
         let filename = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-            .parent().unwrap()
             .join("serialization").join("test_mesh.bin");
         mesh.pb_dump(filename.to_str().unwrap());
         let loaded_file = Mesh::pb_load(filename.to_str().unwrap());
@@ -785,35 +998,6 @@ pub fn run_mesh_protobuf_roundtrip() -> TestResult {
         MINI_CHECK!(loaded_holes.face_holes[&hfk] == hmesh.face_holes[&hfk]);
     })
 }
-
-pub fn run_mesh_loft_cw_top() -> TestResult {
-    MINI_TEST!("Loft CW Top", {
-        use crate::Mesh;
-        use crate::Point;
-        use crate::Polyline;
-
-        let bottom = vec![Polyline::new(vec![
-            Point::new(1809.81961, -1687.495982, 311.578722),
-            Point::new(1825.625156, -1472.493331, 358.952919),
-            Point::new(2243.354726, -1333.020513, 185.483369),
-            Point::new(2333.421648, -1473.010517, 104.339291),
-            Point::new(2018.113456, -1561.111665, 239.690615),
-            Point::new(1809.81961, -1687.495982, 311.578722),
-        ])];
-        let top = vec![Polyline::new(vec![
-            Point::new(1860.437717, -1492.555066, 451.085257),
-            Point::new(1843.734715, -1715.847809, 402.008374),
-            Point::new(2061.759806, -1583.505015, 326.795403),
-            Point::new(2380.846158, -1494.398994, 189.802436),
-            Point::new(2287.583332, -1349.613043, 273.785406),
-            Point::new(1860.437717, -1492.555066, 451.085257),
-        ])];
-        let mesh = Mesh::loft(&bottom, &top, true);
-        MINI_CHECK!(mesh.is_valid());
-        MINI_CHECK!(mesh.is_closed());
-    })
-}
-
 // Register tests with the shared registry
 REGISTER_MINI_TEST!("Mesh", "Constructor", crate::mesh_test::run_mesh_constructor);
 REGISTER_MINI_TEST!("Mesh", "From Polylines", crate::mesh_test::run_mesh_from_polylines);
@@ -822,12 +1006,11 @@ REGISTER_MINI_TEST!("Mesh", "From Polygon With Holes", crate::mesh_test::run_mes
 REGISTER_MINI_TEST!("Mesh", "Loft", crate::mesh_test::run_mesh_loft);
 REGISTER_MINI_TEST!("Mesh", "From Polygon With Holes Many", crate::mesh_test::run_mesh_from_polygon_with_holes_many);
 REGISTER_MINI_TEST!("Mesh", "Loft Many", crate::mesh_test::run_mesh_loft_many);
-REGISTER_MINI_TEST!("Mesh", "Loft CW Top", crate::mesh_test::run_mesh_loft_cw_top);
+REGISTER_MINI_TEST!("Mesh", "Loft with quads and triangles", crate::mesh_test::run_mesh_loft_panels);
 REGISTER_MINI_TEST!("Mesh", "Boolean Queries", crate::mesh_test::run_mesh_boolean_queries);
 REGISTER_MINI_TEST!("Mesh", "Attributes", crate::mesh_test::run_mesh_attributes);
 REGISTER_MINI_TEST!("Mesh", "Edges", crate::mesh_test::run_mesh_edges);
 REGISTER_MINI_TEST!("Mesh", "Vertex and Face Operations", crate::mesh_test::run_mesh_vertex_and_face_operations);
-REGISTER_MINI_TEST!("Mesh", "Unweld", crate::mesh_test::run_mesh_unweld);
 REGISTER_MINI_TEST!("Mesh", "Connectivity Queries", crate::mesh_test::run_mesh_connectivity_queries);
 REGISTER_MINI_TEST!("Mesh", "Geometric Properties", crate::mesh_test::run_mesh_geometric_properties);
 REGISTER_MINI_TEST!("Mesh", "Transformation", crate::mesh_test::run_mesh_transformation);

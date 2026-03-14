@@ -75,17 +75,14 @@ impl Xform {
     }
 
     pub fn identity() -> Self {
-        let mut xform = Xform {
-            typ: "Xform".to_string(),
-            guid: Uuid::new_v4().to_string(),
-            name: "my_xform".to_string(),
-            m: [0.0; 16],
-        };
-        xform.m[0] = 1.0;
-        xform.m[5] = 1.0;
-        xform.m[10] = 1.0;
-        xform.m[15] = 1.0;
-        xform
+        use std::sync::OnceLock;
+        static IDENTITY: OnceLock<Xform> = OnceLock::new();
+        IDENTITY.get_or_init(|| {
+            let mut m = [0.0f64; 16];
+            m[0] = 1.0; m[5] = 1.0; m[10] = 1.0; m[15] = 1.0;
+            Xform { typ: "Xform".to_string(), guid: Uuid::new_v4().to_string(),
+                    name: "my_xform".to_string(), m }
+        }).clone()
     }
 
     pub fn from_cols(col_x: Vector, col_y: Vector, col_z: Vector) -> Self {

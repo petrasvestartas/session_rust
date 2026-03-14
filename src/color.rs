@@ -135,156 +135,156 @@ impl Color {
 
     /// Create white color.
     pub fn white() -> Self {
-        let mut color = Color::new(255, 255, 255, 255);
-        color.name = "white".to_string();
-        color
+        use std::sync::OnceLock;
+        static C: OnceLock<Color> = OnceLock::new();
+        C.get_or_init(|| { let mut c = Color::new(255, 255, 255, 255); c.name = "white".to_string(); c }).clone()
     }
 
     /// Create black color.
     pub fn black() -> Self {
-        let mut color = Color::new(0, 0, 0, 255);
-        color.name = "black".to_string();
-        color
+        use std::sync::OnceLock;
+        static C: OnceLock<Color> = OnceLock::new();
+        C.get_or_init(|| { let mut c = Color::new(0, 0, 0, 255); c.name = "black".to_string(); c }).clone()
     }
 
     /// Create grey color.
     pub fn grey() -> Self {
-        let mut color = Color::new(128, 128, 128, 255);
-        color.name = "grey".to_string();
-        color
+        use std::sync::OnceLock;
+        static C: OnceLock<Color> = OnceLock::new();
+        C.get_or_init(|| { let mut c = Color::new(128, 128, 128, 255); c.name = "grey".to_string(); c }).clone()
     }
 
     /// Create red color.
     pub fn red() -> Self {
-        let mut color = Color::new(255, 0, 0, 255);
-        color.name = "red".to_string();
-        color
+        use std::sync::OnceLock;
+        static C: OnceLock<Color> = OnceLock::new();
+        C.get_or_init(|| { let mut c = Color::new(255, 0, 0, 255); c.name = "red".to_string(); c }).clone()
     }
 
     /// Create orange color.
     pub fn orange() -> Self {
-        let mut color = Color::new(255, 128, 0, 255);
-        color.name = "orange".to_string();
-        color
+        use std::sync::OnceLock;
+        static C: OnceLock<Color> = OnceLock::new();
+        C.get_or_init(|| { let mut c = Color::new(255, 128, 0, 255); c.name = "orange".to_string(); c }).clone()
     }
 
     /// Create yellow color.
     pub fn yellow() -> Self {
-        let mut color = Color::new(255, 255, 0, 255);
-        color.name = "yellow".to_string();
-        color
+        use std::sync::OnceLock;
+        static C: OnceLock<Color> = OnceLock::new();
+        C.get_or_init(|| { let mut c = Color::new(255, 255, 0, 255); c.name = "yellow".to_string(); c }).clone()
     }
 
     /// Create lime color.
     pub fn lime() -> Self {
-        let mut color = Color::new(128, 255, 0, 255);
-        color.name = "lime".to_string();
-        color
+        use std::sync::OnceLock;
+        static C: OnceLock<Color> = OnceLock::new();
+        C.get_or_init(|| { let mut c = Color::new(128, 255, 0, 255); c.name = "lime".to_string(); c }).clone()
     }
 
     /// Create green color.
     pub fn green() -> Self {
-        let mut color = Color::new(0, 255, 0, 255);
-        color.name = "green".to_string();
-        color
+        use std::sync::OnceLock;
+        static C: OnceLock<Color> = OnceLock::new();
+        C.get_or_init(|| { let mut c = Color::new(0, 255, 0, 255); c.name = "green".to_string(); c }).clone()
     }
 
     /// Create mint color.
     pub fn mint() -> Self {
-        let mut color = Color::new(0, 255, 128, 255);
-        color.name = "mint".to_string();
-        color
+        use std::sync::OnceLock;
+        static C: OnceLock<Color> = OnceLock::new();
+        C.get_or_init(|| { let mut c = Color::new(0, 255, 128, 255); c.name = "mint".to_string(); c }).clone()
     }
 
     /// Create cyan color.
     pub fn cyan() -> Self {
-        let mut color = Color::new(0, 255, 255, 255);
-        color.name = "cyan".to_string();
-        color
+        use std::sync::OnceLock;
+        static C: OnceLock<Color> = OnceLock::new();
+        C.get_or_init(|| { let mut c = Color::new(0, 255, 255, 255); c.name = "cyan".to_string(); c }).clone()
     }
 
     /// Create azure color.
     pub fn azure() -> Self {
-        let mut color = Color::new(0, 128, 255, 255);
-        color.name = "azure".to_string();
-        color
+        use std::sync::OnceLock;
+        static C: OnceLock<Color> = OnceLock::new();
+        C.get_or_init(|| { let mut c = Color::new(0, 128, 255, 255); c.name = "azure".to_string(); c }).clone()
     }
 
     /// Create blue color.
     pub fn blue() -> Self {
-        let mut color = Color::new(0, 0, 255, 255);
-        color.name = "blue".to_string();
-        color
+        use std::sync::OnceLock;
+        static C: OnceLock<Color> = OnceLock::new();
+        C.get_or_init(|| { let mut c = Color::new(0, 0, 255, 255); c.name = "blue".to_string(); c }).clone()
     }
 
     /// Create violet color.
     pub fn violet() -> Self {
-        let mut color = Color::new(128, 0, 255, 255);
-        color.name = "violet".to_string();
-        color
+        use std::sync::OnceLock;
+        static C: OnceLock<Color> = OnceLock::new();
+        C.get_or_init(|| { let mut c = Color::new(128, 0, 255, 255); c.name = "violet".to_string(); c }).clone()
     }
 
     /// Create magenta color.
     pub fn magenta() -> Self {
-        let mut color = Color::new(255, 0, 255, 255);
-        color.name = "magenta".to_string();
-        color
+        use std::sync::OnceLock;
+        static C: OnceLock<Color> = OnceLock::new();
+        C.get_or_init(|| { let mut c = Color::new(255, 0, 255, 255); c.name = "magenta".to_string(); c }).clone()
     }
 
     /// Create pink color.
     pub fn pink() -> Self {
-        let mut color = Color::new(255, 0, 128, 255);
-        color.name = "pink".to_string();
-        color
+        use std::sync::OnceLock;
+        static C: OnceLock<Color> = OnceLock::new();
+        C.get_or_init(|| { let mut c = Color::new(255, 0, 128, 255); c.name = "pink".to_string(); c }).clone()
     }
 
     /// Create maroon color.
     pub fn maroon() -> Self {
-        let mut color = Color::new(128, 0, 0, 255);
-        color.name = "maroon".to_string();
-        color
+        use std::sync::OnceLock;
+        static C: OnceLock<Color> = OnceLock::new();
+        C.get_or_init(|| { let mut c = Color::new(128, 0, 0, 255); c.name = "maroon".to_string(); c }).clone()
     }
 
     /// Create brown color.
     pub fn brown() -> Self {
-        let mut color = Color::new(128, 64, 0, 255);
-        color.name = "brown".to_string();
-        color
+        use std::sync::OnceLock;
+        static C: OnceLock<Color> = OnceLock::new();
+        C.get_or_init(|| { let mut c = Color::new(128, 64, 0, 255); c.name = "brown".to_string(); c }).clone()
     }
 
     /// Create olive color.
     pub fn olive() -> Self {
-        let mut color = Color::new(128, 128, 0, 255);
-        color.name = "olive".to_string();
-        color
+        use std::sync::OnceLock;
+        static C: OnceLock<Color> = OnceLock::new();
+        C.get_or_init(|| { let mut c = Color::new(128, 128, 0, 255); c.name = "olive".to_string(); c }).clone()
     }
 
     /// Create teal color.
     pub fn teal() -> Self {
-        let mut color = Color::new(0, 128, 128, 255);
-        color.name = "teal".to_string();
-        color
+        use std::sync::OnceLock;
+        static C: OnceLock<Color> = OnceLock::new();
+        C.get_or_init(|| { let mut c = Color::new(0, 128, 128, 255); c.name = "teal".to_string(); c }).clone()
     }
 
     /// Create navy color.
     pub fn navy() -> Self {
-        let mut color = Color::new(0, 0, 128, 255);
-        color.name = "navy".to_string();
-        color
+        use std::sync::OnceLock;
+        static C: OnceLock<Color> = OnceLock::new();
+        C.get_or_init(|| { let mut c = Color::new(0, 0, 128, 255); c.name = "navy".to_string(); c }).clone()
     }
 
     /// Create purple color.
     pub fn purple() -> Self {
-        let mut color = Color::new(128, 0, 128, 255);
-        color.name = "purple".to_string();
-        color
+        use std::sync::OnceLock;
+        static C: OnceLock<Color> = OnceLock::new();
+        C.get_or_init(|| { let mut c = Color::new(128, 0, 128, 255); c.name = "purple".to_string(); c }).clone()
     }
 
     /// Create silver color.
     pub fn silver() -> Self {
-        let mut color = Color::new(192, 192, 192, 255);
-        color.name = "silver".to_string();
-        color
+        use std::sync::OnceLock;
+        static C: OnceLock<Color> = OnceLock::new();
+        C.get_or_init(|| { let mut c = Color::new(192, 192, 192, 255); c.name = "silver".to_string(); c }).clone()
     }
 
     /// Return a palette of 12 spectral colors in order.

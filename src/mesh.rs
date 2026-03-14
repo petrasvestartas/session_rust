@@ -139,11 +139,19 @@ impl VertexData {
 
 pub struct LoftWallFace {
     pub face_key: usize,
+    pub face_index: usize,
     pub is_quad: bool,
     pub top_v0: usize,
     pub top_v1: usize,
     pub bot_v0: usize,
     pub bot_v1: usize,
+}
+
+pub struct LoftAdjPair {
+    pub pi: usize,
+    pub wi: usize,
+    pub pj: usize,
+    pub wj: usize,
 }
 
 pub struct LoftPanel {
@@ -153,7 +161,9 @@ pub struct LoftPanel {
     pub wall_faces: Vec<LoftWallFace>,
     pub orig_top_to_local: HashMap<usize, usize>,
     pub orig_bot_to_local: HashMap<usize, usize>,
-    pub bot_pts: Vec<Point>,
+    pub top_vertices: Vec<usize>,
+    pub bot_vertices: Vec<usize>,
+    pub face_roles: HashMap<usize, &'static str>,
 }
 
 impl Default for Mesh {
@@ -685,7 +695,7 @@ impl Mesh {
                 (off..off+cnt).map(|i| proj(&all_bot[i])).collect()
             }).collect();
             let b_tris = trimesh_cdt::cdt_triangulate(&b2d, &bh2d);
-            let bot_fvkeys: Vec<usize> = (0..bot_n0).map(|i| bvk[i]).collect();
+            let bot_fvkeys: Vec<usize> = (0..bot_n0).rev().map(|i| bvk[i]).collect();
             if let Some(fk_bot) = mesh.add_face(bot_fvkeys, None) {
                 if !bh2d.is_empty() {
                     let hole_rings: Vec<Vec<usize>> = poly_infos[1..].iter()
@@ -712,6 +722,12 @@ impl Mesh {
                 }
                 let tri_list: Vec<[usize;3]> = t_tris.iter().map(|&(a,b,c)| [tvk[a], tvk[b], tvk[c]]).collect();
                 mesh.triangulation.insert(fk_top, tri_list);
+            }
+            for &(b_off, b_n, t_off, t_n) in &poly_infos[1..] {
+                let bh: Vec<usize> = (0..b_n).rev().map(|j| bvk[b_off + j]).collect();
+                mesh.add_face(bh, None);
+                let th: Vec<usize> = (0..t_n).map(|j| tvk[t_off + j]).collect();
+                mesh.add_face(th, None);
             }
         }
         // Side faces: align by longest edge, quads for equal counts, zipper+triangles otherwise
@@ -796,7 +812,7 @@ impl Mesh {
         edge_match_threshold: f64,
         add_caps: bool,
         skip_triangles: bool,
-    ) -> Vec<LoftPanel> {
+    ) -> (Vec<LoftPanel>, Vec<LoftAdjPair>, Mesh, Mesh) {
         let top_mesh = Mesh::from_polylines(top_polygons, Some(merge_precision));
         let bot_mesh = Mesh::from_polylines(bot_polygons, Some(merge_precision));
         let tfks: Vec<usize> = top_mesh.face.keys().cloned().collect();
@@ -823,7 +839,8 @@ impl Mesh {
             let mut panel = LoftPanel {
                 mesh: Mesh::new(), top_face_key: 0, bot_face_key: 0,
                 wall_faces: Vec::new(), orig_top_to_local: HashMap::new(),
-                orig_bot_to_local: HashMap::new(), bot_pts: Vec::new(),
+                orig_bot_to_local: HashMap::new(), top_vertices: Vec::new(), bot_vertices: Vec::new(),
+                face_roles: HashMap::new(),
             };
             let mut top_vkeys: Vec<usize> = top_mesh.face_vertices(tfk).unwrap().clone();
             let mut bot_vkeys: Vec<usize> = bot_mesh.face_vertices(bfk).unwrap().clone();
@@ -859,14 +876,15 @@ impl Mesh {
             if tnx*ax+tny*ay+tnz*az < 0.0 { top_pts.reverse(); top_vkeys.reverse(); }
             let (bnx, bny, bnz) = lp_newell_normal(&bot_pts);
             if bnx*ax+bny*ay+bnz*az > 0.0 { bot_pts.reverse(); bot_vkeys.reverse(); }
-            panel.bot_pts = bot_pts.clone();
             for i in 0..n {
                 let lk = panel.mesh.add_vertex(top_pts[i].clone(), None);
                 panel.orig_top_to_local.insert(top_vkeys[i], lk);
+                panel.top_vertices.push(lk);
             }
             for j in 0..m {
                 let lk = panel.mesh.add_vertex(bot_pts[j].clone(), None);
                 panel.orig_bot_to_local.insert(bot_vkeys[j], lk);
+                panel.bot_vertices.push(lk);
             }
             if add_caps {
                 let top_cap: Vec<usize> = top_vkeys.iter().map(|&vk| panel.orig_top_to_local[&vk]).collect();
@@ -942,7 +960,7 @@ impl Mesh {
                     };
                     if let Some(fk) = face_fk {
                         panel.wall_faces.push(LoftWallFace {
-                            face_key: fk, is_quad: true,
+                            face_key: fk, face_index: 0, is_quad: true,
                             top_v0: top_vkeys[ti], top_v1: top_vkeys[(ti+1)%n],
                             bot_v0: bot_vkeys[(j+1)%m], bot_v1: bot_vkeys[j],
                         });
@@ -956,7 +974,7 @@ impl Mesh {
                     }
                     let tv = panel.orig_top_to_local[&top_vkeys[best_tv]];
                     if let Some(fk) = panel.mesh.add_face(vec![b0, tv, b1], None) {
-                        panel.wall_faces.push(LoftWallFace { face_key: fk, is_quad: false, top_v0: 0, top_v1: 0, bot_v0: 0, bot_v1: 0 });
+                        panel.wall_faces.push(LoftWallFace { face_key: fk, face_index: 0, is_quad: false, top_v0: 0, top_v1: 0, bot_v0: 0, bot_v1: 0 });
                     }
                 }
             }
@@ -972,7 +990,7 @@ impl Mesh {
                     }
                     let bv = panel.orig_bot_to_local[&bot_vkeys[best_bv]];
                     if let Some(fk) = panel.mesh.add_face(vec![t1, t0, bv], None) {
-                        panel.wall_faces.push(LoftWallFace { face_key: fk, is_quad: false, top_v0: 0, top_v1: 0, bot_v0: 0, bot_v1: 0 });
+                        panel.wall_faces.push(LoftWallFace { face_key: fk, face_index: 0, is_quad: false, top_v0: 0, top_v1: 0, bot_v0: 0, bot_v1: 0 });
                     }
                 }
             }
@@ -1004,7 +1022,53 @@ impl Mesh {
             }
             panels.push(panel);
         }
-        panels
+        for pi in 0..panels.len() {
+            let mut fkey_to_idx: HashMap<usize, usize> = HashMap::new();
+            for (fi, (&fk, _)) in panels[pi].mesh.face.iter().enumerate() {
+                fkey_to_idx.insert(fk, fi);
+            }
+            for wi in 0..panels[pi].wall_faces.len() {
+                let fk = panels[pi].wall_faces[wi].face_key;
+                panels[pi].wall_faces[wi].face_index = *fkey_to_idx.get(&fk).unwrap();
+                let role = if panels[pi].wall_faces[wi].is_quad { "QuadWall" } else { "TriWall" };
+                panels[pi].face_roles.insert(fk, role);
+            }
+            let tfk = panels[pi].top_face_key;
+            if tfk != 0 { panels[pi].face_roles.insert(tfk, "TopCap"); }
+            let bfk = panels[pi].bot_face_key;
+            if bfk != 0 { panels[pi].face_roles.insert(bfk, "BotCap"); }
+        }
+        let mut edge_to_wall: HashMap<(usize, usize), (usize, usize)> = HashMap::new();
+        for pi in 0..panels.len() {
+            for wi in 0..panels[pi].wall_faces.len() {
+                if !panels[pi].wall_faces[wi].is_quad { continue; }
+                let v0 = panels[pi].wall_faces[wi].top_v0;
+                let v1 = panels[pi].wall_faces[wi].top_v1;
+                edge_to_wall.insert((v0, v1), (pi, wi));
+            }
+        }
+        let mut adjacency: Vec<LoftAdjPair> = Vec::new();
+        for pi in 0..panels.len() {
+            for wi in 0..panels[pi].wall_faces.len() {
+                if !panels[pi].wall_faces[wi].is_quad { continue; }
+                let v0 = panels[pi].wall_faces[wi].top_v0;
+                let v1 = panels[pi].wall_faces[wi].top_v1;
+                if let Some(&(pj, wj)) = edge_to_wall.get(&(v1, v0)) {
+                    if pj > pi { adjacency.push(LoftAdjPair { pi, wi, pj, wj }); }
+                }
+            }
+        }
+        let mut top_ordered = Mesh::new();
+        let mut bot_ordered = Mesh::new();
+        for i in 0..panels.len() {
+            let top_pts: Vec<Point> = panels[i].top_vertices.iter().map(|&lk| panels[i].mesh.vertex_position(lk).unwrap()).collect();
+            let bot_pts: Vec<Point> = panels[i].bot_vertices.iter().map(|&lk| panels[i].mesh.vertex_position(lk).unwrap()).collect();
+            let tvks: Vec<usize> = top_pts.into_iter().map(|pt| top_ordered.add_vertex(pt, None)).collect();
+            let bvks: Vec<usize> = bot_pts.into_iter().map(|pt| bot_ordered.add_vertex(pt, None)).collect();
+            top_ordered.add_face(tvks, Some(i));
+            bot_ordered.add_face(bvks, Some(i));
+        }
+        (panels, adjacency, top_ordered, bot_ordered)
     }
 
     pub fn create_box(x: f64, y: f64, z: f64) -> Self {
@@ -1274,6 +1338,64 @@ impl Mesh {
         m
     }
 
+    pub fn weld(&self, tolerance: f64) -> Mesh {
+        if self.vertex.is_empty() { return Mesh::new(); }
+
+        let mut vkeys: Vec<usize> = self.vertex.keys().copied().collect();
+        vkeys.sort();
+        let positions: Vec<Point> = vkeys.iter().map(|k| {
+            let v = &self.vertex[k];
+            Point::new(v.x, v.y, v.z)
+        }).collect();
+        let n = vkeys.len();
+
+        let mut parent: Vec<usize> = (0..n).collect();
+        fn find(parent: &mut Vec<usize>, mut x: usize) -> usize {
+            while parent[x] != x { parent[x] = parent[parent[x]]; x = parent[x]; }
+            x
+        }
+
+        if tolerance > 0.0 {
+            let boxes: Vec<BoundingBox> = positions.iter().map(|p| BoundingBox::from_point(p.clone(), tolerance)).collect();
+            let ws = BVH::compute_world_size(&boxes);
+            let bvh = BVH::from_boxes(&boxes, ws);
+            let (pairs, _, _) = bvh.check_all_collisions(&boxes);
+            for (i, j) in pairs {
+                if positions[i].distance(&positions[j], None) <= tolerance {
+                    let ri = find(&mut parent, i);
+                    let rj = find(&mut parent, j);
+                    if ri != rj { parent[ri] = rj; }
+                }
+            }
+        }
+
+        let mut root_to_rep: std::collections::HashMap<usize, usize> = std::collections::HashMap::new();
+        for i in 0..n {
+            let root = find(&mut parent, i);
+            let entry = root_to_rep.entry(root).or_insert(vkeys[i]);
+            if vkeys[i] < *entry { *entry = vkeys[i]; }
+        }
+        let vkey_to_rep: std::collections::HashMap<usize, usize> = (0..n).map(|i| {
+            let root = find(&mut parent, i);
+            (vkeys[i], root_to_rep[&root])
+        }).collect();
+
+        let mut m = Mesh::new();
+        let mut added: std::collections::HashSet<usize> = std::collections::HashSet::new();
+        for i in 0..n {
+            let rep = vkey_to_rep[&vkeys[i]];
+            if added.insert(rep) {
+                let v = &self.vertex[&rep];
+                m.add_vertex(Point::new(v.x, v.y, v.z), Some(rep));
+            }
+        }
+        for (fk, fvkeys) in &self.face {
+            let new_vkeys: Vec<usize> = fvkeys.iter().map(|vk| vkey_to_rep[vk]).collect();
+            m.add_face(new_vkeys, Some(*fk));
+        }
+        m
+    }
+
     ///////////////////////////////////////////////////////////////////////////////////////////
     // Vertex and Face Operations
     ///////////////////////////////////////////////////////////////////////////////////////////
@@ -1326,8 +1448,9 @@ impl Mesh {
                 k
             }
             None => {
+                let k = self.max_face;
                 self.max_face += 1;
-                self.max_face
+                k
             }
         };
 
@@ -1367,6 +1490,28 @@ impl Mesh {
 
     pub fn face_vertices(&self, face_key: usize) -> Option<&Vec<usize>> {
         self.face.get(&face_key)
+    }
+
+    pub fn face_centroid(&self, face_key: usize) -> Option<Point> {
+        let verts = self.face.get(&face_key)?;
+        if verts.is_empty() { return None; }
+        let mut x = 0.0_f64; let mut y = 0.0_f64; let mut z = 0.0_f64;
+        for vk in verts {
+            let p = self.vertex_position(*vk)?;
+            x += p[0]; y += p[1]; z += p[2];
+        }
+        let n = verts.len() as f64;
+        Some(Point::new(x / n, y / n, z / n))
+    }
+
+    pub fn centroid(&self) -> Point {
+        let mut x = 0.0_f64; let mut y = 0.0_f64; let mut z = 0.0_f64;
+        for vk in self.vertex.keys() {
+            let p = self.vertex_position(*vk).unwrap();
+            x += p[0]; y += p[1]; z += p[2];
+        }
+        let n = if self.vertex.is_empty() { 1.0 } else { self.vertex.len() as f64 };
+        Point::new(x / n, y / n, z / n)
     }
 
     pub fn vertex_neighbors(&self, vertex_key: usize) -> Vec<usize> {
@@ -1525,6 +1670,34 @@ impl Mesh {
         }
 
         Some(area)
+    }
+
+    pub fn area(&self) -> f64 {
+        let mut total = 0.0;
+        for fk in self.face.keys() {
+            if let Some(a) = self.face_area(*fk) {
+                total += a;
+            }
+        }
+        total
+    }
+
+    pub fn volume(&self) -> f64 {
+        let mut total = 0.0;
+        for (_, vkeys) in &self.face {
+            if vkeys.len() < 3 {
+                continue;
+            }
+            let p0 = match self.vertex_position(vkeys[0]) { Some(p) => p, None => continue };
+            for i in 1..(vkeys.len() - 1) {
+                let p1 = match self.vertex_position(vkeys[i]) { Some(p) => p, None => continue };
+                let p2 = match self.vertex_position(vkeys[i + 1]) { Some(p) => p, None => continue };
+                total += p0[0] * (p1[1] * p2[2] - p1[2] * p2[1])
+                       + p0[1] * (p1[2] * p2[0] - p1[0] * p2[2])
+                       + p0[2] * (p1[0] * p2[1] - p1[1] * p2[0]);
+            }
+        }
+        total.abs() / 6.0
     }
 
     pub fn vertex_angle_in_face(&self, vertex_key: usize, face_key: usize) -> Option<f64> {
@@ -1728,7 +1901,8 @@ impl Mesh {
             "linecolors": linecolors_flat,
             "objectcolor": serde_json::to_value(&self.objectcolor).unwrap_or(serde_json::Value::Null),
             "color_mode": self.color_mode.to_str(),
-            "widths": self.widths
+            "widths": self.widths,
+            "xform": serde_json::to_value(&self.xform).unwrap_or(serde_json::Value::Null)
         })
     }
 
@@ -1816,6 +1990,11 @@ impl Mesh {
 
         if let Some(widths) = data.get("widths").and_then(|v| v.as_array()) {
             mesh.widths = widths.iter().filter_map(|v| v.as_f64()).collect();
+        }
+        if let Some(xf) = data.get("xform") {
+            if let Ok(xform) = serde_json::from_value::<crate::Xform>(xf.clone()) {
+                mesh.xform = xform;
+            }
         }
 
         if let Some(oc) = data.get("objectcolor") {

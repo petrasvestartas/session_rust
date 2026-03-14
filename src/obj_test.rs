@@ -38,7 +38,7 @@ pub fn run_obj_write_read_roundtrip() -> TestResult {
         MINI_CHECK!(original_mesh.number_of_vertices() == 4);
         MINI_CHECK!(original_mesh.number_of_faces() == 2);
         let src_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-        let temp_file = src_dir.parent().unwrap().join("serialization").join("test_temp_roundtrip.obj");
+        let temp_file = src_dir.join("serialization").join("test_temp_roundtrip.obj");
         let temp_str = temp_file.to_str().unwrap();
         write_obj(&original_mesh, temp_str).unwrap();
         MINI_CHECK!(temp_file.exists());

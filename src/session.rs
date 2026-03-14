@@ -902,6 +902,13 @@ impl Session {
         }
     }
 
+    /// Create a named layer (TreeNode) and add it to the root of the tree.
+    pub fn add_group(&mut self, name: &str) -> Rc<RefCell<TreeNode>> {
+        let node = TreeNode::new(name);
+        self.add(&node, None);
+        node
+    }
+
     /// Adds an edge between two geometry objects in the graph.
     ///
     /// # Arguments
