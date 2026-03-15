@@ -265,6 +265,7 @@ static TRI_TABLE: [[i32; 16]; 256] = [
     [-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1], // 255
 ];
 
+#[allow(non_camel_case_types)]
 #[derive(Clone, Copy, PartialEq)]
 pub enum TpmsType {
     GYROID = 0,

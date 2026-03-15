@@ -5,7 +5,6 @@ use crate::nurbscurve::NurbsCurve;
 use crate::nurbssurface::NurbsSurface;
 use crate::plane::Plane;
 use crate::point::Point;
-use crate::polyline::Polyline;
 use crate::tolerance::Tolerance;
 use crate::vector::Vector;
 use crate::xform::Xform;
