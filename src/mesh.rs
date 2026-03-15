@@ -1190,6 +1190,7 @@ impl Mesh {
     }
 
     pub fn edges(&self) -> Vec<(usize, usize)> {
+        let mut seen = HashSet::new();
         let mut outer: Vec<usize> = self.halfedge.keys().cloned().collect();
         outer.sort();
         let mut result = Vec::new();
@@ -1197,9 +1198,54 @@ impl Mesh {
             let mut inner: Vec<usize> = self.halfedge[&u].keys().cloned().collect();
             inner.sort();
             for v in inner {
-                if self.halfedge[&u][&v].is_none() {
-                    result.push((u, v));
+                let edge = if u < v { (u, v) } else { (v, u) };
+                if seen.insert(edge) {
+                    result.push(edge);
                 }
+            }
+        }
+        result
+    }
+
+    pub fn naked_edges(&self, boundary: bool) -> Vec<(usize, usize)> {
+        let mut seen = HashSet::new();
+        let mut outer: Vec<usize> = self.halfedge.keys().cloned().collect();
+        outer.sort();
+        let mut result = Vec::new();
+        for u in outer {
+            let mut inner: Vec<usize> = self.halfedge[&u].keys().cloned().collect();
+            inner.sort();
+            for v in inner {
+                let edge = if u < v { (u, v) } else { (v, u) };
+                if seen.insert(edge) {
+                    if self.is_edge_on_boundary(edge.0, edge.1) == boundary {
+                        result.push(edge);
+                    }
+                }
+            }
+        }
+        result
+    }
+
+    pub fn naked_vertices(&self, boundary: bool) -> Vec<usize> {
+        let mut keys: Vec<usize> = self.vertex.keys().cloned().collect();
+        keys.sort();
+        let mut result = Vec::new();
+        for vk in keys {
+            if self.is_vertex_on_boundary(vk) == boundary {
+                result.push(vk);
+            }
+        }
+        result
+    }
+
+    pub fn naked_faces(&self, boundary: bool) -> Vec<usize> {
+        let mut keys: Vec<usize> = self.face.keys().cloned().collect();
+        keys.sort();
+        let mut result = Vec::new();
+        for fk in keys {
+            if self.is_face_on_boundary(fk) == boundary {
+                result.push(fk);
             }
         }
         result
@@ -1478,6 +1524,80 @@ impl Mesh {
         }
 
         Some(face_key)
+    }
+
+    pub fn remove_face(&mut self, fkey: usize) {
+        let verts = match self.face.get(&fkey) {
+            Some(v) => v.clone(),
+            None => return,
+        };
+        let n = verts.len();
+        for i in 0..n {
+            let u = verts[i];
+            let v = verts[(i + 1) % n];
+            if let Some(nbrs) = self.halfedge.get_mut(&u) {
+                if nbrs.contains_key(&v) {
+                    nbrs.insert(v, None);
+                }
+            }
+            let v_to_u_none = self.halfedge.get(&v).and_then(|m| m.get(&u)).map(|f| f.is_none()).unwrap_or(false);
+            if v_to_u_none {
+                if let Some(nbrs) = self.halfedge.get_mut(&u) { nbrs.remove(&v); }
+                if let Some(nbrs) = self.halfedge.get_mut(&v) { nbrs.remove(&u); }
+            }
+        }
+        self.face.remove(&fkey);
+        self.triangulation.remove(&fkey);
+        self.facedata.remove(&fkey);
+        self.face_holes.remove(&fkey);
+        let n_edges = self.number_of_edges();
+        if self.linecolors.len() > n_edges { self.linecolors.truncate(n_edges); }
+        if self.widths.len() > n_edges { self.widths.truncate(n_edges); }
+        let n_faces = self.face.len();
+        if self.facecolors.len() > n_faces { self.facecolors.truncate(n_faces); }
+        self.invalidate_triangle_bvh();
+    }
+
+    pub fn remove_vertex(&mut self, vkey: usize) {
+        if !self.vertex.contains_key(&vkey) { return; }
+        let faces_to_remove: Vec<usize> = self.face.iter()
+            .filter(|(_, verts)| verts.contains(&vkey))
+            .map(|(&fk, _)| fk)
+            .collect();
+        for fk in faces_to_remove {
+            self.remove_face(fk);
+        }
+        if let Some(nbrs) = self.halfedge.remove(&vkey) {
+            for (v, _) in nbrs {
+                if let Some(m) = self.halfedge.get_mut(&v) { m.remove(&vkey); }
+            }
+        }
+        self.edgedata.retain(|k, _| k.0 != vkey && k.1 != vkey);
+        self.vertex.remove(&vkey);
+        let n_vertices = self.vertex.len();
+        if self.pointcolors.len() > n_vertices { self.pointcolors.truncate(n_vertices); }
+        self.invalidate_triangle_bvh();
+    }
+
+    pub fn remove_edge(&mut self, u: usize, v: usize) {
+        let mut faces_to_remove = Vec::new();
+        if let Some(f) = self.halfedge.get(&u).and_then(|m| m.get(&v)).and_then(|&f| f) {
+            faces_to_remove.push(f);
+        }
+        if let Some(f) = self.halfedge.get(&v).and_then(|m| m.get(&u)).and_then(|&f| f) {
+            if !faces_to_remove.contains(&f) { faces_to_remove.push(f); }
+        }
+        for fk in faces_to_remove {
+            self.remove_face(fk);
+        }
+        if let Some(nbrs) = self.halfedge.get_mut(&u) { nbrs.remove(&v); }
+        if let Some(nbrs) = self.halfedge.get_mut(&v) { nbrs.remove(&u); }
+        self.edgedata.remove(&(u, v));
+        self.edgedata.remove(&(v, u));
+        let n_edges = self.number_of_edges();
+        if self.linecolors.len() > n_edges { self.linecolors.truncate(n_edges); }
+        if self.widths.len() > n_edges { self.widths.truncate(n_edges); }
+        self.invalidate_triangle_bvh();
     }
 
     ///////////////////////////////////////////////////////////////////////////////////////////

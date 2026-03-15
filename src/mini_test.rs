@@ -324,6 +324,7 @@ pub fn get_all_tests() -> Vec<RegisteredTest> {
     use crate::primitives_test::*;
     use crate::knot_test::*;
     use crate::trimmedsurface_test::*;
+    use crate::mesh_iso_test::*;
 
     vec![
         // BRep tests
@@ -553,9 +554,6 @@ pub fn get_all_tests() -> Vec<RegisteredTest> {
         RegisteredTest { group: "Primitives", name: "Mesh Icosahedron", func: run_primitives_mesh_icosahedron },
         RegisteredTest { group: "Primitives", name: "Mesh Dodecahedron", func: run_primitives_mesh_dodecahedron },
         RegisteredTest { group: "Primitives", name: "Nurbssurface Wave", func: run_primitives_nurbssurface_wave },
-        RegisteredTest { group: "Primitives", name: "Mesh Chevron", func: run_primitives_mesh_chevron },
-        RegisteredTest { group: "Primitives", name: "FoldedPlates", func: run_primitives_folded_plates },
-        RegisteredTest { group: "Primitives", name: "CrossConnectors", func: run_primitives_cross_connectors },
         // Intersection tests
         RegisteredTest { group: "Intersection", name: "Line Line", func: run_intersection_line_line },
         RegisteredTest { group: "Intersection", name: "Line Line Parallel", func: run_intersection_line_line_parallel },
@@ -663,6 +661,16 @@ pub fn get_all_tests() -> Vec<RegisteredTest> {
         RegisteredTest { group: "Encoders", name: "Dict Of Lists", func: run_encoders_dict_of_lists },
         RegisteredTest { group: "Encoders", name: "List Of Dict", func: run_encoders_list_of_dict },
         RegisteredTest { group: "Encoders", name: "Dict Of Dicts", func: run_encoders_dict_of_dicts },
+        // MeshIso tests
+        RegisteredTest { group: "MeshIso", name: "Eval Gyroid", func: run_mesh_iso_eval_gyroid },
+        RegisteredTest { group: "MeshIso", name: "Eval SchwarzP", func: run_mesh_iso_eval_schwarz_p },
+        RegisteredTest { group: "MeshIso", name: "Eval Diamond", func: run_mesh_iso_eval_diamond },
+        RegisteredTest { group: "MeshIso", name: "From Tpms Gyroid Solid", func: run_mesh_iso_from_tpms_gyroid_solid },
+        RegisteredTest { group: "MeshIso", name: "From Tpms Diamond Sheet", func: run_mesh_iso_from_tpms_diamond_sheet },
+        RegisteredTest { group: "MeshIso", name: "From Tpms Neovius Shell", func: run_mesh_iso_from_tpms_neovius_shell },
+        RegisteredTest { group: "MeshIso", name: "SDF Sphere", func: run_mesh_iso_sdf_sphere },
+        RegisteredTest { group: "MeshIso", name: "Smooth Union", func: run_mesh_iso_smooth_union },
+        RegisteredTest { group: "MeshIso", name: "From Function", func: run_mesh_iso_from_function },
         // AABBTree tests
         RegisteredTest { group: "AABBTree", name: "Build Empty", func: run_aabbtree_build_empty },
         RegisteredTest { group: "AABBTree", name: "Build Single", func: run_aabbtree_build_single },

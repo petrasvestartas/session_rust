@@ -553,7 +553,7 @@ pub fn run_mesh_attributes() -> TestResult {
         use crate::Mesh;
         use crate::Point;
 
-        let mesh = Mesh::create_box(1.0, 1.0, 1.0);
+        let mut mesh = Mesh::create_box(1.0, 1.0, 1.0);
 
         let n_vertices = mesh.number_of_vertices();
         MINI_CHECK!(n_vertices == 8);
@@ -611,6 +611,26 @@ pub fn run_mesh_attributes() -> TestResult {
         MINI_CHECK!(v0  == 0);
         MINI_CHECK!(v5  == 1);
         MINI_CHECK!(v10 == 2);
+
+        // naked (closed box: no naked edges before removal)
+        MINI_CHECK!(mesh.naked_edges(true).len() == 0);
+        MINI_CHECK!(mesh.naked_faces(false).len() == 6);
+        // remove one face — box becomes open, check naked
+        let fk0 = *mesh.face.keys().min().unwrap();
+        mesh.remove_face(fk0);
+        let ne = mesh.naked_edges(true);
+        MINI_CHECK!(ne.len() == 4);
+        MINI_CHECK!(ne[0] == (0, 1));
+        let ni = mesh.naked_edges(false);
+        MINI_CHECK!(ni.len() == 8);
+        let nv = mesh.naked_vertices(true);
+        MINI_CHECK!(nv.len() == 4);
+        let nvi = mesh.naked_vertices(false);
+        MINI_CHECK!(nvi.len() == 4);
+        let nf = mesh.naked_faces(true);
+        MINI_CHECK!(nf.len() == 4);
+        let nfi = mesh.naked_faces(false);
+        MINI_CHECK!(nfi.len() == 1);
     })
 }
 
@@ -628,7 +648,7 @@ pub fn run_mesh_edges() -> TestResult {
 
         let edges = mesh.edges();
         MINI_CHECK!(edges.len() == 4);
-        MINI_CHECK!(edges[0] == (0, 3));
+        MINI_CHECK!(edges[0] == (0, 1));
     })
 }
 
@@ -693,6 +713,62 @@ pub fn run_mesh_vertex_and_face_operations() -> TestResult {
         for vk in w.vertex.keys() {
             MINI_CHECK!(w.vertex_faces(*vk).len() == 3);
         }
+
+        // remove_face
+        let mut mesh3 = Mesh::new();
+        let a0 = mesh3.add_vertex(Point::new(0.0, 0.0, 0.0), None);
+        let a1 = mesh3.add_vertex(Point::new(1.0, 0.0, 0.0), None);
+        let a2 = mesh3.add_vertex(Point::new(1.0, 1.0, 0.0), None);
+        let a3 = mesh3.add_vertex(Point::new(0.0, 1.0, 0.0), None);
+        let fa = mesh3.add_face(vec![a0, a1, a2, a3], None).unwrap();
+        mesh3.remove_face(fa);
+        MINI_CHECK!(mesh3.number_of_faces() == 0);
+        MINI_CHECK!(mesh3.number_of_edges() == 0);
+        MINI_CHECK!(mesh3.number_of_vertices() == 4);
+
+        // remove_vertex
+        let mut mesh4 = Mesh::new();
+        let b0 = mesh4.add_vertex(Point::new(0.0, 0.0, 0.0), None);
+        let b1 = mesh4.add_vertex(Point::new(1.0, 0.0, 0.0), None);
+        let b2 = mesh4.add_vertex(Point::new(1.0, 1.0, 0.0), None);
+        let b3 = mesh4.add_vertex(Point::new(0.0, 1.0, 0.0), None);
+        mesh4.add_face(vec![b0, b1, b2, b3], None);
+        mesh4.remove_vertex(b0);
+        MINI_CHECK!(!mesh4.vertex.contains_key(&b0));
+        MINI_CHECK!(mesh4.number_of_faces() == 0);
+        MINI_CHECK!(mesh4.number_of_vertices() == 3);
+
+        // remove_edge
+        let mut mesh5 = Mesh::new();
+        let c0 = mesh5.add_vertex(Point::new(0.0, 0.0, 0.0), None);
+        let c1 = mesh5.add_vertex(Point::new(1.0, 0.0, 0.0), None);
+        let c2 = mesh5.add_vertex(Point::new(1.0, 1.0, 0.0), None);
+        let c3 = mesh5.add_vertex(Point::new(0.0, 1.0, 0.0), None);
+        let c4 = mesh5.add_vertex(Point::new(2.0, 0.0, 0.0), None);
+        let c5 = mesh5.add_vertex(Point::new(2.0, 1.0, 0.0), None);
+        mesh5.add_face(vec![c0, c1, c2, c3], None);
+        mesh5.add_face(vec![c1, c4, c5, c2], None);
+        mesh5.remove_edge(c1, c2);
+        MINI_CHECK!(mesh5.number_of_faces() == 0);
+        MINI_CHECK!(mesh5.number_of_edges() == 0);
+        MINI_CHECK!(mesh5.number_of_vertices() == 6);
+
+        // remove_face then check naked: 2-face mesh, remove one face, remaining face is naked
+        let mut mesh6 = Mesh::new();
+        let d0 = mesh6.add_vertex(Point::new(0.0, 0.0, 0.0), None);
+        let d1 = mesh6.add_vertex(Point::new(1.0, 0.0, 0.0), None);
+        let d2 = mesh6.add_vertex(Point::new(1.0, 1.0, 0.0), None);
+        let d3 = mesh6.add_vertex(Point::new(0.0, 1.0, 0.0), None);
+        let d4 = mesh6.add_vertex(Point::new(2.0, 0.0, 0.0), None);
+        let d5 = mesh6.add_vertex(Point::new(2.0, 1.0, 0.0), None);
+        let fd0 = mesh6.add_face(vec![d0, d1, d2, d3], None).unwrap();
+        mesh6.add_face(vec![d1, d4, d5, d2], None);
+        mesh6.remove_face(fd0);
+        MINI_CHECK!(mesh6.number_of_faces() == 1);
+        MINI_CHECK!(mesh6.naked_edges(true).len() == 4);
+        MINI_CHECK!(mesh6.naked_edges(false).len() == 0);
+        MINI_CHECK!(mesh6.naked_faces(true).len() == 1);
+        MINI_CHECK!(mesh6.naked_faces(false).len() == 0);
     })
 }
 

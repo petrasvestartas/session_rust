@@ -7,6 +7,8 @@ use std::f64::consts::PI as STD_PI;
 
 /// Mathematical constants
 pub const PI: f64 = STD_PI;
+pub const TWO_PI:  f64 = 2.0 * STD_PI;
+pub const HALF_PI: f64 = STD_PI / 2.0;
 pub const TO_DEGREES: f64 = 180.0 / STD_PI;
 pub const TO_RADIANS: f64 = STD_PI / 180.0;
 
@@ -29,6 +31,8 @@ pub struct Tolerance {
 impl Tolerance {
     /// Mathematical constants
     pub const PI: f64 = STD_PI;
+    pub const TWO_PI:  f64 = 2.0 * STD_PI;
+    pub const HALF_PI: f64 = STD_PI / 2.0;
     pub const TO_DEGREES: f64 = 180.0 / STD_PI;
     pub const TO_RADIANS: f64 = STD_PI / 180.0;
 
