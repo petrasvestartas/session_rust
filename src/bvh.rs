@@ -589,6 +589,34 @@ impl BVH {
         (collisions, check_count)
     }
 
+    /// Return the object_ids of all leaves whose AABB overlaps `query`.
+    pub fn query_aabb(&self, query: &BoundingBox) -> Vec<usize> {
+        let mut hits = Vec::new();
+        if self.arena_root < 0 || self.arena.is_empty() {
+            return hits;
+        }
+        let query_aabb = BvhAABB::from_bbox(query);
+        let mut stack: Vec<i32> = Vec::with_capacity(64);
+        stack.push(self.arena_root);
+        while let Some(node_idx) = stack.pop() {
+            let node = &self.arena[node_idx as usize];
+            if !query_aabb.intersects(&node.aabb) {
+                continue;
+            }
+            if node.object_id >= 0 {
+                hits.push(node.object_id as usize);
+            } else {
+                if node.left >= 0 {
+                    stack.push(node.left);
+                }
+                if node.right >= 0 {
+                    stack.push(node.right);
+                }
+            }
+        }
+        hits
+    }
+
     pub fn aabb_intersect(&self, aabb1: &BoundingBox, aabb2: &BoundingBox) -> bool {
         // Calculate min/max for both boxes
         let min1_x = aabb1.center[0] - aabb1.half_size[0];

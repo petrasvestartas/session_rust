@@ -546,7 +546,7 @@ impl MeshIso {
     }
 
     pub fn smooth_subtract(a: f64, b: f64, k: f64) -> f64 {
-        MeshIso::smooth_union(a, -b, k)
+        -MeshIso::smooth_union(-a, b, k)
     }
 
     pub fn smooth_intersect(a: f64, b: f64, k: f64) -> f64 {

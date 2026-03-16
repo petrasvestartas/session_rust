@@ -1,12 +1,12 @@
 {
   "center": {
-    "guid": "9a3732fb-b907-4d22-83dc-f8c2dbab7ce5",
+    "guid": "cff85a1d-36d5-4a72-b5a9-7a262a1abba7",
     "name": "my_point",
     "pointcolor": {
       "a": 255,
       "b": 255,
       "g": 0,
-      "guid": "b007b713-c302-4a78-b509-9fe25f2d772a",
+      "guid": "370c04f2-07d6-4ab4-af36-bf728e8d060a",
       "name": "blue",
       "r": 0,
       "type": "Color"
@@ -15,7 +15,7 @@
     "width": 1.0,
     "x": 1.0,
     "xform": {
-      "guid": "6b52dfe8-b73e-432f-8bd7-bbd0cc8dc09a",
+      "guid": "8576baa1-2c12-4aad-a7c7-201f05ce9e81",
       "m": [
         1.0,
         0.0,
@@ -40,9 +40,9 @@
     "y": 2.0,
     "z": 3.0
   },
-  "guid": "86b23445-be05-4466-97f6-5baafac8ee5a",
+  "guid": "24700e6c-b06e-46c3-988a-a414d865947c",
   "half_size": {
-    "guid": "a4b5963d-58ab-408f-9ab9-5e4af14d5eff",
+    "guid": "df07f794-f40c-40cc-adfe-89887b998497",
     "name": "my_vector",
     "type": "Vector",
     "x": 5.0,
@@ -52,7 +52,7 @@
   "name": "test_bbox",
   "type": "BoundingBox",
   "x_axis": {
-    "guid": "5913e6bc-8cb6-43e0-9e03-916cff734793",
+    "guid": "75c0927e-a658-4cd2-a1fa-2caba26c3165",
     "name": "my_vector",
     "type": "Vector",
     "x": 1.0,
@@ -60,7 +60,7 @@
     "z": 0.0
   },
   "y_axis": {
-    "guid": "2d20780f-4e21-4204-a610-fdf0a0580a49",
+    "guid": "8ab674b2-b43e-4bdc-bf96-bc443382c7a5",
     "name": "my_vector",
     "type": "Vector",
     "x": 0.0,
@@ -68,7 +68,7 @@
     "z": 0.0
   },
   "z_axis": {
-    "guid": "095cee36-0362-43d8-9545-13d7045f0634",
+    "guid": "623df301-f12d-48ee-a755-0faefd5d6c9a",
     "name": "my_vector",
     "type": "Vector",
     "x": 0.0,

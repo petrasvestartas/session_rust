@@ -1380,6 +1380,46 @@ impl Mesh {
             }
         }
 
+        self.orient_outward();
+        true
+    }
+
+    pub fn orient_outward(&mut self) -> bool {
+        if self.face.is_empty() || !self.naked_edges(true).is_empty() {
+            return false;
+        }
+        let face_items: Vec<(usize, Vec<usize>)> = self.face.iter().map(|(&k, v)| (k, v.clone())).collect();
+        let mut vol = 0.0f64;
+        for (_fk, verts) in &face_items {
+            let n = verts.len();
+            let p0 = self.vertex_position(verts[0]).unwrap();
+            for i in 1..n - 1 {
+                let p1 = self.vertex_position(verts[i]).unwrap();
+                let p2 = self.vertex_position(verts[i + 1]).unwrap();
+                vol += p0[0] * (p1[1] * p2[2] - p1[2] * p2[1])
+                     + p0[1] * (p1[2] * p2[0] - p1[0] * p2[2])
+                     + p0[2] * (p1[0] * p2[1] - p1[1] * p2[0]);
+            }
+        }
+        if vol >= 0.0 {
+            return false;
+        }
+        for verts in self.face.values_mut() {
+            verts.reverse();
+        }
+        for neighbors in self.halfedge.values_mut() {
+            neighbors.clear();
+        }
+        let face_items2: Vec<(usize, Vec<usize>)> = self.face.iter().map(|(&k, v)| (k, v.clone())).collect();
+        for (fk, verts) in face_items2 {
+            let n = verts.len();
+            for i in 0..n {
+                let u = verts[i];
+                let v = verts[(i + 1) % n];
+                self.halfedge.entry(u).or_default().insert(v, Some(fk));
+                self.halfedge.entry(v).or_default().entry(u).or_insert(None);
+            }
+        }
         true
     }
 
@@ -1610,6 +1650,36 @@ impl Mesh {
         if self.linecolors.len() > n_edges { self.linecolors.truncate(n_edges); }
         if self.widths.len() > n_edges { self.widths.truncate(n_edges); }
         self.invalidate_triangle_bvh();
+    }
+
+    pub fn flip_face(&mut self, fkey: usize) {
+        let fv = match self.face.get(&fkey) {
+            Some(v) => v.clone(),
+            None => return,
+        };
+        self.remove_face(fkey);
+        let mut rev = fv;
+        rev.reverse();
+        self.add_face(rev, Some(fkey));
+    }
+
+    pub fn flip(&mut self) {
+        for verts in self.face.values_mut() {
+            verts.reverse();
+        }
+        for neighbors in self.halfedge.values_mut() {
+            neighbors.clear();
+        }
+        let face_items: Vec<(usize, Vec<usize>)> = self.face.iter().map(|(&k, v)| (k, v.clone())).collect();
+        for (fkey, verts) in face_items {
+            let n = verts.len();
+            for i in 0..n {
+                let u = verts[i];
+                let v = verts[(i + 1) % n];
+                self.halfedge.entry(u).or_default().insert(v, Some(fkey));
+                self.halfedge.entry(v).or_default().entry(u).or_insert(None);
+            }
+        }
     }
 
     ///////////////////////////////////////////////////////////////////////////////////////////
@@ -1892,10 +1962,63 @@ impl Mesh {
     }
 
     pub fn vertex_normals_weighted(&self, weighting: NormalWeighting) -> HashMap<usize, Vector> {
+        let mut acc: HashMap<usize, [f64; 3]> = HashMap::new();
+        for (_, vkeys) in &self.face {
+            let n = vkeys.len();
+            if n < 3 { continue; }
+            let mut pts: Vec<[f64; 3]> = Vec::with_capacity(n);
+            let mut ok = true;
+            for &vk in vkeys {
+                match self.vertex.get(&vk) {
+                    Some(vd) => pts.push([vd.x, vd.y, vd.z]),
+                    None => { ok = false; break; }
+                }
+            }
+            if !ok { continue; }
+            let ex = pts[1][0]-pts[0][0]; let ey = pts[1][1]-pts[0][1]; let ez = pts[1][2]-pts[0][2];
+            let fx = pts[2][0]-pts[0][0]; let fy = pts[2][1]-pts[0][1]; let fz = pts[2][2]-pts[0][2];
+            let cnx = ey*fz-ez*fy; let cny = ez*fx-ex*fz; let cnz = ex*fy-ey*fx;
+            let len = (cnx*cnx + cny*cny + cnz*cnz).sqrt();
+            if len < Tolerance::ZERO_TOLERANCE { continue; }
+            let ux = cnx/len; let uy = cny/len; let uz = cnz/len;
+            let area = match weighting {
+                NormalWeighting::Area => {
+                    let mut a = 0.0_f64;
+                    for i in 1..(n-1) {
+                        let ax = pts[i][0]-pts[0][0]; let ay = pts[i][1]-pts[0][1]; let az = pts[i][2]-pts[0][2];
+                        let bx = pts[i+1][0]-pts[0][0]; let by = pts[i+1][1]-pts[0][1]; let bz = pts[i+1][2]-pts[0][2];
+                        let cx = ay*bz-az*by; let cy = az*bx-ax*bz; let cz = ax*by-ay*bx;
+                        a += (cx*cx + cy*cy + cz*cz).sqrt() * 0.5;
+                    }
+                    a
+                }
+                _ => 0.0,
+            };
+            for i in 0..n {
+                let weight = match weighting {
+                    NormalWeighting::Uniform => 1.0,
+                    NormalWeighting::Area => area,
+                    NormalWeighting::Angle => {
+                        let prev = (i + n - 1) % n; let next = (i + 1) % n;
+                        let ax = pts[prev][0]-pts[i][0]; let ay = pts[prev][1]-pts[i][1]; let az = pts[prev][2]-pts[i][2];
+                        let bx = pts[next][0]-pts[i][0]; let by = pts[next][1]-pts[i][1]; let bz = pts[next][2]-pts[i][2];
+                        let a_len = (ax*ax + ay*ay + az*az).sqrt();
+                        let b_len = (bx*bx + by*by + bz*bz).sqrt();
+                        if a_len < Tolerance::ZERO_TOLERANCE || b_len < Tolerance::ZERO_TOLERANCE { 0.0 }
+                        else { ((ax*bx + ay*by + az*bz) / (a_len * b_len)).clamp(-1.0, 1.0).acos() }
+                    }
+                };
+                let v = acc.entry(vkeys[i]).or_insert([0.0, 0.0, 0.0]);
+                v[0] += ux * weight;
+                v[1] += uy * weight;
+                v[2] += uz * weight;
+            }
+        }
         let mut normals = HashMap::new();
-        for vertex_key in self.vertex.keys() {
-            if let Some(normal) = self.vertex_normal_weighted(*vertex_key, weighting) {
-                normals.insert(*vertex_key, normal);
+        for (&vk, v) in &acc {
+            let len = (v[0]*v[0] + v[1]*v[1] + v[2]*v[2]).sqrt();
+            if len > Tolerance::ZERO_TOLERANCE {
+                normals.insert(vk, Vector::new(v[0]/len, v[1]/len, v[2]/len));
             }
         }
         normals

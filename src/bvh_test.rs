@@ -313,6 +313,43 @@ pub fn run_bvh_fixed_100_boxes() -> TestResult {
     })
 }
 
+pub fn run_bvh_query_aabb() -> TestResult {
+    MINI_TEST!("Query Aabb", {
+        use crate::{BVH, BoundingBox, Point, Vector};
+        let bboxes = vec![
+            BoundingBox::new(Point::new(0.0, 0.0, 0.0),
+                Vector::new(1.0, 0.0, 0.0), Vector::new(0.0, 1.0, 0.0),
+                Vector::new(0.0, 0.0, 1.0), Vector::new(1.0, 1.0, 1.0)),
+            BoundingBox::new(Point::new(5.0, 0.0, 0.0),
+                Vector::new(1.0, 0.0, 0.0), Vector::new(0.0, 1.0, 0.0),
+                Vector::new(0.0, 0.0, 1.0), Vector::new(1.0, 1.0, 1.0)),
+            BoundingBox::new(Point::new(0.0, 5.0, 0.0),
+                Vector::new(1.0, 0.0, 0.0), Vector::new(0.0, 1.0, 0.0),
+                Vector::new(0.0, 0.0, 1.0), Vector::new(1.0, 1.0, 1.0)),
+        ];
+        let bvh = BVH::from_boxes(&bboxes, 100.0);
+        // Query near origin — should hit box 0 only
+        let query = BoundingBox::new(
+            Point::new(0.0, 0.0, 0.0),
+            Vector::new(1.0, 0.0, 0.0), Vector::new(0.0, 1.0, 0.0),
+            Vector::new(0.0, 0.0, 1.0), Vector::new(0.5, 0.5, 0.5),
+        );
+        let hits = bvh.query_aabb(&query);
+        MINI_CHECK!(!hits.is_empty());
+        MINI_CHECK!(hits.contains(&0));
+        MINI_CHECK!(!hits.contains(&1));
+        MINI_CHECK!(!hits.contains(&2));
+        // Query covering all three boxes
+        let query_all = BoundingBox::new(
+            Point::new(2.5, 2.5, 0.0),
+            Vector::new(1.0, 0.0, 0.0), Vector::new(0.0, 1.0, 0.0),
+            Vector::new(0.0, 0.0, 1.0), Vector::new(5.0, 5.0, 2.0),
+        );
+        let hits_all = bvh.query_aabb(&query_all);
+        MINI_CHECK!(hits_all.len() == 3);
+    })
+}
+
 REGISTER_MINI_TEST!("BVH", "Expand Bits", crate::bvh_test::run_bvh_expand_bits);
 REGISTER_MINI_TEST!("BVH", "Morton Code Origin", crate::bvh_test::run_bvh_morton_code_origin);
 REGISTER_MINI_TEST!("BVH", "Morton Code Corners", crate::bvh_test::run_bvh_morton_code_corners);
@@ -327,3 +364,4 @@ REGISTER_MINI_TEST!("BVH", "Aabb Intersect", crate::bvh_test::run_bvh_aabb_inter
 REGISTER_MINI_TEST!("BVH", "Check All Collisions", crate::bvh_test::run_bvh_check_all_collisions);
 REGISTER_MINI_TEST!("BVH", "Merge Aabb", crate::bvh_test::run_bvh_merge_aabb);
 REGISTER_MINI_TEST!("BVH", "Fixed 100 Boxes", crate::bvh_test::run_bvh_fixed_100_boxes);
+REGISTER_MINI_TEST!("BVH", "Query Aabb", crate::bvh_test::run_bvh_query_aabb);

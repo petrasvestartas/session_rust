@@ -683,7 +683,6 @@ pub fn run_mesh_edges() -> TestResult {
 pub fn run_mesh_vertex_and_face_operations() -> TestResult {
     MINI_TEST!("Vertex and Face Operations", {
         use crate::Mesh;
-        use crate::Point;
 
         let mut mesh = Mesh::create_box(1.0, 1.0, 1.0);
         let vkeys = mesh.vertices();
@@ -706,33 +705,18 @@ pub fn run_mesh_vertex_and_face_operations() -> TestResult {
         MINI_CHECK!(mesh2.number_of_vertices() == 0);
         MINI_CHECK!(mesh2.number_of_faces() == 0);
 
-        // unify_winding — from_vertices_and_faces creates 2 triangles with mismatched normals
-        let pts = vec![
-            Point::new(0.0, 0.0, 0.0),
-            Point::new(1.0, 0.0, 0.0),
-            Point::new(1.0, 1.0, 0.0),
-            Point::new(2.0, 1.0, 0.0),
-        ];
-        let mut mesh3 = Mesh::from_vertices_and_faces(pts, vec![vec![0, 1, 2], vec![1, 2, 3]]);
-        let fkeys3 = mesh3.faces();
-        let f0 = fkeys3[0];
-        let f1 = fkeys3[1];
-        let n0_before = mesh3.face_normal(f0);
-        let n1_before = mesh3.face_normal(f1);
-        MINI_CHECK!(n0_before.is_some() && n1_before.is_some());
-        MINI_CHECK!(n0_before.unwrap().dot(&n1_before.unwrap()) < 0.0);  // wrong: normals point opposite ways
-
+        // unify_winding — flip face 2 (adjacent to seed face 0) then fix it
+        let mut mesh3 = Mesh::create_box(1.0, 1.0, 1.0);
+        let f2 = mesh3.faces()[2];
+        let n2_orig = mesh3.face_normal(f2).unwrap();
+        mesh3.flip_face(f2);
+        MINI_CHECK!(mesh3.face_normal(f2).unwrap().dot(&n2_orig) < 0.0);
         mesh3.unify_winding();
-
-        let n0_after = mesh3.face_normal(f0);
-        let n1_after = mesh3.face_normal(f1);
-        MINI_CHECK!(n0_after.is_some() && n1_after.is_some());
-        MINI_CHECK!(n0_after.unwrap().dot(&n1_after.unwrap()) > 0.0);  // correct: normals agree
+        MINI_CHECK!(mesh3.face_normal(f2).unwrap().dot(&n2_orig) > 0.0);
 
         // unweld and weld
         let u = mesh.unweld();
         MINI_CHECK!(u.number_of_vertices() == 24);
-
         let w = u.weld(0.001);
         MINI_CHECK!(w.number_of_vertices() == 8);
         MINI_CHECK!(w.number_of_faces() == 6);
