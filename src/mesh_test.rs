@@ -1022,7 +1022,12 @@ pub fn run_mesh_json_roundtrip() -> TestResult {
         MINI_CHECK!(loaded_file.number_of_faces() == mesh.number_of_faces());
 
         // Triangulation roundtrip
-        let polys = vec![vec![Point::new(0.0,0.0,0.0), Point::new(1.0,0.0,0.0), Point::new(1.0,1.0,0.0), Point::new(0.0,1.0,0.0)]];
+        let polys = vec![vec![
+            Point::new(0.0, 0.0, 0.0),
+            Point::new(1.0, 0.0, 0.0),
+            Point::new(1.0, 1.0, 0.0),
+            Point::new(0.0, 1.0, 0.0),
+        ]];
         let pmesh = Mesh::from_polylines(polys, None);
         MINI_CHECK!(!pmesh.triangulation.is_empty());
         let pjson = pmesh.jsondump();
@@ -1072,7 +1077,12 @@ pub fn run_mesh_protobuf_roundtrip() -> TestResult {
         MINI_CHECK!(loaded_file.guid == mesh.guid);
 
         // Triangulation roundtrip
-        let polys = vec![vec![Point::new(0.0,0.0,0.0), Point::new(1.0,0.0,0.0), Point::new(1.0,1.0,0.0), Point::new(0.0,1.0,0.0)]];
+        let polys = vec![vec![
+            Point::new(0.0, 0.0, 0.0),
+            Point::new(1.0, 0.0, 0.0),
+            Point::new(1.0, 1.0, 0.0),
+            Point::new(0.0, 1.0, 0.0),
+        ]];
         let pmesh = Mesh::from_polylines(polys, None);
         MINI_CHECK!(!pmesh.triangulation.is_empty());
         let loaded_tri = Mesh::pb_loads(&pmesh.pb_dumps()).unwrap();

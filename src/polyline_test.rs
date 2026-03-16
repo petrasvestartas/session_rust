@@ -337,7 +337,10 @@ fn test_polyline_line_line_overlap_average() {
 fn test_polyline_line_from_projected_points() {
     let line_start = Point::new(0.0, 0.0, 0.0);
     let line_end = Point::new(2.0, 0.0, 0.0);
-    let points = vec![Point::new(0.5, 1.0, 0.0), Point::new(1.5, -1.0, 0.0)];
+    let points = vec![
+        Point::new(0.5, 1.0, 0.0),
+        Point::new(1.5, -1.0, 0.0),
+    ];
 
     let result = Polyline::line_from_projected_points(&line_start, &line_end, &points);
 

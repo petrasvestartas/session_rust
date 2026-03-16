@@ -45,7 +45,11 @@ pub fn run_encoders_encode_collection_values() -> TestResult {
         use crate::Point;
         use crate::encoders::json_dumps;
 
-        let points = vec![Point::new(1.0, 2.0, 3.0), Point::new(4.0, 5.0, 6.0), Point::new(7.0, 8.0, 9.0)];
+        let points = vec![
+            Point::new(1.0, 2.0, 3.0),
+            Point::new(4.0, 5.0, 6.0),
+            Point::new(7.0, 8.0, 9.0),
+        ];
         let json_str = json_dumps(&points, false).unwrap();
         let json_arr: serde_json::Value = serde_json::from_str(&json_str).unwrap();
 
@@ -62,7 +66,10 @@ pub fn run_encoders_encode_collection_shared_ptr() -> TestResult {
         use crate::Line;
         use crate::encoders::json_dumps;
 
-        let lines = vec![Line::new(0.0, 0.0, 0.0, 1.0, 0.0, 0.0), Line::new(0.0, 0.0, 0.0, 0.0, 1.0, 0.0)];
+        let lines = vec![
+            Line::new(0.0, 0.0, 0.0, 1.0, 0.0, 0.0),
+            Line::new(0.0, 0.0, 0.0, 0.0, 1.0, 0.0),
+        ];
         let json_str = json_dumps(&lines, false).unwrap();
         let json_arr: serde_json::Value = serde_json::from_str(&json_str).unwrap();
 
@@ -78,7 +85,10 @@ pub fn run_encoders_decode_collection() -> TestResult {
         use crate::Point;
         use crate::encoders::{json_dumps, json_loads};
 
-        let original_points = vec![Point::new(1.0, 2.0, 3.0), Point::new(4.0, 5.0, 6.0)];
+        let original_points = vec![
+            Point::new(1.0, 2.0, 3.0),
+            Point::new(4.0, 5.0, 6.0),
+        ];
         let json_str = json_dumps(&original_points, false).unwrap();
         let decoded: Vec<Point> = json_loads(&json_str).unwrap();
 
@@ -93,7 +103,10 @@ pub fn run_encoders_decode_collection_ptr() -> TestResult {
         use crate::Vector;
         use crate::encoders::{json_dumps, json_loads};
 
-        let original_vectors = vec![Vector::new(1.0, 0.0, 0.0), Vector::new(0.0, 1.0, 0.0)];
+        let original_vectors = vec![
+            Vector::new(1.0, 0.0, 0.0),
+            Vector::new(0.0, 1.0, 0.0),
+        ];
         let json_str = json_dumps(&original_vectors, false).unwrap();
         let decoded: Vec<Vector> = json_loads(&json_str).unwrap();
 
@@ -108,7 +121,10 @@ pub fn run_encoders_nested_collections() -> TestResult {
         use crate::Line;
         use crate::encoders::{json_dumps, json_loads};
 
-        let lines = vec![Line::new(0.0, 0.0, 0.0, 1.0, 0.0, 0.0), Line::new(0.0, 0.0, 0.0, 0.0, 1.0, 0.0)];
+        let lines = vec![
+            Line::new(0.0, 0.0, 0.0, 1.0, 0.0, 0.0),
+            Line::new(0.0, 0.0, 0.0, 0.0, 1.0, 0.0),
+        ];
         let json_str = json_dumps(&lines, false).unwrap();
         let loaded: Vec<Line> = json_loads(&json_str).unwrap();
 
@@ -124,7 +140,11 @@ pub fn run_encoders_roundtrip_file_io() -> TestResult {
         use crate::encoders::{json_dump, json_load};
         use std::fs;
 
-        let vectors = vec![Vector::new(1.0, 0.0, 0.0), Vector::new(0.0, 1.0, 0.0), Vector::new(0.0, 0.0, 1.0)];
+        let vectors = vec![
+            Vector::new(1.0, 0.0, 0.0),
+            Vector::new(0.0, 1.0, 0.0),
+            Vector::new(0.0, 0.0, 1.0),
+        ];
         let filepath = "serialization/test_encoders_collection.json";
         json_dump(&vectors, filepath, false).unwrap();
         let decoded: Vec<Vector> = json_load(filepath).unwrap();
@@ -191,7 +211,10 @@ pub fn run_encoders_decode_list() -> TestResult {
         MINI_CHECK!(loaded[0] == 1);
         MINI_CHECK!(loaded[2] == 3);
 
-        let points = vec![Point::new(1.0, 2.0, 3.0), Point::new(4.0, 5.0, 6.0)];
+        let points = vec![
+            Point::new(1.0, 2.0, 3.0),
+            Point::new(4.0, 5.0, 6.0),
+        ];
         let json_str = json_dumps(&points, false).unwrap();
         let decoded: Vec<Point> = json_loads(&json_str).unwrap();
 
@@ -241,7 +264,10 @@ pub fn run_encoders_dict_of_lists() -> TestResult {
         use crate::Point;
         use crate::encoders::json_loads;
 
-        let points = vec![Point::new(1.0, 0.0, 0.0), Point::new(0.0, 1.0, 0.0)];
+        let points = vec![
+            Point::new(1.0, 0.0, 0.0),
+            Point::new(0.0, 1.0, 0.0),
+        ];
         let data = serde_json::json!({
             "numbers": [1, 2, 3],
             "letters": ["a", "b", "c"],

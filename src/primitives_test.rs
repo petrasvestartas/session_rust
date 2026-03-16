@@ -319,8 +319,14 @@ pub fn run_primitives_nurbssurface_ruled() -> TestResult {
         use crate::point::Point;
         use crate::vector::Vector;
 
-        let pts_a = vec![Point::new(3.0, 0.0, 0.0), Point::new(-2.0, 0.0, 5.0)];
-        let pts_b = vec![Point::new(3.0, 5.0, 5.0), Point::new(-2.0, 5.0, 0.0)];
+        let pts_a = vec![
+            Point::new(3.0, 0.0, 0.0),
+            Point::new(-2.0, 0.0, 5.0),
+        ];
+        let pts_b = vec![
+            Point::new(3.0, 5.0, 5.0),
+            Point::new(-2.0, 5.0, 0.0),
+        ];
         let crv_a = NurbsCurve::create(false, 1, &pts_a);
         let crv_b = NurbsCurve::create(false, 1, &pts_b);
         let srf = Primitives::create_ruled(&crv_a, &crv_b);
