@@ -1171,6 +1171,18 @@ impl Mesh {
         self.face.len()
     }
 
+    pub fn vertices(&self) -> Vec<usize> {
+        let mut keys: Vec<usize> = self.vertex.keys().cloned().collect();
+        keys.sort();
+        keys
+    }
+
+    pub fn faces(&self) -> Vec<usize> {
+        let mut keys: Vec<usize> = self.face.keys().cloned().collect();
+        keys.sort();
+        keys
+    }
+
     pub fn number_of_edges(&self) -> usize {
         let mut seen = HashSet::new();
         let mut count = 0;

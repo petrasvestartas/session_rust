@@ -567,23 +567,23 @@ pub fn run_mesh_attributes() -> TestResult {
         let euler = mesh.euler();
         MINI_CHECK!(euler == 2);
 
-        let (vertices, faces) = mesh.to_vertices_and_faces();
-        MINI_CHECK!(faces.len() == n_faces);
-        MINI_CHECK!(vertices.len() == n_vertices);
-        MINI_CHECK!(TOLERANCE.is_point_close(&vertices[0], &Point::new(-0.5, -0.5, -0.5)));
-        MINI_CHECK!(TOLERANCE.is_point_close(&vertices[1], &Point::new( 0.5, -0.5, -0.5)));
-        MINI_CHECK!(TOLERANCE.is_point_close(&vertices[2], &Point::new( 0.5,  0.5, -0.5)));
-        MINI_CHECK!(TOLERANCE.is_point_close(&vertices[3], &Point::new(-0.5,  0.5, -0.5)));
-        MINI_CHECK!(TOLERANCE.is_point_close(&vertices[4], &Point::new(-0.5, -0.5,  0.5)));
-        MINI_CHECK!(TOLERANCE.is_point_close(&vertices[5], &Point::new( 0.5, -0.5,  0.5)));
-        MINI_CHECK!(TOLERANCE.is_point_close(&vertices[6], &Point::new( 0.5,  0.5,  0.5)));
-        MINI_CHECK!(TOLERANCE.is_point_close(&vertices[7], &Point::new(-0.5,  0.5,  0.5)));
-        MINI_CHECK!(faces[0] == vec![0, 3, 2, 1]);
-        MINI_CHECK!(faces[1] == vec![4, 5, 6, 7]);
-        MINI_CHECK!(faces[2] == vec![0, 1, 5, 4]);
-        MINI_CHECK!(faces[3] == vec![2, 3, 7, 6]);
-        MINI_CHECK!(faces[4] == vec![0, 4, 7, 3]);
-        MINI_CHECK!(faces[5] == vec![1, 2, 6, 5]);
+        let (pts, fidx) = mesh.to_vertices_and_faces();
+        MINI_CHECK!(fidx.len() == n_faces);
+        MINI_CHECK!(pts.len() == n_vertices);
+        MINI_CHECK!(TOLERANCE.is_point_close(&pts[0], &Point::new(-0.5, -0.5, -0.5)));
+        MINI_CHECK!(TOLERANCE.is_point_close(&pts[1], &Point::new( 0.5, -0.5, -0.5)));
+        MINI_CHECK!(TOLERANCE.is_point_close(&pts[2], &Point::new( 0.5,  0.5, -0.5)));
+        MINI_CHECK!(TOLERANCE.is_point_close(&pts[3], &Point::new(-0.5,  0.5, -0.5)));
+        MINI_CHECK!(TOLERANCE.is_point_close(&pts[4], &Point::new(-0.5, -0.5,  0.5)));
+        MINI_CHECK!(TOLERANCE.is_point_close(&pts[5], &Point::new( 0.5, -0.5,  0.5)));
+        MINI_CHECK!(TOLERANCE.is_point_close(&pts[6], &Point::new( 0.5,  0.5,  0.5)));
+        MINI_CHECK!(TOLERANCE.is_point_close(&pts[7], &Point::new(-0.5,  0.5,  0.5)));
+        MINI_CHECK!(fidx[0] == vec![0, 3, 2, 1]);
+        MINI_CHECK!(fidx[1] == vec![4, 5, 6, 7]);
+        MINI_CHECK!(fidx[2] == vec![0, 1, 5, 4]);
+        MINI_CHECK!(fidx[3] == vec![2, 3, 7, 6]);
+        MINI_CHECK!(fidx[4] == vec![0, 4, 7, 3]);
+        MINI_CHECK!(fidx[5] == vec![1, 2, 6, 5]);
 
         let mut vertex_to_index = mesh.vertex_index();
         MINI_CHECK!(vertex_to_index.len() == n_vertices);
@@ -596,27 +596,60 @@ pub fn run_mesh_attributes() -> TestResult {
         MINI_CHECK!(vertex_to_index[&6] == 6);
         MINI_CHECK!(vertex_to_index[&7] == 7);
 
-        // sparse keys: key != index
-        let mut mesh2 = Mesh::new();
-        let k0 = mesh2.add_vertex(Point::new(0.0, 0.0, 0.0), None);
-        let k1 = mesh2.add_vertex(Point::new(1.0, 0.0, 0.0), Some(5));
-        let k2 = mesh2.add_vertex(Point::new(0.0, 1.0, 0.0), Some(10));
-        MINI_CHECK!(k0 == 0);
-        MINI_CHECK!(k1 == 5);
-        MINI_CHECK!(k2 == 10);
+        // sparse keys via remove_vertex: key != index after removal
+        let mut mesh2 = mesh.duplicate();
+        let kr = mesh2.vertices()[3];
+        mesh2.remove_vertex(kr);
         vertex_to_index = mesh2.vertex_index();
-        let v0 = vertex_to_index[&0];
-        let v5 = vertex_to_index[&5];
-        let v10 = vertex_to_index[&10];
-        MINI_CHECK!(v0  == 0);
-        MINI_CHECK!(v5  == 1);
-        MINI_CHECK!(v10 == 2);
+        MINI_CHECK!(vertex_to_index.len() == 7);
+        MINI_CHECK!(vertex_to_index[&0] == 0);
+        MINI_CHECK!(vertex_to_index[&1] == 1);
+        MINI_CHECK!(vertex_to_index[&2] == 2);
+        MINI_CHECK!(!vertex_to_index.contains_key(&3));
+        MINI_CHECK!(vertex_to_index[&4] == 3);
+        MINI_CHECK!(vertex_to_index[&5] == 4);
+        MINI_CHECK!(vertex_to_index[&6] == 5);
+        MINI_CHECK!(vertex_to_index[&7] == 6);
+
+        // vertices / faces / edges
+        let vertices = mesh.vertices();
+        MINI_CHECK!(vertices.len() == 8);
+        MINI_CHECK!(vertices[0] == 0);
+        MINI_CHECK!(vertices[1] == 1);
+        MINI_CHECK!(vertices[2] == 2);
+        MINI_CHECK!(vertices[3] == 3);
+        MINI_CHECK!(vertices[4] == 4);
+        MINI_CHECK!(vertices[5] == 5);
+        MINI_CHECK!(vertices[6] == 6);
+        MINI_CHECK!(vertices[7] == 7);
+        let faces = mesh.faces();
+        MINI_CHECK!(faces.len() == 6);
+        MINI_CHECK!(faces[0] == 0);
+        MINI_CHECK!(faces[1] == 1);
+        MINI_CHECK!(faces[2] == 2);
+        MINI_CHECK!(faces[3] == 3);
+        MINI_CHECK!(faces[4] == 4);
+        MINI_CHECK!(faces[5] == 5);
+        let edges = mesh.edges();
+        MINI_CHECK!(edges.len() == 12);
+        MINI_CHECK!(edges[0]  == (0, 1));
+        MINI_CHECK!(edges[1]  == (0, 3));
+        MINI_CHECK!(edges[2]  == (0, 4));
+        MINI_CHECK!(edges[3]  == (1, 2));
+        MINI_CHECK!(edges[4]  == (1, 5));
+        MINI_CHECK!(edges[5]  == (2, 3));
+        MINI_CHECK!(edges[6]  == (2, 6));
+        MINI_CHECK!(edges[7]  == (3, 7));
+        MINI_CHECK!(edges[8]  == (4, 5));
+        MINI_CHECK!(edges[9]  == (4, 7));
+        MINI_CHECK!(edges[10] == (5, 6));
+        MINI_CHECK!(edges[11] == (6, 7));
 
         // naked (closed box: no naked edges before removal)
         MINI_CHECK!(mesh.naked_edges(true).len() == 0);
         MINI_CHECK!(mesh.naked_faces(false).len() == 6);
         // remove one face — box becomes open, check naked
-        let fk0 = *mesh.face.keys().min().unwrap();
+        let fk0 = mesh.faces()[0];
         mesh.remove_face(fk0);
         let ne = mesh.naked_edges(true);
         MINI_CHECK!(ne.len() == 4);
@@ -637,18 +670,13 @@ pub fn run_mesh_attributes() -> TestResult {
 pub fn run_mesh_edges() -> TestResult {
     MINI_TEST!("Edges", {
         use crate::Mesh;
-        use crate::Point;
 
-        let mut mesh = Mesh::new();
-        let v0 = mesh.add_vertex(Point::new(0.0, 0.0, 0.0), None);
-        let v1 = mesh.add_vertex(Point::new(1.0, 0.0, 0.0), None);
-        let v2 = mesh.add_vertex(Point::new(1.0, 1.0, 0.0), None);
-        let v3 = mesh.add_vertex(Point::new(0.0, 1.0, 0.0), None);
-        mesh.add_face(vec![v0, v1, v2, v3], None);
-
+        let mesh = Mesh::create_box(1.0, 1.0, 1.0);
+        let v0 = mesh.vertices()[0];
+        let v1 = mesh.vertices()[1];
         let edges = mesh.edges();
-        MINI_CHECK!(edges.len() == 4);
-        MINI_CHECK!(edges[0] == (0, 1));
+        MINI_CHECK!(edges.len() == 12);
+        MINI_CHECK!(edges[0] == (v0, v1));
     })
 }
 
@@ -657,54 +685,52 @@ pub fn run_mesh_vertex_and_face_operations() -> TestResult {
         use crate::Mesh;
         use crate::Point;
 
-        // add_vertex — None key auto-assigns sequentially from 0
-        let mut mesh = Mesh::new();
-        let v0 = mesh.add_vertex(Point::new(1.0, 2.0, 3.0), None);
-        MINI_CHECK!(v0 == 0);
-        MINI_CHECK!(mesh.number_of_vertices() == 1);
+        let mut mesh = Mesh::create_box(1.0, 1.0, 1.0);
+        let vkeys = mesh.vertices();
+        let v0 = vkeys[0];
+        let v1 = vkeys[1];
         MINI_CHECK!(!mesh.is_empty());
-        let v1 = mesh.add_vertex(Point::new(4.0, 5.0, 6.0), Some(42));
-        MINI_CHECK!(v1 == 42);
-        MINI_CHECK!(mesh.number_of_vertices() == 2);
+        MINI_CHECK!(mesh.number_of_vertices() == 8);
 
-        // add_face
-        let v2 = mesh.add_vertex(Point::new(0.0, 1.0, 0.0), None);
-        let f = mesh.add_face(vec![v0, v1, v2], None);
-        MINI_CHECK!(f.is_some());
+        // add_face: invalid (too few vertices)
         let invalid1 = mesh.add_face(vec![v0, v1], None);
         MINI_CHECK!(invalid1.is_none());
+        // add_face: invalid (duplicate vertex)
         let invalid2 = mesh.add_face(vec![v0, v1, v0], None);
         MINI_CHECK!(invalid2.is_none());
 
         // clear
-        mesh.clear();
-        MINI_CHECK!(mesh.is_empty());
-        MINI_CHECK!(mesh.number_of_vertices() == 0);
-        MINI_CHECK!(mesh.number_of_faces() == 0);
+        let mut mesh2 = mesh.duplicate();
+        mesh2.clear();
+        MINI_CHECK!(mesh2.is_empty());
+        MINI_CHECK!(mesh2.number_of_vertices() == 0);
+        MINI_CHECK!(mesh2.number_of_faces() == 0);
 
-        // unify_winding — two triangles sharing edge p1-p2, f1 has same-direction halfedge (wrong winding)
-        let p0 = mesh.add_vertex(Point::new(0.0, 0.0, 0.0), None);
-        let p1 = mesh.add_vertex(Point::new(1.0, 0.0, 0.0), None);
-        let p2 = mesh.add_vertex(Point::new(1.0, 1.0, 0.0), None);
-        let p3 = mesh.add_vertex(Point::new(2.0, 1.0, 0.0), None);
-        let f0 = mesh.add_face(vec![p0, p1, p2], None).unwrap();  // +z normal
-        let f1 = mesh.add_face(vec![p1, p2, p3], None).unwrap();  // -z normal (wrong: same halfedge dir)
-
-        let n0_before = mesh.face_normal(f0);
-        let n1_before = mesh.face_normal(f1);
+        // unify_winding — from_vertices_and_faces creates 2 triangles with mismatched normals
+        let pts = vec![
+            Point::new(0.0, 0.0, 0.0),
+            Point::new(1.0, 0.0, 0.0),
+            Point::new(1.0, 1.0, 0.0),
+            Point::new(2.0, 1.0, 0.0),
+        ];
+        let mut mesh3 = Mesh::from_vertices_and_faces(pts, vec![vec![0, 1, 2], vec![1, 2, 3]]);
+        let fkeys3 = mesh3.faces();
+        let f0 = fkeys3[0];
+        let f1 = fkeys3[1];
+        let n0_before = mesh3.face_normal(f0);
+        let n1_before = mesh3.face_normal(f1);
         MINI_CHECK!(n0_before.is_some() && n1_before.is_some());
         MINI_CHECK!(n0_before.unwrap().dot(&n1_before.unwrap()) < 0.0);  // wrong: normals point opposite ways
 
-        mesh.unify_winding();
+        mesh3.unify_winding();
 
-        let n0_after = mesh.face_normal(f0);
-        let n1_after = mesh.face_normal(f1);
+        let n0_after = mesh3.face_normal(f0);
+        let n1_after = mesh3.face_normal(f1);
         MINI_CHECK!(n0_after.is_some() && n1_after.is_some());
         MINI_CHECK!(n0_after.unwrap().dot(&n1_after.unwrap()) > 0.0);  // correct: normals agree
 
-        // Unweld and weld
-        let box_mesh = Mesh::create_box(1.0, 1.0, 1.0);
-        let u = box_mesh.unweld();
+        // unweld and weld
+        let u = mesh.unweld();
         MINI_CHECK!(u.number_of_vertices() == 24);
 
         let w = u.weld(0.001);
@@ -715,60 +741,40 @@ pub fn run_mesh_vertex_and_face_operations() -> TestResult {
         }
 
         // remove_face
-        let mut mesh3 = Mesh::new();
-        let a0 = mesh3.add_vertex(Point::new(0.0, 0.0, 0.0), None);
-        let a1 = mesh3.add_vertex(Point::new(1.0, 0.0, 0.0), None);
-        let a2 = mesh3.add_vertex(Point::new(1.0, 1.0, 0.0), None);
-        let a3 = mesh3.add_vertex(Point::new(0.0, 1.0, 0.0), None);
-        let fa = mesh3.add_face(vec![a0, a1, a2, a3], None).unwrap();
-        mesh3.remove_face(fa);
-        MINI_CHECK!(mesh3.number_of_faces() == 0);
-        MINI_CHECK!(mesh3.number_of_edges() == 0);
-        MINI_CHECK!(mesh3.number_of_vertices() == 4);
+        let mut mesh5 = mesh.duplicate();
+        let fa = mesh5.faces()[0];
+        mesh5.remove_face(fa);
+        MINI_CHECK!(mesh5.number_of_faces() == 5);
+        MINI_CHECK!(mesh5.number_of_edges() == 12);
+        MINI_CHECK!(mesh5.number_of_vertices() == 8);
 
         // remove_vertex
-        let mut mesh4 = Mesh::new();
-        let b0 = mesh4.add_vertex(Point::new(0.0, 0.0, 0.0), None);
-        let b1 = mesh4.add_vertex(Point::new(1.0, 0.0, 0.0), None);
-        let b2 = mesh4.add_vertex(Point::new(1.0, 1.0, 0.0), None);
-        let b3 = mesh4.add_vertex(Point::new(0.0, 1.0, 0.0), None);
-        mesh4.add_face(vec![b0, b1, b2, b3], None);
-        mesh4.remove_vertex(b0);
-        MINI_CHECK!(!mesh4.vertex.contains_key(&b0));
-        MINI_CHECK!(mesh4.number_of_faces() == 0);
-        MINI_CHECK!(mesh4.number_of_vertices() == 3);
+        let mut mesh6 = mesh.duplicate();
+        let vr = mesh6.vertices()[0];
+        mesh6.remove_vertex(vr);
+        let vi6 = mesh6.vertex_index();
+        MINI_CHECK!(!vi6.contains_key(&vr));
+        MINI_CHECK!(mesh6.number_of_faces() == 3);
+        MINI_CHECK!(mesh6.number_of_vertices() == 7);
 
         // remove_edge
-        let mut mesh5 = Mesh::new();
-        let c0 = mesh5.add_vertex(Point::new(0.0, 0.0, 0.0), None);
-        let c1 = mesh5.add_vertex(Point::new(1.0, 0.0, 0.0), None);
-        let c2 = mesh5.add_vertex(Point::new(1.0, 1.0, 0.0), None);
-        let c3 = mesh5.add_vertex(Point::new(0.0, 1.0, 0.0), None);
-        let c4 = mesh5.add_vertex(Point::new(2.0, 0.0, 0.0), None);
-        let c5 = mesh5.add_vertex(Point::new(2.0, 1.0, 0.0), None);
-        mesh5.add_face(vec![c0, c1, c2, c3], None);
-        mesh5.add_face(vec![c1, c4, c5, c2], None);
-        mesh5.remove_edge(c1, c2);
-        MINI_CHECK!(mesh5.number_of_faces() == 0);
-        MINI_CHECK!(mesh5.number_of_edges() == 0);
-        MINI_CHECK!(mesh5.number_of_vertices() == 6);
+        let mut mesh7 = mesh.duplicate();
+        let ea = mesh7.vertices()[0];
+        let eb = mesh7.vertices()[1];
+        mesh7.remove_edge(ea, eb);
+        MINI_CHECK!(mesh7.number_of_faces() == 4);
+        MINI_CHECK!(mesh7.number_of_edges() == 11);
+        MINI_CHECK!(mesh7.number_of_vertices() == 8);
 
-        // remove_face then check naked: 2-face mesh, remove one face, remaining face is naked
-        let mut mesh6 = Mesh::new();
-        let d0 = mesh6.add_vertex(Point::new(0.0, 0.0, 0.0), None);
-        let d1 = mesh6.add_vertex(Point::new(1.0, 0.0, 0.0), None);
-        let d2 = mesh6.add_vertex(Point::new(1.0, 1.0, 0.0), None);
-        let d3 = mesh6.add_vertex(Point::new(0.0, 1.0, 0.0), None);
-        let d4 = mesh6.add_vertex(Point::new(2.0, 0.0, 0.0), None);
-        let d5 = mesh6.add_vertex(Point::new(2.0, 1.0, 0.0), None);
-        let fd0 = mesh6.add_face(vec![d0, d1, d2, d3], None).unwrap();
-        mesh6.add_face(vec![d1, d4, d5, d2], None);
-        mesh6.remove_face(fd0);
-        MINI_CHECK!(mesh6.number_of_faces() == 1);
-        MINI_CHECK!(mesh6.naked_edges(true).len() == 4);
-        MINI_CHECK!(mesh6.naked_edges(false).len() == 0);
-        MINI_CHECK!(mesh6.naked_faces(true).len() == 1);
-        MINI_CHECK!(mesh6.naked_faces(false).len() == 0);
+        // remove_face then check naked: box minus one face → 5 faces with 4 naked edges
+        let mut mesh8 = mesh.duplicate();
+        let fd0 = mesh8.faces()[0];
+        mesh8.remove_face(fd0);
+        MINI_CHECK!(mesh8.number_of_faces() == 5);
+        MINI_CHECK!(mesh8.naked_edges(true).len() == 4);
+        MINI_CHECK!(mesh8.naked_edges(false).len() == 8);
+        MINI_CHECK!(mesh8.naked_faces(true).len() == 4);
+        MINI_CHECK!(mesh8.naked_faces(false).len() == 1);
     })
 }
 
@@ -777,14 +783,23 @@ pub fn run_mesh_connectivity_queries() -> TestResult {
         use crate::Mesh;
         use crate::Point;
 
-        let mut mesh = Mesh::new();
-        let v0 = mesh.add_vertex(Point::new(0.0, 0.0, 0.0), None);
-        let v1 = mesh.add_vertex(Point::new(1.0, 0.0, 0.0), None);
-        let v2 = mesh.add_vertex(Point::new(1.0, 1.0, 0.0), None);
-        let v3 = mesh.add_vertex(Point::new(0.0, 1.0, 0.0), None);
-        let v4 = mesh.add_vertex(Point::new(2.0, 0.0, 0.0), None);
-        let f0 = mesh.add_face(vec![v0, v1, v2, v3], None).unwrap();
-        let f1 = mesh.add_face(vec![v1, v4, v2], None).unwrap();
+        let pts = vec![
+            Point::new(0.0, 0.0, 0.0),
+            Point::new(1.0, 0.0, 0.0),
+            Point::new(1.0, 1.0, 0.0),
+            Point::new(0.0, 1.0, 0.0),
+            Point::new(2.0, 0.0, 0.0),
+        ];
+        let mesh = Mesh::from_vertices_and_faces(pts, vec![vec![0, 1, 2, 3], vec![1, 4, 2]]);
+        let vkeys = mesh.vertices();
+        let v0 = vkeys[0];
+        let v1 = vkeys[1];
+        let v2 = vkeys[2];
+        let v3 = vkeys[3];
+        let v4 = vkeys[4];
+        let fkeys = mesh.faces();
+        let f0 = fkeys[0];
+        let f1 = fkeys[1];
 
         // vertex_position
         let pos = mesh.vertex_position(v0);
@@ -852,13 +867,18 @@ pub fn run_mesh_geometric_properties() -> TestResult {
         use crate::Point;
         use crate::mesh::NormalWeighting;
 
-        let mut mesh = Mesh::new();
-        let v0 = mesh.add_vertex(Point::new(0.0, 0.0, 0.0), None);
-        let v1 = mesh.add_vertex(Point::new(1.0, 0.0, 0.0), None);
-        let v2 = mesh.add_vertex(Point::new(-1.0, 0.0, 0.0), None);
-        let v3 = mesh.add_vertex(Point::new(0.0, 1.0, 0.0), None);
-        let f0 = mesh.add_face(vec![v0, v1, v3], None).unwrap();
-        let _f1 = mesh.add_face(vec![v0, v3, v2], None).unwrap();
+        let pts = vec![
+            Point::new(0.0, 0.0, 0.0),
+            Point::new(1.0, 0.0, 0.0),
+            Point::new(-1.0, 0.0, 0.0),
+            Point::new(0.0, 1.0, 0.0),
+        ];
+        let mesh = Mesh::from_vertices_and_faces(pts, vec![vec![0, 1, 3], vec![0, 3, 2]]);
+        let vkeys = mesh.vertices();
+        let v0 = vkeys[0];
+        let v1 = vkeys[1];
+        let v3 = vkeys[3];
+        let f0 = mesh.faces()[0];
 
         // face_normal
         let fn_ = mesh.face_normal(f0);
@@ -923,11 +943,13 @@ pub fn run_mesh_transformation() -> TestResult {
         use crate::Point;
         use crate::Xform;
 
-        let mut mesh = Mesh::new();
-        let v0 = mesh.add_vertex(Point::new(0.0, 0.0, 0.0), None);
-        let v1 = mesh.add_vertex(Point::new(1.0, 0.0, 0.0), None);
-        let v2 = mesh.add_vertex(Point::new(0.0, 1.0, 0.0), None);
-        mesh.add_face(vec![v0, v1, v2], None);
+        let pts = vec![
+            Point::new(0.0, 0.0, 0.0),
+            Point::new(1.0, 0.0, 0.0),
+            Point::new(0.0, 1.0, 0.0),
+        ];
+        let mesh = Mesh::from_vertices_and_faces(pts, vec![vec![0, 1, 2]]);
+        let v0 = mesh.vertices()[0];
 
         // transform(None) — apply stored xform in-place; xform field unchanged
         let mut mesh1 = mesh.duplicate();
@@ -965,13 +987,9 @@ pub fn run_mesh_json_roundtrip() -> TestResult {
         use crate::Point;
         use std::path::PathBuf;
 
-        let mut mesh = Mesh::new();
+        let mut mesh = Mesh::create_box(1.0, 1.0, 1.0);
         mesh.name = "test_mesh".to_string();
         mesh.color_mode = crate::mesh::ColorMode::FACECOLORS;
-        let v0 = mesh.add_vertex(Point::new(0.0, 0.0, 0.0), None);
-        let v1 = mesh.add_vertex(Point::new(1.0, 0.0, 0.0), None);
-        let v2 = mesh.add_vertex(Point::new(0.0, 1.0, 0.0), None);
-        mesh.add_face(vec![v0, v1, v2], None);
 
         // JSON object
         use crate::Xform;
@@ -1028,13 +1046,9 @@ pub fn run_mesh_protobuf_roundtrip() -> TestResult {
         use crate::Point;
         use std::path::PathBuf;
 
-        let mut mesh = Mesh::new();
+        let mut mesh = Mesh::create_box(1.0, 1.0, 1.0);
         mesh.name = "test_mesh_proto".to_string();
         mesh.color_mode = crate::mesh::ColorMode::FACECOLORS;
-        let v0 = mesh.add_vertex(Point::new(0.0, 0.0, 0.0), None);
-        let v1 = mesh.add_vertex(Point::new(1.0, 0.0, 0.0), None);
-        let v2 = mesh.add_vertex(Point::new(0.0, 1.0, 0.0), None);
-        mesh.add_face(vec![v0, v1, v2], None);
 
         // String
         let proto_bytes = mesh.pb_dumps();
