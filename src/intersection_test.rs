@@ -631,6 +631,192 @@ pub fn run_intersection_surface_plane_miss() -> TestResult {
     })
 }
 
+pub fn run_intersection_remap() -> TestResult {
+    MINI_TEST!("Remap", {
+        use crate::intersection;
+        MINI_CHECK!((intersection::remap(5.0, 0.0, 10.0, 0.0, 1.0) - 0.5).abs() < 1e-9);
+        MINI_CHECK!((intersection::remap(0.0, 0.0, 10.0, 0.0, 1.0) - 0.0).abs() < 1e-9);
+        MINI_CHECK!((intersection::remap(10.0, 0.0, 10.0, 0.0, 1.0) - 1.0).abs() < 1e-9);
+    })
+}
+
+pub fn run_intersection_closest_point_on_segment() -> TestResult {
+    MINI_TEST!("Closest Point On Segment", {
+        use crate::intersection;
+        use crate::{Line, Point};
+
+        // Point projects onto segment interior
+        let seg = Line::new(0.0, 0.0, 0.0, 4.0, 0.0, 0.0);
+        let pt = Point::new(2.0, 3.0, 0.0);
+        let (cp, t) = intersection::closest_point_on_segment(&pt, &seg);
+        MINI_CHECK!((cp[0] - 2.0).abs() < 1e-9);
+        MINI_CHECK!((cp[1] - 0.0).abs() < 1e-9);
+        MINI_CHECK!((t - 0.5).abs() < 1e-9);
+
+        // Point projects before segment start → clamped to t=0
+        let pt2 = Point::new(-2.0, 1.0, 0.0);
+        let (cp2, t2) = intersection::closest_point_on_segment(&pt2, &seg);
+        MINI_CHECK!((cp2[0] - 0.0).abs() < 1e-9);
+        MINI_CHECK!((t2 - 0.0).abs() < 1e-9);
+    })
+}
+
+pub fn run_intersection_plane_plane_plane_check_parallel() -> TestResult {
+    MINI_TEST!("Plane Plane Plane Check Parallel", {
+        use crate::intersection;
+        use crate::{Plane, Vector};
+
+        // Two parallel planes → should return None
+        let p0 = Plane::from_point_normal(crate::Point::new(0.0, 0.0, 0.0), Vector::new(0.0, 0.0, 1.0));
+        let p1 = Plane::from_point_normal(crate::Point::new(0.0, 0.0, 1.0), Vector::new(0.0, 0.0, 1.0));
+        let p2 = Plane::from_point_normal(crate::Point::new(0.0, 0.0, 2.0), Vector::new(0.0, 0.0, 1.0));
+        MINI_CHECK!(intersection::plane_plane_plane_check(&p0, &p1, &p2, 0.1).is_none());
+
+        // Three valid planes
+        let px = Plane::from_point_normal(crate::Point::new(1.0, 0.0, 0.0), Vector::new(1.0, 0.0, 0.0));
+        let py = Plane::from_point_normal(crate::Point::new(0.0, 2.0, 0.0), Vector::new(0.0, 1.0, 0.0));
+        let pz = Plane::from_point_normal(crate::Point::new(0.0, 0.0, 3.0), Vector::new(0.0, 0.0, 1.0));
+        let pt = intersection::plane_plane_plane_check(&px, &py, &pz, 0.1);
+        MINI_CHECK!(pt.is_some());
+        let pt = pt.unwrap();
+        MINI_CHECK!((pt[0] - 1.0).abs() < 1e-6);
+        MINI_CHECK!((pt[1] - 2.0).abs() < 1e-6);
+        MINI_CHECK!((pt[2] - 3.0).abs() < 1e-6);
+    })
+}
+
+pub fn run_intersection_plane_4planes() -> TestResult {
+    MINI_TEST!("Plane 4 Planes Closed", {
+        use crate::intersection;
+        use crate::{Plane, Point, Vector};
+
+        // main = z=0; boundary planes cycle left→bottom→right→top (adjacent pairs non-parallel)
+        let main = Plane::from_point_normal(Point::new(0.0, 0.0, 0.0), Vector::new(0.0, 0.0, 1.0));
+        let planes = [
+            Plane::from_point_normal(Point::new(-1.0, 0.0, 0.0), Vector::new(1.0, 0.0, 0.0)),  // x=-1
+            Plane::from_point_normal(Point::new(0.0, -1.0, 0.0), Vector::new(0.0, 1.0, 0.0)),  // y=-1
+            Plane::from_point_normal(Point::new(1.0, 0.0, 0.0),  Vector::new(1.0, 0.0, 0.0)),  // x= 1
+            Plane::from_point_normal(Point::new(0.0, 1.0, 0.0),  Vector::new(0.0, 1.0, 0.0)),  // y= 1
+        ];
+        let result = intersection::plane_4planes(&main, &planes);
+        MINI_CHECK!(result.is_some());
+        let poly = result.unwrap();
+        // Closed polyline has 5 points (first == last)
+        MINI_CHECK!(poly.len() == 5);
+        // All z values should be 0 (on main plane)
+        let pts = poly.get_points();
+        for p in &pts {
+            MINI_CHECK!(p[2].abs() < 1e-6);
+        }
+        // Verify first == last
+        MINI_CHECK!((pts[0][0] - pts[4][0]).abs() < 1e-6);
+        MINI_CHECK!((pts[0][1] - pts[4][1]).abs() < 1e-6);
+    })
+}
+
+pub fn run_intersection_plane_4planes_open() -> TestResult {
+    MINI_TEST!("Plane 4 Planes Open", {
+        use crate::intersection;
+        use crate::{Plane, Point, Vector};
+
+        let main = Plane::from_point_normal(Point::new(0.0, 0.0, 0.0), Vector::new(0.0, 0.0, 1.0));
+        let planes = [
+            Plane::from_point_normal(Point::new(-1.0, 0.0, 0.0), Vector::new(1.0, 0.0, 0.0)),
+            Plane::from_point_normal(Point::new(0.0, -1.0, 0.0), Vector::new(0.0, 1.0, 0.0)),
+            Plane::from_point_normal(Point::new(1.0, 0.0, 0.0),  Vector::new(1.0, 0.0, 0.0)),
+            Plane::from_point_normal(Point::new(0.0, 1.0, 0.0),  Vector::new(0.0, 1.0, 0.0)),
+        ];
+        let result = intersection::plane_4planes_open(&main, &planes);
+        MINI_CHECK!(result.is_some());
+        let poly = result.unwrap();
+        // Open polyline has 4 points
+        MINI_CHECK!(poly.len() == 4);
+    })
+}
+
+pub fn run_intersection_plane_4lines() -> TestResult {
+    MINI_TEST!("Plane 4 Lines", {
+        use crate::intersection;
+        use crate::{Line, Plane, Point, Vector};
+
+        let plane = Plane::from_point_normal(Point::new(0.0, 0.0, 0.0), Vector::new(0.0, 0.0, 1.0));
+        // Four edges of a square in XY projected to the plane
+        let l0 = Line::new(-1.0, -1.0, -1.0, -1.0,  1.0, 1.0);
+        let l1 = Line::new( 1.0, -1.0, -1.0,  1.0,  1.0, 1.0);
+        let l2 = Line::new(-1.0, -1.0, -1.0,  1.0, -1.0, 1.0);
+        let l3 = Line::new(-1.0,  1.0, -1.0,  1.0,  1.0, 1.0);
+        let result = intersection::plane_4lines(&plane, &l0, &l1, &l2, &l3);
+        MINI_CHECK!(result.is_some());
+        let poly = result.unwrap();
+        MINI_CHECK!(poly.len() == 5);
+        for p in poly.get_points() {
+            MINI_CHECK!(p[2].abs() < 1e-6);
+        }
+    })
+}
+
+pub fn run_intersection_scale_vector_to_distance_of_2planes() -> TestResult {
+    MINI_TEST!("Scale Vector To Distance Of 2 Planes", {
+        use crate::intersection;
+        use crate::{Plane, Point, Vector};
+
+        let p0 = Plane::from_point_normal(Point::new(0.0, 0.0, 0.0), Vector::new(0.0, 0.0, 1.0));
+        let p1 = Plane::from_point_normal(Point::new(0.0, 0.0, 3.0), Vector::new(0.0, 0.0, 1.0));
+        let dir = Vector::new(0.0, 0.0, 1.0);
+        let result = intersection::scale_vector_to_distance_of_2planes(&dir, &p0, &p1);
+        MINI_CHECK!(result.is_some());
+        let v = result.unwrap();
+        MINI_CHECK!((v[2] - 3.0).abs() < 1e-6);
+    })
+}
+
+pub fn run_intersection_polyline_plane() -> TestResult {
+    MINI_TEST!("Polyline Plane", {
+        use crate::intersection;
+        use crate::{Plane, Point, Polyline, Vector};
+
+        // Square polyline on z=0 (closed); intersect with plane x=0 (yz-plane)
+        let poly = Polyline::new(vec![
+            Point::new(-1.0, -1.0, 0.0),
+            Point::new( 1.0, -1.0, 0.0),
+            Point::new( 1.0,  1.0, 0.0),
+            Point::new(-1.0,  1.0, 0.0),
+            Point::new(-1.0, -1.0, 0.0), // closed
+        ]);
+
+        let plane = Plane::from_point_normal(Point::new(0.0, 0.0, 0.0), Vector::new(1.0, 0.0, 0.0));
+        let result = intersection::polyline_plane(&poly, &plane);
+        MINI_CHECK!(result.is_some());
+        let (pts, _indices) = result.unwrap();
+        MINI_CHECK!(pts.len() == 2);
+        for p in &pts {
+            MINI_CHECK!(p[0].abs() < 1e-9);
+        }
+    })
+}
+
+pub fn run_intersection_line_line_3d() -> TestResult {
+    MINI_TEST!("Line Line 3D", {
+        use crate::intersection;
+        use crate::Line;
+
+        // Two lines that cross at (1, 1, 0)
+        let cutter = Line::new(0.0, 1.0, 0.0, 2.0, 1.0, 0.0);
+        let seg    = Line::new(1.0, 0.0, 0.0, 1.0, 2.0, 0.0);
+        let result = intersection::line_line_3d(&cutter, &seg);
+        MINI_CHECK!(result.is_some());
+        let pt = result.unwrap();
+        MINI_CHECK!((pt[0] - 1.0).abs() < 1e-6);
+        MINI_CHECK!((pt[1] - 1.0).abs() < 1e-6);
+        MINI_CHECK!((pt[2] - 0.0).abs() < 1e-6);
+
+        // Parallel lines → None
+        let par0 = Line::new(0.0, 0.0, 0.0, 1.0, 0.0, 0.0);
+        let par1 = Line::new(0.0, 1.0, 0.0, 1.0, 1.0, 0.0);
+        MINI_CHECK!(intersection::line_line_3d(&par0, &par1).is_none());
+    })
+}
+
 REGISTER_MINI_TEST!("Intersection", "Line Line", crate::intersection_test::run_intersection_line_line);
 REGISTER_MINI_TEST!("Intersection", "Line Line Parallel", crate::intersection_test::run_intersection_line_line_parallel);
 REGISTER_MINI_TEST!("Intersection", "Line Line Parameters", crate::intersection_test::run_intersection_line_line_parameters);
@@ -664,3 +850,12 @@ REGISTER_MINI_TEST!("Intersection", "Ray Triangle Real World", crate::intersecti
 REGISTER_MINI_TEST!("Intersection", "Surface Plane", crate::intersection_test::run_intersection_surface_plane);
 REGISTER_MINI_TEST!("Intersection", "Surface Plane Curved", crate::intersection_test::run_intersection_surface_plane_curved);
 REGISTER_MINI_TEST!("Intersection", "Surface Plane Miss", crate::intersection_test::run_intersection_surface_plane_miss);
+REGISTER_MINI_TEST!("Intersection", "Remap", crate::intersection_test::run_intersection_remap);
+REGISTER_MINI_TEST!("Intersection", "Closest Point On Segment", crate::intersection_test::run_intersection_closest_point_on_segment);
+REGISTER_MINI_TEST!("Intersection", "Plane Plane Plane Check Parallel", crate::intersection_test::run_intersection_plane_plane_plane_check_parallel);
+REGISTER_MINI_TEST!("Intersection", "Plane 4 Planes Closed", crate::intersection_test::run_intersection_plane_4planes);
+REGISTER_MINI_TEST!("Intersection", "Plane 4 Planes Open", crate::intersection_test::run_intersection_plane_4planes_open);
+REGISTER_MINI_TEST!("Intersection", "Plane 4 Lines", crate::intersection_test::run_intersection_plane_4lines);
+REGISTER_MINI_TEST!("Intersection", "Scale Vector To Distance Of 2 Planes", crate::intersection_test::run_intersection_scale_vector_to_distance_of_2planes);
+REGISTER_MINI_TEST!("Intersection", "Polyline Plane", crate::intersection_test::run_intersection_polyline_plane);
+REGISTER_MINI_TEST!("Intersection", "Line Line 3D", crate::intersection_test::run_intersection_line_line_3d);

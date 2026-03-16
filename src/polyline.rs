@@ -1084,6 +1084,210 @@ impl Polyline {
         result
     }
 
+    // -----------------------------------------------------------------------
+    // Group B: Geometry utilities
+    // -----------------------------------------------------------------------
+
+    /// Linear interpolation: type 0=no endpoints, 1=both, 2=start only.
+    pub fn interpolate_points(from: &Point, to: &Point, steps: usize, kind: u8) -> Vec<Point> {
+        let lerp = |t: f64| {
+            Point::new(
+                from[0] + t * (to[0] - from[0]),
+                from[1] + t * (to[1] - from[1]),
+                from[2] + t * (to[2] - from[2]),
+            )
+        };
+        let mut pts = Vec::new();
+        match kind {
+            1 => {
+                pts.push(from.clone());
+                for i in 1..=steps {
+                    pts.push(lerp(i as f64 / (steps + 1) as f64));
+                }
+                pts.push(to.clone());
+            }
+            2 => {
+                pts.push(from.clone());
+                for i in 1..=steps {
+                    pts.push(lerp(i as f64 / (steps + 1) as f64));
+                }
+            }
+            _ => {
+                for i in 1..=steps {
+                    pts.push(lerp(i as f64 / (steps + 1) as f64));
+                }
+            }
+        }
+        pts
+    }
+
+    /// 2D convex hull (quickhull) in the polygon's local plane.
+    pub fn quick_hull(polygon: &Polyline) -> Polyline {
+        let (orig, xa, ya, _za) = polygon.get_average_plane();
+        let pts = polygon.get_points();
+
+        // Project to 2D
+        let pts2d: Vec<[f64; 2]> = pts.iter().map(|p| {
+            let dx = p[0] - orig[0];
+            let dy = p[1] - orig[1];
+            let dz = p[2] - orig[2];
+            [dx * xa[0] + dy * xa[1] + dz * xa[2],
+             dx * ya[0] + dy * ya[1] + dz * ya[2]]
+        }).collect();
+
+        fn ccw_2d(ax: f64, ay: f64, bx: f64, by: f64, px: f64, py: f64) -> f64 {
+            (bx - ax) * (py - ay) - (by - ay) * (px - ax)
+        }
+        fn qh_recurse(v: &[[f64; 2]], ax: f64, ay: f64, bx: f64, by: f64, hull: &mut Vec<[f64; 2]>) {
+            if v.is_empty() { return; }
+            let (fi, _) = v.iter().enumerate()
+                .max_by(|(_, a), (_, b)| {
+                    ccw_2d(ax, ay, bx, by, a[0], a[1])
+                        .partial_cmp(&ccw_2d(ax, ay, bx, by, b[0], b[1]))
+                        .unwrap()
+                }).unwrap();
+            let fx = v[fi][0]; let fy = v[fi][1];
+            let left: Vec<_> = v.iter().filter(|p| ccw_2d(ax, ay, fx, fy, p[0], p[1]) > 0.0).cloned().collect();
+            qh_recurse(&left, ax, ay, fx, fy, hull);
+            hull.push([fx, fy]);
+            let right: Vec<_> = v.iter().filter(|p| ccw_2d(fx, fy, bx, by, p[0], p[1]) > 0.0).cloned().collect();
+            qh_recurse(&right, fx, fy, bx, by, hull);
+        }
+
+        let ai = pts2d.iter().enumerate().min_by(|(_, a), (_, b)| a[0].partial_cmp(&b[0]).unwrap()).map(|(i, _)| i).unwrap_or(0);
+        let bi = pts2d.iter().enumerate().max_by(|(_, a), (_, b)| a[0].partial_cmp(&b[0]).unwrap()).map(|(i, _)| i).unwrap_or(0);
+        let (ax, ay) = (pts2d[ai][0], pts2d[ai][1]);
+        let (bx, by) = (pts2d[bi][0], pts2d[bi][1]);
+
+        let left: Vec<_>  = pts2d.iter().filter(|p| ccw_2d(ax, ay, bx, by, p[0], p[1]) > 0.0).cloned().collect();
+        let right: Vec<_> = pts2d.iter().filter(|p| ccw_2d(ax, ay, bx, by, p[0], p[1]) <= 0.0).cloned().collect();
+        let mut hull = vec![[ax, ay]];
+        qh_recurse(&left, ax, ay, bx, by, &mut hull);
+        hull.push([bx, by]);
+        qh_recurse(&right, bx, by, ax, ay, &mut hull);
+
+        let pts3d: Vec<Point> = hull.iter().map(|h| {
+            Point::new(orig[0] + h[0] * xa[0] + h[1] * ya[0],
+                       orig[1] + h[0] * xa[1] + h[1] * ya[1],
+                       orig[2] + h[0] * xa[2] + h[1] * ya[2])
+        }).collect();
+        Polyline::new(pts3d)
+    }
+
+    /// Minimum-area bounding rectangle via rotating calipers; returns closed 5-pt Polyline.
+    pub fn bounding_rectangle(polygon: &Polyline) -> Option<Polyline> {
+        let hull = Self::quick_hull(polygon);
+        if hull.point_count() <= 2 { return None; }
+        let (orig, xa, ya, _za) = polygon.get_average_plane();
+
+        // Project hull to 2D
+        let hull_pts = hull.get_points();
+        let hull2d: Vec<[f64; 2]> = hull_pts.iter().map(|p| {
+            let dx = p[0] - orig[0]; let dy = p[1] - orig[1]; let dz = p[2] - orig[2];
+            [dx * xa[0] + dy * xa[1] + dz * xa[2],
+             dx * ya[0] + dy * ya[1] + dz * ya[2]]
+        }).collect();
+
+        let mut best_area = f64::MAX;
+        let mut best = (0.0f64, 0.0f64, 0.0f64, 0.0f64, 0.0f64);
+        let hn = hull2d.len();
+        for i in 0..hn {
+            let j = (i + 1) % hn;
+            let ex = hull2d[j][0] - hull2d[i][0];
+            let ey = hull2d[j][1] - hull2d[i][1];
+            let len = (ex * ex + ey * ey).sqrt();
+            if len < 1e-12 { continue; }
+            let (ca, sa) = (ex / len, ey / len);
+            let (mut min_u, mut max_u) = (f64::MAX, f64::MIN);
+            let (mut min_v, mut max_v) = (f64::MAX, f64::MIN);
+            for h in &hull2d {
+                let u =  h[0] * ca + h[1] * sa;
+                let v = -h[0] * sa + h[1] * ca;
+                min_u = min_u.min(u); max_u = max_u.max(u);
+                min_v = min_v.min(v); max_v = max_v.max(v);
+            }
+            let area = (max_u - min_u) * (max_v - min_v);
+            if area < best_area {
+                best_area = area;
+                best = (min_u, max_u, min_v, max_v, ey.atan2(ex));
+            }
+        }
+        let (min_u, max_u, min_v, max_v, angle) = best;
+        let (ca, sa) = (angle.cos(), angle.sin());
+        let rot_back = |u: f64, v: f64| -> [f64; 2] { [u * ca - v * sa, u * sa + v * ca] };
+        let to3d = |u2: f64, v2: f64| -> Point {
+            Point::new(orig[0] + u2 * xa[0] + v2 * ya[0],
+                       orig[1] + u2 * xa[1] + v2 * ya[1],
+                       orig[2] + u2 * xa[2] + v2 * ya[2])
+        };
+        let c = [rot_back(min_u, min_v), rot_back(min_u, max_v),
+                 rot_back(max_u, max_v), rot_back(max_u, min_v)];
+        let mut pts3d: Vec<Point> = c.iter().map(|h| to3d(h[0], h[1])).collect();
+        pts3d.push(pts3d[0].clone());
+        Some(Polyline::new(pts3d))
+    }
+
+    /// Grid of interior points; offset_dist ignored (no clipper); div_dist = grid spacing.
+    pub fn grid_of_points_in_polygon(polygon: &Polyline, _offset_dist: f64, div_dist: f64, max_pts: usize) -> Vec<Point> {
+        if div_dist < 1e-12 { return Vec::new(); }
+        let (orig, xa, ya, _za) = polygon.get_average_plane();
+        let pts = polygon.get_points();
+
+        // Build 2D polygon, skip duplicate last point if closed
+        let last = if pts.len() > 1 {
+            let a = &pts[0]; let b = &pts[pts.len()-1];
+            if (a[0]-b[0]).abs()<1e-10 && (a[1]-b[1]).abs()<1e-10 && (a[2]-b[2]).abs()<1e-10
+                { pts.len() - 1 } else { pts.len() }
+        } else { pts.len() };
+
+        let poly2d: Vec<[f64; 2]> = pts[..last].iter().map(|p| {
+            let dx = p[0]-orig[0]; let dy = p[1]-orig[1]; let dz = p[2]-orig[2];
+            [dx*xa[0]+dy*xa[1]+dz*xa[2], dx*ya[0]+dy*ya[1]+dz*ya[2]]
+        }).collect();
+
+        if poly2d.is_empty() { return Vec::new(); }
+
+        let (mut x_min, mut x_max) = (f64::MAX, f64::MIN);
+        let (mut y_min, mut y_max) = (f64::MAX, f64::MIN);
+        for p in &poly2d {
+            x_min = x_min.min(p[0]); x_max = x_max.max(p[0]);
+            y_min = y_min.min(p[1]); y_max = y_max.max(p[1]);
+        }
+
+        fn pt_in_poly(px: f64, py: f64, poly: &[[f64; 2]]) -> bool {
+            let n = poly.len();
+            let mut inside = false;
+            let mut j = n - 1;
+            for i in 0..n {
+                let xi = poly[i][0]; let yi = poly[i][1];
+                let xj = poly[j][0]; let yj = poly[j][1];
+                if ((yi > py) != (yj > py)) && (px < (xj-xi)*(py-yi)/(yj-yi)+xi) {
+                    inside = !inside;
+                }
+                j = i;
+            }
+            inside
+        }
+
+        let mut result = Vec::new();
+        let mut u = x_min;
+        while u <= x_max + 1e-10 && result.len() < max_pts {
+            let mut v = y_min;
+            while v <= y_max + 1e-10 && result.len() < max_pts {
+                if pt_in_poly(u, v, &poly2d) {
+                    result.push(Point::new(
+                        orig[0] + u*xa[0] + v*ya[0],
+                        orig[1] + u*xa[1] + v*ya[1],
+                        orig[2] + u*xa[2] + v*ya[2],
+                    ));
+                }
+                v += div_dist;
+            }
+            u += div_dist;
+        }
+        result
+    }
+
     /// Calculate average normal from polyline points
     fn average_normal(&self) -> Vector {
         let total = self.point_count();

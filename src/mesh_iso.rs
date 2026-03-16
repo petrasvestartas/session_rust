@@ -409,12 +409,13 @@ fn marching_cubes<F: Fn(f64, f64, f64) -> f64>(
                         };
                         tri_verts[s] = vk;
                     }
-                    mesh.add_face(vec![tri_verts[0], tri_verts[1], tri_verts[2]], None);
+                    mesh.add_face(vec![tri_verts[0], tri_verts[2], tri_verts[1]], None);
                     t += 3;
                 }
             }
         }
     }
+    mesh.strip_render_data();
     mesh
 }
 
@@ -428,7 +429,9 @@ fn merge_meshes(m1: Mesh, m2: Mesh) -> Mesh {
     for f in f2 {
         faces.push(f.into_iter().map(|idx| idx + offset).collect());
     }
-    Mesh::from_vertices_and_faces(verts, faces)
+    let mut result = Mesh::from_vertices_and_faces(verts, faces);
+    result.strip_render_data();
+    result
 }
 
 impl MeshIso {

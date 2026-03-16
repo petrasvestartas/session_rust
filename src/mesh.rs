@@ -1163,6 +1163,14 @@ impl Mesh {
     // Basic Queries
     ///////////////////////////////////////////////////////////////////////////////////////////
 
+    pub fn strip_render_data(&mut self) {
+        self.halfedge.clear();
+        self.pointcolors.clear();
+        self.facecolors.clear();
+        self.linecolors.clear();
+        self.widths.clear();
+    }
+
     pub fn number_of_vertices(&self) -> usize {
         self.vertex.len()
     }
@@ -1425,7 +1433,10 @@ impl Mesh {
 
     pub fn unweld(&self) -> Mesh {
         let mut m = Mesh::new();
-        for (_fkey, vkeys) in &self.face {
+        let mut fkeys: Vec<usize> = self.face.keys().copied().collect();
+        fkeys.sort();
+        for fkey in &fkeys {
+            let vkeys = &self.face[fkey];
             let mut new_vkeys = Vec::new();
             for &vk in vkeys {
                 let vd = &self.vertex[&vk];

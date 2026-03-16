@@ -81,6 +81,64 @@ pub fn run_tolerance_runtime_modification() -> TestResult {
     })
 }
 
+pub fn run_tolerance_unique_from_two_int() -> TestResult {
+    MINI_TEST!("Unique From Two Int", {
+        use crate::tolerance::{unique_from_two_int};
+        let r0 = unique_from_two_int(3, 7);
+        let r1 = unique_from_two_int(7, 3);
+        MINI_CHECK!(r0 == r1);
+        MINI_CHECK!(r0 == ((7u64 << 32) | 3u64));
+    })
+}
+
+pub fn run_tolerance_wrap_index() -> TestResult {
+    MINI_TEST!("Wrap Index", {
+        use crate::tolerance::wrap_index;
+        MINI_CHECK!(wrap_index(0, 4)  == 0);
+        MINI_CHECK!(wrap_index(3, 4)  == 3);
+        MINI_CHECK!(wrap_index(4, 4)  == 0);
+        MINI_CHECK!(wrap_index(-1, 4) == 3);
+        MINI_CHECK!(wrap_index(0, 0)  == 0);
+    })
+}
+
+pub fn run_tolerance_triangle_edge_by_angle() -> TestResult {
+    MINI_TEST!("Triangle Edge By Angle", {
+        use crate::tolerance::triangle_edge_by_angle;
+        let r = triangle_edge_by_angle(1.0, 45.0);
+        MINI_CHECK!((r - 1.0).abs() < 1e-9);
+        let r2 = triangle_edge_by_angle(5.0, 0.0);
+        MINI_CHECK!(r2.abs() < 1e-9);
+    })
+}
+
+pub fn run_tolerance_rad_deg() -> TestResult {
+    MINI_TEST!("Rad Deg Conversion", {
+        use crate::tolerance::{rad_to_deg, deg_to_rad};
+        use crate::tolerance::Tolerance;
+        MINI_CHECK!((rad_to_deg(Tolerance::PI) - 180.0).abs() < 1e-9);
+        MINI_CHECK!((deg_to_rad(180.0) - Tolerance::PI).abs() < 1e-9);
+        MINI_CHECK!((deg_to_rad(rad_to_deg(1.234)) - 1.234).abs() < 1e-9);
+    })
+}
+
+pub fn run_tolerance_count_digits() -> TestResult {
+    MINI_TEST!("Count Digits", {
+        use crate::tolerance::count_digits;
+        MINI_CHECK!(count_digits(0.0)   == 0);
+        MINI_CHECK!(count_digits(1.0)   == 1);
+        MINI_CHECK!(count_digits(9.9)   == 1);
+        MINI_CHECK!(count_digits(10.0)  == 2);
+        MINI_CHECK!(count_digits(100.5) == 3);
+        MINI_CHECK!(count_digits(-42.0) == 2);
+    })
+}
+
+REGISTER_MINI_TEST!("Tolerance", "Unique From Two Int", crate::tolerance_test::run_tolerance_unique_from_two_int);
+REGISTER_MINI_TEST!("Tolerance", "Wrap Index", crate::tolerance_test::run_tolerance_wrap_index);
+REGISTER_MINI_TEST!("Tolerance", "Triangle Edge By Angle", crate::tolerance_test::run_tolerance_triangle_edge_by_angle);
+REGISTER_MINI_TEST!("Tolerance", "Rad Deg Conversion", crate::tolerance_test::run_tolerance_rad_deg);
+REGISTER_MINI_TEST!("Tolerance", "Count Digits", crate::tolerance_test::run_tolerance_count_digits);
 REGISTER_MINI_TEST!("Tolerance", "Is Zero", crate::tolerance_test::run_tolerance_is_zero);
 REGISTER_MINI_TEST!("Tolerance", "Is Close", crate::tolerance_test::run_tolerance_is_close);
 REGISTER_MINI_TEST!("Tolerance", "Is Positive", crate::tolerance_test::run_tolerance_is_positive);

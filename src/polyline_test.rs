@@ -1057,6 +1057,92 @@ pub fn run_polyline_average_plane() -> TestResult {
     })
 }
 
+pub fn run_polyline_interpolate_points() -> TestResult {
+    MINI_TEST!("Interpolate Points", {
+        use crate::Polyline;
+        use crate::Point;
+
+        let from = Point::new(0.0, 0.0, 0.0);
+        let to   = Point::new(4.0, 0.0, 0.0);
+
+        // type 0: no endpoints → 3 interior points
+        let pts0 = Polyline::interpolate_points(&from, &to, 3, 0);
+        MINI_CHECK!(pts0.len() == 3);
+        MINI_CHECK!((pts0[0][0] - 1.0).abs() < 1e-9);
+        MINI_CHECK!((pts0[1][0] - 2.0).abs() < 1e-9);
+        MINI_CHECK!((pts0[2][0] - 3.0).abs() < 1e-9);
+
+        // type 1: both endpoints → 5 points
+        let pts1 = Polyline::interpolate_points(&from, &to, 3, 1);
+        MINI_CHECK!(pts1.len() == 5);
+        MINI_CHECK!((pts1[0][0] - 0.0).abs() < 1e-9);
+        MINI_CHECK!((pts1[4][0] - 4.0).abs() < 1e-9);
+    })
+}
+
+pub fn run_polyline_quick_hull() -> TestResult {
+    MINI_TEST!("Quick Hull", {
+        use crate::Polyline;
+        use crate::Point;
+
+        // Square with interior point
+        let poly = Polyline::new(vec![
+            Point::new(0.0, 0.0, 0.0),
+            Point::new(2.0, 0.0, 0.0),
+            Point::new(2.0, 2.0, 0.0),
+            Point::new(0.0, 2.0, 0.0),
+            Point::new(1.0, 1.0, 0.0), // interior, should be excluded
+        ]);
+        let hull = Polyline::quick_hull(&poly);
+        MINI_CHECK!(hull.point_count() == 4);
+    })
+}
+
+pub fn run_polyline_bounding_rectangle() -> TestResult {
+    MINI_TEST!("Bounding Rectangle", {
+        use crate::Polyline;
+        use crate::Point;
+
+        // Axis-aligned rectangle
+        let poly = Polyline::new(vec![
+            Point::new(0.0, 0.0, 0.0),
+            Point::new(4.0, 0.0, 0.0),
+            Point::new(4.0, 3.0, 0.0),
+            Point::new(0.0, 3.0, 0.0),
+            Point::new(0.0, 0.0, 0.0),
+        ]);
+        let rect = Polyline::bounding_rectangle(&poly);
+        MINI_CHECK!(rect.is_some());
+        let r = rect.unwrap();
+        MINI_CHECK!(r.point_count() == 5);
+        // First == last (closed)
+        let pts = r.get_points();
+        MINI_CHECK!((pts[0][0] - pts[4][0]).abs() < 1e-6);
+    })
+}
+
+pub fn run_polyline_grid_of_points() -> TestResult {
+    MINI_TEST!("Grid Of Points", {
+        use crate::Polyline;
+        use crate::Point;
+
+        // Square 0..4 x 0..4 with div_dist=1
+        let poly = Polyline::new(vec![
+            Point::new(0.0, 0.0, 0.0),
+            Point::new(4.0, 0.0, 0.0),
+            Point::new(4.0, 4.0, 0.0),
+            Point::new(0.0, 4.0, 0.0),
+            Point::new(0.0, 0.0, 0.0),
+        ]);
+        let pts = Polyline::grid_of_points_in_polygon(&poly, 0.0, 1.0, 200);
+        MINI_CHECK!(pts.len() > 0);
+        for p in &pts {
+            MINI_CHECK!(p[0] >= -1e-9 && p[0] <= 4.0 + 1e-9);
+            MINI_CHECK!(p[1] >= -1e-9 && p[1] <= 4.0 + 1e-9);
+        }
+    })
+}
+
 // Register tests with the shared registry for run_all("rust")
 REGISTER_MINI_TEST!("Polyline", "Constructor", crate::polyline_test::run_polyline_constructor);
 REGISTER_MINI_TEST!("Polyline", "Transformation", crate::polyline_test::run_polyline_transformation);
@@ -1076,3 +1162,7 @@ REGISTER_MINI_TEST!("Polyline", "Is Clockwise", crate::polyline_test::run_polyli
 REGISTER_MINI_TEST!("Polyline", "Convex Corners", crate::polyline_test::run_polyline_convex_corners);
 REGISTER_MINI_TEST!("Polyline", "Tween", crate::polyline_test::run_polyline_tween);
 REGISTER_MINI_TEST!("Polyline", "Average Plane", crate::polyline_test::run_polyline_average_plane);
+REGISTER_MINI_TEST!("Polyline", "Interpolate Points", crate::polyline_test::run_polyline_interpolate_points);
+REGISTER_MINI_TEST!("Polyline", "Quick Hull", crate::polyline_test::run_polyline_quick_hull);
+REGISTER_MINI_TEST!("Polyline", "Bounding Rectangle", crate::polyline_test::run_polyline_bounding_rectangle);
+REGISTER_MINI_TEST!("Polyline", "Grid Of Points", crate::polyline_test::run_polyline_grid_of_points);

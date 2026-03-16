@@ -380,6 +380,46 @@ impl GlobalTolerance {
 
 pub static TOLERANCE: Lazy<GlobalTolerance> = Lazy::new(GlobalTolerance::new);
 
+// ── Math utilities (ported from cgal_math_util) ────────────────────────────
+
+/// Cantor-style hash: order-independent key from two ints.
+/// Larger value in high 32 bits, smaller in low 32 bits.
+pub fn unique_from_two_int(a: i32, b: i32) -> u64 {
+    let (lo, hi) = if b > a { (a as u32, b as u32) } else { (b as u32, a as u32) };
+    ((hi as u64) << 32) | (lo as u64)
+}
+
+/// Signed modulo returning a value in [0, n-1].  Returns 0 when n == 0.
+pub fn wrap_index(index: i32, n: i32) -> i32 {
+    if n == 0 { return 0; }
+    ((index % n) + n) % n
+}
+
+/// Length of the side opposite to `angle_deg` in a right triangle whose
+/// adjacent side has length `edge_length`.  (= edge_length * tan(angle_deg))
+pub fn triangle_edge_by_angle(edge_length: f64, angle_deg: f64) -> f64 {
+    edge_length * (angle_deg * Tolerance::TO_RADIANS).tan()
+}
+
+/// Convert radians → degrees.
+pub fn rad_to_deg(radians: f64) -> f64 {
+    radians * Tolerance::TO_DEGREES
+}
+
+/// Convert degrees → radians.
+pub fn deg_to_rad(degrees: f64) -> f64 {
+    degrees * Tolerance::TO_RADIANS
+}
+
+/// Number of decimal digits of ceil(|n|).  Returns 0 for n == 0.
+pub fn count_digits(n: f64) -> i32 {
+    let mut v = n.abs().ceil() as i64;
+    if v == 0 { return 0; }
+    let mut count = 0;
+    while v != 0 { v /= 10; count += 1; }
+    count
+}
+
 /// Helper to read from global TOLERANCE
 pub fn with_tolerance<F, R>(f: F) -> R
 where

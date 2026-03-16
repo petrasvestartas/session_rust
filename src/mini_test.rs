@@ -325,6 +325,8 @@ pub fn get_all_tests() -> Vec<RegisteredTest> {
     use crate::knot_test::*;
     use crate::trimmedsurface_test::*;
     use crate::mesh_iso_test::*;
+    use crate::rtree_test::*;
+    use crate::session_config_test::*;
 
     vec![
         // BRep tests
@@ -598,6 +600,9 @@ pub fn get_all_tests() -> Vec<RegisteredTest> {
         RegisteredTest { group: "Session", name: "Get Object", func: run_session_get_object },
         RegisteredTest { group: "Session", name: "File Io Comprehensive", func: run_session_file_io_comprehensive },
         RegisteredTest { group: "Session", name: "Tree Transformation Hierarchy", func: run_session_tree_transformation_hierarchy },
+        // SessionConfig tests
+        RegisteredTest { group: "SessionConfig", name: "Default Values", func: run_session_config_default_values },
+        RegisteredTest { group: "SessionConfig", name: "Runtime Modification", func: run_session_config_runtime_modification },
         // OBJ tests
         RegisteredTest { group: "OBJ", name: "Read Bunny", func: run_obj_read_bunny },
         RegisteredTest { group: "OBJ", name: "Write Read Roundtrip", func: run_obj_write_read_roundtrip },
@@ -678,6 +683,17 @@ pub fn get_all_tests() -> Vec<RegisteredTest> {
         RegisteredTest { group: "AABBTree", name: "Node Count", func: run_aabbtree_node_count },
         RegisteredTest { group: "AABBTree", name: "Mesh Point Aabb", func: run_aabbtree_mesh_point_aabb },
         RegisteredTest { group: "AABBTree", name: "Mesh Point Aabb Matches Bvh", func: run_aabbtree_mesh_point_aabb_matches_bvh },
+        // RTree tests
+        RegisteredTest { group: "RTree", name: "Creation", func: run_rtree_creation },
+        RegisteredTest { group: "RTree", name: "Insert", func: run_rtree_insert },
+        RegisteredTest { group: "RTree", name: "Insert Multiple", func: run_rtree_insert_multiple },
+        RegisteredTest { group: "RTree", name: "Search Hit", func: run_rtree_search_hit },
+        RegisteredTest { group: "RTree", name: "Search Miss", func: run_rtree_search_miss },
+        RegisteredTest { group: "RTree", name: "Remove", func: run_rtree_remove },
+        RegisteredTest { group: "RTree", name: "Remove All", func: run_rtree_remove_all },
+        RegisteredTest { group: "RTree", name: "Search Count", func: run_rtree_search_count },
+        RegisteredTest { group: "RTree", name: "Search Stop", func: run_rtree_search_stop },
+        RegisteredTest { group: "RTree", name: "Search 100 Boxes", func: run_rtree_search_100_boxes },
     ]
 }
 

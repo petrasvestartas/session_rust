@@ -1603,3 +1603,176 @@ pub fn surface_plane(surface: &NurbsSurface, plane: &Plane, tolerance: Option<f6
 
     result
 }
+
+// ── Joint geometry utilities (ported from cgal_intersection_util) ──────────
+
+use crate::Polyline;
+
+/// Check if two vectors are nearly parallel (|cos angle| >= cos(angle_tol)).
+fn vectors_nearly_parallel(v0: &Vector, v1: &Vector, angle_tol: f64) -> bool {
+    let m0 = v0.magnitude();
+    let m1 = v1.magnitude();
+    if m0 < Tolerance::ZERO_TOLERANCE || m1 < Tolerance::ZERO_TOLERANCE { return false; }
+    let cos_angle = v0.dot(v1) / (m0 * m1);
+    cos_angle.abs() >= angle_tol.cos()
+}
+
+/// 3-plane intersection with parallelism guard (0.1 rad default).
+pub fn plane_plane_plane_check(
+    p0: &Plane, p1: &Plane, p2: &Plane,
+    angle_tol: f64,
+) -> Option<Point> {
+    if vectors_nearly_parallel(&p0.z_axis(), &p1.z_axis(), angle_tol) { return None; }
+    if vectors_nearly_parallel(&p0.z_axis(), &p2.z_axis(), angle_tol) { return None; }
+    if vectors_nearly_parallel(&p1.z_axis(), &p2.z_axis(), angle_tol) { return None; }
+    plane_plane_plane(p0, p1, p2)
+}
+
+/// Intersect main plane with 4 ordered boundary planes → closed quad (5 pts).
+pub fn plane_4planes(main: &Plane, planes: &[Plane; 4]) -> Option<Polyline> {
+    let p0 = plane_plane_plane_check(&planes[0], &planes[1], main, 0.1)?;
+    let p1 = plane_plane_plane_check(&planes[1], &planes[2], main, 0.1)?;
+    let p2 = plane_plane_plane_check(&planes[2], &planes[3], main, 0.1)?;
+    let p3 = plane_plane_plane_check(&planes[3], &planes[0], main, 0.1)?;
+    Some(Polyline::new(vec![p0.clone(), p1, p2, p3, p0]))
+}
+
+/// Same as plane_4planes but open (4 pts, last ≠ first).
+pub fn plane_4planes_open(main: &Plane, planes: &[Plane; 4]) -> Option<Polyline> {
+    let p0 = plane_plane_plane_check(&planes[0], &planes[1], main, 0.1)?;
+    let p1 = plane_plane_plane_check(&planes[1], &planes[2], main, 0.1)?;
+    let p2 = plane_plane_plane_check(&planes[2], &planes[3], main, 0.1)?;
+    let p3 = plane_plane_plane_check(&planes[3], &planes[0], main, 0.1)?;
+    Some(Polyline::new(vec![p0, p1, p2, p3]))
+}
+
+/// Intersect plane with 4 line segments → closed quad (5 pts).
+pub fn plane_4lines(plane: &Plane, l0: &Line, l1: &Line, l2: &Line, l3: &Line) -> Option<Polyline> {
+    let p0 = line_plane(l0, plane, false)?;
+    let p1 = line_plane(l1, plane, false)?;
+    let p2 = line_plane(l2, plane, false)?;
+    let p3 = line_plane(l3, plane, false)?;
+    Some(Polyline::new(vec![p0.clone(), p1, p2, p3, p0]))
+}
+
+/// Build joint quad from collision face and two bounding planes.
+pub fn get_quad_from_line_topbottomplanes(
+    face_plane: &Plane, line: &Line, plane0: &Plane, plane1: &Plane,
+) -> Option<Polyline> {
+    let dir = line.to_vector();
+    let s = line.start();
+    let e = line.end();
+    let lp0 = Plane::from_point_normal(s, dir.clone());
+    let lp1 = Plane::from_point_normal(e, dir);
+    let p0 = plane_plane_plane_check(&lp0, plane0, face_plane, 0.1)?;
+    let p1 = plane_plane_plane_check(&lp0, plane1, face_plane, 0.1)?;
+    let p2 = plane_plane_plane_check(&lp1, plane1, face_plane, 0.1)?;
+    let p3 = plane_plane_plane_check(&lp1, plane0, face_plane, 0.1)?;
+    Some(Polyline::new(vec![p0.clone(), p1, p2, p3, p0]))
+}
+
+/// Scale direction vector to span the distance between two planes.
+pub fn scale_vector_to_distance_of_2planes(
+    dir: &Vector, p0: &Plane, p1: &Plane,
+) -> Option<Vector> {
+    if dir.magnitude() < Tolerance::ZERO_TOLERANCE { return None; }
+    let origin = Point::new(0.0, 0.0, 0.0);
+    let tip = Point::new(dir[0], dir[1], dir[2]);
+    let ray = Line::new(origin[0], origin[1], origin[2], tip[0], tip[1], tip[2]);
+    let q0 = line_plane(&ray, p0, false)?;
+    let q1 = line_plane(&ray, p1, false)?;
+    let output = Vector::new(q1[0] - q0[0], q1[1] - q0[1], q1[2] - q0[2]);
+    // Validity: squared-distance ratio < 10 (mirrors CGAL)
+    let n1 = p1.z_axis();
+    let n1_mag = n1.magnitude();
+    if n1_mag < Tolerance::ZERO_TOLERANCE { return None; }
+    let o0 = p0.origin();
+    let d = (o0[0] - p1.origin()[0]) * n1[0] / n1_mag
+          + (o0[1] - p1.origin()[1]) * n1[1] / n1_mag
+          + (o0[2] - p1.origin()[2]) * n1[2] / n1_mag;
+    let dist_ortho_sq = d * d;
+    if dist_ortho_sq < Tolerance::ZERO_TOLERANCE { return None; }
+    let dist_sq = output.dot(&output);
+    if dist_sq / dist_ortho_sq >= 10.0 { return None; }
+    Some(output)
+}
+
+/// Orthogonal vector between two line-pairs (each defined by plane×plane).
+pub fn get_orthogonal_vector_between_two_plane_pairs(
+    pp0_0: &Plane, pp1_0: &Plane, pp1_1: &Plane,
+) -> Option<Vector> {
+    let l0 = plane_plane(pp0_0, pp1_0)?;
+    let l1 = plane_plane(pp0_0, pp1_1)?;
+    let (t0, t1) = line_line_parameters(&l0, &l1, 0.0, false, true)?;
+    let pt0 = l0.point_at(t0);
+    let pt1 = l1.point_at(t1);
+    Some(Vector::new(pt1[0] - pt0[0], pt1[1] - pt0[1], pt1[2] - pt0[2]))
+}
+
+/// Clip line segment to region between two planes (in-place-style, returns new Line).
+pub fn line_two_planes(line: &Line, p0: &Plane, p1: &Plane) -> Option<Line> {
+    let q0 = line_plane(line, p0, true)?;
+    let q1 = line_plane(line, p1, true)?;
+    Some(Line::new(q0[0], q0[1], q0[2], q1[0], q1[1], q1[2]))
+}
+
+/// Intersect all polyline perimeter edges with a plane.
+/// Returns (points, edge_ids) if exactly 2 intersections are found.
+pub fn polyline_plane(poly: &Polyline, plane: &Plane) -> Option<(Vec<Point>, Vec<usize>)> {
+    let n = poly.point_count();
+    if n < 2 { return None; }
+    let mut points = Vec::new();
+    let mut ids = Vec::new();
+    for i in 0..n - 1 {
+        if let (Some(a), Some(b)) = (poly.get_point(i), poly.get_point(i + 1)) {
+            let va = plane_value_at(plane, &a);
+            let vb = plane_value_at(plane, &b);
+            if va.abs() < Tolerance::ZERO_TOLERANCE || vb.abs() < Tolerance::ZERO_TOLERANCE {
+                continue;
+            }
+            let seg = Line::new(a[0], a[1], a[2], b[0], b[1], b[2]);
+            if let Some(hit) = line_plane(&seg, plane, true) {
+                points.push(hit);
+                ids.push(i);
+            }
+        }
+    }
+    if points.len() == 2 { Some((points, ids)) } else { None }
+}
+
+/// Intersect polyline perimeter with plane → single segment, aligned to reference start.
+pub fn polyline_plane_to_line(poly: &Polyline, plane: &Plane, align_start: &Point) -> Option<Line> {
+    let (pts, _) = polyline_plane(poly, plane)?;
+    let d0sq = (pts[0][0]-align_start[0]).powi(2)
+             + (pts[0][1]-align_start[1]).powi(2)
+             + (pts[0][2]-align_start[2]).powi(2);
+    let d1sq = (pts[1][0]-align_start[0]).powi(2)
+             + (pts[1][1]-align_start[1]).powi(2)
+             + (pts[1][2]-align_start[2]).powi(2);
+    if d0sq <= d1sq {
+        Some(Line::new(pts[0][0], pts[0][1], pts[0][2], pts[1][0], pts[1][1], pts[1][2]))
+    } else {
+        Some(Line::new(pts[1][0], pts[1][1], pts[1][2], pts[0][0], pts[0][1], pts[0][2]))
+    }
+}
+
+/// 3D skew line intersection via closest-approach on cutter.
+pub fn line_line_3d(cutter: &Line, seg: &Line) -> Option<Point> {
+    let (t0, _) = line_line_parameters(cutter, seg, 0.0, false, false)?;
+    Some(cutter.point_at(t0))
+}
+
+/// Project point onto finite segment; returns (closest_point, t ∈ [0,1]).
+pub fn closest_point_on_segment(pt: &Point, seg: &Line) -> (Point, f64) {
+    let mut t = Polyline::closest_point_to_line(pt, &seg.start(), &seg.end());
+    t = t.clamp(0.0, 1.0);
+    (seg.point_at(t), t)
+}
+
+/// Linear remap: map val from [from1,to1] to [from2,to2].
+pub fn remap(val: f64, from1: f64, to1: f64, from2: f64, to2: f64) -> f64 {
+    let span = to1 - from1;
+    if span.abs() < Tolerance::ZERO_TOLERANCE { return from2; }
+    let t = (val - from1) / span;
+    from2 + t * (to2 - from2)
+}

@@ -596,21 +596,6 @@ pub fn run_mesh_attributes() -> TestResult {
         MINI_CHECK!(vertex_to_index[&6] == 6);
         MINI_CHECK!(vertex_to_index[&7] == 7);
 
-        // sparse keys via remove_vertex: key != index after removal
-        let mut mesh2 = mesh.duplicate();
-        let kr = mesh2.vertices()[3];
-        mesh2.remove_vertex(kr);
-        vertex_to_index = mesh2.vertex_index();
-        MINI_CHECK!(vertex_to_index.len() == 7);
-        MINI_CHECK!(vertex_to_index[&0] == 0);
-        MINI_CHECK!(vertex_to_index[&1] == 1);
-        MINI_CHECK!(vertex_to_index[&2] == 2);
-        MINI_CHECK!(!vertex_to_index.contains_key(&3));
-        MINI_CHECK!(vertex_to_index[&4] == 3);
-        MINI_CHECK!(vertex_to_index[&5] == 4);
-        MINI_CHECK!(vertex_to_index[&6] == 5);
-        MINI_CHECK!(vertex_to_index[&7] == 6);
-
         // vertices / faces / edges
         let vertices = mesh.vertices();
         MINI_CHECK!(vertices.len() == 8);
@@ -649,8 +634,7 @@ pub fn run_mesh_attributes() -> TestResult {
         MINI_CHECK!(mesh.naked_edges(true).len() == 0);
         MINI_CHECK!(mesh.naked_faces(false).len() == 6);
         // remove one face — box becomes open, check naked
-        let fk0 = mesh.faces()[0];
-        mesh.remove_face(fk0);
+        mesh.remove_face(mesh.faces()[0]);
         let ne = mesh.naked_edges(true);
         MINI_CHECK!(ne.len() == 4);
         MINI_CHECK!(ne[0] == (0, 1));
@@ -664,6 +648,19 @@ pub fn run_mesh_attributes() -> TestResult {
         MINI_CHECK!(nf.len() == 4);
         let nfi = mesh.naked_faces(false);
         MINI_CHECK!(nfi.len() == 1);
+        // sparse keys via remove_vertex: key != index after removal
+        let kr = mesh.vertices()[3];
+        mesh.remove_vertex(kr);
+        vertex_to_index = mesh.vertex_index();
+        MINI_CHECK!(vertex_to_index.len() == 7);
+        MINI_CHECK!(vertex_to_index[&0] == 0);
+        MINI_CHECK!(vertex_to_index[&1] == 1);
+        MINI_CHECK!(vertex_to_index[&2] == 2);
+        MINI_CHECK!(!vertex_to_index.contains_key(&3));
+        MINI_CHECK!(vertex_to_index[&4] == 3);
+        MINI_CHECK!(vertex_to_index[&5] == 4);
+        MINI_CHECK!(vertex_to_index[&6] == 5);
+        MINI_CHECK!(vertex_to_index[&7] == 6);
     })
 }
 
@@ -683,82 +680,120 @@ pub fn run_mesh_edges() -> TestResult {
 pub fn run_mesh_vertex_and_face_operations() -> TestResult {
     MINI_TEST!("Vertex and Face Operations", {
         use crate::Mesh;
+        use crate::Point;
 
-        let mut mesh = Mesh::create_box(1.0, 1.0, 1.0);
-        let vkeys = mesh.vertices();
-        let v0 = vkeys[0];
-        let v1 = vkeys[1];
-        MINI_CHECK!(!mesh.is_empty());
-        MINI_CHECK!(mesh.number_of_vertices() == 8);
+        let hx = 0.5_f64; let hy = 0.5_f64; let hz = 0.5_f64;
+        let verts = vec![
+            Point::new(-hx, -hy, -hz), Point::new( hx, -hy, -hz), Point::new( hx,  hy, -hz), Point::new(-hx,  hy, -hz),
+            Point::new(-hx, -hy,  hz), Point::new( hx, -hy,  hz), Point::new( hx,  hy,  hz), Point::new(-hx,  hy,  hz),
+        ];
+        let faces: Vec<Vec<usize>> = vec![
+            vec![0, 3, 2, 1], vec![4, 5, 6, 7], vec![0, 1, 5, 4], vec![2, 3, 7, 6], vec![0, 4, 7, 3], vec![1, 2, 6, 5],
+        ];
 
-        // add_face: invalid (too few vertices)
-        let invalid1 = mesh.add_face(vec![v0, v1], None);
-        MINI_CHECK!(invalid1.is_none());
-        // add_face: invalid (duplicate vertex)
-        let invalid2 = mesh.add_face(vec![v0, v1, v0], None);
-        MINI_CHECK!(invalid2.is_none());
+        let mut mesh = Mesh::new();
 
-        // clear
-        let mut mesh2 = mesh.duplicate();
-        mesh2.clear();
-        MINI_CHECK!(mesh2.is_empty());
-        MINI_CHECK!(mesh2.number_of_vertices() == 0);
-        MINI_CHECK!(mesh2.number_of_faces() == 0);
-
-        // unify_winding — flip face 2 (adjacent to seed face 0) then fix it
-        let mut mesh3 = Mesh::create_box(1.0, 1.0, 1.0);
-        let f2 = mesh3.faces()[2];
-        let n2_orig = mesh3.face_normal(f2).unwrap();
-        mesh3.flip_face(f2);
-        MINI_CHECK!(mesh3.face_normal(f2).unwrap().dot(&n2_orig) < 0.0);
-        mesh3.unify_winding();
-        MINI_CHECK!(mesh3.face_normal(f2).unwrap().dot(&n2_orig) > 0.0);
-
-        // unweld and weld
-        let u = mesh.unweld();
-        MINI_CHECK!(u.number_of_vertices() == 24);
-        let w = u.weld(0.001);
-        MINI_CHECK!(w.number_of_vertices() == 8);
-        MINI_CHECK!(w.number_of_faces() == 6);
-        for vk in w.vertex.keys() {
-            MINI_CHECK!(w.vertex_faces(*vk).len() == 3);
+        for v in &verts {
+            mesh.add_vertex(v.clone(), None);
+        }
+        for f in &faces {
+            mesh.add_face(f.clone(), None);
         }
 
-        // remove_face
-        let mut mesh5 = mesh.duplicate();
-        let fa = mesh5.faces()[0];
-        mesh5.remove_face(fa);
-        MINI_CHECK!(mesh5.number_of_faces() == 5);
-        MINI_CHECK!(mesh5.number_of_edges() == 12);
-        MINI_CHECK!(mesh5.number_of_vertices() == 8);
+        // add_face: invalid (too few vertices)
+        MINI_CHECK!(mesh.add_face(vec![0, 1], None).is_none());
+        // add_face: invalid (duplicate vertex)
+        MINI_CHECK!(mesh.add_face(vec![0, 1, 0], None).is_none());
 
-        // remove_vertex
-        let mut mesh6 = mesh.duplicate();
-        let vr = mesh6.vertices()[0];
-        mesh6.remove_vertex(vr);
-        let vi6 = mesh6.vertex_index();
-        MINI_CHECK!(!vi6.contains_key(&vr));
-        MINI_CHECK!(mesh6.number_of_faces() == 3);
-        MINI_CHECK!(mesh6.number_of_vertices() == 7);
+        // remove_vertex(0): removes vertex 0 + 3 adjacent faces (0,2,4)
+        // vertices → [1,2,3,4,5,6,7], faces → [1,3,5]
+        mesh.remove_vertex(0);
+        MINI_CHECK!(mesh.number_of_vertices() == 7);
+        MINI_CHECK!(mesh.number_of_faces() == 3);
 
-        // remove_edge
-        let mut mesh7 = mesh.duplicate();
-        let ea = mesh7.vertices()[0];
-        let eb = mesh7.vertices()[1];
-        mesh7.remove_edge(ea, eb);
-        MINI_CHECK!(mesh7.number_of_faces() == 4);
-        MINI_CHECK!(mesh7.number_of_edges() == 11);
-        MINI_CHECK!(mesh7.number_of_vertices() == 8);
+        // remove_edge(1,2): removes face 5 [1,2,6,5], faces → [1,3]
+        mesh.remove_edge(1, 2);
+        MINI_CHECK!(mesh.number_of_faces() == 2);
 
-        // remove_face then check naked: box minus one face → 5 faces with 4 naked edges
-        let mut mesh8 = mesh.duplicate();
-        let fd0 = mesh8.faces()[0];
-        mesh8.remove_face(fd0);
-        MINI_CHECK!(mesh8.number_of_faces() == 5);
-        MINI_CHECK!(mesh8.naked_edges(true).len() == 4);
-        MINI_CHECK!(mesh8.naked_edges(false).len() == 8);
-        MINI_CHECK!(mesh8.naked_faces(true).len() == 4);
-        MINI_CHECK!(mesh8.naked_faces(false).len() == 1);
+        // remove_face(1): removes face 1 [4,5,6,7], faces → [3]
+        mesh.remove_face(1);
+        MINI_CHECK!(mesh.number_of_faces() == 1);
+
+        // clear
+        mesh.clear();
+        MINI_CHECK!(mesh.is_empty());
+
+        // rebuild
+        for v in &verts { mesh.add_vertex(v.clone(), None); }
+        for f in &faces { mesh.add_face(f.clone(), None); }
+
+        // unweld and weld
+        mesh = mesh.unweld();
+        MINI_CHECK!(mesh.number_of_vertices() == 24);
+        mesh = mesh.weld(0.001);
+        MINI_CHECK!(mesh.number_of_vertices() == 8);
+        MINI_CHECK!(mesh.number_of_faces() == 6);
+        // face 0: 0 1 2 3, face 1: 4 5 6 7, face 2: 0 3 5 4
+        // face 3: 2 1 7 6, face 4: 0 4 7 1, face 5: 3 2 6 5
+        let fv0 = mesh.face_vertices(0).unwrap(); let fv1 = mesh.face_vertices(1).unwrap();
+        let fv2 = mesh.face_vertices(2).unwrap(); let fv3 = mesh.face_vertices(3).unwrap();
+        let fv4 = mesh.face_vertices(4).unwrap(); let fv5 = mesh.face_vertices(5).unwrap();
+        MINI_CHECK!(fv0[0] == 0 && fv0[1] == 1 && fv0[2] == 2 && fv0[3] == 3);
+        MINI_CHECK!(fv1[0] == 4 && fv1[1] == 5 && fv1[2] == 6 && fv1[3] == 7);
+        MINI_CHECK!(fv2[0] == 0 && fv2[1] == 3 && fv2[2] == 5 && fv2[3] == 4);
+        MINI_CHECK!(fv3[0] == 2 && fv3[1] == 1 && fv3[2] == 7 && fv3[3] == 6);
+        MINI_CHECK!(fv4[0] == 0 && fv4[1] == 4 && fv4[2] == 7 && fv4[3] == 1);
+        MINI_CHECK!(fv5[0] == 3 && fv5[1] == 2 && fv5[2] == 6 && fv5[3] == 5);
+
+        // flip_face(0): face 0 → [3,2,1,0], faces 1-5 unchanged
+        mesh.flip_face(0);
+        let fv0 = mesh.face_vertices(0).unwrap(); let fv1 = mesh.face_vertices(1).unwrap();
+        let fv2 = mesh.face_vertices(2).unwrap(); let fv3 = mesh.face_vertices(3).unwrap();
+        let fv4 = mesh.face_vertices(4).unwrap(); let fv5 = mesh.face_vertices(5).unwrap();
+        MINI_CHECK!(fv0[0] == 3 && fv0[1] == 2 && fv0[2] == 1 && fv0[3] == 0);
+        MINI_CHECK!(fv1[0] == 4 && fv1[1] == 5 && fv1[2] == 6 && fv1[3] == 7);
+        MINI_CHECK!(fv2[0] == 0 && fv2[1] == 3 && fv2[2] == 5 && fv2[3] == 4);
+        MINI_CHECK!(fv3[0] == 2 && fv3[1] == 1 && fv3[2] == 7 && fv3[3] == 6);
+        MINI_CHECK!(fv4[0] == 0 && fv4[1] == 4 && fv4[2] == 7 && fv4[3] == 1);
+        MINI_CHECK!(fv5[0] == 3 && fv5[1] == 2 && fv5[2] == 6 && fv5[3] == 5);
+
+        // unify_winding: face 0 restored to [0,1,2,3], faces 1-5 unchanged
+        mesh.unify_winding();
+        let fv0 = mesh.face_vertices(0).unwrap(); let fv1 = mesh.face_vertices(1).unwrap();
+        let fv2 = mesh.face_vertices(2).unwrap(); let fv3 = mesh.face_vertices(3).unwrap();
+        let fv4 = mesh.face_vertices(4).unwrap(); let fv5 = mesh.face_vertices(5).unwrap();
+        MINI_CHECK!(fv0[0] == 0 && fv0[1] == 1 && fv0[2] == 2 && fv0[3] == 3);
+        MINI_CHECK!(fv1[0] == 4 && fv1[1] == 5 && fv1[2] == 6 && fv1[3] == 7);
+        MINI_CHECK!(fv2[0] == 0 && fv2[1] == 3 && fv2[2] == 5 && fv2[3] == 4);
+        MINI_CHECK!(fv3[0] == 2 && fv3[1] == 1 && fv3[2] == 7 && fv3[3] == 6);
+        MINI_CHECK!(fv4[0] == 0 && fv4[1] == 4 && fv4[2] == 7 && fv4[3] == 1);
+        MINI_CHECK!(fv5[0] == 3 && fv5[1] == 2 && fv5[2] == 6 && fv5[3] == 5);
+
+        // flip: face 0 → [3,2,1,0], face 1 → [7,6,5,4], face 2 → [4,5,3,0]
+        // face 3 → [6,7,1,2], face 4 → [1,7,4,0], face 5 → [5,6,2,3]
+        mesh.flip();
+        let fv0 = mesh.face_vertices(0).unwrap(); let fv1 = mesh.face_vertices(1).unwrap();
+        let fv2 = mesh.face_vertices(2).unwrap(); let fv3 = mesh.face_vertices(3).unwrap();
+        let fv4 = mesh.face_vertices(4).unwrap(); let fv5 = mesh.face_vertices(5).unwrap();
+        MINI_CHECK!(fv0[0] == 3 && fv0[1] == 2 && fv0[2] == 1 && fv0[3] == 0);
+        MINI_CHECK!(fv1[0] == 7 && fv1[1] == 6 && fv1[2] == 5 && fv1[3] == 4);
+        MINI_CHECK!(fv2[0] == 4 && fv2[1] == 5 && fv2[2] == 3 && fv2[3] == 0);
+        MINI_CHECK!(fv3[0] == 6 && fv3[1] == 7 && fv3[2] == 1 && fv3[3] == 2);
+        MINI_CHECK!(fv4[0] == 1 && fv4[1] == 7 && fv4[2] == 4 && fv4[3] == 0);
+        MINI_CHECK!(fv5[0] == 5 && fv5[1] == 6 && fv5[2] == 2 && fv5[3] == 3);
+
+        // orient_outward: face 0 → [0,1,2,3], face 1 → [4,5,6,7], face 2 → [0,3,5,4]
+        // face 3 → [2,1,7,6], face 4 → [0,4,7,1], face 5 → [3,2,6,5]
+        mesh.orient_outward();
+        let fv0 = mesh.face_vertices(0).unwrap(); let fv1 = mesh.face_vertices(1).unwrap();
+        let fv2 = mesh.face_vertices(2).unwrap(); let fv3 = mesh.face_vertices(3).unwrap();
+        let fv4 = mesh.face_vertices(4).unwrap(); let fv5 = mesh.face_vertices(5).unwrap();
+        MINI_CHECK!(fv0[0] == 0 && fv0[1] == 1 && fv0[2] == 2 && fv0[3] == 3);
+        MINI_CHECK!(fv1[0] == 4 && fv1[1] == 5 && fv1[2] == 6 && fv1[3] == 7);
+        MINI_CHECK!(fv2[0] == 0 && fv2[1] == 3 && fv2[2] == 5 && fv2[3] == 4);
+        MINI_CHECK!(fv3[0] == 2 && fv3[1] == 1 && fv3[2] == 7 && fv3[3] == 6);
+        MINI_CHECK!(fv4[0] == 0 && fv4[1] == 4 && fv4[2] == 7 && fv4[3] == 1);
+        MINI_CHECK!(fv5[0] == 3 && fv5[1] == 2 && fv5[2] == 6 && fv5[3] == 5);
     })
 }
 
