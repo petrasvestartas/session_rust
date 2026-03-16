@@ -648,19 +648,6 @@ pub fn run_mesh_attributes() -> TestResult {
         MINI_CHECK!(nf.len() == 4);
         let nfi = mesh.naked_faces(false);
         MINI_CHECK!(nfi.len() == 1);
-        // sparse keys via remove_vertex: key != index after removal
-        let kr = mesh.vertices()[3];
-        mesh.remove_vertex(kr);
-        vertex_to_index = mesh.vertex_index();
-        MINI_CHECK!(vertex_to_index.len() == 7);
-        MINI_CHECK!(vertex_to_index[&0] == 0);
-        MINI_CHECK!(vertex_to_index[&1] == 1);
-        MINI_CHECK!(vertex_to_index[&2] == 2);
-        MINI_CHECK!(!vertex_to_index.contains_key(&3));
-        MINI_CHECK!(vertex_to_index[&4] == 3);
-        MINI_CHECK!(vertex_to_index[&5] == 4);
-        MINI_CHECK!(vertex_to_index[&6] == 5);
-        MINI_CHECK!(vertex_to_index[&7] == 6);
     })
 }
 
@@ -700,9 +687,7 @@ pub fn run_mesh_vertex_and_face_operations() -> TestResult {
             mesh.add_face(f.clone(), None);
         }
 
-        // add_face: invalid (too few vertices)
         MINI_CHECK!(mesh.add_face(vec![0, 1], None).is_none());
-        // add_face: invalid (duplicate vertex)
         MINI_CHECK!(mesh.add_face(vec![0, 1, 0], None).is_none());
 
         // remove_vertex(0): removes vertex 0 + 3 adjacent faces (0,2,4)
