@@ -1,6 +1,6 @@
 {
   "type": "Polyline",
-  "guid": "ac4cf586-bd52-48de-919d-c6fa0d6f423c",
+  "guid": "64fbb1db-5235-46e3-8886-e29a38147ad3",
   "name": "test_polyline",
   "coords": [
     1.0,
@@ -21,13 +21,13 @@
     "a": 255,
     "b": 0,
     "g": 0,
-    "guid": "e1751cd5-146c-4318-bfb7-a59bc0dbde43",
+    "guid": "e7c7bb60-304f-4f41-89cd-cdac34371a70",
     "name": "black",
     "r": 0,
     "type": "Color"
   },
   "xform": {
-    "guid": "63a07eab-bcbe-40c0-9cbf-3652c3589c4e",
+    "guid": "a347197c-1e65-4826-8157-d7ea1cc2deeb",
     "m": [
       1.0,
       0.0,
