@@ -413,7 +413,7 @@ pub fn deg_to_rad(degrees: f64) -> f64 {
 
 /// Number of decimal digits of ceil(|n|).  Returns 0 for n == 0.
 pub fn count_digits(n: f64) -> i32 {
-    let mut v = n.abs().ceil() as i64;
+    let mut v = n.abs() as i64;
     if v == 0 { return 0; }
     let mut count = 0;
     while v != 0 { v /= 10; count += 1; }
