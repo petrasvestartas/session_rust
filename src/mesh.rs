@@ -220,7 +220,7 @@ fn lp_offset_toward(p: &Point, cx: f64, cy: f64, cz: f64, gap: f64) -> Point {
 fn lp_face_centroid(m: &Mesh, fk: usize) -> Point {
     let vkeys = m.face_vertices(fk).unwrap();
     let (mut cx, mut cy, mut cz) = (0.0f64, 0.0, 0.0);
-    for &vk in vkeys { let p = m.vertex_position(vk).unwrap(); cx += p[0]; cy += p[1]; cz += p[2]; }
+    for &vk in vkeys { let p = m.vertex_point(vk).unwrap(); cx += p[0]; cy += p[1]; cz += p[2]; }
     let n = vkeys.len() as f64;
     Point::new(cx/n, cy/n, cz/n)
 }
@@ -844,8 +844,8 @@ impl Mesh {
             };
             let mut top_vkeys: Vec<usize> = top_mesh.face_vertices(tfk).unwrap().clone();
             let mut bot_vkeys: Vec<usize> = bot_mesh.face_vertices(bfk).unwrap().clone();
-            let mut top_pts: Vec<Point> = top_vkeys.iter().map(|&vk| top_mesh.vertex_position(vk).unwrap()).collect();
-            let mut bot_pts: Vec<Point> = bot_vkeys.iter().map(|&vk| bot_mesh.vertex_position(vk).unwrap()).collect();
+            let mut top_pts: Vec<Point> = top_vkeys.iter().map(|&vk| top_mesh.vertex_point(vk).unwrap()).collect();
+            let mut bot_pts: Vec<Point> = bot_vkeys.iter().map(|&vk| bot_mesh.vertex_point(vk).unwrap()).collect();
             lp_merge_collinear(&mut top_pts, &mut top_vkeys);
             lp_merge_collinear(&mut bot_pts, &mut bot_vkeys);
             {
@@ -945,10 +945,10 @@ impl Mesh {
                     let t0 = panel.orig_top_to_local[&top_vkeys[ti]];
                     let t1 = panel.orig_top_to_local[&top_vkeys[(ti+1)%n]];
                     let face_fk = if edge_gap > 0.0 {
-                        let pb0 = panel.mesh.vertex_position(b0).unwrap();
-                        let pb1 = panel.mesh.vertex_position(b1).unwrap();
-                        let pt0 = panel.mesh.vertex_position(t0).unwrap();
-                        let pt1 = panel.mesh.vertex_position(t1).unwrap();
+                        let pb0 = panel.mesh.vertex_point(b0).unwrap();
+                        let pb1 = panel.mesh.vertex_point(b1).unwrap();
+                        let pt0 = panel.mesh.vertex_point(t0).unwrap();
+                        let pt1 = panel.mesh.vertex_point(t1).unwrap();
                         let cx = (pb0[0]+pb1[0]+pt0[0]+pt1[0])*0.25;
                         let cy = (pb0[1]+pb1[1]+pt0[1]+pt1[1])*0.25;
                         let cz = (pb0[2]+pb1[2]+pt0[2]+pt1[2])*0.25;
@@ -1061,8 +1061,8 @@ impl Mesh {
         let mut top_ordered = Mesh::new();
         let mut bot_ordered = Mesh::new();
         for i in 0..panels.len() {
-            let top_pts: Vec<Point> = panels[i].top_vertices.iter().map(|&lk| panels[i].mesh.vertex_position(lk).unwrap()).collect();
-            let bot_pts: Vec<Point> = panels[i].bot_vertices.iter().map(|&lk| panels[i].mesh.vertex_position(lk).unwrap()).collect();
+            let top_pts: Vec<Point> = panels[i].top_vertices.iter().map(|&lk| panels[i].mesh.vertex_point(lk).unwrap()).collect();
+            let bot_pts: Vec<Point> = panels[i].bot_vertices.iter().map(|&lk| panels[i].mesh.vertex_point(lk).unwrap()).collect();
             let tvks: Vec<usize> = top_pts.into_iter().map(|pt| top_ordered.add_vertex(pt, None)).collect();
             let bvks: Vec<usize> = bot_pts.into_iter().map(|pt| bot_ordered.add_vertex(pt, None)).collect();
             top_ordered.add_face(tvks, Some(i));
@@ -1154,9 +1154,10 @@ impl Mesh {
     }
 
     pub fn is_face_on_boundary(&self, face_key: usize) -> bool {
-        self.face_edges(face_key)
-            .into_iter()
-            .any(|(u, v)| self.is_edge_on_boundary(u, v))
+        match self.face_edges(face_key) {
+            Some(fe) => fe.into_iter().any(|(u, v)| self.is_edge_on_boundary(u, v)),
+            None => false,
+        }
     }
 
     ///////////////////////////////////////////////////////////////////////////////////////////
@@ -1400,10 +1401,10 @@ impl Mesh {
         let mut vol = 0.0f64;
         for (_fk, verts) in &face_items {
             let n = verts.len();
-            let p0 = self.vertex_position(verts[0]).unwrap();
+            let p0 = self.vertex_point(verts[0]).unwrap();
             for i in 1..n - 1 {
-                let p1 = self.vertex_position(verts[i]).unwrap();
-                let p2 = self.vertex_position(verts[i + 1]).unwrap();
+                let p1 = self.vertex_point(verts[i]).unwrap();
+                let p2 = self.vertex_point(verts[i + 1]).unwrap();
                 vol += p0[0] * (p1[1] * p2[2] - p1[2] * p2[1])
                      + p0[1] * (p1[2] * p2[0] - p1[0] * p2[2])
                      + p0[2] * (p1[0] * p2[1] - p1[1] * p2[0]);
@@ -1697,12 +1698,87 @@ impl Mesh {
     // Connectivity Queries
     ///////////////////////////////////////////////////////////////////////////////////////////
 
-    pub fn vertex_position(&self, vertex_key: usize) -> Option<Point> {
-        self.vertex.get(&vertex_key).map(|v| v.position())
+    pub fn edge_edges(&self, u: usize, v: usize) -> Option<Vec<(usize, usize)>> {
+        let uv = self.halfedge.get(&u).map_or(false, |m| m.contains_key(&v));
+        let vu = self.halfedge.get(&v).map_or(false, |m| m.contains_key(&u));
+        if !uv && !vu { return None; }
+        let mut edges = Vec::new();
+        if let Some(neighbors) = self.halfedge.get(&u) {
+            let mut keys: Vec<usize> = neighbors.keys().copied().collect();
+            keys.sort();
+            for w in keys { if w != v { edges.push((u, w)); } }
+        }
+        if let Some(neighbors) = self.halfedge.get(&v) {
+            let mut keys: Vec<usize> = neighbors.keys().copied().collect();
+            keys.sort();
+            for w in keys { if w != u { edges.push((v, w)); } }
+        }
+        Some(edges)
+    }
+
+    pub fn edge_faces(&self, u: usize, v: usize) -> Option<Vec<usize>> {
+        let f0 = self.halfedge.get(&u).and_then(|m| m.get(&v)).copied().flatten();
+        let f1 = self.halfedge.get(&v).and_then(|m| m.get(&u)).copied().flatten();
+        if f0.is_none() && f1.is_none() { return None; }
+        Some([f0, f1].iter().filter_map(|f| *f).collect())
+    }
+
+    pub fn edge_line(&self, u: usize, v: usize) -> Option<Line> {
+        let uv = self.halfedge.get(&u).map_or(false, |m| m.contains_key(&v));
+        let vu = self.halfedge.get(&v).map_or(false, |m| m.contains_key(&u));
+        if !uv && !vu { return None; }
+        Some(Line::from_points(&self.vertex_point(u)?, &self.vertex_point(v)?))
+    }
+
+    pub fn face_edges(&self, face_key: usize) -> Option<Vec<(usize, usize)>> {
+        let verts = self.face.get(&face_key)?;
+        let n = verts.len();
+        Some((0..n).map(|i| (verts[i], verts[(i + 1) % n])).collect())
+    }
+
+    pub fn face_faces(&self, face_key: usize) -> Option<Vec<usize>> {
+        let fe = self.face_edges(face_key)?;
+        Some(fe.into_iter()
+            .filter_map(|(u, v)| self.halfedge.get(&v)?.get(&u).copied().flatten())
+            .collect())
+    }
+
+    pub fn face_points(&self, face_key: usize) -> Option<Vec<Point>> {
+        let fv = self.face_vertices(face_key)?;
+        fv.iter().map(|&vk| self.vertex_point(vk)).collect()
+    }
+
+    pub fn face_polyline(&self, face_key: usize) -> Option<Polyline> {
+        Some(Polyline::new(self.face_points(face_key)?))
     }
 
     pub fn face_vertices(&self, face_key: usize) -> Option<&Vec<usize>> {
         self.face.get(&face_key)
+    }
+
+    pub fn vertex_edges(&self, vertex_key: usize) -> Option<Vec<(usize, usize)>> {
+        let neighbors = self.halfedge.get(&vertex_key)?;
+        let mut keys: Vec<usize> = neighbors.keys().copied().collect();
+        keys.sort();
+        Some(keys.into_iter().map(|u| (vertex_key, u)).collect())
+    }
+
+    pub fn vertex_faces(&self, vertex_key: usize) -> Option<Vec<usize>> {
+        let neighbors = self.halfedge.get(&vertex_key)?;
+        let mut keys: Vec<usize> = neighbors.keys().copied().collect();
+        keys.sort();
+        Some(keys.into_iter().filter_map(|k| neighbors[&k]).collect())
+    }
+
+    pub fn vertex_point(&self, vertex_key: usize) -> Option<Point> {
+        self.vertex.get(&vertex_key).map(|v| v.position())
+    }
+
+    pub fn vertex_vertices(&self, vertex_key: usize) -> Option<Vec<usize>> {
+        let neighbors = self.halfedge.get(&vertex_key)?;
+        let mut keys: Vec<usize> = neighbors.keys().copied().collect();
+        keys.sort();
+        Some(keys)
     }
 
     pub fn face_centroid(&self, face_key: usize) -> Option<Point> {
@@ -1710,7 +1786,7 @@ impl Mesh {
         if verts.is_empty() { return None; }
         let mut x = 0.0_f64; let mut y = 0.0_f64; let mut z = 0.0_f64;
         for vk in verts {
-            let p = self.vertex_position(*vk)?;
+            let p = self.vertex_point(*vk)?;
             x += p[0]; y += p[1]; z += p[2];
         }
         let n = verts.len() as f64;
@@ -1720,73 +1796,11 @@ impl Mesh {
     pub fn centroid(&self) -> Point {
         let mut x = 0.0_f64; let mut y = 0.0_f64; let mut z = 0.0_f64;
         for vk in self.vertex.keys() {
-            let p = self.vertex_position(*vk).unwrap();
+            let p = self.vertex_point(*vk).unwrap();
             x += p[0]; y += p[1]; z += p[2];
         }
         let n = if self.vertex.is_empty() { 1.0 } else { self.vertex.len() as f64 };
         Point::new(x / n, y / n, z / n)
-    }
-
-    pub fn vertex_neighbors(&self, vertex_key: usize) -> Vec<usize> {
-        self.halfedge
-            .get(&vertex_key)
-            .map(|neighbors| neighbors.keys().copied().collect())
-            .unwrap_or_default()
-    }
-
-    pub fn vertex_faces(&self, vertex_key: usize) -> Vec<usize> {
-        self.halfedge
-            .get(&vertex_key)
-            .map(|neighbors| neighbors.values().filter_map(|f| *f).collect())
-            .unwrap_or_default()
-    }
-
-    pub fn vertex_edges(&self, vertex_key: usize) -> Vec<(usize, usize)> {
-        self.halfedge
-            .get(&vertex_key)
-            .map(|neighbors| neighbors.keys().map(|&u| (vertex_key, u)).collect())
-            .unwrap_or_default()
-    }
-
-    pub fn face_edges(&self, face_key: usize) -> Vec<(usize, usize)> {
-        let verts = match self.face.get(&face_key) {
-            Some(v) => v,
-            None => return vec![],
-        };
-        let n = verts.len();
-        (0..n).map(|i| (verts[i], verts[(i + 1) % n])).collect()
-    }
-
-    pub fn face_neighbors(&self, face_key: usize) -> Vec<usize> {
-        self.face_edges(face_key)
-            .into_iter()
-            .filter_map(|(u, v)| self.halfedge.get(&v)?.get(&u).copied().flatten())
-            .collect()
-    }
-
-    pub fn edge_vertices(&self, u: usize, v: usize) -> [usize; 2] {
-        [u, v]
-    }
-
-    pub fn edge_faces(&self, u: usize, v: usize) -> (Option<usize>, Option<usize>) {
-        let f0 = self.halfedge.get(&u).and_then(|m| m.get(&v)).copied().flatten();
-        let f1 = self.halfedge.get(&v).and_then(|m| m.get(&u)).copied().flatten();
-        (f0, f1)
-    }
-
-    pub fn edge_edges(&self, u: usize, v: usize) -> Vec<(usize, usize)> {
-        let mut edges = Vec::new();
-        if let Some(neighbors) = self.halfedge.get(&u) {
-            for &w in neighbors.keys() {
-                if w != v { edges.push((u, w)); }
-            }
-        }
-        if let Some(neighbors) = self.halfedge.get(&v) {
-            for &w in neighbors.keys() {
-                if w != u { edges.push((v, w)); }
-            }
-        }
-        edges
     }
 
     ///////////////////////////////////////////////////////////////////////////////////////////
@@ -1799,9 +1813,9 @@ impl Mesh {
             return None;
         }
 
-        let p0 = self.vertex_position(vertices[0])?;
-        let p1 = self.vertex_position(vertices[1])?;
-        let p2 = self.vertex_position(vertices[2])?;
+        let p0 = self.vertex_point(vertices[0])?;
+        let p1 = self.vertex_point(vertices[1])?;
+        let p2 = self.vertex_point(vertices[2])?;
 
         let u = Vector::new(p1[0] - p0[0], p1[1] - p0[1], p1[2] - p0[2]);
         let v = Vector::new(p2[0] - p0[0], p2[1] - p0[1], p2[2] - p0[2]);
@@ -1828,10 +1842,10 @@ impl Mesh {
         vertex_key: usize,
         weighting: NormalWeighting,
     ) -> Option<Vector> {
-        let faces = self.vertex_faces(vertex_key);
-        if faces.is_empty() {
-            return None;
-        }
+        let faces = match self.vertex_faces(vertex_key) {
+            Some(f) if !f.is_empty() => f,
+            _ => return None,
+        };
 
         let mut normal_acc = Vector::new(0.0, 0.0, 0.0);
 
@@ -1870,11 +1884,11 @@ impl Mesh {
         }
 
         let mut area = 0.0;
-        let p0 = self.vertex_position(vertices[0])?;
+        let p0 = self.vertex_point(vertices[0])?;
 
         for i in 1..(vertices.len() - 1) {
-            let p1 = self.vertex_position(vertices[i])?;
-            let p2 = self.vertex_position(vertices[i + 1])?;
+            let p1 = self.vertex_point(vertices[i])?;
+            let p2 = self.vertex_point(vertices[i + 1])?;
 
             let u = Vector::new(p1[0] - p0[0], p1[1] - p0[1], p1[2] - p0[2]);
             let v = Vector::new(p2[0] - p0[0], p2[1] - p0[1], p2[2] - p0[2]);
@@ -1901,10 +1915,10 @@ impl Mesh {
             if vkeys.len() < 3 {
                 continue;
             }
-            let p0 = match self.vertex_position(vkeys[0]) { Some(p) => p, None => continue };
+            let p0 = match self.vertex_point(vkeys[0]) { Some(p) => p, None => continue };
             for i in 1..(vkeys.len() - 1) {
-                let p1 = match self.vertex_position(vkeys[i]) { Some(p) => p, None => continue };
-                let p2 = match self.vertex_position(vkeys[i + 1]) { Some(p) => p, None => continue };
+                let p1 = match self.vertex_point(vkeys[i]) { Some(p) => p, None => continue };
+                let p2 = match self.vertex_point(vkeys[i + 1]) { Some(p) => p, None => continue };
                 total += p0[0] * (p1[1] * p2[2] - p1[2] * p2[1])
                        + p0[1] * (p1[2] * p2[0] - p1[0] * p2[2])
                        + p0[2] * (p1[0] * p2[1] - p1[1] * p2[0]);
@@ -1921,9 +1935,9 @@ impl Mesh {
         let prev_vertex = vertices[(vertex_index + n - 1) % n];
         let next_vertex = vertices[(vertex_index + 1) % n];
 
-        let center = self.vertex_position(vertex_key)?;
-        let prev_pos = self.vertex_position(prev_vertex)?;
-        let next_pos = self.vertex_position(next_vertex)?;
+        let center = self.vertex_point(vertex_key)?;
+        let prev_pos = self.vertex_point(prev_vertex)?;
+        let next_pos = self.vertex_point(next_vertex)?;
 
         let u = Vector::new(
             prev_pos[0] - center[0],
@@ -1949,11 +1963,10 @@ impl Mesh {
     }
 
     pub fn dihedral_angle(&self, u: usize, v: usize) -> Option<f64> {
-        let (f0_opt, f1_opt) = self.edge_faces(u, v);
-        let f0 = f0_opt?;
-        let f1 = f1_opt?;
-        let n0 = self.face_normal(f0)?;
-        let n1 = self.face_normal(f1)?;
+        let ef = self.edge_faces(u, v)?;
+        if ef.len() < 2 { return None; }
+        let n0 = self.face_normal(ef[0])?;
+        let n1 = self.face_normal(ef[1])?;
         let dot = n0.dot(&n1).clamp(-1.0, 1.0);
         Some(std::f64::consts::PI - dot.acos())
     }

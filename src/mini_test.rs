@@ -90,17 +90,18 @@ pub fn extract_timed_body(file: &str, macro_line: u32, checks: &[CheckRecord]) -
 
     // Snippet starts on the line after the MINI_TEST! call
     let start_line = macro_line.saturating_add(1);
-    // End a couple lines after the last check (for closing braces)
-    let end_line = last_check_line + 2;
+    let end_line = last_check_line + 100;
 
     let src = match fs::read_to_string(&path) {
         Ok(s) => s,
         Err(_) => return String::new(),
     };
 
-    let mut code_lines = Vec::new();
+    let mut code_lines: Vec<&str> = Vec::new();
     let mut in_check = false;
     let mut paren_depth = 0i32;
+    // MINI_TEST!(..., { opens with depth 1 on the macro line; stop when we close it
+    let mut brace_depth = 1i32;
 
     for (idx, line) in src.lines().enumerate() {
         let line_no = (idx as u32) + 1;
@@ -111,7 +112,39 @@ pub fn extract_timed_body(file: &str, macro_line: u32, checks: &[CheckRecord]) -
             break;
         }
 
-        // Check if this line starts a MINI_CHECK!
+        // Stop if we hit another MINI_TEST
+        if line.contains("MINI_TEST!(") {
+            break;
+        }
+
+        // If we're continuing a multi-line MINI_CHECK, skip and track parentheses
+        if in_check {
+            for ch in line.chars() {
+                if ch == '(' {
+                    paren_depth += 1;
+                } else if ch == ')' {
+                    paren_depth -= 1;
+                }
+            }
+            if paren_depth <= 0 {
+                in_check = false;
+            }
+            continue;
+        }
+
+        // Track brace depth to find end of test body
+        for ch in line.chars() {
+            if ch == '{' {
+                brace_depth += 1;
+            } else if ch == '}' {
+                brace_depth -= 1;
+            }
+        }
+        if brace_depth <= 0 {
+            break;
+        }
+
+        // Skip MINI_CHECK! lines from code display
         if line.contains("MINI_CHECK!") {
             in_check = true;
             paren_depth = 0;
@@ -128,30 +161,56 @@ pub fn extract_timed_body(file: &str, macro_line: u32, checks: &[CheckRecord]) -
             continue;
         }
 
-        // If we're in a multi-line MINI_CHECK, skip and track parentheses
-        if in_check {
-            for ch in line.chars() {
-                if ch == '(' {
-                    paren_depth += 1;
-                } else if ch == ')' {
-                    paren_depth -= 1;
-                }
-            }
-            if paren_depth <= 0 {
-                in_check = false;
-            }
-            continue;
-        }
-
-        // Skip closing brace only lines
-        let trimmed = line.trim();
-        if trimmed == "}" || trimmed == "})" || trimmed == "});" {
-            continue;
-        }
         code_lines.push(line);
     }
 
-    code_lines.join("\n")
+    // Remove empty if-blocks (entire body was MINI_CHECK calls)
+    let mut out: Vec<&str> = Vec::new();
+    let mut i = 0;
+    while i < code_lines.len() {
+        let line = code_lines[i];
+        let trimmed = line.trim();
+        let is_if = (trimmed.starts_with("if ") || trimmed.starts_with("if("))
+            && trimmed.ends_with('{');
+        if is_if {
+            // Find matching closing brace using brace depth
+            let mut depth = 0i32;
+            for ch in line.chars() {
+                if ch == '{' {
+                    depth += 1;
+                } else if ch == '}' {
+                    depth -= 1;
+                }
+            }
+            let mut j = i + 1;
+            while j < code_lines.len() && depth > 0 {
+                for ch in code_lines[j].chars() {
+                    if ch == '{' {
+                        depth += 1;
+                    } else if ch == '}' {
+                        depth -= 1;
+                    }
+                }
+                j += 1;
+            }
+            // j is one past the closing brace line; check if body is empty
+            let mut body_empty = true;
+            for k in (i + 1)..(j.saturating_sub(1)) {
+                if !code_lines[k].trim().is_empty() {
+                    body_empty = false;
+                    break;
+                }
+            }
+            if body_empty {
+                i = j;
+                continue;
+            }
+        }
+        out.push(line);
+        i += 1;
+    }
+
+    out.join("\n")
 }
 
 #[macro_export]

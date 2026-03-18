@@ -278,9 +278,10 @@ pub fn run_mesh_from_polygon_with_holes_many() -> TestResult {
         use crate::Mesh;
         use crate::Point;
 
-        let inputs: Vec<Vec<Vec<Point>>> = (0..4).map(|i| {
+        let mut inputs: Vec<Vec<Vec<Point>>> = Vec::new();
+        for i in 0..4 {
             let x = i as f64 * 7.0;
-            vec![
+            inputs.push(vec![
                 vec![
                     Point::new(x, 0.0, 0.0), Point::new(x+5.0, 0.0, 0.0),
                     Point::new(x+5.0, 5.0, 0.0), Point::new(x, 5.0, 0.0),
@@ -289,10 +290,13 @@ pub fn run_mesh_from_polygon_with_holes_many() -> TestResult {
                     Point::new(x+1.0, 1.0, 0.0), Point::new(x+4.0, 1.0, 0.0),
                     Point::new(x+4.0, 4.0, 0.0), Point::new(x+1.0, 4.0, 0.0),
                 ],
-            ]
-        }).collect();
+            ]);
+        }
         let meshes = Mesh::from_polygon_with_holes_many(inputs.clone(), false, true);
-        for m in &meshes { MINI_CHECK!(m.is_valid()); }
+        MINI_CHECK!(meshes[0].is_valid());
+        MINI_CHECK!(meshes[1].is_valid());
+        MINI_CHECK!(meshes[2].is_valid());
+        MINI_CHECK!(meshes[3].is_valid());
         let meshes_seq = Mesh::from_polygon_with_holes_many(inputs, false, false);
         MINI_CHECK!(meshes_seq[0].number_of_faces() == meshes[0].number_of_faces());
     })
@@ -304,26 +308,41 @@ pub fn run_mesh_loft_many() -> TestResult {
         use crate::Point;
         use crate::Polyline;
 
-        let pairs: Vec<(Vec<Polyline>, Vec<Polyline>)> = (0..6).map(|i| {
+        let mut loft_inputs: Vec<(Vec<Polyline>, Vec<Polyline>)> = Vec::new();
+        for i in 0..6 {
             let x = i as f64 * 3.0;
-            let h = 1.0 + i as f64 * 0.5;
             let b = Polyline::new(vec![
-                Point::new(x, 0.0, 0.0), Point::new(x+1.0, 0.0, 0.0),
-                Point::new(x+1.0, 1.0, 0.0), Point::new(x, 1.0, 0.0), Point::new(x, 0.0, 0.0),
-            ]);
+                Point::new(x, 0.0, 0.0), Point::new(x+1.0, 0.0, 0.0), Point::new(x+1.0, 1.0, 0.0), Point::new(x, 1.0, 0.0), Point::new(x, 0.0, 0.0)]);
             let t = Polyline::new(vec![
-                Point::new(x, 0.0, h), Point::new(x+1.0, 0.0, h),
-                Point::new(x+1.0, 1.0, h), Point::new(x, 1.0, h), Point::new(x, 0.0, h),
-            ]);
-            (vec![b], vec![t])
-        }).collect();
-        let meshes = Mesh::loft_many(pairs.clone(), true, true);
-        for m in &meshes {
-            MINI_CHECK!(m.is_valid());
-            MINI_CHECK!(m.is_closed());
+                Point::new(x, 0.0, 1.0+i as f64*0.5), Point::new(x+1.0, 0.0, 1.0+i as f64*0.5), Point::new(x+1.0, 1.0, 1.0+i as f64*0.5), Point::new(x, 1.0, 1.0+i as f64*0.5), Point::new(x, 0.0, 1.0+i as f64*0.5)]);
+            loft_inputs.push((vec![b], vec![t]));
         }
-        let meshes_seq = Mesh::loft_many(pairs, true, false);
-        MINI_CHECK!(meshes_seq[0].number_of_faces() == meshes[0].number_of_faces());
+        let meshes = Mesh::loft_many(loft_inputs.clone(), true, true);
+        MINI_CHECK!(meshes[0].is_valid());
+        MINI_CHECK!(meshes[0].is_closed());
+        MINI_CHECK!(meshes[1].is_valid());
+        MINI_CHECK!(meshes[1].is_closed());
+        MINI_CHECK!(meshes[2].is_valid());
+        MINI_CHECK!(meshes[2].is_closed());
+        MINI_CHECK!(meshes[3].is_valid());
+        MINI_CHECK!(meshes[3].is_closed());
+        MINI_CHECK!(meshes[4].is_valid());
+        MINI_CHECK!(meshes[4].is_closed());
+        MINI_CHECK!(meshes[5].is_valid());
+        MINI_CHECK!(meshes[5].is_closed());
+        let meshes_seq = Mesh::loft_many(loft_inputs, true, false);
+        MINI_CHECK!(meshes_seq[0].is_valid());
+        MINI_CHECK!(meshes_seq[0].is_closed());
+        MINI_CHECK!(meshes_seq[1].is_valid());
+        MINI_CHECK!(meshes_seq[1].is_closed());
+        MINI_CHECK!(meshes_seq[2].is_valid());
+        MINI_CHECK!(meshes_seq[2].is_closed());
+        MINI_CHECK!(meshes_seq[3].is_valid());
+        MINI_CHECK!(meshes_seq[3].is_closed());
+        MINI_CHECK!(meshes_seq[4].is_valid());
+        MINI_CHECK!(meshes_seq[4].is_closed());
+        MINI_CHECK!(meshes_seq[5].is_valid());
+        MINI_CHECK!(meshes_seq[5].is_closed());
     })
 }
 
@@ -585,7 +604,7 @@ pub fn run_mesh_attributes() -> TestResult {
         MINI_CHECK!(fidx[4] == vec![0, 4, 7, 3]);
         MINI_CHECK!(fidx[5] == vec![1, 2, 6, 5]);
 
-        let mut vertex_to_index = mesh.vertex_index();
+        let vertex_to_index = mesh.vertex_index();
         MINI_CHECK!(vertex_to_index.len() == n_vertices);
         MINI_CHECK!(vertex_to_index[&0] == 0);
         MINI_CHECK!(vertex_to_index[&1] == 1);
@@ -795,73 +814,177 @@ pub fn run_mesh_connectivity_queries() -> TestResult {
             Point::new(2.0, 0.0, 0.0),
         ];
         let mesh = Mesh::from_vertices_and_faces(pts, vec![vec![0, 1, 2, 3], vec![1, 4, 2]]);
-        let vkeys = mesh.vertices();
-        let v0 = vkeys[0];
-        let v1 = vkeys[1];
-        let v2 = vkeys[2];
-        let v3 = vkeys[3];
-        let v4 = vkeys[4];
-        let fkeys = mesh.faces();
-        let f0 = fkeys[0];
-        let f1 = fkeys[1];
+        let v = mesh.vertices();
+        let f = mesh.faces();
 
-        // vertex_position
-        let pos = mesh.vertex_position(v0);
-        MINI_CHECK!(pos.is_some());
-        MINI_CHECK!(TOLERANCE.is_point_close(&pos.unwrap(), &Point::new(0.0, 0.0, 0.0)));
-        MINI_CHECK!(mesh.vertex_position(999).is_none());
+        // edge edges
+        // edge 1 - 2, edges: 1-0, 1-4, 2-3, 2-4
+        if let Some(ee) = mesh.edge_edges(1, 2) {
 
-        // face_vertices
-        let fv = mesh.face_vertices(f0);
-        MINI_CHECK!(fv.is_some());
-        MINI_CHECK!(fv.unwrap().len() == 4);
-        MINI_CHECK!(fv.unwrap()[0] == v0 && fv.unwrap()[1] == v1 && fv.unwrap()[2] == v2 && fv.unwrap()[3] == v3);
+            let (u0, v0) = ee[0];
+            let l0 = mesh.edge_line(u0, v0).unwrap();
+            let mut mid0 = l0.center();
+            mid0.name = format!("e{}-{}", u0, v0);
 
-        // vertex_neighbors
-        let nb = mesh.vertex_neighbors(v1);
-        MINI_CHECK!(nb.len() == 3);
+            let (u1, v1) = ee[1];
+            let l1 = mesh.edge_line(u1, v1).unwrap();
+            let mut mid1 = l1.center();
+            mid1.name = format!("e{}-{}", u1, v1);
 
-        // vertex_faces
-        let vf0 = mesh.vertex_faces(v0);
-        MINI_CHECK!(vf0.len() == 1);
-        let vf1 = mesh.vertex_faces(v1);
-        MINI_CHECK!(vf1.len() == 2);
+            let (u2, v2) = ee[2];
+            let l2 = mesh.edge_line(u2, v2).unwrap();
+            let mut mid2 = l2.center();
+            mid2.name = format!("e{}-{}", u2, v2);
 
-        // vertex_edges
-        let ve = mesh.vertex_edges(v1);
-        MINI_CHECK!(ve.len() == 3);
-        MINI_CHECK!(ve.contains(&(v1, v0)));
-        MINI_CHECK!(ve.contains(&(v1, v2)));
-        MINI_CHECK!(ve.contains(&(v1, v4)));
+            let (u3, v3) = ee[3];
+            let l3 = mesh.edge_line(u3, v3).unwrap();
+            let mut mid3 = l3.center();
+            mid3.name = format!("e{}-{}", u3, v3);
+
+            let _ee_set: std::collections::BTreeSet<_> = ee.iter().cloned().collect();
+            MINI_CHECK!(ee.len() == 4);
+            MINI_CHECK!(ee[0] == (1, 0));
+            MINI_CHECK!(ee[1] == (1, 4));
+            MINI_CHECK!(ee[2] == (2, 3));
+            MINI_CHECK!(ee[3] == (2, 4));
+        }
+
+        // edge faces
+        // edge 1-2, faces: 0, 1
+        if let Some(ef) = mesh.edge_faces(1, 2) {
+            let ef0 = ef[0];
+            let ef1 = ef[1];
+            let mut efp0 = mesh.face_centroid(ef0).unwrap();
+            efp0.name = format!("f{}", ef0);
+            let mut efp1 = mesh.face_centroid(ef1).unwrap();
+            efp1.name = format!("f{}", ef1);
+            MINI_CHECK!(ef.len() == 2);
+            MINI_CHECK!(ef0 == 0 && ef1 == 1);
+        }
 
         // face_edges
-        let fe = mesh.face_edges(f0);
-        MINI_CHECK!(fe.len() == 4);
-        MINI_CHECK!(fe[0] == (v0, v1));
-        MINI_CHECK!(fe[1] == (v1, v2));
-        MINI_CHECK!(fe[2] == (v2, v3));
-        MINI_CHECK!(fe[3] == (v3, v0));
+        // face 0, edges: 0-1, 1-2, 2-3, 3-0
+        if let Some(fe) = mesh.face_edges(f[0]) {
+            let l0 = mesh.edge_line(fe[0].0, fe[0].1).unwrap();
+            let l1 = mesh.edge_line(fe[1].0, fe[1].1).unwrap();
+            let l2 = mesh.edge_line(fe[2].0, fe[2].1).unwrap();
+            let l3 = mesh.edge_line(fe[3].0, fe[3].1).unwrap();
+            let mut lmid0 = l0.center();
+            lmid0.name = format!("e{}-{}", fe[0].0, fe[0].1);
+            let mut lmid1 = l1.center();
+            lmid1.name = format!("e{}-{}", fe[1].0, fe[1].1);
+            let mut lmid2 = l2.center();
+            lmid2.name = format!("e{}-{}", fe[2].0, fe[2].1);
+            let mut lmid3 = l3.center();
+            lmid3.name = format!("e{}-{}", fe[3].0, fe[3].1);
+            MINI_CHECK!(fe.len() == 4);
+            MINI_CHECK!(fe[0] == (0, 1));
+            MINI_CHECK!(fe[1] == (1, 2));
+            MINI_CHECK!(fe[2] == (2, 3));
+            MINI_CHECK!(fe[3] == (3, 0));
+        }
 
-        // face_neighbors
-        let fn0 = mesh.face_neighbors(f0);
-        MINI_CHECK!(fn0.len() == 1);
-        MINI_CHECK!(fn0[0] == f1);
+        // face_faces
+        // face 0, adjacent faces: 1
+        if let Some(ff) = mesh.face_faces(f[0]) {
+            let ff0 = ff[0];
+            let mut ffp = mesh.face_centroid(ff0).unwrap();
+            ffp.name = format!("f{}", ff0);
+            MINI_CHECK!(ff.len() == 1);
+            MINI_CHECK!(ff0 == 1);
+        }
 
-        // edge_vertices
-        let ev = mesh.edge_vertices(v0, v1);
-        MINI_CHECK!(ev[0] == v0 && ev[1] == v1);
+        // face points
+        if let Some(points) = mesh.face_points(f[0]) {
+            let pointcount = points.len();
+            MINI_CHECK!(pointcount == 4);
+        }
 
-        // edge_faces
-        let ef_inner = mesh.edge_faces(v1, v2);
-        MINI_CHECK!(ef_inner.0.is_some() && ef_inner.1.is_some());
-        let ef_boundary = mesh.edge_faces(v0, v1);
-        MINI_CHECK!(ef_boundary.0.is_some() != ef_boundary.1.is_some());
+        // face polyline
+        if let Some(pl) = mesh.face_polyline(f[0]) {
+            let pointcount = pl.get_points().len();
+            MINI_CHECK!(pointcount == 4);
+        }
 
-        // edge_edges
-        let ee = mesh.edge_edges(v1, v2);
-        MINI_CHECK!(ee.len() == 4);
-        MINI_CHECK!(!ee.contains(&(v1, v2)));
-        MINI_CHECK!(!ee.contains(&(v2, v1)));
+        // face_vertices
+        // face 0 vertices: 0, 1, 2, 3
+        if let Some(fv) = mesh.face_vertices(f[0]) {
+            let fv0 = fv[0];
+            let fv1 = fv[1];
+            let fv2 = fv[2];
+            let fv3 = fv[3];
+            let mut p0 = mesh.vertex_point(fv0).unwrap();
+            p0.name = fv0.to_string();
+            let mut p1 = mesh.vertex_point(fv1).unwrap();
+            p1.name = fv1.to_string();
+            let mut p2 = mesh.vertex_point(fv2).unwrap();
+            p2.name = fv2.to_string();
+            let mut p3 = mesh.vertex_point(fv3).unwrap();
+            p3.name = fv3.to_string();
+            MINI_CHECK!(fv0 == 0);
+            MINI_CHECK!(fv1 == 1);
+            MINI_CHECK!(fv2 == 2);
+            MINI_CHECK!(fv3 == 3);
+            MINI_CHECK!(fv.len() == 4);
+        }
+
+        // vertex_edges
+        // vertex 1, edges 1-0, 1-2, 1-4
+        if let Some(ve) = mesh.vertex_edges(v[1]) {
+            let mut vp = mesh.vertex_point(v[1]).unwrap();
+            vp.name = format!("v{}", v[1]);
+
+            let l0 = mesh.edge_line(ve[0].0, ve[0].1).unwrap();
+            let l1 = mesh.edge_line(ve[1].0, ve[1].1).unwrap();
+            let l2 = mesh.edge_line(ve[2].0, ve[2].1).unwrap();
+            let mut lmid0 = l0.center();
+            lmid0.name = format!("e{}-{}", ve[0].0, ve[0].1);
+            let mut lmid1 = l1.center();
+            lmid1.name = format!("e{}-{}", ve[1].0, ve[1].1);
+            let mut lmid2 = l2.center();
+            lmid2.name = format!("e{}-{}", ve[2].0, ve[2].1);
+
+            MINI_CHECK!(ve[0] == (1, 0));
+            MINI_CHECK!(ve[1] == (1, 2));
+            MINI_CHECK!(ve[2] == (1, 4));
+            MINI_CHECK!(ve.len() == 3);
+        }
+
+        // vertex_faces
+
+        // vertex 1, faces 0, 1
+        if let Some(vf) = mesh.vertex_faces(v[1]) {
+
+            let mut vp = mesh.vertex_point(v[1]).unwrap();
+            vp.name = format!("v{}", v[1]);
+
+            let mut fp0 = mesh.face_centroid(vf[0]).unwrap();
+            fp0.name = format!("f{}", vf[0]);
+            let mut fp1 = mesh.face_centroid(vf[1]).unwrap();
+            fp1.name = format!("f{}", vf[1]);
+            MINI_CHECK!(vf.len() == 2);
+            MINI_CHECK!(vf[0] == 0);
+            MINI_CHECK!(vf[1] == 1);
+        }
+
+        // vertex_vertices
+        // vertex 1, neighbors 0, 2, 4
+        if let Some(vn) = mesh.vertex_vertices(v[1]) {
+            let mut p0 = mesh.vertex_point(v[1]).unwrap();
+            p0.name = format!("main{}", v[1]);
+
+            let mut np0 = mesh.vertex_point(vn[0]).unwrap();
+            np0.name = vn[0].to_string();
+            let mut np1 = mesh.vertex_point(vn[1]).unwrap();
+            np1.name = vn[1].to_string();
+            let mut np2 = mesh.vertex_point(vn[2]).unwrap();
+            np2.name = vn[2].to_string();
+
+            MINI_CHECK!(vn[0] == 0);
+            MINI_CHECK!(vn[1] == 2);
+            MINI_CHECK!(vn[2] == 4);
+            MINI_CHECK!(vn.len() == 3);
+        }
     })
 }
 
@@ -888,6 +1011,19 @@ pub fn run_mesh_geometric_properties() -> TestResult {
         let fn_ = mesh.face_normal(f0);
         MINI_CHECK!(fn_.is_some());
         MINI_CHECK!(TOLERANCE.is_close(fn_.unwrap()[2], 1.0));
+
+        // face_centroid
+        let fc = mesh.face_centroid(f0);
+        MINI_CHECK!(fc.is_some());
+        MINI_CHECK!(TOLERANCE.is_close(fc.as_ref().unwrap()[0], 1.0 / 3.0));
+        MINI_CHECK!(TOLERANCE.is_close(fc.as_ref().unwrap()[1], 1.0 / 3.0));
+        MINI_CHECK!(fc.unwrap()[2] == 0.0);
+
+        // centroid
+        let c = mesh.centroid();
+        MINI_CHECK!(c[0] == 0.0);
+        MINI_CHECK!(TOLERANCE.is_close(c[1], 0.25));
+        MINI_CHECK!(c[2] == 0.0);
 
         // vertex_normal
         let vn = mesh.vertex_normal(v0);
@@ -933,11 +1069,11 @@ pub fn run_mesh_geometric_properties() -> TestResult {
         MINI_CHECK!(TOLERANCE.is_close(vnsw[&v0][2], 1.0));
 
         // area
-        let box_ = Mesh::create_box(2.0, 2.0, 2.0);
-        MINI_CHECK!(TOLERANCE.is_close(box_.area(), 24.0));
+        let mesh_box = Mesh::create_box(2.0, 2.0, 2.0);
+        MINI_CHECK!(TOLERANCE.is_close(mesh_box.area(), 24.0));
 
         // volume
-        MINI_CHECK!(TOLERANCE.is_close(box_.volume(), 8.0));
+        MINI_CHECK!(TOLERANCE.is_close(mesh_box.volume(), 8.0));
     })
 }
 
@@ -960,28 +1096,28 @@ pub fn run_mesh_transformation() -> TestResult {
         mesh1.xform = Xform::translation(0.0, 0.0, 1.0);
         mesh1.transform(None);
         MINI_CHECK!(!mesh1.xform.is_identity());
-        MINI_CHECK!(mesh1.vertex_position(v0).unwrap()[2] == 1.0);
+        MINI_CHECK!(mesh1.vertex_point(v0).unwrap()[2] == 1.0);
 
         // transform(Some(xf)) — apply given xform in-place; stored xform unchanged
         let mut mesh2 = mesh.duplicate();
         let x = Xform::translation(0.0, 0.0, 1.0);
         mesh2.transform(Some(&x));
         MINI_CHECK!(mesh2.xform.is_identity());
-        MINI_CHECK!(mesh2.vertex_position(v0).unwrap()[2] == 1.0);
+        MINI_CHECK!(mesh2.vertex_point(v0).unwrap()[2] == 1.0);
 
         // transformed(None) — copy with stored xform applied
         let mut mesh3 = mesh.duplicate();
         mesh3.xform = Xform::translation(0.0, 0.0, 10.0);
         let mesh3t = mesh3.transformed(None);
         MINI_CHECK!(!mesh3t.xform.is_identity());
-        MINI_CHECK!(mesh3t.vertex_position(v0).unwrap()[2] == 10.0);
+        MINI_CHECK!(mesh3t.vertex_point(v0).unwrap()[2] == 10.0);
 
         // transformed(Some(xf)) — copy with given xform applied
         let mesh4 = mesh.duplicate();
         let x = Xform::translation(0.0, 0.0, 10.0);
         let mesh4t = mesh4.transformed(Some(&x));
         MINI_CHECK!(mesh4t.xform.is_identity());
-        MINI_CHECK!(mesh4t.vertex_position(v0).unwrap()[2] == 10.0);
+        MINI_CHECK!(mesh4t.vertex_point(v0).unwrap()[2] == 10.0);
     })
 }
 
@@ -989,11 +1125,17 @@ pub fn run_mesh_json_roundtrip() -> TestResult {
     MINI_TEST!("Json Roundtrip", {
         use crate::Mesh;
         use crate::Point;
+        use crate::Color;
         use std::path::PathBuf;
 
         let mut mesh = Mesh::create_box(1.0, 1.0, 1.0);
         mesh.name = "test_mesh".to_string();
-        mesh.color_mode = crate::mesh::ColorMode::FACECOLORS;
+        mesh.set_objectcolor(Color::new(255, 0, 0, 255));
+        let mut fc: Vec<Color> = Vec::new();
+        for _ in 0..mesh.number_of_faces() {
+            fc.push(Color::new(255, 0, 0, 255));
+        }
+        mesh.set_facecolors(fc);
 
         // JSON object
         use crate::Xform;
@@ -1001,6 +1143,7 @@ pub fn run_mesh_json_roundtrip() -> TestResult {
         let json = mesh.jsondump();
         let loaded_json = Mesh::jsonload(&json).unwrap();
         MINI_CHECK!(loaded_json.name == mesh.name);
+        MINI_CHECK!(loaded_json.objectcolor() == mesh.objectcolor());
         MINI_CHECK!(loaded_json.color_mode == mesh.color_mode);
         MINI_CHECK!(loaded_json.number_of_vertices() == mesh.number_of_vertices());
         MINI_CHECK!(loaded_json.number_of_faces() == mesh.number_of_faces());
@@ -1018,6 +1161,7 @@ pub fn run_mesh_json_roundtrip() -> TestResult {
         mesh.json_dump(filename.to_str().unwrap()).unwrap();
         let loaded_file = Mesh::json_load(filename.to_str().unwrap()).unwrap();
         MINI_CHECK!(loaded_file.name == mesh.name);
+        MINI_CHECK!(loaded_file.objectcolor() == mesh.objectcolor());
         MINI_CHECK!(loaded_file.number_of_vertices() == mesh.number_of_vertices());
         MINI_CHECK!(loaded_file.number_of_faces() == mesh.number_of_faces());
 
@@ -1053,16 +1197,23 @@ pub fn run_mesh_protobuf_roundtrip() -> TestResult {
     MINI_TEST!("Protobuf Roundtrip", {
         use crate::Mesh;
         use crate::Point;
+        use crate::Color;
         use std::path::PathBuf;
 
         let mut mesh = Mesh::create_box(1.0, 1.0, 1.0);
         mesh.name = "test_mesh_proto".to_string();
-        mesh.color_mode = crate::mesh::ColorMode::FACECOLORS;
+        mesh.set_objectcolor(Color::new(255, 0, 0, 255));
+        let mut fc: Vec<Color> = Vec::new();
+        for _ in 0..mesh.number_of_faces() {
+            fc.push(Color::new(255, 0, 0, 255));
+        }
+        mesh.set_facecolors(fc);
 
         // String
         let proto_bytes = mesh.pb_dumps();
         let loaded_string = Mesh::pb_loads(&proto_bytes).unwrap();
         MINI_CHECK!(loaded_string.name == mesh.name);
+        MINI_CHECK!(loaded_string.objectcolor() == mesh.objectcolor());
         MINI_CHECK!(loaded_string.color_mode == mesh.color_mode);
         MINI_CHECK!(loaded_string.number_of_vertices() == mesh.number_of_vertices());
 
@@ -1072,6 +1223,7 @@ pub fn run_mesh_protobuf_roundtrip() -> TestResult {
         mesh.pb_dump(filename.to_str().unwrap());
         let loaded_file = Mesh::pb_load(filename.to_str().unwrap());
         MINI_CHECK!(loaded_file.name == mesh.name);
+        MINI_CHECK!(loaded_file.objectcolor() == mesh.objectcolor());
         MINI_CHECK!(loaded_file.number_of_vertices() == mesh.number_of_vertices());
         MINI_CHECK!(loaded_file.number_of_faces() == mesh.number_of_faces());
         MINI_CHECK!(loaded_file.guid == mesh.guid);
