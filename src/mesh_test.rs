@@ -683,6 +683,17 @@ pub fn run_mesh_edges() -> TestResult {
     })
 }
 
+pub fn run_mesh_create_dodecahedron() -> TestResult {
+    MINI_TEST!("Create Dodecahedron", {
+        use crate::Mesh;
+
+        let m = Mesh::create_dodecahedron(2.0);
+        MINI_CHECK!(m.is_valid());
+        MINI_CHECK!(m.number_of_vertices() == 20);
+        MINI_CHECK!(m.number_of_faces() == 12);
+    })
+}
+
 pub fn run_mesh_vertex_and_face_operations() -> TestResult {
     MINI_TEST!("Vertex and Face Operations", {
         use crate::Mesh;
@@ -1266,6 +1277,7 @@ REGISTER_MINI_TEST!("Mesh", "Loft with quads and triangles", crate::mesh_test::r
 REGISTER_MINI_TEST!("Mesh", "Boolean Queries", crate::mesh_test::run_mesh_boolean_queries);
 REGISTER_MINI_TEST!("Mesh", "Attributes", crate::mesh_test::run_mesh_attributes);
 REGISTER_MINI_TEST!("Mesh", "Edges", crate::mesh_test::run_mesh_edges);
+REGISTER_MINI_TEST!("Mesh", "Create Dodecahedron", crate::mesh_test::run_mesh_create_dodecahedron);
 REGISTER_MINI_TEST!("Mesh", "Vertex and Face Operations", crate::mesh_test::run_mesh_vertex_and_face_operations);
 REGISTER_MINI_TEST!("Mesh", "Connectivity Queries", crate::mesh_test::run_mesh_connectivity_queries);
 REGISTER_MINI_TEST!("Mesh", "Geometric Properties", crate::mesh_test::run_mesh_geometric_properties);

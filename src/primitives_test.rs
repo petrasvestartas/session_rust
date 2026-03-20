@@ -1087,17 +1087,6 @@ pub fn run_primitives_mesh_icosahedron() -> TestResult {
     })
 }
 
-pub fn run_primitives_mesh_dodecahedron() -> TestResult {
-    MINI_TEST!("Mesh Dodecahedron", {
-        use crate::primitives::Primitives;
-
-        let m = Primitives::dodecahedron(2.0);
-        MINI_CHECK!(m.is_valid());
-        MINI_CHECK!(m.number_of_vertices() == 20);
-        MINI_CHECK!(m.number_of_faces() == 12);
-    })
-}
-
 pub fn run_primitives_nurbssurface_wave() -> TestResult {
     MINI_TEST!("Nurbssurface Wave", {
         use crate::primitives::Primitives;
@@ -1144,5 +1133,4 @@ REGISTER_MINI_TEST!("Primitives", "Mesh Tetrahedron", crate::primitives_test::ru
 REGISTER_MINI_TEST!("Primitives", "Mesh Cube", crate::primitives_test::run_primitives_mesh_cube);
 REGISTER_MINI_TEST!("Primitives", "Mesh Octahedron", crate::primitives_test::run_primitives_mesh_octahedron);
 REGISTER_MINI_TEST!("Primitives", "Mesh Icosahedron", crate::primitives_test::run_primitives_mesh_icosahedron);
-REGISTER_MINI_TEST!("Primitives", "Mesh Dodecahedron", crate::primitives_test::run_primitives_mesh_dodecahedron);
 REGISTER_MINI_TEST!("Primitives", "Nurbssurface Wave", crate::primitives_test::run_primitives_nurbssurface_wave);

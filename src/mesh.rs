@@ -1094,6 +1094,45 @@ impl Mesh {
         Mesh::from_vertices_and_faces(vertices, faces)
     }
 
+    pub fn create_dodecahedron(edge: f64) -> Self {
+        let phi = (1.0 + 5.0_f64.sqrt()) / 2.0;
+        let ip = 1.0 / phi;
+        let s = edge / (2.0 * ip);
+        let verts = vec![
+            Point::new(s, s, s),
+            Point::new(s, s, -s),
+            Point::new(s, -s, s),
+            Point::new(s, -s, -s),
+            Point::new(-s, s, s),
+            Point::new(-s, s, -s),
+            Point::new(-s, -s, s),
+            Point::new(-s, -s, -s),
+            Point::new(0.0, s * ip, s * phi),
+            Point::new(0.0, s * ip, -s * phi),
+            Point::new(0.0, -s * ip, s * phi),
+            Point::new(0.0, -s * ip, -s * phi),
+            Point::new(s * ip, s * phi, 0.0),
+            Point::new(s * ip, -s * phi, 0.0),
+            Point::new(-s * ip, s * phi, 0.0),
+            Point::new(-s * ip, -s * phi, 0.0),
+            Point::new(s * phi, 0.0, s * ip),
+            Point::new(s * phi, 0.0, -s * ip),
+            Point::new(-s * phi, 0.0, s * ip),
+            Point::new(-s * phi, 0.0, -s * ip),
+        ];
+        let idx: [[usize; 5]; 12] = [
+            [0, 8,10, 2,16], [0,16,17, 1,12], [0,12,14, 4, 8],
+            [1,17, 3,11, 9], [1, 9, 5,14,12], [2,10, 6,15,13],
+            [2,13, 3,17,16], [3,13,15, 7,11], [4,14, 5,19,18],
+            [4,18, 6,10, 8], [5, 9,11, 7,19], [6,18,19, 7,15],
+        ];
+        let mut faces: Vec<Vec<Point>> = Vec::new();
+        for f in &idx {
+            faces.push(vec![verts[f[0]].clone(), verts[f[1]].clone(), verts[f[2]].clone(), verts[f[3]].clone(), verts[f[4]].clone()]);
+        }
+        Mesh::from_polylines(faces, Some(1e-10))
+    }
+
     ///////////////////////////////////////////////////////////////////////////////////////////
     // Boolean Queries
     ///////////////////////////////////////////////////////////////////////////////////////////

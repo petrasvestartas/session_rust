@@ -516,6 +516,7 @@ pub fn get_all_tests() -> Vec<RegisteredTest> {
         RegisteredTest { group: "Mesh", name: "Loft Many", func: run_mesh_loft_many },
         RegisteredTest { group: "Mesh", name: "Boolean Queries", func: run_mesh_boolean_queries },
         RegisteredTest { group: "Mesh", name: "Attributes", func: run_mesh_attributes },
+        RegisteredTest { group: "Mesh", name: "Create Dodecahedron", func: run_mesh_create_dodecahedron },
         RegisteredTest { group: "Mesh", name: "Vertex and Face Operations", func: run_mesh_vertex_and_face_operations },
         RegisteredTest { group: "Mesh", name: "Connectivity Queries", func: run_mesh_connectivity_queries },
         RegisteredTest { group: "Mesh", name: "Geometric Properties", func: run_mesh_geometric_properties },
@@ -613,7 +614,6 @@ pub fn get_all_tests() -> Vec<RegisteredTest> {
         RegisteredTest { group: "Primitives", name: "Mesh Cube", func: run_primitives_mesh_cube },
         RegisteredTest { group: "Primitives", name: "Mesh Octahedron", func: run_primitives_mesh_octahedron },
         RegisteredTest { group: "Primitives", name: "Mesh Icosahedron", func: run_primitives_mesh_icosahedron },
-        RegisteredTest { group: "Primitives", name: "Mesh Dodecahedron", func: run_primitives_mesh_dodecahedron },
         RegisteredTest { group: "Primitives", name: "Nurbssurface Wave", func: run_primitives_nurbssurface_wave },
         // Intersection tests
         RegisteredTest { group: "Intersection", name: "Line Line", func: run_intersection_line_line },
