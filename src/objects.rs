@@ -1,4 +1,4 @@
-use crate::boundingbox::BoundingBox;
+use crate::obb::Obb;
 use crate::brep::BRep;
 use crate::line::Line;
 use crate::mesh::Mesh;
@@ -22,7 +22,7 @@ pub struct Objects {
     pub points: Vec<Point>,
     pub lines: Vec<Line>,
     pub planes: Vec<Plane>,
-    pub bboxes: Vec<BoundingBox>,
+    pub bboxes: Vec<Obb>,
     pub polylines: Vec<Polyline>,
     pub pointclouds: Vec<PointCloud>,
     pub meshes: Vec<Mesh>,
@@ -153,7 +153,7 @@ impl Objects {
             objects.planes.push(crate::plane::Plane::pb_loads(&p.encode_to_vec())?);
         }
         for b in &proto.bboxes {
-            objects.bboxes.push(crate::boundingbox::BoundingBox::pb_loads(&b.encode_to_vec())?);
+            objects.bboxes.push(crate::obb::Obb::pb_loads(&b.encode_to_vec())?);
         }
         for p in &proto.polylines {
             objects.polylines.push(crate::polyline::Polyline::pb_loads(&p.encode_to_vec())?);

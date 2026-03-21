@@ -397,6 +397,75 @@ pub fn run_vector_is_zero() -> TestResult {
     })
 }
 
+pub fn run_vector_scale() -> TestResult {
+    MINI_TEST!("Scale", {
+        use crate::Vector;
+
+        let mut v = Vector::new(2.0, 4.0, 6.0);
+        v.scale(0.5);
+        let mut v_up = Vector::new(1.0, 2.0, 3.0);
+        v_up.scale_up();
+        let mut v_rt = Vector::new(1.0, 2.0, 3.0);
+        v_rt.scale_up();
+        v_rt.scale_down();
+
+        MINI_CHECK!(v[0] == 1.0 && v[1] == 2.0 && v[2] == 3.0);
+        MINI_CHECK!(v_up[0] > 1.0);
+        MINI_CHECK!(TOLERANCE.is_close(v_rt[0], 1.0) && TOLERANCE.is_close(v_rt[1], 2.0) && TOLERANCE.is_close(v_rt[2], 3.0));
+    })
+}
+
+pub fn run_vector_reflect() -> TestResult {
+    MINI_TEST!("Reflect", {
+        use crate::Vector;
+
+        let v = Vector::new(1.0, 2.0, 3.0);
+        let n = Vector::x_axis();
+        let r = v.reflect(&n);
+
+        MINI_CHECK!(TOLERANCE.is_close(r[0], -1.0));
+        MINI_CHECK!(TOLERANCE.is_close(r[1], 2.0));
+        MINI_CHECK!(TOLERANCE.is_close(r[2], 3.0));
+    })
+}
+
+pub fn run_vector_average_normal() -> TestResult {
+    MINI_TEST!("Average Normal", {
+        use crate::vector::average_normal;
+        use crate::Point;
+
+        let sq = vec![
+            Point::new(0.0, 0.0, 0.0),
+            Point::new(1.0, 0.0, 0.0),
+            Point::new(1.0, 1.0, 0.0),
+            Point::new(0.0, 1.0, 0.0),
+            Point::new(0.0, 0.0, 0.0),
+        ];
+        let n = average_normal(&sq);
+
+        MINI_CHECK!(TOLERANCE.is_close(n[2].abs(), 1.0));
+        MINI_CHECK!(TOLERANCE.is_close(n[0], 0.0) && TOLERANCE.is_close(n[1], 0.0));
+    })
+}
+
+pub fn run_vector_interpolate_points() -> TestResult {
+    MINI_TEST!("Interpolate Points", {
+        use crate::vector::interpolate_points;
+        use crate::Point;
+
+        let from_pt = Point::new(0.0, 0.0, 0.0);
+        let to_pt = Point::new(1.0, 0.0, 0.0);
+        let pts0 = interpolate_points(&from_pt, &to_pt, 2, 0);
+        let pts1 = interpolate_points(&from_pt, &to_pt, 1, 1);
+
+        MINI_CHECK!(pts0.len() == 2);
+        MINI_CHECK!(TOLERANCE.is_close(pts0[0][0], 1.0 / 3.0));
+        MINI_CHECK!(TOLERANCE.is_close(pts0[1][0], 2.0 / 3.0));
+        MINI_CHECK!(pts1.len() == 3);
+        MINI_CHECK!(TOLERANCE.is_close(pts1[0][0], 0.0) && TOLERANCE.is_close(pts1[2][0], 1.0));
+    })
+}
+
 pub fn run_vector_json_roundtrip() -> TestResult {
     MINI_TEST!("Json Roundtrip", {
         use crate::Vector;
@@ -455,5 +524,9 @@ REGISTER_MINI_TEST!("Vector", "Cos Sin Laws", crate::vector_test::run_vector_cos
 REGISTER_MINI_TEST!("Vector", "Sum Of Vectors", crate::vector_test::run_vector_sum_of_vectors);
 REGISTER_MINI_TEST!("Vector", "Average", crate::vector_test::run_vector_average);
 REGISTER_MINI_TEST!("Vector", "Is Zero", crate::vector_test::run_vector_is_zero);
+REGISTER_MINI_TEST!("Vector", "Scale", crate::vector_test::run_vector_scale);
+REGISTER_MINI_TEST!("Vector", "Reflect", crate::vector_test::run_vector_reflect);
+REGISTER_MINI_TEST!("Vector", "Average Normal", crate::vector_test::run_vector_average_normal);
+REGISTER_MINI_TEST!("Vector", "Interpolate Points", crate::vector_test::run_vector_interpolate_points);
 REGISTER_MINI_TEST!("Vector", "Json Roundtrip", crate::vector_test::run_vector_json_roundtrip);
 REGISTER_MINI_TEST!("Vector", "Protobuf Roundtrip", crate::vector_test::run_vector_protobuf_roundtrip);

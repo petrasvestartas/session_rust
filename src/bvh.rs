@@ -1,4 +1,4 @@
-use crate::{BoundingBox, Point, Vector};
+use crate::{Obb, Point, Vector};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
@@ -8,7 +8,7 @@ pub struct BVHNode {
     pub left: Option<Box<BVHNode>>,
     pub right: Option<Box<BVHNode>>,
     pub object_id: i32,
-    pub aabb: Option<BoundingBox>,
+    pub aabb: Option<Obb>,
 }
 
 impl BVHNode {
@@ -46,7 +46,7 @@ struct BvhAABB {
 
 impl BvhAABB {
     #[inline(always)]
-    fn from_bbox(b: &BoundingBox) -> Self {
+    fn from_bbox(b: &Obb) -> Self {
         BvhAABB {
             cx: b.center[0],
             cy: b.center[1],
@@ -149,7 +149,7 @@ impl BVH {
     }
 
     /// Compute world size from bounding boxes
-    pub fn compute_world_size(bounding_boxes: &[BoundingBox]) -> f64 {
+    pub fn compute_world_size(bounding_boxes: &[Obb]) -> f64 {
         if bounding_boxes.is_empty() {
             return 1000.0;
         }
@@ -175,7 +175,7 @@ impl BVH {
     }
 
     /// Build BVH from bounding boxes with GUIDs
-    pub fn build_with_guids(&mut self, boxes_with_guids: &[(BoundingBox, String)]) {
+    pub fn build_with_guids(&mut self, boxes_with_guids: &[(Obb, String)]) {
         if boxes_with_guids.is_empty() {
             self.root = None;
             self.object_guids.clear();
@@ -183,7 +183,7 @@ impl BVH {
         }
 
         // Extract boxes and GUIDs
-        let bounding_boxes: Vec<BoundingBox> = boxes_with_guids
+        let bounding_boxes: Vec<Obb> = boxes_with_guids
             .iter()
             .map(|(bbox, _)| bbox.clone())
             .collect();
@@ -199,14 +199,14 @@ impl BVH {
         self.build(&bounding_boxes);
     }
 
-    pub fn from_boxes(bounding_boxes: &[BoundingBox], world_size: f64) -> Self {
+    pub fn from_boxes(bounding_boxes: &[Obb], world_size: f64) -> Self {
         let mut bvh = Self::new();
         bvh.world_size = world_size;
         bvh.build(bounding_boxes);
         bvh
     }
 
-    pub fn build(&mut self, bounding_boxes: &[BoundingBox]) {
+    pub fn build(&mut self, bounding_boxes: &[Obb]) {
         if bounding_boxes.is_empty() {
             self.root = None;
             self.arena.clear();
@@ -500,7 +500,7 @@ impl BVH {
         self.root = None;
     }
 
-    pub fn merge_aabb(&self, aabb1: &BoundingBox, aabb2: &BoundingBox) -> BoundingBox {
+    pub fn merge_aabb(&self, aabb1: &Obb, aabb2: &Obb) -> Obb {
         // Calculate min and max corners
         let min_x =
             (aabb1.center[0] - aabb1.half_size[0]).min(aabb2.center[0] - aabb2.half_size[0]);
@@ -528,7 +528,7 @@ impl BVH {
             (max_z - min_z) / 2.0,
         );
 
-        BoundingBox::new(
+        Obb::new(
             center,
             Vector::new(1.0, 0.0, 0.0),
             Vector::new(0.0, 1.0, 0.0),
@@ -540,8 +540,8 @@ impl BVH {
     pub fn find_collisions(
         &self,
         object_id: usize,
-        query_bbox: &BoundingBox,
-        bounding_boxes: &[BoundingBox],
+        query_bbox: &Obb,
+        bounding_boxes: &[Obb],
     ) -> (Vec<usize>, i32) {
         let mut collisions = Vec::new();
         let mut check_count = 0;
@@ -590,7 +590,7 @@ impl BVH {
     }
 
     /// Return the object_ids of all leaves whose AABB overlaps `query`.
-    pub fn query_aabb(&self, query: &BoundingBox) -> Vec<usize> {
+    pub fn query_aabb(&self, query: &Obb) -> Vec<usize> {
         let mut hits = Vec::new();
         if self.arena_root < 0 || self.arena.is_empty() {
             return hits;
@@ -617,7 +617,7 @@ impl BVH {
         hits
     }
 
-    pub fn aabb_intersect(&self, aabb1: &BoundingBox, aabb2: &BoundingBox) -> bool {
+    pub fn aabb_intersect(&self, aabb1: &Obb, aabb2: &Obb) -> bool {
         // Calculate min/max for both boxes
         let min1_x = aabb1.center[0] - aabb1.half_size[0];
         let max1_x = aabb1.center[0] + aabb1.half_size[0];
@@ -644,7 +644,7 @@ impl BVH {
 
     pub fn check_all_collisions(
         &self,
-        bounding_boxes: &[BoundingBox],
+        bounding_boxes: &[Obb],
     ) -> (Vec<(usize, usize)>, Vec<usize>, i32) {
         let mut all_collisions: Vec<(usize, usize)> = Vec::new();
         let mut total_checks: i32 = 0;
@@ -747,7 +747,7 @@ impl BVH {
     /// Uses the internally stored object_guids from build_with_guids
     pub fn check_all_collisions_guids(
         &self,
-        bounding_boxes: &[BoundingBox],
+        bounding_boxes: &[Obb],
     ) -> Vec<(String, String)> {
         let (collision_pairs, _, _) = self.check_all_collisions(bounding_boxes);
 

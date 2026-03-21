@@ -111,14 +111,6 @@ impl Xform {
         xform
     }
 
-    pub fn scaling(x: f64, y: f64, z: f64) -> Self {
-        let mut xform = Self::identity();
-        xform.m[0] = x;
-        xform.m[5] = y;
-        xform.m[10] = z;
-        xform
-    }
-
     pub fn rotation_x(angle_radians: f64) -> Self {
         let mut xform = Self::identity();
 
@@ -607,7 +599,7 @@ impl Xform {
 
     pub fn scale_uniform(origin: &Point, scale_value: f64) -> Self {
         let t0 = Self::translation(-origin[0], -origin[1], -origin[2]);
-        let t1 = Self::scaling(scale_value, scale_value, scale_value);
+        let t1 = Self::scale_xyz(scale_value, scale_value, scale_value);
         let t2 = Self::translation(origin[0], origin[1], origin[2]);
         &t2 * &(&t1 * &t0)
     }

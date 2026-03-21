@@ -10,7 +10,7 @@ pub mod proto {
 }
 
 pub mod aabb_test;
-pub mod boundingbox;
+pub mod obb;
 pub mod brep;
 pub mod brep_test;
 pub mod bvh;
@@ -73,7 +73,7 @@ pub mod mesh_iso_test;
 pub mod primitives_test;
 pub mod session_test;
 pub mod quaternion_test;
-pub mod boundingbox_test;
+pub mod obb_test;
 pub mod edge_test;
 pub mod graph_test;
 pub mod objects_test;
@@ -81,7 +81,7 @@ pub mod tree_test;
 pub mod treenode_test;
 pub mod vertex_test;
 
-pub use boundingbox::BoundingBox;
+pub use obb::Obb;
 pub use brep::BRep;
 pub use bvh::BVH;
 pub use closest::Closest;

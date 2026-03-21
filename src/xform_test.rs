@@ -37,7 +37,7 @@ pub fn run_xform_constructor() -> TestResult {
 
         // Matrix multiplication (*)
         let t = Xform::translation(10.0, 0.0, 0.0);
-        let s = Xform::scaling(2.0, 1.0, 1.0);
+        let s = Xform::scale_xyz(2.0, 1.0, 1.0);
         let combined = &t * &s;
         let p = Point::new(1.0, 0.0, 0.0);
         let result = combined.transformed_point(&p);
@@ -87,7 +87,7 @@ pub fn run_xform_scaling() -> TestResult {
         use crate::Point;
 
         // Scaling matrix
-        let s = Xform::scaling(2.0, 3.0, 4.0);
+        let s = Xform::scale_xyz(2.0, 3.0, 4.0);
 
         // Apply to point
         let p = Point::new(1.0, 1.0, 1.0);
@@ -152,7 +152,7 @@ pub fn run_xform_inverse() -> TestResult {
 
         // Create composite transformation
         let t = Xform::translation(1.0, 2.0, 3.0);
-        let s = Xform::scaling(2.0, 2.0, 2.0);
+        let s = Xform::scale_xyz(2.0, 2.0, 2.0);
         let composite = &t * &s;
 
         // Compute inverse

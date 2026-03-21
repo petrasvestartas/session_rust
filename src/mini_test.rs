@@ -371,7 +371,7 @@ pub fn get_all_tests() -> Vec<RegisteredTest> {
     use crate::triangulation_2d_test::*;
     use crate::bvh_test::*;
     use crate::quaternion_test::*;
-    use crate::boundingbox_test::*;
+    use crate::obb_test::*;
     use crate::edge_test::*;
     use crate::graph_test::*;
     use crate::objects_test::*;
@@ -690,12 +690,12 @@ pub fn get_all_tests() -> Vec<RegisteredTest> {
         RegisteredTest { group: "BVH", name: "Fixed 100 Boxes", func: run_bvh_fixed_100_boxes },
         // Quaternion tests
         RegisteredTest { group: "Quaternion", name: "Json Roundtrip", func: run_quaternion_json_roundtrip },
-        // BoundingBox tests
-        RegisteredTest { group: "BoundingBox", name: "Constructor", func: run_boundingbox_constructor },
-        RegisteredTest { group: "BoundingBox", name: "Collision", func: run_boundingbox_collision },
-        RegisteredTest { group: "BoundingBox", name: "Transformation", func: run_boundingbox_transformation },
-        RegisteredTest { group: "BoundingBox", name: "Json Roundtrip", func: run_boundingbox_json_roundtrip },
-        RegisteredTest { group: "BoundingBox", name: "Protobuf Roundtrip", func: run_boundingbox_protobuf_roundtrip },
+        // Obb tests
+        RegisteredTest { group: "Obb", name: "Constructor", func: run_obb_constructor },
+        RegisteredTest { group: "Obb", name: "Collision", func: run_obb_collision },
+        RegisteredTest { group: "Obb", name: "Transformation", func: run_obb_transformation },
+        RegisteredTest { group: "Obb", name: "Json Roundtrip", func: run_obb_json_roundtrip },
+        RegisteredTest { group: "Obb", name: "Protobuf Roundtrip", func: run_obb_protobuf_roundtrip },
         // Edge tests
         RegisteredTest { group: "Edge", name: "Json Roundtrip", func: run_edge_json_roundtrip },
         // Graph tests

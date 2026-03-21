@@ -1,4 +1,4 @@
-﻿use crate::{BoundingBox, Color, Line, Point, Tolerance, Vector, Xform, BVH};
+﻿use crate::{Obb, Color, Line, Point, Tolerance, Vector, Xform, BVH};
 use crate::polyline::Polyline;
 use crate::trimesh_cdt;
 use serde::{Deserialize, Serialize};
@@ -1505,7 +1505,7 @@ impl Mesh {
         }
 
         if tolerance > 0.0 {
-            let boxes: Vec<BoundingBox> = positions.iter().map(|p| BoundingBox::from_point(p.clone(), tolerance)).collect();
+            let boxes: Vec<Obb> = positions.iter().map(|p| Obb::from_point(p.clone(), tolerance)).collect();
             let ws = BVH::compute_world_size(&boxes);
             let bvh = BVH::from_boxes(&boxes, ws);
             let (pairs, _, _) = bvh.check_all_collisions(&boxes);
@@ -1820,16 +1820,18 @@ impl Mesh {
         Some(keys)
     }
 
-    pub fn face_centroid(&self, face_key: usize) -> Option<Point> {
-        let verts = self.face.get(&face_key)?;
-        if verts.is_empty() { return None; }
-        let mut x = 0.0_f64; let mut y = 0.0_f64; let mut z = 0.0_f64;
-        for vk in verts {
-            let p = self.vertex_point(*vk)?;
-            x += p[0]; y += p[1]; z += p[2];
+    ///////////////////////////////////////////////////////////////////////////////////////////
+    // Geometric Properties
+    ///////////////////////////////////////////////////////////////////////////////////////////
+
+    pub fn area(&self) -> f64 {
+        let mut total = 0.0;
+        for fk in self.face.keys() {
+            if let Some(a) = self.face_area(*fk) {
+                total += a;
+            }
         }
-        let n = verts.len() as f64;
-        Some(Point::new(x / n, y / n, z / n))
+        total
     }
 
     pub fn centroid(&self) -> Point {
@@ -1842,9 +1844,116 @@ impl Mesh {
         Point::new(x / n, y / n, z / n)
     }
 
-    ///////////////////////////////////////////////////////////////////////////////////////////
-    // Geometric Properties
-    ///////////////////////////////////////////////////////////////////////////////////////////
+    pub fn dihedral_angle(&self, u: usize, v: usize) -> Option<f64> {
+        let ef = self.edge_faces(u, v)?;
+        if ef.len() < 2 { return None; }
+        let n0 = self.face_normal(ef[0])?;
+        let n1 = self.face_normal(ef[1])?;
+        let dot = n0.dot(&n1).clamp(-1.0, 1.0);
+        Some((std::f64::consts::PI - dot.acos()) * 180.0 / std::f64::consts::PI)
+    }
+
+    pub fn dihedral_angles(&self, scale: f64)
+        -> (std::collections::BTreeMap<(usize, usize), f64>, Vec<Polyline>, Vec<Point>)
+    {
+        let mut angles: std::collections::BTreeMap<(usize, usize), f64> = std::collections::BTreeMap::new();
+        let mut arcs: Vec<Polyline> = Vec::new();
+        let mut points: Vec<Point> = Vec::new();
+        let arc_n: usize = 12;
+        for (u, v) in self.edges() {
+            let da = match self.dihedral_angle(u, v) { Some(a) => a, None => continue };
+            angles.insert((u, v), da);
+            let deg = da;
+            let ep0 = match self.vertex_point(u) { Some(p) => p, None => continue };
+            let ep1 = match self.vertex_point(v) { Some(p) => p, None => continue };
+            let mx = (ep0[0]+ep1[0])*0.5;
+            let my = (ep0[1]+ep1[1])*0.5;
+            let mz = (ep0[2]+ep1[2])*0.5;
+            if scale == 0.0 {
+                let mut pt = Point::new(mx, my, mz);
+                pt.name = deg.to_string();
+                pt.pointcolor = Color::new(240, 220, 0, 255);
+                points.push(pt);
+                continue;
+            }
+            let ef = match self.edge_faces(u, v) { Some(f) => f, None => continue };
+            if ef.len() < 2 { continue; }
+            let ex = ep1[0]-ep0[0]; let ey = ep1[1]-ep0[1]; let ez = ep1[2]-ep0[2];
+            let elen = (ex*ex+ey*ey+ez*ez).sqrt();
+            if elen < 1e-10 { continue; }
+            let ex = ex/elen; let ey = ey/elen; let ez = ez/elen;
+            let fc0 = match self.face_centroid(ef[0]) { Some(p) => p, None => continue };
+            let fc1 = match self.face_centroid(ef[1]) { Some(p) => p, None => continue };
+            let mut d0x = fc0[0]-mx; let mut d0y = fc0[1]-my; let mut d0z = fc0[2]-mz;
+            let dot0 = d0x*ex+d0y*ey+d0z*ez;
+            d0x -= dot0*ex; d0y -= dot0*ey; d0z -= dot0*ez;
+            let d0len = (d0x*d0x+d0y*d0y+d0z*d0z).sqrt();
+            if d0len < 1e-10 { continue; }
+            let d0x = d0x/d0len; let d0y = d0y/d0len; let d0z = d0z/d0len;
+            let mut d1x = fc1[0]-mx; let mut d1y = fc1[1]-my; let mut d1z = fc1[2]-mz;
+            let dot1 = d1x*ex+d1y*ey+d1z*ez;
+            d1x -= dot1*ex; d1y -= dot1*ey; d1z -= dot1*ez;
+            let d1len = (d1x*d1x+d1y*d1y+d1z*d1z).sqrt();
+            if d1len < 1e-10 { continue; }
+            let d1x = d1x/d1len; let d1y = d1y/d1len; let d1z = d1z/d1len;
+            let theta = (d0x*d1x+d0y*d1y+d0z*d1z).clamp(-1.0, 1.0).acos();
+            if theta.sin().abs() < 1e-10 { continue; }
+            let mut arc_pts: Vec<Point> = Vec::new();
+            for j in 0..=arc_n {
+                let t = j as f64 / arc_n as f64;
+                let w1 = ((1.0-t)*theta).sin() / theta.sin();
+                let w2 = (t*theta).sin() / theta.sin();
+                arc_pts.push(Point::new(
+                    mx+(w1*d0x+w2*d1x)*scale,
+                    my+(w1*d0y+w2*d1y)*scale,
+                    mz+(w1*d0z+w2*d1z)*scale));
+            }
+            let mut arc = Polyline::new(arc_pts.clone());
+            arc.name = format!("dihedral_e{}_{}={}", u, v, deg);
+            arc.linecolor = Color::new(240, 220, 0, 255);
+            arcs.push(arc);
+            let mid = &arc_pts[arc_n/2];
+            let mut pt = Point::new(mid[0], mid[1], mid[2]);
+            pt.name = deg.to_string();
+            pt.pointcolor = Color::new(240, 220, 0, 255);
+            points.push(pt);
+        }
+        (angles, arcs, points)
+    }
+
+    pub fn face_area(&self, face_key: usize) -> Option<f64> {
+        let vertices = self.face.get(&face_key)?;
+        if vertices.len() < 3 {
+            return Some(0.0);
+        }
+
+        let mut area = 0.0;
+        let p0 = self.vertex_point(vertices[0])?;
+
+        for i in 1..(vertices.len() - 1) {
+            let p1 = self.vertex_point(vertices[i])?;
+            let p2 = self.vertex_point(vertices[i + 1])?;
+
+            let u = Vector::new(p1[0] - p0[0], p1[1] - p0[1], p1[2] - p0[2]);
+            let v = Vector::new(p2[0] - p0[0], p2[1] - p0[1], p2[2] - p0[2]);
+
+            area += u.cross(&v).magnitude() * 0.5;
+        }
+
+        Some(area)
+    }
+
+    pub fn face_centroid(&self, face_key: usize) -> Option<Point> {
+        let verts = self.face.get(&face_key)?;
+        if verts.is_empty() { return None; }
+        let mut x = 0.0_f64; let mut y = 0.0_f64; let mut z = 0.0_f64;
+        for vk in verts {
+            let p = self.vertex_point(*vk)?;
+            x += p[0]; y += p[1]; z += p[2];
+        }
+        let n = verts.len() as f64;
+        Some(Point::new(x / n, y / n, z / n))
+    }
 
     pub fn face_normal(&self, face_key: usize) -> Option<Vector> {
         let vertices = self.face.get(&face_key)?;
@@ -1870,6 +1979,51 @@ impl Mesh {
         } else {
             None
         }
+    }
+
+    pub fn face_normals(&self) -> HashMap<usize, Vector> {
+        let mut normals = HashMap::new();
+        for face_key in self.face.keys() {
+            if let Some(normal) = self.face_normal(*face_key) {
+                normals.insert(*face_key, normal);
+            }
+        }
+        normals
+    }
+
+    pub fn vertex_angle_in_face(&self, vertex_key: usize, face_key: usize) -> Option<f64> {
+        let vertices = self.face.get(&face_key)?;
+        let vertex_index = vertices.iter().position(|&v| v == vertex_key)?;
+
+        let n = vertices.len();
+        let prev_vertex = vertices[(vertex_index + n - 1) % n];
+        let next_vertex = vertices[(vertex_index + 1) % n];
+
+        let center = self.vertex_point(vertex_key)?;
+        let prev_pos = self.vertex_point(prev_vertex)?;
+        let next_pos = self.vertex_point(next_vertex)?;
+
+        let u = Vector::new(
+            prev_pos[0] - center[0],
+            prev_pos[1] - center[1],
+            prev_pos[2] - center[2],
+        );
+        let v = Vector::new(
+            next_pos[0] - center[0],
+            next_pos[1] - center[1],
+            next_pos[2] - center[2],
+        );
+
+        let u_len = u.magnitude();
+        let v_len = v.magnitude();
+
+        if u_len < Tolerance::ZERO_TOLERANCE || v_len < Tolerance::ZERO_TOLERANCE {
+            return Some(0.0);
+        }
+
+        let cos_angle = u.dot(&v) / (u_len * v_len);
+        let cos_angle = cos_angle.clamp(-1.0, 1.0);
+        Some(cos_angle.acos())
     }
 
     pub fn vertex_normal(&self, vertex_key: usize) -> Option<Vector> {
@@ -1914,110 +2068,6 @@ impl Mesh {
         } else {
             None
         }
-    }
-
-    pub fn face_area(&self, face_key: usize) -> Option<f64> {
-        let vertices = self.face.get(&face_key)?;
-        if vertices.len() < 3 {
-            return Some(0.0);
-        }
-
-        let mut area = 0.0;
-        let p0 = self.vertex_point(vertices[0])?;
-
-        for i in 1..(vertices.len() - 1) {
-            let p1 = self.vertex_point(vertices[i])?;
-            let p2 = self.vertex_point(vertices[i + 1])?;
-
-            let u = Vector::new(p1[0] - p0[0], p1[1] - p0[1], p1[2] - p0[2]);
-            let v = Vector::new(p2[0] - p0[0], p2[1] - p0[1], p2[2] - p0[2]);
-
-            area += u.cross(&v).magnitude() * 0.5;
-        }
-
-        Some(area)
-    }
-
-    pub fn area(&self) -> f64 {
-        let mut total = 0.0;
-        for fk in self.face.keys() {
-            if let Some(a) = self.face_area(*fk) {
-                total += a;
-            }
-        }
-        total
-    }
-
-    pub fn volume(&self) -> f64 {
-        let mut total = 0.0;
-        for (_, vkeys) in &self.face {
-            if vkeys.len() < 3 {
-                continue;
-            }
-            let p0 = match self.vertex_point(vkeys[0]) { Some(p) => p, None => continue };
-            for i in 1..(vkeys.len() - 1) {
-                let p1 = match self.vertex_point(vkeys[i]) { Some(p) => p, None => continue };
-                let p2 = match self.vertex_point(vkeys[i + 1]) { Some(p) => p, None => continue };
-                total += p0[0] * (p1[1] * p2[2] - p1[2] * p2[1])
-                       + p0[1] * (p1[2] * p2[0] - p1[0] * p2[2])
-                       + p0[2] * (p1[0] * p2[1] - p1[1] * p2[0]);
-            }
-        }
-        total.abs() / 6.0
-    }
-
-    pub fn vertex_angle_in_face(&self, vertex_key: usize, face_key: usize) -> Option<f64> {
-        let vertices = self.face.get(&face_key)?;
-        let vertex_index = vertices.iter().position(|&v| v == vertex_key)?;
-
-        let n = vertices.len();
-        let prev_vertex = vertices[(vertex_index + n - 1) % n];
-        let next_vertex = vertices[(vertex_index + 1) % n];
-
-        let center = self.vertex_point(vertex_key)?;
-        let prev_pos = self.vertex_point(prev_vertex)?;
-        let next_pos = self.vertex_point(next_vertex)?;
-
-        let u = Vector::new(
-            prev_pos[0] - center[0],
-            prev_pos[1] - center[1],
-            prev_pos[2] - center[2],
-        );
-        let v = Vector::new(
-            next_pos[0] - center[0],
-            next_pos[1] - center[1],
-            next_pos[2] - center[2],
-        );
-
-        let u_len = u.magnitude();
-        let v_len = v.magnitude();
-
-        if u_len < Tolerance::ZERO_TOLERANCE || v_len < Tolerance::ZERO_TOLERANCE {
-            return Some(0.0);
-        }
-
-        let cos_angle = u.dot(&v) / (u_len * v_len);
-        let cos_angle = cos_angle.clamp(-1.0, 1.0);
-        Some(cos_angle.acos())
-    }
-
-    pub fn dihedral_angle(&self, u: usize, v: usize) -> Option<f64> {
-        let ef = self.edge_faces(u, v)?;
-        if ef.len() < 2 { return None; }
-        let n0 = self.face_normal(ef[0])?;
-        let n1 = self.face_normal(ef[1])?;
-        let dot = n0.dot(&n1).clamp(-1.0, 1.0);
-        Some(std::f64::consts::PI - dot.acos())
-    }
-
-    pub fn face_normals(&self) -> HashMap<usize, Vector> {
-        let mut normals = HashMap::new();
-        for face_key in self.face.keys() {
-            if let Some(normal) = self.face_normal(*face_key) {
-                normals.insert(*face_key, normal);
-            }
-        }
-        normals
     }
 
     pub fn vertex_normals(&self) -> HashMap<usize, Vector> {
@@ -2085,6 +2135,24 @@ impl Mesh {
             }
         }
         normals
+    }
+
+    pub fn volume(&self) -> f64 {
+        let mut total = 0.0;
+        for (_, vkeys) in &self.face {
+            if vkeys.len() < 3 {
+                continue;
+            }
+            let p0 = match self.vertex_point(vkeys[0]) { Some(p) => p, None => continue };
+            for i in 1..(vkeys.len() - 1) {
+                let p1 = match self.vertex_point(vkeys[i]) { Some(p) => p, None => continue };
+                let p2 = match self.vertex_point(vkeys[i + 1]) { Some(p) => p, None => continue };
+                total += p0[0] * (p1[1] * p2[2] - p1[2] * p2[1])
+                       + p0[1] * (p1[2] * p2[0] - p1[0] * p2[2])
+                       + p0[2] * (p1[0] * p2[1] - p1[1] * p2[0]);
+            }
+        }
+        total.abs() / 6.0
     }
 
     ///////////////////////////////////////////////////////////////////////////////////////////
@@ -2664,7 +2732,7 @@ impl Mesh {
         let mut face_keys: Vec<usize> = self.face.keys().cloned().collect();
         face_keys.sort();
         let mut tris: Vec<[usize; 3]> = Vec::new();
-        let mut tri_boxes: Vec<BoundingBox> = Vec::new();
+        let mut tri_boxes: Vec<Obb> = Vec::new();
 
         for (fi, face) in faces.iter().enumerate() {
             if face.len() < 3 {
@@ -2679,7 +2747,7 @@ impl Mesh {
                         let i2 = vkey_to_idx[&t[2]];
                         tris.push([i0, i1, i2]);
                         let pts = [vertices[i0].clone(), vertices[i1].clone(), vertices[i2].clone()];
-                        tri_boxes.push(BoundingBox::from_points(&pts, 0.0));
+                        tri_boxes.push(Obb::from_points(&pts, 0.0));
                     }
                     continue;
                 }
@@ -2689,7 +2757,7 @@ impl Mesh {
                 let t = [v0, face[i], face[i + 1]];
                 tris.push(t);
                 let pts = [vertices[t[0]].clone(), vertices[t[1]].clone(), vertices[t[2]].clone()];
-                tri_boxes.push(BoundingBox::from_points(&pts, 0.0));
+                tri_boxes.push(Obb::from_points(&pts, 0.0));
             }
         }
 

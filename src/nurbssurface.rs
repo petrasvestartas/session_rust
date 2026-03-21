@@ -3,7 +3,7 @@ use crate::nurbscurve::NurbsCurve;
 use crate::xform::Xform;
 use crate::color::Color;
 use crate::vector::Vector;
-use crate::boundingbox::BoundingBox;
+use crate::obb::Obb;
 use crate::mesh::Mesh;
 use crate::plane::Plane;
 use crate::knot;
@@ -2084,7 +2084,7 @@ impl NurbsSurface {
     }
 
     /// Get axis-aligned bounding box from control vertices
-    pub fn get_bounding_box(&self) -> BoundingBox {
+    pub fn get_bounding_box(&self) -> Obb {
         let mut min_pt = Point::new(f64::MAX, f64::MAX, f64::MAX);
         let mut max_pt = Point::new(f64::MIN, f64::MIN, f64::MIN);
         for i in 0..self.m_cv_count[0] {
@@ -2109,7 +2109,7 @@ impl NurbsSurface {
             (max_pt[1] - min_pt[1]) * 0.5,
             (max_pt[2] - min_pt[2]) * 0.5,
         );
-        BoundingBox::new(
+        Obb::new(
             center,
             Vector::new(1.0, 0.0, 0.0),
             Vector::new(0.0, 1.0, 0.0),

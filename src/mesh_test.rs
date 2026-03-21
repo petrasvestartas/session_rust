@@ -1,6 +1,6 @@
 ﻿use crate::{MINI_CHECK, MINI_TEST, REGISTER_MINI_TEST};
 use crate::mini_test::TestResult;
-use crate::tolerance::{TOLERANCE, PI};
+use crate::tolerance::TOLERANCE;
 
 pub fn run_mesh_constructor() -> TestResult {
     MINI_TEST!("Constructor", {
@@ -1003,88 +1003,145 @@ pub fn run_mesh_geometric_properties() -> TestResult {
     MINI_TEST!("Geometric Properties", {
         use crate::Mesh;
         use crate::Point;
+        use crate::Vector;
         use crate::mesh::NormalWeighting;
 
-        let pts = vec![
-            Point::new(0.0, 0.0, 0.0),
-            Point::new(1.0, 0.0, 0.0),
-            Point::new(-1.0, 0.0, 0.0),
-            Point::new(0.0, 1.0, 0.0),
-        ];
-        let mesh = Mesh::from_vertices_and_faces(pts, vec![vec![0, 1, 3], vec![0, 3, 2]]);
-        let vkeys = mesh.vertices();
-        let v0 = vkeys[0];
-        let v1 = vkeys[1];
-        let v3 = vkeys[3];
-        let f0 = mesh.faces()[0];
-
-        // face_normal
-        let fn_ = mesh.face_normal(f0);
-        MINI_CHECK!(fn_.is_some());
-        MINI_CHECK!(TOLERANCE.is_close(fn_.unwrap()[2], 1.0));
-
-        // face_centroid
-        let fc = mesh.face_centroid(f0);
-        MINI_CHECK!(fc.is_some());
-        MINI_CHECK!(TOLERANCE.is_close(fc.as_ref().unwrap()[0], 1.0 / 3.0));
-        MINI_CHECK!(TOLERANCE.is_close(fc.as_ref().unwrap()[1], 1.0 / 3.0));
-        MINI_CHECK!(fc.unwrap()[2] == 0.0);
-
-        // centroid
-        let c = mesh.centroid();
-        MINI_CHECK!(c[0] == 0.0);
-        MINI_CHECK!(TOLERANCE.is_close(c[1], 0.25));
-        MINI_CHECK!(c[2] == 0.0);
-
-        // vertex_normal
-        let vn = mesh.vertex_normal(v0);
-        MINI_CHECK!(vn.is_some());
-        MINI_CHECK!(vn.unwrap()[2].abs() == 1.0);
-
-        // vertex_normal_weighted
-        let vnw = mesh.vertex_normal_weighted(v0, NormalWeighting::Angle);
-        MINI_CHECK!(vnw.is_some());
-        MINI_CHECK!(TOLERANCE.is_close(vnw.unwrap()[2], 1.0));
-
-        // face_area
-        let area = mesh.face_area(f0);
-        MINI_CHECK!(area.is_some());
-        MINI_CHECK!(TOLERANCE.is_close(area.unwrap(), 0.5));
-
-        // vertex_angle_in_face
-        let angle = mesh.vertex_angle_in_face(v0, f0);
-        MINI_CHECK!(angle.is_some());
-        MINI_CHECK!(TOLERANCE.is_close(angle.unwrap(), PI / 2.0));
-        MINI_CHECK!(mesh.vertex_angle_in_face(999, f0).is_none());
-
-        // dihedral_angle — interior edge v0-v3 shared by f0 and f1 (coplanar = PI)
-        let da = mesh.dihedral_angle(v3, v0);
-        MINI_CHECK!(da.is_some());
-        MINI_CHECK!(TOLERANCE.is_close(da.unwrap(), PI));
-        // boundary edge — only one face
-        MINI_CHECK!(mesh.dihedral_angle(v0, v1).is_none());
-
-        // face_normals
-        let fns = mesh.face_normals();
-        MINI_CHECK!(fns.len() == 2);
-        MINI_CHECK!(TOLERANCE.is_close(fns[&f0][2], 1.0));
-
-        // vertex_normals
-        let vns = mesh.vertex_normals();
-        MINI_CHECK!(vns.len() == mesh.number_of_vertices());
-        MINI_CHECK!(TOLERANCE.is_close(vns[&v0][2], 1.0));
-
-        // vertex_normals_weighted
-        let vnsw = mesh.vertex_normals_weighted(NormalWeighting::Angle);
-        MINI_CHECK!(vnsw.len() == mesh.number_of_vertices());
-        MINI_CHECK!(TOLERANCE.is_close(vnsw[&v0][2], 1.0));
+        let mesh = Mesh::create_dodecahedron(1.5);
 
         // area
-        let mesh_box = Mesh::create_box(2.0, 2.0, 2.0);
-        MINI_CHECK!(TOLERANCE.is_close(mesh_box.area(), 24.0));
+        let area = mesh.area();
+        MINI_CHECK!(TOLERANCE.is_close(area, 46.4528898159021));
+
+        // centroid
+        let centroid = mesh.centroid();
+        MINI_CHECK!(TOLERANCE.is_point_close(&centroid, &Point::new(0.0, 0.0, 0.0)));
+
+        // dihedral angle
+        let (angles, _arcs, _points) = mesh.dihedral_angles(0.3);
+
+        for (edge, angle) in &angles {
+            let _u = edge.0;
+            let _v = edge.1;
+            let angle_in_degrees = *angle;
+            MINI_CHECK!(TOLERANCE.is_close(angle_in_degrees, 116.565051177078));
+        }
+
+        // face area
+        for f in mesh.faces() {
+            let face_area = mesh.face_area(f).unwrap();
+            MINI_CHECK!(TOLERANCE.is_close(face_area, 3.87107415132518));
+        }
+
+        // face centroid
+        let mut centroids = Vec::new();
+        for f in mesh.faces() {
+            centroids.push(mesh.face_centroid(f).unwrap());
+        }
+
+        MINI_CHECK!(TOLERANCE.is_point_close(&centroids[0],  &Point::new( 0.878115294937453,  0.0,                1.420820393249937)));
+        MINI_CHECK!(TOLERANCE.is_point_close(&centroids[1],  &Point::new( 1.420820393249937,  0.878115294937453, 0.0              )));
+        MINI_CHECK!(TOLERANCE.is_point_close(&centroids[2],  &Point::new( 0.0,                1.420820393249937,  0.878115294937453)));
+        MINI_CHECK!(TOLERANCE.is_point_close(&centroids[3],  &Point::new( 0.878115294937453,  0.0,               -1.420820393249937)));
+        MINI_CHECK!(TOLERANCE.is_point_close(&centroids[4],  &Point::new( 0.0,                1.420820393249937, -0.878115294937453)));
+        MINI_CHECK!(TOLERANCE.is_point_close(&centroids[5],  &Point::new( 0.0,               -1.420820393249937,  0.878115294937453)));
+        MINI_CHECK!(TOLERANCE.is_point_close(&centroids[6],  &Point::new( 1.420820393249937, -0.878115294937453, 0.0              )));
+        MINI_CHECK!(TOLERANCE.is_point_close(&centroids[7],  &Point::new( 0.0,               -1.420820393249937, -0.878115294937453)));
+        MINI_CHECK!(TOLERANCE.is_point_close(&centroids[8],  &Point::new(-1.420820393249937,  0.878115294937453, 0.0              )));
+        MINI_CHECK!(TOLERANCE.is_point_close(&centroids[9],  &Point::new(-0.878115294937453,  0.0,                1.420820393249937)));
+        MINI_CHECK!(TOLERANCE.is_point_close(&centroids[10], &Point::new(-0.878115294937453,  0.0,               -1.420820393249937)));
+        MINI_CHECK!(TOLERANCE.is_point_close(&centroids[11], &Point::new(-1.420820393249937, -0.878115294937453, 0.0              )));
+
+        // face normal / s
+        let face_normals = mesh.face_normals();
+        for f in mesh.faces() {
+            let _normal0 = mesh.face_normal(f).unwrap();
+            let _normal1 = &face_normals[&f];
+            MINI_CHECK!(TOLERANCE.is_vector_close(&face_normals[&f], &mesh.face_normal(f).unwrap()));
+        }
+
+        MINI_CHECK!(TOLERANCE.is_vector_close(&face_normals[&0],  &Vector::new( 0.5257311121191336,  0.0,                 0.8506508083520400)));
+        MINI_CHECK!(TOLERANCE.is_vector_close(&face_normals[&1],  &Vector::new( 0.8506508083520400,  0.5257311121191336,  0.0               )));
+        MINI_CHECK!(TOLERANCE.is_vector_close(&face_normals[&2],  &Vector::new( 0.0,                 0.8506508083520400,  0.5257311121191336)));
+        MINI_CHECK!(TOLERANCE.is_vector_close(&face_normals[&3],  &Vector::new( 0.5257311121191336,  0.0,                -0.8506508083520400)));
+        MINI_CHECK!(TOLERANCE.is_vector_close(&face_normals[&4],  &Vector::new( 0.0,                 0.8506508083520400, -0.5257311121191336)));
+        MINI_CHECK!(TOLERANCE.is_vector_close(&face_normals[&5],  &Vector::new( 0.0,                -0.8506508083520400,  0.5257311121191336)));
+        MINI_CHECK!(TOLERANCE.is_vector_close(&face_normals[&6],  &Vector::new( 0.8506508083520400, -0.5257311121191336,  0.0               )));
+        MINI_CHECK!(TOLERANCE.is_vector_close(&face_normals[&7],  &Vector::new( 0.0,                -0.8506508083520400, -0.5257311121191336)));
+        MINI_CHECK!(TOLERANCE.is_vector_close(&face_normals[&8],  &Vector::new(-0.8506508083520400,  0.5257311121191336,  0.0               )));
+        MINI_CHECK!(TOLERANCE.is_vector_close(&face_normals[&9],  &Vector::new(-0.5257311121191336,  0.0,                 0.8506508083520400)));
+        MINI_CHECK!(TOLERANCE.is_vector_close(&face_normals[&10], &Vector::new(-0.5257311121191336,  0.0,                -0.8506508083520400)));
+        MINI_CHECK!(TOLERANCE.is_vector_close(&face_normals[&11], &Vector::new(-0.8506508083520400, -0.5257311121191336,  0.0               )));
+
+        // vertex angle in face
+        for f in mesh.faces() {
+            for v in mesh.face_vertices(f).unwrap() {
+                let _angle = mesh.vertex_angle_in_face(*v, f).unwrap();
+                MINI_CHECK!(TOLERANCE.is_close(mesh.vertex_angle_in_face(*v, f).unwrap(), 1.8849555921538759));
+            }
+        }
+
+        // vertex normal / s
+        let vertex_normals = mesh.vertex_normals();
+        for v in mesh.vertices() {
+            let _normal0 = mesh.vertex_normal(v).unwrap();
+            let _normal1 = &vertex_normals[&v];
+            MINI_CHECK!(TOLERANCE.is_vector_close(&vertex_normals[&v], &mesh.vertex_normal(v).unwrap()));
+        }
+
+        MINI_CHECK!(TOLERANCE.is_vector_close(&vertex_normals[&0],  &Vector::new( 0.5773502691896258,  0.5773502691896258,  0.5773502691896258)));
+        MINI_CHECK!(TOLERANCE.is_vector_close(&vertex_normals[&1],  &Vector::new( 0.0,                 0.3568220897730899,  0.9341723589627158)));
+        MINI_CHECK!(TOLERANCE.is_vector_close(&vertex_normals[&2],  &Vector::new( 0.0,                -0.3568220897730899,  0.9341723589627158)));
+        MINI_CHECK!(TOLERANCE.is_vector_close(&vertex_normals[&3],  &Vector::new( 0.5773502691896257, -0.5773502691896258,  0.5773502691896258)));
+        MINI_CHECK!(TOLERANCE.is_vector_close(&vertex_normals[&4],  &Vector::new( 0.9341723589627158,  0.0,                 0.3568220897730899)));
+        MINI_CHECK!(TOLERANCE.is_vector_close(&vertex_normals[&5],  &Vector::new( 0.9341723589627158,  0.0,                -0.3568220897730899)));
+        MINI_CHECK!(TOLERANCE.is_vector_close(&vertex_normals[&6],  &Vector::new( 0.5773502691896258,  0.5773502691896257, -0.5773502691896258)));
+        MINI_CHECK!(TOLERANCE.is_vector_close(&vertex_normals[&7],  &Vector::new( 0.3568220897730899,  0.9341723589627158,  0.0               )));
+        MINI_CHECK!(TOLERANCE.is_vector_close(&vertex_normals[&8],  &Vector::new(-0.3568220897730899,  0.9341723589627157,  0.0               )));
+        MINI_CHECK!(TOLERANCE.is_vector_close(&vertex_normals[&9],  &Vector::new(-0.5773502691896258,  0.5773502691896258,  0.5773502691896257)));
+        MINI_CHECK!(TOLERANCE.is_vector_close(&vertex_normals[&10], &Vector::new( 0.5773502691896258, -0.5773502691896258, -0.5773502691896257)));
+        MINI_CHECK!(TOLERANCE.is_vector_close(&vertex_normals[&11], &Vector::new( 0.0,                -0.3568220897730899, -0.9341723589627157)));
+        MINI_CHECK!(TOLERANCE.is_vector_close(&vertex_normals[&12], &Vector::new( 0.0,                 0.3568220897730899, -0.9341723589627158)));
+        MINI_CHECK!(TOLERANCE.is_vector_close(&vertex_normals[&13], &Vector::new(-0.5773502691896257,  0.5773502691896258, -0.5773502691896258)));
+        MINI_CHECK!(TOLERANCE.is_vector_close(&vertex_normals[&14], &Vector::new(-0.5773502691896258, -0.5773502691896257,  0.5773502691896258)));
+        MINI_CHECK!(TOLERANCE.is_vector_close(&vertex_normals[&15], &Vector::new(-0.3568220897730899, -0.9341723589627157,  0.0               )));
+        MINI_CHECK!(TOLERANCE.is_vector_close(&vertex_normals[&16], &Vector::new( 0.3568220897730899, -0.9341723589627158,  0.0               )));
+        MINI_CHECK!(TOLERANCE.is_vector_close(&vertex_normals[&17], &Vector::new(-0.5773502691896258, -0.5773502691896258, -0.5773502691896258)));
+        MINI_CHECK!(TOLERANCE.is_vector_close(&vertex_normals[&18], &Vector::new(-0.9341723589627157,  0.0,                -0.3568220897730899)));
+        MINI_CHECK!(TOLERANCE.is_vector_close(&vertex_normals[&19], &Vector::new(-0.9341723589627158,  0.0,                 0.3568220897730899)));
+
+        // vertex normal weighted / s
+        let vertex_normals_weighted = mesh.vertex_normals_weighted(NormalWeighting::Angle);
+        for v in mesh.vertices() {
+            let _normal0 = mesh.vertex_normal_weighted(v, NormalWeighting::Angle).unwrap();
+            let _normal1 = &vertex_normals_weighted[&v];
+            MINI_CHECK!(TOLERANCE.is_vector_close(&vertex_normals_weighted[&v], &mesh.vertex_normal_weighted(v, NormalWeighting::Angle).unwrap()));
+        }
+
+        MINI_CHECK!(TOLERANCE.is_vector_close(&vertex_normals_weighted[&0],  &Vector::new( 0.5773502691896257,  0.5773502691896257,  0.5773502691896257)));
+        MINI_CHECK!(TOLERANCE.is_vector_close(&vertex_normals_weighted[&1],  &Vector::new( 0.0,                 0.3568220897730899,  0.9341723589627158)));
+        MINI_CHECK!(TOLERANCE.is_vector_close(&vertex_normals_weighted[&2],  &Vector::new( 0.0,                -0.3568220897730899,  0.9341723589627158)));
+        MINI_CHECK!(TOLERANCE.is_vector_close(&vertex_normals_weighted[&3],  &Vector::new( 0.5773502691896257, -0.5773502691896257,  0.5773502691896258)));
+        MINI_CHECK!(TOLERANCE.is_vector_close(&vertex_normals_weighted[&4],  &Vector::new( 0.9341723589627158,  0.0,                 0.3568220897730899)));
+        MINI_CHECK!(TOLERANCE.is_vector_close(&vertex_normals_weighted[&5],  &Vector::new( 0.9341723589627158,  0.0,                -0.3568220897730899)));
+        MINI_CHECK!(TOLERANCE.is_vector_close(&vertex_normals_weighted[&6],  &Vector::new( 0.5773502691896258,  0.5773502691896257, -0.5773502691896257)));
+        MINI_CHECK!(TOLERANCE.is_vector_close(&vertex_normals_weighted[&7],  &Vector::new( 0.3568220897730899,  0.9341723589627158,  0.0               )));
+        MINI_CHECK!(TOLERANCE.is_vector_close(&vertex_normals_weighted[&8],  &Vector::new(-0.3568220897730899,  0.9341723589627158,  0.0               )));
+        MINI_CHECK!(TOLERANCE.is_vector_close(&vertex_normals_weighted[&9],  &Vector::new(-0.5773502691896257,  0.5773502691896258,  0.5773502691896257)));
+        MINI_CHECK!(TOLERANCE.is_vector_close(&vertex_normals_weighted[&10], &Vector::new( 0.5773502691896257, -0.5773502691896258, -0.5773502691896257)));
+        MINI_CHECK!(TOLERANCE.is_vector_close(&vertex_normals_weighted[&11], &Vector::new( 0.0,                -0.3568220897730899, -0.9341723589627158)));
+        MINI_CHECK!(TOLERANCE.is_vector_close(&vertex_normals_weighted[&12], &Vector::new( 0.0,                 0.3568220897730899, -0.9341723589627158)));
+        MINI_CHECK!(TOLERANCE.is_vector_close(&vertex_normals_weighted[&13], &Vector::new(-0.5773502691896257,  0.5773502691896257, -0.5773502691896258)));
+        MINI_CHECK!(TOLERANCE.is_vector_close(&vertex_normals_weighted[&14], &Vector::new(-0.5773502691896258, -0.5773502691896257,  0.5773502691896257)));
+        MINI_CHECK!(TOLERANCE.is_vector_close(&vertex_normals_weighted[&15], &Vector::new(-0.3568220897730900, -0.9341723589627158,  0.0               )));
+        MINI_CHECK!(TOLERANCE.is_vector_close(&vertex_normals_weighted[&16], &Vector::new( 0.3568220897730899, -0.9341723589627158,  0.0               )));
+        MINI_CHECK!(TOLERANCE.is_vector_close(&vertex_normals_weighted[&17], &Vector::new(-0.5773502691896257, -0.5773502691896257, -0.5773502691896257)));
+        MINI_CHECK!(TOLERANCE.is_vector_close(&vertex_normals_weighted[&18], &Vector::new(-0.9341723589627158,  0.0,                -0.3568220897730899)));
+        MINI_CHECK!(TOLERANCE.is_vector_close(&vertex_normals_weighted[&19], &Vector::new(-0.9341723589627158,  0.0,                 0.3568220897730899)));
+
 
         // volume
-        MINI_CHECK!(TOLERANCE.is_close(mesh_box.volume(), 8.0));
+        let volume = mesh.volume();
+        MINI_CHECK!(TOLERANCE.is_close(volume, 25.8630264921081));
     })
 }
 
@@ -1136,45 +1193,30 @@ pub fn run_mesh_json_roundtrip() -> TestResult {
     MINI_TEST!("Json Roundtrip", {
         use crate::Mesh;
         use crate::Point;
-        use crate::Color;
+        use crate::Xform;
         use std::path::PathBuf;
 
         let mut mesh = Mesh::create_box(1.0, 1.0, 1.0);
         mesh.name = "test_mesh".to_string();
-        mesh.set_objectcolor(Color::new(255, 0, 0, 255));
-        let mut fc: Vec<Color> = Vec::new();
-        for _ in 0..mesh.number_of_faces() {
-            fc.push(Color::new(255, 0, 0, 255));
-        }
-        mesh.set_facecolors(fc);
+        mesh.xform = Xform::translation(1.0, 2.0, 3.0);
 
         // JSON object
-        use crate::Xform;
-        mesh.xform = Xform::translation(1.0, 2.0, 3.0);
         let json = mesh.jsondump();
         let loaded_json = Mesh::jsonload(&json).unwrap();
-        MINI_CHECK!(loaded_json.name == mesh.name);
-        MINI_CHECK!(loaded_json.objectcolor() == mesh.objectcolor());
-        MINI_CHECK!(loaded_json.color_mode == mesh.color_mode);
-        MINI_CHECK!(loaded_json.number_of_vertices() == mesh.number_of_vertices());
-        MINI_CHECK!(loaded_json.number_of_faces() == mesh.number_of_faces());
-        MINI_CHECK!(loaded_json.xform == mesh.xform);
 
         // String
         let json_string = mesh.json_dumps();
         let loaded_string = Mesh::json_loads(&json_string);
-        MINI_CHECK!(loaded_string.name == mesh.name);
-        MINI_CHECK!(loaded_string.number_of_vertices() == mesh.number_of_vertices());
 
         // File
         let filename = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
             .join("serialization").join("test_mesh.json");
         mesh.json_dump(filename.to_str().unwrap()).unwrap();
         let loaded_file = Mesh::json_load(filename.to_str().unwrap()).unwrap();
-        MINI_CHECK!(loaded_file.name == mesh.name);
-        MINI_CHECK!(loaded_file.objectcolor() == mesh.objectcolor());
-        MINI_CHECK!(loaded_file.number_of_vertices() == mesh.number_of_vertices());
-        MINI_CHECK!(loaded_file.number_of_faces() == mesh.number_of_faces());
+
+        MINI_CHECK!(loaded_json == mesh);
+        MINI_CHECK!(loaded_string == mesh);
+        MINI_CHECK!(loaded_file == mesh);
 
         // Triangulation roundtrip
         let polys = vec![vec![
@@ -1184,9 +1226,7 @@ pub fn run_mesh_json_roundtrip() -> TestResult {
             Point::new(0.0, 1.0, 0.0),
         ]];
         let pmesh = Mesh::from_polylines(polys, None);
-        MINI_CHECK!(!pmesh.triangulation.is_empty());
-        let pjson = pmesh.jsondump();
-        let loaded_tri = Mesh::jsonload(&pjson).unwrap();
+        let loaded_tri = Mesh::jsonload(&pmesh.jsondump()).unwrap();
         let fk = *pmesh.triangulation.keys().next().unwrap();
         MINI_CHECK!(!loaded_tri.triangulation.is_empty());
         MINI_CHECK!(loaded_tri.triangulation.contains_key(&fk));
@@ -1196,7 +1236,6 @@ pub fn run_mesh_json_roundtrip() -> TestResult {
             vec![Point::new(0.0,0.0,0.0), Point::new(4.0,0.0,0.0), Point::new(4.0,4.0,0.0), Point::new(0.0,4.0,0.0)],
             vec![Point::new(1.0,1.0,0.0), Point::new(3.0,1.0,0.0), Point::new(3.0,3.0,0.0), Point::new(1.0,3.0,0.0)],
         ], true);
-        MINI_CHECK!(!hmesh.face_holes.is_empty());
         let loaded_holes = Mesh::jsonload(&hmesh.jsondump()).unwrap();
         let hfk = *hmesh.face_holes.keys().next().unwrap();
         MINI_CHECK!(!loaded_holes.face_holes.is_empty());
@@ -1208,36 +1247,25 @@ pub fn run_mesh_protobuf_roundtrip() -> TestResult {
     MINI_TEST!("Protobuf Roundtrip", {
         use crate::Mesh;
         use crate::Point;
-        use crate::Color;
+        use crate::Xform;
         use std::path::PathBuf;
 
         let mut mesh = Mesh::create_box(1.0, 1.0, 1.0);
         mesh.name = "test_mesh_proto".to_string();
-        mesh.set_objectcolor(Color::new(255, 0, 0, 255));
-        let mut fc: Vec<Color> = Vec::new();
-        for _ in 0..mesh.number_of_faces() {
-            fc.push(Color::new(255, 0, 0, 255));
-        }
-        mesh.set_facecolors(fc);
+        mesh.xform = Xform::translation(1.0, 2.0, 3.0);
 
         // String
         let proto_bytes = mesh.pb_dumps();
         let loaded_string = Mesh::pb_loads(&proto_bytes).unwrap();
-        MINI_CHECK!(loaded_string.name == mesh.name);
-        MINI_CHECK!(loaded_string.objectcolor() == mesh.objectcolor());
-        MINI_CHECK!(loaded_string.color_mode == mesh.color_mode);
-        MINI_CHECK!(loaded_string.number_of_vertices() == mesh.number_of_vertices());
 
         // File
         let filename = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
             .join("serialization").join("test_mesh.bin");
         mesh.pb_dump(filename.to_str().unwrap());
         let loaded_file = Mesh::pb_load(filename.to_str().unwrap());
-        MINI_CHECK!(loaded_file.name == mesh.name);
-        MINI_CHECK!(loaded_file.objectcolor() == mesh.objectcolor());
-        MINI_CHECK!(loaded_file.number_of_vertices() == mesh.number_of_vertices());
-        MINI_CHECK!(loaded_file.number_of_faces() == mesh.number_of_faces());
-        MINI_CHECK!(loaded_file.guid == mesh.guid);
+
+        MINI_CHECK!(loaded_string == mesh);
+        MINI_CHECK!(loaded_file == mesh);
 
         // Triangulation roundtrip
         let polys = vec![vec![
@@ -1247,7 +1275,6 @@ pub fn run_mesh_protobuf_roundtrip() -> TestResult {
             Point::new(0.0, 1.0, 0.0),
         ]];
         let pmesh = Mesh::from_polylines(polys, None);
-        MINI_CHECK!(!pmesh.triangulation.is_empty());
         let loaded_tri = Mesh::pb_loads(&pmesh.pb_dumps()).unwrap();
         let fk = *pmesh.triangulation.keys().next().unwrap();
         MINI_CHECK!(!loaded_tri.triangulation.is_empty());
@@ -1258,7 +1285,6 @@ pub fn run_mesh_protobuf_roundtrip() -> TestResult {
             vec![Point::new(0.0,0.0,0.0), Point::new(4.0,0.0,0.0), Point::new(4.0,4.0,0.0), Point::new(0.0,4.0,0.0)],
             vec![Point::new(1.0,1.0,0.0), Point::new(3.0,1.0,0.0), Point::new(3.0,3.0,0.0), Point::new(1.0,3.0,0.0)],
         ], true);
-        MINI_CHECK!(!hmesh.face_holes.is_empty());
         let loaded_holes = Mesh::pb_loads(&hmesh.pb_dumps()).unwrap();
         let hfk = *hmesh.face_holes.keys().next().unwrap();
         MINI_CHECK!(!loaded_holes.face_holes.is_empty());

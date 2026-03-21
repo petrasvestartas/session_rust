@@ -3,8 +3,8 @@ use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(tag = "type", rename = "BoundingBox")]
-pub struct BoundingBox {
+#[serde(tag = "type", rename = "Obb")]
+pub struct Obb {
     pub center: Point,
     pub x_axis: Vector,
     pub y_axis: Vector,
@@ -16,7 +16,7 @@ pub struct BoundingBox {
     pub xform: Xform,
 }
 
-impl BoundingBox {
+impl Obb {
     pub fn new(
         center: Point,
         x_axis: Vector,
@@ -24,20 +24,20 @@ impl BoundingBox {
         z_axis: Vector,
         half_size: Vector,
     ) -> Self {
-        BoundingBox {
+        Obb {
             center,
             x_axis,
             y_axis,
             z_axis,
             half_size,
             guid: Uuid::new_v4().to_string(),
-            name: "my_boundingbox".to_string(),
+            name: "my_obb".to_string(),
             xform: Xform::identity(),
         }
     }
 
     pub fn from_plane(plane: &Plane, dx: f64, dy: f64, dz: f64) -> Self {
-        BoundingBox {
+        Obb {
             center: plane.origin(),
             x_axis: plane.x_axis(),
             y_axis: plane.y_axis(),
@@ -50,7 +50,7 @@ impl BoundingBox {
     }
 
     pub fn from_point(point: Point, inflate: f64) -> Self {
-        BoundingBox {
+        Obb {
             center: point,
             x_axis: Vector::new(1.0, 0.0, 0.0),
             y_axis: Vector::new(0.0, 1.0, 0.0),
@@ -64,7 +64,7 @@ impl BoundingBox {
 
     pub fn from_points(points: &[Point], inflate: f64) -> Self {
         if points.is_empty() {
-            return BoundingBox::default();
+            return Obb::default();
         }
 
         let mut min_x = f64::MAX;
@@ -94,7 +94,7 @@ impl BoundingBox {
             (max_z - min_z) * 0.5 + inflate,
         );
 
-        BoundingBox {
+        Obb {
             center,
             x_axis: Vector::new(1.0, 0.0, 0.0),
             y_axis: Vector::new(0.0, 1.0, 0.0),
@@ -117,7 +117,7 @@ impl BoundingBox {
 
     pub fn from_nurbscurve(curve: &crate::nurbscurve::NurbsCurve, inflate: f64, tight: bool) -> Self {
         if !curve.is_valid() || curve.cv_count() == 0 {
-            return BoundingBox::default();
+            return Obb::default();
         }
 
         if !tight {
@@ -215,7 +215,7 @@ impl BoundingBox {
         tight: bool,
     ) -> Self {
         if !curve.is_valid() || curve.cv_count() == 0 {
-            return BoundingBox::default();
+            return Obb::default();
         }
 
         if !tight {
@@ -309,7 +309,7 @@ impl BoundingBox {
 
     pub fn from_points_with_plane(points: &[Point], plane: &Plane, inflate: f64) -> Self {
         if points.is_empty() {
-            return BoundingBox::default();
+            return Obb::default();
         }
 
         let origin = plane.origin();
@@ -349,7 +349,7 @@ impl BoundingBox {
         let xy_to_plane = Xform::xy_to_plane(&origin, &x_axis, &y_axis, &z_axis);
         let world_center = xy_to_plane.transformed_point(&local_center);
 
-        BoundingBox {
+        Obb {
             center: world_center,
             x_axis,
             y_axis,
@@ -381,7 +381,7 @@ impl BoundingBox {
 
     pub fn from_nurbssurface(surface: &crate::nurbssurface::NurbsSurface, inflate: f64) -> Self {
         if !surface.is_valid() || surface.cv_count_dir(Some(0)) == 0 || surface.cv_count_dir(Some(1)) == 0 {
-            return BoundingBox::default();
+            return Obb::default();
         }
         let mut points = Vec::new();
         for i in 0..surface.cv_count_dir(Some(0)) {
@@ -396,7 +396,7 @@ impl BoundingBox {
 
     pub fn from_nurbssurface_with_plane(surface: &crate::nurbssurface::NurbsSurface, plane: &Plane, inflate: f64) -> Self {
         if !surface.is_valid() || surface.cv_count_dir(Some(0)) == 0 || surface.cv_count_dir(Some(1)) == 0 {
-            return BoundingBox::default();
+            return Obb::default();
         }
         let mut points = Vec::new();
         for i in 0..surface.cv_count_dir(Some(0)) {
@@ -416,7 +416,7 @@ impl BoundingBox {
         let hx = self.x_axis[0].abs() * ex + self.y_axis[0].abs() * ey + self.z_axis[0].abs() * ez;
         let hy = self.x_axis[1].abs() * ex + self.y_axis[1].abs() * ey + self.z_axis[1].abs() * ez;
         let hz = self.x_axis[2].abs() * ex + self.y_axis[2].abs() * ey + self.z_axis[2].abs() * ez;
-        BoundingBox::new(
+        Obb::new(
             self.center.clone(),
             Vector::new(1.0, 0.0, 0.0),
             Vector::new(0.0, 1.0, 0.0),
@@ -496,8 +496,8 @@ impl BoundingBox {
     fn separating_plane_exists(
         relative_position: &Vector,
         axis: &Vector,
-        box1: &BoundingBox,
-        box2: &BoundingBox,
+        box1: &Obb,
+        box2: &Obb,
     ) -> bool {
         let dot_rp = relative_position.dot(axis).abs();
 
@@ -514,7 +514,7 @@ impl BoundingBox {
         dot_rp > (proj1 + proj2)
     }
 
-    pub fn collides_with(&self, other: &BoundingBox) -> bool {
+    pub fn collides_with(&self, other: &Obb) -> bool {
         let center_pt = Point::new(self.center[0], self.center[1], self.center[2]);
         let other_center_pt = Point::new(other.center[0], other.center[1], other.center[2]);
         let relative_position = Vector::from_points(&center_pt, &other_center_pt);
@@ -598,7 +598,7 @@ impl BoundingBox {
 
     pub fn jsondump(&self) -> Result<String, std::boxed::Box<dyn std::error::Error>> {
         let data = serde_json::json!({
-            "type": "BoundingBox",
+            "type": "Obb",
             "center": serde_json::from_str::<serde_json::Value>(&self.center.jsondump()?)?,
             "x_axis": serde_json::from_str::<serde_json::Value>(&self.x_axis.jsondump()?)?,
             "y_axis": serde_json::from_str::<serde_json::Value>(&self.y_axis.jsondump()?)?,
@@ -612,7 +612,7 @@ impl BoundingBox {
 
     pub fn jsonload(json_data: &str) -> Result<Self, std::boxed::Box<dyn std::error::Error>> {
         let data: serde_json::Value = serde_json::from_str(json_data)?;
-        let mut bbox = BoundingBox::new(
+        let mut bbox = Obb::new(
             Point::jsonload(&data["center"].to_string())?,
             Vector::jsonload(&data["x_axis"].to_string())?,
             Vector::jsonload(&data["y_axis"].to_string())?,
@@ -700,7 +700,7 @@ impl BoundingBox {
         } else {
             crate::vector::Vector::new(0.5, 0.5, 0.5)
         };
-        let mut bbox = BoundingBox::new(center, x_axis, y_axis, z_axis, half_size);
+        let mut bbox = Obb::new(center, x_axis, y_axis, z_axis, half_size);
         bbox.guid = proto.guid;
         bbox.name = proto.name;
         if let Some(xform) = proto.xform {
@@ -723,9 +723,9 @@ impl BoundingBox {
     }
 }
 
-impl Default for BoundingBox {
+impl Default for Obb {
     fn default() -> Self {
-        BoundingBox {
+        Obb {
             center: Point::new(0.0, 0.0, 0.0),
             x_axis: Vector::new(1.0, 0.0, 0.0),
             y_axis: Vector::new(0.0, 1.0, 0.0),
@@ -739,5 +739,6 @@ impl Default for BoundingBox {
 }
 
 #[cfg(test)]
-#[path = "boundingbox_test.rs"]
-mod boundingbox_test;
+#[path = "obb_test.rs"]
+mod obb_test;
+

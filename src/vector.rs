@@ -1,5 +1,5 @@
 use crate::point::Point;
-use crate::tolerance::{Tolerance, TO_DEGREES, TO_RADIANS};
+use crate::tolerance::{Tolerance, SCALE, TO_DEGREES, TO_RADIANS};
 use serde::{ser::Serialize as SerTrait, Deserialize, Serialize};
 use std::cell::Cell;
 use std::fmt;
@@ -805,6 +805,41 @@ impl Vector {
         self.compute_magnitude() < Tolerance::ZERO_TOLERANCE
     }
 
+    /// Scales the vector by a factor (in-place).
+    pub fn scale(&mut self, factor: f64) {
+        self[0] *= factor;
+        self[1] *= factor;
+        self[2] *= factor;
+    }
+
+    /// Scales the vector up by the global SCALE factor (in-place).
+    pub fn scale_up(&mut self) {
+        self.scale(SCALE);
+    }
+
+    /// Scales the vector down by the global SCALE factor (in-place).
+    pub fn scale_down(&mut self) {
+        self.scale(1.0 / SCALE);
+    }
+
+    /// Reflects this vector across a plane defined by its normal.
+    ///
+    /// # Arguments
+    ///
+    /// * `plane_normal` - The unit normal of the plane.
+    ///
+    /// # Returns
+    ///
+    /// The reflected vector: `self - 2*(self·n)*n`.
+    pub fn reflect(&self, plane_normal: &Vector) -> Vector {
+        let d = self.dot(plane_normal);
+        Vector::new(
+            self[0] - 2.0 * d * plane_normal[0],
+            self[1] - 2.0 * d * plane_normal[1],
+            self[2] - 2.0 * d * plane_normal[2],
+        )
+    }
+
     /// Computes coordinate direction angles (alpha, beta, gamma).
     ///
     /// These are the angles between the vector and each coordinate axis.
@@ -1201,6 +1236,77 @@ impl fmt::Display for Vector {
             self.name
         )
     }
+}
+
+/// Computes the average normal of a polygon defined by a list of points.
+///
+/// Handles closed polygons (first == last point).
+///
+/// # Arguments
+///
+/// * `pts` - The polygon vertices.
+///
+/// # Returns
+///
+/// A unit `Vector` representing the average normal.
+pub fn average_normal(pts: &[Point]) -> Vector {
+    const DISTANCE_SQUARED: f64 = 1e-10;
+    let last = pts.len() - 1;
+    let dx = pts[last][0] - pts[0][0];
+    let dy = pts[last][1] - pts[0][1];
+    let dz = pts[last][2] - pts[0][2];
+    let n = if dx * dx + dy * dy + dz * dz < DISTANCE_SQUARED {
+        pts.len() - 1
+    } else {
+        pts.len()
+    };
+    let mut avg = Vector::new(0.0, 0.0, 0.0);
+    for i in 0..n {
+        let prev = (i + n - 1) % n;
+        let next = (i + 1) % n;
+        let ax = pts[i][0] - pts[prev][0];
+        let ay = pts[i][1] - pts[prev][1];
+        let az = pts[i][2] - pts[prev][2];
+        let bx = pts[next][0] - pts[i][0];
+        let by = pts[next][1] - pts[i][1];
+        let bz = pts[next][2] - pts[i][2];
+        avg[0] += ay * bz - az * by;
+        avg[1] += az * bx - ax * bz;
+        avg[2] += ax * by - ay * bx;
+    }
+    avg.normalize();
+    avg
+}
+
+/// Interpolates points between two endpoints.
+///
+/// # Arguments
+///
+/// * `from` - Start point.
+/// * `to` - End point.
+/// * `steps` - Number of interior steps.
+/// * `type_` - 0 = interior only, 1 = both endpoints, 2 = start + interior.
+///
+/// # Returns
+///
+/// A `Vec<Point>` of interpolated points.
+pub fn interpolate_points(from: &Point, to: &Point, steps: usize, type_: usize) -> Vec<Point> {
+    let mut pts: Vec<Point> = Vec::new();
+    if type_ == 1 || type_ == 2 {
+        pts.push(Point::new(from[0], from[1], from[2]));
+    }
+    for i in 1..=steps {
+        let t = i as f64 / (1 + steps) as f64;
+        pts.push(Point::new(
+            from[0] + t * (to[0] - from[0]),
+            from[1] + t * (to[1] - from[1]),
+            from[2] + t * (to[2] - from[2]),
+        ));
+    }
+    if type_ == 1 {
+        pts.push(Point::new(to[0], to[1], to[2]));
+    }
+    pts
 }
 
 #[cfg(test)]

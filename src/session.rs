@@ -1,5 +1,5 @@
 use crate::{
-    BRep, BoundingBox, Graph, Line, Mesh, Objects, Plane, Point, PointCloud, Polyline,
+    BRep, Obb, Graph, Line, Mesh, Objects, Plane, Point, PointCloud, Polyline,
     Tolerance, Tree, TreeNode, BVH,
 };
 use serde::{Deserialize, Serialize};
@@ -14,7 +14,7 @@ use uuid::Uuid;
 /// This is equivalent to C++'s std::variant<...> for heterogeneous geometry storage.
 #[derive(Debug, Clone)]
 pub enum Geometry {
-    BoundingBox(BoundingBox),
+    Obb(Obb),
     BRep(BRep),
     Line(Line),
     Mesh(Mesh),
@@ -28,7 +28,7 @@ impl Geometry {
     /// Get the GUID of the geometry object
     pub fn guid(&self) -> &str {
         match self {
-            Geometry::BoundingBox(g) => &g.guid,
+            Geometry::Obb(g) => &g.guid,
             Geometry::BRep(g) => &g.guid,
             Geometry::Line(g) => &g.guid,
             Geometry::Mesh(g) => &g.guid,
@@ -75,7 +75,7 @@ pub struct Session {
     pub cached_guids: Vec<String>,
     /// Cached AABBs for ray-casting BVH
     #[serde(skip)]
-    pub cached_boxes: Vec<BoundingBox>,
+    pub cached_boxes: Vec<Obb>,
     /// Dirty flag for cached ray BVH
     #[serde(skip)]
     pub bvh_cache_dirty: bool,
@@ -179,7 +179,7 @@ impl Session {
         // Rebuild lookup table from all objects
         let mut lookup = HashMap::new();
         for bbox in &objects.bboxes {
-            lookup.insert(bbox.guid.clone(), Geometry::BoundingBox(bbox.clone()));
+            lookup.insert(bbox.guid.clone(), Geometry::Obb(bbox.clone()));
         }
         for line in &objects.lines {
             lookup.insert(line.guid.clone(), Geometry::Line(line.clone()));
@@ -367,7 +367,7 @@ impl Session {
                 session.objects.planes.push(pln);
             }
             for b in &objects_proto.bboxes {
-                let bb = BoundingBox::pb_loads(&b.encode_to_vec())?;
+                let bb = Obb::pb_loads(&b.encode_to_vec())?;
                 session.objects.bboxes.push(bb);
             }
             for pl in &objects_proto.polylines {
@@ -420,7 +420,7 @@ impl Session {
 
         // Rebuild lookup
         for bbox in &session.objects.bboxes {
-            session.lookup.insert(bbox.guid.clone(), Geometry::BoundingBox(bbox.clone()));
+            session.lookup.insert(bbox.guid.clone(), Geometry::Obb(bbox.clone()));
         }
         for line in &session.objects.lines {
             session.lookup.insert(line.guid.clone(), Geometry::Line(line.clone()));
@@ -461,16 +461,16 @@ impl Session {
     ///////////////////////////////////////////////////////////////////////////////////////////
 
     /// Compute bounding box for a geometry object, inflated by tolerance
-    fn compute_bounding_box(geometry: &Geometry) -> BoundingBox {
+    fn compute_bounding_box(geometry: &Geometry) -> Obb {
         let inflate = Tolerance::APPROXIMATION;
         match geometry {
-            Geometry::Point(p) => BoundingBox::from_point(p.clone(), inflate),
+            Geometry::Point(p) => Obb::from_point(p.clone(), inflate),
             Geometry::Line(l) => {
                 let points = vec![l.start(), l.end()];
-                BoundingBox::from_points(&points, inflate)
+                Obb::from_points(&points, inflate)
             }
-            Geometry::Polyline(pl) => BoundingBox::from_points(&pl.get_points(), inflate),
-            Geometry::PointCloud(pc) => BoundingBox::from_points(&pc.get_points(), inflate),
+            Geometry::Polyline(pl) => Obb::from_points(&pl.get_points(), inflate),
+            Geometry::PointCloud(pc) => Obb::from_points(&pc.get_points(), inflate),
             Geometry::Mesh(m) => {
                 // Extract vertices from mesh vertex data
                 let points: Vec<Point> = m
@@ -479,12 +479,12 @@ impl Session {
                     .map(|v| Point::new(v.x, v.y, v.z))
                     .collect();
                 if points.is_empty() {
-                    BoundingBox::from_point(Point::new(0.0, 0.0, 0.0), inflate)
+                    Obb::from_point(Point::new(0.0, 0.0, 0.0), inflate)
                 } else {
-                    BoundingBox::from_points(&points, inflate)
+                    Obb::from_points(&points, inflate)
                 }
             }
-            Geometry::BoundingBox(bb) => {
+            Geometry::Obb(bb) => {
                 // Inflate existing bounding box
                 let mut inflated = bb.clone();
                 inflated.half_size = crate::Vector::new(
@@ -495,14 +495,14 @@ impl Session {
                 inflated
             }
             Geometry::Plane(p) => {
-                BoundingBox::from_point(p.origin(), inflate * 10.0)
+                Obb::from_point(p.origin(), inflate * 10.0)
             }
             Geometry::BRep(b) => {
                 let points: Vec<Point> = b.m_vertices.clone();
                 if points.is_empty() {
-                    BoundingBox::from_point(Point::new(0.0, 0.0, 0.0), inflate)
+                    Obb::from_point(Point::new(0.0, 0.0, 0.0), inflate)
                 } else {
-                    BoundingBox::from_points(&points, inflate)
+                    Obb::from_points(&points, inflate)
                 }
             }
         }
@@ -520,7 +520,7 @@ impl Session {
     /// A vector of tuples (guid1, guid2) representing colliding geometry pairs
     pub fn get_collisions(&mut self) -> Vec<(String, String)> {
         // Collect all objects with their bounding boxes and GUIDs
-        let mut boxes_with_guids: Vec<(BoundingBox, String)> = Vec::new();
+        let mut boxes_with_guids: Vec<(Obb, String)> = Vec::new();
 
         for (guid, geometry) in &self.lookup {
             let bbox = Self::compute_bounding_box(geometry);
@@ -535,7 +535,7 @@ impl Session {
         self.bvh.build_with_guids(&boxes_with_guids);
 
         // Extract just the boxes for collision checking
-        let boxes: Vec<BoundingBox> = boxes_with_guids
+        let boxes: Vec<Obb> = boxes_with_guids
             .iter()
             .map(|(bbox, _)| bbox.clone())
             .collect();
@@ -638,7 +638,7 @@ impl Session {
             let mut hit_point: Option<Point> = None;
 
             match geom {
-                Geometry::BoundingBox(bb) => {
+                Geometry::Obb(bb) => {
                     if let Some(pts) = crate::intersection::ray_box(&ray_line, bb, 0.0, far) {
                         if !pts.is_empty() {
                             hit_point = Some(pts[0].clone());
@@ -812,15 +812,15 @@ impl Session {
         TreeNode::new(&guid)
     }
 
-    pub fn add_bbox(&mut self, bbox: BoundingBox) -> Rc<RefCell<TreeNode>> {
+    pub fn add_bbox(&mut self, bbox: Obb) -> Rc<RefCell<TreeNode>> {
         let guid = bbox.guid.clone();
         let name = bbox.name.clone();
-        let geometry = Geometry::BoundingBox(bbox.clone());
+        let geometry = Geometry::Obb(bbox.clone());
 
         self.objects.bboxes.push(bbox);
         self.lookup.insert(guid.clone(), geometry);
-        if let Some(Geometry::BoundingBox(b)) = self.lookup.get(&guid) {
-            self.cache_geometry_aabb(&guid, &Geometry::BoundingBox(b.clone()));
+        if let Some(Geometry::Obb(b)) = self.lookup.get(&guid) {
+            self.cache_geometry_aabb(&guid, &Geometry::Obb(b.clone()));
         }
         self.graph.add_node(&guid, &format!("bbox_{name}"));
 
@@ -1058,7 +1058,7 @@ impl Session {
             transformed_lookup.insert(plane.guid.clone(), Geometry::Plane(plane.clone()));
         }
         for bbox in &transformed_objects.bboxes {
-            transformed_lookup.insert(bbox.guid.clone(), Geometry::BoundingBox(bbox.clone()));
+            transformed_lookup.insert(bbox.guid.clone(), Geometry::Obb(bbox.clone()));
         }
         for polyline in &transformed_objects.polylines {
             transformed_lookup.insert(polyline.guid.clone(), Geometry::Polyline(polyline.clone()));
@@ -1092,7 +1092,7 @@ impl Session {
                         Geometry::Point(g) => &g.xform,
                         Geometry::Line(g) => &g.xform,
                         Geometry::Plane(g) => &g.xform,
-                        Geometry::BoundingBox(g) => &g.xform,
+                        Geometry::Obb(g) => &g.xform,
                         Geometry::Polyline(g) => &g.xform,
                         Geometry::PointCloud(g) => &g.xform,
                         Geometry::Mesh(g) => &g.xform,
@@ -1128,7 +1128,7 @@ impl Session {
                             g.xform = combined_xform.clone();
                         }
                     }
-                    Geometry::BoundingBox(_) => {
+                    Geometry::Obb(_) => {
                         if let Some(g) = transformed_objects
                             .bboxes
                             .iter_mut()

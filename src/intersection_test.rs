@@ -211,11 +211,11 @@ pub fn run_intersection_plane_plane_plane_parallel() -> TestResult {
 pub fn run_intersection_ray_box() -> TestResult {
     MINI_TEST!("Ray Box", {
         use crate::intersection;
-        use crate::BoundingBox;
+        use crate::Obb;
         use crate::Line;
         use crate::Point;
 
-        let box_ = BoundingBox::from_points(&[Point::new(-1.0, -1.0, -1.0), Point::new(1.0, 1.0, 1.0)], 0.0);
+        let box_ = Obb::from_points(&[Point::new(-1.0, -1.0, -1.0), Point::new(1.0, 1.0, 1.0)], 0.0);
         let line = Line::new(-5.0, 0.0, 0.0, -4.0, 0.0, 0.0);
         let points = intersection::ray_box(&line, &box_, 0.0, 100.0);
         MINI_CHECK!(points.is_some());
@@ -228,11 +228,11 @@ pub fn run_intersection_ray_box() -> TestResult {
 pub fn run_intersection_ray_box_miss() -> TestResult {
     MINI_TEST!("Ray Box Miss", {
         use crate::intersection;
-        use crate::BoundingBox;
+        use crate::Obb;
         use crate::Line;
         use crate::Point;
 
-        let box_ = BoundingBox::from_points(&[Point::new(-1.0, -1.0, -1.0), Point::new(1.0, 1.0, 1.0)], 0.0);
+        let box_ = Obb::from_points(&[Point::new(-1.0, -1.0, -1.0), Point::new(1.0, 1.0, 1.0)], 0.0);
         let line = Line::new(-5.0, 5.0, 0.0, -4.0, 5.0, 0.0);
         let points = intersection::ray_box(&line, &box_, 0.0, 100.0);
         MINI_CHECK!(points.is_none());
@@ -492,12 +492,12 @@ pub fn run_intersection_ray_mesh_bvh_vs_naive() -> TestResult {
 pub fn run_intersection_ray_box_real_world() -> TestResult {
     MINI_TEST!("Ray Box Real World", {
         use crate::intersection;
-        use crate::BoundingBox;
+        use crate::Obb;
         use crate::Line;
         use crate::Point;
 
         let l0 = Line::new(500.0, -573.576, -819.152, 500.0, 573.576, 819.152);
-        let box_ = BoundingBox::from_points(&[Point::new(214.0, 192.0, 484.0), Point::new(694.0, 567.0, 796.0)], 0.0);
+        let box_ = Obb::from_points(&[Point::new(214.0, 192.0, 484.0), Point::new(694.0, 567.0, 796.0)], 0.0);
         let points = intersection::ray_box(&l0, &box_, 0.0, 1000.0);
         MINI_CHECK!(points.is_some());
         let points = points.unwrap();
