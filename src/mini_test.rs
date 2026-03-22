@@ -384,6 +384,7 @@ pub fn get_all_tests() -> Vec<RegisteredTest> {
     use crate::knot_test::*;
     use crate::trimmedsurface_test::*;
     use crate::mesh_iso_test::*;
+    use crate::remesh_nurbssurface_grid_test::*;
     use crate::rtree_test::*;
     use crate::session_config_test::*;
 
@@ -742,6 +743,15 @@ pub fn get_all_tests() -> Vec<RegisteredTest> {
         RegisteredTest { group: "AABBTree", name: "Node Count", func: run_aabbtree_node_count },
         RegisteredTest { group: "AABBTree", name: "Mesh Point Aabb", func: run_aabbtree_mesh_point_aabb },
         RegisteredTest { group: "AABBTree", name: "Mesh Point Aabb Matches Bvh", func: run_aabbtree_mesh_point_aabb_matches_bvh },
+        // RemeshNurbsSurfaceGrid tests
+        RegisteredTest { group: "RemeshNurbsSurfaceGrid", name: "Sphere", func: run_remesh_nurbssurface_grid_sphere },
+        RegisteredTest { group: "RemeshNurbsSurfaceGrid", name: "Torus", func: run_remesh_nurbssurface_grid_torus },
+        RegisteredTest { group: "RemeshNurbsSurfaceGrid", name: "Cylinder", func: run_remesh_nurbssurface_grid_cylinder },
+        RegisteredTest { group: "RemeshNurbsSurfaceGrid", name: "Cone", func: run_remesh_nurbssurface_grid_cone },
+        RegisteredTest { group: "RemeshNurbsSurfaceGrid", name: "Doubly Curved", func: run_remesh_nurbssurface_grid_doubly_curved },
+        RegisteredTest { group: "RemeshNurbsSurfaceGrid", name: "Grid Target", func: run_remesh_nurbssurface_grid_grid_target },
+        RegisteredTest { group: "RemeshNurbsSurfaceGrid", name: "Flat Quad", func: run_remesh_nurbssurface_grid_flat_quad },
+        RegisteredTest { group: "RemeshNurbsSurfaceGrid", name: "Flat Triangle", func: run_remesh_nurbssurface_grid_flat_triangle },
         // RTree tests
         RegisteredTest { group: "RTree", name: "Creation", func: run_rtree_creation },
         RegisteredTest { group: "RTree", name: "Insert", func: run_rtree_insert },
