@@ -123,6 +123,32 @@ pub fn run_remesh_nurbssurface_grid_flat_triangle() -> TestResult {
     })
 }
 
+pub fn run_remesh_nurbssurface_grid_double_curved_triangle() -> TestResult {
+    MINI_TEST!("Double-Curved Triangle", {
+        use crate::nurbssurface::NurbsSurface;
+        use crate::point::Point;
+        use crate::remesh_nurbssurface_grid::RemeshNurbsSurfaceGrid;
+
+        let pts = vec![
+            Point::new(0.0, 0.0, 0.0),
+            Point::new(2.0, 0.0, 3.0),
+            Point::new(4.0, 0.0, 0.0),
+            Point::new(0.0, 2.0, 2.0),
+            Point::new(2.0, 2.0, 5.0),
+            Point::new(4.0, 2.0, 2.0),
+            Point::new(2.0, 4.0, 0.0),
+            Point::new(2.0, 4.0, 0.0),
+            Point::new(2.0, 4.0, 0.0),
+        ];
+        let s = NurbsSurface::create(false, false, 2, 2, 3, 3, &pts).unwrap();
+        let m = RemeshNurbsSurfaceGrid::from_u_v(s, 0, 0);
+
+        MINI_CHECK!(m.is_valid());
+        MINI_CHECK!(m.number_of_vertices() == 64);
+        MINI_CHECK!(m.number_of_faces() == 98);
+    })
+}
+
 REGISTER_MINI_TEST!("RemeshNurbsSurfaceGrid", "Sphere", crate::remesh_nurbssurface_grid_test::run_remesh_nurbssurface_grid_sphere);
 REGISTER_MINI_TEST!("RemeshNurbsSurfaceGrid", "Torus", crate::remesh_nurbssurface_grid_test::run_remesh_nurbssurface_grid_torus);
 REGISTER_MINI_TEST!("RemeshNurbsSurfaceGrid", "Cylinder", crate::remesh_nurbssurface_grid_test::run_remesh_nurbssurface_grid_cylinder);
@@ -131,3 +157,4 @@ REGISTER_MINI_TEST!("RemeshNurbsSurfaceGrid", "Doubly Curved", crate::remesh_nur
 REGISTER_MINI_TEST!("RemeshNurbsSurfaceGrid", "Grid Target", crate::remesh_nurbssurface_grid_test::run_remesh_nurbssurface_grid_grid_target);
 REGISTER_MINI_TEST!("RemeshNurbsSurfaceGrid", "Flat Quad", crate::remesh_nurbssurface_grid_test::run_remesh_nurbssurface_grid_flat_quad);
 REGISTER_MINI_TEST!("RemeshNurbsSurfaceGrid", "Flat Triangle", crate::remesh_nurbssurface_grid_test::run_remesh_nurbssurface_grid_flat_triangle);
+REGISTER_MINI_TEST!("RemeshNurbsSurfaceGrid", "Double-Curved Triangle", crate::remesh_nurbssurface_grid_test::run_remesh_nurbssurface_grid_double_curved_triangle);

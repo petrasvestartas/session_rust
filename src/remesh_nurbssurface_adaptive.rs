@@ -5,7 +5,7 @@ use crate::nurbssurface::NurbsSurface;
 use crate::point::Point;
 use crate::tolerance::Tolerance;
 
-pub struct RemeshNurbssurfaceAdaptive {
+pub struct RemeshNurbsSurfaceAdaptive {
     surface: NurbsSurface,
     max_angle: f64,
     max_edge_length: f64,
@@ -13,9 +13,9 @@ pub struct RemeshNurbssurfaceAdaptive {
     max_chord_height: f64,
 }
 
-impl RemeshNurbssurfaceAdaptive {
+impl RemeshNurbsSurfaceAdaptive {
     pub fn new(surface: NurbsSurface) -> Self {
-        RemeshNurbssurfaceAdaptive {
+        RemeshNurbsSurfaceAdaptive {
             surface,
             max_angle: 20.0,
             max_edge_length: 0.0,
@@ -200,10 +200,13 @@ impl RemeshNurbssurfaceAdaptive {
                     }
 
                     if !split_u && !split_v {
-                        let twist_tol2 = 4.0 * chord_tol * chord_tol;
-                        for d in 0..2 {
-                            let mid = pmid(&p.c[d], &p.c[d+2]);
-                            if pdist2(&p.c[4], &mid) > twist_tol2 { split_u = true; split_v = true; }
+                        let degenerate = (0..4).any(|ci| pdist2(&p.c[ci], &p.c[(ci + 1) % 4]) < chord_tol * chord_tol);
+                        if !degenerate {
+                            let twist_tol2 = 4.0 * chord_tol * chord_tol;
+                            for d in 0..2 {
+                                let mid = pmid(&p.c[d], &p.c[d+2]);
+                                if pdist2(&p.c[4], &mid) > twist_tol2 { split_u = true; split_v = true; }
+                            }
                         }
                     }
 

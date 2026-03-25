@@ -1,6 +1,6 @@
 ﻿use crate::{Obb, Color, Line, Point, Tolerance, Vector, Xform, BVH};
 use crate::polyline::Polyline;
-use crate::trimesh_cdt;
+use crate::remesh_cdt;
 use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
 
@@ -349,7 +349,7 @@ impl Mesh {
                         (p[0]*ux + p[1]*uy + p[2]*uz,
                          p[0]*vx + p[1]*vy + p[2]*vz)
                     }).collect();
-                    let tris = trimesh_cdt::cdt_triangulate(&bpts, &[]);
+                    let tris = remesh_cdt::cdt_triangulate(&bpts, &[]);
                     let tri_list: Vec<[usize; 3]> = tris.iter().map(|&(a, b, c)| {
                         [vkeys[a], vkeys[b], vkeys[c]]
                     }).collect();
@@ -493,10 +493,16 @@ impl Mesh {
         for cycle in &face_cycles {
             let fvkeys: Vec<usize> = cycle.iter().map(|&i| vkeys[i]).collect();
             if let Some(fkey) = mesh.add_face(fvkeys, None) {
-                let pts: Vec<Point> = cycle.iter().map(|&i| verts[i].clone()).collect();
-                let tris = crate::triangulation_2d::triangulate(&pts, None);
+                let mut ordered: Vec<usize> = cycle.clone();
+                let mut bpts: Vec<(f64, f64)> = ordered.iter().map(|&i| (verts[i][0], verts[i][1])).collect();
+                let area: f64 = (0..bpts.len()).map(|j| {
+                    let k = (j + 1) % bpts.len();
+                    bpts[j].0 * bpts[k].1 - bpts[k].0 * bpts[j].1
+                }).sum::<f64>() * 0.5;
+                if area < 0.0 { bpts.reverse(); ordered.reverse(); }
+                let tris = remesh_cdt::cdt_triangulate(&bpts, &[]);
                 let tri_list: Vec<[usize; 3]> = tris.iter().map(|&(a, b, c)| {
-                    [vkeys[cycle[a as usize]], vkeys[cycle[b as usize]], vkeys[cycle[c as usize]]]
+                    [vkeys[ordered[a]], vkeys[ordered[b]], vkeys[ordered[c]]]
                 }).collect();
                 mesh.triangulation.insert(fkey, tri_list);
             }
@@ -572,7 +578,7 @@ impl Mesh {
         }
         let b2d: Vec<(f64,f64)> = boundary_2d.iter().map(|p| (p[0], p[1])).collect();
         let h2d: Vec<Vec<(f64,f64)>> = holes_2d.iter().map(|h| h.iter().map(|p| (p[0], p[1])).collect()).collect();
-        let tris = trimesh_cdt::cdt_triangulate(&b2d, &h2d);
+        let tris = remesh_cdt::cdt_triangulate(&b2d, &h2d);
         let mut all_pts = border.clone();
         for h in &hole_pts_3d { all_pts.extend(h.iter().cloned()); }
         let mut mesh = Mesh::new();
@@ -694,7 +700,7 @@ impl Mesh {
             let bh2d: Vec<Vec<(f64,f64)>> = poly_infos[1..].iter().map(|&(off,cnt,_,_)| {
                 (off..off+cnt).map(|i| proj(&all_bot[i])).collect()
             }).collect();
-            let b_tris = trimesh_cdt::cdt_triangulate(&b2d, &bh2d);
+            let b_tris = remesh_cdt::cdt_triangulate(&b2d, &bh2d);
             let bot_fvkeys: Vec<usize> = (0..bot_n0).rev().map(|i| bvk[i]).collect();
             if let Some(fk_bot) = mesh.add_face(bot_fvkeys, None) {
                 if !bh2d.is_empty() {
@@ -711,7 +717,7 @@ impl Mesh {
             let th2d: Vec<Vec<(f64,f64)>> = poly_infos[1..].iter().map(|&(_,_,off,cnt)| {
                 (off..off+cnt).map(|i| proj(&all_top[i])).collect()
             }).collect();
-            let t_tris = trimesh_cdt::cdt_triangulate(&t2d, &th2d);
+            let t_tris = remesh_cdt::cdt_triangulate(&t2d, &th2d);
             let top_fvkeys: Vec<usize> = (0..top_n0).map(|i| tvk[i]).collect();
             if let Some(fk_top) = mesh.add_face(top_fvkeys, None) {
                 if !th2d.is_empty() {
@@ -902,7 +908,7 @@ impl Mesh {
                             let um = (ux*ux+uy*uy+uz*uz).sqrt(); ux /= um; uy /= um; uz /= um;
                             let (vx, vy, vz) = (ny*uz-nz*uy, nz*ux-nx*uz, nx*uy-ny*ux);
                             let bpts: Vec<(f64,f64)> = top_pts.iter().map(|p| (p[0]*ux+p[1]*uy+p[2]*uz, p[0]*vx+p[1]*vy+p[2]*vz)).collect();
-                            let tris = trimesh_cdt::cdt_triangulate(&bpts, &[]);
+                            let tris = remesh_cdt::cdt_triangulate(&bpts, &[]);
                             if !tris.is_empty() {
                                 let tri_list: Vec<[usize;3]> = tris.iter().map(|&(a,b,c)| [top_cap[a], top_cap[b], top_cap[c]]).collect();
                                 panel.mesh.triangulation.insert(fk, tri_list);
@@ -1011,7 +1017,7 @@ impl Mesh {
                             bcux /= bcum; bcuy /= bcum; bcuz /= bcum;
                             let (bcvx, bcvy, bcvz) = (bcny*bcuz-bcnz*bcuy, bcnz*bcux-bcnx*bcuz, bcnx*bcuy-bcny*bcux);
                             let bpts2: Vec<(f64,f64)> = bot_pts.iter().map(|p| (p[0]*bcux+p[1]*bcuy+p[2]*bcuz, p[0]*bcvx+p[1]*bcvy+p[2]*bcvz)).collect();
-                            let btris = trimesh_cdt::cdt_triangulate(&bpts2, &[]);
+                            let btris = remesh_cdt::cdt_triangulate(&bpts2, &[]);
                             if !btris.is_empty() {
                                 let tri_list: Vec<[usize;3]> = btris.iter().map(|&(a,b,c)| [bot_cap[a], bot_cap[b], bot_cap[c]]).collect();
                                 panel.mesh.triangulation.insert(fk, tri_list);

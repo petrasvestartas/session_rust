@@ -368,7 +368,6 @@ pub fn get_all_tests() -> Vec<RegisteredTest> {
     use crate::intersection_test::*;
     use crate::obj_test::*;
     use crate::session_test::*;
-    use crate::triangulation_2d_test::*;
     use crate::bvh_test::*;
     use crate::quaternion_test::*;
     use crate::obb_test::*;
@@ -384,6 +383,8 @@ pub fn get_all_tests() -> Vec<RegisteredTest> {
     use crate::knot_test::*;
     use crate::trimmedsurface_test::*;
     use crate::mesh_iso_test::*;
+    use crate::remesh_cdt_test::*;
+    use crate::remesh_nurbssurface_adaptive_test::*;
     use crate::remesh_nurbssurface_grid_test::*;
     use crate::rtree_test::*;
     use crate::session_config_test::*;
@@ -666,14 +667,11 @@ pub fn get_all_tests() -> Vec<RegisteredTest> {
         // OBJ tests
         RegisteredTest { group: "OBJ", name: "Read Bunny", func: run_obj_read_bunny },
         RegisteredTest { group: "OBJ", name: "Write Read Roundtrip", func: run_obj_write_read_roundtrip },
-        // Triangulation2D tests
-        RegisteredTest { group: "Triangulation2D", name: "Triangle", func: run_triangulation2d_triangle },
-        RegisteredTest { group: "Triangulation2D", name: "Square", func: run_triangulation2d_square },
-        RegisteredTest { group: "Triangulation2D", name: "Convex Polygon", func: run_triangulation2d_convex_polygon },
-        RegisteredTest { group: "Triangulation2D", name: "Concave Polygon", func: run_triangulation2d_concave_polygon },
-        RegisteredTest { group: "Triangulation2D", name: "Polygon With Hole", func: run_triangulation2d_polygon_with_hole },
-        RegisteredTest { group: "Triangulation2D", name: "Polygon With Multiple Holes", func: run_triangulation2d_polygon_with_multiple_holes },
-        RegisteredTest { group: "Triangulation2D", name: "Winding Correction", func: run_triangulation2d_winding_correction },
+        // RemeshCDT tests
+        RegisteredTest { group: "RemeshCDT", name: "Triangle", func: run_remesh_cdt_triangle },
+        RegisteredTest { group: "RemeshCDT", name: "Square", func: run_remesh_cdt_square },
+        RegisteredTest { group: "RemeshCDT", name: "Convex Polygon", func: run_remesh_cdt_convex_polygon },
+        RegisteredTest { group: "RemeshCDT", name: "Polygon With Hole", func: run_remesh_cdt_polygon_with_hole },
         // BVH tests
         RegisteredTest { group: "BVH", name: "Expand Bits", func: run_bvh_expand_bits },
         RegisteredTest { group: "BVH", name: "Morton Code Origin", func: run_bvh_morton_code_origin },
@@ -743,6 +741,17 @@ pub fn get_all_tests() -> Vec<RegisteredTest> {
         RegisteredTest { group: "AABBTree", name: "Node Count", func: run_aabbtree_node_count },
         RegisteredTest { group: "AABBTree", name: "Mesh Point Aabb", func: run_aabbtree_mesh_point_aabb },
         RegisteredTest { group: "AABBTree", name: "Mesh Point Aabb Matches Bvh", func: run_aabbtree_mesh_point_aabb_matches_bvh },
+        // RemeshNurbsSurfaceAdaptive tests
+        RegisteredTest { group: "RemeshNurbsSurfaceAdaptive", name: "Constructor", func: run_remesh_nurbssurface_adaptive_constructor },
+        RegisteredTest { group: "RemeshNurbsSurfaceAdaptive", name: "Parameters", func: run_remesh_nurbssurface_adaptive_parameters },
+        RegisteredTest { group: "RemeshNurbsSurfaceAdaptive", name: "Mesh", func: run_remesh_nurbssurface_adaptive_mesh },
+        RegisteredTest { group: "RemeshNurbsSurfaceAdaptive", name: "Torus", func: run_remesh_nurbssurface_adaptive_torus },
+        RegisteredTest { group: "RemeshNurbsSurfaceAdaptive", name: "Cylinder", func: run_remesh_nurbssurface_adaptive_cylinder },
+        RegisteredTest { group: "RemeshNurbsSurfaceAdaptive", name: "Cone", func: run_remesh_nurbssurface_adaptive_cone },
+        RegisteredTest { group: "RemeshNurbsSurfaceAdaptive", name: "Doubly Curved", func: run_remesh_nurbssurface_adaptive_doubly_curved },
+        RegisteredTest { group: "RemeshNurbsSurfaceAdaptive", name: "Flat", func: run_remesh_nurbssurface_adaptive_flat },
+        RegisteredTest { group: "RemeshNurbsSurfaceAdaptive", name: "Singular Triangle", func: run_remesh_nurbssurface_adaptive_singular_triangle },
+        RegisteredTest { group: "RemeshNurbsSurfaceAdaptive", name: "Double-Curved Triangle", func: run_remesh_nurbssurface_adaptive_double_curved_triangle },
         // RemeshNurbsSurfaceGrid tests
         RegisteredTest { group: "RemeshNurbsSurfaceGrid", name: "Sphere", func: run_remesh_nurbssurface_grid_sphere },
         RegisteredTest { group: "RemeshNurbsSurfaceGrid", name: "Torus", func: run_remesh_nurbssurface_grid_torus },
@@ -818,10 +827,20 @@ pub fn run_all(language: &str) -> Result<(), Box<dyn std::error::Error>> {
     for (group, mut tests) in groups {
         tests.sort_by_key(|t| canonical_order.get(&(t.group, t.name)).copied().unwrap_or(usize::MAX));
 
-        let mut results = Vec::new();
+        let mut results: Vec<serde_json::Value> = Vec::new();
         for t in tests {
             let res = (t.func)();
-            results.push(res);
+            let res_json = serde_json::json!({
+                "group": t.group,
+                "test_name": res.test_name,
+                "passed": res.passed,
+                "time_ms": res.time_ms,
+                "line": res.line,
+                "code": res.code,
+                "checks": res.checks,
+                "failures": res.failures,
+            });
+            results.push(res_json);
         }
 
         let filename = format!("{}_test.json", group.to_lowercase());

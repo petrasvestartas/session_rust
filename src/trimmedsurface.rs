@@ -176,13 +176,25 @@ impl TrimmedSurface {
             };
             add_pts(&outer_pts);
             for hp in &hole_pts { add_pts(hp); }
-            let holes_ref: Option<&[Vec<Point>]> = if hole_pts.is_empty() { None } else { Some(&hole_pts) };
-            let tris = crate::triangulation_2d::triangulate(&outer_pts, holes_ref);
-            let np = pts3d.len() as i32;
+            let to_pairs = |pts: &[Point]| -> Vec<(f64, f64)> {
+                let mut v: Vec<(f64,f64)> = pts.iter().map(|p| (p[0], p[1])).collect();
+                if v.len() > 1 && (v[0].0-v[v.len()-1].0).abs() < 1e-12 && (v[0].1-v[v.len()-1].1).abs() < 1e-12 { v.pop(); }
+                v
+            };
+            let mut border = to_pairs(&outer_pts);
+            let mut holes: Vec<Vec<(f64,f64)>> = hole_pts.iter().map(|h| to_pairs(h)).collect();
+            let area: f64 = (0..border.len()).map(|j| { let k=(j+1)%border.len(); border[j].0*border[k].1-border[k].0*border[j].1 }).sum::<f64>() * 0.5;
+            if area < 0.0 { border.reverse(); }
+            for h in &mut holes {
+                let ha: f64 = (0..h.len()).map(|j| { let k=(j+1)%h.len(); h[j].0*h[k].1-h[k].0*h[j].1 }).sum::<f64>() * 0.5;
+                if ha > 0.0 { h.reverse(); }
+            }
+            let tris = crate::remesh_cdt::cdt_triangulate(&border, &holes);
+            let np = pts3d.len();
             let mut polygons: Vec<Vec<Point>> = Vec::new();
             for &(v0, v1, v2) in &tris {
-                if v0 >= 0 && v0 < np && v1 >= 0 && v1 < np && v2 >= 0 && v2 < np {
-                    polygons.push(vec![pts3d[v0 as usize].clone(), pts3d[v1 as usize].clone(), pts3d[v2 as usize].clone()]);
+                if v0 < np && v1 < np && v2 < np {
+                    polygons.push(vec![pts3d[v0].clone(), pts3d[v1].clone(), pts3d[v2].clone()]);
                 }
             }
             let mut result = Mesh::from_polylines(polygons, None);
