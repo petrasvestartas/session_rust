@@ -1,5 +1,5 @@
 use crate::{
-    BRep, Obb, Graph, Line, Mesh, Objects, Plane, Point, PointCloud, Polyline,
+    BRep, Element, Obb, Graph, Line, Mesh, Objects, Plane, Point, PointCloud, Polyline,
     Tolerance, Tree, TreeNode, BVH,
 };
 use serde::{Deserialize, Serialize};
@@ -16,6 +16,7 @@ use uuid::Uuid;
 pub enum Geometry {
     Obb(Obb),
     BRep(BRep),
+    Element(Element),
     Line(Line),
     Mesh(Mesh),
     Plane(Plane),
@@ -30,6 +31,7 @@ impl Geometry {
         match self {
             Geometry::Obb(g) => &g.guid,
             Geometry::BRep(g) => &g.guid,
+            Geometry::Element(g) => &g.guid,
             Geometry::Line(g) => &g.guid,
             Geometry::Mesh(g) => &g.guid,
             Geometry::Plane(g) => &g.guid,
@@ -205,6 +207,9 @@ impl Session {
         for brep in &objects.breps {
             lookup.insert(brep.guid.clone(), Geometry::BRep(brep.clone()));
         }
+        for elem in &objects.elements {
+            lookup.insert(elem.guid.clone(), Geometry::Element(elem.clone()));
+        }
 
         let session = Session {
             guid: json_obj["guid"].as_str().unwrap_or("").to_string(),
@@ -280,6 +285,9 @@ impl Session {
         }
         for b in &self.objects.breps {
             objects_proto.breps.push(crate::proto::BRep::decode(b.pb_dumps().as_slice()).unwrap());
+        }
+        for e in &self.objects.elements {
+            objects_proto.elements.push(crate::proto::Element::decode(e.pb_dumps().as_slice()).unwrap());
         }
 
         // Build Tree proto
@@ -385,6 +393,10 @@ impl Session {
             for b in &objects_proto.breps {
                 let brp = BRep::pb_loads(&b.encode_to_vec())?;
                 session.objects.breps.push(brp);
+            }
+            for e in &objects_proto.elements {
+                let elem = Element::pb_loads(&e.encode_to_vec())?;
+                session.objects.elements.push(elem);
             }
         }
 
@@ -504,6 +516,10 @@ impl Session {
                 } else {
                     Obb::from_points(&points, inflate)
                 }
+            }
+            Geometry::Element(e) => {
+                let mut e2 = e.clone();
+                e2.aabb()
             }
         }
     }
@@ -711,6 +727,7 @@ impl Session {
                 }
                 Geometry::PointCloud(_) => {}
                 Geometry::BRep(_) => {}
+                Geometry::Element(_) => {}
             }
 
             if let Some(hp) = hit_point {
@@ -1097,6 +1114,7 @@ impl Session {
                         Geometry::PointCloud(g) => &g.xform,
                         Geometry::Mesh(g) => &g.xform,
                         Geometry::BRep(g) => &g.xform,
+                        Geometry::Element(g) => &g.session_transformation,
                     };
 
                 // Find and update the geometry in the collections
@@ -1171,6 +1189,15 @@ impl Session {
                             .find(|b| b.guid == node_name)
                         {
                             g.xform = combined_xform.clone();
+                        }
+                    }
+                    Geometry::Element(_) => {
+                        if let Some(g) = transformed_objects
+                            .elements
+                            .iter_mut()
+                            .find(|e| e.guid == node_name)
+                        {
+                            g.session_transformation = combined_xform.clone();
                         }
                     }
                 }

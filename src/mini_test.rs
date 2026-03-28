@@ -388,6 +388,7 @@ pub fn get_all_tests() -> Vec<RegisteredTest> {
     use crate::remesh_nurbssurface_grid_test::*;
     use crate::rtree_test::*;
     use crate::session_config_test::*;
+    use crate::element_test::*;
 
     vec![
         // BRep tests
@@ -772,6 +773,48 @@ pub fn get_all_tests() -> Vec<RegisteredTest> {
         RegisteredTest { group: "RTree", name: "Search Count", func: run_rtree_search_count },
         RegisteredTest { group: "RTree", name: "Search Stop", func: run_rtree_search_stop },
         RegisteredTest { group: "RTree", name: "Search 100 Boxes", func: run_rtree_search_100_boxes },
+        // Element tests
+        RegisteredTest { group: "Element", name: "Constructor", func: run_element_constructor },
+        RegisteredTest { group: "Element", name: "Session Transformation", func: run_element_session_transformation },
+        RegisteredTest { group: "Element", name: "Add Feature", func: run_element_add_feature },
+        RegisteredTest { group: "Element", name: "Aabb", func: run_element_aabb },
+        RegisteredTest { group: "Element", name: "Obb", func: run_element_obb },
+        RegisteredTest { group: "Element", name: "Session Geometry", func: run_element_session_geometry },
+        RegisteredTest { group: "Element", name: "Reset", func: run_element_reset },
+        RegisteredTest { group: "Element", name: "Compute Point", func: run_element_compute_point },
+        RegisteredTest { group: "Element", name: "Brep Aabb", func: run_element_brep_aabb },
+        RegisteredTest { group: "Element", name: "Json Roundtrip", func: run_element_json_roundtrip },
+        RegisteredTest { group: "Element", name: "Protobuf Roundtrip", func: run_element_protobuf_roundtrip },
+        // ColumnElement tests
+        RegisteredTest { group: "ColumnElement", name: "Constructor", func: run_column_constructor },
+        RegisteredTest { group: "ColumnElement", name: "Setters", func: run_column_setters },
+        RegisteredTest { group: "ColumnElement", name: "Center Line", func: run_column_center_line },
+        RegisteredTest { group: "ColumnElement", name: "Extend", func: run_column_extend },
+        RegisteredTest { group: "ColumnElement", name: "Aabb", func: run_column_aabb },
+        RegisteredTest { group: "ColumnElement", name: "Compute Point", func: run_column_compute_point },
+        RegisteredTest { group: "ColumnElement", name: "Session Geometry", func: run_column_session_geometry },
+        RegisteredTest { group: "ColumnElement", name: "Json Roundtrip", func: run_column_json_roundtrip },
+        RegisteredTest { group: "ColumnElement", name: "Protobuf Roundtrip", func: run_column_protobuf_roundtrip },
+        // BeamElement tests
+        RegisteredTest { group: "BeamElement", name: "Constructor", func: run_beam_constructor },
+        RegisteredTest { group: "BeamElement", name: "Setters", func: run_beam_setters },
+        RegisteredTest { group: "BeamElement", name: "Center Line", func: run_beam_center_line },
+        RegisteredTest { group: "BeamElement", name: "Extend", func: run_beam_extend },
+        RegisteredTest { group: "BeamElement", name: "Aabb", func: run_beam_aabb },
+        RegisteredTest { group: "BeamElement", name: "Compute Point", func: run_beam_compute_point },
+        RegisteredTest { group: "BeamElement", name: "Session Geometry", func: run_beam_session_geometry },
+        RegisteredTest { group: "BeamElement", name: "Json Roundtrip", func: run_beam_json_roundtrip },
+        RegisteredTest { group: "BeamElement", name: "Protobuf Roundtrip", func: run_beam_protobuf_roundtrip },
+        // PlateElement tests
+        RegisteredTest { group: "PlateElement", name: "Constructor", func: run_plate_constructor },
+        RegisteredTest { group: "PlateElement", name: "Default Polygon", func: run_plate_default_polygon },
+        RegisteredTest { group: "PlateElement", name: "Setters", func: run_plate_setters },
+        RegisteredTest { group: "PlateElement", name: "Mesh Topology", func: run_plate_mesh_topology },
+        RegisteredTest { group: "PlateElement", name: "Aabb", func: run_plate_aabb },
+        RegisteredTest { group: "PlateElement", name: "Compute Point", func: run_plate_compute_point },
+        RegisteredTest { group: "PlateElement", name: "Triangle Polygon", func: run_plate_triangle_polygon },
+        RegisteredTest { group: "PlateElement", name: "Json Roundtrip", func: run_plate_json_roundtrip },
+        RegisteredTest { group: "PlateElement", name: "Protobuf Roundtrip", func: run_plate_protobuf_roundtrip },
     ]
 }
 

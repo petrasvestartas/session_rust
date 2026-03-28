@@ -1,3 +1,4 @@
+use crate::element::Element;
 use crate::obb::Obb;
 use crate::brep::BRep;
 use crate::line::Line;
@@ -29,6 +30,7 @@ pub struct Objects {
     pub nurbscurves: Vec<NurbsCurve>,
     pub nurbssurfaces: Vec<NurbsSurface>,
     pub breps: Vec<BRep>,
+    pub elements: Vec<Element>,
 }
 
 impl Default for Objects {
@@ -46,6 +48,7 @@ impl Default for Objects {
             nurbscurves: Vec::new(),
             nurbssurfaces: Vec::new(),
             breps: Vec::new(),
+            elements: Vec::new(),
         }
     }
 }
@@ -133,6 +136,9 @@ impl Objects {
             breps: self.breps.iter().map(|b| {
                 crate::proto::BRep::decode(b.pb_dumps().as_slice()).unwrap()
             }).collect(),
+            elements: self.elements.iter().map(|e| {
+                crate::proto::Element::decode(e.pb_dumps().as_slice()).unwrap()
+            }).collect(),
         };
         proto.encode_to_vec()
     }
@@ -172,6 +178,9 @@ impl Objects {
         }
         for b in &proto.breps {
             objects.breps.push(crate::brep::BRep::pb_loads(&b.encode_to_vec())?);
+        }
+        for e in &proto.elements {
+            objects.elements.push(crate::element::Element::pb_loads(&e.encode_to_vec())?);
         }
         Ok(objects)
     }
