@@ -45,6 +45,7 @@ pub mod plane;
 pub mod point;
 pub mod pointcloud;
 pub mod polyline;
+pub mod boolean_polyline;
 pub mod primitives;
 pub mod quaternion;
 pub mod remesh_nurbssurface_adaptive;

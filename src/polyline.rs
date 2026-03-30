@@ -1545,6 +1545,12 @@ impl IndexMut<usize> for Polyline {
     }
 }
 
+impl Polyline {
+    pub fn boolean_op(a: &Polyline, b: &Polyline, clip_type: i32) -> Vec<Polyline> {
+        crate::boolean_polyline::boolean_op(a, b, clip_type)
+    }
+}
+
 impl fmt::Display for Polyline {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(

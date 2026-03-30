@@ -1034,7 +1034,7 @@ impl Mesh {
         for f in &idx {
             faces.push(vec![verts[f[0]].clone(), verts[f[1]].clone(), verts[f[2]].clone(), verts[f[3]].clone(), verts[f[4]].clone()]);
         }
-        Mesh::from_polylines(faces, Some(1e-10))
+        Mesh::from_polylines(faces, Some(1e-6))
     }
 
     ///////////////////////////////////////////////////////////////////////////////////////////
