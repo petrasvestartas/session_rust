@@ -1522,10 +1522,26 @@ impl NurbsCurve {
             return false;
         }
 
+        let clamped_start = self.m_order >= 2 &&
+            (self.m_knot[0] - self.m_knot[self.m_order - 2]).abs() < Tolerance::ZERO_TOLERANCE;
+        let clamped_end = self.m_cv_count < self.m_knot.len() &&
+            (*self.m_knot.last().unwrap() - self.m_knot[self.m_cv_count - 1]).abs() < Tolerance::ZERO_TOLERANCE;
+
         let scale = (t1 - t0) / (old_t1 - old_t0);
 
         for i in 0..self.m_knot.len() {
             self.m_knot[i] = t0 + (self.m_knot[i] - old_t0) * scale;
+        }
+
+        if clamped_start {
+            for i in 0..self.m_order - 1 {
+                self.m_knot[i] = t0;
+            }
+        }
+        if clamped_end {
+            for i in self.m_cv_count - 1..self.m_knot.len() {
+                self.m_knot[i] = t1;
+            }
         }
 
         true

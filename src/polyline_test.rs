@@ -1009,6 +1009,25 @@ pub fn run_polyline_get_points() -> TestResult {
     })
 }
 
+pub fn run_polyline_get_lines() -> TestResult {
+    MINI_TEST!("Get Lines", {
+        use crate::Polyline;
+        use crate::Point;
+        use crate::Line;
+
+        let pl = Polyline::new(vec![
+            Point::new(0.0, 0.0, 0.0), Point::new(1.0, 0.0, 0.0),
+            Point::new(1.0, 1.0, 0.0), Point::new(0.0, 1.0, 0.0),
+        ]);
+        let lines = pl.get_lines();
+
+        MINI_CHECK!(lines.len() == 3);
+        MINI_CHECK!(TOLERANCE.is_close(lines[0][0], 0.0) && TOLERANCE.is_close(lines[0][3], 1.0));
+        MINI_CHECK!(TOLERANCE.is_close(lines[1][0], 1.0) && TOLERANCE.is_close(lines[1][4], 1.0));
+        MINI_CHECK!(TOLERANCE.is_close(lines[2][0], 1.0) && TOLERANCE.is_close(lines[2][3], 0.0));
+    })
+}
+
 pub fn run_polyline_shift() -> TestResult {
     MINI_TEST!("Shift", {
         use crate::Polyline;
@@ -1218,6 +1237,7 @@ REGISTER_MINI_TEST!("Polyline", "Closest Point", crate::polyline_test::run_polyl
 REGISTER_MINI_TEST!("Polyline", "Extend Segment", crate::polyline_test::run_polyline_extend_segment);
 REGISTER_MINI_TEST!("Polyline", "Extend Segment Equally", crate::polyline_test::run_polyline_extend_segment_equally);
 REGISTER_MINI_TEST!("Polyline", "Get Points", crate::polyline_test::run_polyline_get_points);
+REGISTER_MINI_TEST!("Polyline", "Get Lines", crate::polyline_test::run_polyline_get_lines);
 REGISTER_MINI_TEST!("Polyline", "Shift", crate::polyline_test::run_polyline_shift);
 REGISTER_MINI_TEST!("Polyline", "Point At", crate::polyline_test::run_polyline_point_at);
 REGISTER_MINI_TEST!("Polyline", "Is Clockwise", crate::polyline_test::run_polyline_is_clockwise);

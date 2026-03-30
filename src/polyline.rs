@@ -1,5 +1,5 @@
 use crate::tolerance::PI;
-use crate::{Color, Plane, Point, Tolerance, Vector, Xform};
+use crate::{Color, Line, Plane, Point, Tolerance, Vector, Xform};
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use serde_json::Value;
 use std::fmt;
@@ -147,6 +147,20 @@ impl Polyline {
     pub fn segment_count(&self) -> usize {
         let n = self.point_count();
         if n > 1 { n - 1 } else { 0 }
+    }
+
+    /// Returns all segments as Line objects.
+    pub fn get_lines(&self) -> Vec<Line> {
+        let mut result = Vec::with_capacity(self.segment_count());
+        for i in 0..self.segment_count() {
+            let idx0 = i * 3;
+            let idx1 = (i + 1) * 3;
+            result.push(Line::new(
+                self.coords[idx0], self.coords[idx0 + 1], self.coords[idx0 + 2],
+                self.coords[idx1], self.coords[idx1 + 1], self.coords[idx1 + 2],
+            ));
+        }
+        result
     }
 
     /// Returns all points as Point objects.
