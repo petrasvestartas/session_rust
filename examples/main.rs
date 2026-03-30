@@ -8,7 +8,7 @@ fn main() {
     session.add_point(Point::new(0.0005, 0.0, 0.0)); // Point 2 - collides with Point 1
     session.add_line(Line::new(0.0, 0.0, 0.0, 0.1, 0.1, 0.1)); // Line 1 - collides with both points
     session.add_line(Line::new(5.0, 5.0, 5.0, 5.1, 5.1, 5.1)); // Line 2 - far away
-    session.add_bbox(BoundingBox::new(
+    session.add_obb(BoundingBox::new(
         Point::new(10.0, 10.0, 10.0),
         Vector::new(1.0, 0.0, 0.0),
         Vector::new(0.0, 1.0, 0.0),

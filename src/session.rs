@@ -844,7 +844,7 @@ impl Session {
         TreeNode::new(&guid)
     }
 
-    pub fn add_bbox(&mut self, bbox: OBB) -> Rc<RefCell<TreeNode>> {
+    pub fn add_obb(&mut self, bbox: OBB) -> Rc<RefCell<TreeNode>> {
         let guid = bbox.guid().to_string();
         let name = bbox.name.clone();
         let geometry = Geometry::OBB(bbox.clone());
