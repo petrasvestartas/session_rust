@@ -1,19 +1,33 @@
-use crate::{Obb, Point, Vector};
+// BVH — binary tree with OBB leaves, Morton-code (LBVH) construction.
+// Use for: collision detection and closest-point between many dynamic objects.
+//   Handles oriented boxes; supports OBB-OBB overlap as the inner test.
+// Prefer over AABBTree when objects rotate or you need OBB tightness.
+// Prefer over RTree  when all queries are nearest-object, not region overlap.
+// Prefer over KDTree when objects are volumetric (not point clouds).
+use crate::{AABB, OBB, Point, Vector};
 use serde::{Deserialize, Serialize};
-use uuid::Uuid;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct BVHNode {
-    pub guid: String,
+    #[serde(serialize_with = "crate::guid_serde::serialize", deserialize_with = "crate::guid_serde::deserialize")]
+    guid: std::sync::OnceLock<String>,
     pub left: Option<Box<BVHNode>>,
     pub right: Option<Box<BVHNode>>,
     pub object_id: i32,
-    pub aabb: Option<Obb>,
+    pub aabb: Option<OBB>,
 }
 
 impl BVHNode {
     pub fn new() -> Self {
         Self::default()
+    }
+
+    pub fn guid(&self) -> &str {
+        self.guid.get_or_init(|| uuid::Uuid::new_v4().to_string())
+    }
+
+    pub fn set_guid(&self, g: String) {
+        let _ = self.guid.set(g);
     }
 
     pub fn is_leaf(&self) -> bool {
@@ -24,7 +38,7 @@ impl BVHNode {
 impl Default for BVHNode {
     fn default() -> Self {
         BVHNode {
-            guid: Uuid::new_v4().to_string(),
+            guid: std::sync::OnceLock::new(),
             left: None,
             right: None,
             object_id: -1,
@@ -33,71 +47,8 @@ impl Default for BVHNode {
     }
 }
 
-// Lightweight AABB for arena nodes (6 doubles, no axes)
-#[derive(Clone, Copy, Default, Debug)]
-struct BvhAABB {
-    cx: f64,
-    cy: f64,
-    cz: f64,
-    hx: f64,
-    hy: f64,
-    hz: f64,
-}
-
-impl BvhAABB {
-    #[inline(always)]
-    fn from_bbox(b: &Obb) -> Self {
-        BvhAABB {
-            cx: b.center[0],
-            cy: b.center[1],
-            cz: b.center[2],
-            hx: b.half_size[0],
-            hy: b.half_size[1],
-            hz: b.half_size[2],
-        }
-    }
-
-    #[inline(always)]
-    fn merge(a: BvhAABB, b: BvhAABB) -> BvhAABB {
-        let min_x = (a.cx - a.hx).min(b.cx - b.hx);
-        let min_y = (a.cy - a.hy).min(b.cy - b.hy);
-        let min_z = (a.cz - a.hz).min(b.cz - b.hz);
-        let max_x = (a.cx + a.hx).max(b.cx + b.hx);
-        let max_y = (a.cy + a.hy).max(b.cy + b.hy);
-        let max_z = (a.cz + a.hz).max(b.cz + b.hz);
-        BvhAABB {
-            cx: (min_x + max_x) * 0.5,
-            cy: (min_y + max_y) * 0.5,
-            cz: (min_z + max_z) * 0.5,
-            hx: (max_x - min_x) * 0.5,
-            hy: (max_y - min_y) * 0.5,
-            hz: (max_z - min_z) * 0.5,
-        }
-    }
-
-    #[inline(always)]
-    fn intersects(&self, other: &BvhAABB) -> bool {
-        let min1_x = self.cx - self.hx;
-        let max1_x = self.cx + self.hx;
-        let min1_y = self.cy - self.hy;
-        let max1_y = self.cy + self.hy;
-        let min1_z = self.cz - self.hz;
-        let max1_z = self.cz + self.hz;
-
-        let min2_x = other.cx - other.hx;
-        let max2_x = other.cx + other.hx;
-        let min2_y = other.cy - other.hy;
-        let max2_y = other.cy + other.hy;
-        let min2_z = other.cz - other.hz;
-        let max2_z = other.cz + other.hz;
-
-        min1_x <= max2_x
-            && max1_x >= min2_x
-            && min1_y <= max2_y
-            && max1_y >= min2_y
-            && min1_z <= max2_z
-            && max1_z >= min2_z
-    }
+fn aabb_from_obb(b: &OBB) -> AABB {
+    AABB::new(b.center[0], b.center[1], b.center[2], b.half_size[0], b.half_size[1], b.half_size[2])
 }
 
 // Flat node for arena-based traversal (cache-friendly)
@@ -106,12 +57,13 @@ struct FlatNode {
     left: i32,      // -1 if leaf
     right: i32,     // -1 if leaf
     object_id: i32, // >= 0 for leaf, -1 for internal
-    aabb: BvhAABB,
+    aabb: AABB,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct BVH {
-    pub guid: String,
+    #[serde(serialize_with = "crate::guid_serde::serialize", deserialize_with = "crate::guid_serde::deserialize")]
+    guid: std::sync::OnceLock<String>,
     pub name: String,
     pub root: Option<Box<BVHNode>>,
     pub world_size: f64,
@@ -138,7 +90,7 @@ impl Default for BVH {
 impl BVH {
     pub fn new() -> Self {
         BVH {
-            guid: Uuid::new_v4().to_string(),
+            guid: std::sync::OnceLock::new(),
             name: "my_bvh".to_string(),
             root: None,
             world_size: 1000.0, // Default, will be computed from boxes
@@ -148,8 +100,16 @@ impl BVH {
         }
     }
 
+    pub fn guid(&self) -> &str {
+        self.guid.get_or_init(|| uuid::Uuid::new_v4().to_string())
+    }
+
+    pub fn set_guid(&self, g: String) {
+        let _ = self.guid.set(g);
+    }
+
     /// Compute world size from bounding boxes
-    pub fn compute_world_size(bounding_boxes: &[Obb]) -> f64 {
+    pub fn compute_world_size(bounding_boxes: &[OBB]) -> f64 {
         if bounding_boxes.is_empty() {
             return 1000.0;
         }
@@ -175,7 +135,7 @@ impl BVH {
     }
 
     /// Build BVH from bounding boxes with GUIDs
-    pub fn build_with_guids(&mut self, boxes_with_guids: &[(Obb, String)]) {
+    pub fn build_with_guids(&mut self, boxes_with_guids: &[(OBB, String)]) {
         if boxes_with_guids.is_empty() {
             self.root = None;
             self.object_guids.clear();
@@ -183,7 +143,7 @@ impl BVH {
         }
 
         // Extract boxes and GUIDs
-        let bounding_boxes: Vec<Obb> = boxes_with_guids
+        let bounding_boxes: Vec<OBB> = boxes_with_guids
             .iter()
             .map(|(bbox, _)| bbox.clone())
             .collect();
@@ -199,14 +159,14 @@ impl BVH {
         self.build(&bounding_boxes);
     }
 
-    pub fn from_boxes(bounding_boxes: &[Obb], world_size: f64) -> Self {
+    pub fn from_boxes(bounding_boxes: &[OBB], world_size: f64) -> Self {
         let mut bvh = Self::new();
         bvh.world_size = world_size;
         bvh.build(bounding_boxes);
         bvh
     }
 
-    pub fn build(&mut self, bounding_boxes: &[Obb]) {
+    pub fn build(&mut self, bounding_boxes: &[OBB]) {
         if bounding_boxes.is_empty() {
             self.root = None;
             self.arena.clear();
@@ -264,7 +224,7 @@ impl BVH {
         if n == 1 {
             // Single leaf - build arena only
             let id = objects[0].id;
-            let aabb = BvhAABB::from_bbox(&bounding_boxes[id]);
+            let aabb = aabb_from_obb(&bounding_boxes[id]);
 
             self.arena.clear();
             self.arena.push(FlatNode {
@@ -358,14 +318,14 @@ impl BVH {
             left: Option<TempChild>,
             right: Option<TempChild>,
             object_id: i32,
-            aabb: BvhAABB,
+            aabb: AABB,
         }
 
         // Allocate leaves
         let mut leaves: Vec<TempNode> = Vec::with_capacity(n);
         for obj in objects.iter() {
             let id = obj.id;
-            let aabb = BvhAABB::from_bbox(&bounding_boxes[id]);
+            let aabb = aabb_from_obb(&bounding_boxes[id]);
             leaves.push(TempNode {
                 left: None,
                 right: None,
@@ -381,7 +341,7 @@ impl BVH {
                 left: None,
                 right: None,
                 object_id: -1,
-                aabb: BvhAABB::default(),
+                aabb: AABB::default(),
             });
         }
 
@@ -418,7 +378,7 @@ impl BVH {
             idx: usize,
             internals: &mut [TempNode],
             leaves: &[TempNode],
-        ) -> BvhAABB {
+        ) -> AABB {
             let (left, right) = (
                 internals[idx].left.clone().expect("left child"),
                 internals[idx].right.clone().expect("right child"),
@@ -431,7 +391,7 @@ impl BVH {
                 TempChild::Leaf(li) => leaves[li].aabb,
                 TempChild::Internal(ii) => compute_internal(ii, internals, leaves),
             };
-            let merged = BvhAABB::merge(a, b);
+            let merged = AABB::merge(a, b);
             internals[idx].aabb = merged;
             merged
         }
@@ -500,7 +460,7 @@ impl BVH {
         self.root = None;
     }
 
-    pub fn merge_aabb(&self, aabb1: &Obb, aabb2: &Obb) -> Obb {
+    pub fn merge_aabb(&self, aabb1: &OBB, aabb2: &OBB) -> OBB {
         // Calculate min and max corners
         let min_x =
             (aabb1.center[0] - aabb1.half_size[0]).min(aabb2.center[0] - aabb2.half_size[0]);
@@ -528,7 +488,7 @@ impl BVH {
             (max_z - min_z) / 2.0,
         );
 
-        Obb::new(
+        OBB::new(
             center,
             Vector::new(1.0, 0.0, 0.0),
             Vector::new(0.0, 1.0, 0.0),
@@ -540,8 +500,8 @@ impl BVH {
     pub fn find_collisions(
         &self,
         object_id: usize,
-        query_bbox: &Obb,
-        bounding_boxes: &[Obb],
+        query_bbox: &OBB,
+        bounding_boxes: &[OBB],
     ) -> (Vec<usize>, i32) {
         let mut collisions = Vec::new();
         let mut check_count = 0;
@@ -551,7 +511,7 @@ impl BVH {
             return (collisions, check_count);
         }
 
-        let query_aabb = BvhAABB::from_bbox(query_bbox);
+        let query_aabb = aabb_from_obb(query_bbox);
         let mut stack: Vec<i32> = Vec::with_capacity(64);
         stack.push(self.arena_root);
 
@@ -590,12 +550,12 @@ impl BVH {
     }
 
     /// Return the object_ids of all leaves whose AABB overlaps `query`.
-    pub fn query_aabb(&self, query: &Obb) -> Vec<usize> {
+    pub fn query_aabb(&self, query: &OBB) -> Vec<usize> {
         let mut hits = Vec::new();
         if self.arena_root < 0 || self.arena.is_empty() {
             return hits;
         }
-        let query_aabb = BvhAABB::from_bbox(query);
+        let query_aabb = aabb_from_obb(query);
         let mut stack: Vec<i32> = Vec::with_capacity(64);
         stack.push(self.arena_root);
         while let Some(node_idx) = stack.pop() {
@@ -617,7 +577,7 @@ impl BVH {
         hits
     }
 
-    pub fn aabb_intersect(&self, aabb1: &Obb, aabb2: &Obb) -> bool {
+    pub fn aabb_intersect(&self, aabb1: &OBB, aabb2: &OBB) -> bool {
         // Calculate min/max for both boxes
         let min1_x = aabb1.center[0] - aabb1.half_size[0];
         let max1_x = aabb1.center[0] + aabb1.half_size[0];
@@ -644,7 +604,7 @@ impl BVH {
 
     pub fn check_all_collisions(
         &self,
-        bounding_boxes: &[Obb],
+        bounding_boxes: &[OBB],
     ) -> (Vec<(usize, usize)>, Vec<usize>, i32) {
         let mut all_collisions: Vec<(usize, usize)> = Vec::new();
         let mut total_checks: i32 = 0;
@@ -747,7 +707,7 @@ impl BVH {
     /// Uses the internally stored object_guids from build_with_guids
     pub fn check_all_collisions_guids(
         &self,
-        bounding_boxes: &[Obb],
+        bounding_boxes: &[OBB],
     ) -> Vec<(String, String)> {
         let (collision_pairs, _, _) = self.check_all_collisions(bounding_boxes);
 
@@ -768,7 +728,7 @@ impl BVH {
     fn ray_bvhaabb_intersect(
         origin: &Point,
         direction: &Vector,
-        aabb: &BvhAABB,
+        aabb: &AABB,
     ) -> Option<(f64, f64)> {
         let min_x = aabb.cx - aabb.hx;
         let max_x = aabb.cx + aabb.hx;

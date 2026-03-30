@@ -14,13 +14,18 @@ pub fn run_element_constructor() -> TestResult {
         use crate::Point;
 
         let m = Mesh::from_vertices_and_faces(
-            vec![Point::new(0.0, 0.0, 0.0), Point::new(1.0, 0.0, 0.0), Point::new(1.0, 1.0, 0.0), Point::new(0.0, 1.0, 0.0)],
+            vec![
+                Point::new(0.0, 0.0, 0.0),
+                Point::new(1.0, 0.0, 0.0),
+                Point::new(1.0, 1.0, 0.0),
+                Point::new(0.0, 1.0, 0.0),
+            ],
             vec![vec![0, 1, 2, 3]],
         );
         let e = Element::from_mesh(m, "test_element");
 
         let name = &e.name;
-        let guid = &e.guid;
+        let guid = e.guid().to_string();
         let dirty = e.is_dirty();
 
         let estr = e.str();
@@ -37,7 +42,7 @@ pub fn run_element_constructor() -> TestResult {
         MINI_CHECK!(matches!(e.geometry(), ElementGeometry::Mesh(_)));
         MINI_CHECK!(estr == "Element(test_element, Mesh)");
         MINI_CHECK!(erepr == format!("Element({}, test_element, Mesh)", guid));
-        MINI_CHECK!(ecopy == e && ecopy.guid != e.guid);
+        MINI_CHECK!(ecopy == e && ecopy.guid() != e.guid());
         MINI_CHECK!(e == e2);
         MINI_CHECK!(e != e3);
     })
@@ -51,7 +56,12 @@ pub fn run_element_session_transformation() -> TestResult {
         use crate::Point;
 
         let m = Mesh::from_vertices_and_faces(
-            vec![Point::new(0.0, 0.0, 0.0), Point::new(1.0, 0.0, 0.0), Point::new(1.0, 1.0, 0.0), Point::new(0.0, 1.0, 0.0)],
+            vec![
+                Point::new(0.0, 0.0, 0.0),
+                Point::new(1.0, 0.0, 0.0),
+                Point::new(1.0, 1.0, 0.0),
+                Point::new(0.0, 1.0, 0.0),
+            ],
             vec![vec![0, 1, 2, 3]],
         );
         let mut e = Element::from_mesh(m, "my_element");
@@ -70,7 +80,12 @@ pub fn run_element_add_feature() -> TestResult {
         use crate::Point;
 
         let m = Mesh::from_vertices_and_faces(
-            vec![Point::new(0.0, 0.0, 0.0), Point::new(1.0, 0.0, 0.0), Point::new(1.0, 1.0, 0.0), Point::new(0.0, 1.0, 0.0)],
+            vec![
+                Point::new(0.0, 0.0, 0.0),
+                Point::new(1.0, 0.0, 0.0),
+                Point::new(1.0, 1.0, 0.0),
+                Point::new(0.0, 1.0, 0.0),
+            ],
             vec![vec![0, 1, 2, 3]],
         );
         let mut e = Element::from_mesh(m, "my_element");
@@ -90,7 +105,12 @@ pub fn run_element_aabb() -> TestResult {
         use crate::Point;
 
         let m = Mesh::from_vertices_and_faces(
-            vec![Point::new(0.0, 0.0, 0.0), Point::new(1.0, 0.0, 0.0), Point::new(1.0, 1.0, 0.0), Point::new(0.0, 1.0, 0.0)],
+            vec![
+                Point::new(0.0, 0.0, 0.0),
+                Point::new(1.0, 0.0, 0.0),
+                Point::new(1.0, 1.0, 0.0),
+                Point::new(0.0, 1.0, 0.0),
+            ],
             vec![vec![0, 1, 2, 3]],
         );
         let mut e = Element::from_mesh(m, "my_element");
@@ -103,13 +123,18 @@ pub fn run_element_aabb() -> TestResult {
 }
 
 pub fn run_element_obb() -> TestResult {
-    MINI_TEST!("Obb", {
+    MINI_TEST!("OBB", {
         use crate::Mesh;
         use crate::element::Element;
         use crate::Point;
 
         let m = Mesh::from_vertices_and_faces(
-            vec![Point::new(0.0, 0.0, 0.0), Point::new(1.0, 0.0, 0.0), Point::new(1.0, 1.0, 0.0), Point::new(0.0, 1.0, 0.0)],
+            vec![
+                Point::new(0.0, 0.0, 0.0),
+                Point::new(1.0, 0.0, 0.0),
+                Point::new(1.0, 1.0, 0.0),
+                Point::new(0.0, 1.0, 0.0),
+            ],
             vec![vec![0, 1, 2, 3]],
         );
         let mut e = Element::from_mesh(m, "my_element");
@@ -128,7 +153,12 @@ pub fn run_element_session_geometry() -> TestResult {
         use crate::Point;
 
         let m = Mesh::from_vertices_and_faces(
-            vec![Point::new(0.0, 0.0, 0.0), Point::new(1.0, 0.0, 0.0), Point::new(1.0, 1.0, 0.0), Point::new(0.0, 1.0, 0.0)],
+            vec![
+                Point::new(0.0, 0.0, 0.0),
+                Point::new(1.0, 0.0, 0.0),
+                Point::new(1.0, 1.0, 0.0),
+                Point::new(0.0, 1.0, 0.0),
+            ],
             vec![vec![0, 1, 2, 3]],
         );
         let mut e = Element::from_mesh(m, "my_element");
@@ -137,7 +167,9 @@ pub fn run_element_session_geometry() -> TestResult {
 
         MINI_CHECK!(matches!(&sg, ElementGeometry::Mesh(_)));
         if let ElementGeometry::Mesh(mesh) = &sg {
-            let verts: Vec<_> = mesh.vertex.values().collect();
+            let mut vkeys: Vec<usize> = mesh.vertex.keys().cloned().collect();
+            vkeys.sort();
+            let verts: Vec<_> = vkeys.iter().map(|k| mesh.vertex.get(k).unwrap()).collect();
             MINI_CHECK!(TOLERANCE.is_close(verts[0].x, 10.0));
             MINI_CHECK!(TOLERANCE.is_close(verts[1].x, 11.0));
         }
@@ -151,7 +183,12 @@ pub fn run_element_reset() -> TestResult {
         use crate::Point;
 
         let m = Mesh::from_vertices_and_faces(
-            vec![Point::new(0.0, 0.0, 0.0), Point::new(2.0, 0.0, 0.0), Point::new(2.0, 2.0, 0.0), Point::new(0.0, 2.0, 0.0)],
+            vec![
+                Point::new(0.0, 0.0, 0.0),
+                Point::new(2.0, 0.0, 0.0),
+                Point::new(2.0, 2.0, 0.0),
+                Point::new(0.0, 2.0, 0.0),
+            ],
             vec![vec![0, 1, 2, 3]],
         );
         let mut e = Element::from_mesh(m, "my_element");
@@ -174,7 +211,12 @@ pub fn run_element_compute_point() -> TestResult {
         use crate::Point;
 
         let m = Mesh::from_vertices_and_faces(
-            vec![Point::new(0.0, 0.0, 0.0), Point::new(2.0, 0.0, 0.0), Point::new(2.0, 2.0, 0.0), Point::new(0.0, 2.0, 0.0)],
+            vec![
+                Point::new(0.0, 0.0, 0.0),
+                Point::new(2.0, 0.0, 0.0),
+                Point::new(2.0, 2.0, 0.0),
+                Point::new(0.0, 2.0, 0.0),
+            ],
             vec![vec![0, 1, 2, 3]],
         );
         let mut e = Element::from_mesh(m, "my_element");
@@ -213,7 +255,12 @@ pub fn run_element_json_roundtrip() -> TestResult {
         use crate::Point;
 
         let m = Mesh::from_vertices_and_faces(
-            vec![Point::new(0.0, 0.0, 0.0), Point::new(1.0, 0.0, 0.0), Point::new(1.0, 1.0, 0.0), Point::new(0.0, 1.0, 0.0)],
+            vec![
+                Point::new(0.0, 0.0, 0.0),
+                Point::new(1.0, 0.0, 0.0),
+                Point::new(1.0, 1.0, 0.0),
+                Point::new(0.0, 1.0, 0.0),
+            ],
             vec![vec![0, 1, 2, 3]],
         );
         let mut e = Element::from_mesh(m, "json_test");
@@ -260,13 +307,12 @@ pub fn run_element_protobuf_roundtrip() -> TestResult {
 
 pub fn run_column_constructor() -> TestResult {
     MINI_TEST!("Constructor", {
-        use crate::element::{Element, ElementGeometry, ElementKind};
-        use crate::Mesh;
+        use crate::element::{Element, ElementGeometry};
 
         let c = Element::column(0.4, 0.4, 3.0, "col1");
 
         let name = &c.name;
-        let guid = &c.guid;
+        let guid = c.guid().to_string();
         let cstr = c.str();
         let crepr = c.repr();
 
@@ -282,7 +328,7 @@ pub fn run_column_constructor() -> TestResult {
         MINI_CHECK!(c.height() == Some(3.0));
         MINI_CHECK!(cstr == "ColumnElement(col1, 0.4, 0.4, 3)");
         MINI_CHECK!(crepr == format!("ColumnElement({}, col1, 0.4, 0.4, 3)", guid));
-        MINI_CHECK!(ccopy == c && ccopy.guid != c.guid);
+        MINI_CHECK!(ccopy == c && ccopy.guid() != c.guid());
         MINI_CHECK!(c == c2);
         MINI_CHECK!(c != c3);
     })
@@ -307,7 +353,6 @@ pub fn run_column_setters() -> TestResult {
 pub fn run_column_center_line() -> TestResult {
     MINI_TEST!("Center Line", {
         use crate::element::Element;
-        use crate::Line;
 
         let c = Element::column(0.4, 0.4, 5.0, "my_column");
         let cl = c.center_line().unwrap();
@@ -420,7 +465,7 @@ pub fn run_beam_constructor() -> TestResult {
         let b = Element::beam(0.1, 0.2, 3.0, "beam1");
 
         let name = &b.name;
-        let guid = &b.guid;
+        let guid = b.guid().to_string();
         let bstr = b.str();
         let brepr = b.repr();
 
@@ -436,7 +481,7 @@ pub fn run_beam_constructor() -> TestResult {
         MINI_CHECK!(b.length() == Some(3.0));
         MINI_CHECK!(bstr == "BeamElement(beam1, 0.1, 0.2, 3)");
         MINI_CHECK!(brepr == format!("BeamElement({}, beam1, 0.1, 0.2, 3)", guid));
-        MINI_CHECK!(bcopy == b && bcopy.guid != b.guid);
+        MINI_CHECK!(bcopy == b && bcopy.guid() != b.guid());
         MINI_CHECK!(b == b2);
         MINI_CHECK!(b != b3);
     })
@@ -572,13 +617,15 @@ pub fn run_plate_constructor() -> TestResult {
         use crate::Point;
 
         let polygon = vec![
-            Point::new(0.0, 0.0, 0.0), Point::new(2.0, 0.0, 0.0),
-            Point::new(2.0, 2.0, 0.0), Point::new(0.0, 2.0, 0.0),
+            Point::new(0.0, 0.0, 0.0),
+            Point::new(2.0, 0.0, 0.0),
+            Point::new(2.0, 2.0, 0.0),
+            Point::new(0.0, 2.0, 0.0),
         ];
         let p = Element::plate(polygon.clone(), 0.2, "plate1");
 
         let name = &p.name;
-        let guid = &p.guid;
+        let guid = p.guid().to_string();
         let pstr = p.str();
         let prepr = p.repr();
 
@@ -593,7 +640,7 @@ pub fn run_plate_constructor() -> TestResult {
         MINI_CHECK!(p.thickness() == Some(0.2));
         MINI_CHECK!(pstr == "PlateElement(plate1, 4 pts, 0.2)");
         MINI_CHECK!(prepr == format!("PlateElement({}, plate1, 4 pts, 0.2)", guid));
-        MINI_CHECK!(pcopy == p && pcopy.guid != p.guid);
+        MINI_CHECK!(pcopy == p && pcopy.guid() != p.guid());
         MINI_CHECK!(p == p2);
         MINI_CHECK!(p != p3);
     })
@@ -619,8 +666,10 @@ pub fn run_plate_setters() -> TestResult {
         let mut p = Element::plate_default();
         p.set_thickness(0.3);
         p.set_polygon(vec![
-            Point::new(0.0, 0.0, 0.0), Point::new(3.0, 0.0, 0.0),
-            Point::new(3.0, 3.0, 0.0), Point::new(0.0, 3.0, 0.0),
+            Point::new(0.0, 0.0, 0.0),
+            Point::new(3.0, 0.0, 0.0),
+            Point::new(3.0, 3.0, 0.0),
+            Point::new(0.0, 3.0, 0.0),
         ]);
 
         MINI_CHECK!(p.thickness() == Some(0.3));
@@ -635,10 +684,13 @@ pub fn run_plate_mesh_topology() -> TestResult {
         use crate::Point;
 
         let polygon = vec![
-            Point::new(0.0, 0.0, 0.0), Point::new(1.0, 0.0, 0.0),
-            Point::new(1.0, 1.0, 0.0), Point::new(0.0, 1.0, 0.0),
+            Point::new(0.0, 0.0, 0.0),
+            Point::new(1.0, 0.0, 0.0),
+            Point::new(1.0, 1.0, 0.0),
+            Point::new(0.0, 1.0, 0.0),
         ];
         let p = Element::plate(polygon, 0.5, "my_plate");
+
         if let ElementGeometry::Mesh(geo) = p.geometry() {
             MINI_CHECK!(geo.vertex.len() == 8);
             MINI_CHECK!(geo.face.len() == 6);
@@ -652,8 +704,10 @@ pub fn run_plate_aabb() -> TestResult {
         use crate::Point;
 
         let polygon = vec![
-            Point::new(0.0, 0.0, 0.0), Point::new(2.0, 0.0, 0.0),
-            Point::new(2.0, 2.0, 0.0), Point::new(0.0, 2.0, 0.0),
+            Point::new(0.0, 0.0, 0.0),
+            Point::new(2.0, 0.0, 0.0),
+            Point::new(2.0, 2.0, 0.0),
+            Point::new(0.0, 2.0, 0.0),
         ];
         let mut p = Element::plate(polygon, 0.2, "my_plate");
         let aabb = p.aabb();
@@ -670,8 +724,10 @@ pub fn run_plate_compute_point() -> TestResult {
         use crate::Point;
 
         let polygon = vec![
-            Point::new(0.0, 0.0, 0.0), Point::new(2.0, 0.0, 0.0),
-            Point::new(2.0, 2.0, 0.0), Point::new(0.0, 2.0, 0.0),
+            Point::new(0.0, 0.0, 0.0),
+            Point::new(2.0, 0.0, 0.0),
+            Point::new(2.0, 2.0, 0.0),
+            Point::new(0.0, 2.0, 0.0),
         ];
         let mut p = Element::plate(polygon, 0.2, "my_plate");
         let pt = p.point();
@@ -688,9 +744,12 @@ pub fn run_plate_triangle_polygon() -> TestResult {
         use crate::Point;
 
         let polygon = vec![
-            Point::new(0.0, 0.0, 0.0), Point::new(1.0, 0.0, 0.0), Point::new(0.5, 1.0, 0.0),
+            Point::new(0.0, 0.0, 0.0),
+            Point::new(1.0, 0.0, 0.0),
+            Point::new(0.5, 1.0, 0.0),
         ];
         let p = Element::plate(polygon, 0.1, "my_plate");
+
         if let ElementGeometry::Mesh(geo) = p.geometry() {
             MINI_CHECK!(geo.vertex.len() == 6);
             MINI_CHECK!(geo.face.len() == 5);
@@ -705,8 +764,10 @@ pub fn run_plate_json_roundtrip() -> TestResult {
         use crate::Xform;
 
         let polygon = vec![
-            Point::new(0.0, 0.0, 0.0), Point::new(2.0, 0.0, 0.0),
-            Point::new(2.0, 2.0, 0.0), Point::new(0.0, 2.0, 0.0),
+            Point::new(0.0, 0.0, 0.0),
+            Point::new(2.0, 0.0, 0.0),
+            Point::new(2.0, 2.0, 0.0),
+            Point::new(0.0, 2.0, 0.0),
         ];
         let mut p = Element::plate(polygon, 0.3, "json_plate");
         p.session_transformation = Xform::translation(1.0, 2.0, 3.0);
@@ -729,8 +790,10 @@ pub fn run_plate_protobuf_roundtrip() -> TestResult {
         use crate::Xform;
 
         let polygon = vec![
-            Point::new(0.0, 0.0, 0.0), Point::new(2.0, 0.0, 0.0),
-            Point::new(2.0, 2.0, 0.0), Point::new(0.0, 2.0, 0.0),
+            Point::new(0.0, 0.0, 0.0),
+            Point::new(2.0, 0.0, 0.0),
+            Point::new(2.0, 2.0, 0.0),
+            Point::new(0.0, 2.0, 0.0),
         ];
         let mut p = Element::plate(polygon, 0.3, "proto_plate");
         p.session_transformation = Xform::translation(1.0, 2.0, 3.0);
@@ -754,7 +817,7 @@ REGISTER_MINI_TEST!("Element", "Constructor", crate::element_test::run_element_c
 REGISTER_MINI_TEST!("Element", "Session Transformation", crate::element_test::run_element_session_transformation);
 REGISTER_MINI_TEST!("Element", "Add Feature", crate::element_test::run_element_add_feature);
 REGISTER_MINI_TEST!("Element", "Aabb", crate::element_test::run_element_aabb);
-REGISTER_MINI_TEST!("Element", "Obb", crate::element_test::run_element_obb);
+REGISTER_MINI_TEST!("Element", "OBB", crate::element_test::run_element_obb);
 REGISTER_MINI_TEST!("Element", "Session Geometry", crate::element_test::run_element_session_geometry);
 REGISTER_MINI_TEST!("Element", "Reset", crate::element_test::run_element_reset);
 REGISTER_MINI_TEST!("Element", "Compute Point", crate::element_test::run_element_compute_point);

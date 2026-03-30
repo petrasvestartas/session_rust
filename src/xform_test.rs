@@ -47,13 +47,13 @@ pub fn run_xform_constructor() -> TestResult {
         t2 *= s;
         let result2 = t2.transformed_point(&p);
 
-        MINI_CHECK!(x.name == "my_xform" && !x.guid.is_empty());
+        MINI_CHECK!(x.name == "my_xform" && !x.guid().is_empty());
         MINI_CHECK!(m00 == 1.0 && m11 == 1.0 && m22 == 1.0 && m33 == 1.0);
         MINI_CHECK!(is_id == true);
         MINI_CHECK!(xfrom.m[12] == 5.0 && xfrom.m[13] == 10.0 && xfrom.m[14] == 15.0);
         MINI_CHECK!(xstr.contains("1.000000"));
         MINI_CHECK!(xrepr.contains("Xform(") && xrepr.contains("my_xform"));
-        MINI_CHECK!(xcopy == x && xcopy.guid != x.guid);
+        MINI_CHECK!(xcopy == x && xcopy.guid() != x.guid());
         MINI_CHECK!(x_eq == true && x_ne == true);
         // (1,0,0) * scale(2,1,1) = (2,0,0), then translate(10,0,0) = (12,0,0)
         MINI_CHECK!(TOLERANCE.is_close(result[0], 12.0));

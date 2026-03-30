@@ -6,8 +6,6 @@ use std::fmt;
 use std::ops::{
     Add, AddAssign, Div, DivAssign, Index, IndexMut, Mul, MulAssign, Neg, Sub, SubAssign,
 };
-use uuid::Uuid;
-
 /// A 3D vector with visual properties and JSON serialization support.
 ///
 /// The Vector struct represents a mathematical vector in 3D space with
@@ -33,7 +31,8 @@ use uuid::Uuid;
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(tag = "type", rename = "Vector")]
 pub struct Vector {
-    pub guid: String,
+    #[serde(serialize_with = "crate::guid_serde::serialize", deserialize_with = "crate::guid_serde::deserialize")]
+    guid: std::sync::OnceLock<String>,
     pub name: String,
     #[serde(rename = "x")]
     _x: f64,
@@ -53,7 +52,7 @@ impl Default for Vector {
             _x: 0.0,
             _y: 0.0,
             _z: 0.0,
-            guid: Uuid::new_v4().to_string(),
+            guid: std::sync::OnceLock::new(),
             name: "my_vector".to_string(),
             _magnitude: Cell::new(0.0),
             _has_magnitude: Cell::new(false),
@@ -104,6 +103,14 @@ impl Vector {
         }
     }
 
+    pub fn guid(&self) -> &str {
+        self.guid.get_or_init(|| uuid::Uuid::new_v4().to_string())
+    }
+
+    pub fn set_guid(&self, g: String) {
+        let _ = self.guid.set(g);
+    }
+
     /// Deep copy this vector with a new GUID.
     ///
     /// Creates a clone of this vector with all properties copied
@@ -114,7 +121,7 @@ impl Vector {
     /// A new Vector with identical values but a different GUID.
     pub fn duplicate(&self) -> Self {
         let mut copy = self.clone();
-        copy.guid = Uuid::new_v4().to_string();
+        copy.guid = std::sync::OnceLock::new();
         copy
     }
 
@@ -1232,7 +1239,7 @@ impl fmt::Display for Vector {
             self[0],
             self[1],
             self[2],
-            self.guid,
+            self.guid(),
             self.name
         )
     }

@@ -5,6 +5,7 @@ pub fn run_rtree_creation() -> TestResult {
     MINI_TEST!("Creation", {
         use crate::RTree;
         let t = RTree::new();
+
         MINI_CHECK!(t.count() == 0);
     })
 }
@@ -14,6 +15,7 @@ pub fn run_rtree_insert() -> TestResult {
         use crate::RTree;
         let mut t = RTree::new();
         t.insert([0.0, 0.0, 0.0], [1.0, 1.0, 1.0], 42);
+
         MINI_CHECK!(t.count() == 1);
     })
 }
@@ -25,6 +27,7 @@ pub fn run_rtree_insert_multiple() -> TestResult {
         t.insert([0.0, 0.0, 0.0], [1.0, 1.0, 1.0], 0);
         t.insert([2.0, 2.0, 2.0], [3.0, 3.0, 3.0], 1);
         t.insert([4.0, 4.0, 4.0], [5.0, 5.0, 5.0], 2);
+
         MINI_CHECK!(t.count() == 3);
     })
 }
@@ -39,6 +42,7 @@ pub fn run_rtree_search_hit() -> TestResult {
             found = data;
             true
         });
+
         MINI_CHECK!(hits == 1);
         MINI_CHECK!(found == 0);
     })
@@ -50,6 +54,7 @@ pub fn run_rtree_search_miss() -> TestResult {
         let mut t = RTree::new();
         t.insert([0.0, 0.0, 0.0], [1.0, 1.0, 1.0], 7);
         let hits = t.search([2.0, 2.0, 2.0], [3.0, 3.0, 3.0], |_| true);
+
         MINI_CHECK!(hits == 0);
     })
 }
@@ -60,6 +65,7 @@ pub fn run_rtree_remove() -> TestResult {
         let mut t = RTree::new();
         t.insert([0.0, 0.0, 0.0], [1.0, 1.0, 1.0], 5);
         t.remove([0.0, 0.0, 0.0], [1.0, 1.0, 1.0], 5);
+
         MINI_CHECK!(t.count() == 0);
     })
 }
@@ -72,6 +78,7 @@ pub fn run_rtree_remove_all() -> TestResult {
         t.insert([2.0, 2.0, 2.0], [3.0, 3.0, 3.0], 1);
         t.insert([4.0, 4.0, 4.0], [5.0, 5.0, 5.0], 2);
         t.remove_all();
+
         MINI_CHECK!(t.count() == 0);
     })
 }
@@ -86,6 +93,7 @@ pub fn run_rtree_search_count() -> TestResult {
         t.insert([10.0, 0.0, 0.0], [11.0, 1.0, 1.0], 3);
         t.insert([0.0, 10.0, 0.0], [1.0, 11.0, 1.0], 4);
         let hits = t.search([0.0, 0.0, 0.0], [4.0, 4.0, 4.0], |_| true);
+
         MINI_CHECK!(hits == 3);
     })
 }
@@ -98,6 +106,7 @@ pub fn run_rtree_search_stop() -> TestResult {
         t.insert([0.0, 0.0, 0.0], [1.0, 1.0, 1.0], 1);
         t.insert([0.0, 0.0, 0.0], [1.0, 1.0, 1.0], 2);
         let hits = t.search([0.0, 0.0, 0.0], [1.0, 1.0, 1.0], |_| false);
+
         MINI_CHECK!(hits == 1);
     })
 }
@@ -218,12 +227,36 @@ pub fn run_rtree_search_100_boxes() -> TestResult {
             found.push(data);
             true
         });
+
         MINI_CHECK!(hits > 0);
         MINI_CHECK!(hits <= 100);
         for d in &found {
             MINI_CHECK!(*d >= 0);
             MINI_CHECK!(*d < 100);
         }
+    })
+}
+
+pub fn run_rtree_perf() -> TestResult {
+    MINI_TEST!("Perf 10k", {
+        use crate::RTree;
+        let n = 100i32;
+        let mut t = RTree::new();
+        for i in 0..n {
+            for j in 0..n {
+                let x = (i * 2) as f64;
+                let y = (j * 2) as f64;
+                t.insert([x, y, 0.0], [x + 1.0, y + 1.0, 1.0], i * n + j);
+            }
+        }
+
+        MINI_CHECK!(t.count() == n * n);
+        let mut total = 0i32;
+        for k in 0..100i32 {
+            let x = (k * 2) as f64;
+            total += t.search([x, 0.0, 0.0], [x + 10.0, 10.0, 1.0], |_| true);
+        }
+        MINI_CHECK!(total > 0);
     })
 }
 
@@ -237,3 +270,4 @@ REGISTER_MINI_TEST!("RTree", "Remove All", crate::rtree_test::run_rtree_remove_a
 REGISTER_MINI_TEST!("RTree", "Search Count", crate::rtree_test::run_rtree_search_count);
 REGISTER_MINI_TEST!("RTree", "Search Stop", crate::rtree_test::run_rtree_search_stop);
 REGISTER_MINI_TEST!("RTree", "Search 100 Boxes", crate::rtree_test::run_rtree_search_100_boxes);
+REGISTER_MINI_TEST!("RTree", "Perf 10k", crate::rtree_test::run_rtree_perf);

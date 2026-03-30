@@ -2,8 +2,6 @@ use crate::{Color, Vector, Xform};
 use serde::{ser::Serialize as SerTrait, Deserialize, Serialize};
 use std::fmt;
 use std::ops::{Add, AddAssign, Div, DivAssign, Index, IndexMut, Mul, MulAssign, Sub, SubAssign};
-use uuid::Uuid;
-
 /// A 3D point with visual properties and JSON serialization support.
 ///
 /// The Point struct represents a location in 3D space with x, y, z coordinates.
@@ -28,7 +26,8 @@ use uuid::Uuid;
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(tag = "type", rename = "Point")]
 pub struct Point {
-    pub guid: String, // Unique identifier
+    #[serde(serialize_with = "crate::guid_serde::serialize", deserialize_with = "crate::guid_serde::deserialize")]
+    guid: std::sync::OnceLock<String>, // Unique identifier
     pub name: String, // Name of the point
     #[serde(rename = "x")]
     _x: f64, // X coordinate (private)
@@ -48,7 +47,7 @@ impl Default for Point {
             _x: 0.0,
             _y: 0.0,
             _z: 0.0,
-            guid: Uuid::new_v4().to_string(),
+            guid: std::sync::OnceLock::new(),
             name: "my_point".to_string(),
             pointcolor: Color::blue(),
             width: 1.0,
@@ -100,6 +99,14 @@ impl Point {
         }
     }
 
+    pub fn guid(&self) -> &str {
+        self.guid.get_or_init(|| uuid::Uuid::new_v4().to_string())
+    }
+
+    pub fn set_guid(&self, g: String) {
+        let _ = self.guid.set(g);
+    }
+
     /// Deep copy this point with a new GUID.
     ///
     /// Creates a clone of this point with all properties copied
@@ -110,7 +117,7 @@ impl Point {
     /// A new Point with identical values but a different GUID.
     pub fn duplicate(&self) -> Self {
         let mut copy = self.clone();
-        copy.guid = Uuid::new_v4().to_string();
+        copy.guid = std::sync::OnceLock::new();
         copy
     }
 
@@ -217,14 +224,14 @@ impl Point {
         use prost::Message;
         
         let proto = crate::proto::Point {
-            guid: self.guid.clone(),
+            guid: self.guid().to_string(),
             name: self.name.clone(),
             x: self._x,
             y: self._y,
             z: self._z,
             width: self.width,
             pointcolor: Some(crate::proto::Color {
-                guid: self.pointcolor.guid.clone(),
+                guid: self.pointcolor.guid().to_string(),
                 name: self.pointcolor.name.clone(),
                 r: self.pointcolor.r as i32,
                 g: self.pointcolor.g as i32,
@@ -232,7 +239,7 @@ impl Point {
                 a: self.pointcolor.a as i32,
             }),
             xform: Some(crate::proto::Xform {
-                guid: self.xform.guid.clone(),
+                guid: self.xform.guid().to_string(),
                 name: self.xform.name.clone(),
                 matrix: self.xform.m.to_vec(),
             }),
@@ -255,7 +262,7 @@ impl Point {
         let proto = crate::proto::Point::decode(data)?;
         
         let mut pt = Self::new(proto.x, proto.y, proto.z);
-        pt.guid = proto.guid;
+        pt.set_guid(proto.guid);
         pt.name = proto.name;
         pt.width = proto.width;
         
@@ -268,7 +275,7 @@ impl Point {
         }
         
         if let Some(xform) = proto.xform {
-            pt.xform.guid = xform.guid;
+            pt.xform.set_guid(xform.guid);
             pt.xform.name = xform.name;
             for (i, val) in xform.matrix.iter().enumerate() {
                 if i < 16 {

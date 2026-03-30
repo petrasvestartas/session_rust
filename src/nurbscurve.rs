@@ -7,7 +7,6 @@ use crate::color::Color;
 use crate::knot;
 use serde::{Serialize, Deserialize, Serializer, Deserializer};
 use serde::ser::SerializeMap;
-use uuid::Uuid;
 
 /// Non-Uniform Rational B-Spline (NURBS) curve implementation
 ///
@@ -15,7 +14,7 @@ use uuid::Uuid;
 /// All methods match the fixed C++ and Python versions.
 #[derive(Clone, Debug)]
 pub struct NurbsCurve {
-    pub guid: String,
+    guid: std::sync::OnceLock<String>,
     pub name: String,
     pub width: f64,
     pub pointcolors: Vec<Color>,
@@ -62,7 +61,7 @@ impl Serialize for NurbsCurve {
         map.serialize_entry("cv_count", &self.m_cv_count)?;
         map.serialize_entry("cv_stride", &self.m_cv_stride)?;
         map.serialize_entry("dimension", &self.m_dim)?;
-        map.serialize_entry("guid", &self.guid)?;
+        map.serialize_entry("guid", self.guid())?;
         map.serialize_entry("is_rational", &self.m_is_rat)?;
         map.serialize_entry("knots", &self.m_knot)?;
         let linecolors_flat: Vec<u8> = self.linecolors.iter()
@@ -128,7 +127,7 @@ impl<'de> Deserialize<'de> for NurbsCurve {
             .map(|c| Color::new(c[0], c[1], c[2], c[3]))
             .collect();
         Ok(NurbsCurve {
-            guid: data.guid,
+            guid: { let c = std::sync::OnceLock::new(); let _ = c.set(data.guid); c },
             name: data.name,
             width: data.width.unwrap_or(1.0),
             pointcolors,
@@ -659,7 +658,7 @@ impl NurbsCurve {
         let knot_count = if order > 0 && cv_count >= order { order + cv_count - 2 } else { 0 };
 
         NurbsCurve {
-            guid: Uuid::new_v4().to_string(),
+            guid: std::sync::OnceLock::new(),
             name: "my_nurbscurve".to_string(),
             width: 1.0,
             pointcolors: Vec::new(),
@@ -679,7 +678,7 @@ impl NurbsCurve {
     /// Create an empty NURBS curve (default constructor)
     pub fn default() -> Self {
         NurbsCurve {
-            guid: Uuid::new_v4().to_string(),
+            guid: std::sync::OnceLock::new(),
             name: "my_nurbscurve".to_string(),
             width: 1.0,
             pointcolors: Vec::new(),
@@ -699,8 +698,16 @@ impl NurbsCurve {
     /// Create a duplicate with new GUID
     pub fn duplicate(&self) -> Self {
         let mut copy = self.clone();
-        copy.guid = Uuid::new_v4().to_string();
+        copy.guid = std::sync::OnceLock::new();
         copy
+    }
+
+    pub fn guid(&self) -> &str {
+        self.guid.get_or_init(|| uuid::Uuid::new_v4().to_string())
+    }
+
+    pub fn set_guid(&self, g: String) {
+        let _ = self.guid.set(g);
     }
 
 
@@ -2771,7 +2778,7 @@ impl NurbsCurve {
 
     pub fn transformed(&self, xf: Option<&Xform>) -> NurbsCurve {
         let mut result = self.clone();
-        result.guid = Uuid::new_v4().to_string();
+        result.guid = std::sync::OnceLock::new();
         result.transform(xf);
         result
     }
@@ -2815,7 +2822,7 @@ impl NurbsCurve {
     pub fn to_protobuf(&self) -> Vec<u8> {
         use prost::Message;
         let proto = crate::proto::NurbsCurve {
-            guid: self.guid.clone(),
+            guid: self.guid().to_string(),
             name: self.name.clone(),
             dimension: self.m_dim as i32,
             is_rational: self.m_is_rat,
@@ -2834,7 +2841,7 @@ impl NurbsCurve {
                 r: c.r as i32, g: c.g as i32, b: c.b as i32, a: c.a as i32,
             }).collect(),
             xform: Some(crate::proto::Xform {
-                guid: self.xform.guid.clone(),
+                guid: self.xform.guid().to_string(),
                 name: self.xform.name.clone(),
                 matrix: self.xform.m.to_vec(),
             }),
@@ -2853,14 +2860,14 @@ impl NurbsCurve {
             proto.order as usize,
             proto.cv_count as usize,
         );
-        curve.guid = proto.guid;
+        curve.set_guid(proto.guid.clone());
         curve.name = proto.name;
         curve.m_knot = proto.knots;
         curve.m_cv = proto.cvs;
         curve.pointcolors = proto.pointcolors.iter().map(|c| Color::new(c.r as u8, c.g as u8, c.b as u8, c.a as u8)).collect();
         curve.linecolors = proto.linecolors.iter().map(|c| Color::new(c.r as u8, c.g as u8, c.b as u8, c.a as u8)).collect();
         if let Some(xform) = proto.xform {
-            curve.xform.guid = xform.guid;
+            curve.xform.set_guid(xform.guid.clone());
             curve.xform.name = xform.name;
             for (i, val) in xform.matrix.iter().enumerate() {
                 if i < 16 {

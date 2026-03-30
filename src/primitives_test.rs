@@ -44,6 +44,7 @@ pub fn run_primitives_mesh_edge_pipes() -> TestResult {
         mesh.linecolors_mut()[0] = Color::red();
 
         let pipes = Primitives::edge_pipes(&mesh, 0.1);
+
         MINI_CHECK!(pipes.len() == 4);
         MINI_CHECK!(pipes[0].get_facecolors()[0][0] == Color::red()[0]);
     })
@@ -533,7 +534,10 @@ pub fn run_primitives_nurbssurface_extrusion() -> TestResult {
 
         let dir = Vector::new(0.0, 1.0, 5.0);
 
-        let c1 = NurbsCurve::create(false, 1, &[Point::new(13.0, 0.0, 0.0), Point::new(18.0, 0.0, 0.0)]);
+        let c1 = NurbsCurve::create(false, 1, &[
+            Point::new(13.0, 0.0, 0.0),
+            Point::new(18.0, 0.0, 0.0),
+        ]);
         let s_line = Primitives::create_extrusion(&c1, &dir);
         let m_line = s_line.mesh();
 
@@ -542,14 +546,18 @@ pub fn run_primitives_nurbssurface_extrusion() -> TestResult {
         let m_circle = s_circle.mesh();
 
         let c3 = NurbsCurve::create(false, 2, &[
-            Point::new(30.0, 0.0, 0.0), Point::new(33.0, 5.0, 0.0), Point::new(37.0, 0.0, 0.0),
+            Point::new(30.0, 0.0, 0.0),
+            Point::new(33.0, 5.0, 0.0),
+            Point::new(37.0, 0.0, 0.0),
         ]);
         let s_arc = Primitives::create_extrusion(&c3, &dir);
         let m_arc = s_arc.mesh();
 
         let c4 = NurbsCurve::create(false, 1, &[
-            Point::new(40.0, 3.0, 0.0), Point::new(45.0, 0.0, 0.0),
-            Point::new(50.0, 3.0, 0.0), Point::new(55.0, 0.0, 0.0),
+            Point::new(40.0, 3.0, 0.0),
+            Point::new(45.0, 0.0, 0.0),
+            Point::new(50.0, 3.0, 0.0),
+            Point::new(55.0, 0.0, 0.0),
         ]);
         let s_wavy = Primitives::create_extrusion(&c4, &dir);
         let m_wavy = s_wavy.mesh();
@@ -569,8 +577,8 @@ pub fn run_primitives_nurbssurface_extrusion() -> TestResult {
         MINI_CHECK!(s_circle.is_rational());
         MINI_CHECK!(s_circle.is_closed(0) == true && s_circle.is_closed(1) == false);
         MINI_CHECK!(s_circle.cv_count_dir(Some(0)) == 9 && s_circle.cv_count_dir(Some(1)) == 2);
-        MINI_CHECK!(m_circle.number_of_vertices() == 40);
-        MINI_CHECK!(m_circle.number_of_faces() == 40);
+        MINI_CHECK!(m_circle.number_of_vertices() == 42);
+        MINI_CHECK!(m_circle.number_of_faces() == 42);
         MINI_CHECK!(TOLERANCE.is_point_close(&s_circle.get_cv(0,0).unwrap(), &Point::new(27.0, 0.0, 0.0)));
         MINI_CHECK!(TOLERANCE.is_point_close(&s_circle.get_cv(0,1).unwrap(), &Point::new(27.0, 1.0, 5.0)));
         MINI_CHECK!(TOLERANCE.is_point_close(&s_circle.get_cv(4,0).unwrap(), &Point::new(21.0, 0.0, 0.0)));
@@ -659,16 +667,22 @@ pub fn run_primitives_nurbssurface_loft() -> TestResult {
 
         let open_pts = vec![
             vec![
-                Point::new(10.0, -12.0, 0.0), Point::new(10.0, -10.0, 3.0),
-                Point::new(10.0, -7.0, 3.0), Point::new(10.0, -5.0, 0.0),
+                Point::new(10.0, -12.0, 0.0),
+                Point::new(10.0, -10.0, 3.0),
+                Point::new(10.0, -7.0, 3.0),
+                Point::new(10.0, -5.0, 0.0),
             ],
             vec![
-                Point::new(5.5, -12.0, 3.5), Point::new(5.5, -10.0, 1.5),
-                Point::new(5.5, -7.0, 1.5), Point::new(5.5, -5.0, 3.5),
+                Point::new(5.5, -12.0, 3.5),
+                Point::new(5.5, -10.0, 1.5),
+                Point::new(5.5, -7.0, 1.5),
+                Point::new(5.5, -5.0, 3.5),
             ],
             vec![
-                Point::new(1.0, -12.0, 0.0), Point::new(1.0, -10.0, 3.0),
-                Point::new(1.0, -7.0, 3.0), Point::new(1.0, -5.0, 0.0),
+                Point::new(1.0, -12.0, 0.0),
+                Point::new(1.0, -10.0, 3.0),
+                Point::new(1.0, -7.0, 3.0),
+                Point::new(1.0, -5.0, 0.0),
             ],
         ];
         let open_curves = vec![
@@ -728,7 +742,10 @@ pub fn run_primitives_nurbssurface_revolve() -> TestResult {
         let s_torus = Primitives::create_revolve(&pb, &Point::new(tcx, 0.0, 0.0), &Vector::new(0.0, 0.0, 1.0), 2.0 * crate::tolerance::PI);
         let m_torus = s_torus.mesh();
 
-        let pc = NurbsCurve::create(false, 1, &[Point::new(29.0, 0.0, -0.5), Point::new(29.0, 0.0, 0.5)]);
+        let pc = NurbsCurve::create(false, 1, &[
+            Point::new(29.0, 0.0, -0.5),
+            Point::new(29.0, 0.0, 0.5),
+        ]);
         let s_elbow = Primitives::create_revolve(&pc, &Point::new(26.0, 0.0, 0.0), &Vector::new(0.0, 0.0, 1.0), crate::tolerance::PI / 2.0);
         let m_elbow = s_elbow.mesh();
 
@@ -741,7 +758,10 @@ pub fn run_primitives_nurbssurface_revolve() -> TestResult {
         let s_sphere = Primitives::create_revolve(&pd, &Point::new(scx, 0.0, 0.0), &Vector::new(0.0, 0.0, 1.0), 2.0 * crate::tolerance::PI);
         let m_sphere = s_sphere.mesh();
 
-        let pe = NurbsCurve::create(false, 1, &[Point::new(44.0, 0.0, 3.0), Point::new(46.0, 0.0, 0.0)]);
+        let pe = NurbsCurve::create(false, 1, &[
+            Point::new(44.0, 0.0, 3.0),
+            Point::new(46.0, 0.0, 0.0),
+        ]);
         let s_cone = Primitives::create_revolve(&pe, &Point::new(44.0, 0.0, 0.0), &Vector::new(0.0, 0.0, 1.0), 2.0 * crate::tolerance::PI);
         let m_cone = s_cone.mesh();
 
@@ -750,8 +770,8 @@ pub fn run_primitives_nurbssurface_revolve() -> TestResult {
         MINI_CHECK!(s_vase.is_closed(1) == false);
         MINI_CHECK!(s_vase.cv_count_dir(Some(0)) == 9);
         MINI_CHECK!(s_vase.cv_count_dir(Some(1)) == 7);
-        MINI_CHECK!(m_vase.number_of_vertices() == 660);
-        MINI_CHECK!(m_vase.number_of_faces() == 1280);
+        MINI_CHECK!(m_vase.number_of_vertices() == 609);
+        MINI_CHECK!(m_vase.number_of_faces() == 1176);
         MINI_CHECK!(TOLERANCE.is_point_close(&s_vase.get_cv(0,0).unwrap(), &Point::new(1.5, 0.0, 0.0)));
         MINI_CHECK!(TOLERANCE.is_point_close(&s_vase.get_cv(0,6).unwrap(), &Point::new(1.8, 0.0, 5.0)));
 
@@ -760,8 +780,8 @@ pub fn run_primitives_nurbssurface_revolve() -> TestResult {
         MINI_CHECK!(s_torus.is_closed(1) == true);
         MINI_CHECK!(s_torus.cv_count_dir(Some(0)) == 9);
         MINI_CHECK!(s_torus.cv_count_dir(Some(1)) == 9);
-        MINI_CHECK!(m_torus.number_of_vertices() == 640);
-        MINI_CHECK!(m_torus.number_of_faces() == 1280);
+        MINI_CHECK!(m_torus.number_of_vertices() == 693);
+        MINI_CHECK!(m_torus.number_of_faces() == 1386);
         MINI_CHECK!(TOLERANCE.is_point_close(&s_torus.get_cv(0,0).unwrap(), &Point::new(20.5, 0.0, 0.0)));
 
         MINI_CHECK!(s_elbow.is_valid());
@@ -783,8 +803,8 @@ pub fn run_primitives_nurbssurface_revolve() -> TestResult {
         MINI_CHECK!(s_sphere.is_singular(2) == true);
         MINI_CHECK!(s_sphere.cv_count_dir(Some(0)) == 9);
         MINI_CHECK!(s_sphere.cv_count_dir(Some(1)) == 5);
-        MINI_CHECK!(m_sphere.number_of_vertices() > 0);
-        MINI_CHECK!(m_sphere.number_of_faces() > 0);
+        MINI_CHECK!(m_sphere.number_of_vertices() == 191);
+        MINI_CHECK!(m_sphere.number_of_faces() == 378);
         MINI_CHECK!(TOLERANCE.is_point_close(&s_sphere.get_cv(0,0).unwrap(), &Point::new(36.0, 0.0, -2.0)));
         MINI_CHECK!(TOLERANCE.is_point_close(&s_sphere.get_cv(0,4).unwrap(), &Point::new(36.0, 0.0, 2.0)));
 
@@ -795,8 +815,8 @@ pub fn run_primitives_nurbssurface_revolve() -> TestResult {
         MINI_CHECK!(s_cone.is_singular(2) == false);
         MINI_CHECK!(s_cone.cv_count_dir(Some(0)) == 9);
         MINI_CHECK!(s_cone.cv_count_dir(Some(1)) == 2);
-        MINI_CHECK!(m_cone.number_of_vertices() > 0);
-        MINI_CHECK!(m_cone.number_of_faces() > 0);
+        MINI_CHECK!(m_cone.number_of_vertices() == 22);
+        MINI_CHECK!(m_cone.number_of_faces() == 21);
         MINI_CHECK!(TOLERANCE.is_point_close(&s_cone.get_cv(0,0).unwrap(), &Point::new(44.0, 0.0, 3.0)));
         MINI_CHECK!(TOLERANCE.is_point_close(&s_cone.get_cv(0,1).unwrap(), &Point::new(46.0, 0.0, 0.0)));
     })
@@ -809,23 +829,33 @@ pub fn run_primitives_nurbssurface_sweep() -> TestResult {
         use crate::point::Point;
 
         let rail = NurbsCurve::create(false, 2, &[
-            Point::new(0.0, 0.0, 0.0), Point::new(0.0, 5.0, 0.0), Point::new(2.0, 9.0, 0.0),
+            Point::new(0.0, 0.0, 0.0),
+            Point::new(0.0, 5.0, 0.0),
+            Point::new(2.0, 9.0, 0.0),
         ]);
         let profile = Primitives::circle(0.0, 0.0, 0.0, 1.0);
         let s_sweep1 = Primitives::create_sweep1(&rail, &profile);
         let m_sweep1 = s_sweep1.mesh();
 
         let rail1 = NurbsCurve::create(false, 2, &[
-            Point::new(6.0, -1.0, 0.0), Point::new(7.0, 3.0, 0.0), Point::new(8.0, 4.0, 0.0),
+            Point::new(6.0, -1.0, 0.0),
+            Point::new(7.0, 3.0, 0.0),
+            Point::new(8.0, 4.0, 0.0),
         ]);
         let rail2 = NurbsCurve::create(false, 2, &[
-            Point::new(10.0, -1.0, 0.0), Point::new(10.0, 3.0, 0.0), Point::new(9.0, 4.0, 0.0),
+            Point::new(10.0, -1.0, 0.0),
+            Point::new(10.0, 3.0, 0.0),
+            Point::new(9.0, 4.0, 0.0),
         ]);
         let shape1 = NurbsCurve::create(false, 2, &[
-            Point::new(6.0, -1.0, 0.0), Point::new(8.0, -1.0, 2.0), Point::new(10.0, -1.0, 0.0),
+            Point::new(6.0, -1.0, 0.0),
+            Point::new(8.0, -1.0, 2.0),
+            Point::new(10.0, -1.0, 0.0),
         ]);
         let shape2 = NurbsCurve::create(false, 2, &[
-            Point::new(8.0, 4.0, 0.0), Point::new(8.5, 4.0, 1.5), Point::new(9.0, 4.0, 0.0),
+            Point::new(8.0, 4.0, 0.0),
+            Point::new(8.5, 4.0, 1.5),
+            Point::new(9.0, 4.0, 0.0),
         ]);
         let s_sweep2 = Primitives::create_sweep2(&rail1, &rail2, &[shape1, shape2]);
         let m_sweep2 = s_sweep2.mesh();
@@ -866,19 +896,25 @@ pub fn run_primitives_nurbssurface_edge() -> TestResult {
         use crate::point::Point;
 
         let pts_south = vec![
-            Point::new(1.0, 20.569076, 0.0), Point::new(1.0, 22.569076, 3.0),
-            Point::new(1.0, 25.569076, 3.0), Point::new(1.0, 27.569076, 0.0),
+            Point::new(1.0, 20.569076, 0.0),
+            Point::new(1.0, 22.569076, 3.0),
+            Point::new(1.0, 25.569076, 3.0),
+            Point::new(1.0, 27.569076, 0.0),
         ];
         let pts_west  = vec![
-            Point::new(10.0, 20.569076, 0.0), Point::new(5.5, 20.569076, 3.5),
+            Point::new(10.0, 20.569076, 0.0),
+            Point::new(5.5, 20.569076, 3.5),
             Point::new(1.0, 20.569076, 0.0),
         ];
         let pts_north = vec![
-            Point::new(10.0, 20.569076, 0.0), Point::new(10.0, 22.569076, 3.0),
-            Point::new(10.0, 25.569076, 3.0), Point::new(10.0, 27.569076, 0.0),
+            Point::new(10.0, 20.569076, 0.0),
+            Point::new(10.0, 22.569076, 3.0),
+            Point::new(10.0, 25.569076, 3.0),
+            Point::new(10.0, 27.569076, 0.0),
         ];
         let pts_east  = vec![
-            Point::new(10.0, 27.569076, 0.0), Point::new(5.5, 27.569076, 3.5),
+            Point::new(10.0, 27.569076, 0.0),
+            Point::new(5.5, 27.569076, 3.5),
             Point::new(1.0, 27.569076, 0.0),
         ];
 
@@ -1000,9 +1036,12 @@ pub fn run_primitives_nurbscurve_interpolated() -> TestResult {
         use crate::knot::CurveKnotStyle;
 
         let points = vec![
-            Point::new(14.0, 9.0, 0.0), Point::new(15.342777, 13.734889, 0.0),
-            Point::new(21.897914, 32.239195, 0.0), Point::new(24.678472, 0.354555, 0.0),
-            Point::new(33.813678, 24.76858, 0.0), Point::new(39.626394, 15.47249, 0.0),
+            Point::new(14.0, 9.0, 0.0),
+            Point::new(15.342777, 13.734889, 0.0),
+            Point::new(21.897914, 32.239195, 0.0),
+            Point::new(24.678472, 0.354555, 0.0),
+            Point::new(33.813678, 24.76858, 0.0),
+            Point::new(39.626394, 15.47249, 0.0),
             Point::new(41.0, 13.0, 0.0),
         ];
 

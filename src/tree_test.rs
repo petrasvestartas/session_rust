@@ -9,10 +9,11 @@ pub fn run_tree_json_roundtrip() -> TestResult {
         use crate::encoders::{json_dump, json_load};
         let mut original = Tree::new("./serialization/test_tree");
         let point1 = Point::new(1.0, 2.0, 3.0);
-        let node1 = TreeNode::new(&point1.guid.to_string());
+        let node1 = TreeNode::new(&point1.guid().to_string());
         original.add(&node1, None);
         json_dump(&original, "serialization/test_tree.json", false).unwrap();
         let loaded = json_load::<Tree>("serialization/test_tree.json").unwrap();
+
         MINI_CHECK!(loaded.name == original.name);
         MINI_CHECK!(loaded.nodes().len() == original.nodes().len());
     })

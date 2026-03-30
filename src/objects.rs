@@ -1,5 +1,5 @@
 use crate::element::Element;
-use crate::obb::Obb;
+use crate::obb::OBB;
 use crate::brep::BRep;
 use crate::line::Line;
 use crate::mesh::Mesh;
@@ -12,18 +12,18 @@ use crate::polyline::Polyline;
 use serde::{ser::Serialize as SerTrait, Deserialize, Serialize};
 use std::fmt;
 use std::fs;
-use uuid::Uuid;
 
 /// A collection of all geometry objects.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(tag = "type", rename = "Objects")]
 pub struct Objects {
-    pub guid: String,
+    #[serde(serialize_with = "crate::guid_serde::serialize", deserialize_with = "crate::guid_serde::deserialize")]
+    guid: std::sync::OnceLock<String>,
     pub name: String,
     pub points: Vec<Point>,
     pub lines: Vec<Line>,
     pub planes: Vec<Plane>,
-    pub bboxes: Vec<Obb>,
+    pub bboxes: Vec<OBB>,
     pub polylines: Vec<Polyline>,
     pub pointclouds: Vec<PointCloud>,
     pub meshes: Vec<Mesh>,
@@ -36,7 +36,7 @@ pub struct Objects {
 impl Default for Objects {
     fn default() -> Self {
         Self {
-            guid: Uuid::new_v4().to_string(),
+            guid: std::sync::OnceLock::new(),
             name: "my_objects".to_string(),
             points: Vec::new(),
             lines: Vec::new(),
@@ -54,6 +54,14 @@ impl Default for Objects {
 }
 
 impl Objects {
+    pub fn guid(&self) -> &str {
+        self.guid.get_or_init(|| uuid::Uuid::new_v4().to_string())
+    }
+
+    pub fn set_guid(&self, g: String) {
+        let _ = self.guid.set(g);
+    }
+
     pub fn new() -> Self {
         Self {
             name: "my_objects".to_string(),
@@ -105,7 +113,7 @@ impl Objects {
         use prost::Message;
         let proto = crate::proto::Objects {
             name: self.name.clone(),
-            guid: self.guid.clone(),
+            guid: self.guid().to_string(),
             points: self.points.iter().map(|p| {
                 crate::proto::Point::decode(p.pb_dumps().as_slice()).unwrap()
             }).collect(),
@@ -147,7 +155,7 @@ impl Objects {
         use prost::Message;
         let proto = crate::proto::Objects::decode(data)?;
         let mut objects = Objects::new();
-        objects.guid = proto.guid;
+        objects.set_guid(proto.guid.clone());
         objects.name = proto.name;
         for p in &proto.points {
             objects.points.push(crate::point::Point::pb_loads(&p.encode_to_vec())?);
@@ -159,7 +167,7 @@ impl Objects {
             objects.planes.push(crate::plane::Plane::pb_loads(&p.encode_to_vec())?);
         }
         for b in &proto.bboxes {
-            objects.bboxes.push(crate::obb::Obb::pb_loads(&b.encode_to_vec())?);
+            objects.bboxes.push(crate::obb::OBB::pb_loads(&b.encode_to_vec())?);
         }
         for p in &proto.polylines {
             objects.polylines.push(crate::polyline::Polyline::pb_loads(&p.encode_to_vec())?);
@@ -201,7 +209,7 @@ impl fmt::Display for Objects {
             f,
             "Objects({}, {}, points={})",
             self.name,
-            self.guid,
+            self.guid(),
             self.points.len()
         )
     }

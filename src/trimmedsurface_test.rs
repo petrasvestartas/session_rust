@@ -18,8 +18,10 @@ pub fn run_trimmedsurface_constructor() -> TestResult {
 
         // Outer trim loop (rectangle in UV space)
         let outer = NurbsCurve::create(true, 1, &[
-            Point::new(0.1, 0.1, 0.0), Point::new(0.9, 0.1, 0.0),
-            Point::new(0.9, 0.9, 0.0), Point::new(0.1, 0.9, 0.0),
+            Point::new(0.1, 0.1, 0.0),
+            Point::new(0.9, 0.1, 0.0),
+            Point::new(0.9, 0.9, 0.0),
+            Point::new(0.1, 0.9, 0.0),
         ]);
 
         let ts = TrimmedSurface::create(&srf, &outer);
@@ -34,11 +36,11 @@ pub fn run_trimmedsurface_constructor() -> TestResult {
         MINI_CHECK!(ts.is_valid());
         MINI_CHECK!(ts.is_trimmed());
         MINI_CHECK!(ts.name == "my_trimmedsurface");
-        MINI_CHECK!(!ts.guid.is_empty());
+        MINI_CHECK!(!ts.guid().is_empty());
         MINI_CHECK!(sstr.contains("TrimmedSurface"));
         MINI_CHECK!(srepr.contains("name=my_trimmedsurface"));
         MINI_CHECK!(tscopy.is_valid());
-        MINI_CHECK!(tscopy.guid != ts.guid);
+        MINI_CHECK!(tscopy.guid() != ts.guid());
         MINI_CHECK!(tscopy == ts);
     })
 }
@@ -52,42 +54,57 @@ pub fn run_trimmedsurface_constructor_planar() -> TestResult {
 
         // Planar curve boundary
         let pts = vec![
-            Point::new(0.0, 0.0, 0.0), Point::new(3.0, 1.0, 0.0), Point::new(5.0, 0.5, 0.0),
-            Point::new(6.0, 3.0, 0.0), Point::new(4.0, 5.0, 0.0), Point::new(1.0, 4.0, 0.0),
+            Point::new(0.0, 0.0, 0.0),
+            Point::new(3.0, 1.0, 0.0),
+            Point::new(5.0, 0.5, 0.0),
+            Point::new(6.0, 3.0, 0.0),
+            Point::new(4.0, 5.0, 0.0),
+            Point::new(1.0, 4.0, 0.0),
         ];
         let bnd = NurbsCurve::create(true, 3, &pts);
         let _ts = TrimmedSurface::create_planar(&bnd).unwrap();
 
         // Rotated planar
         let pts = vec![
-            Point::new(0.0, 0.0, 0.0), Point::new(3.0, 1.0, -2.0), Point::new(5.0, 2.0, -3.0),
-            Point::new(4.0, 4.0, 0.0), Point::new(1.0, 3.0, 2.0),
+            Point::new(0.0, 0.0, 0.0),
+            Point::new(3.0, 1.0, -2.0),
+            Point::new(5.0, 2.0, -3.0),
+            Point::new(4.0, 4.0, 0.0),
+            Point::new(1.0, 3.0, 2.0),
         ];
         let bnd = NurbsCurve::create(true, 3, &pts);
         let _ts = TrimmedSurface::create_planar(&bnd).unwrap();
 
         // Triangle
         let bnd = NurbsCurve::create(true, 1, &[
-            Point::new(0.0, 0.0, 0.0), Point::new(6.0, 3.0, 3.0), Point::new(2.0, 5.0, 1.0),
+            Point::new(0.0, 0.0, 0.0),
+            Point::new(6.0, 3.0, 3.0),
+            Point::new(2.0, 5.0, 1.0),
         ]);
         let _ts = TrimmedSurface::create_planar(&bnd).unwrap();
 
         // Trapezoid
         let bnd = NurbsCurve::create(true, 1, &[
-            Point::new(0.0, 0.0, 6.0), Point::new(5.0, 0.0, 6.0),
-            Point::new(4.0, 4.0, 2.0), Point::new(1.0, 4.0, 2.0),
+            Point::new(0.0, 0.0, 6.0),
+            Point::new(5.0, 0.0, 6.0),
+            Point::new(4.0, 4.0, 2.0),
+            Point::new(1.0, 4.0, 2.0),
         ]);
         let _ts = TrimmedSurface::create_planar(&bnd).unwrap();
 
         // Rectangle with a hole
         let bnd = NurbsCurve::create(true, 1, &[
-            Point::new(0.0, 0.0, 0.0), Point::new(6.0, 0.0, 0.0),
-            Point::new(6.0, 6.0, 0.0), Point::new(0.0, 6.0, 0.0),
+            Point::new(0.0, 0.0, 0.0),
+            Point::new(6.0, 0.0, 0.0),
+            Point::new(6.0, 6.0, 0.0),
+            Point::new(0.0, 6.0, 0.0),
         ]);
         let mut ts = TrimmedSurface::create_planar(&bnd).unwrap();
         ts.add_hole(&NurbsCurve::create(true, 1, &[
-            Point::new(2.0, 2.0, 0.0), Point::new(4.0, 2.0, 0.0),
-            Point::new(4.0, 4.0, 0.0), Point::new(2.0, 4.0, 0.0),
+            Point::new(2.0, 2.0, 0.0),
+            Point::new(4.0, 2.0, 0.0),
+            Point::new(4.0, 4.0, 0.0),
+            Point::new(2.0, 4.0, 0.0),
         ]));
 
         // Hexagon with 2 holes
@@ -101,11 +118,15 @@ pub fn run_trimmedsurface_constructor_planar() -> TestResult {
         let mut ts = TrimmedSurface::create_planar(&bnd).unwrap();
         ts.add_holes(&[
             NurbsCurve::create(true, 1, &[
-                Point::new(1.5, 0.5, 0.75), Point::new(2.5, 0.5, 1.25), Point::new(2.0, 1.5, 1.0),
+                Point::new(1.5, 0.5, 0.75),
+                Point::new(2.5, 0.5, 1.25),
+                Point::new(2.0, 1.5, 1.0),
             ]),
             NurbsCurve::create(true, 1, &[
-                Point::new(-2.0, -0.5, -1.0), Point::new(-1.0, -0.5, -0.5),
-                Point::new(-1.0, -1.5, -0.5), Point::new(-2.0, -1.5, -1.0),
+                Point::new(-2.0, -0.5, -1.0),
+                Point::new(-1.0, -0.5, -0.5),
+                Point::new(-1.0, -1.5, -0.5),
+                Point::new(-2.0, -1.5, -1.0),
             ]),
         ]);
     })
@@ -135,16 +156,20 @@ pub fn run_trimmedsurface_constructor_hole() -> TestResult {
 
         // Create outer loop (full boundary in UV)
         let outer = NurbsCurve::create(true, 1, &[
-            Point::new(0.0, 0.0, 0.0), Point::new(1.0, 0.0, 0.0),
-            Point::new(1.0, 1.0, 0.0), Point::new(0.0, 1.0, 0.0),
+            Point::new(0.0, 0.0, 0.0),
+            Point::new(1.0, 0.0, 0.0),
+            Point::new(1.0, 1.0, 0.0),
+            Point::new(0.0, 1.0, 0.0),
         ]);
 
         let mut ts = TrimmedSurface::create(&srf, &outer);
 
         // Add hole as UV curve directly
         let hole = NurbsCurve::create(true, 1, &[
-            Point::new(0.4, 0.4, 0.0), Point::new(0.6, 0.4, 0.0),
-            Point::new(0.6, 0.6, 0.0), Point::new(0.4, 0.6, 0.0),
+            Point::new(0.4, 0.4, 0.0),
+            Point::new(0.6, 0.4, 0.0),
+            Point::new(0.6, 0.6, 0.0),
+            Point::new(0.4, 0.6, 0.0),
         ]);
         ts.add_inner_loop(hole);
 
@@ -168,8 +193,10 @@ pub fn run_trimmedsurface_accessors() -> TestResult {
         srf.set_cv(1, 1, &Point::new(5.0, 5.0, 0.0));
 
         let outer = NurbsCurve::create(true, 1, &[
-            Point::new(0.1, 0.1, 0.0), Point::new(0.9, 0.1, 0.0),
-            Point::new(0.9, 0.9, 0.0), Point::new(0.1, 0.9, 0.0),
+            Point::new(0.1, 0.1, 0.0),
+            Point::new(0.9, 0.1, 0.0),
+            Point::new(0.9, 0.9, 0.0),
+            Point::new(0.1, 0.9, 0.0),
         ]);
 
         let mut ts = TrimmedSurface::create(&srf, &outer);
@@ -203,20 +230,26 @@ pub fn run_trimmedsurface_add_inner_loop() -> TestResult {
         srf.set_cv(1, 1, &Point::new(10.0, 10.0, 0.0));
 
         let outer = NurbsCurve::create(true, 1, &[
-            Point::new(0.0, 0.0, 0.0), Point::new(1.0, 0.0, 0.0),
-            Point::new(1.0, 1.0, 0.0), Point::new(0.0, 1.0, 0.0),
+            Point::new(0.0, 0.0, 0.0),
+            Point::new(1.0, 0.0, 0.0),
+            Point::new(1.0, 1.0, 0.0),
+            Point::new(0.0, 1.0, 0.0),
         ]);
 
         let mut ts = TrimmedSurface::create(&srf, &outer);
 
         // Add inner loops (holes in UV)
         let hole1 = NurbsCurve::create(true, 1, &[
-            Point::new(0.2, 0.2, 0.0), Point::new(0.4, 0.2, 0.0),
-            Point::new(0.4, 0.4, 0.0), Point::new(0.2, 0.4, 0.0),
+            Point::new(0.2, 0.2, 0.0),
+            Point::new(0.4, 0.2, 0.0),
+            Point::new(0.4, 0.4, 0.0),
+            Point::new(0.2, 0.4, 0.0),
         ]);
         let hole2 = NurbsCurve::create(true, 1, &[
-            Point::new(0.6, 0.6, 0.0), Point::new(0.8, 0.6, 0.0),
-            Point::new(0.8, 0.8, 0.0), Point::new(0.6, 0.8, 0.0),
+            Point::new(0.6, 0.6, 0.0),
+            Point::new(0.8, 0.6, 0.0),
+            Point::new(0.8, 0.8, 0.0),
+            Point::new(0.6, 0.8, 0.0),
         ]);
 
         ts.add_inner_loop(hole1);
@@ -247,8 +280,10 @@ pub fn run_trimmedsurface_point_at() -> TestResult {
         srf.set_cv(1, 1, &Point::new(4.0, 4.0, 0.0));
 
         let outer = NurbsCurve::create(true, 1, &[
-            Point::new(0.0, 0.0, 0.0), Point::new(1.0, 0.0, 0.0),
-            Point::new(1.0, 1.0, 0.0), Point::new(0.0, 1.0, 0.0),
+            Point::new(0.0, 0.0, 0.0),
+            Point::new(1.0, 0.0, 0.0),
+            Point::new(1.0, 1.0, 0.0),
+            Point::new(0.0, 1.0, 0.0),
         ]);
 
         let ts = TrimmedSurface::create(&srf, &outer);
@@ -282,8 +317,10 @@ pub fn run_trimmedsurface_mesh() -> TestResult {
         srf.set_cv(1, 1, &Point::new(6.0, 6.0, 0.0));
 
         let outer = NurbsCurve::create(true, 1, &[
-            Point::new(0.05, 0.05, 0.0), Point::new(0.95, 0.05, 0.0),
-            Point::new(0.95, 0.95, 0.0), Point::new(0.05, 0.95, 0.0),
+            Point::new(0.05, 0.05, 0.0),
+            Point::new(0.95, 0.05, 0.0),
+            Point::new(0.95, 0.95, 0.0),
+            Point::new(0.05, 0.95, 0.0),
         ]);
 
         let ts = TrimmedSurface::create(&srf, &outer);
@@ -311,8 +348,10 @@ pub fn run_trimmedsurface_transformation() -> TestResult {
         srf.set_cv(1, 1, &Point::new(1.0, 1.0, 0.0));
 
         let outer = NurbsCurve::create(true, 1, &[
-            Point::new(0.0, 0.0, 0.0), Point::new(1.0, 0.0, 0.0),
-            Point::new(1.0, 1.0, 0.0), Point::new(0.0, 1.0, 0.0),
+            Point::new(0.0, 0.0, 0.0),
+            Point::new(1.0, 0.0, 0.0),
+            Point::new(1.0, 1.0, 0.0),
+            Point::new(0.0, 1.0, 0.0),
         ]);
 
         let mut ts = TrimmedSurface::create(&srf, &outer);
@@ -345,8 +384,10 @@ pub fn run_trimmedsurface_json_roundtrip() -> TestResult {
         srf.set_cv(1, 1, &Point::new(5.0, 5.0, 0.0));
 
         let outer = NurbsCurve::create(true, 1, &[
-            Point::new(0.1, 0.1, 0.0), Point::new(0.9, 0.1, 0.0),
-            Point::new(0.9, 0.9, 0.0), Point::new(0.1, 0.9, 0.0),
+            Point::new(0.1, 0.1, 0.0),
+            Point::new(0.9, 0.1, 0.0),
+            Point::new(0.9, 0.9, 0.0),
+            Point::new(0.1, 0.9, 0.0),
         ]);
 
         let mut ts = TrimmedSurface::create(&srf, &outer);
@@ -390,8 +431,10 @@ pub fn run_trimmedsurface_protobuf_roundtrip() -> TestResult {
         srf.set_cv(1, 1, &Point::new(5.0, 5.0, 0.0));
 
         let outer = NurbsCurve::create(true, 1, &[
-            Point::new(0.1, 0.1, 0.0), Point::new(0.9, 0.1, 0.0),
-            Point::new(0.9, 0.9, 0.0), Point::new(0.1, 0.9, 0.0),
+            Point::new(0.1, 0.1, 0.0),
+            Point::new(0.9, 0.1, 0.0),
+            Point::new(0.9, 0.9, 0.0),
+            Point::new(0.1, 0.9, 0.0),
         ]);
 
         let mut ts = TrimmedSurface::create(&srf, &outer);

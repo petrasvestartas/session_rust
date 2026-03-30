@@ -3,11 +3,10 @@ use serde::{ser::Serialize as SerTrait, Deserialize, Serialize};
 use std::cell::RefCell;
 use std::fmt;
 use std::rc::Rc;
-use uuid::Uuid;
 
 #[derive(Debug, Clone)]
 pub struct Tree {
-    pub guid: String,
+    guid: std::sync::OnceLock<String>,
     pub name: String,
     root_node: Option<Rc<RefCell<TreeNode>>>,
 }
@@ -18,7 +17,7 @@ impl Serialize for Tree {
         S: serde::Serializer,
     {
         let serde_tree = TreeSerde {
-            guid: self.guid.clone(),
+            guid: self.guid().to_string(),
             name: self.name.clone(),
             root: self.root_node.as_ref().map(|r| r.borrow().to_serde()),
         };
@@ -33,7 +32,7 @@ impl<'de> Deserialize<'de> for Tree {
     {
         let serde_tree = TreeSerde::deserialize(deserializer)?;
         let mut tree = Tree {
-            guid: serde_tree.guid,
+            guid: { let lock = std::sync::OnceLock::new(); let _ = lock.set(serde_tree.guid); lock },
             name: serde_tree.name,
             root_node: None,
         };
@@ -53,9 +52,17 @@ struct TreeSerde {
 }
 
 impl Tree {
+    pub fn guid(&self) -> &str {
+        self.guid.get_or_init(|| uuid::Uuid::new_v4().to_string())
+    }
+
+    pub fn set_guid(&self, g: String) {
+        let _ = self.guid.set(g);
+    }
+
     pub fn new(name: &str) -> Self {
         Self {
-            guid: Uuid::new_v4().to_string(),
+            guid: std::sync::OnceLock::new(),
             name: name.to_string(),
             root_node: None,
         }
@@ -83,8 +90,8 @@ impl Tree {
 
     pub fn remove(&mut self, node: &Rc<RefCell<TreeNode>>) -> bool {
         if let Some(root) = &self.root_node {
-            let node_guid = node.borrow().guid.clone();
-            if root.borrow().guid == node_guid {
+            let node_guid = node.borrow().guid().to_string();
+            if root.borrow().guid() == node_guid {
                 self.root_node = None;
                 true
             } else if let Some(parent) = self.find_parent_of_node(&node_guid) {
@@ -111,7 +118,7 @@ impl Tree {
     ) -> Option<Rc<RefCell<TreeNode>>> {
         let children = node.borrow().children();
         for child in children {
-            if child.borrow().guid == *target_guid {
+            if child.borrow().guid() == *target_guid {
                 return Some(Rc::clone(node));
             }
             if let Some(found) = Self::find_parent_recursive(&child, target_guid) {
@@ -145,7 +152,7 @@ impl Tree {
     }
 
     pub fn find_node_by_guid(&self, node_guid: &String) -> Option<Rc<RefCell<TreeNode>>> {
-        self.nodes().into_iter().find(|n| n.borrow().guid == *node_guid)
+        self.nodes().into_iter().find(|n| n.borrow().guid() == *node_guid)
     }
 
     pub fn add_child_by_guid(&mut self, parent_guid: &String, child_guid: &String) -> bool {
@@ -164,7 +171,7 @@ impl Tree {
 
     pub fn get_children_guids(&self, node_guid: &String) -> Vec<String> {
         if let Some(node) = self.find_node_by_guid(node_guid) {
-            node.borrow().children().iter().map(|c| c.borrow().guid.clone()).collect()
+            node.borrow().children().iter().map(|c| c.borrow().guid().to_string()).collect()
         } else {
             vec![]
         }
@@ -182,7 +189,7 @@ impl Tree {
 
     fn print_node(node: &Rc<RefCell<TreeNode>>, level: usize) {
         let indent = "  ".repeat(level);
-        println!("{}├── {} ({})", indent, node.borrow().name, node.borrow().guid);
+        println!("{}├── {} ({})", indent, node.borrow().name, node.borrow().guid());
         for child in node.borrow().children() {
             Self::print_node(&child, level + 1);
         }
@@ -190,7 +197,7 @@ impl Tree {
 
     pub fn jsondump(&self) -> Result<String, Box<dyn std::error::Error>> {
         let serde_tree = TreeSerde {
-            guid: self.guid.clone(),
+            guid: self.guid().to_string(),
             name: self.name.clone(),
             root: self.root_node.as_ref().map(|r| r.borrow().to_serde()),
         };
@@ -204,7 +211,7 @@ impl Tree {
     pub fn jsonload(json_data: &str) -> Result<Self, Box<dyn std::error::Error>> {
         let serde_tree: TreeSerde = serde_json::from_str(json_data)?;
         let mut tree = Tree::new(&serde_tree.name);
-        tree.guid = serde_tree.guid;
+        tree.set_guid(serde_tree.guid);
         if let Some(root_serde) = serde_tree.root {
             let root = TreeNode::from_serde(root_serde);
             tree.root_node = Some(root);
@@ -238,7 +245,7 @@ impl Tree {
             let children: Vec<crate::proto::TreeNode> =
                 b.children().iter().map(|c| node_to_proto(c)).collect();
             crate::proto::TreeNode {
-                guid: b.guid.clone(),
+                guid: b.guid().to_string(),
                 name: b.name.clone(),
                 parent_guid: String::new(),
                 color: b.color.map(|c| crate::proto::Color {
@@ -254,7 +261,7 @@ impl Tree {
         }
         let root_proto = self.root_node.as_ref().map(|r| node_to_proto(r));
         let proto = crate::proto::Tree {
-            guid: self.guid.clone(),
+            guid: self.guid().to_string(),
             name: self.name.clone(),
             root: root_proto,
         };
@@ -265,7 +272,7 @@ impl Tree {
         use prost::Message;
         let proto = crate::proto::Tree::decode(data)?;
         let mut tree = Tree::new(&proto.name);
-        tree.guid = proto.guid;
+        tree.set_guid(proto.guid.clone());
         fn proto_to_serde(
             proto_node: &crate::proto::TreeNode,
         ) -> crate::treenode::TreeNodeSerde {
@@ -301,7 +308,7 @@ impl Tree {
 
 impl fmt::Display for Tree {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "Tree({}, {})", self.name, self.guid)
+        write!(f, "Tree({}, {})", self.name, self.guid())
     }
 }
 

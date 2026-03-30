@@ -76,7 +76,7 @@ pub fn run_plane_constructor() -> TestResult {
         let pl_add = pl_base.clone() + offset.clone();
         let pl_sub = pl_base.clone() - offset.clone();
 
-        MINI_CHECK!(pl.name == "my_plane" && !pl.guid.is_empty());
+        MINI_CHECK!(pl.name == "my_plane" && !pl.guid().is_empty());
         MINI_CHECK!(TOLERANCE.is_close(origin[0], 0.0));
         MINI_CHECK!(TOLERANCE.is_close(origin[1], 0.0));
         MINI_CHECK!(TOLERANCE.is_close(origin[2], 0.0));
@@ -96,12 +96,13 @@ pub fn run_plane_constructor() -> TestResult {
         MINI_CHECK!(TOLERANCE.is_close(ax2[2], 1.0));
         MINI_CHECK!(plstr == "0.000000, 0.000000, 0.000000\n1.000000, 0.000000, 0.000000\n0.000000, 1.000000, 0.000000\n0.000000, 0.000000, 1.000000");
         MINI_CHECK!(plrepr == "Plane(my_plane, 0.000000, 0.000000, 0.000000, 0.000000, 0.000000, 1.000000)");
-        MINI_CHECK!(plcopy == pl && plcopy.guid != pl.guid);
+        MINI_CHECK!(plcopy == pl && plcopy.guid() != pl.guid());
         MINI_CHECK!(TOLERANCE.is_close(pl_pn.origin()[2], 5.0));
         MINI_CHECK!(TOLERANCE.is_close(pl_pn.z_axis()[2], 1.0));
         MINI_CHECK!(TOLERANCE.is_close(pl_pn.d(), -5.0));
         MINI_CHECK!(TOLERANCE.is_close(pl_pts.c(), 1.0) && TOLERANCE.is_close(pl_pts.d(), 0.0));
-        MINI_CHECK!(TOLERANCE.is_close(pl_2pts.origin()[0], 0.0) && TOLERANCE.is_close(pl_2pts.x_axis()[0], 1.0));
+        MINI_CHECK!(TOLERANCE.is_close(pl_2pts.origin()[0], 0.0));
+        MINI_CHECK!(TOLERANCE.is_close(pl_2pts.x_axis()[0], 1.0));
         MINI_CHECK!(xy.name == "xy_plane" && TOLERANCE.is_close(xy.c(), 1.0));
         MINI_CHECK!(yz.name == "yz_plane" && TOLERANCE.is_close(yz.a(), 1.0));
         MINI_CHECK!(xz.name == "xz_plane" && TOLERANCE.is_close(xz.b(), 1.0));
@@ -111,7 +112,8 @@ pub fn run_plane_constructor() -> TestResult {
         MINI_CHECK!(TOLERANCE.is_close(pl_isub.origin()[0], -1.0));
         MINI_CHECK!(TOLERANCE.is_close(pl_isub.origin()[1], -2.0));
         MINI_CHECK!(TOLERANCE.is_close(pl_isub.origin()[2], -3.0));
-        MINI_CHECK!(TOLERANCE.is_close(pl_add.origin()[2], 3.0) && TOLERANCE.is_close(pl_base.origin()[2], 0.0));
+        MINI_CHECK!(TOLERANCE.is_close(pl_add.origin()[2], 3.0));
+        MINI_CHECK!(TOLERANCE.is_close(pl_base.origin()[2], 0.0));
         MINI_CHECK!(TOLERANCE.is_close(pl_sub.origin()[2], -3.0));
     })
 }
@@ -169,12 +171,12 @@ pub fn run_plane_is_right_hand() -> TestResult {
         default_pl.rotate(PI / 4.0);
         let rotated_rh = default_pl.is_right_hand();
 
-        MINI_CHECK!(xy_rh == true);
-        MINI_CHECK!(yz_rh == true);
-        MINI_CHECK!(xz_rh == true);
-        MINI_CHECK!(default_rh == true);
-        MINI_CHECK!(reversed_rh == true);
-        MINI_CHECK!(rotated_rh == true);
+        MINI_CHECK!(xy_rh);
+        MINI_CHECK!(yz_rh);
+        MINI_CHECK!(xz_rh);
+        MINI_CHECK!(default_rh);
+        MINI_CHECK!(reversed_rh);
+        MINI_CHECK!(rotated_rh);
     })
 }
 
@@ -209,14 +211,14 @@ pub fn run_plane_is_coplanar() -> TestResult {
         p6 += Vector::new(0.0, 0.0, 1.0);
         let not_coplanar = Plane::is_coplanar(&p5, &p6, true);
 
-        MINI_CHECK!(same_dir == true);
-        MINI_CHECK!(same_dir_flipped == true);
-        MINI_CHECK!(same_dir_strict == false);
-        MINI_CHECK!(same_pos == true);
-        MINI_CHECK!(diff_pos == false);
-        MINI_CHECK!(coplanar == true);
-        MINI_CHECK!(coplanar_reversed == true);
-        MINI_CHECK!(not_coplanar == false);
+        MINI_CHECK!(same_dir);
+        MINI_CHECK!(same_dir_flipped);
+        MINI_CHECK!(!same_dir_strict);
+        MINI_CHECK!(same_pos);
+        MINI_CHECK!(!diff_pos);
+        MINI_CHECK!(coplanar);
+        MINI_CHECK!(coplanar_reversed);
+        MINI_CHECK!(!not_coplanar);
     })
 }
 
@@ -235,9 +237,15 @@ pub fn run_plane_transform() -> TestResult {
         pl2.xform = Xform::translation(1.0, 2.0, 3.0);
         let pl3 = pl2.transformed();
 
-        MINI_CHECK!(TOLERANCE.is_close(pl.origin()[0], 1.0) && TOLERANCE.is_close(pl.origin()[1], 2.0) && TOLERANCE.is_close(pl.origin()[2], 3.0));
-        MINI_CHECK!(TOLERANCE.is_close(pl3.origin()[0], 1.0) && TOLERANCE.is_close(pl3.origin()[1], 2.0) && TOLERANCE.is_close(pl3.origin()[2], 3.0));
-        MINI_CHECK!(TOLERANCE.is_close(pl2.origin()[0], 0.0) && TOLERANCE.is_close(pl2.origin()[1], 0.0) && TOLERANCE.is_close(pl2.origin()[2], 0.0));
+        MINI_CHECK!(TOLERANCE.is_close(pl.origin()[0], 1.0));
+        MINI_CHECK!(TOLERANCE.is_close(pl.origin()[1], 2.0));
+        MINI_CHECK!(TOLERANCE.is_close(pl.origin()[2], 3.0));
+        MINI_CHECK!(TOLERANCE.is_close(pl3.origin()[0], 1.0));
+        MINI_CHECK!(TOLERANCE.is_close(pl3.origin()[1], 2.0));
+        MINI_CHECK!(TOLERANCE.is_close(pl3.origin()[2], 3.0));
+        MINI_CHECK!(TOLERANCE.is_close(pl2.origin()[0], 0.0));
+        MINI_CHECK!(TOLERANCE.is_close(pl2.origin()[1], 0.0));
+        MINI_CHECK!(TOLERANCE.is_close(pl2.origin()[2], 0.0));
     })
 }
 

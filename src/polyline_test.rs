@@ -40,7 +40,10 @@ fn test_polyline_length() {
 
 #[test]
 fn test_polyline_add_point() {
-    let mut polyline = Polyline::new(vec![Point::new(0.0, 0.0, 0.0), Point::new(1.0, 0.0, 0.0)]);
+    let mut polyline = Polyline::new(vec![
+        Point::new(0.0, 0.0, 0.0),
+        Point::new(1.0, 0.0, 0.0),
+    ]);
     assert_eq!(polyline.len(), 2);
 
     polyline.add_point(Point::new(1.0, 1.0, 0.0));
@@ -50,7 +53,10 @@ fn test_polyline_add_point() {
 
 #[test]
 fn test_polyline_insert_point() {
-    let mut polyline = Polyline::new(vec![Point::new(0.0, 0.0, 0.0), Point::new(2.0, 0.0, 0.0)]);
+    let mut polyline = Polyline::new(vec![
+        Point::new(0.0, 0.0, 0.0),
+        Point::new(2.0, 0.0, 0.0),
+    ]);
 
     polyline.insert_point(1, Point::new(1.0, 0.0, 0.0));
     assert_eq!(polyline.len(), 3);
@@ -104,7 +110,10 @@ fn test_polyline_reversed() {
 
 #[test]
 fn test_polyline_add_assign_vector() {
-    let mut polyline = Polyline::new(vec![Point::new(1.0, 2.0, 3.0), Point::new(4.0, 5.0, 6.0)]);
+    let mut polyline = Polyline::new(vec![
+        Point::new(1.0, 2.0, 3.0),
+        Point::new(4.0, 5.0, 6.0),
+    ]);
     let v = Vector::new(4.0, 5.0, 6.0);
     polyline += &v;
 
@@ -118,7 +127,10 @@ fn test_polyline_add_assign_vector() {
 
 #[test]
 fn test_polyline_add_vector() {
-    let polyline = Polyline::new(vec![Point::new(1.0, 2.0, 3.0), Point::new(4.0, 5.0, 6.0)]);
+    let polyline = Polyline::new(vec![
+        Point::new(1.0, 2.0, 3.0),
+        Point::new(4.0, 5.0, 6.0),
+    ]);
     let v = Vector::new(4.0, 5.0, 6.0);
     let polyline2 = polyline + &v;
 
@@ -129,7 +141,10 @@ fn test_polyline_add_vector() {
 
 #[test]
 fn test_polyline_sub_assign_vector() {
-    let mut polyline = Polyline::new(vec![Point::new(1.0, 2.0, 3.0), Point::new(4.0, 5.0, 6.0)]);
+    let mut polyline = Polyline::new(vec![
+        Point::new(1.0, 2.0, 3.0),
+        Point::new(4.0, 5.0, 6.0),
+    ]);
     let v = Vector::new(4.0, 5.0, 6.0);
     polyline -= &v;
 
@@ -143,7 +158,10 @@ fn test_polyline_sub_assign_vector() {
 
 #[test]
 fn test_polyline_sub_vector() {
-    let polyline = Polyline::new(vec![Point::new(1.0, 2.0, 3.0), Point::new(4.0, 5.0, 6.0)]);
+    let polyline = Polyline::new(vec![
+        Point::new(1.0, 2.0, 3.0),
+        Point::new(4.0, 5.0, 6.0),
+    ]);
     let v = Vector::new(4.0, 5.0, 6.0);
     let polyline2 = polyline - &v;
 
@@ -157,7 +175,10 @@ fn test_polyline_sub_vector() {
 
 #[test]
 fn test_polyline_display() {
-    let polyline = Polyline::new(vec![Point::new(0.0, 0.0, 0.0), Point::new(1.0, 0.0, 0.0)]);
+    let polyline = Polyline::new(vec![
+        Point::new(0.0, 0.0, 0.0),
+        Point::new(1.0, 0.0, 0.0),
+    ]);
     let display_str = format!("{polyline}");
     assert!(display_str.contains("Polyline"));
     assert!(display_str.contains("points=2"));
@@ -182,7 +203,10 @@ fn test_polyline_json_serialization() {
 
 #[test]
 fn test_polyline_to_json_data() {
-    let polyline = Polyline::new(vec![Point::new(0.0, 0.0, 0.0), Point::new(1.0, 0.0, 0.0)]);
+    let polyline = Polyline::new(vec![
+        Point::new(0.0, 0.0, 0.0),
+        Point::new(1.0, 0.0, 0.0),
+    ]);
 
     let json_string = polyline.jsondump().unwrap();
     assert!(json_string.contains("Polyline"));
@@ -191,7 +215,10 @@ fn test_polyline_to_json_data() {
 
 #[test]
 fn test_polyline_from_json_data() {
-    let polyline = Polyline::new(vec![Point::new(1.0, 2.0, 3.0), Point::new(4.0, 5.0, 6.0)]);
+    let polyline = Polyline::new(vec![
+        Point::new(1.0, 2.0, 3.0),
+        Point::new(4.0, 5.0, 6.0),
+    ]);
 
     let json_string = polyline.jsondump().unwrap();
     let deserialized = Polyline::jsonload(&json_string).unwrap();
@@ -221,7 +248,10 @@ fn test_polyline_to_json_from_json() {
 
 #[test]
 fn test_polyline_get_point() {
-    let polyline = Polyline::new(vec![Point::new(0.0, 0.0, 0.0), Point::new(1.0, 2.0, 3.0)]);
+    let polyline = Polyline::new(vec![
+        Point::new(0.0, 0.0, 0.0),
+        Point::new(1.0, 2.0, 3.0),
+    ]);
 
     let point = polyline.get_point(1);
     assert!(point.is_some());
@@ -233,7 +263,10 @@ fn test_polyline_get_point() {
 
 #[test]
 fn test_polyline_set_point() {
-    let mut polyline = Polyline::new(vec![Point::new(0.0, 0.0, 0.0), Point::new(1.0, 2.0, 3.0)]);
+    let mut polyline = Polyline::new(vec![
+        Point::new(0.0, 0.0, 0.0),
+        Point::new(1.0, 2.0, 3.0),
+    ]);
 
     polyline.set_point(1, &Point::new(5.0, 6.0, 7.0));
 
@@ -352,7 +385,10 @@ fn test_polyline_line_from_projected_points() {
 
 #[test]
 fn test_polyline_closest_distance_and_point() {
-    let polyline = Polyline::new(vec![Point::new(0.0, 0.0, 0.0), Point::new(2.0, 0.0, 0.0)]);
+    let polyline = Polyline::new(vec![
+        Point::new(0.0, 0.0, 0.0),
+        Point::new(2.0, 0.0, 0.0),
+    ]);
     let test_point = Point::new(1.0, 1.0, 0.0);
 
     let (distance, edge_id, closest_point) = polyline.closest_distance_and_point(&test_point);
@@ -475,7 +511,10 @@ fn test_polyline_scale_line() {
 
 #[test]
 fn test_polyline_extend_segment() {
-    let mut polyline = Polyline::new(vec![Point::new(0.0, 0.0, 0.0), Point::new(1.0, 0.0, 0.0)]);
+    let mut polyline = Polyline::new(vec![
+        Point::new(0.0, 0.0, 0.0),
+        Point::new(1.0, 0.0, 0.0),
+    ]);
 
     polyline.extend_segment(0, 0.5, 0.5, 0.0, 0.0);
 
@@ -496,7 +535,10 @@ fn test_polyline_extend_segment_equally_static() {
 
 #[test]
 fn test_polyline_extend_segment_equally() {
-    let mut polyline = Polyline::new(vec![Point::new(0.0, 0.0, 0.0), Point::new(1.0, 0.0, 0.0)]);
+    let mut polyline = Polyline::new(vec![
+        Point::new(0.0, 0.0, 0.0),
+        Point::new(1.0, 0.0, 0.0),
+    ]);
 
     polyline.extend_segment_equally(0, 0.5, 0.0);
 
@@ -506,7 +548,10 @@ fn test_polyline_extend_segment_equally() {
 
 #[test]
 fn test_polyline_move_by() {
-    let mut polyline = Polyline::new(vec![Point::new(0.0, 0.0, 0.0), Point::new(1.0, 0.0, 0.0)]);
+    let mut polyline = Polyline::new(vec![
+        Point::new(0.0, 0.0, 0.0),
+        Point::new(1.0, 0.0, 0.0),
+    ]);
     let translation = Vector::new(1.0, 1.0, 1.0);
 
     polyline.move_by(&translation);
@@ -563,8 +608,14 @@ fn test_polyline_get_convex_corners() {
 
 #[test]
 fn test_polyline_tween_two_polylines() {
-    let polyline0 = Polyline::new(vec![Point::new(0.0, 0.0, 0.0), Point::new(1.0, 0.0, 0.0)]);
-    let polyline1 = Polyline::new(vec![Point::new(0.0, 2.0, 0.0), Point::new(1.0, 2.0, 0.0)]);
+    let polyline0 = Polyline::new(vec![
+        Point::new(0.0, 0.0, 0.0),
+        Point::new(1.0, 0.0, 0.0),
+    ]);
+    let polyline1 = Polyline::new(vec![
+        Point::new(0.0, 2.0, 0.0),
+        Point::new(1.0, 2.0, 0.0),
+    ]);
 
     let result = Polyline::tween_two_polylines(&polyline0, &polyline1, 0.5);
 
@@ -579,7 +630,7 @@ fn test_polyline_protobuf_roundtrip() {
         Point::new(4.0, 5.0, 6.0),
         Point::new(7.0, 8.0, 9.0),
     ]);
-    polyline.guid = "test-guid-12345".to_string();
+    polyline.set_guid("test-guid-12345".to_string());
     polyline.name = "test_polyline".to_string();
     polyline.width = 2.5;
     polyline.linecolor.r = 255;
@@ -594,7 +645,7 @@ fn test_polyline_protobuf_roundtrip() {
     let loaded = Polyline::pb_loads(&data).unwrap();
 
     // Verify all fields
-    assert_eq!(loaded.guid, "test-guid-12345");
+    assert_eq!(loaded.guid(), "test-guid-12345");
     assert_eq!(loaded.name, "test_polyline");
     assert_eq!(loaded.point_count(), 3);
     assert!((loaded.width - 2.5).abs() < 1e-10);
@@ -641,8 +692,10 @@ pub fn run_polyline_constructor() -> TestResult {
         // Copy (duplicates everything except guid)
         let plcopy = pl.duplicate();
         let plother = Polyline::new(vec![
-            Point::new(0.0, 0.0, 0.0), Point::new(1.0, 0.0, 0.0),
-            Point::new(1.0, 1.0, 0.0), Point::new(0.0, 1.0, 0.0),
+            Point::new(0.0, 0.0, 0.0),
+            Point::new(1.0, 0.0, 0.0),
+            Point::new(1.0, 1.0, 0.0),
+            Point::new(0.0, 1.0, 0.0),
         ]);
 
         // No-copy operators
@@ -676,13 +729,13 @@ pub fn run_polyline_constructor() -> TestResult {
         plc.linecolor = Color::with_name(255, 0, 0, 255, "red");
         plc.width = 2.5;
 
-        MINI_CHECK!(pl.name == "my_polyline" && point_count == 4 && !pl.guid.is_empty());
+        MINI_CHECK!(pl.name == "my_polyline" && point_count == 4 && !pl.guid().is_empty());
         MINI_CHECK!(segment_count == 3 && is_empty == false);
         MINI_CHECK!(pt[0] == 1.0 && pt[1] == 0.0 && pt[2] == 0.0);
         MINI_CHECK!(plstr.contains("Polyline") && plstr.contains("points=4"));
         MINI_CHECK!(plrepr.contains("Polyline(my_polyline") && plrepr.contains("4 points"));
         MINI_CHECK!(plcopy.coords == plother.coords);
-        MINI_CHECK!(plcopy.guid != pl.guid);
+        MINI_CHECK!(plcopy.guid() != pl.guid());
         MINI_CHECK!(plmult.get_points()[1][0] == 2.0);
         MINI_CHECK!(pldiv.get_points()[1][0] == 0.5);
         MINI_CHECK!(pladd.get_points()[0][0] == 1.0 && pladd.get_points()[0][1] == 1.0);
@@ -1169,3 +1222,103 @@ REGISTER_MINI_TEST!("Polyline", "Interpolate Points", crate::polyline_test::run_
 REGISTER_MINI_TEST!("Polyline", "Quick Hull", crate::polyline_test::run_polyline_quick_hull);
 REGISTER_MINI_TEST!("Polyline", "Bounding Rectangle", crate::polyline_test::run_polyline_bounding_rectangle);
 REGISTER_MINI_TEST!("Polyline", "Grid Of Points", crate::polyline_test::run_polyline_grid_of_points);
+
+pub fn run_polyline_simplify_points() -> TestResult {
+    MINI_TEST!("Simplify Points", {
+        use crate::Point;
+        use crate::Polyline;
+        let mut pts = vec![];
+        for i in 0..100_usize {
+            let x = i as f64;
+            let y = (i as f64 * 0.1).sin() * 0.001;
+            let z = 0.0;
+            pts.push(Point::new(x, y, z));
+        }
+        let result_tight = Polyline::simplify_points(&pts, 0.0001);
+        let result_loose = Polyline::simplify_points(&pts, 0.01);
+        let result_very_loose = Polyline::simplify_points(&pts, 1.0);
+
+        MINI_CHECK!(result_tight.len() <= pts.len());
+        MINI_CHECK!(result_loose.len() <= result_tight.len());
+        MINI_CHECK!(result_very_loose.len() <= result_loose.len());
+        MINI_CHECK!(result_tight[0][0] == pts[0][0]);
+        MINI_CHECK!(result_tight[result_tight.len() - 1][0] == pts[pts.len() - 1][0]);
+    })
+}
+REGISTER_MINI_TEST!("Polyline", "Simplify Points", crate::polyline_test::run_polyline_simplify_points);
+
+pub fn run_polyline_simplify() -> TestResult {
+    MINI_TEST!("Simplify", {
+        use crate::Point;
+        use crate::Polyline;
+        let mut pts = vec![];
+        for i in 0..20_usize {
+            let x = i as f64;
+            let y = 0.0;
+            let z = 0.0;
+            pts.push(Point::new(x, y, z));
+        }
+        let pl = Polyline::new(pts);
+        let result = pl.simplify(0.001);
+
+        MINI_CHECK!(result.len() == 2);
+        MINI_CHECK!(TOLERANCE.is_close(result.get_point(0).unwrap()[0], 0.0));
+        MINI_CHECK!(TOLERANCE.is_close(result.get_point(1).unwrap()[0], 19.0));
+    })
+}
+REGISTER_MINI_TEST!("Polyline", "Simplify", crate::polyline_test::run_polyline_simplify);
+
+pub fn run_polyline_simplify_collinear() -> TestResult {
+    MINI_TEST!("Simplify Collinear", {
+        use crate::Point;
+        use crate::Polyline;
+        let pts = vec![
+            Point::new(0.0, 0.0, 0.0),
+            Point::new(1.0, 0.0, 0.0),
+            Point::new(2.0, 0.0, 0.0),
+            Point::new(3.0, 0.0, 0.0),
+            Point::new(4.0, 0.0, 0.0),
+        ];
+        let result = Polyline::simplify_points(&pts, 0.001);
+
+        MINI_CHECK!(result.len() == 2);
+        MINI_CHECK!(TOLERANCE.is_close(result[0][0], 0.0));
+        MINI_CHECK!(TOLERANCE.is_close(result[result.len() - 1][0], 4.0));
+    })
+}
+REGISTER_MINI_TEST!("Polyline", "Simplify Collinear", crate::polyline_test::run_polyline_simplify_collinear);
+
+pub fn run_polyline_simplify_zigzag() -> TestResult {
+    MINI_TEST!("Simplify Zigzag", {
+        use crate::Point;
+        use crate::Polyline;
+        let mut pts = vec![];
+        for i in 0..10_usize {
+            let x = i as f64;
+            let y = if i % 2 == 1 { 1.0 } else { 0.0 };
+            let z = 0.0;
+            pts.push(Point::new(x, y, z));
+        }
+        let result_tight = Polyline::simplify_points(&pts, 0.1);
+        let result_loose = Polyline::simplify_points(&pts, 2.0);
+
+        MINI_CHECK!(result_tight.len() == 10);
+        MINI_CHECK!(result_loose.len() < result_tight.len());
+    })
+}
+REGISTER_MINI_TEST!("Polyline", "Simplify Zigzag", crate::polyline_test::run_polyline_simplify_zigzag);
+
+pub fn run_polyline_simplify_two_points() -> TestResult {
+    MINI_TEST!("Simplify Two Points", {
+        use crate::Point;
+        use crate::Polyline;
+        let pts = vec![
+            Point::new(0.0, 0.0, 0.0),
+            Point::new(1.0, 1.0, 1.0),
+        ];
+        let result = Polyline::simplify_points(&pts, 0.001);
+
+        MINI_CHECK!(result.len() == 2);
+    })
+}
+REGISTER_MINI_TEST!("Polyline", "Simplify Two Points", crate::polyline_test::run_polyline_simplify_two_points);

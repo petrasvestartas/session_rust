@@ -1,11 +1,10 @@
 use crate::{Point, Vector, Xform};
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use serde::ser::SerializeMap;
-use uuid::Uuid;
 
 #[derive(Debug, Clone)]
 pub struct Plane {
-    pub guid: String,
+    guid: std::sync::OnceLock<String>,
     pub name: String,
     pub width: f64,
     _origin: Point,
@@ -29,7 +28,7 @@ impl Serialize for Plane {
     {
         let mut map = serializer.serialize_map(Some(6))?;
         map.serialize_entry("type", "Plane")?;
-        map.serialize_entry("guid", &self.guid)?;
+        map.serialize_entry("guid", self.guid())?;
         map.serialize_entry("name", &self.name)?;
         // Single flat frame array of 12 numbers: origin + x_axis + y_axis + z_axis
         map.serialize_entry("frame", &[
@@ -80,8 +79,10 @@ impl<'de> Deserialize<'de> for Plane {
         let c = z_axis[2];
         let d = -(a * origin[0] + b * origin[1] + c * origin[2]);
 
+        let guid = std::sync::OnceLock::new();
+        let _ = guid.set(data.guid);
         Ok(Plane {
-            guid: data.guid,
+            guid,
             name: data.name,
             width: data.width,
             _origin: origin,
@@ -100,7 +101,7 @@ impl<'de> Deserialize<'de> for Plane {
 impl Default for Plane {
     fn default() -> Self {
         Self {
-            guid: Uuid::new_v4().to_string(),
+            guid: std::sync::OnceLock::new(),
             name: "my_plane".to_string(),
             width: 1.0,
             _origin: Point::default(),
@@ -131,7 +132,7 @@ impl Plane {
         let d = -(a * point[0] + b * point[1] + c * point[2]);
 
         Self {
-            guid: Uuid::new_v4().to_string(),
+            guid: std::sync::OnceLock::new(),
             name: "my_plane".to_string(),
             width: 1.0,
             _origin: point,
@@ -152,7 +153,7 @@ impl Plane {
         let c = z_axis[2];
         let d = -(a * origin[0] + b * origin[1] + c * origin[2]);
         Self {
-            guid: Uuid::new_v4().to_string(),
+            guid: std::sync::OnceLock::new(),
             name: "my_plane".to_string(),
             width: 1.0,
             _origin: origin,
@@ -181,7 +182,7 @@ impl Plane {
         let d = -(a * point[0] + b * point[1] + c * point[2]);
 
         Self {
-            guid: Uuid::new_v4().to_string(),
+            guid: std::sync::OnceLock::new(),
             name,
             width: 1.0,
             _origin: point,
@@ -212,7 +213,7 @@ impl Plane {
         let d = -(a * origin[0] + b * origin[1] + c * origin[2]);
 
         Self {
-            guid: Uuid::new_v4().to_string(),
+            guid: std::sync::OnceLock::new(),
             name: "my_plane".to_string(),
             width: 1.0,
             _origin: origin,
@@ -252,7 +253,7 @@ impl Plane {
         let d = -(a * origin[0] + b * origin[1] + c * origin[2]);
 
         Self {
-            guid: Uuid::new_v4().to_string(),
+            guid: std::sync::OnceLock::new(),
             name: "my_plane".to_string(),
             width: 1.0,
             _origin: origin,
@@ -331,7 +332,7 @@ impl Plane {
         let d = -(a * cx + b * cy + c * cz);
 
         Self {
-            guid: Uuid::new_v4().to_string(),
+            guid: std::sync::OnceLock::new(),
             name: "my_plane".to_string(),
             width: 1.0,
             _origin: Point::new(cx, cy, cz),
@@ -365,7 +366,7 @@ impl Plane {
         let d = -(a * origin[0] + b * origin[1] + c * origin[2]);
 
         Self {
-            guid: Uuid::new_v4().to_string(),
+            guid: std::sync::OnceLock::new(),
             name: "my_plane".to_string(),
             width: 1.0,
             _origin: origin,
@@ -382,7 +383,7 @@ impl Plane {
 
     pub fn xy_plane() -> Self {
         Self {
-            guid: Uuid::new_v4().to_string(),
+            guid: std::sync::OnceLock::new(),
             name: "xy_plane".to_string(),
             width: 1.0,
             _origin: Point::new(0.0, 0.0, 0.0),
@@ -399,7 +400,7 @@ impl Plane {
 
     pub fn yz_plane() -> Self {
         Self {
-            guid: Uuid::new_v4().to_string(),
+            guid: std::sync::OnceLock::new(),
             name: "yz_plane".to_string(),
             width: 1.0,
             _origin: Point::new(0.0, 0.0, 0.0),
@@ -417,7 +418,7 @@ impl Plane {
     /// Create an invalid plane (all zeros)
     pub fn invalid() -> Self {
         Self {
-            guid: Uuid::new_v4().to_string(),
+            guid: std::sync::OnceLock::new(),
             name: "my_plane".to_string(),
             width: 1.0,
             _origin: Point::new(0.0, 0.0, 0.0),
@@ -444,7 +445,7 @@ impl Plane {
         let c = z_axis[2];
         let d = -(a * origin[0] + b * origin[1] + c * origin[2]);
         Self {
-            guid: Uuid::new_v4().to_string(),
+            guid: std::sync::OnceLock::new(),
             name: "my_plane".to_string(),
             width: 1.0,
             _origin: origin,
@@ -461,7 +462,7 @@ impl Plane {
 
     pub fn xz_plane() -> Self {
         Self {
-            guid: Uuid::new_v4().to_string(),
+            guid: std::sync::OnceLock::new(),
             name: "xz_plane".to_string(),
             width: 1.0,
             _origin: Point::new(0.0, 0.0, 0.0),
@@ -474,6 +475,14 @@ impl Plane {
             _d: 0.0,
             xform: Xform::identity(),
         }
+    }
+
+    pub fn guid(&self) -> &str {
+        self.guid.get_or_init(|| uuid::Uuid::new_v4().to_string())
+    }
+
+    pub fn set_guid(&self, g: String) {
+        let _ = self.guid.set(g);
     }
 
     pub fn origin(&self) -> Point {
@@ -684,7 +693,7 @@ impl std::fmt::Display for Plane {
         write!(
             f,
             "Plane(origin={}, x_axis={}, y_axis={}, z_axis={}, guid={}, name={})",
-            self._origin, self._x_axis, self._y_axis, self._z_axis, self.guid, self.name
+            self._origin, self._x_axis, self._y_axis, self._z_axis, self.guid(), self.name
         )
     }
 }
@@ -708,7 +717,7 @@ impl Plane {
     /// Create a deep copy with a new GUID.
     pub fn duplicate(&self) -> Self {
         let mut result = self.clone();
-        result.guid = Uuid::new_v4().to_string();
+        result.guid = std::sync::OnceLock::new();
         result
     }
 
@@ -786,7 +795,7 @@ impl Plane {
         use prost::Message;
         // Use single flat frame array of 12 numbers
         let proto = crate::proto::Plane {
-            guid: self.guid.clone(),
+            guid: self.guid().to_string(),
             name: self.name.clone(),
             frame: vec![
                 self._origin[0], self._origin[1], self._origin[2],
@@ -796,7 +805,7 @@ impl Plane {
             ],
             width: self.width,
             xform: Some(crate::proto::Xform {
-                guid: self.xform.guid.clone(),
+                guid: self.xform.guid().to_string(),
                 name: self.xform.name.clone(),
                 matrix: self.xform.m.to_vec(),
             }),
@@ -824,7 +833,7 @@ impl Plane {
         // Load xform if present
         let xform = if let Some(proto_xform) = proto.xform {
             let mut x = Xform::identity();
-            x.guid = proto_xform.guid;
+            x.set_guid(proto_xform.guid);
             x.name = proto_xform.name;
             if proto_xform.matrix.len() == 16 {
                 x.m.copy_from_slice(&proto_xform.matrix);
@@ -834,8 +843,10 @@ impl Plane {
             Xform::identity()
         };
 
+        let guid = std::sync::OnceLock::new();
+        let _ = guid.set(proto.guid);
         Ok(Plane {
-            guid: proto.guid,
+            guid,
             name: proto.name,
             width: if proto.width > 0.0 { proto.width } else { 1.0 },
             _origin: origin,

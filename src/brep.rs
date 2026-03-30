@@ -7,7 +7,6 @@ use crate::vector::Vector;
 use crate::xform::Xform;
 use serde::ser::SerializeMap;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
-use uuid::Uuid;
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum BRepTrimType {
@@ -63,7 +62,7 @@ pub struct BRepFace {
 
 #[derive(Debug, Clone)]
 pub struct BRep {
-    pub guid: String,
+    guid: std::sync::OnceLock<String>,
     pub name: String,
     pub width: f64,
     pub surfacecolor: Color,
@@ -101,7 +100,7 @@ impl Default for BRep {
 impl BRep {
     pub fn new() -> Self {
         BRep {
-            guid: Uuid::new_v4().to_string(),
+            guid: std::sync::OnceLock::new(),
             name: "my_brep".to_string(),
             width: 1.0,
             surfacecolor: Color::black(),
@@ -120,8 +119,16 @@ impl BRep {
 
     pub fn duplicate(&self) -> Self {
         let mut copy = self.clone();
-        copy.guid = Uuid::new_v4().to_string();
+        copy.guid = std::sync::OnceLock::new();
         copy
+    }
+
+    pub fn guid(&self) -> &str {
+        self.guid.get_or_init(|| uuid::Uuid::new_v4().to_string())
+    }
+
+    pub fn set_guid(&self, g: String) {
+        let _ = self.guid.set(g);
     }
 
     ///////////////////////////////////////////////////////////////////////////////////////////
@@ -1041,7 +1048,7 @@ impl BRep {
             .collect();
 
         let proto = crate::proto::BRep {
-            guid: self.guid.clone(),
+            guid: self.guid().to_string(),
             name: self.name.clone(),
             curves_2d,
             curves_3d,
@@ -1054,7 +1061,7 @@ impl BRep {
             faces,
             width: self.width,
             surfacecolor: Some(crate::proto::Color {
-                guid: self.surfacecolor.guid.clone(),
+                guid: self.surfacecolor.guid().to_string(),
                 name: self.surfacecolor.name.clone(),
                 r: self.surfacecolor.r as i32,
                 g: self.surfacecolor.g as i32,
@@ -1062,7 +1069,7 @@ impl BRep {
                 a: self.surfacecolor.a as i32,
             }),
             xform: Some(crate::proto::Xform {
-                guid: self.xform.guid.clone(),
+                guid: self.xform.guid().to_string(),
                 name: self.xform.name.clone(),
                 matrix: self.xform.m.to_vec(),
             }),
@@ -1074,7 +1081,7 @@ impl BRep {
         use prost::Message;
         let proto = crate::proto::BRep::decode(data)?;
         let mut b = BRep::new();
-        b.guid = proto.guid;
+        b.set_guid(proto.guid.clone());
         b.name = proto.name;
         b.width = proto.width;
 
@@ -1135,7 +1142,7 @@ impl BRep {
         }
 
         if let Some(color) = proto.surfacecolor {
-            b.surfacecolor.guid = color.guid;
+            b.surfacecolor.set_guid(color.guid.clone());
             b.surfacecolor.name = color.name;
             b.surfacecolor.r = color.r as u8;
             b.surfacecolor.g = color.g as u8;
@@ -1143,7 +1150,7 @@ impl BRep {
             b.surfacecolor.a = color.a as u8;
         }
         if let Some(xform) = proto.xform {
-            b.xform.guid = xform.guid;
+            b.xform.set_guid(xform.guid.clone());
             b.xform.name = xform.name;
             for (i, val) in xform.matrix.iter().enumerate() {
                 if i < 16 { b.xform.m[i] = *val; }
@@ -1194,7 +1201,7 @@ impl Serialize for BRep {
             loop_indices: &f.loop_indices, reversed: f.reversed, surface_index: f.surface_index,
         }).collect();
         map.serialize_entry("faces", &faces_json)?;
-        map.serialize_entry("guid", &self.guid)?;
+        map.serialize_entry("guid", &self.guid())?;
         // loops
         let loops_json: Vec<BRepLoopJson> = self.m_loops.iter().map(|l| BRepLoopJson {
             face_index: l.face_index, trim_indices: &l.trim_indices,
@@ -1355,7 +1362,7 @@ impl<'de> Deserialize<'de> for BRep {
 
         let data = BRepData::deserialize(deserializer)?;
         let mut b = BRep::new();
-        if let Some(g) = data.guid { b.guid = g; }
+        if let Some(g) = data.guid { b.set_guid(g); }
         if let Some(n) = data.name { b.name = n; }
         if let Some(w) = data.width { b.width = w; }
         if let Some(c) = data.surfacecolor { b.surfacecolor = c; }

@@ -10,6 +10,7 @@ pub fn run_treenode_json_roundtrip() -> TestResult {
         let json = original.borrow().jsondump().unwrap();
         std::fs::write("serialization/test_treenode.json", &json).unwrap();
         let loaded = TreeNode::jsonload("serialization/test_treenode.json").unwrap();
+
         MINI_CHECK!(loaded.borrow().name == original.borrow().name);
     })
 }

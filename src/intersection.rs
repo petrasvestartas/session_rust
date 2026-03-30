@@ -238,7 +238,7 @@ pub fn plane_plane_plane(
 ///
 /// # Note
 /// Points are sorted from line start (entry first, exit second)
-pub fn ray_box(line: &Line, box_: &crate::Obb, t0: f64, t1: f64) -> Option<Vec<Point>> {
+pub fn ray_box(line: &Line, box_: &crate::OBB, t0: f64, t1: f64) -> Option<Vec<Point>> {
     let origin = line.start();
     let direction = line.to_vector();
 
@@ -957,8 +957,8 @@ pub fn ray_mesh_bvh(line: &Line, mesh: &crate::Mesh, epsilon: f64, find_all: boo
     }
     if tris.is_empty() { return None; }
 
-    let tri_boxes: Vec<crate::Obb> = tris.iter()
-        .map(|(v0, v1, v2)| crate::Obb::from_points(&[v0.clone(), v1.clone(), v2.clone()], 0.0))
+    let tri_boxes: Vec<crate::OBB> = tris.iter()
+        .map(|(v0, v1, v2)| crate::OBB::from_points(&[v0.clone(), v1.clone(), v2.clone()], 0.0))
         .collect();
 
     let world_size = crate::BVH::compute_world_size(&tri_boxes);

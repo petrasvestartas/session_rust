@@ -11,7 +11,8 @@ use serde::{Serialize, Deserialize};
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct TrimmedSurface {
-    pub guid: String,
+    #[serde(serialize_with = "crate::guid_serde::serialize", deserialize_with = "crate::guid_serde::deserialize")]
+    guid: std::sync::OnceLock<String>,
     pub name: String,
     pub width: f64,
     pub surfacecolor: Color,
@@ -25,32 +26,11 @@ pub struct TrimmedSurface {
     pub m_inner_loops: Vec<NurbsCurve>,
 }
 
-fn point_in_polygon_2d(px: f64, py: f64, coords: &[f64]) -> bool {
-    let mut winding: i32 = 0;
-    let n = coords.len() / 2;
-    for i in 0..n {
-        let j = (i + 1) % n;
-        let y0 = coords[i * 2 + 1];
-        let y1 = coords[j * 2 + 1];
-        if y0 <= py {
-            if y1 > py {
-                let x0 = coords[i * 2];
-                let x1 = coords[j * 2];
-                if (x1 - x0) * (py - y0) - (px - x0) * (y1 - y0) > 0.0 { winding += 1; }
-            }
-        } else if y1 <= py {
-            let x0 = coords[i * 2];
-            let x1 = coords[j * 2];
-            if (x1 - x0) * (py - y0) - (px - x0) * (y1 - y0) < 0.0 { winding -= 1; }
-        }
-    }
-    winding != 0
-}
 
 impl TrimmedSurface {
     pub fn new() -> Self {
         TrimmedSurface {
-            guid: uuid::Uuid::new_v4().to_string(),
+            guid: std::sync::OnceLock::new(),
             name: "my_trimmedsurface".to_string(),
             width: 1.0,
             surfacecolor: Color::black(),
@@ -93,6 +73,14 @@ impl TrimmedSurface {
             ts.m_outer_loop = Some(NurbsCurve::create(false, 3, &uv_pts));
         }
         Some(ts)
+    }
+
+    pub fn guid(&self) -> &str {
+        self.guid.get_or_init(|| uuid::Uuid::new_v4().to_string())
+    }
+
+    pub fn set_guid(&self, g: String) {
+        let _ = self.guid.set(g);
     }
 
     pub fn surface(&self) -> &NurbsSurface { &self.m_surface }
@@ -176,17 +164,17 @@ impl TrimmedSurface {
             };
             add_pts(&outer_pts);
             for hp in &hole_pts { add_pts(hp); }
-            let to_pairs = |pts: &[Point]| -> Vec<(f64, f64)> {
-                let mut v: Vec<(f64,f64)> = pts.iter().map(|p| (p[0], p[1])).collect();
-                if v.len() > 1 && (v[0].0-v[v.len()-1].0).abs() < 1e-12 && (v[0].1-v[v.len()-1].1).abs() < 1e-12 { v.pop(); }
+            let strip_close = |pts: &[Point]| -> Vec<Point> {
+                let mut v: Vec<Point> = pts.to_vec();
+                if v.len() > 1 && (v[0][0]-v[v.len()-1][0]).abs() < 1e-12 && (v[0][1]-v[v.len()-1][1]).abs() < 1e-12 { v.pop(); }
                 v
             };
-            let mut border = to_pairs(&outer_pts);
-            let mut holes: Vec<Vec<(f64,f64)>> = hole_pts.iter().map(|h| to_pairs(h)).collect();
-            let area: f64 = (0..border.len()).map(|j| { let k=(j+1)%border.len(); border[j].0*border[k].1-border[k].0*border[j].1 }).sum::<f64>() * 0.5;
+            let mut border = strip_close(&outer_pts);
+            let mut holes: Vec<Vec<Point>> = hole_pts.iter().map(|h| strip_close(h)).collect();
+            let area: f64 = (0..border.len()).map(|j| { let k=(j+1)%border.len(); border[j][0]*border[k][1]-border[k][0]*border[j][1] }).sum::<f64>() * 0.5;
             if area < 0.0 { border.reverse(); }
             for h in &mut holes {
-                let ha: f64 = (0..h.len()).map(|j| { let k=(j+1)%h.len(); h[j].0*h[k].1-h[k].0*h[j].1 }).sum::<f64>() * 0.5;
+                let ha: f64 = (0..h.len()).map(|j| { let k=(j+1)%h.len(); h[j][0]*h[k][1]-h[k][0]*h[j][1] }).sum::<f64>() * 0.5;
                 if ha > 0.0 { h.reverse(); }
             }
             let tris = crate::remesh_cdt::cdt_triangulate(&border, &holes);
@@ -246,22 +234,22 @@ impl TrimmedSurface {
                 }
             }
         }
-        let discretize = |crv: &NurbsCurve| -> Vec<f64> {
+        use crate::polyline::Polyline;
+        let discretize = |crv: &NurbsCurve| -> Polyline {
             let n = std::cmp::max(crv.cv_count() * 4, 16);
             let (pts, _) = crv.divide_by_count(n, true);
-            let mut coords = Vec::with_capacity(pts.len() * 2);
-            for p in &pts { coords.push(p[0]); coords.push(p[1]); }
-            coords
+            Polyline::new(pts.iter().map(|p| Point::new(p[0], p[1], 0.0)).collect())
         };
         let outer_loop = self.m_outer_loop.as_ref().unwrap();
-        let outer_coords = discretize(outer_loop);
-        let inner_coords: Vec<Vec<f64>> = self.m_inner_loops.iter().map(|c| discretize(c)).collect();
+        let outer_polygon = discretize(outer_loop);
+        let inner_polygons: Vec<Polyline> = self.m_inner_loops.iter().map(|c| discretize(c)).collect();
         let mut keep_verts = std::collections::HashSet::new();
         for (&vk, vd) in &full.vertex {
             let u_raw = vd.attributes.get("u").copied().unwrap_or(0.0);
             let v_raw = vd.attributes.get("v").copied().unwrap_or(0.0);
-            if !point_in_polygon_2d(u_raw, v_raw, &outer_coords) { continue; }
-            let in_hole = inner_coords.iter().any(|ic| point_in_polygon_2d(u_raw, v_raw, ic));
+            let pt = Point::new(u_raw, v_raw, 0.0);
+            if !outer_polygon.point_in_polygon_2d(&pt) { continue; }
+            let in_hole = inner_polygons.iter().any(|ip| ip.point_in_polygon_2d(&pt));
             if !in_hole { keep_verts.insert(vk); }
         }
         let mut polygons: Vec<Vec<Point>> = Vec::new();
@@ -314,7 +302,7 @@ impl TrimmedSurface {
 
     pub fn duplicate(&self) -> Self {
         let mut copy = self.clone();
-        copy.guid = uuid::Uuid::new_v4().to_string();
+        copy.guid = std::sync::OnceLock::new();
         copy
     }
 
@@ -393,14 +381,14 @@ impl TrimmedSurface {
         }).collect();
 
         let proto = crate::proto::TrimmedSurface {
-            guid: self.guid.clone(),
+            guid: self.guid().to_string(),
             name: self.name.clone(),
             width: self.width,
             surface: Some(surface_proto),
             outer_loop,
             inner_loops,
             surfacecolor: Some(crate::proto::Color {
-                guid: self.surfacecolor.guid.clone(),
+                guid: self.surfacecolor.guid().to_string(),
                 name: self.surfacecolor.name.clone(),
                 r: self.surfacecolor.r as i32,
                 g: self.surfacecolor.g as i32,
@@ -408,7 +396,7 @@ impl TrimmedSurface {
                 a: self.surfacecolor.a as i32,
             }),
             xform: Some(crate::proto::Xform {
-                guid: self.xform.guid.clone(),
+                guid: self.xform.guid().to_string(),
                 name: self.xform.name.clone(),
                 matrix: self.xform.m.to_vec(),
             }),
@@ -421,7 +409,7 @@ impl TrimmedSurface {
 
         let proto = crate::proto::TrimmedSurface::decode(data)?;
         let mut ts = Self::new();
-        ts.guid = proto.guid;
+        ts.set_guid(proto.guid.clone());
         ts.name = proto.name;
         ts.width = proto.width;
 
@@ -445,7 +433,7 @@ impl TrimmedSurface {
         }
 
         if let Some(color) = proto.surfacecolor {
-            ts.surfacecolor.guid = color.guid;
+            ts.surfacecolor.set_guid(color.guid.clone());
             ts.surfacecolor.name = color.name;
             ts.surfacecolor.r = color.r as u8;
             ts.surfacecolor.g = color.g as u8;
@@ -454,7 +442,7 @@ impl TrimmedSurface {
         }
 
         if let Some(xform) = proto.xform {
-            ts.xform.guid = xform.guid;
+            ts.xform.set_guid(xform.guid.clone());
             ts.xform.name = xform.name;
             for (i, val) in xform.matrix.iter().enumerate() {
                 if i < 16 { ts.xform.m[i] = *val; }

@@ -66,12 +66,12 @@ pub fn run_pointcloud_constructor() -> TestResult {
         let normals_arr = vec![0.0, 0.0, 1.0, 0.0, 0.0, 1.0, 0.0, 0.0, 1.0];
         let pc4 = PointCloud::from_coords(coords, colors_arr, normals_arr);
 
-        MINI_CHECK!(pc.name == "my_pointcloud" && !pc.guid.is_empty());
+        MINI_CHECK!(pc.name == "my_pointcloud" && !pc.guid().is_empty());
         MINI_CHECK!(point_count == 3);
-        MINI_CHECK!(color_count == 3 && normal_count == 3 && is_empty == false);
+        MINI_CHECK!(color_count == 3 && normal_count == 3 && !is_empty);
         MINI_CHECK!(pcstr.contains("3 points"));
         MINI_CHECK!(pcrepr.contains("PointCloud(my_pointcloud"));
-        MINI_CHECK!(pccopy == pc && pccopy.guid != pc.guid);
+        MINI_CHECK!(pccopy == pc && pccopy.guid() != pc.guid());
         MINI_CHECK!(TOLERANCE.is_close(pt0[0], 0.0));
         MINI_CHECK!(TOLERANCE.is_close(pt0[1], 0.0));
         MINI_CHECK!(TOLERANCE.is_close(pt0[2], 0.0));
@@ -131,9 +131,15 @@ pub fn run_pointcloud_transform() -> TestResult {
         pc2.xform = Xform::translation(10.0, 20.0, 30.0);
         let pc3 = pc2.transformed();
 
-        MINI_CHECK!(TOLERANCE.is_close(pc.get_point(0)[0], 11.0) && TOLERANCE.is_close(pc.get_point(0)[1], 22.0) && TOLERANCE.is_close(pc.get_point(0)[2], 33.0));
-        MINI_CHECK!(TOLERANCE.is_close(pc3.get_point(0)[0], 11.0) && TOLERANCE.is_close(pc3.get_point(0)[1], 22.0) && TOLERANCE.is_close(pc3.get_point(0)[2], 33.0));
-        MINI_CHECK!(TOLERANCE.is_close(pc2.get_point(0)[0], 1.0) && TOLERANCE.is_close(pc2.get_point(0)[1], 2.0) && TOLERANCE.is_close(pc2.get_point(0)[2], 3.0));
+        MINI_CHECK!(TOLERANCE.is_close(pc.get_point(0)[0], 11.0));
+        MINI_CHECK!(TOLERANCE.is_close(pc.get_point(0)[1], 22.0));
+        MINI_CHECK!(TOLERANCE.is_close(pc.get_point(0)[2], 33.0));
+        MINI_CHECK!(TOLERANCE.is_close(pc3.get_point(0)[0], 11.0));
+        MINI_CHECK!(TOLERANCE.is_close(pc3.get_point(0)[1], 22.0));
+        MINI_CHECK!(TOLERANCE.is_close(pc3.get_point(0)[2], 33.0));
+        MINI_CHECK!(TOLERANCE.is_close(pc2.get_point(0)[0], 1.0));
+        MINI_CHECK!(TOLERANCE.is_close(pc2.get_point(0)[1], 2.0));
+        MINI_CHECK!(TOLERANCE.is_close(pc2.get_point(0)[2], 3.0));
     })
 }
 
@@ -145,9 +151,18 @@ pub fn run_pointcloud_json_roundtrip() -> TestResult {
         use crate::Color;
 
         let mut pc = PointCloud::new(
-            vec![Point::new(1.0, 2.0, 3.0), Point::new(4.0, 5.0, 6.0)],
-            vec![Vector::new(0.0, 0.0, 1.0), Vector::new(0.0, 0.0, 1.0)],
-            vec![Color::new(255, 0, 0, 255), Color::new(0, 255, 0, 255)],
+            vec![
+                Point::new(1.0, 2.0, 3.0),
+                Point::new(4.0, 5.0, 6.0),
+            ],
+            vec![
+                Vector::new(0.0, 0.0, 1.0),
+                Vector::new(0.0, 0.0, 1.0),
+            ],
+            vec![
+                Color::new(255, 0, 0, 255),
+                Color::new(0, 255, 0, 255),
+            ],
         );
         pc.name = "test_pointcloud".to_string();
 
@@ -165,7 +180,9 @@ pub fn run_pointcloud_json_roundtrip() -> TestResult {
         MINI_CHECK!(TOLERANCE.is_close(loaded.get_point(0)[0], 1.0));
         MINI_CHECK!(TOLERANCE.is_close(loaded.get_point(0)[1], 2.0));
         MINI_CHECK!(TOLERANCE.is_close(loaded.get_point(0)[2], 3.0));
-        MINI_CHECK!(loaded.get_color(0).r == 255 && loaded.get_color(0).g == 0 && loaded.get_color(0).b == 0);
+        MINI_CHECK!(loaded.get_color(0).r == 255);
+        MINI_CHECK!(loaded.get_color(0).g == 0);
+        MINI_CHECK!(loaded.get_color(0).b == 0);
         MINI_CHECK!(TOLERANCE.is_close(loaded.get_normal(0)[2], 1.0));
     })
 }
@@ -178,9 +195,18 @@ pub fn run_pointcloud_protobuf_roundtrip() -> TestResult {
         use crate::Color;
 
         let mut pc = PointCloud::new(
-            vec![Point::new(1.0, 2.0, 3.0), Point::new(4.0, 5.0, 6.0)],
-            vec![Vector::new(0.0, 0.0, 1.0), Vector::new(0.0, 0.0, 1.0)],
-            vec![Color::new(255, 0, 0, 255), Color::new(0, 255, 0, 255)],
+            vec![
+                Point::new(1.0, 2.0, 3.0),
+                Point::new(4.0, 5.0, 6.0),
+            ],
+            vec![
+                Vector::new(0.0, 0.0, 1.0),
+                Vector::new(0.0, 0.0, 1.0),
+            ],
+            vec![
+                Color::new(255, 0, 0, 255),
+                Color::new(0, 255, 0, 255),
+            ],
         );
         pc.name = "test_pointcloud".to_string();
 
@@ -193,7 +219,9 @@ pub fn run_pointcloud_protobuf_roundtrip() -> TestResult {
         MINI_CHECK!(TOLERANCE.is_close(loaded.get_point(0)[0], 1.0));
         MINI_CHECK!(TOLERANCE.is_close(loaded.get_point(0)[1], 2.0));
         MINI_CHECK!(TOLERANCE.is_close(loaded.get_point(0)[2], 3.0));
-        MINI_CHECK!(loaded.get_color(0).r == 255 && loaded.get_color(0).g == 0 && loaded.get_color(0).b == 0);
+        MINI_CHECK!(loaded.get_color(0).r == 255);
+        MINI_CHECK!(loaded.get_color(0).g == 0);
+        MINI_CHECK!(loaded.get_color(0).b == 0);
         MINI_CHECK!(TOLERANCE.is_close(loaded.get_normal(0)[2], 1.0));
     })
 }

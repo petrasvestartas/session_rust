@@ -1,5 +1,5 @@
 use crate::{
-    BRep, Element, Obb, Graph, Line, Mesh, Objects, Plane, Point, PointCloud, Polyline,
+    BRep, Element, OBB, Graph, Line, Mesh, Objects, Plane, Point, PointCloud, Polyline,
     Tolerance, Tree, TreeNode, BVH,
 };
 use serde::{Deserialize, Serialize};
@@ -8,13 +8,12 @@ use std::collections::HashMap;
 use std::fmt;
 use std::fs;
 use std::rc::Rc;
-use uuid::Uuid;
 
 /// Enum representing all possible geometry types in a Session.
 /// This is equivalent to C++'s std::variant<...> for heterogeneous geometry storage.
 #[derive(Debug, Clone)]
 pub enum Geometry {
-    Obb(Obb),
+    OBB(OBB),
     BRep(BRep),
     Element(Element),
     Line(Line),
@@ -29,15 +28,15 @@ impl Geometry {
     /// Get the GUID of the geometry object
     pub fn guid(&self) -> &str {
         match self {
-            Geometry::Obb(g) => &g.guid,
-            Geometry::BRep(g) => &g.guid,
-            Geometry::Element(g) => &g.guid,
-            Geometry::Line(g) => &g.guid,
-            Geometry::Mesh(g) => &g.guid,
-            Geometry::Plane(g) => &g.guid,
-            Geometry::Point(g) => &g.guid,
-            Geometry::PointCloud(g) => &g.guid,
-            Geometry::Polyline(g) => &g.guid,
+            Geometry::OBB(g) => g.guid(),
+            Geometry::BRep(g) => g.guid(),
+            Geometry::Element(g) => g.guid(),
+            Geometry::Line(g) => g.guid(),
+            Geometry::Mesh(g) => g.guid(),
+            Geometry::Plane(g) => g.guid(),
+            Geometry::Point(g) => g.guid(),
+            Geometry::PointCloud(g) => g.guid(),
+            Geometry::Polyline(g) => g.guid(),
         }
     }
 }
@@ -51,7 +50,8 @@ impl Geometry {
 #[serde(tag = "type", rename = "Session")]
 pub struct Session {
     /// Unique identifier for the session
-    pub guid: String,
+    #[serde(serialize_with = "crate::guid_serde::serialize", deserialize_with = "crate::guid_serde::deserialize")]
+    guid: std::sync::OnceLock<String>,
     /// Human-readable name for the session
     pub name: String,
     /// Collection of geometry objects (Points)
@@ -77,7 +77,7 @@ pub struct Session {
     pub cached_guids: Vec<String>,
     /// Cached AABBs for ray-casting BVH
     #[serde(skip)]
-    pub cached_boxes: Vec<Obb>,
+    pub cached_boxes: Vec<OBB>,
     /// Dirty flag for cached ray BVH
     #[serde(skip)]
     pub bvh_cache_dirty: bool,
@@ -85,9 +85,15 @@ pub struct Session {
 
 #[derive(Debug, Clone)]
 pub struct RayHit {
-    pub guid: String,
+    guid: std::sync::OnceLock<String>,
     pub point: Point,
     pub distance: f64,
+}
+
+impl RayHit {
+    pub fn guid(&self) -> &str {
+        self.guid.get_or_init(|| uuid::Uuid::new_v4().to_string())
+    }
 }
 
 impl Default for Session {
@@ -106,8 +112,15 @@ impl Session {
     /// # Returns
     /// A new Session instance with a unique GUID, empty objects collection,
     /// and initialized tree and graph structures.
+    pub fn guid(&self) -> &str {
+        self.guid.get_or_init(|| uuid::Uuid::new_v4().to_string())
+    }
+
+    pub fn set_guid(&self, g: String) {
+        let _ = self.guid.set(g);
+    }
+
     pub fn new(name: &str) -> Self {
-        let guid = Uuid::new_v4().to_string();
         let objects = Objects::new();
         let lookup = HashMap::new();
         let mut tree = Tree::new(&format!("{name}_tree"));
@@ -121,7 +134,7 @@ impl Session {
         let bvh = BVH::new();
 
         Self {
-            guid,
+            guid: std::sync::OnceLock::new(),
             name: name.to_string(),
             objects,
             lookup,
@@ -151,7 +164,7 @@ impl Session {
 
         let json_obj = serde_json::json!({
             "type": "Session",
-            "guid": self.guid,
+            "guid": self.guid(),
             "name": self.name,
             "objects": self.objects,
             "tree": self.tree,
@@ -181,38 +194,38 @@ impl Session {
         // Rebuild lookup table from all objects
         let mut lookup = HashMap::new();
         for bbox in &objects.bboxes {
-            lookup.insert(bbox.guid.clone(), Geometry::Obb(bbox.clone()));
+            lookup.insert(bbox.guid().to_string(), Geometry::OBB(bbox.clone()));
         }
         for line in &objects.lines {
-            lookup.insert(line.guid.clone(), Geometry::Line(line.clone()));
+            lookup.insert(line.guid().to_string(), Geometry::Line(line.clone()));
         }
         for mesh in &objects.meshes {
-            lookup.insert(mesh.guid.clone(), Geometry::Mesh(mesh.clone()));
+            lookup.insert(mesh.guid().to_string(), Geometry::Mesh(mesh.clone()));
         }
         for plane in &objects.planes {
-            lookup.insert(plane.guid.clone(), Geometry::Plane(plane.clone()));
+            lookup.insert(plane.guid().to_string(), Geometry::Plane(plane.clone()));
         }
         for point in &objects.points {
-            lookup.insert(point.guid.clone(), Geometry::Point(point.clone()));
+            lookup.insert(point.guid().to_string(), Geometry::Point(point.clone()));
         }
         for pointcloud in &objects.pointclouds {
             lookup.insert(
-                pointcloud.guid.clone(),
+                pointcloud.guid().to_string(),
                 Geometry::PointCloud(pointcloud.clone()),
             );
         }
         for polyline in &objects.polylines {
-            lookup.insert(polyline.guid.clone(), Geometry::Polyline(polyline.clone()));
+            lookup.insert(polyline.guid().to_string(), Geometry::Polyline(polyline.clone()));
         }
         for brep in &objects.breps {
-            lookup.insert(brep.guid.clone(), Geometry::BRep(brep.clone()));
+            lookup.insert(brep.guid().to_string(), Geometry::BRep(brep.clone()));
         }
         for elem in &objects.elements {
-            lookup.insert(elem.guid.clone(), Geometry::Element(elem.clone()));
+            lookup.insert(elem.guid().to_string(), Geometry::Element(elem.clone()));
         }
 
         let session = Session {
-            guid: json_obj["guid"].as_str().unwrap_or("").to_string(),
+            guid: { let lock = std::sync::OnceLock::new(); let _ = lock.set(json_obj["guid"].as_str().unwrap_or("").to_string()); lock },
             name: json_obj["name"]
                 .as_str()
                 .unwrap_or("my_session")
@@ -259,7 +272,7 @@ impl Session {
         // Build Objects proto
         let mut objects_proto = crate::proto::Objects {
             name: self.objects.name.clone(),
-            guid: self.objects.guid.clone(),
+            guid: self.objects.guid().to_string(),
             ..Default::default()
         };
         for p in &self.objects.points {
@@ -295,15 +308,15 @@ impl Session {
             let b = node.borrow();
             let children: Vec<crate::proto::TreeNode> = b.children().iter().map(|c| treenode_to_proto(c)).collect();
             crate::proto::TreeNode {
-                guid: b.guid.clone(),
+                guid: b.guid().to_string(),
                 name: b.name.clone(),
-                parent_guid: b.parent().map(|p| p.borrow().guid.clone()).unwrap_or_default(),
+                parent_guid: b.parent().map(|p| p.borrow().guid().to_string()).unwrap_or_default(),
                 children,
                 color: None,
             }
         }
         let tree_proto = crate::proto::Tree {
-            guid: self.tree.guid.clone(),
+            guid: self.tree.guid().to_string(),
             name: self.tree.name.clone(),
             root: self.tree.root().map(|r| treenode_to_proto(&r)),
         };
@@ -313,7 +326,7 @@ impl Session {
         for v in self.graph.get_vertices() {
             vertices_map.insert(v.name.clone(), crate::proto::Vertex {
                 name: v.name.clone(),
-                guid: v.guid.clone(),
+                guid: v.guid().to_string(),
                 attribute: v.attribute.clone(),
                 index: v.index,
             });
@@ -322,7 +335,7 @@ impl Session {
         for (_u, neighbors) in &self.graph.edges {
             for (_v, edge) in neighbors {
                 edges_proto.push(crate::proto::Edge {
-                    guid: edge.guid.clone(),
+                    guid: edge.guid().to_string(),
                     name: edge.name.clone(),
                     v0: edge.v0.clone(),
                     v1: edge.v1.clone(),
@@ -333,7 +346,7 @@ impl Session {
         }
         let graph_proto = crate::proto::Graph {
             name: self.graph.name.clone(),
-            guid: self.graph.guid.clone(),
+            guid: self.graph.guid().to_string(),
             vertices: vertices_map,
             edges: edges_proto,
             vertex_count: self.graph.vertex_count,
@@ -342,7 +355,7 @@ impl Session {
 
         let proto = crate::proto::Session {
             name: self.name.clone(),
-            guid: self.guid.clone(),
+            guid: self.guid().to_string(),
             objects: Some(objects_proto),
             tree: Some(tree_proto),
             graph: Some(graph_proto),
@@ -356,11 +369,11 @@ impl Session {
         let proto = crate::proto::Session::decode(data)?;
 
         let mut session = Session::new(&proto.name);
-        session.guid = proto.guid;
+        session.set_guid(proto.guid.clone());
 
         // Rebuild objects
         if let Some(objects_proto) = &proto.objects {
-            session.objects.guid = objects_proto.guid.clone();
+            session.objects.set_guid(objects_proto.guid.clone());
             session.objects.name = objects_proto.name.clone();
             for p in &objects_proto.points {
                 let pt = Point::pb_loads(&p.encode_to_vec())?;
@@ -375,7 +388,7 @@ impl Session {
                 session.objects.planes.push(pln);
             }
             for b in &objects_proto.bboxes {
-                let bb = Obb::pb_loads(&b.encode_to_vec())?;
+                let bb = OBB::pb_loads(&b.encode_to_vec())?;
                 session.objects.bboxes.push(bb);
             }
             for pl in &objects_proto.polylines {
@@ -403,7 +416,7 @@ impl Session {
         // Rebuild tree
         if let Some(tree_proto) = &proto.tree {
             session.tree = Tree::new(&tree_proto.name);
-            session.tree.guid = tree_proto.guid.clone();
+            session.tree.set_guid(tree_proto.guid.clone());
             if let Some(root_proto) = &tree_proto.root {
                 fn proto_to_treenode(proto: &crate::proto::TreeNode) -> Rc<RefCell<TreeNode>> {
                     let node = TreeNode::new(&proto.name);
@@ -421,7 +434,7 @@ impl Session {
         // Rebuild graph
         if let Some(graph_proto) = &proto.graph {
             session.graph = Graph::new(&graph_proto.name);
-            session.graph.guid = graph_proto.guid.clone();
+            session.graph.set_guid(graph_proto.guid.clone());
             for (name, v) in &graph_proto.vertices {
                 session.graph.add_node(name, &v.attribute);
             }
@@ -432,28 +445,28 @@ impl Session {
 
         // Rebuild lookup
         for bbox in &session.objects.bboxes {
-            session.lookup.insert(bbox.guid.clone(), Geometry::Obb(bbox.clone()));
+            session.lookup.insert(bbox.guid().to_string(), Geometry::OBB(bbox.clone()));
         }
         for line in &session.objects.lines {
-            session.lookup.insert(line.guid.clone(), Geometry::Line(line.clone()));
+            session.lookup.insert(line.guid().to_string(), Geometry::Line(line.clone()));
         }
         for mesh in &session.objects.meshes {
-            session.lookup.insert(mesh.guid.clone(), Geometry::Mesh(mesh.clone()));
+            session.lookup.insert(mesh.guid().to_string(), Geometry::Mesh(mesh.clone()));
         }
         for plane in &session.objects.planes {
-            session.lookup.insert(plane.guid.clone(), Geometry::Plane(plane.clone()));
+            session.lookup.insert(plane.guid().to_string(), Geometry::Plane(plane.clone()));
         }
         for point in &session.objects.points {
-            session.lookup.insert(point.guid.clone(), Geometry::Point(point.clone()));
+            session.lookup.insert(point.guid().to_string(), Geometry::Point(point.clone()));
         }
         for pointcloud in &session.objects.pointclouds {
-            session.lookup.insert(pointcloud.guid.clone(), Geometry::PointCloud(pointcloud.clone()));
+            session.lookup.insert(pointcloud.guid().to_string(), Geometry::PointCloud(pointcloud.clone()));
         }
         for polyline in &session.objects.polylines {
-            session.lookup.insert(polyline.guid.clone(), Geometry::Polyline(polyline.clone()));
+            session.lookup.insert(polyline.guid().to_string(), Geometry::Polyline(polyline.clone()));
         }
         for brep in &session.objects.breps {
-            session.lookup.insert(brep.guid.clone(), Geometry::BRep(brep.clone()));
+            session.lookup.insert(brep.guid().to_string(), Geometry::BRep(brep.clone()));
         }
 
         Ok(session)
@@ -473,16 +486,16 @@ impl Session {
     ///////////////////////////////////////////////////////////////////////////////////////////
 
     /// Compute bounding box for a geometry object, inflated by tolerance
-    fn compute_bounding_box(geometry: &Geometry) -> Obb {
+    fn compute_bounding_box(geometry: &Geometry) -> OBB {
         let inflate = Tolerance::APPROXIMATION;
         match geometry {
-            Geometry::Point(p) => Obb::from_point(p.clone(), inflate),
+            Geometry::Point(p) => OBB::from_point(p.clone(), inflate),
             Geometry::Line(l) => {
                 let points = vec![l.start(), l.end()];
-                Obb::from_points(&points, inflate)
+                OBB::from_points(&points, inflate)
             }
-            Geometry::Polyline(pl) => Obb::from_points(&pl.get_points(), inflate),
-            Geometry::PointCloud(pc) => Obb::from_points(&pc.get_points(), inflate),
+            Geometry::Polyline(pl) => OBB::from_points(&pl.get_points(), inflate),
+            Geometry::PointCloud(pc) => OBB::from_points(&pc.get_points(), inflate),
             Geometry::Mesh(m) => {
                 // Extract vertices from mesh vertex data
                 let points: Vec<Point> = m
@@ -491,12 +504,12 @@ impl Session {
                     .map(|v| Point::new(v.x, v.y, v.z))
                     .collect();
                 if points.is_empty() {
-                    Obb::from_point(Point::new(0.0, 0.0, 0.0), inflate)
+                    OBB::from_point(Point::new(0.0, 0.0, 0.0), inflate)
                 } else {
-                    Obb::from_points(&points, inflate)
+                    OBB::from_points(&points, inflate)
                 }
             }
-            Geometry::Obb(bb) => {
+            Geometry::OBB(bb) => {
                 // Inflate existing bounding box
                 let mut inflated = bb.clone();
                 inflated.half_size = crate::Vector::new(
@@ -507,14 +520,14 @@ impl Session {
                 inflated
             }
             Geometry::Plane(p) => {
-                Obb::from_point(p.origin(), inflate * 10.0)
+                OBB::from_point(p.origin(), inflate * 10.0)
             }
             Geometry::BRep(b) => {
                 let points: Vec<Point> = b.m_vertices.clone();
                 if points.is_empty() {
-                    Obb::from_point(Point::new(0.0, 0.0, 0.0), inflate)
+                    OBB::from_point(Point::new(0.0, 0.0, 0.0), inflate)
                 } else {
-                    Obb::from_points(&points, inflate)
+                    OBB::from_points(&points, inflate)
                 }
             }
             Geometry::Element(e) => {
@@ -536,7 +549,7 @@ impl Session {
     /// A vector of tuples (guid1, guid2) representing colliding geometry pairs
     pub fn get_collisions(&mut self) -> Vec<(String, String)> {
         // Collect all objects with their bounding boxes and GUIDs
-        let mut boxes_with_guids: Vec<(Obb, String)> = Vec::new();
+        let mut boxes_with_guids: Vec<(OBB, String)> = Vec::new();
 
         for (guid, geometry) in &self.lookup {
             let bbox = Self::compute_bounding_box(geometry);
@@ -551,7 +564,7 @@ impl Session {
         self.bvh.build_with_guids(&boxes_with_guids);
 
         // Extract just the boxes for collision checking
-        let boxes: Vec<Obb> = boxes_with_guids
+        let boxes: Vec<OBB> = boxes_with_guids
             .iter()
             .map(|(bbox, _)| bbox.clone())
             .collect();
@@ -654,7 +667,7 @@ impl Session {
             let mut hit_point: Option<Point> = None;
 
             match geom {
-                Geometry::Obb(bb) => {
+                Geometry::OBB(bb) => {
                     if let Some(pts) = crate::intersection::ray_box(&ray_line, bb, 0.0, far) {
                         if !pts.is_empty() {
                             hit_point = Some(pts[0].clone());
@@ -737,8 +750,10 @@ impl Session {
                 let forward = dx * dir_unit[0] + dy * dir_unit[1] + dz * dir_unit[2];
                 if forward >= 0.0 {
                     let dist = (dx * dx + dy * dy + dz * dz).sqrt();
+                    let guid_lock = std::sync::OnceLock::new();
+                    let _ = guid_lock.set(guid.clone());
                     hits_all.push(RayHit {
-                        guid: guid.clone(),
+                        guid: guid_lock,
                         point: hp,
                         distance: dist,
                     });
@@ -784,7 +799,7 @@ impl Session {
     /// # Returns
     /// The TreeNode created for this point
     pub fn add_point(&mut self, point: Point) -> Rc<RefCell<TreeNode>> {
-        let point_guid = point.guid.clone();
+        let point_guid = point.guid().to_string();
         let point_name = point.name.clone();
         let geometry = Geometry::Point(point.clone());
 
@@ -800,7 +815,7 @@ impl Session {
     }
 
     pub fn add_line(&mut self, line: Line) -> Rc<RefCell<TreeNode>> {
-        let guid = line.guid.clone();
+        let guid = line.guid().to_string();
         let name = line.name.clone();
         let geometry = Geometry::Line(line.clone());
 
@@ -815,7 +830,7 @@ impl Session {
     }
 
     pub fn add_plane(&mut self, plane: Plane) -> Rc<RefCell<TreeNode>> {
-        let guid = plane.guid.clone();
+        let guid = plane.guid().to_string();
         let name = plane.name.clone();
         let geometry = Geometry::Plane(plane.clone());
 
@@ -829,15 +844,15 @@ impl Session {
         TreeNode::new(&guid)
     }
 
-    pub fn add_bbox(&mut self, bbox: Obb) -> Rc<RefCell<TreeNode>> {
-        let guid = bbox.guid.clone();
+    pub fn add_bbox(&mut self, bbox: OBB) -> Rc<RefCell<TreeNode>> {
+        let guid = bbox.guid().to_string();
         let name = bbox.name.clone();
-        let geometry = Geometry::Obb(bbox.clone());
+        let geometry = Geometry::OBB(bbox.clone());
 
         self.objects.bboxes.push(bbox);
         self.lookup.insert(guid.clone(), geometry);
-        if let Some(Geometry::Obb(b)) = self.lookup.get(&guid) {
-            self.cache_geometry_aabb(&guid, &Geometry::Obb(b.clone()));
+        if let Some(Geometry::OBB(b)) = self.lookup.get(&guid) {
+            self.cache_geometry_aabb(&guid, &Geometry::OBB(b.clone()));
         }
         self.graph.add_node(&guid, &format!("bbox_{name}"));
 
@@ -845,7 +860,7 @@ impl Session {
     }
 
     pub fn add_polyline(&mut self, polyline: Polyline) -> Rc<RefCell<TreeNode>> {
-        let guid = polyline.guid.clone();
+        let guid = polyline.guid().to_string();
         let name = polyline.name.clone();
         let geometry = Geometry::Polyline(polyline.clone());
 
@@ -860,7 +875,7 @@ impl Session {
     }
 
     pub fn add_pointcloud(&mut self, pointcloud: PointCloud) -> Rc<RefCell<TreeNode>> {
-        let guid = pointcloud.guid.clone();
+        let guid = pointcloud.guid().to_string();
         let name = pointcloud.name.clone();
         let geometry = Geometry::PointCloud(pointcloud.clone());
 
@@ -875,7 +890,7 @@ impl Session {
     }
 
     pub fn add_mesh(&mut self, mesh: Mesh) -> Rc<RefCell<TreeNode>> {
-        let guid = mesh.guid.clone();
+        let guid = mesh.guid().to_string();
         let name = mesh.name.clone();
         let geometry = Geometry::Mesh(mesh.clone());
 
@@ -890,7 +905,7 @@ impl Session {
     }
 
     pub fn add_brep(&mut self, brep: BRep) -> Rc<RefCell<TreeNode>> {
-        let guid = brep.guid.clone();
+        let guid = brep.guid().to_string();
         let name = brep.name.clone();
 
         self.objects.breps.push(brep.clone());
@@ -965,14 +980,14 @@ impl Session {
         }
 
         // Remove from all object collections
-        self.objects.points.retain(|p| p.guid != guid);
-        self.objects.lines.retain(|l| l.guid != guid);
-        self.objects.polylines.retain(|p| p.guid != guid);
-        self.objects.planes.retain(|p| p.guid != guid);
-        self.objects.bboxes.retain(|b| b.guid != guid);
-        self.objects.meshes.retain(|m| m.guid != guid);
-        self.objects.pointclouds.retain(|p| p.guid != guid);
-        self.objects.breps.retain(|b| b.guid != guid);
+        self.objects.points.retain(|p| p.guid() != guid);
+        self.objects.lines.retain(|l| l.guid() != guid);
+        self.objects.polylines.retain(|p| p.guid() != guid);
+        self.objects.planes.retain(|p| p.guid() != guid);
+        self.objects.bboxes.retain(|b| b.guid() != guid);
+        self.objects.meshes.retain(|m| m.guid() != guid);
+        self.objects.pointclouds.retain(|p| p.guid() != guid);
+        self.objects.breps.retain(|b| b.guid() != guid);
 
         // Remove from lookup table
         self.lookup.remove(guid);
@@ -1066,31 +1081,31 @@ impl Session {
         let mut transformed_lookup: HashMap<String, Geometry> = HashMap::new();
 
         for point in &transformed_objects.points {
-            transformed_lookup.insert(point.guid.clone(), Geometry::Point(point.clone()));
+            transformed_lookup.insert(point.guid().to_string(), Geometry::Point(point.clone()));
         }
         for line in &transformed_objects.lines {
-            transformed_lookup.insert(line.guid.clone(), Geometry::Line(line.clone()));
+            transformed_lookup.insert(line.guid().to_string(), Geometry::Line(line.clone()));
         }
         for plane in &transformed_objects.planes {
-            transformed_lookup.insert(plane.guid.clone(), Geometry::Plane(plane.clone()));
+            transformed_lookup.insert(plane.guid().to_string(), Geometry::Plane(plane.clone()));
         }
         for bbox in &transformed_objects.bboxes {
-            transformed_lookup.insert(bbox.guid.clone(), Geometry::Obb(bbox.clone()));
+            transformed_lookup.insert(bbox.guid().to_string(), Geometry::OBB(bbox.clone()));
         }
         for polyline in &transformed_objects.polylines {
-            transformed_lookup.insert(polyline.guid.clone(), Geometry::Polyline(polyline.clone()));
+            transformed_lookup.insert(polyline.guid().to_string(), Geometry::Polyline(polyline.clone()));
         }
         for pointcloud in &transformed_objects.pointclouds {
             transformed_lookup.insert(
-                pointcloud.guid.clone(),
+                pointcloud.guid().to_string(),
                 Geometry::PointCloud(pointcloud.clone()),
             );
         }
         for mesh in &transformed_objects.meshes {
-            transformed_lookup.insert(mesh.guid.clone(), Geometry::Mesh(mesh.clone()));
+            transformed_lookup.insert(mesh.guid().to_string(), Geometry::Mesh(mesh.clone()));
         }
         for brep in &transformed_objects.breps {
-            transformed_lookup.insert(brep.guid.clone(), Geometry::BRep(brep.clone()));
+            transformed_lookup.insert(brep.guid().to_string(), Geometry::BRep(brep.clone()));
         }
 
         fn transform_node(
@@ -1109,7 +1124,7 @@ impl Session {
                         Geometry::Point(g) => &g.xform,
                         Geometry::Line(g) => &g.xform,
                         Geometry::Plane(g) => &g.xform,
-                        Geometry::Obb(g) => &g.xform,
+                        Geometry::OBB(g) => &g.xform,
                         Geometry::Polyline(g) => &g.xform,
                         Geometry::PointCloud(g) => &g.xform,
                         Geometry::Mesh(g) => &g.xform,
@@ -1123,7 +1138,7 @@ impl Session {
                         if let Some(g) = transformed_objects
                             .points
                             .iter_mut()
-                            .find(|p| p.guid == node_name)
+                            .find(|p| p.guid() == node_name)
                         {
                             g.xform = combined_xform.clone();
                         }
@@ -1132,7 +1147,7 @@ impl Session {
                         if let Some(g) = transformed_objects
                             .lines
                             .iter_mut()
-                            .find(|l| l.guid == node_name)
+                            .find(|l| l.guid() == node_name)
                         {
                             g.xform = combined_xform.clone();
                         }
@@ -1141,16 +1156,16 @@ impl Session {
                         if let Some(g) = transformed_objects
                             .planes
                             .iter_mut()
-                            .find(|p| p.guid == node_name)
+                            .find(|p| p.guid() == node_name)
                         {
                             g.xform = combined_xform.clone();
                         }
                     }
-                    Geometry::Obb(_) => {
+                    Geometry::OBB(_) => {
                         if let Some(g) = transformed_objects
                             .bboxes
                             .iter_mut()
-                            .find(|b| b.guid == node_name)
+                            .find(|b| b.guid() == node_name)
                         {
                             g.xform = combined_xform.clone();
                         }
@@ -1159,7 +1174,7 @@ impl Session {
                         if let Some(g) = transformed_objects
                             .polylines
                             .iter_mut()
-                            .find(|p| p.guid == node_name)
+                            .find(|p| p.guid() == node_name)
                         {
                             g.xform = combined_xform.clone();
                         }
@@ -1168,7 +1183,7 @@ impl Session {
                         if let Some(g) = transformed_objects
                             .pointclouds
                             .iter_mut()
-                            .find(|p| p.guid == node_name)
+                            .find(|p| p.guid() == node_name)
                         {
                             g.xform = combined_xform.clone();
                         }
@@ -1177,7 +1192,7 @@ impl Session {
                         if let Some(g) = transformed_objects
                             .meshes
                             .iter_mut()
-                            .find(|m| m.guid == node_name)
+                            .find(|m| m.guid() == node_name)
                         {
                             g.xform = combined_xform.clone();
                         }
@@ -1186,7 +1201,7 @@ impl Session {
                         if let Some(g) = transformed_objects
                             .breps
                             .iter_mut()
-                            .find(|b| b.guid == node_name)
+                            .find(|b| b.guid() == node_name)
                         {
                             g.xform = combined_xform.clone();
                         }
@@ -1195,7 +1210,7 @@ impl Session {
                         if let Some(g) = transformed_objects
                             .elements
                             .iter_mut()
-                            .find(|e| e.guid == node_name)
+                            .find(|e| e.guid() == node_name)
                         {
                             g.session_transformation = combined_xform.clone();
                         }
@@ -1262,7 +1277,7 @@ impl fmt::Display for Session {
             f,
             "Session({}, {}, points={}, vertices={}, edges={})",
             self.name,
-            self.guid,
+            self.guid(),
             self.objects.points.len(),
             self.graph.vertex_count,
             self.graph.edge_count

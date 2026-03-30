@@ -5,6 +5,7 @@ use crate::tolerance::TOLERANCE;
 pub fn run_bvh_expand_bits() -> TestResult {
     MINI_TEST!("Expand Bits", {
         use crate::bvh::expand_bits;
+
         MINI_CHECK!(expand_bits(0) == 0);
         MINI_CHECK!(expand_bits(1) == 1);
         MINI_CHECK!(expand_bits(2) == 8);
@@ -18,6 +19,7 @@ pub fn run_bvh_morton_code_origin() -> TestResult {
     MINI_TEST!("Morton Code Origin", {
         use crate::bvh::calculate_morton_code;
         let code = calculate_morton_code(0.0, 0.0, 0.0, 100.0);
+
         MINI_CHECK!(code < (1u32 << 30));
     })
 }
@@ -26,6 +28,7 @@ pub fn run_bvh_morton_code_corners() -> TestResult {
     MINI_TEST!("Morton Code Corners", {
         use crate::bvh::calculate_morton_code;
         let code_min = calculate_morton_code(-50.0, -50.0, -50.0, 100.0);
+
         MINI_CHECK!(code_min == 0);
         let code_max = calculate_morton_code(50.0, 50.0, 50.0, 100.0);
         MINI_CHECK!(code_max == 0x3FFFFFFF);
@@ -40,6 +43,7 @@ pub fn run_bvh_morton_code_spatial_locality() -> TestResult {
         let code3 = calculate_morton_code(-40.0, -40.0, -40.0, 100.0);
         let diff_nearby = code1.abs_diff(code2);
         let diff_far = code1.abs_diff(code3);
+
         MINI_CHECK!(diff_nearby < diff_far);
     })
 }
@@ -48,6 +52,7 @@ pub fn run_bvh_node_creation() -> TestResult {
     MINI_TEST!("Node Creation", {
         use crate::bvh::BVHNode;
         let node = BVHNode::new();
+
         MINI_CHECK!(node.left.is_none());
         MINI_CHECK!(node.right.is_none());
         MINI_CHECK!(node.object_id == -1);
@@ -59,6 +64,7 @@ pub fn run_bvh_node_leaf() -> TestResult {
     MINI_TEST!("Node Leaf", {
         use crate::bvh::BVHNode;
         let mut node = BVHNode::new();
+
         MINI_CHECK!(!node.is_leaf());
         node.object_id = 5;
         MINI_CHECK!(node.is_leaf());
@@ -69,7 +75,8 @@ pub fn run_bvh_creation() -> TestResult {
     MINI_TEST!("Creation", {
         use crate::BVH;
         let bvh = BVH::new();
-        MINI_CHECK!(!bvh.guid.is_empty());
+
+        MINI_CHECK!(!bvh.guid().is_empty());
         MINI_CHECK!(bvh.name == "my_bvh");
         MINI_CHECK!(bvh.root.is_none());
         MINI_CHECK!(TOLERANCE.is_close(bvh.world_size, 1000.0));
@@ -78,17 +85,18 @@ pub fn run_bvh_creation() -> TestResult {
 
 pub fn run_bvh_build_empty() -> TestResult {
     MINI_TEST!("Build Empty", {
-        use crate::{BVH, Obb};
-        let boxes: Vec<Obb> = vec![];
+        use crate::{BVH, OBB};
+        let boxes: Vec<OBB> = vec![];
         let bvh = BVH::from_boxes(&boxes, 100.0);
+
         MINI_CHECK!(bvh.root.is_none());
     })
 }
 
 pub fn run_bvh_build_single() -> TestResult {
     MINI_TEST!("Build Single", {
-        use crate::{BVH, Obb, Point, Vector};
-        let bbox = Obb::new(
+        use crate::{BVH, OBB, Point, Vector};
+        let bbox = OBB::new(
             Point::new(0.0, 0.0, 0.0),
             Vector::new(1.0, 0.0, 0.0),
             Vector::new(0.0, 1.0, 0.0),
@@ -98,26 +106,28 @@ pub fn run_bvh_build_single() -> TestResult {
         let boxes = vec![bbox.clone()];
         let bvh = BVH::from_boxes(&boxes, 100.0);
         let (collisions, _checks) = bvh.find_collisions(0, &bbox, &boxes);
+
         MINI_CHECK!(collisions.is_empty());
     })
 }
 
 pub fn run_bvh_build_multiple() -> TestResult {
     MINI_TEST!("Build Multiple", {
-        use crate::{BVH, Obb, Point, Vector};
+        use crate::{BVH, OBB, Point, Vector};
         let bboxes = vec![
-            Obb::new(Point::new(-10.0, 0.0, 0.0),
+            OBB::new(Point::new(-10.0, 0.0, 0.0),
                 Vector::new(1.0, 0.0, 0.0), Vector::new(0.0, 1.0, 0.0),
                 Vector::new(0.0, 0.0, 1.0), Vector::new(1.0, 1.0, 1.0)),
-            Obb::new(Point::new(10.0, 0.0, 0.0),
+            OBB::new(Point::new(10.0, 0.0, 0.0),
                 Vector::new(1.0, 0.0, 0.0), Vector::new(0.0, 1.0, 0.0),
                 Vector::new(0.0, 0.0, 1.0), Vector::new(1.0, 1.0, 1.0)),
-            Obb::new(Point::new(0.0, 10.0, 0.0),
+            OBB::new(Point::new(0.0, 10.0, 0.0),
                 Vector::new(1.0, 0.0, 0.0), Vector::new(0.0, 1.0, 0.0),
                 Vector::new(0.0, 0.0, 1.0), Vector::new(1.0, 1.0, 1.0)),
         ];
         let bvh = BVH::from_boxes(&bboxes, 100.0);
         let (pairs, _indices, checks) = bvh.check_all_collisions(&bboxes);
+
         MINI_CHECK!(pairs.is_empty());
         MINI_CHECK!(checks > 0);
     })
@@ -125,16 +135,17 @@ pub fn run_bvh_build_multiple() -> TestResult {
 
 pub fn run_bvh_aabb_intersect() -> TestResult {
     MINI_TEST!("Aabb Intersect", {
-        use crate::{BVH, Obb, Point, Vector};
+        use crate::{BVH, OBB, Point, Vector};
         let bvh = BVH::new();
-        let bbox1 = Obb::new(Point::new(0.0, 0.0, 0.0),
+        let bbox1 = OBB::new(Point::new(0.0, 0.0, 0.0),
             Vector::new(1.0, 0.0, 0.0), Vector::new(0.0, 1.0, 0.0),
             Vector::new(0.0, 0.0, 1.0), Vector::new(1.0, 1.0, 1.0));
-        let bbox2 = Obb::new(Point::new(0.5, 0.0, 0.0),
+        let bbox2 = OBB::new(Point::new(0.5, 0.0, 0.0),
             Vector::new(1.0, 0.0, 0.0), Vector::new(0.0, 1.0, 0.0),
             Vector::new(0.0, 0.0, 1.0), Vector::new(1.0, 1.0, 1.0));
+
         MINI_CHECK!(bvh.aabb_intersect(&bbox1, &bbox2));
-        let bbox3 = Obb::new(Point::new(10.0, 0.0, 0.0),
+        let bbox3 = OBB::new(Point::new(10.0, 0.0, 0.0),
             Vector::new(1.0, 0.0, 0.0), Vector::new(0.0, 1.0, 0.0),
             Vector::new(0.0, 0.0, 1.0), Vector::new(1.0, 1.0, 1.0));
         MINI_CHECK!(!bvh.aabb_intersect(&bbox1, &bbox3));
@@ -143,20 +154,21 @@ pub fn run_bvh_aabb_intersect() -> TestResult {
 
 pub fn run_bvh_check_all_collisions() -> TestResult {
     MINI_TEST!("Check All Collisions", {
-        use crate::{BVH, Obb, Point, Vector};
+        use crate::{BVH, OBB, Point, Vector};
         let bboxes = vec![
-            Obb::new(Point::new(0.0, 0.0, 0.0),
+            OBB::new(Point::new(0.0, 0.0, 0.0),
                 Vector::new(1.0, 0.0, 0.0), Vector::new(0.0, 1.0, 0.0),
                 Vector::new(0.0, 0.0, 1.0), Vector::new(1.0, 1.0, 1.0)),
-            Obb::new(Point::new(0.5, 0.0, 0.0),
+            OBB::new(Point::new(0.5, 0.0, 0.0),
                 Vector::new(1.0, 0.0, 0.0), Vector::new(0.0, 1.0, 0.0),
                 Vector::new(0.0, 0.0, 1.0), Vector::new(1.0, 1.0, 1.0)),
-            Obb::new(Point::new(10.0, 0.0, 0.0),
+            OBB::new(Point::new(10.0, 0.0, 0.0),
                 Vector::new(1.0, 0.0, 0.0), Vector::new(0.0, 1.0, 0.0),
                 Vector::new(0.0, 0.0, 1.0), Vector::new(1.0, 1.0, 1.0)),
         ];
         let bvh = BVH::from_boxes(&bboxes, 100.0);
         let (collisions, colliding_indices, checks) = bvh.check_all_collisions(&bboxes);
+
         MINI_CHECK!(collisions.len() == 1);
         MINI_CHECK!(collisions.contains(&(0, 1)));
         MINI_CHECK!(colliding_indices == vec![0, 1]);
@@ -166,15 +178,16 @@ pub fn run_bvh_check_all_collisions() -> TestResult {
 
 pub fn run_bvh_merge_aabb() -> TestResult {
     MINI_TEST!("Merge Aabb", {
-        use crate::{BVH, Obb, Point, Vector};
+        use crate::{BVH, OBB, Point, Vector};
         let bvh = BVH::new();
-        let bbox1 = Obb::new(Point::new(0.0, 0.0, 0.0),
+        let bbox1 = OBB::new(Point::new(0.0, 0.0, 0.0),
             Vector::new(1.0, 0.0, 0.0), Vector::new(0.0, 1.0, 0.0),
             Vector::new(0.0, 0.0, 1.0), Vector::new(1.0, 1.0, 1.0));
-        let bbox2 = Obb::new(Point::new(5.0, 0.0, 0.0),
+        let bbox2 = OBB::new(Point::new(5.0, 0.0, 0.0),
             Vector::new(1.0, 0.0, 0.0), Vector::new(0.0, 1.0, 0.0),
             Vector::new(0.0, 0.0, 1.0), Vector::new(1.0, 1.0, 1.0));
         let merged = bvh.merge_aabb(&bbox1, &bbox2);
+
         MINI_CHECK!((merged.center[0] - 2.5).abs() < 0.001);
         MINI_CHECK!((merged.half_size[0] - 3.5).abs() < 0.001);
     })
@@ -182,8 +195,8 @@ pub fn run_bvh_merge_aabb() -> TestResult {
 
 pub fn run_bvh_fixed_100_boxes() -> TestResult {
     MINI_TEST!("Fixed 100 Boxes", {
-        use crate::{BVH, Obb, Point, Vector};
-        let mut boxes: Vec<Obb> = Vec::new();
+        use crate::{BVH, OBB, Point, Vector};
+        let mut boxes: Vec<OBB> = Vec::new();
         let mut add = |min_x: f64, min_y: f64, min_z: f64, max_x: f64, max_y: f64, max_z: f64| {
             let cx = (min_x + max_x) * 0.5;
             let cy = (min_y + max_y) * 0.5;
@@ -191,7 +204,7 @@ pub fn run_bvh_fixed_100_boxes() -> TestResult {
             let hx = (max_x - min_x) * 0.5;
             let hy = (max_y - min_y) * 0.5;
             let hz = (max_z - min_z) * 0.5;
-            boxes.push(Obb::new(
+            boxes.push(OBB::new(
                 Point::new(cx, cy, cz),
                 Vector::new(1.0, 0.0, 0.0),
                 Vector::new(0.0, 1.0, 0.0),
@@ -299,6 +312,7 @@ pub fn run_bvh_fixed_100_boxes() -> TestResult {
         add(31.7285, 31.0991, -7.73725, 39.8767, 38.2288, 0.932107);
         add(-35.1346, -8.00369, 14.4611, -27.1614, -1.58541, 21.4893);
         add(13.9228, -49.9973, -2.77406, 23.104, -41.5596, 4.89623);
+
         MINI_CHECK!(boxes.len() == 100);
         let bvh = BVH::from_boxes(&boxes, 100.0);
         let (mut pairs, _colliding_indices, _checks) = bvh.check_all_collisions(&boxes);
@@ -315,32 +329,33 @@ pub fn run_bvh_fixed_100_boxes() -> TestResult {
 
 pub fn run_bvh_query_aabb() -> TestResult {
     MINI_TEST!("Query Aabb", {
-        use crate::{BVH, Obb, Point, Vector};
+        use crate::{BVH, OBB, Point, Vector};
         let bboxes = vec![
-            Obb::new(Point::new(0.0, 0.0, 0.0),
+            OBB::new(Point::new(0.0, 0.0, 0.0),
                 Vector::new(1.0, 0.0, 0.0), Vector::new(0.0, 1.0, 0.0),
                 Vector::new(0.0, 0.0, 1.0), Vector::new(1.0, 1.0, 1.0)),
-            Obb::new(Point::new(5.0, 0.0, 0.0),
+            OBB::new(Point::new(5.0, 0.0, 0.0),
                 Vector::new(1.0, 0.0, 0.0), Vector::new(0.0, 1.0, 0.0),
                 Vector::new(0.0, 0.0, 1.0), Vector::new(1.0, 1.0, 1.0)),
-            Obb::new(Point::new(0.0, 5.0, 0.0),
+            OBB::new(Point::new(0.0, 5.0, 0.0),
                 Vector::new(1.0, 0.0, 0.0), Vector::new(0.0, 1.0, 0.0),
                 Vector::new(0.0, 0.0, 1.0), Vector::new(1.0, 1.0, 1.0)),
         ];
         let bvh = BVH::from_boxes(&bboxes, 100.0);
         // Query near origin — should hit box 0 only
-        let query = Obb::new(
+        let query = OBB::new(
             Point::new(0.0, 0.0, 0.0),
             Vector::new(1.0, 0.0, 0.0), Vector::new(0.0, 1.0, 0.0),
             Vector::new(0.0, 0.0, 1.0), Vector::new(0.5, 0.5, 0.5),
         );
         let hits = bvh.query_aabb(&query);
+
         MINI_CHECK!(!hits.is_empty());
         MINI_CHECK!(hits.contains(&0));
         MINI_CHECK!(!hits.contains(&1));
         MINI_CHECK!(!hits.contains(&2));
         // Query covering all three boxes
-        let query_all = Obb::new(
+        let query_all = OBB::new(
             Point::new(2.5, 2.5, 0.0),
             Vector::new(1.0, 0.0, 0.0), Vector::new(0.0, 1.0, 0.0),
             Vector::new(0.0, 0.0, 1.0), Vector::new(5.0, 5.0, 2.0),

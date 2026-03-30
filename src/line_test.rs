@@ -85,12 +85,13 @@ pub fn run_line_constructor() -> TestResult {
             &Point::new(0.0, 0.0, 0.0), &Point::new(2.0, 0.0, 0.0),
             &Point::new(0.0, 2.0, 0.0), &Point::new(2.0, 2.0, 0.0));
 
-        MINI_CHECK!(l.name == "my_line" && !l.guid.is_empty());
+        MINI_CHECK!(l.name == "my_line" && !l.guid().is_empty());
         MINI_CHECK!(l[0] == 10.0 && l[1] == 20.0 && l[2] == 30.0);
-        MINI_CHECK!(x0 == 10.0 && y0 == 20.0 && z0 == 30.0 && x1 == 40.0 && y1 == 50.0 && z1 == 60.0);
+        MINI_CHECK!(x0 == 10.0 && y0 == 20.0 && z0 == 30.0);
+        MINI_CHECK!(x1 == 40.0 && y1 == 50.0 && z1 == 60.0);
         MINI_CHECK!(lstr.contains("10") && lstr.contains("20") && lstr.contains("60"));
         MINI_CHECK!(lrepr.contains("my_line") && lrepr.contains("10") && lrepr.contains("Color"));
-        MINI_CHECK!(lcopy.guid != l.guid);
+        MINI_CHECK!(lcopy.guid() != l.guid());
         MINI_CHECK!(lmult[0] == 20.0 && lmult[3] == 80.0);
         MINI_CHECK!(ldiv[0] == 5.0 && ldiv[3] == 20.0);
         MINI_CHECK!(ladd[0] == 11.0 && ladd[3] == 41.0);
@@ -99,9 +100,11 @@ pub fn run_line_constructor() -> TestResult {
         MINI_CHECK!(rdiv[0] == 5.0 && rdiv[3] == 20.0);
         MINI_CHECK!(radd[0] == 11.0 && radd[3] == 41.0);
         MINI_CHECK!(rdif[0] == 9.0 && rdif[3] == 39.0);
-        MINI_CHECK!(neg[0] == 4.0 && neg[1] == 5.0 && neg[2] == 6.0 && neg[3] == 1.0 && neg[4] == 2.0 && neg[5] == 3.0);
+        MINI_CHECK!(neg[0] == 4.0 && neg[1] == 5.0 && neg[2] == 6.0);
+        MINI_CHECK!(neg[3] == 1.0 && neg[4] == 2.0 && neg[5] == 3.0);
         MINI_CHECK!(l2p[0] == 1.0 && l2p[3] == 4.0);
-        MINI_CHECK!(l_pv[0] == 1.0 && l_pv[1] == 2.0 && l_pv[2] == 3.0 && l_pv[3] == 4.0 && l_pv[4] == 6.0 && l_pv[5] == 8.0);
+        MINI_CHECK!(l_pv[0] == 1.0 && l_pv[1] == 2.0 && l_pv[2] == 3.0);
+        MINI_CHECK!(l_pv[3] == 4.0 && l_pv[4] == 6.0 && l_pv[5] == 8.0);
         MINI_CHECK!(l_pdl[0] == 0.0 && l_pdl[3] == 5.0);
         MINI_CHECK!(lc.linecolor.r == 255 && lc.linecolor.g == 0 && lc.width == 2.5);
         MINI_CHECK!(lwn.name == "custom" && lwn[3] == 1.0);
@@ -142,6 +145,7 @@ pub fn run_line_json_roundtrip() -> TestResult {
         // JSON object (string)
         let js = l.jsondump().unwrap();
         let loaded_j = Line::jsonload(&js).unwrap();
+
         MINI_CHECK!(loaded_j.name == "test_line");
 
         // String
@@ -175,9 +179,10 @@ pub fn run_line_protobuf_roundtrip() -> TestResult {
         // Bytes
         let b = l.pb_dumps();
         let loaded_s = Line::pb_loads(&b).unwrap();
+
         MINI_CHECK!(loaded_s.name == "test_line");
         MINI_CHECK!(TOLERANCE.is_close(loaded_s[0], 42.1));
-        MINI_CHECK!(loaded_s.guid == l.guid);
+        MINI_CHECK!(loaded_s.guid() == l.guid());
 
         // File
         let fname = "serialization/test_line.bin";
@@ -191,7 +196,7 @@ pub fn run_line_protobuf_roundtrip() -> TestResult {
         MINI_CHECK!(TOLERANCE.is_close(loaded[3], 168.4));
         MINI_CHECK!(TOLERANCE.is_close(loaded[4], 210.5));
         MINI_CHECK!(TOLERANCE.is_close(loaded[5], 252.6));
-        MINI_CHECK!(loaded.guid == l.guid);
+        MINI_CHECK!(loaded.guid() == l.guid());
     })
 }
 

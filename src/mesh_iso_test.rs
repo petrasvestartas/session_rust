@@ -31,10 +31,10 @@ pub fn run_mesh_iso_eval_diamond() -> TestResult {
 pub fn run_mesh_iso_from_tpms_gyroid_solid() -> TestResult {
     MINI_TEST!("From Tpms Gyroid Solid", {
         use crate::mesh_iso::{MeshIso, TpmsType, TpmsMode};
-        use crate::obb::Obb;
+        use crate::obb::OBB;
         use crate::point::Point;
 
-        let box_ = Obb::from_points(&[Point::new(0.0, 0.0, 0.0), Point::new(1.0, 1.0, 1.0)], 0.0);
+        let box_ = OBB::from_points(&[Point::new(0.0, 0.0, 0.0), Point::new(1.0, 1.0, 1.0)], 0.0);
         let m = MeshIso::from_tpms(TpmsType::GYROID, &box_, 10, 10, 10, 0.0, 1.0, TpmsMode::SOLID, 0.2);
 
         MINI_CHECK!(m.is_valid());
@@ -46,10 +46,10 @@ pub fn run_mesh_iso_from_tpms_gyroid_solid() -> TestResult {
 pub fn run_mesh_iso_from_tpms_diamond_sheet() -> TestResult {
     MINI_TEST!("From Tpms Diamond Sheet", {
         use crate::mesh_iso::{MeshIso, TpmsType, TpmsMode};
-        use crate::obb::Obb;
+        use crate::obb::OBB;
         use crate::point::Point;
 
-        let box_ = Obb::from_points(&[Point::new(0.0, 0.0, 0.0), Point::new(1.0, 1.0, 1.0)], 0.0);
+        let box_ = OBB::from_points(&[Point::new(0.0, 0.0, 0.0), Point::new(1.0, 1.0, 1.0)], 0.0);
         let m = MeshIso::from_tpms(TpmsType::DIAMOND, &box_, 10, 10, 10, 0.0, 1.0, TpmsMode::SHEET, 0.1);
 
         MINI_CHECK!(m.is_valid());
@@ -59,10 +59,10 @@ pub fn run_mesh_iso_from_tpms_diamond_sheet() -> TestResult {
 pub fn run_mesh_iso_from_tpms_neovius_shell() -> TestResult {
     MINI_TEST!("From Tpms Neovius Shell", {
         use crate::mesh_iso::{MeshIso, TpmsType, TpmsMode};
-        use crate::obb::Obb;
+        use crate::obb::OBB;
         use crate::point::Point;
 
-        let box_ = Obb::from_points(&[Point::new(0.0, 0.0, 0.0), Point::new(1.0, 1.0, 1.0)], 0.0);
+        let box_ = OBB::from_points(&[Point::new(0.0, 0.0, 0.0), Point::new(1.0, 1.0, 1.0)], 0.0);
         let m = MeshIso::from_tpms(TpmsType::NEOVIUS, &box_, 10, 10, 10, 0.0, 1.0, TpmsMode::SHELL, 0.1);
 
         MINI_CHECK!(m.is_valid());
@@ -91,10 +91,10 @@ pub fn run_mesh_iso_smooth_union() -> TestResult {
 pub fn run_mesh_iso_from_function() -> TestResult {
     MINI_TEST!("From Function", {
         use crate::mesh_iso::MeshIso;
-        use crate::obb::Obb;
+        use crate::obb::OBB;
         use crate::point::Point;
 
-        let box_ = Obb::from_points(&[Point::new(-2.0, -2.0, -2.0), Point::new(2.0, 2.0, 2.0)], 0.0);
+        let box_ = OBB::from_points(&[Point::new(-2.0, -2.0, -2.0), Point::new(2.0, 2.0, 2.0)], 0.0);
         let fn_ = |x: f64, y: f64, z: f64| MeshIso::sdf_sphere(0.0, 0.0, 0.0, 1.0, x, y, z);
         let m = MeshIso::from_function(fn_, &box_, 10, 10, 10, 0.0);
 
@@ -106,15 +106,16 @@ pub fn run_mesh_iso_from_function() -> TestResult {
 pub fn run_mesh_iso_all_tpms_shells() -> TestResult {
     MINI_TEST!("All Tpms Shells", {
         use crate::mesh_iso::{MeshIso, TpmsType, TpmsMode};
-        use crate::obb::Obb;
+        use crate::obb::OBB;
         use crate::point::Point;
 
-        let box_ = Obb::from_points(&[Point::new(0.0, 0.0, 0.0), Point::new(1.0, 1.0, 1.0)], 0.0);
+        let box_ = OBB::from_points(&[Point::new(0.0, 0.0, 0.0), Point::new(1.0, 1.0, 1.0)], 0.0);
         let types = [
             TpmsType::GYROID, TpmsType::SCHWARZ_P, TpmsType::DIAMOND,
             TpmsType::NEOVIUS, TpmsType::IWP, TpmsType::LIDINOID,
             TpmsType::FISCHER_KOCH_S, TpmsType::FRD, TpmsType::PMY,
         ];
+
         for i in 0..9 {
             let m = MeshIso::from_tpms(types[i], &box_, 10, 10, 10, 0.0, 1.0, TpmsMode::SHELL, 0.1);
             MINI_CHECK!(m.is_valid());
@@ -126,10 +127,10 @@ pub fn run_mesh_iso_all_tpms_shells() -> TestResult {
 pub fn run_mesh_iso_sdf_box() -> TestResult {
     MINI_TEST!("SDF Box", {
         use crate::mesh_iso::MeshIso;
-        use crate::obb::Obb;
+        use crate::obb::OBB;
         use crate::point::Point;
 
-        let box_ = Obb::from_points(&[Point::new(-2.0, -2.0, -2.0), Point::new(2.0, 2.0, 2.0)], 0.0);
+        let box_ = OBB::from_points(&[Point::new(-2.0, -2.0, -2.0), Point::new(2.0, 2.0, 2.0)], 0.0);
         let fn_ = |x: f64, y: f64, z: f64| MeshIso::sdf_box(0.0, 0.0, 0.0, 1.0, 0.7, 1.3, x, y, z);
         let m = MeshIso::from_function(fn_, &box_, 10, 10, 10, 0.0);
 
@@ -141,10 +142,10 @@ pub fn run_mesh_iso_sdf_box() -> TestResult {
 pub fn run_mesh_iso_sdf_torus() -> TestResult {
     MINI_TEST!("SDF Torus", {
         use crate::mesh_iso::MeshIso;
-        use crate::obb::Obb;
+        use crate::obb::OBB;
         use crate::point::Point;
 
-        let box_ = Obb::from_points(&[Point::new(-2.0, -2.0, -2.0), Point::new(2.0, 2.0, 2.0)], 0.0);
+        let box_ = OBB::from_points(&[Point::new(-2.0, -2.0, -2.0), Point::new(2.0, 2.0, 2.0)], 0.0);
         let fn_ = |x: f64, y: f64, z: f64| MeshIso::sdf_torus(0.0, 0.0, 0.0, 1.1, 0.4, x, y, z);
         let m = MeshIso::from_function(fn_, &box_, 10, 10, 10, 0.0);
 
@@ -156,10 +157,10 @@ pub fn run_mesh_iso_sdf_torus() -> TestResult {
 pub fn run_mesh_iso_sdf_capsule() -> TestResult {
     MINI_TEST!("SDF Capsule", {
         use crate::mesh_iso::MeshIso;
-        use crate::obb::Obb;
+        use crate::obb::OBB;
         use crate::point::Point;
 
-        let box_ = Obb::from_points(&[Point::new(-2.0, -2.0, -2.0), Point::new(2.0, 2.0, 2.0)], 0.0);
+        let box_ = OBB::from_points(&[Point::new(-2.0, -2.0, -2.0), Point::new(2.0, 2.0, 2.0)], 0.0);
         let fn_ = |x: f64, y: f64, z: f64| {
             let p0 = Point::new(0.0, -1.0, 0.0);
             let p1 = Point::new(0.0, 1.0, 0.0);
@@ -175,10 +176,10 @@ pub fn run_mesh_iso_sdf_capsule() -> TestResult {
 pub fn run_mesh_iso_smooth_subtract() -> TestResult {
     MINI_TEST!("Smooth Subtract", {
         use crate::mesh_iso::MeshIso;
-        use crate::obb::Obb;
+        use crate::obb::OBB;
         use crate::point::Point;
 
-        let box_ = Obb::from_points(&[Point::new(-2.0, -2.0, -2.0), Point::new(2.0, 2.0, 2.0)], 0.0);
+        let box_ = OBB::from_points(&[Point::new(-2.0, -2.0, -2.0), Point::new(2.0, 2.0, 2.0)], 0.0);
         let fn_ = |x: f64, y: f64, z: f64| {
             let a = MeshIso::sdf_sphere(0.0, 0.0, 0.0, 1.2, x, y, z);
             let b = MeshIso::sdf_box(0.0, 0.0, 0.0, 0.8, 0.8, 0.8, x, y, z);
@@ -194,10 +195,10 @@ pub fn run_mesh_iso_smooth_subtract() -> TestResult {
 pub fn run_mesh_iso_smooth_intersect() -> TestResult {
     MINI_TEST!("Smooth Intersect", {
         use crate::mesh_iso::MeshIso;
-        use crate::obb::Obb;
+        use crate::obb::OBB;
         use crate::point::Point;
 
-        let box_ = Obb::from_points(&[Point::new(-2.0, -2.0, -2.0), Point::new(2.0, 2.0, 2.0)], 0.0);
+        let box_ = OBB::from_points(&[Point::new(-2.0, -2.0, -2.0), Point::new(2.0, 2.0, 2.0)], 0.0);
         let fn_ = |x: f64, y: f64, z: f64| {
             let a = MeshIso::sdf_sphere(0.0, 0.0, 0.0, 1.4, x, y, z);
             let b = MeshIso::sdf_box(0.0, 0.0, 0.0, 1.1, 1.1, 1.1, x, y, z);
@@ -213,10 +214,10 @@ pub fn run_mesh_iso_smooth_intersect() -> TestResult {
 pub fn run_mesh_iso_gyroid_sphere_shell() -> TestResult {
     MINI_TEST!("Gyroid Sphere Shell", {
         use crate::mesh_iso::{MeshIso, TpmsType};
-        use crate::obb::Obb;
+        use crate::obb::OBB;
         use crate::point::Point;
 
-        let box_ = Obb::from_points(&[Point::new(-1.6, -1.6, -1.6), Point::new(1.6, 1.6, 1.6)], 0.0);
+        let box_ = OBB::from_points(&[Point::new(-1.6, -1.6, -1.6), Point::new(1.6, 1.6, 1.6)], 0.0);
         let fn_ = |x: f64, y: f64, z: f64| {
             let tpms = MeshIso::eval(TpmsType::GYROID, x, y, z, 1.0);
             let shell = MeshIso::sdf_sphere(0.0, 0.0, 0.0, 1.3, x, y, z).abs() - 0.08;

@@ -14,6 +14,7 @@ pub fn run_mesh_constructor() -> TestResult {
         let _sstr = mesh.str();
         let _srepr = mesh.repr();
         let _mcopy = mesh.duplicate();
+
         MINI_CHECK!(mesh.is_valid());
         mesh.name = "hexagon".to_string();
 
@@ -106,6 +107,7 @@ pub fn run_mesh_from_polylines() -> TestResult {
                 Point::new(1.853404, 0.866025, 1.578581),
             ],
         ], Some(0.001));
+
         MINI_CHECK!(mesh.is_valid());
     })
 }
@@ -139,6 +141,7 @@ pub fn run_mesh_from_lines() -> TestResult {
                               &Point::new(3.866593, 0.371225, 1.376346)),
         ];
         let mesh = Mesh::from_lines(&lines, true, None);
+
         MINI_CHECK!(mesh.is_valid());
     })
 }
@@ -177,16 +180,21 @@ pub fn run_mesh_from_polygon_with_holes() -> TestResult {
                 Point::new(7.950364, 0.924872, 0.345738),
             ],
         ], true);
+
         MINI_CHECK!(mesh.is_valid());
 
         let mesh_sorted = Mesh::from_polygon_with_holes(&[
             vec![
-                Point::new(1.0, 1.0, 0.0), Point::new(3.0, 1.0, 0.0),
-                Point::new(3.0, 3.0, 0.0), Point::new(1.0, 3.0, 0.0),
+                Point::new(1.0, 1.0, 0.0),
+                Point::new(3.0, 1.0, 0.0),
+                Point::new(3.0, 3.0, 0.0),
+                Point::new(1.0, 3.0, 0.0),
             ],
             vec![
-                Point::new(0.0, 0.0, 0.0), Point::new(4.0, 0.0, 0.0),
-                Point::new(4.0, 4.0, 0.0), Point::new(0.0, 4.0, 0.0),
+                Point::new(0.0, 0.0, 0.0),
+                Point::new(4.0, 0.0, 0.0),
+                Point::new(4.0, 4.0, 0.0),
+                Point::new(0.0, 4.0, 0.0),
             ],
         ], true);
         MINI_CHECK!(mesh_sorted.is_valid());
@@ -264,6 +272,7 @@ pub fn run_mesh_loft() -> TestResult {
             ]),
         ];
         let mesh = Mesh::loft(&bottom, &top, true);
+
         MINI_CHECK!(mesh.is_valid());
         MINI_CHECK!(mesh.is_closed());
 
@@ -283,16 +292,21 @@ pub fn run_mesh_from_polygon_with_holes_many() -> TestResult {
             let x = i as f64 * 7.0;
             inputs.push(vec![
                 vec![
-                    Point::new(x, 0.0, 0.0), Point::new(x+5.0, 0.0, 0.0),
-                    Point::new(x+5.0, 5.0, 0.0), Point::new(x, 5.0, 0.0),
+                    Point::new(x, 0.0, 0.0),
+                    Point::new(x+5.0, 0.0, 0.0),
+                    Point::new(x+5.0, 5.0, 0.0),
+                    Point::new(x, 5.0, 0.0),
                 ],
                 vec![
-                    Point::new(x+1.0, 1.0, 0.0), Point::new(x+4.0, 1.0, 0.0),
-                    Point::new(x+4.0, 4.0, 0.0), Point::new(x+1.0, 4.0, 0.0),
+                    Point::new(x+1.0, 1.0, 0.0),
+                    Point::new(x+4.0, 1.0, 0.0),
+                    Point::new(x+4.0, 4.0, 0.0),
+                    Point::new(x+1.0, 4.0, 0.0),
                 ],
             ]);
         }
         let meshes = Mesh::from_polygon_with_holes_many(inputs.clone(), false, true);
+
         MINI_CHECK!(meshes[0].is_valid());
         MINI_CHECK!(meshes[1].is_valid());
         MINI_CHECK!(meshes[2].is_valid());
@@ -312,12 +326,23 @@ pub fn run_mesh_loft_many() -> TestResult {
         for i in 0..6 {
             let x = i as f64 * 3.0;
             let b = Polyline::new(vec![
-                Point::new(x, 0.0, 0.0), Point::new(x+1.0, 0.0, 0.0), Point::new(x+1.0, 1.0, 0.0), Point::new(x, 1.0, 0.0), Point::new(x, 0.0, 0.0)]);
+                Point::new(x, 0.0, 0.0),
+                Point::new(x+1.0, 0.0, 0.0),
+                Point::new(x+1.0, 1.0, 0.0),
+                Point::new(x, 1.0, 0.0),
+                Point::new(x, 0.0, 0.0),
+            ]);
             let t = Polyline::new(vec![
-                Point::new(x, 0.0, 1.0+i as f64*0.5), Point::new(x+1.0, 0.0, 1.0+i as f64*0.5), Point::new(x+1.0, 1.0, 1.0+i as f64*0.5), Point::new(x, 1.0, 1.0+i as f64*0.5), Point::new(x, 0.0, 1.0+i as f64*0.5)]);
+                Point::new(x, 0.0, 1.0+i as f64*0.5),
+                Point::new(x+1.0, 0.0, 1.0+i as f64*0.5),
+                Point::new(x+1.0, 1.0, 1.0+i as f64*0.5),
+                Point::new(x, 1.0, 1.0+i as f64*0.5),
+                Point::new(x, 0.0, 1.0+i as f64*0.5),
+            ]);
             loft_inputs.push((vec![b], vec![t]));
         }
         let meshes = Mesh::loft_many(loft_inputs.clone(), true, true);
+
         MINI_CHECK!(meshes[0].is_valid());
         MINI_CHECK!(meshes[0].is_closed());
         MINI_CHECK!(meshes[1].is_valid());
@@ -354,108 +379,108 @@ pub fn run_mesh_loft_panels() -> TestResult {
 
         let top7: Vec<Vec<Point>> = vec![
             vec![
-                Point::new(250.,-250.,500.),
-                Point::new(250.,250.,500.),
-                Point::new(-250.,250.,500.),
-                Point::new(-250.,-250.,500.),
-                Point::new(250.,-250.,500.),
+                Point::new(250., -250., 500.),
+                Point::new(250., 250., 500.),
+                Point::new(-250., 250., 500.),
+                Point::new(-250., -250., 500.),
+                Point::new(250., -250., 500.),
             ],
             vec![
-                Point::new(-250.,500.,250.),
-                Point::new(-250.,250.,500.),
-                Point::new(250.,250.,500.),
-                Point::new(250.,500.,250.),
-                Point::new(-250.,500.,250.),
+                Point::new(-250., 500., 250.),
+                Point::new(-250., 250., 500.),
+                Point::new(250., 250., 500.),
+                Point::new(250., 500., 250.),
+                Point::new(-250., 500., 250.),
             ],
             vec![
-                Point::new(250.,-250.,500.),
-                Point::new(500.,-250.,250.),
-                Point::new(500.,250.,250.),
-                Point::new(250.,250.,500.),
-                Point::new(250.,-250.,500.),
+                Point::new(250., -250., 500.),
+                Point::new(500., -250., 250.),
+                Point::new(500., 250., 250.),
+                Point::new(250., 250., 500.),
+                Point::new(250., -250., 500.),
             ],
             vec![
-                Point::new(250.,500.,250.),
-                Point::new(250.,250.,500.),
-                Point::new(500.,250.,250.),
-                Point::new(250.,500.,250.),
+                Point::new(250., 500., 250.),
+                Point::new(250., 250., 500.),
+                Point::new(500., 250., 250.),
+                Point::new(250., 500., 250.),
             ],
             vec![
-                Point::new(-250.,500.,250.),
-                Point::new(250.,500.,250.),
-                Point::new(250.,500.,-250.),
-                Point::new(-250.,500.,-250.),
-                Point::new(-250.,500.,250.),
+                Point::new(-250., 500., 250.),
+                Point::new(250., 500., 250.),
+                Point::new(250., 500., -250.),
+                Point::new(-250., 500., -250.),
+                Point::new(-250., 500., 250.),
             ],
             vec![
-                Point::new(250.,500.,250.),
-                Point::new(500.,250.,250.),
-                Point::new(500.,250.,-250.),
-                Point::new(250.,500.,-250.),
-                Point::new(250.,500.,250.),
+                Point::new(250., 500., 250.),
+                Point::new(500., 250., 250.),
+                Point::new(500., 250., -250.),
+                Point::new(250., 500., -250.),
+                Point::new(250., 500., 250.),
             ],
             vec![
-                Point::new(500.,-250.,250.),
-                Point::new(500.,-250.,-250.),
-                Point::new(500.,250.,-250.),
-                Point::new(500.,250.,250.),
-                Point::new(500.,-250.,250.),
+                Point::new(500., -250., 250.),
+                Point::new(500., -250., -250.),
+                Point::new(500., 250., -250.),
+                Point::new(500., 250., 250.),
+                Point::new(500., -250., 250.),
             ],
         ];
         let bot7: Vec<Vec<Point>> = vec![
             vec![
-                Point::new(270.710678,-250.,550.),
-                Point::new(270.710678,265.891862,550.),
-                Point::new(265.891862,270.710678,550.),
-                Point::new(-250.,270.710678,550.),
-                Point::new(-250.,-250.,550.),
-                Point::new(270.710678,-250.,550.),
+                Point::new(270.710678, -250., 550.),
+                Point::new(270.710678, 265.891862, 550.),
+                Point::new(265.891862, 270.710678, 550.),
+                Point::new(-250., 270.710678, 550.),
+                Point::new(-250., -250., 550.),
+                Point::new(270.710678, -250., 550.),
             ],
             vec![
-                Point::new(270.710678,-250.,550.),
-                Point::new(550.,-250.,270.710678),
-                Point::new(550.,265.891862,270.710678),
-                Point::new(270.710678,265.891862,550.),
-                Point::new(270.710678,-250.,550.),
+                Point::new(270.710678, -250., 550.),
+                Point::new(550., -250., 270.710678),
+                Point::new(550., 265.891862, 270.710678),
+                Point::new(270.710678, 265.891862, 550.),
+                Point::new(270.710678, -250., 550.),
             ],
             vec![
-                Point::new(-250.,550.,270.710678),
-                Point::new(-250.,270.710678,550.),
-                Point::new(265.891862,270.710678,550.),
-                Point::new(265.891862,550.,270.710678),
-                Point::new(-250.,550.,270.710678),
+                Point::new(-250., 550., 270.710678),
+                Point::new(-250., 270.710678, 550.),
+                Point::new(265.891862, 270.710678, 550.),
+                Point::new(265.891862, 550., 270.710678),
+                Point::new(-250., 550., 270.710678),
             ],
             vec![
-                Point::new(265.891862,550.,270.710678),
-                Point::new(265.891862,270.710678,550.),
-                Point::new(270.710678,265.891862,550.),
-                Point::new(550.,265.891862,270.710678),
-                Point::new(550.,270.710678,265.891862),
-                Point::new(270.710678,550.,265.891862),
-                Point::new(265.891862,550.,270.710678),
+                Point::new(265.891862, 550., 270.710678),
+                Point::new(265.891862, 270.710678, 550.),
+                Point::new(270.710678, 265.891862, 550.),
+                Point::new(550., 265.891862, 270.710678),
+                Point::new(550., 270.710678, 265.891862),
+                Point::new(270.710678, 550., 265.891862),
+                Point::new(265.891862, 550., 270.710678),
             ],
             vec![
-                Point::new(-250.,550.,270.710678),
-                Point::new(265.891862,550.,270.710678),
-                Point::new(270.710678,550.,265.891862),
-                Point::new(270.710678,550.,-250.),
-                Point::new(-250.,550.,-250.),
-                Point::new(-250.,550.,270.710678),
+                Point::new(-250., 550., 270.710678),
+                Point::new(265.891862, 550., 270.710678),
+                Point::new(270.710678, 550., 265.891862),
+                Point::new(270.710678, 550., -250.),
+                Point::new(-250., 550., -250.),
+                Point::new(-250., 550., 270.710678),
             ],
             vec![
-                Point::new(270.710678,550.,265.891862),
-                Point::new(550.,270.710678,265.891862),
-                Point::new(550.,270.710678,-250.),
-                Point::new(270.710678,550.,-250.),
-                Point::new(270.710678,550.,265.891862),
+                Point::new(270.710678, 550., 265.891862),
+                Point::new(550., 270.710678, 265.891862),
+                Point::new(550., 270.710678, -250.),
+                Point::new(270.710678, 550., -250.),
+                Point::new(270.710678, 550., 265.891862),
             ],
             vec![
-                Point::new(550.,-250.,270.710678),
-                Point::new(550.,-250.,-250.),
-                Point::new(550.,270.710678,-250.),
-                Point::new(550.,270.710678,265.891862),
-                Point::new(550.,265.891862,270.710678),
-                Point::new(550.,-250.,270.710678),
+                Point::new(550., -250., 270.710678),
+                Point::new(550., -250., -250.),
+                Point::new(550., 270.710678, -250.),
+                Point::new(550., 270.710678, 265.891862),
+                Point::new(550., 265.891862, 270.710678),
+                Point::new(550., -250., 270.710678),
             ],
         ];
         let (mut panels, adj, _top_mesh, _bot_mesh) = Mesh::loft_panels(top7, bot7, 0.001, 0.0, 2.0, true, false);
@@ -487,6 +512,7 @@ pub fn run_mesh_loft_panels() -> TestResult {
             let mut pt = panels[pair.pi].mesh.face_centroid(w.face_key).unwrap();
             pt.name = format!("p{} f{} - p{} f{}", pair.pi, w.face_index, pair.pj, panels[pair.pj].wall_faces[pair.wj].face_index);
         }
+
         MINI_CHECK!(panels.len() == 7);
         MINI_CHECK!(panels[0].mesh.is_valid());
         MINI_CHECK!(panels[1].mesh.is_valid());
@@ -545,6 +571,7 @@ pub fn run_mesh_boolean_queries() -> TestResult {
         let f0: usize = 0;
 
         let empty = mesh.is_empty();
+
         MINI_CHECK!(!empty);
 
         let valid = mesh.is_valid();
@@ -575,6 +602,7 @@ pub fn run_mesh_attributes() -> TestResult {
         let mut mesh = Mesh::create_box(1.0, 1.0, 1.0);
 
         let n_vertices = mesh.number_of_vertices();
+
         MINI_CHECK!(n_vertices == 8);
 
         let n_faces = mesh.number_of_faces();
@@ -678,6 +706,7 @@ pub fn run_mesh_edges() -> TestResult {
         let v0 = mesh.vertices()[0];
         let v1 = mesh.vertices()[1];
         let edges = mesh.edges();
+
         MINI_CHECK!(edges.len() == 12);
         MINI_CHECK!(edges[0] == (v0, v1));
     })
@@ -688,6 +717,7 @@ pub fn run_mesh_create_dodecahedron() -> TestResult {
         use crate::Mesh;
 
         let m = Mesh::create_dodecahedron(2.0);
+
         MINI_CHECK!(m.is_valid());
         MINI_CHECK!(m.number_of_vertices() == 20);
         MINI_CHECK!(m.number_of_faces() == 12);
@@ -701,8 +731,14 @@ pub fn run_mesh_vertex_and_face_operations() -> TestResult {
 
         let hx = 0.5_f64; let hy = 0.5_f64; let hz = 0.5_f64;
         let verts = vec![
-            Point::new(-hx, -hy, -hz), Point::new( hx, -hy, -hz), Point::new( hx,  hy, -hz), Point::new(-hx,  hy, -hz),
-            Point::new(-hx, -hy,  hz), Point::new( hx, -hy,  hz), Point::new( hx,  hy,  hz), Point::new(-hx,  hy,  hz),
+            Point::new(-hx, -hy, -hz),
+            Point::new( hx, -hy, -hz),
+            Point::new( hx,  hy, -hz),
+            Point::new(-hx,  hy, -hz),
+            Point::new(-hx, -hy,  hz),
+            Point::new( hx, -hy,  hz),
+            Point::new( hx,  hy,  hz),
+            Point::new(-hx,  hy,  hz),
         ];
         let faces: Vec<Vec<usize>> = vec![
             vec![0, 3, 2, 1], vec![4, 5, 6, 7], vec![0, 1, 5, 4], vec![2, 3, 7, 6], vec![0, 4, 7, 3], vec![1, 2, 6, 5],
@@ -853,6 +889,7 @@ pub fn run_mesh_connectivity_queries() -> TestResult {
             mid3.name = format!("e{}-{}", u3, v3);
 
             let _ee_set: std::collections::BTreeSet<_> = ee.iter().cloned().collect();
+
             MINI_CHECK!(ee.len() == 4);
             MINI_CHECK!(ee[0] == (1, 0));
             MINI_CHECK!(ee[1] == (1, 4));
@@ -1010,6 +1047,7 @@ pub fn run_mesh_geometric_properties() -> TestResult {
 
         // area
         let area = mesh.area();
+
         MINI_CHECK!(TOLERANCE.is_close(area, 46.4528898159021));
 
         // centroid
@@ -1163,6 +1201,7 @@ pub fn run_mesh_transformation() -> TestResult {
         let mut mesh1 = mesh.duplicate();
         mesh1.xform = Xform::translation(0.0, 0.0, 1.0);
         mesh1.transform(None);
+
         MINI_CHECK!(!mesh1.xform.is_identity());
         MINI_CHECK!(mesh1.vertex_point(v0).unwrap()[2] == 1.0);
 
@@ -1233,8 +1272,18 @@ pub fn run_mesh_json_roundtrip() -> TestResult {
 
         // Face holes roundtrip
         let hmesh = Mesh::from_polygon_with_holes(&[
-            vec![Point::new(0.0,0.0,0.0), Point::new(4.0,0.0,0.0), Point::new(4.0,4.0,0.0), Point::new(0.0,4.0,0.0)],
-            vec![Point::new(1.0,1.0,0.0), Point::new(3.0,1.0,0.0), Point::new(3.0,3.0,0.0), Point::new(1.0,3.0,0.0)],
+            vec![
+                Point::new(0.0, 0.0, 0.0),
+                Point::new(4.0, 0.0, 0.0),
+                Point::new(4.0, 4.0, 0.0),
+                Point::new(0.0, 4.0, 0.0),
+            ],
+            vec![
+                Point::new(1.0, 1.0, 0.0),
+                Point::new(3.0, 1.0, 0.0),
+                Point::new(3.0, 3.0, 0.0),
+                Point::new(1.0, 3.0, 0.0),
+            ],
         ], true);
         let loaded_holes = Mesh::jsonload(&hmesh.jsondump()).unwrap();
         let hfk = *hmesh.face_holes.keys().next().unwrap();
@@ -1282,8 +1331,18 @@ pub fn run_mesh_protobuf_roundtrip() -> TestResult {
 
         // Face holes roundtrip
         let hmesh = Mesh::from_polygon_with_holes(&[
-            vec![Point::new(0.0,0.0,0.0), Point::new(4.0,0.0,0.0), Point::new(4.0,4.0,0.0), Point::new(0.0,4.0,0.0)],
-            vec![Point::new(1.0,1.0,0.0), Point::new(3.0,1.0,0.0), Point::new(3.0,3.0,0.0), Point::new(1.0,3.0,0.0)],
+            vec![
+                Point::new(0.0, 0.0, 0.0),
+                Point::new(4.0, 0.0, 0.0),
+                Point::new(4.0, 4.0, 0.0),
+                Point::new(0.0, 4.0, 0.0),
+            ],
+            vec![
+                Point::new(1.0, 1.0, 0.0),
+                Point::new(3.0, 1.0, 0.0),
+                Point::new(3.0, 3.0, 0.0),
+                Point::new(1.0, 3.0, 0.0),
+            ],
         ], true);
         let loaded_holes = Mesh::pb_loads(&hmesh.pb_dumps()).unwrap();
         let hfk = *hmesh.face_holes.keys().next().unwrap();

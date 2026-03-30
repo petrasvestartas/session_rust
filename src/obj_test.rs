@@ -12,6 +12,7 @@ pub fn run_obj_read_bunny() -> TestResult {
             return Ok(());
         }
         let mesh = read_obj(bunny_path.to_str().unwrap()).unwrap();
+
         MINI_CHECK!(mesh.number_of_vertices() == 2503);
         MINI_CHECK!(mesh.number_of_faces() == 4968);
         let (vertices, faces) = mesh.to_vertices_and_faces();
@@ -35,6 +36,7 @@ pub fn run_obj_write_read_roundtrip() -> TestResult {
         let v3 = original_mesh.add_vertex(Point::new(0.0, 0.0, 1.0), None);
         let _ = original_mesh.add_face(vec![v0, v1, v2], None);
         let _ = original_mesh.add_face(vec![v0, v1, v3], None);
+
         MINI_CHECK!(original_mesh.number_of_vertices() == 4);
         MINI_CHECK!(original_mesh.number_of_faces() == 2);
         let src_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));

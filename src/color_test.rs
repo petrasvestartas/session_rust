@@ -8,7 +8,7 @@ mod tests {
         let mut red = Color::new(255, 0, 0, 255);
         red.name = "red".to_string();
         assert_eq!(red.name, "red");
-        assert!(!red.guid.to_string().is_empty());
+        assert!(!red.guid().is_empty());
         assert_eq!(red.r, 255);
         assert_eq!(red.g, 0);
         assert_eq!(red.b, 0);
@@ -61,7 +61,7 @@ mod tests {
         assert_eq!(restored_color.b, 100);
         assert_eq!(restored_color.a, 255);
         assert_eq!(restored_color.name, "bronze");
-        assert_eq!(restored_color.guid, original_color.guid);
+        assert_eq!(restored_color.guid(), original_color.guid());
     }
 
     #[test]
@@ -78,7 +78,7 @@ mod tests {
         assert_eq!(loaded.b, original.b);
         assert_eq!(loaded.a, original.a);
         assert_eq!(loaded.name, original.name);
-        assert_eq!(loaded.guid, original.guid);
+        assert_eq!(loaded.guid(), original.guid());
     }
 
     #[test]
@@ -199,13 +199,13 @@ pub fn run_color_constructor() -> TestResult {
         cother.name = "red".to_string();
 
         MINI_CHECK!(red.name == "red");
-        MINI_CHECK!(!red.guid.is_empty());
+        MINI_CHECK!(!red.guid().is_empty());
         MINI_CHECK!(red.r == 255 && red.g == 0 && red.b == 0 && red.a == 255);
         MINI_CHECK!(r == 255 && g == 0 && b == 0 && a == 255);
         MINI_CHECK!(cstr == "255, 0, 0, 255");
         MINI_CHECK!(crepr == "Color(red, 255, 0, 0, 255)");
         MINI_CHECK!(ccopy == cother);
-        MINI_CHECK!(ccopy.guid != red.guid);
+        MINI_CHECK!(ccopy.guid() != red.guid());
     })
 }
 

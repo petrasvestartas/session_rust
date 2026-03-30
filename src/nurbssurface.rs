@@ -3,7 +3,7 @@ use crate::nurbscurve::NurbsCurve;
 use crate::xform::Xform;
 use crate::color::Color;
 use crate::vector::Vector;
-use crate::obb::Obb;
+use crate::obb::OBB;
 use crate::mesh::Mesh;
 use crate::plane::Plane;
 use crate::knot;
@@ -17,7 +17,7 @@ use serde::ser::SerializeMap;
 #[derive(Debug)]
 pub struct NurbsSurface {
     // Metadata
-    pub guid: String,
+    guid: std::sync::OnceLock<String>,
     pub name: String,
     pub width: f64,
     pub pointcolors: Vec<Color>,
@@ -64,7 +64,7 @@ impl serde::Serialize for NurbsSurface {
         let facecolors_flat: Vec<u8> = self.facecolors.iter()
             .flat_map(|c| vec![c.r, c.g, c.b, c.a]).collect();
         map.serialize_entry("facecolors", &facecolors_flat)?;
-        map.serialize_entry("guid", &self.guid)?;
+        map.serialize_entry("guid", self.guid())?;
         map.serialize_entry("is_rational", &self.m_is_rat)?;
         map.serialize_entry("knots_u", &self.m_knot[0])?;
         map.serialize_entry("knots_v", &self.m_knot[1])?;
@@ -152,7 +152,7 @@ impl<'de> Deserialize<'de> for NurbsSurface {
             .collect();
 
         Ok(NurbsSurface {
-            guid: data.guid.unwrap_or_else(|| uuid::Uuid::new_v4().to_string()),
+            guid: { let c = std::sync::OnceLock::new(); let _ = c.set(data.guid.unwrap_or_else(|| uuid::Uuid::new_v4().to_string())); c },
             name: data.name.unwrap_or_else(|| "my_nurbssurface".to_string()),
             width: data.width,
             pointcolors,
@@ -175,7 +175,7 @@ impl NurbsSurface {
     /// Create a new empty NURBS surface
     pub fn new() -> Self {
         NurbsSurface {
-            guid: uuid::Uuid::new_v4().to_string(),
+            guid: std::sync::OnceLock::new(),
             name: "my_nurbssurface".to_string(),
             width: 1.0,
             pointcolors: Vec::new(),
@@ -540,6 +540,16 @@ impl NurbsSurface {
         subs
     }
 
+    pub fn mesh_grid(&self) -> Mesh {
+        if let Some(ref m) = self.m_mesh {
+            return m.clone();
+        }
+        if !self.is_valid() {
+            return Mesh::new();
+        }
+        crate::remesh_nurbssurface_grid::RemeshNurbsSurfaceGrid::from_u_v(self.clone(), 0, 0)
+    }
+
     pub fn mesh(&self) -> Mesh {
         if let Some(ref m) = self.m_mesh {
             return m.clone();
@@ -582,220 +592,7 @@ impl NurbsSurface {
             }
             return result;
         }
-        let max_angle_deg = 20.0f64;
-        let bbox_diag = self.compute_bbox_diagonal();
-        let mut u_subs = self.span_subs(0, &usp, &vsp, max_angle_deg, bbox_diag);
-        let mut v_subs = self.span_subs(1, &vsp, &usp, max_angle_deg, bbox_diag);
-        let total_u: usize = u_subs.iter().sum::<usize>() + 1;
-        let total_v: usize = v_subs.iter().sum::<usize>() + 1;
-        let v_mid = (vsp[0] + vsp[vsp.len()-1]) * 0.5;
-        let u_mid = (usp[0] + usp[usp.len()-1]) * 0.5;
-        let mut u_len = 0.0f64;
-        {
-            let mut p0 = self.point_at(usp[0], v_mid).unwrap_or(Point::new(0.0, 0.0, 0.0));
-            let n_sample = total_u.max(10);
-            for i in 1..=n_sample {
-                let u = usp[0] + i as f64 * (usp[usp.len()-1] - usp[0]) / n_sample as f64;
-                let p1 = self.point_at(u, v_mid).unwrap_or(Point::new(0.0, 0.0, 0.0));
-                u_len += ((p1[0]-p0[0]).powi(2)+(p1[1]-p0[1]).powi(2)+(p1[2]-p0[2]).powi(2)).sqrt();
-                p0 = p1;
-            }
-        }
-        let mut v_len = 0.0f64;
-        {
-            let mut p0 = self.point_at(u_mid, vsp[0]).unwrap_or(Point::new(0.0, 0.0, 0.0));
-            let n_sample = total_v.max(10);
-            for i in 1..=n_sample {
-                let v = vsp[0] + i as f64 * (vsp[vsp.len()-1] - vsp[0]) / n_sample as f64;
-                let p1 = self.point_at(u_mid, v).unwrap_or(Point::new(0.0, 0.0, 0.0));
-                v_len += ((p1[0]-p0[0]).powi(2)+(p1[1]-p0[1]).powi(2)+(p1[2]-p0[2]).powi(2)).sqrt();
-                p0 = p1;
-            }
-        }
-        if u_len > 1e-14 && v_len > 1e-14 && total_u > 0 && total_v > 0 {
-            let spacing_u = u_len / total_u as f64;
-            let spacing_v = v_len / total_v as f64;
-            let ratio = spacing_u / spacing_v;
-            let deg_u = self.degree(0);
-            let deg_v = self.degree(1);
-            if ratio > 2.0 && deg_u > 1 {
-                let scale = ratio.sqrt();
-                for s in u_subs.iter_mut() { *s = (((*s as f64) * scale).ceil() as usize).min(24); }
-            } else if ratio < 0.5 && deg_v > 1 {
-                let scale = (1.0 / ratio).sqrt();
-                for s in v_subs.iter_mut() { *s = (((*s as f64) * scale).ceil() as usize).min(24); }
-            }
-        }
-        {
-            let deg_u = self.degree(0);
-            let deg_v = self.degree(1);
-            if deg_u == 1 && deg_v == 1 {
-                let ns_u = usp.len() - 1;
-                let ns_v = vsp.len() - 1;
-                let chord_tol = if bbox_diag > 0.0 { bbox_diag * 0.005 } else { 1e-6 };
-                let mut max_twist = 0.0f64;
-                for i in 0..ns_u {
-                    for j in 0..ns_v {
-                        let u0 = usp[i]; let u1 = usp[i + 1];
-                        let v0 = vsp[j]; let v1 = vsp[j + 1];
-                        let pm = self.point_at((u0 + u1) * 0.5, (v0 + v1) * 0.5).unwrap_or(Point::new(0.0, 0.0, 0.0));
-                        let p00 = self.point_at(u0, v0).unwrap_or(Point::new(0.0, 0.0, 0.0));
-                        let p11 = self.point_at(u1, v1).unwrap_or(Point::new(0.0, 0.0, 0.0));
-                        let mx = (p00[0] + p11[0]) * 0.5;
-                        let my = (p00[1] + p11[1]) * 0.5;
-                        let mz = (p00[2] + p11[2]) * 0.5;
-                        let dx = pm[0] - mx; let dy = pm[1] - my; let dz = pm[2] - mz;
-                        let twist = (dx*dx + dy*dy + dz*dz).sqrt();
-                        if twist > max_twist { max_twist = twist; }
-                    }
-                }
-                if max_twist > chord_tol {
-                    let twist_subs = 4.max(((2.0 * (max_twist / chord_tol).sqrt()).ceil() as usize).min(24));
-                    for s in u_subs.iter_mut() { *s = (*s).max(twist_subs); }
-                    for s in v_subs.iter_mut() { *s = (*s).max(twist_subs); }
-                }
-            }
-        }
-        let mut us = Vec::new();
-        for i in 0..usp.len() - 1 {
-            let n = u_subs[i];
-            for s in 0..n {
-                us.push(usp[i] + s as f64 * (usp[i + 1] - usp[i]) / n as f64);
-            }
-        }
-        us.push(*usp.last().unwrap());
-        let mut vs = Vec::new();
-        for i in 0..vsp.len() - 1 {
-            let n = v_subs[i];
-            for s in 0..n {
-                vs.push(vsp[i] + s as f64 * (vsp[i + 1] - vsp[i]) / n as f64);
-            }
-        }
-        vs.push(*vsp.last().unwrap());
-        let closed_u = self.is_closed(0);
-        let closed_v = self.is_closed(1);
-        let fix_closed_gap = |params: &mut Vec<f64>, spans: &[f64], closed: bool| {
-            if !closed || params.len() < 3 { return; }
-            params.pop();
-            let domain_end = *spans.last().unwrap();
-            let wrap_gap = domain_end - *params.last().unwrap();
-            let mut max_gap = 0.0f64;
-            for i in 1..params.len() {
-                let g = params[i] - params[i - 1];
-                if g > max_gap { max_gap = g; }
-            }
-            if max_gap > 0.0 && wrap_gap > max_gap * 1.5 {
-                let extra = ((wrap_gap / max_gap).ceil() as usize).saturating_sub(1);
-                let step = wrap_gap / (extra + 1) as f64;
-                for _e in 1..=extra {
-                    params.push(params.last().unwrap() + step);
-                }
-            }
-        };
-        fix_closed_gap(&mut us, &usp, closed_u);
-        fix_closed_gap(&mut vs, &vsp, closed_v);
-        let nu = us.len();
-        let nv = vs.len();
-        let sing_v0 = self.is_singular(0);
-        let sing_v1 = self.is_singular(2);
-        let j_start = if sing_v0 { 1 } else { 0 };
-        let j_end = if sing_v1 { nv - 1 } else { nv };
-        let nv_grid = j_end - j_start;
-        let mut result = Mesh::new();
-        let mut south_pole: usize = 0;
-        let mut north_pole: usize = 0;
-        if sing_v0 {
-            let pt = self.point_at(us[0], vs[0]).unwrap_or(Point::new(0.0, 0.0, 0.0));
-            south_pole = result.add_vertex(pt, None);
-            result.vertex.get_mut(&south_pole).unwrap().attributes.insert("u".to_string(), us[0]);
-            result.vertex.get_mut(&south_pole).unwrap().attributes.insert("v".to_string(), vs[0]);
-        }
-        if sing_v1 {
-            let pt = self.point_at(us[0], vs[nv - 1]).unwrap_or(Point::new(0.0, 0.0, 0.0));
-            north_pole = result.add_vertex(pt, None);
-            result.vertex.get_mut(&north_pole).unwrap().attributes.insert("u".to_string(), us[0]);
-            result.vertex.get_mut(&north_pole).unwrap().attributes.insert("v".to_string(), vs[nv - 1]);
-        }
-        let mut vkeys = Vec::with_capacity(nu * nv_grid);
-        for i in 0..nu {
-            for j in j_start..j_end {
-                let pt = self.point_at(us[i], vs[j]).unwrap_or(Point::new(0.0, 0.0, 0.0));
-                let vk = result.add_vertex(pt, None);
-                result.vertex.get_mut(&vk).unwrap().attributes.insert("u".to_string(), us[i]);
-                result.vertex.get_mut(&vk).unwrap().attributes.insert("v".to_string(), vs[j]);
-                vkeys.push(vk);
-            }
-        }
-        let grid_idx = |i: usize, j: usize| -> usize {
-            vkeys[i * nv_grid + (j - j_start)]
-        };
-        let nu_faces = if closed_u { nu } else { nu - 1 };
-        if sing_v0 {
-            for i in 0..nu_faces {
-                let i1 = (i + 1) % nu;
-                result.add_face(vec![south_pole, grid_idx(i1, j_start), grid_idx(i, j_start)], None);
-            }
-        }
-        let nv_interior = if closed_v && !sing_v0 && !sing_v1 { nv_grid } else { nv_grid - 1 };
-        for i in 0..nu_faces {
-            for jj in 0..nv_interior {
-                let j = jj + j_start;
-                let i1 = (i + 1) % nu;
-                let j1 = if closed_v && !sing_v0 && !sing_v1 {
-                    (jj + 1) % nv_grid + j_start
-                } else {
-                    j + 1
-                };
-                let v00 = grid_idx(i, j); let v10 = grid_idx(i1, j);
-                let v01 = grid_idx(i, j1); let v11 = grid_idx(i1, j1);
-                if (i + jj) % 2 == 0 {
-                    result.add_face(vec![v00, v10, v11], None);
-                    result.add_face(vec![v00, v11, v01], None);
-                } else {
-                    result.add_face(vec![v00, v10, v01], None);
-                    result.add_face(vec![v10, v11, v01], None);
-                }
-            }
-        }
-        if sing_v1 {
-            let j_last = j_end - 1;
-            for i in 0..nu_faces {
-                let i1 = (i + 1) % nu;
-                result.add_face(vec![grid_idx(i, j_last), grid_idx(i1, j_last), north_pole], None);
-            }
-        }
-        let nv_total = result.vertex.len();
-        let mut vnx = vec![0.0f64; nv_total + 1];
-        let mut vny = vec![0.0f64; nv_total + 1];
-        let mut vnz = vec![0.0f64; nv_total + 1];
-        for (_, vids) in &result.face {
-            if vids.len() < 3 { continue; }
-            let p0 = &result.vertex[&vids[0]];
-            let p1 = &result.vertex[&vids[1]];
-            let p2 = &result.vertex[&vids[2]];
-            let e1x = p1.x - p0.x; let e1y = p1.y - p0.y; let e1z = p1.z - p0.z;
-            let e2x = p2.x - p0.x; let e2y = p2.y - p0.y; let e2z = p2.z - p0.z;
-            let fnx = e1y*e2z - e1z*e2y;
-            let fny = e1z*e2x - e1x*e2z;
-            let fnz = e1x*e2y - e1y*e2x;
-            for &vi in vids {
-                vnx[vi] += fnx;
-                vny[vi] += fny;
-                vnz[vi] += fnz;
-            }
-        }
-        for i in 0..=nv_total {
-            let len = (vnx[i]*vnx[i] + vny[i]*vny[i] + vnz[i]*vnz[i]).sqrt();
-            if len > 1e-15 {
-                vnx[i] /= len;
-                vny[i] /= len;
-                vnz[i] /= len;
-            }
-            if let Some(v) = result.vertex.get_mut(&i) {
-                v.set_normal(vnx[i], vny[i], vnz[i]);
-            }
-        }
-        result
+        self.mesh_grid()
     }
 
     ///////////////////////////////////////////////////////////////////////////////////////////
@@ -2084,7 +1881,7 @@ impl NurbsSurface {
     }
 
     /// Get axis-aligned bounding box from control vertices
-    pub fn get_bounding_box(&self) -> Obb {
+    pub fn get_bounding_box(&self) -> OBB {
         let mut min_pt = Point::new(f64::MAX, f64::MAX, f64::MAX);
         let mut max_pt = Point::new(f64::MIN, f64::MIN, f64::MIN);
         for i in 0..self.m_cv_count[0] {
@@ -2109,7 +1906,7 @@ impl NurbsSurface {
             (max_pt[1] - min_pt[1]) * 0.5,
             (max_pt[2] - min_pt[2]) * 0.5,
         );
-        Obb::new(
+        OBB::new(
             center,
             Vector::new(1.0, 0.0, 0.0),
             Vector::new(0.0, 1.0, 0.0),
@@ -2227,6 +2024,14 @@ impl NurbsSurface {
         self.clone()
     }
 
+    pub fn guid(&self) -> &str {
+        self.guid.get_or_init(|| uuid::Uuid::new_v4().to_string())
+    }
+
+    pub fn set_guid(&self, g: String) {
+        let _ = self.guid.set(g);
+    }
+
     /// Serialize to JSON and write to file
     pub fn json_dump(&self, filename: &str) {
         use std::fs::File;
@@ -2282,7 +2087,7 @@ impl NurbsSurface {
         use prost::Message;
 
         let proto = crate::proto::NurbsSurface {
-            guid: self.guid.clone(),
+            guid: self.guid().to_string(),
             name: self.name.clone(),
             dimension: self.m_dim as i32,
             is_rational: self.m_is_rat,
@@ -2309,7 +2114,7 @@ impl NurbsSurface {
                 r: c.r as i32, g: c.g as i32, b: c.b as i32, a: c.a as i32,
             }).collect(),
             xform: Some(crate::proto::Xform {
-                guid: self.xform.guid.clone(),
+                guid: self.xform.guid().to_string(),
                 name: self.xform.name.clone(),
                 matrix: self.xform.m.to_vec(),
             }),
@@ -2356,7 +2161,7 @@ impl NurbsSurface {
         };
 
         // Load metadata
-        surface.guid = proto.guid;
+        surface.set_guid(proto.guid.clone());
         surface.name = proto.name;
         surface.width = proto.width;
 
@@ -2379,7 +2184,7 @@ impl NurbsSurface {
 
         // Load transform
         if let Some(xform) = proto.xform {
-            surface.xform.guid = xform.guid;
+            surface.xform.set_guid(xform.guid.clone());
             surface.xform.name = xform.name;
             for (i, val) in xform.matrix.iter().enumerate() {
                 if i < 16 {
@@ -2466,7 +2271,7 @@ impl Eq for NurbsSurface {}
 impl Clone for NurbsSurface {
     fn clone(&self) -> Self {
         NurbsSurface {
-            guid: uuid::Uuid::new_v4().to_string(), // Generate new GUID
+            guid: std::sync::OnceLock::new(),
             name: self.name.clone(),
             width: self.width,
             pointcolors: self.pointcolors.clone(),

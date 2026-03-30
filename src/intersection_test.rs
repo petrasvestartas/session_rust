@@ -12,6 +12,7 @@ pub fn run_intersection_line_line() -> TestResult {
         let line0 = Line::new(0.0, 0.0, 0.0, 1.0, 0.0, 0.0);
         let line1 = Line::new(0.5, -1.0, 0.0, 0.5, 1.0, 0.0);
         let output = intersection::line_line(&line0, &line1, Tolerance::APPROXIMATION);
+
         MINI_CHECK!(output.is_some());
         let output = output.unwrap();
         MINI_CHECK!(TOLERANCE.is_close(output[0], 0.5));
@@ -29,6 +30,7 @@ pub fn run_intersection_line_line_parallel() -> TestResult {
         let line0 = Line::new(0.0, 0.0, 0.0, 1.0, 0.0, 0.0);
         let line1 = Line::new(0.0, 1.0, 0.0, 1.0, 1.0, 0.0);
         let output = intersection::line_line(&line0, &line1, Tolerance::APPROXIMATION);
+
         MINI_CHECK!(output.is_none());
     })
 }
@@ -42,6 +44,7 @@ pub fn run_intersection_line_line_parameters() -> TestResult {
         let line0 = Line::new(0.0, 0.0, 0.0, 1.0, 0.0, 0.0);
         let line1 = Line::new(0.5, -1.0, 0.0, 0.5, 1.0, 0.0);
         let result = intersection::line_line_parameters(&line0, &line1, Tolerance::APPROXIMATION, true, false);
+
         MINI_CHECK!(result.is_some());
         let (t0, t1) = result.unwrap();
         MINI_CHECK!(TOLERANCE.is_close(t0, 0.5));
@@ -58,6 +61,7 @@ pub fn run_intersection_line_line_parameters_endpoints() -> TestResult {
         let line0 = Line::new(0.0, 0.0, 0.0, 1.0, 0.0, 0.0);
         let line1 = Line::new(0.0, 0.0, 0.0, 0.0, 1.0, 0.0);
         let result = intersection::line_line_parameters(&line0, &line1, Tolerance::APPROXIMATION, true, false);
+
         MINI_CHECK!(result.is_some());
         let (t0, t1) = result.unwrap();
         MINI_CHECK!(TOLERANCE.is_close(t0, 0.0));
@@ -74,6 +78,7 @@ pub fn run_intersection_line_line_parameters_infinite() -> TestResult {
         let line0 = Line::new(0.0, 0.0, 0.0, 1.0, 0.0, 0.0);
         let line1 = Line::new(2.0, -1.0, 0.0, 2.0, 1.0, 0.0);
         let result = intersection::line_line_parameters(&line0, &line1, Tolerance::APPROXIMATION, false, false);
+
         MINI_CHECK!(result.is_some());
         let (t0, _t1) = result.unwrap();
         MINI_CHECK!(TOLERANCE.is_close(t0, 2.0));
@@ -90,6 +95,7 @@ pub fn run_intersection_plane_plane() -> TestResult {
         let plane0 = Plane::from_point_normal(Point::new(0.0, 0.0, 0.0), Vector::new(0.0, 0.0, 1.0));
         let plane1 = Plane::from_point_normal(Point::new(0.0, 0.0, 0.0), Vector::new(0.0, 1.0, 0.0));
         let output = intersection::plane_plane(&plane0, &plane1);
+
         MINI_CHECK!(output.is_some());
         let line_dir = output.unwrap().to_vector();
         MINI_CHECK!((line_dir[0].abs() - 1.0).abs() < 1e-4);
@@ -108,6 +114,7 @@ pub fn run_intersection_plane_plane_complex() -> TestResult {
         let pl0 = Plane::new(Point::new(213.787107, 513.797811, -24.743845), Vector::new(0.907673, -0.258819, 0.330366), Vector::new(0.272094, 0.96225, 0.006285));
         let pl1 = Plane::new(Point::new(247.17924, 499.115486, 59.619568), Vector::new(0.552465, 0.816035, 0.16991), Vector::new(0.172987, 0.087156, -0.98106));
         let intersection_line = intersection::plane_plane(&pl0, &pl1);
+
         MINI_CHECK!(intersection_line.is_some());
         let intersection_line = intersection_line.unwrap();
         let start = intersection_line.start();
@@ -132,6 +139,7 @@ pub fn run_intersection_line_plane() -> TestResult {
         let plane = Plane::from_point_normal(Point::new(0.0, 0.0, 1.0), Vector::new(0.0, 0.0, 1.0));
         let line = Line::new(0.0, 0.0, 0.0, 0.0, 0.0, 2.0);
         let output = intersection::line_plane(&line, &plane, true);
+
         MINI_CHECK!(output.is_some());
         let output = output.unwrap();
         MINI_CHECK!(TOLERANCE.is_close(output[0], 0.0));
@@ -151,6 +159,7 @@ pub fn run_intersection_line_plane_parallel() -> TestResult {
         let plane = Plane::from_point_normal(Point::new(0.0, 0.0, 1.0), Vector::new(0.0, 0.0, 1.0));
         let line = Line::new(0.0, 0.0, 0.0, 1.0, 0.0, 0.0);
         let output = intersection::line_plane(&line, &plane, true);
+
         MINI_CHECK!(output.is_none());
     })
 }
@@ -166,6 +175,7 @@ pub fn run_intersection_line_plane_real_world() -> TestResult {
         let l0 = Line::new(500.0, -573.576, -819.152, 500.0, 573.576, 819.152);
         let pl0 = Plane::new(Point::new(213.787107, 513.797811, -24.743845), Vector::new(0.907673, -0.258819, 0.330366), Vector::new(0.272094, 0.96225, 0.006285));
         let lp = intersection::line_plane(&l0, &pl0, false);
+
         MINI_CHECK!(lp.is_some());
         let lp = lp.unwrap();
         MINI_CHECK!((lp[0] - 500.0).abs() < 0.1);
@@ -185,6 +195,7 @@ pub fn run_intersection_plane_plane_plane() -> TestResult {
         let pl1 = Plane::new(Point::new(247.17924, 499.115486, 59.619568), Vector::new(0.552465, 0.816035, 0.16991), Vector::new(0.172987, 0.087156, -0.98106));
         let pl2 = Plane::new(Point::new(221.399816, 605.893667, -54.000116), Vector::new(0.903451, -0.360516, -0.231957), Vector::new(0.172742, -0.189057, 0.966653));
         let output = intersection::plane_plane_plane(&pl0, &pl1, &pl2);
+
         MINI_CHECK!(output.is_some());
         let output = output.unwrap();
         MINI_CHECK!((output[0] - 300.5).abs() < 0.1);
@@ -204,6 +215,7 @@ pub fn run_intersection_plane_plane_plane_parallel() -> TestResult {
         let plane1 = Plane::from_point_normal(Point::new(0.0, 0.0, 1.0), Vector::new(0.0, 0.0, 1.0));
         let plane2 = Plane::from_point_normal(Point::new(0.0, 0.0, 0.0), Vector::new(1.0, 0.0, 0.0));
         let output = intersection::plane_plane_plane(&plane0, &plane1, &plane2);
+
         MINI_CHECK!(output.is_none());
     })
 }
@@ -211,13 +223,14 @@ pub fn run_intersection_plane_plane_plane_parallel() -> TestResult {
 pub fn run_intersection_ray_box() -> TestResult {
     MINI_TEST!("Ray Box", {
         use crate::intersection;
-        use crate::Obb;
+        use crate::OBB;
         use crate::Line;
         use crate::Point;
 
-        let box_ = Obb::from_points(&[Point::new(-1.0, -1.0, -1.0), Point::new(1.0, 1.0, 1.0)], 0.0);
+        let box_ = OBB::from_points(&[Point::new(-1.0, -1.0, -1.0), Point::new(1.0, 1.0, 1.0)], 0.0);
         let line = Line::new(-5.0, 0.0, 0.0, -4.0, 0.0, 0.0);
         let points = intersection::ray_box(&line, &box_, 0.0, 100.0);
+
         MINI_CHECK!(points.is_some());
         let points = points.unwrap();
         MINI_CHECK!((points[0][0] - (-1.0)).abs() < 1e-4);
@@ -228,13 +241,14 @@ pub fn run_intersection_ray_box() -> TestResult {
 pub fn run_intersection_ray_box_miss() -> TestResult {
     MINI_TEST!("Ray Box Miss", {
         use crate::intersection;
-        use crate::Obb;
+        use crate::OBB;
         use crate::Line;
         use crate::Point;
 
-        let box_ = Obb::from_points(&[Point::new(-1.0, -1.0, -1.0), Point::new(1.0, 1.0, 1.0)], 0.0);
+        let box_ = OBB::from_points(&[Point::new(-1.0, -1.0, -1.0), Point::new(1.0, 1.0, 1.0)], 0.0);
         let line = Line::new(-5.0, 5.0, 0.0, -4.0, 5.0, 0.0);
         let points = intersection::ray_box(&line, &box_, 0.0, 100.0);
+
         MINI_CHECK!(points.is_none());
     })
 }
@@ -249,6 +263,7 @@ pub fn run_intersection_ray_sphere() -> TestResult {
         let center = Point::new(0.0, 0.0, 0.0);
         let radius = 2.0;
         let points = intersection::ray_sphere(&line, &center, radius);
+
         MINI_CHECK!(points.is_some());
         let points = points.unwrap();
         MINI_CHECK!(points.len() == 2);
@@ -267,6 +282,7 @@ pub fn run_intersection_ray_sphere_tangent() -> TestResult {
         let center = Point::new(0.0, 0.0, 0.0);
         let radius = 2.0;
         let points = intersection::ray_sphere(&line, &center, radius);
+
         MINI_CHECK!(points.is_some());
         let points = points.unwrap();
         MINI_CHECK!(points.len() == 1);
@@ -284,6 +300,7 @@ pub fn run_intersection_ray_sphere_miss() -> TestResult {
         let center = Point::new(0.0, 0.0, 0.0);
         let radius = 2.0;
         let points = intersection::ray_sphere(&line, &center, radius);
+
         MINI_CHECK!(points.is_none());
     })
 }
@@ -299,6 +316,7 @@ pub fn run_intersection_ray_triangle() -> TestResult {
         let v1 = Point::new(1.0, 0.0, 0.0);
         let v2 = Point::new(0.0, 1.0, 0.0);
         let result = intersection::ray_triangle(&line, &v0, &v1, &v2, 1e-6);
+
         MINI_CHECK!(result.is_some());
         let result = result.unwrap();
         MINI_CHECK!((result[2] - 0.0).abs() < 1e-4);
@@ -316,6 +334,7 @@ pub fn run_intersection_ray_triangle_miss() -> TestResult {
         let v1 = Point::new(1.0, 0.0, 0.0);
         let v2 = Point::new(0.0, 1.0, 0.0);
         let result = intersection::ray_triangle(&line, &v0, &v1, &v2, 1e-6);
+
         MINI_CHECK!(result.is_none());
     })
 }
@@ -331,6 +350,7 @@ pub fn run_intersection_ray_triangle_parallel() -> TestResult {
         let v1 = Point::new(1.0, 0.0, 0.0);
         let v2 = Point::new(0.0, 1.0, 0.0);
         let result = intersection::ray_triangle(&line, &v0, &v1, &v2, 1e-6);
+
         MINI_CHECK!(result.is_none());
     })
 }
@@ -343,12 +363,23 @@ pub fn run_intersection_ray_mesh() -> TestResult {
         use crate::Point;
 
         let polygons: Vec<Vec<Point>> = vec![
-            vec![Point::new(0.0, 0.0, 0.0), Point::new(1.0, 0.0, 0.0), Point::new(1.0, 1.0, 0.0), Point::new(0.0, 1.0, 0.0)],
-            vec![Point::new(0.0, 0.0, 1.0), Point::new(1.0, 0.0, 1.0), Point::new(1.0, 1.0, 1.0), Point::new(0.0, 1.0, 1.0)],
+            vec![
+                Point::new(0.0, 0.0, 0.0),
+                Point::new(1.0, 0.0, 0.0),
+                Point::new(1.0, 1.0, 0.0),
+                Point::new(0.0, 1.0, 0.0),
+            ],
+            vec![
+                Point::new(0.0, 0.0, 1.0),
+                Point::new(1.0, 0.0, 1.0),
+                Point::new(1.0, 1.0, 1.0),
+                Point::new(0.0, 1.0, 1.0),
+            ],
         ];
         let mesh = Mesh::from_polylines(polygons, None);
         let line = Line::new(0.5, 0.5, -1.0, 0.5, 0.5, 0.0);
         let hits = intersection::ray_mesh(&line, &mesh, 1e-6, true);
+
         MINI_CHECK!(hits.is_some());
         let hits = hits.unwrap();
         MINI_CHECK!(hits.len() >= 1);
@@ -364,12 +395,23 @@ pub fn run_intersection_ray_mesh_first() -> TestResult {
         use crate::Point;
 
         let polygons: Vec<Vec<Point>> = vec![
-            vec![Point::new(0.0, 0.0, 0.0), Point::new(1.0, 0.0, 0.0), Point::new(1.0, 1.0, 0.0), Point::new(0.0, 1.0, 0.0)],
-            vec![Point::new(0.0, 0.0, 1.0), Point::new(1.0, 0.0, 1.0), Point::new(1.0, 1.0, 1.0), Point::new(0.0, 1.0, 1.0)],
+            vec![
+                Point::new(0.0, 0.0, 0.0),
+                Point::new(1.0, 0.0, 0.0),
+                Point::new(1.0, 1.0, 0.0),
+                Point::new(0.0, 1.0, 0.0),
+            ],
+            vec![
+                Point::new(0.0, 0.0, 1.0),
+                Point::new(1.0, 0.0, 1.0),
+                Point::new(1.0, 1.0, 1.0),
+                Point::new(0.0, 1.0, 1.0),
+            ],
         ];
         let mesh = Mesh::from_polylines(polygons, None);
         let line = Line::new(0.5, 0.5, -1.0, 0.5, 0.5, 0.0);
         let hits = intersection::ray_mesh(&line, &mesh, 1e-6, false);
+
         MINI_CHECK!(hits.is_some());
         let hits = hits.unwrap();
         MINI_CHECK!(hits.len() == 1);
@@ -384,11 +426,17 @@ pub fn run_intersection_ray_mesh_miss() -> TestResult {
         use crate::Point;
 
         let polygons: Vec<Vec<Point>> = vec![
-            vec![Point::new(0.0, 0.0, 0.0), Point::new(1.0, 0.0, 0.0), Point::new(1.0, 1.0, 0.0), Point::new(0.0, 1.0, 0.0)],
+            vec![
+                Point::new(0.0, 0.0, 0.0),
+                Point::new(1.0, 0.0, 0.0),
+                Point::new(1.0, 1.0, 0.0),
+                Point::new(0.0, 1.0, 0.0),
+            ],
         ];
         let mesh = Mesh::from_polylines(polygons, None);
         let line = Line::new(5.0, 5.0, -1.0, 5.0, 5.0, 0.0);
         let hits = intersection::ray_mesh(&line, &mesh, 1e-6, true);
+
         MINI_CHECK!(hits.is_none());
     })
 }
@@ -401,12 +449,23 @@ pub fn run_intersection_ray_mesh_bvh() -> TestResult {
         use crate::Point;
 
         let polygons: Vec<Vec<Point>> = vec![
-            vec![Point::new(0.0, 0.0, 0.0), Point::new(1.0, 0.0, 0.0), Point::new(1.0, 1.0, 0.0), Point::new(0.0, 1.0, 0.0)],
-            vec![Point::new(0.0, 0.0, 1.0), Point::new(1.0, 0.0, 1.0), Point::new(1.0, 1.0, 1.0), Point::new(0.0, 1.0, 1.0)],
+            vec![
+                Point::new(0.0, 0.0, 0.0),
+                Point::new(1.0, 0.0, 0.0),
+                Point::new(1.0, 1.0, 0.0),
+                Point::new(0.0, 1.0, 0.0),
+            ],
+            vec![
+                Point::new(0.0, 0.0, 1.0),
+                Point::new(1.0, 0.0, 1.0),
+                Point::new(1.0, 1.0, 1.0),
+                Point::new(0.0, 1.0, 1.0),
+            ],
         ];
         let mesh = Mesh::from_polylines(polygons, None);
         let line = Line::new(0.5, 0.5, -1.0, 0.5, 0.5, 0.0);
         let hits = intersection::ray_mesh_bvh(&line, &mesh, 1e-6, true);
+
         MINI_CHECK!(hits.is_some());
         let hits = hits.unwrap();
         MINI_CHECK!(hits.len() >= 1);
@@ -422,12 +481,23 @@ pub fn run_intersection_ray_mesh_bvh_first() -> TestResult {
         use crate::Point;
 
         let polygons: Vec<Vec<Point>> = vec![
-            vec![Point::new(0.0, 0.0, 0.0), Point::new(1.0, 0.0, 0.0), Point::new(1.0, 1.0, 0.0), Point::new(0.0, 1.0, 0.0)],
-            vec![Point::new(0.0, 0.0, 1.0), Point::new(1.0, 0.0, 1.0), Point::new(1.0, 1.0, 1.0), Point::new(0.0, 1.0, 1.0)],
+            vec![
+                Point::new(0.0, 0.0, 0.0),
+                Point::new(1.0, 0.0, 0.0),
+                Point::new(1.0, 1.0, 0.0),
+                Point::new(0.0, 1.0, 0.0),
+            ],
+            vec![
+                Point::new(0.0, 0.0, 1.0),
+                Point::new(1.0, 0.0, 1.0),
+                Point::new(1.0, 1.0, 1.0),
+                Point::new(0.0, 1.0, 1.0),
+            ],
         ];
         let mesh = Mesh::from_polylines(polygons, None);
         let line = Line::new(0.5, 0.5, -1.0, 0.5, 0.5, 0.0);
         let hits = intersection::ray_mesh_bvh(&line, &mesh, 1e-6, false);
+
         MINI_CHECK!(hits.is_some());
         let hits = hits.unwrap();
         MINI_CHECK!(hits.len() == 1);
@@ -442,11 +512,17 @@ pub fn run_intersection_ray_mesh_bvh_miss() -> TestResult {
         use crate::Point;
 
         let polygons: Vec<Vec<Point>> = vec![
-            vec![Point::new(0.0, 0.0, 0.0), Point::new(1.0, 0.0, 0.0), Point::new(1.0, 1.0, 0.0), Point::new(0.0, 1.0, 0.0)],
+            vec![
+                Point::new(0.0, 0.0, 0.0),
+                Point::new(1.0, 0.0, 0.0),
+                Point::new(1.0, 1.0, 0.0),
+                Point::new(0.0, 1.0, 0.0),
+            ],
         ];
         let mesh = Mesh::from_polylines(polygons, None);
         let line = Line::new(5.0, 5.0, -1.0, 5.0, 5.0, 0.0);
         let hits = intersection::ray_mesh_bvh(&line, &mesh, 1e-6, true);
+
         MINI_CHECK!(hits.is_none());
     })
 }
@@ -477,6 +553,7 @@ pub fn run_intersection_ray_mesh_bvh_vs_naive() -> TestResult {
         let hits_bvh = intersection::ray_mesh_bvh(&line, &mesh, 1e-6, true);
         let result_naive = hits_naive.is_some();
         let result_bvh = hits_bvh.is_some();
+
         MINI_CHECK!(result_naive == result_bvh);
         let naive_count = hits_naive.as_ref().map(|h| h.len()).unwrap_or(0);
         let bvh_count = hits_bvh.as_ref().map(|h| h.len()).unwrap_or(0);
@@ -492,13 +569,14 @@ pub fn run_intersection_ray_mesh_bvh_vs_naive() -> TestResult {
 pub fn run_intersection_ray_box_real_world() -> TestResult {
     MINI_TEST!("Ray Box Real World", {
         use crate::intersection;
-        use crate::Obb;
+        use crate::OBB;
         use crate::Line;
         use crate::Point;
 
         let l0 = Line::new(500.0, -573.576, -819.152, 500.0, 573.576, 819.152);
-        let box_ = Obb::from_points(&[Point::new(214.0, 192.0, 484.0), Point::new(694.0, 567.0, 796.0)], 0.0);
+        let box_ = OBB::from_points(&[Point::new(214.0, 192.0, 484.0), Point::new(694.0, 567.0, 796.0)], 0.0);
         let points = intersection::ray_box(&l0, &box_, 0.0, 1000.0);
+
         MINI_CHECK!(points.is_some());
         let points = points.unwrap();
         MINI_CHECK!(points.len() == 2);
@@ -521,6 +599,7 @@ pub fn run_intersection_ray_sphere_real_world() -> TestResult {
         let sphere_center = Point::new(457.0, 192.0, 207.0);
         let radius = 265.0;
         let points = intersection::ray_sphere(&l0, &sphere_center, radius);
+
         MINI_CHECK!(points.is_some());
         let points = points.unwrap();
         MINI_CHECK!(points.len() == 2);
@@ -545,6 +624,7 @@ pub fn run_intersection_ray_triangle_real_world() -> TestResult {
         let p2 = Point::new(214.0, 192.0, 796.0);
         let p3 = Point::new(694.0, 192.0, 484.0);
         let result = intersection::ray_triangle(&l0, &p1, &p2, &p3, Tolerance::APPROXIMATION);
+
         MINI_CHECK!(result.is_some());
         let result = result.unwrap();
         MINI_CHECK!((result[0] - 500.0).abs() < 0.1);
@@ -562,12 +642,15 @@ pub fn run_intersection_surface_plane() -> TestResult {
         use crate::Vector;
 
         let pts = vec![
-            Point::new(0.0, 0.0, 0.0), Point::new(0.0, 10.0, 0.0),
-            Point::new(10.0, 0.0, 10.0), Point::new(10.0, 10.0, 10.0),
+            Point::new(0.0, 0.0, 0.0),
+            Point::new(0.0, 10.0, 0.0),
+            Point::new(10.0, 0.0, 10.0),
+            Point::new(10.0, 10.0, 10.0),
         ];
         let srf = NurbsSurface::create(false, false, 1, 1, 2, 2, &pts).unwrap();
         let plane = Plane::from_point_normal(Point::new(0.0, 0.0, 5.0), Vector::new(0.0, 0.0, 1.0));
         let curves = intersection::surface_plane(&srf, &plane, None);
+
         MINI_CHECK!(curves.len() == 1);
         MINI_CHECK!(curves[0].is_valid());
         let (t0, t1) = curves[0].domain();
@@ -600,6 +683,7 @@ pub fn run_intersection_surface_plane_curved() -> TestResult {
         let srf = NurbsSurface::create(false, false, 3, 3, 4, 4, &pts).unwrap();
         let plane = Plane::from_point_normal(Point::new(0.0, 0.0, 3.0), Vector::new(0.0, 0.0, 1.0));
         let curves = intersection::surface_plane(&srf, &plane, None);
+
         MINI_CHECK!(curves.len() >= 1);
         MINI_CHECK!(curves[0].is_valid());
         MINI_CHECK!(curves[0].degree() == 3);
@@ -621,12 +705,15 @@ pub fn run_intersection_surface_plane_miss() -> TestResult {
         use crate::Vector;
 
         let pts = vec![
-            Point::new(0.0, 0.0, 0.0), Point::new(0.0, 10.0, 0.0),
-            Point::new(10.0, 0.0, 0.0), Point::new(10.0, 10.0, 0.0),
+            Point::new(0.0, 0.0, 0.0),
+            Point::new(0.0, 10.0, 0.0),
+            Point::new(10.0, 0.0, 0.0),
+            Point::new(10.0, 10.0, 0.0),
         ];
         let srf = NurbsSurface::create(false, false, 1, 1, 2, 2, &pts).unwrap();
         let plane = Plane::from_point_normal(Point::new(0.0, 0.0, 5.0), Vector::new(0.0, 0.0, 1.0));
         let curves = intersection::surface_plane(&srf, &plane, None);
+
         MINI_CHECK!(curves.len() == 0);
     })
 }
@@ -649,6 +736,7 @@ pub fn run_intersection_closest_point_on_segment() -> TestResult {
         let seg = Line::new(0.0, 0.0, 0.0, 4.0, 0.0, 0.0);
         let pt = Point::new(2.0, 3.0, 0.0);
         let (cp, t) = intersection::closest_point_on_segment(&pt, &seg);
+
         MINI_CHECK!((cp[0] - 2.0).abs() < 1e-9);
         MINI_CHECK!((cp[1] - 0.0).abs() < 1e-9);
         MINI_CHECK!((t - 0.5).abs() < 1e-9);
@@ -670,6 +758,7 @@ pub fn run_intersection_plane_plane_plane_check_parallel() -> TestResult {
         let p0 = Plane::from_point_normal(crate::Point::new(0.0, 0.0, 0.0), Vector::new(0.0, 0.0, 1.0));
         let p1 = Plane::from_point_normal(crate::Point::new(0.0, 0.0, 1.0), Vector::new(0.0, 0.0, 1.0));
         let p2 = Plane::from_point_normal(crate::Point::new(0.0, 0.0, 2.0), Vector::new(0.0, 0.0, 1.0));
+
         MINI_CHECK!(intersection::plane_plane_plane_check(&p0, &p1, &p2, 0.1).is_none());
 
         // Three valid planes
@@ -699,6 +788,7 @@ pub fn run_intersection_plane_4planes() -> TestResult {
             Plane::from_point_normal(Point::new(0.0, 1.0, 0.0),  Vector::new(0.0, 1.0, 0.0)),  // y= 1
         ];
         let result = intersection::plane_4planes(&main, &planes);
+
         MINI_CHECK!(result.is_some());
         let poly = result.unwrap();
         // Closed polyline has 5 points (first == last)
@@ -727,6 +817,7 @@ pub fn run_intersection_plane_4planes_open() -> TestResult {
             Plane::from_point_normal(Point::new(0.0, 1.0, 0.0),  Vector::new(0.0, 1.0, 0.0)),
         ];
         let result = intersection::plane_4planes_open(&main, &planes);
+
         MINI_CHECK!(result.is_some());
         let poly = result.unwrap();
         // Open polyline has 4 points
@@ -746,6 +837,7 @@ pub fn run_intersection_plane_4lines() -> TestResult {
         let l2 = Line::new(-1.0, -1.0, -1.0,  1.0, -1.0, 1.0);
         let l3 = Line::new(-1.0,  1.0, -1.0,  1.0,  1.0, 1.0);
         let result = intersection::plane_4lines(&plane, &l0, &l1, &l2, &l3);
+
         MINI_CHECK!(result.is_some());
         let poly = result.unwrap();
         MINI_CHECK!(poly.len() == 5);
@@ -764,6 +856,7 @@ pub fn run_intersection_scale_vector_to_distance_of_2planes() -> TestResult {
         let p1 = Plane::from_point_normal(Point::new(0.0, 0.0, 3.0), Vector::new(0.0, 0.0, 1.0));
         let dir = Vector::new(0.0, 0.0, 1.0);
         let result = intersection::scale_vector_to_distance_of_2planes(&dir, &p0, &p1);
+
         MINI_CHECK!(result.is_some());
         let v = result.unwrap();
         MINI_CHECK!((v[2] - 3.0).abs() < 1e-6);
@@ -786,6 +879,7 @@ pub fn run_intersection_polyline_plane() -> TestResult {
 
         let plane = Plane::from_point_normal(Point::new(0.0, 0.0, 0.0), Vector::new(1.0, 0.0, 0.0));
         let result = intersection::polyline_plane(&poly, &plane);
+
         MINI_CHECK!(result.is_some());
         let (pts, _indices) = result.unwrap();
         MINI_CHECK!(pts.len() == 2);
@@ -804,6 +898,7 @@ pub fn run_intersection_line_line_3d() -> TestResult {
         let cutter = Line::new(0.0, 1.0, 0.0, 2.0, 1.0, 0.0);
         let seg    = Line::new(1.0, 0.0, 0.0, 1.0, 2.0, 0.0);
         let result = intersection::line_line_3d(&cutter, &seg);
+
         MINI_CHECK!(result.is_some());
         let pt = result.unwrap();
         MINI_CHECK!((pt[0] - 1.0).abs() < 1e-6);

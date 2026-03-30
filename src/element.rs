@@ -1,14 +1,13 @@
 use crate::brep::BRep;
 use crate::line::Line;
 use crate::mesh::Mesh;
-use crate::obb::Obb;
+use crate::obb::OBB;
 use crate::point::Point;
 use crate::vector::Vector;
 use crate::xform::Xform;
 use serde::{Deserialize, Serialize};
 use std::fmt;
 use std::fs;
-use uuid::Uuid;
 
 #[derive(Debug, Clone)]
 pub enum ElementGeometry {
@@ -27,15 +26,15 @@ pub enum ElementKind {
 
 #[derive(Debug, Clone)]
 pub struct Element {
-    pub guid: String,
+    guid: std::sync::OnceLock<String>,
     pub name: String,
     pub kind: ElementKind,
     pub session_transformation: Xform,
     geometry: ElementGeometry,
     features: Vec<fn(Mesh) -> Mesh>,
     is_dirty: bool,
-    cached_aabb: Option<Obb>,
-    cached_obb: Option<Obb>,
+    cached_aabb: Option<OBB>,
+    cached_obb: Option<OBB>,
     cached_collision_mesh: Option<Mesh>,
     cached_point: Option<Point>,
 }
@@ -47,7 +46,7 @@ impl Element {
 
     pub fn new(name: &str) -> Self {
         Self {
-            guid: Uuid::new_v4().to_string(),
+            guid: std::sync::OnceLock::new(),
             name: name.to_string(),
             kind: ElementKind::Generic,
             session_transformation: Xform::identity(),
@@ -63,7 +62,7 @@ impl Element {
 
     pub fn from_mesh(geometry: Mesh, name: &str) -> Self {
         Self {
-            guid: Uuid::new_v4().to_string(),
+            guid: std::sync::OnceLock::new(),
             name: name.to_string(),
             kind: ElementKind::Generic,
             session_transformation: Xform::identity(),
@@ -79,7 +78,7 @@ impl Element {
 
     pub fn from_brep(geometry: BRep, name: &str) -> Self {
         Self {
-            guid: Uuid::new_v4().to_string(),
+            guid: std::sync::OnceLock::new(),
             name: name.to_string(),
             kind: ElementKind::Generic,
             session_transformation: Xform::identity(),
@@ -97,7 +96,7 @@ impl Element {
         let kind = ElementKind::Column { width, depth, height };
         let geometry = ElementGeometry::Mesh(Self::compute_box_geometry(width, depth, height));
         Self {
-            guid: Uuid::new_v4().to_string(),
+            guid: std::sync::OnceLock::new(),
             name: name.to_string(),
             kind,
             session_transformation: Xform::identity(),
@@ -115,7 +114,7 @@ impl Element {
         let kind = ElementKind::Beam { width, depth, length };
         let geometry = ElementGeometry::Mesh(Self::compute_box_geometry(width, depth, length));
         Self {
-            guid: Uuid::new_v4().to_string(),
+            guid: std::sync::OnceLock::new(),
             name: name.to_string(),
             kind,
             session_transformation: Xform::identity(),
@@ -133,7 +132,7 @@ impl Element {
         let pts: Vec<Point> = polygon.iter().map(|p| Point::new(p[0], p[1], p[2])).collect();
         let geometry = ElementGeometry::Mesh(Self::compute_plate_geometry(&pts, thickness));
         Self {
-            guid: Uuid::new_v4().to_string(),
+            guid: std::sync::OnceLock::new(),
             name: name.to_string(),
             kind: ElementKind::Plate { polygon: pts, thickness },
             session_transformation: Xform::identity(),
@@ -155,9 +154,17 @@ impl Element {
         Self::plate(polygon, 0.1, "my_plate")
     }
 
+    pub fn guid(&self) -> &str {
+        self.guid.get_or_init(|| uuid::Uuid::new_v4().to_string())
+    }
+
+    pub fn set_guid(&self, g: String) {
+        let _ = self.guid.set(g);
+    }
+
     pub fn duplicate(&self) -> Self {
         let mut result = self.clone();
-        result.guid = Uuid::new_v4().to_string();
+        result.guid = std::sync::OnceLock::new();
         result.is_dirty = true;
         result.cached_aabb = None;
         result.cached_obb = None;
@@ -208,14 +215,14 @@ impl Element {
         }
     }
 
-    pub fn aabb(&mut self) -> Obb {
+    pub fn aabb(&mut self) -> OBB {
         if self.is_dirty || self.cached_aabb.is_none() {
             self.cached_aabb = Some(self.compute_aabb());
         }
         self.cached_aabb.clone().unwrap()
     }
 
-    pub fn obb(&mut self) -> Obb {
+    pub fn obb(&mut self) -> OBB {
         if self.is_dirty || self.cached_obb.is_none() {
             self.cached_obb = Some(self.compute_obb());
         }
@@ -399,8 +406,8 @@ impl Element {
     }
 
     pub fn features_count(&self) -> usize { self.features.len() }
-    pub fn cached_aabb_ref(&self) -> &Option<Obb> { &self.cached_aabb }
-    pub fn cached_obb_ref(&self) -> &Option<Obb> { &self.cached_obb }
+    pub fn cached_aabb_ref(&self) -> &Option<OBB> { &self.cached_aabb }
+    pub fn cached_obb_ref(&self) -> &Option<OBB> { &self.cached_obb }
     pub fn cached_collision_mesh_ref(&self) -> &Option<Mesh> { &self.cached_collision_mesh }
     pub fn cached_point_ref(&self) -> &Option<Point> { &self.cached_point }
 
@@ -408,18 +415,18 @@ impl Element {
     // Computation
     ///////////////////////////////////////////////////////////////////////////////////////////
 
-    fn compute_aabb(&self) -> Obb {
+    fn compute_aabb(&self) -> OBB {
         let geo = self.session_geometry();
         if matches!(geo, ElementGeometry::None) {
-            return Obb::from_point(Point::new(0.0, 0.0, 0.0), 0.0);
+            return OBB::from_point(Point::new(0.0, 0.0, 0.0), 0.0);
         }
         Self::obb_from_geometry(&geo)
     }
 
-    fn compute_obb(&self) -> Obb {
+    fn compute_obb(&self) -> OBB {
         let geo = self.session_geometry();
         if matches!(geo, ElementGeometry::None) {
-            return Obb::from_point(Point::new(0.0, 0.0, 0.0), 0.0);
+            return OBB::from_point(Point::new(0.0, 0.0, 0.0), 0.0);
         }
         Self::obb_from_geometry(&geo)
     }
@@ -454,19 +461,19 @@ impl Element {
         }
     }
 
-    fn obb_from_geometry(geo: &ElementGeometry) -> Obb {
+    fn obb_from_geometry(geo: &ElementGeometry) -> OBB {
         let inflate = 0.0;
         match geo {
             ElementGeometry::Mesh(mesh) => {
                 let points: Vec<Point> = mesh.vertex.values().map(|v| v.position()).collect();
-                if points.is_empty() { return Obb::from_point(Point::new(0.0, 0.0, 0.0), inflate); }
-                Obb::from_points(&points, inflate)
+                if points.is_empty() { return OBB::from_point(Point::new(0.0, 0.0, 0.0), inflate); }
+                OBB::from_points(&points, inflate)
             }
             ElementGeometry::BRep(brep) => {
-                if brep.m_vertices.is_empty() { return Obb::from_point(Point::new(0.0, 0.0, 0.0), inflate); }
-                Obb::from_points(&brep.m_vertices, inflate)
+                if brep.m_vertices.is_empty() { return OBB::from_point(Point::new(0.0, 0.0, 0.0), inflate); }
+                OBB::from_points(&brep.m_vertices, inflate)
             }
-            ElementGeometry::None => Obb::from_point(Point::new(0.0, 0.0, 0.0), inflate),
+            ElementGeometry::None => OBB::from_point(Point::new(0.0, 0.0, 0.0), inflate),
         }
     }
 
@@ -558,13 +565,13 @@ impl Element {
 
     pub fn repr(&self) -> String {
         match &self.kind {
-            ElementKind::Generic => format!("Element({}, {}, {})", self.guid, self.name, self.geometry_type_name()),
+            ElementKind::Generic => format!("Element({}, {}, {})", self.guid(), self.name, self.geometry_type_name()),
             ElementKind::Column { width, depth, height } =>
-                format!("ColumnElement({}, {}, {}, {}, {})", self.guid, self.name, width, depth, height),
+                format!("ColumnElement({}, {}, {}, {}, {})", self.guid(), self.name, width, depth, height),
             ElementKind::Beam { width, depth, length } =>
-                format!("BeamElement({}, {}, {}, {}, {})", self.guid, self.name, width, depth, length),
+                format!("BeamElement({}, {}, {}, {}, {})", self.guid(), self.name, width, depth, length),
             ElementKind::Plate { polygon, thickness } =>
-                format!("PlateElement({}, {}, {} pts, {})", self.guid, self.name, polygon.len(), thickness),
+                format!("PlateElement({}, {}, {} pts, {})", self.guid(), self.name, polygon.len(), thickness),
         }
     }
 
@@ -583,7 +590,7 @@ impl Element {
                 serde_json::json!({
                     "geometry_data": geo_data,
                     "geometry_type": geo_type,
-                    "guid": self.guid,
+                    "guid": self.guid(),
                     "name": self.name,
                     "session_transformation": serde_json::to_value(&self.session_transformation).unwrap(),
                     "type": "Element",
@@ -599,7 +606,7 @@ impl Element {
                     "depth": depth,
                     "geometry_data": geo_data,
                     "geometry_type": geo_type,
-                    "guid": self.guid,
+                    "guid": self.guid(),
                     "height": height,
                     "name": self.name,
                     "session_transformation": serde_json::to_value(&self.session_transformation).unwrap(),
@@ -617,7 +624,7 @@ impl Element {
                     "depth": depth,
                     "geometry_data": geo_data,
                     "geometry_type": geo_type,
-                    "guid": self.guid,
+                    "guid": self.guid(),
                     "length": length,
                     "name": self.name,
                     "session_transformation": serde_json::to_value(&self.session_transformation).unwrap(),
@@ -635,7 +642,7 @@ impl Element {
                 serde_json::json!({
                     "geometry_data": geo_data,
                     "geometry_type": geo_type,
-                    "guid": self.guid,
+                    "guid": self.guid(),
                     "name": self.name,
                     "polygon": poly_json,
                     "session_transformation": serde_json::to_value(&self.session_transformation).unwrap(),
@@ -659,7 +666,7 @@ impl Element {
                 let d = data["depth"].as_f64().unwrap_or(0.4);
                 let h = data["height"].as_f64().unwrap_or(3.0);
                 let mut elem = Self::column(w, d, h, "my_column");
-                elem.guid = data["guid"].as_str().unwrap_or(&elem.guid).to_string();
+                if let Some(g) = data["guid"].as_str() { elem.set_guid(g.to_string()); }
                 elem.name = data["name"].as_str().unwrap_or(&elem.name).to_string();
                 if let Some(xf_data) = data.get("session_transformation") {
                     if let Ok(xf) = serde_json::from_value::<Xform>(xf_data.clone()) {
@@ -673,7 +680,7 @@ impl Element {
                 let d = data["depth"].as_f64().unwrap_or(0.2);
                 let l = data["length"].as_f64().unwrap_or(3.0);
                 let mut elem = Self::beam(w, d, l, "my_beam");
-                elem.guid = data["guid"].as_str().unwrap_or(&elem.guid).to_string();
+                if let Some(g) = data["guid"].as_str() { elem.set_guid(g.to_string()); }
                 elem.name = data["name"].as_str().unwrap_or(&elem.name).to_string();
                 if let Some(xf_data) = data.get("session_transformation") {
                     if let Ok(xf) = serde_json::from_value::<Xform>(xf_data.clone()) {
@@ -703,7 +710,7 @@ impl Element {
                 } else {
                     Self::plate(polygon, thickness, "my_plate")
                 };
-                elem.guid = data["guid"].as_str().unwrap_or(&elem.guid).to_string();
+                if let Some(g) = data["guid"].as_str() { elem.set_guid(g.to_string()); }
                 elem.name = data["name"].as_str().unwrap_or(&elem.name).to_string();
                 if let Some(xf_data) = data.get("session_transformation") {
                     if let Ok(xf) = serde_json::from_value::<Xform>(xf_data.clone()) {
@@ -724,7 +731,7 @@ impl Element {
                         elem.geometry = ElementGeometry::BRep(brep);
                     }
                 }
-                elem.guid = data["guid"].as_str().unwrap_or(&elem.guid).to_string();
+                if let Some(g) = data["guid"].as_str() { elem.set_guid(g.to_string()); }
                 elem.name = data["name"].as_str().unwrap_or(&elem.name).to_string();
                 if let Some(xf_data) = data.get("session_transformation") {
                     if let Ok(xf) = serde_json::from_value::<Xform>(xf_data.clone()) {
@@ -759,7 +766,7 @@ impl Element {
     pub fn pb_dumps(&self) -> Vec<u8> {
         use prost::Message;
         let mut proto = crate::proto::Element::default();
-        proto.guid = self.guid.clone();
+        proto.guid = self.guid().to_string();
         proto.name = self.name.clone();
 
         match &self.kind {
@@ -860,7 +867,7 @@ impl Element {
             _ => Self::new("my_element"),
         };
 
-        elem.guid = proto.guid;
+        elem.set_guid(proto.guid.clone());
         elem.name = proto.name;
         if let Some(xf_proto) = proto.session_transformation {
             let mut xf = Xform::identity();

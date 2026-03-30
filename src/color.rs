@@ -2,12 +2,11 @@ use serde::{Deserialize, Deserializer, Serializer};
 use serde::ser::SerializeMap;
 use std::fmt;
 use std::ops::{Index, IndexMut};
-use uuid::Uuid;
 
 /// A color with RGBA values and JSON serialization support.
 #[derive(Debug, Clone)]
 pub struct Color {
-    pub guid: String,
+    guid: std::sync::OnceLock<String>,
     pub name: String,
     pub r: u8,
     pub g: u8,
@@ -24,7 +23,7 @@ impl serde::Serialize for Color {
         map.serialize_entry("a", &self.a)?;
         map.serialize_entry("b", &self.b)?;
         map.serialize_entry("g", &self.g)?;
-        map.serialize_entry("guid", &self.guid)?;
+        map.serialize_entry("guid", self.guid())?;
         map.serialize_entry("name", &self.name)?;
         map.serialize_entry("r", &self.r)?;
         map.serialize_entry("type", "Color")?;
@@ -54,14 +53,18 @@ impl<'de> Deserialize<'de> for Color {
         }
         fn default_alpha() -> u8 { 255 }
         let data = ColorData::deserialize(deserializer)?;
-        Ok(Color {
-            guid: data.guid.unwrap_or_else(|| Uuid::new_v4().to_string()),
+        let c = Color {
+            guid: std::sync::OnceLock::new(),
             name: data.name.unwrap_or_else(|| "my_color".to_string()),
             r: data.r,
             g: data.g,
             b: data.b,
             a: data.a,
-        })
+        };
+        if let Some(g) = data.guid {
+            c.set_guid(g);
+        }
+        Ok(c)
     }
 }
 
@@ -80,7 +83,7 @@ impl Color {
     /// A new Color with the specified RGBA values and a unique GUID.
     pub fn new(r: u8, g: u8, b: u8, a: u8) -> Self {
         Color {
-            guid: Uuid::new_v4().to_string(),
+            guid: std::sync::OnceLock::new(),
             name: "my_color".to_string(),
             r,
             g,
@@ -104,13 +107,21 @@ impl Color {
     /// A new Color with the specified RGBA values, name, and a unique GUID.
     pub fn with_name(r: u8, g: u8, b: u8, a: u8, name: &str) -> Self {
         Color {
-            guid: Uuid::new_v4().to_string(),
+            guid: std::sync::OnceLock::new(),
             name: name.to_string(),
             r,
             g,
             b,
             a,
         }
+    }
+
+    pub fn guid(&self) -> &str {
+        self.guid.get_or_init(|| uuid::Uuid::new_v4().to_string())
+    }
+
+    pub fn set_guid(&self, g: String) {
+        let _ = self.guid.set(g);
     }
 
     /// Duplicate the color (creates a copy with new GUID).
@@ -120,7 +131,7 @@ impl Color {
     /// A new Color with identical RGBA values but a different GUID.
     pub fn duplicate(&self) -> Self {
         Color {
-            guid: Uuid::new_v4().to_string(),
+            guid: std::sync::OnceLock::new(),
             name: self.name.clone(),
             r: self.r,
             g: self.g,
@@ -305,7 +316,7 @@ impl Color {
         use prost::Message;
         
         let proto = crate::proto::Color {
-            guid: self.guid.clone(),
+            guid: self.guid().to_string(),
             name: self.name.clone(),
             r: self.r as i32,
             g: self.g as i32,
@@ -330,7 +341,7 @@ impl Color {
         let proto = crate::proto::Color::decode(data)?;
         
         let mut color = Self::new(proto.r as u8, proto.g as u8, proto.b as u8, proto.a as u8);
-        color.guid = proto.guid;
+        color.set_guid(proto.guid);
         color.name = proto.name;
         Ok(color)
     }

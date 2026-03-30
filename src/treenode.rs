@@ -2,11 +2,10 @@ use serde::{ser::Serialize as SerTrait, Deserialize, Serialize};
 use std::cell::RefCell;
 use std::fmt;
 use std::rc::{Rc, Weak};
-use uuid::Uuid;
 
 #[derive(Debug)]
 pub struct TreeNode {
-    pub guid: String,
+    guid: std::sync::OnceLock<String>,
     pub name: String,
     pub color: Option<[u8; 4]>,
     children: Vec<Rc<RefCell<TreeNode>>>,
@@ -16,7 +15,7 @@ pub struct TreeNode {
 
 impl PartialEq for TreeNode {
     fn eq(&self, other: &Self) -> bool {
-        self.guid == other.guid
+        self.guid() == other.guid()
     }
 }
 
@@ -45,7 +44,7 @@ impl<'de> Deserialize<'de> for TreeNode {
 #[derive(Serialize, Deserialize)]
 #[serde(tag = "type", rename = "TreeNode")]
 pub(crate) struct TreeNodeSerde {
-    pub guid: String,
+    pub(crate) guid: String,
     pub name: String,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub color: Option<[u8; 4]>,
@@ -55,7 +54,7 @@ pub(crate) struct TreeNodeSerde {
 impl TreeNode {
     pub fn new(name: &str) -> Rc<RefCell<TreeNode>> {
         let node = Rc::new(RefCell::new(TreeNode {
-            guid: Uuid::new_v4().to_string(),
+            guid: std::sync::OnceLock::new(),
             name: name.to_string(),
             color: None,
             children: Vec::new(),
@@ -64,6 +63,14 @@ impl TreeNode {
         }));
         node.borrow_mut().weak_self = Rc::downgrade(&node);
         node
+    }
+
+    pub fn guid(&self) -> &str {
+        self.guid.get_or_init(|| uuid::Uuid::new_v4().to_string())
+    }
+
+    pub fn set_guid(&self, g: String) {
+        let _ = self.guid.set(g);
     }
 
     pub fn color(&self) -> Option<[u8; 4]> {
@@ -80,8 +87,8 @@ impl TreeNode {
     }
 
     pub fn remove(&mut self, child: &Rc<RefCell<TreeNode>>) -> bool {
-        let child_guid = child.borrow().guid.clone();
-        if let Some(pos) = self.children.iter().position(|c| c.borrow().guid == child_guid) {
+        let child_guid = child.borrow().guid().to_string();
+        if let Some(pos) = self.children.iter().position(|c| c.borrow().guid() == child_guid) {
             let removed = self.children.remove(pos);
             removed.borrow_mut().parent = None;
             true
@@ -206,7 +213,7 @@ impl TreeNode {
 
     pub(crate) fn to_serde(&self) -> TreeNodeSerde {
         TreeNodeSerde {
-            guid: self.guid.clone(),
+            guid: self.guid().to_string(),
             name: self.name.clone(),
             color: self.color,
             children: self.children.iter().map(|c| c.borrow().to_serde()).collect(),
@@ -215,7 +222,7 @@ impl TreeNode {
 
     pub(crate) fn from_serde(serde_node: TreeNodeSerde) -> Rc<RefCell<TreeNode>> {
         let node = TreeNode::new(&serde_node.name);
-        node.borrow_mut().guid = serde_node.guid;
+        node.borrow_mut().set_guid(serde_node.guid);
         node.borrow_mut().color = serde_node.color;
         for child_serde in serde_node.children {
             let child = Self::from_serde(child_serde);
@@ -231,7 +238,7 @@ impl fmt::Display for TreeNode {
             f,
             "TreeNode({}, {}, {} children)",
             self.name,
-            self.guid,
+            self.guid(),
             self.children.len()
         )
     }

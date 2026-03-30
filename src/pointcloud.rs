@@ -2,7 +2,6 @@ use crate::{Color, Point, Vector, Xform};
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use std::fmt;
 use std::ops::{Add, AddAssign, Sub, SubAssign};
-use uuid::Uuid;
 
 /// A point cloud with coordinates, normals, and colors stored as flat arrays.
 ///
@@ -12,7 +11,7 @@ use uuid::Uuid;
 /// - _normals: [nx0, ny0, nz0, nx1, ny1, nz1, ...]
 #[derive(Debug, Clone)]
 pub struct PointCloud {
-    pub guid: String,
+    guid: std::sync::OnceLock<String>,
     pub name: String,
     pub point_size: f64,
     pub xform: Xform,
@@ -24,7 +23,7 @@ pub struct PointCloud {
 impl Default for PointCloud {
     fn default() -> Self {
         Self {
-            guid: Uuid::new_v4().to_string(),
+            guid: std::sync::OnceLock::new(),
             name: "my_pointcloud".to_string(),
             point_size: 1.0,
             xform: Xform::identity(),
@@ -68,7 +67,7 @@ impl PointCloud {
     /// Create from flat arrays.
     pub fn from_coords(coords: Vec<f64>, colors: Vec<i32>, normals: Vec<f64>) -> Self {
         Self {
-            guid: Uuid::new_v4().to_string(),
+            guid: std::sync::OnceLock::new(),
             name: "my_pointcloud".to_string(),
             point_size: 1.0,
             xform: Xform::identity(),
@@ -76,6 +75,14 @@ impl PointCloud {
             _colors: colors,
             _normals: normals,
         }
+    }
+
+    pub fn guid(&self) -> &str {
+        self.guid.get_or_init(|| uuid::Uuid::new_v4().to_string())
+    }
+
+    pub fn set_guid(&self, g: String) {
+        let _ = self.guid.set(g);
     }
 
     ///////////////////////////////////////////////////////////////////////////////////////////
@@ -227,7 +234,7 @@ impl PointCloud {
 
     pub fn duplicate(&self) -> Self {
         let mut result = self.clone();
-        result.guid = Uuid::new_v4().to_string();
+        result.guid = std::sync::OnceLock::new();
         result
     }
 
@@ -307,12 +314,12 @@ impl PointCloud {
         use prost::Message;
 
         let mut proto_xform = proto::Xform::default();
-        proto_xform.guid = self.xform.guid.clone();
+        proto_xform.guid = self.xform.guid().to_string();
         proto_xform.name = self.xform.name.clone();
         proto_xform.matrix = self.xform.m.to_vec();
 
         let proto = proto::PointCloud {
-            guid: self.guid.clone(),
+            guid: self.guid().to_string(),
             name: self.name.clone(),
             coords: self._coords.clone(),
             colors: self._colors.iter().map(|&c| c as u32).collect(),
@@ -335,12 +342,12 @@ impl PointCloud {
             proto.colors.iter().map(|&c| c as i32).collect(),
             proto.normals,
         );
-        pc.guid = proto.guid;
+        pc.set_guid(proto.guid);
         pc.name = proto.name;
         pc.point_size = if proto.point_size > 0.0 { proto.point_size } else { 1.0 };
 
         if let Some(xform_proto) = proto.xform {
-            pc.xform.guid = xform_proto.guid;
+            pc.xform.set_guid(xform_proto.guid);
             pc.xform.name = xform_proto.name;
             for (i, &val) in xform_proto.matrix.iter().enumerate() {
                 if i < 16 {
@@ -465,7 +472,7 @@ impl Serialize for PointCloud {
         let mut state = serializer.serialize_struct("PointCloud", 8)?;
 
         state.serialize_field("type", "PointCloud")?;
-        state.serialize_field("guid", &self.guid)?;
+        state.serialize_field("guid", self.guid())?;
         state.serialize_field("name", &self.name)?;
         state.serialize_field("coords", &self._coords)?;
         state.serialize_field("colors", &self._colors)?;
@@ -548,7 +555,7 @@ impl<'de> Deserialize<'de> for PointCloud {
                     }
                 }
 
-                let guid = guid.ok_or_else(|| de::Error::missing_field("guid"))?;
+                let guid_str = guid.ok_or_else(|| de::Error::missing_field("guid"))?;
                 let name = name.ok_or_else(|| de::Error::missing_field("name"))?;
                 let coords = coords.ok_or_else(|| de::Error::missing_field("coords"))?;
                 let colors = colors.ok_or_else(|| de::Error::missing_field("colors"))?;
@@ -557,7 +564,7 @@ impl<'de> Deserialize<'de> for PointCloud {
                 let xform = xform.ok_or_else(|| de::Error::missing_field("xform"))?;
 
                 Ok(PointCloud {
-                    guid,
+                    guid: { let c = std::sync::OnceLock::new(); let _ = c.set(guid_str); c },
                     name,
                     point_size,
                     xform,

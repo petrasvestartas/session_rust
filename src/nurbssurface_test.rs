@@ -46,7 +46,7 @@ pub fn run_nurbssurface_constructor() -> TestResult {
         let scopy = s.duplicate();
         let _sother = NurbsSurface::create(false, false, 3, 3, 4, 4, &points).unwrap();
 
-        MINI_CHECK!(s.is_valid() == true);
+        MINI_CHECK!(s.is_valid());
         MINI_CHECK!(s.cv_count_dir(Some(0)) == 4);
         MINI_CHECK!(s.cv_count_dir(Some(1)) == 4);
         MINI_CHECK!(s.cv_count_dir(None) == 16);
@@ -59,11 +59,11 @@ pub fn run_nurbssurface_constructor() -> TestResult {
         MINI_CHECK!(s.knot_count(0) == 6);
         MINI_CHECK!(s.knot_count(1) == 6);
         MINI_CHECK!(s.name == "my_nurbssurface");
-        MINI_CHECK!(!s.guid.is_empty());
+        MINI_CHECK!(!s.guid().is_empty());
         MINI_CHECK!(sstr == "NurbsSurface(name=my_nurbssurface, degree=(3,3), cvs=(4,4))");
         MINI_CHECK!(srepr == "NurbsSurface(\n  name=my_nurbssurface,\n  degree=(3,3),\n  cvs=(4,4),\n  rational=false,\n  control_points=[\n    0, 0, 0\n    -1, 0.75, 2\n    -1, 4.25, 2\n    0, 5, 0\n    0.75, -1, 2\n    1.25, 1.25, 4\n    1.25, 3.75, 4\n    0.75, 6, 2\n    4.25, -1, 2\n    3.75, 1.25, 4\n    3.75, 3.75, 4\n    4.25, 6, 2\n    5, 0, 0\n    6, 0.75, 2\n    6, 4.25, 2\n    5, 5, 0\n  ]\n)");
         MINI_CHECK!(scopy.cv_count_dir(None) == s.cv_count_dir(None));
-        MINI_CHECK!(scopy.guid != s.guid);
+        MINI_CHECK!(scopy.guid() != s.guid());
         MINI_CHECK!(TOLERANCE.is_point_close(&p[0][0], &Point::new(0.000000000000000, 0.000000000000000, 0.000000000000000)));
         MINI_CHECK!(TOLERANCE.is_point_close(&p[0][1], &Point::new(-0.416666666666667, 0.578703703703704, 0.833333333333333)));
         MINI_CHECK!(TOLERANCE.is_point_close(&p[0][2], &Point::new(-0.666666666666667, 1.462962962962963, 1.333333333333333)));
@@ -242,6 +242,7 @@ pub fn run_nurbssurface_control_vertices_access() -> TestResult {
 
         // Raw CV access
         let cv_slice = s.cv(0, 0).unwrap();
+
         MINI_CHECK!(cv_slice[2] == 0.0);
         let cv_mut_slice = s.cv_mut(0, 0).unwrap();
         cv_mut_slice[2] = 10.0;
@@ -259,7 +260,9 @@ pub fn run_nurbssurface_control_vertices_access() -> TestResult {
         s.set_cv(0, 0, &Point::new(0.0, 0.0, 5.0));
         MINI_CHECK!(s.get_cv(0, 0).unwrap() == Point::new(0.0, 0.0, 5.0));
         s.set_cv_4d(0, 0, 0.0, 0.0, 4.0, 0.5);
-        MINI_CHECK!(s.get_cv(0, 0).unwrap() == Point::new(0.0, 0.0, 8.0) && s.cv(0, 0).unwrap()[2] == 4.0 && s.weight(0, 0) == 0.5);
+        MINI_CHECK!(s.get_cv(0, 0).unwrap() == Point::new(0.0, 0.0, 8.0));
+        MINI_CHECK!(s.cv(0, 0).unwrap()[2] == 4.0);
+        MINI_CHECK!(s.weight(0, 0) == 0.5);
 
         let _w = s.weight(0, 0);
         s.set_weight(0, 0, 1.0);
@@ -362,6 +365,7 @@ pub fn run_nurbssurface_domain() -> TestResult {
         // Get domain 0 - 1
         let domain_u = s.domain(0).unwrap();
         let _domain_v = s.domain(1).unwrap();
+
         MINI_CHECK!(TOLERANCE.is_close(domain_u.0, 0.0));
         MINI_CHECK!(TOLERANCE.is_close(domain_u.1, 1.0));
 
@@ -451,20 +455,32 @@ pub fn run_nurbssurface_division() -> TestResult {
         MINI_CHECK!(TOLERANCE.is_vector_close(&vectors[3][2], &Vector::new(0.722897836195991, 0.327787263130091, 0.608255068661856)));
         MINI_CHECK!(TOLERANCE.is_vector_close(&vectors[3][3], &Vector::new(0.704360725060499, 0.704360725060499, -0.0880450906325624)));
         MINI_CHECK!(TOLERANCE.is_close(uvs0[0][0].0, 0.0) && TOLERANCE.is_close(uvs0[0][0].1, 0.0));
-        MINI_CHECK!(TOLERANCE.is_close(uvs0[0][1].0, 0.0) && TOLERANCE.is_close(uvs0[0][1].1, 0.333333333333333));
-        MINI_CHECK!(TOLERANCE.is_close(uvs0[0][2].0, 0.0) && TOLERANCE.is_close(uvs0[0][2].1, 0.666666666666667));
+        MINI_CHECK!(TOLERANCE.is_close(uvs0[0][1].0, 0.0));
+        MINI_CHECK!(TOLERANCE.is_close(uvs0[0][1].1, 0.333333333333333));
+        MINI_CHECK!(TOLERANCE.is_close(uvs0[0][2].0, 0.0));
+        MINI_CHECK!(TOLERANCE.is_close(uvs0[0][2].1, 0.666666666666667));
         MINI_CHECK!(TOLERANCE.is_close(uvs0[0][3].0, 0.0) && TOLERANCE.is_close(uvs0[0][3].1, 1.0));
-        MINI_CHECK!(TOLERANCE.is_close(uvs0[1][0].0, 0.333333333333333) && TOLERANCE.is_close(uvs0[1][0].1, 0.0));
-        MINI_CHECK!(TOLERANCE.is_close(uvs0[1][1].0, 0.333333333333333) && TOLERANCE.is_close(uvs0[1][1].1, 0.333333333333333));
-        MINI_CHECK!(TOLERANCE.is_close(uvs0[1][2].0, 0.333333333333333) && TOLERANCE.is_close(uvs0[1][2].1, 0.666666666666667));
-        MINI_CHECK!(TOLERANCE.is_close(uvs0[1][3].0, 0.333333333333333) && TOLERANCE.is_close(uvs0[1][3].1, 1.0));
-        MINI_CHECK!(TOLERANCE.is_close(uvs0[2][0].0, 0.666666666666667) && TOLERANCE.is_close(uvs0[2][0].1, 0.0));
-        MINI_CHECK!(TOLERANCE.is_close(uvs0[2][1].0, 0.666666666666667) && TOLERANCE.is_close(uvs0[2][1].1, 0.333333333333333));
-        MINI_CHECK!(TOLERANCE.is_close(uvs0[2][2].0, 0.666666666666667) && TOLERANCE.is_close(uvs0[2][2].1, 0.666666666666667));
-        MINI_CHECK!(TOLERANCE.is_close(uvs0[2][3].0, 0.666666666666667) && TOLERANCE.is_close(uvs0[2][3].1, 1.0));
+        MINI_CHECK!(TOLERANCE.is_close(uvs0[1][0].0, 0.333333333333333));
+        MINI_CHECK!(TOLERANCE.is_close(uvs0[1][0].1, 0.0));
+        MINI_CHECK!(TOLERANCE.is_close(uvs0[1][1].0, 0.333333333333333));
+        MINI_CHECK!(TOLERANCE.is_close(uvs0[1][1].1, 0.333333333333333));
+        MINI_CHECK!(TOLERANCE.is_close(uvs0[1][2].0, 0.333333333333333));
+        MINI_CHECK!(TOLERANCE.is_close(uvs0[1][2].1, 0.666666666666667));
+        MINI_CHECK!(TOLERANCE.is_close(uvs0[1][3].0, 0.333333333333333));
+        MINI_CHECK!(TOLERANCE.is_close(uvs0[1][3].1, 1.0));
+        MINI_CHECK!(TOLERANCE.is_close(uvs0[2][0].0, 0.666666666666667));
+        MINI_CHECK!(TOLERANCE.is_close(uvs0[2][0].1, 0.0));
+        MINI_CHECK!(TOLERANCE.is_close(uvs0[2][1].0, 0.666666666666667));
+        MINI_CHECK!(TOLERANCE.is_close(uvs0[2][1].1, 0.333333333333333));
+        MINI_CHECK!(TOLERANCE.is_close(uvs0[2][2].0, 0.666666666666667));
+        MINI_CHECK!(TOLERANCE.is_close(uvs0[2][2].1, 0.666666666666667));
+        MINI_CHECK!(TOLERANCE.is_close(uvs0[2][3].0, 0.666666666666667));
+        MINI_CHECK!(TOLERANCE.is_close(uvs0[2][3].1, 1.0));
         MINI_CHECK!(TOLERANCE.is_close(uvs0[3][0].0, 1.0) && TOLERANCE.is_close(uvs0[3][0].1, 0.0));
-        MINI_CHECK!(TOLERANCE.is_close(uvs0[3][1].0, 1.0) && TOLERANCE.is_close(uvs0[3][1].1, 0.333333333333333));
-        MINI_CHECK!(TOLERANCE.is_close(uvs0[3][2].0, 1.0) && TOLERANCE.is_close(uvs0[3][2].1, 0.666666666666667));
+        MINI_CHECK!(TOLERANCE.is_close(uvs0[3][1].0, 1.0));
+        MINI_CHECK!(TOLERANCE.is_close(uvs0[3][1].1, 0.333333333333333));
+        MINI_CHECK!(TOLERANCE.is_close(uvs0[3][2].0, 1.0));
+        MINI_CHECK!(TOLERANCE.is_close(uvs0[3][2].1, 0.666666666666667));
         MINI_CHECK!(TOLERANCE.is_close(uvs0[3][3].0, 1.0) && TOLERANCE.is_close(uvs0[3][3].1, 1.0));
         MINI_CHECK!(TOLERANCE.is_vector_close(&planes[0][0].x_axis(), &Vector::new(0.317999364001908, -0.423999152002544, 0.847998304005088)));
         MINI_CHECK!(TOLERANCE.is_vector_close(&planes[0][1].x_axis(), &Vector::new(0.657483781160109, -0.0556600026378928, 0.751410035611553)));
@@ -537,6 +553,7 @@ pub fn run_nurbssurface_evaluation() -> TestResult {
 
         // point_at(u, v) - returns Point
         let p1 = s.point_at(u, v).unwrap();
+
         MINI_CHECK!(TOLERANCE.is_point_close(&p1, &Point::new(2.5, 2.5, 3.0)));
 
         // normal_at(u, v) - returns Vector
@@ -595,6 +612,7 @@ pub fn run_nurbssurface_modification() -> TestResult {
         // Reverse one direction
         let mut s_rev = s.clone();
         s_rev.reverse(0);
+
         MINI_CHECK!(s_rev.point_at_corner(0, 0).unwrap() == s.point_at_corner(1, 0).unwrap());
         MINI_CHECK!(s_rev.normal_at(0.5, 0.5) == s.normal_at(0.5, 0.5) * -1.0);
 
@@ -612,7 +630,8 @@ pub fn run_nurbssurface_modification() -> TestResult {
         // Trim surface, domain changed but parametrization preserved
         let mut s_trim = s.clone();
         s_trim.trim(0, (0.25, 0.75));
-        MINI_CHECK!(TOLERANCE.is_close(s_trim.domain(0).unwrap().0, 0.25) && TOLERANCE.is_close(s_trim.domain(0).unwrap().1, 0.75));
+        MINI_CHECK!(TOLERANCE.is_close(s_trim.domain(0).unwrap().0, 0.25));
+        MINI_CHECK!(TOLERANCE.is_close(s_trim.domain(0).unwrap().1, 0.75));
         MINI_CHECK!(TOLERANCE.is_point_close(&s.point_at(0.25, 0.5).unwrap(), &s_trim.point_at(0.25, 0.5).unwrap()));
 
         // Split surface into 4 quadrants, check shared corner point is the same
@@ -681,28 +700,29 @@ pub fn run_nurbssurface_transformations() -> TestResult {
         let mut surface1 = NurbsSurface::create(false, false, 3, 3, 4, 4, &points).unwrap();
         surface1.xform = Xform::translation(0.0, 0.0, 1.0);
         surface1.transform_self();
-        MINI_CHECK!(surface1.xform.is_identity() == false);
+
+        MINI_CHECK!(!surface1.xform.is_identity());
         MINI_CHECK!(surface1.cv(0, 0).unwrap()[2] == 1.0);
 
         // Variant 2: transform(&xform) - Apply custom xform (in-place)
         let mut surface2 = NurbsSurface::create(false, false, 3, 3, 4, 4, &points).unwrap();
         let x = Xform::translation(0.0, 0.0, 1.0);
         surface2.transform(&x);
-        MINI_CHECK!(surface2.xform.is_identity() == true);
+        MINI_CHECK!(surface2.xform.is_identity());
         MINI_CHECK!(surface2.cv(0, 0).unwrap()[2] == 1.0);
 
         // Variant 3: transformed(None) - Get copy with stored xform applied
         let mut surface3 = NurbsSurface::create(false, false, 3, 3, 4, 4, &points).unwrap();
         surface3.xform = Xform::translation(0.0, 0.0, 10.0);
         let surface3_transformed = surface3.transformed(None);
-        MINI_CHECK!(surface3_transformed.xform.is_identity() == false);
+        MINI_CHECK!(!surface3_transformed.xform.is_identity());
         MINI_CHECK!(surface3_transformed.cv(0, 0).unwrap()[2] == 10.0);
 
         // Variant 4: transformed(Some(&xform)) - Get copy with custom xform
         let surface4 = NurbsSurface::create(false, false, 3, 3, 4, 4, &points).unwrap();
         let x = Xform::translation(0.0, 0.0, 10.0);
         let surface4_transformed = surface4.transformed(Some(&x));
-        MINI_CHECK!(surface4_transformed.xform.is_identity() == true);
+        MINI_CHECK!(surface4_transformed.xform.is_identity());
         MINI_CHECK!(surface4_transformed.cv(0, 0).unwrap()[2] == 10.0);
     })
 }
@@ -717,6 +737,7 @@ pub fn run_nurbssurface_meshing() -> TestResult {
         // 1. Sphere — two poles, closed U, rational
         let sphere = Primitives::sphere_surface(0.0, 0.0, 0.0, 3.0);
         let mesh_sphere = sphere.mesh();
+
         MINI_CHECK!(mesh_sphere.is_valid());
 
         // 2. Cone — singular apex (pole), closed U
@@ -745,33 +766,77 @@ pub fn run_nurbssurface_meshing() -> TestResult {
         MINI_CHECK!(mesh_cylinder.is_valid());
 
         // 6. Ruled — bilinear (degree 1x1), tests twist subdivision
-        let ra = NurbsCurve::create(false, 1, &[Point::new(0.0, 64.0, 0.0), Point::new(5.0, 64.0, 5.0)]);
-        let rb = NurbsCurve::create(false, 1, &[Point::new(0.0, 69.0, 5.0), Point::new(5.0, 69.0, 0.0)]);
+        let ra = NurbsCurve::create(false, 1, &[
+            Point::new(0.0, 64.0, 0.0),
+            Point::new(5.0, 64.0, 5.0),
+        ]);
+        let rb = NurbsCurve::create(false, 1, &[
+            Point::new(0.0, 69.0, 5.0),
+            Point::new(5.0, 69.0, 0.0),
+        ]);
         let hypar = Primitives::create_ruled(&ra, &rb);
         let mesh_hypar = hypar.mesh();
         MINI_CHECK!(mesh_hypar.is_valid());
 
         // 7. Sweep1 — circle along curved rail
         let profile = Primitives::circle(0.0, 0.0, 0.0, 1.0);
-        let rail = NurbsCurve::create(false, 2, &[Point::new(0.0, 76.0, 0.0), Point::new(0.0, 81.0, 0.0), Point::new(2.0, 85.0, 0.0)]);
+        let rail = NurbsCurve::create(false, 2, &[
+            Point::new(0.0, 76.0, 0.0),
+            Point::new(0.0, 81.0, 0.0),
+            Point::new(2.0, 85.0, 0.0),
+        ]);
         let sweep1 = Primitives::create_sweep1(&rail, &profile);
         let mesh_sweep1 = sweep1.mesh();
         MINI_CHECK!(mesh_sweep1.is_valid());
 
         // 8. Sweep2 — two rails + cross sections
-        let r1 = NurbsCurve::create(false, 2, &[Point::new(0.0, 89.0, 0.0), Point::new(1.0, 93.0, 0.0), Point::new(2.0, 94.0, 0.0)]);
-        let r2 = NurbsCurve::create(false, 2, &[Point::new(4.0, 89.0, 0.0), Point::new(4.0, 93.0, 0.0), Point::new(3.0, 94.0, 0.0)]);
-        let sh1 = NurbsCurve::create(false, 2, &[Point::new(0.0, 89.0, 0.0), Point::new(2.0, 89.0, 2.0), Point::new(4.0, 89.0, 0.0)]);
-        let sh2 = NurbsCurve::create(false, 2, &[Point::new(2.0, 94.0, 0.0), Point::new(2.5, 94.0, 1.5), Point::new(3.0, 94.0, 0.0)]);
+        let r1 = NurbsCurve::create(false, 2, &[
+            Point::new(0.0, 89.0, 0.0),
+            Point::new(1.0, 93.0, 0.0),
+            Point::new(2.0, 94.0, 0.0),
+        ]);
+        let r2 = NurbsCurve::create(false, 2, &[
+            Point::new(4.0, 89.0, 0.0),
+            Point::new(4.0, 93.0, 0.0),
+            Point::new(3.0, 94.0, 0.0),
+        ]);
+        let sh1 = NurbsCurve::create(false, 2, &[
+            Point::new(0.0, 89.0, 0.0),
+            Point::new(2.0, 89.0, 2.0),
+            Point::new(4.0, 89.0, 0.0),
+        ]);
+        let sh2 = NurbsCurve::create(false, 2, &[
+            Point::new(2.0, 94.0, 0.0),
+            Point::new(2.5, 94.0, 1.5),
+            Point::new(3.0, 94.0, 0.0),
+        ]);
         let sweep2 = Primitives::create_sweep2(&r1, &r2, &[sh1, sh2]);
         let mesh_sweep2 = sweep2.mesh();
         MINI_CHECK!(mesh_sweep2.is_valid());
 
         // 9. Edge surface (Coons patch) — 4 boundary curves
-        let south = NurbsCurve::create(false, 3, &[Point::new(1.0, 104.0, 0.0), Point::new(1.0, 106.0, 3.0), Point::new(1.0, 109.0, 3.0), Point::new(1.0, 111.0, 0.0)]);
-        let west  = NurbsCurve::create(false, 2, &[Point::new(10.0, 104.0, 0.0), Point::new(5.5, 104.0, 3.5), Point::new(1.0, 104.0, 0.0)]);
-        let north = NurbsCurve::create(false, 3, &[Point::new(10.0, 104.0, 0.0), Point::new(10.0, 106.0, 3.0), Point::new(10.0, 109.0, 3.0), Point::new(10.0, 111.0, 0.0)]);
-        let east  = NurbsCurve::create(false, 2, &[Point::new(10.0, 111.0, 0.0), Point::new(5.5, 111.0, 3.5), Point::new(1.0, 111.0, 0.0)]);
+        let south = NurbsCurve::create(false, 3, &[
+            Point::new(1.0, 104.0, 0.0),
+            Point::new(1.0, 106.0, 3.0),
+            Point::new(1.0, 109.0, 3.0),
+            Point::new(1.0, 111.0, 0.0),
+        ]);
+        let west  = NurbsCurve::create(false, 2, &[
+            Point::new(10.0, 104.0, 0.0),
+            Point::new(5.5, 104.0, 3.5),
+            Point::new(1.0, 104.0, 0.0),
+        ]);
+        let north = NurbsCurve::create(false, 3, &[
+            Point::new(10.0, 104.0, 0.0),
+            Point::new(10.0, 106.0, 3.0),
+            Point::new(10.0, 109.0, 3.0),
+            Point::new(10.0, 111.0, 0.0),
+        ]);
+        let east  = NurbsCurve::create(false, 2, &[
+            Point::new(10.0, 111.0, 0.0),
+            Point::new(5.5, 111.0, 3.5),
+            Point::new(1.0, 111.0, 0.0),
+        ]);
         let arched = Primitives::create_edge(&south, &west, &north, &east);
         let mesh_arched = arched.mesh();
         MINI_CHECK!(mesh_arched.is_valid());
@@ -782,7 +847,13 @@ pub fn run_nurbssurface_meshing() -> TestResult {
         MINI_CHECK!(mesh_wave.is_valid());
 
         // 11. Planar — mesh() early exit: 2 triangles
-        let planar = NurbsCurve::create(false, 1, &[Point::new(0.0, 132.0, 0.0), Point::new(6.0, 132.0, 0.0), Point::new(6.0, 136.0, 0.0), Point::new(0.0, 136.0, 0.0), Point::new(0.0, 132.0, 0.0)]);
+        let planar = NurbsCurve::create(false, 1, &[
+            Point::new(0.0, 132.0, 0.0),
+            Point::new(6.0, 132.0, 0.0),
+            Point::new(6.0, 136.0, 0.0),
+            Point::new(0.0, 136.0, 0.0),
+            Point::new(0.0, 132.0, 0.0),
+        ]);
         let pln = Primitives::create_planar(&planar);
         let mesh_planar = pln.mesh();
         MINI_CHECK!(mesh_planar.is_valid());

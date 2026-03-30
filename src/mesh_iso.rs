@@ -1,4 +1,4 @@
-use crate::{Obb, Mesh, Point};
+use crate::{OBB, Mesh, Point};
 
 static EDGE_VERTICES: [[usize; 2]; 12] = [
     [0,1],[1,2],[2,3],[3,0],
@@ -289,7 +289,7 @@ pub enum TpmsMode {
 pub struct MeshIso;
 
 fn marching_cubes<F: Fn(f64, f64, f64) -> f64>(
-    fn_: &F, box_: &Obb, nx: usize, ny: usize, nz: usize, isovalue: f64,
+    fn_: &F, box_: &OBB, nx: usize, ny: usize, nz: usize, isovalue: f64,
 ) -> Mesh {
     let mn = box_.min_point();
     let mx = box_.max_point();
@@ -478,7 +478,7 @@ impl MeshIso {
         }
     }
 
-    pub fn from_tpms(tpms_type: TpmsType, box_: &Obb,
+    pub fn from_tpms(tpms_type: TpmsType, box_: &OBB,
                      nx: usize, ny: usize, nz: usize,
                      isovalue: f64, period: f64,
                      mode: TpmsMode, thickness: f64) -> Mesh {
@@ -494,7 +494,7 @@ impl MeshIso {
     }
 
     pub fn from_function<F: Fn(f64, f64, f64) -> f64>(
-        fn_: F, box_: &Obb, nx: usize, ny: usize, nz: usize, isovalue: f64,
+        fn_: F, box_: &OBB, nx: usize, ny: usize, nz: usize, isovalue: f64,
     ) -> Mesh {
         marching_cubes(&fn_, box_, nx, ny, nz, isovalue)
     }

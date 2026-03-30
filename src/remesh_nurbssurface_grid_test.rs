@@ -94,8 +94,10 @@ pub fn run_remesh_nurbssurface_grid_flat_quad() -> TestResult {
         use crate::remesh_nurbssurface_grid::RemeshNurbsSurfaceGrid;
 
         let s = NurbsSurface::create(false, false, 1, 1, 2, 2, &[
-            Point::new(0.0, 0.0, 0.0), Point::new(0.0, 4.0, 0.0),
-            Point::new(4.0, 0.0, 0.0), Point::new(4.0, 4.0, 0.0),
+            Point::new(0.0, 0.0, 0.0),
+            Point::new(0.0, 4.0, 0.0),
+            Point::new(4.0, 0.0, 0.0),
+            Point::new(4.0, 4.0, 0.0),
         ]).unwrap();
         let m = RemeshNurbsSurfaceGrid::from_u_v(s, 0, 0);
 
@@ -112,8 +114,10 @@ pub fn run_remesh_nurbssurface_grid_flat_triangle() -> TestResult {
         use crate::remesh_nurbssurface_grid::RemeshNurbsSurfaceGrid;
 
         let s = NurbsSurface::create(false, false, 1, 1, 2, 2, &[
-            Point::new(0.0, 0.0, 0.0), Point::new(2.0, 4.0, 0.0),
-            Point::new(4.0, 0.0, 0.0), Point::new(2.0, 4.0, 0.0),
+            Point::new(0.0, 0.0, 0.0),
+            Point::new(2.0, 4.0, 0.0),
+            Point::new(4.0, 0.0, 0.0),
+            Point::new(2.0, 4.0, 0.0),
         ]).unwrap();
         let m = RemeshNurbsSurfaceGrid::from_u_v(s, 0, 0);
 

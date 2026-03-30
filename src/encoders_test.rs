@@ -182,6 +182,7 @@ pub fn run_encoders_decode_primitives() -> TestResult {
 
         let json_str = json_dumps(&42i32, false).unwrap();
         let loaded: i32 = json_loads(&json_str).unwrap();
+
         MINI_CHECK!(loaded == 42);
 
         let json_str = json_dumps(&3.14f64, false).unwrap();

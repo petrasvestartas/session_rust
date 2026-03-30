@@ -1,5 +1,5 @@
 use session_rust::{
-    read_obj, Obb, Line, Mesh, NurbsCurve, Plane, Point, Session, Tolerance, Vector, BVH,
+    read_obj, OBB, Line, Mesh, NurbsCurve, Plane, Point, Session, Tolerance, Vector, BVH,
 };
 use std::path::Path;
 use std::time::Instant;
@@ -59,7 +59,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let min = Point::new(214.0, 192.0, 484.0);
     let max = Point::new(694.0, 567.0, 796.0);
     let pts = vec![min.clone(), max.clone()];
-    let bbox = Obb::from_points(&pts, 0.0);
+    let bbox = OBB::from_points(&pts, 0.0);
     if let Some(intersection_points) = session_rust::intersection::ray_box(&l0, &bbox, 0.0, 1000.0)
     {
         if intersection_points.len() >= 2 {
@@ -117,7 +117,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         let (vertices, faces) = bunny.to_vertices_and_faces();
         let tri_build_start = Instant::now();
         let mut tris: Vec<[usize; 3]> = Vec::new();
-        let mut tri_boxes: Vec<Obb> = Vec::new();
+        let mut tri_boxes: Vec<OBB> = Vec::new();
         for face in faces.iter() {
             if face.len() >= 3 {
                 let v0 = face[0];
@@ -129,7 +129,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                         vertices[t[1]].clone(),
                         vertices[t[2]].clone(),
                     ];
-                    tri_boxes.push(Obb::from_points(&pts, 0.0));
+                    tri_boxes.push(OBB::from_points(&pts, 0.0));
                 }
             }
         }
@@ -209,7 +209,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         unsafe { libc::srand(42) }; // match C++ seeding per dataset
         let rand_max = 2147483647.0f64; // typical RAND_MAX on macOS
         let next_rand01 = || -> f64 { unsafe { (libc::rand() as i64) as f64 / rand_max } };
-        let mut boxes: Vec<Obb> = Vec::with_capacity(box_count);
+        let mut boxes: Vec<OBB> = Vec::with_capacity(box_count);
         for _ in 0..box_count {
             let x = (next_rand01() - 0.5) * world_size;
             let y = (next_rand01() - 0.5) * world_size;
@@ -219,7 +219,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             let d = min_size + next_rand01() * (max_size - min_size);
             let center = Point::new(x, y, z);
             let half = Vector::new(w * 0.5, h * 0.5, d * 0.5);
-            boxes.push(Obb::new(
+            boxes.push(OBB::new(
                 center,
                 Vector::new(1.0, 0.0, 0.0),
                 Vector::new(0.0, 1.0, 0.0),
@@ -250,18 +250,18 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         let mut scene = Session::new("ray_test");
         let mut pt1 = Point::new(5.0, 0.0, 0.0);
         pt1.name = "point_at_5".to_string();
-        let pt1_guid = pt1.guid.clone();
+        let pt1_guid = pt1.guid().to_string();
         scene.add_point(pt1.clone());
 
         let mut pt2 = Point::new(15.0, 0.0, 0.0);
         pt2.name = "point_at_15".to_string();
-        let pt2_guid = pt2.guid.clone();
+        let pt2_guid = pt2.guid().to_string();
         scene.add_point(pt2.clone());
 
         let mut line1 =
             Line::from_points(&Point::new(10.0, -2.0, 0.0), &Point::new(10.0, 2.0, 0.0));
         line1.name = "vertical_line_at_10".to_string();
-        let line1_guid = line1.guid.clone();
+        let line1_guid = line1.guid().to_string();
         scene.add_line(line1.clone());
 
         let mut plane1 = Plane::new(
@@ -270,7 +270,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             Vector::new(0.0, 1.0, 0.0),
         );
         plane1.name = "plane_at_20".to_string();
-        let plane1_guid = plane1.guid.clone();
+        let plane1_guid = plane1.guid().to_string();
         scene.add_plane(plane1.clone());
 
         let poly_pts = vec![
@@ -280,7 +280,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         ];
         let mut polyline1 = session_rust::Polyline::new(poly_pts);
         polyline1.name = "polyline_at_25".to_string();
-        let polyline1_guid = polyline1.guid.clone();
+        let polyline1_guid = polyline1.guid().to_string();
         scene.add_polyline(polyline1.clone());
 
         let ray_origin = Point::new(0.0, 0.0, 0.0);
@@ -289,15 +289,15 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         let hits = scene.ray_cast(&ray_origin, &ray_direction, tolerance);
         println!("{} hit(s):", hits.len());
         for h in hits.iter() {
-            let name = if h.guid == pt1_guid {
+            let name = if h.guid() == pt1_guid {
                 pt1.name.clone()
-            } else if h.guid == pt2_guid {
+            } else if h.guid() == pt2_guid {
                 pt2.name.clone()
-            } else if h.guid == line1_guid {
+            } else if h.guid() == line1_guid {
                 line1.name.clone()
-            } else if h.guid == plane1_guid {
+            } else if h.guid() == plane1_guid {
                 plane1.name.clone()
-            } else if h.guid == polyline1_guid {
+            } else if h.guid() == polyline1_guid {
                 polyline1.name.clone()
             } else {
                 "unknown".to_string()
@@ -311,7 +311,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         let object_count = 10_000usize;
         let world_size = 100.0f64;
         let mut scene = Session::new("perf_test");
-        let mut pure_boxes: Vec<Obb> = Vec::with_capacity(object_count);
+        let mut pure_boxes: Vec<OBB> = Vec::with_capacity(object_count);
         unsafe { libc::srand(42) }; // match C++
         let rand_max = 2147483647.0f64;
         for i in 0..object_count {
@@ -321,7 +321,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             let mut pt = Point::new(x, y, z);
             pt.name = format!("point_{i}");
             scene.add_point(pt.clone());
-            pure_boxes.push(Obb::new(
+            pure_boxes.push(OBB::new(
                 Point::new(x, y, z),
                 Vector::new(1.0, 0.0, 0.0),
                 Vector::new(0.0, 1.0, 0.0),

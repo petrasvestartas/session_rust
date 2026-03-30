@@ -1,5 +1,8 @@
 // Constrained Delaunay Triangulation via sweep-line.
 use std::collections::HashMap;
+use crate::mesh::Mesh;
+use crate::point::Point;
+use crate::polyline::Polyline;
 
 const LOOSE: u8 = 0;
 const ASCEND: u8 = 1;
@@ -649,18 +652,31 @@ impl Delaunay {
     }
 }
 
-pub fn cdt_triangulate(border_2d: &[(f64, f64)], holes_2d: &[Vec<(f64, f64)>]) -> Vec<(usize, usize, usize)> {
-    let scale = 1e6f64;
-    let mut flat: Vec<(f64, f64)> = border_2d.to_vec();
-    for h in holes_2d { flat.extend(h.iter().copied()); }
+pub(crate) fn cdt_triangulate(border_2d: &[Point], holes_2d: &[Vec<Point>]) -> Vec<(usize, usize, usize)> {
+    let mut max_coord = 1.0f64;
+    for p in border_2d {
+        max_coord = max_coord.max(p[0].abs()).max(p[1].abs());
+    }
+    for h in holes_2d {
+        for p in h {
+            max_coord = max_coord.max(p[0].abs()).max(p[1].abs());
+        }
+    }
+    let mut precision = 6i32;
+    while precision > 0 && max_coord * 10f64.powi(precision) > 9e17 {
+        precision -= 1;
+    }
+    let scale = 10f64.powi(precision);
+    let mut flat: Vec<Point> = border_2d.to_vec();
+    for h in holes_2d { flat.extend(h.iter().cloned()); }
     let mut pt_map: HashMap<(i64, i64), usize> = HashMap::new();
-    for (i, &(x, y)) in flat.iter().enumerate() {
-        let key = ((x * scale).round() as i64, (y * scale).round() as i64);
+    for (i, p) in flat.iter().enumerate() {
+        let key = ((p[0] * scale).round() as i64, (p[1] * scale).round() as i64);
         pt_map.entry(key).or_insert(i);
     }
-    let make_path = |pts: &[(f64, f64)]| -> Vec<P64> {
-        let mut path: Vec<P64> = pts.iter().map(|&(x, y)| P64 {
-            x: (x * scale).round() as i64, y: (y * scale).round() as i64
+    let make_path = |pts: &[Point]| -> Vec<P64> {
+        let mut path: Vec<P64> = pts.iter().map(|p| P64 {
+            x: (p[0] * scale).round() as i64, y: (p[1] * scale).round() as i64
         }).collect();
         if path.len() > 1 && path[0] == *path.last().unwrap() { path.pop(); }
         path
@@ -681,3 +697,142 @@ pub fn cdt_triangulate(border_2d: &[(f64, f64)], holes_2d: &[Vec<(f64, f64)>]) -
     }
     out
 }
+
+pub(crate) fn from_polygon_with_holes_impl(polylines: &[Polyline], is_2d: bool, is_first_boundary: bool) -> Mesh {
+    use crate::session_config::SESSION_CONFIG;
+    fn strip_close(mut pts: Vec<Point>) -> Vec<Point> {
+        if pts.len() > 1 {
+            let same = { let f = &pts[0]; let b = &pts[pts.len()-1];
+                (f[0]-b[0]).abs() < 1e-12 && (f[1]-b[1]).abs() < 1e-12 && (f[2]-b[2]).abs() < 1e-12 };
+            if same { pts.pop(); }
+        }
+        pts
+    }
+    if polylines.is_empty() { return Mesh::new(); }
+    let mut border_idx = 0usize;
+    if !is_first_boundary && polylines.len() > 1 {
+        let mut max_diag = 0.0_f64;
+        for (i, poly) in polylines.iter().enumerate() {
+            let pts = poly.get_points();
+            if pts.len() < 3 { continue; }
+            let (mut minx, mut miny, mut minz) = (pts[0][0], pts[0][1], pts[0][2]);
+            let (mut maxx, mut maxy, mut maxz) = (minx, miny, minz);
+            for p in &pts {
+                if p[0] < minx { minx = p[0]; } if p[0] > maxx { maxx = p[0]; }
+                if p[1] < miny { miny = p[1]; } if p[1] > maxy { maxy = p[1]; }
+                if p[2] < minz { minz = p[2]; } if p[2] > maxz { maxz = p[2]; }
+            }
+            let (dx, dy, dz) = (maxx - minx, maxy - miny, maxz - minz);
+            let diag = (dx*dx + dy*dy + dz*dz).sqrt();
+            if diag > max_diag { max_diag = diag; border_idx = i; }
+        }
+    }
+    let mut border = strip_close(polylines[border_idx].get_points());
+    if border.len() < 3 { return Mesh::new(); }
+    let mut hole_pts_3d: Vec<Vec<Point>> = polylines.iter().enumerate()
+        .filter(|(i, _)| *i != border_idx)
+        .map(|(_, h)| strip_close(h.get_points())).filter(|h| h.len() >= 3).collect();
+    let signed_area = |pts: &[Point]| -> f64 {
+        let n = pts.len(); let mut a = 0.0;
+        for i in 0..n { let j = (i+1)%n; a += pts[i][0]*pts[j][1] - pts[j][0]*pts[i][1]; }
+        a * 0.5
+    };
+    let (mut boundary_2d, mut holes_2d) = if is_2d {
+        let b2d: Vec<Point> = border.iter().map(|p| Point::new(p[0], p[1], 0.0)).collect();
+        let h2d: Vec<Vec<Point>> = hole_pts_3d.iter().map(|h| h.iter().map(|p| Point::new(p[0], p[1], 0.0)).collect()).collect();
+        (b2d, h2d)
+    } else {
+        let all_pts_for_plane: Vec<Point> = border.iter().chain(hole_pts_3d.iter().flatten()).cloned().collect();
+        let (origin, xaxis, yaxis, _) = crate::polyline::Polyline::new(all_pts_for_plane).get_average_plane();
+        let project_2d = |p: &Point| -> Point {
+            let dx = p[0]-origin[0]; let dy = p[1]-origin[1]; let dz = p[2]-origin[2];
+            Point::new(dx*xaxis[0]+dy*xaxis[1]+dz*xaxis[2], dx*yaxis[0]+dy*yaxis[1]+dz*yaxis[2], 0.0)
+        };
+        let b2d: Vec<Point> = border.iter().map(|p| project_2d(p)).collect();
+        let h2d: Vec<Vec<Point>> = hole_pts_3d.iter().map(|h| h.iter().map(|p| project_2d(p)).collect()).collect();
+        (b2d, h2d)
+    };
+    if signed_area(&boundary_2d) < 0.0 { border.reverse(); boundary_2d.reverse(); }
+    for (hole, h2d) in hole_pts_3d.iter_mut().zip(holes_2d.iter_mut()) {
+        if signed_area(h2d) > 0.0 { hole.reverse(); h2d.reverse(); }
+    }
+    let tris = cdt_triangulate(&boundary_2d, &holes_2d);
+    let all_pts: Vec<Point> = border.iter().chain(hole_pts_3d.iter().flatten()).cloned().collect();
+    let mut m = Mesh::new();
+    let vkeys: Vec<usize> = all_pts.iter().map(|p| m.add_vertex(p.clone(), None)).collect();
+    if SESSION_CONFIG.explode_mesh_faces() {
+        for &(a, b, c) in &tris {
+            m.add_face(vec![vkeys[a], vkeys[b], vkeys[c]], None);
+        }
+        return m;
+    }
+    let bvk: Vec<usize> = vkeys[..border.len()].to_vec();
+    if let Some(fkey) = m.add_face(bvk, None) {
+        if hole_pts_3d.is_empty() {
+            let mut tri_list: Vec<[usize; 3]> = tris.iter()
+                .filter(|&&(a, b, c)| vkeys[a] != vkeys[b] && vkeys[b] != vkeys[c] && vkeys[c] != vkeys[a])
+                .map(|&(a, b, c)| [vkeys[a], vkeys[b], vkeys[c]])
+                .collect();
+            let covered: std::collections::HashSet<usize> = tri_list.iter().flatten().cloned().collect();
+            let n_vk = border.len();
+            for i in 0..n_vk {
+                if !covered.contains(&vkeys[i]) {
+                    tri_list.push([vkeys[(i+n_vk-1)%n_vk], vkeys[i], vkeys[(i+1)%n_vk]]);
+                }
+            }
+            m.set_face_triangulation(fkey, tri_list);
+        } else {
+            let mut hole_rings: Vec<Vec<usize>> = Vec::new();
+            let mut off = border.len();
+            for h in &hole_pts_3d {
+                hole_rings.push(vkeys[off..off+h.len()].to_vec());
+                off += h.len();
+            }
+            m.face_holes.insert(fkey, hole_rings);
+            let tri_list: Vec<[usize; 3]> = tris.iter()
+                .filter(|&&(a, b, c)| vkeys[a] != vkeys[b] && vkeys[b] != vkeys[c] && vkeys[c] != vkeys[a])
+                .map(|&(a, b, c)| [vkeys[a], vkeys[b], vkeys[c]])
+                .collect();
+            m.set_face_triangulation(fkey, tri_list);
+        }
+    }
+    m
+}
+
+pub struct RemeshCDT;
+
+impl RemeshCDT {
+    /// polylines[0]=border, rest=holes (x,y used; z ignored). Strips closing duplicate.
+    /// Returns (i,j,k) index triples into flat vertex array [border..., hole0..., hole1...].
+    /// To build a Mesh from the result:
+    /// ```ignore
+    /// let border = Polyline::new(vec![Point::new(0.0,0.0,0.0), Point::new(4.0,0.0,0.0), Point::new(4.0,4.0,0.0), Point::new(0.0,4.0,0.0)]);
+    /// let hole   = Polyline::new(vec![Point::new(1.0,1.0,0.0), Point::new(1.0,3.0,0.0), Point::new(3.0,3.0,0.0), Point::new(3.0,1.0,0.0)]);
+    /// let tris = RemeshCDT::triangulate(&[border.clone(), hole.clone()]);
+    /// let flat: Vec<Point> = border.get_points().into_iter().chain(hole.get_points()).collect();
+    /// let mut m = Mesh::new();
+    /// let vkeys: Vec<usize> = flat.iter().map(|p| m.add_vertex(p.clone(), None)).collect();
+    /// for &(a, b, c) in &tris { m.add_face(vec![vkeys[a], vkeys[b], vkeys[c]], None); }
+    /// ```
+    pub fn triangulate(polylines: &[Polyline]) -> Vec<(usize, usize, usize)> {
+        fn strip(pts: Vec<Point>) -> Vec<Point> {
+            if pts.len() > 1 {
+                let f = &pts[0]; let b = &pts[pts.len()-1];
+                if (f[0]-b[0]).abs() < 1e-12 && (f[1]-b[1]).abs() < 1e-12 && (f[2]-b[2]).abs() < 1e-12 {
+                    return pts[..pts.len()-1].to_vec();
+                }
+            }
+            pts
+        }
+        if polylines.is_empty() { return vec![]; }
+        let bpts = strip(polylines[0].get_points());
+        let hpts_list: Vec<Vec<Point>> = polylines[1..].iter().map(|h| strip(h.get_points())).collect();
+        cdt_triangulate(&bpts, &hpts_list)
+    }
+
+    /// Polylines → Mesh. is_2d=true skips plane projection. is_first_boundary=false detects border by largest bbox diagonal.
+    pub fn from_polylines(polylines: &[Polyline], is_2d: bool, is_first_boundary: bool) -> Mesh {
+        from_polygon_with_holes_impl(polylines, is_2d, is_first_boundary)
+    }
+}
+

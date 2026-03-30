@@ -4,7 +4,6 @@ use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use serde_json::Value;
 use std::fmt;
 use std::ops::{Add, AddAssign, Div, DivAssign, Mul, MulAssign, Neg, Sub, SubAssign};
-use uuid::Uuid;
 
 /// A polyline defined by a collection of coordinates with an associated plane.
 ///
@@ -12,7 +11,7 @@ use uuid::Uuid;
 /// efficient serialization. Provides Point-based API for compatibility.
 #[derive(Debug, Clone)]
 pub struct Polyline {
-    pub guid: String,
+    guid: std::sync::OnceLock<String>,
     pub name: String,
     /// Flat coordinate array [x0, y0, z0, x1, y1, z1, ...]
     pub coords: Vec<f64>,
@@ -25,7 +24,7 @@ pub struct Polyline {
 impl Default for Polyline {
     fn default() -> Self {
         Self {
-            guid: Uuid::new_v4().to_string(),
+            guid: std::sync::OnceLock::new(),
             name: "my_polyline".to_string(),
             coords: Vec::new(),
             plane: Plane::default(),
@@ -59,7 +58,7 @@ impl Polyline {
         };
 
         Self {
-            guid: Uuid::new_v4().to_string(),
+            guid: std::sync::OnceLock::new(),
             name: "my_polyline".to_string(),
             coords,
             plane,
@@ -90,7 +89,7 @@ impl Polyline {
     /// Creates a Polyline from a flat coordinate array.
     pub fn from_coords(coords: Vec<f64>) -> Self {
         let mut pl = Self {
-            guid: Uuid::new_v4().to_string(),
+            guid: std::sync::OnceLock::new(),
             name: "my_polyline".to_string(),
             coords,
             plane: Plane::default(),
@@ -102,6 +101,14 @@ impl Polyline {
         pl
     }
 
+    pub fn guid(&self) -> &str {
+        self.guid.get_or_init(|| uuid::Uuid::new_v4().to_string())
+    }
+
+    pub fn set_guid(&self, g: String) {
+        let _ = self.guid.set(g);
+    }
+
     /// Returns detailed string representation (like Python __repr__).
     pub fn repr(&self) -> String {
         format!("Polyline({}, {} points)", self.name, self.point_count())
@@ -110,7 +117,7 @@ impl Polyline {
     /// Creates a deep copy with a new GUID.
     pub fn duplicate(&self) -> Self {
         Self {
-            guid: Uuid::new_v4().to_string(),
+            guid: std::sync::OnceLock::new(),
             name: self.name.clone(),
             coords: self.coords.clone(),
             plane: self.plane.clone(),
@@ -297,7 +304,7 @@ impl Polyline {
          use serde::ser::SerializeMap;
          let mut map = serializer.serialize_map(Some(7))?;
          map.serialize_entry("type", "Polyline")?;
-         map.serialize_entry("guid", &self.guid)?;
+         map.serialize_entry("guid", self.guid())?;
          map.serialize_entry("name", &self.name)?;
          map.serialize_entry("coords", &self.coords)?;
          map.serialize_entry("width", &self.width)?;
@@ -314,11 +321,11 @@ impl Polyline {
      {
          let value: Value = Value::deserialize(deserializer)?;
 
-         let guid = value
+         let guid_str = value
              .get("guid")
              .and_then(|v| v.as_str())
              .map(|s| s.to_string())
-             .unwrap_or_else(|| Uuid::new_v4().to_string());
+             .unwrap_or_else(|| uuid::Uuid::new_v4().to_string());
 
          let name = value
              .get("name")
@@ -366,7 +373,7 @@ impl Polyline {
              .unwrap_or_else(Xform::identity);
 
          let mut polyline = Polyline {
-             guid,
+             guid: { let c = std::sync::OnceLock::new(); let _ = c.set(guid_str); c },
              name,
              coords,
              plane: Plane::default(),
@@ -429,12 +436,12 @@ impl Polyline {
         use prost::Message;
 
         let proto = crate::proto::Polyline {
-            guid: self.guid.clone(),
+            guid: self.guid().to_string(),
             name: self.name.clone(),
             coords: self.coords.clone(),
             width: self.width,
             linecolor: Some(crate::proto::Color {
-                guid: self.linecolor.guid.clone(),
+                guid: self.linecolor.guid().to_string(),
                 name: self.linecolor.name.clone(),
                 r: self.linecolor.r as i32,
                 g: self.linecolor.g as i32,
@@ -442,7 +449,7 @@ impl Polyline {
                 a: self.linecolor.a as i32,
             }),
             xform: Some(crate::proto::Xform {
-                guid: self.xform.guid.clone(),
+                guid: self.xform.guid().to_string(),
                 name: self.xform.name.clone(),
                 matrix: self.xform.m.to_vec(),
             }),
@@ -465,12 +472,12 @@ impl Polyline {
         let proto = crate::proto::Polyline::decode(data)?;
 
         let mut pl = Self::from_coords(proto.coords);
-        pl.guid = proto.guid;
+        pl.set_guid(proto.guid);
         pl.name = proto.name;
         pl.width = proto.width;
 
         if let Some(color) = proto.linecolor {
-            pl.linecolor.guid = color.guid;
+            pl.linecolor.set_guid(color.guid);
             pl.linecolor.name = color.name;
             pl.linecolor.r = color.r as u8;
             pl.linecolor.g = color.g as u8;
@@ -479,7 +486,7 @@ impl Polyline {
         }
 
         if let Some(xform) = proto.xform {
-            pl.xform.guid = xform.guid;
+            pl.xform.set_guid(xform.guid);
             pl.xform.name = xform.name;
             for (i, val) in xform.matrix.iter().enumerate() {
                 if i < 16 {
@@ -844,6 +851,29 @@ impl Polyline {
     pub fn center_vec(&self) -> Vector {
         let center = self.center();
         Vector::new(center[0], center[1], center[2])
+    }
+
+    /// Winding-number point-in-polygon test. p.x/y tested; polygon vertex z ignored.
+    pub fn point_in_polygon_2d(&self, p: &crate::point::Point) -> bool {
+        let (px, py) = (p[0], p[1]);
+        let coords = self.get_points();
+        let mut winding: i32 = 0;
+        let n = coords.len();
+        for i in 0..n {
+            let j = (i + 1) % n;
+            let y0 = coords[i][1];
+            let y1 = coords[j][1];
+            if y0 <= py {
+                if y1 > py {
+                    let x0 = coords[i][0]; let x1 = coords[j][0];
+                    if (x1 - x0) * (py - y0) - (px - x0) * (y1 - y0) > 0.0 { winding += 1; }
+                }
+            } else if y1 <= py {
+                let x0 = coords[i][0]; let x1 = coords[j][0];
+                if (x1 - x0) * (py - y0) - (px - x0) * (y1 - y0) < 0.0 { winding -= 1; }
+            }
+        }
+        winding != 0
     }
 
     /// Get average plane from polyline points
@@ -1314,6 +1344,62 @@ impl Polyline {
         average_normal.normalize();
         average_normal
     }
+
+    fn simplify_perp_dist(pt: &Point, line_start: &Point, line_end: &Point) -> f64 {
+        let dx = line_end[0] - line_start[0];
+        let dy = line_end[1] - line_start[1];
+        let dz = line_end[2] - line_start[2];
+        let len_sq = dx * dx + dy * dy + dz * dz;
+        if len_sq == 0.0 {
+            let ex = pt[0] - line_start[0];
+            let ey = pt[1] - line_start[1];
+            let ez = pt[2] - line_start[2];
+            return (ex * ex + ey * ey + ez * ez).sqrt();
+        }
+        let t = ((pt[0] - line_start[0]) * dx + (pt[1] - line_start[1]) * dy + (pt[2] - line_start[2]) * dz) / len_sq;
+        let t = t.max(0.0).min(1.0);
+        let cx = line_start[0] + t * dx;
+        let cy = line_start[1] + t * dy;
+        let cz = line_start[2] + t * dz;
+        let ex = pt[0] - cx;
+        let ey = pt[1] - cy;
+        let ez = pt[2] - cz;
+        (ex * ex + ey * ey + ez * ez).sqrt()
+    }
+
+    fn simplify_rdp(points: &[Point], start: usize, end: usize, tolerance: f64, keep: &mut Vec<bool>) {
+        if end <= start + 1 { return; }
+        let mut max_dist = 0.0_f64;
+        let mut max_idx = start;
+        for i in (start + 1)..end {
+            let d = Self::simplify_perp_dist(&points[i], &points[start], &points[end]);
+            if d > max_dist {
+                max_dist = d;
+                max_idx = i;
+            }
+        }
+        if max_dist > tolerance {
+            keep[max_idx] = true;
+            Self::simplify_rdp(points, start, max_idx, tolerance, keep);
+            Self::simplify_rdp(points, max_idx, end, tolerance, keep);
+        }
+    }
+
+    pub fn simplify_points(points: &[Point], tolerance: f64) -> Vec<Point> {
+        let n = points.len();
+        if n < 3 { return points.to_vec(); }
+        let mut keep = vec![false; n];
+        keep[0] = true;
+        keep[n - 1] = true;
+        Self::simplify_rdp(points, 0, n - 1, tolerance, &mut keep);
+        points.iter().enumerate().filter(|(i, _)| keep[*i]).map(|(_, p)| p.clone()).collect()
+    }
+
+    pub fn simplify(&self, tolerance: f64) -> Polyline {
+        let pts = self.get_points();
+        let simplified = Self::simplify_points(&pts, tolerance);
+        Polyline::new(simplified)
+    }
 }
 
 impl AddAssign<&Vector> for Polyline {
@@ -1428,7 +1514,7 @@ impl fmt::Display for Polyline {
         write!(
             f,
             "Polyline(guid={}, name={}, points={})",
-            self.guid,
+            self.guid(),
             self.name,
             self.point_count()
         )

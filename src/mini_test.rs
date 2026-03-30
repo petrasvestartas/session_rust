@@ -20,6 +20,7 @@ pub struct TestResult {
     pub passed: bool,
     pub time_ms: f64,
     pub line: u32,
+    pub file: &'static str,
     pub code: String,
     pub checks: Vec<CheckRecord>,
     pub failures: Vec<Value>,
@@ -265,6 +266,7 @@ macro_rules! MINI_TEST {
             passed,
             time_ms,
             line,
+            file: file!(),
             code,
             checks,
             failures,
@@ -295,6 +297,7 @@ macro_rules! MINI_TEST {
             passed,
             time_ms,
             line,
+            file: file!(),
             code,
             checks,
             failures,
@@ -371,12 +374,10 @@ pub fn get_all_tests() -> Vec<RegisteredTest> {
     use crate::bvh_test::*;
     use crate::quaternion_test::*;
     use crate::obb_test::*;
-    use crate::edge_test::*;
     use crate::graph_test::*;
     use crate::objects_test::*;
     use crate::tree_test::*;
     use crate::treenode_test::*;
-    use crate::vertex_test::*;
     use crate::encoders_test::*;
     use crate::aabb_test::*;
     use crate::primitives_test::*;
@@ -669,10 +670,17 @@ pub fn get_all_tests() -> Vec<RegisteredTest> {
         RegisteredTest { group: "OBJ", name: "Read Bunny", func: run_obj_read_bunny },
         RegisteredTest { group: "OBJ", name: "Write Read Roundtrip", func: run_obj_write_read_roundtrip },
         // RemeshCDT tests
+        RegisteredTest { group: "RemeshCDT", name: "Triangulate", func: run_remesh_cdt_triangulate },
         RegisteredTest { group: "RemeshCDT", name: "Triangle", func: run_remesh_cdt_triangle },
-        RegisteredTest { group: "RemeshCDT", name: "Square", func: run_remesh_cdt_square },
-        RegisteredTest { group: "RemeshCDT", name: "Convex Polygon", func: run_remesh_cdt_convex_polygon },
-        RegisteredTest { group: "RemeshCDT", name: "Polygon With Hole", func: run_remesh_cdt_polygon_with_hole },
+        RegisteredTest { group: "RemeshCDT", name: "Rectangle", func: run_remesh_cdt_rectangle },
+        RegisteredTest { group: "RemeshCDT", name: "L-shape", func: run_remesh_cdt_l_shape },
+        RegisteredTest { group: "RemeshCDT", name: "U-shape", func: run_remesh_cdt_u_shape },
+        RegisteredTest { group: "RemeshCDT", name: "Octagon", func: run_remesh_cdt_octagon },
+        RegisteredTest { group: "RemeshCDT", name: "Rectangle with rectangle hole", func: run_remesh_cdt_rectangle_with_rectangle_hole },
+        RegisteredTest { group: "RemeshCDT", name: "Duplicate vertices", func: run_remesh_cdt_duplicate_vertices },
+        RegisteredTest { group: "RemeshCDT", name: "Tilted rectangle with rectangle hole", func: run_remesh_cdt_tilted_rectangle_with_rectangle_hole },
+        RegisteredTest { group: "RemeshCDT", name: "Irregular tilted polyline.", func: run_remesh_cdt_irregular_tilted_polyline },
+        RegisteredTest { group: "RemeshCDT", name: "Irregular tilted polyline with holes.", func: run_remesh_cdt_irregular_tilted_polyline_with_holes },
         // BVH tests
         RegisteredTest { group: "BVH", name: "Expand Bits", func: run_bvh_expand_bits },
         RegisteredTest { group: "BVH", name: "Morton Code Origin", func: run_bvh_morton_code_origin },
@@ -690,12 +698,12 @@ pub fn get_all_tests() -> Vec<RegisteredTest> {
         RegisteredTest { group: "BVH", name: "Fixed 100 Boxes", func: run_bvh_fixed_100_boxes },
         // Quaternion tests
         RegisteredTest { group: "Quaternion", name: "Json Roundtrip", func: run_quaternion_json_roundtrip },
-        // Obb tests
-        RegisteredTest { group: "Obb", name: "Constructor", func: run_obb_constructor },
-        RegisteredTest { group: "Obb", name: "Collision", func: run_obb_collision },
-        RegisteredTest { group: "Obb", name: "Transformation", func: run_obb_transformation },
-        RegisteredTest { group: "Obb", name: "Json Roundtrip", func: run_obb_json_roundtrip },
-        RegisteredTest { group: "Obb", name: "Protobuf Roundtrip", func: run_obb_protobuf_roundtrip },
+        // OBB tests
+        RegisteredTest { group: "OBB", name: "Constructor", func: run_obb_constructor },
+        RegisteredTest { group: "OBB", name: "Collision", func: run_obb_collision },
+        RegisteredTest { group: "OBB", name: "Transformation", func: run_obb_transformation },
+        RegisteredTest { group: "OBB", name: "Json Roundtrip", func: run_obb_json_roundtrip },
+        RegisteredTest { group: "OBB", name: "Protobuf Roundtrip", func: run_obb_protobuf_roundtrip },
         // Edge tests
         RegisteredTest { group: "Edge", name: "Json Roundtrip", func: run_edge_json_roundtrip },
         // Graph tests
@@ -773,12 +781,13 @@ pub fn get_all_tests() -> Vec<RegisteredTest> {
         RegisteredTest { group: "RTree", name: "Search Count", func: run_rtree_search_count },
         RegisteredTest { group: "RTree", name: "Search Stop", func: run_rtree_search_stop },
         RegisteredTest { group: "RTree", name: "Search 100 Boxes", func: run_rtree_search_100_boxes },
+        RegisteredTest { group: "RTree", name: "Perf 10k", func: run_rtree_perf },
         // Element tests
         RegisteredTest { group: "Element", name: "Constructor", func: run_element_constructor },
         RegisteredTest { group: "Element", name: "Session Transformation", func: run_element_session_transformation },
         RegisteredTest { group: "Element", name: "Add Feature", func: run_element_add_feature },
         RegisteredTest { group: "Element", name: "Aabb", func: run_element_aabb },
-        RegisteredTest { group: "Element", name: "Obb", func: run_element_obb },
+        RegisteredTest { group: "Element", name: "OBB", func: run_element_obb },
         RegisteredTest { group: "Element", name: "Session Geometry", func: run_element_session_geometry },
         RegisteredTest { group: "Element", name: "Reset", func: run_element_reset },
         RegisteredTest { group: "Element", name: "Compute Point", func: run_element_compute_point },
@@ -866,6 +875,10 @@ pub fn run_all(language: &str) -> Result<(), Box<dyn std::error::Error>> {
         .map(|(i, t)| ((t.group, t.name), i))
         .collect();
 
+    let mut total_tests = 0usize;
+    let mut total_passed = 0usize;
+    let mut failed_tests: Vec<(String, String, String, u32, Vec<serde_json::Value>)> = Vec::new();
+
     // For each group, run its tests and emit <group>_test.json (lowercased).
     for (group, mut tests) in groups {
         tests.sort_by_key(|t| canonical_order.get(&(t.group, t.name)).copied().unwrap_or(usize::MAX));
@@ -873,6 +886,12 @@ pub fn run_all(language: &str) -> Result<(), Box<dyn std::error::Error>> {
         let mut results: Vec<serde_json::Value> = Vec::new();
         for t in tests {
             let res = (t.func)();
+            total_tests += 1;
+            if res.passed {
+                total_passed += 1;
+            } else {
+                failed_tests.push((group.to_string(), res.test_name.to_string(), res.file.to_string(), res.line, res.failures.clone()));
+            }
             let res_json = serde_json::json!({
                 "group": t.group,
                 "test_name": res.test_name,
@@ -892,11 +911,25 @@ pub fn run_all(language: &str) -> Result<(), Box<dyn std::error::Error>> {
         let json = serde_json::to_string_pretty(&results)?;
         fs::write(&tmp_path, &json)?;
         if let Err(_) = fs::rename(&tmp_path, &path) {
-            // rename failed (Windows lock), fall back to remove + rename
             let _ = fs::remove_file(&path);
             fs::rename(&tmp_path, &path).or_else(|_| fs::write(&path, &json))?;
         }
     }
 
+    if !failed_tests.is_empty() {
+        eprintln!("\n[rust-minitest] FAILURES:");
+        for (group, name, file, line, failures) in &failed_tests {
+            eprintln!("  FAIL {group}::{name}  {file}:{line}");
+            for f in failures {
+                if let Some(err) = f.get("error").and_then(|v| v.as_str()) {
+                    eprintln!("       {err}");
+                }
+            }
+        }
+        eprintln!("\n[rust-minitest] {total_passed}/{total_tests} passed, {} failed", failed_tests.len());
+        std::process::exit(1);
+    }
+
+    println!("[rust-minitest] {total_passed}/{total_tests} passed");
     Ok(())
 }

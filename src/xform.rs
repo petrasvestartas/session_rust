@@ -3,13 +3,12 @@ use serde::{Deserialize, Deserializer, Serializer};
 use serde::ser::SerializeMap;
 use std::fmt;
 use std::ops::{Index, IndexMut, Mul, MulAssign};
-use uuid::Uuid;
 
 /// A 4x4 column-major transformation matrix in 3D space
 #[derive(Clone)]
 pub struct Xform {
     pub typ: String,
-    pub guid: String,
+    guid: std::sync::OnceLock<String>,
     pub name: String,
     /// The matrix elements stored in column-major order as a flattened array
     pub m: [f64; 16],
@@ -21,7 +20,7 @@ impl serde::Serialize for Xform {
         S: Serializer,
     {
         let mut map = serializer.serialize_map(Some(4))?;
-        map.serialize_entry("guid", &self.guid)?;
+        map.serialize_entry("guid", self.guid())?;
         map.serialize_entry("m", &self.m)?;
         map.serialize_entry("name", &self.name)?;
         map.serialize_entry("type", "Xform")?;
@@ -47,9 +46,13 @@ impl<'de> Deserialize<'de> for Xform {
             [1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0]
         }
         let data = XformData::deserialize(deserializer)?;
+        let guid = std::sync::OnceLock::new();
+        if let Some(g) = data.guid {
+            let _ = guid.set(g);
+        }
         Ok(Xform {
             typ: "Xform".to_string(),
-            guid: data.guid.unwrap_or_else(|| Uuid::new_v4().to_string()),
+            guid,
             name: data.name.unwrap_or_else(|| "my_xform".to_string()),
             m: data.m,
         })
@@ -68,7 +71,7 @@ impl Xform {
     pub fn from_matrix(matrix: [f64; 16]) -> Self {
         Xform {
             typ: "Xform".to_string(),
-            guid: Uuid::new_v4().to_string(),
+            guid: std::sync::OnceLock::new(),
             name: "my_xform".to_string(),
             m: matrix,
         }
@@ -80,7 +83,7 @@ impl Xform {
         IDENTITY.get_or_init(|| {
             let mut m = [0.0f64; 16];
             m[0] = 1.0; m[5] = 1.0; m[10] = 1.0; m[15] = 1.0;
-            Xform { typ: "Xform".to_string(), guid: Uuid::new_v4().to_string(),
+            Xform { typ: "Xform".to_string(), guid: std::sync::OnceLock::new(),
                     name: "my_xform".to_string(), m }
         }).clone()
     }
@@ -97,6 +100,14 @@ impl Xform {
         xform.m[9] = col_z[1];
         xform.m[10] = col_z[2];
         xform
+    }
+
+    pub fn guid(&self) -> &str {
+        self.guid.get_or_init(|| uuid::Uuid::new_v4().to_string())
+    }
+
+    pub fn set_guid(&self, g: String) {
+        let _ = self.guid.set(g);
     }
 
     ///////////////////////////////////////////////////////////////////////////////////////////
@@ -683,7 +694,7 @@ impl Xform {
         use prost::Message;
 
         let proto = crate::proto::Xform {
-            guid: self.guid.clone(),
+            guid: self.guid().to_string(),
             name: self.name.clone(),
             matrix: self.m.to_vec(),
         };
@@ -705,7 +716,7 @@ impl Xform {
         let proto = crate::proto::Xform::decode(data)?;
 
         let mut xform = Self::identity();
-        xform.guid = proto.guid;
+        xform.set_guid(proto.guid);
         xform.name = proto.name;
         for (i, val) in proto.matrix.iter().enumerate() {
             if i < 16 {
@@ -760,7 +771,7 @@ impl Xform {
 
     /// Full string representation (name and guid prefix)
     pub fn repr(&self) -> String {
-        format!("Xform({}, {})", self.name, &self.guid[..8])
+        format!("Xform({}, {})", self.name, &self.guid()[..8])
     }
 
     /// Create a copy with a new GUID

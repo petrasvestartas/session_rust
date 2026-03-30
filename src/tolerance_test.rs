@@ -6,41 +6,47 @@ use crate::tolerance::TOLERANCE;
 pub fn run_tolerance_is_zero() -> TestResult {
     MINI_TEST!("Is Zero", {
         let result = TOLERANCE.is_zero(1e-10);
-        MINI_CHECK!(result == true);
+
+        MINI_CHECK!(result);
     })
 }
 
 pub fn run_tolerance_is_close() -> TestResult {
     MINI_TEST!("Is Close", {
         let result = TOLERANCE.is_close(1.0, 1.0 + 1e-7);
-        MINI_CHECK!(result == true);
+
+        MINI_CHECK!(result);
     })
 }
 
 pub fn run_tolerance_is_positive() -> TestResult {
     MINI_TEST!("Is Positive", {
         let result = TOLERANCE.is_positive(1.0);
-        MINI_CHECK!(result == true);
+
+        MINI_CHECK!(result);
     })
 }
 
 pub fn run_tolerance_is_negative() -> TestResult {
     MINI_TEST!("Is Negative", {
         let result = TOLERANCE.is_negative(-1.0);
-        MINI_CHECK!(result == true);
+
+        MINI_CHECK!(result);
     })
 }
 
 pub fn run_tolerance_is_between() -> TestResult {
     MINI_TEST!("Is Between", {
         let result = TOLERANCE.is_between(0.5, 0.0, 1.0);
-        MINI_CHECK!(result == true);
+
+        MINI_CHECK!(result);
     })
 }
 
 pub fn run_tolerance_format_number() -> TestResult {
     MINI_TEST!("Format Number", {
         let result = TOLERANCE.format_number(3.14159, 2);
+
         MINI_CHECK!(result == "3.14");
     })
 }
@@ -48,6 +54,7 @@ pub fn run_tolerance_format_number() -> TestResult {
 pub fn run_tolerance_key() -> TestResult {
     MINI_TEST!("Key", {
         let result = TOLERANCE.key([1.0, 2.0, 3.0], -999);
+
         MINI_CHECK!(result == "1.000,2.000,3.000");
     })
 }
@@ -57,6 +64,7 @@ pub fn run_tolerance_runtime_modification() -> TestResult {
         // Get current default values
         let original_absolute = TOLERANCE.absolute();
         let original_relative = TOLERANCE.relative();
+
         MINI_CHECK!(original_absolute == 1e-9);
         MINI_CHECK!(original_relative == 1e-6);
 
@@ -68,7 +76,7 @@ pub fn run_tolerance_runtime_modification() -> TestResult {
 
         // Test with new tolerance - 1e-11 difference now fails is_close
         let close_with_tight = TOLERANCE.is_close(1.0, 1.0 + 1e-11);
-        MINI_CHECK!(close_with_tight == false);
+        MINI_CHECK!(!close_with_tight);
 
         // Reset to defaults
         TOLERANCE.reset();
@@ -77,7 +85,7 @@ pub fn run_tolerance_runtime_modification() -> TestResult {
 
         // Same test now passes with default tolerance
         let close_with_default = TOLERANCE.is_close(1.0, 1.0 + 1e-11);
-        MINI_CHECK!(close_with_default == true);
+        MINI_CHECK!(close_with_default);
     })
 }
 
@@ -86,6 +94,7 @@ pub fn run_tolerance_unique_from_two_int() -> TestResult {
         use crate::tolerance::{unique_from_two_int};
         let r0 = unique_from_two_int(3, 7);
         let r1 = unique_from_two_int(7, 3);
+
         MINI_CHECK!(r0 == r1);
         MINI_CHECK!(r0 == ((7u64 << 32) | 3u64));
     })
@@ -106,6 +115,7 @@ pub fn run_tolerance_triangle_edge_by_angle() -> TestResult {
     MINI_TEST!("Triangle Edge By Angle", {
         use crate::tolerance::triangle_edge_by_angle;
         let r = triangle_edge_by_angle(1.0, 45.0);
+
         MINI_CHECK!((r - 1.0).abs() < 1e-9);
         let r2 = triangle_edge_by_angle(5.0, 0.0);
         MINI_CHECK!(r2.abs() < 1e-9);

@@ -1,14 +1,14 @@
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::fmt;
-use uuid::Uuid;
 
 /// A graph vertex with a unique identifier and attribute string.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(tag = "type", rename = "Vertex")]
 pub struct Vertex {
     /// The unique identifier of the vertex.
-    pub guid: String,
+    #[serde(serialize_with = "crate::guid_serde::serialize", deserialize_with = "crate::guid_serde::deserialize")]
+    guid: std::sync::OnceLock<String>,
     /// The name of the vertex.
     pub name: String,
     /// Vertex attribute data as string.
@@ -21,7 +21,7 @@ impl Default for Vertex {
     fn default() -> Self {
         Self {
             name: "my_vertex".to_string(),
-            guid: Uuid::new_v4().to_string(),
+            guid: std::sync::OnceLock::new(),
             attribute: String::new(),
             index: -1,
         }
@@ -33,7 +33,7 @@ impl fmt::Display for Graph {
         write!(
             f,
             "Graph({}, {}, vertices={}, edges={})",
-            self.name, self.guid, self.vertex_count, self.edge_count
+            self.name, self.guid(), self.vertex_count, self.edge_count
         )
     }
 }
@@ -43,7 +43,7 @@ impl fmt::Display for Vertex {
         write!(
             f,
             "Vertex({}, {}, attr={}, index={})",
-            self.name, self.guid, self.attribute, self.index
+            self.name, self.guid(), self.attribute, self.index
         )
     }
 }
@@ -53,13 +53,21 @@ impl fmt::Display for Edge {
         write!(
             f,
             "Edge({}, {}, {} -> {}, attr={}, index={})",
-            self.name, self.guid, self.v0, self.v1, self.attribute, self.index
+            self.name, self.guid(), self.v0, self.v1, self.attribute, self.index
         )
     }
 }
 
 impl Vertex {
     /// Initialize a new Vertex.
+    pub fn guid(&self) -> &str {
+        self.guid.get_or_init(|| uuid::Uuid::new_v4().to_string())
+    }
+
+    pub fn set_guid(&self, g: String) {
+        let _ = self.guid.set(g);
+    }
+
     pub fn new(name: Option<String>, attribute: Option<String>) -> Self {
         Self {
             name: name.unwrap_or_default(),
@@ -88,7 +96,8 @@ impl Vertex {
 #[serde(tag = "type", rename = "Edge")]
 pub struct Edge {
     /// The unique identifier of the edge.
-    pub guid: String,
+    #[serde(serialize_with = "crate::guid_serde::serialize", deserialize_with = "crate::guid_serde::deserialize")]
+    guid: std::sync::OnceLock<String>,
     /// The name of the edge.
     pub name: String,
     /// The first vertex of the edge.
@@ -105,7 +114,7 @@ impl Default for Edge {
     fn default() -> Self {
         Self {
             name: "my_edge".to_string(),
-            guid: Uuid::new_v4().to_string(),
+            guid: std::sync::OnceLock::new(),
             v0: String::new(),
             v1: String::new(),
             attribute: String::new(),
@@ -116,6 +125,14 @@ impl Default for Edge {
 
 impl Edge {
     /// Initialize a new Edge.
+    pub fn guid(&self) -> &str {
+        self.guid.get_or_init(|| uuid::Uuid::new_v4().to_string())
+    }
+
+    pub fn set_guid(&self, g: String) {
+        let _ = self.guid.set(g);
+    }
+
     pub fn new(
         name: Option<String>,
         v0: Option<String>,
@@ -169,7 +186,8 @@ impl Edge {
 #[serde(tag = "type", rename = "Graph")]
 pub struct Graph {
     // Public fields, similar to C++
-    pub guid: String,
+    #[serde(serialize_with = "crate::guid_serde::serialize", deserialize_with = "crate::guid_serde::deserialize")]
+    guid: std::sync::OnceLock<String>,
     pub name: String,
     pub vertex_count: i32,
     pub edge_count: i32,
@@ -183,7 +201,7 @@ pub struct Graph {
 impl Default for Graph {
     fn default() -> Self {
         Self {
-            guid: Uuid::new_v4().to_string(),
+            guid: std::sync::OnceLock::new(),
             name: "my_graph".to_string(),
             vertex_count: 0,
             edge_count: 0,
@@ -195,6 +213,14 @@ impl Default for Graph {
 
 impl Graph {
     /// Creates a new, empty `Graph` with a specific name.
+    pub fn guid(&self) -> &str {
+        self.guid.get_or_init(|| uuid::Uuid::new_v4().to_string())
+    }
+
+    pub fn set_guid(&self, g: String) {
+        let _ = self.guid.set(g);
+    }
+
     pub fn new(name: &str) -> Self {
         Self {
             name: name.to_string(),
@@ -410,7 +436,7 @@ impl Graph {
         let json_obj = serde_json::json!({
             "type": "Graph",
             "name": self.name,
-            "guid": self.guid,
+            "guid": self.guid(),
             "vertices": vertices,
             "edges": edges,
             "vertex_count": self.vertex_count,
@@ -425,7 +451,7 @@ impl Graph {
         let json_obj: serde_json::Value = serde_json::from_str(json_data)?;
 
         let mut graph = Graph::new(json_obj["name"].as_str().unwrap_or("my_graph"));
-        graph.guid = json_obj["guid"].as_str().unwrap_or("").to_string();
+        graph.set_guid(json_obj["guid"].as_str().unwrap_or("").to_string());
         graph.vertex_count = json_obj["vertex_count"].as_i64().unwrap_or(0) as i32;
         graph.edge_count = json_obj["edge_count"].as_i64().unwrap_or(0) as i32;
 
@@ -491,7 +517,7 @@ impl Graph {
         for (name, vertex) in &self.vertices {
             proto_vertices.insert(name.clone(), crate::proto::Vertex {
                 name: vertex.name.clone(),
-                guid: vertex.guid.clone(),
+                guid: vertex.guid().to_string(),
                 attribute: vertex.attribute.clone(),
                 index: vertex.index,
             });
@@ -504,7 +530,7 @@ impl Graph {
                 let key = if u < v { (u.clone(), v.clone()) } else { (v.clone(), u.clone()) };
                 if seen.insert(key) {
                     proto_edges.push(crate::proto::Edge {
-                        guid: edge.guid.clone(),
+                        guid: edge.guid().to_string(),
                         name: edge.name.clone(),
                         v0: edge.v0.clone(),
                         v1: edge.v1.clone(),
@@ -517,7 +543,7 @@ impl Graph {
 
         let proto = crate::proto::Graph {
             name: self.name.clone(),
-            guid: self.guid.clone(),
+            guid: self.guid().to_string(),
             vertices: proto_vertices,
             edges: proto_edges,
             vertex_count: self.vertex_count,
@@ -530,29 +556,31 @@ impl Graph {
         use prost::Message;
         let proto = crate::proto::Graph::decode(data)?;
         let mut graph = Graph::new(&proto.name);
-        graph.guid = proto.guid;
+        graph.set_guid(proto.guid.clone());
         graph.vertex_count = proto.vertex_count;
         graph.edge_count = proto.edge_count;
 
         for (name, v) in &proto.vertices {
             let vertex = Vertex {
-                guid: v.guid.clone(),
                 name: v.name.clone(),
                 attribute: v.attribute.clone(),
                 index: v.index,
+                ..Default::default()
             };
+            vertex.set_guid(v.guid.clone());
             graph.vertices.insert(name.clone(), vertex);
         }
 
         for e in &proto.edges {
             let edge = Edge {
-                guid: e.guid.clone(),
                 name: e.name.clone(),
                 v0: e.v0.clone(),
                 v1: e.v1.clone(),
                 attribute: e.attribute.clone(),
                 index: e.index,
+                ..Default::default()
             };
+            edge.set_guid(e.guid.clone());
             graph.edges.entry(e.v0.clone()).or_default().insert(e.v1.clone(), edge.clone());
             graph.edges.entry(e.v1.clone()).or_default().insert(e.v0.clone(), edge);
         }
@@ -567,6 +595,208 @@ impl Graph {
     pub fn pb_load(path: &str) -> Self {
         let data = std::fs::read(path).expect("Failed to read protobuf file");
         Self::pb_loads(&data).expect("Failed to parse protobuf")
+    }
+
+    ///////////////////////////////////////////////////////////////////////////////////////////
+    // Algorithms
+    ///////////////////////////////////////////////////////////////////////////////////////////
+
+    pub fn bfs(&self, start: &str) -> Vec<String> {
+        if !self.has_node(start) {
+            return Vec::new();
+        }
+        let mut visited = std::collections::HashSet::new();
+        let mut queue = std::collections::VecDeque::new();
+        queue.push_back(start.to_string());
+        visited.insert(start.to_string());
+        let mut result = Vec::new();
+        while let Some(node) = queue.pop_front() {
+            result.push(node.clone());
+            let mut nbrs = self.neighbors(&node);
+            nbrs.sort();
+            for neighbor in nbrs {
+                if !visited.contains(&neighbor) {
+                    visited.insert(neighbor.clone());
+                    queue.push_back(neighbor);
+                }
+            }
+        }
+        result
+    }
+
+    pub fn dfs(&self, start: &str) -> Vec<String> {
+        if !self.has_node(start) {
+            return Vec::new();
+        }
+        let mut visited = std::collections::HashSet::new();
+        let mut result = Vec::new();
+        let mut stack = vec![start.to_string()];
+        while let Some(node) = stack.pop() {
+            if visited.contains(&node) {
+                continue;
+            }
+            visited.insert(node.clone());
+            result.push(node.clone());
+            let mut nbrs = self.neighbors(&node);
+            nbrs.sort();
+            nbrs.reverse();
+            for neighbor in nbrs {
+                if !visited.contains(&neighbor) {
+                    stack.push(neighbor);
+                }
+            }
+        }
+        result
+    }
+
+    pub fn connected_components(&self) -> Vec<Vec<String>> {
+        let mut visited = std::collections::HashSet::new();
+        let mut comps = Vec::new();
+        let mut keys: Vec<String> = self.vertices.keys().cloned().collect();
+        keys.sort();
+        for start in keys {
+            if visited.contains(&start) {
+                continue;
+            }
+            let comp = self.bfs(&start);
+            for n in &comp {
+                visited.insert(n.clone());
+            }
+            let mut sorted_comp = comp;
+            sorted_comp.sort();
+            comps.push(sorted_comp);
+        }
+        comps
+    }
+
+    pub fn is_connected(&self) -> bool {
+        self.connected_components().len() <= 1
+    }
+
+    pub fn number_connected_components(&self) -> usize {
+        self.connected_components().len()
+    }
+
+    pub fn shortest_path(&self, u: &str, v: &str) -> Vec<String> {
+        if !self.has_node(u) || !self.has_node(v) {
+            return Vec::new();
+        }
+        if u == v {
+            return vec![u.to_string()];
+        }
+        let mut parent: std::collections::HashMap<String, Option<String>> = std::collections::HashMap::new();
+        parent.insert(u.to_string(), None);
+        let mut queue = std::collections::VecDeque::new();
+        queue.push_back(u.to_string());
+        while let Some(node) = queue.pop_front() {
+            let mut nbrs = self.neighbors(&node);
+            nbrs.sort();
+            for neighbor in nbrs {
+                if !parent.contains_key(&neighbor) {
+                    parent.insert(neighbor.clone(), Some(node.clone()));
+                    if neighbor == v {
+                        let mut path = Vec::new();
+                        let mut cur = v.to_string();
+                        loop {
+                            path.push(cur.clone());
+                            match parent.get(&cur).unwrap() {
+                                Some(p) => cur = p.clone(),
+                                None => break,
+                            }
+                        }
+                        path.reverse();
+                        return path;
+                    }
+                    queue.push_back(neighbor);
+                }
+            }
+        }
+        Vec::new()
+    }
+
+    pub fn shortest_path_length(&self, u: &str, v: &str) -> i32 {
+        let path = self.shortest_path(u, v);
+        if path.is_empty() {
+            return -1;
+        }
+        (path.len() as i32) - 1
+    }
+
+    pub fn has_cycle(&self) -> bool {
+        let mut visited = std::collections::HashSet::new();
+        let mut keys: Vec<String> = self.vertices.keys().cloned().collect();
+        keys.sort();
+        for start in keys {
+            if visited.contains(&start) {
+                continue;
+            }
+            let mut parent: std::collections::HashMap<String, String> = std::collections::HashMap::new();
+            parent.insert(start.clone(), String::new());
+            let mut queue = std::collections::VecDeque::new();
+            queue.push_back(start.clone());
+            visited.insert(start.clone());
+            while let Some(node) = queue.pop_front() {
+                let nbrs = self.neighbors(&node);
+                for neighbor in nbrs {
+                    if !visited.contains(&neighbor) {
+                        visited.insert(neighbor.clone());
+                        parent.insert(neighbor.clone(), node.clone());
+                        queue.push_back(neighbor);
+                    } else if parent.get(&node).map_or(true, |p| p != &neighbor) {
+                        return true;
+                    }
+                }
+            }
+        }
+        false
+    }
+
+    pub fn cycle_basis(&self) -> Vec<Vec<String>> {
+        let mut result = Vec::new();
+        let mut disc: std::collections::HashMap<String, i32> = std::collections::HashMap::new();
+        let mut par: std::collections::HashMap<String, String> = std::collections::HashMap::new();
+        let mut timer = 0i32;
+        let mut keys: Vec<String> = self.vertices.keys().cloned().collect();
+        keys.sort();
+        for start in keys {
+            if disc.contains_key(&start) {
+                continue;
+            }
+            par.insert(start.clone(), String::new());
+            disc.insert(start.clone(), timer);
+            timer += 1;
+            let mut nbrs = self.neighbors(&start);
+            nbrs.sort();
+            let mut stk: Vec<(String, String, Vec<String>, usize)> = Vec::new();
+            stk.push((start.clone(), String::new(), nbrs, 0));
+            while !stk.is_empty() {
+                let (u, p, nbrs_u, idx) = stk.last().unwrap().clone();
+                if idx < nbrs_u.len() {
+                    let v = nbrs_u[idx].clone();
+                    stk.last_mut().unwrap().3 += 1;
+                    if !disc.contains_key(&v) {
+                        par.insert(v.clone(), u.clone());
+                        disc.insert(v.clone(), timer);
+                        timer += 1;
+                        let mut v_nbrs = self.neighbors(&v);
+                        v_nbrs.sort();
+                        stk.push((v, u.clone(), v_nbrs, 0));
+                    } else if v != p && disc[&v] < disc[&u] {
+                        let mut cycle = Vec::new();
+                        let mut node = u.clone();
+                        while node != v {
+                            cycle.push(node.clone());
+                            node = par[&node].clone();
+                        }
+                        cycle.push(v);
+                        result.push(cycle);
+                    }
+                } else {
+                    stk.pop();
+                }
+            }
+        }
+        result
     }
 
     /// Get or set edge attribute.

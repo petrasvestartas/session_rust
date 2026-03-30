@@ -15,10 +15,10 @@ pub fn run_brep_constructor() -> TestResult {
         MINI_CHECK!(!b.is_valid());
         MINI_CHECK!(b.face_count() == 0);
         MINI_CHECK!(b.name == "my_brep");
-        MINI_CHECK!(!b.guid.is_empty());
+        MINI_CHECK!(!b.guid().is_empty());
         MINI_CHECK!(sstr.contains("BRep"));
         MINI_CHECK!(srepr.contains("name=my_brep"));
-        MINI_CHECK!(bcopy.guid != b.guid);
+        MINI_CHECK!(bcopy.guid() != b.guid());
         MINI_CHECK!(bcopy == b);
         MINI_CHECK!(!(bcopy != b));
     })
@@ -74,7 +74,10 @@ pub fn run_brep_add_face() -> TestResult {
         let fi = b.add_face(si as i32, false);
         let li = b.add_loop(fi as i32, BRepLoopType::Outer);
 
-        let trim = NurbsCurve::create(false, 1, &[Point::new(0.0, 0.0, 0.0), Point::new(1.0, 0.0, 0.0)]);
+        let trim = NurbsCurve::create(false, 1, &[
+            Point::new(0.0, 0.0, 0.0),
+            Point::new(1.0, 0.0, 0.0),
+        ]);
         let ci = b.add_curve_2d(&trim);
         b.add_trim(ci as i32, -1, li as i32, false, BRepTrimType::Boundary);
 
@@ -258,18 +261,34 @@ pub fn run_brep_from_polylines() -> TestResult {
 
         let hx = 1.0_f64; let hy = 1.5_f64; let hz = 2.0_f64;
         let c = [
-            Point::new(-hx, -hy, -hz), Point::new( hx, -hy, -hz),
-            Point::new( hx, hy, -hz), Point::new(-hx, hy, -hz),
-            Point::new(-hx, -hy, hz), Point::new( hx, -hy, hz),
-            Point::new( hx, hy, hz), Point::new(-hx, hy, hz),
+            Point::new(-hx, -hy, -hz),
+            Point::new( hx, -hy, -hz),
+            Point::new( hx,  hy, -hz),
+            Point::new(-hx,  hy, -hz),
+            Point::new(-hx, -hy,  hz),
+            Point::new( hx, -hy,  hz),
+            Point::new( hx,  hy,  hz),
+            Point::new(-hx,  hy,  hz),
         ];
 
-        let bottom = Polyline::new(vec![c[0].clone(), c[3].clone(), c[2].clone(), c[1].clone(), c[0].clone()]);
-        let top = Polyline::new(vec![c[4].clone(), c[5].clone(), c[6].clone(), c[7].clone(), c[4].clone()]);
-        let front = Polyline::new(vec![c[0].clone(), c[1].clone(), c[5].clone(), c[4].clone(), c[0].clone()]);
-        let right = Polyline::new(vec![c[1].clone(), c[2].clone(), c[6].clone(), c[5].clone(), c[1].clone()]);
-        let back = Polyline::new(vec![c[2].clone(), c[3].clone(), c[7].clone(), c[6].clone(), c[2].clone()]);
-        let left = Polyline::new(vec![c[3].clone(), c[0].clone(), c[4].clone(), c[7].clone(), c[3].clone()]);
+        let bottom = Polyline::new(vec![
+            c[0].clone(), c[3].clone(), c[2].clone(), c[1].clone(), c[0].clone(),
+        ]);
+        let top = Polyline::new(vec![
+            c[4].clone(), c[5].clone(), c[6].clone(), c[7].clone(), c[4].clone(),
+        ]);
+        let front = Polyline::new(vec![
+            c[0].clone(), c[1].clone(), c[5].clone(), c[4].clone(), c[0].clone(),
+        ]);
+        let right = Polyline::new(vec![
+            c[1].clone(), c[2].clone(), c[6].clone(), c[5].clone(), c[1].clone(),
+        ]);
+        let back = Polyline::new(vec![
+            c[2].clone(), c[3].clone(), c[7].clone(), c[6].clone(), c[2].clone(),
+        ]);
+        let left = Polyline::new(vec![
+            c[3].clone(), c[0].clone(), c[4].clone(), c[7].clone(), c[3].clone(),
+        ]);
 
         let b = BRep::from_polylines(&[bottom, top, front, right, back, left]);
         let m = b.mesh();
@@ -292,18 +311,34 @@ pub fn run_brep_from_nurbscurves() -> TestResult {
 
         let hx = 1.0_f64; let hy = 1.5_f64; let hz = 2.0_f64;
         let c = [
-            Point::new(-hx, -hy, -hz), Point::new( hx, -hy, -hz),
-            Point::new( hx, hy, -hz), Point::new(-hx, hy, -hz),
-            Point::new(-hx, -hy, hz), Point::new( hx, -hy, hz),
-            Point::new( hx, hy, hz), Point::new(-hx, hy, hz),
+            Point::new(-hx, -hy, -hz),
+            Point::new( hx, -hy, -hz),
+            Point::new( hx,  hy, -hz),
+            Point::new(-hx,  hy, -hz),
+            Point::new(-hx, -hy,  hz),
+            Point::new( hx, -hy,  hz),
+            Point::new( hx,  hy,  hz),
+            Point::new(-hx,  hy,  hz),
         ];
 
-        let bottom = NurbsCurve::create(false, 1, &[c[0].clone(), c[3].clone(), c[2].clone(), c[1].clone(), c[0].clone()]);
-        let top = NurbsCurve::create(false, 1, &[c[4].clone(), c[5].clone(), c[6].clone(), c[7].clone(), c[4].clone()]);
-        let front = NurbsCurve::create(false, 1, &[c[0].clone(), c[1].clone(), c[5].clone(), c[4].clone(), c[0].clone()]);
-        let right = NurbsCurve::create(false, 1, &[c[1].clone(), c[2].clone(), c[6].clone(), c[5].clone(), c[1].clone()]);
-        let back = NurbsCurve::create(false, 1, &[c[2].clone(), c[3].clone(), c[7].clone(), c[6].clone(), c[2].clone()]);
-        let left = NurbsCurve::create(false, 1, &[c[3].clone(), c[0].clone(), c[4].clone(), c[7].clone(), c[3].clone()]);
+        let bottom = NurbsCurve::create(false, 1, &[
+            c[0].clone(), c[3].clone(), c[2].clone(), c[1].clone(), c[0].clone(),
+        ]);
+        let top = NurbsCurve::create(false, 1, &[
+            c[4].clone(), c[5].clone(), c[6].clone(), c[7].clone(), c[4].clone(),
+        ]);
+        let front = NurbsCurve::create(false, 1, &[
+            c[0].clone(), c[1].clone(), c[5].clone(), c[4].clone(), c[0].clone(),
+        ]);
+        let right = NurbsCurve::create(false, 1, &[
+            c[1].clone(), c[2].clone(), c[6].clone(), c[5].clone(), c[1].clone(),
+        ]);
+        let back = NurbsCurve::create(false, 1, &[
+            c[2].clone(), c[3].clone(), c[7].clone(), c[6].clone(), c[2].clone(),
+        ]);
+        let left = NurbsCurve::create(false, 1, &[
+            c[3].clone(), c[0].clone(), c[4].clone(), c[7].clone(), c[3].clone(),
+        ]);
 
         let b = BRep::from_nurbscurves(&[bottom, top, front, right, back, left], &[]);
         let m = b.mesh();

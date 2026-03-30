@@ -2,12 +2,12 @@ use crate::{Color, Point, Vector, Xform};
 use serde::{Deserialize, Serialize};
 use std::fmt;
 use std::ops::{Add, AddAssign, Div, DivAssign, Index, IndexMut, Mul, MulAssign, Neg, Sub, SubAssign};
-use uuid::Uuid;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(tag = "type", rename = "Line")]
 pub struct Line {
-    pub guid: String,
+    #[serde(serialize_with = "crate::guid_serde::serialize", deserialize_with = "crate::guid_serde::deserialize")]
+    guid: std::sync::OnceLock<String>,
     pub name: String,
     #[serde(rename = "x0")]
     _x0: f64,
@@ -36,7 +36,7 @@ impl Default for Line {
             _x1: 0.0,
             _y1: 0.0,
             _z1: 1.0,
-            guid: Uuid::new_v4().to_string(),
+            guid: std::sync::OnceLock::new(),
             name: "my_line".to_string(),
             linecolor: Color::black(),
             width: 1.0,
@@ -174,10 +174,18 @@ impl Line {
         )
     }
 
+    pub fn guid(&self) -> &str {
+        self.guid.get_or_init(|| uuid::Uuid::new_v4().to_string())
+    }
+
+    pub fn set_guid(&self, g: String) {
+        let _ = self.guid.set(g);
+    }
+
     /// Create a duplicate with a new GUID.
     pub fn duplicate(&self) -> Self {
         let mut copy = self.clone();
-        copy.guid = Uuid::new_v4().to_string();
+        copy.guid = std::sync::OnceLock::new();
         copy
     }
 
@@ -371,7 +379,7 @@ impl Line {
                 pointcolor: None,
                 xform: None,
             }),
-            guid: self.guid.clone(),
+            guid: self.guid().to_string(),
             name: self.name.clone(),
             xform: None,
         };
@@ -385,7 +393,7 @@ impl Line {
         let start = proto.start.unwrap_or_default();
         let end = proto.end.unwrap_or_default();
         let mut line = Self::new(start.x, start.y, start.z, end.x, end.y, end.z);
-        line.guid = proto.guid;
+        line.set_guid(proto.guid);
         line.name = proto.name;
         Ok(line)
     }

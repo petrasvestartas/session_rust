@@ -58,12 +58,12 @@ pub fn run_point_constructor() -> TestResult {
             p[2] == 30.0 &&
             p.width == 1.0 &&
             p.pointcolor == Color::blue() &&
-            !p.guid.is_empty()
+            !p.guid().is_empty()
         );
         MINI_CHECK!(x == 10.0 && y == 20.0 && z == 30.0);
         MINI_CHECK!(pstr == "10.000000, 20.000000, 30.000000");
         MINI_CHECK!(prepr == "Point(my_point, 10.000000, 20.000000, 30.000000, Color(0, 0, 255, 255), 1.000000)");
-        MINI_CHECK!(pcopy == p && pcopy.guid != p.guid);
+        MINI_CHECK!(pcopy == p && pcopy.guid() != p.guid());
         MINI_CHECK!(pother != p);
         MINI_CHECK!(pmult[0] == 20.0 && pmult[1] == 40.0 && pmult[2] == 60.0);
         MINI_CHECK!(pdiv[0] == 5.0 && pdiv[1] == 10.0 && pdiv[2] == 15.0);

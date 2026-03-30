@@ -37,11 +37,11 @@ pub fn run_nurbscurve_constructor() -> TestResult {
         MINI_CHECK!(curve.degree() == 2);
         MINI_CHECK!(curve.order() == 3);
         MINI_CHECK!(curve.name == "my_nurbscurve");
-        MINI_CHECK!(!curve.guid.is_empty());
+        MINI_CHECK!(!curve.guid().is_empty());
         MINI_CHECK!(cstr == "NurbsCurve(name=my_nurbscurve, degree=2, cvs=4)");
         MINI_CHECK!(crepr.contains("name=my_nurbscurve"));
         MINI_CHECK!(ccopy.cv_count() == curve.cv_count());
-        MINI_CHECK!(ccopy.guid != curve.guid);
+        MINI_CHECK!(ccopy.guid() != curve.guid());
     })
 }
 
@@ -52,8 +52,11 @@ pub fn run_nurbscurve_create_interpolated() -> TestResult {
         use crate::knot::CurveKnotStyle;
 
         let points = vec![
-            Point::new(14.0, 9.0, 0.0), Point::new(21.0, 22.0, 0.0), Point::new(26.0, 10.0, 0.0),
-            Point::new(35.0, 19.0, 0.0), Point::new(41.0, 13.0, 0.0),
+            Point::new(14.0, 9.0, 0.0),
+            Point::new(21.0, 22.0, 0.0),
+            Point::new(26.0, 10.0, 0.0),
+            Point::new(35.0, 19.0, 0.0),
+            Point::new(41.0, 13.0, 0.0),
         ];
 
         let c = NurbsCurve::create_interpolated(&points, CurveKnotStyle::Chord);
@@ -148,20 +151,21 @@ pub fn run_nurbscurve_attributes() -> TestResult {
 
         // Whole curve
         let is_valid = curve.is_valid();
-        MINI_CHECK!(is_valid == true);
+
+        MINI_CHECK!(is_valid);
 
         // Check whole knot vector for
         // For correct size: order + cv_count - 2
         // Non-decreasing (can repeat, can't go down)
         // Valid domain exists
         let is_valid_knot_vector = curve.is_valid_knot_vector();
-        MINI_CHECK!(is_valid_knot_vector == true);
+        MINI_CHECK!(is_valid_knot_vector);
 
         // Check if the curve is clamped at start, end, or both
         let is_clamped_start = curve.is_clamped(0);
         let is_clamped_end = curve.is_clamped(1);
         let is_clamped_both = curve.is_clamped(2);
-        MINI_CHECK!(is_clamped_start == true && is_clamped_end == true && is_clamped_both == true);
+        MINI_CHECK!(is_clamped_start && is_clamped_end && is_clamped_both);
 
         // Is rational is related to control points having weights
         // is_rational = false means control points [x, y, z]
@@ -182,18 +186,18 @@ pub fn run_nurbscurve_attributes() -> TestResult {
         let is_duplicate = curve.is_duplicate(&curve, false);
         let is_continuous = curve.is_continuous(1, curve.domain_middle());
 
-        MINI_CHECK!(is_rational == false);
-        MINI_CHECK!(closed == false);
-        MINI_CHECK!(periodic == false);
-        MINI_CHECK!(linear == false);
-        MINI_CHECK!(planar == true);
-        MINI_CHECK!(arc == false);
-        MINI_CHECK!(on_plane == true);
-        MINI_CHECK!(is_open == false);
-        MINI_CHECK!(is_polyline == false);
-        MINI_CHECK!(is_singular == false);
-        MINI_CHECK!(is_duplicate == true);
-        MINI_CHECK!(is_continuous == true);
+        MINI_CHECK!(!is_rational);
+        MINI_CHECK!(!closed);
+        MINI_CHECK!(!periodic);
+        MINI_CHECK!(!linear);
+        MINI_CHECK!(planar);
+        MINI_CHECK!(!arc);
+        MINI_CHECK!(on_plane);
+        MINI_CHECK!(!is_open);
+        MINI_CHECK!(!is_polyline);
+        MINI_CHECK!(!is_singular);
+        MINI_CHECK!(is_duplicate);
+        MINI_CHECK!(is_continuous);
 
         /////////////////////////////////////////////
         // Knot Operations
@@ -365,7 +369,7 @@ pub fn run_nurbscurve_attributes() -> TestResult {
         /////////////////////////////////////////////////////
 
         let (found, t_out) = curve.get_next_discontinuity(2, curve.domain_start(), curve.domain_end());
-        MINI_CHECK!(found == true && t_out == 0.5);
+        MINI_CHECK!(found && t_out == 0.5);
     })
 }
 

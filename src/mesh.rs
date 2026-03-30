@@ -1,4 +1,4 @@
-﻿use crate::{Obb, Color, Line, Point, Tolerance, Vector, Xform, BVH};
+﻿use crate::{OBB, Color, Line, Point, Tolerance, Vector, Xform, BVH};
 use crate::polyline::Polyline;
 use crate::remesh_cdt;
 use serde::{Deserialize, Serialize};
@@ -55,7 +55,8 @@ pub struct Mesh {
     pub face_holes: HashMap<usize, Vec<Vec<usize>>>,    // Face hole rings
     max_vertex: usize,                                           // Next vertex key
     max_face: usize,                                             // Next face key
-    pub guid: String,                                            // Unique identifier
+    #[serde(serialize_with = "crate::guid_serde::serialize", deserialize_with = "crate::guid_serde::deserialize")]
+    guid: std::sync::OnceLock<String>,                          // Unique identifier
     pub name: String,                                            // Mesh name
     #[serde(skip)]
     pointcolors: Vec<Color>,                   // Vertex colors
@@ -246,7 +247,7 @@ impl Mesh {
             face_holes: HashMap::new(),
             max_vertex: 0,
             max_face: 0,
-            guid: uuid::Uuid::new_v4().to_string(),
+            guid: std::sync::OnceLock::new(),
             name: "my_mesh".to_string(),
             pointcolors: Vec::new(),
             facecolors: Vec::new(),
@@ -345,10 +346,9 @@ impl Mesh {
                     ux /= um; uy /= um; uz /= um;
                     let (vx, vy, vz) = (ny*uz - nz*uy, nz*ux - nx*uz, nx*uy - ny*ux);
                     let nk = vkeys.len();
-                    let bpts: Vec<(f64, f64)> = poly[..nk].iter().map(|p| {
-                        (p[0]*ux + p[1]*uy + p[2]*uz,
-                         p[0]*vx + p[1]*vy + p[2]*vz)
-                    }).collect();
+                    let bpts: Vec<Point> = poly[..nk].iter().map(|p| Point::new(
+                        p[0]*ux + p[1]*uy + p[2]*uz,
+                        p[0]*vx + p[1]*vy + p[2]*vz, 0.0)).collect();
                     let tris = remesh_cdt::cdt_triangulate(&bpts, &[]);
                     let tri_list: Vec<[usize; 3]> = tris.iter().map(|&(a, b, c)| {
                         [vkeys[a], vkeys[b], vkeys[c]]
@@ -494,10 +494,10 @@ impl Mesh {
             let fvkeys: Vec<usize> = cycle.iter().map(|&i| vkeys[i]).collect();
             if let Some(fkey) = mesh.add_face(fvkeys, None) {
                 let mut ordered: Vec<usize> = cycle.clone();
-                let mut bpts: Vec<(f64, f64)> = ordered.iter().map(|&i| (verts[i][0], verts[i][1])).collect();
+                let mut bpts: Vec<Point> = ordered.iter().map(|&i| Point::new(verts[i][0], verts[i][1], 0.0)).collect();
                 let area: f64 = (0..bpts.len()).map(|j| {
                     let k = (j + 1) % bpts.len();
-                    bpts[j].0 * bpts[k].1 - bpts[k].0 * bpts[j].1
+                    bpts[j][0] * bpts[k][1] - bpts[k][0] * bpts[j][1]
                 }).sum::<f64>() * 0.5;
                 if area < 0.0 { bpts.reverse(); ordered.reverse(); }
                 let tris = remesh_cdt::cdt_triangulate(&bpts, &[]);
@@ -510,115 +510,13 @@ impl Mesh {
         mesh
     }
 
-    pub fn from_polygon_with_holes(polylines: &[Vec<Point>], sort_by_bbox: bool) -> Self {
-        if polylines.is_empty() { return Mesh::new(); }
-        let mut border_idx = 0usize;
-        if sort_by_bbox && polylines.len() > 1 {
-            let mut max_diag = 0.0_f64;
-            for (i, poly) in polylines.iter().enumerate() {
-                if poly.len() < 3 { continue; }
-                let (mut minx, mut miny, mut minz) = (poly[0][0], poly[0][1], poly[0][2]);
-                let (mut maxx, mut maxy, mut maxz) = (minx, miny, minz);
-                for p in poly {
-                    if p[0] < minx { minx = p[0]; } if p[0] > maxx { maxx = p[0]; }
-                    if p[1] < miny { miny = p[1]; } if p[1] > maxy { maxy = p[1]; }
-                    if p[2] < minz { minz = p[2]; } if p[2] > maxz { maxz = p[2]; }
-                }
-                let (dx, dy, dz) = (maxx - minx, maxy - miny, maxz - minz);
-                let diag = (dx*dx + dy*dy + dz*dz).sqrt();
-                if diag > max_diag { max_diag = diag; border_idx = i; }
-            }
-        }
-        let strip_close = |pts: &[Point]| -> Vec<Point> {
-            if pts.len() > 1 {
-                let f = &pts[0]; let b = &pts[pts.len()-1];
-                if (f[0]-b[0]).abs() < 1e-12 && (f[1]-b[1]).abs() < 1e-12 && (f[2]-b[2]).abs() < 1e-12 {
-                    return pts[..pts.len()-1].to_vec();
-                }
-            }
-            pts.to_vec()
-        };
-        let mut border = strip_close(&polylines[border_idx]);
-        if border.len() < 3 { return Mesh::new(); }
-        let border_pl = Polyline::new(border.clone());
-        let (origin, xaxis, yaxis, _zaxis) = border_pl.get_average_plane();
-        let project_2d = |p: &Point| -> Point {
-            let dx = p[0] - origin[0]; let dy = p[1] - origin[1]; let dz = p[2] - origin[2];
-            let u = dx * xaxis[0] + dy * xaxis[1] + dz * xaxis[2];
-            let v = dx * yaxis[0] + dy * yaxis[1] + dz * yaxis[2];
-            Point::new(u, v, 0.0)
-        };
-        let mut boundary_2d: Vec<Point> = border.iter().map(|p| project_2d(p)).collect();
-        let signed_area = |pts: &[Point]| -> f64 {
-            let n = pts.len();
-            let mut area = 0.0;
-            for i in 0..n {
-                let j = (i + 1) % n;
-                area += pts[i][0] * pts[j][1] - pts[j][0] * pts[i][1];
-            }
-            area * 0.5
-        };
-        if signed_area(&boundary_2d) < 0.0 {
-            border.reverse();
-            boundary_2d.reverse();
-        }
-        let mut holes_2d: Vec<Vec<Point>> = Vec::new();
-        let mut hole_pts_3d: Vec<Vec<Point>> = Vec::new();
-        for (i, poly) in polylines.iter().enumerate() {
-            if i == border_idx { continue; }
-            let mut hole = strip_close(poly);
-            if hole.len() < 3 { continue; }
-            let mut hole_2d: Vec<Point> = hole.iter().map(|p| project_2d(p)).collect();
-            if signed_area(&hole_2d) > 0.0 {
-                hole.reverse();
-                hole_2d.reverse();
-            }
-            holes_2d.push(hole_2d);
-            hole_pts_3d.push(hole);
-        }
-        let b2d: Vec<(f64,f64)> = boundary_2d.iter().map(|p| (p[0], p[1])).collect();
-        let h2d: Vec<Vec<(f64,f64)>> = holes_2d.iter().map(|h| h.iter().map(|p| (p[0], p[1])).collect()).collect();
-        let tris = remesh_cdt::cdt_triangulate(&b2d, &h2d);
-        let mut all_pts = border.clone();
-        for h in &hole_pts_3d { all_pts.extend(h.iter().cloned()); }
-        let mut mesh = Mesh::new();
-        let mut vkeys: Vec<usize> = Vec::with_capacity(all_pts.len());
-        for p in &all_pts { vkeys.push(mesh.add_vertex(p.clone(), None)); }
-        if hole_pts_3d.is_empty() {
-            let fvkeys: Vec<usize> = (0..border.len()).map(|i| vkeys[i]).collect();
-            if let Some(fkey) = mesh.add_face(fvkeys, None) {
-                let mut tri_list: Vec<[usize; 3]> = Vec::new();
-                for &(a, b, c) in &tris {
-                    if vkeys[a] == vkeys[b] || vkeys[b] == vkeys[c] || vkeys[c] == vkeys[a] { continue; }
-                    tri_list.push([vkeys[a], vkeys[b], vkeys[c]]);
-                }
-                let n_vk = border.len();
-                let covered: std::collections::HashSet<usize> = tri_list.iter().flat_map(|t| t.iter().copied()).collect();
-                for m in 0..n_vk {
-                    if !covered.contains(&vkeys[m]) {
-                        tri_list.push([vkeys[(m + n_vk - 1) % n_vk], vkeys[m], vkeys[(m + 1) % n_vk]]);
-                    }
-                }
-                mesh.triangulation.insert(fkey, tri_list);
-            }
-        } else {
-            let fvkeys: Vec<usize> = (0..border.len()).map(|i| vkeys[i]).collect();
-            if let Some(fkey) = mesh.add_face(fvkeys, None) {
-                let mut hole_rings: Vec<Vec<usize>> = Vec::new();
-                let mut off = border.len();
-                for h in &hole_pts_3d {
-                    let ring: Vec<usize> = (off..off+h.len()).map(|i| vkeys[i]).collect();
-                    hole_rings.push(ring); off += h.len();
-                }
-                mesh.face_holes.insert(fkey, hole_rings);
-                let tri_list: Vec<[usize; 3]> = tris.iter()
-                    .filter(|&&(a, b, c)| vkeys[a] != vkeys[b] && vkeys[b] != vkeys[c] && vkeys[c] != vkeys[a])
-                    .map(|&(a, b, c)| [vkeys[a], vkeys[b], vkeys[c]])
-                    .collect();
-                mesh.triangulation.insert(fkey, tri_list);
-            }
-        }
-        mesh
+    pub fn from_polygon_with_holes(raw: &[Vec<Point>], sort_by_bbox: bool) -> Self {
+        let polylines: Vec<Polyline> = raw.iter().map(|v| Polyline::new(v.clone())).collect();
+        Mesh::_from_polygon_with_holes_pl(&polylines, sort_by_bbox)
+    }
+
+    fn _from_polygon_with_holes_pl(polylines: &[Polyline], sort_by_bbox: bool) -> Self {
+        crate::remesh_cdt::RemeshCDT::from_polylines(polylines, false, !sort_by_bbox)
     }
 
     pub fn loft(polylines0: &[Polyline], polylines1: &[Polyline], cap: bool) -> Self {
@@ -660,17 +558,17 @@ impl Mesh {
                 yaxis = Vector::new(-yaxis[0], -yaxis[1], -yaxis[2]);
             }
         }
-        let proj = |p: &Point| -> (f64, f64) {
+        let proj = |p: &Point| -> Point {
             let dx = p[0]-origin[0]; let dy = p[1]-origin[1]; let dz = p[2]-origin[2];
-            (dx*xaxis[0]+dy*xaxis[1]+dz*xaxis[2], dx*yaxis[0]+dy*yaxis[1]+dz*yaxis[2])
+            Point::new(dx*xaxis[0]+dy*xaxis[1]+dz*xaxis[2], dx*yaxis[0]+dy*yaxis[1]+dz*yaxis[2], 0.0)
         };
         let sarea = |pts: &[Point]| -> f64 {
             let n = pts.len();
             let mut a = 0.0;
             for i in 0..n {
                 let j = (i+1) % n;
-                let (xi, yi) = proj(&pts[i]); let (xj, yj) = proj(&pts[j]);
-                a += xi*yj - xj*yi;
+                let pi = proj(&pts[i]); let pj = proj(&pts[j]);
+                a += pi[0]*pj[1] - pj[0]*pi[1];
             }
             a * 0.5
         };
@@ -696,8 +594,8 @@ impl Mesh {
         if cap {
             let (_, bot_n0, _, top_n0) = poly_infos[0];
             // Bottom cap CDT
-            let b2d: Vec<(f64,f64)> = (0..bot_n0).map(|i| proj(&all_bot[i])).collect();
-            let bh2d: Vec<Vec<(f64,f64)>> = poly_infos[1..].iter().map(|&(off,cnt,_,_)| {
+            let b2d: Vec<Point> = (0..bot_n0).map(|i| proj(&all_bot[i])).collect();
+            let bh2d: Vec<Vec<Point>> = poly_infos[1..].iter().map(|&(off,cnt,_,_)| {
                 (off..off+cnt).map(|i| proj(&all_bot[i])).collect()
             }).collect();
             let b_tris = remesh_cdt::cdt_triangulate(&b2d, &bh2d);
@@ -713,8 +611,8 @@ impl Mesh {
                 mesh.triangulation.insert(fk_bot, tri_list);
             }
             // Top cap CDT
-            let t2d: Vec<(f64,f64)> = (0..top_n0).map(|i| proj(&all_top[i])).collect();
-            let th2d: Vec<Vec<(f64,f64)>> = poly_infos[1..].iter().map(|&(_,_,off,cnt)| {
+            let t2d: Vec<Point> = (0..top_n0).map(|i| proj(&all_top[i])).collect();
+            let th2d: Vec<Vec<Point>> = poly_infos[1..].iter().map(|&(_,_,off,cnt)| {
                 (off..off+cnt).map(|i| proj(&all_top[i])).collect()
             }).collect();
             let t_tris = remesh_cdt::cdt_triangulate(&t2d, &th2d);
@@ -907,7 +805,7 @@ impl Mesh {
                             ux -= dot*nx; uy -= dot*ny; uz -= dot*nz;
                             let um = (ux*ux+uy*uy+uz*uz).sqrt(); ux /= um; uy /= um; uz /= um;
                             let (vx, vy, vz) = (ny*uz-nz*uy, nz*ux-nx*uz, nx*uy-ny*ux);
-                            let bpts: Vec<(f64,f64)> = top_pts.iter().map(|p| (p[0]*ux+p[1]*uy+p[2]*uz, p[0]*vx+p[1]*vy+p[2]*vz)).collect();
+                            let bpts: Vec<Point> = top_pts.iter().map(|p| Point::new(p[0]*ux+p[1]*uy+p[2]*uz, p[0]*vx+p[1]*vy+p[2]*vz, 0.0)).collect();
                             let tris = remesh_cdt::cdt_triangulate(&bpts, &[]);
                             if !tris.is_empty() {
                                 let tri_list: Vec<[usize;3]> = tris.iter().map(|&(a,b,c)| [top_cap[a], top_cap[b], top_cap[c]]).collect();
@@ -1016,7 +914,7 @@ impl Mesh {
                             let bcum = (bcux*bcux+bcuy*bcuy+bcuz*bcuz).sqrt();
                             bcux /= bcum; bcuy /= bcum; bcuz /= bcum;
                             let (bcvx, bcvy, bcvz) = (bcny*bcuz-bcnz*bcuy, bcnz*bcux-bcnx*bcuz, bcnx*bcuy-bcny*bcux);
-                            let bpts2: Vec<(f64,f64)> = bot_pts.iter().map(|p| (p[0]*bcux+p[1]*bcuy+p[2]*bcuz, p[0]*bcvx+p[1]*bcvy+p[2]*bcvz)).collect();
+                            let bpts2: Vec<Point> = bot_pts.iter().map(|p| Point::new(p[0]*bcux+p[1]*bcuy+p[2]*bcuz, p[0]*bcvx+p[1]*bcvy+p[2]*bcvz, 0.0)).collect();
                             let btris = remesh_cdt::cdt_triangulate(&bpts2, &[]);
                             if !btris.is_empty() {
                                 let tri_list: Vec<[usize;3]> = btris.iter().map(|&(a,b,c)| [bot_cap[a], bot_cap[b], bot_cap[c]]).collect();
@@ -1511,7 +1409,7 @@ impl Mesh {
         }
 
         if tolerance > 0.0 {
-            let boxes: Vec<Obb> = positions.iter().map(|p| Obb::from_point(p.clone(), tolerance)).collect();
+            let boxes: Vec<OBB> = positions.iter().map(|p| OBB::from_point(p.clone(), tolerance)).collect();
             let ws = BVH::compute_world_size(&boxes);
             let bvh = BVH::from_boxes(&boxes, ws);
             let (pairs, _, _) = bvh.check_all_collisions(&boxes);
@@ -2228,8 +2126,16 @@ impl Mesh {
 
     pub fn clone_with_new_guid(&self) -> Self {
         let mut m = self.clone();
-        m.guid = uuid::Uuid::new_v4().to_string();
+        m.guid = std::sync::OnceLock::new();
         m
+    }
+
+    pub fn guid(&self) -> &str {
+        self.guid.get_or_init(|| uuid::Uuid::new_v4().to_string())
+    }
+
+    pub fn set_guid(&self, g: String) {
+        let _ = self.guid.set(g);
     }
 
     ///////////////////////////////////////////////////////////////////////////////////////////
@@ -2274,7 +2180,7 @@ impl Mesh {
 
         serde_json::json!({
             "type": "Mesh",
-            "guid": self.guid,
+            "guid": self.guid(),
             "name": self.name,
             "vertex": self.vertex,
             "face": self.face,
@@ -2302,7 +2208,7 @@ impl Mesh {
         let mut mesh = Mesh::new();
 
         if let Some(guid) = data.get("guid").and_then(|v| v.as_str()) {
-            mesh.guid = guid.to_string();
+            mesh.set_guid(guid.to_string());
         }
         if let Some(name) = data.get("name").and_then(|v| v.as_str()) {
             mesh.name = name.to_string();
@@ -2511,7 +2417,7 @@ impl Mesh {
 
         let pointcolors: Vec<crate::proto::Color> = self.pointcolors.iter().map(|c| {
             crate::proto::Color {
-                guid: c.guid.clone(),
+                guid: c.guid().to_string(),
                 name: c.name.clone(),
                 r: c.r as i32,
                 g: c.g as i32,
@@ -2522,7 +2428,7 @@ impl Mesh {
 
         let facecolors: Vec<crate::proto::Color> = self.facecolors.iter().map(|c| {
             crate::proto::Color {
-                guid: c.guid.clone(),
+                guid: c.guid().to_string(),
                 name: c.name.clone(),
                 r: c.r as i32,
                 g: c.g as i32,
@@ -2533,7 +2439,7 @@ impl Mesh {
 
         let linecolors: Vec<crate::proto::Color> = self.linecolors.iter().map(|c| {
             crate::proto::Color {
-                guid: c.guid.clone(),
+                guid: c.guid().to_string(),
                 name: c.name.clone(),
                 r: c.r as i32,
                 g: c.g as i32,
@@ -2554,7 +2460,7 @@ impl Mesh {
         }
 
         let proto = crate::proto::Mesh {
-            guid: self.guid.clone(),
+            guid: self.guid().to_string(),
             name: self.name.clone(),
             vertices,
             faces,
@@ -2568,7 +2474,7 @@ impl Mesh {
             linecolors,
             widths: self.widths.clone(),
             objectcolor: Some(crate::proto::Color {
-                guid: self.objectcolor.guid.clone(),
+                guid: self.objectcolor.guid().to_string(),
                 name: self.objectcolor.name.clone(),
                 r: self.objectcolor.r as i32,
                 g: self.objectcolor.g as i32,
@@ -2577,7 +2483,7 @@ impl Mesh {
             }),
             color_mode: self.color_mode.to_i32(),
             xform: Some(crate::proto::Xform {
-                guid: self.xform.guid.clone(),
+                guid: self.xform.guid().to_string(),
                 name: self.xform.name.clone(),
                 matrix: self.xform.m.to_vec(),
             }),
@@ -2591,7 +2497,7 @@ impl Mesh {
 
         let proto = crate::proto::Mesh::decode(data)?;
         let mut mesh = Self::new();
-        mesh.guid = proto.guid;
+        mesh.set_guid(proto.guid.clone());
         mesh.name = proto.name;
 
         for (vkey, vdata) in proto.vertices {
@@ -2653,21 +2559,21 @@ impl Mesh {
 
         mesh.pointcolors = proto.pointcolors.iter().map(|c| {
             let mut color = Color::new(c.r as u8, c.g as u8, c.b as u8, c.a as u8);
-            color.guid = c.guid.clone();
+            color.set_guid(c.guid.clone());
             color.name = c.name.clone();
             color
         }).collect();
 
         mesh.facecolors = proto.facecolors.iter().map(|c| {
             let mut color = Color::new(c.r as u8, c.g as u8, c.b as u8, c.a as u8);
-            color.guid = c.guid.clone();
+            color.set_guid(c.guid.clone());
             color.name = c.name.clone();
             color
         }).collect();
 
         mesh.linecolors = proto.linecolors.iter().map(|c| {
             let mut color = Color::new(c.r as u8, c.g as u8, c.b as u8, c.a as u8);
-            color.guid = c.guid.clone();
+            color.set_guid(c.guid.clone());
             color.name = c.name.clone();
             color
         }).collect();
@@ -2676,13 +2582,13 @@ impl Mesh {
 
         if let Some(oc) = proto.objectcolor {
             mesh.objectcolor = Color::new(oc.r as u8, oc.g as u8, oc.b as u8, oc.a as u8);
-            mesh.objectcolor.guid = oc.guid;
+            mesh.objectcolor.set_guid(oc.guid.clone());
             mesh.objectcolor.name = oc.name;
         }
         mesh.color_mode = ColorMode::from_i32(proto.color_mode);
 
         if let Some(xform) = proto.xform {
-            mesh.xform.guid = xform.guid;
+            mesh.xform.set_guid(xform.guid.clone());
             mesh.xform.name = xform.name;
             for (i, val) in xform.matrix.iter().enumerate() {
                 if i < 16 {
@@ -2738,7 +2644,7 @@ impl Mesh {
         let mut face_keys: Vec<usize> = self.face.keys().cloned().collect();
         face_keys.sort();
         let mut tris: Vec<[usize; 3]> = Vec::new();
-        let mut tri_boxes: Vec<Obb> = Vec::new();
+        let mut tri_boxes: Vec<OBB> = Vec::new();
 
         for (fi, face) in faces.iter().enumerate() {
             if face.len() < 3 {
@@ -2753,7 +2659,7 @@ impl Mesh {
                         let i2 = vkey_to_idx[&t[2]];
                         tris.push([i0, i1, i2]);
                         let pts = [vertices[i0].clone(), vertices[i1].clone(), vertices[i2].clone()];
-                        tri_boxes.push(Obb::from_points(&pts, 0.0));
+                        tri_boxes.push(OBB::from_points(&pts, 0.0));
                     }
                     continue;
                 }
@@ -2763,7 +2669,7 @@ impl Mesh {
                 let t = [v0, face[i], face[i + 1]];
                 tris.push(t);
                 let pts = [vertices[t[0]].clone(), vertices[t[1]].clone(), vertices[t[2]].clone()];
-                tri_boxes.push(Obb::from_points(&pts, 0.0));
+                tri_boxes.push(OBB::from_points(&pts, 0.0));
             }
         }
 
