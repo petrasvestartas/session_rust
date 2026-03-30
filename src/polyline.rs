@@ -3,7 +3,7 @@ use crate::{Color, Plane, Point, Tolerance, Vector, Xform};
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use serde_json::Value;
 use std::fmt;
-use std::ops::{Add, AddAssign, Div, DivAssign, Mul, MulAssign, Neg, Sub, SubAssign};
+use std::ops::{Add, AddAssign, Div, DivAssign, Index, IndexMut, Mul, MulAssign, Neg, Sub, SubAssign};
 
 /// A polyline defined by a collection of coordinates with an associated plane.
 ///
@@ -1506,6 +1506,28 @@ impl Neg for Polyline {
     /// Negate polyline (reverse point order).
     fn neg(self) -> Polyline {
         self.reversed()
+    }
+}
+
+impl Index<usize> for Polyline {
+    type Output = [f64];
+
+    fn index(&self, index: usize) -> &Self::Output {
+        if index >= self.point_count() {
+            panic!("Index out of range");
+        }
+        let idx = index * 3;
+        &self.coords[idx..idx + 3]
+    }
+}
+
+impl IndexMut<usize> for Polyline {
+    fn index_mut(&mut self, index: usize) -> &mut Self::Output {
+        if index >= self.point_count() {
+            panic!("Index out of range");
+        }
+        let idx = index * 3;
+        &mut self.coords[idx..idx + 3]
     }
 }
 
