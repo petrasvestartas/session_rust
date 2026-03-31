@@ -289,17 +289,19 @@ impl Line {
         )
     }
 
-    pub fn closest_point(&self, point: &Point) -> Point {
+    pub fn closest_point(&self, point: &Point, limited: bool) -> (f64, Point) {
         let dx = self._x1 - self._x0;
         let dy = self._y1 - self._y0;
         let dz = self._z1 - self._z0;
         let len_sq = dx * dx + dy * dy + dz * dz;
         if len_sq < 1e-20 {
-            return self.start();
+            return (0.0, self.start());
         }
-        let t = ((point[0] - self._x0) * dx + (point[1] - self._y0) * dy + (point[2] - self._z0) * dz) / len_sq;
-        let t = t.clamp(0.0, 1.0);
-        self.point_at(t)
+        let mut t = ((point[0] - self._x0) * dx + (point[1] - self._y0) * dy + (point[2] - self._z0) * dz) / len_sq;
+        if limited {
+            t = t.clamp(0.0, 1.0);
+        }
+        (t, self.point_at(t))
     }
 
     /// Calculate middle line between two line segments

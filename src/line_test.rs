@@ -262,13 +262,16 @@ pub fn run_line_closest_point() -> TestResult {
         let p1 = Point::new(5.0, 5.0, 0.0);
         let p2 = Point::new(-5.0, 0.0, 0.0);
         let p3 = Point::new(15.0, 0.0, 0.0);
-        let cp1 = l.closest_point(&p1);
-        let cp2 = l.closest_point(&p2);
-        let cp3 = l.closest_point(&p3);
+        let (t1, cp1) = l.closest_point(&p1, true);
+        let (t2, cp2) = l.closest_point(&p2, true);
+        let (t3, cp3) = l.closest_point(&p3, true);
 
         MINI_CHECK!(cp1[0] == 5.0 && cp1[1] == 0.0 && cp1[2] == 0.0);
         MINI_CHECK!(cp2[0] == 0.0 && cp2[1] == 0.0 && cp2[2] == 0.0);
         MINI_CHECK!(cp3[0] == 10.0 && cp3[1] == 0.0 && cp3[2] == 0.0);
+        MINI_CHECK!(TOLERANCE.is_close(t1, 0.5));
+        MINI_CHECK!(TOLERANCE.is_close(t2, 0.0));
+        MINI_CHECK!(TOLERANCE.is_close(t3, 1.0));
     })
 }
 
