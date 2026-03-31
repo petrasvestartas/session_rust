@@ -902,6 +902,25 @@ pub fn run_polyline_is_closed() -> TestResult {
     })
 }
 
+pub fn run_polyline_closed() -> TestResult {
+    MINI_TEST!("Closed", {
+        use crate::Polyline;
+        use crate::Point;
+
+        let open_pl = Polyline::new(vec![Point::new(0.0, 0.0, 0.0), Point::new(1.0, 0.0, 0.0), Point::new(1.0, 1.0, 0.0), Point::new(0.0, 1.0, 0.0)]);
+        let closed_from_open = open_pl.closed();
+
+        let closed_pl = Polyline::new(vec![Point::new(0.0, 0.0, 0.0), Point::new(1.0, 0.0, 0.0), Point::new(1.0, 1.0, 0.0), Point::new(0.0, 1.0, 0.0), Point::new(0.0, 0.0, 0.0)]);
+        let closed_from_closed = closed_pl.closed();
+
+        MINI_CHECK!(closed_from_open.point_count() == 5);
+        MINI_CHECK!(closed_from_open.is_closed() == true);
+        MINI_CHECK!(closed_from_closed.point_count() == 5);
+        MINI_CHECK!(closed_from_closed.is_closed() == true);
+
+    })
+}
+
 pub fn run_polyline_reverse() -> TestResult {
     MINI_TEST!("Reverse", {
         use crate::Polyline;
@@ -1232,6 +1251,7 @@ REGISTER_MINI_TEST!("Polyline", "Protobuf Roundtrip", crate::polyline_test::run_
 REGISTER_MINI_TEST!("Polyline", "Length", crate::polyline_test::run_polyline_length);
 REGISTER_MINI_TEST!("Polyline", "Center", crate::polyline_test::run_polyline_center);
 REGISTER_MINI_TEST!("Polyline", "Is Closed", crate::polyline_test::run_polyline_is_closed);
+REGISTER_MINI_TEST!("Polyline", "Closed", crate::polyline_test::run_polyline_closed);
 REGISTER_MINI_TEST!("Polyline", "Reverse", crate::polyline_test::run_polyline_reverse);
 REGISTER_MINI_TEST!("Polyline", "Closest Point", crate::polyline_test::run_polyline_closest_point);
 REGISTER_MINI_TEST!("Polyline", "Extend Segment", crate::polyline_test::run_polyline_extend_segment);

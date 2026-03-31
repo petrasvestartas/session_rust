@@ -795,6 +795,17 @@ impl Polyline {
         first.distance(&last, None) < Tolerance::ZERO_TOLERANCE
     }
 
+    pub fn closed(&self) -> Self {
+        if self.is_closed() {
+            return Self::from_coords(self.coords.clone());
+        }
+        let mut new_coords = self.coords.clone();
+        new_coords.push(self.coords[0]);
+        new_coords.push(self.coords[1]);
+        new_coords.push(self.coords[2]);
+        Self::from_coords(new_coords)
+    }
+
     /// Merge consecutive collinear segments in-place; closed polyline wraps around
     pub fn merge_collinear(&mut self, tol: f64) {
         let closed = self.is_closed();
