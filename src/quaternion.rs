@@ -121,7 +121,7 @@ impl Quaternion {
             }
             return Self::identity();
         }
-        Self::from_sv(1.0 + dot_val, cross).normalize()
+        Self::from_sv(1.0 + dot_val, cross).normalized()
     }
 
     pub fn from_euler(x: f64, y: f64, z: f64) -> Self {
@@ -152,7 +152,7 @@ impl Quaternion {
         self.s * self.s + self.v[0] * self.v[0] + self.v[1] * self.v[1] + self.v[2] * self.v[2]
     }
 
-    pub fn normalize(&self) -> Self {
+    pub fn normalized(&self) -> Self {
         let mag = self.magnitude();
         if mag > 1e-10 {
             self.apply(self.s / mag, self.v.clone() / mag)
@@ -180,7 +180,7 @@ impl Quaternion {
     pub fn slerp(&self, other: &Self, amount: f64) -> Self {
         let dot_val = self.dot(other);
         if dot_val > 0.9995 {
-            return (self.clone() + (other.clone() - self.clone()) * amount).normalize();
+            return (self.clone() + (other.clone() - self.clone()) * amount).normalized();
         }
         let robust_dot = dot_val.max(-1.0).min(1.0);
         let theta = robust_dot.acos();
@@ -191,7 +191,7 @@ impl Quaternion {
     }
 
     pub fn nlerp(&self, other: &Self, amount: f64) -> Self {
-        (self.clone() * (1.0 - amount) + other.clone() * amount).normalize()
+        (self.clone() * (1.0 - amount) + other.clone() * amount).normalized()
     }
 
     pub fn jsondump(&self) -> Result<String, Box<dyn std::error::Error>> {

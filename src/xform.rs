@@ -501,12 +501,12 @@ impl Xform {
         let mut x1 = plane_to.x_axis();
         let mut y1 = plane_to.y_axis();
         let mut z1 = plane_to.z_axis();
-        x0.normalize();
-        y0.normalize();
-        z0.normalize();
-        x1.normalize();
-        y1.normalize();
-        z1.normalize();
+        x0.normalize_self();
+        y0.normalize_self();
+        z0.normalize_self();
+        x1.normalize_self();
+        y1.normalize_self();
+        z1.normalize_self();
 
         let origin_0 = plane_from.origin();
         let origin_1 = plane_to.origin();
@@ -544,9 +544,9 @@ impl Xform {
         let mut x = x_axis.clone();
         let mut y = y_axis.clone();
         let mut z = z_axis.clone();
-        x.normalize();
-        y.normalize();
-        z.normalize();
+        x.normalize_self();
+        y.normalize_self();
+        z.normalize_self();
 
         let t = Self::translation(-origin[0], -origin[1], -origin[2]);
         let mut f = Self::identity();
@@ -566,9 +566,9 @@ impl Xform {
         let mut x = x_axis.clone();
         let mut y = y_axis.clone();
         let mut z = z_axis.clone();
-        x.normalize();
-        y.normalize();
-        z.normalize();
+        x.normalize_self();
+        y.normalize_self();
+        z.normalize_self();
 
         let mut f = Self::identity();
         f.m[0] = x[0];

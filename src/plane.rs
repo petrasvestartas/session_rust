@@ -119,12 +119,12 @@ impl Default for Plane {
 
 impl Plane {
     pub fn new(point: Point, mut x_axis: Vector, mut y_axis: Vector) -> Self {
-        x_axis.normalize();
+        x_axis.normalize_self();
         let dot_product = y_axis.dot(&x_axis);
         y_axis -= x_axis.clone() * dot_product;
-        y_axis.normalize();
+        y_axis.normalize_self();
         let mut z_axis = x_axis.cross(&y_axis);
-        z_axis.normalize();
+        z_axis.normalize_self();
 
         let a = z_axis[0];
         let b = z_axis[1];
@@ -169,12 +169,12 @@ impl Plane {
     }
 
     pub fn with_name(point: Point, mut x_axis: Vector, mut y_axis: Vector, name: String) -> Self {
-        x_axis.normalize();
+        x_axis.normalize_self();
         let dot_product = y_axis.dot(&x_axis);
         y_axis -= x_axis.clone() * dot_product;
-        y_axis.normalize();
+        y_axis.normalize_self();
         let mut z_axis = x_axis.cross(&y_axis);
-        z_axis.normalize();
+        z_axis.normalize_self();
 
         let a = z_axis[0];
         let b = z_axis[1];
@@ -200,12 +200,12 @@ impl Plane {
     pub fn from_point_normal(point: Point, normal: Vector) -> Self {
         let origin = point.clone();
         let mut z_axis = normal;
-        z_axis.normalize();
+        z_axis.normalize_self();
         let mut x_axis = Vector::default();
         x_axis.perpendicular_to(&z_axis);
-        x_axis.normalize();
+        x_axis.normalize_self();
         let mut y_axis = z_axis.cross(&x_axis);
-        y_axis.normalize();
+        y_axis.normalize_self();
 
         let a = z_axis[0];
         let b = z_axis[1];
@@ -239,12 +239,12 @@ impl Plane {
         let v1 = point2.clone() - point1.clone();
         let v2 = point3.clone() - point1.clone();
         let mut z_axis = v1.cross(&v2);
-        z_axis.normalize();
+        z_axis.normalize_self();
         let mut x_axis = Vector::default();
         x_axis.perpendicular_to(&z_axis);
-        x_axis.normalize();
+        x_axis.normalize_self();
         let mut y_axis = z_axis.cross(&x_axis);
-        y_axis.normalize();
+        y_axis.normalize_self();
         let origin = point1.clone();
 
         let a = z_axis[0];
@@ -321,10 +321,10 @@ impl Plane {
         let mut x_axis = Vector::new(eigvec[0][0], eigvec[0][1], eigvec[0][2]);
         let y_tmp = Vector::new(eigvec[1][0], eigvec[1][1], eigvec[1][2]);
         let mut z_axis = x_axis.cross(&y_tmp);
-        z_axis.normalize();
+        z_axis.normalize_self();
         let mut y_axis = z_axis.cross(&x_axis);
-        y_axis.normalize();
-        x_axis.normalize();
+        y_axis.normalize_self();
+        x_axis.normalize_self();
 
         let a = z_axis[0];
         let b = z_axis[1];
@@ -351,14 +351,14 @@ impl Plane {
         let origin = point1.clone();
 
         let mut direction = point2.clone() - point1.clone();
-        direction.normalize();
+        direction.normalize_self();
         let mut z_axis = Vector::default();
         z_axis.perpendicular_to(&direction);
-        z_axis.normalize();
+        z_axis.normalize_self();
 
         let x_axis = direction;
         let mut y_axis = z_axis.cross(&x_axis);
-        y_axis.normalize();
+        y_axis.normalize_self();
 
         let a = z_axis[0];
         let b = z_axis[1];
@@ -680,7 +680,7 @@ impl Plane {
     /// Translate (move) a plane along its normal direction by a specified distance
     pub fn translate_by_normal(&self, distance: f64) -> Plane {
         let mut normal = self._z_axis.clone();
-        normal.normalize();
+        normal.normalize_self();
 
         let new_origin = self._origin.clone() + (normal * distance);
 

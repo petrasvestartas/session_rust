@@ -1866,9 +1866,9 @@ impl NurbsSurface {
                 let su = &derivs[2];
                 let sv = &derivs[1];
                 let mut x_axis = su.clone();
-                if x_axis.magnitude() > 1e-14 { x_axis.normalize(); }
+                if x_axis.magnitude() > 1e-14 { x_axis.normalize_self(); }
                 let mut y_axis = sv.clone();
-                if y_axis.magnitude() > 1e-14 { y_axis.normalize(); }
+                if y_axis.magnitude() > 1e-14 { y_axis.normalize_self(); }
                 let n = self.normal_at(u, v);
                 let plane = Plane::from_axes(origin, x_axis, y_axis, n);
                 row.push(plane);

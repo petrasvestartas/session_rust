@@ -908,7 +908,7 @@ impl Polyline {
 
         let x_axis = if points.len() >= 2 {
             let mut x = points[1].clone() - points[0].clone();
-            x.normalize();
+            x.normalize_self();
             x
         } else {
             Vector::new(1.0, 0.0, 0.0)
@@ -916,7 +916,7 @@ impl Polyline {
 
         let z_axis = self.average_normal();
         let mut y_axis = z_axis.cross(&x_axis);
-        y_axis.normalize();
+        y_axis.normalize_self();
 
         (origin, x_axis, y_axis, z_axis)
     }
@@ -942,7 +942,7 @@ impl Polyline {
         distance1: f64,
     ) {
         let mut v = line_end.clone() - line_start.clone();
-        v.normalize();
+        v.normalize_self();
 
         *line_start = line_start.clone() - (v.clone() * distance0);
         *line_end = line_end.clone() + (v * distance1);
@@ -1014,7 +1014,7 @@ impl Polyline {
             *segment_end = segment_end.clone() + (v * proportion);
         } else {
             let mut v_norm = v;
-            v_norm.normalize();
+            v_norm.normalize_self();
             *segment_start = segment_start.clone() - (v_norm.clone() * dist);
             *segment_end = segment_end.clone() + (v_norm * dist);
         }
@@ -1097,13 +1097,13 @@ impl Polyline {
             let next = if current == n - 1 { 0 } else { current + 1 };
 
             let mut dir0 = points[current].clone() - points[prev].clone();
-            dir0.normalize();
+            dir0.normalize_self();
 
             let mut dir1 = points[next].clone() - points[current].clone();
-            dir1.normalize();
+            dir1.normalize_self();
 
             let mut cross = dir0.cross(&dir1);
-            cross.normalize();
+            cross.normalize_self();
 
             let dot = cross.dot(&normal);
             let is_convex = dot >= 0.0;
@@ -1366,7 +1366,7 @@ impl Polyline {
             average_normal += &cross;
         }
 
-        average_normal.normalize();
+        average_normal.normalize_self();
         average_normal
     }
 

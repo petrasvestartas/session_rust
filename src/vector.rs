@@ -263,7 +263,7 @@ impl Vector {
     ///
     /// Modifies this vector to have unit magnitude (magnitude = 1.0).
     /// If the vector has zero magnitude, it remains unchanged.
-    pub fn normalize(&mut self) {
+    pub fn normalize_self(&mut self) {
         let len = self.compute_magnitude();
         if len > Tolerance::ZERO_TOLERANCE {
             self._x /= len;
@@ -280,7 +280,7 @@ impl Vector {
     /// A new Vector with unit magnitude pointing in the same direction.
     pub fn normalized(&self) -> Self {
         let mut result = self.clone();
-        result.normalize();
+        result.normalize_self();
         result
     }
 
@@ -567,7 +567,7 @@ impl Vector {
     /// Computes the inclined distance needed to achieve a given vertical rise.
     pub fn get_leveled_vector(&self, vertical_height: f64) -> Vector {
         let mut copy = self.clone();
-        copy.normalize();
+        copy.normalize_self();
 
         if vertical_height != 0.0 {
             let reference = Vector::z_axis();
@@ -1281,7 +1281,7 @@ pub fn average_normal(pts: &[Point]) -> Vector {
         avg[1] += az * bx - ax * bz;
         avg[2] += ax * by - ay * bx;
     }
-    avg.normalize();
+    avg.normalize_self();
     avg
 }
 

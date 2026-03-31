@@ -100,7 +100,7 @@ pub fn run_vector_normalize() -> TestResult {
         use crate::Vector;
 
         let mut v0 = Vector::new(3.0, 4.0, 0.0);
-        v0.normalize();
+        v0.normalize_self();
 
         let v1 = Vector::new(3.0, 4.0, 0.0);
         let v2 = v1.normalized();
