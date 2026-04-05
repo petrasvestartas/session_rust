@@ -82,7 +82,7 @@ impl Vertex {
 
     /// Convert the Vertex to a JSON-serializable string.
     pub fn jsondump(&self) -> Result<String, Box<dyn std::error::Error>> {
-        Ok(serde_json::to_string_pretty(self)?)
+        crate::encoders::sorted_json_string(self)
     }
 
     /// Create Vertex from JSON string data.
@@ -154,7 +154,7 @@ impl Edge {
 
     /// Convert the Edge to a JSON-serializable string.
     pub fn jsondump(&self) -> Result<String, Box<dyn std::error::Error>> {
-        Ok(serde_json::to_string_pretty(self)?)
+        crate::encoders::sorted_json_string(self)
     }
 
     /// Create Edge from JSON string data.
@@ -443,7 +443,15 @@ impl Graph {
             "edge_count": self.edge_count
         });
 
-        serde_json::to_string_pretty(&json_obj)
+        let sorted = crate::encoders::sort_json_keys(json_obj);
+        let mut buf = Vec::new();
+        let formatter = serde_json::ser::PrettyFormatter::with_indent(b"    ");
+        let mut ser = serde_json::Serializer::with_formatter(&mut buf, formatter);
+        serde::Serialize::serialize(&sorted, &mut ser)?;
+        String::from_utf8(buf).map_err(|e| {
+            use serde::ser::Error;
+            serde_json::Error::custom(e.to_string())
+        })
     }
 
     /// Deserializes a Graph from a JSON string.

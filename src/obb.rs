@@ -200,7 +200,7 @@ impl OBB {
         let mut max_z = f64::MIN;
 
         for pt in points {
-            let local_pt = plane_to_xy.transformed_point(pt);
+            let mut local_pt = pt.clone(); local_pt.xform = plane_to_xy.clone(); local_pt = local_pt.transformed();
             min_x = min_x.min(local_pt[0]);
             min_y = min_y.min(local_pt[1]);
             min_z = min_z.min(local_pt[2]);
@@ -221,7 +221,7 @@ impl OBB {
         );
 
         let xy_to_plane = Xform::xy_to_plane(&origin, &x_axis, &y_axis, &z_axis);
-        let world_center = xy_to_plane.transformed_point(&local_center);
+        let mut world_center = local_center.clone(); world_center.xform = xy_to_plane.clone(); world_center = world_center.transformed();
 
         OBB {
             center: world_center,
@@ -549,11 +549,14 @@ impl OBB {
     }
 
     pub fn transform(&mut self) {
-        let xform = self.xform.clone();
-        xform.transform_point(&mut self.center);
-        xform.transform_vector(&mut self.x_axis);
-        xform.transform_vector(&mut self.y_axis);
-        xform.transform_vector(&mut self.z_axis);
+        self.center.xform = self.xform.clone();
+        self.center.transform();
+        self.x_axis.xform = self.xform.clone();
+        self.x_axis.transform();
+        self.y_axis.xform = self.xform.clone();
+        self.y_axis.transform();
+        self.z_axis.xform = self.xform.clone();
+        self.z_axis.transform();
         self.xform = Xform::identity();
     }
 

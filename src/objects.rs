@@ -9,7 +9,7 @@ use crate::plane::Plane;
 use crate::point::Point;
 use crate::pointcloud::PointCloud;
 use crate::polyline::Polyline;
-use serde::{ser::Serialize as SerTrait, Deserialize, Serialize};
+use serde::{Deserialize, Serialize};
 use std::fmt;
 use std::fs;
 
@@ -75,11 +75,7 @@ impl Objects {
 
     /// Serializes the Objects to a JSON string.
     pub fn jsondump(&self) -> Result<String, Box<dyn std::error::Error>> {
-        let mut buf = Vec::new();
-        let formatter = serde_json::ser::PrettyFormatter::with_indent(b"    ");
-        let mut ser = serde_json::Serializer::with_formatter(&mut buf, formatter);
-        SerTrait::serialize(self, &mut ser)?;
-        Ok(String::from_utf8(buf)?)
+        crate::encoders::sorted_json_string(self)
     }
 
     /// Deserializes Objects from a JSON string.

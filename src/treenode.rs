@@ -1,4 +1,4 @@
-use serde::{ser::Serialize as SerTrait, Deserialize, Serialize};
+use serde::{Deserialize, Serialize};
 use std::cell::RefCell;
 use std::fmt;
 use std::rc::{Rc, Weak};
@@ -198,11 +198,7 @@ impl TreeNode {
 
     pub fn jsondump(&self) -> Result<String, Box<dyn std::error::Error>> {
         let serde_node = self.to_serde();
-        let mut buf = Vec::new();
-        let formatter = serde_json::ser::PrettyFormatter::with_indent(b"    ");
-        let mut ser = serde_json::Serializer::with_formatter(&mut buf, formatter);
-        SerTrait::serialize(&serde_node, &mut ser)?;
-        Ok(String::from_utf8(buf)?)
+        crate::encoders::sorted_json_string(&serde_node)
     }
 
     pub fn jsonload(path: &str) -> Result<Rc<RefCell<TreeNode>>, Box<dyn std::error::Error>> {

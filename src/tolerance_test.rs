@@ -132,6 +132,24 @@ pub fn run_tolerance_rad_deg() -> TestResult {
     })
 }
 
+pub fn run_tolerance_to_radians() -> TestResult {
+    MINI_TEST!("To Radians", {
+        use crate::tolerance::Tolerance;
+        MINI_CHECK!((Tolerance::to_radians(180.0) - Tolerance::PI).abs() < 1e-9);
+        MINI_CHECK!((Tolerance::to_radians(90.0) - Tolerance::PI / 2.0).abs() < 1e-9);
+        MINI_CHECK!(Tolerance::to_radians(0.0).abs() < 1e-9);
+    })
+}
+
+pub fn run_tolerance_to_degrees() -> TestResult {
+    MINI_TEST!("To Degrees", {
+        use crate::tolerance::Tolerance;
+        MINI_CHECK!((Tolerance::to_degrees(Tolerance::PI) - 180.0).abs() < 1e-9);
+        MINI_CHECK!((Tolerance::to_degrees(Tolerance::PI / 2.0) - 90.0).abs() < 1e-9);
+        MINI_CHECK!(Tolerance::to_degrees(0.0).abs() < 1e-9);
+    })
+}
+
 pub fn run_tolerance_count_digits() -> TestResult {
     MINI_TEST!("Count Digits", {
         use crate::tolerance::count_digits;
@@ -148,6 +166,8 @@ REGISTER_MINI_TEST!("Tolerance", "Unique From Two Int", crate::tolerance_test::r
 REGISTER_MINI_TEST!("Tolerance", "Wrap Index", crate::tolerance_test::run_tolerance_wrap_index);
 REGISTER_MINI_TEST!("Tolerance", "Triangle Edge By Angle", crate::tolerance_test::run_tolerance_triangle_edge_by_angle);
 REGISTER_MINI_TEST!("Tolerance", "Rad Deg Conversion", crate::tolerance_test::run_tolerance_rad_deg);
+REGISTER_MINI_TEST!("Tolerance", "To Radians", crate::tolerance_test::run_tolerance_to_radians);
+REGISTER_MINI_TEST!("Tolerance", "To Degrees", crate::tolerance_test::run_tolerance_to_degrees);
 REGISTER_MINI_TEST!("Tolerance", "Count Digits", crate::tolerance_test::run_tolerance_count_digits);
 REGISTER_MINI_TEST!("Tolerance", "Is Zero", crate::tolerance_test::run_tolerance_is_zero);
 REGISTER_MINI_TEST!("Tolerance", "Is Close", crate::tolerance_test::run_tolerance_is_close);

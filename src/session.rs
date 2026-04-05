@@ -158,8 +158,6 @@ impl Session {
     /// A Result containing the JSON string representation of the Session,
     /// or an error if serialization fails.
     pub fn jsondump(&self) -> Result<String, Box<dyn std::error::Error>> {
-        // Use custom serialization to ensure consistent structure with C++/Python
-        // Convert graph to use array structure instead of nested objects
         let graph_json: serde_json::Value = serde_json::from_str(&self.graph.jsondump()?)?;
 
         let json_obj = serde_json::json!({
@@ -171,7 +169,12 @@ impl Session {
             "graph": graph_json
         });
 
-        Ok(serde_json::to_string_pretty(&json_obj)?)
+        let sorted = crate::encoders::sort_json_keys(json_obj);
+        let mut buf = Vec::new();
+        let formatter = serde_json::ser::PrettyFormatter::with_indent(b"    ");
+        let mut ser = serde_json::Serializer::with_formatter(&mut buf, formatter);
+        serde::Serialize::serialize(&sorted, &mut ser)?;
+        Ok(String::from_utf8(buf)?)
     }
 
     /// Deserializes Session from a JSON string.

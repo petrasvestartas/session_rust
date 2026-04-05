@@ -92,6 +92,7 @@ pub mod kdtree;
 pub mod kdtree_test;
 pub mod marching_squares;
 pub mod marching_squares_test;
+pub mod boolean_polyline_test;
 
 pub use aabb::AABB;
 pub use obb::OBB;

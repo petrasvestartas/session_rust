@@ -597,7 +597,7 @@ impl Matrix {
     ///////////////////////////////////////////////////////////////////////////////////////////
 
     pub fn jsondump(&self) -> Result<String, Box<dyn std::error::Error>> {
-        Ok(serde_json::to_string_pretty(self)?)
+        crate::encoders::sorted_json_string(self)
     }
 
     pub fn jsonload(json_data: &str) -> Result<Self, Box<dyn std::error::Error>> {

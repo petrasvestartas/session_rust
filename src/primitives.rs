@@ -314,7 +314,7 @@ impl Primitives {
         let vertex_keys: Vec<usize> = vertices
             .iter()
             .map(|v| {
-                let transformed = xform.transformed_point(v);
+                let mut transformed = v.clone(); transformed.xform = xform.clone(); transformed = transformed.transformed();
                 mesh.add_vertex(transformed, None)
             })
             .collect();
@@ -444,7 +444,7 @@ impl Primitives {
 
         let mut body_vertex_map = Vec::new();
         for v in &body_geometry.0 {
-            let transformed = body_xform.transformed_point(v);
+            let mut transformed = v.clone(); transformed.xform = body_xform.clone(); transformed = transformed.transformed();
             let key = mesh.add_vertex(transformed, None);
             body_vertex_map.push(key);
         }
@@ -455,7 +455,7 @@ impl Primitives {
 
         let mut cone_vertex_map = Vec::new();
         for v in &cone_geometry.0 {
-            let transformed = cone_xform.transformed_point(v);
+            let mut transformed = v.clone(); transformed.xform = cone_xform.clone(); transformed = transformed.transformed();
             let key = mesh.add_vertex(transformed, None);
             cone_vertex_map.push(key);
         }

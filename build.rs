@@ -4,7 +4,6 @@ fn main() {
     let proto_dir = "../session_proto";
 
     println!("cargo:rerun-if-changed=build.rs");
-    println!("cargo:rerun-if-changed={}", proto_dir);
 
     let protoc_path = download_protoc();
     std::env::set_var("PROTOC", &protoc_path);
@@ -21,6 +20,10 @@ fn main() {
             }
         })
         .collect();
+
+    for proto_file in &proto_files {
+        println!("cargo:rerun-if-changed={}", proto_file);
+    }
 
     if !proto_files.is_empty() {
         prost_build::compile_protos(

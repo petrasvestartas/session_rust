@@ -810,6 +810,284 @@ pub fn run_plate_protobuf_roundtrip() -> TestResult {
 }
 
 ///////////////////////////////////////////////////////////////////////////////////////////
+// Element - Polylines
+///////////////////////////////////////////////////////////////////////////////////////////
+
+pub fn run_element_polylines() -> TestResult {
+    MINI_TEST!("Polylines", {
+        use crate::Mesh;
+        use crate::element::Element;
+        use crate::Point;
+
+        let m = Mesh::from_vertices_and_faces(
+            vec![Point::new(0.0,0.0,0.0), Point::new(1.0,0.0,0.0), Point::new(1.0,1.0,0.0), Point::new(0.0,1.0,0.0)],
+            vec![vec![0,1,2,3]],
+        );
+        let mut e = Element::from_mesh(m, "test_element");
+
+        MINI_CHECK!(e.polylines().is_empty());
+        MINI_CHECK!(e.planes().is_empty());
+        MINI_CHECK!(e.edge_vectors().is_empty());
+        MINI_CHECK!(e.axis().is_none());
+    })
+}
+
+///////////////////////////////////////////////////////////////////////////////////////////
+// BeamElement - Polylines/Planes/Edge Vectors/Axis
+///////////////////////////////////////////////////////////////////////////////////////////
+
+pub fn run_beam_polylines() -> TestResult {
+    MINI_TEST!("Polylines", {
+        use crate::element::Element;
+        let mut b = Element::beam(0.1, 0.2, 3.0, "my_beam");
+        let pls = b.polylines();
+        MINI_CHECK!(pls.len() == 6);
+        for pl in &pls { MINI_CHECK!(pl.point_count() == 5); }
+    })
+}
+
+pub fn run_beam_planes() -> TestResult {
+    MINI_TEST!("Planes", {
+        use crate::element::Element;
+        let mut b = Element::beam(0.1, 0.2, 3.0, "my_beam");
+        let pls = b.planes();
+        MINI_CHECK!(pls.len() == 6);
+        MINI_CHECK!(TOLERANCE.is_close(pls[0].z_axis()[2], -1.0));
+        MINI_CHECK!(TOLERANCE.is_close(pls[1].z_axis()[2], 1.0));
+    })
+}
+
+pub fn run_beam_edge_vectors() -> TestResult {
+    MINI_TEST!("Edge Vectors", {
+        use crate::element::Element;
+        let mut b = Element::beam(0.1, 0.2, 3.0, "my_beam");
+        let evs = b.edge_vectors();
+        MINI_CHECK!(evs.len() == 12);
+    })
+}
+
+pub fn run_beam_axis() -> TestResult {
+    MINI_TEST!("Axis", {
+        use crate::element::Element;
+        let mut b = Element::beam(0.1, 0.2, 5.0, "my_beam");
+        let ax = b.axis().unwrap();
+        MINI_CHECK!(TOLERANCE.is_close(ax.start()[2], 0.0));
+        MINI_CHECK!(TOLERANCE.is_close(ax.end()[2], 5.0));
+    })
+}
+
+///////////////////////////////////////////////////////////////////////////////////////////
+// ColumnElement - Polylines/Planes/Edge Vectors/Axis
+///////////////////////////////////////////////////////////////////////////////////////////
+
+pub fn run_column_polylines() -> TestResult {
+    MINI_TEST!("Polylines", {
+        use crate::element::Element;
+        let mut c = Element::column(0.4, 0.4, 3.0, "my_column");
+        let pls = c.polylines();
+        MINI_CHECK!(pls.len() == 6);
+        for pl in &pls { MINI_CHECK!(pl.point_count() == 5); }
+    })
+}
+
+pub fn run_column_planes() -> TestResult {
+    MINI_TEST!("Planes", {
+        use crate::element::Element;
+        let mut c = Element::column(0.4, 0.4, 3.0, "my_column");
+        let pls = c.planes();
+        MINI_CHECK!(pls.len() == 6);
+        MINI_CHECK!(TOLERANCE.is_close(pls[0].z_axis()[2], -1.0));
+        MINI_CHECK!(TOLERANCE.is_close(pls[1].z_axis()[2], 1.0));
+    })
+}
+
+pub fn run_column_edge_vectors() -> TestResult {
+    MINI_TEST!("Edge Vectors", {
+        use crate::element::Element;
+        let mut c = Element::column(0.4, 0.4, 3.0, "my_column");
+        let evs = c.edge_vectors();
+        MINI_CHECK!(evs.len() == 12);
+    })
+}
+
+pub fn run_column_axis() -> TestResult {
+    MINI_TEST!("Axis", {
+        use crate::element::Element;
+        let mut c = Element::column(0.4, 0.4, 5.0, "my_column");
+        let ax = c.axis().unwrap();
+        MINI_CHECK!(TOLERANCE.is_close(ax.start()[2], 0.0));
+        MINI_CHECK!(TOLERANCE.is_close(ax.end()[2], 5.0));
+    })
+}
+
+///////////////////////////////////////////////////////////////////////////////////////////
+// PlateElement - Polylines/Planes/Edge Vectors/Axis/Joinery
+///////////////////////////////////////////////////////////////////////////////////////////
+
+pub fn run_plate_polylines() -> TestResult {
+    MINI_TEST!("Polylines", {
+        use crate::element::Element;
+        use crate::Point;
+        let polygon = vec![Point::new(0.0,0.0,0.0), Point::new(1.0,0.0,0.0), Point::new(1.0,1.0,0.0), Point::new(0.0,1.0,0.0)];
+        let mut p = Element::plate(polygon, 0.2, "my_plate");
+        let pls = p.polylines();
+        MINI_CHECK!(pls.len() == 6);
+        MINI_CHECK!(pls[0].point_count() == 5);
+        MINI_CHECK!(pls[1].point_count() == 5);
+        for i in 2..6 { MINI_CHECK!(pls[i].point_count() == 5); }
+    })
+}
+
+pub fn run_plate_planes() -> TestResult {
+    MINI_TEST!("Planes", {
+        use crate::element::Element;
+        use crate::Point;
+        let polygon = vec![Point::new(0.0,0.0,0.0), Point::new(1.0,0.0,0.0), Point::new(1.0,1.0,0.0), Point::new(0.0,1.0,0.0)];
+        let mut p = Element::plate(polygon, 0.2, "my_plate");
+        let pls = p.planes();
+        MINI_CHECK!(pls.len() == 6);
+        MINI_CHECK!(TOLERANCE.is_close(pls[0].z_axis()[2], 1.0));
+        MINI_CHECK!(TOLERANCE.is_close(pls[1].z_axis()[2], -1.0));
+    })
+}
+
+pub fn run_plate_edge_vectors() -> TestResult {
+    MINI_TEST!("Edge Vectors", {
+        use crate::element::Element;
+        use crate::Point;
+        let polygon = vec![Point::new(0.0,0.0,0.0), Point::new(1.0,0.0,0.0), Point::new(1.0,1.0,0.0), Point::new(0.0,1.0,0.0)];
+        let mut p = Element::plate(polygon, 0.2, "my_plate");
+        let evs = p.edge_vectors();
+        MINI_CHECK!(evs.len() == 4);
+        MINI_CHECK!(TOLERANCE.is_close(evs[0][0], 1.0));
+        MINI_CHECK!(TOLERANCE.is_close(evs[0][1], 0.0));
+        MINI_CHECK!(TOLERANCE.is_close(evs[1][0], 0.0));
+        MINI_CHECK!(TOLERANCE.is_close(evs[1][1], 1.0));
+    })
+}
+
+pub fn run_plate_axis() -> TestResult {
+    MINI_TEST!("Axis", {
+        use crate::element::Element;
+        use crate::Point;
+        let polygon = vec![Point::new(0.0,0.0,0.0), Point::new(2.0,0.0,0.0), Point::new(2.0,2.0,0.0), Point::new(0.0,2.0,0.0)];
+        let mut p = Element::plate(polygon, 0.4, "my_plate");
+        let ax = p.axis().unwrap();
+        MINI_CHECK!(TOLERANCE.is_close(ax.start()[0], 1.0));
+        MINI_CHECK!(TOLERANCE.is_close(ax.start()[1], 1.0));
+        MINI_CHECK!(TOLERANCE.is_close(ax.start()[2], 0.0));
+        MINI_CHECK!(TOLERANCE.is_close(ax.end()[2], -0.4));
+    })
+}
+
+pub fn run_plate_joint_types() -> TestResult {
+    MINI_TEST!("Joint Types", {
+        use crate::element::Element;
+        let mut p = Element::plate_default();
+        MINI_CHECK!(p.joint_types().unwrap().is_empty());
+        p.set_joint_types(vec![1, 2, 3, 4]);
+        MINI_CHECK!(p.joint_types().unwrap().len() == 4);
+        MINI_CHECK!(p.joint_types().unwrap()[0] == 1);
+        MINI_CHECK!(p.joint_types().unwrap()[3] == 4);
+    })
+}
+
+pub fn run_plate_j_mf() -> TestResult {
+    MINI_TEST!("J Mf", {
+        use crate::element::Element;
+        let mut p = Element::plate_default();
+        MINI_CHECK!(p.j_mf().unwrap().is_empty());
+        p.set_j_mf(vec![
+            vec![(0, true, 0.5), (1, false, 0.3)],
+            vec![],
+            vec![(2, true, 0.8)],
+        ]);
+        MINI_CHECK!(p.j_mf().unwrap().len() == 3);
+        MINI_CHECK!(p.j_mf().unwrap()[0].len() == 2);
+        MINI_CHECK!(p.j_mf().unwrap()[0][0] == (0, true, 0.5));
+        MINI_CHECK!(p.j_mf().unwrap()[2][0].0 == 2);
+    })
+}
+
+pub fn run_plate_key() -> TestResult {
+    MINI_TEST!("Key", {
+        use crate::element::Element;
+        let mut p = Element::plate_default();
+        MINI_CHECK!(p.key().unwrap() == "");
+        p.set_key("plate_A".to_string());
+        MINI_CHECK!(p.key().unwrap() == "plate_A");
+    })
+}
+
+pub fn run_plate_component_plane() -> TestResult {
+    MINI_TEST!("Component Plane", {
+        use crate::element::Element;
+        use crate::plane::Plane;
+        use crate::Point;
+        use crate::Vector;
+        let mut p = Element::plate_default();
+        MINI_CHECK!(p.component_plane().is_none());
+        let cp = Plane::new(Point::new(1.0, 2.0, 3.0), Vector::new(1.0, 0.0, 0.0), Vector::new(0.0, 1.0, 0.0));
+        p.set_component_plane(cp);
+        MINI_CHECK!(TOLERANCE.is_close(p.component_plane().unwrap().origin()[0], 1.0));
+        MINI_CHECK!(TOLERANCE.is_close(p.component_plane().unwrap().origin()[1], 2.0));
+    })
+}
+
+pub fn run_plate_json_roundtrip_joinery() -> TestResult {
+    MINI_TEST!("Json Roundtrip Joinery", {
+        use crate::element::Element;
+        use crate::plane::Plane;
+        use crate::Point;
+        use crate::Vector;
+
+        let polygon = vec![Point::new(0.0,0.0,0.0), Point::new(2.0,0.0,0.0), Point::new(2.0,2.0,0.0), Point::new(0.0,2.0,0.0)];
+        let mut p = Element::plate(polygon, 0.3, "joinery_plate");
+        p.set_joint_types(vec![1, 2, 3, 4]);
+        p.set_j_mf(vec![vec![(0, true, 0.5)], vec![], vec![(1, false, 0.3)]]);
+        p.set_key("plate_A".to_string());
+        p.set_component_plane(Plane::new(Point::new(1.0, 2.0, 3.0), Vector::new(1.0, 0.0, 0.0), Vector::new(0.0, 1.0, 0.0)));
+
+        let fname = "serialization/test_plate_element_joinery.json";
+        p.json_dump(fname);
+        let loaded = Element::json_load(fname);
+
+        MINI_CHECK!(loaded.joint_types().unwrap() == &vec![1, 2, 3, 4]);
+        MINI_CHECK!(loaded.j_mf().unwrap().len() == 3);
+        MINI_CHECK!(loaded.key().unwrap() == "plate_A");
+        MINI_CHECK!(loaded.component_plane().is_some());
+        MINI_CHECK!(TOLERANCE.is_close(loaded.component_plane().unwrap().origin()[0], 1.0));
+    })
+}
+
+pub fn run_plate_protobuf_roundtrip_joinery() -> TestResult {
+    MINI_TEST!("Protobuf Roundtrip Joinery", {
+        use crate::element::Element;
+        use crate::plane::Plane;
+        use crate::Point;
+        use crate::Vector;
+
+        let polygon = vec![Point::new(0.0,0.0,0.0), Point::new(2.0,0.0,0.0), Point::new(2.0,2.0,0.0), Point::new(0.0,2.0,0.0)];
+        let mut p = Element::plate(polygon, 0.3, "joinery_plate");
+        p.set_joint_types(vec![1, 2, 3, 4]);
+        p.set_j_mf(vec![vec![(0, true, 0.5)], vec![], vec![(1, false, 0.3)]]);
+        p.set_key("plate_A".to_string());
+        p.set_component_plane(Plane::new(Point::new(1.0, 2.0, 3.0), Vector::new(1.0, 0.0, 0.0), Vector::new(0.0, 1.0, 0.0)));
+
+        let path = "serialization/test_plate_element_joinery.bin";
+        p.pb_dump(path);
+        let loaded = Element::pb_load(path).unwrap();
+
+        MINI_CHECK!(loaded.joint_types().unwrap() == &vec![1, 2, 3, 4]);
+        MINI_CHECK!(loaded.j_mf().unwrap().len() == 3);
+        MINI_CHECK!(loaded.j_mf().unwrap()[0][0] == (0, true, 0.5));
+        MINI_CHECK!(loaded.key().unwrap() == "plate_A");
+        MINI_CHECK!(loaded.component_plane().is_some());
+        MINI_CHECK!(TOLERANCE.is_close(loaded.component_plane().unwrap().origin()[0], 1.0));
+    })
+}
+
+///////////////////////////////////////////////////////////////////////////////////////////
 // Registration
 ///////////////////////////////////////////////////////////////////////////////////////////
 
@@ -824,6 +1102,7 @@ REGISTER_MINI_TEST!("Element", "Compute Point", crate::element_test::run_element
 REGISTER_MINI_TEST!("Element", "Brep Aabb", crate::element_test::run_element_brep_aabb);
 REGISTER_MINI_TEST!("Element", "Json Roundtrip", crate::element_test::run_element_json_roundtrip);
 REGISTER_MINI_TEST!("Element", "Protobuf Roundtrip", crate::element_test::run_element_protobuf_roundtrip);
+REGISTER_MINI_TEST!("Element", "Polylines", crate::element_test::run_element_polylines);
 
 REGISTER_MINI_TEST!("ColumnElement", "Constructor", crate::element_test::run_column_constructor);
 REGISTER_MINI_TEST!("ColumnElement", "Setters", crate::element_test::run_column_setters);
@@ -834,6 +1113,10 @@ REGISTER_MINI_TEST!("ColumnElement", "Compute Point", crate::element_test::run_c
 REGISTER_MINI_TEST!("ColumnElement", "Session Geometry", crate::element_test::run_column_session_geometry);
 REGISTER_MINI_TEST!("ColumnElement", "Json Roundtrip", crate::element_test::run_column_json_roundtrip);
 REGISTER_MINI_TEST!("ColumnElement", "Protobuf Roundtrip", crate::element_test::run_column_protobuf_roundtrip);
+REGISTER_MINI_TEST!("ColumnElement", "Polylines", crate::element_test::run_column_polylines);
+REGISTER_MINI_TEST!("ColumnElement", "Planes", crate::element_test::run_column_planes);
+REGISTER_MINI_TEST!("ColumnElement", "Edge Vectors", crate::element_test::run_column_edge_vectors);
+REGISTER_MINI_TEST!("ColumnElement", "Axis", crate::element_test::run_column_axis);
 
 REGISTER_MINI_TEST!("BeamElement", "Constructor", crate::element_test::run_beam_constructor);
 REGISTER_MINI_TEST!("BeamElement", "Setters", crate::element_test::run_beam_setters);
@@ -844,6 +1127,10 @@ REGISTER_MINI_TEST!("BeamElement", "Compute Point", crate::element_test::run_bea
 REGISTER_MINI_TEST!("BeamElement", "Session Geometry", crate::element_test::run_beam_session_geometry);
 REGISTER_MINI_TEST!("BeamElement", "Json Roundtrip", crate::element_test::run_beam_json_roundtrip);
 REGISTER_MINI_TEST!("BeamElement", "Protobuf Roundtrip", crate::element_test::run_beam_protobuf_roundtrip);
+REGISTER_MINI_TEST!("BeamElement", "Polylines", crate::element_test::run_beam_polylines);
+REGISTER_MINI_TEST!("BeamElement", "Planes", crate::element_test::run_beam_planes);
+REGISTER_MINI_TEST!("BeamElement", "Edge Vectors", crate::element_test::run_beam_edge_vectors);
+REGISTER_MINI_TEST!("BeamElement", "Axis", crate::element_test::run_beam_axis);
 
 REGISTER_MINI_TEST!("PlateElement", "Constructor", crate::element_test::run_plate_constructor);
 REGISTER_MINI_TEST!("PlateElement", "Default Polygon", crate::element_test::run_plate_default_polygon);
@@ -854,3 +1141,13 @@ REGISTER_MINI_TEST!("PlateElement", "Compute Point", crate::element_test::run_pl
 REGISTER_MINI_TEST!("PlateElement", "Triangle Polygon", crate::element_test::run_plate_triangle_polygon);
 REGISTER_MINI_TEST!("PlateElement", "Json Roundtrip", crate::element_test::run_plate_json_roundtrip);
 REGISTER_MINI_TEST!("PlateElement", "Protobuf Roundtrip", crate::element_test::run_plate_protobuf_roundtrip);
+REGISTER_MINI_TEST!("PlateElement", "Polylines", crate::element_test::run_plate_polylines);
+REGISTER_MINI_TEST!("PlateElement", "Planes", crate::element_test::run_plate_planes);
+REGISTER_MINI_TEST!("PlateElement", "Edge Vectors", crate::element_test::run_plate_edge_vectors);
+REGISTER_MINI_TEST!("PlateElement", "Axis", crate::element_test::run_plate_axis);
+REGISTER_MINI_TEST!("PlateElement", "Joint Types", crate::element_test::run_plate_joint_types);
+REGISTER_MINI_TEST!("PlateElement", "J Mf", crate::element_test::run_plate_j_mf);
+REGISTER_MINI_TEST!("PlateElement", "Key", crate::element_test::run_plate_key);
+REGISTER_MINI_TEST!("PlateElement", "Component Plane", crate::element_test::run_plate_component_plane);
+REGISTER_MINI_TEST!("PlateElement", "Json Roundtrip Joinery", crate::element_test::run_plate_json_roundtrip_joinery);
+REGISTER_MINI_TEST!("PlateElement", "Protobuf Roundtrip Joinery", crate::element_test::run_plate_protobuf_roundtrip_joinery);

@@ -10,6 +10,7 @@ use crate::mesh::Mesh;
 use serde::{Serialize, Deserialize};
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
+#[serde(tag = "type", rename = "TrimmedSurface")]
 pub struct TrimmedSurface {
     #[serde(serialize_with = "crate::guid_serde::serialize", deserialize_with = "crate::guid_serde::deserialize")]
     guid: std::sync::OnceLock<String>,
@@ -17,11 +18,13 @@ pub struct TrimmedSurface {
     pub width: f64,
     pub surfacecolor: Color,
     pub xform: Xform,
+    #[serde(rename = "surface")]
     pub m_surface: NurbsSurface,
+    #[serde(rename = "outer_loop")]
     #[serde(skip_serializing_if = "Option::is_none")]
     #[serde(default)]
     pub m_outer_loop: Option<NurbsCurve>,
-    #[serde(skip_serializing_if = "Vec::is_empty")]
+    #[serde(rename = "inner_loops")]
     #[serde(default)]
     pub m_inner_loops: Vec<NurbsCurve>,
 }
@@ -328,11 +331,7 @@ impl TrimmedSurface {
     }
 
     pub fn jsondump(&self) -> Result<String, Box<dyn std::error::Error>> {
-        let mut buf = Vec::new();
-        let formatter = serde_json::ser::PrettyFormatter::with_indent(b"    ");
-        let mut ser = serde_json::Serializer::with_formatter(&mut buf, formatter);
-        serde::Serialize::serialize(self, &mut ser)?;
-        Ok(String::from_utf8(buf)?)
+        crate::encoders::sorted_json_string(self)
     }
 
     pub fn jsonload(json_data: &str) -> Result<Self, Box<dyn std::error::Error>> {

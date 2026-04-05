@@ -977,7 +977,7 @@ impl BRep {
     ///////////////////////////////////////////////////////////////////////////////////////////
 
     pub fn json_dumps(&self) -> String {
-        serde_json::to_string(self).unwrap_or_default()
+        crate::encoders::sorted_json_string(self).unwrap_or_default()
     }
 
     pub fn json_loads(s: &str) -> Self {
@@ -985,7 +985,7 @@ impl BRep {
     }
 
     pub fn json_dump(&self, filepath: &str) {
-        let json = serde_json::to_string_pretty(self).unwrap_or_default();
+        let json = crate::encoders::sorted_json_string(self).unwrap_or_default();
         std::fs::write(filepath, json).expect("Failed to write JSON file");
     }
 

@@ -2909,11 +2909,7 @@ impl NurbsCurve {
     }
 
     pub fn jsondump(&self) -> Result<String, Box<dyn std::error::Error>> {
-        let mut buf = Vec::new();
-        let formatter = serde_json::ser::PrettyFormatter::with_indent(b"    ");
-        let mut ser = serde_json::Serializer::with_formatter(&mut buf, formatter);
-        serde::Serialize::serialize(self, &mut ser)?;
-        Ok(String::from_utf8(buf)?)
+        crate::encoders::sorted_json_string(self)
     }
 
     pub fn jsonload(json_data: &str) -> Result<Self, Box<dyn std::error::Error>> {

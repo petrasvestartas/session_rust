@@ -246,7 +246,8 @@ impl PointCloud {
         for i in 0..self.point_count() {
             let idx = i * 3;
             let mut pt = Point::new(self._coords[idx], self._coords[idx + 1], self._coords[idx + 2]);
-            self.xform.transform_point(&mut pt);
+            pt.xform = self.xform.clone();
+            pt.transform();
             self._coords[idx] = pt[0];
             self._coords[idx + 1] = pt[1];
             self._coords[idx + 2] = pt[2];
@@ -255,7 +256,8 @@ impl PointCloud {
         for i in 0..self.normal_count() {
             let idx = i * 3;
             let mut n = Vector::new(self._normals[idx], self._normals[idx + 1], self._normals[idx + 2]);
-            self.xform.transform_vector(&mut n);
+            n.xform = self.xform.clone();
+            n.transform();
             self._normals[idx] = n[0];
             self._normals[idx + 1] = n[1];
             self._normals[idx + 2] = n[2];
@@ -275,11 +277,7 @@ impl PointCloud {
     ///////////////////////////////////////////////////////////////////////////////////////////
 
     pub fn jsondump(&self) -> Result<String, Box<dyn std::error::Error>> {
-        let mut buf = Vec::new();
-        let formatter = serde_json::ser::PrettyFormatter::with_indent(b"  ");
-        let mut ser = serde_json::Serializer::with_formatter(&mut buf, formatter);
-        serde::Serialize::serialize(self, &mut ser)?;
-        Ok(String::from_utf8(buf)?)
+        crate::encoders::sorted_json_string(self)
     }
 
     pub fn jsonload(json_str: &str) -> Result<Self, Box<dyn std::error::Error>> {

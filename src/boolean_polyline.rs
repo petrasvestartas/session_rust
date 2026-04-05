@@ -6,7 +6,6 @@ use crate::Polyline;
 
 const BOOL_SCALE: f64 = 1e9;
 const BOOL_INV_SCALE: f64 = 1e-9;
-const VF_NONE: u32 = 0;
 const VF_LOCAL_MAX: u32 = 4;
 const VF_LOCAL_MIN: u32 = 8;
 
@@ -191,7 +190,7 @@ fn very_small_tri(sc: &Sc, op: usize) -> bool {
 }
 
 fn valid_closed(sc: &Sc, op: usize) -> bool {
-    let n = sc.opt[op].next; n != op && sc.opt[n].next != sc.opt[op].prev && !very_small_tri(sc, op)
+    let n = sc.opt[op].next; n != op && n != sc.opt[op].prev && !very_small_tri(sc, op)
 }
 
 fn pip_i(pt: Pt, poly: &[Pt]) -> bool {
@@ -301,7 +300,7 @@ fn is_valid_ael_order(sc: &Sc, res: usize, new: usize) -> bool {
         return cross3(sc.act[new].bot, sc.act[new].top, sc.vtx[next_vertex(sc, new).unwrap()].pt) >= 0.0;
     }
     let y = sc.act[new].bot.y;
-    if sc.act[res].bot.y != y || sc.locmin[sc.act[res].local_min.unwrap()].vertex != sc.act[res].local_min.map(|lm| sc.locmin[lm].vertex).unwrap_or(usize::MAX) { return sc.act[new].is_left_bound; }
+    if sc.act[res].bot.y != y || sc.vtx[sc.locmin[sc.act[res].local_min.unwrap()].vertex].pt.y != y { return sc.act[new].is_left_bound; }
     if sc.act[res].is_left_bound != sc.act[new].is_left_bound { return sc.act[new].is_left_bound; }
     let pp_res = prev_prev_vertex(sc, res);
     if pp_res.is_some() && is_collinear(sc.vtx[pp_res.unwrap()].pt, sc.act[res].bot, sc.act[res].top) { return true; }
@@ -559,7 +558,7 @@ fn intersect_edges(sc: &mut Sc, e1: usize, e2: usize, pt: Pt, ct: i32) {
 
 // ── Horizontal + Update edge ─────────────────────────────────────────────
 
-fn update_edge_into_ael(sc: &mut Sc, e: usize, ct: i32) {
+fn update_edge_into_ael(sc: &mut Sc, e: usize, _ct: i32) {
     let nv = next_vertex(sc, e).unwrap();
     sc.act[e].bot = sc.act[e].top; sc.act[e].vertex_top = Some(nv);
     sc.act[e].top = sc.vtx[nv].pt; sc.act[e].curr_x = sc.act[e].bot.x;
@@ -787,12 +786,12 @@ fn build_intersect_list(sc: &mut Sc, top_y: i64) -> bool {
             let left_start = left_opt.unwrap();
             let mut curr_base = left_start;
             let right_start = sc.act[left_start].jump.unwrap();
-            let l_end = right_start;
+            let mut l_end: OptIdx = Some(right_start);
             let r_end = sc.act[right_start].jump;
             sc.act[left_start].jump = r_end;
             let mut left = left_opt;
             let mut right = Some(right_start);
-            while left != Some(l_end) && right != r_end {
+            while left != l_end && right != r_end {
                 if sc.act[right.unwrap()].curr_x < sc.act[left.unwrap()].curr_x {
                     let ri = right.unwrap();
                     let mut tmp = sc.act[ri].prev_in_sel;
@@ -808,7 +807,7 @@ fn build_intersect_list(sc: &mut Sc, top_y: i64) -> bool {
                     let ri_prev = sc.act[ri].prev_in_sel.unwrap();
                     sc.act[ri_prev].next_in_sel = ri_next;
                     right = ri_next;
-                    let new_l_end = right;
+                    l_end = right;
                     // insert ri before left
                     let li = left.unwrap();
                     sc.act[ri].prev_in_sel = sc.act[li].prev_in_sel;
@@ -819,9 +818,6 @@ fn build_intersect_list(sc: &mut Sc, top_y: i64) -> bool {
                         if prev_base.is_none() { sc.sel = Some(curr_base); }
                         else { sc.act[prev_base.unwrap()].jump = Some(curr_base); }
                     }
-                    // l_end might have changed
-                    if Some(l_end) == Some(right_start) { /* l_end updated via new_l_end */ }
-                    let _ = new_l_end; // suppress warning
                 } else { left = sc.act[left.unwrap()].next_in_sel; }
             }
             prev_base = Some(curr_base); left_opt = r_end;
@@ -1156,3 +1152,7 @@ pub fn boolean_op(a: &Polyline, b: &Polyline, clip_type: i32) -> Vec<Polyline> {
     }
     out
 }
+
+#[cfg(test)]
+#[path = "boolean_polyline_test.rs"]
+mod boolean_polyline_test;

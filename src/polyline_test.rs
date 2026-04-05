@@ -1032,7 +1032,6 @@ pub fn run_polyline_get_lines() -> TestResult {
     MINI_TEST!("Get Lines", {
         use crate::Polyline;
         use crate::Point;
-        use crate::Line;
 
         let pl = Polyline::new(vec![
             Point::new(0.0, 0.0, 0.0), Point::new(1.0, 0.0, 0.0),

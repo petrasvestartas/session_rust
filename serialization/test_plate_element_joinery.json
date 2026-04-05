@@ -1,5 +1,56 @@
 {
-  "component_plane": null,
+  "component_plane": {
+    "frame": [
+      1.0,
+      2.0,
+      3.0,
+      1.0,
+      0.0,
+      0.0,
+      0.0,
+      1.0,
+      0.0,
+      0.0,
+      0.0,
+      1.0
+    ],
+    "guid": "e9809b2b-4867-4a8f-a559-120ee0d09b36",
+    "linecolor": {
+      "a": 255,
+      "b": 255,
+      "g": 0,
+      "guid": "4d5e7bad-bb99-4b0b-a836-04f228ae1950",
+      "name": "blue",
+      "r": 0,
+      "type": "Color"
+    },
+    "name": "my_plane",
+    "type": "Plane",
+    "width": 1.0,
+    "xform": {
+      "guid": "e8190775-69a3-493f-9e10-7ae54bbc443f",
+      "m": [
+        1.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        1.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        1.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "name": "my_xform",
+      "type": "Xform"
+    }
+  },
   "geometry_data": {
     "default_edge_attributes": {},
     "default_face_attributes": {},
@@ -48,7 +99,7 @@
       ]
     },
     "facedata": {},
-    "guid": "2a7ebd4f-3705-458b-9118-b2566a8e99de",
+    "guid": "8f1cdaa1-3d7b-4fe0-98e8-d7e685b09941",
     "halfedge": {
       "0": {
         "1": 2,
@@ -146,7 +197,7 @@
       }
     },
     "xform": {
-      "guid": "49914043-ab83-4b2d-a63a-7185b37967ea",
+      "guid": "67165571-fd64-4f93-a20e-f1267f90f975",
       "m": [
         1.0,
         0.0,
@@ -170,11 +221,32 @@
     }
   },
   "geometry_type": "Mesh",
-  "guid": "df822eee-521d-4234-9572-aebc8633877e",
-  "j_mf": [],
-  "joint_types": [],
-  "key": "",
-  "name": "json_plate",
+  "guid": "8ac681a1-d50d-434f-80df-849baef4f12f",
+  "j_mf": [
+    [
+      [
+        0,
+        true,
+        0.5
+      ]
+    ],
+    [],
+    [
+      [
+        1,
+        false,
+        0.3
+      ]
+    ]
+  ],
+  "joint_types": [
+    1,
+    2,
+    3,
+    4
+  ],
+  "key": "plate_A",
+  "name": "joinery_plate",
   "polygon": [
     [
       0.0,
@@ -198,7 +270,7 @@
     ]
   ],
   "session_transformation": {
-    "guid": "bbeac4d1-e571-41dd-9c04-eec61186d28b",
+    "guid": "03e28753-b77a-48f2-bbee-9bab43b6fe1d",
     "m": [
       1.0,
       0.0,
@@ -212,9 +284,9 @@
       0.0,
       1.0,
       0.0,
-      1.0,
-      2.0,
-      3.0,
+      0.0,
+      0.0,
+      0.0,
       1.0
     ],
     "name": "my_xform",

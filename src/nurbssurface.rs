@@ -47,7 +47,7 @@ impl serde::Serialize for NurbsSurface {
         let mut cvs: Vec<f64> = Vec::with_capacity(self.m_cv_count[0] * self.m_cv_count[1] * cv_sz);
         for ci in 0..self.m_cv_count[0] {
             for cj in 0..self.m_cv_count[1] {
-                let base = ci * self.m_cv_stride[1] + cj * self.m_cv_stride[0];
+                let base = ci * self.m_cv_stride[0] + cj * self.m_cv_stride[1];
                 for d in 0..cv_sz {
                     if base + d < self.m_cv.len() {
                         cvs.push(self.m_cv[base + d]);
@@ -136,7 +136,19 @@ impl<'de> Deserialize<'de> for NurbsSurface {
         let data = NurbsSurfaceData::deserialize(deserializer)?;
         let cv_sz = if data.is_rational { data.dimension + 1 } else { data.dimension };
         let cv_stride_u = cv_sz;
-        let cv_stride_v = cv_sz * data.cv_count_v;
+        let cv_stride_v = cv_sz * data.cv_count_u;
+
+        // Rearrange from row-major (serialized) to column-major (internal layout)
+        let mut cv_data = vec![0.0f64; data.control_points.len()];
+        for i in 0..data.cv_count_u {
+            for j in 0..data.cv_count_v {
+                let src = (i * data.cv_count_v + j) * cv_sz;
+                let dst = i * cv_stride_u + j * cv_stride_v;
+                if src + cv_sz <= data.control_points.len() && dst + cv_sz <= cv_data.len() {
+                    cv_data[dst..dst + cv_sz].copy_from_slice(&data.control_points[src..src + cv_sz]);
+                }
+            }
+        }
 
         let pointcolors = data.pointcolors.chunks(4)
             .filter(|c| c.len() == 4)
@@ -165,7 +177,7 @@ impl<'de> Deserialize<'de> for NurbsSurface {
             m_cv_count: [data.cv_count_u, data.cv_count_v],
             m_cv_stride: [cv_stride_u, cv_stride_v],
             m_knot: [data.knots_u, data.knots_v],
-            m_cv: data.control_points,
+            m_cv: cv_data,
             m_mesh: None,
         })
     }
@@ -457,87 +469,6 @@ impl NurbsSurface {
             return false;
         }
         self.from_curve_internal(&crv, dir)
-    }
-
-    fn compute_bbox_diagonal(&self) -> f64 {
-        let (mut minx, mut miny, mut minz) = (1e30f64, 1e30f64, 1e30f64);
-        let (mut maxx, mut maxy, mut maxz) = (-1e30f64, -1e30f64, -1e30f64);
-        for i in 0..self.cv_count_dir(Some(0)) {
-            for j in 0..self.cv_count_dir(Some(1)) {
-                if let Some(p) = self.get_cv(i, j) {
-                    if p[0] < minx { minx = p[0]; }
-                    if p[1] < miny { miny = p[1]; }
-                    if p[2] < minz { minz = p[2]; }
-                    if p[0] > maxx { maxx = p[0]; }
-                    if p[1] > maxy { maxy = p[1]; }
-                    if p[2] > maxz { maxz = p[2]; }
-                }
-            }
-        }
-        let (dx, dy, dz) = (maxx-minx, maxy-miny, maxz-minz);
-        (dx*dx + dy*dy + dz*dz).sqrt()
-    }
-
-    fn span_subs(&self, dir: usize, sp: &[f64], osp: &[f64], max_angle_deg: f64, bbox_diag: f64) -> Vec<usize> {
-        let n = sp.len() - 1;
-        let n_other = osp.len() - 1;
-        let mut subs = vec![1usize; n];
-        let deg_u = self.degree(0);
-        let deg_v = self.degree(1);
-        let degree_dir = if dir == 0 { deg_u } else { deg_v };
-        let s_positions: Vec<f64> = (0..n_other).map(|k| (osp[k] + osp[k + 1]) * 0.5).collect();
-        for i in 0..n {
-            let t0 = sp[i];
-            let t1 = sp[i + 1];
-            if degree_dir > 1 {
-                let mut max_angle = 0.0f64;
-                for &s in &s_positions {
-                    let mut prev_n: Option<Vector> = None;
-                    let mut total_angle = 0.0f64;
-                    for k in 0..=4 {
-                        let t = t0 + k as f64 * (t1 - t0) / 4.0;
-                        let nv = if dir == 0 { self.normal_at(t, s) } else { self.normal_at(s, t) };
-                        if let Some(ref pn) = prev_n {
-                            let dot = (pn[0]*nv[0] + pn[1]*nv[1] + pn[2]*nv[2]).clamp(-1.0, 1.0);
-                            total_angle += dot.acos() * 180.0 / crate::tolerance::PI;
-                        }
-                        prev_n = Some(nv);
-                    }
-                    if total_angle > max_angle { max_angle = total_angle; }
-                }
-                subs[i] = 1.max((max_angle / max_angle_deg).ceil() as usize).min(24);
-            }
-            // Direct chord-height deviation check
-            {
-                let chord_tol = bbox_diag * 0.005;
-                let mut max_dev = 0.0f64;
-                let nc = n_other.min(3);
-                for ci in 0..=nc {
-                    let s = osp[0] + ci as f64 * (osp[osp.len()-1] - osp[0]) / nc.max(1) as f64;
-                    let pa = if dir == 0 { self.point_at(t0, s) } else { self.point_at(s, t0) }.unwrap_or(Point::new(0.0, 0.0, 0.0));
-                    let pb = if dir == 0 { self.point_at(t1, s) } else { self.point_at(s, t1) }.unwrap_or(Point::new(0.0, 0.0, 0.0));
-                    for k in 1..=3 {
-                        let frac = k as f64 / 4.0;
-                        let tm = t0 + frac * (t1 - t0);
-                        let pm = if dir == 0 { self.point_at(tm, s) } else { self.point_at(s, tm) }.unwrap_or(Point::new(0.0, 0.0, 0.0));
-                        let lx = pa[0] + frac * (pb[0] - pa[0]);
-                        let ly = pa[1] + frac * (pb[1] - pa[1]);
-                        let lz = pa[2] + frac * (pb[2] - pa[2]);
-                        let dx = pm[0] - lx;
-                        let dy = pm[1] - ly;
-                        let dz = pm[2] - lz;
-                        let dev = (dx*dx + dy*dy + dz*dz).sqrt();
-                        if dev > max_dev { max_dev = dev; }
-                    }
-                }
-                if max_dev > chord_tol {
-                    let chord_subs = 2.max((max_dev / chord_tol).sqrt().ceil() as usize);
-                    subs[i] = subs[i].max(chord_subs.min(24));
-                }
-            }
-            if degree_dir > 1 { subs[i] = subs[i].max(2); }
-        }
-        subs
     }
 
     pub fn mesh_grid(&self) -> Mesh {
@@ -1925,7 +1856,8 @@ impl NurbsSurface {
         for i in 0..self.m_cv_count[0] {
             for j in 0..self.m_cv_count[1] {
                 if let Some(mut pt) = self.get_cv(i, j) {
-                    xf.transform_point(&mut pt);
+                    pt.xform = xf.clone();
+                    pt.transform();
                     self.set_cv(i, j, &pt);
                 }
             }
@@ -1937,7 +1869,8 @@ impl NurbsSurface {
         for i in 0..self.m_cv_count[0] {
             for j in 0..self.m_cv_count[1] {
                 if let Some(mut pt) = self.get_cv(i, j) {
-                    xform.transform_point(&mut pt);
+                    pt.xform = xform.clone();
+                    pt.transform();
                     if !self.set_cv(i, j, &pt) {
                         return false;
                     }
@@ -2044,11 +1977,7 @@ impl NurbsSurface {
     }
 
     pub fn jsondump(&self) -> Result<String, Box<dyn std::error::Error>> {
-        let mut buf = Vec::new();
-        let formatter = serde_json::ser::PrettyFormatter::with_indent(b"    ");
-        let mut ser = serde_json::Serializer::with_formatter(&mut buf, formatter);
-        serde::Serialize::serialize(self, &mut ser)?;
-        Ok(String::from_utf8(buf)?)
+        crate::encoders::sorted_json_string(self)
     }
 
     pub fn jsonload(json_data: &str) -> Result<Self, Box<dyn std::error::Error>> {

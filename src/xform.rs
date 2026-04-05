@@ -1,4 +1,5 @@
-use crate::{Plane, Point, Vector};
+use crate::{Line, Plane, Point, Vector};
+use crate::tolerance::Tolerance;
 use serde::{Deserialize, Deserializer, Serializer};
 use serde::ser::SerializeMap;
 use std::fmt;
@@ -61,7 +62,7 @@ impl<'de> Deserialize<'de> for Xform {
 
 impl Xform {
     ///////////////////////////////////////////////////////////////////////////////////////////
-    // Basic Constructors
+    // Constructors
     ///////////////////////////////////////////////////////////////////////////////////////////
 
     pub fn new() -> Self {
@@ -122,11 +123,12 @@ impl Xform {
         xform
     }
 
-    pub fn rotation_x(angle_radians: f64) -> Self {
+    pub fn rotation_x(angle: f64, degrees: bool) -> Self {
+        let angle = if degrees { angle * Tolerance::TO_RADIANS } else { angle };
         let mut xform = Self::identity();
 
-        let cos_angle = angle_radians.cos();
-        let sin_angle = angle_radians.sin();
+        let cos_angle = angle.cos();
+        let sin_angle = angle.sin();
 
         xform.m[5] = cos_angle;
         xform.m[6] = sin_angle;
@@ -136,11 +138,12 @@ impl Xform {
         xform
     }
 
-    pub fn rotation_y(angle_radians: f64) -> Self {
+    pub fn rotation_y(angle: f64, degrees: bool) -> Self {
+        let angle = if degrees { angle * Tolerance::TO_RADIANS } else { angle };
         let mut xform = Self::identity();
 
-        let cos_angle = angle_radians.cos();
-        let sin_angle = angle_radians.sin();
+        let cos_angle = angle.cos();
+        let sin_angle = angle.sin();
 
         xform.m[0] = cos_angle;
         xform.m[2] = -sin_angle;
@@ -150,10 +153,11 @@ impl Xform {
         xform
     }
 
-    pub fn rotation_z(angle_radians: f64) -> Self {
+    pub fn rotation_z(angle: f64, degrees: bool) -> Self {
+        let angle = if degrees { angle * Tolerance::TO_RADIANS } else { angle };
         let mut xform = Self::identity();
-        let cos_angle = angle_radians.cos();
-        let sin_angle = angle_radians.sin();
+        let cos_angle = angle.cos();
+        let sin_angle = angle.sin();
 
         xform.m[0] = cos_angle;
         xform.m[1] = sin_angle;
@@ -163,12 +167,13 @@ impl Xform {
         xform
     }
 
-    pub fn rotation(axis: &Vector, angle_radians: f64) -> Self {
+    pub fn rotation(axis: &Vector, angle: f64, degrees: bool) -> Self {
+        let angle = if degrees { angle * Tolerance::TO_RADIANS } else { angle };
         let axis = axis.normalized();
 
         let mut xform = Self::identity();
-        let cos_angle = angle_radians.cos();
-        let sin_angle = angle_radians.sin();
+        let cos_angle = angle.cos();
+        let sin_angle = angle.sin();
         let one_minus_cos = 1.0 - cos_angle;
 
         let xx = axis[0] * axis[0];
@@ -193,14 +198,22 @@ impl Xform {
         xform
     }
 
-    pub fn look_at_rh(eye: &Point, target: &Point, up: &Vector) -> Self {
-        // Use direct coordinate access to avoid cloning Points
+    pub fn rotation_around_line(line: &Line, angle: f64, degrees: bool) -> Self {
+        let p = line.start();
+        let d = line.to_direction();
+        let t0 = Self::translation(-p[0], -p[1], -p[2]);
+        let r = Self::rotation(&d, angle, degrees);
+        let t1 = Self::translation(p[0], p[1], p[2]);
+        t1 * (r * t0)
+    }
+
+    pub fn look_at_right_handed(eye: &Point, target: &Point, up: &Vector) -> Self {
         let fx = target[0] - eye[0];
         let fy = target[1] - eye[1];
         let fz = target[2] - eye[2];
         let f_len = (fx * fx + fy * fy + fz * fz).sqrt();
         let f = Vector::new(fx / f_len, fy / f_len, fz / f_len);
-        
+
         let s = f.cross(&up.normalized()).normalized();
         let u = s.cross(&f);
 
@@ -224,6 +237,94 @@ impl Xform {
 
         xform
     }
+
+    pub fn look_to_right_handed(eye: &Point, direction: &Vector, up: &Vector) -> Self {
+        let f = direction.normalized();
+        let s = f.cross(&up.normalized()).normalized();
+        let u = s.cross(&f);
+
+        let mut xform = Self::identity();
+
+        xform.m[0] = s[0];
+        xform.m[4] = s[1];
+        xform.m[8] = s[2];
+
+        xform.m[1] = u[0];
+        xform.m[5] = u[1];
+        xform.m[9] = u[2];
+
+        xform.m[2] = -f[0];
+        xform.m[6] = -f[1];
+        xform.m[10] = -f[2];
+
+        xform.m[12] = -s.dot(&Vector::new(eye[0], eye[1], eye[2]));
+        xform.m[13] = -u.dot(&Vector::new(eye[0], eye[1], eye[2]));
+        xform.m[14] = f.dot(&Vector::new(eye[0], eye[1], eye[2]));
+
+        xform
+    }
+
+    pub fn perspective(fov_y: f64, aspect: f64, near: f64, far: f64) -> Self {
+        let f = 1.0 / (fov_y / 2.0).tan();
+        let nf = near - far;
+        let mut xform = Xform::new();
+        xform.m = [0.0; 16];
+        xform.m[0] = f / aspect;
+        xform.m[5] = f;
+        xform.m[10] = far / nf;
+        xform.m[11] = -1.0;
+        xform.m[14] = (near * far) / nf;
+        xform
+    }
+
+    pub fn orthographic(left: f64, right: f64, bottom: f64, top: f64, near: f64, far: f64) -> Self {
+        let rl = right - left;
+        let tb = top - bottom;
+        let nf = near - far;
+        let mut xform = Xform::new();
+        xform.m = [0.0; 16];
+        xform.m[0] = 2.0 / rl;
+        xform.m[5] = 2.0 / tb;
+        xform.m[10] = 1.0 / nf;
+        xform.m[12] = (left + right) / (left - right);
+        xform.m[13] = (bottom + top) / (bottom - top);
+        xform.m[14] = near / nf;
+        xform.m[15] = 1.0;
+        xform
+    }
+
+    pub fn project_to_plane(plane: &Plane) -> Self {
+        let n = plane.z_axis();
+        let o = plane.origin();
+        let (nx, ny, nz) = (n[0], n[1], n[2]);
+        let d = o[0] * nx + o[1] * ny + o[2] * nz;
+        let mut xform = Xform::new();
+        xform.m[0]  = 1.0 - nx * nx;  xform.m[4]  = -nx * ny;        xform.m[8]  = -nx * nz;        xform.m[12] = nx * d;
+        xform.m[1]  = -ny * nx;       xform.m[5]  = 1.0 - ny * ny;   xform.m[9]  = -ny * nz;        xform.m[13] = ny * d;
+        xform.m[2]  = -nz * nx;       xform.m[6]  = -nz * ny;        xform.m[10] = 1.0 - nz * nz;   xform.m[14] = nz * d;
+        xform.m[3]  = 0.0;            xform.m[7]  = 0.0;             xform.m[11] = 0.0;              xform.m[15] = 1.0;
+        xform
+    }
+
+    pub fn project_to_plane_by_axis(plane: &Plane, direction: &Vector) -> Self {
+        let n = plane.z_axis();
+        let o = plane.origin();
+        let (nx, ny, nz) = (n[0], n[1], n[2]);
+        let (dx, dy, dz) = (direction[0], direction[1], direction[2]);
+        let dot_nd = nx * dx + ny * dy + nz * dz;
+        let s = 1.0 / dot_nd;
+        let d = o[0] * nx + o[1] * ny + o[2] * nz;
+        let mut xform = Xform::new();
+        xform.m[0]  = 1.0 - dx*s*nx;  xform.m[4]  = -dx*s*ny;        xform.m[8]  = -dx*s*nz;        xform.m[12] = dx*s*d;
+        xform.m[1]  = -dy*s*nx;       xform.m[5]  = 1.0 - dy*s*ny;   xform.m[9]  = -dy*s*nz;        xform.m[13] = dy*s*d;
+        xform.m[2]  = -dz*s*nx;       xform.m[6]  = -dz*s*ny;        xform.m[10] = 1.0 - dz*s*nz;   xform.m[14] = dz*s*d;
+        xform.m[3]  = 0.0;            xform.m[7]  = 0.0;             xform.m[11] = 0.0;              xform.m[15] = 1.0;
+        xform
+    }
+
+    ///////////////////////////////////////////////////////////////////////////////////////////
+    // Details
+    ///////////////////////////////////////////////////////////////////////////////////////////
 
     pub fn inverse(&self) -> Option<Xform> {
         let a00 = self[(0, 0)];
@@ -279,52 +380,6 @@ impl Xform {
     ///////////////////////////////////////////////////////////////////////////////////////////
     // Apply Transformations
     ///////////////////////////////////////////////////////////////////////////////////////////
-
-    pub fn transformed_point(&self, point: &Point) -> Point {
-        let m = &self.m;
-        let w = m[3] * point[0] + m[7] * point[1] + m[11] * point[2] + m[15];
-        let w_inv = if w.abs() > 1e-10 { 1.0 / w } else { 1.0 };
-
-        Point::new(
-            (m[0] * point[0] + m[4] * point[1] + m[8] * point[2] + m[12]) * w_inv,
-            (m[1] * point[0] + m[5] * point[1] + m[9] * point[2] + m[13]) * w_inv,
-            (m[2] * point[0] + m[6] * point[1] + m[10] * point[2] + m[14]) * w_inv,
-        )
-    }
-
-    pub fn transformed_vector(&self, vector: &Vector) -> Vector {
-        let m = &self.m;
-
-        Vector::new(
-            m[0] * vector[0] + m[4] * vector[1] + m[8] * vector[2],
-            m[1] * vector[0] + m[5] * vector[1] + m[9] * vector[2],
-            m[2] * vector[0] + m[6] * vector[1] + m[10] * vector[2],
-        )
-    }
-
-    pub fn transform_point(&self, point: &mut Point) {
-        let m = &self.m;
-        let x = point[0];
-        let y = point[1];
-        let z = point[2];
-        let w = m[3] * x + m[7] * y + m[11] * z + m[15];
-        let w_inv = if w.abs() > 1e-10 { 1.0 / w } else { 1.0 };
-
-        point[0] = (m[0] * x + m[4] * y + m[8] * z + m[12]) * w_inv;
-        point[1] = (m[1] * x + m[5] * y + m[9] * z + m[13]) * w_inv;
-        point[2] = (m[2] * x + m[6] * y + m[10] * z + m[14]) * w_inv;
-    }
-
-    pub fn transform_vector(&self, vector: &mut Vector) {
-        let m = &self.m;
-        let x = vector[0];
-        let y = vector[1];
-        let z = vector[2];
-
-        vector[0] = m[0] * x + m[4] * y + m[8] * z;
-        vector[1] = m[1] * x + m[5] * y + m[9] * z;
-        vector[2] = m[2] * x + m[6] * y + m[10] * z;
-    }
 
     pub fn x(&self) -> Vector {
         Vector::new(self.m[0], self.m[1], self.m[2])
@@ -622,7 +677,8 @@ impl Xform {
         &t2 * &(&t1 * &t0)
     }
 
-    pub fn axis_rotation(angle: f64, axis: &Vector) -> Self {
+    pub fn axis_rotation(angle: f64, axis: &Vector, degrees: bool) -> Self {
+        let angle = if degrees { angle * Tolerance::TO_RADIANS } else { angle };
         let c = angle.cos();
         let s = angle.sin();
         let ux = axis[0];
@@ -651,11 +707,7 @@ impl Xform {
     ///////////////////////////////////////////////////////////////////////////////////////////
 
     pub fn jsondump(&self) -> Result<String, Box<dyn std::error::Error>> {
-        let mut buf = Vec::new();
-        let formatter = serde_json::ser::PrettyFormatter::with_indent(b"    ");
-        let mut ser = serde_json::Serializer::with_formatter(&mut buf, formatter);
-        serde::Serialize::serialize(self, &mut ser)?;
-        Ok(String::from_utf8(buf)?)
+        crate::encoders::sorted_json_string(self)
     }
 
     pub fn jsonload(json_data: &str) -> Result<Self, Box<dyn std::error::Error>> {
@@ -682,7 +734,7 @@ impl Xform {
     }
 
     ///////////////////////////////////////////////////////////////////////////////////////////
-    // Protobuf Serialization
+    // Protobuf
     ///////////////////////////////////////////////////////////////////////////////////////////
 
     /// Convert to protobuf binary format.

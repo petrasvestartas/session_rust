@@ -1,5 +1,5 @@
 use crate::{Color, Vector, Xform};
-use serde::{ser::Serialize as SerTrait, Deserialize, Serialize};
+use serde::{Deserialize, Serialize};
 use std::fmt;
 use std::ops::{Add, AddAssign, Div, DivAssign, Index, IndexMut, Mul, MulAssign, Sub, SubAssign};
 /// A 3D point with visual properties and JSON serialization support.
@@ -125,8 +125,13 @@ impl Point {
     ///
     /// Transforms the point in-place and resets xform to identity.
     pub fn transform(&mut self) {
-        let xform = self.xform.clone();
-        xform.transform_point(self);
+        let (x, y, z) = (self._x, self._y, self._z);
+        let m = &self.xform.m;
+        let w = m[3]*x + m[7]*y + m[11]*z + m[15];
+        let w_inv = if w.abs() > 1e-10 { 1.0 / w } else { 1.0 };
+        self._x = (m[0]*x + m[4]*y + m[8]*z + m[12]) * w_inv;
+        self._y = (m[1]*x + m[5]*y + m[9]*z + m[13]) * w_inv;
+        self._z = (m[2]*x + m[6]*y + m[10]*z + m[14]) * w_inv;
         self.xform = Xform::identity();
     }
 
@@ -154,11 +159,7 @@ impl Point {
     ///
     /// A Result containing the pretty-printed JSON string or an error.
     pub fn jsondump(&self) -> Result<String, Box<dyn std::error::Error>> {
-        let mut buf = Vec::new();
-        let formatter = serde_json::ser::PrettyFormatter::with_indent(b"    ");
-        let mut ser = serde_json::Serializer::with_formatter(&mut buf, formatter);
-        SerTrait::serialize(self, &mut ser)?;
-        Ok(String::from_utf8(buf)?)
+        crate::encoders::sorted_json_string(self)
     }
 
     /// Deserializes a Point from a JSON string.

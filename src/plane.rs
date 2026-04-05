@@ -1,4 +1,4 @@
-use crate::{Point, Vector, Xform};
+use crate::{Color, Point, Vector, Xform};
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use serde::ser::SerializeMap;
 
@@ -7,6 +7,7 @@ pub struct Plane {
     guid: std::sync::OnceLock<String>,
     pub name: String,
     pub width: f64,
+    pub linecolor: Color,
     _origin: Point,
     _x_axis: Vector,
     _y_axis: Vector,
@@ -26,7 +27,8 @@ impl Serialize for Plane {
     where
         S: Serializer,
     {
-        let mut map = serializer.serialize_map(Some(6))?;
+        let mut map = serializer.serialize_map(Some(7))?;
+        map.serialize_entry("linecolor", &self.linecolor)?;
         map.serialize_entry("type", "Plane")?;
         map.serialize_entry("guid", self.guid())?;
         map.serialize_entry("name", &self.name)?;
@@ -58,6 +60,8 @@ impl<'de> Deserialize<'de> for Plane {
             #[serde(default = "default_width")]
             width: f64,
             #[serde(default)]
+            linecolor: Option<Color>,
+            #[serde(default)]
             xform: Option<Xform>,
         }
 
@@ -85,6 +89,7 @@ impl<'de> Deserialize<'de> for Plane {
             guid,
             name: data.name,
             width: data.width,
+            linecolor: data.linecolor.unwrap_or_else(Color::blue),
             _origin: origin,
             _x_axis: x_axis,
             _y_axis: y_axis,
@@ -104,6 +109,7 @@ impl Default for Plane {
             guid: std::sync::OnceLock::new(),
             name: "my_plane".to_string(),
             width: 1.0,
+            linecolor: Color::blue(),
             _origin: Point::default(),
             _x_axis: Vector::x_axis(),
             _y_axis: Vector::y_axis(),
@@ -135,6 +141,7 @@ impl Plane {
             guid: std::sync::OnceLock::new(),
             name: "my_plane".to_string(),
             width: 1.0,
+            linecolor: Color::blue(),
             _origin: point,
             _x_axis: x_axis,
             _y_axis: y_axis,
@@ -156,6 +163,7 @@ impl Plane {
             guid: std::sync::OnceLock::new(),
             name: "my_plane".to_string(),
             width: 1.0,
+            linecolor: Color::blue(),
             _origin: origin,
             _x_axis: x_axis,
             _y_axis: y_axis,
@@ -185,6 +193,7 @@ impl Plane {
             guid: std::sync::OnceLock::new(),
             name,
             width: 1.0,
+            linecolor: Color::blue(),
             _origin: point,
             _x_axis: x_axis,
             _y_axis: y_axis,
@@ -198,14 +207,18 @@ impl Plane {
     }
 
     pub fn from_point_normal(point: Point, normal: Vector) -> Self {
+        Self::from_point_normal_opt(point, normal, true)
+    }
+
+    pub fn from_point_normal_opt(point: Point, normal: Vector, normalize: bool) -> Self {
         let origin = point.clone();
         let mut z_axis = normal;
-        z_axis.normalize_self();
+        if normalize { z_axis.normalize_self(); }
         let mut x_axis = Vector::default();
         x_axis.perpendicular_to(&z_axis);
-        x_axis.normalize_self();
+        if normalize { x_axis.normalize_self(); }
         let mut y_axis = z_axis.cross(&x_axis);
-        y_axis.normalize_self();
+        if normalize { y_axis.normalize_self(); }
 
         let a = z_axis[0];
         let b = z_axis[1];
@@ -216,6 +229,7 @@ impl Plane {
             guid: std::sync::OnceLock::new(),
             name: "my_plane".to_string(),
             width: 1.0,
+            linecolor: Color::blue(),
             _origin: origin,
             _x_axis: x_axis,
             _y_axis: y_axis,
@@ -256,6 +270,7 @@ impl Plane {
             guid: std::sync::OnceLock::new(),
             name: "my_plane".to_string(),
             width: 1.0,
+            linecolor: Color::blue(),
             _origin: origin,
             _x_axis: x_axis,
             _y_axis: y_axis,
@@ -335,6 +350,7 @@ impl Plane {
             guid: std::sync::OnceLock::new(),
             name: "my_plane".to_string(),
             width: 1.0,
+            linecolor: Color::blue(),
             _origin: Point::new(cx, cy, cz),
             _x_axis: x_axis,
             _y_axis: y_axis,
@@ -369,6 +385,7 @@ impl Plane {
             guid: std::sync::OnceLock::new(),
             name: "my_plane".to_string(),
             width: 1.0,
+            linecolor: Color::blue(),
             _origin: origin,
             _x_axis: x_axis,
             _y_axis: y_axis,
@@ -386,6 +403,7 @@ impl Plane {
             guid: std::sync::OnceLock::new(),
             name: "xy_plane".to_string(),
             width: 1.0,
+            linecolor: Color::blue(),
             _origin: Point::new(0.0, 0.0, 0.0),
             _x_axis: Vector::x_axis(),
             _y_axis: Vector::y_axis(),
@@ -403,6 +421,7 @@ impl Plane {
             guid: std::sync::OnceLock::new(),
             name: "yz_plane".to_string(),
             width: 1.0,
+            linecolor: Color::blue(),
             _origin: Point::new(0.0, 0.0, 0.0),
             _x_axis: Vector::y_axis(),
             _y_axis: Vector::z_axis(),
@@ -421,6 +440,7 @@ impl Plane {
             guid: std::sync::OnceLock::new(),
             name: "my_plane".to_string(),
             width: 1.0,
+            linecolor: Color::blue(),
             _origin: Point::new(0.0, 0.0, 0.0),
             _x_axis: Vector::new(0.0, 0.0, 0.0),
             _y_axis: Vector::new(0.0, 0.0, 0.0),
@@ -448,6 +468,7 @@ impl Plane {
             guid: std::sync::OnceLock::new(),
             name: "my_plane".to_string(),
             width: 1.0,
+            linecolor: Color::blue(),
             _origin: origin,
             _x_axis: x_axis,
             _y_axis: y_axis,
@@ -465,6 +486,7 @@ impl Plane {
             guid: std::sync::OnceLock::new(),
             name: "xz_plane".to_string(),
             width: 1.0,
+            linecolor: Color::blue(),
             _origin: Point::new(0.0, 0.0, 0.0),
             _x_axis: Vector::x_axis(),
             _y_axis: Vector::new(0.0, 0.0, -1.0),
@@ -581,7 +603,7 @@ impl Plane {
         if can_be_flipped {
             parallel != 0
         } else {
-            parallel == 1
+            parallel == -1
         }
     }
 
@@ -598,13 +620,33 @@ impl Plane {
             + plane1._d)
             .abs();
 
-        let tolerance = crate::tolerance::Tolerance::ZERO_TOLERANCE;
+        let tolerance = crate::tolerance::Tolerance::APPROXIMATION;
         dist0 < tolerance && dist1 < tolerance
     }
 
     pub fn is_coplanar(plane0: &Plane, plane1: &Plane, can_be_flipped: bool) -> bool {
         Self::is_same_direction(plane0, plane1, can_be_flipped)
             && Self::is_same_position(plane0, plane1)
+    }
+
+    pub fn is_coplanar_from_normals(
+        origin0: &Point, normal0: &Vector,
+        origin1: &Point, normal1: &Vector,
+        can_be_flipped: bool,
+    ) -> bool {
+        let mut n0 = normal0.clone();
+        let mut n1 = normal1.clone();
+        let parallel = n0.is_parallel_to(&n1);
+        if can_be_flipped { if parallel == 0 { return false; } }
+        else { if parallel != -1 { return false; } }
+        let (a0, b0, c0) = (n0[0], n0[1], n0[2]);
+        let d0 = -(a0 * origin0[0] + b0 * origin0[1] + c0 * origin0[2]);
+        let (a1, b1, c1) = (n1[0], n1[1], n1[2]);
+        let d1 = -(a1 * origin1[0] + b1 * origin1[1] + c1 * origin1[2]);
+        let tol = crate::tolerance::Tolerance::APPROXIMATION;
+        let dist0 = (a0 * origin1[0] + b0 * origin1[1] + c0 * origin1[2] + d0).abs();
+        let dist1 = (a1 * origin0[0] + b1 * origin0[1] + c1 * origin0[2] + d1).abs();
+        dist0 < tol && dist1 < tol
     }
 }
 
@@ -672,7 +714,8 @@ impl PartialEq for Plane {
         self._origin == other._origin &&
         self._x_axis == other._x_axis &&
         self._y_axis == other._y_axis &&
-        self._z_axis == other._z_axis
+        self._z_axis == other._z_axis &&
+        self.linecolor == other.linecolor
     }
 }
 
@@ -700,11 +743,14 @@ impl std::fmt::Display for Plane {
 
 impl Plane {
     pub fn transform(&mut self) {
-        // No clone needed - transform methods take &self
-        self.xform.transform_point(&mut self._origin);
-        self.xform.transform_vector(&mut self._x_axis);
-        self.xform.transform_vector(&mut self._y_axis);
-        self.xform.transform_vector(&mut self._z_axis);
+        self._origin.xform = self.xform.clone();
+        self._origin.transform();
+        self._x_axis.xform = self.xform.clone();
+        self._x_axis.transform();
+        self._y_axis.xform = self.xform.clone();
+        self._y_axis.transform();
+        self._z_axis.xform = self.xform.clone();
+        self._z_axis.transform();
         self.xform = Xform::identity();
     }
 
@@ -747,7 +793,7 @@ impl Plane {
         use crate::tolerance::TOLERANCE;
         let prec = crate::tolerance::Tolerance::ROUNDING;
         format!(
-            "Plane({}, {}, {}, {}, {}, {}, {})",
+            "Plane({}, {}, {}, {}, {}, {}, {}, {})",
             self.name,
             TOLERANCE.format_number(self._origin[0], prec),
             TOLERANCE.format_number(self._origin[1], prec),
@@ -755,11 +801,12 @@ impl Plane {
             TOLERANCE.format_number(self._z_axis[0], prec),
             TOLERANCE.format_number(self._z_axis[1], prec),
             TOLERANCE.format_number(self._z_axis[2], prec),
+            self.linecolor.repr(),
         )
     }
 
     pub fn jsondump(&self) -> Result<String, Box<dyn std::error::Error>> {
-        Ok(serde_json::to_string_pretty(self)?)
+        crate::encoders::sorted_json_string(self)
     }
 
     pub fn jsonload(json_data: &str) -> Result<Self, Box<dyn std::error::Error>> {
@@ -804,6 +851,14 @@ impl Plane {
                 self._z_axis[0], self._z_axis[1], self._z_axis[2],
             ],
             width: self.width,
+            linecolor: Some(crate::proto::Color {
+                guid: self.linecolor.guid().to_string(),
+                name: self.linecolor.name.clone(),
+                r: self.linecolor.r as i32,
+                g: self.linecolor.g as i32,
+                b: self.linecolor.b as i32,
+                a: self.linecolor.a as i32,
+            }),
             xform: Some(crate::proto::Xform {
                 guid: self.xform.guid().to_string(),
                 name: self.xform.name.clone(),
@@ -830,6 +885,16 @@ impl Plane {
         let c = z_axis[2];
         let d = -(a * origin[0] + b * origin[1] + c * origin[2]);
 
+        // Load linecolor
+        let mut color = Color::blue();
+        if let Some(c) = proto.linecolor {
+            color.name = c.name;
+            color.r = c.r as u8;
+            color.g = c.g as u8;
+            color.b = c.b as u8;
+            color.a = c.a as u8;
+        }
+
         // Load xform if present
         let xform = if let Some(proto_xform) = proto.xform {
             let mut x = Xform::identity();
@@ -849,6 +914,7 @@ impl Plane {
             guid,
             name: proto.name,
             width: if proto.width > 0.0 { proto.width } else { 1.0 },
+            linecolor: color,
             _origin: origin,
             _x_axis: x_axis,
             _y_axis: y_axis,

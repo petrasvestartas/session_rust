@@ -1,1 +1,34 @@
-{"type":"Graph","guid":"5af95095-3113-4132-a995-bb47692e7324","name":"./serialization/test_graph","vertex_count":2,"edge_count":1,"vertices":{"node1":{"type":"Vertex","guid":"f948414f-e53f-4d99-9e6a-837e5d4b80c2","name":"node1","attribute":"Node 1","index":0},"node2":{"type":"Vertex","guid":"446c2f8d-7965-42f3-ae89-007da52bd90e","name":"node2","attribute":"Node 2","index":1}},"edges":{"node2":{"node1":{"type":"Edge","guid":"4e7cf6cf-09a6-4774-a312-239eba48c41f","name":"my_edge","v0":"node1","v1":"node2","attribute":"edge1","index":0}},"node1":{"node2":{"type":"Edge","guid":"dfa366e5-197c-4477-94f9-ffdc27de9ff3","name":"my_edge","v0":"node1","v1":"node2","attribute":"edge1","index":0}}}}
+{
+    "edge_count": 1,
+    "edges": [
+        {
+            "attribute": "edge1",
+            "guid": "950972a2-0558-4846-96b2-ac7a3a278def",
+            "index": 0,
+            "name": "my_edge",
+            "type": "Edge",
+            "v0": "node1",
+            "v1": "node2"
+        }
+    ],
+    "guid": "0d2346b8-bc46-4cb9-b732-22456ca289f5",
+    "name": "./serialization/test_graph",
+    "type": "Graph",
+    "vertex_count": 2,
+    "vertices": [
+        {
+            "attribute": "Node 1",
+            "guid": "d7ef1403-771f-44d8-b26b-4183efa92d7d",
+            "index": 0,
+            "name": "node1",
+            "type": "Vertex"
+        },
+        {
+            "attribute": "Node 2",
+            "guid": "20a472e7-aee0-43ca-90e1-38783fce6422",
+            "index": 1,
+            "name": "node2",
+            "type": "Vertex"
+        }
+    ]
+}

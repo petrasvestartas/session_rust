@@ -31,35 +31,32 @@ pub fn run_xform_constructor() -> TestResult {
         let xcopy = x.duplicate();
         let xother = Xform::new();
 
-        // Equality operators
-        let x_eq = x == xother;
-        let x_ne = x != xfrom;
-
         // Matrix multiplication (*)
         let t = Xform::translation(10.0, 0.0, 0.0);
         let s = Xform::scale_xyz(2.0, 1.0, 1.0);
         let combined = &t * &s;
-        let p = Point::new(1.0, 0.0, 0.0);
-        let result = combined.transformed_point(&p);
+        let mut p = Point::new(1.0, 0.0, 0.0);
+        p.xform = combined;
+        let result = p.transformed();
 
         // In-place multiplication (*=)
         let mut t2 = Xform::translation(10.0, 0.0, 0.0);
         t2 *= s;
-        let result2 = t2.transformed_point(&p);
+        let mut p2 = Point::new(1.0, 0.0, 0.0);
+        p2.xform = t2;
+        let result2 = p2.transformed();
 
         MINI_CHECK!(x.name == "my_xform" && !x.guid().is_empty());
         MINI_CHECK!(m00 == 1.0 && m11 == 1.0 && m22 == 1.0 && m33 == 1.0);
         MINI_CHECK!(is_id == true);
         MINI_CHECK!(xfrom.m[12] == 5.0 && xfrom.m[13] == 10.0 && xfrom.m[14] == 15.0);
-        MINI_CHECK!(xstr.contains("1.000000"));
-        MINI_CHECK!(xrepr.contains("Xform(") && xrepr.contains("my_xform"));
+        MINI_CHECK!(xstr == "[1.000000, 0.000000, 0.000000, 0.000000]\n[0.000000, 1.000000, 0.000000, 0.000000]\n[0.000000, 0.000000, 1.000000, 0.000000]\n[0.000000, 0.000000, 0.000000, 1.000000]");
+        MINI_CHECK!(xrepr == format!("Xform(my_xform, {})", &x.guid()[..8]));
         MINI_CHECK!(xcopy == x && xcopy.guid() != x.guid());
-        MINI_CHECK!(x_eq == true && x_ne == true);
-        // (1,0,0) * scale(2,1,1) = (2,0,0), then translate(10,0,0) = (12,0,0)
-        MINI_CHECK!(TOLERANCE.is_close(result[0], 12.0));
-        MINI_CHECK!(TOLERANCE.is_close(result[1], 0.0) && TOLERANCE.is_close(result[2], 0.0));
-        MINI_CHECK!(TOLERANCE.is_close(result2[0], 12.0));
-        MINI_CHECK!(TOLERANCE.is_close(result2[1], 0.0) && TOLERANCE.is_close(result2[2], 0.0));
+        MINI_CHECK!(xother == x);
+        MINI_CHECK!(xfrom != x);
+        MINI_CHECK!(result[0] == 12.0 && result[1] == 0.0 && result[2] == 0.0);
+        MINI_CHECK!(result2[0] == 12.0 && result2[1] == 0.0 && result2[2] == 0.0);
     })
 }
 
@@ -67,101 +64,418 @@ pub fn run_xform_translation() -> TestResult {
     MINI_TEST!("Translation", {
         use crate::Xform;
         use crate::Point;
+        use crate::Mesh;
 
-        // Translation matrix
-        let t = Xform::translation(1.0, 2.0, 3.0);
-
-        // Apply to point
-        let p = Point::new(4.0, 5.0, 6.0);
-        let tp = t.transformed_point(&p);
-
-        MINI_CHECK!(TOLERANCE.is_close(tp[0], 5.0));
-        MINI_CHECK!(TOLERANCE.is_close(tp[1], 7.0));
-        MINI_CHECK!(TOLERANCE.is_close(tp[2], 9.0));
+        let xf = Xform::translation(1.5, 1.0, 0.5);
+        let mesh = Mesh::create_box(2.0, 2.0, 2.0);
+        let result = mesh.transformed(Some(&xf));
+        MINI_CHECK!(TOLERANCE.is_point_close(&result.vertex_point(0).unwrap(), &Point::new(0.5, 0.0, -0.5)));
+        MINI_CHECK!(TOLERANCE.is_point_close(&result.vertex_point(1).unwrap(), &Point::new(2.5, 0.0, -0.5)));
+        MINI_CHECK!(TOLERANCE.is_point_close(&result.vertex_point(2).unwrap(), &Point::new(2.5, 2.0, -0.5)));
+        MINI_CHECK!(TOLERANCE.is_point_close(&result.vertex_point(3).unwrap(), &Point::new(0.5, 2.0, -0.5)));
+        MINI_CHECK!(TOLERANCE.is_point_close(&result.vertex_point(4).unwrap(), &Point::new(0.5, 0.0, 1.5)));
+        MINI_CHECK!(TOLERANCE.is_point_close(&result.vertex_point(5).unwrap(), &Point::new(2.5, 0.0, 1.5)));
+        MINI_CHECK!(TOLERANCE.is_point_close(&result.vertex_point(6).unwrap(), &Point::new(2.5, 2.0, 1.5)));
+        MINI_CHECK!(TOLERANCE.is_point_close(&result.vertex_point(7).unwrap(), &Point::new(0.5, 2.0, 1.5)));
     })
 }
 
-pub fn run_xform_scaling() -> TestResult {
-    MINI_TEST!("Scaling", {
+pub fn run_xform_rotation_x() -> TestResult {
+    MINI_TEST!("Rotation X", {
         use crate::Xform;
         use crate::Point;
+        use crate::Mesh;
 
-        // Scaling matrix
-        let s = Xform::scale_xyz(2.0, 3.0, 4.0);
-
-        // Apply to point
-        let p = Point::new(1.0, 1.0, 1.0);
-        let sp = s.transformed_point(&p);
-
-        MINI_CHECK!(TOLERANCE.is_close(sp[0], 2.0));
-        MINI_CHECK!(TOLERANCE.is_close(sp[1], 3.0));
-        MINI_CHECK!(TOLERANCE.is_close(sp[2], 4.0));
+        let s = f64::sqrt(2.0);
+        let xf = Xform::rotation_x(PI / 4.0, false);
+        let mesh = Mesh::create_box(2.0, 2.0, 2.0);
+        let result = mesh.transformed(Some(&xf));
+        MINI_CHECK!(TOLERANCE.is_point_close(&result.vertex_point(0).unwrap(), &Point::new(-1.0, 0.0, -s)));
+        MINI_CHECK!(TOLERANCE.is_point_close(&result.vertex_point(1).unwrap(), &Point::new(1.0, 0.0, -s)));
+        MINI_CHECK!(TOLERANCE.is_point_close(&result.vertex_point(2).unwrap(), &Point::new(1.0, s, 0.0)));
+        MINI_CHECK!(TOLERANCE.is_point_close(&result.vertex_point(3).unwrap(), &Point::new(-1.0, s, 0.0)));
+        MINI_CHECK!(TOLERANCE.is_point_close(&result.vertex_point(4).unwrap(), &Point::new(-1.0, -s, 0.0)));
+        MINI_CHECK!(TOLERANCE.is_point_close(&result.vertex_point(5).unwrap(), &Point::new(1.0, -s, 0.0)));
+        MINI_CHECK!(TOLERANCE.is_point_close(&result.vertex_point(6).unwrap(), &Point::new(1.0, 0.0, s)));
+        MINI_CHECK!(TOLERANCE.is_point_close(&result.vertex_point(7).unwrap(), &Point::new(-1.0, 0.0, s)));
     })
 }
 
-pub fn run_xform_rotation() -> TestResult {
-    MINI_TEST!("Rotation", {
+pub fn run_xform_rotation_y() -> TestResult {
+    MINI_TEST!("Rotation Y", {
+        use crate::Xform;
+        use crate::Point;
+        use crate::Mesh;
+
+        let s = f64::sqrt(2.0);
+        let xf = Xform::rotation_y(PI / 4.0, false);
+        let mesh = Mesh::create_box(2.0, 2.0, 2.0);
+        let result = mesh.transformed(Some(&xf));
+        MINI_CHECK!(TOLERANCE.is_point_close(&result.vertex_point(0).unwrap(), &Point::new(-s, -1.0, 0.0)));
+        MINI_CHECK!(TOLERANCE.is_point_close(&result.vertex_point(1).unwrap(), &Point::new(0.0, -1.0, -s)));
+        MINI_CHECK!(TOLERANCE.is_point_close(&result.vertex_point(2).unwrap(), &Point::new(0.0, 1.0, -s)));
+        MINI_CHECK!(TOLERANCE.is_point_close(&result.vertex_point(3).unwrap(), &Point::new(-s, 1.0, 0.0)));
+        MINI_CHECK!(TOLERANCE.is_point_close(&result.vertex_point(4).unwrap(), &Point::new(0.0, -1.0, s)));
+        MINI_CHECK!(TOLERANCE.is_point_close(&result.vertex_point(5).unwrap(), &Point::new(s, -1.0, 0.0)));
+        MINI_CHECK!(TOLERANCE.is_point_close(&result.vertex_point(6).unwrap(), &Point::new(s, 1.0, 0.0)));
+        MINI_CHECK!(TOLERANCE.is_point_close(&result.vertex_point(7).unwrap(), &Point::new(0.0, 1.0, s)));
+    })
+}
+
+pub fn run_xform_rotation_z() -> TestResult {
+    MINI_TEST!("Rotation Z", {
+        use crate::Xform;
+        use crate::Point;
+        use crate::Mesh;
+
+        let s = f64::sqrt(2.0);
+        let xf = Xform::rotation_z(PI / 4.0, false);
+        let mesh = Mesh::create_box(2.0, 2.0, 2.0);
+        let result = mesh.transformed(Some(&xf));
+        MINI_CHECK!(TOLERANCE.is_point_close(&result.vertex_point(0).unwrap(), &Point::new(0.0, -s, -1.0)));
+        MINI_CHECK!(TOLERANCE.is_point_close(&result.vertex_point(1).unwrap(), &Point::new(s, 0.0, -1.0)));
+        MINI_CHECK!(TOLERANCE.is_point_close(&result.vertex_point(2).unwrap(), &Point::new(0.0, s, -1.0)));
+        MINI_CHECK!(TOLERANCE.is_point_close(&result.vertex_point(3).unwrap(), &Point::new(-s, 0.0, -1.0)));
+        MINI_CHECK!(TOLERANCE.is_point_close(&result.vertex_point(4).unwrap(), &Point::new(0.0, -s, 1.0)));
+        MINI_CHECK!(TOLERANCE.is_point_close(&result.vertex_point(5).unwrap(), &Point::new(s, 0.0, 1.0)));
+        MINI_CHECK!(TOLERANCE.is_point_close(&result.vertex_point(6).unwrap(), &Point::new(0.0, s, 1.0)));
+        MINI_CHECK!(TOLERANCE.is_point_close(&result.vertex_point(7).unwrap(), &Point::new(-s, 0.0, 1.0)));
+    })
+}
+
+pub fn run_xform_rotation_axis() -> TestResult {
+    MINI_TEST!("Rotation Axis", {
         use crate::Xform;
         use crate::Point;
         use crate::Vector;
+        use crate::Mesh;
 
-        // Rotation around X axis by 90 degrees
-        let rx = Xform::rotation_x(PI / 2.0);
-        // Apply to point (0,1,0) -> (0,0,1)
-        let px = Point::new(0.0, 1.0, 0.0);
-        let rpx = rx.transformed_point(&px);
-
-        // Rotation around Y axis by 90 degrees
-        let ry = Xform::rotation_y(PI / 2.0);
-        // Apply to point (0,0,1) -> (1,0,0)
-        let py = Point::new(0.0, 0.0, 1.0);
-        let rpy = ry.transformed_point(&py);
-
-        // Rotation around Z axis by 90 degrees
-        let rz = Xform::rotation_z(PI / 2.0);
-        // Apply to point (1,0,0) -> (0,1,0)
-        let pz = Point::new(1.0, 0.0, 0.0);
-        let rpz = rz.transformed_point(&pz);
-
-        // Rotation around arbitrary axis (1,1,1) by 120 degrees
-        // This cycles x->y->z->x
         let axis = Vector::new(1.0, 1.0, 1.0);
-        let r = Xform::rotation(&axis, 2.0 * PI / 3.0);
-        // Apply to point (1,0,0) -> (0,1,0)
-        let p = Point::new(1.0, 0.0, 0.0);
-        let rp = r.transformed_point(&p);
+        let xf = Xform::rotation(&axis, 2.0 * PI / 4.0, false);
+        let mesh = Mesh::create_box(2.0, 2.0, 2.0);
+        let result = mesh.transformed(Some(&xf));
+        let t = 1.0 / 3.0;
+        let k = 2.0 / f64::sqrt(3.0);
+        MINI_CHECK!(TOLERANCE.is_point_close(&result.vertex_point(0).unwrap(), &Point::new(-1.0, -1.0, -1.0)));
+        MINI_CHECK!(TOLERANCE.is_point_close(&result.vertex_point(1).unwrap(), &Point::new(-t, -t+k, -t-k)));
+        MINI_CHECK!(TOLERANCE.is_point_close(&result.vertex_point(2).unwrap(), &Point::new(t-k, t+k, t)));
+        MINI_CHECK!(TOLERANCE.is_point_close(&result.vertex_point(3).unwrap(), &Point::new(-t-k, -t, -t+k)));
+        MINI_CHECK!(TOLERANCE.is_point_close(&result.vertex_point(4).unwrap(), &Point::new(-t+k, -t-k, -t)));
+        MINI_CHECK!(TOLERANCE.is_point_close(&result.vertex_point(5).unwrap(), &Point::new(t+k, t, t-k)));
+        MINI_CHECK!(TOLERANCE.is_point_close(&result.vertex_point(6).unwrap(), &Point::new(1.0, 1.0, 1.0)));
+        MINI_CHECK!(TOLERANCE.is_point_close(&result.vertex_point(7).unwrap(), &Point::new(t, t-k, t+k)));
+    })
+}
 
-        MINI_CHECK!(TOLERANCE.is_close(rpx[0], 0.0));
-        MINI_CHECK!(TOLERANCE.is_close(rpx[1], 0.0));
-        MINI_CHECK!(TOLERANCE.is_close(rpx[2], 1.0));
-        MINI_CHECK!(TOLERANCE.is_close(rpy[0], 1.0));
-        MINI_CHECK!(TOLERANCE.is_close(rpy[1], 0.0));
-        MINI_CHECK!(TOLERANCE.is_close(rpy[2], 0.0));
-        MINI_CHECK!(TOLERANCE.is_close(rpz[0], 0.0));
-        MINI_CHECK!(TOLERANCE.is_close(rpz[1], 1.0));
-        MINI_CHECK!(TOLERANCE.is_close(rpz[2], 0.0));
-        MINI_CHECK!(TOLERANCE.is_close(rp[0], 0.0));
-        MINI_CHECK!(TOLERANCE.is_close(rp[1], 1.0));
-        MINI_CHECK!(TOLERANCE.is_close(rp[2], 0.0));
+pub fn run_xform_rotation_around_line() -> TestResult {
+    MINI_TEST!("Rotation Around Line", {
+        use crate::Xform;
+        use crate::Point;
+        use crate::Line;
+        use crate::Mesh;
+
+        let s = f64::sqrt(2.0);
+        let line = Line::new(-1.0, -1.0, -1.0, -1.0, -1.0, 1.0);
+        let xf = Xform::rotation_around_line(&line, PI / 4.0, false);
+        let mesh = Mesh::create_box(2.0, 2.0, 2.0);
+        let result = mesh.transformed(Some(&xf));
+        MINI_CHECK!(TOLERANCE.is_point_close(&result.vertex_point(0).unwrap(), &Point::new(-1.0, -1.0, -1.0)));
+        MINI_CHECK!(TOLERANCE.is_point_close(&result.vertex_point(1).unwrap(), &Point::new(s-1.0, s-1.0, -1.0)));
+        MINI_CHECK!(TOLERANCE.is_point_close(&result.vertex_point(2).unwrap(), &Point::new(-1.0, 2.0*s-1.0, -1.0)));
+        MINI_CHECK!(TOLERANCE.is_point_close(&result.vertex_point(3).unwrap(), &Point::new(-s-1.0, s-1.0, -1.0)));
+        MINI_CHECK!(TOLERANCE.is_point_close(&result.vertex_point(4).unwrap(), &Point::new(-1.0, -1.0, 1.0)));
+        MINI_CHECK!(TOLERANCE.is_point_close(&result.vertex_point(5).unwrap(), &Point::new(s-1.0, s-1.0, 1.0)));
+        MINI_CHECK!(TOLERANCE.is_point_close(&result.vertex_point(6).unwrap(), &Point::new(-1.0, 2.0*s-1.0, 1.0)));
+        MINI_CHECK!(TOLERANCE.is_point_close(&result.vertex_point(7).unwrap(), &Point::new(-s-1.0, s-1.0, 1.0)));
+    })
+}
+
+pub fn run_xform_change_basis() -> TestResult {
+    MINI_TEST!("Change Basis", {
+        use crate::Xform;
+        use crate::Point;
+        use crate::Vector;
+        use crate::Mesh;
+
+        let o0 = Point::new(0.0, 0.0, 0.0);
+        let x0 = Vector::new(1.0, 0.0, 0.0);
+        let y0 = Vector::new(0.0, 1.0, 0.0);
+        let z0 = Vector::new(0.0, 0.0, 1.0);
+        let o1 = Point::new(0.5, -1.0, 0.5);
+        let x1 = Vector::new(1.2, 0.0, 0.0);
+        let y1 = Vector::new(0.3, -1.0, -0.15);
+        let z1 = Vector::new(0.0, 0.0, 1.1);
+        let xf = Xform::change_basis(&o0, &x0, &y0, &z0, &o1, &x1, &y1, &z1);
+        let mesh = Mesh::create_box(2.0, 2.0, 2.0);
+        let result = mesh.transformed(Some(&xf));
+        MINI_CHECK!(TOLERANCE.is_point_close(&result.vertex_point(0).unwrap(), &Point::new(-1.0, 0.0, -0.45)));
+        MINI_CHECK!(TOLERANCE.is_point_close(&result.vertex_point(1).unwrap(), &Point::new(1.4, 0.0, -0.45)));
+        MINI_CHECK!(TOLERANCE.is_point_close(&result.vertex_point(2).unwrap(), &Point::new(2.0, -2.0, -0.75)));
+        MINI_CHECK!(TOLERANCE.is_point_close(&result.vertex_point(3).unwrap(), &Point::new(-0.4, -2.0, -0.75)));
+        MINI_CHECK!(TOLERANCE.is_point_close(&result.vertex_point(4).unwrap(), &Point::new(-1.0, 0.0, 1.75)));
+        MINI_CHECK!(TOLERANCE.is_point_close(&result.vertex_point(5).unwrap(), &Point::new(1.4, 0.0, 1.75)));
+        MINI_CHECK!(TOLERANCE.is_point_close(&result.vertex_point(6).unwrap(), &Point::new(2.0, -2.0, 1.45)));
+        MINI_CHECK!(TOLERANCE.is_point_close(&result.vertex_point(7).unwrap(), &Point::new(-0.4, -2.0, 1.45)));
+    })
+}
+
+pub fn run_xform_plane_to_plane() -> TestResult {
+    MINI_TEST!("Plane To Plane", {
+        use crate::Xform;
+        use crate::Point;
+        use crate::Vector;
+        use crate::Plane;
+        use crate::Mesh;
+
+        let pf = Plane::new(Point::new(0.0, 0.0, 0.0), Vector::new(1.0, 0.0, 0.0), Vector::new(0.0, 1.0, 0.0));
+        let pt = Plane::new(Point::new(2.0, 0.0, 0.0), Vector::new(0.0, 1.0, 0.0), Vector::new(-1.0, 0.0, 0.0));
+        let xf = Xform::plane_to_plane(&pf, &pt);
+        let mesh = Mesh::create_box(2.0, 2.0, 2.0);
+        let result = mesh.transformed(Some(&xf));
+        MINI_CHECK!(TOLERANCE.is_point_close(&result.vertex_point(0).unwrap(), &Point::new(1.0, 1.0, -1.0)));
+        MINI_CHECK!(TOLERANCE.is_point_close(&result.vertex_point(1).unwrap(), &Point::new(1.0, -1.0, -1.0)));
+        MINI_CHECK!(TOLERANCE.is_point_close(&result.vertex_point(2).unwrap(), &Point::new(3.0, -1.0, -1.0)));
+        MINI_CHECK!(TOLERANCE.is_point_close(&result.vertex_point(3).unwrap(), &Point::new(3.0, 1.0, -1.0)));
+        MINI_CHECK!(TOLERANCE.is_point_close(&result.vertex_point(4).unwrap(), &Point::new(1.0, 1.0, 1.0)));
+        MINI_CHECK!(TOLERANCE.is_point_close(&result.vertex_point(5).unwrap(), &Point::new(1.0, -1.0, 1.0)));
+        MINI_CHECK!(TOLERANCE.is_point_close(&result.vertex_point(6).unwrap(), &Point::new(3.0, -1.0, 1.0)));
+        MINI_CHECK!(TOLERANCE.is_point_close(&result.vertex_point(7).unwrap(), &Point::new(3.0, 1.0, 1.0)));
+    })
+}
+
+pub fn run_xform_scale_xyz() -> TestResult {
+    MINI_TEST!("Scale XYZ", {
+        use crate::Xform;
+        use crate::Point;
+        use crate::Mesh;
+
+        let xf = Xform::scale_xyz(1.5, 1.2, 1.8);
+        let mesh = Mesh::create_box(2.0, 2.0, 2.0);
+        let result = mesh.transformed(Some(&xf));
+        MINI_CHECK!(TOLERANCE.is_point_close(&result.vertex_point(0).unwrap(), &Point::new(-1.5, -1.2, -1.8)));
+        MINI_CHECK!(TOLERANCE.is_point_close(&result.vertex_point(1).unwrap(), &Point::new(1.5, -1.2, -1.8)));
+        MINI_CHECK!(TOLERANCE.is_point_close(&result.vertex_point(2).unwrap(), &Point::new(1.5, 1.2, -1.8)));
+        MINI_CHECK!(TOLERANCE.is_point_close(&result.vertex_point(3).unwrap(), &Point::new(-1.5, 1.2, -1.8)));
+        MINI_CHECK!(TOLERANCE.is_point_close(&result.vertex_point(4).unwrap(), &Point::new(-1.5, -1.2, 1.8)));
+        MINI_CHECK!(TOLERANCE.is_point_close(&result.vertex_point(5).unwrap(), &Point::new(1.5, -1.2, 1.8)));
+        MINI_CHECK!(TOLERANCE.is_point_close(&result.vertex_point(6).unwrap(), &Point::new(1.5, 1.2, 1.8)));
+        MINI_CHECK!(TOLERANCE.is_point_close(&result.vertex_point(7).unwrap(), &Point::new(-1.5, 1.2, 1.8)));
+    })
+}
+
+pub fn run_xform_scale_uniform() -> TestResult {
+    MINI_TEST!("Scale Uniform", {
+        use crate::Xform;
+        use crate::Point;
+        use crate::Mesh;
+
+        let c = Point::new(0.0, 0.0, 0.0);
+        let xf = Xform::scale_uniform(&c, 2.0);
+        let mesh = Mesh::create_box(2.0, 2.0, 2.0);
+        let result = mesh.transformed(Some(&xf));
+        MINI_CHECK!(TOLERANCE.is_point_close(&result.vertex_point(0).unwrap(), &Point::new(-2.0, -2.0, -2.0)));
+        MINI_CHECK!(TOLERANCE.is_point_close(&result.vertex_point(1).unwrap(), &Point::new(2.0, -2.0, -2.0)));
+        MINI_CHECK!(TOLERANCE.is_point_close(&result.vertex_point(2).unwrap(), &Point::new(2.0, 2.0, -2.0)));
+        MINI_CHECK!(TOLERANCE.is_point_close(&result.vertex_point(3).unwrap(), &Point::new(-2.0, 2.0, -2.0)));
+        MINI_CHECK!(TOLERANCE.is_point_close(&result.vertex_point(4).unwrap(), &Point::new(-2.0, -2.0, 2.0)));
+        MINI_CHECK!(TOLERANCE.is_point_close(&result.vertex_point(5).unwrap(), &Point::new(2.0, -2.0, 2.0)));
+        MINI_CHECK!(TOLERANCE.is_point_close(&result.vertex_point(6).unwrap(), &Point::new(2.0, 2.0, 2.0)));
+        MINI_CHECK!(TOLERANCE.is_point_close(&result.vertex_point(7).unwrap(), &Point::new(-2.0, 2.0, 2.0)));
+    })
+}
+
+pub fn run_xform_scale_non_uniform() -> TestResult {
+    MINI_TEST!("Scale Non Uniform", {
+        use crate::Xform;
+        use crate::Point;
+        use crate::Mesh;
+
+        let c = Point::new(0.0, 0.0, 0.0);
+        let xf = Xform::scale_non_uniform(&c, 1.5, 1.2, 1.8);
+        let mesh = Mesh::create_box(2.0, 2.0, 2.0);
+        let result = mesh.transformed(Some(&xf));
+        MINI_CHECK!(TOLERANCE.is_point_close(&result.vertex_point(0).unwrap(), &Point::new(-1.5, -1.2, -1.8)));
+        MINI_CHECK!(TOLERANCE.is_point_close(&result.vertex_point(1).unwrap(), &Point::new(1.5, -1.2, -1.8)));
+        MINI_CHECK!(TOLERANCE.is_point_close(&result.vertex_point(2).unwrap(), &Point::new(1.5, 1.2, -1.8)));
+        MINI_CHECK!(TOLERANCE.is_point_close(&result.vertex_point(3).unwrap(), &Point::new(-1.5, 1.2, -1.8)));
+        MINI_CHECK!(TOLERANCE.is_point_close(&result.vertex_point(4).unwrap(), &Point::new(-1.5, -1.2, 1.8)));
+        MINI_CHECK!(TOLERANCE.is_point_close(&result.vertex_point(5).unwrap(), &Point::new(1.5, -1.2, 1.8)));
+        MINI_CHECK!(TOLERANCE.is_point_close(&result.vertex_point(6).unwrap(), &Point::new(1.5, 1.2, 1.8)));
+        MINI_CHECK!(TOLERANCE.is_point_close(&result.vertex_point(7).unwrap(), &Point::new(-1.5, 1.2, 1.8)));
+    })
+}
+
+pub fn run_xform_look_at_right_handed() -> TestResult {
+    MINI_TEST!("Look At Right Handed", {
+        use crate::Xform;
+        use crate::Point;
+        use crate::Vector;
+        use crate::Mesh;
+
+        let eye = Point::new(0.0, 3.0, 0.0);
+        let target = Point::new(0.0, 0.0, 0.0);
+        let xf = Xform::look_at_right_handed(&eye, &target, &Vector::new(0.0, 0.0, 1.0));
+        let mesh = Mesh::create_box(2.0, 2.0, 2.0);
+        let result = mesh.transformed(Some(&xf));
+        MINI_CHECK!(TOLERANCE.is_point_close(&result.vertex_point(0).unwrap(), &Point::new(1.0, -1.0, -4.0)));
+        MINI_CHECK!(TOLERANCE.is_point_close(&result.vertex_point(1).unwrap(), &Point::new(-1.0, -1.0, -4.0)));
+        MINI_CHECK!(TOLERANCE.is_point_close(&result.vertex_point(2).unwrap(), &Point::new(-1.0, -1.0, -2.0)));
+        MINI_CHECK!(TOLERANCE.is_point_close(&result.vertex_point(3).unwrap(), &Point::new(1.0, -1.0, -2.0)));
+        MINI_CHECK!(TOLERANCE.is_point_close(&result.vertex_point(4).unwrap(), &Point::new(1.0, 1.0, -4.0)));
+        MINI_CHECK!(TOLERANCE.is_point_close(&result.vertex_point(5).unwrap(), &Point::new(-1.0, 1.0, -4.0)));
+        MINI_CHECK!(TOLERANCE.is_point_close(&result.vertex_point(6).unwrap(), &Point::new(-1.0, 1.0, -2.0)));
+        MINI_CHECK!(TOLERANCE.is_point_close(&result.vertex_point(7).unwrap(), &Point::new(1.0, 1.0, -2.0)));
+    })
+}
+
+pub fn run_xform_look_to_right_handed() -> TestResult {
+    MINI_TEST!("Look To Right Handed", {
+        use crate::Xform;
+        use crate::Point;
+        use crate::Vector;
+        use crate::Mesh;
+
+        let eye = Point::new(0.0, 3.0, 0.0);
+        let direction = Vector::new(0.0, -1.0, 0.0);
+        let xf = Xform::look_to_right_handed(&eye, &direction, &Vector::new(0.0, 0.0, 1.0));
+        let mesh = Mesh::create_box(2.0, 2.0, 2.0);
+        let result = mesh.transformed(Some(&xf));
+        MINI_CHECK!(TOLERANCE.is_point_close(&result.vertex_point(0).unwrap(), &Point::new(1.0, -1.0, -4.0)));
+        MINI_CHECK!(TOLERANCE.is_point_close(&result.vertex_point(1).unwrap(), &Point::new(-1.0, -1.0, -4.0)));
+        MINI_CHECK!(TOLERANCE.is_point_close(&result.vertex_point(2).unwrap(), &Point::new(-1.0, -1.0, -2.0)));
+        MINI_CHECK!(TOLERANCE.is_point_close(&result.vertex_point(3).unwrap(), &Point::new(1.0, -1.0, -2.0)));
+        MINI_CHECK!(TOLERANCE.is_point_close(&result.vertex_point(4).unwrap(), &Point::new(1.0, 1.0, -4.0)));
+        MINI_CHECK!(TOLERANCE.is_point_close(&result.vertex_point(5).unwrap(), &Point::new(-1.0, 1.0, -4.0)));
+        MINI_CHECK!(TOLERANCE.is_point_close(&result.vertex_point(6).unwrap(), &Point::new(-1.0, 1.0, -2.0)));
+        MINI_CHECK!(TOLERANCE.is_point_close(&result.vertex_point(7).unwrap(), &Point::new(1.0, 1.0, -2.0)));
+    })
+}
+
+pub fn run_xform_perspective() -> TestResult {
+    MINI_TEST!("Perspective", {
+        use crate::Xform;
+        use crate::Point;
+        use crate::Mesh;
+
+        let view = Xform::translation(0.0, 0.0, -2.0);
+        let proj = Xform::perspective(PI / 2.0, 1.0, 1.0, 3.0);
+        let xf = &proj * &view;
+        let mesh = Mesh::create_box(2.0, 2.0, 2.0);
+        let result = mesh.transformed(Some(&xf));
+        let t = 1.0 / 3.0;
+        MINI_CHECK!(TOLERANCE.is_point_close(&result.vertex_point(0).unwrap(), &Point::new(-t, -t, 1.0)));
+        MINI_CHECK!(TOLERANCE.is_point_close(&result.vertex_point(1).unwrap(), &Point::new(t, -t, 1.0)));
+        MINI_CHECK!(TOLERANCE.is_point_close(&result.vertex_point(2).unwrap(), &Point::new(t, t, 1.0)));
+        MINI_CHECK!(TOLERANCE.is_point_close(&result.vertex_point(3).unwrap(), &Point::new(-t, t, 1.0)));
+        MINI_CHECK!(TOLERANCE.is_point_close(&result.vertex_point(4).unwrap(), &Point::new(-1.0, -1.0, 0.0)));
+        MINI_CHECK!(TOLERANCE.is_point_close(&result.vertex_point(5).unwrap(), &Point::new(1.0, -1.0, 0.0)));
+        MINI_CHECK!(TOLERANCE.is_point_close(&result.vertex_point(6).unwrap(), &Point::new(1.0, 1.0, 0.0)));
+        MINI_CHECK!(TOLERANCE.is_point_close(&result.vertex_point(7).unwrap(), &Point::new(-1.0, 1.0, 0.0)));
+    })
+}
+
+pub fn run_xform_orthographic() -> TestResult {
+    MINI_TEST!("Orthographic", {
+        use crate::Xform;
+        use crate::Point;
+        use crate::Mesh;
+
+        let view = Xform::translation(0.0, 0.0, -2.0);
+        let proj = Xform::orthographic(-1.0, 1.0, -1.0, 1.0, 1.0, 3.0);
+        let xf = &proj * &view;
+        let mesh = Mesh::create_box(2.0, 2.0, 2.0);
+        let result = mesh.transformed(Some(&xf));
+        MINI_CHECK!(TOLERANCE.is_point_close(&result.vertex_point(0).unwrap(), &Point::new(-1.0, -1.0, 1.0)));
+        MINI_CHECK!(TOLERANCE.is_point_close(&result.vertex_point(1).unwrap(), &Point::new(1.0, -1.0, 1.0)));
+        MINI_CHECK!(TOLERANCE.is_point_close(&result.vertex_point(2).unwrap(), &Point::new(1.0, 1.0, 1.0)));
+        MINI_CHECK!(TOLERANCE.is_point_close(&result.vertex_point(3).unwrap(), &Point::new(-1.0, 1.0, 1.0)));
+        MINI_CHECK!(TOLERANCE.is_point_close(&result.vertex_point(4).unwrap(), &Point::new(-1.0, -1.0, 0.0)));
+        MINI_CHECK!(TOLERANCE.is_point_close(&result.vertex_point(5).unwrap(), &Point::new(1.0, -1.0, 0.0)));
+        MINI_CHECK!(TOLERANCE.is_point_close(&result.vertex_point(6).unwrap(), &Point::new(1.0, 1.0, 0.0)));
+        MINI_CHECK!(TOLERANCE.is_point_close(&result.vertex_point(7).unwrap(), &Point::new(-1.0, 1.0, 0.0)));
+    })
+}
+
+pub fn run_xform_project_to_plane() -> TestResult {
+    MINI_TEST!("Project To Plane", {
+        use crate::Xform;
+        use crate::Point;
+        use crate::Vector;
+        use crate::Plane;
+        use crate::Polyline;
+
+        let plane = Plane::new(Point::new(0.0, 0.0, 0.0), Vector::new(1.0, 0.0, 0.0), Vector::new(0.0, 1.0, 0.0));
+        let mv = Xform::translation(0.0, 0.0, 1.0);
+        let proj = Xform::project_to_plane(&plane);
+        let xf = &proj * &mv;
+        let tp = |x: f64, y: f64, z: f64| -> Point { let mut p = Point::new(x, y, z); p.xform = xf.clone(); p.transformed() };
+        let outline = Polyline::new(vec![
+            tp(-1.0, -1.0, -1.0),
+            tp(1.0, -1.0, -1.0),
+            tp(1.0, 1.0, -1.0),
+            tp(-1.0, 1.0, -1.0),
+            tp(-1.0, -1.0, -1.0),
+        ]);
+        let pts = outline.get_points();
+        MINI_CHECK!(TOLERANCE.is_point_close(&pts[0], &Point::new(-1.0, -1.0, 0.0)));
+        MINI_CHECK!(TOLERANCE.is_point_close(&pts[1], &Point::new(1.0, -1.0, 0.0)));
+        MINI_CHECK!(TOLERANCE.is_point_close(&pts[2], &Point::new(1.0, 1.0, 0.0)));
+        MINI_CHECK!(TOLERANCE.is_point_close(&pts[3], &Point::new(-1.0, 1.0, 0.0)));
+        MINI_CHECK!(TOLERANCE.is_point_close(&pts[4], &Point::new(-1.0, -1.0, 0.0)));
+    })
+}
+
+pub fn run_xform_project_to_plane_by_axis() -> TestResult {
+    MINI_TEST!("Project To Plane By Axis", {
+        use crate::Xform;
+        use crate::Point;
+        use crate::Vector;
+        use crate::Plane;
+        use crate::Polyline;
+
+        let plane = Plane::new(Point::new(0.0, 0.0, 0.0), Vector::new(1.0, 0.0, 0.0), Vector::new(0.0, 1.0, 0.0));
+        let direction = Vector::new(1.0, 0.0, 1.0);
+        let mv = Xform::translation(0.0, 0.0, 1.0);
+        let proj = Xform::project_to_plane_by_axis(&plane, &direction);
+        let xf = &proj * &mv;
+        let tp = |x: f64, y: f64, z: f64| -> Point { let mut p = Point::new(x, y, z); p.xform = xf.clone(); p.transformed() };
+        let outline = Polyline::new(vec![
+            tp(-1.0, -1.0, 1.0),
+            tp(1.0, -1.0, -1.0),
+            tp(1.0, 1.0, -1.0),
+            tp(-1.0, 1.0, 1.0),
+            tp(-1.0, -1.0, 1.0),
+        ]);
+        let pts = outline.get_points();
+        MINI_CHECK!(TOLERANCE.is_point_close(&pts[0], &Point::new(-3.0, -1.0, 0.0)));
+        MINI_CHECK!(TOLERANCE.is_point_close(&pts[1], &Point::new(1.0, -1.0, 0.0)));
+        MINI_CHECK!(TOLERANCE.is_point_close(&pts[2], &Point::new(1.0, 1.0, 0.0)));
+        MINI_CHECK!(TOLERANCE.is_point_close(&pts[3], &Point::new(-3.0, 1.0, 0.0)));
+        MINI_CHECK!(TOLERANCE.is_point_close(&pts[4], &Point::new(-3.0, -1.0, 0.0)));
     })
 }
 
 pub fn run_xform_inverse() -> TestResult {
     MINI_TEST!("Inverse", {
         use crate::Xform;
+        use crate::Point;
+        use crate::Mesh;
 
-        // Create composite transformation
-        let t = Xform::translation(1.0, 2.0, 3.0);
-        let s = Xform::scale_xyz(2.0, 2.0, 2.0);
+        let t = Xform::translation(1.0, 0.5, 0.5);
+        let s = Xform::scale_xyz(1.5, 1.2, 1.3);
         let composite = &t * &s;
-
-        // Compute inverse
         let inv = composite.inverse().unwrap();
-
-        // Multiply should give identity
-        let result = &composite * &inv;
-
-        MINI_CHECK!(result.is_identity());
+        let mesh = Mesh::create_box(2.0, 2.0, 2.0);
+        let forward = mesh.transformed(Some(&composite));
+        let roundtrip = forward.transformed(Some(&inv));
+        MINI_CHECK!(TOLERANCE.is_point_close(&roundtrip.vertex_point(0).unwrap(), &Point::new(-1.0, -1.0, -1.0)));
+        MINI_CHECK!(TOLERANCE.is_point_close(&roundtrip.vertex_point(1).unwrap(), &Point::new(1.0, -1.0, -1.0)));
+        MINI_CHECK!(TOLERANCE.is_point_close(&roundtrip.vertex_point(2).unwrap(), &Point::new(1.0, 1.0, -1.0)));
+        MINI_CHECK!(TOLERANCE.is_point_close(&roundtrip.vertex_point(3).unwrap(), &Point::new(-1.0, 1.0, -1.0)));
+        MINI_CHECK!(TOLERANCE.is_point_close(&roundtrip.vertex_point(4).unwrap(), &Point::new(-1.0, -1.0, 1.0)));
+        MINI_CHECK!(TOLERANCE.is_point_close(&roundtrip.vertex_point(5).unwrap(), &Point::new(1.0, -1.0, 1.0)));
+        MINI_CHECK!(TOLERANCE.is_point_close(&roundtrip.vertex_point(6).unwrap(), &Point::new(1.0, 1.0, 1.0)));
+        MINI_CHECK!(TOLERANCE.is_point_close(&roundtrip.vertex_point(7).unwrap(), &Point::new(-1.0, 1.0, 1.0)));
     })
 }
 
@@ -179,16 +493,17 @@ pub fn run_xform_transform_geometry() -> TestResult {
 
         // Transform Point: (1,2,3) -> (11,22,33)
         let mut pt = Point::new(1.0, 2.0, 3.0);
-        pt.xform = t.duplicate();
+        pt.xform = t.clone();
         let pt_transformed = pt.transformed();
 
         // Transform Vector: translation should NOT affect vectors
-        let v = Vector::new(1.0, 0.0, 0.0);
-        let v_transformed = t.transformed_vector(&v);
+        let mut v = Vector::new(1.0, 0.0, 0.0);
+        v.xform = t.clone();
+        let v_transformed = v.transformed();
 
         // Transform Line: (0,0,0)-(1,0,0) -> (10,20,30)-(11,20,30)
         let mut ln = Line::new(0.0, 0.0, 0.0, 1.0, 0.0, 0.0);
-        ln.xform = t.duplicate();
+        ln.xform = t.clone();
         let ln_transformed = ln.transformed();
 
         // Transform Plane: origin (0,0,0) -> (10,20,30)
@@ -197,7 +512,7 @@ pub fn run_xform_transform_geometry() -> TestResult {
             Vector::new(1.0, 0.0, 0.0),
             Vector::new(0.0, 1.0, 0.0),
         );
-        pl.xform = t.duplicate();
+        pl.xform = t.clone();
         let pl_transformed = pl.transformed();
 
         // Transform Polyline: 3 points translated
@@ -206,120 +521,18 @@ pub fn run_xform_transform_geometry() -> TestResult {
             Point::new(1.0, 0.0, 0.0),
             Point::new(1.0, 1.0, 0.0),
         ]);
-        poly.xform = t.duplicate();
+        poly.xform = t.clone();
         let poly_transformed = poly.transformed();
         let pts = poly_transformed.get_points();
 
-        MINI_CHECK!(TOLERANCE.is_close(pt_transformed[0], 11.0));
-        MINI_CHECK!(TOLERANCE.is_close(pt_transformed[1], 22.0));
-        MINI_CHECK!(TOLERANCE.is_close(pt_transformed[2], 33.0));
-        MINI_CHECK!(TOLERANCE.is_close(v_transformed[0], 1.0));
-        MINI_CHECK!(TOLERANCE.is_close(v_transformed[1], 0.0));
-        MINI_CHECK!(TOLERANCE.is_close(v_transformed[2], 0.0));
-        MINI_CHECK!(TOLERANCE.is_close(ln_transformed[0], 10.0));
-        MINI_CHECK!(TOLERANCE.is_close(ln_transformed[1], 20.0));
-        MINI_CHECK!(TOLERANCE.is_close(ln_transformed[2], 30.0));
-        MINI_CHECK!(TOLERANCE.is_close(ln_transformed[3], 11.0));
-        MINI_CHECK!(TOLERANCE.is_close(ln_transformed[4], 20.0));
-        MINI_CHECK!(TOLERANCE.is_close(ln_transformed[5], 30.0));
-        MINI_CHECK!(TOLERANCE.is_close(pl_transformed.origin()[0], 10.0));
-        MINI_CHECK!(TOLERANCE.is_close(pl_transformed.origin()[1], 20.0));
-        MINI_CHECK!(TOLERANCE.is_close(pl_transformed.origin()[2], 30.0));
-        MINI_CHECK!(TOLERANCE.is_close(pts[0][0], 10.0));
-        MINI_CHECK!(TOLERANCE.is_close(pts[0][1], 20.0));
-        MINI_CHECK!(TOLERANCE.is_close(pts[0][2], 30.0));
-        MINI_CHECK!(TOLERANCE.is_close(pts[1][0], 11.0));
-        MINI_CHECK!(TOLERANCE.is_close(pts[1][1], 20.0));
-        MINI_CHECK!(TOLERANCE.is_close(pts[1][2], 30.0));
-        MINI_CHECK!(TOLERANCE.is_close(pts[2][0], 11.0));
-        MINI_CHECK!(TOLERANCE.is_close(pts[2][1], 21.0));
-        MINI_CHECK!(TOLERANCE.is_close(pts[2][2], 30.0));
-    })
-}
-
-pub fn run_xform_change_basis() -> TestResult {
-    MINI_TEST!("Change Basis", {
-        use crate::Xform;
-        use crate::Point;
-        use crate::Vector;
-
-        // System 0: standard XY plane at origin
-        let origin_0 = Point::new(0.0, 0.0, 0.0);
-        let x_axis_0 = Vector::new(1.0, 0.0, 0.0);
-        let y_axis_0 = Vector::new(0.0, 1.0, 0.0);
-        let z_axis_0 = Vector::new(0.0, 0.0, 1.0);
-
-        // System 1: translated and rotated 90 degrees around Z
-        let origin_1 = Point::new(10.0, 20.0, 0.0);
-        let x_axis_1 = Vector::new(0.0, 1.0, 0.0);
-        let y_axis_1 = Vector::new(-1.0, 0.0, 0.0);
-        let z_axis_1 = Vector::new(0.0, 0.0, 1.0);
-
-        // Transform maps points FROM system 1 TO system 0
-        let xform = Xform::change_basis(&origin_1, &x_axis_1, &y_axis_1, &z_axis_1, &origin_0, &x_axis_0, &y_axis_0, &z_axis_0);
-
-        // Point at origin_1 should map to origin_0
-        let p = Point::new(10.0, 20.0, 0.0);
-        let tp = xform.transformed_point(&p);
-
-        MINI_CHECK!(TOLERANCE.is_close(tp[0], 0.0));
-        MINI_CHECK!(TOLERANCE.is_close(tp[1], 0.0));
-        MINI_CHECK!(TOLERANCE.is_close(tp[2], 0.0));
-    })
-}
-
-pub fn run_xform_plane_to_plane() -> TestResult {
-    MINI_TEST!("Plane To Plane", {
-        use crate::Xform;
-        use crate::Point;
-        use crate::Vector;
-        use crate::Plane;
-
-        // Source plane at origin, XY plane
-        let plane_from = Plane::new(
-            Point::new(0.0, 0.0, 0.0),
-            Vector::new(1.0, 0.0, 0.0),
-            Vector::new(0.0, 1.0, 0.0),
-        );
-
-        // Target plane translated and rotated
-        let plane_to = Plane::new(
-            Point::new(10.0, 0.0, 0.0),
-            Vector::new(0.0, 1.0, 0.0),
-            Vector::new(-1.0, 0.0, 0.0),
-        );
-
-        let xform = Xform::plane_to_plane(&plane_from, &plane_to);
-
-        // Origin of source should map to origin of target
-        let p = Point::new(0.0, 0.0, 0.0);
-        let tp = xform.transformed_point(&p);
-
-        MINI_CHECK!(TOLERANCE.is_close(tp[0], 10.0));
-        MINI_CHECK!(TOLERANCE.is_close(tp[1], 0.0));
-        MINI_CHECK!(TOLERANCE.is_close(tp[2], 0.0));
-    })
-}
-
-pub fn run_xform_look_at_rh() -> TestResult {
-    MINI_TEST!("Look At Rh", {
-        use crate::Xform;
-        use crate::Point;
-        use crate::Vector;
-
-        // Camera at (0,0,10) looking at origin
-        let eye = Point::new(0.0, 0.0, 10.0);
-        let target = Point::new(0.0, 0.0, 0.0);
-        let up = Vector::new(0.0, 1.0, 0.0);
-
-        let xform = Xform::look_at_rh(&eye, &target, &up);
-
-        // The target point should be on the negative Z axis in view space
-        let tp = xform.transformed_point(&target);
-
-        MINI_CHECK!(TOLERANCE.is_close(tp[0], 0.0));
-        MINI_CHECK!(TOLERANCE.is_close(tp[1], 0.0));
-        MINI_CHECK!(TOLERANCE.is_close(tp[2], -10.0));
+        MINI_CHECK!(TOLERANCE.is_point_close(&pt_transformed, &Point::new(11.0, 22.0, 33.0)));
+        MINI_CHECK!(v_transformed[0] == 1.0 && v_transformed[1] == 0.0 && v_transformed[2] == 0.0);
+        MINI_CHECK!(ln_transformed[0] == 10.0 && ln_transformed[1] == 20.0 && ln_transformed[2] == 30.0);
+        MINI_CHECK!(ln_transformed[3] == 11.0 && ln_transformed[4] == 20.0 && ln_transformed[5] == 30.0);
+        MINI_CHECK!(TOLERANCE.is_point_close(&pl_transformed.origin(), &Point::new(10.0, 20.0, 30.0)));
+        MINI_CHECK!(TOLERANCE.is_point_close(&pts[0], &Point::new(10.0, 20.0, 30.0)));
+        MINI_CHECK!(TOLERANCE.is_point_close(&pts[1], &Point::new(11.0, 20.0, 30.0)));
+        MINI_CHECK!(TOLERANCE.is_point_close(&pts[2], &Point::new(11.0, 21.0, 30.0)));
     })
 }
 
@@ -327,23 +540,23 @@ pub fn run_xform_json_roundtrip() -> TestResult {
     MINI_TEST!("Json Roundtrip", {
         use crate::Xform;
 
-        // Create a non-identity xform
         let mut xform = Xform::translation(1.0, 2.0, 3.0);
         xform.name = "test_xform".to_string();
-
-        //   json_dumps()    │ String       │ to JSON string
-        //   json_loads(s)   │ String       │ from JSON string
-        //   json_dump(path) │ file         │ write to file
-        //   json_load(path) │ file         │ read from file
 
         let filename = "serialization/test_xform.json";
         xform.json_dump(filename).unwrap();
         let loaded = Xform::json_load(filename).unwrap();
 
         MINI_CHECK!(loaded.name == "test_xform");
-        MINI_CHECK!(TOLERANCE.is_close(loaded.m[12], 1.0));
-        MINI_CHECK!(TOLERANCE.is_close(loaded.m[13], 2.0));
-        MINI_CHECK!(TOLERANCE.is_close(loaded.m[14], 3.0));
+        MINI_CHECK!(loaded.guid() == xform.guid());
+        MINI_CHECK!(TOLERANCE.is_close(loaded.m[0], 1.0) && TOLERANCE.is_close(loaded.m[1], 0.0));
+        MINI_CHECK!(TOLERANCE.is_close(loaded.m[2], 0.0) && TOLERANCE.is_close(loaded.m[3], 0.0));
+        MINI_CHECK!(TOLERANCE.is_close(loaded.m[4], 0.0) && TOLERANCE.is_close(loaded.m[5], 1.0));
+        MINI_CHECK!(TOLERANCE.is_close(loaded.m[6], 0.0) && TOLERANCE.is_close(loaded.m[7], 0.0));
+        MINI_CHECK!(TOLERANCE.is_close(loaded.m[8], 0.0) && TOLERANCE.is_close(loaded.m[9], 0.0));
+        MINI_CHECK!(TOLERANCE.is_close(loaded.m[10], 1.0) && TOLERANCE.is_close(loaded.m[11], 0.0));
+        MINI_CHECK!(TOLERANCE.is_close(loaded.m[12], 1.0) && TOLERANCE.is_close(loaded.m[13], 2.0));
+        MINI_CHECK!(TOLERANCE.is_close(loaded.m[14], 3.0) && TOLERANCE.is_close(loaded.m[15], 1.0));
     })
 }
 
@@ -351,30 +564,45 @@ pub fn run_xform_protobuf_roundtrip() -> TestResult {
     MINI_TEST!("Protobuf Roundtrip", {
         use crate::Xform;
 
-        // Create a non-identity xform
         let mut xform = Xform::translation(1.0, 2.0, 3.0);
         xform.name = "test_xform_proto".to_string();
 
-        // pb_dump(filename) / pb_load(filename) - file-based serialization
         let filename = "serialization/test_xform.bin";
         xform.pb_dump(filename);
         let loaded = Xform::pb_load(filename);
 
         MINI_CHECK!(loaded.name == "test_xform_proto");
-        MINI_CHECK!(TOLERANCE.is_close(loaded.m[12], 1.0));
-        MINI_CHECK!(TOLERANCE.is_close(loaded.m[13], 2.0));
-        MINI_CHECK!(TOLERANCE.is_close(loaded.m[14], 3.0));
+        MINI_CHECK!(loaded.guid() == xform.guid());
+        MINI_CHECK!(TOLERANCE.is_close(loaded.m[0], 1.0) && TOLERANCE.is_close(loaded.m[1], 0.0));
+        MINI_CHECK!(TOLERANCE.is_close(loaded.m[2], 0.0) && TOLERANCE.is_close(loaded.m[3], 0.0));
+        MINI_CHECK!(TOLERANCE.is_close(loaded.m[4], 0.0) && TOLERANCE.is_close(loaded.m[5], 1.0));
+        MINI_CHECK!(TOLERANCE.is_close(loaded.m[6], 0.0) && TOLERANCE.is_close(loaded.m[7], 0.0));
+        MINI_CHECK!(TOLERANCE.is_close(loaded.m[8], 0.0) && TOLERANCE.is_close(loaded.m[9], 0.0));
+        MINI_CHECK!(TOLERANCE.is_close(loaded.m[10], 1.0) && TOLERANCE.is_close(loaded.m[11], 0.0));
+        MINI_CHECK!(TOLERANCE.is_close(loaded.m[12], 1.0) && TOLERANCE.is_close(loaded.m[13], 2.0));
+        MINI_CHECK!(TOLERANCE.is_close(loaded.m[14], 3.0) && TOLERANCE.is_close(loaded.m[15], 1.0));
     })
 }
 
 REGISTER_MINI_TEST!("Xform", "Constructor", crate::xform_test::run_xform_constructor);
 REGISTER_MINI_TEST!("Xform", "Translation", crate::xform_test::run_xform_translation);
-REGISTER_MINI_TEST!("Xform", "Scaling", crate::xform_test::run_xform_scaling);
-REGISTER_MINI_TEST!("Xform", "Rotation", crate::xform_test::run_xform_rotation);
-REGISTER_MINI_TEST!("Xform", "Inverse", crate::xform_test::run_xform_inverse);
-REGISTER_MINI_TEST!("Xform", "Transform Geometry", crate::xform_test::run_xform_transform_geometry);
+REGISTER_MINI_TEST!("Xform", "Rotation X", crate::xform_test::run_xform_rotation_x);
+REGISTER_MINI_TEST!("Xform", "Rotation Y", crate::xform_test::run_xform_rotation_y);
+REGISTER_MINI_TEST!("Xform", "Rotation Z", crate::xform_test::run_xform_rotation_z);
+REGISTER_MINI_TEST!("Xform", "Rotation Axis", crate::xform_test::run_xform_rotation_axis);
+REGISTER_MINI_TEST!("Xform", "Rotation Around Line", crate::xform_test::run_xform_rotation_around_line);
 REGISTER_MINI_TEST!("Xform", "Change Basis", crate::xform_test::run_xform_change_basis);
 REGISTER_MINI_TEST!("Xform", "Plane To Plane", crate::xform_test::run_xform_plane_to_plane);
-REGISTER_MINI_TEST!("Xform", "Look At Rh", crate::xform_test::run_xform_look_at_rh);
+REGISTER_MINI_TEST!("Xform", "Scale XYZ", crate::xform_test::run_xform_scale_xyz);
+REGISTER_MINI_TEST!("Xform", "Scale Uniform", crate::xform_test::run_xform_scale_uniform);
+REGISTER_MINI_TEST!("Xform", "Scale Non Uniform", crate::xform_test::run_xform_scale_non_uniform);
+REGISTER_MINI_TEST!("Xform", "Look At Right Handed", crate::xform_test::run_xform_look_at_right_handed);
+REGISTER_MINI_TEST!("Xform", "Look To Right Handed", crate::xform_test::run_xform_look_to_right_handed);
+REGISTER_MINI_TEST!("Xform", "Perspective", crate::xform_test::run_xform_perspective);
+REGISTER_MINI_TEST!("Xform", "Orthographic", crate::xform_test::run_xform_orthographic);
+REGISTER_MINI_TEST!("Xform", "Project To Plane", crate::xform_test::run_xform_project_to_plane);
+REGISTER_MINI_TEST!("Xform", "Project To Plane By Axis", crate::xform_test::run_xform_project_to_plane_by_axis);
+REGISTER_MINI_TEST!("Xform", "Inverse", crate::xform_test::run_xform_inverse);
+REGISTER_MINI_TEST!("Xform", "Transform Geometry", crate::xform_test::run_xform_transform_geometry);
 REGISTER_MINI_TEST!("Xform", "Json Roundtrip", crate::xform_test::run_xform_json_roundtrip);
 REGISTER_MINI_TEST!("Xform", "Protobuf Roundtrip", crate::xform_test::run_xform_protobuf_roundtrip);

@@ -1,15 +1,45 @@
 use serde::{Deserialize, Serialize};
 use std::fs;
 
-/// Serialize data to JSON string with pretty formatting.
+pub fn sort_json_keys(value: serde_json::Value) -> serde_json::Value {
+    match value {
+        serde_json::Value::Object(map) => {
+            let mut sorted: serde_json::Map<String, serde_json::Value> = serde_json::Map::new();
+            let mut entries: Vec<(String, serde_json::Value)> = map.into_iter().collect();
+            entries.sort_by(|a, b| a.0.cmp(&b.0));
+            for (k, v) in entries {
+                sorted.insert(k, sort_json_keys(v));
+            }
+            serde_json::Value::Object(sorted)
+        }
+        serde_json::Value::Array(arr) => {
+            serde_json::Value::Array(arr.into_iter().map(sort_json_keys).collect())
+        }
+        other => other,
+    }
+}
+
+pub fn sorted_json_string<T: Serialize>(data: &T) -> Result<String, Box<dyn std::error::Error>> {
+    let value = serde_json::to_value(data)?;
+    let sorted = sort_json_keys(value);
+    let mut buf = Vec::new();
+    let formatter = serde_json::ser::PrettyFormatter::with_indent(b"    ");
+    let mut ser = serde_json::Serializer::with_formatter(&mut buf, formatter);
+    serde::Serialize::serialize(&sorted, &mut ser)?;
+    Ok(String::from_utf8(buf)?)
+}
+
+/// Serialize data to JSON string with pretty formatting and sorted keys.
 pub fn json_dumps<T: Serialize>(
     data: &T,
     pretty: bool,
 ) -> Result<String, Box<dyn std::error::Error>> {
+    let value = serde_json::to_value(data)?;
+    let sorted = sort_json_keys(value);
     if pretty {
-        Ok(serde_json::to_string_pretty(data)?)
+        Ok(serde_json::to_string_pretty(&sorted)?)
     } else {
-        Ok(serde_json::to_string(data)?)
+        Ok(serde_json::to_string(&sorted)?)
     }
 }
 

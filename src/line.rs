@@ -193,9 +193,10 @@ impl Line {
         let mut start = Point::new(self._x0, self._y0, self._z0);
         let mut end = Point::new(self._x1, self._y1, self._z1);
 
-        // No clone needed - transform_point takes &self
-        self.xform.transform_point(&mut start);
-        self.xform.transform_point(&mut end);
+        start.xform = self.xform.clone();
+        start.transform();
+        end.xform = self.xform.clone();
+        end.transform();
 
         self._x0 = start[0];
         self._y0 = start[1];
@@ -325,7 +326,7 @@ impl Line {
     }
 
     pub fn jsondump(&self) -> Result<String, Box<dyn std::error::Error>> {
-        Ok(serde_json::to_string_pretty(self)?)
+        crate::encoders::sorted_json_string(self)
     }
 
     pub fn jsonload(json_data: &str) -> Result<Self, Box<dyn std::error::Error>> {

@@ -2,17 +2,47 @@ use crate::{MINI_CHECK, MINI_TEST, REGISTER_MINI_TEST};
 use crate::mini_test::TestResult;
 use crate::tolerance::TOLERANCE;
 
-pub fn run_quaternion_json_roundtrip() -> TestResult {
-    MINI_TEST!("Json Roundtrip", {
+pub fn run_quaternion_constructor() -> TestResult {
+    MINI_TEST!("Constructor", {
         use crate::Quaternion;
         use crate::Vector;
-        use crate::encoders::{json_dump, json_load};
-        let axis = Vector::new(0.0, 0.0, 1.0);
-        let original = Quaternion::from_axis_angle(axis, 1.5708);
-        json_dump(&original, "serialization/test_quaternion.json", false).unwrap();
-        let loaded = json_load::<Quaternion>("serialization/test_quaternion.json").unwrap();
+        use crate::tolerance::PI;
 
-        MINI_CHECK!(TOLERANCE.is_close(loaded.s, original.s));
+        // Default constructor (identity)
+        let q0 = Quaternion::identity();
+
+        // Constructor with args
+        let q1 = Quaternion::from_sv(2.0, Vector::new(1.0, 0.0, 0.0));
+
+        // Quaternion multiplication
+        let q = Quaternion::from_axis_angle(Vector::new(0.0, 0.0, 1.0), PI / 2.0);
+        let r = q.clone() * q.clone();
+        let v = r.rotate_vector(Vector::new(1.0, 0.0, 0.0));
+
+        // Scalar multiplication
+        let scaled = Quaternion::identity() * 2.0;
+
+        // Addition
+        let a = Quaternion::from_sv(1.0, Vector::new(0.0, 0.0, 0.0));
+        let b = Quaternion::from_sv(0.0, Vector::new(0.0, 0.0, 1.0));
+        let sum = a + b;
+
+        // Subtraction
+        let diff = q.clone() - q.clone();
+
+        // Negation
+        let neg = -Quaternion::identity();
+
+        MINI_CHECK!(q0.name == "my_quaternion");
+        MINI_CHECK!(!q0.guid().is_empty());
+        MINI_CHECK!(TOLERANCE.is_close(q0.s, 1.0));
+        MINI_CHECK!(TOLERANCE.is_close(q0.v[0], 0.0) && TOLERANCE.is_close(q0.v[1], 0.0) && TOLERANCE.is_close(q0.v[2], 0.0));
+        MINI_CHECK!(TOLERANCE.is_close(q1.s, 2.0) && TOLERANCE.is_close(q1.v[0], 1.0));
+        MINI_CHECK!(TOLERANCE.is_close(v[0], -1.0) && TOLERANCE.is_close(v[1], 0.0));
+        MINI_CHECK!(TOLERANCE.is_close(scaled.s, 2.0));
+        MINI_CHECK!(TOLERANCE.is_close(sum.s, 1.0) && TOLERANCE.is_close(sum.v[2], 1.0));
+        MINI_CHECK!(TOLERANCE.is_close(diff.s, 0.0) && TOLERANCE.is_close(diff.v[2], 0.0));
+        MINI_CHECK!(TOLERANCE.is_close(neg.s, -1.0));
     })
 }
 
@@ -50,6 +80,55 @@ pub fn run_quaternion_from_euler() -> TestResult {
     })
 }
 
+pub fn run_quaternion_magnitude_squared() -> TestResult {
+    MINI_TEST!("Magnitude Squared", {
+        use crate::Quaternion;
+        use crate::Vector;
+        use crate::tolerance::PI;
+        let q = Quaternion::from_axis_angle(Vector::new(0.0, 0.0, 1.0), PI / 4.0);
+
+        MINI_CHECK!(TOLERANCE.is_close(q.magnitude_squared(), q.magnitude() * q.magnitude()));
+    })
+}
+
+pub fn run_quaternion_conjugate() -> TestResult {
+    MINI_TEST!("Conjugate", {
+        use crate::Quaternion;
+        use crate::Vector;
+        use crate::tolerance::PI;
+        let q = Quaternion::from_axis_angle(Vector::new(0.0, 0.0, 1.0), PI / 4.0);
+        let r = q.conjugate();
+
+        MINI_CHECK!(TOLERANCE.is_close(r.s, q.s));
+        MINI_CHECK!(TOLERANCE.is_close(r.v[0], -q.v[0]));
+        MINI_CHECK!(TOLERANCE.is_close(r.v[2], -q.v[2]));
+    })
+}
+
+pub fn run_quaternion_invert() -> TestResult {
+    MINI_TEST!("Invert", {
+        use crate::Quaternion;
+        use crate::Vector;
+        use crate::tolerance::PI;
+        let q = Quaternion::from_axis_angle(Vector::new(0.0, 0.0, 1.0), PI / 3.0);
+        let result = q.clone() * q.invert();
+
+        MINI_CHECK!(TOLERANCE.is_close(result.s, 1.0));
+        MINI_CHECK!(TOLERANCE.is_close(result.v[0], 0.0));
+        MINI_CHECK!(TOLERANCE.is_close(result.v[1], 0.0));
+        MINI_CHECK!(TOLERANCE.is_close(result.v[2], 0.0));
+    })
+}
+
+pub fn run_quaternion_dot() -> TestResult {
+    MINI_TEST!("Dot", {
+        use crate::Quaternion;
+        let q = Quaternion::identity();
+
+        MINI_CHECK!(TOLERANCE.is_close(q.dot(&q), 1.0));
+    })
+}
+
 pub fn run_quaternion_slerp() -> TestResult {
     MINI_TEST!("Slerp", {
         use crate::Quaternion;
@@ -84,125 +163,27 @@ pub fn run_quaternion_nlerp() -> TestResult {
     })
 }
 
-pub fn run_quaternion_invert() -> TestResult {
-    MINI_TEST!("Invert", {
+pub fn run_quaternion_json_roundtrip() -> TestResult {
+    MINI_TEST!("Json Roundtrip", {
         use crate::Quaternion;
         use crate::Vector;
-        use crate::tolerance::PI;
-        let q = Quaternion::from_axis_angle(Vector::new(0.0, 0.0, 1.0), PI / 3.0);
-        let result = q.clone() * q.invert();
+        use crate::encoders::{json_dump, json_load};
+        let axis = Vector::new(0.0, 0.0, 1.0);
+        let original = Quaternion::from_axis_angle(axis, 1.5708);
+        json_dump(&original, "serialization/test_quaternion.json", false).unwrap();
+        let loaded = json_load::<Quaternion>("serialization/test_quaternion.json").unwrap();
 
-        MINI_CHECK!(TOLERANCE.is_close(result.s, 1.0));
-        MINI_CHECK!(TOLERANCE.is_close(result.v[0], 0.0));
-        MINI_CHECK!(TOLERANCE.is_close(result.v[1], 0.0));
-        MINI_CHECK!(TOLERANCE.is_close(result.v[2], 0.0));
+        MINI_CHECK!(TOLERANCE.is_close(loaded.s, original.s));
     })
 }
 
-pub fn run_quaternion_dot() -> TestResult {
-    MINI_TEST!("Dot", {
-        use crate::Quaternion;
-        let q = Quaternion::identity();
-
-        MINI_CHECK!(TOLERANCE.is_close(q.dot(&q), 1.0));
-    })
-}
-
-pub fn run_quaternion_add() -> TestResult {
-    MINI_TEST!("Add", {
-        use crate::Quaternion;
-        let a = Quaternion::new(1.0, 0.0, 0.0, 0.0);
-        let b = Quaternion::new(0.0, 0.0, 0.0, 1.0);
-        let r = a + b;
-
-        MINI_CHECK!(TOLERANCE.is_close(r.s, 1.0));
-        MINI_CHECK!(TOLERANCE.is_close(r.v[2], 1.0));
-    })
-}
-
-pub fn run_quaternion_sub() -> TestResult {
-    MINI_TEST!("Sub", {
-        use crate::Quaternion;
-        use crate::Vector;
-        use crate::tolerance::PI;
-        let q = Quaternion::from_axis_angle(Vector::new(0.0, 0.0, 1.0), PI / 4.0);
-        let r = q.clone() - q;
-
-        MINI_CHECK!(TOLERANCE.is_close(r.s, 0.0));
-        MINI_CHECK!(TOLERANCE.is_close(r.v[2], 0.0));
-    })
-}
-
-pub fn run_quaternion_neg() -> TestResult {
-    MINI_TEST!("Neg", {
-        use crate::Quaternion;
-        let q = Quaternion::identity();
-        let r = -q;
-
-        MINI_CHECK!(TOLERANCE.is_close(r.s, -1.0));
-    })
-}
-
-pub fn run_quaternion_mul_scalar() -> TestResult {
-    MINI_TEST!("Mul Scalar", {
-        use crate::Quaternion;
-        let q = Quaternion::identity();
-        let r = q * 2.0;
-
-        MINI_CHECK!(TOLERANCE.is_close(r.s, 2.0));
-    })
-}
-
-pub fn run_quaternion_magnitude2() -> TestResult {
-    MINI_TEST!("Magnitude2", {
-        use crate::Quaternion;
-        use crate::Vector;
-        use crate::tolerance::PI;
-        let q = Quaternion::from_axis_angle(Vector::new(0.0, 0.0, 1.0), PI / 4.0);
-
-        MINI_CHECK!(TOLERANCE.is_close(q.magnitude2(), q.magnitude() * q.magnitude()));
-    })
-}
-
-pub fn run_quaternion_conjugate() -> TestResult {
-    MINI_TEST!("Conjugate", {
-        use crate::Quaternion;
-        use crate::Vector;
-        use crate::tolerance::PI;
-        let q = Quaternion::from_axis_angle(Vector::new(0.0, 0.0, 1.0), PI / 4.0);
-        let r = q.conjugate();
-
-        MINI_CHECK!(TOLERANCE.is_close(r.s, q.s));
-        MINI_CHECK!(TOLERANCE.is_close(r.v[0], -q.v[0]));
-        MINI_CHECK!(TOLERANCE.is_close(r.v[2], -q.v[2]));
-    })
-}
-
-pub fn run_quaternion_mul() -> TestResult {
-    MINI_TEST!("Mul", {
-        use crate::Quaternion;
-        use crate::Vector;
-        use crate::tolerance::PI;
-        let q = Quaternion::from_axis_angle(Vector::new(0.0, 0.0, 1.0), PI / 2.0);
-        let r = q.clone() * q;
-        let v = r.rotate_vector(Vector::new(1.0, 0.0, 0.0));
-
-        MINI_CHECK!(TOLERANCE.is_close(v[0], -1.0));
-        MINI_CHECK!(TOLERANCE.is_close(v[1], 0.0));
-    })
-}
-
-REGISTER_MINI_TEST!("Quaternion", "Json Roundtrip", crate::quaternion_test::run_quaternion_json_roundtrip);
+REGISTER_MINI_TEST!("Quaternion", "Constructor", crate::quaternion_test::run_quaternion_constructor);
 REGISTER_MINI_TEST!("Quaternion", "From Arc", crate::quaternion_test::run_quaternion_from_arc);
 REGISTER_MINI_TEST!("Quaternion", "From Euler", crate::quaternion_test::run_quaternion_from_euler);
-REGISTER_MINI_TEST!("Quaternion", "Slerp", crate::quaternion_test::run_quaternion_slerp);
-REGISTER_MINI_TEST!("Quaternion", "Nlerp", crate::quaternion_test::run_quaternion_nlerp);
+REGISTER_MINI_TEST!("Quaternion", "Magnitude Squared", crate::quaternion_test::run_quaternion_magnitude_squared);
+REGISTER_MINI_TEST!("Quaternion", "Conjugate", crate::quaternion_test::run_quaternion_conjugate);
 REGISTER_MINI_TEST!("Quaternion", "Invert", crate::quaternion_test::run_quaternion_invert);
 REGISTER_MINI_TEST!("Quaternion", "Dot", crate::quaternion_test::run_quaternion_dot);
-REGISTER_MINI_TEST!("Quaternion", "Add", crate::quaternion_test::run_quaternion_add);
-REGISTER_MINI_TEST!("Quaternion", "Sub", crate::quaternion_test::run_quaternion_sub);
-REGISTER_MINI_TEST!("Quaternion", "Neg", crate::quaternion_test::run_quaternion_neg);
-REGISTER_MINI_TEST!("Quaternion", "Mul Scalar", crate::quaternion_test::run_quaternion_mul_scalar);
-REGISTER_MINI_TEST!("Quaternion", "Magnitude2", crate::quaternion_test::run_quaternion_magnitude2);
-REGISTER_MINI_TEST!("Quaternion", "Conjugate", crate::quaternion_test::run_quaternion_conjugate);
-REGISTER_MINI_TEST!("Quaternion", "Mul", crate::quaternion_test::run_quaternion_mul);
+REGISTER_MINI_TEST!("Quaternion", "Slerp", crate::quaternion_test::run_quaternion_slerp);
+REGISTER_MINI_TEST!("Quaternion", "Nlerp", crate::quaternion_test::run_quaternion_nlerp);
+REGISTER_MINI_TEST!("Quaternion", "Json Roundtrip", crate::quaternion_test::run_quaternion_json_roundtrip);

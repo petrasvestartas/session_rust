@@ -294,6 +294,10 @@ impl Tolerance {
         result
     }
 
+    pub fn to_radians(degrees: f64) -> f64 { degrees * Self::TO_RADIANS }
+
+    pub fn to_degrees(radians: f64) -> f64 { radians * Self::TO_DEGREES }
+
     /// Round a value to a given number of decimal places (like Python's round(value, ndigits))
     pub fn round_to(value: f64, ndigits: i32) -> f64 {
         let factor = 10f64.powi(ndigits);

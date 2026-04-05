@@ -82,6 +82,28 @@ pub fn run_vector_constructor() -> TestResult {
     })
 }
 
+pub fn run_vector_transformation() -> TestResult {
+    MINI_TEST!("Transformation", {
+        use crate::Vector;
+        use crate::Xform;
+        use crate::tolerance::PI;
+
+        let mut v = Vector::new(1.0, 2.0, 3.0);
+        v.xform = Xform::translation(10.0, 20.0, 30.0);
+        let v_transformed = v.transformed();
+        v.transform();
+
+        MINI_CHECK!(v_transformed[0] == 1.0 && v_transformed[1] == 2.0 && v_transformed[2] == 3.0);
+        MINI_CHECK!(v[0] == 1.0 && v[1] == 2.0 && v[2] == 3.0);
+        MINI_CHECK!(v.xform == Xform::identity());
+
+        let mut v2 = Vector::new(1.0, 0.0, 0.0);
+        v2.xform = Xform::rotation_z(PI / 2.0, false);
+        v2.transform();
+        MINI_CHECK!(TOLERANCE.is_close(v2[0], 0.0) && TOLERANCE.is_close(v2[1], 1.0) && TOLERANCE.is_close(v2[2], 0.0));
+    })
+}
+
 pub fn run_vector_magnitude() -> TestResult {
     MINI_TEST!("Magnitude", {
         use crate::Vector;
@@ -514,6 +536,7 @@ pub fn run_vector_protobuf_roundtrip() -> TestResult {
 
 // Register tests with the shared registry for run_all("rust")
 REGISTER_MINI_TEST!("Vector", "Constructor", crate::vector_test::run_vector_constructor);
+REGISTER_MINI_TEST!("Vector", "Transformation", crate::vector_test::run_vector_transformation);
 REGISTER_MINI_TEST!("Vector", "Magnitude", crate::vector_test::run_vector_magnitude);
 REGISTER_MINI_TEST!("Vector", "Normalize", crate::vector_test::run_vector_normalize);
 REGISTER_MINI_TEST!("Vector", "Reverse", crate::vector_test::run_vector_reverse);

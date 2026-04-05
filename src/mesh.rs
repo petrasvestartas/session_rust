@@ -2106,7 +2106,8 @@ impl Mesh {
         };
         for v in self.vertex.values_mut() {
             let mut pt = Point::new(v.x, v.y, v.z);
-            xform.transform_point(&mut pt);
+            pt.xform = xform.clone();
+            pt.transform();
             v.x = pt[0];
             v.y = pt[1];
             v.z = pt[2];
@@ -2328,7 +2329,8 @@ impl Mesh {
     }
 
     pub fn json_dumps(&self) -> String {
-        serde_json::to_string_pretty(&self.jsondump()).unwrap_or_default()
+        let sorted = crate::encoders::sort_json_keys(self.jsondump());
+        serde_json::to_string_pretty(&sorted).unwrap_or_default()
     }
 
     pub fn json_loads(json_string: &str) -> Self {
@@ -2337,8 +2339,8 @@ impl Mesh {
     }
 
     pub fn json_dump(&self, filename: &str) -> std::io::Result<()> {
-        let data = self.jsondump();
-        std::fs::write(filename, serde_json::to_string_pretty(&data)?)
+        let sorted = crate::encoders::sort_json_keys(self.jsondump());
+        std::fs::write(filename, serde_json::to_string_pretty(&sorted)?)
     }
 
     pub fn json_load(filename: &str) -> std::io::Result<Self> {

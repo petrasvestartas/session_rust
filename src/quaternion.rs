@@ -2,12 +2,18 @@ use crate::Vector;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use std::ops::{Add, Mul, Neg, Sub};
 
+/// A quaternion for 3D rotations (scalar + vector).
 #[derive(Debug, Clone)]
 pub struct Quaternion {
+    /// Type identifier
     pub typ: String,
+    /// Lazily generated unique identifier
     guid: std::sync::OnceLock<String>,
+    /// Human-readable name
     pub name: String,
+    /// Scalar part
     pub s: f64,
+    /// Vector part
     pub v: Vector,
 }
 
@@ -60,11 +66,12 @@ impl<'de> Deserialize<'de> for Quaternion {
 }
 
 impl Quaternion {
+    /// Internal helper: create quaternion preserving typ/name but new guid
     fn apply(&self, s: f64, v: Vector) -> Self {
         Quaternion { typ: self.typ.clone(), guid: std::sync::OnceLock::new(), name: self.name.clone(), s, v }
     }
 
-    /// cgmath-equivalent: `Quaternion::new(w, xi, yj, zk)`
+    /// Construct from scalar w and vector components (xi, yj, zk)
     pub fn new(w: f64, xi: f64, yj: f64, zk: f64) -> Self {
         Quaternion {
             typ: "Quaternion".to_string(),
@@ -75,7 +82,7 @@ impl Quaternion {
         }
     }
 
-    /// cgmath-equivalent: `Quaternion::from_sv(s, v)`
+    /// Create from scalar and vector components
     pub fn from_sv(s: f64, v: Vector) -> Self {
         Quaternion {
             typ: "Quaternion".to_string(),
@@ -86,24 +93,29 @@ impl Quaternion {
         }
     }
 
+    /// Lazy GUID accessor
     pub fn guid(&self) -> &str {
         self.guid.get_or_init(|| uuid::Uuid::new_v4().to_string())
     }
 
+    /// Set GUID
     pub fn set_guid(&self, g: String) {
         let _ = self.guid.set(g);
     }
 
+    /// Identity quaternion (s=1, v=0)
     pub fn identity() -> Self {
         Self::from_sv(1.0, Vector::new(0.0, 0.0, 0.0))
     }
 
+    /// Create from axis of rotation and angle
     pub fn from_axis_angle(axis: Vector, angle: f64) -> Self {
         let ax = axis.normalized();
         let half = angle * 0.5;
         Self::from_sv(half.cos(), ax * half.sin())
     }
 
+    /// Create rotation from source vector to destination vector
     pub fn from_arc(src: Vector, dst: Vector) -> Self {
         let s = src.normalized();
         let d = dst.normalized();
@@ -124,6 +136,7 @@ impl Quaternion {
         Self::from_sv(1.0 + dot_val, cross).normalized()
     }
 
+    /// Create from Euler angles (XYZ convention)
     pub fn from_euler(x: f64, y: f64, z: f64) -> Self {
         let (s1, c1) = ((x * 0.5).sin(), (x * 0.5).cos());
         let (s2, c2) = ((y * 0.5).sin(), (y * 0.5).cos());
@@ -138,20 +151,24 @@ impl Quaternion {
         )
     }
 
+    /// Rotate a vector by this quaternion
     pub fn rotate_vector(&self, v: Vector) -> Vector {
         let uv = self.v.cross(&v);
         let uuv = self.v.cross(&uv);
         v + (uv * self.s + uuv) * 2.0
     }
 
+    /// Euclidean norm
     pub fn magnitude(&self) -> f64 {
-        self.magnitude2().sqrt()
+        self.magnitude_squared().sqrt()
     }
 
-    pub fn magnitude2(&self) -> f64 {
+    /// Squared magnitude
+    pub fn magnitude_squared(&self) -> f64 {
         self.s * self.s + self.v[0] * self.v[0] + self.v[1] * self.v[1] + self.v[2] * self.v[2]
     }
 
+    /// Unit quaternion with same direction
     pub fn normalized(&self) -> Self {
         let mag = self.magnitude();
         if mag > 1e-10 {
@@ -161,22 +178,26 @@ impl Quaternion {
         }
     }
 
+    /// Conjugate (negates vector part)
     pub fn conjugate(&self) -> Self {
         self.apply(self.s, self.v.clone() * -1.0)
     }
 
+    /// Multiplicative inverse
     pub fn invert(&self) -> Self {
-        let mag2 = self.magnitude2();
+        let mag2 = self.magnitude_squared();
         if mag2 < 1e-20 {
             return Self::identity();
         }
         self.apply(self.s / mag2, self.v.clone() * (-1.0 / mag2))
     }
 
+    /// Dot product with another quaternion
     pub fn dot(&self, other: &Self) -> f64 {
         self.s * other.s + self.v.dot(&other.v)
     }
 
+    /// Spherical linear interpolation
     pub fn slerp(&self, other: &Self, amount: f64) -> Self {
         let dot_val = self.dot(other);
         if dot_val > 0.9995 {
@@ -190,30 +211,36 @@ impl Quaternion {
         (self.clone() * scale1 + other.clone() * scale2) * (1.0 / sin_theta)
     }
 
+    /// Normalized linear interpolation
     pub fn nlerp(&self, other: &Self, amount: f64) -> Self {
         (self.clone() * (1.0 - amount) + other.clone() * amount).normalized()
     }
 
+    /// Serialize to JSON string
     pub fn jsondump(&self) -> Result<String, Box<dyn std::error::Error>> {
-        Ok(serde_json::to_string_pretty(self)?)
+        crate::encoders::sorted_json_string(self)
     }
 
+    /// Deserialize from JSON string
     pub fn jsonload(json_data: &str) -> Result<Self, Box<dyn std::error::Error>> {
         Ok(serde_json::from_str(json_data)?)
     }
 
+    /// Write JSON to file
     pub fn to_json(&self, filepath: &str) -> Result<(), Box<dyn std::error::Error>> {
         let json = self.jsondump()?;
         std::fs::write(filepath, json)?;
         Ok(())
     }
 
+    /// Read JSON from file
     pub fn from_json(filepath: &str) -> Result<Self, Box<dyn std::error::Error>> {
         let json_data = std::fs::read_to_string(filepath)?;
         Self::jsonload(&json_data)
     }
 }
 
+/// Quaternion multiplication (composition)
 impl Mul<Quaternion> for Quaternion {
     type Output = Quaternion;
 
@@ -224,6 +251,7 @@ impl Mul<Quaternion> for Quaternion {
     }
 }
 
+/// Scalar multiplication
 impl Mul<f64> for Quaternion {
     type Output = Quaternion;
 
@@ -232,6 +260,7 @@ impl Mul<f64> for Quaternion {
     }
 }
 
+/// Component-wise addition
 impl Add<Quaternion> for Quaternion {
     type Output = Quaternion;
 
@@ -240,6 +269,7 @@ impl Add<Quaternion> for Quaternion {
     }
 }
 
+/// Component-wise subtraction
 impl Sub<Quaternion> for Quaternion {
     type Output = Quaternion;
 
@@ -248,6 +278,7 @@ impl Sub<Quaternion> for Quaternion {
     }
 }
 
+/// Negation
 impl Neg for Quaternion {
     type Output = Quaternion;
 

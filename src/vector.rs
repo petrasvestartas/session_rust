@@ -1,6 +1,7 @@
 use crate::point::Point;
 use crate::tolerance::{Tolerance, SCALE, TO_DEGREES, TO_RADIANS};
-use serde::{ser::Serialize as SerTrait, Deserialize, Serialize};
+use crate::xform::Xform;
+use serde::{Deserialize, Serialize};
 use std::cell::Cell;
 use std::fmt;
 use std::ops::{
@@ -36,6 +37,8 @@ pub struct Vector {
     pub name: String,
     #[serde(rename = "x")]
     _x: f64,
+    #[serde(default = "Xform::identity")]
+    pub xform: Xform,
     #[serde(rename = "y")]
     _y: f64,
     #[serde(rename = "z")]
@@ -54,6 +57,7 @@ impl Default for Vector {
             _z: 0.0,
             guid: std::sync::OnceLock::new(),
             name: "my_vector".to_string(),
+            xform: Xform::identity(),
             _magnitude: Cell::new(0.0),
             _has_magnitude: Cell::new(false),
         }
@@ -281,6 +285,28 @@ impl Vector {
     pub fn normalized(&self) -> Self {
         let mut result = self.clone();
         result.normalize_self();
+        result
+    }
+
+    /// Apply the stored xform transformation to the vector coordinates.
+    ///
+    /// Transforms the vector in-place and resets xform to identity.
+    pub fn transform(&mut self) {
+        let (x, y, z) = (self._x, self._y, self._z);
+        let m = &self.xform.m;
+        self._x = m[0]*x + m[4]*y + m[8]*z;
+        self._y = m[1]*x + m[5]*y + m[9]*z;
+        self._z = m[2]*x + m[6]*y + m[10]*z;
+        self.xform = Xform::identity();
+    }
+
+    /// Return a transformed copy of the vector.
+    ///
+    /// Returns a new vector with the transformation applied.
+    /// The original vector and its xform remain unchanged.
+    pub fn transformed(&self) -> Self {
+        let mut result = self.clone();
+        result.transform();
         result
     }
 
@@ -919,11 +945,7 @@ impl Vector {
     ///
     /// A Result containing the pretty-printed JSON string or an error.
     pub fn jsondump(&self) -> Result<String, Box<dyn std::error::Error>> {
-        let mut buf = Vec::new();
-        let formatter = serde_json::ser::PrettyFormatter::with_indent(b"    ");
-        let mut ser = serde_json::Serializer::with_formatter(&mut buf, formatter);
-        SerTrait::serialize(self, &mut ser)?;
-        Ok(String::from_utf8(buf)?)
+        crate::encoders::sorted_json_string(self)
     }
 
     /// Deserializes a Vector from a JSON string.
@@ -977,6 +999,11 @@ impl Vector {
             y: self._y,
             z: self._z,
             name: self.name.clone(),
+            xform: Some(crate::proto::Xform {
+                guid: self.xform.guid().to_string(),
+                name: self.xform.name.clone(),
+                matrix: self.xform.m.to_vec(),
+            }),
         };
         proto.encode_to_vec()
     }
@@ -994,10 +1021,19 @@ impl Vector {
         use prost::Message;
         
         let proto = crate::proto::Vector::decode(data)?;
-        
+
         let mut v = Self::new(proto.x, proto.y, proto.z);
         v.name = proto.name;
-        
+        if let Some(xform) = proto.xform {
+            v.xform.set_guid(xform.guid);
+            v.xform.name = xform.name;
+            for (i, val) in xform.matrix.iter().enumerate() {
+                if i < 16 {
+                    v.xform.m[i] = *val;
+                }
+            }
+        }
+
         Ok(v)
     }
 

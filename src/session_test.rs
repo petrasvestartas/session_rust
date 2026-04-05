@@ -186,8 +186,8 @@ pub fn run_session_tree_transformation_hierarchy() -> TestResult {
         let plane_from = Plane::new(Point::new(0.0, 0.0, 0.0), x.clone(), y.clone());
         let plane_to = Plane::new(box1_top, x.clone(), y.clone());
         let xy_to_top = Xform::plane_to_plane(&plane_from, &plane_to);
-        box1.xform = Xform::rotation_z(PI / 1.5) * xy_to_top;
-        box2.xform = Xform::translation(2.0, 0.0, 0.0) * Xform::rotation_z(PI / 6.0);
+        box1.xform = Xform::rotation_z(PI / 1.5, false) * xy_to_top;
+        box2.xform = Xform::translation(2.0, 0.0, 0.0) * Xform::rotation_z(PI / 6.0, false);
         box3.xform = Xform::translation(2.0, 0.0, 0.0);
 
         scene.objects.meshes[0].xform = box1.xform.clone();
