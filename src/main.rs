@@ -251,18 +251,18 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         let mut pt1 = Point::new(5.0, 0.0, 0.0);
         pt1.name = "point_at_5".to_string();
         let pt1_guid = pt1.guid().to_string();
-        scene.add_point(pt1.clone());
+        scene.add_point(pt1.clone(), None);
 
         let mut pt2 = Point::new(15.0, 0.0, 0.0);
         pt2.name = "point_at_15".to_string();
         let pt2_guid = pt2.guid().to_string();
-        scene.add_point(pt2.clone());
+        scene.add_point(pt2.clone(), None);
 
         let mut line1 =
             Line::from_points(&Point::new(10.0, -2.0, 0.0), &Point::new(10.0, 2.0, 0.0));
         line1.name = "vertical_line_at_10".to_string();
         let line1_guid = line1.guid().to_string();
-        scene.add_line(line1.clone());
+        scene.add_line(line1.clone(), None);
 
         let mut plane1 = Plane::new(
             Point::new(20.0, 0.0, 0.0),
@@ -271,7 +271,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         );
         plane1.name = "plane_at_20".to_string();
         let plane1_guid = plane1.guid().to_string();
-        scene.add_plane(plane1.clone());
+        scene.add_plane(plane1.clone(), None);
 
         let poly_pts = vec![
             Point::new(25.0, -1.0, -1.0),
@@ -281,7 +281,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         let mut polyline1 = session_rust::Polyline::new(poly_pts);
         polyline1.name = "polyline_at_25".to_string();
         let polyline1_guid = polyline1.guid().to_string();
-        scene.add_polyline(polyline1.clone());
+        scene.add_polyline(polyline1.clone(), None);
 
         let ray_origin = Point::new(0.0, 0.0, 0.0);
         let ray_direction = Vector::new(1.0, 0.0, 0.0);
@@ -320,7 +320,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             let z = (unsafe { libc::rand() } as f64 / rand_max - 0.5) * world_size;
             let mut pt = Point::new(x, y, z);
             pt.name = format!("point_{i}");
-            scene.add_point(pt.clone());
+            scene.add_point(pt.clone(), None);
             pure_boxes.push(OBB::new(
                 Point::new(x, y, z),
                 Vector::new(1.0, 0.0, 0.0),

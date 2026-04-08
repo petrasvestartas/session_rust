@@ -633,9 +633,10 @@ impl Plane {
         origin0: &Point, normal0: &Vector,
         origin1: &Point, normal1: &Vector,
         can_be_flipped: bool,
+        tolerance: f64,
     ) -> bool {
-        let mut n0 = normal0.clone();
-        let mut n1 = normal1.clone();
+        let n0 = normal0.clone();
+        let n1 = normal1.clone();
         let parallel = n0.is_parallel_to(&n1);
         if can_be_flipped { if parallel == 0 { return false; } }
         else { if parallel != -1 { return false; } }
@@ -643,7 +644,7 @@ impl Plane {
         let d0 = -(a0 * origin0[0] + b0 * origin0[1] + c0 * origin0[2]);
         let (a1, b1, c1) = (n1[0], n1[1], n1[2]);
         let d1 = -(a1 * origin1[0] + b1 * origin1[1] + c1 * origin1[2]);
-        let tol = crate::tolerance::Tolerance::APPROXIMATION;
+        let tol = if tolerance < 0.0 { crate::tolerance::Tolerance::APPROXIMATION } else { tolerance };
         let dist0 = (a0 * origin1[0] + b0 * origin1[1] + c0 * origin1[2] + d0).abs();
         let dist1 = (a1 * origin0[0] + b1 * origin0[1] + c1 * origin0[2] + d1).abs();
         dist0 < tol && dist1 < tol
@@ -728,6 +729,28 @@ impl Plane {
         let new_origin = self._origin.clone() + (normal * distance);
 
         Plane::new(new_origin, self._x_axis.clone(), self._y_axis.clone())
+    }
+
+    /// Orthogonal projection of a point onto this plane.
+    /// Equivalent to CGAL's `Plane_3::projection(Point_3)`.
+    ///
+    /// Uses the cached plane equation `ax + by + cz + d = 0` so the signed
+    /// distance is computed without re-normalizing the normal — the plane
+    /// constructor already enforces a unit z_axis.
+    pub fn projection(&self, p: &Point) -> Point {
+        let signed_distance = self._a * p[0] + self._b * p[1] + self._c * p[2] + self._d;
+        Point::new(
+            p[0] - signed_distance * self._a,
+            p[1] - signed_distance * self._b,
+            p[2] - signed_distance * self._c,
+        )
+    }
+
+    /// True if `p` lies strictly on the negative half-space of this plane —
+    /// i.e. the signed distance from `p` to the plane along the unit normal
+    /// `(a, b, c)` is negative. Mirrors CGAL's `Plane_3::has_on_negative_side`.
+    pub fn has_on_negative_side(&self, p: &Point) -> bool {
+        (self._a * p[0] + self._b * p[1] + self._c * p[2] + self._d) < 0.0
     }
 }
 

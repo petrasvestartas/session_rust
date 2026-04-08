@@ -1410,3 +1410,28 @@ pub fn run_polyline_boolean_op() -> TestResult {
     })
 }
 REGISTER_MINI_TEST!("Polyline", "Boolean Op", crate::polyline_test::run_polyline_boolean_op);
+
+#[test]
+fn test_polyline_boolean_op_plane() {
+    let _ = run_polyline_boolean_op_plane();
+}
+
+pub fn run_polyline_boolean_op_plane() -> TestResult {
+    MINI_TEST!("Boolean Op Plane", {
+        use crate::{Plane, Point, Polyline, Vector};
+        // Two overlapping squares lifted to z=5 and clipped against the z=5 plane
+        let plane = Plane::from_point_normal(Point::new(0.0,0.0,5.0), Vector::new(0.0,0.0,1.0));
+        let sq_a = Polyline::new(vec![Point::new(-1.0,-1.0,5.0), Point::new(1.0,-1.0,5.0), Point::new(1.0,1.0,5.0), Point::new(-1.0,1.0,5.0), Point::new(-1.0,-1.0,5.0)]);
+        let sq_b = Polyline::new(vec![Point::new(0.0,0.0,5.0), Point::new(2.0,0.0,5.0), Point::new(2.0,2.0,5.0), Point::new(0.0,2.0,5.0), Point::new(0.0,0.0,5.0)]);
+        let isect = Polyline::boolean_op_plane(&sq_a, &sq_b, &plane, 0);
+        let uni = Polyline::boolean_op_plane(&sq_a, &sq_b, &plane, 1);
+        let diff = Polyline::boolean_op_plane(&sq_a, &sq_b, &plane, 2);
+        MINI_CHECK!(isect.len() == 1);
+        MINI_CHECK!(uni.len() == 1);
+        MINI_CHECK!(diff.len() == 1);
+        for i in 0..isect[0].point_count() { MINI_CHECK!(TOLERANCE.is_close(isect[0][i][2], 5.0)); }
+        for i in 0..uni[0].point_count() { MINI_CHECK!(TOLERANCE.is_close(uni[0][i][2], 5.0)); }
+        for i in 0..diff[0].point_count() { MINI_CHECK!(TOLERANCE.is_close(diff[0][i][2], 5.0)); }
+    })
+}
+REGISTER_MINI_TEST!("Polyline", "Boolean Op Plane", crate::polyline_test::run_polyline_boolean_op_plane);

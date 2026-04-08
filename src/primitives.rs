@@ -5,10 +5,9 @@ use crate::nurbscurve::NurbsCurve;
 use crate::nurbssurface::NurbsSurface;
 use crate::plane::Plane;
 use crate::point::Point;
-use crate::tolerance::Tolerance;
+use crate::tolerance::{Tolerance, PI};
 use crate::vector::Vector;
 use crate::xform::Xform;
-use std::f64::consts::PI;
 
 fn merge_knot_vectors(a: &[f64], b: &[f64]) -> Vec<f64> {
     let mut merged = Vec::new();
@@ -333,7 +332,7 @@ impl Primitives {
 
     fn capsule_geometry(start: &Point, end: &Point, radius: f64) -> (Vec<Point>, Vec<[usize; 3]>) {
         let n = 10usize;
-        let lat = std::f64::consts::PI / 4.0;
+        let lat = PI / 4.0;
         let r_hemi = radius * lat.sin();
         let off = radius * lat.cos();
         let (mut ax, mut ay, mut az) = (end[0]-start[0], end[1]-start[1], end[2]-start[2]);
@@ -344,7 +343,7 @@ impl Primitives {
         let (yx, yy, yz) = (ay*xz-az*xy, az*xx-ax*xz, ax*xy-ay*xx);
         let ring = |cx: f64, cy: f64, cz: f64, aoff: f64, rr: f64| -> Vec<Point> {
             (0..n).map(|i| {
-                let a = 2.0*std::f64::consts::PI*i as f64/n as f64;
+                let a = 2.0*PI*i as f64/n as f64;
                 let (ca, sa) = (a.cos(), a.sin());
                 Point::new(cx+aoff*ax+rr*(ca*xx+sa*yx),
                            cy+aoff*ay+rr*(ca*xy+sa*yy),
@@ -1711,7 +1710,7 @@ impl Primitives {
 
     pub fn wave_surface(size: f64, amplitude: f64) -> NurbsSurface {
         let n = 13;
-        let pi2 = 2.0 * std::f64::consts::PI;
+        let pi2 = 2.0 * PI;
         let mut pts = Vec::new();
         for i in 0..n {
             let u = i as f64 / (n - 1) as f64;

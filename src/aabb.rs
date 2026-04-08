@@ -53,6 +53,38 @@ impl AABB {
         }
     }
 
+    /// Build an AABB directly from a stride-3 coord buffer (e.g. `Polyline::coords`)
+    /// without constructing an intermediate `Vec<Point>`. Used on hot paths like
+    /// `Session::add_polyline` where the caller already has raw coords.
+    pub fn from_coords_stride3(coords: &[f64], inflate: f64) -> Self {
+        if coords.len() < 3 {
+            return AABB::default();
+        }
+        let n = coords.len() / 3;
+        let mut min_x = coords[0];
+        let mut min_y = coords[1];
+        let mut min_z = coords[2];
+        let mut max_x = min_x;
+        let mut max_y = min_y;
+        let mut max_z = min_z;
+        for i in 1..n {
+            let x = coords[i * 3];
+            let y = coords[i * 3 + 1];
+            let z = coords[i * 3 + 2];
+            if x < min_x { min_x = x; } else if x > max_x { max_x = x; }
+            if y < min_y { min_y = y; } else if y > max_y { max_y = y; }
+            if z < min_z { min_z = z; } else if z > max_z { max_z = z; }
+        }
+        AABB {
+            cx: (min_x + max_x) * 0.5,
+            cy: (min_y + max_y) * 0.5,
+            cz: (min_z + max_z) * 0.5,
+            hx: (max_x - min_x) * 0.5 + inflate,
+            hy: (max_y - min_y) * 0.5 + inflate,
+            hz: (max_z - min_z) * 0.5 + inflate,
+        }
+    }
+
     pub fn from_line(line: &crate::line::Line, inflate: f64) -> Self {
         let points = vec![line.start(), line.end()];
         Self::from_points(&points, inflate)

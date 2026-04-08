@@ -1,6 +1,7 @@
 ﻿use crate::{OBB, Color, Line, Point, Tolerance, Vector, Xform, BVH};
 use crate::polyline::Polyline;
 use crate::remesh_cdt;
+use crate::tolerance::PI;
 use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
 
@@ -1754,7 +1755,7 @@ impl Mesh {
         let n0 = self.face_normal(ef[0])?;
         let n1 = self.face_normal(ef[1])?;
         let dot = n0.dot(&n1).clamp(-1.0, 1.0);
-        Some((std::f64::consts::PI - dot.acos()) * 180.0 / std::f64::consts::PI)
+        Some((PI - dot.acos()) * 180.0 / PI)
     }
 
     pub fn dihedral_angles(&self, scale: f64)

@@ -18,6 +18,18 @@ pub enum ElementGeometry {
     BRep(BRep),
 }
 
+// Strip closing duplicate if polygon is closed (last == first)
+fn strip_closing(pts: &[Point]) -> Vec<Point> {
+    if pts.len() > 3 {
+        let f = &pts[0];
+        let l = &pts[pts.len() - 1];
+        if (f[0] - l[0]).abs() < 1e-6 && (f[1] - l[1]).abs() < 1e-6 && (f[2] - l[2]).abs() < 1e-6 {
+            return pts[..pts.len() - 1].to_vec();
+        }
+    }
+    pts.to_vec()
+}
+
 #[derive(Debug, Clone)]
 pub enum ElementKind {
     Generic,
@@ -25,6 +37,7 @@ pub enum ElementKind {
     Beam { width: f64, depth: f64, length: f64 },
     Plate {
         polygon: Vec<Point>,
+        polygon_top: Vec<Point>,
         thickness: f64,
         joint_types: Vec<i32>,
         j_mf: Vec<Vec<(i32, bool, f64)>>,
@@ -163,11 +176,54 @@ impl Element {
 
     pub fn plate(polygon: Vec<Point>, thickness: f64, name: &str) -> Self {
         let pts: Vec<Point> = polygon.iter().map(|p| Point::new(p[0], p[1], p[2])).collect();
+        let polygon_top = Self::offset_polygon_top(&pts, thickness);
         let geometry = ElementGeometry::Mesh(Self::compute_plate_geometry(&pts, thickness));
         Self {
             guid: std::sync::OnceLock::new(),
             name: name.to_string(),
-            kind: ElementKind::Plate { polygon: pts, thickness, joint_types: Vec::new(), j_mf: Vec::new(), key: String::new(), component_plane: None },
+            kind: ElementKind::Plate { polygon: pts, polygon_top, thickness, joint_types: Vec::new(), j_mf: Vec::new(), key: String::new(), component_plane: None },
+            session_transformation: Xform::identity(),
+            geometry,
+            features: Vec::new(),
+            is_dirty: true,
+            cached_aabb: None,
+            cached_obb: None,
+            cached_collision_mesh: None,
+            cached_point: None,
+            cached_polylines: None,
+            cached_planes: None,
+            cached_edge_vectors: None,
+            cached_axis: None,
+        }
+    }
+
+    pub fn plate_from_top_bottom(bottom: Vec<Point>, top: Vec<Point>, name: &str) -> Self {
+        let mut bot = strip_closing(&bottom);
+        let mut tp = strip_closing(&top);
+        // Ensure bottom normal points toward top
+        let norm = Self::polygon_normal(&bot);
+        let np = bot.len().min(tp.len());
+        let mut d = 0.0;
+        for k in 0..np {
+            d += (tp[k][0] - bot[k][0]) * norm[0]
+               + (tp[k][1] - bot[k][1]) * norm[1]
+               + (tp[k][2] - bot[k][2]) * norm[2];
+        }
+        if d < 0.0 { std::mem::swap(&mut bot, &mut tp); }
+        // Compute thickness from average distance
+        let mut thickness = 0.0;
+        for k in 0..np {
+            let dx = tp[k][0] - bot[k][0];
+            let dy = tp[k][1] - bot[k][1];
+            let dz = tp[k][2] - bot[k][2];
+            thickness += (dx * dx + dy * dy + dz * dz).sqrt();
+        }
+        thickness /= np as f64;
+        let geometry = ElementGeometry::Mesh(Self::compute_plate_geometry_explicit(&bot, &tp));
+        Self {
+            guid: std::sync::OnceLock::new(),
+            name: name.to_string(),
+            kind: ElementKind::Plate { polygon: bot, polygon_top: tp, thickness, joint_types: Vec::new(), j_mf: Vec::new(), key: String::new(), component_plane: None },
             session_transformation: Xform::identity(),
             geometry,
             features: Vec::new(),
@@ -330,6 +386,13 @@ impl Element {
         }
     }
 
+    pub fn polygon_top(&self) -> Option<&Vec<Point>> {
+        match &self.kind {
+            ElementKind::Plate { polygon_top, .. } => Some(polygon_top),
+            _ => None,
+        }
+    }
+
     ///////////////////////////////////////////////////////////////////////////////////////////
     // Column/Beam/Plate Setters
     ///////////////////////////////////////////////////////////////////////////////////////////
@@ -381,16 +444,18 @@ impl Element {
     }
 
     pub fn set_thickness(&mut self, v: f64) {
-        if let ElementKind::Plate { polygon, thickness, .. } = &mut self.kind {
+        if let ElementKind::Plate { polygon, polygon_top, thickness, .. } = &mut self.kind {
             *thickness = v;
+            *polygon_top = Self::offset_polygon_top(polygon, *thickness);
             self.geometry = ElementGeometry::Mesh(Self::compute_plate_geometry(polygon, *thickness));
             self.reset();
         }
     }
 
     pub fn set_polygon(&mut self, pts: Vec<Point>) {
-        if let ElementKind::Plate { polygon, thickness, .. } = &mut self.kind {
+        if let ElementKind::Plate { polygon, polygon_top, thickness, .. } = &mut self.kind {
             *polygon = pts.iter().map(|p| Point::new(p[0], p[1], p[2])).collect();
+            *polygon_top = Self::offset_polygon_top(polygon, *thickness);
             self.geometry = ElementGeometry::Mesh(Self::compute_plate_geometry(polygon, *thickness));
             self.reset();
         }
@@ -488,6 +553,14 @@ impl Element {
     pub fn set_brep_geometry(&mut self, geo: BRep) {
         self.geometry = ElementGeometry::BRep(geo);
         self.is_dirty = true;
+    }
+
+    pub fn set_polylines(&mut self, polys: Vec<Polyline>) {
+        self.cached_polylines = Some(polys);
+    }
+
+    pub fn set_planes(&mut self, plns: Vec<Plane>) {
+        self.cached_planes = Some(plns);
     }
 
     pub fn reset(&mut self) {
@@ -619,7 +692,7 @@ impl Element {
         Mesh::from_vertices_and_faces(vertices, faces)
     }
 
-    fn polygon_normal(pts: &[Point]) -> Vector {
+    pub fn polygon_normal(pts: &[Point]) -> Vector {
         let (mut nx, mut ny, mut nz) = (0.0, 0.0, 0.0);
         let n = pts.len();
         for i in 0..n {
@@ -634,19 +707,40 @@ impl Element {
         Vector::new(nx / mag, ny / mag, nz / mag)
     }
 
-    fn compute_plate_geometry(polygon: &[Point], thickness: f64) -> Mesh {
-        let normal = Self::polygon_normal(polygon);
-        let n = polygon.len();
-        let mut vertices = Vec::with_capacity(n * 2);
-        for p in polygon {
-            vertices.push(Point::new(p[0], p[1], p[2]));
+    pub fn compute_aabb_fast(&self, inflate: f64) -> OBB {
+        match &self.kind {
+            ElementKind::Plate { polygon, polygon_top, .. } => {
+                let mut pts: Vec<Point> = Vec::with_capacity(polygon.len() + polygon_top.len());
+                for p in polygon { pts.push(Point::new(p[0], p[1], p[2])); }
+                for p in polygon_top { pts.push(Point::new(p[0], p[1], p[2])); }
+                OBB::from_points(&pts, inflate)
+            }
+            _ => OBB::from_point(Point::new(0.0, 0.0, 0.0), inflate),
         }
-        for p in polygon {
-            vertices.push(Point::new(
-                p[0] - normal[0] * thickness,
-                p[1] - normal[1] * thickness,
-                p[2] - normal[2] * thickness,
-            ));
+    }
+
+    fn offset_polygon_top(polygon: &[Point], thickness: f64) -> Vec<Point> {
+        let normal = Self::polygon_normal(polygon);
+        polygon.iter().map(|p| Point::new(
+            p[0] - normal[0] * thickness,
+            p[1] - normal[1] * thickness,
+            p[2] - normal[2] * thickness,
+        )).collect()
+    }
+
+    fn compute_plate_geometry(polygon: &[Point], thickness: f64) -> Mesh {
+        let top = Self::offset_polygon_top(polygon, thickness);
+        Self::compute_plate_geometry_explicit(polygon, &top)
+    }
+
+    fn compute_plate_geometry_explicit(bottom: &[Point], top: &[Point]) -> Mesh {
+        let n = bottom.len().min(top.len());
+        let mut vertices = Vec::with_capacity(n * 2);
+        for i in 0..n {
+            vertices.push(Point::new(bottom[i][0], bottom[i][1], bottom[i][2]));
+        }
+        for i in 0..n {
+            vertices.push(Point::new(top[i][0], top[i][1], top[i][2]));
         }
         let mut faces = Vec::new();
         let bottom_face: Vec<usize> = (0..n).rev().collect();
@@ -684,23 +778,20 @@ impl Element {
                     Polyline::new(vec![b[1].clone(), b[2].clone(), t[2].clone(), t[1].clone(), b[1].clone()]),
                 ]
             }
-            ElementKind::Plate { polygon, thickness, .. } => {
-                let normal = Self::polygon_normal(polygon);
-                let n = polygon.len();
-                let bottom: Vec<Point> = polygon.iter().map(|p| Point::new(p[0], p[1], p[2])).collect();
-                let top: Vec<Point> = polygon.iter().map(|p| Point::new(
-                    p[0] - normal[0] * thickness, p[1] - normal[1] * thickness, p[2] - normal[2] * thickness,
-                )).collect();
-                let rev: Vec<Point> = bottom.iter().rev().cloned().collect();
-                let mut bottom_pl = rev.clone();
-                bottom_pl.push(rev[0].clone());
+            ElementKind::Plate { polygon, polygon_top, .. } => {
+                let n = polygon.len().min(polygon_top.len());
+                let bottom: Vec<Point> = polygon.iter().take(n).map(|p| Point::new(p[0], p[1], p[2])).collect();
+                let top: Vec<Point> = polygon_top.iter().take(n).map(|p| Point::new(p[0], p[1], p[2])).collect();
+                // [0]=top polyline, [1]=bottom polyline, [2+]=side polylines (matching wood)
                 let mut top_pl = top.clone();
                 top_pl.push(top[0].clone());
-                let mut result = vec![Polyline::new(bottom_pl), Polyline::new(top_pl)];
+                let mut bot_pl = bottom.clone();
+                bot_pl.push(bottom[0].clone());
+                let mut result = vec![Polyline::new(top_pl), Polyline::new(bot_pl)];
                 for i in 0..n {
                     let j = (i + 1) % n;
                     result.push(Polyline::new(vec![
-                        bottom[i].clone(), bottom[j].clone(), top[j].clone(), top[i].clone(), bottom[i].clone(),
+                        top[i].clone(), top[j].clone(), bottom[j].clone(), bottom[i].clone(), top[i].clone(),
                     ]));
                 }
                 result
@@ -729,33 +820,40 @@ impl Element {
                     Plane::from_point_normal(Point::new(hx, 0.0, hz), Vector::new(1.0, 0.0, 0.0)),
                 ]
             }
-            ElementKind::Plate { polygon, thickness, .. } => {
+            ElementKind::Plate { polygon, polygon_top, .. } => {
                 let normal = Self::polygon_normal(polygon);
-                let n = polygon.len();
-                let bottom: Vec<Point> = polygon.iter().map(|p| Point::new(p[0], p[1], p[2])).collect();
-                let top: Vec<Point> = polygon.iter().map(|p| Point::new(
-                    p[0] - normal[0] * thickness, p[1] - normal[1] * thickness, p[2] - normal[2] * thickness,
-                )).collect();
+                let n = polygon.len().min(polygon_top.len());
+                let bottom: Vec<Point> = polygon.iter().take(n).map(|p| Point::new(p[0], p[1], p[2])).collect();
+                let top: Vec<Point> = polygon_top.iter().take(n).map(|p| Point::new(p[0], p[1], p[2])).collect();
                 let (bcx, bcy, bcz) = bottom.iter().fold((0.0, 0.0, 0.0), |(x, y, z), p| (x + p[0], y + p[1], z + p[2]));
                 let (tcx, tcy, tcz) = top.iter().fold((0.0, 0.0, 0.0), |(x, y, z), p| (x + p[0], y + p[1], z + p[2]));
                 let nf = n as f64;
+                // [0]=top plane, [1]=bottom plane, [2+]=side planes (matching wood)
                 let mut result = vec![
-                    Plane::from_point_normal(Point::new(bcx / nf, bcy / nf, bcz / nf), normal.clone()),
-                    Plane::from_point_normal(Point::new(tcx / nf, tcy / nf, tcz / nf), Vector::new(-normal[0], -normal[1], -normal[2])),
+                    Plane::from_point_normal(Point::new(tcx / nf, tcy / nf, tcz / nf), normal.clone()),
+                    Plane::from_point_normal(Point::new(bcx / nf, bcy / nf, bcz / nf), Vector::new(-normal[0], -normal[1], -normal[2])),
                 ];
+                // Side planes from 3 actual points: cross(top[i]-top[j], bot[j]-top[j])
                 for i in 0..n {
                     let j = (i + 1) % n;
-                    let edge = Vector::new(bottom[j][0] - bottom[i][0], bottom[j][1] - bottom[i][1], bottom[j][2] - bottom[i][2]);
-                    let mut sn = Vector::new(
-                        edge[1] * normal[2] - edge[2] * normal[1],
-                        edge[2] * normal[0] - edge[0] * normal[2],
-                        edge[0] * normal[1] - edge[1] * normal[0],
-                    );
-                    let mag = (sn[0] * sn[0] + sn[1] * sn[1] + sn[2] * sn[2]).sqrt();
-                    if mag > 1e-12 { sn = Vector::new(sn[0] / mag, sn[1] / mag, sn[2] / mag); }
-                    let cx = (bottom[i][0] + bottom[j][0] + top[i][0] + top[j][0]) * 0.25;
-                    let cy = (bottom[i][1] + bottom[j][1] + top[i][1] + top[j][1]) * 0.25;
-                    let cz = (bottom[i][2] + bottom[j][2] + top[i][2] + top[j][2]) * 0.25;
+                    let ax = top[i][0] - top[j][0];
+                    let ay = top[i][1] - top[j][1];
+                    let az = top[i][2] - top[j][2];
+                    let bx = bottom[j][0] - top[j][0];
+                    let by = bottom[j][1] - top[j][1];
+                    let bz = bottom[j][2] - top[j][2];
+                    let nx = ay * bz - az * by;
+                    let ny = az * bx - ax * bz;
+                    let nz = ax * by - ay * bx;
+                    let mag = (nx * nx + ny * ny + nz * nz).sqrt();
+                    let sn = if mag > 1e-12 {
+                        Vector::new(nx / mag, ny / mag, nz / mag)
+                    } else {
+                        Vector::new(nx, ny, nz)
+                    };
+                    let cx = (top[i][0] + top[j][0] + bottom[j][0] + bottom[i][0]) * 0.25;
+                    let cy = (top[i][1] + top[j][1] + bottom[j][1] + bottom[i][1]) * 0.25;
+                    let cz = (top[i][2] + top[j][2] + bottom[j][2] + bottom[i][2]) * 0.25;
                     result.push(Plane::from_point_normal(Point::new(cx, cy, cz), sn));
                 }
                 result
@@ -901,13 +999,14 @@ impl Element {
                     "width": width,
                 })
             }
-            ElementKind::Plate { polygon, thickness, joint_types, j_mf, key, component_plane } => {
+            ElementKind::Plate { polygon, polygon_top, thickness, joint_types, j_mf, key, component_plane } => {
                 let geo_data = match &self.geometry {
                     ElementGeometry::Mesh(m) => serde_json::to_value(m).unwrap_or(serde_json::Value::Null),
                     _ => serde_json::Value::Null,
                 };
                 let geo_type = if matches!(self.geometry, ElementGeometry::Mesh(_)) { "Mesh" } else { "None" };
                 let poly_json: Vec<[f64; 3]> = polygon.iter().map(|p| [p[0], p[1], p[2]]).collect();
+                let poly_top_json: Vec<[f64; 3]> = polygon_top.iter().map(|p| [p[0], p[1], p[2]]).collect();
                 let cp_json = component_plane.as_ref().map(|p| serde_json::to_value(p).unwrap_or(serde_json::Value::Null));
                 let j_mf_json: Vec<Vec<(i32, bool, f64)>> = j_mf.clone();
                 serde_json::json!({
@@ -920,6 +1019,7 @@ impl Element {
                     "key": key,
                     "name": self.name,
                     "polygon": poly_json,
+                    "polygon_top": poly_top_json,
                     "session_transformation": serde_json::to_value(&self.session_transformation).unwrap(),
                     "thickness": thickness,
                     "type": "PlateElement",
@@ -979,9 +1079,25 @@ impl Element {
                         }
                     }
                 }
+                let mut polygon_top = Vec::new();
+                if let Some(arr) = data["polygon_top"].as_array() {
+                    for p in arr {
+                        if let Some(coords) = p.as_array() {
+                            if coords.len() >= 3 {
+                                polygon_top.push(Point::new(
+                                    coords[0].as_f64().unwrap_or(0.0),
+                                    coords[1].as_f64().unwrap_or(0.0),
+                                    coords[2].as_f64().unwrap_or(0.0),
+                                ));
+                            }
+                        }
+                    }
+                }
                 let thickness = data["thickness"].as_f64().unwrap_or(0.1);
                 let mut elem = if polygon.is_empty() {
                     Self::plate_default()
+                } else if !polygon_top.is_empty() {
+                    Self::plate_from_top_bottom(polygon, polygon_top, "my_plate")
                 } else {
                     Self::plate(polygon, thickness, "my_plate")
                 };
@@ -1113,10 +1229,11 @@ impl Element {
                 let params = serde_json::json!({"width": width, "depth": depth, "length": length});
                 proto.geometry_data = params.to_string().into_bytes();
             }
-            ElementKind::Plate { polygon, thickness, .. } => {
+            ElementKind::Plate { polygon, polygon_top, thickness, .. } => {
                 proto.geometry_type = "PlateElement".to_string();
                 let poly_json: Vec<[f64; 3]> = polygon.iter().map(|p| [p[0], p[1], p[2]]).collect();
-                let params = serde_json::json!({"polygon": poly_json, "thickness": thickness});
+                let poly_top_json: Vec<[f64; 3]> = polygon_top.iter().map(|p| [p[0], p[1], p[2]]).collect();
+                let params = serde_json::json!({"polygon": poly_json, "polygon_top": poly_top_json, "thickness": thickness});
                 proto.geometry_data = params.to_string().into_bytes();
             }
         }
@@ -1197,7 +1314,23 @@ impl Element {
                         }
                     }
                 }
-                Self::plate(polygon, params["thickness"].as_f64().unwrap(), "my_plate")
+                let mut polygon_top = Vec::new();
+                if let Some(arr) = params["polygon_top"].as_array() {
+                    for p in arr {
+                        if let Some(coords) = p.as_array() {
+                            polygon_top.push(Point::new(
+                                coords[0].as_f64().unwrap_or(0.0),
+                                coords[1].as_f64().unwrap_or(0.0),
+                                coords[2].as_f64().unwrap_or(0.0),
+                            ));
+                        }
+                    }
+                }
+                if !polygon_top.is_empty() {
+                    Self::plate_from_top_bottom(polygon, polygon_top, "my_plate")
+                } else {
+                    Self::plate(polygon, params["thickness"].as_f64().unwrap(), "my_plate")
+                }
             }
             "Mesh" => {
                 let mut e = Self::new("my_element");

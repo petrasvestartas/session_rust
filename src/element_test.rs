@@ -809,6 +809,26 @@ pub fn run_plate_protobuf_roundtrip() -> TestResult {
     })
 }
 
+pub fn run_plate_from_top_bottom() -> TestResult {
+    MINI_TEST!("From Top Bottom", {
+        use crate::element::Element;
+        use crate::Point;
+
+        let bottom = vec![Point::new(0.0,0.0,0.0), Point::new(2.0,0.0,0.0), Point::new(2.0,2.0,0.0), Point::new(0.0,2.0,0.0), Point::new(0.0,0.0,0.0)];
+        let top    = vec![Point::new(0.0,0.0,1.0), Point::new(2.0,0.0,1.0), Point::new(2.0,2.0,1.0), Point::new(0.0,2.0,1.0), Point::new(0.0,0.0,1.0)];
+        let p = Element::plate_from_top_bottom(bottom.clone(), top.clone(), "tb_plate");
+        MINI_CHECK!(p.polygon().unwrap().len() == 4);
+        MINI_CHECK!(p.polygon_top().unwrap().len() == 4);
+        MINI_CHECK!(TOLERANCE.is_close(p.thickness().unwrap(), 1.0));
+        MINI_CHECK!(TOLERANCE.is_close(p.polygon().unwrap()[0][2], 0.0));
+        MINI_CHECK!(TOLERANCE.is_close(p.polygon_top().unwrap()[0][2], 1.0));
+        // Reversed argument order should auto-swap
+        let pr = Element::plate_from_top_bottom(top, bottom, "tb_plate_r");
+        MINI_CHECK!(TOLERANCE.is_close(pr.polygon().unwrap()[0][2], 0.0));
+        MINI_CHECK!(TOLERANCE.is_close(pr.polygon_top().unwrap()[0][2], 1.0));
+    })
+}
+
 ///////////////////////////////////////////////////////////////////////////////////////////
 // Element - Polylines
 ///////////////////////////////////////////////////////////////////////////////////////////
@@ -1141,6 +1161,7 @@ REGISTER_MINI_TEST!("PlateElement", "Compute Point", crate::element_test::run_pl
 REGISTER_MINI_TEST!("PlateElement", "Triangle Polygon", crate::element_test::run_plate_triangle_polygon);
 REGISTER_MINI_TEST!("PlateElement", "Json Roundtrip", crate::element_test::run_plate_json_roundtrip);
 REGISTER_MINI_TEST!("PlateElement", "Protobuf Roundtrip", crate::element_test::run_plate_protobuf_roundtrip);
+REGISTER_MINI_TEST!("PlateElement", "From Top Bottom", crate::element_test::run_plate_from_top_bottom);
 REGISTER_MINI_TEST!("PlateElement", "Polylines", crate::element_test::run_plate_polylines);
 REGISTER_MINI_TEST!("PlateElement", "Planes", crate::element_test::run_plate_planes);
 REGISTER_MINI_TEST!("PlateElement", "Edge Vectors", crate::element_test::run_plate_edge_vectors);

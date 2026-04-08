@@ -65,7 +65,7 @@ impl OBB {
         Self::from_aabb(AABB::from_polyline(polyline, inflate))
     }
 
-    fn from_aabb(a: AABB) -> Self {
+    pub fn from_aabb(a: AABB) -> Self {
         OBB {
             center: Point::new(a.cx, a.cy, a.cz),
             x_axis: Vector::new(1.0, 0.0, 0.0),

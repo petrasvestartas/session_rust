@@ -4,10 +4,14 @@ use std::cell::RefCell;
 use std::fmt;
 use std::rc::Rc;
 
+/// A hierarchical data structure with parent-child relationships.
 #[derive(Debug, Clone)]
 pub struct Tree {
+    /// Lazily generated unique identifier
     guid: std::sync::OnceLock<String>,
+    /// Tree identifier/name
     pub name: String,
+    /// Root node of the tree (None for empty tree)
     root_node: Option<Rc<RefCell<TreeNode>>>,
 }
 
@@ -52,14 +56,17 @@ struct TreeSerde {
 }
 
 impl Tree {
+    /// Lazy GUID accessor
     pub fn guid(&self) -> &str {
         self.guid.get_or_init(|| uuid::Uuid::new_v4().to_string())
     }
 
+    /// Set the GUID explicitly
     pub fn set_guid(&self, g: String) {
         let _ = self.guid.set(g);
     }
 
+    /// Default / named constructor
     pub fn new(name: &str) -> Self {
         Self {
             guid: std::sync::OnceLock::new(),
@@ -68,10 +75,12 @@ impl Tree {
         }
     }
 
+    /// Get the root node of the tree
     pub fn root(&self) -> Option<Rc<RefCell<TreeNode>>> {
         self.root_node.clone()
     }
 
+    /// Add a node to the tree (parent=None adds as root)
     pub fn add(&mut self, node: &Rc<RefCell<TreeNode>>, parent: Option<&Rc<RefCell<TreeNode>>>) {
         if parent.is_none() {
             self.root_node = Some(Rc::clone(node));
@@ -80,6 +89,7 @@ impl Tree {
         }
     }
 
+    /// All nodes in the tree
     pub fn nodes(&self) -> Vec<Rc<RefCell<TreeNode>>> {
         if let Some(root) = &self.root_node {
             root.borrow().nodes()
@@ -88,6 +98,7 @@ impl Tree {
         }
     }
 
+    /// Remove a node from the tree
     pub fn remove(&mut self, node: &Rc<RefCell<TreeNode>>) -> bool {
         if let Some(root) = &self.root_node {
             let node_guid = node.borrow().guid().to_string();
@@ -128,10 +139,12 @@ impl Tree {
         None
     }
 
+    /// All leaf nodes
     pub fn leaves(&self) -> Vec<Rc<RefCell<TreeNode>>> {
         self.nodes().into_iter().filter(|n| n.borrow().is_leaf()).collect()
     }
 
+    /// Traverse from root ("depthfirst"|"breadthfirst", "preorder"|"postorder")
     pub fn traverse(&self, strategy: &str, order: &str) -> Vec<Rc<RefCell<TreeNode>>> {
         if let Some(root) = &self.root_node {
             root.borrow().traverse(strategy, order)
@@ -140,10 +153,12 @@ impl Tree {
         }
     }
 
+    /// First node with the given name
     pub fn get_node_by_name(&self, node_name: &str) -> Option<Rc<RefCell<TreeNode>>> {
         self.nodes().into_iter().find(|n| n.borrow().name == node_name)
     }
 
+    /// All nodes with the given name
     pub fn get_nodes_by_name(&self, node_name: &str) -> Vec<Rc<RefCell<TreeNode>>> {
         self.nodes()
             .into_iter()
@@ -151,16 +166,19 @@ impl Tree {
             .collect()
     }
 
+    /// Find a node by its GUID
     pub fn find_node_by_guid(&self, node_guid: &String) -> Option<Rc<RefCell<TreeNode>>> {
         self.nodes().into_iter().find(|n| n.borrow().guid() == *node_guid)
     }
 
+    /// Reparent a child by GUID; returns true if both nodes were found
     pub fn add_child_by_guid(&mut self, parent_guid: &String, child_guid: &String) -> bool {
         let parent_node = self.find_node_by_guid(parent_guid);
         let child_node = self.find_node_by_guid(child_guid);
         if let (Some(parent), Some(child)) = (parent_node, child_node) {
-            if let Some(current_parent) = child.borrow().parent() {
-                current_parent.borrow_mut().remove(&child);
+            let current_parent = child.borrow().parent();
+            if let Some(cp) = current_parent {
+                cp.borrow_mut().remove(&child);
             }
             parent.borrow_mut().add(&child);
             true
@@ -169,6 +187,7 @@ impl Tree {
         }
     }
 
+    /// GUIDs of children of a node by GUID
     pub fn get_children_guids(&self, node_guid: &String) -> Vec<String> {
         if let Some(node) = self.find_node_by_guid(node_guid) {
             node.borrow().children().iter().map(|c| c.borrow().guid().to_string()).collect()
@@ -177,10 +196,12 @@ impl Tree {
         }
     }
 
+    /// Convenience overload taking a &str
     pub fn get_children(&self, node_guid: &str) -> Vec<String> {
         self.get_children_guids(&node_guid.to_string())
     }
 
+    /// Print the hierarchy to stdout
     pub fn print_hierarchy(&self) {
         if let Some(root) = &self.root_node {
             Self::print_node(root, 0);
@@ -195,6 +216,7 @@ impl Tree {
         }
     }
 
+    /// Serialize to JSON string
     pub fn jsondump(&self) -> Result<String, Box<dyn std::error::Error>> {
         let serde_tree = TreeSerde {
             guid: self.guid().to_string(),
@@ -204,6 +226,7 @@ impl Tree {
         crate::encoders::sorted_json_string(&serde_tree)
     }
 
+    /// Deserialize from JSON string
     pub fn jsonload(json_data: &str) -> Result<Self, Box<dyn std::error::Error>> {
         let serde_tree: TreeSerde = serde_json::from_str(json_data)?;
         let mut tree = Tree::new(&serde_tree.name);
@@ -215,25 +238,30 @@ impl Tree {
         Ok(tree)
     }
 
+    /// Convert to JSON string (infallible fallback)
     pub fn json_dumps(&self) -> String {
         self.jsondump().unwrap_or_default()
     }
 
+    /// Load from JSON string (infallible fallback)
     pub fn json_loads(s: &str) -> Self {
         Self::jsonload(s).unwrap_or_else(|_| Self::default())
     }
 
+    /// Write JSON to file
     pub fn json_dump(&self, path: &str) -> Result<(), Box<dyn std::error::Error>> {
         let json = self.jsondump()?;
         std::fs::write(path, json)?;
         Ok(())
     }
 
+    /// Read JSON from file
     pub fn json_load(path: &str) -> Result<Self, Box<dyn std::error::Error>> {
         let json = std::fs::read_to_string(path)?;
         Self::jsonload(&json)
     }
 
+    /// Convert to protobuf binary bytes
     pub fn pb_dumps(&self) -> Vec<u8> {
         use prost::Message;
         fn node_to_proto(node: &Rc<RefCell<TreeNode>>) -> crate::proto::TreeNode {
@@ -264,6 +292,7 @@ impl Tree {
         proto.encode_to_vec()
     }
 
+    /// Load from protobuf binary bytes
     pub fn pb_loads(data: &[u8]) -> Result<Self, Box<dyn std::error::Error>> {
         use prost::Message;
         let proto = crate::proto::Tree::decode(data)?;
@@ -292,10 +321,12 @@ impl Tree {
         Ok(tree)
     }
 
+    /// Write protobuf to file
     pub fn pb_dump(&self, path: &str) {
         std::fs::write(path, self.pb_dumps()).expect("Failed to write protobuf file");
     }
 
+    /// Read protobuf from file
     pub fn pb_load(path: &str) -> Self {
         let data = std::fs::read(path).expect("Failed to read protobuf file");
         Self::pb_loads(&data).expect("Failed to parse protobuf")

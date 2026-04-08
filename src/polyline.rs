@@ -16,6 +16,7 @@ pub struct Polyline {
     /// Flat coordinate array [x0, y0, z0, x1, y1, z1, ...]
     pub coords: Vec<f64>,
     pub plane: Plane,
+    plane_dirty: bool,
     pub width: f64,
     pub linecolor: Color,
     pub xform: Xform,
@@ -28,6 +29,7 @@ impl Default for Polyline {
             name: "my_polyline".to_string(),
             coords: Vec::new(),
             plane: Plane::default(),
+            plane_dirty: true,
             width: 1.0,
             linecolor: Color::black(),
             xform: Xform::identity(),
@@ -36,36 +38,52 @@ impl Default for Polyline {
 }
 
 impl Polyline {
-    /// Creates a new `Polyline` with default guid and name.
-    ///
-    /// # Arguments
-    ///
-    /// * `points` - The collection of points (converted to flat coords internally).
     pub fn new(points: Vec<Point>) -> Self {
-        // Convert points to flat coords
         let mut coords = Vec::with_capacity(points.len() * 3);
         for p in &points {
             coords.push(p[0]);
             coords.push(p[1]);
             coords.push(p[2]);
         }
-        
-        // Delegate plane computation to Plane::from_points
-        let plane = if points.len() >= 3 {
-            Plane::from_points(points)
-        } else {
-            Plane::default()
-        };
-
         Self {
             guid: std::sync::OnceLock::new(),
             name: "my_polyline".to_string(),
             coords,
-            plane,
+            plane: Plane::default(),
+            plane_dirty: true,
             width: 1.0,
             linecolor: Color::black(),
             xform: Xform::identity(),
         }
+    }
+
+    /// Get plane (lazy — computed on first access from first non-collinear triple).
+    pub fn get_plane(&mut self) -> &Plane {
+        if self.plane_dirty && self.point_count() >= 3 {
+            let n = self.point_count();
+            let p0 = Point::new(self.coords[0], self.coords[1], self.coords[2]);
+            let mut found = false;
+            for i in 1..n {
+                let v1 = Vector::new(self.coords[i*3]-p0[0], self.coords[i*3+1]-p0[1], self.coords[i*3+2]-p0[2]);
+                if v1[0]*v1[0]+v1[1]*v1[1]+v1[2]*v1[2] < 1e-20 { continue; }
+                for j in (i+1)..n {
+                    let v2 = Vector::new(self.coords[j*3]-p0[0], self.coords[j*3+1]-p0[1], self.coords[j*3+2]-p0[2]);
+                    let mut normal = v1.cross(&v2);
+                    if normal[0]*normal[0]+normal[1]*normal[1]+normal[2]*normal[2] < 1e-20 { continue; }
+                    normal.normalize_self();
+                    let mut v1n = v1.clone();
+                    v1n.normalize_self();
+                    let mut yax = normal.cross(&v1n);
+                    yax.normalize_self();
+                    self.plane = Plane::new(p0.clone(), v1n, yax);
+                    found = true;
+                    break;
+                }
+                if found { break; }
+            }
+            self.plane_dirty = false;
+        }
+        &self.plane
     }
 
     /// Create a regular polygon with given number of sides and radius.
@@ -88,17 +106,16 @@ impl Polyline {
 
     /// Creates a Polyline from a flat coordinate array.
     pub fn from_coords(coords: Vec<f64>) -> Self {
-        let mut pl = Self {
+        Self {
             guid: std::sync::OnceLock::new(),
             name: "my_polyline".to_string(),
             coords,
             plane: Plane::default(),
+            plane_dirty: true,
             width: 1.0,
             linecolor: Color::black(),
             xform: Xform::identity(),
-        };
-        pl.recompute_plane_if_needed();
-        pl
+        }
     }
 
     pub fn guid(&self) -> &str {
@@ -121,6 +138,7 @@ impl Polyline {
             name: self.name.clone(),
             coords: self.coords.clone(),
             plane: self.plane.clone(),
+            plane_dirty: self.plane_dirty,
             width: self.width,
             linecolor: self.linecolor.clone(),
             xform: self.xform.clone(),
@@ -304,9 +322,7 @@ impl Polyline {
 
      /// Recompute plane if we have at least 3 points
      fn recompute_plane_if_needed(&mut self) {
-         if self.point_count() >= 3 {
-             self.plane = Plane::from_points(self.get_points());
-         }
+         self.plane_dirty = true;
      }
 
  }
@@ -387,16 +403,16 @@ impl Polyline {
              .map(|v| serde_json::from_value(v.clone()).unwrap_or_else(|_| Xform::identity()))
              .unwrap_or_else(Xform::identity);
 
-         let mut polyline = Polyline {
+         let polyline = Polyline {
              guid: { let c = std::sync::OnceLock::new(); let _ = c.set(guid_str); c },
              name,
              coords,
              plane: Plane::default(),
+             plane_dirty: true,
              width,
              linecolor,
              xform,
          };
-         polyline.recompute_plane_if_needed();
          Ok(polyline)
      }
  }
@@ -1557,6 +1573,124 @@ impl Polyline {
     pub fn boolean_op(a: &Polyline, b: &Polyline, clip_type: i32) -> Vec<Polyline> {
         crate::boolean_polyline::boolean_op(a, b, clip_type)
     }
+
+    pub fn boolean_op_plane(a: &Polyline, b: &Polyline, plane: &crate::plane::Plane, clip_type: i32) -> Vec<Polyline> {
+        let ox = plane.origin()[0]; let oy = plane.origin()[1]; let oz = plane.origin()[2];
+        let xx = plane.x_axis()[0]; let xy = plane.x_axis()[1]; let xz = plane.x_axis()[2];
+        let yx = plane.y_axis()[0]; let yy = plane.y_axis()[1]; let yz = plane.y_axis()[2];
+
+        // Reuse thread-local Polyline wrappers for the projected 2D inputs.
+        // This avoids 2 fresh Polyline allocations per call (each with a
+        // "my_polyline" String, default Plane/Xform/Color, and a new coords
+        // Vec) — saves ~5-10 ms across the 3515 boolean_op_plane calls in
+        // compute_face_to_face.
+        PROJECTED_BUFFERS.with(|cell| {
+            let mut borrow = cell.borrow_mut();
+            let (pa2d, pb2d) = &mut *borrow;
+
+            // Project `a` into pa2d (reusing pa2d.coords capacity).
+            let na = a.point_count();
+            pa2d.coords.clear();
+            pa2d.coords.reserve(na * 3);
+            for i in 0..na {
+                let dx = a.coords[i*3] - ox;
+                let dy = a.coords[i*3+1] - oy;
+                let dz = a.coords[i*3+2] - oz;
+                pa2d.coords.push(dx*xx + dy*xy + dz*xz);
+                pa2d.coords.push(dx*yx + dy*yy + dz*yz);
+                pa2d.coords.push(0.0);
+            }
+            // Snap closing point if nearly closed (within 1mm)
+            if na >= 4 {
+                let dx = pa2d.coords[(na-1)*3] - pa2d.coords[0];
+                let dy = pa2d.coords[(na-1)*3+1] - pa2d.coords[1];
+                if dx*dx + dy*dy < 1.0 {
+                    pa2d.coords[(na-1)*3] = pa2d.coords[0];
+                    pa2d.coords[(na-1)*3+1] = pa2d.coords[1];
+                }
+            }
+
+            // Project `b` into pb2d (reusing pb2d.coords capacity).
+            let nb = b.point_count();
+            pb2d.coords.clear();
+            pb2d.coords.reserve(nb * 3);
+            for i in 0..nb {
+                let dx = b.coords[i*3] - ox;
+                let dy = b.coords[i*3+1] - oy;
+                let dz = b.coords[i*3+2] - oz;
+                pb2d.coords.push(dx*xx + dy*xy + dz*xz);
+                pb2d.coords.push(dx*yx + dy*yy + dz*yz);
+                pb2d.coords.push(0.0);
+            }
+            if nb >= 4 {
+                let dx = pb2d.coords[(nb-1)*3] - pb2d.coords[0];
+                let dy = pb2d.coords[(nb-1)*3+1] - pb2d.coords[1];
+                if dx*dx + dy*dy < 1.0 {
+                    pb2d.coords[(nb-1)*3] = pb2d.coords[0];
+                    pb2d.coords[(nb-1)*3+1] = pb2d.coords[1];
+                }
+            }
+
+            // Ensure CCW winding (Vatti containment requires CCW).
+            ensure_ccw_inplace(&mut pa2d.coords);
+            ensure_ccw_inplace(&mut pb2d.coords);
+
+            let mut results = crate::boolean_polyline::boolean_op(pa2d, pb2d, clip_type);
+
+            // Inverse-transform results back to 3D.
+            for r in results.iter_mut() {
+                let n = r.coords.len() / 3;
+                for i in 0..n {
+                    let u = r.coords[i*3];
+                    let v = r.coords[i*3+1];
+                    r.coords[i*3]   = ox + u*xx + v*yx;
+                    r.coords[i*3+1] = oy + u*xy + v*yy;
+                    r.coords[i*3+2] = oz + u*xz + v*yz;
+                }
+            }
+            results
+        })
+    }
+}
+
+/// CCW-orient a stride-3 2D polygon in place (z coord is 0 throughout).
+/// Factored out of `boolean_op_plane` so it can be called on a raw `&mut Vec<f64>`
+/// rather than needing a full `&mut Polyline` wrapper.
+fn ensure_ccw_inplace(coords: &mut Vec<f64>) {
+    let n = coords.len() / 3;
+    let mut m = n;
+    if m >= 4 {
+        let dx = coords[(m-1)*3] - coords[0];
+        let dy = coords[(m-1)*3+1] - coords[1];
+        if dx*dx + dy*dy < 1e-10 { m -= 1; }
+    }
+    if m < 3 { return; }
+    let mut area = 0.0;
+    for i in 0..m {
+        let j = (i + 1) % m;
+        area += coords[i*3] * coords[j*3+1] - coords[j*3] * coords[i*3+1];
+    }
+    if area < 0.0 {
+        for i in 0..n/2 {
+            let j = n - 1 - i;
+            coords.swap(i*3, j*3);
+            coords.swap(i*3+1, j*3+1);
+            coords.swap(i*3+2, j*3+2);
+        }
+    }
+}
+
+thread_local! {
+    /// Reused projected-polygon buffers for `Polyline::boolean_op_plane`. Holds
+    /// two full `Polyline` structs so their coord Vec capacity, name String,
+    /// and default Plane/Xform/Color live across all calls — see the boolean
+    /// workload in `Session::compute_face_to_face` which fires ~3500 times per
+    /// `main_1` run.
+    static PROJECTED_BUFFERS: std::cell::RefCell<(Polyline, Polyline)>
+        = std::cell::RefCell::new((
+            Polyline::from_coords(Vec::new()),
+            Polyline::from_coords(Vec::new()),
+        ));
 }
 
 impl fmt::Display for Polyline {

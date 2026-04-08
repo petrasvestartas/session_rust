@@ -327,6 +327,34 @@ pub fn run_bvh_fixed_100_boxes() -> TestResult {
     })
 }
 
+pub fn run_bvh_nearest_neighbors() -> TestResult {
+    MINI_TEST!("Nearest Neighbors", {
+        use crate::{BVH, OBB, Point, Vector};
+        let bboxes = vec![
+            OBB::new(Point::new(0.0, 0.0, 0.0),
+                Vector::new(1.0, 0.0, 0.0), Vector::new(0.0, 1.0, 0.0),
+                Vector::new(0.0, 0.0, 1.0), Vector::new(1.0, 1.0, 1.0)),
+            OBB::new(Point::new(0.5, 0.0, 0.0),
+                Vector::new(1.0, 0.0, 0.0), Vector::new(0.0, 1.0, 0.0),
+                Vector::new(0.0, 0.0, 1.0), Vector::new(1.0, 1.0, 1.0)),
+            OBB::new(Point::new(10.0, 0.0, 0.0),
+                Vector::new(1.0, 0.0, 0.0), Vector::new(0.0, 1.0, 0.0),
+                Vector::new(0.0, 0.0, 1.0), Vector::new(1.0, 1.0, 1.0)),
+        ];
+        let bvh = BVH::from_boxes(&bboxes, 100.0);
+
+        let n0 = bvh.nearest_neighbors(0, &bboxes, 1.2);
+        MINI_CHECK!(n0.len() == 1);
+        MINI_CHECK!(n0[0] == 1);
+
+        let n2 = bvh.nearest_neighbors(2, &bboxes, 1.2);
+        MINI_CHECK!(n2.is_empty());
+
+        let n2_wide = bvh.nearest_neighbors(2, &bboxes, 10.0);
+        MINI_CHECK!(n2_wide.len() == 2);
+    })
+}
+
 pub fn run_bvh_query_aabb() -> TestResult {
     MINI_TEST!("Query Aabb", {
         use crate::{BVH, OBB, Point, Vector};
@@ -380,3 +408,4 @@ REGISTER_MINI_TEST!("BVH", "Check All Collisions", crate::bvh_test::run_bvh_chec
 REGISTER_MINI_TEST!("BVH", "Merge Aabb", crate::bvh_test::run_bvh_merge_aabb);
 REGISTER_MINI_TEST!("BVH", "Fixed 100 Boxes", crate::bvh_test::run_bvh_fixed_100_boxes);
 REGISTER_MINI_TEST!("BVH", "Query Aabb", crate::bvh_test::run_bvh_query_aabb);
+REGISTER_MINI_TEST!("BVH", "Nearest Neighbors", crate::bvh_test::run_bvh_nearest_neighbors);

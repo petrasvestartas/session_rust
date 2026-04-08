@@ -577,6 +577,33 @@ impl BVH {
         hits
     }
 
+    /// Convenience: find leaf object_ids near `object_id`, excluding self.
+    /// Inflates the half-extents of the object's AABB by `inflate` and queries.
+    pub fn nearest_neighbors(
+        &self,
+        object_id: usize,
+        bounding_boxes: &[OBB],
+        inflate: f64,
+    ) -> Vec<usize> {
+        if object_id >= bounding_boxes.len() {
+            return Vec::new();
+        }
+        let bb = &bounding_boxes[object_id];
+        let inflated = OBB::new(
+            bb.center.clone(),
+            bb.x_axis.clone(),
+            bb.y_axis.clone(),
+            bb.z_axis.clone(),
+            Vector::new(
+                bb.half_size[0] * inflate,
+                bb.half_size[1] * inflate,
+                bb.half_size[2] * inflate,
+            ),
+        );
+        let hits = self.query_aabb(&inflated);
+        hits.into_iter().filter(|&id| id != object_id).collect()
+    }
+
     pub fn aabb_intersect(&self, aabb1: &OBB, aabb2: &OBB) -> bool {
         // Calculate min/max for both boxes
         let min1_x = aabb1.center[0] - aabb1.half_size[0];

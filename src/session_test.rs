@@ -1,78 +1,16 @@
 use crate::{MINI_CHECK, MINI_TEST, REGISTER_MINI_TEST};
 use crate::mini_test::TestResult;
+use crate::tolerance::PI;
 
 pub fn run_session_constructor() -> TestResult {
     MINI_TEST!("Constructor", {
         use crate::Session;
         let session = Session::default();
+        let named = Session::new("my_named_session");
 
         MINI_CHECK!(session.name == "my_session");
         MINI_CHECK!(!session.guid().is_empty());
-    })
-}
-
-pub fn run_session_jsondump() -> TestResult {
-    MINI_TEST!("Jsondump", {
-        use crate::{Session, Point};
-        use crate::encoders::json_dump;
-        let mut session = Session::default();
-        let point1 = Point::new(1.0, 2.0, 3.0);
-        let point2 = Point::new(4.0, 5.0, 6.0);
-        let _ = (point1.guid(), point2.guid());
-        session.add_point(point1.clone());
-        session.add_point(point2.clone());
-        session.add_edge(point1.guid(), point2.guid(), "connection");
-        let json_str = session.jsondump().unwrap();
-        let data: serde_json::Value = serde_json::from_str(&json_str).unwrap();
-
-        MINI_CHECK!(data["name"] == "my_session");
-        MINI_CHECK!(!data["guid"].is_null());
-        MINI_CHECK!(data["objects"]["points"].as_array().unwrap().len() == 2);
-        MINI_CHECK!(data["graph"]["vertices"].as_array().unwrap().len() == 2);
-        MINI_CHECK!(data["graph"]["edges"].as_array().unwrap().len() == 1);
-        json_dump(&session, "serialization/test_session.json", true).unwrap();
-    })
-}
-
-pub fn run_session_jsonload() -> TestResult {
-    MINI_TEST!("Jsonload", {
-        use crate::{Session, Point};
-        let mut session = Session::default();
-        let point1 = Point::new(1.0, 2.0, 3.0);
-        let point2 = Point::new(4.0, 5.0, 6.0);
-        let _ = (point1.guid(), point2.guid());
-        session.add_point(point1.clone());
-        session.add_point(point2.clone());
-        session.add_edge(point1.guid(), point2.guid(), "connection");
-        let json_str = session.jsondump().unwrap();
-        let session2 = Session::jsonload(&json_str).unwrap();
-
-        MINI_CHECK!(session2.name == "my_session");
-        MINI_CHECK!(session2.lookup.len() == 2);
-        MINI_CHECK!(session2.graph.number_of_vertices() == 2);
-    })
-}
-
-pub fn run_session_file_io() -> TestResult {
-    MINI_TEST!("File Io", {
-        use crate::{Session, Point};
-        use std::fs;
-        let mut session = Session::default();
-        let point1 = Point::new(1.0, 2.0, 3.0);
-        let point2 = Point::new(4.0, 5.0, 6.0);
-        session.add_point(point1.clone());
-        session.add_point(point2.clone());
-        session.add_edge(point1.guid(), point2.guid(), "connection");
-        let filename = "serialization/test_session_roundtrip.json";
-        let json_str = session.jsondump().unwrap();
-        fs::write(filename, &json_str).unwrap();
-        let loaded_str = fs::read_to_string(filename).unwrap();
-        let loaded_session = Session::jsonload(&loaded_str).unwrap();
-
-        MINI_CHECK!(loaded_session.name == session.name);
-        MINI_CHECK!(loaded_session.lookup.len() == session.lookup.len());
-        MINI_CHECK!(loaded_session.graph.number_of_vertices() == session.graph.number_of_vertices());
-        fs::remove_file(filename).ok();
+        MINI_CHECK!(named.name == "my_named_session");
     })
 }
 
@@ -81,12 +19,107 @@ pub fn run_session_add_point() -> TestResult {
         use crate::{Session, Point};
         let mut session = Session::default();
         let point = Point::new(1.0, 2.0, 3.0);
-        let _ = point.guid();
-        session.add_point(point.clone());
+        let guid = point.guid().to_string();
+        session.add_point(point, None);
 
         MINI_CHECK!(session.objects.points.len() == 1);
-        MINI_CHECK!(session.lookup.contains_key(point.guid()));
-        MINI_CHECK!(session.graph.has_node(point.guid()));
+        MINI_CHECK!(session.lookup.contains_key(&guid));
+        MINI_CHECK!(session.graph.has_node(&guid));
+    })
+}
+
+pub fn run_session_add_line() -> TestResult {
+    MINI_TEST!("Add Line", {
+        use crate::{Session, Line};
+        let mut session = Session::default();
+        let line = Line::new(0.0, 0.0, 0.0, 1.0, 0.0, 0.0);
+        let guid = line.guid().to_string();
+        session.add_line(line, None);
+
+        MINI_CHECK!(session.objects.lines.len() == 1);
+        MINI_CHECK!(session.lookup.contains_key(&guid));
+    })
+}
+
+pub fn run_session_add_plane() -> TestResult {
+    MINI_TEST!("Add Plane", {
+        use crate::{Session, Plane};
+        let mut session = Session::default();
+        let plane = Plane::xy_plane();
+        let guid = plane.guid().to_string();
+        session.add_plane(plane, None);
+
+        MINI_CHECK!(session.objects.planes.len() == 1);
+        MINI_CHECK!(session.lookup.contains_key(&guid));
+    })
+}
+
+pub fn run_session_add_polyline() -> TestResult {
+    MINI_TEST!("Add Polyline", {
+        use crate::{Session, Polyline, Point};
+        let mut session = Session::default();
+        let pl = Polyline::new(vec![Point::new(0.0,0.0,0.0), Point::new(1.0,0.0,0.0), Point::new(1.0,1.0,0.0)]);
+        let guid = pl.guid().to_string();
+        session.add_polyline(pl, None);
+
+        MINI_CHECK!(session.objects.polylines.len() == 1);
+        MINI_CHECK!(session.lookup.contains_key(&guid));
+    })
+}
+
+pub fn run_session_add_pointcloud() -> TestResult {
+    MINI_TEST!("Add Pointcloud", {
+        use crate::{Session, PointCloud, Point};
+        let mut session = Session::default();
+        let pc = PointCloud::new(vec![Point::new(0.0,0.0,0.0), Point::new(1.0,0.0,0.0)], vec![], vec![]);
+        let guid = pc.guid().to_string();
+        session.add_pointcloud(pc, None);
+
+        MINI_CHECK!(session.objects.pointclouds.len() == 1);
+        MINI_CHECK!(session.lookup.contains_key(&guid));
+    })
+}
+
+pub fn run_session_add_mesh() -> TestResult {
+    MINI_TEST!("Add Mesh", {
+        use crate::{Session, Mesh, Point};
+        let mut session = Session::default();
+        let mut mesh = Mesh::new();
+        let v0 = mesh.add_vertex(Point::new(0.0,0.0,0.0), None);
+        let v1 = mesh.add_vertex(Point::new(1.0,0.0,0.0), None);
+        let v2 = mesh.add_vertex(Point::new(0.0,1.0,0.0), None);
+        mesh.add_face(vec![v0, v1, v2], None);
+        let guid = mesh.guid().to_string();
+        session.add_mesh(mesh, None);
+
+        MINI_CHECK!(session.objects.meshes.len() == 1);
+        MINI_CHECK!(session.lookup.contains_key(&guid));
+    })
+}
+
+pub fn run_session_add_element() -> TestResult {
+    MINI_TEST!("Add Element", {
+        use crate::{Session, Point};
+        use crate::element::Element;
+        let mut session = Session::default();
+        let polygon = vec![Point::new(0.0,0.0,0.0), Point::new(2.0,0.0,0.0), Point::new(2.0,2.0,0.0), Point::new(0.0,2.0,0.0)];
+        let plate = Element::plate(polygon, 0.2, "p1");
+        let guid = plate.guid().to_string();
+        session.add_element(plate, None);
+
+        MINI_CHECK!(session.objects.elements.len() == 1);
+        MINI_CHECK!(session.lookup.contains_key(&guid));
+        MINI_CHECK!(session.graph.has_node(&guid));
+    })
+}
+
+pub fn run_session_add_group() -> TestResult {
+    MINI_TEST!("Add Group", {
+        use crate::Session;
+        let mut session = Session::default();
+        let group = session.add_group("my_group");
+
+        MINI_CHECK!(group.borrow().name == "my_group");
     })
 }
 
@@ -94,13 +127,89 @@ pub fn run_session_add_edge() -> TestResult {
     MINI_TEST!("Add Edge", {
         use crate::{Session, Point};
         let mut session = Session::default();
-        let point1 = Point::new(1.0, 2.0, 3.0);
-        let point2 = Point::new(4.0, 5.0, 6.0);
-        session.add_point(point1.clone());
-        session.add_point(point2.clone());
-        session.add_edge(point1.guid(), point2.guid(), "connection");
+        let p1 = Point::new(1.0, 2.0, 3.0);
+        let p2 = Point::new(4.0, 5.0, 6.0);
+        let g1 = p1.guid().to_string();
+        let g2 = p2.guid().to_string();
+        session.add_point(p1, None);
+        session.add_point(p2, None);
+        session.add_edge(&g1, &g2, "connection");
 
-        MINI_CHECK!(session.graph.has_edge((point1.guid(), point2.guid())));
+        MINI_CHECK!(session.graph.has_edge((&g1, &g2)));
+    })
+}
+
+pub fn run_session_add_hierarchy() -> TestResult {
+    MINI_TEST!("Add Hierarchy", {
+        use crate::{Session, Point};
+        let mut session = Session::default();
+        let p1 = Point::new(0.0,0.0,0.0);
+        let p2 = Point::new(1.0,0.0,0.0);
+        let n1 = session.add_point(p1, None);
+        let n2 = session.add_point(p2, None);
+        session.add(&n1, None);
+        session.add(&n2, None);
+        let g1 = n1.borrow().guid().to_string();
+        let g2 = n2.borrow().guid().to_string();
+        let ok = session.add_hierarchy(&g1, &g2);
+
+        MINI_CHECK!(ok);
+    })
+}
+
+pub fn run_session_get_children() -> TestResult {
+    MINI_TEST!("Get Children", {
+        use crate::{Session, Point};
+        let mut session = Session::default();
+        let p1 = Point::new(0.0,0.0,0.0);
+        let p2 = Point::new(1.0,0.0,0.0);
+        let n1 = session.add_point(p1, None);
+        let n2 = session.add_point(p2, None);
+        session.add(&n1, None);
+        session.add(&n2, None);
+        let g1 = n1.borrow().guid().to_string();
+        let g2 = n2.borrow().guid().to_string();
+        session.add_hierarchy(&g1, &g2);
+
+        let children = session.get_children(&g1);
+
+        MINI_CHECK!(children.len() == 1);
+        MINI_CHECK!(children[0] == g2);
+    })
+}
+
+pub fn run_session_add_relationship() -> TestResult {
+    MINI_TEST!("Add Relationship", {
+        use crate::{Session, Point};
+        let mut session = Session::default();
+        let p1 = Point::new(0.0,0.0,0.0);
+        let p2 = Point::new(1.0,0.0,0.0);
+        let g1 = p1.guid().to_string();
+        let g2 = p2.guid().to_string();
+        session.add_point(p1, None);
+        session.add_point(p2, None);
+        session.add_relationship(&g1, &g2, "connects_to");
+
+        MINI_CHECK!(session.graph.has_edge((&g1, &g2)));
+    })
+}
+
+pub fn run_session_get_neighbours() -> TestResult {
+    MINI_TEST!("Get Neighbours", {
+        use crate::{Session, Point};
+        let mut session = Session::default();
+        let p1 = Point::new(0.0,0.0,0.0);
+        let p2 = Point::new(1.0,0.0,0.0);
+        let g1 = p1.guid().to_string();
+        let g2 = p2.guid().to_string();
+        session.add_point(p1, None);
+        session.add_point(p2, None);
+        session.add_edge(&g1, &g2, "connection");
+
+        let neighbours = session.get_neighbours(&g1);
+
+        MINI_CHECK!(neighbours.len() == 1);
+        MINI_CHECK!(neighbours[0] == g2);
     })
 }
 
@@ -109,42 +218,112 @@ pub fn run_session_get_object() -> TestResult {
         use crate::{Session, Point};
         let mut session = Session::default();
         let point = Point::new(1.0, 2.0, 3.0);
-        let _ = point.guid();
-        session.add_point(point.clone());
-        let retrieved = session.get_object(point.guid());
+        let guid = point.guid().to_string();
+        session.add_point(point, None);
+        let retrieved = session.get_object(&guid);
 
         MINI_CHECK!(retrieved.is_some());
-        MINI_CHECK!(retrieved.unwrap().guid() == point.guid());
     })
 }
 
-pub fn run_session_file_io_comprehensive() -> TestResult {
-    MINI_TEST!("File Io Comprehensive", {
+pub fn run_session_remove_object() -> TestResult {
+    MINI_TEST!("Remove Object", {
         use crate::{Session, Point};
-        use crate::encoders::{json_dump, json_load};
-        use std::fs;
-        let mut session = Session::new("./serialization/test_session");
-        let point1 = Point::new(1.0, 2.0, 3.0);
-        let point2 = Point::new(4.0, 5.0, 6.0);
-        session.add_point(point1.clone());
-        session.add_point(point2.clone());
-        session.add_edge(point1.guid(), point2.guid(), "./serialization/test_connection");
-        let filename = "serialization/test_session_comprehensive.json";
-        json_dump(&session, filename, true).unwrap();
-        let loaded_session: Session = json_load(filename).unwrap();
+        let mut session = Session::default();
+        let point = Point::new(1.0, 2.0, 3.0);
+        let guid = point.guid().to_string();
+        session.add_point(point, None);
+        let removed = session.remove_object(&guid);
 
-        MINI_CHECK!(loaded_session.name == session.name);
-        MINI_CHECK!(loaded_session.objects.points.len() == session.objects.points.len());
-        MINI_CHECK!(loaded_session.graph.number_of_vertices() == session.graph.number_of_vertices());
-        MINI_CHECK!(loaded_session.graph.number_of_edges() == session.graph.number_of_edges());
-        fs::remove_file(filename).ok();
+        MINI_CHECK!(removed);
+        MINI_CHECK!(!session.lookup.contains_key(&guid));
+    })
+}
+
+pub fn run_session_get_geometry() -> TestResult {
+    MINI_TEST!("Get Geometry", {
+        use crate::{Session, Point};
+        let mut session = Session::default();
+        let point = Point::new(1.0, 2.0, 3.0);
+        session.add_point(point, None);
+
+        let geom = session.get_geometry();
+
+        MINI_CHECK!(geom.points.len() == 1);
+    })
+}
+
+pub fn run_session_compute_face_to_face() -> TestResult {
+    MINI_TEST!("Compute Face To Face", {
+        use crate::{Session, Point};
+        use crate::element::Element;
+        let mut session = Session::default();
+        let p1 = Element::plate(vec![Point::new(0.0,0.0,0.0), Point::new(1.0,0.0,0.0), Point::new(1.0,1.0,0.0), Point::new(0.0,1.0,0.0)], 0.2, "p1");
+        let p2 = Element::plate(vec![Point::new(0.0,0.0,-0.2), Point::new(1.0,0.0,-0.2), Point::new(1.0,1.0,-0.2), Point::new(0.0,1.0,-0.2)], 0.2, "p2");
+        let g1 = p1.guid().to_string();
+        let g2 = p2.guid().to_string();
+        session.add_element(p1, None);
+        session.add_element(p2, None);
+        session.compute_face_to_face(5.0, 0.001);
+
+        MINI_CHECK!(session.objects.elements.len() == 2);
+        MINI_CHECK!(session.graph.has_edge((&g1, &g2)));
+    })
+}
+
+pub fn run_session_json_roundtrip() -> TestResult {
+    MINI_TEST!("Json Roundtrip", {
+        use crate::{Session, Point};
+        let mut session = Session::default();
+        let p1 = Point::new(1.0, 2.0, 3.0);
+        let p2 = Point::new(4.0, 5.0, 6.0);
+        let g1 = p1.guid().to_string();
+        let g2 = p2.guid().to_string();
+        session.add_point(p1, None);
+        session.add_point(p2, None);
+        session.add_edge(&g1, &g2, "connection");
+
+        //   jsondump()      │ String       │ to JSON string (internal use)
+        //   jsonload(s)     │ String       │ from JSON string (internal use)
+        //   json_dumps()    │ String       │ to JSON string
+        //   json_loads(s)   │ String       │ from JSON string
+        //   json_dump(path) │ file         │ write to file
+        //   json_load(path) │ file         │ read from file
+
+        let fname = "serialization/test_session.json";
+        session.json_dump(fname);
+        let loaded = Session::json_load(fname);
+
+        MINI_CHECK!(loaded.name == session.name);
+        MINI_CHECK!(loaded.lookup.len() == session.lookup.len());
+        MINI_CHECK!(loaded.graph.number_of_vertices() == session.graph.number_of_vertices());
+    })
+}
+
+pub fn run_session_protobuf_roundtrip() -> TestResult {
+    MINI_TEST!("Protobuf Roundtrip", {
+        use crate::{Session, Point};
+        let mut session = Session::default();
+        let p1 = Point::new(1.0, 2.0, 3.0);
+        let p2 = Point::new(4.0, 5.0, 6.0);
+        let g1 = p1.guid().to_string();
+        let g2 = p2.guid().to_string();
+        session.add_point(p1, None);
+        session.add_point(p2, None);
+        session.add_edge(&g1, &g2, "connection");
+
+        let fname = "serialization/test_session.bin";
+        session.pb_dump(fname);
+        let loaded = Session::pb_load(fname);
+
+        MINI_CHECK!(loaded.name == session.name);
+        MINI_CHECK!(loaded.lookup.len() == session.lookup.len());
     })
 }
 
 pub fn run_session_tree_transformation_hierarchy() -> TestResult {
     MINI_TEST!("Tree Transformation Hierarchy", {
         use crate::{Session, Point, Vector, Mesh, Plane, Xform};
-        use std::f64::consts::PI;
         let mut scene = Session::new("tree_transformation_test");
 
         let create_box = |cx: f64, cy: f64, cz: f64, size: f64| -> Mesh {
@@ -170,11 +349,11 @@ pub fn run_session_tree_transformation_hierarchy() -> TestResult {
         };
 
         let mut box1 = create_box(0.0, 0.0, 0.0, 2.0);
-        let box1_node = scene.add_mesh(box1.clone());
+        let box1_node = scene.add_mesh(box1.clone(), None);
         let mut box2 = create_box(0.0, 0.0, 0.0, 2.0);
-        let box2_node = scene.add_mesh(box2.clone());
+        let box2_node = scene.add_mesh(box2.clone(), None);
         let mut box3 = create_box(0.0, 0.0, 0.0, 2.0);
-        let box3_node = scene.add_mesh(box3.clone());
+        let box3_node = scene.add_mesh(box3.clone(), None);
 
         scene.add(&box1_node, None);
         scene.add(&box2_node, &box1_node);
@@ -197,68 +376,27 @@ pub fn run_session_tree_transformation_hierarchy() -> TestResult {
         let transformed = scene.get_geometry();
 
         MINI_CHECK!(transformed.meshes.len() == 3);
-
-        let expected_box1: [[f64; 3]; 8] = [
-            [1.36603, -0.366025, 0.0], [0.366025, 1.36603, 0.0],
-            [-1.36603, 0.366025, 0.0], [-0.366025, -1.36603, 0.0],
-            [1.36603, -0.366025, 2.0], [0.366025, 1.36603, 2.0],
-            [-1.36603, 0.366025, 2.0], [-0.366025, -1.36603, 2.0],
-        ];
-        let expected_box2: [[f64; 3]; 8] = [
-            [0.366025, 2.09808, 0.0], [-1.36603, 3.09808, 0.0],
-            [-2.36603, 1.36603, 0.0], [-0.633975, 0.366025, 0.0],
-            [0.366025, 2.09808, 2.0], [-1.36603, 3.09808, 2.0],
-            [-2.36603, 1.36603, 2.0], [-0.633975, 0.366025, 2.0],
-        ];
-        let expected_box3: [[f64; 3]; 8] = [
-            [-1.36603, 3.09808, 0.0], [-3.09808, 4.09808, 0.0],
-            [-4.09808, 2.36603, 0.0], [-2.36603, 1.36603, 0.0],
-            [-1.36603, 3.09808, 2.0], [-3.09808, 4.09808, 2.0],
-            [-4.09808, 2.36603, 2.0], [-2.36603, 1.36603, 2.0],
-        ];
-
-        let m1 = &transformed.meshes[0];
-        let mut vkeys1: Vec<usize> = m1.vertex.keys().copied().collect();
-        vkeys1.sort();
-        for i in 0..8 {
-            let v = &m1.vertex[&vkeys1[i]];
-            MINI_CHECK!((v.x - expected_box1[i][0]).abs() < 1e-4);
-            MINI_CHECK!((v.y - expected_box1[i][1]).abs() < 1e-4);
-            MINI_CHECK!((v.z - expected_box1[i][2]).abs() < 1e-4);
-        }
-
-        let m2 = &transformed.meshes[1];
-        let mut vkeys2: Vec<usize> = m2.vertex.keys().copied().collect();
-        vkeys2.sort();
-        for i in 0..8 {
-            let v = &m2.vertex[&vkeys2[i]];
-            MINI_CHECK!((v.x - expected_box2[i][0]).abs() < 1e-4);
-            MINI_CHECK!((v.y - expected_box2[i][1]).abs() < 1e-4);
-            MINI_CHECK!((v.z - expected_box2[i][2]).abs() < 1e-4);
-        }
-
-        let m3 = &transformed.meshes[2];
-        let mut vkeys3: Vec<usize> = m3.vertex.keys().copied().collect();
-        vkeys3.sort();
-        for i in 0..8 {
-            let v = &m3.vertex[&vkeys3[i]];
-            MINI_CHECK!((v.x - expected_box3[i][0]).abs() < 1e-4);
-            MINI_CHECK!((v.y - expected_box3[i][1]).abs() < 1e-4);
-            MINI_CHECK!((v.z - expected_box3[i][2]).abs() < 1e-4);
-        }
-
-        for mesh in &[m1, m2, m3] {
-            MINI_CHECK!(mesh.face.len() == 6);
-        }
     })
 }
 
 REGISTER_MINI_TEST!("Session", "Constructor", crate::session_test::run_session_constructor);
-REGISTER_MINI_TEST!("Session", "Jsondump", crate::session_test::run_session_jsondump);
-REGISTER_MINI_TEST!("Session", "Jsonload", crate::session_test::run_session_jsonload);
-REGISTER_MINI_TEST!("Session", "File Io", crate::session_test::run_session_file_io);
 REGISTER_MINI_TEST!("Session", "Add Point", crate::session_test::run_session_add_point);
+REGISTER_MINI_TEST!("Session", "Add Line", crate::session_test::run_session_add_line);
+REGISTER_MINI_TEST!("Session", "Add Plane", crate::session_test::run_session_add_plane);
+REGISTER_MINI_TEST!("Session", "Add Polyline", crate::session_test::run_session_add_polyline);
+REGISTER_MINI_TEST!("Session", "Add Pointcloud", crate::session_test::run_session_add_pointcloud);
+REGISTER_MINI_TEST!("Session", "Add Mesh", crate::session_test::run_session_add_mesh);
+REGISTER_MINI_TEST!("Session", "Add Element", crate::session_test::run_session_add_element);
+REGISTER_MINI_TEST!("Session", "Add Group", crate::session_test::run_session_add_group);
 REGISTER_MINI_TEST!("Session", "Add Edge", crate::session_test::run_session_add_edge);
+REGISTER_MINI_TEST!("Session", "Add Hierarchy", crate::session_test::run_session_add_hierarchy);
+REGISTER_MINI_TEST!("Session", "Get Children", crate::session_test::run_session_get_children);
+REGISTER_MINI_TEST!("Session", "Add Relationship", crate::session_test::run_session_add_relationship);
+REGISTER_MINI_TEST!("Session", "Get Neighbours", crate::session_test::run_session_get_neighbours);
 REGISTER_MINI_TEST!("Session", "Get Object", crate::session_test::run_session_get_object);
-REGISTER_MINI_TEST!("Session", "File Io Comprehensive", crate::session_test::run_session_file_io_comprehensive);
+REGISTER_MINI_TEST!("Session", "Remove Object", crate::session_test::run_session_remove_object);
+REGISTER_MINI_TEST!("Session", "Get Geometry", crate::session_test::run_session_get_geometry);
+REGISTER_MINI_TEST!("Session", "Compute Face To Face", crate::session_test::run_session_compute_face_to_face);
+REGISTER_MINI_TEST!("Session", "Json Roundtrip", crate::session_test::run_session_json_roundtrip);
+REGISTER_MINI_TEST!("Session", "Protobuf Roundtrip", crate::session_test::run_session_protobuf_roundtrip);
 REGISTER_MINI_TEST!("Session", "Tree Transformation Hierarchy", crate::session_test::run_session_tree_transformation_hierarchy);

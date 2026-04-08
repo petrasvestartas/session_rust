@@ -1776,3 +1776,1360 @@ pub fn remap(val: f64, from1: f64, to1: f64, from2: f64, to2: f64) -> f64 {
     let t = (val - from1) / span;
     from2 + t * (to2 - from2)
 }
+
+pub fn face_to_face(
+    adjacency: &[i32],
+    polylines: &[Vec<crate::polyline::Polyline>],
+    planes: &[Vec<crate::plane::Plane>],
+    coplanar_tolerance: f64,
+) -> Vec<(i32, i32, i32, i32, i32, crate::polyline::Polyline)> {
+    use crate::plane::Plane;
+    use crate::polyline::Polyline;
+    use crate::vector::Vector;
+
+    let mut results = Vec::new();
+    let mut idx = 0;
+    while idx + 1 < adjacency.len() {
+        let a = adjacency[idx] as usize;
+        let b = adjacency[idx + 1] as usize;
+        idx += 4;
+
+        let mut found = false;
+        for i in 0..planes[a].len() {
+            if found { break; }
+            for j in 0..planes[b].len() {
+                let oa = planes[a][i].origin();
+                let za = planes[a][i].z_axis();
+                let ob = planes[b][j].origin();
+                let zb = planes[b][j].z_axis();
+                if !Plane::is_coplanar_from_normals(&oa, &za, &ob, &zb, false, coplanar_tolerance) {
+                    continue;
+                }
+
+                let pts_i = polylines[a][i].get_points();
+                if pts_i.len() < 2 { continue; }
+                let mut edge = Vector::new(
+                    pts_i[1][0] - pts_i[0][0],
+                    pts_i[1][1] - pts_i[0][1],
+                    pts_i[1][2] - pts_i[0][2],
+                );
+                edge.normalize_self();
+                let zax = planes[a][i].z_axis();
+                let mut yax = zax.cross(&edge);
+                yax.normalize_self();
+                let pln = Plane::from_axes(pts_i[0].clone(), edge, yax, zax);
+
+                let bools = Polyline::boolean_op_plane(&polylines[a][i], &polylines[b][j], &pln, 0);
+                if bools.is_empty() || bools[0].point_count() < 3 { continue; }
+
+                let typ = (if i > 1 { 0 } else { 1 }) + (if j > 1 { 0 } else { 1 });
+                let jpl = if bools[0].is_closed() { bools[0].clone() } else { bools[0].closed() };
+                results.push((a as i32, b as i32, i as i32, j as i32, typ as i32, jpl));
+                found = true;
+                break;
+            }
+        }
+    }
+
+    results
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// WOOD: face_to_face_wood — detailed timber-joint topology detection
+// ─────────────────────────────────────────────────────────────────────────────
+//
+// Direct port of the C++ wood-library function `wood::main::face_to_face` from
+// `cmake/src/wood/include/wood_main.cpp`. This is the heavy-weight cousin of
+// the lightweight `face_to_face` above: it not only detects that two element
+// faces are coplanar and overlap, but also constructs the full alignment
+// lines and the volumetric joint regions used by the joint-library
+// (mortise/tenon, half-lap, butt, cross-lap, etc.).
+//
+// The algorithm is intricate. Key conventions, kept identical to the C++:
+//
+//   * Input polylines/planes are indexed [0]=top face, [1]=bottom face,
+//     [2..]=side faces (one per side). All faces are convex polygons.
+//   * The "type" of a joint is determined by the face-class of each side:
+//       type0 = (i > 1 ? 0 : 1) — 0 if side, 1 if top
+//       type1 = (j > 1 ? 0 : 1)
+//       type  = type0 + type1
+//     so 0 = side-side, 1 = top-side, 2 = top-top.
+//   * Inside each branch the type is further refined into the codes the
+//     joint library uses:  11 = side-side parallel out-of-plane,
+//     12 = side-side parallel in-plane,  13 = side-side rotated/perpendicular,
+//     20 = top-side,  40 = top-top.
+//   * `joint_volumes_pair_a_pair_b` holds up to 4 closed-quad polylines.
+//     Pair A (indices 0,1) is the male side, pair B (indices 2,3) the female.
+//     Type 13/20/40 only fill pair A (indices 0,1); type 12 fills all four.
+//
+// The function fails (returns `None`) if no face pair is coplanar+overlapping,
+// or if any geometric helper degenerates (parallel-plane intersections,
+// collapsed alignment lines, dihedral angles below the validity threshold).
+
+/// Tunable parameters for `face_to_face_wood`. The original C++ code reads
+/// these from a global state (`wood::GLOBALS::*`); the Rust port passes them
+/// explicitly so the function is pure and re-entrant.
+#[derive(Clone, Debug)]
+pub struct WoodConfig {
+    /// Per-joint extension parameters, packed in triples
+    /// `(width_extension, height_extension, line_extension)`. The function
+    /// picks one triple based on `joint_id`, clamping to the last available
+    /// triple if `joint_id` exceeds what's defined.
+    pub joint_volume_extension: Vec<f64>,
+    /// Minimum joint length (linear, not squared); the function rejects
+    /// joints whose alignment line is shorter than this minus the line
+    /// extension parameter.
+    pub limit_min_joint_length: f64,
+    /// Squared distance below which an alignment line is treated as
+    /// degenerate. Mirrors `wood::GLOBALS::DISTANCE_SQUARED`.
+    pub distance_squared: f64,
+    /// Dihedral angle (degrees) cutoff between out-of-plane (≤ this value)
+    /// and in-plane (> this value) parallel side-to-side joints. Wood
+    /// default is 150°.
+    pub face_to_face_side_to_side_joints_dihedral_angle: f64,
+    /// If true, every side-to-side joint is forced through the rotated
+    /// branch even when the alignment lines are parallel.
+    pub face_to_face_side_to_side_joints_all_treated_as_rotated: bool,
+    /// If true, the rotated branch uses the average of both alignment lines
+    /// as its joint axis; if false it uses `joint_line0` directly.
+    pub face_to_face_side_to_side_joints_rotated_joint_as_average: bool,
+}
+
+impl Default for WoodConfig {
+    fn default() -> Self {
+        Self {
+            joint_volume_extension: vec![0.0, 0.0, 0.0],
+            limit_min_joint_length: 0.0,
+            distance_squared: 1e-6,
+            face_to_face_side_to_side_joints_dihedral_angle: 150.0,
+            face_to_face_side_to_side_joints_all_treated_as_rotated: false,
+            face_to_face_side_to_side_joints_rotated_joint_as_average: true,
+        }
+    }
+}
+
+/// Output of a successful `face_to_face_wood` call. Mirrors the seven
+/// out-parameters of the original C++ function (`el_ids`, `face_ids`, `type`,
+/// `joint_area`, `joint_lines`, and `joint_volumes_pairA_pairB`).
+#[derive(Clone, Debug)]
+pub struct WoodJoint {
+    /// Element-id pair. May be SWAPPED relative to the caller's input when a
+    /// male/female flip is required (out-of-plane side-to-side, top-side).
+    pub el_ids: (i32, i32),
+    /// `(face_indices_for_el0, face_indices_for_el1)`. Both slots in each
+    /// array currently hold the same matched face index — the C++ kept the
+    /// shape pair-of-arrays for forward compatibility with multi-face joints.
+    pub face_ids: ([i32; 2], [i32; 2]),
+    /// Refined joint type code consumed by the joint library. See the module
+    /// header above for the meaning of 11/12/13/20/40.
+    pub joint_type: i32,
+    /// 2D Boolean intersection polygon (the overlap area between the two
+    /// coplanar faces) carried as a polyline in the original 3D coordinates.
+    pub joint_area: crate::Polyline,
+    /// Joint alignment lines. For top-side and rotated/parallel side-side
+    /// both entries hold the same line (`joint_lines[1]` is a duplicate);
+    /// for out-of-plane parallel side-side they hold the male line and the
+    /// female line, possibly reversed if a male/female flip occurred.
+    pub joint_lines: [Line; 2],
+    /// Up to 4 closed-quad polylines describing the volumetric joint
+    /// regions. Indices follow the C++ `joint_volumes_pairA_pairB`:
+    ///   * type 13 (rotated side-side): slots 0 and 1 are filled.
+    ///   * type 11 (out-of-plane parallel): slots 0 and 1 are filled.
+    ///   * type 12 (in-plane parallel): all four slots are filled.
+    ///   * type 20 (top-side): slots 0 and 1 are filled.
+    ///   * type 40 (top-top): slots 0 and 1 are filled.
+    pub joint_volumes_pair_a_pair_b: [Option<crate::Polyline>; 4],
+}
+
+// ── wood-private helpers ────────────────────────────────────────────────────
+
+/// Approximate dihedral angle (degrees, unsigned [0, 180]) of edge `pq` in the
+/// tetrahedron `pqrs`. Mirrors `CGAL::approximate_dihedral_angle(p, q, r, s)`
+/// followed by `std::abs(...)` as the wood caller uses it.
+///
+/// This is the angle between half-plane (pqr) and half-plane (pqs), measured
+/// in the plane perpendicular to edge pq.
+fn approximate_dihedral_angle(p: &Point, q: &Point, r: &Point, s: &Point) -> f64 {
+    use crate::Vector;
+    let pq = Vector::new(q[0] - p[0], q[1] - p[1], q[2] - p[2]);
+    let pr = Vector::new(r[0] - p[0], r[1] - p[1], r[2] - p[2]);
+    let ps = Vector::new(s[0] - p[0], s[1] - p[1], s[2] - p[2]);
+    let n1 = pq.cross(&pr);
+    let n2 = pq.cross(&ps);
+    let m1 = n1.magnitude();
+    let m2 = n2.magnitude();
+    if m1 < crate::tolerance::Tolerance::ZERO_TOLERANCE
+        || m2 < crate::tolerance::Tolerance::ZERO_TOLERANCE
+    {
+        return 0.0;
+    }
+    let cos_theta = (n1.dot(&n2) / (m1 * m2)).clamp(-1.0, 1.0);
+    cos_theta.acos().to_degrees()
+}
+
+/// Average overlap segment of two near-parallel 3D line segments.
+///
+/// Algorithm:
+///   1. Project all four endpoints onto `l0`'s axis (parameter `t`).
+///   2. The overlap region is `[max(min, min) .. min(max, max)]` of the t's.
+///   3. For the two t-values bounding the overlap, sample line0 at that t
+///      and find the closest point on line1; their midpoint is one endpoint
+///      of the average segment.
+///
+/// Returns `None` if `l0` is degenerate or if there is no overlap.
+fn line_line_overlap_average(l0: &Line, l1: &Line) -> Option<Line> {
+    use crate::Vector;
+    let s0 = l0.start();
+    let e0 = l0.end();
+    let s1 = l1.start();
+    let e1 = l1.end();
+
+    let d0 = Vector::new(e0[0] - s0[0], e0[1] - s0[1], e0[2] - s0[2]);
+    let len0_sq = d0.dot(&d0);
+    if len0_sq < crate::tolerance::Tolerance::ZERO_TOLERANCE {
+        return None;
+    }
+
+    // Project a point onto line0's axis as a parameter t (0 = s0, 1 = e0).
+    let proj = |p: &Point| -> f64 {
+        let dx = p[0] - s0[0];
+        let dy = p[1] - s0[1];
+        let dz = p[2] - s0[2];
+        (dx * d0[0] + dy * d0[1] + dz * d0[2]) / len0_sq
+    };
+    let t_a = 0.0_f64;
+    let t_b = 1.0_f64;
+    let t_c = proj(&s1);
+    let t_d = proj(&e1);
+
+    // Overlap interval on line0's parameterization.
+    let (lo0, hi0) = (t_a.min(t_b), t_a.max(t_b));
+    let (lo1, hi1) = (t_c.min(t_d), t_c.max(t_d));
+    let lo = lo0.max(lo1);
+    let hi = hi0.min(hi1);
+    if hi <= lo {
+        return None;
+    }
+
+    // Sample line0 at the overlap endpoints.
+    let pt0_lo = Point::new(s0[0] + lo * d0[0], s0[1] + lo * d0[1], s0[2] + lo * d0[2]);
+    let pt0_hi = Point::new(s0[0] + hi * d0[0], s0[1] + hi * d0[1], s0[2] + hi * d0[2]);
+
+    // Find the corresponding closest points on line1, clamped to [s1, e1].
+    let closest_on_l1 = |pt: &Point| -> Point {
+        let d1 = Vector::new(e1[0] - s1[0], e1[1] - s1[1], e1[2] - s1[2]);
+        let len1_sq = d1.dot(&d1);
+        if len1_sq < crate::tolerance::Tolerance::ZERO_TOLERANCE {
+            return s1.clone();
+        }
+        let dx = pt[0] - s1[0];
+        let dy = pt[1] - s1[1];
+        let dz = pt[2] - s1[2];
+        let t = ((dx * d1[0] + dy * d1[1] + dz * d1[2]) / len1_sq).clamp(0.0, 1.0);
+        Point::new(s1[0] + t * d1[0], s1[1] + t * d1[1], s1[2] + t * d1[2])
+    };
+    let pt1_lo = closest_on_l1(&pt0_lo);
+    let pt1_hi = closest_on_l1(&pt0_hi);
+
+    // Average the two pairs to get the final overlap segment.
+    let avg_lo = Point::new(
+        (pt0_lo[0] + pt1_lo[0]) * 0.5,
+        (pt0_lo[1] + pt1_lo[1]) * 0.5,
+        (pt0_lo[2] + pt1_lo[2]) * 0.5,
+    );
+    let avg_hi = Point::new(
+        (pt0_hi[0] + pt1_hi[0]) * 0.5,
+        (pt0_hi[1] + pt1_hi[1]) * 0.5,
+        (pt0_hi[2] + pt1_hi[2]) * 0.5,
+    );
+    Some(Line::from_points(&avg_lo, &avg_hi))
+}
+
+/// Slide the two endpoints of polyline edge `edge_idx` outward (or inward,
+/// for negative `distance`) along the edge's tangent direction. The
+/// neighbouring edges deform accordingly. For closed polylines (where
+/// `pts[n-1] == pts[0]`) the closing duplicate is kept in sync.
+///
+/// Used by `face_to_face_wood` to scale joint volume rectangles by the
+/// `JOINT_VOLUME_EXTENSION` config: extending opposite edges by the same
+/// amount preserves the rectangle and grows it uniformly along that axis.
+fn extend_polyline_edge_equally(
+    poly: &mut crate::Polyline,
+    edge_idx: usize,
+    distance: f64,
+) {
+    let n = poly.point_count();
+    if n < 2 || edge_idx + 1 >= n {
+        return;
+    }
+    let i = edge_idx;
+    let j = edge_idx + 1;
+    let pi = match poly.get_point(i) { Some(p) => p, None => return };
+    let pj = match poly.get_point(j) { Some(p) => p, None => return };
+    let dx = pj[0] - pi[0];
+    let dy = pj[1] - pi[1];
+    let dz = pj[2] - pi[2];
+    let len = (dx * dx + dy * dy + dz * dz).sqrt();
+    if len < 1e-12 {
+        return;
+    }
+    let inv_len = 1.0 / len;
+    let ux = dx * inv_len * distance;
+    let uy = dy * inv_len * distance;
+    let uz = dz * inv_len * distance;
+    let new_pi = Point::new(pi[0] - ux, pi[1] - uy, pi[2] - uz);
+    let new_pj = Point::new(pj[0] + ux, pj[1] + uy, pj[2] + uz);
+    poly.set_point(i, &new_pi);
+    poly.set_point(j, &new_pj);
+    // Closed polylines: index 0 and n-1 are the same point. If we just moved
+    // either end of the joining seam, keep both copies in sync.
+    if i == 0 {
+        poly.set_point(n - 1, &new_pi);
+    }
+    if j == n - 1 {
+        poly.set_point(0, &new_pj);
+    }
+}
+
+/// Apply an `Xform` to a single `Point` without going through the `Point.xform`
+/// field setup dance. Used by the rotated-joint branch to project the joint
+/// area into the local 2D frame for AABB extraction.
+fn xform_apply_point(xform: &crate::Xform, p: &Point) -> Point {
+    let m = &xform.m;
+    let (x, y, z) = (p[0], p[1], p[2]);
+    let w = m[3] * x + m[7] * y + m[11] * z + m[15];
+    let w_inv = if w.abs() > 1e-10 { 1.0 / w } else { 1.0 };
+    Point::new(
+        (m[0] * x + m[4] * y + m[8] * z + m[12]) * w_inv,
+        (m[1] * x + m[5] * y + m[9] * z + m[13]) * w_inv,
+        (m[2] * x + m[6] * y + m[10] * z + m[14]) * w_inv,
+    )
+}
+
+/// Detailed face-to-face joint detection between two timber elements.
+///
+/// Direct Rust port of `wood::main::face_to_face` from
+/// `cmake/src/wood/include/wood_main.cpp`. See the module header above for
+/// the conventions on input polyline/plane ordering and joint type codes.
+///
+/// The function tries every face pair `(i, j)` between `polylines_0` and
+/// `polylines_1`. For the first pair that is coplanar AND has a non-empty
+/// 2D Boolean intersection (the "joint area"), it builds the alignment lines
+/// and volumetric joint regions, then returns. Subsequent pairs are not
+/// tried because the joint library only emits one joint per element pair.
+///
+/// Returns `None` if no face pair matches, or if any geometric helper
+/// degenerates partway through (parallel-plane intersection failure,
+/// collapsed alignment line, dihedral angle below validity threshold).
+pub fn face_to_face_wood(
+    joint_id: usize,
+    polylines_0: &[crate::Polyline],
+    polylines_1: &[crate::Polyline],
+    planes_0: &[crate::Plane],
+    planes_1: &[crate::Plane],
+    insertion_vectors_0: &[crate::Vector],
+    insertion_vectors_1: &[crate::Vector],
+    el_ids_in: (i32, i32),
+    config: &WoodConfig,
+) -> Option<WoodJoint> {
+    use crate::{Plane, Polyline, Vector, Xform};
+
+    // Pick which extension triple to use from the config.
+    // The C++ original: `extension_id = min(joint_id, count-1) * 3` where
+    // `count = floor(JOINT_VOLUME_EXTENSION.size() / 3.0) - 1`.
+    let extension_variables_count = if config.joint_volume_extension.len() / 3 == 0 {
+        0
+    } else {
+        (config.joint_volume_extension.len() / 3) - 1
+    };
+    let extension_id = if extension_variables_count == 0 {
+        0
+    } else {
+        joint_id.min(extension_variables_count) * 3
+    };
+    // Convenience accessors with bounds protection (same defaults as C++ when
+    // the array is too short — falls back to 0 in production builds).
+    let ext = |k: usize| -> f64 {
+        config.joint_volume_extension.get(k + extension_id).copied().unwrap_or(0.0)
+    };
+    let ext_w = ext(0); // edges 0,2 → joint width  scaling
+    let ext_h = ext(1); // edges 1,3 → joint height scaling
+    let ext_l = ext(2); // joint-line axial extension
+
+    // Mutable copies that may be reordered by the male/female flip branch.
+    let mut el_ids = el_ids_in;
+    let mut face_ids: ([i32; 2], [i32; 2]) = ([0; 2], [0; 2]);
+
+    // Outer loop over every face pair (face_a, face_b).
+    for i in 0..planes_0.len() {
+        for j in 0..planes_1.len() {
+            // ── 1. Coplanarity test (cheap; ~10 ms across the workload). ──
+            // The C++ uses `cgal::plane_util::is_coplanar(P0, P1, false)`
+            // which is the antiparallel-only test (faces touching back-to-back).
+            let coplanar = Plane::is_coplanar_from_normals(
+                &planes_0[i].origin(),
+                &planes_0[i].z_axis(),
+                &planes_1[j].origin(),
+                &planes_1[j].z_axis(),
+                false,
+                crate::tolerance::Tolerance::APPROXIMATION,
+            );
+            if !coplanar {
+                continue;
+            }
+
+            // ── 2. 2D Boolean intersection between the two coplanar faces. ──
+            // Returns the overlap polygon as a single Polyline, or empty if
+            // the polygons don't actually touch in their shared plane.
+            let isect_results =
+                Polyline::boolean_op_plane(&polylines_0[i], &polylines_1[j], &planes_0[i], 0);
+            if isect_results.is_empty() {
+                continue;
+            }
+            let joint_area_open = isect_results.into_iter().next().unwrap();
+            if joint_area_open.point_count() < 3 {
+                continue;
+            }
+            // Promote to a closed polyline (caller convention: closing dup).
+            let joint_area = if joint_area_open.is_closed() {
+                joint_area_open
+            } else {
+                joint_area_open.closed()
+            };
+
+            // ── 3. Record matched face indices for the output. ──
+            // The C++ keeps both slots equal because it only stores ONE
+            // matched face per element today. We mirror that.
+            face_ids.0[0] = i as i32;
+            face_ids.0[1] = i as i32;
+            face_ids.1[0] = j as i32;
+            face_ids.1[1] = j as i32;
+
+            // ── 4. Joint type from the geometric class of each side. ──
+            //   type0 = 0 if face is a side, 1 if face is top/bottom
+            //   type  = 0 (side-side), 1 (top-side), or 2 (top-top)
+            let type0: i32 = if i > 1 { 0 } else { 1 };
+            let type1: i32 = if j > 1 { 0 } else { 1 };
+            let mut joint_type: i32 = type0 + type1;
+
+            // ── 5. Build the side-A alignment line (`joint_line0`) when ──
+            //      face A is a side face (i > 1). For top faces this stays
+            //      a degenerate sentinel — its length is later required to
+            //      pass the LIMIT_MIN_JOINT_LENGTH check, so top-top joints
+            //      naturally bypass it via the `type == 2` branch below.
+            //
+            // The alignment segment goes from the midpoint of edge `i-2` of
+            // the top/bottom polylines to the midpoint of edge `i-1`. This
+            // is the "natural axis" of the side face (in the wood library's
+            // top/bottom + side convention, side `k` connects vertices `k`
+            // of the top and bottom rings).
+            let mut joint_line0 = Line::from_points(&Point::new(0.0, 0.0, 0.0), &Point::new(0.0, 0.0, 0.0));
+            // Average plane of the two reference (top + bottom) faces of
+            // element 0 — i.e. the mid-thickness plane of element 0.
+            let avg_plane_0 = Plane::from_point_normal(
+                Point::mid_point(&polylines_0[0].get_point(0)?, &polylines_0[1].get_point(0)?),
+                planes_0[0].z_axis(),
+            );
+            let mut joint_quads0: Option<Polyline> = None;
+
+            if i > 1 {
+                // Alignment segment from midpoint(top[i-2], bottom[i-2])
+                // to midpoint(top[i-1], bottom[i-1]).
+                let a0 = polylines_0[0].get_point(i - 2)?;
+                let a1 = polylines_0[1].get_point(i - 2)?;
+                let b0 = polylines_0[0].get_point(i - 1)?;
+                let b1 = polylines_0[1].get_point(i - 1)?;
+                let alignment_segment =
+                    Line::from_points(&Point::mid_point(&a0, &a1), &Point::mid_point(&b0, &b1));
+
+                // Intersect joint area with the average plane → 1D segment.
+                // The Rust helper aligns the result so its start is closest
+                // to the alignment_segment's start point.
+                let line_opt = polyline_plane_to_line(
+                    &joint_area,
+                    &avg_plane_0,
+                    &alignment_segment.start(),
+                );
+                let line = line_opt?;
+                if line.squared_length() <= config.distance_squared {
+                    return None;
+                }
+                joint_line0 = line;
+                // Build the side-face joint quad from joint_line0 +
+                // top + bottom planes of element 0.
+                joint_quads0 = get_quad_from_line_topbottomplanes(
+                    &planes_0[i],
+                    &joint_line0,
+                    &planes_0[0],
+                    &planes_0[1],
+                );
+                if joint_quads0.is_none() {
+                    return None;
+                }
+            }
+
+            // ── 6. Same for side-B alignment line (`joint_line1`). ──
+            let mut joint_line1 = Line::from_points(&Point::new(0.0, 0.0, 0.0), &Point::new(0.0, 0.0, 0.0));
+            let avg_plane_1 = Plane::from_point_normal(
+                Point::mid_point(&polylines_1[0].get_point(0)?, &polylines_1[1].get_point(0)?),
+                planes_1[0].z_axis(),
+            );
+            let mut joint_quads1: Option<Polyline> = None;
+
+            if j > 1 {
+                let a0 = polylines_1[0].get_point(j - 2)?;
+                let a1 = polylines_1[1].get_point(j - 2)?;
+                let b0 = polylines_1[0].get_point(j - 1)?;
+                let b1 = polylines_1[1].get_point(j - 1)?;
+                let alignment_segment =
+                    Line::from_points(&Point::mid_point(&a0, &a1), &Point::mid_point(&b0, &b1));
+                let line_opt = polyline_plane_to_line(
+                    &joint_area,
+                    &avg_plane_1,
+                    &alignment_segment.start(),
+                );
+                let line = line_opt?;
+                if line.squared_length() <= config.distance_squared {
+                    return None;
+                }
+                joint_line1 = line;
+                joint_quads1 = get_quad_from_line_topbottomplanes(
+                    &planes_1[j],
+                    &joint_line1,
+                    &planes_1[0],
+                    &planes_1[1],
+                );
+                if joint_quads1.is_none() {
+                    return None;
+                }
+            }
+
+            // ── 7. Validate joint line length and apply axial extension. ──
+            // The wood C++ derives:
+            //     joint_line_extension_limit = (ext_l * 2)^2
+            //     limit_min_squared          = limit_min_joint_length^2
+            // and rejects the joint when
+            //     joint_line_extension_limit > line.squared_length() - limit_min_squared
+            // i.e. extending the line by ext_l on each end would shrink it
+            // below the configured minimum length. This guards both
+            // joint_line0 and joint_line1 — for `type == 2` (top-top) both
+            // are still default zero-length segments and we'd fail here, so
+            // the top-top branch below skips this check entirely.
+            if joint_type < 2 {
+                let joint_line_extension_limit = (ext_l * 2.0).powi(2);
+                let limit_min_squared = config.limit_min_joint_length.powi(2);
+                if i > 1
+                    && joint_line_extension_limit
+                        > joint_line0.squared_length() - limit_min_squared
+                {
+                    return None;
+                }
+                if j > 1
+                    && joint_line_extension_limit
+                        > joint_line1.squared_length() - limit_min_squared
+                {
+                    return None;
+                }
+                joint_line0.extend_equally(ext_l);
+                joint_line1.extend_equally(ext_l);
+            }
+
+            // ── 8. Insertion direction (optional). ──
+            // If either element has insertion vectors assigned, the male
+            // (whichever has the higher face index) takes priority.
+            let mut dir = Vector::new(0.0, 0.0, 0.0);
+            let mut dir_set = false;
+            if !insertion_vectors_0.is_empty() && !insertion_vectors_1.is_empty() {
+                dir = if i > j {
+                    insertion_vectors_0[i].clone()
+                } else {
+                    insertion_vectors_1[j].clone()
+                };
+                dir_set = (dir[0].abs() + dir[1].abs() + dir[2].abs()) > 0.01;
+            }
+
+            // ── 9. Branch on joint type (0 / 1 / 2). ──
+            //      Each branch fills `joint_lines`, `joint_volumes_pair_a_pair_b`
+            //      and the refined `joint_type` (11/12/13/20/40), then returns.
+            let mut joint_lines = [
+                Line::from_points(&Point::new(0.0, 0.0, 0.0), &Point::new(0.0, 0.0, 0.0)),
+                Line::from_points(&Point::new(0.0, 0.0, 0.0), &Point::new(0.0, 0.0, 0.0)),
+            ];
+            let mut joint_volumes: [Option<Polyline>; 4] = [None, None, None, None];
+
+            if joint_type == 0 {
+                // ────────────────────────────────────────────────────────
+                // SIDE-SIDE
+                // ────────────────────────────────────────────────────────
+                joint_lines[0] = joint_line0.clone();
+                joint_lines[1] = joint_line1.clone();
+
+                // Are the two side faces' alignment lines parallel? The
+                // wood library distinguishes "rotated" (perpendicular or
+                // skew) from "parallel" elements; the rotated branch builds
+                // a single averaged rectangle, the parallel branch
+                // distinguishes in-plane vs out-of-plane via dihedral angle.
+                let v0 = Vector::new(
+                    joint_line0.start()[0] - joint_line0.end()[0],
+                    joint_line0.start()[1] - joint_line0.end()[1],
+                    joint_line0.start()[2] - joint_line0.end()[2],
+                );
+                let v1 = Vector::new(
+                    joint_line1.start()[0] - joint_line1.end()[0],
+                    joint_line1.start()[1] - joint_line1.end()[1],
+                    joint_line1.start()[2] - joint_line1.end()[2],
+                );
+                let parallel = v0.is_parallel_to(&v1);
+
+                if parallel == 0
+                    || config.face_to_face_side_to_side_joints_all_treated_as_rotated
+                {
+                    // ──────────────────────────────────────────────
+                    // Rotated / perpendicular elements (type 13)
+                    // ──────────────────────────────────────────────
+                    //
+                    // Build an averaged segment between the two alignment
+                    // lines (matching endpoints by closest distance), then
+                    // construct a local 2D frame around it, project the
+                    // joint area into 2D, take its AABB, and extrude it to
+                    // a thickness rectangle in 3D.
+
+                    let average_segment = if Point::distance(
+                        &joint_line0.start(),
+                        &joint_line1.start(),
+                        None,
+                    ) < Point::distance(
+                        &joint_line0.start(),
+                        &joint_line1.end(),
+                        None,
+                    ) {
+                        Line::from_points(
+                            &Point::mid_point(&joint_line0.start(), &joint_line1.start()),
+                            &Point::mid_point(&joint_line0.end(), &joint_line1.end()),
+                        )
+                    } else {
+                        Line::from_points(
+                            &Point::mid_point(&joint_line0.start(), &joint_line1.end()),
+                            &Point::mid_point(&joint_line0.end(), &joint_line1.start()),
+                        )
+                    };
+                    let axis_segment =
+                        if config.face_to_face_side_to_side_joints_rotated_joint_as_average {
+                            average_segment
+                        } else {
+                            joint_line0.clone()
+                        };
+
+                    // Local frame: x = along axis, z = face normal,
+                    // y = z × x (then reorthogonalised against actual
+                    // element thicknesses, see below).
+                    let o = axis_segment.start();
+                    let mut x = axis_segment.to_vector();
+                    let z = planes_0[i].z_axis();
+                    let mut y = z.cross(&x);
+                    y.normalize_self();
+
+                    // The C++ has an alternative branch when
+                    // `rotated_joint_as_average == false`: y becomes the
+                    // first plate's bottom-face normal, z becomes x×y.
+                    let mut z = z;
+                    if !config.face_to_face_side_to_side_joints_rotated_joint_as_average {
+                        y = planes_0[0].z_axis();
+                        z = x.cross(&y);
+                    }
+
+                    // Re-orient y by intersecting a thick test segment
+                    // through the joint center with the two outer plates'
+                    // top/bottom planes — this picks up the actual signed
+                    // direction across the assembly.
+                    let center_pt = polylines_0[i].center();
+                    let thickness_a = (planes_0[0]
+                        .origin()
+                        .distance(&planes_0[1].projection(&planes_0[0].origin()), None))
+                    .max(
+                        planes_1[0]
+                            .origin()
+                            .distance(&planes_1[1].projection(&planes_1[0].origin()), None),
+                    );
+                    let mut y_scaled = y.clone();
+                    y_scaled = Vector::new(
+                        y_scaled[0] * (thickness_a * 2.0),
+                        y_scaled[1] * (thickness_a * 2.0),
+                        y_scaled[2] * (thickness_a * 2.0),
+                    );
+                    let y_line = Line::from_points(
+                        &Point::new(
+                            center_pt[0] + y_scaled[0],
+                            center_pt[1] + y_scaled[1],
+                            center_pt[2] + y_scaled[2],
+                        ),
+                        &Point::new(
+                            center_pt[0] - y_scaled[0],
+                            center_pt[1] - y_scaled[1],
+                            center_pt[2] - y_scaled[2],
+                        ),
+                    );
+                    if let Some(clipped) = line_two_planes(&y_line, &planes_0[0], &planes_1[1]) {
+                        y = Vector::new(
+                            clipped.end()[0] - clipped.start()[0],
+                            clipped.end()[1] - clipped.start()[1],
+                            clipped.end()[2] - clipped.start()[2],
+                        );
+                    }
+                    x = y.cross(&z);
+
+                    let xform = Xform::plane_to_xy(&o, &x, &y, &z);
+
+                    // Project joint area into the local 2D frame and grab
+                    // its axis-aligned bounding box.
+                    let pts3d = joint_area.get_points();
+                    let proj_pts: Vec<Point> = pts3d
+                        .iter()
+                        .map(|p| xform_apply_point(&xform, p))
+                        .collect();
+                    if proj_pts.is_empty() {
+                        return None;
+                    }
+                    let mut xmin = proj_pts[0][0];
+                    let mut xmax = xmin;
+                    let mut ymin = proj_pts[0][1];
+                    let mut ymax = ymin;
+                    for p in &proj_pts[1..] {
+                        if p[0] < xmin {
+                            xmin = p[0];
+                        } else if p[0] > xmax {
+                            xmax = p[0];
+                        }
+                        if p[1] < ymin {
+                            ymin = p[1];
+                        } else if p[1] > ymax {
+                            ymax = p[1];
+                        }
+                    }
+                    // Average rectangle in local 2D, vertices ordered to
+                    // match the C++ shape: { p0+x+y, p3, p1, p2 }.
+                    let zmin = proj_pts[0][2];
+                    let r0 = Point::new(xmax, ymax, zmin); // p0+x+y
+                    let r1 = Point::new(xmin, ymax, zmin); // p3
+                    let r2 = Point::new(xmin, ymin, zmin); // p1
+                    let r3 = Point::new(xmax, ymin, zmin); // p2
+                    let xform_inv = xform.inverse()?;
+                    let r0_3d = xform_apply_point(&xform_inv, &r0);
+                    let r1_3d = xform_apply_point(&xform_inv, &r1);
+                    let r2_3d = xform_apply_point(&xform_inv, &r2);
+                    let r3_3d = xform_apply_point(&xform_inv, &r3);
+                    let average_rectangle = [r0_3d, r1_3d, r2_3d, r3_3d];
+
+                    // Offset by the element thickness along the chosen
+                    // axis (insertion direction if available, otherwise z).
+                    let mut offset_vector = if dir_set { dir.clone() } else { z.clone() };
+                    offset_vector.normalize_self();
+                    let d0 = 0.5
+                        * planes_0[0].origin().distance(
+                            &planes_0[1].projection(&planes_0[0].origin()),
+                            None,
+                        );
+                    offset_vector = Vector::new(
+                        offset_vector[0] * d0,
+                        offset_vector[1] * d0,
+                        offset_vector[2] * d0,
+                    );
+
+                    // Build pair A (rectangle 0) and pair B (rectangle 1)
+                    // by extruding average_rectangle along ±offset_vector.
+                    let mk = |a: &Point, ov: &Vector| -> Polyline {
+                        Polyline::new(vec![
+                            Point::new(a[0] + ov[0], a[1] + ov[1], a[2] + ov[2]),
+                            Point::new(a[0] - ov[0], a[1] - ov[1], a[2] - ov[2]),
+                            Point::new(a[0] - ov[0], a[1] - ov[1], a[2] - ov[2]),
+                            Point::new(a[0] + ov[0], a[1] + ov[1], a[2] + ov[2]),
+                            Point::new(a[0] + ov[0], a[1] + ov[1], a[2] + ov[2]),
+                        ])
+                    };
+                    // The C++ form is more specific: each rectangle uses
+                    // average_rectangle vertices [3] and [0] (or [2] and
+                    // [1]), each offset ±. We replicate it directly.
+                    let mut vol0 = Polyline::new(vec![
+                        Point::new(
+                            average_rectangle[3][0] + offset_vector[0],
+                            average_rectangle[3][1] + offset_vector[1],
+                            average_rectangle[3][2] + offset_vector[2],
+                        ),
+                        Point::new(
+                            average_rectangle[3][0] - offset_vector[0],
+                            average_rectangle[3][1] - offset_vector[1],
+                            average_rectangle[3][2] - offset_vector[2],
+                        ),
+                        Point::new(
+                            average_rectangle[0][0] - offset_vector[0],
+                            average_rectangle[0][1] - offset_vector[1],
+                            average_rectangle[0][2] - offset_vector[2],
+                        ),
+                        Point::new(
+                            average_rectangle[0][0] + offset_vector[0],
+                            average_rectangle[0][1] + offset_vector[1],
+                            average_rectangle[0][2] + offset_vector[2],
+                        ),
+                        Point::new(
+                            average_rectangle[3][0] + offset_vector[0],
+                            average_rectangle[3][1] + offset_vector[1],
+                            average_rectangle[3][2] + offset_vector[2],
+                        ),
+                    ]);
+                    let mut vol1 = Polyline::new(vec![
+                        Point::new(
+                            average_rectangle[2][0] + offset_vector[0],
+                            average_rectangle[2][1] + offset_vector[1],
+                            average_rectangle[2][2] + offset_vector[2],
+                        ),
+                        Point::new(
+                            average_rectangle[2][0] - offset_vector[0],
+                            average_rectangle[2][1] - offset_vector[1],
+                            average_rectangle[2][2] - offset_vector[2],
+                        ),
+                        Point::new(
+                            average_rectangle[1][0] - offset_vector[0],
+                            average_rectangle[1][1] - offset_vector[1],
+                            average_rectangle[1][2] - offset_vector[2],
+                        ),
+                        Point::new(
+                            average_rectangle[1][0] + offset_vector[0],
+                            average_rectangle[1][1] + offset_vector[1],
+                            average_rectangle[1][2] + offset_vector[2],
+                        ),
+                        Point::new(
+                            average_rectangle[2][0] + offset_vector[0],
+                            average_rectangle[2][1] + offset_vector[1],
+                            average_rectangle[2][2] + offset_vector[2],
+                        ),
+                    ]);
+
+                    // Apply joint width/height extensions to all 4 edges of
+                    // each rectangle (opposite-edge pairs preserve shape).
+                    for &k in &[0_usize, 2] {
+                        extend_polyline_edge_equally(&mut vol0, k, ext_w);
+                        extend_polyline_edge_equally(&mut vol1, k, ext_w);
+                    }
+                    for &k in &[1_usize, 3] {
+                        extend_polyline_edge_equally(&mut vol0, k, ext_h);
+                        extend_polyline_edge_equally(&mut vol1, k, ext_h);
+                    }
+
+                    joint_volumes[0] = Some(vol0);
+                    joint_volumes[1] = Some(vol1);
+                    joint_type = 13;
+                    let _ = mk; // helper kept for parity with C++ comments
+
+                    return Some(WoodJoint {
+                        el_ids,
+                        face_ids,
+                        joint_type,
+                        joint_area,
+                        joint_lines,
+                        joint_volumes_pair_a_pair_b: joint_volumes,
+                    });
+                } else {
+                    // ──────────────────────────────────────────────
+                    // Parallel elements
+                    // ──────────────────────────────────────────────
+                    //
+                    // Take the averaged overlap between joint_line0 and
+                    // joint_line1, then split on dihedral angle:
+                    //   <  20°            → invalid
+                    //   ≤  configured cut → out-of-plane (type 11)
+                    //   >  configured cut → in-plane     (type 12)
+
+                    let lj = line_line_overlap_average(&joint_line0, &joint_line1)?;
+                    joint_lines[0] = lj.clone();
+                    joint_lines[1] = lj.clone();
+
+                    // End planes that bound the joint along its axis.
+                    let mut pl_end0 = Plane::from_point_normal(lj.start(), lj.to_vector());
+                    if dir_set {
+                        pl_end0 = Plane::from_point_normal(lj.start(), dir.clone());
+                    }
+                    let pl_end1 = Plane::from_point_normal(lj.end(), pl_end0.z_axis());
+
+                    // Dihedral angle of the joint edge in the tetrahedron
+                    // (lj.start, lj.end, center0, center1).
+                    let center0 =
+                        avg_plane_0.projection(&polylines_0[0].center());
+                    let center1 =
+                        avg_plane_1.projection(&polylines_1[0].center());
+                    let dihedral = approximate_dihedral_angle(
+                        &lj.start(),
+                        &lj.end(),
+                        &center0,
+                        &center1,
+                    );
+
+                    if dihedral < 20.0 {
+                        return None;
+                    } else if dihedral
+                        <= config.face_to_face_side_to_side_joints_dihedral_angle
+                    {
+                        // ────── Out-of-plane (type 11) ──────
+                        //
+                        // Probe the joint axis 90° (in the face plane) to
+                        // figure out which adjacent element planes are
+                        // closer, then build an "open" plane×4-plane
+                        // intersection to get a quad.
+
+                        let connection_normal = planes_0[i].z_axis();
+                        let lj_normal = lj.to_vector();
+                        let lj_v_90_unscaled = lj_normal.cross(&connection_normal);
+                        let lj_v_90 = Vector::new(
+                            lj_v_90_unscaled[0] * 0.5,
+                            lj_v_90_unscaled[1] * 0.5,
+                            lj_v_90_unscaled[2] * 0.5,
+                        );
+                        let lj_l_90 = Line::new(
+                            lj.start()[0],
+                            lj.start()[1],
+                            lj.start()[2],
+                            lj.start()[0] + lj_v_90[0],
+                            lj.start()[1] + lj_v_90[1],
+                            lj.start()[2] + lj_v_90[2],
+                        );
+                        let pl0_0_p = line_plane(&lj_l_90, &planes_0[0], false)?;
+                        let pl1_0_p = line_plane(&lj_l_90, &planes_1[0], false)?;
+                        let pl1_1_p = line_plane(&lj_l_90, &planes_1[1], false)?;
+
+                        // Choose the adjacent element planes by which is
+                        // farther from the probe point on plane0[0].
+                        let d_to_pl1_0 = Point::distance(&pl0_0_p, &pl1_0_p, None);
+                        let d_to_pl1_1 = Point::distance(&pl0_0_p, &pl1_1_p, None);
+                        let larger_to_pl1_0 = d_to_pl1_0 > d_to_pl1_1;
+                        let planes4: [Plane; 4] = if larger_to_pl1_0 {
+                            [
+                                planes_1[1].clone(),
+                                planes_0[0].clone(),
+                                planes_1[0].clone(),
+                                planes_0[1].clone(),
+                            ]
+                        } else {
+                            [
+                                planes_1[0].clone(),
+                                planes_0[0].clone(),
+                                planes_1[1].clone(),
+                                planes_0[1].clone(),
+                            ]
+                        };
+
+                        let mut vol0 = plane_4planes_open(&pl_end0, &planes4)?;
+                        let mut vol1 = plane_4planes_open(&pl_end1, &planes4)?;
+
+                        // Consistent volume orientation: rotate the
+                        // 4-vertex Polyline by 2 if the second vertex is
+                        // not on the negative side of plane_0[i].
+                        let need_rotate = {
+                            let p1 = vol0.get_point(1).unwrap();
+                            !planes_0[i].has_on_negative_side(&p1)
+                        };
+                        if need_rotate {
+                            let pts0: Vec<Point> = (0..vol0.point_count())
+                                .map(|k| vol0.get_point(k).unwrap())
+                                .collect();
+                            let pts1: Vec<Point> = (0..vol1.point_count())
+                                .map(|k| vol1.get_point(k).unwrap())
+                                .collect();
+                            let n0 = pts0.len();
+                            let n1 = pts1.len();
+                            let mut rot0 = Vec::with_capacity(n0);
+                            for k in 0..n0 {
+                                rot0.push(pts0[(k + 2) % n0].clone());
+                            }
+                            let mut rot1 = Vec::with_capacity(n1);
+                            for k in 0..n1 {
+                                rot1.push(pts1[(k + 2) % n1].clone());
+                            }
+                            vol0 = Polyline::new(rot0);
+                            vol1 = Polyline::new(rot1);
+                        }
+
+                        // The C++ then reverses the volumes AND swaps the
+                        // element ids — the male/female flip. We do the
+                        // same so the joint library always sees the male
+                        // element first.
+                        let pts0: Vec<Point> = (0..vol0.point_count())
+                            .map(|k| vol0.get_point(k).unwrap())
+                            .rev()
+                            .collect();
+                        let pts1: Vec<Point> = (0..vol1.point_count())
+                            .map(|k| vol1.get_point(k).unwrap())
+                            .rev()
+                            .collect();
+                        let n0 = pts0.len();
+                        let n1 = pts1.len();
+                        let mut rot0 = Vec::with_capacity(n0);
+                        for k in 0..n0 {
+                            rot0.push(pts0[(k + 3) % n0].clone());
+                        }
+                        let mut rot1 = Vec::with_capacity(n1);
+                        for k in 0..n1 {
+                            rot1.push(pts1[(k + 3) % n1].clone());
+                        }
+                        vol0 = Polyline::new(rot0);
+                        vol1 = Polyline::new(rot1);
+                        el_ids = (el_ids.1, el_ids.0);
+                        face_ids = (face_ids.1, face_ids.0);
+                        joint_lines.reverse();
+
+                        // Close the rectangles (append the first vertex).
+                        let p0_0 = vol0.get_point(0).unwrap();
+                        vol0.add_point(p0_0);
+                        let p0_1 = vol1.get_point(0).unwrap();
+                        vol1.add_point(p0_1);
+
+                        // Apply width/height extensions on opposite edges.
+                        for &k in &[0_usize, 2] {
+                            extend_polyline_edge_equally(&mut vol0, k, ext_w);
+                            extend_polyline_edge_equally(&mut vol1, k, ext_w);
+                        }
+                        for &k in &[1_usize, 3] {
+                            extend_polyline_edge_equally(&mut vol0, k, ext_h);
+                            extend_polyline_edge_equally(&mut vol1, k, ext_h);
+                        }
+
+                        joint_volumes[0] = Some(vol0);
+                        joint_volumes[1] = Some(vol1);
+                        joint_type = 11;
+
+                        return Some(WoodJoint {
+                            el_ids,
+                            face_ids,
+                            joint_type,
+                            joint_area,
+                            joint_lines,
+                            joint_volumes_pair_a_pair_b: joint_volumes,
+                        });
+                    } else {
+                        // ────── In-plane (type 12) ──────
+                        //
+                        // Compute two planes offset from the matched face
+                        // plane by ±half the element thickness, then form
+                        // two 4-plane loops (one per element) and intersect
+                        // each with the two end planes → 4 joint volumes.
+
+                        let d0 = 0.5
+                            * planes_0[0].origin().distance(
+                                &planes_0[1].projection(&planes_0[0].origin()),
+                                None,
+                            );
+                        let offset_plane_0 = planes_0[i].translate_by_normal(-d0);
+                        let offset_plane_1 = planes_0[i].translate_by_normal(d0);
+
+                        // Winding fix: if plane1[0] is farther from
+                        // plane0[0] than plane1[1] is, swap so the loop
+                        // goes around the joint consistently.
+                        let pt00 = planes_0[0].origin();
+                        let proj00 = planes_1[0].projection(&pt00);
+                        let proj01 = planes_1[1].projection(&pt00);
+                        let w0 = Point::distance(&pt00, &proj00, None);
+                        let w1 = Point::distance(&pt00, &proj01, None);
+                        let (p1_0, p1_1) = if w0 > w1 {
+                            (planes_1[1].clone(), planes_1[0].clone())
+                        } else {
+                            (planes_1[0].clone(), planes_1[1].clone())
+                        };
+
+                        let loop_planes_0: [Plane; 4] = [
+                            offset_plane_0.clone(),
+                            planes_0[0].clone(),
+                            offset_plane_1.clone(),
+                            planes_0[1].clone(),
+                        ];
+                        let loop_planes_1: [Plane; 4] = [
+                            offset_plane_0.clone(),
+                            p1_0,
+                            offset_plane_1.clone(),
+                            p1_1,
+                        ];
+
+                        let mut vol0 = plane_4planes(&pl_end0, &loop_planes_0)?;
+                        let mut vol1 = plane_4planes(&pl_end1, &loop_planes_0)?;
+                        let mut vol2 = plane_4planes(&pl_end0, &loop_planes_1)?;
+                        let mut vol3 = plane_4planes(&pl_end1, &loop_planes_1)?;
+
+                        for vol in [&mut vol0, &mut vol1, &mut vol2, &mut vol3].iter_mut() {
+                            for &k in &[0_usize, 2] {
+                                extend_polyline_edge_equally(vol, k, ext_w);
+                            }
+                            for &k in &[1_usize, 3] {
+                                extend_polyline_edge_equally(vol, k, ext_h);
+                            }
+                        }
+
+                        joint_volumes[0] = Some(vol0);
+                        joint_volumes[1] = Some(vol1);
+                        joint_volumes[2] = Some(vol2);
+                        joint_volumes[3] = Some(vol3);
+                        joint_type = 12;
+
+                        return Some(WoodJoint {
+                            el_ids,
+                            face_ids,
+                            joint_type,
+                            joint_area,
+                            joint_lines,
+                            joint_volumes_pair_a_pair_b: joint_volumes,
+                        });
+                    }
+                }
+            } else if joint_type == 1 {
+                // ────────────────────────────────────────────────────────
+                // TOP-SIDE (type 20)
+                // ────────────────────────────────────────────────────────
+                //
+                // The element with the higher face index is the male (its
+                // side face is what defines the joint axis). The female is
+                // the other element's top/bottom face. The joint volume is
+                // built by extruding the male's side-face quad (`joint_quads`)
+                // by an offset vector that spans the female's thickness.
+
+                let male_or_female = i > j; // true: male = element 0
+                let joint_line_for_volumes = if male_or_female {
+                    joint_line0.clone()
+                } else {
+                    joint_line1.clone()
+                };
+                joint_lines[0] = joint_line_for_volumes.clone();
+                joint_lines[1] = joint_line_for_volumes;
+
+                let plane0_0 = if male_or_female {
+                    planes_0[0].clone()
+                } else {
+                    planes_1[0].clone()
+                };
+                // Female collision plane (top of the female element).
+                let plane1_0 = if !male_or_female {
+                    planes_0[i].clone()
+                } else {
+                    planes_1[j].clone()
+                };
+                let other_idx = if !male_or_female {
+                    (i as i32 - 1).unsigned_abs() as usize
+                } else {
+                    (j as i32 - 1).unsigned_abs() as usize
+                };
+                let plane1_1 = if !male_or_female {
+                    planes_0[other_idx].clone()
+                } else {
+                    planes_1[other_idx].clone()
+                };
+                let quad_0_owned = if male_or_female {
+                    joint_quads0.clone()
+                } else {
+                    joint_quads1.clone()
+                };
+                let quad_0 = quad_0_owned?;
+
+                let mut offset_vector = get_orthogonal_vector_between_two_plane_pairs(
+                    &plane0_0,
+                    &plane1_0,
+                    &plane1_1,
+                )?;
+                if dir_set {
+                    if let Some(scaled) = scale_vector_to_distance_of_2planes(
+                        &dir,
+                        &plane1_0,
+                        &plane1_1,
+                    ) {
+                        offset_vector = scaled;
+                    }
+                }
+
+                // If the female (= top) element is element 0, swap so the
+                // joint library always sees the male first.
+                if !male_or_female {
+                    el_ids = (el_ids.1, el_ids.0);
+                    face_ids = (face_ids.1, face_ids.0);
+                }
+
+                let m_id = if male_or_female { 0 } else { 1 };
+                let f_id = if male_or_female { 1 } else { 0 };
+                let q0 = quad_0.get_point(0)?;
+                let q1 = quad_0.get_point(1)?;
+                let q2 = quad_0.get_point(2)?;
+                let q3 = quad_0.get_point(3)?;
+
+                let mk_quad = |a: &Point, b: &Point, ov: &Vector| -> Polyline {
+                    Polyline::new(vec![
+                        a.clone(),
+                        b.clone(),
+                        Point::new(b[0] + ov[0], b[1] + ov[1], b[2] + ov[2]),
+                        Point::new(a[0] + ov[0], a[1] + ov[1], a[2] + ov[2]),
+                        a.clone(),
+                    ])
+                };
+                let mut male_vol = mk_quad(&q0, &q1, &offset_vector);
+                let mut female_vol = mk_quad(&q3, &q2, &offset_vector);
+
+                for &k in &[0_usize, 2] {
+                    extend_polyline_edge_equally(&mut male_vol, k, ext_w);
+                    extend_polyline_edge_equally(&mut female_vol, k, ext_w);
+                }
+                for &k in &[1_usize, 3] {
+                    extend_polyline_edge_equally(&mut male_vol, k, ext_h);
+                    extend_polyline_edge_equally(&mut female_vol, k, ext_h);
+                }
+                joint_volumes[m_id] = Some(male_vol);
+                joint_volumes[f_id] = Some(female_vol);
+                joint_type = 20;
+
+                return Some(WoodJoint {
+                    el_ids,
+                    face_ids,
+                    joint_type,
+                    joint_area,
+                    joint_lines,
+                    joint_volumes_pair_a_pair_b: joint_volumes,
+                });
+            } else {
+                // ────────────────────────────────────────────────────────
+                // TOP-TOP (type 40)
+                // ────────────────────────────────────────────────────────
+                //
+                // Build the bounding rectangle of the joint area in the
+                // shared plane, then translate it ±thickness along each
+                // element's normal to form two extruded slabs. The four
+                // corners of those slabs are reorganised into two
+                // rectangles matching the wood::joint_lib convention.
+
+                let rect = Polyline::bounding_rectangle(&joint_area)?;
+                let mut vol_a = rect.clone();
+                let mut vol_b = rect;
+
+                // Movement direction (insertion vector if available, else
+                // the face normal). The C++ flips the sign twice, leaving
+                // dir0 in the original direction and dir1 = -dir0.
+                let mut dir0 = if dir_set {
+                    if i < insertion_vectors_0.len() {
+                        insertion_vectors_0[i].clone()
+                    } else {
+                        planes_0[i].z_axis()
+                    }
+                } else {
+                    planes_0[i].z_axis()
+                };
+                dir0.normalize_self();
+                let dir1_pre = Vector::new(-dir0[0], -dir0[1], -dir0[2]);
+                // After both negations the C++ ends up with `dir0 *= -1`
+                // and `dir1 *= -1`, i.e. dir0 flipped and dir1 = +dir0.
+                let dir0 = Vector::new(-dir0[0], -dir0[1], -dir0[2]);
+                let dir1 = Vector::new(-dir1_pre[0], -dir1_pre[1], -dir1_pre[2]);
+
+                // Element thicknesses across the matched face.
+                let next_plane_0 = if i == 0 { 1 } else { 0 };
+                let next_plane_1 = if j == 0 { 1 } else { 0 };
+                let dist_0 = planes_0[i]
+                    .origin()
+                    .distance(&planes_0[next_plane_0].projection(&planes_0[i].origin()), None);
+                let dist_1 = planes_1[j]
+                    .origin()
+                    .distance(&planes_1[next_plane_1].projection(&planes_1[j].origin()), None);
+                let dir0 =
+                    Vector::new(dir0[0] * dist_0, dir0[1] * dist_0, dir0[2] * dist_0);
+                let dir1 =
+                    Vector::new(dir1[0] * dist_1, dir1[1] * dist_1, dir1[2] * dist_1);
+
+                // Translate the rectangles.
+                for k in 0..vol_a.point_count() {
+                    let p = vol_a.get_point(k).unwrap();
+                    vol_a.set_point(
+                        k,
+                        &Point::new(p[0] + dir0[0], p[1] + dir0[1], p[2] + dir0[2]),
+                    );
+                }
+                for k in 0..vol_b.point_count() {
+                    let p = vol_b.get_point(k).unwrap();
+                    vol_b.set_point(
+                        k,
+                        &Point::new(p[0] + dir1[0], p[1] + dir1[1], p[2] + dir1[2]),
+                    );
+                }
+
+                // Reformat into the two-rectangle convention used by the
+                // joint library: temp0 = (a[0], a[1], b[1], b[0], a[0]),
+                // temp1 = (a[3], a[2], b[2], b[3], a[3]).
+                let a0 = vol_a.get_point(0)?;
+                let a1 = vol_a.get_point(1)?;
+                let a2 = vol_a.get_point(2)?;
+                let a3 = vol_a.get_point(3)?;
+                let b0 = vol_b.get_point(0)?;
+                let b1 = vol_b.get_point(1)?;
+                let b2 = vol_b.get_point(2)?;
+                let b3 = vol_b.get_point(3)?;
+
+                let mut temp0 = Polyline::new(vec![
+                    a0.clone(),
+                    a1.clone(),
+                    b1.clone(),
+                    b0.clone(),
+                    a0.clone(),
+                ]);
+                let mut temp1 = Polyline::new(vec![
+                    a3.clone(),
+                    a2.clone(),
+                    b2.clone(),
+                    b3.clone(),
+                    a3.clone(),
+                ]);
+
+                for &k in &[0_usize, 2] {
+                    extend_polyline_edge_equally(&mut temp0, k, ext_w);
+                    extend_polyline_edge_equally(&mut temp1, k, ext_w);
+                }
+                for &k in &[1_usize, 3] {
+                    extend_polyline_edge_equally(&mut temp0, k, ext_h);
+                    extend_polyline_edge_equally(&mut temp1, k, ext_h);
+                }
+
+                joint_volumes[0] = Some(temp0);
+                joint_volumes[1] = Some(temp1);
+                joint_type = 40;
+
+                return Some(WoodJoint {
+                    el_ids,
+                    face_ids,
+                    joint_type,
+                    joint_area,
+                    joint_lines,
+                    joint_volumes_pair_a_pair_b: joint_volumes,
+                });
+            }
+        }
+    }
+    None
+}
+
+pub fn adjacency_search(elements: &mut [crate::element::Element], inflate: f64) -> Vec<i32> {
+    use crate::obb::OBB;
+    use crate::bvh::BVH;
+
+    let n = elements.len();
+    let mut obbs: Vec<OBB> = Vec::with_capacity(n);
+    for elem in elements.iter_mut() {
+        let mut pts: Vec<Point> = Vec::new();
+        for pl in elem.polylines() {
+            for p in pl.get_points() { pts.push(p); }
+        }
+        obbs.push(OBB::from_points(&pts, inflate));
+    }
+
+    let mut bvh = BVH::new();
+    bvh.build(&obbs);
+    let mut adjacency: Vec<i32> = Vec::new();
+    for i in 0..n {
+        let hits = bvh.query_aabb(&obbs[i]);
+        for j in hits {
+            if (i as i32) < (j as i32) && obbs[i].collides_with(&obbs[j]) {
+                adjacency.push(i as i32);
+                adjacency.push(j as i32);
+                adjacency.push(-1);
+                adjacency.push(-1);
+            }
+        }
+    }
+    adjacency
+}

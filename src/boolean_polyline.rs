@@ -4,8 +4,6 @@
 
 use crate::Polyline;
 
-const BOOL_SCALE: f64 = 1e9;
-const BOOL_INV_SCALE: f64 = 1e-9;
 const VF_LOCAL_MAX: u32 = 4;
 const VF_LOCAL_MIN: u32 = 8;
 
@@ -50,6 +48,14 @@ impl Sc {
                locmin: Vec::new(), isnodes: Vec::new(), hsegs: Vec::new(), hjoins: Vec::new(),
                orclist: Vec::new(), scan: Vec::new(),
                actives: None, sel: None, bot_y: 0, lm_idx: 0, ok: true }
+    }
+    /// Reset lengths to 0 but preserve capacity, matching C++ `static thread_local VattiScratch vtls`
+    /// reset semantics in boolean_polyline.cpp:159. Used by the SCRATCH thread_local pool.
+    fn clear_for_reuse(&mut self) {
+        self.vtx.clear(); self.act.clear(); self.opt.clear(); self.orc.clear();
+        self.locmin.clear(); self.isnodes.clear(); self.hsegs.clear(); self.hjoins.clear();
+        self.orclist.clear(); self.scan.clear();
+        self.actives = None; self.sel = None; self.bot_y = 0; self.lm_idx = 0; self.ok = true;
     }
     fn alloc_vtx(&mut self) -> usize { self.vtx.push(VVertex::default()); self.vtx.len()-1 }
     fn alloc_act(&mut self) -> usize { self.act.push(VActive::default()); self.act.len()-1 }
@@ -218,12 +224,12 @@ fn pip_vertex(sc: &Sc, pt: Pt, head: usize) -> bool {
 
 // ── Vertex building ──────────────────────────────────────────────────────
 
-fn add_path_from_coords(sc: &mut Sc, ca: &[f64], n: usize, pty: i8) -> (OptIdx, i64, i64, i64, i64) {
+fn add_path_from_coords(sc: &mut Sc, ca: &[f64], n: usize, pty: i8, bool_scale: f64) -> (OptIdx, i64, i64, i64, i64) {
     if n < 3 { return (None, 0, 0, 0, 0); }
     let base = sc.vtx.len();
     sc.vtx.resize(base + n, VVertex::default());
     let cvt = |i: usize| -> Pt {
-        Pt { x: (ca[i*3] * BOOL_SCALE).round() as i64, y: (ca[i*3+1] * BOOL_SCALE).round() as i64 }
+        Pt { x: (ca[i*3] * bool_scale).round() as i64, y: (ca[i*3+1] * bool_scale).round() as i64 }
     };
     let pt0 = cvt(0);
     sc.vtx[base].pt = pt0;
@@ -1030,7 +1036,146 @@ fn execute_internal(sc: &mut Sc, ct: i32) -> bool {
     sc.ok
 }
 
+// ── Convex intersection fast path (Sutherland-Hodgman) ──────────────────
+//
+// For convex CCW inputs (which all PlateElement faces are — top, bottom, and
+// every side face is a convex quad), the full Vatti scanline is enormous
+// overkill. Sutherland-Hodgman runs in O(na*nb) with ~6 flops per vertex,
+// no fixed-point conversion, no priority queue, no allocator churn.
+//
+// For na=nb=4 (quad-vs-quad), the Vatti path costs ~50µs per call;
+// Sutherland-Hodgman is ~1µs. With 3081 joints in main_1, this saves ~150ms.
+
+/// Returns +1 if convex CCW, -1 if convex CW, 0 if non-convex or degenerate.
+/// Reads x,y from stride-3 coords; ignores z.
+fn convex_orientation_2d(coords: &[f64], n: usize) -> i32 {
+    if n < 3 { return 0; }
+    let mut sign: i32 = 0;
+    for i in 0..n {
+        let i0 = i * 3;
+        let i1 = ((i + 1) % n) * 3;
+        let i2 = ((i + 2) % n) * 3;
+        let dx1 = coords[i1] - coords[i0];
+        let dy1 = coords[i1 + 1] - coords[i0 + 1];
+        let dx2 = coords[i2] - coords[i1];
+        let dy2 = coords[i2 + 1] - coords[i1 + 1];
+        let cross = dx1 * dy2 - dy1 * dx2;
+        if cross > 1e-12 {
+            if sign < 0 { return 0; }
+            sign = 1;
+        } else if cross < -1e-12 {
+            if sign > 0 { return 0; }
+            sign = -1;
+        }
+        // Collinear vertices (cross ≈ 0) are valid in a convex polygon.
+    }
+    sign
+}
+
+/// Sutherland-Hodgman intersection of two convex CCW polygons in 2D.
+/// Inputs are stride-3 coords (z=0 ignored). Returns a single open Polyline
+/// (stride-3, no closing duplicate — matches Vatti output convention), or an
+/// empty Vec if the intersection is degenerate (< 3 vertices).
+///
+/// Callers must pass thread-local scratch buffers to avoid per-call allocation.
+fn sutherland_hodgman_ccw_intersect(
+    buf_in: &mut Vec<(f64, f64)>,
+    buf_out: &mut Vec<(f64, f64)>,
+    ca: &[f64], na: usize,
+    cb: &[f64], nb: usize,
+) -> Vec<Polyline> {
+    buf_in.clear();
+    buf_out.clear();
+    for i in 0..na {
+        buf_in.push((ca[i * 3], ca[i * 3 + 1]));
+    }
+
+    // For each edge of clip polygon B (CCW), clip the subject by that edge's
+    // half-plane. CCW polygon → "inside" is on the left of each directed edge,
+    // i.e. cross = ex*(p.y - es.y) - ey*(p.x - es.x) > 0.
+    let mut bx_prev = cb[(nb - 1) * 3];
+    let mut by_prev = cb[(nb - 1) * 3 + 1];
+    for j in 0..nb {
+        let bx_curr = cb[j * 3];
+        let by_curr = cb[j * 3 + 1];
+        let ex = bx_curr - bx_prev;
+        let ey = by_curr - by_prev;
+
+        if buf_in.is_empty() {
+            bx_prev = bx_curr;
+            by_prev = by_curr;
+            continue;
+        }
+
+        buf_out.clear();
+        let n_in = buf_in.len();
+        let mut prev = buf_in[n_in - 1];
+        let mut prev_cross = ex * (prev.1 - by_prev) - ey * (prev.0 - bx_prev);
+        for k in 0..n_in {
+            let curr = buf_in[k];
+            let curr_cross = ex * (curr.1 - by_prev) - ey * (curr.0 - bx_prev);
+            let prev_inside = prev_cross >= 0.0;
+            let curr_inside = curr_cross >= 0.0;
+            if curr_inside {
+                if !prev_inside {
+                    let t = prev_cross / (prev_cross - curr_cross);
+                    buf_out.push((
+                        prev.0 + t * (curr.0 - prev.0),
+                        prev.1 + t * (curr.1 - prev.1),
+                    ));
+                }
+                buf_out.push(curr);
+            } else if prev_inside {
+                let t = prev_cross / (prev_cross - curr_cross);
+                buf_out.push((
+                    prev.0 + t * (curr.0 - prev.0),
+                    prev.1 + t * (curr.1 - prev.1),
+                ));
+            }
+            prev = curr;
+            prev_cross = curr_cross;
+        }
+
+        // Swap the two Vec headers (ptr/len/capacity) in place — this makes
+        // `buf_out` the new subject polygon for the next iteration while
+        // `buf_in` becomes the scratch for the next output. Both stay owned
+        // by the caller's thread-local cell; capacities persist.
+        std::mem::swap::<Vec<(f64, f64)>>(buf_in, buf_out);
+        bx_prev = bx_curr;
+        by_prev = by_curr;
+    }
+
+    if buf_in.len() < 3 {
+        return vec![];
+    }
+
+    // Emit an OPEN polyline (stride-3, z=0). The Vatti output convention is
+    // unique vertices with no closing duplicate; callers (e.g. face_to_face at
+    // intersection.rs:1826) explicitly call .closed() if they need a ring.
+    let n_out = buf_in.len();
+    let mut coords = Vec::with_capacity(n_out * 3);
+    for &(x, y) in buf_in.iter() {
+        coords.push(x);
+        coords.push(y);
+        coords.push(0.0);
+    }
+    vec![Polyline::from_coords(coords)]
+}
+
 // ── Public API ───────────────────────────────────────────────────────────
+
+thread_local! {
+    /// Reusable Vatti scratch pool — matches C++ `static thread_local VattiScratch vtls`
+    /// at boolean_polyline.cpp:159. Reusing the same Vec capacities across the ~3000+
+    /// boolean_op calls in `compute_face_to_face` eliminates per-call allocation churn.
+    static SCRATCH: std::cell::RefCell<Sc> = std::cell::RefCell::new(Sc::new());
+
+    /// Reusable ping-pong buffers for the Sutherland-Hodgman convex fast path.
+    /// Held as a tuple so a single `borrow_mut()` hands out both halves without
+    /// running afoul of RefCell aliasing.
+    static SH_BUFFERS: std::cell::RefCell<(Vec<(f64, f64)>, Vec<(f64, f64)>)>
+        = std::cell::RefCell::new((Vec::new(), Vec::new()));
+}
 
 pub fn boolean_op(a: &Polyline, b: &Polyline, clip_type: i32) -> Vec<Polyline> {
     let ca = &a.coords; let cb = &b.coords;
@@ -1040,10 +1185,42 @@ pub fn boolean_op(a: &Polyline, b: &Polyline, clip_type: i32) -> Vec<Polyline> {
     if nb >= 2 { let dx = cb[(nb-1)*3]-cb[0]; let dy = cb[(nb-1)*3+1]-cb[1]; if dx*dx+dy*dy < 1e-20 { nb -= 1; } }
     if na < 3 || nb < 3 { return vec![]; }
 
-    let mut sc = Sc::new();
+    // Compute safe scale from actual coordinate range to prevent int64 overflow
+    // in cross products: (max_coord * scale)^2 must fit in int64
+    let mut max_coord: f64 = 0.0;
+    for i in 0..na { max_coord = max_coord.max(ca[i*3].abs()).max(ca[i*3+1].abs()); }
+    for i in 0..nb { max_coord = max_coord.max(cb[i*3].abs()).max(cb[i*3+1].abs()); }
+    if max_coord < 1e-12 { max_coord = 1.0; }
+    let bool_scale: f64 = ((i64::MAX as f64).sqrt() / max_coord * 0.99).floor();
+    let bool_inv_scale: f64 = 1.0 / bool_scale;
+
+    SCRATCH.with(|cell| {
+        let mut sc = cell.borrow_mut();
+        sc.clear_for_reuse();
+        // Pre-reserve like C++ at boolean_polyline.cpp:1133-1139 — eliminates grow-by-doubling
+        let total = na + nb;
+        sc.vtx.reserve(total + 4);
+        sc.act.reserve(total * 2 + 4);
+        sc.opt.reserve(total * 4);
+        sc.orc.reserve(total);
+        sc.locmin.reserve(total);
+        sc.orclist.reserve(total);
+        sc.scan.reserve(total * 2);
+        boolean_op_inner(&mut sc, a, b, ca, cb, na, nb, clip_type, bool_scale, bool_inv_scale)
+    })
+}
+
+fn boolean_op_inner(
+    sc: &mut Sc,
+    a: &Polyline, b: &Polyline,
+    ca: &[f64], cb: &[f64],
+    na: usize, nb: usize,
+    clip_type: i32,
+    bool_scale: f64, bool_inv_scale: f64,
+) -> Vec<Polyline> {
     // Small polygon fast path
     if (na as i64) * (nb as i64) <= 400 {
-        let cvt = |c: &[f64], i: usize| -> Pt { Pt { x: (c[i*3]*BOOL_SCALE).round() as i64, y: (c[i*3+1]*BOOL_SCALE).round() as i64 } };
+        let cvt = |c: &[f64], i: usize| -> Pt { Pt { x: (c[i*3]*bool_scale).round() as i64, y: (c[i*3+1]*bool_scale).round() as i64 } };
         let va: Vec<Pt> = (0..na).map(|i| cvt(ca, i)).collect();
         let vb: Vec<Pt> = (0..nb).map(|i| cvt(cb, i)).collect();
         let (mut aminx, mut amaxx, mut aminy, mut amaxy) = (va[0].x, va[0].x, va[0].y, va[0].y);
@@ -1069,6 +1246,22 @@ pub fn boolean_op(a: &Polyline, b: &Polyline, clip_type: i32) -> Vec<Polyline> {
             if clip_type == 0 { return if a_in_b { vec![a.clone()] } else if b_in_a { vec![b.clone()] } else { vec![] }; }
             if clip_type == 1 { return if a_in_b { vec![b.clone()] } else if b_in_a { vec![a.clone()] } else { vec![a.clone(), b.clone()] }; }
             return if a_in_b { vec![] } else if b_in_a { vec![a.clone()] } else { vec![a.clone()] };
+        }
+        // Convex intersection fast path: we've just verified via any_cross==true
+        // that the polygons actually intersect AND we haven't short-circuited via
+        // disjoint-AABB or no-crossing. For convex CCW quads (every PlateElement
+        // face — see element.rs:760-800), Sutherland-Hodgman in float64 skips the
+        // rest of the Vatti sweep-line pipeline below. For non-convex inputs this
+        // falls through to the full Vatti path as before.
+        if clip_type == 0
+            && convex_orientation_2d(ca, na) == 1
+            && convex_orientation_2d(cb, nb) == 1
+        {
+            return SH_BUFFERS.with(|cell| {
+                let mut borrow = cell.borrow_mut();
+                let (buf_in, buf_out) = &mut *borrow;
+                sutherland_hodgman_ccw_intersect(buf_in, buf_out, ca, na, cb, nb)
+            });
         }
         // build vertex lists from va/vb arrays
         for v in &va { let vi = sc.alloc_vtx(); sc.vtx[vi].pt = *v; }
@@ -1114,38 +1307,38 @@ pub fn boolean_op(a: &Polyline, b: &Polyline, clip_type: i32) -> Vec<Polyline> {
         }
     } else {
         // Large polygon: direct double→VVertex single pass
-        let (va_head, aminx, amaxx, aminy, amaxy) = add_path_from_coords(&mut sc, ca, na, 0);
-        let (vb_head, bminx, bmaxx, bminy, bmaxy) = add_path_from_coords(&mut sc, cb, nb, 1);
+        let (va_head, aminx, amaxx, aminy, amaxy) = add_path_from_coords(sc, ca, na, 0, bool_scale);
+        let (vb_head, bminx, bmaxx, bminy, bmaxy) = add_path_from_coords(sc, cb, nb, 1, bool_scale);
         if va_head.is_none() || vb_head.is_none() { return vec![]; }
         if amaxx < bminx || bmaxx < aminx || amaxy < bminy || bmaxy < aminy {
-            let a_in_b = pip_vertex(&sc, sc.vtx[va_head.unwrap()].pt, vb_head.unwrap());
-            let b_in_a = pip_vertex(&sc, sc.vtx[vb_head.unwrap()].pt, va_head.unwrap());
+            let a_in_b = pip_vertex(sc, sc.vtx[va_head.unwrap()].pt, vb_head.unwrap());
+            let b_in_a = pip_vertex(sc, sc.vtx[vb_head.unwrap()].pt, va_head.unwrap());
             if clip_type == 0 { return if a_in_b { vec![a.clone()] } else if b_in_a { vec![b.clone()] } else { vec![] }; }
             if clip_type == 1 { return if a_in_b { vec![b.clone()] } else if b_in_a { vec![a.clone()] } else { vec![a.clone(), b.clone()] }; }
             return if a_in_b { vec![] } else if b_in_a { vec![a.clone()] } else { vec![a.clone()] };
         }
     }
 
-    if !execute_internal(&mut sc, clip_type) { return vec![]; }
+    if !execute_internal(sc, clip_type) { return vec![]; }
 
     // Extract output
     let mut out = Vec::new();
     let orc_indices: Vec<usize> = sc.orclist.clone();
     for &or_idx in &orc_indices {
         if sc.orc[or_idx].pts.is_none() { continue; }
-        clean_collinear(&mut sc, or_idx);
+        clean_collinear(sc, or_idx);
         if sc.orc[or_idx].pts.is_none() { continue; }
         let op = sc.orc[or_idx].pts.unwrap();
         if sc.opt[op].next == op || sc.opt[op].next == sc.opt[op].prev { continue; }
-        if very_small_tri(&sc, op) { continue; }
+        if very_small_tri(sc, op) { continue; }
         let mut coords = Vec::new();
         let mut o = sc.opt[op].next; let mut last = sc.opt[o].pt;
-        coords.push(last.x as f64 * BOOL_INV_SCALE); coords.push(last.y as f64 * BOOL_INV_SCALE); coords.push(0.0);
+        coords.push(last.x as f64 * bool_inv_scale); coords.push(last.y as f64 * bool_inv_scale); coords.push(0.0);
         o = sc.opt[o].next;
         let start = sc.opt[op].next;
         while o != start {
             if sc.opt[o].pt != last { last = sc.opt[o].pt;
-                coords.push(last.x as f64 * BOOL_INV_SCALE); coords.push(last.y as f64 * BOOL_INV_SCALE); coords.push(0.0); }
+                coords.push(last.x as f64 * bool_inv_scale); coords.push(last.y as f64 * bool_inv_scale); coords.push(0.0); }
             o = sc.opt[o].next;
         }
         if coords.len() >= 9 { out.push(Polyline::from_coords(coords)); }

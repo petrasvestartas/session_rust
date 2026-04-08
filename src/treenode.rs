@@ -3,13 +3,21 @@ use std::cell::RefCell;
 use std::fmt;
 use std::rc::{Rc, Weak};
 
+
+/// A node of a tree data structure
 #[derive(Debug)]
 pub struct TreeNode {
+    /// Lazily generated unique identifier
     guid: std::sync::OnceLock<String>,
+    /// Node identifier/name. For geometry nodes, this is the geometry's GUID
     pub name: String,
+    /// Optional display color, used for layer nodes
     pub color: Option<[u8; 4]>,
+    /// Owning pointers to children
     children: Vec<Rc<RefCell<TreeNode>>>,
+    /// Non-owning pointer to parent
     parent: Option<Weak<RefCell<TreeNode>>>,
+    /// Self weak reference for parent setup
     weak_self: Weak<RefCell<TreeNode>>,
 }
 
@@ -52,6 +60,7 @@ pub(crate) struct TreeNodeSerde {
 }
 
 impl TreeNode {
+    /// Default / named constructor — returns Rc<RefCell<TreeNode>> for shared ownership
     pub fn new(name: &str) -> Rc<RefCell<TreeNode>> {
         let node = Rc::new(RefCell::new(TreeNode {
             guid: std::sync::OnceLock::new(),
@@ -65,27 +74,33 @@ impl TreeNode {
         node
     }
 
+    /// Lazy GUID accessor
     pub fn guid(&self) -> &str {
         self.guid.get_or_init(|| uuid::Uuid::new_v4().to_string())
     }
 
+    /// Set the GUID explicitly
     pub fn set_guid(&self, g: String) {
         let _ = self.guid.set(g);
     }
 
+    /// Optional display color
     pub fn color(&self) -> Option<[u8; 4]> {
         self.color
     }
 
+    /// Set the display color from RGBA components
     pub fn set_color(&mut self, r: u8, g: u8, b: u8, a: u8) {
         self.color = Some([r, g, b, a]);
     }
 
+    /// Add a child node to this node
     pub fn add(&mut self, child: &Rc<RefCell<TreeNode>>) {
         child.borrow_mut().parent = Some(self.weak_self.clone());
         self.children.push(Rc::clone(child));
     }
 
+    /// Remove a child node, returning true if it was found and removed
     pub fn remove(&mut self, child: &Rc<RefCell<TreeNode>>) -> bool {
         let child_guid = child.borrow().guid().to_string();
         if let Some(pos) = self.children.iter().position(|c| c.borrow().guid() == child_guid) {
@@ -97,22 +112,27 @@ impl TreeNode {
         }
     }
 
+    /// Parent node, or None if this is the root
     pub fn parent(&self) -> Option<Rc<RefCell<TreeNode>>> {
         self.parent.as_ref()?.upgrade()
     }
 
+    /// Direct children of this node
     pub fn children(&self) -> Vec<Rc<RefCell<TreeNode>>> {
         self.children.iter().map(Rc::clone).collect()
     }
 
+    /// True if this node has no parent
     pub fn is_root(&self) -> bool {
         self.parent.is_none()
     }
 
+    /// True if this node has no children
     pub fn is_leaf(&self) -> bool {
         self.children.is_empty()
     }
 
+    /// All ancestors from immediate parent up to root
     pub fn ancestors(&self) -> Vec<Rc<RefCell<TreeNode>>> {
         let mut result = Vec::new();
         let mut current = self.parent();
@@ -124,6 +144,7 @@ impl TreeNode {
         result
     }
 
+    /// All descendants of this node, depth-first
     pub fn descendants(&self) -> Vec<Rc<RefCell<TreeNode>>> {
         let mut result = Vec::new();
         for child in &self.children {
@@ -133,6 +154,7 @@ impl TreeNode {
         result
     }
 
+    /// All nodes in the subtree rooted at this node (self + descendants)
     pub fn nodes(&self) -> Vec<Rc<RefCell<TreeNode>>> {
         let mut result = vec![self.weak_self.upgrade().unwrap()];
         for child in &self.children {
@@ -141,6 +163,7 @@ impl TreeNode {
         result
     }
 
+    /// Get the root of the tree this node belongs to
     pub fn root(&self) -> Rc<RefCell<TreeNode>> {
         if let Some(parent) = self.parent() {
             parent.borrow().root()
@@ -149,6 +172,7 @@ impl TreeNode {
         }
     }
 
+    /// Traverse from this node ("depthfirst"|"breadthfirst", "preorder"|"postorder")
     pub fn traverse(&self, strategy: &str, order: &str) -> Vec<Rc<RefCell<TreeNode>>> {
         match strategy {
             "depthfirst" => self.depth_first_traverse(order),
@@ -196,11 +220,13 @@ impl TreeNode {
         result
     }
 
+    /// Serialize to JSON string
     pub fn jsondump(&self) -> Result<String, Box<dyn std::error::Error>> {
         let serde_node = self.to_serde();
         crate::encoders::sorted_json_string(&serde_node)
     }
 
+    /// Deserialize from a JSON file path
     pub fn jsonload(path: &str) -> Result<Rc<RefCell<TreeNode>>, Box<dyn std::error::Error>> {
         let json = std::fs::read_to_string(path)?;
         let serde_node: TreeNodeSerde = serde_json::from_str(&json)?;

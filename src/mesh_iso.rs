@@ -1,4 +1,5 @@
 use crate::{OBB, Mesh, Point};
+use crate::tolerance::PI;
 
 static EDGE_VERTICES: [[usize; 2]; 12] = [
     [0,1],[1,2],[2,3],[3,0],
@@ -483,7 +484,7 @@ impl MeshIso {
                      isovalue: f64, period: f64,
                      mode: TpmsMode, thickness: f64) -> Mesh {
         let fn_tpms = move |x: f64, y: f64, z: f64| -> f64 {
-            MeshIso::eval(tpms_type, x, y, z, period / (2.0 * std::f64::consts::PI))
+            MeshIso::eval(tpms_type, x, y, z, period / (2.0 * PI))
         };
         if mode == TpmsMode::SOLID {
             return marching_cubes(&fn_tpms, box_, nx, ny, nz, isovalue);

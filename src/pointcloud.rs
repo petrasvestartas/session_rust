@@ -4,19 +4,21 @@ use std::fmt;
 use std::ops::{Add, AddAssign, Sub, SubAssign};
 
 /// A point cloud with coordinates, normals, and colors stored as flat arrays.
-///
-/// Internally stores data as flat arrays for efficient serialization:
-/// - _coords: [x0, y0, z0, x1, y1, z1, ...]
-/// - _colors: [r0, g0, b0, a0, r1, g1, b1, a1, ...]
-/// - _normals: [nx0, ny0, nz0, nx1, ny1, nz1, ...]
 #[derive(Debug, Clone)]
 pub struct PointCloud {
+    /// Lazily generated unique identifier
     guid: std::sync::OnceLock<String>,
+    /// Human-readable name
     pub name: String,
+    /// Point size for rendering
     pub point_size: f64,
+    /// Transformation matrix applied by transform()/transformed()
     pub xform: Xform,
+    /// Flat coords [x0, y0, z0, x1, y1, z1, ...]
     _coords: Vec<f64>,
+    /// Flat colors [r0, g0, b0, a0, ...]
     _colors: Vec<i32>,
+    /// Flat normals [nx0, ny0, nz0, ...]
     _normals: Vec<f64>,
 }
 
@@ -35,7 +37,7 @@ impl Default for PointCloud {
 }
 
 impl PointCloud {
-    /// Create a new PointCloud from vectors of Point, Vector, and Color.
+    /// Constructor with points, normals, and colors
     pub fn new(points: Vec<Point>, normals: Vec<Vector>, colors: Vec<Color>) -> Self {
         let mut pc = Self::default();
 
@@ -64,7 +66,7 @@ impl PointCloud {
         pc
     }
 
-    /// Create from flat arrays.
+    /// Create from flat arrays of coords, colors, and normals
     pub fn from_coords(coords: Vec<f64>, colors: Vec<i32>, normals: Vec<f64>) -> Self {
         Self {
             guid: std::sync::OnceLock::new(),
@@ -77,10 +79,12 @@ impl PointCloud {
         }
     }
 
+    /// Lazy GUID accessor
     pub fn guid(&self) -> &str {
         self.guid.get_or_init(|| uuid::Uuid::new_v4().to_string())
     }
 
+    /// Set the GUID explicitly
     pub fn set_guid(&self, g: String) {
         let _ = self.guid.set(g);
     }
@@ -89,23 +93,28 @@ impl PointCloud {
     // Point Access
     ///////////////////////////////////////////////////////////////////////////////////////////
 
+    /// Number of points
     pub fn point_count(&self) -> usize {
         self._coords.len() / 3
     }
 
+    /// Alias for point_count()
     pub fn len(&self) -> usize {
         self.point_count()
     }
 
+    /// True when the cloud has no points
     pub fn is_empty(&self) -> bool {
         self._coords.is_empty()
     }
 
+    /// Get point at index
     pub fn get_point(&self, index: usize) -> Point {
         let idx = index * 3;
         Point::new(self._coords[idx], self._coords[idx + 1], self._coords[idx + 2])
     }
 
+    /// Set point at index
     pub fn set_point(&mut self, index: usize, point: &Point) {
         let idx = index * 3;
         self._coords[idx] = point[0];
@@ -113,12 +122,14 @@ impl PointCloud {
         self._coords[idx + 2] = point[2];
     }
 
+    /// Append a point to the cloud
     pub fn add_point(&mut self, point: &Point) {
         self._coords.push(point[0]);
         self._coords.push(point[1]);
         self._coords.push(point[2]);
     }
 
+    /// Get all points as a vector
     pub fn get_points(&self) -> Vec<Point> {
         let mut points = Vec::with_capacity(self.point_count());
         for i in 0..self.point_count() {
@@ -132,10 +143,12 @@ impl PointCloud {
     // Color Access
     ///////////////////////////////////////////////////////////////////////////////////////////
 
+    /// Number of colors
     pub fn color_count(&self) -> usize {
         self._colors.len() / 4
     }
 
+    /// Get color at index
     pub fn get_color(&self, index: usize) -> Color {
         let idx = index * 4;
         Color::new(
@@ -146,6 +159,7 @@ impl PointCloud {
         )
     }
 
+    /// Set color at index
     pub fn set_color(&mut self, index: usize, color: &Color) {
         let idx = index * 4;
         self._colors[idx] = color.r as i32;
@@ -154,6 +168,7 @@ impl PointCloud {
         self._colors[idx + 3] = color.a as i32;
     }
 
+    /// Append a color to the cloud
     pub fn add_color(&mut self, color: &Color) {
         self._colors.push(color.r as i32);
         self._colors.push(color.g as i32);
@@ -161,6 +176,7 @@ impl PointCloud {
         self._colors.push(color.a as i32);
     }
 
+    /// Get all colors as a vector
     pub fn get_colors(&self) -> Vec<Color> {
         let mut colors = Vec::with_capacity(self.color_count());
         for i in 0..self.color_count() {
@@ -179,15 +195,18 @@ impl PointCloud {
     // Normal Access
     ///////////////////////////////////////////////////////////////////////////////////////////
 
+    /// Number of normals
     pub fn normal_count(&self) -> usize {
         self._normals.len() / 3
     }
 
+    /// Get normal at index
     pub fn get_normal(&self, index: usize) -> Vector {
         let idx = index * 3;
         Vector::new(self._normals[idx], self._normals[idx + 1], self._normals[idx + 2])
     }
 
+    /// Set normal at index
     pub fn set_normal(&mut self, index: usize, normal: &Vector) {
         let idx = index * 3;
         self._normals[idx] = normal[0];
@@ -195,12 +214,14 @@ impl PointCloud {
         self._normals[idx + 2] = normal[2];
     }
 
+    /// Append a normal to the cloud
     pub fn add_normal(&mut self, normal: &Vector) {
         self._normals.push(normal[0]);
         self._normals.push(normal[1]);
         self._normals.push(normal[2]);
     }
 
+    /// Get all normals as a vector
     pub fn get_normals(&self) -> Vec<Vector> {
         let mut normals = Vec::with_capacity(self.normal_count());
         for i in 0..self.normal_count() {
@@ -214,10 +235,12 @@ impl PointCloud {
     // String Representations
     ///////////////////////////////////////////////////////////////////////////////////////////
 
+    /// Simple string form (like Python __str__)
     pub fn str(&self) -> String {
         format!("{} points", self.point_count())
     }
 
+    /// Detailed representation (like Python __repr__)
     pub fn repr(&self) -> String {
         format!(
             "PointCloud({}, {} points, {} colors, {} normals)",
@@ -232,6 +255,7 @@ impl PointCloud {
     // Duplicate and Equality
     ///////////////////////////////////////////////////////////////////////////////////////////
 
+    /// Deep copy this cloud with a new guid
     pub fn duplicate(&self) -> Self {
         let mut result = self.clone();
         result.guid = std::sync::OnceLock::new();
@@ -242,6 +266,7 @@ impl PointCloud {
     // Transformation
     ///////////////////////////////////////////////////////////////////////////////////////////
 
+    /// Apply this cloud's xform in place
     pub fn transform(&mut self) {
         for i in 0..self.point_count() {
             let idx = i * 3;
@@ -266,6 +291,7 @@ impl PointCloud {
         self.xform = Xform::identity();
     }
 
+    /// Return a copy of this cloud with its xform applied
     pub fn transformed(&self) -> Self {
         let mut result = self.clone();
         result.transform();
@@ -276,28 +302,34 @@ impl PointCloud {
     // JSON Serialization
     ///////////////////////////////////////////////////////////////////////////////////////////
 
+    /// Serialize to JSON string
     pub fn jsondump(&self) -> Result<String, Box<dyn std::error::Error>> {
         crate::encoders::sorted_json_string(self)
     }
 
+    /// Deserialize from JSON string
     pub fn jsonload(json_str: &str) -> Result<Self, Box<dyn std::error::Error>> {
         Ok(serde_json::from_str(json_str)?)
     }
 
+    /// Convert to JSON string (infallible fallback)
     pub fn json_dumps(&self) -> String {
         self.jsondump().unwrap_or_default()
     }
 
+    /// Load from JSON string (infallible fallback)
     pub fn json_loads(json_string: &str) -> Self {
         Self::jsonload(json_string).unwrap_or_else(|_| Self::default())
     }
 
+    /// Write JSON to file
     pub fn json_dump(&self, filepath: &str) -> Result<(), Box<dyn std::error::Error>> {
         let json_str = self.jsondump()?;
         std::fs::write(filepath, json_str)?;
         Ok(())
     }
 
+    /// Read JSON from file
     pub fn json_load(filepath: &str) -> Result<Self, Box<dyn std::error::Error>> {
         let json_str = std::fs::read_to_string(filepath)?;
         Self::jsonload(&json_str)
@@ -307,6 +339,7 @@ impl PointCloud {
     // Protobuf Serialization
     ///////////////////////////////////////////////////////////////////////////////////////////
 
+    /// Convert to protobuf binary bytes
     pub fn pb_dumps(&self) -> Vec<u8> {
         use crate::proto;
         use prost::Message;
@@ -329,6 +362,7 @@ impl PointCloud {
         proto.encode_to_vec()
     }
 
+    /// Load from protobuf binary bytes
     pub fn pb_loads(data: &[u8]) -> Self {
         use crate::proto;
         use prost::Message;
@@ -357,11 +391,13 @@ impl PointCloud {
         pc
     }
 
+    /// Write protobuf to file
     pub fn pb_dump(&self, filepath: &str) {
         let data = self.pb_dumps();
         std::fs::write(filepath, data).expect("Failed to write protobuf file");
     }
 
+    /// Read protobuf from file
     pub fn pb_load(filepath: &str) -> Self {
         let data = std::fs::read(filepath).expect("Failed to read protobuf file");
         Self::pb_loads(&data)

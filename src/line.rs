@@ -248,6 +248,31 @@ impl Line {
         )
     }
 
+    /// Extend both endpoints of this line by `distance` along its tangent.
+    /// Negative `distance` shortens the line; if the requested shortening
+    /// would collapse the line to zero length, the line is left unchanged.
+    /// Mirrors the wood-library helper `cgal::polyline_util::extend_equally`.
+    pub fn extend_equally(&mut self, distance: f64) {
+        let len = self.length();
+        if len < crate::tolerance::Tolerance::ZERO_TOLERANCE {
+            return;
+        }
+        // Don't allow the line to collapse to zero or invert.
+        if distance < 0.0 && (-distance) * 2.0 >= len {
+            return;
+        }
+        let inv_len = 1.0 / len;
+        let dx = (self._x1 - self._x0) * inv_len * distance;
+        let dy = (self._y1 - self._y0) * inv_len * distance;
+        let dz = (self._z1 - self._z0) * inv_len * distance;
+        self._x0 -= dx;
+        self._y0 -= dy;
+        self._z0 -= dz;
+        self._x1 += dx;
+        self._y1 += dy;
+        self._z1 += dz;
+    }
+
     /// Subdivide line into n points.
     pub fn subdivide(&self, n: usize) -> Vec<Point> {
         if n < 2 {

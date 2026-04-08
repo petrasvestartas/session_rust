@@ -107,7 +107,7 @@ pub use mesh::{Mesh, LoftPanel, LoftWallFace};
 pub use nurbscurve::NurbsCurve;
 pub use nurbssurface::NurbsSurface;
 pub use trimmedsurface::TrimmedSurface;
-pub use obj::{read_obj, write_obj};
+pub use obj::{read_obj, write_obj, read_obj_polylines, pair_polylines};
 pub use objects::Objects;
 pub use plane::Plane;
 pub use point::Point;

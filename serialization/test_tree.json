@@ -1,1 +1,11 @@
-{"guid":"1f4061e7-60ef-4951-a056-fb040e50e18b","name":"./serialization/test_tree","root":{"children":[],"guid":"d950ba87-8c25-440a-9160-9409d1a88e03","name":"7d2ab95d-53fb-4b65-be0d-2f113373f20f","type":"TreeNode"},"type":"Tree"}
+{
+    "guid": "c947383c-4967-4ce9-a4af-ed9ee6707918",
+    "name": "test_tree",
+    "root": {
+        "children": [],
+        "guid": "36f6ed4e-8ac1-4c4f-9c38-663f1ed006d0",
+        "name": "root_node",
+        "type": "TreeNode"
+    },
+    "type": "Tree"
+}

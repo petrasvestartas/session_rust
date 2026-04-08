@@ -1,5 +1,6 @@
 use crate::{MINI_CHECK, MINI_TEST, REGISTER_MINI_TEST};
 use crate::mini_test::TestResult;
+use crate::tolerance::PI;
 
 pub fn run_convex_hull_hull_2d() -> TestResult {
     MINI_TEST!("Hull2d", {
@@ -39,7 +40,6 @@ REGISTER_MINI_TEST!("ConvexHull", "Hull2dCollinear", crate::convex_hull_test::ru
 pub fn run_convex_hull_hull_2d_circle() -> TestResult {
     MINI_TEST!("Hull2dCircle", {
         use crate::{ConvexHull, Point};
-        use std::f64::consts::PI;
         let n = 12_usize;
         let mut pts = vec![];
         for i in 0..n {

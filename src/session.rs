@@ -1,13 +1,13 @@
 use crate::{
-    BRep, Element, OBB, Graph, Line, Mesh, Objects, Plane, Point, PointCloud, Polyline,
+    AABB, BRep, Element, OBB, Graph, Line, Mesh, Objects, Plane, Point, PointCloud, Polyline,
     Tolerance, Tree, TreeNode, BVH,
 };
 use serde::{Deserialize, Serialize};
 use std::cell::RefCell;
 use std::collections::HashMap;
 use std::fmt;
-use std::fs;
 use std::rc::Rc;
+use std::fs;
 
 /// Enum representing all possible geometry types in a Session.
 /// This is equivalent to C++'s std::variant<...> for heterogeneous geometry storage.
@@ -363,6 +363,7 @@ impl Session {
             tree: Some(tree_proto),
             graph: Some(graph_proto),
             bvh_boxes: Vec::new(),
+            edge_features: std::collections::HashMap::new(),
         };
         proto.encode_to_vec()
     }
@@ -801,121 +802,184 @@ impl Session {
     ///
     /// # Returns
     /// The TreeNode created for this point
-    pub fn add_point(&mut self, point: Point) -> Rc<RefCell<TreeNode>> {
-        let point_guid = point.guid().to_string();
-        let point_name = point.name.clone();
+    pub fn add_point(&mut self, point: Point, parent: Option<&Rc<RefCell<TreeNode>>>) -> Rc<RefCell<TreeNode>> {
+        let guid = point.guid().to_string();
+        let name = point.name.clone();
         let geometry = Geometry::Point(point.clone());
-
         self.objects.points.push(point);
-        self.lookup.insert(point_guid.clone(), geometry);
-        if let Some(Geometry::Point(p)) = self.lookup.get(&point_guid) {
-            self.cache_geometry_aabb(&point_guid, &Geometry::Point(p.clone()));
+        self.lookup.insert(guid.clone(), geometry);
+        if let Some(Geometry::Point(p)) = self.lookup.get(&guid) {
+            self.cache_geometry_aabb(&guid, &Geometry::Point(p.clone()));
         }
-        self.graph
-            .add_node(&point_guid, &format!("point_{point_name}"));
-
-        TreeNode::new(&point_guid)
+        self.graph.add_node(&guid, &format!("point_{name}"));
+        let node = TreeNode::new(&guid);
+        if let Some(p) = parent { self.tree.add(&node, Some(p)); }
+        node
     }
 
-    pub fn add_line(&mut self, line: Line) -> Rc<RefCell<TreeNode>> {
+    pub fn add_line(&mut self, line: Line, parent: Option<&Rc<RefCell<TreeNode>>>) -> Rc<RefCell<TreeNode>> {
         let guid = line.guid().to_string();
         let name = line.name.clone();
         let geometry = Geometry::Line(line.clone());
-
         self.objects.lines.push(line);
         self.lookup.insert(guid.clone(), geometry);
         if let Some(Geometry::Line(l)) = self.lookup.get(&guid) {
             self.cache_geometry_aabb(&guid, &Geometry::Line(l.clone()));
         }
         self.graph.add_node(&guid, &format!("line_{name}"));
-
-        TreeNode::new(&guid)
+        let node = TreeNode::new(&guid);
+        if let Some(p) = parent { self.tree.add(&node, Some(p)); }
+        node
     }
 
-    pub fn add_plane(&mut self, plane: Plane) -> Rc<RefCell<TreeNode>> {
+    pub fn add_plane(&mut self, plane: Plane, parent: Option<&Rc<RefCell<TreeNode>>>) -> Rc<RefCell<TreeNode>> {
         let guid = plane.guid().to_string();
         let name = plane.name.clone();
         let geometry = Geometry::Plane(plane.clone());
-
         self.objects.planes.push(plane);
         self.lookup.insert(guid.clone(), geometry);
         if let Some(Geometry::Plane(p)) = self.lookup.get(&guid) {
             self.cache_geometry_aabb(&guid, &Geometry::Plane(p.clone()));
         }
         self.graph.add_node(&guid, &format!("plane_{name}"));
-
-        TreeNode::new(&guid)
+        let node = TreeNode::new(&guid);
+        if let Some(p) = parent { self.tree.add(&node, Some(p)); }
+        node
     }
 
     pub fn add_obb(&mut self, bbox: OBB) -> Rc<RefCell<TreeNode>> {
         let guid = bbox.guid().to_string();
         let name = bbox.name.clone();
         let geometry = Geometry::OBB(bbox.clone());
-
         self.objects.bboxes.push(bbox);
         self.lookup.insert(guid.clone(), geometry);
         if let Some(Geometry::OBB(b)) = self.lookup.get(&guid) {
             self.cache_geometry_aabb(&guid, &Geometry::OBB(b.clone()));
         }
         self.graph.add_node(&guid, &format!("bbox_{name}"));
-
         TreeNode::new(&guid)
     }
 
-    pub fn add_polyline(&mut self, polyline: Polyline) -> Rc<RefCell<TreeNode>> {
+    pub fn add_polyline(&mut self, polyline: Polyline, parent: Option<&Rc<RefCell<TreeNode>>>) -> Rc<RefCell<TreeNode>> {
         let guid = polyline.guid().to_string();
-        let name = polyline.name.clone();
+        // Compute AABB directly from the raw coord stride — eliminates the
+        // `get_points()` intermediate Vec<Point> allocation AND the second
+        // `polyline.clone()` that the old self.lookup.get() path required.
+        // Saves ~2 full Polyline deep copies per call across 3081 joints in
+        // compute_face_to_face.
+        let bbox = OBB::from_aabb(AABB::from_coords_stride3(&polyline.coords, Tolerance::APPROXIMATION));
+        self.cached_boxes.push(bbox);
+        self.cached_guids.push(guid.clone());
+        self.bvh_cache_dirty = true;
+        // Format the graph-node label before moving the polyline, avoiding a
+        // separate `polyline.name.clone()`.
+        let label = format!("polyline_{}", polyline.name);
         let geometry = Geometry::Polyline(polyline.clone());
-
         self.objects.polylines.push(polyline);
         self.lookup.insert(guid.clone(), geometry);
-        if let Some(Geometry::Polyline(p)) = self.lookup.get(&guid) {
-            self.cache_geometry_aabb(&guid, &Geometry::Polyline(p.clone()));
-        }
-        self.graph.add_node(&guid, &format!("polyline_{name}"));
-
-        TreeNode::new(&guid)
+        self.graph.add_node(&guid, &label);
+        let node = TreeNode::new(&guid);
+        if let Some(p) = parent { self.tree.add(&node, Some(p)); }
+        node
     }
 
-    pub fn add_pointcloud(&mut self, pointcloud: PointCloud) -> Rc<RefCell<TreeNode>> {
+    pub fn add_pointcloud(&mut self, pointcloud: PointCloud, parent: Option<&Rc<RefCell<TreeNode>>>) -> Rc<RefCell<TreeNode>> {
         let guid = pointcloud.guid().to_string();
         let name = pointcloud.name.clone();
         let geometry = Geometry::PointCloud(pointcloud.clone());
-
         self.objects.pointclouds.push(pointcloud);
         self.lookup.insert(guid.clone(), geometry);
         if let Some(Geometry::PointCloud(p)) = self.lookup.get(&guid) {
             self.cache_geometry_aabb(&guid, &Geometry::PointCloud(p.clone()));
         }
         self.graph.add_node(&guid, &format!("pointcloud_{name}"));
-
-        TreeNode::new(&guid)
+        let node = TreeNode::new(&guid);
+        if let Some(p) = parent { self.tree.add(&node, Some(p)); }
+        node
     }
 
-    pub fn add_mesh(&mut self, mesh: Mesh) -> Rc<RefCell<TreeNode>> {
+    pub fn add_mesh(&mut self, mesh: Mesh, parent: Option<&Rc<RefCell<TreeNode>>>) -> Rc<RefCell<TreeNode>> {
         let guid = mesh.guid().to_string();
         let name = mesh.name.clone();
         let geometry = Geometry::Mesh(mesh.clone());
-
         self.objects.meshes.push(mesh);
         self.lookup.insert(guid.clone(), geometry);
         if let Some(Geometry::Mesh(m)) = self.lookup.get(&guid) {
             self.cache_geometry_aabb(&guid, &Geometry::Mesh(m.clone()));
         }
         self.graph.add_node(&guid, &format!("mesh_{name}"));
-
-        TreeNode::new(&guid)
+        let node = TreeNode::new(&guid);
+        if let Some(p) = parent { self.tree.add(&node, Some(p)); }
+        node
     }
 
-    pub fn add_brep(&mut self, brep: BRep) -> Rc<RefCell<TreeNode>> {
+    pub fn add_brep(&mut self, brep: BRep, parent: Option<&Rc<RefCell<TreeNode>>>) -> Rc<RefCell<TreeNode>> {
         let guid = brep.guid().to_string();
         let name = brep.name.clone();
-
         self.objects.breps.push(brep.clone());
         self.lookup.insert(guid.clone(), Geometry::BRep(brep));
         self.graph.add_node(&guid, &format!("brep_{name}"));
+        let node = TreeNode::new(&guid);
+        if let Some(p) = parent { self.tree.add(&node, Some(p)); }
+        node
+    }
 
-        TreeNode::new(&guid)
+    pub fn add_element(&mut self, element: Element, parent: Option<&Rc<RefCell<TreeNode>>>) -> Rc<RefCell<TreeNode>> {
+        let guid = element.guid().to_string();
+        let name = element.name.clone();
+        self.objects.elements.push(element.clone());
+        self.lookup.insert(guid.clone(), Geometry::Element(element));
+        self.graph.add_node(&guid, &format!("element_{name}"));
+        let node = TreeNode::new(&guid);
+        if let Some(p) = parent { self.tree.add(&node, Some(p)); }
+        node
+    }
+
+    pub fn compute_face_to_face(&mut self, inflate: f64, coplanar_tolerance: f64) {
+        let n = self.objects.elements.len();
+        if n == 0 { return; }
+
+        // Step A: Fast AABB from raw polygon data (no Polyline construction)
+        let mut aabbs: Vec<crate::obb::OBB> = Vec::with_capacity(n);
+        for elem in &self.objects.elements {
+            aabbs.push(elem.compute_aabb_fast(inflate));
+        }
+
+        // Step B: BVH broad phase
+        let mut bvh = crate::bvh::BVH::new();
+        bvh.build(&aabbs);
+        let mut adjacency: Vec<i32> = Vec::new();
+        for i in 0..n {
+            let hits = bvh.query_aabb(&aabbs[i]);
+            for j in hits {
+                if (i as i32) < (j as i32) {
+                    adjacency.push(i as i32);
+                    adjacency.push(j as i32);
+                    adjacency.push(-1);
+                    adjacency.push(-1);
+                }
+            }
+        }
+
+        // Step C: Cache polylines + planes, then face-to-face
+        let mut all_polys: Vec<Vec<crate::polyline::Polyline>> = Vec::with_capacity(n);
+        let mut all_planes: Vec<Vec<crate::plane::Plane>> = Vec::with_capacity(n);
+        for elem in self.objects.elements.iter_mut() {
+            all_polys.push(elem.polylines());
+            all_planes.push(elem.planes());
+        }
+        let elem_guids: Vec<String> = self.objects.elements.iter().map(|e| e.guid().to_string()).collect();
+        let joints = crate::intersection::face_to_face(&adjacency, &all_polys, &all_planes, coplanar_tolerance);
+
+        let g = self.add_group("Joints");
+        for (k, (a, b, fi, fj, typ, poly)) in joints.into_iter().enumerate() {
+            let mut jpl = poly;
+            jpl.name = format!("joint_{k}");
+            let jpl_guid = jpl.guid().to_string();
+            self.add_polyline(jpl, Some(&g));
+            self.add_edge(&elem_guids[a as usize], &elem_guids[b as usize],
+                &format!("{fi},{fj},{typ},{jpl_guid}"));
+        }
     }
 
     /// Adds a TreeNode to the tree hierarchy.

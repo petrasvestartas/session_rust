@@ -252,3 +252,28 @@ pub fn run_boolean_polyline_two_large_circles_1000() -> TestResult {
     })
 }
 REGISTER_MINI_TEST!("Boolean Polyline", "Two Large Circles 1000", crate::boolean_polyline_test::run_boolean_polyline_two_large_circles_1000);
+
+#[test]
+fn test_boolean_polyline_large_coords_auto_scale() {
+    let _ = run_boolean_polyline_large_coords_auto_scale();
+}
+
+pub fn run_boolean_polyline_large_coords_auto_scale() -> TestResult {
+    MINI_TEST!("Large Coords Auto Scale", {
+        use crate::{Point, Polyline};
+        // Coordinates near 1e7 would overflow int64 cross products with the old
+        // fixed 1e9 scale: (1e7*1e9)^2 = 1e32 >> int64::max (~9.2e18)
+        let a = Polyline::new(vec![Point::new(64e6,1e6,0.0), Point::new(64e6+2e6,1e6,0.0), Point::new(64e6+2e6,1e6+2e6,0.0), Point::new(64e6,1e6+2e6,0.0), Point::new(64e6,1e6,0.0)]);
+        let b = Polyline::new(vec![Point::new(64e6+1e6,1e6+1e6,0.0), Point::new(64e6+3e6,1e6+1e6,0.0), Point::new(64e6+3e6,1e6+3e6,0.0), Point::new(64e6+1e6,1e6+3e6,0.0), Point::new(64e6+1e6,1e6+1e6,0.0)]);
+        let isect = Polyline::boolean_op(&a, &b, 0);
+        let uni = Polyline::boolean_op(&a, &b, 1);
+        let diff = Polyline::boolean_op(&a, &b, 2);
+        MINI_CHECK!(isect.len() >= 1);
+        MINI_CHECK!(isect[0].point_count() > 0);
+        MINI_CHECK!(uni.len() >= 1);
+        MINI_CHECK!(uni[0].point_count() > 0);
+        MINI_CHECK!(diff.len() >= 1);
+        MINI_CHECK!(diff[0].point_count() > 0);
+    })
+}
+REGISTER_MINI_TEST!("Boolean Polyline", "Large Coords Auto Scale", crate::boolean_polyline_test::run_boolean_polyline_large_coords_auto_scale);
