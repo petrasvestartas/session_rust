@@ -474,6 +474,44 @@ impl Line {
         )
     }
 
+    /// Return the overlapping segment between this line and `other`.
+    ///
+    /// Returns `None` if the segments do not overlap (or overlap at a point).
+    pub fn overlap(&self, other: &Line) -> Option<Line> {
+        let s0 = self.start();
+        let e0 = self.end();
+        let s1 = other.start();
+        let e1 = other.end();
+        let r = crate::polyline::Polyline::line_line_overlap(&s0, &e0, &s1, &e1)?;
+        Some(Line::from_points(&r.0, &r.1))
+    }
+
+    /// Return the average of the two reciprocal overlaps between this line and `other`.
+    ///
+    /// Returns `None` if the resulting overlap collapses to a point.
+    pub fn overlap_average(&self, other: &Line) -> Option<Line> {
+        let s0 = self.start();
+        let e0 = self.end();
+        let s1 = other.start();
+        let e1 = other.end();
+        let (a, b) = crate::polyline::Polyline::line_line_overlap_average(&s0, &e0, &s1, &e1);
+        let out = Line::from_points(&a, &b);
+        if out.squared_length() > 0.0 { Some(out) } else { None }
+    }
+
+    /// Extend this line in place by `ext_start` at the start end and
+    /// `ext_end` at the end.
+    pub fn extend(&mut self, ext_start: f64, ext_end: f64) {
+        let s = self.start();
+        let e = self.end();
+        let mut v = e.clone() - s.clone();
+        v.normalize_self();
+        let new_s = s - (v.clone() * ext_start);
+        let new_e = e + (v * ext_end);
+        self._x0 = new_s[0]; self._y0 = new_s[1]; self._z0 = new_s[2];
+        self._x1 = new_e[0]; self._y1 = new_e[1]; self._z1 = new_e[2];
+    }
+
 }
 
 impl Index<usize> for Line {

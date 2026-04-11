@@ -141,7 +141,10 @@ impl Quaternion {
         Self::from_components(1.0, Vector::new(0.0, 0.0, 0.0))
     }
 
-    /// Create from axis of rotation and angle
+    /// Build a unit quaternion that rotates by `angle` radians around `axis`.
+    /// THE everyday rotation builder. Use this whenever you can describe the
+    /// rotation as "spin by N radians around this direction" - turning a wheel,
+    /// opening a door, orbiting a camera. The result is always unit-length.
     pub fn from_axis_angle(axis: Vector, angle: f64) -> Self {
         let ax = axis.normalized();
         let half = angle * 0.5;
@@ -188,7 +191,10 @@ impl Quaternion {
         (axis, angle)
     }
 
-    /// Create rotation from source vector to destination vector
+    /// Build the shortest rotation that maps direction `src` to direction `dst`.
+    /// Use this for "look at" logic (point a camera at a target), aligning a
+    /// model's forward axis with a desired direction, or snapping one face
+    /// normal to another. Both arguments are normalized internally.
     pub fn from_arc(src: Vector, dst: Vector) -> Self {
         let s = src.normalized();
         let d = dst.normalized();
@@ -209,7 +215,11 @@ impl Quaternion {
         Self::from_components(1.0 + dot_val, cross).normalized()
     }
 
-    /// Create from Euler angles (XYZ convention)
+    /// Build a quaternion from three Euler angles (XYZ convention).
+    /// Use only at I/O boundaries: importing rotations stored as pitch/yaw/roll
+    /// or accepting user input. AVOID for composition - Euler angles suffer
+    /// from gimbal lock. Store/compose as quaternions, convert to Euler only
+    /// to display or save.
     pub fn from_euler(x: f64, y: f64, z: f64) -> Self {
         let (s1, c1) = ((x * 0.5).sin(), (x * 0.5).cos());
         let (s2, c2) = ((y * 0.5).sin(), (y * 0.5).cos());
@@ -224,7 +234,11 @@ impl Quaternion {
         )
     }
 
-    /// Create rotation that maps the basis of plane_a onto plane_b (Rhino: Quaternion.Rotation(plane, plane))
+    /// Build the quaternion that maps the basis of `plane_a` onto the basis of
+    /// `plane_b`. Use this to snap one local frame to another - aligning two
+    /// CAD parts by their reference planes, transferring a frame between
+    /// objects, or computing the relative rotation between two coordinate
+    /// systems. (Rhino: Quaternion.Rotation(plane, plane))
     pub fn from_rotation(plane_a: &Plane, plane_b: &Plane) -> Self {
         let xa = plane_a.x_axis_ref(); let ya = plane_a.y_axis_ref(); let za = plane_a.z_axis_ref();
         let xb = plane_b.x_axis_ref(); let yb = plane_b.y_axis_ref(); let zb = plane_b.z_axis_ref();
@@ -261,7 +275,11 @@ impl Quaternion {
         Self::from_components(s * (m[k][j] - m[j][k]), Vector::new(q[0], q[1], q[2]))
     }
 
-    /// Apply this quaternion's rotation to the world XY plane and return the resulting plane (Rhino: Quaternion.GetRotation(out plane))
+    /// Apply this rotation to the world XY plane and return the resulting Plane.
+    /// Use this to visualize a quaternion as a frame in 3D, or to convert a
+    /// stored quaternion into a Plane for frame-based APIs in the rest of the
+    /// kernel. Inverse: from_rotation(xy_plane(), result).
+    /// (Rhino: Quaternion.GetRotation(out plane))
     pub fn get_rotation(&self) -> Plane {
         let a = self.scalar; let b = self.vector[0]; let c = self.vector[1]; let d = self.vector[2];
         let xaxis = Vector::new(a*a + b*b - c*c - d*d, 2.0*(a*d + b*c),       2.0*(b*d - a*c));
@@ -276,7 +294,10 @@ impl Quaternion {
         copy
     }
 
-    /// Rotate a vector by this quaternion
+    /// Apply this rotation to a 3D vector and return the rotated vector.
+    /// Use this when you have a quaternion orientation and need to know where
+    /// a specific direction points after the rotation - the camera's forward
+    /// axis, a bone's tip, the normal of a rotated face. Math: q*v_pure*q^-1.
     pub fn rotate_vector(&self, v: Vector) -> Vector {
         let uv = self.vector.cross(&v);
         let uuv = self.vector.cross(&uv);
@@ -293,7 +314,9 @@ impl Quaternion {
         self.scalar * self.scalar + self.vector[0] * self.vector[0] + self.vector[1] * self.vector[1] + self.vector[2] * self.vector[2]
     }
 
-    /// Unit quaternion with same direction
+    /// Return a unit-length copy. Use periodically after composing many
+    /// rotations - floating-point drift slowly makes a quaternion non-unit,
+    /// and a non-unit quaternion no longer represents a valid rotation.
     pub fn normalized(&self) -> Self {
         let mag = self.magnitude();
         if mag > 1e-10 {
@@ -303,12 +326,16 @@ impl Quaternion {
         }
     }
 
-    /// Conjugate (negates vector part)
+    /// Flip the sign of the vector part: (s, v) -> (s, -v). For UNIT
+    /// quaternions this equals the inverse - the opposite rotation. Use as
+    /// the cheap inverse when you KNOW the quaternion is unit-length.
     pub fn conjugate(&self) -> Self {
         self.apply(self.scalar, self.vector.clone() * -1.0)
     }
 
-    /// Multiplicative inverse
+    /// True multiplicative inverse: conjugate / magnitude_squared. Works for
+    /// non-unit quaternions too. Use as the safe inverse when the quaternion
+    /// may not be unit-length. q * q.invert() always equals identity.
     pub fn invert(&self) -> Self {
         let mag2 = self.magnitude_squared();
         if mag2 < 1e-20 {
@@ -317,12 +344,17 @@ impl Quaternion {
         self.apply(self.scalar / mag2, self.vector.clone() * (-1.0 / mag2))
     }
 
-    /// Dot product with another quaternion
+    /// Algebraic 4D dot product (NOT a geometric operation). Used inside
+    /// slerp implementations and as a similarity measure between two unit
+    /// quaternions (1 = same, 0 = 90 deg apart).
     pub fn dot(&self, other: &Self) -> f64 {
         self.scalar * other.scalar + self.vector.dot(&other.vector)
     }
 
-    /// Spherical linear interpolation
+    /// Spherical Linear intERPolation along the shortest great-circle path
+    /// on S^3. Constant angular velocity. Use for high-quality animation
+    /// between two orientations - camera transitions, character bones,
+    /// anything where smoothness matters more than raw speed.
     pub fn slerp(&self, other: &Self, amount: f64) -> Self {
         let dot_val = self.dot(other);
         if dot_val > 0.9995 {
@@ -336,7 +368,9 @@ impl Quaternion {
         (self.clone() * scale1 + other.clone() * scale2) * (1.0 / sin_theta)
     }
 
-    /// Normalized linear interpolation
+    /// Normalized Linear intERPolation. Cheaper than slerp but the angular
+    /// velocity isn't perfectly uniform. Use in real-time loops where every
+    /// microsecond matters and the visual difference from slerp is negligible.
     pub fn nlerp(&self, other: &Self, amount: f64) -> Self {
         (self.clone() * (1.0 - amount) + other.clone() * amount).normalized()
     }

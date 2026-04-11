@@ -457,8 +457,8 @@ pub fn run_vector_reflect() -> TestResult {
 
 pub fn run_vector_average_normal() -> TestResult {
     MINI_TEST!("Average Normal", {
-        use crate::vector::average_normal;
         use crate::Point;
+        use crate::Vector;
 
         let sq = vec![
             Point::new(0.0, 0.0, 0.0),
@@ -467,7 +467,7 @@ pub fn run_vector_average_normal() -> TestResult {
             Point::new(0.0, 1.0, 0.0),
             Point::new(0.0, 0.0, 0.0),
         ];
-        let n = average_normal(&sq);
+        let n = Vector::average_normal(&sq);
 
         MINI_CHECK!(TOLERANCE.is_close(n[2].abs(), 1.0));
         MINI_CHECK!(TOLERANCE.is_close(n[0], 0.0) && TOLERANCE.is_close(n[1], 0.0));

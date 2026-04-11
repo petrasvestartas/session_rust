@@ -731,6 +731,15 @@ impl Plane {
         Plane::new(new_origin, self._x_axis.clone(), self._y_axis.clone())
     }
 
+    /// Sign test using the cached plane equation `ax + by + cz + d`.
+    ///
+    /// Returns `true` if `p` lies on the negative side
+    /// (`a*p[0] + b*p[1] + c*p[2] + d < 0`). Mirrors CGAL's
+    /// `Plane_3::has_on_negative_side`.
+    pub fn has_on_negative_side(&self, p: &Point) -> bool {
+        (self.a() * p[0] + self.b() * p[1] + self.c() * p[2] + self.d()) < 0.0
+    }
+
     /// Orthogonal projection of a point onto this plane.
     /// Equivalent to CGAL's `Plane_3::projection(Point_3)`.
     ///
@@ -744,13 +753,6 @@ impl Plane {
             p[1] - signed_distance * self._b,
             p[2] - signed_distance * self._c,
         )
-    }
-
-    /// True if `p` lies strictly on the negative half-space of this plane —
-    /// i.e. the signed distance from `p` to the plane along the unit normal
-    /// `(a, b, c)` is negative. Mirrors CGAL's `Plane_3::has_on_negative_side`.
-    pub fn has_on_negative_side(&self, p: &Point) -> bool {
-        (self._a * p[0] + self._b * p[1] + self._c * p[2] + self._d) < 0.0
     }
 
     pub fn to_polylines(&self, scale: f64) -> Vec<Polyline> {

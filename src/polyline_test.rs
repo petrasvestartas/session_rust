@@ -1435,3 +1435,49 @@ pub fn run_polyline_boolean_op_plane() -> TestResult {
     })
 }
 REGISTER_MINI_TEST!("Polyline", "Boolean Op Plane", crate::polyline_test::run_polyline_boolean_op_plane);
+
+pub fn run_polyline_transformed_xform() -> TestResult {
+    MINI_TEST!("Transformed Xform", {
+        use crate::{Point, Polyline, Xform};
+        let pl = Polyline::new(vec![Point::new(0.0, 0.0, 0.0), Point::new(1.0, 0.0, 0.0)]);
+        let xf = Xform::translation(10.0, 0.0, 0.0);
+        let pl_x = pl.transformed_xform(&xf);
+        MINI_CHECK!(TOLERANCE.is_close(pl_x.get_point(0).unwrap()[0], 10.0));
+        MINI_CHECK!(TOLERANCE.is_close(pl_x.get_point(1).unwrap()[0], 11.0));
+    })
+}
+REGISTER_MINI_TEST!("Polyline", "Transformed Xform", crate::polyline_test::run_polyline_transformed_xform);
+
+pub fn run_polyline_translate() -> TestResult {
+    MINI_TEST!("Translate", {
+        use crate::{Point, Polyline, Vector};
+        let mut pl = Polyline::new(vec![
+            Point::new(0.0, 0.0, 0.0),
+            Point::new(1.0, 0.0, 0.0),
+            Point::new(1.0, 1.0, 0.0),
+            Point::new(0.0, 1.0, 0.0),
+        ]);
+        pl.translate(&Vector::new(5.0, 0.0, 0.0));
+        MINI_CHECK!(TOLERANCE.is_close(pl.get_point(0).unwrap()[0], 5.0));
+        MINI_CHECK!(TOLERANCE.is_close(pl.get_point(2).unwrap()[0], 6.0));
+    })
+}
+REGISTER_MINI_TEST!("Polyline", "Translate", crate::polyline_test::run_polyline_translate);
+
+pub fn run_polyline_extend_edge_equally() -> TestResult {
+    MINI_TEST!("Extend Edge Equally", {
+        use crate::{Point, Polyline};
+        let mut pl = Polyline::new(vec![
+            Point::new(0.0, 0.0, 0.0),
+            Point::new(10.0, 0.0, 0.0),
+            Point::new(10.0, 10.0, 0.0),
+            Point::new(0.0, 10.0, 0.0),
+            Point::new(0.0, 0.0, 0.0),
+        ]);
+        pl.extend_edge_equally(0, 1.0);
+        MINI_CHECK!(TOLERANCE.is_close(pl.get_point(0).unwrap()[0], -1.0));
+        MINI_CHECK!(TOLERANCE.is_close(pl.get_point(1).unwrap()[0], 11.0));
+        MINI_CHECK!(TOLERANCE.is_close(pl.get_point(4).unwrap()[0], -1.0));
+    })
+}
+REGISTER_MINI_TEST!("Polyline", "Extend Edge Equally", crate::polyline_test::run_polyline_extend_edge_equally);

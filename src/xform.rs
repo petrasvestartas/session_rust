@@ -548,6 +548,102 @@ impl Xform {
         &t2 * &(&m_xform * &t0)
     }
 
+    /// Build the change-of-basis xform from two 4-point joint volume rectangles.
+    ///
+    /// Maps the unit cube `[-0.5, +0.5]^3` to the world frame defined by the
+    /// two rectangles. Verbatim port of the inline `change_basis` helper from
+    /// main_5.cpp:782 (which mirrored wood `wood_joint.cpp:103`).
+    ///
+    /// Returns `Xform::identity()` if the rectangle is degenerate.
+    pub fn from_change_of_basis(rect0: &crate::polyline::Polyline, rect1: &crate::polyline::Polyline) -> Self {
+        if rect0.point_count() < 4 || rect1.point_count() < 1 {
+            return Xform::identity();
+        }
+
+        let o1x = -0.5_f64;
+        let o1y = -0.5_f64;
+        let o1z = -0.5_f64;
+
+        let o0 = rect0.get_point(0).unwrap();
+        let r01 = rect0.get_point(1).unwrap();
+        let r03 = rect0.get_point(3).unwrap();
+        let r10 = rect1.get_point(0).unwrap();
+        let x0 = [r01[0] - o0[0], r01[1] - o0[1], r01[2] - o0[2]];
+        let y0 = [r03[0] - o0[0], r03[1] - o0[1], r03[2] - o0[2]];
+        let z0 = [r10[0] - o0[0], r10[1] - o0[1], r10[2] - o0[2]];
+
+        // Augmented matrix [I | dot(Xi, X0j)] (X1, Y1, Z1 are orthonormal so
+        // their Gram is the identity).
+        let mut r: [[f64; 6]; 3] = [
+            [1.0, 0.0, 0.0, x0[0], y0[0], z0[0]],
+            [0.0, 1.0, 0.0, x0[1], y0[1], z0[1]],
+            [0.0, 0.0, 1.0, x0[2], y0[2], z0[2]],
+        ];
+
+        let mut i0 = if r[0][0] >= r[1][1] { 0 } else { 1 };
+        if r[2][2] > r[i0][i0] {
+            i0 = 2;
+        }
+        let mut i1 = (i0 + 1) % 3;
+        let mut i2 = (i1 + 1) % 3;
+        if r[i0][i0] == 0.0 {
+            return Xform::identity();
+        }
+
+        // Inline elimination/normalization (closures would borrow r mutably).
+        macro_rules! elim {
+            ($pivot:expr, $target:expr) => {{
+                let pv: usize = $pivot;
+                let tg: usize = $target;
+                if r[tg][pv] != 0.0 {
+                    let dd = -r[tg][pv];
+                    for k in 0..6 {
+                        r[tg][k] += dd * r[pv][k];
+                    }
+                    r[tg][pv] = 0.0;
+                }
+            }};
+        }
+        macro_rules! norm_row {
+            ($row:expr) => {{
+                let rw: usize = $row;
+                let dd = 1.0 / r[rw][rw];
+                for k in 0..6 {
+                    r[rw][k] *= dd;
+                }
+                r[rw][rw] = 1.0;
+            }};
+        }
+
+        norm_row!(i0); elim!(i0, i1); elim!(i0, i2);
+        if r[i1][i1].abs() < r[i2][i2].abs() {
+            std::mem::swap(&mut i1, &mut i2);
+        }
+        if r[i1][i1] == 0.0 {
+            return Xform::identity();
+        }
+        norm_row!(i1); elim!(i1, i0); elim!(i1, i2);
+        if r[i2][i2] == 0.0 {
+            return Xform::identity();
+        }
+        norm_row!(i2); elim!(i2, i0); elim!(i2, i1);
+
+        let tx = o0[0] - (r[0][3]*o1x + r[0][4]*o1y + r[0][5]*o1z);
+        let ty = o0[1] - (r[1][3]*o1x + r[1][4]*o1y + r[1][5]*o1z);
+        let tz = o0[2] - (r[2][3]*o1x + r[2][4]*o1y + r[2][5]*o1z);
+        Xform {
+            typ: "Xform".to_string(),
+            guid: std::sync::OnceLock::new(),
+            name: "my_xform".to_string(),
+            m: [
+                r[0][3], r[1][3], r[2][3], 0.0,
+                r[0][4], r[1][4], r[2][4], 0.0,
+                r[0][5], r[1][5], r[2][5], 0.0,
+                tx,      ty,      tz,      1.0,
+            ],
+        }
+    }
+
     /// Transform mapping one plane to another.
     pub fn plane_to_plane(plane_from: &Plane, plane_to: &Plane) -> Self {
         let mut x0 = plane_from.x_axis();

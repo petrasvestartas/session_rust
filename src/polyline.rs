@@ -320,6 +320,67 @@ impl Polyline {
         result
     }
 
+    /// Return a copy of this polyline with `xf` applied to every point.
+    /// Mirrors C++ `Polyline::transformed_xform`.
+    pub fn transformed_xform(&self, xf: &Xform) -> Polyline {
+        let m = &xf.m;
+        let mut new_pts = Vec::with_capacity(self.point_count());
+        for i in 0..self.point_count() {
+            let p = self.get_point(i).unwrap();
+            let x = m[0]*p[0] + m[4]*p[1] + m[8]*p[2]  + m[12];
+            let y = m[1]*p[0] + m[5]*p[1] + m[9]*p[2]  + m[13];
+            let z = m[2]*p[0] + m[6]*p[1] + m[10]*p[2] + m[14];
+            new_pts.push(Point::new(x, y, z));
+        }
+        Polyline::new(new_pts)
+    }
+
+    /// Translate every point of this polyline by `v` (in place).
+    /// Mirrors C++ `Polyline::translate`.
+    pub fn translate(&mut self, v: &Vector) {
+        for i in 0..self.point_count() {
+            let idx = i * 3;
+            self.coords[idx]     += v[0];
+            self.coords[idx + 1] += v[1];
+            self.coords[idx + 2] += v[2];
+        }
+    }
+
+    /// Slide both endpoints of edge `edge_idx` outward by `distance`.
+    /// Negative `distance` slides them inward. For closed polylines the
+    /// closing-duplicate vertex is kept in sync.
+    pub fn extend_edge_equally(&mut self, edge_idx: usize, distance: f64) {
+        let n = self.point_count();
+        if n < 2 || edge_idx + 1 >= n {
+            return;
+        }
+        let i = edge_idx;
+        let j = edge_idx + 1;
+        let pi = self.get_point(i).unwrap();
+        let pj = self.get_point(j).unwrap();
+        let dx = pj[0] - pi[0];
+        let dy = pj[1] - pi[1];
+        let dz = pj[2] - pi[2];
+        let len = (dx*dx + dy*dy + dz*dz).sqrt();
+        if len < 1e-12 {
+            return;
+        }
+        let inv = 1.0 / len;
+        let ux = dx * inv * distance;
+        let uy = dy * inv * distance;
+        let uz = dz * inv * distance;
+        let new_pi = Point::new(pi[0]-ux, pi[1]-uy, pi[2]-uz);
+        let new_pj = Point::new(pj[0]+ux, pj[1]+uy, pj[2]+uz);
+        self.set_point(i, &new_pi);
+        self.set_point(j, &new_pj);
+        if i == 0 {
+            self.set_point(n - 1, &new_pi);
+        }
+        if j == n - 1 {
+            self.set_point(0, &new_pj);
+        }
+    }
+
      /// Recompute plane if we have at least 3 points
      fn recompute_plane_if_needed(&mut self) {
          self.plane_dirty = true;

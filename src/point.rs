@@ -549,7 +549,45 @@ impl Point {
         Ok(Point::new(result[0], result[1], result[2]))
     }
 
- 
+    /// Average of an arbitrary list of points.
+    pub fn centroid(points: &[Point]) -> Point {
+        if points.is_empty() {
+            return Point::new(0.0, 0.0, 0.0);
+        }
+        let mut cx = 0.0;
+        let mut cy = 0.0;
+        let mut cz = 0.0;
+        for p in points {
+            cx += p[0];
+            cy += p[1];
+            cz += p[2];
+        }
+        let n = points.len() as f64;
+        Point::new(cx / n, cy / n, cz / n)
+    }
+
+    /// Approximate dihedral angle in degrees between half-planes (p,q,r) and (p,q,s).
+    pub fn dihedral_angle_deg(p: &Point, q: &Point, r: &Point, s: &Point) -> f64 {
+        use crate::tolerance::Tolerance;
+        let pq = Vector::new(q[0] - p[0], q[1] - p[1], q[2] - p[2]);
+        let pr = Vector::new(r[0] - p[0], r[1] - p[1], r[2] - p[2]);
+        let ps = Vector::new(s[0] - p[0], s[1] - p[1], s[2] - p[2]);
+        let n1 = pq.cross(&pr);
+        let n2 = pq.cross(&ps);
+        let m1 = n1.magnitude();
+        let m2 = n2.magnitude();
+        if m1 < Tolerance::ZERO_TOLERANCE || m2 < Tolerance::ZERO_TOLERANCE {
+            return 0.0;
+        }
+        let mut cos_t = n1.dot(&n2) / (m1 * m2);
+        if cos_t > 1.0 {
+            cos_t = 1.0;
+        }
+        if cos_t < -1.0 {
+            cos_t = -1.0;
+        }
+        cos_t.acos() * (180.0 / 3.141592653589793)
+    }
 }
 
 impl fmt::Display for Point {

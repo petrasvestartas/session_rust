@@ -1756,6 +1756,290 @@ pub fn polyline_plane_to_line(poly: &Polyline, plane: &Plane, align_start: &Poin
     }
 }
 
+/// Build a closed quad polyline from a joint line plus two side planes.
+///
+/// End-cap planes are perpendicular to the joint line at each endpoint;
+/// the four corners are 3-plane intersections.
+pub fn quad_from_line_top_bottom_planes(
+    face_plane: &Plane,
+    line: &Line,
+    plane0: &Plane,
+    plane1: &Plane,
+) -> Option<Polyline> {
+    let direction = line.to_vector();
+    let s = line.start();
+    let lp0 = Plane::from_point_normal(s, direction.clone());
+    let e = line.end();
+    let lp1 = Plane::from_point_normal(e, direction);
+    let p0 = plane_plane_plane(&lp0, plane0, face_plane)?;
+    let p1 = plane_plane_plane(&lp0, plane1, face_plane)?;
+    let p2 = plane_plane_plane(&lp1, plane1, face_plane)?;
+    let p3 = plane_plane_plane(&lp1, plane0, face_plane)?;
+    Some(Polyline::new(vec![p0.clone(), p1, p2, p3, p0]))
+}
+
+/// Vector orthogonal to the (pp00, pp10) intersection line, anchored on (pp00, pp11).
+///
+/// Verbatim port of wood `cgal_intersection_util.cpp:619-628`:
+///
+/// ```text
+///   plane_plane(pp00, pp10, l0);
+///   plane_plane(pp00, pp11, l1);
+///   output = l1.point() - l0.projection(l1.point());
+/// ```
+pub fn orthogonal_vector_between_two_plane_pairs(
+    pp00: &Plane,
+    pp10: &Plane,
+    pp11: &Plane,
+) -> Option<Vector> {
+    let l0 = plane_plane(pp00, pp10)?;
+    let l1 = plane_plane(pp00, pp11)?;
+    let p1 = l1.start();
+    let ldir = l0.to_vector();
+    let len_sq = ldir[0]*ldir[0] + ldir[1]*ldir[1] + ldir[2]*ldir[2];
+    if len_sq < 1e-20 {
+        return None;
+    }
+    let l0s = l0.start();
+    let vx = p1[0] - l0s[0];
+    let vy = p1[1] - l0s[1];
+    let vz = p1[2] - l0s[2];
+    let t = (vx*ldir[0] + vy*ldir[1] + vz*ldir[2]) / len_sq;
+    let px = l0s[0] + ldir[0]*t;
+    let py = l0s[1] + ldir[1]*t;
+    let pz = l0s[2] + ldir[2]*t;
+    Some(Vector::new(p1[0]-px, p1[1]-py, p1[2]-pz))
+}
+
+/// Clip an open joint outline against a closed plate polygon in 2D.
+///
+/// Native (no Clipper) port of the wood `wood_element.cpp:438-651` helper.
+/// Returns the clipped 3D polyline plus parametric positions `(t0, t1)` on
+/// the plate edges, or `None` if the joint outline does not intersect the
+/// plate polygon.
+pub fn closed_and_open_paths_2d(
+    plate: &Polyline,
+    joint: &Polyline,
+    plane: &Plane,
+) -> Option<(Polyline, (f64, f64))> {
+    let origin = plate.get_point(0)?;
+    let mut xax = plane.x_axis();
+    let mut yax = plane.y_axis();
+    xax.normalize_self();
+    yax.normalize_self();
+
+    let to_2d = |pp: &Point| -> (f64, f64) {
+        let dx = pp[0]-origin[0];
+        let dy = pp[1]-origin[1];
+        let dz = pp[2]-origin[2];
+        (dx*xax[0]+dy*xax[1]+dz*xax[2],
+         dx*yax[0]+dy*yax[1]+dz*yax[2])
+    };
+    let to_3d = |u: f64, v: f64| -> Point {
+        Point::new(origin[0] + u*xax[0] + v*yax[0],
+                   origin[1] + u*xax[1] + v*yax[1],
+                   origin[2] + u*xax[2] + v*yax[2])
+    };
+
+    // Plate outline (2D), strip closing duplicate.
+    let mut plate_n = plate.point_count();
+    if plate_n > 1 {
+        let f = plate.get_point(0).unwrap();
+        let l = plate.get_point(plate_n-1).unwrap();
+        if (f[0]-l[0]).abs() < 1e-6 && (f[1]-l[1]).abs() < 1e-6 && (f[2]-l[2]).abs() < 1e-6 {
+            plate_n -= 1;
+        }
+    }
+    let plate2d: Vec<(f64, f64)> = (0..plate_n)
+        .map(|i| to_2d(&plate.get_point(i).unwrap()))
+        .collect();
+    if plate2d.len() < 3 {
+        return None;
+    }
+
+    let joint2d: Vec<(f64, f64)> = (0..joint.point_count())
+        .map(|i| to_2d(&joint.get_point(i).unwrap()))
+        .collect();
+    if joint2d.len() < 2 {
+        return None;
+    }
+
+    let pip = |px: f64, py: f64| -> bool {
+        let mut wn = 0i32;
+        let n = plate2d.len();
+        for i in 0..n {
+            let a = plate2d[i];
+            let b = plate2d[(i+1) % n];
+            if a.1 <= py {
+                if b.1 > py {
+                    let e = (b.0-a.0)*(py-a.1) - (px-a.0)*(b.1-a.1);
+                    if e > 0.0 { wn += 1; }
+                }
+            } else if b.1 <= py {
+                let e = (b.0-a.0)*(py-a.1) - (px-a.0)*(b.1-a.1);
+                if e < 0.0 { wn -= 1; }
+            }
+        }
+        wn != 0
+    };
+
+    let seg_seg_2d = |s0: (f64, f64), s1: (f64, f64), e0: (f64, f64), e1: (f64, f64)| -> Option<(f64, f64)> {
+        let sx = s1.0-s0.0; let sy = s1.1-s0.1;
+        let ex = e1.0-e0.0; let ey = e1.1-e0.1;
+        let denom = sx*ey - sy*ex;
+        if denom.abs() < 1e-20 {
+            return None;
+        }
+        let dx = e0.0-s0.0; let dy = e0.1-s0.1;
+        let t_s = (dx*ey - dy*ex) / denom;
+        let t_e = (dx*sy - dy*sx) / denom;
+        Some((t_s, t_e))
+    };
+
+    const EPS: f64 = 1e-9;
+    let mut pieces: Vec<Vec<(f64, f64)>> = Vec::new();
+    for s in 0..joint2d.len()-1 {
+        let p0 = joint2d[s];
+        let p1 = joint2d[s+1];
+        let mut ts: Vec<f64> = vec![0.0];
+        for i in 0..plate2d.len() {
+            let a = plate2d[i];
+            let b = plate2d[(i+1) % plate2d.len()];
+            if let Some((t_s, t_e)) = seg_seg_2d(p0, p1, a, b) {
+                if t_s > EPS && t_s < 1.0 - EPS && t_e >= -EPS && t_e <= 1.0 + EPS {
+                    ts.push(t_s);
+                }
+            }
+        }
+        ts.push(1.0);
+        ts.sort_by(|a, b| a.partial_cmp(b).unwrap());
+        ts.dedup_by(|a, b| (*a - *b).abs() < EPS);
+
+        let mut current: Vec<(f64, f64)> = Vec::new();
+        for i in 0..ts.len()-1 {
+            let t_mid = 0.5 * (ts[i] + ts[i+1]);
+            let mx = p0.0 + (p1.0-p0.0)*t_mid;
+            let my = p0.1 + (p1.1-p0.1)*t_mid;
+            if pip(mx, my) {
+                let sub_a = (p0.0 + (p1.0-p0.0)*ts[i],   p0.1 + (p1.1-p0.1)*ts[i]);
+                let sub_b = (p0.0 + (p1.0-p0.0)*ts[i+1], p0.1 + (p1.1-p0.1)*ts[i+1]);
+                if current.is_empty() {
+                    current.push(sub_a);
+                    current.push(sub_b);
+                } else {
+                    let last = *current.last().unwrap();
+                    let dx = last.0 - sub_a.0;
+                    let dy = last.1 - sub_a.1;
+                    if dx*dx + dy*dy < 1e-18 {
+                        current.push(sub_b);
+                    } else {
+                        pieces.push(std::mem::take(&mut current));
+                        current.push(sub_a);
+                        current.push(sub_b);
+                    }
+                }
+            } else if !current.is_empty() {
+                pieces.push(std::mem::take(&mut current));
+            }
+        }
+        if !current.is_empty() {
+            pieces.push(current);
+        }
+    }
+
+    let sq2 = |a: (f64, f64), b: (f64, f64)| -> f64 {
+        let dx = a.0-b.0; let dy = a.1-b.1;
+        dx*dx + dy*dy
+    };
+    const DISTANCE_SQ: f64 = 0.01;
+    let mut c2d: Vec<(f64, f64)> = Vec::new();
+    let mut count = 0i32;
+    for piece in &pieces {
+        if piece.len() <= 1 { continue; }
+        if count == 0 {
+            c2d = piece.clone();
+        } else {
+            let mut pts = piece.clone();
+            if sq2(*c2d.last().unwrap(), pts[0]) > DISTANCE_SQ
+                && sq2(*c2d.last().unwrap(), *pts.last().unwrap()) > DISTANCE_SQ {
+                c2d.reverse();
+            }
+            if sq2(*c2d.last().unwrap(), pts[0]) > sq2(*c2d.last().unwrap(), *pts.last().unwrap()) {
+                pts.reverse();
+            }
+            for j in 1..pts.len() {
+                c2d.push(pts[j]);
+            }
+        }
+        count += 1;
+    }
+
+    if c2d.len() < 2 {
+        return None;
+    }
+
+    let closest_param = |p: (f64, f64), a: (f64, f64), b: (f64, f64)| -> f64 {
+        let abx = b.0-a.0; let aby = b.1-a.1;
+        let l2 = abx*abx + aby*aby;
+        if l2 < 1e-20 { return 0.0; }
+        let apx = p.0-a.0; let apy = p.1-a.1;
+        let mut t = (apx*abx + apy*aby) / l2;
+        if t < 0.0 { t = 0.0; }
+        if t > 1.0 { t = 1.0; }
+        t
+    };
+    let sq_dist_seg = |p: (f64, f64), a: (f64, f64), b: (f64, f64)| -> f64 {
+        let abx = b.0-a.0; let aby = b.1-a.1;
+        let l2 = abx*abx + aby*aby;
+        if l2 < 1e-20 {
+            let dx = p.0-a.0; let dy = p.1-a.1;
+            return dx*dx + dy*dy;
+        }
+        let apx = p.0-a.0; let apy = p.1-a.1;
+        let mut t = (apx*abx + apy*aby) / l2;
+        if t < 0.0 { t = 0.0; }
+        if t > 1.0 { t = 1.0; }
+        let px = a.0 + t*abx;
+        let py = a.1 + t*aby;
+        let dx = p.0-px;
+        let dy = p.1-py;
+        dx*dx + dy*dy
+    };
+
+    let mut t0 = -1.0_f64;
+    let mut t1 = -1.0_f64;
+    for i in 0..plate2d.len() {
+        let a = plate2d[i];
+        let b = plate2d[(i+1) % plate2d.len()];
+        for jj in 0..2 {
+            let idx = if jj == 0 { 0 } else { c2d.len() - 1 };
+            let d = sq_dist_seg(c2d[idx], a, b);
+            if jj == 0 && d < 1.0 {
+                t0 = i as f64 + closest_param(c2d[0], a, b);
+            } else if jj == 1 && d < 1.0 {
+                t1 = i as f64 + closest_param(*c2d.last().unwrap(), a, b);
+            }
+        }
+        if t0 >= 0.0 && t1 >= 0.0 { break; }
+    }
+
+    let mut reverse_flag = t0 > t1;
+    if (t0.floor() as usize) == 0 && (t1.floor() as usize) == c2d.len() - 1 {
+        reverse_flag = !reverse_flag;
+    }
+    if reverse_flag {
+        std::mem::swap(&mut t0, &mut t1);
+        c2d.reverse();
+    }
+
+    if t0 < 0.0 || t1 < 0.0 {
+        return None;
+    }
+
+    let out_pts: Vec<Point> = c2d.iter().map(|p| to_3d(p.0, p.1)).collect();
+    Some((Polyline::new(out_pts), (t0, t1)))
+}
+
 /// 3D skew line intersection via closest-approach on cutter.
 pub fn line_line_3d(cutter: &Line, seg: &Line) -> Option<Point> {
     let (t0, _) = line_line_parameters(cutter, seg, 0.0, false, false)?;

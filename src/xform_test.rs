@@ -606,3 +606,21 @@ REGISTER_MINI_TEST!("Xform", "Inverse", crate::xform_test::run_xform_inverse);
 REGISTER_MINI_TEST!("Xform", "Transform Geometry", crate::xform_test::run_xform_transform_geometry);
 REGISTER_MINI_TEST!("Xform", "Json Roundtrip", crate::xform_test::run_xform_json_roundtrip);
 REGISTER_MINI_TEST!("Xform", "Protobuf Roundtrip", crate::xform_test::run_xform_protobuf_roundtrip);
+
+pub fn run_xform_from_change_of_basis() -> TestResult {
+    MINI_TEST!("From Change Of Basis", {
+        use crate::{Point, Polyline, Xform};
+        let rect0 = Polyline::new(vec![
+            Point::new(0.0, 0.0, 0.0),
+            Point::new(2.0, 0.0, 0.0),
+            Point::new(2.0, 3.0, 0.0),
+            Point::new(0.0, 3.0, 0.0),
+        ]);
+        let rect1 = Polyline::new(vec![Point::new(0.0, 0.0, 4.0)]);
+        let xf = Xform::from_change_of_basis(&rect0, &rect1);
+        MINI_CHECK!(TOLERANCE.is_close(xf.m[12], 1.0));
+        MINI_CHECK!(TOLERANCE.is_close(xf.m[13], 1.5));
+        MINI_CHECK!(TOLERANCE.is_close(xf.m[14], 2.0));
+    })
+}
+REGISTER_MINI_TEST!("Xform", "From Change Of Basis", crate::xform_test::run_xform_from_change_of_basis);

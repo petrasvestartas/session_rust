@@ -330,6 +330,38 @@ pub fn run_line_subdivide() -> TestResult {
     })
 }
 
+pub fn run_line_overlap() -> TestResult {
+    MINI_TEST!("Overlap", {
+        use crate::{Line, Point};
+        let l0 = Line::from_points(&Point::new(0.0, 0.0, 0.0), &Point::new(10.0, 0.0, 0.0));
+        let l1 = Line::from_points(&Point::new(5.0, 0.0, 0.0), &Point::new(15.0, 0.0, 0.0));
+        let out = l0.overlap(&l1).unwrap();
+        MINI_CHECK!(TOLERANCE.is_close(out.start()[0], 5.0));
+        MINI_CHECK!(TOLERANCE.is_close(out.end()[0], 10.0));
+    })
+}
+
+pub fn run_line_overlap_average() -> TestResult {
+    MINI_TEST!("Overlap Average", {
+        use crate::{Line, Point};
+        let l0 = Line::from_points(&Point::new(0.0, 0.0, 0.0), &Point::new(10.0, 0.0, 0.0));
+        let l1 = Line::from_points(&Point::new(5.0, 0.0, 0.0), &Point::new(15.0, 0.0, 0.0));
+        let out = l0.overlap_average(&l1).unwrap();
+        MINI_CHECK!(TOLERANCE.is_close(out.start()[0], 5.0));
+        MINI_CHECK!(TOLERANCE.is_close(out.end()[0], 10.0));
+    })
+}
+
+pub fn run_line_extend() -> TestResult {
+    MINI_TEST!("Extend", {
+        use crate::{Line, Point};
+        let mut l = Line::from_points(&Point::new(0.0, 0.0, 0.0), &Point::new(10.0, 0.0, 0.0));
+        l.extend(1.0, 2.0);
+        MINI_CHECK!(TOLERANCE.is_close(l.start()[0], -1.0));
+        MINI_CHECK!(TOLERANCE.is_close(l.end()[0], 12.0));
+    })
+}
+
 // Register tests with the shared registry for run_all("rust")
 REGISTER_MINI_TEST!("Line", "Constructor", crate::line_test::run_line_constructor);
 REGISTER_MINI_TEST!("Line", "Transformation", crate::line_test::run_line_transformation);
@@ -343,3 +375,6 @@ REGISTER_MINI_TEST!("Line", "Closest Point", crate::line_test::run_line_closest_
 REGISTER_MINI_TEST!("Line", "Start End Center", crate::line_test::run_line_start_end_center);
 REGISTER_MINI_TEST!("Line", "Fit Points", crate::line_test::run_line_fit_points);
 REGISTER_MINI_TEST!("Line", "Subdivide", crate::line_test::run_line_subdivide);
+REGISTER_MINI_TEST!("Line", "Overlap", crate::line_test::run_line_overlap);
+REGISTER_MINI_TEST!("Line", "Overlap Average", crate::line_test::run_line_overlap_average);
+REGISTER_MINI_TEST!("Line", "Extend", crate::line_test::run_line_extend);

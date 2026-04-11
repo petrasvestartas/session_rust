@@ -237,6 +237,38 @@ pub fn run_point_centroid_quad() -> TestResult {
     })
 }
 
+pub fn run_point_centroid() -> TestResult {
+    MINI_TEST!("Centroid", {
+        use crate::Point;
+
+        let p0 = Point::new(0.0, 0.0, 0.0);
+        let p1 = Point::new(2.0, 0.0, 0.0);
+        let p2 = Point::new(2.0, 2.0, 0.0);
+        let p3 = Point::new(0.0, 2.0, 0.0);
+        let centroid = Point::centroid(&vec![p0, p1, p2, p3]);
+
+        MINI_CHECK!(TOLERANCE.is_close(centroid[0], 1.0));
+        MINI_CHECK!(TOLERANCE.is_close(centroid[1], 1.0));
+        MINI_CHECK!(TOLERANCE.is_close(centroid[2], 0.0));
+    })
+}
+
+pub fn run_point_dihedral_angle_deg() -> TestResult {
+    MINI_TEST!("Dihedral Angle Deg", {
+        use crate::Point;
+
+        // Edge from origin to (1,0,0); r at (0,1,0); s at (0,0,1).
+        // Both half-planes share the X edge; angle is 90 degrees.
+        let p = Point::new(0.0, 0.0, 0.0);
+        let q = Point::new(1.0, 0.0, 0.0);
+        let r = Point::new(0.0, 1.0, 0.0);
+        let s = Point::new(0.0, 0.0, 1.0);
+        let angle = Point::dihedral_angle_deg(&p, &q, &r, &s);
+
+        MINI_CHECK!(TOLERANCE.is_close(angle, 90.0));
+    })
+}
+
 // Register tests with the shared registry for run_all("rust")
 REGISTER_MINI_TEST!("Point", "Constructor", crate::point_test::run_point_constructor);
 REGISTER_MINI_TEST!("Point", "Transformation", crate::point_test::run_point_transformation);
@@ -248,3 +280,5 @@ REGISTER_MINI_TEST!("Point", "Distance", crate::point_test::run_point_distance);
 REGISTER_MINI_TEST!("Point", "Squared Distance", crate::point_test::run_point_squared_distance);
 REGISTER_MINI_TEST!("Point", "Area", crate::point_test::run_point_area);
 REGISTER_MINI_TEST!("Point", "Centroid Quad", crate::point_test::run_point_centroid_quad);
+REGISTER_MINI_TEST!("Point", "Centroid", crate::point_test::run_point_centroid);
+REGISTER_MINI_TEST!("Point", "Dihedral Angle Deg", crate::point_test::run_point_dihedral_angle_deg);

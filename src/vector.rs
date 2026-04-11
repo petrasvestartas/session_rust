@@ -873,6 +873,11 @@ impl Vector {
         )
     }
 
+    /// Average outward normal of a polygon defined by `points` (Newell's method).
+    pub fn average_normal(points: &[Point]) -> Vector {
+        average_normal(points)
+    }
+
     /// Computes coordinate direction angles (alpha, beta, gamma).
     ///
     /// These are the angles between the vector and each coordinate axis.

@@ -278,3 +278,15 @@ REGISTER_MINI_TEST!("Plane", "Transform", crate::plane_test::run_plane_transform
 REGISTER_MINI_TEST!("Plane", "Transformed", crate::plane_test::run_plane_transformed);
 REGISTER_MINI_TEST!("Plane", "Json Roundtrip", crate::plane_test::run_plane_json_roundtrip);
 REGISTER_MINI_TEST!("Plane", "Protobuf Roundtrip", crate::plane_test::run_plane_protobuf_roundtrip);
+
+pub fn run_plane_has_on_negative_side() -> TestResult {
+    MINI_TEST!("Has On Negative Side", {
+        use crate::{Plane, Point};
+        let pl = Plane::xy_plane();
+        let above = Point::new(0.0, 0.0, 1.0);
+        let below = Point::new(0.0, 0.0, -1.0);
+        MINI_CHECK!(pl.has_on_negative_side(&below));
+        MINI_CHECK!(!pl.has_on_negative_side(&above));
+    })
+}
+REGISTER_MINI_TEST!("Plane", "Has On Negative Side", crate::plane_test::run_plane_has_on_negative_side);
