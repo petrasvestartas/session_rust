@@ -11,7 +11,7 @@ pub fn run_quaternion_constructor() -> TestResult {
         let q0 = Quaternion::identity();
 
         // Constructor with arguments
-        let mut q = Quaternion::from_scalar_and_vector(2.0, Vector::new(1.0, 0.0, 0.0));
+        let mut q = Quaternion::from_components(2.0, Vector::new(1.0, 0.0, 0.0));
 
         // Setters
         q[0] = 5.0;
@@ -31,14 +31,14 @@ pub fn run_quaternion_constructor() -> TestResult {
 
         // Copy (duplicates everything except guid)
         let qcopy = q.duplicate();
-        let qother = Quaternion::from_scalar_and_vector(2.0, Vector::new(1.0, 0.0, 0.0));
+        let qother = Quaternion::from_components(2.0, Vector::new(1.0, 0.0, 0.0));
 
         // Copy operators
         let qrot = Quaternion::from_axis_angle(Vector::new(0.0, 0.0, 1.0), PI / 2.0);
         let qmul = qrot.clone() * qrot.clone();
         let qscaled = Quaternion::identity() * 2.0;
-        let a = Quaternion::from_scalar_and_vector(1.0, Vector::new(0.0, 0.0, 0.0));
-        let b = Quaternion::from_scalar_and_vector(0.0, Vector::new(0.0, 0.0, 1.0));
+        let a = Quaternion::from_components(1.0, Vector::new(0.0, 0.0, 0.0));
+        let b = Quaternion::from_components(0.0, Vector::new(0.0, 0.0, 1.0));
         let qsum = a + b;
         let qdiff = qrot.clone() - qrot.clone();
         let qneg = -Quaternion::identity();
@@ -73,16 +73,37 @@ pub fn run_quaternion_identity() -> TestResult {
     })
 }
 
-pub fn run_quaternion_from_scalar_and_vector() -> TestResult {
-    MINI_TEST!("From Scalar And Vector", {
+pub fn run_quaternion_from_components() -> TestResult {
+    MINI_TEST!("From Components", {
         use crate::Quaternion;
         use crate::Vector;
-        let q = Quaternion::from_scalar_and_vector(2.0, Vector::new(1.0, 2.0, 3.0));
+
+        // q = s + xi + yj + zk: first arg is scalar, second arg is (i,j,k) coefficients (NOT a rotation axis).
+        let q = Quaternion::from_components(2.0, Vector::new(1.0, 2.0, 3.0));
 
         MINI_CHECK!(TOLERANCE.is_close(q.scalar, 2.0));
         MINI_CHECK!(TOLERANCE.is_close(q.vector[0], 1.0));
         MINI_CHECK!(TOLERANCE.is_close(q.vector[1], 2.0));
         MINI_CHECK!(TOLERANCE.is_close(q.vector[2], 3.0));
+
+        // Geometric meaning of (s, v): a rotation by `angle` around `axis`.
+        // to_axis_angle() extracts these — for q=(2,(1,2,3)):
+        //   axis  = (1,2,3)/sqrt(14)
+        //   angle = 2*acos(2/sqrt(18)) ≈ 2.1617 rad ≈ 123.85°
+        let (axis, angle) = q.to_axis_angle();
+        let sqrt14 = 14.0_f64.sqrt();
+        MINI_CHECK!(TOLERANCE.is_close(axis[0], 1.0 / sqrt14));
+        MINI_CHECK!(TOLERANCE.is_close(axis[1], 2.0 / sqrt14));
+        MINI_CHECK!(TOLERANCE.is_close(axis[2], 3.0 / sqrt14));
+        MINI_CHECK!(TOLERANCE.is_close(angle, 2.0 * (2.0_f64 / 18.0_f64.sqrt()).acos()));
+
+        // Round-trip: from_axis_angle(to_axis_angle(q)) == q.normalized()
+        let q_round = Quaternion::from_axis_angle(axis, angle);
+        let qn = q.normalized();
+        MINI_CHECK!(TOLERANCE.is_close(q_round.scalar, qn.scalar));
+        MINI_CHECK!(TOLERANCE.is_close(q_round.vector[0], qn.vector[0]));
+        MINI_CHECK!(TOLERANCE.is_close(q_round.vector[1], qn.vector[1]));
+        MINI_CHECK!(TOLERANCE.is_close(q_round.vector[2], qn.vector[2]));
     })
 }
 
@@ -198,7 +219,7 @@ pub fn run_quaternion_normalized() -> TestResult {
     MINI_TEST!("Normalized", {
         use crate::Quaternion;
         use crate::Vector;
-        let q = Quaternion::from_scalar_and_vector(2.0, Vector::new(0.0, 0.0, 2.0));
+        let q = Quaternion::from_components(2.0, Vector::new(0.0, 0.0, 2.0));
         let n = q.normalized();
 
         MINI_CHECK!(TOLERANCE.is_close(n.magnitude(), 1.0));
@@ -318,7 +339,7 @@ pub fn run_quaternion_protobuf_roundtrip() -> TestResult {
 
 REGISTER_MINI_TEST!("Quaternion", "Constructor", crate::quaternion_test::run_quaternion_constructor);
 REGISTER_MINI_TEST!("Quaternion", "Identity", crate::quaternion_test::run_quaternion_identity);
-REGISTER_MINI_TEST!("Quaternion", "From Scalar And Vector", crate::quaternion_test::run_quaternion_from_scalar_and_vector);
+REGISTER_MINI_TEST!("Quaternion", "From Components", crate::quaternion_test::run_quaternion_from_components);
 REGISTER_MINI_TEST!("Quaternion", "From Axis Angle", crate::quaternion_test::run_quaternion_from_axis_angle);
 REGISTER_MINI_TEST!("Quaternion", "From Arc", crate::quaternion_test::run_quaternion_from_arc);
 REGISTER_MINI_TEST!("Quaternion", "From Euler", crate::quaternion_test::run_quaternion_from_euler);

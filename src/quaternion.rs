@@ -84,8 +84,39 @@ impl Quaternion {
         }
     }
 
-    /// Create from scalar and vector components
-    pub fn from_scalar_and_vector(scalar: f64, vector: Vector) -> Self {
+    /// Create a quaternion from raw scalar (real) and vector (imaginary) components.
+    ///
+    /// **WARNING:** The `vector` argument is NOT a rotation axis. It is the
+    /// `(i, j, k)` coefficients of the quaternion. Most users want
+    /// [`Quaternion::from_axis_angle`] instead.
+    ///
+    /// A quaternion is canonically written as `q = s + xi + yj + zk` where
+    /// `s` is the scalar (real) part and `(x, y, z)` is the vector (imaginary)
+    /// part. Use this constructor only when you have raw quaternion components.
+    ///
+    /// # Visually constructing a plane from `(s, v)` values
+    ///
+    /// 1. If `v` should be the plane's **normal** (the geometric meaning users
+    ///    usually expect), bypass the quaternion entirely:
+    ///    ```ignore
+    ///    let p = Plane::from_point_normal(Point::new(0.0,0.0,0.0), v);
+    ///    ```
+    ///
+    /// 2. If you want the plane produced by the quaternion's rotation
+    ///    (i.e. the world XY plane rotated by `q`), normalize first:
+    ///    ```ignore
+    ///    let p = Quaternion::from_components(s, v).normalized().get_rotation();
+    ///    ```
+    ///    The result's normal is the rotation of `(0,0,1)` by `q`, which
+    ///    equals `v` only in the trivial case where the rotation axis is Z.
+    ///
+    /// 3. If you want a quaternion whose rotation produces a plane with
+    ///    normal `v`, use [`Quaternion::from_arc`]:
+    ///    ```ignore
+    ///    let q = Quaternion::from_arc(Vector::new(0.0,0.0,1.0), v.normalized());
+    ///    let p = q.get_rotation();   // p.z_axis() == v.normalized()
+    ///    ```
+    pub fn from_components(scalar: f64, vector: Vector) -> Self {
         Quaternion {
             typ: "Quaternion".to_string(),
             guid: std::sync::OnceLock::new(),
@@ -107,14 +138,54 @@ impl Quaternion {
 
     /// Identity quaternion (scalar=1, vector=0)
     pub fn identity() -> Self {
-        Self::from_scalar_and_vector(1.0, Vector::new(0.0, 0.0, 0.0))
+        Self::from_components(1.0, Vector::new(0.0, 0.0, 0.0))
     }
 
     /// Create from axis of rotation and angle
     pub fn from_axis_angle(axis: Vector, angle: f64) -> Self {
         let ax = axis.normalized();
         let half = angle * 0.5;
-        Self::from_scalar_and_vector(half.cos(), ax * half.sin())
+        Self::from_components(half.cos(), ax * half.sin())
+    }
+
+    /// Extract `(axis, angle in radians)` from this quaternion — the inverse of
+    /// [`Quaternion::from_axis_angle`].
+    ///
+    /// Geometric meaning of a quaternion `(s, v)`:
+    ///
+    /// - `axis  = v / |v|`
+    /// - `angle = 2 * acos(s / |q|)`
+    ///
+    /// Normalizes internally, so non-unit quaternions are handled correctly.
+    ///
+    /// Edge case: for the identity quaternion (or any near-identity) the
+    /// axis is undefined; this function returns `(Vector(0, 0, 1), 0.0)`.
+    ///
+    /// # Example
+    ///
+    /// ```ignore
+    /// let q = Quaternion::from_components(2.0, Vector::new(1.0, 2.0, 3.0));
+    /// let (axis, angle) = q.to_axis_angle();
+    /// // axis = (1,2,3)/sqrt(14), angle ≈ 2.1617 rad ≈ 123.85°
+    ///
+    /// // Reconstruct via geometric form:
+    /// let q2 = Quaternion::from_axis_angle(axis, angle);
+    /// // q2 == q.normalized()
+    /// ```
+    pub fn to_axis_angle(&self) -> (Vector, f64) {
+        let qn = self.normalized();
+        let s = qn.scalar.clamp(-1.0, 1.0);
+        let angle = 2.0 * s.acos();
+        let sin_half = (1.0 - s * s).sqrt();
+        if sin_half < 1e-12 {
+            return (Vector::new(0.0, 0.0, 1.0), 0.0);
+        }
+        let axis = Vector::new(
+            qn.vector[0] / sin_half,
+            qn.vector[1] / sin_half,
+            qn.vector[2] / sin_half,
+        );
+        (axis, angle)
     }
 
     /// Create rotation from source vector to destination vector
@@ -135,7 +206,7 @@ impl Quaternion {
             }
             return Self::identity();
         }
-        Self::from_scalar_and_vector(1.0 + dot_val, cross).normalized()
+        Self::from_components(1.0 + dot_val, cross).normalized()
     }
 
     /// Create from Euler angles (XYZ convention)
@@ -143,7 +214,7 @@ impl Quaternion {
         let (s1, c1) = ((x * 0.5).sin(), (x * 0.5).cos());
         let (s2, c2) = ((y * 0.5).sin(), (y * 0.5).cos());
         let (s3, c3) = ((z * 0.5).sin(), (z * 0.5).cos());
-        Self::from_scalar_and_vector(
+        Self::from_components(
             -s1 * s2 * s3 + c1 * c2 * c3,
             Vector::new(
                 s1 * c2 * c3 + s2 * s3 * c1,
@@ -175,19 +246,19 @@ impl Quaternion {
                 if d > eps { is_identity = false; break 'outer; }
             }
         }
-        if is_identity { return Self::from_scalar_and_vector(1.0, Vector::new(0.0, 0.0, 0.0)); }
+        if is_identity { return Self::from_components(1.0, Vector::new(0.0, 0.0, 0.0)); }
         let i = if m[0][0] >= m[1][1] { if m[0][0] >= m[2][2] { 0 } else { 2 } } else { if m[1][1] >= m[2][2] { 1 } else { 2 } };
         let j = (i + 1) % 3;
         let k = (i + 2) % 3;
         let s_init = 1.0 + m[i][i] - m[j][j] - m[k][k];
-        if s_init <= 0.0 { return Self::from_scalar_and_vector(1.0, Vector::new(0.0, 0.0, 0.0)); }
+        if s_init <= 0.0 { return Self::from_components(1.0, Vector::new(0.0, 0.0, 0.0)); }
         let r = s_init.sqrt();
         let s = 0.5 / r;
         let mut q = [0.0_f64; 3];
         q[i] = 0.5 * r;
         q[j] = s * (m[i][j] + m[j][i]);
         q[k] = s * (m[k][i] + m[i][k]);
-        Self::from_scalar_and_vector(s * (m[k][j] - m[j][k]), Vector::new(q[0], q[1], q[2]))
+        Self::from_components(s * (m[k][j] - m[j][k]), Vector::new(q[0], q[1], q[2]))
     }
 
     /// Apply this quaternion's rotation to the world XY plane and return the resulting plane (Rhino: Quaternion.GetRotation(out plane))
@@ -347,7 +418,7 @@ impl Quaternion {
     pub fn pb_loads(data: &[u8]) -> Result<Self, Box<dyn std::error::Error>> {
         use prost::Message;
         let proto = crate::proto::Quaternion::decode(data)?;
-        let mut q = Self::from_scalar_and_vector(proto.a, Vector::new(proto.b, proto.c, proto.d));
+        let mut q = Self::from_components(proto.a, Vector::new(proto.b, proto.c, proto.d));
         q.name = proto.name;
         Ok(q)
     }
@@ -398,7 +469,7 @@ impl Mul<Quaternion> for Quaternion {
     fn mul(self, rhs: Quaternion) -> Self::Output {
         let new_s = self.scalar * rhs.scalar - self.vector.dot(&rhs.vector);
         let new_v = rhs.vector.clone() * self.scalar + self.vector.clone() * rhs.scalar + self.vector.cross(&rhs.vector);
-        Self::from_scalar_and_vector(new_s, new_v)
+        Self::from_components(new_s, new_v)
     }
 }
 
@@ -407,7 +478,7 @@ impl Mul<f64> for Quaternion {
     type Output = Quaternion;
 
     fn mul(self, t: f64) -> Self::Output {
-        Self::from_scalar_and_vector(self.scalar * t, self.vector * t)
+        Self::from_components(self.scalar * t, self.vector * t)
     }
 }
 
@@ -416,7 +487,7 @@ impl Add<Quaternion> for Quaternion {
     type Output = Quaternion;
 
     fn add(self, rhs: Quaternion) -> Self::Output {
-        Self::from_scalar_and_vector(self.scalar + rhs.scalar, self.vector + rhs.vector)
+        Self::from_components(self.scalar + rhs.scalar, self.vector + rhs.vector)
     }
 }
 
@@ -425,7 +496,7 @@ impl Sub<Quaternion> for Quaternion {
     type Output = Quaternion;
 
     fn sub(self, rhs: Quaternion) -> Self::Output {
-        Self::from_scalar_and_vector(self.scalar - rhs.scalar, self.vector - rhs.vector)
+        Self::from_components(self.scalar - rhs.scalar, self.vector - rhs.vector)
     }
 }
 
@@ -434,7 +505,7 @@ impl Neg for Quaternion {
     type Output = Quaternion;
 
     fn neg(self) -> Self::Output {
-        Self::from_scalar_and_vector(-self.scalar, self.vector * -1.0)
+        Self::from_components(-self.scalar, self.vector * -1.0)
     }
 }
 

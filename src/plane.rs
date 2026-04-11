@@ -1,4 +1,4 @@
-use crate::{Color, Point, Vector, Xform};
+use crate::{Color, Point, Polyline, Vector, Xform};
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use serde::ser::SerializeMap;
 
@@ -751,6 +751,28 @@ impl Plane {
     /// `(a, b, c)` is negative. Mirrors CGAL's `Plane_3::has_on_negative_side`.
     pub fn has_on_negative_side(&self, p: &Point) -> bool {
         (self._a * p[0] + self._b * p[1] + self._c * p[2] + self._d) < 0.0
+    }
+
+    pub fn to_polylines(&self, scale: f64) -> Vec<Polyline> {
+        let s = scale * 0.5;
+        let o = &self._origin;
+        let x = &self._x_axis;
+        let y = &self._y_axis;
+        let z = &self._z_axis;
+        let c0 = Point::new(o[0] - x[0]*s - y[0]*s, o[1] - x[1]*s - y[1]*s, o[2] - x[2]*s - y[2]*s);
+        let c1 = Point::new(o[0] + x[0]*s - y[0]*s, o[1] + x[1]*s - y[1]*s, o[2] + x[2]*s - y[2]*s);
+        let c2 = Point::new(o[0] + x[0]*s + y[0]*s, o[1] + x[1]*s + y[1]*s, o[2] + x[2]*s + y[2]*s);
+        let c3 = Point::new(o[0] - x[0]*s + y[0]*s, o[1] - x[1]*s + y[1]*s, o[2] - x[2]*s + y[2]*s);
+        let mut rect = Polyline::new(vec![c0, c1, c2, c3, Point::new(o[0] - x[0]*s - y[0]*s, o[1] - x[1]*s - y[1]*s, o[2] - x[2]*s - y[2]*s)]);
+        rect.linecolor = self.linecolor.clone();
+        let origin_pt = Point::new(o[0], o[1], o[2]);
+        let mut x_line = Polyline::new(vec![origin_pt.clone(), Point::new(o[0] + x[0]*s, o[1] + x[1]*s, o[2] + x[2]*s)]);
+        x_line.linecolor = Color::red();
+        let mut y_line = Polyline::new(vec![origin_pt.clone(), Point::new(o[0] + y[0]*s, o[1] + y[1]*s, o[2] + y[2]*s)]);
+        y_line.linecolor = Color::green();
+        let mut z_line = Polyline::new(vec![origin_pt, Point::new(o[0] + z[0]*s, o[1] + z[1]*s, o[2] + z[2]*s)]);
+        z_line.linecolor = Color::blue();
+        vec![rect, x_line, y_line, z_line]
     }
 }
 
