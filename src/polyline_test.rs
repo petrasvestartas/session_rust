@@ -96,6 +96,35 @@ pub fn run_polyline_constructor() -> TestResult {
     })
 }
 
+pub fn run_polyline_from_coords() -> TestResult {
+    MINI_TEST!("From Coords", {
+        use crate::Polyline;
+
+        let coords = vec![0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 1.0, 1.0, 0.0];
+        let pl = Polyline::from_coords(coords);
+
+        MINI_CHECK!(pl.point_count() == 3);
+        MINI_CHECK!(TOLERANCE.is_close(pl.get_points()[0][0], 0.0));
+        MINI_CHECK!(TOLERANCE.is_close(pl.get_points()[1][0], 1.0));
+        MINI_CHECK!(TOLERANCE.is_close(pl.get_points()[2][1], 1.0));
+    })
+}
+REGISTER_MINI_TEST!("Polyline", "From Coords", crate::polyline_test::run_polyline_from_coords);
+
+pub fn run_polyline_from_sides() -> TestResult {
+    MINI_TEST!("From Sides", {
+        use crate::Polyline;
+
+        let sq = Polyline::from_sides(4, 1.0, false);
+        let sq_closed = Polyline::from_sides(4, 1.0, true);
+
+        MINI_CHECK!(sq.point_count() == 4);
+        MINI_CHECK!(sq_closed.point_count() == 5);
+        MINI_CHECK!(sq_closed.is_closed());
+    })
+}
+REGISTER_MINI_TEST!("Polyline", "From Sides", crate::polyline_test::run_polyline_from_sides);
+
 pub fn run_polyline_transformation() -> TestResult {
     MINI_TEST!("Transformation", {
         use crate::Polyline;
@@ -309,6 +338,117 @@ pub fn run_polyline_closest_point() -> TestResult {
     })
 }
 
+pub fn run_polyline_closest_point_to_line() -> TestResult {
+    MINI_TEST!("Closest Point To Line", {
+        use crate::Polyline;
+        use crate::Point;
+
+        let line_start = Point::new(0.0, 0.0, 0.0);
+        let line_end = Point::new(2.0, 0.0, 0.0);
+        let pt = Point::new(1.0, 1.0, 0.0);
+        let t = Polyline::closest_point_to_line(&pt, &line_start, &line_end);
+
+        MINI_CHECK!(TOLERANCE.is_close(t, 0.5));
+    })
+}
+REGISTER_MINI_TEST!("Polyline", "Closest Point To Line", crate::polyline_test::run_polyline_closest_point_to_line);
+
+pub fn run_polyline_line_line_overlap() -> TestResult {
+    MINI_TEST!("Line Line Overlap", {
+        use crate::Polyline;
+        use crate::Point;
+
+        let s0 = Point::new(0.0, 0.0, 0.0);
+        let e0 = Point::new(2.0, 0.0, 0.0);
+        let s1 = Point::new(1.0, 0.0, 0.0);
+        let e1 = Point::new(3.0, 0.0, 0.0);
+        let result = Polyline::line_line_overlap(&s0, &e0, &s1, &e1);
+
+        MINI_CHECK!(result.is_some());
+        let (os, oe) = result.unwrap();
+        MINI_CHECK!(TOLERANCE.is_close(os[0], 1.0));
+        MINI_CHECK!(TOLERANCE.is_close(oe[0], 2.0));
+
+        let s2 = Point::new(5.0, 0.0, 0.0);
+        let e2 = Point::new(6.0, 0.0, 0.0);
+        let no_overlap = Polyline::line_line_overlap(&s0, &e0, &s2, &e2);
+        MINI_CHECK!(no_overlap.is_none());
+    })
+}
+REGISTER_MINI_TEST!("Polyline", "Line Line Overlap", crate::polyline_test::run_polyline_line_line_overlap);
+
+pub fn run_polyline_line_line_average() -> TestResult {
+    MINI_TEST!("Line Line Average", {
+        use crate::Polyline;
+        use crate::Point;
+
+        let s0 = Point::new(0.0, 0.0, 0.0);
+        let e0 = Point::new(2.0, 0.0, 0.0);
+        let s1 = Point::new(0.0, 2.0, 0.0);
+        let e1 = Point::new(2.0, 2.0, 0.0);
+        let (os, oe) = Polyline::line_line_average(&s0, &e0, &s1, &e1);
+
+        MINI_CHECK!(TOLERANCE.is_close(os[0], 0.0));
+        MINI_CHECK!(TOLERANCE.is_close(os[1], 1.0));
+        MINI_CHECK!(TOLERANCE.is_close(oe[0], 2.0));
+        MINI_CHECK!(TOLERANCE.is_close(oe[1], 1.0));
+    })
+}
+REGISTER_MINI_TEST!("Polyline", "Line Line Average", crate::polyline_test::run_polyline_line_line_average);
+
+pub fn run_polyline_line_line_overlap_average() -> TestResult {
+    MINI_TEST!("Line Line Overlap Average", {
+        use crate::Polyline;
+        use crate::Point;
+
+        let s0 = Point::new(0.0, 0.0, 0.0);
+        let e0 = Point::new(2.0, 0.0, 0.0);
+        let s1 = Point::new(1.0, 2.0, 0.0);
+        let e1 = Point::new(3.0, 2.0, 0.0);
+        let (os, oe) = Polyline::line_line_overlap_average(&s0, &e0, &s1, &e1);
+
+        MINI_CHECK!(TOLERANCE.is_close(os[0], 1.0));
+        MINI_CHECK!(TOLERANCE.is_close(oe[0], 2.0));
+        MINI_CHECK!(TOLERANCE.is_close(os[1], 1.0));
+    })
+}
+REGISTER_MINI_TEST!("Polyline", "Line Line Overlap Average", crate::polyline_test::run_polyline_line_line_overlap_average);
+
+pub fn run_polyline_line_from_projected_points() -> TestResult {
+    MINI_TEST!("Line From Projected Points", {
+        use crate::Polyline;
+        use crate::Point;
+
+        let s = Point::new(0.0, 0.0, 0.0);
+        let e = Point::new(4.0, 0.0, 0.0);
+        let pts = vec![Point::new(1.0, 1.0, 0.0), Point::new(3.0, -1.0, 0.0)];
+        let result = Polyline::line_from_projected_points(&s, &e, &pts);
+
+        MINI_CHECK!(result.is_some());
+        let (os, oe) = result.unwrap();
+        MINI_CHECK!(TOLERANCE.is_close(os[0], 1.0));
+        MINI_CHECK!(TOLERANCE.is_close(oe[0], 3.0));
+    })
+}
+REGISTER_MINI_TEST!("Polyline", "Line From Projected Points", crate::polyline_test::run_polyline_line_from_projected_points);
+
+pub fn run_polyline_point_in_polygon_2d() -> TestResult {
+    MINI_TEST!("Point In Polygon 2d", {
+        use crate::Polyline;
+        use crate::Point;
+
+        let sq = Polyline::new(vec![
+            Point::new(0.0, 0.0, 0.0), Point::new(1.0, 0.0, 0.0),
+            Point::new(1.0, 1.0, 0.0), Point::new(0.0, 1.0, 0.0),
+            Point::new(0.0, 0.0, 0.0),
+        ]);
+
+        MINI_CHECK!(sq.point_in_polygon_2d(&Point::new(0.5, 0.5, 0.0)));
+        MINI_CHECK!(!sq.point_in_polygon_2d(&Point::new(2.0, 2.0, 0.0)));
+    })
+}
+REGISTER_MINI_TEST!("Polyline", "Point In Polygon 2d", crate::polyline_test::run_polyline_point_in_polygon_2d);
+
 pub fn run_polyline_extend_segment() -> TestResult {
     MINI_TEST!("Extend Segment", {
         use crate::Polyline;
@@ -344,6 +484,36 @@ pub fn run_polyline_extend_segment_equally() -> TestResult {
         MINI_CHECK!(TOLERANCE.is_close(second, 1.5));
     })
 }
+
+pub fn run_polyline_extend_line_segment() -> TestResult {
+    MINI_TEST!("Extend Line Segment", {
+        use crate::Polyline;
+        use crate::Point;
+
+        let mut start = Point::new(0.0, 0.0, 0.0);
+        let mut end = Point::new(1.0, 0.0, 0.0);
+        Polyline::extend_line_segment(&mut start, &mut end, 0.5, 0.5);
+
+        MINI_CHECK!(TOLERANCE.is_close(start[0], -0.5));
+        MINI_CHECK!(TOLERANCE.is_close(end[0], 1.5));
+    })
+}
+REGISTER_MINI_TEST!("Polyline", "Extend Line Segment", crate::polyline_test::run_polyline_extend_line_segment);
+
+pub fn run_polyline_shrink_line_segment() -> TestResult {
+    MINI_TEST!("Shrink Line Segment", {
+        use crate::Polyline;
+        use crate::Point;
+
+        let mut start = Point::new(0.0, 0.0, 0.0);
+        let mut end = Point::new(1.0, 0.0, 0.0);
+        Polyline::shrink_line_segment(&mut start, &mut end, 0.1);
+
+        MINI_CHECK!(TOLERANCE.is_close(start[0], 0.1));
+        MINI_CHECK!(TOLERANCE.is_close(end[0], 0.9));
+    })
+}
+REGISTER_MINI_TEST!("Polyline", "Shrink Line Segment", crate::polyline_test::run_polyline_shrink_line_segment);
 
 pub fn run_polyline_get_points() -> TestResult {
     MINI_TEST!("Get Points", {
@@ -385,6 +555,61 @@ pub fn run_polyline_get_lines() -> TestResult {
         MINI_CHECK!(TOLERANCE.is_close(lines[2][0], 1.0) && TOLERANCE.is_close(lines[2][3], 0.0));
     })
 }
+
+pub fn run_polyline_add_point() -> TestResult {
+    MINI_TEST!("Add Point", {
+        use crate::Polyline;
+        use crate::Point;
+
+        let mut pl = Polyline::new(vec![
+            Point::new(0.0, 0.0, 0.0),
+            Point::new(1.0, 0.0, 0.0),
+        ]);
+        pl.add_point(Point::new(2.0, 0.0, 0.0));
+
+        MINI_CHECK!(pl.point_count() == 3);
+        MINI_CHECK!(TOLERANCE.is_close(pl.get_points()[2][0], 2.0));
+    })
+}
+REGISTER_MINI_TEST!("Polyline", "Add Point", crate::polyline_test::run_polyline_add_point);
+
+pub fn run_polyline_insert_point() -> TestResult {
+    MINI_TEST!("Insert Point", {
+        use crate::Polyline;
+        use crate::Point;
+
+        let mut pl = Polyline::new(vec![
+            Point::new(0.0, 0.0, 0.0),
+            Point::new(2.0, 0.0, 0.0),
+        ]);
+        pl.insert_point(1, Point::new(1.0, 0.0, 0.0));
+
+        MINI_CHECK!(pl.point_count() == 3);
+        MINI_CHECK!(TOLERANCE.is_close(pl.get_points()[1][0], 1.0));
+        MINI_CHECK!(TOLERANCE.is_close(pl.get_points()[2][0], 2.0));
+    })
+}
+REGISTER_MINI_TEST!("Polyline", "Insert Point", crate::polyline_test::run_polyline_insert_point);
+
+pub fn run_polyline_remove_point() -> TestResult {
+    MINI_TEST!("Remove Point", {
+        use crate::Polyline;
+        use crate::Point;
+
+        let mut pl = Polyline::new(vec![
+            Point::new(0.0, 0.0, 0.0),
+            Point::new(1.0, 0.0, 0.0),
+            Point::new(2.0, 0.0, 0.0),
+        ]);
+        let removed = pl.remove_point(1);
+
+        MINI_CHECK!(removed.is_some());
+        MINI_CHECK!(pl.point_count() == 2);
+        MINI_CHECK!(TOLERANCE.is_close(removed.unwrap()[0], 1.0));
+        MINI_CHECK!(TOLERANCE.is_close(pl.get_points()[1][0], 2.0));
+    })
+}
+REGISTER_MINI_TEST!("Polyline", "Remove Point", crate::polyline_test::run_polyline_remove_point);
 
 pub fn run_polyline_shift() -> TestResult {
     MINI_TEST!("Shift", {
@@ -685,6 +910,26 @@ pub fn run_polyline_boolean_op_plane() -> TestResult {
     })
 }
 REGISTER_MINI_TEST!("Polyline", "Boolean Op Plane", crate::polyline_test::run_polyline_boolean_op_plane);
+
+pub fn run_polyline_merge_collinear() -> TestResult {
+    MINI_TEST!("Merge Collinear", {
+        use crate::Polyline;
+        use crate::Point;
+
+        let mut pl = Polyline::new(vec![
+            Point::new(0.0, 0.0, 0.0),
+            Point::new(1.0, 0.0, 0.0),
+            Point::new(2.0, 0.0, 0.0),
+            Point::new(2.0, 1.0, 0.0),
+        ]);
+        pl.merge_collinear(1e-3);
+
+        MINI_CHECK!(pl.point_count() == 3);
+        MINI_CHECK!(TOLERANCE.is_close(pl.get_points()[1][0], 2.0));
+        MINI_CHECK!(TOLERANCE.is_close(pl.get_points()[2][1], 1.0));
+    })
+}
+REGISTER_MINI_TEST!("Polyline", "Merge Collinear", crate::polyline_test::run_polyline_merge_collinear);
 
 pub fn run_polyline_simplify_points() -> TestResult {
     MINI_TEST!("Simplify Points", {

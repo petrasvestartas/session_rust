@@ -666,10 +666,11 @@ impl BVH {
             if a_leaf && b_leaf {
                 let i = a.object_id as usize;
                 let j = b.object_id as usize;
-                if i < j && i < visited.len() && j < visited.len() {
-                    all_collisions.push((i, j));
-                    visited[i] = true;
-                    visited[j] = true;
+                if i != j && i < visited.len() && j < visited.len() {
+                    let (lo, hi) = if i < j { (i, j) } else { (j, i) };
+                    all_collisions.push((lo, hi));
+                    visited[lo] = true;
+                    visited[hi] = true;
                 }
                 continue;
             }

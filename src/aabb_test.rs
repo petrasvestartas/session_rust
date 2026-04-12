@@ -137,11 +137,16 @@ pub fn run_aabb_constructor() -> crate::mini_test::TestResult {
         MINI_CHECK!(a.get_edges().len() == 12);
         MINI_CHECK!(a.point_at(1.0, 0.0, 0.0) == Point::new(1.0, 0.0, 0.0));
         MINI_CHECK!(a.point_at(0.0, 0.0, 0.0) == Point::new(0.0, 0.0, 0.0));
+        MINI_CHECK!(a.intersects(&AABB::new(0.5, 0.0, 0.0, 0.5, 0.5, 0.5)));
+        MINI_CHECK!(!a.intersects(&AABB::new(10.0, 0.0, 0.0, 0.5, 0.5, 0.5)));
         let mut a = a;
         let b = AABB::new(5.0, 0.0, 0.0, 1.0, 1.0, 1.0);
         a.union_with(&b);
         MINI_CHECK!(a.min_point() == Point::new(-1.0, -2.0, -3.0));
         MINI_CHECK!(a.max_point() == Point::new(6.0, 2.0, 3.0));
+        let c = AABB::merge(AABB::new(0.0, 0.0, 0.0, 1.0, 1.0, 1.0), AABB::new(4.0, 0.0, 0.0, 1.0, 1.0, 1.0));
+        MINI_CHECK!(c.min_point() == Point::new(-1.0, -1.0, -1.0));
+        MINI_CHECK!(c.max_point() == Point::new(5.0, 1.0, 1.0));
     })
 }
 

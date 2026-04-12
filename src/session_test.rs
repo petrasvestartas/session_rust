@@ -54,6 +54,25 @@ pub fn run_session_add_plane() -> TestResult {
     })
 }
 
+pub fn run_session_add_obb() -> TestResult {
+    MINI_TEST!("Add OBB", {
+        use crate::{Session, OBB, Point, Vector};
+        let mut session = Session::default();
+        let obb = OBB::new(
+            Point::new(0.0, 0.0, 0.0),
+            Vector::new(1.0, 0.0, 0.0),
+            Vector::new(0.0, 1.0, 0.0),
+            Vector::new(0.0, 0.0, 1.0),
+            Vector::new(1.0, 1.0, 1.0),
+        );
+        let guid = obb.guid().to_string();
+        session.add_obb(obb);
+
+        MINI_CHECK!(session.objects.bboxes.len() == 1);
+        MINI_CHECK!(session.lookup.contains_key(&guid));
+    })
+}
+
 pub fn run_session_add_polyline() -> TestResult {
     MINI_TEST!("Add Polyline", {
         use crate::{Session, Polyline, Point};
@@ -93,6 +112,20 @@ pub fn run_session_add_mesh() -> TestResult {
         session.add_mesh(mesh, None);
 
         MINI_CHECK!(session.objects.meshes.len() == 1);
+        MINI_CHECK!(session.lookup.contains_key(&guid));
+    })
+}
+
+pub fn run_session_add_brep() -> TestResult {
+    MINI_TEST!("Add Brep", {
+        use crate::Session;
+        use crate::brep::BRep;
+        let mut session = Session::default();
+        let brep = BRep::create_box(1.0, 1.0, 1.0);
+        let guid = brep.guid().to_string();
+        session.add_brep(brep, None);
+
+        MINI_CHECK!(session.objects.breps.len() == 1);
         MINI_CHECK!(session.lookup.contains_key(&guid));
     })
 }
@@ -210,6 +243,48 @@ pub fn run_session_get_neighbours() -> TestResult {
 
         MINI_CHECK!(neighbours.len() == 1);
         MINI_CHECK!(neighbours[0] == g2);
+    })
+}
+
+pub fn run_session_get_collisions() -> TestResult {
+    MINI_TEST!("Get Collisions", {
+        use crate::{Session, OBB, Point, Vector};
+        let mut session = Session::default();
+        let obb1 = OBB::new(
+            Point::new(0.0, 0.0, 0.0),
+            Vector::new(1.0, 0.0, 0.0),
+            Vector::new(0.0, 1.0, 0.0),
+            Vector::new(0.0, 0.0, 1.0),
+            Vector::new(2.0, 2.0, 2.0),
+        );
+        let obb2 = OBB::new(
+            Point::new(1.0, 0.0, 0.0),
+            Vector::new(1.0, 0.0, 0.0),
+            Vector::new(0.0, 1.0, 0.0),
+            Vector::new(0.0, 0.0, 1.0),
+            Vector::new(2.0, 2.0, 2.0),
+        );
+        session.add_obb(obb1);
+        session.add_obb(obb2);
+        let pairs = session.get_collisions();
+
+        MINI_CHECK!(pairs.len() >= 1);
+    })
+}
+
+pub fn run_session_ray_cast() -> TestResult {
+    MINI_TEST!("Ray Cast", {
+        use crate::{Session, Mesh, Point, Vector};
+        let mut session = Session::default();
+        let mut mesh = Mesh::new();
+        let v0 = mesh.add_vertex(Point::new(-1.0, -1.0, 0.0), None);
+        let v1 = mesh.add_vertex(Point::new(1.0, -1.0, 0.0), None);
+        let v2 = mesh.add_vertex(Point::new(0.0, 1.0, 0.0), None);
+        mesh.add_face(vec![v0, v1, v2], None);
+        session.add_mesh(mesh, None);
+        let hits = session.ray_cast(&Point::new(0.0, 0.0, 2.0), &Vector::new(0.0, 0.0, -1.0), 1e-3);
+
+        MINI_CHECK!(hits.len() >= 1);
     })
 }
 
@@ -383,9 +458,11 @@ REGISTER_MINI_TEST!("Session", "Constructor", crate::session_test::run_session_c
 REGISTER_MINI_TEST!("Session", "Add Point", crate::session_test::run_session_add_point);
 REGISTER_MINI_TEST!("Session", "Add Line", crate::session_test::run_session_add_line);
 REGISTER_MINI_TEST!("Session", "Add Plane", crate::session_test::run_session_add_plane);
+REGISTER_MINI_TEST!("Session", "Add OBB", crate::session_test::run_session_add_obb);
 REGISTER_MINI_TEST!("Session", "Add Polyline", crate::session_test::run_session_add_polyline);
 REGISTER_MINI_TEST!("Session", "Add Pointcloud", crate::session_test::run_session_add_pointcloud);
 REGISTER_MINI_TEST!("Session", "Add Mesh", crate::session_test::run_session_add_mesh);
+REGISTER_MINI_TEST!("Session", "Add Brep", crate::session_test::run_session_add_brep);
 REGISTER_MINI_TEST!("Session", "Add Element", crate::session_test::run_session_add_element);
 REGISTER_MINI_TEST!("Session", "Add Group", crate::session_test::run_session_add_group);
 REGISTER_MINI_TEST!("Session", "Add Edge", crate::session_test::run_session_add_edge);
@@ -393,6 +470,8 @@ REGISTER_MINI_TEST!("Session", "Add Hierarchy", crate::session_test::run_session
 REGISTER_MINI_TEST!("Session", "Get Children", crate::session_test::run_session_get_children);
 REGISTER_MINI_TEST!("Session", "Add Relationship", crate::session_test::run_session_add_relationship);
 REGISTER_MINI_TEST!("Session", "Get Neighbours", crate::session_test::run_session_get_neighbours);
+REGISTER_MINI_TEST!("Session", "Get Collisions", crate::session_test::run_session_get_collisions);
+REGISTER_MINI_TEST!("Session", "Ray Cast", crate::session_test::run_session_ray_cast);
 REGISTER_MINI_TEST!("Session", "Get Object", crate::session_test::run_session_get_object);
 REGISTER_MINI_TEST!("Session", "Remove Object", crate::session_test::run_session_remove_object);
 REGISTER_MINI_TEST!("Session", "Get Geometry", crate::session_test::run_session_get_geometry);

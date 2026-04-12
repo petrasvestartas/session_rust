@@ -1009,7 +1009,7 @@ impl Polyline {
     }
 
     /// Extend line segment by specified distances at both ends
-    pub fn extend_line(
+    pub fn extend_line_segment(
         line_start: &mut Point,
         line_end: &mut Point,
         distance0: f64,
@@ -1022,8 +1022,8 @@ impl Polyline {
         *line_end = line_end.clone() + (v * distance1);
     }
 
-    /// Scale line segment inward by specified distance
-    pub fn scale_line(line_start: &mut Point, line_end: &mut Point, distance: f64) {
+    /// Shrink line segment inward by specified distance
+    pub fn shrink_line_segment(line_start: &mut Point, line_end: &mut Point, distance: f64) {
         let v = line_end.clone() - line_start.clone();
         *line_start = line_start.clone() + (v.clone() * distance);
         *line_end = line_end.clone() - (v * distance);

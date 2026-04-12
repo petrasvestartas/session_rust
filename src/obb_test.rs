@@ -92,6 +92,10 @@ pub fn run_obb_collision() -> TestResult {
         MINI_CHECK!(!bb1.collides_with(&bb3));
         MINI_CHECK!(bb1.collides_with_broad(&bb2));
         MINI_CHECK!(!bb1.collides_with_broad(&bb3));
+        MINI_CHECK!(bb1.collides_with_rtcd(&bb2));
+        MINI_CHECK!(!bb1.collides_with_rtcd(&bb3));
+        MINI_CHECK!(bb1.collides_with_naive(&bb2));
+        MINI_CHECK!(!bb1.collides_with_naive(&bb3));
     })
 }
 

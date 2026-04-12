@@ -278,22 +278,46 @@ pub fn run_brep_from_polylines() -> TestResult {
         ];
 
         let bottom = Polyline::new(vec![
-            c[0].clone(), c[3].clone(), c[2].clone(), c[1].clone(), c[0].clone(),
+            c[0].clone(),
+            c[3].clone(),
+            c[2].clone(),
+            c[1].clone(),
+            c[0].clone(),
         ]);
         let top = Polyline::new(vec![
-            c[4].clone(), c[5].clone(), c[6].clone(), c[7].clone(), c[4].clone(),
+            c[4].clone(),
+            c[5].clone(),
+            c[6].clone(),
+            c[7].clone(),
+            c[4].clone(),
         ]);
         let front = Polyline::new(vec![
-            c[0].clone(), c[1].clone(), c[5].clone(), c[4].clone(), c[0].clone(),
+            c[0].clone(),
+            c[1].clone(),
+            c[5].clone(),
+            c[4].clone(),
+            c[0].clone(),
         ]);
         let right = Polyline::new(vec![
-            c[1].clone(), c[2].clone(), c[6].clone(), c[5].clone(), c[1].clone(),
+            c[1].clone(),
+            c[2].clone(),
+            c[6].clone(),
+            c[5].clone(),
+            c[1].clone(),
         ]);
         let back = Polyline::new(vec![
-            c[2].clone(), c[3].clone(), c[7].clone(), c[6].clone(), c[2].clone(),
+            c[2].clone(),
+            c[3].clone(),
+            c[7].clone(),
+            c[6].clone(),
+            c[2].clone(),
         ]);
         let left = Polyline::new(vec![
-            c[3].clone(), c[0].clone(), c[4].clone(), c[7].clone(), c[3].clone(),
+            c[3].clone(),
+            c[0].clone(),
+            c[4].clone(),
+            c[7].clone(),
+            c[3].clone(),
         ]);
 
         let b = BRep::from_polylines(&[bottom, top, front, right, back, left]);
@@ -330,22 +354,46 @@ pub fn run_brep_from_nurbscurves() -> TestResult {
         ];
 
         let bottom = NurbsCurve::create(false, 1, &[
-            c[0].clone(), c[3].clone(), c[2].clone(), c[1].clone(), c[0].clone(),
+            c[0].clone(),
+            c[3].clone(),
+            c[2].clone(),
+            c[1].clone(),
+            c[0].clone(),
         ]);
         let top = NurbsCurve::create(false, 1, &[
-            c[4].clone(), c[5].clone(), c[6].clone(), c[7].clone(), c[4].clone(),
+            c[4].clone(),
+            c[5].clone(),
+            c[6].clone(),
+            c[7].clone(),
+            c[4].clone(),
         ]);
         let front = NurbsCurve::create(false, 1, &[
-            c[0].clone(), c[1].clone(), c[5].clone(), c[4].clone(), c[0].clone(),
+            c[0].clone(),
+            c[1].clone(),
+            c[5].clone(),
+            c[4].clone(),
+            c[0].clone(),
         ]);
         let right = NurbsCurve::create(false, 1, &[
-            c[1].clone(), c[2].clone(), c[6].clone(), c[5].clone(), c[1].clone(),
+            c[1].clone(),
+            c[2].clone(),
+            c[6].clone(),
+            c[5].clone(),
+            c[1].clone(),
         ]);
         let back = NurbsCurve::create(false, 1, &[
-            c[2].clone(), c[3].clone(), c[7].clone(), c[6].clone(), c[2].clone(),
+            c[2].clone(),
+            c[3].clone(),
+            c[7].clone(),
+            c[6].clone(),
+            c[2].clone(),
         ]);
         let left = NurbsCurve::create(false, 1, &[
-            c[3].clone(), c[0].clone(), c[4].clone(), c[7].clone(), c[3].clone(),
+            c[3].clone(),
+            c[0].clone(),
+            c[4].clone(),
+            c[7].clone(),
+            c[3].clone(),
         ]);
 
         let b = BRep::from_nurbscurves(&[bottom, top, front, right, back, left], &[]);

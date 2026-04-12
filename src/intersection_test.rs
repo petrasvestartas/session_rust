@@ -92,8 +92,14 @@ pub fn run_intersection_plane_plane() -> TestResult {
         use crate::Point;
         use crate::Vector;
 
-        let plane0 = Plane::from_point_normal(Point::new(0.0, 0.0, 0.0), Vector::new(0.0, 0.0, 1.0));
-        let plane1 = Plane::from_point_normal(Point::new(0.0, 0.0, 0.0), Vector::new(0.0, 1.0, 0.0));
+        let p0 = Point::new(0.0, 0.0, 0.0);
+        let n0 = Vector::new(0.0, 0.0, 1.0);
+        let plane0 = Plane::from_point_normal(p0, n0);
+
+        let p1 = Point::new(0.0, 0.0, 0.0);
+        let n1 = Vector::new(0.0, 1.0, 0.0);
+        let plane1 = Plane::from_point_normal(p1, n1);
+
         let output = intersection::plane_plane(&plane0, &plane1);
 
         MINI_CHECK!(output.is_some());
@@ -111,17 +117,28 @@ pub fn run_intersection_plane_plane_complex() -> TestResult {
         use crate::Point;
         use crate::Vector;
 
-        let pl0 = Plane::new(Point::new(213.787107, 513.797811, -24.743845), Vector::new(0.907673, -0.258819, 0.330366), Vector::new(0.272094, 0.96225, 0.006285));
-        let pl1 = Plane::new(Point::new(247.17924, 499.115486, 59.619568), Vector::new(0.552465, 0.816035, 0.16991), Vector::new(0.172987, 0.087156, -0.98106));
+        let plane_origin_0 = Point::new(213.787107, 513.797811, -24.743845);
+        let plane_xaxis_0 = Vector::new(0.907673, -0.258819, 0.330366);
+        let plane_yaxis_0 = Vector::new(0.272094, 0.96225, 0.006285);
+        let pl0 = Plane::new(plane_origin_0, plane_xaxis_0, plane_yaxis_0);
+
+        let plane_origin_1 = Point::new(247.17924, 499.115486, 59.619568);
+        let plane_xaxis_1 = Vector::new(0.552465, 0.816035, 0.16991);
+        let plane_yaxis_1 = Vector::new(0.172987, 0.087156, -0.98106);
+        let pl1 = Plane::new(plane_origin_1, plane_xaxis_1, plane_yaxis_1);
+
         let intersection_line = intersection::plane_plane(&pl0, &pl1);
 
         MINI_CHECK!(intersection_line.is_some());
         let intersection_line = intersection_line.unwrap();
+
         let start = intersection_line.start();
         let end = intersection_line.end();
+
         MINI_CHECK!((start[0] - 252.4632).abs() < 0.01);
         MINI_CHECK!((start[1] - 495.32248).abs() < 0.01);
         MINI_CHECK!((start[2] - (-10.002656)).abs() < 0.01);
+
         MINI_CHECK!((end[0] - 253.01033).abs() < 0.01);
         MINI_CHECK!((end[1] - 496.1218).abs() < 0.01);
         MINI_CHECK!((end[2] - (-9.888727)).abs() < 0.01);
@@ -136,8 +153,12 @@ pub fn run_intersection_line_plane() -> TestResult {
         use crate::Point;
         use crate::Vector;
 
-        let plane = Plane::from_point_normal(Point::new(0.0, 0.0, 1.0), Vector::new(0.0, 0.0, 1.0));
+        let p = Point::new(0.0, 0.0, 1.0);
+        let n = Vector::new(0.0, 0.0, 1.0);
+        let plane = Plane::from_point_normal(p, n);
+
         let line = Line::new(0.0, 0.0, 0.0, 0.0, 0.0, 2.0);
+
         let output = intersection::line_plane(&line, &plane, true);
 
         MINI_CHECK!(output.is_some());
@@ -156,8 +177,12 @@ pub fn run_intersection_line_plane_parallel() -> TestResult {
         use crate::Point;
         use crate::Vector;
 
-        let plane = Plane::from_point_normal(Point::new(0.0, 0.0, 1.0), Vector::new(0.0, 0.0, 1.0));
+        let p = Point::new(0.0, 0.0, 1.0);
+        let n = Vector::new(0.0, 0.0, 1.0);
+        let plane = Plane::from_point_normal(p, n);
+
         let line = Line::new(0.0, 0.0, 0.0, 1.0, 0.0, 0.0);
+
         let output = intersection::line_plane(&line, &plane, true);
 
         MINI_CHECK!(output.is_none());
@@ -172,8 +197,13 @@ pub fn run_intersection_line_plane_real_world() -> TestResult {
         use crate::Point;
         use crate::Vector;
 
-        let l0 = Line::new(500.0, -573.576, -819.152, 500.0, 573.576, 819.152);
-        let pl0 = Plane::new(Point::new(213.787107, 513.797811, -24.743845), Vector::new(0.907673, -0.258819, 0.330366), Vector::new(0.272094, 0.96225, 0.006285));
+        let l0 = Line::new(500.000, -573.576, -819.152, 500.000, 573.576, 819.152);
+
+        let plane_origin_0 = Point::new(213.787107, 513.797811, -24.743845);
+        let plane_xaxis_0 = Vector::new(0.907673, -0.258819, 0.330366);
+        let plane_yaxis_0 = Vector::new(0.272094, 0.96225, 0.006285);
+        let pl0 = Plane::new(plane_origin_0, plane_xaxis_0, plane_yaxis_0);
+
         let lp = intersection::line_plane(&l0, &pl0, false);
 
         MINI_CHECK!(lp.is_some());
@@ -191,9 +221,21 @@ pub fn run_intersection_plane_plane_plane() -> TestResult {
         use crate::Point;
         use crate::Vector;
 
-        let pl0 = Plane::new(Point::new(213.787107, 513.797811, -24.743845), Vector::new(0.907673, -0.258819, 0.330366), Vector::new(0.272094, 0.96225, 0.006285));
-        let pl1 = Plane::new(Point::new(247.17924, 499.115486, 59.619568), Vector::new(0.552465, 0.816035, 0.16991), Vector::new(0.172987, 0.087156, -0.98106));
-        let pl2 = Plane::new(Point::new(221.399816, 605.893667, -54.000116), Vector::new(0.903451, -0.360516, -0.231957), Vector::new(0.172742, -0.189057, 0.966653));
+        let plane_origin_0 = Point::new(213.787107, 513.797811, -24.743845);
+        let plane_xaxis_0 = Vector::new(0.907673, -0.258819, 0.330366);
+        let plane_yaxis_0 = Vector::new(0.272094, 0.96225, 0.006285);
+        let pl0 = Plane::new(plane_origin_0, plane_xaxis_0, plane_yaxis_0);
+
+        let plane_origin_1 = Point::new(247.17924, 499.115486, 59.619568);
+        let plane_xaxis_1 = Vector::new(0.552465, 0.816035, 0.16991);
+        let plane_yaxis_1 = Vector::new(0.172987, 0.087156, -0.98106);
+        let pl1 = Plane::new(plane_origin_1, plane_xaxis_1, plane_yaxis_1);
+
+        let plane_origin_2 = Point::new(221.399816, 605.893667, -54.000116);
+        let plane_xaxis_2 = Vector::new(0.903451, -0.360516, -0.231957);
+        let plane_yaxis_2 = Vector::new(0.172742, -0.189057, 0.966653);
+        let pl2 = Plane::new(plane_origin_2, plane_xaxis_2, plane_yaxis_2);
+
         let output = intersection::plane_plane_plane(&pl0, &pl1, &pl2);
 
         MINI_CHECK!(output.is_some());
@@ -211,9 +253,18 @@ pub fn run_intersection_plane_plane_plane_parallel() -> TestResult {
         use crate::Point;
         use crate::Vector;
 
-        let plane0 = Plane::from_point_normal(Point::new(0.0, 0.0, 0.0), Vector::new(0.0, 0.0, 1.0));
-        let plane1 = Plane::from_point_normal(Point::new(0.0, 0.0, 1.0), Vector::new(0.0, 0.0, 1.0));
-        let plane2 = Plane::from_point_normal(Point::new(0.0, 0.0, 0.0), Vector::new(1.0, 0.0, 0.0));
+        let p0 = Point::new(0.0, 0.0, 0.0);
+        let n0 = Vector::new(0.0, 0.0, 1.0);
+        let plane0 = Plane::from_point_normal(p0, n0);
+
+        let p1 = Point::new(0.0, 0.0, 1.0);
+        let n1 = Vector::new(0.0, 0.0, 1.0);
+        let plane1 = Plane::from_point_normal(p1, n1);
+
+        let p2 = Point::new(0.0, 0.0, 0.0);
+        let n2 = Vector::new(1.0, 0.0, 0.0);
+        let plane2 = Plane::from_point_normal(p2, n2);
+
         let output = intersection::plane_plane_plane(&plane0, &plane1, &plane2);
 
         MINI_CHECK!(output.is_none());
@@ -227,7 +278,10 @@ pub fn run_intersection_ray_box() -> TestResult {
         use crate::Line;
         use crate::Point;
 
-        let box_ = OBB::from_points(&[Point::new(-1.0, -1.0, -1.0), Point::new(1.0, 1.0, 1.0)], 0.0);
+        let box_ = OBB::from_points(&[
+            Point::new(-1.0, -1.0, -1.0),
+            Point::new(1.0, 1.0, 1.0),
+        ], 0.0);
         let line = Line::new(-5.0, 0.0, 0.0, -4.0, 0.0, 0.0);
         let points = intersection::ray_box(&line, &box_, 0.0, 100.0);
 
@@ -245,7 +299,10 @@ pub fn run_intersection_ray_box_miss() -> TestResult {
         use crate::Line;
         use crate::Point;
 
-        let box_ = OBB::from_points(&[Point::new(-1.0, -1.0, -1.0), Point::new(1.0, 1.0, 1.0)], 0.0);
+        let box_ = OBB::from_points(&[
+            Point::new(-1.0, -1.0, -1.0),
+            Point::new(1.0, 1.0, 1.0),
+        ], 0.0);
         let line = Line::new(-5.0, 5.0, 0.0, -4.0, 5.0, 0.0);
         let points = intersection::ray_box(&line, &box_, 0.0, 100.0);
 
@@ -574,7 +631,9 @@ pub fn run_intersection_ray_box_real_world() -> TestResult {
         use crate::Point;
 
         let l0 = Line::new(500.0, -573.576, -819.152, 500.0, 573.576, 819.152);
-        let box_ = OBB::from_points(&[Point::new(214.0, 192.0, 484.0), Point::new(694.0, 567.0, 796.0)], 0.0);
+        let min_pt = Point::new(214.0, 192.0, 484.0);
+        let max_pt = Point::new(694.0, 567.0, 796.0);
+        let box_ = OBB::from_points(&[min_pt, max_pt], 0.0);
         let points = intersection::ray_box(&l0, &box_, 0.0, 1000.0);
 
         MINI_CHECK!(points.is_some());

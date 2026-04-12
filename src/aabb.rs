@@ -103,21 +103,6 @@ impl AABB {
         Self::from_points(&pointcloud.get_points(), inflate)
     }
 
-    pub fn from_nurbssurface(surface: &crate::nurbssurface::NurbsSurface, inflate: f64) -> Self {
-        if !surface.is_valid() || surface.cv_count_dir(Some(0)) == 0 || surface.cv_count_dir(Some(1)) == 0 {
-            return AABB::default();
-        }
-        let mut points = Vec::new();
-        for i in 0..surface.cv_count_dir(Some(0)) {
-            for j in 0..surface.cv_count_dir(Some(1)) {
-                if let Some(pt) = surface.get_cv(i, j) {
-                    points.push(pt);
-                }
-            }
-        }
-        Self::from_points(&points, inflate)
-    }
-
     pub fn from_nurbscurve(curve: &crate::nurbscurve::NurbsCurve, inflate: f64, tight: bool) -> Self {
         if !curve.is_valid() || curve.cv_count() == 0 {
             return AABB::default();
@@ -193,6 +178,21 @@ impl AABB {
             }
         }
         Self::from_points(&extrema_points, inflate)
+    }
+
+    pub fn from_nurbssurface(surface: &crate::nurbssurface::NurbsSurface, inflate: f64) -> Self {
+        if !surface.is_valid() || surface.cv_count_dir(Some(0)) == 0 || surface.cv_count_dir(Some(1)) == 0 {
+            return AABB::default();
+        }
+        let mut points = Vec::new();
+        for i in 0..surface.cv_count_dir(Some(0)) {
+            for j in 0..surface.cv_count_dir(Some(1)) {
+                if let Some(pt) = surface.get_cv(i, j) {
+                    points.push(pt);
+                }
+            }
+        }
+        Self::from_points(&points, inflate)
     }
 
     pub fn min_point(&self) -> Point {

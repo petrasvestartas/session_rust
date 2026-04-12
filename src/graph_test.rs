@@ -160,6 +160,22 @@ pub fn run_graph_json_roundtrip() -> TestResult {
     })
 }
 
+pub fn run_graph_protobuf_roundtrip() -> TestResult {
+    MINI_TEST!("Protobuf Roundtrip", {
+        use crate::graph::Graph;
+        let mut original = Graph::new("test_graph");
+        original.add_node("node1", "Node 1");
+        original.add_node("node2", "Node 2");
+        original.add_edge("node1", "node2", "edge1");
+        original.pb_dump("serialization/test_graph.bin");
+        let loaded = Graph::pb_load("serialization/test_graph.bin");
+
+        MINI_CHECK!(loaded.number_of_vertices() == 2);
+        MINI_CHECK!(loaded.number_of_edges() == 1);
+        MINI_CHECK!(loaded.has_edge(("node1", "node2")));
+    })
+}
+
 pub fn run_graph_has_node() -> TestResult {
     MINI_TEST!("Has Node", {
         use crate::graph::Graph;
@@ -265,6 +281,19 @@ pub fn run_graph_neighbors() -> TestResult {
         g.add_edge("a", "c", "");
 
         let neigh = g.neighbors("a");
+
+        MINI_CHECK!(neigh.len() == 2);
+    })
+}
+
+pub fn run_graph_get_neighbors() -> TestResult {
+    MINI_TEST!("Get Neighbors", {
+        use crate::graph::Graph;
+        let mut g = Graph::new("g");
+        g.add_edge("a", "b", "");
+        g.add_edge("a", "c", "");
+
+        let neigh = g.get_neighbors("a");
 
         MINI_CHECK!(neigh.len() == 2);
     })
@@ -429,6 +458,7 @@ REGISTER_MINI_TEST!("Edge", "Connects", crate::graph_test::run_edge_connects);
 REGISTER_MINI_TEST!("Edge", "Other Vertex", crate::graph_test::run_edge_other_vertex);
 REGISTER_MINI_TEST!("Graph", "Constructor", crate::graph_test::run_graph_constructor);
 REGISTER_MINI_TEST!("Graph", "Json Roundtrip", crate::graph_test::run_graph_json_roundtrip);
+REGISTER_MINI_TEST!("Graph", "Protobuf Roundtrip", crate::graph_test::run_graph_protobuf_roundtrip);
 REGISTER_MINI_TEST!("Graph", "Has Node", crate::graph_test::run_graph_has_node);
 REGISTER_MINI_TEST!("Graph", "Has Edge", crate::graph_test::run_graph_has_edge);
 REGISTER_MINI_TEST!("Graph", "Add Node", crate::graph_test::run_graph_add_node);
@@ -438,6 +468,7 @@ REGISTER_MINI_TEST!("Graph", "Remove Edge", crate::graph_test::run_graph_remove_
 REGISTER_MINI_TEST!("Graph", "Get Vertices", crate::graph_test::run_graph_get_vertices);
 REGISTER_MINI_TEST!("Graph", "Get Edges", crate::graph_test::run_graph_get_edges);
 REGISTER_MINI_TEST!("Graph", "Neighbors", crate::graph_test::run_graph_neighbors);
+REGISTER_MINI_TEST!("Graph", "Get Neighbors", crate::graph_test::run_graph_get_neighbors);
 REGISTER_MINI_TEST!("Graph", "Number Of Vertices", crate::graph_test::run_graph_number_of_vertices);
 REGISTER_MINI_TEST!("Graph", "Number Of Edges", crate::graph_test::run_graph_number_of_edges);
 REGISTER_MINI_TEST!("Graph", "Clear", crate::graph_test::run_graph_clear);

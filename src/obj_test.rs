@@ -4,6 +4,7 @@ use crate::mini_test::TestResult;
 
 pub fn run_obj_read_bunny() -> TestResult {
     MINI_TEST!("Read Bunny", {
+        // load Stanford Bunny (real-world OBJ: 2503 vertices, 4968 faces)
         use std::path::PathBuf;
         use crate::obj::read_obj;
         let src_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
@@ -26,6 +27,7 @@ pub fn run_obj_read_bunny() -> TestResult {
 
 pub fn run_obj_write_read_roundtrip() -> TestResult {
     MINI_TEST!("Write Read Roundtrip", {
+        // build a small mesh (4 verts, 2 faces), write to OBJ, read back, compare counts
         use crate::{Mesh, Point};
         use crate::obj::{read_obj, write_obj};
         use std::path::PathBuf;

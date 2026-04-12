@@ -69,40 +69,6 @@ pub fn run_mesh_iso_from_tpms_neovius_shell() -> TestResult {
     })
 }
 
-pub fn run_mesh_iso_sdf_sphere() -> TestResult {
-    MINI_TEST!("SDF Sphere", {
-        use crate::mesh_iso::MeshIso;
-
-        MINI_CHECK!(TOLERANCE.is_close(MeshIso::sdf_sphere(0.0, 0.0, 0.0, 1.0, 1.0, 0.0, 0.0), 0.0));
-        MINI_CHECK!(TOLERANCE.is_close(MeshIso::sdf_sphere(0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0), -1.0));
-        MINI_CHECK!(TOLERANCE.is_close(MeshIso::sdf_sphere(0.0, 0.0, 0.0, 1.0, 2.0, 0.0, 0.0), 1.0));
-    })
-}
-
-pub fn run_mesh_iso_smooth_union() -> TestResult {
-    MINI_TEST!("Smooth Union", {
-        use crate::mesh_iso::MeshIso;
-
-        MINI_CHECK!(MeshIso::smooth_union(-1.0, 1.0, 8.0) < 0.0);
-        MINI_CHECK!(MeshIso::smooth_union(1.0, 1.0, 8.0) < 1.0);
-    })
-}
-
-pub fn run_mesh_iso_from_function() -> TestResult {
-    MINI_TEST!("From Function", {
-        use crate::mesh_iso::MeshIso;
-        use crate::obb::OBB;
-        use crate::point::Point;
-
-        let box_ = OBB::from_points(&[Point::new(-2.0, -2.0, -2.0), Point::new(2.0, 2.0, 2.0)], 0.0);
-        let fn_ = |x: f64, y: f64, z: f64| MeshIso::sdf_sphere(0.0, 0.0, 0.0, 1.0, x, y, z);
-        let m = MeshIso::from_function(fn_, &box_, 10, 10, 10, 0.0);
-
-        MINI_CHECK!(m.is_valid());
-        MINI_CHECK!(m.number_of_vertices() > 0);
-    })
-}
-
 pub fn run_mesh_iso_all_tpms_shells() -> TestResult {
     MINI_TEST!("All Tpms Shells", {
         use crate::mesh_iso::{MeshIso, TpmsType, TpmsMode};
@@ -124,6 +90,31 @@ pub fn run_mesh_iso_all_tpms_shells() -> TestResult {
     })
 }
 
+pub fn run_mesh_iso_from_function() -> TestResult {
+    MINI_TEST!("From Function", {
+        use crate::mesh_iso::MeshIso;
+        use crate::obb::OBB;
+        use crate::point::Point;
+
+        let box_ = OBB::from_points(&[Point::new(-2.0, -2.0, -2.0), Point::new(2.0, 2.0, 2.0)], 0.0);
+        let fn_ = |x: f64, y: f64, z: f64| MeshIso::sdf_sphere(0.0, 0.0, 0.0, 1.0, x, y, z);
+        let m = MeshIso::from_function(fn_, &box_, 10, 10, 10, 0.0);
+
+        MINI_CHECK!(m.is_valid());
+        MINI_CHECK!(m.number_of_vertices() > 0);
+    })
+}
+
+pub fn run_mesh_iso_sdf_sphere() -> TestResult {
+    MINI_TEST!("SDF Sphere", {
+        use crate::mesh_iso::MeshIso;
+
+        MINI_CHECK!(TOLERANCE.is_close(MeshIso::sdf_sphere(0.0, 0.0, 0.0, 1.0, 1.0, 0.0, 0.0), 0.0));
+        MINI_CHECK!(TOLERANCE.is_close(MeshIso::sdf_sphere(0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0), -1.0));
+        MINI_CHECK!(TOLERANCE.is_close(MeshIso::sdf_sphere(0.0, 0.0, 0.0, 1.0, 2.0, 0.0, 0.0), 1.0));
+    })
+}
+
 pub fn run_mesh_iso_sdf_box() -> TestResult {
     MINI_TEST!("SDF Box", {
         use crate::mesh_iso::MeshIso;
@@ -132,21 +123,6 @@ pub fn run_mesh_iso_sdf_box() -> TestResult {
 
         let box_ = OBB::from_points(&[Point::new(-2.0, -2.0, -2.0), Point::new(2.0, 2.0, 2.0)], 0.0);
         let fn_ = |x: f64, y: f64, z: f64| MeshIso::sdf_box(0.0, 0.0, 0.0, 1.0, 0.7, 1.3, x, y, z);
-        let m = MeshIso::from_function(fn_, &box_, 10, 10, 10, 0.0);
-
-        MINI_CHECK!(m.is_valid());
-        MINI_CHECK!(m.number_of_vertices() > 0);
-    })
-}
-
-pub fn run_mesh_iso_sdf_torus() -> TestResult {
-    MINI_TEST!("SDF Torus", {
-        use crate::mesh_iso::MeshIso;
-        use crate::obb::OBB;
-        use crate::point::Point;
-
-        let box_ = OBB::from_points(&[Point::new(-2.0, -2.0, -2.0), Point::new(2.0, 2.0, 2.0)], 0.0);
-        let fn_ = |x: f64, y: f64, z: f64| MeshIso::sdf_torus(0.0, 0.0, 0.0, 1.1, 0.4, x, y, z);
         let m = MeshIso::from_function(fn_, &box_, 10, 10, 10, 0.0);
 
         MINI_CHECK!(m.is_valid());
@@ -170,6 +146,40 @@ pub fn run_mesh_iso_sdf_capsule() -> TestResult {
 
         MINI_CHECK!(m.is_valid());
         MINI_CHECK!(m.number_of_vertices() > 0);
+    })
+}
+
+pub fn run_mesh_iso_sdf_torus() -> TestResult {
+    MINI_TEST!("SDF Torus", {
+        use crate::mesh_iso::MeshIso;
+        use crate::obb::OBB;
+        use crate::point::Point;
+
+        let box_ = OBB::from_points(&[Point::new(-2.0, -2.0, -2.0), Point::new(2.0, 2.0, 2.0)], 0.0);
+        let fn_ = |x: f64, y: f64, z: f64| MeshIso::sdf_torus(0.0, 0.0, 0.0, 1.1, 0.4, x, y, z);
+        let m = MeshIso::from_function(fn_, &box_, 10, 10, 10, 0.0);
+
+        MINI_CHECK!(m.is_valid());
+        MINI_CHECK!(m.number_of_vertices() > 0);
+    })
+}
+
+pub fn run_mesh_iso_sdf_plane() -> TestResult {
+    MINI_TEST!("SDF Plane", {
+        use crate::mesh_iso::MeshIso;
+
+        MINI_CHECK!(TOLERANCE.is_close(MeshIso::sdf_plane(0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0), 0.0));
+        MINI_CHECK!(TOLERANCE.is_close(MeshIso::sdf_plane(0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0), 1.0));
+        MINI_CHECK!(TOLERANCE.is_close(MeshIso::sdf_plane(0.0, 0.0, 1.0, 0.0, 0.0, 0.0, -1.0), -1.0));
+    })
+}
+
+pub fn run_mesh_iso_smooth_union() -> TestResult {
+    MINI_TEST!("Smooth Union", {
+        use crate::mesh_iso::MeshIso;
+
+        MINI_CHECK!(MeshIso::smooth_union(-1.0, 1.0, 8.0) < 0.0);
+        MINI_CHECK!(MeshIso::smooth_union(1.0, 1.0, 8.0) < 1.0);
     })
 }
 
@@ -236,13 +246,14 @@ REGISTER_MINI_TEST!("MeshIso", "Eval Diamond", crate::mesh_iso_test::run_mesh_is
 REGISTER_MINI_TEST!("MeshIso", "From Tpms Gyroid Solid", crate::mesh_iso_test::run_mesh_iso_from_tpms_gyroid_solid);
 REGISTER_MINI_TEST!("MeshIso", "From Tpms Diamond Sheet", crate::mesh_iso_test::run_mesh_iso_from_tpms_diamond_sheet);
 REGISTER_MINI_TEST!("MeshIso", "From Tpms Neovius Shell", crate::mesh_iso_test::run_mesh_iso_from_tpms_neovius_shell);
-REGISTER_MINI_TEST!("MeshIso", "SDF Sphere", crate::mesh_iso_test::run_mesh_iso_sdf_sphere);
-REGISTER_MINI_TEST!("MeshIso", "Smooth Union", crate::mesh_iso_test::run_mesh_iso_smooth_union);
-REGISTER_MINI_TEST!("MeshIso", "From Function", crate::mesh_iso_test::run_mesh_iso_from_function);
 REGISTER_MINI_TEST!("MeshIso", "All Tpms Shells", crate::mesh_iso_test::run_mesh_iso_all_tpms_shells);
+REGISTER_MINI_TEST!("MeshIso", "From Function", crate::mesh_iso_test::run_mesh_iso_from_function);
+REGISTER_MINI_TEST!("MeshIso", "SDF Sphere", crate::mesh_iso_test::run_mesh_iso_sdf_sphere);
 REGISTER_MINI_TEST!("MeshIso", "SDF Box", crate::mesh_iso_test::run_mesh_iso_sdf_box);
-REGISTER_MINI_TEST!("MeshIso", "SDF Torus", crate::mesh_iso_test::run_mesh_iso_sdf_torus);
 REGISTER_MINI_TEST!("MeshIso", "SDF Capsule", crate::mesh_iso_test::run_mesh_iso_sdf_capsule);
+REGISTER_MINI_TEST!("MeshIso", "SDF Torus", crate::mesh_iso_test::run_mesh_iso_sdf_torus);
+REGISTER_MINI_TEST!("MeshIso", "SDF Plane", crate::mesh_iso_test::run_mesh_iso_sdf_plane);
+REGISTER_MINI_TEST!("MeshIso", "Smooth Union", crate::mesh_iso_test::run_mesh_iso_smooth_union);
 REGISTER_MINI_TEST!("MeshIso", "Smooth Subtract", crate::mesh_iso_test::run_mesh_iso_smooth_subtract);
 REGISTER_MINI_TEST!("MeshIso", "Smooth Intersect", crate::mesh_iso_test::run_mesh_iso_smooth_intersect);
 REGISTER_MINI_TEST!("MeshIso", "Gyroid Sphere Shell", crate::mesh_iso_test::run_mesh_iso_gyroid_sphere_shell);
