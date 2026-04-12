@@ -912,9 +912,9 @@ impl Element {
     pub fn type_name(&self) -> &str {
         match &self.kind {
             ElementKind::Generic => "Element",
-            ElementKind::Column { .. } => "ColumnElement",
-            ElementKind::Beam { .. } => "BeamElement",
-            ElementKind::Plate { .. } => "PlateElement",
+            ElementKind::Column { .. } => "ElementColumn",
+            ElementKind::Beam { .. } => "ElementBeam",
+            ElementKind::Plate { .. } => "ElementPlate",
         }
     }
 
@@ -922,11 +922,11 @@ impl Element {
         match &self.kind {
             ElementKind::Generic => format!("Element({}, {})", self.name, self.geometry_type_name()),
             ElementKind::Column { width, depth, height } =>
-                format!("ColumnElement({}, {}, {}, {})", self.name, width, depth, height),
+                format!("ElementColumn({}, {}, {}, {})", self.name, width, depth, height),
             ElementKind::Beam { width, depth, length } =>
-                format!("BeamElement({}, {}, {}, {})", self.name, width, depth, length),
+                format!("ElementBeam({}, {}, {}, {})", self.name, width, depth, length),
             ElementKind::Plate { polygon, thickness, .. } =>
-                format!("PlateElement({}, {} pts, {})", self.name, polygon.len(), thickness),
+                format!("ElementPlate({}, {} pts, {})", self.name, polygon.len(), thickness),
         }
     }
 
@@ -934,11 +934,11 @@ impl Element {
         match &self.kind {
             ElementKind::Generic => format!("Element({}, {}, {})", self.guid(), self.name, self.geometry_type_name()),
             ElementKind::Column { width, depth, height } =>
-                format!("ColumnElement({}, {}, {}, {}, {})", self.guid(), self.name, width, depth, height),
+                format!("ElementColumn({}, {}, {}, {}, {})", self.guid(), self.name, width, depth, height),
             ElementKind::Beam { width, depth, length } =>
-                format!("BeamElement({}, {}, {}, {}, {})", self.guid(), self.name, width, depth, length),
+                format!("ElementBeam({}, {}, {}, {}, {})", self.guid(), self.name, width, depth, length),
             ElementKind::Plate { polygon, thickness, .. } =>
-                format!("PlateElement({}, {}, {} pts, {})", self.guid(), self.name, polygon.len(), thickness),
+                format!("ElementPlate({}, {}, {} pts, {})", self.guid(), self.name, polygon.len(), thickness),
         }
     }
 
@@ -977,7 +977,7 @@ impl Element {
                     "height": height,
                     "name": self.name,
                     "session_transformation": serde_json::to_value(&self.session_transformation).unwrap(),
-                    "type": "ColumnElement",
+                    "type": "ElementColumn",
                     "width": width,
                 })
             }
@@ -995,7 +995,7 @@ impl Element {
                     "length": length,
                     "name": self.name,
                     "session_transformation": serde_json::to_value(&self.session_transformation).unwrap(),
-                    "type": "BeamElement",
+                    "type": "ElementBeam",
                     "width": width,
                 })
             }
@@ -1022,7 +1022,7 @@ impl Element {
                     "polygon_top": poly_top_json,
                     "session_transformation": serde_json::to_value(&self.session_transformation).unwrap(),
                     "thickness": thickness,
-                    "type": "PlateElement",
+                    "type": "ElementPlate",
                 })
             }
         }
@@ -1036,7 +1036,7 @@ impl Element {
     pub fn jsonload_value(data: &serde_json::Value) -> Self {
         let type_name = data["type"].as_str().unwrap_or("Element");
         match type_name {
-            "ColumnElement" => {
+            "ElementColumn" => {
                 let w = data["width"].as_f64().unwrap_or(0.4);
                 let d = data["depth"].as_f64().unwrap_or(0.4);
                 let h = data["height"].as_f64().unwrap_or(3.0);
@@ -1050,7 +1050,7 @@ impl Element {
                 }
                 elem
             }
-            "BeamElement" => {
+            "ElementBeam" => {
                 let w = data["width"].as_f64().unwrap_or(0.1);
                 let d = data["depth"].as_f64().unwrap_or(0.2);
                 let l = data["length"].as_f64().unwrap_or(3.0);
@@ -1064,7 +1064,7 @@ impl Element {
                 }
                 elem
             }
-            "PlateElement" => {
+            "ElementPlate" => {
                 let mut polygon = Vec::new();
                 if let Some(arr) = data["polygon"].as_array() {
                     for p in arr {
@@ -1220,17 +1220,17 @@ impl Element {
                 }
             }
             ElementKind::Column { width, depth, height } => {
-                proto.geometry_type = "ColumnElement".to_string();
+                proto.geometry_type = "ElementColumn".to_string();
                 let params = serde_json::json!({"width": width, "depth": depth, "height": height});
                 proto.geometry_data = params.to_string().into_bytes();
             }
             ElementKind::Beam { width, depth, length } => {
-                proto.geometry_type = "BeamElement".to_string();
+                proto.geometry_type = "ElementBeam".to_string();
                 let params = serde_json::json!({"width": width, "depth": depth, "length": length});
                 proto.geometry_data = params.to_string().into_bytes();
             }
             ElementKind::Plate { polygon, polygon_top, thickness, .. } => {
-                proto.geometry_type = "PlateElement".to_string();
+                proto.geometry_type = "ElementPlate".to_string();
                 let poly_json: Vec<[f64; 3]> = polygon.iter().map(|p| [p[0], p[1], p[2]]).collect();
                 let poly_top_json: Vec<[f64; 3]> = polygon_top.iter().map(|p| [p[0], p[1], p[2]]).collect();
                 let params = serde_json::json!({"polygon": poly_json, "polygon_top": poly_top_json, "thickness": thickness});
@@ -1282,7 +1282,7 @@ impl Element {
         let geo_type = &proto.geometry_type;
 
         let mut elem = match geo_type.as_str() {
-            "ColumnElement" => {
+            "ElementColumn" => {
                 let params: serde_json::Value = serde_json::from_slice(&proto.geometry_data)?;
                 Self::column(
                     params["width"].as_f64().unwrap(),
@@ -1291,7 +1291,7 @@ impl Element {
                     "my_column",
                 )
             }
-            "BeamElement" => {
+            "ElementBeam" => {
                 let params: serde_json::Value = serde_json::from_slice(&proto.geometry_data)?;
                 Self::beam(
                     params["width"].as_f64().unwrap(),
@@ -1300,7 +1300,7 @@ impl Element {
                     "my_beam",
                 )
             }
-            "PlateElement" => {
+            "ElementPlate" => {
                 let params: serde_json::Value = serde_json::from_slice(&proto.geometry_data)?;
                 let mut polygon = Vec::new();
                 if let Some(arr) = params["polygon"].as_array() {

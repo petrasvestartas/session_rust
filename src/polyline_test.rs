@@ -1,666 +1,6 @@
-#[cfg(test)]
-use crate::encoders::{json_dump, json_load};
-#[cfg(test)]
-use crate::{Plane, Point, Polyline, Vector};
 use crate::{MINI_CHECK, MINI_TEST, REGISTER_MINI_TEST};
 use crate::mini_test::TestResult;
 use crate::tolerance::TOLERANCE;
-
-#[test]
-fn test_polyline_new() {
-    let points = vec![
-        Point::new(0.0, 0.0, 0.0),
-        Point::new(1.0, 0.0, 0.0),
-        Point::new(0.0, 1.0, 0.0),
-    ];
-    let polyline = Polyline::new(points);
-    assert_eq!(polyline.len(), 3);
-    assert_eq!(polyline.segment_count(), 2);
-}
-
-#[test]
-fn test_polyline_default() {
-    let polyline = Polyline::default();
-    assert_eq!(polyline.len(), 0);
-    assert!(polyline.is_empty());
-    assert_eq!(polyline.segment_count(), 0);
-}
-
-#[test]
-fn test_polyline_length() {
-    let points = vec![
-        Point::new(0.0, 0.0, 0.0),
-        Point::new(1.0, 0.0, 0.0),
-        Point::new(1.0, 1.0, 0.0),
-    ];
-    let polyline = Polyline::new(points);
-    let length = polyline.length();
-    assert!((length - 2.0).abs() < 1e-5);
-}
-
-#[test]
-fn test_polyline_add_point() {
-    let mut polyline = Polyline::new(vec![
-        Point::new(0.0, 0.0, 0.0),
-        Point::new(1.0, 0.0, 0.0),
-    ]);
-    assert_eq!(polyline.len(), 2);
-
-    polyline.add_point(Point::new(1.0, 1.0, 0.0));
-    assert_eq!(polyline.len(), 3);
-    assert_eq!(polyline.segment_count(), 2);
-}
-
-#[test]
-fn test_polyline_insert_point() {
-    let mut polyline = Polyline::new(vec![
-        Point::new(0.0, 0.0, 0.0),
-        Point::new(2.0, 0.0, 0.0),
-    ]);
-
-    polyline.insert_point(1, Point::new(1.0, 0.0, 0.0));
-    assert_eq!(polyline.len(), 3);
-    assert_eq!(polyline.get_points()[1][0], 1.0);
-}
-
-#[test]
-fn test_polyline_remove_point() {
-    let mut polyline = Polyline::new(vec![
-        Point::new(0.0, 0.0, 0.0),
-        Point::new(1.0, 0.0, 0.0),
-        Point::new(2.0, 0.0, 0.0),
-    ]);
-
-    let removed = polyline.remove_point(1);
-    assert!(removed.is_some());
-    assert_eq!(removed.unwrap()[0], 1.0);
-    assert_eq!(polyline.len(), 2);
-}
-
-#[test]
-fn test_polyline_reverse() {
-    let mut polyline = Polyline::new(vec![
-        Point::new(0.0, 0.0, 0.0),
-        Point::new(1.0, 0.0, 0.0),
-        Point::new(2.0, 0.0, 0.0),
-    ]);
-
-    polyline.reverse();
-    assert_eq!(polyline.get_points()[0][0], 2.0);
-    assert_eq!(polyline.get_points()[1][0], 1.0);
-    assert_eq!(polyline.get_points()[2][0], 0.0);
-}
-
-#[test]
-fn test_polyline_reversed() {
-    let polyline = Polyline::new(vec![
-        Point::new(0.0, 0.0, 0.0),
-        Point::new(1.0, 0.0, 0.0),
-        Point::new(2.0, 0.0, 0.0),
-    ]);
-
-    let reversed = polyline.reversed();
-    assert_eq!(reversed.get_points()[0][0], 2.0);
-    assert_eq!(reversed.get_points()[1][0], 1.0);
-    assert_eq!(reversed.get_points()[2][0], 0.0);
-
-    // Original should be unchanged
-    assert_eq!(polyline.get_points()[0][0], 0.0);
-}
-
-#[test]
-fn test_polyline_add_assign_vector() {
-    let mut polyline = Polyline::new(vec![
-        Point::new(1.0, 2.0, 3.0),
-        Point::new(4.0, 5.0, 6.0),
-    ]);
-    let v = Vector::new(4.0, 5.0, 6.0);
-    polyline += &v;
-
-    assert_eq!(polyline.get_points()[0][0], 5.0);
-    assert_eq!(polyline.get_points()[0][1], 7.0);
-    assert_eq!(polyline.get_points()[0][2], 9.0);
-    assert_eq!(polyline.get_points()[1][0], 8.0);
-    assert_eq!(polyline.get_points()[1][1], 10.0);
-    assert_eq!(polyline.get_points()[1][2], 12.0);
-}
-
-#[test]
-fn test_polyline_add_vector() {
-    let polyline = Polyline::new(vec![
-        Point::new(1.0, 2.0, 3.0),
-        Point::new(4.0, 5.0, 6.0),
-    ]);
-    let v = Vector::new(4.0, 5.0, 6.0);
-    let polyline2 = polyline + &v;
-
-    assert_eq!(polyline2.get_points()[0][0], 5.0);
-    assert_eq!(polyline2.get_points()[0][1], 7.0);
-    assert_eq!(polyline2.get_points()[0][2], 9.0);
-}
-
-#[test]
-fn test_polyline_sub_assign_vector() {
-    let mut polyline = Polyline::new(vec![
-        Point::new(1.0, 2.0, 3.0),
-        Point::new(4.0, 5.0, 6.0),
-    ]);
-    let v = Vector::new(4.0, 5.0, 6.0);
-    polyline -= &v;
-
-    assert_eq!(polyline.get_points()[0][0], -3.0);
-    assert_eq!(polyline.get_points()[0][1], -3.0);
-    assert_eq!(polyline.get_points()[0][2], -3.0);
-    assert_eq!(polyline.get_points()[1][0], 0.0);
-    assert_eq!(polyline.get_points()[1][1], 0.0);
-    assert_eq!(polyline.get_points()[1][2], 0.0);
-}
-
-#[test]
-fn test_polyline_sub_vector() {
-    let polyline = Polyline::new(vec![
-        Point::new(1.0, 2.0, 3.0),
-        Point::new(4.0, 5.0, 6.0),
-    ]);
-    let v = Vector::new(4.0, 5.0, 6.0);
-    let polyline2 = polyline - &v;
-
-    assert_eq!(polyline2.get_points()[0][0], -3.0);
-    assert_eq!(polyline2.get_points()[0][1], -3.0);
-    assert_eq!(polyline2.get_points()[0][2], -3.0);
-    assert_eq!(polyline2.get_points()[1][0], 0.0);
-    assert_eq!(polyline2.get_points()[1][1], 0.0);
-    assert_eq!(polyline2.get_points()[1][2], 0.0);
-}
-
-#[test]
-fn test_polyline_display() {
-    let polyline = Polyline::new(vec![
-        Point::new(0.0, 0.0, 0.0),
-        Point::new(1.0, 0.0, 0.0),
-    ]);
-    let display_str = format!("{polyline}");
-    assert!(display_str.contains("Polyline"));
-    assert!(display_str.contains("points=2"));
-}
-
-#[test]
-fn test_polyline_json_serialization() {
-    let polyline = Polyline::new(vec![
-        Point::new(0.0, 0.0, 0.0),
-        Point::new(1.0, 0.0, 0.0),
-        Point::new(1.0, 1.0, 0.0),
-    ]);
-
-    let json = serde_json::to_string(&polyline).unwrap();
-    let deserialized: Polyline = serde_json::from_str(&json).unwrap();
-
-    assert_eq!(deserialized.len(), 3);
-    assert_eq!(deserialized.get_points()[0][0], 0.0);
-    assert_eq!(deserialized.get_points()[1][0], 1.0);
-    assert_eq!(deserialized.get_points()[2][1], 1.0);
-}
-
-#[test]
-fn test_polyline_to_json_data() {
-    let polyline = Polyline::new(vec![
-        Point::new(0.0, 0.0, 0.0),
-        Point::new(1.0, 0.0, 0.0),
-    ]);
-
-    let json_string = polyline.jsondump().unwrap();
-    assert!(json_string.contains("Polyline"));
-    assert!(json_string.contains("coords"));
-}
-
-#[test]
-fn test_polyline_from_json_data() {
-    let polyline = Polyline::new(vec![
-        Point::new(1.0, 2.0, 3.0),
-        Point::new(4.0, 5.0, 6.0),
-    ]);
-
-    let json_string = polyline.jsondump().unwrap();
-    let deserialized = Polyline::jsonload(&json_string).unwrap();
-
-    assert_eq!(deserialized.len(), 2);
-    assert_eq!(deserialized.get_points()[0][0], 1.0);
-    assert_eq!(deserialized.get_points()[1][0], 4.0);
-}
-
-#[test]
-fn test_polyline_to_json_from_json() {
-    let polyline = Polyline::new(vec![
-        Point::new(1.0, 2.0, 3.0),
-        Point::new(4.0, 5.0, 6.0),
-        Point::new(7.0, 8.0, 9.0),
-    ]);
-
-    let filepath = "serialization/test_polyline.json";
-    json_dump(&polyline, filepath, true).unwrap();
-    let loaded = json_load::<Polyline>(filepath).unwrap();
-
-    assert_eq!(loaded.len(), 3);
-    assert_eq!(loaded.get_points()[0][0], 1.0);
-    assert_eq!(loaded.get_points()[1][1], 5.0);
-    assert_eq!(loaded.get_points()[2][2], 9.0);
-}
-
-#[test]
-fn test_polyline_get_point() {
-    let polyline = Polyline::new(vec![
-        Point::new(0.0, 0.0, 0.0),
-        Point::new(1.0, 2.0, 3.0),
-    ]);
-
-    let point = polyline.get_point(1);
-    assert!(point.is_some());
-    assert_eq!(point.unwrap()[0], 1.0);
-
-    let invalid = polyline.get_point(10);
-    assert!(invalid.is_none());
-}
-
-#[test]
-fn test_polyline_set_point() {
-    let mut polyline = Polyline::new(vec![
-        Point::new(0.0, 0.0, 0.0),
-        Point::new(1.0, 2.0, 3.0),
-    ]);
-
-    polyline.set_point(1, &Point::new(5.0, 6.0, 7.0));
-
-    assert_eq!(polyline.get_points()[1][0], 5.0);
-    assert_eq!(polyline.get_points()[1][1], 6.0);
-    assert_eq!(polyline.get_points()[1][2], 7.0);
-}
-
-#[test]
-fn test_polyline_shift() {
-    let mut polyline = Polyline::new(vec![
-        Point::new(0.0, 0.0, 0.0),
-        Point::new(1.0, 0.0, 0.0),
-        Point::new(2.0, 0.0, 0.0),
-    ]);
-
-    polyline.shift(1);
-
-    assert_eq!(polyline.get_points()[0][0], 1.0);
-    assert_eq!(polyline.get_points()[1][0], 2.0);
-    assert_eq!(polyline.get_points()[2][0], 0.0);
-}
-
-#[test]
-fn test_polyline_length_squared() {
-    let polyline = Polyline::new(vec![
-        Point::new(0.0, 0.0, 0.0),
-        Point::new(1.0, 0.0, 0.0),
-        Point::new(1.0, 1.0, 0.0),
-    ]);
-
-    let length = polyline.length();
-    assert!((length - 2.0).abs() < 1e-5);
-}
-
-#[test]
-fn test_polyline_point_at() {
-    let start = Point::new(0.0, 0.0, 0.0);
-    let end = Point::new(2.0, 0.0, 0.0);
-
-    let mid = Polyline::point_at(&start, &end, 0.5);
-    assert_eq!(mid[0], 1.0);
-    assert_eq!(mid[1], 0.0);
-    assert_eq!(mid[2], 0.0);
-}
-
-#[test]
-fn test_polyline_closest_point_to_line() {
-    let line_start = Point::new(0.0, 0.0, 0.0);
-    let line_end = Point::new(2.0, 0.0, 0.0);
-    let test_point = Point::new(1.0, 1.0, 0.0);
-
-    let t = Polyline::closest_point_to_line(&test_point, &line_start, &line_end);
-    assert!((t - 0.5).abs() < 1e-5);
-}
-
-#[test]
-fn test_polyline_line_line_overlap() {
-    let line0_start = Point::new(0.0, 0.0, 0.0);
-    let line0_end = Point::new(2.0, 0.0, 0.0);
-    let line1_start = Point::new(1.0, 0.0, 0.0);
-    let line1_end = Point::new(3.0, 0.0, 0.0);
-
-    let overlap = Polyline::line_line_overlap(&line0_start, &line0_end, &line1_start, &line1_end);
-
-    assert!(overlap.is_some());
-    let (overlap_start, overlap_end) = overlap.unwrap();
-    assert!((overlap_start[0] - 1.0).abs() < 1e-5);
-    assert!((overlap_end[0] - 2.0).abs() < 1e-5);
-}
-
-#[test]
-fn test_polyline_line_line_average() {
-    let line0_start = Point::new(0.0, 0.0, 0.0);
-    let line0_end = Point::new(2.0, 0.0, 0.0);
-    let line1_start = Point::new(0.0, 2.0, 0.0);
-    let line1_end = Point::new(2.0, 2.0, 0.0);
-
-    let (avg_start, avg_end) =
-        Polyline::line_line_average(&line0_start, &line0_end, &line1_start, &line1_end);
-
-    assert!((avg_start[1] - 1.0).abs() < 1e-5);
-    assert!((avg_end[1] - 1.0).abs() < 1e-5);
-}
-
-#[test]
-fn test_polyline_line_line_overlap_average() {
-    let line0_start = Point::new(0.0, 0.0, 0.0);
-    let line0_end = Point::new(3.0, 0.0, 0.0);
-    let line1_start = Point::new(1.0, 0.0, 0.0);
-    let line1_end = Point::new(4.0, 0.0, 0.0);
-
-    let (output_start, output_end) =
-        Polyline::line_line_overlap_average(&line0_start, &line0_end, &line1_start, &line1_end);
-
-    assert!(output_start[0] >= 0.0);
-    assert!(output_end[0] <= 4.0);
-}
-
-#[test]
-fn test_polyline_line_from_projected_points() {
-    let line_start = Point::new(0.0, 0.0, 0.0);
-    let line_end = Point::new(2.0, 0.0, 0.0);
-    let points = vec![
-        Point::new(0.5, 1.0, 0.0),
-        Point::new(1.5, -1.0, 0.0),
-    ];
-
-    let result = Polyline::line_from_projected_points(&line_start, &line_end, &points);
-
-    assert!(result.is_some());
-    let (output_start, output_end) = result.unwrap();
-    assert!((output_start[0] - 0.5).abs() < 1e-5);
-    assert!((output_end[0] - 1.5).abs() < 1e-5);
-}
-
-#[test]
-fn test_polyline_closest_distance_and_point() {
-    let polyline = Polyline::new(vec![
-        Point::new(0.0, 0.0, 0.0),
-        Point::new(2.0, 0.0, 0.0),
-    ]);
-    let test_point = Point::new(1.0, 1.0, 0.0);
-
-    let (distance, edge_id, closest_point) = polyline.closest_distance_and_point(&test_point);
-
-    assert_eq!(edge_id, 0);
-    assert!((closest_point[0] - 1.0).abs() < 1e-5);
-    assert!((distance - 1.0).abs() < 1e-5);
-}
-
-#[test]
-fn test_polyline_is_closed() {
-    let open_polyline = Polyline::new(vec![
-        Point::new(0.0, 0.0, 0.0),
-        Point::new(1.0, 0.0, 0.0),
-        Point::new(1.0, 1.0, 0.0),
-    ]);
-    assert!(!open_polyline.is_closed());
-
-    let closed_polyline = Polyline::new(vec![
-        Point::new(0.0, 0.0, 0.0),
-        Point::new(1.0, 0.0, 0.0),
-        Point::new(1.0, 1.0, 0.0),
-        Point::new(0.0, 0.0, 0.0),
-    ]);
-    assert!(closed_polyline.is_closed());
-}
-
-#[test]
-fn test_polyline_center() {
-    let polyline = Polyline::new(vec![
-        Point::new(0.0, 0.0, 0.0),
-        Point::new(2.0, 0.0, 0.0),
-        Point::new(2.0, 2.0, 0.0),
-        Point::new(0.0, 2.0, 0.0),
-    ]);
-
-    let c = polyline.center();
-    assert!((c[0] - 1.0).abs() < 1e-5);
-    assert!((c[1] - 1.0).abs() < 1e-5);
-    assert!((c[2] - 0.0).abs() < 1e-5);
-}
-
-#[test]
-fn test_polyline_center_vec() {
-    let polyline = Polyline::new(vec![
-        Point::new(0.0, 0.0, 0.0),
-        Point::new(2.0, 0.0, 0.0),
-        Point::new(2.0, 2.0, 0.0),
-    ]);
-
-    let c = polyline.center_vec();
-    assert!((c[0] - 4.0 / 3.0).abs() < 1e-5);
-    assert!((c[1] - 2.0 / 3.0).abs() < 1e-5);
-}
-
-#[test]
-fn test_polyline_get_average_plane() {
-    let polyline = Polyline::new(vec![
-        Point::new(0.0, 0.0, 0.0),
-        Point::new(1.0, 0.0, 0.0),
-        Point::new(0.0, 1.0, 0.0),
-    ]);
-
-    let (_origin, _x_axis, _y_axis, z_axis) = polyline.get_average_plane();
-
-    assert!((z_axis[2] - 1.0).abs() < 1e-5);
-}
-
-#[test]
-fn test_polyline_get_fast_plane() {
-    let polyline = Polyline::new(vec![
-        Point::new(0.0, 0.0, 0.0),
-        Point::new(1.0, 0.0, 0.0),
-        Point::new(0.0, 1.0, 0.0),
-    ]);
-
-    let (origin, _plane) = polyline.get_fast_plane();
-
-    assert_eq!(origin[0], 0.0);
-    assert_eq!(origin[1], 0.0);
-    assert_eq!(origin[2], 0.0);
-}
-
-#[test]
-fn test_line_get_middle_line() {
-    use crate::Line;
-    let line0_start = Point::new(0.0, 0.0, 0.0);
-    let line0_end = Point::new(2.0, 0.0, 0.0);
-    let line1_start = Point::new(0.0, 2.0, 0.0);
-    let line1_end = Point::new(2.0, 2.0, 0.0);
-
-    let (output_start, output_end) =
-        Line::get_middle_line(&line0_start, &line0_end, &line1_start, &line1_end);
-
-    assert!((output_start[1] - 1.0).abs() < 1e-5);
-    assert!((output_end[1] - 1.0).abs() < 1e-5);
-}
-
-#[test]
-fn test_polyline_extend_line() {
-    let mut start = Point::new(0.0, 0.0, 0.0);
-    let mut end = Point::new(1.0, 0.0, 0.0);
-
-    Polyline::extend_line(&mut start, &mut end, 0.5, 0.5);
-
-    assert!((start[0] - (-0.5)).abs() < 1e-5);
-    assert!((end[0] - 1.5).abs() < 1e-5);
-}
-
-#[test]
-fn test_polyline_scale_line() {
-    let mut start = Point::new(0.0, 0.0, 0.0);
-    let mut end = Point::new(2.0, 0.0, 0.0);
-
-    Polyline::scale_line(&mut start, &mut end, 0.25);
-
-    assert!((start[0] - 0.5).abs() < 1e-5);
-    assert!((end[0] - 1.5).abs() < 1e-5);
-}
-
-#[test]
-fn test_polyline_extend_segment() {
-    let mut polyline = Polyline::new(vec![
-        Point::new(0.0, 0.0, 0.0),
-        Point::new(1.0, 0.0, 0.0),
-    ]);
-
-    polyline.extend_segment(0, 0.5, 0.5, 0.0, 0.0);
-
-    assert!((polyline.get_points()[0][0] - (-0.5)).abs() < 1e-5);
-    assert!((polyline.get_points()[1][0] - 1.5).abs() < 1e-5);
-}
-
-#[test]
-fn test_polyline_extend_segment_equally_static() {
-    let mut start = Point::new(0.0, 0.0, 0.0);
-    let mut end = Point::new(1.0, 0.0, 0.0);
-
-    Polyline::extend_segment_equally_static(&mut start, &mut end, 0.5, 0.0);
-
-    assert!((start[0] - (-0.5)).abs() < 1e-5);
-    assert!((end[0] - 1.5).abs() < 1e-5);
-}
-
-#[test]
-fn test_polyline_extend_segment_equally() {
-    let mut polyline = Polyline::new(vec![
-        Point::new(0.0, 0.0, 0.0),
-        Point::new(1.0, 0.0, 0.0),
-    ]);
-
-    polyline.extend_segment_equally(0, 0.5, 0.0);
-
-    assert!((polyline.get_points()[0][0] - (-0.5)).abs() < 1e-5);
-    assert!((polyline.get_points()[1][0] - 1.5).abs() < 1e-5);
-}
-
-#[test]
-fn test_polyline_move_by() {
-    let mut polyline = Polyline::new(vec![
-        Point::new(0.0, 0.0, 0.0),
-        Point::new(1.0, 0.0, 0.0),
-    ]);
-    let translation = Vector::new(1.0, 1.0, 1.0);
-
-    polyline.move_by(&translation);
-
-    assert_eq!(polyline.get_points()[0][0], 1.0);
-    assert_eq!(polyline.get_points()[0][1], 1.0);
-    assert_eq!(polyline.get_points()[0][2], 1.0);
-    assert_eq!(polyline.get_points()[1][0], 2.0);
-    assert_eq!(polyline.get_points()[1][1], 1.0);
-    assert_eq!(polyline.get_points()[1][2], 1.0);
-}
-
-#[test]
-fn test_polyline_is_clockwise() {
-    let polyline = Polyline::new(vec![
-        Point::new(0.0, 0.0, 0.0),
-        Point::new(1.0, 0.0, 0.0),
-        Point::new(1.0, 1.0, 0.0),
-    ]);
-    let plane = Plane::default();
-
-    let _clockwise = polyline.is_clockwise(&plane);
-    // Just test it doesn't crash - the function returns a boolean value
-}
-
-#[test]
-fn test_polyline_flip() {
-    let mut polyline = Polyline::new(vec![
-        Point::new(0.0, 0.0, 0.0),
-        Point::new(1.0, 0.0, 0.0),
-        Point::new(2.0, 0.0, 0.0),
-    ]);
-
-    polyline.flip();
-
-    assert_eq!(polyline.get_points()[0][0], 2.0);
-    assert_eq!(polyline.get_points()[1][0], 1.0);
-    assert_eq!(polyline.get_points()[2][0], 0.0);
-}
-
-#[test]
-fn test_polyline_get_convex_corners() {
-    let polyline = Polyline::new(vec![
-        Point::new(0.0, 0.0, 0.0),
-        Point::new(1.0, 0.0, 0.0),
-        Point::new(1.0, 1.0, 0.0),
-        Point::new(0.0, 1.0, 0.0),
-    ]);
-
-    let convex_corners = polyline.get_convex_corners();
-
-    assert_eq!(convex_corners.len(), 4);
-}
-
-#[test]
-fn test_polyline_tween_two_polylines() {
-    let polyline0 = Polyline::new(vec![
-        Point::new(0.0, 0.0, 0.0),
-        Point::new(1.0, 0.0, 0.0),
-    ]);
-    let polyline1 = Polyline::new(vec![
-        Point::new(0.0, 2.0, 0.0),
-        Point::new(1.0, 2.0, 0.0),
-    ]);
-
-    let result = Polyline::tween_two_polylines(&polyline0, &polyline1, 0.5);
-
-    assert!((result.get_points()[0][1] - 1.0).abs() < 1e-5);
-    assert!((result.get_points()[1][1] - 1.0).abs() < 1e-5);
-}
-
-#[test]
-fn test_polyline_protobuf_roundtrip() {
-    let mut polyline = Polyline::new(vec![
-        Point::new(1.0, 2.0, 3.0),
-        Point::new(4.0, 5.0, 6.0),
-        Point::new(7.0, 8.0, 9.0),
-    ]);
-    polyline.set_guid("test-guid-12345".to_string());
-    polyline.name = "test_polyline".to_string();
-    polyline.width = 2.5;
-    polyline.linecolor.r = 255;
-    polyline.linecolor.g = 128;
-    polyline.linecolor.b = 64;
-
-    // Serialize to protobuf
-    let data = polyline.pb_dumps();
-    assert!(!data.is_empty());
-
-    // Deserialize from protobuf
-    let loaded = Polyline::pb_loads(&data).unwrap();
-
-    // Verify all fields
-    assert_eq!(loaded.guid(), "test-guid-12345");
-    assert_eq!(loaded.name, "test_polyline");
-    assert_eq!(loaded.point_count(), 3);
-    assert!((loaded.width - 2.5).abs() < 1e-10);
-    assert_eq!(loaded.linecolor.r, 255);
-    assert_eq!(loaded.linecolor.g, 128);
-    assert_eq!(loaded.linecolor.b, 64);
-
-    // Verify points
-    let points = loaded.get_points();
-    assert!((points[0][0] - 1.0).abs() < 1e-10);
-    assert!((points[0][1] - 2.0).abs() < 1e-10);
-    assert!((points[0][2] - 3.0).abs() < 1e-10);
-    assert!((points[1][0] - 4.0).abs() < 1e-10);
-    assert!((points[2][2] - 9.0).abs() < 1e-10);
-}
 
 
 pub fn run_polyline_constructor() -> TestResult {
@@ -1221,7 +561,7 @@ pub fn run_polyline_bounding_rectangle() -> TestResult {
 }
 
 pub fn run_polyline_grid_of_points() -> TestResult {
-    MINI_TEST!("Grid Of Points", {
+    MINI_TEST!("Grid Of Points In Polygon", {
         use crate::Polyline;
         use crate::Point;
 
@@ -1266,7 +606,85 @@ REGISTER_MINI_TEST!("Polyline", "Average Plane", crate::polyline_test::run_polyl
 REGISTER_MINI_TEST!("Polyline", "Interpolate Points", crate::polyline_test::run_polyline_interpolate_points);
 REGISTER_MINI_TEST!("Polyline", "Quick Hull", crate::polyline_test::run_polyline_quick_hull);
 REGISTER_MINI_TEST!("Polyline", "Bounding Rectangle", crate::polyline_test::run_polyline_bounding_rectangle);
-REGISTER_MINI_TEST!("Polyline", "Grid Of Points", crate::polyline_test::run_polyline_grid_of_points);
+REGISTER_MINI_TEST!("Polyline", "Grid Of Points In Polygon", crate::polyline_test::run_polyline_grid_of_points);
+
+pub fn run_polyline_boolean_op() -> TestResult {
+    MINI_TEST!("Boolean Op", {
+        use crate::{Point, Polyline};
+        let sq_a = Polyline::new(vec![
+            Point::new(-1.0, -1.0, 0.0),
+            Point::new( 1.0, -1.0, 0.0),
+            Point::new( 1.0,  1.0, 0.0),
+            Point::new(-1.0,  1.0, 0.0),
+        ]);
+        let sq_b = Polyline::new(vec![
+            Point::new(0.0, 0.0, 0.0),
+            Point::new(2.0, 0.0, 0.0),
+            Point::new(2.0, 2.0, 0.0),
+            Point::new(0.0, 2.0, 0.0),
+        ]);
+        let sq_inside = Polyline::new(vec![
+            Point::new(-0.5, -0.5, 0.0),
+            Point::new( 0.5, -0.5, 0.0),
+            Point::new( 0.5,  0.5, 0.0),
+            Point::new(-0.5,  0.5, 0.0),
+        ]);
+        let sq_disjoint = Polyline::new(vec![
+            Point::new(5.0, 5.0, 0.0),
+            Point::new(6.0, 5.0, 0.0),
+            Point::new(6.0, 6.0, 0.0),
+            Point::new(5.0, 6.0, 0.0),
+        ]);
+
+        let isect = Polyline::boolean_op(&sq_a, &sq_b, 0);
+        let uni = Polyline::boolean_op(&sq_a, &sq_b, 1);
+        let diff = Polyline::boolean_op(&sq_a, &sq_b, 2);
+        MINI_CHECK!(isect.len() == 1);
+        MINI_CHECK!(isect[0].point_count() == 4);
+        MINI_CHECK!(uni.len() == 1);
+        MINI_CHECK!(uni[0].point_count() == 8);
+        MINI_CHECK!(diff.len() == 1);
+        MINI_CHECK!(diff[0].point_count() == 6);
+
+        let isect_in = Polyline::boolean_op(&sq_a, &sq_inside, 0);
+        let uni_in = Polyline::boolean_op(&sq_a, &sq_inside, 1);
+        let diff_in = Polyline::boolean_op(&sq_a, &sq_inside, 2);
+        MINI_CHECK!(isect_in.len() == 1);
+        MINI_CHECK!(isect_in[0].point_count() == 4);
+        MINI_CHECK!(uni_in.len() == 1);
+        MINI_CHECK!(uni_in[0].point_count() == 4);
+        MINI_CHECK!(diff_in.len() == 1);
+        MINI_CHECK!(diff_in[0].point_count() == 4);
+
+        let isect_dis = Polyline::boolean_op(&sq_a, &sq_disjoint, 0);
+        let uni_dis = Polyline::boolean_op(&sq_a, &sq_disjoint, 1);
+        let diff_dis = Polyline::boolean_op(&sq_a, &sq_disjoint, 2);
+        MINI_CHECK!(isect_dis.len() == 0);
+        MINI_CHECK!(uni_dis.len() == 2);
+        MINI_CHECK!(diff_dis.len() == 1);
+    })
+}
+REGISTER_MINI_TEST!("Polyline", "Boolean Op", crate::polyline_test::run_polyline_boolean_op);
+
+pub fn run_polyline_boolean_op_plane() -> TestResult {
+    MINI_TEST!("Boolean Op Plane", {
+        use crate::{Plane, Point, Polyline, Vector};
+        // Two overlapping squares lifted to z=5 and clipped against the z=5 plane
+        let plane = Plane::from_point_normal(Point::new(0.0,0.0,5.0), Vector::new(0.0,0.0,1.0));
+        let sq_a = Polyline::new(vec![Point::new(-1.0,-1.0,5.0), Point::new(1.0,-1.0,5.0), Point::new(1.0,1.0,5.0), Point::new(-1.0,1.0,5.0), Point::new(-1.0,-1.0,5.0)]);
+        let sq_b = Polyline::new(vec![Point::new(0.0,0.0,5.0), Point::new(2.0,0.0,5.0), Point::new(2.0,2.0,5.0), Point::new(0.0,2.0,5.0), Point::new(0.0,0.0,5.0)]);
+        let isect = Polyline::boolean_op_plane(&sq_a, &sq_b, &plane, 0);
+        let uni = Polyline::boolean_op_plane(&sq_a, &sq_b, &plane, 1);
+        let diff = Polyline::boolean_op_plane(&sq_a, &sq_b, &plane, 2);
+        MINI_CHECK!(isect.len() == 1);
+        MINI_CHECK!(uni.len() == 1);
+        MINI_CHECK!(diff.len() == 1);
+        for i in 0..isect[0].point_count() { MINI_CHECK!(TOLERANCE.is_close(isect[0][i][2], 5.0)); }
+        for i in 0..uni[0].point_count() { MINI_CHECK!(TOLERANCE.is_close(uni[0][i][2], 5.0)); }
+        for i in 0..diff[0].point_count() { MINI_CHECK!(TOLERANCE.is_close(diff[0][i][2], 5.0)); }
+    })
+}
+REGISTER_MINI_TEST!("Polyline", "Boolean Op Plane", crate::polyline_test::run_polyline_boolean_op_plane);
 
 pub fn run_polyline_simplify_points() -> TestResult {
     MINI_TEST!("Simplify Points", {
@@ -1368,73 +786,6 @@ pub fn run_polyline_simplify_two_points() -> TestResult {
 }
 REGISTER_MINI_TEST!("Polyline", "Simplify Two Points", crate::polyline_test::run_polyline_simplify_two_points);
 
-#[test]
-fn test_polyline_boolean_op() {
-    let _ = run_polyline_boolean_op();
-}
-
-pub fn run_polyline_boolean_op() -> TestResult {
-    MINI_TEST!("Boolean Op", {
-        use crate::{Point, Polyline};
-        let sq_a = Polyline::new(vec![Point::new(-1.0,-1.0,0.0), Point::new(1.0,-1.0,0.0), Point::new(1.0,1.0,0.0), Point::new(-1.0,1.0,0.0)]);
-        let sq_b = Polyline::new(vec![Point::new(0.0,0.0,0.0), Point::new(2.0,0.0,0.0), Point::new(2.0,2.0,0.0), Point::new(0.0,2.0,0.0)]);
-        let sq_inside = Polyline::new(vec![Point::new(-0.5,-0.5,0.0), Point::new(0.5,-0.5,0.0), Point::new(0.5,0.5,0.0), Point::new(-0.5,0.5,0.0)]);
-        let sq_disjoint = Polyline::new(vec![Point::new(5.0,5.0,0.0), Point::new(6.0,5.0,0.0), Point::new(6.0,6.0,0.0), Point::new(5.0,6.0,0.0)]);
-
-        let isect = Polyline::boolean_op(&sq_a, &sq_b, 0);
-        let uni = Polyline::boolean_op(&sq_a, &sq_b, 1);
-        let diff = Polyline::boolean_op(&sq_a, &sq_b, 2);
-        MINI_CHECK!(isect.len() == 1);
-        MINI_CHECK!(isect[0].point_count() == 4);
-        MINI_CHECK!(uni.len() == 1);
-        MINI_CHECK!(uni[0].point_count() == 8);
-        MINI_CHECK!(diff.len() == 1);
-        MINI_CHECK!(diff[0].point_count() == 6);
-
-        let isect_in = Polyline::boolean_op(&sq_a, &sq_inside, 0);
-        let uni_in = Polyline::boolean_op(&sq_a, &sq_inside, 1);
-        let diff_in = Polyline::boolean_op(&sq_a, &sq_inside, 2);
-        MINI_CHECK!(isect_in.len() == 1);
-        MINI_CHECK!(isect_in[0].point_count() == 4);
-        MINI_CHECK!(uni_in.len() == 1);
-        MINI_CHECK!(uni_in[0].point_count() == 4);
-        MINI_CHECK!(diff_in.len() == 1);
-        MINI_CHECK!(diff_in[0].point_count() == 4);
-
-        let isect_dis = Polyline::boolean_op(&sq_a, &sq_disjoint, 0);
-        let uni_dis = Polyline::boolean_op(&sq_a, &sq_disjoint, 1);
-        let diff_dis = Polyline::boolean_op(&sq_a, &sq_disjoint, 2);
-        MINI_CHECK!(isect_dis.len() == 0);
-        MINI_CHECK!(uni_dis.len() == 2);
-        MINI_CHECK!(diff_dis.len() == 1);
-    })
-}
-REGISTER_MINI_TEST!("Polyline", "Boolean Op", crate::polyline_test::run_polyline_boolean_op);
-
-#[test]
-fn test_polyline_boolean_op_plane() {
-    let _ = run_polyline_boolean_op_plane();
-}
-
-pub fn run_polyline_boolean_op_plane() -> TestResult {
-    MINI_TEST!("Boolean Op Plane", {
-        use crate::{Plane, Point, Polyline, Vector};
-        // Two overlapping squares lifted to z=5 and clipped against the z=5 plane
-        let plane = Plane::from_point_normal(Point::new(0.0,0.0,5.0), Vector::new(0.0,0.0,1.0));
-        let sq_a = Polyline::new(vec![Point::new(-1.0,-1.0,5.0), Point::new(1.0,-1.0,5.0), Point::new(1.0,1.0,5.0), Point::new(-1.0,1.0,5.0), Point::new(-1.0,-1.0,5.0)]);
-        let sq_b = Polyline::new(vec![Point::new(0.0,0.0,5.0), Point::new(2.0,0.0,5.0), Point::new(2.0,2.0,5.0), Point::new(0.0,2.0,5.0), Point::new(0.0,0.0,5.0)]);
-        let isect = Polyline::boolean_op_plane(&sq_a, &sq_b, &plane, 0);
-        let uni = Polyline::boolean_op_plane(&sq_a, &sq_b, &plane, 1);
-        let diff = Polyline::boolean_op_plane(&sq_a, &sq_b, &plane, 2);
-        MINI_CHECK!(isect.len() == 1);
-        MINI_CHECK!(uni.len() == 1);
-        MINI_CHECK!(diff.len() == 1);
-        for i in 0..isect[0].point_count() { MINI_CHECK!(TOLERANCE.is_close(isect[0][i][2], 5.0)); }
-        for i in 0..uni[0].point_count() { MINI_CHECK!(TOLERANCE.is_close(uni[0][i][2], 5.0)); }
-        for i in 0..diff[0].point_count() { MINI_CHECK!(TOLERANCE.is_close(diff[0][i][2], 5.0)); }
-    })
-}
-REGISTER_MINI_TEST!("Polyline", "Boolean Op Plane", crate::polyline_test::run_polyline_boolean_op_plane);
 
 pub fn run_polyline_transformed_xform() -> TestResult {
     MINI_TEST!("Transformed Xform", {

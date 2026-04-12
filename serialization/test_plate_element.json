@@ -48,7 +48,7 @@
       ]
     },
     "facedata": {},
-    "guid": "79a01e6e-3266-4299-a6fb-73e2d7d971bd",
+    "guid": "ca771c76-5719-413a-9d66-2eeced58fab6",
     "halfedge": {
       "0": {
         "1": 2,
@@ -146,7 +146,7 @@
       }
     },
     "xform": {
-      "guid": "c6125661-e7de-4cf4-9be5-d99c1f720166",
+      "guid": "3fe55b65-6289-4251-9cca-be2ea86d41c9",
       "m": [
         1.0,
         0.0,
@@ -170,7 +170,7 @@
     }
   },
   "geometry_type": "Mesh",
-  "guid": "b386134e-34af-42cb-a8f5-63ed2c9df4e8",
+  "guid": "0aad8cd6-d4d8-4a73-b5fc-ee19a8766785",
   "j_mf": [],
   "joint_types": [],
   "key": "",
@@ -220,7 +220,7 @@
     ]
   ],
   "session_transformation": {
-    "guid": "1415dd6e-2c7a-42b3-9f2d-a0e29e8a51ad",
+    "guid": "e444b793-9e9f-432a-965d-235dbf89eea5",
     "m": [
       1.0,
       0.0,
@@ -243,5 +243,5 @@
     "type": "Xform"
   },
   "thickness": 0.3,
-  "type": "PlateElement"
+  "type": "ElementPlate"
 }

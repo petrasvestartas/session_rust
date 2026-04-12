@@ -103,6 +103,12 @@ impl Xform {
         xform
     }
 
+    /// Build a pure rotation (no translation) from three column axis vectors.
+    /// Port of wood `internal::rotation_in_xy_plane(x, y, z)`.
+    pub fn from_axes(col_x: &Vector, col_y: &Vector, col_z: &Vector) -> Self {
+        Self::from_cols(col_x.clone(), col_y.clone(), col_z.clone())
+    }
+
     pub fn guid(&self) -> &str {
         self.guid.get_or_init(|| uuid::Uuid::new_v4().to_string())
     }
