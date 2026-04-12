@@ -1967,12 +1967,8 @@ impl NurbsSurface {
 
     /// Serialize to JSON and write to file
     pub fn json_dump(&self, filename: &str) {
-        use std::fs::File;
-        use std::io::Write;
-        if let Ok(json) = serde_json::to_string_pretty(self) {
-            if let Ok(mut file) = File::create(filename) {
-                let _ = file.write_all(json.as_bytes());
-            }
+        if let Ok(json) = self.jsondump() {
+            let _ = std::fs::write(filename, json);
         }
     }
 
@@ -1992,19 +1988,11 @@ impl NurbsSurface {
         serde_json::from_str(json_string).unwrap_or_else(|_| Self::default())
     }
 
-    /// Load from JSON file
     pub fn json_load(filename: &str) -> Self {
-        use std::fs::File;
-        use std::io::Read;
-        let mut file = match File::open(filename) {
-            Ok(f) => f,
-            Err(_) => return Self::default(),
-        };
-        let mut contents = String::new();
-        if file.read_to_string(&mut contents).is_err() {
-            return Self::default();
+        match std::fs::read_to_string(filename) {
+            Ok(s) => Self::jsonload(&s).unwrap_or_default(),
+            Err(_) => Self::default(),
         }
-        serde_json::from_str(&contents).unwrap_or_else(|_| Self::default())
     }
 
     /// Serialize to protobuf binary data.

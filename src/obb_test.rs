@@ -142,7 +142,9 @@ pub fn run_obb_json_roundtrip() -> TestResult {
         MINI_CHECK!(TOLERANCE.is_close(loaded_s.half_size[0], 5.0));
 
         // File
-        let fname = "serialization/test_obb.json";
+        let src_dir = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+        let fname = src_dir.join("serialization").join("test_obb.json");
+        let fname = fname.to_str().unwrap();
         bb.json_dump(fname);
         let loaded = OBB::json_load(fname);
 
@@ -169,7 +171,9 @@ pub fn run_obb_protobuf_roundtrip() -> TestResult {
         MINI_CHECK!(TOLERANCE.is_close(loaded_s.center[0], 1.0));
 
         // File
-        let fname = "serialization/test_obb.bin";
+        let src_dir = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+        let fname = src_dir.join("serialization").join("test_obb.bin");
+        let fname = fname.to_str().unwrap();
         bb.pb_dump(fname);
         let loaded = OBB::pb_load(fname);
 
