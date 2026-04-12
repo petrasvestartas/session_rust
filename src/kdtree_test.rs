@@ -4,7 +4,8 @@ use crate::tolerance::TOLERANCE;
 
 pub fn run_kdtree_nearest() -> TestResult {
     MINI_TEST!("Nearest", {
-        use crate::{KDTree, Point};
+        use crate::KDTree;
+        use crate::Point;
 
         // 5 known points on a line: 0, 1, 2, 3, 4
         // Query at 1.1 — nearest should be index 1 (point at x=1), distance 0.1
@@ -26,7 +27,8 @@ pub fn run_kdtree_nearest() -> TestResult {
 
 pub fn run_kdtree_nearest_k() -> TestResult {
     MINI_TEST!("Nearest K", {
-        use crate::{KDTree, Point};
+        use crate::KDTree;
+        use crate::Point;
 
         // 5 points on X axis: 0, 1, 2, 3, 4
         // Query at 1.5 — 3 nearest are: x=1 (d=0.5), x=2 (d=0.5), x=3 (d=1.5)
@@ -50,7 +52,8 @@ pub fn run_kdtree_nearest_k() -> TestResult {
 
 pub fn run_kdtree_radius_search() -> TestResult {
     MINI_TEST!("Radius Search", {
-        use crate::{KDTree, Point};
+        use crate::KDTree;
+        use crate::Point;
 
         // 4 points: 0, 1, 2, 5 on X axis
         // Query at 0.5, radius 1.1 — finds x=0 (d=0.5) and x=1 (d=0.5)

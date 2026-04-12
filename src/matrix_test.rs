@@ -182,7 +182,7 @@ pub fn run_matrix_solve() -> TestResult {
 }
 
 pub fn run_matrix_lu_decompose() -> TestResult {
-    MINI_TEST!("LuDecompose", {
+    MINI_TEST!("Lu Decompose", {
         use crate::Matrix;
         let a = Matrix::from_vec(3, 3, vec![2.0, 1.0, 1.0, 4.0, 3.0, 3.0, 8.0, 7.0, 9.0]);
         let (l, u, p) = a.lu_decompose();
@@ -200,7 +200,7 @@ pub fn run_matrix_lu_decompose() -> TestResult {
 }
 
 pub fn run_matrix_qr_decompose() -> TestResult {
-    MINI_TEST!("QrDecompose", {
+    MINI_TEST!("Qr Decompose", {
         use crate::Matrix;
         let a = Matrix::from_vec(3, 3, vec![12.0, -51.0, 4.0, 6.0, 167.0, -68.0, -4.0, 24.0, -41.0]);
         let (q, r) = a.qr_decompose();
@@ -335,8 +335,8 @@ REGISTER_MINI_TEST!("Matrix", "Transpose", crate::matrix_test::run_matrix_transp
 REGISTER_MINI_TEST!("Matrix", "Determinant", crate::matrix_test::run_matrix_determinant);
 REGISTER_MINI_TEST!("Matrix", "Inverse", crate::matrix_test::run_matrix_inverse);
 REGISTER_MINI_TEST!("Matrix", "Solve", crate::matrix_test::run_matrix_solve);
-REGISTER_MINI_TEST!("Matrix", "LuDecompose", crate::matrix_test::run_matrix_lu_decompose);
-REGISTER_MINI_TEST!("Matrix", "QrDecompose", crate::matrix_test::run_matrix_qr_decompose);
+REGISTER_MINI_TEST!("Matrix", "Lu Decompose", crate::matrix_test::run_matrix_lu_decompose);
+REGISTER_MINI_TEST!("Matrix", "Qr Decompose", crate::matrix_test::run_matrix_qr_decompose);
 REGISTER_MINI_TEST!("Matrix", "Cholesky", crate::matrix_test::run_matrix_cholesky);
 REGISTER_MINI_TEST!("Matrix", "Eigenvalues", crate::matrix_test::run_matrix_eigenvalues);
 REGISTER_MINI_TEST!("Matrix", "Svd", crate::matrix_test::run_matrix_svd);

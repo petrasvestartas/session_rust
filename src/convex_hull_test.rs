@@ -3,8 +3,9 @@ use crate::mini_test::TestResult;
 use crate::tolerance::PI;
 
 pub fn run_convex_hull_hull_2d() -> TestResult {
-    MINI_TEST!("Hull2d", {
-        use crate::{ConvexHull, Point};
+    MINI_TEST!("Hull 2d", {
+        use crate::ConvexHull;
+        use crate::Point;
         let pts = vec![
             Point::new(0.0, 0.0, 0.0),
             Point::new(1.0, 0.0, 0.0),
@@ -18,11 +19,12 @@ pub fn run_convex_hull_hull_2d() -> TestResult {
         MINI_CHECK!(hull.len() == 4);
     })
 }
-REGISTER_MINI_TEST!("ConvexHull", "Hull2d", crate::convex_hull_test::run_convex_hull_hull_2d);
+REGISTER_MINI_TEST!("ConvexHull", "Hull 2d", crate::convex_hull_test::run_convex_hull_hull_2d);
 
 pub fn run_convex_hull_hull_2d_collinear() -> TestResult {
-    MINI_TEST!("Hull2dCollinear", {
-        use crate::{ConvexHull, Point};
+    MINI_TEST!("Hull 2d Collinear", {
+        use crate::ConvexHull;
+        use crate::Point;
         let pts = vec![
             Point::new(0.0, 0.0, 0.0),
             Point::new(1.0, 0.0, 0.0),
@@ -35,11 +37,12 @@ pub fn run_convex_hull_hull_2d_collinear() -> TestResult {
         MINI_CHECK!(hull.len() >= 3);
     })
 }
-REGISTER_MINI_TEST!("ConvexHull", "Hull2dCollinear", crate::convex_hull_test::run_convex_hull_hull_2d_collinear);
+REGISTER_MINI_TEST!("ConvexHull", "Hull 2d Collinear", crate::convex_hull_test::run_convex_hull_hull_2d_collinear);
 
 pub fn run_convex_hull_hull_2d_circle() -> TestResult {
-    MINI_TEST!("Hull2dCircle", {
-        use crate::{ConvexHull, Point};
+    MINI_TEST!("Hull 2d Circle", {
+        use crate::ConvexHull;
+        use crate::Point;
         let n = 12_usize;
         let mut pts = vec![];
         for i in 0..n {
@@ -52,11 +55,12 @@ pub fn run_convex_hull_hull_2d_circle() -> TestResult {
         MINI_CHECK!(hull.len() == n);
     })
 }
-REGISTER_MINI_TEST!("ConvexHull", "Hull2dCircle", crate::convex_hull_test::run_convex_hull_hull_2d_circle);
+REGISTER_MINI_TEST!("ConvexHull", "Hull 2d Circle", crate::convex_hull_test::run_convex_hull_hull_2d_circle);
 
 pub fn run_convex_hull_hull_3d() -> TestResult {
-    MINI_TEST!("Hull3d", {
-        use crate::{ConvexHull, Point};
+    MINI_TEST!("Hull 3d", {
+        use crate::ConvexHull;
+        use crate::Point;
         let pts = vec![
             Point::new(0.0, 0.0, 0.0),
             Point::new(1.0, 0.0, 0.0),
@@ -70,11 +74,12 @@ pub fn run_convex_hull_hull_3d() -> TestResult {
         MINI_CHECK!(mesh.number_of_faces() == 4);
     })
 }
-REGISTER_MINI_TEST!("ConvexHull", "Hull3d", crate::convex_hull_test::run_convex_hull_hull_3d);
+REGISTER_MINI_TEST!("ConvexHull", "Hull 3d", crate::convex_hull_test::run_convex_hull_hull_3d);
 
 pub fn run_convex_hull_hull_3d_cube() -> TestResult {
-    MINI_TEST!("Hull3dCube", {
-        use crate::{ConvexHull, Point};
+    MINI_TEST!("Hull 3d Cube", {
+        use crate::ConvexHull;
+        use crate::Point;
         let pts = vec![
             Point::new(0.0, 0.0, 0.0),
             Point::new(1.0, 0.0, 0.0),
@@ -92,5 +97,5 @@ pub fn run_convex_hull_hull_3d_cube() -> TestResult {
         MINI_CHECK!(mesh.number_of_faces() == 12);
     })
 }
-REGISTER_MINI_TEST!("ConvexHull", "Hull3dCube", crate::convex_hull_test::run_convex_hull_hull_3d_cube);
+REGISTER_MINI_TEST!("ConvexHull", "Hull 3d Cube", crate::convex_hull_test::run_convex_hull_hull_3d_cube);
 
