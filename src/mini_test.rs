@@ -948,7 +948,7 @@ pub fn run_all(language: &str) -> Result<(), Box<dyn std::error::Error>> {
             results.push(res_json);
         }
 
-        let filename = format!("{}_test.json", group.to_lowercase());
+        let filename = format!("{}_test.json", group.to_lowercase().replace(' ', "_"));
         let path = out_dir.join(&filename);
         let tmp_path = out_dir.join(format!("{}.tmp", &filename));
         let json = serde_json::to_string_pretty(&results)?;

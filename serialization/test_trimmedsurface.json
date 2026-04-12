@@ -1,19 +1,19 @@
 {
   "type": "TrimmedSurface",
-  "guid": "98add0b8-fab9-45d1-93bb-7434877289e4",
+  "guid": "6b2d97ca-4ae5-4ebb-9cb4-061853908b59",
   "name": "test_trimmedsurface",
   "width": 2.0,
   "surfacecolor": {
     "a": 255,
     "b": 64,
     "g": 128,
-    "guid": "ef972798-b943-4c5d-86ea-a93655de7a34",
+    "guid": "7a8b30d9-c978-4655-9bb9-3052806714e5",
     "name": "my_color",
     "r": 255,
     "type": "Color"
   },
   "xform": {
-    "guid": "34b76701-f262-4044-8ed8-361d4b0ad1ce",
+    "guid": "55427e3b-541e-4435-a6e8-32f0149f2344",
     "m": [
       1.0,
       0.0,
@@ -54,7 +54,7 @@
     "cv_count_v": 2,
     "dimension": 3,
     "facecolors": [],
-    "guid": "2b0de5da-1841-4b1e-9e04-422c5cd04eb7",
+    "guid": "2ada76ee-7502-40e9-9c71-20da27e3f01f",
     "is_rational": false,
     "knots_u": [
       0.0,
@@ -72,7 +72,7 @@
     "type": "NurbsSurface",
     "width": 1.0,
     "xform": {
-      "guid": "bf3a8532-f71f-4aa8-a719-532815882d38",
+      "guid": "8e618637-8c06-408f-bdef-6e61f1b6be7c",
       "m": [
         1.0,
         0.0,
@@ -126,7 +126,7 @@
     "cv_count": 5,
     "cv_stride": 3,
     "dimension": 3,
-    "guid": "ccdf69f9-0054-4b97-9122-b86239e6dbbf",
+    "guid": "1fba5a91-2b89-4cfe-81b9-705a06bc01f1",
     "is_rational": false,
     "knots": [
       0.0,
@@ -142,7 +142,7 @@
     "type": "NurbsCurve",
     "width": 1.0,
     "xform": {
-      "guid": "b2b9481d-b37f-47ea-8a42-d65b162c0a70",
+      "guid": "c12da1b7-8320-4494-8e3c-81f351371476",
       "m": [
         1.0,
         0.0,
