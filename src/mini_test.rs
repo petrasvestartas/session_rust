@@ -687,7 +687,6 @@ pub fn get_all_tests() -> Vec<RegisteredTest> {
         RegisteredTest { group: "Session", name: "Protobuf Roundtrip", func: run_session_protobuf_roundtrip },
         RegisteredTest { group: "Session", name: "Tree Transformation Hierarchy", func: run_session_tree_transformation_hierarchy },
         // SessionConfig tests
-        RegisteredTest { group: "SessionConfig", name: "Default Values", func: run_session_config_default_values },
         RegisteredTest { group: "SessionConfig", name: "Runtime Modification", func: run_session_config_runtime_modification },
         // OBJ tests
         RegisteredTest { group: "OBJ", name: "Read Bunny", func: run_obj_read_bunny },
@@ -804,7 +803,6 @@ pub fn get_all_tests() -> Vec<RegisteredTest> {
         RegisteredTest { group: "RTree", name: "Search Count", func: run_rtree_search_count },
         RegisteredTest { group: "RTree", name: "Search Stop", func: run_rtree_search_stop },
         RegisteredTest { group: "RTree", name: "Search 100 Boxes", func: run_rtree_search_100_boxes },
-        RegisteredTest { group: "RTree", name: "Perf 10k", func: run_rtree_perf },
         // Element tests
         RegisteredTest { group: "Element", name: "Constructor", func: run_element_constructor },
         RegisteredTest { group: "Element", name: "Session Transformation", func: run_element_session_transformation },

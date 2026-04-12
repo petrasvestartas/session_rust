@@ -67,8 +67,10 @@ pub fn run_brep_add_face() -> TestResult {
 
         let mut b = BRep::new();
         let mut srf = NurbsSurface::create_raw(3, false, 2, 2, 2, 2, false, false, 1.0, 1.0).unwrap();
-        srf.set_cv(0, 0, &Point::new(0.0, 0.0, 0.0)); srf.set_cv(1, 0, &Point::new(1.0, 0.0, 0.0));
-        srf.set_cv(0, 1, &Point::new(0.0, 1.0, 0.0)); srf.set_cv(1, 1, &Point::new(1.0, 1.0, 0.0));
+        srf.set_cv(0, 0, &Point::new(0.0, 0.0, 0.0));
+        srf.set_cv(1, 0, &Point::new(1.0, 0.0, 0.0));
+        srf.set_cv(0, 1, &Point::new(0.0, 1.0, 0.0));
+        srf.set_cv(1, 1, &Point::new(1.0, 1.0, 0.0));
 
         let si = b.add_surface(&srf);
         let fi = b.add_face(si as i32, false);
@@ -124,8 +126,10 @@ pub fn run_brep_is_solid() -> TestResult {
 
         let mut single = BRep::new();
         let mut srf = NurbsSurface::create_raw(3, false, 2, 2, 2, 2, false, false, 1.0, 1.0).unwrap();
-        srf.set_cv(0, 0, &Point::new(0.0, 0.0, 0.0)); srf.set_cv(1, 0, &Point::new(1.0, 0.0, 0.0));
-        srf.set_cv(0, 1, &Point::new(0.0, 1.0, 0.0)); srf.set_cv(1, 1, &Point::new(1.0, 1.0, 0.0));
+        srf.set_cv(0, 0, &Point::new(0.0, 0.0, 0.0));
+        srf.set_cv(1, 0, &Point::new(1.0, 0.0, 0.0));
+        srf.set_cv(0, 1, &Point::new(0.0, 1.0, 0.0));
+        srf.set_cv(1, 1, &Point::new(1.0, 1.0, 0.0));
         let si = single.add_surface(&srf);
         single.add_face(si as i32, false);
         single.add_vertex(&Point::new(0.0, 0.0, 0.0));
@@ -259,7 +263,9 @@ pub fn run_brep_from_polylines() -> TestResult {
         use crate::polyline::Polyline;
         use crate::Point;
 
-        let hx = 1.0_f64; let hy = 1.5_f64; let hz = 2.0_f64;
+        let hx = 1.0_f64;
+        let hy = 1.5_f64;
+        let hz = 2.0_f64;
         let c = [
             Point::new(-hx, -hy, -hz),
             Point::new( hx, -hy, -hz),
@@ -309,7 +315,9 @@ pub fn run_brep_from_nurbscurves() -> TestResult {
         use crate::NurbsCurve;
         use crate::Point;
 
-        let hx = 1.0_f64; let hy = 1.5_f64; let hz = 2.0_f64;
+        let hx = 1.0_f64;
+        let hy = 1.5_f64;
+        let hz = 2.0_f64;
         let c = [
             Point::new(-hx, -hy, -hz),
             Point::new( hx, -hy, -hz),

@@ -5,35 +5,31 @@ use crate::tolerance::TOLERANCE;
 pub fn run_kdtree_nearest() -> TestResult {
     MINI_TEST!("Nearest", {
         use crate::{KDTree, Point};
-        // Simple deterministic random using LCG
-        let mut seed: u64 = 42;
-        let mut rng = || -> f64 {
-            seed = seed.wrapping_mul(6364136223846793005).wrapping_add(1442695040888963407);
-            (seed >> 33) as f64 / (u32::MAX as f64) * 20.0 - 10.0
-        };
-        let mut pts = vec![];
-        for _ in 0..100 {
-            pts.push(Point::new(rng(), rng(), rng()));
-        }
-        let tree = KDTree::new(pts.clone());
-        let query = Point::new(0.0, 0.0, 0.0);
-        let (idx, dist) = tree.nearest(&query);
-        let brute_idx = (0..pts.len()).min_by(|&a, &b| {
-            let da = pts[a][0]*pts[a][0]+pts[a][1]*pts[a][1]+pts[a][2]*pts[a][2];
-            let db = pts[b][0]*pts[b][0]+pts[b][1]*pts[b][1]+pts[b][2]*pts[b][2];
-            da.partial_cmp(&db).unwrap()
-        }).unwrap();
-        let brute_dist = (pts[brute_idx][0].powi(2)+pts[brute_idx][1].powi(2)+pts[brute_idx][2].powi(2)).sqrt();
 
-        MINI_CHECK!(idx == brute_idx);
-        MINI_CHECK!(TOLERANCE.is_close(dist, brute_dist));
+        // 5 known points on a line: 0, 1, 2, 3, 4
+        // Query at 1.1 — nearest should be index 1 (point at x=1), distance 0.1
+        let pts = vec![
+            Point::new(0.0, 0.0, 0.0),
+            Point::new(1.0, 0.0, 0.0),
+            Point::new(2.0, 0.0, 0.0),
+            Point::new(3.0, 0.0, 0.0),
+            Point::new(4.0, 0.0, 0.0),
+        ];
+        let tree = KDTree::new(pts);
+        let query = Point::new(1.1, 0.0, 0.0);
+        let (idx, dist) = tree.nearest(&query);
+
+        MINI_CHECK!(idx == 1);
+        MINI_CHECK!(TOLERANCE.is_close(dist, 0.1));
     })
 }
-REGISTER_MINI_TEST!("KDTree", "Nearest", crate::kdtree_test::run_kdtree_nearest);
 
 pub fn run_kdtree_nearest_k() -> TestResult {
-    MINI_TEST!("NearestK", {
+    MINI_TEST!("Nearest K", {
         use crate::{KDTree, Point};
+
+        // 5 points on X axis: 0, 1, 2, 3, 4
+        // Query at 1.5 — 3 nearest are: x=1 (d=0.5), x=2 (d=0.5), x=3 (d=1.5)
         let pts = vec![
             Point::new(0.0, 0.0, 0.0),
             Point::new(1.0, 0.0, 0.0),
@@ -51,11 +47,13 @@ pub fn run_kdtree_nearest_k() -> TestResult {
         MINI_CHECK!(TOLERANCE.is_close(result[2].1, 1.5));
     })
 }
-REGISTER_MINI_TEST!("KDTree", "NearestK", crate::kdtree_test::run_kdtree_nearest_k);
 
 pub fn run_kdtree_radius_search() -> TestResult {
-    MINI_TEST!("RadiusSearch", {
+    MINI_TEST!("Radius Search", {
         use crate::{KDTree, Point};
+
+        // 4 points: 0, 1, 2, 5 on X axis
+        // Query at 0.5, radius 1.1 — finds x=0 (d=0.5) and x=1 (d=0.5)
         let pts = vec![
             Point::new(0.0, 0.0, 0.0),
             Point::new(1.0, 0.0, 0.0),
@@ -71,11 +69,13 @@ pub fn run_kdtree_radius_search() -> TestResult {
         MINI_CHECK!(TOLERANCE.is_close(result[1].1, 0.5));
     })
 }
-REGISTER_MINI_TEST!("KDTree", "RadiusSearch", crate::kdtree_test::run_kdtree_radius_search);
 
 pub fn run_kdtree_single_point() -> TestResult {
-    MINI_TEST!("SinglePoint", {
+    MINI_TEST!("Single Point", {
         use crate::{KDTree, Point};
+
+        // Tree with one point at (3,4,0). Query from origin.
+        // Distance = sqrt(9+16) = 5 (3-4-5 right triangle)
         let pts = vec![Point::new(3.0, 4.0, 0.0)];
         let tree = KDTree::new(pts);
         let query = Point::new(0.0, 0.0, 0.0);
@@ -85,34 +85,38 @@ pub fn run_kdtree_single_point() -> TestResult {
         MINI_CHECK!(TOLERANCE.is_close(dist, 5.0));
     })
 }
-REGISTER_MINI_TEST!("KDTree", "SinglePoint", crate::kdtree_test::run_kdtree_single_point);
 
 pub fn run_kdtree_nearest_brute_force() -> TestResult {
-    MINI_TEST!("NearestBruteForce", {
+    MINI_TEST!("Nearest Brute Force", {
         use crate::{KDTree, Point};
-        let mut seed: u64 = 7;
-        let mut rng = || -> f64 {
-            seed = seed.wrapping_mul(6364136223846793005).wrapping_add(1442695040888963407);
-            (seed >> 33) as f64 / (u32::MAX as f64) * 100.0
-        };
-        let mut pts = vec![];
-        for _ in 0..50 {
-            pts.push(Point::new(rng(), rng(), rng()));
-        }
-        let mut queries = vec![];
-        for _ in 0..10 {
-            queries.push(Point::new(rng(), rng(), rng()));
-        }
+
+        // 8 points in 3D — verify KDTree matches brute-force for several queries
+        let pts = vec![
+            Point::new(0.0, 0.0, 0.0),
+            Point::new(1.0, 0.0, 0.0),
+            Point::new(0.0, 1.0, 0.0),
+            Point::new(0.0, 0.0, 1.0),
+            Point::new(5.0, 5.0, 5.0),
+            Point::new(-3.0, 2.0, 1.0),
+            Point::new(2.0, -1.0, 3.0),
+            Point::new(-1.0, -1.0, -1.0),
+        ];
         let tree = KDTree::new(pts.clone());
+        let queries = vec![
+            Point::new(0.5, 0.5, 0.5),
+            Point::new(4.0, 4.0, 4.0),
+            Point::new(-2.0, 1.0, 0.0),
+        ];
         let mut all_match = true;
         for q in &queries {
             let (_idx, dist) = tree.nearest(q);
+            // Brute-force: find closest by scanning all points
             let brute = (0..pts.len()).min_by(|&a, &b| {
-                let da = (pts[a][0]-q[0]).powi(2)+(pts[a][1]-q[1]).powi(2)+(pts[a][2]-q[2]).powi(2);
-                let db = (pts[b][0]-q[0]).powi(2)+(pts[b][1]-q[1]).powi(2)+(pts[b][2]-q[2]).powi(2);
+                let da = pts[a].squared_distance(q, None);
+                let db = pts[b].squared_distance(q, None);
                 da.partial_cmp(&db).unwrap()
             }).unwrap();
-            let brute_d = ((pts[brute][0]-q[0]).powi(2)+(pts[brute][1]-q[1]).powi(2)+(pts[brute][2]-q[2]).powi(2)).sqrt();
+            let brute_d = pts[brute].distance(q, None);
             if !TOLERANCE.is_close(dist, brute_d) {
                 all_match = false;
             }
@@ -121,4 +125,9 @@ pub fn run_kdtree_nearest_brute_force() -> TestResult {
         MINI_CHECK!(all_match);
     })
 }
-REGISTER_MINI_TEST!("KDTree", "NearestBruteForce", crate::kdtree_test::run_kdtree_nearest_brute_force);
+
+REGISTER_MINI_TEST!("KDTree", "Nearest", crate::kdtree_test::run_kdtree_nearest);
+REGISTER_MINI_TEST!("KDTree", "Nearest K", crate::kdtree_test::run_kdtree_nearest_k);
+REGISTER_MINI_TEST!("KDTree", "Radius Search", crate::kdtree_test::run_kdtree_radius_search);
+REGISTER_MINI_TEST!("KDTree", "Single Point", crate::kdtree_test::run_kdtree_single_point);
+REGISTER_MINI_TEST!("KDTree", "Nearest Brute Force", crate::kdtree_test::run_kdtree_nearest_brute_force);

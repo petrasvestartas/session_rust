@@ -162,6 +162,77 @@ pub fn run_tolerance_count_digits() -> TestResult {
     })
 }
 
+pub fn run_tolerance_is_angle_zero() -> TestResult {
+    MINI_TEST!("Is Angle Zero", {
+        // Angular tolerance default is 1e-6
+        MINI_CHECK!(TOLERANCE.is_angle_zero(1e-8));
+        MINI_CHECK!(!TOLERANCE.is_angle_zero(0.1));
+    })
+}
+
+pub fn run_tolerance_is_angles_close() -> TestResult {
+    MINI_TEST!("Is Angles Close", {
+        MINI_CHECK!(TOLERANCE.is_angles_close(1.0, 1.0 + 1e-8));
+        MINI_CHECK!(!TOLERANCE.is_angles_close(1.0, 2.0));
+    })
+}
+
+pub fn run_tolerance_is_point_close() -> TestResult {
+    MINI_TEST!("Is Point Close", {
+        use crate::Point;
+
+        let a = Point::new(1.0, 2.0, 3.0);
+        let b = Point::new(1.0, 2.0, 3.0 + 1e-12);
+        let c = Point::new(1.0, 2.0, 4.0);
+
+        MINI_CHECK!(TOLERANCE.is_point_close(&a, &b));
+        MINI_CHECK!(!TOLERANCE.is_point_close(&a, &c));
+    })
+}
+
+pub fn run_tolerance_is_allclose() -> TestResult {
+    MINI_TEST!("Is Allclose", {
+        let a = vec![1.0, 2.0, 3.0];
+        let b = vec![1.0, 2.0, 3.0 + 1e-12];
+        let c = vec![1.0, 2.0, 4.0];
+
+        MINI_CHECK!(TOLERANCE.is_allclose(&a, &b));
+        MINI_CHECK!(!TOLERANCE.is_allclose(&a, &c));
+    })
+}
+
+pub fn run_tolerance_key_xy() -> TestResult {
+    MINI_TEST!("Key Xy", {
+        let result = TOLERANCE.key_xy([1.0, 2.0], -999);
+
+        MINI_CHECK!(result == "1.000,2.000");
+    })
+}
+
+pub fn run_tolerance_round_to() -> TestResult {
+    MINI_TEST!("Round To", {
+        use crate::tolerance::Tolerance;
+        MINI_CHECK!((Tolerance::round_to(3.14159, 2) - 3.14).abs() < 1e-9);
+        MINI_CHECK!((Tolerance::round_to(2.5, 0) - 3.0).abs() < 1e-9);
+    })
+}
+
+pub fn run_tolerance_precision_from_tolerance() -> TestResult {
+    MINI_TEST!("Precision From Tolerance", {
+        // Default absolute tolerance is 1e-9 -> precision should be 9
+        let prec = TOLERANCE.precision_from_tolerance(None);
+
+        MINI_CHECK!(prec == 9);
+    })
+}
+
+REGISTER_MINI_TEST!("Tolerance", "Is Angle Zero", crate::tolerance_test::run_tolerance_is_angle_zero);
+REGISTER_MINI_TEST!("Tolerance", "Is Angles Close", crate::tolerance_test::run_tolerance_is_angles_close);
+REGISTER_MINI_TEST!("Tolerance", "Is Point Close", crate::tolerance_test::run_tolerance_is_point_close);
+REGISTER_MINI_TEST!("Tolerance", "Is Allclose", crate::tolerance_test::run_tolerance_is_allclose);
+REGISTER_MINI_TEST!("Tolerance", "Key Xy", crate::tolerance_test::run_tolerance_key_xy);
+REGISTER_MINI_TEST!("Tolerance", "Round To", crate::tolerance_test::run_tolerance_round_to);
+REGISTER_MINI_TEST!("Tolerance", "Precision From Tolerance", crate::tolerance_test::run_tolerance_precision_from_tolerance);
 REGISTER_MINI_TEST!("Tolerance", "Unique From Two Int", crate::tolerance_test::run_tolerance_unique_from_two_int);
 REGISTER_MINI_TEST!("Tolerance", "Wrap Index", crate::tolerance_test::run_tolerance_wrap_index);
 REGISTER_MINI_TEST!("Tolerance", "Triangle Edge By Angle", crate::tolerance_test::run_tolerance_triangle_edge_by_angle);

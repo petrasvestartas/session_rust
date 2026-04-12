@@ -176,6 +176,11 @@ pub fn run_line_protobuf_roundtrip() -> TestResult {
         let mut l = Line::new(42.1, 84.2, 126.3, 168.4, 210.5, 252.6);
         l.name = "test_line".to_string();
 
+        //   pb_dumps()      | bytes        | to protobuf bytes
+        //   pb_loads(b)     | bytes        | from protobuf bytes
+        //   pb_dump(path)   | file         | write to file
+        //   pb_load(path)   | file         | read from file
+
         // Bytes
         let b = l.pb_dumps();
         let loaded_s = Line::pb_loads(&b).unwrap();

@@ -72,6 +72,16 @@ pub fn run_treenode_is_leaf() -> TestResult {
     })
 }
 
+pub fn run_treenode_tree() -> TestResult {
+    MINI_TEST!("Tree", {
+        use crate::treenode::TreeNode;
+
+        let n = TreeNode::new("standalone");
+
+        MINI_CHECK!(n.borrow().is_root());
+    })
+}
+
 pub fn run_treenode_add() -> TestResult {
     MINI_TEST!("Add", {
         use crate::treenode::TreeNode;
@@ -191,6 +201,7 @@ REGISTER_MINI_TEST!("TreeNode", "Constructor", crate::treenode_test::run_treenod
 REGISTER_MINI_TEST!("TreeNode", "Json Roundtrip", crate::treenode_test::run_treenode_json_roundtrip);
 REGISTER_MINI_TEST!("TreeNode", "Is Root", crate::treenode_test::run_treenode_is_root);
 REGISTER_MINI_TEST!("TreeNode", "Is Leaf", crate::treenode_test::run_treenode_is_leaf);
+REGISTER_MINI_TEST!("TreeNode", "Tree", crate::treenode_test::run_treenode_tree);
 REGISTER_MINI_TEST!("TreeNode", "Add", crate::treenode_test::run_treenode_add);
 REGISTER_MINI_TEST!("TreeNode", "Remove", crate::treenode_test::run_treenode_remove);
 REGISTER_MINI_TEST!("TreeNode", "Parent", crate::treenode_test::run_treenode_parent);
