@@ -4,42 +4,42 @@
         "edges": [
             {
                 "attribute": "connection",
-                "guid": "1b2b81a8-8de3-413c-8a89-4f8cfd83f094",
+                "guid": "5d4ceda2-767a-4f53-9ca8-2dbc5498fae5",
                 "index": 0,
                 "name": "my_edge",
                 "type": "Edge",
-                "v0": "4f91222a-a913-4982-a229-9b338c3f8db1",
-                "v1": "79fa9966-14ea-4323-821c-14c4e9f80d31"
+                "v0": "97445e83-0719-4bbc-8c35-239d882bd37f",
+                "v1": "1c3f2546-1525-4fdf-9197-9b76a6e030b8"
             }
         ],
-        "guid": "06f0137d-01d8-4de0-a31d-39ba28ac538a",
+        "guid": "53ffd3a0-fa43-4c7d-8ac2-3afa9f1087e6",
         "name": "my_session_graph",
         "type": "Graph",
         "vertex_count": 2,
         "vertices": [
             {
                 "attribute": "point_my_point",
-                "guid": "9491ffd7-aa0a-4e80-bfcc-c86ec6b76f35",
+                "guid": "a2b522fe-bee4-46e5-810f-e41f2353df20",
                 "index": 0,
-                "name": "4f91222a-a913-4982-a229-9b338c3f8db1",
+                "name": "97445e83-0719-4bbc-8c35-239d882bd37f",
                 "type": "Vertex"
             },
             {
                 "attribute": "point_my_point",
-                "guid": "22ff548c-c037-4e55-8364-d07dbbf3706c",
+                "guid": "6c95d1d4-79ab-4487-b71e-128681782d61",
                 "index": 1,
-                "name": "79fa9966-14ea-4323-821c-14c4e9f80d31",
+                "name": "1c3f2546-1525-4fdf-9197-9b76a6e030b8",
                 "type": "Vertex"
             }
         ]
     },
-    "guid": "a71f2298-8dac-473c-9313-63c52a8f357c",
+    "guid": "fd5adf66-0621-4d01-854e-ae07c8d2e3ab",
     "name": "my_session",
     "objects": {
         "bboxes": [],
         "breps": [],
         "elements": [],
-        "guid": "1d269f19-05e8-4d24-8a2f-e66e8290a14d",
+        "guid": "09ff8bec-8026-41f4-bf65-4bc1de78bdc3",
         "lines": [],
         "meshes": [],
         "name": "my_objects",
@@ -49,13 +49,13 @@
         "pointclouds": [],
         "points": [
             {
-                "guid": "4f91222a-a913-4982-a229-9b338c3f8db1",
+                "guid": "97445e83-0719-4bbc-8c35-239d882bd37f",
                 "name": "my_point",
                 "pointcolor": {
                     "a": 255,
                     "b": 255,
                     "g": 0,
-                    "guid": "0d165eb4-3fa6-496d-b9ec-00d2e4cf903d",
+                    "guid": "9d490902-ad64-48b6-9417-922dc3ab7bb8",
                     "name": "blue",
                     "r": 0,
                     "type": "Color"
@@ -64,7 +64,7 @@
                 "width": 1.0,
                 "x": 1.0,
                 "xform": {
-                    "guid": "3804068b-6fee-4486-a0c7-c94ed6645a75",
+                    "guid": "1368c1cd-7724-4894-b3fd-6d9b5e5fcd40",
                     "m": [
                         1.0,
                         0.0,
@@ -90,13 +90,13 @@
                 "z": 3.0
             },
             {
-                "guid": "79fa9966-14ea-4323-821c-14c4e9f80d31",
+                "guid": "1c3f2546-1525-4fdf-9197-9b76a6e030b8",
                 "name": "my_point",
                 "pointcolor": {
                     "a": 255,
                     "b": 255,
                     "g": 0,
-                    "guid": "d5e564c7-6c13-41db-b196-a7a10e404b7c",
+                    "guid": "51312604-af45-41f4-8818-5ac7fc3f57af",
                     "name": "blue",
                     "r": 0,
                     "type": "Color"
@@ -105,7 +105,7 @@
                 "width": 1.0,
                 "x": 4.0,
                 "xform": {
-                    "guid": "d1ca7c19-4f61-4d6d-885f-5c1f05e4fa54",
+                    "guid": "96c204de-3cb6-4949-bcb7-53238a8e01c6",
                     "m": [
                         1.0,
                         0.0,
@@ -135,11 +135,11 @@
         "type": "Objects"
     },
     "tree": {
-        "guid": "3368d9fb-6500-4bf4-9b5b-a84b8320f4b1",
+        "guid": "e5cf4c3e-5c7a-40c5-850e-fd880aff3878",
         "name": "my_session_tree",
         "root": {
             "children": [],
-            "guid": "78284ec4-7ab3-4068-837d-088d92ce5013",
+            "guid": "bf1ec4ad-082a-472d-bd57-fbf9f8f031a4",
             "name": "my_session",
             "type": "TreeNode"
         },
