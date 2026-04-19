@@ -2,6 +2,25 @@ use crate::{MINI_CHECK, MINI_TEST, REGISTER_MINI_TEST};
 use crate::mini_test::TestResult;
 use crate::tolerance::TOLERANCE;
 
+pub fn run_kdtree_constructor() -> TestResult {
+    MINI_TEST!("Constructor", {
+        use crate::KDTree;
+        use crate::Point;
+
+        // KDTree: O(n log n) build, O(log n) nearest — static point set closest search
+        let pts = vec![
+            Point::new(0.0, 0.0, 0.0),
+            Point::new(3.0, 0.0, 0.0),
+            Point::new(10.0, 0.0, 0.0),
+        ];
+        let tree = KDTree::new(pts);
+        let (idx, dist) = tree.nearest(&Point::new(2.0, 0.0, 0.0));
+
+        MINI_CHECK!(idx == 1);
+        MINI_CHECK!(TOLERANCE.is_close(dist, 1.0));
+    })
+}
+
 pub fn run_kdtree_nearest() -> TestResult {
     MINI_TEST!("Nearest", {
         use crate::KDTree;
@@ -73,6 +92,7 @@ pub fn run_kdtree_radius_search() -> TestResult {
     })
 }
 
+REGISTER_MINI_TEST!("KDTree", "Constructor", crate::kdtree_test::run_kdtree_constructor);
 REGISTER_MINI_TEST!("KDTree", "Nearest", crate::kdtree_test::run_kdtree_nearest);
 REGISTER_MINI_TEST!("KDTree", "Nearest K", crate::kdtree_test::run_kdtree_nearest_k);
 REGISTER_MINI_TEST!("KDTree", "Radius Search", crate::kdtree_test::run_kdtree_radius_search);

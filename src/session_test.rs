@@ -454,6 +454,70 @@ pub fn run_session_tree_transformation_hierarchy() -> TestResult {
     })
 }
 
+pub fn run_session_add_component() -> TestResult {
+    MINI_TEST!("Add Component", {
+        // add_component stores a custom domain object in session.objects.components
+        // and registers it in the graph under its guid.
+        // The lookup is NOT in the geometry lookup (components are not geometry)
+        // but they ARE in the tree and graph.
+        use crate::{Session, Component};
+
+        let mut session = Session::default();
+
+        let mut extra = std::collections::HashMap::new();
+        extra.insert("size".to_string(),   serde_json::json!(3000));
+        extra.insert("height".to_string(), serde_json::json!(650));
+
+        let guid = uuid::Uuid::new_v4().to_string();
+        let c = Component {
+            type_name: "FloorBuilder".to_string(),
+            guid: guid.clone(),
+            name: "floor_builder".to_string(),
+            extra,
+        };
+
+        session.add_component(c, None);
+
+        MINI_CHECK!(session.objects.components.len() == 1);
+        MINI_CHECK!(session.graph.has_node(&guid));
+        MINI_CHECK!(session.objects.components[0].type_name == "FloorBuilder");
+        MINI_CHECK!(session.objects.components[0].extra["size"] == serde_json::json!(3000));
+    })
+}
+
+pub fn run_session_component_json_roundtrip() -> TestResult {
+    MINI_TEST!("Component Json Roundtrip", {
+        // A session with a component serialises to JSON and back.
+        // All custom fields in `extra` must survive the round-trip.
+        use crate::{Session, Component};
+        use crate::encoders::{json_dump, json_load};
+
+        let mut session = Session::default();
+
+        let mut extra = std::collections::HashMap::new();
+        extra.insert("size".to_string(),   serde_json::json!(3000));
+        extra.insert("height".to_string(), serde_json::json!(650));
+        extra.insert("rise".to_string(),   serde_json::json!(453));
+
+        let guid = uuid::Uuid::new_v4().to_string();
+        session.add_component(Component {
+            type_name: "FloorBuilder".to_string(),
+            guid: guid.clone(),
+            name: "floor_builder".to_string(),
+            extra,
+        }, None);
+
+        json_dump(&session, "serialization/test_session_component.json", false).unwrap();
+        let loaded = json_load::<Session>("serialization/test_session_component.json").unwrap();
+
+        MINI_CHECK!(loaded.objects.components.len() == 1);
+        MINI_CHECK!(loaded.objects.components[0].guid == guid);
+        MINI_CHECK!(loaded.objects.components[0].type_name == "FloorBuilder");
+        MINI_CHECK!(loaded.objects.components[0].extra["size"]   == serde_json::json!(3000));
+        MINI_CHECK!(loaded.objects.components[0].extra["rise"]   == serde_json::json!(453));
+    })
+}
+
 REGISTER_MINI_TEST!("Session", "Constructor", crate::session_test::run_session_constructor);
 REGISTER_MINI_TEST!("Session", "Add Point", crate::session_test::run_session_add_point);
 REGISTER_MINI_TEST!("Session", "Add Line", crate::session_test::run_session_add_line);
@@ -479,3 +543,5 @@ REGISTER_MINI_TEST!("Session", "Compute Face To Face", crate::session_test::run_
 REGISTER_MINI_TEST!("Session", "Json Roundtrip", crate::session_test::run_session_json_roundtrip);
 REGISTER_MINI_TEST!("Session", "Protobuf Roundtrip", crate::session_test::run_session_protobuf_roundtrip);
 REGISTER_MINI_TEST!("Session", "Tree Transformation Hierarchy", crate::session_test::run_session_tree_transformation_hierarchy);
+REGISTER_MINI_TEST!("Session", "Add Component",              crate::session_test::run_session_add_component);
+REGISTER_MINI_TEST!("Session", "Component Json Roundtrip",   crate::session_test::run_session_component_json_roundtrip);

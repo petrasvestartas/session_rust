@@ -1,6 +1,25 @@
 use crate::{MINI_CHECK, MINI_TEST, REGISTER_MINI_TEST};
 use crate::mini_test::TestResult;
 
+pub fn run_rtree_constructor() -> TestResult {
+    MINI_TEST!("Constructor", {
+        use crate::RTree;
+
+        // RTree3: dynamic spatial index — insert/remove support, O(log n) overlap search
+        let mut t = RTree::new();
+        t.insert([0.0, 0.0, 0.0], [1.0, 1.0, 1.0], 0);
+        t.insert([5.0, 0.0, 0.0], [6.0, 1.0, 1.0], 1);
+        t.insert([10.0, 0.0, 0.0], [11.0, 1.0, 1.0], 2);
+        let mut found: Vec<i32> = Vec::new();
+        t.search([0.0, 0.0, 0.0], [1.0, 1.0, 1.0], |id| {
+            found.push(id);
+            true
+        });
+
+        MINI_CHECK!(found.contains(&0));
+    })
+}
+
 pub fn run_rtree_creation() -> TestResult {
     MINI_TEST!("Creation", {
         use crate::RTree;
@@ -237,6 +256,7 @@ pub fn run_rtree_search_100_boxes() -> TestResult {
     })
 }
 
+REGISTER_MINI_TEST!("RTree", "Constructor", crate::rtree_test::run_rtree_constructor);
 REGISTER_MINI_TEST!("RTree", "Creation", crate::rtree_test::run_rtree_creation);
 REGISTER_MINI_TEST!("RTree", "Insert", crate::rtree_test::run_rtree_insert);
 REGISTER_MINI_TEST!("RTree", "Insert Multiple", crate::rtree_test::run_rtree_insert_multiple);

@@ -13,6 +13,51 @@ use serde::{Deserialize, Serialize};
 use std::fmt;
 use std::fs;
 
+/// A custom domain object stored generically in a Session.
+///
+/// External packages (e.g. session_tf) use this to store arbitrary
+/// serializable objects (FloorBuilder, WallBuilder, …) without the core
+/// session needing to know their concrete types.  All custom fields are
+/// preserved in `extra` via serde's flatten so downstream code can
+/// reconstruct the concrete object via a factory registry.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Component {
+    #[serde(rename = "type")]
+    pub type_name: String,
+    pub guid: String,
+    pub name: String,
+    #[serde(flatten)]
+    pub extra: std::collections::HashMap<String, serde_json::Value>,
+}
+
+impl Component {
+    pub fn guid(&self) -> &str { &self.guid }
+
+    pub fn pb_dumps(&self) -> Vec<u8> {
+        use prost::Message;
+        let proto = crate::proto::Component {
+            type_name: self.type_name.clone(),
+            guid: self.guid.clone(),
+            name: self.name.clone(),
+            json_data: serde_json::to_string(&self.extra).unwrap_or_default(),
+        };
+        proto.encode_to_vec()
+    }
+
+    pub fn pb_loads(data: &[u8]) -> Result<Self, Box<dyn std::error::Error>> {
+        use prost::Message;
+        let proto = crate::proto::Component::decode(data)?;
+        let extra: std::collections::HashMap<String, serde_json::Value> =
+            serde_json::from_str(&proto.json_data).unwrap_or_default();
+        Ok(Component {
+            type_name: proto.type_name,
+            guid: proto.guid,
+            name: proto.name,
+            extra,
+        })
+    }
+}
+
 /// A collection of all geometry objects.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(tag = "type", rename = "Objects")]
@@ -31,6 +76,7 @@ pub struct Objects {
     pub nurbssurfaces: Vec<NurbsSurface>,
     pub breps: Vec<BRep>,
     pub elements: Vec<Element>,
+    pub components: Vec<Component>,
 }
 
 impl Default for Objects {
@@ -49,6 +95,7 @@ impl Default for Objects {
             nurbssurfaces: Vec::new(),
             breps: Vec::new(),
             elements: Vec::new(),
+            components: Vec::new(),
         }
     }
 }
@@ -143,6 +190,9 @@ impl Objects {
             elements: self.elements.iter().map(|e| {
                 crate::proto::Element::decode(e.pb_dumps().as_slice()).unwrap()
             }).collect(),
+            components: self.components.iter().map(|c| {
+                crate::proto::Component::decode(c.pb_dumps().as_slice()).unwrap()
+            }).collect(),
         };
         proto.encode_to_vec()
     }
@@ -185,6 +235,9 @@ impl Objects {
         }
         for e in &proto.elements {
             objects.elements.push(crate::element::Element::pb_loads(&e.encode_to_vec())?);
+        }
+        for c in &proto.components {
+            objects.components.push(Component::pb_loads(&c.encode_to_vec())?);
         }
         Ok(objects)
     }

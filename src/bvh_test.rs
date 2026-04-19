@@ -2,6 +2,33 @@ use crate::{MINI_CHECK, MINI_TEST, REGISTER_MINI_TEST};
 use crate::mini_test::TestResult;
 use crate::tolerance::TOLERANCE;
 
+pub fn run_bvh_constructor() -> TestResult {
+    MINI_TEST!("Constructor", {
+        use crate::bvh::BVH;
+        use crate::OBB;
+        use crate::Point;
+        use crate::Vector;
+
+        // BVH: Morton-ordered static hierarchy — O(log n) nearest-neighbour for OBBs
+        let boxes = vec![
+            OBB::new(Point::new(0.0, 0.0, 0.0),
+                Vector::new(1.0, 0.0, 0.0), Vector::new(0.0, 1.0, 0.0),
+                Vector::new(0.0, 0.0, 1.0), Vector::new(1.0, 1.0, 1.0)),
+            OBB::new(Point::new(2.0, 0.0, 0.0),
+                Vector::new(1.0, 0.0, 0.0), Vector::new(0.0, 1.0, 0.0),
+                Vector::new(0.0, 0.0, 1.0), Vector::new(1.0, 1.0, 1.0)),
+            OBB::new(Point::new(20.0, 0.0, 0.0),
+                Vector::new(1.0, 0.0, 0.0), Vector::new(0.0, 1.0, 0.0),
+                Vector::new(0.0, 0.0, 1.0), Vector::new(1.0, 1.0, 1.0)),
+        ];
+        let bvh = BVH::from_boxes(&boxes, 100.0);
+        let n = bvh.nearest_neighbors(0, &boxes, 1.5);
+
+        MINI_CHECK!(n.len() == 1);
+        MINI_CHECK!(n[0] == 1);
+    })
+}
+
 pub fn run_bvh_expand_bits() -> TestResult {
     MINI_TEST!("Expand Bits", {
         use crate::bvh::expand_bits;
@@ -393,6 +420,7 @@ pub fn run_bvh_query_aabb() -> TestResult {
     })
 }
 
+REGISTER_MINI_TEST!("BVH", "Constructor", crate::bvh_test::run_bvh_constructor);
 REGISTER_MINI_TEST!("BVH", "Expand Bits", crate::bvh_test::run_bvh_expand_bits);
 REGISTER_MINI_TEST!("BVH", "Morton Code Origin", crate::bvh_test::run_bvh_morton_code_origin);
 REGISTER_MINI_TEST!("BVH", "Morton Code Corners", crate::bvh_test::run_bvh_morton_code_corners);

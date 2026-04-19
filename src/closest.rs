@@ -543,4 +543,149 @@ impl Closest {
 
         (best_point, best_index, best_dist)
     }
+
+    pub fn pointcloud_point_kdtree(cloud: &PointCloud, test_point: &Point) -> (Point, usize, f64) {
+        if cloud.point_count() == 0 {
+            return (Point::new(0.0, 0.0, 0.0), 0, f64::INFINITY);
+        }
+        use crate::kdtree::KDTree;
+        let pts: Vec<Point> = (0..cloud.point_count()).map(|i| cloud.get_point(i)).collect();
+        let kd = KDTree::new(pts);
+        let (idx, dist) = kd.nearest(test_point);
+        (cloud.get_point(idx), idx, dist)
+    }
+
+    fn build_raw_boxes(aabbs: &[[f64; 6]]) -> Vec<([f64; 6], i32, i32)> {
+        let mut nodes: Vec<([f64; 6], i32, i32)> = Vec::new();
+        fn build(ids: &mut [usize], boxes: &[[f64; 6]], nodes: &mut Vec<([f64; 6], i32, i32)>) {
+            let ni = nodes.len();
+            nodes.push(([0.0; 6], -1, -1));
+            let mut lo = [f64::MAX; 3];
+            let mut hi = [f64::MIN; 3];
+            for &i in ids.iter() {
+                let b = &boxes[i];
+                for a in 0..3 { lo[a] = lo[a].min(b[a] - b[a + 3]); hi[a] = hi[a].max(b[a] + b[a + 3]); }
+            }
+            nodes[ni].0 = [(lo[0]+hi[0])*0.5, (lo[1]+hi[1])*0.5, (lo[2]+hi[2])*0.5,
+                           (hi[0]-lo[0])*0.5, (hi[1]-lo[1])*0.5, (hi[2]-lo[2])*0.5];
+            if ids.len() == 1 { nodes[ni].2 = ids[0] as i32; return; }
+            let dx = hi[0]-lo[0]; let dy = hi[1]-lo[1]; let dz = hi[2]-lo[2];
+            let axis = if dx >= dy && dx >= dz { 0 } else if dy >= dz { 1 } else { 2 };
+            let mid = ids.len() / 2;
+            ids.select_nth_unstable_by(mid, |&a, &b| boxes[a][axis].partial_cmp(&boxes[b][axis]).unwrap());
+            let (left_ids, right_ids) = ids.split_at_mut(mid);
+            build(left_ids, boxes, nodes);
+            nodes[ni].1 = nodes.len() as i32;
+            build(right_ids, boxes, nodes);
+        }
+        let mut ids: Vec<usize> = (0..aabbs.len()).collect();
+        build(&mut ids, aabbs, &mut nodes);
+        nodes
+    }
+
+    fn query_raw_nodes(ni: usize, nodes: &[([f64; 6], i32, i32)], query: &[f64; 6], result: &mut Vec<usize>) {
+        let (ref aabb, right, obj) = nodes[ni];
+        let overlaps = (0..3).all(|a| (aabb[a] - query[a]).abs() <= aabb[a+3] + query[a+3]);
+        if !overlaps { return; }
+        if obj >= 0 { result.push(obj as usize); return; }
+        Self::query_raw_nodes(ni + 1, nodes, query, result);
+        Self::query_raw_nodes(right as usize, nodes, query, result);
+    }
+
+    fn aabb_to_aabb_min_dist(a: &[f64; 6], b: &[f64; 6]) -> f64 {
+        let dx = ((a[0] - b[0]).abs() - a[3] - b[3]).max(0.0);
+        let dy = ((a[1] - b[1]).abs() - a[4] - b[4]).max(0.0);
+        let dz = ((a[2] - b[2]).abs() - a[5] - b[5]).max(0.0);
+        (dx*dx + dy*dy + dz*dz).sqrt()
+    }
+
+    pub fn lines_closest(lines: &[Line], threshold: f64) -> Vec<(usize, usize)> {
+        use crate::aabb::AABB;
+        if lines.len() < 2 { return Vec::new(); }
+        let raw: Vec<[f64; 6]> = lines.iter().map(|ln| {
+            let b = AABB::from_line(ln, threshold);
+            [b.cx, b.cy, b.cz, b.hx, b.hy, b.hz]
+        }).collect();
+        let nodes = Self::build_raw_boxes(&raw);
+        let mut pairs = Vec::new();
+        for i in 0..lines.len() {
+            let mut candidates = Vec::new();
+            Self::query_raw_nodes(0, &nodes, &raw[i], &mut candidates);
+            for j in candidates {
+                if j <= i { continue; }
+                let (_, _, d_a) = Self::line_point(&lines[j], &lines[i].start());
+                let (_, _, d_b) = Self::line_point(&lines[j], &lines[i].end());
+                let (_, _, d_c) = Self::line_point(&lines[i], &lines[j].start());
+                let (_, _, d_d) = Self::line_point(&lines[i], &lines[j].end());
+                if d_a.min(d_b).min(d_c).min(d_d) <= threshold { pairs.push((i, j)); }
+            }
+        }
+        pairs
+    }
+
+    pub fn polylines_closest(polylines: &[Polyline], threshold: f64) -> Vec<(usize, usize)> {
+        use crate::aabb::AABB;
+        if polylines.len() < 2 { return Vec::new(); }
+        let raw: Vec<[f64; 6]> = polylines.iter().map(|pl| {
+            let b = AABB::from_polyline(pl, threshold);
+            [b.cx, b.cy, b.cz, b.hx, b.hy, b.hz]
+        }).collect();
+        let nodes = Self::build_raw_boxes(&raw);
+        let mut pairs = Vec::new();
+        for i in 0..polylines.len() {
+            let mut candidates = Vec::new();
+            Self::query_raw_nodes(0, &nodes, &raw[i], &mut candidates);
+            for j in candidates {
+                if j <= i { continue; }
+                let pts_a = polylines[i].get_points();
+                let dist = pts_a.iter().map(|pt| Self::polyline_point(&polylines[j], pt).2)
+                    .fold(f64::INFINITY, f64::min);
+                if dist <= threshold { pairs.push((i, j)); }
+            }
+        }
+        pairs
+    }
+
+    pub fn nurbscurves_closest(curves: &[NurbsCurve], threshold: f64) -> Vec<(usize, usize)> {
+        use crate::aabb::AABB;
+        if curves.len() < 2 { return Vec::new(); }
+        let raw: Vec<[f64; 6]> = curves.iter().map(|crv| {
+            let b = AABB::from_nurbscurve(crv, threshold, false);
+            [b.cx, b.cy, b.cz, b.hx, b.hy, b.hz]
+        }).collect();
+        let nodes = Self::build_raw_boxes(&raw);
+        let mut pairs = Vec::new();
+        for i in 0..curves.len() {
+            let mut candidates = Vec::new();
+            Self::query_raw_nodes(0, &nodes, &raw[i], &mut candidates);
+            for j in candidates {
+                if j <= i { continue; }
+                let (t0, t1) = curves[i].domain();
+                let p_start = curves[i].point_at(t0);
+                let p_end = curves[i].point_at(t1);
+                let (_, d_a) = Self::curve_point(&curves[j], &p_start, 0.0, 0.0);
+                let (_, d_b) = Self::curve_point(&curves[j], &p_end, 0.0, 0.0);
+                if d_a.min(d_b) <= threshold { pairs.push((i, j)); }
+            }
+        }
+        pairs
+    }
+
+    pub fn boxes_closest(boxes: &[crate::aabb::AABB], threshold: f64) -> Vec<(usize, usize)> {
+        if boxes.len() < 2 { return Vec::new(); }
+        let raw_orig: Vec<[f64; 6]> = boxes.iter().map(|b| [b.cx, b.cy, b.cz, b.hx, b.hy, b.hz]).collect();
+        let raw_inf: Vec<[f64; 6]> = boxes.iter().map(|b| [b.cx, b.cy, b.cz, b.hx + threshold, b.hy + threshold, b.hz + threshold]).collect();
+        let nodes = Self::build_raw_boxes(&raw_inf);
+        let mut pairs = Vec::new();
+        for i in 0..boxes.len() {
+            let mut candidates = Vec::new();
+            Self::query_raw_nodes(0, &nodes, &raw_inf[i], &mut candidates);
+            for j in candidates {
+                if j <= i { continue; }
+                let dist = Self::aabb_to_aabb_min_dist(&raw_orig[i], &raw_orig[j]);
+                if dist <= threshold { pairs.push((i, j)); }
+            }
+        }
+        pairs
+    }
 }

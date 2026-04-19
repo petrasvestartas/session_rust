@@ -924,6 +924,16 @@ impl Session {
         node
     }
 
+    pub fn add_component(&mut self, component: crate::objects::Component, parent: Option<&Rc<RefCell<TreeNode>>>) -> Rc<RefCell<TreeNode>> {
+        let guid = component.guid().to_string();
+        let name = component.name.clone();
+        self.objects.components.push(component);
+        self.graph.add_node(&guid, &format!("component_{name}"));
+        let node = TreeNode::new(&guid);
+        if let Some(p) = parent { self.tree.add(&node, Some(p)); }
+        node
+    }
+
     pub fn add_element(&mut self, element: Element, parent: Option<&Rc<RefCell<TreeNode>>>) -> Rc<RefCell<TreeNode>> {
         let guid = element.guid().to_string();
         let name = element.name.clone();
@@ -1001,11 +1011,23 @@ impl Session {
         }
     }
 
-    /// Create a named layer (TreeNode) and add it to the root of the tree.
+    /// Create a named group (TreeNode) and add it to the root of the tree.
     pub fn add_group(&mut self, name: &str) -> Rc<RefCell<TreeNode>> {
         let node = TreeNode::new(name);
         self.add(&node, None);
         node
+    }
+
+    /// Find an existing group by name. Panics if the group does not exist.
+    pub fn find_group(&self, name: &str) -> Rc<RefCell<TreeNode>> {
+        if let Some(root) = self.tree.root() {
+            for child in root.borrow().children() {
+                if child.borrow().name == name {
+                    return child.clone();
+                }
+            }
+        }
+        panic!("Group '{}' not found", name);
     }
 
     /// Adds an edge between two geometry objects in the graph.

@@ -222,10 +222,145 @@ pub fn run_obb_accessors() -> crate::mini_test::TestResult {
     })
 }
 
+pub fn run_obb_from_geometry() -> TestResult {
+    MINI_TEST!("From Geometry", {
+        use crate::Color;
+        use crate::Line;
+        use crate::NurbsCurve;
+        use crate::NurbsSurface;
+        use crate::OBB;
+        use crate::Point;
+        use crate::PointCloud;
+        use crate::Polyline;
+        use crate::Primitives;
+        use crate::Vector;
+
+        let bb_line = OBB::from_line(&Line::new(0.0, 0.0, 0.0, 4.0, 0.0, 0.0), 0.1);
+
+        MINI_CHECK!(bb_line.is_valid());
+        MINI_CHECK!(TOLERANCE.is_close(bb_line.center[0], 2.0));
+
+        let bb_pl = OBB::from_polyline(&Polyline::new(vec![
+            Point::new(0.0, 0.0, 0.0),
+            Point::new(4.0, 0.0, 0.0),
+            Point::new(4.0, 4.0, 4.0),
+        ]), 0.0);
+
+        MINI_CHECK!(bb_pl.is_valid());
+        MINI_CHECK!(bb_pl.volume() > 0.0);
+
+        let bb_mesh = OBB::from_mesh(&Primitives::cube(2.0), 0.0);
+
+        MINI_CHECK!(bb_mesh.is_valid());
+        MINI_CHECK!(TOLERANCE.is_close(bb_mesh.center[0], 0.0));
+        MINI_CHECK!(TOLERANCE.is_close(bb_mesh.volume(), 8.0));
+
+        let bb_pc = OBB::from_pointcloud(&PointCloud::new(
+            vec![
+                Point::new(0.0, 0.0, 0.0),
+                Point::new(2.0, 0.0, 0.0),
+                Point::new(0.0, 2.0, 0.0),
+                Point::new(0.0, 0.0, 2.0),
+            ],
+            vec![
+                Vector::new(0.0, 0.0, 1.0),
+                Vector::new(0.0, 0.0, 1.0),
+                Vector::new(0.0, 0.0, 1.0),
+                Vector::new(0.0, 0.0, 1.0),
+            ],
+            vec![
+                Color::new(255, 0, 0, 255),
+                Color::new(0, 255, 0, 255),
+                Color::new(0, 0, 255, 255),
+                Color::new(255, 255, 0, 255),
+            ],
+        ), 0.0);
+
+        MINI_CHECK!(bb_pc.is_valid());
+        MINI_CHECK!(bb_pc.volume() > 0.0);
+
+        let bb_nc = OBB::from_nurbscurve(&NurbsCurve::create(false, 2, &[
+            Point::new(0.0, 0.0, 0.0),
+            Point::new(1.0, 0.0, 0.0),
+            Point::new(2.0, 0.0, 0.0),
+            Point::new(3.0, 0.0, 0.0),
+        ]), 0.5, false);
+
+        MINI_CHECK!(bb_nc.is_valid());
+
+        let surf_ns = NurbsSurface::create(false, false, 1, 1, 2, 2, &[
+            Point::new(0.0, 0.0, 0.0),
+            Point::new(2.0, 0.0, 0.0),
+            Point::new(0.0, 2.0, 0.0),
+            Point::new(2.0, 2.0, 2.0),
+        ]).unwrap();
+        let bb_ns = OBB::from_nurbssurface(&surf_ns, 0.0);
+
+        MINI_CHECK!(bb_ns.is_valid());
+    })
+}
+
+pub fn run_obb_from_plane() -> TestResult {
+    MINI_TEST!("From Plane", {
+        use crate::OBB;
+        use crate::Plane;
+        use crate::Point;
+
+        let plane = Plane::xy_plane();
+        let box_ = OBB::from_plane(&plane, 2.0, 3.0, 4.0);
+
+        MINI_CHECK!(TOLERANCE.is_close(box_.half_size[0], 1.0));
+        MINI_CHECK!(TOLERANCE.is_close(box_.half_size[1], 1.5));
+        MINI_CHECK!(TOLERANCE.is_close(box_.half_size[2], 2.0));
+        MINI_CHECK!(box_.center == Point::new(0.0, 0.0, 0.0));
+
+        let pts = vec![
+            Point::new(0.0, 0.0, 0.0),
+            Point::new(2.0, 0.0, 0.0),
+            Point::new(2.0, 3.0, 0.0),
+            Point::new(0.0, 3.0, 0.0),
+        ];
+        let bb = OBB::from_points_with_plane(&pts, &plane, 0.0);
+
+        MINI_CHECK!(TOLERANCE.is_close(bb.half_size[0], 1.0));
+        MINI_CHECK!(TOLERANCE.is_close(bb.half_size[1], 1.5));
+        MINI_CHECK!(TOLERANCE.is_close(bb.x_axis[0], 1.0));
+    })
+}
+
+pub fn run_obb_two_rectangles() -> TestResult {
+    MINI_TEST!("Two Rectangles", {
+        use crate::OBB;
+        use crate::Point;
+        use crate::Vector;
+
+        let bb = OBB::new(
+            Point::new(1.0, 2.0, 3.0),
+            Vector::new(1.0, 0.0, 0.0),
+            Vector::new(0.0, 1.0, 0.0),
+            Vector::new(0.0, 0.0, 1.0),
+            Vector::new(2.0, 3.0, 4.0),
+        );
+        let rects = bb.two_rectangles();
+
+        // bottom rect (z=-4 offset): corners at z=-1; top rect (z=+4 offset): corners at z=7
+        MINI_CHECK!(rects.len() == 10);
+        MINI_CHECK!(rects[0] == Point::new(3.0, 5.0, -1.0));
+        MINI_CHECK!(rects[2] == Point::new(-1.0, -1.0, -1.0));
+        MINI_CHECK!(rects[4] == rects[0]);
+        MINI_CHECK!(rects[5] == Point::new(3.0, 5.0, 7.0));
+        MINI_CHECK!(rects[7] == Point::new(-1.0, -1.0, 7.0));
+        MINI_CHECK!(rects[9] == rects[5]);
+    })
+}
+
 REGISTER_MINI_TEST!("OBB", "Constructor", crate::obb_test::run_obb_constructor);
 REGISTER_MINI_TEST!("OBB", "Collision", crate::obb_test::run_obb_collision);
 REGISTER_MINI_TEST!("OBB", "Transformation", crate::obb_test::run_obb_transformation);
 REGISTER_MINI_TEST!("OBB", "Json Roundtrip", crate::obb_test::run_obb_json_roundtrip);
 REGISTER_MINI_TEST!("OBB", "Protobuf Roundtrip", crate::obb_test::run_obb_protobuf_roundtrip);
 REGISTER_MINI_TEST!("OBB", "Accessors", crate::obb_test::run_obb_accessors);
+REGISTER_MINI_TEST!("OBB", "From Geometry", crate::obb_test::run_obb_from_geometry);
+REGISTER_MINI_TEST!("OBB", "From Plane", crate::obb_test::run_obb_from_plane);
+REGISTER_MINI_TEST!("OBB", "Two Rectangles", crate::obb_test::run_obb_two_rectangles);
 

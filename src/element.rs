@@ -71,11 +71,15 @@ impl Element {
     ///////////////////////////////////////////////////////////////////////////////////////////
 
     pub fn new(name: &str) -> Self {
+        Self::with_transformation(name, Xform::identity())
+    }
+
+    pub fn with_transformation(name: &str, transformation: Xform) -> Self {
         Self {
             guid: std::sync::OnceLock::new(),
             name: name.to_string(),
             kind: ElementKind::Generic,
-            session_transformation: Xform::identity(),
+            session_transformation: transformation,
             geometry: ElementGeometry::None,
             features: Vec::new(),
             is_dirty: true,
@@ -91,11 +95,15 @@ impl Element {
     }
 
     pub fn from_mesh(geometry: Mesh, name: &str) -> Self {
+        Self::from_mesh_with_transformation(geometry, name, Xform::identity())
+    }
+
+    pub fn from_mesh_with_transformation(geometry: Mesh, name: &str, transformation: Xform) -> Self {
         Self {
             guid: std::sync::OnceLock::new(),
             name: name.to_string(),
             kind: ElementKind::Generic,
-            session_transformation: Xform::identity(),
+            session_transformation: transformation,
             geometry: ElementGeometry::Mesh(geometry),
             features: Vec::new(),
             is_dirty: true,
@@ -111,11 +119,15 @@ impl Element {
     }
 
     pub fn from_brep(geometry: BRep, name: &str) -> Self {
+        Self::from_brep_with_transformation(geometry, name, Xform::identity())
+    }
+
+    pub fn from_brep_with_transformation(geometry: BRep, name: &str, transformation: Xform) -> Self {
         Self {
             guid: std::sync::OnceLock::new(),
             name: name.to_string(),
             kind: ElementKind::Generic,
-            session_transformation: Xform::identity(),
+            session_transformation: transformation,
             geometry: ElementGeometry::BRep(geometry),
             features: Vec::new(),
             is_dirty: true,
@@ -131,13 +143,17 @@ impl Element {
     }
 
     pub fn column(width: f64, depth: f64, height: f64, name: &str) -> Self {
+        Self::column_with_transformation(width, depth, height, name, Xform::identity())
+    }
+
+    pub fn column_with_transformation(width: f64, depth: f64, height: f64, name: &str, transformation: Xform) -> Self {
         let kind = ElementKind::Column { width, depth, height };
         let geometry = ElementGeometry::Mesh(Self::compute_box_geometry(width, depth, height));
         Self {
             guid: std::sync::OnceLock::new(),
             name: name.to_string(),
             kind,
-            session_transformation: Xform::identity(),
+            session_transformation: transformation,
             geometry,
             features: Vec::new(),
             is_dirty: true,
@@ -153,13 +169,17 @@ impl Element {
     }
 
     pub fn beam(width: f64, depth: f64, length: f64, name: &str) -> Self {
+        Self::beam_with_transformation(width, depth, length, name, Xform::identity())
+    }
+
+    pub fn beam_with_transformation(width: f64, depth: f64, length: f64, name: &str, transformation: Xform) -> Self {
         let kind = ElementKind::Beam { width, depth, length };
         let geometry = ElementGeometry::Mesh(Self::compute_box_geometry(width, depth, length));
         Self {
             guid: std::sync::OnceLock::new(),
             name: name.to_string(),
             kind,
-            session_transformation: Xform::identity(),
+            session_transformation: transformation,
             geometry,
             features: Vec::new(),
             is_dirty: true,
@@ -175,6 +195,10 @@ impl Element {
     }
 
     pub fn plate(polygon: Vec<Point>, thickness: f64, name: &str) -> Self {
+        Self::plate_with_transformation(polygon, thickness, name, Xform::identity())
+    }
+
+    pub fn plate_with_transformation(polygon: Vec<Point>, thickness: f64, name: &str, transformation: Xform) -> Self {
         let pts: Vec<Point> = polygon.iter().map(|p| Point::new(p[0], p[1], p[2])).collect();
         let polygon_top = Self::offset_polygon_top(&pts, thickness);
         let geometry = ElementGeometry::Mesh(Self::compute_plate_geometry(&pts, thickness));
@@ -182,7 +206,7 @@ impl Element {
             guid: std::sync::OnceLock::new(),
             name: name.to_string(),
             kind: ElementKind::Plate { polygon: pts, polygon_top, thickness, joint_types: Vec::new(), j_mf: Vec::new(), key: String::new(), component_plane: None },
-            session_transformation: Xform::identity(),
+            session_transformation: transformation,
             geometry,
             features: Vec::new(),
             is_dirty: true,
@@ -198,6 +222,10 @@ impl Element {
     }
 
     pub fn plate_from_top_bottom(bottom: Vec<Point>, top: Vec<Point>, name: &str) -> Self {
+        Self::plate_from_top_bottom_with_transformation(bottom, top, name, Xform::identity())
+    }
+
+    pub fn plate_from_top_bottom_with_transformation(bottom: Vec<Point>, top: Vec<Point>, name: &str, transformation: Xform) -> Self {
         let mut bot = strip_closing(&bottom);
         let mut tp = strip_closing(&top);
         // Ensure bottom normal points toward top
@@ -224,7 +252,7 @@ impl Element {
             guid: std::sync::OnceLock::new(),
             name: name.to_string(),
             kind: ElementKind::Plate { polygon: bot, polygon_top: tp, thickness, joint_types: Vec::new(), j_mf: Vec::new(), key: String::new(), component_plane: None },
-            session_transformation: Xform::identity(),
+            session_transformation: transformation,
             geometry,
             features: Vec::new(),
             is_dirty: true,
