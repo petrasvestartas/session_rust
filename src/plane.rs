@@ -755,6 +755,42 @@ impl Plane {
         )
     }
 
+    /// Canonical in-plane x-axis from the normal (smallest-|coef| pivot rule).
+    ///
+    /// Deterministic frame that depends only on the normal; used for 2D
+    /// projections that must be stable across different construction hints.
+    pub fn base1(&self) -> Vector {
+        let n = &self._z_axis;
+        let nx = n[0];
+        let ny = n[1];
+        let nz = n[2];
+        let ax = nx.abs();
+        let ay = ny.abs();
+        let az = nz.abs();
+        let mut b = if ax <= ay && ax <= az {
+            Vector::new(0.0, -nz, ny)
+        } else if ay <= ax && ay <= az {
+            Vector::new(-nz, 0.0, nx)
+        } else {
+            Vector::new(-ny, nx, 0.0)
+        };
+        b.normalize_self();
+        b
+    }
+
+    /// Canonical in-plane y-axis = normal × base1 (right-handed).
+    pub fn base2(&self) -> Vector {
+        let b1 = self.base1();
+        let n = &self._z_axis;
+        let mut b2 = Vector::new(
+            n[1]*b1[2] - n[2]*b1[1],
+            n[2]*b1[0] - n[0]*b1[2],
+            n[0]*b1[1] - n[1]*b1[0],
+        );
+        b2.normalize_self();
+        b2
+    }
+
     pub fn to_polylines(&self, scale: f64) -> Vec<Polyline> {
         let s = scale * 0.5;
         let o = &self._origin;

@@ -807,6 +807,49 @@ pub fn run_polyline_grid_of_points() -> TestResult {
     })
 }
 
+pub fn run_polyline_polylabel() -> TestResult {
+    MINI_TEST!("Polylabel", {
+        use crate::Polyline;
+        use crate::Point;
+
+        let poly = Polyline::new(vec![
+            Point::new(0.0, 0.0, 0.0),
+            Point::new(10.0, 0.0, 0.0),
+            Point::new(10.0, 10.0, 0.0),
+            Point::new(0.0, 10.0, 0.0),
+            Point::new(0.0, 0.0, 0.0),
+        ]);
+        let polys = vec![poly];
+        let (c, _plane, r) = Polyline::polylabel(&polys, 0.5);
+        MINI_CHECK!((c[0] - 5.0).abs() < 0.6);
+        MINI_CHECK!((c[1] - 5.0).abs() < 0.6);
+        MINI_CHECK!((r - 5.0).abs() < 0.6);
+    })
+}
+
+pub fn run_polyline_polylabel_circle_division_points() -> TestResult {
+    MINI_TEST!("Polylabel Circle Division Points", {
+        use crate::Polyline;
+        use crate::Point;
+        use crate::Vector;
+
+        let poly = Polyline::new(vec![
+            Point::new(0.0, 0.0, 0.0),
+            Point::new(10.0, 0.0, 0.0),
+            Point::new(10.0, 10.0, 0.0),
+            Point::new(0.0, 10.0, 0.0),
+            Point::new(0.0, 0.0, 0.0),
+        ]);
+        let polys = vec![poly];
+        let dir = Vector::new(0.0, 0.0, 0.0);
+        let pts = Polyline::polylabel_circle_division_points(&dir, &polys, 4, 0.5, 1.0, true);
+        MINI_CHECK!(pts.len() == 4);
+        for p in &pts {
+            MINI_CHECK!(p[2].abs() < 1e-6);
+        }
+    })
+}
+
 // Register tests with the shared registry for run_all("rust")
 REGISTER_MINI_TEST!("Polyline", "Constructor", crate::polyline_test::run_polyline_constructor);
 REGISTER_MINI_TEST!("Polyline", "Transformation", crate::polyline_test::run_polyline_transformation);
@@ -832,6 +875,8 @@ REGISTER_MINI_TEST!("Polyline", "Interpolate Points", crate::polyline_test::run_
 REGISTER_MINI_TEST!("Polyline", "Quick Hull", crate::polyline_test::run_polyline_quick_hull);
 REGISTER_MINI_TEST!("Polyline", "Bounding Rectangle", crate::polyline_test::run_polyline_bounding_rectangle);
 REGISTER_MINI_TEST!("Polyline", "Grid Of Points In Polygon", crate::polyline_test::run_polyline_grid_of_points);
+REGISTER_MINI_TEST!("Polyline", "Polylabel", crate::polyline_test::run_polyline_polylabel);
+REGISTER_MINI_TEST!("Polyline", "Polylabel Circle Division Points", crate::polyline_test::run_polyline_polylabel_circle_division_points);
 
 pub fn run_polyline_boolean_op() -> TestResult {
     MINI_TEST!("Boolean Op", {

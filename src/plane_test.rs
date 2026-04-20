@@ -197,6 +197,21 @@ pub fn run_plane_translate_by_normal() -> TestResult {
     })
 }
 
+pub fn run_plane_base1_base2() -> TestResult {
+    MINI_TEST!("Base1 Base2", {
+        use crate::Plane;
+
+        let xy = Plane::xy_plane();
+        let b1 = xy.base1();
+        let b2 = xy.base2();
+        MINI_CHECK!(TOLERANCE.is_close(b1.dot(&xy.z_axis()).abs(), 0.0));
+        MINI_CHECK!(TOLERANCE.is_close(b2.dot(&xy.z_axis()).abs(), 0.0));
+        MINI_CHECK!(TOLERANCE.is_close(b1.dot(&b2), 0.0));
+        MINI_CHECK!(TOLERANCE.is_close(b1.magnitude(), 1.0));
+        MINI_CHECK!(TOLERANCE.is_close(b2.magnitude(), 1.0));
+    })
+}
+
 pub fn run_plane_transform() -> TestResult {
     MINI_TEST!("Transform", {
         use crate::Plane;
@@ -274,6 +289,7 @@ REGISTER_MINI_TEST!("Plane", "Is Same Direction", crate::plane_test::run_plane_i
 REGISTER_MINI_TEST!("Plane", "Is Same Position", crate::plane_test::run_plane_is_same_position);
 REGISTER_MINI_TEST!("Plane", "Is Coplanar", crate::plane_test::run_plane_is_coplanar);
 REGISTER_MINI_TEST!("Plane", "Translate By Normal", crate::plane_test::run_plane_translate_by_normal);
+REGISTER_MINI_TEST!("Plane", "Base1 Base2", crate::plane_test::run_plane_base1_base2);
 REGISTER_MINI_TEST!("Plane", "Transform", crate::plane_test::run_plane_transform);
 REGISTER_MINI_TEST!("Plane", "Transformed", crate::plane_test::run_plane_transformed);
 REGISTER_MINI_TEST!("Plane", "Json Roundtrip", crate::plane_test::run_plane_json_roundtrip);

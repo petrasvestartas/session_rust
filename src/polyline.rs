@@ -1357,7 +1357,7 @@ impl Polyline {
     }
 
     /// Grid of interior points; offset_dist ignored (no clipper); div_dist = grid spacing.
-    pub fn grid_of_points_in_polygon(polygon: &Polyline, _offset_dist: f64, div_dist: f64, max_pts: usize) -> Vec<Point> {
+    pub fn grid_of_points_in_polygon(polygon: &Polyline, offset_dist: f64, div_dist: f64, max_pts: usize) -> Vec<Point> {
         if div_dist < 1e-12 { return Vec::new(); }
         let (orig, xa, ya, _za) = polygon.get_average_plane();
         let pts = polygon.get_points();
@@ -1369,12 +1369,68 @@ impl Polyline {
                 { pts.len() - 1 } else { pts.len() }
         } else { pts.len() };
 
-        let poly2d: Vec<[f64; 2]> = pts[..last].iter().map(|p| {
+        let mut poly2d: Vec<[f64; 2]> = pts[..last].iter().map(|p| {
             let dx = p[0]-orig[0]; let dy = p[1]-orig[1]; let dz = p[2]-orig[2];
             [dx*xa[0]+dy*xa[1]+dz*xa[2], dx*ya[0]+dy*ya[1]+dz*ya[2]]
         }).collect();
 
         if poly2d.is_empty() { return Vec::new(); }
+
+        // Miter offset in 2D (negative = inward, positive = outward). Reuses
+        // the same algorithm as Intersection::offset_in_3d. Falls back to the
+        // un-offset polygon if the result degenerates.
+        if offset_dist != 0.0 && poly2d.len() >= 3 {
+            let n = poly2d.len();
+            let mut signed_area = 0.0;
+            for i in 0..n {
+                let a = poly2d[i];
+                let b = poly2d[(i+1) % n];
+                signed_area += a[0]*b[1] - b[0]*a[1];
+            }
+            let delta = if signed_area < 0.0 { -offset_dist } else { offset_dist };
+
+            let mut normals: Vec<[f64; 2]> = Vec::with_capacity(n);
+            for i in 0..n {
+                let a = poly2d[i];
+                let b = poly2d[(i+1) % n];
+                let ex = b[0]-a[0];
+                let ey = b[1]-a[1];
+                let len = (ex*ex + ey*ey).sqrt();
+                if len < 1e-12 { normals.push([0.0, 0.0]); }
+                else { normals.push([ey/len, -ex/len]); }
+            }
+
+            let mut out: Vec<[f64; 2]> = Vec::with_capacity(n * 3);
+            for i in 0..n {
+                let np = normals[(i + n - 1) % n];
+                let nn = normals[i];
+                let cos_a = np[0]*nn[0] + np[1]*nn[1];
+                let sin_a = np[0]*nn[1] - np[1]*nn[0];
+                let denom = 1.0 + cos_a;
+                let concave = (cos_a > -0.999) && (sin_a * delta < 0.0) && (offset_dist > 0.0);
+                if concave {
+                    out.push([poly2d[i][0] + np[0]*delta, poly2d[i][1] + np[1]*delta]);
+                    out.push([poly2d[i][0], poly2d[i][1]]);
+                    out.push([poly2d[i][0] + nn[0]*delta, poly2d[i][1] + nn[1]*delta]);
+                } else if denom.abs() < 1e-9 {
+                    let mx = (np[0]+nn[0])*0.5;
+                    let my = (np[1]+nn[1])*0.5;
+                    out.push([poly2d[i][0] + mx*delta, poly2d[i][1] + my*delta]);
+                } else {
+                    let bx = (np[0]+nn[0])/denom;
+                    let by = (np[1]+nn[1])/denom;
+                    out.push([poly2d[i][0] + bx*delta, poly2d[i][1] + by*delta]);
+                }
+            }
+
+            let mut out_area = 0.0;
+            for i in 0..out.len() {
+                let a = out[i];
+                let b = out[(i+1) % out.len()];
+                out_area += a[0]*b[1] - b[0]*a[1];
+            }
+            if out.len() >= 3 && out_area.abs() > 1e-4 { poly2d = out; }
+        }
 
         let (mut x_min, mut x_max) = (f64::MAX, f64::MIN);
         let (mut y_min, mut y_max) = (f64::MAX, f64::MIN);
@@ -1499,6 +1555,240 @@ impl Polyline {
         let simplified = Self::simplify_points(&pts, tolerance);
         Polyline::new(simplified)
     }
+
+    /// Largest inscribed circle via mapbox polylabel.
+    /// polylines[0] is the outer boundary; polylines[1..] are holes.
+    pub fn polylabel(polylines: &[Polyline], precision: f64) -> (Point, crate::plane::Plane, f64) {
+        if polylines.is_empty() {
+            return (Point::new(0.0, 0.0, 0.0), crate::plane::Plane::default(), 0.0);
+        }
+        let (orig, xa, ya, za) = polylines[0].get_average_plane();
+        let to2d = |p: &Point| -> [f64; 2] {
+            let dx = p[0]-orig[0]; let dy = p[1]-orig[1]; let dz = p[2]-orig[2];
+            [dx*xa[0]+dy*xa[1]+dz*xa[2], dx*ya[0]+dy*ya[1]+dz*ya[2]]
+        };
+
+        let mut rings2d: Vec<Vec<[f64; 2]>> = Vec::with_capacity(polylines.len());
+        let mut sizes: Vec<f64> = Vec::with_capacity(polylines.len());
+        for pl in polylines {
+            let pts = pl.get_points();
+            let last = if pts.len() > 1 {
+                let a = &pts[0]; let b = &pts[pts.len()-1];
+                if (a[0]-b[0]).abs()<1e-10 && (a[1]-b[1]).abs()<1e-10 && (a[2]-b[2]).abs()<1e-10
+                    { pts.len() - 1 } else { pts.len() }
+            } else { pts.len() };
+            let mut ring: Vec<[f64; 2]> = Vec::with_capacity(last);
+            let (mut mnx, mut mxx) = (f64::INFINITY, f64::NEG_INFINITY);
+            let (mut mny, mut mxy) = (f64::INFINITY, f64::NEG_INFINITY);
+            for p in &pts[..last] {
+                let uv = to2d(p);
+                mnx = mnx.min(uv[0]); mxx = mxx.max(uv[0]);
+                mny = mny.min(uv[1]); mxy = mxy.max(uv[1]);
+                ring.push(uv);
+            }
+            let dx = mxx - mnx; let dy = mxy - mny;
+            sizes.push(dx*dx + dy*dy);
+            rings2d.push(ring);
+        }
+        let mut ids: Vec<usize> = (0..rings2d.len()).collect();
+        ids.sort_by(|&a, &b| sizes[b].partial_cmp(&sizes[a]).unwrap_or(std::cmp::Ordering::Equal));
+        let polygon: Vec<Vec<[f64; 2]>> = ids.iter().map(|&i| rings2d[i].clone()).collect();
+
+        let cr = mapbox_polylabel(&polygon, precision);
+        let center = Point::new(orig[0] + cr[0]*xa[0] + cr[1]*ya[0],
+                                orig[1] + cr[0]*xa[1] + cr[1]*ya[1],
+                                orig[2] + cr[0]*xa[2] + cr[1]*ya[2]);
+        let plane = crate::plane::Plane::new(orig.clone(), xa.clone(), ya.clone());
+        let _ = za;
+        (center, plane, cr[2])
+    }
+
+    /// Points on the polylabel inscribed circle, scaled by `scale`.
+    pub fn polylabel_circle_division_points(
+        division_direction_in_3d: &Vector,
+        polylines: &[Polyline],
+        division: usize,
+        scale: f64,
+        precision: f64,
+        orient_to_closest_edge: bool,
+    ) -> Vec<Point> {
+        let (center, plane, r) = Self::polylabel(polylines, precision);
+        let radius = r * scale;
+
+        let is_direction_valid =
+            division_direction_in_3d[0] != 0.0 ||
+            division_direction_in_3d[1] != 0.0 ||
+            division_direction_in_3d[2] != 0.0;
+
+        let mut edge_i: usize = 0;
+        let mut edge_j: usize = 0;
+        let mut best_sq = f64::INFINITY;
+        if orient_to_closest_edge {
+            for (i, pl) in polylines.iter().enumerate() {
+                let pts = pl.get_points();
+                if pts.len() < 2 { continue; }
+                for j in 0..pts.len()-1 {
+                    let a = &pts[j]; let b = &pts[j+1];
+                    let ex = b[0]-a[0]; let ey = b[1]-a[1]; let ez = b[2]-a[2];
+                    let len2 = ex*ex + ey*ey + ez*ez;
+                    if len2 <= 0.0 { continue; }
+                    let px = center[0]-a[0]; let py = center[1]-a[1]; let pz = center[2]-a[2];
+                    let t = (px*ex + py*ey + pz*ez) / len2;
+                    if t < 0.0 || t > 1.0 { continue; }
+                    let cx = a[0]+t*ex; let cy = a[1]+t*ey; let cz = a[2]+t*ez;
+                    let dx = center[0]-cx; let dy = center[1]-cy; let dz = center[2]-cz;
+                    let d2 = dx*dx + dy*dy + dz*dz;
+                    if d2 < best_sq { best_sq = d2; edge_i = i; edge_j = j; }
+                }
+            }
+        }
+
+        let z_axis_ref = plane.z_axis().clone();
+        let (mut x_axis, mut y_axis);
+        if is_direction_valid || orient_to_closest_edge {
+            let dir = if orient_to_closest_edge && best_sq.is_finite() {
+                let pts = polylines[edge_i].get_points();
+                Vector::new(pts[edge_j+1][0]-pts[edge_j][0],
+                            pts[edge_j+1][1]-pts[edge_j][1],
+                            pts[edge_j+1][2]-pts[edge_j][2])
+            } else {
+                division_direction_in_3d.clone()
+            };
+            x_axis = dir.clone();
+            y_axis = Vector::new(dir[1]*z_axis_ref[2] - dir[2]*z_axis_ref[1],
+                                 dir[2]*z_axis_ref[0] - dir[0]*z_axis_ref[2],
+                                 dir[0]*z_axis_ref[1] - dir[1]*z_axis_ref[0]);
+        } else {
+            x_axis = plane.x_axis().clone();
+            y_axis = plane.y_axis().clone();
+        }
+        let mut z_axis = z_axis_ref;
+        let unit = |v: &mut Vector| {
+            let l = (v[0]*v[0]+v[1]*v[1]+v[2]*v[2]).sqrt();
+            if l > 0.0 { *v = Vector::new(v[0]/l, v[1]/l, v[2]/l); }
+        };
+        unit(&mut x_axis); unit(&mut y_axis); unit(&mut z_axis);
+
+        let mut points: Vec<Point> = Vec::with_capacity(division);
+        let pi_rad = std::f64::consts::PI / 180.0;
+        let chunk = 360.0 / (division as f64);
+        for i in 0..division {
+            let deg = (i as f64) * chunk;
+            let r = (45.0 + deg) * pi_rad;
+            let u = radius * r.cos();
+            let v = radius * r.sin();
+            points.push(Point::new(center[0] + u*x_axis[0] + v*y_axis[0],
+                                   center[1] + u*x_axis[1] + v*y_axis[1],
+                                   center[2] + u*x_axis[2] + v*y_axis[2]));
+        }
+        points
+    }
+}
+
+// ========== mapbox polylabel helpers (native) ==========
+fn pl_seg_dist_sq(px: f64, py: f64, ax: f64, ay: f64, bx: f64, by: f64) -> f64 {
+    let mut x = ax; let mut y = ay;
+    let mut dx = bx - x; let mut dy = by - y;
+    if dx != 0.0 || dy != 0.0 {
+        let t = ((px - x) * dx + (py - y) * dy) / (dx*dx + dy*dy);
+        if t > 1.0 { x = bx; y = by; }
+        else if t > 0.0 { x += dx * t; y += dy * t; }
+    }
+    dx = px - x; dy = py - y;
+    dx*dx + dy*dy
+}
+
+fn pl_point_to_poly_dist(px: f64, py: f64, polygon: &[Vec<[f64; 2]>]) -> f64 {
+    let mut inside = false;
+    let mut min_sq = f64::INFINITY;
+    for ring in polygon {
+        let len = ring.len();
+        if len == 0 { continue; }
+        let mut j = len - 1;
+        for i in 0..len {
+            let ax = ring[i][0]; let ay = ring[i][1];
+            let bx = ring[j][0]; let by = ring[j][1];
+            if (ay > py) != (by > py) && (px < (bx-ax)*(py-ay)/(by-ay) + ax) {
+                inside = !inside;
+            }
+            min_sq = min_sq.min(pl_seg_dist_sq(px, py, ax, ay, bx, by));
+            j = i;
+        }
+    }
+    (if inside { 1.0 } else { -1.0 }) * min_sq.sqrt()
+}
+
+#[derive(Clone, Copy)]
+struct PCell { cx: f64, cy: f64, h: f64, d: f64, mx: f64 }
+impl PCell {
+    fn new(cx: f64, cy: f64, h: f64, polygon: &[Vec<[f64; 2]>]) -> Self {
+        let d = pl_point_to_poly_dist(cx, cy, polygon);
+        PCell { cx, cy, h, d, mx: d + h * std::f64::consts::SQRT_2 }
+    }
+}
+impl PartialEq for PCell { fn eq(&self, o: &Self) -> bool { self.mx == o.mx } }
+impl Eq for PCell {}
+impl PartialOrd for PCell { fn partial_cmp(&self, o: &Self) -> Option<std::cmp::Ordering> { self.mx.partial_cmp(&o.mx) } }
+impl Ord for PCell { fn cmp(&self, o: &Self) -> std::cmp::Ordering { self.partial_cmp(o).unwrap_or(std::cmp::Ordering::Equal) } }
+
+fn pl_centroid_cell(polygon: &[Vec<[f64; 2]>]) -> PCell {
+    let mut area = 0.0;
+    let mut cx = 0.0;
+    let mut cy = 0.0;
+    let ring = &polygon[0];
+    let len = ring.len();
+    let mut j = len - 1;
+    for i in 0..len {
+        let ax = ring[i][0]; let ay = ring[i][1];
+        let bx = ring[j][0]; let by = ring[j][1];
+        let f = ax*by - bx*ay;
+        cx += (ax+bx)*f;
+        cy += (ay+by)*f;
+        area += f * 3.0;
+        j = i;
+    }
+    if area == 0.0 { return PCell::new(ring[0][0], ring[0][1], 0.0, polygon); }
+    PCell::new(cx/area, cy/area, 0.0, polygon)
+}
+
+fn mapbox_polylabel(polygon: &[Vec<[f64; 2]>], precision: f64) -> [f64; 3] {
+    let outer = &polygon[0];
+    let (mut mnx, mut mxx) = (f64::INFINITY, f64::NEG_INFINITY);
+    let (mut mny, mut mxy) = (f64::INFINITY, f64::NEG_INFINITY);
+    for p in outer {
+        mnx = mnx.min(p[0]); mxx = mxx.max(p[0]);
+        mny = mny.min(p[1]); mxy = mxy.max(p[1]);
+    }
+    let sx = mxx - mnx; let sy = mxy - mny;
+    let cell_size = sx.min(sy);
+    let mut h = cell_size / 2.0;
+    if cell_size == 0.0 { return [mnx, mny, 0.0]; }
+
+    let mut queue: std::collections::BinaryHeap<PCell> = std::collections::BinaryHeap::new();
+    let mut x = mnx;
+    while x < mxx {
+        let mut y = mny;
+        while y < mxy {
+            queue.push(PCell::new(x + h, y + h, h, polygon));
+            y += cell_size;
+        }
+        x += cell_size;
+    }
+
+    let mut best = pl_centroid_cell(polygon);
+    let bbox_c = PCell::new(mnx + sx/2.0, mny + sy/2.0, 0.0, polygon);
+    if bbox_c.d > best.d { best = bbox_c; }
+
+    while let Some(cell) = queue.pop() {
+        if cell.d > best.d { best = cell; }
+        if cell.mx - best.d <= precision { continue; }
+        h = cell.h / 2.0;
+        queue.push(PCell::new(cell.cx - h, cell.cy - h, h, polygon));
+        queue.push(PCell::new(cell.cx + h, cell.cy - h, h, polygon));
+        queue.push(PCell::new(cell.cx - h, cell.cy + h, h, polygon));
+        queue.push(PCell::new(cell.cx + h, cell.cy + h, h, polygon));
+    }
+    [best.cx, best.cy, best.d]
 }
 
 impl AddAssign<&Vector> for Polyline {
