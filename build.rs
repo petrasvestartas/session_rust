@@ -24,11 +24,15 @@ fn main() {
         return;
     }
 
-    let proto_files: Vec<PathBuf> = std::fs::read_dir(&proto_dir)
+    let mut proto_files: Vec<PathBuf> = std::fs::read_dir(&proto_dir)
         .expect("read session_proto")
         .filter_map(|e| e.ok().map(|e| e.path()))
         .filter(|p| p.extension().and_then(|s| s.to_str()) == Some("proto"))
         .collect();
+    // Deterministic ordering — read_dir returns FS-order which differs
+    // between NTFS / ext4 / APFS and would cause prost-build output to
+    // diverge across platforms.
+    proto_files.sort();
 
     if proto_files.is_empty() {
         return;
