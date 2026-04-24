@@ -139,8 +139,8 @@ pub fn run_obb_json_roundtrip() -> TestResult {
         MINI_CHECK!(TOLERANCE.is_close(loaded_j.center[0], 1.0));
 
         // String
-        let s = bb.json_dumps();
-        let loaded_s = OBB::json_loads(&s);
+        let s = bb.file_json_dumps();
+        let loaded_s = OBB::file_json_loads(&s);
 
         MINI_CHECK!(loaded_s.name == "test_bbox");
         MINI_CHECK!(TOLERANCE.is_close(loaded_s.half_size[0], 5.0));
@@ -149,8 +149,8 @@ pub fn run_obb_json_roundtrip() -> TestResult {
         let src_dir = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"));
         let fname = src_dir.join("serialization").join("test_obb.json");
         let fname = fname.to_str().unwrap();
-        bb.json_dump(fname);
-        let loaded = OBB::json_load(fname);
+        bb.file_json_dump(fname);
+        let loaded = OBB::file_json_load(fname);
 
         MINI_CHECK!(loaded.name == "test_bbox");
         MINI_CHECK!(TOLERANCE.is_close(loaded.center[0], 1.0));

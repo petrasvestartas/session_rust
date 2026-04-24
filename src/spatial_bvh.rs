@@ -1,23 +1,23 @@
-// BVH — binary tree with OBB leaves, Morton-code (LBVH) construction.
+// SpatialBVH — binary tree with OBB leaves, Morton-code (LBVH) construction.
 // Use for: collision detection and closest-point between many dynamic objects.
 //   Handles oriented boxes; supports OBB-OBB overlap as the inner test.
-// Prefer over AABBTree when objects rotate or you need OBB tightness.
-// Prefer over RTree  when all queries are nearest-object, not region overlap.
-// Prefer over KDTree when objects are volumetric (not point clouds).
+// Prefer over SpatialAABBTree when objects rotate or you need OBB tightness.
+// Prefer over SpatialRTree  when all queries are nearest-object, not region overlap.
+// Prefer over SpatialKDTree when objects are volumetric (not point clouds).
 use crate::{AABB, OBB, Point, Vector};
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct BVHNode {
+pub struct SpatialBVHNode {
     #[serde(serialize_with = "crate::guid_serde::serialize", deserialize_with = "crate::guid_serde::deserialize")]
     guid: std::sync::OnceLock<String>,
-    pub left: Option<Box<BVHNode>>,
-    pub right: Option<Box<BVHNode>>,
+    pub left: Option<Box<SpatialBVHNode>>,
+    pub right: Option<Box<SpatialBVHNode>>,
     pub object_id: i32,
     pub aabb: Option<OBB>,
 }
 
-impl BVHNode {
+impl SpatialBVHNode {
     pub fn new() -> Self {
         Self::default()
     }
@@ -35,9 +35,9 @@ impl BVHNode {
     }
 }
 
-impl Default for BVHNode {
+impl Default for SpatialBVHNode {
     fn default() -> Self {
-        BVHNode {
+        SpatialBVHNode {
             guid: std::sync::OnceLock::new(),
             left: None,
             right: None,
@@ -61,11 +61,11 @@ struct FlatNode {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct BVH {
+pub struct SpatialBVH {
     #[serde(serialize_with = "crate::guid_serde::serialize", deserialize_with = "crate::guid_serde::deserialize")]
     guid: std::sync::OnceLock<String>,
     pub name: String,
-    pub root: Option<Box<BVHNode>>,
+    pub root: Option<Box<SpatialBVHNode>>,
     pub world_size: f64,
     #[serde(skip)]
     pub object_guids: Vec<String>, // Parallel array to boxes - maps indices to GUIDs
@@ -81,15 +81,15 @@ struct ObjectInfo {
     morton_code: u32,
 }
 
-impl Default for BVH {
+impl Default for SpatialBVH {
     fn default() -> Self {
         Self::new()
     }
 }
 
-impl BVH {
+impl SpatialBVH {
     pub fn new() -> Self {
-        BVH {
+        SpatialBVH {
             guid: std::sync::OnceLock::new(),
             name: "my_bvh".to_string(),
             root: None,
@@ -134,7 +134,7 @@ impl BVH {
         (max_extent * 2.2).max(10.0)
     }
 
-    /// Build BVH from bounding boxes with GUIDs
+    /// Build SpatialBVH from bounding boxes with GUIDs
     pub fn build_with_guids(&mut self, boxes_with_guids: &[(OBB, String)]) {
         if boxes_with_guids.is_empty() {
             self.root = None;
@@ -644,7 +644,7 @@ impl BVH {
         // Track which object indices participate in any collision
         let mut visited: Vec<bool> = vec![false; bounding_boxes.len()];
 
-        // Stack of node index pairs for pairwise BVH traversal (cache-friendly)
+        // Stack of node index pairs for pairwise SpatialBVH traversal (cache-friendly)
         let mut stack: Vec<(i32, i32)> = Vec::with_capacity(256);
         stack.push((self.arena_root, self.arena_root));
 

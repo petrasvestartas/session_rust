@@ -75,7 +75,7 @@ pub fn run_beam_extend() -> TestResult {
 }
 
 pub fn run_beam_aabb() -> TestResult {
-    MINI_TEST!("Aabb", {
+    MINI_TEST!("AABB", {
         use crate::element::Element;
 
         let mut b = Element::beam(0.1, 0.2, 3.0, "my_beam");
@@ -126,8 +126,8 @@ pub fn run_beam_json_roundtrip() -> TestResult {
         b.session_transformation = Xform::translation(1.0, 2.0, 3.0);
 
         let fname = "serialization/test_beam_element.json";
-        b.json_dump(fname);
-        let loaded = Element::json_load(fname);
+        b.file_json_dump(fname);
+        let loaded = Element::file_json_load(fname);
 
         MINI_CHECK!(loaded.name == "json_beam");
         MINI_CHECK!(TOLERANCE.is_close(loaded.width().unwrap(), 0.15));
@@ -207,7 +207,7 @@ REGISTER_MINI_TEST!("ElementBeam", "Constructor", crate::element_beam_test::run_
 REGISTER_MINI_TEST!("ElementBeam", "Setters", crate::element_beam_test::run_beam_setters);
 REGISTER_MINI_TEST!("ElementBeam", "Center Line", crate::element_beam_test::run_beam_center_line);
 REGISTER_MINI_TEST!("ElementBeam", "Extend", crate::element_beam_test::run_beam_extend);
-REGISTER_MINI_TEST!("ElementBeam", "Aabb", crate::element_beam_test::run_beam_aabb);
+REGISTER_MINI_TEST!("ElementBeam", "AABB", crate::element_beam_test::run_beam_aabb);
 REGISTER_MINI_TEST!("ElementBeam", "Compute Point", crate::element_beam_test::run_beam_compute_point);
 REGISTER_MINI_TEST!("ElementBeam", "Session Geometry", crate::element_beam_test::run_beam_session_geometry);
 REGISTER_MINI_TEST!("ElementBeam", "Json Roundtrip", crate::element_beam_test::run_beam_json_roundtrip);

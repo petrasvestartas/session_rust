@@ -56,8 +56,8 @@ pub fn run_nurbssurface_constructor() -> TestResult {
         MINI_CHECK!(s.order(1) == 4);
         MINI_CHECK!(s.dimension() == 3);
         MINI_CHECK!(!s.is_rational());
-        MINI_CHECK!(s.knot_count(0) == 6);
-        MINI_CHECK!(s.knot_count(1) == 6);
+        MINI_CHECK!(s.nurbsknot_count(0) == 6);
+        MINI_CHECK!(s.nurbsknot_count(1) == 6);
         MINI_CHECK!(s.name == "my_nurbssurface");
         MINI_CHECK!(!s.guid().is_empty());
         MINI_CHECK!(sstr == "NurbsSurface(name=my_nurbssurface, degree=(3,3), cvs=(4,4))");
@@ -108,9 +108,9 @@ pub fn run_nurbssurface_booleans_queries() -> TestResult {
 
         let s = Primitives::sphere_surface(0.0, 0.0, 0.0, 5.0);
 
-        // Validity surface and knots
+        // Validity surface and nurbsknots
         let is_valid = s.is_valid();
-        let are_knots_valid = s.is_valid_knot_vector(0) && s.is_valid_knot_vector(1);
+        let are_nurbsknots_valid = s.is_valid_nurbsknot_vector(0) && s.is_valid_nurbsknot_vector(1);
 
         // Are control points weights enabled?
         let is_rational = s.is_rational();
@@ -131,7 +131,7 @@ pub fn run_nurbssurface_booleans_queries() -> TestResult {
         let is_clamped = s.is_clamped(0, 2) && s.is_clamped(1, 2);
 
         MINI_CHECK!(is_valid);
-        MINI_CHECK!(are_knots_valid);
+        MINI_CHECK!(are_nurbsknots_valid);
         MINI_CHECK!(is_rational);
         MINI_CHECK!(is_closed);
         MINI_CHECK!(!is_periodic);
@@ -187,9 +187,9 @@ pub fn run_nurbssurface_attributes() -> TestResult {
         let cv_count = s.cv_count_dir(None);
         let cv_size = s.cv_size();
 
-        // Number of knots
-        let k_count_0 = s.knot_count(0);
-        let k_count_1 = s.knot_count(1);
+        // Number of nurbsknots
+        let k_count_0 = s.nurbsknot_count(0);
+        let k_count_1 = s.nurbsknot_count(1);
 
         // Span count
         let s_count_0 = s.span_count(0);
@@ -270,8 +270,8 @@ pub fn run_nurbssurface_control_vertices_access() -> TestResult {
     })
 }
 
-pub fn run_nurbssurface_knot_access() -> TestResult {
-    MINI_TEST!("Knot Access", {
+pub fn run_nurbssurface_nurbsknot_access() -> TestResult {
+    MINI_TEST!("NurbsKnot Access", {
         use crate::NurbsSurface;
         use crate::Point;
 
@@ -300,34 +300,34 @@ pub fn run_nurbssurface_knot_access() -> TestResult {
 
         let mut s = NurbsSurface::create(false, false, 3, 3, 4, 4, &points).unwrap();
 
-        // Get knot vectors and individual knot
-        let knots_u = s.get_knots(0);
-        for i in 0..s.knot_count(0) as usize {
-            let knot = s.knot(0, i).unwrap();
-            MINI_CHECK!(knot == knots_u[i]);
+        // Get nurbsknot vectors and individual nurbsknot
+        let nurbsknots_u = s.get_nurbsknots(0);
+        for i in 0..s.nurbsknot_count(0) as usize {
+            let nurbsknot = s.nurbsknot(0, i).unwrap();
+            MINI_CHECK!(nurbsknot == nurbsknots_u[i]);
         }
 
-        let knots_v = s.get_knots(1);
-        for i in 0..s.knot_count(1) as usize {
-            let knot = s.knot(1, i).unwrap();
-            MINI_CHECK!(knot == knots_v[i]);
+        let nurbsknots_v = s.get_nurbsknots(1);
+        for i in 0..s.nurbsknot_count(1) as usize {
+            let nurbsknot = s.nurbsknot(1, i).unwrap();
+            MINI_CHECK!(nurbsknot == nurbsknots_v[i]);
         }
 
-        // Set knots
-        let _is_set = s.set_knot(0, 2, 0.5);
-        MINI_CHECK!(s.knot(0, 2).unwrap() == 0.5);
-        let _is_set = s.set_knot(0, 2, 0.0);
+        // Set nurbsknots
+        let _is_set = s.set_nurbsknot(0, 2, 0.5);
+        MINI_CHECK!(s.nurbsknot(0, 2).unwrap() == 0.5);
+        let _is_set = s.set_nurbsknot(0, 2, 0.0);
 
         // Verify start multiplicity
-        let mult_u_start = s.knot_multiplicity(0, 0);
-        let mult_v_start = s.knot_multiplicity(1, 0);
+        let mult_u_start = s.nurbsknot_multiplicity(0, 0);
+        let mult_v_start = s.nurbsknot_multiplicity(1, 0);
         MINI_CHECK!(mult_u_start == 3);
         MINI_CHECK!(mult_v_start == 3);
 
-        s.insert_knot(0, 0.1, 2);
-        MINI_CHECK!(s.knot_count(0) == 8);
-        MINI_CHECK!(s.knot(0, 3).unwrap() == 0.1);
-        MINI_CHECK!(s.knot_multiplicity(0, 3) == 2);
+        s.insert_nurbsknot(0, 0.1, 2);
+        MINI_CHECK!(s.nurbsknot_count(0) == 8);
+        MINI_CHECK!(s.nurbsknot(0, 3).unwrap() == 0.1);
+        MINI_CHECK!(s.nurbsknot_multiplicity(0, 3) == 2);
     })
 }
 
@@ -375,7 +375,7 @@ pub fn run_nurbssurface_domain() -> TestResult {
         MINI_CHECK!(is_set_u && TOLERANCE.is_close(s.domain(1).unwrap().0, -5.1));
         MINI_CHECK!(is_set_v && TOLERANCE.is_close(s.domain(1).unwrap().1, 1.3));
 
-        // Get sorted list of distinct knot values
+        // Get sorted list of distinct nurbsknot values
         let span_vector = s.get_span_vector(0);
         let first_item = span_vector[0];
         let last_item = span_vector[span_vector.len() - 1];
@@ -895,14 +895,14 @@ pub fn run_nurbssurface_json_roundtrip() -> TestResult {
         let loaded_json = NurbsSurface::jsonload(&json).unwrap();
 
         // String
-        let json_string = surface.json_dumps();
-        let loaded_json_string = NurbsSurface::json_loads(&json_string);
+        let json_string = surface.file_json_dumps();
+        let loaded_json_string = NurbsSurface::file_json_loads(&json_string);
 
         // File
         let src_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
         let filename = src_dir.join("serialization").join("test_nurbssurface.json");
-        surface.json_dump(filename.to_str().unwrap());
-        let loaded_from_file = NurbsSurface::json_load(filename.to_str().unwrap());
+        surface.file_json_dump(filename.to_str().unwrap());
+        let loaded_from_file = NurbsSurface::file_json_load(filename.to_str().unwrap());
 
         MINI_CHECK!(loaded_json == surface);
         MINI_CHECK!(loaded_json_string == surface);
@@ -960,7 +960,7 @@ REGISTER_MINI_TEST!("NurbsSurface", "Constructor", crate::nurbssurface_test::run
 REGISTER_MINI_TEST!("NurbsSurface", "Booleans Queries", crate::nurbssurface_test::run_nurbssurface_booleans_queries);
 REGISTER_MINI_TEST!("NurbsSurface", "Attributes", crate::nurbssurface_test::run_nurbssurface_attributes);
 REGISTER_MINI_TEST!("NurbsSurface", "Control Vertices Access", crate::nurbssurface_test::run_nurbssurface_control_vertices_access);
-REGISTER_MINI_TEST!("NurbsSurface", "Knot Access", crate::nurbssurface_test::run_nurbssurface_knot_access);
+REGISTER_MINI_TEST!("NurbsSurface", "NurbsKnot Access", crate::nurbssurface_test::run_nurbssurface_nurbsknot_access);
 REGISTER_MINI_TEST!("NurbsSurface", "Domain", crate::nurbssurface_test::run_nurbssurface_domain);
 REGISTER_MINI_TEST!("NurbsSurface", "Division", crate::nurbssurface_test::run_nurbssurface_division);
 REGISTER_MINI_TEST!("NurbsSurface", "Evaluation", crate::nurbssurface_test::run_nurbssurface_evaluation);

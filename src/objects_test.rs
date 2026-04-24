@@ -15,12 +15,12 @@ pub fn run_objects_constructor() -> TestResult {
 pub fn run_objects_json_roundtrip() -> TestResult {
     MINI_TEST!("Json Roundtrip", {
         use crate::{Objects, Point};
-        use crate::encoders::{json_dump, json_load};
+        use crate::file_encoders::{file_json_dump, file_json_load};
         let mut original = Objects::new();
         original.points.push(Point::new(1.0, 2.0, 3.0));
         original.points.push(Point::new(4.0, 5.0, 6.0));
-        json_dump(&original, "serialization/test_objects.json", false).unwrap();
-        let loaded = json_load::<Objects>("serialization/test_objects.json").unwrap();
+        file_json_dump(&original, "serialization/test_objects.json", false).unwrap();
+        let loaded = file_json_load::<Objects>("serialization/test_objects.json").unwrap();
         MINI_CHECK!(loaded.points.len() == original.points.len());
     })
 }
@@ -67,7 +67,7 @@ pub fn run_objects_component_json_roundtrip() -> TestResult {
         // jsondump produces a flat dict (type/guid/name + extra fields).
         // jsonload reconstructs it; serde flatten handles the extra fields.
         use crate::{Objects, Component};
-        use crate::encoders::{json_dump, json_load};
+        use crate::file_encoders::{file_json_dump, file_json_load};
 
         let mut extra = std::collections::HashMap::new();
         extra.insert("size".to_string(),   serde_json::json!(3000));
@@ -85,8 +85,8 @@ pub fn run_objects_component_json_roundtrip() -> TestResult {
         let mut original = Objects::new();
         original.components.push(c);
 
-        json_dump(&original, "serialization/test_objects_component.json", false).unwrap();
-        let loaded = json_load::<Objects>("serialization/test_objects_component.json").unwrap();
+        file_json_dump(&original, "serialization/test_objects_component.json", false).unwrap();
+        let loaded = file_json_load::<Objects>("serialization/test_objects_component.json").unwrap();
 
         MINI_CHECK!(loaded.components.len() == 1);
         MINI_CHECK!(loaded.components[0].type_name == "FloorBuilder");

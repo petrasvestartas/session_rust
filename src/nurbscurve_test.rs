@@ -49,7 +49,7 @@ pub fn run_nurbscurve_create_interpolated() -> TestResult {
     MINI_TEST!("Create Interpolated", {
         use crate::NurbsCurve;
         use crate::Point;
-        use crate::knot::CurveKnotStyle;
+        use crate::nurbsknot::CurveNurbsKnotStyle;
 
         let points = vec![
             Point::new(14.0, 9.0, 0.0),
@@ -59,7 +59,7 @@ pub fn run_nurbscurve_create_interpolated() -> TestResult {
             Point::new(41.0, 13.0, 0.0),
         ];
 
-        let c = NurbsCurve::create_interpolated(&points, CurveKnotStyle::Chord);
+        let c = NurbsCurve::create_interpolated(&points, CurveNurbsKnotStyle::Chord);
 
         MINI_CHECK!(c.is_valid());
         MINI_CHECK!(c.degree() == 3);
@@ -87,7 +87,7 @@ pub fn run_nurbscurve_create_interpolated() -> TestResult {
             Point::new(0.0, 15.0, 0.0),
         ];
 
-        let cp = NurbsCurve::create_interpolated(&closed_pts, CurveKnotStyle::ChordPeriodic);
+        let cp = NurbsCurve::create_interpolated(&closed_pts, CurveNurbsKnotStyle::ChordPeriodic);
 
         MINI_CHECK!(cp.is_valid());
         MINI_CHECK!(cp.degree() == 3);
@@ -154,12 +154,12 @@ pub fn run_nurbscurve_attributes() -> TestResult {
 
         MINI_CHECK!(is_valid);
 
-        // Check whole knot vector for
+        // Check whole nurbsknot vector for
         // For correct size: order + cv_count - 2
         // Non-decreasing (can repeat, can't go down)
         // Valid domain exists
-        let is_valid_knot_vector = curve.is_valid_knot_vector();
-        MINI_CHECK!(is_valid_knot_vector);
+        let is_valid_nurbsknot_vector = curve.is_valid_nurbsknot_vector();
+        MINI_CHECK!(is_valid_nurbsknot_vector);
 
         // Check if the curve is clamped at start, end, or both
         let is_clamped_start = curve.is_clamped(0);
@@ -200,15 +200,15 @@ pub fn run_nurbscurve_attributes() -> TestResult {
         MINI_CHECK!(is_continuous);
 
         /////////////////////////////////////////////
-        // Knot Operations
+        // NurbsKnot Operations
         /////////////////////////////////////////////
 
-        // Insert knot into curve
+        // Insert nurbsknot into curve
         // Useful for splitting curves at a parameter
         // Increase local control without changing shape
         let mut copy_curve = curve.duplicate();
         let before_pt = copy_curve.point_at(1.5);
-        copy_curve.insert_knot(1.5, 1);
+        copy_curve.insert_nurbsknot(1.5, 1);
         MINI_CHECK!(TOLERANCE.is_point_close(&before_pt, &copy_curve.point_at(1.5)));
 
         // Useful for controlling curve by cv on lying on it
@@ -235,7 +235,7 @@ pub fn run_nurbscurve_attributes() -> TestResult {
         // is_rational = false means control points [x, y, z]
         // is_rational = false means control points [xw, yw, zw]
         // Rational curves are used to represent:
-        // Order = degree + 1, control points + order = knots
+        // Order = degree + 1, control points + order = nurbsknots
         let order = curve.order();
         MINI_CHECK!(order == 3);
         // Number of control vertices
@@ -244,11 +244,11 @@ pub fn run_nurbscurve_attributes() -> TestResult {
         // Number of floats per 1 control vertex
         let cv_size = curve.cv_size();
         MINI_CHECK!(cv_size == 3);
-        // The knots are a list of (degree+control_points-1) numbers
-        let knot_count = curve.knot_count();
-        MINI_CHECK!(knot_count == 5);
-        // Span = a knot interval where a single polynomial segment is evaluated
-        // Knot vector: [0, 0, 0 ↑, 1 ↑, 2 ↑, 3, 3, 3]  (cubic, 5 CVs)
+        // The nurbsknots are a list of (degree+control_points-1) numbers
+        let nurbsknot_count = curve.nurbsknot_count();
+        MINI_CHECK!(nurbsknot_count == 5);
+        // Span = a nurbsknot interval where a single polynomial segment is evaluated
+        // NurbsKnot vector: [0, 0, 0 ↑, 1 ↑, 2 ↑, 3, 3, 3]  (cubic, 5 CVs)
         let span_count = curve.span_count();
         MINI_CHECK!(span_count == 2);
         /////////////////////////////////////////////////////
@@ -292,46 +292,46 @@ pub fn run_nurbscurve_attributes() -> TestResult {
         MINI_CHECK!(curve.weight(2) == 0.5);
 
         /////////////////////////////////////////////////////
-        // Knot Access
+        // NurbsKnot Access
         /////////////////////////////////////////////////////
 
-        // Get knot value at index
-        let knot3 = curve.knot(3).unwrap();
-        MINI_CHECK!(TOLERANCE.is_close(knot3, 3.519488670956267));
+        // Get nurbsknot value at index
+        let nurbsknot3 = curve.nurbsknot(3).unwrap();
+        MINI_CHECK!(TOLERANCE.is_close(nurbsknot3, 3.519488670956267));
 
-        // Set knot value at index
+        // Set nurbsknot value at index
         // ATTENTION you can brake increasing rule
-        let end_knot = curve.knot(4).unwrap();
-        curve.set_knot(4, end_knot);
-        MINI_CHECK!(TOLERANCE.is_close(curve.knot(4).unwrap(), end_knot));
+        let end_nurbsknot = curve.nurbsknot(4).unwrap();
+        curve.set_nurbsknot(4, end_nurbsknot);
+        MINI_CHECK!(TOLERANCE.is_close(curve.nurbsknot(4).unwrap(), end_nurbsknot));
 
-        // Count repeated knots at index [0, 0, 1, 1, 2]
-        let m0 = curve.knot_multiplicity(0);  // 2 (two 0's)
-        let m1 = curve.knot_multiplicity(1);  // 2 (still counting the 0's)
-        let m2 = curve.knot_multiplicity(2);  // 1 (single 0.5)
-        let m3 = curve.knot_multiplicity(3);  // 2 (single 1's)
-        let m4 = curve.knot_multiplicity(4);  // 2 (single 2)
+        // Count repeated nurbsknots at index [0, 0, 1, 1, 2]
+        let m0 = curve.nurbsknot_multiplicity(0);  // 2 (two 0's)
+        let m1 = curve.nurbsknot_multiplicity(1);  // 2 (still counting the 0's)
+        let m2 = curve.nurbsknot_multiplicity(2);  // 1 (single 0.5)
+        let m3 = curve.nurbsknot_multiplicity(3);  // 2 (single 1's)
+        let m4 = curve.nurbsknot_multiplicity(4);  // 2 (single 2)
         MINI_CHECK!(m0 == 2);
         MINI_CHECK!(m1 == 2);
         MINI_CHECK!(m2 == 1);
         MINI_CHECK!(m3 == 2);
         MINI_CHECK!(m4 == 2);
 
-        // Superflous knots are used for extension of clamped curves
-        let superfluous_knot = curve.superfluous_knot(1);
-        MINI_CHECK!(TOLERANCE.is_close(superfluous_knot, 7.038977341912535));
+        // Superflous nurbsknots are used for extension of clamped curves
+        let superfluous_nurbsknot = curve.superfluous_nurbsknot(1);
+        MINI_CHECK!(TOLERANCE.is_close(superfluous_nurbsknot, 7.038977341912535));
 
-        // Direct memory access to knot values, fast, read-only
+        // Direct memory access to nurbsknot values, fast, read-only
         // Vector return is slower and makes a copy
-        let knots = curve.knot_array();
-        let k0 = knots[0];
-        let knot_vector = curve.get_knots();
+        let nurbsknots = curve.nurbsknot_array();
+        let k0 = nurbsknots[0];
+        let nurbsknot_vector = curve.get_nurbsknots();
         MINI_CHECK!(k0 == 0.0);
-        MINI_CHECK!(TOLERANCE.is_close(knot_vector[0], 0.0));
-        MINI_CHECK!(TOLERANCE.is_close(knot_vector[1], 0.0));
-        MINI_CHECK!(TOLERANCE.is_close(knot_vector[2], 1.759744335478134));
-        MINI_CHECK!(TOLERANCE.is_close(knot_vector[3], 3.519488670956267));
-        MINI_CHECK!(TOLERANCE.is_close(knot_vector[4], 3.519488670956267));
+        MINI_CHECK!(TOLERANCE.is_close(nurbsknot_vector[0], 0.0));
+        MINI_CHECK!(TOLERANCE.is_close(nurbsknot_vector[1], 0.0));
+        MINI_CHECK!(TOLERANCE.is_close(nurbsknot_vector[2], 1.759744335478134));
+        MINI_CHECK!(TOLERANCE.is_close(nurbsknot_vector[3], 3.519488670956267));
+        MINI_CHECK!(TOLERANCE.is_close(nurbsknot_vector[4], 3.519488670956267));
 
         // Control vertex array access
         let cvs = curve.cv_array();
@@ -360,7 +360,7 @@ pub fn run_nurbscurve_attributes() -> TestResult {
         MINI_CHECK!(curve.domain_middle() == 0.5);
         MINI_CHECK!(curve.domain_end() == 1.0);
 
-        // Span of distict knot intervals
+        // Span of distict nurbsknot intervals
         let intervals = curve.get_span_vector();
         MINI_CHECK!(TOLERANCE.is_close(intervals[0], 0.0) && TOLERANCE.is_close(intervals[1], 0.5) && TOLERANCE.is_close(intervals[2], 1.0));
 
@@ -612,15 +612,15 @@ pub fn run_nurbscurve_modifications() -> TestResult {
             curve_open.set_cv(i, &points_open[i]);
         }
 
-        for i in 0..curve_open.knot_count() {
-            curve_open.set_knot(i, i as f64 * 1.0);
+        for i in 0..curve_open.nurbsknot_count() {
+            curve_open.set_nurbsknot(i, i as f64 * 1.0);
         }
 
-        // Now clamp, making 2 knots at the ends the same
+        // Now clamp, making 2 nurbsknots at the ends the same
         curve_open.clamp_end(2);
-        let knots = curve_open.get_knots();
-        MINI_CHECK!(TOLERANCE.is_close(knots[0], knots[1]));
-        MINI_CHECK!(TOLERANCE.is_close(knots[knots.len() - 2], knots[knots.len() - 1]));
+        let nurbsknots = curve_open.get_nurbsknots();
+        MINI_CHECK!(TOLERANCE.is_close(nurbsknots[0], nurbsknots[1]));
+        MINI_CHECK!(TOLERANCE.is_close(nurbsknots[nurbsknots.len() - 2], nurbsknots[nurbsknots.len() - 1]));
 
         // Increase degree without change the shape
         let mut raised = curve.duplicate();
@@ -703,24 +703,24 @@ pub fn run_nurbscurve_json_roundtrip() -> TestResult {
 
         //   jsondump()      │ String       │ to JSON string (internal use)
         //   jsonload(s)     │ String       │ from JSON string (internal use)
-        //   json_dumps()    │ String       │ to JSON string
-        //   json_loads(s)   │ String       │ from JSON string
-        //   json_dump(path) │ file         │ write to file
-        //   json_load(path) │ file         │ read from file
+        //   file_json_dumps()    │ String       │ to JSON string
+        //   file_json_loads(s)   │ String       │ from JSON string
+        //   file_json_dump(path) │ file         │ write to file
+        //   file_json_load(path) │ file         │ read from file
 
         // JSON object
         let json = curve.jsondump().unwrap();
         let loaded_json = NurbsCurve::jsonload(&json).unwrap();
 
         // String
-        let json_string = curve.json_dumps();
-        let loaded_json_string = NurbsCurve::json_loads(&json_string);
+        let json_string = curve.file_json_dumps();
+        let loaded_json_string = NurbsCurve::file_json_loads(&json_string);
 
         // File
         let src_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
         let filename = src_dir.join("serialization").join("test_nurbscurve.json");
-        curve.json_dump(filename.to_str().unwrap());
-        let loaded_from_file = NurbsCurve::json_load(filename.to_str().unwrap());
+        curve.file_json_dump(filename.to_str().unwrap());
+        let loaded_from_file = NurbsCurve::file_json_load(filename.to_str().unwrap());
 
         MINI_CHECK!(loaded_json == curve);
         MINI_CHECK!(loaded_json_string == curve);

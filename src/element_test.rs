@@ -99,7 +99,7 @@ pub fn run_element_add_feature() -> TestResult {
 }
 
 pub fn run_element_aabb() -> TestResult {
-    MINI_TEST!("Aabb", {
+    MINI_TEST!("AABB", {
         use crate::Mesh;
         use crate::element::Element;
         use crate::Point;
@@ -267,8 +267,8 @@ pub fn run_element_json_roundtrip() -> TestResult {
         e.session_transformation = Xform::translation(1.0, 2.0, 3.0);
 
         let fname = "serialization/test_element.json";
-        e.json_dump(fname);
-        let loaded = Element::json_load(fname);
+        e.file_json_dump(fname);
+        let loaded = Element::file_json_load(fname);
 
         MINI_CHECK!(loaded.name == "json_test");
         MINI_CHECK!(matches!(loaded.geometry(), ElementGeometry::Mesh(_)));
@@ -331,7 +331,7 @@ pub fn run_element_polylines() -> TestResult {
 REGISTER_MINI_TEST!("Element", "Constructor", crate::element_test::run_element_constructor);
 REGISTER_MINI_TEST!("Element", "Session Transformation", crate::element_test::run_element_session_transformation);
 REGISTER_MINI_TEST!("Element", "Add Feature", crate::element_test::run_element_add_feature);
-REGISTER_MINI_TEST!("Element", "Aabb", crate::element_test::run_element_aabb);
+REGISTER_MINI_TEST!("Element", "AABB", crate::element_test::run_element_aabb);
 REGISTER_MINI_TEST!("Element", "OBB", crate::element_test::run_element_obb);
 REGISTER_MINI_TEST!("Element", "Session Geometry", crate::element_test::run_element_session_geometry);
 REGISTER_MINI_TEST!("Element", "Reset", crate::element_test::run_element_reset);

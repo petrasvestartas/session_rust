@@ -737,7 +737,7 @@ pub fn run_primitives_nurbssurface_revolve() -> TestResult {
         let ck = [0.0, 0.0, 1.0, 1.0, 2.0, 2.0, 3.0, 3.0, 4.0, 4.0];
         let rr = 5.0; let r = 1.5; let tcx = 14.0;
         let mut pb = NurbsCurve::new(3, true, 3, 9);
-        for i in 0..10 { pb.set_knot(i, ck[i]); }
+        for i in 0..10 { pb.set_nurbsknot(i, ck[i]); }
         for i in 0..9 { pb.set_cv_4d(i, (tcx + rr + r * ca[i]) * cw[i], 0.0, r * sa[i] * cw[i], cw[i]); }
         let s_torus = Primitives::create_revolve(&pb, &Point::new(tcx, 0.0, 0.0), &Vector::new(0.0, 0.0, 1.0), 2.0 * crate::tolerance::PI);
         let m_torus = s_torus.mesh();
@@ -752,7 +752,7 @@ pub fn run_primitives_nurbssurface_revolve() -> TestResult {
         let sr = 2.0; let scx = 36.0;
         let mut pd = NurbsCurve::new(3, true, 3, 5);
         let sk = [0.0, 0.0, 1.0, 1.0, 2.0, 2.0];
-        for i in 0..6 { pd.set_knot(i, sk[i]); }
+        for i in 0..6 { pd.set_nurbsknot(i, sk[i]); }
         let spx = [0.0, sr, sr, sr, 0.0]; let spz = [-sr, -sr, 0.0, sr, sr]; let spw = [1.0, w, 1.0, w, 1.0];
         for i in 0..5 { pd.set_cv_4d(i, (scx + spx[i]) * spw[i], 0.0, spz[i] * spw[i], spw[i]); }
         let s_sphere = Primitives::create_revolve(&pd, &Point::new(scx, 0.0, 0.0), &Vector::new(0.0, 0.0, 1.0), 2.0 * crate::tolerance::PI);
@@ -1035,7 +1035,7 @@ pub fn run_primitives_nurbscurve_interpolated() -> TestResult {
     MINI_TEST!("Nurbscurve Interpolated", {
         use crate::primitives::Primitives;
         use crate::point::Point;
-        use crate::knot::CurveKnotStyle;
+        use crate::nurbsknot::CurveNurbsKnotStyle;
 
         let points = vec![
             Point::new(14.0, 9.0, 0.0),
@@ -1047,7 +1047,7 @@ pub fn run_primitives_nurbscurve_interpolated() -> TestResult {
             Point::new(41.0, 13.0, 0.0),
         ];
 
-        let c = Primitives::create_interpolated(&points, CurveKnotStyle::Chord);
+        let c = Primitives::create_interpolated(&points, CurveNurbsKnotStyle::Chord);
 
         MINI_CHECK!(c.is_valid());
         MINI_CHECK!(c.degree() == 3);
@@ -1056,13 +1056,13 @@ pub fn run_primitives_nurbscurve_interpolated() -> TestResult {
         MINI_CHECK!(c.is_rational() == false);
 
         let (d0, d1) = c.domain();
-        let knots = c.get_knots();
+        let nurbsknots = c.get_nurbsknots();
         MINI_CHECK!(TOLERANCE.is_point_close(&c.point_at(d0), &points[0]));
-        MINI_CHECK!(TOLERANCE.is_point_close(&c.point_at(knots[3]), &points[1]));
-        MINI_CHECK!(TOLERANCE.is_point_close(&c.point_at(knots[4]), &points[2]));
-        MINI_CHECK!(TOLERANCE.is_point_close(&c.point_at(knots[5]), &points[3]));
-        MINI_CHECK!(TOLERANCE.is_point_close(&c.point_at(knots[6]), &points[4]));
-        MINI_CHECK!(TOLERANCE.is_point_close(&c.point_at(knots[7]), &points[5]));
+        MINI_CHECK!(TOLERANCE.is_point_close(&c.point_at(nurbsknots[3]), &points[1]));
+        MINI_CHECK!(TOLERANCE.is_point_close(&c.point_at(nurbsknots[4]), &points[2]));
+        MINI_CHECK!(TOLERANCE.is_point_close(&c.point_at(nurbsknots[5]), &points[3]));
+        MINI_CHECK!(TOLERANCE.is_point_close(&c.point_at(nurbsknots[6]), &points[4]));
+        MINI_CHECK!(TOLERANCE.is_point_close(&c.point_at(nurbsknots[7]), &points[5]));
         MINI_CHECK!(TOLERANCE.is_point_close(&c.point_at(d1), &points[6]));
 
         MINI_CHECK!(TOLERANCE.is_point_close(&c.get_cv(0).unwrap(), &points[0]));
@@ -1074,7 +1074,7 @@ pub fn run_primitives_nurbscurve_interpolated() -> TestResult {
             Point::new(3.0, 1.0, 0.0),
             Point::new(5.0, 3.0, 0.0),
         ];
-        let c4 = Primitives::create_interpolated(&pts4, CurveKnotStyle::Chord);
+        let c4 = Primitives::create_interpolated(&pts4, CurveNurbsKnotStyle::Chord);
         MINI_CHECK!(c4.is_valid());
         MINI_CHECK!(c4.degree() == 3);
         MINI_CHECK!(c4.cv_count() == 6);

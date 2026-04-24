@@ -30,7 +30,7 @@ pub fn sorted_json_string<T: Serialize>(data: &T) -> Result<String, Box<dyn std:
 }
 
 /// Serialize data to JSON string with pretty formatting and sorted keys.
-pub fn json_dumps<T: Serialize>(
+pub fn file_json_dumps<T: Serialize>(
     data: &T,
     pretty: bool,
 ) -> Result<String, Box<dyn std::error::Error>> {
@@ -44,29 +44,29 @@ pub fn json_dumps<T: Serialize>(
 }
 
 /// Deserialize data from JSON string.
-pub fn json_loads<T: for<'de> Deserialize<'de>>(
+pub fn file_json_loads<T: for<'de> Deserialize<'de>>(
     json_str: &str,
 ) -> Result<T, Box<dyn std::error::Error>> {
     Ok(serde_json::from_str(json_str)?)
 }
 
 /// Write data to JSON file with pretty formatting.
-pub fn json_dump<T: Serialize>(
+pub fn file_json_dump<T: Serialize>(
     data: &T,
     filepath: &str,
     pretty: bool,
 ) -> Result<(), Box<dyn std::error::Error>> {
-    let json_str = json_dumps(data, pretty)?;
+    let json_str = file_json_dumps(data, pretty)?;
     fs::write(filepath, json_str)?;
     Ok(())
 }
 
 /// Read data from JSON file.
-pub fn json_load<T: for<'de> Deserialize<'de>>(
+pub fn file_json_load<T: for<'de> Deserialize<'de>>(
     filepath: &str,
 ) -> Result<T, Box<dyn std::error::Error>> {
     let json_str = fs::read_to_string(filepath)?;
-    json_loads(&json_str)
+    file_json_loads(&json_str)
 }
 
 /// Encode a value to JSON (wrapper for Serialize types).
@@ -85,14 +85,14 @@ mod tests {
     use crate::vector::Vector;
 
     #[test]
-    fn test_json_dump_and_load() {
+    fn test_file_json_dump_and_load() {
         let mut original = Point::new(1.5, 2.5, 3.5);
         original.name = "test_point".to_string();
 
         let filepath = "serialization/test_encoders_point.json";
-        json_dump(&original, filepath, true).unwrap();
+        file_json_dump(&original, filepath, true).unwrap();
 
-        let loaded: Point = json_load(filepath).unwrap();
+        let loaded: Point = file_json_load(filepath).unwrap();
 
         assert_eq!(loaded[0], original[0]);
         assert_eq!(loaded[1], original[1]);
@@ -103,15 +103,15 @@ mod tests {
     }
 
     #[test]
-    fn test_json_dumps_and_loads() {
+    fn test_file_json_dumps_and_loads() {
         let mut original = Vector::new(42.1, 84.2, 126.3);
         original.name = "test_vector".to_string();
 
-        let json_str = json_dumps(&original, true).unwrap();
+        let json_str = file_json_dumps(&original, true).unwrap();
         assert!(!json_str.is_empty());
         assert!(json_str.contains("Vector"));
 
-        let loaded: Vector = json_loads(&json_str).unwrap();
+        let loaded: Vector = file_json_loads(&json_str).unwrap();
 
         assert_eq!(loaded[0], original[0]);
         assert_eq!(loaded[1], original[1]);
@@ -120,17 +120,17 @@ mod tests {
     }
 
     #[test]
-    fn test_encode_collection() {
+    fn test_file_encode_collection() {
         let points = vec![
             Point::new(1.0, 2.0, 3.0),
             Point::new(4.0, 5.0, 6.0),
             Point::new(7.0, 8.0, 9.0),
         ];
 
-        let json_str = json_dumps(&points, true).unwrap();
+        let json_str = file_json_dumps(&points, true).unwrap();
         assert!(!json_str.is_empty());
 
-        let loaded: Vec<Point> = json_loads(&json_str).unwrap();
+        let loaded: Vec<Point> = file_json_loads(&json_str).unwrap();
         assert_eq!(loaded.len(), 3);
         assert_eq!(loaded[0][0], 1.0);
         assert_eq!(loaded[1][1], 5.0);
@@ -144,8 +144,8 @@ mod tests {
             Line::new(0.0, 0.0, 0.0, 0.0, 1.0, 0.0),
         ];
 
-        let json_str = json_dumps(&lines, true).unwrap();
-        let loaded: Vec<Line> = json_loads(&json_str).unwrap();
+        let json_str = file_json_dumps(&lines, true).unwrap();
+        let loaded: Vec<Line> = file_json_loads(&json_str).unwrap();
 
         assert_eq!(loaded.len(), 2);
         assert_eq!(loaded[0].end()[0], 1.0);
@@ -161,9 +161,9 @@ mod tests {
         ];
 
         let filepath = "serialization/test_encoders_collection.json";
-        json_dump(&vectors, filepath, true).unwrap();
+        file_json_dump(&vectors, filepath, true).unwrap();
 
-        let loaded: Vec<Vector> = json_load(filepath).unwrap();
+        let loaded: Vec<Vector> = file_json_load(filepath).unwrap();
 
         assert_eq!(loaded.len(), 3);
         assert_eq!(loaded[0][0], 1.0);
@@ -177,15 +177,15 @@ mod tests {
     fn test_pretty_vs_compact() {
         let point = Point::new(1.0, 2.0, 3.0);
 
-        let pretty = json_dumps(&point, true).unwrap();
-        let compact = json_dumps(&point, false).unwrap();
+        let pretty = file_json_dumps(&point, true).unwrap();
+        let compact = file_json_dumps(&point, false).unwrap();
 
         assert!(pretty.len() > compact.len());
         assert!(pretty.contains("\n"));
         assert!(!compact.contains("\n"));
 
-        let loaded_pretty: Point = json_loads(&pretty).unwrap();
-        let loaded_compact: Point = json_loads(&compact).unwrap();
+        let loaded_pretty: Point = file_json_loads(&pretty).unwrap();
+        let loaded_compact: Point = file_json_loads(&compact).unwrap();
 
         assert_eq!(loaded_pretty[0], 1.0);
         assert_eq!(loaded_compact[0], 1.0);
@@ -194,36 +194,36 @@ mod tests {
     #[test]
     fn test_decode_primitives() {
         let num: i32 = 42;
-        let json_str = json_dumps(&num, false).unwrap();
-        let loaded: i32 = json_loads(&json_str).unwrap();
+        let json_str = file_json_dumps(&num, false).unwrap();
+        let loaded: i32 = file_json_loads(&json_str).unwrap();
         assert_eq!(loaded, 42);
 
         let float: f64 = 2.5;
-        let json_str = json_dumps(&float, false).unwrap();
-        let loaded: f64 = json_loads(&json_str).unwrap();
+        let json_str = file_json_dumps(&float, false).unwrap();
+        let loaded: f64 = file_json_loads(&json_str).unwrap();
         assert_eq!(loaded, 2.5);
 
         let text = "hello";
-        let json_str = json_dumps(&text, false).unwrap();
-        let loaded: String = json_loads(&json_str).unwrap();
+        let json_str = file_json_dumps(&text, false).unwrap();
+        let loaded: String = file_json_loads(&json_str).unwrap();
         assert_eq!(loaded, "hello");
 
         let flag = true;
-        let json_str = json_dumps(&flag, false).unwrap();
-        let loaded: bool = json_loads(&json_str).unwrap();
+        let json_str = file_json_dumps(&flag, false).unwrap();
+        let loaded: bool = file_json_loads(&json_str).unwrap();
         assert!(loaded);
     }
 
     #[test]
     fn test_decode_list() {
         let data = vec![1, 2, 3];
-        let json_str = json_dumps(&data, false).unwrap();
-        let loaded: Vec<i32> = json_loads(&json_str).unwrap();
+        let json_str = file_json_dumps(&data, false).unwrap();
+        let loaded: Vec<i32> = file_json_loads(&json_str).unwrap();
         assert_eq!(loaded, vec![1, 2, 3]);
 
         let points = vec![Point::new(1.0, 2.0, 3.0), Point::new(4.0, 5.0, 6.0)];
-        let json_str = json_dumps(&points, false).unwrap();
-        let loaded: Vec<Point> = json_loads(&json_str).unwrap();
+        let json_str = file_json_dumps(&points, false).unwrap();
+        let loaded: Vec<Point> = file_json_loads(&json_str).unwrap();
         assert_eq!(loaded.len(), 2);
         assert_eq!(loaded[0][0], 1.0);
         assert_eq!(loaded[1][0], 4.0);
@@ -236,22 +236,22 @@ mod tests {
         let mut data = HashMap::new();
         data.insert("a".to_string(), 1);
         data.insert("b".to_string(), 2);
-        let json_str = json_dumps(&data, false).unwrap();
-        let loaded: HashMap<String, i32> = json_loads(&json_str).unwrap();
+        let json_str = file_json_dumps(&data, false).unwrap();
+        let loaded: HashMap<String, i32> = file_json_loads(&json_str).unwrap();
         assert_eq!(loaded.get("a"), Some(&1));
         assert_eq!(loaded.get("b"), Some(&2));
 
         let vec = Vector::new(1.0, 2.0, 3.0);
-        let json_str = json_dumps(&vec, false).unwrap();
-        let loaded: Vector = json_loads(&json_str).unwrap();
+        let json_str = file_json_dumps(&vec, false).unwrap();
+        let loaded: Vector = file_json_loads(&json_str).unwrap();
         assert_eq!(loaded[0], 1.0);
     }
 
     #[test]
     fn test_list_in_list_in_list() {
         let data = vec![vec![vec![1, 2], vec![3, 4]], vec![vec![5, 6], vec![7, 8]]];
-        let json_str = json_dumps(&data, false).unwrap();
-        let loaded: Vec<Vec<Vec<i32>>> = json_loads(&json_str).unwrap();
+        let json_str = file_json_dumps(&data, false).unwrap();
+        let loaded: Vec<Vec<Vec<i32>>> = file_json_loads(&json_str).unwrap();
 
         assert_eq!(loaded[0][0][0], 1);
         assert_eq!(loaded[1][1][1], 8);
@@ -271,7 +271,7 @@ mod tests {
         });
 
         let json_str = data.to_string();
-        let loaded: serde_json::Value = json_loads(&json_str).unwrap();
+        let loaded: serde_json::Value = file_json_loads(&json_str).unwrap();
 
         assert_eq!(loaded["numbers"].as_array().unwrap().len(), 3);
         assert_eq!(loaded["letters"][0], "a");
@@ -294,7 +294,7 @@ mod tests {
         ]);
 
         let json_str = data.to_string();
-        let loaded: serde_json::Value = json_loads(&json_str).unwrap();
+        let loaded: serde_json::Value = file_json_loads(&json_str).unwrap();
 
         assert_eq!(loaded.as_array().unwrap().len(), 3);
         assert_eq!(loaded[0]["name"], "point1");
@@ -323,7 +323,7 @@ mod tests {
         });
 
         let json_str = data.to_string();
-        let loaded: serde_json::Value = json_loads(&json_str).unwrap();
+        let loaded: serde_json::Value = file_json_loads(&json_str).unwrap();
 
         assert_eq!(loaded["config"]["tolerance"], 0.001);
         assert_eq!(loaded["config"]["scale"], 1000);

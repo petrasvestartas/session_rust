@@ -1,8 +1,8 @@
-// KDTree — alternating-axis median split over bare 3D points.
+// SpatialKDTree — alternating-axis median split over bare 3D points.
 // Use for: k-nearest-neighbor queries on point clouds (fastest option).
 //   Points only — no volumes, no boxes, no rotation.
-// Prefer over AABBTree/BVH when data is a point cloud, not triangle faces.
-// Prefer over RTree   when queries are k-NN, not region overlap.
+// Prefer over SpatialAABBTree/SpatialBVH when data is a point cloud, not triangle faces.
+// Prefer over SpatialRTree   when queries are k-NN, not region overlap.
 // Note: static structure; rebuild required after point insertion.
 use crate::point::Point;
 
@@ -13,16 +13,16 @@ struct Node {
     right: Option<Box<Node>>,
 }
 
-pub struct KDTree {
+pub struct SpatialKDTree {
     points: Vec<Point>,
     root: Option<Box<Node>>,
 }
 
-impl KDTree {
+impl SpatialKDTree {
     pub fn new(points: Vec<Point>) -> Self {
         let mut indices: Vec<usize> = (0..points.len()).collect();
         let root = if points.is_empty() { None } else { Some(Self::build(&points, &mut indices, 0)) };
-        KDTree { points, root }
+        SpatialKDTree { points, root }
     }
 
     fn build(points: &[Point], indices: &mut [usize], depth: usize) -> Box<Node> {

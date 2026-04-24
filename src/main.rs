@@ -1,5 +1,5 @@
 use session_rust::{
-    read_obj, OBB, Line, Mesh, NurbsCurve, Plane, Point, Session, Tolerance, Vector, BVH,
+    read_file_obj, OBB, Line, Mesh, NurbsCurve, Plane, Point, Session, Tolerance, Vector, SpatialBVH,
 };
 use std::path::Path;
 use std::time::Instant;
@@ -101,7 +101,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     ];
     for p in try_paths.iter() {
         if Path::new(p).exists() {
-            if let Ok(m) = read_obj(p) {
+            if let Ok(m) = read_file_obj(p) {
                 bunny_opt = Some(m);
                 break;
             }
@@ -133,11 +133,11 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 }
             }
         }
-        let world_size = BVH::compute_world_size(&tri_boxes);
-        let tri_bvh = BVH::from_boxes(&tri_boxes, world_size);
+        let world_size = SpatialBVH::compute_world_size(&tri_boxes);
+        let tri_bvh = SpatialBVH::from_boxes(&tri_boxes, world_size);
         let tri_build_end = Instant::now();
         let bvh_build_time_ms = (tri_build_end - tri_build_start).as_secs_f64() * 1000.0;
-        println!("BVH build: {bvh_build_time_ms:.3} ms");
+        println!("SpatialBVH build: {bvh_build_time_ms:.3} ms");
 
         let zaxis = Line::new(0.201, -0.212, 0.036, -0.326, 0.677, -0.060);
 
@@ -190,7 +190,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
         let bvh_end = Instant::now();
         let bvh_time_ms = (bvh_end - bvh_start).as_secs_f64() * 1000.0;
-        print!("Ray-mesh (BVH):   {bvh_hits} hits, {bvh_time_ms:.3} ms");
+        print!("Ray-mesh (SpatialBVH):   {bvh_hits} hits, {bvh_time_ms:.3} ms");
         if bvh_time_ms > 0.0 && mesh_time_ms > 0.0 {
             println!(" ({:.2}x faster)", mesh_time_ms / bvh_time_ms);
         } else {
@@ -200,7 +200,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         println!("ERROR: Cannot find bunny.obj in ../data/ or ../../data/ or data/");
     }
 
-    println!("\n=== BVH Collision Detection (Rust) ===");
+    println!("\n=== SpatialBVH Collision Detection (Rust) ===");
     let box_counts = [100usize, 5000usize, 10000usize];
     for &box_count in box_counts.iter() {
         let world_size = 100.0f64;
@@ -228,7 +228,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             ));
         }
         let bvh_start = Instant::now();
-        let bvh = BVH::from_boxes(&boxes, world_size);
+        let bvh = SpatialBVH::from_boxes(&boxes, world_size);
         let bvh_end = Instant::now();
         let bvh_build_ms = (bvh_end - bvh_start).as_secs_f64() * 1000.0;
         let coll_start = Instant::now();
@@ -340,7 +340,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         let hits1 = scene.ray_cast(&ray_origin, &ray_dir_y, tol);
         let session_cached_ms = (Instant::now() - t1).as_secs_f64() * 1000.0;
         let bvh_start = Instant::now();
-        let pure_bvh = BVH::from_boxes(&pure_boxes, world_size);
+        let pure_bvh = SpatialBVH::from_boxes(&pure_boxes, world_size);
         let mut candidate_ids: Vec<usize> = Vec::new();
         pure_bvh.ray_cast(&ray_origin, &ray_dir_x, &mut candidate_ids, true);
         let bvh_ms = (Instant::now() - bvh_start).as_secs_f64() * 1000.0;
@@ -360,7 +360,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             }
         );
         println!(
-            "Pure BVH:         {:.3}ms ({} candidates)",
+            "Pure SpatialBVH:         {:.3}ms ({} candidates)",
             bvh_ms,
             candidate_ids.len()
         );

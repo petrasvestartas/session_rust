@@ -499,14 +499,14 @@ pub fn run_vector_json_roundtrip() -> TestResult {
         let mut v = Vector::new(42.1, 84.2, 126.3);
         v.name = "test_vector".to_string();
 
-        //   json_dumps()    │ String       │ to JSON string
-        //   json_loads(s)   │ String       │ from JSON string
-        //   json_dump(path) │ file         │ write to file
-        //   json_load(path) │ file         │ read from file
+        //   file_json_dumps()    │ String       │ to JSON string
+        //   file_json_loads(s)   │ String       │ from JSON string
+        //   file_json_dump(path) │ file         │ write to file
+        //   file_json_load(path) │ file         │ read from file
 
         let filename = "serialization/test_vector.json";
-        v.json_dump(filename).unwrap();
-        let loaded = Vector::json_load(filename).unwrap();
+        v.file_json_dump(filename).unwrap();
+        let loaded = Vector::file_json_load(filename).unwrap();
 
         MINI_CHECK!(loaded.name == "test_vector");
         MINI_CHECK!(TOLERANCE.is_close(loaded[0], 42.1));

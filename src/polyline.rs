@@ -209,6 +209,20 @@ impl Polyline {
         total_length
     }
 
+    /// Sum of squared segment lengths — avoids sqrt when only relative lengths matter.
+    pub fn length_squared(&self) -> f64 {
+        let mut total = 0.0;
+        for i in 0..self.segment_count() {
+            let idx0 = i * 3;
+            let idx1 = (i + 1) * 3;
+            let dx = self.coords[idx1] - self.coords[idx0];
+            let dy = self.coords[idx1 + 1] - self.coords[idx0 + 1];
+            let dz = self.coords[idx1 + 2] - self.coords[idx0 + 2];
+            total += dx * dx + dy * dy + dz * dz;
+        }
+        total
+    }
+
     /// Returns a copy of the point at the given index.
     pub fn get_point(&self, index: usize) -> Option<Point> {
         if index < self.point_count() {
@@ -482,7 +496,7 @@ impl Polyline {
 
      /// Serializes the Polyline to a JSON string.
      pub fn jsondump(&self) -> Result<String, Box<dyn std::error::Error>> {
-         crate::encoders::sorted_json_string(self)
+         crate::file_encoders::sorted_json_string(self)
      }
 
     /// Deserializes a Polyline from a JSON string.
@@ -490,23 +504,23 @@ impl Polyline {
         Ok(serde_json::from_str(json_data)?)
     }
 
-    pub fn json_dumps(&self) -> String {
+    pub fn file_json_dumps(&self) -> String {
         self.jsondump().unwrap_or_default()
     }
 
-    pub fn json_loads(json_string: &str) -> Self {
+    pub fn file_json_loads(json_string: &str) -> Self {
         Self::jsonload(json_string).unwrap_or_else(|_| Self::default())
     }
 
     /// Serializes the Polyline to a JSON file.
-    pub fn json_dump(&self, filepath: &str) -> Result<(), Box<dyn std::error::Error>> {
+    pub fn file_json_dump(&self, filepath: &str) -> Result<(), Box<dyn std::error::Error>> {
         let json = self.jsondump()?;
         std::fs::write(filepath, json)?;
         Ok(())
     }
 
     /// Deserializes a Polyline from a JSON file.
-    pub fn json_load(filepath: &str) -> Result<Self, Box<dyn std::error::Error>> {
+    pub fn file_json_load(filepath: &str) -> Result<Self, Box<dyn std::error::Error>> {
         let json = std::fs::read_to_string(filepath)?;
         Self::jsonload(&json)
     }

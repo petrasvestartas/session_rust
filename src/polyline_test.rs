@@ -151,7 +151,7 @@ pub fn run_polyline_json_roundtrip() -> TestResult {
     MINI_TEST!("Json Roundtrip", {
         use crate::Polyline;
         use crate::Point;
-        use crate::encoders::{json_dump, json_load};
+        use crate::file_encoders::{file_json_dump, file_json_load};
 
         let mut pl = Polyline::new(vec![
             Point::new(1.0, 2.0, 3.0), Point::new(4.0, 5.0, 6.0),
@@ -159,14 +159,14 @@ pub fn run_polyline_json_roundtrip() -> TestResult {
         ]);
         pl.name = "test_polyline".to_string();
 
-        //   json_dumps()    │ String       │ to JSON string
-        //   json_loads(s)   │ String       │ from JSON string
-        //   json_dump(path) │ file         │ write to file
-        //   json_load(path) │ file         │ read from file
+        //   file_json_dumps()    │ String       │ to JSON string
+        //   file_json_loads(s)   │ String       │ from JSON string
+        //   file_json_dump(path) │ file         │ write to file
+        //   file_json_load(path) │ file         │ read from file
 
         let fname = "serialization/test_polyline.json";
-        json_dump(&pl, fname, true).unwrap();
-        let loaded: Polyline = json_load(fname).unwrap();
+        file_json_dump(&pl, fname, true).unwrap();
+        let loaded: Polyline = file_json_load(fname).unwrap();
 
         MINI_CHECK!(loaded.name == "test_polyline");
         MINI_CHECK!(loaded.len() == 4);

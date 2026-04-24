@@ -159,7 +159,7 @@ impl Point {
     ///
     /// A Result containing the pretty-printed JSON string or an error.
     pub fn jsondump(&self) -> Result<String, Box<dyn std::error::Error>> {
-        crate::encoders::sorted_json_string(self)
+        crate::file_encoders::sorted_json_string(self)
     }
 
     /// Deserializes a Point from a JSON string.
@@ -175,11 +175,11 @@ impl Point {
         Ok(serde_json::from_str(json_data)?)
     }
 
-    pub fn json_dumps(&self) -> String {
+    pub fn file_json_dumps(&self) -> String {
         self.jsondump().unwrap_or_default()
     }
 
-    pub fn json_loads(json_string: &str) -> Self {
+    pub fn file_json_loads(json_string: &str) -> Self {
         Self::jsonload(json_string).unwrap_or_else(|_| Self::default())
     }
 
@@ -192,7 +192,7 @@ impl Point {
     /// # Returns
     ///
     /// A Result indicating success or an error.
-    pub fn json_dump(&self, filepath: &str) -> Result<(), Box<dyn std::error::Error>> {
+    pub fn file_json_dump(&self, filepath: &str) -> Result<(), Box<dyn std::error::Error>> {
         let json = self.jsondump()?;
         std::fs::write(filepath, json)?;
         Ok(())
@@ -207,7 +207,7 @@ impl Point {
     /// # Returns
     ///
     /// A Result containing the deserialized Point or an error.
-    pub fn json_load(filepath: &str) -> Result<Self, Box<dyn std::error::Error>> {
+    pub fn file_json_load(filepath: &str) -> Result<Self, Box<dyn std::error::Error>> {
         let json = std::fs::read_to_string(filepath)?;
         Self::jsonload(&json)
     }

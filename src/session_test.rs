@@ -360,14 +360,14 @@ pub fn run_session_json_roundtrip() -> TestResult {
 
         //   jsondump()      │ String       │ to JSON string (internal use)
         //   jsonload(s)     │ String       │ from JSON string (internal use)
-        //   json_dumps()    │ String       │ to JSON string
-        //   json_loads(s)   │ String       │ from JSON string
-        //   json_dump(path) │ file         │ write to file
-        //   json_load(path) │ file         │ read from file
+        //   file_json_dumps()    │ String       │ to JSON string
+        //   file_json_loads(s)   │ String       │ from JSON string
+        //   file_json_dump(path) │ file         │ write to file
+        //   file_json_load(path) │ file         │ read from file
 
         let fname = "serialization/test_session.json";
-        session.json_dump(fname);
-        let loaded = Session::json_load(fname);
+        session.file_json_dump(fname);
+        let loaded = Session::file_json_load(fname);
 
         MINI_CHECK!(loaded.name == session.name);
         MINI_CHECK!(loaded.lookup.len() == session.lookup.len());
@@ -490,7 +490,7 @@ pub fn run_session_component_json_roundtrip() -> TestResult {
         // A session with a component serialises to JSON and back.
         // All custom fields in `extra` must survive the round-trip.
         use crate::{Session, Component};
-        use crate::encoders::{json_dump, json_load};
+        use crate::file_encoders::{file_json_dump, file_json_load};
 
         let mut session = Session::default();
 
@@ -507,8 +507,8 @@ pub fn run_session_component_json_roundtrip() -> TestResult {
             extra,
         }, None);
 
-        json_dump(&session, "serialization/test_session_component.json", false).unwrap();
-        let loaded = json_load::<Session>("serialization/test_session_component.json").unwrap();
+        file_json_dump(&session, "serialization/test_session_component.json", false).unwrap();
+        let loaded = file_json_load::<Session>("serialization/test_session_component.json").unwrap();
 
         MINI_CHECK!(loaded.objects.components.len() == 1);
         MINI_CHECK!(loaded.objects.components[0].guid == guid);

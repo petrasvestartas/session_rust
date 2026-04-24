@@ -2,9 +2,9 @@ use crate::{MINI_CHECK, MINI_TEST, REGISTER_MINI_TEST};
 use crate::mini_test::TestResult;
 use crate::tolerance::TOLERANCE;
 
-pub fn run_trimmedsurface_constructor() -> TestResult {
+pub fn run_nurbssurface_trimmed_constructor() -> TestResult {
     MINI_TEST!("Constructor", {
-        use crate::trimmedsurface::TrimmedSurface;
+        use crate::nurbssurface_trimmed::NurbsSurfaceTrimmed;
         use crate::NurbsSurface;
         use crate::NurbsCurve;
         use crate::Point;
@@ -24,7 +24,7 @@ pub fn run_trimmedsurface_constructor() -> TestResult {
             Point::new(0.1, 0.9, 0.0),
         ]);
 
-        let ts = TrimmedSurface::create(&srf, &outer);
+        let ts = NurbsSurfaceTrimmed::create(&srf, &outer);
 
         // String representations
         let sstr = ts.to_string();
@@ -35,19 +35,19 @@ pub fn run_trimmedsurface_constructor() -> TestResult {
 
         MINI_CHECK!(ts.is_valid());
         MINI_CHECK!(ts.is_trimmed());
-        MINI_CHECK!(ts.name == "my_trimmedsurface");
+        MINI_CHECK!(ts.name == "my_nurbssurface_trimmed");
         MINI_CHECK!(!ts.guid().is_empty());
-        MINI_CHECK!(sstr.contains("TrimmedSurface"));
-        MINI_CHECK!(srepr.contains("name=my_trimmedsurface"));
+        MINI_CHECK!(sstr.contains("NurbsSurfaceTrimmed"));
+        MINI_CHECK!(srepr.contains("name=my_nurbssurface_trimmed"));
         MINI_CHECK!(tscopy.is_valid());
         MINI_CHECK!(tscopy.guid() != ts.guid());
         MINI_CHECK!(tscopy == ts);
     })
 }
 
-pub fn run_trimmedsurface_constructor_planar() -> TestResult {
+pub fn run_nurbssurface_trimmed_constructor_planar() -> TestResult {
     MINI_TEST!("Constructor Planar", {
-        use crate::trimmedsurface::TrimmedSurface;
+        use crate::nurbssurface_trimmed::NurbsSurfaceTrimmed;
         use crate::NurbsCurve;
         use crate::Point;
         use crate::tolerance::PI;
@@ -62,7 +62,7 @@ pub fn run_trimmedsurface_constructor_planar() -> TestResult {
             Point::new(1.0, 4.0, 0.0),
         ];
         let bnd = NurbsCurve::create(true, 3, &pts);
-        let _ts = TrimmedSurface::create_planar(&bnd).unwrap();
+        let _ts = NurbsSurfaceTrimmed::create_planar(&bnd).unwrap();
 
         // Rotated planar
         let pts = vec![
@@ -73,7 +73,7 @@ pub fn run_trimmedsurface_constructor_planar() -> TestResult {
             Point::new(1.0, 3.0, 2.0),
         ];
         let bnd = NurbsCurve::create(true, 3, &pts);
-        let _ts = TrimmedSurface::create_planar(&bnd).unwrap();
+        let _ts = NurbsSurfaceTrimmed::create_planar(&bnd).unwrap();
 
         // Triangle
         let bnd = NurbsCurve::create(true, 1, &[
@@ -81,7 +81,7 @@ pub fn run_trimmedsurface_constructor_planar() -> TestResult {
             Point::new(6.0, 3.0, 3.0),
             Point::new(2.0, 5.0, 1.0),
         ]);
-        let _ts = TrimmedSurface::create_planar(&bnd).unwrap();
+        let _ts = NurbsSurfaceTrimmed::create_planar(&bnd).unwrap();
 
         // Trapezoid
         let bnd = NurbsCurve::create(true, 1, &[
@@ -90,7 +90,7 @@ pub fn run_trimmedsurface_constructor_planar() -> TestResult {
             Point::new(4.0, 4.0, 2.0),
             Point::new(1.0, 4.0, 2.0),
         ]);
-        let _ts = TrimmedSurface::create_planar(&bnd).unwrap();
+        let _ts = NurbsSurfaceTrimmed::create_planar(&bnd).unwrap();
 
         // Rectangle with a hole
         let bnd = NurbsCurve::create(true, 1, &[
@@ -99,7 +99,7 @@ pub fn run_trimmedsurface_constructor_planar() -> TestResult {
             Point::new(6.0, 6.0, 0.0),
             Point::new(0.0, 6.0, 0.0),
         ]);
-        let mut ts = TrimmedSurface::create_planar(&bnd).unwrap();
+        let mut ts = NurbsSurfaceTrimmed::create_planar(&bnd).unwrap();
         ts.add_hole(&NurbsCurve::create(true, 1, &[
             Point::new(2.0, 2.0, 0.0),
             Point::new(4.0, 2.0, 0.0),
@@ -115,7 +115,7 @@ pub fn run_trimmedsurface_constructor_planar() -> TestResult {
             pts.push(Point::new(r * a.cos(), r * a.sin(), r * a.cos() * 0.5));
         }
         let bnd = NurbsCurve::create(true, 1, &pts);
-        let mut ts = TrimmedSurface::create_planar(&bnd).unwrap();
+        let mut ts = NurbsSurfaceTrimmed::create_planar(&bnd).unwrap();
         ts.add_holes(&[
             NurbsCurve::create(true, 1, &[
                 Point::new(1.5, 0.5, 0.75),
@@ -132,9 +132,9 @@ pub fn run_trimmedsurface_constructor_planar() -> TestResult {
     })
 }
 
-pub fn run_trimmedsurface_constructor_hole() -> TestResult {
+pub fn run_nurbssurface_trimmed_constructor_hole() -> TestResult {
     MINI_TEST!("Constructor Hole", {
-        use crate::trimmedsurface::TrimmedSurface;
+        use crate::nurbssurface_trimmed::NurbsSurfaceTrimmed;
         use crate::NurbsSurface;
         use crate::NurbsCurve;
         use crate::Point;
@@ -162,7 +162,7 @@ pub fn run_trimmedsurface_constructor_hole() -> TestResult {
             Point::new(0.0, 1.0, 0.0),
         ]);
 
-        let mut ts = TrimmedSurface::create(&srf, &outer);
+        let mut ts = NurbsSurfaceTrimmed::create(&srf, &outer);
 
         // Add hole as UV curve directly
         let hole = NurbsCurve::create(true, 1, &[
@@ -179,9 +179,9 @@ pub fn run_trimmedsurface_constructor_hole() -> TestResult {
     })
 }
 
-pub fn run_trimmedsurface_accessors() -> TestResult {
+pub fn run_nurbssurface_trimmed_accessors() -> TestResult {
     MINI_TEST!("Accessors", {
-        use crate::trimmedsurface::TrimmedSurface;
+        use crate::nurbssurface_trimmed::NurbsSurfaceTrimmed;
         use crate::NurbsSurface;
         use crate::NurbsCurve;
         use crate::Point;
@@ -199,7 +199,7 @@ pub fn run_trimmedsurface_accessors() -> TestResult {
             Point::new(0.1, 0.9, 0.0),
         ]);
 
-        let mut ts = TrimmedSurface::create(&srf, &outer);
+        let mut ts = NurbsSurfaceTrimmed::create(&srf, &outer);
         ts.name = "test_accessors".to_string();
         ts.width = 2.5;
 
@@ -216,9 +216,9 @@ pub fn run_trimmedsurface_accessors() -> TestResult {
     })
 }
 
-pub fn run_trimmedsurface_add_inner_loop() -> TestResult {
+pub fn run_nurbssurface_trimmed_add_inner_loop() -> TestResult {
     MINI_TEST!("Add Inner Loop", {
-        use crate::trimmedsurface::TrimmedSurface;
+        use crate::nurbssurface_trimmed::NurbsSurfaceTrimmed;
         use crate::NurbsSurface;
         use crate::NurbsCurve;
         use crate::Point;
@@ -236,7 +236,7 @@ pub fn run_trimmedsurface_add_inner_loop() -> TestResult {
             Point::new(0.0, 1.0, 0.0),
         ]);
 
-        let mut ts = TrimmedSurface::create(&srf, &outer);
+        let mut ts = NurbsSurfaceTrimmed::create(&srf, &outer);
 
         // Add inner loops (holes in UV)
         let hole1 = NurbsCurve::create(true, 1, &[
@@ -265,9 +265,9 @@ pub fn run_trimmedsurface_add_inner_loop() -> TestResult {
     })
 }
 
-pub fn run_trimmedsurface_point_at() -> TestResult {
+pub fn run_nurbssurface_trimmed_point_at() -> TestResult {
     MINI_TEST!("Point At", {
-        use crate::trimmedsurface::TrimmedSurface;
+        use crate::nurbssurface_trimmed::NurbsSurfaceTrimmed;
         use crate::NurbsSurface;
         use crate::NurbsCurve;
         use crate::Point;
@@ -286,7 +286,7 @@ pub fn run_trimmedsurface_point_at() -> TestResult {
             Point::new(0.0, 1.0, 0.0),
         ]);
 
-        let ts = TrimmedSurface::create(&srf, &outer);
+        let ts = NurbsSurfaceTrimmed::create(&srf, &outer);
 
         let (u0, u1) = ts.surface().domain(0).unwrap();
         let (v0, v1) = ts.surface().domain(1).unwrap();
@@ -303,9 +303,9 @@ pub fn run_trimmedsurface_point_at() -> TestResult {
     })
 }
 
-pub fn run_trimmedsurface_mesh() -> TestResult {
+pub fn run_nurbssurface_trimmed_mesh() -> TestResult {
     MINI_TEST!("Mesh", {
-        use crate::trimmedsurface::TrimmedSurface;
+        use crate::nurbssurface_trimmed::NurbsSurfaceTrimmed;
         use crate::NurbsSurface;
         use crate::NurbsCurve;
         use crate::Point;
@@ -323,7 +323,7 @@ pub fn run_trimmedsurface_mesh() -> TestResult {
             Point::new(0.05, 0.95, 0.0),
         ]);
 
-        let ts = TrimmedSurface::create(&srf, &outer);
+        let ts = NurbsSurfaceTrimmed::create(&srf, &outer);
         let m = ts.mesh();
 
         MINI_CHECK!(!m.is_empty());
@@ -332,9 +332,9 @@ pub fn run_trimmedsurface_mesh() -> TestResult {
     })
 }
 
-pub fn run_trimmedsurface_transformation() -> TestResult {
+pub fn run_nurbssurface_trimmed_transformation() -> TestResult {
     MINI_TEST!("Transformation", {
-        use crate::trimmedsurface::TrimmedSurface;
+        use crate::nurbssurface_trimmed::NurbsSurfaceTrimmed;
         use crate::NurbsSurface;
         use crate::NurbsCurve;
         use crate::Point;
@@ -354,7 +354,7 @@ pub fn run_trimmedsurface_transformation() -> TestResult {
             Point::new(0.0, 1.0, 0.0),
         ]);
 
-        let mut ts = TrimmedSurface::create(&srf, &outer);
+        let mut ts = NurbsSurfaceTrimmed::create(&srf, &outer);
         ts.xform = Xform::translation(10.0, 20.0, 30.0);
         let ts2 = ts.transformed();
 
@@ -368,9 +368,9 @@ pub fn run_trimmedsurface_transformation() -> TestResult {
     })
 }
 
-pub fn run_trimmedsurface_json_roundtrip() -> TestResult {
+pub fn run_nurbssurface_trimmed_json_roundtrip() -> TestResult {
     MINI_TEST!("Json Roundtrip", {
-        use crate::trimmedsurface::TrimmedSurface;
+        use crate::nurbssurface_trimmed::NurbsSurfaceTrimmed;
         use crate::NurbsSurface;
         use crate::NurbsCurve;
         use crate::Point;
@@ -390,24 +390,24 @@ pub fn run_trimmedsurface_json_roundtrip() -> TestResult {
             Point::new(0.1, 0.9, 0.0),
         ]);
 
-        let mut ts = TrimmedSurface::create(&srf, &outer);
-        ts.name = "test_trimmedsurface".to_string();
+        let mut ts = NurbsSurfaceTrimmed::create(&srf, &outer);
+        ts.name = "test_nurbssurface_trimmed".to_string();
         ts.width = 2.0;
         ts.surfacecolor = Color::new(255, 128, 64, 255);
 
         // JSON object
         let json = ts.jsondump().unwrap();
-        let loaded_json = TrimmedSurface::jsonload(&json).unwrap();
+        let loaded_json = NurbsSurfaceTrimmed::jsonload(&json).unwrap();
 
         // String
-        let json_string = ts.json_dumps();
-        let loaded_json_string = TrimmedSurface::json_loads(&json_string);
+        let json_string = ts.file_json_dumps();
+        let loaded_json_string = NurbsSurfaceTrimmed::file_json_loads(&json_string);
 
         // File
         let src_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-        let filename = src_dir.join("serialization").join("test_trimmedsurface.json");
-        ts.json_dump(filename.to_str().unwrap());
-        let loaded_from_file = TrimmedSurface::json_load(filename.to_str().unwrap());
+        let filename = src_dir.join("serialization").join("test_nurbssurface_trimmed.json");
+        ts.file_json_dump(filename.to_str().unwrap());
+        let loaded_from_file = NurbsSurfaceTrimmed::file_json_load(filename.to_str().unwrap());
 
         MINI_CHECK!(loaded_json == ts);
         MINI_CHECK!(loaded_json_string == ts);
@@ -415,9 +415,9 @@ pub fn run_trimmedsurface_json_roundtrip() -> TestResult {
     })
 }
 
-pub fn run_trimmedsurface_protobuf_roundtrip() -> TestResult {
+pub fn run_nurbssurface_trimmed_protobuf_roundtrip() -> TestResult {
     MINI_TEST!("Protobuf Roundtrip", {
-        use crate::trimmedsurface::TrimmedSurface;
+        use crate::nurbssurface_trimmed::NurbsSurfaceTrimmed;
         use crate::NurbsSurface;
         use crate::NurbsCurve;
         use crate::Point;
@@ -437,20 +437,20 @@ pub fn run_trimmedsurface_protobuf_roundtrip() -> TestResult {
             Point::new(0.1, 0.9, 0.0),
         ]);
 
-        let mut ts = TrimmedSurface::create(&srf, &outer);
-        ts.name = "test_trimmedsurface".to_string();
+        let mut ts = NurbsSurfaceTrimmed::create(&srf, &outer);
+        ts.name = "test_nurbssurface_trimmed".to_string();
         ts.width = 2.0;
         ts.surfacecolor = Color::new(255, 128, 64, 255);
 
         // String
         let proto_string = ts.pb_dumps();
-        let loaded_proto_string = TrimmedSurface::pb_loads(&proto_string).unwrap();
+        let loaded_proto_string = NurbsSurfaceTrimmed::pb_loads(&proto_string).unwrap();
 
         // File
         let src_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-        let filename = src_dir.join("serialization").join("test_trimmedsurface.bin");
+        let filename = src_dir.join("serialization").join("test_nurbssurface_trimmed.bin");
         ts.pb_dump(filename.to_str().unwrap());
-        let loaded = TrimmedSurface::pb_load(filename.to_str().unwrap());
+        let loaded = NurbsSurfaceTrimmed::pb_load(filename.to_str().unwrap());
 
         MINI_CHECK!(loaded_proto_string == ts);
         MINI_CHECK!(loaded == ts);
@@ -458,13 +458,13 @@ pub fn run_trimmedsurface_protobuf_roundtrip() -> TestResult {
 }
 
 // Register tests with the shared registry
-REGISTER_MINI_TEST!("TrimmedSurface", "Constructor", crate::trimmedsurface_test::run_trimmedsurface_constructor);
-REGISTER_MINI_TEST!("TrimmedSurface", "Constructor Planar", crate::trimmedsurface_test::run_trimmedsurface_constructor_planar);
-REGISTER_MINI_TEST!("TrimmedSurface", "Constructor Hole", crate::trimmedsurface_test::run_trimmedsurface_constructor_hole);
-REGISTER_MINI_TEST!("TrimmedSurface", "Accessors", crate::trimmedsurface_test::run_trimmedsurface_accessors);
-REGISTER_MINI_TEST!("TrimmedSurface", "Add Inner Loop", crate::trimmedsurface_test::run_trimmedsurface_add_inner_loop);
-REGISTER_MINI_TEST!("TrimmedSurface", "Point At", crate::trimmedsurface_test::run_trimmedsurface_point_at);
-REGISTER_MINI_TEST!("TrimmedSurface", "Mesh", crate::trimmedsurface_test::run_trimmedsurface_mesh);
-REGISTER_MINI_TEST!("TrimmedSurface", "Transformation", crate::trimmedsurface_test::run_trimmedsurface_transformation);
-REGISTER_MINI_TEST!("TrimmedSurface", "Json Roundtrip", crate::trimmedsurface_test::run_trimmedsurface_json_roundtrip);
-REGISTER_MINI_TEST!("TrimmedSurface", "Protobuf Roundtrip", crate::trimmedsurface_test::run_trimmedsurface_protobuf_roundtrip);
+REGISTER_MINI_TEST!("NurbsSurfaceTrimmed", "Constructor", crate::nurbssurface_trimmed_test::run_nurbssurface_trimmed_constructor);
+REGISTER_MINI_TEST!("NurbsSurfaceTrimmed", "Constructor Planar", crate::nurbssurface_trimmed_test::run_nurbssurface_trimmed_constructor_planar);
+REGISTER_MINI_TEST!("NurbsSurfaceTrimmed", "Constructor Hole", crate::nurbssurface_trimmed_test::run_nurbssurface_trimmed_constructor_hole);
+REGISTER_MINI_TEST!("NurbsSurfaceTrimmed", "Accessors", crate::nurbssurface_trimmed_test::run_nurbssurface_trimmed_accessors);
+REGISTER_MINI_TEST!("NurbsSurfaceTrimmed", "Add Inner Loop", crate::nurbssurface_trimmed_test::run_nurbssurface_trimmed_add_inner_loop);
+REGISTER_MINI_TEST!("NurbsSurfaceTrimmed", "Point At", crate::nurbssurface_trimmed_test::run_nurbssurface_trimmed_point_at);
+REGISTER_MINI_TEST!("NurbsSurfaceTrimmed", "Mesh", crate::nurbssurface_trimmed_test::run_nurbssurface_trimmed_mesh);
+REGISTER_MINI_TEST!("NurbsSurfaceTrimmed", "Transformation", crate::nurbssurface_trimmed_test::run_nurbssurface_trimmed_transformation);
+REGISTER_MINI_TEST!("NurbsSurfaceTrimmed", "Json Roundtrip", crate::nurbssurface_trimmed_test::run_nurbssurface_trimmed_json_roundtrip);
+REGISTER_MINI_TEST!("NurbsSurfaceTrimmed", "Protobuf Roundtrip", crate::nurbssurface_trimmed_test::run_nurbssurface_trimmed_protobuf_roundtrip);

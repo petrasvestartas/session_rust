@@ -137,10 +137,10 @@ pub fn run_line_json_roundtrip() -> TestResult {
 
         //   jsondump()      │ String       │ to JSON string (object)
         //   jsonload(s)     │ String       │ from JSON string (object)
-        //   json_dumps()    │ String       │ to JSON string
-        //   json_loads(s)   │ String       │ from JSON string
-        //   json_dump(path) │ file         │ write to file
-        //   json_load(path) │ file         │ read from file
+        //   file_json_dumps()    │ String       │ to JSON string
+        //   file_json_loads(s)   │ String       │ from JSON string
+        //   file_json_dump(path) │ file         │ write to file
+        //   file_json_load(path) │ file         │ read from file
 
         // JSON object (string)
         let js = l.jsondump().unwrap();
@@ -149,15 +149,15 @@ pub fn run_line_json_roundtrip() -> TestResult {
         MINI_CHECK!(loaded_j.name == "test_line");
 
         // String
-        let s = l.json_dumps();
-        let loaded_s = Line::json_loads(&s);
+        let s = l.file_json_dumps();
+        let loaded_s = Line::file_json_loads(&s);
         MINI_CHECK!(loaded_s.name == "test_line");
         MINI_CHECK!(TOLERANCE.is_close(loaded_s[0], 42.1));
 
         // File
         let fname = "serialization/test_line.json";
-        l.json_dump(fname).unwrap();
-        let loaded = Line::json_load(fname).unwrap();
+        l.file_json_dump(fname).unwrap();
+        let loaded = Line::file_json_load(fname).unwrap();
 
         MINI_CHECK!(loaded.name == "test_line");
         MINI_CHECK!(TOLERANCE.is_close(loaded[0], 42.1));

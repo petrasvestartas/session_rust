@@ -10,8 +10,8 @@ use crate::mesh::Mesh;
 use serde::{Serialize, Deserialize};
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
-#[serde(tag = "type", rename = "TrimmedSurface")]
-pub struct TrimmedSurface {
+#[serde(tag = "type", rename = "NurbsSurfaceTrimmed")]
+pub struct NurbsSurfaceTrimmed {
     #[serde(serialize_with = "crate::guid_serde::serialize", deserialize_with = "crate::guid_serde::deserialize")]
     guid: std::sync::OnceLock<String>,
     pub name: String,
@@ -30,11 +30,11 @@ pub struct TrimmedSurface {
 }
 
 
-impl TrimmedSurface {
+impl NurbsSurfaceTrimmed {
     pub fn new() -> Self {
-        TrimmedSurface {
+        NurbsSurfaceTrimmed {
             guid: std::sync::OnceLock::new(),
-            name: "my_trimmedsurface".to_string(),
+            name: "my_nurbssurface_trimmed".to_string(),
             width: 1.0,
             surfacecolor: Color::black(),
             xform: Xform::identity(),
@@ -310,17 +310,17 @@ impl TrimmedSurface {
     }
 
     pub fn to_string(&self) -> String {
-        format!("TrimmedSurface(name={}, trimmed={}, holes={})",
+        format!("NurbsSurfaceTrimmed(name={}, trimmed={}, holes={})",
                 self.name, self.is_trimmed(), self.inner_loop_count())
     }
 
     pub fn repr(&self) -> String {
-        format!("TrimmedSurface(\n  name={},\n  trimmed={},\n  holes={},\n  surface={}\n)",
+        format!("NurbsSurfaceTrimmed(\n  name={},\n  trimmed={},\n  holes={},\n  surface={}\n)",
                 self.name, self.is_trimmed(), self.inner_loop_count(), self.m_surface.to_string())
     }
 
     // JSON serialization
-    pub fn json_dump(&self, filename: &str) {
+    pub fn file_json_dump(&self, filename: &str) {
         use std::fs::File;
         use std::io::Write;
         if let Ok(json) = serde_json::to_string_pretty(self) {
@@ -331,22 +331,22 @@ impl TrimmedSurface {
     }
 
     pub fn jsondump(&self) -> Result<String, Box<dyn std::error::Error>> {
-        crate::encoders::sorted_json_string(self)
+        crate::file_encoders::sorted_json_string(self)
     }
 
     pub fn jsonload(json_data: &str) -> Result<Self, Box<dyn std::error::Error>> {
         Ok(serde_json::from_str(json_data)?)
     }
 
-    pub fn json_dumps(&self) -> String {
+    pub fn file_json_dumps(&self) -> String {
         self.jsondump().unwrap_or_default()
     }
 
-    pub fn json_loads(json_string: &str) -> Self {
+    pub fn file_json_loads(json_string: &str) -> Self {
         serde_json::from_str(json_string).unwrap_or_else(|_| Self::default())
     }
 
-    pub fn json_load(filename: &str) -> Self {
+    pub fn file_json_load(filename: &str) -> Self {
         use std::fs::File;
         use std::io::Read;
         let mut file = match File::open(filename) {
@@ -379,7 +379,7 @@ impl TrimmedSurface {
             crate::proto::NurbsCurve::decode(data.as_slice()).unwrap()
         }).collect();
 
-        let proto = crate::proto::TrimmedSurface {
+        let proto = crate::proto::NurbsSurfaceTrimmed {
             guid: self.guid().to_string(),
             name: self.name.clone(),
             width: self.width,
@@ -406,7 +406,7 @@ impl TrimmedSurface {
     pub fn pb_loads(data: &[u8]) -> Result<Self, Box<dyn std::error::Error>> {
         use prost::Message;
 
-        let proto = crate::proto::TrimmedSurface::decode(data)?;
+        let proto = crate::proto::NurbsSurfaceTrimmed::decode(data)?;
         let mut ts = Self::new();
         ts.set_guid(proto.guid.clone());
         ts.name = proto.name;
@@ -462,11 +462,11 @@ impl TrimmedSurface {
     }
 }
 
-impl Default for TrimmedSurface {
+impl Default for NurbsSurfaceTrimmed {
     fn default() -> Self { Self::new() }
 }
 
-impl PartialEq for TrimmedSurface {
+impl PartialEq for NurbsSurfaceTrimmed {
     fn eq(&self, other: &Self) -> bool {
         if self.name != other.name { return false; }
         if self.width != other.width { return false; }
@@ -477,7 +477,7 @@ impl PartialEq for TrimmedSurface {
     }
 }
 
-impl std::fmt::Display for TrimmedSurface {
+impl std::fmt::Display for NurbsSurfaceTrimmed {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{}", self.to_string())
     }

@@ -1,9 +1,9 @@
-// RTree — R-tree with dynamic insert/delete (Guttman split, fan-out 4–8).
+// SpatialRTree — R-tree with dynamic insert/delete (Guttman split, fan-out 4–8).
 // Use for: "find all objects overlapping this region" (spatial range queries).
 //   Supports live insertion and deletion; good for mutable object sets.
-// Prefer over AABBTree/BVH when data changes frequently.
-// Prefer over KDTree  when querying volumes/boxes, not bare point clouds.
-// Note: k-NN is possible but slower than KDTree for pure point queries.
+// Prefer over SpatialAABBTree/SpatialBVH when data changes frequently.
+// Prefer over SpatialKDTree  when querying volumes/boxes, not bare point clouds.
+// Note: k-NN is possible but slower than SpatialKDTree for pure point queries.
 const MAXNODES: usize = 8;
 const MINNODES: usize = 4;
 const NOT_TAKEN: i32 = -1;
@@ -69,16 +69,16 @@ impl PartitionVars {
     }
 }
 
-pub struct RTree {
+pub struct SpatialRTree {
     nodes: Vec<RTreeNode>,
     free_list: Vec<usize>,
     m_root: usize,
     m_size: i32,
 }
 
-impl RTree {
+impl SpatialRTree {
     pub fn new() -> Self {
-        let mut rt = RTree { nodes: Vec::new(), free_list: Vec::new(), m_root: 0, m_size: 0 };
+        let mut rt = SpatialRTree { nodes: Vec::new(), free_list: Vec::new(), m_root: 0, m_size: 0 };
         rt.m_root = rt.alloc_node();
         rt
     }

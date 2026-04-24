@@ -351,30 +351,30 @@ impl Line {
     }
 
     pub fn jsondump(&self) -> Result<String, Box<dyn std::error::Error>> {
-        crate::encoders::sorted_json_string(self)
+        crate::file_encoders::sorted_json_string(self)
     }
 
     pub fn jsonload(json_data: &str) -> Result<Self, Box<dyn std::error::Error>> {
         Ok(serde_json::from_str(json_data)?)
     }
 
-    pub fn json_dumps(&self) -> String {
+    pub fn file_json_dumps(&self) -> String {
         self.jsondump().unwrap_or_default()
     }
 
-    pub fn json_loads(json_string: &str) -> Self {
+    pub fn file_json_loads(json_string: &str) -> Self {
         Self::jsonload(json_string).unwrap_or_else(|_| Self::default())
     }
 
     /// Serialize to JSON file.
-    pub fn json_dump(&self, filepath: &str) -> Result<(), Box<dyn std::error::Error>> {
+    pub fn file_json_dump(&self, filepath: &str) -> Result<(), Box<dyn std::error::Error>> {
         let json = self.jsondump()?;
         std::fs::write(filepath, json)?;
         Ok(())
     }
 
     /// Deserialize from JSON file.
-    pub fn json_load(filepath: &str) -> Result<Self, Box<dyn std::error::Error>> {
+    pub fn file_json_load(filepath: &str) -> Result<Self, Box<dyn std::error::Error>> {
         let json = std::fs::read_to_string(filepath)?;
         Self::jsonload(&json)
     }

@@ -426,7 +426,7 @@ pub fn run_quaternion_json_roundtrip() -> TestResult {
         use crate::Quaternion;
         use crate::Vector;
 
-        // FUNCTION: q.json_dump / Quaternion::json_load
+        // FUNCTION: q.file_json_dump / Quaternion::file_json_load
         // WHAT: Write a quaternion to a JSON file, read it back.
         // WHEN TO USE: Human-readable persistence and debugging, or when sharing
         //       data with tools that consume JSON.
@@ -436,14 +436,14 @@ pub fn run_quaternion_json_roundtrip() -> TestResult {
 
         //   jsondump()      | String       | to JSON string (internal use)
         //   jsonload(s)     | String       | from JSON string (internal use)
-        //   json_dumps()    | String       | to JSON string
-        //   json_loads(s)   | String       | from JSON string
-        //   json_dump(path) | file         | write to file
-        //   json_load(path) | file         | read from file
+        //   file_json_dumps()    | String       | to JSON string
+        //   file_json_loads(s)   | String       | from JSON string
+        //   file_json_dump(path) | file         | write to file
+        //   file_json_load(path) | file         | read from file
 
         let filename = "serialization/test_quaternion.json";
-        q.json_dump(filename).unwrap();
-        let loaded = Quaternion::json_load(filename).unwrap();
+        q.file_json_dump(filename).unwrap();
+        let loaded = Quaternion::file_json_load(filename).unwrap();
 
         MINI_CHECK!(loaded.name == "test_quaternion");
         MINI_CHECK!(TOLERANCE.is_close(loaded.scalar, q.scalar));

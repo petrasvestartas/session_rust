@@ -75,7 +75,7 @@ pub fn run_column_extend() -> TestResult {
 }
 
 pub fn run_column_aabb() -> TestResult {
-    MINI_TEST!("Aabb", {
+    MINI_TEST!("AABB", {
         use crate::element::Element;
 
         let mut c = Element::column(0.4, 0.4, 3.0, "my_column");
@@ -126,8 +126,8 @@ pub fn run_column_json_roundtrip() -> TestResult {
         c.session_transformation = Xform::translation(1.0, 2.0, 3.0);
 
         let fname = "serialization/test_column_element.json";
-        c.json_dump(fname);
-        let loaded = Element::json_load(fname);
+        c.file_json_dump(fname);
+        let loaded = Element::file_json_load(fname);
 
         MINI_CHECK!(loaded.name == "json_col");
         MINI_CHECK!(TOLERANCE.is_close(loaded.width().unwrap(), 0.5));
@@ -207,7 +207,7 @@ REGISTER_MINI_TEST!("ElementColumn", "Constructor", crate::element_column_test::
 REGISTER_MINI_TEST!("ElementColumn", "Setters", crate::element_column_test::run_column_setters);
 REGISTER_MINI_TEST!("ElementColumn", "Center Line", crate::element_column_test::run_column_center_line);
 REGISTER_MINI_TEST!("ElementColumn", "Extend", crate::element_column_test::run_column_extend);
-REGISTER_MINI_TEST!("ElementColumn", "Aabb", crate::element_column_test::run_column_aabb);
+REGISTER_MINI_TEST!("ElementColumn", "AABB", crate::element_column_test::run_column_aabb);
 REGISTER_MINI_TEST!("ElementColumn", "Compute Point", crate::element_column_test::run_column_compute_point);
 REGISTER_MINI_TEST!("ElementColumn", "Session Geometry", crate::element_column_test::run_column_session_geometry);
 REGISTER_MINI_TEST!("ElementColumn", "Json Roundtrip", crate::element_column_test::run_column_json_roundtrip);

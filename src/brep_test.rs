@@ -169,14 +169,14 @@ pub fn run_brep_json_roundtrip() -> TestResult {
         b.surfacecolor = Color::new(255, 128, 64, 255);
 
         // String
-        let json_string = b.json_dumps();
-        let loaded_json_string = BRep::json_loads(&json_string);
+        let json_string = b.file_json_dumps();
+        let loaded_json_string = BRep::file_json_loads(&json_string);
 
         // File
         let src_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
         let filename = src_dir.join("serialization").join("test_brep.json");
-        b.json_dump(filename.to_str().unwrap());
-        let loaded_from_file = BRep::json_load(filename.to_str().unwrap());
+        b.file_json_dump(filename.to_str().unwrap());
+        let loaded_from_file = BRep::file_json_load(filename.to_str().unwrap());
 
         MINI_CHECK!(loaded_json_string == b);
         MINI_CHECK!(loaded_from_file == b);

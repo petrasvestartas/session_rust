@@ -26,10 +26,10 @@ pub fn run_vertex_constructor() -> TestResult {
 pub fn run_vertex_json_roundtrip() -> TestResult {
     MINI_TEST!("Json Roundtrip", {
         use crate::graph::Vertex;
-        use crate::encoders::{json_dump, json_load};
+        use crate::file_encoders::{file_json_dump, file_json_load};
         let original = Vertex::new(Some("v0".to_string()), Some("test_attribute".to_string()));
-        json_dump(&original, "serialization/test_vertex.json", false).unwrap();
-        let loaded = json_load::<Vertex>("serialization/test_vertex.json").unwrap();
+        file_json_dump(&original, "serialization/test_vertex.json", false).unwrap();
+        let loaded = file_json_load::<Vertex>("serialization/test_vertex.json").unwrap();
 
         MINI_CHECK!(loaded.name == original.name);
         MINI_CHECK!(loaded.attribute == original.attribute);
@@ -62,15 +62,15 @@ pub fn run_edge_constructor() -> TestResult {
 pub fn run_edge_json_roundtrip() -> TestResult {
     MINI_TEST!("Json Roundtrip", {
         use crate::graph::Edge;
-        use crate::encoders::{json_dump, json_load};
+        use crate::file_encoders::{file_json_dump, file_json_load};
         let original = Edge::new(
             Some("my_edge".to_string()),
             Some("v0".to_string()),
             Some("v1".to_string()),
             Some("test_edge_attr".to_string()),
         );
-        json_dump(&original, "serialization/test_edge.json", false).unwrap();
-        let loaded = json_load::<Edge>("serialization/test_edge.json").unwrap();
+        file_json_dump(&original, "serialization/test_edge.json", false).unwrap();
+        let loaded = file_json_load::<Edge>("serialization/test_edge.json").unwrap();
 
         MINI_CHECK!(loaded.name == original.name);
         MINI_CHECK!(loaded.v0 == original.v0);
@@ -151,8 +151,8 @@ pub fn run_graph_json_roundtrip() -> TestResult {
         original.add_node("node1", "Node 1");
         original.add_node("node2", "Node 2");
         original.add_edge("node1", "node2", "edge1");
-        original.json_dump("serialization/test_graph.json").unwrap();
-        let loaded = Graph::json_load("serialization/test_graph.json").unwrap();
+        original.file_json_dump("serialization/test_graph.json").unwrap();
+        let loaded = Graph::file_json_load("serialization/test_graph.json").unwrap();
 
         MINI_CHECK!(loaded.number_of_vertices() == 2);
         MINI_CHECK!(loaded.number_of_edges() == 1);

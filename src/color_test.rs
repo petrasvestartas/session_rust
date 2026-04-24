@@ -1,6 +1,6 @@
 #[cfg(test)]
 mod tests {
-    use crate::encoders::{json_dump, json_load};
+    use crate::file_encoders::{file_json_dump, file_json_load};
     use crate::Color;
 
     #[test]
@@ -70,8 +70,8 @@ mod tests {
         original.name = "sunset_orange".to_string();
         let filename = "serialization/test_color_roundtrip.json";
 
-        json_dump(&original, filename, true).unwrap();
-        let loaded = json_load::<Color>(filename).unwrap();
+        file_json_dump(&original, filename, true).unwrap();
+        let loaded = file_json_load::<Color>(filename).unwrap();
 
         assert_eq!(loaded.r, original.r);
         assert_eq!(loaded.g, original.g);
@@ -215,14 +215,14 @@ pub fn run_color_json_roundtrip() -> TestResult {
 
         let color = Color::with_name(255, 128, 64, 255, "test_color");
 
-        //   json_dumps()    │ String       │ to JSON string
-        //   json_loads(s)   │ String       │ from JSON string
-        //   json_dump(path) │ file         │ write to file
-        //   json_load(path) │ file         │ read from file
+        //   file_json_dumps()    │ String       │ to JSON string
+        //   file_json_loads(s)   │ String       │ from JSON string
+        //   file_json_dump(path) │ file         │ write to file
+        //   file_json_load(path) │ file         │ read from file
 
         let filename = "serialization/test_color.json";
-        color.json_dump(filename).unwrap();
-        let loaded = Color::json_load(filename).unwrap();
+        color.file_json_dump(filename).unwrap();
+        let loaded = Color::file_json_load(filename).unwrap();
 
         MINI_CHECK!(loaded.name == "test_color");
         MINI_CHECK!(loaded.r == 255);

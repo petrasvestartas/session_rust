@@ -342,14 +342,14 @@ pub fn run_pointcloud_json_roundtrip() -> TestResult {
 
         //   jsondump()      │ String       │ to JSON string (internal use)
         //   jsonload(s)     │ String       │ from JSON string (internal use)
-        //   json_dumps()    │ String       │ to JSON string
-        //   json_loads(s)   │ String       │ from JSON string
-        //   json_dump(path) │ file         │ write to file
-        //   json_load(path) │ file         │ read from file
+        //   file_json_dumps()    │ String       │ to JSON string
+        //   file_json_loads(s)   │ String       │ from JSON string
+        //   file_json_dump(path) │ file         │ write to file
+        //   file_json_load(path) │ file         │ read from file
 
         let fname = "serialization/test_pointcloud.json";
-        pc.json_dump(fname).unwrap();
-        let loaded = PointCloud::json_load(fname).unwrap();
+        pc.file_json_dump(fname).unwrap();
+        let loaded = PointCloud::file_json_load(fname).unwrap();
 
         MINI_CHECK!(loaded.name == "test_pointcloud");
         MINI_CHECK!(loaded.len() == 2);

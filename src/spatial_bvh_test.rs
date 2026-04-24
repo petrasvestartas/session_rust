@@ -4,12 +4,12 @@ use crate::tolerance::TOLERANCE;
 
 pub fn run_bvh_constructor() -> TestResult {
     MINI_TEST!("Constructor", {
-        use crate::bvh::BVH;
+        use crate::spatial_bvh::SpatialBVH;
         use crate::OBB;
         use crate::Point;
         use crate::Vector;
 
-        // BVH: Morton-ordered static hierarchy — O(log n) nearest-neighbour for OBBs
+        // SpatialBVH: Morton-ordered static hierarchy — O(log n) nearest-neighbour for OBBs
         let boxes = vec![
             OBB::new(Point::new(0.0, 0.0, 0.0),
                 Vector::new(1.0, 0.0, 0.0), Vector::new(0.0, 1.0, 0.0),
@@ -21,7 +21,7 @@ pub fn run_bvh_constructor() -> TestResult {
                 Vector::new(1.0, 0.0, 0.0), Vector::new(0.0, 1.0, 0.0),
                 Vector::new(0.0, 0.0, 1.0), Vector::new(1.0, 1.0, 1.0)),
         ];
-        let bvh = BVH::from_boxes(&boxes, 100.0);
+        let bvh = SpatialBVH::from_boxes(&boxes, 100.0);
         let n = bvh.nearest_neighbors(0, &boxes, 1.5);
 
         MINI_CHECK!(n.len() == 1);
@@ -31,7 +31,7 @@ pub fn run_bvh_constructor() -> TestResult {
 
 pub fn run_bvh_expand_bits() -> TestResult {
     MINI_TEST!("Expand Bits", {
-        use crate::bvh::expand_bits;
+        use crate::spatial_bvh::expand_bits;
 
         MINI_CHECK!(expand_bits(0) == 0);
         MINI_CHECK!(expand_bits(1) == 1);
@@ -44,7 +44,7 @@ pub fn run_bvh_expand_bits() -> TestResult {
 
 pub fn run_bvh_morton_code_origin() -> TestResult {
     MINI_TEST!("Morton Code Origin", {
-        use crate::bvh::calculate_morton_code;
+        use crate::spatial_bvh::calculate_morton_code;
         let code = calculate_morton_code(0.0, 0.0, 0.0, 100.0);
 
         MINI_CHECK!(code < (1u32 << 30));
@@ -53,7 +53,7 @@ pub fn run_bvh_morton_code_origin() -> TestResult {
 
 pub fn run_bvh_morton_code_corners() -> TestResult {
     MINI_TEST!("Morton Code Corners", {
-        use crate::bvh::calculate_morton_code;
+        use crate::spatial_bvh::calculate_morton_code;
         let code_min = calculate_morton_code(-50.0, -50.0, -50.0, 100.0);
 
         MINI_CHECK!(code_min == 0);
@@ -64,7 +64,7 @@ pub fn run_bvh_morton_code_corners() -> TestResult {
 
 pub fn run_bvh_morton_code_spatial_locality() -> TestResult {
     MINI_TEST!("Morton Code Spatial Locality", {
-        use crate::bvh::calculate_morton_code;
+        use crate::spatial_bvh::calculate_morton_code;
         let code1 = calculate_morton_code(10.0, 10.0, 10.0, 100.0);
         let code2 = calculate_morton_code(10.1, 10.1, 10.1, 100.0);
         let code3 = calculate_morton_code(-40.0, -40.0, -40.0, 100.0);
@@ -77,8 +77,8 @@ pub fn run_bvh_morton_code_spatial_locality() -> TestResult {
 
 pub fn run_bvh_node_creation() -> TestResult {
     MINI_TEST!("Node Creation", {
-        use crate::bvh::BVHNode;
-        let node = BVHNode::new();
+        use crate::spatial_bvh::SpatialBVHNode;
+        let node = SpatialBVHNode::new();
 
         MINI_CHECK!(node.left.is_none());
         MINI_CHECK!(node.right.is_none());
@@ -89,8 +89,8 @@ pub fn run_bvh_node_creation() -> TestResult {
 
 pub fn run_bvh_node_leaf() -> TestResult {
     MINI_TEST!("Node Leaf", {
-        use crate::bvh::BVHNode;
-        let mut node = BVHNode::new();
+        use crate::spatial_bvh::SpatialBVHNode;
+        let mut node = SpatialBVHNode::new();
 
         MINI_CHECK!(!node.is_leaf());
         node.object_id = 5;
@@ -100,8 +100,8 @@ pub fn run_bvh_node_leaf() -> TestResult {
 
 pub fn run_bvh_creation() -> TestResult {
     MINI_TEST!("Creation", {
-        use crate::BVH;
-        let bvh = BVH::new();
+        use crate::SpatialBVH;
+        let bvh = SpatialBVH::new();
 
         MINI_CHECK!(!bvh.guid().is_empty());
         MINI_CHECK!(bvh.name == "my_bvh");
@@ -112,9 +112,9 @@ pub fn run_bvh_creation() -> TestResult {
 
 pub fn run_bvh_build_empty() -> TestResult {
     MINI_TEST!("Build Empty", {
-        use crate::{BVH, OBB};
+        use crate::{SpatialBVH, OBB};
         let boxes: Vec<OBB> = vec![];
-        let bvh = BVH::from_boxes(&boxes, 100.0);
+        let bvh = SpatialBVH::from_boxes(&boxes, 100.0);
 
         MINI_CHECK!(bvh.root.is_none());
     })
@@ -122,7 +122,7 @@ pub fn run_bvh_build_empty() -> TestResult {
 
 pub fn run_bvh_build_single() -> TestResult {
     MINI_TEST!("Build Single", {
-        use crate::{BVH, OBB, Point, Vector};
+        use crate::{SpatialBVH, OBB, Point, Vector};
         let bbox = OBB::new(
             Point::new(0.0, 0.0, 0.0),
             Vector::new(1.0, 0.0, 0.0),
@@ -131,7 +131,7 @@ pub fn run_bvh_build_single() -> TestResult {
             Vector::new(1.0, 1.0, 1.0),
         );
         let boxes = vec![bbox.clone()];
-        let bvh = BVH::from_boxes(&boxes, 100.0);
+        let bvh = SpatialBVH::from_boxes(&boxes, 100.0);
         let (collisions, _checks) = bvh.find_collisions(0, &bbox, &boxes);
 
         MINI_CHECK!(collisions.is_empty());
@@ -140,7 +140,7 @@ pub fn run_bvh_build_single() -> TestResult {
 
 pub fn run_bvh_build_multiple() -> TestResult {
     MINI_TEST!("Build Multiple", {
-        use crate::{BVH, OBB, Point, Vector};
+        use crate::{SpatialBVH, OBB, Point, Vector};
         let bboxes = vec![
             OBB::new(Point::new(-10.0, 0.0, 0.0),
                 Vector::new(1.0, 0.0, 0.0), Vector::new(0.0, 1.0, 0.0),
@@ -152,7 +152,7 @@ pub fn run_bvh_build_multiple() -> TestResult {
                 Vector::new(1.0, 0.0, 0.0), Vector::new(0.0, 1.0, 0.0),
                 Vector::new(0.0, 0.0, 1.0), Vector::new(1.0, 1.0, 1.0)),
         ];
-        let bvh = BVH::from_boxes(&bboxes, 100.0);
+        let bvh = SpatialBVH::from_boxes(&bboxes, 100.0);
         let (pairs, _indices, checks) = bvh.check_all_collisions(&bboxes);
 
         MINI_CHECK!(pairs.is_empty());
@@ -162,8 +162,8 @@ pub fn run_bvh_build_multiple() -> TestResult {
 
 pub fn run_bvh_aabb_intersect() -> TestResult {
     MINI_TEST!("Aabb Intersect", {
-        use crate::{BVH, OBB, Point, Vector};
-        let bvh = BVH::new();
+        use crate::{SpatialBVH, OBB, Point, Vector};
+        let bvh = SpatialBVH::new();
         let bbox1 = OBB::new(Point::new(0.0, 0.0, 0.0),
             Vector::new(1.0, 0.0, 0.0), Vector::new(0.0, 1.0, 0.0),
             Vector::new(0.0, 0.0, 1.0), Vector::new(1.0, 1.0, 1.0));
@@ -181,7 +181,7 @@ pub fn run_bvh_aabb_intersect() -> TestResult {
 
 pub fn run_bvh_check_all_collisions() -> TestResult {
     MINI_TEST!("Check All Collisions", {
-        use crate::{BVH, OBB, Point, Vector};
+        use crate::{SpatialBVH, OBB, Point, Vector};
         let bboxes = vec![
             OBB::new(Point::new(0.0, 0.0, 0.0),
                 Vector::new(1.0, 0.0, 0.0), Vector::new(0.0, 1.0, 0.0),
@@ -193,7 +193,7 @@ pub fn run_bvh_check_all_collisions() -> TestResult {
                 Vector::new(1.0, 0.0, 0.0), Vector::new(0.0, 1.0, 0.0),
                 Vector::new(0.0, 0.0, 1.0), Vector::new(1.0, 1.0, 1.0)),
         ];
-        let bvh = BVH::from_boxes(&bboxes, 100.0);
+        let bvh = SpatialBVH::from_boxes(&bboxes, 100.0);
         let (collisions, colliding_indices, checks) = bvh.check_all_collisions(&bboxes);
 
         MINI_CHECK!(collisions.len() == 1);
@@ -205,8 +205,8 @@ pub fn run_bvh_check_all_collisions() -> TestResult {
 
 pub fn run_bvh_merge_aabb() -> TestResult {
     MINI_TEST!("Merge Aabb", {
-        use crate::{BVH, OBB, Point, Vector};
-        let bvh = BVH::new();
+        use crate::{SpatialBVH, OBB, Point, Vector};
+        let bvh = SpatialBVH::new();
         let bbox1 = OBB::new(Point::new(0.0, 0.0, 0.0),
             Vector::new(1.0, 0.0, 0.0), Vector::new(0.0, 1.0, 0.0),
             Vector::new(0.0, 0.0, 1.0), Vector::new(1.0, 1.0, 1.0));
@@ -222,7 +222,7 @@ pub fn run_bvh_merge_aabb() -> TestResult {
 
 pub fn run_bvh_fixed_100_boxes() -> TestResult {
     MINI_TEST!("Fixed 100 Boxes", {
-        use crate::{BVH, OBB, Point, Vector};
+        use crate::{SpatialBVH, OBB, Point, Vector};
         let mut boxes: Vec<OBB> = Vec::new();
         let mut add = |min_x: f64, min_y: f64, min_z: f64, max_x: f64, max_y: f64, max_z: f64| {
             let cx = (min_x + max_x) * 0.5;
@@ -341,7 +341,7 @@ pub fn run_bvh_fixed_100_boxes() -> TestResult {
         add(13.9228, -49.9973, -2.77406, 23.104, -41.5596, 4.89623);
 
         MINI_CHECK!(boxes.len() == 100);
-        let bvh = BVH::from_boxes(&boxes, 100.0);
+        let bvh = SpatialBVH::from_boxes(&boxes, 100.0);
         let (mut pairs, _colliding_indices, _checks) = bvh.check_all_collisions(&boxes);
         pairs.sort();
         MINI_CHECK!(pairs.len() > 0);
@@ -356,7 +356,7 @@ pub fn run_bvh_fixed_100_boxes() -> TestResult {
 
 pub fn run_bvh_nearest_neighbors() -> TestResult {
     MINI_TEST!("Nearest Neighbors", {
-        use crate::{BVH, OBB, Point, Vector};
+        use crate::{SpatialBVH, OBB, Point, Vector};
         let bboxes = vec![
             OBB::new(Point::new(0.0, 0.0, 0.0),
                 Vector::new(1.0, 0.0, 0.0), Vector::new(0.0, 1.0, 0.0),
@@ -368,7 +368,7 @@ pub fn run_bvh_nearest_neighbors() -> TestResult {
                 Vector::new(1.0, 0.0, 0.0), Vector::new(0.0, 1.0, 0.0),
                 Vector::new(0.0, 0.0, 1.0), Vector::new(1.0, 1.0, 1.0)),
         ];
-        let bvh = BVH::from_boxes(&bboxes, 100.0);
+        let bvh = SpatialBVH::from_boxes(&bboxes, 100.0);
 
         let n0 = bvh.nearest_neighbors(0, &bboxes, 1.2);
         MINI_CHECK!(n0.len() == 1);
@@ -384,7 +384,7 @@ pub fn run_bvh_nearest_neighbors() -> TestResult {
 
 pub fn run_bvh_query_aabb() -> TestResult {
     MINI_TEST!("Query Aabb", {
-        use crate::{BVH, OBB, Point, Vector};
+        use crate::{SpatialBVH, OBB, Point, Vector};
         let bboxes = vec![
             OBB::new(Point::new(0.0, 0.0, 0.0),
                 Vector::new(1.0, 0.0, 0.0), Vector::new(0.0, 1.0, 0.0),
@@ -396,7 +396,7 @@ pub fn run_bvh_query_aabb() -> TestResult {
                 Vector::new(1.0, 0.0, 0.0), Vector::new(0.0, 1.0, 0.0),
                 Vector::new(0.0, 0.0, 1.0), Vector::new(1.0, 1.0, 1.0)),
         ];
-        let bvh = BVH::from_boxes(&bboxes, 100.0);
+        let bvh = SpatialBVH::from_boxes(&bboxes, 100.0);
         // Query near origin — should hit box 0 only
         let query = OBB::new(
             Point::new(0.0, 0.0, 0.0),
@@ -420,20 +420,20 @@ pub fn run_bvh_query_aabb() -> TestResult {
     })
 }
 
-REGISTER_MINI_TEST!("BVH", "Constructor", crate::bvh_test::run_bvh_constructor);
-REGISTER_MINI_TEST!("BVH", "Expand Bits", crate::bvh_test::run_bvh_expand_bits);
-REGISTER_MINI_TEST!("BVH", "Morton Code Origin", crate::bvh_test::run_bvh_morton_code_origin);
-REGISTER_MINI_TEST!("BVH", "Morton Code Corners", crate::bvh_test::run_bvh_morton_code_corners);
-REGISTER_MINI_TEST!("BVH", "Morton Code Spatial Locality", crate::bvh_test::run_bvh_morton_code_spatial_locality);
-REGISTER_MINI_TEST!("BVH", "Node Creation", crate::bvh_test::run_bvh_node_creation);
-REGISTER_MINI_TEST!("BVH", "Node Leaf", crate::bvh_test::run_bvh_node_leaf);
-REGISTER_MINI_TEST!("BVH", "Creation", crate::bvh_test::run_bvh_creation);
-REGISTER_MINI_TEST!("BVH", "Build Empty", crate::bvh_test::run_bvh_build_empty);
-REGISTER_MINI_TEST!("BVH", "Build Single", crate::bvh_test::run_bvh_build_single);
-REGISTER_MINI_TEST!("BVH", "Build Multiple", crate::bvh_test::run_bvh_build_multiple);
-REGISTER_MINI_TEST!("BVH", "Aabb Intersect", crate::bvh_test::run_bvh_aabb_intersect);
-REGISTER_MINI_TEST!("BVH", "Check All Collisions", crate::bvh_test::run_bvh_check_all_collisions);
-REGISTER_MINI_TEST!("BVH", "Merge Aabb", crate::bvh_test::run_bvh_merge_aabb);
-REGISTER_MINI_TEST!("BVH", "Fixed 100 Boxes", crate::bvh_test::run_bvh_fixed_100_boxes);
-REGISTER_MINI_TEST!("BVH", "Query Aabb", crate::bvh_test::run_bvh_query_aabb);
-REGISTER_MINI_TEST!("BVH", "Nearest Neighbors", crate::bvh_test::run_bvh_nearest_neighbors);
+REGISTER_MINI_TEST!("SpatialBVH", "Constructor", crate::spatial_bvh_test::run_bvh_constructor);
+REGISTER_MINI_TEST!("SpatialBVH", "Expand Bits", crate::spatial_bvh_test::run_bvh_expand_bits);
+REGISTER_MINI_TEST!("SpatialBVH", "Morton Code Origin", crate::spatial_bvh_test::run_bvh_morton_code_origin);
+REGISTER_MINI_TEST!("SpatialBVH", "Morton Code Corners", crate::spatial_bvh_test::run_bvh_morton_code_corners);
+REGISTER_MINI_TEST!("SpatialBVH", "Morton Code Spatial Locality", crate::spatial_bvh_test::run_bvh_morton_code_spatial_locality);
+REGISTER_MINI_TEST!("SpatialBVH", "Node Creation", crate::spatial_bvh_test::run_bvh_node_creation);
+REGISTER_MINI_TEST!("SpatialBVH", "Node Leaf", crate::spatial_bvh_test::run_bvh_node_leaf);
+REGISTER_MINI_TEST!("SpatialBVH", "Creation", crate::spatial_bvh_test::run_bvh_creation);
+REGISTER_MINI_TEST!("SpatialBVH", "Build Empty", crate::spatial_bvh_test::run_bvh_build_empty);
+REGISTER_MINI_TEST!("SpatialBVH", "Build Single", crate::spatial_bvh_test::run_bvh_build_single);
+REGISTER_MINI_TEST!("SpatialBVH", "Build Multiple", crate::spatial_bvh_test::run_bvh_build_multiple);
+REGISTER_MINI_TEST!("SpatialBVH", "Aabb Intersect", crate::spatial_bvh_test::run_bvh_aabb_intersect);
+REGISTER_MINI_TEST!("SpatialBVH", "Check All Collisions", crate::spatial_bvh_test::run_bvh_check_all_collisions);
+REGISTER_MINI_TEST!("SpatialBVH", "Merge Aabb", crate::spatial_bvh_test::run_bvh_merge_aabb);
+REGISTER_MINI_TEST!("SpatialBVH", "Fixed 100 Boxes", crate::spatial_bvh_test::run_bvh_fixed_100_boxes);
+REGISTER_MINI_TEST!("SpatialBVH", "Query Aabb", crate::spatial_bvh_test::run_bvh_query_aabb);
+REGISTER_MINI_TEST!("SpatialBVH", "Nearest Neighbors", crate::spatial_bvh_test::run_bvh_nearest_neighbors);

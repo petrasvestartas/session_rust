@@ -369,24 +369,23 @@ pub fn get_all_tests() -> Vec<RegisteredTest> {
     use crate::brep_test::*;
     use crate::closest_test::*;
     use crate::intersection_test::*;
-    use crate::obj_test::*;
+    use crate::file_obj_test::*;
     use crate::session_test::*;
-    use crate::bvh_test::*;
+    use crate::spatial_aabbtree_test::*;
+    use crate::spatial_bvh_test::*;
     use crate::quaternion_test::*;
     use crate::obb_test::*;
     use crate::graph_test::*;
     use crate::objects_test::*;
     use crate::tree_test::*;
-    use crate::treenode_test::*;
-    use crate::encoders_test::*;
-    use crate::aabb_test::*;
+    use crate::file_encoders_test::*;
     use crate::primitives_test::*;
-    use crate::knot_test::*;
-    use crate::trimmedsurface_test::*;
+    use crate::nurbsknot_test::*;
+    use crate::nurbssurface_trimmed_test::*;
     use crate::remesh_cdt_test::*;
     use crate::remesh_nurbssurface_adaptive_test::*;
     use crate::remesh_nurbssurface_grid_test::*;
-    use crate::rtree_test::*;
+    use crate::spatial_rtree_test::*;
     use crate::session_config_test::*;
     use crate::element_test::*;
     use crate::element_column_test::*;
@@ -556,7 +555,7 @@ pub fn get_all_tests() -> Vec<RegisteredTest> {
         RegisteredTest { group: "NurbsSurface", name: "Booleans Queries", func: run_nurbssurface_booleans_queries },
         RegisteredTest { group: "NurbsSurface", name: "Attributes", func: run_nurbssurface_attributes },
         RegisteredTest { group: "NurbsSurface", name: "Control Vertices Access", func: run_nurbssurface_control_vertices_access },
-        RegisteredTest { group: "NurbsSurface", name: "Knot Access", func: run_nurbssurface_knot_access },
+        RegisteredTest { group: "NurbsSurface", name: "NurbsKnot Access", func: run_nurbssurface_nurbsknot_access },
         RegisteredTest { group: "NurbsSurface", name: "Domain", func: run_nurbssurface_domain },
         RegisteredTest { group: "NurbsSurface", name: "Division", func: run_nurbssurface_division },
         RegisteredTest { group: "NurbsSurface", name: "Evaluation", func: run_nurbssurface_evaluation },
@@ -565,30 +564,30 @@ pub fn get_all_tests() -> Vec<RegisteredTest> {
         RegisteredTest { group: "NurbsSurface", name: "Meshing", func: run_nurbssurface_meshing },
         RegisteredTest { group: "NurbsSurface", name: "Json Roundtrip", func: run_nurbssurface_json_roundtrip },
         RegisteredTest { group: "NurbsSurface", name: "Protobuf Roundtrip", func: run_nurbssurface_protobuf_roundtrip },
-        // Knot tests
-        RegisteredTest { group: "Knot", name: "Make Clamped Uniform", func: run_make_clamped_uniform },
-        RegisteredTest { group: "Knot", name: "Make Periodic Uniform", func: run_make_periodic_uniform },
-        RegisteredTest { group: "Knot", name: "Is Clamped", func: run_is_clamped },
-        RegisteredTest { group: "Knot", name: "Reverse", func: run_reverse },
-        RegisteredTest { group: "Knot", name: "Find Span", func: run_find_span },
-        RegisteredTest { group: "Knot", name: "Solve Tridiagonal", func: run_solve_tridiagonal },
-        RegisteredTest { group: "Knot", name: "Compute Parameters", func: run_compute_parameters },
-        RegisteredTest { group: "Knot", name: "Build Interpolation Knots", func: run_build_interp_knots },
-        RegisteredTest { group: "Knot", name: "Evaluation Basis", func: run_eval_basis },
-        RegisteredTest { group: "Knot", name: "Build Fitted Knots Adaptive", func: run_build_fitted_knots_adaptive },
-        RegisteredTest { group: "Knot", name: "Build Fitted Knots Periodic Adaptive", func: run_build_fitted_knots_periodic_adaptive },
-        RegisteredTest { group: "Knot", name: "Solve Banded SPD", func: run_solve_banded_spd },
-        // TrimmedSurface tests
-        RegisteredTest { group: "TrimmedSurface", name: "Constructor", func: run_trimmedsurface_constructor },
-        RegisteredTest { group: "TrimmedSurface", name: "Constructor Planar", func: run_trimmedsurface_constructor_planar },
-        RegisteredTest { group: "TrimmedSurface", name: "Constructor Hole", func: run_trimmedsurface_constructor_hole },
-        RegisteredTest { group: "TrimmedSurface", name: "Accessors", func: run_trimmedsurface_accessors },
-        RegisteredTest { group: "TrimmedSurface", name: "Add Inner Loop", func: run_trimmedsurface_add_inner_loop },
-        RegisteredTest { group: "TrimmedSurface", name: "Point At", func: run_trimmedsurface_point_at },
-        RegisteredTest { group: "TrimmedSurface", name: "Mesh", func: run_trimmedsurface_mesh },
-        RegisteredTest { group: "TrimmedSurface", name: "Transformation", func: run_trimmedsurface_transformation },
-        RegisteredTest { group: "TrimmedSurface", name: "Json Roundtrip", func: run_trimmedsurface_json_roundtrip },
-        RegisteredTest { group: "TrimmedSurface", name: "Protobuf Roundtrip", func: run_trimmedsurface_protobuf_roundtrip },
+        // NurbsKnot tests
+        RegisteredTest { group: "NurbsKnot", name: "Make Clamped Uniform", func: run_make_clamped_uniform },
+        RegisteredTest { group: "NurbsKnot", name: "Make Periodic Uniform", func: run_make_periodic_uniform },
+        RegisteredTest { group: "NurbsKnot", name: "Is Clamped", func: run_is_clamped },
+        RegisteredTest { group: "NurbsKnot", name: "Reverse", func: run_reverse },
+        RegisteredTest { group: "NurbsKnot", name: "Find Span", func: run_find_span },
+        RegisteredTest { group: "NurbsKnot", name: "Solve Tridiagonal", func: run_solve_tridiagonal },
+        RegisteredTest { group: "NurbsKnot", name: "Compute Parameters", func: run_compute_parameters },
+        RegisteredTest { group: "NurbsKnot", name: "Build Interpolation NurbsKnots", func: run_build_interp_nurbsknots },
+        RegisteredTest { group: "NurbsKnot", name: "Evaluation Basis", func: run_eval_basis },
+        RegisteredTest { group: "NurbsKnot", name: "Build Fitted NurbsKnots Adaptive", func: run_build_fitted_nurbsknots_adaptive },
+        RegisteredTest { group: "NurbsKnot", name: "Build Fitted NurbsKnots Periodic Adaptive", func: run_build_fitted_nurbsknots_periodic_adaptive },
+        RegisteredTest { group: "NurbsKnot", name: "Solve Banded SPD", func: run_solve_banded_spd },
+        // NurbsSurfaceTrimmed tests
+        RegisteredTest { group: "NurbsSurfaceTrimmed", name: "Constructor", func: run_nurbssurface_trimmed_constructor },
+        RegisteredTest { group: "NurbsSurfaceTrimmed", name: "Constructor Planar", func: run_nurbssurface_trimmed_constructor_planar },
+        RegisteredTest { group: "NurbsSurfaceTrimmed", name: "Constructor Hole", func: run_nurbssurface_trimmed_constructor_hole },
+        RegisteredTest { group: "NurbsSurfaceTrimmed", name: "Accessors", func: run_nurbssurface_trimmed_accessors },
+        RegisteredTest { group: "NurbsSurfaceTrimmed", name: "Add Inner Loop", func: run_nurbssurface_trimmed_add_inner_loop },
+        RegisteredTest { group: "NurbsSurfaceTrimmed", name: "Point At", func: run_nurbssurface_trimmed_point_at },
+        RegisteredTest { group: "NurbsSurfaceTrimmed", name: "Mesh", func: run_nurbssurface_trimmed_mesh },
+        RegisteredTest { group: "NurbsSurfaceTrimmed", name: "Transformation", func: run_nurbssurface_trimmed_transformation },
+        RegisteredTest { group: "NurbsSurfaceTrimmed", name: "Json Roundtrip", func: run_nurbssurface_trimmed_json_roundtrip },
+        RegisteredTest { group: "NurbsSurfaceTrimmed", name: "Protobuf Roundtrip", func: run_nurbssurface_trimmed_protobuf_roundtrip },
         // Closest tests
         RegisteredTest { group: "Closest", name: "Line Point", func: run_closest_line_point },
         RegisteredTest { group: "Closest", name: "Polyline Point", func: run_closest_polyline_point },
@@ -687,9 +686,9 @@ pub fn get_all_tests() -> Vec<RegisteredTest> {
         RegisteredTest { group: "Session", name: "Tree Transformation Hierarchy", func: run_session_tree_transformation_hierarchy },
         // SessionConfig tests
         RegisteredTest { group: "SessionConfig", name: "Runtime Modification", func: run_session_config_runtime_modification },
-        // OBJ tests
-        RegisteredTest { group: "OBJ", name: "Read Bunny", func: run_obj_read_bunny },
-        RegisteredTest { group: "OBJ", name: "Write Read Roundtrip", func: run_obj_write_read_roundtrip },
+        // FileObj tests
+        RegisteredTest { group: "FileObj", name: "Read Bunny", func: run_file_obj_read_bunny },
+        RegisteredTest { group: "FileObj", name: "Write Read Roundtrip", func: run_file_obj_write_read_roundtrip },
         // RemeshCDT tests
         RegisteredTest { group: "RemeshCDT", name: "Triangulate", func: run_remesh_cdt_triangulate },
         RegisteredTest { group: "RemeshCDT", name: "Triangle", func: run_remesh_cdt_triangle },
@@ -702,21 +701,21 @@ pub fn get_all_tests() -> Vec<RegisteredTest> {
         RegisteredTest { group: "RemeshCDT", name: "Tilted rectangle with rectangle hole", func: run_remesh_cdt_tilted_rectangle_with_rectangle_hole },
         RegisteredTest { group: "RemeshCDT", name: "Irregular tilted polyline.", func: run_remesh_cdt_irregular_tilted_polyline },
         RegisteredTest { group: "RemeshCDT", name: "Irregular tilted polyline with holes.", func: run_remesh_cdt_irregular_tilted_polyline_with_holes },
-        // BVH tests
-        RegisteredTest { group: "BVH", name: "Expand Bits", func: run_bvh_expand_bits },
-        RegisteredTest { group: "BVH", name: "Morton Code Origin", func: run_bvh_morton_code_origin },
-        RegisteredTest { group: "BVH", name: "Morton Code Corners", func: run_bvh_morton_code_corners },
-        RegisteredTest { group: "BVH", name: "Morton Code Spatial Locality", func: run_bvh_morton_code_spatial_locality },
-        RegisteredTest { group: "BVH", name: "Node Creation", func: run_bvh_node_creation },
-        RegisteredTest { group: "BVH", name: "Node Leaf", func: run_bvh_node_leaf },
-        RegisteredTest { group: "BVH", name: "Creation", func: run_bvh_creation },
-        RegisteredTest { group: "BVH", name: "Build Empty", func: run_bvh_build_empty },
-        RegisteredTest { group: "BVH", name: "Build Single", func: run_bvh_build_single },
-        RegisteredTest { group: "BVH", name: "Build Multiple", func: run_bvh_build_multiple },
-        RegisteredTest { group: "BVH", name: "Aabb Intersect", func: run_bvh_aabb_intersect },
-        RegisteredTest { group: "BVH", name: "Check All Collisions", func: run_bvh_check_all_collisions },
-        RegisteredTest { group: "BVH", name: "Merge Aabb", func: run_bvh_merge_aabb },
-        RegisteredTest { group: "BVH", name: "Fixed 100 Boxes", func: run_bvh_fixed_100_boxes },
+        // SpatialBVH tests
+        RegisteredTest { group: "SpatialBVH", name: "Expand Bits", func: run_bvh_expand_bits },
+        RegisteredTest { group: "SpatialBVH", name: "Morton Code Origin", func: run_bvh_morton_code_origin },
+        RegisteredTest { group: "SpatialBVH", name: "Morton Code Corners", func: run_bvh_morton_code_corners },
+        RegisteredTest { group: "SpatialBVH", name: "Morton Code Spatial Locality", func: run_bvh_morton_code_spatial_locality },
+        RegisteredTest { group: "SpatialBVH", name: "Node Creation", func: run_bvh_node_creation },
+        RegisteredTest { group: "SpatialBVH", name: "Node Leaf", func: run_bvh_node_leaf },
+        RegisteredTest { group: "SpatialBVH", name: "Creation", func: run_bvh_creation },
+        RegisteredTest { group: "SpatialBVH", name: "Build Empty", func: run_bvh_build_empty },
+        RegisteredTest { group: "SpatialBVH", name: "Build Single", func: run_bvh_build_single },
+        RegisteredTest { group: "SpatialBVH", name: "Build Multiple", func: run_bvh_build_multiple },
+        RegisteredTest { group: "SpatialBVH", name: "Aabb Intersect", func: run_bvh_aabb_intersect },
+        RegisteredTest { group: "SpatialBVH", name: "Check All Collisions", func: run_bvh_check_all_collisions },
+        RegisteredTest { group: "SpatialBVH", name: "Merge Aabb", func: run_bvh_merge_aabb },
+        RegisteredTest { group: "SpatialBVH", name: "Fixed 100 Boxes", func: run_bvh_fixed_100_boxes },
         // Quaternion tests
         RegisteredTest { group: "Quaternion", name: "Json Roundtrip", func: run_quaternion_json_roundtrip },
         // OBB tests
@@ -738,29 +737,29 @@ pub fn get_all_tests() -> Vec<RegisteredTest> {
         // Vertex tests
         RegisteredTest { group: "Vertex", name: "Json Roundtrip", func: run_vertex_json_roundtrip },
         // Encoders tests
-        RegisteredTest { group: "Encoders", name: "Json Dump Load", func: run_encoders_json_dump_load },
-        RegisteredTest { group: "Encoders", name: "Json Dumps Loads", func: run_encoders_json_dumps_loads },
-        RegisteredTest { group: "Encoders", name: "Encode Collection Values", func: run_encoders_encode_collection_values },
-        RegisteredTest { group: "Encoders", name: "Encode Collection Shared Ptr", func: run_encoders_encode_collection_shared_ptr },
-        RegisteredTest { group: "Encoders", name: "Decode Collection", func: run_encoders_decode_collection },
-        RegisteredTest { group: "Encoders", name: "Decode Collection Ptr", func: run_encoders_decode_collection_ptr },
-        RegisteredTest { group: "Encoders", name: "Nested Collections", func: run_encoders_nested_collections },
-        RegisteredTest { group: "Encoders", name: "Roundtrip File Io", func: run_encoders_roundtrip_file_io },
-        RegisteredTest { group: "Encoders", name: "Pretty Vs Compact", func: run_encoders_pretty_vs_compact },
-        RegisteredTest { group: "Encoders", name: "Decode Primitives", func: run_encoders_decode_primitives },
-        RegisteredTest { group: "Encoders", name: "Decode List", func: run_encoders_decode_list },
-        RegisteredTest { group: "Encoders", name: "Decode Dict", func: run_encoders_decode_dict },
-        RegisteredTest { group: "Encoders", name: "List In List In List", func: run_encoders_list_in_list_in_list },
-        RegisteredTest { group: "Encoders", name: "Dict Of Lists", func: run_encoders_dict_of_lists },
-        RegisteredTest { group: "Encoders", name: "List Of Dict", func: run_encoders_list_of_dict },
-        RegisteredTest { group: "Encoders", name: "Dict Of Dicts", func: run_encoders_dict_of_dicts },
-        // AABBTree tests
-        RegisteredTest { group: "AABBTree", name: "Build Empty", func: run_aabbtree_build_empty },
-        RegisteredTest { group: "AABBTree", name: "Build Single", func: run_aabbtree_build_single },
-        RegisteredTest { group: "AABBTree", name: "Build Multiple", func: run_aabbtree_build_multiple },
-        RegisteredTest { group: "AABBTree", name: "Node Count", func: run_aabbtree_node_count },
-        RegisteredTest { group: "AABBTree", name: "Mesh Point Aabb", func: run_aabbtree_mesh_point_aabb },
-        RegisteredTest { group: "AABBTree", name: "Mesh Point Aabb Matches Bvh", func: run_aabbtree_mesh_point_aabb_matches_bvh },
+        RegisteredTest { group: "FileEncoders", name: "Json Dump Load", func: run_encoders_file_json_dump_load },
+        RegisteredTest { group: "FileEncoders", name: "Json Dumps Loads", func: run_encoders_file_json_dumps_loads },
+        RegisteredTest { group: "FileEncoders", name: "Encode Collection Values", func: run_encoders_file_encode_collection_values },
+        RegisteredTest { group: "FileEncoders", name: "Encode Collection Shared Ptr", func: run_encoders_file_encode_collection_shared_ptr },
+        RegisteredTest { group: "FileEncoders", name: "Decode Collection", func: run_encoders_file_decode_collection },
+        RegisteredTest { group: "FileEncoders", name: "Decode Collection Ptr", func: run_encoders_file_decode_collection_ptr },
+        RegisteredTest { group: "FileEncoders", name: "Nested Collections", func: run_encoders_nested_collections },
+        RegisteredTest { group: "FileEncoders", name: "Roundtrip File Io", func: run_encoders_roundtrip_file_io },
+        RegisteredTest { group: "FileEncoders", name: "Pretty Vs Compact", func: run_encoders_pretty_vs_compact },
+        RegisteredTest { group: "FileEncoders", name: "Decode Primitives", func: run_encoders_decode_primitives },
+        RegisteredTest { group: "FileEncoders", name: "Decode List", func: run_encoders_decode_list },
+        RegisteredTest { group: "FileEncoders", name: "Decode Dict", func: run_encoders_decode_dict },
+        RegisteredTest { group: "FileEncoders", name: "List In List In List", func: run_encoders_list_in_list_in_list },
+        RegisteredTest { group: "FileEncoders", name: "Dict Of Lists", func: run_encoders_dict_of_lists },
+        RegisteredTest { group: "FileEncoders", name: "List Of Dict", func: run_encoders_list_of_dict },
+        RegisteredTest { group: "FileEncoders", name: "Dict Of Dicts", func: run_encoders_dict_of_dicts },
+        // SpatialAABBTree tests
+        RegisteredTest { group: "SpatialAABBTree", name: "Build Empty", func: run_spatial_aabbtree_build_empty },
+        RegisteredTest { group: "SpatialAABBTree", name: "Build Single", func: run_spatial_aabbtree_build_single },
+        RegisteredTest { group: "SpatialAABBTree", name: "Build Multiple", func: run_spatial_aabbtree_build_multiple },
+        RegisteredTest { group: "SpatialAABBTree", name: "Node Count", func: run_spatial_aabbtree_node_count },
+        RegisteredTest { group: "SpatialAABBTree", name: "Mesh Point Aabb", func: run_spatial_aabbtree_mesh_point_aabb },
+        RegisteredTest { group: "SpatialAABBTree", name: "Mesh Point Aabb Matches Bvh", func: run_spatial_aabbtree_mesh_point_aabb_matches_bvh },
         // RemeshNurbsSurfaceAdaptive tests
         RegisteredTest { group: "RemeshNurbsSurfaceAdaptive", name: "Constructor", func: run_remesh_nurbssurface_adaptive_constructor },
         RegisteredTest { group: "RemeshNurbsSurfaceAdaptive", name: "Parameters", func: run_remesh_nurbssurface_adaptive_parameters },
@@ -781,22 +780,22 @@ pub fn get_all_tests() -> Vec<RegisteredTest> {
         RegisteredTest { group: "RemeshNurbsSurfaceGrid", name: "Grid Target", func: run_remesh_nurbssurface_grid_grid_target },
         RegisteredTest { group: "RemeshNurbsSurfaceGrid", name: "Flat Quad", func: run_remesh_nurbssurface_grid_flat_quad },
         RegisteredTest { group: "RemeshNurbsSurfaceGrid", name: "Flat Triangle", func: run_remesh_nurbssurface_grid_flat_triangle },
-        // RTree tests
-        RegisteredTest { group: "RTree", name: "Creation", func: run_rtree_creation },
-        RegisteredTest { group: "RTree", name: "Insert", func: run_rtree_insert },
-        RegisteredTest { group: "RTree", name: "Insert Multiple", func: run_rtree_insert_multiple },
-        RegisteredTest { group: "RTree", name: "Search Hit", func: run_rtree_search_hit },
-        RegisteredTest { group: "RTree", name: "Search Miss", func: run_rtree_search_miss },
-        RegisteredTest { group: "RTree", name: "Remove", func: run_rtree_remove },
-        RegisteredTest { group: "RTree", name: "Remove All", func: run_rtree_remove_all },
-        RegisteredTest { group: "RTree", name: "Search Count", func: run_rtree_search_count },
-        RegisteredTest { group: "RTree", name: "Search Stop", func: run_rtree_search_stop },
-        RegisteredTest { group: "RTree", name: "Search 100 Boxes", func: run_rtree_search_100_boxes },
+        // SpatialRTree tests
+        RegisteredTest { group: "SpatialRTree", name: "Creation", func: run_rtree_creation },
+        RegisteredTest { group: "SpatialRTree", name: "Insert", func: run_rtree_insert },
+        RegisteredTest { group: "SpatialRTree", name: "Insert Multiple", func: run_rtree_insert_multiple },
+        RegisteredTest { group: "SpatialRTree", name: "Search Hit", func: run_rtree_search_hit },
+        RegisteredTest { group: "SpatialRTree", name: "Search Miss", func: run_rtree_search_miss },
+        RegisteredTest { group: "SpatialRTree", name: "Remove", func: run_rtree_remove },
+        RegisteredTest { group: "SpatialRTree", name: "Remove All", func: run_rtree_remove_all },
+        RegisteredTest { group: "SpatialRTree", name: "Search Count", func: run_rtree_search_count },
+        RegisteredTest { group: "SpatialRTree", name: "Search Stop", func: run_rtree_search_stop },
+        RegisteredTest { group: "SpatialRTree", name: "Search 100 Boxes", func: run_rtree_search_100_boxes },
         // Element tests
         RegisteredTest { group: "Element", name: "Constructor", func: run_element_constructor },
         RegisteredTest { group: "Element", name: "Session Transformation", func: run_element_session_transformation },
         RegisteredTest { group: "Element", name: "Add Feature", func: run_element_add_feature },
-        RegisteredTest { group: "Element", name: "Aabb", func: run_element_aabb },
+        RegisteredTest { group: "Element", name: "AABB", func: run_element_aabb },
         RegisteredTest { group: "Element", name: "OBB", func: run_element_obb },
         RegisteredTest { group: "Element", name: "Session Geometry", func: run_element_session_geometry },
         RegisteredTest { group: "Element", name: "Reset", func: run_element_reset },
@@ -810,7 +809,7 @@ pub fn get_all_tests() -> Vec<RegisteredTest> {
         RegisteredTest { group: "ElementColumn", name: "Setters", func: run_column_setters },
         RegisteredTest { group: "ElementColumn", name: "Center Line", func: run_column_center_line },
         RegisteredTest { group: "ElementColumn", name: "Extend", func: run_column_extend },
-        RegisteredTest { group: "ElementColumn", name: "Aabb", func: run_column_aabb },
+        RegisteredTest { group: "ElementColumn", name: "AABB", func: run_column_aabb },
         RegisteredTest { group: "ElementColumn", name: "Compute Point", func: run_column_compute_point },
         RegisteredTest { group: "ElementColumn", name: "Session Geometry", func: run_column_session_geometry },
         RegisteredTest { group: "ElementColumn", name: "Json Roundtrip", func: run_column_json_roundtrip },
@@ -824,7 +823,7 @@ pub fn get_all_tests() -> Vec<RegisteredTest> {
         RegisteredTest { group: "ElementBeam", name: "Setters", func: run_beam_setters },
         RegisteredTest { group: "ElementBeam", name: "Center Line", func: run_beam_center_line },
         RegisteredTest { group: "ElementBeam", name: "Extend", func: run_beam_extend },
-        RegisteredTest { group: "ElementBeam", name: "Aabb", func: run_beam_aabb },
+        RegisteredTest { group: "ElementBeam", name: "AABB", func: run_beam_aabb },
         RegisteredTest { group: "ElementBeam", name: "Compute Point", func: run_beam_compute_point },
         RegisteredTest { group: "ElementBeam", name: "Session Geometry", func: run_beam_session_geometry },
         RegisteredTest { group: "ElementBeam", name: "Json Roundtrip", func: run_beam_json_roundtrip },
@@ -838,7 +837,7 @@ pub fn get_all_tests() -> Vec<RegisteredTest> {
         RegisteredTest { group: "ElementPlate", name: "Default Polygon", func: run_plate_default_polygon },
         RegisteredTest { group: "ElementPlate", name: "Setters", func: run_plate_setters },
         RegisteredTest { group: "ElementPlate", name: "Mesh Topology", func: run_plate_mesh_topology },
-        RegisteredTest { group: "ElementPlate", name: "Aabb", func: run_plate_aabb },
+        RegisteredTest { group: "ElementPlate", name: "AABB", func: run_plate_aabb },
         RegisteredTest { group: "ElementPlate", name: "Compute Point", func: run_plate_compute_point },
         RegisteredTest { group: "ElementPlate", name: "Triangle Polygon", func: run_plate_triangle_polygon },
         RegisteredTest { group: "ElementPlate", name: "Json Roundtrip", func: run_plate_json_roundtrip },
@@ -909,11 +908,12 @@ pub fn run_all(language: &str) -> Result<(), Box<dyn std::error::Error>> {
     let mut total_passed = 0usize;
     let mut failed_tests: Vec<(String, String, String, u32, Vec<serde_json::Value>)> = Vec::new();
 
-    // For each group, run its tests and emit <group>_test.json (lowercased).
+    // Run all tests; key results by source-file stem so groups sharing a file
+    // (e.g. "Tree" + "TreeNode" in tree_test.rs) land in the same output file.
+    let mut results_by_file: BTreeMap<String, Vec<serde_json::Value>> = BTreeMap::new();
     for (group, mut tests) in groups {
         tests.sort_by_key(|t| canonical_order.get(&(t.group, t.name)).copied().unwrap_or(usize::MAX));
 
-        let mut results: Vec<serde_json::Value> = Vec::new();
         for t in tests {
             let res = (t.func)();
             total_tests += 1;
@@ -922,6 +922,11 @@ pub fn run_all(language: &str) -> Result<(), Box<dyn std::error::Error>> {
             } else {
                 failed_tests.push((group.to_string(), res.test_name.to_string(), res.file.to_string(), res.line, res.failures.clone()));
             }
+            let file_stem = std::path::Path::new(res.file)
+                .file_stem()
+                .and_then(|s| s.to_str())
+                .unwrap_or("unknown")
+                .to_string();
             let res_json = serde_json::json!({
                 "group": t.group,
                 "test_name": res.test_name,
@@ -932,13 +937,15 @@ pub fn run_all(language: &str) -> Result<(), Box<dyn std::error::Error>> {
                 "checks": res.checks,
                 "failures": res.failures,
             });
-            results.push(res_json);
+            results_by_file.entry(file_stem).or_default().push(res_json);
         }
+    }
 
-        let filename = format!("{}_test.json", group.to_lowercase().replace(' ', ""));
+    for (file_stem, results) in &results_by_file {
+        let filename = format!("{}.json", file_stem);
         let path = out_dir.join(&filename);
         let tmp_path = out_dir.join(format!("{}.tmp", &filename));
-        let json = serde_json::to_string_pretty(&results)?;
+        let json = serde_json::to_string_pretty(results)?;
         fs::write(&tmp_path, &json)?;
         if let Err(_) = fs::rename(&tmp_path, &path) {
             let _ = fs::remove_file(&path);

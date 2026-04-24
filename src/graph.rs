@@ -82,7 +82,7 @@ impl Vertex {
 
     /// Convert the Vertex to a JSON-serializable string.
     pub fn jsondump(&self) -> Result<String, Box<dyn std::error::Error>> {
-        crate::encoders::sorted_json_string(self)
+        crate::file_encoders::sorted_json_string(self)
     }
 
     /// Create Vertex from JSON string data.
@@ -154,7 +154,7 @@ impl Edge {
 
     /// Convert the Edge to a JSON-serializable string.
     pub fn jsondump(&self) -> Result<String, Box<dyn std::error::Error>> {
-        crate::encoders::sorted_json_string(self)
+        crate::file_encoders::sorted_json_string(self)
     }
 
     /// Create Edge from JSON string data.
@@ -443,7 +443,7 @@ impl Graph {
             "edge_count": self.edge_count
         });
 
-        let sorted = crate::encoders::sort_json_keys(json_obj);
+        let sorted = crate::file_encoders::sort_json_keys(json_obj);
         let mut buf = Vec::new();
         let formatter = serde_json::ser::PrettyFormatter::with_indent(b"    ");
         let mut ser = serde_json::Serializer::with_formatter(&mut buf, formatter);
@@ -494,21 +494,21 @@ impl Graph {
         Ok(graph)
     }
 
-    pub fn json_dumps(&self) -> String {
+    pub fn file_json_dumps(&self) -> String {
         self.jsondump().unwrap_or_default()
     }
 
-    pub fn json_loads(s: &str) -> Self {
+    pub fn file_json_loads(s: &str) -> Self {
         Self::jsonload(s).unwrap_or_else(|_| Self::default())
     }
 
-    pub fn json_dump(&self, filepath: &str) -> Result<(), Box<dyn std::error::Error>> {
+    pub fn file_json_dump(&self, filepath: &str) -> Result<(), Box<dyn std::error::Error>> {
         let json_data = self.jsondump()?;
         std::fs::write(filepath, json_data)?;
         Ok(())
     }
 
-    pub fn json_load(filepath: &str) -> Result<Self, Box<dyn std::error::Error>> {
+    pub fn file_json_load(filepath: &str) -> Result<Self, Box<dyn std::error::Error>> {
         let json_data = std::fs::read_to_string(filepath)?;
         Self::jsonload(&json_data).map_err(|e| e.into())
     }

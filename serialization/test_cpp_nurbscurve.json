@@ -5,7 +5,7 @@
     "is_rational": false,
     "order": 3,
     "cv_count": 3,
-    "knots": [
+    "nurbsknots": [
         0.0,
         0.0,
         1.0,

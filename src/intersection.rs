@@ -139,6 +139,48 @@ pub fn plane_plane(plane0: &crate::Plane, plane1: &crate::Plane) -> Option<Line>
     ))
 }
 
+/// Plane-plane intersection with CGAL-canonical anchor (foot-of-perpendicular
+/// from world origin onto the intersection line). Independent of input-plane
+/// origin choice — matches wood's `cgal::intersection_util::plane_plane`
+/// (cgal_intersection_util.cpp:493-511) bit-for-bit, giving identical results
+/// to wood for parallel input planes.
+pub fn plane_plane_to_line_canonical(plane0: &crate::Plane, plane1: &crate::Plane) -> Option<Line> {
+    let n0 = plane0.z_axis();
+    let n1 = plane1.z_axis();
+    let d = crate::Vector::new(
+        n1[1] * n0[2] - n1[2] * n0[1],
+        n1[2] * n0[0] - n1[0] * n0[2],
+        n1[0] * n0[1] - n1[1] * n0[0],
+    );
+    let d_sq = d[0] * d[0] + d[1] * d[1] + d[2] * d[2];
+    if d_sq < 1e-20 {
+        return None;
+    }
+
+    let o0 = plane0.origin();
+    let o1 = plane1.origin();
+    let k0 = n0[0] * o0[0] + n0[1] * o0[1] + n0[2] * o0[2];
+    let k1 = n1[0] * o1[0] + n1[1] * o1[1] + n1[2] * o1[2];
+    let n0n0 = n0[0] * n0[0] + n0[1] * n0[1] + n0[2] * n0[2];
+    let n1n1 = n1[0] * n1[0] + n1[1] * n1[1] + n1[2] * n1[2];
+    let n0n1 = n0[0] * n1[0] + n0[1] * n1[1] + n0[2] * n1[2];
+    let det = n0n0 * n1n1 - n0n1 * n0n1;
+    if det.abs() < 1e-20 {
+        return None;
+    }
+    let c0 = (k0 * n1n1 - k1 * n0n1) / det;
+    let c1 = (k1 * n0n0 - k0 * n0n1) / det;
+    let anchor = Point::new(
+        c0 * n0[0] + c1 * n1[0],
+        c0 * n0[1] + c1 * n1[1],
+        c0 * n0[2] + c1 * n1[2],
+    );
+    Some(Line::from_points(
+        &anchor,
+        &Point::new(anchor[0] + d[0], anchor[1] + d[1], anchor[2] + d[2]),
+    ))
+}
+
 fn plane_value_at(plane: &crate::Plane, point: &Point) -> f64 {
     plane.a() * point[0] + plane.b() * point[1] + plane.c() * point[2] + plane.d()
 }
@@ -469,7 +511,7 @@ pub fn ray_triangle(
 //==========================================================================================
 
 use crate::{NurbsCurve, NurbsSurface, Plane, Tolerance, Vector};
-use crate::knot::CurveKnotStyle;
+use crate::nurbsknot::CurveNurbsKnotStyle;
 
 fn curve_signed_distance_to_plane(pt: &Point, plane: &Plane) -> f64 {
     let v = Vector::new(
@@ -944,7 +986,7 @@ pub fn ray_mesh(line: &Line, mesh: &crate::Mesh, epsilon: f64, find_all: bool) -
     }
 }
 
-/// Find intersection points between a ray (Line) and a mesh using BVH acceleration.
+/// Find intersection points between a ray (Line) and a mesh using SpatialBVH acceleration.
 pub fn ray_mesh_bvh(line: &Line, mesh: &crate::Mesh, epsilon: f64, find_all: bool) -> Option<Vec<Point>> {
     let (vertices, faces) = mesh.to_vertices_and_faces();
     let mut tris: Vec<(Point, Point, Point)> = Vec::new();
@@ -961,8 +1003,8 @@ pub fn ray_mesh_bvh(line: &Line, mesh: &crate::Mesh, epsilon: f64, find_all: boo
         .map(|(v0, v1, v2)| crate::OBB::from_points(&[v0.clone(), v1.clone(), v2.clone()], 0.0))
         .collect();
 
-    let world_size = crate::BVH::compute_world_size(&tri_boxes);
-    let bvh = crate::BVH::from_boxes(&tri_boxes, world_size);
+    let world_size = crate::SpatialBVH::compute_world_size(&tri_boxes);
+    let bvh = crate::SpatialBVH::from_boxes(&tri_boxes, world_size);
 
     let origin = line.start();
     let direction = line.to_vector().normalized();
@@ -1339,8 +1381,8 @@ pub fn surface_plane(surface: &NurbsSurface, plane: &Plane, tolerance: Option<f6
                     let cy_: [f64; 9] = [0.0, 1.0, 1.0, 1.0, 0.0, -1.0, -1.0, -1.0, 0.0];
                     let wts: [f64; 9] = [1.0, w, 1.0, w, 1.0, w, 1.0, w, 1.0];
                     crv = NurbsCurve::new(3, true, 3, 9);
-                    let knots: [f64; 10] = [0.0, 0.0, 1.0, 1.0, 2.0, 2.0, 3.0, 3.0, 4.0, 4.0];
-                    for i in 0..10 { crv.set_knot(i, knots[i]); }
+                    let nurbsknots: [f64; 10] = [0.0, 0.0, 1.0, 1.0, 2.0, 2.0, 3.0, 3.0, 4.0, 4.0];
+                    for i in 0..10 { crv.set_nurbsknot(i, nurbsknots[i]); }
                     for i in 0..9 {
                         let px = cx3d + radius * (cx_[i] * ax[0] + cy_[i] * ay[0]);
                         let py = cy3d + radius * (cx_[i] * ax[1] + cy_[i] * ay[1]);
@@ -1464,8 +1506,8 @@ pub fn surface_plane(surface: &NurbsSurface, plane: &Plane, tolerance: Option<f6
                         let cy_: [f64; 9] = [0.0, 1.0, 1.0, 1.0, 0.0, -1.0, -1.0, -1.0, 0.0];
                         let wts: [f64; 9] = [1.0, w, 1.0, w, 1.0, w, 1.0, w, 1.0];
                         crv = NurbsCurve::new(3, true, 3, 9);
-                        let knots: [f64; 10] = [0.0, 0.0, 1.0, 1.0, 2.0, 2.0, 3.0, 3.0, 4.0, 4.0];
-                        for i in 0..10 { crv.set_knot(i, knots[i]); }
+                        let nurbsknots: [f64; 10] = [0.0, 0.0, 1.0, 1.0, 2.0, 2.0, 3.0, 3.0, 4.0, 4.0];
+                        for i in 0..10 { crv.set_nurbsknot(i, nurbsknots[i]); }
                         for i in 0..9 {
                             let px = cx3d + semi_a * cx_[i] * ea[0] + semi_b * cy_[i] * eb[0];
                             let py = cy3d + semi_a * cx_[i] * ea[1] + semi_b * cy_[i] * eb[1];
@@ -1558,9 +1600,9 @@ pub fn surface_plane(surface: &NurbsSurface, plane: &Plane, tolerance: Option<f6
             }
             if !crv_2d.is_valid() {
                 crv_2d = if is_loop {
-                    NurbsCurve::create_interpolated(&pts_2d, CurveKnotStyle::ChordPeriodic)
+                    NurbsCurve::create_interpolated(&pts_2d, CurveNurbsKnotStyle::ChordPeriodic)
                 } else {
-                    NurbsCurve::create_interpolated(&pts_2d, CurveKnotStyle::Chord)
+                    NurbsCurve::create_interpolated(&pts_2d, CurveNurbsKnotStyle::Chord)
                 };
             }
 
@@ -3387,9 +3429,263 @@ pub fn face_to_face_wood(
     None
 }
 
+/// Thin wrapper over `Polyline::boolean_op` mirroring C++ `Intersection::polyline_boolean`.
+pub fn polyline_boolean(a: &Polyline, b: &Polyline, clip_type: i32) -> Vec<Polyline> {
+    Polyline::boolean_op(a, b, clip_type)
+}
+
+/// 2D boolean between two closed planar polylines, projected into the plane's
+/// canonical 2D frame (`base1`/`base2`). `intersection_type`: 0=Intersect,
+/// 1=Union, 2=Difference, 3=Xor. Returns the result polyline (closed, 3D) on
+/// success, or `None` on empty/degenerate/triangle-reject/sub-`min_area`.
+/// Verbatim port of C++ `Intersection::polyline_boolean_2d_in_plane`.
+pub fn polyline_boolean_2d_in_plane(
+    polyline0: &Polyline,
+    polyline1: &Polyline,
+    plane: &crate::Plane,
+    intersection_type: i32,
+    include_triangles: bool,
+    min_area: f64,
+    collapse_eps: f64,
+) -> Option<Polyline> {
+    let n0 = polyline0.point_count();
+    let n1 = polyline1.point_count();
+    if n0 < 3 || n1 < 3 {
+        return None;
+    }
+    let origin = polyline0.get_point(0)?;
+    let xax = plane.base1();
+    let yax = plane.base2();
+
+    let to_2d = |pl: &Polyline| -> Polyline {
+        let n = pl.point_count();
+        let mut pts2d: Vec<Point> = Vec::with_capacity(n + 1);
+        for i in 0..n {
+            let p = pl.get_point(i).unwrap();
+            let dx = p[0]-origin[0]; let dy = p[1]-origin[1]; let dz = p[2]-origin[2];
+            let u = dx*xax[0] + dy*xax[1] + dz*xax[2];
+            let v = dx*yax[0] + dy*yax[1] + dz*yax[2];
+            pts2d.push(Point::new(u, v, 0.0));
+        }
+        if pts2d.len() > 1 {
+            let f = &pts2d[0];
+            let l = pts2d.last().unwrap();
+            let dx = f[0]-l[0]; let dy = f[1]-l[1];
+            if dx*dx + dy*dy > 1e-12 {
+                let p0 = pts2d[0].clone();
+                pts2d.push(p0);
+            }
+        }
+        Polyline::new(pts2d)
+    };
+    let a2d = to_2d(polyline0);
+    let b2d = to_2d(polyline1);
+
+    let result_2d: Vec<Polyline> = if (0..=2).contains(&intersection_type) {
+        Polyline::boolean_op(&a2d, &b2d, intersection_type)
+    } else if intersection_type == 3 {
+        let u = Polyline::boolean_op(&a2d, &b2d, 1);
+        let inter = Polyline::boolean_op(&a2d, &b2d, 0);
+        if u.is_empty() {
+            return None;
+        }
+        if inter.is_empty() { u } else { Polyline::boolean_op(&u[0], &inter[0], 2) }
+    } else {
+        return None;
+    };
+    if result_2d.is_empty() {
+        return None;
+    }
+
+    let c = &result_2d[0];
+    let mut nc = c.point_count();
+    if nc > 1 {
+        let f = c.get_point(0).unwrap();
+        let l = c.get_point(nc-1).unwrap();
+        let dx = f[0]-l[0]; let dy = f[1]-l[1];
+        if dx*dx + dy*dy < 1e-12 {
+            nc -= 1;
+        }
+    }
+    if nc < 3 {
+        return None;
+    }
+
+    let mut src2d: Vec<Point> = (0..nc).map(|i| c.get_point(i).unwrap()).collect();
+    if collapse_eps > 0.0 {
+        let eps_sq = collapse_eps * collapse_eps;
+        let mut collapsed: Vec<Point> = Vec::with_capacity(src2d.len());
+        for p in &src2d {
+            if let Some(last) = collapsed.last() {
+                let dx = p[0] - last[0];
+                let dy = p[1] - last[1];
+                if dx*dx + dy*dy < eps_sq {
+                    continue;
+                }
+            }
+            collapsed.push(p.clone());
+        }
+        if collapsed.len() >= 2 {
+            let dx = collapsed.last().unwrap()[0] - collapsed[0][0];
+            let dy = collapsed.last().unwrap()[1] - collapsed[0][1];
+            if dx*dx + dy*dy < eps_sq {
+                collapsed.pop();
+            }
+        }
+        src2d = collapsed;
+        nc = src2d.len();
+        if nc < 3 {
+            return None;
+        }
+    }
+    if nc == 3 && !include_triangles {
+        return None;
+    }
+
+    let mut area = 0.0;
+    for i in 0..nc {
+        let p0 = &src2d[i];
+        let p1 = &src2d[(i+1) % nc];
+        area += p0[0]*p1[1] - p1[0]*p0[1];
+    }
+    if area.abs() * 0.5 <= min_area {
+        return None;
+    }
+
+    let mut pts: Vec<Point> = Vec::with_capacity(nc + 1);
+    for p in &src2d {
+        let u = p[0]; let v = p[1];
+        pts.push(Point::new(
+            origin[0] + u*xax[0] + v*yax[0],
+            origin[1] + u*xax[1] + v*yax[1],
+            origin[2] + u*xax[2] + v*yax[2],
+        ));
+    }
+    pts.push(pts[0].clone());
+    Some(Polyline::new(pts))
+}
+
+/// Native miter-join polygon offset in plane-space 2D. Verbatim port of
+/// C++ `Intersection::offset_in_3d`. Mutates `polyline` in place and returns
+/// true on success. Uses `plane.base1()/base2()` canonical axes so the output
+/// is deterministic across plane constructions.
+pub fn offset_in_3d(polyline: &mut Polyline, plane: &crate::Plane, offset: f64) -> bool {
+    let n_raw = polyline.point_count();
+    if n_raw < 3 {
+        return false;
+    }
+    let origin = polyline.get_point(0).unwrap();
+    let xax = plane.base1();
+    let yax = plane.base2();
+
+    let mut path: Vec<(f64, f64)> = Vec::with_capacity(n_raw);
+    for i in 0..n_raw {
+        let p = polyline.get_point(i).unwrap();
+        let dx = p[0] - origin[0]; let dy = p[1] - origin[1]; let dz = p[2] - origin[2];
+        let u = dx*xax[0] + dy*xax[1] + dz*xax[2];
+        let v = dx*yax[0] + dy*yax[1] + dz*yax[2];
+        path.push((u, v));
+    }
+    if path.len() >= 2 {
+        let dx = path.last().unwrap().0 - path[0].0;
+        let dy = path.last().unwrap().1 - path[0].1;
+        if dx*dx + dy*dy < 1e-12 {
+            path.pop();
+        }
+    }
+    let n = path.len();
+    if n < 3 {
+        return false;
+    }
+
+    let mut signed_area = 0.0;
+    for i in 0..n {
+        let (ax, ay) = path[i];
+        let (bx, by) = path[(i+1) % n];
+        signed_area += ax * by - bx * ay;
+    }
+    let delta = if signed_area < 0.0 { -offset } else { offset };
+
+    let mut normals: Vec<(f64, f64)> = Vec::with_capacity(n);
+    for i in 0..n {
+        let (ax, ay) = path[i];
+        let (bx, by) = path[(i+1) % n];
+        let ex = bx - ax; let ey = by - ay;
+        let len = (ex*ex + ey*ey).sqrt();
+        if len < 1e-12 {
+            normals.push((0.0, 0.0));
+        } else {
+            normals.push((ey/len, -ex/len));
+        }
+    }
+
+    let mut out: Vec<(f64, f64)> = Vec::with_capacity(n * 3);
+    for i in 0..n {
+        let (npx, npy) = normals[(i + n - 1) % n];
+        let (nnx, nny) = normals[i];
+        let cos_a = npx*nnx + npy*nny;
+        let sin_a = npx*nny - npy*nnx;
+        let denom = 1.0 + cos_a;
+        let concave = (cos_a > -0.999) && (sin_a * delta < 0.0) && (offset > 0.0);
+        let (px, py) = path[i];
+        if concave {
+            out.push((px + npx * delta, py + npy * delta));
+            out.push((px, py));
+            out.push((px + nnx * delta, py + nny * delta));
+        } else if denom.abs() < 1e-9 {
+            let bx = npx + nnx; let by = npy + nny;
+            let bl = (bx*bx + by*by).sqrt();
+            if bl < 1e-12 {
+                out.push((px + nnx * delta, py + nny * delta));
+            } else {
+                out.push((px + (bx/bl) * delta, py + (by/bl) * delta));
+            }
+        } else {
+            let k = delta / denom;
+            out.push((px + (npx + nnx) * k, py + (npy + nny) * k));
+        }
+    }
+    let nout = out.len();
+    if nout < 3 {
+        return false;
+    }
+
+    let mut out_area = 0.0;
+    for i in 0..nout {
+        let (ax, ay) = out[i];
+        let (bx, by) = out[(i+1) % nout];
+        out_area += ax * by - bx * ay;
+    }
+    if out_area.abs() * 0.5 < 0.0001 {
+        return false;
+    }
+
+    let mut cp = 0usize;
+    let mut cd = (out[0].0 - path[0].0).powi(2) + (out[0].1 - path[0].1).powi(2);
+    for i in 1..nout {
+        let d = (out[i].0 - path[0].0).powi(2) + (out[i].1 - path[0].1).powi(2);
+        if d < cd { cd = d; cp = i; }
+    }
+    if cp != 0 {
+        out.rotate_left(cp);
+    }
+
+    let mut pts: Vec<Point> = Vec::with_capacity(nout + 1);
+    for &(u, v) in &out {
+        pts.push(Point::new(
+            origin[0] + u*xax[0] + v*yax[0],
+            origin[1] + u*xax[1] + v*yax[1],
+            origin[2] + u*xax[2] + v*yax[2],
+        ));
+    }
+    pts.push(pts[0].clone());
+    *polyline = Polyline::new(pts);
+    true
+}
+
 pub fn adjacency_search(elements: &mut [crate::element::Element], inflate: f64) -> Vec<i32> {
     use crate::obb::OBB;
-    use crate::bvh::BVH;
+    use crate::spatial_bvh::SpatialBVH;
 
     let n = elements.len();
     let mut obbs: Vec<OBB> = Vec::with_capacity(n);
@@ -3401,7 +3697,7 @@ pub fn adjacency_search(elements: &mut [crate::element::Element], inflate: f64) 
         obbs.push(OBB::from_points(&pts, inflate));
     }
 
-    let mut bvh = BVH::new();
+    let mut bvh = SpatialBVH::new();
     bvh.build(&obbs);
     let mut adjacency: Vec<i32> = Vec::new();
     for i in 0..n {

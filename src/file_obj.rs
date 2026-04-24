@@ -1,7 +1,7 @@
-use crate::{Element, Mesh, Point, Polyline, RTree, AABB};
+use crate::{Element, Mesh, Point, Polyline, SpatialRTree, AABB};
 use std::io;
 
-pub fn write_obj(mesh: &Mesh, filepath: &str) -> io::Result<()> {
+pub fn write_file_obj(mesh: &Mesh, filepath: &str) -> io::Result<()> {
     let (vertices, faces) = mesh.to_vertices_and_faces();
     let mut s = String::new();
     for p in vertices {
@@ -16,7 +16,7 @@ pub fn write_obj(mesh: &Mesh, filepath: &str) -> io::Result<()> {
     std::fs::write(filepath, s)
 }
 
-pub fn read_obj(filepath: &str) -> io::Result<Mesh> {
+pub fn read_file_obj(filepath: &str) -> io::Result<Mesh> {
     let content = std::fs::read_to_string(filepath)?;
     let mut verts: Vec<Point> = Vec::new();
     let mut faces: Vec<Vec<usize>> = Vec::new();
@@ -71,7 +71,7 @@ pub fn read_obj(filepath: &str) -> io::Result<Mesh> {
     Ok(mesh)
 }
 
-pub fn read_obj_polylines(filepath: &str) -> io::Result<Vec<Polyline>> {
+pub fn read_file_obj_polylines(filepath: &str) -> io::Result<Vec<Polyline>> {
     let content = std::fs::read_to_string(filepath)?;
     let mut verts: Vec<Point> = Vec::new();
     let mut polylines: Vec<Polyline> = Vec::new();
@@ -131,7 +131,7 @@ pub fn pair_polylines(polylines: &[Polyline], search_radius: f64) -> Vec<(usize,
         pts
     };
 
-    let mut tree = RTree::new();
+    let mut tree = SpatialRTree::new();
     for i in 0..np {
         let pts = open_pts(&polylines[i]);
         let mut cx = 0.0; let mut cy = 0.0; let mut cz = 0.0;

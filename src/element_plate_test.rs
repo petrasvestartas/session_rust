@@ -94,7 +94,7 @@ pub fn run_plate_mesh_topology() -> TestResult {
 }
 
 pub fn run_plate_aabb() -> TestResult {
-    MINI_TEST!("Aabb", {
+    MINI_TEST!("AABB", {
         use crate::element::Element;
         use crate::Point;
 
@@ -168,8 +168,8 @@ pub fn run_plate_json_roundtrip() -> TestResult {
         p.session_transformation = Xform::translation(1.0, 2.0, 3.0);
 
         let fname = "serialization/test_plate_element.json";
-        p.json_dump(fname);
-        let loaded = Element::json_load(fname);
+        p.file_json_dump(fname);
+        let loaded = Element::file_json_load(fname);
 
         MINI_CHECK!(loaded.name == "json_plate");
         MINI_CHECK!(TOLERANCE.is_close(loaded.thickness().unwrap(), 0.3));
@@ -353,8 +353,8 @@ pub fn run_plate_json_roundtrip_joinery() -> TestResult {
         p.set_component_plane(Plane::new(Point::new(1.0, 2.0, 3.0), Vector::new(1.0, 0.0, 0.0), Vector::new(0.0, 1.0, 0.0)));
 
         let fname = "serialization/test_plate_element_joinery.json";
-        p.json_dump(fname);
-        let loaded = Element::json_load(fname);
+        p.file_json_dump(fname);
+        let loaded = Element::file_json_load(fname);
 
         MINI_CHECK!(loaded.joint_types().unwrap() == &vec![1, 2, 3, 4]);
         MINI_CHECK!(loaded.j_mf().unwrap().len() == 3);
@@ -399,7 +399,7 @@ REGISTER_MINI_TEST!("ElementPlate", "Constructor", crate::element_plate_test::ru
 REGISTER_MINI_TEST!("ElementPlate", "Default Polygon", crate::element_plate_test::run_plate_default_polygon);
 REGISTER_MINI_TEST!("ElementPlate", "Setters", crate::element_plate_test::run_plate_setters);
 REGISTER_MINI_TEST!("ElementPlate", "Mesh Topology", crate::element_plate_test::run_plate_mesh_topology);
-REGISTER_MINI_TEST!("ElementPlate", "Aabb", crate::element_plate_test::run_plate_aabb);
+REGISTER_MINI_TEST!("ElementPlate", "AABB", crate::element_plate_test::run_plate_aabb);
 REGISTER_MINI_TEST!("ElementPlate", "Compute Point", crate::element_plate_test::run_plate_compute_point);
 REGISTER_MINI_TEST!("ElementPlate", "Triangle Polygon", crate::element_plate_test::run_plate_triangle_polygon);
 REGISTER_MINI_TEST!("ElementPlate", "Json Roundtrip", crate::element_plate_test::run_plate_json_roundtrip);

@@ -122,7 +122,7 @@ impl Objects {
 
     /// Serializes the Objects to a JSON string.
     pub fn jsondump(&self) -> Result<String, Box<dyn std::error::Error>> {
-        crate::encoders::sorted_json_string(self)
+        crate::file_encoders::sorted_json_string(self)
     }
 
     /// Deserializes Objects from a JSON string.
@@ -130,20 +130,20 @@ impl Objects {
         Ok(serde_json::from_str(json_data)?)
     }
 
-    pub fn json_dumps(&self) -> String {
+    pub fn file_json_dumps(&self) -> String {
         self.jsondump().unwrap_or_default()
     }
 
-    pub fn json_loads(s: &str) -> Self {
+    pub fn file_json_loads(s: &str) -> Self {
         Self::jsonload(s).unwrap_or_else(|_| Self::default())
     }
 
-    pub fn json_dump(&self, filepath: &str) {
+    pub fn file_json_dump(&self, filepath: &str) {
         let json = self.jsondump().unwrap_or_default();
         fs::write(filepath, json).expect("Failed to write JSON file");
     }
 
-    pub fn json_load(filepath: &str) -> Self {
+    pub fn file_json_load(filepath: &str) -> Self {
         let json = fs::read_to_string(filepath).expect("Failed to read JSON file");
         Self::jsonload(&json).unwrap_or_else(|_| Self::default())
     }

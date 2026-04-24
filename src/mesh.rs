@@ -1,4 +1,4 @@
-﻿use crate::{OBB, Color, Line, Point, Tolerance, Vector, Xform, BVH};
+﻿use crate::{OBB, Color, Line, Point, Tolerance, Vector, Xform, SpatialBVH};
 use crate::polyline::Polyline;
 use crate::remesh_cdt;
 use crate::tolerance::PI;
@@ -75,7 +75,7 @@ pub struct Mesh {
     pub xform: Xform,   // Transformation matrix
     // Cached triangle BVH for ray queries (not serialized)
     #[serde(skip)]
-    pub tri_bvh: Option<BVH>,
+    pub tri_bvh: Option<SpatialBVH>,
     #[serde(skip)]
     pub tri_tris: Vec<[usize; 3]>,
     #[serde(skip)]
@@ -578,6 +578,36 @@ impl Mesh {
         let mut poly_infos: Vec<(usize, usize, usize, usize)> = Vec::new(); // (bot_off, bot_n, top_off, top_n)
         let mut all_bot: Vec<Point> = Vec::new();
         let mut all_top: Vec<Point> = Vec::new();
+        let strip_shared_collinear = |bot: &mut Vec<Point>, top: &mut Vec<Point>| {
+            let cdt_scale = 1.0e6_f64;
+            let cross_q = |a: &Point, b: &Point, c: &Point| -> i64 {
+                let pa = proj(a); let pb = proj(b); let pc = proj(c);
+                let iax = (pa[0] * cdt_scale).round() as i64;
+                let iay = (pa[1] * cdt_scale).round() as i64;
+                let ibx = (pb[0] * cdt_scale).round() as i64;
+                let iby = (pb[1] * cdt_scale).round() as i64;
+                let icx = (pc[0] * cdt_scale).round() as i64;
+                let icy = (pc[1] * cdt_scale).round() as i64;
+                (ibx - iax) * (icy - iay) - (iby - iay) * (icx - iax)
+            };
+            let mut changed = true;
+            while changed && bot.len() > 3 {
+                changed = false;
+                let n = bot.len();
+                for i in 0..n {
+                    let prev = (i + n - 1) % n;
+                    let next = (i + 1) % n;
+                    if cross_q(&bot[prev], &bot[i], &bot[next]) == 0
+                        && cross_q(&top[prev], &top[i], &top[next]) == 0
+                    {
+                        bot.remove(i);
+                        top.remove(i);
+                        changed = true;
+                        break;
+                    }
+                }
+            }
+        };
         for (oi, &idx) in order.iter().enumerate() {
             let mut bot = get_open(&polylines0[idx]);
             let mut top = get_open(&polylines1[idx]);
@@ -585,6 +615,7 @@ impl Mesh {
             if (oi == 0 && area < 0.0) || (oi != 0 && area > 0.0) {
                 bot.reverse(); top.reverse();
             }
+            if bot.len() == top.len() { strip_shared_collinear(&mut bot, &mut top); }
             poly_infos.push((all_bot.len(), bot.len(), all_top.len(), top.len()));
             all_bot.extend(bot.into_iter());
             all_top.extend(top.into_iter());
@@ -627,12 +658,6 @@ impl Mesh {
                 }
                 let tri_list: Vec<[usize;3]> = t_tris.iter().map(|&(a,b,c)| [tvk[a], tvk[b], tvk[c]]).collect();
                 mesh.triangulation.insert(fk_top, tri_list);
-            }
-            for &(b_off, b_n, t_off, t_n) in &poly_infos[1..] {
-                let bh: Vec<usize> = (0..b_n).rev().map(|j| bvk[b_off + j]).collect();
-                mesh.add_face(bh, None);
-                let th: Vec<usize> = (0..t_n).map(|j| tvk[t_off + j]).collect();
-                mesh.add_face(th, None);
             }
         }
         // Side faces: align by longest edge, quads for equal counts, zipper+triangles otherwise
@@ -1064,9 +1089,20 @@ impl Mesh {
     }
 
     pub fn is_closed(&self) -> bool {
-        for (_, nbrs) in &self.halfedge {
-            for (_, fkey) in nbrs {
-                if fkey.is_none() { return false; }
+        let mut hole_edges: std::collections::HashSet<(usize, usize)> = std::collections::HashSet::new();
+        for (_, rings) in &self.face_holes {
+            for ring in rings {
+                let n = ring.len();
+                for i in 0..n {
+                    let a = ring[i]; let b = ring[(i + 1) % n];
+                    hole_edges.insert((a, b));
+                    hole_edges.insert((b, a));
+                }
+            }
+        }
+        for (u, nbrs) in &self.halfedge {
+            for (v, fkey) in nbrs {
+                if fkey.is_none() && !hole_edges.contains(&(*u, *v)) { return false; }
             }
         }
         !self.halfedge.is_empty()
@@ -1411,8 +1447,8 @@ impl Mesh {
 
         if tolerance > 0.0 {
             let boxes: Vec<OBB> = positions.iter().map(|p| OBB::from_point(p.clone(), tolerance)).collect();
-            let ws = BVH::compute_world_size(&boxes);
-            let bvh = BVH::from_boxes(&boxes, ws);
+            let ws = SpatialBVH::compute_world_size(&boxes);
+            let bvh = SpatialBVH::from_boxes(&boxes, ws);
             let (pairs, _, _) = bvh.check_all_collisions(&boxes);
             for (i, j) in pairs {
                 if positions[i].distance(&positions[j], None) <= tolerance {
@@ -2329,22 +2365,22 @@ impl Mesh {
         Some(mesh)
     }
 
-    pub fn json_dumps(&self) -> String {
-        let sorted = crate::encoders::sort_json_keys(self.jsondump());
+    pub fn file_json_dumps(&self) -> String {
+        let sorted = crate::file_encoders::sort_json_keys(self.jsondump());
         serde_json::to_string_pretty(&sorted).unwrap_or_default()
     }
 
-    pub fn json_loads(json_string: &str) -> Self {
+    pub fn file_json_loads(json_string: &str) -> Self {
         let data: serde_json::Value = serde_json::from_str(json_string).unwrap_or_default();
         Self::jsonload(&data).unwrap_or_else(|| Self::new())
     }
 
-    pub fn json_dump(&self, filename: &str) -> std::io::Result<()> {
-        let sorted = crate::encoders::sort_json_keys(self.jsondump());
+    pub fn file_json_dump(&self, filename: &str) -> std::io::Result<()> {
+        let sorted = crate::file_encoders::sort_json_keys(self.jsondump());
         std::fs::write(filename, serde_json::to_string_pretty(&sorted)?)
     }
 
-    pub fn json_load(filename: &str) -> std::io::Result<Self> {
+    pub fn file_json_load(filename: &str) -> std::io::Result<Self> {
         let content = std::fs::read_to_string(filename)?;
         let data: serde_json::Value = serde_json::from_str(&content)?;
         Self::jsonload(&data).ok_or_else(|| {
@@ -2683,8 +2719,8 @@ impl Mesh {
             return;
         }
 
-        let world_size = BVH::compute_world_size(&tri_boxes);
-        let bvh = BVH::from_boxes(&tri_boxes, world_size);
+        let world_size = SpatialBVH::compute_world_size(&tri_boxes);
+        let bvh = SpatialBVH::from_boxes(&tri_boxes, world_size);
         self.tri_vertices = vertices;
         self.tri_tris = tris;
         self.tri_bvh = Some(bvh);

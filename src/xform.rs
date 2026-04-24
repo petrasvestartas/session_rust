@@ -742,6 +742,50 @@ impl Xform {
         &t * &f
     }
 
+    /// Transform world points INTO a local frame defined by (origin, x, y, z).
+    /// Given a world point p, returns (u, v, w) such that
+    /// `p = origin + u*x_hat + v*y_hat + w*z_hat`. Stores the basis as matrix
+    /// ROWS (world-to-local), unlike `plane_to_xy` which stores them as
+    /// COLUMNS and therefore actually does local-to-world despite its name.
+    /// Use this when you need a faithful 3D projection — especially when the
+    /// input geometry's normal can align with one of the basis axes (where
+    /// `plane_to_xy` collapses a dimension). See wood_main.cpp type-13 branch.
+    pub fn world_to_frame(origin: &Point, x_axis: &Vector, y_axis: &Vector, z_axis: &Vector) -> Self {
+        let mut x = x_axis.clone();
+        let mut y = y_axis.clone();
+        let mut z = z_axis.clone();
+        x.normalize_self();
+        y.normalize_self();
+        z.normalize_self();
+
+        let mut f = Self::identity();
+        f.m[0] = x[0]; f.m[4] = x[1]; f.m[8]  = x[2];
+        f.m[1] = y[0]; f.m[5] = y[1]; f.m[9]  = y[2];
+        f.m[2] = z[0]; f.m[6] = z[1]; f.m[10] = z[2];
+
+        let t = Self::translation(-origin[0], -origin[1], -origin[2]);
+        &f * &t
+    }
+
+    /// Inverse of `world_to_frame`: local (u,v,w) -> world point at
+    /// `origin + u*x_hat + v*y_hat + w*z_hat`.
+    pub fn frame_to_world(origin: &Point, x_axis: &Vector, y_axis: &Vector, z_axis: &Vector) -> Self {
+        let mut x = x_axis.clone();
+        let mut y = y_axis.clone();
+        let mut z = z_axis.clone();
+        x.normalize_self();
+        y.normalize_self();
+        z.normalize_self();
+
+        let mut f = Self::identity();
+        f.m[0] = x[0]; f.m[1] = x[1]; f.m[2]  = x[2];
+        f.m[4] = y[0]; f.m[5] = y[1]; f.m[6]  = y[2];
+        f.m[8] = z[0]; f.m[9] = z[1]; f.m[10] = z[2];
+
+        let t = Self::translation(origin[0], origin[1], origin[2]);
+        &t * &f
+    }
+
     /// Transform from world XY to target frame/plane (same as COMPAS from_frame)
     pub fn to_frame(frame: &Plane) -> Self {
         let x = frame.x_axis().normalized();
@@ -809,28 +853,28 @@ impl Xform {
     ///////////////////////////////////////////////////////////////////////////////////////////
 
     pub fn jsondump(&self) -> Result<String, Box<dyn std::error::Error>> {
-        crate::encoders::sorted_json_string(self)
+        crate::file_encoders::sorted_json_string(self)
     }
 
     pub fn jsonload(json_data: &str) -> Result<Self, Box<dyn std::error::Error>> {
         Ok(serde_json::from_str(json_data)?)
     }
 
-    pub fn json_dumps(&self) -> String {
+    pub fn file_json_dumps(&self) -> String {
         self.jsondump().unwrap_or_default()
     }
 
-    pub fn json_loads(json_string: &str) -> Self {
+    pub fn file_json_loads(json_string: &str) -> Self {
         Self::jsonload(json_string).unwrap_or_else(|_| Self::default())
     }
 
-    pub fn json_dump(&self, filepath: &str) -> Result<(), Box<dyn std::error::Error>> {
+    pub fn file_json_dump(&self, filepath: &str) -> Result<(), Box<dyn std::error::Error>> {
         let json = self.jsondump()?;
         std::fs::write(filepath, json)?;
         Ok(())
     }
 
-    pub fn json_load(filepath: &str) -> Result<Self, Box<dyn std::error::Error>> {
+    pub fn file_json_load(filepath: &str) -> Result<Self, Box<dyn std::error::Error>> {
         let json = std::fs::read_to_string(filepath)?;
         Self::jsonload(&json)
     }

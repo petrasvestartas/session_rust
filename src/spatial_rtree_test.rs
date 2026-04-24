@@ -3,10 +3,10 @@ use crate::mini_test::TestResult;
 
 pub fn run_rtree_constructor() -> TestResult {
     MINI_TEST!("Constructor", {
-        use crate::RTree;
+        use crate::SpatialRTree;
 
         // RTree3: dynamic spatial index — insert/remove support, O(log n) overlap search
-        let mut t = RTree::new();
+        let mut t = SpatialRTree::new();
         t.insert([0.0, 0.0, 0.0], [1.0, 1.0, 1.0], 0);
         t.insert([5.0, 0.0, 0.0], [6.0, 1.0, 1.0], 1);
         t.insert([10.0, 0.0, 0.0], [11.0, 1.0, 1.0], 2);
@@ -22,8 +22,8 @@ pub fn run_rtree_constructor() -> TestResult {
 
 pub fn run_rtree_creation() -> TestResult {
     MINI_TEST!("Creation", {
-        use crate::RTree;
-        let t = RTree::new();
+        use crate::SpatialRTree;
+        let t = SpatialRTree::new();
 
         MINI_CHECK!(t.count() == 0);
     })
@@ -31,8 +31,8 @@ pub fn run_rtree_creation() -> TestResult {
 
 pub fn run_rtree_insert() -> TestResult {
     MINI_TEST!("Insert", {
-        use crate::RTree;
-        let mut t = RTree::new();
+        use crate::SpatialRTree;
+        let mut t = SpatialRTree::new();
         t.insert([0.0, 0.0, 0.0], [1.0, 1.0, 1.0], 42);
 
         MINI_CHECK!(t.count() == 1);
@@ -41,8 +41,8 @@ pub fn run_rtree_insert() -> TestResult {
 
 pub fn run_rtree_insert_multiple() -> TestResult {
     MINI_TEST!("Insert Multiple", {
-        use crate::RTree;
-        let mut t = RTree::new();
+        use crate::SpatialRTree;
+        let mut t = SpatialRTree::new();
         t.insert([0.0, 0.0, 0.0], [1.0, 1.0, 1.0], 0);
         t.insert([2.0, 2.0, 2.0], [3.0, 3.0, 3.0], 1);
         t.insert([4.0, 4.0, 4.0], [5.0, 5.0, 5.0], 2);
@@ -53,8 +53,8 @@ pub fn run_rtree_insert_multiple() -> TestResult {
 
 pub fn run_rtree_search_hit() -> TestResult {
     MINI_TEST!("Search Hit", {
-        use crate::RTree;
-        let mut t = RTree::new();
+        use crate::SpatialRTree;
+        let mut t = SpatialRTree::new();
         t.insert([0.0, 0.0, 0.0], [2.0, 2.0, 2.0], 0);
         let mut found: i32 = -1;
         let hits = t.search([1.0, 1.0, 1.0], [3.0, 3.0, 3.0], |data| {
@@ -69,8 +69,8 @@ pub fn run_rtree_search_hit() -> TestResult {
 
 pub fn run_rtree_search_miss() -> TestResult {
     MINI_TEST!("Search Miss", {
-        use crate::RTree;
-        let mut t = RTree::new();
+        use crate::SpatialRTree;
+        let mut t = SpatialRTree::new();
         t.insert([0.0, 0.0, 0.0], [1.0, 1.0, 1.0], 7);
         let hits = t.search([2.0, 2.0, 2.0], [3.0, 3.0, 3.0], |_| true);
 
@@ -80,8 +80,8 @@ pub fn run_rtree_search_miss() -> TestResult {
 
 pub fn run_rtree_remove() -> TestResult {
     MINI_TEST!("Remove", {
-        use crate::RTree;
-        let mut t = RTree::new();
+        use crate::SpatialRTree;
+        let mut t = SpatialRTree::new();
         t.insert([0.0, 0.0, 0.0], [1.0, 1.0, 1.0], 5);
         t.remove([0.0, 0.0, 0.0], [1.0, 1.0, 1.0], 5);
 
@@ -91,8 +91,8 @@ pub fn run_rtree_remove() -> TestResult {
 
 pub fn run_rtree_remove_all() -> TestResult {
     MINI_TEST!("Remove All", {
-        use crate::RTree;
-        let mut t = RTree::new();
+        use crate::SpatialRTree;
+        let mut t = SpatialRTree::new();
         t.insert([0.0, 0.0, 0.0], [1.0, 1.0, 1.0], 0);
         t.insert([2.0, 2.0, 2.0], [3.0, 3.0, 3.0], 1);
         t.insert([4.0, 4.0, 4.0], [5.0, 5.0, 5.0], 2);
@@ -104,8 +104,8 @@ pub fn run_rtree_remove_all() -> TestResult {
 
 pub fn run_rtree_search_count() -> TestResult {
     MINI_TEST!("Search Count", {
-        use crate::RTree;
-        let mut t = RTree::new();
+        use crate::SpatialRTree;
+        let mut t = SpatialRTree::new();
         t.insert([0.0, 0.0, 0.0], [1.0, 1.0, 1.0], 0);
         t.insert([2.0, 2.0, 2.0], [3.0, 3.0, 3.0], 1);
         t.insert([3.0, 3.0, 3.0], [4.0, 4.0, 4.0], 2);
@@ -119,8 +119,8 @@ pub fn run_rtree_search_count() -> TestResult {
 
 pub fn run_rtree_search_stop() -> TestResult {
     MINI_TEST!("Search Stop", {
-        use crate::RTree;
-        let mut t = RTree::new();
+        use crate::SpatialRTree;
+        let mut t = SpatialRTree::new();
         t.insert([0.0, 0.0, 0.0], [1.0, 1.0, 1.0], 0);
         t.insert([0.0, 0.0, 0.0], [1.0, 1.0, 1.0], 1);
         t.insert([0.0, 0.0, 0.0], [1.0, 1.0, 1.0], 2);
@@ -132,8 +132,8 @@ pub fn run_rtree_search_stop() -> TestResult {
 
 pub fn run_rtree_search_100_boxes() -> TestResult {
     MINI_TEST!("Search 100 Boxes", {
-        use crate::RTree;
-        let mut t = RTree::new();
+        use crate::SpatialRTree;
+        let mut t = SpatialRTree::new();
         let mut id: i32 = 0;
         {
             let mut add = |x0: f64, y0: f64, z0: f64, x1: f64, y1: f64, z1: f64| {
@@ -256,14 +256,14 @@ pub fn run_rtree_search_100_boxes() -> TestResult {
     })
 }
 
-REGISTER_MINI_TEST!("RTree", "Constructor", crate::rtree_test::run_rtree_constructor);
-REGISTER_MINI_TEST!("RTree", "Creation", crate::rtree_test::run_rtree_creation);
-REGISTER_MINI_TEST!("RTree", "Insert", crate::rtree_test::run_rtree_insert);
-REGISTER_MINI_TEST!("RTree", "Insert Multiple", crate::rtree_test::run_rtree_insert_multiple);
-REGISTER_MINI_TEST!("RTree", "Search Hit", crate::rtree_test::run_rtree_search_hit);
-REGISTER_MINI_TEST!("RTree", "Search Miss", crate::rtree_test::run_rtree_search_miss);
-REGISTER_MINI_TEST!("RTree", "Remove", crate::rtree_test::run_rtree_remove);
-REGISTER_MINI_TEST!("RTree", "Remove All", crate::rtree_test::run_rtree_remove_all);
-REGISTER_MINI_TEST!("RTree", "Search Count", crate::rtree_test::run_rtree_search_count);
-REGISTER_MINI_TEST!("RTree", "Search Stop", crate::rtree_test::run_rtree_search_stop);
-REGISTER_MINI_TEST!("RTree", "Search 100 Boxes", crate::rtree_test::run_rtree_search_100_boxes);
+REGISTER_MINI_TEST!("SpatialRTree", "Constructor", crate::spatial_rtree_test::run_rtree_constructor);
+REGISTER_MINI_TEST!("SpatialRTree", "Creation", crate::spatial_rtree_test::run_rtree_creation);
+REGISTER_MINI_TEST!("SpatialRTree", "Insert", crate::spatial_rtree_test::run_rtree_insert);
+REGISTER_MINI_TEST!("SpatialRTree", "Insert Multiple", crate::spatial_rtree_test::run_rtree_insert_multiple);
+REGISTER_MINI_TEST!("SpatialRTree", "Search Hit", crate::spatial_rtree_test::run_rtree_search_hit);
+REGISTER_MINI_TEST!("SpatialRTree", "Search Miss", crate::spatial_rtree_test::run_rtree_search_miss);
+REGISTER_MINI_TEST!("SpatialRTree", "Remove", crate::spatial_rtree_test::run_rtree_remove);
+REGISTER_MINI_TEST!("SpatialRTree", "Remove All", crate::spatial_rtree_test::run_rtree_remove_all);
+REGISTER_MINI_TEST!("SpatialRTree", "Search Count", crate::spatial_rtree_test::run_rtree_search_count);
+REGISTER_MINI_TEST!("SpatialRTree", "Search Stop", crate::spatial_rtree_test::run_rtree_search_stop);
+REGISTER_MINI_TEST!("SpatialRTree", "Search 100 Boxes", crate::spatial_rtree_test::run_rtree_search_100_boxes);

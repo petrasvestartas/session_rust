@@ -299,8 +299,8 @@ pub fn run_matrix_json_roundtrip() -> TestResult {
         let mut a = Matrix::from_vec(2, 3, vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0]);
         a.name = "test_matrix".to_string();
         let filename = "serialization/test_matrix.json";
-        a.json_dump(filename).unwrap();
-        let loaded = Matrix::json_load(filename).unwrap();
+        a.file_json_dump(filename).unwrap();
+        let loaded = Matrix::file_json_load(filename).unwrap();
 
         MINI_CHECK!(loaded.name == "test_matrix");
         MINI_CHECK!(loaded.rows == 2 && loaded.cols == 3);

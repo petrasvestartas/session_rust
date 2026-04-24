@@ -250,14 +250,14 @@ pub fn run_plane_json_roundtrip() -> TestResult {
         let mut pl = Plane::xy_plane();
         pl.name = "test_plane".to_string();
 
-        //   json_dumps()    │ String       │ to JSON string
-        //   json_loads(s)   │ String       │ from JSON string
-        //   json_dump(path) │ file         │ write to file
-        //   json_load(path) │ file         │ read from file
+        //   file_json_dumps()    │ String       │ to JSON string
+        //   file_json_loads(s)   │ String       │ from JSON string
+        //   file_json_dump(path) │ file         │ write to file
+        //   file_json_load(path) │ file         │ read from file
 
         let fname = "serialization/test_plane.json";
-        pl.json_dump(fname).unwrap();
-        let loaded = Plane::json_load(fname).unwrap();
+        pl.file_json_dump(fname).unwrap();
+        let loaded = Plane::file_json_load(fname).unwrap();
 
         MINI_CHECK!(loaded.name == "test_plane");
         MINI_CHECK!(TOLERANCE.is_close(loaded.c(), 1.0));

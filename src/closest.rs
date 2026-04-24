@@ -434,7 +434,7 @@ impl Closest {
              (hx-lx)*0.5, (hy-ly)*0.5, (hz-lz)*0.5]
         }).collect();
 
-        // AABBTree nodes: (aabb, right_child, object_id)
+        // SpatialAABBTree nodes: (aabb, right_child, object_id)
         let mut nodes: Vec<([f64; 6], i32, i32)> = Vec::new();
 
         fn build_node(ids: &mut [usize], boxes: &[[f64; 6]], nodes: &mut Vec<([f64; 6], i32, i32)>) {
@@ -548,9 +548,9 @@ impl Closest {
         if cloud.point_count() == 0 {
             return (Point::new(0.0, 0.0, 0.0), 0, f64::INFINITY);
         }
-        use crate::kdtree::KDTree;
+        use crate::spatial_kdtree::SpatialKDTree;
         let pts: Vec<Point> = (0..cloud.point_count()).map(|i| cloud.get_point(i)).collect();
-        let kd = KDTree::new(pts);
+        let kd = SpatialKDTree::new(pts);
         let (idx, dist) = kd.nearest(test_point);
         (cloud.get_point(idx), idx, dist)
     }

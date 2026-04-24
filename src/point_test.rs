@@ -103,14 +103,14 @@ pub fn run_point_json_roundtrip() -> TestResult {
         p.width = 2.0;
         p.pointcolor = Color::new(255, 128, 64, 255);
 
-        //   json_dumps()    │ String       │ to JSON string
-        //   json_loads(s)   │ String       │ from JSON string
-        //   json_dump(path) │ file         │ write to file
-        //   json_load(path) │ file         │ read from file
+        //   file_json_dumps()    │ String       │ to JSON string
+        //   file_json_loads(s)   │ String       │ from JSON string
+        //   file_json_dump(path) │ file         │ write to file
+        //   file_json_load(path) │ file         │ read from file
 
         let filename = "serialization/test_point.json";
-        p.json_dump(filename).unwrap();
-        let loaded = Point::json_load(filename).unwrap();
+        p.file_json_dump(filename).unwrap();
+        let loaded = Point::file_json_load(filename).unwrap();
 
         MINI_CHECK!(loaded.name == p.name);
         MINI_CHECK!(loaded[0] == p[0]);

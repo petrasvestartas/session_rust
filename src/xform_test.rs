@@ -544,8 +544,8 @@ pub fn run_xform_json_roundtrip() -> TestResult {
         xform.name = "test_xform".to_string();
 
         let filename = "serialization/test_xform.json";
-        xform.json_dump(filename).unwrap();
-        let loaded = Xform::json_load(filename).unwrap();
+        xform.file_json_dump(filename).unwrap();
+        let loaded = Xform::file_json_load(filename).unwrap();
 
         MINI_CHECK!(loaded.name == "test_xform");
         MINI_CHECK!(loaded.guid() == xform.guid());

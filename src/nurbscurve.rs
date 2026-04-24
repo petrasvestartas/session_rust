@@ -4,7 +4,7 @@ use crate::plane::Plane;
 use crate::tolerance::Tolerance;
 use crate::xform::Xform;
 use crate::color::Color;
-use crate::knot;
+use crate::nurbsknot;
 use serde::{Serialize, Deserialize, Serializer, Deserializer};
 use serde::ser::SerializeMap;
 
@@ -25,7 +25,7 @@ pub struct NurbsCurve {
     pub m_order: usize,
     pub m_cv_count: usize,
     pub m_cv_stride: usize,
-    pub m_knot: Vec<f64>,
+    pub m_nurbsknot: Vec<f64>,
     pub m_cv: Vec<f64>,
 }
 
@@ -36,7 +36,7 @@ impl PartialEq for NurbsCurve {
             && self.m_order == other.m_order
             && self.m_cv_count == other.m_cv_count
             && self.m_cv_stride == other.m_cv_stride
-            && self.m_knot == other.m_knot
+            && self.m_nurbsknot == other.m_nurbsknot
             && self.m_cv == other.m_cv
     }
 }
@@ -63,7 +63,7 @@ impl Serialize for NurbsCurve {
         map.serialize_entry("dimension", &self.m_dim)?;
         map.serialize_entry("guid", self.guid())?;
         map.serialize_entry("is_rational", &self.m_is_rat)?;
-        map.serialize_entry("knots", &self.m_knot)?;
+        map.serialize_entry("nurbsknots", &self.m_nurbsknot)?;
         let linecolors_flat: Vec<u8> = self.linecolors.iter()
             .flat_map(|c| vec![c.r, c.g, c.b, c.a]).collect();
         map.serialize_entry("linecolors", &linecolors_flat)?;
@@ -93,7 +93,7 @@ impl<'de> Deserialize<'de> for NurbsCurve {
             dimension: usize,
             guid: String,
             is_rational: bool,
-            knots: Vec<f64>,
+            nurbsknots: Vec<f64>,
             #[serde(default)]
             pointcolors: Vec<u8>,
             #[serde(default)]
@@ -138,7 +138,7 @@ impl<'de> Deserialize<'de> for NurbsCurve {
             m_order: data.order,
             m_cv_count: data.cv_count,
             m_cv_stride: cv_stride,
-            m_knot: data.knots,
+            m_nurbsknot: data.nurbsknots,
             m_cv,
         })
     }
@@ -167,7 +167,13 @@ impl NurbsCurve {
             Self::create_clamped_uniform(3, order, points, 1.0)
         };
         if curve.is_valid() {
-            let l = curve.length(Some(1e-6));
+            let l = if degree == 1 && points.len() == 2 {
+                let p0 = &points[0]; let p1 = &points[1];
+                let dx = p1[0] - p0[0]; let dy = p1[1] - p0[1]; let dz = p1[2] - p0[2];
+                (dx*dx + dy*dy + dz*dz).sqrt()
+            } else {
+                curve.length(Some(1e-6))
+            };
             if l > 0.0 {
                 curve.set_domain(0.0, l);
             }
@@ -175,7 +181,7 @@ impl NurbsCurve {
         curve
     }
 
-    pub fn create_interpolated(points: &[Point], parameterization: knot::CurveKnotStyle) -> NurbsCurve {
+    pub fn create_interpolated(points: &[Point], parameterization: nurbsknot::CurveNurbsKnotStyle) -> NurbsCurve {
         let n = points.len();
         if n < 2 { return NurbsCurve::new(3, false, 4, 0); }
         let dim = 3usize;
@@ -183,9 +189,9 @@ impl NurbsCurve {
         let order = degree + 1;
 
         let periodic = matches!(parameterization,
-            knot::CurveKnotStyle::UniformPeriodic |
-            knot::CurveKnotStyle::ChordPeriodic |
-            knot::CurveKnotStyle::ChordSquareRootPeriodic);
+            nurbsknot::CurveNurbsKnotStyle::UniformPeriodic |
+            nurbsknot::CurveNurbsKnotStyle::ChordPeriodic |
+            nurbsknot::CurveNurbsKnotStyle::ChordSquareRootPeriodic);
 
         if periodic && n < 3 { return NurbsCurve::new(3, false, 4, 0); }
 
@@ -199,22 +205,22 @@ impl NurbsCurve {
             let kc = cv_count + order - 2;
 
             let base_style = match parameterization {
-                knot::CurveKnotStyle::UniformPeriodic => knot::CurveKnotStyle::Uniform,
-                knot::CurveKnotStyle::ChordSquareRootPeriodic => knot::CurveKnotStyle::ChordSquareRoot,
-                _ => knot::CurveKnotStyle::Chord,
+                nurbsknot::CurveNurbsKnotStyle::UniformPeriodic => nurbsknot::CurveNurbsKnotStyle::Uniform,
+                nurbsknot::CurveNurbsKnotStyle::ChordSquareRootPeriodic => nurbsknot::CurveNurbsKnotStyle::ChordSquareRoot,
+                _ => nurbsknot::CurveNurbsKnotStyle::Chord,
             };
 
             let mut params = vec![0.0; n + 1];
-            if matches!(base_style, knot::CurveKnotStyle::Uniform) {
+            if matches!(base_style, nurbsknot::CurveNurbsKnotStyle::Uniform) {
                 for i in 1..=n { params[i] = i as f64; }
             } else {
                 for i in 1..n {
                     let mut d = pdist(&points[i-1], &points[i]);
-                    if matches!(base_style, knot::CurveKnotStyle::ChordSquareRoot) { d = d.sqrt(); }
+                    if matches!(base_style, nurbsknot::CurveNurbsKnotStyle::ChordSquareRoot) { d = d.sqrt(); }
                     params[i] = params[i-1] + d;
                 }
                 let mut d_close = pdist(&points[n-1], &points[0]);
-                if matches!(base_style, knot::CurveKnotStyle::ChordSquareRoot) { d_close = d_close.sqrt(); }
+                if matches!(base_style, nurbsknot::CurveNurbsKnotStyle::ChordSquareRoot) { d_close = d_close.sqrt(); }
                 params[n] = params[n-1] + d_close;
             }
 
@@ -229,18 +235,18 @@ impl NurbsCurve {
                 return NurbsCurve::new(3, false, 4, 0);
             }
 
-            let mut knots_vec = vec![0.0; kc];
-            for i in 0..=n { knots_vec[i + 2] = params[i]; }
-            knots_vec[cv_count]     = knots_vec[3] - knots_vec[2] + knots_vec[cv_count - 1];
-            knots_vec[1]            = knots_vec[cv_count - 2] - knots_vec[cv_count - 1] + knots_vec[2];
-            knots_vec[cv_count + 1] = knots_vec[4] - knots_vec[3] + knots_vec[cv_count];
-            knots_vec[0]            = knots_vec[cv_count - 3] - knots_vec[cv_count - 2] + knots_vec[1];
+            let mut nurbsknots_vec = vec![0.0; kc];
+            for i in 0..=n { nurbsknots_vec[i + 2] = params[i]; }
+            nurbsknots_vec[cv_count]     = nurbsknots_vec[3] - nurbsknots_vec[2] + nurbsknots_vec[cv_count - 1];
+            nurbsknots_vec[1]            = nurbsknots_vec[cv_count - 2] - nurbsknots_vec[cv_count - 1] + nurbsknots_vec[2];
+            nurbsknots_vec[cv_count + 1] = nurbsknots_vec[4] - nurbsknots_vec[3] + nurbsknots_vec[cv_count];
+            nurbsknots_vec[0]            = nurbsknots_vec[cv_count - 3] - nurbsknots_vec[cv_count - 2] + nurbsknots_vec[1];
 
             let mut a = vec![vec![0.0; n]; n];
             let mut rhs = vec![0.0; n * dim];
 
             for i in 0..n {
-                let basis = knot::eval_basis(order, &knots_vec, i, params[i]);
+                let basis = nurbsknot::eval_basis(order, &nurbsknots_vec, i, params[i]);
                 let c0 = i % n;
                 let c1 = (i + 1) % n;
                 let c2 = (i + 2) % n;
@@ -280,7 +286,7 @@ impl NurbsCurve {
             }
 
             let mut curve = NurbsCurve::new(dim, false, order, cv_count);
-            for i in 0..kc { curve.set_knot(i, knots_vec[i]); }
+            for i in 0..kc { curve.set_nurbsknot(i, nurbsknots_vec[i]); }
             for i in 0..n {
                 curve.set_cv(i, &Point::new(cv[i*3], cv[i*3+1], cv[i*3+2]));
             }
@@ -303,9 +309,9 @@ impl NurbsCurve {
             pts[i*3+2] = points[i][2];
         }
 
-        let params = knot::compute_parameters(&pts, dim, parameterization);
-        let knots_vec = knot::build_interp_knots(&params, degree);
-        let kc = knots_vec.len();
+        let params = nurbsknot::compute_parameters(&pts, dim, parameterization);
+        let nurbsknots_vec = nurbsknot::build_interp_nurbsknots(&params, degree);
+        let kc = nurbsknots_vec.len();
 
         let estimate_tangent = |i0: usize, i1: usize, i2: usize| -> Vector {
             let d01 = pdist(&points[i0], &points[i1]);
@@ -372,7 +378,7 @@ impl NurbsCurve {
         for d in 0..dim { rhs[d] = cv[dim + d]; }
 
         for i in 1..n-1 {
-            let basis = knot::eval_basis(order, &knots_vec, i, params[i]);
+            let basis = nurbsknot::eval_basis(order, &nurbsknots_vec, i, params[i]);
             lower[i] = basis[0];
             diag[i] = basis[1];
             upper[i] = basis[2];
@@ -382,14 +388,14 @@ impl NurbsCurve {
         diag[n-1] = 1.0;
         for d in 0..dim { rhs[(n-1) * dim + d] = cv[n * dim + d]; }
 
-        let solution = knot::solve_tridiagonal(dim, &lower, &diag, &upper, &rhs).unwrap();
+        let solution = nurbsknot::solve_tridiagonal(dim, &lower, &diag, &upper, &rhs).unwrap();
 
         for i in 0..sys_n {
             for d in 0..dim { cv[(i+1) * dim + d] = solution[i * dim + d]; }
         }
 
         let mut curve = NurbsCurve::new(dim, false, order, cv_count);
-        for i in 0..kc { curve.set_knot(i, knots_vec[i]); }
+        for i in 0..kc { curve.set_nurbsknot(i, nurbsknots_vec[i]); }
         for i in 0..cv_count {
             curve.set_cv(i, &Point::new(cv[i*3], cv[i*3+1], cv[i*3+2]));
         }
@@ -412,7 +418,7 @@ impl NurbsCurve {
             if n >= 2 && pdist(&points[0], &points[n-1]) < 1e-10 { n -= 1; }
             if n <= num_cvs || num_cvs < order {
                 if n < 3 { return NurbsCurve::new(3, false, 4, 0); }
-                return NurbsCurve::create_interpolated(&points[..n], knot::CurveKnotStyle::ChordPeriodic);
+                return NurbsCurve::create_interpolated(&points[..n], nurbsknot::CurveNurbsKnotStyle::ChordPeriodic);
             }
 
             let cv_count = num_cvs + degree;
@@ -430,14 +436,14 @@ impl NurbsCurve {
             for i in 0..n {
                 ppts[i*3] = points[i][0]; ppts[i*3+1] = points[i][1]; ppts[i*3+2] = points[i][2];
             }
-            let knots_vec = knot::build_fitted_knots_periodic_adaptive(&params, &ppts, n, dim, num_cvs, degree, 3.0);
+            let nurbsknots_vec = nurbsknot::build_fitted_nurbsknots_periodic_adaptive(&params, &ppts, n, dim, num_cvs, degree, 3.0);
 
             let mut ntn = vec![vec![0.0; num_cvs]; num_cvs];
             let mut ntq = vec![0.0; num_cvs * dim];
 
             for k in 0..n {
-                let span = knot::find_span(order, cv_count, &knots_vec, params[k]);
-                let basis = knot::eval_basis(order, &knots_vec, span, params[k]);
+                let span = nurbsknot::find_span(order, cv_count, &nurbsknots_vec, params[k]);
+                let basis = nurbsknot::eval_basis(order, &nurbsknots_vec, span, params[k]);
                 for a in 0..order {
                     let ci = (span + a) % num_cvs;
                     for d in 0..dim {
@@ -477,7 +483,7 @@ impl NurbsCurve {
             }
 
             let mut curve = NurbsCurve::new(dim, false, order, cv_count);
-            for i in 0..kc { curve.set_knot(i, knots_vec[i]); }
+            for i in 0..kc { curve.set_nurbsknot(i, nurbsknots_vec[i]); }
             for i in 0..num_cvs {
                 curve.set_cv(i, &Point::new(cv[i*3], cv[i*3+1], cv[i*3+2]));
             }
@@ -490,7 +496,7 @@ impl NurbsCurve {
 
         // Open fitting
         if m <= num_cvs || num_cvs < order {
-            return NurbsCurve::create_interpolated(points, knot::CurveKnotStyle::Chord);
+            return NurbsCurve::create_interpolated(points, nurbsknot::CurveNurbsKnotStyle::Chord);
         }
 
         let mut pts = vec![0.0; m * dim];
@@ -498,8 +504,8 @@ impl NurbsCurve {
             pts[i*3] = points[i][0]; pts[i*3+1] = points[i][1]; pts[i*3+2] = points[i][2];
         }
 
-        let params = knot::compute_parameters(&pts, dim, knot::CurveKnotStyle::Chord);
-        let knots_vec = knot::build_fitted_knots_adaptive(&params, &pts, dim, num_cvs, degree, 3.0);
+        let params = nurbsknot::compute_parameters(&pts, dim, nurbsknot::CurveNurbsKnotStyle::Chord);
+        let nurbsknots_vec = nurbsknot::build_fitted_nurbsknots_adaptive(&params, &pts, dim, num_cvs, degree, 3.0);
         let n = num_cvs - 1;
         let sys_n = num_cvs - 2;
         let bw = degree;
@@ -509,8 +515,8 @@ impl NurbsCurve {
         let mut rhs = vec![0.0; sys_n * dim];
 
         for k in 1..(m - 1) {
-            let span = knot::find_span(order, num_cvs, &knots_vec, params[k]);
-            let basis = knot::eval_basis(order, &knots_vec, span, params[k]);
+            let span = nurbsknot::find_span(order, num_cvs, &nurbsknots_vec, params[k]);
+            let basis = nurbsknot::eval_basis(order, &nurbsknots_vec, span, params[k]);
 
             let mut rk = [points[k][0], points[k][1], points[k][2]];
             for a in 0..order {
@@ -539,12 +545,12 @@ impl NurbsCurve {
             }
         }
 
-        if !knot::solve_banded_spd(dim, sys_n, bw, &mut band, &mut rhs) {
-            return NurbsCurve::create_interpolated(points, knot::CurveKnotStyle::Chord);
+        if !nurbsknot::solve_banded_spd(dim, sys_n, bw, &mut band, &mut rhs) {
+            return NurbsCurve::create_interpolated(points, nurbsknot::CurveNurbsKnotStyle::Chord);
         }
 
         let mut curve = NurbsCurve::new(dim, false, order, num_cvs);
-        for i in 0..knots_vec.len() { curve.set_knot(i, knots_vec[i]); }
+        for i in 0..nurbsknots_vec.len() { curve.set_nurbsknot(i, nurbsknots_vec[i]); }
         curve.set_cv(0, &points[0]);
         for i in 0..sys_n {
             curve.set_cv(i + 1, &Point::new(rhs[i*3], rhs[i*3+1], rhs[i*3+2]));
@@ -555,12 +561,12 @@ impl NurbsCurve {
 
     /// Create clamped uniform NURBS curve from control points
     ///
-    /// Implementation matches OpenNURBS ON_MakeClampedUniformKnotVector exactly.
+    /// Implementation matches OpenNURBS ON_MakeClampedUniformNurbsKnotVector exactly.
     pub fn create_clamped_uniform(
         dimension: usize,
         order: usize,
         points: &[Point],
-        knot_delta: f64,
+        nurbsknot_delta: f64,
     ) -> Self {
         let point_count = points.len();
         
@@ -578,28 +584,28 @@ impl NurbsCurve {
             curve.set_cv(i, point);
         }
 
-        // Create clamped uniform knot vector - matches OpenNURBS exactly
-        let knot_count = order + point_count - 2;
+        // Create clamped uniform nurbsknot vector - matches OpenNURBS exactly
+        let nurbsknot_count = order + point_count - 2;
 
-        // Fill interior knots with uniform spacing
+        // Fill interior nurbsknots with uniform spacing
         // Start from index (order-2) up to (cv_count-1)
         let mut k = 0.0;
         for i in (order - 2)..point_count {
-            curve.m_knot[i] = k;
-            k += knot_delta;
+            curve.m_nurbsknot[i] = k;
+            k += nurbsknot_delta;
         }
 
-        // Clamp both ends: sets first (order-2) and last (order-2) knots
-        // Left clamp: knot[0..order-3] = knot[order-2]
+        // Clamp both ends: sets first (order-2) and last (order-2) nurbsknots
+        // Left clamp: nurbsknot[0..order-3] = nurbsknot[order-2]
         let i0 = order - 2;
         for i in 0..i0 {
-            curve.m_knot[i] = curve.m_knot[i0];
+            curve.m_nurbsknot[i] = curve.m_nurbsknot[i0];
         }
 
-        // Right clamp: knot[cv_count..knot_count-1] = knot[cv_count-1]
+        // Right clamp: nurbsknot[cv_count..nurbsknot_count-1] = nurbsknot[cv_count-1]
         let i0 = point_count - 1;
-        for i in (i0 + 1)..knot_count {
-            curve.m_knot[i] = curve.m_knot[i0];
+        for i in (i0 + 1)..nurbsknot_count {
+            curve.m_nurbsknot[i] = curve.m_nurbsknot[i0];
         }
 
         curve
@@ -611,7 +617,7 @@ impl NurbsCurve {
         dimension: usize,
         order: usize,
         points: &[Point],
-        knot_delta: f64,
+        nurbsknot_delta: f64,
     ) -> Self {
         let point_count = points.len();
 
@@ -637,10 +643,10 @@ impl NurbsCurve {
             curve.set_cv(point_count + i, &points[idx]);
         }
 
-        // Create uniform knot vector
-        let knot_count = order + cv_count - 2;
-        for i in 0..knot_count {
-            curve.m_knot[i] = i as f64 * knot_delta;
+        // Create uniform nurbsknot vector
+        let nurbsknot_count = order + cv_count - 2;
+        for i in 0..nurbsknot_count {
+            curve.m_nurbsknot[i] = i as f64 * nurbsknot_delta;
         }
 
         curve
@@ -655,7 +661,7 @@ impl NurbsCurve {
     /// Create a NURBS curve with specified parameters (matches C++/Python constructor)
     pub fn new(dimension: usize, is_rational: bool, order: usize, cv_count: usize) -> Self {
         let cv_stride = if is_rational { dimension + 1 } else { dimension };
-        let knot_count = if order > 0 && cv_count >= order { order + cv_count - 2 } else { 0 };
+        let nurbsknot_count = if order > 0 && cv_count >= order { order + cv_count - 2 } else { 0 };
 
         NurbsCurve {
             guid: std::sync::OnceLock::new(),
@@ -669,7 +675,7 @@ impl NurbsCurve {
             m_order: order,
             m_cv_count: cv_count,
             m_cv_stride: cv_stride,
-            m_knot: vec![0.0; knot_count],
+            m_nurbsknot: vec![0.0; nurbsknot_count],
             m_cv: vec![0.0; cv_count * cv_stride],
         }
     }
@@ -689,7 +695,7 @@ impl NurbsCurve {
             m_order: 0,
             m_cv_count: 0,
             m_cv_stride: 0,
-            m_knot: Vec::new(),
+            m_nurbsknot: Vec::new(),
             m_cv: Vec::new(),
         }
     }
@@ -735,8 +741,8 @@ impl NurbsCurve {
         self.m_cv_count = cv_count;
         self.m_cv_stride = if is_rational { dimension + 1 } else { dimension };
 
-        let knot_count = order + cv_count - 2;
-        self.m_knot = vec![0.0; knot_count];
+        let nurbsknot_count = order + cv_count - 2;
+        self.m_nurbsknot = vec![0.0; nurbsknot_count];
         self.m_cv = vec![0.0; cv_count * self.m_cv_stride];
 
         // Initialize weights to 1.0 for rational curves
@@ -761,14 +767,14 @@ impl NurbsCurve {
         if self.m_order < 2 || self.m_cv_count < self.m_order {
             return false;
         }
-        if self.m_knot.len() != self.m_order + self.m_cv_count - 2 {
+        if self.m_nurbsknot.len() != self.m_order + self.m_cv_count - 2 {
             return false;
         }
-        // Check for sufficient distinct knots
+        // Check for sufficient distinct nurbsknots
         if self.m_order >= 2 && self.m_cv_count >= self.m_order {
             let idx1 = self.m_order - 2;
             let idx2 = self.m_cv_count - 1;
-            if idx2 < self.m_knot.len() && self.m_knot[idx1] >= self.m_knot[idx2] {
+            if idx2 < self.m_nurbsknot.len() && self.m_nurbsknot[idx1] >= self.m_nurbsknot[idx2] {
                 return false;
             }
         }
@@ -798,7 +804,7 @@ impl NurbsCurve {
     /// Check if curve is periodic (wraps around seamlessly)
     pub fn is_periodic(&self) -> bool {
         // For now, return false - full implementation would check
-        // if the curve is clamped and if removing end knots makes it periodic
+        // if the curve is clamped and if removing end nurbsknots makes it periodic
         false
     }
 
@@ -980,8 +986,8 @@ impl NurbsCurve {
             }
         }
         if !ignore_parameterization {
-            for i in 0..self.knot_count() {
-                if (self.m_knot[i] - other.m_knot[i]).abs() > tolerance { return false; }
+            for i in 0..self.nurbsknot_count() {
+                if (self.m_nurbsknot[i] - other.m_nurbsknot[i]).abs() > tolerance { return false; }
             }
         }
         true
@@ -991,17 +997,17 @@ impl NurbsCurve {
         if !self.is_valid() { return false; }
         let (d0, d1) = self.domain();
         if t < d0 || t > d1 { return false; }
-        let mut at_knot = false;
-        let mut knot_idx: usize = 0;
-        for i in 0..self.knot_count() {
-            if (self.m_knot[i] - t).abs() < Tolerance::ZERO_TOLERANCE {
-                at_knot = true;
-                knot_idx = i;
+        let mut at_nurbsknot = false;
+        let mut nurbsknot_idx: usize = 0;
+        for i in 0..self.nurbsknot_count() {
+            if (self.m_nurbsknot[i] - t).abs() < Tolerance::ZERO_TOLERANCE {
+                at_nurbsknot = true;
+                nurbsknot_idx = i;
                 break;
             }
         }
-        if !at_knot { return true; }
-        let mult = self.knot_multiplicity(knot_idx);
+        if !at_nurbsknot { return true; }
+        let mult = self.nurbsknot_multiplicity(nurbsknot_idx);
         if continuity_type == 0 { return mult < self.m_order; }
         if continuity_type == 1 { return mult < self.m_order - 1; }
         if continuity_type == 2 { return mult < self.m_order - 2; }
@@ -1009,14 +1015,14 @@ impl NurbsCurve {
     }
 
 
-    /// Check if knot vector is valid
-    pub fn is_valid_knot_vector(&self) -> bool {
-        if self.m_knot.len() != self.m_order + self.m_cv_count - 2 {
+    /// Check if nurbsknot vector is valid
+    pub fn is_valid_nurbsknot_vector(&self) -> bool {
+        if self.m_nurbsknot.len() != self.m_order + self.m_cv_count - 2 {
             return false;
         }
         // Check non-decreasing
-        for i in 1..self.m_knot.len() {
-            if self.m_knot[i] < self.m_knot[i - 1] - Tolerance::ZERO_TOLERANCE {
+        for i in 1..self.m_nurbsknot.len() {
+            if self.m_nurbsknot[i] < self.m_nurbsknot[i - 1] - Tolerance::ZERO_TOLERANCE {
                 return false;
             }
         }
@@ -1024,7 +1030,7 @@ impl NurbsCurve {
         if self.m_order >= 2 && self.m_cv_count >= self.m_order {
             let idx1 = self.m_order - 2;
             let idx2 = self.m_cv_count - 1;
-            if idx2 < self.m_knot.len() && self.m_knot[idx1] >= self.m_knot[idx2] {
+            if idx2 < self.m_nurbsknot.len() && self.m_nurbsknot[idx1] >= self.m_nurbsknot[idx2] {
                 return false;
             }
         }
@@ -1032,12 +1038,12 @@ impl NurbsCurve {
     }
 
 
-    /// Check if knot vector is clamped at ends (0=start, 1=end, 2=both)
+    /// Check if nurbsknot vector is clamped at ends (0=start, 1=end, 2=both)
     pub fn is_clamped(&self, end: i32) -> bool {
         if !self.is_valid() {
             return false;
         }
-        knot::is_clamped(self.m_order, self.m_cv_count, &self.m_knot, end)
+        nurbsknot::is_clamped(self.m_order, self.m_cv_count, &self.m_nurbsknot, end)
     }
 
 
@@ -1075,9 +1081,9 @@ impl NurbsCurve {
     }
 
 
-    /// Get knot count
-    pub fn knot_count(&self) -> usize {
-        self.m_knot.len()
+    /// Get nurbsknot count
+    pub fn nurbsknot_count(&self) -> usize {
+        self.m_nurbsknot.len()
     }
 
 
@@ -1101,15 +1107,15 @@ impl NurbsCurve {
     }
 
 
-    /// Get all knot values
-    pub fn get_knots(&self) -> Vec<f64> {
-        self.m_knot.clone()
+    /// Get all nurbsknot values
+    pub fn get_nurbsknots(&self) -> Vec<f64> {
+        self.m_nurbsknot.clone()
     }
 
 
-    /// Get knot array pointer (for compatibility)
-    pub fn knot_array(&self) -> &[f64] {
-        &self.m_knot
+    /// Get nurbsknot array pointer (for compatibility)
+    pub fn nurbsknot_array(&self) -> &[f64] {
+        &self.m_nurbsknot
     }
 
 
@@ -1248,48 +1254,48 @@ impl NurbsCurve {
 
 
     ///////////////////////////////////////////////////////////////////////////////////////////
-    // Knot Access
+    // NurbsKnot Access
     ///////////////////////////////////////////////////////////////////////////////////////////
 
 
 
-    /// Get knot value at index
-    pub fn knot(&self, knot_index: usize) -> Option<f64> {
-        if knot_index >= self.m_knot.len() {
+    /// Get nurbsknot value at index
+    pub fn nurbsknot(&self, nurbsknot_index: usize) -> Option<f64> {
+        if nurbsknot_index >= self.m_nurbsknot.len() {
             return None;
         }
-        Some(self.m_knot[knot_index])
+        Some(self.m_nurbsknot[nurbsknot_index])
     }
 
 
-    /// Set knot value at index
-    pub fn set_knot(&mut self, knot_index: usize, knot_value: f64) -> bool {
-        if knot_index >= self.m_knot.len() {
+    /// Set nurbsknot value at index
+    pub fn set_nurbsknot(&mut self, nurbsknot_index: usize, nurbsknot_value: f64) -> bool {
+        if nurbsknot_index >= self.m_nurbsknot.len() {
             return false;
         }
-        self.m_knot[knot_index] = knot_value;
+        self.m_nurbsknot[nurbsknot_index] = nurbsknot_value;
         true
     }
 
 
-    /// Get knot multiplicity at index
-    pub fn knot_multiplicity(&self, knot_index: usize) -> usize {
-        if knot_index >= self.m_knot.len() {
+    /// Get nurbsknot multiplicity at index
+    pub fn nurbsknot_multiplicity(&self, nurbsknot_index: usize) -> usize {
+        if nurbsknot_index >= self.m_nurbsknot.len() {
             return 0;
         }
-        let val = self.m_knot[knot_index];
+        let val = self.m_nurbsknot[nurbsknot_index];
         let mut count = 1;
         // Count forward
-        let mut i = knot_index + 1;
-        while i < self.m_knot.len() && (self.m_knot[i] - val).abs() < Tolerance::ZERO_TOLERANCE {
+        let mut i = nurbsknot_index + 1;
+        while i < self.m_nurbsknot.len() && (self.m_nurbsknot[i] - val).abs() < Tolerance::ZERO_TOLERANCE {
             count += 1;
             i += 1;
         }
         // Count backward
-        let mut j = knot_index;
+        let mut j = nurbsknot_index;
         while j > 0 {
             j -= 1;
-            if (self.m_knot[j] - val).abs() < Tolerance::ZERO_TOLERANCE {
+            if (self.m_nurbsknot[j] - val).abs() < Tolerance::ZERO_TOLERANCE {
                 count += 1;
             } else {
                 break;
@@ -1299,95 +1305,95 @@ impl NurbsCurve {
     }
 
 
-    /// Get superfluous knot value at end (0=start, 1=end)
-    pub fn superfluous_knot(&self, end: usize) -> f64 {
+    /// Get superfluous nurbsknot value at end (0=start, 1=end)
+    pub fn superfluous_nurbsknot(&self, end: usize) -> f64 {
         if !self.is_valid() {
             return 0.0;
         }
-        let kc = self.knot_count();
+        let kc = self.nurbsknot_count();
         if end == 0 {
-            // First superfluous knot: reflect first knot across knot[order-2]
-            return 2.0 * self.m_knot[0] - self.m_knot[self.m_order - 2];
+            // First superfluous nurbsknot: reflect first nurbsknot across nurbsknot[order-2]
+            return 2.0 * self.m_nurbsknot[0] - self.m_nurbsknot[self.m_order - 2];
         } else {
-            // Last superfluous knot: reflect last knot across knot[cv_count-order]
-            return 2.0 * self.m_knot[kc - 1] - self.m_knot[self.m_cv_count - self.m_order];
+            // Last superfluous nurbsknot: reflect last nurbsknot across nurbsknot[cv_count-order]
+            return 2.0 * self.m_nurbsknot[kc - 1] - self.m_nurbsknot[self.m_cv_count - self.m_order];
         }
     }
 
 
-    /// Create a clamped uniform knot vector for this curve
-    pub fn make_clamped_uniform_knot_vector(&mut self, delta: f64) -> bool {
+    /// Create a clamped uniform nurbsknot vector for this curve
+    pub fn make_clamped_uniform_nurbsknot_vector(&mut self, delta: f64) -> bool {
         if delta <= 0.0 || self.m_dim == 0 || self.m_order < 2 || self.m_cv_count < self.m_order {
             return false;
         }
-        self.m_knot = knot::make_clamped_uniform(self.m_order, self.m_cv_count, delta);
-        !self.m_knot.is_empty()
+        self.m_nurbsknot = nurbsknot::make_clamped_uniform(self.m_order, self.m_cv_count, delta);
+        !self.m_nurbsknot.is_empty()
     }
 
 
-    /// Insert knot into curve (Boehm's algorithm)
-    pub fn insert_knot(&mut self, knot_value: f64, knot_multiplicity: usize) -> bool {
+    /// Insert nurbsknot into curve (Boehm's algorithm)
+    pub fn insert_nurbsknot(&mut self, nurbsknot_value: f64, nurbsknot_multiplicity: usize) -> bool {
         if !self.is_valid() {
             return false;
         }
 
         let p = self.degree();
-        if knot_multiplicity < 1 || knot_multiplicity > p {
+        if nurbsknot_multiplicity < 1 || nurbsknot_multiplicity > p {
             return false;
         }
 
         let (d0, d1) = self.domain();
-        if knot_value < d0 || knot_value > d1 {
+        if nurbsknot_value < d0 || nurbsknot_value > d1 {
             return false;
         }
 
-        // Handle end knots
-        if knot_value == d0 {
-            if knot_multiplicity == p { self.clamp_end(0); return true; }
-            if knot_multiplicity == 1 { return true; }
+        // Handle end nurbsknots
+        if nurbsknot_value == d0 {
+            if nurbsknot_multiplicity == p { self.clamp_end(0); return true; }
+            if nurbsknot_multiplicity == 1 { return true; }
             return false;
         }
-        if knot_value == d1 {
-            if knot_multiplicity == p { self.clamp_end(1); return true; }
-            if knot_multiplicity == 1 { return true; }
+        if nurbsknot_value == d1 {
+            if nurbsknot_multiplicity == p { self.clamp_end(1); return true; }
+            if nurbsknot_multiplicity == 1 { return true; }
             return false;
         }
 
         let mut n = self.m_cv_count - 1;
-        let mut full_knot_count = self.m_cv_count + self.m_order;
+        let mut full_nurbsknot_count = self.m_cv_count + self.m_order;
 
-        for _insert_iter in 0..knot_multiplicity {
-            // Build full knot vector
-            let mut u = vec![0.0f64; full_knot_count];
-            u[0] = self.m_knot[0];
-            for i in 0..self.m_knot.len() {
-                u[i + 1] = self.m_knot[i];
+        for _insert_iter in 0..nurbsknot_multiplicity {
+            // Build full nurbsknot vector
+            let mut u = vec![0.0f64; full_nurbsknot_count];
+            u[0] = self.m_nurbsknot[0];
+            for i in 0..self.m_nurbsknot.len() {
+                u[i + 1] = self.m_nurbsknot[i];
             }
-            u[full_knot_count - 1] = *self.m_knot.last().unwrap();
+            u[full_nurbsknot_count - 1] = *self.m_nurbsknot.last().unwrap();
 
             // Count current multiplicity
             let tol = (d0.abs() + d1.abs() + (d1 - d0).abs()) * f64::EPSILON.sqrt();
-            let mult = u.iter().filter(|&&v| (v - knot_value).abs() <= tol).count();
+            let mult = u.iter().filter(|&&v| (v - nurbsknot_value).abs() <= tol).count();
             if mult >= p {
                 return false;
             }
 
             // Find span
-            let span = self.find_span(knot_value);
+            let span = self.find_span(nurbsknot_value);
             let k = span + self.m_order - 1;
 
-            let m_full = full_knot_count - 1;
-            let new_full_knot_count = full_knot_count + 1;
+            let m_full = full_nurbsknot_count - 1;
+            let new_full_nurbsknot_count = full_nurbsknot_count + 1;
             let new_cv_count = self.m_cv_count + 1;
 
-            let mut u_new = vec![0.0f64; new_full_knot_count];
+            let mut u_new = vec![0.0f64; new_full_nurbsknot_count];
             let mut cv_new = vec![0.0f64; new_cv_count * self.m_cv_stride];
 
-            // Copy unaffected knots
+            // Copy unaffected nurbsknots
             for i in 0..=k {
                 u_new[i] = u[i];
             }
-            u_new[k + 1] = knot_value;
+            u_new[k + 1] = nurbsknot_value;
             for i in (k + 1)..=m_full {
                 u_new[i + 1] = u[i];
             }
@@ -1409,7 +1415,7 @@ impl NurbsCurve {
             // Compute new CVs in affected region
             for i in (k - p + 1)..=(k) {
                 let denom = u[i + p] - u[i];
-                let alpha = if denom != 0.0 { (knot_value - u[i]) / denom } else { 0.0 };
+                let alpha = if denom != 0.0 { (nurbsknot_value - u[i]) / denom } else { 0.0 };
 
                 let src_prev = (i - 1) * self.m_cv_stride;
                 let src_curr = i * self.m_cv_stride;
@@ -1425,9 +1431,9 @@ impl NurbsCurve {
             self.m_cv = cv_new;
 
             let new_compressed = self.m_order + self.m_cv_count - 2;
-            self.m_knot = (0..new_compressed).map(|i| u_new[i + 1]).collect();
+            self.m_nurbsknot = (0..new_compressed).map(|i| u_new[i + 1]).collect();
 
-            full_knot_count = new_full_knot_count;
+            full_nurbsknot_count = new_full_nurbsknot_count;
             n = self.m_cv_count - 1;
         }
 
@@ -1441,24 +1447,24 @@ impl NurbsCurve {
             return 0.0;
         }
 
-        let knot = &self.m_knot[cv_index..];
+        let nurbsknot = &self.m_nurbsknot[cv_index..];
         let order = self.m_order;
 
-        if order <= 2 || knot[0] == knot[order - 2] {
-            return knot[0];
+        if order <= 2 || nurbsknot[0] == nurbsknot[order - 2] {
+            return nurbsknot[0];
         }
 
         let p = order - 1;
-        let k0 = knot[0];
-        let k = knot[p / 2];
-        let k1 = knot[p - 1];
+        let k0 = nurbsknot[0];
+        let k = nurbsknot[p / 2];
+        let k1 = nurbsknot[p - 1];
         let tol = (k1 - k0) * 1.490116119385e-8_f64;
         let dp = p as f64;
 
-        let mut g: f64 = knot[..p].iter().sum();
+        let mut g: f64 = nurbsknot[..p].iter().sum();
         g /= dp;
 
-        // Snap to exact middle knot for uniform knot vectors
+        // Snap to exact middle nurbsknot for uniform nurbsknot vectors
         if (2.0 * k - (k0 + k1)).abs() <= tol
             && (g - k).abs() <= (g.abs() * 1.490116119385e-8_f64 + tol)
         {
@@ -1486,8 +1492,8 @@ impl NurbsCurve {
         if !self.is_valid() {
             return (0.0, 0.0);
         }
-        let t0 = self.m_knot[self.m_order - 2];
-        let t1 = self.m_knot[self.m_cv_count - 1];
+        let t0 = self.m_nurbsknot[self.m_order - 2];
+        let t1 = self.m_nurbsknot[self.m_cv_count - 1];
         (t0, t1)
     }
 
@@ -1523,24 +1529,24 @@ impl NurbsCurve {
         }
 
         let clamped_start = self.m_order >= 2 &&
-            (self.m_knot[0] - self.m_knot[self.m_order - 2]).abs() < Tolerance::ZERO_TOLERANCE;
-        let clamped_end = self.m_cv_count < self.m_knot.len() &&
-            (*self.m_knot.last().unwrap() - self.m_knot[self.m_cv_count - 1]).abs() < Tolerance::ZERO_TOLERANCE;
+            (self.m_nurbsknot[0] - self.m_nurbsknot[self.m_order - 2]).abs() < Tolerance::ZERO_TOLERANCE;
+        let clamped_end = self.m_cv_count < self.m_nurbsknot.len() &&
+            (*self.m_nurbsknot.last().unwrap() - self.m_nurbsknot[self.m_cv_count - 1]).abs() < Tolerance::ZERO_TOLERANCE;
 
         let scale = (t1 - t0) / (old_t1 - old_t0);
 
-        for i in 0..self.m_knot.len() {
-            self.m_knot[i] = t0 + (self.m_knot[i] - old_t0) * scale;
+        for i in 0..self.m_nurbsknot.len() {
+            self.m_nurbsknot[i] = t0 + (self.m_nurbsknot[i] - old_t0) * scale;
         }
 
         if clamped_start {
             for i in 0..self.m_order - 1 {
-                self.m_knot[i] = t0;
+                self.m_nurbsknot[i] = t0;
             }
         }
         if clamped_end {
-            for i in self.m_cv_count - 1..self.m_knot.len() {
-                self.m_knot[i] = t1;
+            for i in self.m_cv_count - 1..self.m_nurbsknot.len() {
+                self.m_nurbsknot[i] = t1;
             }
         }
 
@@ -1556,11 +1562,11 @@ impl NurbsCurve {
         }
 
         let offset = self.m_order - 2;
-        spans.push(self.m_knot[offset]);
+        spans.push(self.m_nurbsknot[offset]);
 
         for i in (offset + 1)..self.m_cv_count {
-            if i == offset || (self.m_knot[i] - self.m_knot[i - 1]).abs() > Tolerance::ZERO_TOLERANCE {
-                spans.push(self.m_knot[i]);
+            if i == offset || (self.m_nurbsknot[i] - self.m_nurbsknot[i - 1]).abs() > Tolerance::ZERO_TOLERANCE {
+                spans.push(self.m_nurbsknot[i]);
             }
         }
 
@@ -1585,9 +1591,9 @@ impl NurbsCurve {
             return (false, 0.0);
         }
         for i in (self.m_order - 1)..(self.m_cv_count - 1) {
-            let t = self.m_knot[i];
+            let t = self.m_nurbsknot[i];
             if t <= t0 || t >= t1 { continue; }
-            let mult = self.knot_multiplicity(i);
+            let mult = self.nurbsknot_multiplicity(i);
             if continuity_type == 0 && mult >= self.m_order {
                 return (true, t);
             }
@@ -1633,8 +1639,8 @@ impl NurbsCurve {
         const SUBDIVISIONS: usize = 4;
 
         for span in 0..n_spans {
-            let span_a = self.m_knot[self.m_order - 2 + span];
-            let span_b = self.m_knot[self.m_order - 1 + span];
+            let span_a = self.m_nurbsknot[self.m_order - 2 + span];
+            let span_b = self.m_nurbsknot[self.m_order - 1 + span];
             if span_b <= span_a {
                 continue;
             }
@@ -2030,7 +2036,7 @@ impl NurbsCurve {
             return Point::new(0.0, 0.0, 0.0);
         }
 
-        // Find span (returns index relative to shifted knot array)
+        // Find span (returns index relative to shifted nurbsknot array)
         let span = self.find_span(t);
 
         // Evaluate using Cox-de Boor algorithm
@@ -2454,7 +2460,7 @@ impl NurbsCurve {
             }
         }
 
-        knot::reverse(self.m_order, self.m_cv_count, &mut self.m_knot)
+        nurbsknot::reverse(self.m_order, self.m_cv_count, &mut self.m_nurbsknot)
     }
 
     /// Swap two coordinate indices for all CVs
@@ -2522,7 +2528,7 @@ impl NurbsCurve {
             self.clamp_end(0);
             self.evaluate_nurbs_de_boor_inplace(cvdim, self.m_order, 0, 1, new_t0);
             for i in 0..(self.m_order - 1) {
-                self.m_knot[i] = new_t0;
+                self.m_nurbsknot[i] = new_t0;
             }
             changed = true;
         }
@@ -2532,9 +2538,9 @@ impl NurbsCurve {
             self.clamp_end(1);
             let i0 = self.m_cv_count - self.m_order;
             self.evaluate_nurbs_de_boor_inplace(cvdim, self.m_order, i0, -1, new_t1);
-            let kc = self.knot_count();
+            let kc = self.nurbsknot_count();
             for i in (self.m_cv_count - 1)..kc {
-                self.m_knot[i] = new_t1;
+                self.m_nurbsknot[i] = new_t1;
             }
             changed = true;
         }
@@ -2622,18 +2628,18 @@ impl NurbsCurve {
 
         // Clamp start
         if end == 0 || end == 2 {
-            let knot_val = self.m_knot[self.m_order - 2];
+            let nurbsknot_val = self.m_nurbsknot[self.m_order - 2];
             for i in 0..(self.m_order - 2) {
-                self.m_knot[i] = knot_val;
+                self.m_nurbsknot[i] = nurbsknot_val;
             }
         }
 
         // Clamp end
         if end == 1 || end == 2 {
-            let kc = self.knot_count();
-            let knot_val = self.m_knot[self.m_cv_count - 1];
+            let kc = self.nurbsknot_count();
+            let nurbsknot_val = self.m_nurbsknot[self.m_cv_count - 1];
             for i in self.m_cv_count..kc {
-                self.m_knot[i] = knot_val;
+                self.m_nurbsknot[i] = nurbsknot_val;
             }
         }
     }
@@ -2651,22 +2657,22 @@ impl NurbsCurve {
         let p = self.degree();
         let trim_start = t0 > d0 + Tolerance::ZERO_TOLERANCE;
         let trim_end = t1 < d1 - Tolerance::ZERO_TOLERANCE;
-        if trim_start { if !self.insert_knot(t0, p) { return false; } }
-        if trim_end { if !self.insert_knot(t1, p) { return false; } }
-        let full_knot_count = self.m_cv_count + self.m_order;
-        let mut u = vec![0.0; full_knot_count];
-        u[0] = *self.m_knot.first().unwrap();
-        for i in 0..self.m_knot.len() {
-            u[i + 1] = self.m_knot[i];
+        if trim_start { if !self.insert_nurbsknot(t0, p) { return false; } }
+        if trim_end { if !self.insert_nurbsknot(t1, p) { return false; } }
+        let full_nurbsknot_count = self.m_cv_count + self.m_order;
+        let mut u = vec![0.0; full_nurbsknot_count];
+        u[0] = *self.m_nurbsknot.first().unwrap();
+        for i in 0..self.m_nurbsknot.len() {
+            u[i + 1] = self.m_nurbsknot[i];
         }
-        u[full_knot_count - 1] = *self.m_knot.last().unwrap();
+        u[full_nurbsknot_count - 1] = *self.m_nurbsknot.last().unwrap();
         let tol = Tolerance::ZERO_TOLERANCE;
         let mut start_span: i32 = -1;
-        for i in (0..full_knot_count).rev() {
+        for i in (0..full_nurbsknot_count).rev() {
             if (u[i] - t0).abs() < tol { start_span = i as i32; break; }
         }
         let mut end_span: i32 = -1;
-        for i in 0..full_knot_count {
+        for i in 0..full_nurbsknot_count {
             if (u[i] - t1).abs() < tol { end_span = i as i32; break; }
         }
         if start_span < 0 || end_span < 0 || start_span >= end_span { return false; }
@@ -2681,18 +2687,18 @@ impl NurbsCurve {
                 return false;
             }
         }
-        let new_knot_count = new_cv_count + self.m_order - 2;
-        let mut new_knot = vec![0.0; new_knot_count];
-        for i in 0..(p - 1) { new_knot[i] = t0; }
-        let mid_count = new_knot_count as i32 - 2 * (p as i32 - 1);
+        let new_nurbsknot_count = new_cv_count + self.m_order - 2;
+        let mut new_nurbsknot = vec![0.0; new_nurbsknot_count];
+        for i in 0..(p - 1) { new_nurbsknot[i] = t0; }
+        let mid_count = new_nurbsknot_count as i32 - 2 * (p as i32 - 1);
         if mid_count > 0 {
             let src_start = start_span as usize;
             for i in 0..mid_count as usize {
                 let src_idx = src_start + i;
-                new_knot[p - 1 + i] = if src_idx < full_knot_count { u[src_idx] } else { t1 };
+                new_nurbsknot[p - 1 + i] = if src_idx < full_nurbsknot_count { u[src_idx] } else { t1 };
             }
         }
-        for i in 0..(p - 1) { new_knot[new_knot_count - p + 1 + i] = t1; }
+        for i in 0..(p - 1) { new_nurbsknot[new_nurbsknot_count - p + 1 + i] = t1; }
         let mut new_cv = vec![0.0; new_cv_count * self.m_cv_stride];
         for i in 0..new_cv_count {
             let src = (first_cv + i) * self.m_cv_stride;
@@ -2703,7 +2709,7 @@ impl NurbsCurve {
         }
         self.m_cv_count = new_cv_count;
         self.m_cv = new_cv;
-        self.m_knot = new_knot;
+        self.m_nurbsknot = new_nurbsknot;
         true
     }
 
@@ -2740,7 +2746,7 @@ impl NurbsCurve {
         let new_cv_count = right_crv.m_cv_count + left_crv.m_cv_count - 1;
         let new_kc = order + new_cv_count - 2;
         let mut new_cv = vec![0.0; new_cv_count * self.m_cv_stride];
-        let mut new_knots = vec![0.0; new_kc];
+        let mut new_nurbsknots = vec![0.0; new_kc];
         for i in 0..right_crv.m_cv_count {
             for j in 0..cvdim {
                 new_cv[i * self.m_cv_stride + j] = right_crv.m_cv[i * right_crv.m_cv_stride + j];
@@ -2752,15 +2758,15 @@ impl NurbsCurve {
                 new_cv[dst * self.m_cv_stride + j] = left_crv.m_cv[i * left_crv.m_cv_stride + j];
             }
         }
-        let rkc = right_crv.knot_count();
-        for i in 0..rkc { new_knots[i] = right_crv.m_knot[i]; }
-        let lkc = left_crv.knot_count();
+        let rkc = right_crv.nurbsknot_count();
+        for i in 0..rkc { new_nurbsknots[i] = right_crv.m_nurbsknot[i]; }
+        let lkc = left_crv.nurbsknot_count();
         for i in (order - 1)..lkc {
-            new_knots[rkc + i - (order - 1)] = left_crv.m_knot[i] + shift;
+            new_nurbsknots[rkc + i - (order - 1)] = left_crv.m_nurbsknot[i] + shift;
         }
         self.m_cv_count = new_cv_count;
         self.m_cv = new_cv;
-        self.m_knot = new_knots;
+        self.m_nurbsknot = new_nurbsknots;
         self.set_domain(t, t + dom_len);
         true
     }
@@ -2807,7 +2813,7 @@ impl NurbsCurve {
 
 
     /// Serialize to JSON and write to file
-    pub fn json_dump(&self, filename: &str) {
+    pub fn file_json_dump(&self, filename: &str) {
         use std::fs::File;
         use std::io::Write;
         if let Ok(json) = serde_json::to_string_pretty(self) {
@@ -2819,7 +2825,7 @@ impl NurbsCurve {
 
 
     /// Load from JSON file
-    pub fn json_load(filename: &str) -> Self {
+    pub fn file_json_load(filename: &str) -> Self {
         use std::fs::File;
         use std::io::Read;
         let mut file = match File::open(filename) {
@@ -2845,7 +2851,7 @@ impl NurbsCurve {
             order: self.m_order as i32,
             cv_count: self.m_cv_count as i32,
             cv_stride: self.m_cv_stride as i32,
-            knots: self.m_knot.clone(),
+            nurbsknots: self.m_nurbsknot.clone(),
             cvs: self.m_cv.clone(),
             width: self.width,
             pointcolors: self.pointcolors.iter().map(|c| crate::proto::Color {
@@ -2878,7 +2884,7 @@ impl NurbsCurve {
         );
         curve.set_guid(proto.guid.clone());
         curve.name = proto.name;
-        curve.m_knot = proto.knots;
+        curve.m_nurbsknot = proto.nurbsknots;
         curve.m_cv = proto.cvs;
         curve.pointcolors = proto.pointcolors.iter().map(|c| Color::new(c.r as u8, c.g as u8, c.b as u8, c.a as u8)).collect();
         curve.linecolors = proto.linecolors.iter().map(|c| Color::new(c.r as u8, c.g as u8, c.b as u8, c.a as u8)).collect();
@@ -2909,18 +2915,18 @@ impl NurbsCurve {
     }
 
     pub fn jsondump(&self) -> Result<String, Box<dyn std::error::Error>> {
-        crate::encoders::sorted_json_string(self)
+        crate::file_encoders::sorted_json_string(self)
     }
 
     pub fn jsonload(json_data: &str) -> Result<Self, Box<dyn std::error::Error>> {
         Ok(serde_json::from_str(json_data)?)
     }
 
-    pub fn json_dumps(&self) -> String {
+    pub fn file_json_dumps(&self) -> String {
         self.jsondump().unwrap_or_default()
     }
 
-    pub fn json_loads(s: &str) -> Self {
+    pub fn file_json_loads(s: &str) -> Self {
         Self::jsonload(s).unwrap_or_else(|_| Self::default())
     }
 
@@ -2984,7 +2990,7 @@ impl NurbsCurve {
         if !self.is_valid() { return false; }
         if span_index >= self.m_cv_count - self.m_order { return false; }
         let ki = span_index + self.m_order - 2;
-        if self.m_knot[ki] >= self.m_knot[ki + 1] { return true; }
+        if self.m_nurbsknot[ki] >= self.m_nurbsknot[ki + 1] { return true; }
         if let Some(p0) = self.get_cv(span_index) {
             for i in 1..self.m_order {
                 if let Some(p) = self.get_cv(span_index + i) {
@@ -3000,27 +3006,27 @@ impl NurbsCurve {
     fn increment_nurbs_degree(&mut self) -> bool {
         let m = self.clone();
         let sc = m.span_count();
-        let new_kcount = m.knot_count() + sc + 1;
+        let new_kcount = m.nurbsknot_count() + sc + 1;
         let new_order = m.order() + 1;
         let new_cv_count = new_kcount - new_order + 2;
         let cvdim = m.cv_size();
 
         self.m_order = new_order;
         self.m_cv_count = new_cv_count;
-        self.m_knot.resize(new_order + new_cv_count - 2, 0.0);
+        self.m_nurbsknot.resize(new_order + new_cv_count - 2, 0.0);
         self.m_cv.resize(new_cv_count * self.m_cv_stride, 0.0);
 
         let mut ki: usize = 0;
         let mut ko: usize = 0;
-        let mkc = m.knot_count();
+        let mkc = m.nurbsknot_count();
         while ki < mkc {
-            let kn = m.m_knot[ki];
+            let kn = m.m_nurbsknot[ki];
             let mut mult = 1;
-            while ki + mult < mkc && (m.m_knot[ki + mult] - kn).abs() < Tolerance::ZERO_TOLERANCE {
+            while ki + mult < mkc && (m.m_nurbsknot[ki + mult] - kn).abs() < Tolerance::ZERO_TOLERANCE {
                 mult += 1;
             }
             for _ in 0..=mult {
-                self.m_knot[ko] = kn;
+                self.m_nurbsknot[ko] = kn;
                 ko += 1;
             }
             ki += mult;
@@ -3031,22 +3037,22 @@ impl NurbsCurve {
         let mut si_n: usize = 0;
         let mut si_m: usize = 0;
         for _ in 0..sc {
-            let span_mult = self.knot_multiplicity(si_n + self.degree() - 1);
+            let span_mult = self.nurbsknot_multiplicity(si_n + self.degree() - 1);
             let skip = self.order() - span_mult;
             for j in skip..self.order() {
                 let mut cv_n = vec![0.0; cvdim];
                 get_raised_degree_cv(
                     m.order(), cvdim, m.m_cv_stride,
                     &m.m_cv[si_m * m.m_cv_stride..],
-                    &m.m_knot[si_m..],
-                    &self.m_knot[si_n..],
+                    &m.m_nurbsknot[si_m..],
+                    &self.m_nurbsknot[si_n..],
                     j, &mut cv_n,
                 );
                 let dst = (si_n + j) * self.m_cv_stride;
                 for k in 0..cvdim { self.m_cv[dst + k] = cv_n[k]; }
             }
-            si_n = next_span_index(self.order(), self.cv_count(), &self.m_knot, si_n);
-            si_m = next_span_index(m.order(), m.cv_count(), &m.m_knot, si_m);
+            si_n = next_span_index(self.order(), self.cv_count(), &self.m_nurbsknot, si_n);
+            si_m = next_span_index(m.order(), m.cv_count(), &m.m_nurbsknot, si_m);
         }
 
         let last_dst = (self.m_cv_count - 1) * self.m_cv_stride;
@@ -3059,27 +3065,27 @@ impl NurbsCurve {
     }
 
     fn find_span(&self, t: f64) -> usize {
-        // Use knot module function
-        knot::find_span(self.m_order, self.m_cv_count, &self.m_knot, t)
+        // Use nurbsknot module function
+        nurbsknot::find_span(self.m_order, self.m_cv_count, &self.m_nurbsknot, t)
     }
 
 
     /// Compute non-zero basis functions at parameter t
     ///
-    /// Implementation matches OpenNURBS Cox-de Boor algorithm with offset knot pointer.
+    /// Implementation matches OpenNURBS Cox-de Boor algorithm with offset nurbsknot pointer.
     fn basis_functions(&self, span: usize, t: f64) -> Vec<f64> {
         let mut basis = vec![0.0; self.m_order];
         let mut left = vec![0.0; self.m_order];
         let mut right = vec![0.0; self.m_order];
 
-        // Offset knot pointer like OpenNURBS does
+        // Offset nurbsknot pointer like OpenNURBS does
         let offset = self.m_order - 2 + span;
 
         basis[0] = 1.0;
 
         for j in 1..self.m_order {
-            left[j] = t - self.m_knot[offset + 1 - j];
-            right[j] = self.m_knot[offset + j] - t;
+            left[j] = t - self.m_nurbsknot[offset + 1 - j];
+            right[j] = self.m_nurbsknot[offset + j] - t;
             let mut saved = 0.0;
 
             for r in 0..j {
@@ -3106,13 +3112,13 @@ impl NurbsCurve {
         let mut right = vec![0.0; p + 1];
         let mut ndu = vec![vec![0.0; p + 1]; p + 1];
 
-        // Use same knot offset as basis_functions
+        // Use same nurbsknot offset as basis_functions
         let offset = self.m_order - 2 + span;
 
         ndu[0][0] = 1.0;
         for j in 1..=p {
-            left[j] = t - self.m_knot[offset + 1 - j];
-            right[j] = self.m_knot[offset + j] - t;
+            left[j] = t - self.m_nurbsknot[offset + 1 - j];
+            right[j] = self.m_nurbsknot[offset + j] - t;
             let mut saved = 0.0;
             for r in 0..j {
                 ndu[j][r] = right[r + 1] + left[j - r];
@@ -3187,8 +3193,8 @@ impl NurbsCurve {
             let k0 = if direction > 0 { cv_start + i - 1 } else { cv_start + order - i };
             let k1 = if direction > 0 { k0 + 1 } else { k0.saturating_sub(1) };
 
-            let a = self.m_knot[cv_start + if direction > 0 { order - 1 } else { 0 }];
-            let b = self.m_knot[cv_start + if direction > 0 { i } else { order - 1 - i }];
+            let a = self.m_nurbsknot[cv_start + if direction > 0 { order - 1 } else { 0 }];
+            let b = self.m_nurbsknot[cv_start + if direction > 0 { i } else { order - 1 - i }];
 
             if (b - a).abs() < 1e-14 {
                 continue;
@@ -3224,13 +3230,13 @@ impl NurbsCurve {
 }
 
 fn evaluate_nurbs_blossom(cvdim: usize, order: usize, cv_stride: usize,
-    cv: &[f64], knot: &[f64], t: &[f64], p: &mut [f64]) -> bool {
+    cv: &[f64], nurbsknot: &[f64], t: &[f64], p: &mut [f64]) -> bool {
     if cv_stride < cvdim { return false; }
     let degree = order - 1;
     for i in 1..(2 * degree) {
-        if knot[i] - knot[i - 1] < 0.0 { return false; }
+        if nurbsknot[i] - nurbsknot[i - 1] < 0.0 { return false; }
     }
-    if knot[degree] - knot[degree - 1] < Tolerance::ZERO_TOLERANCE { return false; }
+    if nurbsknot[degree] - nurbsknot[degree - 1] < Tolerance::ZERO_TOLERANCE { return false; }
     let mut space = vec![0.0; order];
     for i in 0..cvdim {
         for j in 0..order {
@@ -3238,9 +3244,9 @@ fn evaluate_nurbs_blossom(cvdim: usize, order: usize, cv_stride: usize,
         }
         for j in 1..order {
             for k in j..order {
-                let denom = knot[degree + k - j] - knot[k - 1];
-                space[k - j] = (knot[degree + k - j] - t[j - 1]) / denom * space[k - j] +
-                    (t[j - 1] - knot[k - 1]) / denom * space[k - j + 1];
+                let denom = nurbsknot[degree + k - j] - nurbsknot[k - 1];
+                space[k - j] = (nurbsknot[degree + k - j] - t[j - 1]) / denom * space[k - j] +
+                    (t[j - 1] - nurbsknot[k - 1]) / denom * space[k - j + 1];
             }
         }
         p[i] = space[0];
@@ -3272,12 +3278,12 @@ fn get_raised_degree_cv(old_order: usize, cvdim: usize, old_cv_stride: usize,
     true
 }
 
-fn next_span_index(order: usize, cv_count: usize, knot: &[f64], mut span_index: usize) -> usize {
+fn next_span_index(order: usize, cv_count: usize, nurbsknot: &[f64], mut span_index: usize) -> usize {
     if span_index > cv_count - order { return span_index; }
     if span_index < cv_count - order {
         span_index += 1;
         while span_index < cv_count - order &&
-              knot[span_index + order - 2] == knot[span_index + order - 1] {
+              nurbsknot[span_index + order - 2] == nurbsknot[span_index + order - 1] {
             span_index += 1;
         }
     }

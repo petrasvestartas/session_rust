@@ -177,12 +177,12 @@ pub fn run_closest_pointcloud_point() -> TestResult {
 }
 
 pub fn run_closest_pointcloud_point_kdtree() -> TestResult {
-    MINI_TEST!("Pointcloud Point KDTree", {
+    MINI_TEST!("Pointcloud Point SpatialKDTree", {
         use crate::Closest;
         use crate::PointCloud;
         use crate::Point;
 
-        // KDTree variant: same result as linear scan, O(log n) query
+        // SpatialKDTree variant: same result as linear scan, O(log n) query
         let pc = PointCloud::new(vec![
             Point::new(0.0, 0.0, 0.0),
             Point::new(5.0, 0.0, 0.0),
@@ -206,7 +206,6 @@ pub fn run_closest_lines_closest() -> TestResult {
     MINI_TEST!("Lines Closest", {
         use crate::Closest;
         use crate::Line;
-        use crate::Point;
 
         // 3 lines: first two sharing an endpoint, third far away
         let lines = vec![
@@ -290,7 +289,7 @@ REGISTER_MINI_TEST!("Closest", "Surface Point", crate::closest_test::run_closest
 REGISTER_MINI_TEST!("Closest", "Mesh Point", crate::closest_test::run_closest_mesh_point);
 REGISTER_MINI_TEST!("Closest", "Mesh Point AABB", crate::closest_test::run_closest_mesh_point_aabb);
 REGISTER_MINI_TEST!("Closest", "Pointcloud Point", crate::closest_test::run_closest_pointcloud_point);
-REGISTER_MINI_TEST!("Closest", "Pointcloud Point KDTree", crate::closest_test::run_closest_pointcloud_point_kdtree);
+REGISTER_MINI_TEST!("Closest", "Pointcloud Point SpatialKDTree", crate::closest_test::run_closest_pointcloud_point_kdtree);
 REGISTER_MINI_TEST!("Closest", "Lines Closest", crate::closest_test::run_closest_lines_closest);
 REGISTER_MINI_TEST!("Closest", "Polylines Closest", crate::closest_test::run_closest_polylines_closest);
 REGISTER_MINI_TEST!("Closest", "Nurbscurves Closest", crate::closest_test::run_closest_nurbscurves_closest);

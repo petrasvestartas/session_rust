@@ -1,4 +1,4 @@
-use crate::knot;
+use crate::nurbsknot;
 use crate::line::Line;
 use crate::mesh::Mesh;
 use crate::nurbscurve::NurbsCurve;
@@ -9,7 +9,7 @@ use crate::tolerance::{Tolerance, PI};
 use crate::vector::Vector;
 use crate::xform::Xform;
 
-fn merge_knot_vectors(a: &[f64], b: &[f64]) -> Vec<f64> {
+fn merge_nurbsknot_vectors(a: &[f64], b: &[f64]) -> Vec<f64> {
     let mut merged = Vec::new();
     let (mut i, mut j) = (0, 0);
     let tol = 1e-10;
@@ -30,7 +30,7 @@ fn merge_knot_vectors(a: &[f64], b: &[f64]) -> Vec<f64> {
     merged
 }
 
-fn knot_vectors_equal(a: &[f64], b: &[f64]) -> bool {
+fn nurbsknot_vectors_equal(a: &[f64], b: &[f64]) -> bool {
     if a.len() != b.len() { return false; }
     let tol = 1e-10;
     for i in 0..a.len() {
@@ -51,28 +51,28 @@ fn make_curves_compatible(curves: &mut Vec<NurbsCurve>) {
     }
     let mut already_compatible = true;
     let cv0 = curves[0].cv_count();
-    let knots0 = curves[0].get_knots();
+    let nurbsknots0 = curves[0].get_nurbsknots();
     for i in 1..curves.len() {
-        if curves[i].cv_count() != cv0 || !knot_vectors_equal(&curves[i].get_knots(), &knots0) {
+        if curves[i].cv_count() != cv0 || !nurbsknot_vectors_equal(&curves[i].get_nurbsknots(), &nurbsknots0) {
             already_compatible = false;
             break;
         }
     }
     if already_compatible { return; }
     for c in curves.iter_mut() { c.set_domain(0.0, 1.0); }
-    let mut unified = curves[0].get_knots();
+    let mut unified = curves[0].get_nurbsknots();
     for i in 1..curves.len() {
-        unified = merge_knot_vectors(&unified, &curves[i].get_knots());
+        unified = merge_nurbsknot_vectors(&unified, &curves[i].get_nurbsknots());
     }
     let tol = 1e-10;
     for c in curves.iter_mut() {
-        let cur_knots = c.get_knots();
+        let cur_nurbsknots = c.get_nurbsknots();
         let mut ci = 0usize;
         for ui in 0..unified.len() {
-            if ci < cur_knots.len() && (cur_knots[ci] - unified[ui]).abs() < tol {
+            if ci < cur_nurbsknots.len() && (cur_nurbsknots[ci] - unified[ui]).abs() < tol {
                 ci += 1;
             } else {
-                c.insert_knot(unified[ui], 1);
+                c.insert_nurbsknot(unified[ui], 1);
             }
         }
     }
@@ -89,7 +89,7 @@ impl Primitives {
         let weights = [1.0, w, 1.0, w, 1.0, w, 1.0, w, 1.0];
 
         let mut curve = NurbsCurve::new(3, true, 3, 9);
-        curve.m_knot = vec![0.0, 0.0, 1.0, 1.0, 2.0, 2.0, 3.0, 3.0, 4.0, 4.0];
+        curve.m_nurbsknot = vec![0.0, 0.0, 1.0, 1.0, 2.0, 2.0, 3.0, 3.0, 4.0, 4.0];
 
         for i in 0..9 {
             let px = cx + radius * cx_pat[i];
@@ -107,7 +107,7 @@ impl Primitives {
         let weights = [1.0, w, 1.0, w, 1.0, w, 1.0, w, 1.0];
 
         let mut curve = NurbsCurve::new(3, true, 3, 9);
-        curve.m_knot = vec![0.0, 0.0, 1.0, 1.0, 2.0, 2.0, 3.0, 3.0, 4.0, 4.0];
+        curve.m_nurbsknot = vec![0.0, 0.0, 1.0, 1.0, 2.0, 2.0, 3.0, 3.0, 4.0, 4.0];
 
         for i in 0..9 {
             let px = cx + major_radius * ex[i];
@@ -163,7 +163,7 @@ impl Primitives {
         let w = w.max(0.1).min(1.0);
 
         let mut curve = NurbsCurve::new(3, true, 3, 3);
-        curve.m_knot = vec![0.0, 0.0, 1.0, 1.0];
+        curve.m_nurbsknot = vec![0.0, 0.0, 1.0, 1.0];
 
         let shoulder = Point::new(
             (start[0] + end[0]) / 2.0 + (mid[0] - (start[0] + end[0]) / 2.0) / w,
@@ -181,7 +181,7 @@ impl Primitives {
     /// Create a parabola through 3 points as a non-rational quadratic NURBS
     pub fn parabola(p0: &Point, p1: &Point, p2: &Point) -> NurbsCurve {
         let mut curve = NurbsCurve::new(3, false, 3, 3);
-        curve.m_knot = vec![0.0, 0.0, 1.0, 1.0];
+        curve.m_nurbsknot = vec![0.0, 0.0, 1.0, 1.0];
 
         let cv1 = Point::new(
             2.0 * p1[0] - (p0[0] + p2[0]) / 2.0,
@@ -473,12 +473,12 @@ impl Primitives {
         let circle_weights = [1.0, w, 1.0, w, 1.0, w, 1.0, w, 1.0];
         let circle_x = [1.0, 1.0, 0.0, -1.0, -1.0, -1.0, 0.0, 1.0, 1.0];
         let circle_y = [0.0, 1.0, 1.0, 1.0, 0.0, -1.0, -1.0, -1.0, 0.0];
-        let u_knots = [0.0, 0.0, 1.0, 1.0, 2.0, 2.0, 3.0, 3.0, 4.0, 4.0];
-        let v_knots = [0.0, 1.0];
+        let u_nurbsknots = [0.0, 0.0, 1.0, 1.0, 2.0, 2.0, 3.0, 3.0, 4.0, 4.0];
+        let v_nurbsknots = [0.0, 1.0];
 
         let mut srf = NurbsSurface::create_simple(3, true, 3, 2, 9, 2).unwrap();
-        for i in 0..10 { srf.set_knot(0, i, u_knots[i]); }
-        for i in 0..2 { srf.set_knot(1, i, v_knots[i]); }
+        for i in 0..10 { srf.set_nurbsknot(0, i, u_nurbsknots[i]); }
+        for i in 0..2 { srf.set_nurbsknot(1, i, v_nurbsknots[i]); }
         for i in 0..9 {
             let wi = circle_weights[i];
             let px = cx + radius * circle_x[i];
@@ -494,12 +494,12 @@ impl Primitives {
         let circle_weights = [1.0, w, 1.0, w, 1.0, w, 1.0, w, 1.0];
         let circle_x = [1.0, 1.0, 0.0, -1.0, -1.0, -1.0, 0.0, 1.0, 1.0];
         let circle_y = [0.0, 1.0, 1.0, 1.0, 0.0, -1.0, -1.0, -1.0, 0.0];
-        let u_knots = [0.0, 0.0, 1.0, 1.0, 2.0, 2.0, 3.0, 3.0, 4.0, 4.0];
-        let v_knots = [0.0, 1.0];
+        let u_nurbsknots = [0.0, 0.0, 1.0, 1.0, 2.0, 2.0, 3.0, 3.0, 4.0, 4.0];
+        let v_nurbsknots = [0.0, 1.0];
 
         let mut srf = NurbsSurface::create_simple(3, true, 3, 2, 9, 2).unwrap();
-        for i in 0..10 { srf.set_knot(0, i, u_knots[i]); }
-        for i in 0..2 { srf.set_knot(1, i, v_knots[i]); }
+        for i in 0..10 { srf.set_nurbsknot(0, i, u_nurbsknots[i]); }
+        for i in 0..2 { srf.set_nurbsknot(1, i, v_nurbsknots[i]); }
         let apex_z = cz + height;
         for i in 0..9 {
             let wi = circle_weights[i];
@@ -516,11 +516,11 @@ impl Primitives {
         let cw = [1.0, w, 1.0, w, 1.0, w, 1.0, w, 1.0];
         let cos_a = [1.0, 1.0, 0.0, -1.0, -1.0, -1.0, 0.0, 1.0, 1.0];
         let sin_a = [0.0, 1.0, 1.0, 1.0, 0.0, -1.0, -1.0, -1.0, 0.0];
-        let u_knots = [0.0, 0.0, 1.0, 1.0, 2.0, 2.0, 3.0, 3.0, 4.0, 4.0];
+        let u_nurbsknots = [0.0, 0.0, 1.0, 1.0, 2.0, 2.0, 3.0, 3.0, 4.0, 4.0];
 
         let mut srf = NurbsSurface::create_simple(3, true, 3, 3, 9, 9).unwrap();
         for d in 0..2 {
-            for i in 0..10 { srf.set_knot(d, i, u_knots[i]); }
+            for i in 0..10 { srf.set_nurbsknot(d, i, u_nurbsknots[i]); }
         }
         for i in 0..9 {
             let ca = cos_a[i];
@@ -544,15 +544,15 @@ impl Primitives {
         let cw = [1.0, w, 1.0, w, 1.0, w, 1.0, w, 1.0];
         let cos_a = [1.0, 1.0, 0.0, -1.0, -1.0, -1.0, 0.0, 1.0, 1.0];
         let sin_a = [0.0, 1.0, 1.0, 1.0, 0.0, -1.0, -1.0, -1.0, 0.0];
-        let u_knots = [0.0, 0.0, 1.0, 1.0, 2.0, 2.0, 3.0, 3.0, 4.0, 4.0];
-        let v_knots = [0.0, 0.0, 1.0, 1.0, 2.0, 2.0];
+        let u_nurbsknots = [0.0, 0.0, 1.0, 1.0, 2.0, 2.0, 3.0, 3.0, 4.0, 4.0];
+        let v_nurbsknots = [0.0, 0.0, 1.0, 1.0, 2.0, 2.0];
         let lat_r = [0.0, 1.0, 1.0, 1.0, 0.0];
         let lat_z = [-1.0, -1.0, 0.0, 1.0, 1.0];
         let lat_w = [1.0, w, 1.0, w, 1.0];
 
         let mut srf = NurbsSurface::create_simple(3, true, 3, 3, 9, 5).unwrap();
-        for i in 0..10 { srf.set_knot(0, i, u_knots[i]); }
-        for i in 0..6 { srf.set_knot(1, i, v_knots[i]); }
+        for i in 0..10 { srf.set_nurbsknot(0, i, u_nurbsknots[i]); }
+        for i in 0..6 { srf.set_nurbsknot(1, i, v_nurbsknots[i]); }
 
         for j in 0..5 {
             let r = radius * lat_r[j];
@@ -627,15 +627,15 @@ impl Primitives {
         }
 
         let tol = 1e-10;
-        let knots_b = cb.get_knots();
-        for &k in &knots_b {
-            let found = ca.get_knots().iter().any(|&ka| (ka - k).abs() < tol);
-            if !found { ca.insert_knot(k, 1); }
+        let nurbsknots_b = cb.get_nurbsknots();
+        for &k in &nurbsknots_b {
+            let found = ca.get_nurbsknots().iter().any(|&ka| (ka - k).abs() < tol);
+            if !found { ca.insert_nurbsknot(k, 1); }
         }
-        let knots_a = ca.get_knots();
-        for &k in &knots_a {
-            let found = cb.get_knots().iter().any(|&kb| (kb - k).abs() < tol);
-            if !found { cb.insert_knot(k, 1); }
+        let nurbsknots_a = ca.get_nurbsknots();
+        for &k in &nurbsknots_a {
+            let found = cb.get_nurbsknots().iter().any(|&kb| (kb - k).abs() < tol);
+            if !found { cb.insert_nurbsknot(k, 1); }
         }
 
         let order_u = ca.order();
@@ -647,11 +647,11 @@ impl Primitives {
             None => return NurbsSurface::new(),
         };
 
-        for i in 0..ca.knot_count() {
-            if let Some(kv) = ca.knot(i) { surface.set_knot(0, i, kv); }
+        for i in 0..ca.nurbsknot_count() {
+            if let Some(kv) = ca.nurbsknot(i) { surface.set_nurbsknot(0, i, kv); }
         }
-        surface.set_knot(1, 0, 0.0);
-        surface.set_knot(1, 1, 1.0);
+        surface.set_nurbsknot(1, 0, 0.0);
+        surface.set_nurbsknot(1, 1, 1.0);
 
         if is_rat {
             for i in 0..cv_count_u {
@@ -695,8 +695,8 @@ impl Primitives {
         let make_bilinear = |orig: &Point, xax: &Vector, yax: &Vector,
                              min_u: f64, max_u: f64, min_v: f64, max_v: f64| -> NurbsSurface {
             let mut srf = NurbsSurface::create_simple(3, false, 2, 2, 2, 2).unwrap();
-            srf.set_knot(0, 0, 0.0); srf.set_knot(0, 1, 1.0);
-            srf.set_knot(1, 0, 0.0); srf.set_knot(1, 1, 1.0);
+            srf.set_nurbsknot(0, 0, 0.0); srf.set_nurbsknot(0, 1, 1.0);
+            srf.set_nurbsknot(1, 0, 0.0); srf.set_nurbsknot(1, 1, 1.0);
             let pt = |u: f64, v: f64| -> Point {
                 Point::new(orig[0] + u*xax[0] + v*yax[0],
                            orig[1] + u*xax[1] + v*yax[1],
@@ -730,8 +730,8 @@ impl Primitives {
 
         if unique_pts.len() == 3 && boundary.degree() <= 1 {
             let mut srf = NurbsSurface::create_simple(3, false, 2, 2, 2, 2).unwrap();
-            srf.set_knot(0, 0, 0.0); srf.set_knot(0, 1, 1.0);
-            srf.set_knot(1, 0, 0.0); srf.set_knot(1, 1, 1.0);
+            srf.set_nurbsknot(0, 0, 0.0); srf.set_nurbsknot(0, 1, 1.0);
+            srf.set_nurbsknot(1, 0, 0.0); srf.set_nurbsknot(1, 1, 1.0);
             srf.set_cv(0, 0, &unique_pts[0]);
             srf.set_cv(1, 0, &unique_pts[1]);
             srf.set_cv(1, 1, &unique_pts[2]);
@@ -741,8 +741,8 @@ impl Primitives {
 
         if unique_pts.len() == 4 && boundary.degree() <= 1 {
             let mut srf = NurbsSurface::create_simple(3, false, 2, 2, 2, 2).unwrap();
-            srf.set_knot(0, 0, 0.0); srf.set_knot(0, 1, 1.0);
-            srf.set_knot(1, 0, 0.0); srf.set_knot(1, 1, 1.0);
+            srf.set_nurbsknot(0, 0, 0.0); srf.set_nurbsknot(0, 1, 1.0);
+            srf.set_nurbsknot(1, 0, 0.0); srf.set_nurbsknot(1, 1, 1.0);
             srf.set_cv(0, 0, &unique_pts[0]);
             srf.set_cv(1, 0, &unique_pts[1]);
             srf.set_cv(1, 1, &unique_pts[2]);
@@ -840,22 +840,22 @@ impl Primitives {
         }
 
         let cv_count_v = n_sections;
-        let knot_count_v = order_v + cv_count_v - 2;
-        let mut knots_v = vec![0.0; knot_count_v];
+        let nurbsknot_count_v = order_v + cv_count_v - 2;
+        let mut nurbsknots_v = vec![0.0; nurbsknot_count_v];
 
         if degree_v >= n_sections - 1 {
             let d = degree_v;
-            for i in 0..d { knots_v[i] = 0.0; }
-            for i in d..knot_count_v { knots_v[i] = 1.0; }
+            for i in 0..d { nurbsknots_v[i] = 0.0; }
+            for i in d..nurbsknot_count_v { nurbsknots_v[i] = 1.0; }
         } else {
-            for i in 0..(order_v - 1) { knots_v[i] = v_params[0]; }
+            for i in 0..(order_v - 1) { nurbsknots_v[i] = v_params[0]; }
             for j in 1..=(n_sections - order_v) {
                 let mut sum = 0.0;
                 for i in j..(j + degree_v) { sum += v_params[i]; }
-                knots_v[order_v - 2 + j] = sum / degree_v as f64;
+                nurbsknots_v[order_v - 2 + j] = sum / degree_v as f64;
             }
-            for i in (knot_count_v - order_v + 1)..knot_count_v {
-                knots_v[i] = v_params[n_sections - 1];
+            for i in (nurbsknot_count_v - order_v + 1)..nurbsknot_count_v {
+                nurbsknots_v[i] = v_params[n_sections - 1];
             }
         }
 
@@ -864,11 +864,11 @@ impl Primitives {
             None => return NurbsSurface::new(),
         };
 
-        for i in 0..surface.knot_count(0) {
-            if let Some(k) = curves[0].knot(i) { surface.set_knot(0, i, k); }
+        for i in 0..surface.nurbsknot_count(0) {
+            if let Some(k) = curves[0].nurbsknot(i) { surface.set_nurbsknot(0, i, k); }
         }
-        for i in 0..knots_v.len() {
-            if i < surface.knot_count(1) { surface.set_knot(1, i, knots_v[i]); }
+        for i in 0..nurbsknots_v.len() {
+            if i < surface.nurbsknot_count(1) { surface.set_nurbsknot(1, i, nurbsknots_v[i]); }
         }
 
         let n = n_sections;
@@ -876,17 +876,17 @@ impl Primitives {
 
         for k in 0..n {
             let mut t = v_params[k];
-            let t0 = knots_v[order_v - 2];
-            let t1 = knots_v[knot_count_v - order_v + 1];
+            let t0 = nurbsknots_v[order_v - 2];
+            let t1 = nurbsknots_v[nurbsknot_count_v - order_v + 1];
             if t < t0 { t = t0; }
             if t > t1 { t = t1; }
 
-            let span = knot::find_span(order_v, cv_count_v, &knots_v, t);
+            let span = nurbsknot::find_span(order_v, cv_count_v, &nurbsknots_v, t);
             let d = order_v - 1;
-            let knot_base = span + d;
+            let nurbsknot_base = span + d;
 
-            if knots_v[knot_base - 1] == knots_v[knot_base] {
-                if t <= knots_v[knot_base] {
+            if nurbsknots_v[nurbsknot_base - 1] == nurbsknots_v[nurbsknot_base] {
+                if t <= nurbsknots_v[nurbsknot_base] {
                     n_matrix[k][span] = 1.0;
                 } else {
                     n_matrix[k][span + order_v - 1] = 1.0;
@@ -899,14 +899,14 @@ impl Primitives {
             let mut left = vec![0.0; d];
             let mut right = vec![0.0; d];
             let mut n_idx = (order_v * order_v - 1) as i64;
-            let mut k_right = knot_base;
-            let mut k_left = knot_base - 1;
+            let mut k_right = nurbsknot_base;
+            let mut k_left = nurbsknot_base - 1;
 
             for j in 0..d {
                 let n0_idx = n_idx;
                 n_idx -= (order_v + 1) as i64;
-                left[j] = t - knots_v[k_left];
-                right[j] = knots_v[k_right] - t;
+                left[j] = t - nurbsknots_v[k_left];
+                right[j] = nurbsknots_v[k_right] - t;
                 if k_left > 0 { k_left -= 1; } else { k_left = 0; }
                 k_right += 1;
 
@@ -1005,17 +1005,17 @@ impl Primitives {
         let w_mid = (d_theta / 2.0).cos();
         let n_u = 2 * n_arcs + 1;
 
-        let knot_count_u = n_u + 1;
-        let mut knots_u = vec![0.0; knot_count_u];
-        knots_u[0] = 0.0;
-        knots_u[1] = 0.0;
+        let nurbsknot_count_u = n_u + 1;
+        let mut nurbsknots_u = vec![0.0; nurbsknot_count_u];
+        nurbsknots_u[0] = 0.0;
+        nurbsknots_u[1] = 0.0;
         for i in 1..=n_arcs {
             let kv = i as f64 * d_theta;
-            knots_u[2 * i] = kv;
-            knots_u[2 * i + 1] = kv;
+            nurbsknots_u[2 * i] = kv;
+            nurbsknots_u[2 * i + 1] = kv;
         }
-        knots_u[knot_count_u - 1] = angle;
-        knots_u[knot_count_u - 2] = angle;
+        nurbsknots_u[nurbsknot_count_u - 1] = angle;
+        nurbsknots_u[nurbsknot_count_u - 2] = angle;
 
         let cv_count_v = profile.cv_count();
         let order_v = profile.order();
@@ -1026,11 +1026,11 @@ impl Primitives {
             None => return NurbsSurface::new(),
         };
 
-        for i in 0..knot_count_u.min(surface.knot_count(0)) {
-            surface.set_knot(0, i, knots_u[i]);
+        for i in 0..nurbsknot_count_u.min(surface.nurbsknot_count(0)) {
+            surface.set_nurbsknot(0, i, nurbsknots_u[i]);
         }
-        for i in 0..profile.knot_count().min(surface.knot_count(1)) {
-            if let Some(kv) = profile.knot(i) { surface.set_knot(1, i, kv); }
+        for i in 0..profile.nurbsknot_count().min(surface.nurbsknot_count(1)) {
+            if let Some(kv) = profile.nurbsknot(i) { surface.set_nurbsknot(1, i, kv); }
         }
 
         let mut u_angles = vec![0.0; n_u];
@@ -1393,11 +1393,11 @@ impl Primitives {
             None => return NurbsSurface::new(),
         };
 
-        for i in 0..surface.knot_count(0) {
-            if let Some(kv) = west.knot(i) { surface.set_knot(0, i, kv); }
+        for i in 0..surface.nurbsknot_count(0) {
+            if let Some(kv) = west.nurbsknot(i) { surface.set_nurbsknot(0, i, kv); }
         }
-        for i in 0..surface.knot_count(1) {
-            if let Some(kv) = south.knot(i) { surface.set_knot(1, i, kv); }
+        for i in 0..surface.nurbsknot_count(1) {
+            if let Some(kv) = south.nurbsknot(i) { surface.set_nurbsknot(1, i, kv); }
         }
 
         let u_grev = west.get_greville_abcissae();
@@ -1438,7 +1438,7 @@ impl Primitives {
         surface
     }
 
-    pub fn create_interpolated(points: &[Point], parameterization: knot::CurveKnotStyle) -> NurbsCurve {
+    pub fn create_interpolated(points: &[Point], parameterization: nurbsknot::CurveNurbsKnotStyle) -> NurbsCurve {
         NurbsCurve::create_interpolated(points, parameterization)
     }
 

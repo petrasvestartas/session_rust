@@ -1,4 +1,4 @@
-use session_rust::{obj, Element, Session};
+use session_rust::{file_obj, Element, Session};
 use std::path::PathBuf;
 use std::time::Instant;
 
@@ -10,14 +10,14 @@ fn main() {
     let t0 = Instant::now();
 
     // 1. Import + pair polylines
-    let polylines = obj::read_obj_polylines(
+    let polylines = file_obj::read_file_obj_polylines(
         base.join("session_data")
             .join("annen_polylines.obj")
             .to_str()
             .unwrap(),
     )
     .expect("read obj");
-    let pairs = obj::pair_polylines(&polylines, 500.0);
+    let pairs = file_obj::pair_polylines(&polylines, 500.0);
     let t1 = Instant::now();
 
     // 2. Create session with elements

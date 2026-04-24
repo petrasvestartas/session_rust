@@ -663,19 +663,19 @@ impl OBB {
         Self::jsonload(&json_string)
     }
 
-    pub fn json_dumps(&self) -> String {
+    pub fn file_json_dumps(&self) -> String {
         self.jsondump().unwrap_or_default()
     }
 
-    pub fn json_loads(s: &str) -> Self {
+    pub fn file_json_loads(s: &str) -> Self {
         Self::jsonload(s).unwrap_or_default()
     }
 
-    pub fn json_dump(&self, filepath: &str) {
+    pub fn file_json_dump(&self, filepath: &str) {
         let _ = self.to_json(filepath);
     }
 
-    pub fn json_load(filepath: &str) -> Self {
+    pub fn file_json_load(filepath: &str) -> Self {
         Self::from_json(filepath).unwrap_or_default()
     }
 

@@ -1057,9 +1057,7 @@ pub fn run_mesh_geometric_properties() -> TestResult {
         // dihedral angle
         let (angles, _arcs, _points) = mesh.dihedral_angles(0.3);
 
-        for (edge, angle) in &angles {
-            let _u = edge.0;
-            let _v = edge.1;
+        for (_edge, angle) in &angles {
             let angle_in_degrees = *angle;
             MINI_CHECK!(TOLERANCE.is_close(angle_in_degrees, 116.565051177078));
         }
@@ -1244,14 +1242,14 @@ pub fn run_mesh_json_roundtrip() -> TestResult {
         let loaded_json = Mesh::jsonload(&json).unwrap();
 
         // String
-        let json_string = mesh.json_dumps();
-        let loaded_string = Mesh::json_loads(&json_string);
+        let json_string = mesh.file_json_dumps();
+        let loaded_string = Mesh::file_json_loads(&json_string);
 
         // File
         let filename = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
             .join("serialization").join("test_mesh.json");
-        mesh.json_dump(filename.to_str().unwrap()).unwrap();
-        let loaded_file = Mesh::json_load(filename.to_str().unwrap()).unwrap();
+        mesh.file_json_dump(filename.to_str().unwrap()).unwrap();
+        let loaded_file = Mesh::file_json_load(filename.to_str().unwrap()).unwrap();
 
         MINI_CHECK!(loaded_json == mesh);
         MINI_CHECK!(loaded_string == mesh);

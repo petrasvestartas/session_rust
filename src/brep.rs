@@ -302,7 +302,7 @@ impl BRep {
         let cwt = [1.0, cw, 1.0, cw, 1.0, cw, 1.0, cw, 1.0];
         let make_cap_circle = || {
             let mut c = NurbsCurve::new(3, true, 3, 9);
-            c.m_knot = vec![0.0, 0.0, 1.0, 1.0, 2.0, 2.0, 3.0, 3.0, 4.0, 4.0];
+            c.m_nurbsknot = vec![0.0, 0.0, 1.0, 1.0, 2.0, 2.0, 3.0, 3.0, 4.0, 4.0];
             for i in 0..9 {
                 c.set_cv_4d(i, (0.5+0.5*ccx[i])*cwt[i], (0.5+0.5*ccy[i])*cwt[i], 0.0, cwt[i]);
             }
@@ -508,7 +508,7 @@ impl BRep {
             }
             let inner_li = brep.add_loop(fi, BRepLoopType::Inner) as i32;
             let mut hole_crv = NurbsCurve::new(3, true, 3, 9);
-            for i in 0..10 { hole_crv.set_knot(i, ckn[i]); }
+            for i in 0..10 { hole_crv.set_nurbsknot(i, ckn[i]); }
             let cr = hole_radius / (2.0 * r);
             let cx_uv = 0.5; let cy_uv = 0.5;
             for i in 0..9 {
@@ -703,7 +703,7 @@ impl BRep {
             let project_curve_to_uv = |crv: &NurbsCurve, org: &Point, xa: &crate::Vector, ya: &crate::Vector,
                                         umin: f64, vmin: f64, du: f64, dv: f64| -> NurbsCurve {
                 let mut crv2d = NurbsCurve::new(3, crv.is_rational(), crv.order() as usize, crv.cv_count());
-                crv2d.m_knot = crv.m_knot.clone();
+                crv2d.m_nurbsknot = crv.m_nurbsknot.clone();
                 for i in 0..crv.cv_count() {
                     if crv.is_rational() {
                         let (wx, wy, wz, w) = crv.get_cv_4d(i).unwrap();
@@ -875,28 +875,92 @@ impl BRep {
     ///////////////////////////////////////////////////////////////////////////////////////////
 
     pub fn mesh(&self) -> Mesh {
-        use crate::trimmedsurface::TrimmedSurface;
-        let mut all_polygons: Vec<Vec<Point>> = Vec::new();
-        for face in &self.m_faces {
-            if face.surface_index < 0 || face.surface_index as usize >= self.m_surfaces.len() {
-                continue;
-            }
+        use crate::nurbssurface_trimmed::NurbsSurfaceTrimmed;
+        let nf = self.m_faces.len();
+
+        // Phase 1: Classify faces as direct (RemeshNurbsSurfaceGrid) or CDT
+        let mut face_direct = vec![false; nf];
+        for fi in 0..nf {
+            let face = &self.m_faces[fi];
+            if face.surface_index < 0 || face.surface_index as usize >= self.m_surfaces.len() { continue; }
             let srf = &self.m_surfaces[face.surface_index as usize];
-            let mut ts = TrimmedSurface::new();
+            let mut has_inner = false;
+            let mut all_linear = true;
+            let mut outer_pts: Vec<Point> = Vec::new();
+            for &li in &face.loop_indices {
+                if li < 0 || li as usize >= self.m_loops.len() { continue; }
+                let bloop = &self.m_loops[li as usize];
+                if bloop.loop_type == BRepLoopType::Inner { has_inner = true; }
+                for &ti in &bloop.trim_indices {
+                    if ti < 0 || ti as usize >= self.m_trims.len() { continue; }
+                    let trim = &self.m_trims[ti as usize];
+                    if trim.curve_2d_index < 0 || trim.curve_2d_index as usize >= self.m_curves_2d.len() { continue; }
+                    let crv = &self.m_curves_2d[trim.curve_2d_index as usize];
+                    if crv.degree() > 1 || crv.is_rational() { all_linear = false; }
+                    if bloop.loop_type == BRepLoopType::Outer && crv.degree() <= 1 && !crv.is_rational() {
+                        for k in 0..crv.cv_count().saturating_sub(1) {
+                            if let Some(p) = crv.get_cv(k) { outer_pts.push(p); }
+                        }
+                    }
+                }
+            }
+            let mut direct = !has_inner && all_linear;
+            if direct && !outer_pts.is_empty() {
+                if let (Some((u0, u1)), Some((v0, v1))) = (srf.domain(0), srf.domain(1)) {
+                    let tol = (u1 - u0).max(v1 - v0) * 0.01;
+                    let mut bb_umin = f64::INFINITY; let mut bb_umax = f64::NEG_INFINITY;
+                    let mut bb_vmin = f64::INFINITY; let mut bb_vmax = f64::NEG_INFINITY;
+                    for p in &outer_pts {
+                        if p[0] < bb_umin { bb_umin = p[0]; }
+                        if p[0] > bb_umax { bb_umax = p[0]; }
+                        if p[1] < bb_vmin { bb_vmin = p[1]; }
+                        if p[1] > bb_vmax { bb_vmax = p[1]; }
+                    }
+                    if (bb_umin - u0).abs() > tol || (bb_umax - u1).abs() > tol ||
+                       (bb_vmin - v0).abs() > tol || (bb_vmax - v1).abs() > tol {
+                        direct = false;
+                    }
+                }
+            }
+            face_direct[fi] = direct;
+        }
+
+        // Phase 2: Mesh direct faces
+        let mut fmesh: Vec<Mesh> = (0..nf).map(|_| Mesh::new()).collect();
+        for fi in 0..nf {
+            if !face_direct[fi] { continue; }
+            let face = &self.m_faces[fi];
+            let srf = &self.m_surfaces[face.surface_index as usize];
+            fmesh[fi] = srf.mesh();
+        }
+
+        // Phase 3: Mesh CDT faces
+        for fi in 0..nf {
+            if face_direct[fi] { continue; }
+            let face = &self.m_faces[fi];
+            if face.surface_index < 0 || face.surface_index as usize >= self.m_surfaces.len() { continue; }
+            let srf = &self.m_surfaces[face.surface_index as usize];
+            let mut ts = NurbsSurfaceTrimmed::new();
             ts.m_surface = srf.clone();
             for &li in &face.loop_indices {
-                if li < 0 || (li as usize) >= self.m_loops.len() { continue; }
+                if li < 0 || li as usize >= self.m_loops.len() { continue; }
                 let bloop = &self.m_loops[li as usize];
                 let mut loop_pts = Vec::new();
                 for &ti in &bloop.trim_indices {
-                    if ti < 0 || (ti as usize) >= self.m_trims.len() { continue; }
+                    if ti < 0 || ti as usize >= self.m_trims.len() { continue; }
                     let trim = &self.m_trims[ti as usize];
-                    if trim.curve_2d_index < 0 || (trim.curve_2d_index as usize) >= self.m_curves_2d.len() { continue; }
+                    if trim.curve_2d_index < 0 || trim.curve_2d_index as usize >= self.m_curves_2d.len() { continue; }
                     let crv = &self.m_curves_2d[trim.curve_2d_index as usize];
-                    let ndiv = if crv.degree() > 1 { (crv.cv_count() * 4).max(16) } else { (crv.cv_count().saturating_sub(1)).max(4) };
-                    let (pts, _) = crv.divide_by_count(ndiv, true);
-                    for k in 0..pts.len().saturating_sub(1) {
-                        loop_pts.push(pts[k].clone());
+                    if crv.degree() <= 1 && !crv.is_rational() {
+                        for k in 0..crv.cv_count().saturating_sub(1) {
+                            if let Some(p) = crv.get_cv(k) { loop_pts.push(p); }
+                        }
+                    } else {
+                        let n = (crv.cv_count() * 4).max(16);
+                        let (pts, _) = crv.divide_by_count(n, true);
+                        for k in 0..pts.len().saturating_sub(1) {
+                            loop_pts.push(pts[k].clone());
+                        }
                     }
                 }
                 if loop_pts.len() >= 3 {
@@ -908,18 +972,25 @@ impl BRep {
                     }
                 }
             }
-            let mut face_mesh = ts.mesh();
+            fmesh[fi] = ts.mesh();
+        }
+
+        // Phase 4: Combine
+        let mut all_polygons: Vec<Vec<Point>> = Vec::new();
+        for fi in 0..nf {
+            let face = &self.m_faces[fi];
+            let fm = &mut fmesh[fi];
+            if fm.face.is_empty() { continue; }
             if face.reversed {
-                for (_, vd) in face_mesh.vertex.iter_mut() {
-                    let n = vd.normal();
-                    if let Some(n) = n {
+                for (_, vd) in fm.vertex.iter_mut() {
+                    if let Some(n) = vd.normal() {
                         vd.set_normal(-n[0], -n[1], -n[2]);
                     }
                 }
             }
-            for (_fk, fverts) in &face_mesh.face {
+            for (_fk, fverts) in &fm.face {
                 let poly: Vec<Point> = fverts.iter()
-                    .filter_map(|vi| face_mesh.vertex.get(vi).map(|v| Point::new(v.x, v.y, v.z)))
+                    .filter_map(|vi| fm.vertex.get(vi).map(|v| Point::new(v.x, v.y, v.z)))
                     .collect();
                 all_polygons.push(poly);
             }
@@ -976,20 +1047,20 @@ impl BRep {
     // JSON Serialization
     ///////////////////////////////////////////////////////////////////////////////////////////
 
-    pub fn json_dumps(&self) -> String {
-        crate::encoders::sorted_json_string(self).unwrap_or_default()
+    pub fn file_json_dumps(&self) -> String {
+        crate::file_encoders::sorted_json_string(self).unwrap_or_default()
     }
 
-    pub fn json_loads(s: &str) -> Self {
+    pub fn file_json_loads(s: &str) -> Self {
         serde_json::from_str(s).unwrap_or_else(|_| Self::new())
     }
 
-    pub fn json_dump(&self, filepath: &str) {
-        let json = crate::encoders::sorted_json_string(self).unwrap_or_default();
+    pub fn file_json_dump(&self, filepath: &str) {
+        let json = crate::file_encoders::sorted_json_string(self).unwrap_or_default();
         std::fs::write(filepath, json).expect("Failed to write JSON file");
     }
 
-    pub fn json_load(filepath: &str) -> Self {
+    pub fn file_json_load(filepath: &str) -> Self {
         let json = std::fs::read_to_string(filepath).expect("Failed to read JSON file");
         serde_json::from_str(&json).unwrap_or_else(|_| Self::new())
     }

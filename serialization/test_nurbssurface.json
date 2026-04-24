@@ -53,33 +53,33 @@
     "cv_count_v": 4,
     "dimension": 3,
     "facecolors": [],
-    "guid": "fd64ad59-0425-40ab-b635-a2d5ae8b2e9c",
+    "guid": "5483310a-65d8-47e4-98ff-f33086d91b1c",
     "is_rational": false,
-    "knots_u": [
-        0.0,
-        0.0,
-        0.0,
-        1.0,
-        1.0,
-        1.0
-    ],
-    "knots_v": [
-        0.0,
-        0.0,
-        0.0,
-        1.0,
-        1.0,
-        1.0
-    ],
     "linecolors": [],
     "name": "my_nurbssurface",
+    "nurbsknots_u": [
+        0.0,
+        0.0,
+        0.0,
+        1.0,
+        1.0,
+        1.0
+    ],
+    "nurbsknots_v": [
+        0.0,
+        0.0,
+        0.0,
+        1.0,
+        1.0,
+        1.0
+    ],
     "order_u": 4,
     "order_v": 4,
     "pointcolors": [],
     "type": "NurbsSurface",
     "width": 1.0,
     "xform": {
-        "guid": "2c584f4c-ed28-4c05-b646-3add9949f396",
+        "guid": "60aaf3ff-2113-4aa2-a78c-af4bcb765ece",
         "m": [
             1.0,
             0.0,

@@ -1,6 +1,6 @@
 use crate::{
     AABB, BRep, Element, OBB, Graph, Line, Mesh, Objects, Plane, Point, PointCloud, Polyline,
-    Tolerance, Tree, TreeNode, BVH,
+    Tolerance, Tree, TreeNode, SpatialBVH,
 };
 use serde::{Deserialize, Serialize};
 use std::cell::RefCell;
@@ -68,17 +68,17 @@ pub struct Session {
     pub graph: Graph,
     /// Boundary Volume Hierarchy for spatial collision detection
     #[serde(skip)]
-    pub bvh: BVH,
-    /// Cached BVH for ray casting (indices map to cached_guids)
+    pub bvh: SpatialBVH,
+    /// Cached SpatialBVH for ray casting (indices map to cached_guids)
     #[serde(skip)]
-    pub cached_ray_bvh: Option<BVH>,
+    pub cached_ray_bvh: Option<SpatialBVH>,
     /// Cached GUIDs corresponding to cached_boxes order
     #[serde(skip)]
     pub cached_guids: Vec<String>,
-    /// Cached AABBs for ray-casting BVH
+    /// Cached AABBs for ray-casting SpatialBVH
     #[serde(skip)]
     pub cached_boxes: Vec<OBB>,
-    /// Dirty flag for cached ray BVH
+    /// Dirty flag for cached ray SpatialBVH
     #[serde(skip)]
     pub bvh_cache_dirty: bool,
 }
@@ -131,7 +131,7 @@ impl Session {
         tree.add(&root_node, None);
 
         // Create boundary-volume-hierarchy, each time we add object we store inside bvh
-        let bvh = BVH::new();
+        let bvh = SpatialBVH::new();
 
         Self {
             guid: std::sync::OnceLock::new(),
@@ -169,7 +169,7 @@ impl Session {
             "graph": graph_json
         });
 
-        let sorted = crate::encoders::sort_json_keys(json_obj);
+        let sorted = crate::file_encoders::sort_json_keys(json_obj);
         let mut buf = Vec::new();
         let formatter = serde_json::ser::PrettyFormatter::with_indent(b"    ");
         let mut ser = serde_json::Serializer::with_formatter(&mut buf, formatter);
@@ -237,7 +237,7 @@ impl Session {
             lookup,
             tree,
             graph,
-            bvh: BVH::new(),
+            bvh: SpatialBVH::new(),
             cached_ray_bvh: None,
             cached_guids: Vec::new(),
             cached_boxes: Vec::new(),
@@ -247,20 +247,20 @@ impl Session {
         Ok(session)
     }
 
-    pub fn json_dumps(&self) -> String {
+    pub fn file_json_dumps(&self) -> String {
         self.jsondump().unwrap_or_default()
     }
 
-    pub fn json_loads(s: &str) -> Self {
+    pub fn file_json_loads(s: &str) -> Self {
         Self::jsonload(s).unwrap_or_else(|_| Self::default())
     }
 
-    pub fn json_dump(&self, filepath: &str) {
+    pub fn file_json_dump(&self, filepath: &str) {
         let json = self.jsondump().unwrap_or_default();
         fs::write(filepath, json).expect("Failed to write JSON file");
     }
 
-    pub fn json_load(filepath: &str) -> Self {
+    pub fn file_json_load(filepath: &str) -> Self {
         let json = fs::read_to_string(filepath).expect("Failed to read JSON file");
         Self::jsonload(&json).unwrap_or_else(|_| Self::default())
     }
@@ -363,7 +363,7 @@ impl Session {
             tree: Some(tree_proto),
             graph: Some(graph_proto),
             bvh_boxes: Vec::new(),
-            edge_features: std::collections::HashMap::new(),
+            edge_elementfeatures: std::collections::HashMap::new(),
         };
         proto.encode_to_vec()
     }
@@ -486,7 +486,7 @@ impl Session {
     }
 
     ///////////////////////////////////////////////////////////////////////////////////////////
-    // BVH Collision Detection
+    // SpatialBVH Collision Detection
     ///////////////////////////////////////////////////////////////////////////////////////////
 
     /// Compute bounding box for a geometry object, inflated by tolerance
@@ -541,11 +541,11 @@ impl Session {
         }
     }
 
-    /// Get all collision pairs using BVH and add them as graph edges.
+    /// Get all collision pairs using SpatialBVH and add them as graph edges.
     ///
     /// Automatically:
     /// - Computes bounding boxes for all objects with tolerance inflation
-    /// - Builds/rebuilds the BVH with auto-computed world size
+    /// - Builds/rebuilds the SpatialBVH with auto-computed world size
     /// - Detects all collision pairs
     /// - Adds collision edges to the graph
     ///
@@ -564,7 +564,7 @@ impl Session {
             return Vec::new();
         }
 
-        // Build BVH with GUIDs (auto-computes world size)
+        // Build SpatialBVH with GUIDs (auto-computes world size)
         self.bvh.build_with_guids(&boxes_with_guids);
 
         // Extract just the boxes for collision checking
@@ -585,7 +585,7 @@ impl Session {
     }
 
     ///////////////////////////////////////////////////////////////////////////////////////////
-    // Ray BVH Cache
+    // Ray SpatialBVH Cache
     ///////////////////////////////////////////////////////////////////////////////////////////
 
     fn cache_geometry_aabb(&mut self, guid: &str, geometry: &Geometry) {
@@ -608,8 +608,8 @@ impl Session {
             }
         }
         if !self.cached_boxes.is_empty() {
-            let world_size = BVH::compute_world_size(&self.cached_boxes);
-            self.cached_ray_bvh = Some(BVH::from_boxes(&self.cached_boxes, world_size));
+            let world_size = SpatialBVH::compute_world_size(&self.cached_boxes);
+            self.cached_ray_bvh = Some(SpatialBVH::from_boxes(&self.cached_boxes, world_size));
         } else {
             self.cached_ray_bvh = None;
         }
@@ -643,7 +643,7 @@ impl Session {
         );
         let ray_line = Line::from_points(origin, &ray_end);
 
-        // Use cached BVH for ray casting
+        // Use cached SpatialBVH for ray casting
         if self.bvh_cache_dirty || self.cached_ray_bvh.is_none() {
             self.rebuild_ray_bvh_cache();
             self.bvh_cache_dirty = false;
@@ -955,8 +955,8 @@ impl Session {
             aabbs.push(elem.compute_aabb_fast(inflate));
         }
 
-        // Step B: BVH broad phase
-        let mut bvh = crate::bvh::BVH::new();
+        // Step B: SpatialBVH broad phase
+        let mut bvh = crate::spatial_bvh::SpatialBVH::new();
         bvh.build(&aabbs);
         let mut adjacency: Vec<i32> = Vec::new();
         for i in 0..n {

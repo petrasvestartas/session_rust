@@ -6,7 +6,7 @@ use crate::vector::Vector;
 use crate::obb::OBB;
 use crate::mesh::Mesh;
 use crate::plane::Plane;
-use crate::knot;
+use crate::nurbsknot;
 use serde::{Deserialize, Deserializer, Serializer};
 use serde::ser::SerializeMap;
 
@@ -31,7 +31,7 @@ pub struct NurbsSurface {
     pub m_order: [usize; 2],
     pub m_cv_count: [usize; 2],
     pub m_cv_stride: [usize; 2],
-    pub m_knot: [Vec<f64>; 2],
+    pub m_nurbsknot: [Vec<f64>; 2],
     pub m_cv: Vec<f64>,
 
     // Cached mesh
@@ -66,8 +66,8 @@ impl serde::Serialize for NurbsSurface {
         map.serialize_entry("facecolors", &facecolors_flat)?;
         map.serialize_entry("guid", self.guid())?;
         map.serialize_entry("is_rational", &self.m_is_rat)?;
-        map.serialize_entry("knots_u", &self.m_knot[0])?;
-        map.serialize_entry("knots_v", &self.m_knot[1])?;
+        map.serialize_entry("nurbsknots_u", &self.m_nurbsknot[0])?;
+        map.serialize_entry("nurbsknots_v", &self.m_nurbsknot[1])?;
         let linecolors_flat: Vec<u8> = self.linecolors.iter()
             .flat_map(|c| vec![c.r, c.g, c.b, c.a]).collect();
         map.serialize_entry("linecolors", &linecolors_flat)?;
@@ -123,9 +123,9 @@ impl<'de> Deserialize<'de> for NurbsSurface {
             #[serde(default)]
             cv_count_v: usize,
             #[serde(default)]
-            knots_u: Vec<f64>,
+            nurbsknots_u: Vec<f64>,
             #[serde(default)]
-            knots_v: Vec<f64>,
+            nurbsknots_v: Vec<f64>,
             #[serde(default)]
             control_points: Vec<f64>,
         }
@@ -176,7 +176,7 @@ impl<'de> Deserialize<'de> for NurbsSurface {
             m_order: [data.order_u, data.order_v],
             m_cv_count: [data.cv_count_u, data.cv_count_v],
             m_cv_stride: [cv_stride_u, cv_stride_v],
-            m_knot: [data.knots_u, data.knots_v],
+            m_nurbsknot: [data.nurbsknots_u, data.nurbsknots_v],
             m_cv: cv_data,
             m_mesh: None,
         })
@@ -199,13 +199,13 @@ impl NurbsSurface {
             m_order: [0, 0],
             m_cv_count: [0, 0],
             m_cv_stride: [0, 0],
-            m_knot: [Vec::new(), Vec::new()],
+            m_nurbsknot: [Vec::new(), Vec::new()],
             m_cv: Vec::new(),
             m_mesh: None,
         }
     }
 
-    /// Create NURBS surface with specified parameters and optional knot vector initialization
+    /// Create NURBS surface with specified parameters and optional nurbsknot vector initialization
     ///
     /// # Parameters
     /// - `dimension`: Dimension of the surface (typically 3)
@@ -214,10 +214,10 @@ impl NurbsSurface {
     /// - `order1`: Order in v direction (degree + 1)
     /// - `cv_count0`: Number of control vertices in u direction
     /// - `cv_count1`: Number of control vertices in v direction
-    /// - `is_periodic_u`: If true, creates periodic uniform knot vector in u direction
-    /// - `is_periodic_v`: If true, creates periodic uniform knot vector in v direction
-    /// - `knot_delta_u`: Knot spacing in u direction
-    /// - `knot_delta_v`: Knot spacing in v direction
+    /// - `is_periodic_u`: If true, creates periodic uniform nurbsknot vector in u direction
+    /// - `is_periodic_v`: If true, creates periodic uniform nurbsknot vector in v direction
+    /// - `nurbsknot_delta_u`: NurbsKnot spacing in u direction
+    /// - `nurbsknot_delta_v`: NurbsKnot spacing in v direction
     pub fn create_raw(
         dimension: usize,
         is_rational: bool,
@@ -227,8 +227,8 @@ impl NurbsSurface {
         cv_count1: usize,
         is_periodic_u: bool,
         is_periodic_v: bool,
-        knot_delta_u: f64,
-        knot_delta_v: f64,
+        nurbsknot_delta_u: f64,
+        nurbsknot_delta_v: f64,
     ) -> Option<Self> {
         if dimension < 1 || order0 < 2 || order1 < 2
            || cv_count0 < order0 || cv_count1 < order1 {
@@ -248,27 +248,27 @@ impl NurbsSurface {
         srf.m_cv_stride[0] = cv_size;
         srf.m_cv_stride[1] = cv_size * cv_count0;
 
-        // Allocate knot vectors
-        let knot_count0 = order0 + cv_count0 - 2;
-        let knot_count1 = order1 + cv_count1 - 2;
-        srf.m_knot[0] = vec![0.0; knot_count0];
-        srf.m_knot[1] = vec![0.0; knot_count1];
+        // Allocate nurbsknot vectors
+        let nurbsknot_count0 = order0 + cv_count0 - 2;
+        let nurbsknot_count1 = order1 + cv_count1 - 2;
+        srf.m_nurbsknot[0] = vec![0.0; nurbsknot_count0];
+        srf.m_nurbsknot[1] = vec![0.0; nurbsknot_count1];
 
         // Allocate CV array
         let cv_size_total = cv_size * cv_count0 * cv_count1;
         srf.m_cv = vec![0.0; cv_size_total];
 
-        // Initialize knot vectors
-        // TODO: Add make_periodic_uniform_knot_vector implementation
+        // Initialize nurbsknot vectors
+        // TODO: Add make_periodic_uniform_nurbsknot_vector implementation
         if is_periodic_u {
-            eprintln!("Warning: Periodic uniform knot vectors not yet implemented in Rust. Using clamped uniform.");
+            eprintln!("Warning: Periodic uniform nurbsknot vectors not yet implemented in Rust. Using clamped uniform.");
         }
-        srf.make_clamped_uniform_knot_vector(0, knot_delta_u);
+        srf.make_clamped_uniform_nurbsknot_vector(0, nurbsknot_delta_u);
 
         if is_periodic_v {
-            eprintln!("Warning: Periodic uniform knot vectors not yet implemented in Rust. Using clamped uniform.");
+            eprintln!("Warning: Periodic uniform nurbsknot vectors not yet implemented in Rust. Using clamped uniform.");
         }
-        srf.make_clamped_uniform_knot_vector(1, knot_delta_v);
+        srf.make_clamped_uniform_nurbsknot_vector(1, nurbsknot_delta_v);
 
         Some(srf)
     }
@@ -310,7 +310,7 @@ impl NurbsSurface {
         Ok(srf)
     }
 
-    /// Create NURBS surface with default knot vectors (clamped uniform, delta=1.0)
+    /// Create NURBS surface with default nurbsknot vectors (clamped uniform, delta=1.0)
     ///
     /// Convenience method for backward compatibility. Equivalent to:
     /// `create(dimension, is_rational, order0, order1, cv_count0, cv_count1, false, false, 1.0, 1.0)`
@@ -334,12 +334,12 @@ impl NurbsSurface {
         order1: usize,
         cv_count0: usize,
         cv_count1: usize,
-        knot_delta0: f64,
-        knot_delta1: f64,
+        nurbsknot_delta0: f64,
+        nurbsknot_delta1: f64,
     ) -> bool {
-        // Create surface with given parameters and knot vectors
+        // Create surface with given parameters and nurbsknot vectors
         let srf = match Self::create_raw(dimension, false, order0, order1, cv_count0, cv_count1,
-                                     false, false, knot_delta0, knot_delta1) {
+                                     false, false, nurbsknot_delta0, nurbsknot_delta1) {
             Some(s) => s,
             None => return false,
         };
@@ -358,8 +358,8 @@ impl NurbsSurface {
         };
         let hdim = dim * n_other;
         let mut crv = NurbsCurve::new(hdim, false, self.m_order[dir], n_along);
-        for k in 0..self.knot_count(dir) {
-            crv.set_knot(k, self.m_knot[dir][k]);
+        for k in 0..self.nurbsknot_count(dir) {
+            crv.set_nurbsknot(k, self.m_nurbsknot[dir][k]);
         }
         for i in 0..n_along {
             let mut cv_data = Vec::with_capacity(hdim);
@@ -402,21 +402,21 @@ impl NurbsSurface {
         };
 
         if dir == 0 {
-            for k in 0..crv.knot_count() {
-                if let Some(kv) = crv.knot(k) {
-                    new_srf.set_knot(0, k, kv);
+            for k in 0..crv.nurbsknot_count() {
+                if let Some(kv) = crv.nurbsknot(k) {
+                    new_srf.set_nurbsknot(0, k, kv);
                 }
             }
-            for k in 0..self.knot_count(1) {
-                new_srf.set_knot(1, k, self.m_knot[1][k]);
+            for k in 0..self.nurbsknot_count(1) {
+                new_srf.set_nurbsknot(1, k, self.m_nurbsknot[1][k]);
             }
         } else {
-            for k in 0..self.knot_count(0) {
-                new_srf.set_knot(0, k, self.m_knot[0][k]);
+            for k in 0..self.nurbsknot_count(0) {
+                new_srf.set_nurbsknot(0, k, self.m_nurbsknot[0][k]);
             }
-            for k in 0..crv.knot_count() {
-                if let Some(kv) = crv.knot(k) {
-                    new_srf.set_knot(1, k, kv);
+            for k in 0..crv.nurbsknot_count() {
+                if let Some(kv) = crv.nurbsknot(k) {
+                    new_srf.set_nurbsknot(1, k, kv);
                 }
             }
         }
@@ -437,20 +437,20 @@ impl NurbsSurface {
 
         self.m_order = new_srf.m_order;
         self.m_cv_count = new_srf.m_cv_count;
-        self.m_knot = new_srf.m_knot;
+        self.m_nurbsknot = new_srf.m_nurbsknot;
         self.m_cv = new_srf.m_cv;
         self.m_cv_stride = new_srf.m_cv_stride;
         true
     }
 
-    pub fn insert_knot(&mut self, dir: usize, knot_value: f64, knot_multiplicity: usize) -> bool {
+    pub fn insert_nurbsknot(&mut self, dir: usize, nurbsknot_value: f64, nurbsknot_multiplicity: usize) -> bool {
         if dir > 1 { return false; }
         let mut crv = match self.to_curve_internal(dir) {
             Some(c) => c,
             None => return false,
         };
-        for _ in 0..knot_multiplicity {
-            if !crv.insert_knot(knot_value, 1) {
+        for _ in 0..nurbsknot_multiplicity {
+            if !crv.insert_nurbsknot(nurbsknot_value, 1) {
                 return false;
             }
         }
@@ -544,21 +544,21 @@ impl NurbsSurface {
             return false;
         }
         for dir in 0..2 {
-            let knot_count = self.m_order[dir] + self.m_cv_count[dir] - 2;
-            if self.m_knot[dir].len() < knot_count {
+            let nurbsknot_count = self.m_order[dir] + self.m_cv_count[dir] - 2;
+            if self.m_nurbsknot[dir].len() < nurbsknot_count {
                 return false;
             }
         }
         true
     }
 
-    /// Check if knot vector is valid in specified direction
-    pub fn is_valid_knot_vector(&self, dir: usize) -> bool {
+    /// Check if nurbsknot vector is valid in specified direction
+    pub fn is_valid_nurbsknot_vector(&self, dir: usize) -> bool {
         if dir >= 2 { return false; }
-        let kc = self.knot_count(dir);
-        if self.m_knot[dir].len() != kc { return false; }
+        let kc = self.nurbsknot_count(dir);
+        if self.m_nurbsknot[dir].len() != kc { return false; }
         for i in 1..kc {
-            if self.m_knot[dir][i] < self.m_knot[dir][i - 1] { return false; }
+            if self.m_nurbsknot[dir][i] < self.m_nurbsknot[dir][i - 1] { return false; }
         }
         true
     }
@@ -602,18 +602,18 @@ impl NurbsSurface {
             return false;
         }
 
-        // Check knot vector periodicity
+        // Check nurbsknot vector periodicity
         let order = self.m_order[dir];
-        if self.m_knot[dir].len() < order * 2 {
+        if self.m_nurbsknot[dir].len() < order * 2 {
             return false;
         }
 
-        let delta = self.m_knot[dir][order] - self.m_knot[dir][0];
+        let delta = self.m_nurbsknot[dir][order] - self.m_nurbsknot[dir][0];
         let tol = 1e-10;
 
         for i in 0..order {
-            let expected = self.m_knot[dir][i] + delta;
-            let actual = self.m_knot[dir][i + order];
+            let expected = self.m_nurbsknot[dir][i] + delta;
+            let actual = self.m_nurbsknot[dir][i + order];
             if (expected - actual).abs() > tol {
                 return false;
             }
@@ -710,12 +710,12 @@ impl NurbsSurface {
     /// Check if surface is clamped in specified direction (at both ends by default)
     /// end: 0=start only, 1=end only, 2=both
     pub fn is_clamped(&self, dir: usize, end: usize) -> bool {
-        if dir >= 2 || self.m_knot[dir].is_empty() {
+        if dir >= 2 || self.m_nurbsknot[dir].is_empty() {
             return false;
         }
 
-        // Use knot module function
-        knot::is_clamped(self.m_order[dir], self.m_cv_count[dir], &self.m_knot[dir], end as i32)
+        // Use nurbsknot module function
+        nurbsknot::is_clamped(self.m_order[dir], self.m_cv_count[dir], &self.m_nurbsknot[dir], end as i32)
     }
 
     pub fn is_duplicate(&self, other: &Self, ignore_parameterization: bool, tolerance: f64) -> bool {
@@ -741,8 +741,8 @@ impl NurbsSurface {
 
         if !ignore_parameterization {
             for dir in 0..2 {
-                for i in 0..self.knot_count(dir) {
-                    match (self.knot(dir, i), other.knot(dir, i)) {
+                for i in 0..self.nurbsknot_count(dir) {
+                    match (self.nurbsknot(dir, i), other.nurbsknot(dir, i)) {
                         (Some(k1), Some(k2)) => {
                             if (k1 - k2).abs() > tolerance { return false; }
                         }
@@ -790,10 +790,10 @@ impl NurbsSurface {
         if self.m_is_rat { self.m_dim + 1 } else { self.m_dim }
     }
 
-    /// Get knot count in specified direction
-    pub fn knot_count(&self, dir: usize) -> usize {
+    /// Get nurbsknot count in specified direction
+    pub fn nurbsknot_count(&self, dir: usize) -> usize {
         if dir >= 2 { return 0; }
-        self.m_knot[dir].len()
+        self.m_nurbsknot[dir].len()
     }
     
     /// Get number of spans in specified direction
@@ -803,20 +803,20 @@ impl NurbsSurface {
         self.m_cv_count[dir] - self.m_order[dir] + 1
     }
 
-    /// Get knot value at index in specified direction
-    pub fn knot(&self, dir: usize, index: usize) -> Option<f64> {
-        if dir >= 2 || index >= self.m_knot[dir].len() {
+    /// Get nurbsknot value at index in specified direction
+    pub fn nurbsknot(&self, dir: usize, index: usize) -> Option<f64> {
+        if dir >= 2 || index >= self.m_nurbsknot[dir].len() {
             return None;
         }
-        Some(self.m_knot[dir][index])
+        Some(self.m_nurbsknot[dir][index])
     }
 
-    /// Set knot value at index in specified direction
-    pub fn set_knot(&mut self, dir: usize, index: usize, value: f64) -> bool {
-        if dir >= 2 || index >= self.m_knot[dir].len() {
+    /// Set nurbsknot value at index in specified direction
+    pub fn set_nurbsknot(&mut self, dir: usize, index: usize, value: f64) -> bool {
+        if dir >= 2 || index >= self.m_nurbsknot[dir].len() {
             return false;
         }
-        self.m_knot[dir][index] = value;
+        self.m_nurbsknot[dir][index] = value;
         true
     }
 
@@ -951,9 +951,9 @@ impl NurbsSurface {
         false
     }
 
-    /// Make knot vector a clamped uniform knot vector
+    /// Make nurbsknot vector a clamped uniform nurbsknot vector
     /// Matches OpenNURBS algorithm exactly
-    pub fn make_clamped_uniform_knot_vector(&mut self, dir: usize, delta: f64) -> bool {
+    pub fn make_clamped_uniform_nurbsknot_vector(&mut self, dir: usize, delta: f64) -> bool {
         if dir >= 2 {
             return false;
         }
@@ -961,12 +961,12 @@ impl NurbsSurface {
             return false;
         }
 
-        // Use knot module function
-        let result = knot::make_clamped_uniform(self.m_order[dir], self.m_cv_count[dir], delta);
+        // Use nurbsknot module function
+        let result = nurbsknot::make_clamped_uniform(self.m_order[dir], self.m_cv_count[dir], delta);
         if result.is_empty() {
             return false;
         }
-        self.m_knot[dir] = result;
+        self.m_nurbsknot[dir] = result;
         true
     }
 
@@ -977,10 +977,10 @@ impl NurbsSurface {
         }
         let order = self.m_order[dir];
         let cv_count = self.m_cv_count[dir];
-        if order < 2 || cv_count < order || self.m_knot[dir].len() < order + cv_count - 2 {
+        if order < 2 || cv_count < order || self.m_nurbsknot[dir].len() < order + cv_count - 2 {
             return None;
         }
-        Some((self.m_knot[dir][order - 2], self.m_knot[dir][cv_count - 1]))
+        Some((self.m_nurbsknot[dir][order - 2], self.m_nurbsknot[dir][cv_count - 1]))
     }
 
     /// Set surface domain in specified direction
@@ -999,13 +999,13 @@ impl NurbsSurface {
         }
 
         let scale = (t1 - t0) / (d1 - d0);
-        for i in 0..self.m_knot[dir].len() {
-            self.m_knot[dir][i] = t0 + (self.m_knot[dir][i] - d0) * scale;
+        for i in 0..self.m_nurbsknot[dir].len() {
+            self.m_nurbsknot[dir][i] = t0 + (self.m_nurbsknot[dir][i] - d0) * scale;
         }
         true
     }
 
-    /// Get span (distinct knot intervals) values in specified direction
+    /// Get span (distinct nurbsknot intervals) values in specified direction
     pub fn get_span_vector(&self, dir: usize) -> Vec<f64> {
         if dir >= 2 || !self.is_valid() {
             return Vec::new();
@@ -1014,36 +1014,36 @@ impl NurbsSurface {
         let mut spans = Vec::new();
         let tol = 1e-10;
 
-        if self.m_knot[dir].is_empty() {
+        if self.m_nurbsknot[dir].is_empty() {
             return spans;
         }
 
-        spans.push(self.m_knot[dir][0]);
+        spans.push(self.m_nurbsknot[dir][0]);
 
-        for i in 1..self.m_knot[dir].len() {
-            let diff = self.m_knot[dir][i] - *spans.last().unwrap();
+        for i in 1..self.m_nurbsknot[dir].len() {
+            let diff = self.m_nurbsknot[dir][i] - *spans.last().unwrap();
             if diff.abs() > tol {
-                spans.push(self.m_knot[dir][i]);
+                spans.push(self.m_nurbsknot[dir][i]);
             }
         }
 
         spans
     }
 
-    /// Get knot multiplicity at index in specified direction
-    pub fn knot_multiplicity(&self, dir: usize, knot_index: usize) -> usize {
+    /// Get nurbsknot multiplicity at index in specified direction
+    pub fn nurbsknot_multiplicity(&self, dir: usize, nurbsknot_index: usize) -> usize {
         if dir >= 2 {
             return 0;
         }
         
-        // Use knot module function
-        knot::multiplicity(self.m_order[dir], self.m_cv_count[dir], &self.m_knot[dir], knot_index)
+        // Use nurbsknot module function
+        nurbsknot::multiplicity(self.m_order[dir], self.m_cv_count[dir], &self.m_nurbsknot[dir], nurbsknot_index)
     }
 
-    /// Get all knot values for specified direction
-    pub fn get_knots(&self, dir: usize) -> Vec<f64> {
+    /// Get all nurbsknot values for specified direction
+    pub fn get_nurbsknots(&self, dir: usize) -> Vec<f64> {
         if dir < 2 {
-            self.m_knot[dir].clone()
+            self.m_nurbsknot[dir].clone()
         } else {
             Vec::new()
         }
@@ -1182,14 +1182,14 @@ impl NurbsSurface {
 
     /// Find span index for parameter value (OpenNURBS algorithm)
     /// 
-    /// Matches ON_NurbsSpanIndex from opennurbs_knot.cpp exactly
+    /// Matches ON_NurbsSpanIndex from opennurbs_nurbsknot.cpp exactly
     fn find_span(&self, dir: usize, t: f64) -> isize {
         if dir >= 2 {
             return -1;
         }
 
-        // Use knot module function
-        knot::find_span(self.m_order[dir], self.m_cv_count[dir], &self.m_knot[dir], t) as isize
+        // Use nurbsknot module function
+        nurbsknot::find_span(self.m_order[dir], self.m_cv_count[dir], &self.m_nurbsknot[dir], t) as isize
     }
 
     /// Compute basis functions (OpenNURBS ON_EvaluateNurbsBasis algorithm)
@@ -1202,13 +1202,13 @@ impl NurbsSurface {
 
         let degree = order - 1;  // d = order - 1
         
-        // OpenNURBS shifts knot by (order-2) + span, then by d inside basis
-        let knot_base = span_index + degree;
-        let knot = &self.m_knot[dir];
+        // OpenNURBS shifts nurbsknot by (order-2) + span, then by d inside basis
+        let nurbsknot_base = span_index + degree;
+        let nurbsknot = &self.m_nurbsknot[dir];
         
-        if knot[knot_base - 1] == knot[knot_base] {
+        if nurbsknot[nurbsknot_base - 1] == nurbsknot[nurbsknot_base] {
             let mut out = vec![0.0; order];
-            if t <= knot[knot_base] { out[0] = 1.0; } else { out[order - 1] = 1.0; }
+            if t <= nurbsknot[nurbsknot_base] { out[0] = 1.0; } else { out[order - 1] = 1.0; }
             return out;
         }
 
@@ -1219,14 +1219,14 @@ impl NurbsSurface {
         let mut right = vec![0.0; degree];
 
         let mut n_idx = order * order - 1;
-        let mut k_right = knot_base;
-        let mut k_left = knot_base - 1;
+        let mut k_right = nurbsknot_base;
+        let mut k_left = nurbsknot_base - 1;
 
         for j in 0..degree {
             let n0_idx = n_idx;
             n_idx -= order + 1;
-            left[j] = t - knot[k_left];
-            right[j] = knot[k_right] - t;
+            left[j] = t - nurbsknot[k_left];
+            right[j] = nurbsknot[k_right] - t;
             k_left = k_left.wrapping_sub(1);
             k_right += 1;
 
@@ -1250,12 +1250,12 @@ impl NurbsSurface {
         if dir >= 2 { return vec![]; }
         let order = self.m_order[dir];
         let degree = order - 1;
-        let knot = &self.m_knot[dir];
-        let knot_base = span + degree;
+        let nurbsknot = &self.m_nurbsknot[dir];
+        let nurbsknot_base = span + degree;
 
         let mut ders = vec![vec![0.0; order]; deriv_order + 1];
 
-        if knot[knot_base - 1] == knot[knot_base] {
+        if nurbsknot[nurbsknot_base - 1] == nurbsknot[nurbsknot_base] {
             return ders;
         }
 
@@ -1265,8 +1265,8 @@ impl NurbsSurface {
         let mut right = vec![0.0; degree + 1];
 
         for j in 1..=degree {
-            left[j] = t - knot[knot_base - j];
-            right[j] = knot[knot_base + j - 1] - t;
+            left[j] = t - nurbsknot[nurbsknot_base - j];
+            right[j] = nurbsknot[nurbsknot_base + j - 1] - t;
             let mut saved = 0.0;
             for r in 0..j {
                 ndu[j][r] = right[r + 1] + left[j - r];
@@ -1314,7 +1314,7 @@ impl NurbsSurface {
             for j in 0..=degree {
                 ders[k][j] *= factorial;
             }
-            factorial *= (degree - k) as f64;
+            factorial *= (degree as isize - k as isize) as f64;
         }
 
         ders
@@ -1410,13 +1410,13 @@ impl NurbsSurface {
         let cv_size = if self.m_is_rat { self.m_dim + 1 } else { self.m_dim };
         nurbs_crv.m_cv_stride = cv_size;
         
-        // Allocate knot vector
-        let knot_count = nurbs_crv.m_order + nurbs_crv.m_cv_count - 2;
-        nurbs_crv.m_knot = vec![0.0; knot_count];
+        // Allocate nurbsknot vector
+        let nurbsknot_count = nurbs_crv.m_order + nurbs_crv.m_cv_count - 2;
+        nurbs_crv.m_nurbsknot = vec![0.0; nurbsknot_count];
         
-        // Copy knot vector for varying direction
-        for i in 0..knot_count {
-            nurbs_crv.m_knot[i] = self.m_knot[dir][i];
+        // Copy nurbsknot vector for varying direction
+        for i in 0..nurbsknot_count {
+            nurbs_crv.m_nurbsknot[i] = self.m_nurbsknot[dir][i];
         }
         
         // Allocate CV array
@@ -1564,8 +1564,8 @@ impl NurbsSurface {
             }
         }
         
-        // Reverse knot vector using knot module function
-        knot::reverse(self.m_order[dir], self.m_cv_count[dir], &mut self.m_knot[dir])
+        // Reverse nurbsknot vector using nurbsknot module function
+        nurbsknot::reverse(self.m_order[dir], self.m_cv_count[dir], &mut self.m_nurbsknot[dir])
     }
     
     /// Transpose surface (swap u and v parameters)
@@ -1610,8 +1610,8 @@ impl NurbsSurface {
         self.m_cv_stride[0] = cv_size * self.m_cv_count[1];
         self.m_cv_stride[1] = cv_size;
 
-        // Swap knot vectors
-        self.m_knot.swap(0, 1);
+        // Swap nurbsknot vectors
+        self.m_nurbsknot.swap(0, 1);
 
         true
     }
@@ -1670,8 +1670,8 @@ impl NurbsSurface {
             return false;
         }
         
-        // Use knot module function
-        knot::clamp(self.m_order[dir], self.m_cv_count[dir], &mut self.m_knot[dir], end as i32)
+        // Use nurbsknot module function
+        nurbsknot::clamp(self.m_order[dir], self.m_cv_count[dir], &mut self.m_nurbsknot[dir], end as i32)
     }
     
     /// Subdivide surface into a grid of points.
@@ -1889,11 +1889,11 @@ impl NurbsSurface {
         result
     }
 
-    pub fn make_periodic_uniform_knot_vector(&mut self, dir: usize, delta: f64) -> bool {
+    pub fn make_periodic_uniform_nurbsknot_vector(&mut self, dir: usize, delta: f64) -> bool {
         if dir > 1 || delta <= 0.0 { return false; }
-        let knots = knot::make_periodic_uniform(self.m_order[dir], self.m_cv_count[dir], delta);
-        if knots.is_empty() { return false; }
-        self.m_knot[dir] = knots;
+        let nurbsknots = nurbsknot::make_periodic_uniform(self.m_order[dir], self.m_cv_count[dir], delta);
+        if nurbsknots.is_empty() { return false; }
+        self.m_nurbsknot[dir] = nurbsknots;
         true
     }
 
@@ -1966,29 +1966,29 @@ impl NurbsSurface {
     }
 
     /// Serialize to JSON and write to file
-    pub fn json_dump(&self, filename: &str) {
+    pub fn file_json_dump(&self, filename: &str) {
         if let Ok(json) = self.jsondump() {
             let _ = std::fs::write(filename, json);
         }
     }
 
     pub fn jsondump(&self) -> Result<String, Box<dyn std::error::Error>> {
-        crate::encoders::sorted_json_string(self)
+        crate::file_encoders::sorted_json_string(self)
     }
 
     pub fn jsonload(json_data: &str) -> Result<Self, Box<dyn std::error::Error>> {
         Ok(serde_json::from_str(json_data)?)
     }
 
-    pub fn json_dumps(&self) -> String {
+    pub fn file_json_dumps(&self) -> String {
         self.jsondump().unwrap_or_default()
     }
 
-    pub fn json_loads(json_string: &str) -> Self {
+    pub fn file_json_loads(json_string: &str) -> Self {
         serde_json::from_str(json_string).unwrap_or_else(|_| Self::default())
     }
 
-    pub fn json_load(filename: &str) -> Self {
+    pub fn file_json_load(filename: &str) -> Self {
         match std::fs::read_to_string(filename) {
             Ok(s) => Self::jsonload(&s).unwrap_or_default(),
             Err(_) => Self::default(),
@@ -2014,8 +2014,8 @@ impl NurbsSurface {
             cv_count_v: self.m_cv_count[1] as i32,
             cv_stride_u: self.m_cv_stride[0] as i32,
             cv_stride_v: self.m_cv_stride[1] as i32,
-            knots_u: self.m_knot[0].clone(),
-            knots_v: self.m_knot[1].clone(),
+            nurbsknots_u: self.m_nurbsknot[0].clone(),
+            nurbsknots_v: self.m_nurbsknot[1].clone(),
             cvs: self.m_cv.clone(),
             width: self.width,
             pointcolors: self.pointcolors.iter().map(|c| crate::proto::Color {
@@ -2082,12 +2082,12 @@ impl NurbsSurface {
         surface.name = proto.name;
         surface.width = proto.width;
 
-        // Load knot vectors
-        if proto.knots_u.len() == surface.m_knot[0].len() {
-            surface.m_knot[0] = proto.knots_u;
+        // Load nurbsknot vectors
+        if proto.nurbsknots_u.len() == surface.m_nurbsknot[0].len() {
+            surface.m_nurbsknot[0] = proto.nurbsknots_u;
         }
-        if proto.knots_v.len() == surface.m_knot[1].len() {
-            surface.m_knot[1] = proto.knots_v;
+        if proto.nurbsknots_v.len() == surface.m_nurbsknot[1].len() {
+            surface.m_nurbsknot[1] = proto.nurbsknots_v;
         }
 
         // Load control vertices
@@ -2172,9 +2172,9 @@ impl PartialEq for NurbsSurface {
         if self.m_cv_count != other.m_cv_count { return false; }
         if self.m_cv_stride != other.m_cv_stride { return false; }
 
-        // Compare knot vectors
-        if self.m_knot[0] != other.m_knot[0] { return false; }
-        if self.m_knot[1] != other.m_knot[1] { return false; }
+        // Compare nurbsknot vectors
+        if self.m_nurbsknot[0] != other.m_nurbsknot[0] { return false; }
+        if self.m_nurbsknot[1] != other.m_nurbsknot[1] { return false; }
 
         // Compare control vertices
         if self.m_cv != other.m_cv { return false; }
@@ -2200,7 +2200,7 @@ impl Clone for NurbsSurface {
             m_order: self.m_order,
             m_cv_count: self.m_cv_count,
             m_cv_stride: self.m_cv_stride,
-            m_knot: self.m_knot.clone(),
+            m_nurbsknot: self.m_nurbsknot.clone(),
             m_cv: self.m_cv.clone(),
             m_mesh: self.m_mesh.clone(),
         }

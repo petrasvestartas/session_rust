@@ -1,9 +1,5 @@
-// AABBTree — flat contiguous BVH over axis-aligned boxes (SAH median split).
-// Use for: closest-point on static mesh faces, ray-mesh intersection.
-//   Build once, query many times. Cache-friendly 56-byte nodes.
-// Prefer over BVH  when geometry is static and all volumes are world-aligned.
-// Prefer over RTree when no dynamic insert/delete is needed.
-// Prefer over KDTree when querying faces/volumes, not bare point clouds.
+// AABB — axis-aligned bounding box primitive (center + half-size).
+// Use for: containment tests, intersection tests, tight bounds of geometry.
 use crate::Point;
 
 #[derive(Clone, Copy, Default, Debug)]
