@@ -1,102 +1,70 @@
+// Generates protobuf Rust bindings into src/proto/ (committed).
+//
+// Option C: the generated file is checked into the repo. Consumers of
+// session_rust never need protoc to build. During development, edits to
+// ../session_proto/*.proto cause this script to rewrite src/proto/session_proto.rs
+// so the diff shows up in `git status` and gets committed alongside the schema.
+//
+// Set REGEN_PROTO=0 to skip (useful for offline end-user builds without protoc).
+
 use std::path::PathBuf;
 
 fn main() {
-    let proto_dir = "../session_proto";
-
     println!("cargo:rerun-if-changed=build.rs");
+    println!("cargo:rerun-if-env-changed=REGEN_PROTO");
 
-    let protoc_path = download_protoc();
-    std::env::set_var("PROTOC", &protoc_path);
+    let proto_dir = PathBuf::from("../session_proto");
+    let out_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("src/proto");
 
-    let proto_files: Vec<String> = std::fs::read_dir(proto_dir)
-        .expect("Failed to read proto directory")
-        .filter_map(|entry| {
-            let entry = entry.ok()?;
-            let path = entry.path();
-            if path.extension()? == "proto" {
-                Some(path.to_string_lossy().into_owned())
-            } else {
-                None
-            }
-        })
+    if std::env::var("REGEN_PROTO").as_deref() == Ok("0") {
+        return;
+    }
+
+    if !proto_dir.exists() {
+        return;
+    }
+
+    let proto_files: Vec<PathBuf> = std::fs::read_dir(&proto_dir)
+        .expect("read session_proto")
+        .filter_map(|e| e.ok().map(|e| e.path()))
+        .filter(|p| p.extension().and_then(|s| s.to_str()) == Some("proto"))
         .collect();
 
-    for proto_file in &proto_files {
-        println!("cargo:rerun-if-changed={}", proto_file);
+    if proto_files.is_empty() {
+        return;
     }
 
-    if !proto_files.is_empty() {
-        prost_build::compile_protos(
-            &proto_files.iter().map(|s| s.as_str()).collect::<Vec<_>>(),
-            &[proto_dir],
-        )
-        .expect("Failed to compile protobuf files");
-    }
-}
-
-fn download_protoc() -> PathBuf {
-    use std::io::Read;
-
-    let version = "29.0";
-    let out_dir = PathBuf::from(std::env::var("OUT_DIR").unwrap());
-    let protoc_dir = out_dir.join("protoc");
-
-    #[cfg(target_os = "windows")]
-    let (platform, exe_name) = ("win64", "protoc.exe");
-
-    #[cfg(all(target_os = "linux", target_arch = "x86_64"))]
-    let (platform, exe_name) = ("linux-x86_64", "protoc");
-
-    #[cfg(all(target_os = "linux", target_arch = "aarch64"))]
-    let (platform, exe_name) = ("linux-aarch_64", "protoc");
-
-    #[cfg(all(target_os = "macos", target_arch = "x86_64"))]
-    let (platform, exe_name) = ("osx-x86_64", "protoc");
-
-    #[cfg(all(target_os = "macos", target_arch = "aarch64"))]
-    let (platform, exe_name) = ("osx-aarch_64", "protoc");
-
-    let protoc_exe = protoc_dir.join("bin").join(exe_name);
-
-    if protoc_exe.exists() {
-        return protoc_exe;
+    for f in &proto_files {
+        println!("cargo:rerun-if-changed={}", f.display());
     }
 
-    let url = format!(
-        "https://github.com/protocolbuffers/protobuf/releases/download/v{}/protoc-{}-{}.zip",
-        version, version, platform
-    );
+    std::fs::create_dir_all(&out_dir).expect("create src/proto");
 
-    eprintln!("Downloading protoc from {}...", url);
+    let protoc = protoc_bin_vendored::protoc_bin_path()
+        .expect("protoc-bin-vendored failed to locate bundled protoc");
+    std::env::set_var("PROTOC", &protoc);
 
-    let response = ureq::get(&url).call().expect("Failed to download protoc");
-    let mut bytes = Vec::new();
-    response.into_reader().read_to_end(&mut bytes).expect("Failed to read response");
+    let staging = PathBuf::from(std::env::var("OUT_DIR").unwrap()).join("proto_staging");
+    std::fs::create_dir_all(&staging).expect("create staging");
 
-    let mut archive = zip::ZipArchive::new(std::io::Cursor::new(bytes)).expect("Failed to open zip");
+    let mut cfg = prost_build::Config::new();
+    cfg.out_dir(&staging);
+    cfg.compile_protos(&proto_files, &[&proto_dir])
+        .expect("prost-build: compile_protos");
 
-    for i in 0..archive.len() {
-        let mut file = archive.by_index(i).unwrap();
-        let outpath = protoc_dir.join(file.name());
-
-        if file.name().ends_with('/') {
-            std::fs::create_dir_all(&outpath).ok();
-        } else {
-            if let Some(parent) = outpath.parent() {
-                std::fs::create_dir_all(parent).ok();
-            }
-            let mut outfile = std::fs::File::create(&outpath).unwrap();
-            std::io::copy(&mut file, &mut outfile).unwrap();
-
-            #[cfg(unix)]
-            {
-                use std::os::unix::fs::PermissionsExt;
-                if outpath.to_string_lossy().contains("bin/protoc") {
-                    std::fs::set_permissions(&outpath, std::fs::Permissions::from_mode(0o755)).ok();
-                }
-            }
+    // Copy to src/proto/ only when content differs so cargo does not
+    // mtime-rebuild the library on every run.
+    for entry in std::fs::read_dir(&staging).expect("read staging") {
+        let entry = entry.expect("entry");
+        let src = entry.path();
+        let dst = out_dir.join(entry.file_name());
+        let new_bytes = std::fs::read(&src).expect("read staging file");
+        let changed = match std::fs::read(&dst) {
+            Ok(old) => old != new_bytes,
+            Err(_) => true,
+        };
+        if changed {
+            std::fs::write(&dst, &new_bytes).expect("write committed proto");
         }
     }
-
-    protoc_exe
 }

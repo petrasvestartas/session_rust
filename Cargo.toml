@@ -13,12 +13,11 @@ rand = "0.8"
 libc = "0.2"
 inventory = "0.3"
 rayon = "1.10"
-prost = "0.12"
+prost = "0.14"
 
 [build-dependencies]
-prost-build = "0.12"
-ureq = "2.9"
-zip = { version = "0.6", default-features = false, features = ["deflate"] }
+prost-build = "0.14"
+protoc-bin-vendored = "3.2"
 
 [dev-dependencies]
 

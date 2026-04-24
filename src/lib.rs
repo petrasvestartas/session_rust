@@ -6,7 +6,7 @@
 #![allow(static_mut_refs)]
 
 pub mod proto {
-    include!(concat!(env!("OUT_DIR"), "/session_proto.rs"));
+    include!("proto/session_proto.rs");
 }
 
 pub mod aabb;
