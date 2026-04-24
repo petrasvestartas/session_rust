@@ -431,6 +431,13 @@ pub fn run_primitives_nurbssurface_planar() -> TestResult {
         use crate::nurbscurve::NurbsCurve;
         use crate::point::Point;
 
+        // Hardcoded expected CVs include create_planar's least-squares
+        // fitting noise; libm cos/sin precision varies by platform (esp.
+        // Apple Silicon vs x86). Loosen TOLERANCE for parity with the
+        // Python/C++ mirrors of this test.
+        let _saved_abs = TOLERANCE.absolute();
+        TOLERANCE.set_absolute(1e-6);
+
         let c1 = 0.7_f64.cos(); let s1 = 0.7_f64.sin();
         let c2 = 0.96_f64.cos(); let s2 = 0.96_f64.sin();
         let c3 = 0.52_f64.cos(); let s3 = 0.52_f64.sin();
@@ -522,6 +529,8 @@ pub fn run_primitives_nurbssurface_planar() -> TestResult {
         MINI_CHECK!(TOLERANCE.is_point_close(&s_nurbs.get_cv(0,1).unwrap(), &Point::new(24.347485651711366, 0.916607409071279, 1.942978687541882)));
         MINI_CHECK!(TOLERANCE.is_point_close(&s_nurbs.get_cv(1,0).unwrap(), &Point::new(32.606791655643732, 0.791738725121784, 1.678288276735475)));
         MINI_CHECK!(TOLERANCE.is_point_close(&s_nurbs.get_cv(1,1).unwrap(), &Point::new(30.301430747422629, 2.436120711686657, 5.163967229855166)));
+
+        TOLERANCE.set_absolute(_saved_abs);
     })
 }
 
