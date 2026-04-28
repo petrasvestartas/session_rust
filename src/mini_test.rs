@@ -528,6 +528,7 @@ pub fn get_all_tests() -> Vec<RegisteredTest> {
         RegisteredTest { group: "Mesh", name: "From Lines", func: run_mesh_from_lines },
         RegisteredTest { group: "Mesh", name: "From Polygon With Holes", func: run_mesh_from_polygon_with_holes },
         RegisteredTest { group: "Mesh", name: "Loft", func: run_mesh_loft },
+        RegisteredTest { group: "Mesh", name: "Loft concave with holes and collinear", func: run_mesh_loft_concave_with_holes_and_collinear },
         RegisteredTest { group: "Mesh", name: "From Polygon With Holes Many", func: run_mesh_from_polygon_with_holes_many },
         RegisteredTest { group: "Mesh", name: "Loft Many", func: run_mesh_loft_many },
         RegisteredTest { group: "Mesh", name: "Boolean Queries", func: run_mesh_boolean_queries },

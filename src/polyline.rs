@@ -1370,7 +1370,7 @@ impl Polyline {
         Some(Polyline::new(pts3d))
     }
 
-    /// Grid of interior points; offset_dist ignored (no clipper); div_dist = grid spacing.
+    /// Grid of interior points; offset_dist currently unused; div_dist = grid spacing.
     pub fn grid_of_points_in_polygon(polygon: &Polyline, offset_dist: f64, div_dist: f64, max_pts: usize) -> Vec<Point> {
         if div_dist < 1e-12 { return Vec::new(); }
         let (orig, xa, ya, _za) = polygon.get_average_plane();

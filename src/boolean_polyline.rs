@@ -1,6 +1,6 @@
-// Vatti scanline polygon clipping — ported from Clipper2 (Angus Johnson,
-// Boost licence) into session_rust types. Closed-path NonZero fill only.
-// Uses arena-index pattern: all pointers are usize indices into Vec pools.
+// Vatti scanline polygon clipping in session_rust types. Closed-path NonZero
+// fill only. Uses arena-index pattern: all pointers are usize indices into
+// Vec pools.
 
 use crate::Polyline;
 

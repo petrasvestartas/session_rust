@@ -282,6 +282,110 @@ pub fn run_mesh_loft() -> TestResult {
     })
 }
 
+pub fn run_mesh_loft_concave_with_holes_and_collinear() -> TestResult {
+    MINI_TEST!("Loft concave with holes and collinear", {
+        use crate::Mesh;
+        use crate::Point;
+        use crate::Polyline;
+
+        let annen_bot = vec![
+            Polyline::new(vec![
+                Point::new(2142.008, -530.170, 1172.487),
+                Point::new(2142.008, -530.170, -318.768),
+                Point::new(2142.008, -318.102, -318.768),
+                Point::new(2142.008, -347.792, -414.110),
+                Point::new(2142.008, -106.034, -414.110),
+                Point::new(2142.008, -135.724, -318.768),
+                Point::new(2142.008,  106.034, -318.768),
+                Point::new(2142.008,   76.344, -414.110),
+                Point::new(2142.008,  318.102, -414.110),
+                Point::new(2142.008,  288.412, -318.768),
+                Point::new(2142.008,  530.170, -318.768),
+                Point::new(2142.008,  530.170, 1172.487),
+                Point::new(2142.008, -530.170, 1172.487),
+            ]),
+            Polyline::new(vec![
+                Point::new(2142.008, 97.448,  841.097),
+                Point::new(2142.008,  0.000,  841.097),
+                Point::new(2142.008,  0.000, 1006.792),
+                Point::new(2142.008, 97.448, 1006.792),
+                Point::new(2142.008, 97.448,  841.097),
+            ]),
+            Polyline::new(vec![
+                Point::new(2142.008, 97.448, 178.317),
+                Point::new(2142.008,  0.000, 178.317),
+                Point::new(2142.008,  0.000, 344.012),
+                Point::new(2142.008, 97.448, 344.012),
+                Point::new(2142.008, 97.448, 178.317),
+            ]),
+        ];
+        let annen_top = vec![
+            Polyline::new(vec![
+                Point::new(2223.416, -530.170, 1172.487),
+                Point::new(2223.416, -530.170, -269.141),
+                Point::new(2223.416, -318.102, -269.141),
+                Point::new(2223.416, -347.792, -364.483),
+                Point::new(2223.416, -106.034, -364.483),
+                Point::new(2223.416, -135.724, -269.141),
+                Point::new(2223.416,  106.034, -269.141),
+                Point::new(2223.416,   76.344, -364.483),
+                Point::new(2223.416,  318.102, -364.483),
+                Point::new(2223.416,  288.412, -269.141),
+                Point::new(2223.416,  530.170, -269.141),
+                Point::new(2223.416,  530.170, 1172.487),
+                Point::new(2223.416, -530.170, 1172.487),
+            ]),
+            Polyline::new(vec![
+                Point::new(2223.416, 97.448,  841.097),
+                Point::new(2223.416,  0.000,  841.097),
+                Point::new(2223.416,  0.000, 1006.792),
+                Point::new(2223.416, 97.448, 1006.792),
+                Point::new(2223.416, 97.448,  841.097),
+            ]),
+            Polyline::new(vec![
+                Point::new(2223.416, 97.448, 178.317),
+                Point::new(2223.416,  0.000, 178.317),
+                Point::new(2223.416,  0.000, 344.012),
+                Point::new(2223.416, 97.448, 344.012),
+                Point::new(2223.416, 97.448, 178.317),
+            ]),
+        ];
+        let annen = Mesh::loft(&annen_bot, &annen_top, true);
+        MINI_CHECK!(annen.is_valid());
+        MINI_CHECK!(annen.is_closed());
+        MINI_CHECK!(annen.vertex.len() == 40);
+        MINI_CHECK!(annen.face.len() == 22);
+
+        let col_bot = vec![
+            Polyline::new(vec![
+                Point::new( 0.0, 0.0, 0.0),
+                Point::new( 4.0, 0.0, 0.0),
+                Point::new( 7.0, 0.0, 0.0),
+                Point::new(12.0, 0.0, 0.0),
+                Point::new(12.0, 5.0, 0.0),
+                Point::new( 0.0, 5.0, 0.0),
+                Point::new( 0.0, 0.0, 0.0),
+            ]),
+        ];
+        let col_top = vec![
+            Polyline::new(vec![
+                Point::new( 0.0, 0.0, 1.5),
+                Point::new( 4.0, 0.0, 1.5),
+                Point::new( 7.0, 0.0, 1.5),
+                Point::new(12.0, 0.0, 1.5),
+                Point::new(12.0, 5.0, 1.5),
+                Point::new( 0.0, 5.0, 1.5),
+                Point::new( 0.0, 0.0, 1.5),
+            ]),
+        ];
+        let colmesh = Mesh::loft(&col_bot, &col_top, true);
+        MINI_CHECK!(colmesh.is_valid());
+        MINI_CHECK!(colmesh.is_closed());
+        MINI_CHECK!(colmesh.vertex.len() == 8);
+        MINI_CHECK!(colmesh.face.len() == 6);
+    })
+}
+
 pub fn run_mesh_from_polygon_with_holes_many() -> TestResult {
     MINI_TEST!("From Polygon With Holes Many", {
         use crate::Mesh;
