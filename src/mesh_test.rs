@@ -1452,6 +1452,310 @@ pub fn run_mesh_protobuf_roundtrip() -> TestResult {
         MINI_CHECK!(loaded_holes.face_holes[&hfk] == hmesh.face_holes[&hfk]);
     })
 }
+pub fn run_mesh_vertex_neighbors() -> TestResult {
+    MINI_TEST!("Vertex Neighbors", {
+        use crate::Mesh;
+        let mesh = Mesh::create_box(1.0, 1.0, 1.0);
+        let n0 = mesh.vertex_neighbors(0, false).unwrap();
+        let n0v = mesh.vertex_vertices(0).unwrap();
+        MINI_CHECK!(n0 == n0v);
+        MINI_CHECK!(n0.len() == 3);
+    })
+}
+
+pub fn run_mesh_vertices_on_boundary() -> TestResult {
+    MINI_TEST!("Vertices On Boundary", {
+        use crate::Mesh;
+        let mut mesh = Mesh::create_box(1.0, 1.0, 1.0);
+        MINI_CHECK!(mesh.vertices_on_boundary().len() == 0);
+        mesh.remove_face(mesh.faces()[0]);
+        let vb = mesh.vertices_on_boundary();
+        MINI_CHECK!(vb.len() == 4);
+    })
+}
+
+pub fn run_mesh_edges_on_boundary() -> TestResult {
+    MINI_TEST!("Edges On Boundary", {
+        use crate::Mesh;
+        let mut mesh = Mesh::create_box(1.0, 1.0, 1.0);
+        MINI_CHECK!(mesh.edges_on_boundary().len() == 0);
+        mesh.remove_face(mesh.faces()[0]);
+        let eb = mesh.edges_on_boundary();
+        MINI_CHECK!(eb.len() == 4);
+    })
+}
+
+pub fn run_mesh_faces_on_boundary() -> TestResult {
+    MINI_TEST!("Faces On Boundary", {
+        use crate::Mesh;
+        let mut mesh = Mesh::create_box(1.0, 1.0, 1.0);
+        MINI_CHECK!(mesh.faces_on_boundary().len() == 0);
+        mesh.remove_face(mesh.faces()[0]);
+        MINI_CHECK!(mesh.faces_on_boundary().len() == 4);
+    })
+}
+
+pub fn run_mesh_halfedge_face() -> TestResult {
+    MINI_TEST!("Halfedge Face", {
+        use crate::Mesh;
+        let mut mesh = Mesh::create_box(1.0, 1.0, 1.0);
+        let f = mesh.halfedge_face((0, 3));
+        MINI_CHECK!(f == Some(0));
+        mesh.remove_face(0);
+        MINI_CHECK!(mesh.halfedge_face((0, 3)).is_none());
+    })
+}
+
+pub fn run_mesh_halfedge_after_before() -> TestResult {
+    MINI_TEST!("Halfedge After Before", {
+        use crate::Mesh;
+        let mesh = Mesh::create_box(1.0, 1.0, 1.0);
+        let after = mesh.halfedge_after((0, 3));
+        let before = mesh.halfedge_before((0, 3));
+        MINI_CHECK!(after == Some((3, 2)));
+        MINI_CHECK!(before == Some((1, 0)));
+    })
+}
+
+pub fn run_mesh_halfedge_loop() -> TestResult {
+    MINI_TEST!("Halfedge Loop", {
+        use crate::Mesh;
+        let mesh = Mesh::create_box(1.0, 1.0, 1.0);
+        let loop_edges = mesh.halfedge_loop((0, 3));
+        MINI_CHECK!(loop_edges.len() == 1);
+        MINI_CHECK!(loop_edges[0] == (0, 3));
+    })
+}
+
+pub fn run_mesh_halfedge_strip() -> TestResult {
+    MINI_TEST!("Halfedge Strip", {
+        use crate::Mesh;
+        let mesh = Mesh::create_box(1.0, 1.0, 1.0);
+        let strip = mesh.halfedge_strip((0, 3));
+        MINI_CHECK!(strip.len() == 5);
+        MINI_CHECK!(strip[0] == (0, 3));
+        MINI_CHECK!(strip[strip.len() - 1] == (0, 3));
+    })
+}
+
+pub fn run_mesh_vertex_sample() -> TestResult {
+    MINI_TEST!("Vertex Sample", {
+        use crate::Mesh;
+        use std::collections::HashSet;
+        let mesh = Mesh::create_box(1.0, 1.0, 1.0);
+        let s = mesh.vertex_sample(3, Some(42));
+        MINI_CHECK!(s.len() == 3);
+        let unique: HashSet<usize> = s.iter().copied().collect();
+        MINI_CHECK!(unique.len() == 3);
+        let s2 = mesh.vertex_sample(3, Some(42));
+        MINI_CHECK!(s == s2);
+    })
+}
+
+pub fn run_mesh_edge_sample() -> TestResult {
+    MINI_TEST!("Edge Sample", {
+        use crate::Mesh;
+        let mesh = Mesh::create_box(1.0, 1.0, 1.0);
+        let s = mesh.edge_sample(2, Some(7));
+        MINI_CHECK!(s.len() == 2);
+        let s2 = mesh.edge_sample(2, Some(7));
+        MINI_CHECK!(s == s2);
+    })
+}
+
+pub fn run_mesh_face_sample() -> TestResult {
+    MINI_TEST!("Face Sample", {
+        use crate::Mesh;
+        let mesh = Mesh::create_box(1.0, 1.0, 1.0);
+        let s = mesh.face_sample(2, Some(11));
+        MINI_CHECK!(s.len() == 2);
+        let s2 = mesh.face_sample(2, Some(11));
+        MINI_CHECK!(s == s2);
+    })
+}
+
+pub fn run_mesh_face_center() -> TestResult {
+    MINI_TEST!("Face Center", {
+        use crate::Mesh;
+        let mesh = Mesh::create_box(2.0, 2.0, 2.0);
+        let c = mesh.face_center(0).unwrap();
+        let cc = mesh.face_centroid(0).unwrap();
+        MINI_CHECK!(c == cc);
+    })
+}
+
+pub fn run_mesh_face_polygon() -> TestResult {
+    MINI_TEST!("Face Polygon", {
+        use crate::Mesh;
+        let mesh = Mesh::create_box(1.0, 1.0, 1.0);
+        let poly = mesh.face_polygon(0).unwrap();
+        let pts = poly.get_points();
+        MINI_CHECK!(pts.len() == 5);
+        MINI_CHECK!(pts[0] == pts[pts.len() - 1]);
+    })
+}
+
+pub fn run_mesh_flip_cycles() -> TestResult {
+    MINI_TEST!("Flip Cycles", {
+        use crate::Mesh;
+        let mut mesh = Mesh::create_box(1.0, 1.0, 1.0);
+        let n0 = mesh.face_normal(0).unwrap();
+        mesh.flip_cycles();
+        let n0b = mesh.face_normal(0).unwrap();
+        MINI_CHECK!((n0[0] + n0b[0]).abs() < crate::tolerance::Tolerance::ZERO_TOLERANCE);
+        MINI_CHECK!((n0[1] + n0b[1]).abs() < crate::tolerance::Tolerance::ZERO_TOLERANCE);
+        MINI_CHECK!((n0[2] + n0b[2]).abs() < crate::tolerance::Tolerance::ZERO_TOLERANCE);
+    })
+}
+
+pub fn run_mesh_face_normal_unitized() -> TestResult {
+    MINI_TEST!("Face Normal Unitized", {
+        use crate::Mesh;
+        let mesh = Mesh::create_box(2.0, 2.0, 2.0);
+        let nu = mesh.face_normal_unitized(0, true).unwrap();
+        let nn = mesh.face_normal_unitized(0, false).unwrap();
+        MINI_CHECK!((nu.magnitude() - 1.0).abs() < crate::tolerance::Tolerance::ZERO_TOLERANCE);
+        MINI_CHECK!(nn.magnitude() > 1.0);
+    })
+}
+
+pub fn run_mesh_default_attributes() -> TestResult {
+    MINI_TEST!("Default Attributes", {
+        use crate::Mesh;
+        let mut mesh = Mesh::create_box(1.0, 1.0, 1.0);
+        mesh.update_default_vertex_attributes(&[("is_support", 0.0), ("load_z", 0.0)]);
+        mesh.update_default_face_attributes(&[("stress", 0.0)]);
+        mesh.update_default_edge_attributes(&[("weight", 1.0)]);
+        MINI_CHECK!(mesh.default_vertex_attributes["is_support"] == 0.0);
+        MINI_CHECK!(mesh.default_vertex_attributes["load_z"] == 0.0);
+        MINI_CHECK!(mesh.default_face_attributes["stress"] == 0.0);
+        MINI_CHECK!(mesh.default_edge_attributes["weight"] == 1.0);
+    })
+}
+
+pub fn run_mesh_vertex_attribute() -> TestResult {
+    MINI_TEST!("Vertex Attribute", {
+        use crate::Mesh;
+        let mut mesh = Mesh::create_box(1.0, 1.0, 1.0);
+        mesh.update_default_vertex_attributes(&[("is_support", 0.0)]);
+        mesh.set_vertex_attribute(0, "is_support", 1.0);
+        MINI_CHECK!(mesh.vertex_attribute(0, "is_support") == Some(1.0));
+        MINI_CHECK!(mesh.vertex_attribute(1, "is_support") == Some(0.0));
+    })
+}
+
+pub fn run_mesh_face_attribute() -> TestResult {
+    MINI_TEST!("Face Attribute", {
+        use crate::Mesh;
+        let mut mesh = Mesh::create_box(1.0, 1.0, 1.0);
+        mesh.update_default_face_attributes(&[("stress", 0.0)]);
+        mesh.set_face_attribute(0, "stress", 2.5);
+        MINI_CHECK!(mesh.face_attribute(0, "stress") == Some(2.5));
+        MINI_CHECK!(mesh.face_attribute(1, "stress") == Some(0.0));
+    })
+}
+
+pub fn run_mesh_edge_attribute() -> TestResult {
+    MINI_TEST!("Edge Attribute", {
+        use crate::Mesh;
+        let mut mesh = Mesh::create_box(1.0, 1.0, 1.0);
+        mesh.update_default_edge_attributes(&[("weight", 1.0)]);
+        mesh.set_edge_attribute((0, 1), "weight", 5.0);
+        MINI_CHECK!(mesh.edge_attribute((0, 1), "weight") == Some(5.0));
+        MINI_CHECK!(mesh.edge_attribute((0, 3), "weight") == Some(1.0));
+    })
+}
+
+pub fn run_mesh_vertices_attribute_bulk() -> TestResult {
+    MINI_TEST!("Vertices Attribute Bulk", {
+        use crate::Mesh;
+        let mut mesh = Mesh::create_box(1.0, 1.0, 1.0);
+        mesh.update_default_vertex_attributes(&[("is_support", 0.0)]);
+        mesh.set_vertices_attribute("is_support", 1.0, Some(&[0, 1, 2]));
+        let vals = mesh.vertices_attribute("is_support", None);
+        MINI_CHECK!(vals[0] == Some(1.0));
+        MINI_CHECK!(vals[1] == Some(1.0));
+        MINI_CHECK!(vals[2] == Some(1.0));
+        MINI_CHECK!(vals[3] == Some(0.0));
+    })
+}
+
+pub fn run_mesh_vertices_where() -> TestResult {
+    MINI_TEST!("Vertices Where", {
+        use crate::Mesh;
+        let mut mesh = Mesh::create_box(1.0, 1.0, 1.0);
+        mesh.update_default_vertex_attributes(&[("is_support", 0.0)]);
+        mesh.set_vertices_attribute("is_support", 1.0, Some(&[0, 2, 4]));
+        let mut sup = mesh.vertices_where(&[("is_support", 1.0)]);
+        sup.sort();
+        MINI_CHECK!(sup.len() == 3);
+        MINI_CHECK!(sup == vec![0, 2, 4]);
+    })
+}
+
+pub fn run_mesh_faces_where() -> TestResult {
+    MINI_TEST!("Faces Where", {
+        use crate::Mesh;
+        let mut mesh = Mesh::create_box(1.0, 1.0, 1.0);
+        mesh.update_default_face_attributes(&[("tag", 0.0)]);
+        mesh.set_face_attribute(2, "tag", 7.0);
+        mesh.set_face_attribute(4, "tag", 7.0);
+        let mut out = mesh.faces_where(&[("tag", 7.0)]);
+        out.sort();
+        MINI_CHECK!(out == vec![2, 4]);
+    })
+}
+
+pub fn run_mesh_edges_where() -> TestResult {
+    MINI_TEST!("Edges Where", {
+        use crate::Mesh;
+        let mut mesh = Mesh::create_box(1.0, 1.0, 1.0);
+        mesh.update_default_edge_attributes(&[("weight", 0.0)]);
+        mesh.set_edge_attribute((0, 1), "weight", 3.0);
+        let out = mesh.edges_where(&[("weight", 3.0)]);
+        MINI_CHECK!(out.len() == 1);
+        MINI_CHECK!(out[0] == (0, 1));
+    })
+}
+
+pub fn run_mesh_vertices_where_predicate() -> TestResult {
+    MINI_TEST!("Vertices Where Predicate", {
+        use crate::Mesh;
+        let mut mesh = Mesh::create_box(1.0, 1.0, 1.0);
+        mesh.update_default_vertex_attributes(&[("load", 0.0)]);
+        mesh.set_vertex_attribute(0, "load", 5.0);
+        mesh.set_vertex_attribute(1, "load", 10.0);
+        let mut big = mesh.vertices_where_predicate(|_, a| a.get("load").copied().unwrap_or(0.0) > 4.0);
+        big.sort();
+        MINI_CHECK!(big == vec![0, 1]);
+    })
+}
+
+pub fn run_mesh_faces_where_predicate() -> TestResult {
+    MINI_TEST!("Faces Where Predicate", {
+        use crate::Mesh;
+        let mut mesh = Mesh::create_box(1.0, 1.0, 1.0);
+        mesh.update_default_face_attributes(&[("area", 0.0)]);
+        mesh.set_face_attribute(0, "area", 2.0);
+        mesh.set_face_attribute(3, "area", 4.0);
+        let mut big = mesh.faces_where_predicate(|_, a| a.get("area").copied().unwrap_or(0.0) > 1.0);
+        big.sort();
+        MINI_CHECK!(big == vec![0, 3]);
+    })
+}
+
+pub fn run_mesh_edges_where_predicate() -> TestResult {
+    MINI_TEST!("Edges Where Predicate", {
+        use crate::Mesh;
+        let mut mesh = Mesh::create_box(1.0, 1.0, 1.0);
+        mesh.update_default_edge_attributes(&[("weight", 0.0)]);
+        mesh.set_edge_attribute((0, 1), "weight", 5.0);
+        let big = mesh.edges_where_predicate(|_, a| a.get("weight").copied().unwrap_or(0.0) > 1.0);
+        MINI_CHECK!(big.len() == 1);
+        MINI_CHECK!(big[0] == (0, 1));
+    })
+}
+
 // Register tests with the shared registry
 REGISTER_MINI_TEST!("Mesh", "Constructor", crate::mesh_test::run_mesh_constructor);
 REGISTER_MINI_TEST!("Mesh", "From Polylines", crate::mesh_test::run_mesh_from_polylines);
@@ -1471,3 +1775,29 @@ REGISTER_MINI_TEST!("Mesh", "Geometric Properties", crate::mesh_test::run_mesh_g
 REGISTER_MINI_TEST!("Mesh", "Transformation", crate::mesh_test::run_mesh_transformation);
 REGISTER_MINI_TEST!("Mesh", "Json Roundtrip", crate::mesh_test::run_mesh_json_roundtrip);
 REGISTER_MINI_TEST!("Mesh", "Protobuf Roundtrip", crate::mesh_test::run_mesh_protobuf_roundtrip);
+REGISTER_MINI_TEST!("Mesh", "Vertex Neighbors", crate::mesh_test::run_mesh_vertex_neighbors);
+REGISTER_MINI_TEST!("Mesh", "Vertices On Boundary", crate::mesh_test::run_mesh_vertices_on_boundary);
+REGISTER_MINI_TEST!("Mesh", "Edges On Boundary", crate::mesh_test::run_mesh_edges_on_boundary);
+REGISTER_MINI_TEST!("Mesh", "Faces On Boundary", crate::mesh_test::run_mesh_faces_on_boundary);
+REGISTER_MINI_TEST!("Mesh", "Halfedge Face", crate::mesh_test::run_mesh_halfedge_face);
+REGISTER_MINI_TEST!("Mesh", "Halfedge After Before", crate::mesh_test::run_mesh_halfedge_after_before);
+REGISTER_MINI_TEST!("Mesh", "Halfedge Loop", crate::mesh_test::run_mesh_halfedge_loop);
+REGISTER_MINI_TEST!("Mesh", "Halfedge Strip", crate::mesh_test::run_mesh_halfedge_strip);
+REGISTER_MINI_TEST!("Mesh", "Vertex Sample", crate::mesh_test::run_mesh_vertex_sample);
+REGISTER_MINI_TEST!("Mesh", "Edge Sample", crate::mesh_test::run_mesh_edge_sample);
+REGISTER_MINI_TEST!("Mesh", "Face Sample", crate::mesh_test::run_mesh_face_sample);
+REGISTER_MINI_TEST!("Mesh", "Face Center", crate::mesh_test::run_mesh_face_center);
+REGISTER_MINI_TEST!("Mesh", "Face Polygon", crate::mesh_test::run_mesh_face_polygon);
+REGISTER_MINI_TEST!("Mesh", "Flip Cycles", crate::mesh_test::run_mesh_flip_cycles);
+REGISTER_MINI_TEST!("Mesh", "Face Normal Unitized", crate::mesh_test::run_mesh_face_normal_unitized);
+REGISTER_MINI_TEST!("Mesh", "Default Attributes", crate::mesh_test::run_mesh_default_attributes);
+REGISTER_MINI_TEST!("Mesh", "Vertex Attribute", crate::mesh_test::run_mesh_vertex_attribute);
+REGISTER_MINI_TEST!("Mesh", "Face Attribute", crate::mesh_test::run_mesh_face_attribute);
+REGISTER_MINI_TEST!("Mesh", "Edge Attribute", crate::mesh_test::run_mesh_edge_attribute);
+REGISTER_MINI_TEST!("Mesh", "Vertices Attribute Bulk", crate::mesh_test::run_mesh_vertices_attribute_bulk);
+REGISTER_MINI_TEST!("Mesh", "Vertices Where", crate::mesh_test::run_mesh_vertices_where);
+REGISTER_MINI_TEST!("Mesh", "Faces Where", crate::mesh_test::run_mesh_faces_where);
+REGISTER_MINI_TEST!("Mesh", "Edges Where", crate::mesh_test::run_mesh_edges_where);
+REGISTER_MINI_TEST!("Mesh", "Vertices Where Predicate", crate::mesh_test::run_mesh_vertices_where_predicate);
+REGISTER_MINI_TEST!("Mesh", "Faces Where Predicate", crate::mesh_test::run_mesh_faces_where_predicate);
+REGISTER_MINI_TEST!("Mesh", "Edges Where Predicate", crate::mesh_test::run_mesh_edges_where_predicate);
