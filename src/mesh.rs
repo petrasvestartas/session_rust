@@ -1761,6 +1761,478 @@ impl Mesh {
         Some(keys)
     }
 
+    /// Alias of vertex_vertices. With ordered=true returns neighbors in face-cycle order
+    /// around the vertex (boundary vertex starts/ends at boundary halfedges).
+    pub fn vertex_neighbors(&self, vertex_key: usize, ordered: bool) -> Option<Vec<usize>> {
+        let nbrs_map = self.halfedge.get(&vertex_key)?;
+        let mut nbrs: Vec<usize> = nbrs_map.keys().copied().collect();
+        nbrs.sort();
+        if !ordered || nbrs.len() <= 1 {
+            return Some(nbrs);
+        }
+        let mut start = nbrs[0];
+        for &n in &nbrs {
+            if nbrs_map.get(&n).map(|f| f.is_none()).unwrap_or(false) {
+                start = n;
+                break;
+            }
+        }
+        let mut fkey = self.halfedge.get(&start).and_then(|m| m.get(&vertex_key)).and_then(|f| *f);
+        let mut out = vec![start];
+        let mut guard = 0usize;
+        while let Some(fk) = fkey {
+            guard += 1;
+            if guard > 10_000 { break; }
+            let verts = match self.face.get(&fk) { Some(v) => v, None => break };
+            let i = match verts.iter().position(|&x| x == vertex_key) { Some(p) => p, None => break };
+            let nbr = verts[(i + 1) % verts.len()];
+            if nbr == start { break; }
+            out.push(nbr);
+            fkey = self.halfedge.get(&nbr).and_then(|m| m.get(&vertex_key)).and_then(|f| *f);
+        }
+        Some(out)
+    }
+
+    ///////////////////////////////////////////////////////////////////////////////////////////
+    // Boundary
+    ///////////////////////////////////////////////////////////////////////////////////////////
+
+    pub fn vertices_on_boundary(&self) -> Vec<usize> {
+        let mut out: Vec<usize> = self.vertex.keys().copied()
+            .filter(|&v| self.is_vertex_on_boundary(v))
+            .collect();
+        out.sort();
+        out
+    }
+
+    pub fn edges_on_boundary(&self) -> Vec<(usize, usize)> {
+        let mut out = Vec::new();
+        for (u, nbrs) in &self.halfedge {
+            for (v, f) in nbrs {
+                if f.is_none() {
+                    out.push((*u, *v));
+                }
+            }
+        }
+        out.sort();
+        out
+    }
+
+    pub fn faces_on_boundary(&self) -> Vec<usize> {
+        let mut out: Vec<usize> = self.face.keys().copied()
+            .filter(|&f| self.is_face_on_boundary(f))
+            .collect();
+        out.sort();
+        out
+    }
+
+    ///////////////////////////////////////////////////////////////////////////////////////////
+    // Halfedge Navigation
+    ///////////////////////////////////////////////////////////////////////////////////////////
+
+    pub fn halfedge_face(&self, edge: (usize, usize)) -> Option<usize> {
+        self.halfedge.get(&edge.0).and_then(|m| m.get(&edge.1)).and_then(|f| *f)
+    }
+
+    pub fn halfedge_after(&self, edge: (usize, usize)) -> Option<(usize, usize)> {
+        let (u, v) = edge;
+        if let Some(f) = self.halfedge_face(edge) {
+            let verts = self.face.get(&f)?;
+            let n = verts.len();
+            let i = verts.iter().position(|&x| x == v)?;
+            return Some((v, verts[(i + 1) % n]));
+        }
+        let nbrs = self.halfedge.get(&v)?;
+        for (w, fw) in nbrs {
+            if *w != u && fw.is_none() {
+                return Some((v, *w));
+            }
+        }
+        None
+    }
+
+    pub fn halfedge_before(&self, edge: (usize, usize)) -> Option<(usize, usize)> {
+        let (u, v) = edge;
+        if let Some(f) = self.halfedge_face(edge) {
+            let verts = self.face.get(&f)?;
+            let n = verts.len();
+            let i = verts.iter().position(|&x| x == u)?;
+            return Some((verts[(i + n - 1) % n], u));
+        }
+        let nbrs = self.halfedge.get(&u)?;
+        for (w, _) in nbrs {
+            if *w != v {
+                let opp = self.halfedge.get(w).and_then(|m| m.get(&u)).and_then(|f| *f);
+                if opp.is_none() {
+                    return Some((*w, u));
+                }
+            }
+        }
+        None
+    }
+
+    /// Compas-style: walk the loop of halfedges in the direction of `edge` via opposite
+    /// ordered neighbor (interior valence-4 only). Boundary edges follow the boundary.
+    pub fn halfedge_loop(&self, edge: (usize, usize)) -> Vec<(usize, usize)> {
+        if self.is_edge_on_boundary(edge.0, edge.1) {
+            return self.halfedge_loop_on_boundary(edge);
+        }
+        let mut edges = vec![edge];
+        let (mut u, mut v) = edge;
+        let mut guard = 0usize;
+        loop {
+            guard += 1;
+            if guard > 10_000 { break; }
+            let nbrs = match self.vertex_neighbors(v, true) { Some(n) => n, None => break };
+            if nbrs.len() != 4 { break; }
+            let i = match nbrs.iter().position(|&x| x == u) { Some(p) => p, None => break };
+            u = v;
+            let n = nbrs.len();
+            v = nbrs[(i + n - 2) % n];
+            edges.push((u, v));
+            if v == edges[0].0 { break; }
+        }
+        edges
+    }
+
+    fn halfedge_loop_on_boundary(&self, edge: (usize, usize)) -> Vec<(usize, usize)> {
+        let mut edges = vec![edge];
+        let (mut u, mut v) = edge;
+        let mut guard = 0usize;
+        loop {
+            guard += 1;
+            if guard > 10_000 { break; }
+            let nbrs = match self.vertex_neighbors(v, false) { Some(n) => n, None => break };
+            if nbrs.len() == 2 { break; }
+            let mut nbr: Option<usize> = None;
+            for temp in &nbrs {
+                if *temp == u { continue; }
+                if self.is_edge_on_boundary(v, *temp) {
+                    nbr = Some(*temp);
+                    break;
+                }
+            }
+            let next = match nbr { Some(n) => n, None => break };
+            u = v;
+            v = next;
+            edges.push((u, v));
+            if v == edges[0].0 { break; }
+        }
+        edges
+    }
+
+    /// Compas-style: walk across quads via the opposite halfedge. Closes by appending start.
+    pub fn halfedge_strip(&self, edge: (usize, usize)) -> Vec<(usize, usize)> {
+        let (mut u, mut v) = edge;
+        let mut edges = vec![edge];
+        let mut guard = 0usize;
+        loop {
+            guard += 1;
+            if guard > 10_000 { break; }
+            let f = match self.halfedge.get(&u).and_then(|m| m.get(&v)).and_then(|f| *f) {
+                Some(x) => x,
+                None => break,
+            };
+            let verts = match self.face.get(&f) { Some(v) => v, None => break };
+            if verts.len() != 4 { break; }
+            let i = match verts.iter().position(|&x| x == u) { Some(p) => p, None => break };
+            let n = verts.len();
+            u = verts[(i + n - 1) % n];
+            v = verts[(i + n - 2) % n];
+            edges.push((u, v));
+            if (u, v) == edge { break; }
+        }
+        edges
+    }
+
+    ///////////////////////////////////////////////////////////////////////////////////////////
+    // Sampling (deterministic LCG when seed given, for cross-language parity)
+    ///////////////////////////////////////////////////////////////////////////////////////////
+
+    fn lcg_sample<T: Clone>(keys: &[T], size: usize, seed: Option<u32>) -> Vec<T> {
+        if keys.is_empty() || size == 0 {
+            return Vec::new();
+        }
+        let n = keys.len();
+        let take = size.min(n);
+        if let Some(seed) = seed {
+            let mut s = (seed & 0x7FFF_FFFF).max(1);
+            let mut used = std::collections::HashSet::new();
+            let mut out = Vec::with_capacity(take);
+            while out.len() < take {
+                s = s.wrapping_mul(1103515245).wrapping_add(12345) & 0x7FFF_FFFF;
+                let i = (s as usize) % n;
+                if used.insert(i) {
+                    out.push(keys[i].clone());
+                }
+            }
+            out
+        } else {
+            keys.iter().take(take).cloned().collect()
+        }
+    }
+
+    pub fn vertex_sample(&self, size: usize, seed: Option<u32>) -> Vec<usize> {
+        let mut keys: Vec<usize> = self.vertex.keys().copied().collect();
+        keys.sort();
+        Self::lcg_sample(&keys, size, seed)
+    }
+
+    pub fn edge_sample(&self, size: usize, seed: Option<u32>) -> Vec<(usize, usize)> {
+        let edges = self.edges();
+        Self::lcg_sample(&edges, size, seed)
+    }
+
+    pub fn face_sample(&self, size: usize, seed: Option<u32>) -> Vec<usize> {
+        let mut keys: Vec<usize> = self.face.keys().copied().collect();
+        keys.sort();
+        Self::lcg_sample(&keys, size, seed)
+    }
+
+    ///////////////////////////////////////////////////////////////////////////////////////////
+    // Compas-style Aliases
+    ///////////////////////////////////////////////////////////////////////////////////////////
+
+    pub fn face_center(&self, face_key: usize) -> Option<Point> {
+        self.face_centroid(face_key)
+    }
+
+    pub fn face_polygon(&self, face_key: usize) -> Option<Polyline> {
+        let pts = self.face_points(face_key)?;
+        if pts.is_empty() {
+            return Some(Polyline::new(pts));
+        }
+        let mut closed = pts.clone();
+        if closed.first() != closed.last() {
+            closed.push(closed[0].clone());
+        }
+        Some(Polyline::new(closed))
+    }
+
+    pub fn flip_cycles(&mut self) {
+        self.flip();
+    }
+
+    ///////////////////////////////////////////////////////////////////////////////////////////
+    // Attribute API
+    ///////////////////////////////////////////////////////////////////////////////////////////
+
+    pub fn update_default_vertex_attributes(&mut self, attrs: &[(&str, f64)]) {
+        for (k, v) in attrs {
+            self.default_vertex_attributes.insert((*k).to_string(), *v);
+        }
+    }
+
+    pub fn update_default_face_attributes(&mut self, attrs: &[(&str, f64)]) {
+        for (k, v) in attrs {
+            self.default_face_attributes.insert((*k).to_string(), *v);
+        }
+    }
+
+    pub fn update_default_edge_attributes(&mut self, attrs: &[(&str, f64)]) {
+        for (k, v) in attrs {
+            self.default_edge_attributes.insert((*k).to_string(), *v);
+        }
+    }
+
+    pub fn vertex_attribute(&self, key: usize, name: &str) -> Option<f64> {
+        let vd = self.vertex.get(&key)?;
+        if let Some(v) = vd.attributes.get(name) {
+            return Some(*v);
+        }
+        self.default_vertex_attributes.get(name).copied()
+    }
+
+    pub fn set_vertex_attribute(&mut self, key: usize, name: &str, value: f64) {
+        if let Some(vd) = self.vertex.get_mut(&key) {
+            vd.attributes.insert(name.to_string(), value);
+        }
+    }
+
+    pub fn face_attribute(&self, fkey: usize, name: &str) -> Option<f64> {
+        if !self.face.contains_key(&fkey) {
+            return None;
+        }
+        if let Some(attrs) = self.facedata.get(&fkey) {
+            if let Some(v) = attrs.get(name) {
+                return Some(*v);
+            }
+        }
+        self.default_face_attributes.get(name).copied()
+    }
+
+    pub fn set_face_attribute(&mut self, fkey: usize, name: &str, value: f64) {
+        if !self.face.contains_key(&fkey) {
+            return;
+        }
+        self.facedata.entry(fkey).or_default().insert(name.to_string(), value);
+    }
+
+    pub fn edge_attribute(&self, edge: (usize, usize), name: &str) -> Option<f64> {
+        let (u, v) = edge;
+        let exists = self.halfedge.get(&u).map(|m| m.contains_key(&v)).unwrap_or(false)
+            || self.halfedge.get(&v).map(|m| m.contains_key(&u)).unwrap_or(false);
+        if !exists {
+            return None;
+        }
+        if let Some(attrs) = self.edgedata.get(&(u, v)).or_else(|| self.edgedata.get(&(v, u))) {
+            if let Some(val) = attrs.get(name) {
+                return Some(*val);
+            }
+        }
+        self.default_edge_attributes.get(name).copied()
+    }
+
+    pub fn set_edge_attribute(&mut self, edge: (usize, usize), name: &str, value: f64) {
+        let (u, v) = edge;
+        let key = if self.edgedata.contains_key(&(v, u)) { (v, u) } else { (u, v) };
+        self.edgedata.entry(key).or_default().insert(name.to_string(), value);
+    }
+
+    pub fn vertices_attribute(&self, name: &str, keys: Option<&[usize]>) -> Vec<Option<f64>> {
+        let owned: Vec<usize>;
+        let it: &[usize] = match keys {
+            Some(k) => k,
+            None => {
+                owned = { let mut k: Vec<usize> = self.vertex.keys().copied().collect(); k.sort(); k };
+                &owned
+            }
+        };
+        it.iter().map(|k| self.vertex_attribute(*k, name)).collect()
+    }
+
+    pub fn set_vertices_attribute(&mut self, name: &str, value: f64, keys: Option<&[usize]>) {
+        let owned: Vec<usize>;
+        let it: &[usize] = match keys {
+            Some(k) => k,
+            None => {
+                owned = { let mut k: Vec<usize> = self.vertex.keys().copied().collect(); k.sort(); k };
+                &owned
+            }
+        };
+        for &k in it {
+            self.set_vertex_attribute(k, name, value);
+        }
+    }
+
+    pub fn faces_attribute(&self, name: &str, keys: Option<&[usize]>) -> Vec<Option<f64>> {
+        let owned: Vec<usize>;
+        let it: &[usize] = match keys {
+            Some(k) => k,
+            None => {
+                owned = { let mut k: Vec<usize> = self.face.keys().copied().collect(); k.sort(); k };
+                &owned
+            }
+        };
+        it.iter().map(|k| self.face_attribute(*k, name)).collect()
+    }
+
+    pub fn set_faces_attribute(&mut self, name: &str, value: f64, keys: Option<&[usize]>) {
+        let owned: Vec<usize>;
+        let it: &[usize] = match keys {
+            Some(k) => k,
+            None => {
+                owned = { let mut k: Vec<usize> = self.face.keys().copied().collect(); k.sort(); k };
+                &owned
+            }
+        };
+        for &k in it {
+            self.set_face_attribute(k, name, value);
+        }
+    }
+
+    pub fn edges_attribute(&self, name: &str, keys: Option<&[(usize, usize)]>) -> Vec<Option<f64>> {
+        let owned: Vec<(usize, usize)>;
+        let it: &[(usize, usize)] = match keys {
+            Some(k) => k,
+            None => { owned = self.edges(); &owned }
+        };
+        it.iter().map(|e| self.edge_attribute(*e, name)).collect()
+    }
+
+    pub fn set_edges_attribute(&mut self, name: &str, value: f64, keys: Option<&[(usize, usize)]>) {
+        let owned: Vec<(usize, usize)>;
+        let it: &[(usize, usize)] = match keys {
+            Some(k) => k,
+            None => { owned = self.edges(); &owned }
+        };
+        for &e in it {
+            self.set_edge_attribute(e, name, value);
+        }
+    }
+
+    pub fn vertices_where(&self, conditions: &[(&str, f64)]) -> Vec<usize> {
+        let mut keys: Vec<usize> = self.vertex.keys().copied().collect();
+        keys.sort();
+        keys.into_iter()
+            .filter(|k| conditions.iter().all(|(n, v)| self.vertex_attribute(*k, n) == Some(*v)))
+            .collect()
+    }
+
+    pub fn faces_where(&self, conditions: &[(&str, f64)]) -> Vec<usize> {
+        let mut keys: Vec<usize> = self.face.keys().copied().collect();
+        keys.sort();
+        keys.into_iter()
+            .filter(|k| conditions.iter().all(|(n, v)| self.face_attribute(*k, n) == Some(*v)))
+            .collect()
+    }
+
+    pub fn edges_where(&self, conditions: &[(&str, f64)]) -> Vec<(usize, usize)> {
+        self.edges().into_iter()
+            .filter(|e| conditions.iter().all(|(n, v)| self.edge_attribute(*e, n) == Some(*v)))
+            .collect()
+    }
+
+    pub fn vertices_where_predicate<F>(&self, pred: F) -> Vec<usize>
+    where F: Fn(usize, &HashMap<String, f64>) -> bool {
+        let mut keys: Vec<usize> = self.vertex.keys().copied().collect();
+        keys.sort();
+        keys.into_iter()
+            .filter(|k| {
+                let mut attrs = self.default_vertex_attributes.clone();
+                if let Some(vd) = self.vertex.get(k) {
+                    for (kk, vv) in &vd.attributes {
+                        attrs.insert(kk.clone(), *vv);
+                    }
+                }
+                pred(*k, &attrs)
+            })
+            .collect()
+    }
+
+    pub fn faces_where_predicate<F>(&self, pred: F) -> Vec<usize>
+    where F: Fn(usize, &HashMap<String, f64>) -> bool {
+        let mut keys: Vec<usize> = self.face.keys().copied().collect();
+        keys.sort();
+        keys.into_iter()
+            .filter(|k| {
+                let mut attrs = self.default_face_attributes.clone();
+                if let Some(fd) = self.facedata.get(k) {
+                    for (kk, vv) in fd {
+                        attrs.insert(kk.clone(), *vv);
+                    }
+                }
+                pred(*k, &attrs)
+            })
+            .collect()
+    }
+
+    pub fn edges_where_predicate<F>(&self, pred: F) -> Vec<(usize, usize)>
+    where F: Fn((usize, usize), &HashMap<String, f64>) -> bool {
+        self.edges().into_iter()
+            .filter(|e| {
+                let mut attrs = self.default_edge_attributes.clone();
+                let ed = self.edgedata.get(e).or_else(|| self.edgedata.get(&(e.1, e.0)));
+                if let Some(map) = ed {
+                    for (kk, vv) in map {
+                        attrs.insert(kk.clone(), *vv);
+                    }
+                }
+                pred(*e, &attrs)
+            })
+            .collect()
+    }
+
     ///////////////////////////////////////////////////////////////////////////////////////////
     // Geometric Properties
     ///////////////////////////////////////////////////////////////////////////////////////////
@@ -1897,6 +2369,11 @@ impl Mesh {
     }
 
     pub fn face_normal(&self, face_key: usize) -> Option<Vector> {
+        self.face_normal_unitized(face_key, true)
+    }
+
+    /// When unitized=false, returned vector length encodes 2x first-triangle area.
+    pub fn face_normal_unitized(&self, face_key: usize, unitized: bool) -> Option<Vector> {
         let vertices = self.face.get(&face_key)?;
         if vertices.len() < 3 {
             return None;
@@ -1910,6 +2387,9 @@ impl Mesh {
         let v = Vector::new(p2[0] - p0[0], p2[1] - p0[1], p2[2] - p0[2]);
 
         let normal = u.cross(&v);
+        if !unitized {
+            return Some(Vector::new(normal[0], normal[1], normal[2]));
+        }
         let len = normal.magnitude();
         if len > Tolerance::ZERO_TOLERANCE {
             Some(Vector::new(
