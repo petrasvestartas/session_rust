@@ -271,12 +271,12 @@ pub fn run_mesh_loft() -> TestResult {
                 Point::new(13.802461, 0.286422, 0.776916),
             ]),
         ];
-        let mesh = Mesh::loft(&bottom, &top, true);
+        let mesh = Mesh::loft(&bottom, &top, true, true);
 
         MINI_CHECK!(mesh.is_valid());
         MINI_CHECK!(mesh.is_closed());
 
-        let mesh_no_cap = Mesh::loft(&bottom, &top, false);
+        let mesh_no_cap = Mesh::loft(&bottom, &top, false, true);
         MINI_CHECK!(mesh_no_cap.is_valid());
         MINI_CHECK!(!mesh_no_cap.is_closed());
     })
@@ -350,7 +350,7 @@ pub fn run_mesh_loft_concave_with_holes_and_collinear() -> TestResult {
                 Point::new(2223.416, 97.448, 178.317),
             ]),
         ];
-        let annen = Mesh::loft(&annen_bot, &annen_top, true);
+        let annen = Mesh::loft(&annen_bot, &annen_top, true, true);
         MINI_CHECK!(annen.is_valid());
         MINI_CHECK!(annen.is_closed());
         MINI_CHECK!(annen.vertex.len() == 40);
@@ -378,7 +378,7 @@ pub fn run_mesh_loft_concave_with_holes_and_collinear() -> TestResult {
                 Point::new( 0.0, 0.0, 1.5),
             ]),
         ];
-        let colmesh = Mesh::loft(&col_bot, &col_top, true);
+        let colmesh = Mesh::loft(&col_bot, &col_top, true, true);
         MINI_CHECK!(colmesh.is_valid());
         MINI_CHECK!(colmesh.is_closed());
         MINI_CHECK!(colmesh.vertex.len() == 8);
@@ -445,7 +445,7 @@ pub fn run_mesh_loft_many() -> TestResult {
             ]);
             loft_inputs.push((vec![b], vec![t]));
         }
-        let meshes = Mesh::loft_many(loft_inputs.clone(), true, true);
+        let meshes = Mesh::loft_many(loft_inputs.clone(), true, true, true);
 
         MINI_CHECK!(meshes[0].is_valid());
         MINI_CHECK!(meshes[0].is_closed());
@@ -459,7 +459,7 @@ pub fn run_mesh_loft_many() -> TestResult {
         MINI_CHECK!(meshes[4].is_closed());
         MINI_CHECK!(meshes[5].is_valid());
         MINI_CHECK!(meshes[5].is_closed());
-        let meshes_seq = Mesh::loft_many(loft_inputs, true, false);
+        let meshes_seq = Mesh::loft_many(loft_inputs, true, false, true);
         MINI_CHECK!(meshes_seq[0].is_valid());
         MINI_CHECK!(meshes_seq[0].is_closed());
         MINI_CHECK!(meshes_seq[1].is_valid());

@@ -391,6 +391,7 @@ pub fn get_all_tests() -> Vec<RegisteredTest> {
     use crate::element_column_test::*;
     use crate::element_beam_test::*;
     use crate::element_plate_test::*;
+    use crate::mesh_offset_test::*;
 
     vec![
         // BRep tests
@@ -854,6 +855,13 @@ pub fn get_all_tests() -> Vec<RegisteredTest> {
         RegisteredTest { group: "ElementPlate", name: "Component Plane", func: run_plate_component_plane },
         RegisteredTest { group: "ElementPlate", name: "Json Roundtrip Joinery", func: run_plate_json_roundtrip_joinery },
         RegisteredTest { group: "ElementPlate", name: "Protobuf Roundtrip Joinery", func: run_plate_protobuf_roundtrip_joinery },
+        RegisteredTest { group: "MeshOffset", name: "from_mesh", func: run_mesh_offset_from_mesh },
+        RegisteredTest { group: "MeshOffset", name: "from_mesh_grid", func: run_mesh_offset_from_mesh_grid },
+        RegisteredTest { group: "MeshOffset", name: "from_mesh_layers", func: run_mesh_offset_from_mesh_layers },
+        RegisteredTest { group: "MeshOffset", name: "file_json_dump", func: run_mesh_offset_file_json_dump },
+        RegisteredTest { group: "MeshOffset", name: "file_json_load", func: run_mesh_offset_file_json_load },
+        RegisteredTest { group: "MeshOffset", name: "to_proto", func: run_mesh_offset_to_proto },
+        RegisteredTest { group: "MeshOffset", name: "from_proto", func: run_mesh_offset_from_proto },
     ]
 }
 

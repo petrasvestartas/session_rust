@@ -520,7 +520,7 @@ impl Mesh {
         crate::remesh_cdt::RemeshCDT::from_polylines(polylines, false, !sort_by_bbox)
     }
 
-    pub fn loft(polylines0: &[Polyline], polylines1: &[Polyline], cap: bool) -> Self {
+    pub fn loft(polylines0: &[Polyline], polylines1: &[Polyline], cap: bool, fix_collinear: bool) -> Self {
         if polylines0.is_empty() || polylines1.is_empty() || polylines0.len() != polylines1.len() {
             return Mesh::new();
         }
@@ -639,7 +639,45 @@ impl Mesh {
                         .collect();
                     mesh.face_holes.insert(fk_bot, hole_rings);
                 }
-                let tri_list: Vec<[usize;3]> = b_tris.iter().map(|&(a,b,c)| [bvk[a], bvk[c], bvk[b]]).collect();
+                let mut tri_list: Vec<[usize;3]> = b_tris.iter().map(|&(a,b,c)| [bvk[a], bvk[c], bvk[b]]).collect();
+                if fix_collinear {
+                    let vk2d: std::collections::HashMap<usize,(f64,f64)> = (0..bot_n0).map(|i| { let p = proj(&all_bot[i]); (bvk[i], (p[0],p[1])) }).collect();
+                    let fv: Vec<usize> = (0..bot_n0).rev().map(|i| bvk[i]).collect();
+                    let mut chg = true;
+                    while chg {
+                        chg = false;
+                        let tv: std::collections::HashSet<usize> = tri_list.iter().flat_map(|t| t.iter().copied()).collect();
+                        let n = fv.len();
+                        'outer: for k in 0..n {
+                            let b_vk = fv[k];
+                            if tv.contains(&b_vk) { continue; }
+                            let a_vk = fv[(k+n-1)%n]; let c_vk = fv[(k+1)%n];
+                            for j in 0..tri_list.len() {
+                                let ha = tri_list[j].contains(&a_vk); let hc = tri_list[j].contains(&c_vk);
+                                if !ha || !hc { continue; }
+                                let ft = tri_list[j];
+                                let (t1, t2) = if (ft[0]==a_vk||ft[0]==c_vk) && (ft[1]==a_vk||ft[1]==c_vk) {
+                                    ([ft[0],b_vk,ft[2]], [b_vk,ft[1],ft[2]])
+                                } else if (ft[1]==a_vk||ft[1]==c_vk) && (ft[2]==a_vk||ft[2]==c_vk) {
+                                    ([ft[0],ft[1],b_vk], [ft[0],b_vk,ft[2]])
+                                } else {
+                                    ([ft[0],ft[1],b_vk], [b_vk,ft[1],ft[2]])
+                                };
+                                tri_list[j] = t1; tri_list.push(t2); chg = true; break 'outer;
+                            }
+                        }
+                    }
+                    let sc = 1e6_f64;
+                    tri_list.retain(|t| {
+                        let (u0,v0) = vk2d.get(&t[0]).copied().unwrap_or((0.0,0.0));
+                        let (u1,v1) = vk2d.get(&t[1]).copied().unwrap_or((0.0,0.0));
+                        let (u2,v2) = vk2d.get(&t[2]).copied().unwrap_or((0.0,0.0));
+                        let iu0=(u0*sc).round() as i64; let iv0=(v0*sc).round() as i64;
+                        let iu1=(u1*sc).round() as i64; let iv1=(v1*sc).round() as i64;
+                        let iu2=(u2*sc).round() as i64; let iv2=(v2*sc).round() as i64;
+                        (iu1-iu0)*(iv2-iv0)-(iv1-iv0)*(iu2-iu0) != 0
+                    });
+                }
                 mesh.triangulation.insert(fk_bot, tri_list);
             }
             // Top cap CDT
@@ -656,7 +694,45 @@ impl Mesh {
                         .collect();
                     mesh.face_holes.insert(fk_top, hole_rings);
                 }
-                let tri_list: Vec<[usize;3]> = t_tris.iter().map(|&(a,b,c)| [tvk[a], tvk[b], tvk[c]]).collect();
+                let mut tri_list: Vec<[usize;3]> = t_tris.iter().map(|&(a,b,c)| [tvk[a], tvk[b], tvk[c]]).collect();
+                if fix_collinear {
+                    let vk2d: std::collections::HashMap<usize,(f64,f64)> = (0..top_n0).map(|i| { let p = proj(&all_top[i]); (tvk[i], (p[0],p[1])) }).collect();
+                    let fv: Vec<usize> = (0..top_n0).map(|i| tvk[i]).collect();
+                    let mut chg = true;
+                    while chg {
+                        chg = false;
+                        let tv: std::collections::HashSet<usize> = tri_list.iter().flat_map(|t| t.iter().copied()).collect();
+                        let n = fv.len();
+                        'outer: for k in 0..n {
+                            let b_vk = fv[k];
+                            if tv.contains(&b_vk) { continue; }
+                            let a_vk = fv[(k+n-1)%n]; let c_vk = fv[(k+1)%n];
+                            for j in 0..tri_list.len() {
+                                let ha = tri_list[j].contains(&a_vk); let hc = tri_list[j].contains(&c_vk);
+                                if !ha || !hc { continue; }
+                                let ft = tri_list[j];
+                                let (t1, t2) = if (ft[0]==a_vk||ft[0]==c_vk) && (ft[1]==a_vk||ft[1]==c_vk) {
+                                    ([ft[0],b_vk,ft[2]], [b_vk,ft[1],ft[2]])
+                                } else if (ft[1]==a_vk||ft[1]==c_vk) && (ft[2]==a_vk||ft[2]==c_vk) {
+                                    ([ft[0],ft[1],b_vk], [ft[0],b_vk,ft[2]])
+                                } else {
+                                    ([ft[0],ft[1],b_vk], [b_vk,ft[1],ft[2]])
+                                };
+                                tri_list[j] = t1; tri_list.push(t2); chg = true; break 'outer;
+                            }
+                        }
+                    }
+                    let sc = 1e6_f64;
+                    tri_list.retain(|t| {
+                        let (u0,v0) = vk2d.get(&t[0]).copied().unwrap_or((0.0,0.0));
+                        let (u1,v1) = vk2d.get(&t[1]).copied().unwrap_or((0.0,0.0));
+                        let (u2,v2) = vk2d.get(&t[2]).copied().unwrap_or((0.0,0.0));
+                        let iu0=(u0*sc).round() as i64; let iv0=(v0*sc).round() as i64;
+                        let iu1=(u1*sc).round() as i64; let iv1=(v1*sc).round() as i64;
+                        let iu2=(u2*sc).round() as i64; let iv2=(v2*sc).round() as i64;
+                        (iu1-iu0)*(iv2-iv0)-(iv1-iv0)*(iu2-iu0) != 0
+                    });
+                }
                 mesh.triangulation.insert(fk_top, tri_list);
             }
         }
@@ -670,7 +746,16 @@ impl Mesh {
             let bpts = &all_bot[bot_off..bot_off+bot_n];
             let tpts = &all_top[top_off..top_off+top_n];
             let ia = (0..bot_n).max_by(|&a, &b| edsq(bpts, a).partial_cmp(&edsq(bpts, b)).unwrap()).unwrap_or(0);
-            let ib = (0..top_n).max_by(|&a, &b| edsq(tpts, a).partial_cmp(&edsq(tpts, b)).unwrap()).unwrap_or(0);
+            let ib = if bot_n == top_n {
+                let align_cost = |cand: usize| -> f64 {
+                    (0..bot_n).map(|k| {
+                        let pb = proj(&bpts[(ia+k)%bot_n]);
+                        let pt = proj(&tpts[(cand+k)%top_n]);
+                        (pt[0]-pb[0])*(pt[0]-pb[0]) + (pt[1]-pb[1])*(pt[1]-pb[1])
+                    }).sum::<f64>()
+                };
+                (0..top_n).min_by(|&a, &b| align_cost(a).partial_cmp(&align_cost(b)).unwrap()).unwrap_or(0)
+            } else { 0 };
             if bot_n == top_n {
                 for k in 0..bot_n {
                     let (cb, ct) = (bot_off+(ia+k)%bot_n, top_off+(ib+k)%top_n);
@@ -725,12 +810,12 @@ impl Mesh {
         }
     }
 
-    pub fn loft_many(pairs: Vec<(Vec<Polyline>, Vec<Polyline>)>, cap: bool, parallel: bool) -> Vec<Self> {
+    pub fn loft_many(pairs: Vec<(Vec<Polyline>, Vec<Polyline>)>, cap: bool, parallel: bool, fix_collinear: bool) -> Vec<Self> {
         if parallel && pairs.len() > 1 {
             use rayon::prelude::*;
-            pairs.into_par_iter().map(|(p0, p1)| Mesh::loft(&p0, &p1, cap)).collect()
+            pairs.into_par_iter().map(|(p0, p1)| Mesh::loft(&p0, &p1, cap, fix_collinear)).collect()
         } else {
-            pairs.iter().map(|(p0, p1)| Mesh::loft(p0, p1, cap)).collect()
+            pairs.iter().map(|(p0, p1)| Mesh::loft(p0, p1, cap, fix_collinear)).collect()
         }
     }
 
