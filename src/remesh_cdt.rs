@@ -667,8 +667,31 @@ pub(crate) fn cdt_triangulate(border_2d: &[Point], holes_2d: &[Vec<Point>]) -> V
         precision -= 1;
     }
     let scale = 10f64.powi(precision);
+
+    // Break y-collinearity between hole vertices and border vertices.
+    // The sweep-line CDT fails when a hole vertex shares the same int64
+    // y-coordinate as a border vertex (purely y-collinear constraint segments
+    // at different x positions break event ordering → 0 adjacent triangles for
+    // that hole). Fix: shift each conflicting hole vertex by -1 int64 unit in y
+    // (≈ 1/scale metres), which is imperceptible in practice.
+    let border_ys: std::collections::HashSet<i64> = border_2d.iter()
+        .map(|p| (p[1] * scale).round() as i64)
+        .collect();
+    let holes_adj: Vec<Vec<Point>> = holes_2d.iter().map(|hole| {
+        hole.iter().map(|p| {
+            let iy = (p[1] * scale).round() as i64;
+            if border_ys.contains(&iy) {
+                let mut adj = p.clone();
+                adj[1] = (iy - 1) as f64 / scale;
+                adj
+            } else {
+                p.clone()
+            }
+        }).collect()
+    }).collect();
+
     let mut flat: Vec<Point> = border_2d.to_vec();
-    for h in holes_2d { flat.extend(h.iter().cloned()); }
+    for h in &holes_adj { flat.extend(h.iter().cloned()); }
     let mut pt_map: HashMap<(i64, i64), usize> = HashMap::new();
     for (i, p) in flat.iter().enumerate() {
         let key = ((p[0] * scale).round() as i64, (p[1] * scale).round() as i64);
@@ -682,9 +705,63 @@ pub(crate) fn cdt_triangulate(border_2d: &[Point], holes_2d: &[Vec<Point>]) -> V
         path
     };
     let mut paths: Vec<Vec<P64>> = vec![make_path(border_2d)];
-    for h in holes_2d { paths.push(make_path(h)); }
+    for h in &holes_adj { paths.push(make_path(h)); }
     let d = Delaunay::new(true);
     let tris = d.execute(&paths);
+
+    // Post-process: remove triangles inside holes.
+    // Two tests (centroid-only — edge midpoints excluded because valid triangles
+    // adjacent to a hole share an edge with the hole boundary, landing their
+    // midpoints exactly on the boundary which pt_in_poly counts as inside):
+    //   1. Vertex-set: all 3 vertices belong to the same hole → remove.
+    //   2. Centroid outside outer boundary or inside any hole → remove.
+    let tris = if !holes_2d.is_empty() {
+        let hole_vsets: Vec<std::collections::HashSet<(i64, i64)>> = paths[1..]
+            .iter()
+            .map(|h| h.iter().map(|p| (p.x, p.y)).collect())
+            .collect();
+
+        let pt_in_poly = |px: i64, py: i64, poly: &[P64]| -> bool {
+            let mut inside = false;
+            let n = poly.len();
+            let mut j = n - 1;
+            for i in 0..n {
+                let (xi, yi) = (poly[i].x, poly[i].y);
+                let (xj, yj) = (poly[j].x, poly[j].y);
+                if (yi > py) != (yj > py) {
+                    let xi_cross = xj as f64 + (py - yj) as f64 * (xi - xj) as f64 / (yj - yi) as f64;
+                    if (px as f64) < xi_cross { inside = !inside; }
+                }
+                j = i;
+            }
+            inside
+        };
+
+        let pt_invalid = |px: i64, py: i64| -> bool {
+            if !pt_in_poly(px, py, &paths[0]) { return true; }
+            for h_path in &paths[1..] {
+                if pt_in_poly(px, py, h_path) { return true; }
+            }
+            false
+        };
+
+        tris.into_iter().filter(|tri| {
+            let t = [(tri[0].x, tri[0].y), (tri[1].x, tri[1].y), (tri[2].x, tri[2].y)];
+            // Test 1: all 3 verts in same hole
+            for vs in &hole_vsets {
+                if vs.contains(&t[0]) && vs.contains(&t[1]) && vs.contains(&t[2]) {
+                    return false;
+                }
+            }
+            // Test 2: centroid
+            let cx = (tri[0].x + tri[1].x + tri[2].x) / 3;
+            let cy = (tri[0].y + tri[1].y + tri[2].y) / 3;
+            !pt_invalid(cx, cy)
+        }).collect()
+    } else {
+        tris
+    };
+
     let mut out = Vec::new();
     for tri in tris {
         let mut f = [0usize; 3];

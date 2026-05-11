@@ -1452,6 +1452,143 @@ pub fn run_mesh_protobuf_roundtrip() -> TestResult {
         MINI_CHECK!(loaded_holes.face_holes[&hfk] == hmesh.face_holes[&hfk]);
     })
 }
+pub fn run_mesh_loft_plate_failing() -> TestResult {
+    MINI_TEST!("Loft plate_failing 15-vert outer + 3 holes", {
+        use crate::{Mesh, Point, Polyline};
+        let bot = vec![
+            Polyline::new(vec![
+                Point::new( 734.392021, -1906.59468,  1101.588031),
+                Point::new( 632.396858, -1838.597905,  948.595287),
+                Point::new( 624.453132, -1769.270846,  984.70313 ),
+                Point::new( 113.775484, -1428.81908,   218.686657),
+                Point::new( 121.719209, -1498.146139,  182.578814),
+                Point::new(  15.607979, -1427.40532,    23.411969),
+                Point::new(   0.0,      -1441.0,        -18.0     ),
+                Point::new(   0.0,      -1893.0,       -357.0     ),
+                Point::new(  13.416408, -1917.0,       -348.167184),
+                Point::new( 104.290124, -1917.0,       -166.419752),
+                Point::new( 118.441096, -1964.169906,  -173.495238),
+                Point::new( 362.132034, -1799.867966,  179.289322 ),
+                Point::new( 348.0,      -1752.698063,  185.364808 ),
+                Point::new( 623.259018, -1832.362654,  751.385447 ),
+                Point::new( 734.392021, -1906.59468,  1101.588031),
+            ]),
+            Polyline::new(vec![
+                Point::new( 200.979108, -1563.492448,  354.900013),
+                Point::new( 197.007245, -1563.492448,  354.900013),
+                Point::new( 200.979108, -1598.155978,  336.846091),
+                Point::new( 197.007245, -1598.155978,  336.846091),
+                Point::new( 200.979108, -1563.492448,  354.900013),
+            ]),
+            Polyline::new(vec![
+                Point::new( 388.0,      -1716.0,        208.0     ),
+                Point::new( 392.0,      -1716.0,        208.0     ),
+                Point::new( 392.0,      -1750.0,        190.0     ),
+                Point::new( 388.0,      -1750.0,        190.0     ),
+                Point::new( 388.0,      -1716.0,        208.0     ),
+            ]),
+            Polyline::new(vec![
+                Point::new( 540.0,      -1790.0,        620.0     ),
+                Point::new( 544.0,      -1790.0,        620.0     ),
+                Point::new( 544.0,      -1820.0,        604.0     ),
+                Point::new( 540.0,      -1820.0,        604.0     ),
+                Point::new( 540.0,      -1790.0,        620.0     ),
+            ]),
+        ];
+        let top = bot.clone();
+        let m = Mesh::loft(&bot, &top, true, true);
+        MINI_CHECK!(m.is_valid());
+    })
+}
+
+pub fn run_mesh_loft_plate_v2() -> TestResult {
+    MINI_TEST!("Loft plate_v2 15-vert outer + 3 holes", {
+        use crate::{Mesh, Point, Polyline};
+        let top = vec![
+            Polyline::new(vec![
+                Point::new( 734.392021,  -28.40532,  1101.588031),
+                Point::new( 630.839301,  -97.440466,  946.258951),
+                Point::new( 602.668732,  -21.881034,  974.757956),
+                Point::new(  90.636822, -363.235641,  206.710092),
+                Point::new( 118.807391, -438.795073,  178.211087),
+                Point::new(  15.607979, -507.59468,    23.411969),
+                Point::new(  21.213203, -518.0,        21.213203),
+                Point::new(1478.786797, -518.0,      1478.786797),
+                Point::new(1476.953362, -502.635574, 1488.476681),
+                Point::new(1323.309106, -400.20607,  1411.654553),
+                Point::new(1323.309106, -350.20607,  1449.154553),
+                Point::new( 921.429178,  -82.286119, 1248.214589),
+                Point::new( 921.429178, -132.286119, 1210.714589),
+                Point::new( 773.046638,  -33.364426, 1136.523319),
+                Point::new( 734.392021,  -28.40532,  1101.588031),
+            ]),
+            Polyline::new(vec![
+                Point::new(1055.389154, -196.592769, 1296.444577),
+                Point::new(1189.34913,  -285.89942,  1363.424565),
+                Point::new(1189.34913,  -310.89942,  1344.674565),
+                Point::new(1055.389154, -221.592769, 1277.694577),
+                Point::new(1055.389154, -196.592769, 1296.444577),
+            ]),
+            Polyline::new(vec![
+                Point::new( 411.941252, -196.202593,  653.289308),
+                Point::new( 514.347634, -127.931671,  806.898881),
+                Point::new( 528.432919, -165.711387,  792.649378),
+                Point::new( 426.026537, -233.982309,  639.039805),
+                Point::new( 411.941252, -196.202593,  653.289308),
+            ]),
+            Polyline::new(vec![
+                Point::new( 207.128489, -332.744435,  346.070162),
+                Point::new( 309.53487,  -264.473514,  499.679735),
+                Point::new( 323.620155, -302.25323,   485.430233),
+                Point::new( 221.213773, -370.524151,  331.82066 ),
+                Point::new( 207.128489, -332.744435,  346.070162),
+            ]),
+        ];
+        let bot = vec![
+            Polyline::new(vec![
+                Point::new( 717.764591,  -24.335988, 1136.036032),
+                Point::new( 607.106921,  -98.107768,  970.049526),
+                Point::new( 593.021636,  -60.328052,  984.299029),
+                Point::new(  80.989727, -401.682659,  216.251164),
+                Point::new(  95.075011, -439.462375,  202.001662),
+                Point::new( -28.206905, -521.650319,   17.078787),
+                Point::new( -22.601681, -532.055639,   14.880022),
+                Point::new(1489.346823, -532.055639, 1526.828525),
+                Point::new(1487.513388, -516.691213, 1536.51841 ),
+                Point::new(1323.309106, -407.221692, 1454.416269),
+                Point::new(1323.309106, -382.221692, 1473.166269),
+                Point::new( 921.429178, -114.30174,  1272.226305),
+                Point::new( 921.429178, -139.30174,  1253.476305),
+                Point::new( 756.419209,  -29.295094, 1170.97132 ),
+                Point::new( 717.764591,  -24.335988, 1136.036032),
+            ]),
+            Polyline::new(vec![
+                Point::new(1055.389154, -228.608391, 1320.456293),
+                Point::new(1189.34913,  -317.915041, 1387.436281),
+                Point::new(1189.34913,  -342.915041, 1368.686281),
+                Point::new(1055.389154, -253.608391, 1301.706293),
+                Point::new(1055.389154, -228.608391, 1320.456293),
+            ]),
+            Polyline::new(vec![
+                Point::new( 402.294157, -234.649611,  662.830381),
+                Point::new( 504.700539, -166.37869,   816.439954),
+                Point::new( 518.785824, -204.158406,  802.190451),
+                Point::new( 416.379442, -272.429327,  648.580878),
+                Point::new( 402.294157, -234.649611,  662.830381),
+            ]),
+            Polyline::new(vec![
+                Point::new( 197.481393, -371.191453,  355.611235),
+                Point::new( 299.887775, -302.920532,  509.220808),
+                Point::new( 313.97306,  -340.700248,  494.971305),
+                Point::new( 211.566678, -408.971169,  341.361733),
+                Point::new( 197.481393, -371.191453,  355.611235),
+            ]),
+        ];
+        let m = Mesh::loft(&top, &bot, true, true);
+        MINI_CHECK!(m.is_valid());
+    })
+}
+
 // Register tests with the shared registry
 REGISTER_MINI_TEST!("Mesh", "Constructor", crate::mesh_test::run_mesh_constructor);
 REGISTER_MINI_TEST!("Mesh", "From Polylines", crate::mesh_test::run_mesh_from_polylines);
@@ -1471,3 +1608,5 @@ REGISTER_MINI_TEST!("Mesh", "Geometric Properties", crate::mesh_test::run_mesh_g
 REGISTER_MINI_TEST!("Mesh", "Transformation", crate::mesh_test::run_mesh_transformation);
 REGISTER_MINI_TEST!("Mesh", "Json Roundtrip", crate::mesh_test::run_mesh_json_roundtrip);
 REGISTER_MINI_TEST!("Mesh", "Protobuf Roundtrip", crate::mesh_test::run_mesh_protobuf_roundtrip);
+REGISTER_MINI_TEST!("Mesh", "Loft plate_failing 15-vert outer + 3 holes", crate::mesh_test::run_mesh_loft_plate_failing);
+REGISTER_MINI_TEST!("Mesh", "Loft plate_v2 15-vert outer + 3 holes", crate::mesh_test::run_mesh_loft_plate_v2);

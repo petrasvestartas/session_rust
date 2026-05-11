@@ -223,6 +223,33 @@ impl Polyline {
         total
     }
 
+    /// Generate a polyline along a quadratic Bezier curve defined by three points.
+    ///
+    /// Evaluates B(t) = (1-t)²·p0 + 2(1-t)t·p1 + t²·p2 for `divisions`
+    /// uniformly-spaced values of t in \[0, 1\].
+    ///
+    /// # Parameters
+    /// - `p0`: start point
+    /// - `p1`: control point (parabola apex direction)
+    /// - `p2`: end point
+    /// - `divisions`: number of points (minimum 2)
+    pub fn quadratic_points(p0: &Point, p1: &Point, p2: &Point, divisions: usize) -> Self {
+        let divs = divisions.max(2);
+        let d = (divs - 1) as f64;
+        let mut coords = Vec::with_capacity(divs * 3);
+        for k in 0..divs {
+            let t  = k as f64 / d;
+            let s  = 1.0 - t;
+            let s2 = s * s;
+            let ts = 2.0 * s * t;
+            let t2 = t * t;
+            coords.push(s2*p0[0] + ts*p1[0] + t2*p2[0]);
+            coords.push(s2*p0[1] + ts*p1[1] + t2*p2[1]);
+            coords.push(s2*p0[2] + ts*p1[2] + t2*p2[2]);
+        }
+        Self::from_coords(coords)
+    }
+
     /// Returns a copy of the point at the given index.
     pub fn get_point(&self, index: usize) -> Option<Point> {
         if index < self.point_count() {
@@ -873,6 +900,103 @@ impl Polyline {
     }
 
     /// Check if polyline is closed (first and last points are the same)
+    /// Cut polyline by plane, returning the portion on one side.
+    ///
+    /// When `flip` is `None` the side containing the arc-length midpoint is
+    /// kept.  `Some(false)` keeps the side opposite to the plane normal;
+    /// `Some(true)` keeps the normal-aligned side.
+    ///
+    /// Segment-plane intersections are inserted as new vertices.
+    /// Consecutive near-duplicate points (within 1e-6) are removed.
+    pub fn cut_by_plane(&self, plane: &Plane, flip: Option<bool>) -> Self {
+        let n_pts = self.point_count();
+        if n_pts < 2 {
+            return Self::from_coords(self.coords.clone());
+        }
+
+        let n = plane.z_axis();
+        let o = plane.origin();
+
+        let signed_dist = |px: f64, py: f64, pz: f64| -> f64 {
+            n[0] * (px - o[0]) + n[1] * (py - o[1]) + n[2] * (pz - o[2])
+        };
+
+        let keep_sign: f64 = match flip {
+            Some(f) => if f { 1.0 } else { -1.0 },
+            None => {
+                // Arc-length midpoint
+                let half_len = self.length() * 0.5;
+                let mut acc = 0.0_f64;
+                let mut mx = self.coords[0];
+                let mut my = self.coords[1];
+                let mut mz = self.coords[2];
+                'outer: for i in 0..n_pts - 1 {
+                    let i0 = i * 3;
+                    let i1 = (i + 1) * 3;
+                    let ax = self.coords[i0];   let ay = self.coords[i0+1]; let az = self.coords[i0+2];
+                    let bx = self.coords[i1];   let by = self.coords[i1+1]; let bz = self.coords[i1+2];
+                    let dx = bx-ax; let dy = by-ay; let dz = bz-az;
+                    let seg_len = (dx*dx + dy*dy + dz*dz).sqrt();
+                    if acc + seg_len >= half_len {
+                        let t = if seg_len > 1e-14 { (half_len - acc) / seg_len } else { 0.0 };
+                        mx = ax + t*dx; my = ay + t*dy; mz = az + t*dz;
+                        break 'outer;
+                    }
+                    acc += seg_len;
+                }
+                if signed_dist(mx, my, mz) >= 0.0 { 1.0 } else { -1.0 }
+            }
+        };
+
+        let on_keep_side = |px: f64, py: f64, pz: f64| -> bool {
+            signed_dist(px, py, pz) * keep_sign >= 0.0
+        };
+
+        let mut result: Vec<f64> = Vec::new();
+        for i in 0..n_pts - 1 {
+            let i0 = i * 3;
+            let i1 = (i + 1) * 3;
+            let ax = self.coords[i0];   let ay = self.coords[i0+1]; let az = self.coords[i0+2];
+            let bx = self.coords[i1];   let by = self.coords[i1+1]; let bz = self.coords[i1+2];
+            if on_keep_side(ax, ay, az) {
+                result.extend_from_slice(&[ax, ay, az]);
+            }
+            let da = signed_dist(ax, ay, az);
+            let db = signed_dist(bx, by, bz);
+            if (da > 0.0) != (db > 0.0) {
+                let t = da / (da - db);
+                result.extend_from_slice(&[ax + t*(bx-ax),
+                                           ay + t*(by-ay),
+                                           az + t*(bz-az)]);
+            }
+        }
+        let last = (n_pts - 1) * 3;
+        if on_keep_side(self.coords[last], self.coords[last+1], self.coords[last+2]) {
+            result.extend_from_slice(&self.coords[last..last+3]);
+        }
+
+        // Remove consecutive near-duplicate points
+        let tol = 1e-6_f64;
+        let mut deduped: Vec<f64> = Vec::new();
+        let mut k = 0;
+        while k + 2 < result.len() {
+            if deduped.len() < 3 {
+                deduped.extend_from_slice(&result[k..k+3]);
+            } else {
+                let n = deduped.len();
+                let dx = result[k]   - deduped[n-3];
+                let dy = result[k+1] - deduped[n-2];
+                let dz = result[k+2] - deduped[n-1];
+                if (dx*dx + dy*dy + dz*dz).sqrt() > tol {
+                    deduped.extend_from_slice(&result[k..k+3]);
+                }
+            }
+            k += 3;
+        }
+
+        Self::from_coords(deduped)
+    }
+
     pub fn is_closed(&self) -> bool {
         let n = self.point_count();
         if n < 2 {
