@@ -7,7 +7,113 @@
 //! maps `instance_id` ⇄ session `guid` so GPU-side IDs round-trip back to the
 //! original `Geometry`.
 //!
-//! See plan: /Users/petras/.claude/plans/read-this-and-explain-functional-nest.md
+//! # Wiring guide for session_viewer
+//!
+//! Full integration recipe — copy/paste, then customize:
+//!
+//! ## 1. Cargo.toml
+//!
+//! ```toml
+//! [dependencies]
+//! session_rust = { path = "../session_rust" }
+//! bytemuck = "1"
+//! wgpu = "29"
+//! ```
+//!
+//! ## 2. One-time setup (call once after creating `device` + `queue`)
+//!
+//! ```ignore
+//! use session_rust::gpu_session::GpuSession;
+//! use session_rust::gpu_shaders::{
+//!     build_bind_group, build_bind_group_layout, build_line_pipeline,
+//!     build_mesh_pipeline, build_point_pipeline, create_camera_buffer,
+//!     CameraUniform,
+//! };
+//! use session_rust::gpu_demo::make_demo_session;
+//!
+//! // Build a Session (your CPU geometry data).
+//! let session = make_demo_session();
+//!
+//! // GPU mirror — three arenas + instance buffer + pick table.
+//! let mut gpu = GpuSession::new(&device);
+//! gpu.rebuild_from(&session, &device, &queue);
+//!
+//! // Bind group + pipelines (one shared bind group for all 3 pipelines).
+//! let bgl = build_bind_group_layout(&device);
+//! let camera_buf = create_camera_buffer(&device);
+//! let bind_group = build_bind_group(&device, &bgl, &camera_buf, &gpu.instance_buffer);
+//!
+//! // Pipelines — pick `surface_format` from your wgpu::Surface config.
+//! let mesh_pipeline  = build_mesh_pipeline (&device, surface_format, None, &bgl);
+//! let line_pipeline  = build_line_pipeline (&device, surface_format, None, &bgl);
+//! let point_pipeline = build_point_pipeline(&device, surface_format, None, &bgl);
+//! ```
+//!
+//! Store `gpu`, `bind_group`, `camera_buf`, and the three pipelines in your
+//! viewer's `State`.
+//!
+//! ## 3. Per-frame: update the camera
+//!
+//! ```ignore
+//! // Build view + projection. Multiply view_proj = proj * view.
+//! let view_proj: [[f32; 4]; 4] = /* your math */;
+//! let cam = CameraUniform { view_proj };
+//! queue.write_buffer(&camera_buf, 0, bytemuck::bytes_of(&cam));
+//! ```
+//!
+//! ## 4. Per-frame: draw
+//!
+//! ```ignore
+//! let mut pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor { /* ... */ });
+//! pass.set_bind_group(0, &bind_group, &[]);
+//!
+//! pass.set_pipeline(&mesh_pipeline);
+//! gpu.draw_meshes(&mut pass);
+//!
+//! pass.set_pipeline(&line_pipeline);
+//! gpu.draw_lines(&mut pass);
+//!
+//! pass.set_pipeline(&point_pipeline);
+//! gpu.draw_points(&mut pass);
+//! ```
+//!
+//! That's it. The bind group is the same for all three pipelines because they
+//! share `group(0) binding(0)=camera, binding(1)=instances`.
+//!
+//! ## 5. Picking (mouse click → which object?)
+//!
+//! ```ignore
+//! use session_rust::session_pick::Ray;
+//!
+//! // From a screen-space cursor click:
+//! let hits = session.pick_by_screen(
+//!     &view_matrix, &proj_matrix,
+//!     (config.width as f32, config.height as f32),
+//!     (cursor_x as f32, cursor_y as f32),
+//!     /* pick_radius_world */ 0.1,
+//! );
+//! if let Some(hit) = hits.first() {
+//!     let guid: &str = hit.guid();
+//!     // Highlight by setting the FLAG_SELECTED bit on the instance row.
+//!     gpu.set_flag(guid, InstanceData::FLAG_SELECTED, true, &queue);
+//! }
+//! ```
+//!
+//! ## 6. Updating geometry at runtime
+//!
+//! ```ignore
+//! // After adding/removing objects on the Session, two options:
+//! // a) Full rebuild (simple, O(n)):
+//! gpu.rebuild_from(&session, &device, &queue);
+//! // b) Incremental (warm path):
+//! gpu.add_geometry(&guid, geometry_ref, &device, &queue);
+//! gpu.remove(&guid);
+//! gpu.update_transform(&guid, new_model_matrix, &queue);
+//! gpu.update_color(&guid, [r, g, b, a], &queue);
+//! ```
+//!
+//! See also: `gpu_shaders` (WGSL + pipeline factories), `gpu_demo`
+//! (sample sessions), `session_pick` (Ray/PickHit).
 
 use bytemuck::{Pod, Zeroable};
 use std::collections::HashMap;

@@ -139,6 +139,45 @@ pub const POINT_WGSL: &str = LINE_WGSL;
 // Bind group layout — shared across all three pipelines.
 // ============================================================================
 
+/// Build a bind group matching `build_bind_group_layout`.
+///
+/// - `camera_buffer` must be a uniform buffer of at least
+///   `size_of::<CameraUniform>()` bytes.
+/// - `instance_buffer` is the storage buffer owned by `GpuSession` —
+///   typically `&gpu.instance_buffer`.
+pub fn build_bind_group(
+    device: &wgpu::Device,
+    layout: &wgpu::BindGroupLayout,
+    camera_buffer: &wgpu::Buffer,
+    instance_buffer: &wgpu::Buffer,
+) -> wgpu::BindGroup {
+    device.create_bind_group(&wgpu::BindGroupDescriptor {
+        label: Some("gpu_session.bg"),
+        layout,
+        entries: &[
+            wgpu::BindGroupEntry {
+                binding: 0,
+                resource: camera_buffer.as_entire_binding(),
+            },
+            wgpu::BindGroupEntry {
+                binding: 1,
+                resource: instance_buffer.as_entire_binding(),
+            },
+        ],
+    })
+}
+
+/// Allocate a small uniform buffer ready to hold a `CameraUniform`.
+/// Initialized to the identity view-projection.
+pub fn create_camera_buffer(device: &wgpu::Device) -> wgpu::Buffer {
+    use wgpu::util::DeviceExt;
+    device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+        label: Some("gpu_session.camera"),
+        contents: bytemuck::bytes_of(&CameraUniform::default()),
+        usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
+    })
+}
+
 /// Build the canonical bind group layout (Camera @ binding 0,
 /// instance storage @ binding 1). Use this when creating the pipeline AND
 /// when building the bind group at draw time so they match.
