@@ -53,7 +53,7 @@
     "cv_count_v": 4,
     "dimension": 3,
     "facecolors": [],
-    "guid": "94925507-1eba-4556-acb9-dbd0208e8865",
+    "guid": "7e3d6cf6-2c33-4bdd-8790-8d8ddc67fbf6",
     "is_rational": false,
     "linecolors": [],
     "name": "my_nurbssurface",
@@ -79,7 +79,7 @@
     "type": "NurbsSurface",
     "width": 1.0,
     "xform": {
-        "guid": "dec2df1d-86b1-4a7d-9561-0e704509c2ce",
+        "guid": "a216df1e-8d2f-492a-af21-ef608bad67a8",
         "m": [
             1.0,
             0.0,

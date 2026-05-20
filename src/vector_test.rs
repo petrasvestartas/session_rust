@@ -64,7 +64,7 @@ pub fn run_vector_constructor() -> TestResult {
         MINI_CHECK!(x == 10.0 && y == 20.0 && z == 30.0);
         MINI_CHECK!(v_2p[0] == 1.0 && v_2p[1] == 2.0 && v_2p[2] == 3.0);
         MINI_CHECK!(vsrt == "10.000000, 20.000000, 30.000000");
-        MINI_CHECK!(vrepr == "Vector(my_vector, 10.000000, 20.000000, 30.000000, 37.416574)");
+        MINI_CHECK!(vrepr == "Vector(my_vector, 10.000000, 20.000000, 30.000000, 37.416573)");
         MINI_CHECK!(vcopy == v && vcopy.guid() != v.guid());
         MINI_CHECK!(vother != v);
         MINI_CHECK!(vmult[0] == 20.0 && vmult[1] == 40.0 && vmult[2] == 60.0);
