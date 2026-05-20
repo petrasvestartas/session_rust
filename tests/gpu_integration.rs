@@ -208,6 +208,35 @@ fn nurbscurve_tessellates_into_line_arena() {
 }
 
 #[test]
+fn pipelines_build_against_default_layouts() {
+    let (device, _queue) = match try_make_device() {
+        Some(dq) => dq,
+        None => return,
+    };
+    let bgl = session_rust::gpu_shaders::build_bind_group_layout(&device);
+    let _mesh = session_rust::gpu_shaders::build_mesh_pipeline(
+        &device,
+        wgpu::TextureFormat::Bgra8UnormSrgb,
+        Some(wgpu::TextureFormat::Depth32Float),
+        &bgl,
+    );
+    let _line = session_rust::gpu_shaders::build_line_pipeline(
+        &device,
+        wgpu::TextureFormat::Bgra8UnormSrgb,
+        Some(wgpu::TextureFormat::Depth32Float),
+        &bgl,
+    );
+    let _point = session_rust::gpu_shaders::build_point_pipeline(
+        &device,
+        wgpu::TextureFormat::Bgra8UnormSrgb,
+        Some(wgpu::TextureFormat::Depth32Float),
+        &bgl,
+    );
+    // If we got here, all three pipelines compiled — shader source matches
+    // the vertex layouts in MeshVertex/LineVertex/PointVertex.
+}
+
+#[test]
 fn instance_data_is_pod_and_correct_size() {
     // Compile-time-ish sanity: this would panic if alignment/size assumptions
     // shifted (e.g. someone added a field without updating _pad).
