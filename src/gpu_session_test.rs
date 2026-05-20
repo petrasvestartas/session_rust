@@ -7,9 +7,11 @@ mod tests {
 
     #[test]
     fn vertex_sizes_are_packed() {
-        assert_eq!(std::mem::size_of::<MeshVertex>(), 24);
-        assert_eq!(std::mem::size_of::<LineVertex>(), 12);
-        assert_eq!(std::mem::size_of::<PointVertex>(), 12);
+        // position [f32;3] + normal [f32;3] + color [u8;4] = 28
+        assert_eq!(std::mem::size_of::<MeshVertex>(), 28);
+        // position [f32;3] + color [u8;4] = 16
+        assert_eq!(std::mem::size_of::<LineVertex>(), 16);
+        assert_eq!(std::mem::size_of::<PointVertex>(), 16);
     }
 
     #[test]

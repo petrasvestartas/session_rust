@@ -47,17 +47,19 @@ impl GeometryKind {
     }
 }
 
-/// Triangle-arena vertex. 24 bytes.
+/// Triangle-arena vertex. 28 bytes: position + normal + RGBA8.
+/// Color uses `Unorm8x4` so the shader sees `vec4<f32>` in 0..=1.
 #[repr(C)]
 #[derive(Clone, Copy, Debug, Pod, Zeroable)]
 pub struct MeshVertex {
     pub position: [f32; 3],
     pub normal: [f32; 3],
+    pub color: [u8; 4],
 }
 
 impl MeshVertex {
-    pub const ATTRIBS: [wgpu::VertexAttribute; 2] =
-        wgpu::vertex_attr_array![0 => Float32x3, 1 => Float32x3];
+    pub const ATTRIBS: [wgpu::VertexAttribute; 3] =
+        wgpu::vertex_attr_array![0 => Float32x3, 1 => Float32x3, 2 => Unorm8x4];
 
     pub fn layout() -> wgpu::VertexBufferLayout<'static> {
         wgpu::VertexBufferLayout {
@@ -68,16 +70,17 @@ impl MeshVertex {
     }
 }
 
-/// Line-arena vertex. 12 bytes.
+/// Line-arena vertex. 16 bytes: position + RGBA8.
 #[repr(C)]
 #[derive(Clone, Copy, Debug, Pod, Zeroable)]
 pub struct LineVertex {
     pub position: [f32; 3],
+    pub color: [u8; 4],
 }
 
 impl LineVertex {
-    pub const ATTRIBS: [wgpu::VertexAttribute; 1] =
-        wgpu::vertex_attr_array![0 => Float32x3];
+    pub const ATTRIBS: [wgpu::VertexAttribute; 2] =
+        wgpu::vertex_attr_array![0 => Float32x3, 1 => Unorm8x4];
 
     pub fn layout() -> wgpu::VertexBufferLayout<'static> {
         wgpu::VertexBufferLayout {
@@ -88,16 +91,17 @@ impl LineVertex {
     }
 }
 
-/// Point-arena vertex. 12 bytes.
+/// Point-arena vertex. 16 bytes: position + RGBA8.
 #[repr(C)]
 #[derive(Clone, Copy, Debug, Pod, Zeroable)]
 pub struct PointVertex {
     pub position: [f32; 3],
+    pub color: [u8; 4],
 }
 
 impl PointVertex {
-    pub const ATTRIBS: [wgpu::VertexAttribute; 1] =
-        wgpu::vertex_attr_array![0 => Float32x3];
+    pub const ATTRIBS: [wgpu::VertexAttribute; 2] =
+        wgpu::vertex_attr_array![0 => Float32x3, 1 => Unorm8x4];
 
     pub fn layout() -> wgpu::VertexBufferLayout<'static> {
         wgpu::VertexBufferLayout {
@@ -263,7 +267,9 @@ impl GpuSession {
         let instance_buffer = device.create_buffer(&wgpu::BufferDescriptor {
             label: Some("gpu_session.instances"),
             size: (DEFAULT_INSTANCE_CAP as u64) * (std::mem::size_of::<InstanceData>() as u64),
-            usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_DST,
+            usage: wgpu::BufferUsages::STORAGE
+                | wgpu::BufferUsages::COPY_DST
+                | wgpu::BufferUsages::COPY_SRC,
             mapped_at_creation: false,
         });
 
@@ -312,21 +318,21 @@ impl GpuSession {
                 self.point.allocate(
                     guid, &[v], None, instance_id, kind, device, queue,
                 );
-                self.write_instance(instance_id, color_to_rgba_f32(&p.pointcolor), queue);
+                self.write_instance(instance_id, color_to_rgba_f32(&p.pointcolor), device, queue);
             }
             Geometry::Line(l) => {
                 let vs = l.to_line_vertices();
                 self.line.allocate(
                     guid, &vs, None, instance_id, kind, device, queue,
                 );
-                self.write_instance(instance_id, color_to_rgba_f32(&l.linecolor), queue);
+                self.write_instance(instance_id, color_to_rgba_f32(&l.linecolor), device, queue);
             }
             Geometry::Polyline(pl) => {
                 let (vs, is) = pl.to_line_vertices();
                 self.line.allocate(
                     guid, &vs, Some(&is), instance_id, kind, device, queue,
                 );
-                self.write_instance(instance_id, color_to_rgba_f32(&pl.linecolor), queue);
+                self.write_instance(instance_id, color_to_rgba_f32(&pl.linecolor), device, queue);
             }
             Geometry::PointCloud(pc) => {
                 let vs = pc.to_point_vertices();
@@ -336,33 +342,83 @@ impl GpuSession {
                 // Pointcloud has per-vertex colors; here we just store a default
                 // white for the instance; per-vertex colors would require
                 // extending PointVertex.
-                self.write_instance(instance_id, [1.0, 1.0, 1.0, 1.0], queue);
+                self.write_instance(instance_id, [1.0, 1.0, 1.0, 1.0], device, queue);
             }
             Geometry::Mesh(m) => {
                 let (vs, is) = m.to_mesh_vertices();
                 self.tri.allocate(
                     guid, &vs, Some(&is), instance_id, kind, device, queue,
                 );
-                self.write_instance(instance_id, color_to_rgba_f32(m.objectcolor()), queue);
+                self.write_instance(instance_id, color_to_rgba_f32(m.objectcolor()), device, queue);
             }
             Geometry::Plane(pl) => {
                 let (vs, is) = pl.to_mesh_vertices(1.0);
                 self.tri.allocate(
                     guid, &vs, Some(&is), instance_id, kind, device, queue,
                 );
-                self.write_instance(instance_id, color_to_rgba_f32(&pl.linecolor), queue);
+                self.write_instance(instance_id, color_to_rgba_f32(&pl.linecolor), device, queue);
             }
             Geometry::OBB(bb) => {
                 let (vs, is) = bb.to_line_vertices();
                 self.line.allocate(
                     guid, &vs, Some(&is), instance_id, kind, device, queue,
                 );
-                self.write_instance(instance_id, [1.0, 1.0, 1.0, 1.0], queue);
+                self.write_instance(instance_id, [1.0, 1.0, 1.0, 1.0], device, queue);
             }
-            Geometry::BRep(_) | Geometry::Element(_) => {
-                // Composite types tessellate to internal Mesh; deferred to a
-                // follow-up since BRep::to_mesh needs to be added.
-                self.pick.release(guid);
+            Geometry::BRep(b) => {
+                // Tessellate to Mesh and dispatch to the tri arena.
+                let m = b.mesh();
+                let (vs, is) = m.to_mesh_vertices();
+                if !vs.is_empty() {
+                    self.tri.allocate(
+                        guid, &vs, Some(&is), instance_id, kind, device, queue,
+                    );
+                    self.write_instance(instance_id, color_to_rgba_f32(&b.surfacecolor), device, queue);
+                } else {
+                    self.pick.release(guid);
+                }
+            }
+            Geometry::Element(e) => {
+                // Element wraps either a Mesh or a BRep; dispatch accordingly.
+                use crate::element::ElementGeometry;
+                match e.geometry() {
+                    ElementGeometry::Mesh(m) => {
+                        let (vs, is) = m.to_mesh_vertices();
+                        if !vs.is_empty() {
+                            self.tri.allocate(
+                                guid, &vs, Some(&is), instance_id, kind, device, queue,
+                            );
+                            self.write_instance(
+                                instance_id,
+                                color_to_rgba_f32(m.objectcolor()),
+                                device,
+                                queue,
+                            );
+                        } else {
+                            self.pick.release(guid);
+                        }
+                    }
+                    ElementGeometry::BRep(b) => {
+                        let m = b.mesh();
+                        let (vs, is) = m.to_mesh_vertices();
+                        if !vs.is_empty() {
+                            self.tri.allocate(
+                                guid, &vs, Some(&is), instance_id, kind, device, queue,
+                            );
+                            self.write_instance(
+                                instance_id,
+                                color_to_rgba_f32(&b.surfacecolor),
+                                device,
+                                queue,
+                            );
+                        } else {
+                            self.pick.release(guid);
+                        }
+                    }
+                    ElementGeometry::None => {
+                        self.pick.release(guid);
+                    }
+                }
             }
         }
     }
@@ -385,24 +441,69 @@ impl GpuSession {
         self.instances_cpu.clear();
     }
 
-    /// Write or grow the CPU mirror and upload the slot.
-    fn write_instance(&mut self, instance_id: u32, color: [f32; 4], queue: &wgpu::Queue) {
+    /// Write the CPU mirror entry for this `instance_id` and upload to the GPU
+    /// storage buffer. Grows the buffer (amortized 2×) if `instance_id` is
+    /// beyond current capacity, preserving existing contents via
+    /// copy_buffer_to_buffer.
+    fn write_instance(
+        &mut self,
+        instance_id: u32,
+        color: [f32; 4],
+        device: &wgpu::Device,
+        queue: &wgpu::Queue,
+    ) {
         let id = instance_id as usize;
         if id >= self.instances_cpu.len() {
-            self.instances_cpu
-                .resize(id + 1, InstanceData::new(0));
+            self.instances_cpu.resize(id + 1, InstanceData::new(0));
         }
         let mut data = InstanceData::new(instance_id);
         data.color = color;
         self.instances_cpu[id] = data;
 
-        // Upload just this slot (only valid while id < instance_capacity).
-        if instance_id < self.instance_capacity {
-            let offset = (id as u64) * (std::mem::size_of::<InstanceData>() as u64);
-            queue.write_buffer(&self.instance_buffer, offset, bytemuck::bytes_of(&data));
+        if instance_id >= self.instance_capacity {
+            self.grow_instance_buffer(instance_id + 1, device, queue);
         }
-        // TODO(growth): when instance_id >= instance_capacity, grow
-        // instance_buffer (similar to GpuArena::grow_vertex_buffer).
+        let offset = (id as u64) * (std::mem::size_of::<InstanceData>() as u64);
+        queue.write_buffer(&self.instance_buffer, offset, bytemuck::bytes_of(&data));
+    }
+
+    /// Resize the GPU instance buffer to fit at least `needed` slots,
+    /// preserving existing data. Doubles capacity each grow.
+    fn grow_instance_buffer(
+        &mut self,
+        needed: u32,
+        device: &wgpu::Device,
+        queue: &wgpu::Queue,
+    ) {
+        let mut new_cap = self.instance_capacity.max(1) * 2;
+        while new_cap < needed {
+            new_cap *= 2;
+        }
+        let new_buffer = device.create_buffer(&wgpu::BufferDescriptor {
+            label: Some("gpu_session.instances"),
+            size: (new_cap as u64) * (std::mem::size_of::<InstanceData>() as u64),
+            usage: wgpu::BufferUsages::STORAGE
+                | wgpu::BufferUsages::COPY_DST
+                | wgpu::BufferUsages::COPY_SRC,
+            mapped_at_creation: false,
+        });
+        let bytes_to_copy = (self.instance_capacity as u64)
+            * (std::mem::size_of::<InstanceData>() as u64);
+        if bytes_to_copy > 0 {
+            let mut encoder = device.create_command_encoder(&wgpu::CommandEncoderDescriptor {
+                label: Some("gpu_session.instances.grow"),
+            });
+            encoder.copy_buffer_to_buffer(
+                &self.instance_buffer,
+                0,
+                &new_buffer,
+                0,
+                bytes_to_copy,
+            );
+            queue.submit(std::iter::once(encoder.finish()));
+        }
+        self.instance_buffer = new_buffer;
+        self.instance_capacity = new_cap;
     }
 
     /// Update an instance row's transform (e.g. when the user moves the object).
