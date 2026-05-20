@@ -9,6 +9,10 @@ pub mod proto {
     include!("proto/session_proto.rs");
 }
 
+pub mod gpu_arena;
+pub mod gpu_session;
+pub mod gpu_adapters;
+
 pub mod aabb;
 pub mod aabb_test;
 pub mod guid_serde;
