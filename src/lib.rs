@@ -12,6 +12,7 @@ pub mod proto {
 pub mod gpu_arena;
 pub mod gpu_session;
 pub mod gpu_adapters;
+pub mod session_pick;
 
 pub mod aabb;
 pub mod aabb_test;
