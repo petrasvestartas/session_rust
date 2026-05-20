@@ -68,7 +68,9 @@ pub fn run_tolerance_key() -> TestResult {
 pub fn run_tolerance_runtime_modification() -> TestResult {
     MINI_TEST!("Runtime Modification", {
         use crate::tolerance::TOLERANCE;
-        // Get current default values
+        // Defend against test pollution: other tests may have set_absolute'd
+        // without restoring (e.g. primitives_test when an assertion fires early).
+        TOLERANCE.reset();
         let original_absolute = TOLERANCE.absolute();
         let original_relative = TOLERANCE.relative();
 
@@ -267,6 +269,8 @@ pub fn run_tolerance_round_to() -> TestResult {
 pub fn run_tolerance_precision_from_tolerance() -> TestResult {
     MINI_TEST!("Precision From Tolerance", {
         use crate::tolerance::TOLERANCE;
+        // Defend against test pollution.
+        TOLERANCE.reset();
         // Default absolute tolerance is 1e-5 -> precision should be 5
         let prec = TOLERANCE.precision_from_tolerance(None);
 

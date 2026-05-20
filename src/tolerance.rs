@@ -36,7 +36,9 @@ impl Tolerance {
     pub const TO_DEGREES: f32 = 180.0 / STD_PI;
     pub const TO_RADIANS: f32 = STD_PI / 180.0;
 
-    /// Default tolerance values (loosened from f64 originals to fit f32 precision)
+    /// Default tolerance values (loosened from f64 originals to fit f32 precision).
+    /// ABSOLUTE just above f32 machine epsilon (≈1.2e-7); algorithms that need
+    /// tighter checking should set per-call tolerance explicitly.
     pub const ABSOLUTE: f32 = 1e-5;
     pub const RELATIVE: f32 = 1e-5;
     pub const ANGULAR: f32 = 1e-5;
