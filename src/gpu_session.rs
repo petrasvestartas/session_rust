@@ -294,9 +294,85 @@ impl GpuSession {
         queue: &wgpu::Queue,
     ) {
         self.clear();
+        // Geometry enum types come from session.lookup.
         for (guid, geom) in &session.lookup {
             self.add_geometry(guid, geom, device, queue);
         }
+        // NurbsCurve and NurbsSurface are stored in Objects but not in the
+        // Geometry enum (they're parametric, not heterogeneous-rendered).
+        // Iterate the typed Vecs directly.
+        for nc in &session.objects.nurbscurves {
+            self.add_nurbscurve(nc, device, queue);
+        }
+        for ns in &session.objects.nurbssurfaces {
+            self.add_nurbssurface(ns, device, queue);
+        }
+    }
+
+    /// Tessellate a NurbsCurve to a polyline and add it to the line arena.
+    /// Uses Tolerance::ANGULARDEFLECTION for adaptive subdivision.
+    pub fn add_nurbscurve(
+        &mut self,
+        curve: &crate::NurbsCurve,
+        device: &wgpu::Device,
+        queue: &wgpu::Queue,
+    ) {
+        let guid = curve.guid().to_string();
+        let (pts, _params) = curve.to_polyline_adaptive(
+            crate::Tolerance::ANGULARDEFLECTION,
+            0.0,
+            0.0,
+        );
+        if pts.len() < 2 {
+            return;
+        }
+        let instance_id = self.pick.allocate(&guid);
+        let color = crate::gpu_adapters::color_to_rgba_u8(
+            curve.linecolors.get(0).unwrap_or(&crate::Color::black()),
+        );
+        let verts: Vec<LineVertex> = pts
+            .iter()
+            .map(|p| LineVertex { position: [p[0], p[1], p[2]], color })
+            .collect();
+        let n = verts.len();
+        let mut inds: Vec<u32> = Vec::with_capacity(n.saturating_sub(1) * 2);
+        for i in 0..n.saturating_sub(1) {
+            inds.push(i as u32);
+            inds.push((i + 1) as u32);
+        }
+        self.line.allocate(
+            &guid, &verts, Some(&inds), instance_id, GeometryKind::NurbsCurve,
+            device, queue,
+        );
+        let color_f32 = crate::gpu_adapters::color_to_rgba_f32(
+            curve.linecolors.get(0).unwrap_or(&crate::Color::black()),
+        );
+        self.write_instance(instance_id, color_f32, device, queue);
+    }
+
+    /// Tessellate a NurbsSurface to a mesh and add it to the tri arena.
+    /// Uses the surface's cached `m_mesh` if present, else generates one.
+    pub fn add_nurbssurface(
+        &mut self,
+        surface: &crate::NurbsSurface,
+        device: &wgpu::Device,
+        queue: &wgpu::Queue,
+    ) {
+        let guid = surface.guid().to_string();
+        let mesh = surface.mesh();
+        let (vs, is) = mesh.to_mesh_vertices();
+        if vs.is_empty() {
+            return;
+        }
+        let instance_id = self.pick.allocate(&guid);
+        self.tri.allocate(
+            &guid, &vs, Some(&is), instance_id, GeometryKind::NurbsSurface,
+            device, queue,
+        );
+        let color = crate::gpu_adapters::color_to_rgba_f32(
+            surface.linecolors.get(0).unwrap_or(&crate::Color::white()),
+        );
+        self.write_instance(instance_id, color, device, queue);
     }
 
     /// Add a single `Geometry` variant to the arena it belongs to and register
@@ -577,6 +653,76 @@ impl GpuSession {
 
     pub fn guid_for_instance(&self, instance_id: u32) -> Option<&str> {
         self.pick.resolve(instance_id)
+    }
+
+    // ========================================================================
+    // Draw helpers
+    //
+    // Each emits a sequence of `draw_indexed(...)` (or `draw(...)` for
+    // unindexed point arena) calls — one per arena slot. The caller is
+    // responsible for setting the pipeline + bind groups (camera uniforms,
+    // instance storage buffer) before invoking these. Instance-id is passed
+    // via `instance_range`: `[id..id+1]` so the vertex shader can index into
+    // the instance buffer using `@builtin(instance_index)`.
+    // ========================================================================
+
+    /// Bind the tri arena's buffers and emit one draw call per mesh slot.
+    pub fn draw_meshes<'a>(&'a self, pass: &mut wgpu::RenderPass<'a>) {
+        let ibo = match self.tri.ibo.as_ref() {
+            Some(b) => b,
+            None => return,
+        };
+        pass.set_vertex_buffer(0, self.tri.vbo.slice(..));
+        pass.set_index_buffer(ibo.slice(..), wgpu::IndexFormat::Uint32);
+        for (_guid, slot) in self.tri.iter_slots() {
+            if let Some(ir) = slot.index_range.clone() {
+                pass.draw_indexed(
+                    ir,
+                    slot.vertex_range.start as i32,
+                    slot.instance_id..(slot.instance_id + 1),
+                );
+            }
+        }
+    }
+
+    /// Bind the line arena's buffers and emit one draw call per line slot.
+    /// Lines that have an index buffer use draw_indexed; bare LineList
+    /// (e.g. simple Line) draws with `vertex_range` directly.
+    pub fn draw_lines<'a>(&'a self, pass: &mut wgpu::RenderPass<'a>) {
+        pass.set_vertex_buffer(0, self.line.vbo.slice(..));
+        if let Some(ibo) = self.line.ibo.as_ref() {
+            pass.set_index_buffer(ibo.slice(..), wgpu::IndexFormat::Uint32);
+        }
+        for (_guid, slot) in self.line.iter_slots() {
+            match slot.index_range.clone() {
+                Some(ir) => pass.draw_indexed(
+                    ir,
+                    slot.vertex_range.start as i32,
+                    slot.instance_id..(slot.instance_id + 1),
+                ),
+                None => pass.draw(
+                    slot.vertex_range.clone(),
+                    slot.instance_id..(slot.instance_id + 1),
+                ),
+            }
+        }
+    }
+
+    /// Bind the point arena and emit one draw per slot (always unindexed).
+    pub fn draw_points<'a>(&'a self, pass: &mut wgpu::RenderPass<'a>) {
+        pass.set_vertex_buffer(0, self.point.vbo.slice(..));
+        for (_guid, slot) in self.point.iter_slots() {
+            pass.draw(
+                slot.vertex_range.clone(),
+                slot.instance_id..(slot.instance_id + 1),
+            );
+        }
+    }
+
+    /// Total number of objects across all three arenas. Useful for debugging
+    /// and stats displays.
+    pub fn total_slots(&self) -> usize {
+        self.tri.len() + self.line.len() + self.point.len()
     }
 }
 

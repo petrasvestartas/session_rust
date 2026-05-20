@@ -14,7 +14,9 @@
 use session_rust::gpu_session::{
     GpuSession, InstanceData, DEFAULT_INSTANCE_CAP,
 };
-use session_rust::{Color, Line, Mesh, Plane, Point, PointCloud, Polyline, Session, Vector, OBB};
+use session_rust::{
+    Color, Line, Mesh, NurbsCurve, Plane, Point, PointCloud, Polyline, Session, Vector, OBB,
+};
 
 /// Try to build a wgpu device. Returns None on systems with no adapter
 /// (typical for CI without GPU) so tests can skip gracefully.
@@ -173,6 +175,36 @@ fn instance_buffer_grows_past_default_cap() {
         gpu.instances_cpu.len() as u32,
         DEFAULT_INSTANCE_CAP + 16
     );
+}
+
+#[test]
+fn nurbscurve_tessellates_into_line_arena() {
+    let (device, queue) = match try_make_device() {
+        Some(dq) => dq,
+        None => return,
+    };
+
+    let mut session = Session::new("nurbs");
+    let pts = vec![
+        Point::new(0.0, 0.0, 0.0),
+        Point::new(1.0, 2.0, 0.0),
+        Point::new(2.0, 0.0, 0.0),
+        Point::new(3.0, 2.0, 0.0),
+        Point::new(4.0, 0.0, 0.0),
+    ];
+    let nc = NurbsCurve::create(false, 3, &pts);
+    let guid = nc.guid().to_string();
+    session.objects.nurbscurves.push(nc);
+
+    let mut gpu = GpuSession::new(&device);
+    gpu.rebuild_from(&session, &device, &queue);
+
+    assert!(
+        gpu.line.slot(&guid).is_some(),
+        "NurbsCurve should land in the line arena"
+    );
+    let inst_id = gpu.pick.instance_id(&guid);
+    assert!(inst_id.is_some(), "NurbsCurve should have a pick entry");
 }
 
 #[test]
