@@ -29,15 +29,15 @@
   "cv_count": 5,
   "cv_stride": 3,
   "dimension": 3,
-  "guid": "914c136b-377c-482b-bb1b-c1ff82119312",
+  "guid": "043064af-4d95-4c4f-8968-becf55a2dd4d",
   "is_rational": false,
   "nurbsknots": [
     0.0,
     0.0,
-    2.048176115522097,
-    4.096352231044194,
-    6.144528346566291,
-    6.144528346566291
+    2.048176,
+    4.096352,
+    6.144528,
+    6.144528
   ],
   "linecolors": [],
   "name": "my_nurbscurve",
@@ -46,7 +46,7 @@
   "type": "NurbsCurve",
   "width": 1.0,
   "xform": {
-    "guid": "2e1a33a3-8c64-41c8-80e7-083a6ead6c6a",
+    "guid": "1df95e28-f173-43f3-850c-03824a02d25e",
     "m": [
       1.0,
       0.0,

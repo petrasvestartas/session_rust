@@ -198,9 +198,9 @@ mod tests {
         let loaded: i32 = file_json_loads(&json_str).unwrap();
         assert_eq!(loaded, 42);
 
-        let float: f64 = 2.5;
+        let float: f32 = 2.5;
         let json_str = file_json_dumps(&float, false).unwrap();
-        let loaded: f64 = file_json_loads(&json_str).unwrap();
+        let loaded: f32 = file_json_loads(&json_str).unwrap();
         assert_eq!(loaded, 2.5);
 
         let text = "hello";

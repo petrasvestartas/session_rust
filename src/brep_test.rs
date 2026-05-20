@@ -263,9 +263,9 @@ pub fn run_brep_from_polylines() -> TestResult {
         use crate::polyline::Polyline;
         use crate::Point;
 
-        let hx = 1.0_f64;
-        let hy = 1.5_f64;
-        let hz = 2.0_f64;
+        let hx = 1.0_f32;
+        let hy = 1.5_f32;
+        let hz = 2.0_f32;
         let c = [
             Point::new(-hx, -hy, -hz),
             Point::new( hx, -hy, -hz),
@@ -339,9 +339,9 @@ pub fn run_brep_from_nurbscurves() -> TestResult {
         use crate::NurbsCurve;
         use crate::Point;
 
-        let hx = 1.0_f64;
-        let hy = 1.5_f64;
-        let hz = 2.0_f64;
+        let hx = 1.0_f32;
+        let hy = 1.5_f32;
+        let hz = 2.0_f32;
         let c = [
             Point::new(-hx, -hy, -hz),
             Point::new( hx, -hy, -hz),

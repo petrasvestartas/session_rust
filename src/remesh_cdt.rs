@@ -45,15 +45,15 @@ struct CdtTri {
 }
 
 fn cps(p1: P64, p2: P64, p3: P64) -> i32 {
-    let cp = (p2.x - p1.x) as f64 * (p3.y - p2.y) as f64
-           - (p2.y - p1.y) as f64 * (p3.x - p2.x) as f64;
+    let cp = (p2.x - p1.x) as f32 * (p3.y - p2.y) as f32
+           - (p2.y - p1.y) as f32 * (p3.x - p2.x) as f32;
     if cp > 0.0 { 1 } else if cp < 0.0 { -1 } else { 0 }
 }
 
-fn sqr(x: f64) -> f64 { x * x }
+fn sqr(x: f32) -> f32 { x * x }
 
-fn dist_sqr(a: P64, b: P64) -> f64 {
-    sqr((a.x - b.x) as f64) + sqr((a.y - b.y) as f64)
+fn dist_sqr(a: P64, b: P64) -> f32 {
+    sqr((a.x - b.x) as f32) + sqr((a.y - b.y) as f32)
 }
 
 fn left_turning(p1: P64, p2: P64, p3: P64) -> bool { cps(p1, p2, p3) < 0 }
@@ -74,16 +74,16 @@ fn edge_contains(e: &Edge, v: usize) -> u8 {
     if e.vl == v { EC_LEFT } else if e.vr == v { EC_RIGHT } else { EC_NEITHER }
 }
 
-fn in_circle(pa: P64, pb: P64, pc: P64, pd: P64) -> f64 {
-    let m00 = (pa.x - pd.x) as f64; let m01 = (pa.y - pd.y) as f64; let m02 = sqr(m00) + sqr(m01);
-    let m10 = (pb.x - pd.x) as f64; let m11 = (pb.y - pd.y) as f64; let m12 = sqr(m10) + sqr(m11);
-    let m20 = (pc.x - pd.x) as f64; let m21 = (pc.y - pd.y) as f64; let m22 = sqr(m20) + sqr(m21);
+fn in_circle(pa: P64, pb: P64, pc: P64, pd: P64) -> f32 {
+    let m00 = (pa.x - pd.x) as f32; let m01 = (pa.y - pd.y) as f32; let m02 = sqr(m00) + sqr(m01);
+    let m10 = (pb.x - pd.x) as f32; let m11 = (pb.y - pd.y) as f32; let m12 = sqr(m10) + sqr(m11);
+    let m20 = (pc.x - pd.x) as f32; let m21 = (pc.y - pd.y) as f32; let m22 = sqr(m20) + sqr(m21);
     m00*(m11*m22-m21*m12) - m10*(m01*m22-m21*m02) + m20*(m01*m12-m11*m02)
 }
 
-fn shortest_dist_seg(pt: P64, sp1: P64, sp2: P64) -> f64 {
-    let dx = (sp2.x - sp1.x) as f64; let dy = (sp2.y - sp1.y) as f64;
-    let ax = (pt.x - sp1.x) as f64; let ay = (pt.y - sp1.y) as f64;
+fn shortest_dist_seg(pt: P64, sp1: P64, sp2: P64) -> f32 {
+    let dx = (sp2.x - sp1.x) as f32; let dy = (sp2.y - sp1.y) as f32;
+    let ax = (pt.x - sp1.x) as f32; let ay = (pt.y - sp1.y) as f32;
     let qnum = ax*dx + ay*dy;
     if qnum < 0.0 { return dist_sqr(pt, sp1); }
     let dd = dx*dx + dy*dy;
@@ -93,14 +93,14 @@ fn shortest_dist_seg(pt: P64, sp1: P64, sp2: P64) -> f64 {
 
 fn segs_intersect(s1a: P64, s1b: P64, s2a: P64, s2b: P64) -> u8 {
     if s1a == s2a || s1b == s2a || s1b == s2b { return IX_NONE; }
-    let dy1 = (s1b.y - s1a.y) as f64; let dx1 = (s1b.x - s1a.x) as f64;
-    let dy2 = (s2b.y - s2a.y) as f64; let dx2 = (s2b.x - s2a.x) as f64;
+    let dy1 = (s1b.y - s1a.y) as f32; let dx1 = (s1b.x - s1a.x) as f32;
+    let dy2 = (s2b.y - s2a.y) as f32; let dx2 = (s2b.x - s2a.x) as f32;
     let cp = dy1*dx2 - dy2*dx1;
     if cp == 0.0 { return IX_COLLINEAR; }
-    let t = (s1a.x - s2a.x) as f64 * dy2 - (s1a.y - s2a.y) as f64 * dx2;
+    let t = (s1a.x - s2a.x) as f32 * dy2 - (s1a.y - s2a.y) as f32 * dx2;
     if t >= 0.0 { if cp < 0.0 || t >= cp { return IX_NONE; } }
     else        { if cp > 0.0 || t <= cp { return IX_NONE; } }
-    let t2 = (s1a.x - s2a.x) as f64 * dy1 - (s1a.y - s2a.y) as f64 * dx1;
+    let t2 = (s1a.x - s2a.x) as f32 * dy1 - (s1a.y - s2a.y) as f32 * dx1;
     if t2 >= 0.0 { if cp > 0.0 && t2 < cp { return IX_INTERSECT; } }
     else         { if cp < 0.0 && t2 > cp { return IX_INTERSECT; } }
     IX_NONE
@@ -287,7 +287,7 @@ impl Delaunay {
         let ya = self.vs[v_above].pt.y;
         let mut e = self.first_active;
         let mut e_below = NULL;
-        let mut best_d = -1.0f64;
+        let mut best_d = -1.0f32;
         while e != NULL {
             let vl_x = self.vs[self.es[e].vl].pt.x;
             let vr_x = self.vs[self.es[e].vr].pt.x;
@@ -653,7 +653,7 @@ impl Delaunay {
 }
 
 pub(crate) fn cdt_triangulate(border_2d: &[Point], holes_2d: &[Vec<Point>]) -> Vec<(usize, usize, usize)> {
-    let mut max_coord = 1.0f64;
+    let mut max_coord = 1.0f32;
     for p in border_2d {
         max_coord = max_coord.max(p[0].abs()).max(p[1].abs());
     }
@@ -663,10 +663,10 @@ pub(crate) fn cdt_triangulate(border_2d: &[Point], holes_2d: &[Vec<Point>]) -> V
         }
     }
     let mut precision = 6i32;
-    while precision > 0 && max_coord * 10f64.powi(precision) > 9e17 {
+    while precision > 0 && max_coord * 10f32.powi(precision) > 9e17 {
         precision -= 1;
     }
-    let scale = 10f64.powi(precision);
+    let scale = 10f32.powi(precision);
 
     // Break y-collinearity between hole vertices and border vertices.
     // The sweep-line CDT fails when a hole vertex shares the same int64
@@ -682,7 +682,7 @@ pub(crate) fn cdt_triangulate(border_2d: &[Point], holes_2d: &[Vec<Point>]) -> V
             let iy = (p[1] * scale).round() as i64;
             if border_ys.contains(&iy) {
                 let mut adj = p.clone();
-                adj[1] = (iy - 1) as f64 / scale;
+                adj[1] = (iy - 1) as f32 / scale;
                 adj
             } else {
                 p.clone()
@@ -729,8 +729,8 @@ pub(crate) fn cdt_triangulate(border_2d: &[Point], holes_2d: &[Vec<Point>]) -> V
                 let (xi, yi) = (poly[i].x, poly[i].y);
                 let (xj, yj) = (poly[j].x, poly[j].y);
                 if (yi > py) != (yj > py) {
-                    let xi_cross = xj as f64 + (py - yj) as f64 * (xi - xj) as f64 / (yj - yi) as f64;
-                    if (px as f64) < xi_cross { inside = !inside; }
+                    let xi_cross = xj as f32 + (py - yj) as f32 * (xi - xj) as f32 / (yj - yi) as f32;
+                    if (px as f32) < xi_cross { inside = !inside; }
                 }
                 j = i;
             }
@@ -788,7 +788,7 @@ pub(crate) fn from_polygon_with_holes_impl(polylines: &[Polyline], is_2d: bool, 
     if polylines.is_empty() { return Mesh::new(); }
     let mut border_idx = 0usize;
     if !is_first_boundary && polylines.len() > 1 {
-        let mut max_diag = 0.0_f64;
+        let mut max_diag = 0.0_f32;
         for (i, poly) in polylines.iter().enumerate() {
             let pts = poly.get_points();
             if pts.len() < 3 { continue; }
@@ -809,7 +809,7 @@ pub(crate) fn from_polygon_with_holes_impl(polylines: &[Polyline], is_2d: bool, 
     let mut hole_pts_3d: Vec<Vec<Point>> = polylines.iter().enumerate()
         .filter(|(i, _)| *i != border_idx)
         .map(|(_, h)| strip_close(h.get_points())).filter(|h| h.len() >= 3).collect();
-    let signed_area = |pts: &[Point]| -> f64 {
+    let signed_area = |pts: &[Point]| -> f32 {
         let n = pts.len(); let mut a = 0.0;
         for i in 0..n { let j = (i+1)%n; a += pts[i][0]*pts[j][1] - pts[j][0]*pts[i][1]; }
         a * 0.5

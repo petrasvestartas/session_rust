@@ -224,7 +224,7 @@ pub fn run_bvh_fixed_100_boxes() -> TestResult {
     MINI_TEST!("Fixed 100 Boxes", {
         use crate::{SpatialBVH, OBB, Point, Vector};
         let mut boxes: Vec<OBB> = Vec::new();
-        let mut add = |min_x: f64, min_y: f64, min_z: f64, max_x: f64, max_y: f64, max_z: f64| {
+        let mut add = |min_x: f32, min_y: f32, min_z: f32, max_x: f32, max_y: f32, max_z: f32| {
             let cx = (min_x + max_x) * 0.5;
             let cy = (min_y + max_y) * 0.5;
             let cz = (min_z + max_z) * 0.5;

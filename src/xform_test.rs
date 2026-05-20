@@ -86,7 +86,7 @@ pub fn run_xform_rotation_x() -> TestResult {
         use crate::Point;
         use crate::Mesh;
 
-        let s = f64::sqrt(2.0);
+        let s = f32::sqrt(2.0);
         let xf = Xform::rotation_x(PI / 4.0, false);
         let mesh = Mesh::create_box(2.0, 2.0, 2.0);
         let result = mesh.transformed(Some(&xf));
@@ -107,7 +107,7 @@ pub fn run_xform_rotation_y() -> TestResult {
         use crate::Point;
         use crate::Mesh;
 
-        let s = f64::sqrt(2.0);
+        let s = f32::sqrt(2.0);
         let xf = Xform::rotation_y(PI / 4.0, false);
         let mesh = Mesh::create_box(2.0, 2.0, 2.0);
         let result = mesh.transformed(Some(&xf));
@@ -128,7 +128,7 @@ pub fn run_xform_rotation_z() -> TestResult {
         use crate::Point;
         use crate::Mesh;
 
-        let s = f64::sqrt(2.0);
+        let s = f32::sqrt(2.0);
         let xf = Xform::rotation_z(PI / 4.0, false);
         let mesh = Mesh::create_box(2.0, 2.0, 2.0);
         let result = mesh.transformed(Some(&xf));
@@ -155,7 +155,7 @@ pub fn run_xform_rotation_axis() -> TestResult {
         let mesh = Mesh::create_box(2.0, 2.0, 2.0);
         let result = mesh.transformed(Some(&xf));
         let t = 1.0 / 3.0;
-        let k = 2.0 / f64::sqrt(3.0);
+        let k = 2.0 / f32::sqrt(3.0);
         MINI_CHECK!(TOLERANCE.is_point_close(&result.vertex_point(0).unwrap(), &Point::new(-1.0, -1.0, -1.0)));
         MINI_CHECK!(TOLERANCE.is_point_close(&result.vertex_point(1).unwrap(), &Point::new(-t, -t+k, -t-k)));
         MINI_CHECK!(TOLERANCE.is_point_close(&result.vertex_point(2).unwrap(), &Point::new(t-k, t+k, t)));
@@ -174,7 +174,7 @@ pub fn run_xform_rotation_around_line() -> TestResult {
         use crate::Line;
         use crate::Mesh;
 
-        let s = f64::sqrt(2.0);
+        let s = f32::sqrt(2.0);
         let line = Line::new(-1.0, -1.0, -1.0, -1.0, -1.0, 1.0);
         let xf = Xform::rotation_around_line(&line, PI / 4.0, false);
         let mesh = Mesh::create_box(2.0, 2.0, 2.0);
@@ -408,7 +408,7 @@ pub fn run_xform_project_to_plane() -> TestResult {
         let mv = Xform::translation(0.0, 0.0, 1.0);
         let proj = Xform::project_to_plane(&plane);
         let xf = &proj * &mv;
-        let tp = |x: f64, y: f64, z: f64| -> Point { let mut p = Point::new(x, y, z); p.xform = xf.clone(); p.transformed() };
+        let tp = |x: f32, y: f32, z: f32| -> Point { let mut p = Point::new(x, y, z); p.xform = xf.clone(); p.transformed() };
         let outline = Polyline::new(vec![
             tp(-1.0, -1.0, -1.0),
             tp(1.0, -1.0, -1.0),
@@ -438,7 +438,7 @@ pub fn run_xform_project_to_plane_by_axis() -> TestResult {
         let mv = Xform::translation(0.0, 0.0, 1.0);
         let proj = Xform::project_to_plane_by_axis(&plane, &direction);
         let xf = &proj * &mv;
-        let tp = |x: f64, y: f64, z: f64| -> Point { let mut p = Point::new(x, y, z); p.xform = xf.clone(); p.transformed() };
+        let tp = |x: f32, y: f32, z: f32| -> Point { let mut p = Point::new(x, y, z); p.xform = xf.clone(); p.transformed() };
         let outline = Polyline::new(vec![
             tp(-1.0, -1.0, 1.0),
             tp(1.0, -1.0, -1.0),

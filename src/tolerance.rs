@@ -3,50 +3,50 @@ use crate::vector::Vector;
 use once_cell::sync::Lazy;
 use parking_lot::RwLock;
 use serde::{Deserialize, Serialize};
-use std::f64::consts::PI as STD_PI;
+use std::f32::consts::PI as STD_PI;
 
 /// Mathematical constants
-pub const PI: f64 = STD_PI;
-pub const TWO_PI:  f64 = 2.0 * STD_PI;
-pub const HALF_PI: f64 = STD_PI / 2.0;
-pub const TO_DEGREES: f64 = 180.0 / STD_PI;
-pub const TO_RADIANS: f64 = STD_PI / 180.0;
+pub const PI: f32 = STD_PI;
+pub const TWO_PI:  f32 = 2.0 * STD_PI;
+pub const HALF_PI: f32 = STD_PI / 2.0;
+pub const TO_DEGREES: f32 = 180.0 / STD_PI;
+pub const TO_RADIANS: f32 = STD_PI / 180.0;
 
 /// Scale factor
-pub const SCALE: f64 = 1e6;
+pub const SCALE: f32 = 1e6;
 
 /// Tolerance settings for geometric operations
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Tolerance {
     pub unit: String,
-    absolute: Option<f64>,
-    relative: Option<f64>,
-    angular: Option<f64>,
-    approximation: Option<f64>,
+    absolute: Option<f32>,
+    relative: Option<f32>,
+    angular: Option<f32>,
+    approximation: Option<f32>,
     precision: Option<i32>,
-    lineardeflection: Option<f64>,
-    angulardeflection: Option<f64>,
+    lineardeflection: Option<f32>,
+    angulardeflection: Option<f32>,
 }
 
 impl Tolerance {
     /// Mathematical constants
-    pub const PI: f64 = STD_PI;
-    pub const TWO_PI:  f64 = 2.0 * STD_PI;
-    pub const HALF_PI: f64 = STD_PI / 2.0;
-    pub const TO_DEGREES: f64 = 180.0 / STD_PI;
-    pub const TO_RADIANS: f64 = STD_PI / 180.0;
+    pub const PI: f32 = STD_PI;
+    pub const TWO_PI:  f32 = 2.0 * STD_PI;
+    pub const HALF_PI: f32 = STD_PI / 2.0;
+    pub const TO_DEGREES: f32 = 180.0 / STD_PI;
+    pub const TO_RADIANS: f32 = STD_PI / 180.0;
 
-    /// Default tolerance values (f64 only)
-    pub const ABSOLUTE: f64 = 1e-9;
-    pub const RELATIVE: f64 = 1e-6;
-    pub const ANGULAR: f64 = 1e-6;
-    pub const APPROXIMATION: f64 = 1e-3;
+    /// Default tolerance values (loosened from f64 originals to fit f32 precision)
+    pub const ABSOLUTE: f32 = 1e-5;
+    pub const RELATIVE: f32 = 1e-5;
+    pub const ANGULAR: f32 = 1e-5;
+    pub const APPROXIMATION: f32 = 1e-3;
     pub const PRECISION: i32 = 3;
-    pub const LINEARDEFLECTION: f64 = 1e-3;
-    pub const ANGULARDEFLECTION: f64 = 1e-1;
-    pub const ANGLE_TOLERANCE_DEGREES: f64 = 0.11;
+    pub const LINEARDEFLECTION: f32 = 1e-3;
+    pub const ANGULARDEFLECTION: f32 = 1e-1;
+    pub const ANGLE_TOLERANCE_DEGREES: f32 = 0.11;
     pub const ROUNDING: i32 = 6;
-    pub const ZERO_TOLERANCE: f64 = 1e-12;
+    pub const ZERO_TOLERANCE: f32 = 1e-7;
 
     pub fn new(unit: &str) -> Self {
         Self {
@@ -71,35 +71,35 @@ impl Tolerance {
         self.angulardeflection = None;
     }
 
-    pub fn absolute(&self) -> f64 {
+    pub fn absolute(&self) -> f32 {
         self.absolute.unwrap_or(Self::ABSOLUTE)
     }
 
-    pub fn set_absolute(&mut self, value: f64) {
+    pub fn set_absolute(&mut self, value: f32) {
         self.absolute = Some(value);
     }
 
-    pub fn relative(&self) -> f64 {
+    pub fn relative(&self) -> f32 {
         self.relative.unwrap_or(Self::RELATIVE)
     }
 
-    pub fn set_relative(&mut self, value: f64) {
+    pub fn set_relative(&mut self, value: f32) {
         self.relative = Some(value);
     }
 
-    pub fn angular(&self) -> f64 {
+    pub fn angular(&self) -> f32 {
         self.angular.unwrap_or(Self::ANGULAR)
     }
 
-    pub fn set_angular(&mut self, value: f64) {
+    pub fn set_angular(&mut self, value: f32) {
         self.angular = Some(value);
     }
 
-    pub fn approximation(&self) -> f64 {
+    pub fn approximation(&self) -> f32 {
         self.approximation.unwrap_or(Self::APPROXIMATION)
     }
 
-    pub fn set_approximation(&mut self, value: f64) {
+    pub fn set_approximation(&mut self, value: f32) {
         self.approximation = Some(value);
     }
 
@@ -111,52 +111,52 @@ impl Tolerance {
         self.precision = Some(value);
     }
 
-    pub fn lineardeflection(&self) -> f64 {
+    pub fn lineardeflection(&self) -> f32 {
         self.lineardeflection.unwrap_or(Self::LINEARDEFLECTION)
     }
 
-    pub fn set_lineardeflection(&mut self, value: f64) {
+    pub fn set_lineardeflection(&mut self, value: f32) {
         self.lineardeflection = Some(value);
     }
 
-    pub fn angulardeflection(&self) -> f64 {
+    pub fn angulardeflection(&self) -> f32 {
         self.angulardeflection.unwrap_or(Self::ANGULARDEFLECTION)
     }
 
-    pub fn set_angulardeflection(&mut self, value: f64) {
+    pub fn set_angulardeflection(&mut self, value: f32) {
         self.angulardeflection = Some(value);
     }
 
-    pub fn tolerance(&self, truevalue: f64, rtol: f64, atol: f64) -> f64 {
+    pub fn tolerance(&self, truevalue: f32, rtol: f32, atol: f32) -> f32 {
         rtol * truevalue.abs() + atol
     }
 
-    pub fn compare(&self, a: f64, b: f64, rtol: f64, atol: f64) -> bool {
+    pub fn compare(&self, a: f32, b: f32, rtol: f32, atol: f32) -> bool {
         (a - b).abs() <= self.tolerance(b, rtol, atol)
     }
 
-    pub fn is_zero(&self, a: f64) -> bool {
+    pub fn is_zero(&self, a: f32) -> bool {
         a.abs() <= self.absolute()
     }
 
-    pub fn is_positive(&self, a: f64) -> bool {
+    pub fn is_positive(&self, a: f32) -> bool {
         a > self.absolute()
     }
 
-    pub fn is_negative(&self, a: f64) -> bool {
+    pub fn is_negative(&self, a: f32) -> bool {
         a < -self.absolute()
     }
 
-    pub fn is_between(&self, value: f64, minval: f64, maxval: f64) -> bool {
+    pub fn is_between(&self, value: f32, minval: f32, maxval: f32) -> bool {
         let atol = self.absolute();
         minval - atol <= value && value <= maxval + atol
     }
 
-    pub fn is_close(&self, a: f64, b: f64) -> bool {
+    pub fn is_close(&self, a: f32, b: f32) -> bool {
         self.compare(a, b, self.relative(), self.absolute())
     }
 
-    pub fn is_allclose(&self, a: &[f64], b: &[f64]) -> bool {
+    pub fn is_allclose(&self, a: &[f32], b: &[f32]) -> bool {
         let rtol = self.relative();
         let atol = self.absolute();
         a.iter()
@@ -164,11 +164,11 @@ impl Tolerance {
             .all(|(x, y)| self.compare(*x, *y, rtol, atol))
     }
 
-    pub fn is_angle_zero(&self, a: f64) -> bool {
+    pub fn is_angle_zero(&self, a: f32) -> bool {
         a.abs() <= self.angular()
     }
 
-    pub fn is_angles_close(&self, a: f64, b: f64) -> bool {
+    pub fn is_angles_close(&self, a: f32, b: f32) -> bool {
         (a - b).abs() <= self.angular()
     }
 
@@ -186,7 +186,7 @@ impl Tolerance {
         (dx * dx + dy * dy + dz * dz) <= self.absolute() * self.absolute()
     }
 
-    pub fn key(&self, xyz: [f64; 3], precision: i32) -> String {
+    pub fn key(&self, xyz: [f32; 3], precision: i32) -> String {
         let precision = if precision == -999 { self.precision() } else { precision };
         let [mut x, mut y, mut z] = xyz;
 
@@ -196,7 +196,7 @@ impl Tolerance {
 
         if precision < -1 {
             let p = (-precision - 1) as u32;
-            let factor = 10_f64.powi(p as i32);
+            let factor = 10_f32.powi(p as i32);
             return format!(
                 "{},{},{}",
                 ((x / factor).round() * factor) as i64,
@@ -225,7 +225,7 @@ impl Tolerance {
         )
     }
 
-    pub fn key_xy(&self, xy: [f64; 2], precision: i32) -> String {
+    pub fn key_xy(&self, xy: [f32; 2], precision: i32) -> String {
         let precision = if precision == -999 { self.precision() } else { precision };
         let [mut x, mut y] = xy;
 
@@ -235,7 +235,7 @@ impl Tolerance {
 
         if precision < -1 {
             let p = (-precision - 1) as u32;
-            let factor = 10_f64.powi(p as i32);
+            let factor = 10_f32.powi(p as i32);
             return format!(
                 "{},{}",
                 ((x / factor).round() * factor) as i64,
@@ -254,7 +254,7 @@ impl Tolerance {
         format!("{:.prec$},{:.prec$}", x, y, prec = precision as usize)
     }
 
-    pub fn format_number(&self, number: f64, precision: i32) -> String {
+    pub fn format_number(&self, number: f32, precision: i32) -> String {
         let precision = if precision == -999 { self.precision() } else { precision };
 
         if precision == -1 {
@@ -263,14 +263,14 @@ impl Tolerance {
 
         if precision < -1 {
             let p = (-precision - 1) as u32;
-            let factor = 10_f64.powi(p as i32);
+            let factor = 10_f32.powi(p as i32);
             return format!("{}", ((number / factor).round() * factor) as i64);
         }
 
         format!("{:.prec$}", number, prec = precision as usize)
     }
 
-    pub fn precision_from_tolerance(&self, tol: Option<f64>) -> i32 {
+    pub fn precision_from_tolerance(&self, tol: Option<f32>) -> i32 {
         let tol = tol.unwrap_or_else(|| self.absolute());
         if tol < 1.0 {
             let s = format!("{tol:e}");
@@ -294,13 +294,13 @@ impl Tolerance {
         result
     }
 
-    pub fn to_radians(degrees: f64) -> f64 { degrees * Self::TO_RADIANS }
+    pub fn to_radians(degrees: f32) -> f32 { degrees * Self::TO_RADIANS }
 
-    pub fn to_degrees(radians: f64) -> f64 { radians * Self::TO_DEGREES }
+    pub fn to_degrees(radians: f32) -> f32 { radians * Self::TO_DEGREES }
 
     /// Round a value to a given number of decimal places (like Python's round(value, ndigits))
-    pub fn round_to(value: f64, ndigits: i32) -> f64 {
-        let factor = 10f64.powi(ndigits);
+    pub fn round_to(value: f32, ndigits: i32) -> f32 {
+        let factor = 10f32.powi(ndigits);
         (value * factor).round() / factor
     }
 }
@@ -324,49 +324,49 @@ impl GlobalTolerance {
     }
 
     // Setters (require write lock)
-    pub fn set_absolute(&self, value: f64) { self.inner.write().set_absolute(value); }
-    pub fn set_relative(&self, value: f64) { self.inner.write().set_relative(value); }
-    pub fn set_angular(&self, value: f64) { self.inner.write().set_angular(value); }
-    pub fn set_approximation(&self, value: f64) { self.inner.write().set_approximation(value); }
+    pub fn set_absolute(&self, value: f32) { self.inner.write().set_absolute(value); }
+    pub fn set_relative(&self, value: f32) { self.inner.write().set_relative(value); }
+    pub fn set_angular(&self, value: f32) { self.inner.write().set_angular(value); }
+    pub fn set_approximation(&self, value: f32) { self.inner.write().set_approximation(value); }
     pub fn set_precision(&self, value: i32) { self.inner.write().set_precision(value); }
-    pub fn set_lineardeflection(&self, value: f64) { self.inner.write().set_lineardeflection(value); }
-    pub fn set_angulardeflection(&self, value: f64) { self.inner.write().set_angulardeflection(value); }
+    pub fn set_lineardeflection(&self, value: f32) { self.inner.write().set_lineardeflection(value); }
+    pub fn set_angulardeflection(&self, value: f32) { self.inner.write().set_angulardeflection(value); }
     pub fn reset(&self) { self.inner.write().reset(); }
 
     // Getters (require read lock)
-    pub fn absolute(&self) -> f64 { self.inner.read().absolute() }
-    pub fn relative(&self) -> f64 { self.inner.read().relative() }
-    pub fn angular(&self) -> f64 { self.inner.read().angular() }
-    pub fn approximation(&self) -> f64 { self.inner.read().approximation() }
+    pub fn absolute(&self) -> f32 { self.inner.read().absolute() }
+    pub fn relative(&self) -> f32 { self.inner.read().relative() }
+    pub fn angular(&self) -> f32 { self.inner.read().angular() }
+    pub fn approximation(&self) -> f32 { self.inner.read().approximation() }
     pub fn precision(&self) -> i32 { self.inner.read().precision() }
-    pub fn lineardeflection(&self) -> f64 { self.inner.read().lineardeflection() }
-    pub fn angulardeflection(&self) -> f64 { self.inner.read().angulardeflection() }
+    pub fn lineardeflection(&self) -> f32 { self.inner.read().lineardeflection() }
+    pub fn angulardeflection(&self) -> f32 { self.inner.read().angulardeflection() }
 
     // Operations (require read lock)
-    pub fn tolerance(&self, truevalue: f64, rtol: f64, atol: f64) -> f64 {
+    pub fn tolerance(&self, truevalue: f32, rtol: f32, atol: f32) -> f32 {
         self.inner.read().tolerance(truevalue, rtol, atol)
     }
-    pub fn compare(&self, a: f64, b: f64, rtol: f64, atol: f64) -> bool {
+    pub fn compare(&self, a: f32, b: f32, rtol: f32, atol: f32) -> bool {
         self.inner.read().compare(a, b, rtol, atol)
     }
-    pub fn is_zero(&self, a: f64) -> bool { self.inner.read().is_zero(a) }
-    pub fn is_positive(&self, a: f64) -> bool { self.inner.read().is_positive(a) }
-    pub fn is_negative(&self, a: f64) -> bool { self.inner.read().is_negative(a) }
-    pub fn is_between(&self, value: f64, minval: f64, maxval: f64) -> bool {
+    pub fn is_zero(&self, a: f32) -> bool { self.inner.read().is_zero(a) }
+    pub fn is_positive(&self, a: f32) -> bool { self.inner.read().is_positive(a) }
+    pub fn is_negative(&self, a: f32) -> bool { self.inner.read().is_negative(a) }
+    pub fn is_between(&self, value: f32, minval: f32, maxval: f32) -> bool {
         self.inner.read().is_between(value, minval, maxval)
     }
-    pub fn is_close(&self, a: f64, b: f64) -> bool { self.inner.read().is_close(a, b) }
-    pub fn is_allclose(&self, a: &[f64], b: &[f64]) -> bool { self.inner.read().is_allclose(a, b) }
-    pub fn is_angle_zero(&self, a: f64) -> bool { self.inner.read().is_angle_zero(a) }
-    pub fn is_angles_close(&self, a: f64, b: f64) -> bool { self.inner.read().is_angles_close(a, b) }
+    pub fn is_close(&self, a: f32, b: f32) -> bool { self.inner.read().is_close(a, b) }
+    pub fn is_allclose(&self, a: &[f32], b: &[f32]) -> bool { self.inner.read().is_allclose(a, b) }
+    pub fn is_angle_zero(&self, a: f32) -> bool { self.inner.read().is_angle_zero(a) }
+    pub fn is_angles_close(&self, a: f32, b: f32) -> bool { self.inner.read().is_angles_close(a, b) }
     pub fn is_point_close(&self, a: &Point, b: &Point) -> bool { self.inner.read().is_point_close(a, b) }
     pub fn is_vector_close(&self, a: &Vector, b: &Vector) -> bool { self.inner.read().is_vector_close(a, b) }
-    pub fn key(&self, xyz: [f64; 3], precision: i32) -> String { self.inner.read().key(xyz, precision) }
-    pub fn key_xy(&self, xy: [f64; 2], precision: i32) -> String { self.inner.read().key_xy(xy, precision) }
-    pub fn format_number(&self, number: f64, precision: i32) -> String {
+    pub fn key(&self, xyz: [f32; 3], precision: i32) -> String { self.inner.read().key(xyz, precision) }
+    pub fn key_xy(&self, xy: [f32; 2], precision: i32) -> String { self.inner.read().key_xy(xy, precision) }
+    pub fn format_number(&self, number: f32, precision: i32) -> String {
         self.inner.read().format_number(number, precision)
     }
-    pub fn precision_from_tolerance(&self, tol: Option<f64>) -> i32 {
+    pub fn precision_from_tolerance(&self, tol: Option<f32>) -> i32 {
         self.inner.read().precision_from_tolerance(tol)
     }
 
@@ -401,22 +401,22 @@ pub fn wrap_index(index: i32, n: i32) -> i32 {
 
 /// Length of the side opposite to `angle_deg` in a right triangle whose
 /// adjacent side has length `edge_length`.  (= edge_length * tan(angle_deg))
-pub fn triangle_edge_by_angle(edge_length: f64, angle_deg: f64) -> f64 {
+pub fn triangle_edge_by_angle(edge_length: f32, angle_deg: f32) -> f32 {
     edge_length * (angle_deg * Tolerance::TO_RADIANS).tan()
 }
 
 /// Convert radians → degrees.
-pub fn rad_to_deg(radians: f64) -> f64 {
+pub fn rad_to_deg(radians: f32) -> f32 {
     radians * Tolerance::TO_DEGREES
 }
 
 /// Convert degrees → radians.
-pub fn deg_to_rad(degrees: f64) -> f64 {
+pub fn deg_to_rad(degrees: f32) -> f32 {
     degrees * Tolerance::TO_RADIANS
 }
 
 /// Number of decimal digits of ceil(|n|).  Returns 0 for n == 0.
-pub fn count_digits(n: f64) -> i32 {
+pub fn count_digits(n: f32) -> i32 {
     let mut v = n.abs() as i64;
     if v == 0 { return 0; }
     let mut count = 0;

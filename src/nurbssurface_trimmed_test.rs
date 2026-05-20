@@ -108,10 +108,10 @@ pub fn run_nurbssurface_trimmed_constructor_planar() -> TestResult {
         ]));
 
         // Hexagon with 2 holes
-        let r = 4.0f64;
+        let r = 4.0f32;
         let mut pts = Vec::new();
         for k in 0..6 {
-            let a = k as f64 * PI / 3.0;
+            let a = k as f32 * PI / 3.0;
             pts.push(Point::new(r * a.cos(), r * a.sin(), r * a.cos() * 0.5));
         }
         let bnd = NurbsCurve::create(true, 1, &pts);
@@ -144,8 +144,8 @@ pub fn run_nurbssurface_trimmed_constructor_hole() -> TestResult {
         let mut pts = Vec::new();
         for i in 0..n {
             for j in 0..n {
-                let x = i as f64;
-                let y = j as f64;
+                let x = i as f32;
+                let y = j as f32;
                 let r2 = (x - 1.5) * (x - 1.5) + (y - 1.5) * (y - 1.5);
                 let z = 5.0 * (-r2 / 1.0).exp() + 0.3 * (crate::tolerance::PI * x / 7.0).sin() * (crate::tolerance::PI * y / 7.0).sin();
                 pts.push(Point::new(x, y, z));

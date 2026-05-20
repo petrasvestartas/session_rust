@@ -6,16 +6,16 @@ use serde::ser::SerializeMap;
 pub struct Plane {
     guid: std::sync::OnceLock<String>,
     pub name: String,
-    pub width: f64,
+    pub width: f32,
     pub linecolor: Color,
     _origin: Point,
     _x_axis: Vector,
     _y_axis: Vector,
     _z_axis: Vector,
-    _a: f64,
-    _b: f64,
-    _c: f64,
-    _d: f64,
+    _a: f32,
+    _b: f32,
+    _c: f32,
+    _d: f32,
     pub xform: Xform,
 }
 
@@ -56,16 +56,16 @@ impl<'de> Deserialize<'de> for Plane {
         struct PlaneData {
             guid: String,
             name: String,
-            frame: [f64; 12],  // [ox, oy, oz, xx, xy, xz, yx, yy, yz, zx, zy, zz]
+            frame: [f32; 12],  // [ox, oy, oz, xx, xy, xz, yx, yy, yz, zx, zy, zz]
             #[serde(default = "default_width")]
-            width: f64,
+            width: f32,
             #[serde(default)]
             linecolor: Option<Color>,
             #[serde(default)]
             xform: Option<Xform>,
         }
 
-        fn default_width() -> f64 {
+        fn default_width() -> f32 {
             1.0
         }
 
@@ -288,10 +288,10 @@ impl Plane {
             return Self::default();
         }
 
-        let n = points.len() as f64;
-        let mut cx = 0.0_f64;
-        let mut cy = 0.0_f64;
-        let mut cz = 0.0_f64;
+        let n = points.len() as f32;
+        let mut cx = 0.0_f32;
+        let mut cy = 0.0_f32;
+        let mut cz = 0.0_f32;
         for p in &points {
             cx += p[0]; cy += p[1]; cz += p[2];
         }
@@ -305,8 +305,8 @@ impl Plane {
             cxy += dx * dy; cxz += dx * dz; cyz += dy * dz;
         }
 
-        let mut eigvec = [[0.0_f64; 3]; 3];
-        let mut eigval = [0.0_f64; 3];
+        let mut eigvec = [[0.0_f32; 3]; 3];
+        let mut eigval = [0.0_f32; 3];
         let mut cov = [[cxx, cxy, cxz], [cxy, cyy, cyz], [cxz, cyz, czz]];
 
         for e in 0..3 {
@@ -555,19 +555,19 @@ impl Plane {
         cross.dot(&self._z_axis) > 0.0
     }
 
-    pub fn a(&self) -> f64 {
+    pub fn a(&self) -> f32 {
         self._a
     }
 
-    pub fn b(&self) -> f64 {
+    pub fn b(&self) -> f32 {
         self._b
     }
 
-    pub fn c(&self) -> f64 {
+    pub fn c(&self) -> f32 {
         self._c
     }
 
-    pub fn d(&self) -> f64 {
+    pub fn d(&self) -> f32 {
         self._d
     }
 
@@ -582,7 +582,7 @@ impl Plane {
             -(self._a * self._origin[0] + self._b * self._origin[1] + self._c * self._origin[2]);
     }
 
-    pub fn rotate(&mut self, angles_in_radians: f64) {
+    pub fn rotate(&mut self, angles_in_radians: f32) {
         let cos_angle = angles_in_radians.cos();
         let sin_angle = angles_in_radians.sin();
 
@@ -633,7 +633,7 @@ impl Plane {
         origin0: &Point, normal0: &Vector,
         origin1: &Point, normal1: &Vector,
         can_be_flipped: bool,
-        tolerance: f64,
+        tolerance: f32,
     ) -> bool {
         let n0 = normal0.clone();
         let n1 = normal1.clone();
@@ -722,7 +722,7 @@ impl PartialEq for Plane {
 
 impl Plane {
     /// Translate (move) a plane along its normal direction by a specified distance
-    pub fn translate_by_normal(&self, distance: f64) -> Plane {
+    pub fn translate_by_normal(&self, distance: f32) -> Plane {
         let mut normal = self._z_axis.clone();
         normal.normalize_self();
 
@@ -791,7 +791,7 @@ impl Plane {
         b2
     }
 
-    pub fn to_polylines(&self, scale: f64) -> Vec<Polyline> {
+    pub fn to_polylines(&self, scale: f32) -> Vec<Polyline> {
         let s = scale * 0.5;
         let o = &self._origin;
         let x = &self._x_axis;
@@ -928,12 +928,12 @@ impl Plane {
             guid: self.guid().to_string(),
             name: self.name.clone(),
             frame: vec![
-                self._origin[0], self._origin[1], self._origin[2],
-                self._x_axis[0], self._x_axis[1], self._x_axis[2],
-                self._y_axis[0], self._y_axis[1], self._y_axis[2],
-                self._z_axis[0], self._z_axis[1], self._z_axis[2],
+                self._origin[0] as f64, self._origin[1] as f64, self._origin[2] as f64,
+                self._x_axis[0] as f64, self._x_axis[1] as f64, self._x_axis[2] as f64,
+                self._y_axis[0] as f64, self._y_axis[1] as f64, self._y_axis[2] as f64,
+                self._z_axis[0] as f64, self._z_axis[1] as f64, self._z_axis[2] as f64,
             ],
-            width: self.width,
+            width: self.width as f64,
             linecolor: Some(crate::proto::Color {
                 guid: self.linecolor.guid().to_string(),
                 name: self.linecolor.name.clone(),
@@ -945,7 +945,7 @@ impl Plane {
             xform: Some(crate::proto::Xform {
                 guid: self.xform.guid().to_string(),
                 name: self.xform.name.clone(),
-                matrix: self.xform.m.to_vec(),
+                matrix: self.xform.m.iter().map(|&v| v as f64).collect(),
             }),
         };
         proto.encode_to_vec()
@@ -957,10 +957,10 @@ impl Plane {
         let proto = crate::proto::Plane::decode(data)?;
 
         // Parse frame array
-        let origin = Point::new(proto.frame[0], proto.frame[1], proto.frame[2]);
-        let x_axis = Vector::new(proto.frame[3], proto.frame[4], proto.frame[5]);
-        let y_axis = Vector::new(proto.frame[6], proto.frame[7], proto.frame[8]);
-        let z_axis = Vector::new(proto.frame[9], proto.frame[10], proto.frame[11]);
+        let origin = Point::new(proto.frame[0] as f32, proto.frame[1] as f32, proto.frame[2] as f32);
+        let x_axis = Vector::new(proto.frame[3] as f32, proto.frame[4] as f32, proto.frame[5] as f32);
+        let y_axis = Vector::new(proto.frame[6] as f32, proto.frame[7] as f32, proto.frame[8] as f32);
+        let z_axis = Vector::new(proto.frame[9] as f32, proto.frame[10] as f32, proto.frame[11] as f32);
 
         // Compute plane equation coefficients
         let a = z_axis[0];
@@ -984,7 +984,9 @@ impl Plane {
             x.set_guid(proto_xform.guid);
             x.name = proto_xform.name;
             if proto_xform.matrix.len() == 16 {
-                x.m.copy_from_slice(&proto_xform.matrix);
+                for (i, v) in proto_xform.matrix.iter().enumerate() {
+                    x.m[i] = *v as f32;
+                }
             }
             x
         } else {
@@ -996,7 +998,7 @@ impl Plane {
         Ok(Plane {
             guid,
             name: proto.name,
-            width: if proto.width > 0.0 { proto.width } else { 1.0 },
+            width: if proto.width > 0.0 { proto.width as f32 } else { 1.0 },
             linecolor: color,
             _origin: origin,
             _x_axis: x_axis,

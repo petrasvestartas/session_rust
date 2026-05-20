@@ -64,7 +64,7 @@ pub struct BRepFace {
 pub struct BRep {
     guid: std::sync::OnceLock<String>,
     pub name: String,
-    pub width: f64,
+    pub width: f32,
     pub surfacecolor: Color,
     pub xform: Xform,
     pub m_surfaces: Vec<NurbsSurface>,
@@ -135,7 +135,7 @@ impl BRep {
     // Factory
     ///////////////////////////////////////////////////////////////////////////////////////////
 
-    pub fn create_box(sx: f64, sy: f64, sz: f64) -> Self {
+    pub fn create_box(sx: f32, sy: f32, sz: f32) -> Self {
         let mut brep = BRep::new();
         brep.name = "box".to_string();
         let hx = sx * 0.5;
@@ -238,7 +238,7 @@ impl BRep {
         brep
     }
 
-    pub fn create_cylinder(radius: f64, height: f64) -> Self {
+    pub fn create_cylinder(radius: f32, height: f32) -> Self {
         use crate::primitives::Primitives;
         let mut brep = BRep::new();
         brep.name = "cylinder".to_string();
@@ -296,7 +296,7 @@ impl BRep {
         let ci = brep.add_curve_2d(&c2d_sl) as i32;
         brep.add_trim(ci, ei_seam, li_body, true, BRepTrimType::Seam);
         // Circular 2D trim in UV space: circle at (0.5,0.5) radius 0.5
-        let cw = (2.0_f64).sqrt() / 2.0;
+        let cw = (2.0_f32).sqrt() / 2.0;
         let ccx = [1.0, 1.0, 0.0, -1.0, -1.0, -1.0, 0.0, 1.0, 1.0];
         let ccy = [0.0, 1.0, 1.0, 1.0, 0.0, -1.0, -1.0, -1.0, 0.0];
         let cwt = [1.0, cw, 1.0, cw, 1.0, cw, 1.0, cw, 1.0];
@@ -325,7 +325,7 @@ impl BRep {
         brep
     }
 
-    pub fn create_sphere(radius: f64) -> Self {
+    pub fn create_sphere(radius: f32) -> Self {
         use crate::primitives::Primitives;
         let mut brep = BRep::new();
         brep.name = "sphere".to_string();
@@ -373,7 +373,7 @@ impl BRep {
         brep
     }
 
-    pub fn create_block_with_hole(sx: f64, sy: f64, sz: f64, hole_radius: f64) -> Self {
+    pub fn create_block_with_hole(sx: f32, sy: f32, sz: f32, hole_radius: f32) -> Self {
         use crate::primitives::Primitives;
         let mut brep = BRep::new();
         brep.name = "block_with_hole".to_string();
@@ -478,12 +478,12 @@ impl BRep {
         ]);
         let ci = brep.add_curve_2d(&c2d) as i32;
         brep.add_trim(ci, ei_seam, li_cyl, true, BRepTrimType::Seam);
-        let cw = std::f64::consts::FRAC_1_SQRT_2;
+        let cw = std::f32::consts::FRAC_1_SQRT_2;
         let ccx = [1.0, 1.0, 0.0, -1.0, -1.0, -1.0, 0.0, 1.0, 1.0];
         let ccy = [0.0, 1.0, 1.0, 1.0, 0.0, -1.0, -1.0, -1.0, 0.0];
         let cwt = [1.0, cw, 1.0, cw, 1.0, cw, 1.0, cw, 1.0];
         let ckn = [0.0, 0.0, 1.0, 1.0, 2.0, 2.0, 3.0, 3.0, 4.0, 4.0];
-        let mut make_cap = |z: f64, reversed: bool, circle_edge_idx: i32| {
+        let mut make_cap = |z: f32, reversed: bool, circle_edge_idx: i32| {
             let r = hx.max(hy);
             let mut cap = NurbsSurface::create_raw(3, false, 2, 2, 2, 2, false, false, 1.0, 1.0).unwrap();
             cap.set_cv(0, 0, &Point::new(-r, -r, z)); cap.set_cv(1, 0, &Point::new(r, -r, z));
@@ -567,10 +567,10 @@ impl BRep {
             let xa = plane.x_axis();
             let ya = plane.y_axis();
 
-            let mut us: Vec<f64> = Vec::with_capacity(n);
-            let mut vs: Vec<f64> = Vec::with_capacity(n);
-            let mut umin = f64::MAX; let mut umax = f64::MIN;
-            let mut vmin = f64::MAX; let mut vmax = f64::MIN;
+            let mut us: Vec<f32> = Vec::with_capacity(n);
+            let mut vs: Vec<f32> = Vec::with_capacity(n);
+            let mut umin = f32::MAX; let mut umax = f32::MIN;
+            let mut vmin = f32::MAX; let mut vmax = f32::MIN;
             for i in 0..n {
                 let dx = brep.m_vertices[vi[i]][0] - org[0];
                 let dy = brep.m_vertices[vi[i]][1] - org[1];
@@ -585,7 +585,7 @@ impl BRep {
             umin -= pad; umax += pad; vmin -= pad; vmax += pad;
             let du = umax - umin; let dv = vmax - vmin;
 
-            let pt3d = |u: f64, v: f64| -> Point {
+            let pt3d = |u: f32, v: f32| -> Point {
                 Point::new(org[0]+u*xa[0]+v*ya[0], org[1]+u*xa[1]+v*ya[1], org[2]+u*xa[2]+v*ya[2])
             };
             let mut srf = NurbsSurface::create_raw(3, false, 2, 2, 2, 2, false, false, 1.0, 1.0).unwrap();
@@ -663,10 +663,10 @@ impl BRep {
             let xa = plane.x_axis();
             let ya = plane.y_axis();
 
-            let mut us: Vec<f64> = Vec::with_capacity(n);
-            let mut vs: Vec<f64> = Vec::with_capacity(n);
-            let mut umin = f64::MAX; let mut umax = f64::MIN;
-            let mut vmin = f64::MAX; let mut vmax = f64::MIN;
+            let mut us: Vec<f32> = Vec::with_capacity(n);
+            let mut vs: Vec<f32> = Vec::with_capacity(n);
+            let mut umin = f32::MAX; let mut umax = f32::MIN;
+            let mut vmin = f32::MAX; let mut vmax = f32::MIN;
             for i in 0..n {
                 let dx = pts[i][0] - org[0]; let dy = pts[i][1] - org[1]; let dz = pts[i][2] - org[2];
                 let u = dx*xa[0]+dy*xa[1]+dz*xa[2];
@@ -690,7 +690,7 @@ impl BRep {
             umin -= pad; umax += pad; vmin -= pad; vmax += pad;
             let du = umax - umin; let dv = vmax - vmin;
 
-            let pt3d = |u: f64, v: f64| -> Point {
+            let pt3d = |u: f32, v: f32| -> Point {
                 Point::new(org[0]+u*xa[0]+v*ya[0], org[1]+u*xa[1]+v*ya[1], org[2]+u*xa[2]+v*ya[2])
             };
             let mut srf = NurbsSurface::create_raw(3, false, 2, 2, 2, 2, false, false, 1.0, 1.0).unwrap();
@@ -701,7 +701,7 @@ impl BRep {
 
             // Helper: project curve CVs to UV space
             let project_curve_to_uv = |crv: &NurbsCurve, org: &Point, xa: &crate::Vector, ya: &crate::Vector,
-                                        umin: f64, vmin: f64, du: f64, dv: f64| -> NurbsCurve {
+                                        umin: f32, vmin: f32, du: f32, dv: f32| -> NurbsCurve {
                 let mut crv2d = NurbsCurve::new(3, crv.is_rational(), crv.order() as usize, crv.cv_count());
                 crv2d.m_nurbsknot = crv.m_nurbsknot.clone();
                 for i in 0..crv.cv_count() {
@@ -908,8 +908,8 @@ impl BRep {
             if direct && !outer_pts.is_empty() {
                 if let (Some((u0, u1)), Some((v0, v1))) = (srf.domain(0), srf.domain(1)) {
                     let tol = (u1 - u0).max(v1 - v0) * 0.01;
-                    let mut bb_umin = f64::INFINITY; let mut bb_umax = f64::NEG_INFINITY;
-                    let mut bb_vmin = f64::INFINITY; let mut bb_vmax = f64::NEG_INFINITY;
+                    let mut bb_umin = f32::INFINITY; let mut bb_umax = f32::NEG_INFINITY;
+                    let mut bb_vmin = f32::INFINITY; let mut bb_vmax = f32::NEG_INFINITY;
                     for p in &outer_pts {
                         if p[0] < bb_umin { bb_umin = p[0]; }
                         if p[0] > bb_umax { bb_umax = p[0]; }
@@ -1002,14 +1002,14 @@ impl BRep {
     // Evaluation
     ///////////////////////////////////////////////////////////////////////////////////////////
 
-    pub fn point_at(&self, face_idx: usize, u: f64, v: f64) -> Point {
+    pub fn point_at(&self, face_idx: usize, u: f32, v: f32) -> Point {
         if face_idx >= self.m_faces.len() { return Point::new(0.0, 0.0, 0.0); }
         let si = self.m_faces[face_idx].surface_index;
         if si < 0 || si as usize >= self.m_surfaces.len() { return Point::new(0.0, 0.0, 0.0); }
         self.m_surfaces[si as usize].point_at(u, v).unwrap_or(Point::new(0.0, 0.0, 0.0))
     }
 
-    pub fn normal_at(&self, face_idx: usize, u: f64, v: f64) -> Vector {
+    pub fn normal_at(&self, face_idx: usize, u: f32, v: f32) -> Vector {
         if face_idx >= self.m_faces.len() { return Vector::new(0.0, 0.0, 0.0); }
         let si = self.m_faces[face_idx].surface_index;
         if si < 0 || si as usize >= self.m_surfaces.len() { return Vector::new(0.0, 0.0, 0.0); }
@@ -1082,7 +1082,7 @@ impl BRep {
             .map(|s| crate::proto::NurbsSurface::decode(s.pb_dumps().as_slice()).unwrap())
             .collect();
         let vertices: Vec<crate::proto::Point> = self.m_vertices.iter()
-            .map(|v| crate::proto::Point { guid: String::new(), name: String::new(), x: v[0], y: v[1], z: v[2], width: 0.0,
+            .map(|v| crate::proto::Point { guid: String::new(), name: String::new(), x: v[0] as f64, y: v[1] as f64, z: v[2] as f64, width: 0.0,
                 pointcolor: None, xform: None })
             .collect();
         let topology_vertices: Vec<crate::proto::BRepVertex> = self.m_topology_vertices.iter()
@@ -1130,7 +1130,7 @@ impl BRep {
             trims,
             loops,
             faces,
-            width: self.width,
+            width: self.width as f64,
             surfacecolor: Some(crate::proto::Color {
                 guid: self.surfacecolor.guid().to_string(),
                 name: self.surfacecolor.name.clone(),
@@ -1142,7 +1142,7 @@ impl BRep {
             xform: Some(crate::proto::Xform {
                 guid: self.xform.guid().to_string(),
                 name: self.xform.name.clone(),
-                matrix: self.xform.m.to_vec(),
+                matrix: self.xform.m.iter().map(|&v| v as f64).collect(),
             }),
         };
         proto.encode_to_vec()
@@ -1154,7 +1154,7 @@ impl BRep {
         let mut b = BRep::new();
         b.set_guid(proto.guid.clone());
         b.name = proto.name;
-        b.width = proto.width;
+        b.width = proto.width as f32;
 
         for c in &proto.curves_2d {
             b.m_curves_2d.push(NurbsCurve::pb_loads(&c.encode_to_vec())?);
@@ -1166,7 +1166,7 @@ impl BRep {
             b.m_surfaces.push(NurbsSurface::pb_loads(&s.encode_to_vec())?);
         }
         for v in &proto.vertices {
-            b.m_vertices.push(Point::new(v.x, v.y, v.z));
+            b.m_vertices.push(Point::new(v.x as f32, v.y as f32, v.z as f32));
         }
         for tv in &proto.topology_vertices {
             b.m_topology_vertices.push(BRepVertex {
@@ -1224,7 +1224,7 @@ impl BRep {
             b.xform.set_guid(xform.guid.clone());
             b.xform.name = xform.name;
             for (i, val) in xform.matrix.iter().enumerate() {
-                if i < 16 { b.xform.m[i] = *val; }
+                if i < 16 { b.xform.m[i] = *val as f32; }
             }
         }
 
@@ -1305,7 +1305,7 @@ impl Serialize for BRep {
         map.serialize_entry("trims", &trims_json)?;
         map.serialize_entry("type", "BRep")?;
         // vertices as [x, y, z] arrays
-        let verts: Vec<[f64; 3]> = self.m_vertices.iter().map(|v| [v[0], v[1], v[2]]).collect();
+        let verts: Vec<[f32; 3]> = self.m_vertices.iter().map(|v| [v[0], v[1], v[2]]).collect();
         map.serialize_entry("vertices", &verts)?;
         map.serialize_entry("width", &self.width)?;
         map.serialize_entry("xform", &self.xform)?;
@@ -1365,7 +1365,7 @@ impl<'de> Deserialize<'de> for BRep {
             #[serde(default)]
             name: Option<String>,
             #[serde(default)]
-            width: Option<f64>,
+            width: Option<f32>,
             #[serde(default)]
             surfacecolor: Option<Color>,
             #[serde(default)]
@@ -1377,7 +1377,7 @@ impl<'de> Deserialize<'de> for BRep {
             #[serde(default)]
             surfaces: Option<Vec<NurbsSurface>>,
             #[serde(default)]
-            vertices: Option<Vec<[f64; 3]>>,
+            vertices: Option<Vec<[f32; 3]>>,
             #[serde(default)]
             topology_vertices: Option<Vec<TopologyVertexData>>,
             #[serde(default)]

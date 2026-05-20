@@ -274,7 +274,7 @@ pub fn run_matrix_norms() -> TestResult {
         let n1 = a.norm_1();
         let ni = a.norm_inf();
 
-        MINI_CHECK!(TOLERANCE.is_close(nf, 30.0f64.sqrt()));
+        MINI_CHECK!(TOLERANCE.is_close(nf, 30.0f32.sqrt()));
         MINI_CHECK!(TOLERANCE.is_close(n1, 6.0));
         MINI_CHECK!(TOLERANCE.is_close(ni, 7.0));
     })

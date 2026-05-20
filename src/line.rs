@@ -10,18 +10,18 @@ pub struct Line {
     guid: std::sync::OnceLock<String>,
     pub name: String,
     #[serde(rename = "x0")]
-    _x0: f64,
+    _x0: f32,
     #[serde(rename = "y0")]
-    _y0: f64,
+    _y0: f32,
     #[serde(rename = "z0")]
-    _z0: f64,
+    _z0: f32,
     #[serde(rename = "x1")]
-    _x1: f64,
+    _x1: f32,
     #[serde(rename = "y1")]
-    _y1: f64,
+    _y1: f32,
     #[serde(rename = "z1")]
-    _z1: f64,
-    pub width: f64,
+    _z1: f32,
+    pub width: f32,
     pub linecolor: Color,
     #[serde(default = "Xform::identity")]
     pub xform: Xform,
@@ -46,7 +46,7 @@ impl Default for Line {
 }
 
 impl Line {
-    pub fn new(x0: f64, y0: f64, z0: f64, x1: f64, y1: f64, z1: f64) -> Self {
+    pub fn new(x0: f32, y0: f32, z0: f32, x1: f32, y1: f32, z1: f32) -> Self {
         Self {
             _x0: x0,
             _y0: y0,
@@ -58,7 +58,7 @@ impl Line {
         }
     }
 
-    pub fn with_name(name: &str, x0: f64, y0: f64, z0: f64, x1: f64, y1: f64, z1: f64) -> Self {
+    pub fn with_name(name: &str, x0: f32, y0: f32, z0: f32, x1: f32, y1: f32, z1: f32) -> Self {
         Self {
             name: name.to_string(),
             _x0: x0,
@@ -86,12 +86,12 @@ impl Line {
     ///
     /// # Panics
     /// Panics if fewer than 2 points are provided.
-    pub fn fit_points(points: &[Point], length: Option<f64>) -> Self {
+    pub fn fit_points(points: &[Point], length: Option<f32>) -> Self {
         if points.len() < 2 {
             panic!("At least 2 points are required for line fitting");
         }
 
-        let n = points.len() as f64;
+        let n = points.len() as f32;
 
         // Compute centroid
         let (mut cx, mut cy, mut cz) = (0.0, 0.0, 0.0);
@@ -138,7 +138,7 @@ impl Line {
         let half_len = match length {
             Some(len) => len / 2.0,
             None => {
-                let (mut t_min, mut t_max): (f64, f64) = (0.0, 0.0);
+                let (mut t_min, mut t_max): (f32, f32) = (0.0, 0.0);
                 for p in points {
                     let dx = p[0] - cx;
                     let dy = p[1] - cy;
@@ -166,7 +166,7 @@ impl Line {
         )
     }
 
-    pub fn from_point_direction_length(point: &Point, direction: &Vector, length: f64) -> Self {
+    pub fn from_point_direction_length(point: &Point, direction: &Vector, length: f32) -> Self {
         let d = direction.normalized();
         Self::new(
             point[0], point[1], point[2],
@@ -213,14 +213,14 @@ impl Line {
         result
     }
 
-    pub fn length(&self) -> f64 {
+    pub fn length(&self) -> f32 {
         let dx = self._x1 - self._x0;
         let dy = self._y1 - self._y0;
         let dz = self._z1 - self._z0;
         (dx * dx + dy * dy + dz * dz).sqrt()
     }
 
-    pub fn squared_length(&self) -> f64 {
+    pub fn squared_length(&self) -> f32 {
         let dx = self._x1 - self._x0;
         let dy = self._y1 - self._y0;
         let dz = self._z1 - self._z0;
@@ -239,7 +239,7 @@ impl Line {
         self.to_vector().normalized()
     }
 
-    pub fn point_at(&self, t: f64) -> Point {
+    pub fn point_at(&self, t: f32) -> Point {
         let s = 1.0 - t;
         Point::new(
             s * self._x0 + t * self._x1,
@@ -252,7 +252,7 @@ impl Line {
     /// Negative `distance` shortens the line; if the requested shortening
     /// would collapse the line to zero length, the line is left unchanged.
     /// Mirrors the wood-library helper `cgal::polyline_util::extend_equally`.
-    pub fn extend_equally(&mut self, distance: f64) {
+    pub fn extend_equally(&mut self, distance: f32) {
         let len = self.length();
         if len < crate::tolerance::Tolerance::ZERO_TOLERANCE {
             return;
@@ -280,14 +280,14 @@ impl Line {
         }
         let mut points = Vec::with_capacity(n);
         for i in 0..n {
-            let t = i as f64 / (n - 1) as f64;
+            let t = i as f32 / (n - 1) as f32;
             points.push(self.point_at(t));
         }
         points
     }
 
     /// Subdivide line by approximate distance between points.
-    pub fn subdivide_by_distance(&self, distance: f64) -> Vec<Point> {
+    pub fn subdivide_by_distance(&self, distance: f32) -> Vec<Point> {
         if distance <= 0.0 {
             panic!("distance must be positive");
         }
@@ -315,7 +315,7 @@ impl Line {
         )
     }
 
-    pub fn closest_point(&self, point: &Point, limited: bool) -> (f64, Point) {
+    pub fn closest_point(&self, point: &Point, limited: bool) -> (f32, Point) {
         let dx = self._x1 - self._x0;
         let dy = self._y1 - self._y0;
         let dz = self._z1 - self._z0;
@@ -388,9 +388,9 @@ impl Line {
         use prost::Message;
         let proto = crate::proto::Line {
             start: Some(crate::proto::Point {
-                x: self._x0,
-                y: self._y0,
-                z: self._z0,
+                x: self._x0 as f64,
+                y: self._y0 as f64,
+                z: self._z0 as f64,
                 guid: String::new(),
                 name: String::new(),
                 width: 1.0,
@@ -398,9 +398,9 @@ impl Line {
                 xform: None,
             }),
             end: Some(crate::proto::Point {
-                x: self._x1,
-                y: self._y1,
-                z: self._z1,
+                x: self._x1 as f64,
+                y: self._y1 as f64,
+                z: self._z1 as f64,
                 guid: String::new(),
                 name: String::new(),
                 width: 1.0,
@@ -420,7 +420,7 @@ impl Line {
         let proto = crate::proto::Line::decode(data)?;
         let start = proto.start.unwrap_or_default();
         let end = proto.end.unwrap_or_default();
-        let mut line = Self::new(start.x, start.y, start.z, end.x, end.y, end.z);
+        let mut line = Self::new(start.x as f32, start.y as f32, start.z as f32, end.x as f32, end.y as f32, end.z as f32);
         line.set_guid(proto.guid);
         line.name = proto.name;
         Ok(line)
@@ -501,7 +501,7 @@ impl Line {
 
     /// Extend this line in place by `ext_start` at the start end and
     /// `ext_end` at the end.
-    pub fn extend(&mut self, ext_start: f64, ext_end: f64) {
+    pub fn extend(&mut self, ext_start: f32, ext_end: f32) {
         let s = self.start();
         let e = self.end();
         let mut v = e.clone() - s.clone();
@@ -515,7 +515,7 @@ impl Line {
 }
 
 impl Index<usize> for Line {
-    type Output = f64;
+    type Output = f32;
 
     fn index(&self, index: usize) -> &Self::Output {
         match index {
@@ -566,8 +566,8 @@ impl SubAssign<&Vector> for Line {
     }
 }
 
-impl MulAssign<f64> for Line {
-    fn mul_assign(&mut self, factor: f64) {
+impl MulAssign<f32> for Line {
+    fn mul_assign(&mut self, factor: f32) {
         self._x0 *= factor;
         self._y0 *= factor;
         self._z0 *= factor;
@@ -577,8 +577,8 @@ impl MulAssign<f64> for Line {
     }
 }
 
-impl DivAssign<f64> for Line {
-    fn div_assign(&mut self, factor: f64) {
+impl DivAssign<f32> for Line {
+    fn div_assign(&mut self, factor: f32) {
         self._x0 /= factor;
         self._y0 /= factor;
         self._z0 /= factor;
@@ -608,20 +608,20 @@ impl Sub<&Vector> for Line {
     }
 }
 
-impl Mul<f64> for Line {
+impl Mul<f32> for Line {
     type Output = Line;
 
-    fn mul(self, factor: f64) -> Line {
+    fn mul(self, factor: f32) -> Line {
         let mut result = self;
         result *= factor;
         result
     }
 }
 
-impl Div<f64> for Line {
+impl Div<f32> for Line {
     type Output = Line;
 
-    fn div(self, factor: f64) -> Line {
+    fn div(self, factor: f32) -> Line {
         let mut result = self;
         result /= factor;
         result
@@ -652,18 +652,18 @@ impl Sub<&Vector> for &Line {
     }
 }
 
-impl Mul<f64> for &Line {
+impl Mul<f32> for &Line {
     type Output = Line;
 
-    fn mul(self, factor: f64) -> Line {
+    fn mul(self, factor: f32) -> Line {
         self.clone() * factor
     }
 }
 
-impl Div<f64> for &Line {
+impl Div<f32> for &Line {
     type Output = Line;
 
-    fn div(self, factor: f64) -> Line {
+    fn div(self, factor: f32) -> Line {
         self.clone() / factor
     }
 }

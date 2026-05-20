@@ -18,7 +18,7 @@ pub struct CheckRecord {
 pub struct TestResult {
     pub test_name: &'static str,
     pub passed: bool,
-    pub time_ms: f64,
+    pub time_ms: f32,
     pub line: u32,
     pub file: &'static str,
     pub code: String,
@@ -28,7 +28,7 @@ pub struct TestResult {
 
 std::thread_local! {
     static CURRENT_CHECKS: RefCell<Vec<CheckRecord>> = RefCell::new(Vec::new());
-    static CURRENT_ASSERTION_TIME: RefCell<f64> = RefCell::new(0.0);
+    static CURRENT_ASSERTION_TIME: RefCell<f32> = RefCell::new(0.0);
 }
 
 pub fn start_checks() {
@@ -40,11 +40,11 @@ pub fn push_check(line: u32, code_line: &'static str, passed: bool, start: std::
     CURRENT_CHECKS.with(|c| {
         c.borrow_mut().push(CheckRecord { line, code_line, passed });
     });
-    let elapsed = start.elapsed().as_secs_f64() * 1000.0;
+    let elapsed = start.elapsed().as_secs_f32() * 1000.0;
     CURRENT_ASSERTION_TIME.with(|t| *t.borrow_mut() += elapsed);
 }
 
-pub fn take_assertion_time() -> f64 {
+pub fn take_assertion_time() -> f32 {
     CURRENT_ASSERTION_TIME.with(|t| {
         let v = *t.borrow();
         *t.borrow_mut() = 0.0;
@@ -254,7 +254,7 @@ macro_rules! MINI_TEST {
             failures.push(serde_json::json!({ "error": msg }));
         }
 
-        let elapsed_ms = start.elapsed().as_secs_f64() * 1000.0;
+        let elapsed_ms = start.elapsed().as_secs_f32() * 1000.0;
         let assertion_time = $crate::mini_test::take_assertion_time();
         let effective_ms = (elapsed_ms - assertion_time).max(0.0);
         let time_ms = (effective_ms * 1000.0).round() / 1000.0;
@@ -287,7 +287,7 @@ macro_rules! MINI_TEST {
             failures.push(serde_json::json!({ "error": msg }));
         }
 
-        let elapsed_ms = start.elapsed().as_secs_f64() * 1000.0;
+        let elapsed_ms = start.elapsed().as_secs_f32() * 1000.0;
         let time_ms = (elapsed_ms * 1000.0).round() / 1000.0;
         // Note: backwards-compatible form doesn't subtract assertion time
         let code = $crate::mini_test::extract_timed_body(file!(), line, &checks);
