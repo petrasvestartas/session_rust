@@ -68,30 +68,32 @@ pub fn run_tolerance_key() -> TestResult {
 pub fn run_tolerance_runtime_modification() -> TestResult {
     MINI_TEST!("Runtime Modification", {
         use crate::tolerance::TOLERANCE;
-        // Get current default values
+        // Defend against test pollution: other tests may have set_absolute'd
+        // without restoring (e.g. primitives_test when an assertion fires early).
+        TOLERANCE.reset();
         let original_absolute = TOLERANCE.absolute();
         let original_relative = TOLERANCE.relative();
 
-        MINI_CHECK!(original_absolute == 1e-9);
-        MINI_CHECK!(original_relative == 1e-6);
+        MINI_CHECK!(original_absolute == 1e-5);
+        MINI_CHECK!(original_relative == 1e-5);
 
         // Modify tolerance values at runtime
-        TOLERANCE.set_absolute(1e-12);
-        TOLERANCE.set_relative(1e-12);
-        MINI_CHECK!(TOLERANCE.absolute() == 1e-12);
-        MINI_CHECK!(TOLERANCE.relative() == 1e-12);
+        TOLERANCE.set_absolute(1e-7);
+        TOLERANCE.set_relative(1e-7);
+        MINI_CHECK!(TOLERANCE.absolute() == 1e-7);
+        MINI_CHECK!(TOLERANCE.relative() == 1e-7);
 
-        // Test with new tolerance - 1e-11 difference now fails is_close
-        let close_with_tight = TOLERANCE.is_close(1.0, 1.0 + 1e-11);
+        // Test with new tolerance - 1e-6 difference now fails is_close
+        let close_with_tight = TOLERANCE.is_close(1.0, 1.0 + 1e-6);
         MINI_CHECK!(!close_with_tight);
 
         // Reset to defaults
         TOLERANCE.reset();
-        MINI_CHECK!(TOLERANCE.absolute() == 1e-9);
-        MINI_CHECK!(TOLERANCE.relative() == 1e-6);
+        MINI_CHECK!(TOLERANCE.absolute() == 1e-5);
+        MINI_CHECK!(TOLERANCE.relative() == 1e-5);
 
         // Same test now passes with default tolerance
-        let close_with_default = TOLERANCE.is_close(1.0, 1.0 + 1e-11);
+        let close_with_default = TOLERANCE.is_close(1.0, 1.0 + 1e-6);
         MINI_CHECK!(close_with_default);
     })
 }
@@ -267,10 +269,12 @@ pub fn run_tolerance_round_to() -> TestResult {
 pub fn run_tolerance_precision_from_tolerance() -> TestResult {
     MINI_TEST!("Precision From Tolerance", {
         use crate::tolerance::TOLERANCE;
-        // Default absolute tolerance is 1e-9 -> precision should be 9
+        // Defend against test pollution.
+        TOLERANCE.reset();
+        // Default absolute tolerance is 1e-5 -> precision should be 5
         let prec = TOLERANCE.precision_from_tolerance(None);
 
-        MINI_CHECK!(prec == 9);
+        MINI_CHECK!(prec == 5);
     })
 }
 
@@ -297,8 +301,8 @@ pub fn run_tolerance_compare() -> TestResult {
 
 pub fn run_tolerance_is_finite() -> TestResult {
     MINI_TEST!("Is Finite", {
-        let r0 = 1.0_f64.is_finite();
-        let r1 = f64::INFINITY.is_finite();
+        let r0 = 1.0_f32.is_finite();
+        let r1 = f32::INFINITY.is_finite();
 
         MINI_CHECK!(r0);
         MINI_CHECK!(!r1);

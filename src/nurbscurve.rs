@@ -16,7 +16,7 @@ use serde::ser::SerializeMap;
 pub struct NurbsCurve {
     guid: std::sync::OnceLock<String>,
     pub name: String,
-    pub width: f64,
+    pub width: f32,
     pub pointcolors: Vec<Color>,
     pub linecolors: Vec<Color>,
     pub xform: Xform,
@@ -25,8 +25,8 @@ pub struct NurbsCurve {
     pub m_order: usize,
     pub m_cv_count: usize,
     pub m_cv_stride: usize,
-    pub m_nurbsknot: Vec<f64>,
-    pub m_cv: Vec<f64>,
+    pub m_nurbsknot: Vec<f32>,
+    pub m_cv: Vec<f32>,
 }
 
 impl PartialEq for NurbsCurve {
@@ -47,7 +47,7 @@ impl Serialize for NurbsCurve {
         S: Serializer,
     {
         let mut map = serializer.serialize_map(Some(14))?;
-        let control_points: Vec<Vec<f64>> = (0..self.m_cv_count)
+        let control_points: Vec<Vec<f32>> = (0..self.m_cv_count)
             .map(|i| {
                 if let Some(p) = self.get_cv(i) {
                     vec![p[0], p[1], p[2]]
@@ -86,14 +86,14 @@ impl<'de> Deserialize<'de> for NurbsCurve {
     {
         #[derive(Deserialize)]
         struct NurbsCurveData {
-            control_points: Vec<Vec<f64>>,
+            control_points: Vec<Vec<f32>>,
             cv_count: usize,
             #[serde(default)]
             cv_stride: Option<usize>,
             dimension: usize,
             guid: String,
             is_rational: bool,
-            nurbsknots: Vec<f64>,
+            nurbsknots: Vec<f32>,
             #[serde(default)]
             pointcolors: Vec<u8>,
             #[serde(default)]
@@ -101,7 +101,7 @@ impl<'de> Deserialize<'de> for NurbsCurve {
             name: String,
             order: usize,
             #[serde(default)]
-            width: Option<f64>,
+            width: Option<f32>,
             #[serde(default)]
             xform: Option<Xform>,
         }
@@ -195,7 +195,7 @@ impl NurbsCurve {
 
         if periodic && n < 3 { return NurbsCurve::new(3, false, 4, 0); }
 
-        let pdist = |a: &Point, b: &Point| -> f64 {
+        let pdist = |a: &Point, b: &Point| -> f32 {
             let dx = a[0]-b[0]; let dy = a[1]-b[1]; let dz = a[2]-b[2];
             (dx*dx + dy*dy + dz*dz).sqrt()
         };
@@ -212,7 +212,7 @@ impl NurbsCurve {
 
             let mut params = vec![0.0; n + 1];
             if matches!(base_style, nurbsknot::CurveNurbsKnotStyle::Uniform) {
-                for i in 1..=n { params[i] = i as f64; }
+                for i in 1..=n { params[i] = i as f32; }
             } else {
                 for i in 1..n {
                     let mut d = pdist(&points[i-1], &points[i]);
@@ -224,8 +224,8 @@ impl NurbsCurve {
                 params[n] = params[n-1] + d_close;
             }
 
-            let mut dmin = 1e300_f64;
-            let mut dmax = 0.0_f64;
+            let mut dmin = f32::INFINITY;
+            let mut dmax = 0.0_f32;
             for i in 0..n {
                 let d = params[i+1] - params[i];
                 if d < dmin { dmin = d; }
@@ -408,7 +408,7 @@ impl NurbsCurve {
         let dim = 3;
         let order = degree + 1;
 
-        let pdist = |a: &Point, b: &Point| -> f64 {
+        let pdist = |a: &Point, b: &Point| -> f32 {
             let dx = a[0]-b[0]; let dy = a[1]-b[1]; let dz = a[2]-b[2];
             (dx*dx + dy*dy + dz*dz).sqrt()
         };
@@ -566,7 +566,7 @@ impl NurbsCurve {
         dimension: usize,
         order: usize,
         points: &[Point],
-        nurbsknot_delta: f64,
+        nurbsknot_delta: f32,
     ) -> Self {
         let point_count = points.len();
         
@@ -617,7 +617,7 @@ impl NurbsCurve {
         dimension: usize,
         order: usize,
         points: &[Point],
-        nurbsknot_delta: f64,
+        nurbsknot_delta: f32,
     ) -> Self {
         let point_count = points.len();
 
@@ -646,7 +646,7 @@ impl NurbsCurve {
         // Create uniform nurbsknot vector
         let nurbsknot_count = order + cv_count - 2;
         for i in 0..nurbsknot_count {
-            curve.m_nurbsknot[i] = i as f64 * nurbsknot_delta;
+            curve.m_nurbsknot[i] = i as f32 * nurbsknot_delta;
         }
 
         curve
@@ -810,7 +810,7 @@ impl NurbsCurve {
 
 
     /// Check if curve is a straight line within tolerance
-    pub fn is_linear(&self, tolerance: Option<f64>) -> bool {
+    pub fn is_linear(&self, tolerance: Option<f32>) -> bool {
         let tol = tolerance.unwrap_or(Tolerance::ZERO_TOLERANCE);
 
         if !self.is_valid() || self.m_cv_count < 2 {
@@ -849,7 +849,7 @@ impl NurbsCurve {
 
 
     /// Check if curve is planar (all CVs lie in a single plane)
-    pub fn is_planar(&self, tolerance: Option<f64>) -> bool {
+    pub fn is_planar(&self, tolerance: Option<f32>) -> bool {
         let tol = tolerance.unwrap_or(Tolerance::ZERO_TOLERANCE);
         if !self.is_valid() || self.m_cv_count < 3 {
             return true;
@@ -878,13 +878,13 @@ impl NurbsCurve {
 
 
     /// Check if curve is an arc (matches C++ is_arc stub)
-    pub fn is_arc(&self, _tolerance: Option<f64>) -> bool {
+    pub fn is_arc(&self, _tolerance: Option<f32>) -> bool {
         false
     }
 
 
     /// Check if curve lies entirely in a given plane
-    pub fn is_in_plane(&self, plane: &Plane, tolerance: Option<f64>) -> bool {
+    pub fn is_in_plane(&self, plane: &Plane, tolerance: Option<f32>) -> bool {
         let tol = tolerance.unwrap_or(Tolerance::ZERO_TOLERANCE);
         if !self.is_valid() {
             return false;
@@ -905,7 +905,7 @@ impl NurbsCurve {
 
 
     /// Check if curve has "natural" end conditions (zero 2nd derivative at endpoints)
-    pub fn is_natural(&self, _tolerance: Option<f64>) -> bool {
+    pub fn is_natural(&self, _tolerance: Option<f32>) -> bool {
         if !self.is_valid() {
             return false;
         }
@@ -949,7 +949,7 @@ impl NurbsCurve {
 
 
     /// Check if curve is a polyline (all CVs connected by straight segments)
-    pub fn is_polyline(&self, _tolerance: Option<f64>) -> bool {
+    pub fn is_polyline(&self, _tolerance: Option<f32>) -> bool {
         if !self.is_valid() {
             return false;
         }
@@ -993,7 +993,7 @@ impl NurbsCurve {
         true
     }
 
-    pub fn is_continuous(&self, continuity_type: i32, t: f64) -> bool {
+    pub fn is_continuous(&self, continuity_type: i32, t: f32) -> bool {
         if !self.is_valid() { return false; }
         let (d0, d1) = self.domain();
         if t < d0 || t > d1 { return false; }
@@ -1108,25 +1108,25 @@ impl NurbsCurve {
 
 
     /// Get all nurbsknot values
-    pub fn get_nurbsknots(&self) -> Vec<f64> {
+    pub fn get_nurbsknots(&self) -> Vec<f32> {
         self.m_nurbsknot.clone()
     }
 
 
     /// Get nurbsknot array pointer (for compatibility)
-    pub fn nurbsknot_array(&self) -> &[f64] {
+    pub fn nurbsknot_array(&self) -> &[f32] {
         &self.m_nurbsknot
     }
 
 
     /// Get CV array pointer (for compatibility)
-    pub fn cv_array(&self) -> &[f64] {
+    pub fn cv_array(&self) -> &[f32] {
         &self.m_cv
     }
 
 
     /// Get CV array mutable pointer (for expert use)
-    pub fn cv_array_mut(&mut self) -> &mut [f64] {
+    pub fn cv_array_mut(&mut self) -> &mut [f32] {
         &mut self.m_cv
     }
 
@@ -1186,7 +1186,7 @@ impl NurbsCurve {
 
 
     /// Get raw CV data at index (like C++ double* cv(int))
-    pub fn cv(&self, cv_index: usize) -> Option<&[f64]> {
+    pub fn cv(&self, cv_index: usize) -> Option<&[f32]> {
         if cv_index >= self.m_cv_count {
             return None;
         }
@@ -1196,7 +1196,7 @@ impl NurbsCurve {
 
 
     /// Get control point at index as homogeneous point (x, y, z, w)
-    pub fn get_cv_4d(&self, cv_index: usize) -> Option<(f64, f64, f64, f64)> {
+    pub fn get_cv_4d(&self, cv_index: usize) -> Option<(f32, f32, f32, f32)> {
         if cv_index >= self.m_cv_count {
             return None;
         }
@@ -1210,7 +1210,7 @@ impl NurbsCurve {
 
 
     /// Set control point at index from homogeneous coordinates
-    pub fn set_cv_4d(&mut self, cv_index: usize, x: f64, y: f64, z: f64, w: f64) -> bool {
+    pub fn set_cv_4d(&mut self, cv_index: usize, x: f32, y: f32, z: f32, w: f32) -> bool {
         if cv_index >= self.m_cv_count {
             return false;
         }
@@ -1230,7 +1230,7 @@ impl NurbsCurve {
 
 
     /// Get weight at control vertex index (returns 1.0 if non-rational)
-    pub fn weight(&self, cv_index: usize) -> f64 {
+    pub fn weight(&self, cv_index: usize) -> f32 {
         if !self.m_is_rat || cv_index >= self.m_cv_count {
             return 1.0;
         }
@@ -1240,7 +1240,7 @@ impl NurbsCurve {
 
 
     /// Set weight at control vertex index
-    pub fn set_weight(&mut self, cv_index: usize, weight: f64) -> bool {
+    pub fn set_weight(&mut self, cv_index: usize, weight: f32) -> bool {
         if cv_index >= self.m_cv_count {
             return false;
         }
@@ -1260,7 +1260,7 @@ impl NurbsCurve {
 
 
     /// Get nurbsknot value at index
-    pub fn nurbsknot(&self, nurbsknot_index: usize) -> Option<f64> {
+    pub fn nurbsknot(&self, nurbsknot_index: usize) -> Option<f32> {
         if nurbsknot_index >= self.m_nurbsknot.len() {
             return None;
         }
@@ -1269,7 +1269,7 @@ impl NurbsCurve {
 
 
     /// Set nurbsknot value at index
-    pub fn set_nurbsknot(&mut self, nurbsknot_index: usize, nurbsknot_value: f64) -> bool {
+    pub fn set_nurbsknot(&mut self, nurbsknot_index: usize, nurbsknot_value: f32) -> bool {
         if nurbsknot_index >= self.m_nurbsknot.len() {
             return false;
         }
@@ -1306,7 +1306,7 @@ impl NurbsCurve {
 
 
     /// Get superfluous nurbsknot value at end (0=start, 1=end)
-    pub fn superfluous_nurbsknot(&self, end: usize) -> f64 {
+    pub fn superfluous_nurbsknot(&self, end: usize) -> f32 {
         if !self.is_valid() {
             return 0.0;
         }
@@ -1322,7 +1322,7 @@ impl NurbsCurve {
 
 
     /// Create a clamped uniform nurbsknot vector for this curve
-    pub fn make_clamped_uniform_nurbsknot_vector(&mut self, delta: f64) -> bool {
+    pub fn make_clamped_uniform_nurbsknot_vector(&mut self, delta: f32) -> bool {
         if delta <= 0.0 || self.m_dim == 0 || self.m_order < 2 || self.m_cv_count < self.m_order {
             return false;
         }
@@ -1332,7 +1332,7 @@ impl NurbsCurve {
 
 
     /// Insert nurbsknot into curve (Boehm's algorithm)
-    pub fn insert_nurbsknot(&mut self, nurbsknot_value: f64, nurbsknot_multiplicity: usize) -> bool {
+    pub fn insert_nurbsknot(&mut self, nurbsknot_value: f32, nurbsknot_multiplicity: usize) -> bool {
         if !self.is_valid() {
             return false;
         }
@@ -1364,7 +1364,7 @@ impl NurbsCurve {
 
         for _insert_iter in 0..nurbsknot_multiplicity {
             // Build full nurbsknot vector
-            let mut u = vec![0.0f64; full_nurbsknot_count];
+            let mut u = vec![0.0f32; full_nurbsknot_count];
             u[0] = self.m_nurbsknot[0];
             for i in 0..self.m_nurbsknot.len() {
                 u[i + 1] = self.m_nurbsknot[i];
@@ -1372,7 +1372,7 @@ impl NurbsCurve {
             u[full_nurbsknot_count - 1] = *self.m_nurbsknot.last().unwrap();
 
             // Count current multiplicity
-            let tol = (d0.abs() + d1.abs() + (d1 - d0).abs()) * f64::EPSILON.sqrt();
+            let tol = (d0.abs() + d1.abs() + (d1 - d0).abs()) * f32::EPSILON.sqrt();
             let mult = u.iter().filter(|&&v| (v - nurbsknot_value).abs() <= tol).count();
             if mult >= p {
                 return false;
@@ -1386,8 +1386,8 @@ impl NurbsCurve {
             let new_full_nurbsknot_count = full_nurbsknot_count + 1;
             let new_cv_count = self.m_cv_count + 1;
 
-            let mut u_new = vec![0.0f64; new_full_nurbsknot_count];
-            let mut cv_new = vec![0.0f64; new_cv_count * self.m_cv_stride];
+            let mut u_new = vec![0.0f32; new_full_nurbsknot_count];
+            let mut cv_new = vec![0.0f32; new_cv_count * self.m_cv_stride];
 
             // Copy unaffected nurbsknots
             for i in 0..=k {
@@ -1442,7 +1442,7 @@ impl NurbsCurve {
 
 
     /// Get Greville abcissa for a control point (aligned with opennurbs)
-    pub fn greville_abcissa(&self, cv_index: usize) -> f64 {
+    pub fn greville_abcissa(&self, cv_index: usize) -> f32 {
         if cv_index >= self.m_cv_count {
             return 0.0;
         }
@@ -1458,15 +1458,15 @@ impl NurbsCurve {
         let k0 = nurbsknot[0];
         let k = nurbsknot[p / 2];
         let k1 = nurbsknot[p - 1];
-        let tol = (k1 - k0) * 1.490116119385e-8_f64;
-        let dp = p as f64;
+        let tol = (k1 - k0) * 1.490116119385e-8_f32;
+        let dp = p as f32;
 
-        let mut g: f64 = nurbsknot[..p].iter().sum();
+        let mut g: f32 = nurbsknot[..p].iter().sum();
         g /= dp;
 
         // Snap to exact middle nurbsknot for uniform nurbsknot vectors
         if (2.0 * k - (k0 + k1)).abs() <= tol
-            && (g - k).abs() <= (g.abs() * 1.490116119385e-8_f64 + tol)
+            && (g - k).abs() <= (g.abs() * 1.490116119385e-8_f32 + tol)
         {
             g = k;
         }
@@ -1476,7 +1476,7 @@ impl NurbsCurve {
 
 
     /// Get all Greville abcissae
-    pub fn get_greville_abcissae(&self) -> Vec<f64> {
+    pub fn get_greville_abcissae(&self) -> Vec<f32> {
         (0..self.m_cv_count).map(|i| self.greville_abcissa(i)).collect()
     }
 
@@ -1488,7 +1488,7 @@ impl NurbsCurve {
 
 
     /// Get curve domain [t_start, t_end]
-    pub fn domain(&self) -> (f64, f64) {
+    pub fn domain(&self) -> (f32, f32) {
         if !self.is_valid() {
             return (0.0, 0.0);
         }
@@ -1499,26 +1499,26 @@ impl NurbsCurve {
 
 
     /// Get start of domain
-    pub fn domain_start(&self) -> f64 {
+    pub fn domain_start(&self) -> f32 {
         self.domain().0
     }
 
 
     /// Get end of domain
-    pub fn domain_end(&self) -> f64 {
+    pub fn domain_end(&self) -> f32 {
         self.domain().1
     }
 
 
     /// Get middle of domain
-    pub fn domain_middle(&self) -> f64 {
+    pub fn domain_middle(&self) -> f32 {
         let (t0, t1) = self.domain();
         (t0 + t1) * 0.5
     }
 
 
     /// Set curve domain
-    pub fn set_domain(&mut self, t0: f64, t1: f64) -> bool {
+    pub fn set_domain(&mut self, t0: f32, t1: f32) -> bool {
         if !self.is_valid() || t0 >= t1 {
             return false;
         }
@@ -1555,7 +1555,7 @@ impl NurbsCurve {
 
 
     /// Get span vector (parameter values at span boundaries)
-    pub fn get_span_vector(&self) -> Vec<f64> {
+    pub fn get_span_vector(&self) -> Vec<f32> {
         let mut spans = Vec::new();
         if !self.is_valid() {
             return spans;
@@ -1580,7 +1580,7 @@ impl NurbsCurve {
 
 
 
-    pub fn get_next_discontinuity(&self, continuity_type: i32, t0: f64, t1: f64) -> (bool, f64) {
+    pub fn get_next_discontinuity(&self, continuity_type: i32, t0: f32, t1: f32) -> (bool, f32) {
         if !self.is_valid() || t0 >= t1 {
             return (false, 0.0);
         }
@@ -1616,18 +1616,18 @@ impl NurbsCurve {
 
 
     /// Get curve length using Gauss-Legendre quadrature
-    pub fn length(&self, _tolerance: Option<f64>) -> f64 {
+    pub fn length(&self, _tolerance: Option<f32>) -> f32 {
         if !self.is_valid() {
             return 0.0;
         }
 
-        const GL_X: [f64; 10] = [
+        const GL_X: [f32; 10] = [
             -0.9739065285171717, -0.8650633666889845, -0.6794095682990244,
             -0.4333953941292472, -0.1488743389816312,
              0.1488743389816312,  0.4333953941292472,  0.6794095682990244,
              0.8650633666889845,  0.9739065285171717
         ];
-        const GL_W: [f64; 10] = [
+        const GL_W: [f32; 10] = [
             0.0666713443086881, 0.1494513491505806, 0.2190863625159820,
             0.2692667193099963, 0.2955242247147529,
             0.2955242247147529, 0.2692667193099963, 0.2190863625159820,
@@ -1645,9 +1645,9 @@ impl NurbsCurve {
                 continue;
             }
 
-            let span_width = (span_b - span_a) / SUBDIVISIONS as f64;
+            let span_width = (span_b - span_a) / SUBDIVISIONS as f32;
             for sub in 0..SUBDIVISIONS {
-                let a = span_a + sub as f64 * span_width;
+                let a = span_a + sub as f32 * span_width;
                 let b = a + span_width;
                 let mid = (a + b) * 0.5;
                 let half = (b - a) * 0.5;
@@ -1667,10 +1667,10 @@ impl NurbsCurve {
     /// Convert curve to polyline using adaptive subdivision
     pub fn to_polyline_adaptive(
         &self,
-        angle_tolerance: f64,
-        min_edge_length: f64,
-        max_edge_length: f64,
-    ) -> (Vec<Point>, Vec<f64>) {
+        angle_tolerance: f32,
+        min_edge_length: f32,
+        max_edge_length: f32,
+    ) -> (Vec<Point>, Vec<f32>) {
         let mut points = Vec::new();
         let mut params = Vec::new();
 
@@ -1690,12 +1690,12 @@ impl NurbsCurve {
         }
 
         // Collect (param, point) pairs, then sort by param
-        let mut samples: Vec<(f64, Point)> = Vec::new();
+        let mut samples: Vec<(f32, Point)> = Vec::new();
         samples.push((t0, self.point_at(t0)));
         samples.push((t1, self.point_at(t1)));
 
         // Work queue: segments to potentially subdivide (ta, tb)
-        let mut work_queue: Vec<(f64, f64)> = Vec::new();
+        let mut work_queue: Vec<(f32, f32)> = Vec::new();
         work_queue.push((t0, t1));
 
         const MAX_ITERATIONS: i32 = 10000;
@@ -1767,7 +1767,7 @@ impl NurbsCurve {
     ///
     /// # Returns
     /// Tuple of (points, parameters)
-    pub fn divide_by_count(&self, count: usize, include_endpoints: bool) -> (Vec<Point>, Vec<f64>) {
+    pub fn divide_by_count(&self, count: usize, include_endpoints: bool) -> (Vec<Point>, Vec<f32>) {
         let mut points = Vec::new();
         let mut params = Vec::new();
 
@@ -1780,11 +1780,11 @@ impl NurbsCurve {
         let h = dom_len * 1e-8;
 
         // 5-point Gauss-Legendre nodes and weights for [-1, 1]
-        const GL_NODES: [f64; 5] = [-0.9061798459386640, -0.5384693101056831, 0.0, 0.5384693101056831, 0.9061798459386640];
-        const GL_WEIGHTS: [f64; 5] = [0.2369268850561891, 0.4786286704993665, 0.5688888888888889, 0.4786286704993665, 0.2369268850561891];
+        const GL_NODES: [f32; 5] = [-0.9061798459386640, -0.5384693101056831, 0.0, 0.5384693101056831, 0.9061798459386640];
+        const GL_WEIGHTS: [f32; 5] = [0.2369268850561891, 0.4786286704993665, 0.5688888888888889, 0.4786286704993665, 0.2369268850561891];
 
         // Compute derivative (un-normalized) at parameter t
-        let derivative_at = |curve: &NurbsCurve, t: f64| -> Vector {
+        let derivative_at = |curve: &NurbsCurve, t: f32| -> Vector {
             let (p1, p2, dt);
             if t <= t0 + h {
                 p1 = curve.point_at(t0);
@@ -1803,7 +1803,7 @@ impl NurbsCurve {
         };
 
         // Arc length via Gauss-Legendre quadrature
-        let arc_length_gauss = |curve: &NurbsCurve, ta: f64, tb: f64| -> f64 {
+        let arc_length_gauss = |curve: &NurbsCurve, ta: f32, tb: f32| -> f32 {
             let mid = (ta + tb) * 0.5;
             let half = (tb - ta) * 0.5;
             let mut sum = 0.0;
@@ -1816,7 +1816,7 @@ impl NurbsCurve {
 
         // Build arc-length table with high resolution
         let n_samples = (1000usize).max(count * 100);
-        let dt = (t1 - t0) / n_samples as f64;
+        let dt = (t1 - t0) / n_samples as f32;
 
         let mut t_vals = vec![0.0; n_samples + 1];
         let mut s_vals = vec![0.0; n_samples + 1];
@@ -1825,16 +1825,16 @@ impl NurbsCurve {
         s_vals[0] = 0.0;
 
         for i in 1..=n_samples {
-            t_vals[i] = t0 + i as f64 * dt;
+            t_vals[i] = t0 + i as f32 * dt;
             s_vals[i] = s_vals[i - 1] + arc_length_gauss(self, t_vals[i - 1], t_vals[i]);
         }
 
         let total_len = s_vals[n_samples];
         let n_segs = if include_endpoints { count - 1 } else { count + 1 };
-        let seg_len = total_len / n_segs as f64;
+        let seg_len = total_len / n_segs as f32;
 
         // Find parameter at target arc length with Newton-Raphson refinement
-        let find_t_at_s = |curve: &NurbsCurve, s_target: f64| -> f64 {
+        let find_t_at_s = |curve: &NurbsCurve, s_target: f32| -> f32 {
             if s_target <= 0.0 { return t0; }
             if s_target >= total_len { return t1; }
 
@@ -1883,9 +1883,9 @@ impl NurbsCurve {
 
         for i in 0..count {
             let s_target = if include_endpoints {
-                seg_len * i as f64
+                seg_len * i as f32
             } else {
-                seg_len * (i + 1) as f64
+                seg_len * (i + 1) as f32
             };
 
             let t = find_t_at_s(self, s_target);
@@ -1899,7 +1899,7 @@ impl NurbsCurve {
 
     /// Divide curve by arc length using Gauss-Legendre quadrature.
     /// Matches C++ implementation exactly.
-    pub fn divide_by_length(&self, segment_length: f64) -> (Vec<Point>, Vec<f64>) {
+    pub fn divide_by_length(&self, segment_length: f32) -> (Vec<Point>, Vec<f32>) {
         let mut points = Vec::new();
         let mut params = Vec::new();
 
@@ -1912,11 +1912,11 @@ impl NurbsCurve {
         let h = dom_len * 1e-8;
 
         // 5-point Gauss-Legendre nodes and weights for [-1, 1]
-        const GL_NODES: [f64; 5] = [-0.9061798459386640, -0.5384693101056831, 0.0, 0.5384693101056831, 0.9061798459386640];
-        const GL_WEIGHTS: [f64; 5] = [0.2369268850561891, 0.4786286704993665, 0.5688888888888889, 0.4786286704993665, 0.2369268850561891];
+        const GL_NODES: [f32; 5] = [-0.9061798459386640, -0.5384693101056831, 0.0, 0.5384693101056831, 0.9061798459386640];
+        const GL_WEIGHTS: [f32; 5] = [0.2369268850561891, 0.4786286704993665, 0.5688888888888889, 0.4786286704993665, 0.2369268850561891];
 
         // Compute derivative (un-normalized) at parameter t
-        let derivative_at = |curve: &NurbsCurve, t: f64| -> Vector {
+        let derivative_at = |curve: &NurbsCurve, t: f32| -> Vector {
             let (p1, p2, dt);
             if t <= t0 + h {
                 p1 = curve.point_at(t0);
@@ -1935,7 +1935,7 @@ impl NurbsCurve {
         };
 
         // Arc length via Gauss-Legendre quadrature
-        let arc_length_gauss = |curve: &NurbsCurve, ta: f64, tb: f64| -> f64 {
+        let arc_length_gauss = |curve: &NurbsCurve, ta: f32, tb: f32| -> f32 {
             let mid = (ta + tb) * 0.5;
             let half = (tb - ta) * 0.5;
             let mut sum = 0.0;
@@ -1949,7 +1949,7 @@ impl NurbsCurve {
         // Build arc-length table with high resolution
         let approx_len = self.length(Some(1e-6));
         let n_samples = (1000usize).max((approx_len / segment_length) as usize * 100);
-        let dt = (t1 - t0) / n_samples as f64;
+        let dt = (t1 - t0) / n_samples as f32;
 
         let mut t_vals = vec![0.0; n_samples + 1];
         let mut s_vals = vec![0.0; n_samples + 1];
@@ -1958,14 +1958,14 @@ impl NurbsCurve {
         s_vals[0] = 0.0;
 
         for i in 1..=n_samples {
-            t_vals[i] = t0 + i as f64 * dt;
+            t_vals[i] = t0 + i as f32 * dt;
             s_vals[i] = s_vals[i - 1] + arc_length_gauss(self, t_vals[i - 1], t_vals[i]);
         }
 
         let total_len = s_vals[n_samples];
 
         // Find parameter at target arc length with Newton-Raphson refinement
-        let find_t_at_s = |curve: &NurbsCurve, s_target: f64| -> f64 {
+        let find_t_at_s = |curve: &NurbsCurve, s_target: f32| -> f32 {
             if s_target <= 0.0 { return t0; }
             if s_target >= total_len { return t1; }
 
@@ -2031,7 +2031,7 @@ impl NurbsCurve {
     /// Evaluate point at parameter t
     ///
     /// Implementation matches OpenNURBS evaluation approach.
-    pub fn point_at(&self, t: f64) -> Point {
+    pub fn point_at(&self, t: f32) -> Point {
         if !self.is_valid() {
             return Point::new(0.0, 0.0, 0.0);
         }
@@ -2092,7 +2092,7 @@ impl NurbsCurve {
     /// Evaluate point and derivatives on curve at parameter t.
     /// Returns [point, d1, d2, ...] depending on derivative_count.
     /// Uses analytical basis function derivatives matching C++ implementation.
-    pub fn evaluate(&self, t: f64, derivative_count: usize) -> Vec<Vector> {
+    pub fn evaluate(&self, t: f32, derivative_count: usize) -> Vec<Vector> {
         let mut result = Vec::new();
 
         if !self.is_valid() {
@@ -2108,7 +2108,7 @@ impl NurbsCurve {
 
         // Evaluate homogeneous coordinates and derivatives
         let p = self.degree();
-        let mut aders: Vec<[f64; 4]> = vec![[0.0; 4]; max_derivs + 1];
+        let mut aders: Vec<[f32; 4]> = vec![[0.0; 4]; max_derivs + 1];
 
         for k in 0..=max_derivs {
             for j in 0..=p {
@@ -2133,7 +2133,7 @@ impl NurbsCurve {
         }
 
         // Convert from homogeneous derivatives (Aders) to Cartesian derivatives
-        let mut cders: Vec<[f64; 3]> = vec![[0.0; 3]; max_derivs + 1];
+        let mut cders: Vec<[f32; 3]> = vec![[0.0; 3]; max_derivs + 1];
 
         if !self.m_is_rat {
             // Non-rational: derivatives are directly Aders (w == 1)
@@ -2152,7 +2152,7 @@ impl NurbsCurve {
 
                 // Subtract contributions of weight derivatives
                 for j in 1..=k {
-                    let coeff = Self::binomial(k, j) as f64;
+                    let coeff = Self::binomial(k, j) as f32;
                     let wj = aders[j][3];
                     ck_x -= coeff * wj * cders[k - j][0];
                     ck_y -= coeff * wj * cders[k - j][1];
@@ -2178,7 +2178,7 @@ impl NurbsCurve {
 
 
     /// Get tangent vector at parameter t
-    pub fn tangent_at(&self, t: f64) -> Vector {
+    pub fn tangent_at(&self, t: f32) -> Vector {
         if !self.is_valid() {
             return Vector::new(0.0, 0.0, 0.0);
         }
@@ -2205,7 +2205,7 @@ impl NurbsCurve {
 
 
     /// Get Frenet frame at parameter t (tangent, normal, binormal)
-    pub fn plane_at(&self, t: f64, normalized: bool) -> Plane {
+    pub fn plane_at(&self, t: f32, normalized: bool) -> Plane {
         if !self.is_valid() {
             return Plane::invalid();
         }
@@ -2261,7 +2261,7 @@ impl NurbsCurve {
 
     /// Get rotation minimizing perpendicular plane at parameter t
     /// Uses the exact Double Reflection algorithm for accuracy
-    pub fn perpendicular_plane_at(&self, t: f64, normalized: bool) -> Plane {
+    pub fn perpendicular_plane_at(&self, t: f32, normalized: bool) -> Plane {
         if !self.is_valid() {
             return Plane::invalid();
         }
@@ -2319,7 +2319,7 @@ impl NurbsCurve {
 
         // Propagate frame using Double Reflection (RMF) algorithm
         let num_steps = 10.max(((param - t0) / (t1 - t0) * 100.0) as i32);
-        let dt = (param - t0) / num_steps as f64;
+        let dt = (param - t0) / num_steps as f32;
 
         let mut ri = r0;
         let mut ti_param = t0;
@@ -2478,7 +2478,7 @@ impl NurbsCurve {
 
 
     /// Split curve at parameter t into two curves
-    pub fn split(&self, t: f64) -> (NurbsCurve, NurbsCurve) {
+    pub fn split(&self, t: f32) -> (NurbsCurve, NurbsCurve) {
         if !self.is_valid() {
             return (NurbsCurve::default(), NurbsCurve::default());
         }
@@ -2494,14 +2494,14 @@ impl NurbsCurve {
         // Left curve points
         let mut left_points = Vec::new();
         for i in 0..=num_samples {
-            let param = t0 + (t - t0) * (i as f64) / (num_samples as f64);
+            let param = t0 + (t - t0) * (i as f32) / (num_samples as f32);
             left_points.push(self.point_at(param));
         }
 
         // Right curve points
         let mut right_points = Vec::new();
         for i in 0..=num_samples {
-            let param = t + (t1 - t) * (i as f64) / (num_samples as f64);
+            let param = t + (t1 - t) * (i as f32) / (num_samples as f32);
             right_points.push(self.point_at(param));
         }
 
@@ -2514,7 +2514,7 @@ impl NurbsCurve {
 
 
     /// Extend curve domain using de Boor extrapolation (matches C++ implementation)
-    pub fn extend(&mut self, new_t0: f64, new_t1: f64) -> bool {
+    pub fn extend(&mut self, new_t0: f32, new_t1: f32) -> bool {
         if !self.is_valid() || self.is_closed() {
             return false;
         }
@@ -2645,7 +2645,7 @@ impl NurbsCurve {
     }
 
 
-    pub fn trim(&mut self, t0: f64, t1: f64) -> bool {
+    pub fn trim(&mut self, t0: f32, t1: f32) -> bool {
         if !self.is_valid() || t0 >= t1 { return false; }
         let (d0, d1) = self.domain();
         if t0 < d0 - Tolerance::ZERO_TOLERANCE || t1 > d1 + Tolerance::ZERO_TOLERANCE { return false; }
@@ -2725,7 +2725,7 @@ impl NurbsCurve {
         true
     }
 
-    pub fn change_closed_curve_seam(&mut self, t: f64) -> bool {
+    pub fn change_closed_curve_seam(&mut self, t: f32) -> bool {
         if !self.is_valid() || !self.is_closed() { return false; }
         let (t0, t1) = self.domain();
         let dom_len = t1 - t0;
@@ -2851,9 +2851,9 @@ impl NurbsCurve {
             order: self.m_order as i32,
             cv_count: self.m_cv_count as i32,
             cv_stride: self.m_cv_stride as i32,
-            nurbsknots: self.m_nurbsknot.clone(),
-            cvs: self.m_cv.clone(),
-            width: self.width,
+            nurbsknots: self.m_nurbsknot.iter().map(|&v| v as f64).collect(),
+            cvs: self.m_cv.iter().map(|&v| v as f64).collect(),
+            width: self.width as f64,
             pointcolors: self.pointcolors.iter().map(|c| crate::proto::Color {
                 guid: String::new(), name: String::new(),
                 r: c.r as i32, g: c.g as i32, b: c.b as i32, a: c.a as i32,
@@ -2865,7 +2865,7 @@ impl NurbsCurve {
             xform: Some(crate::proto::Xform {
                 guid: self.xform.guid().to_string(),
                 name: self.xform.name.clone(),
-                matrix: self.xform.m.to_vec(),
+                matrix: self.xform.m.iter().map(|&v| v as f64).collect(),
             }),
         };
         proto.encode_to_vec()
@@ -2884,8 +2884,8 @@ impl NurbsCurve {
         );
         curve.set_guid(proto.guid.clone());
         curve.name = proto.name;
-        curve.m_nurbsknot = proto.nurbsknots;
-        curve.m_cv = proto.cvs;
+        curve.m_nurbsknot = proto.nurbsknots.into_iter().map(|v| v as f32).collect();
+        curve.m_cv = proto.cvs.into_iter().map(|v| v as f32).collect();
         curve.pointcolors = proto.pointcolors.iter().map(|c| Color::new(c.r as u8, c.g as u8, c.b as u8, c.a as u8)).collect();
         curve.linecolors = proto.linecolors.iter().map(|c| Color::new(c.r as u8, c.g as u8, c.b as u8, c.a as u8)).collect();
         if let Some(xform) = proto.xform {
@@ -2893,7 +2893,7 @@ impl NurbsCurve {
             curve.xform.name = xform.name;
             for (i, val) in xform.matrix.iter().enumerate() {
                 if i < 16 {
-                    curve.xform.m[i] = *val;
+                    curve.xform.m[i] = *val as f32;
                 }
             }
         }
@@ -3064,7 +3064,7 @@ impl NurbsCurve {
         true
     }
 
-    fn find_span(&self, t: f64) -> usize {
+    fn find_span(&self, t: f32) -> usize {
         // Use nurbsknot module function
         nurbsknot::find_span(self.m_order, self.m_cv_count, &self.m_nurbsknot, t)
     }
@@ -3073,7 +3073,7 @@ impl NurbsCurve {
     /// Compute non-zero basis functions at parameter t
     ///
     /// Implementation matches OpenNURBS Cox-de Boor algorithm with offset nurbsknot pointer.
-    fn basis_functions(&self, span: usize, t: f64) -> Vec<f64> {
+    fn basis_functions(&self, span: usize, t: f32) -> Vec<f32> {
         let mut basis = vec![0.0; self.m_order];
         let mut left = vec![0.0; self.m_order];
         let mut right = vec![0.0; self.m_order];
@@ -3103,7 +3103,7 @@ impl NurbsCurve {
 
     /// Compute basis functions and their derivatives at parameter t
     /// Returns ders[k][j] = k-th derivative of j-th basis function
-    fn basis_functions_derivatives(&self, span: usize, t: f64, deriv_order: usize) -> Vec<Vec<f64>> {
+    fn basis_functions_derivatives(&self, span: usize, t: f32, deriv_order: usize) -> Vec<Vec<f32>> {
         let p = self.degree();
         let n_der = deriv_order.min(p);
 
@@ -3170,12 +3170,12 @@ impl NurbsCurve {
         }
 
         // Apply factorial scaling: p!/(p-k)!
-        let mut scale = p as f64;
+        let mut scale = p as f32;
         for k in 1..=n_der {
             for j in 0..=p {
                 ders[k][j] *= scale;
             }
-            scale *= (p - k) as f64;
+            scale *= (p - k) as f32;
         }
 
         ders
@@ -3183,7 +3183,7 @@ impl NurbsCurve {
 
 
     /// Internal de Boor evaluation for curve extension (modifies CVs in place)
-    fn evaluate_nurbs_de_boor_inplace(&mut self, cvdim: usize, order: usize, cv_start: usize, direction: i32, t: f64) {
+    fn evaluate_nurbs_de_boor_inplace(&mut self, cvdim: usize, order: usize, cv_start: usize, direction: i32, t: f32) {
         if order < 2 {
             return;
         }
@@ -3230,7 +3230,7 @@ impl NurbsCurve {
 }
 
 fn evaluate_nurbs_blossom(cvdim: usize, order: usize, cv_stride: usize,
-    cv: &[f64], nurbsknot: &[f64], t: &[f64], p: &mut [f64]) -> bool {
+    cv: &[f32], nurbsknot: &[f32], t: &[f32], p: &mut [f32]) -> bool {
     if cv_stride < cvdim { return false; }
     let degree = order - 1;
     for i in 1..(2 * degree) {
@@ -3255,8 +3255,8 @@ fn evaluate_nurbs_blossom(cvdim: usize, order: usize, cv_stride: usize,
 }
 
 fn get_raised_degree_cv(old_order: usize, cvdim: usize, old_cv_stride: usize,
-    old_cv: &[f64], old_kn: &[f64], new_kn: &[f64],
-    cv_id: usize, new_cv: &mut [f64]) -> bool {
+    old_cv: &[f32], old_kn: &[f32], new_kn: &[f32],
+    cv_id: usize, new_cv: &mut [f32]) -> bool {
     let old_degree = old_order - 1;
     let new_degree = old_degree + 1;
     let mut t = vec![0.0; old_degree];
@@ -3273,12 +3273,12 @@ fn get_raised_degree_cv(old_order: usize, cvdim: usize, old_cv_stride: usize,
         }
         for k in 0..cvdim { new_cv[k] += pp[k]; }
     }
-    let denom = new_degree as f64;
+    let denom = new_degree as f32;
     for i in 0..cvdim { new_cv[i] /= denom; }
     true
 }
 
-fn next_span_index(order: usize, cv_count: usize, nurbsknot: &[f64], mut span_index: usize) -> usize {
+fn next_span_index(order: usize, cv_count: usize, nurbsknot: &[f32], mut span_index: usize) -> usize {
     if span_index > cv_count - order { return span_index; }
     if span_index < cv_count - order {
         span_index += 1;

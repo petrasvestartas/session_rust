@@ -87,7 +87,7 @@ pub struct Session {
 pub struct RayHit {
     guid: std::sync::OnceLock<String>,
     pub point: Point,
-    pub distance: f64,
+    pub distance: f32,
 }
 
 impl RayHit {
@@ -623,7 +623,7 @@ impl Session {
         &mut self,
         origin: &Point,
         direction: &crate::Vector,
-        tolerance: f64,
+        tolerance: f32,
     ) -> Vec<RayHit> {
         let dir_len = direction.magnitude();
         if dir_len <= 0.0 {
@@ -635,7 +635,7 @@ impl Session {
             direction[2] / dir_len,
         );
 
-        let far = 1e6f64;
+        let far = 1e6f32;
         let ray_end = Point::new(
             origin[0] + dir_unit[0] * far,
             origin[1] + dir_unit[1] * far,
@@ -691,7 +691,7 @@ impl Session {
                     }
                 }
                 Geometry::Polyline(pl) => {
-                    let mut best_t = f64::INFINITY;
+                    let mut best_t = f32::INFINITY;
                     let mut best_p: Option<Point> = None;
                     let pl_points = pl.get_points();
                     if pl_points.len() >= 2 {
@@ -769,7 +769,7 @@ impl Session {
             return Vec::new();
         }
 
-        let mut min_d = f64::INFINITY;
+        let mut min_d = f32::INFINITY;
         for h in &hits_all {
             if h.distance < min_d {
                 min_d = h.distance;
@@ -945,7 +945,7 @@ impl Session {
         node
     }
 
-    pub fn compute_face_to_face(&mut self, inflate: f64, coplanar_tolerance: f64) {
+    pub fn compute_face_to_face(&mut self, inflate: f32, coplanar_tolerance: f32) {
         let n = self.objects.elements.len();
         if n == 0 { return; }
 

@@ -185,8 +185,8 @@ pub fn run_encoders_decode_primitives() -> TestResult {
 
         MINI_CHECK!(loaded == 42);
 
-        let json_str = file_json_dumps(&3.14f64, false).unwrap();
-        let loaded: f64 = file_json_loads(&json_str).unwrap();
+        let json_str = file_json_dumps(&3.14f32, false).unwrap();
+        let loaded: f32 = file_json_loads(&json_str).unwrap();
         MINI_CHECK!(crate::tolerance::TOLERANCE.is_close(loaded, 3.14));
 
         let json_str = file_json_dumps(&"hello", false).unwrap();
@@ -323,7 +323,7 @@ pub fn run_encoders_dict_of_dicts() -> TestResult {
         let json_str = data.to_string();
         let loaded: serde_json::Value = file_json_loads(&json_str).unwrap();
 
-        MINI_CHECK!(crate::tolerance::TOLERANCE.is_close(loaded["config"]["tolerance"].as_f64().unwrap(), 0.001));
+        MINI_CHECK!(crate::tolerance::TOLERANCE.is_close(loaded["config"]["tolerance"].as_f64().unwrap() as f32, 0.001));
         MINI_CHECK!(loaded["config"]["scale"] == 1000);
 
         let loaded_point: Point = serde_json::from_value(loaded["geometry"]["point"].clone()).unwrap();

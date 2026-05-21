@@ -136,7 +136,7 @@ pub fn run_rtree_search_100_boxes() -> TestResult {
         let mut t = SpatialRTree::new();
         let mut id: i32 = 0;
         {
-            let mut add = |x0: f64, y0: f64, z0: f64, x1: f64, y1: f64, z1: f64| {
+            let mut add = |x0: f32, y0: f32, z0: f32, x1: f32, y1: f32, z1: f32| {
                 t.insert([x0, y0, z0], [x1, y1, z1], id);
                 id += 1;
             };

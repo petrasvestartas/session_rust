@@ -53,8 +53,8 @@ fn main() {
 
     for i in 0..2 {  // First 2 rows
         for j in 0..10 {
-            let u = u_min + (u_max - u_min) * (i as f64) / 9.0;
-            let v = v_min + (v_max - v_min) * (j as f64) / 9.0;
+            let u = u_min + (u_max - u_min) * (i as f32) / 9.0;
+            let v = v_min + (v_max - v_min) * (j as f32) / 9.0;
             let pt = srf.point_at(u, v).unwrap();
             
             let (exp_x, exp_y, exp_z) = expected[idx];

@@ -15,7 +15,7 @@ pub struct NurbsSurfaceTrimmed {
     #[serde(serialize_with = "crate::guid_serde::serialize", deserialize_with = "crate::guid_serde::deserialize")]
     guid: std::sync::OnceLock<String>,
     pub name: String,
-    pub width: f64,
+    pub width: f32,
     pub surfacecolor: Color,
     pub xform: Xform,
     #[serde(rename = "surface")]
@@ -113,7 +113,7 @@ impl NurbsSurfaceTrimmed {
         let n_samples = std::cmp::max(curve_3d.cv_count() * 4, 32);
         let mut uv_pts = Vec::new();
         for i in 0..n_samples {
-            let t = dom.0 + (dom.1 - dom.0) * i as f64 / n_samples as f64;
+            let t = dom.0 + (dom.1 - dom.0) * i as f32 / n_samples as f32;
             let pt3d = curve_3d.point_at(t);
             let (u, v, _) = Closest::surface_point(&self.m_surface, &pt3d, 0.0, 0.0, 0.0, 0.0);
             let nu = (u - sdom_u.0) / range_u;
@@ -139,8 +139,8 @@ impl NurbsSurfaceTrimmed {
 
     pub fn clear_inner_loops(&mut self) { self.m_inner_loops.clear(); }
 
-    pub fn point_at(&self, u: f64, v: f64) -> Option<Point> { self.m_surface.point_at(u, v) }
-    pub fn normal_at(&self, u: f64, v: f64) -> Vector { self.m_surface.normal_at(u, v) }
+    pub fn point_at(&self, u: f32, v: f32) -> Option<Point> { self.m_surface.point_at(u, v) }
+    pub fn normal_at(&self, u: f32, v: f32) -> Vector { self.m_surface.normal_at(u, v) }
 
     pub fn mesh(&self) -> Mesh {
         if !self.is_trimmed() { return self.m_surface.mesh(); }
@@ -174,10 +174,10 @@ impl NurbsSurfaceTrimmed {
             };
             let mut border = strip_close(&outer_pts);
             let mut holes: Vec<Vec<Point>> = hole_pts.iter().map(|h| strip_close(h)).collect();
-            let area: f64 = (0..border.len()).map(|j| { let k=(j+1)%border.len(); border[j][0]*border[k][1]-border[k][0]*border[j][1] }).sum::<f64>() * 0.5;
+            let area: f32 = (0..border.len()).map(|j| { let k=(j+1)%border.len(); border[j][0]*border[k][1]-border[k][0]*border[j][1] }).sum::<f32>() * 0.5;
             if area < 0.0 { border.reverse(); }
             for h in &mut holes {
-                let ha: f64 = (0..h.len()).map(|j| { let k=(j+1)%h.len(); h[j][0]*h[k][1]-h[k][0]*h[j][1] }).sum::<f64>() * 0.5;
+                let ha: f32 = (0..h.len()).map(|j| { let k=(j+1)%h.len(); h[j][0]*h[k][1]-h[k][0]*h[j][1] }).sum::<f32>() * 0.5;
                 if ha > 0.0 { h.reverse(); }
             }
             let tris = crate::remesh_cdt::cdt_triangulate(&border, &holes);
@@ -213,8 +213,8 @@ impl NurbsSurfaceTrimmed {
         let max_edge = if max_dim > 1e-10 { max_dim / 10.0 } else { 0.1 };
         let nu = if u_len > 1e-10 { 12usize.max((u_len / max_edge).ceil() as usize + 1) } else { 12 };
         let nv = if v_len > 1e-10 { 12usize.max((v_len / max_edge).ceil() as usize + 1) } else { 12 };
-        let us: Vec<f64> = (0..nu).map(|i| dom_u.0 + i as f64 * range_u / (nu - 1) as f64).collect();
-        let vs: Vec<f64> = (0..nv).map(|j| dom_v.0 + j as f64 * range_v / (nv - 1) as f64).collect();
+        let us: Vec<f32> = (0..nu).map(|i| dom_u.0 + i as f32 * range_u / (nu - 1) as f32).collect();
+        let vs: Vec<f32> = (0..nv).map(|j| dom_v.0 + j as f32 * range_v / (nv - 1) as f32).collect();
         let mut full = Mesh::new();
         for i in 0..nu {
             for j in 0..nv {
@@ -266,9 +266,9 @@ impl NurbsSurfaceTrimmed {
         }
         let mut result = Mesh::from_polylines(polygons, None);
         let nv_total = result.vertex.len();
-        let mut vnx = vec![0.0f64; nv_total + 1];
-        let mut vny = vec![0.0f64; nv_total + 1];
-        let mut vnz = vec![0.0f64; nv_total + 1];
+        let mut vnx = vec![0.0f32; nv_total + 1];
+        let mut vny = vec![0.0f32; nv_total + 1];
+        let mut vnz = vec![0.0f32; nv_total + 1];
         for (_, vids) in &result.face {
             if vids.len() < 3 { continue; }
             let p0 = &result.vertex[&vids[0]];
@@ -382,7 +382,7 @@ impl NurbsSurfaceTrimmed {
         let proto = crate::proto::NurbsSurfaceTrimmed {
             guid: self.guid().to_string(),
             name: self.name.clone(),
-            width: self.width,
+            width: self.width as f64,
             surface: Some(surface_proto),
             outer_loop,
             inner_loops,
@@ -397,7 +397,7 @@ impl NurbsSurfaceTrimmed {
             xform: Some(crate::proto::Xform {
                 guid: self.xform.guid().to_string(),
                 name: self.xform.name.clone(),
-                matrix: self.xform.m.to_vec(),
+                matrix: self.xform.m.iter().map(|&v| v as f64).collect(),
             }),
         };
         proto.encode_to_vec()
@@ -410,7 +410,7 @@ impl NurbsSurfaceTrimmed {
         let mut ts = Self::new();
         ts.set_guid(proto.guid.clone());
         ts.name = proto.name;
-        ts.width = proto.width;
+        ts.width = proto.width as f32;
 
         if let Some(srf_proto) = proto.surface {
             let srf_data = srf_proto.encode_to_vec();
@@ -444,7 +444,7 @@ impl NurbsSurfaceTrimmed {
             ts.xform.set_guid(xform.guid.clone());
             ts.xform.name = xform.name;
             for (i, val) in xform.matrix.iter().enumerate() {
-                if i < 16 { ts.xform.m[i] = *val; }
+                if i < 16 { ts.xform.m[i] = *val as f32; }
             }
         }
 

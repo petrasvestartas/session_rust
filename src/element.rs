@@ -33,14 +33,14 @@ fn strip_closing(pts: &[Point]) -> Vec<Point> {
 #[derive(Debug, Clone)]
 pub enum ElementKind {
     Generic,
-    Column { width: f64, depth: f64, height: f64 },
-    Beam { width: f64, depth: f64, length: f64 },
+    Column { width: f32, depth: f32, height: f32 },
+    Beam { width: f32, depth: f32, length: f32 },
     Plate {
         polygon: Vec<Point>,
         polygon_top: Vec<Point>,
-        thickness: f64,
+        thickness: f32,
         joint_types: Vec<i32>,
-        j_mf: Vec<Vec<(i32, bool, f64)>>,
+        j_mf: Vec<Vec<(i32, bool, f32)>>,
         key: String,
         component_plane: Option<Plane>,
     },
@@ -142,11 +142,11 @@ impl Element {
         }
     }
 
-    pub fn column(width: f64, depth: f64, height: f64, name: &str) -> Self {
+    pub fn column(width: f32, depth: f32, height: f32, name: &str) -> Self {
         Self::column_with_transformation(width, depth, height, name, Xform::identity())
     }
 
-    pub fn column_with_transformation(width: f64, depth: f64, height: f64, name: &str, transformation: Xform) -> Self {
+    pub fn column_with_transformation(width: f32, depth: f32, height: f32, name: &str, transformation: Xform) -> Self {
         let kind = ElementKind::Column { width, depth, height };
         let geometry = ElementGeometry::Mesh(Self::compute_box_geometry(width, depth, height));
         Self {
@@ -168,11 +168,11 @@ impl Element {
         }
     }
 
-    pub fn beam(width: f64, depth: f64, length: f64, name: &str) -> Self {
+    pub fn beam(width: f32, depth: f32, length: f32, name: &str) -> Self {
         Self::beam_with_transformation(width, depth, length, name, Xform::identity())
     }
 
-    pub fn beam_with_transformation(width: f64, depth: f64, length: f64, name: &str, transformation: Xform) -> Self {
+    pub fn beam_with_transformation(width: f32, depth: f32, length: f32, name: &str, transformation: Xform) -> Self {
         let kind = ElementKind::Beam { width, depth, length };
         let geometry = ElementGeometry::Mesh(Self::compute_box_geometry(width, depth, length));
         Self {
@@ -194,11 +194,11 @@ impl Element {
         }
     }
 
-    pub fn plate(polygon: Vec<Point>, thickness: f64, name: &str) -> Self {
+    pub fn plate(polygon: Vec<Point>, thickness: f32, name: &str) -> Self {
         Self::plate_with_transformation(polygon, thickness, name, Xform::identity())
     }
 
-    pub fn plate_with_transformation(polygon: Vec<Point>, thickness: f64, name: &str, transformation: Xform) -> Self {
+    pub fn plate_with_transformation(polygon: Vec<Point>, thickness: f32, name: &str, transformation: Xform) -> Self {
         let pts: Vec<Point> = polygon.iter().map(|p| Point::new(p[0], p[1], p[2])).collect();
         let polygon_top = Self::offset_polygon_top(&pts, thickness);
         let geometry = ElementGeometry::Mesh(Self::compute_plate_geometry(&pts, thickness));
@@ -246,7 +246,7 @@ impl Element {
             let dz = tp[k][2] - bot[k][2];
             thickness += (dx * dx + dy * dy + dz * dz).sqrt();
         }
-        thickness /= np as f64;
+        thickness /= np as f32;
         let geometry = ElementGeometry::Mesh(Self::compute_plate_geometry_explicit(&bot, &tp));
         Self {
             guid: std::sync::OnceLock::new(),
@@ -372,35 +372,35 @@ impl Element {
     // Column/Beam/Plate Accessors
     ///////////////////////////////////////////////////////////////////////////////////////////
 
-    pub fn width(&self) -> Option<f64> {
+    pub fn width(&self) -> Option<f32> {
         match &self.kind {
             ElementKind::Column { width, .. } | ElementKind::Beam { width, .. } => Some(*width),
             _ => None,
         }
     }
 
-    pub fn depth(&self) -> Option<f64> {
+    pub fn depth(&self) -> Option<f32> {
         match &self.kind {
             ElementKind::Column { depth, .. } | ElementKind::Beam { depth, .. } => Some(*depth),
             _ => None,
         }
     }
 
-    pub fn height(&self) -> Option<f64> {
+    pub fn height(&self) -> Option<f32> {
         match &self.kind {
             ElementKind::Column { height, .. } => Some(*height),
             _ => None,
         }
     }
 
-    pub fn length(&self) -> Option<f64> {
+    pub fn length(&self) -> Option<f32> {
         match &self.kind {
             ElementKind::Beam { length, .. } => Some(*length),
             _ => None,
         }
     }
 
-    pub fn thickness(&self) -> Option<f64> {
+    pub fn thickness(&self) -> Option<f32> {
         match &self.kind {
             ElementKind::Plate { thickness, .. } => Some(*thickness),
             _ => None,
@@ -425,7 +425,7 @@ impl Element {
     // Column/Beam/Plate Setters
     ///////////////////////////////////////////////////////////////////////////////////////////
 
-    pub fn set_width(&mut self, v: f64) {
+    pub fn set_width(&mut self, v: f32) {
         match &mut self.kind {
             ElementKind::Column { width, depth, height } => {
                 *width = v;
@@ -440,7 +440,7 @@ impl Element {
         self.reset();
     }
 
-    pub fn set_depth(&mut self, v: f64) {
+    pub fn set_depth(&mut self, v: f32) {
         match &mut self.kind {
             ElementKind::Column { width, depth, height } => {
                 *depth = v;
@@ -455,7 +455,7 @@ impl Element {
         self.reset();
     }
 
-    pub fn set_height(&mut self, v: f64) {
+    pub fn set_height(&mut self, v: f32) {
         if let ElementKind::Column { width, depth, height } = &mut self.kind {
             *height = v;
             self.geometry = ElementGeometry::Mesh(Self::compute_box_geometry(*width, *depth, *height));
@@ -463,7 +463,7 @@ impl Element {
         }
     }
 
-    pub fn set_length(&mut self, v: f64) {
+    pub fn set_length(&mut self, v: f32) {
         if let ElementKind::Beam { width, depth, length } = &mut self.kind {
             *length = v;
             self.geometry = ElementGeometry::Mesh(Self::compute_box_geometry(*width, *depth, *length));
@@ -471,7 +471,7 @@ impl Element {
         }
     }
 
-    pub fn set_thickness(&mut self, v: f64) {
+    pub fn set_thickness(&mut self, v: f32) {
         if let ElementKind::Plate { polygon, polygon_top, thickness, .. } = &mut self.kind {
             *thickness = v;
             *polygon_top = Self::offset_polygon_top(polygon, *thickness);
@@ -510,14 +510,14 @@ impl Element {
         }
     }
 
-    pub fn j_mf(&self) -> Option<&Vec<Vec<(i32, bool, f64)>>> {
+    pub fn j_mf(&self) -> Option<&Vec<Vec<(i32, bool, f32)>>> {
         match &self.kind {
             ElementKind::Plate { j_mf, .. } => Some(j_mf),
             _ => None,
         }
     }
 
-    pub fn set_j_mf(&mut self, v: Vec<Vec<(i32, bool, f64)>>) {
+    pub fn set_j_mf(&mut self, v: Vec<Vec<(i32, bool, f32)>>) {
         if let ElementKind::Plate { j_mf, .. } = &mut self.kind {
             *j_mf = v;
         }
@@ -549,7 +549,7 @@ impl Element {
         }
     }
 
-    pub fn extend(&mut self, distance: f64) {
+    pub fn extend(&mut self, distance: f32) {
         match &mut self.kind {
             ElementKind::Column { width, depth, height } => {
                 *height += distance * 2.0;
@@ -671,7 +671,7 @@ impl Element {
                 for (_, v) in &mesh.vertex {
                     sx += v.x; sy += v.y; sz += v.z;
                 }
-                let n = mesh.vertex.len() as f64;
+                let n = mesh.vertex.len() as f32;
                 Point::new(sx / n, sy / n, sz / n)
             }
             ElementGeometry::BRep(brep) => {
@@ -680,7 +680,7 @@ impl Element {
                 for p in &brep.m_vertices {
                     sx += p[0]; sy += p[1]; sz += p[2];
                 }
-                let n = brep.m_vertices.len() as f64;
+                let n = brep.m_vertices.len() as f32;
                 Point::new(sx / n, sy / n, sz / n)
             }
             ElementGeometry::None => Point::new(0.0, 0.0, 0.0),
@@ -703,7 +703,7 @@ impl Element {
         }
     }
 
-    fn compute_box_geometry(width: f64, depth: f64, z_extent: f64) -> Mesh {
+    fn compute_box_geometry(width: f32, depth: f32, z_extent: f32) -> Mesh {
         let hx = width * 0.5;
         let hy = depth * 0.5;
         let vertices = vec![
@@ -735,7 +735,7 @@ impl Element {
         Vector::new(nx / mag, ny / mag, nz / mag)
     }
 
-    pub fn compute_aabb_fast(&self, inflate: f64) -> OBB {
+    pub fn compute_aabb_fast(&self, inflate: f32) -> OBB {
         match &self.kind {
             ElementKind::Plate { polygon, polygon_top, .. } => {
                 let mut pts: Vec<Point> = Vec::with_capacity(polygon.len() + polygon_top.len());
@@ -747,7 +747,7 @@ impl Element {
         }
     }
 
-    fn offset_polygon_top(polygon: &[Point], thickness: f64) -> Vec<Point> {
+    fn offset_polygon_top(polygon: &[Point], thickness: f32) -> Vec<Point> {
         let normal = Self::polygon_normal(polygon);
         polygon.iter().map(|p| Point::new(
             p[0] - normal[0] * thickness,
@@ -756,7 +756,7 @@ impl Element {
         )).collect()
     }
 
-    fn compute_plate_geometry(polygon: &[Point], thickness: f64) -> Mesh {
+    fn compute_plate_geometry(polygon: &[Point], thickness: f32) -> Mesh {
         let top = Self::offset_polygon_top(polygon, thickness);
         Self::compute_plate_geometry_explicit(polygon, &top)
     }
@@ -855,7 +855,7 @@ impl Element {
                 let top: Vec<Point> = polygon_top.iter().take(n).map(|p| Point::new(p[0], p[1], p[2])).collect();
                 let (bcx, bcy, bcz) = bottom.iter().fold((0.0, 0.0, 0.0), |(x, y, z), p| (x + p[0], y + p[1], z + p[2]));
                 let (tcx, tcy, tcz) = top.iter().fold((0.0, 0.0, 0.0), |(x, y, z), p| (x + p[0], y + p[1], z + p[2]));
-                let nf = n as f64;
+                let nf = n as f32;
                 // [0]=top plane, [1]=bottom plane, [2+]=side planes (matching wood)
                 let mut result = vec![
                     Plane::from_point_normal(Point::new(tcx / nf, tcy / nf, tcz / nf), normal.clone()),
@@ -923,10 +923,10 @@ impl Element {
             ElementKind::Beam { length, .. } => Some(Line::new(0.0, 0.0, 0.0, 0.0, 0.0, *length)),
             ElementKind::Plate { polygon, thickness, .. } => {
                 let normal = Self::polygon_normal(polygon);
-                let n = polygon.len() as f64;
-                let cx = polygon.iter().map(|p| p[0]).sum::<f64>() / n;
-                let cy = polygon.iter().map(|p| p[1]).sum::<f64>() / n;
-                let cz = polygon.iter().map(|p| p[2]).sum::<f64>() / n;
+                let n = polygon.len() as f32;
+                let cx = polygon.iter().map(|p| p[0]).sum::<f32>() / n;
+                let cy = polygon.iter().map(|p| p[1]).sum::<f32>() / n;
+                let cz = polygon.iter().map(|p| p[2]).sum::<f32>() / n;
                 Some(Line::new(cx, cy, cz, cx - normal[0] * thickness, cy - normal[1] * thickness, cz - normal[2] * thickness))
             }
             _ => None,
@@ -1033,10 +1033,10 @@ impl Element {
                     _ => serde_json::Value::Null,
                 };
                 let geo_type = if matches!(self.geometry, ElementGeometry::Mesh(_)) { "Mesh" } else { "None" };
-                let poly_json: Vec<[f64; 3]> = polygon.iter().map(|p| [p[0], p[1], p[2]]).collect();
-                let poly_top_json: Vec<[f64; 3]> = polygon_top.iter().map(|p| [p[0], p[1], p[2]]).collect();
+                let poly_json: Vec<[f32; 3]> = polygon.iter().map(|p| [p[0], p[1], p[2]]).collect();
+                let poly_top_json: Vec<[f32; 3]> = polygon_top.iter().map(|p| [p[0], p[1], p[2]]).collect();
                 let cp_json = component_plane.as_ref().map(|p| serde_json::to_value(p).unwrap_or(serde_json::Value::Null));
-                let j_mf_json: Vec<Vec<(i32, bool, f64)>> = j_mf.clone();
+                let j_mf_json: Vec<Vec<(i32, bool, f32)>> = j_mf.clone();
                 serde_json::json!({
                     "component_plane": cp_json,
                     "geometry_data": geo_data,
@@ -1065,9 +1065,9 @@ impl Element {
         let type_name = data["type"].as_str().unwrap_or("Element");
         match type_name {
             "ElementColumn" => {
-                let w = data["width"].as_f64().unwrap_or(0.4);
-                let d = data["depth"].as_f64().unwrap_or(0.4);
-                let h = data["height"].as_f64().unwrap_or(3.0);
+                let w = data["width"].as_f64().unwrap_or(0.4) as f32;
+                let d = data["depth"].as_f64().unwrap_or(0.4) as f32;
+                let h = data["height"].as_f64().unwrap_or(3.0) as f32;
                 let mut elem = Self::column(w, d, h, "my_column");
                 if let Some(g) = data["guid"].as_str() { elem.set_guid(g.to_string()); }
                 elem.name = data["name"].as_str().unwrap_or(&elem.name).to_string();
@@ -1079,9 +1079,9 @@ impl Element {
                 elem
             }
             "ElementBeam" => {
-                let w = data["width"].as_f64().unwrap_or(0.1);
-                let d = data["depth"].as_f64().unwrap_or(0.2);
-                let l = data["length"].as_f64().unwrap_or(3.0);
+                let w = data["width"].as_f64().unwrap_or(0.1) as f32;
+                let d = data["depth"].as_f64().unwrap_or(0.2) as f32;
+                let l = data["length"].as_f64().unwrap_or(3.0) as f32;
                 let mut elem = Self::beam(w, d, l, "my_beam");
                 if let Some(g) = data["guid"].as_str() { elem.set_guid(g.to_string()); }
                 elem.name = data["name"].as_str().unwrap_or(&elem.name).to_string();
@@ -1099,9 +1099,9 @@ impl Element {
                         if let Some(coords) = p.as_array() {
                             if coords.len() >= 3 {
                                 polygon.push(Point::new(
-                                    coords[0].as_f64().unwrap_or(0.0),
-                                    coords[1].as_f64().unwrap_or(0.0),
-                                    coords[2].as_f64().unwrap_or(0.0),
+                                    coords[0].as_f64().unwrap_or(0.0) as f32,
+                                    coords[1].as_f64().unwrap_or(0.0) as f32,
+                                    coords[2].as_f64().unwrap_or(0.0) as f32,
                                 ));
                             }
                         }
@@ -1113,15 +1113,15 @@ impl Element {
                         if let Some(coords) = p.as_array() {
                             if coords.len() >= 3 {
                                 polygon_top.push(Point::new(
-                                    coords[0].as_f64().unwrap_or(0.0),
-                                    coords[1].as_f64().unwrap_or(0.0),
-                                    coords[2].as_f64().unwrap_or(0.0),
+                                    coords[0].as_f64().unwrap_or(0.0) as f32,
+                                    coords[1].as_f64().unwrap_or(0.0) as f32,
+                                    coords[2].as_f64().unwrap_or(0.0) as f32,
                                 ));
                             }
                         }
                     }
                 }
-                let thickness = data["thickness"].as_f64().unwrap_or(0.1);
+                let thickness = data["thickness"].as_f64().unwrap_or(0.1) as f32;
                 let mut elem = if polygon.is_empty() {
                     Self::plate_default()
                 } else if !polygon_top.is_empty() {
@@ -1154,7 +1154,7 @@ impl Element {
                                             fv.push((
                                                 jc_arr[0].as_i64().unwrap_or(0) as i32,
                                                 jc_arr[1].as_bool().unwrap_or(false),
-                                                jc_arr[2].as_f64().unwrap_or(0.0),
+                                                jc_arr[2].as_f64().unwrap_or(0.0) as f32,
                                             ));
                                         }
                                     }
@@ -1259,8 +1259,8 @@ impl Element {
             }
             ElementKind::Plate { polygon, polygon_top, thickness, .. } => {
                 proto.geometry_type = "ElementPlate".to_string();
-                let poly_json: Vec<[f64; 3]> = polygon.iter().map(|p| [p[0], p[1], p[2]]).collect();
-                let poly_top_json: Vec<[f64; 3]> = polygon_top.iter().map(|p| [p[0], p[1], p[2]]).collect();
+                let poly_json: Vec<[f32; 3]> = polygon.iter().map(|p| [p[0], p[1], p[2]]).collect();
+                let poly_top_json: Vec<[f32; 3]> = polygon_top.iter().map(|p| [p[0], p[1], p[2]]).collect();
                 let params = serde_json::json!({"polygon": poly_json, "polygon_top": poly_top_json, "thickness": thickness});
                 proto.geometry_data = params.to_string().into_bytes();
             }
@@ -1274,7 +1274,7 @@ impl Element {
                         crate::proto::JointConnection {
                             joint_id: *jid,
                             is_male: *is_male,
-                            parameter: *param,
+                            parameter: *param as f64,
                         }
                     }).collect(),
                 }
@@ -1285,10 +1285,10 @@ impl Element {
                     guid: String::new(),
                     name: cp.name.clone(),
                     frame: vec![
-                        cp.origin()[0], cp.origin()[1], cp.origin()[2],
-                        cp.x_axis()[0], cp.x_axis()[1], cp.x_axis()[2],
-                        cp.y_axis()[0], cp.y_axis()[1], cp.y_axis()[2],
-                        cp.z_axis()[0], cp.z_axis()[1], cp.z_axis()[2],
+                        cp.origin()[0] as f64, cp.origin()[1] as f64, cp.origin()[2] as f64,
+                        cp.x_axis()[0] as f64, cp.x_axis()[1] as f64, cp.x_axis()[2] as f64,
+                        cp.y_axis()[0] as f64, cp.y_axis()[1] as f64, cp.y_axis()[2] as f64,
+                        cp.z_axis()[0] as f64, cp.z_axis()[1] as f64, cp.z_axis()[2] as f64,
                     ],
                     width: 0.0,
                     xform: None,
@@ -1299,7 +1299,7 @@ impl Element {
 
         let mut xf_proto = crate::proto::Xform::default();
         xf_proto.name = self.session_transformation.name.clone();
-        xf_proto.matrix = self.session_transformation.m.to_vec();
+        xf_proto.matrix = self.session_transformation.m.iter().map(|&v| v as f64).collect();
         proto.session_transformation = Some(xf_proto);
         proto.encode_to_vec()
     }
@@ -1313,18 +1313,18 @@ impl Element {
             "ElementColumn" => {
                 let params: serde_json::Value = serde_json::from_slice(&proto.geometry_data)?;
                 Self::column(
-                    params["width"].as_f64().unwrap(),
-                    params["depth"].as_f64().unwrap(),
-                    params["height"].as_f64().unwrap(),
+                    params["width"].as_f64().unwrap() as f32,
+                    params["depth"].as_f64().unwrap() as f32,
+                    params["height"].as_f64().unwrap() as f32,
                     "my_column",
                 )
             }
             "ElementBeam" => {
                 let params: serde_json::Value = serde_json::from_slice(&proto.geometry_data)?;
                 Self::beam(
-                    params["width"].as_f64().unwrap(),
-                    params["depth"].as_f64().unwrap(),
-                    params["length"].as_f64().unwrap(),
+                    params["width"].as_f64().unwrap() as f32,
+                    params["depth"].as_f64().unwrap() as f32,
+                    params["length"].as_f64().unwrap() as f32,
                     "my_beam",
                 )
             }
@@ -1335,9 +1335,9 @@ impl Element {
                     for p in arr {
                         if let Some(coords) = p.as_array() {
                             polygon.push(Point::new(
-                                coords[0].as_f64().unwrap_or(0.0),
-                                coords[1].as_f64().unwrap_or(0.0),
-                                coords[2].as_f64().unwrap_or(0.0),
+                                coords[0].as_f64().unwrap_or(0.0) as f32,
+                                coords[1].as_f64().unwrap_or(0.0) as f32,
+                                coords[2].as_f64().unwrap_or(0.0) as f32,
                             ));
                         }
                     }
@@ -1347,9 +1347,9 @@ impl Element {
                     for p in arr {
                         if let Some(coords) = p.as_array() {
                             polygon_top.push(Point::new(
-                                coords[0].as_f64().unwrap_or(0.0),
-                                coords[1].as_f64().unwrap_or(0.0),
-                                coords[2].as_f64().unwrap_or(0.0),
+                                coords[0].as_f64().unwrap_or(0.0) as f32,
+                                coords[1].as_f64().unwrap_or(0.0) as f32,
+                                coords[2].as_f64().unwrap_or(0.0) as f32,
                             ));
                         }
                     }
@@ -1357,7 +1357,7 @@ impl Element {
                 if !polygon_top.is_empty() {
                     Self::plate_from_top_bottom(polygon, polygon_top, "my_plate")
                 } else {
-                    Self::plate(polygon, params["thickness"].as_f64().unwrap(), "my_plate")
+                    Self::plate(polygon, params["thickness"].as_f64().unwrap() as f32, "my_plate")
                 }
             }
             "Mesh" => {
@@ -1383,7 +1383,7 @@ impl Element {
             let mut xf = Xform::identity();
             xf.name = xf_proto.name;
             if xf_proto.matrix.len() == 16 {
-                for i in 0..16 { xf.m[i] = xf_proto.matrix[i]; }
+                for i in 0..16 { xf.m[i] = xf_proto.matrix[i] as f32; }
             }
             elem.session_transformation = xf;
         }
@@ -1391,8 +1391,8 @@ impl Element {
             elem.set_joint_types(proto.joint_types.clone());
         }
         if !proto.j_mf.is_empty() {
-            let j_mf: Vec<Vec<(i32, bool, f64)>> = proto.j_mf.iter().map(|fj| {
-                fj.connections.iter().map(|c| (c.joint_id, c.is_male, c.parameter)).collect()
+            let j_mf: Vec<Vec<(i32, bool, f32)>> = proto.j_mf.iter().map(|fj| {
+                fj.connections.iter().map(|c| (c.joint_id, c.is_male, c.parameter as f32)).collect()
             }).collect();
             elem.set_j_mf(j_mf);
         }
@@ -1402,9 +1402,9 @@ impl Element {
         if let Some(cp) = &proto.component_plane {
             if cp.frame.len() == 12 {
                 let plane = Plane::new(
-                    Point::new(cp.frame[0], cp.frame[1], cp.frame[2]),
-                    Vector::new(cp.frame[3], cp.frame[4], cp.frame[5]),
-                    Vector::new(cp.frame[6], cp.frame[7], cp.frame[8]),
+                    Point::new(cp.frame[0] as f32, cp.frame[1] as f32, cp.frame[2] as f32),
+                    Vector::new(cp.frame[3] as f32, cp.frame[4] as f32, cp.frame[5] as f32),
+                    Vector::new(cp.frame[6] as f32, cp.frame[7] as f32, cp.frame[8] as f32),
                 );
                 elem.set_component_plane(plane);
             }

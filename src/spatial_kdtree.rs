@@ -34,14 +34,14 @@ impl SpatialKDTree {
         Box::new(Node { idx: indices[mid], axis, left, right })
     }
 
-    fn dist_sq(a: &Point, b: &Point) -> f64 {
+    fn dist_sq(a: &Point, b: &Point) -> f32 {
         let dx = a[0] - b[0];
         let dy = a[1] - b[1];
         let dz = a[2] - b[2];
         dx * dx + dy * dy + dz * dz
     }
 
-    fn nearest_1(node: &Option<Box<Node>>, points: &[Point], query: &Point, best_idx: &mut usize, best_d2: &mut f64) {
+    fn nearest_1(node: &Option<Box<Node>>, points: &[Point], query: &Point, best_idx: &mut usize, best_d2: &mut f32) {
         let node = match node { Some(n) => n, None => return };
         let d = Self::dist_sq(query, &points[node.idx]);
         if d < *best_d2 {
@@ -56,14 +56,14 @@ impl SpatialKDTree {
         }
     }
 
-    pub fn nearest(&self, query: &Point) -> (usize, f64) {
+    pub fn nearest(&self, query: &Point) -> (usize, f32) {
         let mut best_idx = 0;
-        let mut best_d2 = f64::INFINITY;
+        let mut best_d2 = f32::INFINITY;
         Self::nearest_1(&self.root, &self.points, query, &mut best_idx, &mut best_d2);
         (best_idx, best_d2.sqrt())
     }
 
-    fn nearest_k_rec(node: &Option<Box<Node>>, points: &[Point], query: &Point, k: usize, heap: &mut Vec<(f64, usize)>) {
+    fn nearest_k_rec(node: &Option<Box<Node>>, points: &[Point], query: &Point, k: usize, heap: &mut Vec<(f32, usize)>) {
         let node = match node { Some(n) => n, None => return };
         let d = Self::dist_sq(query, &points[node.idx]);
         if heap.len() < k {
@@ -81,15 +81,15 @@ impl SpatialKDTree {
         }
     }
 
-    pub fn nearest_k(&self, query: &Point, k: usize) -> Vec<(usize, f64)> {
-        let mut heap: Vec<(f64, usize)> = Vec::new();
+    pub fn nearest_k(&self, query: &Point, k: usize) -> Vec<(usize, f32)> {
+        let mut heap: Vec<(f32, usize)> = Vec::new();
         Self::nearest_k_rec(&self.root, &self.points, query, k, &mut heap);
-        let mut result: Vec<(usize, f64)> = heap.iter().map(|&(d2, i)| (i, d2.sqrt())).collect();
+        let mut result: Vec<(usize, f32)> = heap.iter().map(|&(d2, i)| (i, d2.sqrt())).collect();
         result.sort_by(|a, b| a.1.partial_cmp(&b.1).unwrap());
         result
     }
 
-    fn radius_rec(node: &Option<Box<Node>>, points: &[Point], query: &Point, radius_sq: f64, result: &mut Vec<(usize, f64)>) {
+    fn radius_rec(node: &Option<Box<Node>>, points: &[Point], query: &Point, radius_sq: f32, result: &mut Vec<(usize, f32)>) {
         let node = match node { Some(n) => n, None => return };
         let d = Self::dist_sq(query, &points[node.idx]);
         if d <= radius_sq {
@@ -103,7 +103,7 @@ impl SpatialKDTree {
         }
     }
 
-    pub fn radius_search(&self, query: &Point, radius: f64) -> Vec<(usize, f64)> {
+    pub fn radius_search(&self, query: &Point, radius: f32) -> Vec<(usize, f32)> {
         let mut result = Vec::new();
         Self::radius_rec(&self.root, &self.points, query, radius * radius, &mut result);
         result.sort_by(|a, b| a.1.partial_cmp(&b.1).unwrap());

@@ -12,7 +12,7 @@ pub fn run_aabb_constructor() -> crate::mini_test::TestResult {
 
         MINI_CHECK!(TOLERANCE.is_close(a.area(), 88.0));
         MINI_CHECK!(a.center() == Point::new(0.0, 0.0, 0.0));
-        MINI_CHECK!(TOLERANCE.is_close(a.diagonal(), 2.0 * 14.0_f64.sqrt()));
+        MINI_CHECK!(TOLERANCE.is_close(a.diagonal(), 2.0 * 14.0_f32.sqrt()));
         MINI_CHECK!(a.is_valid());
         MINI_CHECK!(TOLERANCE.is_close(a.volume(), 48.0));
         MINI_CHECK!(a.closest_point(&Point::new(0.0, 0.0, 0.0)) == Point::new(0.0, 0.0, 0.0));

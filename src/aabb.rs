@@ -4,33 +4,33 @@ use crate::Point;
 
 #[derive(Clone, Copy, Default, Debug)]
 pub struct AABB {
-    pub cx: f64,
-    pub cy: f64,
-    pub cz: f64,
-    pub hx: f64,
-    pub hy: f64,
-    pub hz: f64,
+    pub cx: f32,
+    pub cy: f32,
+    pub cz: f32,
+    pub hx: f32,
+    pub hy: f32,
+    pub hz: f32,
 }
 
 impl AABB {
-    pub fn new(cx: f64, cy: f64, cz: f64, hx: f64, hy: f64, hz: f64) -> Self {
+    pub fn new(cx: f32, cy: f32, cz: f32, hx: f32, hy: f32, hz: f32) -> Self {
         AABB { cx, cy, cz, hx, hy, hz }
     }
 
-    pub fn from_point(point: &Point, inflate: f64) -> Self {
+    pub fn from_point(point: &Point, inflate: f32) -> Self {
         AABB { cx: point[0], cy: point[1], cz: point[2], hx: inflate, hy: inflate, hz: inflate }
     }
 
-    pub fn from_points(points: &[Point], inflate: f64) -> Self {
+    pub fn from_points(points: &[Point], inflate: f32) -> Self {
         if points.is_empty() {
             return AABB::default();
         }
-        let mut min_x = f64::MAX;
-        let mut min_y = f64::MAX;
-        let mut min_z = f64::MAX;
-        let mut max_x = f64::MIN;
-        let mut max_y = f64::MIN;
-        let mut max_z = f64::MIN;
+        let mut min_x = f32::MAX;
+        let mut min_y = f32::MAX;
+        let mut min_z = f32::MAX;
+        let mut max_x = f32::MIN;
+        let mut max_y = f32::MIN;
+        let mut max_z = f32::MIN;
         for pt in points {
             min_x = min_x.min(pt[0]);
             min_y = min_y.min(pt[1]);
@@ -52,7 +52,7 @@ impl AABB {
     /// Build an AABB directly from a stride-3 coord buffer (e.g. `Polyline::coords`)
     /// without constructing an intermediate `Vec<Point>`. Used on hot paths like
     /// `Session::add_polyline` where the caller already has raw coords.
-    pub fn from_coords_stride3(coords: &[f64], inflate: f64) -> Self {
+    pub fn from_coords_stride3(coords: &[f32], inflate: f32) -> Self {
         if coords.len() < 3 {
             return AABB::default();
         }
@@ -81,25 +81,25 @@ impl AABB {
         }
     }
 
-    pub fn from_line(line: &crate::line::Line, inflate: f64) -> Self {
+    pub fn from_line(line: &crate::line::Line, inflate: f32) -> Self {
         let points = vec![line.start(), line.end()];
         Self::from_points(&points, inflate)
     }
 
-    pub fn from_polyline(polyline: &crate::polyline::Polyline, inflate: f64) -> Self {
+    pub fn from_polyline(polyline: &crate::polyline::Polyline, inflate: f32) -> Self {
         Self::from_points(&polyline.get_points(), inflate)
     }
 
-    pub fn from_mesh(mesh: &crate::mesh::Mesh, inflate: f64) -> Self {
+    pub fn from_mesh(mesh: &crate::mesh::Mesh, inflate: f32) -> Self {
         let (vertices, _) = mesh.to_vertices_and_faces();
         Self::from_points(&vertices, inflate)
     }
 
-    pub fn from_pointcloud(pointcloud: &crate::pointcloud::PointCloud, inflate: f64) -> Self {
+    pub fn from_pointcloud(pointcloud: &crate::pointcloud::PointCloud, inflate: f32) -> Self {
         Self::from_points(&pointcloud.get_points(), inflate)
     }
 
-    pub fn from_nurbscurve(curve: &crate::nurbscurve::NurbsCurve, inflate: f64, tight: bool) -> Self {
+    pub fn from_nurbscurve(curve: &crate::nurbscurve::NurbsCurve, inflate: f32, tight: bool) -> Self {
         if !curve.is_valid() || curve.cv_count() == 0 {
             return AABB::default();
         }
@@ -117,10 +117,10 @@ impl AABB {
             }
         }
         const NUM_SAMPLES: usize = 20;
-        let dt = (t1 - t0) / NUM_SAMPLES as f64;
+        let dt = (t1 - t0) / NUM_SAMPLES as f32;
         for axis in 0..3 {
             for i in 0..NUM_SAMPLES {
-                let t_start = t0 + i as f64 * dt;
+                let t_start = t0 + i as f32 * dt;
                 let t_end = t_start + dt;
                 let deriv_start = curve.evaluate(t_start, 1);
                 let deriv_end = curve.evaluate(t_end, 1);
@@ -176,7 +176,7 @@ impl AABB {
         Self::from_points(&extrema_points, inflate)
     }
 
-    pub fn from_nurbssurface(surface: &crate::nurbssurface::NurbsSurface, inflate: f64) -> Self {
+    pub fn from_nurbssurface(surface: &crate::nurbssurface::NurbsSurface, inflate: f32) -> Self {
         if !surface.is_valid() || surface.cv_count_dir(Some(0)) == 0 || surface.cv_count_dir(Some(1)) == 0 {
             return AABB::default();
         }
@@ -216,11 +216,11 @@ impl AABB {
         Point::new(self.cx, self.cy, self.cz)
     }
 
-    pub fn area(&self) -> f64 {
+    pub fn area(&self) -> f32 {
         8.0 * (self.hx * self.hy + self.hy * self.hz + self.hz * self.hx)
     }
 
-    pub fn diagonal(&self) -> f64 {
+    pub fn diagonal(&self) -> f32 {
         2.0 * (self.hx * self.hx + self.hy * self.hy + self.hz * self.hz).sqrt()
     }
 
@@ -228,7 +228,7 @@ impl AABB {
         self.hx >= 0.0 && self.hy >= 0.0 && self.hz >= 0.0
     }
 
-    pub fn volume(&self) -> f64 {
+    pub fn volume(&self) -> f32 {
         8.0 * self.hx * self.hy * self.hz
     }
 
@@ -275,7 +275,7 @@ impl AABB {
         ]
     }
 
-    pub fn point_at(&self, x: f64, y: f64, z: f64) -> Point {
+    pub fn point_at(&self, x: f32, y: f32, z: f32) -> Point {
         Point::new(self.cx + x, self.cy + y, self.cz + z)
     }
 
@@ -291,7 +291,7 @@ impl AABB {
         self.cz = (min_z + max_z) * 0.5; self.hz = (max_z - min_z) * 0.5;
     }
 
-    pub fn inflate(&mut self, amount: f64) {
+    pub fn inflate(&mut self, amount: f32) {
         self.hx += amount;
         self.hy += amount;
         self.hz += amount;

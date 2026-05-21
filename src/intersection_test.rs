@@ -594,8 +594,8 @@ pub fn run_intersection_ray_mesh_bvh_vs_naive() -> TestResult {
         let mut polygons: Vec<Vec<Point>> = Vec::new();
         for i in 0..10 {
             for j in 0..10 {
-                let x = i as f64;
-                let y = j as f64;
+                let x = i as f32;
+                let y = j as f32;
                 polygons.push(vec![
                     Point::new(x, y, 0.0),
                     Point::new(x + 1.0, y, 0.0),
@@ -714,7 +714,7 @@ pub fn run_intersection_surface_plane() -> TestResult {
         MINI_CHECK!(curves[0].is_valid());
         let (t0, t1) = curves[0].domain();
         for i in 0..=10 {
-            let t = t0 + (t1 - t0) * i as f64 / 10.0;
+            let t = t0 + (t1 - t0) * i as f32 / 10.0;
             let p = curves[0].point_at(t);
             MINI_CHECK!((p[0] - 5.0).abs() < 0.5);
             MINI_CHECK!((p[2] - 5.0).abs() < 0.5);
@@ -733,8 +733,8 @@ pub fn run_intersection_surface_plane_curved() -> TestResult {
         let mut pts = Vec::new();
         for i in 0..4 {
             for j in 0..4 {
-                let x = i as f64 * 10.0;
-                let y = j as f64 * 10.0;
+                let x = i as f32 * 10.0;
+                let y = j as f32 * 10.0;
                 let z = if (i == 1 || i == 2) && (j == 1 || j == 2) { 10.0 } else { 0.0 };
                 pts.push(Point::new(x, y, z));
             }
@@ -748,7 +748,7 @@ pub fn run_intersection_surface_plane_curved() -> TestResult {
         MINI_CHECK!(curves[0].degree() == 3);
         let (t0, t1) = curves[0].domain();
         for i in 0..=10 {
-            let t = t0 + (t1 - t0) * i as f64 / 10.0;
+            let t = t0 + (t1 - t0) * i as f32 / 10.0;
             let p = curves[0].point_at(t);
             MINI_CHECK!((p[2] - 3.0).abs() < 1.0);
         }

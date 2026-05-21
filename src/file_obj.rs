@@ -29,9 +29,9 @@ pub fn read_file_obj(filepath: &str) -> io::Result<Mesh> {
         if line.starts_with("v ") {
             let mut parts = line.split_whitespace();
             let _ = parts.next();
-            let x: f64 = parts.next().unwrap_or("0").parse().unwrap_or(0.0);
-            let y: f64 = parts.next().unwrap_or("0").parse().unwrap_or(0.0);
-            let z: f64 = parts.next().unwrap_or("0").parse().unwrap_or(0.0);
+            let x: f32 = parts.next().unwrap_or("0").parse().unwrap_or(0.0);
+            let y: f32 = parts.next().unwrap_or("0").parse().unwrap_or(0.0);
+            let z: f32 = parts.next().unwrap_or("0").parse().unwrap_or(0.0);
             verts.push(Point::new(x, y, z));
         } else if line.starts_with("f ") {
             let mut parts = line.split_whitespace();
@@ -84,9 +84,9 @@ pub fn read_file_obj_polylines(filepath: &str) -> io::Result<Vec<Polyline>> {
         if line.starts_with("v ") {
             let mut parts = line.split_whitespace();
             let _ = parts.next();
-            let x: f64 = parts.next().unwrap_or("0").parse().unwrap_or(0.0);
-            let y: f64 = parts.next().unwrap_or("0").parse().unwrap_or(0.0);
-            let z: f64 = parts.next().unwrap_or("0").parse().unwrap_or(0.0);
+            let x: f32 = parts.next().unwrap_or("0").parse().unwrap_or(0.0);
+            let y: f32 = parts.next().unwrap_or("0").parse().unwrap_or(0.0);
+            let z: f32 = parts.next().unwrap_or("0").parse().unwrap_or(0.0);
             verts.push(Point::new(x, y, z));
         } else if line.starts_with("curv ") {
             let mut parts = line.split_whitespace();
@@ -113,7 +113,7 @@ pub fn read_file_obj_polylines(filepath: &str) -> io::Result<Vec<Polyline>> {
     Ok(polylines)
 }
 
-pub fn pair_polylines(polylines: &[Polyline], search_radius: f64) -> Vec<(usize, usize)> {
+pub fn pair_polylines(polylines: &[Polyline], search_radius: f32) -> Vec<(usize, usize)> {
     let np = polylines.len();
     let mut centroids: Vec<Point> = vec![Point::new(0.0, 0.0, 0.0); np];
     let mut normals: Vec<crate::Vector> = vec![crate::Vector::new(0.0, 0.0, 0.0); np];
@@ -136,7 +136,7 @@ pub fn pair_polylines(polylines: &[Polyline], search_radius: f64) -> Vec<(usize,
         let pts = open_pts(&polylines[i]);
         let mut cx = 0.0; let mut cy = 0.0; let mut cz = 0.0;
         for p in &pts { cx += p[0]; cy += p[1]; cz += p[2]; }
-        let n = pts.len() as f64;
+        let n = pts.len() as f32;
         centroids[i] = Point::new(cx / n, cy / n, cz / n);
         normals[i] = Element::polygon_normal(&pts);
         aabbs[i] = AABB::from_polyline(&polylines[i], search_radius);
@@ -153,7 +153,7 @@ pub fn pair_polylines(polylines: &[Polyline], search_radius: f64) -> Vec<(usize,
     for i in 0..np {
         if paired[i] { continue; }
         let mut best: i32 = -1;
-        let mut best_d = 1e30_f64;
+        let mut best_d = 1e30_f32;
         let a = &aabbs[i];
         let ni = normals[i].clone();
         let ci = centroids[i].clone();

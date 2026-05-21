@@ -30,12 +30,12 @@ pub struct Point {
     guid: std::sync::OnceLock<String>, // Unique identifier
     pub name: String, // Name of the point
     #[serde(rename = "x")]
-    _x: f64, // X coordinate (private)
+    _x: f32, // X coordinate (private)
     #[serde(rename = "y")]
-    _y: f64, // Y coordinate (private)
+    _y: f32, // Y coordinate (private)
     #[serde(rename = "z")]
-    _z: f64, // Z coordinate (private)
-    pub width: f64,   // Width of the point
+    _z: f32, // Z coordinate (private)
+    pub width: f32,   // Width of the point
     pub pointcolor: Color, // Color of the point
     #[serde(default = "Xform::identity")]
     pub xform: Xform, // Transformation matrix
@@ -68,7 +68,7 @@ impl Point {
     /// # Returns
     ///
     /// A new Point with the specified coordinates and a unique GUID.
-    pub fn new(x: f64, y: f64, z: f64) -> Self {
+    pub fn new(x: f32, y: f32, z: f32) -> Self {
         Self {
             _x: x,
             _y: y,
@@ -89,7 +89,7 @@ impl Point {
     /// # Returns
     ///
     /// A new Point with the specified coordinates, name, and a unique GUID.
-    pub fn with_name(x: f64, y: f64, z: f64, name: &str) -> Self {
+    pub fn with_name(x: f32, y: f32, z: f32, name: &str) -> Self {
         Self {
             _x: x,
             _y: y,
@@ -227,10 +227,10 @@ impl Point {
         let proto = crate::proto::Point {
             guid: self.guid().to_string(),
             name: self.name.clone(),
-            x: self._x,
-            y: self._y,
-            z: self._z,
-            width: self.width,
+            x: self._x as f64,
+            y: self._y as f64,
+            z: self._z as f64,
+            width: self.width as f64,
             pointcolor: Some(crate::proto::Color {
                 guid: self.pointcolor.guid().to_string(),
                 name: self.pointcolor.name.clone(),
@@ -242,7 +242,7 @@ impl Point {
             xform: Some(crate::proto::Xform {
                 guid: self.xform.guid().to_string(),
                 name: self.xform.name.clone(),
-                matrix: self.xform.m.to_vec(),
+                matrix: self.xform.m.iter().map(|&v| v as f64).collect(),
             }),
         };
         proto.encode_to_vec()
@@ -262,11 +262,11 @@ impl Point {
         
         let proto = crate::proto::Point::decode(data)?;
         
-        let mut pt = Self::new(proto.x, proto.y, proto.z);
+        let mut pt = Self::new(proto.x as f32, proto.y as f32, proto.z as f32);
         pt.set_guid(proto.guid);
         pt.name = proto.name;
-        pt.width = proto.width;
-        
+        pt.width = proto.width as f32;
+
         if let Some(color) = proto.pointcolor {
             pt.pointcolor.name = color.name;
             pt.pointcolor.r = color.r as u8;
@@ -274,13 +274,13 @@ impl Point {
             pt.pointcolor.b = color.b as u8;
             pt.pointcolor.a = color.a as u8;
         }
-        
+
         if let Some(xform) = proto.xform {
             pt.xform.set_guid(xform.guid);
             pt.xform.name = xform.name;
             for (i, val) in xform.matrix.iter().enumerate() {
                 if i < 16 {
-                    pt.xform.m[i] = *val;
+                    pt.xform.m[i] = *val as f32;
                 }
             }
         }
@@ -435,7 +435,7 @@ impl Point {
     /// # Arguments
     /// * `p` - The other point
     /// * `double_min` - Optional minimum value for distance calculation. Defaults to 1e-12.
-    pub fn distance(&self, p: &Point, double_min: Option<f64>) -> f64 {
+    pub fn distance(&self, p: &Point, double_min: Option<f32>) -> f32 {
         let double_min = double_min.unwrap_or(1e-12);
         let mut dx = (self[0] - p[0]).abs();
         let mut dy = (self[1] - p[1]).abs();
@@ -464,7 +464,7 @@ impl Point {
     /// # Arguments
     /// * `p` - The other point
     /// * `double_min` - Optional minimum value for distance calculation. Defaults to 1e-12.
-    pub fn squared_distance(&self, p: &Point, double_min: Option<f64>) -> f64 {
+    pub fn squared_distance(&self, p: &Point, double_min: Option<f32>) -> f32 {
         let double_min = double_min.unwrap_or(1e-12);
         let mut dx = (self[0] - p[0]).abs();
         let mut dy = (self[1] - p[1]).abs();
@@ -496,7 +496,7 @@ impl Point {
     /// # Returns
     ///
     /// The area of the polygon.
-    pub fn area(points: &[Point]) -> f64 {
+    pub fn area(points: &[Point]) -> f32 {
         let n = points.len();
         let mut area = 0.0;
 
@@ -562,12 +562,12 @@ impl Point {
             cy += p[1];
             cz += p[2];
         }
-        let n = points.len() as f64;
+        let n = points.len() as f32;
         Point::new(cx / n, cy / n, cz / n)
     }
 
     /// Approximate dihedral angle in degrees between half-planes (p,q,r) and (p,q,s).
-    pub fn dihedral_angle_deg(p: &Point, q: &Point, r: &Point, s: &Point) -> f64 {
+    pub fn dihedral_angle_deg(p: &Point, q: &Point, r: &Point, s: &Point) -> f32 {
         use crate::tolerance::Tolerance;
         let pq = Vector::new(q[0] - p[0], q[1] - p[1], q[2] - p[2]);
         let pr = Vector::new(r[0] - p[0], r[1] - p[1], r[2] - p[2]);
@@ -619,7 +619,7 @@ impl PartialEq for Point {
 ///////////////////////////////////////////////////////////////////////////////////////////
 
 impl Index<usize> for Point {
-    type Output = f64;
+    type Output = f32;
 
     fn index(&self, index: usize) -> &Self::Output {
         match index {
@@ -646,16 +646,16 @@ impl IndexMut<usize> for Point {
 // No-copy operators
 ///////////////////////////////////////////////////////////////////////////////////////////
 
-impl MulAssign<f64> for Point {
-    fn mul_assign(&mut self, rhs: f64) {
+impl MulAssign<f32> for Point {
+    fn mul_assign(&mut self, rhs: f32) {
         self._x *= rhs;
         self._y *= rhs;
         self._z *= rhs;
     }
 }
 
-impl DivAssign<f64> for Point {
-    fn div_assign(&mut self, rhs: f64) {
+impl DivAssign<f32> for Point {
+    fn div_assign(&mut self, rhs: f32) {
         self._x /= rhs;
         self._y /= rhs;
         self._z /= rhs;
@@ -682,18 +682,18 @@ impl SubAssign<Vector> for Point {
 // Copy operators
 ///////////////////////////////////////////////////////////////////////////////////////////
 
-impl Mul<f64> for Point {
+impl Mul<f32> for Point {
     type Output = Point;
 
-    fn mul(self, rhs: f64) -> Self::Output {
+    fn mul(self, rhs: f32) -> Self::Output {
         Point::new(self._x * rhs, self._y * rhs, self._z * rhs)
     }
 }
 
-impl Div<f64> for Point {
+impl Div<f32> for Point {
     type Output = Point;
 
-    fn div(self, rhs: f64) -> Self::Output {
+    fn div(self, rhs: f32) -> Self::Output {
         Point::new(self._x / rhs, self._y / rhs, self._z / rhs)
     }
 }
@@ -723,18 +723,18 @@ impl Sub<Vector> for Point {
 }
 
 // Reference operators (avoid cloning)
-impl Mul<f64> for &Point {
+impl Mul<f32> for &Point {
     type Output = Point;
 
-    fn mul(self, rhs: f64) -> Self::Output {
+    fn mul(self, rhs: f32) -> Self::Output {
         Point::new(self._x * rhs, self._y * rhs, self._z * rhs)
     }
 }
 
-impl Div<f64> for &Point {
+impl Div<f32> for &Point {
     type Output = Point;
 
-    fn div(self, rhs: f64) -> Self::Output {
+    fn div(self, rhs: f32) -> Self::Output {
         Point::new(self._x / rhs, self._y / rhs, self._z / rhs)
     }
 }

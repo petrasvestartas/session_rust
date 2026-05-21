@@ -10,7 +10,7 @@ pub struct MeshOffsetLayers {
     pub sides: Mesh,
 }
 
-fn offset_planes(mesh: &Mesh, distance: f64) -> HashMap<usize, (f64, f64, f64, f64)> {
+fn offset_planes(mesh: &Mesh, distance: f32) -> HashMap<usize, (f32, f32, f32, f32)> {
     let mut planes = HashMap::new();
     for fk in mesh.faces() {
         let c = match mesh.face_centroid(fk) { Some(p) => p, None => continue };
@@ -25,7 +25,7 @@ fn offset_planes(mesh: &Mesh, distance: f64) -> HashMap<usize, (f64, f64, f64, f
     planes
 }
 
-fn intersect_planes(planes: &[(f64, f64, f64, f64)], fallback: &Point) -> Point {
+fn intersect_planes(planes: &[(f32, f32, f32, f32)], fallback: &Point) -> Point {
     let n = planes.len();
     if n == 0 {
         return fallback.clone();
@@ -36,9 +36,9 @@ fn intersect_planes(planes: &[(f64, f64, f64, f64)], fallback: &Point) -> Point 
         let t = d_rhs - (a * fallback[0] + b * fallback[1] + c * fallback[2]);
         return Point::new(fallback[0] + t * a, fallback[1] + t * b, fallback[2] + t * c);
     }
-    const EPS: f64 = 1e-8;
-    let mut mat = [[0.0f64; 3]; 3];
-    let mut rhs = [0.0f64; 3];
+    const EPS: f32 = 1e-8;
+    let mut mat = [[0.0f32; 3]; 3];
+    let mut rhs = [0.0f32; 3];
     for &(a, b, c, d) in planes {
         let d_rhs = -d;
         mat[0][0] += a * a;
@@ -79,7 +79,7 @@ fn intersect_planes(planes: &[(f64, f64, f64, f64)], fallback: &Point) -> Point 
     Point::new(x, y, z)
 }
 
-fn offset_vertices(mesh: &Mesh, planes: &HashMap<usize, (f64, f64, f64, f64)>) -> HashMap<usize, Point> {
+fn offset_vertices(mesh: &Mesh, planes: &HashMap<usize, (f32, f32, f32, f32)>) -> HashMap<usize, Point> {
     let mut result = HashMap::new();
     for vk in mesh.vertices() {
         let vp = match mesh.vertex_point(vk) { Some(p) => p, None => continue };
@@ -88,7 +88,7 @@ fn offset_vertices(mesh: &Mesh, planes: &HashMap<usize, (f64, f64, f64, f64)>) -
             result.insert(vk, vp);
             continue;
         }
-        let adj: Vec<(f64, f64, f64, f64)> = fkeys.iter()
+        let adj: Vec<(f32, f32, f32, f32)> = fkeys.iter()
             .filter_map(|fk| planes.get(fk).copied())
             .collect();
         result.insert(vk, intersect_planes(&adj, &vp));
@@ -97,7 +97,7 @@ fn offset_vertices(mesh: &Mesh, planes: &HashMap<usize, (f64, f64, f64, f64)>) -
 }
 
 impl MeshOffset {
-    pub fn from_mesh(mesh: &Mesh, distance: f64) -> Mesh {
+    pub fn from_mesh(mesh: &Mesh, distance: f32) -> Mesh {
         let planes = offset_planes(mesh, distance);
         let off_verts = offset_vertices(mesh, &planes);
 
@@ -127,7 +127,7 @@ impl MeshOffset {
         result
     }
 
-    pub fn from_mesh_layers(mesh: &Mesh, distance: f64) -> MeshOffsetLayers {
+    pub fn from_mesh_layers(mesh: &Mesh, distance: f32) -> MeshOffsetLayers {
         let planes = offset_planes(mesh, distance);
         let off_verts = offset_vertices(mesh, &planes);
 
