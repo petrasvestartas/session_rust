@@ -74,7 +74,7 @@
     255
   ],
   "facedata": {},
-  "guid": "d228b8a6-ec33-4b96-a8db-4b42ec9de04a",
+  "guid": "f77cf0de-0355-4bf0-b01d-de67056c3172",
   "halfedge": {
     "0": {
       "1": 2,
@@ -171,12 +171,12 @@
   "max_vertex": 8,
   "name": "test_mesh",
   "objectcolor": {
-    "a": 255,
-    "b": 255,
-    "g": 255,
-    "guid": "a7e095f4-64df-4436-9868-c0515e099b4b",
+    "a": 1.0,
+    "b": 1.0,
+    "g": 1.0,
+    "guid": "488cad9e-73dc-4de2-8a03-302d1b124ddb",
     "name": "white",
-    "r": 255,
+    "r": 1.0,
     "type": "Color"
   },
   "pointcolors": [
@@ -280,7 +280,7 @@
     1.0
   ],
   "xform": {
-    "guid": "eff0198a-7089-47e3-b883-7e8f077f6771",
+    "guid": "01beb65d-d9f9-4f75-978c-abe5166c5a70",
     "m": [
       1.0,
       0.0,

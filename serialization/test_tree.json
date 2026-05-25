@@ -1,9 +1,9 @@
 {
-    "guid": "d80da4b2-5284-4c8a-b615-fb5630c9f552",
+    "guid": "5e34a185-cd68-45c1-9a50-fbd9a7d776a5",
     "name": "test_tree",
     "root": {
         "children": [],
-        "guid": "249fec37-2baf-47d6-a961-bf7a044786da",
+        "guid": "b4e225d0-b0b3-4010-892b-196f1314f4d9",
         "name": "root_node",
         "type": "TreeNode"
     },

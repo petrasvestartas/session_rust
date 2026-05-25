@@ -269,10 +269,10 @@ pub fn run_obb_from_geometry() -> TestResult {
                 Vector::new(0.0, 0.0, 1.0),
             ],
             vec![
-                Color::new(255, 0, 0, 255),
-                Color::new(0, 255, 0, 255),
-                Color::new(0, 0, 255, 255),
-                Color::new(255, 255, 0, 255),
+                Color::new(1.0, 0.0, 0.0, 1.0),
+                Color::new(0.0, 1.0, 0.0, 1.0),
+                Color::new(0.0, 0.0, 1.0, 1.0),
+                Color::new(1.0, 1.0, 0.0, 1.0),
             ],
         ), 0.0);
 

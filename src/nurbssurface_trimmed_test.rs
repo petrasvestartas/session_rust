@@ -393,7 +393,7 @@ pub fn run_nurbssurface_trimmed_json_roundtrip() -> TestResult {
         let mut ts = NurbsSurfaceTrimmed::create(&srf, &outer);
         ts.name = "test_nurbssurface_trimmed".to_string();
         ts.width = 2.0;
-        ts.surfacecolor = Color::new(255, 128, 64, 255);
+        ts.surfacecolor = Color::new(1.0, 0.5, 0.25, 1.0);
 
         // JSON object
         let json = ts.jsondump().unwrap();
@@ -440,7 +440,7 @@ pub fn run_nurbssurface_trimmed_protobuf_roundtrip() -> TestResult {
         let mut ts = NurbsSurfaceTrimmed::create(&srf, &outer);
         ts.name = "test_nurbssurface_trimmed".to_string();
         ts.width = 2.0;
-        ts.surfacecolor = Color::new(255, 128, 64, 255);
+        ts.surfacecolor = Color::new(1.0, 0.5, 0.25, 1.0);
 
         // String
         let proto_string = ts.pb_dumps();

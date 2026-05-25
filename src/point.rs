@@ -234,10 +234,10 @@ impl Point {
             pointcolor: Some(crate::proto::Color {
                 guid: self.pointcolor.guid().to_string(),
                 name: self.pointcolor.name.clone(),
-                r: self.pointcolor.r as i32,
-                g: self.pointcolor.g as i32,
-                b: self.pointcolor.b as i32,
-                a: self.pointcolor.a as i32,
+                r: self.pointcolor.r,
+                g: self.pointcolor.g,
+                b: self.pointcolor.b,
+                a: self.pointcolor.a,
             }),
             xform: Some(crate::proto::Xform {
                 guid: self.xform.guid().to_string(),
@@ -269,10 +269,10 @@ impl Point {
 
         if let Some(color) = proto.pointcolor {
             pt.pointcolor.name = color.name;
-            pt.pointcolor.r = color.r as u8;
-            pt.pointcolor.g = color.g as u8;
-            pt.pointcolor.b = color.b as u8;
-            pt.pointcolor.a = color.a as u8;
+            pt.pointcolor.r = color.r;
+            pt.pointcolor.g = color.g;
+            pt.pointcolor.b = color.b;
+            pt.pointcolor.a = color.a;
         }
 
         if let Some(xform) = proto.xform {

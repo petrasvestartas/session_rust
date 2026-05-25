@@ -62,14 +62,14 @@ impl serde::Serialize for NurbsSurface {
         map.serialize_entry("cv_count_v", &self.m_cv_count[1])?;
         map.serialize_entry("dimension", &self.m_dim)?;
         let facecolors_flat: Vec<u8> = self.facecolors.iter()
-            .flat_map(|c| vec![c.r, c.g, c.b, c.a]).collect();
+            .flat_map(|c| vec![(c.r * 255.0) as u8, (c.g * 255.0) as u8, (c.b * 255.0) as u8, (c.a * 255.0) as u8]).collect();
         map.serialize_entry("facecolors", &facecolors_flat)?;
         map.serialize_entry("guid", self.guid())?;
         map.serialize_entry("is_rational", &self.m_is_rat)?;
         map.serialize_entry("nurbsknots_u", &self.m_nurbsknot[0])?;
         map.serialize_entry("nurbsknots_v", &self.m_nurbsknot[1])?;
         let linecolors_flat: Vec<u8> = self.linecolors.iter()
-            .flat_map(|c| vec![c.r, c.g, c.b, c.a]).collect();
+            .flat_map(|c| vec![(c.r * 255.0) as u8, (c.g * 255.0) as u8, (c.b * 255.0) as u8, (c.a * 255.0) as u8]).collect();
         map.serialize_entry("linecolors", &linecolors_flat)?;
         if let Some(ref m) = self.m_mesh {
             if m.number_of_vertices() > 0 {
@@ -80,7 +80,7 @@ impl serde::Serialize for NurbsSurface {
         map.serialize_entry("order_u", &self.m_order[0])?;
         map.serialize_entry("order_v", &self.m_order[1])?;
         let pointcolors_flat: Vec<u8> = self.pointcolors.iter()
-            .flat_map(|c| vec![c.r, c.g, c.b, c.a]).collect();
+            .flat_map(|c| vec![(c.r * 255.0) as u8, (c.g * 255.0) as u8, (c.b * 255.0) as u8, (c.a * 255.0) as u8]).collect();
         map.serialize_entry("pointcolors", &pointcolors_flat)?;
         map.serialize_entry("type", "NurbsSurface")?;
         map.serialize_entry("width", &self.width)?;
@@ -152,15 +152,15 @@ impl<'de> Deserialize<'de> for NurbsSurface {
 
         let pointcolors = data.pointcolors.chunks(4)
             .filter(|c| c.len() == 4)
-            .map(|c| Color::new(c[0], c[1], c[2], c[3]))
+            .map(|c| Color::new(c[0] as f32 / 255.0, c[1] as f32 / 255.0, c[2] as f32 / 255.0, c[3] as f32 / 255.0))
             .collect();
         let facecolors = data.facecolors.chunks(4)
             .filter(|c| c.len() == 4)
-            .map(|c| Color::new(c[0], c[1], c[2], c[3]))
+            .map(|c| Color::new(c[0] as f32 / 255.0, c[1] as f32 / 255.0, c[2] as f32 / 255.0, c[3] as f32 / 255.0))
             .collect();
         let linecolors = data.linecolors.chunks(4)
             .filter(|c| c.len() == 4)
-            .map(|c| Color::new(c[0], c[1], c[2], c[3]))
+            .map(|c| Color::new(c[0] as f32 / 255.0, c[1] as f32 / 255.0, c[2] as f32 / 255.0, c[3] as f32 / 255.0))
             .collect();
 
         Ok(NurbsSurface {
@@ -2020,15 +2020,15 @@ impl NurbsSurface {
             width: self.width as f64,
             pointcolors: self.pointcolors.iter().map(|c| crate::proto::Color {
                 guid: String::new(), name: String::new(),
-                r: c.r as i32, g: c.g as i32, b: c.b as i32, a: c.a as i32,
+                r: c.r, g: c.g, b: c.b, a: c.a,
             }).collect(),
             facecolors: self.facecolors.iter().map(|c| crate::proto::Color {
                 guid: String::new(), name: String::new(),
-                r: c.r as i32, g: c.g as i32, b: c.b as i32, a: c.a as i32,
+                r: c.r, g: c.g, b: c.b, a: c.a,
             }).collect(),
             linecolors: self.linecolors.iter().map(|c| crate::proto::Color {
                 guid: String::new(), name: String::new(),
-                r: c.r as i32, g: c.g as i32, b: c.b as i32, a: c.a as i32,
+                r: c.r, g: c.g, b: c.b, a: c.a,
             }).collect(),
             xform: Some(crate::proto::Xform {
                 guid: self.xform.guid().to_string(),
@@ -2095,9 +2095,9 @@ impl NurbsSurface {
             surface.m_cv = proto.cvs.into_iter().map(|v| v as f32).collect();
         }
 
-        surface.pointcolors = proto.pointcolors.iter().map(|c| Color::new(c.r as u8, c.g as u8, c.b as u8, c.a as u8)).collect();
-        surface.facecolors = proto.facecolors.iter().map(|c| Color::new(c.r as u8, c.g as u8, c.b as u8, c.a as u8)).collect();
-        surface.linecolors = proto.linecolors.iter().map(|c| Color::new(c.r as u8, c.g as u8, c.b as u8, c.a as u8)).collect();
+        surface.pointcolors = proto.pointcolors.iter().map(|c| Color::new(c.r, c.g, c.b, c.a)).collect();
+        surface.facecolors = proto.facecolors.iter().map(|c| Color::new(c.r, c.g, c.b, c.a)).collect();
+        surface.linecolors = proto.linecolors.iter().map(|c| Color::new(c.r, c.g, c.b, c.a)).collect();
 
         // Load transform
         if let Some(xform) = proto.xform {

@@ -74,7 +74,7 @@ pub fn run_line_constructor() -> TestResult {
 
         // Line with custom color and width
         let mut lc = Line::new(0.0, 0.0, 0.0, 1.0, 1.0, 1.0);
-        lc.linecolor = Color::with_name(255, 0, 0, 255, "red");
+        lc.linecolor = Color::with_name(1.0, 0.0, 0.0, 1.0, "red");
         lc.width = 2.5;
 
         // with_name constructor
@@ -106,7 +106,7 @@ pub fn run_line_constructor() -> TestResult {
         MINI_CHECK!(l_pv[0] == 1.0 && l_pv[1] == 2.0 && l_pv[2] == 3.0);
         MINI_CHECK!(l_pv[3] == 4.0 && l_pv[4] == 6.0 && l_pv[5] == 8.0);
         MINI_CHECK!(l_pdl[0] == 0.0 && l_pdl[3] == 5.0);
-        MINI_CHECK!(lc.linecolor.r == 255 && lc.linecolor.g == 0 && lc.width == 2.5);
+        MINI_CHECK!(lc.linecolor.r == 1.0 && lc.linecolor.g == 0.0 && lc.width == 2.5);
         MINI_CHECK!(lwn.name == "custom" && lwn[3] == 1.0);
         MINI_CHECK!(TOLERANCE.is_close(ms[1], 1.0) && TOLERANCE.is_close(me[1], 1.0));
     })

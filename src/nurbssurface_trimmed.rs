@@ -389,10 +389,10 @@ impl NurbsSurfaceTrimmed {
             surfacecolor: Some(crate::proto::Color {
                 guid: self.surfacecolor.guid().to_string(),
                 name: self.surfacecolor.name.clone(),
-                r: self.surfacecolor.r as i32,
-                g: self.surfacecolor.g as i32,
-                b: self.surfacecolor.b as i32,
-                a: self.surfacecolor.a as i32,
+                r: self.surfacecolor.r,
+                g: self.surfacecolor.g,
+                b: self.surfacecolor.b,
+                a: self.surfacecolor.a,
             }),
             xform: Some(crate::proto::Xform {
                 guid: self.xform.guid().to_string(),
@@ -434,10 +434,10 @@ impl NurbsSurfaceTrimmed {
         if let Some(color) = proto.surfacecolor {
             ts.surfacecolor.set_guid(color.guid.clone());
             ts.surfacecolor.name = color.name;
-            ts.surfacecolor.r = color.r as u8;
-            ts.surfacecolor.g = color.g as u8;
-            ts.surfacecolor.b = color.b as u8;
-            ts.surfacecolor.a = color.a as u8;
+            ts.surfacecolor.r = color.r;
+            ts.surfacecolor.g = color.g;
+            ts.surfacecolor.b = color.b;
+            ts.surfacecolor.a = color.a;
         }
 
         if let Some(xform) = proto.xform {

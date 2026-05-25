@@ -71,7 +71,7 @@ pub fn run_polyline_constructor() -> TestResult {
             Point::new(0.0, 0.0, 0.0), Point::new(1.0, 0.0, 0.0),
             Point::new(1.0, 1.0, 0.0), Point::new(0.0, 1.0, 0.0),
         ]);
-        plc.linecolor = Color::with_name(255, 0, 0, 255, "red");
+        plc.linecolor = Color::with_name(1.0, 0.0, 0.0, 1.0, "red");
         plc.width = 2.5;
 
         MINI_CHECK!(pl.name == "my_polyline" && point_count == 4 && !pl.guid().is_empty());
@@ -91,7 +91,7 @@ pub fn run_polyline_constructor() -> TestResult {
         MINI_CHECK!(radd.get_points()[0][0] == 1.0 && radd.get_points()[0][1] == 1.0);
         MINI_CHECK!(rdif.get_points()[0][0] == -1.0 && rdif.get_points()[0][1] == -1.0);
         MINI_CHECK!(neg.get_points()[0][0] == 3.0 && neg.get_points()[3][0] == 0.0);
-        MINI_CHECK!(plc.linecolor.r == 255 && plc.linecolor.g == 0 && plc.width == 2.5);
+        MINI_CHECK!(plc.linecolor.r == 1.0 && plc.linecolor.g == 0.0 && plc.width == 2.5);
 
     })
 }

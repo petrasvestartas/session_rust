@@ -93,7 +93,7 @@ pub fn run_mesh_offset_file_json_dump() -> TestResult {
         ];
         let mesh = Mesh::from_vertices_and_faces(pts, vec![vec![0, 1, 2, 3]]);
         let result = MeshOffset::from_mesh(&mesh, 1.0);
-        result.file_json_dump("mesh_offset_test_dump.json");
+        let _ = result.file_json_dump("mesh_offset_test_dump.json");
         let loaded = Mesh::file_json_load("mesh_offset_test_dump.json").unwrap();
         MINI_CHECK!(loaded.is_valid());
         MINI_CHECK!(loaded.number_of_vertices() == result.number_of_vertices());

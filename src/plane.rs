@@ -937,10 +937,10 @@ impl Plane {
             linecolor: Some(crate::proto::Color {
                 guid: self.linecolor.guid().to_string(),
                 name: self.linecolor.name.clone(),
-                r: self.linecolor.r as i32,
-                g: self.linecolor.g as i32,
-                b: self.linecolor.b as i32,
-                a: self.linecolor.a as i32,
+                r: self.linecolor.r,
+                g: self.linecolor.g,
+                b: self.linecolor.b,
+                a: self.linecolor.a,
             }),
             xform: Some(crate::proto::Xform {
                 guid: self.xform.guid().to_string(),
@@ -972,10 +972,10 @@ impl Plane {
         let mut color = Color::blue();
         if let Some(c) = proto.linecolor {
             color.name = c.name;
-            color.r = c.r as u8;
-            color.g = c.g as u8;
-            color.b = c.b as u8;
-            color.a = c.a as u8;
+            color.r = c.r;
+            color.g = c.g;
+            color.b = c.b;
+            color.a = c.a;
         }
 
         // Load xform if present

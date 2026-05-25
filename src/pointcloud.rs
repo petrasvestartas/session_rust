@@ -50,10 +50,10 @@ impl PointCloud {
 
         pc._colors.reserve(colors.len() * 4);
         for c in &colors {
-            pc._colors.push(c.r as i32);
-            pc._colors.push(c.g as i32);
-            pc._colors.push(c.b as i32);
-            pc._colors.push(c.a as i32);
+            pc._colors.push((c.r * 255.0).round() as i32);
+            pc._colors.push((c.g * 255.0).round() as i32);
+            pc._colors.push((c.b * 255.0).round() as i32);
+            pc._colors.push((c.a * 255.0).round() as i32);
         }
 
         pc._normals.reserve(normals.len() * 3);
@@ -152,28 +152,28 @@ impl PointCloud {
     pub fn get_color(&self, index: usize) -> Color {
         let idx = index * 4;
         Color::new(
-            self._colors[idx] as u8,
-            self._colors[idx + 1] as u8,
-            self._colors[idx + 2] as u8,
-            self._colors[idx + 3] as u8,
+            self._colors[idx] as f32 / 255.0,
+            self._colors[idx + 1] as f32 / 255.0,
+            self._colors[idx + 2] as f32 / 255.0,
+            self._colors[idx + 3] as f32 / 255.0,
         )
     }
 
     /// Set color at index
     pub fn set_color(&mut self, index: usize, color: &Color) {
         let idx = index * 4;
-        self._colors[idx] = color.r as i32;
-        self._colors[idx + 1] = color.g as i32;
-        self._colors[idx + 2] = color.b as i32;
-        self._colors[idx + 3] = color.a as i32;
+        self._colors[idx] = (color.r * 255.0).round() as i32;
+        self._colors[idx + 1] = (color.g * 255.0).round() as i32;
+        self._colors[idx + 2] = (color.b * 255.0).round() as i32;
+        self._colors[idx + 3] = (color.a * 255.0).round() as i32;
     }
 
     /// Append a color to the cloud
     pub fn add_color(&mut self, color: &Color) {
-        self._colors.push(color.r as i32);
-        self._colors.push(color.g as i32);
-        self._colors.push(color.b as i32);
-        self._colors.push(color.a as i32);
+        self._colors.push((color.r * 255.0).round() as i32);
+        self._colors.push((color.g * 255.0).round() as i32);
+        self._colors.push((color.b * 255.0).round() as i32);
+        self._colors.push((color.a * 255.0).round() as i32);
     }
 
     /// Get all colors as a vector
@@ -182,10 +182,10 @@ impl PointCloud {
         for i in 0..self.color_count() {
             let idx = i * 4;
             colors.push(Color::new(
-                self._colors[idx] as u8,
-                self._colors[idx + 1] as u8,
-                self._colors[idx + 2] as u8,
-                self._colors[idx + 3] as u8,
+                self._colors[idx] as f32 / 255.0,
+                self._colors[idx + 1] as f32 / 255.0,
+                self._colors[idx + 2] as f32 / 255.0,
+                self._colors[idx + 3] as f32 / 255.0,
             ));
         }
         colors

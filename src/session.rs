@@ -615,7 +615,7 @@ impl Session {
         }
     }
 
-    fn invalidate_bvh_cache(&mut self) {
+    pub fn invalidate_bvh_cache(&mut self) {
         self.bvh_cache_dirty = true;
     }
 
@@ -685,7 +685,7 @@ impl Session {
                 }
                 Geometry::Line(l) => {
                     if let Some(p) =
-                        crate::intersection::line_line(&ray_line, l, Tolerance::APPROXIMATION)
+                        crate::intersection::line_line(&ray_line, l, tolerance)
                     {
                         hit_point = Some(p);
                     }
@@ -700,7 +700,7 @@ impl Session {
                             if let Some(p) = crate::intersection::line_line(
                                 &ray_line,
                                 &seg,
-                                Tolerance::APPROXIMATION,
+                                tolerance,
                             ) {
                                 let dx = p[0] - origin[0];
                                 let dy = p[1] - origin[1];
@@ -742,7 +742,34 @@ impl Session {
                         }
                     }
                 }
-                Geometry::PointCloud(_) => {}
+                Geometry::PointCloud(pc) => {
+                    let pts = pc.get_points();
+                    let mut best_t = f32::INFINITY;
+                    let mut best_p: Option<Point> = None;
+                    for p in &pts {
+                        let vx = p[0] - origin[0];
+                        let vy = p[1] - origin[1];
+                        let vz = p[2] - origin[2];
+                        let cross_x = vy * dir_unit[2] - vz * dir_unit[1];
+                        let cross_y = vz * dir_unit[0] - vx * dir_unit[2];
+                        let cross_z = vx * dir_unit[1] - vy * dir_unit[0];
+                        let dist = (cross_x * cross_x + cross_y * cross_y + cross_z * cross_z).sqrt();
+                        if dist <= tolerance {
+                            let t = vx * dir_unit[0] + vy * dir_unit[1] + vz * dir_unit[2];
+                            if t >= 0.0 && t < best_t {
+                                best_t = t;
+                                best_p = Some(Point::new(
+                                    origin[0] + dir_unit[0] * t,
+                                    origin[1] + dir_unit[1] * t,
+                                    origin[2] + dir_unit[2] * t,
+                                ));
+                            }
+                        }
+                    }
+                    if let Some(p) = best_p {
+                        hit_point = Some(p);
+                    }
+                }
                 Geometry::BRep(_) => {}
                 Geometry::Element(_) => {}
             }

@@ -19,9 +19,9 @@ pub fn run_pointcloud_constructor() -> TestResult {
         let n0 = Vector::new(0.0, 0.0, 1.0);
         let n1 = Vector::new(0.0, 0.0, 1.0);
         let n2 = Vector::new(0.0, 0.0, 1.0);
-        let c0 = Color::new(255, 0, 0, 255);
-        let c1 = Color::new(0, 255, 0, 255);
-        let c2 = Color::new(0, 0, 255, 255);
+        let c0 = Color::new(1.0, 0.0, 0.0, 1.0);
+        let c1 = Color::new(0.0, 1.0, 0.0, 1.0);
+        let c2 = Color::new(0.0, 0.0, 1.0, 1.0);
         let pc = PointCloud::new(vec![p0, p1, p2], vec![n0, n1, n2], vec![c0, c1, c2]);
 
         // Minimal and Full String Representation
@@ -68,7 +68,7 @@ pub fn run_pointcloud_from_coords() -> TestResult {
 
         MINI_CHECK!(pc.len() == 3 && pc.color_count() == 3 && pc.normal_count() == 3);
         MINI_CHECK!(TOLERANCE.is_close(pc.get_point(1)[0], 1.0));
-        MINI_CHECK!(pc.get_color(1).g == 255);
+        MINI_CHECK!(pc.get_color(1).g == 1.0);
         MINI_CHECK!(TOLERANCE.is_close(pc.get_normal(1)[2], 1.0));
     })
 }
@@ -170,7 +170,7 @@ pub fn run_pointcloud_color_count() -> TestResult {
         use crate::PointCloud;
         use crate::Color;
 
-        let pc = PointCloud::new(vec![], vec![], vec![Color::new(255, 0, 0, 255), Color::new(0, 255, 0, 255)]);
+        let pc = PointCloud::new(vec![], vec![], vec![Color::new(1.0, 0.0, 0.0, 1.0), Color::new(0.0, 1.0, 0.0, 1.0)]);
 
         MINI_CHECK!(pc.color_count() == 2);
     })
@@ -181,10 +181,10 @@ pub fn run_pointcloud_get_color() -> TestResult {
         use crate::PointCloud;
         use crate::Color;
 
-        let pc = PointCloud::new(vec![], vec![], vec![Color::new(255, 0, 0, 255), Color::new(0, 255, 0, 255)]);
+        let pc = PointCloud::new(vec![], vec![], vec![Color::new(1.0, 0.0, 0.0, 1.0), Color::new(0.0, 1.0, 0.0, 1.0)]);
         let c = pc.get_color(1);
 
-        MINI_CHECK!(c.r == 0 && c.g == 255 && c.b == 0 && c.a == 255);
+        MINI_CHECK!(c.r == 0.0 && c.g == 1.0 && c.b == 0.0 && c.a == 1.0);
     })
 }
 
@@ -193,10 +193,10 @@ pub fn run_pointcloud_set_color() -> TestResult {
         use crate::PointCloud;
         use crate::Color;
 
-        let mut pc = PointCloud::new(vec![], vec![], vec![Color::new(0, 0, 0, 0)]);
-        pc.set_color(0, &Color::new(200, 100, 50, 255));
+        let mut pc = PointCloud::new(vec![], vec![], vec![Color::new(0.0, 0.0, 0.0, 0.0)]);
+        pc.set_color(0, &Color::new(1.0, 0.0, 0.0, 1.0));
 
-        MINI_CHECK!(pc.get_color(0).r == 200 && pc.get_color(0).g == 100 && pc.get_color(0).b == 50 && pc.get_color(0).a == 255);
+        MINI_CHECK!(TOLERANCE.is_close(pc.get_color(0).r, 1.0) && pc.get_color(0).g == 0.0 && pc.get_color(0).b == 0.0 && pc.get_color(0).a == 1.0);
     })
 }
 
@@ -206,10 +206,10 @@ pub fn run_pointcloud_add_color() -> TestResult {
         use crate::Color;
 
         let mut pc = PointCloud::default();
-        pc.add_color(&Color::new(128, 64, 32, 255));
+        pc.add_color(&Color::new(1.0, 0.0, 0.0, 1.0));
 
         MINI_CHECK!(pc.color_count() == 1);
-        MINI_CHECK!(pc.get_color(0).r == 128 && pc.get_color(0).g == 64 && pc.get_color(0).b == 32);
+        MINI_CHECK!(TOLERANCE.is_close(pc.get_color(0).r, 1.0) && pc.get_color(0).g == 0.0 && pc.get_color(0).b == 0.0);
     })
 }
 
@@ -218,12 +218,12 @@ pub fn run_pointcloud_get_colors() -> TestResult {
         use crate::PointCloud;
         use crate::Color;
 
-        let pc = PointCloud::new(vec![], vec![], vec![Color::new(255, 0, 0, 255), Color::new(0, 255, 0, 255)]);
+        let pc = PointCloud::new(vec![], vec![], vec![Color::new(1.0, 0.0, 0.0, 1.0), Color::new(0.0, 1.0, 0.0, 1.0)]);
         let colors = pc.get_colors();
 
         MINI_CHECK!(colors.len() == 2);
-        MINI_CHECK!(colors[0].r == 255);
-        MINI_CHECK!(colors[1].g == 255);
+        MINI_CHECK!(colors[0].r == 1.0);
+        MINI_CHECK!(colors[1].g == 1.0);
     })
 }
 
@@ -336,7 +336,7 @@ pub fn run_pointcloud_json_roundtrip() -> TestResult {
         let mut pc = PointCloud::new(
             vec![Point::new(1.0, 2.0, 3.0), Point::new(4.0, 5.0, 6.0)],
             vec![Vector::new(0.0, 0.0, 1.0), Vector::new(0.0, 0.0, 1.0)],
-            vec![Color::new(255, 0, 0, 255), Color::new(0, 255, 0, 255)],
+            vec![Color::new(1.0, 0.0, 0.0, 1.0), Color::new(0.0, 1.0, 0.0, 1.0)],
         );
         pc.name = "test_pointcloud".to_string();
 
@@ -354,7 +354,7 @@ pub fn run_pointcloud_json_roundtrip() -> TestResult {
         MINI_CHECK!(loaded.name == "test_pointcloud");
         MINI_CHECK!(loaded.len() == 2);
         MINI_CHECK!(TOLERANCE.is_close(loaded.get_point(0)[0], 1.0));
-        MINI_CHECK!(loaded.get_color(0).r == 255);
+        MINI_CHECK!(loaded.get_color(0).r == 1.0);
         MINI_CHECK!(TOLERANCE.is_close(loaded.get_normal(0)[2], 1.0));
     })
 }
@@ -369,7 +369,7 @@ pub fn run_pointcloud_protobuf_roundtrip() -> TestResult {
         let mut pc = PointCloud::new(
             vec![Point::new(1.0, 2.0, 3.0), Point::new(4.0, 5.0, 6.0)],
             vec![Vector::new(0.0, 0.0, 1.0), Vector::new(0.0, 0.0, 1.0)],
-            vec![Color::new(255, 0, 0, 255), Color::new(0, 255, 0, 255)],
+            vec![Color::new(1.0, 0.0, 0.0, 1.0), Color::new(0.0, 1.0, 0.0, 1.0)],
         );
         pc.name = "test_pointcloud".to_string();
 
@@ -380,7 +380,7 @@ pub fn run_pointcloud_protobuf_roundtrip() -> TestResult {
         MINI_CHECK!(loaded.name == "test_pointcloud");
         MINI_CHECK!(loaded.len() == 2);
         MINI_CHECK!(TOLERANCE.is_close(loaded.get_point(0)[0], 1.0));
-        MINI_CHECK!(loaded.get_color(0).r == 255);
+        MINI_CHECK!(TOLERANCE.is_close(loaded.get_color(0).r, 1.0));
         MINI_CHECK!(TOLERANCE.is_close(loaded.get_normal(0)[2], 1.0));
     })
 }

@@ -13,21 +13,21 @@
     11.0,
     12.0
   ],
-  "guid": "7fcda335-5067-4995-b443-85b13c61fef5",
+  "guid": "cc026a1f-86d3-4582-bf0c-d0f4b22af9e5",
   "linecolor": {
-    "a": 255,
-    "b": 0,
-    "g": 0,
-    "guid": "644489f9-fdc1-4161-b195-9ea1ac7b85ad",
+    "a": 1.0,
+    "b": 0.0,
+    "g": 0.0,
+    "guid": "e34c26d5-d7c3-4d9e-b03b-82671a5a3055",
     "name": "black",
-    "r": 0,
+    "r": 0.0,
     "type": "Color"
   },
   "name": "test_polyline",
   "type": "Polyline",
   "width": 1.0,
   "xform": {
-    "guid": "ee4c764e-2513-407b-8e89-45e046e0b8b4",
+    "guid": "6500fa78-e6e4-4ec4-b347-8856abb101a7",
     "m": [
       1.0,
       0.0,

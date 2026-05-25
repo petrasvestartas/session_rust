@@ -479,6 +479,22 @@ pub fn run_xform_inverse() -> TestResult {
     })
 }
 
+pub fn run_xform_to_cols() -> TestResult {
+    MINI_TEST!("To Cols", {
+        use crate::Xform;
+
+        let xf = Xform::translation(1.0, 2.0, 3.0);
+        let cols = xf.to_cols();
+        MINI_CHECK!(TOLERANCE.is_close(cols[0][0], 1.0));
+        MINI_CHECK!(TOLERANCE.is_close(cols[1][1], 1.0));
+        MINI_CHECK!(TOLERANCE.is_close(cols[2][2], 1.0));
+        MINI_CHECK!(TOLERANCE.is_close(cols[3][3], 1.0));
+        MINI_CHECK!(TOLERANCE.is_close(cols[3][0], 1.0));
+        MINI_CHECK!(TOLERANCE.is_close(cols[3][1], 2.0));
+        MINI_CHECK!(TOLERANCE.is_close(cols[3][2], 3.0));
+    })
+}
+
 pub fn run_xform_transform_geometry() -> TestResult {
     MINI_TEST!("Transform Geometry", {
         use crate::Xform;
@@ -603,6 +619,7 @@ REGISTER_MINI_TEST!("Xform", "Orthographic", crate::xform_test::run_xform_orthog
 REGISTER_MINI_TEST!("Xform", "Project To Plane", crate::xform_test::run_xform_project_to_plane);
 REGISTER_MINI_TEST!("Xform", "Project To Plane By Axis", crate::xform_test::run_xform_project_to_plane_by_axis);
 REGISTER_MINI_TEST!("Xform", "Inverse", crate::xform_test::run_xform_inverse);
+REGISTER_MINI_TEST!("Xform", "To Cols", crate::xform_test::run_xform_to_cols);
 REGISTER_MINI_TEST!("Xform", "Transform Geometry", crate::xform_test::run_xform_transform_geometry);
 REGISTER_MINI_TEST!("Xform", "Json Roundtrip", crate::xform_test::run_xform_json_roundtrip);
 REGISTER_MINI_TEST!("Xform", "Protobuf Roundtrip", crate::xform_test::run_xform_protobuf_roundtrip);

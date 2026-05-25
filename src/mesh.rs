@@ -1898,7 +1898,7 @@ impl Mesh {
             if scale == 0.0 {
                 let mut pt = Point::new(mx, my, mz);
                 pt.name = deg.to_string();
-                pt.pointcolor = Color::new(240, 220, 0, 255);
+                pt.pointcolor = Color::new(240.0/255.0, 220.0/255.0, 0.0, 1.0);
                 points.push(pt);
                 continue;
             }
@@ -1936,12 +1936,12 @@ impl Mesh {
             }
             let mut arc = Polyline::new(arc_pts.clone());
             arc.name = format!("dihedral_e{}_{}={}", u, v, deg);
-            arc.linecolor = Color::new(240, 220, 0, 255);
+            arc.linecolor = Color::new(240.0/255.0, 220.0/255.0, 0.0, 1.0);
             arcs.push(arc);
             let mid = &arc_pts[arc_n/2];
             let mut pt = Point::new(mid[0], mid[1], mid[2]);
             pt.name = deg.to_string();
-            pt.pointcolor = Color::new(240, 220, 0, 255);
+            pt.pointcolor = Color::new(240.0/255.0, 220.0/255.0, 0.0, 1.0);
             points.push(pt);
         }
         (angles, arcs, points)
@@ -2270,19 +2270,19 @@ impl Mesh {
         let pointcolors_flat: Vec<u8> = self
             .pointcolors
             .iter()
-            .flat_map(|c| vec![c.r, c.g, c.b, c.a])
+            .flat_map(|c| vec![(c.r * 255.0) as u8, (c.g * 255.0) as u8, (c.b * 255.0) as u8, (c.a * 255.0) as u8])
             .collect();
 
         let facecolors_flat: Vec<u8> = self
             .facecolors
             .iter()
-            .flat_map(|c| vec![c.r, c.g, c.b, c.a])
+            .flat_map(|c| vec![(c.r * 255.0) as u8, (c.g * 255.0) as u8, (c.b * 255.0) as u8, (c.a * 255.0) as u8])
             .collect();
 
         let linecolors_flat: Vec<u8> = self
             .linecolors
             .iter()
-            .flat_map(|c| vec![c.r, c.g, c.b, c.a])
+            .flat_map(|c| vec![(c.r * 255.0) as u8, (c.g * 255.0) as u8, (c.b * 255.0) as u8, (c.a * 255.0) as u8])
             .collect();
 
         let mut tri_json = serde_json::Map::new();
@@ -2381,7 +2381,7 @@ impl Mesh {
             mesh.pointcolors = rgba_values
                 .chunks(4)
                 .filter(|c| c.len() == 4)
-                .map(|c| Color::new(c[0], c[1], c[2], c[3]))
+                .map(|c| Color::new(c[0] as f32 / 255.0, c[1] as f32 / 255.0, c[2] as f32 / 255.0, c[3] as f32 / 255.0))
                 .collect();
         }
 
@@ -2393,7 +2393,7 @@ impl Mesh {
             mesh.facecolors = rgba_values
                 .chunks(4)
                 .filter(|c| c.len() == 4)
-                .map(|c| Color::new(c[0], c[1], c[2], c[3]))
+                .map(|c| Color::new(c[0] as f32 / 255.0, c[1] as f32 / 255.0, c[2] as f32 / 255.0, c[3] as f32 / 255.0))
                 .collect();
         }
 
@@ -2405,7 +2405,7 @@ impl Mesh {
             mesh.linecolors = rgba_values
                 .chunks(4)
                 .filter(|c| c.len() == 4)
-                .map(|c| Color::new(c[0], c[1], c[2], c[3]))
+                .map(|c| Color::new(c[0] as f32 / 255.0, c[1] as f32 / 255.0, c[2] as f32 / 255.0, c[3] as f32 / 255.0))
                 .collect();
         }
 
@@ -2543,10 +2543,10 @@ impl Mesh {
             crate::proto::Color {
                 guid: c.guid().to_string(),
                 name: c.name.clone(),
-                r: c.r as i32,
-                g: c.g as i32,
-                b: c.b as i32,
-                a: c.a as i32,
+                r: c.r,
+                g: c.g,
+                b: c.b,
+                a: c.a,
             }
         }).collect();
 
@@ -2554,10 +2554,10 @@ impl Mesh {
             crate::proto::Color {
                 guid: c.guid().to_string(),
                 name: c.name.clone(),
-                r: c.r as i32,
-                g: c.g as i32,
-                b: c.b as i32,
-                a: c.a as i32,
+                r: c.r,
+                g: c.g,
+                b: c.b,
+                a: c.a,
             }
         }).collect();
 
@@ -2565,10 +2565,10 @@ impl Mesh {
             crate::proto::Color {
                 guid: c.guid().to_string(),
                 name: c.name.clone(),
-                r: c.r as i32,
-                g: c.g as i32,
-                b: c.b as i32,
-                a: c.a as i32,
+                r: c.r,
+                g: c.g,
+                b: c.b,
+                a: c.a,
             }
         }).collect();
 
@@ -2600,10 +2600,10 @@ impl Mesh {
             objectcolor: Some(crate::proto::Color {
                 guid: self.objectcolor.guid().to_string(),
                 name: self.objectcolor.name.clone(),
-                r: self.objectcolor.r as i32,
-                g: self.objectcolor.g as i32,
-                b: self.objectcolor.b as i32,
-                a: self.objectcolor.a as i32,
+                r: self.objectcolor.r,
+                g: self.objectcolor.g,
+                b: self.objectcolor.b,
+                a: self.objectcolor.a,
             }),
             color_mode: self.color_mode.to_i32(),
             xform: Some(crate::proto::Xform {
@@ -2684,21 +2684,21 @@ impl Mesh {
         mesh.default_edge_attributes = proto.default_edge_attributes.into_iter().map(|(k, v)| (k, v as f32)).collect();
 
         mesh.pointcolors = proto.pointcolors.iter().map(|c| {
-            let mut color = Color::new(c.r as u8, c.g as u8, c.b as u8, c.a as u8);
+            let mut color = Color::new(c.r, c.g, c.b, c.a);
             color.set_guid(c.guid.clone());
             color.name = c.name.clone();
             color
         }).collect();
 
         mesh.facecolors = proto.facecolors.iter().map(|c| {
-            let mut color = Color::new(c.r as u8, c.g as u8, c.b as u8, c.a as u8);
+            let mut color = Color::new(c.r, c.g, c.b, c.a);
             color.set_guid(c.guid.clone());
             color.name = c.name.clone();
             color
         }).collect();
 
         mesh.linecolors = proto.linecolors.iter().map(|c| {
-            let mut color = Color::new(c.r as u8, c.g as u8, c.b as u8, c.a as u8);
+            let mut color = Color::new(c.r, c.g, c.b, c.a);
             color.set_guid(c.guid.clone());
             color.name = c.name.clone();
             color
@@ -2707,7 +2707,7 @@ impl Mesh {
         mesh.widths = proto.widths.into_iter().map(|v| v as f32).collect();
 
         if let Some(oc) = proto.objectcolor {
-            mesh.objectcolor = Color::new(oc.r as u8, oc.g as u8, oc.b as u8, oc.a as u8);
+            mesh.objectcolor = Color::new(oc.r, oc.g, oc.b, oc.a);
             mesh.objectcolor.set_guid(oc.guid.clone());
             mesh.objectcolor.name = oc.name;
         }

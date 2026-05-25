@@ -1113,7 +1113,7 @@ impl BRep {
                 reversed: f.reversed,
                 facecolor: f.facecolor.as_ref().map(|c| crate::proto::Color {
                     guid: String::new(), name: String::new(),
-                    r: c.r as i32, g: c.g as i32, b: c.b as i32, a: c.a as i32,
+                    r: c.r, g: c.g, b: c.b, a: c.a,
                 }),
             })
             .collect();
@@ -1134,10 +1134,10 @@ impl BRep {
             surfacecolor: Some(crate::proto::Color {
                 guid: self.surfacecolor.guid().to_string(),
                 name: self.surfacecolor.name.clone(),
-                r: self.surfacecolor.r as i32,
-                g: self.surfacecolor.g as i32,
-                b: self.surfacecolor.b as i32,
-                a: self.surfacecolor.a as i32,
+                r: self.surfacecolor.r,
+                g: self.surfacecolor.g,
+                b: self.surfacecolor.b,
+                a: self.surfacecolor.a,
             }),
             xform: Some(crate::proto::Xform {
                 guid: self.xform.guid().to_string(),
@@ -1208,17 +1208,17 @@ impl BRep {
                 surface_index: f.surface_index,
                 loop_indices: f.loop_indices.clone(),
                 reversed: f.reversed,
-                facecolor: f.facecolor.as_ref().map(|c| Color::new(c.r as u8, c.g as u8, c.b as u8, c.a as u8)),
+                facecolor: f.facecolor.as_ref().map(|c| Color::new(c.r, c.g, c.b, c.a)),
             });
         }
 
         if let Some(color) = proto.surfacecolor {
             b.surfacecolor.set_guid(color.guid.clone());
             b.surfacecolor.name = color.name;
-            b.surfacecolor.r = color.r as u8;
-            b.surfacecolor.g = color.g as u8;
-            b.surfacecolor.b = color.b as u8;
-            b.surfacecolor.a = color.a as u8;
+            b.surfacecolor.r = color.r;
+            b.surfacecolor.g = color.g;
+            b.surfacecolor.b = color.b;
+            b.surfacecolor.a = color.a;
         }
         if let Some(xform) = proto.xform {
             b.xform.set_guid(xform.guid.clone());

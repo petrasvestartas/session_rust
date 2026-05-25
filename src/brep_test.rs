@@ -166,7 +166,7 @@ pub fn run_brep_json_roundtrip() -> TestResult {
         let mut b = BRep::create_box(2.0, 3.0, 4.0);
         b.name = "test_brep".to_string();
         b.width = 2.0;
-        b.surfacecolor = Color::new(255, 128, 64, 255);
+        b.surfacecolor = Color::new(1.0, 0.5, 0.25, 1.0);
 
         // String
         let json_string = b.file_json_dumps();
@@ -208,7 +208,7 @@ pub fn run_brep_protobuf_roundtrip() -> TestResult {
         let mut b = BRep::create_box(2.0, 3.0, 4.0);
         b.name = "test_brep".to_string();
         b.width = 2.0;
-        b.surfacecolor = Color::new(255, 128, 64, 255);
+        b.surfacecolor = Color::new(1.0, 0.5, 0.25, 1.0);
 
         // String
         let proto_data = b.pb_dumps();

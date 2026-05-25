@@ -537,10 +537,10 @@ impl Tree {
                 color: b.color.map(|c| crate::proto::Color {
                     guid: String::new(),
                     name: String::new(),
-                    r: c[0] as i32,
-                    g: c[1] as i32,
-                    b: c[2] as i32,
-                    a: c[3] as i32,
+                    r: c[0] as f32 / 255.0,
+                    g: c[1] as f32 / 255.0,
+                    b: c[2] as f32 / 255.0,
+                    a: c[3] as f32 / 255.0,
                 }),
                 children,
             }
@@ -567,8 +567,8 @@ impl Tree {
                 guid: proto_node.guid.clone(),
                 name: proto_node.name.clone(),
                 color: proto_node.color.as_ref()
-                    .filter(|c| c.a > 0)
-                    .map(|c| [c.r as u8, c.g as u8, c.b as u8, c.a as u8]),
+                    .filter(|c| c.a > 0.0)
+                    .map(|c| [(c.r * 255.0).round() as u8, (c.g * 255.0).round() as u8, (c.b * 255.0).round() as u8, (c.a * 255.0).round() as u8]),
                 children: proto_node
                     .children
                     .iter()

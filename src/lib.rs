@@ -9,34 +9,8 @@ pub mod proto {
     include!("proto/session_proto.rs");
 }
 
-pub mod gpu_arena;
-pub mod gpu_session;
-pub mod gpu_adapters;
-pub mod gpu_shaders;
-pub mod gpu_demo;
-pub mod session_pick;
 
-/// One-stop import for renderer/viewer code.
-///
-/// ```ignore
-/// use session_rust::prelude::*;
-/// // Now in scope: Session, GpuSession, CameraUniform, build_* helpers,
-/// // make_demo_session, Ray, PickHit, and the common geometry types.
-/// ```
-///
-/// For the full wiring recipe, see the module docs of `gpu_session`.
 pub mod prelude {
-    pub use crate::gpu_demo::make_demo_session;
-    pub use crate::gpu_session::{
-        GpuSession, InstanceData, LineVertex, MeshVertex, PointVertex,
-        DEFAULT_INSTANCE_CAP,
-    };
-    pub use crate::gpu_shaders::{
-        build_bind_group, build_bind_group_layout, build_line_pipeline,
-        build_mesh_pipeline, build_point_pipeline, create_camera_buffer,
-        CameraUniform, LINE_WGSL, MESH_WGSL, POINT_WGSL,
-    };
-    pub use crate::session_pick::{Ray, screen_to_world_ray};
     pub use crate::session::{Geometry, RayHit, Session};
     pub use crate::{
         Color, Line, Mesh, NurbsCurve, NurbsSurface, Plane, Point, PointCloud,
@@ -129,6 +103,7 @@ pub mod mesh_offset_test;
 pub mod spatial_kdtree;
 pub mod spatial_kdtree_test;
 pub mod boolean_polyline_test;
+pub mod picking_test;
 
 pub use aabb::AABB;
 pub use obb::OBB;

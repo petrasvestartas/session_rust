@@ -65,12 +65,12 @@ impl Serialize for NurbsCurve {
         map.serialize_entry("is_rational", &self.m_is_rat)?;
         map.serialize_entry("nurbsknots", &self.m_nurbsknot)?;
         let linecolors_flat: Vec<u8> = self.linecolors.iter()
-            .flat_map(|c| vec![c.r, c.g, c.b, c.a]).collect();
+            .flat_map(|c| vec![(c.r * 255.0) as u8, (c.g * 255.0) as u8, (c.b * 255.0) as u8, (c.a * 255.0) as u8]).collect();
         map.serialize_entry("linecolors", &linecolors_flat)?;
         map.serialize_entry("name", &self.name)?;
         map.serialize_entry("order", &self.m_order)?;
         let pointcolors_flat: Vec<u8> = self.pointcolors.iter()
-            .flat_map(|c| vec![c.r, c.g, c.b, c.a]).collect();
+            .flat_map(|c| vec![(c.r * 255.0) as u8, (c.g * 255.0) as u8, (c.b * 255.0) as u8, (c.a * 255.0) as u8]).collect();
         map.serialize_entry("pointcolors", &pointcolors_flat)?;
         map.serialize_entry("type", "NurbsCurve")?;
         map.serialize_entry("width", &self.width)?;
@@ -120,11 +120,11 @@ impl<'de> Deserialize<'de> for NurbsCurve {
         }
         let pointcolors = data.pointcolors.chunks(4)
             .filter(|c| c.len() == 4)
-            .map(|c| Color::new(c[0], c[1], c[2], c[3]))
+            .map(|c| Color::new(c[0] as f32 / 255.0, c[1] as f32 / 255.0, c[2] as f32 / 255.0, c[3] as f32 / 255.0))
             .collect();
         let linecolors = data.linecolors.chunks(4)
             .filter(|c| c.len() == 4)
-            .map(|c| Color::new(c[0], c[1], c[2], c[3]))
+            .map(|c| Color::new(c[0] as f32 / 255.0, c[1] as f32 / 255.0, c[2] as f32 / 255.0, c[3] as f32 / 255.0))
             .collect();
         Ok(NurbsCurve {
             guid: { let c = std::sync::OnceLock::new(); let _ = c.set(data.guid); c },
@@ -2856,11 +2856,11 @@ impl NurbsCurve {
             width: self.width as f64,
             pointcolors: self.pointcolors.iter().map(|c| crate::proto::Color {
                 guid: String::new(), name: String::new(),
-                r: c.r as i32, g: c.g as i32, b: c.b as i32, a: c.a as i32,
+                r: c.r, g: c.g, b: c.b, a: c.a,
             }).collect(),
             linecolors: self.linecolors.iter().map(|c| crate::proto::Color {
                 guid: String::new(), name: String::new(),
-                r: c.r as i32, g: c.g as i32, b: c.b as i32, a: c.a as i32,
+                r: c.r, g: c.g, b: c.b, a: c.a,
             }).collect(),
             xform: Some(crate::proto::Xform {
                 guid: self.xform.guid().to_string(),
@@ -2886,8 +2886,8 @@ impl NurbsCurve {
         curve.name = proto.name;
         curve.m_nurbsknot = proto.nurbsknots.into_iter().map(|v| v as f32).collect();
         curve.m_cv = proto.cvs.into_iter().map(|v| v as f32).collect();
-        curve.pointcolors = proto.pointcolors.iter().map(|c| Color::new(c.r as u8, c.g as u8, c.b as u8, c.a as u8)).collect();
-        curve.linecolors = proto.linecolors.iter().map(|c| Color::new(c.r as u8, c.g as u8, c.b as u8, c.a as u8)).collect();
+        curve.pointcolors = proto.pointcolors.iter().map(|c| Color::new(c.r, c.g, c.b, c.a)).collect();
+        curve.linecolors = proto.linecolors.iter().map(|c| Color::new(c.r, c.g, c.b, c.a)).collect();
         if let Some(xform) = proto.xform {
             curve.xform.set_guid(xform.guid.clone());
             curve.xform.name = xform.name;

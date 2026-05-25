@@ -48,7 +48,18 @@ impl Default for SpatialBVHNode {
 }
 
 fn aabb_from_obb(b: &OBB) -> AABB {
-    AABB::new(b.center[0], b.center[1], b.center[2], b.half_size[0], b.half_size[1], b.half_size[2])
+    // Project each OBB half-axis onto the world axes to get the world-space half-extents.
+    // This is correct regardless of the OBB's orientation.
+    let hx = b.half_size[0] * b.x_axis[0].abs()
+           + b.half_size[1] * b.y_axis[0].abs()
+           + b.half_size[2] * b.z_axis[0].abs();
+    let hy = b.half_size[0] * b.x_axis[1].abs()
+           + b.half_size[1] * b.y_axis[1].abs()
+           + b.half_size[2] * b.z_axis[1].abs();
+    let hz = b.half_size[0] * b.x_axis[2].abs()
+           + b.half_size[1] * b.y_axis[2].abs()
+           + b.half_size[2] * b.z_axis[2].abs();
+    AABB::new(b.center[0], b.center[1], b.center[2], hx, hy, hz)
 }
 
 // Flat node for arena-based traversal (cache-friendly)
