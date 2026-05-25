@@ -797,7 +797,7 @@ impl NurbsCurve {
         let start = self.point_at_start();
         let end = self.point_at_end();
 
-        start.distance(&end, None) < Tolerance::ZERO_TOLERANCE
+        start.distance(&end, None) < Tolerance::ABSOLUTE
     }
 
 
