@@ -656,6 +656,23 @@ impl Session {
         let mut candidates: Vec<usize> = Vec::new();
         bvh.ray_cast(origin, &dir_unit, &mut candidates, true);
 
+        // Thin geometry (Line/Polyline/Point/PointCloud) has near-degenerate BVH
+        // boxes (inflated by only 0.001mm) so the ray rarely hits them. Always add
+        // them as candidates so the line_line / point distance tests run.
+        for (idx, guid) in self.cached_guids.iter().enumerate() {
+            if let Some(geom) = self.lookup.get(guid) {
+                match geom {
+                    Geometry::Line(_) | Geometry::Polyline(_)
+                    | Geometry::Point(_) | Geometry::PointCloud(_) => {
+                        if !candidates.contains(&idx) {
+                            candidates.push(idx);
+                        }
+                    }
+                    _ => {}
+                }
+            }
+        }
+
         let mut hits_all: Vec<RayHit> = Vec::new();
 
         for idx in candidates {
