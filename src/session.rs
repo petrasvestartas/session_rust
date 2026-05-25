@@ -527,7 +527,22 @@ impl Session {
                 OBB::from_point(p.origin(), inflate * 10.0)
             }
             Geometry::BRep(b) => {
-                let points: Vec<Point> = b.m_vertices.clone();
+                let mut points: Vec<Point> = b.m_vertices.clone();
+                if points.is_empty() {
+                    for curve in &b.m_curves_3d {
+                        let stride = curve.m_cv_stride.max(3);
+                        for i in 0..curve.m_cv_count {
+                            let base = i * stride;
+                            if base + 2 < curve.m_cv.len() {
+                                points.push(Point::new(
+                                    curve.m_cv[base] as f32,
+                                    curve.m_cv[base + 1] as f32,
+                                    curve.m_cv[base + 2] as f32,
+                                ));
+                            }
+                        }
+                    }
+                }
                 if points.is_empty() {
                     OBB::from_point(Point::new(0.0, 0.0, 0.0), inflate)
                 } else {
@@ -787,7 +802,12 @@ impl Session {
                         hit_point = Some(p);
                     }
                 }
-                Geometry::BRep(_) => {}
+                Geometry::BRep(b) => {
+                    let mut bm = b.mesh();
+                    if let Some(p) = bm.ray_cast_bvh(&ray_line, 1e-6) {
+                        hit_point = Some(p);
+                    }
+                }
                 Geometry::Element(_) => {}
             }
 
