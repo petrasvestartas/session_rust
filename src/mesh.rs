@@ -80,6 +80,8 @@ pub struct Mesh {
     pub tri_tris: Vec<[usize; 3]>,
     #[serde(skip)]
     pub tri_vertices: Vec<Point>,
+    #[serde(skip)]
+    pub crease_angle_deg: f32,
 }
 
 /// Vertex data containing position and attributes
@@ -260,6 +262,7 @@ impl Mesh {
             tri_bvh: None,
             tri_tris: Vec::new(),
             tri_vertices: Vec::new(),
+            crease_angle_deg: 0.0,
         }
     }
 

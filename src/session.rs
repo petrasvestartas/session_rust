@@ -835,27 +835,25 @@ impl Session {
             }
         }
 
-        if hits_all.is_empty() {
-            return Vec::new();
-        }
-
-        let mut min_d = f32::INFINITY;
-        for h in &hits_all {
-            if h.distance < min_d {
-                min_d = h.distance;
-            }
-        }
-        let eps = tolerance;
-        let mut hits: Vec<RayHit> = hits_all
-            .into_iter()
-            .filter(|h| (h.distance - min_d).abs() <= eps)
-            .collect();
-        hits.sort_by(|a, b| {
-            a.distance
-                .partial_cmp(&b.distance)
-                .unwrap_or(std::cmp::Ordering::Equal)
+        hits_all.sort_by(|a, b| {
+            a.distance.partial_cmp(&b.distance).unwrap_or(std::cmp::Ordering::Equal)
         });
-        hits
+        hits_all
+    }
+
+    /// Like `ray_cast` but filters to only hits within `tolerance` of the nearest.
+    /// Useful when you want "the object at the cursor" without iterating through
+    /// everything behind it.
+    pub fn ray_cast_nearest(
+        &mut self,
+        origin: &Point,
+        direction: &crate::Vector,
+        tolerance: f32,
+    ) -> Vec<RayHit> {
+        let hits_all = self.ray_cast(origin, direction, tolerance);
+        if hits_all.is_empty() { return Vec::new(); }
+        let min_d = hits_all[0].distance;
+        hits_all.into_iter().filter(|h| (h.distance - min_d).abs() <= tolerance).collect()
     }
 
     ///////////////////////////////////////////////////////////////////////////////////////////

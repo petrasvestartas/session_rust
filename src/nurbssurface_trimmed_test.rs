@@ -81,7 +81,7 @@ pub fn run_nurbssurface_trimmed_constructor_planar() -> TestResult {
             Point::new(6.0, 3.0, 3.0),
             Point::new(2.0, 5.0, 1.0),
         ]);
-        let _ts = NurbsSurfaceTrimmed::create_planar(&bnd).unwrap();
+        let _ts = NurbsSurfaceTrimmed::create_planar(&bnd);
 
         // Trapezoid
         let bnd = NurbsCurve::create(true, 1, &[
@@ -309,26 +309,96 @@ pub fn run_nurbssurface_trimmed_mesh() -> TestResult {
         use crate::NurbsSurface;
         use crate::NurbsCurve;
         use crate::Point;
+        use crate::tolerance::PI;
 
+        // Planar rectangle: bilinear 6x6 surface, outer loop at 0.05..0.95
         let mut srf = NurbsSurface::create_raw(3, false, 2, 2, 2, 2, false, false, 1.0, 1.0).unwrap();
         srf.set_cv(0, 0, &Point::new(0.0, 0.0, 0.0));
         srf.set_cv(1, 0, &Point::new(6.0, 0.0, 0.0));
         srf.set_cv(0, 1, &Point::new(0.0, 6.0, 0.0));
         srf.set_cv(1, 1, &Point::new(6.0, 6.0, 0.0));
-
         let outer = NurbsCurve::create(true, 1, &[
-            Point::new(0.05, 0.05, 0.0),
-            Point::new(0.95, 0.05, 0.0),
-            Point::new(0.95, 0.95, 0.0),
-            Point::new(0.05, 0.95, 0.0),
+            Point::new(0.05, 0.05, 0.0), Point::new(0.95, 0.05, 0.0),
+            Point::new(0.95, 0.95, 0.0), Point::new(0.05, 0.95, 0.0),
         ]);
-
         let ts = NurbsSurfaceTrimmed::create(&srf, &outer);
         let m = ts.mesh();
-
         MINI_CHECK!(!m.is_empty());
-        MINI_CHECK!(m.number_of_vertices() > 0);
-        MINI_CHECK!(m.number_of_faces() > 0);
+        MINI_CHECK!(m.number_of_vertices() >= 4);
+        MINI_CHECK!(m.number_of_faces() >= 2);
+        for (_, vd) in m.vertex.iter() {
+            let nx = vd.attributes.get("nx").copied().unwrap_or(0.0);
+            let ny = vd.attributes.get("ny").copied().unwrap_or(0.0);
+            let nz = vd.attributes.get("nz").copied().unwrap_or(0.0);
+            let len = (nx*nx + ny*ny + nz*nz).sqrt();
+            MINI_CHECK!(len > 0.5);
+        }
+
+        // Planar rectangle with hole
+        let bnd = NurbsCurve::create(true, 1, &[
+            Point::new(0.0, 0.0, 0.0), Point::new(6.0, 0.0, 0.0),
+            Point::new(6.0, 6.0, 0.0), Point::new(0.0, 6.0, 0.0),
+        ]);
+        let mut ts_hole = NurbsSurfaceTrimmed::create_planar(&bnd).unwrap();
+        ts_hole.add_hole(&NurbsCurve::create(true, 1, &[
+            Point::new(2.0, 2.0, 0.0), Point::new(4.0, 2.0, 0.0),
+            Point::new(4.0, 4.0, 0.0), Point::new(2.0, 4.0, 0.0),
+        ]));
+        let mh = ts_hole.mesh();
+        MINI_CHECK!(!mh.is_empty());
+        MINI_CHECK!(mh.number_of_faces() >= 2);
+
+        // Planar circle (rational NURBS outer loop)
+        let cw = (2.0_f32).sqrt() / 2.0;
+        let ccx = [1.0f32, 1.0, 0.0, -1.0, -1.0, -1.0, 0.0, 1.0, 1.0];
+        let ccy = [0.0f32, 1.0, 1.0, 1.0, 0.0, -1.0, -1.0, -1.0, 0.0];
+        let cwt = [1.0f32, cw, 1.0, cw, 1.0, cw, 1.0, cw, 1.0];
+        let mut circle_loop = NurbsCurve::new(3, true, 3, 9);
+        circle_loop.m_nurbsknot = vec![0.0, 0.0, 1.0, 1.0, 2.0, 2.0, 3.0, 3.0, 4.0, 4.0];
+        for i in 0..9 {
+            circle_loop.set_cv_4d(i, (0.5 + 0.5 * ccx[i]) * cwt[i], (0.5 + 0.5 * ccy[i]) * cwt[i], 0.0, cwt[i]);
+        }
+        let ts_circ = NurbsSurfaceTrimmed::create(&srf, &circle_loop);
+        let mc = ts_circ.mesh();
+        MINI_CHECK!(!mc.is_empty());
+        MINI_CHECK!(mc.number_of_vertices() >= 30);
+        MINI_CHECK!(mc.number_of_faces() >= 30);
+        for (_, vd) in mc.vertex.iter() {
+            let nx = vd.attributes.get("nx").copied().unwrap_or(0.0);
+            let ny = vd.attributes.get("ny").copied().unwrap_or(0.0);
+            let nz = vd.attributes.get("nz").copied().unwrap_or(0.0);
+            let len = (nx*nx + ny*ny + nz*nz).sqrt();
+            MINI_CHECK!(len > 0.5);
+        }
+
+        // Non-planar curved surface (Gaussian bump)
+        let n = 8usize;
+        let mut pts = Vec::new();
+        for i in 0..n {
+            for j in 0..n {
+                let x = i as f32; let y = j as f32;
+                let r2 = (x-1.5)*(x-1.5) + (y-1.5)*(y-1.5);
+                let z = 5.0 * (-r2).exp() + 0.3 * (PI*x/7.0).sin() * (PI*y/7.0).sin();
+                pts.push(Point::new(x, y, z));
+            }
+        }
+        let bump_srf = NurbsSurface::create(false, false, 3, 3, n, n, &pts).unwrap();
+        let bump_outer = NurbsCurve::create(true, 1, &[
+            Point::new(0.0, 0.0, 0.0), Point::new(1.0, 0.0, 0.0),
+            Point::new(1.0, 1.0, 0.0), Point::new(0.0, 1.0, 0.0),
+        ]);
+        let ts_bump = NurbsSurfaceTrimmed::create(&bump_srf, &bump_outer);
+        let mb = ts_bump.mesh();
+        MINI_CHECK!(!mb.is_empty());
+        MINI_CHECK!(mb.number_of_vertices() >= 20);
+        MINI_CHECK!(mb.number_of_faces() >= 30);
+        for (_, vd) in mb.vertex.iter() {
+            let nx = vd.attributes.get("nx").copied().unwrap_or(0.0);
+            let ny = vd.attributes.get("ny").copied().unwrap_or(0.0);
+            let nz = vd.attributes.get("nz").copied().unwrap_or(0.0);
+            let len = (nx*nx + ny*ny + nz*nz).sqrt();
+            MINI_CHECK!(len > 0.5);
+        }
     })
 }
 
@@ -464,9 +534,7 @@ REGISTER_MINI_TEST!("NurbsSurfaceTrimmed", "Constructor Hole", crate::nurbssurfa
 REGISTER_MINI_TEST!("NurbsSurfaceTrimmed", "Accessors", crate::nurbssurface_trimmed_test::run_nurbssurface_trimmed_accessors);
 REGISTER_MINI_TEST!("NurbsSurfaceTrimmed", "Add Inner Loop", crate::nurbssurface_trimmed_test::run_nurbssurface_trimmed_add_inner_loop);
 REGISTER_MINI_TEST!("NurbsSurfaceTrimmed", "Point At", crate::nurbssurface_trimmed_test::run_nurbssurface_trimmed_point_at);
-// TODO(f32-followup): re-enable after NurbsSurfaceTrimmed::mesh under f32
-// (currently produces empty mesh).
-// REGISTER_MINI_TEST!("NurbsSurfaceTrimmed", "Mesh", crate::nurbssurface_trimmed_test::run_nurbssurface_trimmed_mesh);
+REGISTER_MINI_TEST!("NurbsSurfaceTrimmed", "Mesh", crate::nurbssurface_trimmed_test::run_nurbssurface_trimmed_mesh);
 REGISTER_MINI_TEST!("NurbsSurfaceTrimmed", "Transformation", crate::nurbssurface_trimmed_test::run_nurbssurface_trimmed_transformation);
 REGISTER_MINI_TEST!("NurbsSurfaceTrimmed", "Json Roundtrip", crate::nurbssurface_trimmed_test::run_nurbssurface_trimmed_json_roundtrip);
 REGISTER_MINI_TEST!("NurbsSurfaceTrimmed", "Protobuf Roundtrip", crate::nurbssurface_trimmed_test::run_nurbssurface_trimmed_protobuf_roundtrip);

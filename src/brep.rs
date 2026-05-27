@@ -338,7 +338,14 @@ impl BRep {
         let vi_north = brep.add_vertex(&p_north) as i32;
         brep.m_topology_vertices.push(BRepVertex { point_index: vi_south, edge_indices: Vec::new() });
         brep.m_topology_vertices.push(BRepVertex { point_index: vi_north, edge_indices: Vec::new() });
-        let seam_crv = NurbsCurve::create(false, 1, &[p_south, p_north]);
+        let seam_pts: Vec<Point> = {
+            let n = 32;
+            (0..=n).map(|i| {
+                let v = dom_v.0 + i as f32 * (dom_v.1 - dom_v.0) / n as f32;
+                srf.point_at(dom_u.0, v).unwrap_or(Point::new(0.0, 0.0, 0.0))
+            }).collect()
+        };
+        let seam_crv = NurbsCurve::create(false, 1, &seam_pts);
         let ci_seam = brep.add_curve_3d(&seam_crv) as i32;
         let ei_seam = brep.add_edge(ci_seam, 0, 1) as i32;
         let si = brep.add_surface(&srf) as i32;
@@ -878,6 +885,7 @@ impl BRep {
     /// Trimmed faces use CDT tessellation; reversed faces have normals flipped.
     /// Vertices are NOT shared across faces so face boundaries are hard edges.
     pub fn face_meshes(&self) -> Vec<Mesh> {
+        use crate::nurbssurface_trimmed::NurbsSurfaceTrimmed;
         let nf = self.m_faces.len();
 
         // Phase 1: classify
@@ -936,54 +944,44 @@ impl BRep {
             fmesh[fi] = srf.mesh();
         }
 
-        // Phase 3: Fan-tessellate CDT faces (outer loop boundary evaluated on surface)
+        // Phase 3: Mesh CDT faces via NurbsSurfaceTrimmed (Bowyer-Watson CDT)
         for fi in 0..nf {
             if face_direct[fi] { continue; }
             let face = &self.m_faces[fi];
             if face.surface_index < 0 || face.surface_index as usize >= self.m_surfaces.len() { continue; }
             let srf = &self.m_surfaces[face.surface_index as usize];
-            let mut outer_3d: Vec<Point> = Vec::new();
-            'outer_f: for &li in &face.loop_indices {
+            let mut ts = NurbsSurfaceTrimmed::new();
+            ts.m_surface = srf.clone();
+            for &li in &face.loop_indices {
                 if li < 0 || li as usize >= self.m_loops.len() { continue; }
                 let bloop = &self.m_loops[li as usize];
-                if bloop.loop_type != BRepLoopType::Outer { continue; }
+                let mut loop_pts: Vec<Point> = Vec::new();
                 for &ti in &bloop.trim_indices {
                     if ti < 0 || ti as usize >= self.m_trims.len() { continue; }
                     let trim = &self.m_trims[ti as usize];
                     if trim.trim_type == BRepTrimType::Singular { continue; }
                     if trim.curve_2d_index < 0 || trim.curve_2d_index as usize >= self.m_curves_2d.len() { continue; }
                     let crv = &self.m_curves_2d[trim.curve_2d_index as usize];
-                    let uv_pts: Vec<Point> = if crv.degree() <= 1 && !crv.is_rational() {
-                        (0..crv.cv_count().saturating_sub(1)).filter_map(|k| crv.get_cv(k)).collect()
+                    if crv.degree() <= 1 && !crv.is_rational() {
+                        for k in 0..crv.cv_count().saturating_sub(1) {
+                            if let Some(p) = crv.get_cv(k) { loop_pts.push(p); }
+                        }
                     } else {
                         let n = (crv.cv_count() * 4).max(16);
-                        let (pts, _) = crv.divide_by_count(n, true);
-                        pts[..pts.len().saturating_sub(1)].to_vec()
-                    };
-                    for uv in &uv_pts {
-                        if let Some(p3d) = srf.point_at(uv[0], uv[1]) {
-                            outer_3d.push(p3d);
-                        }
+                        let (pts, _) = crv.divide_by_count(n, false);
+                        for k in 0..pts.len().saturating_sub(1) { loop_pts.push(pts[k].clone()); }
                     }
                 }
-                break 'outer_f;
+                if loop_pts.len() >= 3 {
+                    let loop_crv = NurbsCurve::create(true, 1, &loop_pts);
+                    if bloop.loop_type == BRepLoopType::Outer {
+                        ts.m_outer_loop = Some(loop_crv);
+                    } else {
+                        ts.m_inner_loops.push(loop_crv);
+                    }
+                }
             }
-            let n = outer_3d.len();
-            if n < 3 { continue; }
-            let cx: f32 = outer_3d.iter().map(|p| p[0]).sum::<f32>() / n as f32;
-            let cy: f32 = outer_3d.iter().map(|p| p[1]).sum::<f32>() / n as f32;
-            let cz: f32 = outer_3d.iter().map(|p| p[2]).sum::<f32>() / n as f32;
-            let center = Point::new(cx, cy, cz);
-            let mut m = Mesh::new();
-            for i in 0..n {
-                let p0 = outer_3d[i].clone();
-                let p1 = outer_3d[(i + 1) % n].clone();
-                let vk0 = m.add_vertex(p0, None);
-                let vk1 = m.add_vertex(p1, None);
-                let vc = m.add_vertex(center.clone(), None);
-                m.add_face(vec![vk0, vk1, vc], None);
-            }
-            fmesh[fi] = m;
+            fmesh[fi] = ts.mesh();
         }
 
         // Apply reversed flag
@@ -1002,6 +1000,7 @@ impl BRep {
     }
 
     pub fn mesh(&self) -> Mesh {
+        use crate::nurbssurface_trimmed::NurbsSurfaceTrimmed;
         let nf = self.m_faces.len();
 
         // Phase 1: Classify faces as direct (RemeshNurbsSurfaceGrid) or CDT
@@ -1066,48 +1065,38 @@ impl BRep {
             let face = &self.m_faces[fi];
             if face.surface_index < 0 || face.surface_index as usize >= self.m_surfaces.len() { continue; }
             let srf = &self.m_surfaces[face.surface_index as usize];
-            let mut outer_3d: Vec<Point> = Vec::new();
-            'outer_m: for &li in &face.loop_indices {
+            let mut ts = NurbsSurfaceTrimmed::new();
+            ts.m_surface = srf.clone();
+            for &li in &face.loop_indices {
                 if li < 0 || li as usize >= self.m_loops.len() { continue; }
                 let bloop = &self.m_loops[li as usize];
-                if bloop.loop_type != BRepLoopType::Outer { continue; }
+                let mut loop_pts: Vec<Point> = Vec::new();
                 for &ti in &bloop.trim_indices {
                     if ti < 0 || ti as usize >= self.m_trims.len() { continue; }
                     let trim = &self.m_trims[ti as usize];
                     if trim.trim_type == BRepTrimType::Singular { continue; }
                     if trim.curve_2d_index < 0 || trim.curve_2d_index as usize >= self.m_curves_2d.len() { continue; }
                     let crv = &self.m_curves_2d[trim.curve_2d_index as usize];
-                    let uv_pts: Vec<Point> = if crv.degree() <= 1 && !crv.is_rational() {
-                        (0..crv.cv_count().saturating_sub(1)).filter_map(|k| crv.get_cv(k)).collect()
+                    if crv.degree() <= 1 && !crv.is_rational() {
+                        for k in 0..crv.cv_count().saturating_sub(1) {
+                            if let Some(p) = crv.get_cv(k) { loop_pts.push(p); }
+                        }
                     } else {
                         let n = (crv.cv_count() * 4).max(16);
-                        let (pts, _) = crv.divide_by_count(n, true);
-                        pts[..pts.len().saturating_sub(1)].to_vec()
-                    };
-                    for uv in &uv_pts {
-                        if let Some(p3d) = srf.point_at(uv[0], uv[1]) {
-                            outer_3d.push(p3d);
-                        }
+                        let (pts, _) = crv.divide_by_count(n, false);
+                        for k in 0..pts.len().saturating_sub(1) { loop_pts.push(pts[k].clone()); }
                     }
                 }
-                break 'outer_m;
+                if loop_pts.len() >= 3 {
+                    let loop_crv = NurbsCurve::create(true, 1, &loop_pts);
+                    if bloop.loop_type == BRepLoopType::Outer {
+                        ts.m_outer_loop = Some(loop_crv);
+                    } else {
+                        ts.m_inner_loops.push(loop_crv);
+                    }
+                }
             }
-            let n = outer_3d.len();
-            if n < 3 { continue; }
-            let cx: f32 = outer_3d.iter().map(|p| p[0]).sum::<f32>() / n as f32;
-            let cy: f32 = outer_3d.iter().map(|p| p[1]).sum::<f32>() / n as f32;
-            let cz: f32 = outer_3d.iter().map(|p| p[2]).sum::<f32>() / n as f32;
-            let center = Point::new(cx, cy, cz);
-            let mut m = Mesh::new();
-            for i in 0..n {
-                let p0 = outer_3d[i].clone();
-                let p1 = outer_3d[(i + 1) % n].clone();
-                let vk0 = m.add_vertex(p0, None);
-                let vk1 = m.add_vertex(p1, None);
-                let vc = m.add_vertex(center.clone(), None);
-                m.add_face(vec![vk0, vk1, vc], None);
-            }
-            fmesh[fi] = m;
+            fmesh[fi] = ts.mesh();
         }
 
         // Phase 4: Combine
