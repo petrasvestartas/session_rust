@@ -6,6 +6,7 @@ use crate::vector::Vector;
 use crate::obb::OBB;
 use crate::mesh::Mesh;
 use crate::plane::Plane;
+use crate::line::Line;
 use crate::nurbsknot;
 use serde::{Deserialize, Deserializer, Serializer};
 use serde::ser::SerializeMap;
@@ -514,7 +515,7 @@ impl NurbsSurface {
                 result.add_face(vec![v0, v1, v2], None);
                 result.add_face(vec![v0, v2, v3], None);
                 let derivs = self.evaluate(0.5, 0.5, 1);
-                normal = if derivs.len() >= 3 { derivs[1].cross(&derivs[2]) } else { Vector::new(0.0, 0.0, 1.0) };
+                normal = if derivs.len() >= 3 { derivs[2].cross(&derivs[1]) } else { Vector::new(0.0, 0.0, 1.0) };
             }
             let nlen = normal.magnitude();
             let n = if nlen > 1e-15 { &normal * (1.0 / nlen) } else { normal };
@@ -1387,8 +1388,105 @@ impl NurbsSurface {
         self.point_at(u, v)
     }
 
+    /// Ray-surface intersection via Newton-Raphson.
+    /// Solves S(u,v) = o + t*d for (u,v,t), returning world-space hit points.
+    pub fn ray_intersect(&self, ray: &Line, tolerance: f32) -> Vec<Point> {
+        if !self.is_valid() { return Vec::new(); }
+        let usp = self.get_span_vector(0);
+        let vsp = self.get_span_vector(1);
+        if usp.len() < 2 || vsp.len() < 2 { return Vec::new(); }
+
+        let s = ray.start();
+        let e = ray.end();
+        let ox = s[0]; let oy = s[1]; let oz = s[2];
+        let ex = e[0]; let ey = e[1]; let ez = e[2];
+        let dxr = ex - ox; let dyr = ey - oy; let dzr = ez - oz;
+        let dlen = (dxr*dxr + dyr*dyr + dzr*dzr).sqrt();
+        if dlen < 1e-14 { return Vec::new(); }
+        let dx = dxr / dlen; let dy = dyr / dlen; let dz = dzr / dlen;
+
+        let tol2 = (tolerance * tolerance).max(1e-10_f32);
+        let max_iter = 50;
+        let mut results: Vec<(f32, f32)> = Vec::new();
+
+        // Seed Newton-Raphson from midpoints of each span cell
+        for i in 0..usp.len()-1 {
+            for j in 0..vsp.len()-1 {
+                let mut u = (usp[i] + usp[i+1]) * 0.5;
+                let mut v = (vsp[j] + vsp[j+1]) * 0.5;
+                let (u0, u1) = (usp[0], *usp.last().unwrap());
+                let (v0, v1) = (vsp[0], *vsp.last().unwrap());
+
+                let mut converged = false;
+                for _ in 0..max_iter {
+                    let d = self.evaluate(u, v, 1);
+                    if d.len() < 3 { break; }
+                    let (px, py, pz) = (d[0][0], d[0][1], d[0][2]);
+                    let (dsu_x, dsu_y, dsu_z) = (d[1][0], d[1][1], d[1][2]);
+                    let (dsv_x, dsv_y, dsv_z) = (d[2][0], d[2][1], d[2][2]);
+
+                    // Residual: F = S(u,v) - (o + t*d), but we absorb t into Newton
+                    // Jacobian J = [dS/du | dS/dv | -d]
+                    // Solve J * [du, dv, dt]^T = -(S - o - t*d)
+                    // We don't track t explicitly; project residual onto ray direction
+                    // Project point onto ray to get t:
+                    let wx = px - ox; let wy = py - oy; let wz = pz - oz;
+                    let t_est = wx*dx + wy*dy + wz*dz;
+                    let rx = px - (ox + t_est*dx);
+                    let ry = py - (oy + t_est*dy);
+                    let rz = pz - (oz + t_est*dz);
+                    let res2 = rx*rx + ry*ry + rz*rz;
+                    if res2 < tol2 { converged = true; break; }
+
+                    // 2-equation reduced system: minimize distance from ray
+                    // F1 = dS/du · (S - o - t*d) = 0
+                    // F2 = dS/dv · (S - o - t*d) = 0
+                    // S - o - t*d: use full ray (t_est)
+                    let fx = px - (ox + t_est*dx);
+                    let fy = py - (oy + t_est*dy);
+                    let fz = pz - (oz + t_est*dz);
+                    let f1 = dsu_x*fx + dsu_y*fy + dsu_z*fz;
+                    let f2 = dsv_x*fx + dsv_y*fy + dsv_z*fz;
+
+                    // Jacobian of [F1,F2] w.r.t. [u,v]:
+                    // dF1/du = |dS/du|^2 (approx, ignoring d^2S/du^2 term)
+                    // dF1/dv = dS/du . dS/dv
+                    // dF2/du = dS/dv . dS/du
+                    // dF2/dv = |dS/dv|^2
+                    let j11 = dsu_x*dsu_x + dsu_y*dsu_y + dsu_z*dsu_z;
+                    let j12 = dsu_x*dsv_x + dsu_y*dsv_y + dsu_z*dsv_z;
+                    let j21 = j12;
+                    let j22 = dsv_x*dsv_x + dsv_y*dsv_y + dsv_z*dsv_z;
+                    let det = j11*j22 - j12*j21;
+                    if det.abs() < 1e-20 { break; }
+                    let du = -(j22*f1 - j12*f2) / det;
+                    let dv = -(j11*f2 - j21*f1) / det;
+                    u = (u + du).clamp(u0, u1);
+                    v = (v + dv).clamp(v0, v1);
+                }
+
+                if converged {
+                    // Check t > 0 (in front of camera)
+                    if let Some(p) = self.point_at(u, v) {
+                        let wx = p[0] - ox; let wy = p[1] - oy; let wz = p[2] - oz;
+                        let t = wx*dx + wy*dy + wz*dz;
+                        if t > tolerance {
+                            // Deduplicate by (u,v) proximity
+                            let dup = results.iter().any(|(ru, rv)| (ru-u).abs() < 1e-4 && (rv-v).abs() < 1e-4);
+                            if !dup {
+                                results.push((u, v));
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        results.iter().filter_map(|(u, v)| self.point_at(*u, *v)).collect()
+    }
+
     /// Extract isoparametric curve from surface
-    /// 
+    ///
     /// # Arguments
     /// * `dir` - Direction (0=iso-u curve where v varies, 1=iso-v curve where u varies)
     /// * `c` - Parameter value at which to extract the curve
@@ -1440,11 +1538,11 @@ impl NurbsSurface {
             
             for k in 0..self.m_order[1 - dir] {
                 let (row, col) = if dir == 0 {
-                    // iso-u: v varies, u is constant at c
-                    (span_index + k, i)
-                } else {
-                    // iso-v: u varies, v is constant at c
+                    // u-direction curve at fixed v=c: blend over v (span+k), iterate u (i)
                     (i, span_index + k)
+                } else {
+                    // v-direction curve at fixed u=c: blend over u (span+k), iterate v (i)
+                    (span_index + k, i)
                 };
                 
                 if let Some(cv_ptr) = self.cv(row, col) {

@@ -2758,7 +2758,7 @@ impl Mesh {
         self.tri_vertices.clear();
     }
 
-    fn ensure_triangle_bvh(&mut self) {
+    pub fn ensure_triangle_bvh(&mut self) {
         if self.tri_bvh.is_some() && !self.tri_tris.is_empty() && !self.tri_vertices.is_empty() {
             return;
         }

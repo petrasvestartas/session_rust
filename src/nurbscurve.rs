@@ -1698,6 +1698,20 @@ impl NurbsCurve {
         let mut work_queue: Vec<(f32, f32)> = Vec::new();
         work_queue.push((t0, t1));
 
+        // Closed curves: start == end, so the initial (t0,t1) chord has zero length
+        // and the adaptive loop skips it. Force-subdivide into thirds to bootstrap.
+        if self.point_at(t0).distance(&self.point_at(t1), None) < 1e-6 && curve_len > max_len {
+            let span = (t1 - t0) / 3.0;
+            let tm1 = t0 + span;
+            let tm2 = t0 + 2.0 * span;
+            samples.push((tm1, self.point_at(tm1)));
+            samples.push((tm2, self.point_at(tm2)));
+            work_queue.clear();
+            work_queue.push((t0, tm1));
+            work_queue.push((tm1, tm2));
+            work_queue.push((tm2, t1));
+        }
+
         const MAX_ITERATIONS: i32 = 10000;
         let mut iterations = 0;
 

@@ -527,18 +527,25 @@ impl Session {
                 OBB::from_point(p.origin(), inflate * 10.0)
             }
             Geometry::BRep(b) => {
-                let mut points: Vec<Point> = b.m_vertices.clone();
-                if points.is_empty() {
-                    for curve in &b.m_curves_3d {
-                        let stride = curve.m_cv_stride.max(3);
-                        for i in 0..curve.m_cv_count {
-                            let base = i * stride;
-                            if base + 2 < curve.m_cv.len() {
-                                points.push(Point::new(
-                                    curve.m_cv[base] as f32,
-                                    curve.m_cv[base + 1] as f32,
-                                    curve.m_cv[base + 2] as f32,
-                                ));
+                let xf = b.xform.to_cols();
+                let tp = |p: &Point| -> Point {
+                    Point::new(
+                        xf[0][0]*p[0] + xf[1][0]*p[1] + xf[2][0]*p[2] + xf[3][0],
+                        xf[0][1]*p[0] + xf[1][1]*p[1] + xf[2][1]*p[2] + xf[3][1],
+                        xf[0][2]*p[0] + xf[1][2]*p[1] + xf[2][2]*p[2] + xf[3][2],
+                    )
+                };
+                let mut points: Vec<Point> = b.m_vertices.iter().map(|p| tp(p)).collect();
+                // Sample surface points to cover curved surfaces (e.g. sphere with only pole vertices)
+                for srf in &b.m_surfaces {
+                    if let (Some((u0, u1)), Some((v0, v1))) = (srf.domain(0), srf.domain(1)) {
+                        for ui in 0..=2usize {
+                            for vi in 0..=2usize {
+                                let u = u0 + (u1 - u0) * ui as f32 / 2.0;
+                                let v = v0 + (v1 - v0) * vi as f32 / 2.0;
+                                if let Some(p) = srf.point_at(u, v) {
+                                    points.push(tp(&p));
+                                }
                             }
                         }
                     }
@@ -802,11 +809,10 @@ impl Session {
                         hit_point = Some(p);
                     }
                 }
-                Geometry::BRep(b) => {
-                    let mut bm = b.mesh();
-                    if let Some(p) = bm.ray_cast_bvh(&ray_line, 1e-6) {
-                        hit_point = Some(p);
-                    }
+                Geometry::BRep(_) => {
+                    // BRep tessellation is expensive (re-tessellates every call).
+                    // Viewers must use pre-cached tessellations with pre-built BVH.
+                    // hit_point stays None — callers handle BReps separately.
                 }
                 Geometry::Element(_) => {}
             }
