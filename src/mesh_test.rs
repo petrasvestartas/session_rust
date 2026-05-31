@@ -46,7 +46,7 @@ pub fn run_mesh_constructor() -> TestResult {
 
         // set_linecolors does not change color_mode
         let mut lc: Vec<Color> = Vec::new();
-        let lw: Vec<f32> = vec![0.1; mesh.number_of_edges()];
+        let lw: Vec<f64> = vec![0.1; mesh.number_of_edges()];
         lc.reserve(mesh.number_of_edges());
         for i in 0..mesh.number_of_edges() {
             lc.push(palette[i % palette.len()].clone());
@@ -393,7 +393,7 @@ pub fn run_mesh_from_polygon_with_holes_many() -> TestResult {
 
         let mut inputs: Vec<Vec<Vec<Point>>> = Vec::new();
         for i in 0..4 {
-            let x = i as f32 * 7.0;
+            let x = i as f64 * 7.0;
             inputs.push(vec![
                 vec![
                     Point::new(x, 0.0, 0.0),
@@ -428,7 +428,7 @@ pub fn run_mesh_loft_many() -> TestResult {
 
         let mut loft_inputs: Vec<(Vec<Polyline>, Vec<Polyline>)> = Vec::new();
         for i in 0..6 {
-            let x = i as f32 * 3.0;
+            let x = i as f64 * 3.0;
             let b = Polyline::new(vec![
                 Point::new(x, 0.0, 0.0),
                 Point::new(x+1.0, 0.0, 0.0),
@@ -437,11 +437,11 @@ pub fn run_mesh_loft_many() -> TestResult {
                 Point::new(x, 0.0, 0.0),
             ]);
             let t = Polyline::new(vec![
-                Point::new(x, 0.0, 1.0+i as f32*0.5),
-                Point::new(x+1.0, 0.0, 1.0+i as f32*0.5),
-                Point::new(x+1.0, 1.0, 1.0+i as f32*0.5),
-                Point::new(x, 1.0, 1.0+i as f32*0.5),
-                Point::new(x, 0.0, 1.0+i as f32*0.5),
+                Point::new(x, 0.0, 1.0+i as f64*0.5),
+                Point::new(x+1.0, 0.0, 1.0+i as f64*0.5),
+                Point::new(x+1.0, 1.0, 1.0+i as f64*0.5),
+                Point::new(x, 1.0, 1.0+i as f64*0.5),
+                Point::new(x, 0.0, 1.0+i as f64*0.5),
             ]);
             loft_inputs.push((vec![b], vec![t]));
         }
@@ -833,7 +833,7 @@ pub fn run_mesh_vertex_and_face_operations() -> TestResult {
         use crate::Mesh;
         use crate::Point;
 
-        let hx = 0.5_f32; let hy = 0.5_f32; let hz = 0.5_f32;
+        let hx = 0.5_f64; let hy = 0.5_f64; let hz = 0.5_f64;
         let verts = vec![
             Point::new(-hx, -hy, -hz),
             Point::new( hx, -hy, -hz),

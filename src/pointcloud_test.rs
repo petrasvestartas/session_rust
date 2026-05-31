@@ -196,7 +196,7 @@ pub fn run_pointcloud_set_color() -> TestResult {
         let mut pc = PointCloud::new(vec![], vec![], vec![Color::new(0.0, 0.0, 0.0, 0.0)]);
         pc.set_color(0, &Color::new(1.0, 0.0, 0.0, 1.0));
 
-        MINI_CHECK!(TOLERANCE.is_close(pc.get_color(0).r, 1.0) && pc.get_color(0).g == 0.0 && pc.get_color(0).b == 0.0 && pc.get_color(0).a == 1.0);
+        MINI_CHECK!(TOLERANCE.is_close(pc.get_color(0).r as f64, 1.0) && pc.get_color(0).g == 0.0 && pc.get_color(0).b == 0.0 && pc.get_color(0).a == 1.0);
     })
 }
 
@@ -209,7 +209,7 @@ pub fn run_pointcloud_add_color() -> TestResult {
         pc.add_color(&Color::new(1.0, 0.0, 0.0, 1.0));
 
         MINI_CHECK!(pc.color_count() == 1);
-        MINI_CHECK!(TOLERANCE.is_close(pc.get_color(0).r, 1.0) && pc.get_color(0).g == 0.0 && pc.get_color(0).b == 0.0);
+        MINI_CHECK!(TOLERANCE.is_close(pc.get_color(0).r as f64, 1.0) && pc.get_color(0).g == 0.0 && pc.get_color(0).b == 0.0);
     })
 }
 
@@ -380,7 +380,7 @@ pub fn run_pointcloud_protobuf_roundtrip() -> TestResult {
         MINI_CHECK!(loaded.name == "test_pointcloud");
         MINI_CHECK!(loaded.len() == 2);
         MINI_CHECK!(TOLERANCE.is_close(loaded.get_point(0)[0], 1.0));
-        MINI_CHECK!(TOLERANCE.is_close(loaded.get_color(0).r, 1.0));
+        MINI_CHECK!(TOLERANCE.is_close(loaded.get_color(0).r as f64, 1.0));
         MINI_CHECK!(TOLERANCE.is_close(loaded.get_normal(0)[2], 1.0));
     })
 }

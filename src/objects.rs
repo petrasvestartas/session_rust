@@ -74,6 +74,8 @@ pub struct Objects {
     pub meshes: Vec<Mesh>,
     pub nurbscurves: Vec<NurbsCurve>,
     pub nurbssurfaces: Vec<NurbsSurface>,
+    #[serde(default)]
+    pub nurbssurfacetrimmeds: Vec<crate::nurbssurface_trimmed::NurbsSurfaceTrimmed>,
     pub breps: Vec<BRep>,
     pub elements: Vec<Element>,
     pub components: Vec<Component>,
@@ -93,6 +95,7 @@ impl Default for Objects {
             meshes: Vec::new(),
             nurbscurves: Vec::new(),
             nurbssurfaces: Vec::new(),
+            nurbssurfacetrimmeds: Vec::new(),
             breps: Vec::new(),
             elements: Vec::new(),
             components: Vec::new(),

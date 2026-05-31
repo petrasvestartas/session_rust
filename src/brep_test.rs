@@ -199,6 +199,19 @@ pub fn run_brep_create_block_with_hole() -> TestResult {
     })
 }
 
+pub fn run_brep_mesh_orientation() -> TestResult {
+    MINI_TEST!("Mesh Orientation", {
+        use crate::brep::BRep;
+
+        // Reversed faces must flip winding; the bug inflated volume() past the solid box.
+        let bh = BRep::create_block_with_hole(8.0, 6.0, 4.0, 1.5);
+        let vol = bh.mesh().volume();
+
+        MINI_CHECK!(vol > 60.0);
+        MINI_CHECK!(vol < 175.0);
+    })
+}
+
 pub fn run_brep_protobuf_roundtrip() -> TestResult {
     MINI_TEST!("Protobuf Roundtrip", {
         use crate::brep::BRep;
@@ -263,9 +276,9 @@ pub fn run_brep_from_polylines() -> TestResult {
         use crate::polyline::Polyline;
         use crate::Point;
 
-        let hx = 1.0_f32;
-        let hy = 1.5_f32;
-        let hz = 2.0_f32;
+        let hx = 1.0_f64;
+        let hy = 1.5_f64;
+        let hz = 2.0_f64;
         let c = [
             Point::new(-hx, -hy, -hz),
             Point::new( hx, -hy, -hz),
@@ -339,9 +352,9 @@ pub fn run_brep_from_nurbscurves() -> TestResult {
         use crate::NurbsCurve;
         use crate::Point;
 
-        let hx = 1.0_f32;
-        let hy = 1.5_f32;
-        let hz = 2.0_f32;
+        let hx = 1.0_f64;
+        let hy = 1.5_f64;
+        let hz = 2.0_f64;
         let c = [
             Point::new(-hx, -hy, -hz),
             Point::new( hx, -hy, -hz),
@@ -447,11 +460,12 @@ REGISTER_MINI_TEST!("BRep", "Transformation", crate::brep_test::run_brep_transfo
 REGISTER_MINI_TEST!("BRep", "Json Roundtrip", crate::brep_test::run_brep_json_roundtrip);
 REGISTER_MINI_TEST!("BRep", "Create Cylinder", crate::brep_test::run_brep_create_cylinder);
 REGISTER_MINI_TEST!("BRep", "Create Sphere", crate::brep_test::run_brep_create_sphere);
-// TODO(f32-followup): re-enable after BRep/Mesh-from-polylines tolerance
-// investigation under f32 (currently produces empty mesh).
+// TODO(f64-followup): re-enable after BRep/Mesh-from-polylines tolerance
+// investigation under f64 (currently produces empty mesh).
 // REGISTER_MINI_TEST!("BRep", "From Polylines", crate::brep_test::run_brep_from_polylines);
 REGISTER_MINI_TEST!("BRep", "From Nurbscurves", crate::brep_test::run_brep_from_nurbscurves);
-// TODO(f32-followup): re-enable after BRep validity check under f32.
+// TODO(f64-followup): re-enable after BRep validity check under f64.
 // REGISTER_MINI_TEST!("BRep", "From Nurbscurves Holes", crate::brep_test::run_brep_from_nurbscurves_holes);
 REGISTER_MINI_TEST!("BRep", "Create Block With Hole", crate::brep_test::run_brep_create_block_with_hole);
+REGISTER_MINI_TEST!("BRep", "Mesh Orientation", crate::brep_test::run_brep_mesh_orientation);
 REGISTER_MINI_TEST!("BRep", "Protobuf Roundtrip", crate::brep_test::run_brep_protobuf_roundtrip);

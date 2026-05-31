@@ -111,7 +111,7 @@ pub fn run_beam_session_geometry() -> TestResult {
 
         MINI_CHECK!(matches!(&sg, ElementGeometry::Mesh(_)));
         if let ElementGeometry::Mesh(mesh) = &sg {
-            let min_x = mesh.vertex.values().map(|v| v.x).fold(f32::INFINITY, f32::min);
+            let min_x = mesh.vertex.values().map(|v| v.x).fold(f64::INFINITY, f64::min);
             MINI_CHECK!(min_x > 9.0);
         }
     })

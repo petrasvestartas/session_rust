@@ -12,7 +12,7 @@ pub struct Xform {
     guid: std::sync::OnceLock<String>,
     pub name: String,
     /// The matrix elements stored in column-major order as a flattened array
-    pub m: [f32; 16],
+    pub m: [f64; 16],
 }
 
 impl serde::Serialize for Xform {
@@ -41,9 +41,9 @@ impl<'de> Deserialize<'de> for Xform {
             #[serde(default)]
             name: Option<String>,
             #[serde(default = "default_matrix")]
-            m: [f32; 16],
+            m: [f64; 16],
         }
-        fn default_matrix() -> [f32; 16] {
+        fn default_matrix() -> [f64; 16] {
             [1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0]
         }
         let data = XformData::deserialize(deserializer)?;
@@ -69,7 +69,7 @@ impl Xform {
         Self::identity()
     }
 
-    pub fn from_matrix(matrix: [f32; 16]) -> Self {
+    pub fn from_matrix(matrix: [f64; 16]) -> Self {
         Xform {
             typ: "Xform".to_string(),
             guid: std::sync::OnceLock::new(),
@@ -82,7 +82,7 @@ impl Xform {
         use std::sync::OnceLock;
         static IDENTITY: OnceLock<Xform> = OnceLock::new();
         IDENTITY.get_or_init(|| {
-            let mut m = [0.0f32; 16];
+            let mut m = [0.0f64; 16];
             m[0] = 1.0; m[5] = 1.0; m[10] = 1.0; m[15] = 1.0;
             Xform { typ: "Xform".to_string(), guid: std::sync::OnceLock::new(),
                     name: "my_xform".to_string(), m }
@@ -121,7 +121,7 @@ impl Xform {
     // Transformations
     ///////////////////////////////////////////////////////////////////////////////////////////
 
-    pub fn translation(x: f32, y: f32, z: f32) -> Self {
+    pub fn translation(x: f64, y: f64, z: f64) -> Self {
         let mut xform = Self::identity();
         xform.m[12] = x;
         xform.m[13] = y;
@@ -129,7 +129,7 @@ impl Xform {
         xform
     }
 
-    pub fn rotation_x(angle: f32, degrees: bool) -> Self {
+    pub fn rotation_x(angle: f64, degrees: bool) -> Self {
         let angle = if degrees { angle * Tolerance::TO_RADIANS } else { angle };
         let mut xform = Self::identity();
 
@@ -144,7 +144,7 @@ impl Xform {
         xform
     }
 
-    pub fn rotation_y(angle: f32, degrees: bool) -> Self {
+    pub fn rotation_y(angle: f64, degrees: bool) -> Self {
         let angle = if degrees { angle * Tolerance::TO_RADIANS } else { angle };
         let mut xform = Self::identity();
 
@@ -159,7 +159,7 @@ impl Xform {
         xform
     }
 
-    pub fn rotation_z(angle: f32, degrees: bool) -> Self {
+    pub fn rotation_z(angle: f64, degrees: bool) -> Self {
         let angle = if degrees { angle * Tolerance::TO_RADIANS } else { angle };
         let mut xform = Self::identity();
         let cos_angle = angle.cos();
@@ -173,7 +173,7 @@ impl Xform {
         xform
     }
 
-    pub fn rotation(axis: &Vector, angle: f32, degrees: bool) -> Self {
+    pub fn rotation(axis: &Vector, angle: f64, degrees: bool) -> Self {
         let angle = if degrees { angle * Tolerance::TO_RADIANS } else { angle };
         let axis = axis.normalized();
 
@@ -204,7 +204,7 @@ impl Xform {
         xform
     }
 
-    pub fn rotation_around_line(line: &Line, angle: f32, degrees: bool) -> Self {
+    pub fn rotation_around_line(line: &Line, angle: f64, degrees: bool) -> Self {
         let p = line.start();
         let d = line.to_direction();
         let t0 = Self::translation(-p[0], -p[1], -p[2]);
@@ -270,7 +270,7 @@ impl Xform {
         xform
     }
 
-    pub fn perspective(fov_y: f32, aspect: f32, near: f32, far: f32) -> Self {
+    pub fn perspective(fov_y: f64, aspect: f64, near: f64, far: f64) -> Self {
         let f = 1.0 / (fov_y / 2.0).tan();
         let nf = near - far;
         let mut xform = Xform::new();
@@ -283,7 +283,7 @@ impl Xform {
         xform
     }
 
-    pub fn orthographic(left: f32, right: f32, bottom: f32, top: f32, near: f32, far: f32) -> Self {
+    pub fn orthographic(left: f64, right: f64, bottom: f64, top: f64, near: f64, far: f64) -> Self {
         let rl = right - left;
         let tb = top - bottom;
         let nf = near - far;
@@ -566,9 +566,9 @@ impl Xform {
             return Xform::identity();
         }
 
-        let o1x = -0.5_f32;
-        let o1y = -0.5_f32;
-        let o1z = -0.5_f32;
+        let o1x = -0.5_f64;
+        let o1y = -0.5_f64;
+        let o1z = -0.5_f64;
 
         let o0 = rect0.get_point(0).unwrap();
         let r01 = rect0.get_point(1).unwrap();
@@ -580,7 +580,7 @@ impl Xform {
 
         // Augmented matrix [I | dot(Xi, X0j)] (X1, Y1, Z1 are orthonormal so
         // their Gram is the identity).
-        let mut r: [[f32; 6]; 3] = [
+        let mut r: [[f64; 6]; 3] = [
             [1.0, 0.0, 0.0, x0[0], y0[0], z0[0]],
             [0.0, 1.0, 0.0, x0[1], y0[1], z0[1]],
             [0.0, 0.0, 1.0, x0[2], y0[2], z0[2]],
@@ -801,7 +801,7 @@ impl Xform {
         xf
     }
 
-    pub fn scale_xyz(scale_x: f32, scale_y: f32, scale_z: f32) -> Self {
+    pub fn scale_xyz(scale_x: f64, scale_y: f64, scale_z: f64) -> Self {
         let mut xform = Self::identity();
         xform.m[0] = scale_x;
         xform.m[5] = scale_y;
@@ -809,21 +809,21 @@ impl Xform {
         xform
     }
 
-    pub fn scale_uniform(origin: &Point, scale_value: f32) -> Self {
+    pub fn scale_uniform(origin: &Point, scale_value: f64) -> Self {
         let t0 = Self::translation(-origin[0], -origin[1], -origin[2]);
         let t1 = Self::scale_xyz(scale_value, scale_value, scale_value);
         let t2 = Self::translation(origin[0], origin[1], origin[2]);
         &t2 * &(&t1 * &t0)
     }
 
-    pub fn scale_non_uniform(origin: &Point, scale_x: f32, scale_y: f32, scale_z: f32) -> Self {
+    pub fn scale_non_uniform(origin: &Point, scale_x: f64, scale_y: f64, scale_z: f64) -> Self {
         let t0 = Self::translation(-origin[0], -origin[1], -origin[2]);
         let t1 = Self::scale_xyz(scale_x, scale_y, scale_z);
         let t2 = Self::translation(origin[0], origin[1], origin[2]);
         &t2 * &(&t1 * &t0)
     }
 
-    pub fn axis_rotation(angle: f32, axis: &Vector, degrees: bool) -> Self {
+    pub fn axis_rotation(angle: f64, axis: &Vector, degrees: bool) -> Self {
         let angle = if degrees { angle * Tolerance::TO_RADIANS } else { angle };
         let c = angle.cos();
         let s = angle.sin();
@@ -848,7 +848,7 @@ impl Xform {
         xform
     }
 
-    pub fn to_cols(&self) -> [[f32; 4]; 4] {
+    pub fn to_cols(&self) -> [[f64; 4]; 4] {
         [
             [self.m[0],  self.m[1],  self.m[2],  self.m[3] ],
             [self.m[4],  self.m[5],  self.m[6],  self.m[7] ],
@@ -927,7 +927,7 @@ impl Xform {
         xform.name = proto.name;
         for (i, val) in proto.matrix.iter().enumerate() {
             if i < 16 {
-                xform.m[i] = *val as f32;
+                xform.m[i] = *val as f64;
             }
         }
         Ok(xform)
@@ -1051,7 +1051,7 @@ impl Eq for Xform {}
 
 // Implement Index trait for accessing matrix elements with [(row, col)] syntax
 impl Index<(usize, usize)> for Xform {
-    type Output = f32;
+    type Output = f64;
 
     fn index(&self, idx: (usize, usize)) -> &Self::Output {
         let (row, col) = idx;

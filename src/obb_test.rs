@@ -204,7 +204,7 @@ pub fn run_obb_accessors() -> crate::mini_test::TestResult {
         let mut b = OBB::from_points(&pts, 0.0);
 
         MINI_CHECK!(TOLERANCE.is_close(b.area(), 88.0));
-        MINI_CHECK!(TOLERANCE.is_close(b.diagonal(), 2.0 * 14.0_f32.sqrt()));
+        MINI_CHECK!(TOLERANCE.is_close(b.diagonal(), 2.0 * 14.0_f64.sqrt()));
         MINI_CHECK!(b.is_valid());
         MINI_CHECK!(TOLERANCE.is_close(b.volume(), 48.0));
         MINI_CHECK!(b.closest_point(&Point::new(1.0, 2.0, 3.0)) == Point::new(1.0, 2.0, 3.0));

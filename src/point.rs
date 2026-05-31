@@ -30,12 +30,12 @@ pub struct Point {
     guid: std::sync::OnceLock<String>, // Unique identifier
     pub name: String, // Name of the point
     #[serde(rename = "x")]
-    _x: f32, // X coordinate (private)
+    _x: f64, // X coordinate (private)
     #[serde(rename = "y")]
-    _y: f32, // Y coordinate (private)
+    _y: f64, // Y coordinate (private)
     #[serde(rename = "z")]
-    _z: f32, // Z coordinate (private)
-    pub width: f32,   // Width of the point
+    _z: f64, // Z coordinate (private)
+    pub width: f64,   // Width of the point
     pub pointcolor: Color, // Color of the point
     #[serde(default = "Xform::identity")]
     pub xform: Xform, // Transformation matrix
@@ -68,7 +68,7 @@ impl Point {
     /// # Returns
     ///
     /// A new Point with the specified coordinates and a unique GUID.
-    pub fn new(x: f32, y: f32, z: f32) -> Self {
+    pub fn new(x: f64, y: f64, z: f64) -> Self {
         Self {
             _x: x,
             _y: y,
@@ -89,7 +89,7 @@ impl Point {
     /// # Returns
     ///
     /// A new Point with the specified coordinates, name, and a unique GUID.
-    pub fn with_name(x: f32, y: f32, z: f32, name: &str) -> Self {
+    pub fn with_name(x: f64, y: f64, z: f64, name: &str) -> Self {
         Self {
             _x: x,
             _y: y,
@@ -262,10 +262,10 @@ impl Point {
         
         let proto = crate::proto::Point::decode(data)?;
         
-        let mut pt = Self::new(proto.x as f32, proto.y as f32, proto.z as f32);
+        let mut pt = Self::new(proto.x as f64, proto.y as f64, proto.z as f64);
         pt.set_guid(proto.guid);
         pt.name = proto.name;
-        pt.width = proto.width as f32;
+        pt.width = proto.width as f64;
 
         if let Some(color) = proto.pointcolor {
             pt.pointcolor.name = color.name;
@@ -280,7 +280,7 @@ impl Point {
             pt.xform.name = xform.name;
             for (i, val) in xform.matrix.iter().enumerate() {
                 if i < 16 {
-                    pt.xform.m[i] = *val as f32;
+                    pt.xform.m[i] = *val as f64;
                 }
             }
         }
@@ -435,7 +435,7 @@ impl Point {
     /// # Arguments
     /// * `p` - The other point
     /// * `double_min` - Optional minimum value for distance calculation. Defaults to 1e-12.
-    pub fn distance(&self, p: &Point, double_min: Option<f32>) -> f32 {
+    pub fn distance(&self, p: &Point, double_min: Option<f64>) -> f64 {
         let double_min = double_min.unwrap_or(1e-12);
         let mut dx = (self[0] - p[0]).abs();
         let mut dy = (self[1] - p[1]).abs();
@@ -464,7 +464,7 @@ impl Point {
     /// # Arguments
     /// * `p` - The other point
     /// * `double_min` - Optional minimum value for distance calculation. Defaults to 1e-12.
-    pub fn squared_distance(&self, p: &Point, double_min: Option<f32>) -> f32 {
+    pub fn squared_distance(&self, p: &Point, double_min: Option<f64>) -> f64 {
         let double_min = double_min.unwrap_or(1e-12);
         let mut dx = (self[0] - p[0]).abs();
         let mut dy = (self[1] - p[1]).abs();
@@ -496,7 +496,7 @@ impl Point {
     /// # Returns
     ///
     /// The area of the polygon.
-    pub fn area(points: &[Point]) -> f32 {
+    pub fn area(points: &[Point]) -> f64 {
         let n = points.len();
         let mut area = 0.0;
 
@@ -562,12 +562,12 @@ impl Point {
             cy += p[1];
             cz += p[2];
         }
-        let n = points.len() as f32;
+        let n = points.len() as f64;
         Point::new(cx / n, cy / n, cz / n)
     }
 
     /// Approximate dihedral angle in degrees between half-planes (p,q,r) and (p,q,s).
-    pub fn dihedral_angle_deg(p: &Point, q: &Point, r: &Point, s: &Point) -> f32 {
+    pub fn dihedral_angle_deg(p: &Point, q: &Point, r: &Point, s: &Point) -> f64 {
         use crate::tolerance::Tolerance;
         let pq = Vector::new(q[0] - p[0], q[1] - p[1], q[2] - p[2]);
         let pr = Vector::new(r[0] - p[0], r[1] - p[1], r[2] - p[2]);
@@ -619,7 +619,7 @@ impl PartialEq for Point {
 ///////////////////////////////////////////////////////////////////////////////////////////
 
 impl Index<usize> for Point {
-    type Output = f32;
+    type Output = f64;
 
     fn index(&self, index: usize) -> &Self::Output {
         match index {
@@ -646,16 +646,16 @@ impl IndexMut<usize> for Point {
 // No-copy operators
 ///////////////////////////////////////////////////////////////////////////////////////////
 
-impl MulAssign<f32> for Point {
-    fn mul_assign(&mut self, rhs: f32) {
+impl MulAssign<f64> for Point {
+    fn mul_assign(&mut self, rhs: f64) {
         self._x *= rhs;
         self._y *= rhs;
         self._z *= rhs;
     }
 }
 
-impl DivAssign<f32> for Point {
-    fn div_assign(&mut self, rhs: f32) {
+impl DivAssign<f64> for Point {
+    fn div_assign(&mut self, rhs: f64) {
         self._x /= rhs;
         self._y /= rhs;
         self._z /= rhs;
@@ -682,18 +682,18 @@ impl SubAssign<Vector> for Point {
 // Copy operators
 ///////////////////////////////////////////////////////////////////////////////////////////
 
-impl Mul<f32> for Point {
+impl Mul<f64> for Point {
     type Output = Point;
 
-    fn mul(self, rhs: f32) -> Self::Output {
+    fn mul(self, rhs: f64) -> Self::Output {
         Point::new(self._x * rhs, self._y * rhs, self._z * rhs)
     }
 }
 
-impl Div<f32> for Point {
+impl Div<f64> for Point {
     type Output = Point;
 
-    fn div(self, rhs: f32) -> Self::Output {
+    fn div(self, rhs: f64) -> Self::Output {
         Point::new(self._x / rhs, self._y / rhs, self._z / rhs)
     }
 }
@@ -723,18 +723,18 @@ impl Sub<Vector> for Point {
 }
 
 // Reference operators (avoid cloning)
-impl Mul<f32> for &Point {
+impl Mul<f64> for &Point {
     type Output = Point;
 
-    fn mul(self, rhs: f32) -> Self::Output {
+    fn mul(self, rhs: f64) -> Self::Output {
         Point::new(self._x * rhs, self._y * rhs, self._z * rhs)
     }
 }
 
-impl Div<f32> for &Point {
+impl Div<f64> for &Point {
     type Output = Point;
 
-    fn div(self, rhs: f32) -> Self::Output {
+    fn div(self, rhs: f64) -> Self::Output {
         Point::new(self._x / rhs, self._y / rhs, self._z / rhs)
     }
 }

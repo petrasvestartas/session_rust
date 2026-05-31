@@ -28,7 +28,7 @@ pub struct JointElementFeature {
     /// Polyline GUIDs in `Session::lookup`.
     pub joint_volume_guids: Vec<String>,
     /// Type-specific scalars (insertion direction x/y/z, depth, ...).
-    pub extras: HashMap<String, f32>,
+    pub extras: HashMap<String, f64>,
 }
 
 impl Default for JointElementFeature {

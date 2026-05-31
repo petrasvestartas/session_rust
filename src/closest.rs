@@ -22,9 +22,9 @@ impl Closest {
     ///
     /// # Returns
     /// (parameter, distance) of closest point
-    pub fn curve_point(curve: &NurbsCurve, test_point: &Point, t0: f32, t1: f32) -> (f32, f32) {
+    pub fn curve_point(curve: &NurbsCurve, test_point: &Point, t0: f64, t1: f64) -> (f64, f64) {
         if !curve.is_valid() {
-            return (0.0, f32::INFINITY);
+            return (0.0, f64::INFINITY);
         }
 
         let (domain_start, domain_end) = curve.domain();
@@ -35,13 +35,13 @@ impl Closest {
         t1 = t1.min(domain_end);
 
         let num_samples = (curve.degree() * 2).max(10);
-        let dt = (t1 - t0) / num_samples as f32;
+        let dt = (t1 - t0) / num_samples as f64;
 
         let mut best_t = t0;
         let mut best_dist = curve.point_at(t0).distance(test_point, None);
 
         for i in 0..=num_samples {
-            let t = t0 + i as f32 * dt;
+            let t = t0 + i as f64 * dt;
             let dist = curve.point_at(t).distance(test_point, None);
             if dist < best_dist {
                 best_dist = dist;
@@ -128,7 +128,7 @@ impl Closest {
     ///
     /// # Returns
     /// (closest_point, parameter, distance)
-    pub fn line_point(line: &Line, test_point: &Point) -> (Point, f32, f32) {
+    pub fn line_point(line: &Line, test_point: &Point) -> (Point, f64, f64) {
         let start = line.start();
         let end = line.end();
 
@@ -165,11 +165,11 @@ impl Closest {
     ///
     /// # Returns
     /// (closest_point, parameter, distance)
-    pub fn polyline_point(polyline: &Polyline, test_point: &Point) -> (Point, f32, f32) {
+    pub fn polyline_point(polyline: &Polyline, test_point: &Point) -> (Point, f64, f64) {
         let points = polyline.get_points();
 
         if points.is_empty() {
-            return (Point::new(0.0, 0.0, 0.0), 0.0, f32::INFINITY);
+            return (Point::new(0.0, 0.0, 0.0), 0.0, f64::INFINITY);
         }
 
         if points.len() == 1 {
@@ -179,7 +179,7 @@ impl Closest {
 
         let mut best_point = points[0].clone();
         let mut best_param = 0.0;
-        let mut best_dist = f32::INFINITY;
+        let mut best_dist = f64::INFINITY;
 
         let mut cumulative_length = 0.0;
         let total_length = polyline.length();
@@ -195,7 +195,7 @@ impl Closest {
                 if total_length > 1e-20 {
                     best_param = (cumulative_length + t * segment_length) / total_length;
                 } else {
-                    best_param = i as f32 / (points.len() - 1) as f32;
+                    best_param = i as f64 / (points.len() - 1) as f64;
                 }
             }
 
@@ -218,13 +218,13 @@ impl Closest {
     pub fn surface_point(
         surface: &NurbsSurface,
         test_point: &Point,
-        u0: f32,
-        u1: f32,
-        v0: f32,
-        v1: f32,
-    ) -> (f32, f32, f32) {
+        u0: f64,
+        u1: f64,
+        v0: f64,
+        v1: f64,
+    ) -> (f64, f64, f64) {
         if !surface.is_valid() {
-            return (0.0, 0.0, f32::INFINITY);
+            return (0.0, 0.0, f64::INFINITY);
         }
 
         let (domain_u0, domain_u1) = surface.domain(0).unwrap_or((0.0, 1.0));
@@ -243,17 +243,17 @@ impl Closest {
         let u_samples = surface.order(0).max(10) as usize;
         let v_samples = surface.order(1).max(10) as usize;
 
-        let du_param = (u1 - u0) / u_samples as f32;
-        let dv_param = (v1 - v0) / v_samples as f32;
+        let du_param = (u1 - u0) / u_samples as f64;
+        let dv_param = (v1 - v0) / v_samples as f64;
 
         let mut best_u = u0;
         let mut best_v = v0;
-        let mut best_dist = f32::INFINITY;
+        let mut best_dist = f64::INFINITY;
 
         for i in 0..=u_samples {
             for j in 0..=v_samples {
-                let uu = u0 + i as f32 * du_param;
-                let vv = v0 + j as f32 * dv_param;
+                let uu = u0 + i as f64 * du_param;
+                let vv = v0 + j as f64 * dv_param;
                 if let Some(pt) = surface.point_at(uu, vv) {
                     let dist = pt.distance(test_point, None);
                     if dist < best_dist {
@@ -318,7 +318,7 @@ impl Closest {
 
         let final_dist = surface.point_at(u, v)
             .map(|pt| pt.distance(test_point, None))
-            .unwrap_or(f32::INFINITY);
+            .unwrap_or(f64::INFINITY);
 
         (u, v, final_dist)
     }
@@ -366,9 +366,9 @@ impl Closest {
         Point::new(a[0] + abx*v + acx*w, a[1] + aby*v + acy*w, a[2] + abz*v + acz*w)
     }
 
-    pub fn mesh_point(mesh: &Mesh, test_point: &Point) -> (Point, usize, f32) {
+    pub fn mesh_point(mesh: &Mesh, test_point: &Point) -> (Point, usize, f64) {
         if mesh.number_of_faces() == 0 {
-            return (Point::new(0.0, 0.0, 0.0), 0, f32::INFINITY);
+            return (Point::new(0.0, 0.0, 0.0), 0, f64::INFINITY);
         }
 
         let (vertices, faces) = mesh.to_vertices_and_faces();
@@ -377,7 +377,7 @@ impl Closest {
 
         let mut best_point = Point::new(0.0, 0.0, 0.0);
         let mut best_face_key: usize = 0;
-        let mut best_dist = f32::INFINITY;
+        let mut best_dist = f64::INFINITY;
 
         for (fi, fv) in faces.iter().enumerate() {
             if fv.len() < 3 { continue; }
@@ -398,9 +398,9 @@ impl Closest {
         (best_point, best_face_key, best_dist)
     }
 
-    pub fn mesh_point_aabb(mesh: &Mesh, test_point: &Point) -> (Point, usize, f32) {
+    pub fn mesh_point_aabb(mesh: &Mesh, test_point: &Point) -> (Point, usize, f64) {
         if mesh.number_of_faces() == 0 {
-            return (Point::new(0.0, 0.0, 0.0), 0, f32::INFINITY);
+            return (Point::new(0.0, 0.0, 0.0), 0, f64::INFINITY);
         }
 
         let (vertices, faces) = mesh.to_vertices_and_faces();
@@ -419,11 +419,11 @@ impl Closest {
         }
 
         if tris.is_empty() {
-            return (Point::new(0.0, 0.0, 0.0), 0, f32::INFINITY);
+            return (Point::new(0.0, 0.0, 0.0), 0, f64::INFINITY);
         }
 
         // Build AABB boxes for each triangle: (cx, cy, cz, hx, hy, hz)
-        let boxes: Vec<[f32; 6]> = tris.iter().map(|(v0, v1, v2)| {
+        let boxes: Vec<[f64; 6]> = tris.iter().map(|(v0, v1, v2)| {
             let lx = v0[0].min(v1[0]).min(v2[0]);
             let ly = v0[1].min(v1[1]).min(v2[1]);
             let lz = v0[2].min(v1[2]).min(v2[2]);
@@ -435,13 +435,13 @@ impl Closest {
         }).collect();
 
         // SpatialAABBTree nodes: (aabb, right_child, object_id)
-        let mut nodes: Vec<([f32; 6], i32, i32)> = Vec::new();
+        let mut nodes: Vec<([f64; 6], i32, i32)> = Vec::new();
 
-        fn build_node(ids: &mut [usize], boxes: &[[f32; 6]], nodes: &mut Vec<([f32; 6], i32, i32)>) {
+        fn build_node(ids: &mut [usize], boxes: &[[f64; 6]], nodes: &mut Vec<([f64; 6], i32, i32)>) {
             let ni = nodes.len();
             nodes.push(([0.0; 6], -1, -1));
-            let mut lo = [f32::MAX; 3];
-            let mut hi = [f32::MIN; 3];
+            let mut lo = [f64::MAX; 3];
+            let mut hi = [f64::MIN; 3];
             for &i in ids.iter() {
                 let b = &boxes[i];
                 for a in 0..3 {
@@ -472,7 +472,7 @@ impl Closest {
         let mut ids: Vec<usize> = (0..tris.len()).collect();
         build_node(&mut ids, &boxes, &mut nodes);
 
-        fn aabb_min_dist(aabb: &[f32; 6], pt: &Point) -> f32 {
+        fn aabb_min_dist(aabb: &[f64; 6], pt: &Point) -> f64 {
             let dx = (pt[0] - aabb[0]).abs() - aabb[3];
             let dy = (pt[1] - aabb[1]).abs() - aabb[4];
             let dz = (pt[2] - aabb[2]).abs() - aabb[5];
@@ -482,13 +482,13 @@ impl Closest {
 
         let mut best_point = Point::new(0.0, 0.0, 0.0);
         let mut best_face_key: usize = 0;
-        let mut best_dist = f32::INFINITY;
+        let mut best_dist = f64::INFINITY;
 
         fn dfs(
-            ni: usize, nodes: &[([f32; 6], i32, i32)],
+            ni: usize, nodes: &[([f64; 6], i32, i32)],
             tris: &[(Point, Point, Point)], tri_face_idx: &[usize],
             sorted_face_keys: &[usize], test_point: &Point,
-            best_point: &mut Point, best_face_key: &mut usize, best_dist: &mut f32,
+            best_point: &mut Point, best_face_key: &mut usize, best_dist: &mut f64,
         ) {
             let (ref aabb, right, obj) = nodes[ni];
             if aabb_min_dist(aabb, test_point) >= *best_dist { return; }
@@ -522,9 +522,9 @@ impl Closest {
         (best_point, best_face_key, best_dist)
     }
 
-    pub fn pointcloud_point(cloud: &PointCloud, test_point: &Point) -> (Point, usize, f32) {
+    pub fn pointcloud_point(cloud: &PointCloud, test_point: &Point) -> (Point, usize, f64) {
         if cloud.point_count() == 0 {
-            return (Point::new(0.0, 0.0, 0.0), 0, f32::INFINITY);
+            return (Point::new(0.0, 0.0, 0.0), 0, f64::INFINITY);
         }
 
         let mut best_point = cloud.get_point(0);
@@ -544,9 +544,9 @@ impl Closest {
         (best_point, best_index, best_dist)
     }
 
-    pub fn pointcloud_point_kdtree(cloud: &PointCloud, test_point: &Point) -> (Point, usize, f32) {
+    pub fn pointcloud_point_kdtree(cloud: &PointCloud, test_point: &Point) -> (Point, usize, f64) {
         if cloud.point_count() == 0 {
-            return (Point::new(0.0, 0.0, 0.0), 0, f32::INFINITY);
+            return (Point::new(0.0, 0.0, 0.0), 0, f64::INFINITY);
         }
         use crate::spatial_kdtree::SpatialKDTree;
         let pts: Vec<Point> = (0..cloud.point_count()).map(|i| cloud.get_point(i)).collect();
@@ -555,13 +555,13 @@ impl Closest {
         (cloud.get_point(idx), idx, dist)
     }
 
-    fn build_raw_boxes(aabbs: &[[f32; 6]]) -> Vec<([f32; 6], i32, i32)> {
-        let mut nodes: Vec<([f32; 6], i32, i32)> = Vec::new();
-        fn build(ids: &mut [usize], boxes: &[[f32; 6]], nodes: &mut Vec<([f32; 6], i32, i32)>) {
+    fn build_raw_boxes(aabbs: &[[f64; 6]]) -> Vec<([f64; 6], i32, i32)> {
+        let mut nodes: Vec<([f64; 6], i32, i32)> = Vec::new();
+        fn build(ids: &mut [usize], boxes: &[[f64; 6]], nodes: &mut Vec<([f64; 6], i32, i32)>) {
             let ni = nodes.len();
             nodes.push(([0.0; 6], -1, -1));
-            let mut lo = [f32::MAX; 3];
-            let mut hi = [f32::MIN; 3];
+            let mut lo = [f64::MAX; 3];
+            let mut hi = [f64::MIN; 3];
             for &i in ids.iter() {
                 let b = &boxes[i];
                 for a in 0..3 { lo[a] = lo[a].min(b[a] - b[a + 3]); hi[a] = hi[a].max(b[a] + b[a + 3]); }
@@ -583,7 +583,7 @@ impl Closest {
         nodes
     }
 
-    fn query_raw_nodes(ni: usize, nodes: &[([f32; 6], i32, i32)], query: &[f32; 6], result: &mut Vec<usize>) {
+    fn query_raw_nodes(ni: usize, nodes: &[([f64; 6], i32, i32)], query: &[f64; 6], result: &mut Vec<usize>) {
         let (ref aabb, right, obj) = nodes[ni];
         let overlaps = (0..3).all(|a| (aabb[a] - query[a]).abs() <= aabb[a+3] + query[a+3]);
         if !overlaps { return; }
@@ -592,17 +592,17 @@ impl Closest {
         Self::query_raw_nodes(right as usize, nodes, query, result);
     }
 
-    fn aabb_to_aabb_min_dist(a: &[f32; 6], b: &[f32; 6]) -> f32 {
+    fn aabb_to_aabb_min_dist(a: &[f64; 6], b: &[f64; 6]) -> f64 {
         let dx = ((a[0] - b[0]).abs() - a[3] - b[3]).max(0.0);
         let dy = ((a[1] - b[1]).abs() - a[4] - b[4]).max(0.0);
         let dz = ((a[2] - b[2]).abs() - a[5] - b[5]).max(0.0);
         (dx*dx + dy*dy + dz*dz).sqrt()
     }
 
-    pub fn lines_closest(lines: &[Line], threshold: f32) -> Vec<(usize, usize)> {
+    pub fn lines_closest(lines: &[Line], threshold: f64) -> Vec<(usize, usize)> {
         use crate::aabb::AABB;
         if lines.len() < 2 { return Vec::new(); }
-        let raw: Vec<[f32; 6]> = lines.iter().map(|ln| {
+        let raw: Vec<[f64; 6]> = lines.iter().map(|ln| {
             let b = AABB::from_line(ln, threshold);
             [b.cx, b.cy, b.cz, b.hx, b.hy, b.hz]
         }).collect();
@@ -623,10 +623,10 @@ impl Closest {
         pairs
     }
 
-    pub fn polylines_closest(polylines: &[Polyline], threshold: f32) -> Vec<(usize, usize)> {
+    pub fn polylines_closest(polylines: &[Polyline], threshold: f64) -> Vec<(usize, usize)> {
         use crate::aabb::AABB;
         if polylines.len() < 2 { return Vec::new(); }
-        let raw: Vec<[f32; 6]> = polylines.iter().map(|pl| {
+        let raw: Vec<[f64; 6]> = polylines.iter().map(|pl| {
             let b = AABB::from_polyline(pl, threshold);
             [b.cx, b.cy, b.cz, b.hx, b.hy, b.hz]
         }).collect();
@@ -639,17 +639,17 @@ impl Closest {
                 if j <= i { continue; }
                 let pts_a = polylines[i].get_points();
                 let dist = pts_a.iter().map(|pt| Self::polyline_point(&polylines[j], pt).2)
-                    .fold(f32::INFINITY, f32::min);
+                    .fold(f64::INFINITY, f64::min);
                 if dist <= threshold { pairs.push((i, j)); }
             }
         }
         pairs
     }
 
-    pub fn nurbscurves_closest(curves: &[NurbsCurve], threshold: f32) -> Vec<(usize, usize)> {
+    pub fn nurbscurves_closest(curves: &[NurbsCurve], threshold: f64) -> Vec<(usize, usize)> {
         use crate::aabb::AABB;
         if curves.len() < 2 { return Vec::new(); }
-        let raw: Vec<[f32; 6]> = curves.iter().map(|crv| {
+        let raw: Vec<[f64; 6]> = curves.iter().map(|crv| {
             let b = AABB::from_nurbscurve(crv, threshold, false);
             [b.cx, b.cy, b.cz, b.hx, b.hy, b.hz]
         }).collect();
@@ -671,10 +671,10 @@ impl Closest {
         pairs
     }
 
-    pub fn boxes_closest(boxes: &[crate::aabb::AABB], threshold: f32) -> Vec<(usize, usize)> {
+    pub fn boxes_closest(boxes: &[crate::aabb::AABB], threshold: f64) -> Vec<(usize, usize)> {
         if boxes.len() < 2 { return Vec::new(); }
-        let raw_orig: Vec<[f32; 6]> = boxes.iter().map(|b| [b.cx, b.cy, b.cz, b.hx, b.hy, b.hz]).collect();
-        let raw_inf: Vec<[f32; 6]> = boxes.iter().map(|b| [b.cx, b.cy, b.cz, b.hx + threshold, b.hy + threshold, b.hz + threshold]).collect();
+        let raw_orig: Vec<[f64; 6]> = boxes.iter().map(|b| [b.cx, b.cy, b.cz, b.hx, b.hy, b.hz]).collect();
+        let raw_inf: Vec<[f64; 6]> = boxes.iter().map(|b| [b.cx, b.cy, b.cz, b.hx + threshold, b.hy + threshold, b.hz + threshold]).collect();
         let nodes = Self::build_raw_boxes(&raw_inf);
         let mut pairs = Vec::new();
         for i in 0..boxes.len() {

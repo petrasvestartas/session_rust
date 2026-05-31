@@ -401,7 +401,7 @@ pub fn run_session_tree_transformation_hierarchy() -> TestResult {
         use crate::{Session, Point, Vector, Mesh, Plane, Xform};
         let mut scene = Session::new("tree_transformation_test");
 
-        let create_box = |cx: f32, cy: f32, cz: f32, size: f32| -> Mesh {
+        let create_box = |cx: f64, cy: f64, cz: f64, size: f64| -> Mesh {
             let mut mesh = Mesh::new();
             let h = size * 0.5;
             let vkeys = [

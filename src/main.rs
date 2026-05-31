@@ -136,7 +136,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         let world_size = SpatialBVH::compute_world_size(&tri_boxes);
         let tri_bvh = SpatialBVH::from_boxes(&tri_boxes, world_size);
         let tri_build_end = Instant::now();
-        let bvh_build_time_ms = (tri_build_end - tri_build_start).as_secs_f32() * 1000.0;
+        let bvh_build_time_ms = (tri_build_end - tri_build_start).as_secs_f64() * 1000.0;
         println!("SpatialBVH build: {bvh_build_time_ms:.3} ms");
 
         let zaxis = Line::new(0.201, -0.212, 0.036, -0.326, 0.677, -0.060);
@@ -160,7 +160,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             }
         }
         let brute_end = Instant::now();
-        let mesh_time_ms = (brute_end - brute_start).as_secs_f32() * 1000.0;
+        let mesh_time_ms = (brute_end - brute_start).as_secs_f64() * 1000.0;
         println!("Ray-mesh (brute): {mesh_hits} hits, {mesh_time_ms:.3} ms");
 
         let bvh_start = Instant::now();
@@ -189,7 +189,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             }
         }
         let bvh_end = Instant::now();
-        let bvh_time_ms = (bvh_end - bvh_start).as_secs_f32() * 1000.0;
+        let bvh_time_ms = (bvh_end - bvh_start).as_secs_f64() * 1000.0;
         print!("Ray-mesh (SpatialBVH):   {bvh_hits} hits, {bvh_time_ms:.3} ms");
         if bvh_time_ms > 0.0 && mesh_time_ms > 0.0 {
             println!(" ({:.2}x faster)", mesh_time_ms / bvh_time_ms);
@@ -203,12 +203,12 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("\n=== SpatialBVH Collision Detection (Rust) ===");
     let box_counts = [100usize, 5000usize, 10000usize];
     for &box_count in box_counts.iter() {
-        let world_size = 100.0f32;
-        let min_size = 5.0f32;
-        let max_size = 10.0f32;
+        let world_size = 100.0f64;
+        let min_size = 5.0f64;
+        let max_size = 10.0f64;
         unsafe { libc::srand(42) }; // match C++ seeding per dataset
-        let rand_max = 2147483647.0f32; // typical RAND_MAX on macOS
-        let next_rand01 = || -> f32 { unsafe { (libc::rand() as i64) as f32 / rand_max } };
+        let rand_max = 2147483647.0f64; // typical RAND_MAX on macOS
+        let next_rand01 = || -> f64 { unsafe { (libc::rand() as i64) as f64 / rand_max } };
         let mut boxes: Vec<OBB> = Vec::with_capacity(box_count);
         for _ in 0..box_count {
             let x = (next_rand01() - 0.5) * world_size;
@@ -230,11 +230,11 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         let bvh_start = Instant::now();
         let bvh = SpatialBVH::from_boxes(&boxes, world_size);
         let bvh_end = Instant::now();
-        let bvh_build_ms = (bvh_end - bvh_start).as_secs_f32() * 1000.0;
+        let bvh_build_ms = (bvh_end - bvh_start).as_secs_f64() * 1000.0;
         let coll_start = Instant::now();
         let (pairs, _indices, checks) = bvh.check_all_collisions(&boxes);
         let coll_end = Instant::now();
-        let coll_ms = (coll_end - coll_start).as_secs_f32() * 1000.0;
+        let coll_ms = (coll_end - coll_start).as_secs_f64() * 1000.0;
         println!(
             "{} boxes: build={:.3}ms, collisions={:.3}ms ({} pairs, {} checks)",
             box_count,
@@ -309,15 +309,15 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("\n=== Performance Test (10k Objects) (Rust) ===");
     {
         let object_count = 10_000usize;
-        let world_size = 100.0f32;
+        let world_size = 100.0f64;
         let mut scene = Session::new("perf_test");
         let mut pure_boxes: Vec<OBB> = Vec::with_capacity(object_count);
         unsafe { libc::srand(42) }; // match C++
-        let rand_max = 2147483647.0f32;
+        let rand_max = 2147483647.0f64;
         for i in 0..object_count {
-            let x = (unsafe { libc::rand() } as f32 / rand_max - 0.5) * world_size;
-            let y = (unsafe { libc::rand() } as f32 / rand_max - 0.5) * world_size;
-            let z = (unsafe { libc::rand() } as f32 / rand_max - 0.5) * world_size;
+            let x = (unsafe { libc::rand() } as f64 / rand_max - 0.5) * world_size;
+            let y = (unsafe { libc::rand() } as f64 / rand_max - 0.5) * world_size;
+            let z = (unsafe { libc::rand() } as f64 / rand_max - 0.5) * world_size;
             let mut pt = Point::new(x, y, z);
             pt.name = format!("point_{i}");
             scene.add_point(pt.clone(), None);
@@ -335,15 +335,15 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         let tol = 1.0;
         let t0 = Instant::now();
         let hits0 = scene.ray_cast(&ray_origin, &ray_dir_x, tol);
-        let session_ms = (Instant::now() - t0).as_secs_f32() * 1000.0;
+        let session_ms = (Instant::now() - t0).as_secs_f64() * 1000.0;
         let t1 = Instant::now();
         let hits1 = scene.ray_cast(&ray_origin, &ray_dir_y, tol);
-        let session_cached_ms = (Instant::now() - t1).as_secs_f32() * 1000.0;
+        let session_cached_ms = (Instant::now() - t1).as_secs_f64() * 1000.0;
         let bvh_start = Instant::now();
         let pure_bvh = SpatialBVH::from_boxes(&pure_boxes, world_size);
         let mut candidate_ids: Vec<usize> = Vec::new();
         pure_bvh.ray_cast(&ray_origin, &ray_dir_x, &mut candidate_ids, true);
-        let bvh_ms = (Instant::now() - bvh_start).as_secs_f32() * 1000.0;
+        let bvh_ms = (Instant::now() - bvh_start).as_secs_f64() * 1000.0;
         println!(
             "Session (first):  {:.3}ms ({} hits)",
             session_ms,
@@ -383,7 +383,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Create planes perpendicular to X-axis at regular intervals
     let mut planes = Vec::new();
     for i in 0..7 {
-        let origin = Point::new(i as f32 * 500.0, 0.0, 0.0);
+        let origin = Point::new(i as f64 * 500.0, 0.0, 0.0);
         let normal = Vector::new(1.0, 0.0, 0.0);
         planes.push(Plane::from_point_normal(origin, normal));
     }

@@ -7,10 +7,10 @@ use crate::tolerance::Tolerance;
 
 pub struct RemeshNurbsSurfaceAdaptive {
     surface: NurbsSurface,
-    max_angle: f32,
-    max_edge_length: f32,
-    min_edge_length: f32,
-    max_chord_height: f32,
+    max_angle: f64,
+    max_edge_length: f64,
+    min_edge_length: f64,
+    max_chord_height: f64,
 }
 
 impl RemeshNurbsSurfaceAdaptive {
@@ -24,35 +24,35 @@ impl RemeshNurbsSurfaceAdaptive {
         }
     }
 
-    pub fn set_max_angle(&mut self, degrees: f32) -> &mut Self {
+    pub fn set_max_angle(&mut self, degrees: f64) -> &mut Self {
         self.max_angle = degrees;
         self
     }
 
-    pub fn set_max_edge_length(&mut self, length: f32) -> &mut Self {
+    pub fn set_max_edge_length(&mut self, length: f64) -> &mut Self {
         self.max_edge_length = length;
         self
     }
 
-    pub fn set_min_edge_length(&mut self, length: f32) -> &mut Self {
+    pub fn set_min_edge_length(&mut self, length: f64) -> &mut Self {
         self.min_edge_length = length;
         self
     }
 
-    pub fn set_max_chord_height(&mut self, height: f32) -> &mut Self {
+    pub fn set_max_chord_height(&mut self, height: f64) -> &mut Self {
         self.max_chord_height = height;
         self
     }
 
-    pub fn get_max_angle(&self) -> f32 { self.max_angle }
-    pub fn get_max_edge_length(&self) -> f32 { self.max_edge_length }
-    pub fn get_min_edge_length(&self) -> f32 { self.min_edge_length }
-    pub fn get_max_chord_height(&self) -> f32 { self.max_chord_height }
+    pub fn get_max_angle(&self) -> f64 { self.max_angle }
+    pub fn get_max_edge_length(&self) -> f64 { self.max_edge_length }
+    pub fn get_min_edge_length(&self) -> f64 { self.min_edge_length }
+    pub fn get_max_chord_height(&self) -> f64 { self.max_chord_height }
 
-    fn compute_bbox_diagonal(&self) -> f32 {
+    fn compute_bbox_diagonal(&self) -> f64 {
         let s = &self.surface;
-        let (mut minx, mut miny, mut minz) = (1e30_f32, 1e30_f32, 1e30_f32);
-        let (mut maxx, mut maxy, mut maxz) = (-1e30_f32, -1e30_f32, -1e30_f32);
+        let (mut minx, mut miny, mut minz) = (1e30_f64, 1e30_f64, 1e30_f64);
+        let (mut maxx, mut maxy, mut maxz) = (-1e30_f64, -1e30_f64, -1e30_f64);
         for i in 0..s.cv_count_dir(Some(0)) {
             for j in 0..s.cv_count_dir(Some(1)) {
                 if let Some(p) = s.get_cv(i, j) {
@@ -89,12 +89,12 @@ impl RemeshNurbsSurfaceAdaptive {
 
         // Corner: (px, py, pz, nx, ny, nz)
         #[derive(Clone, Copy, Default)]
-        struct Corner { px: f32, py: f32, pz: f32, nx: f32, ny: f32, nz: f32 }
+        struct Corner { px: f64, py: f64, pz: f64, nx: f64, ny: f64, nz: f64 }
 
         // Node: u0, v0, u1, v1, corners[5], children[4], depth
         #[derive(Clone)]
         struct Node {
-            u0: f32, v0: f32, u1: f32, v1: f32,
+            u0: f64, v0: f64, u1: f64, v1: f64,
             c: [Corner; 5],
             ch: [i32; 4],
             depth: i32,
@@ -106,7 +106,7 @@ impl RemeshNurbsSurfaceAdaptive {
 
         let mut nodes: Vec<Node> = Vec::with_capacity(ns_u * ns_v * 256);
 
-        let eval_corner = |u: f32, v: f32| -> Corner {
+        let eval_corner = |u: f64, v: f64| -> Corner {
             let mut c = Corner::default();
             if let Some(pt) = s.point_at(u, v) {
                 c.px = pt[0]; c.py = pt[1]; c.pz = pt[2];
@@ -126,12 +126,12 @@ impl RemeshNurbsSurfaceAdaptive {
             c
         };
 
-        let ndiff = |a: &Corner, b: &Corner| -> f32 {
+        let ndiff = |a: &Corner, b: &Corner| -> f64 {
             let (dx, dy, dz) = (a.nx-b.nx, a.ny-b.ny, a.nz-b.nz);
             dx*dx + dy*dy + dz*dz
         };
         let nvalid = |c: &Corner| -> bool { c.nx*c.nx + c.ny*c.ny + c.nz*c.nz > 1e-20 };
-        let pdist2 = |a: &Corner, b: &Corner| -> f32 {
+        let pdist2 = |a: &Corner, b: &Corner| -> f64 {
             let (dx, dy, dz) = (a.px-b.px, a.py-b.py, a.pz-b.pz);
             dx*dx + dy*dy + dz*dz
         };
@@ -139,9 +139,9 @@ impl RemeshNurbsSurfaceAdaptive {
             Corner { px: (a.px+b.px)*0.5, py: (a.py+b.py)*0.5, pz: (a.pz+b.pz)*0.5, nx: 0.0, ny: 0.0, nz: 0.0 }
         };
 
-        let fill_node = |u0: f32, v0: f32, u1: f32, v1: f32,
+        let fill_node = |u0: f64, v0: f64, u1: f64, v1: f64,
                          sw: Corner, se: Corner, ne: Corner, nw: Corner,
-                         depth: i32, eval_fn: &dyn Fn(f32,f32)->Corner| -> Node {
+                         depth: i32, eval_fn: &dyn Fn(f64,f64)->Corner| -> Node {
             let ct = eval_fn((u0+u1)*0.5, (v0+v1)*0.5);
             Node { u0, v0, u1, v1, c: [sw, se, ne, nw, ct], ch: [-1,-1,-1,-1], depth }
         };
@@ -161,7 +161,7 @@ impl RemeshNurbsSurfaceAdaptive {
                     let vm = (p.v0 + p.v1) * 0.5;
 
                     if min_edge_length > 0.0 {
-                        let mut me = 0.0_f32;
+                        let mut me = 0.0_f64;
                         for i in 0..4 {
                             let d = pdist2(&p.c[i], &p.c[(i+1)%4]);
                             if d > me { me = d; }
@@ -315,11 +315,11 @@ impl RemeshNurbsSurfaceAdaptive {
         }
 
         // Collect leaf corner UVs for T-junction detection
-        let qk = |x: f32| -> i64 { (x * 1e10).round() as i64 };
-        let norm_u_fn = |u: f32| -> f32 {
+        let qk = |x: f64| -> i64 { (x * 1e10).round() as i64 };
+        let norm_u_fn = |u: f64| -> f64 {
             if closed_u && (u - usp[usp.len()-1]).abs() < 1e-10 { usp[0] } else { u }
         };
-        let norm_v_fn = |v: f32| -> f32 {
+        let norm_v_fn = |v: f64| -> f64 {
             if closed_v && (v - vsp[vsp.len()-1]).abs() < 1e-10 { vsp[0] } else { v }
         };
 
@@ -363,28 +363,28 @@ impl RemeshNurbsSurfaceAdaptive {
 
         let mut vtx_map: BTreeMap<IKey, usize> = BTreeMap::new();
 
-        let find_h_mids = |u_start: f32, u_end: f32, v_const: f32,
-                           by_v: &BTreeMap<i64, Vec<i64>>| -> Vec<f32> {
+        let find_h_mids = |u_start: f64, u_end: f64, v_const: f64,
+                           by_v: &BTreeMap<i64, Vec<i64>>| -> Vec<f64> {
             let qv = qk(norm_v_fn(v_const));
             let vec = match by_v.get(&qv) { Some(v) => v, None => return Vec::new() };
             let (qa, qb) = (qk(u_start), qk(u_end));
             let (lo, hi) = (qa.min(qb), qa.max(qb));
             let li = vec.partition_point(|&x| x <= lo);
             let ri = vec.partition_point(|&x| x < hi);
-            let mut res: Vec<f32> = vec[li..ri].iter().map(|&x| x as f32 / 1e10).collect();
+            let mut res: Vec<f64> = vec[li..ri].iter().map(|&x| x as f64 / 1e10).collect();
             if qa > qb { res.reverse(); }
             res
         };
 
-        let find_v_mids = |u_const: f32, v_start: f32, v_end: f32,
-                           by_u: &BTreeMap<i64, Vec<i64>>| -> Vec<f32> {
+        let find_v_mids = |u_const: f64, v_start: f64, v_end: f64,
+                           by_u: &BTreeMap<i64, Vec<i64>>| -> Vec<f64> {
             let qu = qk(norm_u_fn(u_const));
             let vec = match by_u.get(&qu) { Some(v) => v, None => return Vec::new() };
             let (qa, qb) = (qk(v_start), qk(v_end));
             let (lo, hi) = (qa.min(qb), qa.max(qb));
             let li = vec.partition_point(|&x| x <= lo);
             let ri = vec.partition_point(|&x| x < hi);
-            let mut res: Vec<f32> = vec[li..ri].iter().map(|&x| x as f32 / 1e10).collect();
+            let mut res: Vec<f64> = vec[li..ri].iter().map(|&x| x as f64 / 1e10).collect();
             if qa > qb { res.reverse(); }
             res
         };
@@ -475,9 +475,9 @@ impl RemeshNurbsSurfaceAdaptive {
 
         // Compute vertex normals from face normals
         let nv = if result.vertex.is_empty() { 0 } else { *result.vertex.keys().max().unwrap() + 1 };
-        let mut vnx = vec![0.0_f32; nv];
-        let mut vny = vec![0.0_f32; nv];
-        let mut vnz = vec![0.0_f32; nv];
+        let mut vnx = vec![0.0_f64; nv];
+        let mut vny = vec![0.0_f64; nv];
+        let mut vnz = vec![0.0_f64; nv];
         for vids in result.face.values() {
             if vids.len() < 3 { continue; }
             let pos0 = result.vertex.get(&vids[0]).unwrap().position();

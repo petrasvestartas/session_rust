@@ -35,7 +35,7 @@ pub fn run_spatial_aabbtree_build_empty() -> TestResult {
         let m = Mesh::new();
         let (_cp, _fk, d) = Closest::mesh_point_aabb(&m, &Point::new(0.0, 0.0, 0.0));
 
-        MINI_CHECK!(d == f32::INFINITY);
+        MINI_CHECK!(d == f64::INFINITY);
     })
 }
 
@@ -91,9 +91,9 @@ pub fn run_spatial_aabbtree_node_count() -> TestResult {
         let mut m = Mesh::new();
         let mut vkeys: Vec<usize> = Vec::new();
         for i in 0..100 {
-            vkeys.push(m.add_vertex(Point::new(i as f32, 0.0, 0.0), None));
-            vkeys.push(m.add_vertex(Point::new(i as f32 + 0.5, 0.5, 0.0), None));
-            vkeys.push(m.add_vertex(Point::new(i as f32, 0.5, 0.0), None));
+            vkeys.push(m.add_vertex(Point::new(i as f64, 0.0, 0.0), None));
+            vkeys.push(m.add_vertex(Point::new(i as f64 + 0.5, 0.5, 0.0), None));
+            vkeys.push(m.add_vertex(Point::new(i as f64, 0.5, 0.0), None));
         }
         for i in 0..100 {
             m.add_face(vec![vkeys[i*3], vkeys[i*3+1], vkeys[i*3+2]], None);

@@ -11,15 +11,15 @@ pub struct PointCloud {
     /// Human-readable name
     pub name: String,
     /// Point size for rendering
-    pub point_size: f32,
+    pub point_size: f64,
     /// Transformation matrix applied by transform()/transformed()
     pub xform: Xform,
     /// Flat coords [x0, y0, z0, x1, y1, z1, ...]
-    _coords: Vec<f32>,
+    _coords: Vec<f64>,
     /// Flat colors [r0, g0, b0, a0, ...]
     _colors: Vec<i32>,
     /// Flat normals [nx0, ny0, nz0, ...]
-    _normals: Vec<f32>,
+    _normals: Vec<f64>,
 }
 
 impl Default for PointCloud {
@@ -67,7 +67,7 @@ impl PointCloud {
     }
 
     /// Create from flat arrays of coords, colors, and normals
-    pub fn from_coords(coords: Vec<f32>, colors: Vec<i32>, normals: Vec<f32>) -> Self {
+    pub fn from_coords(coords: Vec<f64>, colors: Vec<i32>, normals: Vec<f64>) -> Self {
         Self {
             guid: std::sync::OnceLock::new(),
             name: "my_pointcloud".to_string(),
@@ -370,20 +370,20 @@ impl PointCloud {
         let proto = proto::PointCloud::decode(data).expect("Failed to decode protobuf");
 
         let mut pc = Self::from_coords(
-            proto.coords.into_iter().map(|v| v as f32).collect(),
+            proto.coords.into_iter().map(|v| v as f64).collect(),
             proto.colors.iter().map(|&c| c as i32).collect(),
-            proto.normals.into_iter().map(|v| v as f32).collect(),
+            proto.normals.into_iter().map(|v| v as f64).collect(),
         );
         pc.set_guid(proto.guid);
         pc.name = proto.name;
-        pc.point_size = if proto.point_size > 0.0 { proto.point_size as f32 } else { 1.0 };
+        pc.point_size = if proto.point_size > 0.0 { proto.point_size as f64 } else { 1.0 };
 
         if let Some(xform_proto) = proto.xform {
             pc.xform.set_guid(xform_proto.guid);
             pc.xform.name = xform_proto.name;
             for (i, &val) in xform_proto.matrix.iter().enumerate() {
                 if i < 16 {
-                    pc.xform.m[i] = val as f32;
+                    pc.xform.m[i] = val as f64;
                 }
             }
         }
@@ -554,9 +554,9 @@ impl<'de> Deserialize<'de> for PointCloud {
             {
                 let mut guid = None;
                 let mut name = None;
-                let mut coords: Option<Vec<f32>> = None;
+                let mut coords: Option<Vec<f64>> = None;
                 let mut colors: Option<Vec<i32>> = None;
-                let mut normals: Option<Vec<f32>> = None;
+                let mut normals: Option<Vec<f64>> = None;
                 let mut point_size = None;
                 let mut xform = None;
 

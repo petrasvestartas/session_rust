@@ -254,10 +254,10 @@ pub fn run_color_conversion() -> TestResult {
         let flts = color.to_float_array();
         let color2 = Color::from_float(flts[0], flts[1], flts[2], flts[3]);
 
-        MINI_CHECK!(TOLERANCE.is_close(flts[0], 1.0));
-        MINI_CHECK!(TOLERANCE.is_close(flts[1], 0.5));
-        MINI_CHECK!(TOLERANCE.is_close(flts[2], 0.25));
-        MINI_CHECK!(TOLERANCE.is_close(flts[3], 1.0));
+        MINI_CHECK!(TOLERANCE.is_close(flts[0] as f64, 1.0));
+        MINI_CHECK!(TOLERANCE.is_close(flts[1] as f64, 0.5));
+        MINI_CHECK!(TOLERANCE.is_close(flts[2] as f64, 0.25));
+        MINI_CHECK!(TOLERANCE.is_close(flts[3] as f64, 1.0));
         MINI_CHECK!(color2 == color);
     })
 }

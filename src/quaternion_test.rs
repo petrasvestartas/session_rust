@@ -107,11 +107,11 @@ pub fn run_quaternion_from_components() -> TestResult {
         //   axis  = (1,2,3)/sqrt(14)
         //   angle = 2*acos(2/sqrt(18)) ≈ 2.1617 rad ≈ 123.85°
         let (axis, angle) = q.to_axis_angle();
-        let sqrt14 = 14.0_f32.sqrt();
+        let sqrt14 = 14.0_f64.sqrt();
         MINI_CHECK!(TOLERANCE.is_close(axis[0], 1.0 / sqrt14));
         MINI_CHECK!(TOLERANCE.is_close(axis[1], 2.0 / sqrt14));
         MINI_CHECK!(TOLERANCE.is_close(axis[2], 3.0 / sqrt14));
-        MINI_CHECK!(TOLERANCE.is_close(angle, 2.0 * (2.0_f32 / 18.0_f32.sqrt()).acos()));
+        MINI_CHECK!(TOLERANCE.is_close(angle, 2.0 * (2.0_f64 / 18.0_f64.sqrt()).acos()));
 
         // Round-trip: from_axis_angle(to_axis_angle(q)) == q.normalized()
         let q_round = Quaternion::from_axis_angle(axis, angle);

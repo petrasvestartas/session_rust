@@ -108,10 +108,10 @@ pub fn run_nurbssurface_trimmed_constructor_planar() -> TestResult {
         ]));
 
         // Hexagon with 2 holes
-        let r = 4.0f32;
+        let r = 4.0f64;
         let mut pts = Vec::new();
         for k in 0..6 {
-            let a = k as f32 * PI / 3.0;
+            let a = k as f64 * PI / 3.0;
             pts.push(Point::new(r * a.cos(), r * a.sin(), r * a.cos() * 0.5));
         }
         let bnd = NurbsCurve::create(true, 1, &pts);
@@ -144,8 +144,8 @@ pub fn run_nurbssurface_trimmed_constructor_hole() -> TestResult {
         let mut pts = Vec::new();
         for i in 0..n {
             for j in 0..n {
-                let x = i as f32;
-                let y = j as f32;
+                let x = i as f64;
+                let y = j as f64;
                 let r2 = (x - 1.5) * (x - 1.5) + (y - 1.5) * (y - 1.5);
                 let z = 5.0 * (-r2 / 1.0).exp() + 0.3 * (crate::tolerance::PI * x / 7.0).sin() * (crate::tolerance::PI * y / 7.0).sin();
                 pts.push(Point::new(x, y, z));
@@ -349,10 +349,10 @@ pub fn run_nurbssurface_trimmed_mesh() -> TestResult {
         MINI_CHECK!(mh.number_of_faces() >= 2);
 
         // Planar circle (rational NURBS outer loop)
-        let cw = (2.0_f32).sqrt() / 2.0;
-        let ccx = [1.0f32, 1.0, 0.0, -1.0, -1.0, -1.0, 0.0, 1.0, 1.0];
-        let ccy = [0.0f32, 1.0, 1.0, 1.0, 0.0, -1.0, -1.0, -1.0, 0.0];
-        let cwt = [1.0f32, cw, 1.0, cw, 1.0, cw, 1.0, cw, 1.0];
+        let cw = (2.0_f64).sqrt() / 2.0;
+        let ccx = [1.0f64, 1.0, 0.0, -1.0, -1.0, -1.0, 0.0, 1.0, 1.0];
+        let ccy = [0.0f64, 1.0, 1.0, 1.0, 0.0, -1.0, -1.0, -1.0, 0.0];
+        let cwt = [1.0f64, cw, 1.0, cw, 1.0, cw, 1.0, cw, 1.0];
         let mut circle_loop = NurbsCurve::new(3, true, 3, 9);
         circle_loop.m_nurbsknot = vec![0.0, 0.0, 1.0, 1.0, 2.0, 2.0, 3.0, 3.0, 4.0, 4.0];
         for i in 0..9 {
@@ -376,7 +376,7 @@ pub fn run_nurbssurface_trimmed_mesh() -> TestResult {
         let mut pts = Vec::new();
         for i in 0..n {
             for j in 0..n {
-                let x = i as f32; let y = j as f32;
+                let x = i as f64; let y = j as f64;
                 let r2 = (x-1.5)*(x-1.5) + (y-1.5)*(y-1.5);
                 let z = 5.0 * (-r2).exp() + 0.3 * (PI*x/7.0).sin() * (PI*y/7.0).sin();
                 pts.push(Point::new(x, y, z));

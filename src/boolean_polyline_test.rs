@@ -1,7 +1,7 @@
 use crate::{MINI_CHECK, MINI_TEST, REGISTER_MINI_TEST};
 use crate::mini_test::TestResult;
 
-const PI2: f32 = 6.283185307179586476;
+const PI2: f64 = 6.283185307179586476;
 
 #[test]
 fn test_boolean_polyline_overlapping_squares() {
@@ -34,7 +34,7 @@ fn test_boolean_polyline_circle_vs_rectangle() {
 pub fn run_boolean_polyline_circle_vs_rectangle() -> TestResult {
     MINI_TEST!("Circle Vs Rectangle", {
         use crate::{Point, Polyline};
-        let mut pts: Vec<Point> = (0..64).map(|i| { let a = PI2 * i as f32 / 64.0; Point::new(5.0 + 1.5 * a.cos(), 1.5 * a.sin(), 0.0) }).collect();
+        let mut pts: Vec<Point> = (0..64).map(|i| { let a = PI2 * i as f64 / 64.0; Point::new(5.0 + 1.5 * a.cos(), 1.5 * a.sin(), 0.0) }).collect();
         pts.push(pts[0].clone());
         let circle = Polyline::new(pts);
         let rect = Polyline::new(vec![Point::new(4.0,-0.5,0.0), Point::new(7.0,-0.5,0.0), Point::new(7.0,0.5,0.0), Point::new(4.0,0.5,0.0), Point::new(4.0,-0.5,0.0)]);
@@ -59,10 +59,10 @@ fn test_boolean_polyline_star_vs_circle() {
 pub fn run_boolean_polyline_star_vs_circle() -> TestResult {
     MINI_TEST!("Star Vs Circle", {
         use crate::{Point, Polyline};
-        let mut star_pts: Vec<Point> = (0..10).map(|i| { let a = PI2 * i as f32 / 10.0; let r = if i % 2 == 0 { 2.0 } else { 0.8 }; Point::new(10.0 + r * a.cos(), r * a.sin(), 0.0) }).collect();
+        let mut star_pts: Vec<Point> = (0..10).map(|i| { let a = PI2 * i as f64 / 10.0; let r = if i % 2 == 0 { 2.0 } else { 0.8 }; Point::new(10.0 + r * a.cos(), r * a.sin(), 0.0) }).collect();
         star_pts.push(star_pts[0].clone());
         let star = Polyline::new(star_pts);
-        let mut circ_pts: Vec<Point> = (0..32).map(|i| { let a = PI2 * i as f32 / 32.0; Point::new(10.5 + 1.2 * a.cos(), 0.5 + 1.2 * a.sin(), 0.0) }).collect();
+        let mut circ_pts: Vec<Point> = (0..32).map(|i| { let a = PI2 * i as f64 / 32.0; Point::new(10.5 + 1.2 * a.cos(), 0.5 + 1.2 * a.sin(), 0.0) }).collect();
         circ_pts.push(circ_pts[0].clone());
         let circle = Polyline::new(circ_pts);
         let isect = Polyline::boolean_op(&star, &circle, 0);
@@ -109,9 +109,9 @@ fn test_boolean_polyline_two_large_circles() {
 pub fn run_boolean_polyline_two_large_circles() -> TestResult {
     MINI_TEST!("Two Large Circles", {
         use crate::{Point, Polyline};
-        let mut pts_a: Vec<Point> = (0..256).map(|i| { let a = PI2 * i as f32 / 256.0; Point::new(22.0 + 2.0 * a.cos(), 2.0 * a.sin(), 0.0) }).collect();
+        let mut pts_a: Vec<Point> = (0..256).map(|i| { let a = PI2 * i as f64 / 256.0; Point::new(22.0 + 2.0 * a.cos(), 2.0 * a.sin(), 0.0) }).collect();
         pts_a.push(pts_a[0].clone());
-        let mut pts_b: Vec<Point> = (0..256).map(|i| { let a = PI2 * i as f32 / 256.0; Point::new(23.0 + 2.0 * a.cos(), 0.5 + 2.0 * a.sin(), 0.0) }).collect();
+        let mut pts_b: Vec<Point> = (0..256).map(|i| { let a = PI2 * i as f64 / 256.0; Point::new(23.0 + 2.0 * a.cos(), 0.5 + 2.0 * a.sin(), 0.0) }).collect();
         pts_b.push(pts_b[0].clone());
         let ca = Polyline::new(pts_a);
         let cb = Polyline::new(pts_b);
@@ -159,9 +159,9 @@ fn test_boolean_polyline_star_vs_star() {
 pub fn run_boolean_polyline_star_vs_star() -> TestResult {
     MINI_TEST!("Star Vs Star", {
         use crate::{Point, Polyline};
-        let mut pts_a: Vec<Point> = (0..12).map(|i| { let a = PI2 * i as f32 / 12.0; let r = if i % 2 == 0 { 2.5 } else { 1.0 }; Point::new(36.0 + r * a.cos(), r * a.sin(), 0.0) }).collect();
+        let mut pts_a: Vec<Point> = (0..12).map(|i| { let a = PI2 * i as f64 / 12.0; let r = if i % 2 == 0 { 2.5 } else { 1.0 }; Point::new(36.0 + r * a.cos(), r * a.sin(), 0.0) }).collect();
         pts_a.push(pts_a[0].clone());
-        let mut pts_b: Vec<Point> = (0..10).map(|i| { let a = PI2 * i as f32 / 10.0; let r = if i % 2 == 0 { 2.0 } else { 0.8 }; Point::new(37.0 + r * a.cos(), 0.5 + r * a.sin(), 0.0) }).collect();
+        let mut pts_b: Vec<Point> = (0..10).map(|i| { let a = PI2 * i as f64 / 10.0; let r = if i % 2 == 0 { 2.0 } else { 0.8 }; Point::new(37.0 + r * a.cos(), 0.5 + r * a.sin(), 0.0) }).collect();
         pts_b.push(pts_b[0].clone());
         let sa = Polyline::new(pts_a);
         let sb = Polyline::new(pts_b);
@@ -210,7 +210,7 @@ pub fn run_boolean_polyline_concave_arrow_vs_circle() -> TestResult {
     MINI_TEST!("Concave Arrow Vs Circle", {
         use crate::{Point, Polyline};
         let arrow = Polyline::new(vec![Point::new(49.0,0.0,0.0), Point::new(52.0,2.0,0.0), Point::new(51.0,0.5,0.0), Point::new(53.0,0.5,0.0), Point::new(53.0,-0.5,0.0), Point::new(51.0,-0.5,0.0), Point::new(52.0,-2.0,0.0), Point::new(49.0,0.0,0.0)]);
-        let mut pts: Vec<Point> = (0..48).map(|i| { let a = PI2 * i as f32 / 48.0; Point::new(51.5 + 1.5 * a.cos(), 1.5 * a.sin(), 0.0) }).collect();
+        let mut pts: Vec<Point> = (0..48).map(|i| { let a = PI2 * i as f64 / 48.0; Point::new(51.5 + 1.5 * a.cos(), 1.5 * a.sin(), 0.0) }).collect();
         pts.push(pts[0].clone());
         let circle = Polyline::new(pts);
         let isect = Polyline::boolean_op(&arrow, &circle, 0);
@@ -234,9 +234,9 @@ fn test_boolean_polyline_two_large_circles_1000() {
 pub fn run_boolean_polyline_two_large_circles_1000() -> TestResult {
     MINI_TEST!("Two Large Circles 1000", {
         use crate::{Point, Polyline};
-        let mut pts_a: Vec<Point> = (0..1000).map(|i| { let a = PI2 * i as f32 / 1000.0; Point::new(58.0 + 3.0 * a.cos(), 3.0 * a.sin(), 0.0) }).collect();
+        let mut pts_a: Vec<Point> = (0..1000).map(|i| { let a = PI2 * i as f64 / 1000.0; Point::new(58.0 + 3.0 * a.cos(), 3.0 * a.sin(), 0.0) }).collect();
         pts_a.push(pts_a[0].clone());
-        let mut pts_b: Vec<Point> = (0..1000).map(|i| { let a = PI2 * i as f32 / 1000.0; Point::new(59.5 + 3.0 * a.cos(), 3.0 * a.sin(), 0.0) }).collect();
+        let mut pts_b: Vec<Point> = (0..1000).map(|i| { let a = PI2 * i as f64 / 1000.0; Point::new(59.5 + 3.0 * a.cos(), 3.0 * a.sin(), 0.0) }).collect();
         pts_b.push(pts_b[0].clone());
         let ca = Polyline::new(pts_a);
         let cb = Polyline::new(pts_b);

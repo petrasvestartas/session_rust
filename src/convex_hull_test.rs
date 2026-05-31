@@ -46,7 +46,7 @@ pub fn run_convex_hull_hull_2d_circle() -> TestResult {
         let n = 12_usize;
         let mut pts = vec![];
         for i in 0..n {
-            let angle = 2.0 * PI * i as f32 / n as f32;
+            let angle = 2.0 * PI * i as f64 / n as f64;
             pts.push(Point::new(angle.cos(), angle.sin(), 0.0));
         }
         pts.push(Point::new(0.0, 0.0, 0.0));

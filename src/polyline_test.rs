@@ -982,8 +982,8 @@ pub fn run_polyline_simplify_points() -> TestResult {
         use crate::Polyline;
         let mut pts = vec![];
         for i in 0..100_usize {
-            let x = i as f32;
-            let y = (i as f32 * 0.1).sin() * 0.001;
+            let x = i as f64;
+            let y = (i as f64 * 0.1).sin() * 0.001;
             let z = 0.0;
             pts.push(Point::new(x, y, z));
         }
@@ -1006,7 +1006,7 @@ pub fn run_polyline_simplify() -> TestResult {
         use crate::Polyline;
         let mut pts = vec![];
         for i in 0..20_usize {
-            let x = i as f32;
+            let x = i as f64;
             let y = 0.0;
             let z = 0.0;
             pts.push(Point::new(x, y, z));
@@ -1047,7 +1047,7 @@ pub fn run_polyline_simplify_zigzag() -> TestResult {
         use crate::Polyline;
         let mut pts = vec![];
         for i in 0..10_usize {
-            let x = i as f32;
+            let x = i as f64;
             let y = if i % 2 == 1 { 1.0 } else { 0.0 };
             let z = 0.0;
             pts.push(Point::new(x, y, z));

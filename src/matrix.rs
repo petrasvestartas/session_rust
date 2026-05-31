@@ -11,7 +11,7 @@ pub struct Matrix {
     pub name: String,
     pub rows: usize,
     pub cols: usize,
-    pub data: Vec<f32>,
+    pub data: Vec<f64>,
 }
 
 impl serde::Serialize for Matrix {
@@ -46,7 +46,7 @@ impl<'de> Deserialize<'de> for Matrix {
             #[serde(default)]
             cols: i64,
             #[serde(default)]
-            data: Vec<f32>,
+            data: Vec<f64>,
         }
         let d = MatrixData::deserialize(deserializer)?;
         let guid = std::sync::OnceLock::new();
@@ -91,14 +91,14 @@ impl fmt::Debug for Matrix {
 }
 
 impl Index<(usize, usize)> for Matrix {
-    type Output = f32;
-    fn index(&self, (r, c): (usize, usize)) -> &f32 {
+    type Output = f64;
+    fn index(&self, (r, c): (usize, usize)) -> &f64 {
         &self.data[r * self.cols + c]
     }
 }
 
 impl IndexMut<(usize, usize)> for Matrix {
-    fn index_mut(&mut self, (r, c): (usize, usize)) -> &mut f32 {
+    fn index_mut(&mut self, (r, c): (usize, usize)) -> &mut f64 {
         let idx = r * self.cols + c;
         &mut self.data[idx]
     }
@@ -149,7 +149,7 @@ impl Matrix {
         m
     }
 
-    pub fn from_vec(rows: usize, cols: usize, data: Vec<f32>) -> Self {
+    pub fn from_vec(rows: usize, cols: usize, data: Vec<f64>) -> Self {
         Matrix {
             typ: "Matrix".to_string(),
             guid: std::sync::OnceLock::new(),
@@ -160,7 +160,7 @@ impl Matrix {
         }
     }
 
-    pub fn from_rows(rows_list: &[Vec<f32>]) -> Self {
+    pub fn from_rows(rows_list: &[Vec<f64>]) -> Self {
         let r = rows_list.len();
         let c = if r > 0 { rows_list[0].len() } else { 0 };
         let mut m = Self::zeros(r, c);
@@ -172,7 +172,7 @@ impl Matrix {
         m
     }
 
-    pub fn from_cols(cols_list: &[Vec<f32>]) -> Self {
+    pub fn from_cols(cols_list: &[Vec<f64>]) -> Self {
         let c = cols_list.len();
         let r = if c > 0 { cols_list[0].len() } else { 0 };
         let mut m = Self::zeros(r, c);
@@ -214,7 +214,7 @@ impl Matrix {
         true
     }
 
-    pub fn trace(&self) -> f32 {
+    pub fn trace(&self) -> f64 {
         let mut sum = 0.0;
         for i in 0..self.rows {
             sum += self[(i, i)];
@@ -255,18 +255,18 @@ impl Matrix {
 
     pub fn add_mat(&self, other: &Matrix) -> Matrix {
         assert!(self.rows == other.rows && self.cols == other.cols);
-        let data: Vec<f32> = self.data.iter().zip(other.data.iter()).map(|(a, b)| a + b).collect();
+        let data: Vec<f64> = self.data.iter().zip(other.data.iter()).map(|(a, b)| a + b).collect();
         Self::from_vec(self.rows, self.cols, data)
     }
 
     pub fn subtract(&self, other: &Matrix) -> Matrix {
         assert!(self.rows == other.rows && self.cols == other.cols);
-        let data: Vec<f32> = self.data.iter().zip(other.data.iter()).map(|(a, b)| a - b).collect();
+        let data: Vec<f64> = self.data.iter().zip(other.data.iter()).map(|(a, b)| a - b).collect();
         Self::from_vec(self.rows, self.cols, data)
     }
 
-    pub fn scale(&self, s: f32) -> Matrix {
-        let data: Vec<f32> = self.data.iter().map(|x| x * s).collect();
+    pub fn scale(&self, s: f64) -> Matrix {
+        let data: Vec<f64> = self.data.iter().map(|x| x * s).collect();
         Self::from_vec(self.rows, self.cols, data)
     }
 
@@ -347,7 +347,7 @@ impl Matrix {
         (l, u, p)
     }
 
-    pub fn determinant(&self) -> f32 {
+    pub fn determinant(&self) -> f64 {
         assert!(self.is_square());
         let n = self.rows;
         if n == 1 {
@@ -379,15 +379,15 @@ impl Matrix {
         let mut result = Self::zeros(n, n);
         let eye = Self::identity(n);
         for col in 0..n {
-            let pb: Vec<f32> = (0..n).map(|i| (0..n).map(|j| p[(i, j)] * eye[(j, col)]).sum()).collect();
-            let mut y = vec![0.0f32; n];
+            let pb: Vec<f64> = (0..n).map(|i| (0..n).map(|j| p[(i, j)] * eye[(j, col)]).sum()).collect();
+            let mut y = vec![0.0f64; n];
             for i in 0..n {
                 y[i] = pb[i];
                 for j in 0..i {
                     y[i] -= l[(i, j)] * y[j];
                 }
             }
-            let mut x = vec![0.0f32; n];
+            let mut x = vec![0.0f64; n];
             for i in (0..n).rev() {
                 x[i] = y[i];
                 for j in (i + 1)..n {
@@ -413,15 +413,15 @@ impl Matrix {
                 return None;
             }
         }
-        let pb: Vec<f32> = (0..n).map(|i| (0..n).map(|j| p[(i, j)] * b[(j, 0)]).sum()).collect();
-        let mut y = vec![0.0f32; n];
+        let pb: Vec<f64> = (0..n).map(|i| (0..n).map(|j| p[(i, j)] * b[(j, 0)]).sum()).collect();
+        let mut y = vec![0.0f64; n];
         for i in 0..n {
             y[i] = pb[i];
             for j in 0..i {
                 y[i] -= l[(i, j)] * y[j];
             }
         }
-        let mut x = vec![0.0f32; n];
+        let mut x = vec![0.0f64; n];
         for i in (0..n).rev() {
             x[i] = y[i];
             for j in (i + 1)..n {
@@ -438,19 +438,19 @@ impl Matrix {
 
     pub fn qr_decompose(&self) -> (Matrix, Matrix) {
         let (m, n) = (self.rows, self.cols);
-        let a_cols: Vec<Vec<f32>> = (0..n).map(|j| (0..m).map(|i| self[(i, j)]).collect()).collect();
-        let mut q_cols: Vec<Vec<f32>> = Vec::new();
+        let a_cols: Vec<Vec<f64>> = (0..n).map(|j| (0..m).map(|i| self[(i, j)]).collect()).collect();
+        let mut q_cols: Vec<Vec<f64>> = Vec::new();
         let mut r = Self::zeros(n, n);
         for j in 0..n {
             let mut v = a_cols[j].clone();
             for i in 0..j {
-                let rij: f32 = q_cols[i].iter().zip(v.iter()).map(|(a, b)| a * b).sum();
+                let rij: f64 = q_cols[i].iter().zip(v.iter()).map(|(a, b)| a * b).sum();
                 r[(i, j)] = rij;
                 for k in 0..m {
                     v[k] -= rij * q_cols[i][k];
                 }
             }
-            let norm: f32 = v.iter().map(|x| x * x).sum::<f32>().sqrt();
+            let norm: f64 = v.iter().map(|x| x * x).sum::<f64>().sqrt();
             r[(j, j)] = norm;
             if norm > 1e-14 {
                 q_cols.push(v.iter().map(|x| x / norm).collect());
@@ -492,7 +492,7 @@ impl Matrix {
         Some(l)
     }
 
-    pub fn eigenvalues(&self) -> Vec<f32> {
+    pub fn eigenvalues(&self) -> Vec<f64> {
         assert!(self.is_square());
         let n = self.rows;
         let mut a = self.duplicate();
@@ -507,7 +507,7 @@ impl Matrix {
         (0..n).map(|i| a[(i, i)]).collect()
     }
 
-    fn eigen_decompose_symmetric(&self) -> Vec<(f32, Vec<f32>)> {
+    fn eigen_decompose_symmetric(&self) -> Vec<(f64, Vec<f64>)> {
         let n = self.rows;
         let mut a = self.duplicate();
         let mut v = Self::identity(n);
@@ -523,7 +523,7 @@ impl Matrix {
         (0..n).map(|i| (a[(i, i)], (0..n).map(|j| v[(j, i)]).collect())).collect()
     }
 
-    pub fn svd(&self) -> (Matrix, Vec<f32>, Matrix) {
+    pub fn svd(&self) -> (Matrix, Vec<f64>, Matrix) {
         let (m, n) = (self.rows, self.cols);
         let at = self.transpose();
         let ata = at.multiply(self);
@@ -531,7 +531,7 @@ impl Matrix {
         pairs.sort_by(|a, b| b.0.partial_cmp(&a.0).unwrap_or(std::cmp::Ordering::Equal));
         let k = m.min(n);
         let mut singular_values = Vec::with_capacity(k);
-        let mut v_cols: Vec<Vec<f32>> = Vec::with_capacity(k);
+        let mut v_cols: Vec<Vec<f64>> = Vec::with_capacity(k);
         for i in 0..k {
             let (ev, evec) = &pairs[i];
             singular_values.push(ev.max(0.0).sqrt());
@@ -547,7 +547,7 @@ impl Matrix {
         for j in 0..k {
             if singular_values[j] > 1e-12 {
                 for i in 0..m {
-                    let val: f32 = (0..n).map(|l| self[(i, l)] * v[(l, j)]).sum();
+                    let val: f64 = (0..n).map(|l| self[(i, l)] * v[(l, j)]).sum();
                     u[(i, j)] = val / singular_values[j];
                 }
             }
@@ -556,14 +556,14 @@ impl Matrix {
         (u, singular_values, vt)
     }
 
-    pub fn norm_frobenius(&self) -> f32 {
-        self.data.iter().map(|x| x * x).sum::<f32>().sqrt()
+    pub fn norm_frobenius(&self) -> f64 {
+        self.data.iter().map(|x| x * x).sum::<f64>().sqrt()
     }
 
-    pub fn norm_1(&self) -> f32 {
-        let mut max_sum = 0.0f32;
+    pub fn norm_1(&self) -> f64 {
+        let mut max_sum = 0.0f64;
         for j in 0..self.cols {
-            let col_sum: f32 = (0..self.rows).map(|i| self[(i, j)].abs()).sum();
+            let col_sum: f64 = (0..self.rows).map(|i| self[(i, j)].abs()).sum();
             if col_sum > max_sum {
                 max_sum = col_sum;
             }
@@ -571,10 +571,10 @@ impl Matrix {
         max_sum
     }
 
-    pub fn norm_inf(&self) -> f32 {
-        let mut max_sum = 0.0f32;
+    pub fn norm_inf(&self) -> f64 {
+        let mut max_sum = 0.0f64;
         for i in 0..self.rows {
-            let row_sum: f32 = (0..self.cols).map(|j| self[(i, j)].abs()).sum();
+            let row_sum: f64 = (0..self.cols).map(|j| self[(i, j)].abs()).sum();
             if row_sum > max_sum {
                 max_sum = row_sum;
             }
@@ -587,8 +587,8 @@ impl Matrix {
         if sv.is_empty() {
             return 0;
         }
-        let max_sv = sv.iter().cloned().fold(0.0f32, f32::max);
-        let threshold = self.rows.max(self.cols) as f32 * max_sv * 1e-10;
+        let max_sv = sv.iter().cloned().fold(0.0f64, f64::max);
+        let threshold = self.rows.max(self.cols) as f64 * max_sv * 1e-10;
         sv.iter().filter(|&&s| s > threshold).count()
     }
 
@@ -642,7 +642,7 @@ impl Matrix {
     pub fn pb_loads(data: &[u8]) -> Result<Self, Box<dyn std::error::Error>> {
         use prost::Message;
         let proto = crate::proto::Matrix::decode(data)?;
-        let mut m = Self::from_vec(proto.rows as usize, proto.cols as usize, proto.data.into_iter().map(|v| v as f32).collect());
+        let mut m = Self::from_vec(proto.rows as usize, proto.cols as usize, proto.data.into_iter().map(|v| v as f64).collect());
         m.set_guid(proto.guid);
         m.name = proto.name;
         Ok(m)

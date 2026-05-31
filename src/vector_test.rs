@@ -64,7 +64,7 @@ pub fn run_vector_constructor() -> TestResult {
         MINI_CHECK!(x == 10.0 && y == 20.0 && z == 30.0);
         MINI_CHECK!(v_2p[0] == 1.0 && v_2p[1] == 2.0 && v_2p[2] == 3.0);
         MINI_CHECK!(vsrt == "10.000000, 20.000000, 30.000000");
-        MINI_CHECK!(vrepr == "Vector(my_vector, 10.000000, 20.000000, 30.000000, 37.416573)");
+        MINI_CHECK!(vrepr == "Vector(my_vector, 10.000000, 20.000000, 30.000000, 37.416574)");
         MINI_CHECK!(vcopy == v && vcopy.guid() != v.guid());
         MINI_CHECK!(vother != v);
         MINI_CHECK!(vmult[0] == 20.0 && vmult[1] == 40.0 && vmult[2] == 60.0);
@@ -208,8 +208,8 @@ pub fn run_vector_angle() -> TestResult {
         let angle_45 = v1.angle(&v3, false);  // v1 to v3: 45°
 
         // angle_between_vector_xy_components(): Angle of vector's XY projection from +X axis (atan2)
-        let v_30 = Vector::new(3.0_f32.sqrt(), 1.0, 0.0);  // 30° from x-axis
-        let v_60 = Vector::new(1.0, 3.0_f32.sqrt(), 0.0);  // 60° from x-axis
+        let v_30 = Vector::new(3.0_f64.sqrt(), 1.0, 0.0);  // 30° from x-axis
+        let v_60 = Vector::new(1.0, 3.0_f64.sqrt(), 0.0);  // 60° from x-axis
         let v_neg = Vector::new(-1.0, 1.0, 0.0);           // 135° from x-axis
 
         let xy_angle_30 = Vector::angle_between_vector_xy_components(&v_30);
@@ -221,7 +221,7 @@ pub fn run_vector_angle() -> TestResult {
         let abg = v_dir.coordinate_direction_3angles(true);
 
         // coordinate_direction_2angles(): Spherical angles (θ azimuth, φ elevation)
-        let v_sph = Vector::new(1.0, 1.0, 2.0_f32.sqrt());
+        let v_sph = Vector::new(1.0, 1.0, 2.0_f64.sqrt());
         let pt = v_sph.coordinate_direction_2angles(true);
 
         MINI_CHECK!(TOLERANCE.is_close(angle_90, 90.0));
@@ -311,7 +311,7 @@ pub fn run_vector_get_leveled_vector() -> TestResult {
         let vertical_height = 1.0;
         let v_leveled = v.get_leveled_vector(vertical_height);
 
-        MINI_CHECK!(TOLERANCE.is_close(v_leveled.magnitude(), 3.0_f32.sqrt()));
+        MINI_CHECK!(TOLERANCE.is_close(v_leveled.magnitude(), 3.0_f64.sqrt()));
     })
 }
 

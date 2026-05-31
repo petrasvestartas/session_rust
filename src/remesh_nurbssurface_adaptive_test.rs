@@ -166,7 +166,7 @@ REGISTER_MINI_TEST!("RemeshNurbsSurfaceAdaptive", "Parameters", crate::remesh_nu
 REGISTER_MINI_TEST!("RemeshNurbsSurfaceAdaptive", "Mesh", crate::remesh_nurbssurface_adaptive_test::run_remesh_nurbssurface_adaptive_mesh);
 REGISTER_MINI_TEST!("RemeshNurbsSurfaceAdaptive", "Torus", crate::remesh_nurbssurface_adaptive_test::run_remesh_nurbssurface_adaptive_torus);
 REGISTER_MINI_TEST!("RemeshNurbsSurfaceAdaptive", "Cylinder", crate::remesh_nurbssurface_adaptive_test::run_remesh_nurbssurface_adaptive_cylinder);
-// TODO(f32-followup): vertex count differs from f64 reference under adaptive remesh.
+// TODO(f64-followup): vertex count differs from f64 reference under adaptive remesh.
 // REGISTER_MINI_TEST!("RemeshNurbsSurfaceAdaptive", "Cone", crate::remesh_nurbssurface_adaptive_test::run_remesh_nurbssurface_adaptive_cone);
 REGISTER_MINI_TEST!("RemeshNurbsSurfaceAdaptive", "Doubly Curved", crate::remesh_nurbssurface_adaptive_test::run_remesh_nurbssurface_adaptive_doubly_curved);
 REGISTER_MINI_TEST!("RemeshNurbsSurfaceAdaptive", "Flat", crate::remesh_nurbssurface_adaptive_test::run_remesh_nurbssurface_adaptive_flat);

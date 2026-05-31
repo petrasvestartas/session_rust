@@ -11,8 +11,8 @@ const NULL_IDX: usize = usize::MAX;
 
 #[derive(Clone, Copy)]
 struct Rect {
-    m_min: [f32; 3],
-    m_max: [f32; 3],
+    m_min: [f64; 3],
+    m_max: [f64; 3],
 }
 
 const EMPTY_RECT: Rect = Rect { m_min: [0.0; 3], m_max: [0.0; 3] };
@@ -45,11 +45,11 @@ struct PartitionVars {
     m_min_fill: i32,
     m_count: [i32; 2],
     m_cover: [Rect; 2],
-    m_area: [f32; 2],
+    m_area: [f64; 2],
     m_branch_buf: [Branch; MAXNODES + 1],
     m_branch_count: i32,
     m_cover_split: Rect,
-    m_cover_split_area: f32,
+    m_cover_split_area: f64,
 }
 
 impl PartitionVars {
@@ -110,12 +110,12 @@ impl SpatialRTree {
         self.free_node(node_idx);
     }
 
-    fn make_rect(&self, a_min: [f32; 3], a_max: [f32; 3]) -> Rect {
+    fn make_rect(&self, a_min: [f64; 3], a_max: [f64; 3]) -> Rect {
         Rect { m_min: a_min, m_max: a_max }
     }
 
-    fn calc_rect_volume(&self, rect: &Rect) -> f32 {
-        let mut volume = 1.0f32;
+    fn calc_rect_volume(&self, rect: &Rect) -> f64 {
+        let mut volume = 1.0f64;
         for i in 0..3 {
             volume *= rect.m_max[i] - rect.m_min[i];
         }
@@ -170,8 +170,8 @@ impl SpatialRTree {
     }
 
     fn pick_branch(&self, rect: &Rect, node_idx: usize) -> usize {
-        let mut best_incr: f32 = -1.0;
-        let mut best_area: f32 = -1.0;
+        let mut best_incr: f64 = -1.0;
+        let mut best_area: f64 = -1.0;
         let mut best: usize = 0;
         let count = self.nodes[node_idx].m_count as usize;
         for i in 0..count {
@@ -234,7 +234,7 @@ impl SpatialRTree {
         let mut seed0: usize = 0;
         let mut seed1: usize = 1;
         let mut worst = -part_vars.m_cover_split_area - 1.0;
-        let mut area = [0.0f32; MAXNODES + 1];
+        let mut area = [0.0f64; MAXNODES + 1];
         for i in 0..part_vars.m_total as usize {
             area[i] = self.calc_rect_volume(&part_vars.m_branch_buf[i].m_rect);
         }
@@ -261,7 +261,7 @@ impl SpatialRTree {
               part_vars.m_count[0] < (part_vars.m_total - part_vars.m_min_fill) &&
               part_vars.m_count[1] < (part_vars.m_total - part_vars.m_min_fill)
         {
-            let mut biggest_diff: f32 = -1.0;
+            let mut biggest_diff: f64 = -1.0;
             let mut chosen: usize = 0;
             let mut better_group: usize = 0;
             for i in 0..part_vars.m_total as usize {
@@ -432,13 +432,13 @@ impl SpatialRTree {
         }
     }
 
-    pub fn insert(&mut self, a_min: [f32; 3], a_max: [f32; 3], a_data: i32) {
+    pub fn insert(&mut self, a_min: [f64; 3], a_max: [f64; 3], a_data: i32) {
         let branch = Branch { m_rect: self.make_rect(a_min, a_max), m_child: NULL_IDX, m_data: a_data };
         self.insert_branch_internal(branch, 0);
         self.m_size += 1;
     }
 
-    pub fn remove(&mut self, a_min: [f32; 3], a_max: [f32; 3], a_data: i32) {
+    pub fn remove(&mut self, a_min: [f64; 3], a_max: [f64; 3], a_data: i32) {
         let rect = self.make_rect(a_min, a_max);
         let mut reinsert_list: Vec<usize> = Vec::new();
         let root = self.m_root;
@@ -467,7 +467,7 @@ impl SpatialRTree {
         self.m_size -= 1;
     }
 
-    pub fn search(&self, a_min: [f32; 3], a_max: [f32; 3], mut a_callback: impl FnMut(i32) -> bool) -> i32 {
+    pub fn search(&self, a_min: [f64; 3], a_max: [f64; 3], mut a_callback: impl FnMut(i32) -> bool) -> i32 {
         let rect = self.make_rect(a_min, a_max);
         let mut count: i32 = 0;
         self.search_internal(&rect, self.m_root, &mut count, &mut a_callback);

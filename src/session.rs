@@ -87,7 +87,7 @@ pub struct Session {
 pub struct RayHit {
     guid: std::sync::OnceLock<String>,
     pub point: Point,
-    pub distance: f32,
+    pub distance: f64,
 }
 
 impl RayHit {
@@ -541,8 +541,8 @@ impl Session {
                     if let (Some((u0, u1)), Some((v0, v1))) = (srf.domain(0), srf.domain(1)) {
                         for ui in 0..=2usize {
                             for vi in 0..=2usize {
-                                let u = u0 + (u1 - u0) * ui as f32 / 2.0;
-                                let v = v0 + (v1 - v0) * vi as f32 / 2.0;
+                                let u = u0 + (u1 - u0) * ui as f64 / 2.0;
+                                let v = v0 + (v1 - v0) * vi as f64 / 2.0;
                                 if let Some(p) = srf.point_at(u, v) {
                                     points.push(tp(&p));
                                 }
@@ -645,7 +645,7 @@ impl Session {
         &mut self,
         origin: &Point,
         direction: &crate::Vector,
-        tolerance: f32,
+        tolerance: f64,
     ) -> Vec<RayHit> {
         let dir_len = direction.magnitude();
         if dir_len <= 0.0 {
@@ -657,7 +657,7 @@ impl Session {
             direction[2] / dir_len,
         );
 
-        let far = 1e6f32;
+        let far = 1e6f64;
         let ray_end = Point::new(
             origin[0] + dir_unit[0] * far,
             origin[1] + dir_unit[1] * far,
@@ -730,7 +730,7 @@ impl Session {
                     }
                 }
                 Geometry::Polyline(pl) => {
-                    let mut best_t = f32::INFINITY;
+                    let mut best_t = f64::INFINITY;
                     let mut best_p: Option<Point> = None;
                     let pl_points = pl.get_points();
                     if pl_points.len() >= 2 {
@@ -783,7 +783,7 @@ impl Session {
                 }
                 Geometry::PointCloud(pc) => {
                     let pts = pc.get_points();
-                    let mut best_t = f32::INFINITY;
+                    let mut best_t = f64::INFINITY;
                     let mut best_p: Option<Point> = None;
                     for p in &pts {
                         let vx = p[0] - origin[0];
@@ -848,7 +848,7 @@ impl Session {
         &mut self,
         origin: &Point,
         direction: &crate::Vector,
-        tolerance: f32,
+        tolerance: f64,
     ) -> Vec<RayHit> {
         let hits_all = self.ray_cast(origin, direction, tolerance);
         if hits_all.is_empty() { return Vec::new(); }
@@ -1013,7 +1013,7 @@ impl Session {
         node
     }
 
-    pub fn compute_face_to_face(&mut self, inflate: f32, coplanar_tolerance: f32) {
+    pub fn compute_face_to_face(&mut self, inflate: f64, coplanar_tolerance: f64) {
         let n = self.objects.elements.len();
         if n == 0 { return; }
 

@@ -18,7 +18,7 @@ pub struct CheckRecord {
 pub struct TestResult {
     pub test_name: &'static str,
     pub passed: bool,
-    pub time_ms: f32,
+    pub time_ms: f64,
     pub line: u32,
     pub file: &'static str,
     pub code: String,
@@ -28,7 +28,7 @@ pub struct TestResult {
 
 std::thread_local! {
     static CURRENT_CHECKS: RefCell<Vec<CheckRecord>> = RefCell::new(Vec::new());
-    static CURRENT_ASSERTION_TIME: RefCell<f32> = RefCell::new(0.0);
+    static CURRENT_ASSERTION_TIME: RefCell<f64> = RefCell::new(0.0);
 }
 
 pub fn start_checks() {
@@ -40,11 +40,11 @@ pub fn push_check(line: u32, code_line: &'static str, passed: bool, start: std::
     CURRENT_CHECKS.with(|c| {
         c.borrow_mut().push(CheckRecord { line, code_line, passed });
     });
-    let elapsed = start.elapsed().as_secs_f32() * 1000.0;
+    let elapsed = start.elapsed().as_secs_f64() * 1000.0;
     CURRENT_ASSERTION_TIME.with(|t| *t.borrow_mut() += elapsed);
 }
 
-pub fn take_assertion_time() -> f32 {
+pub fn take_assertion_time() -> f64 {
     CURRENT_ASSERTION_TIME.with(|t| {
         let v = *t.borrow();
         *t.borrow_mut() = 0.0;
@@ -254,7 +254,7 @@ macro_rules! MINI_TEST {
             failures.push(serde_json::json!({ "error": msg }));
         }
 
-        let elapsed_ms = start.elapsed().as_secs_f32() * 1000.0;
+        let elapsed_ms = start.elapsed().as_secs_f64() * 1000.0;
         let assertion_time = $crate::mini_test::take_assertion_time();
         let effective_ms = (elapsed_ms - assertion_time).max(0.0);
         let time_ms = (effective_ms * 1000.0).round() / 1000.0;
@@ -287,7 +287,7 @@ macro_rules! MINI_TEST {
             failures.push(serde_json::json!({ "error": msg }));
         }
 
-        let elapsed_ms = start.elapsed().as_secs_f32() * 1000.0;
+        let elapsed_ms = start.elapsed().as_secs_f64() * 1000.0;
         let time_ms = (elapsed_ms * 1000.0).round() / 1000.0;
         // Note: backwards-compatible form doesn't subtract assertion time
         let code = $crate::mini_test::extract_timed_body(file!(), line, &checks);
@@ -406,7 +406,7 @@ pub fn get_all_tests() -> Vec<RegisteredTest> {
         RegisteredTest { group: "BRep", name: "Json Roundtrip", func: run_brep_json_roundtrip },
         RegisteredTest { group: "BRep", name: "Create Cylinder", func: run_brep_create_cylinder },
         RegisteredTest { group: "BRep", name: "Create Sphere", func: run_brep_create_sphere },
-        // TODO(f32-followup): re-enable after BRep/Mesh-from-polylines f32 investigation
+        // TODO(f64-followup): re-enable after BRep/Mesh-from-polylines f64 investigation
         // RegisteredTest { group: "BRep", name: "From Polylines", func: run_brep_from_polylines },
         RegisteredTest { group: "BRep", name: "From Nurbscurves", func: run_brep_from_nurbscurves },
         // RegisteredTest { group: "BRep", name: "From Nurbscurves Holes", func: run_brep_from_nurbscurves_holes },
@@ -545,7 +545,7 @@ pub fn get_all_tests() -> Vec<RegisteredTest> {
         // NurbsCurve tests
         RegisteredTest { group: "NurbsCurve", name: "Constructor", func: run_nurbscurve_constructor },
         RegisteredTest { group: "NurbsCurve", name: "Attributes", func: run_nurbscurve_attributes },
-        // TODO(f32-followup): rebaseline high-precision expected values for f32 NURBS
+        // TODO(f64-followup): rebaseline high-precision expected values for f64 NURBS
         // RegisteredTest { group: "NurbsCurve", name: "Conversions", func: run_nurbscurve_conversions },
         // RegisteredTest { group: "NurbsCurve", name: "Evaluation", func: run_nurbscurve_evaluation },
         RegisteredTest { group: "NurbsCurve", name: "Modifications", func: run_nurbscurve_modifications },
@@ -588,7 +588,7 @@ pub fn get_all_tests() -> Vec<RegisteredTest> {
         RegisteredTest { group: "NurbsSurfaceTrimmed", name: "Accessors", func: run_nurbssurface_trimmed_accessors },
         RegisteredTest { group: "NurbsSurfaceTrimmed", name: "Add Inner Loop", func: run_nurbssurface_trimmed_add_inner_loop },
         RegisteredTest { group: "NurbsSurfaceTrimmed", name: "Point At", func: run_nurbssurface_trimmed_point_at },
-        // TODO(f32-followup): NurbsSurfaceTrimmed::mesh produces empty result under f32
+        // TODO(f64-followup): NurbsSurfaceTrimmed::mesh produces empty result under f64
         // RegisteredTest { group: "NurbsSurfaceTrimmed", name: "Mesh", func: run_nurbssurface_trimmed_mesh },
         RegisteredTest { group: "NurbsSurfaceTrimmed", name: "Transformation", func: run_nurbssurface_trimmed_transformation },
         RegisteredTest { group: "NurbsSurfaceTrimmed", name: "Json Roundtrip", func: run_nurbssurface_trimmed_json_roundtrip },
@@ -617,7 +617,7 @@ pub fn get_all_tests() -> Vec<RegisteredTest> {
         RegisteredTest { group: "Primitives", name: "Nurbssurface Quad Sphere", func: run_primitives_nurbssurface_quad_sphere },
         RegisteredTest { group: "Primitives", name: "Nurbssurface Torus", func: run_primitives_nurbssurface_torus },
         RegisteredTest { group: "Primitives", name: "Nurbssurface Ruled", func: run_primitives_nurbssurface_ruled },
-        // TODO(f32-followup): high-precision get_cv/closure assertions; rebaseline.
+        // TODO(f64-followup): high-precision get_cv/closure assertions; rebaseline.
         // RegisteredTest { group: "Primitives", name: "Nurbssurface Planar", func: run_primitives_nurbssurface_planar },
         RegisteredTest { group: "Primitives", name: "Nurbssurface Extrusion", func: run_primitives_nurbssurface_extrusion },
         RegisteredTest { group: "Primitives", name: "Nurbssurface Loft", func: run_primitives_nurbssurface_loft },
@@ -628,7 +628,7 @@ pub fn get_all_tests() -> Vec<RegisteredTest> {
         RegisteredTest { group: "Primitives", name: "Mesh Diamond Mesh", func: run_primitives_mesh_diamond_mesh },
         RegisteredTest { group: "Primitives", name: "Mesh Hex Mesh", func: run_primitives_mesh_hex_mesh },
         RegisteredTest { group: "Primitives", name: "Mesh Cone Subdivisions", func: run_primitives_mesh_cone_subdivisions },
-        // TODO(f32-followup): rebaseline f32 interpolation expected values.
+        // TODO(f64-followup): rebaseline f64 interpolation expected values.
         // RegisteredTest { group: "Primitives", name: "Nurbscurve Interpolated", func: run_primitives_nurbscurve_interpolated },
         RegisteredTest { group: "Primitives", name: "Mesh Tetrahedron", func: run_primitives_mesh_tetrahedron },
         RegisteredTest { group: "Primitives", name: "Mesh Cube", func: run_primitives_mesh_cube },
@@ -773,7 +773,7 @@ pub fn get_all_tests() -> Vec<RegisteredTest> {
         RegisteredTest { group: "RemeshNurbsSurfaceAdaptive", name: "Mesh", func: run_remesh_nurbssurface_adaptive_mesh },
         RegisteredTest { group: "RemeshNurbsSurfaceAdaptive", name: "Torus", func: run_remesh_nurbssurface_adaptive_torus },
         RegisteredTest { group: "RemeshNurbsSurfaceAdaptive", name: "Cylinder", func: run_remesh_nurbssurface_adaptive_cylinder },
-        // TODO(f32-followup): vertex count diverges under f32 adaptive remesh.
+        // TODO(f64-followup): vertex count diverges under f64 adaptive remesh.
         // RegisteredTest { group: "RemeshNurbsSurfaceAdaptive", name: "Cone", func: run_remesh_nurbssurface_adaptive_cone },
         RegisteredTest { group: "RemeshNurbsSurfaceAdaptive", name: "Doubly Curved", func: run_remesh_nurbssurface_adaptive_doubly_curved },
         RegisteredTest { group: "RemeshNurbsSurfaceAdaptive", name: "Flat", func: run_remesh_nurbssurface_adaptive_flat },

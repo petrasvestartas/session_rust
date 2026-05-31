@@ -53,8 +53,8 @@ impl SpatialAABBTree {
         let idx = self.nodes.len();
         self.nodes.push(Node { aabb: AABB::default(), right: -1, object_id: -1 });
 
-        let mut lo_x: f32 = f32::INFINITY; let mut lo_y: f32 = f32::INFINITY; let mut lo_z: f32 = f32::INFINITY;
-        let mut hi_x: f32 = f32::NEG_INFINITY; let mut hi_y: f32 = f32::NEG_INFINITY; let mut hi_z: f32 = f32::NEG_INFINITY;
+        let mut lo_x: f64 = f64::INFINITY; let mut lo_y: f64 = f64::INFINITY; let mut lo_z: f64 = f64::INFINITY;
+        let mut hi_x: f64 = f64::NEG_INFINITY; let mut hi_y: f64 = f64::NEG_INFINITY; let mut hi_z: f64 = f64::NEG_INFINITY;
         for &id in ids.iter() {
             let b = &aabbs[id as usize];
             lo_x = lo_x.min(b.cx - b.hx); hi_x = hi_x.max(b.cx + b.hx);

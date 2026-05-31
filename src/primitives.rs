@@ -9,7 +9,7 @@ use crate::tolerance::{Tolerance, PI};
 use crate::vector::Vector;
 use crate::xform::Xform;
 
-fn merge_nurbsknot_vectors(a: &[f32], b: &[f32]) -> Vec<f32> {
+fn merge_nurbsknot_vectors(a: &[f64], b: &[f64]) -> Vec<f64> {
     let mut merged = Vec::new();
     let (mut i, mut j) = (0, 0);
     let tol = 1e-10;
@@ -30,7 +30,7 @@ fn merge_nurbsknot_vectors(a: &[f32], b: &[f32]) -> Vec<f32> {
     merged
 }
 
-fn nurbsknot_vectors_equal(a: &[f32], b: &[f32]) -> bool {
+fn nurbsknot_vectors_equal(a: &[f64], b: &[f64]) -> bool {
     if a.len() != b.len() { return false; }
     let tol = 1e-10;
     for i in 0..a.len() {
@@ -82,10 +82,10 @@ pub struct Primitives;
 
 impl Primitives {
     /// Create a circle as a rational NURBS curve (9 control points)
-    pub fn circle(cx: f32, cy: f32, cz: f32, radius: f32) -> NurbsCurve {
-        let w = (2.0_f32).sqrt() / 2.0;
-        let cx_pat: [f32; 9] = [1.0, 1.0, 0.0, -1.0, -1.0, -1.0, 0.0, 1.0, 1.0];
-        let cy_pat: [f32; 9] = [0.0, 1.0, 1.0, 1.0, 0.0, -1.0, -1.0, -1.0, 0.0];
+    pub fn circle(cx: f64, cy: f64, cz: f64, radius: f64) -> NurbsCurve {
+        let w = (2.0_f64).sqrt() / 2.0;
+        let cx_pat: [f64; 9] = [1.0, 1.0, 0.0, -1.0, -1.0, -1.0, 0.0, 1.0, 1.0];
+        let cy_pat: [f64; 9] = [0.0, 1.0, 1.0, 1.0, 0.0, -1.0, -1.0, -1.0, 0.0];
         let weights = [1.0, w, 1.0, w, 1.0, w, 1.0, w, 1.0];
 
         let mut curve = NurbsCurve::new(3, true, 3, 9);
@@ -100,10 +100,10 @@ impl Primitives {
     }
 
     /// Create an ellipse as a rational NURBS curve
-    pub fn ellipse(cx: f32, cy: f32, cz: f32, major_radius: f32, minor_radius: f32) -> NurbsCurve {
-        let w = (2.0_f32).sqrt() / 2.0;
-        let ex: [f32; 9] = [1.0, 1.0, 0.0, -1.0, -1.0, -1.0, 0.0, 1.0, 1.0];
-        let ey: [f32; 9] = [0.0, 1.0, 1.0, 1.0, 0.0, -1.0, -1.0, -1.0, 0.0];
+    pub fn ellipse(cx: f64, cy: f64, cz: f64, major_radius: f64, minor_radius: f64) -> NurbsCurve {
+        let w = (2.0_f64).sqrt() / 2.0;
+        let ex: [f64; 9] = [1.0, 1.0, 0.0, -1.0, -1.0, -1.0, 0.0, 1.0, 1.0];
+        let ey: [f64; 9] = [0.0, 1.0, 1.0, 1.0, 0.0, -1.0, -1.0, -1.0, 0.0];
         let weights = [1.0, w, 1.0, w, 1.0, w, 1.0, w, 1.0];
 
         let mut curve = NurbsCurve::new(3, true, 3, 9);
@@ -150,7 +150,7 @@ impl Primitives {
         let r_approx = if sagitta > 0.0 {
             (half_chord.powi(2) + sagitta.powi(2)) / (2.0 * sagitta)
         } else {
-            f32::INFINITY
+            f64::INFINITY
         };
 
         let w = if r_approx > 0.0 {
@@ -197,13 +197,13 @@ impl Primitives {
     }
 
     /// Create a hyperbola segment as a NURBS curve
-    pub fn hyperbola(center: &Point, a: f32, b: f32, extent: f32) -> NurbsCurve {
+    pub fn hyperbola(center: &Point, a: f64, b: f64, extent: f64) -> NurbsCurve {
         let num_segments = 8;
         let cv_count = num_segments + 1;
 
         let points: Vec<Point> = (0..cv_count)
             .map(|i| {
-                let t = -extent + 2.0 * extent * (i as f32) / (num_segments as f32);
+                let t = -extent + 2.0 * extent * (i as f64) / (num_segments as f64);
                 Point::new(center[0] + a * t.cosh(), center[1] + b * t.sinh(), center[2])
             })
             .collect();
@@ -212,15 +212,15 @@ impl Primitives {
     }
 
     /// Create a spiral (helix with varying radius)
-    pub fn spiral(start_radius: f32, end_radius: f32, pitch: f32, turns: f32) -> NurbsCurve {
+    pub fn spiral(start_radius: f64, end_radius: f64, pitch: f64, turns: f64) -> NurbsCurve {
         let segments_per_turn = 8;
-        let total_segments = ((turns * segments_per_turn as f32) as usize).max(4);
+        let total_segments = ((turns * segments_per_turn as f64) as usize).max(4);
         let cv_count = total_segments + 1;
         let total_angle = turns * 2.0 * PI;
 
         let points: Vec<Point> = (0..cv_count)
             .map(|i| {
-                let t = (i as f32) / (total_segments as f32);
+                let t = (i as f64) / (total_segments as f64);
                 let angle = t * total_angle;
                 let r = start_radius + t * (end_radius - start_radius);
                 Point::new(r * angle.cos(), r * angle.sin(), t * turns * pitch)
@@ -282,7 +282,7 @@ impl Primitives {
         (vertices, triangles)
     }
 
-    fn line_to_cylinder_transform(line: &Line, radius: f32) -> Xform {
+    fn line_to_cylinder_transform(line: &Line, radius: f64) -> Xform {
         let start = line.start();
         let end = line.end();
         let line_vec = line.to_vector();
@@ -324,13 +324,13 @@ impl Primitives {
         mesh
     }
 
-    pub fn cylinder_mesh(line: &Line, radius: f32) -> Mesh {
+    pub fn cylinder_mesh(line: &Line, radius: f64) -> Mesh {
         let unit_cyl = Self::unit_cylinder_geometry();
         let xform = Self::line_to_cylinder_transform(line, radius);
         Self::transform_geometry(&unit_cyl, &xform)
     }
 
-    fn capsule_geometry(start: &Point, end: &Point, radius: f32) -> (Vec<Point>, Vec<[usize; 3]>) {
+    fn capsule_geometry(start: &Point, end: &Point, radius: f64) -> (Vec<Point>, Vec<[usize; 3]>) {
         let n = 10usize;
         let lat = PI / 4.0;
         let r_hemi = radius * lat.sin();
@@ -341,9 +341,9 @@ impl Primitives {
         let (mut xx, mut xy, mut xz) = if az.abs() < 0.9 { (-ay, ax, 0.0) } else { (0.0, -az, ay) };
         let xl = (xx*xx+xy*xy+xz*xz).sqrt(); xx/=xl; xy/=xl; xz/=xl;
         let (yx, yy, yz) = (ay*xz-az*xy, az*xx-ax*xz, ax*xy-ay*xx);
-        let ring = |cx: f32, cy: f32, cz: f32, aoff: f32, rr: f32| -> Vec<Point> {
+        let ring = |cx: f64, cy: f64, cz: f64, aoff: f64, rr: f64| -> Vec<Point> {
             (0..n).map(|i| {
-                let a = 2.0*PI*i as f32/n as f32;
+                let a = 2.0*PI*i as f64/n as f64;
                 let (ca, sa) = (a.cos(), a.sin());
                 Point::new(cx+aoff*ax+rr*(ca*xx+sa*yx),
                            cy+aoff*ay+rr*(ca*xy+sa*yy),
@@ -372,7 +372,7 @@ impl Primitives {
         (verts, tris)
     }
 
-    pub fn capsule_mesh(line: &Line, radius: f32) -> Mesh {
+    pub fn capsule_mesh(line: &Line, radius: f64) -> Mesh {
         let start = line.start();
         let end = line.end();
         let (verts, tris) = Self::capsule_geometry(&start, &end, radius);
@@ -382,7 +382,7 @@ impl Primitives {
         mesh
     }
 
-    pub fn edge_pipes(mesh: &Mesh, radius: f32) -> Vec<Mesh> {
+    pub fn edge_pipes(mesh: &Mesh, radius: f64) -> Vec<Mesh> {
         let edge_list = mesh.edges();
         let mut result = Vec::new();
         for (i, (u, v)) in edge_list.iter().enumerate() {
@@ -399,7 +399,7 @@ impl Primitives {
         result
     }
 
-    pub fn arrow_mesh(line: &Line, radius: f32) -> Mesh {
+    pub fn arrow_mesh(line: &Line, radius: f64) -> Mesh {
         let start = line.start();
         let line_vec = line.to_vector();
         let length = line.length();
@@ -468,8 +468,8 @@ impl Primitives {
 
     // Surface factory methods
 
-    pub fn cylinder_surface(cx: f32, cy: f32, cz: f32, radius: f32, height: f32) -> NurbsSurface {
-        let w = (2.0_f32).sqrt() / 2.0;
+    pub fn cylinder_surface(cx: f64, cy: f64, cz: f64, radius: f64, height: f64) -> NurbsSurface {
+        let w = (2.0_f64).sqrt() / 2.0;
         let circle_weights = [1.0, w, 1.0, w, 1.0, w, 1.0, w, 1.0];
         let circle_x = [1.0, 1.0, 0.0, -1.0, -1.0, -1.0, 0.0, 1.0, 1.0];
         let circle_y = [0.0, 1.0, 1.0, 1.0, 0.0, -1.0, -1.0, -1.0, 0.0];
@@ -489,8 +489,8 @@ impl Primitives {
         srf
     }
 
-    pub fn cone_surface(cx: f32, cy: f32, cz: f32, radius: f32, height: f32) -> NurbsSurface {
-        let w = (2.0_f32).sqrt() / 2.0;
+    pub fn cone_surface(cx: f64, cy: f64, cz: f64, radius: f64, height: f64) -> NurbsSurface {
+        let w = (2.0_f64).sqrt() / 2.0;
         let circle_weights = [1.0, w, 1.0, w, 1.0, w, 1.0, w, 1.0];
         let circle_x = [1.0, 1.0, 0.0, -1.0, -1.0, -1.0, 0.0, 1.0, 1.0];
         let circle_y = [0.0, 1.0, 1.0, 1.0, 0.0, -1.0, -1.0, -1.0, 0.0];
@@ -511,8 +511,8 @@ impl Primitives {
         srf
     }
 
-    pub fn torus_surface(cx: f32, cy: f32, cz: f32, major_radius: f32, minor_radius: f32) -> NurbsSurface {
-        let w = (2.0_f32).sqrt() / 2.0;
+    pub fn torus_surface(cx: f64, cy: f64, cz: f64, major_radius: f64, minor_radius: f64) -> NurbsSurface {
+        let w = (2.0_f64).sqrt() / 2.0;
         let cw = [1.0, w, 1.0, w, 1.0, w, 1.0, w, 1.0];
         let cos_a = [1.0, 1.0, 0.0, -1.0, -1.0, -1.0, 0.0, 1.0, 1.0];
         let sin_a = [0.0, 1.0, 1.0, 1.0, 0.0, -1.0, -1.0, -1.0, 0.0];
@@ -539,8 +539,8 @@ impl Primitives {
         srf
     }
 
-    pub fn sphere_surface(cx: f32, cy: f32, cz: f32, radius: f32) -> NurbsSurface {
-        let w = (2.0_f32).sqrt() / 2.0;
+    pub fn sphere_surface(cx: f64, cy: f64, cz: f64, radius: f64) -> NurbsSurface {
+        let w = (2.0_f64).sqrt() / 2.0;
         let cw = [1.0, w, 1.0, w, 1.0, w, 1.0, w, 1.0];
         let cos_a = [1.0, 1.0, 0.0, -1.0, -1.0, -1.0, 0.0, 1.0, 1.0];
         let sin_a = [0.0, 1.0, 1.0, 1.0, 0.0, -1.0, -1.0, -1.0, 0.0];
@@ -568,23 +568,23 @@ impl Primitives {
         srf
     }
 
-    pub fn quad_sphere(cx: f32, cy: f32, cz: f32, radius: f32) -> Vec<NurbsSurface> {
+    pub fn quad_sphere(cx: f64, cy: f64, cz: f64, radius: f64) -> Vec<NurbsSurface> {
         let r = radius;
-        let a = r / 3.0_f32.sqrt();
-        let e = r * 3.0_f32.sqrt() / 2.0;
-        let wk = (2.0_f32 / 3.0).sqrt();
-        let wc = (-72.0 - 32.0 * 6.0_f32.sqrt() + 48.0 * 3.0_f32.sqrt() + 56.0 * 2.0_f32.sqrt())
-               / (48.0 * (1.0 + (2.0_f32 / 3.0).sqrt() - 1.0 / 3.0_f32.sqrt() - 1.0 / 2.0_f32.sqrt()));
-        let k_val = r * (1.0 - 1.0 / 3.0_f32.sqrt() + 2.0 * (2.0_f32 / 3.0).sqrt() - 2.0_f32.sqrt());
+        let a = r / 3.0_f64.sqrt();
+        let e = r * 3.0_f64.sqrt() / 2.0;
+        let wk = (2.0_f64 / 3.0).sqrt();
+        let wc = (-72.0 - 32.0 * 6.0_f64.sqrt() + 48.0 * 3.0_f64.sqrt() + 56.0 * 2.0_f64.sqrt())
+               / (48.0 * (1.0 + (2.0_f64 / 3.0).sqrt() - 1.0 / 3.0_f64.sqrt() - 1.0 / 2.0_f64.sqrt()));
+        let k_val = r * (1.0 - 1.0 / 3.0_f64.sqrt() + 2.0 * (2.0_f64 / 3.0).sqrt() - 2.0_f64.sqrt());
         let h = r + k_val / wc;
 
-        let zf: [[(f32,f32,f32,f32); 3]; 3] = [
+        let zf: [[(f64,f64,f64,f64); 3]; 3] = [
             [(-a,-a, a, 1.0), (-e, 0.0, e, wk), (-a, a, a, 1.0)],
             [( 0.0,-e, e, wk),( 0.0, 0.0, h, wc), ( 0.0, e, e, wk)],
             [( a,-a, a, 1.0), ( e, 0.0, e, wk), ( a, a, a, 1.0)],
         ];
 
-        let rot: [[[f32; 3]; 3]; 6] = [
+        let rot: [[[f64; 3]; 3]; 6] = [
             [[ 1.0, 0.0, 0.0],[ 0.0, 1.0, 0.0],[ 0.0, 0.0, 1.0]],
             [[ 1.0, 0.0, 0.0],[ 0.0,-1.0, 0.0],[ 0.0, 0.0,-1.0]],
             [[ 0.0, 0.0, 1.0],[ 0.0, 1.0, 0.0],[-1.0, 0.0, 0.0]],
@@ -693,11 +693,11 @@ impl Primitives {
         if unique_pts.len() < 3 { return NurbsSurface::new(); }
 
         let make_bilinear = |orig: &Point, xax: &Vector, yax: &Vector,
-                             min_u: f32, max_u: f32, min_v: f32, max_v: f32| -> NurbsSurface {
+                             min_u: f64, max_u: f64, min_v: f64, max_v: f64| -> NurbsSurface {
             let mut srf = NurbsSurface::create_simple(3, false, 2, 2, 2, 2).unwrap();
             srf.set_nurbsknot(0, 0, 0.0); srf.set_nurbsknot(0, 1, 1.0);
             srf.set_nurbsknot(1, 0, 0.0); srf.set_nurbsknot(1, 1, 1.0);
-            let pt = |u: f32, v: f32| -> Point {
+            let pt = |u: f64, v: f64| -> Point {
                 Point::new(orig[0] + u*xax[0] + v*yax[0],
                            orig[1] + u*xax[1] + v*yax[1],
                            orig[2] + u*xax[2] + v*yax[2])
@@ -710,7 +710,7 @@ impl Primitives {
         };
 
         let longest_edge_dir = |pts: &[Point]| -> Vector {
-            let mut best_d2 = 0.0f32;
+            let mut best_d2 = 0.0f64;
             let mut best_i = 0;
             for i in 0..pts.len() {
                 let j = (i + 1) % pts.len();
@@ -765,7 +765,7 @@ impl Primitives {
             let yax = &yax * (1.0 / ylen);
 
             let orig = unique_pts[0].clone();
-            let (mut min_u, mut max_u, mut min_v, mut max_v) = (0.0f32, 0.0f32, 0.0f32, 0.0f32);
+            let (mut min_u, mut max_u, mut min_v, mut max_v) = (0.0f64, 0.0f64, 0.0f64, 0.0f64);
             for pt in &unique_pts {
                 let dx = pt[0]-orig[0]; let dy = pt[1]-orig[1]; let dz = pt[2]-orig[2];
                 let u = dx*xax[0] + dy*xax[1] + dz*xax[2];
@@ -788,7 +788,7 @@ impl Primitives {
         let yax = plane.y_axis();
         let orig = plane.origin();
 
-        let (mut min_u, mut max_u, mut min_v, mut max_v) = (1e30f32, -1e30f32, 1e30f32, -1e30f32);
+        let (mut min_u, mut max_u, mut min_v, mut max_v) = (1e30f64, -1e30f64, 1e30f64, -1e30f64);
         for pt in &sample_pts {
             let dx = pt[0]-orig[0]; let dy = pt[1]-orig[1]; let dz = pt[2]-orig[2];
             let u = dx*xax[0] + dy*xax[1] + dz*xax[2];
@@ -825,18 +825,24 @@ impl Primitives {
 
         let mut v_params = vec![0.0; n_sections];
         for k in 1..n_sections {
-            let pk_prev = curves[k - 1].point_at_middle();
-            let pk_curr = curves[k].point_at_middle();
-            let dx = pk_curr[0] - pk_prev[0];
-            let dy = pk_curr[1] - pk_prev[1];
-            let dz = pk_curr[2] - pk_prev[2];
-            v_params[k] = v_params[k - 1] + (dx * dx + dy * dy + dz * dz).sqrt();
+            // Average chord length over corresponding control points (robust section
+            // spacing, vs a single midpoint sample which mis-spaces rotated/reshaped sections).
+            let mut s = 0.0;
+            for i in 0..cv_count_u {
+                let a = curves[k - 1].get_cv(i).unwrap_or(Point::new(0.0, 0.0, 0.0));
+                let b = curves[k].get_cv(i).unwrap_or(Point::new(0.0, 0.0, 0.0));
+                let dx = b[0] - a[0];
+                let dy = b[1] - a[1];
+                let dz = b[2] - a[2];
+                s += (dx * dx + dy * dy + dz * dz).sqrt();
+            }
+            v_params[k] = v_params[k - 1] + s / cv_count_u as f64;
         }
         let total_len = v_params[n_sections - 1];
         if total_len > 1e-14 {
             for k in 0..n_sections { v_params[k] /= total_len; }
         } else {
-            for k in 0..n_sections { v_params[k] = k as f32 / (n_sections - 1) as f32; }
+            for k in 0..n_sections { v_params[k] = k as f64 / (n_sections - 1) as f64; }
         }
 
         let cv_count_v = n_sections;
@@ -852,7 +858,7 @@ impl Primitives {
             for j in 1..=(n_sections - order_v) {
                 let mut sum = 0.0;
                 for i in j..(j + degree_v) { sum += v_params[i]; }
-                nurbsknots_v[order_v - 2 + j] = sum / degree_v as f32;
+                nurbsknots_v[order_v - 2 + j] = sum / degree_v as f64;
             }
             for i in (nurbsknot_count_v - order_v + 1)..nurbsknot_count_v {
                 nurbsknots_v[i] = v_params[n_sections - 1];
@@ -986,7 +992,7 @@ impl Primitives {
     }
 
     pub fn create_revolve(profile: &NurbsCurve, axis_origin: &Point,
-                          axis_direction: &Vector, angle: f32) -> NurbsSurface {
+                          axis_direction: &Vector, angle: f64) -> NurbsSurface {
         if !profile.is_valid() { return NurbsSurface::new(); }
         let ax_len = axis_direction.magnitude();
         if ax_len < 1e-14 { return NurbsSurface::new(); }
@@ -1001,7 +1007,7 @@ impl Primitives {
                      else if angle <= 3.0 * PI / 2.0 + 1e-10 { 3 }
                      else { 4 };
 
-        let d_theta = angle / n_arcs as f32;
+        let d_theta = angle / n_arcs as f64;
         let w_mid = (d_theta / 2.0).cos();
         let n_u = 2 * n_arcs + 1;
 
@@ -1010,7 +1016,7 @@ impl Primitives {
         nurbsknots_u[0] = 0.0;
         nurbsknots_u[1] = 0.0;
         for i in 1..=n_arcs {
-            let kv = i as f32 * d_theta;
+            let kv = i as f64 * d_theta;
             nurbsknots_u[2 * i] = kv;
             nurbsknots_u[2 * i + 1] = kv;
         }
@@ -1037,10 +1043,10 @@ impl Primitives {
         let mut u_weights = vec![0.0; n_u];
         for i in 0..n_u {
             if i % 2 == 0 {
-                u_angles[i] = (i / 2) as f32 * d_theta;
+                u_angles[i] = (i / 2) as f64 * d_theta;
                 u_weights[i] = 1.0;
             } else {
-                u_angles[i] = (i / 2) as f32 * d_theta + d_theta / 2.0;
+                u_angles[i] = (i / 2) as f64 * d_theta + d_theta / 2.0;
                 u_weights[i] = w_mid;
             }
         }
@@ -1105,7 +1111,7 @@ impl Primitives {
 
         let working_profile = profile.duplicate();
 
-        let n = (rail.span_count() * 2 + 1).max(5).min(20);
+        let n = (rail.span_count() * 2 + 1).max(5).min(200);
         let frames = rail.get_perpendicular_planes(n);
         if frames.is_empty() { return NurbsSurface::new(); }
 
@@ -1116,7 +1122,7 @@ impl Primitives {
                 cx += cv[0]; cy += cv[1]; cz += cv[2];
             }
         }
-        cx /= nc as f32; cy /= nc as f32; cz /= nc as f32;
+        cx /= nc as f64; cy /= nc as f64; cz /= nc as f64;
 
         let (t0, t1) = working_profile.domain();
         let pa = working_profile.point_at(t0);
@@ -1182,11 +1188,11 @@ impl Primitives {
         if compat_shapes.len() >= 2 { make_curves_compatible(&mut compat_shapes); }
 
         let n_shapes = compat_shapes.len();
-        let shape_params: Vec<f32> = (0..n_shapes).map(|k| {
-            if n_shapes == 1 { 0.0 } else { k as f32 / (n_shapes - 1) as f32 }
+        let shape_params: Vec<f64> = (0..n_shapes).map(|k| {
+            if n_shapes == 1 { 0.0 } else { k as f64 / (n_shapes - 1) as f64 }
         }).collect();
 
-        let n = (rail1.span_count().max(rail2.span_count()) * 2 + 1).max(5).min(20);
+        let n = (rail1.span_count().max(rail2.span_count()) * 2 + 1).max(5).min(200);
 
         let (pts1, _params1) = rail1.divide_by_count(n + 1, true);
         let (pts2, _params2) = rail2.divide_by_count(n + 1, true);
@@ -1195,7 +1201,7 @@ impl Primitives {
         if frames1.is_empty() { return NurbsSurface::new(); }
 
         struct ShapeInfo {
-            start: Point, _end: Point, width: f32,
+            start: Point, _end: Point, width: f64,
             dir: Vector, side: Vector, up: Vector,
         }
         let sinfo: Vec<ShapeInfo> = (0..n_shapes).map(|k| {
@@ -1221,7 +1227,7 @@ impl Primitives {
         let mut positioned_profiles = Vec::with_capacity(frames1.len());
 
         for i in 0..frames1.len().min(pts1.len()).min(pts2.len()) {
-            let t = if frames1.len() <= 1 { 0.0 } else { i as f32 / (frames1.len() - 1) as f32 };
+            let t = if frames1.len() <= 1 { 0.0 } else { i as f64 / (frames1.len() - 1) as f64 };
 
             let mut j = 0usize;
             let mut s;
@@ -1405,8 +1411,8 @@ impl Primitives {
 
         let (u0, u1) = west.domain();
         let (v0, v1) = south.domain();
-        let u_grev: Vec<f32> = u_grev.iter().map(|&g| if u1 > u0 { (g - u0) / (u1 - u0) } else { 0.0 }).collect();
-        let v_grev: Vec<f32> = v_grev.iter().map(|&g| if v1 > v0 { (g - v0) / (v1 - v0) } else { 0.0 }).collect();
+        let u_grev: Vec<f64> = u_grev.iter().map(|&g| if u1 > u0 { (g - u0) / (u1 - u0) } else { 0.0 }).collect();
+        let v_grev: Vec<f64> = v_grev.iter().map(|&g| if v1 > v0 { (g - v0) / (v1 - v0) } else { 0.0 }).collect();
 
         let c00 = south.get_cv(0).unwrap_or(Point::new(0.0, 0.0, 0.0));
         let c01 = south.get_cv(cv_count_v - 1).unwrap_or(Point::new(0.0, 0.0, 0.0));
@@ -1454,12 +1460,12 @@ impl Primitives {
 
         let mut vkeys = vec![vec![0usize; nv]; nu];
         for i in 0..nu {
-            let u = du.0 + (du.1 - du.0) * i as f32 / u_count as f32;
+            let u = du.0 + (du.1 - du.0) * i as f64 / u_count as f64;
             for j in 0..nv {
                 if closed_u && i == u_count { vkeys[i][j] = vkeys[0][j]; continue; }
                 if singular_south && j == 0 && i > 0 { vkeys[i][j] = vkeys[0][0]; continue; }
                 if singular_north && j == v_count && i > 0 { vkeys[i][j] = vkeys[0][v_count]; continue; }
-                let v = dv.0 + (dv.1 - dv.0) * j as f32 / v_count as f32;
+                let v = dv.0 + (dv.1 - dv.0) * j as f64 / v_count as f64;
                 vkeys[i][j] = mesh.add_vertex(surface.point_at(u, v).unwrap(), None);
             }
         }
@@ -1489,8 +1495,8 @@ impl Primitives {
         let mut mesh = Mesh::new();
         let du = surface.domain(0).unwrap();
         let dv = surface.domain(1).unwrap();
-        let su = (du.1 - du.0) / u_count as f32;
-        let sv = (dv.1 - dv.0) / v_count as f32;
+        let su = (du.1 - du.0) / u_count as f64;
+        let sv = (dv.1 - dv.0) / v_count as f64;
         let nu = u_count + 1;
         let nv = v_count + 1;
         let closed_u = surface.is_closed(0);
@@ -1499,12 +1505,12 @@ impl Primitives {
 
         let mut grid = vec![vec![0usize; nv]; nu];
         for i in 0..nu {
-            let u = du.0 + su * i as f32;
+            let u = du.0 + su * i as f64;
             for j in 0..nv {
                 if closed_u && i == u_count { grid[i][j] = grid[0][j]; continue; }
                 if singular_south && j == 0 && i > 0 { grid[i][j] = grid[0][0]; continue; }
                 if singular_north && j == v_count && i > 0 { grid[i][j] = grid[0][v_count]; continue; }
-                let v = dv.0 + sv * j as f32;
+                let v = dv.0 + sv * j as f64;
                 grid[i][j] = mesh.add_vertex(surface.point_at(u, v).unwrap(), None);
             }
         }
@@ -1533,12 +1539,12 @@ impl Primitives {
         mesh
     }
 
-    pub fn hex_mesh(surface: &NurbsSurface, u_count: usize, v_count: usize, t: f32) -> Mesh {
+    pub fn hex_mesh(surface: &NurbsSurface, u_count: usize, v_count: usize, t: f64) -> Mesh {
         let mut mesh = Mesh::new();
         let du = surface.domain(0).unwrap();
         let dv = surface.domain(1).unwrap();
-        let su = (du.1 - du.0) / u_count as f32;
-        let sv = (dv.1 - dv.0) / v_count as f32;
+        let su = (du.1 - du.0) / u_count as f64;
+        let sv = (dv.1 - dv.0) / v_count as f64;
 
         let nu = u_count + 1;
         let nv = v_count + 1;
@@ -1548,32 +1554,32 @@ impl Primitives {
 
         let mut grid = vec![vec![0usize; nv]; nu];
         for i in 0..nu {
-            let u = du.0 + su * i as f32;
+            let u = du.0 + su * i as f64;
             for j in 0..nv {
                 if closed_u && i == u_count { grid[i][j] = grid[0][j]; continue; }
                 if singular_south && j == 0 && i > 0 { grid[i][j] = grid[0][0]; continue; }
                 if singular_north && j == v_count && i > 0 { grid[i][j] = grid[0][v_count]; continue; }
-                let v = dv.0 + sv * j as f32;
+                let v = dv.0 + sv * j as f64;
                 grid[i][j] = mesh.add_vertex(surface.point_at(u, v).unwrap(), None);
             }
         }
 
         let mut mid_a = vec![vec![0usize; v_count]; nu];
         for i in 0..nu {
-            let u = du.0 + su * i as f32;
+            let u = du.0 + su * i as f64;
             for j in 0..v_count {
                 if closed_u && i == u_count { mid_a[i][j] = mid_a[0][j]; continue; }
-                let v = dv.0 + sv * (j as f32 + t);
+                let v = dv.0 + sv * (j as f64 + t);
                 mid_a[i][j] = mesh.add_vertex(surface.point_at(u, v).unwrap(), None);
             }
         }
 
         let mut mid_b = vec![vec![0usize; v_count]; nu];
         for i in 0..nu {
-            let u = du.0 + su * i as f32;
+            let u = du.0 + su * i as f64;
             for j in 0..v_count {
                 if closed_u && i == u_count { mid_b[i][j] = mid_b[0][j]; continue; }
-                let v = dv.0 + sv * (j as f32 + (1.0 - t));
+                let v = dv.0 + sv * (j as f64 + (1.0 - t));
                 mid_b[i][j] = mesh.add_vertex(surface.point_at(u, v).unwrap(), None);
             }
         }
@@ -1607,10 +1613,10 @@ impl Primitives {
         mesh
     }
 
-    pub fn tetrahedron(edge: f32) -> Mesh {
+    pub fn tetrahedron(edge: f64) -> Mesh {
         let a = edge / 2.0;
-        let h = edge * (2.0_f32 / 3.0).sqrt();
-        let r = edge / 3.0_f32.sqrt();
+        let h = edge * (2.0_f64 / 3.0).sqrt();
+        let r = edge / 3.0_f64.sqrt();
         let z0 = -h / 4.0;
         let z1 = 3.0 * h / 4.0;
         let faces = vec![
@@ -1638,7 +1644,7 @@ impl Primitives {
         Mesh::from_polylines(faces, Some(1e-10))
     }
 
-    pub fn cube(edge: f32) -> Mesh {
+    pub fn cube(edge: f64) -> Mesh {
         let a = edge / 2.0;
         let v0 = Point::new(-a, -a, -a);
         let v1 = Point::new(a, -a, -a);
@@ -1659,8 +1665,8 @@ impl Primitives {
         Mesh::from_polylines(faces, Some(1e-10))
     }
 
-    pub fn octahedron(edge: f32) -> Mesh {
-        let a = edge / 2.0_f32.sqrt();
+    pub fn octahedron(edge: f64) -> Mesh {
+        let a = edge / 2.0_f64.sqrt();
         let px = Point::new(a, 0.0, 0.0);
         let nx = Point::new(-a, 0.0, 0.0);
         let py = Point::new(0.0, a, 0.0);
@@ -1680,8 +1686,8 @@ impl Primitives {
         Mesh::from_polylines(faces, Some(1e-10))
     }
 
-    pub fn icosahedron(edge: f32) -> Mesh {
-        let phi = (1.0 + 5.0_f32.sqrt()) / 2.0;
+    pub fn icosahedron(edge: f64) -> Mesh {
+        let phi = (1.0 + 5.0_f64.sqrt()) / 2.0;
         let s = edge / 2.0;
         let sp = s * phi;
         let verts = vec![
@@ -1708,15 +1714,15 @@ impl Primitives {
         Mesh::from_polylines(faces, Some(1e-10))
     }
 
-    pub fn wave_surface(size: f32, amplitude: f32) -> NurbsSurface {
+    pub fn wave_surface(size: f64, amplitude: f64) -> NurbsSurface {
         let n = 13;
         let pi2 = 2.0 * PI;
         let mut pts = Vec::new();
         for i in 0..n {
-            let u = i as f32 / (n - 1) as f32;
+            let u = i as f64 / (n - 1) as f64;
             let x = size * u;
             for j in 0..n {
-                let v = j as f32 / (n - 1) as f32;
+                let v = j as f64 / (n - 1) as f64;
                 let y = size * v;
                 let z = amplitude * (pi2 * u).sin() * (pi2 * v).sin();
                 pts.push(Point::new(x, y, z));

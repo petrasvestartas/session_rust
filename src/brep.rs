@@ -64,7 +64,7 @@ pub struct BRepFace {
 pub struct BRep {
     guid: std::sync::OnceLock<String>,
     pub name: String,
-    pub width: f32,
+    pub width: f64,
     pub surfacecolor: Color,
     pub xform: Xform,
     pub m_surfaces: Vec<NurbsSurface>,
@@ -135,7 +135,7 @@ impl BRep {
     // Factory
     ///////////////////////////////////////////////////////////////////////////////////////////
 
-    pub fn create_box(sx: f32, sy: f32, sz: f32) -> Self {
+    pub fn create_box(sx: f64, sy: f64, sz: f64) -> Self {
         let mut brep = BRep::new();
         brep.name = "box".to_string();
         let hx = sx * 0.5;
@@ -238,7 +238,7 @@ impl BRep {
         brep
     }
 
-    pub fn create_cylinder(radius: f32, height: f32) -> Self {
+    pub fn create_cylinder(radius: f64, height: f64) -> Self {
         use crate::primitives::Primitives;
         let mut brep = BRep::new();
         brep.name = "cylinder".to_string();
@@ -296,7 +296,7 @@ impl BRep {
         let ci = brep.add_curve_2d(&c2d_sl) as i32;
         brep.add_trim(ci, ei_seam, li_body, true, BRepTrimType::Seam);
         // Circular 2D trim in UV space: circle at (0.5,0.5) radius 0.5
-        let cw = (2.0_f32).sqrt() / 2.0;
+        let cw = (2.0_f64).sqrt() / 2.0;
         let ccx = [1.0, 1.0, 0.0, -1.0, -1.0, -1.0, 0.0, 1.0, 1.0];
         let ccy = [0.0, 1.0, 1.0, 1.0, 0.0, -1.0, -1.0, -1.0, 0.0];
         let cwt = [1.0, cw, 1.0, cw, 1.0, cw, 1.0, cw, 1.0];
@@ -325,7 +325,7 @@ impl BRep {
         brep
     }
 
-    pub fn create_sphere(radius: f32) -> Self {
+    pub fn create_sphere(radius: f64) -> Self {
         use crate::primitives::Primitives;
         let mut brep = BRep::new();
         brep.name = "sphere".to_string();
@@ -341,7 +341,7 @@ impl BRep {
         let seam_pts: Vec<Point> = {
             let n = 32;
             (0..=n).map(|i| {
-                let v = dom_v.0 + i as f32 * (dom_v.1 - dom_v.0) / n as f32;
+                let v = dom_v.0 + i as f64 * (dom_v.1 - dom_v.0) / n as f64;
                 srf.point_at(dom_u.0, v).unwrap_or(Point::new(0.0, 0.0, 0.0))
             }).collect()
         };
@@ -380,7 +380,7 @@ impl BRep {
         brep
     }
 
-    pub fn create_block_with_hole(sx: f32, sy: f32, sz: f32, hole_radius: f32) -> Self {
+    pub fn create_block_with_hole(sx: f64, sy: f64, sz: f64, hole_radius: f64) -> Self {
         use crate::primitives::Primitives;
         let mut brep = BRep::new();
         brep.name = "block_with_hole".to_string();
@@ -485,12 +485,12 @@ impl BRep {
         ]);
         let ci = brep.add_curve_2d(&c2d) as i32;
         brep.add_trim(ci, ei_seam, li_cyl, true, BRepTrimType::Seam);
-        let cw = std::f32::consts::FRAC_1_SQRT_2;
+        let cw = std::f64::consts::FRAC_1_SQRT_2;
         let ccx = [1.0, 1.0, 0.0, -1.0, -1.0, -1.0, 0.0, 1.0, 1.0];
         let ccy = [0.0, 1.0, 1.0, 1.0, 0.0, -1.0, -1.0, -1.0, 0.0];
         let cwt = [1.0, cw, 1.0, cw, 1.0, cw, 1.0, cw, 1.0];
         let ckn = [0.0, 0.0, 1.0, 1.0, 2.0, 2.0, 3.0, 3.0, 4.0, 4.0];
-        let mut make_cap = |z: f32, reversed: bool, circle_edge_idx: i32| {
+        let mut make_cap = |z: f64, reversed: bool, circle_edge_idx: i32| {
             let r = hx.max(hy);
             let mut cap = NurbsSurface::create_raw(3, false, 2, 2, 2, 2, false, false, 1.0, 1.0).unwrap();
             cap.set_cv(0, 0, &Point::new(-r, -r, z)); cap.set_cv(1, 0, &Point::new(r, -r, z));
@@ -574,10 +574,10 @@ impl BRep {
             let xa = plane.x_axis();
             let ya = plane.y_axis();
 
-            let mut us: Vec<f32> = Vec::with_capacity(n);
-            let mut vs: Vec<f32> = Vec::with_capacity(n);
-            let mut umin = f32::MAX; let mut umax = f32::MIN;
-            let mut vmin = f32::MAX; let mut vmax = f32::MIN;
+            let mut us: Vec<f64> = Vec::with_capacity(n);
+            let mut vs: Vec<f64> = Vec::with_capacity(n);
+            let mut umin = f64::MAX; let mut umax = f64::MIN;
+            let mut vmin = f64::MAX; let mut vmax = f64::MIN;
             for i in 0..n {
                 let dx = brep.m_vertices[vi[i]][0] - org[0];
                 let dy = brep.m_vertices[vi[i]][1] - org[1];
@@ -592,7 +592,7 @@ impl BRep {
             umin -= pad; umax += pad; vmin -= pad; vmax += pad;
             let du = umax - umin; let dv = vmax - vmin;
 
-            let pt3d = |u: f32, v: f32| -> Point {
+            let pt3d = |u: f64, v: f64| -> Point {
                 Point::new(org[0]+u*xa[0]+v*ya[0], org[1]+u*xa[1]+v*ya[1], org[2]+u*xa[2]+v*ya[2])
             };
             let mut srf = NurbsSurface::create_raw(3, false, 2, 2, 2, 2, false, false, 1.0, 1.0).unwrap();
@@ -670,10 +670,10 @@ impl BRep {
             let xa = plane.x_axis();
             let ya = plane.y_axis();
 
-            let mut us: Vec<f32> = Vec::with_capacity(n);
-            let mut vs: Vec<f32> = Vec::with_capacity(n);
-            let mut umin = f32::MAX; let mut umax = f32::MIN;
-            let mut vmin = f32::MAX; let mut vmax = f32::MIN;
+            let mut us: Vec<f64> = Vec::with_capacity(n);
+            let mut vs: Vec<f64> = Vec::with_capacity(n);
+            let mut umin = f64::MAX; let mut umax = f64::MIN;
+            let mut vmin = f64::MAX; let mut vmax = f64::MIN;
             for i in 0..n {
                 let dx = pts[i][0] - org[0]; let dy = pts[i][1] - org[1]; let dz = pts[i][2] - org[2];
                 let u = dx*xa[0]+dy*xa[1]+dz*xa[2];
@@ -697,7 +697,7 @@ impl BRep {
             umin -= pad; umax += pad; vmin -= pad; vmax += pad;
             let du = umax - umin; let dv = vmax - vmin;
 
-            let pt3d = |u: f32, v: f32| -> Point {
+            let pt3d = |u: f64, v: f64| -> Point {
                 Point::new(org[0]+u*xa[0]+v*ya[0], org[1]+u*xa[1]+v*ya[1], org[2]+u*xa[2]+v*ya[2])
             };
             let mut srf = NurbsSurface::create_raw(3, false, 2, 2, 2, 2, false, false, 1.0, 1.0).unwrap();
@@ -708,7 +708,7 @@ impl BRep {
 
             // Helper: project curve CVs to UV space
             let project_curve_to_uv = |crv: &NurbsCurve, org: &Point, xa: &crate::Vector, ya: &crate::Vector,
-                                        umin: f32, vmin: f32, du: f32, dv: f32| -> NurbsCurve {
+                                        umin: f64, vmin: f64, du: f64, dv: f64| -> NurbsCurve {
                 let mut crv2d = NurbsCurve::new(3, crv.is_rational(), crv.order() as usize, crv.cv_count());
                 crv2d.m_nurbsknot = crv.m_nurbsknot.clone();
                 for i in 0..crv.cv_count() {
@@ -885,6 +885,14 @@ impl BRep {
     /// Trimmed faces use CDT tessellation; reversed faces have normals flipped.
     /// Vertices are NOT shared across faces so face boundaries are hard edges.
     pub fn face_meshes(&self) -> Vec<Mesh> {
+        self.face_meshes_q(None)
+    }
+
+    /// Per-face meshes with an optional tessellation-quality override applied to the
+    /// grid-meshed (direct) faces: `Some((max_angle_deg, chord_factor))` densifies them
+    /// (and, via the shared-edge coordination, the CDT faces follow). `None` keeps the
+    /// default `NurbsSurface::mesh()` density.
+    pub fn face_meshes_q(&self, quality: Option<(f64, f64)>) -> Vec<Mesh> {
         use crate::nurbssurface_trimmed::NurbsSurfaceTrimmed;
         let nf = self.m_faces.len();
 
@@ -918,8 +926,8 @@ impl BRep {
             if direct && !outer_pts.is_empty() {
                 if let (Some((u0, u1)), Some((v0, v1))) = (srf.domain(0), srf.domain(1)) {
                     let tol = (u1 - u0).max(v1 - v0) * 0.01;
-                    let mut bb_umin = f32::INFINITY; let mut bb_umax = f32::NEG_INFINITY;
-                    let mut bb_vmin = f32::INFINITY; let mut bb_vmax = f32::NEG_INFINITY;
+                    let mut bb_umin = f64::INFINITY; let mut bb_umax = f64::NEG_INFINITY;
+                    let mut bb_vmin = f64::INFINITY; let mut bb_vmax = f64::NEG_INFINITY;
                     for p in &outer_pts {
                         if p[0] < bb_umin { bb_umin = p[0]; }
                         if p[0] > bb_umax { bb_umax = p[0]; }
@@ -935,21 +943,94 @@ impl BRep {
             face_direct[fi] = direct;
         }
 
-        // Phase 2: direct faces
+        // Phase 2: direct faces. Mesh each via the grid mesher, then record the 3D
+        // boundary discretisation along every edge shared with a CDT face, so the CDT
+        // face can reuse the exact same points → watertight seams (mirrors C++ BRep::mesh).
         let mut fmesh: Vec<Mesh> = (0..nf).map(|_| Mesh::new()).collect();
+        let mut edge_bnd: std::collections::HashMap<i32, Vec<Point>> = std::collections::HashMap::new();
         for fi in 0..nf {
             if !face_direct[fi] { continue; }
             let face = &self.m_faces[fi];
             let srf = &self.m_surfaces[face.surface_index as usize];
-            fmesh[fi] = srf.mesh();
+            fmesh[fi] = match quality {
+                Some((a, c)) => crate::remesh_nurbssurface_grid::RemeshNurbsSurfaceGrid::from_u_v_q(srf.clone(), 0, 0, a, c),
+                None => srf.mesh(),
+            };
+            let (u0, u1) = match srf.domain(0) { Some(d) => d, None => continue };
+            let (v0, v1) = match srf.domain(1) { Some(d) => d, None => continue };
+            let utol = (u1 - u0) * 0.001;
+            let vtol = (v1 - v0) * 0.001;
+            for &li in &face.loop_indices {
+                if li < 0 || li as usize >= self.m_loops.len() { continue; }
+                for &ti in &self.m_loops[li as usize].trim_indices {
+                    if ti < 0 || ti as usize >= self.m_trims.len() { continue; }
+                    let eidx = self.m_trims[ti as usize].edge_index;
+                    if eidx < 0 || eidx as usize >= self.m_topology_edges.len() { continue; }
+                    if edge_bnd.contains_key(&eidx) { continue; }
+                    // Only extract if this edge is shared with a CDT (non-direct) face.
+                    let mut shared = false;
+                    for &oti in &self.m_topology_edges[eidx as usize].trim_indices {
+                        if oti == ti || oti < 0 || oti as usize >= self.m_trims.len() { continue; }
+                        let oli = self.m_trims[oti as usize].loop_index;
+                        if oli < 0 || oli as usize >= self.m_loops.len() { continue; }
+                        let ofi = self.m_loops[oli as usize].face_index;
+                        if ofi >= 0 && (ofi as usize) < nf && !face_direct[ofi as usize] { shared = true; break; }
+                    }
+                    if !shared { continue; }
+                    // Which UV boundary (u0/u1/v0/v1) does this trim lie on?
+                    let c2di = self.m_trims[ti as usize].curve_2d_index;
+                    if c2di < 0 || c2di as usize >= self.m_curves_2d.len() { continue; }
+                    let c2d = &self.m_curves_2d[c2di as usize];
+                    let (sp, ep) = match (c2d.get_cv(0), c2d.get_cv(c2d.cv_count().saturating_sub(1))) {
+                        (Some(a), Some(b)) => (a, b),
+                        _ => continue,
+                    };
+                    let at_v0 = (sp[1] - v0).abs() < vtol && (ep[1] - v0).abs() < vtol;
+                    let at_v1 = (sp[1] - v1).abs() < vtol && (ep[1] - v1).abs() < vtol;
+                    let at_u0 = (sp[0] - u0).abs() < utol && (ep[0] - u0).abs() < utol;
+                    let at_u1 = (sp[0] - u1).abs() < utol && (ep[0] - u1).abs() < utol;
+                    if !at_v0 && !at_v1 && !at_u0 && !at_u1 { continue; }
+                    // Collect the grid vertices that sit on that boundary, keyed by the
+                    // along-edge parameter (the u/v attributes stored by the grid mesher).
+                    let mut pts: Vec<(f64, Point)> = Vec::new();
+                    for (_, vd) in fmesh[fi].vertex.iter() {
+                        let (iu, iv) = match (vd.attributes.get("u"), vd.attributes.get("v")) {
+                            (Some(&a), Some(&b)) => (a, b),
+                            _ => continue,
+                        };
+                        if at_v0 && (iv - v0).abs() < vtol * 0.1 { pts.push((iu, vd.position())); }
+                        else if at_v1 && (iv - v1).abs() < vtol * 0.1 { pts.push((iu, vd.position())); }
+                        else if at_u0 && (iu - u0).abs() < utol * 0.1 { pts.push((iv, vd.position())); }
+                        else if at_u1 && (iu - u1).abs() < utol * 0.1 { pts.push((iv, vd.position())); }
+                    }
+                    pts.sort_by(|a, b| a.0.partial_cmp(&b.0).unwrap_or(std::cmp::Ordering::Equal));
+                    if pts.len() >= 2 {
+                        edge_bnd.insert(eidx, pts.into_iter().map(|(_, p)| p).collect());
+                    }
+                }
+            }
         }
 
-        // Phase 3: Mesh CDT faces via NurbsSurfaceTrimmed (Bowyer-Watson CDT)
+        // Phase 3: Mesh CDT faces via NurbsSurfaceTrimmed (Bowyer-Watson CDT). For edges
+        // shared with a direct face, reuse that face's boundary points (projected into this
+        // bilinear face's UV) so the seam vertices coincide exactly.
         for fi in 0..nf {
             if face_direct[fi] { continue; }
             let face = &self.m_faces[fi];
             if face.surface_index < 0 || face.surface_index as usize >= self.m_surfaces.len() { continue; }
             let srf = &self.m_surfaces[face.surface_index as usize];
+            // Bilinear 3D→UV projection frame (valid for the planar cap surfaces).
+            let proj: Option<(Point, [f64; 3], [f64; 3], f64, f64)> =
+                match (srf.get_cv(0, 0), srf.get_cv(1, 0), srf.get_cv(0, 1)) {
+                    (Some(a), Some(b), Some(c)) if srf.degree(0) == 1 && srf.degree(1) == 1 => {
+                        let eu = [b[0]-a[0], b[1]-a[1], b[2]-a[2]];
+                        let ev = [c[0]-a[0], c[1]-a[1], c[2]-a[2]];
+                        let eu2 = eu[0]*eu[0] + eu[1]*eu[1] + eu[2]*eu[2];
+                        let ev2 = ev[0]*ev[0] + ev[1]*ev[1] + ev[2]*ev[2];
+                        if eu2 > 1e-28 && ev2 > 1e-28 { Some((a, eu, ev, eu2, ev2)) } else { None }
+                    }
+                    _ => None,
+                };
             let mut ts = NurbsSurfaceTrimmed::new();
             ts.m_surface = srf.clone();
             for &li in &face.loop_indices {
@@ -960,16 +1041,27 @@ impl BRep {
                     if ti < 0 || ti as usize >= self.m_trims.len() { continue; }
                     let trim = &self.m_trims[ti as usize];
                     if trim.trim_type == BRepTrimType::Singular { continue; }
-                    if trim.curve_2d_index < 0 || trim.curve_2d_index as usize >= self.m_curves_2d.len() { continue; }
-                    let crv = &self.m_curves_2d[trim.curve_2d_index as usize];
-                    if crv.degree() <= 1 && !crv.is_rational() {
-                        for k in 0..crv.cv_count().saturating_sub(1) {
-                            if let Some(p) = crv.get_cv(k) { loop_pts.push(p); }
+                    let eidx = trim.edge_index;
+                    if proj.is_some() && eidx >= 0 && edge_bnd.contains_key(&eidx) {
+                        let (a, eu, ev, eu2, ev2) = proj.as_ref().unwrap();
+                        for pt in &edge_bnd[&eidx] {
+                            let d = [pt[0]-a[0], pt[1]-a[1], pt[2]-a[2]];
+                            let u = (d[0]*eu[0] + d[1]*eu[1] + d[2]*eu[2]) / *eu2;
+                            let v = (d[0]*ev[0] + d[1]*ev[1] + d[2]*ev[2]) / *ev2;
+                            loop_pts.push(Point::new(u, v, 0.0));
                         }
                     } else {
-                        let n = (crv.cv_count() * 4).max(16);
-                        let (pts, _) = crv.divide_by_count(n, false);
-                        for k in 0..pts.len().saturating_sub(1) { loop_pts.push(pts[k].clone()); }
+                        if trim.curve_2d_index < 0 || trim.curve_2d_index as usize >= self.m_curves_2d.len() { continue; }
+                        let crv = &self.m_curves_2d[trim.curve_2d_index as usize];
+                        if crv.degree() <= 1 && !crv.is_rational() {
+                            for k in 0..crv.cv_count().saturating_sub(1) {
+                                if let Some(p) = crv.get_cv(k) { loop_pts.push(p); }
+                            }
+                        } else {
+                            let n = (crv.cv_count() * 4).max(16);
+                            let (pts, _) = crv.divide_by_count(n, true);
+                            for k in 0..pts.len().saturating_sub(1) { loop_pts.push(pts[k].clone()); }
+                        }
                     }
                 }
                 if loop_pts.len() >= 3 {
@@ -984,10 +1076,14 @@ impl BRep {
             fmesh[fi] = ts.mesh();
         }
 
-        // Apply reversed flag
+        // Apply reversed flag: flip BOTH winding and normals. The mesh shader derives
+        // front/back from triangle winding (gl_FrontFacing) and flips the lighting normal
+        // accordingly, so winding and the stored vertex normal must agree. Flipping only
+        // the normal left reversed faces (e.g. the block-with-hole bottom cap and bore)
+        // wound for the hidden side → they shaded/highlighted as back-faces (inverted).
         for fi in 0..nf {
-            let face = &self.m_faces[fi];
-            if face.reversed {
+            if self.m_faces[fi].reversed {
+                fmesh[fi].flip();
                 for (_, vd) in fmesh[fi].vertex.iter_mut() {
                     if let Some(n) = vd.normal() {
                         vd.set_normal(-n[0], -n[1], -n[2]);
@@ -1033,8 +1129,8 @@ impl BRep {
             if direct && !outer_pts.is_empty() {
                 if let (Some((u0, u1)), Some((v0, v1))) = (srf.domain(0), srf.domain(1)) {
                     let tol = (u1 - u0).max(v1 - v0) * 0.01;
-                    let mut bb_umin = f32::INFINITY; let mut bb_umax = f32::NEG_INFINITY;
-                    let mut bb_vmin = f32::INFINITY; let mut bb_vmax = f32::NEG_INFINITY;
+                    let mut bb_umin = f64::INFINITY; let mut bb_umax = f64::NEG_INFINITY;
+                    let mut bb_vmin = f64::INFINITY; let mut bb_vmax = f64::NEG_INFINITY;
                     for p in &outer_pts {
                         if p[0] < bb_umin { bb_umin = p[0]; }
                         if p[0] > bb_umax { bb_umax = p[0]; }
@@ -1103,19 +1199,16 @@ impl BRep {
         let mut all_polygons: Vec<Vec<Point>> = Vec::new();
         for fi in 0..nf {
             let face = &self.m_faces[fi];
-            let fm = &mut fmesh[fi];
+            let fm = &fmesh[fi];
             if fm.face.is_empty() { continue; }
-            if face.reversed {
-                for (_, vd) in fm.vertex.iter_mut() {
-                    if let Some(n) = vd.normal() {
-                        vd.set_normal(-n[0], -n[1], -n[2]);
-                    }
-                }
-            }
+            // Reversed faces must have their triangle winding flipped so the facet
+            // orientation matches the face's outward normal (from_polylines rebuilds
+            // vertices from positions, so flipping per-vertex normals here has no effect).
             for (_fk, fverts) in &fm.face {
-                let poly: Vec<Point> = fverts.iter()
+                let mut poly: Vec<Point> = fverts.iter()
                     .filter_map(|vi| fm.vertex.get(vi).map(|v| Point::new(v.x, v.y, v.z)))
                     .collect();
+                if face.reversed { poly.reverse(); }
                 all_polygons.push(poly);
             }
         }
@@ -1126,18 +1219,19 @@ impl BRep {
     // Evaluation
     ///////////////////////////////////////////////////////////////////////////////////////////
 
-    pub fn point_at(&self, face_idx: usize, u: f32, v: f32) -> Point {
+    pub fn point_at(&self, face_idx: usize, u: f64, v: f64) -> Point {
         if face_idx >= self.m_faces.len() { return Point::new(0.0, 0.0, 0.0); }
         let si = self.m_faces[face_idx].surface_index;
         if si < 0 || si as usize >= self.m_surfaces.len() { return Point::new(0.0, 0.0, 0.0); }
         self.m_surfaces[si as usize].point_at(u, v).unwrap_or(Point::new(0.0, 0.0, 0.0))
     }
 
-    pub fn normal_at(&self, face_idx: usize, u: f32, v: f32) -> Vector {
+    pub fn normal_at(&self, face_idx: usize, u: f64, v: f64) -> Vector {
         if face_idx >= self.m_faces.len() { return Vector::new(0.0, 0.0, 0.0); }
         let si = self.m_faces[face_idx].surface_index;
         if si < 0 || si as usize >= self.m_surfaces.len() { return Vector::new(0.0, 0.0, 0.0); }
-        self.m_surfaces[si as usize].normal_at(u, v)
+        let n = self.m_surfaces[si as usize].normal_at(u, v);
+        if self.m_faces[face_idx].reversed { -n } else { n }
     }
 
     ///////////////////////////////////////////////////////////////////////////////////////////
@@ -1278,7 +1372,7 @@ impl BRep {
         let mut b = BRep::new();
         b.set_guid(proto.guid.clone());
         b.name = proto.name;
-        b.width = proto.width as f32;
+        b.width = proto.width as f64;
 
         for c in &proto.curves_2d {
             b.m_curves_2d.push(NurbsCurve::pb_loads(&c.encode_to_vec())?);
@@ -1290,7 +1384,7 @@ impl BRep {
             b.m_surfaces.push(NurbsSurface::pb_loads(&s.encode_to_vec())?);
         }
         for v in &proto.vertices {
-            b.m_vertices.push(Point::new(v.x as f32, v.y as f32, v.z as f32));
+            b.m_vertices.push(Point::new(v.x as f64, v.y as f64, v.z as f64));
         }
         for tv in &proto.topology_vertices {
             b.m_topology_vertices.push(BRepVertex {
@@ -1348,7 +1442,7 @@ impl BRep {
             b.xform.set_guid(xform.guid.clone());
             b.xform.name = xform.name;
             for (i, val) in xform.matrix.iter().enumerate() {
-                if i < 16 { b.xform.m[i] = *val as f32; }
+                if i < 16 { b.xform.m[i] = *val as f64; }
             }
         }
 
@@ -1429,7 +1523,7 @@ impl Serialize for BRep {
         map.serialize_entry("trims", &trims_json)?;
         map.serialize_entry("type", "BRep")?;
         // vertices as [x, y, z] arrays
-        let verts: Vec<[f32; 3]> = self.m_vertices.iter().map(|v| [v[0], v[1], v[2]]).collect();
+        let verts: Vec<[f64; 3]> = self.m_vertices.iter().map(|v| [v[0], v[1], v[2]]).collect();
         map.serialize_entry("vertices", &verts)?;
         map.serialize_entry("width", &self.width)?;
         map.serialize_entry("xform", &self.xform)?;
@@ -1489,7 +1583,7 @@ impl<'de> Deserialize<'de> for BRep {
             #[serde(default)]
             name: Option<String>,
             #[serde(default)]
-            width: Option<f32>,
+            width: Option<f64>,
             #[serde(default)]
             surfacecolor: Option<Color>,
             #[serde(default)]
@@ -1501,7 +1595,7 @@ impl<'de> Deserialize<'de> for BRep {
             #[serde(default)]
             surfaces: Option<Vec<NurbsSurface>>,
             #[serde(default)]
-            vertices: Option<Vec<[f32; 3]>>,
+            vertices: Option<Vec<[f64; 3]>>,
             #[serde(default)]
             topology_vertices: Option<Vec<TopologyVertexData>>,
             #[serde(default)]

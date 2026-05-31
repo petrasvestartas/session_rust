@@ -77,7 +77,7 @@ pub struct SpatialBVH {
     guid: std::sync::OnceLock<String>,
     pub name: String,
     pub root: Option<Box<SpatialBVHNode>>,
-    pub world_size: f32,
+    pub world_size: f64,
     #[serde(skip)]
     pub object_guids: Vec<String>, // Parallel array to boxes - maps indices to GUIDs
     #[serde(skip)]
@@ -120,12 +120,12 @@ impl SpatialBVH {
     }
 
     /// Compute world size from bounding boxes
-    pub fn compute_world_size(bounding_boxes: &[OBB]) -> f32 {
+    pub fn compute_world_size(bounding_boxes: &[OBB]) -> f64 {
         if bounding_boxes.is_empty() {
             return 1000.0;
         }
 
-        let mut max_extent = 0.0f32;
+        let mut max_extent = 0.0f64;
         for bbox in bounding_boxes {
             // Find maximum absolute coordinate in any dimension
             let x_extent = (bbox.center[0] + bbox.half_size[0])
@@ -170,7 +170,7 @@ impl SpatialBVH {
         self.build(&bounding_boxes);
     }
 
-    pub fn from_boxes(bounding_boxes: &[OBB], world_size: f32) -> Self {
+    pub fn from_boxes(bounding_boxes: &[OBB], world_size: f64) -> Self {
         let mut bvh = Self::new();
         bvh.world_size = world_size;
         bvh.build(bounding_boxes);
@@ -594,7 +594,7 @@ impl SpatialBVH {
         &self,
         object_id: usize,
         bounding_boxes: &[OBB],
-        inflate: f32,
+        inflate: f64,
     ) -> Vec<usize> {
         if object_id >= bounding_boxes.len() {
             return Vec::new();
@@ -768,7 +768,7 @@ impl SpatialBVH {
         origin: &Point,
         direction: &Vector,
         aabb: &AABB,
-    ) -> Option<(f32, f32)> {
+    ) -> Option<(f64, f64)> {
         let min_x = aabb.cx - aabb.hx;
         let max_x = aabb.cx + aabb.hx;
         let min_y = aabb.cy - aabb.hy;
@@ -777,17 +777,17 @@ impl SpatialBVH {
         let max_z = aabb.cz + aabb.hz;
 
         let invx = if direction[0] == 0.0 {
-            f32::INFINITY
+            f64::INFINITY
         } else {
             1.0 / direction[0]
         };
         let invy = if direction[1] == 0.0 {
-            f32::INFINITY
+            f64::INFINITY
         } else {
             1.0 / direction[1]
         };
         let invz = if direction[2] == 0.0 {
-            f32::INFINITY
+            f64::INFINITY
         } else {
             1.0 / direction[2]
         };
@@ -881,7 +881,7 @@ pub fn expand_bits(v: u32) -> u32 {
     v
 }
 
-pub fn calculate_morton_code(x: f32, y: f32, z: f32, world_size: f32) -> u32 {
+pub fn calculate_morton_code(x: f64, y: f64, z: f64, world_size: f64) -> u32 {
     // Normalize coordinates to [0,1] range
     let nx = (x + world_size / 2.0) / world_size;
     let ny = (y + world_size / 2.0) / world_size;

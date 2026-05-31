@@ -9,7 +9,7 @@ impl ConvexHull {
     // 2D Graham scan (projects to XY)
     // -------------------------------------------------------------------------
 
-    fn cross_2d(o: &Point, a: &Point, b: &Point) -> f32 {
+    fn cross_2d(o: &Point, a: &Point, b: &Point) -> f64 {
         (a[0] - o[0]) * (b[1] - o[1]) - (a[1] - o[1]) * (b[0] - o[0])
     }
 
@@ -43,7 +43,7 @@ impl ConvexHull {
     // 3D Quickhull
     // -------------------------------------------------------------------------
 
-    fn normal(a: &Point, b: &Point, c: &Point) -> (f32, f32, f32) {
+    fn normal(a: &Point, b: &Point, c: &Point) -> (f64, f64, f64) {
         let ax = b[0] - a[0];
         let ay = b[1] - a[1];
         let az = b[2] - a[2];
@@ -53,14 +53,14 @@ impl ConvexHull {
         (ay * bz - az * by, az * bx - ax * bz, ax * by - ay * bx)
     }
 
-    fn signed_volume(a: &Point, b: &Point, c: &Point, d: &Point) -> f32 {
+    fn signed_volume(a: &Point, b: &Point, c: &Point, d: &Point) -> f64 {
         let (nx, ny, nz) = Self::normal(a, b, c);
         nx * (d[0] - a[0]) + ny * (d[1] - a[1]) + nz * (d[2] - a[2])
     }
 
     fn farthest_point(pts_idx: &[usize], points: &[Point], a: &Point, b: &Point, c: &Point) -> Option<usize> {
         let mut best_idx = None;
-        let mut best_vol = 0.0_f32;
+        let mut best_vol = 0.0_f64;
         for &i in pts_idx {
             let v = Self::signed_volume(a, b, c, &points[i]);
             if v > best_vol {
@@ -107,8 +107,8 @@ impl ConvexHull {
             return mesh;
         }
         // Use first-maximum semantics (like Python's max()) for consistent tie-breaking
-        let first_max = |iter: &mut dyn Iterator<Item = usize>, key: &dyn Fn(usize) -> f32| -> usize {
-            iter.fold(None::<(usize, f32)>, |acc, i| {
+        let first_max = |iter: &mut dyn Iterator<Item = usize>, key: &dyn Fn(usize) -> f64| -> usize {
+            iter.fold(None::<(usize, f64)>, |acc, i| {
                 let d = key(i);
                 match acc {
                     None => Some((i, d)),
@@ -123,7 +123,7 @@ impl ConvexHull {
         let ax = points[p1][0] - points[p0][0];
         let ay = points[p1][1] - points[p0][1];
         let az = points[p1][2] - points[p0][2];
-        let dist_to_line = |i: usize| -> f32 {
+        let dist_to_line = |i: usize| -> f64 {
             let bx = points[i][0] - points[p0][0];
             let by = points[i][1] - points[p0][1];
             let bz = points[i][2] - points[p0][2];

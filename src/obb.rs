@@ -36,7 +36,7 @@ impl OBB {
         }
     }
 
-    pub fn from_plane(plane: &Plane, dx: f32, dy: f32, dz: f32) -> Self {
+    pub fn from_plane(plane: &Plane, dx: f64, dy: f64, dz: f64) -> Self {
         OBB {
             center: plane.origin(),
             x_axis: plane.x_axis(),
@@ -49,19 +49,19 @@ impl OBB {
         }
     }
 
-    pub fn from_point(point: Point, inflate: f32) -> Self {
+    pub fn from_point(point: Point, inflate: f64) -> Self {
         Self::from_aabb(AABB::from_point(&point, inflate))
     }
 
-    pub fn from_points(points: &[Point], inflate: f32) -> Self {
+    pub fn from_points(points: &[Point], inflate: f64) -> Self {
         Self::from_aabb(AABB::from_points(points, inflate))
     }
 
-    pub fn from_line(line: &crate::line::Line, inflate: f32) -> Self {
+    pub fn from_line(line: &crate::line::Line, inflate: f64) -> Self {
         Self::from_aabb(AABB::from_line(line, inflate))
     }
 
-    pub fn from_polyline(polyline: &crate::polyline::Polyline, inflate: f32) -> Self {
+    pub fn from_polyline(polyline: &crate::polyline::Polyline, inflate: f64) -> Self {
         Self::from_aabb(AABB::from_polyline(polyline, inflate))
     }
 
@@ -78,14 +78,14 @@ impl OBB {
         }
     }
 
-    pub fn from_nurbscurve(curve: &crate::nurbscurve::NurbsCurve, inflate: f32, tight: bool) -> Self {
+    pub fn from_nurbscurve(curve: &crate::nurbscurve::NurbsCurve, inflate: f64, tight: bool) -> Self {
         Self::from_aabb(AABB::from_nurbscurve(curve, inflate, tight))
     }
 
     pub fn from_nurbscurve_with_plane(
         curve: &crate::nurbscurve::NurbsCurve,
         plane: &Plane,
-        inflate: f32,
+        inflate: f64,
         tight: bool,
     ) -> Self {
         if !curve.is_valid() || curve.cv_count() == 0 {
@@ -111,11 +111,11 @@ impl OBB {
 
         let axes = [plane.x_axis(), plane.y_axis(), plane.z_axis()];
         const NUM_SAMPLES: usize = 20;
-        let dt = (t1 - t0) / NUM_SAMPLES as f32;
+        let dt = (t1 - t0) / NUM_SAMPLES as f64;
 
         for axis in &axes {
             for i in 0..NUM_SAMPLES {
-                let t_start = t0 + i as f32 * dt;
+                let t_start = t0 + i as f64 * dt;
                 let t_end = t_start + dt;
 
                 let deriv_start = curve.evaluate(t_start, 1);
@@ -181,7 +181,7 @@ impl OBB {
         Self::from_points_with_plane(&extrema_points, plane, inflate)
     }
 
-    pub fn from_points_with_plane(points: &[Point], plane: &Plane, inflate: f32) -> Self {
+    pub fn from_points_with_plane(points: &[Point], plane: &Plane, inflate: f64) -> Self {
         if points.is_empty() {
             return OBB::default();
         }
@@ -192,12 +192,12 @@ impl OBB {
         let z_axis = plane.z_axis();
         let plane_to_xy = Xform::plane_to_xy(&origin, &x_axis, &y_axis, &z_axis);
 
-        let mut min_x = f32::MAX;
-        let mut min_y = f32::MAX;
-        let mut min_z = f32::MAX;
-        let mut max_x = f32::MIN;
-        let mut max_y = f32::MIN;
-        let mut max_z = f32::MIN;
+        let mut min_x = f64::MAX;
+        let mut min_y = f64::MAX;
+        let mut min_z = f64::MAX;
+        let mut max_x = f64::MIN;
+        let mut max_y = f64::MIN;
+        let mut max_z = f64::MIN;
 
         for pt in points {
             let mut local_pt = pt.clone(); local_pt.xform = plane_to_xy.clone(); local_pt = local_pt.transformed();
@@ -235,28 +235,28 @@ impl OBB {
         }
     }
 
-    pub fn from_mesh(mesh: &crate::mesh::Mesh, inflate: f32) -> Self {
+    pub fn from_mesh(mesh: &crate::mesh::Mesh, inflate: f64) -> Self {
         Self::from_aabb(AABB::from_mesh(mesh, inflate))
     }
 
-    pub fn from_mesh_with_plane(mesh: &crate::mesh::Mesh, plane: &Plane, inflate: f32) -> Self {
+    pub fn from_mesh_with_plane(mesh: &crate::mesh::Mesh, plane: &Plane, inflate: f64) -> Self {
         let (vertices, _) = mesh.to_vertices_and_faces();
         Self::from_points_with_plane(&vertices, plane, inflate)
     }
 
-    pub fn from_pointcloud(pointcloud: &crate::pointcloud::PointCloud, inflate: f32) -> Self {
+    pub fn from_pointcloud(pointcloud: &crate::pointcloud::PointCloud, inflate: f64) -> Self {
         Self::from_aabb(AABB::from_pointcloud(pointcloud, inflate))
     }
 
-    pub fn from_pointcloud_with_plane(pointcloud: &crate::pointcloud::PointCloud, plane: &Plane, inflate: f32) -> Self {
+    pub fn from_pointcloud_with_plane(pointcloud: &crate::pointcloud::PointCloud, plane: &Plane, inflate: f64) -> Self {
         Self::from_points_with_plane(&pointcloud.get_points(), plane, inflate)
     }
 
-    pub fn from_nurbssurface(surface: &crate::nurbssurface::NurbsSurface, inflate: f32) -> Self {
+    pub fn from_nurbssurface(surface: &crate::nurbssurface::NurbsSurface, inflate: f64) -> Self {
         Self::from_aabb(AABB::from_nurbssurface(surface, inflate))
     }
 
-    pub fn from_nurbssurface_with_plane(surface: &crate::nurbssurface::NurbsSurface, plane: &Plane, inflate: f32) -> Self {
+    pub fn from_nurbssurface_with_plane(surface: &crate::nurbssurface::NurbsSurface, plane: &Plane, inflate: f64) -> Self {
         if !surface.is_valid() || surface.cv_count_dir(Some(0)) == 0 || surface.cv_count_dir(Some(1)) == 0 {
             return OBB::default();
         }
@@ -289,7 +289,7 @@ impl OBB {
         AABB::new(self.center[0], self.center[1], self.center[2], hx, hy, hz)
     }
 
-    pub fn point_at(&self, x: f32, y: f32, z: f32) -> Point {
+    pub fn point_at(&self, x: f64, y: f64, z: f64) -> Point {
         Point::new(
             self.center[0] + x * self.x_axis[0] + y * self.y_axis[0] + z * self.z_axis[0],
             self.center[1] + x * self.x_axis[1] + y * self.y_axis[1] + z * self.z_axis[1],
@@ -341,7 +341,7 @@ impl OBB {
         ]
     }
 
-    pub fn inflate(&mut self, amount: f32) {
+    pub fn inflate(&mut self, amount: f64) {
         self.half_size = Vector::new(
             self.half_size[0] + amount,
             self.half_size[1] + amount,
@@ -349,12 +349,12 @@ impl OBB {
         );
     }
 
-    pub fn area(&self) -> f32 {
+    pub fn area(&self) -> f64 {
         let (hx, hy, hz) = (self.half_size[0], self.half_size[1], self.half_size[2]);
         8.0 * (hx * hy + hy * hz + hz * hx)
     }
 
-    pub fn diagonal(&self) -> f32 {
+    pub fn diagonal(&self) -> f64 {
         let (hx, hy, hz) = (self.half_size[0], self.half_size[1], self.half_size[2]);
         2.0 * (hx * hx + hy * hy + hz * hz).sqrt()
     }
@@ -363,7 +363,7 @@ impl OBB {
         self.half_size[0] >= 0.0 && self.half_size[1] >= 0.0 && self.half_size[2] >= 0.0
     }
 
-    pub fn volume(&self) -> f32 {
+    pub fn volume(&self) -> f64 {
         8.0 * self.half_size[0] * self.half_size[1] * self.half_size[2]
     }
 
@@ -549,7 +549,7 @@ impl OBB {
     }
 
     pub fn collides_with_rtcd(&self, other: &OBB) -> bool {
-        const EPS: f32 = 1e-9;
+        const EPS: f64 = 1e-9;
         let (a0, a1, a2) = (self.half_size[0], self.half_size[1], self.half_size[2]);
         let (b0, b1, b2) = (other.half_size[0], other.half_size[1], other.half_size[2]);
         let (r00, r01, r02) = (self.x_axis.dot(&other.x_axis), self.x_axis.dot(&other.y_axis), self.x_axis.dot(&other.z_axis));
@@ -733,7 +733,7 @@ impl OBB {
             bbox.xform.set_guid(xform.guid);
             bbox.xform.name = xform.name;
             for (i, val) in xform.matrix.iter().enumerate() {
-                if i < 16 { bbox.xform.m[i] = *val as f32; }
+                if i < 16 { bbox.xform.m[i] = *val as f64; }
             }
         }
         Ok(bbox)

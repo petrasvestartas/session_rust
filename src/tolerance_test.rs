@@ -301,8 +301,8 @@ pub fn run_tolerance_compare() -> TestResult {
 
 pub fn run_tolerance_is_finite() -> TestResult {
     MINI_TEST!("Is Finite", {
-        let r0 = 1.0_f32.is_finite();
-        let r1 = f32::INFINITY.is_finite();
+        let r0 = 1.0_f64.is_finite();
+        let r1 = f64::INFINITY.is_finite();
 
         MINI_CHECK!(r0);
         MINI_CHECK!(!r1);

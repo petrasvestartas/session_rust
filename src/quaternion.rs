@@ -14,7 +14,7 @@ pub struct Quaternion {
     /// Human-readable name
     pub name: String,
     /// Scalar part
-    pub scalar: f32,
+    pub scalar: f64,
     /// Vector part
     pub vector: Vector,
 }
@@ -48,10 +48,10 @@ impl<'de> Deserialize<'de> for Quaternion {
             typ: String,
             guid: String,
             name: String,
-            s: f32,
-            x: f32,
-            y: f32,
-            z: f32,
+            s: f64,
+            x: f64,
+            y: f64,
+            z: f64,
         }
 
         let helper = QuaternionHelper::deserialize(deserializer)?;
@@ -69,12 +69,12 @@ impl<'de> Deserialize<'de> for Quaternion {
 
 impl Quaternion {
     /// Internal helper: create quaternion preserving typ/name but new guid
-    fn apply(&self, scalar: f32, vector: Vector) -> Self {
+    fn apply(&self, scalar: f64, vector: Vector) -> Self {
         Quaternion { typ: self.typ.clone(), guid: std::sync::OnceLock::new(), name: self.name.clone(), scalar, vector }
     }
 
     /// Construct from scalar w and vector components (xi, yj, zk)
-    pub fn new(w: f32, xi: f32, yj: f32, zk: f32) -> Self {
+    pub fn new(w: f64, xi: f64, yj: f64, zk: f64) -> Self {
         Quaternion {
             typ: "Quaternion".to_string(),
             guid: std::sync::OnceLock::new(),
@@ -116,7 +116,7 @@ impl Quaternion {
     ///    let q = Quaternion::from_arc(Vector::new(0.0,0.0,1.0), v.normalized());
     ///    let p = q.get_rotation();   // p.z_axis() == v.normalized()
     ///    ```
-    pub fn from_components(scalar: f32, vector: Vector) -> Self {
+    pub fn from_components(scalar: f64, vector: Vector) -> Self {
         Quaternion {
             typ: "Quaternion".to_string(),
             guid: std::sync::OnceLock::new(),
@@ -145,7 +145,7 @@ impl Quaternion {
     /// THE everyday rotation builder. Use this whenever you can describe the
     /// rotation as "spin by N radians around this direction" - turning a wheel,
     /// opening a door, orbiting a camera. The result is always unit-length.
-    pub fn from_axis_angle(axis: Vector, angle: f32) -> Self {
+    pub fn from_axis_angle(axis: Vector, angle: f64) -> Self {
         let ax = axis.normalized();
         let half = angle * 0.5;
         Self::from_components(half.cos(), ax * half.sin())
@@ -175,7 +175,7 @@ impl Quaternion {
     /// let q2 = Quaternion::from_axis_angle(axis, angle);
     /// // q2 == q.normalized()
     /// ```
-    pub fn to_axis_angle(&self) -> (Vector, f32) {
+    pub fn to_axis_angle(&self) -> (Vector, f64) {
         let qn = self.normalized();
         let s = qn.scalar.clamp(-1.0, 1.0);
         let angle = 2.0 * s.acos();
@@ -220,7 +220,7 @@ impl Quaternion {
     /// or accepting user input. AVOID for composition - Euler angles suffer
     /// from gimbal lock. Store/compose as quaternions, convert to Euler only
     /// to display or save.
-    pub fn from_euler(x: f32, y: f32, z: f32) -> Self {
+    pub fn from_euler(x: f64, y: f64, z: f64) -> Self {
         let (s1, c1) = ((x * 0.5).sin(), (x * 0.5).cos());
         let (s2, c2) = ((y * 0.5).sin(), (y * 0.5).cos());
         let (s3, c3) = ((z * 0.5).sin(), (z * 0.5).cos());
@@ -242,7 +242,7 @@ impl Quaternion {
     pub fn from_rotation(plane_a: &Plane, plane_b: &Plane) -> Self {
         let xa = plane_a.x_axis_ref(); let ya = plane_a.y_axis_ref(); let za = plane_a.z_axis_ref();
         let xb = plane_b.x_axis_ref(); let yb = plane_b.y_axis_ref(); let zb = plane_b.z_axis_ref();
-        let mut m = [[0.0_f32; 3]; 3];
+        let mut m = [[0.0_f64; 3]; 3];
         m[0][0] = xb[0]*xa[0] + yb[0]*ya[0] + zb[0]*za[0];
         m[0][1] = xb[0]*xa[1] + yb[0]*ya[1] + zb[0]*za[1];
         m[0][2] = xb[0]*xa[2] + yb[0]*ya[2] + zb[0]*za[2];
@@ -253,7 +253,7 @@ impl Quaternion {
         m[2][1] = xb[2]*xa[1] + yb[2]*ya[1] + zb[2]*za[1];
         m[2][2] = xb[2]*xa[2] + yb[2]*ya[2] + zb[2]*za[2];
         let mut is_identity = true;
-        let eps = 1.490116119385e-8_f32;
+        let eps = 1.490116119385e-8_f64;
         'outer: for i in 0..3 {
             for j in 0..3 {
                 let d = if i == j { (m[i][i] - 1.0).abs() } else { m[i][j].abs() };
@@ -268,7 +268,7 @@ impl Quaternion {
         if s_init <= 0.0 { return Self::from_components(1.0, Vector::new(0.0, 0.0, 0.0)); }
         let r = s_init.sqrt();
         let s = 0.5 / r;
-        let mut q = [0.0_f32; 3];
+        let mut q = [0.0_f64; 3];
         q[i] = 0.5 * r;
         q[j] = s * (m[i][j] + m[j][i]);
         q[k] = s * (m[k][i] + m[i][k]);
@@ -305,12 +305,12 @@ impl Quaternion {
     }
 
     /// Euclidean norm
-    pub fn magnitude(&self) -> f32 {
+    pub fn magnitude(&self) -> f64 {
         self.magnitude_squared().sqrt()
     }
 
     /// Squared magnitude
-    pub fn magnitude_squared(&self) -> f32 {
+    pub fn magnitude_squared(&self) -> f64 {
         self.scalar * self.scalar + self.vector[0] * self.vector[0] + self.vector[1] * self.vector[1] + self.vector[2] * self.vector[2]
     }
 
@@ -347,7 +347,7 @@ impl Quaternion {
     /// Algebraic 4D dot product (NOT a geometric operation). Used inside
     /// slerp implementations and as a similarity measure between two unit
     /// quaternions (1 = same, 0 = 90 deg apart).
-    pub fn dot(&self, other: &Self) -> f32 {
+    pub fn dot(&self, other: &Self) -> f64 {
         self.scalar * other.scalar + self.vector.dot(&other.vector)
     }
 
@@ -355,7 +355,7 @@ impl Quaternion {
     /// on S^3. Constant angular velocity. Use for high-quality animation
     /// between two orientations - camera transitions, character bones,
     /// anything where smoothness matters more than raw speed.
-    pub fn slerp(&self, other: &Self, amount: f32) -> Self {
+    pub fn slerp(&self, other: &Self, amount: f64) -> Self {
         let dot_val = self.dot(other);
         if dot_val > 0.9995 {
             return (self.clone() + (other.clone() - self.clone()) * amount).normalized();
@@ -371,7 +371,7 @@ impl Quaternion {
     /// Normalized Linear intERPolation. Cheaper than slerp but the angular
     /// velocity isn't perfectly uniform. Use in real-time loops where every
     /// microsecond matters and the visual difference from slerp is negligible.
-    pub fn nlerp(&self, other: &Self, amount: f32) -> Self {
+    pub fn nlerp(&self, other: &Self, amount: f64) -> Self {
         (self.clone() * (1.0 - amount) + other.clone() * amount).normalized()
     }
 
@@ -452,7 +452,7 @@ impl Quaternion {
     pub fn pb_loads(data: &[u8]) -> Result<Self, Box<dyn std::error::Error>> {
         use prost::Message;
         let proto = crate::proto::Quaternion::decode(data)?;
-        let mut q = Self::from_components(proto.a as f32, Vector::new(proto.b as f32, proto.c as f32, proto.d as f32));
+        let mut q = Self::from_components(proto.a as f64, Vector::new(proto.b as f64, proto.c as f64, proto.d as f64));
         q.name = proto.name;
         Ok(q)
     }
@@ -471,7 +471,7 @@ impl Quaternion {
 }
 
 impl Index<usize> for Quaternion {
-    type Output = f32;
+    type Output = f64;
 
     fn index(&self, index: usize) -> &Self::Output {
         match index {
@@ -508,10 +508,10 @@ impl Mul<Quaternion> for Quaternion {
 }
 
 /// Scalar multiplication
-impl Mul<f32> for Quaternion {
+impl Mul<f64> for Quaternion {
     type Output = Quaternion;
 
-    fn mul(self, t: f32) -> Self::Output {
+    fn mul(self, t: f64) -> Self::Output {
         Self::from_components(self.scalar * t, self.vector * t)
     }
 }
