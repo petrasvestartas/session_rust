@@ -115,6 +115,56 @@ pub fn run_closest_surface_point() -> TestResult {
     })
 }
 
+pub fn run_closest_surface_curve() -> TestResult {
+    MINI_TEST!("Surface Curve", {
+        use crate::Closest;
+        use crate::NurbsCurve;
+        use crate::Point;
+        use crate::Primitives;
+        use crate::nurbsknot::CurveNurbsKnotStyle;
+
+        let cyl = Primitives::cylinder_surface(0.0, 0.0, 0.0, 1.0, 4.0);
+        let (u0, u1) = cyl.domain(0).unwrap();
+        let (v0, v1) = cyl.domain(1).unwrap();
+        let ps = cyl.point_at(u0, 0.5).unwrap();
+        let seam_ang = ps[1].atan2(ps[0]);
+        let mut crv_pts = Vec::new();
+        for i in 0..21 {
+            let a = seam_ang - 0.8 + 1.6 * i as f64 / 20.0;
+            let z = 1.0 + 2.0 * i as f64 / 20.0;
+            crv_pts.push(Point::new(a.cos(), a.sin(), z));
+        }
+        let crv = NurbsCurve::create_interpolated(&crv_pts, CurveNurbsKnotStyle::Chord);
+
+        let pcurves = Closest::surface_curve(&cyl, &crv, 0.0, 0.0, None);
+
+        MINI_CHECK!(pcurves.len() == 2);
+        let mut on_border = 0;
+        let mut inside = true;
+        for pcurve in &pcurves {
+            MINI_CHECK!(pcurve.is_valid());
+            for e in [0.0, 1.0] {
+                let p2 = pcurve.point_at(e);
+                if (p2[0] - u0).abs() < 1e-9 || (p2[0] - u1).abs() < 1e-9 {
+                    on_border += 1;
+                }
+            }
+            for i in 0..17 {
+                let p2 = pcurve.point_at(i as f64 / 16.0);
+                if p2[0] < u0 - 1e-6 || p2[0] > u1 + 1e-6 || p2[1] < v0 - 1e-6 || p2[1] > v1 + 1e-6 {
+                    inside = false;
+                }
+            }
+        }
+        MINI_CHECK!(on_border == 2);
+        MINI_CHECK!(inside);
+
+        let off = NurbsCurve::create(false, 1, &[Point::new(20.0, 20.0, 20.0), Point::new(30.0, 30.0, 30.0)]);
+
+        MINI_CHECK!(Closest::surface_curve(&cyl, &off, 0.0, 0.0, None).len() == 0);
+    })
+}
+
 pub fn run_closest_mesh_point() -> TestResult {
     MINI_TEST!("Mesh Point", {
         use crate::Closest;
@@ -286,6 +336,7 @@ REGISTER_MINI_TEST!("Closest", "Line Point", crate::closest_test::run_closest_li
 REGISTER_MINI_TEST!("Closest", "Polyline Point", crate::closest_test::run_closest_polyline_point);
 REGISTER_MINI_TEST!("Closest", "Curve Point", crate::closest_test::run_closest_curve_point);
 REGISTER_MINI_TEST!("Closest", "Surface Point", crate::closest_test::run_closest_surface_point);
+REGISTER_MINI_TEST!("Closest", "Surface Curve", crate::closest_test::run_closest_surface_curve);
 REGISTER_MINI_TEST!("Closest", "Mesh Point", crate::closest_test::run_closest_mesh_point);
 REGISTER_MINI_TEST!("Closest", "Mesh Point AABB", crate::closest_test::run_closest_mesh_point_aabb);
 REGISTER_MINI_TEST!("Closest", "Pointcloud Point", crate::closest_test::run_closest_pointcloud_point);

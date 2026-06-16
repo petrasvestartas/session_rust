@@ -323,6 +323,418 @@ impl Closest {
         (u, v, final_dist)
     }
 
+    /// Project a 3D curve onto a surface (curve pullback).
+    ///
+    /// Samples the curve, inverts each sample with warm-started windowed
+    /// point inversion, unwraps across seams of closed surfaces, refines
+    /// adaptively, and refits seam-split UV pcurves (x=u, y=v, z=0) with
+    /// domain [0, 1]. Returns an empty list if the curve does not lie on the
+    /// surface within the rejection tolerance.
+    ///
+    /// # Arguments
+    /// * `surface` - The surface to project onto
+    /// * `curve` - The 3D curve to pull back
+    /// * `t0`, `t1` - Curve sub-domain (0.0 means use the curve domain end)
+    /// * `tolerance` - Fit deviation budget (defaults to a trace-step heuristic)
+    ///
+    /// # Returns
+    /// Seam-split UV pcurves
+    pub fn surface_curve(surface: &NurbsSurface, curve: &NurbsCurve, t0: f64, t1: f64, tolerance: Option<f64>) -> Vec<NurbsCurve> {
+        use crate::nurbsknot::CurveNurbsKnotStyle;
+
+        if !surface.is_valid() || !curve.is_valid() {
+            return vec![];
+        }
+
+        let (u0, u1) = match surface.domain(0) { Some(d) => d, None => return vec![] };
+        let (v0, v1) = match surface.domain(1) { Some(d) => d, None => return vec![] };
+        let range_u = u1 - u0;
+        let range_v = v1 - v0;
+        let closed_u = surface.is_closed(0);
+        let closed_v = surface.is_closed(1);
+
+        let (ct0, ct1) = curve.domain();
+        let mut t0 = if t0 <= 0.0 { ct0 } else { t0 };
+        let mut t1 = if t1 <= 0.0 { ct1 } else { t1 };
+        t0 = t0.max(ct0);
+        t1 = t1.min(ct1);
+        if t1 - t0 < 1e-14 {
+            return vec![];
+        }
+
+        let spans_u = surface.get_span_vector(0);
+        let spans_v = surface.get_span_vector(1);
+        let nu = spans_u.len().saturating_sub(1).max(1) * 4;
+        let nv = spans_v.len().saturating_sub(1).max(1) * 4;
+        let du = range_u / nu as f64;
+        let dv = range_v / nv as f64;
+
+        let mu = (u0 + u1) * 0.5;
+        let mv = (v0 + v1) * 0.5;
+        let pmid = surface.point_at(mu, mv).unwrap_or(Point::new(0.0, 0.0, 0.0));
+        let wu_probe = (mu + du).min(u1);
+        let wv_probe = (mv + dv).min(v1);
+        let uv_to_3d_u = pmid.distance(&surface.point_at(wu_probe, mv).unwrap_or(Point::new(0.0, 0.0, 0.0)), None) / du;
+        let uv_to_3d_v = pmid.distance(&surface.point_at(mu, wv_probe).unwrap_or(Point::new(0.0, 0.0, 0.0)), None) / dv;
+        let mut uv_to_3d = uv_to_3d_u.max(uv_to_3d_v);
+        let mut uv_to_3d_min = uv_to_3d_u.min(uv_to_3d_v);
+        if uv_to_3d < 1e-10 {
+            uv_to_3d = 1.0;
+        }
+        if uv_to_3d_min < 1e-10 {
+            uv_to_3d_min = 1.0;
+        }
+
+        let step = du.min(dv) * 0.25;
+        let fit_tol = match tolerance {
+            Some(tol) if tol > 0.0 => tol,
+            _ => step * (uv_to_3d + uv_to_3d_min) * 0.5,
+        };
+        let reject_tol = fit_tol * 100.0;
+        // Absolute "lies on the surface" gate (fraction of the surface size).
+        // Used to (a) reject a curve that nowhere touches the surface and
+        // (b) stop bisecting stick-out portions of a curve that extends past
+        // the face, both of which otherwise burn a full 4096-sample bisection.
+        let c00 = surface.point_at(u0, v0).unwrap_or(crate::point::Point::new(0.0, 0.0, 0.0));
+        let c11 = surface.point_at(u1, v1).unwrap_or(crate::point::Point::new(0.0, 0.0, 0.0));
+        let mut corner_diag = c00.distance(&c11, None);
+        if corner_diag < 1e-12 {
+            corner_diag = range_u.max(range_v);
+        }
+        let on_surf_tol = corner_diag * 0.05;
+
+        let wrap_u = |u: f64| -> f64 {
+            if closed_u {
+                let mut t = (u - u0) % range_u;
+                if t < 0.0 { t += range_u; }
+                return u0 + t;
+            }
+            u.max(u0).min(u1)
+        };
+        let wrap_v = |v: f64| -> f64 {
+            if closed_v {
+                let mut t = (v - v0) % range_v;
+                if t < 0.0 { t += range_v; }
+                return v0 + t;
+            }
+            v.max(v0).min(v1)
+        };
+
+        let invert_near = |pt: &Point, up: f64, vp: f64, wu: f64, wv: f64| -> (f64, f64, f64) {
+            // Windowed inversion with seam-aware candidate windows
+            let mut u_centers = vec![up];
+            if closed_u {
+                if up - wu < u0 { u_centers.push(up + range_u); }
+                if up + wu > u1 { u_centers.push(up - range_u); }
+            }
+            let mut v_centers = vec![vp];
+            if closed_v {
+                if vp - wv < v0 { v_centers.push(vp + range_v); }
+                if vp + wv > v1 { v_centers.push(vp - range_v); }
+            }
+            let mut best = (up, vp, f64::INFINITY);
+            for &uc in &u_centers {
+                for &vc in &v_centers {
+                    let wu0 = (uc - wu).max(u0);
+                    let wu1 = (uc + wu).min(u1);
+                    let wv0 = (vc - wv).max(v0);
+                    let wv1 = (vc + wv).min(v1);
+                    if wu1 - wu0 < 1e-14 || wv1 - wv0 < 1e-14 { continue; }
+                    let res = Closest::surface_point(surface, pt, wu0, wu1, wv0, wv1);
+                    if res.2 < best.2 { best = res; }
+                    if best.2 < fit_tol * 0.01 { break; }
+                }
+            }
+            best
+        };
+
+        let unwrap_to = |prev_u: f64, prev_v: f64, mut u: f64, mut v: f64| -> (f64, f64) {
+            if closed_u {
+                while u - prev_u > range_u * 0.5 { u -= range_u; }
+                while u - prev_u < -range_u * 0.5 { u += range_u; }
+            }
+            if closed_v {
+                while v - prev_v > range_v * 0.5 { v -= range_v; }
+                while v - prev_v < -range_v * 0.5 { v += range_v; }
+            }
+            (u, v)
+        };
+
+        // 1. Initial samples with warm-started inversion
+        let n0 = 16.max(4 * curve.span_count());
+        let mut samples: Vec<[f64; 4]> = Vec::new(); // [t, u_unwrapped, v_unwrapped, residual]
+        let mut max_residual = 0.0f64;
+        let mut min_residual = f64::INFINITY;
+        for i in 0..=n0 {
+            let t = t0 + (t1 - t0) * i as f64 / n0 as f64;
+            let pt = curve.point_at(t);
+            let (uu, vv, rd) = if i == 0 {
+                Closest::surface_point(surface, &pt, 0.0, 0.0, 0.0, 0.0)
+            } else {
+                let prev = samples[samples.len() - 1];
+                let prev2 = samples[samples.len().saturating_sub(2)];
+                let wu = du.max(dv) * 2.0 + (prev[1] - prev2[1]).abs();
+                let wv = du.max(dv) * 2.0 + (prev[2] - prev2[2]).abs();
+                let (mut ru, mut rv, mut rd) = invert_near(&pt, wrap_u(prev[1]), wrap_v(prev[2]), wu, wv);
+                if rd > reject_tol {
+                    let full = Closest::surface_point(surface, &pt, 0.0, 0.0, 0.0, 0.0);
+                    ru = full.0;
+                    rv = full.1;
+                    rd = full.2;
+                }
+                let (uu, vv) = unwrap_to(prev[1], prev[2], ru, rv);
+                (uu, vv, rd)
+            };
+            samples.push([t, uu, vv, rd]);
+            max_residual = max_residual.max(rd);
+            min_residual = min_residual.min(rd);
+        }
+
+        // Reject a curve that nowhere lies on the surface (no sample touches it).
+        if max_residual > reject_tol || min_residual > on_surf_tol {
+            return vec![];
+        }
+
+        // 2. Adaptive bisection where the lifted UV midpoint strays from the curve
+        let mut depth = 0;
+        while depth < 8 {
+            let mut inserted = 0;
+            let mut i = 0;
+            while i < samples.len() - 1 {
+                let a = samples[i];
+                let b = samples[i + 1];
+                let tm = (a[0] + b[0]) * 0.5;
+                let um = (a[1] + b[1]) * 0.5;
+                let vm = (a[2] + b[2]) * 0.5;
+                let pm = curve.point_at(tm);
+                let lift = surface.point_at(wrap_u(um), wrap_v(vm)).unwrap_or(Point::new(0.0, 0.0, 0.0));
+                if lift.distance(&pm, None) > fit_tol && samples.len() < 4096 {
+                    let wu = (b[1] - a[1]).abs().max(du) * 1.0;
+                    let wv = (b[2] - a[2]).abs().max(dv) * 1.0;
+                    let (ru, rv, rd) = invert_near(&pm, wrap_u(um), wrap_v(vm), wu, wv);
+                    if rd > on_surf_tol {
+                        // Midpoint is off the surface: stick-out portion of a
+                        // curve that extends past the face, not a curvature
+                        // stray. Do not refine it (avoids unbounded bisection).
+                        i += 1;
+                        continue;
+                    }
+                    let (uu, vv) = unwrap_to(a[1], a[2], ru, rv);
+                    samples.insert(i + 1, [tm, uu, vv, rd]);
+                    inserted += 1;
+                    i += 2;
+                } else {
+                    i += 1;
+                }
+            }
+            if inserted == 0 {
+                break;
+            }
+            depth += 1;
+        }
+
+        let mut pts: Vec<[f64; 2]> = samples.iter().map(|s| [s[1], s[2]]).collect();
+
+        // 3. Closed-loop closure and seam-crossing split (same scheme as surface_plane_uv)
+        let p_first = curve.point_at(samples[0][0]);
+        let p_last = curve.point_at(samples[samples.len() - 1][0]);
+        let is_loop = p_first.distance(&p_last, None) < fit_tol * 4.0 && pts.len() >= 6;
+
+        let mut closure_du = 0.0;
+        let mut closure_dv = 0.0;
+        if is_loop {
+            pts.pop();
+            let mut du_j = pts[0][0] - pts[pts.len() - 1][0];
+            let mut dv_j = pts[0][1] - pts[pts.len() - 1][1];
+            if closed_u {
+                while du_j > range_u * 0.5 { du_j -= range_u; }
+                while du_j < -range_u * 0.5 { du_j += range_u; }
+            }
+            if closed_v {
+                while dv_j > range_v * 0.5 { dv_j -= range_v; }
+                while dv_j < -range_v * 0.5 { dv_j += range_v; }
+            }
+            closure_du = (pts[pts.len() - 1][0] + du_j) - pts[0][0];
+            closure_dv = (pts[pts.len() - 1][1] + dv_j) - pts[0][1];
+            pts.push([pts[0][0] + closure_du, pts[0][1] + closure_dv]);
+        }
+
+        let mut out_pts: Vec<[f64; 2]> = vec![pts[0]];
+        let mut cross_idx: Vec<usize> = Vec::new();
+        for i in 1..pts.len() {
+            let pa = pts[i - 1];
+            let pb = pts[i];
+            let mut crossings: Vec<(f64, i32, f64)> = Vec::new();
+            if closed_u && (pb[0] - pa[0]).abs() > 1e-15 {
+                let k0 = ((pa[0] - u0) / range_u).floor() as i64;
+                let k1 = ((pb[0] - u0) / range_u).floor() as i64;
+                for k in (k0.min(k1) + 1)..=(k0.max(k1)) {
+                    let l = u0 + k as f64 * range_u;
+                    let t = (l - pa[0]) / (pb[0] - pa[0]);
+                    if 0.0 < t && t < 1.0 { crossings.push((t, 0, l)); }
+                }
+            }
+            if closed_v && (pb[1] - pa[1]).abs() > 1e-15 {
+                let k0 = ((pa[1] - v0) / range_v).floor() as i64;
+                let k1 = ((pb[1] - v0) / range_v).floor() as i64;
+                for k in (k0.min(k1) + 1)..=(k0.max(k1)) {
+                    let l = v0 + k as f64 * range_v;
+                    let t = (l - pa[1]) / (pb[1] - pa[1]);
+                    if 0.0 < t && t < 1.0 { crossings.push((t, 1, l)); }
+                }
+            }
+            crossings.sort_by(|a, b| a.partial_cmp(b).unwrap());
+            for &(t, axis, l) in &crossings {
+                let mut cu = pa[0] + (pb[0] - pa[0]) * t;
+                let mut cv_ = pa[1] + (pb[1] - pa[1]) * t;
+                if axis == 0 {
+                    cu = l;
+                } else {
+                    cv_ = l;
+                }
+                out_pts.push([cu, cv_]);
+                cross_idx.push(out_pts.len() - 1);
+            }
+            out_pts.push([pb[0], pb[1]]);
+            // An interior sample sitting exactly on a seam level is a crossing
+            if i < pts.len() - 1 {
+                let mut on_seam = false;
+                if closed_u {
+                    let k = ((pb[0] - u0) / range_u).round();
+                    let l = u0 + k * range_u;
+                    if (pb[0] - l).abs() < range_u * 1e-9 && (pb[0] - pa[0]).abs() > range_u * 1e-9 {
+                        out_pts.last_mut().unwrap()[0] = l;
+                        on_seam = true;
+                    }
+                }
+                if closed_v {
+                    let k = ((pb[1] - v0) / range_v).round();
+                    let l = v0 + k * range_v;
+                    if (pb[1] - l).abs() < range_v * 1e-9 && (pb[1] - pa[1]).abs() > range_v * 1e-9 {
+                        out_pts.last_mut().unwrap()[1] = l;
+                        on_seam = true;
+                    }
+                }
+                if on_seam {
+                    cross_idx.push(out_pts.len() - 1);
+                }
+            }
+        }
+
+        let wrap_drift = closure_du.abs() > range_u * 0.5 || closure_dv.abs() > range_v * 0.5;
+        let mut pieces: Vec<(Vec<[f64; 2]>, bool)> = Vec::new();
+        if cross_idx.is_empty() {
+            pieces.push((out_pts.clone(), is_loop && !wrap_drift));
+        } else if is_loop {
+            for w in cross_idx.windows(2) {
+                let (a, b) = (w[0], w[1]);
+                pieces.push((out_pts[a..=b].to_vec(), false));
+            }
+            let mut wrap_piece: Vec<[f64; 2]> = out_pts[cross_idx[cross_idx.len() - 1]..].to_vec();
+            for p in &out_pts[1..=cross_idx[0]] {
+                wrap_piece.push([p[0] + closure_du, p[1] + closure_dv]);
+            }
+            pieces.push((wrap_piece, false));
+        } else {
+            let mut bounds: Vec<usize> = vec![0];
+            for &c in &cross_idx { bounds.push(c); }
+            bounds.push(out_pts.len() - 1);
+            for w in bounds.windows(2) {
+                let (a, b) = (w[0], w[1]);
+                if b > a { pieces.push((out_pts[a..=b].to_vec(), false)); }
+            }
+        }
+
+        // 4. Refit each piece as a UV pcurve
+        let mut result: Vec<NurbsCurve> = Vec::new();
+        for (mut piece_pts, piece_loop) in pieces {
+            if piece_pts.len() < 2 {
+                continue;
+            }
+            let mid = piece_pts[piece_pts.len() / 2];
+            if closed_u {
+                let k_u = ((mid[0] - u0) / range_u).floor();
+                if k_u != 0.0 {
+                    for p in piece_pts.iter_mut() { p[0] -= k_u * range_u; }
+                }
+            }
+            if closed_v {
+                let k_v = ((mid[1] - v0) / range_v).floor();
+                if k_v != 0.0 {
+                    for p in piece_pts.iter_mut() { p[1] -= k_v * range_v; }
+                }
+            }
+
+            let pts_uv: Vec<Point> = piece_pts.iter().map(|p| Point::new(p[0], p[1], 0.0)).collect();
+            let mp = pts_uv.len();
+            let fit_tol_uv = step;
+            let mut total_turning = 0.0f64;
+            for i in 1..(mp - 1) {
+                let dx1 = pts_uv[i][0] - pts_uv[i - 1][0];
+                let dy1 = pts_uv[i][1] - pts_uv[i - 1][1];
+                let dx2 = pts_uv[i + 1][0] - pts_uv[i][0];
+                let dy2 = pts_uv[i + 1][1] - pts_uv[i][1];
+                let l1 = f64::hypot(dx1, dy1);
+                let l2 = f64::hypot(dx2, dy2);
+                if l1 > 1e-14 && l2 > 1e-14 {
+                    let c = ((dx1 * dx2 + dy1 * dy2) / (l1 * l2)).max(-1.0).min(1.0);
+                    total_turning += c.acos();
+                }
+            }
+
+            let mut chords = vec![0.0f64; mp];
+            let mut total_len = 0.0f64;
+            for i in 1..mp {
+                total_len += pts_uv[i].distance(&pts_uv[i - 1], None);
+                chords[i] = total_len;
+            }
+            if piece_loop && mp > 1 {
+                total_len += pts_uv[0].distance(&pts_uv[mp - 1], None);
+            }
+            if total_len > 1e-14 {
+                for i in 1..mp { chords[i] /= total_len; }
+            }
+
+            let mut target_cvs = 8_i32.max((total_turning / 0.5) as i32 + 6);
+            let max_cvs = (mp as i32) - 1;
+            let mut pcurve = NurbsCurve::new(3, false, 4, 0);
+            for _ in 0..5 {
+                if target_cvs > max_cvs { break; }
+                pcurve = NurbsCurve::create_fitted(&pts_uv, target_cvs as usize, 3, piece_loop);
+                if !pcurve.is_valid() { break; }
+                let (ft0, ft1) = pcurve.domain();
+                let mut max_dev = 0.0f64;
+                for i in 0..mp {
+                    let t = ft0 + (ft1 - ft0) * chords[i];
+                    max_dev = max_dev.max(pcurve.point_at(t).distance(&pts_uv[i], None));
+                }
+                if max_dev < fit_tol_uv { break; }
+                target_cvs = (target_cvs * 2).min(max_cvs);
+            }
+
+            if !pcurve.is_valid() {
+                pcurve = if piece_loop {
+                    NurbsCurve::create_interpolated(&pts_uv, CurveNurbsKnotStyle::ChordPeriodic)
+                } else {
+                    NurbsCurve::create_interpolated(&pts_uv, CurveNurbsKnotStyle::Chord)
+                };
+            }
+            if !pcurve.is_valid() && pts_uv.len() >= 2 {
+                // Last resort: a degree-1 polyline through the inverted UV samples
+                // (always valid; lies on the surface piecewise-linearly in UV).
+                pcurve = NurbsCurve::create(false, 1, &pts_uv);
+            }
+            if !pcurve.is_valid() {
+                continue;
+            }
+
+            pcurve.set_domain(0.0, 1.0);
+            result.push(pcurve);
+        }
+
+        result
+    }
+
     fn closest_point_on_triangle(p: &Point, a: &Point, b: &Point, c: &Point) -> Point {
         let (abx, aby, abz) = (b[0]-a[0], b[1]-a[1], b[2]-a[2]);
         let (acx, acy, acz) = (c[0]-a[0], c[1]-a[1], c[2]-a[2]);

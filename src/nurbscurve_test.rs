@@ -73,6 +73,12 @@ pub fn run_nurbscurve_create_interpolated() -> TestResult {
         MINI_CHECK!(TOLERANCE.is_point_close(&c.get_cv(0).unwrap(), &points[0]));
         MINI_CHECK!(TOLERANCE.is_point_close(&c.get_cv(6).unwrap(), &points[4]));
 
+        // Rhino parity: interior CVs match Rhino CreateInterpolatedCurve (Chord)
+        // bit-for-bit (validated by the OCCT/Rhino harness in validation/).
+        MINI_CHECK!(TOLERANCE.is_point_close(&c.get_cv(1).unwrap(), &Point::new(15.342776949, 13.734888836, 0.0)));
+        MINI_CHECK!(TOLERANCE.is_point_close(&c.get_cv(3).unwrap(), &Point::new(24.678472471, 0.354555126, 0.0)));
+        MINI_CHECK!(TOLERANCE.is_point_close(&c.get_cv(5).unwrap(), &Point::new(39.626394361, 15.472490151, 0.0)));
+
         // Periodic closed curve
         let closed_pts = vec![
             Point::new(4.0, 20.0, 0.0),
@@ -127,6 +133,38 @@ pub fn run_nurbscurve_create_fitted() -> TestResult {
         MINI_CHECK!(cp.is_valid());
         MINI_CHECK!(cp.is_closed());
         MINI_CHECK!(cp.cv_count() == 13);
+    })
+}
+
+pub fn run_nurbscurve_join() -> TestResult {
+    MINI_TEST!("Join", {
+        use crate::NurbsCurve;
+        use crate::Point;
+        use crate::primitives::Primitives;
+
+        let arc1 = Primitives::arc(&Point::new(-1.0, 0.0, 0.0), &Point::new(0.0, 1.0, 0.0), &Point::new(1.0, 0.0, 0.0));
+        let mut arc2 = Primitives::arc(&Point::new(1.0, 0.0, 0.0), &Point::new(1.5, -1.0, 0.0), &Point::new(1.0, -2.0, 0.0));
+        let pts = vec![Point::new(1.0, -2.0, 0.0), Point::new(-1.0, 0.0, 0.0)];
+        let line = NurbsCurve::create(false, 1, &pts);
+        arc2.reverse();
+
+        let joined = NurbsCurve::join(&[line.duplicate(), arc1.duplicate(), arc2.duplicate()], None);
+
+        MINI_CHECK!(joined.len() == 1);
+        MINI_CHECK!(joined[0].is_valid());
+        MINI_CHECK!(joined[0].is_closed());
+        MINI_CHECK!(joined[0].degree() == 2);
+        MINI_CHECK!(joined[0].cv_count() == 7);
+
+        let l1 = NurbsCurve::create(false, 1, &[Point::new(0.0, 0.0, 0.0), Point::new(1.0, 0.0, 0.0)]);
+        let l2 = NurbsCurve::create(false, 1, &[Point::new(1.0, 0.0, 0.0), Point::new(1.0, 1.0, 0.0)]);
+        let l3 = NurbsCurve::create(false, 1, &[Point::new(9.0, 9.0, 0.0), Point::new(8.0, 8.0, 0.0)]);
+
+        let separate = NurbsCurve::join(&[l1, l3, l2], None);
+
+        MINI_CHECK!(separate.len() == 2);
+        MINI_CHECK!(separate[0].cv_count() == 3);
+        MINI_CHECK!((separate[0].length(None) - 2.0).abs() < 1e-9);
     })
 }
 
@@ -766,6 +804,7 @@ pub fn run_nurbscurve_protobuf_roundtrip() -> TestResult {
 REGISTER_MINI_TEST!("NurbsCurve", "Constructor", crate::nurbscurve_test::run_nurbscurve_constructor);
 REGISTER_MINI_TEST!("NurbsCurve", "Create Interpolated", crate::nurbscurve_test::run_nurbscurve_create_interpolated);
 REGISTER_MINI_TEST!("NurbsCurve", "Create Fitted", crate::nurbscurve_test::run_nurbscurve_create_fitted);
+REGISTER_MINI_TEST!("NurbsCurve", "Join", crate::nurbscurve_test::run_nurbscurve_join);
 REGISTER_MINI_TEST!("NurbsCurve", "Attributes", crate::nurbscurve_test::run_nurbscurve_attributes);
 // TODO(f64-followup): re-enable after rebaselining or NURBS algorithm-level
 // precision investigation. The arc-length clustering bug (divide_by_count finite-diff

@@ -8,6 +8,51 @@ use crate::xform::Xform;
 use serde::ser::SerializeMap;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 
+fn aabb_from_surface(srf: &NurbsSurface) -> ([f64; 3], [f64; 3]) {
+    let n = 6;
+    let (u0, u1) = srf.domain(0).unwrap_or((0.0, 1.0));
+    let (v0, v1) = srf.domain(1).unwrap_or((0.0, 1.0));
+    let mut lo = [f64::INFINITY; 3];
+    let mut hi = [f64::NEG_INFINITY; 3];
+    for i in 0..=n {
+        for j in 0..=n {
+            let u = u0 + (u1 - u0) * (i as f64) / (n as f64);
+            let v = v0 + (v1 - v0) * (j as f64) / (n as f64);
+            if let Some(p) = srf.point_at(u, v) {
+                for k in 0..3 {
+                    if p[k] < lo[k] { lo[k] = p[k]; }
+                    if p[k] > hi[k] { hi[k] = p[k]; }
+                }
+            }
+        }
+    }
+    (lo, hi)
+}
+
+fn aabb_from_curve(crv: &NurbsCurve) -> ([f64; 3], [f64; 3]) {
+    let n = 16;
+    let (c0, c1) = crv.domain();
+    let mut lo = [f64::INFINITY; 3];
+    let mut hi = [f64::NEG_INFINITY; 3];
+    for i in 0..=n {
+        let p = crv.point_at(c0 + (c1 - c0) * (i as f64) / (n as f64));
+        for k in 0..3 {
+            if p[k] < lo[k] { lo[k] = p[k]; }
+            if p[k] > hi[k] { hi[k] = p[k]; }
+        }
+    }
+    (lo, hi)
+}
+
+fn aabb_overlap(a: &([f64; 3], [f64; 3]), b: &([f64; 3], [f64; 3]), m: f64) -> bool {
+    for k in 0..3 {
+        if a.0[k] - m > b.1[k] || b.0[k] - m > a.1[k] {
+            return false;
+        }
+    }
+    true
+}
+
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum BRepTrimType {
     Boundary = 0,
@@ -875,6 +920,342 @@ impl BRep {
             facecolor: None,
         });
         self.m_faces.len() - 1
+    }
+
+    ///////////////////////////////////////////////////////////////////////////////////////////
+    // Splitting
+    ///////////////////////////////////////////////////////////////////////////////////////////
+
+    fn q6(x: f64) -> i64 {
+        (x * 1_000_000.0).round() as i64
+    }
+
+    fn lift_loop(srf: &NurbsSurface, pc: &NurbsCurve) -> (NurbsCurve, Point, Point, Point) {
+        let n = (pc.cv_count() * 4).max(8);
+        let (c0, c1) = pc.domain();
+        let mut pts3: Vec<Point> = Vec::with_capacity(n + 1);
+        for i in 0..=n {
+            let uv = pc.point_at(c0 + (c1 - c0) * (i as f64) / (n as f64));
+            let p = srf.point_at(uv[0], uv[1]).unwrap_or(Point::new(uv[0], uv[1], 0.0));
+            pts3.push(p);
+        }
+        let c3d = NurbsCurve::create(false, 1, &pts3);
+        let p0 = pts3[0].clone();
+        let p1 = pts3[n].clone();
+        let pm = pts3[n / 2].clone();
+        (c3d, p0, p1, pm)
+    }
+
+    fn find_or_add_vertex(result: &mut BRep, vmap: &mut std::collections::HashMap<(i64, i64, i64), i32>, p: &Point) -> i32 {
+        let key = (Self::q6(p[0]), Self::q6(p[1]), Self::q6(p[2]));
+        if let Some(&idx) = vmap.get(&key) {
+            return idx;
+        }
+        let idx = result.add_vertex(p) as i32;
+        result.m_topology_vertices.push(BRepVertex { point_index: idx, edge_indices: Vec::new() });
+        vmap.insert(key, idx);
+        idx
+    }
+
+    fn append_face(result: &mut BRep,
+                   vmap: &mut std::collections::HashMap<(i64, i64, i64), i32>,
+                   emap: &mut std::collections::HashMap<(i32, i32, i64, i64, i64), i32>,
+                   srf: &NurbsSurface,
+                   loops: &[(BRepLoopType, Vec<NurbsCurve>)]) {
+        let si = result.add_surface(srf) as i32;
+        let fi = result.add_face(si, false) as i32;
+        for (ltype, pcs) in loops {
+            let li = result.add_loop(fi, *ltype) as i32;
+            for pc in pcs {
+                if !pc.is_valid() {
+                    continue;
+                }
+                let (c3d, p0, p1, pm) = Self::lift_loop(srf, pc);
+                let ci3d = result.add_curve_3d(&c3d) as i32;
+                let va = Self::find_or_add_vertex(result, vmap, &p0);
+                let vb = Self::find_or_add_vertex(result, vmap, &p1);
+                let (lo, hi) = if va <= vb { (va, vb) } else { (vb, va) };
+                let ekey = (lo, hi, Self::q6(pm[0]), Self::q6(pm[1]), Self::q6(pm[2]));
+                let (ei, ttype) = if let Some(&prior) = emap.get(&ekey) {
+                    (prior, BRepTrimType::Mated)
+                } else {
+                    let ne = result.add_edge(ci3d, lo, hi) as i32;
+                    emap.insert(ekey, ne);
+                    (ne, BRepTrimType::Boundary)
+                };
+                let ci2d = result.add_curve_2d(pc) as i32;
+                result.add_trim(ci2d, ei, li, false, ttype);
+            }
+        }
+    }
+
+    fn split_with<F: Fn(&NurbsSurface) -> Vec<NurbsCurve>>(&self, tolerance: Option<f64>, cut_for: F) -> BRep {
+        use crate::nurbssurface_trimmed::NurbsSurfaceTrimmed;
+        let mut result = BRep::new();
+        result.name = self.name.clone();
+        let mut vmap: std::collections::HashMap<(i64, i64, i64), i32> = std::collections::HashMap::new();
+        let mut emap: std::collections::HashMap<(i32, i32, i64, i64, i64), i32> = std::collections::HashMap::new();
+
+        for face in &self.m_faces {
+            if face.surface_index < 0 || face.surface_index as usize >= self.m_surfaces.len() {
+                continue;
+            }
+            let srf = &self.m_surfaces[face.surface_index as usize];
+            let mut outer_pcs: Vec<NurbsCurve> = Vec::new();
+            let mut inner_loops: Vec<Vec<NurbsCurve>> = Vec::new();
+            let mut has_inner = false;
+            for &li in &face.loop_indices {
+                if li < 0 || li as usize >= self.m_loops.len() {
+                    continue;
+                }
+                let bloop = &self.m_loops[li as usize];
+                let mut pcs: Vec<NurbsCurve> = Vec::new();
+                for &ti in &bloop.trim_indices {
+                    if ti < 0 || ti as usize >= self.m_trims.len() {
+                        continue;
+                    }
+                    let c2 = self.m_trims[ti as usize].curve_2d_index;
+                    if c2 >= 0 && (c2 as usize) < self.m_curves_2d.len() {
+                        pcs.push(self.m_curves_2d[c2 as usize].clone());
+                    }
+                }
+                if bloop.loop_type == BRepLoopType::Inner {
+                    has_inner = true;
+                    inner_loops.push(pcs);
+                } else {
+                    outer_pcs = pcs;
+                }
+            }
+
+            let cut_pcs = cut_for(srf);
+            if cut_pcs.is_empty() || has_inner {
+                let mut loops: Vec<(BRepLoopType, Vec<NurbsCurve>)> = vec![(BRepLoopType::Outer, outer_pcs)];
+                for il in inner_loops {
+                    loops.push((BRepLoopType::Inner, il));
+                }
+                Self::append_face(&mut result, &mut vmap, &mut emap, srf, &loops);
+                continue;
+            }
+
+            let n_boundary = outer_pcs.len();
+            let mut all_pcs = outer_pcs.clone();
+            all_pcs.extend(cut_pcs);
+            let parts = NurbsSurfaceTrimmed::split_by_uv_curves_ex(srf, &all_pcs, tolerance, false, n_boundary);
+            if parts.len() <= 1 {
+                let loops: Vec<(BRepLoopType, Vec<NurbsCurve>)> = vec![(BRepLoopType::Outer, outer_pcs)];
+                Self::append_face(&mut result, &mut vmap, &mut emap, srf, &loops);
+                continue;
+            }
+            for part in &parts {
+                let mut loops: Vec<(BRepLoopType, Vec<NurbsCurve>)> = Vec::new();
+                if let Some(ol) = &part.m_outer_loop {
+                    loops.push((BRepLoopType::Outer, vec![ol.clone()]));
+                }
+                for il in &part.m_inner_loops {
+                    loops.push((BRepLoopType::Inner, vec![il.clone()]));
+                }
+                Self::append_face(&mut result, &mut vmap, &mut emap, &part.m_surface, &loops);
+            }
+        }
+
+        for ei in 0..result.m_topology_edges.len() {
+            let (sv, ev) = (result.m_topology_edges[ei].start_vertex, result.m_topology_edges[ei].end_vertex);
+            if sv >= 0 && (sv as usize) < result.m_topology_vertices.len() {
+                result.m_topology_vertices[sv as usize].edge_indices.push(ei as i32);
+            }
+            if ev != sv && ev >= 0 && (ev as usize) < result.m_topology_vertices.len() {
+                result.m_topology_vertices[ev as usize].edge_indices.push(ei as i32);
+            }
+        }
+        result
+    }
+
+    /// Split this BRep by a plane. Returns a new subdivided BRep.
+    pub fn split_by_plane(&self, plane: &crate::plane::Plane, tolerance: Option<f64>) -> BRep {
+        self.split_with(tolerance, |srf| {
+            crate::intersection::surface_plane_uv(srf, plane, tolerance)
+                .into_iter().map(|(_c3, pc)| pc).collect()
+        })
+    }
+
+    /// Split this BRep by another surface. Returns a new subdivided BRep.
+    pub fn split_by_surface(&self, cutter: &NurbsSurface, tolerance: Option<f64>) -> BRep {
+        let cutter_bb = aabb_from_surface(cutter);
+        self.split_with(tolerance, |srf| {
+            let srf_bb = aabb_from_surface(srf);
+            let margin = (srf_bb.1[0] - srf_bb.0[0]).max(srf_bb.1[1] - srf_bb.0[1]).max(srf_bb.1[2] - srf_bb.0[2]) * 1e-3;
+            if !aabb_overlap(&srf_bb, &cutter_bb, margin) {
+                return Vec::new();
+            }
+            crate::intersection::surface_surface(srf, cutter, tolerance)
+                .into_iter().map(|(_c3, pa, _pb)| pa).collect()
+        })
+    }
+
+    /// Split this BRep by 3D curves pulled onto each face. New BRep.
+    pub fn split_by_curves(&self, curves: &[NurbsCurve], tolerance: Option<f64>) -> BRep {
+        let curve_bbs: Vec<([f64; 3], [f64; 3])> = curves.iter().map(|c| aabb_from_curve(c)).collect();
+        self.split_with(tolerance, |srf| {
+            let srf_bb = aabb_from_surface(srf);
+            let margin = (srf_bb.1[0] - srf_bb.0[0]).max(srf_bb.1[1] - srf_bb.0[1]).max(srf_bb.1[2] - srf_bb.0[2]) * 1e-3;
+            let mut out: Vec<NurbsCurve> = Vec::new();
+            for (crv, cbb) in curves.iter().zip(curve_bbs.iter()) {
+                if !aabb_overlap(&srf_bb, cbb, margin) {
+                    continue;
+                }
+                for pc in crate::closest::Closest::surface_curve(srf, crv, 0.0, 0.0, tolerance) {
+                    out.push(pc);
+                }
+            }
+            out
+        })
+    }
+
+    /// Split this BRep by a line pulled onto each face. New BRep.
+    pub fn split_by_line(&self, line: &crate::line::Line, tolerance: Option<f64>) -> BRep {
+        let pts = [line.start(), line.end()];
+        let crv = NurbsCurve::create(false, 1, &pts);
+        self.split_by_curves(&[crv], tolerance)
+    }
+
+    fn sub_map_surface(sub: &mut BRep, m: &mut std::collections::HashMap<i32, i32>, src: &BRep, i: i32) -> i32 {
+        if let Some(&x) = m.get(&i) { return x; }
+        let x = sub.add_surface(&src.m_surfaces[i as usize]) as i32;
+        m.insert(i, x);
+        x
+    }
+    fn sub_map_c2(sub: &mut BRep, m: &mut std::collections::HashMap<i32, i32>, src: &BRep, i: i32) -> i32 {
+        if i < 0 || i as usize >= src.m_curves_2d.len() { return -1; }
+        if let Some(&x) = m.get(&i) { return x; }
+        let x = sub.add_curve_2d(&src.m_curves_2d[i as usize]) as i32;
+        m.insert(i, x);
+        x
+    }
+    fn sub_map_vertex(sub: &mut BRep, m: &mut std::collections::HashMap<i32, i32>, src: &BRep, i: i32) -> i32 {
+        if i < 0 || i as usize >= src.m_topology_vertices.len() { return -1; }
+        if let Some(&x) = m.get(&i) { return x; }
+        let pt = src.m_vertices[src.m_topology_vertices[i as usize].point_index as usize].clone();
+        let idx = sub.add_vertex(&pt) as i32;
+        sub.m_topology_vertices.push(BRepVertex { point_index: idx, edge_indices: Vec::new() });
+        let nv = (sub.m_topology_vertices.len() - 1) as i32;
+        m.insert(i, nv);
+        nv
+    }
+    fn sub_map_edge(sub: &mut BRep, e_map: &mut std::collections::HashMap<i32, i32>,
+                    c3_map: &mut std::collections::HashMap<i32, i32>,
+                    v_map: &mut std::collections::HashMap<i32, i32>, src: &BRep, i: i32) -> i32 {
+        if i < 0 || i as usize >= src.m_topology_edges.len() { return -1; }
+        if let Some(&x) = e_map.get(&i) { return x; }
+        let e = src.m_topology_edges[i as usize].clone();
+        let mut ci3 = -1;
+        if e.curve_3d_index >= 0 && (e.curve_3d_index as usize) < src.m_curves_3d.len() {
+            ci3 = match c3_map.get(&e.curve_3d_index) {
+                Some(&x) => x,
+                None => {
+                    let x = sub.add_curve_3d(&src.m_curves_3d[e.curve_3d_index as usize]) as i32;
+                    c3_map.insert(e.curve_3d_index, x);
+                    x
+                }
+            };
+        }
+        let sv = Self::sub_map_vertex(sub, v_map, src, e.start_vertex);
+        let ev = Self::sub_map_vertex(sub, v_map, src, e.end_vertex);
+        let ne = sub.add_edge(ci3, sv, ev) as i32;
+        e_map.insert(i, ne);
+        ne
+    }
+
+    /// Build a standalone BRep from a subset of this BRep's faces.
+    pub fn subset(&self, face_indices: &[usize]) -> BRep {
+        let mut sub = BRep::new();
+        sub.name = self.name.clone();
+        let mut s_map = std::collections::HashMap::new();
+        let mut c2_map = std::collections::HashMap::new();
+        let mut c3_map = std::collections::HashMap::new();
+        let mut v_map = std::collections::HashMap::new();
+        let mut e_map = std::collections::HashMap::new();
+        for &fi in face_indices {
+            let face = &self.m_faces[fi];
+            let si = Self::sub_map_surface(&mut sub, &mut s_map, self, face.surface_index);
+            let new_fi = sub.add_face(si, face.reversed) as i32;
+            for &li in &face.loop_indices {
+                let lp = self.m_loops[li as usize].clone();
+                let new_li = sub.add_loop(new_fi, lp.loop_type) as i32;
+                for &ti in &lp.trim_indices {
+                    let trim = self.m_trims[ti as usize].clone();
+                    let ci2 = Self::sub_map_c2(&mut sub, &mut c2_map, self, trim.curve_2d_index);
+                    let ei = Self::sub_map_edge(&mut sub, &mut e_map, &mut c3_map, &mut v_map, self, trim.edge_index);
+                    sub.add_trim(ci2, ei, new_li, trim.reversed, trim.trim_type);
+                }
+            }
+        }
+        for ei in 0..sub.m_topology_edges.len() {
+            let (sv, ev) = (sub.m_topology_edges[ei].start_vertex, sub.m_topology_edges[ei].end_vertex);
+            if sv >= 0 && (sv as usize) < sub.m_topology_vertices.len() {
+                sub.m_topology_vertices[sv as usize].edge_indices.push(ei as i32);
+            }
+            if ev != sv && ev >= 0 && (ev as usize) < sub.m_topology_vertices.len() {
+                sub.m_topology_vertices[ev as usize].edge_indices.push(ei as i32);
+            }
+        }
+        sub
+    }
+
+    /// Split this BRep by a plane and separate the result into the pieces on
+    /// each side of the plane. Returns one BRep per side.
+    pub fn split_by_plane_pieces(&self, plane: &crate::plane::Plane, tolerance: Option<f64>) -> Vec<BRep> {
+        let whole = self.split_by_plane(plane, tolerance);
+        let o = plane.origin();
+        let n = plane.z_axis();
+        let mut pos: Vec<usize> = Vec::new();
+        let mut neg: Vec<usize> = Vec::new();
+        for (fi, face) in whole.m_faces.iter().enumerate() {
+            let srf = &whole.m_surfaces[face.surface_index as usize];
+            let (mut sx, mut sy, mut sz, mut cnt) = (0.0, 0.0, 0.0, 0i32);
+            for &li in &face.loop_indices {
+                let lp = &whole.m_loops[li as usize];
+                if lp.loop_type != BRepLoopType::Outer { continue; }
+                for &ti in &lp.trim_indices {
+                    let pc = &whole.m_curves_2d[whole.m_trims[ti as usize].curve_2d_index as usize];
+                    let (d0, d1) = pc.domain();
+                    for k in 0..8 {
+                        let uv = pc.point_at(d0 + (d1 - d0) * k as f64 / 8.0);
+                        let p = srf.point_at(uv[0], uv[1]).unwrap_or(Point::new(0.0, 0.0, 0.0));
+                        sx += p[0]; sy += p[1]; sz += p[2]; cnt += 1;
+                    }
+                }
+            }
+            if cnt == 0 { continue; }
+            let (cx, cy, cz) = (sx / cnt as f64, sy / cnt as f64, sz / cnt as f64);
+            let d = (cx - o[0]) * n[0] + (cy - o[1]) * n[1] + (cz - o[2]) * n[2];
+            if d >= 0.0 { pos.push(fi); } else { neg.push(fi); }
+        }
+        let mut pieces = Vec::new();
+        for idxs in [pos, neg] {
+            if !idxs.is_empty() {
+                pieces.push(whole.subset(&idxs));
+            }
+        }
+        pieces
+    }
+
+    /// Split this BRep by every face of another BRep. New BRep.
+    pub fn split_by_brep(&self, cutter: &BRep, tolerance: Option<f64>) -> BRep {
+        let cutter_bbs: Vec<([f64; 3], [f64; 3])> = cutter.m_surfaces.iter().map(|cs| aabb_from_surface(cs)).collect();
+        self.split_with(tolerance, |srf| {
+            let srf_bb = aabb_from_surface(srf);
+            let margin = (srf_bb.1[0] - srf_bb.0[0]).max(srf_bb.1[1] - srf_bb.0[1]).max(srf_bb.1[2] - srf_bb.0[2]) * 1e-3;
+            let mut out: Vec<NurbsCurve> = Vec::new();
+            for (cs, cbb) in cutter.m_surfaces.iter().zip(cutter_bbs.iter()) {
+                if !aabb_overlap(&srf_bb, cbb, margin) {
+                    continue;
+                }
+                for pc in crate::intersection::cut_curves_on_surface(srf, cs, tolerance) {
+                    out.push(pc);
+                }
+            }
+            out
+        })
     }
 
     ///////////////////////////////////////////////////////////////////////////////////////////

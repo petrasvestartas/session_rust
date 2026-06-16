@@ -402,6 +402,40 @@ pub fn run_nurbssurface_trimmed_mesh() -> TestResult {
     })
 }
 
+pub fn run_nurbssurface_trimmed_split_by_uv_curves() -> TestResult {
+    MINI_TEST!("Split By UV Curves", {
+        use crate::nurbssurface_trimmed::NurbsSurfaceTrimmed;
+        use crate::NurbsCurve;
+        use crate::Point;
+        use crate::Primitives;
+
+        let srf = Primitives::wave_surface(10.0, 1.0);
+        let (u0, u1) = srf.domain(0).unwrap();
+        let (v0, v1) = srf.domain(1).unwrap();
+        let pts = vec![Point::new(u0 + (u1-u0)*0.4, v0, 0.0), Point::new(u0 + (u1-u0)*0.6, v1, 0.0)];
+        let line = NurbsCurve::create(false, 1, &pts);
+
+        let parts = NurbsSurfaceTrimmed::split_by_uv_curves(&srf, &[line], None);
+
+        MINI_CHECK!(parts.len() == 2);
+        MINI_CHECK!(parts[0].is_trimmed());
+        MINI_CHECK!(parts[1].is_trimmed());
+
+        let circle = Primitives::circle((u0+u1)*0.5, (v0+v1)*0.5, 0.0, (u1-u0)*0.2);
+
+        let ring = NurbsSurfaceTrimmed::split_by_uv_curves(&srf, &[circle], None);
+
+        MINI_CHECK!(ring.len() == 2);
+        MINI_CHECK!(ring[0].inner_loop_count() + ring[1].inner_loop_count() == 1);
+
+        let dangling = NurbsCurve::create(false, 1, &[Point::new(3.0, 3.0, 0.0), Point::new(5.0, 5.0, 0.0)]);
+
+        let whole = NurbsSurfaceTrimmed::split_by_uv_curves(&srf, &[dangling], None);
+
+        MINI_CHECK!(whole.len() == 1);
+    })
+}
+
 pub fn run_nurbssurface_trimmed_transformation() -> TestResult {
     MINI_TEST!("Transformation", {
         use crate::nurbssurface_trimmed::NurbsSurfaceTrimmed;
@@ -535,6 +569,7 @@ REGISTER_MINI_TEST!("NurbsSurfaceTrimmed", "Accessors", crate::nurbssurface_trim
 REGISTER_MINI_TEST!("NurbsSurfaceTrimmed", "Add Inner Loop", crate::nurbssurface_trimmed_test::run_nurbssurface_trimmed_add_inner_loop);
 REGISTER_MINI_TEST!("NurbsSurfaceTrimmed", "Point At", crate::nurbssurface_trimmed_test::run_nurbssurface_trimmed_point_at);
 REGISTER_MINI_TEST!("NurbsSurfaceTrimmed", "Mesh", crate::nurbssurface_trimmed_test::run_nurbssurface_trimmed_mesh);
+REGISTER_MINI_TEST!("NurbsSurfaceTrimmed", "Split By UV Curves", crate::nurbssurface_trimmed_test::run_nurbssurface_trimmed_split_by_uv_curves);
 REGISTER_MINI_TEST!("NurbsSurfaceTrimmed", "Transformation", crate::nurbssurface_trimmed_test::run_nurbssurface_trimmed_transformation);
 REGISTER_MINI_TEST!("NurbsSurfaceTrimmed", "Json Roundtrip", crate::nurbssurface_trimmed_test::run_nurbssurface_trimmed_json_roundtrip);
 REGISTER_MINI_TEST!("NurbsSurfaceTrimmed", "Protobuf Roundtrip", crate::nurbssurface_trimmed_test::run_nurbssurface_trimmed_protobuf_roundtrip);

@@ -1035,13 +1035,14 @@ pub fn ray_mesh_bvh(line: &Line, mesh: &crate::Mesh, epsilon: f64, find_all: boo
     }
 }
 
-/// Find intersection curves between a NURBS surface and a plane
-pub fn surface_plane(surface: &NurbsSurface, plane: &Plane, tolerance: Option<f64>) -> Vec<NurbsCurve> {
-    if !surface.is_valid() { return vec![]; }
-    let tol = tolerance.unwrap_or(Tolerance::ZERO_TOLERANCE).max(Tolerance::ZERO_TOLERANCE);
-
-    let (u0, u1) = match surface.domain(0) { Some(d) => d, None => return vec![] };
-    let (v0, v1) = match surface.domain(1) { Some(d) => d, None => return vec![] };
+/// Seed and trace surface/plane intersection curves in UV space.
+///
+/// Returns (traces, step, uv_to_3d, uv_to_3d_min) where traces is a list of
+/// (uv_trace, uv_unwrapped, is_loop): wrapped UV samples, seam-unwrapped UV
+/// samples, and whether the trace is a closed loop.
+fn surface_plane_traces(surface: &NurbsSurface, plane: &Plane, tolerance: f64) -> (Vec<(Vec<(f64, f64)>, Vec<(f64, f64)>, bool)>, f64, f64, f64) {
+    let (u0, u1) = match surface.domain(0) { Some(d) => d, None => return (Vec::new(), 0.0, 1.0, 1.0) };
+    let (v0, v1) = match surface.domain(1) { Some(d) => d, None => return (Vec::new(), 0.0, 1.0, 1.0) };
     let range_u = u1 - u0;
     let range_v = v1 - v0;
     let closed_u = surface.is_closed(0);
@@ -1087,7 +1088,7 @@ pub fn surface_plane(surface: &NurbsSurface, plane: &Plane, tolerance: Option<f6
     let newton_correct = |u: &mut f64, v: &mut f64| -> bool {
         for _ in 0..10 {
             let (val, gu, gv) = g_and_grad(*u, *v);
-            if val.abs() < tol { return true; }
+            if val.abs() < tolerance { return true; }
             let mag2 = gu * gu + gv * gv;
             if mag2 < 1e-28 { return false; }
             *u -= val * gu / mag2;
@@ -1095,7 +1096,7 @@ pub fn surface_plane(surface: &NurbsSurface, plane: &Plane, tolerance: Option<f6
             *u = wrap_u(*u);
             *v = wrap_v(*v);
         }
-        g(*u, *v).abs() < tol * 10.0
+        g(*u, *v).abs() < tolerance * 10.0
     };
 
     // 1. Find seeds
@@ -1186,7 +1187,7 @@ pub fn surface_plane(surface: &NurbsSurface, plane: &Plane, tolerance: Option<f6
     let close_tol_3d = step * 4.0 * uv_to_3d_min;
     let consume_tol_3d = step * uv_to_3d * 2.0;
 
-    let mut result: Vec<NurbsCurve> = Vec::new();
+    let mut traces: Vec<(Vec<(f64, f64)>, Vec<(f64, f64)>, bool)> = Vec::new();
 
     for seed_idx in 0..seeds.len() {
         if seeds[seed_idx].used { continue; }
@@ -1328,53 +1329,185 @@ pub fn surface_plane(surface: &NurbsSurface, plane: &Plane, tolerance: Option<f6
             }
         }
 
-        // 3. Evaluate all trace points to 3D
-        let all_pts: Vec<Point> = uv_trace.iter()
-            .map(|&(u, v)| surface.point_at(u, v).unwrap_or(Point::new(0.0, 0.0, 0.0)))
-            .collect();
+        traces.push((uv_trace, uv_unwrapped, is_loop));
+    }
 
-        // 4. Circle detection
-        let mut crv = NurbsCurve::new(3, false, 4, 0);
-        if is_loop && all_pts.len() >= 6 {
-            let ax = plane.x_axis();
-            let ay = plane.y_axis();
-            let po = plane.origin();
-            let to2d = |p: &Point| -> (f64, f64) {
-                let dx = p[0] - po[0];
-                let dy = p[1] - po[1];
-                let dz = p[2] - po[2];
-                (dx * ax[0] + dy * ax[1] + dz * ax[2], dx * ay[0] + dy * ay[1] + dz * ay[2])
-            };
+    (traces, step, uv_to_3d, uv_to_3d_min)
+}
 
-            let n = all_pts.len();
-            let (x1, y1) = to2d(&all_pts[0]);
-            let (x2, y2) = to2d(&all_pts[n / 3]);
-            let (x3, y3) = to2d(&all_pts[2 * n / 3]);
+/// Fit a 3D plane-constrained NurbsCurve to traced intersection points.
+///
+/// Tries exact circle recognition, then ellipse recognition for closed loops
+/// (when allow_conics), then adaptive plane-constrained least-squares fitting.
+/// Returns an invalid curve on failure.
+fn surface_plane_fit_3d(all_pts: &[Point], is_loop: bool, plane: &Plane, step: f64, uv_to_3d: f64, uv_to_3d_min: f64, allow_conics: bool) -> NurbsCurve {
+    // 4. Circle detection
+    let mut crv = NurbsCurve::new(3, false, 4, 0);
+    if allow_conics && is_loop && all_pts.len() >= 6 {
+        let ax = plane.x_axis();
+        let ay = plane.y_axis();
+        let po = plane.origin();
+        let to2d = |p: &Point| -> (f64, f64) {
+            let dx = p[0] - po[0];
+            let dy = p[1] - po[1];
+            let dz = p[2] - po[2];
+            (dx * ax[0] + dy * ax[1] + dz * ax[2], dx * ay[0] + dy * ay[1] + dz * ay[2])
+        };
 
-            let ax_ = x2 - x1;
-            let ay_ = y2 - y1;
-            let bx_ = x3 - x1;
-            let by_ = y3 - y1;
-            let d_val = 2.0 * (ax_ * by_ - ay_ * bx_);
+        let n = all_pts.len();
+        let (x1, y1) = to2d(&all_pts[0]);
+        let (x2, y2) = to2d(&all_pts[n / 3]);
+        let (x3, y3) = to2d(&all_pts[2 * n / 3]);
 
-            if d_val.abs() > 1e-10 {
-                let a2 = ax_ * ax_ + ay_ * ay_;
-                let b2 = bx_ * bx_ + by_ * by_;
-                let ccx = x1 + (by_ * a2 - ay_ * b2) / d_val;
-                let ccy = y1 + (ax_ * b2 - bx_ * a2) / d_val;
-                let radius = f64::hypot(x1 - ccx, y1 - ccy);
+        let ax_ = x2 - x1;
+        let ay_ = y2 - y1;
+        let bx_ = x3 - x1;
+        let by_ = y3 - y1;
+        let d_val = 2.0 * (ax_ * by_ - ay_ * bx_);
 
-                let mut max_dev = 0.0f64;
-                for p in &all_pts {
-                    let (px, py) = to2d(p);
-                    max_dev = max_dev.max((f64::hypot(px - ccx, py - ccy) - radius).abs());
+        if d_val.abs() > 1e-10 {
+            let a2 = ax_ * ax_ + ay_ * ay_;
+            let b2 = bx_ * bx_ + by_ * by_;
+            let ccx = x1 + (by_ * a2 - ay_ * b2) / d_val;
+            let ccy = y1 + (ax_ * b2 - bx_ * a2) / d_val;
+            let radius = f64::hypot(x1 - ccx, y1 - ccy);
+
+            let mut max_dev = 0.0f64;
+            for p in all_pts {
+                let (px, py) = to2d(p);
+                max_dev = max_dev.max((f64::hypot(px - ccx, py - ccy) - radius).abs());
+            }
+
+            let circle_tol = (radius * 1e-4).max(1e-6);
+            if radius > 1e-10 && max_dev < circle_tol {
+                let cx3d = po[0] + ccx * ax[0] + ccy * ay[0];
+                let cy3d = po[1] + ccx * ax[1] + ccy * ay[1];
+                let cz3d = po[2] + ccx * ax[2] + ccy * ay[2];
+
+                let w = std::f64::consts::FRAC_1_SQRT_2;
+                let cx_: [f64; 9] = [1.0, 1.0, 0.0, -1.0, -1.0, -1.0, 0.0, 1.0, 1.0];
+                let cy_: [f64; 9] = [0.0, 1.0, 1.0, 1.0, 0.0, -1.0, -1.0, -1.0, 0.0];
+                let wts: [f64; 9] = [1.0, w, 1.0, w, 1.0, w, 1.0, w, 1.0];
+                crv = NurbsCurve::new(3, true, 3, 9);
+                let nurbsknots: [f64; 10] = [0.0, 0.0, 1.0, 1.0, 2.0, 2.0, 3.0, 3.0, 4.0, 4.0];
+                for i in 0..10 { crv.set_nurbsknot(i, nurbsknots[i]); }
+                for i in 0..9 {
+                    let px = cx3d + radius * (cx_[i] * ax[0] + cy_[i] * ay[0]);
+                    let py = cy3d + radius * (cx_[i] * ax[1] + cy_[i] * ay[1]);
+                    let pz = cz3d + radius * (cx_[i] * ax[2] + cy_[i] * ay[2]);
+                    crv.set_cv_4d(i, px * wts[i], py * wts[i], pz * wts[i], wts[i]);
                 }
+            }
+        }
+    }
 
-                let circle_tol = (radius * 1e-4).max(1e-6);
-                if radius > 1e-10 && max_dev < circle_tol {
-                    let cx3d = po[0] + ccx * ax[0] + ccy * ay[0];
-                    let cy3d = po[1] + ccx * ax[1] + ccy * ay[1];
-                    let cz3d = po[2] + ccx * ax[2] + ccy * ay[2];
+    // 4b. Ellipse (conic) detection for non-circular closed curves
+    if !crv.is_valid() && allow_conics && is_loop && all_pts.len() >= 8 {
+        let ax = plane.x_axis();
+        let ay = plane.y_axis();
+        let po = plane.origin();
+        let to2d = |p: &Point| -> (f64, f64) {
+            let dx = p[0] - po[0];
+            let dy = p[1] - po[1];
+            let dz = p[2] - po[2];
+            (dx * ax[0] + dy * ax[1] + dz * ax[2], dx * ay[0] + dy * ay[1] + dz * ay[2])
+        };
+
+        let n = all_pts.len();
+        // Build normal equations (5x5 symmetric system)
+        let mut ata = [[0.0f64; 5]; 5];
+        let mut atb = [0.0f64; 5];
+        for i in 0..n {
+            let (x, y) = to2d(&all_pts[i]);
+            let row = [x * x, x * y, y * y, x, y];
+            for r in 0..5 {
+                atb[r] += row[r];
+                for c in 0..5 {
+                    ata[r][c] += row[r] * row[c];
+                }
+            }
+        }
+        // Solve 5x5 system by Gaussian elimination
+        let mut m_mat = [[0.0f64; 6]; 5];
+        for r in 0..5 {
+            for c in 0..5 { m_mat[r][c] = ata[r][c]; }
+            m_mat[r][5] = atb[r];
+        }
+        let mut ok = true;
+        for col in 0..5 {
+            if !ok { break; }
+            let mut pivot = col;
+            for r in (col + 1)..5 {
+                if m_mat[r][col].abs() > m_mat[pivot][col].abs() { pivot = r; }
+            }
+            if m_mat[pivot][col].abs() < 1e-20 { ok = false; break; }
+            if pivot != col {
+                for j in col..=5 {
+                    let tmp = m_mat[col][j];
+                    m_mat[col][j] = m_mat[pivot][j];
+                    m_mat[pivot][j] = tmp;
+                }
+            }
+            for r in (col + 1)..5 {
+                let f = m_mat[r][col] / m_mat[col][col];
+                for j in col..=5 { m_mat[r][j] -= f * m_mat[col][j]; }
+            }
+        }
+        let mut coef = [0.0f64; 5];
+        if ok {
+            for i in (0..5).rev() {
+                let mut s = m_mat[i][5];
+                for j in (i + 1)..5 { s -= m_mat[i][j] * coef[j]; }
+                coef[i] = s / m_mat[i][i];
+            }
+        }
+        let ca = coef[0];
+        let cb = coef[1];
+        let cc = coef[2];
+        let cd = coef[3];
+        let ce = coef[4];
+        let disc = cb * cb - 4.0 * ca * cc;
+
+        if ok && disc < -1e-10 && ca.abs() > 1e-14 {
+            let mut max_conic_dev = 0.0f64;
+            for p in all_pts {
+                let (x, y) = to2d(p);
+                let val = ca * x * x + cb * x * y + cc * y * y + cd * x + ce * y - 1.0;
+                max_conic_dev = max_conic_dev.max(val.abs());
+            }
+            let scale = ca.abs().max(cc.abs());
+            let norm_dev = max_conic_dev / scale.max(1e-10);
+
+            if norm_dev < 0.01 {
+                let det = 4.0 * ca * cc - cb * cb;
+                let cx = (cb * ce - 2.0 * cc * cd) / det;
+                let cy = (cb * cd - 2.0 * ca * ce) / det;
+                let theta = 0.5 * f64::atan2(cb, ca - cc);
+                let cos_t = theta.cos();
+                let sin_t = theta.sin();
+                let a2 = ca * cos_t * cos_t + cb * cos_t * sin_t + cc * sin_t * sin_t;
+                let c2 = ca * sin_t * sin_t - cb * cos_t * sin_t + cc * cos_t * cos_t;
+                let f_val = ca * cx * cx + cb * cx * cy + cc * cy * cy + cd * cx + ce * cy - 1.0;
+                let rhs = -f_val;
+
+                if rhs > 1e-14 && a2 > 1e-14 && c2 > 1e-14 {
+                    let semi_a = (rhs / a2).sqrt();
+                    let semi_b = (rhs / c2).sqrt();
+
+                    let cx3d = po[0] + cx * ax[0] + cy * ay[0];
+                    let cy3d = po[1] + cx * ax[1] + cy * ay[1];
+                    let cz3d = po[2] + cx * ax[2] + cy * ay[2];
+
+                    let ea = Vector::new(
+                        cos_t * ax[0] + sin_t * ay[0],
+                        cos_t * ax[1] + sin_t * ay[1],
+                        cos_t * ax[2] + sin_t * ay[2],
+                    );
+                    let eb = Vector::new(
+                        -sin_t * ax[0] + cos_t * ay[0],
+                        -sin_t * ax[1] + cos_t * ay[1],
+                        -sin_t * ax[2] + cos_t * ay[2],
+                    );
 
                     let w = std::f64::consts::FRAC_1_SQRT_2;
                     let cx_: [f64; 9] = [1.0, 1.0, 0.0, -1.0, -1.0, -1.0, 0.0, 1.0, 1.0];
@@ -1384,244 +1517,136 @@ pub fn surface_plane(surface: &NurbsSurface, plane: &Plane, tolerance: Option<f6
                     let nurbsknots: [f64; 10] = [0.0, 0.0, 1.0, 1.0, 2.0, 2.0, 3.0, 3.0, 4.0, 4.0];
                     for i in 0..10 { crv.set_nurbsknot(i, nurbsknots[i]); }
                     for i in 0..9 {
-                        let px = cx3d + radius * (cx_[i] * ax[0] + cy_[i] * ay[0]);
-                        let py = cy3d + radius * (cx_[i] * ax[1] + cy_[i] * ay[1]);
-                        let pz = cz3d + radius * (cx_[i] * ax[2] + cy_[i] * ay[2]);
+                        let px = cx3d + semi_a * cx_[i] * ea[0] + semi_b * cy_[i] * eb[0];
+                        let py = cy3d + semi_a * cx_[i] * ea[1] + semi_b * cy_[i] * eb[1];
+                        let pz = cz3d + semi_a * cx_[i] * ea[2] + semi_b * cy_[i] * eb[2];
                         crv.set_cv_4d(i, px * wts[i], py * wts[i], pz * wts[i], wts[i]);
                     }
-                }
-            }
-        }
 
-        // 4b. Ellipse (conic) detection for non-circular closed curves
-        if !crv.is_valid() && is_loop && all_pts.len() >= 8 {
-            let ax = plane.x_axis();
-            let ay = plane.y_axis();
-            let po = plane.origin();
-            let to2d = |p: &Point| -> (f64, f64) {
-                let dx = p[0] - po[0];
-                let dy = p[1] - po[1];
-                let dz = p[2] - po[2];
-                (dx * ax[0] + dy * ax[1] + dz * ax[2], dx * ay[0] + dy * ay[1] + dz * ay[2])
-            };
-
-            let n = all_pts.len();
-            // Build normal equations (5x5 symmetric system)
-            let mut ata = [[0.0f64; 5]; 5];
-            let mut atb = [0.0f64; 5];
-            for i in 0..n {
-                let (x, y) = to2d(&all_pts[i]);
-                let row = [x * x, x * y, y * y, x, y];
-                for r in 0..5 {
-                    atb[r] += row[r];
-                    for c in 0..5 {
-                        ata[r][c] += row[r] * row[c];
+                    // Verify ellipse fit
+                    let mut max_ell_dev = 0.0f64;
+                    for p in all_pts {
+                        let (px2, py2) = to2d(p);
+                        let lx = cos_t * (px2 - cx) + sin_t * (py2 - cy);
+                        let ly = -sin_t * (px2 - cx) + cos_t * (py2 - cy);
+                        let ang = f64::atan2(ly / semi_b, lx / semi_a);
+                        let ex = cx + semi_a * ang.cos() * cos_t - semi_b * ang.sin() * sin_t;
+                        let ey = cy + semi_a * ang.cos() * sin_t + semi_b * ang.sin() * cos_t;
+                        let dev = f64::hypot(px2 - ex, py2 - ey);
+                        max_ell_dev = max_ell_dev.max(dev);
                     }
-                }
-            }
-            // Solve 5x5 system by Gaussian elimination
-            let mut m_mat = [[0.0f64; 6]; 5];
-            for r in 0..5 {
-                for c in 0..5 { m_mat[r][c] = ata[r][c]; }
-                m_mat[r][5] = atb[r];
-            }
-            let mut ok = true;
-            for col in 0..5 {
-                if !ok { break; }
-                let mut pivot = col;
-                for r in (col + 1)..5 {
-                    if m_mat[r][col].abs() > m_mat[pivot][col].abs() { pivot = r; }
-                }
-                if m_mat[pivot][col].abs() < 1e-20 { ok = false; break; }
-                if pivot != col {
-                    for j in col..=5 {
-                        let tmp = m_mat[col][j];
-                        m_mat[col][j] = m_mat[pivot][j];
-                        m_mat[pivot][j] = tmp;
-                    }
-                }
-                for r in (col + 1)..5 {
-                    let f = m_mat[r][col] / m_mat[col][col];
-                    for j in col..=5 { m_mat[r][j] -= f * m_mat[col][j]; }
-                }
-            }
-            let mut coef = [0.0f64; 5];
-            if ok {
-                for i in (0..5).rev() {
-                    let mut s = m_mat[i][5];
-                    for j in (i + 1)..5 { s -= m_mat[i][j] * coef[j]; }
-                    coef[i] = s / m_mat[i][i];
-                }
-            }
-            let ca = coef[0];
-            let cb = coef[1];
-            let cc = coef[2];
-            let cd = coef[3];
-            let ce = coef[4];
-            let disc = cb * cb - 4.0 * ca * cc;
-
-            if ok && disc < -1e-10 && ca.abs() > 1e-14 {
-                let mut max_conic_dev = 0.0f64;
-                for p in &all_pts {
-                    let (x, y) = to2d(p);
-                    let val = ca * x * x + cb * x * y + cc * y * y + cd * x + ce * y - 1.0;
-                    max_conic_dev = max_conic_dev.max(val.abs());
-                }
-                let scale = ca.abs().max(cc.abs());
-                let norm_dev = max_conic_dev / scale.max(1e-10);
-
-                if norm_dev < 0.01 {
-                    let det = 4.0 * ca * cc - cb * cb;
-                    let cx = (cb * ce - 2.0 * cc * cd) / det;
-                    let cy = (cb * cd - 2.0 * ca * ce) / det;
-                    let theta = 0.5 * f64::atan2(cb, ca - cc);
-                    let cos_t = theta.cos();
-                    let sin_t = theta.sin();
-                    let a2 = ca * cos_t * cos_t + cb * cos_t * sin_t + cc * sin_t * sin_t;
-                    let c2 = ca * sin_t * sin_t - cb * cos_t * sin_t + cc * cos_t * cos_t;
-                    let f_val = ca * cx * cx + cb * cx * cy + cc * cy * cy + cd * cx + ce * cy - 1.0;
-                    let rhs = -f_val;
-
-                    if rhs > 1e-14 && a2 > 1e-14 && c2 > 1e-14 {
-                        let semi_a = (rhs / a2).sqrt();
-                        let semi_b = (rhs / c2).sqrt();
-
-                        let cx3d = po[0] + cx * ax[0] + cy * ay[0];
-                        let cy3d = po[1] + cx * ax[1] + cy * ay[1];
-                        let cz3d = po[2] + cx * ax[2] + cy * ay[2];
-
-                        let ea = Vector::new(
-                            cos_t * ax[0] + sin_t * ay[0],
-                            cos_t * ax[1] + sin_t * ay[1],
-                            cos_t * ax[2] + sin_t * ay[2],
-                        );
-                        let eb = Vector::new(
-                            -sin_t * ax[0] + cos_t * ay[0],
-                            -sin_t * ax[1] + cos_t * ay[1],
-                            -sin_t * ax[2] + cos_t * ay[2],
-                        );
-
-                        let w = std::f64::consts::FRAC_1_SQRT_2;
-                        let cx_: [f64; 9] = [1.0, 1.0, 0.0, -1.0, -1.0, -1.0, 0.0, 1.0, 1.0];
-                        let cy_: [f64; 9] = [0.0, 1.0, 1.0, 1.0, 0.0, -1.0, -1.0, -1.0, 0.0];
-                        let wts: [f64; 9] = [1.0, w, 1.0, w, 1.0, w, 1.0, w, 1.0];
-                        crv = NurbsCurve::new(3, true, 3, 9);
-                        let nurbsknots: [f64; 10] = [0.0, 0.0, 1.0, 1.0, 2.0, 2.0, 3.0, 3.0, 4.0, 4.0];
-                        for i in 0..10 { crv.set_nurbsknot(i, nurbsknots[i]); }
-                        for i in 0..9 {
-                            let px = cx3d + semi_a * cx_[i] * ea[0] + semi_b * cy_[i] * eb[0];
-                            let py = cy3d + semi_a * cx_[i] * ea[1] + semi_b * cy_[i] * eb[1];
-                            let pz = cz3d + semi_a * cx_[i] * ea[2] + semi_b * cy_[i] * eb[2];
-                            crv.set_cv_4d(i, px * wts[i], py * wts[i], pz * wts[i], wts[i]);
-                        }
-
-                        // Verify ellipse fit
-                        let mut max_ell_dev = 0.0f64;
-                        for p in &all_pts {
-                            let (px2, py2) = to2d(p);
-                            let lx = cos_t * (px2 - cx) + sin_t * (py2 - cy);
-                            let ly = -sin_t * (px2 - cx) + cos_t * (py2 - cy);
-                            let ang = f64::atan2(ly / semi_b, lx / semi_a);
-                            let ex = cx + semi_a * ang.cos() * cos_t - semi_b * ang.sin() * sin_t;
-                            let ey = cy + semi_a * ang.cos() * sin_t + semi_b * ang.sin() * cos_t;
-                            let dev = f64::hypot(px2 - ex, py2 - ey);
-                            max_ell_dev = max_ell_dev.max(dev);
-                        }
-                        let ell_tol = semi_a.max(semi_b) * 5e-3;
-                        if max_ell_dev > ell_tol {
-                            crv = NurbsCurve::new(3, false, 4, 0); // reject
-                        }
+                    let ell_tol = semi_a.max(semi_b) * 5e-3;
+                    if max_ell_dev > ell_tol {
+                        crv = NurbsCurve::new(3, false, 4, 0); // reject
                     }
                 }
             }
         }
+    }
 
-        // 5. 2D plane-constrained fitting for non-circular/elliptical curves
-        if !crv.is_valid() {
-            let m = all_pts.len();
-            if m < 4 { continue; }
+    // 5. 2D plane-constrained fitting for non-circular/elliptical curves
+    if !crv.is_valid() {
+        let m = all_pts.len();
+        if m < 4 { return NurbsCurve::new(3, false, 4, 0); }
 
-            let ax = plane.x_axis();
-            let ay = plane.y_axis();
-            let po = plane.origin();
-            let mut pts_2d: Vec<Point> = Vec::with_capacity(m);
+        let ax = plane.x_axis();
+        let ay = plane.y_axis();
+        let po = plane.origin();
+        let mut pts_2d: Vec<Point> = Vec::with_capacity(m);
+        for i in 0..m {
+            let dx = all_pts[i][0] - po[0];
+            let dy = all_pts[i][1] - po[1];
+            let dz = all_pts[i][2] - po[2];
+            let px = dx * ax[0] + dy * ax[1] + dz * ax[2];
+            let py = dx * ay[0] + dy * ay[1] + dz * ay[2];
+            pts_2d.push(Point::new(px, py, 0.0));
+        }
+
+        // Chord-length params
+        let mut chords = vec![0.0f64; m];
+        let mut total_len = 0.0f64;
+        for i in 1..m {
+            total_len += pts_2d[i].distance(&pts_2d[i - 1], None);
+            chords[i] = total_len;
+        }
+        if is_loop && m > 1 {
+            total_len += pts_2d[0].distance(&pts_2d[m - 1], None);
+        }
+        if total_len > 1e-14 {
+            for i in 1..m { chords[i] /= total_len; }
+        }
+
+        let fit_tol = step * (uv_to_3d + uv_to_3d_min) * 0.5;
+        let mut total_turning = 0.0f64;
+        for i in 1..(m - 1) {
+            let dx1 = pts_2d[i][0] - pts_2d[i - 1][0];
+            let dy1 = pts_2d[i][1] - pts_2d[i - 1][1];
+            let dx2 = pts_2d[i + 1][0] - pts_2d[i][0];
+            let dy2 = pts_2d[i + 1][1] - pts_2d[i][1];
+            let l1 = f64::hypot(dx1, dy1);
+            let l2 = f64::hypot(dx2, dy2);
+            if l1 > 1e-14 && l2 > 1e-14 {
+                let c = ((dx1 * dx2 + dy1 * dy2) / (l1 * l2)).max(-1.0).min(1.0);
+                total_turning += c.acos();
+            }
+        }
+        let mut target_cvs = 8_i32.max((total_turning / 0.5) as i32 + 6);
+        let max_cvs = (m as i32) - 1;
+        let mut crv_2d = NurbsCurve::new(3, false, 4, 0);
+        for _ in 0..5 {
+            if target_cvs > max_cvs { break; }
+            crv_2d = NurbsCurve::create_fitted(&pts_2d, target_cvs as usize, 3, is_loop);
+            if !crv_2d.is_valid() { break; }
+            let (ft0, ft1) = crv_2d.domain();
+            let mut max_dev = 0.0f64;
             for i in 0..m {
-                let dx = all_pts[i][0] - po[0];
-                let dy = all_pts[i][1] - po[1];
-                let dz = all_pts[i][2] - po[2];
-                let px = dx * ax[0] + dy * ax[1] + dz * ax[2];
-                let py = dx * ay[0] + dy * ay[1] + dz * ay[2];
-                pts_2d.push(Point::new(px, py, 0.0));
+                let t = ft0 + (ft1 - ft0) * chords[i];
+                max_dev = max_dev.max(crv_2d.point_at(t).distance(&pts_2d[i], None));
             }
+            if max_dev < fit_tol { break; }
+            target_cvs = (target_cvs * 2).min(max_cvs);
+        }
+        if !crv_2d.is_valid() {
+            crv_2d = if is_loop {
+                NurbsCurve::create_interpolated(&pts_2d, CurveNurbsKnotStyle::ChordPeriodic)
+            } else {
+                NurbsCurve::create_interpolated(&pts_2d, CurveNurbsKnotStyle::Chord)
+            };
+        }
 
-            // Chord-length params
-            let mut chords = vec![0.0f64; m];
-            let mut total_len = 0.0f64;
-            for i in 1..m {
-                total_len += pts_2d[i].distance(&pts_2d[i - 1], None);
-                chords[i] = total_len;
-            }
-            if is_loop && m > 1 {
-                total_len += pts_2d[0].distance(&pts_2d[m - 1], None);
-            }
-            if total_len > 1e-14 {
-                for i in 1..m { chords[i] /= total_len; }
-            }
-
-            let fit_tol = step * (uv_to_3d + uv_to_3d_min) * 0.5;
-            let mut total_turning = 0.0f64;
-            for i in 1..(m - 1) {
-                let dx1 = pts_2d[i][0] - pts_2d[i - 1][0];
-                let dy1 = pts_2d[i][1] - pts_2d[i - 1][1];
-                let dx2 = pts_2d[i + 1][0] - pts_2d[i][0];
-                let dy2 = pts_2d[i + 1][1] - pts_2d[i][1];
-                let l1 = f64::hypot(dx1, dy1);
-                let l2 = f64::hypot(dx2, dy2);
-                if l1 > 1e-14 && l2 > 1e-14 {
-                    let c = ((dx1 * dx2 + dy1 * dy2) / (l1 * l2)).max(-1.0).min(1.0);
-                    total_turning += c.acos();
-                }
-            }
-            let mut target_cvs = 8_i32.max((total_turning / 0.5) as i32 + 6);
-            let max_cvs = (m as i32) - 1;
-            let mut crv_2d = NurbsCurve::new(3, false, 4, 0);
-            for _ in 0..5 {
-                if target_cvs > max_cvs { break; }
-                crv_2d = NurbsCurve::create_fitted(&pts_2d, target_cvs as usize, 3, is_loop);
-                if !crv_2d.is_valid() { break; }
-                let (ft0, ft1) = crv_2d.domain();
-                let mut max_dev = 0.0f64;
-                for i in 0..m {
-                    let t = ft0 + (ft1 - ft0) * chords[i];
-                    max_dev = max_dev.max(crv_2d.point_at(t).distance(&pts_2d[i], None));
-                }
-                if max_dev < fit_tol { break; }
-                target_cvs = (target_cvs * 2).min(max_cvs);
-            }
-            if !crv_2d.is_valid() {
-                crv_2d = if is_loop {
-                    NurbsCurve::create_interpolated(&pts_2d, CurveNurbsKnotStyle::ChordPeriodic)
-                } else {
-                    NurbsCurve::create_interpolated(&pts_2d, CurveNurbsKnotStyle::Chord)
-                };
-            }
-
-            // Lift 2D CVs back to 3D
-            if crv_2d.is_valid() {
-                crv = crv_2d;
-                for i in 0..crv.cv_count() {
-                    if let Some(cv2) = crv.get_cv(i) {
-                        let cx = cv2[0];
-                        let cy = cv2[1];
-                        crv.set_cv(i, &Point::new(
-                            po[0] + cx * ax[0] + cy * ay[0],
-                            po[1] + cx * ax[1] + cy * ay[1],
-                            po[2] + cx * ax[2] + cy * ay[2],
-                        ));
-                    }
+        // Lift 2D CVs back to 3D
+        if crv_2d.is_valid() {
+            crv = crv_2d;
+            for i in 0..crv.cv_count() {
+                if let Some(cv2) = crv.get_cv(i) {
+                    let cx = cv2[0];
+                    let cy = cv2[1];
+                    crv.set_cv(i, &Point::new(
+                        po[0] + cx * ax[0] + cy * ay[0],
+                        po[1] + cx * ax[1] + cy * ay[1],
+                        po[2] + cx * ax[2] + cy * ay[2],
+                    ));
                 }
             }
         }
+    }
+    crv
+}
+
+/// Find intersection curves between a NURBS surface and a plane
+pub fn surface_plane(surface: &NurbsSurface, plane: &Plane, tolerance: Option<f64>) -> Vec<NurbsCurve> {
+    if !surface.is_valid() { return vec![]; }
+    let tolerance = tolerance.unwrap_or(Tolerance::ZERO_TOLERANCE).max(Tolerance::ZERO_TOLERANCE);
+
+    let (traces, step, uv_to_3d, uv_to_3d_min) = surface_plane_traces(surface, plane, tolerance);
+
+    let mut result: Vec<NurbsCurve> = Vec::new();
+    for (uv_trace, _uv_unwrapped, is_loop) in &traces {
+        // 3. Evaluate all trace points to 3D
+        let all_pts: Vec<Point> = uv_trace.iter()
+            .map(|&(u, v)| surface.point_at(u, v).unwrap_or(Point::new(0.0, 0.0, 0.0)))
+            .collect();
+        let crv = surface_plane_fit_3d(&all_pts, *is_loop, plane, step, uv_to_3d, uv_to_3d_min, true);
         if !crv.is_valid() { continue; }
 
         // Deduplicate: skip if ALL sample points are close to an existing curve
@@ -1641,6 +1666,1813 @@ pub fn surface_plane(surface: &NurbsSurface, plane: &Plane, tolerance: Option<f6
             if all_close { dup = true; break; }
         }
         if !dup { result.push(crv); }
+    }
+
+    result
+}
+
+/// Keep only the sub-segments of a UV pcurve on `target` whose lifted 3D point
+/// lies within the (bounded) cutter footprint (closest point gap ~ 0).
+fn clip_pcurve_to_cutter(target: &NurbsSurface, pc: &NurbsCurve, cutter: &NurbsSurface) -> Vec<NurbsCurve> {
+    let n = (pc.cv_count() * 4).max(16);
+    let (d0, d1) = pc.domain();
+    let (cu0, cu1) = cutter.domain(0).unwrap_or((0.0, 1.0));
+    let (cv0, cv1) = cutter.domain(1).unwrap_or((0.0, 1.0));
+    let zero = crate::point::Point::new(0.0, 0.0, 0.0);
+    let c00 = cutter.point_at(cu0, cv0).unwrap_or(zero.clone());
+    let c11 = cutter.point_at(cu1, cv1).unwrap_or(zero.clone());
+    let on_tol = (1e-7f64).max(c00.distance(&c11, None) * 1e-4);
+
+    let gap = |t: f64| -> f64 {
+        let uv = pc.point_at(t);
+        let p3 = target.point_at(uv[0], uv[1]).unwrap_or(crate::point::Point::new(0.0, 0.0, 0.0));
+        crate::closest::Closest::surface_point(cutter, &p3, 0.0, 0.0, 0.0, 0.0).2
+    };
+    let refine = |t_in: f64, t_out: f64| -> f64 {
+        let (mut a, mut b) = (t_in, t_out);
+        for _ in 0..20 {
+            let tm = (a + b) * 0.5;
+            if gap(tm) < on_tol { a = tm; } else { b = tm; }
+        }
+        b
+    };
+
+    let mut flags: Vec<(f64, bool)> = Vec::with_capacity(n + 1);
+    for i in 0..=n {
+        let t = d0 + (d1 - d0) * i as f64 / n as f64;
+        flags.push((t, gap(t) < on_tol));
+    }
+    let mut pieces = Vec::new();
+    let mut i = 0;
+    while i <= n {
+        if flags[i].1 {
+            let mut j = i;
+            while j + 1 <= n && flags[j + 1].1 { j += 1; }
+            let ta = if i == 0 { flags[i].0 } else { refine(flags[i].0, flags[i - 1].0) };
+            let tb = if j == n { flags[j].0 } else { refine(flags[j].0, flags[j + 1].0) };
+            if tb - ta > (d1 - d0) * 1e-6 {
+                let mut piece = pc.duplicate();
+                if piece.trim(ta, tb) && piece.is_valid() {
+                    pieces.push(piece);
+                }
+            }
+            i = j + 1;
+        } else {
+            i += 1;
+        }
+    }
+    pieces
+}
+
+/// Return the cutter surface's UV pcurves on the target surface.
+///
+/// Fast path: if the cutter is planar, intersect the target with the cutter's
+/// plane (surface_plane_uv) and clip the result to the cutter footprint.
+/// Otherwise use the surface/surface intersection (already domain-clipped).
+pub fn cut_curves_on_surface(target: &NurbsSurface, cutter: &NurbsSurface, tolerance: Option<f64>) -> Vec<NurbsCurve> {
+    if cutter.is_planar(1e-6) {
+        let (cu0, cu1) = cutter.domain(0).unwrap_or((0.0, 1.0));
+        let (cv0, cv1) = cutter.domain(1).unwrap_or((0.0, 1.0));
+        let mu = (cu0 + cu1) * 0.5;
+        let mv = (cv0 + cv1) * 0.5;
+        let origin = cutter.point_at(mu, mv).unwrap_or(crate::point::Point::new(0.0, 0.0, 0.0));
+        let normal = cutter.normal_at(mu, mv);
+        let plane = Plane::from_point_normal(origin, normal);
+        let mut out = Vec::new();
+        for (_c3, pc) in surface_plane_uv(target, &plane, tolerance) {
+            out.extend(clip_pcurve_to_cutter(target, &pc, cutter));
+        }
+        return out;
+    }
+    surface_surface(target, cutter, tolerance).into_iter().map(|(_c3, pa, _pb)| pa).collect()
+}
+
+/// Find surface/plane intersection curves with their UV pcurves.
+///
+/// Returns a list of (curve_3d, pcurve) pairs. Pcurves are NurbsCurves in
+/// parameter space (x=u, y=v, z=0), seam-split so each pcurve is continuous
+/// inside the surface domain. Both curves are reparameterized to [0, 1] by
+/// chord length; the pcurve is a tolerance companion of the 3D curve, not an
+/// exact reparameterization.
+pub fn surface_plane_uv(surface: &NurbsSurface, plane: &Plane, tolerance: Option<f64>) -> Vec<(NurbsCurve, NurbsCurve)> {
+    if !surface.is_valid() { return vec![]; }
+    let tolerance = tolerance.unwrap_or(Tolerance::ZERO_TOLERANCE).max(Tolerance::ZERO_TOLERANCE);
+
+    let (u0, u1) = match surface.domain(0) { Some(d) => d, None => return vec![] };
+    let (v0, v1) = match surface.domain(1) { Some(d) => d, None => return vec![] };
+    let range_u = u1 - u0;
+    let range_v = v1 - v0;
+    let closed_u = surface.is_closed(0);
+    let closed_v = surface.is_closed(1);
+
+    let wrap_u = |u: f64| -> f64 {
+        if closed_u {
+            let mut t = (u - u0) % range_u;
+            if t < 0.0 { t += range_u; }
+            return u0 + t;
+        }
+        u.max(u0).min(u1)
+    };
+    let wrap_v = |v: f64| -> f64 {
+        if closed_v {
+            let mut t = (v - v0) % range_v;
+            if t < 0.0 { t += range_v; }
+            return v0 + t;
+        }
+        v.max(v0).min(v1)
+    };
+
+    let pn = plane.z_axis();
+    let p0 = plane.origin();
+
+    let g_and_grad = |u: f64, v: f64| -> (f64, f64, f64) {
+        let derivs = surface.evaluate(wrap_u(u), wrap_v(v), 1);
+        if derivs.len() < 3 { return (0.0, 0.0, 0.0); }
+        let s = &derivs[0];
+        let su = &derivs[2];
+        let sv = &derivs[1];
+        let val = (s[0] - p0[0]) * pn[0] + (s[1] - p0[1]) * pn[1] + (s[2] - p0[2]) * pn[2];
+        let gu = su[0] * pn[0] + su[1] * pn[1] + su[2] * pn[2];
+        let gv = sv[0] * pn[0] + sv[1] * pn[1] + sv[2] * pn[2];
+        (val, gu, gv)
+    };
+
+    // Refine the free coordinate along a fixed seam iso-line so g = 0
+    let seam_newton = |mut cu: f64, mut cv_: f64, axis: i32| -> (f64, f64) {
+        for _ in 0..10 {
+            let (val, gu, gv) = g_and_grad(cu, cv_);
+            if val.abs() < tolerance { break; }
+            if axis == 0 {
+                if gv.abs() < 1e-14 { break; }
+                cv_ -= val / gv;
+            } else {
+                if gu.abs() < 1e-14 { break; }
+                cu -= val / gu;
+            }
+        }
+        (cu, cv_)
+    };
+
+    let (traces, step, uv_to_3d, uv_to_3d_min) = surface_plane_traces(surface, plane, tolerance);
+
+    let fit_tol = step * (uv_to_3d + uv_to_3d_min) * 0.5;
+    let dup_tol = step * uv_to_3d * 3.0;
+
+    let mut result: Vec<(NurbsCurve, NurbsCurve)> = Vec::new();
+    let mut kept_pts3: Vec<Vec<Point>> = Vec::new();
+    for (uv_trace, uv_unwrapped, is_loop) in &traces {
+        let is_loop = *is_loop;
+        // Trace-level dedup against already kept traces (3-sample proximity)
+        let m = uv_trace.len();
+        let trace_pts3: Vec<Point> = uv_trace.iter()
+            .map(|&(u, v)| surface.point_at(u, v).unwrap_or(Point::new(0.0, 0.0, 0.0)))
+            .collect();
+        let mut dup = false;
+        for other in &kept_pts3 {
+            let mut all_close = true;
+            for &f in &[0.25, 0.5, 0.75] {
+                let cp = &trace_pts3[((m - 1) as f64 * f) as usize];
+                let mut dmin = dup_tol + 1.0;
+                for k in (0..other.len()).step_by(5) {
+                    dmin = dmin.min(cp.distance(&other[k], None));
+                }
+                if dmin > dup_tol { all_close = false; break; }
+            }
+            if all_close { dup = true; break; }
+        }
+        if dup { continue; }
+        kept_pts3.push(trace_pts3);
+
+        // Extend closed loops with a virtual copy of the first point
+        let mut pts: Vec<(f64, f64)> = uv_unwrapped.clone();
+        let mut closure_du = 0.0;
+        let mut closure_dv = 0.0;
+        if is_loop && pts.len() >= 2 {
+            let mut du_j = pts[0].0 - pts[pts.len() - 1].0;
+            let mut dv_j = pts[0].1 - pts[pts.len() - 1].1;
+            if closed_u {
+                while du_j > range_u * 0.5 { du_j -= range_u; }
+                while du_j < -range_u * 0.5 { du_j += range_u; }
+            }
+            if closed_v {
+                while dv_j > range_v * 0.5 { dv_j -= range_v; }
+                while dv_j < -range_v * 0.5 { dv_j += range_v; }
+            }
+            closure_du = (pts[pts.len() - 1].0 + du_j) - pts[0].0;
+            closure_dv = (pts[pts.len() - 1].1 + dv_j) - pts[0].1;
+            pts.push((pts[0].0 + closure_du, pts[0].1 + closure_dv));
+        }
+
+        // Insert seam crossings (Newton-refined onto the seam iso-line)
+        let mut out_pts: Vec<(f64, f64)> = vec![pts[0]];
+        let mut cross_idx: Vec<usize> = Vec::new();
+        for i in 1..pts.len() {
+            let pa = pts[i - 1];
+            let pb = pts[i];
+            let mut crossings: Vec<(f64, i32, f64)> = Vec::new();
+            if closed_u && (pb.0 - pa.0).abs() > 1e-15 {
+                let k0 = ((pa.0 - u0) / range_u).floor() as i64;
+                let k1 = ((pb.0 - u0) / range_u).floor() as i64;
+                for k in (k0.min(k1) + 1)..=(k0.max(k1)) {
+                    let l = u0 + k as f64 * range_u;
+                    let t = (l - pa.0) / (pb.0 - pa.0);
+                    if 0.0 < t && t < 1.0 { crossings.push((t, 0, l)); }
+                }
+            }
+            if closed_v && (pb.1 - pa.1).abs() > 1e-15 {
+                let k0 = ((pa.1 - v0) / range_v).floor() as i64;
+                let k1 = ((pb.1 - v0) / range_v).floor() as i64;
+                for k in (k0.min(k1) + 1)..=(k0.max(k1)) {
+                    let l = v0 + k as f64 * range_v;
+                    let t = (l - pa.1) / (pb.1 - pa.1);
+                    if 0.0 < t && t < 1.0 { crossings.push((t, 1, l)); }
+                }
+            }
+            crossings.sort_by(|a, b| a.partial_cmp(b).unwrap());
+            for &(t, axis, l) in &crossings {
+                let mut cu = pa.0 + (pb.0 - pa.0) * t;
+                let mut cv_ = pa.1 + (pb.1 - pa.1) * t;
+                if axis == 0 {
+                    let (_cu_r, cv_r) = seam_newton(l, cv_, 0);
+                    cu = l;
+                    cv_ = cv_r;
+                } else {
+                    let (cu_r, _cv_r) = seam_newton(cu, l, 1);
+                    cu = cu_r;
+                    cv_ = l;
+                }
+                out_pts.push((cu, cv_));
+                cross_idx.push(out_pts.len() - 1);
+            }
+            out_pts.push((pb.0, pb.1));
+            // An interior sample sitting exactly on a seam level is a crossing
+            if i < pts.len() - 1 {
+                let mut on_seam = false;
+                if closed_u {
+                    let k = ((pb.0 - u0) / range_u).round();
+                    let l = u0 + k * range_u;
+                    if (pb.0 - l).abs() < range_u * 1e-9 && (pb.0 - pa.0).abs() > range_u * 1e-9 {
+                        out_pts.last_mut().unwrap().0 = l;
+                        on_seam = true;
+                    }
+                }
+                if closed_v {
+                    let k = ((pb.1 - v0) / range_v).round();
+                    let l = v0 + k * range_v;
+                    if (pb.1 - l).abs() < range_v * 1e-9 && (pb.1 - pa.1).abs() > range_v * 1e-9 {
+                        out_pts.last_mut().unwrap().1 = l;
+                        on_seam = true;
+                    }
+                }
+                if on_seam {
+                    cross_idx.push(out_pts.len() - 1);
+                }
+            }
+        }
+
+        // Split at seam crossings into continuous UV pieces
+        let wrap_drift = closure_du.abs() > range_u * 0.5 || closure_dv.abs() > range_v * 0.5;
+        let mut pieces: Vec<(Vec<(f64, f64)>, bool)> = Vec::new();
+        if cross_idx.is_empty() {
+            // A loop with net unwrap drift wraps the seam with endpoints on it:
+            // emit as one open piece spanning the full period
+            pieces.push((out_pts.clone(), is_loop && !wrap_drift));
+        } else if is_loop {
+            for w in cross_idx.windows(2) {
+                let (a, b) = (w[0], w[1]);
+                pieces.push((out_pts[a..=b].to_vec(), false));
+            }
+            let mut wrap_piece: Vec<(f64, f64)> = out_pts[cross_idx[cross_idx.len() - 1]..].to_vec();
+            for p in &out_pts[1..=cross_idx[0]] {
+                wrap_piece.push((p.0 + closure_du, p.1 + closure_dv));
+            }
+            pieces.push((wrap_piece, false));
+        } else {
+            let mut bounds: Vec<usize> = vec![0];
+            for &c in &cross_idx { bounds.push(c); }
+            bounds.push(out_pts.len() - 1);
+            for w in bounds.windows(2) {
+                let (a, b) = (w[0], w[1]);
+                if b > a { pieces.push((out_pts[a..=b].to_vec(), false)); }
+            }
+        }
+
+        for (mut piece_pts, piece_loop) in pieces {
+            if piece_pts.len() < 2 { continue; }
+            // Shift the piece into the base domain
+            let mid = piece_pts[piece_pts.len() / 2];
+            if closed_u {
+                let k_u = ((mid.0 - u0) / range_u).floor();
+                if k_u != 0.0 {
+                    for p in piece_pts.iter_mut() { p.0 -= k_u * range_u; }
+                }
+            }
+            if closed_v {
+                let k_v = ((mid.1 - v0) / range_v).floor();
+                if k_v != 0.0 {
+                    for p in piece_pts.iter_mut() { p.1 -= k_v * range_v; }
+                }
+            }
+
+            let pts3: Vec<Point> = piece_pts.iter()
+                .map(|&(u, v)| surface.point_at(wrap_u(u), wrap_v(v)).unwrap_or(Point::new(0.0, 0.0, 0.0)))
+                .collect();
+
+            // Fit the 3D curve (plane-constrained; circle/ellipse for full loops)
+            let mut crv3 = surface_plane_fit_3d(&pts3, piece_loop, plane, step, uv_to_3d, uv_to_3d_min, false);
+            if !crv3.is_valid() {
+                crv3 = if piece_loop {
+                    NurbsCurve::create_interpolated(&pts3, CurveNurbsKnotStyle::ChordPeriodic)
+                } else {
+                    NurbsCurve::create_interpolated(&pts3, CurveNurbsKnotStyle::Chord)
+                };
+            }
+            if !crv3.is_valid() { continue; }
+
+            // Fit the UV pcurve
+            let pts_uv: Vec<Point> = piece_pts.iter()
+                .map(|&(u, v)| Point::new(u, v, 0.0))
+                .collect();
+            let mp = pts_uv.len();
+            let fit_tol_uv = step;
+            let mut total_turning = 0.0f64;
+            for i in 1..(mp - 1) {
+                let dx1 = pts_uv[i][0] - pts_uv[i - 1][0];
+                let dy1 = pts_uv[i][1] - pts_uv[i - 1][1];
+                let dx2 = pts_uv[i + 1][0] - pts_uv[i][0];
+                let dy2 = pts_uv[i + 1][1] - pts_uv[i][1];
+                let l1 = f64::hypot(dx1, dy1);
+                let l2 = f64::hypot(dx2, dy2);
+                if l1 > 1e-14 && l2 > 1e-14 {
+                    let c = ((dx1 * dx2 + dy1 * dy2) / (l1 * l2)).max(-1.0).min(1.0);
+                    total_turning += c.acos();
+                }
+            }
+
+            let mut chords = vec![0.0f64; mp];
+            let mut total_len = 0.0f64;
+            for i in 1..mp {
+                total_len += pts_uv[i].distance(&pts_uv[i - 1], None);
+                chords[i] = total_len;
+            }
+            if piece_loop && mp > 1 {
+                total_len += pts_uv[0].distance(&pts_uv[mp - 1], None);
+            }
+            if total_len > 1e-14 {
+                for i in 1..mp { chords[i] /= total_len; }
+            }
+
+            let mut target_cvs = 8_i32.max((total_turning / 0.5) as i32 + 6);
+            let max_cvs = (mp as i32) - 1;
+            let mut pcurve = NurbsCurve::new(3, false, 4, 0);
+            for _ in 0..5 {
+                if target_cvs > max_cvs { break; }
+                pcurve = NurbsCurve::create_fitted(&pts_uv, target_cvs as usize, 3, piece_loop);
+                if !pcurve.is_valid() { break; }
+                let (ft0, ft1) = pcurve.domain();
+                let mut max_dev = 0.0f64;
+                for i in 0..mp {
+                    let t = ft0 + (ft1 - ft0) * chords[i];
+                    max_dev = max_dev.max(pcurve.point_at(t).distance(&pts_uv[i], None));
+                }
+                if max_dev < fit_tol_uv { break; }
+                target_cvs = (target_cvs * 2).min(max_cvs);
+            }
+
+            if !pcurve.is_valid() {
+                pcurve = if piece_loop {
+                    NurbsCurve::create_interpolated(&pts_uv, CurveNurbsKnotStyle::ChordPeriodic)
+                } else {
+                    NurbsCurve::create_interpolated(&pts_uv, CurveNurbsKnotStyle::Chord)
+                };
+            }
+            if !pcurve.is_valid() { continue; }
+
+            crv3.set_domain(0.0, 1.0);
+            pcurve.set_domain(0.0, 1.0);
+
+            // Validate: lifted pcurve must stay on the plane within the fit budget
+            let vali_tol = (10.0 * tolerance).max(fit_tol * 2.0);
+            let mut max_off = 0.0f64;
+            for i in 0..17 {
+                let t = i as f64 / 16.0;
+                let pc = pcurve.point_at(t);
+                let (val, _gu, _gv) = g_and_grad(pc[0], pc[1]);
+                max_off = max_off.max(val.abs());
+            }
+            if max_off > vali_tol && target_cvs * 2 <= max_cvs {
+                let mut refit = NurbsCurve::create_fitted(&pts_uv, (target_cvs * 2) as usize, 3, piece_loop);
+                if refit.is_valid() {
+                    refit.set_domain(0.0, 1.0);
+                    pcurve = refit;
+                }
+            }
+
+            result.push((crv3, pcurve));
+        }
+    }
+
+    result
+}
+
+/// Solve an n x n linear system by Gaussian elimination with pivoting.
+fn solve_gauss(m: &[Vec<f64>], rhs: &[f64], n: usize) -> Option<Vec<f64>> {
+    let mut a: Vec<Vec<f64>> = (0..n).map(|r| {
+        let mut row = m[r].clone();
+        row.push(rhs[r]);
+        row
+    }).collect();
+    for col in 0..n {
+        let mut pivot = col;
+        for r in (col + 1)..n {
+            if a[r][col].abs() > a[pivot][col].abs() { pivot = r; }
+        }
+        if a[pivot][col].abs() < 1e-20 { return None; }
+        if pivot != col { a.swap(col, pivot); }
+        for r in (col + 1)..n {
+            let f = a[r][col] / a[col][col];
+            for j in col..=n {
+                a[r][j] -= f * a[col][j];
+            }
+        }
+    }
+    let mut x = vec![0.0f64; n];
+    for i in (0..n).rev() {
+        let mut s = a[i][n];
+        for j in (i + 1)..n {
+            s -= a[i][j] * x[j];
+        }
+        x[i] = s / a[i][i];
+    }
+    Some(x)
+}
+
+/// Return two unit vectors spanning the plane perpendicular to unit n.
+fn ortho_basis(n: [f64; 3]) -> ([f64; 3], [f64; 3]) {
+    let ax = if n[0].abs() <= n[1].abs() && n[0].abs() <= n[2].abs() { 1.0 } else { 0.0 };
+    let ay = if ax == 0.0 && n[1].abs() <= n[2].abs() { 1.0 } else { 0.0 };
+    let az = if ax == 0.0 && ay == 0.0 { 1.0 } else { 0.0 };
+    // u = (ax,ay,az) x n, then v = n x u
+    let ux = ay * n[2] - az * n[1];
+    let uy = az * n[0] - ax * n[2];
+    let uz = ax * n[1] - ay * n[0];
+    let ul = (ux * ux + uy * uy + uz * uz).sqrt();
+    let (ux, uy, uz) = (ux / ul, uy / ul, uz / ul);
+    let vx = n[1] * uz - n[2] * uy;
+    let vy = n[2] * ux - n[0] * uz;
+    let vz = n[0] * uy - n[1] * ux;
+    ([ux, uy, uz], [vx, vy, vz])
+}
+
+/// Exact 9-CV rational NURBS circle: center (cx,cy,cz), in-plane orthonormal
+/// axes xa, ya, given radius. Geometrically exact (not a fit).
+fn exact_circle(cx: f64, cy: f64, cz: f64, xa: [f64; 3], ya: [f64; 3], radius: f64) -> NurbsCurve {
+    let w = (2.0_f64).sqrt() / 2.0;
+    let px = [1.0, 1.0, 0.0, -1.0, -1.0, -1.0, 0.0, 1.0, 1.0];
+    let py = [0.0, 1.0, 1.0, 1.0, 0.0, -1.0, -1.0, -1.0, 0.0];
+    let wts = [1.0, w, 1.0, w, 1.0, w, 1.0, w, 1.0];
+    let mut crv = NurbsCurve::new(3, true, 3, 9);
+    let knots = [0.0, 0.0, 1.0, 1.0, 2.0, 2.0, 3.0, 3.0, 4.0, 4.0];
+    for i in 0..10 {
+        crv.set_nurbsknot(i, knots[i]);
+    }
+    for i in 0..9 {
+        let x = cx + radius * (px[i] * xa[0] + py[i] * ya[0]);
+        let y = cy + radius * (px[i] * xa[1] + py[i] * ya[1]);
+        let z = cz + radius * (px[i] * xa[2] + py[i] * ya[2]);
+        crv.set_cv_4d(i, x * wts[i], y * wts[i], z * wts[i], wts[i]);
+    }
+    crv.set_domain(0.0, 1.0);
+    crv
+}
+
+/// Eigenvalues/vectors of a symmetric 3x3 matrix (cyclic Jacobi).
+/// Returns (eigvals, eigvecs) with eigvecs[k] the unit vector for eigvals[k].
+fn jacobi_eig3(m: &[[f64; 3]; 3]) -> ([f64; 3], [[f64; 3]; 3]) {
+    let mut a = *m;
+    let mut v = [[1.0, 0.0, 0.0], [0.0, 1.0, 0.0], [0.0, 0.0, 1.0]];
+    for _ in 0..50 {
+        let off = a[0][1].abs() + a[0][2].abs() + a[1][2].abs();
+        if off < 1e-18 {
+            break;
+        }
+        for &(p, q) in &[(0usize, 1usize), (0, 2), (1, 2)] {
+            if a[p][q].abs() < 1e-300 {
+                continue;
+            }
+            let theta = (a[q][q] - a[p][p]) / (2.0 * a[p][q]);
+            let t = (if theta >= 0.0 { 1.0 } else { -1.0 }) / (theta.abs() + (theta * theta + 1.0).sqrt());
+            let c = 1.0 / (t * t + 1.0).sqrt();
+            let s = t * c;
+            for k in 0..3 {
+                let (akp, akq) = (a[k][p], a[k][q]);
+                a[k][p] = c * akp - s * akq;
+                a[k][q] = s * akp + c * akq;
+            }
+            for k in 0..3 {
+                let (apk, aqk) = (a[p][k], a[q][k]);
+                a[p][k] = c * apk - s * aqk;
+                a[q][k] = s * apk + c * aqk;
+            }
+            for k in 0..3 {
+                let (vkp, vkq) = (v[k][p], v[k][q]);
+                v[k][p] = c * vkp - s * vkq;
+                v[k][q] = s * vkp + c * vkq;
+            }
+        }
+    }
+    let eigvals = [a[0][0], a[1][1], a[2][2]];
+    let eigvecs = [
+        [v[0][0], v[1][0], v[2][0]],
+        [v[0][1], v[1][1], v[2][1]],
+        [v[0][2], v[1][2], v[2][2]],
+    ];
+    (eigvals, eigvecs)
+}
+
+/// Exact 9-CV rational NURBS ellipse: center, in-plane orthonormal axes
+/// ea/eb, semi-axes semi_a/semi_b. Geometrically exact.
+fn exact_ellipse(cx: f64, cy: f64, cz: f64, ea: [f64; 3], eb: [f64; 3], semi_a: f64, semi_b: f64) -> NurbsCurve {
+    let w = (2.0_f64).sqrt() / 2.0;
+    let px = [1.0, 1.0, 0.0, -1.0, -1.0, -1.0, 0.0, 1.0, 1.0];
+    let py = [0.0, 1.0, 1.0, 1.0, 0.0, -1.0, -1.0, -1.0, 0.0];
+    let wts = [1.0, w, 1.0, w, 1.0, w, 1.0, w, 1.0];
+    let mut crv = NurbsCurve::new(3, true, 3, 9);
+    let knots = [0.0, 0.0, 1.0, 1.0, 2.0, 2.0, 3.0, 3.0, 4.0, 4.0];
+    for i in 0..10 {
+        crv.set_nurbsknot(i, knots[i]);
+    }
+    for i in 0..9 {
+        let x = cx + semi_a * px[i] * ea[0] + semi_b * py[i] * eb[0];
+        let y = cy + semi_a * px[i] * ea[1] + semi_b * py[i] * eb[1];
+        let z = cz + semi_a * px[i] * ea[2] + semi_b * py[i] * eb[2];
+        crv.set_cv_4d(i, x * wts[i], y * wts[i], z * wts[i], wts[i]);
+    }
+    crv.set_domain(0.0, 1.0);
+    crv
+}
+
+/// Recognize a circular cylinder: axis via the min-variance direction of the
+/// surface normals, radius via distance of points to the axis line. Returns
+/// (axis_pt, axis_dir, radius) or None.
+fn fit_cylinder(surface: &NurbsSurface, tol: f64) -> Option<([f64; 3], [f64; 3], f64)> {
+    let (u0, u1) = surface.domain(0)?;
+    let (v0, v1) = surface.domain(1)?;
+    let mut pts: Vec<[f64; 3]> = Vec::new();
+    let mut nrm: Vec<[f64; 3]> = Vec::new();
+    for i in 0..5 {
+        for j in 0..5 {
+            let uu = u0 + (u1 - u0) * i as f64 / 4.0;
+            let vv = v0 + (v1 - v0) * j as f64 / 4.0;
+            let p = surface.point_at(uu, vv)?;
+            pts.push([p[0], p[1], p[2]]);
+            let n = surface.normal_at(uu, vv);
+            nrm.push([n[0], n[1], n[2]]);
+        }
+    }
+    // Axis = eigenvector of the smallest eigenvalue of sum(n n^T) (normals are
+    // perpendicular to the axis, so variance along the axis is ~0).
+    let mut m = [[0.0; 3]; 3];
+    for n in &nrm {
+        for r in 0..3 {
+            for c in 0..3 {
+                m[r][c] += n[r] * n[c];
+            }
+        }
+    }
+    let (evals, evecs) = jacobi_eig3(&m);
+    let mut kmin = 0usize;
+    for k in 1..3 {
+        if evals[k] < evals[kmin] {
+            kmin = k;
+        }
+    }
+    let w = evecs[kmin];
+    let wl = (w[0] * w[0] + w[1] * w[1] + w[2] * w[2]).sqrt();
+    if wl < 1e-12 {
+        return None;
+    }
+    let w = [w[0] / wl, w[1] / wl, w[2] / wl];
+    // Project points onto the plane perpendicular to the axis and fit a 2D
+    // circle there (unbiased; a centroid is skewed by non-uniform/seam sampling).
+    let (ea, eb) = ortho_basis(w);
+    let p0 = pts[0];
+    let mut ata = vec![vec![0.0; 3]; 3];
+    let mut atb = vec![0.0; 3];
+    let mut proj: Vec<(f64, f64)> = Vec::new();
+    for p in &pts {
+        let dp = [p[0] - p0[0], p[1] - p0[1], p[2] - p0[2]];
+        let x = dp[0] * ea[0] + dp[1] * ea[1] + dp[2] * ea[2];
+        let y = dp[0] * eb[0] + dp[1] * eb[1] + dp[2] * eb[2];
+        proj.push((x, y));
+        let row = [x, y, 1.0];
+        let rhs = -(x * x + y * y);
+        for r in 0..3 {
+            atb[r] += row[r] * rhs;
+            for c in 0..3 {
+                ata[r][c] += row[r] * row[c];
+            }
+        }
+    }
+    let sol = solve_gauss(&ata, &atb, 3)?;
+    let ccx = -sol[0] / 2.0;
+    let ccy = -sol[1] / 2.0;
+    let r2 = ccx * ccx + ccy * ccy - sol[2];
+    if r2 <= 1e-18 {
+        return None;
+    }
+    let r = r2.sqrt();
+    for &(x, y) in &proj {
+        if (((x - ccx).powi(2) + (y - ccy).powi(2)).sqrt() - r).abs() > tol {
+            return None;
+        }
+    }
+    let axis_pt = [
+        p0[0] + ccx * ea[0] + ccy * eb[0],
+        p0[1] + ccx * ea[1] + ccy * eb[1],
+        p0[2] + ccx * ea[2] + ccy * eb[2],
+    ];
+    Some((axis_pt, w, r))
+}
+
+/// Recognize a circular cone. Apex from the tangent-plane condition n.(V-p)=0
+/// (least squares), axis from the principal direction of the generator
+/// covariance, half-angle from the mean apex-to-point angle. Returns
+/// (apex, axis, half_angle) or None.
+fn fit_cone(surface: &NurbsSurface, tol: f64) -> Option<([f64; 3], [f64; 3], f64)> {
+    let (u0, u1) = surface.domain(0)?;
+    let (v0, v1) = surface.domain(1)?;
+    // Sample the closed u-direction over [u0,u1) (8 distinct angles, no seam
+    // duplicate, which would bias the covariance-based axis estimate).
+    let mut pts: Vec<[f64; 3]> = Vec::new();
+    let mut nrm: Vec<([f64; 3], [f64; 3])> = Vec::new();
+    let nu_s = 8;
+    for i in 0..nu_s {
+        let uu = u0 + (u1 - u0) * i as f64 / nu_s as f64;
+        for j in 0..5 {
+            let vv = v0 + (v1 - v0) * j as f64 / 4.0;
+            let p = surface.point_at(uu, vv)?;
+            pts.push([p[0], p[1], p[2]]);
+            let n = surface.normal_at(uu, vv);
+            let nl = (n[0] * n[0] + n[1] * n[1] + n[2] * n[2]).sqrt();
+            if nl < 1e-12 {
+                continue;
+            }
+            let pp = surface.point_at(uu, vv)?;
+            nrm.push(([n[0] / nl, n[1] / nl, n[2] / nl], [pp[0], pp[1], pp[2]]));
+        }
+    }
+    if nrm.len() < 4 {
+        return None;
+    }
+    let mut ata = vec![vec![0.0; 3]; 3];
+    let mut atb = vec![0.0; 3];
+    for (n, p) in &nrm {
+        let npd = n[0] * p[0] + n[1] * p[1] + n[2] * p[2];
+        for r in 0..3 {
+            atb[r] += n[r] * npd;
+            for c in 0..3 {
+                ata[r][c] += n[r] * n[c];
+            }
+        }
+    }
+    let vv = solve_gauss(&ata, &atb, 3)?;
+    let mut gs: Vec<[f64; 3]> = Vec::new();
+    for p in &pts {
+        let d = [p[0] - vv[0], p[1] - vv[1], p[2] - vv[2]];
+        let dl = (d[0] * d[0] + d[1] * d[1] + d[2] * d[2]).sqrt();
+        if dl < tol {
+            continue;
+        }
+        gs.push([d[0] / dl, d[1] / dl, d[2] / dl]);
+    }
+    if gs.len() < 3 {
+        return None;
+    }
+    // Axis = principal (largest-eigenvalue) direction of the generator
+    // covariance — generators cluster tightly around the axis. (The mean
+    // generator is biased by non-uniform/seam sampling.)
+    let mut g = [[0.0; 3]; 3];
+    for gg in &gs {
+        for r in 0..3 {
+            for c in 0..3 {
+                g[r][c] += gg[r] * gg[c];
+            }
+        }
+    }
+    let (gevals, gevecs) = jacobi_eig3(&g);
+    let mut kmax = 0usize;
+    for k in 1..3 {
+        if gevals[k] > gevals[kmax] {
+            kmax = k;
+        }
+    }
+    let mut w = gevecs[kmax];
+    let sx = [
+        gs.iter().map(|g| g[0]).sum::<f64>(),
+        gs.iter().map(|g| g[1]).sum::<f64>(),
+        gs.iter().map(|g| g[2]).sum::<f64>(),
+    ];
+    if w[0] * sx[0] + w[1] * sx[1] + w[2] * sx[2] < 0.0 {
+        // orient toward the generators
+        w = [-w[0], -w[1], -w[2]];
+    }
+    let wl = (w[0] * w[0] + w[1] * w[1] + w[2] * w[2]).sqrt();
+    if wl < 1e-12 {
+        return None;
+    }
+    let w = [w[0] / wl, w[1] / wl, w[2] / wl];
+    let mut angs: Vec<f64> = Vec::new();
+    for gg in &gs {
+        angs.push((gg[0] * w[0] + gg[1] * w[1] + gg[2] * w[2]).max(-1.0).min(1.0).acos());
+    }
+    let alpha = angs.iter().sum::<f64>() / angs.len() as f64;
+    if alpha < 1e-4 || alpha > std::f64::consts::PI / 2.0 - 1e-4 {
+        return None;
+    }
+    let ca = alpha.cos();
+    for p in &pts {
+        let d = [p[0] - vv[0], p[1] - vv[1], p[2] - vv[2]];
+        let axd = d[0] * w[0] + d[1] * w[1] + d[2] * w[2];
+        let perp = (0.0_f64).max((d[0] * d[0] + d[1] * d[1] + d[2] * d[2]) - axd * axd).sqrt();
+        if (perp - axd * alpha.tan()).abs() * ca > tol {
+            return None;
+        }
+    }
+    Some(([vv[0], vv[1], vv[2]], w, alpha))
+}
+
+/// Algebraic sphere fit on sampled surface points. Returns (cx,cy,cz,r) if the
+/// surface is a sphere within tol, else None.
+fn fit_sphere(surface: &NurbsSurface, tol: f64) -> Option<(f64, f64, f64, f64)> {
+    let (u0, u1) = surface.domain(0)?;
+    let (v0, v1) = surface.domain(1)?;
+    let mut pts: Vec<[f64; 3]> = Vec::new();
+    for i in 0..5 {
+        for j in 0..5 {
+            let uu = u0 + (u1 - u0) * i as f64 / 4.0;
+            let vv = v0 + (v1 - v0) * j as f64 / 4.0;
+            let p = surface.point_at(uu, vv)?;
+            pts.push([p[0], p[1], p[2]]);
+        }
+    }
+    // Solve x^2+y^2+z^2 + D x + E y + F z + G = 0  (least squares, normal eqs)
+    let mut ata = vec![vec![0.0; 4]; 4];
+    let mut atb = vec![0.0; 4];
+    for p in &pts {
+        let row = [p[0], p[1], p[2], 1.0];
+        let rhs = -(p[0] * p[0] + p[1] * p[1] + p[2] * p[2]);
+        for r in 0..4 {
+            atb[r] += row[r] * rhs;
+            for c in 0..4 {
+                ata[r][c] += row[r] * row[c];
+            }
+        }
+    }
+    let sol = solve_gauss(&ata, &atb, 4)?;
+    let cx = -sol[0] / 2.0;
+    let cy = -sol[1] / 2.0;
+    let cz = -sol[2] / 2.0;
+    let r2 = cx * cx + cy * cy + cz * cz - sol[3];
+    if r2 <= 0.0 {
+        return None;
+    }
+    let r = r2.sqrt();
+    // Verify: all sampled points within tol of the sphere.
+    for p in &pts {
+        let d = ((p[0] - cx).powi(2) + (p[1] - cy).powi(2) + (p[2] - cz).powi(2)).sqrt();
+        if (d - r).abs() > tol {
+            return None;
+        }
+    }
+    Some((cx, cy, cz, r))
+}
+
+/// Recognize a torus. Axis = smallest-variance direction of the surface points
+/// (a torus is flattest along its axis, for major > minor). Then fit a 2D circle
+/// (rho, axial) of the tube cross-section. Returns (center, axis, major_radius,
+/// minor_radius) or None.
+fn fit_torus(surface: &NurbsSurface, tol: f64) -> Option<([f64; 3], [f64; 3], f64, f64)> {
+    let (u0, u1) = surface.domain(0)?;
+    let (v0, v1) = surface.domain(1)?;
+    let mut pts: Vec<[f64; 3]> = Vec::new();
+    for i in 0..8 {
+        for j in 0..8 {
+            let p = surface.point_at(u0 + (u1 - u0) * i as f64 / 8.0, v0 + (v1 - v0) * j as f64 / 8.0)?;
+            pts.push([p[0], p[1], p[2]]);
+        }
+    }
+    let n = pts.len() as f64;
+    let cen = [
+        pts.iter().map(|p| p[0]).sum::<f64>() / n,
+        pts.iter().map(|p| p[1]).sum::<f64>() / n,
+        pts.iter().map(|p| p[2]).sum::<f64>() / n,
+    ];
+    let mut mm = [[0.0; 3]; 3];
+    for p in &pts {
+        let d = [p[0] - cen[0], p[1] - cen[1], p[2] - cen[2]];
+        for r in 0..3 {
+            for c in 0..3 {
+                mm[r][c] += d[r] * d[c];
+            }
+        }
+    }
+    let (evals, evecs) = jacobi_eig3(&mm);
+    let mut kmin = 0usize;
+    for k in 1..3 {
+        if evals[k] < evals[kmin] {
+            kmin = k;
+        }
+    }
+    let w = evecs[kmin];
+    let wl = (w[0] * w[0] + w[1] * w[1] + w[2] * w[2]).sqrt();
+    if wl < 1e-12 {
+        return None;
+    }
+    let w = [w[0] / wl, w[1] / wl, w[2] / wl];
+    // Fit circle (rho-R)^2 + (a-a0)^2 = r^2 in (rho, axial) coords.
+    let mut ata = vec![vec![0.0; 3]; 3];
+    let mut atb = vec![0.0; 3];
+    let mut rhoa: Vec<(f64, f64)> = Vec::new();
+    for p in &pts {
+        let d = [p[0] - cen[0], p[1] - cen[1], p[2] - cen[2]];
+        let a = d[0] * w[0] + d[1] * w[1] + d[2] * w[2];
+        let perp = [d[0] - a * w[0], d[1] - a * w[1], d[2] - a * w[2]];
+        let rho = (perp[0] * perp[0] + perp[1] * perp[1] + perp[2] * perp[2]).sqrt();
+        rhoa.push((rho, a));
+        let row = [rho, a, 1.0];
+        let rhs = -(rho * rho + a * a);
+        for r in 0..3 {
+            atb[r] += row[r] * rhs;
+            for c in 0..3 {
+                ata[r][c] += row[r] * row[c];
+            }
+        }
+    }
+    let sol = solve_gauss(&ata, &atb, 3)?;
+    let rr = -sol[0] / 2.0;
+    let a0 = -sol[1] / 2.0;
+    let r2 = rr * rr + a0 * a0 - sol[2];
+    if r2 <= 1e-18 || rr <= 0.0 {
+        return None;
+    }
+    let r = r2.sqrt();
+    if rr <= r * 0.5 {
+        return None; // not a clear ring torus
+    }
+    for &(rho, a) in &rhoa {
+        if (((rho - rr).powi(2) + (a - a0).powi(2)).sqrt() - r).abs() > tol {
+            return None;
+        }
+    }
+    let center = [cen[0] + a0 * w[0], cen[1] + a0 * w[1], cen[2] + a0 * w[2]];
+    Some((center, w, rr, r))
+}
+
+/// Recognized analytic surface type.
+enum RecSurf {
+    Plane([f64; 3], [f64; 3]),
+    Sphere([f64; 3], f64),
+    Cylinder([f64; 3], [f64; 3], f64),
+    Cone([f64; 3], [f64; 3], f64),
+    Torus([f64; 3], [f64; 3], f64, f64),
+}
+
+/// Classify a surface as a plane, sphere, cylinder or cone, else None.
+fn recognize_surface(surface: &NurbsSurface, tol: f64) -> Option<RecSurf> {
+    if surface.is_planar(tol) {
+        let (u0, u1) = surface.domain(0)?;
+        let (v0, v1) = surface.domain(1)?;
+        let o = surface.point_at((u0 + u1) * 0.5, (v0 + v1) * 0.5)?;
+        let n = surface.normal_at((u0 + u1) * 0.5, (v0 + v1) * 0.5);
+        return Some(RecSurf::Plane([o[0], o[1], o[2]], [n[0], n[1], n[2]]));
+    }
+    if let Some(sph) = fit_sphere(surface, tol) {
+        return Some(RecSurf::Sphere([sph.0, sph.1, sph.2], sph.3));
+    }
+    if let Some(cyl) = fit_cylinder(surface, tol) {
+        return Some(RecSurf::Cylinder(cyl.0, cyl.1, cyl.2));
+    }
+    if let Some(cone) = fit_cone(surface, tol) {
+        return Some(RecSurf::Cone(cone.0, cone.1, cone.2));
+    }
+    if let Some(tor) = fit_torus(surface, tol) {
+        return Some(RecSurf::Torus(tor.0, tor.1, tor.2, tor.3));
+    }
+    None
+}
+
+#[inline]
+fn vunit(v: [f64; 3]) -> [f64; 3] {
+    let l = (v[0] * v[0] + v[1] * v[1] + v[2] * v[2]).sqrt();
+    if l > 1e-300 {
+        [v[0] / l, v[1] / l, v[2] / l]
+    } else {
+        v
+    }
+}
+
+#[inline]
+fn vcross(u: [f64; 3], v: [f64; 3]) -> [f64; 3] {
+    [
+        u[1] * v[2] - u[2] * v[1],
+        u[2] * v[0] - u[0] * v[2],
+        u[0] * v[1] - u[1] * v[0],
+    ]
+}
+
+fn plane_sphere(o: [f64; 3], nraw: [f64; 3], c: [f64; 3], r: f64) -> Option<NurbsCurve> {
+    let nu = vunit(nraw);
+    let d = (c[0] - o[0]) * nu[0] + (c[1] - o[1]) * nu[1] + (c[2] - o[2]) * nu[2];
+    if d.abs() >= r {
+        return None;
+    }
+    let cc = [c[0] - d * nu[0], c[1] - d * nu[1], c[2] - d * nu[2]];
+    let rr = (r * r - d * d).sqrt();
+    let (xa, ya) = ortho_basis(nu);
+    Some(exact_circle(cc[0], cc[1], cc[2], xa, ya, rr))
+}
+
+fn plane_cylinder(o: [f64; 3], nraw: [f64; 3], p_pt: [f64; 3], wraw: [f64; 3], r: f64) -> Option<NurbsCurve> {
+    let nu = vunit(nraw);
+    let w = vunit(wraw);
+    let wn = w[0] * nu[0] + w[1] * nu[1] + w[2] * nu[2];
+    if wn.abs() < 1e-7 {
+        return None; // plane parallel to axis -> lines (degenerate); marcher
+    }
+    let t = ((o[0] - p_pt[0]) * nu[0] + (o[1] - p_pt[1]) * nu[1] + (o[2] - p_pt[2]) * nu[2]) / wn;
+    let cc = [p_pt[0] + t * w[0], p_pt[1] + t * w[1], p_pt[2] + t * w[2]];
+    let mraw = vcross(w, nu); // in plane, perp to axis
+    if (mraw[0] * mraw[0] + mraw[1] * mraw[1] + mraw[2] * mraw[2]).sqrt() < 1e-9 {
+        // Plane perpendicular to the axis -> the section is a circle.
+        let (xa, ya) = ortho_basis(nu);
+        return Some(exact_circle(cc[0], cc[1], cc[2], xa, ya, r));
+    }
+    let minor = vunit(mraw);
+    let major = vunit([w[0] - wn * nu[0], w[1] - wn * nu[1], w[2] - wn * nu[2]]);
+    Some(exact_ellipse(cc[0], cc[1], cc[2], major, minor, r / wn.abs(), r))
+}
+
+fn line_cone(x0: [f64; 3], d: [f64; 3], v: [f64; 3], w: [f64; 3], alpha: f64) -> Vec<f64> {
+    // Solve ((X-V).w)^2 - cos^2a |X-V|^2 = 0 along X=x0+t d. Returns [t...].
+    let ca2 = alpha.cos().powi(2);
+    let e = [x0[0] - v[0], x0[1] - v[1], x0[2] - v[2]];
+    let aa = e[0] * w[0] + e[1] * w[1] + e[2] * w[2];
+    let bb = d[0] * w[0] + d[1] * w[1] + d[2] * w[2];
+    let cc = e[0] * e[0] + e[1] * e[1] + e[2] * e[2];
+    let dd = e[0] * d[0] + e[1] * d[1] + e[2] * d[2];
+    let ee = d[0] * d[0] + d[1] * d[1] + d[2] * d[2];
+    let qa = bb * bb - ca2 * ee;
+    let qb = 2.0 * aa * bb - 2.0 * ca2 * dd;
+    let qc = aa * aa - ca2 * cc;
+    if qa.abs() < 1e-14 {
+        return if qb.abs() < 1e-300 { vec![] } else { vec![-qc / qb] };
+    }
+    let disc = qb * qb - 4.0 * qa * qc;
+    if disc < 0.0 {
+        return vec![];
+    }
+    let sq = disc.sqrt();
+    vec![(-qb - sq) / (2.0 * qa), (-qb + sq) / (2.0 * qa)]
+}
+
+fn plane_cone(o: [f64; 3], nraw: [f64; 3], v: [f64; 3], wraw: [f64; 3], alpha: f64) -> Option<NurbsCurve> {
+    let nu = vunit(nraw);
+    let w = vunit(wraw);
+    let wn = w[0] * nu[0] + w[1] * nu[1] + w[2] * nu[2];
+    if (wn.abs() - 1.0).abs() < 1e-9 {
+        // Plane perpendicular to axis -> circle at axial distance from apex.
+        let dax = (o[0] - v[0]) * w[0] + (o[1] - v[1]) * w[1] + (o[2] - v[2]) * w[2];
+        let rr = dax.abs() * alpha.tan();
+        let cc = [v[0] + dax * w[0], v[1] + dax * w[1], v[2] + dax * w[2]];
+        if rr < 1e-12 {
+            return None;
+        }
+        let (xa, ya) = ortho_basis(nu);
+        return Some(exact_circle(cc[0], cc[1], cc[2], xa, ya, rr));
+    }
+    // General: major axis = cutting plane ∩ symmetry plane (span of w,n).
+    let mraw = vcross(w, nu);
+    let ml = (mraw[0] * mraw[0] + mraw[1] * mraw[1] + mraw[2] * mraw[2]).sqrt();
+    if ml < 1e-12 {
+        return None;
+    }
+    let m = [mraw[0] / ml, mraw[1] / ml, mraw[2] / ml]; // minor direction
+    let major0 = vunit([w[0] - wn * nu[0], w[1] - wn * nu[1], w[2] - wn * nu[2]]);
+    // Apex projected into the cutting plane lies on the major-axis line.
+    let dv = (v[0] - o[0]) * nu[0] + (v[1] - o[1]) * nu[1] + (v[2] - o[2]) * nu[2];
+    let vp = [v[0] - dv * nu[0], v[1] - dv * nu[1], v[2] - dv * nu[2]];
+    let ts = line_cone(vp, major0, v, w, alpha);
+    if ts.len() != 2 {
+        return None; // parabola/hyperbola (unbounded) -> not an ellipse
+    }
+    let a_pt = [vp[0] + ts[0] * major0[0], vp[1] + ts[0] * major0[1], vp[2] + ts[0] * major0[2]];
+    let bp = [vp[0] + ts[1] * major0[0], vp[1] + ts[1] * major0[1], vp[2] + ts[1] * major0[2]];
+    let cc = [(a_pt[0] + bp[0]) * 0.5, (a_pt[1] + bp[1]) * 0.5, (a_pt[2] + bp[2]) * 0.5];
+    let semi_major = 0.5 * ((bp[0] - a_pt[0]).powi(2) + (bp[1] - a_pt[1]).powi(2) + (bp[2] - a_pt[2]).powi(2)).sqrt();
+    let major = vunit([bp[0] - a_pt[0], bp[1] - a_pt[1], bp[2] - a_pt[2]]);
+    let tm = line_cone(cc, m, v, w, alpha);
+    if tm.len() != 2 {
+        return None;
+    }
+    let semi_minor = 0.5 * (tm[1] - tm[0]).abs();
+    if semi_major < 1e-12 || semi_minor < 1e-12 {
+        return None;
+    }
+    Some(exact_ellipse(cc[0], cc[1], cc[2], major, m, semi_major, semi_minor))
+}
+
+/// Plane ∩ torus. Returns None if the plane is not perpendicular to the torus
+/// axis (a non-perpendicular cut is a quartic, not a conic -> marcher). Otherwise
+/// returns up to two concentric circles (the two tube cross-sections), or an
+/// empty list if the plane misses the tube.
+fn plane_torus(o: [f64; 3], nraw: [f64; 3], c: [f64; 3], wraw: [f64; 3], rr: f64, r: f64) -> Option<Vec<NurbsCurve>> {
+    let nu = vunit(nraw);
+    let w = vunit(wraw);
+    let wn = w[0] * nu[0] + w[1] * nu[1] + w[2] * nu[2];
+    if (wn.abs() - 1.0).abs() > 1e-7 {
+        return None; // non-perpendicular -> quartic, not conic -> marcher
+    }
+    let d = (o[0] - c[0]) * w[0] + (o[1] - c[1]) * w[1] + (o[2] - c[2]) * w[2];
+    if d.abs() > r {
+        return Some(vec![]); // plane misses the tube
+    }
+    let h = (0.0_f64).max(r * r - d * d).sqrt();
+    let cc = [c[0] + d * w[0], c[1] + d * w[1], c[2] + d * w[2]];
+    let (xa, ya) = ortho_basis(w);
+    let mut out: Vec<NurbsCurve> = Vec::new();
+    for radius in [rr + h, rr - h] {
+        if radius > 1e-12 {
+            out.push(exact_circle(cc[0], cc[1], cc[2], xa, ya, radius));
+        }
+    }
+    Some(out)
+}
+
+/// Closed-form intersection for recognized quadric pairs (exact conics).
+/// Returns Some(list of (curve_3d, pcurve_a, pcurve_b)), Some(empty) (recognized
+/// exact case but no intersection), or None (not an analytically-exact pair ->
+/// caller falls back to marching).
+fn analytic_ssi(a: &NurbsSurface, b: &NurbsSurface, tolerance: Option<f64>) -> Option<Vec<(NurbsCurve, NurbsCurve, NurbsCurve)>> {
+    let tol = match tolerance {
+        Some(t) if t > 0.0 => t,
+        _ => 1e-12,  // SSI default tolerance: match Python/C++ (1e-12), not Rust ZERO_TOLERANCE (1e-7)
+    };
+    let rtol = tol.max(1e-7) * 1e4;
+    let ra = recognize_surface(a, rtol)?;
+    let rb = recognize_surface(b, rtol)?;
+
+    // single(c) wraps a one-curve handler: [c] if Some, else empty.
+    let single = |c: Option<NurbsCurve>| -> Vec<NurbsCurve> {
+        match c {
+            Some(crv) => vec![crv],
+            None => vec![],
+        }
+    };
+
+    // Each handler returns a list of exact 3D curves (empty = recognized but no
+    // intersection), or the whole match arm returns None = not analytically
+    // handled (caller marches).
+    let c3_list: Vec<NurbsCurve> = match (&ra, &rb) {
+        (RecSurf::Plane(o, n), RecSurf::Sphere(c, r)) => single(plane_sphere(*o, *n, *c, *r)),
+        (RecSurf::Sphere(c, r), RecSurf::Plane(o, n)) => single(plane_sphere(*o, *n, *c, *r)),
+        (RecSurf::Plane(o, n), RecSurf::Cylinder(p, w, r)) => single(plane_cylinder(*o, *n, *p, *w, *r)),
+        (RecSurf::Cylinder(p, w, r), RecSurf::Plane(o, n)) => single(plane_cylinder(*o, *n, *p, *w, *r)),
+        (RecSurf::Plane(o, n), RecSurf::Cone(v, w, alpha)) => single(plane_cone(*o, *n, *v, *w, *alpha)),
+        (RecSurf::Cone(v, w, alpha), RecSurf::Plane(o, n)) => single(plane_cone(*o, *n, *v, *w, *alpha)),
+        (RecSurf::Plane(o, n), RecSurf::Torus(c, w, rr, r)) => match plane_torus(*o, *n, *c, *w, *rr, *r) {
+            Some(v) => v,
+            None => return None,
+        },
+        (RecSurf::Torus(c, w, rr, r), RecSurf::Plane(o, n)) => match plane_torus(*o, *n, *c, *w, *rr, *r) {
+            Some(v) => v,
+            None => return None,
+        },
+        (RecSurf::Sphere(c1, r1), RecSurf::Sphere(c2, r2)) => {
+            let dv = [c2[0] - c1[0], c2[1] - c1[1], c2[2] - c1[2]];
+            let dist = (dv[0] * dv[0] + dv[1] * dv[1] + dv[2] * dv[2]).sqrt();
+            let mut c3: Option<NurbsCurve> = None;
+            if 1e-12 < dist && dist < r1 + r2 && dist > (r1 - r2).abs() {
+                let nu = [dv[0] / dist, dv[1] / dist, dv[2] / dist];
+                let aa = (dist * dist + r1 * r1 - r2 * r2) / (2.0 * dist);
+                let rr2 = r1 * r1 - aa * aa;
+                if rr2 > 0.0 {
+                    let cc = [c1[0] + aa * nu[0], c1[1] + aa * nu[1], c1[2] + aa * nu[2]];
+                    let (xa, ya) = ortho_basis(nu);
+                    c3 = Some(exact_circle(cc[0], cc[1], cc[2], xa, ya, rr2.sqrt()));
+                }
+            }
+            single(c3)
+        }
+        _ => return None, // not an analytically-exact pair -> marcher
+    };
+
+    // The 3D curves are exact; use the first pcurve piece on each surface (a
+    // curve crossing a surface seam pulls back to several UV pieces — c3 stays
+    // whole). Skip a curve whose pullback fails entirely.
+    let mut triples: Vec<(NurbsCurve, NurbsCurve, NurbsCurve)> = Vec::new();
+    for c3 in c3_list {
+        let pas = Closest::surface_curve(a, &c3, 0.0, 0.0, Some(tol));
+        let pbs = Closest::surface_curve(b, &c3, 0.0, 0.0, Some(tol));
+        if !pas.is_empty() && !pbs.is_empty() {
+            triples.push((c3, pas[0].clone(), pbs[0].clone()));
+        }
+    }
+    Some(triples)
+}
+
+/// Find surface/surface intersection curves with UV pcurves on both.
+///
+/// Returns a list of (curve_3d, pcurve_a, pcurve_b) triples. Pcurves are
+/// NurbsCurves in each surface's parameter space (x=u, y=v, z=0), seam-split
+/// on BOTH surfaces. All three curves are reparameterized to [0, 1]; the
+/// pcurves are tolerance companions, not exact reparameterizations. Marching
+/// terminates at tangencies (n_a parallel n_b); tangential intersections are
+/// unsupported.
+pub fn surface_surface(a: &NurbsSurface, b: &NurbsSurface, tolerance: Option<f64>) -> Vec<(NurbsCurve, NurbsCurve, NurbsCurve)> {
+    if a.is_valid() && b.is_valid() {
+        if let Some(ana) = analytic_ssi(a, b, tolerance) {
+            return ana;
+        }
+    }
+    if !a.is_valid() || !b.is_valid() { return vec![]; }
+    let tolerance = match tolerance {
+        Some(t) if t > 0.0 => t,
+        _ => 1e-12,  // SSI default tolerance: match Python/C++ (1e-12), not Rust ZERO_TOLERANCE (1e-7)
+    };
+
+    // Planar dispatch: reuse the plane tracer when either surface is planar
+    let plane_from = |srf: &NurbsSurface| -> Plane {
+        let (s0, s1) = srf.domain(0).unwrap();
+        let (t0, t1) = srf.domain(1).unwrap();
+        let po = srf.point_at((s0 + s1) * 0.5, (t0 + t1) * 0.5).unwrap_or(Point::new(0.0, 0.0, 0.0));
+        let nn = srf.normal_at((s0 + s1) * 0.5, (t0 + t1) * 0.5);
+        Plane::from_point_normal(po, Vector::new(nn[0], nn[1], nn[2]))
+    };
+
+    if a.is_planar(1e-9) {
+        let plane = plane_from(a);
+        let mut result = Vec::new();
+        for (c3, pb) in surface_plane_uv(b, &plane, Some(tolerance)) {
+            let pas = Closest::surface_curve(a, &c3, 0.0, 0.0, Some(tolerance));
+            if pas.len() == 1 {
+                result.push((c3, pas[0].clone(), pb));
+            }
+        }
+        return result;
+    }
+    if b.is_planar(1e-9) {
+        let plane = plane_from(b);
+        let mut result = Vec::new();
+        for (c3, pa) in surface_plane_uv(a, &plane, Some(tolerance)) {
+            let pbs = Closest::surface_curve(b, &c3, 0.0, 0.0, Some(tolerance));
+            if pbs.len() == 1 {
+                result.push((c3, pa, pbs[0].clone()));
+            }
+        }
+        return result;
+    }
+
+    // ---- Per-surface context ----
+    let (au0, au1) = a.domain(0).unwrap();
+    let (av0, av1) = a.domain(1).unwrap();
+    let (bu0, bu1) = b.domain(0).unwrap();
+    let (bv0, bv1) = b.domain(1).unwrap();
+    let a_range_u = au1 - au0;
+    let a_range_v = av1 - av0;
+    let b_range_u = bu1 - bu0;
+    let b_range_v = bv1 - bv0;
+    let a_closed_u = a.is_closed(0);
+    let a_closed_v = a.is_closed(1);
+    let b_closed_u = b.is_closed(0);
+    let b_closed_v = b.is_closed(1);
+
+    let make_wrap = |c0: f64, c1: f64, rng: f64, closed: bool| {
+        move |t: f64| -> f64 {
+            if closed {
+                let mut f = (t - c0) % rng;
+                if f < 0.0 { f += rng; }
+                return c0 + f;
+            }
+            t.max(c0).min(c1)
+        }
+    };
+
+    let a_wrap_u = make_wrap(au0, au1, a_range_u, a_closed_u);
+    let a_wrap_v = make_wrap(av0, av1, a_range_v, a_closed_v);
+    let b_wrap_u = make_wrap(bu0, bu1, b_range_u, b_closed_u);
+    let b_wrap_v = make_wrap(bv0, bv1, b_range_v, b_closed_v);
+
+    let eval_a = |u: f64, v: f64| -> (Vector, Vector, Vector) {
+        let d = a.evaluate(a_wrap_u(u), a_wrap_v(v), 1);
+        (d[0].clone(), d[2].clone(), d[1].clone())
+    };
+    let eval_b = |u: f64, v: f64| -> (Vector, Vector, Vector) {
+        let d = b.evaluate(b_wrap_u(u), b_wrap_v(v), 1);
+        (d[0].clone(), d[2].clone(), d[1].clone())
+    };
+
+    let spans_au = a.get_span_vector(0);
+    let spans_av = a.get_span_vector(1);
+    let spans_bu = b.get_span_vector(0);
+    let spans_bv = b.get_span_vector(1);
+    let a_nu = (spans_au.len().saturating_sub(1)).max(1) * 4;
+    let a_nv = (spans_av.len().saturating_sub(1)).max(1) * 4;
+    let b_nu = (spans_bu.len().saturating_sub(1)).max(1) * 4;
+    let b_nv = (spans_bv.len().saturating_sub(1)).max(1) * 4;
+    let a_du = a_range_u / a_nu as f64;
+    let a_dv = a_range_v / a_nv as f64;
+    let b_du = b_range_u / b_nu as f64;
+    let b_dv = b_range_v / b_nv as f64;
+
+    // ---- Seed cells: half-resolution sample grids + sag-inflated AABBs ----
+    // box = (minx, miny, minz, maxx, maxy, maxz, cu, cv)
+    let cell_boxes = |srf: &NurbsSurface, c0u: f64, dcu: f64, ncu: usize, c0v: f64, dcv: f64, ncv: usize| -> Vec<[f64; 8]> {
+        let mut s_grid: Vec<Vec<Point>> = Vec::with_capacity(2 * ncu + 1);
+        for i in 0..(2 * ncu + 1) {
+            let mut row = Vec::with_capacity(2 * ncv + 1);
+            for j in 0..(2 * ncv + 1) {
+                row.push(srf.point_at(c0u + dcu * 0.5 * i as f64, c0v + dcv * 0.5 * j as f64).unwrap_or(Point::new(0.0, 0.0, 0.0)));
+            }
+            s_grid.push(row);
+        }
+        let mut boxes = Vec::new();
+        for ci in 0..ncu {
+            for cj in 0..ncv {
+                let mut xs = f64::INFINITY; let mut ys = f64::INFINITY; let mut zs = f64::INFINITY;
+                let mut xl = f64::NEG_INFINITY; let mut yl = f64::NEG_INFINITY; let mut zl = f64::NEG_INFINITY;
+                for i in (2 * ci)..(2 * ci + 3) {
+                    for j in (2 * cj)..(2 * cj + 3) {
+                        let p = &s_grid[i][j];
+                        xs = xs.min(p[0]); ys = ys.min(p[1]); zs = zs.min(p[2]);
+                        xl = xl.max(p[0]); yl = yl.max(p[1]); zl = zl.max(p[2]);
+                    }
+                }
+                let ctr = &s_grid[2 * ci + 1][2 * cj + 1];
+                let cx = (s_grid[2*ci][2*cj][0] + s_grid[2*ci+2][2*cj][0] + s_grid[2*ci][2*cj+2][0] + s_grid[2*ci+2][2*cj+2][0]) * 0.25;
+                let cy = (s_grid[2*ci][2*cj][1] + s_grid[2*ci+2][2*cj][1] + s_grid[2*ci][2*cj+2][1] + s_grid[2*ci+2][2*cj+2][1]) * 0.25;
+                let cz = (s_grid[2*ci][2*cj][2] + s_grid[2*ci+2][2*cj][2] + s_grid[2*ci][2*cj+2][2] + s_grid[2*ci+2][2*cj+2][2]) * 0.25;
+                let sag = ((ctr[0]-cx).powi(2) + (ctr[1]-cy).powi(2) + (ctr[2]-cz).powi(2)).sqrt();
+                let inf = 2.0 * sag + tolerance;
+                boxes.push([xs - inf, ys - inf, zs - inf, xl + inf, yl + inf, zl + inf,
+                            c0u + dcu * (ci as f64 + 0.5), c0v + dcv * (cj as f64 + 0.5)]);
+            }
+        }
+        boxes
+    };
+
+    let boxes_a = cell_boxes(a, au0, a_du, a_nu, av0, a_dv, a_nv);
+    let boxes_b = cell_boxes(b, bu0, b_du, b_nu, bv0, b_dv, b_nv);
+
+    let cell_3d = |boxes: &[[f64; 8]]| -> f64 {
+        let mut best = f64::INFINITY;
+        for bx in boxes.iter().take(64) {
+            let d = ((bx[3]-bx[0]).powi(2) + (bx[4]-bx[1]).powi(2) + (bx[5]-bx[2]).powi(2)).sqrt();
+            if 1e-12 < d && d < best { best = d; }
+        }
+        if best < f64::INFINITY { best } else { 1.0 }
+    };
+
+    let h_init = cell_3d(&boxes_a).min(cell_3d(&boxes_b)) * 0.25;
+    let conv_tol = tolerance.max(h_init * 1e-7);
+
+    let clamp_open = |x: &mut [f64; 4]| {
+        if !a_closed_u { x[0] = x[0].max(au0).min(au1); }
+        if !a_closed_v { x[1] = x[1].max(av0).min(av1); }
+        if !b_closed_u { x[2] = x[2].max(bu0).min(bu1); }
+        if !b_closed_v { x[3] = x[3].max(bv0).min(bv1); }
+    };
+
+    let correct = |x: &mut [f64; 4], pin: Option<(&[f64; 3], &[f64; 3])>| -> bool {
+        // Newton on Sa(u,v) - Sb(s,t) = 0; minimum-norm or tangent-pinned
+        for _ in 0..8 {
+            let (sa, sau, sav) = eval_a(x[0], x[1]);
+            let (sb, sbu, sbv) = eval_b(x[2], x[3]);
+            let f = [sa[0]-sb[0], sa[1]-sb[1], sa[2]-sb[2]];
+            if (f[0]*f[0] + f[1]*f[1] + f[2]*f[2]).sqrt() < conv_tol { return true; }
+            let j: [[f64; 4]; 3] = [
+                [sau[0], sav[0], -sbu[0], -sbv[0]],
+                [sau[1], sav[1], -sbu[1], -sbv[1]],
+                [sau[2], sav[2], -sbu[2], -sbv[2]],
+            ];
+            match pin {
+                None => {
+                    let jjt: Vec<Vec<f64>> = (0..3).map(|r| {
+                        (0..3).map(|q| (0..4).map(|c| j[r][c]*j[q][c]).sum()).collect()
+                    }).collect();
+                    let y = match solve_gauss(&jjt, &f, 3) { Some(y) => y, None => return false };
+                    for c in 0..4 {
+                        x[c] -= (0..3).map(|r| j[r][c]*y[r]).sum::<f64>();
+                    }
+                }
+                Some((d, pp)) => {
+                    let m: Vec<Vec<f64>> = vec![
+                        j[0].to_vec(), j[1].to_vec(), j[2].to_vec(),
+                        vec![d[0]*sau[0]+d[1]*sau[1]+d[2]*sau[2],
+                             d[0]*sav[0]+d[1]*sav[1]+d[2]*sav[2], 0.0, 0.0],
+                    ];
+                    let rhs = [f[0], f[1], f[2],
+                               d[0]*(sa[0]-pp[0]) + d[1]*(sa[1]-pp[1]) + d[2]*(sa[2]-pp[2])];
+                    let dx = match solve_gauss(&m, &rhs, 4) { Some(dx) => dx, None => return false };
+                    for c in 0..4 { x[c] -= dx[c]; }
+                }
+            }
+            clamp_open(x);
+        }
+        let (sa, _, _) = eval_a(x[0], x[1]);
+        let (sb, _, _) = eval_b(x[2], x[3]);
+        let g = ((sa[0]-sb[0]).powi(2) + (sa[1]-sb[1]).powi(2) + (sa[2]-sb[2]).powi(2)).sqrt();
+        g < conv_tol * 10.0
+    };
+
+    // ---- Seeds from overlapping cell pairs (minimum-norm Gauss-Newton) ----
+    let mut seeds: Vec<[f64; 5]> = Vec::new(); // [u, v, s, t, used(0/1)]
+    let seed_tol_3d = cell_3d(&boxes_a).max(cell_3d(&boxes_b));
+    let mut pair_budget: i64 = 20000;
+    'outer: for ba in &boxes_a {
+        if pair_budget < 0 { break; }
+        for bb in &boxes_b {
+            if bb[0] > ba[3] || bb[3] < ba[0] || bb[1] > ba[4] || bb[4] < ba[1] || bb[2] > ba[5] || bb[5] < ba[2] {
+                continue;
+            }
+            pair_budget -= 1;
+            if pair_budget < 0 { break 'outer; }
+            let mut x = [ba[6], ba[7], bb[6], bb[7]];
+            if !correct(&mut x, None) { continue; }
+            let (sa, _, _) = eval_a(x[0], x[1]);
+            let mut dup = false;
+            for sd in &seeds {
+                let (so, _, _) = eval_a(sd[0], sd[1]);
+                if ((sa[0]-so[0]).powi(2) + (sa[1]-so[1]).powi(2) + (sa[2]-so[2]).powi(2)).sqrt() < seed_tol_3d {
+                    dup = true;
+                    break;
+                }
+            }
+            if !dup {
+                seeds.push([a_wrap_u(x[0]), a_wrap_v(x[1]), b_wrap_u(x[2]), b_wrap_v(x[3]), 0.0]);
+            }
+        }
+    }
+
+    // ---- Trace each branch with predictor-corrector marching ----
+    let max_steps = (a_nu * a_nv + b_nu * b_nv) * 32;
+    let close_tol = h_init * 3.0;
+    let consume_tol = h_init * 2.0;
+
+    // Returns (dir, Sa, Sau, Sav, Sbu, Sbv) or None at tangency
+    let tangent_3d = |x: &[f64; 4], dir_sign: f64| -> Option<([f64; 3], Vector, Vector, Vector, Vector, Vector)> {
+        let (sa, sau, sav) = eval_a(x[0], x[1]);
+        let (_sb, sbu, sbv) = eval_b(x[2], x[3]);
+        let na = [sau[1]*sav[2]-sau[2]*sav[1], sau[2]*sav[0]-sau[0]*sav[2], sau[0]*sav[1]-sau[1]*sav[0]];
+        let nb = [sbu[1]*sbv[2]-sbu[2]*sbv[1], sbu[2]*sbv[0]-sbu[0]*sbv[2], sbu[0]*sbv[1]-sbu[1]*sbv[0]];
+        let d = [na[1]*nb[2]-na[2]*nb[1], na[2]*nb[0]-na[0]*nb[2], na[0]*nb[1]-na[1]*nb[0]];
+        let dl = (d[0]*d[0] + d[1]*d[1] + d[2]*d[2]).sqrt();
+        let nal = (na[0]*na[0] + na[1]*na[1] + na[2]*na[2]).sqrt();
+        let nbl = (nb[0]*nb[0] + nb[1]*nb[1] + nb[2]*nb[2]).sqrt();
+        if dl < 1e-4 * nal * nbl || dl < 1e-30 { return None; }
+        Some(([d[0]/dl*dir_sign, d[1]/dl*dir_sign, d[2]/dl*dir_sign], sa, sau, sav, sbu, sbv))
+    };
+
+    // trace_dir: returns (out_pts, is_closed)
+    let trace_dir = |x0: &[f64; 4], dir_sign: f64, seeds: &mut Vec<[f64; 5]>| -> (Vec<[f64; 4]>, bool) {
+        let mut out: Vec<[f64; 4]> = Vec::new();
+        let mut x = *x0;
+        let mut prev_d: Option<[f64; 3]> = None;
+        let (sa0, _, _) = eval_a(x[0], x[1]);
+        let p_start = [sa0[0], sa0[1], sa0[2]];
+        let mut p_prev = p_start;
+        let mut dist_traveled = 0.0;
+        let mut h = h_init;
+        let mut smooth = 0;
+        for _step in 0..max_steps {
+            let tng = match tangent_3d(&x, dir_sign) { Some(t) => t, None => break };
+            let (d, sa, sau, sav, sbu, sbv) = tng;
+            let mut accepted = false;
+            let mut attempts = 0;
+            let mut xn = [0.0f64; 4];
+            let mut p_cur = [0.0f64; 3];
+            let mut step_len = 0.0;
+            let mut hit_boundary = false;
+            while attempts < 7 && !accepted {
+                let duv_a = solve_gauss(
+                    &[vec![sau[0].powi(2)+sau[1].powi(2)+sau[2].powi(2), sau[0]*sav[0]+sau[1]*sav[1]+sau[2]*sav[2]],
+                      vec![sau[0]*sav[0]+sau[1]*sav[1]+sau[2]*sav[2], sav[0].powi(2)+sav[1].powi(2)+sav[2].powi(2)]],
+                    &[h*(d[0]*sau[0]+d[1]*sau[1]+d[2]*sau[2]), h*(d[0]*sav[0]+d[1]*sav[1]+d[2]*sav[2])], 2);
+                let duv_b = solve_gauss(
+                    &[vec![sbu[0].powi(2)+sbu[1].powi(2)+sbu[2].powi(2), sbu[0]*sbv[0]+sbu[1]*sbv[1]+sbu[2]*sbv[2]],
+                      vec![sbu[0]*sbv[0]+sbu[1]*sbv[1]+sbu[2]*sbv[2], sbv[0].powi(2)+sbv[1].powi(2)+sbv[2].powi(2)]],
+                    &[h*(d[0]*sbu[0]+d[1]*sbu[1]+d[2]*sbu[2]), h*(d[0]*sbv[0]+d[1]*sbv[1]+d[2]*sbv[2])], 2);
+                let (duv_a, duv_b) = match (duv_a, duv_b) {
+                    (Some(da), Some(db)) => (da, db),
+                    _ => return (out, false),
+                };
+                let delta = [duv_a[0], duv_a[1], duv_b[0], duv_b[1]];
+                let mut tc = 1.0f64;
+                hit_boundary = false;
+                for &(idx, lo, hi, closed) in &[(0usize, au0, au1, a_closed_u), (1, av0, av1, a_closed_v),
+                                                (2, bu0, bu1, b_closed_u), (3, bv0, bv1, b_closed_v)] {
+                    if closed || delta[idx].abs() < 1e-15 { continue; }
+                    if x[idx] + delta[idx] > hi {
+                        tc = tc.min((hi - x[idx]) / delta[idx]);
+                        hit_boundary = true;
+                    }
+                    if x[idx] + delta[idx] < lo {
+                        tc = tc.min((lo - x[idx]) / delta[idx]);
+                        hit_boundary = true;
+                    }
+                }
+                let mut xn_local = [0.0f64; 4];
+                for k in 0..4 { xn_local[k] = x[k] + tc * delta[k]; }
+                let p_pred = [sa[0] + d[0]*h*tc, sa[1] + d[1]*h*tc, sa[2] + d[2]*h*tc];
+                if !correct(&mut xn_local, Some((&d, &p_pred))) { return (out, false); }
+                xn = xn_local;
+                let (san, _, _) = eval_a(xn[0], xn[1]);
+                p_cur = [san[0], san[1], san[2]];
+                step_len = ((p_cur[0]-p_prev[0]).powi(2) + (p_cur[1]-p_prev[1]).powi(2) + (p_cur[2]-p_prev[2]).powi(2)).sqrt();
+                if let Some(pd) = prev_d {
+                    if step_len > 1e-14 {
+                        let sd_ = [(p_cur[0]-p_prev[0])/step_len, (p_cur[1]-p_prev[1])/step_len, (p_cur[2]-p_prev[2])/step_len];
+                        let ddot = sd_[0]*pd[0] + sd_[1]*pd[1] + sd_[2]*pd[2];
+                        if ddot < 0.985 && attempts < 6 && !hit_boundary {
+                            h *= 0.5;
+                            attempts += 1;
+                            smooth = 0;
+                            continue;
+                        }
+                    }
+                }
+                accepted = true;
+            }
+            if !accepted { break; }
+            prev_d = Some(d);
+            smooth += 1;
+            if smooth >= 5 && h < h_init * 2.0 {
+                h *= 1.4;
+                smooth = 0;
+            }
+            x = xn;
+            dist_traveled += step_len;
+            if dist_traveled > close_tol * 3.0 &&
+               ((p_cur[0]-p_start[0]).powi(2) + (p_cur[1]-p_start[1]).powi(2) + (p_cur[2]-p_start[2]).powi(2)).sqrt() < close_tol {
+                out.push(x);
+                return (out, true);
+            }
+            out.push(x);
+            p_prev = p_cur;
+            if hit_boundary { break; }
+            for sd in seeds.iter_mut() {
+                if sd[4] == 0.0 {
+                    let (so, _, _) = eval_a(sd[0], sd[1]);
+                    if ((p_cur[0]-so[0]).powi(2) + (p_cur[1]-so[1]).powi(2) + (p_cur[2]-so[2]).powi(2)).sqrt() < consume_tol {
+                        sd[4] = 1.0;
+                    }
+                }
+            }
+        }
+        (out, false)
+    };
+
+    // axes: (idx, c0, range, closed)
+    let axes: [(usize, f64, f64, bool); 4] = [
+        (0, au0, a_range_u, a_closed_u), (1, av0, a_range_v, a_closed_v),
+        (2, bu0, b_range_u, b_closed_u), (3, bv0, b_range_v, b_closed_v),
+    ];
+
+    let eval3_q = |q: &[f64]| -> [f64; 3] {
+        let (sa, _, _) = eval_a(q[0], q[1]);
+        [sa[0], sa[1], sa[2]]
+    };
+
+    let mut result: Vec<(NurbsCurve, NurbsCurve, NurbsCurve)> = Vec::new();
+    let mut kept_pts3: Vec<Vec<[f64; 3]>> = Vec::new();
+    for si in 0..seeds.len() {
+        if seeds[si][4] != 0.0 { continue; }
+        seeds[si][4] = 1.0;
+        let mut x0 = [seeds[si][0], seeds[si][1], seeds[si][2], seeds[si][3]];
+        if !correct(&mut x0, None) { continue; }
+        let (fwd, fwd_closed) = trace_dir(&x0, 1.0, &mut seeds);
+        let bwd = if !fwd_closed {
+            trace_dir(&x0, -1.0, &mut seeds).0
+        } else {
+            Vec::new()
+        };
+
+        let mut quad: Vec<[f64; 4]> = Vec::new();
+        for i in (0..bwd.len()).rev() {
+            quad.push(bwd[i]);
+        }
+        quad.push(x0);
+        for p in &fwd {
+            quad.push(*p);
+        }
+        if quad.len() < 4 { continue; }
+
+        // Unwrap all four parameters along the trace
+        for i in 1..quad.len() {
+            for &(idx, _c0, rng, closed) in &axes {
+                if !closed { continue; }
+                let jump = quad[i][idx] - quad[i-1][idx];
+                if jump > rng * 0.5 {
+                    quad[i][idx] -= rng;
+                } else if jump < -rng * 0.5 {
+                    quad[i][idx] += rng;
+                }
+            }
+        }
+
+        let p_first = eval3_q(&quad[0]);
+        let p_last = eval3_q(&quad[quad.len() - 1]);
+        let gap2 = ((p_first[0]-p_last[0]).powi(2) + (p_first[1]-p_last[1]).powi(2) + (p_first[2]-p_last[2]).powi(2)).sqrt();
+        let is_loop = fwd_closed || (quad.len() >= 6 && gap2 < close_tol);
+        if is_loop { quad.pop(); }
+        if quad.len() < 4 { continue; }
+
+        // Trace-level dedup against already kept traces
+        let m = quad.len();
+        let trace_pts3: Vec<[f64; 3]> = quad.iter().map(|q| eval3_q(q)).collect();
+        let dup_tol = h_init * 6.0;
+        let mut dup = false;
+        for other in &kept_pts3 {
+            let mut all_close = true;
+            for &f in &[0.25, 0.5, 0.75] {
+                let cp = trace_pts3[((m - 1) as f64 * f) as usize];
+                let mut dmin = dup_tol + 1.0;
+                for k in (0..other.len()).step_by(5) {
+                    let op = other[k];
+                    dmin = dmin.min(((cp[0]-op[0]).powi(2) + (cp[1]-op[1]).powi(2) + (cp[2]-op[2]).powi(2)).sqrt());
+                }
+                if dmin > dup_tol { all_close = false; break; }
+            }
+            if all_close { dup = true; break; }
+        }
+        if dup { continue; }
+        kept_pts3.push(trace_pts3);
+
+        // Densify: fill large 3D gaps (grown steps / fwd-bwd junction) with
+        // Newton-corrected midpoints so per-piece interpolation reaches 1e-6.
+        let gap3 = |qi: &[f64; 4], qj: &[f64; 4]| -> f64 {
+            let pi = eval3_q(qi);
+            let pj = eval3_q(qj);
+            ((pi[0]-pj[0]).powi(2) + (pi[1]-pj[1]).powi(2) + (pi[2]-pj[2]).powi(2)).sqrt()
+        };
+        for _gp in 0..4 {
+            let mut gg: Vec<f64> = Vec::with_capacity(quad.len().saturating_sub(1));
+            for i in 0..quad.len()-1 {
+                gg.push(gap3(&quad[i], &quad[i+1]));
+            }
+            if gg.is_empty() { break; }
+            let mut sorted = gg.clone();
+            sorted.sort_by(|a, b| a.partial_cmp(b).unwrap());
+            let med = sorted[sorted.len()/2];
+            if med <= 0.0 { break; }
+            let mut changed = false;
+            let mut i = 0;
+            while i < quad.len()-1 && quad.len() < 4000 {
+                if gap3(&quad[i], &quad[i+1]) > 1.5*med {
+                    let mut mid = [0.0f64; 4];
+                    for k in 0..4 { mid[k] = (quad[i][k]+quad[i+1][k])*0.5; }
+                    if correct(&mut mid, None) {
+                        quad.insert(i+1, mid);
+                        changed = true;
+                        i += 2;
+                        continue;
+                    }
+                }
+                i += 1;
+            }
+            if !changed { break; }
+        }
+
+        // Closed-loop virtual closure point across all four parameters
+        let mut closure = [0.0f64; 4];
+        if is_loop && quad.len() >= 2 {
+            let mut virt = quad[0];
+            for &(idx, _c0, rng, closed) in &axes {
+                let mut jump = quad[0][idx] - quad[quad.len() - 1][idx];
+                if closed {
+                    while jump > rng * 0.5 { jump -= rng; }
+                    while jump < -rng * 0.5 { jump += rng; }
+                }
+                virt[idx] = quad[quad.len() - 1][idx] + jump;
+                closure[idx] = virt[idx] - quad[0][idx];
+            }
+            quad.push(virt);
+        }
+
+        // Insert seam crossings on any closed parameter of either surface
+        let mut out_pts: Vec<[f64; 4]> = vec![quad[0]];
+        let mut cross_idx: Vec<usize> = Vec::new();
+        for i in 1..quad.len() {
+            let pa_ = quad[i - 1];
+            let pb_ = quad[i];
+            let mut crossings: Vec<(f64, usize, f64)> = Vec::new();
+            for &(idx, c0, rng, closed) in &axes {
+                if !closed || (pb_[idx] - pa_[idx]).abs() <= 1e-15 { continue; }
+                let k0 = ((pa_[idx] - c0) / rng).floor() as i64;
+                let k1 = ((pb_[idx] - c0) / rng).floor() as i64;
+                for k in (k0.min(k1) + 1)..=(k0.max(k1)) {
+                    let l = c0 + k as f64 * rng;
+                    let t = (l - pa_[idx]) / (pb_[idx] - pa_[idx]);
+                    if 0.0 < t && t < 1.0 { crossings.push((t, idx, l)); }
+                }
+            }
+            crossings.sort_by(|a, b| a.partial_cmp(b).unwrap());
+            for &(t, idx, l) in &crossings {
+                let mut cp = [0.0f64; 4];
+                for k in 0..4 { cp[k] = pa_[k] + (pb_[k] - pa_[k]) * t; }
+                cp[idx] = l;
+                // The crossing was linearly interpolated; Newton-correct it onto
+                // both surfaces so the piece boundary is accurate (1e-6), not off
+                // by the chord error.
+                correct(&mut cp, None);
+                out_pts.push(cp);
+                cross_idx.push(out_pts.len() - 1);
+            }
+            out_pts.push(pb_);
+            if i < quad.len() - 1 {
+                let mut on_seam = false;
+                for &(idx, c0, rng, closed) in &axes {
+                    if !closed { continue; }
+                    let k = ((pb_[idx] - c0) / rng).round();
+                    let l = c0 + k * rng;
+                    if (pb_[idx] - l).abs() < rng * 1e-9 && (pb_[idx] - pa_[idx]).abs() > rng * 1e-9 {
+                        let last = out_pts.len() - 1;
+                        out_pts[last][idx] = l;
+                        on_seam = true;
+                    }
+                }
+                if on_seam {
+                    cross_idx.push(out_pts.len() - 1);
+                }
+            }
+        }
+
+        let mut wrap_drift = false;
+        for &(idx, _c0, rng, _closed) in &axes {
+            if closure[idx].abs() > rng * 0.5 { wrap_drift = true; }
+        }
+        let mut pieces: Vec<(Vec<[f64; 4]>, bool)> = Vec::new();
+        if cross_idx.is_empty() {
+            pieces.push((out_pts.clone(), is_loop && !wrap_drift));
+        } else if is_loop {
+            for w in cross_idx.windows(2) {
+                let (ia, ib) = (w[0], w[1]);
+                pieces.push((out_pts[ia..=ib].to_vec(), false));
+            }
+            let mut wrap_piece: Vec<[f64; 4]> = out_pts[cross_idx[cross_idx.len() - 1]..].to_vec();
+            for p in &out_pts[1..=cross_idx[0]] {
+                let mut wp = [0.0f64; 4];
+                for k in 0..4 { wp[k] = p[k] + closure[k]; }
+                wrap_piece.push(wp);
+            }
+            pieces.push((wrap_piece, false));
+        } else {
+            let mut bounds: Vec<usize> = vec![0];
+            for &c in &cross_idx { bounds.push(c); }
+            bounds.push(out_pts.len() - 1);
+            for w in bounds.windows(2) {
+                let (ia, ib) = (w[0], w[1]);
+                if ib > ia { pieces.push((out_pts[ia..=ib].to_vec(), false)); }
+            }
+        }
+
+        for (mut piece_pts, piece_loop) in pieces {
+            if piece_pts.len() < 2 { continue; }
+            let mid = piece_pts[piece_pts.len() / 2];
+            for &(idx, c0, rng, closed) in &axes {
+                if !closed { continue; }
+                let k_s = ((mid[idx] - c0) / rng).floor();
+                if k_s != 0.0 {
+                    for p in piece_pts.iter_mut() { p[idx] -= k_s * rng; }
+                }
+            }
+
+            let mut pts3: Vec<[f64; 3]> = piece_pts.iter().map(|p| eval3_q(p)).collect();
+            let mut chord3 = 0.0;
+            for i in 1..pts3.len() {
+                chord3 += ((pts3[i][0]-pts3[i-1][0]).powi(2) + (pts3[i][1]-pts3[i-1][1]).powi(2) + (pts3[i][2]-pts3[i-1][2]).powi(2)).sqrt();
+            }
+            // Degenerate sliver pieces between near-coincident crossings
+            if chord3 < h_init * 0.5 { continue; }
+
+            // Deflection-refine this piece: insert Newton-corrected midpoints
+            // wherever the 3D curve deviates from its chord by more than the
+            // target, so the per-piece interpolation reaches 1e-6 even in
+            // high-curvature regions (the global gap-fill misses locally-curved
+            // pieces because it uses the whole-curve median spacing).
+            let refine_tol = (tolerance * 100.0).max(5e-6);
+            for _dp in 0..8 {
+                let mut refined = false;
+                let mut new_pp: Vec<[f64; 4]> = vec![piece_pts[0]];
+                let mut i = 0;
+                while i < piece_pts.len() - 1 && piece_pts.len() < 3000 {
+                    let pa2 = piece_pts[i];
+                    let pb2 = piece_pts[i + 1];
+                    let p3a = eval3_q(&pa2);
+                    let p3b = eval3_q(&pb2);
+                    let mut mid = [0.0f64; 4];
+                    for k in 0..4 { mid[k] = (pa2[k] + pb2[k]) * 0.5; }
+                    if correct(&mut mid, None) {
+                        let p3m = eval3_q(&mid);
+                        let ex = p3b[0]-p3a[0]; let ey = p3b[1]-p3a[1]; let ez = p3b[2]-p3a[2];
+                        let l2 = ex*ex + ey*ey + ez*ez;
+                        let dev = if l2 > 1e-30 {
+                            let tt = ((p3m[0]-p3a[0])*ex + (p3m[1]-p3a[1])*ey + (p3m[2]-p3a[2])*ez) / l2;
+                            let cx = p3a[0]+tt*ex; let cy = p3a[1]+tt*ey; let cz = p3a[2]+tt*ez;
+                            ((p3m[0]-cx).powi(2) + (p3m[1]-cy).powi(2) + (p3m[2]-cz).powi(2)).sqrt()
+                        } else {
+                            0.0
+                        };
+                        if dev > refine_tol {
+                            new_pp.push(mid);
+                            refined = true;
+                        }
+                    }
+                    new_pp.push(pb2);
+                    i += 1;
+                }
+                piece_pts = new_pp;
+                if !refined { break; }
+            }
+            pts3 = piece_pts.iter().map(|p| eval3_q(p)).collect();
+
+            let fit_track = |pts2: &[Point], fit_tol_track: f64| -> NurbsCurve {
+                let mp = pts2.len();
+                let mut total_turning = 0.0f64;
+                for i in 1..(mp.saturating_sub(1)) {
+                    let dx1 = pts2[i][0] - pts2[i-1][0];
+                    let dy1 = pts2[i][1] - pts2[i-1][1];
+                    let dz1 = pts2[i][2] - pts2[i-1][2];
+                    let dx2 = pts2[i+1][0] - pts2[i][0];
+                    let dy2 = pts2[i+1][1] - pts2[i][1];
+                    let dz2 = pts2[i+1][2] - pts2[i][2];
+                    let l1 = (dx1*dx1 + dy1*dy1 + dz1*dz1).sqrt();
+                    let l2 = (dx2*dx2 + dy2*dy2 + dz2*dz2).sqrt();
+                    if l1 > 1e-14 && l2 > 1e-14 {
+                        let c = ((dx1*dx2 + dy1*dy2 + dz1*dz2) / (l1*l2)).max(-1.0).min(1.0);
+                        total_turning += c.acos();
+                    }
+                }
+                let mut chords = vec![0.0f64; mp];
+                let mut total_len = 0.0f64;
+                for i in 1..mp {
+                    total_len += pts2[i].distance(&pts2[i-1], None);
+                    chords[i] = total_len;
+                }
+                if piece_loop && mp > 1 {
+                    total_len += pts2[0].distance(&pts2[mp-1], None);
+                }
+                if total_len > 1e-14 {
+                    for i in 1..mp { chords[i] /= total_len; }
+                }
+                // Compact least-squares first (keep best valid); if it cannot
+                // reach the tolerance, interpolate EXACTLY through the dense,
+                // high-precision (on-surface) samples to reach 1e-6.
+                let mut target_cvs = 8_i32.max((total_turning / 0.5) as i32 + 6);
+                let max_cvs = 8_i32.max(((mp as i32) - 1).min((mp / 3) as i32));
+                let mut best = NurbsCurve::new(3, false, 4, 0);
+                let mut best_dev = f64::INFINITY;
+                while target_cvs <= max_cvs {
+                    let crv = NurbsCurve::create_fitted(pts2, target_cvs as usize, 3, piece_loop);
+                    if !crv.is_valid() { break; }
+                    let (ft0, ft1) = crv.domain();
+                    let mut dev = 0.0f64;
+                    for i in 0..mp {
+                        let t = ft0 + (ft1 - ft0) * chords[i];
+                        dev = dev.max(crv.point_at(t).distance(&pts2[i], None));
+                    }
+                    if dev < best_dev {
+                        best = crv;
+                        best_dev = dev;
+                    }
+                    if dev < fit_tol_track { break; }
+                    target_cvs *= 2;
+                }
+                if best_dev >= fit_tol_track {
+                    let interp = if piece_loop {
+                        NurbsCurve::create_interpolated(pts2, CurveNurbsKnotStyle::ChordPeriodic)
+                    } else {
+                        NurbsCurve::create_interpolated(pts2, CurveNurbsKnotStyle::Chord)
+                    };
+                    if interp.is_valid() {
+                        best = interp;
+                    }
+                }
+                if best.is_valid() {
+                    best.set_domain(0.0, 1.0);
+                }
+                best
+            };
+
+            let pts3_p: Vec<Point> = pts3.iter().map(|p| Point::new(p[0], p[1], p[2])).collect();
+            let pts_pa: Vec<Point> = piece_pts.iter().map(|p| Point::new(p[0], p[1], 0.0)).collect();
+            let pts_pb: Vec<Point> = piece_pts.iter().map(|p| Point::new(p[2], p[3], 0.0)).collect();
+            let crv3 = fit_track(&pts3_p, (tolerance * 10.0).max(1e-7));
+            let pcurve_a = fit_track(&pts_pa, a_du.min(a_dv) * 1e-4);
+            let pcurve_b = fit_track(&pts_pb, b_du.min(b_dv) * 1e-4);
+            if !crv3.is_valid() || !pcurve_a.is_valid() || !pcurve_b.is_valid() { continue; }
+            result.push((crv3, pcurve_a, pcurve_b));
+        }
     }
 
     result

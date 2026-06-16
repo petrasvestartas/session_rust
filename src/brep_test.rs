@@ -449,6 +449,104 @@ pub fn run_brep_from_nurbscurves_holes() -> TestResult {
     })
 }
 
+pub fn run_brep_split_by_plane() -> TestResult {
+    MINI_TEST!("Split By Plane", {
+        use crate::brep::BRep;
+        use crate::brep::BRepLoopType;
+        use crate::plane::Plane;
+        use crate::Point;
+        use crate::Vector;
+
+        let bbox = BRep::create_box(2.0, 2.0, 2.0);
+        let plane = Plane::from_point_normal(Point::new(0.0, 0.0, 0.0), Vector::new(0.0, 0.0, 1.0));
+        let split = bbox.split_by_plane(&plane, None);
+        let box_area = bbox.mesh().area();
+        let split_area = split.mesh().area();
+        let mut inner = 0;
+        for face in &split.m_faces {
+            for &li in &face.loop_indices {
+                if split.m_loops[li as usize].loop_type == BRepLoopType::Inner {
+                    inner += 1;
+                }
+            }
+        }
+
+        MINI_CHECK!(split.face_count() == 10);
+        MINI_CHECK!((split_area - box_area).abs() < box_area * 0.01);
+        MINI_CHECK!(!split.mesh().is_empty());
+        MINI_CHECK!(inner == 0);
+
+        let cylinder = BRep::create_cylinder(1.0, 4.0);
+        let mid = Plane::from_point_normal(Point::new(0.0, 0.0, 1.0), Vector::new(0.0, 0.0, 1.0));
+        let cut = cylinder.split_by_plane(&mid, None);
+
+        MINI_CHECK!(cut.face_count() == 4);
+        MINI_CHECK!((cut.mesh().area() - cylinder.mesh().area()).abs() < cylinder.mesh().area() * 0.02);
+    })
+}
+
+pub fn run_brep_split_by_plane_pieces() -> TestResult {
+    MINI_TEST!("Split By Plane Pieces", {
+        use crate::brep::BRep;
+        use crate::plane::Plane;
+        use crate::Point;
+        use crate::Vector;
+
+        let bbox = BRep::create_box(2.0, 2.0, 2.0);
+        let plane = Plane::from_point_normal(Point::new(0.0, 0.0, 0.0), Vector::new(0.0, 0.0, 1.0));
+        let pieces = bbox.split_by_plane_pieces(&plane, None);
+        let mut total = 0.0;
+        for piece in &pieces {
+            total += piece.mesh().area();
+        }
+
+        MINI_CHECK!(pieces.len() == 2);
+        MINI_CHECK!(pieces[0].face_count() == 5);
+        MINI_CHECK!(pieces[1].face_count() == 5);
+        MINI_CHECK!((total - bbox.mesh().area()).abs() < bbox.mesh().area() * 0.01);
+
+        let far = Plane::from_point_normal(Point::new(0.0, 0.0, 5.0), Vector::new(0.0, 0.0, 1.0));
+        let whole = bbox.split_by_plane_pieces(&far, None);
+
+        MINI_CHECK!(whole.len() == 1);
+        MINI_CHECK!(whole[0].face_count() == 6);
+    })
+}
+
+pub fn run_brep_split_by_line() -> TestResult {
+    MINI_TEST!("Split By Line", {
+        use crate::brep::BRep;
+        use crate::line::Line;
+        use crate::Point;
+
+        let bbox = BRep::create_box(2.0, 2.0, 2.0);
+        let line = Line::from_points(&Point::new(0.0, -2.0, 1.0), &Point::new(0.0, 2.0, 1.0));
+        let split = bbox.split_by_line(&line, None);
+        let box_area = bbox.mesh().area();
+        let split_area = split.mesh().area();
+
+        MINI_CHECK!(split.face_count() == 7);
+        MINI_CHECK!((split_area - box_area).abs() < box_area * 0.01);
+        MINI_CHECK!(!split.mesh().is_empty());
+    })
+}
+
+pub fn run_brep_split_by_brep() -> TestResult {
+    MINI_TEST!("Split By Brep", {
+        use crate::brep::BRep;
+
+        let target = BRep::create_box(4.0, 4.0, 2.0);
+        let cutter = BRep::create_box(2.0, 2.0, 6.0);
+        let split = target.split_by_brep(&cutter, None);
+        let target_area = target.mesh().area();
+        let split_area = split.mesh().area();
+
+        MINI_CHECK!(split.face_count() == 8);
+        MINI_CHECK!((split_area - target_area).abs() < target_area * 0.01);
+        MINI_CHECK!(!split.mesh().is_empty());
+    })
+}
+
 REGISTER_MINI_TEST!("BRep", "Constructor", crate::brep_test::run_brep_constructor);
 REGISTER_MINI_TEST!("BRep", "Create Box", crate::brep_test::run_brep_create_box);
 REGISTER_MINI_TEST!("BRep", "Accessors", crate::brep_test::run_brep_accessors);
@@ -469,3 +567,7 @@ REGISTER_MINI_TEST!("BRep", "From Nurbscurves", crate::brep_test::run_brep_from_
 REGISTER_MINI_TEST!("BRep", "Create Block With Hole", crate::brep_test::run_brep_create_block_with_hole);
 REGISTER_MINI_TEST!("BRep", "Mesh Orientation", crate::brep_test::run_brep_mesh_orientation);
 REGISTER_MINI_TEST!("BRep", "Protobuf Roundtrip", crate::brep_test::run_brep_protobuf_roundtrip);
+REGISTER_MINI_TEST!("BRep", "Split By Plane", crate::brep_test::run_brep_split_by_plane);
+REGISTER_MINI_TEST!("BRep", "Split By Plane Pieces", crate::brep_test::run_brep_split_by_plane_pieces);
+REGISTER_MINI_TEST!("BRep", "Split By Line", crate::brep_test::run_brep_split_by_line);
+REGISTER_MINI_TEST!("BRep", "Split By Brep", crate::brep_test::run_brep_split_by_brep);

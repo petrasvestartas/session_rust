@@ -860,6 +860,133 @@ pub fn run_nurbssurface_meshing() -> TestResult {
     })
 }
 
+pub fn run_nurbssurface_split_by_plane() -> TestResult {
+    MINI_TEST!("Split By Plane", {
+        use crate::Plane;
+        use crate::Point;
+        use crate::Vector;
+        use crate::Primitives;
+
+        let cyl = Primitives::cylinder_surface(0.0, 0.0, 0.0, 1.0, 4.0);
+        let plane = Plane::from_point_normal(Point::new(0.0, 0.0, 2.0), Vector::new(0.3, 0.0, 1.0));
+
+        let parts = cyl.split_by_plane(&plane, None);
+
+        MINI_CHECK!(parts.len() == 2);
+        for ts in &parts {
+            MINI_CHECK!(ts.is_trimmed());
+            let m = ts.mesh_q(20.0, 0.005);
+            MINI_CHECK!(m.number_of_faces() > 0);
+        }
+
+        let sphere = Primitives::sphere_surface(0.0, 0.0, 0.0, 1.0);
+        let plane2 = Plane::from_point_normal(Point::new(0.0, 0.0, 0.3), Vector::new(0.0, 0.0, 1.0));
+
+        let caps = sphere.split_by_plane(&plane2, None);
+
+        MINI_CHECK!(caps.len() == 2);
+    })
+}
+
+pub fn run_nurbssurface_split_by_curves() -> TestResult {
+    MINI_TEST!("Split By Curves", {
+        use crate::Closest;
+        use crate::NurbsCurve;
+        use crate::Point;
+        use crate::Primitives;
+        use crate::nurbsknot::CurveNurbsKnotStyle;
+
+        let wave = Primitives::wave_surface(10.0, 1.0);
+        let mut lift_pts = Vec::new();
+        for i in 0..21 {
+            let x = 10.0 * i as f64 / 20.0;
+            let y = 5.0 + 2.0 * x.sin();
+            let (u, v, _d) = Closest::surface_point(&wave, &Point::new(x, y, 0.0), 0.0, 0.0, 0.0, 0.0);
+            lift_pts.push(wave.point_at(u, v).unwrap());
+        }
+        let crv = NurbsCurve::create_interpolated(&lift_pts, CurveNurbsKnotStyle::Chord);
+
+        let parts = wave.split_by_curves(&[crv], None);
+
+        MINI_CHECK!(parts.len() == 2);
+        MINI_CHECK!(parts[0].is_trimmed());
+        MINI_CHECK!(parts[1].is_trimmed());
+
+        let off = NurbsCurve::create(false, 1, &[Point::new(50.0, 50.0, 50.0), Point::new(60.0, 60.0, 60.0)]);
+
+        let whole = wave.split_by_curves(&[off], None);
+
+        MINI_CHECK!(whole.len() == 1);
+    })
+}
+
+pub fn run_nurbssurface_split_by_line() -> TestResult {
+    MINI_TEST!("Split By Line", {
+        use crate::Line;
+        use crate::Point;
+        use crate::Primitives;
+
+        let wave = Primitives::wave_surface(10.0, 1.0);
+        let line = Line::from_points(&Point::new(-1.0, 5.0, 0.0), &Point::new(11.0, 5.0, 0.0));
+
+        let parts = wave.split_by_line(&line, None);
+
+        MINI_CHECK!(parts.len() == 2);
+        MINI_CHECK!(parts[0].is_trimmed());
+        MINI_CHECK!(parts[1].is_trimmed());
+    })
+}
+
+pub fn run_nurbssurface_split_by_surface() -> TestResult {
+    MINI_TEST!("Split By Surface", {
+        use crate::NurbsSurface;
+        use crate::Point;
+        use crate::Primitives;
+
+        let cyl = Primitives::cylinder_surface(0.0, 0.0, -2.0, 1.0, 4.0);
+        let flat = NurbsSurface::create(false, false, 1, 1, 2, 2, &[
+            Point::new(-3.0, -3.0, 0.0),
+            Point::new(-3.0, 3.0, 0.0),
+            Point::new(3.0, -3.0, 0.0),
+            Point::new(3.0, 3.0, 0.0),
+        ]).unwrap();
+
+        let parts = cyl.split_by_surface(&flat, None);
+
+        MINI_CHECK!(parts.len() == 2);
+        for ts in &parts {
+            MINI_CHECK!(ts.is_trimmed());
+            let m = ts.mesh_q(20.0, 0.005);
+            MINI_CHECK!(m.number_of_faces() > 0);
+        }
+    })
+}
+
+pub fn run_nurbssurface_split_by_brep() -> TestResult {
+    MINI_TEST!("Split By Brep", {
+        use crate::NurbsSurface;
+        use crate::Point;
+        use crate::brep::BRep;
+
+        let flat = NurbsSurface::create(false, false, 1, 1, 2, 2, &[
+            Point::new(-3.0, -3.0, 0.0),
+            Point::new(-3.0, 3.0, 0.0),
+            Point::new(3.0, -3.0, 0.0),
+            Point::new(3.0, 3.0, 0.0),
+        ]).unwrap();
+        let cutter = BRep::create_box(2.0, 2.0, 2.0);
+
+        let parts = flat.split_by_brep(&cutter, None);
+
+        MINI_CHECK!(parts.len() == 2);
+        for ts in &parts {
+            MINI_CHECK!(ts.is_trimmed());
+            let m = ts.mesh_q(20.0, 0.005);
+            MINI_CHECK!(m.number_of_faces() > 0);
+        }
+    })
+}
+
 pub fn run_nurbssurface_json_roundtrip() -> TestResult {
     MINI_TEST!("Json Roundtrip", {
         use crate::nurbssurface::NurbsSurface;
@@ -967,5 +1094,10 @@ REGISTER_MINI_TEST!("NurbsSurface", "Evaluation", crate::nurbssurface_test::run_
 REGISTER_MINI_TEST!("NurbsSurface", "Modification", crate::nurbssurface_test::run_nurbssurface_modification);
 REGISTER_MINI_TEST!("NurbsSurface", "Transformations", crate::nurbssurface_test::run_nurbssurface_transformations);
 REGISTER_MINI_TEST!("NurbsSurface", "Meshing", crate::nurbssurface_test::run_nurbssurface_meshing);
+REGISTER_MINI_TEST!("NurbsSurface", "Split By Plane", crate::nurbssurface_test::run_nurbssurface_split_by_plane);
+REGISTER_MINI_TEST!("NurbsSurface", "Split By Curves", crate::nurbssurface_test::run_nurbssurface_split_by_curves);
+REGISTER_MINI_TEST!("NurbsSurface", "Split By Line", crate::nurbssurface_test::run_nurbssurface_split_by_line);
+REGISTER_MINI_TEST!("NurbsSurface", "Split By Surface", crate::nurbssurface_test::run_nurbssurface_split_by_surface);
+REGISTER_MINI_TEST!("NurbsSurface", "Split By Brep", crate::nurbssurface_test::run_nurbssurface_split_by_brep);
 REGISTER_MINI_TEST!("NurbsSurface", "Json Roundtrip", crate::nurbssurface_test::run_nurbssurface_json_roundtrip);
 REGISTER_MINI_TEST!("NurbsSurface", "Protobuf Roundtrip", crate::nurbssurface_test::run_nurbssurface_protobuf_roundtrip);

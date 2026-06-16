@@ -11,6 +11,37 @@ use crate::nurbsknot;
 use serde::{Deserialize, Deserializer, Serializer};
 use serde::ser::SerializeMap;
 
+fn surface_aabb(srf: &NurbsSurface) -> ([f64; 3], [f64; 3]) {
+    let n = 6;
+    let (u0, u1) = srf.domain(0).unwrap_or((0.0, 1.0));
+    let (v0, v1) = srf.domain(1).unwrap_or((0.0, 1.0));
+    let mut lo = [f64::INFINITY; 3];
+    let mut hi = [f64::NEG_INFINITY; 3];
+    for i in 0..=n {
+        for j in 0..=n {
+            let u = u0 + (u1 - u0) * (i as f64) / (n as f64);
+            let v = v0 + (v1 - v0) * (j as f64) / (n as f64);
+            if let Some(p) = srf.point_at(u, v) {
+                for k in 0..3 {
+                    if p[k] < lo[k] { lo[k] = p[k]; }
+                    if p[k] > hi[k] { hi[k] = p[k]; }
+                }
+            }
+        }
+    }
+    (lo, hi)
+}
+
+fn aabb_overlap_pad(a: &([f64; 3], [f64; 3]), b: &([f64; 3], [f64; 3])) -> bool {
+    let m = (a.1[0] - a.0[0]).max(a.1[1] - a.0[1]).max(a.1[2] - a.0[2]) * 1e-3;
+    for k in 0..3 {
+        if a.0[k] - m > b.1[k] || b.0[k] - m > a.1[k] {
+            return false;
+        }
+    }
+    true
+}
+
 /// Non-Uniform Rational B-Spline (NURBS) surface implementation
 ///
 /// Based on OpenNURBS ground truth implementation.
@@ -2049,9 +2080,84 @@ impl NurbsSurface {
     }
 
     ///////////////////////////////////////////////////////////////////////////////////////////
+    // GEOMETRIC OPERATIONS (ADDITIONAL)
+    ///////////////////////////////////////////////////////////////////////////////////////////
+
+    /// Split this surface by a plane into trimmed faces.
+    ///
+    /// Computes the surface/plane intersection with UV pcurves and splits
+    /// the UV domain along them.
+    pub fn split_by_plane(&self, plane: &Plane, tolerance: Option<f64>) -> Vec<crate::nurbssurface_trimmed::NurbsSurfaceTrimmed> {
+        let pairs = crate::intersection::surface_plane_uv(self, plane, tolerance);
+        let mut pcurves = Vec::new();
+        for pair in pairs {
+            pcurves.push(pair.1);
+        }
+        crate::nurbssurface_trimmed::NurbsSurfaceTrimmed::split_by_uv_curves(self, &pcurves, tolerance)
+    }
+
+    /// Split this surface by 3D curves lying on (or near) it.
+    ///
+    /// Each curve is pulled back to UV via closest-point projection; curves
+    /// whose pullback fails (off-surface) are skipped.
+    pub fn split_by_curves(&self, curves: &[NurbsCurve], tolerance: Option<f64>) -> Vec<crate::nurbssurface_trimmed::NurbsSurfaceTrimmed> {
+        let mut pcurves = Vec::new();
+        for crv in curves {
+            for pcurve in crate::closest::Closest::surface_curve(self, crv, 0.0, 0.0, tolerance) {
+                pcurves.push(pcurve);
+            }
+        }
+        crate::nurbssurface_trimmed::NurbsSurfaceTrimmed::split_by_uv_curves(self, &pcurves, tolerance)
+    }
+
+    /// Split this surface by a line pulled onto it (Rhino "pull then split").
+    ///
+    /// The line is converted to a degree-1 curve and projected onto the
+    /// surface by closest points; the surface is split along the pulled
+    /// curve. A pulled curve that does not reach the boundary or another
+    /// cutter is discarded. For a planar cut, use split_by_plane.
+    pub fn split_by_line(&self, line: &Line, tolerance: Option<f64>) -> Vec<crate::nurbssurface_trimmed::NurbsSurfaceTrimmed> {
+        let pts = vec![line.start(), line.end()];
+        let crv = NurbsCurve::create(false, 1, &pts);
+        self.split_by_curves(&[crv], tolerance)
+    }
+
+    /// Split this surface by another surface.
+    ///
+    /// Computes the surface/surface intersection and splits the UV domain
+    /// along the pcurves on this surface.
+    pub fn split_by_surface(&self, cutter: &NurbsSurface, tolerance: Option<f64>) -> Vec<crate::nurbssurface_trimmed::NurbsSurfaceTrimmed> {
+        let triples = crate::intersection::surface_surface(self, cutter, tolerance);
+        let mut pcurves = Vec::new();
+        for triple in triples {
+            pcurves.push(triple.1);
+        }
+        crate::nurbssurface_trimmed::NurbsSurfaceTrimmed::split_by_uv_curves(self, &pcurves, tolerance)
+    }
+
+    /// Split this surface by every face of a BRep.
+    ///
+    /// Each cutter face is intersected with this surface (planar faces via the
+    /// fast plane path, others via surface/surface); all cut pcurves split the
+    /// UV domain at once.
+    pub fn split_by_brep(&self, brep: &crate::brep::BRep, tolerance: Option<f64>) -> Vec<crate::nurbssurface_trimmed::NurbsSurfaceTrimmed> {
+        let target_bb = surface_aabb(self);
+        let mut pcurves = Vec::new();
+        for cutter in &brep.m_surfaces {
+            if !aabb_overlap_pad(&target_bb, &surface_aabb(cutter)) {
+                continue;
+            }
+            for pc in crate::intersection::cut_curves_on_surface(self, cutter, tolerance) {
+                pcurves.push(pc);
+            }
+        }
+        crate::nurbssurface_trimmed::NurbsSurfaceTrimmed::split_by_uv_curves(self, &pcurves, tolerance)
+    }
+
+    ///////////////////////////////////////////////////////////////////////////////////////////
     // STRING REPRESENTATION
     ///////////////////////////////////////////////////////////////////////////////////////////
-    
+
     /// Get string representation (matches Python to_string format)
     pub fn to_string(&self) -> String {
         format!(

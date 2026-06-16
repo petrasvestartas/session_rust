@@ -486,6 +486,580 @@ impl NurbsSurfaceTrimmed {
         Some(ts)
     }
 
+    /// Split a surface into trimmed faces by UV pcurves.
+    ///
+    /// Builds a planar arrangement of the UV domain rectangle and the given
+    /// pcurves (NurbsCurves with x=u, y=v, z=0), extracts faces, and emits one
+    /// NurbsSurfaceTrimmed per face. Loops are exact trims of the input
+    /// pcurves joined with straight border segments. Dangling open cutters
+    /// that do not reach the border or another cutter are discarded.
+    pub fn split_by_uv_curves(srf: &NurbsSurface, pcurves: &[NurbsCurve], tolerance: Option<f64>) -> Vec<NurbsSurfaceTrimmed> {
+        Self::split_by_uv_curves_ex(srf, pcurves, tolerance, true, 0)
+    }
+
+    /// Split a surface by UV pcurves. When `use_domain_border` is false the four
+    /// domain border sides are not added; the caller supplies closed boundary
+    /// loops as the first `n_boundary` pcurves (used by BRep splitting).
+    pub fn split_by_uv_curves_ex(srf: &NurbsSurface, pcurves: &[NurbsCurve], tolerance: Option<f64>, use_domain_border: bool, n_boundary: usize) -> Vec<NurbsSurfaceTrimmed> {
+        use std::collections::HashMap;
+        use std::collections::HashSet;
+
+        let is_boundary = |cidx: i32| -> bool {
+            cidx < 0 || (!use_domain_border && cidx >= 0 && (cidx as usize) < n_boundary)
+        };
+
+        if !srf.is_valid() {
+            return Vec::new();
+        }
+
+        let (u0, u1) = srf.domain(0).unwrap_or((0.0, 1.0));
+        let (v0, v1) = srf.domain(1).unwrap_or((0.0, 1.0));
+        let range_u = u1 - u0;
+        let range_v = v1 - v0;
+
+        let spans_u = srf.get_span_vector(0);
+        let spans_v = srf.get_span_vector(1);
+        let nu = spans_u.len().saturating_sub(1).max(1) * 4;
+        let nv = spans_v.len().saturating_sub(1).max(1) * 4;
+        let du = range_u / nu as f64;
+        let dv = range_v / nv as f64;
+        let mu = (u0 + u1) * 0.5;
+        let mv = (v0 + v1) * 0.5;
+        let pmid = srf.point_at(mu, mv).unwrap_or_else(|| Point::new(0.0, 0.0, 0.0));
+        let pdu = srf.point_at((mu + du).min(u1), mv).unwrap_or_else(|| Point::new(0.0, 0.0, 0.0));
+        let pdv = srf.point_at(mu, (mv + dv).min(v1)).unwrap_or_else(|| Point::new(0.0, 0.0, 0.0));
+        let uv_to_3d_u = pmid.distance(&pdu, None) / du;
+        let uv_to_3d_v = pmid.distance(&pdv, None) / dv;
+        let mut uv_to_3d = uv_to_3d_u.max(uv_to_3d_v);
+        if uv_to_3d < 1e-10 {
+            uv_to_3d = 1.0;
+        }
+
+        let snap_uv = match tolerance {
+            Some(tol) if tol > 0.0 => (tol / uv_to_3d).max(1e-9),
+            _ => range_u.min(range_v) * 1e-7,
+        };
+
+        // ---- 1. Sample cutters into tagged UV polylines ----
+        let samp_tol = range_u.max(range_v) * 1e-3;
+        struct PolyLine { cidx: i32, pts: Vec<[f64; 2]>, ts: Vec<f64> }
+        let mut polylines: Vec<PolyLine> = Vec::new();
+
+        let snap_border = |p: &mut [f64; 2]| {
+            if (p[0] - u0).abs() < snap_uv {
+                p[0] = u0;
+            }
+            if (p[0] - u1).abs() < snap_uv {
+                p[0] = u1;
+            }
+            if (p[1] - v0).abs() < snap_uv {
+                p[1] = v0;
+            }
+            if (p[1] - v1).abs() < snap_uv {
+                p[1] = v1;
+            }
+        };
+
+        for (cidx, crv) in pcurves.iter().enumerate() {
+            if !crv.is_valid() {
+                continue;
+            }
+            let (ct0, ct1) = crv.domain();
+            let mut entries: Vec<[f64; 3]> = Vec::new();
+            let n = (crv.cv_count() * 4).max(16);
+            for i in 0..=n {
+                let t = ct0 + (ct1 - ct0) * i as f64 / n as f64;
+                let p = crv.point_at(t);
+                entries.push([t, p[0], p[1]]);
+            }
+            let mut depth = 0;
+            while depth < 6 {
+                let mut inserted = 0;
+                let mut i = 0;
+                while i < entries.len() - 1 {
+                    let a = entries[i];
+                    let b = entries[i + 1];
+                    let tm = (a[0] + b[0]) * 0.5;
+                    let pm = crv.point_at(tm);
+                    let exu = b[1] - a[1];
+                    let exv = b[2] - a[2];
+                    let l2 = exu*exu + exv*exv;
+                    let dev = if l2 > 1e-30 {
+                        let s = ((pm[0]-a[1])*exu + (pm[1]-a[2])*exv) / l2;
+                        let cx = a[1] + s*exu;
+                        let cy = a[2] + s*exv;
+                        (pm[0]-cx).hypot(pm[1]-cy)
+                    } else {
+                        0.0
+                    };
+                    if dev > samp_tol && entries.len() < 4096 {
+                        entries.insert(i + 1, [tm, pm[0], pm[1]]);
+                        inserted += 1;
+                        i += 2;
+                    } else {
+                        i += 1;
+                    }
+                }
+                if inserted == 0 {
+                    break;
+                }
+                depth += 1;
+            }
+            let mut pts: Vec<[f64; 2]> = Vec::new();
+            let mut ts: Vec<f64> = Vec::new();
+            for e in &entries {
+                let mut p = [e[1].max(u0).min(u1), e[2].max(v0).min(v1)];
+                snap_border(&mut p);
+                if let Some(last) = pts.last() {
+                    if (p[0]-last[0]).abs() < 1e-15 && (p[1]-last[1]).abs() < 1e-15 {
+                        continue;
+                    }
+                }
+                pts.push(p);
+                ts.push(e[0]);
+            }
+            if pts.len() < 2 {
+                continue;
+            }
+            // A cutter lying entirely on one border line coincides with the
+            // domain edge (e.g. a cut circle on the seam) and splits nothing.
+            // When the caller supplies its own boundary loops (no domain
+            // border), those loops legitimately run along the domain edges.
+            if use_domain_border && (
+               pts.iter().all(|p| (p[0] - u0).abs() < snap_uv) ||
+               pts.iter().all(|p| (p[0] - u1).abs() < snap_uv) ||
+               pts.iter().all(|p| (p[1] - v0).abs() < snap_uv) ||
+               pts.iter().all(|p| (p[1] - v1).abs() < snap_uv)) {
+                continue;
+            }
+            polylines.push(PolyLine { cidx: cidx as i32, pts, ts });
+        }
+
+        // Border sides as polylines: cidx -1 bottom, -2 right, -3 top, -4 left
+        if use_domain_border {
+            polylines.push(PolyLine { cidx: -1, pts: vec![[u0, v0], [u1, v0]], ts: vec![u0, u1] });
+            polylines.push(PolyLine { cidx: -2, pts: vec![[u1, v0], [u1, v1]], ts: vec![v0, v1] });
+            polylines.push(PolyLine { cidx: -3, pts: vec![[u1, v1], [u0, v1]], ts: vec![u1, u0] });
+            polylines.push(PolyLine { cidx: -4, pts: vec![[u0, v1], [u0, v0]], ts: vec![v1, v0] });
+        }
+
+        // ---- 2. Segment-segment intersections (Newton-refined on real curves) ----
+        fn seg_seg(p1: &[f64; 2], p2: &[f64; 2], p3: &[f64; 2], p4: &[f64; 2]) -> Option<(f64, f64)> {
+            let d1u = p2[0] - p1[0];
+            let d1v = p2[1] - p1[1];
+            let d2u = p4[0] - p3[0];
+            let d2v = p4[1] - p3[1];
+            let den = d1u * d2v - d1v * d2u;
+            if den.abs() < 1e-20 {
+                return None;
+            }
+            let s = ((p3[0]-p1[0]) * d2v - (p3[1]-p1[1]) * d2u) / den;
+            let t = ((p3[0]-p1[0]) * d1v - (p3[1]-p1[1]) * d1u) / den;
+            if -1e-12 <= s && s <= 1.0 + 1e-12 && -1e-12 <= t && t <= 1.0 + 1e-12 {
+                return Some((s, t));
+            }
+            None
+        }
+
+        let newton_cc = |ca: &NurbsCurve, mut ta: f64, cb: &NurbsCurve, mut tb: f64| -> (f64, f64) {
+            for _ in 0..8 {
+                let da = ca.evaluate(ta, 1);
+                let db = cb.evaluate(tb, 1);
+                let fu = da[0][0] - db[0][0];
+                let fv = da[0][1] - db[0][1];
+                if fu.hypot(fv) < snap_uv * 0.01 {
+                    break;
+                }
+                let j00 = da[1][0];
+                let j01 = -db[1][0];
+                let j10 = da[1][1];
+                let j11 = -db[1][1];
+                let den = j00 * j11 - j01 * j10;
+                if den.abs() < 1e-20 {
+                    break;
+                }
+                ta -= (fu * j11 - j01 * fv) / den;
+                tb -= (j00 * fv - fu * j10) / den;
+                let (a0, a1) = ca.domain();
+                let (b0, b1) = cb.domain();
+                ta = ta.max(a0).min(a1);
+                tb = tb.max(b0).min(b1);
+            }
+            (ta, tb)
+        };
+
+        let mut splits: HashMap<(usize, usize), Vec<(f64, f64, f64, f64)>> = HashMap::new();
+        for pi in 0..polylines.len() {
+            for pj in (pi + 1)..polylines.len() {
+                let a_poly = &polylines[pi];
+                let b_poly = &polylines[pj];
+                if is_boundary(a_poly.cidx) && is_boundary(b_poly.cidx) {
+                    continue;
+                }
+                let aminu = a_poly.pts.iter().map(|p| p[0]).fold(f64::INFINITY, f64::min) - snap_uv;
+                let amaxu = a_poly.pts.iter().map(|p| p[0]).fold(f64::NEG_INFINITY, f64::max) + snap_uv;
+                let aminv = a_poly.pts.iter().map(|p| p[1]).fold(f64::INFINITY, f64::min) - snap_uv;
+                let amaxv = a_poly.pts.iter().map(|p| p[1]).fold(f64::NEG_INFINITY, f64::max) + snap_uv;
+                let bminu = b_poly.pts.iter().map(|p| p[0]).fold(f64::INFINITY, f64::min);
+                let bmaxu = b_poly.pts.iter().map(|p| p[0]).fold(f64::NEG_INFINITY, f64::max);
+                let bminv = b_poly.pts.iter().map(|p| p[1]).fold(f64::INFINITY, f64::min);
+                let bmaxv = b_poly.pts.iter().map(|p| p[1]).fold(f64::NEG_INFINITY, f64::max);
+                if bminu > amaxu || bmaxu < aminu || bminv > amaxv || bmaxv < aminv {
+                    continue;
+                }
+                for ia in 0..a_poly.pts.len() - 1 {
+                    for ib in 0..b_poly.pts.len() - 1 {
+                        let hit = seg_seg(&a_poly.pts[ia], &a_poly.pts[ia+1], &b_poly.pts[ib], &b_poly.pts[ib+1]);
+                        let (s, t) = match hit {
+                            Some(h) => h,
+                            None => continue,
+                        };
+                        let mut ta = a_poly.ts[ia] + (a_poly.ts[ia+1] - a_poly.ts[ia]) * s;
+                        let mut tb = b_poly.ts[ib] + (b_poly.ts[ib+1] - b_poly.ts[ib]) * t;
+                        let mut hu = a_poly.pts[ia][0] + (a_poly.pts[ia+1][0] - a_poly.pts[ia][0]) * s;
+                        let mut hv = a_poly.pts[ia][1] + (a_poly.pts[ia+1][1] - a_poly.pts[ia][1]) * s;
+                        if a_poly.cidx >= 0 && b_poly.cidx >= 0 {
+                            let (nta, ntb) = newton_cc(&pcurves[a_poly.cidx as usize], ta, &pcurves[b_poly.cidx as usize], tb);
+                            ta = nta;
+                            tb = ntb;
+                            let pa = pcurves[a_poly.cidx as usize].point_at(ta);
+                            hu = pa[0];
+                            hv = pa[1];
+                        } else if a_poly.cidx >= 0 {
+                            let pa = pcurves[a_poly.cidx as usize].point_at(ta);
+                            hu = pa[0];
+                            hv = pa[1];
+                        } else if b_poly.cidx >= 0 {
+                            let pb = pcurves[b_poly.cidx as usize].point_at(tb);
+                            hu = pb[0];
+                            hv = pb[1];
+                        }
+                        let mut hp = [hu, hv];
+                        snap_border(&mut hp);
+                        if b_poly.cidx < 0 {
+                            if b_poly.cidx == -1 || b_poly.cidx == -3 {
+                                tb = hp[0];
+                            } else {
+                                tb = hp[1];
+                            }
+                        }
+                        if a_poly.cidx < 0 {
+                            if a_poly.cidx == -1 || a_poly.cidx == -3 {
+                                ta = hp[0];
+                            } else {
+                                ta = hp[1];
+                            }
+                        }
+                        splits.entry((pi, ia)).or_insert_with(Vec::new).push((s, hp[0], hp[1], ta));
+                        splits.entry((pj, ib)).or_insert_with(Vec::new).push((t, hp[0], hp[1], tb));
+                    }
+                }
+            }
+        }
+
+        // ---- 3. Rebuild polylines with split vertices; build the vertex pool ----
+        let mut cell_map: HashMap<(i64, i64), Vec<usize>> = HashMap::new();
+        let mut verts: Vec<[f64; 2]> = Vec::new();
+
+        fn vert_id(p: [f64; 2], snap_uv: f64, verts: &mut Vec<[f64; 2]>, cell_map: &mut std::collections::HashMap<(i64, i64), Vec<usize>>) -> usize {
+            let ci = (p[0] / snap_uv).floor() as i64;
+            let cj = (p[1] / snap_uv).floor() as i64;
+            for di in -1i64..=1 {
+                for dj in -1i64..=1 {
+                    if let Some(bucket) = cell_map.get(&(ci+di, cj+dj)) {
+                        for &vk in bucket {
+                            let q = verts[vk];
+                            if (q[0]-p[0]).hypot(q[1]-p[1]) <= snap_uv {
+                                return vk;
+                            }
+                        }
+                    }
+                }
+            }
+            let vk = verts.len();
+            verts.push([p[0], p[1]]);
+            cell_map.entry((ci, cj)).or_insert_with(Vec::new).push(vk);
+            vk
+        }
+
+        struct EdgeRec { a: usize, b: usize, cidx: i32, ta: f64, tb: f64 }
+        let mut edges: Vec<EdgeRec> = Vec::new();
+
+        for (pi, poly) in polylines.iter().enumerate() {
+            let mut chain: Vec<(usize, f64)> = Vec::new();
+            for i in 0..poly.pts.len() {
+                chain.push((vert_id(poly.pts[i], snap_uv, &mut verts, &mut cell_map), poly.ts[i]));
+                if i < poly.pts.len() - 1 {
+                    if let Some(sp) = splits.get(&(pi, i)) {
+                        let mut evs = sp.clone();
+                        evs.sort_by(|x, y| x.partial_cmp(y).unwrap());
+                        for (_frac, hu, hv, tc) in evs {
+                            chain.push((vert_id([hu, hv], snap_uv, &mut verts, &mut cell_map), tc));
+                        }
+                    }
+                }
+            }
+            for i in 0..chain.len() - 1 {
+                let (a, ta) = chain[i];
+                let (b, tb) = chain[i + 1];
+                if a == b {
+                    continue;
+                }
+                edges.push(EdgeRec { a, b, cidx: poly.cidx, ta, tb });
+            }
+        }
+
+        // ---- 4. Prune dangling edges (valence-1 chains) ----
+        let mut alive = vec![true; edges.len()];
+        let mut changed = true;
+        while changed {
+            changed = false;
+            let mut degree: HashMap<usize, usize> = HashMap::new();
+            for (ei, e) in edges.iter().enumerate() {
+                if !alive[ei] {
+                    continue;
+                }
+                *degree.entry(e.a).or_insert(0) += 1;
+                *degree.entry(e.b).or_insert(0) += 1;
+            }
+            for (ei, e) in edges.iter().enumerate() {
+                if !alive[ei] {
+                    continue;
+                }
+                if degree.get(&e.a).copied().unwrap_or(0) == 1 || degree.get(&e.b).copied().unwrap_or(0) == 1 {
+                    alive[ei] = false;
+                    changed = true;
+                }
+            }
+        }
+
+        let live_edges: Vec<&EdgeRec> = edges.iter().enumerate().filter(|(ei, _)| alive[*ei]).map(|(_, e)| e).collect();
+        if live_edges.is_empty() {
+            return Vec::new();
+        }
+
+        // ---- 5. Half-edge face extraction (leftmost-turn walk) ----
+        let mut out_map: HashMap<usize, Vec<usize>> = HashMap::new();
+        let mut hes: Vec<(usize, usize, usize, bool)> = Vec::new(); // (tail, head, live_edge_index, fwd)
+        for (li, e) in live_edges.iter().enumerate() {
+            hes.push((e.a, e.b, li, true));
+            hes.push((e.b, e.a, li, false));
+        }
+        for (hi, he) in hes.iter().enumerate() {
+            out_map.entry(he.0).or_insert_with(Vec::new).push(hi);
+        }
+        for (&vid, outs) in out_map.iter_mut() {
+            outs.sort_by(|&h1, &h2| {
+                let a1 = (verts[hes[h1].1][1] - verts[vid][1]).atan2(verts[hes[h1].1][0] - verts[vid][0]);
+                let a2 = (verts[hes[h2].1][1] - verts[vid][1]).atan2(verts[hes[h2].1][0] - verts[vid][0]);
+                a1.partial_cmp(&a2).unwrap()
+            });
+        }
+
+        let mut next_he = vec![usize::MAX; hes.len()];
+        for (_vid, outs) in out_map.iter() {
+            for (pos, &hi) in outs.iter().enumerate() {
+                let tw = hi ^ 1;
+                // at vertex vid, incoming tw arrives; next outgoing is the one
+                // clockwise from the reversed incoming (leftmost turn)
+                let nxt = outs[(pos + outs.len() - 1) % outs.len()];
+                next_he[tw] = nxt;
+            }
+        }
+
+        let mut visited = vec![false; hes.len()];
+        let mut faces: Vec<Vec<usize>> = Vec::new(); // list of list of he indices
+        for hi in 0..hes.len() {
+            if visited[hi] {
+                continue;
+            }
+            let mut cycle = Vec::new();
+            let mut cur = hi;
+            while !visited[cur] {
+                visited[cur] = true;
+                cycle.push(cur);
+                cur = next_he[cur];
+            }
+            if cycle.len() >= 2 {
+                faces.push(cycle);
+            }
+        }
+
+        let face_area = |cycle: &Vec<usize>| -> f64 {
+            let mut s = 0.0;
+            for &hi in cycle {
+                let a = verts[hes[hi].0];
+                let b = verts[hes[hi].1];
+                s += a[0]*b[1] - b[0]*a[1];
+            }
+            s * 0.5
+        };
+
+        let mut border_vids: HashSet<usize> = HashSet::new();
+        for e in &live_edges {
+            if is_boundary(e.cidx) {
+                border_vids.insert(e.a);
+                border_vids.insert(e.b);
+            }
+        }
+
+        let point_in_cycle = |p: [f64; 2], cycle: &Vec<usize>| -> bool {
+            let mut inside = false;
+            for &hi in cycle {
+                let a = verts[hes[hi].0];
+                let b = verts[hes[hi].1];
+                if (a[1] > p[1]) != (b[1] > p[1]) && p[0] < (b[0]-a[0])*(p[1]-a[1])/(b[1]-a[1])+a[0] {
+                    inside = !inside;
+                }
+            }
+            inside
+        };
+
+        let mut pos_faces: Vec<(Vec<usize>, f64)> = Vec::new();
+        let mut neg_faces: Vec<Vec<usize>> = Vec::new();
+        for cycle in faces {
+            let area = face_area(&cycle);
+            if area > snap_uv * snap_uv {
+                pos_faces.push((cycle, area));
+            } else if area < -snap_uv * snap_uv {
+                let touches_border = cycle.iter().any(|&hi| border_vids.contains(&hes[hi].0));
+                if !touches_border {
+                    neg_faces.push(cycle);
+                }
+            }
+        }
+
+        // ---- 6. Assign floating hole loops to their containing faces ----
+        let mut holes_of: Vec<Vec<Vec<usize>>> = vec![Vec::new(); pos_faces.len()];
+        for cycle in &neg_faces {
+            let sample = verts[hes[cycle[0]].0];
+            let mut best: i32 = -1;
+            let mut best_area = f64::INFINITY;
+            for (fi, (fc, area)) in pos_faces.iter().enumerate() {
+                if *area < best_area && point_in_cycle(sample, fc) {
+                    // the hole vertex lies ON the cycle of its own disk face;
+                    // skip faces sharing vertices with the hole cycle
+                    let hole_vids: HashSet<usize> = cycle.iter().map(|&hi| hes[hi].0).collect();
+                    let face_vids: HashSet<usize> = fc.iter().map(|&hi| hes[hi].0).collect();
+                    if hole_vids == face_vids {
+                        continue;
+                    }
+                    best = fi as i32;
+                    best_area = *area;
+                }
+            }
+            if best >= 0 {
+                holes_of[best as usize].push(cycle.clone());
+            }
+        }
+
+        // ---- 7. Emit one trimmed surface per face ----
+        let cycle_to_loop = |cycle: &Vec<usize>| -> NurbsCurve {
+            // Collapse consecutive same-curve half-edges into exact trims,
+            // border runs into straight segments, then join into one loop
+            struct Run { cidx: i32, va: usize, vb: usize, ta: f64, tb: f64 }
+            let mut runs: Vec<Run> = Vec::new();
+            for &hi in cycle {
+                let (tail, head, li, fwd) = hes[hi];
+                let e = live_edges[li];
+                let ta = if fwd { e.ta } else { e.tb };
+                let tb = if fwd { e.tb } else { e.ta };
+                let merged = match runs.last_mut() {
+                    Some(last) if last.cidx == e.cidx && last.vb == tail => {
+                        last.vb = head;
+                        last.tb = tb;
+                        true
+                    }
+                    _ => false,
+                };
+                if !merged {
+                    runs.push(Run { cidx: e.cidx, va: tail, vb: head, ta, tb });
+                }
+            }
+            let mut pieces: Vec<NurbsCurve> = Vec::new();
+            for run in &runs {
+                if run.cidx >= 0 {
+                    let crv = &pcurves[run.cidx as usize];
+                    let (c0, c1) = crv.domain();
+                    let lo = run.ta.min(run.tb);
+                    let hi_ = run.ta.max(run.tb);
+                    let mut piece = Some(crv.duplicate());
+                    if hi_ - lo < (c1 - c0) - 1e-12 && hi_ - lo > 1e-14 {
+                        if !piece.as_mut().unwrap().trim(lo, hi_) {
+                            piece = None;
+                        }
+                    }
+                    if let Some(p) = piece {
+                        if p.is_valid() {
+                            pieces.push(p);
+                            continue;
+                        }
+                    }
+                }
+                let pa = verts[run.va];
+                let pb = verts[run.vb];
+                if (pb[0]-pa[0]).hypot(pb[1]-pa[1]) > 1e-14 {
+                    let seg_pts = vec![
+                        Point::new(pa[0], pa[1], 0.0),
+                        Point::new(pb[0], pb[1], 0.0),
+                    ];
+                    pieces.push(NurbsCurve::create(false, 1, &seg_pts));
+                }
+            }
+            if pieces.is_empty() {
+                return NurbsCurve::default();
+            }
+            let mut joined = NurbsCurve::join(&pieces, Some(snap_uv * 4.0));
+            if joined.len() == 1 && joined[0].is_closed() {
+                return joined.remove(0);
+            }
+            // Fallback: polyline loop from the face walk
+            let mut loop_pts: Vec<Point> = Vec::new();
+            for &hi in cycle {
+                let a = verts[hes[hi].0];
+                loop_pts.push(Point::new(a[0], a[1], 0.0));
+            }
+            loop_pts.push(Point::new(loop_pts[0][0], loop_pts[0][1], 0.0));
+            NurbsCurve::create(false, 1, &loop_pts)
+        };
+
+        let loop_signed_area = |loop_crv: &NurbsCurve| -> f64 {
+            let n = 64;
+            let (l0, l1) = loop_crv.domain();
+            let mut s = 0.0;
+            let mut prev = loop_crv.point_at(l0);
+            for i in 1..=n {
+                let p = loop_crv.point_at(l0 + (l1 - l0) * i as f64 / n as f64);
+                s += prev[0]*p[1] - p[0]*prev[1];
+                prev = p;
+            }
+            s * 0.5
+        };
+
+        let mut result: Vec<NurbsSurfaceTrimmed> = Vec::new();
+        for (fi, (cycle, _area)) in pos_faces.iter().enumerate() {
+            let mut outer = cycle_to_loop(cycle);
+            if !outer.is_valid() {
+                continue;
+            }
+            if loop_signed_area(&outer) < 0.0 {
+                outer.reverse();
+            }
+            let mut ts = NurbsSurfaceTrimmed::create(srf, &outer);
+            for hole_cycle in &holes_of[fi] {
+                let mut hole = cycle_to_loop(hole_cycle);
+                if hole.is_valid() {
+                    if loop_signed_area(&hole) > 0.0 {
+                        hole.reverse();
+                    }
+                    ts.add_inner_loop(hole);
+                }
+            }
+            result.push(ts);
+        }
+        result
+    }
+
     pub fn guid(&self) -> &str {
         self.guid.get_or_init(|| uuid::Uuid::new_v4().to_string())
     }

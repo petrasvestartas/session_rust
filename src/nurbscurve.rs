@@ -198,6 +198,9 @@ impl NurbsCurve {
 
         if periodic && n < 3 { return NurbsCurve::new(3, false, 4, 0); }
 
+        // Two points: Rhino emits a degree-1 line (2 CVs), not a cubic.
+        if n == 2 && !periodic { return NurbsCurve::create(false, 1, points); }
+
         let pdist = |a: &Point, b: &Point| -> f64 {
             let dx = a[0]-b[0]; let dy = a[1]-b[1]; let dz = a[2]-b[2];
             (dx*dx + dy*dy + dz*dz).sqrt()
@@ -391,7 +394,10 @@ impl NurbsCurve {
         diag[n-1] = 1.0;
         for d in 0..dim { rhs[(n-1) * dim + d] = cv[n * dim + d]; }
 
-        let solution = nurbsknot::solve_tridiagonal(dim, &lower, &diag, &upper, &rhs).unwrap();
+        let solution = match nurbsknot::solve_tridiagonal(dim, &lower, &diag, &upper, &rhs) {
+            Some(s) => s,
+            None => return NurbsCurve::new(3, false, 4, 0),
+        };
 
         for i in 0..sys_n {
             for d in 0..dim { cv[(i+1) * dim + d] = solution[i * dim + d]; }
@@ -560,6 +566,115 @@ impl NurbsCurve {
         }
         curve.set_cv(n, &points[m-1]);
         curve
+    }
+
+    /// Join curve segments into chains by endpoint matching.
+    ///
+    /// Segments are greedily chained (reversed as needed), made compatible
+    /// (common degree, common rationality), and concatenated with C0
+    /// continuity (junction nurbsknot at multiplicity = degree).
+    pub fn join(curves: &[NurbsCurve], tolerance: Option<f64>) -> Vec<NurbsCurve> {
+        let tol = tolerance.unwrap_or(Tolerance::ZERO_TOLERANCE);
+        let mut segs: Vec<NurbsCurve> = Vec::new();
+        for c in curves {
+            if c.is_valid() {
+                segs.push(c.duplicate());
+            }
+        }
+        let mut chains: Vec<Vec<NurbsCurve>> = Vec::new();
+        let mut used = vec![false; segs.len()];
+        for i in 0..segs.len() {
+            if used[i] {
+                continue;
+            }
+            used[i] = true;
+            let mut chain: Vec<NurbsCurve> = vec![segs[i].duplicate()];
+            if !segs[i].is_closed() {
+                let mut grown = true;
+                while grown {
+                    grown = false;
+                    let start = chain[0].point_at_start();
+                    let end = chain[chain.len() - 1].point_at_end();
+                    for j in 0..segs.len() {
+                        if used[j] || segs[j].is_closed() {
+                            continue;
+                        }
+                        let s = segs[j].point_at_start();
+                        let e = segs[j].point_at_end();
+                        if s.distance(&end, None) <= tol {
+                            chain.push(segs[j].duplicate());
+                        } else if e.distance(&end, None) <= tol {
+                            let mut r = segs[j].duplicate();
+                            r.reverse();
+                            chain.push(r);
+                        } else if e.distance(&start, None) <= tol {
+                            chain.insert(0, segs[j].duplicate());
+                        } else if s.distance(&start, None) <= tol {
+                            let mut r = segs[j].duplicate();
+                            r.reverse();
+                            chain.insert(0, r);
+                        } else {
+                            continue;
+                        }
+                        used[j] = true;
+                        grown = true;
+                        break;
+                    }
+                }
+            }
+            chains.push(chain);
+        }
+        let mut result: Vec<NurbsCurve> = Vec::new();
+        for mut chain in chains {
+            if chain.len() == 1 {
+                result.push(chain.remove(0));
+                continue;
+            }
+            let mut rational = false;
+            let mut max_degree = 1;
+            for c in &chain {
+                if c.is_rational() {
+                    rational = true;
+                }
+                if c.degree() > max_degree {
+                    max_degree = c.degree();
+                }
+            }
+            for c in chain.iter_mut() {
+                if rational {
+                    c.make_rational();
+                }
+                c.clamp_end(2);
+                c.increase_degree(max_degree);
+            }
+            let mut joined = chain.remove(0);
+            for mut c in chain {
+                let stride = joined.m_cv_stride;
+                let cvdim = joined.cv_size();
+                let (_, a1) = joined.domain();
+                let (s0, s1) = c.domain();
+                c.set_domain(a1, a1 + (s1 - s0));
+                if rational {
+                    let w_end = joined.weight(joined.m_cv_count - 1);
+                    let w_start = c.weight(0);
+                    if w_start.abs() > Tolerance::ZERO_TOLERANCE {
+                        let scale = w_end / w_start;
+                        for k in 0..c.m_cv.len() {
+                            c.m_cv[k] = c.m_cv[k] * scale;
+                        }
+                    }
+                }
+                let last = (joined.m_cv_count - 1) * stride;
+                for k in 0..cvdim {
+                    joined.m_cv[last + k] = 0.5 * (joined.m_cv[last + k] + c.m_cv[k]);
+                }
+                joined.m_nurbsknot.extend_from_slice(&c.m_nurbsknot[joined.m_order - 1..]);
+                joined.m_cv.extend_from_slice(&c.m_cv[stride..]);
+                joined.m_cv_count = joined.m_cv_count + c.m_cv_count - 1;
+            }
+            result.push(joined);
+        }
+        result
     }
 
     /// Create clamped uniform NURBS curve from control points
