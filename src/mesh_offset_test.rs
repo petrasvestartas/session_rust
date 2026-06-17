@@ -93,8 +93,9 @@ pub fn run_mesh_offset_file_json_dump() -> TestResult {
         ];
         let mesh = Mesh::from_vertices_and_faces(pts, vec![vec![0, 1, 2, 3]]);
         let result = MeshOffset::from_mesh(&mesh, 1.0);
-        let _ = result.file_json_dump("mesh_offset_test_dump.json");
-        let loaded = Mesh::file_json_load("mesh_offset_test_dump.json").unwrap();
+        let filename = "serialization/test_mesh_offset.json";
+        let _ = result.file_json_dump(filename);
+        let loaded = Mesh::file_json_load(filename).unwrap();
         MINI_CHECK!(loaded.is_valid());
         MINI_CHECK!(loaded.number_of_vertices() == result.number_of_vertices());
         MINI_CHECK!(loaded.number_of_faces() == result.number_of_faces());
@@ -105,7 +106,8 @@ REGISTER_MINI_TEST!("MeshOffset", "file_json_dump", crate::mesh_offset_test::run
 pub fn run_mesh_offset_file_json_load() -> TestResult {
     MINI_TEST!("file_json_load", {
         use crate::Mesh;
-        let loaded = Mesh::file_json_load("mesh_offset_test_dump.json").unwrap();
+        let filename = "serialization/test_mesh_offset.json";
+        let loaded = Mesh::file_json_load(filename).unwrap();
         MINI_CHECK!(loaded.is_valid());
         MINI_CHECK!(loaded.number_of_vertices() == 8);
         MINI_CHECK!(loaded.number_of_faces() == 6);
@@ -126,8 +128,9 @@ pub fn run_mesh_offset_to_proto() -> TestResult {
         ];
         let mesh = Mesh::from_vertices_and_faces(pts, vec![vec![0, 1, 2, 3]]);
         let result = MeshOffset::from_mesh(&mesh, 1.0);
-        result.pb_dump("mesh_offset_test.pb");
-        let loaded = Mesh::pb_load("mesh_offset_test.pb");
+        let filename = "serialization/test_mesh_offset.bin";
+        result.pb_dump(filename);
+        let loaded = Mesh::pb_load(filename);
         MINI_CHECK!(loaded.is_valid());
         MINI_CHECK!(loaded.number_of_vertices() == result.number_of_vertices());
         MINI_CHECK!(loaded.number_of_faces() == result.number_of_faces());
@@ -138,7 +141,8 @@ REGISTER_MINI_TEST!("MeshOffset", "to_proto", crate::mesh_offset_test::run_mesh_
 pub fn run_mesh_offset_from_proto() -> TestResult {
     MINI_TEST!("from_proto", {
         use crate::Mesh;
-        let loaded = Mesh::pb_load("mesh_offset_test.pb");
+        let filename = "serialization/test_mesh_offset.bin";
+        let loaded = Mesh::pb_load(filename);
         MINI_CHECK!(loaded.is_valid());
         MINI_CHECK!(loaded.number_of_vertices() == 8);
         MINI_CHECK!(loaded.number_of_faces() == 6);

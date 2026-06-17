@@ -1440,7 +1440,7 @@ impl NurbsSurfaceTrimmed {
         let mut result = Mesh::new();
         let wt = diag*1e-5; let cell = if wt>0.0 { wt } else { 1.0 };
         let mut cmap: std::collections::HashMap<(i64,i64,i64), Vec<([f64;3],usize)>> = std::collections::HashMap::new();
-        let mut weld = |result: &mut Mesh, cmap: &mut std::collections::HashMap<(i64,i64,i64),Vec<([f64;3],usize)>>, u: f64, v: f64| -> usize {
+        let weld = |result: &mut Mesh, cmap: &mut std::collections::HashMap<(i64,i64,i64),Vec<([f64;3],usize)>>, u: f64, v: f64| -> usize {
             let p = srf.point_at(u,v).unwrap_or(Point::new(0.0,0.0,0.0));
             let (x,y,z)=(p[0] as f64,p[1] as f64,p[2] as f64);
             let (ci,cj,ck)=((x/cell).floor() as i64,(y/cell).floor() as i64,(z/cell).floor() as i64);
@@ -1567,7 +1567,7 @@ impl NurbsSurfaceTrimmed {
         let mut result=Mesh::new();
         let wt=diag*1e-5; let cell=if wt>0.0 {wt} else {1.0};
         let mut cmap: std::collections::HashMap<(i64,i64,i64),Vec<([f64;3],usize)>> = std::collections::HashMap::new();
-        let mut weld = |result:&mut Mesh, cmap:&mut std::collections::HashMap<(i64,i64,i64),Vec<([f64;3],usize)>>, u:f64,v:f64| -> usize {
+        let weld = |result:&mut Mesh, cmap:&mut std::collections::HashMap<(i64,i64,i64),Vec<([f64;3],usize)>>, u:f64,v:f64| -> usize {
             let p=srf.point_at(u,v).unwrap_or(Point::new(0.0,0.0,0.0));
             let (x,y,z)=(p[0] as f64,p[1] as f64,p[2] as f64);
             let (ci,cj,ck)=((x/cell).floor() as i64,(y/cell).floor() as i64,(z/cell).floor() as i64);
