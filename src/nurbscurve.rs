@@ -3221,7 +3221,8 @@ impl NurbsCurve {
             let mut saved = 0.0;
 
             for r in 0..j {
-                let temp = basis[r] / (right[r + 1] + left[j - r]);
+                let denom = right[r + 1] + left[j - r];
+                let temp = if denom != 0.0 { basis[r] / denom } else { 0.0 };
                 basis[r] = saved + right[r + 1] * temp;
                 saved = left[j - r] * temp;
             }

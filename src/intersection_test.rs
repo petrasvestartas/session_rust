@@ -1266,3 +1266,54 @@ pub fn run_intersection_closed_and_open_paths_2d() -> TestResult {
     })
 }
 REGISTER_MINI_TEST!("Intersection", "Closed And Open Paths 2D", crate::intersection_test::run_intersection_closed_and_open_paths_2d);
+
+pub fn run_intersection_line_line_classified() -> TestResult {
+    MINI_TEST!("Line Line Classified", {
+        use crate::intersection;
+        use crate::{Line, Point, Vector};
+
+        // Crossing perpendicular segments meeting at their midpoints.
+        let s0 = Line::new(-1.0, 0.0, 0.0, 1.0, 0.0, 0.0);
+        let s1 = Line::new(0.0, -1.0, 0.0, 0.0, 1.0, 0.0);
+        let mut p0 = Point::new(0.0, 0.0, 0.0);
+        let mut p1 = Point::new(0.0, 0.0, 0.0);
+        let mut v0 = Vector::new(0.0, 0.0, 0.0);
+        let mut v1 = Vector::new(0.0, 0.0, 0.0);
+        let mut normal = Vector::new(0.0, 0.0, 0.0);
+        let mut type0 = false;
+        let mut type1 = false;
+        let mut is_parallel = false;
+        let ok = intersection::line_line_classified(&s0, &s1, 1, 1, 0, 0, 0.5, &mut p0, &mut p1, &mut v0, &mut v1, &mut normal, &mut type0, &mut type1, &mut is_parallel);
+
+        MINI_CHECK!(ok);
+        MINI_CHECK!(!is_parallel);
+        MINI_CHECK!((p0[0]).abs() < 1e-6);
+        MINI_CHECK!((p0[1]).abs() < 1e-6);
+        MINI_CHECK!((p1[0]).abs() < 1e-6);
+        MINI_CHECK!((p1[1]).abs() < 1e-6);
+        MINI_CHECK!((normal[2].abs() - 1.0).abs() < 1e-6);
+
+        // Shared-endpoint case: both segments start at the same point.
+        let e0 = Line::new(0.0, 0.0, 0.0, 1.0, 0.0, 0.0);
+        let e1 = Line::new(0.0, 0.0, 0.0, 0.0, 1.0, 0.0);
+        let ok2 = intersection::line_line_classified(&e0, &e1, 1, 1, 0, 0, 0.5, &mut p0, &mut p1, &mut v0, &mut v1, &mut normal, &mut type0, &mut type1, &mut is_parallel);
+
+        MINI_CHECK!(ok2);
+        MINI_CHECK!(!type0);
+        MINI_CHECK!(!type1);
+        MINI_CHECK!((p0[0]).abs() < 1e-6);
+        MINI_CHECK!((p0[1]).abs() < 1e-6);
+
+        // Parallel offset segments.
+        let q0 = Line::new(0.0, 0.0, 0.0, 2.0, 0.0, 0.0);
+        let q1 = Line::new(0.0, 1.0, 0.0, 2.0, 1.0, 0.0);
+        let ok3 = intersection::line_line_classified(&q0, &q1, 1, 1, 0, 0, 0.5, &mut p0, &mut p1, &mut v0, &mut v1, &mut normal, &mut type0, &mut type1, &mut is_parallel);
+
+        MINI_CHECK!(ok3);
+        MINI_CHECK!(is_parallel);
+        MINI_CHECK!(!type0);
+        MINI_CHECK!(!type1);
+    })
+}
+REGISTER_MINI_TEST!("Intersection", "Line Line Classified", crate::intersection_test::run_intersection_line_line_classified);
+

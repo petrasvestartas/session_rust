@@ -277,3 +277,64 @@ pub fn run_boolean_polyline_large_coords_auto_scale() -> TestResult {
     })
 }
 REGISTER_MINI_TEST!("Boolean Polyline", "Large Coords Auto Scale", crate::boolean_polyline_test::run_boolean_polyline_large_coords_auto_scale);
+
+#[test]
+fn test_boolean_polyline_open_horizontal_line_vs_unit_square() {
+    let _ = run_boolean_polyline_open_horizontal_line_vs_unit_square();
+}
+
+pub fn run_boolean_polyline_open_horizontal_line_vs_unit_square() -> TestResult {
+    MINI_TEST!("Horizontal Line Vs Unit Square", {
+        use crate::{Point, Polyline};
+        let open_line = Polyline::new(vec![Point::new(-2.0,0.0,0.0), Point::new(2.0,0.0,0.0)]);
+        let sq = Polyline::new(vec![Point::new(-1.0,-1.0,0.0), Point::new(1.0,-1.0,0.0), Point::new(1.0,1.0,0.0), Point::new(-1.0,1.0,0.0), Point::new(-1.0,-1.0,0.0)]);
+        let out = Polyline::clip_open_against_closed(&open_line, &sq);
+        MINI_CHECK!(out.len() == 1);
+        MINI_CHECK!(out[0].point_count() == 2);
+        let p0 = out[0].get_point(0).unwrap();
+        let p1 = out[0].get_point(1).unwrap();
+        MINI_CHECK!((p0[0].abs() - 1.0).abs() < 1e-6);
+        MINI_CHECK!((p1[0].abs() - 1.0).abs() < 1e-6);
+        MINI_CHECK!(p0[1].abs() < 1e-6);
+        MINI_CHECK!(p1[1].abs() < 1e-6);
+    })
+}
+REGISTER_MINI_TEST!("Boolean Polyline Open", "Horizontal Line Vs Unit Square", crate::boolean_polyline_test::run_boolean_polyline_open_horizontal_line_vs_unit_square);
+
+#[test]
+fn test_boolean_polyline_open_diagonal_line_vs_unit_square() {
+    let _ = run_boolean_polyline_open_diagonal_line_vs_unit_square();
+}
+
+pub fn run_boolean_polyline_open_diagonal_line_vs_unit_square() -> TestResult {
+    MINI_TEST!("Diagonal Line Vs Unit Square", {
+        use crate::{Point, Polyline};
+        let open_line = Polyline::new(vec![Point::new(-2.0,-2.0,0.0), Point::new(2.0,2.0,0.0)]);
+        let sq = Polyline::new(vec![Point::new(-1.0,-1.0,0.0), Point::new(1.0,-1.0,0.0), Point::new(1.0,1.0,0.0), Point::new(-1.0,1.0,0.0), Point::new(-1.0,-1.0,0.0)]);
+        let out = Polyline::clip_open_against_closed(&open_line, &sq);
+        MINI_CHECK!(out.len() == 1);
+        MINI_CHECK!(out[0].point_count() == 2);
+        let p0 = out[0].get_point(0).unwrap();
+        let p1 = out[0].get_point(1).unwrap();
+        MINI_CHECK!((p0[0].abs() - 1.0).abs() < 1e-6);
+        MINI_CHECK!((p1[0].abs() - 1.0).abs() < 1e-6);
+    })
+}
+REGISTER_MINI_TEST!("Boolean Polyline Open", "Diagonal Line Vs Unit Square", crate::boolean_polyline_test::run_boolean_polyline_open_diagonal_line_vs_unit_square);
+
+#[test]
+fn test_boolean_polyline_open_interior_open_path_passes_through() {
+    let _ = run_boolean_polyline_open_interior_open_path_passes_through();
+}
+
+pub fn run_boolean_polyline_open_interior_open_path_passes_through() -> TestResult {
+    MINI_TEST!("Interior Open Path Passes Through", {
+        use crate::{Point, Polyline};
+        let open_path = Polyline::new(vec![Point::new(-2.0,0.0,0.0), Point::new(0.0,0.2,0.0), Point::new(2.0,0.0,0.0)]);
+        let sq = Polyline::new(vec![Point::new(-1.0,-1.0,0.0), Point::new(1.0,-1.0,0.0), Point::new(1.0,1.0,0.0), Point::new(-1.0,1.0,0.0), Point::new(-1.0,-1.0,0.0)]);
+        let out = Polyline::clip_open_against_closed(&open_path, &sq);
+        MINI_CHECK!(out.len() == 1);
+        MINI_CHECK!(out[0].point_count() >= 3);
+    })
+}
+REGISTER_MINI_TEST!("Boolean Polyline Open", "Interior Open Path Passes Through", crate::boolean_polyline_test::run_boolean_polyline_open_interior_open_path_passes_through);

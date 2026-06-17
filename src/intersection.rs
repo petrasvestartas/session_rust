@@ -522,16 +522,97 @@ fn curve_signed_distance_to_plane(pt: &Point, plane: &Plane) -> f64 {
     v.dot(&plane.z_axis())
 }
 
-/// Find all intersections between NURBS curve and plane
-pub fn curve_plane(curve: &NurbsCurve, plane: &Plane, tolerance: Option<f64>) -> Vec<f64> {
-    let tol = tolerance.unwrap_or(Tolerance::ZERO_TOLERANCE);
-    let mut results = Vec::new();
+fn curve_find_root_bisection(
+    curve: &NurbsCurve,
+    plane: &Plane,
+    mut t0: f64,
+    mut t1: f64,
+    tolerance: f64,
+) -> Option<f64> {
+    let max_iterations = 50;
+    let mut d0 = curve_signed_distance_to_plane(&curve.point_at(t0), plane);
+    let mut _d1 = curve_signed_distance_to_plane(&curve.point_at(t1), plane);
 
-    if !curve.is_valid() {
-        return results;
+    if d0 * _d1 > 0.0 {
+        return None;
     }
 
-    let (_t_start, t_end) = curve.domain();
+    for _ in 0..max_iterations {
+        let t_mid = (t0 + t1) * 0.5;
+        let d_mid = curve_signed_distance_to_plane(&curve.point_at(t_mid), plane);
+
+        if d_mid.abs() < tolerance || (t1 - t0) < tolerance {
+            return Some(t_mid);
+        }
+
+        if d0 * d_mid < 0.0 {
+            t1 = t_mid;
+            _d1 = d_mid;
+        } else {
+            t0 = t_mid;
+            d0 = d_mid;
+        }
+    }
+
+    let t_result = (t0 + t1) * 0.5;
+    if curve_signed_distance_to_plane(&curve.point_at(t_result), plane).abs() < tolerance * 10.0 {
+        Some(t_result)
+    } else {
+        None
+    }
+}
+
+fn curve_refine_intersection_newton(curve: &NurbsCurve, plane: &Plane, t: &mut f64, tolerance: f64) -> bool {
+    let max_iterations = 10;
+    let step_tolerance = tolerance * 0.01;
+
+    for _ in 0..max_iterations {
+        let pt = curve.point_at(*t);
+        let tangent = curve.tangent_at(*t);
+
+        let f = curve_signed_distance_to_plane(&pt, plane);
+        let df = tangent.dot(&plane.z_axis());
+
+        if f.abs() < tolerance {
+            return true;
+        }
+        if df.abs() < 1e-12 {
+            return false;
+        }
+
+        let dt = -f / df;
+        if dt.abs() < step_tolerance {
+            return true;
+        }
+
+        *t += dt;
+
+        let (t0, t1) = curve.domain();
+        if *t < t0 {
+            *t = t0;
+        }
+        if *t > t1 {
+            *t = t1;
+        }
+    }
+
+    curve_signed_distance_to_plane(&curve.point_at(*t), plane).abs() < tolerance * 2.0
+}
+
+/// Find all intersections between NURBS curve and plane
+pub fn curve_plane(curve: &NurbsCurve, plane: &Plane, tolerance: Option<f64>) -> Vec<f64> {
+    let mut intersections = Vec::new();
+
+    if !curve.is_valid() {
+        return intersections;
+    }
+    let tol = if tolerance.unwrap_or(0.0) <= 0.0 {
+        Tolerance::ZERO_TOLERANCE
+    } else {
+        tolerance.unwrap()
+    };
+
+    let (t_start, t_end) = curve.domain();
     let span_params = curve.get_span_vector();
 
     for i in 0..(span_params.len() - 1) {
@@ -546,41 +627,65 @@ pub fn curve_plane(curve: &NurbsCurve, plane: &Plane, tolerance: Option<f64>) ->
         let d1 = curve_signed_distance_to_plane(&curve.point_at(t1), plane);
 
         if d0 * d1 < 0.0 {
-            let mut ta = t0;
-            let mut tb = t1;
-            let mut tm = (ta + tb) * 0.5;
-
-            for _ in 0..50 {
-                tm = (ta + tb) * 0.5;
-                let dm = curve_signed_distance_to_plane(&curve.point_at(tm), plane);
-                if dm.abs() < tol {
-                    break;
-                }
-                if dm * d0 < 0.0 {
-                    tb = tm;
-                } else {
-                    ta = tm;
-                }
+            if let Some(mut t_intersection) = curve_find_root_bisection(curve, plane, t0, t1, tol) {
+                curve_refine_intersection_newton(curve, plane, &mut t_intersection, tol);
+                intersections.push(t_intersection);
             }
-            results.push(tm);
         } else if d0.abs() < tol {
-            if results.is_empty() || (results.last().unwrap() - t0).abs() >= tol {
-                results.push(t0);
+            let mut add = true;
+            if !intersections.is_empty() && (intersections.last().unwrap() - t0).abs() < tol {
+                add = false;
+            }
+            if add {
+                intersections.push(t0);
             }
         }
     }
 
     let d_end = curve_signed_distance_to_plane(&curve.point_at(t_end), plane);
     if d_end.abs() < tol {
-        if results.is_empty() || (results.last().unwrap() - t_end).abs() >= tol {
-            results.push(t_end);
+        let mut add = true;
+        if !intersections.is_empty() && (intersections.last().unwrap() - t_end).abs() < tol {
+            add = false;
+        }
+        if add {
+            intersections.push(t_end);
         }
     }
 
-    results.sort_by(|a, b| a.partial_cmp(b).unwrap());
-    results.dedup_by(|a, b| (*a - *b).abs() < tol * 2.0);
+    if curve.degree() > 3 && intersections.len() < curve.degree() {
+        let num_samples = (curve.degree() * 4) as i32;
+        let dt = (t_end - t_start) / num_samples as f64;
 
-    results
+        for i in 0..num_samples {
+            let t0 = t_start + i as f64 * dt;
+            let t1 = t_start + (i + 1) as f64 * dt;
+
+            let d0 = curve_signed_distance_to_plane(&curve.point_at(t0), plane);
+            let d1 = curve_signed_distance_to_plane(&curve.point_at(t1), plane);
+
+            if d0 * d1 < 0.0 {
+                if let Some(mut t_intersection) = curve_find_root_bisection(curve, plane, t0, t1, tol) {
+                    let mut is_new = true;
+                    for &existing in &intersections {
+                        if (existing - t_intersection).abs() < tol * 2.0 {
+                            is_new = false;
+                            break;
+                        }
+                    }
+                    if is_new {
+                        curve_refine_intersection_newton(curve, plane, &mut t_intersection, tol);
+                        intersections.push(t_intersection);
+                    }
+                }
+            }
+        }
+    }
+
+    intersections.sort_by(|a, b| a.partial_cmp(b).unwrap());
+    intersections.dedup_by(|a, b| (*a - *b).abs() < tol * 2.0);
+
+    intersections
 }
 
 /// Find all intersection points between NURBS curve and plane
@@ -3917,6 +4022,166 @@ pub fn closed_and_open_paths_2d(
 pub fn line_line_3d(cutter: &Line, seg: &Line) -> Option<Point> {
     let (t0, _) = line_line_parameters(cutter, seg, 0.0, false, false)?;
     Some(cutter.point_at(t0))
+}/// Port of cgal_box_search.h:252-496 line_line_intersection_with_properties.
+/// Classifies two finite segments s0/s1 as end-to-end, side-to-end, or cross
+/// based on above_closer_to_edge in [0,1]. n_segs_*/cur_seg_* give the segment's
+/// position within its parent polyline (used for full-polyline parameter
+/// remapping that determines type0/type1). Outputs: p0/p1 = closest approach
+/// points (clamped to [0,1] on each segment); v0/v1 = unit directions, flipped
+/// away from the far end when type=0; normal = unit perpendicular to both
+/// segments (Plane::base1 if parallel); type0/type1 = false (0) means
+/// segment-end, true (1) means segment-interior; is_parallel = true when
+/// v0 x v1 is near-zero. Returns false for degenerate cases.
+#[allow(clippy::too_many_arguments)]
+pub fn line_line_classified(
+    s0: &Line,
+    s1: &Line,
+    n_segs_0: i32,
+    n_segs_1: i32,
+    cur_seg_0: i32,
+    cur_seg_1: i32,
+    above_closer_to_edge: f64,
+    p0: &mut Point,
+    p1: &mut Point,
+    v0: &mut Vector,
+    v1: &mut Vector,
+    normal: &mut Vector,
+    type0: &mut bool,
+    type1: &mut bool,
+    is_parallel: &mut bool,
+) -> bool {
+    use crate::plane::Plane;
+    use crate::vector::Vector;
+
+    const DIST_SQ: f64 = 1e-6;
+    const EPS_PAR: f64 = 1.0; // degrees
+
+    *v0 = s0.to_vector();
+    *v1 = s1.to_vector();
+    *normal = v0.cross(v1);
+    let nmag2 = normal[0] * normal[0] + normal[1] * normal[1] + normal[2] * normal[2];
+    let ang = v0.angle(v1, false);
+    *is_parallel = (nmag2 < 1e-24) || ((90.0 - (ang - 90.0).abs()) < EPS_PAR);
+    if *is_parallel {
+        let tmp_origin = s0.start();
+        let tmp_normal = v0.clone();
+        let pl_tmp = Plane::from_point_normal(tmp_origin, tmp_normal);
+        *normal = pl_tmp.base1();
+    }
+    normal.normalize_self();
+
+    let eq = |a: &Point, b: &Point| -> bool {
+        let dx = a[0] - b[0];
+        let dy = a[1] - b[1];
+        let dz = a[2] - b[2];
+        dx * dx + dy * dy + dz * dz < DIST_SQ
+    };
+    let endcase = |pp: Point, dv0: Vector, dv1: Vector,
+                   p0: &mut Point, p1: &mut Point, v0: &mut Vector, v1: &mut Vector,
+                   type0: &mut bool, type1: &mut bool| {
+        *p0 = pp.clone();
+        *p1 = pp;
+        *v0 = dv0;
+        v0.normalize_self();
+        *v1 = dv1;
+        v1.normalize_self();
+        *type0 = false;
+        *type1 = false;
+    };
+    if eq(&s0.start(), &s1.start()) { endcase(s0.start(), s0.end() - s0.start(), s1.end() - s1.start(), p0, p1, v0, v1, type0, type1); return true; }
+    if eq(&s0.start(), &s1.end())   { endcase(s0.start(), s0.end() - s0.start(), s1.start() - s1.end(), p0, p1, v0, v1, type0, type1); return true; }
+    if eq(&s0.end(),   &s1.start()) { endcase(s0.end(),   s0.start() - s0.end(), s1.end() - s1.start(), p0, p1, v0, v1, type0, type1); return true; }
+    if eq(&s0.end(),   &s1.end())   { endcase(s0.end(),   s0.start() - s0.end(), s1.start() - s1.end(), p0, p1, v0, v1, type0, type1); return true; }
+
+    if *is_parallel {
+        v0.normalize_self();
+        v1.normalize_self();
+        let signed_t = |src: &Point, unit: &Vector, q: &Point| -> f64 {
+            (q[0] - src[0]) * unit[0] + (q[1] - src[1]) * unit[1] + (q[2] - src[2]) * unit[2]
+        };
+        let proj_onto_line = |l: &Line, q: &Point| -> Point {
+            l.closest_point(q, false).1
+        };
+        let mut pts: Vec<(f64, f64)> = Vec::new();
+        let push = |q: &Point, pts: &mut Vec<(f64, f64)>| {
+            let q0 = proj_onto_line(s0, q);
+            let q1 = proj_onto_line(s1, q);
+            pts.push((signed_t(&s0.start(), v0, &q0), signed_t(&s1.start(), v1, &q1)));
+        };
+        push(&s0.start(), &mut pts);
+        push(&s0.end(), &mut pts);
+        push(&s1.start(), &mut pts);
+        push(&s1.end(), &mut pts);
+        pts.sort_by(|a, b| a.0.partial_cmp(&b.0).unwrap());
+        let seg0_a = Point::new(
+            s0.start()[0] + pts[1].0 * v0[0],
+            s0.start()[1] + pts[1].0 * v0[1],
+            s0.start()[2] + pts[1].0 * v0[2],
+        );
+        let seg0_b = Point::new(
+            s0.start()[0] + pts[2].0 * v0[0],
+            s0.start()[1] + pts[2].0 * v0[1],
+            s0.start()[2] + pts[2].0 * v0[2],
+        );
+        let seg1_a = Point::new(
+            s1.start()[0] + pts[1].1 * v1[0],
+            s1.start()[1] + pts[1].1 * v1[1],
+            s1.start()[2] + pts[1].1 * v1[2],
+        );
+        let seg1_b = Point::new(
+            s1.start()[0] + pts[2].1 * v1[0],
+            s1.start()[1] + pts[2].1 * v1[1],
+            s1.start()[2] + pts[2].1 * v1[2],
+        );
+        let m0 = Point::new((seg0_a[0] + seg0_b[0]) * 0.5, (seg0_a[1] + seg0_b[1]) * 0.5, (seg0_a[2] + seg0_b[2]) * 0.5);
+        let m1 = Point::new((seg1_a[0] + seg1_b[0]) * 0.5, (seg1_a[1] + seg1_b[1]) * 0.5, (seg1_a[2] + seg1_b[2]) * 0.5);
+        let avg = Point::new((m0[0] + m1[0]) * 0.5, (m0[1] + m1[1]) * 0.5, (m0[2] + m1[2]) * 0.5);
+        *p0 = proj_onto_line(s0, &avg);
+        *p1 = proj_onto_line(s1, &avg);
+        let t_of = |l: &Line, q: &Point| -> f64 {
+            l.closest_point(q, false).0
+        };
+        let t0_v = t_of(s0, p0);
+        let t1_v = t_of(s1, p1);
+        if t0_v > 0.5 { *v0 = Vector::new(-v0[0], -v0[1], -v0[2]); }
+        if t1_v > 0.5 { *v1 = Vector::new(-v1[0], -v1[1], -v1[2]); }
+        *type0 = false;
+        *type1 = false;
+        return true;
+    }
+
+    v0.normalize_self();
+    v1.normalize_self();
+    let (t0_v, t1_v) = match line_line_parameters(s0, s1, 0.0, false, true) {
+        Some(t) => t,
+        None => return false,
+    };
+    let t0c = t0_v.clamp(0.0, 1.0);
+    let t1c = t1_v.clamp(0.0, 1.0);
+    *p0 = s0.point_at(t0c);
+    *p1 = s1.point_at(t1c);
+
+    let tt0 = (t0c + cur_seg_0 as f64) / n_segs_0 as f64;
+    let tt1 = (t1c + cur_seg_1 as f64) / n_segs_1 as f64;
+    let close0 = 2.0 * (0.5 - tt0).abs();
+    let close1 = 2.0 * (0.5 - tt1).abs();
+
+    if above_closer_to_edge < 0.0 {
+        *type0 = true;
+        *type1 = true;
+    } else if above_closer_to_edge > 1.0 {
+        *type0 = !(tt0 < tt1);
+        *type1 = tt0 < tt1;
+    } else {
+        *type0 = !(close0 > above_closer_to_edge);
+        *type1 = !(close1 > above_closer_to_edge);
+        if close0 > close1 && !*type0 && !*type1 { *type0 = false; *type1 = true; }
+        else if close0 < close1 && !*type0 && !*type1 { *type0 = true; *type1 = false; }
+    }
+
+    if tt0 > 0.5 && !*type0 { *v0 = Vector::new(-v0[0], -v0[1], -v0[2]); }
+    if tt1 > 0.5 && !*type1 { *v1 = Vector::new(-v1[0], -v1[1], -v1[2]); }
+    true
 }
 
 /// Project point onto finite segment; returns (closest_point, t ∈ [0,1]).

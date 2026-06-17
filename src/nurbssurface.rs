@@ -1266,10 +1266,9 @@ impl NurbsSurface {
         let nurbsknot_base = span_index + degree;
         let nurbsknot = &self.m_nurbsknot[dir];
         
+        // Check for degenerate span: fill ZEROS to match C++/OpenNURBS
         if nurbsknot[nurbsknot_base - 1] == nurbsknot[nurbsknot_base] {
-            let mut out = vec![0.0; order];
-            if t <= nurbsknot[nurbsknot_base] { out[0] = 1.0; } else { out[order - 1] = 1.0; }
-            return out;
+            return vec![0.0; order];
         }
 
         let mut big_n = vec![0.0; order * order];

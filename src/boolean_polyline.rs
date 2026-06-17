@@ -1191,7 +1191,7 @@ pub fn boolean_op(a: &Polyline, b: &Polyline, clip_type: i32) -> Vec<Polyline> {
     for i in 0..na { max_coord = max_coord.max(ca[i*3].abs()).max(ca[i*3+1].abs()); }
     for i in 0..nb { max_coord = max_coord.max(cb[i*3].abs()).max(cb[i*3+1].abs()); }
     if max_coord < 1e-12 { max_coord = 1.0; }
-    let bool_scale: f64 = ((i64::MAX as f64).sqrt() / max_coord * 0.99).floor();
+    let bool_scale: f64 = ((i64::MAX as f64).sqrt() / (2.0 * max_coord)).floor();
     let bool_inv_scale: f64 = 1.0 / bool_scale;
 
     SCRATCH.with(|cell| {
@@ -1242,7 +1242,31 @@ fn boolean_op_inner(
             }
         }
         if !any_cross {
-            let a_in_b = pip_i(va[0], &vb); let b_in_a = pip_i(vb[0], &va);
+            let mut a_in_b = pip_i(va[0], &vb); let mut b_in_a = pip_i(vb[0], &va);
+            // Validate containment with centroid — pip_i can return true for a
+            // vertex of A that lies on B's boundary (shared vertex / shared
+            // edge), giving a false-positive containment. A convex polygon's
+            // centroid is strictly interior to itself, so if A is truly
+            // contained in B, A's centroid must also test inside B. If it
+            // doesn't, the vertex test was a boundary artefact.
+            let mut ca_cen = Pt { x: 0, y: 0 }; let mut cb_cen = Pt { x: 0, y: 0 };
+            for i in 0..na { ca_cen.x += va[i].x; ca_cen.y += va[i].y; }
+            ca_cen.x /= na as i64; ca_cen.y /= na as i64;
+            for i in 0..nb { cb_cen.x += vb[i].x; cb_cen.y += vb[i].y; }
+            cb_cen.x /= nb as i64; cb_cen.y /= nb as i64;
+            if a_in_b && !pip_i(ca_cen, &vb) { a_in_b = false; }
+            if b_in_a && !pip_i(cb_cen, &va) { b_in_a = false; }
+            // If vertex tests fail, try centroids — catches near-identical
+            // polygons with shared vertices (boundary points return false).
+            if !a_in_b && !b_in_a {
+                a_in_b = pip_i(ca_cen, &vb); b_in_a = pip_i(cb_cen, &va);
+                // If centroid also lands on boundary (exact y-match),
+                // perturb by 1 int64 unit to escape the edge.
+                if !a_in_b && !b_in_a {
+                    a_in_b = pip_i(Pt { x: ca_cen.x + 1, y: ca_cen.y + 1 }, &vb);
+                    b_in_a = pip_i(Pt { x: cb_cen.x + 1, y: cb_cen.y + 1 }, &va);
+                }
+            }
             if clip_type == 0 { return if a_in_b { vec![a.clone()] } else if b_in_a { vec![b.clone()] } else { vec![] }; }
             if clip_type == 1 { return if a_in_b { vec![b.clone()] } else if b_in_a { vec![a.clone()] } else { vec![a.clone(), b.clone()] }; }
             return if a_in_b { vec![] } else if b_in_a { vec![a.clone()] } else { vec![a.clone()] };
@@ -1344,6 +1368,131 @@ fn boolean_op_inner(
         if coords.len() >= 9 { out.push(Polyline::from_coords(coords)); }
     }
     out
+}
+
+pub fn clip_open_against_closed(open_subject: &Polyline, closed_clip: &Polyline) -> Vec<Polyline> {
+    let mut result: Vec<Polyline> = Vec::new();
+    let cs = &open_subject.coords;
+    let cc = &closed_clip.coords;
+    let ns = cs.len() / 3;
+    let mut nc = cc.len() / 3;
+
+    if nc >= 2 {
+        let dx = cc[(nc - 1) * 3] - cc[0];
+        let dy = cc[(nc - 1) * 3 + 1] - cc[1];
+        if dx * dx + dy * dy < 1e-20 {
+            nc -= 1;
+        }
+    }
+    if ns < 2 || nc < 3 {
+        return result;
+    }
+
+    let point_in_poly = |px: f64, py: f64| -> bool {
+        let mut inside = false;
+        let mut j = nc - 1;
+        for i in 0..nc {
+            let xi = cc[i * 3];
+            let yi = cc[i * 3 + 1];
+            let xj = cc[j * 3];
+            let yj = cc[j * 3 + 1];
+            let crosses = (yi > py) != (yj > py);
+            if crosses {
+                let xint = xj + (py - yj) * (xi - xj) / (yi - yj);
+                if px < xint {
+                    inside = !inside;
+                }
+            }
+            j = i;
+        }
+        inside
+    };
+
+    fn push_xy(cur: &mut Vec<f64>, x: f64, y: f64) {
+        let n = cur.len();
+        if n >= 3 {
+            let lx = cur[n - 3];
+            let ly = cur[n - 2];
+            if (lx - x).abs() < 1e-9 && (ly - y).abs() < 1e-9 {
+                return;
+            }
+        }
+        cur.push(x);
+        cur.push(y);
+        cur.push(0.0);
+    }
+
+    fn flush(cur: &mut Vec<f64>, result: &mut Vec<Polyline>) {
+        if cur.len() < 6 {
+            cur.clear();
+            return;
+        }
+        result.push(Polyline::from_coords(std::mem::take(cur)));
+    }
+
+    let mut cur: Vec<f64> = Vec::new();
+
+    let a_inside = point_in_poly(cs[0], cs[1]);
+    if a_inside {
+        push_xy(&mut cur, cs[0], cs[1]);
+    }
+
+    for si in 0..(ns - 1) {
+        let ax = cs[si * 3];
+        let ay = cs[si * 3 + 1];
+        let bx = cs[(si + 1) * 3];
+        let by = cs[(si + 1) * 3 + 1];
+        let dx = bx - ax;
+        let dy = by - ay;
+        let mut ts: Vec<f64> = Vec::new();
+        let mut ej = nc - 1;
+        for ei in 0..nc {
+            let ex = cc[ei * 3] - cc[ej * 3];
+            let ey = cc[ei * 3 + 1] - cc[ej * 3 + 1];
+            let denom = dx * (-ey) - dy * (-ex);
+            if denom.abs() >= 1e-18 {
+                let rx = cc[ej * 3] - ax;
+                let ry = cc[ej * 3 + 1] - ay;
+                let t = (rx * (-ey) - ry * (-ex)) / denom;
+                let u = (rx * (-dy) - ry * (-dx)) / denom;
+                if t > 1e-12 && t <= 1.0 + 1e-12 && u >= -1e-9 && u <= 1.0 + 1e-9 {
+                    ts.push(if t < 0.0 { 0.0 } else if t > 1.0 { 1.0 } else { t });
+                }
+            }
+            ej = ei;
+        }
+        ts.sort_by(|a, b| a.partial_cmp(b).unwrap());
+        let mut prev_t = 0.0;
+        for &t in &ts {
+            if t - prev_t < 1e-12 {
+                prev_t = t;
+                continue;
+            }
+            let mid_t = 0.5 * (prev_t + t);
+            let mx = ax + dx * mid_t;
+            let my = ay + dy * mid_t;
+            let mid_in = point_in_poly(mx, my);
+            let ix = ax + dx * t;
+            let iy = ay + dy * t;
+            if mid_in {
+                push_xy(&mut cur, ix, iy);
+                flush(&mut cur, &mut result);
+            } else {
+                push_xy(&mut cur, ix, iy);
+            }
+            prev_t = t;
+        }
+        if prev_t < 1.0 - 1e-12 {
+            let mid_t = 0.5 * (prev_t + 1.0);
+            let mx = ax + dx * mid_t;
+            let my = ay + dy * mid_t;
+            if point_in_poly(mx, my) {
+                push_xy(&mut cur, bx, by);
+            }
+        }
+    }
+    flush(&mut cur, &mut result);
+    result
 }
 
 #[cfg(test)]

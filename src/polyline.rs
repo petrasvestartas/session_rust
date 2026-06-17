@@ -386,6 +386,94 @@ impl Polyline {
             self.coords[idx + 2] += v[2];
         }
     }
+    /// Non-mutating translate: returns a new Polyline offset by `v`.
+    /// Mirrors C++ `Polyline::translated`.
+    pub fn translated(&self, v: &Vector) -> Polyline {
+        let mut result = self.clone();
+        result.translate(v);
+        result
+    }
+
+    /// Remove consecutive near-duplicate points in place.
+    /// Mirrors C++ `Polyline::remove_consecutive_duplicates`.
+    pub fn remove_consecutive_duplicates(&mut self, tol: f64) {
+        let pts = self.get_points();
+        let mut cleaned: Vec<Point> = Vec::with_capacity(pts.len());
+        let tol_sq = tol * tol;
+        for p in &pts {
+            if cleaned.is_empty() {
+                cleaned.push(p.clone());
+                continue;
+            }
+            let last = cleaned.last().unwrap();
+            let dx = p[0] - last[0];
+            let dy = p[1] - last[1];
+            let dz = p[2] - last[2];
+            if dx*dx + dy*dy + dz*dz >= tol_sq {
+                cleaned.push(p.clone());
+            }
+        }
+        *self = Polyline::new(cleaned);
+    }
+
+    /// Build two oriented rectangular cross-section polylines (male `rect0`, female `rect1`)
+    /// from a local frame: center point `p`, tangent direction `segment_vector`, and `zaxis`.
+    /// `radius` controls the half-width; `length` is the extent along `segment_vector`.
+    /// `middle=true`: symmetric about `p`; `flip_male`: +1/-1/0 for corner order.
+    /// Mirrors C++ `Polyline::two_rects_from_frame`.
+    pub fn two_rects_from_frame(
+        p: &Point,
+        segment_vector: &Vector,
+        zaxis: &Vector,
+        middle: bool,
+        radius: f64,
+        length: f64,
+        flip_male: i32,
+    ) -> (Polyline, Polyline) {
+        let y_axis = zaxis.cross(segment_vector);
+        let mut x_axis = y_axis.cross(segment_vector);
+        let mut y_axis = y_axis;
+        x_axis.normalize_self();
+        y_axis.normalize_self();
+        let x_axis = x_axis * radius;
+        let y_axis = y_axis * radius;
+
+        let sv0 = segment_vector * (length * -0.5);
+        let sv1 = segment_vector * (length *  0.5);
+
+        let mut v: [Vector; 4] = [
+            Vector::new(-x_axis[0] - y_axis[0], -x_axis[1] - y_axis[1], -x_axis[2] - y_axis[2]),
+            Vector::new( x_axis[0] - y_axis[0],  x_axis[1] - y_axis[1],  x_axis[2] - y_axis[2]),
+            Vector::new( x_axis[0] + y_axis[0],  x_axis[1] + y_axis[1],  x_axis[2] + y_axis[2]),
+            Vector::new(-x_axis[0] + y_axis[0], -x_axis[1] + y_axis[1], -x_axis[2] + y_axis[2]),
+        ];
+        if !middle {
+            if flip_male == 1 {
+                v.rotate_left(1);
+            } else if flip_male == -1 {
+                v.rotate_right(1);
+            }
+        }
+
+        let pt = |sv: &Vector, uv: &Vector| -> Point {
+            Point::new(p[0]+sv[0]+uv[0], p[1]+sv[1]+uv[1], p[2]+sv[2]+uv[2])
+        };
+        let rect0 = Polyline::new(vec![
+            pt(&sv0, &v[1]),
+            pt(&sv1, &v[1]),
+            pt(&sv1, &v[0]),
+            pt(&sv0, &v[0]),
+            pt(&sv0, &v[1]),
+        ]);
+        let rect1 = Polyline::new(vec![
+            pt(&sv0, &v[2]),
+            pt(&sv1, &v[2]),
+            pt(&sv1, &v[3]),
+            pt(&sv0, &v[3]),
+            pt(&sv0, &v[2]),
+        ]);
+        (rect0, rect1)
+    }
 
     /// Slide both endpoints of edge `edge_idx` outward by `distance`.
     /// Negative `distance` slides them inward. For closed polylines the
@@ -2061,6 +2149,10 @@ impl IndexMut<usize> for Polyline {
 impl Polyline {
     pub fn boolean_op(a: &Polyline, b: &Polyline, clip_type: i32) -> Vec<Polyline> {
         crate::boolean_polyline::boolean_op(a, b, clip_type)
+    }
+
+    pub fn clip_open_against_closed(open_subject: &Polyline, closed_clip: &Polyline) -> Vec<Polyline> {
+        crate::boolean_polyline::clip_open_against_closed(open_subject, closed_clip)
     }
 
     pub fn boolean_op_plane(a: &Polyline, b: &Polyline, plane: &crate::plane::Plane, clip_type: i32) -> Vec<Polyline> {
