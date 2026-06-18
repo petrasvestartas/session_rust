@@ -2155,6 +2155,14 @@ impl Polyline {
         crate::boolean_polyline::clip_open_against_closed(open_subject, closed_clip)
     }
 
+    pub fn compute_count(a: &Polyline, b: &Polyline, clip_type: i32) -> i32 {
+        crate::boolean_polyline::compute_count(a, b, clip_type)
+    }
+
+    pub fn compute_raw(a_xy: &[f64], na: usize, b_xy: &[f64], nb: usize, clip_type: i32, out_xy: &mut [f64], max_out: usize) -> i32 {
+        crate::boolean_polyline::compute_raw(a_xy, na, b_xy, nb, clip_type, out_xy, max_out)
+    }
+
     pub fn boolean_op_plane(a: &Polyline, b: &Polyline, plane: &crate::plane::Plane, clip_type: i32) -> Vec<Polyline> {
         let ox = plane.origin()[0]; let oy = plane.origin()[1]; let oz = plane.origin()[2];
         let xx = plane.x_axis()[0]; let xy = plane.x_axis()[1]; let xz = plane.x_axis()[2];

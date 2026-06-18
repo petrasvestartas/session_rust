@@ -1370,6 +1370,137 @@ fn boolean_op_inner(
     out
 }
 
+/// Count the output points of a boolean op without allocating Polylines. Mirrors C++
+/// `BooleanPolyline::compute_count`: goes straight to the Vatti sweep (no fast paths) and
+/// counts the points of every output ring after collinear cleanup.
+pub fn compute_count(a: &Polyline, b: &Polyline, clip_type: i32) -> i32 {
+    let ca = &a.coords;
+    let cb = &b.coords;
+    let mut na = ca.len() / 3;
+    let mut nb = cb.len() / 3;
+    if na >= 2 { let dx = ca[(na-1)*3]-ca[0]; let dy = ca[(na-1)*3+1]-ca[1]; if dx*dx+dy*dy < 1e-20 { na -= 1; } }
+    if nb >= 2 { let dx = cb[(nb-1)*3]-cb[0]; let dy = cb[(nb-1)*3+1]-cb[1]; if dx*dx+dy*dy < 1e-20 { nb -= 1; } }
+    if na < 3 || nb < 3 { return 0; }
+
+    let mut max_coord: f64 = 0.0;
+    for i in 0..na { max_coord = max_coord.max(ca[i*3].abs()).max(ca[i*3+1].abs()); }
+    for i in 0..nb { max_coord = max_coord.max(cb[i*3].abs()).max(cb[i*3+1].abs()); }
+    if max_coord < 1e-12 { max_coord = 1.0; }
+    let bool_scale: f64 = ((i64::MAX as f64).sqrt() / (2.0 * max_coord)).floor();
+
+    SCRATCH.with(|cell| {
+        let mut sc = cell.borrow_mut();
+        sc.clear_for_reuse();
+        let total = na + nb;
+        sc.vtx.reserve(total + 4);
+        sc.act.reserve(total * 2 + 4);
+        sc.opt.reserve(total * 4);
+        sc.orc.reserve(total);
+        sc.locmin.reserve(total);
+        sc.orclist.reserve(total);
+        sc.scan.reserve(total * 2);
+
+        let (va_head, aminx, amaxx, aminy, amaxy) = add_path_from_coords(&mut sc, ca, na, 0, bool_scale);
+        let (vb_head, bminx, bmaxx, bminy, bmaxy) = add_path_from_coords(&mut sc, cb, nb, 1, bool_scale);
+        if va_head.is_none() || vb_head.is_none() { return 0; }
+        if amaxx < bminx || bmaxx < aminx || amaxy < bminy || bmaxy < aminy { return 0; }
+
+        if !execute_internal(&mut sc, clip_type) { return 0; }
+
+        let mut total_pts = 0i32;
+        let orc_indices: Vec<usize> = sc.orclist.clone();
+        for &or_idx in &orc_indices {
+            if sc.orc[or_idx].pts.is_none() { continue; }
+            clean_collinear(&mut sc, or_idx);
+            if sc.orc[or_idx].pts.is_none() { continue; }
+            let op = sc.orc[or_idx].pts.unwrap();
+            if sc.opt[op].next == op || sc.opt[op].next == sc.opt[op].prev { continue; }
+            if very_small_tri(&mut sc, op) { continue; }
+            let mut o = op;
+            loop {
+                total_pts += 1;
+                o = sc.opt[o].next;
+                if o == op { break; }
+            }
+        }
+        total_pts
+    })
+}
+
+/// Raw-array boolean: takes flat 2D coords (x,y pairs, stride 2), writes flat 2D result coords
+/// into `out_xy` (up to `max_out` points), returns the total result-point count. Mirrors C++
+/// `BooleanPolyline::compute_raw`. No Polyline allocation.
+pub fn compute_raw(a_xy: &[f64], na_in: usize, b_xy: &[f64], nb_in: usize, clip_type: i32, out_xy: &mut [f64], max_out: usize) -> i32 {
+    let mut ca: Vec<f64> = Vec::with_capacity(na_in * 3);
+    for i in 0..na_in { ca.push(a_xy[i*2]); ca.push(a_xy[i*2+1]); ca.push(0.0); }
+    let mut cb: Vec<f64> = Vec::with_capacity(nb_in * 3);
+    for i in 0..nb_in { cb.push(b_xy[i*2]); cb.push(b_xy[i*2+1]); cb.push(0.0); }
+    let mut na = na_in;
+    let mut nb = nb_in;
+    if na >= 2 { let dx = ca[(na-1)*3]-ca[0]; let dy = ca[(na-1)*3+1]-ca[1]; if dx*dx+dy*dy < 1e-20 { na -= 1; } }
+    if nb >= 2 { let dx = cb[(nb-1)*3]-cb[0]; let dy = cb[(nb-1)*3+1]-cb[1]; if dx*dx+dy*dy < 1e-20 { nb -= 1; } }
+    if na < 3 || nb < 3 { return 0; }
+
+    let mut max_coord: f64 = 0.0;
+    for i in 0..na { max_coord = max_coord.max(ca[i*3].abs()).max(ca[i*3+1].abs()); }
+    for i in 0..nb { max_coord = max_coord.max(cb[i*3].abs()).max(cb[i*3+1].abs()); }
+    if max_coord < 1e-12 { max_coord = 1.0; }
+    let bool_scale: f64 = ((i64::MAX as f64).sqrt() / (2.0 * max_coord)).floor();
+    let bool_inv_scale: f64 = 1.0 / bool_scale;
+
+    SCRATCH.with(|cell| {
+        let mut sc = cell.borrow_mut();
+        sc.clear_for_reuse();
+        let total = na + nb;
+        sc.vtx.reserve(total + 4);
+        sc.act.reserve(total * 2 + 4);
+        sc.opt.reserve(total * 4);
+        sc.orc.reserve(total);
+        sc.locmin.reserve(total);
+        sc.orclist.reserve(total);
+        sc.scan.reserve(total * 2);
+
+        let (va_head, aminx, amaxx, aminy, amaxy) = add_path_from_coords(&mut sc, &ca, na, 0, bool_scale);
+        let (vb_head, bminx, bmaxx, bminy, bmaxy) = add_path_from_coords(&mut sc, &cb, nb, 1, bool_scale);
+        if va_head.is_none() || vb_head.is_none() { return 0; }
+        if amaxx < bminx || bmaxx < aminx || amaxy < bminy || bmaxy < aminy { return 0; }
+
+        if !execute_internal(&mut sc, clip_type) { return 0; }
+
+        let mut total_pts = 0i32;
+        let orc_indices: Vec<usize> = sc.orclist.clone();
+        for &or_idx in &orc_indices {
+            if sc.orc[or_idx].pts.is_none() { continue; }
+            clean_collinear(&mut sc, or_idx);
+            if sc.orc[or_idx].pts.is_none() { continue; }
+            let op = sc.orc[or_idx].pts.unwrap();
+            if sc.opt[op].next == op || sc.opt[op].next == sc.opt[op].prev { continue; }
+            if very_small_tri(&mut sc, op) { continue; }
+            let start = sc.opt[op].next;
+            let mut o = start;
+            let mut last = sc.opt[o].pt;
+            if (total_pts as usize) < max_out {
+                out_xy[total_pts as usize * 2] = last.x as f64 * bool_inv_scale;
+                out_xy[total_pts as usize * 2 + 1] = last.y as f64 * bool_inv_scale;
+            }
+            total_pts += 1;
+            o = sc.opt[o].next;
+            while o != start {
+                if sc.opt[o].pt != last {
+                    last = sc.opt[o].pt;
+                    if (total_pts as usize) < max_out {
+                        out_xy[total_pts as usize * 2] = last.x as f64 * bool_inv_scale;
+                        out_xy[total_pts as usize * 2 + 1] = last.y as f64 * bool_inv_scale;
+                    }
+                    total_pts += 1;
+                }
+                o = sc.opt[o].next;
+            }
+        }
+        total_pts
+    })
+}
+
 pub fn clip_open_against_closed(open_subject: &Polyline, closed_clip: &Polyline) -> Vec<Polyline> {
     let mut result: Vec<Polyline> = Vec::new();
     let cs = &open_subject.coords;
