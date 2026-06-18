@@ -363,7 +363,6 @@ impl Session {
             tree: Some(tree_proto),
             graph: Some(graph_proto),
             bvh_boxes: Vec::new(),
-            edge_elementfeatures: std::collections::HashMap::new(),
         };
         proto.encode_to_vec()
     }

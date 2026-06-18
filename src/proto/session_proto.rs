@@ -564,86 +564,6 @@ pub struct Element {
     #[prost(message, optional, tag = "9")]
     pub component_plane: ::core::option::Option<Plane>,
 }
-/// CrossElementFeature: plane-to-face cross joint between plate elements.
-/// Geometry lives in Session::lookup as Polylines, referenced by GUID.
-#[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
-pub struct CrossElementFeature {
-    #[prost(string, tag = "1")]
-    pub guid: ::prost::alloc::string::String,
-    #[prost(int32, tag = "2")]
-    pub face_ids_a_first: i32,
-    #[prost(int32, tag = "3")]
-    pub face_ids_a_second: i32,
-    #[prost(int32, tag = "4")]
-    pub face_ids_b_first: i32,
-    #[prost(int32, tag = "5")]
-    pub face_ids_b_second: i32,
-    #[prost(string, tag = "6")]
-    pub joint_area_guid: ::prost::alloc::string::String,
-    /// size 2
-    #[prost(string, repeated, tag = "7")]
-    pub joint_volume_guids: ::prost::alloc::vec::Vec<::prost::alloc::string::String>,
-    /// size 2
-    #[prost(string, repeated, tag = "8")]
-    pub joint_line_guids: ::prost::alloc::vec::Vec<::prost::alloc::string::String>,
-}
-/// FaceElementFeature: face-to-face coplanar joint between two elements.
-#[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
-pub struct FaceElementFeature {
-    #[prost(string, tag = "1")]
-    pub guid: ::prost::alloc::string::String,
-    #[prost(int32, tag = "2")]
-    pub face_id_a: i32,
-    #[prost(int32, tag = "3")]
-    pub face_id_b: i32,
-    #[prost(string, tag = "4")]
-    pub joint_area_guid: ::prost::alloc::string::String,
-}
-/// AxisElementFeature: closest-polyline / axis-to-axis connection for beam / axis workflows.
-#[derive(Clone, PartialEq, ::prost::Message)]
-pub struct AxisElementFeature {
-    #[prost(string, tag = "1")]
-    pub guid: ::prost::alloc::string::String,
-    #[prost(string, tag = "2")]
-    pub axis_a_guid: ::prost::alloc::string::String,
-    #[prost(string, tag = "3")]
-    pub axis_b_guid: ::prost::alloc::string::String,
-    #[prost(string, tag = "4")]
-    pub connector_guid: ::prost::alloc::string::String,
-    #[prost(double, tag = "5")]
-    pub distance: f64,
-}
-/// CollisionElementFeature: BVH / OBB / AABB collision pair.
-#[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
-pub struct CollisionElementFeature {
-    #[prost(string, tag = "1")]
-    pub guid: ::prost::alloc::string::String,
-    /// "bvh", "obb", "aabb", ...
-    #[prost(string, tag = "2")]
-    pub mode: ::prost::alloc::string::String,
-}
-/// EdgeElementFeature: sum type of everything that can live on a graph edge as a
-/// structured element feature. Absent payload (oneof unset) represents std::monostate
-/// / None / Empty — no element feature attached.
-#[derive(Clone, PartialEq, ::prost::Message)]
-pub struct EdgeElementFeature {
-    #[prost(oneof = "edge_element_feature::Payload", tags = "1, 2, 3, 4")]
-    pub payload: ::core::option::Option<edge_element_feature::Payload>,
-}
-/// Nested message and enum types in `EdgeElementFeature`.
-pub mod edge_element_feature {
-    #[derive(Clone, PartialEq, ::prost::Oneof)]
-    pub enum Payload {
-        #[prost(message, tag = "1")]
-        Cross(super::CrossElementFeature),
-        #[prost(message, tag = "2")]
-        Face(super::FaceElementFeature),
-        #[prost(message, tag = "3")]
-        Axis(super::AxisElementFeature),
-        #[prost(message, tag = "4")]
-        Collision(super::CollisionElementFeature),
-    }
-}
 /// Encoders message for serialization metadata and options
 #[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
 pub struct EncoderOptions {
@@ -964,12 +884,6 @@ pub struct Session {
     /// Simplified BVH representation (AABBs)
     #[prost(message, repeated, tag = "6")]
     pub bvh_boxes: ::prost::alloc::vec::Vec<BoundingBox>,
-    /// Typed edge element features keyed by element feature GUID
-    #[prost(map = "string, message", tag = "7")]
-    pub edge_elementfeatures: ::std::collections::HashMap<
-        ::prost::alloc::string::String,
-        EdgeElementFeature,
-    >,
 }
 /// Tolerance message for geometric comparisons
 #[derive(Clone, PartialEq, ::prost::Message)]
