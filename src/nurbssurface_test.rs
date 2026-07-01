@@ -1082,8 +1082,74 @@ pub fn run_nurbssurface_protobuf_roundtrip() -> TestResult {
     })
 }
 
+pub fn run_nurbssurface_closest_point() -> TestResult {
+    MINI_TEST!("ClosestPoint", {
+        use crate::Point;
+        use crate::primitives::Primitives;
+        // Sphere radius 2 at origin: closest surface point to an outside point is radial.
+        let sphere = Primitives::sphere_surface(0.0, 0.0, 0.0, 2.0);
+        let cp = sphere.closest_point(&Point::new(5.0, 0.0, 0.0));
+        MINI_CHECK!((cp[0] - 2.0).abs() < 1e-4 && cp[1].abs() < 1e-4 && cp[2].abs() < 1e-4);
+        // Curvature: sphere radius R has Gaussian K = 1/R^2, |mean| = 1/R.
+        let (u0, u1) = sphere.domain(0).unwrap();
+        let (v0, v1) = sphere.domain(1).unwrap();
+        let um = u0 + 0.37 * (u1 - u0);
+        let vm = v0 + 0.41 * (v1 - v0);
+        MINI_CHECK!((sphere.gaussian_curvature(um, vm) - 0.25).abs() < 1e-3);
+        MINI_CHECK!((sphere.mean_curvature(um, vm).abs() - 0.5).abs() < 1e-3);
+    })
+}
+
+pub fn run_nurbssurface_create_from_parameters() -> TestResult {
+    MINI_TEST!("Create From Parameters", {
+        use crate::NurbsSurface;
+        use crate::Point;
+
+        // Mirrors compas_occt OCCNurbsSurface.from_parameters / from_points (surface_from_points.py).
+        // Validated pointwise against OCCT (validation/compare_surface_eval.py).
+        let grid = vec![
+            vec![Point::new(0.0,0.0,0.0), Point::new(1.0,0.0,0.0), Point::new(2.0,0.0,0.0), Point::new(3.0,0.0,0.0)],
+            vec![Point::new(0.0,1.0,0.0), Point::new(1.0,1.0,2.0), Point::new(2.0,1.0,2.0), Point::new(3.0,1.0,0.0)],
+            vec![Point::new(0.0,2.0,0.0), Point::new(1.0,2.0,2.0), Point::new(2.0,2.0,2.0), Point::new(3.0,2.0,0.0)],
+            vec![Point::new(0.0,3.0,0.0), Point::new(1.0,3.0,0.0), Point::new(2.0,3.0,0.0), Point::new(3.0,3.0,0.0)],
+        ];
+        let w: Vec<Vec<f64>> = vec![vec![1.0; 4]; 4];
+        let s = NurbsSurface::create_from_parameters(&grid, &w, &[0.0,1.0], &[0.0,1.0], &[4,4], &[4,4], 3, 3, false, false);
+        MINI_CHECK!(s.is_valid());
+        MINI_CHECK!(s.degree(0) == 3 && s.degree(1) == 3);
+        MINI_CHECK!(s.cv_count_dir(Some(0)) == 4 && s.cv_count_dir(Some(1)) == 4);
+        MINI_CHECK!(!s.is_rational());
+        let (u0, u1) = s.domain(0).unwrap();
+        let (v0, v1) = s.domain(1).unwrap();
+        MINI_CHECK!(u0.abs() < 1e-12 && (u1 - 1.0).abs() < 1e-12);
+        MINI_CHECK!(v0.abs() < 1e-12 && (v1 - 1.0).abs() < 1e-12);
+        MINI_CHECK!(TOLERANCE.is_point_close(&s.point_at(0.0, 0.0).unwrap(), &Point::new(0.0, 0.0, 0.0)));
+        MINI_CHECK!(TOLERANCE.is_point_close(&s.point_at(1.0, 1.0).unwrap(), &Point::new(3.0, 3.0, 0.0)));
+        MINI_CHECK!(TOLERANCE.is_point_close(&s.point_at(0.5, 0.5).unwrap(), &Point::new(1.5, 1.5, 1.125)));
+        MINI_CHECK!(TOLERANCE.is_point_close(&s.point_at(0.37, 0.41).unwrap(), &Point::new(1.11, 1.23, 1.01496402)));
+
+        // frame_at (surface_frames.py): origin == point_at, z-axis == normal_at.
+        // Normal validated vs OCCT D1uxD1v (validation/compare_surface_eval.py).
+        let fr = s.frame_at(0.3, 0.4);
+        MINI_CHECK!(TOLERANCE.is_point_close(&fr.origin(), &s.point_at(0.3, 0.4).unwrap()));
+        let n = s.normal_at(0.3, 0.4);
+        let za = fr.z_axis();
+        MINI_CHECK!((za[0]-n[0]).abs() < 1e-9 && (za[1]-n[1]).abs() < 1e-9 && (za[2]-n[2]).abs() < 1e-9);
+
+        // intersections_with_line (surface_intersections_with_line.py): a vertical line
+        // through (1.5, 1.5) hits the surface once at (1.5, 1.5, 1.125). Validated vs
+        // OCCT GeomAPI_IntCS (validation harness, dev <= 1.6e-16).
+        use crate::line::Line;
+        let hits = s.intersections_with_line(&Line::new(1.5, 1.5, -5.0, 1.5, 1.5, 5.0));
+        MINI_CHECK!(hits.len() == 1);
+        MINI_CHECK!(TOLERANCE.is_point_close(&hits[0], &Point::new(1.5, 1.5, 1.125)));
+    })
+}
+
 // Register tests with the shared registry
+REGISTER_MINI_TEST!("NurbsSurface", "ClosestPoint", crate::nurbssurface_test::run_nurbssurface_closest_point);
 REGISTER_MINI_TEST!("NurbsSurface", "Constructor", crate::nurbssurface_test::run_nurbssurface_constructor);
+REGISTER_MINI_TEST!("NurbsSurface", "Create From Parameters", crate::nurbssurface_test::run_nurbssurface_create_from_parameters);
 REGISTER_MINI_TEST!("NurbsSurface", "Booleans Queries", crate::nurbssurface_test::run_nurbssurface_booleans_queries);
 REGISTER_MINI_TEST!("NurbsSurface", "Attributes", crate::nurbssurface_test::run_nurbssurface_attributes);
 REGISTER_MINI_TEST!("NurbsSurface", "Control Vertices Access", crate::nurbssurface_test::run_nurbssurface_control_vertices_access);

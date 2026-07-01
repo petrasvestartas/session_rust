@@ -342,6 +342,66 @@ impl NurbsSurface {
         Ok(srf)
     }
 
+    /// Create a NURBS surface from explicit parameters (OCCT / compas_occt convention:
+    /// distinct knots + per-knot multiplicities, per direction). Mirrors
+    /// OCCNurbsSurface.from_parameters and underlies from_points / from_meshgrid.
+    /// `points`/`weights` follow the compas grid convention: a list of v-rows, each with u
+    /// columns (points[iv][iu]). Internal (OpenNURBS) knot vectors are the expanded full knot
+    /// vectors with first and last entries dropped; domains become
+    /// [knots_u.first(), knots_u.last()] x [knots_v.first(), knots_v.last()].
+    pub fn create_from_parameters(
+        points: &[Vec<Point>],
+        weights: &[Vec<f64>],
+        knots_u: &[f64], knots_v: &[f64],
+        mults_u: &[usize], mults_v: &[usize],
+        degree_u: usize, degree_v: usize,
+        periodic_u: bool, periodic_v: bool,
+    ) -> Self {
+        let nv = points.len();
+        let nu = if nv > 0 { points[0].len() } else { 0 };
+        let order_u = degree_u + 1;
+        let order_v = degree_v + 1;
+        if nu < order_u || nv < order_v { return Self::default(); }
+        if periodic_u || periodic_v { return Self::default(); }
+        if knots_u.len() != mults_u.len() || knots_v.len() != mults_v.len() { return Self::default(); }
+
+        let rational = weights.iter().any(|row| row.iter().any(|&w| (w - 1.0).abs() > crate::tolerance::Tolerance::ZERO_TOLERANCE));
+
+        let expand = |knots: &[f64], mults: &[usize]| -> Vec<f64> {
+            let mut full = Vec::new();
+            for (i, &v) in knots.iter().enumerate() {
+                for _ in 0..mults[i] { full.push(v); }
+            }
+            full
+        };
+        let full_u = expand(knots_u, mults_u);
+        let full_v = expand(knots_v, mults_v);
+        let kc_u = order_u + nu - 2;
+        let kc_v = order_v + nv - 2;
+        if full_u.len() != kc_u + 2 || full_v.len() != kc_v + 2 { return Self::default(); }
+
+        let mut srf = match Self::create_raw(3, rational, order_u, order_v, nu, nv, false, false, 1.0, 1.0) {
+            Some(s) => s,
+            None => return Self::default(),
+        };
+        for i in 0..kc_u { srf.set_nurbsknot(0, i, full_u[i + 1]); }
+        for i in 0..kc_v { srf.set_nurbsknot(1, i, full_v[i + 1]); }
+
+        // i in u (0..nu-1), j in v (0..nv-1); compas grid is points[v][u].
+        for i in 0..nu {
+            for j in 0..nv {
+                let p = &points[j][i];
+                if rational {
+                    let w = weights[j][i];
+                    srf.set_cv_4d(i, j, p[0] * w, p[1] * w, p[2] * w, w);
+                } else {
+                    srf.set_cv(i, j, p);
+                }
+            }
+        }
+        srf
+    }
+
     /// Create NURBS surface with default nurbsknot vectors (clamped uniform, delta=1.0)
     ///
     /// Convenience method for backward compatibility. Equivalent to:
@@ -1216,6 +1276,18 @@ impl NurbsSurface {
                     a[2] -= c * prev[2];
                 }
             }
+            // Mixed terms (NURBS Book A4.4): -sum_{i=1}^{k} sum_{j=1}^{l} C(k,i) C(l,j) w[i][j] SKL[k-i][l-j].
+            // Previously omitted -> rational mixed derivatives (e.g. Suv) were wrong.
+            for i in 1..=k {
+                for j in 1..=l {
+                    if let Some(prev) = aders.get(&(k - i, l - j)) {
+                        let c = binom(k, i) * binom(l, j) * wders.get(&(i, j)).copied().unwrap_or(0.0);
+                        a[0] -= c * prev[0];
+                        a[1] -= c * prev[1];
+                        a[2] -= c * prev[2];
+                    }
+                }
+            }
             let v = Vector::new(a[0] / w00, a[1] / w00, a[2] / w00);
             aders.insert((k, l), v.clone());
             result.push(v);
@@ -1238,6 +1310,81 @@ impl NurbsSurface {
         } else {
             n.normalized()
         }
+    }
+
+    /// Local frame at (u, v): origin = S(u,v), x-axis = dS/du, y-axis = dS/dv.
+    /// Mirrors OCCNurbsSurface.frame_at. The Plane orthonormalizes the axes; its
+    /// z-axis equals normal_at(u, v).
+    pub fn frame_at(&self, u: f64, v: f64) -> crate::plane::Plane {
+        let d = self.evaluate(u, v, 1);
+        if d.len() < 3 {
+            return crate::plane::Plane::new(Point::new(0.0, 0.0, 0.0),
+                Vector::new(1.0, 0.0, 0.0), Vector::new(0.0, 1.0, 0.0));
+        }
+        let origin = Point::new(d[0][0], d[0][1], d[0][2]);
+        let su = Vector::new(d[2][0], d[2][1], d[2][2]);  // dS/du
+        let sv = Vector::new(d[1][0], d[1][1], d[1][2]);  // dS/dv
+        crate::plane::Plane::new(origin, su, sv)
+    }
+
+    /// Intersection points of an (infinite) line with the surface.
+    /// Mirrors OCCNurbsSurface.intersections_with_line (OCCT GeomAPI_IntCS).
+    pub fn intersections_with_line(&self, line: &crate::line::Line) -> Vec<Point> {
+        let mut results: Vec<Point> = Vec::new();
+        if !self.is_valid() { return results; }
+        let p0 = line.start();
+        let pe = line.end();
+        let mut d = Vector::new(pe[0] - p0[0], pe[1] - p0[1], pe[2] - p0[2]);
+        let dl = d.magnitude();
+        if dl < 1e-14 { return results; }
+        d = Vector::new(d[0] / dl, d[1] / dl, d[2] / dl);
+        let helper = if d[0].abs() < 0.9 { Vector::new(1.0, 0.0, 0.0) } else { Vector::new(0.0, 1.0, 0.0) };
+        let mut n1 = d.cross(&helper); let m1 = n1.magnitude(); n1 = Vector::new(n1[0]/m1, n1[1]/m1, n1[2]/m1);
+        let mut n2 = d.cross(&n1);    let m2 = n2.magnitude(); n2 = Vector::new(n2[0]/m2, n2[1]/m2, n2[2]/m2);
+
+        let (u0, u1) = self.domain(0).unwrap_or((0.0, 1.0));
+        let (v0, v1) = self.domain(1).unwrap_or((0.0, 1.0));
+        let nu = (self.cv_count_dir(Some(0)) * 4).max(12);
+        let nv = (self.cv_count_dir(Some(1)) * 4).max(12);
+
+        let mut seen: Vec<Point> = Vec::new();
+        for a in 0..=nu {
+            for b in 0..=nv {
+                let mut u = u0 + (u1 - u0) * a as f64 / nu as f64;
+                let mut v = v0 + (v1 - v0) * b as f64 / nv as f64;
+                let mut ok = true;
+                for _ in 0..40 {
+                    let der = self.evaluate(u, v, 1);
+                    if der.len() < 3 { ok = false; break; }
+                    let (p, sv, su) = (&der[0], &der[1], &der[2]);
+                    let rx = p[0] - p0[0]; let ry = p[1] - p0[1]; let rz = p[2] - p0[2];
+                    let f1 = n1[0]*rx + n1[1]*ry + n1[2]*rz;
+                    let f2 = n2[0]*rx + n2[1]*ry + n2[2]*rz;
+                    if f1.abs() < 1e-12 && f2.abs() < 1e-12 { break; }
+                    let j11 = n1[0]*su[0] + n1[1]*su[1] + n1[2]*su[2];
+                    let j12 = n1[0]*sv[0] + n1[1]*sv[1] + n1[2]*sv[2];
+                    let j21 = n2[0]*su[0] + n2[1]*su[1] + n2[2]*su[2];
+                    let j22 = n2[0]*sv[0] + n2[1]*sv[1] + n2[2]*sv[2];
+                    let det = j11*j22 - j12*j21;
+                    if det.abs() < 1e-14 { ok = false; break; }
+                    let du = -(j22*f1 - j12*f2) / det;
+                    let dv = -(-j21*f1 + j11*f2) / det;
+                    u += du; v += dv;
+                    if u < u0 || u > u1 || v < v0 || v > v1 { ok = false; break; }
+                    if du.abs() < 1e-13 && dv.abs() < 1e-13 { break; }
+                }
+                if !ok { continue; }
+                let p = match self.point_at(u, v) { Some(pp) => pp, None => continue };
+                let rx = p[0] - p0[0]; let ry = p[1] - p0[1]; let rz = p[2] - p0[2];
+                let f1 = n1[0]*rx + n1[1]*ry + n1[2]*rz;
+                let f2 = n2[0]*rx + n2[1]*ry + n2[2]*rz;
+                if f1.abs() > 1e-7 || f2.abs() > 1e-7 { continue; }
+                if seen.iter().any(|q| p.distance(q, None) < 1e-6) { continue; }
+                seen.push(p.clone());
+                results.push(p);
+            }
+        }
+        results
     }
 
     /// Find span index for parameter value (OpenNURBS algorithm)
@@ -1381,6 +1528,73 @@ impl NurbsSurface {
 
     /// Evaluate point on surface at parameters (u, v)
     /// Matches OpenNURBS EvPoint algorithm
+    /// Parameters (u,v) of the closest point on the surface to test_point (grid seed + Newton).
+    /// Matches OCCT GeomAPI_ProjectPointOnSurface.
+    pub fn closest_parameters(&self, test_point: &Point) -> (f64, f64) {
+        let (u, v, _dist) = crate::closest::Closest::surface_point(self, test_point, 0.0, 0.0, 0.0, 0.0);
+        (u, v)
+    }
+
+    /// Closest point on the surface to test_point.
+    pub fn closest_point(&self, test_point: &Point) -> Point {
+        let (u, v) = self.closest_parameters(test_point);
+        self.point_at(u, v).unwrap_or(Point::new(0.0, 0.0, 0.0))
+    }
+
+    /// First/second fundamental forms (E,F,G,L,M,N) at (u,v); None if degenerate.
+    fn fundamental_forms(&self, u: f64, v: f64) -> Option<(f64, f64, f64, f64, f64, f64)> {
+        let d = self.evaluate(u, v, 2);
+        if d.len() < 6 {
+            return None;
+        }
+        // evaluate() result order is [S, Sv, Svv, Su, Suv, Suu].
+        let sv = &d[1];
+        let svv = &d[2];
+        let su = &d[3];
+        let suv = &d[4];
+        let suu = &d[5];
+        let cr = su.cross(sv);
+        if cr.magnitude() < 1e-10 {
+            return None;
+        }
+        let nrm = cr.normalized();
+        let e = su.dot(su);
+        let f = su.dot(sv);
+        let g = sv.dot(sv);
+        let l = suu.dot(&nrm);
+        let m = suv.dot(&nrm);
+        let n = svv.dot(&nrm);
+        Some((e, f, g, l, m, n))
+    }
+
+    /// Gaussian curvature K = (LN - M^2)/(EG - F^2) at (u,v).
+    /// Matches OCCT GeomLProp_SLProps::GaussianCurvature.
+    pub fn gaussian_curvature(&self, u: f64, v: f64) -> f64 {
+        if let Some((e, f, g, l, m, n)) = self.fundamental_forms(u, v) {
+            let denom = e * g - f * f;
+            if denom.abs() < 1e-10 {
+                return 0.0;
+            }
+            (l * n - m * m) / denom
+        } else {
+            0.0
+        }
+    }
+
+    /// Mean curvature H = (EN - 2FM + GL)/(2(EG - F^2)) at (u,v).
+    /// Matches OCCT GeomLProp_SLProps::MeanCurvature (magnitude; sign follows Su x Sv).
+    pub fn mean_curvature(&self, u: f64, v: f64) -> f64 {
+        if let Some((e, f, g, l, m, n)) = self.fundamental_forms(u, v) {
+            let denom = e * g - f * f;
+            if denom.abs() < 1e-10 {
+                return 0.0;
+            }
+            (e * n - 2.0 * f * m + g * l) / (2.0 * denom)
+        } else {
+            0.0
+        }
+    }
+
     pub fn point_at(&self, u: f64, v: f64) -> Option<Point> {
         // Find span indices
         let u_span = self.find_span(0, u);

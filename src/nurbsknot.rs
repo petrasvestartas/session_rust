@@ -27,6 +27,24 @@ pub enum CurveNurbsKnotStyle {
     ChordSquareRootPeriodic = 5,
 }
 
+/// End-tangent (boundary) condition for cubic interpolation.
+///
+/// Both styles share chord-length parameters and clamped knots; they differ only
+/// in how the start/end tangents (and hence the 2nd/penultimate control points)
+/// are estimated:
+///  - `Rhino`: normalized Bessel tangents (matches Rhino / OpenNURBS).
+///  - `Occt`:  un-normalized derivative of the cubic Lagrange polynomial through the
+///    first/last 4 points (matches OCCT `GeomAPI_Interpolate::BuildTangents`).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
+#[repr(u8)]
+pub enum CurveInterpStyle {
+    /// Bessel end tangents (matches Rhino / OpenNURBS).
+    #[default]
+    Rhino = 0,
+    /// Cubic Lagrange end tangents (matches OCCT GeomAPI_Interpolate).
+    Occt = 1,
+}
+
 /// Compute the number of nurbsknots in a nurbsknot vector.
 ///
 /// # Arguments

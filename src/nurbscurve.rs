@@ -158,6 +158,44 @@ impl NurbsCurve {
     /// * `periodic` - If true, creates a periodic curve; if false, creates a clamped curve
     /// * `degree` - Degree of the curve (order = degree + 1)
     /// * `points` - Control points for the curve
+    /// Create a NURBS curve from explicit parameters (OCCT / compas_occt convention:
+    /// distinct knots + per-knot multiplicities). Mirrors OCCNurbsCurve.from_parameters and
+    /// underlies from_points / from_line / from_circle / from_ellipse. The internal (OpenNURBS)
+    /// knot vector is the expanded full knot vector with first and last entries dropped; the
+    /// domain becomes [knots.first(), knots.last()].
+    pub fn create_from_parameters(points: &[Point], weights: &[f64], knots: &[f64],
+                                  mults: &[usize], degree: usize, periodic: bool) -> Self {
+        let n = points.len();
+        let order = degree + 1;
+        if n < order { return Self::default(); }
+        if weights.len() != n { return Self::default(); }
+        if knots.len() != mults.len() || knots.is_empty() { return Self::default(); }
+        if periodic { return Self::default(); }  // periodic from_parameters not yet supported
+
+        let rational = weights.iter().any(|&w| (w - 1.0).abs() > crate::tolerance::Tolerance::ZERO_TOLERANCE);
+
+        // Expand distinct knots by multiplicity into the full (OCCT-style) knot vector.
+        let mut full: Vec<f64> = Vec::new();
+        for (i, &v) in knots.iter().enumerate() {
+            for _ in 0..mults[i] { full.push(v); }
+        }
+
+        let kc = order + n - 2;  // OpenNURBS knot count
+        if full.len() != kc + 2 { return Self::default(); }  // must equal n + order
+
+        let mut c = Self::new(3, rational, order, n);
+        for i in 0..kc { c.set_nurbsknot(i, full[i + 1]); }
+        for i in 0..n {
+            if rational {
+                let w = weights[i];
+                c.set_cv_4d(i, points[i][0] * w, points[i][1] * w, points[i][2] * w, w);
+            } else {
+                c.set_cv(i, &points[i]);
+            }
+        }
+        c
+    }
+
     pub fn create(periodic: bool, degree: usize, points: &[Point]) -> Self {
         let order = degree + 1;
 
@@ -167,10 +205,22 @@ impl NurbsCurve {
             Self::create_clamped_uniform(3, order, points, 1.0)
         };
         if curve.is_valid() {
-            let l = if degree == 1 && points.len() == 2 {
-                let p0 = &points[0]; let p1 = &points[1];
-                let dx = p1[0] - p0[0]; let dy = p1[1] - p0[1]; let dz = p1[2] - p0[2];
-                (dx*dx + dy*dy + dz*dz).sqrt()
+            // A degree-1 curve is a polyline: its arc length is the exact sum of segment lengths
+            // (plus the closing segment when periodic). Computing it directly avoids the general
+            // quadrature length(), which was ~3.5 ms for a 40-point polyline and dominated every
+            // polyline build (lift / mesh / split) -- a kernel-wide hot path.
+            let l = if degree == 1 {
+                let np = points.len();
+                let seg = |a: usize, b: usize| {
+                    let dx = points[b][0]-points[a][0];
+                    let dy = points[b][1]-points[a][1];
+                    let dz = points[b][2]-points[a][2];
+                    (dx*dx + dy*dy + dz*dz).sqrt()
+                };
+                let mut s = 0.0;
+                for i in 1..np { s += seg(i - 1, i); }
+                if periodic && np > 1 { s += seg(np - 1, 0); }
+                s
             } else {
                 curve.length(Some(1e-6))
             };
@@ -184,7 +234,17 @@ impl NurbsCurve {
     /// parameterization maps to Rhino's CurveKnotStyle: Uniform/Chord/ChordSquareRoot
     /// (centripetal). Rhino's CreateInterpolatedCurve(points, degree) API defaults to Uniform;
     /// the InterpCrv command commonly uses Chord. Pass the style explicitly to match Rhino.
+    /// Uses Rhino (Bessel) end tangents; for OCCT-matching results use
+    /// [`create_interpolated_styled`] with [`nurbsknot::CurveInterpStyle::Occt`].
     pub fn create_interpolated(points: &[Point], parameterization: nurbsknot::CurveNurbsKnotStyle) -> NurbsCurve {
+        Self::create_interpolated_styled(points, parameterization, nurbsknot::CurveInterpStyle::Rhino)
+    }
+
+    /// As [`create_interpolated`], but `end_condition` selects the boundary tangent rule:
+    /// Rhino (Bessel) or Occt (cubic Lagrange derivative, reproduces OCCT GeomAPI_Interpolate).
+    pub fn create_interpolated_styled(points: &[Point],
+                                      parameterization: nurbsknot::CurveNurbsKnotStyle,
+                                      end_condition: nurbsknot::CurveInterpStyle) -> NurbsCurve {
         let n = points.len();
         if n < 2 { return NurbsCurve::new(3, false, 4, 0); }
         let dim = 3usize;
@@ -343,34 +403,57 @@ impl NurbsCurve {
             if len > 0.0 { Vector::new(dx/len, dy/len, dz/len) } else { Vector::new(0.0, 0.0, 0.0) }
         };
 
-        let (tan_start, tan_end) = if n >= 3 {
+        // Un-normalized derivative of the cubic (or quadratic, when n==3) Lagrange
+        // polynomial through `m` consecutive points, evaluated at parameter t.
+        // Reproduces OCCT GeomAPI_Interpolate::BuildTangents (PLib::EvalLagrange).
+        let lagrange_tangent = |i0: usize, m: usize, t: f64| -> Vector {
+            let mut res = [0.0f64; 3];
+            for j in 0..m {
+                let uj = params[i0 + j];
+                let mut dsum = 0.0;
+                for i in 0..m {
+                    if i == j { continue; }
+                    let mut term = 1.0 / (uj - params[i0 + i]);
+                    for k in 0..m {
+                        if k == j || k == i { continue; }
+                        term *= (t - params[i0 + k]) / (uj - params[i0 + k]);
+                    }
+                    dsum += term;
+                }
+                let pj = &points[i0 + j];
+                for d in 0..3 { res[d] += pj[d] * dsum; }
+            }
+            Vector::new(res[0], res[1], res[2])
+        };
+
+        let (tan_start, tan_end, s0, s1) = if matches!(end_condition, nurbsknot::CurveInterpStyle::Occt) && n >= 3 {
+            // OCCT mode: un-normalized Lagrange derivative at the endpoints. The
+            // derivative-constraint poles satisfy C'(u0) = 3/(params[1]-params[0])*(P1-P0),
+            // so P1 = P0 + (params[1]-params[0])/3 * tan_start (symmetric at the end).
+            let deg_t = if n == 3 { 2 } else { 3 };
+            let ts = lagrange_tangent(0, deg_t + 1, params[0]);
+            let te = lagrange_tangent(n - 1 - deg_t, deg_t + 1, params[n - 1]);
+            (ts, te, (params[1] - params[0]) / 3.0, -(params[n-1] - params[n-2]) / 3.0)
+        } else if n >= 3 {
             let ts = estimate_tangent(0, 1, 2);
             let er = estimate_tangent(n-1, n-2, n-3);
-            (ts, Vector::new(-er[0], -er[1], -er[2]))
+            (ts, Vector::new(-er[0], -er[1], -er[2]),
+             pdist(&points[0], &points[1]) / 3.0, -pdist(&points[n-1], &points[n-2]) / 3.0)
         } else {
             let dx = points[1][0] - points[0][0];
             let dy = points[1][1] - points[0][1];
             let dz = points[1][2] - points[0][2];
             let len = (dx*dx + dy*dy + dz*dz).sqrt();
-            if len > 0.0 {
-                let v = Vector::new(dx/len, dy/len, dz/len);
-                (v.clone(), v)
-            } else {
-                (Vector::new(0.0, 0.0, 0.0), Vector::new(0.0, 0.0, 0.0))
-            }
+            let v = if len > 0.0 { Vector::new(dx/len, dy/len, dz/len) } else { Vector::new(0.0, 0.0, 0.0) };
+            (v.clone(), v, pdist(&points[0], &points[1]) / 3.0, -pdist(&points[n-1], &points[n-2]) / 3.0)
         };
-
-        let d_start = pdist(&points[0], &points[1]);
-        let d_end = pdist(&points[n-1], &points[n-2]);
 
         let mut cv = vec![0.0; cv_count * dim];
         for d in 0..dim { cv[d] = points[0][d]; }
-        let s0 = d_start / 3.0;
         for d in 0..dim { cv[dim + d] = points[0][d] + s0 * tan_start[d]; }
         for i in 1..n-1 {
             for d in 0..dim { cv[(i+1) * dim + d] = points[i][d]; }
         }
-        let s1 = -d_end / 3.0;
         for d in 0..dim { cv[n * dim + d] = points[n-1][d] + s1 * tan_end[d]; }
         for d in 0..dim { cv[(n+1) * dim + d] = points[n-1][d]; }
 
@@ -2308,6 +2391,44 @@ impl NurbsCurve {
         result
     }
 
+
+    /// Curvature magnitude (1/radius) at parameter t, from analytic 1st/2nd derivatives:
+    /// kappa = |C' x C''| / |C'|^3. Matches OCCT GeomLProp_CLProps::Curvature.
+    pub fn curvature_at(&self, t: f64) -> f64 {
+        let d = self.evaluate(t, 2);
+        if d.len() < 3 {
+            return 0.0;
+        }
+        let s = d[1].magnitude();
+        if s < 1e-12 {
+            return 0.0;
+        }
+        d[1].cross(&d[2]).magnitude() / (s * s * s)
+    }
+
+    /// Parameter of the closest point on the curve to test_point (grid seed + Newton).
+    /// Matches OCCT GeomAPI_ProjectPointOnCurve.
+    pub fn closest_parameter(&self, test_point: &Point) -> f64 {
+        crate::closest::Closest::curve_point(self, test_point, 0.0, 0.0).0
+    }
+
+    /// Closest point on the curve to test_point.
+    pub fn closest_point(&self, test_point: &Point) -> Point {
+        self.point_at(self.closest_parameter(test_point))
+    }
+
+    /// Parameters (u, v) where this curve is closest to another curve.
+    /// Matches OCCT GeomAPI_ExtremaCurveCurve.
+    pub fn closest_parameters_curve(&self, other: &NurbsCurve) -> (f64, f64) {
+        let (u, v, _d) = crate::closest::Closest::curve_curve(self, other);
+        (u, v)
+    }
+
+    /// Points (this(u), other(v)) where this curve is closest to another curve.
+    pub fn closest_points_curve(&self, other: &NurbsCurve) -> (Point, Point) {
+        let (u, v, _d) = crate::closest::Closest::curve_curve(self, other);
+        (self.point_at(u), other.point_at(v))
+    }
 
     /// Get tangent vector at parameter t
     pub fn tangent_at(&self, t: f64) -> Vector {

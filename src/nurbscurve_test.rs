@@ -79,6 +79,17 @@ pub fn run_nurbscurve_create_interpolated() -> TestResult {
         MINI_CHECK!(TOLERANCE.is_point_close(&c.get_cv(3).unwrap(), &Point::new(24.678472471, 0.354555126, 0.0)));
         MINI_CHECK!(TOLERANCE.is_point_close(&c.get_cv(5).unwrap(), &Point::new(39.626394361, 15.472490151, 0.0)));
 
+        // OCCT parity: with CurveInterpStyle::Occt the control points match
+        // OCCT GeomAPI_Interpolate exactly (oracle: validation/compare_interp.py).
+        use crate::nurbsknot::CurveInterpStyle;
+        let co = NurbsCurve::create_interpolated_styled(&points, CurveNurbsKnotStyle::Chord, CurveInterpStyle::Occt);
+        MINI_CHECK!(co.cv_count() == 7);
+        MINI_CHECK!(TOLERANCE.is_point_close(&co.get_cv(0).unwrap(), &points[0]));
+        MINI_CHECK!(TOLERANCE.is_point_close(&co.get_cv(6).unwrap(), &points[4]));
+        MINI_CHECK!(TOLERANCE.is_point_close(&co.get_cv(1).unwrap(), &Point::new(17.3526678158, 24.4472657919, 0.0)));
+        MINI_CHECK!(TOLERANCE.is_point_close(&co.get_cv(3).unwrap(), &Point::new(24.7854378511, 2.1457823679, 0.0)));
+        MINI_CHECK!(TOLERANCE.is_point_close(&co.get_cv(5).unwrap(), &Point::new(39.1865250566, 18.5349257754, 0.0)));
+
         // Periodic closed curve
         let closed_pts = vec![
             Point::new(4.0, 20.0, 0.0),
@@ -99,6 +110,49 @@ pub fn run_nurbscurve_create_interpolated() -> TestResult {
         MINI_CHECK!(cp.degree() == 3);
         MINI_CHECK!(cp.cv_count() == 13);
         MINI_CHECK!(cp.is_closed());
+    })
+}
+
+pub fn run_nurbscurve_create_from_parameters() -> TestResult {
+    MINI_TEST!("Create From Parameters", {
+        use crate::NurbsCurve;
+        use crate::Point;
+
+        // Mirrors compas_occt OCCNurbsCurve.from_parameters / from_points / from_circle.
+        // Validated bit-for-bit against OCCT (validation/compare_curve_eval.py).
+
+        // from_points: 4 control points, clamped cubic (knots [0,1] mults [4,4]).
+        let p4 = vec![Point::new(0.0,0.0,0.0), Point::new(3.0,6.0,0.0),
+                      Point::new(6.0,-3.0,3.0), Point::new(10.0,0.0,0.0)];
+        let c = NurbsCurve::create_from_parameters(&p4, &[1.0,1.0,1.0,1.0], &[0.0,1.0], &[4,4], 3, false);
+        MINI_CHECK!(c.is_valid());
+        MINI_CHECK!(c.degree() == 3);
+        MINI_CHECK!(c.cv_count() == 4);
+        MINI_CHECK!(!c.is_rational());
+        let (d0, d1) = c.domain();
+        MINI_CHECK!((d0 - 0.0).abs() < 1e-12 && (d1 - 1.0).abs() < 1e-12);
+        MINI_CHECK!(TOLERANCE.is_point_close(&c.get_cv(0).unwrap(), &Point::new(0.0,0.0,0.0)));
+        MINI_CHECK!(TOLERANCE.is_point_close(&c.get_cv(3).unwrap(), &Point::new(10.0,0.0,0.0)));
+        MINI_CHECK!(TOLERANCE.is_point_close(&c.point_at(0.5), &Point::new(4.625, 1.125, 1.125)));
+
+        // from_circle (radius 1): degree-2 rational, 9 poles, exact unit circle.
+        let w = 0.5 * (2.0_f64).sqrt();
+        let cpts = vec![
+            Point::new(0.0,-1.0,0.0), Point::new(-1.0,-1.0,0.0), Point::new(-1.0,0.0,0.0),
+            Point::new(-1.0,1.0,0.0), Point::new(0.0,1.0,0.0), Point::new(1.0,1.0,0.0),
+            Point::new(1.0,0.0,0.0), Point::new(1.0,-1.0,0.0), Point::new(0.0,-1.0,0.0)];
+        let circle = NurbsCurve::create_from_parameters(
+            &cpts, &[1.0,w,1.0,w,1.0,w,1.0,w,1.0], &[0.0,0.25,0.5,0.75,1.0], &[3,2,2,2,3], 2, false);
+        MINI_CHECK!(circle.is_valid());
+        MINI_CHECK!(circle.degree() == 2);
+        MINI_CHECK!(circle.cv_count() == 9);
+        MINI_CHECK!(circle.is_rational());
+        MINI_CHECK!(TOLERANCE.is_point_close(&circle.point_at(0.5), &Point::new(0.0,1.0,0.0)));
+        MINI_CHECK!(TOLERANCE.is_point_close(&circle.point_at(0.125), &Point::new(-w, -w, 0.0)));
+        for k in 0..=16 {
+            let pp = circle.point_at(k as f64 / 16.0);
+            MINI_CHECK!(((pp[0]*pp[0] + pp[1]*pp[1]).sqrt() - 1.0).abs() < 1e-9);
+        }
     })
 }
 
@@ -801,8 +855,63 @@ pub fn run_nurbscurve_protobuf_roundtrip() -> TestResult {
     })
 }
 
+pub fn run_nurbscurve_curvature() -> TestResult {
+    MINI_TEST!("Curvature", {
+        use crate::NurbsCurve;
+        use crate::Point;
+        use crate::primitives::Primitives;
+
+        // A circle of radius R is an exact rational NURBS with constant curvature 1/R.
+        let r = 2.0;
+        let circle = Primitives::circle(0.0, 0.0, 0.0, r);
+        let (t0, t1) = circle.domain();
+        for i in 0..=8 {
+            let t = t0 + (t1 - t0) * (i as f64) / 8.0;
+            MINI_CHECK!((circle.curvature_at(t) - 1.0 / r).abs() < 1e-6);
+        }
+        // Closest point: an outside point projects radially onto the circle.
+        let cp = circle.closest_point(&Point::new(5.0, 0.0, 0.0));
+        MINI_CHECK!((cp[0] - 2.0).abs() < 1e-5 && cp[1].abs() < 1e-5 && cp[2].abs() < 1e-5);
+
+        // Project onto a 3D interpolated curve (curve_closest_point.py). Reference from
+        // OCCT GeomAPI_ProjectPointOnCurve (validation/compare_curve_ops.py).
+        use crate::nurbsknot::{CurveNurbsKnotStyle, CurveInterpStyle};
+        let ipts = vec![Point::new(0.0,0.0,0.0), Point::new(3.0,0.0,2.0),
+                        Point::new(6.0,0.0,-3.0), Point::new(8.0,0.0,0.0)];
+        let ic = NurbsCurve::create_interpolated_styled(&ipts, CurveNurbsKnotStyle::Chord, CurveInterpStyle::Occt);
+        let pc = ic.closest_point(&Point::new(2.0, -1.0, 0.0));
+        MINI_CHECK!(TOLERANCE.is_point_close(&pc, &Point::new(0.5808155659, 0.0, 0.9672315271)));
+
+        // Curve-curve closest (curve_closest_parameters_curve.py). Reference from
+        // OCCT GeomAPI_ExtremaCurveCurve (u=0.475768, v=0.336691).
+        let c0 = NurbsCurve::create_from_parameters(
+            &[Point::new(0.0,0.0,0.0),Point::new(3.0,6.0,0.0),Point::new(6.0,-3.0,3.0),Point::new(10.0,0.0,0.0)],
+            &[1.0,1.0,1.0,1.0], &[0.0,1.0], &[4,4], 3, false);
+        let c1 = NurbsCurve::create_from_parameters(
+            &[Point::new(6.0,-3.0,0.0),Point::new(3.0,1.0,0.0),Point::new(6.0,6.0,3.0),Point::new(3.0,12.0,0.0)],
+            &[1.0,1.0,1.0,1.0], &[0.0,1.0], &[4,4], 3, false);
+        let (u, v) = c0.closest_parameters_curve(&c1);
+        MINI_CHECK!((u - 0.4757682937).abs() < 1e-6 && (v - 0.3366914716).abs() < 1e-6);
+        let (pa, pb) = c0.closest_points_curve(&c1);
+        MINI_CHECK!(TOLERANCE.is_point_close(&pa, &Point::new(4.389607399, 1.285537564, 1.067964425)));
+        MINI_CHECK!(TOLERANCE.is_point_close(&pb, &Point::new(4.552264625, 1.380381100, 0.676740741)));
+
+        // A straight line has zero curvature.
+        let line_pts = vec![
+            Point::new(0.0, 0.0, 0.0),
+            Point::new(1.0, 0.0, 0.0),
+            Point::new(2.0, 0.0, 0.0),
+            Point::new(3.0, 0.0, 0.0),
+        ];
+        let line = NurbsCurve::create(false, 1, &line_pts);
+        MINI_CHECK!(line.curvature_at(line.domain_middle()) < 1e-9);
+    })
+}
+
+REGISTER_MINI_TEST!("NurbsCurve", "Curvature", crate::nurbscurve_test::run_nurbscurve_curvature);
 REGISTER_MINI_TEST!("NurbsCurve", "Constructor", crate::nurbscurve_test::run_nurbscurve_constructor);
 REGISTER_MINI_TEST!("NurbsCurve", "Create Interpolated", crate::nurbscurve_test::run_nurbscurve_create_interpolated);
+REGISTER_MINI_TEST!("NurbsCurve", "Create From Parameters", crate::nurbscurve_test::run_nurbscurve_create_from_parameters);
 REGISTER_MINI_TEST!("NurbsCurve", "Create Fitted", crate::nurbscurve_test::run_nurbscurve_create_fitted);
 REGISTER_MINI_TEST!("NurbsCurve", "Join", crate::nurbscurve_test::run_nurbscurve_join);
 REGISTER_MINI_TEST!("NurbsCurve", "Attributes", crate::nurbscurve_test::run_nurbscurve_attributes);

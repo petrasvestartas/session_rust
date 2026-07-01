@@ -17,6 +17,11 @@ prost = "0.14"
 bytemuck = { version = "1", features = ["derive"] }
 wgpu = "29"
 
+# On wasm, wgpu handles are !Send/!Sync. `Mesh` now caches a wgpu::Buffer and must
+# stay Send (rayon par_iter over Vec<Mesh>), so promise single-threaded-wasm safety.
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+wgpu = { version = "29", features = ["fragile-send-sync-non-atomic-wasm"] }
+
 [build-dependencies]
 prost-build = "0.14"
 protoc-bin-vendored = "3.2"

@@ -82,6 +82,10 @@ pub struct Mesh {
     pub tri_vertices: Vec<Point>,
     #[serde(skip)]
     pub crease_angle_deg: f64,
+    // Cached GPU buffers (f32, render-side). Built once by `gpu_mesh()`, dropped on
+    // any geometry/color change. Never serialized; resets to empty on clone.
+    #[serde(skip)]
+    pub(crate) gpu_cache: crate::render_mesh::GpuCache, // accessed by render_mesh::{gpu_mesh, invalidate_gpu}
 }
 
 /// Vertex data containing position and attributes
@@ -263,6 +267,7 @@ impl Mesh {
             tri_tris: Vec::new(),
             tri_vertices: Vec::new(),
             crease_angle_deg: 0.0,
+            gpu_cache: crate::render_mesh::GpuCache::default(),
         }
     }
 
@@ -1366,10 +1371,10 @@ impl Mesh {
         self.invalidate_triangle_bvh();
     }
 
-    pub fn set_pointcolors(&mut self, v: Vec<Color>) { self.pointcolors = v; self.color_mode = ColorMode::POINTCOLORS; }
+    pub fn set_pointcolors(&mut self, v: Vec<Color>) { self.pointcolors = v; self.color_mode = ColorMode::POINTCOLORS; self.gpu_cache.0 = None; }
     pub fn set_facecolors(&mut self, v: Vec<Color>) { self.facecolors = v; self.color_mode = ColorMode::FACECOLORS; }
     pub fn set_linecolors(&mut self, v: Vec<Color>, w: Vec<f64>) { self.linecolors = v; if !w.is_empty() { self.widths = w; } }
-    pub fn set_objectcolor(&mut self, c: Color) { self.objectcolor = c; }
+    pub fn set_objectcolor(&mut self, c: Color) { self.objectcolor = c; self.gpu_cache.0 = None; }
 
     pub fn get_pointcolors(&self) -> &[Color]      { &self.pointcolors }
     pub fn get_facecolors(&self) -> &[Color]       { &self.facecolors }
@@ -2759,6 +2764,7 @@ impl Mesh {
         self.tri_bvh = None;
         self.tri_tris.clear();
         self.tri_vertices.clear();
+        self.gpu_cache.0 = None; // geometry changed → cached GPU buffers are stale
     }
 
     pub fn ensure_triangle_bvh(&mut self) {

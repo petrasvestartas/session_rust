@@ -1788,9 +1788,31 @@ fn clip_pcurve_to_cutter(target: &NurbsSurface, pc: &NurbsCurve, cutter: &NurbsS
     let c11 = cutter.point_at(cu1, cv1).unwrap_or(zero.clone());
     let on_tol = (1e-7f64).max(c00.distance(&c11, None) * 1e-4);
 
+    // clip_pcurve_to_cutter is only ever called for a PLANAR cutter (the caller guards on
+    // cutter_planar), so the closest-point gap to the finite cutter face is the analytic
+    // point-to-rectangle distance: project p3 into the face's (eu,ev) frame, clamp the
+    // parameters to the face rect, measure the 3D residual. This replaces a per-sample grid
+    // search (Closest::surface_point) that dominated SSI time (~66%), with an O(1) projection.
+    let q00 = cutter.point_at(cu0, cv0).unwrap_or(zero.clone());
+    let q10 = cutter.point_at(cu1, cv0).unwrap_or(zero.clone());
+    let q01 = cutter.point_at(cu0, cv1).unwrap_or(zero.clone());
+    let eu = crate::vector::Vector::new(q10[0]-q00[0], q10[1]-q00[1], q10[2]-q00[2]);
+    let ev = crate::vector::Vector::new(q01[0]-q00[0], q01[1]-q00[1], q01[2]-q00[2]);
+    let eu2 = eu[0]*eu[0]+eu[1]*eu[1]+eu[2]*eu[2];
+    let ev2 = ev[0]*ev[0]+ev[1]*ev[1]+ev[2]*ev[2];
+    let fast_planar = eu2 > 1e-28 && ev2 > 1e-28;
     let gap = |t: f64| -> f64 {
         let uv = pc.point_at(t);
         let p3 = target.point_at(uv[0], uv[1]).unwrap_or(crate::point::Point::new(0.0, 0.0, 0.0));
+        if fast_planar {
+            let (dx, dy, dz) = (p3[0]-q00[0], p3[1]-q00[1], p3[2]-q00[2]);
+            let a = ((dx*eu[0]+dy*eu[1]+dz*eu[2]) / eu2).max(0.0).min(1.0);
+            let b = ((dx*ev[0]+dy*ev[1]+dz*ev[2]) / ev2).max(0.0).min(1.0);
+            let cx = q00[0]+a*eu[0]+b*ev[0];
+            let cy = q00[1]+a*eu[1]+b*ev[1];
+            let cz = q00[2]+a*eu[2]+b*ev[2];
+            return ((p3[0]-cx).powi(2)+(p3[1]-cy).powi(2)+(p3[2]-cz).powi(2)).sqrt();
+        }
         crate::closest::Closest::surface_point(cutter, &p3, 0.0, 0.0, 0.0, 0.0).2
     };
     let refine = |t_in: f64, t_out: f64| -> f64 {
@@ -1835,21 +1857,40 @@ fn clip_pcurve_to_cutter(target: &NurbsSurface, pc: &NurbsCurve, cutter: &NurbsS
 /// plane (surface_plane_uv) and clip the result to the cutter footprint.
 /// Otherwise use the surface/surface intersection (already domain-clipped).
 pub fn cut_curves_on_surface(target: &NurbsSurface, cutter: &NurbsSurface, tolerance: Option<f64>) -> Vec<NurbsCurve> {
-    if cutter.is_planar(1e-6) {
-        let (cu0, cu1) = cutter.domain(0).unwrap_or((0.0, 1.0));
-        let (cv0, cv1) = cutter.domain(1).unwrap_or((0.0, 1.0));
-        let mu = (cu0 + cu1) * 0.5;
-        let mv = (cv0 + cv1) * 0.5;
-        let origin = cutter.point_at(mu, mv).unwrap_or(crate::point::Point::new(0.0, 0.0, 0.0));
-        let normal = cutter.normal_at(mu, mv);
-        let plane = Plane::from_point_normal(origin, normal);
-        let mut out = Vec::new();
-        for (_c3, pc) in surface_plane_uv(target, &plane, tolerance) {
-            out.extend(clip_pcurve_to_cutter(target, &pc, cutter));
+    // Route through surface_surface so the closed-form analytic dispatch (plane/cylinder/
+    // sphere/cone/torus) is used when the pair is recognized -- exact AND fast. Marching is the
+    // fallback only for unrecognized freeform pairs. The intersection pcurve on `target` is then
+    // clipped to the (finite) cutter's extent. Use the analytic pcurve when the target is a
+    // recognized quadric (exact, single piece), else project for every seam arc.
+    let cutter_planar = cutter.is_planar(1e-6);
+    let rtol = tolerance.unwrap_or(1e-7).max(1e-7) * 1e4;
+    let rt = recognize_surface(target, rtol);
+    let mut out = Vec::new();
+    for tr in surface_surface(target, cutter, tolerance) {
+        let c3d = &tr.0;
+        let pa_an = rt.as_ref().and_then(|r| analytic_pcurve(target, r, c3d));
+        let pcs: Vec<NurbsCurve> = if let Some(pa) = pa_an {
+            vec![pa]
+        } else if matches!(rt.as_ref(), Some(RecSurf::Sphere(..))) {
+            // OCCT-style analytic per-point inverse (atan2 longitude) -> exact seam crossings.
+            let mut v = analytic_sphere_pullback(target, rt.as_ref().unwrap(), c3d);
+            if v.is_empty() { v = Closest::surface_curve(target, c3d, 0.0, 0.0, tolerance); }
+            if v.is_empty() { v.push(tr.1.clone()); }
+            v
+        } else {
+            let mut v = Closest::surface_curve(target, c3d, 0.0, 0.0, tolerance);
+            if v.is_empty() { v.push(tr.1.clone()); }
+            v
+        };
+        for pc in pcs {
+            if cutter_planar {
+                out.extend(clip_pcurve_to_cutter(target, &pc, cutter));
+            } else {
+                out.push(pc);
+            }
         }
-        return out;
     }
-    surface_surface(target, cutter, tolerance).into_iter().map(|(_c3, pa, _pb)| pa).collect()
+    out
 }
 
 /// Find surface/plane intersection curves with their UV pcurves.
@@ -2686,6 +2727,11 @@ fn vcross(u: [f64; 3], v: [f64; 3]) -> [f64; 3] {
     ]
 }
 
+#[inline]
+fn vdot(a: [f64; 3], b: [f64; 3]) -> f64 {
+    a[0] * b[0] + a[1] * b[1] + a[2] * b[2]
+}
+
 fn plane_sphere(o: [f64; 3], nraw: [f64; 3], c: [f64; 3], r: f64) -> Option<NurbsCurve> {
     let nu = vunit(nraw);
     let d = (c[0] - o[0]) * nu[0] + (c[1] - o[1]) * nu[1] + (c[2] - o[2]) * nu[2];
@@ -2818,6 +2864,536 @@ fn plane_torus(o: [f64; 3], nraw: [f64; 3], c: [f64; 3], wraw: [f64; 3], rr: f64
 /// Returns Some(list of (curve_3d, pcurve_a, pcurve_b)), Some(empty) (recognized
 /// exact case but no intersection), or None (not an analytically-exact pair ->
 /// caller falls back to marching).
+// Tri-state result of an exact plane/plane SSI clipped to both (finite) faces.
+enum PpResult { Line(NurbsCurve), Empty, Marcher }
+
+fn ssi_plane_plane(sa: &NurbsSurface, oa: [f64; 3], na_raw: [f64; 3],
+                   sb: &NurbsSurface, ob: [f64; 3], nb_raw: [f64; 3]) -> PpResult {
+    let dot = |a: [f64; 3], b: [f64; 3]| a[0]*b[0] + a[1]*b[1] + a[2]*b[2];
+    let na = vunit(na_raw);
+    let nb = vunit(nb_raw);
+    let v = vcross(na, nb);
+    let vl = dot(v, v).sqrt();
+    if vl < 1e-9 { return PpResult::Marcher; }  // parallel/coincident -> marcher
+    // Anchor: point of the intersection line closest to origin (two-plane closed form).
+    let da = dot(na, oa);
+    let db = dot(nb, ob);
+    let nb_x_v = vcross(nb, v);
+    let v_x_na = vcross(v, na);
+    let inv = 1.0 / (vl * vl);
+    let anchor = [(da*nb_x_v[0] + db*v_x_na[0]) * inv,
+                  (da*nb_x_v[1] + db*v_x_na[1]) * inv,
+                  (da*nb_x_v[2] + db*v_x_na[2]) * inv];
+    let dir = [v[0]/vl, v[1]/vl, v[2]/vl];
+
+    let axis_clip = |c: f64, d: f64, t0: &mut f64, t1: &mut f64| -> bool {
+        if d.abs() < 1e-15 { return c >= -1e-9 && c <= 1.0 + 1e-9; }
+        let mut ta = (0.0 - c) / d;
+        let mut tb = (1.0 - c) / d;
+        if ta > tb { std::mem::swap(&mut ta, &mut tb); }
+        *t0 = (*t0).max(ta);
+        *t1 = (*t1).min(tb);
+        true
+    };
+
+    let mut tmin: f64 = -1e300;
+    let mut tmax: f64 = 1e300;
+    for s in [sa, sb] {
+        let (u0, u1) = s.domain(0).unwrap_or((0.0, 1.0));
+        let (v0, v1) = s.domain(1).unwrap_or((0.0, 1.0));
+        let o = s.point_at(u0, v0).unwrap_or(Point::new(0.0, 0.0, 0.0));
+        let pu = s.point_at(u1, v0).unwrap_or(Point::new(0.0, 0.0, 0.0));
+        let pv = s.point_at(u0, v1).unwrap_or(Point::new(0.0, 0.0, 0.0));
+        let o3 = [o[0], o[1], o[2]];
+        let eu = [pu[0]-o[0], pu[1]-o[1], pu[2]-o[2]];
+        let ev = [pv[0]-o[0], pv[1]-o[1], pv[2]-o[2]];
+        let exx = dot(eu, eu); let eyy = dot(ev, ev); let exy = dot(eu, ev);
+        let det = exx*eyy - exy*exy;
+        if det.abs() < 1e-18 { return PpResult::Marcher; }
+        let frac = |r: [f64; 3]| -> (f64, f64) {
+            let rx = dot(r, eu); let ry = dot(r, ev);
+            ((eyy*rx - exy*ry) / det, (exx*ry - exy*rx) / det)
+        };
+        let (a0, b0) = frac([anchor[0]-o3[0], anchor[1]-o3[1], anchor[2]-o3[2]]);
+        let (dav, dbv) = frac(dir);
+        let mut t0: f64 = -1e300;
+        let mut t1: f64 = 1e300;
+        if !axis_clip(a0, dav, &mut t0, &mut t1) || !axis_clip(b0, dbv, &mut t0, &mut t1) || t0 > t1 {
+            return PpResult::Empty;
+        }
+        tmin = tmin.max(t0); tmax = tmax.min(t1);
+    }
+    if tmax - tmin <= 1e-9 { return PpResult::Empty; }
+    let a = Point::new(anchor[0]+tmin*dir[0], anchor[1]+tmin*dir[1], anchor[2]+tmin*dir[2]);
+    let b = Point::new(anchor[0]+tmax*dir[0], anchor[1]+tmax*dir[1], anchor[2]+tmax*dir[2]);
+    let mut c3 = NurbsCurve::create(false, 1, &[a, b]);
+    c3.set_domain(0.0, 1.0);
+    PpResult::Line(c3)
+}
+
+/// Closed-form pull-back of an exact 3D conic onto a recognized quadric, reproducing OCCT's
+/// ProjLib projection without sampling/fitting. PLANE: invert the affine (bilinear) (u,v)->3D
+/// map and remap the conic's control points (preserves the exact rational circle/ellipse).
+/// CYLINDER/SPHERE: a circle perpendicular to the axis pulls back to a v=const line spanning
+/// the full u range. Returns None when not analytically handled (caller projects).
+fn analytic_pcurve(srf: &NurbsSurface, recog: &RecSurf, c3d: &NurbsCurve) -> Option<NurbsCurve> {
+    let (u0, u1) = srf.domain(0)?;
+    let (v0, v1) = srf.domain(1)?;
+    let dot = |a: [f64; 3], b: [f64; 3]| a[0]*b[0] + a[1]*b[1] + a[2]*b[2];
+    match recog {
+        RecSurf::Plane(_o, _n) => {
+            let o = srf.point_at(u0, v0)?;
+            let pu = srf.point_at(u1, v0)?;
+            let pv = srf.point_at(u0, v1)?;
+            let ex = [pu[0]-o[0], pu[1]-o[1], pu[2]-o[2]];
+            let ey = [pv[0]-o[0], pv[1]-o[1], pv[2]-o[2]];
+            let exx = dot(ex, ex); let eyy = dot(ey, ey); let exy = dot(ex, ey);
+            let det = exx*eyy - exy*exy;
+            if det.abs() < 1e-18 { return None; }
+            let mut pc = c3d.clone();
+            for i in 0..c3d.cv_count() {
+                let p = c3d.get_cv(i)?;
+                let r = [p[0]-o[0], p[1]-o[1], p[2]-o[2]];
+                let rx = dot(r, ex); let ry = dot(r, ey);
+                let a = (eyy*rx - exy*ry) / det;
+                let b = (exx*ry - exy*rx) / det;
+                let u = u0 + a*(u1-u0); let v = v0 + b*(v1-v0);
+                if c3d.is_rational() {
+                    let w = c3d.weight(i);
+                    pc.set_cv_4d(i, u*w, v*w, 0.0, w);
+                } else {
+                    pc.set_cv(i, &Point::new(u, v, 0.0));
+                }
+            }
+            Some(pc)
+        }
+        RecSurf::Cylinder(p1, p2, _r) => {
+            let ap = *p1;
+            let mut ax = *p2;
+            let an = dot(ax, ax).sqrt();
+            if an < 1e-12 { return None; }
+            ax = [ax[0]/an, ax[1]/an, ax[2]/an];
+            let height = |p: Point| { let r = [p[0]-ap[0], p[1]-ap[1], p[2]-ap[2]]; dot(r, ax) };
+            let um = 0.5*(u0+u1);
+            let h0 = height(srf.point_at(um, v0)?);
+            let h1 = height(srf.point_at(um, v1)?);
+            if (h1-h0).abs() < 1e-12 { return None; }
+            let (t0, t1) = c3d.domain();
+            let mut hmin: f64 = 1e300; let mut hmax: f64 = -1e300; let mut hsum = 0.0; let mut ns = 0;
+            for i in 0..=32 {
+                let h = height(c3d.point_at(t0 + (t1-t0)*i as f64/32.0));
+                hmin = hmin.min(h); hmax = hmax.max(h); hsum += h; ns += 1;
+            }
+            if hmax - hmin > 1e-5 * (h1-h0).abs() { return None; }  // oblique -> fallback
+            if c3d.point_at(t0).distance(&c3d.point_at(t1), None) > 1e-6 * ((h1-h0).abs() + 1.0) { return None; }
+            let hc = hsum / ns as f64;
+            let vc = v0 + (hc-h0)/(h1-h0)*(v1-v0);
+            if vc < v0.min(v1) - 1e-9 || vc > v0.max(v1) + 1e-9 { return None; }
+            Some(NurbsCurve::create(false, 1, &[Point::new(u0, vc, 0.0), Point::new(u1, vc, 0.0)]))
+        }
+        RecSurf::Sphere(c, r) => {
+            let um = 0.5*(u0+u1);
+            let sp = srf.point_at(um, v0)?;
+            let np = srf.point_at(um, v1)?;
+            let mut ax = [np[0]-sp[0], np[1]-sp[1], np[2]-sp[2]];
+            let an = dot(ax, ax).sqrt();
+            if an < 1e-12 { return None; }
+            ax = [ax[0]/an, ax[1]/an, ax[2]/an];
+            let cc = *c;
+            let height = |p: Point| { let rr = [p[0]-cc[0], p[1]-cc[1], p[2]-cc[2]]; dot(rr, ax) };
+            let (t0, t1) = c3d.domain();
+            let mut hmin: f64 = 1e300; let mut hmax: f64 = -1e300; let mut hsum = 0.0; let mut ns = 0;
+            for i in 0..=32 {
+                let h = height(c3d.point_at(t0 + (t1-t0)*i as f64/32.0));
+                hmin = hmin.min(h); hmax = hmax.max(h); hsum += h; ns += 1;
+            }
+            if hmax - hmin > *r * 1e-4 { return None; }
+            if c3d.point_at(t0).distance(&c3d.point_at(t1), None) > *r * 1e-3 { return None; }
+            let hc = hsum / ns as f64;
+            let mut va = v0; let mut vb = v1;
+            let mut ha = height(srf.point_at(um, va)?);
+            let hb = height(srf.point_at(um, vb)?);
+            if (hc-ha)*(hc-hb) > 0.0 { return None; }
+            for _ in 0..60 {
+                let vm = 0.5*(va+vb);
+                let hm = height(srf.point_at(um, vm).unwrap_or(Point::new(0.0, 0.0, 0.0)));
+                if (hm-hc)*(ha-hc) <= 0.0 { vb = vm; } else { va = vm; ha = hm; }
+            }
+            let vc = 0.5*(va+vb);
+            Some(NurbsCurve::create(false, 1, &[Point::new(u0, vc, 0.0), Point::new(u1, vc, 0.0)]))
+        }
+        RecSurf::Cone(p1, p2, _r) => {
+            // A circle perpendicular to the cone axis (a coaxial "parallel") -> exact v=const line.
+            // (recog.r is the cone HALF-ANGLE, not a length, so use a curve-length scale for tolerances.)
+            let mut ax = *p2;
+            let an = dot(ax, ax).sqrt();
+            if an < 1e-12 { return None; }
+            ax = [ax[0]/an, ax[1]/an, ax[2]/an];
+            let aa = *p1;   // apex
+            let height = |p: Point| { let r = [p[0]-aa[0], p[1]-aa[1], p[2]-aa[2]]; dot(r, ax) };
+            let (t0, t1) = c3d.domain();
+            let clen = c3d.point_at(t0).distance(&c3d.point_at(0.5*(t0+t1)), None);
+            let hscale = clen.max(1e-9);
+            let mut hmin: f64 = 1e300; let mut hmax: f64 = -1e300; let mut hsum = 0.0; let mut ns = 0;
+            for i in 0..=32 {
+                let h = height(c3d.point_at(t0 + (t1-t0)*i as f64/32.0));
+                hmin = hmin.min(h); hmax = hmax.max(h); hsum += h; ns += 1;
+            }
+            if hmax - hmin > hscale * 1e-4 { return None; }   // oblique conic -> projection
+            if c3d.point_at(t0).distance(&c3d.point_at(t1), None) > hscale * 1e-3 { return None; }  // not a full wrap
+            let hc = hsum / ns as f64;
+            let um2 = 0.5*(u0+u1);
+            let mut va = v0; let mut vb = v1;
+            let mut ha = height(srf.point_at(um2, va)?);
+            let hb = height(srf.point_at(um2, vb)?);
+            if (hc-ha)*(hc-hb) > 0.0 { return None; }   // height out of v-range
+            for _ in 0..60 {
+                let vmid = 0.5*(va+vb);
+                let hm = height(srf.point_at(um2, vmid).unwrap_or(Point::new(0.0, 0.0, 0.0)));
+                if (hm-hc)*(ha-hc) <= 0.0 { vb = vmid; } else { va = vmid; ha = hm; }
+            }
+            let vc = 0.5*(va+vb);
+            Some(NurbsCurve::create(false, 1, &[Point::new(u0, vc, 0.0), Point::new(u1, vc, 0.0)]))
+        }
+        _ => None,
+    }
+}
+
+/// Analytic pull-back of a 3D curve onto a recognized SPHERE, replicating OCCT ProjLib_Sphere's
+/// per-point inverse (EvalPnt2d): in the sphere's local frame, longitude = atan2(y,x) is EXACT
+/// (so a seam-straddling circle's crossing of the u-seam lands EXACTLY on u=u0/u=u1 -- the thing
+/// the iterative projector got ~0.18 wrong), and the nonlinear meridian v is found from a height
+/// table. Returns the seam-split arcs (a circle straddling the seam -> 2 arcs, each anchored on
+/// the seam), as exact-endpoint degree-1 polylines. Empty if not a usable sphere/circle.
+fn analytic_sphere_pullback(srf: &NurbsSurface, recog: &RecSurf, c3d: &NurbsCurve) -> Vec<NurbsCurve> {
+    let cc = match recog { RecSurf::Sphere(c, _r) => *c, _ => return vec![] };
+    let (u0, u1) = match srf.domain(0) { Some(d) => d, None => return vec![] };
+    let (v0, v1) = match srf.domain(1) { Some(d) => d, None => return vec![] };
+    let range_u = u1 - u0;
+    if range_u < 1e-9 { return vec![]; }
+    let dot = |a: [f64; 3], b: [f64; 3]| a[0]*b[0] + a[1]*b[1] + a[2]*b[2];
+    let um = 0.5 * (u0 + u1);
+    let vm = 0.5 * (v0 + v1);
+    // Polar axis Zs (south->north pole), and the equatorial frame Xs (u=u0 meridian dir), Ys.
+    let sp = match srf.point_at(um, v0) { Some(p) => p, None => return vec![] };
+    let np = match srf.point_at(um, v1) { Some(p) => p, None => return vec![] };
+    let mut zs = [np[0]-sp[0], np[1]-sp[1], np[2]-sp[2]];
+    let zn = dot(zs, zs).sqrt();
+    if zn < 1e-12 { return vec![]; }
+    zs = [zs[0]/zn, zs[1]/zn, zs[2]/zn];
+    let p0 = match srf.point_at(u0, vm) { Some(p) => p, None => return vec![] };
+    let x0 = [p0[0]-cc[0], p0[1]-cc[1], p0[2]-cc[2]];
+    let h0 = dot(x0, zs);
+    let mut xs = [x0[0]-h0*zs[0], x0[1]-h0*zs[1], x0[2]-h0*zs[2]];
+    let xn = dot(xs, xs).sqrt();
+    if xn < 1e-12 { return vec![]; }
+    xs = [xs[0]/xn, xs[1]/xn, xs[2]/xn];
+    let ys = [zs[1]*xs[2]-zs[2]*xs[1], zs[2]*xs[0]-zs[0]*xs[2], zs[0]*xs[1]-zs[1]*xs[0]];
+    const PI: f64 = std::f64::consts::PI;
+    const TWO_PI: f64 = 2.0 * PI;
+    // (u -> longitude) table along the equator. The NURBS sphere's u is the RATIONAL-quadratic
+    // circle parameter, which is NOT linear in longitude (only correct at 45-deg multiples) -- a
+    // linear u = u0 + (lon/2pi)*range_u approximation distorts the pulled-back circle so it bounds
+    // ~2% too little flux (wrong volume). Invert the true parametrization: tabulate longitude(u)
+    // on the equator (v-independent for a surface of revolution), then binary-search per point.
+    let nt = 128usize;
+    let mut tu = vec![0.0_f64; nt + 1];
+    let mut tlon = vec![0.0_f64; nt + 1];
+    for k in 0..=nt {
+        let u = u0 + range_u * k as f64 / nt as f64;
+        let p = srf.point_at(u, vm).unwrap_or(Point::new(0.0, 0.0, 0.0));
+        let r = [p[0]-cc[0], p[1]-cc[1], p[2]-cc[2]];
+        let mut lon = dot(r, ys).atan2(dot(r, xs));
+        if k > 0 {
+            while lon - tlon[k-1] > PI { lon -= TWO_PI; }
+            while lon - tlon[k-1] < -PI { lon += TWO_PI; }
+        }
+        tu[k] = u;
+        tlon[k] = lon;
+    }
+    let lon_incr = tlon[nt] >= tlon[0];
+    let lon_lo = tlon[0].min(tlon[nt]);
+    let lon_hi = tlon[0].max(tlon[nt]);
+    let u_from_lon = |mut lon: f64| -> f64 {
+        while lon < lon_lo - 1e-9 { lon += TWO_PI; }
+        while lon > lon_hi + 1e-9 { lon -= TWO_PI; }
+        let mut lo = 0usize;
+        let mut hi = nt;
+        while hi - lo > 1 {
+            let mid = (lo + hi) / 2;
+            let above = if lon_incr { tlon[mid] < lon } else { tlon[mid] > lon };
+            if above { lo = mid; } else { hi = mid; }
+        }
+        let denom = tlon[hi] - tlon[lo];
+        let f = if denom.abs() > 1e-15 { (lon - tlon[lo]) / denom } else { 0.0 };
+        tu[lo] + (tu[hi] - tu[lo]) * f
+    };
+    // height(v) along a meridian (independent of u by sphere symmetry) is MONOTONE pole-to-pole.
+    // Precompute a (v, height) table ONCE, then invert by binary-search + linear interp per point.
+    let mut tv = vec![0.0_f64; nt + 1];
+    let mut th = vec![0.0_f64; nt + 1];
+    for k in 0..=nt {
+        let v = v0 + (v1 - v0) * k as f64 / nt as f64;
+        let p = srf.point_at(um, v).unwrap_or(Point::new(0.0, 0.0, 0.0));
+        let r = [p[0]-cc[0], p[1]-cc[1], p[2]-cc[2]];
+        tv[k] = v;
+        th[k] = dot(r, zs);
+    }
+    let incr = th[nt] >= th[0];
+    if (th[nt] - th[0]).abs() < 1e-12 { return vec![]; }
+    let v_from_height = |h: f64| -> f64 {
+        if incr {
+            if h <= th[0] { return tv[0]; }
+            if h >= th[nt] { return tv[nt]; }
+        } else {
+            if h >= th[0] { return tv[0]; }
+            if h <= th[nt] { return tv[nt]; }
+        }
+        let mut lo = 0usize;
+        let mut hi = nt;
+        while hi - lo > 1 {
+            let mid = (lo + hi) / 2;
+            let above = if incr { th[mid] < h } else { th[mid] > h };
+            if above { lo = mid; } else { hi = mid; }
+        }
+        let denom = th[hi] - th[lo];
+        let f = if denom.abs() > 1e-15 { (h - th[lo]) / denom } else { 0.0 };
+        tv[lo] + (tv[hi] - tv[lo]) * f
+    };
+    // Sample the 3D curve; project each point analytically -> (u_unwrapped, v).
+    let (t0, t1) = c3d.domain();
+    let n = (c3d.cv_count() * 8).max(120);
+    let mut uv: Vec<[f64; 2]> = Vec::new();
+    let mut prev_u = 0.0_f64;
+    for i in 0..=n {
+        let p = c3d.point_at(t0 + (t1 - t0) * i as f64 / n as f64);
+        let r = [p[0]-cc[0], p[1]-cc[1], p[2]-cc[2]];
+        let lon = dot(r, ys).atan2(dot(r, xs)); // (-pi, pi], exact
+        let h = dot(r, zs);
+        let mut u = u_from_lon(lon); // exact NURBS u (not the linear approx)
+        if i > 0 {
+            while u - prev_u > range_u * 0.5 { u -= range_u; }
+            while u - prev_u < -range_u * 0.5 { u += range_u; }
+        }
+        prev_u = u;
+        uv.push([u, v_from_height(h)]);
+    }
+    if uv.len() < 2 { return vec![]; }
+    // Split the continuous (u,v) polyline into arcs by "domain copy" index k = floor((u-u0)/range).
+    // When k changes between consecutive samples the curve crosses a seam: end the current arc
+    // EXACTLY on the seam (u0 or u1) and start the next on the opposite seam, each shifted into
+    // [u0,u1]. So a circle straddling the seam -> two arcs anchored exactly on u0 and u1.
+    let mut out: Vec<NurbsCurve> = Vec::new();
+    let mut seg: Vec<Point> = Vec::new();
+    let kof = |u: f64| -> i64 { ((u - u0) / range_u + 1e-9).floor() as i64 };
+    let mut cur_k = kof(uv[0][0]);
+    seg.push(Point::new(uv[0][0] - cur_k as f64 * range_u, uv[0][1], 0.0));
+    for i in 1..uv.len() {
+        let ki = kof(uv[i][0]);
+        while ki != cur_k {
+            let step: i64 = if ki > cur_k { 1 } else { -1 };
+            let nk = cur_k + step;
+            let seam_cont = u0 + (if step > 0 { nk } else { cur_k }) as f64 * range_u; // boundary crossed
+            let denom = uv[i][0] - uv[i-1][0];
+            let mut f = if denom.abs() > 1e-15 { (seam_cont - uv[i-1][0]) / denom } else { 0.0 };
+            f = f.max(0.0).min(1.0);
+            let vc = uv[i-1][1] + (uv[i][1] - uv[i-1][1]) * f;
+            seg.push(Point::new(seam_cont - cur_k as f64 * range_u, vc, 0.0)); // end at u1 (step>0) or u0
+            if seg.len() >= 2 { out.push(NurbsCurve::create(false, 1, &seg)); }
+            seg.clear();
+            seg.push(Point::new(seam_cont - nk as f64 * range_u, vc, 0.0)); // start at u0 (step>0) or u1
+            cur_k = nk;
+        }
+        seg.push(Point::new(uv[i][0] - cur_k as f64 * range_u, uv[i][1], 0.0));
+    }
+    if seg.len() >= 2 { out.push(NurbsCurve::create(false, 1, &seg)); }
+    out
+}
+
+// ===========================================================================
+// Analytic SSI for COAXIAL / canonical quadric pairs (exact conics), ported
+// from OCCT IntAna_QuadQuadGeo. Each pushes the exact 3D circle(s)/line(s)/
+// ellipse(s) and returns Some(curves) = recognised & handled (may be empty =>
+// recognised no-intersection); None = not handled (caller marches).
+// ===========================================================================
+fn point_axis_dist(apt: [f64; 3], adir: [f64; 3], p: [f64; 3]) -> f64 {
+    let u = vunit(adir);
+    let dp = [p[0] - apt[0], p[1] - apt[1], p[2] - apt[2]];
+    let t = vdot(dp, u);
+    let perp = [dp[0] - t * u[0], dp[1] - t * u[1], dp[2] - t * u[2]];
+    vdot(perp, perp).sqrt()
+}
+fn axial_coord(apt: [f64; 3], adir: [f64; 3], p: [f64; 3]) -> f64 {
+    let u = vunit(adir);
+    (p[0] - apt[0]) * u[0] + (p[1] - apt[1]) * u[1] + (p[2] - apt[2]) * u[2]
+}
+fn axes_coaxial(p1: [f64; 3], d1: [f64; 3], p2: [f64; 3], d2: [f64; 3], tol: f64) -> bool {
+    let u1 = vunit(d1);
+    let u2 = vunit(d2);
+    let cx = vcross(u1, u2);
+    if vdot(cx, cx).sqrt() > tol { return false; }
+    point_axis_dist(p1, u1, p2) <= tol
+}
+fn cyl_span(srf: &NurbsSurface, apt: [f64; 3], adir: [f64; 3]) -> (f64, f64) {
+    let u = vunit(adir);
+    let (u0, u1) = srf.domain(0).unwrap_or((0.0, 1.0));
+    let (v0, v1) = srf.domain(1).unwrap_or((0.0, 1.0));
+    let um = 0.5 * (u0 + u1);
+    let mut smin: f64 = 1e300;
+    let mut smax: f64 = -1e300;
+    for vv in [v0, v1] {
+        if let Some(p) = srf.point_at(um, vv) {
+            let s = (p[0] - apt[0]) * u[0] + (p[1] - apt[1]) * u[1] + (p[2] - apt[2]) * u[2];
+            smin = smin.min(s);
+            smax = smax.max(s);
+        }
+    }
+    (smin, smax)
+}
+fn lines_closest_point(p1: [f64; 3], d1: [f64; 3], p2: [f64; 3], d2: [f64; 3], tol: f64) -> Option<[f64; 3]> {
+    let u = vunit(d1);
+    let v = vunit(d2);
+    let w0 = [p1[0] - p2[0], p1[1] - p2[1], p1[2] - p2[2]];
+    let a = vdot(u, u);
+    let b = vdot(u, v);
+    let c = vdot(v, v);
+    let d = vdot(u, w0);
+    let e = vdot(v, w0);
+    let den = a * c - b * b;
+    if den.abs() < 1e-12 { return None; }
+    let sc = (b * e - c * d) / den;
+    let tc = (a * e - b * d) / den;
+    let q1 = [p1[0] + sc * u[0], p1[1] + sc * u[1], p1[2] + sc * u[2]];
+    let q2 = [p2[0] + tc * v[0], p2[1] + tc * v[1], p2[2] + tc * v[2]];
+    let diff = [q1[0] - q2[0], q1[1] - q2[1], q1[2] - q2[2]];
+    if vdot(diff, diff).sqrt() > tol { return None; }
+    Some([0.5 * (q1[0] + q2[0]), 0.5 * (q1[1] + q2[1]), 0.5 * (q1[2] + q2[2])])
+}
+fn ssi_cylinder_sphere(cyl_p: [f64; 3], cyl_w: [f64; 3], rc: f64, sph_c: [f64; 3], r_sph: f64) -> Option<Vec<NurbsCurve>> {
+    let ktol = 1e-6;
+    let w = vunit(cyl_w);
+    if point_axis_dist(cyl_p, w, sph_c) > ktol { return None; }
+    let mut out: Vec<NurbsCurve> = Vec::new();
+    if r_sph < rc - ktol { return Some(out); }
+    let dist = (r_sph * r_sph - rc * rc).max(0.0).sqrt();
+    let (xa, ya) = ortho_basis(w);
+    if dist <= ktol {
+        out.push(exact_circle(sph_c[0], sph_c[1], sph_c[2], xa, ya, rc));
+        return Some(out);
+    }
+    for s in [dist, -dist] {
+        let cc = [sph_c[0] + s * w[0], sph_c[1] + s * w[1], sph_c[2] + s * w[2]];
+        out.push(exact_circle(cc[0], cc[1], cc[2], xa, ya, rc));
+    }
+    Some(out)
+}
+fn ssi_cylinder_cone(cyl_p: [f64; 3], cyl_w: [f64; 3], rc: f64, cone_apex: [f64; 3], cone_a: [f64; 3], alpha: f64) -> Option<Vec<NurbsCurve>> {
+    let ktol = 1e-6;
+    let w = vunit(cyl_w);
+    let a = vunit(cone_a);
+    if !axes_coaxial(cyl_p, w, cone_apex, a, ktol) { return None; }
+    let ta = alpha.tan();
+    if ta < 1e-9 { return None; }
+    let s = rc / ta;
+    let mut out: Vec<NurbsCurve> = Vec::new();
+    if s < ktol { return Some(out); }
+    let cc = [cone_apex[0] + s * a[0], cone_apex[1] + s * a[1], cone_apex[2] + s * a[2]];
+    let (xa, ya) = ortho_basis(a);
+    out.push(exact_circle(cc[0], cc[1], cc[2], xa, ya, rc));
+    Some(out)
+}
+fn ssi_cone_sphere(cone_apex: [f64; 3], cone_a: [f64; 3], alpha: f64, sph_c: [f64; 3], r_sph: f64) -> Option<Vec<NurbsCurve>> {
+    let ktol = 1e-6;
+    let a = vunit(cone_a);
+    if point_axis_dist(cone_apex, a, sph_c) > ktol { return None; }
+    let dsign = axial_coord(cone_apex, a, sph_c);
+    let d = dsign.abs();
+    let dir = if d > ktol && dsign < 0.0 { [-a[0], -a[1], -a[2]] } else { a };
+    let t = alpha.tan();
+    let t2 = t * t;
+    let aq = 1.0 + t2;
+    let bq = 2.0 * t2 * d;
+    let cq = t2 * d * d - r_sph * r_sph;
+    let disc = bq * bq - 4.0 * aq * cq;
+    let mut out: Vec<NurbsCurve> = Vec::new();
+    if disc < -ktol { return Some(out); }
+    let sq = disc.max(0.0).sqrt();
+    let xs: Vec<f64> = if sq <= ktol {
+        vec![-bq / (2.0 * aq)]
+    } else {
+        vec![(-bq - sq) / (2.0 * aq), (-bq + sq) / (2.0 * aq)]
+    };
+    let (xa, ya) = ortho_basis(a);
+    for x in xs {
+        let s_ax = d + x;
+        if s_ax < ktol { continue; }
+        let rr = t * s_ax;
+        if rr < ktol { continue; }
+        let cc = [cone_apex[0] + s_ax * dir[0], cone_apex[1] + s_ax * dir[1], cone_apex[2] + s_ax * dir[2]];
+        out.push(exact_circle(cc[0], cc[1], cc[2], xa, ya, rr));
+    }
+    Some(out)
+}
+fn ssi_cylinder_cylinder(sa: &NurbsSurface, p1: [f64; 3], w1raw: [f64; 3], r1: f64,
+                         sb: &NurbsSurface, p2: [f64; 3], w2raw: [f64; 3], r2: f64) -> Option<Vec<NurbsCurve>> {
+    let ktol = 1e-6;
+    let w1 = vunit(w1raw);
+    let w2 = vunit(w2raw);
+    let cx = vcross(w1, w2);
+    let sinmag = vdot(cx, cx).sqrt();
+    let mut out: Vec<NurbsCurve> = Vec::new();
+    if sinmag <= ktol {
+        let dline = point_axis_dist(p1, w1, p2);
+        if dline <= ktol {
+            if (r1 - r2).abs() <= ktol { return None; }  // coincident axis & radius -> marcher
+            return Some(out);                            // coaxial, different radii -> no intersection
+        }
+        let off = vdot([p2[0] - p1[0], p2[1] - p1[1], p2[2] - p1[2]], w1);
+        let p2p = [p2[0] - off * w1[0], p2[1] - off * w1[1], p2[2] - off * w1[2]];
+        let d = dline;
+        if d > r1 + r2 + ktol { return Some(out); }
+        if d < (r1 - r2).abs() - ktol { return Some(out); }
+        let xdir = vunit([p2p[0] - p1[0], p2p[1] - p1[1], p2p[2] - p1[2]]);
+        let ydir = vunit(vcross(w1, xdir));
+        let aa = (r1 * r1 - r2 * r2 + d * d) / (2.0 * d);
+        let h = (r1 * r1 - aa * aa).max(0.0).sqrt();
+        let foot = [p1[0] + aa * xdir[0], p1[1] + aa * xdir[1], p1[2] + aa * xdir[2]];
+        let (s0a, s1a) = cyl_span(sa, p1, w1);
+        let (s0b, s1b) = cyl_span(sb, p1, w1);
+        let slo = s0a.max(s0b);
+        let shi = s1a.min(s1b);
+        if shi - slo <= ktol { return Some(out); }
+        let emit = |bp: [f64; 3], out: &mut Vec<NurbsCurve>| {
+            let e0 = [bp[0] + slo * w1[0], bp[1] + slo * w1[1], bp[2] + slo * w1[2]];
+            let e1 = [bp[0] + shi * w1[0], bp[1] + shi * w1[1], bp[2] + shi * w1[2]];
+            let mut ln = NurbsCurve::create(false, 1, &[Point::new(e0[0], e0[1], e0[2]), Point::new(e1[0], e1[1], e1[2])]);
+            ln.set_domain(0.0, 1.0);
+            out.push(ln);
+        };
+        if h <= ktol {
+            emit(foot, &mut out);
+        } else {
+            emit([foot[0] + h * ydir[0], foot[1] + h * ydir[1], foot[2] + h * ydir[2]], &mut out);
+            emit([foot[0] - h * ydir[0], foot[1] - h * ydir[1], foot[2] - h * ydir[2]], &mut out);
+        }
+        return Some(out);
+    }
+    let rmax = r1.max(r2);
+    if rmax < 1e-12 || (r1 - r2).abs() / rmax > 1e-6 { return None; }
+    let pint = lines_closest_point(p1, w1, p2, w2, ktol)?;
+    let r = 0.5 * (r1 + r2);
+    let ang = vdot(w1, w2).max(-1.0).min(1.0).acos();
+    let sh = (0.5 * ang).sin();
+    let ch = (0.5 * ang).cos();
+    if sh < 1e-9 || ch < 1e-9 { return None; }
+    let minor = vunit(cx);
+    let maj1 = vunit([w1[0] + w2[0], w1[1] + w2[1], w1[2] + w2[2]]);
+    let maj2 = vunit([w1[0] - w2[0], w1[1] - w2[1], w1[2] - w2[2]]);
+    out.push(exact_ellipse(pint[0], pint[1], pint[2], maj1, minor, r / sh, r));
+    out.push(exact_ellipse(pint[0], pint[1], pint[2], maj2, minor, r / ch, r));
+    Some(out)
+}
+
 fn analytic_ssi(a: &NurbsSurface, b: &NurbsSurface, tolerance: Option<f64>) -> Option<Vec<(NurbsCurve, NurbsCurve, NurbsCurve)>> {
     let tol = match tolerance {
         Some(t) if t > 0.0 => t,
@@ -2839,6 +3415,13 @@ fn analytic_ssi(a: &NurbsSurface, b: &NurbsSurface, tolerance: Option<f64>) -> O
     // intersection), or the whole match arm returns None = not analytically
     // handled (caller marches).
     let c3_list: Vec<NurbsCurve> = match (&ra, &rb) {
+        (RecSurf::Plane(oa, na), RecSurf::Plane(ob, nb)) => {
+            match ssi_plane_plane(a, *oa, *na, b, *ob, *nb) {
+                PpResult::Line(c) => vec![c],
+                PpResult::Empty => vec![],          // recognized, finite faces disjoint -> []
+                PpResult::Marcher => return None,   // parallel/coincident -> marcher
+            }
+        }
         (RecSurf::Plane(o, n), RecSurf::Sphere(c, r)) => single(plane_sphere(*o, *n, *c, *r)),
         (RecSurf::Sphere(c, r), RecSurf::Plane(o, n)) => single(plane_sphere(*o, *n, *c, *r)),
         (RecSurf::Plane(o, n), RecSurf::Cylinder(p, w, r)) => single(plane_cylinder(*o, *n, *p, *w, *r)),
@@ -2869,12 +3452,32 @@ fn analytic_ssi(a: &NurbsSurface, b: &NurbsSurface, tolerance: Option<f64>) -> O
             }
             single(c3)
         }
+        // Coaxial / canonical quadric pairs (exact conics from IntAna_QuadQuadGeo).
+        (RecSurf::Cylinder(p, w, r), RecSurf::Sphere(c, sr)) =>
+            match ssi_cylinder_sphere(*p, *w, *r, *c, *sr) { Some(v) => v, None => return None },
+        (RecSurf::Sphere(c, sr), RecSurf::Cylinder(p, w, r)) =>
+            match ssi_cylinder_sphere(*p, *w, *r, *c, *sr) { Some(v) => v, None => return None },
+        (RecSurf::Cylinder(p, w, r), RecSurf::Cone(v2, w2, alpha)) =>
+            match ssi_cylinder_cone(*p, *w, *r, *v2, *w2, *alpha) { Some(v) => v, None => return None },
+        (RecSurf::Cone(v2, w2, alpha), RecSurf::Cylinder(p, w, r)) =>
+            match ssi_cylinder_cone(*p, *w, *r, *v2, *w2, *alpha) { Some(v) => v, None => return None },
+        (RecSurf::Cone(v2, w2, alpha), RecSurf::Sphere(c, sr)) =>
+            match ssi_cone_sphere(*v2, *w2, *alpha, *c, *sr) { Some(v) => v, None => return None },
+        (RecSurf::Sphere(c, sr), RecSurf::Cone(v2, w2, alpha)) =>
+            match ssi_cone_sphere(*v2, *w2, *alpha, *c, *sr) { Some(v) => v, None => return None },
+        (RecSurf::Cylinder(pa, wa, ra_r), RecSurf::Cylinder(pb, wb, rb_r)) =>
+            match ssi_cylinder_cylinder(a, *pa, *wa, *ra_r, b, *pb, *wb, *rb_r) { Some(v) => v, None => return None },
         _ => return None, // not an analytically-exact pair -> marcher
     };
 
     // The 3D curves are exact; use the first pcurve piece on each surface (a
     // curve crossing a surface seam pulls back to several UV pieces — c3 stays
     // whole). Skip a curve whose pullback fails entirely.
+    // The 3D curves are exact; use the first pcurve piece on each surface (a curve crossing a
+    // surface seam pulls back to several UV pieces -- c3 stays whole). Projection (not the
+    // analytic v=const pcurve) is kept here so surface_surface consumers such as
+    // NurbsSurface::split_by_surface keep their seam-aware pcurves; cut_curves_on_surface
+    // recomputes the exact analytic pcurve itself for boolean imprinting.
     let mut triples: Vec<(NurbsCurve, NurbsCurve, NurbsCurve)> = Vec::new();
     for c3 in c3_list {
         let pas = Closest::surface_curve(a, &c3, 0.0, 0.0, Some(tol));
@@ -3292,17 +3895,21 @@ pub fn surface_surface(a: &NurbsSurface, b: &NurbsSurface, tolerance: Option<f64
         if is_loop { quad.pop(); }
         if quad.len() < 4 { continue; }
 
-        // Trace-level dedup against already kept traces
+        // Trace-level dedup against already kept traces. The tolerance must be tight relative to the
+        // spacing between DISTINCT intersection branches: two perpendicular cylinders (Steinmetz) have
+        // 4 arcs only ~1.4 apart at the 0.25/0.75 samples, so the old h_init*6 (~2.3) wrongly merged
+        // 3 of the 4 arcs into one. Use h_init*2 and scan EVERY kept point (a true duplicate lies
+        // within ~1 marching step everywhere; distinct branches do not).
         let m = quad.len();
         let trace_pts3: Vec<[f64; 3]> = quad.iter().map(|q| eval3_q(q)).collect();
-        let dup_tol = h_init * 6.0;
+        let dup_tol = h_init * 2.0;
         let mut dup = false;
         for other in &kept_pts3 {
             let mut all_close = true;
             for &f in &[0.25, 0.5, 0.75] {
                 let cp = trace_pts3[((m - 1) as f64 * f) as usize];
                 let mut dmin = dup_tol + 1.0;
-                for k in (0..other.len()).step_by(5) {
+                for k in 0..other.len() {
                     let op = other[k];
                     dmin = dmin.min(((cp[0]-op[0]).powi(2) + (cp[1]-op[1]).powi(2) + (cp[2]-op[2]).powi(2)).sqrt());
                 }

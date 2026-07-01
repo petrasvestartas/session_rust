@@ -1448,6 +1448,12 @@ impl Primitives {
         NurbsCurve::create_interpolated(points, parameterization)
     }
 
+    pub fn create_interpolated_styled(points: &[Point],
+                                      parameterization: nurbsknot::CurveNurbsKnotStyle,
+                                      end_condition: nurbsknot::CurveInterpStyle) -> NurbsCurve {
+        NurbsCurve::create_interpolated_styled(points, parameterization, end_condition)
+    }
+
     pub fn quad_mesh(surface: &NurbsSurface, u_count: usize, v_count: usize) -> Mesh {
         let mut mesh = Mesh::new();
         let du = surface.domain(0).unwrap();

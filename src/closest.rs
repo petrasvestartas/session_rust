@@ -34,7 +34,10 @@ impl Closest {
         t0 = t0.max(domain_start);
         t1 = t1.min(domain_end);
 
-        let num_samples = (curve.degree() * 2).max(10);
+        // Dense seed grid: sample every knot span several times so the global minimum's
+        // basin is captured before Newton refines (matches OCCT's robust initial sampling
+        // in GeomAPI_ProjectPointOnCurve).
+        let num_samples = (curve.cv_count() * 10).max(50);
         let dt = (t1 - t0) / num_samples as f64;
 
         let mut best_t = t0;
@@ -49,41 +52,40 @@ impl Closest {
             }
         }
 
-        let max_iterations = 20;
-        let step_tolerance = (t1 - t0) * 1e-10;
+        let max_iterations = 32;
+        let step_tolerance = (t1 - t0) * 1e-12;
 
         let mut t = best_t;
 
+        // Newton on h(t) = (C(t) - P) . C'(t)  (= 0 at a foot of perpendicular).
+        // h'(t) = |C'(t)|^2 + (C(t) - P) . C''(t).  Use the RAW derivatives C', C''.
         for _ in 0..max_iterations {
-            let pt = curve.point_at(t);
-            let tangent = curve.tangent_at(t);
+            let derivs = curve.evaluate(t, 2);
+            if derivs.len() < 3 {
+                break;
+            }
+            let pt = &derivs[0];
+            let d1 = &derivs[1];
+            let d2 = &derivs[2];
 
-            let delta = Vector::new(
-                test_point[0] - pt[0],
-                test_point[1] - pt[1],
-                test_point[2] - pt[2],
-            );
+            let rx = pt[0] - test_point[0];
+            let ry = pt[1] - test_point[1];
+            let rz = pt[2] - test_point[2];
 
-            let f = -delta.dot(&tangent);
+            let f = rx * d1[0] + ry * d1[1] + rz * d1[2];
 
             if f.abs() < step_tolerance {
                 break;
             }
 
-            let derivs = curve.evaluate(t, 2);
-            if derivs.len() < 3 {
+            let df = d1[0] * d1[0] + d1[1] * d1[1] + d1[2] * d1[2]
+                + rx * d2[0] + ry * d2[1] + rz * d2[2];
+
+            if df.abs() < 1e-14 {
                 break;
             }
 
-            let d2 = Vector::new(derivs[2][0], derivs[2][1], derivs[2][2]);
-            let tangent_mag = tangent.magnitude();
-            let df = delta.dot(&d2) - tangent_mag * tangent_mag;
-
-            if df.abs() < 1e-12 {
-                break;
-            }
-
-            let mut dt_step = f / df;
+            let mut dt_step = -f / df;
 
             if dt_step.abs() > (t1 - t0) * 0.5 {
                 dt_step = dt_step.signum() * (t1 - t0) * 0.5;
@@ -118,6 +120,69 @@ impl Closest {
         }
 
         (t, final_dist)
+    }
+
+    /// Closest approach between two curves: minimize |C0(u) - C1(v)|^2.
+    /// Returns (u, v, distance). Matches OCCT GeomAPI_ExtremaCurveCurve.
+    pub fn curve_curve(curve0: &NurbsCurve, curve1: &NurbsCurve) -> (f64, f64, f64) {
+        if !curve0.is_valid() || !curve1.is_valid() {
+            return (0.0, 0.0, f64::INFINITY);
+        }
+        let (u0, u1) = curve0.domain();
+        let (v0, v1) = curve1.domain();
+        let n0 = (curve0.cv_count() * 8).max(40);
+        let n1 = (curve1.cv_count() * 8).max(40);
+
+        let p0: Vec<Point> = (0..=n0).map(|i| curve0.point_at(u0 + (u1 - u0) * i as f64 / n0 as f64)).collect();
+        let p1: Vec<Point> = (0..=n1).map(|j| curve1.point_at(v0 + (v1 - v0) * j as f64 / n1 as f64)).collect();
+
+        let mut best = f64::INFINITY;
+        let mut u = u0; let mut v = v0;
+        for i in 0..=n0 {
+            for j in 0..=n1 {
+                let dx = p0[i][0] - p1[j][0]; let dy = p0[i][1] - p1[j][1]; let dz = p0[i][2] - p1[j][2];
+                let d2 = dx*dx + dy*dy + dz*dz;
+                if d2 < best {
+                    best = d2;
+                    u = u0 + (u1 - u0) * i as f64 / n0 as f64;
+                    v = v0 + (v1 - v0) * j as f64 / n1 as f64;
+                }
+            }
+        }
+
+        // 2D Newton on f(u,v) = |C0(u) - C1(v)|^2.
+        for _ in 0..64 {
+            let e0 = curve0.evaluate(u, 2);
+            let e1 = curve1.evaluate(v, 2);
+            if e0.len() < 3 || e1.len() < 3 { break; }
+            let (c0, c0p, c0pp) = (&e0[0], &e0[1], &e0[2]);
+            let (c1, c1p, c1pp) = (&e1[0], &e1[1], &e1[2]);
+            let rx = c0[0] - c1[0]; let ry = c0[1] - c1[1]; let rz = c0[2] - c1[2];
+
+            let gu = rx*c0p[0] + ry*c0p[1] + rz*c0p[2];
+            let gv = -(rx*c1p[0] + ry*c1p[1] + rz*c1p[2]);
+
+            let huu = c0p[0]*c0p[0] + c0p[1]*c0p[1] + c0p[2]*c0p[2]
+                    + rx*c0pp[0] + ry*c0pp[1] + rz*c0pp[2];
+            let huv = -(c0p[0]*c1p[0] + c0p[1]*c1p[1] + c0p[2]*c1p[2]);
+            let hvv = c1p[0]*c1p[0] + c1p[1]*c1p[1] + c1p[2]*c1p[2]
+                    - (rx*c1pp[0] + ry*c1pp[1] + rz*c1pp[2]);
+
+            let det = huu*hvv - huv*huv;
+            if det.abs() < 1e-14 { break; }
+            let mut du = -(hvv*gu - huv*gv) / det;
+            let mut dv = -(-huv*gu + huu*gv) / det;
+
+            if du.abs() > (u1 - u0) * 0.5 { du = du.signum() * (u1 - u0) * 0.5; }
+            if dv.abs() > (v1 - v0) * 0.5 { dv = dv.signum() * (v1 - v0) * 0.5; }
+
+            u = (u + du).clamp(u0, u1);
+            v = (v + dv).clamp(v0, v1);
+            if du.abs().max(dv.abs()) < 1e-13 { break; }
+        }
+
+        let dist = curve0.point_at(u).distance(&curve1.point_at(v), None);
+        (u, v, dist)
     }
 
     /// Find closest point on line to test point.
