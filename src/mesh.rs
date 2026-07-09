@@ -1655,7 +1655,7 @@ impl Mesh {
 
             if is_new_edge {
                 self.halfedge.get_mut(&v).unwrap().insert(u, None);
-                self.linecolors.push(Color::white());
+                self.linecolors.push(Color::black());
                 self.widths.push(1.0);
             }
         }
@@ -2171,6 +2171,16 @@ impl Mesh {
         normals
     }
 
+    pub fn compute_vertex_normals(&mut self) {
+        let normals = self.vertex_normals();
+        for (key, n) in &normals {
+            if let Some(v) = self.vertex.get_mut(key) {
+                v.set_normal(n[0], n[1], n[2]);
+            }
+        }
+        self.invalidate_gpu();
+    }
+
     pub fn volume(&self) -> f64 {
         let mut total = 0.0;
         for (_, vkeys) in &self.face {
@@ -2229,8 +2239,8 @@ impl Mesh {
     // Transformation
     ///////////////////////////////////////////////////////////////////////////////////////////
 
-    pub fn transform(&mut self, xf: Option<&Xform>) {
-        let xform = match xf {
+    pub fn transform<'a>(&mut self, xf: impl Into<Option<&'a Xform>>) {
+        let xform = match xf.into() {
             Some(x) => x.clone(),
             None => self.xform.clone(),
         };
@@ -2245,9 +2255,9 @@ impl Mesh {
         self.invalidate_triangle_bvh();
     }
 
-    pub fn transformed(&self, xf: Option<&Xform>) -> Self {
+    pub fn transformed<'a>(&self, xf: impl Into<Option<&'a Xform>>) -> Self {
         let mut result = self.clone();
-        result.transform(xf);
+        result.transform(xf.into());
         result
     }
 

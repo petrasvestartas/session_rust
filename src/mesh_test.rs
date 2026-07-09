@@ -1147,7 +1147,7 @@ pub fn run_mesh_geometric_properties() -> TestResult {
         use crate::Vector;
         use crate::mesh::NormalWeighting;
 
-        let mesh = Mesh::create_dodecahedron(1.5);
+        let mut mesh = Mesh::create_dodecahedron(1.5);
 
         // area
         let area = mesh.area();
@@ -1278,6 +1278,12 @@ pub fn run_mesh_geometric_properties() -> TestResult {
         MINI_CHECK!(TOLERANCE.is_vector_close(&vertex_normals_weighted[&18], &Vector::new(-0.9341723589627158,  0.0,                -0.3568220897730899)));
         MINI_CHECK!(TOLERANCE.is_vector_close(&vertex_normals_weighted[&19], &Vector::new(-0.9341723589627158,  0.0,                 0.3568220897730899)));
 
+        // compute vertex normals
+        mesh.compute_vertex_normals();
+        for v in mesh.vertices() {
+            let stored = mesh.vertex[&v].normal().unwrap();
+            MINI_CHECK!(TOLERANCE.is_vector_close(&Vector::new(stored[0], stored[1], stored[2]), &vertex_normals[&v]));
+        }
 
         // volume
         let volume = mesh.volume();

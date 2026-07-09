@@ -15,6 +15,8 @@
 
 use bytemuck::{Pod, Zeroable};
 use crate::mesh::Mesh;
+use crate::point::Point;
+use crate::color::Color;
 
 /// One interleaved GPU vertex: position + normal + linear RGBA color, all f32,
 /// tightly packed. Mirror this layout in the viewer's `wgpu::VertexBufferLayout`
@@ -123,6 +125,15 @@ impl Mesh {
         RenderMesh { vertices, indices }
     }
 
+    /// The mesh's representative edge color for rendering: the first stored line
+    /// color, or [`Color::black`] if the mesh has no edges. Every edge shares the
+    /// same default today (`add_face` seeds `Color::black()`), so one sample is
+    /// exact; genuine per-edge colors wait for the first-class edge path, which
+    /// needs edge↔`linecolors` index alignment that `edges()` doesn't yet promise.
+    pub fn edge_color(&self) -> Color {
+        self.get_linecolors().first().cloned().unwrap_or_else(Color::black)
+    }
+
     /// Drop the cached GPU buffers so the next `gpu_mesh()` rebuilds them. Called
     /// automatically on geometry edits (via `invalidate_triangle_bvh`) and color
     /// changes; call manually if you mutate render-affecting state another way.
@@ -161,6 +172,20 @@ impl Mesh {
 impl RenderVertex {
     const ATTRIBS: [wgpu::VertexAttribute; 3] =
         wgpu::vertex_attr_array![0 => Float32x3, 1 => Float32x3, 2 => Float32x4];
+
+    /// Build a vertex from a kernel [`Point`] and [`Color`], with a zero normal. The
+    /// f64→f32 position cast and the `Color`→`[f32; 4]` unpack both happen here — the
+    /// correct precision/format boundary — so callers pass kernel types straight in
+    /// and never sprinkle `as f32` or `[c.r, c.g, c.b, c.a]` at every use site. Handy
+    /// for unlit line/edge geometry (the shader ignores the normal); for lit surfaces
+    /// set the normal too.
+    pub fn point(p: Point, color: &Color) -> Self {
+        Self {
+            position: [p[0] as f32, p[1] as f32, p[2] as f32],
+            normal: [0.0; 3],
+            color: [color.r, color.g, color.b, color.a],
+        }
+    }
 
     /// The `wgpu::VertexBufferLayout` a mesh pipeline must declare — mirrors this
     /// struct (pos f32x3 @0, normal f32x3 @12, color f32x4 @24, stride 40). The
