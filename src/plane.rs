@@ -916,6 +916,26 @@ impl Plane {
         let json = std::fs::read_to_string(filepath)?;
         Self::jsonload(&json)
     }
+
+    ///////////////////////////////////////////////////////////////////////////////////////////
+    // WGPU
+    ///////////////////////////////////////////////////////////////////////////////////////////
+
+    /// GPU-ready `[f32; 16]` frame matrix, column-major to match [`crate::Xform::to_f32`]:
+    /// columns are x_axis, y_axis, z_axis, then origin (translation). Upload as a model /
+    /// basis mat4 for grid, gumball, and section planes. Kernel stays f64.
+    pub fn to_f32(&self) -> [f32; 16] {
+        let x = &self._x_axis;
+        let y = &self._y_axis;
+        let z = &self._z_axis;
+        let o = &self._origin;
+        [
+            x[0] as f32, x[1] as f32, x[2] as f32, 0.0,
+            y[0] as f32, y[1] as f32, y[2] as f32, 0.0,
+            z[0] as f32, z[1] as f32, z[2] as f32, 0.0,
+            o[0] as f32, o[1] as f32, o[2] as f32, 1.0,
+        ]
+    }
 }
 
 // Protobuf serialization (requires "protobuf" feature)

@@ -588,6 +588,17 @@ impl Point {
         }
         cos_t.acos() * (180.0 / 3.141592653589793)
     }
+
+    ///////////////////////////////////////////////////////////////////////////////////////////
+    // WGPU
+    ///////////////////////////////////////////////////////////////////////////////////////////
+
+    /// GPU-ready `[x, y, z]` as f32 — the f64→f32 boundary for wgpu upload
+    /// (vertex / instance / segment rows). Mirrors [`crate::Xform::to_f32`]: the kernel
+    /// keeps f64, this casts only at the point of upload.
+    pub fn to_f32(&self) -> [f32; 3] {
+        [self._x as f32, self._y as f32, self._z as f32]
+    }
 }
 
 impl fmt::Display for Point {

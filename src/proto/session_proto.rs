@@ -634,6 +634,28 @@ pub struct Graph {
     #[prost(int32, tag = "6")]
     pub edge_count: i32,
 }
+/// InstanceRef message: a block reference that places a definition by a transform
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct InstanceRef {
+    /// Unique identifier
+    #[prost(string, tag = "1")]
+    pub guid: ::prost::alloc::string::String,
+    /// Instance name
+    #[prost(string, tag = "2")]
+    pub name: ::prost::alloc::string::String,
+    /// Guid of the definition this instance places
+    #[prost(string, tag = "3")]
+    pub definition_guid: ::prost::alloc::string::String,
+    /// Placement transform (the only per-instance data)
+    #[prost(message, optional, tag = "4")]
+    pub xform: ::core::option::Option<Xform>,
+    /// Per-instance color override
+    #[prost(message, optional, tag = "5")]
+    pub color: ::core::option::Option<Color>,
+    /// Reserved: selection / cull / visibility
+    #[prost(uint32, tag = "6")]
+    pub flags: u32,
+}
 /// Line message representing a line segment
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct Line {

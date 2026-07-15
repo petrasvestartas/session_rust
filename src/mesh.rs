@@ -1321,6 +1321,34 @@ impl Mesh {
         result
     }
 
+    /// Edges paired with their stored line color, walked in the SAME order `add_face`
+    /// seeded `linecolors` (first-discovery during face traversal) — so color N belongs
+    /// to edge N. `edges()` sorts `(u < v)` and therefore does NOT align with `linecolors`;
+    /// this walk does. Robust for meshes built face-by-face; note that `remove_face`
+    /// truncates `linecolors` from the end, so a mesh edited by face removal can desync
+    /// (rebuild the colors after structural edits).
+    pub fn edges_with_colors(&self) -> Vec<(usize, usize, Color)> {
+        let mut seen: HashSet<(usize, usize)> = HashSet::new();
+        let mut out: Vec<(usize, usize, Color)> = Vec::new();
+        let mut ci = 0usize;
+        let mut fkeys: Vec<usize> = self.face.keys().copied().collect();
+        fkeys.sort_unstable();
+        for fk in fkeys {
+            let vs = &self.face[&fk];
+            for i in 0..vs.len() {
+                let u = vs[i];
+                let v = vs[(i + 1) % vs.len()];
+                let e = if u < v { (u, v) } else { (v, u) };
+                if seen.insert(e) {
+                    let c = self.linecolors.get(ci).cloned().unwrap_or_else(Color::black);
+                    out.push((e.0, e.1, c));
+                    ci += 1;
+                }
+            }
+        }
+        out
+    }
+
     pub fn naked_vertices(&self, boundary: bool) -> Vec<usize> {
         let mut keys: Vec<usize> = self.vertex.keys().cloned().collect();
         keys.sort();

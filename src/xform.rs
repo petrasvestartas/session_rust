@@ -78,12 +78,6 @@ impl Xform {
         }
     }
 
-    /// The 16 matrix elements as f32, same column-major order as `m` — ready to upload
-    /// to a GPU uniform (`bytemuck::cast_slice(&xform.to_f32())`).
-    pub fn to_f32(&self) -> [f32; 16] {
-        std::array::from_fn(|i| self.m[i] as f32)
-    }
-
     pub fn identity() -> Self {
         use std::sync::OnceLock;
         static IDENTITY: OnceLock<Xform> = OnceLock::new();
@@ -992,6 +986,16 @@ impl Xform {
         let mut copy = Self::from_matrix(self.m);
         copy.name = self.name.clone();
         copy
+    }
+
+    ///////////////////////////////////////////////////////////////////////////////////////////
+    // WGPU
+    ///////////////////////////////////////////////////////////////////////////////////////////
+
+    /// The 16 matrix elements as f32, same column-major order as `m` — ready to upload
+    /// to a GPU uniform (`bytemuck::cast_slice(&xform.to_f32())`).
+    pub fn to_f32(&self) -> [f32; 16] {
+        std::array::from_fn(|i| self.m[i] as f32)
     }
 }
 

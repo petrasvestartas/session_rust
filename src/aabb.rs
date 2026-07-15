@@ -324,4 +324,14 @@ impl AABB {
             hz: (max_z - min_z) * 0.5,
         }
     }
+
+    ///////////////////////////////////////////////////////////////////////////////////////////
+    // WGPU
+    ///////////////////////////////////////////////////////////////////////////////////////////
+
+    /// The 8 box corners as f32 `[x, y, z]` rows — ready for a wireframe-box vertex/segment
+    /// buffer. Same winding as [`corners`](Self::corners); the kernel keeps f64.
+    pub fn corners_f32(&self) -> [[f32; 3]; 8] {
+        self.corners().map(|p| p.to_f32())
+    }
 }

@@ -379,6 +379,23 @@ impl Color {
     pub fn from_float(r: f32, g: f32, b: f32, a: f32) -> Self {
         Color::new(r, g, b, a)
     }
+
+    ///////////////////////////////////////////////////////////////////////////////////////////
+    // WGPU
+    ///////////////////////////////////////////////////////////////////////////////////////////
+
+    /// GPU-ready `[r, g, b, a]` as f32 — the color→GPU boundary for wgpu upload
+    /// (`bytemuck::cast_slice`, instance/segment rows). Mirrors [`crate::Xform::to_f32`].
+    /// Components are already f32, so this just drops the guid/name and packs the four.
+    pub fn to_f32(&self) -> [f32; 4] {
+        [self.r, self.g, self.b, self.a]
+    }
+
+    /// GPU-ready `[r, g, b]` as f32 — the opaque RGB prefix (drops alpha), for shaders
+    /// that light a `vec3` base color.
+    pub fn to_rgb(&self) -> [f32; 3] {
+        [self.r, self.g, self.b]
+    }
 }
 
 impl Default for Color {

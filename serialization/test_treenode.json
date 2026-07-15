@@ -2,12 +2,12 @@
     "children": [
         {
             "children": [],
-            "guid": "e6b94244-f7e7-439d-92b6-916bc8e9df2a",
+            "guid": "a2324936-98e5-47a9-852f-eda4ccf01189",
             "name": "child_node",
             "type": "TreeNode"
         }
     ],
-    "guid": "7f5fd324-a784-4e3c-bc5b-5a107d2e8708",
+    "guid": "115544bb-a69e-4428-8735-288efdc9ffe4",
     "name": "test_node",
     "type": "TreeNode"
 }

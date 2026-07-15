@@ -1065,6 +1065,16 @@ impl Vector {
         let data = std::fs::read(filepath).expect("Failed to read protobuf file");
         Self::pb_loads(&data).expect("Failed to parse protobuf")
     }
+
+    ///////////////////////////////////////////////////////////////////////////////////////////
+    // WGPU
+    ///////////////////////////////////////////////////////////////////////////////////////////
+
+    /// GPU-ready `[x, y, z]` as f32 — the f64→f32 boundary for wgpu upload (normals,
+    /// directions, axis rows). Mirrors [`crate::Point::to_f32`]; the kernel keeps f64.
+    pub fn to_f32(&self) -> [f32; 3] {
+        [self._x as f32, self._y as f32, self._z as f32]
+    }
 }
 
 impl PartialEq for Vector {

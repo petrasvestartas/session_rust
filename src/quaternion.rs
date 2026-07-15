@@ -468,6 +468,21 @@ impl Quaternion {
         let data = std::fs::read(filepath).expect("Failed to read protobuf file");
         Self::pb_loads(&data).expect("Failed to parse protobuf")
     }
+
+    ///////////////////////////////////////////////////////////////////////////////////////////
+    // WGPU
+    ///////////////////////////////////////////////////////////////////////////////////////////
+
+    /// GPU-ready `[x, y, z, w]` as f32 — the standard xyzw quaternion layout for GPU
+    /// upload (camera / orientation rows). Mirrors [`crate::Xform::to_f32`]; kernel stays f64.
+    pub fn to_f32(&self) -> [f32; 4] {
+        [
+            self.vector[0] as f32,
+            self.vector[1] as f32,
+            self.vector[2] as f32,
+            self.scalar as f32,
+        ]
+    }
 }
 
 impl Index<usize> for Quaternion {

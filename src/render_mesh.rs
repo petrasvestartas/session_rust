@@ -181,9 +181,9 @@ impl RenderVertex {
     /// set the normal too.
     pub fn point(p: Point, color: &Color) -> Self {
         Self {
-            position: [p[0] as f32, p[1] as f32, p[2] as f32],
+            position: p.to_f32(),
             normal: [0.0; 3],
-            color: [color.r, color.g, color.b, color.a],
+            color: color.to_f32(),
         }
     }
 
