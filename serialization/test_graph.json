@@ -3,7 +3,7 @@
     "edges": [
         {
             "attribute": "edge1",
-            "guid": "29785188-0234-46fb-a546-7e4315ee9964",
+            "guid": "e2e2dbe6-3a05-4c8a-aa29-b3e0fce6688f",
             "index": 0,
             "name": "my_edge",
             "type": "Edge",
@@ -11,21 +11,21 @@
             "v1": "node2"
         }
     ],
-    "guid": "b0edc709-ae8b-4e1e-8b9d-a79d0ff7db36",
+    "guid": "b9c6435b-a8ff-477d-b99e-c750681acd7c",
     "name": "test_graph",
     "type": "Graph",
     "vertex_count": 2,
     "vertices": [
         {
             "attribute": "Node 1",
-            "guid": "4f342146-90b0-45d8-bcf0-ce62ec842fdd",
+            "guid": "670ee74d-1b0b-404c-91f2-44beb89b815f",
             "index": 0,
             "name": "node1",
             "type": "Vertex"
         },
         {
             "attribute": "Node 2",
-            "guid": "38feae0b-9193-465c-9e29-6b0ea1f26f15",
+            "guid": "318c727a-20aa-47f9-994e-02fa9efd5f4c",
             "index": 1,
             "name": "node2",
             "type": "Vertex"

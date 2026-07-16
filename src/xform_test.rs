@@ -490,6 +490,46 @@ pub fn run_xform_inverse() -> TestResult {
     })
 }
 
+pub fn run_xform_transform_point() -> TestResult {
+    MINI_TEST!("Transform Point", {
+        use crate::Xform;
+        use crate::Point;
+
+        let t = Xform::translation(10.0, 20.0, 30.0);
+        let s = Xform::scale_xyz(2.0, 3.0, 4.0);
+        let composite = &t * &s;
+        let p = composite.transform_point(&Point::new(1.0, 1.0, 1.0));
+        MINI_CHECK!(TOLERANCE.is_point_close(&p, &Point::new(12.0, 23.0, 34.0)));
+
+        let mut pr = Xform::identity();
+        pr.m[0] = 1.2;
+        pr.m[5] = 0.8;
+        pr.m[10] = 1.1;
+        pr.m[14] = 0.5;
+        pr.m[11] = -1.0;
+        pr.m[15] = 0.0;
+        let q = pr.transform_point(&Point::new(1.0, 1.0, 2.0));
+        MINI_CHECK!(TOLERANCE.is_point_close(&q, &Point::new(-0.6, -0.4, -1.35)));
+    })
+}
+
+pub fn run_xform_transform_vector() -> TestResult {
+    MINI_TEST!("Transform Vector", {
+        use crate::Xform;
+        use crate::Vector;
+
+        let t = Xform::translation(10.0, 20.0, 30.0);
+        let s = Xform::scale_xyz(2.0, 3.0, 4.0);
+        let composite = &t * &s;
+        let v = composite.transform_vector(&Vector::new(1.0, 1.0, 1.0));
+        MINI_CHECK!(TOLERANCE.is_vector_close(&v, &Vector::new(2.0, 3.0, 4.0)));
+
+        let r = Xform::rotation_z(90.0, true);
+        let u = r.transform_vector(&Vector::x_axis());
+        MINI_CHECK!(TOLERANCE.is_vector_close(&u, &Vector::y_axis()));
+    })
+}
+
 pub fn run_xform_to_cols() -> TestResult {
     MINI_TEST!("To Cols", {
         use crate::Xform;
@@ -630,6 +670,8 @@ REGISTER_MINI_TEST!("Xform", "Orthographic", crate::xform_test::run_xform_orthog
 REGISTER_MINI_TEST!("Xform", "Project To Plane", crate::xform_test::run_xform_project_to_plane);
 REGISTER_MINI_TEST!("Xform", "Project To Plane By Axis", crate::xform_test::run_xform_project_to_plane_by_axis);
 REGISTER_MINI_TEST!("Xform", "Inverse", crate::xform_test::run_xform_inverse);
+REGISTER_MINI_TEST!("Xform", "Transform Point", crate::xform_test::run_xform_transform_point);
+REGISTER_MINI_TEST!("Xform", "Transform Vector", crate::xform_test::run_xform_transform_vector);
 REGISTER_MINI_TEST!("Xform", "To Cols", crate::xform_test::run_xform_to_cols);
 REGISTER_MINI_TEST!("Xform", "Transform Geometry", crate::xform_test::run_xform_transform_geometry);
 REGISTER_MINI_TEST!("Xform", "Json Roundtrip", crate::xform_test::run_xform_json_roundtrip);

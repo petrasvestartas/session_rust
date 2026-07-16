@@ -1,5 +1,6 @@
 use crate::{MINI_CHECK, MINI_TEST, REGISTER_MINI_TEST};
 use crate::mini_test::TestResult;
+use crate::tolerance::TOLERANCE;
 use crate::tolerance::PI;
 
 pub fn run_session_constructor() -> TestResult {
@@ -112,6 +113,44 @@ pub fn run_session_add_mesh() -> TestResult {
         session.add_mesh(mesh, None);
 
         MINI_CHECK!(session.objects.meshes.len() == 1);
+        MINI_CHECK!(session.lookup.contains_key(&guid));
+    })
+}
+
+pub fn run_session_add_nurbscurve() -> TestResult {
+    MINI_TEST!("Add Nurbscurve", {
+        use crate::{Session, NurbsCurve, Point};
+        let mut session = Session::default();
+        let pts = vec![
+            Point::new(0.0, 0.0, 0.0),
+            Point::new(1.0, 1.0, 0.0),
+            Point::new(2.0, 0.0, 0.0),
+            Point::new(3.0, 1.0, 0.0),
+        ];
+        let nc = NurbsCurve::create(false, 2, &pts);
+        let guid = nc.guid().to_string();
+        session.add_nurbscurve(nc, None);
+
+        MINI_CHECK!(session.objects.nurbscurves.len() == 1);
+        MINI_CHECK!(session.lookup.contains_key(&guid));
+    })
+}
+
+pub fn run_session_add_nurbssurface() -> TestResult {
+    MINI_TEST!("Add Nurbssurface", {
+        use crate::{Session, NurbsSurface, Point};
+        let mut session = Session::default();
+        let pts = vec![
+            Point::new(0.0, 0.0, 0.0), Point::new(0.0, 1.0, 0.0), Point::new(0.0, 2.0, 0.0), Point::new(0.0, 3.0, 0.0),
+            Point::new(1.0, 0.0, 0.0), Point::new(1.0, 1.0, 0.0), Point::new(1.0, 2.0, 0.0), Point::new(1.0, 3.0, 0.0),
+            Point::new(2.0, 0.0, 0.0), Point::new(2.0, 1.0, 0.0), Point::new(2.0, 2.0, 0.0), Point::new(2.0, 3.0, 0.0),
+            Point::new(3.0, 0.0, 0.0), Point::new(3.0, 1.0, 0.0), Point::new(3.0, 2.0, 0.0), Point::new(3.0, 3.0, 0.0),
+        ];
+        let ns = NurbsSurface::create(false, false, 3, 3, 4, 4, &pts).unwrap();
+        let guid = ns.guid().to_string();
+        session.add_nurbssurface(ns, None);
+
+        MINI_CHECK!(session.objects.nurbssurfaces.len() == 1);
         MINI_CHECK!(session.lookup.contains_key(&guid));
     })
 }
@@ -274,7 +313,7 @@ pub fn run_session_get_collisions() -> TestResult {
 
 pub fn run_session_ray_cast() -> TestResult {
     MINI_TEST!("Ray Cast", {
-        use crate::{Session, Mesh, Point, Vector};
+        use crate::{Session, Mesh, Point, Vector, Xform};
         let mut session = Session::default();
         let mut mesh = Mesh::new();
         let v0 = mesh.add_vertex(Point::new(-1.0, -1.0, 0.0), None);
@@ -285,6 +324,18 @@ pub fn run_session_ray_cast() -> TestResult {
         let hits = session.ray_cast(&Point::new(0.0, 0.0, 2.0), &Vector::new(0.0, 0.0, -1.0), 1e-3);
 
         MINI_CHECK!(hits.len() >= 1);
+
+        let mut placed = Mesh::new();
+        let p0 = placed.add_vertex(Point::new(-1.0, -1.0, 0.0), None);
+        let p1 = placed.add_vertex(Point::new(1.0, -1.0, 0.0), None);
+        let p2 = placed.add_vertex(Point::new(0.0, 1.0, 0.0), None);
+        placed.add_face(vec![p0, p1, p2], None);
+        placed.xform = Xform::translation(100.0, 0.0, 0.0);
+        session.add_mesh(placed, None);
+        let hits2 = session.ray_cast(&Point::new(100.0, 0.0, 2.0), &Vector::new(0.0, 0.0, -1.0), 1e-3);
+
+        MINI_CHECK!(hits2.len() >= 1);
+        MINI_CHECK!(TOLERANCE.is_close(hits2[0].point[0], 100.0));
     })
 }
 
@@ -526,6 +577,8 @@ REGISTER_MINI_TEST!("Session", "Add OBB", crate::session_test::run_session_add_o
 REGISTER_MINI_TEST!("Session", "Add Polyline", crate::session_test::run_session_add_polyline);
 REGISTER_MINI_TEST!("Session", "Add Pointcloud", crate::session_test::run_session_add_pointcloud);
 REGISTER_MINI_TEST!("Session", "Add Mesh", crate::session_test::run_session_add_mesh);
+REGISTER_MINI_TEST!("Session", "Add Nurbscurve", crate::session_test::run_session_add_nurbscurve);
+REGISTER_MINI_TEST!("Session", "Add Nurbssurface", crate::session_test::run_session_add_nurbssurface);
 REGISTER_MINI_TEST!("Session", "Add Brep", crate::session_test::run_session_add_brep);
 REGISTER_MINI_TEST!("Session", "Add Element", crate::session_test::run_session_add_element);
 REGISTER_MINI_TEST!("Session", "Add Group", crate::session_test::run_session_add_group);

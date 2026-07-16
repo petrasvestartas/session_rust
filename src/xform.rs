@@ -374,6 +374,24 @@ impl Xform {
     // Apply Transformations
     ///////////////////////////////////////////////////////////////////////////////////////////
 
+    pub fn transform_point(&self, p: &Point) -> Point {
+        let x = self.m[0] * p[0] + self.m[4] * p[1] + self.m[8] * p[2] + self.m[12];
+        let y = self.m[1] * p[0] + self.m[5] * p[1] + self.m[9] * p[2] + self.m[13];
+        let z = self.m[2] * p[0] + self.m[6] * p[1] + self.m[10] * p[2] + self.m[14];
+        let w = self.m[3] * p[0] + self.m[7] * p[1] + self.m[11] * p[2] + self.m[15];
+        if w.abs() < 1e-12 {
+            return Point::new(x, y, z);
+        }
+        Point::new(x / w, y / w, z / w)
+    }
+
+    pub fn transform_vector(&self, v: &Vector) -> Vector {
+        let x = self.m[0] * v[0] + self.m[4] * v[1] + self.m[8] * v[2];
+        let y = self.m[1] * v[0] + self.m[5] * v[1] + self.m[9] * v[2];
+        let z = self.m[2] * v[0] + self.m[6] * v[1] + self.m[10] * v[2];
+        Vector::new(x, y, z)
+    }
+
     pub fn x(&self) -> Vector {
         Vector::new(self.m[0], self.m[1], self.m[2])
     }

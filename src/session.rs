@@ -1,6 +1,6 @@
 use crate::{
-    AABB, BRep, Element, OBB, Graph, Line, Mesh, Objects, Plane, Point, PointCloud, Polyline,
-    Tolerance, Tree, TreeNode, SpatialBVH,
+    AABB, BRep, Element, OBB, Graph, Line, Mesh, NurbsCurve, NurbsSurface, Objects, Plane, Point,
+    PointCloud, Polyline, Tolerance, Tree, TreeNode, SpatialBVH,
 };
 use serde::{Deserialize, Serialize};
 use std::cell::RefCell;
@@ -18,6 +18,8 @@ pub enum Geometry {
     Element(Element),
     Line(Line),
     Mesh(Mesh),
+    NurbsCurve(NurbsCurve),
+    NurbsSurface(NurbsSurface),
     Plane(Plane),
     Point(Point),
     PointCloud(PointCloud),
@@ -33,6 +35,8 @@ impl Geometry {
             Geometry::Element(g) => g.guid(),
             Geometry::Line(g) => g.guid(),
             Geometry::Mesh(g) => g.guid(),
+            Geometry::NurbsCurve(g) => g.guid(),
+            Geometry::NurbsSurface(g) => g.guid(),
             Geometry::Plane(g) => g.guid(),
             Geometry::Point(g) => g.guid(),
             Geometry::PointCloud(g) => g.guid(),
@@ -219,6 +223,12 @@ impl Session {
         }
         for polyline in &objects.polylines {
             lookup.insert(polyline.guid().to_string(), Geometry::Polyline(polyline.clone()));
+        }
+        for nurbscurve in &objects.nurbscurves {
+            lookup.insert(nurbscurve.guid().to_string(), Geometry::NurbsCurve(nurbscurve.clone()));
+        }
+        for nurbssurface in &objects.nurbssurfaces {
+            lookup.insert(nurbssurface.guid().to_string(), Geometry::NurbsSurface(nurbssurface.clone()));
         }
         for brep in &objects.breps {
             lookup.insert(brep.guid().to_string(), Geometry::BRep(brep.clone()));
@@ -468,6 +478,12 @@ impl Session {
         for polyline in &session.objects.polylines {
             session.lookup.insert(polyline.guid().to_string(), Geometry::Polyline(polyline.clone()));
         }
+        for nurbscurve in &session.objects.nurbscurves {
+            session.lookup.insert(nurbscurve.guid().to_string(), Geometry::NurbsCurve(nurbscurve.clone()));
+        }
+        for nurbssurface in &session.objects.nurbssurfaces {
+            session.lookup.insert(nurbssurface.guid().to_string(), Geometry::NurbsSurface(nurbssurface.clone()));
+        }
         for brep in &session.objects.breps {
             session.lookup.insert(brep.guid().to_string(), Geometry::BRep(brep.clone()));
         }
@@ -500,11 +516,11 @@ impl Session {
             Geometry::Polyline(pl) => OBB::from_points(&pl.get_points(), inflate),
             Geometry::PointCloud(pc) => OBB::from_points(&pc.get_points(), inflate),
             Geometry::Mesh(m) => {
-                // Extract vertices from mesh vertex data
+                // Extract vertices from mesh vertex data; xform is the placement, so bake it
                 let points: Vec<Point> = m
                     .vertex
                     .values()
-                    .map(|v| Point::new(v.x, v.y, v.z))
+                    .map(|v| m.xform.transform_point(&Point::new(v.x, v.y, v.z)))
                     .collect();
                 if points.is_empty() {
                     OBB::from_point(Point::new(0.0, 0.0, 0.0), inflate)
@@ -526,14 +542,7 @@ impl Session {
                 OBB::from_point(p.origin(), inflate * 10.0)
             }
             Geometry::BRep(b) => {
-                let xf = b.xform.to_cols();
-                let tp = |p: &Point| -> Point {
-                    Point::new(
-                        xf[0][0]*p[0] + xf[1][0]*p[1] + xf[2][0]*p[2] + xf[3][0],
-                        xf[0][1]*p[0] + xf[1][1]*p[1] + xf[2][1]*p[2] + xf[3][1],
-                        xf[0][2]*p[0] + xf[1][2]*p[1] + xf[2][2]*p[2] + xf[3][2],
-                    )
-                };
+                let tp = |p: &Point| -> Point { b.xform.transform_point(p) };
                 let mut points: Vec<Point> = b.m_vertices.iter().map(|p| tp(p)).collect();
                 // Sample surface points to cover curved surfaces (e.g. sphere with only pole vertices)
                 for srf in &b.m_surfaces {
@@ -546,6 +555,34 @@ impl Session {
                                     points.push(tp(&p));
                                 }
                             }
+                        }
+                    }
+                }
+                if points.is_empty() {
+                    OBB::from_point(Point::new(0.0, 0.0, 0.0), inflate)
+                } else {
+                    OBB::from_points(&points, inflate)
+                }
+            }
+            Geometry::NurbsCurve(c) => {
+                let mut points: Vec<Point> = Vec::new();
+                for i in 0..c.cv_count() {
+                    if let Some(p) = c.get_cv(i) {
+                        points.push(p);
+                    }
+                }
+                if points.is_empty() {
+                    OBB::from_point(Point::new(0.0, 0.0, 0.0), inflate)
+                } else {
+                    OBB::from_points(&points, inflate)
+                }
+            }
+            Geometry::NurbsSurface(s) => {
+                let mut points: Vec<Point> = Vec::new();
+                for i in 0..s.cv_count_dir(Some(0)) {
+                    for j in 0..s.cv_count_dir(Some(1)) {
+                        if let Some(p) = s.get_cv(i, j) {
+                            points.push(p);
                         }
                     }
                 }
@@ -756,8 +793,15 @@ impl Session {
                     }
                 }
                 Geometry::Mesh(m) => {
-                    if let Some(p) = m.ray_cast_bvh(&ray_line, 1e-6) {
-                        hit_point = Some(p);
+                    // xform is the placement: cast in the mesh's LOCAL frame, return a WORLD hit
+                    if let Some(inv) = m.xform.inverse() {
+                        let local_ray = Line::from_points(
+                            &inv.transform_point(&ray_line.start()),
+                            &inv.transform_point(&ray_line.end()),
+                        );
+                        if let Some(p) = m.ray_cast_bvh(&local_ray, 1e-6) {
+                            hit_point = Some(m.xform.transform_point(&p));
+                        }
                     }
                 }
                 Geometry::Point(p) => {
@@ -812,6 +856,12 @@ impl Session {
                     // BRep tessellation is expensive (re-tessellates every call).
                     // Viewers must use pre-cached tessellations with pre-built BVH.
                     // hit_point stays None — callers handle BReps separately.
+                }
+                Geometry::NurbsCurve(_) => {
+                    // Exact ray-curve intersection is out of scope; viewers pick via sampled polylines.
+                }
+                Geometry::NurbsSurface(_) => {
+                    // Exact ray-surface intersection is out of scope; viewers pick via cached tessellations.
                 }
                 Geometry::Element(_) => {}
             }
@@ -980,6 +1030,36 @@ impl Session {
         node
     }
 
+    pub fn add_nurbscurve(&mut self, nurbscurve: NurbsCurve, parent: Option<&Rc<RefCell<TreeNode>>>) -> Rc<RefCell<TreeNode>> {
+        let guid = nurbscurve.guid().to_string();
+        let name = nurbscurve.name.clone();
+        let geometry = Geometry::NurbsCurve(nurbscurve.clone());
+        self.objects.nurbscurves.push(nurbscurve);
+        self.lookup.insert(guid.clone(), geometry);
+        if let Some(Geometry::NurbsCurve(c)) = self.lookup.get(&guid) {
+            self.cache_geometry_aabb(&guid, &Geometry::NurbsCurve(c.clone()));
+        }
+        self.graph.add_node(&guid, &format!("nurbscurve_{name}"));
+        let node = TreeNode::new(&guid);
+        if let Some(p) = parent { self.tree.add(&node, Some(p)); }
+        node
+    }
+
+    pub fn add_nurbssurface(&mut self, nurbssurface: NurbsSurface, parent: Option<&Rc<RefCell<TreeNode>>>) -> Rc<RefCell<TreeNode>> {
+        let guid = nurbssurface.guid().to_string();
+        let name = nurbssurface.name.clone();
+        let geometry = Geometry::NurbsSurface(nurbssurface.clone());
+        self.objects.nurbssurfaces.push(nurbssurface);
+        self.lookup.insert(guid.clone(), geometry);
+        if let Some(Geometry::NurbsSurface(s)) = self.lookup.get(&guid) {
+            self.cache_geometry_aabb(&guid, &Geometry::NurbsSurface(s.clone()));
+        }
+        self.graph.add_node(&guid, &format!("nurbssurface_{name}"));
+        let node = TreeNode::new(&guid);
+        if let Some(p) = parent { self.tree.add(&node, Some(p)); }
+        node
+    }
+
     pub fn add_brep(&mut self, brep: BRep, parent: Option<&Rc<RefCell<TreeNode>>>) -> Rc<RefCell<TreeNode>> {
         let guid = brep.guid().to_string();
         let name = brep.name.clone();
@@ -1143,6 +1223,8 @@ impl Session {
         self.objects.bboxes.retain(|b| b.guid() != guid);
         self.objects.meshes.retain(|m| m.guid() != guid);
         self.objects.pointclouds.retain(|p| p.guid() != guid);
+        self.objects.nurbscurves.retain(|c| c.guid() != guid);
+        self.objects.nurbssurfaces.retain(|s| s.guid() != guid);
         self.objects.breps.retain(|b| b.guid() != guid);
 
         // Remove from lookup table
@@ -1260,6 +1342,12 @@ impl Session {
         for mesh in &transformed_objects.meshes {
             transformed_lookup.insert(mesh.guid().to_string(), Geometry::Mesh(mesh.clone()));
         }
+        for nurbscurve in &transformed_objects.nurbscurves {
+            transformed_lookup.insert(nurbscurve.guid().to_string(), Geometry::NurbsCurve(nurbscurve.clone()));
+        }
+        for nurbssurface in &transformed_objects.nurbssurfaces {
+            transformed_lookup.insert(nurbssurface.guid().to_string(), Geometry::NurbsSurface(nurbssurface.clone()));
+        }
         for brep in &transformed_objects.breps {
             transformed_lookup.insert(brep.guid().to_string(), Geometry::BRep(brep.clone()));
         }
@@ -1284,6 +1372,8 @@ impl Session {
                         Geometry::Polyline(g) => &g.xform,
                         Geometry::PointCloud(g) => &g.xform,
                         Geometry::Mesh(g) => &g.xform,
+                        Geometry::NurbsCurve(g) => &g.xform,
+                        Geometry::NurbsSurface(g) => &g.xform,
                         Geometry::BRep(g) => &g.xform,
                         Geometry::Element(g) => &g.session_transformation,
                     };
@@ -1322,6 +1412,24 @@ impl Session {
                             .bboxes
                             .iter_mut()
                             .find(|b| b.guid() == node_name)
+                        {
+                            g.xform = combined_xform.clone();
+                        }
+                    }
+                    Geometry::NurbsCurve(_) => {
+                        if let Some(g) = transformed_objects
+                            .nurbscurves
+                            .iter_mut()
+                            .find(|c| c.guid() == node_name)
+                        {
+                            g.xform = combined_xform.clone();
+                        }
+                    }
+                    Geometry::NurbsSurface(_) => {
+                        if let Some(g) = transformed_objects
+                            .nurbssurfaces
+                            .iter_mut()
+                            .find(|s| s.guid() == node_name)
                         {
                             g.xform = combined_xform.clone();
                         }
