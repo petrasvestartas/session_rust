@@ -333,53 +333,40 @@ impl Xform {
     ///////////////////////////////////////////////////////////////////////////////////////////
 
     pub fn inverse(&self) -> Option<Xform> {
-        let a00 = self[(0, 0)];
-        let a01 = self[(0, 1)];
-        let a02 = self[(0, 2)];
-        let a10 = self[(1, 0)];
-        let a11 = self[(1, 1)];
-        let a12 = self[(1, 2)];
-        let a20 = self[(2, 0)];
-        let a21 = self[(2, 1)];
-        let a22 = self[(2, 2)];
-
-        let det = a00 * (a11 * a22 - a12 * a21) - a01 * (a10 * a22 - a12 * a20)
-            + a02 * (a10 * a21 - a11 * a20);
+        let s0 = self.m[0] * self.m[5] - self.m[1] * self.m[4];
+        let s1 = self.m[0] * self.m[9] - self.m[1] * self.m[8];
+        let s2 = self.m[0] * self.m[13] - self.m[1] * self.m[12];
+        let s3 = self.m[4] * self.m[9] - self.m[5] * self.m[8];
+        let s4 = self.m[4] * self.m[13] - self.m[5] * self.m[12];
+        let s5 = self.m[8] * self.m[13] - self.m[9] * self.m[12];
+        let c5 = self.m[10] * self.m[15] - self.m[11] * self.m[14];
+        let c4 = self.m[6] * self.m[15] - self.m[7] * self.m[14];
+        let c3 = self.m[6] * self.m[11] - self.m[7] * self.m[10];
+        let c2 = self.m[2] * self.m[15] - self.m[3] * self.m[14];
+        let c1 = self.m[2] * self.m[11] - self.m[3] * self.m[10];
+        let c0 = self.m[2] * self.m[7] - self.m[3] * self.m[6];
+        let det = s0 * c5 - s1 * c4 + s2 * c3 + s3 * c2 - s4 * c1 + s5 * c0;
         if det.abs() < 1e-12 {
             return None;
         }
         let inv_det = 1.0 / det;
-
-        let m00 = (a11 * a22 - a12 * a21) * inv_det;
-        let m01 = (a02 * a21 - a01 * a22) * inv_det;
-        let m02 = (a01 * a12 - a02 * a11) * inv_det;
-        let m10 = (a12 * a20 - a10 * a22) * inv_det;
-        let m11 = (a00 * a22 - a02 * a20) * inv_det;
-        let m12 = (a02 * a10 - a00 * a12) * inv_det;
-        let m20 = (a10 * a21 - a11 * a20) * inv_det;
-        let m21 = (a01 * a20 - a00 * a21) * inv_det;
-        let m22 = (a00 * a11 - a01 * a10) * inv_det;
-
-        let tx = self[(0, 3)];
-        let ty = self[(1, 3)];
-        let tz = self[(2, 3)];
-        let itx = -(m00 * tx + m01 * ty + m02 * tz);
-        let ity = -(m10 * tx + m11 * ty + m12 * tz);
-        let itz = -(m20 * tx + m21 * ty + m22 * tz);
-
         let mut res = Xform::identity();
-        res[(0, 0)] = m00;
-        res[(0, 1)] = m01;
-        res[(0, 2)] = m02;
-        res[(1, 0)] = m10;
-        res[(1, 1)] = m11;
-        res[(1, 2)] = m12;
-        res[(2, 0)] = m20;
-        res[(2, 1)] = m21;
-        res[(2, 2)] = m22;
-        res[(0, 3)] = itx;
-        res[(1, 3)] = ity;
-        res[(2, 3)] = itz;
+        res.m[0] = (self.m[5] * c5 - self.m[9] * c4 + self.m[13] * c3) * inv_det;
+        res.m[4] = (-self.m[4] * c5 + self.m[8] * c4 - self.m[12] * c3) * inv_det;
+        res.m[8] = (self.m[7] * s5 - self.m[11] * s4 + self.m[15] * s3) * inv_det;
+        res.m[12] = (-self.m[6] * s5 + self.m[10] * s4 - self.m[14] * s3) * inv_det;
+        res.m[1] = (-self.m[1] * c5 + self.m[9] * c2 - self.m[13] * c1) * inv_det;
+        res.m[5] = (self.m[0] * c5 - self.m[8] * c2 + self.m[12] * c1) * inv_det;
+        res.m[9] = (-self.m[3] * s5 + self.m[11] * s2 - self.m[15] * s1) * inv_det;
+        res.m[13] = (self.m[2] * s5 - self.m[10] * s2 + self.m[14] * s1) * inv_det;
+        res.m[2] = (self.m[1] * c4 - self.m[5] * c2 + self.m[13] * c0) * inv_det;
+        res.m[6] = (-self.m[0] * c4 + self.m[4] * c2 - self.m[12] * c0) * inv_det;
+        res.m[10] = (self.m[3] * s4 - self.m[7] * s2 + self.m[15] * s0) * inv_det;
+        res.m[14] = (-self.m[2] * s4 + self.m[6] * s2 - self.m[14] * s0) * inv_det;
+        res.m[3] = (-self.m[1] * c3 + self.m[5] * c1 - self.m[9] * c0) * inv_det;
+        res.m[7] = (self.m[0] * c3 - self.m[4] * c1 + self.m[8] * c0) * inv_det;
+        res.m[11] = (-self.m[3] * s3 + self.m[7] * s1 - self.m[11] * s0) * inv_det;
+        res.m[15] = (self.m[2] * s3 - self.m[6] * s1 + self.m[10] * s0) * inv_det;
         Some(res)
     }
 

@@ -476,6 +476,17 @@ pub fn run_xform_inverse() -> TestResult {
         MINI_CHECK!(TOLERANCE.is_point_close(&roundtrip.vertex_point(5).unwrap(), &Point::new(1.0, -1.0, 1.0)));
         MINI_CHECK!(TOLERANCE.is_point_close(&roundtrip.vertex_point(6).unwrap(), &Point::new(1.0, 1.0, 1.0)));
         MINI_CHECK!(TOLERANCE.is_point_close(&roundtrip.vertex_point(7).unwrap(), &Point::new(-1.0, 1.0, 1.0)));
+
+        let mut p = Xform::identity();
+        p.m[0] = 1.2;
+        p.m[5] = 0.8;
+        p.m[10] = 1.1;
+        p.m[14] = 0.5;
+        p.m[11] = -1.0;
+        p.m[15] = 0.0;
+        let pinv = p.inverse().unwrap();
+        let prod = &p * &pinv;
+        MINI_CHECK!(prod.is_identity());
     })
 }
 
