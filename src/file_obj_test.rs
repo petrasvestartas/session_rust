@@ -1,5 +1,6 @@
 use crate::{MINI_CHECK, MINI_TEST, REGISTER_MINI_TEST};
 use crate::mini_test::TestResult;
+use crate::tolerance::TOLERANCE;
 
 
 pub fn run_file_obj_read_bunny() -> TestResult {
@@ -53,5 +54,26 @@ pub fn run_file_obj_write_read_roundtrip() -> TestResult {
     })
 }
 
+pub fn run_file_obj_string_roundtrip() -> TestResult {
+    MINI_TEST!("String Roundtrip", {
+        use crate::{Mesh, Point};
+        use crate::file_obj::{read_file_obj_from_str, write_file_obj_to_string};
+        let mut original_mesh = Mesh::new();
+        let v0 = original_mesh.add_vertex(Point::new(0.0, 0.0, 0.0), None);
+        let v1 = original_mesh.add_vertex(Point::new(1.0, 0.0, 0.0), None);
+        let v2 = original_mesh.add_vertex(Point::new(0.0, 1.0, 0.0), None);
+        let v3 = original_mesh.add_vertex(Point::new(0.0, 0.0, 1.0), None);
+        let _ = original_mesh.add_face(vec![v0, v1, v2], None);
+        let _ = original_mesh.add_face(vec![v0, v1, v3], None);
+        let s = write_file_obj_to_string(&original_mesh);
+        let loaded_mesh = read_file_obj_from_str(&s);
+
+        MINI_CHECK!(loaded_mesh.number_of_vertices() == original_mesh.number_of_vertices());
+        MINI_CHECK!(loaded_mesh.number_of_faces() == original_mesh.number_of_faces());
+        MINI_CHECK!(TOLERANCE.is_close(loaded_mesh.area(), original_mesh.area()));
+    })
+}
+
 REGISTER_MINI_TEST!("FileObj", "Read Bunny", crate::file_obj_test::run_file_obj_read_bunny);
+REGISTER_MINI_TEST!("FileObj", "String Roundtrip", crate::file_obj_test::run_file_obj_string_roundtrip);
 REGISTER_MINI_TEST!("FileObj", "Write Read Roundtrip", crate::file_obj_test::run_file_obj_write_read_roundtrip);

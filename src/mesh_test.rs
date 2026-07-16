@@ -1596,6 +1596,20 @@ pub fn run_mesh_loft_plate_v2() -> TestResult {
 }
 
 // Register tests with the shared registry
+pub fn run_mesh_refresh_guid() -> TestResult {
+    MINI_TEST!("Refresh Guid", {
+        use crate::Mesh;
+        let mesh = Mesh::create_box(1.0, 1.0, 1.0);
+        let original = mesh.guid().to_string();
+        let mut copy = mesh.clone();
+
+        MINI_CHECK!(copy.guid() == original);
+        copy.refresh_guid();
+        MINI_CHECK!(copy.guid() != original);
+        MINI_CHECK!(mesh.guid() == original);
+    })
+}
+
 REGISTER_MINI_TEST!("Mesh", "Constructor", crate::mesh_test::run_mesh_constructor);
 REGISTER_MINI_TEST!("Mesh", "From Polylines", crate::mesh_test::run_mesh_from_polylines);
 REGISTER_MINI_TEST!("Mesh", "From Lines", crate::mesh_test::run_mesh_from_lines);
@@ -1616,3 +1630,4 @@ REGISTER_MINI_TEST!("Mesh", "Json Roundtrip", crate::mesh_test::run_mesh_json_ro
 REGISTER_MINI_TEST!("Mesh", "Protobuf Roundtrip", crate::mesh_test::run_mesh_protobuf_roundtrip);
 REGISTER_MINI_TEST!("Mesh", "Loft plate_failing 15-vert outer + 3 holes", crate::mesh_test::run_mesh_loft_plate_failing);
 REGISTER_MINI_TEST!("Mesh", "Loft plate_v2 15-vert outer + 3 holes", crate::mesh_test::run_mesh_loft_plate_v2);
+REGISTER_MINI_TEST!("Mesh", "Refresh Guid", crate::mesh_test::run_mesh_refresh_guid);

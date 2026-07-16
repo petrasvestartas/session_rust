@@ -917,6 +917,11 @@ impl NurbsCurve {
         let _ = self.guid.set(g);
     }
 
+    /// Clear the guid so a FRESH one mints lazily on next read — the duplicate/copy enabler.
+    pub fn refresh_guid(&mut self) {
+        self.guid = std::sync::OnceLock::new();
+    }
+
 
     ///////////////////////////////////////////////////////////////////////////////////////////
     // Initialization & Creation

@@ -2414,6 +2414,11 @@ impl NurbsSurface {
         let _ = self.guid.set(g);
     }
 
+    /// Clear the guid so a FRESH one mints lazily on next read — the duplicate/copy enabler.
+    pub fn refresh_guid(&mut self) {
+        self.guid = std::sync::OnceLock::new();
+    }
+
     /// Serialize to JSON and write to file
     pub fn file_json_dump(&self, filename: &str) {
         if let Ok(json) = self.jsondump() {

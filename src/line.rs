@@ -182,6 +182,11 @@ impl Line {
         let _ = self.guid.set(g);
     }
 
+    /// Clear the guid so a FRESH one mints lazily on next read — the duplicate/copy enabler.
+    pub fn refresh_guid(&mut self) {
+        self.guid = std::sync::OnceLock::new();
+    }
+
     /// Create a duplicate with a new GUID.
     pub fn duplicate(&self) -> Self {
         let mut copy = self.clone();

@@ -1,7 +1,7 @@
 use crate::{Element, Mesh, Point, Polyline, SpatialRTree, AABB};
 use std::io;
 
-pub fn write_file_obj(mesh: &Mesh, filepath: &str) -> io::Result<()> {
+pub fn write_file_obj_to_string(mesh: &Mesh) -> String {
     let (vertices, faces) = mesh.to_vertices_and_faces();
     let mut s = String::new();
     for p in vertices {
@@ -13,11 +13,19 @@ pub fn write_file_obj(mesh: &Mesh, filepath: &str) -> io::Result<()> {
             s.push_str(&format!("f {}\n", indices.join(" ")));
         }
     }
-    std::fs::write(filepath, s)
+    s
+}
+
+pub fn write_file_obj(mesh: &Mesh, filepath: &str) -> io::Result<()> {
+    std::fs::write(filepath, write_file_obj_to_string(mesh))
 }
 
 pub fn read_file_obj(filepath: &str) -> io::Result<Mesh> {
     let content = std::fs::read_to_string(filepath)?;
+    Ok(read_file_obj_from_str(&content))
+}
+
+pub fn read_file_obj_from_str(content: &str) -> Mesh {
     let mut verts: Vec<Point> = Vec::new();
     let mut faces: Vec<Vec<usize>> = Vec::new();
 
@@ -68,7 +76,7 @@ pub fn read_file_obj(filepath: &str) -> io::Result<Mesh> {
         let vlist: Vec<usize> = f.into_iter().map(|i| vkeys[i]).collect();
         let _ = mesh.add_face(vlist, None);
     }
-    Ok(mesh)
+    mesh
 }
 
 pub fn read_file_obj_polylines(filepath: &str) -> io::Result<Vec<Polyline>> {
