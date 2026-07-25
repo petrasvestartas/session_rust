@@ -17,7 +17,7 @@
       ]
     },
     "facedata": {},
-    "guid": "0a3483a6-298c-4006-95c5-62ace687795b",
+    "guid": "79c28a60-3d01-4621-9ea7-eefdd333ccad",
     "halfedge": {
       "0": {
         "1": 0,
@@ -67,7 +67,7 @@
       }
     },
     "xform": {
-      "guid": "86785a02-d8a8-448e-ac8f-d7f2af63222d",
+      "guid": "556f0449-099a-48d1-9755-97f265145f02",
       "m": [
         1.0,
         0.0,
@@ -91,10 +91,10 @@
     }
   },
   "geometry_type": "Mesh",
-  "guid": "1e0e0840-5163-40c9-9c95-749670c5591f",
+  "guid": "e510f2d9-41ac-44e0-b84d-d88c8978f497",
   "name": "json_test",
   "session_transformation": {
-    "guid": "982f7ae6-9927-4079-8993-923c2d4c728f",
+    "guid": "da57995d-1b15-486c-8c6c-87ab7a7a6a09",
     "m": [
       1.0,
       0.0,

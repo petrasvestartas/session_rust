@@ -674,6 +674,12 @@ pub struct Line {
     /// Transformation matrix
     #[prost(message, optional, tag = "5")]
     pub xform: ::core::option::Option<Xform>,
+    /// Line width
+    #[prost(double, tag = "6")]
+    pub width: f64,
+    /// Line color
+    #[prost(message, optional, tag = "7")]
+    pub linecolor: ::core::option::Option<Color>,
 }
 /// Matrix message representing an NxM matrix
 #[derive(Clone, PartialEq, ::prost::Message)]

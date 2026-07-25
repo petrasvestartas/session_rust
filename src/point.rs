@@ -49,7 +49,7 @@ impl Default for Point {
             _z: 0.0,
             guid: std::sync::OnceLock::new(),
             name: "my_point".to_string(),
-            pointcolor: Color::blue(),
+            pointcolor: Color::black(),
             width: 1.0,
             xform: Xform::identity(),
         }

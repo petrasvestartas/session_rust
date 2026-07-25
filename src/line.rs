@@ -415,6 +415,15 @@ impl Line {
             guid: self.guid().to_string(),
             name: self.name.clone(),
             xform: None,
+            width: self.width,
+            linecolor: Some(crate::proto::Color {
+                guid: self.linecolor.guid().to_string(),
+                name: self.linecolor.name.clone(),
+                r: self.linecolor.r,
+                g: self.linecolor.g,
+                b: self.linecolor.b,
+                a: self.linecolor.a,
+            }),
         };
         proto.encode_to_vec()
     }
@@ -428,6 +437,15 @@ impl Line {
         let mut line = Self::new(start.x as f64, start.y as f64, start.z as f64, end.x as f64, end.y as f64, end.z as f64);
         line.set_guid(proto.guid);
         line.name = proto.name;
+        if proto.width > 0.0 { line.width = proto.width; }
+        if let Some(color) = proto.linecolor {
+            line.linecolor.set_guid(color.guid.clone());
+            line.linecolor.name = color.name;
+            line.linecolor.r = color.r;
+            line.linecolor.g = color.g;
+            line.linecolor.b = color.b;
+            line.linecolor.a = color.a;
+        }
         Ok(line)
     }
 
