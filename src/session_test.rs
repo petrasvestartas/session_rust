@@ -361,8 +361,21 @@ pub fn run_session_remove_object() -> TestResult {
         session.add_point(point, None);
         let removed = session.remove_object(&guid);
 
+        let polygon = vec![Point::new(0.0,0.0,0.0), Point::new(2.0,0.0,0.0), Point::new(2.0,2.0,0.0), Point::new(0.0,2.0,0.0)];
+        let plate = crate::element::Element::plate(polygon, 0.2, "p1");
+        let eguid = plate.guid().to_string();
+        session.add_element(plate, None);
+        let eremoved = session.remove_object(&eguid);
+
+        let fname = "serialization/test_session_remove.bin";
+        session.pb_dump(fname);
+        let loaded = Session::pb_load(fname);
+
         MINI_CHECK!(removed);
         MINI_CHECK!(!session.lookup.contains_key(&guid));
+        MINI_CHECK!(eremoved);
+        MINI_CHECK!(session.objects.elements.is_empty());
+        MINI_CHECK!(!loaded.lookup.contains_key(&eguid)); // removed objects must not resurrect on save/load
     })
 }
 
@@ -447,9 +460,52 @@ pub fn run_session_protobuf_roundtrip() -> TestResult {
     })
 }
 
+pub fn run_session_lookup_mutation_roundtrip() -> TestResult {
+    MINI_TEST!("Lookup Mutation Roundtrip", {
+        use crate::{Session, Line, Geometry};
+        let mut session = Session::default();
+        let line = Line::new(0.0, 0.0, 0.0, 1.0, 0.0, 0.0);
+        let guid = line.guid().to_string();
+        session.add_line(line, None);
+
+        if let Some(Geometry::Line(l)) = session.lookup.get_mut(&guid) { std::rc::Rc::make_mut(l).width = 5.0; }
+
+        let fname = "serialization/test_session_lookup.bin";
+        session.pb_dump(fname);
+        let loaded = Session::pb_load(fname);
+
+        MINI_CHECK!(loaded.objects.lines[0].width == 5.0);
+        MINI_CHECK!(matches!(loaded.lookup.get(&guid), Some(Geometry::Line(l)) if l.width == 5.0));
+    })
+}
+
+pub fn run_session_order() -> TestResult {
+    MINI_TEST!("Order", {
+        use crate::{Session, Line, Point};
+        let mut session = Session::default();
+        let line = Line::new(0.0, 0.0, 0.0, 1.0, 0.0, 0.0);
+        let point = Point::new(1.0, 2.0, 3.0);
+        let line_guid = line.guid().to_string();
+        let point_guid = point.guid().to_string();
+        session.add_line(line, None);
+        session.add_point(point, None);
+
+        let order = session.order();
+
+        let fname = "serialization/test_session_order.bin";
+        session.pb_dump(fname);
+        let loaded = Session::pb_load(fname);
+
+        MINI_CHECK!(order.len() == 2);
+        MINI_CHECK!(order[0] == point_guid);
+        MINI_CHECK!(order[1] == line_guid);
+        MINI_CHECK!(loaded.order() == order);
+    })
+}
+
 pub fn run_session_tree_transformation_hierarchy() -> TestResult {
     MINI_TEST!("Tree Transformation Hierarchy", {
-        use crate::{Session, Point, Vector, Mesh, Plane, Xform};
+        use crate::{Session, Geometry, Point, Vector, Mesh, Plane, Xform};
         let mut scene = Session::new("tree_transformation_test");
 
         let create_box = |cx: f64, cy: f64, cz: f64, size: f64| -> Mesh {
@@ -495,9 +551,12 @@ pub fn run_session_tree_transformation_hierarchy() -> TestResult {
         box2.xform = Xform::translation(2.0, 0.0, 0.0) * Xform::rotation_z(PI / 6.0, false);
         box3.xform = Xform::translation(2.0, 0.0, 0.0);
 
-        scene.objects.meshes[0].xform = box1.xform.clone();
-        scene.objects.meshes[1].xform = box2.xform.clone();
-        scene.objects.meshes[2].xform = box3.xform.clone();
+        for (i, xf) in [&box1.xform, &box2.xform, &box3.xform].iter().enumerate() {
+            let guid = scene.objects.meshes[i].guid().to_string();
+            if let Some(Geometry::Mesh(m)) = scene.lookup.get_mut(&guid) {
+                std::rc::Rc::make_mut(m).xform = (*xf).clone(); // lookup is the mutable truth
+            }
+        }
 
         let transformed = scene.get_geometry();
 
@@ -595,6 +654,8 @@ REGISTER_MINI_TEST!("Session", "Get Geometry", crate::session_test::run_session_
 REGISTER_MINI_TEST!("Session", "Compute Face To Face", crate::session_test::run_session_compute_face_to_face);
 REGISTER_MINI_TEST!("Session", "Json Roundtrip", crate::session_test::run_session_json_roundtrip);
 REGISTER_MINI_TEST!("Session", "Protobuf Roundtrip", crate::session_test::run_session_protobuf_roundtrip);
+REGISTER_MINI_TEST!("Session", "Lookup Mutation Roundtrip", crate::session_test::run_session_lookup_mutation_roundtrip);
+REGISTER_MINI_TEST!("Session", "Order", crate::session_test::run_session_order);
 REGISTER_MINI_TEST!("Session", "Tree Transformation Hierarchy", crate::session_test::run_session_tree_transformation_hierarchy);
 REGISTER_MINI_TEST!("Session", "Add Component",              crate::session_test::run_session_add_component);
 REGISTER_MINI_TEST!("Session", "Component Json Roundtrip",   crate::session_test::run_session_component_json_roundtrip);

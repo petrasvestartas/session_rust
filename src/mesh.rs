@@ -2869,8 +2869,19 @@ impl Mesh {
         self.ray_cast_bvh(ray, epsilon)
     }
 
+    /// True when the triangle BVH cache is built and usable by `ray_cast_bvh_ready`.
+    pub fn has_triangle_bvh(&self) -> bool {
+        self.tri_bvh.is_some() && !self.tri_tris.is_empty() && !self.tri_vertices.is_empty()
+    }
+
     pub fn ray_cast_bvh(&mut self, ray: &Line, epsilon: f64) -> Option<Point> {
         self.ensure_triangle_bvh();
+        self.ray_cast_bvh_ready(ray, epsilon)
+    }
+
+    /// Read-only cast against an ALREADY-BUILT triangle BVH (see `has_triangle_bvh` /
+    /// `build_triangle_bvh`) — lets shared (Rc) meshes cast without a COW split.
+    pub fn ray_cast_bvh_ready(&self, ray: &Line, epsilon: f64) -> Option<Point> {
         let bvh = match &self.tri_bvh {
             Some(b) => b,
             None => return None,

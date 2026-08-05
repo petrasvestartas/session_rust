@@ -17,8 +17,8 @@ pub fn run_objects_json_roundtrip() -> TestResult {
         use crate::{Objects, Point};
         use crate::file_encoders::{file_json_dump, file_json_load};
         let mut original = Objects::new();
-        original.points.push(Point::new(1.0, 2.0, 3.0));
-        original.points.push(Point::new(4.0, 5.0, 6.0));
+        original.points.push(std::rc::Rc::new(Point::new(1.0, 2.0, 3.0)));
+        original.points.push(std::rc::Rc::new(Point::new(4.0, 5.0, 6.0)));
         file_json_dump(&original, "serialization/test_objects.json", false).unwrap();
         let loaded = file_json_load::<Objects>("serialization/test_objects.json").unwrap();
         MINI_CHECK!(loaded.points.len() == original.points.len());
@@ -29,8 +29,8 @@ pub fn run_objects_protobuf_roundtrip() -> TestResult {
     MINI_TEST!("Protobuf Roundtrip", {
         use crate::{Objects, Point};
         let mut original = Objects::new();
-        original.points.push(Point::new(1.0, 2.0, 3.0));
-        original.points.push(Point::new(4.0, 5.0, 6.0));
+        original.points.push(std::rc::Rc::new(Point::new(1.0, 2.0, 3.0)));
+        original.points.push(std::rc::Rc::new(Point::new(4.0, 5.0, 6.0)));
         original.pb_dump("serialization/test_objects.bin");
         let loaded = Objects::pb_load("serialization/test_objects.bin");
         MINI_CHECK!(loaded.points.len() == original.points.len());

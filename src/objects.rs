@@ -10,6 +10,7 @@ use crate::point::Point;
 use crate::pointcloud::PointCloud;
 use crate::polyline::Polyline;
 use serde::{Deserialize, Serialize};
+use std::rc::Rc;
 use std::fmt;
 use std::fs;
 
@@ -65,19 +66,19 @@ pub struct Objects {
     #[serde(serialize_with = "crate::guid_serde::serialize", deserialize_with = "crate::guid_serde::deserialize")]
     guid: std::sync::OnceLock<String>,
     pub name: String,
-    pub points: Vec<Point>,
-    pub lines: Vec<Line>,
-    pub planes: Vec<Plane>,
-    pub bboxes: Vec<OBB>,
-    pub polylines: Vec<Polyline>,
-    pub pointclouds: Vec<PointCloud>,
-    pub meshes: Vec<Mesh>,
-    pub nurbscurves: Vec<NurbsCurve>,
-    pub nurbssurfaces: Vec<NurbsSurface>,
+    pub points: Vec<Rc<Point>>,
+    pub lines: Vec<Rc<Line>>,
+    pub planes: Vec<Rc<Plane>>,
+    pub bboxes: Vec<Rc<OBB>>,
+    pub polylines: Vec<Rc<Polyline>>,
+    pub pointclouds: Vec<Rc<PointCloud>>,
+    pub meshes: Vec<Rc<Mesh>>,
+    pub nurbscurves: Vec<Rc<NurbsCurve>>,
+    pub nurbssurfaces: Vec<Rc<NurbsSurface>>,
     #[serde(default)]
-    pub nurbssurfacetrimmeds: Vec<crate::nurbssurface_trimmed::NurbsSurfaceTrimmed>,
-    pub breps: Vec<BRep>,
-    pub elements: Vec<Element>,
+    pub nurbssurfacetrimmeds: Vec<Rc<crate::nurbssurface_trimmed::NurbsSurfaceTrimmed>>,
+    pub breps: Vec<Rc<BRep>>,
+    pub elements: Vec<Rc<Element>>,
     pub components: Vec<Component>,
 }
 
@@ -207,37 +208,37 @@ impl Objects {
         objects.set_guid(proto.guid.clone());
         objects.name = proto.name;
         for p in &proto.points {
-            objects.points.push(crate::point::Point::pb_loads(&p.encode_to_vec())?);
+            objects.points.push(Rc::new(crate::point::Point::pb_loads(&p.encode_to_vec())?));
         }
         for l in &proto.lines {
-            objects.lines.push(crate::line::Line::pb_loads(&l.encode_to_vec())?);
+            objects.lines.push(Rc::new(crate::line::Line::pb_loads(&l.encode_to_vec())?));
         }
         for p in &proto.planes {
-            objects.planes.push(crate::plane::Plane::pb_loads(&p.encode_to_vec())?);
+            objects.planes.push(Rc::new(crate::plane::Plane::pb_loads(&p.encode_to_vec())?));
         }
         for b in &proto.bboxes {
-            objects.bboxes.push(crate::obb::OBB::pb_loads(&b.encode_to_vec())?);
+            objects.bboxes.push(Rc::new(crate::obb::OBB::pb_loads(&b.encode_to_vec())?));
         }
         for p in &proto.polylines {
-            objects.polylines.push(crate::polyline::Polyline::pb_loads(&p.encode_to_vec())?);
+            objects.polylines.push(Rc::new(crate::polyline::Polyline::pb_loads(&p.encode_to_vec())?));
         }
         for p in &proto.pointclouds {
-            objects.pointclouds.push(crate::pointcloud::PointCloud::pb_loads(&p.encode_to_vec()));
+            objects.pointclouds.push(Rc::new(crate::pointcloud::PointCloud::pb_loads(&p.encode_to_vec())));
         }
         for m in &proto.meshes {
-            objects.meshes.push(crate::mesh::Mesh::pb_loads(&m.encode_to_vec())?);
+            objects.meshes.push(Rc::new(crate::mesh::Mesh::pb_loads(&m.encode_to_vec())?));
         }
         for nc in &proto.nurbscurves {
-            objects.nurbscurves.push(crate::nurbscurve::NurbsCurve::pb_loads(&nc.encode_to_vec())?);
+            objects.nurbscurves.push(Rc::new(crate::nurbscurve::NurbsCurve::pb_loads(&nc.encode_to_vec())?));
         }
         for ns in &proto.nurbssurfaces {
-            objects.nurbssurfaces.push(crate::nurbssurface::NurbsSurface::pb_loads(&ns.encode_to_vec())?);
+            objects.nurbssurfaces.push(Rc::new(crate::nurbssurface::NurbsSurface::pb_loads(&ns.encode_to_vec())?));
         }
         for b in &proto.breps {
-            objects.breps.push(crate::brep::BRep::pb_loads(&b.encode_to_vec())?);
+            objects.breps.push(Rc::new(crate::brep::BRep::pb_loads(&b.encode_to_vec())?));
         }
         for e in &proto.elements {
-            objects.elements.push(crate::element::Element::pb_loads(&e.encode_to_vec())?);
+            objects.elements.push(Rc::new(crate::element::Element::pb_loads(&e.encode_to_vec())?));
         }
         for c in &proto.components {
             objects.components.push(Component::pb_loads(&c.encode_to_vec())?);
