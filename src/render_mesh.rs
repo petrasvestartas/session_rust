@@ -61,6 +61,56 @@ impl Mesh {
         // takes effect even though `add_vertex` seeds a white point-color per vertex.
         let has_point_colors =
             self.color_mode == crate::mesh::ColorMode::POINTCOLORS && point_colors.len() == keys.len();
+        
+        // FACECOLORS: flat per-face color needs duplicated vertices
+        // a shared vertex can only one vertex.
+        // Same gate style as pointcolors: the Mode is the user-set signal.
+        // facecolors is private to mesh.rs
+        // from this sibling module use get_facecolors().
+        let has_face_colors = self.color_mode == crate::mesh::ColorMode::FACECOLORS && self.get_facecolors().len() == self.face.len();
+
+        if has_face_colors {
+            let face_colors = self.get_facecolors();
+            let mut vertices: Vec<RenderVertex> = Vec::new();
+            let mut indices: Vec<u32> = Vec::new();
+            let mut face_keys: Vec<usize> = self.face.keys().copied().collect();
+            face_keys.sort_unstable();
+            for (fi, fk) in face_key.iter().enumerate() {
+                let c = &face_colors[fi];
+                let color = [c.r, c.g, c.b, 1.0];
+                let mut tris: Vec<[usize; 3]> = Vec::new();
+                if let Some(cached) = self.triangulation.get(fk) {
+                    tris.extend_from_slice(cached);
+                }
+                if tris.is_empty(){
+                    let vs = &self.face[fk];
+                    if vs.len() < 3 {
+                        continue;
+                    }
+                    for i in 1..(vs.len() -1){
+                        tris.push(vs[0], vs[i], vs[i+1]);
+                    }
+                }
+                for tri in &tris{
+                    if tri.iter().any(|vk| !self.vertex.contains_key(vk)){
+                        continue;
+                    }
+                    for &vk in tri {
+                        let v = &self.vertex[&vk];
+                        let nx = v.attributes.get("nx").copied().unwrap_or(0.0);
+                        let ny = v.attributes.get("ny").copied().unwrap_or(0.0);
+                        let nz = v.attributes.get("nz").copied().unwrap_or(0.0);
+                        indices.push(vertices.len() as u32);
+                        vertices.push(RenderVertex {
+                            position: [v.x as f32, v.y as f32, v.z as f32],
+                            normal: [nx as f32, ny as f32, nz as f32],
+                            color,
+                        });
+                    }
+                }
+            }
+            return RenderMesh { vertices, indices };
+        }
 
         let mut vertices: Vec<RenderVertex> = Vec::with_capacity(keys.len());
         for (idx, k) in keys.iter().enumerate() {
