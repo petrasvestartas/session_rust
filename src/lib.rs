@@ -126,7 +126,7 @@ pub use render_mesh::{RenderMesh, RenderVertex, GpuMesh, GpuCache};
 pub use nurbscurve::NurbsCurve;
 pub use nurbssurface::NurbsSurface;
 pub use nurbssurface_trimmed::NurbsSurfaceTrimmed;
-pub use file_obj::{read_file_obj, write_file_obj, read_file_obj_polylines, pair_polylines};
+pub use file_obj::{read_file_obj, write_file_obj, read_file_obj_polylines};
 pub use io::{read_xyz, write_xyz, read_xyz_from_str, write_xyz_to_string};
 pub use objects::{Objects, Component};
 pub use plane::Plane;
