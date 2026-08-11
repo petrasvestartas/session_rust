@@ -1044,7 +1044,7 @@ fn execute_internal(sc: &mut Sc, ct: i32) -> bool {
 // no fixed-point conversion, no priority queue, no allocator churn.
 //
 // For na=nb=4 (quad-vs-quad), the Vatti path costs ~50µs per call;
-// Sutherland-Hodgman is ~1µs. With 3081 joints in main_1, this saves ~150ms.
+// Sutherland-Hodgman is ~1µs — worth ~150ms across a few thousand joints.
 
 /// Returns +1 if convex CCW, -1 if convex CW, 0 if non-convex or degenerate.
 /// Reads x,y from stride-3 coords; ignores z.
