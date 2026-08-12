@@ -49,6 +49,8 @@ pub mod mesh;
 pub mod render_mesh;
 pub mod nurbscurve;
 pub mod nurbssurface;
+#[cfg(feature = "pdf")]
+pub mod pdf;
 pub mod file_obj;
 pub mod file_obj_test;
 pub mod io;
