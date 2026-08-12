@@ -49,7 +49,7 @@ pub mod mesh;
 pub mod render_mesh;
 pub mod nurbscurve;
 pub mod nurbssurface;
-#[cfg(feature = "pdf")]
+#[cfg(all(feature = "pdf", not(target_arch = "wasm32")))]
 pub mod pdf;
 pub mod file_obj;
 pub mod file_obj_test;
