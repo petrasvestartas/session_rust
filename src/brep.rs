@@ -111,7 +111,6 @@ pub struct BRep {
     pub name: String,
     pub width: f64,
     pub surfacecolor: Color,
-    pub xform: Xform,
     pub m_surfaces: Vec<NurbsSurface>,
     pub m_curves_3d: Vec<NurbsCurve>,
     pub m_curves_2d: Vec<NurbsCurve>,
@@ -128,7 +127,6 @@ impl PartialEq for BRep {
         self.name == other.name
             && self.width == other.width
             && self.surfacecolor == other.surfacecolor
-            && self.xform == other.xform
             && self.m_faces.len() == other.m_faces.len()
             && self.m_surfaces.len() == other.m_surfaces.len()
             && self.m_topology_edges.len() == other.m_topology_edges.len()
@@ -149,7 +147,6 @@ impl BRep {
             name: "my_brep".to_string(),
             width: 1.0,
             surfacecolor: Color::black(),
-            xform: Xform::identity(),
             m_surfaces: Vec::new(),
             m_curves_3d: Vec::new(),
             m_curves_2d: Vec::new(),
@@ -3093,13 +3090,12 @@ impl BRep {
     // Transformation
     ///////////////////////////////////////////////////////////////////////////////////////////
 
-    pub fn transform(&mut self) {
-        let xf = self.xform.clone();
+    pub fn transform(&mut self, xf: &Xform) {
         for srf in &mut self.m_surfaces {
-            srf.transform(&xf);
+            srf.transform(xf);
         }
         for crv in &mut self.m_curves_3d {
-            crv.transform(Some(&xf));
+            crv.transform(xf);
         }
         for pt in &mut self.m_vertices {
             let x = xf.m[0] * pt[0] + xf.m[4] * pt[1] + xf.m[8] * pt[2] + xf.m[12];
@@ -3107,12 +3103,11 @@ impl BRep {
             let z = xf.m[2] * pt[0] + xf.m[6] * pt[1] + xf.m[10] * pt[2] + xf.m[14];
             *pt = Point::new(x, y, z);
         }
-        self.xform = Xform::identity();
     }
 
-    pub fn transformed(&self) -> Self {
+    pub fn transformed(&self, xf: &Xform) -> Self {
         let mut b = self.clone();
-        b.transform();
+        b.transform(xf);
         b
     }
 
@@ -3144,6 +3139,12 @@ impl BRep {
 
     pub fn pb_dumps(&self) -> Vec<u8> {
         use prost::Message;
+        self.to_proto().encode_to_vec()
+    }
+
+    /// The proto struct itself — pb_dumps encodes it; Session embeds it directly.
+    pub fn to_proto(&self) -> crate::proto::BRep {
+        use prost::Message;
 
         let curves_2d: Vec<crate::proto::NurbsCurve> = self.m_curves_2d.iter()
             .map(|c| crate::proto::NurbsCurve::decode(c.pb_dumps().as_slice()).unwrap())
@@ -3156,7 +3157,7 @@ impl BRep {
             .collect();
         let vertices: Vec<crate::proto::Point> = self.m_vertices.iter()
             .map(|v| crate::proto::Point { guid: String::new(), name: String::new(), x: v[0] as f64, y: v[1] as f64, z: v[2] as f64, width: 0.0,
-                pointcolor: None, xform: None })
+                pointcolor: None })
             .collect();
         let topology_vertices: Vec<crate::proto::BRepVertex> = self.m_topology_vertices.iter()
             .map(|tv| crate::proto::BRepVertex { point_index: tv.point_index, edge_indices: tv.edge_indices.clone() })
@@ -3191,7 +3192,7 @@ impl BRep {
             })
             .collect();
 
-        let proto = crate::proto::BRep {
+        crate::proto::BRep {
             guid: self.guid().to_string(),
             name: self.name.clone(),
             curves_2d,
@@ -3212,18 +3213,17 @@ impl BRep {
                 b: self.surfacecolor.b,
                 a: self.surfacecolor.a,
             }),
-            xform: Some(crate::proto::Xform {
-                guid: self.xform.guid().to_string(),
-                name: self.xform.name.clone(),
-                matrix: self.xform.m.iter().map(|&v| v as f64).collect(),
-            }),
-        };
-        proto.encode_to_vec()
+        }
     }
 
     pub fn pb_loads(data: &[u8]) -> Result<Self, Box<dyn std::error::Error>> {
         use prost::Message;
-        let proto = crate::proto::BRep::decode(data)?;
+        Self::from_proto(crate::proto::BRep::decode(data)?)
+    }
+
+    /// Build from an already-decoded proto — pb_loads decodes then calls this.
+    pub fn from_proto(proto: crate::proto::BRep) -> Result<Self, Box<dyn std::error::Error>> {
+        use prost::Message;
         let mut b = BRep::new();
         b.set_guid(proto.guid.clone());
         b.name = proto.name;
@@ -3292,13 +3292,6 @@ impl BRep {
             b.surfacecolor.g = color.g;
             b.surfacecolor.b = color.b;
             b.surfacecolor.a = color.a;
-        }
-        if let Some(xform) = proto.xform {
-            b.xform.set_guid(xform.guid.clone());
-            b.xform.name = xform.name;
-            for (i, val) in xform.matrix.iter().enumerate() {
-                if i < 16 { b.xform.m[i] = *val as f64; }
-            }
         }
 
         Ok(b)
@@ -3381,7 +3374,6 @@ impl Serialize for BRep {
         let verts: Vec<[f64; 3]> = self.m_vertices.iter().map(|v| [v[0], v[1], v[2]]).collect();
         map.serialize_entry("vertices", &verts)?;
         map.serialize_entry("width", &self.width)?;
-        map.serialize_entry("xform", &self.xform)?;
         map.end()
     }
 }
@@ -3441,8 +3433,6 @@ impl<'de> Deserialize<'de> for BRep {
             width: Option<f64>,
             #[serde(default)]
             surfacecolor: Option<Color>,
-            #[serde(default)]
-            xform: Option<Xform>,
             #[serde(default)]
             curves_2d: Option<Vec<NurbsCurve>>,
             #[serde(default)]
@@ -3510,7 +3500,6 @@ impl<'de> Deserialize<'de> for BRep {
         if let Some(n) = data.name { b.name = n; }
         if let Some(w) = data.width { b.width = w; }
         if let Some(c) = data.surfacecolor { b.surfacecolor = c; }
-        if let Some(x) = data.xform { b.xform = x; }
         if let Some(c) = data.curves_2d { b.m_curves_2d = c; }
         if let Some(c) = data.curves_3d { b.m_curves_3d = c; }
         if let Some(s) = data.surfaces { b.m_surfaces = s; }

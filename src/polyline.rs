@@ -19,7 +19,6 @@ pub struct Polyline {
     plane_dirty: bool,
     pub width: f64,
     pub linecolor: Color,
-    pub xform: Xform,
 }
 
 impl Default for Polyline {
@@ -32,7 +31,6 @@ impl Default for Polyline {
             plane_dirty: true,
             width: 1.0,
             linecolor: Color::black(),
-            xform: Xform::identity(),
         }
     }
 }
@@ -53,7 +51,6 @@ impl Polyline {
             plane_dirty: true,
             width: 1.0,
             linecolor: Color::black(),
-            xform: Xform::identity(),
         }
     }
 
@@ -114,7 +111,6 @@ impl Polyline {
             plane_dirty: true,
             width: 1.0,
             linecolor: Color::black(),
-            xform: Xform::identity(),
         }
     }
 
@@ -146,7 +142,6 @@ impl Polyline {
             plane_dirty: self.plane_dirty,
             width: self.width,
             linecolor: self.linecolor.clone(),
-            xform: self.xform.clone(),
         }
     }
 
@@ -346,40 +341,24 @@ impl Polyline {
         reversed
     }
 
-    pub fn transform(&mut self) {
+    pub fn transform(&mut self, xform: &Xform) {
         // Transform coordinates in-place without creating Point objects
         for i in 0..self.point_count() {
             let idx = i * 3;
             let mut pt = Point::new(self.coords[idx], self.coords[idx + 1], self.coords[idx + 2]);
-            pt.xform = self.xform.clone();
-            pt.transform();
+            pt.transform(xform);
             self.coords[idx] = pt[0];
             self.coords[idx + 1] = pt[1];
             self.coords[idx + 2] = pt[2];
         }
-        self.xform = Xform::identity();
     }
 
-    pub fn transformed(&self) -> Self {
+    pub fn transformed(&self, xform: &Xform) -> Self {
         let mut result = self.clone();
-        result.transform();
+        result.transform(xform);
         result
     }
 
-    /// Return a copy of this polyline with `xf` applied to every point.
-    /// Mirrors C++ `Polyline::transformed_xform`.
-    pub fn transformed_xform(&self, xf: &Xform) -> Polyline {
-        let m = &xf.m;
-        let mut new_pts = Vec::with_capacity(self.point_count());
-        for i in 0..self.point_count() {
-            let p = self.get_point(i).unwrap();
-            let x = m[0]*p[0] + m[4]*p[1] + m[8]*p[2]  + m[12];
-            let y = m[1]*p[0] + m[5]*p[1] + m[9]*p[2]  + m[13];
-            let z = m[2]*p[0] + m[6]*p[1] + m[10]*p[2] + m[14];
-            new_pts.push(Point::new(x, y, z));
-        }
-        Polyline::new(new_pts)
-    }
 
     /// Translate every point of this polyline by `v` (in place).
     /// Mirrors C++ `Polyline::translate`.
@@ -535,7 +514,6 @@ impl Polyline {
          map.serialize_entry("coords", &self.coords)?;
          map.serialize_entry("width", &self.width)?;
          map.serialize_entry("linecolor", &self.linecolor)?;
-         map.serialize_entry("xform", &self.xform)?;
          map.end()
      }
  }
@@ -593,11 +571,6 @@ impl Polyline {
              .map(|v| serde_json::from_value(v.clone()).unwrap_or_else(|_| Color::white()))
              .unwrap_or_else(Color::white);
 
-         let xform = value
-             .get("xform")
-             .map(|v| serde_json::from_value(v.clone()).unwrap_or_else(|_| Xform::identity()))
-             .unwrap_or_else(Xform::identity);
-
          let polyline = Polyline {
              guid: { let c = std::sync::OnceLock::new(); let _ = c.set(guid_str); c },
              name,
@@ -606,7 +579,6 @@ impl Polyline {
              plane_dirty: true,
              width,
              linecolor,
-             xform,
          };
          Ok(polyline)
      }
@@ -656,8 +628,12 @@ impl Polyline {
     /// A Vec<u8> containing the serialized protobuf data.
     pub fn pb_dumps(&self) -> Vec<u8> {
         use prost::Message;
+        self.to_proto().encode_to_vec()
+    }
 
-        let proto = crate::proto::Polyline {
+    /// The proto struct itself — pb_dumps encodes it; Session embeds it directly.
+    pub fn to_proto(&self) -> crate::proto::Polyline {
+        crate::proto::Polyline {
             guid: self.guid().to_string(),
             name: self.name.clone(),
             coords: self.coords.iter().map(|&v| v as f64).collect(),
@@ -670,13 +646,7 @@ impl Polyline {
                 b: self.linecolor.b,
                 a: self.linecolor.a,
             }),
-            xform: Some(crate::proto::Xform {
-                guid: self.xform.guid().to_string(),
-                name: self.xform.name.clone(),
-                matrix: self.xform.m.iter().map(|&v| v as f64).collect(),
-            }),
-        };
-        proto.encode_to_vec()
+        }
     }
 
     /// Create Polyline from protobuf binary data.
@@ -690,9 +660,11 @@ impl Polyline {
     /// A Result containing the deserialized Polyline or an error.
     pub fn pb_loads(data: &[u8]) -> Result<Self, Box<dyn std::error::Error>> {
         use prost::Message;
+        Ok(Self::from_proto(crate::proto::Polyline::decode(data)?))
+    }
 
-        let proto = crate::proto::Polyline::decode(data)?;
-
+    /// Build from an already-decoded proto — pb_loads decodes then calls this.
+    pub fn from_proto(proto: crate::proto::Polyline) -> Self {
         let mut pl = Self::from_coords(proto.coords.into_iter().map(|v| v as f64).collect());
         pl.set_guid(proto.guid);
         pl.name = proto.name;
@@ -707,17 +679,7 @@ impl Polyline {
             pl.linecolor.a = color.a;
         }
 
-        if let Some(xform) = proto.xform {
-            pl.xform.set_guid(xform.guid);
-            pl.xform.name = xform.name;
-            for (i, val) in xform.matrix.iter().enumerate() {
-                if i < 16 {
-                    pl.xform.m[i] = *val as f64;
-                }
-            }
-        }
-
-        Ok(pl)
+        pl
     }
 
     /// Write protobuf to file.
@@ -2278,8 +2240,8 @@ thread_local! {
     /// Reused projected-polygon buffers for `Polyline::boolean_op_plane`. Holds
     /// two full `Polyline` structs so their coord Vec capacity, name String,
     /// and default Plane/Xform/Color live across all calls — see the boolean
-    /// workload in `Session::compute_face_to_face` which fires ~3500 times per
-    /// `main_1` run.
+    /// workload in `Session::compute_face_to_face`, which fires a few thousand
+    /// times per run.
     static PROJECTED_BUFFERS: std::cell::RefCell<(Polyline, Polyline)>
         = std::cell::RefCell::new((
             Polyline::from_coords(Vec::new()),

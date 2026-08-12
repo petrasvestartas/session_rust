@@ -75,7 +75,7 @@ impl Mesh {
             let mut indices: Vec<u32> = Vec::new();
             let mut face_keys: Vec<usize> = self.face.keys().copied().collect();
             face_keys.sort_unstable();
-            for (fi, fk) in face_key.iter().enumerate() {
+            for (fi, fk) in face_keys.iter().enumerate() {
                 let c = &face_colors[fi];
                 let color = [c.r, c.g, c.b, 1.0];
                 let mut tris: Vec<[usize; 3]> = Vec::new();
@@ -88,7 +88,7 @@ impl Mesh {
                         continue;
                     }
                     for i in 1..(vs.len() -1){
-                        tris.push(vs[0], vs[i], vs[i+1]);
+                        tris.push([vs[0], vs[i], vs[i+1]]);
                     }
                 }
                 for tri in &tris{

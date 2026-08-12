@@ -105,9 +105,9 @@ pub fn run_column_session_geometry() -> TestResult {
         use crate::element::{Element, ElementGeometry};
         use crate::Xform;
 
-        let mut c = Element::column(0.4, 0.4, 3.0, "my_column");
-        c.session_transformation = Xform::translation(10.0, 0.0, 0.0);
-        let sg = c.session_geometry();
+        let c = Element::column(0.4, 0.4, 3.0, "my_column");
+        let c_xf = Xform::translation(10.0, 0.0, 0.0);
+        let sg = c.session_geometry(&c_xf);
 
         MINI_CHECK!(matches!(&sg, ElementGeometry::Mesh(_)));
         if let ElementGeometry::Mesh(mesh) = &sg {
@@ -120,10 +120,8 @@ pub fn run_column_session_geometry() -> TestResult {
 pub fn run_column_json_roundtrip() -> TestResult {
     MINI_TEST!("Json Roundtrip", {
         use crate::element::Element;
-        use crate::Xform;
 
-        let mut c = Element::column(0.5, 0.6, 4.0, "json_col");
-        c.session_transformation = Xform::translation(1.0, 2.0, 3.0);
+        let c = Element::column(0.5, 0.6, 4.0, "json_col");
 
         let fname = "serialization/test_column_element.json";
         c.file_json_dump(fname);
@@ -139,10 +137,8 @@ pub fn run_column_json_roundtrip() -> TestResult {
 pub fn run_column_protobuf_roundtrip() -> TestResult {
     MINI_TEST!("Protobuf Roundtrip", {
         use crate::element::Element;
-        use crate::Xform;
 
-        let mut c = Element::column(0.5, 0.6, 4.0, "proto_col");
-        c.session_transformation = Xform::translation(1.0, 2.0, 3.0);
+        let c = Element::column(0.5, 0.6, 4.0, "proto_col");
 
         let path = "serialization/test_column_element.bin";
         c.pb_dump(path);

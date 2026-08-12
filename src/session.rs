@@ -1,6 +1,6 @@
 use crate::{
     BRep, Element, OBB, Graph, Line, Mesh, NurbsCurve, NurbsSurface, Objects, Plane, Point,
-    PointCloud, Polyline, Tolerance, Tree, TreeNode, SpatialBVH,
+    PointCloud, Polyline, Tolerance, Tree, TreeNode, SpatialBVH, Xform,
 };
 use serde::{Deserialize, Serialize};
 use std::cell::RefCell;
@@ -76,6 +76,12 @@ pub struct Session {
     /// Graph structure for representing object relationships
     #[serde(rename = "graph")]
     pub graph: Graph,
+    /// Guid → LOCAL transform, relative to the tree parent. THE only place a transform is
+    /// stored: geometry types carry no transformation member. Cumulative placement comes from
+    /// `world_xform`, which multiplies down the tree. Serialized explicitly by
+    /// jsondump/pb_dumps in `order()` sequence (a HashMap has no deterministic order).
+    #[serde(skip)]
+    pub xforms: HashMap<String, Xform>,
     /// Boundary Volume Hierarchy for spatial collision detection
     #[serde(skip)]
     pub bvh: SpatialBVH,
@@ -150,6 +156,7 @@ impl Session {
             lookup,
             tree,
             graph,
+            xforms: HashMap::new(),
             bvh,
             cached_ray_bvh: None,
             cached_guids: Vec::new(),
@@ -211,6 +218,107 @@ impl Session {
     }
 
     ///////////////////////////////////////////////////////////////////////////////////////////
+    // XFORMS — the one place a transformation is stored
+    ///////////////////////////////////////////////////////////////////////////////////////////
+
+
+    /// Sets the LOCAL transform of an object, relative to its tree parent.
+    pub fn set_xform(&mut self, guid: &str, xform: Xform) {
+        self.xforms.insert(guid.to_string(), xform);
+        self.bvh_cache_dirty = true;
+    }
+
+    /// The LOCAL transform of an object, identity when none was set.
+    pub fn xform(&self, guid: &str) -> Xform {
+        self.xforms.get(guid).cloned().unwrap_or_else(Xform::identity)
+    }
+
+    /// Removes an object's local transform, returning whether one was present.
+    pub fn remove_xform(&mut self, guid: &str) -> bool {
+        let removed = self.xforms.remove(guid).is_some();
+        if removed {
+            self.bvh_cache_dirty = true;
+        }
+        removed
+    }
+
+    /// The CUMULATIVE placement of an object: every ancestor's transform multiplied down the
+    /// tree onto its own. An object with no tree node is its own root and returns its local
+    /// transform — objects added without a parent are never attached, so treating a missing
+    /// node as identity would silently move them to the origin.
+    pub fn world_xform(&self, guid: &str) -> Xform {
+        let mut acc = self.xform(guid);
+        if let Some(node) = self.tree.get_node_by_name(guid) {
+            // ancestors() runs immediate parent → root, so left-multiplying each in turn
+            // yields root * … * parent * local — the same order the tree walk composes.
+            for ancestor in node.borrow().ancestors() {
+                let name = ancestor.borrow().name.clone();
+                if let Some(xf) = self.xforms.get(&name) {
+                    acc = xf * &acc;
+                }
+            }
+        }
+        acc
+    }
+
+    /// Every object's cumulative placement, computed in ONE downward pass. Use this instead of
+    /// calling `world_xform` per object: that does a whole-tree scan to find each node, which
+    /// is quadratic over a session.
+    pub fn world_xforms(&self) -> HashMap<String, Xform> {
+        fn walk(
+            node: &Rc<RefCell<TreeNode>>,
+            parent_xform: &Xform,
+            xforms: &HashMap<String, Xform>,
+            out: &mut HashMap<String, Xform>,
+        ) {
+            let name = node.borrow().name.clone();
+            let current = match xforms.get(&name) {
+                Some(local) => parent_xform * local,
+                None => parent_xform.clone(),
+            };
+            out.insert(name, current.clone());
+            for child in node.borrow().children() {
+                walk(&child, &current, xforms, out);
+            }
+        }
+
+        let mut out = HashMap::new();
+        if let Some(root) = self.tree.root() {
+            walk(&root, &Xform::identity(), &self.xforms, &mut out);
+        }
+        // Objects that were added without a parent have no tree node; they are their own roots.
+        for (guid, xform) in &self.xforms {
+            out.entry(guid.clone()).or_insert_with(|| xform.clone());
+        }
+        out
+    }
+
+    /// The xforms in canonical `order()` sequence, identity entries omitted — the exact
+    /// sequence jsondump and pb_dumps write, so both formats share one order.
+    /// Group nodes carry transforms too but hold no geometry, so they are absent from
+    /// `order()`; they follow, sorted by guid, or a group's placement would be lost on save.
+    fn xforms_ordered(&self) -> Vec<(String, Xform)> {
+        let mut ordered = Vec::new();
+        for guid in self.order() {
+            if let Some(xform) = self.xforms.get(&guid) {
+                if !xform.is_identity() {
+                    ordered.push((guid, xform.clone()));
+                }
+            }
+        }
+        let listed: std::collections::HashSet<&String> = ordered.iter().map(|(g, _)| g).collect();
+        let mut rest: Vec<(String, Xform)> = self
+            .xforms
+            .iter()
+            .filter(|(guid, xform)| !listed.contains(guid) && !xform.is_identity())
+            .map(|(guid, xform)| (guid.clone(), xform.clone()))
+            .collect();
+        rest.sort_by(|a, b| a.0.cmp(&b.0));
+        ordered.extend(rest);
+        ordered
+    }
+
+    ///////////////////////////////////////////////////////////////////////////////////////////
     // JSON
     ///////////////////////////////////////////////////////////////////////////////////////////
 
@@ -222,13 +330,20 @@ impl Session {
     pub fn jsondump(&self) -> Result<String, Box<dyn std::error::Error>> {
         let graph_json: serde_json::Value = serde_json::from_str(&self.graph.jsondump()?)?;
 
+        let xforms_json: Vec<serde_json::Value> = self
+            .xforms_ordered()
+            .into_iter()
+            .map(|(guid, xform)| serde_json::json!({ "guid": guid, "xform": xform }))
+            .collect();
+
         let json_obj = serde_json::json!({
             "type": "Session",
             "guid": self.guid(),
             "name": self.name,
             "objects": self.objects_synced(),
             "tree": self.tree,
-            "graph": graph_json
+            "graph": graph_json,
+            "xforms": xforms_json
         });
 
         let sorted = crate::file_encoders::sort_json_keys(json_obj);
@@ -295,6 +410,17 @@ impl Session {
             lookup.insert(elem.guid().to_string(), Geometry::Element(Rc::clone(elem)));
         }
 
+        let mut xforms = HashMap::new();
+        if let Some(entries) = json_obj["xforms"].as_array() {
+            for entry in entries {
+                if let Some(guid) = entry["guid"].as_str() {
+                    if let Ok(xform) = serde_json::from_value::<Xform>(entry["xform"].clone()) {
+                        xforms.insert(guid.to_string(), xform);
+                    }
+                }
+            }
+        }
+
         let session = Session {
             guid: { let lock = std::sync::OnceLock::new(); let _ = lock.set(json_obj["guid"].as_str().unwrap_or("").to_string()); lock },
             name: json_obj["name"]
@@ -305,6 +431,7 @@ impl Session {
             lookup,
             tree,
             graph,
+            xforms,
             bvh: SpatialBVH::new(),
             cached_ray_bvh: None,
             cached_guids: Vec::new(),
@@ -347,39 +474,19 @@ impl Session {
             guid: objects.guid().to_string(),
             ..Default::default()
         };
-        for p in &objects.points {
-            objects_proto.points.push(crate::proto::Point::decode(p.pb_dumps().as_slice()).unwrap());
-        }
-        for l in &objects.lines {
-            objects_proto.lines.push(crate::proto::Line::decode(l.pb_dumps().as_slice()).unwrap());
-        }
-        for pl in &objects.planes {
-            objects_proto.planes.push(crate::proto::Plane::decode(pl.pb_dumps().as_slice()).unwrap());
-        }
-        for b in &objects.bboxes {
-            objects_proto.bboxes.push(crate::proto::BoundingBox::decode(b.pb_dumps().as_slice()).unwrap());
-        }
-        for pl in &objects.polylines {
-            objects_proto.polylines.push(crate::proto::Polyline::decode(pl.pb_dumps().as_slice()).unwrap());
-        }
-        for pc in &objects.pointclouds {
-            objects_proto.pointclouds.push(crate::proto::PointCloud::decode(pc.pb_dumps().as_slice()).unwrap());
-        }
-        for m in &objects.meshes {
-            objects_proto.meshes.push(crate::proto::Mesh::decode(m.pb_dumps().as_slice()).unwrap());
-        }
-        for nc in &objects.nurbscurves {
-            objects_proto.nurbscurves.push(crate::proto::NurbsCurve::decode(nc.pb_dumps().as_slice()).unwrap());
-        }
-        for ns in &objects.nurbssurfaces {
-            objects_proto.nurbssurfaces.push(crate::proto::NurbsSurface::decode(ns.pb_dumps().as_slice()).unwrap());
-        }
-        for b in &objects.breps {
-            objects_proto.breps.push(crate::proto::BRep::decode(b.pb_dumps().as_slice()).unwrap());
-        }
-        for e in &objects.elements {
-            objects_proto.elements.push(crate::proto::Element::decode(e.pb_dumps().as_slice()).unwrap());
-        }
+        // to_proto directly — the old decode(pb_dumps()) round-trip re-encoded and re-decoded
+        // every object just to obtain the proto struct it was built from.
+        for p in &objects.points { objects_proto.points.push(p.to_proto()); }
+        for l in &objects.lines { objects_proto.lines.push(l.to_proto()); }
+        for pl in &objects.planes { objects_proto.planes.push(pl.to_proto()); }
+        for b in &objects.bboxes { objects_proto.bboxes.push(b.to_proto()); }
+        for pl in &objects.polylines { objects_proto.polylines.push(pl.to_proto()); }
+        for pc in &objects.pointclouds { objects_proto.pointclouds.push(pc.to_proto()); }
+        for m in &objects.meshes { objects_proto.meshes.push(m.to_proto()); }
+        for nc in &objects.nurbscurves { objects_proto.nurbscurves.push(nc.to_proto()); }
+        for ns in &objects.nurbssurfaces { objects_proto.nurbssurfaces.push(ns.to_proto()); }
+        for b in &objects.breps { objects_proto.breps.push(b.to_proto()); }
+        for e in &objects.elements { objects_proto.elements.push(e.to_proto()); }
 
         // Build Tree proto
         fn treenode_to_proto(node: &Rc<RefCell<TreeNode>>) -> crate::proto::TreeNode {
@@ -431,6 +538,20 @@ impl Session {
             edge_count: self.graph.edge_count,
         };
 
+        // Xforms in canonical order() sequence — a map would not be deterministic
+        let xforms_proto: Vec<crate::proto::XformEntry> = self
+            .xforms_ordered()
+            .into_iter()
+            .map(|(guid, xform)| crate::proto::XformEntry {
+                guid,
+                xform: Some(crate::proto::Xform {
+                    guid: xform.guid().to_string(),
+                    name: xform.name.clone(),
+                    matrix: xform.m.to_vec(),
+                }),
+            })
+            .collect();
+
         let proto = crate::proto::Session {
             name: self.name.clone(),
             guid: self.guid().to_string(),
@@ -438,6 +559,7 @@ impl Session {
             tree: Some(tree_proto),
             graph: Some(graph_proto),
             bvh_boxes: Vec::new(),
+            xforms: xforms_proto,
         };
         proto.encode_to_vec()
     }
@@ -449,53 +571,43 @@ impl Session {
         let mut session = Session::new(&proto.name);
         session.set_guid(proto.guid.clone());
 
-        // Rebuild objects
-        if let Some(objects_proto) = &proto.objects {
-            session.objects.set_guid(objects_proto.guid.clone());
-            session.objects.name = objects_proto.name.clone();
-            for p in &objects_proto.points {
-                let pt = Point::pb_loads(&p.encode_to_vec())?;
-                session.objects.points.push(Rc::new(pt));
+        // Rebuild objects — from_proto by value (moved out of the decoded Session proto); the
+        // old path re-ENCODED each decoded proto object and decoded it a second time.
+        if let Some(objects_proto) = proto.objects {
+            session.objects.set_guid(objects_proto.guid);
+            session.objects.name = objects_proto.name;
+            for p in objects_proto.points {
+                session.objects.points.push(Rc::new(Point::from_proto(p)));
             }
-            for l in &objects_proto.lines {
-                let ln = Line::pb_loads(&l.encode_to_vec())?;
-                session.objects.lines.push(Rc::new(ln));
+            for l in objects_proto.lines {
+                session.objects.lines.push(Rc::new(Line::from_proto(l)));
             }
-            for pl in &objects_proto.planes {
-                let pln = Plane::pb_loads(&pl.encode_to_vec())?;
-                session.objects.planes.push(Rc::new(pln));
+            for pl in objects_proto.planes {
+                session.objects.planes.push(Rc::new(Plane::from_proto(pl)));
             }
-            for b in &objects_proto.bboxes {
-                let bb = OBB::pb_loads(&b.encode_to_vec())?;
-                session.objects.bboxes.push(Rc::new(bb));
+            for b in objects_proto.bboxes {
+                session.objects.bboxes.push(Rc::new(OBB::from_proto(b)?));
             }
-            for pl in &objects_proto.polylines {
-                let pll = Polyline::pb_loads(&pl.encode_to_vec())?;
-                session.objects.polylines.push(Rc::new(pll));
+            for pl in objects_proto.polylines {
+                session.objects.polylines.push(Rc::new(Polyline::from_proto(pl)));
             }
-            for pc in &objects_proto.pointclouds {
-                let pcl = PointCloud::pb_loads(&pc.encode_to_vec());
-                session.objects.pointclouds.push(Rc::new(pcl));
+            for pc in objects_proto.pointclouds {
+                session.objects.pointclouds.push(Rc::new(PointCloud::from_proto(pc)));
             }
-            for m in &objects_proto.meshes {
-                let msh = Mesh::pb_loads(&m.encode_to_vec())?;
-                session.objects.meshes.push(Rc::new(msh));
+            for m in objects_proto.meshes {
+                session.objects.meshes.push(Rc::new(Mesh::from_proto(m)));
             }
-            for nc in &objects_proto.nurbscurves {
-                let crv = NurbsCurve::pb_loads(&nc.encode_to_vec())?;
-                session.objects.nurbscurves.push(Rc::new(crv));
+            for nc in objects_proto.nurbscurves {
+                session.objects.nurbscurves.push(Rc::new(NurbsCurve::from_proto(nc)));
             }
-            for ns in &objects_proto.nurbssurfaces {
-                let srf = NurbsSurface::pb_loads(&ns.encode_to_vec())?;
-                session.objects.nurbssurfaces.push(Rc::new(srf));
+            for ns in objects_proto.nurbssurfaces {
+                session.objects.nurbssurfaces.push(Rc::new(NurbsSurface::from_proto(ns)?));
             }
-            for b in &objects_proto.breps {
-                let brp = BRep::pb_loads(&b.encode_to_vec())?;
-                session.objects.breps.push(Rc::new(brp));
+            for b in objects_proto.breps {
+                session.objects.breps.push(Rc::new(BRep::from_proto(b)?));
             }
-            for e in &objects_proto.elements {
-                let elem = Element::pb_loads(&e.encode_to_vec())?;
-                session.objects.elements.push(Rc::new(elem));
+            for e in objects_proto.elements {
+                session.objects.elements.push(Rc::new(Element::from_proto(e)?));
             }
         }
 
@@ -564,6 +676,19 @@ impl Session {
             session.lookup.insert(elem.guid().to_string(), Geometry::Element(Rc::clone(elem)));
         }
 
+        // Rebuild xforms
+        for entry in &proto.xforms {
+            if let Some(xf) = &entry.xform {
+                let mut xform = Xform::identity();
+                xform.set_guid(xf.guid.clone());
+                xform.name = xf.name.clone();
+                for (i, val) in xf.matrix.iter().enumerate().take(16) {
+                    xform.m[i] = *val;
+                }
+                session.xforms.insert(entry.guid.clone(), xform);
+            }
+        }
+
         Ok(session)
     }
 
@@ -581,22 +706,30 @@ impl Session {
     ///////////////////////////////////////////////////////////////////////////////////////////
 
     /// Compute bounding box for a geometry object, inflated by tolerance
-    fn compute_bounding_box(geometry: &Geometry) -> OBB {
+    /// Bounding box of an object in WORLD placement. `xform` is its cumulative transform from
+    /// `world_xform` — the geometry itself stores no placement, so it must be supplied here.
+    fn compute_bounding_box(geometry: &Geometry, xform: &Xform) -> OBB {
         let inflate = Tolerance::APPROXIMATION;
+        let tp = |p: &Point| -> Point { xform.transform_point(p) };
         match geometry {
-            Geometry::Point(p) => OBB::from_point((**p).clone(), inflate),
+            Geometry::Point(p) => OBB::from_point(tp(p), inflate),
             Geometry::Line(l) => {
-                let points = vec![l.start(), l.end()];
+                let points = vec![tp(&l.start()), tp(&l.end())];
                 OBB::from_points(&points, inflate)
             }
-            Geometry::Polyline(pl) => OBB::from_points(&pl.get_points(), inflate),
-            Geometry::PointCloud(pc) => OBB::from_points(&pc.get_points(), inflate),
+            Geometry::Polyline(pl) => {
+                let points: Vec<Point> = pl.get_points().iter().map(|p| tp(p)).collect();
+                OBB::from_points(&points, inflate)
+            }
+            Geometry::PointCloud(pc) => {
+                let points: Vec<Point> = pc.get_points().iter().map(|p| tp(p)).collect();
+                OBB::from_points(&points, inflate)
+            }
             Geometry::Mesh(m) => {
-                // Extract vertices from mesh vertex data; xform is the placement, so bake it
                 let points: Vec<Point> = m
                     .vertex
                     .values()
-                    .map(|v| m.xform.transform_point(&Point::new(v.x, v.y, v.z)))
+                    .map(|v| tp(&Point::new(v.x, v.y, v.z)))
                     .collect();
                 if points.is_empty() {
                     OBB::from_point(Point::new(0.0, 0.0, 0.0), inflate)
@@ -612,13 +745,13 @@ impl Session {
                     inflated.half_size[1] + inflate,
                     inflated.half_size[2] + inflate,
                 );
+                inflated.transform(xform);
                 inflated
             }
             Geometry::Plane(p) => {
-                OBB::from_point(p.origin(), inflate * 10.0)
+                OBB::from_point(tp(&p.origin()), inflate * 10.0)
             }
             Geometry::BRep(b) => {
-                let tp = |p: &Point| -> Point { b.xform.transform_point(p) };
                 let mut points: Vec<Point> = b.m_vertices.iter().map(|p| tp(p)).collect();
                 // Sample surface points to cover curved surfaces (e.g. sphere with only pole vertices)
                 for srf in &b.m_surfaces {
@@ -644,7 +777,7 @@ impl Session {
                 let mut points: Vec<Point> = Vec::new();
                 for i in 0..c.cv_count() {
                     if let Some(p) = c.get_cv(i) {
-                        points.push(p);
+                        points.push(tp(&p));
                     }
                 }
                 if points.is_empty() {
@@ -658,7 +791,7 @@ impl Session {
                 for i in 0..s.cv_count_dir(Some(0)) {
                     for j in 0..s.cv_count_dir(Some(1)) {
                         if let Some(p) = s.get_cv(i, j) {
-                            points.push(p);
+                            points.push(tp(&p));
                         }
                     }
                 }
@@ -670,7 +803,9 @@ impl Session {
             }
             Geometry::Element(e) => {
                 let mut e2 = (**e).clone();
-                e2.aabb()
+                let mut box_ = e2.aabb();
+                box_.transform(xform);
+                box_
             }
         }
     }
@@ -689,9 +824,10 @@ impl Session {
         // Collect all objects with their bounding boxes and GUIDs
         let mut boxes_with_guids: Vec<(OBB, String)> = Vec::new();
 
+        let world = self.world_xforms();
         for guid in self.order() {
             let Some(geometry) = self.lookup.get(&guid) else { continue };
-            let bbox = Self::compute_bounding_box(geometry);
+            let bbox = Self::compute_bounding_box(geometry, world.get(&guid).unwrap_or(&Xform::identity()));
             boxes_with_guids.push((bbox, guid));
         }
 
@@ -732,9 +868,10 @@ impl Session {
         self.cached_boxes.clear();
         self.cached_guids.clear();
         let mut boxes: Vec<OBB> = Vec::with_capacity(self.lookup.len());
+        let world = self.world_xforms();
         for guid in self.order() {
             if let Some(geometry) = self.lookup.get(&guid) {
-                boxes.push(Self::compute_bounding_box(geometry));
+                boxes.push(Self::compute_bounding_box(geometry, world.get(&guid).unwrap_or(&Xform::identity())));
                 self.cached_guids.push(guid);
             }
         }
@@ -805,12 +942,16 @@ impl Session {
         }
 
         let mut hits_all: Vec<RayHit> = Vec::new();
+        // Placements come from the session, not the geometry; resolve them all up front
+        // because the loop below borrows `lookup` mutably.
+        let world = self.world_xforms();
 
         for idx in candidates {
             if idx >= self.cached_guids.len() {
                 continue;
             }
             let guid = self.cached_guids[idx].clone();
+            let placement = world.get(&guid).cloned().unwrap_or_else(Xform::identity);
             let geom = match self.lookup.get_mut(&guid) {
                 Some(g) => g,
                 None => continue,
@@ -866,19 +1007,19 @@ impl Session {
                     }
                 }
                 Geometry::Mesh(m) => {
-                    // xform is the placement: cast in the mesh's LOCAL frame, return a WORLD hit.
+                    // The session holds the placement: cast in the mesh's LOCAL frame, return a WORLD hit.
                     // COW only when the triangle BVH is missing — a shared mesh with a built BVH
                     // is cast through &self (no clone after every save/re-share).
                     if !m.has_triangle_bvh() {
                         Rc::make_mut(m).build_triangle_bvh();
                     }
-                    if let Some(inv) = m.xform.inverse() {
+                    if let Some(inv) = placement.inverse() {
                         let local_ray = Line::from_points(
                             &inv.transform_point(&ray_line.start()),
                             &inv.transform_point(&ray_line.end()),
                         );
                         if let Some(p) = m.ray_cast_bvh_ready(&local_ray, 1e-6) {
-                            hit_point = Some(m.xform.transform_point(&p));
+                            hit_point = Some(placement.transform_point(&p));
                         }
                     }
                 }
@@ -1295,6 +1436,7 @@ impl Session {
 
         // Remove from lookup table
         self.lookup.remove(guid);
+        self.xforms.remove(guid);
         self.invalidate_bvh_cache();
 
         // Remove from tree - find node by GUID and remove it
@@ -1367,237 +1509,51 @@ impl Session {
     // Details - Transformed Geometry
     ///////////////////////////////////////////////////////////////////////////////////////////
 
-    /// Get all geometry with transformations applied from tree hierarchy.
+    /// All geometry with its hierarchical placement BAKED into the coordinates.
     ///
-    /// Recursively traverses the tree and applies parent transformations to children.
-    /// Each child's transformation is the composition of all ancestor transformations
-    /// multiplied by its own transformation.
+    /// Each object is transformed by its cumulative `world_xform` — its own transform with
+    /// every ancestor's multiplied down the tree. The result is a FLATTENED snapshot: every
+    /// guid's world transform is identity by construction, so never pair it back with
+    /// `self.xforms` or the placement would be applied twice.
     ///
     /// # Returns
     /// Objects collection with transformed geometry
     pub fn get_geometry(&self) -> Objects {
-        use crate::Xform;
+        let mut objects = self.objects_synced(); // lookup is the truth
+        let world = self.world_xforms();
 
-        // Deep copy all objects
-        let mut transformed_objects = self.objects_synced(); // lookup is the truth
-
-        // Rebuild lookup from copied objects
-        let mut transformed_lookup: HashMap<String, Geometry> = HashMap::new();
-
-        for point in &transformed_objects.points {
-            transformed_lookup.insert(point.guid().to_string(), Geometry::Point(Rc::clone(point)));
-        }
-        for line in &transformed_objects.lines {
-            transformed_lookup.insert(line.guid().to_string(), Geometry::Line(Rc::clone(line)));
-        }
-        for plane in &transformed_objects.planes {
-            transformed_lookup.insert(plane.guid().to_string(), Geometry::Plane(Rc::clone(plane)));
-        }
-        for bbox in &transformed_objects.bboxes {
-            transformed_lookup.insert(bbox.guid().to_string(), Geometry::OBB(Rc::clone(bbox)));
-        }
-        for polyline in &transformed_objects.polylines {
-            transformed_lookup.insert(polyline.guid().to_string(), Geometry::Polyline(Rc::clone(polyline)));
-        }
-        for pointcloud in &transformed_objects.pointclouds {
-            transformed_lookup.insert(
-                pointcloud.guid().to_string(),
-                Geometry::PointCloud(Rc::clone(pointcloud)),
-            );
-        }
-        for mesh in &transformed_objects.meshes {
-            transformed_lookup.insert(mesh.guid().to_string(), Geometry::Mesh(Rc::clone(mesh)));
-        }
-        for nurbscurve in &transformed_objects.nurbscurves {
-            transformed_lookup.insert(nurbscurve.guid().to_string(), Geometry::NurbsCurve(Rc::clone(nurbscurve)));
-        }
-        for nurbssurface in &transformed_objects.nurbssurfaces {
-            transformed_lookup.insert(nurbssurface.guid().to_string(), Geometry::NurbsSurface(Rc::clone(nurbssurface)));
-        }
-        for brep in &transformed_objects.breps {
-            transformed_lookup.insert(brep.guid().to_string(), Geometry::BRep(Rc::clone(brep)));
-        }
-
-        fn transform_node(
-            node: &Rc<RefCell<TreeNode>>,
-            parent_xform: &Xform,
-            transformed_lookup: &HashMap<String, Geometry>,
-            transformed_objects: &mut Objects,
-        ) {
-            let node_name = node.borrow().name.clone();
-            let geometry = transformed_lookup.get(&node_name);
-
-            let current_xform = if let Some(geom) = geometry {
-                // Get mutable reference and transform in-place
-                let combined_xform = parent_xform
-                    * match geom {
-                        Geometry::Point(g) => &g.xform,
-                        Geometry::Line(g) => &g.xform,
-                        Geometry::Plane(g) => &g.xform,
-                        Geometry::OBB(g) => &g.xform,
-                        Geometry::Polyline(g) => &g.xform,
-                        Geometry::PointCloud(g) => &g.xform,
-                        Geometry::Mesh(g) => &g.xform,
-                        Geometry::NurbsCurve(g) => &g.xform,
-                        Geometry::NurbsSurface(g) => &g.xform,
-                        Geometry::BRep(g) => &g.xform,
-                        Geometry::Element(g) => &g.session_transformation,
-                    };
-
-                // Find and update the geometry in the collections
-                match geom {
-                    Geometry::Point(_) => {
-                        if let Some(g) = transformed_objects
-                            .points
-                            .iter_mut()
-                            .find(|p| p.guid() == node_name)
-                        {
-                            Rc::make_mut(g).xform = combined_xform.clone();
-                        }
-                    }
-                    Geometry::Line(_) => {
-                        if let Some(g) = transformed_objects
-                            .lines
-                            .iter_mut()
-                            .find(|l| l.guid() == node_name)
-                        {
-                            Rc::make_mut(g).xform = combined_xform.clone();
-                        }
-                    }
-                    Geometry::Plane(_) => {
-                        if let Some(g) = transformed_objects
-                            .planes
-                            .iter_mut()
-                            .find(|p| p.guid() == node_name)
-                        {
-                            Rc::make_mut(g).xform = combined_xform.clone();
-                        }
-                    }
-                    Geometry::OBB(_) => {
-                        if let Some(g) = transformed_objects
-                            .bboxes
-                            .iter_mut()
-                            .find(|b| b.guid() == node_name)
-                        {
-                            Rc::make_mut(g).xform = combined_xform.clone();
-                        }
-                    }
-                    Geometry::NurbsCurve(_) => {
-                        if let Some(g) = transformed_objects
-                            .nurbscurves
-                            .iter_mut()
-                            .find(|c| c.guid() == node_name)
-                        {
-                            Rc::make_mut(g).xform = combined_xform.clone();
-                        }
-                    }
-                    Geometry::NurbsSurface(_) => {
-                        if let Some(g) = transformed_objects
-                            .nurbssurfaces
-                            .iter_mut()
-                            .find(|s| s.guid() == node_name)
-                        {
-                            Rc::make_mut(g).xform = combined_xform.clone();
-                        }
-                    }
-                    Geometry::Polyline(_) => {
-                        if let Some(g) = transformed_objects
-                            .polylines
-                            .iter_mut()
-                            .find(|p| p.guid() == node_name)
-                        {
-                            Rc::make_mut(g).xform = combined_xform.clone();
-                        }
-                    }
-                    Geometry::PointCloud(_) => {
-                        if let Some(g) = transformed_objects
-                            .pointclouds
-                            .iter_mut()
-                            .find(|p| p.guid() == node_name)
-                        {
-                            Rc::make_mut(g).xform = combined_xform.clone();
-                        }
-                    }
-                    Geometry::Mesh(_) => {
-                        if let Some(g) = transformed_objects
-                            .meshes
-                            .iter_mut()
-                            .find(|m| m.guid() == node_name)
-                        {
-                            Rc::make_mut(g).xform = combined_xform.clone();
-                        }
-                    }
-                    Geometry::BRep(_) => {
-                        if let Some(g) = transformed_objects
-                            .breps
-                            .iter_mut()
-                            .find(|b| b.guid() == node_name)
-                        {
-                            Rc::make_mut(g).xform = combined_xform.clone();
-                        }
-                    }
-                    Geometry::Element(_) => {
-                        if let Some(g) = transformed_objects
-                            .elements
-                            .iter_mut()
-                            .find(|e| e.guid() == node_name)
-                        {
-                            Rc::make_mut(g).session_transformation = combined_xform.clone();
-                        }
+        // No type is skipped: Rust used to leave nurbs and elements un-baked and C++ left
+        // breps un-baked, so a placement in the tree silently did nothing for them.
+        macro_rules! bake {
+            ($vec:expr) => {
+                for item in $vec.iter_mut() {
+                    let Some(xform) = world.get(item.guid()) else { continue };
+                    if !xform.is_identity() {
+                        Rc::make_mut(item).transform(xform);
                     }
                 }
-
-                combined_xform
-            } else {
-                parent_xform.clone()
             };
+        }
+        bake!(objects.points);
+        bake!(objects.lines);
+        bake!(objects.planes);
+        bake!(objects.bboxes);
+        bake!(objects.polylines);
+        bake!(objects.pointclouds);
+        bake!(objects.meshes);
+        bake!(objects.nurbscurves);
+        bake!(objects.nurbssurfaces);
+        bake!(objects.breps);
 
-            for child in node.borrow().children() {
-                transform_node(
-                    &child,
-                    &current_xform,
-                    transformed_lookup,
-                    transformed_objects,
-                );
+        // An Element holds its own geometry, so its placement is baked through session_geometry.
+        for item in objects.elements.iter_mut() {
+            let Some(xform) = world.get(item.guid()) else { continue };
+            if !xform.is_identity() {
+                Rc::make_mut(item).place(xform);
             }
         }
 
-        if let Some(root) = self.tree.root() {
-            transform_node(
-                &root,
-                &Xform::identity(),
-                &transformed_lookup,
-                &mut transformed_objects,
-            );
-        }
-
-        // Apply accumulated transformations to actual geometry coordinates
-        for point in &mut transformed_objects.points {
-            Rc::make_mut(point).transform();
-        }
-        for line in &mut transformed_objects.lines {
-            Rc::make_mut(line).transform();
-        }
-        for plane in &mut transformed_objects.planes {
-            Rc::make_mut(plane).transform();
-        }
-        for bbox in &mut transformed_objects.bboxes {
-            Rc::make_mut(bbox).transform();
-        }
-        for polyline in &mut transformed_objects.polylines {
-            Rc::make_mut(polyline).transform();
-        }
-        for pointcloud in &mut transformed_objects.pointclouds {
-            Rc::make_mut(pointcloud).transform();
-        }
-        for mesh in &mut transformed_objects.meshes {
-            Rc::make_mut(mesh).transform(None);
-        }
-        for brep in &mut transformed_objects.breps {
-            Rc::make_mut(brep).transform();
-        }
-
-        transformed_objects
+        objects
     }
 }
 

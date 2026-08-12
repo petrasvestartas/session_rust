@@ -110,15 +110,14 @@ pub fn run_obb_transformation() -> TestResult {
             Point::new(1.0, 1.0, 0.0),
         ];
         let mut bb = OBB::from_points(&pts, 0.0);
-        bb.xform = Xform::translation(0.0, 0.0, 5.0);
+        let bb_xf = Xform::translation(0.0, 0.0, 5.0);
 
-        let bbt = bb.transformed();
+        let bbt = bb.transformed(&bb_xf);
 
         MINI_CHECK!(TOLERANCE.is_close(bbt.center[2], 5.0));
 
-        bb.transform();
+        bb.transform(&bb_xf);
 
-        MINI_CHECK!(bb.xform == Xform::identity());
         MINI_CHECK!(TOLERANCE.is_close(bb.center[2], 5.0));
     })
 }

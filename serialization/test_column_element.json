@@ -48,7 +48,7 @@
       ]
     },
     "facedata": {},
-    "guid": "47efaa10-018e-4f4d-ac27-9e9c39108c5f",
+    "guid": "32084b0e-8c62-4fb0-88f9-4349fdfdea29",
     "halfedge": {
       "0": {
         "1": 2,
@@ -144,58 +144,12 @@
         "y": 0.3,
         "z": 4.0
       }
-    },
-    "xform": {
-      "guid": "74b7f8f7-9b6d-40af-8bdd-b6235508b6e9",
-      "m": [
-        1.0,
-        0.0,
-        0.0,
-        0.0,
-        0.0,
-        1.0,
-        0.0,
-        0.0,
-        0.0,
-        0.0,
-        1.0,
-        0.0,
-        0.0,
-        0.0,
-        0.0,
-        1.0
-      ],
-      "name": "my_xform",
-      "type": "Xform"
     }
   },
   "geometry_type": "Mesh",
-  "guid": "ea9a1c64-4cb1-4728-a1ce-12fddfa7b062",
+  "guid": "03fd4c01-4b32-4466-9326-54b01c705613",
   "height": 4.0,
   "name": "json_col",
-  "session_transformation": {
-    "guid": "083713e4-2d76-450c-8ddb-bbe427da683f",
-    "m": [
-      1.0,
-      0.0,
-      0.0,
-      0.0,
-      0.0,
-      1.0,
-      0.0,
-      0.0,
-      0.0,
-      0.0,
-      1.0,
-      0.0,
-      1.0,
-      2.0,
-      3.0,
-      1.0
-    ],
-    "name": "my_xform",
-    "type": "Xform"
-  },
   "type": "ElementColumn",
   "width": 0.5
 }

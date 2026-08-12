@@ -13,40 +13,17 @@
         0.0,
         1.0
     ],
-    "guid": "883a70fe-8090-4cc0-8f38-6a9b92ec3c63",
+    "guid": "0aeead0b-55b6-481d-9577-ccdc07f30bfc",
     "linecolor": {
         "a": 1.0,
         "b": 1.0,
         "g": 0.0,
-        "guid": "c1fca0f3-f95f-46d3-b3bc-061a0a0cd653",
+        "guid": "607ca2b8-9666-400a-974a-d8bb667b6768",
         "name": "blue",
         "r": 0.0,
         "type": "Color"
     },
     "name": "test_plane",
     "type": "Plane",
-    "width": 1.0,
-    "xform": {
-        "guid": "bfd062a2-2ff1-4e4e-a190-0d550f0f69d8",
-        "m": [
-            1.0,
-            0.0,
-            0.0,
-            0.0,
-            0.0,
-            1.0,
-            0.0,
-            0.0,
-            0.0,
-            0.0,
-            1.0,
-            0.0,
-            0.0,
-            0.0,
-            0.0,
-            1.0
-        ],
-        "name": "my_xform",
-        "type": "Xform"
-    }
+    "width": 1.0
 }

@@ -365,7 +365,6 @@ pub struct NurbsSurfaceTrimmed {
     pub name: String,
     pub width: f64,
     pub surfacecolor: Color,
-    pub xform: Xform,
     #[serde(rename = "surface")]
     pub m_surface: NurbsSurface,
     #[serde(rename = "outer_loop")]
@@ -403,7 +402,6 @@ impl NurbsSurfaceTrimmed {
             name: "my_nurbssurface_trimmed".to_string(),
             width: 1.0,
             surfacecolor: Color::black(),
-            xform: Xform::identity(),
             m_surface: NurbsSurface::new(),
             m_outer_loop: None,
             m_inner_loops: Vec::new(),
@@ -431,11 +429,11 @@ impl NurbsSurfaceTrimmed {
     /// geometry. Mirrors NurbsSurface::transform(&xf) so the viewer can move it like a BRep.
     pub fn transform(&mut self, xf: &Xform) {
         self.m_surface.transform(xf);
-        if let Some(q0) = self.cut_q0.as_mut() { q0.xform = xf.clone(); q0.transform(); q0.xform = Xform::identity(); }
-        if let Some(n) = self.cut_n.as_mut() { n.xform = xf.clone(); n.transform(); n.xform = Xform::identity(); }
+        if let Some(q0) = self.cut_q0.as_mut() { q0.transform(xf); }
+        if let Some(n) = self.cut_n.as_mut() { n.transform(xf); }
         for (q, n) in self.cut_planes.iter_mut() {
-            q.xform = xf.clone(); q.transform(); q.xform = Xform::identity();
-            n.xform = xf.clone(); n.transform(); n.xform = Xform::identity();
+            q.transform(xf);
+            n.transform(xf);
         }
     }
 
@@ -1642,15 +1640,9 @@ impl NurbsSurfaceTrimmed {
         out
     }
 
-    pub fn transform_self(&mut self) {
-        let xf = self.xform.clone();
-        self.m_surface.transform(&xf);
-        self.xform = Xform::identity();
-    }
-
-    pub fn transformed(&self) -> Self {
+    pub fn transformed(&self, xf: &Xform) -> Self {
         let mut ts = self.clone();
-        ts.transform_self();
+        ts.transform(xf);
         ts
     }
 
@@ -1745,11 +1737,6 @@ impl NurbsSurfaceTrimmed {
                 b: self.surfacecolor.b,
                 a: self.surfacecolor.a,
             }),
-            xform: Some(crate::proto::Xform {
-                guid: self.xform.guid().to_string(),
-                name: self.xform.name.clone(),
-                matrix: self.xform.m.iter().map(|&v| v as f64).collect(),
-            }),
         };
         proto.encode_to_vec()
     }
@@ -1791,14 +1778,6 @@ impl NurbsSurfaceTrimmed {
             ts.surfacecolor.a = color.a;
         }
 
-        if let Some(xform) = proto.xform {
-            ts.xform.set_guid(xform.guid.clone());
-            ts.xform.name = xform.name;
-            for (i, val) in xform.matrix.iter().enumerate() {
-                if i < 16 { ts.xform.m[i] = *val as f64; }
-            }
-        }
-
         Ok(ts)
     }
 
@@ -1822,7 +1801,6 @@ impl PartialEq for NurbsSurfaceTrimmed {
         if self.name != other.name { return false; }
         if self.width != other.width { return false; }
         if self.surfacecolor != other.surfacecolor { return false; }
-        if self.xform != other.xform { return false; }
         if self.m_surface != other.m_surface { return false; }
         true
     }

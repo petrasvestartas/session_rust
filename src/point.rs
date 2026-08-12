@@ -37,8 +37,6 @@ pub struct Point {
     _z: f64, // Z coordinate (private)
     pub width: f64,   // Width of the point
     pub pointcolor: Color, // Color of the point
-    #[serde(default = "Xform::identity")]
-    pub xform: Xform, // Transformation matrix
 }
 
 impl Default for Point {
@@ -51,7 +49,6 @@ impl Default for Point {
             name: "my_point".to_string(),
             pointcolor: Color::black(),
             width: 1.0,
-            xform: Xform::identity(),
         }
     }
 }
@@ -126,31 +123,25 @@ impl Point {
         copy
     }
 
-    /// Apply the stored xform transformation to the point coordinates.
-    ///
-    /// Transforms the point in-place and resets xform to identity.
-    pub fn transform(&mut self) {
+    /// Apply a transformation to the point coordinates, in place.
+    pub fn transform(&mut self, xform: &Xform) {
         let (x, y, z) = (self._x, self._y, self._z);
-        let m = &self.xform.m;
+        let m = &xform.m;
         let w = m[3]*x + m[7]*y + m[11]*z + m[15];
         let w_inv = if w.abs() > 1e-10 { 1.0 / w } else { 1.0 };
         self._x = (m[0]*x + m[4]*y + m[8]*z + m[12]) * w_inv;
         self._y = (m[1]*x + m[5]*y + m[9]*z + m[13]) * w_inv;
         self._z = (m[2]*x + m[6]*y + m[10]*z + m[14]) * w_inv;
-        self.xform = Xform::identity();
     }
 
-    /// Return a transformed copy of the point.
-    ///
-    /// Returns a new point with the transformation applied.
-    /// The original point and its xform remain unchanged.
+    /// Return a transformed copy of the point, leaving the original unchanged.
     ///
     /// # Returns
     ///
     /// A new transformed Point.
-    pub fn transformed(&self) -> Self {
+    pub fn transformed(&self, xform: &Xform) -> Self {
         let mut result = self.clone();
-        result.transform();
+        result.transform(xform);
         result
     }
 
@@ -228,8 +219,12 @@ impl Point {
     /// A Vec<u8> containing the serialized protobuf data.
     pub fn pb_dumps(&self) -> Vec<u8> {
         use prost::Message;
-        
-        let proto = crate::proto::Point {
+        self.to_proto().encode_to_vec()
+    }
+
+    /// The proto struct itself — pb_dumps encodes it; Session embeds it directly.
+    pub fn to_proto(&self) -> crate::proto::Point {
+        crate::proto::Point {
             guid: self.guid().to_string(),
             name: self.name.clone(),
             x: self._x as f64,
@@ -244,13 +239,7 @@ impl Point {
                 b: self.pointcolor.b,
                 a: self.pointcolor.a,
             }),
-            xform: Some(crate::proto::Xform {
-                guid: self.xform.guid().to_string(),
-                name: self.xform.name.clone(),
-                matrix: self.xform.m.iter().map(|&v| v as f64).collect(),
-            }),
-        };
-        proto.encode_to_vec()
+        }
     }
 
     /// Create Point from protobuf binary data.
@@ -264,9 +253,11 @@ impl Point {
     /// A Result containing the deserialized Point or an error.
     pub fn pb_loads(data: &[u8]) -> Result<Self, Box<dyn std::error::Error>> {
         use prost::Message;
-        
-        let proto = crate::proto::Point::decode(data)?;
-        
+        Ok(Self::from_proto(crate::proto::Point::decode(data)?))
+    }
+
+    /// Build from an already-decoded proto — pb_loads decodes then calls this.
+    pub fn from_proto(proto: crate::proto::Point) -> Self {
         let mut pt = Self::new(proto.x as f64, proto.y as f64, proto.z as f64);
         pt.set_guid(proto.guid);
         pt.name = proto.name;
@@ -280,17 +271,7 @@ impl Point {
             pt.pointcolor.a = color.a;
         }
 
-        if let Some(xform) = proto.xform {
-            pt.xform.set_guid(xform.guid);
-            pt.xform.name = xform.name;
-            for (i, val) in xform.matrix.iter().enumerate() {
-                if i < 16 {
-                    pt.xform.m[i] = *val as f64;
-                }
-            }
-        }
-        
-        Ok(pt)
+        pt
     }
 
     /// Write protobuf to file.

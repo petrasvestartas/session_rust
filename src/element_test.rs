@@ -48,11 +48,11 @@ pub fn run_element_constructor() -> TestResult {
     })
 }
 
-pub fn run_element_session_transformation() -> TestResult {
-    MINI_TEST!("Session Transformation", {
+pub fn run_element_place() -> TestResult {
+    MINI_TEST!("Place", {
         use crate::Mesh;
         use crate::Xform;
-        use crate::element::Element;
+        use crate::element::{Element, ElementGeometry};
         use crate::Point;
 
         let m = Mesh::from_vertices_and_faces(
@@ -66,10 +66,13 @@ pub fn run_element_session_transformation() -> TestResult {
         );
         let mut e = Element::from_mesh(m, "my_element");
         let xf = Xform::translation(10.0, 20.0, 30.0);
-        e.session_transformation = xf.clone();
+        e.place(&xf);
 
         MINI_CHECK!(e.is_dirty());
-        MINI_CHECK!(e.session_transformation == xf);
+        if let ElementGeometry::Mesh(mesh) = e.geometry() {
+            let min_x = mesh.vertex.values().map(|v| v.x).fold(f64::INFINITY, f64::min);
+            MINI_CHECK!(min_x > 9.0);
+        }
     })
 }
 
@@ -161,9 +164,9 @@ pub fn run_element_session_geometry() -> TestResult {
             ],
             vec![vec![0, 1, 2, 3]],
         );
-        let mut e = Element::from_mesh(m, "my_element");
-        e.session_transformation = Xform::translation(10.0, 0.0, 0.0);
-        let sg = e.session_geometry();
+        let e = Element::from_mesh(m, "my_element");
+        let e_xf = Xform::translation(10.0, 0.0, 0.0);
+        let sg = e.session_geometry(&e_xf);
 
         MINI_CHECK!(matches!(&sg, ElementGeometry::Mesh(_)));
         if let ElementGeometry::Mesh(mesh) = &sg {
@@ -250,7 +253,6 @@ pub fn run_element_brep_aabb() -> TestResult {
 pub fn run_element_json_roundtrip() -> TestResult {
     MINI_TEST!("Json Roundtrip", {
         use crate::Mesh;
-        use crate::Xform;
         use crate::element::{Element, ElementGeometry};
         use crate::Point;
 
@@ -263,8 +265,7 @@ pub fn run_element_json_roundtrip() -> TestResult {
             ],
             vec![vec![0, 1, 2, 3]],
         );
-        let mut e = Element::from_mesh(m, "json_test");
-        e.session_transformation = Xform::translation(1.0, 2.0, 3.0);
+        let e = Element::from_mesh(m, "json_test");
 
         let fname = "serialization/test_element.json";
         e.file_json_dump(fname);
@@ -281,12 +282,10 @@ pub fn run_element_json_roundtrip() -> TestResult {
 pub fn run_element_protobuf_roundtrip() -> TestResult {
     MINI_TEST!("Protobuf Roundtrip", {
         use crate::BRep;
-        use crate::Xform;
         use crate::element::{Element, ElementGeometry};
 
         let b = BRep::create_box(2.0, 3.0, 4.0);
-        let mut e = Element::from_brep(b, "proto_test");
-        e.session_transformation = Xform::translation(1.0, 2.0, 3.0);
+        let e = Element::from_brep(b, "proto_test");
 
         let path = "serialization/test_element.bin";
         e.pb_dump(path);
@@ -329,7 +328,7 @@ pub fn run_element_polylines() -> TestResult {
 ///////////////////////////////////////////////////////////////////////////////////////////
 
 REGISTER_MINI_TEST!("Element", "Constructor", crate::element_test::run_element_constructor);
-REGISTER_MINI_TEST!("Element", "Session Transformation", crate::element_test::run_element_session_transformation);
+REGISTER_MINI_TEST!("Element", "Place", crate::element_test::run_element_place);
 REGISTER_MINI_TEST!("Element", "Add Feature", crate::element_test::run_element_add_feature);
 REGISTER_MINI_TEST!("Element", "AABB", crate::element_test::run_element_aabb);
 REGISTER_MINI_TEST!("Element", "OBB", crate::element_test::run_element_obb);

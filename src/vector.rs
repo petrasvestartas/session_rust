@@ -37,8 +37,6 @@ pub struct Vector {
     pub name: String,
     #[serde(rename = "x")]
     _x: f64,
-    #[serde(default = "Xform::identity")]
-    pub xform: Xform,
     #[serde(rename = "y")]
     _y: f64,
     #[serde(rename = "z")]
@@ -57,7 +55,6 @@ impl Default for Vector {
             _z: 0.0,
             guid: std::sync::OnceLock::new(),
             name: "my_vector".to_string(),
-            xform: Xform::identity(),
             _magnitude: Cell::new(0.0),
             _has_magnitude: Cell::new(false),
         }
@@ -288,25 +285,20 @@ impl Vector {
         result
     }
 
-    /// Apply the stored xform transformation to the vector coordinates.
-    ///
-    /// Transforms the vector in-place and resets xform to identity.
-    pub fn transform(&mut self) {
+    /// Apply a transformation to the vector coordinates, in place.
+    /// Only the rotation/scale part applies: a vector has no position to translate.
+    pub fn transform(&mut self, xform: &Xform) {
         let (x, y, z) = (self._x, self._y, self._z);
-        let m = &self.xform.m;
+        let m = &xform.m;
         self._x = m[0]*x + m[4]*y + m[8]*z;
         self._y = m[1]*x + m[5]*y + m[9]*z;
         self._z = m[2]*x + m[6]*y + m[10]*z;
-        self.xform = Xform::identity();
     }
 
-    /// Return a transformed copy of the vector.
-    ///
-    /// Returns a new vector with the transformation applied.
-    /// The original vector and its xform remain unchanged.
-    pub fn transformed(&self) -> Self {
+    /// Return a transformed copy of the vector, leaving the original unchanged.
+    pub fn transformed(&self, xform: &Xform) -> Self {
         let mut result = self.clone();
-        result.transform();
+        result.transform(xform);
         result
     }
 
@@ -1004,11 +996,6 @@ impl Vector {
             y: self._y as f64,
             z: self._z as f64,
             name: self.name.clone(),
-            xform: Some(crate::proto::Xform {
-                guid: self.xform.guid().to_string(),
-                name: self.xform.name.clone(),
-                matrix: self.xform.m.iter().map(|&v| v as f64).collect(),
-            }),
         };
         proto.encode_to_vec()
     }
@@ -1029,15 +1016,6 @@ impl Vector {
 
         let mut v = Self::new(proto.x as f64, proto.y as f64, proto.z as f64);
         v.name = proto.name;
-        if let Some(xform) = proto.xform {
-            v.xform.set_guid(xform.guid);
-            v.xform.name = xform.name;
-            for (i, val) in xform.matrix.iter().enumerate() {
-                if i < 16 {
-                    v.xform.m[i] = *val as f64;
-                }
-            }
-        }
 
         Ok(v)
     }

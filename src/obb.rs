@@ -12,8 +12,6 @@ pub struct OBB {
     #[serde(serialize_with = "crate::guid_serde::serialize", deserialize_with = "crate::guid_serde::deserialize")]
     guid: std::sync::OnceLock<String>,
     pub name: String,
-    #[serde(default = "Xform::identity")]
-    pub xform: Xform,
 }
 
 impl OBB {
@@ -32,7 +30,6 @@ impl OBB {
             half_size,
             guid: std::sync::OnceLock::new(),
             name: "my_obb".to_string(),
-            xform: Xform::identity(),
         }
     }
 
@@ -45,7 +42,6 @@ impl OBB {
             half_size: Vector::new(dx * 0.5, dy * 0.5, dz * 0.5),
             guid: std::sync::OnceLock::new(),
             name: String::new(),
-            xform: Xform::identity(),
         }
     }
 
@@ -74,7 +70,6 @@ impl OBB {
             half_size: Vector::new(a.hx, a.hy, a.hz),
             guid: std::sync::OnceLock::new(),
             name: String::new(),
-            xform: Xform::identity(),
         }
     }
 
@@ -200,7 +195,7 @@ impl OBB {
         let mut max_z = f64::MIN;
 
         for pt in points {
-            let mut local_pt = pt.clone(); local_pt.xform = plane_to_xy.clone(); local_pt = local_pt.transformed();
+            let local_pt = pt.transformed(&plane_to_xy);
             min_x = min_x.min(local_pt[0]);
             min_y = min_y.min(local_pt[1]);
             min_z = min_z.min(local_pt[2]);
@@ -221,7 +216,7 @@ impl OBB {
         );
 
         let xy_to_plane = Xform::xy_to_plane(&origin, &x_axis, &y_axis, &z_axis);
-        let mut world_center = local_center.clone(); world_center.xform = xy_to_plane.clone(); world_center = world_center.transformed();
+        let world_center = local_center.transformed(&xy_to_plane);
 
         OBB {
             center: world_center,
@@ -231,7 +226,6 @@ impl OBB {
             half_size,
             guid: std::sync::OnceLock::new(),
             name: String::new(),
-            xform: Xform::identity(),
         }
     }
 
@@ -604,21 +598,16 @@ impl OBB {
         true
     }
 
-    pub fn transform(&mut self) {
-        self.center.xform = self.xform.clone();
-        self.center.transform();
-        self.x_axis.xform = self.xform.clone();
-        self.x_axis.transform();
-        self.y_axis.xform = self.xform.clone();
-        self.y_axis.transform();
-        self.z_axis.xform = self.xform.clone();
-        self.z_axis.transform();
-        self.xform = Xform::identity();
+    pub fn transform(&mut self, xform: &Xform) {
+        self.center.transform(xform);
+        self.x_axis.transform(xform);
+        self.y_axis.transform(xform);
+        self.z_axis.transform(xform);
     }
 
-    pub fn transformed(&self) -> Self {
+    pub fn transformed(&self, xform: &Xform) -> Self {
         let mut result = self.clone();
-        result.transform();
+        result.transform(xform);
         result
     }
 
@@ -681,7 +670,13 @@ impl OBB {
 
     pub fn pb_dumps(&self) -> Vec<u8> {
         use prost::Message;
-        let proto = crate::proto::BoundingBox {
+        self.to_proto().encode_to_vec()
+    }
+
+    /// The proto struct itself — pb_dumps encodes it; Session embeds it directly.
+    pub fn to_proto(&self) -> crate::proto::BoundingBox {
+        use prost::Message;
+        crate::proto::BoundingBox {
             center: Some(crate::proto::Point::decode(self.center.pb_dumps().as_slice()).unwrap()),
             x_axis: Some(crate::proto::Vector::decode(self.x_axis.pb_dumps().as_slice()).unwrap()),
             y_axis: Some(crate::proto::Vector::decode(self.y_axis.pb_dumps().as_slice()).unwrap()),
@@ -689,18 +684,17 @@ impl OBB {
             half_size: Some(crate::proto::Vector::decode(self.half_size.pb_dumps().as_slice()).unwrap()),
             guid: self.guid().to_string(),
             name: self.name.clone(),
-            xform: Some(crate::proto::Xform {
-                guid: self.xform.guid().to_string(),
-                name: self.xform.name.clone(),
-                matrix: self.xform.m.iter().map(|&v| v as f64).collect(),
-            }),
-        };
-        proto.encode_to_vec()
+        }
     }
 
     pub fn pb_loads(data: &[u8]) -> Result<Self, Box<dyn std::error::Error>> {
         use prost::Message;
-        let proto = crate::proto::BoundingBox::decode(data)?;
+        Self::from_proto(crate::proto::BoundingBox::decode(data)?)
+    }
+
+    /// Build from an already-decoded proto — pb_loads decodes then calls this.
+    pub fn from_proto(proto: crate::proto::BoundingBox) -> Result<Self, Box<dyn std::error::Error>> {
+        use prost::Message;
         let center = if let Some(p) = &proto.center {
             crate::point::Point::pb_loads(&p.encode_to_vec())?
         } else {
@@ -729,13 +723,6 @@ impl OBB {
         let mut bbox = OBB::new(center, x_axis, y_axis, z_axis, half_size);
         bbox.set_guid(proto.guid);
         bbox.name = proto.name;
-        if let Some(xform) = proto.xform {
-            bbox.xform.set_guid(xform.guid);
-            bbox.xform.name = xform.name;
-            for (i, val) in xform.matrix.iter().enumerate() {
-                if i < 16 { bbox.xform.m[i] = *val as f64; }
-            }
-        }
         Ok(bbox)
     }
 
@@ -769,7 +756,6 @@ impl Default for OBB {
             half_size: Vector::new(0.5, 0.5, 0.5),
             guid: std::sync::OnceLock::new(),
             name: String::new(),
-            xform: Xform::identity(),
         }
     }
 }

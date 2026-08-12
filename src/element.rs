@@ -51,7 +51,6 @@ pub struct Element {
     guid: std::sync::OnceLock<String>,
     pub name: String,
     pub kind: ElementKind,
-    pub session_transformation: Xform,
     geometry: ElementGeometry,
     features: Vec<fn(Mesh) -> Mesh>,
     is_dirty: bool,
@@ -71,15 +70,10 @@ impl Element {
     ///////////////////////////////////////////////////////////////////////////////////////////
 
     pub fn new(name: &str) -> Self {
-        Self::with_transformation(name, Xform::identity())
-    }
-
-    pub fn with_transformation(name: &str, transformation: Xform) -> Self {
         Self {
             guid: std::sync::OnceLock::new(),
             name: name.to_string(),
             kind: ElementKind::Generic,
-            session_transformation: transformation,
             geometry: ElementGeometry::None,
             features: Vec::new(),
             is_dirty: true,
@@ -94,16 +88,12 @@ impl Element {
         }
     }
 
-    pub fn from_mesh(geometry: Mesh, name: &str) -> Self {
-        Self::from_mesh_with_transformation(geometry, name, Xform::identity())
-    }
 
-    pub fn from_mesh_with_transformation(geometry: Mesh, name: &str, transformation: Xform) -> Self {
+    pub fn from_mesh(geometry: Mesh, name: &str) -> Self {
         Self {
             guid: std::sync::OnceLock::new(),
             name: name.to_string(),
             kind: ElementKind::Generic,
-            session_transformation: transformation,
             geometry: ElementGeometry::Mesh(geometry),
             features: Vec::new(),
             is_dirty: true,
@@ -118,16 +108,12 @@ impl Element {
         }
     }
 
-    pub fn from_brep(geometry: BRep, name: &str) -> Self {
-        Self::from_brep_with_transformation(geometry, name, Xform::identity())
-    }
 
-    pub fn from_brep_with_transformation(geometry: BRep, name: &str, transformation: Xform) -> Self {
+    pub fn from_brep(geometry: BRep, name: &str) -> Self {
         Self {
             guid: std::sync::OnceLock::new(),
             name: name.to_string(),
             kind: ElementKind::Generic,
-            session_transformation: transformation,
             geometry: ElementGeometry::BRep(geometry),
             features: Vec::new(),
             is_dirty: true,
@@ -142,18 +128,14 @@ impl Element {
         }
     }
 
-    pub fn column(width: f64, depth: f64, height: f64, name: &str) -> Self {
-        Self::column_with_transformation(width, depth, height, name, Xform::identity())
-    }
 
-    pub fn column_with_transformation(width: f64, depth: f64, height: f64, name: &str, transformation: Xform) -> Self {
+    pub fn column(width: f64, depth: f64, height: f64, name: &str) -> Self {
         let kind = ElementKind::Column { width, depth, height };
         let geometry = ElementGeometry::Mesh(Self::compute_box_geometry(width, depth, height));
         Self {
             guid: std::sync::OnceLock::new(),
             name: name.to_string(),
             kind,
-            session_transformation: transformation,
             geometry,
             features: Vec::new(),
             is_dirty: true,
@@ -168,18 +150,14 @@ impl Element {
         }
     }
 
-    pub fn beam(width: f64, depth: f64, length: f64, name: &str) -> Self {
-        Self::beam_with_transformation(width, depth, length, name, Xform::identity())
-    }
 
-    pub fn beam_with_transformation(width: f64, depth: f64, length: f64, name: &str, transformation: Xform) -> Self {
+    pub fn beam(width: f64, depth: f64, length: f64, name: &str) -> Self {
         let kind = ElementKind::Beam { width, depth, length };
         let geometry = ElementGeometry::Mesh(Self::compute_box_geometry(width, depth, length));
         Self {
             guid: std::sync::OnceLock::new(),
             name: name.to_string(),
             kind,
-            session_transformation: transformation,
             geometry,
             features: Vec::new(),
             is_dirty: true,
@@ -194,11 +172,8 @@ impl Element {
         }
     }
 
-    pub fn plate(polygon: Vec<Point>, thickness: f64, name: &str) -> Self {
-        Self::plate_with_transformation(polygon, thickness, name, Xform::identity())
-    }
 
-    pub fn plate_with_transformation(polygon: Vec<Point>, thickness: f64, name: &str, transformation: Xform) -> Self {
+    pub fn plate(polygon: Vec<Point>, thickness: f64, name: &str) -> Self {
         let pts: Vec<Point> = polygon.iter().map(|p| Point::new(p[0], p[1], p[2])).collect();
         let polygon_top = Self::offset_polygon_top(&pts, thickness);
         let geometry = ElementGeometry::Mesh(Self::compute_plate_geometry(&pts, thickness));
@@ -206,7 +181,6 @@ impl Element {
             guid: std::sync::OnceLock::new(),
             name: name.to_string(),
             kind: ElementKind::Plate { polygon: pts, polygon_top, thickness, joint_types: Vec::new(), j_mf: Vec::new(), key: String::new(), component_plane: None },
-            session_transformation: transformation,
             geometry,
             features: Vec::new(),
             is_dirty: true,
@@ -221,11 +195,8 @@ impl Element {
         }
     }
 
-    pub fn plate_from_top_bottom(bottom: Vec<Point>, top: Vec<Point>, name: &str) -> Self {
-        Self::plate_from_top_bottom_with_transformation(bottom, top, name, Xform::identity())
-    }
 
-    pub fn plate_from_top_bottom_with_transformation(bottom: Vec<Point>, top: Vec<Point>, name: &str, transformation: Xform) -> Self {
+    pub fn plate_from_top_bottom(bottom: Vec<Point>, top: Vec<Point>, name: &str) -> Self {
         let mut bot = strip_closing(&bottom);
         let mut tp = strip_closing(&top);
         // Ensure bottom normal points toward top
@@ -252,7 +223,6 @@ impl Element {
             guid: std::sync::OnceLock::new(),
             name: name.to_string(),
             kind: ElementKind::Plate { polygon: bot, polygon_top: tp, thickness, joint_types: Vec::new(), j_mf: Vec::new(), key: String::new(), component_plane: None },
-            session_transformation: transformation,
             geometry,
             features: Vec::new(),
             is_dirty: true,
@@ -266,6 +236,7 @@ impl Element {
             cached_axis: None,
         }
     }
+
 
     pub fn plate_default() -> Self {
         let polygon = vec![
@@ -317,23 +288,23 @@ impl Element {
         }
     }
 
-    pub fn session_geometry(&self) -> ElementGeometry {
+    /// The element's geometry placed by `xform`. The placement is supplied by the caller —
+    /// an Element no longer stores one; the Session does. Pass identity for local geometry.
+    pub fn session_geometry(&self, xform: &Xform) -> ElementGeometry {
         match &self.geometry {
             ElementGeometry::None => ElementGeometry::None,
             ElementGeometry::Mesh(mesh) => {
                 let mut geo = mesh.clone();
                 for f in &self.features { geo = f(geo); }
-                if !self.session_transformation.is_identity() {
-                    geo.xform = &self.session_transformation * &geo.xform;
-                    geo.transform(None);
+                if !xform.is_identity() {
+                    geo.transform(xform);
                 }
                 ElementGeometry::Mesh(geo)
             }
             ElementGeometry::BRep(brep) => {
                 let mut geo = brep.clone();
-                if !self.session_transformation.is_identity() {
-                    geo.xform = &self.session_transformation * &geo.xform;
-                    geo.transform();
+                if !xform.is_identity() {
+                    geo.transform(xform);
                 }
                 ElementGeometry::BRep(geo)
             }
@@ -573,6 +544,13 @@ impl Element {
         self.is_dirty = true;
     }
 
+    /// Bake a placement into this element's own geometry, invalidating the cached boxes.
+    /// The Session owns the placement, so it hands it in here rather than the Element storing it.
+    pub fn place(&mut self, xform: &Xform) {
+        self.geometry = self.session_geometry(xform);
+        self.is_dirty = true;
+    }
+
     pub fn set_geometry(&mut self, geo: Mesh) {
         self.geometry = ElementGeometry::Mesh(geo);
         self.is_dirty = true;
@@ -642,7 +620,7 @@ impl Element {
     ///////////////////////////////////////////////////////////////////////////////////////////
 
     fn compute_aabb(&self) -> OBB {
-        let geo = self.session_geometry();
+        let geo = self.session_geometry(&Xform::identity());
         if matches!(geo, ElementGeometry::None) {
             return OBB::from_point(Point::new(0.0, 0.0, 0.0), 0.0);
         }
@@ -650,7 +628,7 @@ impl Element {
     }
 
     fn compute_obb(&self) -> OBB {
-        let geo = self.session_geometry();
+        let geo = self.session_geometry(&Xform::identity());
         if matches!(geo, ElementGeometry::None) {
             return OBB::from_point(Point::new(0.0, 0.0, 0.0), 0.0);
         }
@@ -658,12 +636,12 @@ impl Element {
     }
 
     fn compute_collision_mesh(&self) -> Mesh {
-        if let ElementGeometry::Mesh(mesh) = self.session_geometry() { return mesh; }
+        if let ElementGeometry::Mesh(mesh) = self.session_geometry(&Xform::identity()) { return mesh; }
         Mesh::new()
     }
 
     fn compute_point(&self) -> Point {
-        let geo = self.session_geometry();
+        let geo = self.session_geometry(&Xform::identity());
         match &geo {
             ElementGeometry::Mesh(mesh) => {
                 if mesh.vertex.is_empty() { return Point::new(0.0, 0.0, 0.0); }
@@ -987,7 +965,6 @@ impl Element {
                     "geometry_type": geo_type,
                     "guid": self.guid(),
                     "name": self.name,
-                    "session_transformation": serde_json::to_value(&self.session_transformation).unwrap(),
                     "type": "Element",
                 })
             }
@@ -1004,7 +981,6 @@ impl Element {
                     "guid": self.guid(),
                     "height": height,
                     "name": self.name,
-                    "session_transformation": serde_json::to_value(&self.session_transformation).unwrap(),
                     "type": "ElementColumn",
                     "width": width,
                 })
@@ -1022,7 +998,6 @@ impl Element {
                     "guid": self.guid(),
                     "length": length,
                     "name": self.name,
-                    "session_transformation": serde_json::to_value(&self.session_transformation).unwrap(),
                     "type": "ElementBeam",
                     "width": width,
                 })
@@ -1048,7 +1023,6 @@ impl Element {
                     "name": self.name,
                     "polygon": poly_json,
                     "polygon_top": poly_top_json,
-                    "session_transformation": serde_json::to_value(&self.session_transformation).unwrap(),
                     "thickness": thickness,
                     "type": "ElementPlate",
                 })
@@ -1071,11 +1045,6 @@ impl Element {
                 let mut elem = Self::column(w, d, h, "my_column");
                 if let Some(g) = data["guid"].as_str() { elem.set_guid(g.to_string()); }
                 elem.name = data["name"].as_str().unwrap_or(&elem.name).to_string();
-                if let Some(xf_data) = data.get("session_transformation") {
-                    if let Ok(xf) = serde_json::from_value::<Xform>(xf_data.clone()) {
-                        elem.session_transformation = xf;
-                    }
-                }
                 elem
             }
             "ElementBeam" => {
@@ -1085,11 +1054,6 @@ impl Element {
                 let mut elem = Self::beam(w, d, l, "my_beam");
                 if let Some(g) = data["guid"].as_str() { elem.set_guid(g.to_string()); }
                 elem.name = data["name"].as_str().unwrap_or(&elem.name).to_string();
-                if let Some(xf_data) = data.get("session_transformation") {
-                    if let Ok(xf) = serde_json::from_value::<Xform>(xf_data.clone()) {
-                        elem.session_transformation = xf;
-                    }
-                }
                 elem
             }
             "ElementPlate" => {
@@ -1131,11 +1095,6 @@ impl Element {
                 };
                 if let Some(g) = data["guid"].as_str() { elem.set_guid(g.to_string()); }
                 elem.name = data["name"].as_str().unwrap_or(&elem.name).to_string();
-                if let Some(xf_data) = data.get("session_transformation") {
-                    if let Ok(xf) = serde_json::from_value::<Xform>(xf_data.clone()) {
-                        elem.session_transformation = xf;
-                    }
-                }
                 if let Some(jt) = data.get("joint_types") {
                     if let Some(arr) = jt.as_array() {
                         let types: Vec<i32> = arr.iter().filter_map(|v| v.as_i64().map(|i| i as i32)).collect();
@@ -1191,11 +1150,6 @@ impl Element {
                 }
                 if let Some(g) = data["guid"].as_str() { elem.set_guid(g.to_string()); }
                 elem.name = data["name"].as_str().unwrap_or(&elem.name).to_string();
-                if let Some(xf_data) = data.get("session_transformation") {
-                    if let Ok(xf) = serde_json::from_value::<Xform>(xf_data.clone()) {
-                        elem.session_transformation = xf;
-                    }
-                }
                 elem
             }
         }
@@ -1227,6 +1181,11 @@ impl Element {
 
     pub fn pb_dumps(&self) -> Vec<u8> {
         use prost::Message;
+        self.to_proto().encode_to_vec()
+    }
+
+    /// The proto struct itself — pb_dumps encodes it; Session embeds it directly.
+    pub fn to_proto(&self) -> crate::proto::Element {
         let mut proto = crate::proto::Element::default();
         proto.guid = self.guid().to_string();
         proto.name = self.name.clone();
@@ -1291,22 +1250,21 @@ impl Element {
                         cp.z_axis()[0] as f64, cp.z_axis()[1] as f64, cp.z_axis()[2] as f64,
                     ],
                     width: 0.0,
-                    xform: None,
                     linecolor: None,
                 });
             }
         }
 
-        let mut xf_proto = crate::proto::Xform::default();
-        xf_proto.name = self.session_transformation.name.clone();
-        xf_proto.matrix = self.session_transformation.m.iter().map(|&v| v as f64).collect();
-        proto.session_transformation = Some(xf_proto);
-        proto.encode_to_vec()
+        proto
     }
 
     pub fn pb_loads(data: &[u8]) -> Result<Self, Box<dyn std::error::Error>> {
         use prost::Message;
-        let proto = crate::proto::Element::decode(data)?;
+        Self::from_proto(crate::proto::Element::decode(data)?)
+    }
+
+    /// Build from an already-decoded proto — pb_loads decodes then calls this.
+    pub fn from_proto(proto: crate::proto::Element) -> Result<Self, Box<dyn std::error::Error>> {
         let geo_type = &proto.geometry_type;
 
         let mut elem = match geo_type.as_str() {
@@ -1379,14 +1337,6 @@ impl Element {
 
         elem.set_guid(proto.guid.clone());
         elem.name = proto.name.clone();
-        if let Some(xf_proto) = proto.session_transformation {
-            let mut xf = Xform::identity();
-            xf.name = xf_proto.name;
-            if xf_proto.matrix.len() == 16 {
-                for i in 0..16 { xf.m[i] = xf_proto.matrix[i] as f64; }
-            }
-            elem.session_transformation = xf;
-        }
         if !proto.joint_types.is_empty() {
             elem.set_joint_types(proto.joint_types.clone());
         }

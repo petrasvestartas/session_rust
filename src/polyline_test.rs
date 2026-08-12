@@ -135,14 +135,13 @@ pub fn run_polyline_transformation() -> TestResult {
             Point::new(0.0, 0.0, 0.0), Point::new(1.0, 0.0, 0.0),
             Point::new(1.0, 1.0, 0.0), Point::new(0.0, 1.0, 0.0),
         ]);
-        pl.xform = Xform::translation(10.0, 0.0, 0.0);
-        let pl_transformed = pl.transformed();
-        pl.transform();
+        let pl_xf = Xform::translation(10.0, 0.0, 0.0);
+        let pl_transformed = pl.transformed(&pl_xf);
+        pl.transform(&pl_xf);
 
         MINI_CHECK!(pl_transformed.get_points()[0][0] == 10.0);
         MINI_CHECK!(pl_transformed.get_points()[1][0] == 11.0);
         MINI_CHECK!(pl.get_points()[0][0] == 10.0 && pl.get_points()[1][0] == 11.0);
-        MINI_CHECK!(pl.xform == Xform::identity());
 
     })
 }
@@ -1077,17 +1076,6 @@ pub fn run_polyline_simplify_two_points() -> TestResult {
 REGISTER_MINI_TEST!("Polyline", "Simplify Two Points", crate::polyline_test::run_polyline_simplify_two_points);
 
 
-pub fn run_polyline_transformed_xform() -> TestResult {
-    MINI_TEST!("Transformed Xform", {
-        use crate::{Point, Polyline, Xform};
-        let pl = Polyline::new(vec![Point::new(0.0, 0.0, 0.0), Point::new(1.0, 0.0, 0.0)]);
-        let xf = Xform::translation(10.0, 0.0, 0.0);
-        let pl_x = pl.transformed_xform(&xf);
-        MINI_CHECK!(TOLERANCE.is_close(pl_x.get_point(0).unwrap()[0], 10.0));
-        MINI_CHECK!(TOLERANCE.is_close(pl_x.get_point(1).unwrap()[0], 11.0));
-    })
-}
-REGISTER_MINI_TEST!("Polyline", "Transformed Xform", crate::polyline_test::run_polyline_transformed_xform);
 
 pub fn run_polyline_translate() -> TestResult {
     MINI_TEST!("Translate", {

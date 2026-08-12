@@ -16,7 +16,6 @@ pub struct Plane {
     _b: f64,
     _c: f64,
     _d: f64,
-    pub xform: Xform,
 }
 
 // Custom serialization to use single flat frame array of 12 numbers
@@ -40,7 +39,6 @@ impl Serialize for Plane {
             self._z_axis[0], self._z_axis[1], self._z_axis[2],
         ])?;
         map.serialize_entry("width", &self.width)?;
-        map.serialize_entry("xform", &self.xform)?;
         map.end()
     }
 }
@@ -61,8 +59,6 @@ impl<'de> Deserialize<'de> for Plane {
             width: f64,
             #[serde(default)]
             linecolor: Option<Color>,
-            #[serde(default)]
-            xform: Option<Xform>,
         }
 
         fn default_width() -> f64 {
@@ -98,7 +94,6 @@ impl<'de> Deserialize<'de> for Plane {
             _b: b,
             _c: c,
             _d: d,
-            xform: data.xform.unwrap_or_else(Xform::identity),
         })
     }
 }
@@ -118,7 +113,6 @@ impl Default for Plane {
             _b: 0.0,
             _c: 1.0,
             _d: 0.0,
-            xform: Xform::identity(),
         }
     }
 }
@@ -150,7 +144,6 @@ impl Plane {
             _b: b,
             _c: c,
             _d: d,
-            xform: Xform::identity(),
         }
     }
 
@@ -172,7 +165,6 @@ impl Plane {
             _b: b,
             _c: c,
             _d: d,
-            xform: Xform::identity(),
         }
     }
 
@@ -202,7 +194,6 @@ impl Plane {
             _b: b,
             _c: c,
             _d: d,
-            xform: Xform::identity(),
         }
     }
 
@@ -238,7 +229,6 @@ impl Plane {
             _b: b,
             _c: c,
             _d: d,
-            xform: Xform::identity(),
         }
     }
 
@@ -279,7 +269,6 @@ impl Plane {
             _b: b,
             _c: c,
             _d: d,
-            xform: Xform::identity(),
         }
     }
 
@@ -359,7 +348,6 @@ impl Plane {
             _b: b,
             _c: c,
             _d: d,
-            xform: Xform::identity(),
         }
     }
 
@@ -394,7 +382,6 @@ impl Plane {
             _b: b,
             _c: c,
             _d: d,
-            xform: Xform::identity(),
         }
     }
 
@@ -412,7 +399,6 @@ impl Plane {
             _b: 0.0,
             _c: 1.0,
             _d: 0.0,
-            xform: Xform::identity(),
         }
     }
 
@@ -430,7 +416,6 @@ impl Plane {
             _b: 0.0,
             _c: 0.0,
             _d: 0.0,
-            xform: Xform::identity(),
         }
     }
 
@@ -449,7 +434,6 @@ impl Plane {
             _b: 0.0,
             _c: 0.0,
             _d: 0.0,
-            xform: Xform::identity(),
         }
     }
 
@@ -477,7 +461,6 @@ impl Plane {
             _b: b,
             _c: c,
             _d: d,
-            xform: Xform::identity(),
         }
     }
 
@@ -495,7 +478,6 @@ impl Plane {
             _b: 1.0,
             _c: 0.0,
             _d: 0.0,
-            xform: Xform::identity(),
         }
     }
 
@@ -825,21 +807,16 @@ impl std::fmt::Display for Plane {
 }
 
 impl Plane {
-    pub fn transform(&mut self) {
-        self._origin.xform = self.xform.clone();
-        self._origin.transform();
-        self._x_axis.xform = self.xform.clone();
-        self._x_axis.transform();
-        self._y_axis.xform = self.xform.clone();
-        self._y_axis.transform();
-        self._z_axis.xform = self.xform.clone();
-        self._z_axis.transform();
-        self.xform = Xform::identity();
+    pub fn transform(&mut self, xform: &Xform) {
+        self._origin.transform(xform);
+        self._x_axis.transform(xform);
+        self._y_axis.transform(xform);
+        self._z_axis.transform(xform);
     }
 
-    pub fn transformed(&self) -> Self {
+    pub fn transformed(&self, xform: &Xform) -> Self {
         let mut result = self.clone();
-        result.transform();
+        result.transform(xform);
         result
     }
 
@@ -943,8 +920,13 @@ impl Plane {
     /// Convert to protobuf binary format.
     pub fn pb_dumps(&self) -> Vec<u8> {
         use prost::Message;
+        self.to_proto().encode_to_vec()
+    }
+
+    /// The proto struct itself — pb_dumps encodes it; Session embeds it directly.
+    pub fn to_proto(&self) -> crate::proto::Plane {
         // Use single flat frame array of 12 numbers
-        let proto = crate::proto::Plane {
+        crate::proto::Plane {
             guid: self.guid().to_string(),
             name: self.name.clone(),
             frame: vec![
@@ -962,20 +944,17 @@ impl Plane {
                 b: self.linecolor.b,
                 a: self.linecolor.a,
             }),
-            xform: Some(crate::proto::Xform {
-                guid: self.xform.guid().to_string(),
-                name: self.xform.name.clone(),
-                matrix: self.xform.m.iter().map(|&v| v as f64).collect(),
-            }),
-        };
-        proto.encode_to_vec()
+        }
     }
 
     /// Create Plane from protobuf binary data.
     pub fn pb_loads(data: &[u8]) -> Result<Self, prost::DecodeError> {
         use prost::Message;
-        let proto = crate::proto::Plane::decode(data)?;
+        Ok(Self::from_proto(crate::proto::Plane::decode(data)?))
+    }
 
+    /// Build from an already-decoded proto — pb_loads decodes then calls this.
+    pub fn from_proto(proto: crate::proto::Plane) -> Self {
         // Parse frame array
         let origin = Point::new(proto.frame[0] as f64, proto.frame[1] as f64, proto.frame[2] as f64);
         let x_axis = Vector::new(proto.frame[3] as f64, proto.frame[4] as f64, proto.frame[5] as f64);
@@ -998,24 +977,9 @@ impl Plane {
             color.a = c.a;
         }
 
-        // Load xform if present
-        let xform = if let Some(proto_xform) = proto.xform {
-            let mut x = Xform::identity();
-            x.set_guid(proto_xform.guid);
-            x.name = proto_xform.name;
-            if proto_xform.matrix.len() == 16 {
-                for (i, v) in proto_xform.matrix.iter().enumerate() {
-                    x.m[i] = *v as f64;
-                }
-            }
-            x
-        } else {
-            Xform::identity()
-        };
-
         let guid = std::sync::OnceLock::new();
         let _ = guid.set(proto.guid);
-        Ok(Plane {
+        Plane {
             guid,
             name: proto.name,
             width: if proto.width > 0.0 { proto.width as f64 } else { 1.0 },
@@ -1028,8 +992,7 @@ impl Plane {
             _b: b,
             _c: c,
             _d: d,
-            xform,
-        })
+        }
     }
 
     /// Write protobuf to file.

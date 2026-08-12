@@ -12,8 +12,6 @@ pub struct PointCloud {
     pub name: String,
     /// Point size for rendering
     pub point_size: f64,
-    /// Transformation matrix applied by transform()/transformed()
-    pub xform: Xform,
     /// Flat coords [x0, y0, z0, x1, y1, z1, ...]
     _coords: Vec<f64>,
     /// Flat colors [r0, g0, b0, a0, ...]
@@ -28,7 +26,6 @@ impl Default for PointCloud {
             guid: std::sync::OnceLock::new(),
             name: "my_pointcloud".to_string(),
             point_size: 1.0,
-            xform: Xform::identity(),
             _coords: Vec::new(),
             _colors: Vec::new(),
             _normals: Vec::new(),
@@ -72,7 +69,6 @@ impl PointCloud {
             guid: std::sync::OnceLock::new(),
             name: "my_pointcloud".to_string(),
             point_size: 1.0,
-            xform: Xform::identity(),
             _coords: coords,
             _colors: colors,
             _normals: normals,
@@ -266,13 +262,12 @@ impl PointCloud {
     // Transformation
     ///////////////////////////////////////////////////////////////////////////////////////////
 
-    /// Apply this cloud's xform in place
-    pub fn transform(&mut self) {
+    /// Apply a transformation to this cloud in place
+    pub fn transform(&mut self, xform: &Xform) {
         for i in 0..self.point_count() {
             let idx = i * 3;
             let mut pt = Point::new(self._coords[idx], self._coords[idx + 1], self._coords[idx + 2]);
-            pt.xform = self.xform.clone();
-            pt.transform();
+            pt.transform(xform);
             self._coords[idx] = pt[0];
             self._coords[idx + 1] = pt[1];
             self._coords[idx + 2] = pt[2];
@@ -281,20 +276,17 @@ impl PointCloud {
         for i in 0..self.normal_count() {
             let idx = i * 3;
             let mut n = Vector::new(self._normals[idx], self._normals[idx + 1], self._normals[idx + 2]);
-            n.xform = self.xform.clone();
-            n.transform();
+            n.transform(xform);
             self._normals[idx] = n[0];
             self._normals[idx + 1] = n[1];
             self._normals[idx + 2] = n[2];
         }
-
-        self.xform = Xform::identity();
     }
 
     /// Return a copy of this cloud with its xform applied
-    pub fn transformed(&self) -> Self {
+    pub fn transformed(&self, xform: &Xform) -> Self {
         let mut result = self.clone();
-        result.transform();
+        result.transform(xform);
         result
     }
 
@@ -341,34 +333,33 @@ impl PointCloud {
 
     /// Convert to protobuf binary bytes
     pub fn pb_dumps(&self) -> Vec<u8> {
-        use crate::proto;
         use prost::Message;
+        self.to_proto().encode_to_vec()
+    }
 
-        let mut proto_xform = proto::Xform::default();
-        proto_xform.guid = self.xform.guid().to_string();
-        proto_xform.name = self.xform.name.clone();
-        proto_xform.matrix = self.xform.m.iter().map(|&v| v as f64).collect();
+    /// The proto struct itself — pb_dumps encodes it; Session embeds it directly.
+    pub fn to_proto(&self) -> crate::proto::PointCloud {
+        use crate::proto;
 
-        let proto = proto::PointCloud {
+        proto::PointCloud {
             guid: self.guid().to_string(),
             name: self.name.clone(),
             coords: self._coords.iter().map(|&v| v as f64).collect(),
             colors: self._colors.iter().map(|&c| c as u32).collect(),
             normals: self._normals.iter().map(|&v| v as f64).collect(),
             point_size: self.point_size as f64,
-            xform: Some(proto_xform),
-        };
-
-        proto.encode_to_vec()
+        }
     }
 
     /// Load from protobuf binary bytes
     pub fn pb_loads(data: &[u8]) -> Self {
         use crate::proto;
         use prost::Message;
+        Self::from_proto(proto::PointCloud::decode(data).expect("Failed to decode protobuf"))
+    }
 
-        let proto = proto::PointCloud::decode(data).expect("Failed to decode protobuf");
-
+    /// Build from an already-decoded proto — pb_loads decodes then calls this.
+    pub fn from_proto(proto: crate::proto::PointCloud) -> Self {
         let mut pc = Self::from_coords(
             proto.coords.into_iter().map(|v| v as f64).collect(),
             proto.colors.iter().map(|&c| c as i32).collect(),
@@ -377,16 +368,6 @@ impl PointCloud {
         pc.set_guid(proto.guid);
         pc.name = proto.name;
         pc.point_size = if proto.point_size > 0.0 { proto.point_size as f64 } else { 1.0 };
-
-        if let Some(xform_proto) = proto.xform {
-            pc.xform.set_guid(xform_proto.guid);
-            pc.xform.name = xform_proto.name;
-            for (i, &val) in xform_proto.matrix.iter().enumerate() {
-                if i < 16 {
-                    pc.xform.m[i] = val as f64;
-                }
-            }
-        }
 
         pc
     }
@@ -512,7 +493,6 @@ impl Serialize for PointCloud {
         state.serialize_field("colors", &self._colors)?;
         state.serialize_field("normals", &self._normals)?;
         state.serialize_field("point_size", &self.point_size)?;
-        state.serialize_field("xform", &self.xform)?;
 
         state.end()
     }
@@ -536,7 +516,6 @@ impl<'de> Deserialize<'de> for PointCloud {
             Normals,
             #[serde(rename = "point_size")]
             PointSize,
-            Xform,
         }
 
         struct PointCloudVisitor;
@@ -558,7 +537,6 @@ impl<'de> Deserialize<'de> for PointCloud {
                 let mut colors: Option<Vec<i32>> = None;
                 let mut normals: Option<Vec<f64>> = None;
                 let mut point_size = None;
-                let mut xform = None;
 
                 while let Some(key) = map.next_key()? {
                     match key {
@@ -583,9 +561,6 @@ impl<'de> Deserialize<'de> for PointCloud {
                         Field::PointSize => {
                             point_size = Some(map.next_value()?);
                         }
-                        Field::Xform => {
-                            xform = Some(map.next_value()?);
-                        }
                     }
                 }
 
@@ -595,13 +570,11 @@ impl<'de> Deserialize<'de> for PointCloud {
                 let colors = colors.ok_or_else(|| de::Error::missing_field("colors"))?;
                 let normals = normals.ok_or_else(|| de::Error::missing_field("normals"))?;
                 let point_size = point_size.unwrap_or(1.0);
-                let xform = xform.ok_or_else(|| de::Error::missing_field("xform"))?;
 
                 Ok(PointCloud {
                     guid: { let c = std::sync::OnceLock::new(); let _ = c.set(guid_str); c },
                     name,
                     point_size,
-                    xform,
                     _coords: coords,
                     _colors: colors,
                     _normals: normals,
@@ -610,7 +583,7 @@ impl<'de> Deserialize<'de> for PointCloud {
         }
 
         const FIELDS: &[&str] = &[
-            "type", "guid", "name", "coords", "colors", "normals", "point_size", "xform",
+            "type", "guid", "name", "coords", "colors", "normals", "point_size",
         ];
         deserializer.deserialize_struct("PointCloud", FIELDS, PointCloudVisitor)
     }

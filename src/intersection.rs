@@ -5120,9 +5120,10 @@ fn extend_polyline_edge_equally(
     }
 }
 
-/// Apply an `Xform` to a single `Point` without going through the `Point.xform`
-/// field setup dance. Used by the rotated-joint branch to project the joint
-/// area into the local 2D frame for AABB extraction.
+/// Apply an `Xform` to a single `Point`, returning bare coordinates. Same math as
+/// `Point::transformed`, but it skips the clone of name/colour that carries — this runs per
+/// point in the rotated-joint branch, projecting the joint area into the local 2D frame for
+/// AABB extraction, where only the coordinates are read.
 fn xform_apply_point(xform: &crate::Xform, p: &Point) -> Point {
     let m = &xform.m;
     let (x, y, z) = (p[0], p[1], p[2]);

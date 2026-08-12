@@ -55,7 +55,6 @@ pub struct NurbsSurface {
     pub pointcolors: Vec<Color>,
     pub facecolors: Vec<Color>,
     pub linecolors: Vec<Color>,
-    pub xform: Xform,
 
     // Core NURBS data
     pub m_dim: usize,
@@ -116,7 +115,6 @@ impl serde::Serialize for NurbsSurface {
         map.serialize_entry("pointcolors", &pointcolors_flat)?;
         map.serialize_entry("type", "NurbsSurface")?;
         map.serialize_entry("width", &self.width)?;
-        map.serialize_entry("xform", &self.xform)?;
         map.end()
     }
 }
@@ -140,8 +138,6 @@ impl<'de> Deserialize<'de> for NurbsSurface {
             facecolors: Vec<u8>,
             #[serde(default)]
             linecolors: Vec<u8>,
-            #[serde(default)]
-            xform: Option<Xform>,
             #[serde(default = "default_dim")]
             dimension: usize,
             #[serde(default)]
@@ -202,7 +198,6 @@ impl<'de> Deserialize<'de> for NurbsSurface {
             pointcolors,
             facecolors,
             linecolors,
-            xform: data.xform.unwrap_or_else(Xform::identity),
             m_dim: data.dimension,
             m_is_rat: data.is_rational,
             m_order: [data.order_u, data.order_v],
@@ -225,7 +220,6 @@ impl NurbsSurface {
             pointcolors: Vec::new(),
             facecolors: Vec::new(),
             linecolors: Vec::new(),
-            xform: Xform::identity(),
             m_dim: 0,
             m_is_rat: false,
             m_order: [0, 0],
@@ -2220,27 +2214,12 @@ impl NurbsSurface {
     // TRANSFORMATION
     ///////////////////////////////////////////////////////////////////////////////////////////
     
-    /// Apply stored xform transformation (in-place)
-    pub fn transform_self(&mut self) {
-        let xf = self.xform.clone();
-        for i in 0..self.m_cv_count[0] {
-            for j in 0..self.m_cv_count[1] {
-                if let Some(mut pt) = self.get_cv(i, j) {
-                    pt.xform = xf.clone();
-                    pt.transform();
-                    self.set_cv(i, j, &pt);
-                }
-            }
-        }
-    }
-    
-    /// Apply custom transformation matrix (in-place)
+    /// Apply a transformation matrix (in-place)
     pub fn transform(&mut self, xform: &Xform) -> bool {
         for i in 0..self.m_cv_count[0] {
             for j in 0..self.m_cv_count[1] {
                 if let Some(mut pt) = self.get_cv(i, j) {
-                    pt.xform = xform.clone();
-                    pt.transform();
+                    pt.transform(xform);
                     if !self.set_cv(i, j, &pt) {
                         return false;
                     }
@@ -2250,12 +2229,9 @@ impl NurbsSurface {
         true
     }
     
-    pub fn transformed(&self, xform: Option<&Xform>) -> Self {
+    pub fn transformed(&self, xform: &Xform) -> Self {
         let mut result = self.clone();
-        match xform {
-            Some(xf) => { result.transform(xf); }
-            None => { result.transform_self(); }
-        }
+        result.transform(xform);
         result
     }
 
@@ -2456,8 +2432,14 @@ impl NurbsSurface {
     /// A Vec<u8> containing the serialized protobuf data.
     pub fn pb_dumps(&self) -> Vec<u8> {
         use prost::Message;
+        self.to_proto().encode_to_vec()
+    }
 
-        let proto = crate::proto::NurbsSurface {
+    /// The proto struct itself — pb_dumps encodes it; Session embeds it directly.
+    pub fn to_proto(&self) -> crate::proto::NurbsSurface {
+        use prost::Message;
+
+        crate::proto::NurbsSurface {
             guid: self.guid().to_string(),
             name: self.name.clone(),
             dimension: self.m_dim as i32,
@@ -2484,19 +2466,13 @@ impl NurbsSurface {
                 guid: String::new(), name: String::new(),
                 r: c.r, g: c.g, b: c.b, a: c.a,
             }).collect(),
-            xform: Some(crate::proto::Xform {
-                guid: self.xform.guid().to_string(),
-                name: self.xform.name.clone(),
-                matrix: self.xform.m.iter().map(|&v| v as f64).collect(),
-            }),
             cached_mesh: if let Some(ref m) = self.m_mesh {
                 if m.number_of_vertices() > 0 {
                     let mesh_data = m.pb_dumps();
                     crate::proto::Mesh::decode(mesh_data.as_slice()).ok()
                 } else { None }
             } else { None },
-        };
-        proto.encode_to_vec()
+        }
     }
 
     /// Create NurbsSurface from protobuf binary data.
@@ -2510,9 +2486,11 @@ impl NurbsSurface {
     /// A Result containing the deserialized NurbsSurface or an error.
     pub fn pb_loads(data: &[u8]) -> Result<Self, Box<dyn std::error::Error>> {
         use prost::Message;
+        Self::from_proto(crate::proto::NurbsSurface::decode(data)?)
+    }
 
-        let proto = crate::proto::NurbsSurface::decode(data)?;
-
+    /// Build from an already-decoded proto — pb_loads decodes then calls this.
+    pub fn from_proto(proto: crate::proto::NurbsSurface) -> Result<Self, Box<dyn std::error::Error>> {
         // Create surface with correct dimensions
         let mut surface = if let Some(srf) = Self::create_raw(
             proto.dimension as usize,
@@ -2552,17 +2530,6 @@ impl NurbsSurface {
         surface.pointcolors = proto.pointcolors.iter().map(|c| Color::new(c.r, c.g, c.b, c.a)).collect();
         surface.facecolors = proto.facecolors.iter().map(|c| Color::new(c.r, c.g, c.b, c.a)).collect();
         surface.linecolors = proto.linecolors.iter().map(|c| Color::new(c.r, c.g, c.b, c.a)).collect();
-
-        // Load transform
-        if let Some(xform) = proto.xform {
-            surface.xform.set_guid(xform.guid.clone());
-            surface.xform.name = xform.name;
-            for (i, val) in xform.matrix.iter().enumerate() {
-                if i < 16 {
-                    surface.xform.m[i] = *val as f64;
-                }
-            }
-        }
 
         // Load cached mesh
         if let Some(cached) = proto.cached_mesh {
@@ -2617,7 +2584,6 @@ impl PartialEq for NurbsSurface {
         if self.pointcolors != other.pointcolors { return false; }
         if self.facecolors != other.facecolors { return false; }
         if self.linecolors != other.linecolors { return false; }
-        if self.xform != other.xform { return false; }
 
         // Compare NURBS structure
         if self.m_dim != other.m_dim { return false; }
@@ -2652,7 +2618,6 @@ impl Clone for NurbsSurface {
             pointcolors: self.pointcolors.clone(),
             facecolors: self.facecolors.clone(),
             linecolors: self.linecolors.clone(),
-            xform: self.xform.clone(),
             m_dim: self.m_dim,
             m_is_rat: self.m_is_rat,
             m_order: self.m_order,

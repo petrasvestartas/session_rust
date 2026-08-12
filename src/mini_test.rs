@@ -700,6 +700,9 @@ pub fn get_all_tests() -> Vec<RegisteredTest> {
         RegisteredTest { group: "Session", name: "Compute Face To Face", func: run_session_compute_face_to_face },
         RegisteredTest { group: "Session", name: "Json Roundtrip", func: run_session_json_roundtrip },
         RegisteredTest { group: "Session", name: "Protobuf Roundtrip", func: run_session_protobuf_roundtrip },
+        RegisteredTest { group: "Session", name: "Set Xform", func: run_session_set_xform },
+        RegisteredTest { group: "Session", name: "World Xform Hierarchy", func: run_session_world_xform_hierarchy },
+        RegisteredTest { group: "Session", name: "Xform Roundtrip", func: run_session_xform_roundtrip },
         RegisteredTest { group: "Session", name: "Tree Transformation Hierarchy", func: run_session_tree_transformation_hierarchy },
         // SessionConfig tests
         RegisteredTest { group: "SessionConfig", name: "Runtime Modification", func: run_session_config_runtime_modification },
@@ -733,6 +736,13 @@ pub fn get_all_tests() -> Vec<RegisteredTest> {
         RegisteredTest { group: "SpatialBVH", name: "Check All Collisions", func: run_bvh_check_all_collisions },
         RegisteredTest { group: "SpatialBVH", name: "Merge Aabb", func: run_bvh_merge_aabb },
         RegisteredTest { group: "SpatialBVH", name: "Fixed 100 Boxes", func: run_bvh_fixed_100_boxes },
+        RegisteredTest { group: "SpatialBVH", name: "Query Aabb", func: run_bvh_query_aabb },
+        RegisteredTest { group: "SpatialBVH", name: "Nearest Neighbors", func: run_bvh_nearest_neighbors },
+        RegisteredTest { group: "SpatialBVH", name: "Build From Boxes", func: run_bvh_build_from_boxes },
+        RegisteredTest { group: "SpatialBVH", name: "Build From Aabbs", func: run_bvh_build_from_aabbs },
+        RegisteredTest { group: "SpatialBVH", name: "Build With Guids", func: run_bvh_build_with_guids },
+        RegisteredTest { group: "SpatialBVH", name: "Check All Collisions Guids", func: run_bvh_check_all_collisions_guids },
+        RegisteredTest { group: "SpatialBVH", name: "Find Collisions", func: run_bvh_find_collisions },
         // Quaternion tests
         RegisteredTest { group: "Quaternion", name: "Json Roundtrip", func: run_quaternion_json_roundtrip },
         // OBB tests
@@ -811,7 +821,7 @@ pub fn get_all_tests() -> Vec<RegisteredTest> {
         RegisteredTest { group: "SpatialRTree", name: "Search 100 Boxes", func: run_rtree_search_100_boxes },
         // Element tests
         RegisteredTest { group: "Element", name: "Constructor", func: run_element_constructor },
-        RegisteredTest { group: "Element", name: "Session Transformation", func: run_element_session_transformation },
+        RegisteredTest { group: "Element", name: "Place", func: run_element_place },
         RegisteredTest { group: "Element", name: "Add Feature", func: run_element_add_feature },
         RegisteredTest { group: "Element", name: "AABB", func: run_element_aabb },
         RegisteredTest { group: "Element", name: "OBB", func: run_element_obb },

@@ -21,19 +21,6 @@ pub struct Color {
     #[prost(string, tag = "6")]
     pub name: ::prost::alloc::string::String,
 }
-/// Xform message representing a 4x4 transformation matrix
-#[derive(Clone, PartialEq, ::prost::Message)]
-pub struct Xform {
-    /// Unique identifier
-    #[prost(string, tag = "1")]
-    pub guid: ::prost::alloc::string::String,
-    /// Transformation name
-    #[prost(string, tag = "2")]
-    pub name: ::prost::alloc::string::String,
-    /// 16 values in column-major order
-    #[prost(double, repeated, tag = "3")]
-    pub matrix: ::prost::alloc::vec::Vec<f64>,
-}
 /// Point message representing a 3D point with metadata
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct Point {
@@ -58,9 +45,6 @@ pub struct Point {
     /// Color of the point
     #[prost(message, optional, tag = "7")]
     pub pointcolor: ::core::option::Option<Color>,
-    /// Transformation matrix
-    #[prost(message, optional, tag = "8")]
-    pub xform: ::core::option::Option<Xform>,
 }
 /// Vector message representing a 3D vector
 #[derive(Clone, PartialEq, ::prost::Message)]
@@ -77,9 +61,6 @@ pub struct Vector {
     /// Optional vector name
     #[prost(string, tag = "4")]
     pub name: ::prost::alloc::string::String,
-    /// Transformation matrix
-    #[prost(message, optional, tag = "5")]
-    pub xform: ::core::option::Option<Xform>,
 }
 /// BoundingBox message representing an oriented bounding box
 #[derive(Clone, PartialEq, ::prost::Message)]
@@ -105,9 +86,6 @@ pub struct BoundingBox {
     /// Bounding box name
     #[prost(string, tag = "7")]
     pub name: ::prost::alloc::string::String,
-    /// Transformation matrix
-    #[prost(message, optional, tag = "8")]
-    pub xform: ::core::option::Option<Xform>,
 }
 /// Vertex data for mesh
 #[derive(Clone, PartialEq, ::prost::Message)]
@@ -216,9 +194,6 @@ pub struct Mesh {
     /// Edge widths
     #[prost(double, repeated, tag = "13")]
     pub widths: ::prost::alloc::vec::Vec<f64>,
-    /// Transformation matrix
-    #[prost(message, optional, tag = "14")]
-    pub xform: ::core::option::Option<Xform>,
     /// Object color
     #[prost(message, optional, tag = "15")]
     pub objectcolor: ::core::option::Option<Color>,
@@ -277,9 +252,6 @@ pub struct NurbsSurface {
     /// Point colors (RGBA)
     #[prost(message, repeated, tag = "15")]
     pub pointcolors: ::prost::alloc::vec::Vec<Color>,
-    /// Transformation matrix
-    #[prost(message, optional, tag = "16")]
-    pub xform: ::core::option::Option<Xform>,
     /// Face colors (RGBA)
     #[prost(message, repeated, tag = "19")]
     pub facecolors: ::prost::alloc::vec::Vec<Color>,
@@ -326,9 +298,6 @@ pub struct NurbsCurve {
     /// Point colors (RGBA)
     #[prost(message, repeated, tag = "11")]
     pub pointcolors: ::prost::alloc::vec::Vec<Color>,
-    /// Transformation matrix
-    #[prost(message, optional, tag = "12")]
-    pub xform: ::core::option::Option<Xform>,
     /// Line colors (RGBA)
     #[prost(message, repeated, tag = "13")]
     pub linecolors: ::prost::alloc::vec::Vec<Color>,
@@ -412,8 +381,6 @@ pub struct BRep {
     pub width: f64,
     #[prost(message, optional, tag = "13")]
     pub surfacecolor: ::core::option::Option<Color>,
-    #[prost(message, optional, tag = "14")]
-    pub xform: ::core::option::Option<Xform>,
 }
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord, ::prost::Enumeration)]
 #[repr(i32)]
@@ -512,9 +479,6 @@ pub struct Plane {
     /// Width for plane visualization
     #[prost(double, tag = "4")]
     pub width: f64,
-    /// Transformation matrix
-    #[prost(message, optional, tag = "5")]
-    pub xform: ::core::option::Option<Xform>,
     /// Color of the plane
     #[prost(message, optional, tag = "6")]
     pub linecolor: ::core::option::Option<Color>,
@@ -548,9 +512,6 @@ pub struct Element {
     /// Serialized geometry bytes
     #[prost(bytes = "vec", tag = "4")]
     pub geometry_data: ::prost::alloc::vec::Vec<u8>,
-    /// Transformation to session space
-    #[prost(message, optional, tag = "5")]
-    pub session_transformation: ::core::option::Option<Xform>,
     /// Per-edge joint type codes
     #[prost(int32, repeated, tag = "6")]
     pub joint_types: ::prost::alloc::vec::Vec<i32>,
@@ -634,6 +595,19 @@ pub struct Graph {
     #[prost(int32, tag = "6")]
     pub edge_count: i32,
 }
+/// Xform message representing a 4x4 transformation matrix
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct Xform {
+    /// Unique identifier
+    #[prost(string, tag = "1")]
+    pub guid: ::prost::alloc::string::String,
+    /// Transformation name
+    #[prost(string, tag = "2")]
+    pub name: ::prost::alloc::string::String,
+    /// 16 values in column-major order
+    #[prost(double, repeated, tag = "3")]
+    pub matrix: ::prost::alloc::vec::Vec<f64>,
+}
 /// InstanceRef message: a block reference that places a definition by a transform
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct InstanceRef {
@@ -671,9 +645,6 @@ pub struct Line {
     /// Line name
     #[prost(string, tag = "4")]
     pub name: ::prost::alloc::string::String,
-    /// Transformation matrix
-    #[prost(message, optional, tag = "5")]
-    pub xform: ::core::option::Option<Xform>,
     /// Line width
     #[prost(double, tag = "6")]
     pub width: f64,
@@ -724,9 +695,6 @@ pub struct NurbsSurfaceTrimmed {
     /// Surface color
     #[prost(message, optional, tag = "7")]
     pub surfacecolor: ::core::option::Option<Color>,
-    /// Transformation matrix
-    #[prost(message, optional, tag = "8")]
-    pub xform: ::core::option::Option<Xform>,
 }
 /// Polyline message representing a connected sequence of points
 /// Stores coordinates as a flat array \[x0, y0, z0, x1, y1, z1, ...\] for efficiency
@@ -747,9 +715,6 @@ pub struct Polyline {
     /// Line color
     #[prost(message, optional, tag = "5")]
     pub linecolor: ::core::option::Option<Color>,
-    /// Transformation matrix
-    #[prost(message, optional, tag = "6")]
-    pub xform: ::core::option::Option<Xform>,
 }
 /// PointCloud message representing a collection of 3D points with optional colors and normals
 /// Stores data as flat arrays for efficient serialization
@@ -773,9 +738,6 @@ pub struct PointCloud {
     /// Point size for display
     #[prost(double, tag = "6")]
     pub point_size: f64,
-    /// Transformation matrix
-    #[prost(message, optional, tag = "7")]
-    pub xform: ::core::option::Option<Xform>,
 }
 /// Component message for custom domain objects (e.g. FloorBuilder, WallBuilder)
 /// Allows external packages to store arbitrary serializable objects in a Session.
@@ -891,6 +853,18 @@ pub struct Tree {
     #[prost(message, optional, tag = "3")]
     pub root: ::core::option::Option<TreeNode>,
 }
+/// One object's local placement. Transforms are stored ONLY here - geometry types
+/// carry no transformation member. A map is deliberately avoided: map iteration
+/// order is unspecified, and this repo requires byte-identical output across languages.
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct XformEntry {
+    /// Guid of the object this transform places
+    #[prost(string, tag = "1")]
+    pub guid: ::prost::alloc::string::String,
+    /// LOCAL transform, relative to the tree parent
+    #[prost(message, optional, tag = "2")]
+    pub xform: ::core::option::Option<Xform>,
+}
 /// Session message representing a complete session with geometry and hierarchy
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct Session {
@@ -912,6 +886,9 @@ pub struct Session {
     /// Simplified BVH representation (AABBs)
     #[prost(message, repeated, tag = "6")]
     pub bvh_boxes: ::prost::alloc::vec::Vec<BoundingBox>,
+    /// Local transforms in Session::order() sequence, identity omitted
+    #[prost(message, repeated, tag = "7")]
+    pub xforms: ::prost::alloc::vec::Vec<XformEntry>,
 }
 /// Tolerance message for geometric comparisons
 #[derive(Clone, PartialEq, ::prost::Message)]

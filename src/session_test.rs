@@ -330,8 +330,9 @@ pub fn run_session_ray_cast() -> TestResult {
         let p1 = placed.add_vertex(Point::new(1.0, -1.0, 0.0), None);
         let p2 = placed.add_vertex(Point::new(0.0, 1.0, 0.0), None);
         placed.add_face(vec![p0, p1, p2], None);
-        placed.xform = Xform::translation(100.0, 0.0, 0.0);
+        let placed_guid = placed.guid().to_string();
         session.add_mesh(placed, None);
+        session.set_xform(&placed_guid, Xform::translation(100.0, 0.0, 0.0));
         let hits2 = session.ray_cast(&Point::new(100.0, 0.0, 2.0), &Vector::new(0.0, 0.0, -1.0), 1e-3);
 
         MINI_CHECK!(hits2.len() >= 1);
@@ -503,9 +504,87 @@ pub fn run_session_order() -> TestResult {
     })
 }
 
+pub fn run_session_set_xform() -> TestResult {
+    MINI_TEST!("Set Xform", {
+        use crate::{Session, Point, Xform};
+        let mut session = Session::default();
+        let point = Point::new(1.0, 2.0, 3.0);
+        let guid = point.guid().to_string();
+        session.add_point(point, None);
+
+        let shift = Xform::translation(5.0, 0.0, 0.0);
+        session.set_xform(&guid, shift.clone());
+
+        MINI_CHECK!(session.xform(&guid) == shift);
+        // No parent was passed, so the object has no tree node: it is its own root and keeps
+        // its placement. Falling back to identity here would move it to the origin.
+        MINI_CHECK!(session.world_xform(&guid) == shift);
+        MINI_CHECK!(session.world_xforms()[&guid] == shift);
+        MINI_CHECK!(session.xform("missing") == Xform::identity());
+        MINI_CHECK!(session.remove_xform(&guid));
+        MINI_CHECK!(session.xform(&guid) == Xform::identity());
+    })
+}
+
+pub fn run_session_world_xform_hierarchy() -> TestResult {
+    MINI_TEST!("World Xform Hierarchy", {
+        use crate::{Session, Point, Xform};
+        let mut session = Session::default();
+        let a = Point::new(0.0, 0.0, 0.0);
+        let b = Point::new(0.0, 0.0, 0.0);
+        let c = Point::new(0.0, 0.0, 0.0);
+        let a_guid = a.guid().to_string();
+        let b_guid = b.guid().to_string();
+        let c_guid = c.guid().to_string();
+        let a_node = session.add_point(a, None);
+        let b_node = session.add_point(b, None);
+        let c_node = session.add_point(c, None);
+
+        session.add(&a_node, None);
+        session.add(&b_node, &a_node);
+        session.add(&c_node, &b_node);
+
+        // Rotation and translation do not commute, so a reversed fold fails these checks.
+        let a_xform = Xform::rotation_z(PI / 2.0, false);
+        let b_xform = Xform::translation(2.0, 0.0, 0.0);
+        let c_xform = Xform::rotation_z(PI / 2.0, false);
+        session.set_xform(&a_guid, a_xform.clone());
+        session.set_xform(&b_guid, b_xform.clone());
+        session.set_xform(&c_guid, c_xform.clone());
+
+        let world = session.world_xforms();
+
+        MINI_CHECK!(session.world_xform(&a_guid) == a_xform);
+        MINI_CHECK!(session.world_xform(&b_guid) == &a_xform * &b_xform);
+        MINI_CHECK!(session.world_xform(&c_guid) == &(&a_xform * &b_xform) * &c_xform);
+        MINI_CHECK!(world[&c_guid] == session.world_xform(&c_guid));
+    })
+}
+
+pub fn run_session_xform_roundtrip() -> TestResult {
+    MINI_TEST!("Xform Roundtrip", {
+        use crate::{Session, Point, Xform};
+        let mut session = Session::default();
+        let point = Point::new(1.0, 2.0, 3.0);
+        let guid = point.guid().to_string();
+        session.add_point(point, None);
+        session.set_xform(&guid, Xform::translation(7.0, 8.0, 9.0));
+
+        let fname = "serialization/test_session_xform.bin";
+        session.pb_dump(fname);
+        let loaded = Session::pb_load(fname);
+        let json_loaded = Session::jsonload(&session.jsondump().unwrap()).unwrap();
+
+        MINI_CHECK!(loaded.xform(&guid) == session.xform(&guid));
+        MINI_CHECK!(loaded.xforms.len() == 1);
+        MINI_CHECK!(json_loaded.xform(&guid) == session.xform(&guid));
+        MINI_CHECK!(json_loaded.xforms.len() == 1);
+    })
+}
+
 pub fn run_session_tree_transformation_hierarchy() -> TestResult {
     MINI_TEST!("Tree Transformation Hierarchy", {
-        use crate::{Session, Geometry, Point, Vector, Mesh, Plane, Xform};
+        use crate::{Session, Point, Vector, Mesh, Plane, Xform};
         let mut scene = Session::new("tree_transformation_test");
 
         let create_box = |cx: f64, cy: f64, cz: f64, size: f64| -> Mesh {
@@ -530,12 +609,15 @@ pub fn run_session_tree_transformation_hierarchy() -> TestResult {
             mesh
         };
 
-        let mut box1 = create_box(0.0, 0.0, 0.0, 2.0);
-        let box1_node = scene.add_mesh(box1.clone(), None);
-        let mut box2 = create_box(0.0, 0.0, 0.0, 2.0);
-        let box2_node = scene.add_mesh(box2.clone(), None);
-        let mut box3 = create_box(0.0, 0.0, 0.0, 2.0);
-        let box3_node = scene.add_mesh(box3.clone(), None);
+        let box1 = create_box(0.0, 0.0, 0.0, 2.0);
+        let box1_guid = box1.guid().to_string();
+        let box1_node = scene.add_mesh(box1, None);
+        let box2 = create_box(0.0, 0.0, 0.0, 2.0);
+        let box2_guid = box2.guid().to_string();
+        let box2_node = scene.add_mesh(box2, None);
+        let box3 = create_box(0.0, 0.0, 0.0, 2.0);
+        let box3_guid = box3.guid().to_string();
+        let box3_node = scene.add_mesh(box3, None);
 
         scene.add(&box1_node, None);
         scene.add(&box2_node, &box1_node);
@@ -547,20 +629,21 @@ pub fn run_session_tree_transformation_hierarchy() -> TestResult {
         let plane_from = Plane::new(Point::new(0.0, 0.0, 0.0), x.clone(), y.clone());
         let plane_to = Plane::new(box1_top, x.clone(), y.clone());
         let xy_to_top = Xform::plane_to_plane(&plane_from, &plane_to);
-        box1.xform = Xform::rotation_z(PI / 1.5, false) * xy_to_top;
-        box2.xform = Xform::translation(2.0, 0.0, 0.0) * Xform::rotation_z(PI / 6.0, false);
-        box3.xform = Xform::translation(2.0, 0.0, 0.0);
+        scene.set_xform(&box1_guid, Xform::rotation_z(PI / 1.5, false) * xy_to_top);
+        scene.set_xform(&box2_guid, Xform::translation(2.0, 0.0, 0.0) * Xform::rotation_z(PI / 6.0, false));
+        scene.set_xform(&box3_guid, Xform::translation(2.0, 0.0, 0.0));
 
-        for (i, xf) in [&box1.xform, &box2.xform, &box3.xform].iter().enumerate() {
-            let guid = scene.objects.meshes[i].guid().to_string();
-            if let Some(Geometry::Mesh(m)) = scene.lookup.get_mut(&guid) {
-                std::rc::Rc::make_mut(m).xform = (*xf).clone(); // lookup is the mutable truth
-            }
-        }
-
+        // get_geometry BAKES the cumulative placement into the coordinates, so the deepest box
+        // must land exactly where its world xform sends the original corner.
+        let world3 = scene.world_xform(&box3_guid);
+        let expected = world3.transform_point(&Point::new(-1.0, -1.0, -1.0));
         let transformed = scene.get_geometry();
+        let baked = transformed.meshes[2].vertex_point(0).unwrap();
 
         MINI_CHECK!(transformed.meshes.len() == 3);
+        MINI_CHECK!(TOLERANCE.is_close(baked[0], expected[0]));
+        MINI_CHECK!(TOLERANCE.is_close(baked[1], expected[1]));
+        MINI_CHECK!(TOLERANCE.is_close(baked[2], expected[2]));
     })
 }
 
@@ -656,6 +739,9 @@ REGISTER_MINI_TEST!("Session", "Json Roundtrip", crate::session_test::run_sessio
 REGISTER_MINI_TEST!("Session", "Protobuf Roundtrip", crate::session_test::run_session_protobuf_roundtrip);
 REGISTER_MINI_TEST!("Session", "Lookup Mutation Roundtrip", crate::session_test::run_session_lookup_mutation_roundtrip);
 REGISTER_MINI_TEST!("Session", "Order", crate::session_test::run_session_order);
+REGISTER_MINI_TEST!("Session", "Set Xform", crate::session_test::run_session_set_xform);
+REGISTER_MINI_TEST!("Session", "World Xform Hierarchy", crate::session_test::run_session_world_xform_hierarchy);
+REGISTER_MINI_TEST!("Session", "Xform Roundtrip", crate::session_test::run_session_xform_roundtrip);
 REGISTER_MINI_TEST!("Session", "Tree Transformation Hierarchy", crate::session_test::run_session_tree_transformation_hierarchy);
 REGISTER_MINI_TEST!("Session", "Add Component",              crate::session_test::run_session_add_component);
 REGISTER_MINI_TEST!("Session", "Component Json Roundtrip",   crate::session_test::run_session_component_json_roundtrip);

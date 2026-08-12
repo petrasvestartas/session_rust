@@ -2,23 +2,28 @@
 // drawing shifted into its own cell of a grid so nothing overlaps. Output:
 // session_data/combined_scene.pb — the single file the viewer loads.
 //
-// The shift is applied to every object's `xform`, never to its coordinates: the viewer uploads
-// that matrix as the instance row, so placement costs nothing and the geometry stays as authored.
+// The shift is stored ONCE per file, on that file's group node in the session tree - never baked
+// into coordinates. Objects inherit it through the tree (Session::world_xform), and the viewer
+// uploads that matrix as the instance row, so placement costs nothing and geometry stays as authored.
+// cd /home/petras/code/code_rust/session/session_rust
+// cargo run --release --example combined_scene
 use std::collections::HashMap;
 
 use session_rust::{Session, Mesh, Polyline, Point, Color, Xform};
 use session_rust::session::Geometry;
 
-const DRAWINGS: [&str; 9] = [
+// A slice, not a fixed-size array, so entries can be commented in and out without
+// having to keep a length in sync.
+const DRAWINGS: &[&str] = &[
     "../session_data/30700_querschnitt_gg.pb",
     "../session_data/draw_pb_haus25.pb",
-    "../session_data/draw_pc_gru_og2.pb",
-    "../session_data/draw_pd_treppenhaus04.pb",
-    "../session_data/draw_pe_schalungsbild.pb",
-    "../session_data/draw_pf_he.pb",
-    "../session_data/draw_pi_laengsschnitt.pb",
-    "../session_data/draw_pj_grundriss_og2.pb",
-    "../session_data/draw_pj_treppenhaus_a.pb",
+    // "../session_data/draw_pc_gru_og2.pb",
+    // "../session_data/draw_pd_treppenhaus04.pb",
+    // "../session_data/draw_pe_schalungsbild.pb",
+    // "../session_data/draw_pf_he.pb",
+    // "../session_data/draw_pi_laengsschnitt.pb",
+    // "../session_data/draw_pj_grundriss_og2.pb",
+    // "../session_data/draw_pj_treppenhaus_a.pb",
 ];
 const GAP: f64 = 2000.0; // mm between cells
 
@@ -106,6 +111,13 @@ fn layer_of(src: &Session) -> HashMap<String, String> {
 /// distinct.
 fn place(dst: &mut Session, src: &Session, shift: &Xform, file: &str) -> usize {
     let layers = layer_of(src);
+    // ONE node per file carries the whole placement. Layer groups hang under it and objects under
+    // those, so the shift reaches every object by tree composition - one stored matrix per file
+    // instead of one per object, and the geometry stays exactly as authored.
+    let file_node = dst.add_group(file);
+    let file_key = file_node.borrow().name.clone();
+    dst.set_xform(&file_key, shift.clone());
+
     let mut groups: HashMap<String, std::rc::Rc<std::cell::RefCell<session_rust::tree::TreeNode>>> = HashMap::new();
     let mut n = 0;
     for guid in src.order() {
@@ -113,11 +125,15 @@ fn place(dst: &mut Session, src: &Session, shift: &Xform, file: &str) -> usize {
         if white_ink(g) { continue }
         let parent = layers.get(&guid).map(|l| {
             groups.entry(l.clone())
-                .or_insert_with(|| dst.add_group(&format!("{file} / {l}")))
+                .or_insert_with(|| {
+                    let node = session_rust::tree::TreeNode::new(&format!("{file} / {l}"));
+                    dst.add(&node, &file_node);
+                    node
+                })
                 .clone()
-        });
-        let parent = parent.as_ref();
-        macro_rules! moved { ($rc:expr) => {{ (**$rc).transformed(shift) }} }
+        }).unwrap_or_else(|| file_node.clone());
+        let parent = Some(&parent);
+        macro_rules! moved { ($rc:expr) => {{ (**$rc).clone() }} }
         match g {
             Geometry::Point(p) => { dst.add_point(moved!(p), parent); }
             Geometry::Line(l) => { dst.add_line(moved!(l), parent); }

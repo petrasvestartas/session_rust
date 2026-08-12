@@ -218,8 +218,8 @@ pub fn run_plane_transform() -> TestResult {
         use crate::Xform;
 
         let mut pl = Plane::xy_plane();
-        pl.xform = Xform::translation(1.0, 2.0, 3.0);
-        pl.transform();
+        let pl_xf = Xform::translation(1.0, 2.0, 3.0);
+        pl.transform(&pl_xf);
 
         MINI_CHECK!(TOLERANCE.is_close(pl.origin()[0], 1.0));
         MINI_CHECK!(TOLERANCE.is_close(pl.origin()[1], 2.0));
@@ -232,9 +232,9 @@ pub fn run_plane_transformed() -> TestResult {
         use crate::Plane;
         use crate::Xform;
 
-        let mut pl = Plane::xy_plane();
-        pl.xform = Xform::translation(1.0, 2.0, 3.0);
-        let pl2 = pl.transformed();
+        let pl = Plane::xy_plane();
+        let pl_xf = Xform::translation(1.0, 2.0, 3.0);
+        let pl2 = pl.transformed(&pl_xf);
 
         MINI_CHECK!(TOLERANCE.is_close(pl2.origin()[0], 1.0));
         MINI_CHECK!(TOLERANCE.is_close(pl2.origin()[1], 2.0));

@@ -696,33 +696,29 @@ pub fn run_nurbssurface_transformations() -> TestResult {
             Point::new(5.0, 5.0, 0.0),
         ];
 
-        // Variant 1: transform_self() - Apply stored xform (in-place)
+        // Variant 1: transform(&xform) - in place
         let mut surface1 = NurbsSurface::create(false, false, 3, 3, 4, 4, &points).unwrap();
-        surface1.xform = Xform::translation(0.0, 0.0, 1.0);
-        surface1.transform_self();
+        let surface1_xf = Xform::translation(0.0, 0.0, 1.0);
+        surface1.transform(&surface1_xf);
 
-        MINI_CHECK!(!surface1.xform.is_identity());
         MINI_CHECK!(surface1.cv(0, 0).unwrap()[2] == 1.0);
 
-        // Variant 2: transform(&xform) - Apply custom xform (in-place)
+        // Variant 2: transform(&xform) - in place, matrix built separately
         let mut surface2 = NurbsSurface::create(false, false, 3, 3, 4, 4, &points).unwrap();
         let x = Xform::translation(0.0, 0.0, 1.0);
         surface2.transform(&x);
-        MINI_CHECK!(surface2.xform.is_identity());
         MINI_CHECK!(surface2.cv(0, 0).unwrap()[2] == 1.0);
 
-        // Variant 3: transformed(None) - Get copy with stored xform applied
-        let mut surface3 = NurbsSurface::create(false, false, 3, 3, 4, 4, &points).unwrap();
-        surface3.xform = Xform::translation(0.0, 0.0, 10.0);
-        let surface3_transformed = surface3.transformed(None);
-        MINI_CHECK!(!surface3_transformed.xform.is_identity());
+        // Variant 3: transformed(&xform) - returns a copy
+        let surface3 = NurbsSurface::create(false, false, 3, 3, 4, 4, &points).unwrap();
+        let surface3_xf = Xform::translation(0.0, 0.0, 10.0);
+        let surface3_transformed = surface3.transformed(&surface3_xf);
         MINI_CHECK!(surface3_transformed.cv(0, 0).unwrap()[2] == 10.0);
 
-        // Variant 4: transformed(Some(&xform)) - Get copy with custom xform
+        // Variant 4: transformed(&xform) - returns a copy, matrix built separately
         let surface4 = NurbsSurface::create(false, false, 3, 3, 4, 4, &points).unwrap();
         let x = Xform::translation(0.0, 0.0, 10.0);
-        let surface4_transformed = surface4.transformed(Some(&x));
-        MINI_CHECK!(surface4_transformed.xform.is_identity());
+        let surface4_transformed = surface4.transformed(&x);
         MINI_CHECK!(surface4_transformed.cv(0, 0).unwrap()[2] == 10.0);
     })
 }

@@ -1305,33 +1305,29 @@ pub fn run_mesh_transformation() -> TestResult {
         let mesh = Mesh::from_vertices_and_faces(pts, vec![vec![0, 1, 2]]);
         let v0 = mesh.vertices()[0];
 
-        // transform(None) — apply stored xform in-place; xform field unchanged
+        // transform(&xf) — apply in place
         let mut mesh1 = mesh.duplicate();
-        mesh1.xform = Xform::translation(0.0, 0.0, 1.0);
-        mesh1.transform(None);
+        let mesh1_xf = Xform::translation(0.0, 0.0, 1.0);
+        mesh1.transform(&mesh1_xf);
 
-        MINI_CHECK!(!mesh1.xform.is_identity());
         MINI_CHECK!(mesh1.vertex_point(v0).unwrap()[2] == 1.0);
 
-        // transform(Some(xf)) — apply given xform in-place; stored xform unchanged
+        // transform(&xf) — apply in place, matrix built separately
         let mut mesh2 = mesh.duplicate();
         let x = Xform::translation(0.0, 0.0, 1.0);
-        mesh2.transform(Some(&x));
-        MINI_CHECK!(mesh2.xform.is_identity());
+        mesh2.transform(&x);
         MINI_CHECK!(mesh2.vertex_point(v0).unwrap()[2] == 1.0);
 
-        // transformed(None) — copy with stored xform applied
-        let mut mesh3 = mesh.duplicate();
-        mesh3.xform = Xform::translation(0.0, 0.0, 10.0);
-        let mesh3t = mesh3.transformed(None);
-        MINI_CHECK!(!mesh3t.xform.is_identity());
+        // transformed(&xf) — returns a copy
+        let mesh3 = mesh.duplicate();
+        let mesh3_xf = Xform::translation(0.0, 0.0, 10.0);
+        let mesh3t = mesh3.transformed(&mesh3_xf);
         MINI_CHECK!(mesh3t.vertex_point(v0).unwrap()[2] == 10.0);
 
         // transformed(Some(xf)) — copy with given xform applied
         let mesh4 = mesh.duplicate();
         let x = Xform::translation(0.0, 0.0, 10.0);
-        let mesh4t = mesh4.transformed(Some(&x));
-        MINI_CHECK!(mesh4t.xform.is_identity());
+        let mesh4t = mesh4.transformed(&x);
         MINI_CHECK!(mesh4t.vertex_point(v0).unwrap()[2] == 10.0);
     })
 }
@@ -1340,12 +1336,11 @@ pub fn run_mesh_json_roundtrip() -> TestResult {
     MINI_TEST!("Json Roundtrip", {
         use crate::Mesh;
         use crate::Point;
-        use crate::Xform;
+        
         use std::path::PathBuf;
 
         let mut mesh = Mesh::create_box(1.0, 1.0, 1.0);
         mesh.name = "test_mesh".to_string();
-        mesh.xform = Xform::translation(1.0, 2.0, 3.0);
 
         // JSON object
         let json = mesh.jsondump();
@@ -1404,12 +1399,11 @@ pub fn run_mesh_protobuf_roundtrip() -> TestResult {
     MINI_TEST!("Protobuf Roundtrip", {
         use crate::Mesh;
         use crate::Point;
-        use crate::Xform;
+        
         use std::path::PathBuf;
 
         let mut mesh = Mesh::create_box(1.0, 1.0, 1.0);
         mesh.name = "test_mesh_proto".to_string();
-        mesh.xform = Xform::translation(1.0, 2.0, 3.0);
 
         // String
         let proto_bytes = mesh.pb_dumps();

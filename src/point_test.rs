@@ -84,13 +84,12 @@ pub fn run_point_transformation() -> TestResult {
         use crate::Xform;
 
         let mut p = Point::new(1.0, 2.0, 3.0);
-        p.xform = Xform::translation(1.0, 2.0, 3.0);
-        let p_transformed = p.transformed(); // Make a copy
-        p.transform(); // After the call, "xform" is reset
+        let p_xf = Xform::translation(1.0, 2.0, 3.0);
+        let p_transformed = p.transformed(&p_xf); // Make a copy
+        p.transform(&p_xf);
 
         MINI_CHECK!(p_transformed[0] == 2.0 && p_transformed[1] == 4.0 && p_transformed[2] == 6.0);
         MINI_CHECK!(p[0] == 2.0 && p[1] == 4.0 && p[2] == 6.0);
-        MINI_CHECK!(p.xform == Xform::identity());
     })
 }
 

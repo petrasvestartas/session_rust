@@ -144,9 +144,9 @@ pub fn run_brep_transformation() -> TestResult {
         use crate::brep::BRep;
         use crate::Xform;
 
-        let mut b = BRep::create_box(2.0, 3.0, 4.0);
-        b.xform = Xform::translation(10.0, 20.0, 30.0);
-        let moved = b.transformed();
+        let b = BRep::create_box(2.0, 3.0, 4.0);
+        let b_xf = Xform::translation(10.0, 20.0, 30.0);
+        let moved = b.transformed(&b_xf);
 
         let pt = moved.point_at(0, 0.0, 0.0);
         let pt_orig = b.point_at(0, 0.0, 0.0);
@@ -623,9 +623,9 @@ pub fn run_brep_boolean_box_cyl() -> TestResult {
         use crate::brep::BRep;
         use crate::xform::Xform;
         let bx = BRep::create_box(2.0, 2.0, 2.0);
-        let mut cyl = BRep::create_cylinder(0.7, 3.0);
-        cyl.xform = Xform::translation(0.0, 0.0, -1.5);
-        let cyl = cyl.transformed();
+        let cyl = BRep::create_cylinder(0.7, 3.0);
+        let cyl_xf = Xform::translation(0.0, 0.0, -1.5);
+        let cyl = cyl.transformed(&cyl_xf);
         let fus = bx.boolean_union(&cyl, None);
         let cut = bx.boolean_difference(&cyl, None);
         let com = bx.boolean_intersection(&cyl, None);
@@ -647,9 +647,9 @@ pub fn run_brep_boolean_offcenter_cyl() -> TestResult {
         use crate::xform::Xform;
         const PI: f64 = std::f64::consts::PI;
         let bx = BRep::create_box(4.0, 4.0, 4.0);
-        let mut cyl = BRep::create_cylinder(1.0, 6.0);
-        cyl.xform = Xform::translation(0.5, 0.0, -3.0);
-        let cyl = cyl.transformed();
+        let cyl = BRep::create_cylinder(1.0, 6.0);
+        let cyl_xf = Xform::translation(0.5, 0.0, -3.0);
+        let cyl = cyl.transformed(&cyl_xf);
         let cut = bx.boolean_difference(&cyl, None);
         let com = bx.boolean_intersection(&cyl, None);
         let fus = bx.boolean_union(&cyl, None);
@@ -690,9 +690,9 @@ pub fn run_brep_boolean_box_box() -> TestResult {
         use crate::brep::BRep;
         use crate::xform::Xform;
         let ba = BRep::create_box(4.0, 4.0, 4.0);
-        let mut bb = BRep::create_box(2.0, 2.0, 2.0);
-        bb.xform = Xform::translation(2.0, 0.0, 0.0);
-        let bb = bb.transformed();
+        let bb = BRep::create_box(2.0, 2.0, 2.0);
+        let bb_xf = Xform::translation(2.0, 0.0, 0.0);
+        let bb = bb.transformed(&bb_xf);
         let bcut = ba.boolean_difference(&bb, None);
         let bcom = ba.boolean_intersection(&bb, None);
         let bfus = ba.boolean_union(&bb, None);

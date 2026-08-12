@@ -344,8 +344,8 @@ pub fn run_bvh_fixed_100_boxes() -> TestResult {
         let bvh = SpatialBVH::from_boxes(&boxes, 100.0);
         let (mut pairs, _colliding_indices, _checks) = bvh.check_all_collisions(&boxes);
         pairs.sort();
-        MINI_CHECK!(pairs.len() > 0);
-        MINI_CHECK!(pairs.len() <= 26);
+        MINI_CHECK!(pairs.len() == 13);
+        MINI_CHECK!(pairs.contains(&(4, 74)));
         for (i, j) in &pairs {
             MINI_CHECK!(*i < 100);
             MINI_CHECK!(*j < 100);
@@ -420,6 +420,131 @@ pub fn run_bvh_query_aabb() -> TestResult {
     })
 }
 
+pub fn run_bvh_build_from_boxes() -> TestResult {
+    MINI_TEST!("Build From Boxes", {
+        use crate::{SpatialBVH, OBB, Point, Vector};
+        let boxes = vec![
+            OBB::new(Point::new(0.0, 0.0, 0.0),
+                Vector::new(1.0, 0.0, 0.0), Vector::new(0.0, 1.0, 0.0),
+                Vector::new(0.0, 0.0, 1.0), Vector::new(1.0, 1.0, 1.0)),
+            OBB::new(Point::new(0.5, 0.0, 0.0),
+                Vector::new(1.0, 0.0, 0.0), Vector::new(0.0, 1.0, 0.0),
+                Vector::new(0.0, 0.0, 1.0), Vector::new(1.0, 1.0, 1.0)),
+            OBB::new(Point::new(10.0, 0.0, 0.0),
+                Vector::new(1.0, 0.0, 0.0), Vector::new(0.0, 1.0, 0.0),
+                Vector::new(0.0, 0.0, 1.0), Vector::new(1.0, 1.0, 1.0)),
+        ];
+        let mut bvh = SpatialBVH::new();
+        bvh.build_from_boxes(&boxes, 100.0);
+        let (pairs, _indices, _checks) = bvh.check_all_collisions(&boxes);
+
+        MINI_CHECK!(TOLERANCE.is_close(bvh.world_size, 100.0));
+        MINI_CHECK!(pairs.len() == 1);
+        MINI_CHECK!(pairs.contains(&(0, 1)));
+    })
+}
+
+pub fn run_bvh_build_from_aabbs() -> TestResult {
+    MINI_TEST!("Build From Aabbs", {
+        use crate::{SpatialBVH, AABB, OBB, Point, Vector};
+        let aabbs = vec![
+            AABB::new(0.0, 0.0, 0.0, 2.0, 2.0, 2.0),
+            AABB::new(3.0, 0.0, 0.0, 2.0, 2.0, 2.0),
+            AABB::new(50.0, 0.0, 0.0, 2.0, 2.0, 2.0),
+        ];
+        let mut bvh = SpatialBVH::new();
+        bvh.build_from_aabbs(&aabbs, 100.0);
+        let query = OBB::new(Point::new(0.0, 0.0, 0.0),
+            Vector::new(1.0, 0.0, 0.0), Vector::new(0.0, 1.0, 0.0),
+            Vector::new(0.0, 0.0, 1.0), Vector::new(2.0, 2.0, 2.0));
+        let hits = bvh.query_aabb(&query);
+
+        MINI_CHECK!(hits.len() == 2);
+        MINI_CHECK!(hits.contains(&0));
+        MINI_CHECK!(hits.contains(&1));
+    })
+}
+
+pub fn run_bvh_build_with_guids() -> TestResult {
+    MINI_TEST!("Build With Guids", {
+        use crate::{SpatialBVH, OBB, Point, Vector};
+        let boxes = vec![
+            OBB::new(Point::new(0.0, 0.0, 0.0),
+                Vector::new(1.0, 0.0, 0.0), Vector::new(0.0, 1.0, 0.0),
+                Vector::new(0.0, 0.0, 1.0), Vector::new(1.0, 1.0, 1.0)),
+            OBB::new(Point::new(0.5, 0.0, 0.0),
+                Vector::new(1.0, 0.0, 0.0), Vector::new(0.0, 1.0, 0.0),
+                Vector::new(0.0, 0.0, 1.0), Vector::new(1.0, 1.0, 1.0)),
+            OBB::new(Point::new(10.0, 0.0, 0.0),
+                Vector::new(1.0, 0.0, 0.0), Vector::new(0.0, 1.0, 0.0),
+                Vector::new(0.0, 0.0, 1.0), Vector::new(1.0, 1.0, 1.0)),
+        ];
+        let boxes_with_guids: Vec<(OBB, String)> = vec![
+            (boxes[0].clone(), "a".to_string()),
+            (boxes[1].clone(), "b".to_string()),
+            (boxes[2].clone(), "c".to_string()),
+        ];
+        let mut bvh = SpatialBVH::new();
+        bvh.build_with_guids(&boxes_with_guids);
+
+        MINI_CHECK!(bvh.object_guids.len() == 3);
+        MINI_CHECK!(bvh.object_guids[0] == "a");
+        MINI_CHECK!(TOLERANCE.is_close(bvh.world_size, 24.2));
+    })
+}
+
+pub fn run_bvh_check_all_collisions_guids() -> TestResult {
+    MINI_TEST!("Check All Collisions Guids", {
+        use crate::{SpatialBVH, OBB, Point, Vector};
+        let boxes = vec![
+            OBB::new(Point::new(0.0, 0.0, 0.0),
+                Vector::new(1.0, 0.0, 0.0), Vector::new(0.0, 1.0, 0.0),
+                Vector::new(0.0, 0.0, 1.0), Vector::new(1.0, 1.0, 1.0)),
+            OBB::new(Point::new(0.5, 0.0, 0.0),
+                Vector::new(1.0, 0.0, 0.0), Vector::new(0.0, 1.0, 0.0),
+                Vector::new(0.0, 0.0, 1.0), Vector::new(1.0, 1.0, 1.0)),
+            OBB::new(Point::new(10.0, 0.0, 0.0),
+                Vector::new(1.0, 0.0, 0.0), Vector::new(0.0, 1.0, 0.0),
+                Vector::new(0.0, 0.0, 1.0), Vector::new(1.0, 1.0, 1.0)),
+        ];
+        let boxes_with_guids: Vec<(OBB, String)> = vec![
+            (boxes[0].clone(), "a".to_string()),
+            (boxes[1].clone(), "b".to_string()),
+            (boxes[2].clone(), "c".to_string()),
+        ];
+        let mut bvh = SpatialBVH::new();
+        bvh.build_with_guids(&boxes_with_guids);
+        let guid_pairs = bvh.check_all_collisions_guids(&boxes);
+
+        MINI_CHECK!(guid_pairs.len() == 1);
+        MINI_CHECK!(guid_pairs[0] == ("a".to_string(), "b".to_string()));
+    })
+}
+
+pub fn run_bvh_find_collisions() -> TestResult {
+    MINI_TEST!("Find Collisions", {
+        use crate::{SpatialBVH, OBB, Point, Vector};
+        let boxes = vec![
+            OBB::new(Point::new(0.0, 0.0, 0.0),
+                Vector::new(1.0, 0.0, 0.0), Vector::new(0.0, 1.0, 0.0),
+                Vector::new(0.0, 0.0, 1.0), Vector::new(1.0, 1.0, 1.0)),
+            OBB::new(Point::new(0.5, 0.0, 0.0),
+                Vector::new(1.0, 0.0, 0.0), Vector::new(0.0, 1.0, 0.0),
+                Vector::new(0.0, 0.0, 1.0), Vector::new(1.0, 1.0, 1.0)),
+            OBB::new(Point::new(10.0, 0.0, 0.0),
+                Vector::new(1.0, 0.0, 0.0), Vector::new(0.0, 1.0, 0.0),
+                Vector::new(0.0, 0.0, 1.0), Vector::new(1.0, 1.0, 1.0)),
+        ];
+        let bvh = SpatialBVH::from_boxes(&boxes, 100.0);
+        let (c0, checks0) = bvh.find_collisions(0, &boxes[0], &boxes);
+        let (c2, _checks2) = bvh.find_collisions(2, &boxes[2], &boxes);
+
+        MINI_CHECK!(c0 == vec![1]);
+        MINI_CHECK!(c2.is_empty());
+        MINI_CHECK!(checks0 > 0);
+    })
+}
+
 REGISTER_MINI_TEST!("SpatialBVH", "Constructor", crate::spatial_bvh_test::run_bvh_constructor);
 REGISTER_MINI_TEST!("SpatialBVH", "Expand Bits", crate::spatial_bvh_test::run_bvh_expand_bits);
 REGISTER_MINI_TEST!("SpatialBVH", "Morton Code Origin", crate::spatial_bvh_test::run_bvh_morton_code_origin);
@@ -437,3 +562,8 @@ REGISTER_MINI_TEST!("SpatialBVH", "Merge Aabb", crate::spatial_bvh_test::run_bvh
 REGISTER_MINI_TEST!("SpatialBVH", "Fixed 100 Boxes", crate::spatial_bvh_test::run_bvh_fixed_100_boxes);
 REGISTER_MINI_TEST!("SpatialBVH", "Query Aabb", crate::spatial_bvh_test::run_bvh_query_aabb);
 REGISTER_MINI_TEST!("SpatialBVH", "Nearest Neighbors", crate::spatial_bvh_test::run_bvh_nearest_neighbors);
+REGISTER_MINI_TEST!("SpatialBVH", "Build From Boxes", crate::spatial_bvh_test::run_bvh_build_from_boxes);
+REGISTER_MINI_TEST!("SpatialBVH", "Build From Aabbs", crate::spatial_bvh_test::run_bvh_build_from_aabbs);
+REGISTER_MINI_TEST!("SpatialBVH", "Build With Guids", crate::spatial_bvh_test::run_bvh_build_with_guids);
+REGISTER_MINI_TEST!("SpatialBVH", "Check All Collisions Guids", crate::spatial_bvh_test::run_bvh_check_all_collisions_guids);
+REGISTER_MINI_TEST!("SpatialBVH", "Find Collisions", crate::spatial_bvh_test::run_bvh_find_collisions);

@@ -348,7 +348,7 @@ impl SpatialRTree {
             self.add_branch(branch, node_idx, &mut out);
             out
         } else {
-            None
+            unreachable!()
         }
     }
 
@@ -438,12 +438,12 @@ impl SpatialRTree {
         self.m_size += 1;
     }
 
-    pub fn remove(&mut self, a_min: [f64; 3], a_max: [f64; 3], a_data: i32) {
+    pub fn remove(&mut self, a_min: [f64; 3], a_max: [f64; 3], a_data: i32) -> bool {
         let rect = self.make_rect(a_min, a_max);
         let mut reinsert_list: Vec<usize> = Vec::new();
         let root = self.m_root;
         if !self.remove_rect_internal(&rect, a_data, root, &mut reinsert_list) {
-            return;
+            return false;
         }
         for node_idx in reinsert_list {
             let count = self.nodes[node_idx].m_count;
@@ -465,6 +465,7 @@ impl SpatialRTree {
             }
         }
         self.m_size -= 1;
+        true
     }
 
     pub fn search(&self, a_min: [f64; 3], a_max: [f64; 3], mut a_callback: impl FnMut(i32) -> bool) -> i32 {

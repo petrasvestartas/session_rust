@@ -156,7 +156,6 @@ pub fn run_plate_json_roundtrip() -> TestResult {
     MINI_TEST!("Json Roundtrip", {
         use crate::element::Element;
         use crate::Point;
-        use crate::Xform;
 
         let polygon = vec![
             Point::new(0.0, 0.0, 0.0),
@@ -164,8 +163,7 @@ pub fn run_plate_json_roundtrip() -> TestResult {
             Point::new(2.0, 2.0, 0.0),
             Point::new(0.0, 2.0, 0.0),
         ];
-        let mut p = Element::plate(polygon, 0.3, "json_plate");
-        p.session_transformation = Xform::translation(1.0, 2.0, 3.0);
+        let p = Element::plate(polygon, 0.3, "json_plate");
 
         let fname = "serialization/test_plate_element.json";
         p.file_json_dump(fname);
@@ -182,7 +180,6 @@ pub fn run_plate_protobuf_roundtrip() -> TestResult {
     MINI_TEST!("Protobuf Roundtrip", {
         use crate::element::Element;
         use crate::Point;
-        use crate::Xform;
 
         let polygon = vec![
             Point::new(0.0, 0.0, 0.0),
@@ -190,8 +187,7 @@ pub fn run_plate_protobuf_roundtrip() -> TestResult {
             Point::new(2.0, 2.0, 0.0),
             Point::new(0.0, 2.0, 0.0),
         ];
-        let mut p = Element::plate(polygon, 0.3, "proto_plate");
-        p.session_transformation = Xform::translation(1.0, 2.0, 3.0);
+        let p = Element::plate(polygon, 0.3, "proto_plate");
 
         let path = "serialization/test_plate_element.bin";
         p.pb_dump(path);

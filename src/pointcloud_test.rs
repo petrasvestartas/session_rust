@@ -300,8 +300,8 @@ pub fn run_pointcloud_transform() -> TestResult {
         use crate::Xform;
 
         let mut pc = PointCloud::new(vec![Point::new(1.0, 2.0, 3.0)], vec![], vec![]);
-        pc.xform = Xform::translation(10.0, 20.0, 30.0);
-        pc.transform();
+        let pc_xf = Xform::translation(10.0, 20.0, 30.0);
+        pc.transform(&pc_xf);
 
         MINI_CHECK!(TOLERANCE.is_close(pc.get_point(0)[0], 11.0));
         MINI_CHECK!(TOLERANCE.is_close(pc.get_point(0)[1], 22.0));
@@ -315,9 +315,9 @@ pub fn run_pointcloud_transformed() -> TestResult {
         use crate::Point;
         use crate::Xform;
 
-        let mut pc = PointCloud::new(vec![Point::new(1.0, 2.0, 3.0)], vec![], vec![]);
-        pc.xform = Xform::translation(10.0, 20.0, 30.0);
-        let pc2 = pc.transformed();
+        let pc = PointCloud::new(vec![Point::new(1.0, 2.0, 3.0)], vec![], vec![]);
+        let pc_xf = Xform::translation(10.0, 20.0, 30.0);
+        let pc2 = pc.transformed(&pc_xf);
 
         MINI_CHECK!(TOLERANCE.is_close(pc2.get_point(0)[0], 11.0));
         MINI_CHECK!(TOLERANCE.is_close(pc2.get_point(0)[1], 22.0));

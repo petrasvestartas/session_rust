@@ -458,9 +458,9 @@ pub fn run_nurbssurface_trimmed_transformation() -> TestResult {
             Point::new(0.0, 1.0, 0.0),
         ]);
 
-        let mut ts = NurbsSurfaceTrimmed::create(&srf, &outer);
-        ts.xform = Xform::translation(10.0, 20.0, 30.0);
-        let ts2 = ts.transformed();
+        let ts = NurbsSurfaceTrimmed::create(&srf, &outer);
+        let ts_xf = Xform::translation(10.0, 20.0, 30.0);
+        let ts2 = ts.transformed(&ts_xf);
 
         let (u0, _u1) = ts2.surface().domain(0).unwrap();
         let (v0, _v1) = ts2.surface().domain(1).unwrap();

@@ -35,16 +35,14 @@ pub fn run_xform_constructor() -> TestResult {
         let t = Xform::translation(10.0, 0.0, 0.0);
         let s = Xform::scale_xyz(2.0, 1.0, 1.0);
         let combined = &t * &s;
-        let mut p = Point::new(1.0, 0.0, 0.0);
-        p.xform = combined;
-        let result = p.transformed();
+        let p = Point::new(1.0, 0.0, 0.0);
+        let result = p.transformed(&combined);
 
         // In-place multiplication (*=)
         let mut t2 = Xform::translation(10.0, 0.0, 0.0);
         t2 *= s;
-        let mut p2 = Point::new(1.0, 0.0, 0.0);
-        p2.xform = t2;
-        let result2 = p2.transformed();
+        let p2 = Point::new(1.0, 0.0, 0.0);
+        let result2 = p2.transformed(&t2);
 
         MINI_CHECK!(x.name == "my_xform" && !x.guid().is_empty());
         MINI_CHECK!(m00 == 1.0 && m11 == 1.0 && m22 == 1.0 && m33 == 1.0);
@@ -68,7 +66,7 @@ pub fn run_xform_translation() -> TestResult {
 
         let xf = Xform::translation(1.5, 1.0, 0.5);
         let mesh = Mesh::create_box(2.0, 2.0, 2.0);
-        let result = mesh.transformed(Some(&xf));
+        let result = mesh.transformed(&xf);
         MINI_CHECK!(TOLERANCE.is_point_close(&result.vertex_point(0).unwrap(), &Point::new(0.5, 0.0, -0.5)));
         MINI_CHECK!(TOLERANCE.is_point_close(&result.vertex_point(1).unwrap(), &Point::new(2.5, 0.0, -0.5)));
         MINI_CHECK!(TOLERANCE.is_point_close(&result.vertex_point(2).unwrap(), &Point::new(2.5, 2.0, -0.5)));
@@ -89,7 +87,7 @@ pub fn run_xform_rotation_x() -> TestResult {
         let s = f64::sqrt(2.0);
         let xf = Xform::rotation_x(PI / 4.0, false);
         let mesh = Mesh::create_box(2.0, 2.0, 2.0);
-        let result = mesh.transformed(Some(&xf));
+        let result = mesh.transformed(&xf);
         MINI_CHECK!(TOLERANCE.is_point_close(&result.vertex_point(0).unwrap(), &Point::new(-1.0, 0.0, -s)));
         MINI_CHECK!(TOLERANCE.is_point_close(&result.vertex_point(1).unwrap(), &Point::new(1.0, 0.0, -s)));
         MINI_CHECK!(TOLERANCE.is_point_close(&result.vertex_point(2).unwrap(), &Point::new(1.0, s, 0.0)));
@@ -110,7 +108,7 @@ pub fn run_xform_rotation_y() -> TestResult {
         let s = f64::sqrt(2.0);
         let xf = Xform::rotation_y(PI / 4.0, false);
         let mesh = Mesh::create_box(2.0, 2.0, 2.0);
-        let result = mesh.transformed(Some(&xf));
+        let result = mesh.transformed(&xf);
         MINI_CHECK!(TOLERANCE.is_point_close(&result.vertex_point(0).unwrap(), &Point::new(-s, -1.0, 0.0)));
         MINI_CHECK!(TOLERANCE.is_point_close(&result.vertex_point(1).unwrap(), &Point::new(0.0, -1.0, -s)));
         MINI_CHECK!(TOLERANCE.is_point_close(&result.vertex_point(2).unwrap(), &Point::new(0.0, 1.0, -s)));
@@ -131,7 +129,7 @@ pub fn run_xform_rotation_z() -> TestResult {
         let s = f64::sqrt(2.0);
         let xf = Xform::rotation_z(PI / 4.0, false);
         let mesh = Mesh::create_box(2.0, 2.0, 2.0);
-        let result = mesh.transformed(Some(&xf));
+        let result = mesh.transformed(&xf);
         MINI_CHECK!(TOLERANCE.is_point_close(&result.vertex_point(0).unwrap(), &Point::new(0.0, -s, -1.0)));
         MINI_CHECK!(TOLERANCE.is_point_close(&result.vertex_point(1).unwrap(), &Point::new(s, 0.0, -1.0)));
         MINI_CHECK!(TOLERANCE.is_point_close(&result.vertex_point(2).unwrap(), &Point::new(0.0, s, -1.0)));
@@ -153,7 +151,7 @@ pub fn run_xform_rotation_axis() -> TestResult {
         let axis = Vector::new(1.0, 1.0, 1.0);
         let xf = Xform::rotation(&axis, 2.0 * PI / 4.0, false);
         let mesh = Mesh::create_box(2.0, 2.0, 2.0);
-        let result = mesh.transformed(Some(&xf));
+        let result = mesh.transformed(&xf);
         let t = 1.0 / 3.0;
         let k = 2.0 / f64::sqrt(3.0);
         MINI_CHECK!(TOLERANCE.is_point_close(&result.vertex_point(0).unwrap(), &Point::new(-1.0, -1.0, -1.0)));
@@ -178,7 +176,7 @@ pub fn run_xform_rotation_around_line() -> TestResult {
         let line = Line::new(-1.0, -1.0, -1.0, -1.0, -1.0, 1.0);
         let xf = Xform::rotation_around_line(&line, PI / 4.0, false);
         let mesh = Mesh::create_box(2.0, 2.0, 2.0);
-        let result = mesh.transformed(Some(&xf));
+        let result = mesh.transformed(&xf);
         MINI_CHECK!(TOLERANCE.is_point_close(&result.vertex_point(0).unwrap(), &Point::new(-1.0, -1.0, -1.0)));
         MINI_CHECK!(TOLERANCE.is_point_close(&result.vertex_point(1).unwrap(), &Point::new(s-1.0, s-1.0, -1.0)));
         MINI_CHECK!(TOLERANCE.is_point_close(&result.vertex_point(2).unwrap(), &Point::new(-1.0, 2.0*s-1.0, -1.0)));
@@ -207,7 +205,7 @@ pub fn run_xform_change_basis() -> TestResult {
         let z1 = Vector::new(0.0, 0.0, 1.1);
         let xf = Xform::change_basis(&o0, &x0, &y0, &z0, &o1, &x1, &y1, &z1);
         let mesh = Mesh::create_box(2.0, 2.0, 2.0);
-        let result = mesh.transformed(Some(&xf));
+        let result = mesh.transformed(&xf);
         MINI_CHECK!(TOLERANCE.is_point_close(&result.vertex_point(0).unwrap(), &Point::new(-1.0, 0.0, -0.45)));
         MINI_CHECK!(TOLERANCE.is_point_close(&result.vertex_point(1).unwrap(), &Point::new(1.4, 0.0, -0.45)));
         MINI_CHECK!(TOLERANCE.is_point_close(&result.vertex_point(2).unwrap(), &Point::new(2.0, -2.0, -0.75)));
@@ -231,7 +229,7 @@ pub fn run_xform_plane_to_plane() -> TestResult {
         let pt = Plane::new(Point::new(2.0, 0.0, 0.0), Vector::new(0.0, 1.0, 0.0), Vector::new(-1.0, 0.0, 0.0));
         let xf = Xform::plane_to_plane(&pf, &pt);
         let mesh = Mesh::create_box(2.0, 2.0, 2.0);
-        let result = mesh.transformed(Some(&xf));
+        let result = mesh.transformed(&xf);
         MINI_CHECK!(TOLERANCE.is_point_close(&result.vertex_point(0).unwrap(), &Point::new(1.0, 1.0, -1.0)));
         MINI_CHECK!(TOLERANCE.is_point_close(&result.vertex_point(1).unwrap(), &Point::new(1.0, -1.0, -1.0)));
         MINI_CHECK!(TOLERANCE.is_point_close(&result.vertex_point(2).unwrap(), &Point::new(3.0, -1.0, -1.0)));
@@ -251,7 +249,7 @@ pub fn run_xform_scale_xyz() -> TestResult {
 
         let xf = Xform::scale_xyz(1.5, 1.2, 1.8);
         let mesh = Mesh::create_box(2.0, 2.0, 2.0);
-        let result = mesh.transformed(Some(&xf));
+        let result = mesh.transformed(&xf);
         MINI_CHECK!(TOLERANCE.is_point_close(&result.vertex_point(0).unwrap(), &Point::new(-1.5, -1.2, -1.8)));
         MINI_CHECK!(TOLERANCE.is_point_close(&result.vertex_point(1).unwrap(), &Point::new(1.5, -1.2, -1.8)));
         MINI_CHECK!(TOLERANCE.is_point_close(&result.vertex_point(2).unwrap(), &Point::new(1.5, 1.2, -1.8)));
@@ -272,7 +270,7 @@ pub fn run_xform_scale_uniform() -> TestResult {
         let c = Point::new(0.0, 0.0, 0.0);
         let xf = Xform::scale_uniform(&c, 2.0);
         let mesh = Mesh::create_box(2.0, 2.0, 2.0);
-        let result = mesh.transformed(Some(&xf));
+        let result = mesh.transformed(&xf);
         MINI_CHECK!(TOLERANCE.is_point_close(&result.vertex_point(0).unwrap(), &Point::new(-2.0, -2.0, -2.0)));
         MINI_CHECK!(TOLERANCE.is_point_close(&result.vertex_point(1).unwrap(), &Point::new(2.0, -2.0, -2.0)));
         MINI_CHECK!(TOLERANCE.is_point_close(&result.vertex_point(2).unwrap(), &Point::new(2.0, 2.0, -2.0)));
@@ -293,7 +291,7 @@ pub fn run_xform_scale_non_uniform() -> TestResult {
         let c = Point::new(0.0, 0.0, 0.0);
         let xf = Xform::scale_non_uniform(&c, 1.5, 1.2, 1.8);
         let mesh = Mesh::create_box(2.0, 2.0, 2.0);
-        let result = mesh.transformed(Some(&xf));
+        let result = mesh.transformed(&xf);
         MINI_CHECK!(TOLERANCE.is_point_close(&result.vertex_point(0).unwrap(), &Point::new(-1.5, -1.2, -1.8)));
         MINI_CHECK!(TOLERANCE.is_point_close(&result.vertex_point(1).unwrap(), &Point::new(1.5, -1.2, -1.8)));
         MINI_CHECK!(TOLERANCE.is_point_close(&result.vertex_point(2).unwrap(), &Point::new(1.5, 1.2, -1.8)));
@@ -316,7 +314,7 @@ pub fn run_xform_look_at_right_handed() -> TestResult {
         let target = Point::new(0.0, 0.0, 0.0);
         let xf = Xform::look_at_right_handed(&eye, &target, &Vector::new(0.0, 0.0, 1.0));
         let mesh = Mesh::create_box(2.0, 2.0, 2.0);
-        let result = mesh.transformed(Some(&xf));
+        let result = mesh.transformed(&xf);
         MINI_CHECK!(TOLERANCE.is_point_close(&result.vertex_point(0).unwrap(), &Point::new(1.0, -1.0, -4.0)));
         MINI_CHECK!(TOLERANCE.is_point_close(&result.vertex_point(1).unwrap(), &Point::new(-1.0, -1.0, -4.0)));
         MINI_CHECK!(TOLERANCE.is_point_close(&result.vertex_point(2).unwrap(), &Point::new(-1.0, -1.0, -2.0)));
@@ -339,7 +337,7 @@ pub fn run_xform_look_to_right_handed() -> TestResult {
         let direction = Vector::new(0.0, -1.0, 0.0);
         let xf = Xform::look_to_right_handed(&eye, &direction, &Vector::new(0.0, 0.0, 1.0));
         let mesh = Mesh::create_box(2.0, 2.0, 2.0);
-        let result = mesh.transformed(Some(&xf));
+        let result = mesh.transformed(&xf);
         MINI_CHECK!(TOLERANCE.is_point_close(&result.vertex_point(0).unwrap(), &Point::new(1.0, -1.0, -4.0)));
         MINI_CHECK!(TOLERANCE.is_point_close(&result.vertex_point(1).unwrap(), &Point::new(-1.0, -1.0, -4.0)));
         MINI_CHECK!(TOLERANCE.is_point_close(&result.vertex_point(2).unwrap(), &Point::new(-1.0, -1.0, -2.0)));
@@ -361,7 +359,7 @@ pub fn run_xform_perspective() -> TestResult {
         let proj = Xform::perspective(PI / 2.0, 1.0, 1.0, 3.0);
         let xf = &proj * &view;
         let mesh = Mesh::create_box(2.0, 2.0, 2.0);
-        let result = mesh.transformed(Some(&xf));
+        let result = mesh.transformed(&xf);
         let t = 1.0 / 3.0;
         MINI_CHECK!(TOLERANCE.is_point_close(&result.vertex_point(0).unwrap(), &Point::new(-t, -t, 1.0)));
         MINI_CHECK!(TOLERANCE.is_point_close(&result.vertex_point(1).unwrap(), &Point::new(t, -t, 1.0)));
@@ -384,7 +382,7 @@ pub fn run_xform_orthographic() -> TestResult {
         let proj = Xform::orthographic(-1.0, 1.0, -1.0, 1.0, 1.0, 3.0);
         let xf = &proj * &view;
         let mesh = Mesh::create_box(2.0, 2.0, 2.0);
-        let result = mesh.transformed(Some(&xf));
+        let result = mesh.transformed(&xf);
         MINI_CHECK!(TOLERANCE.is_point_close(&result.vertex_point(0).unwrap(), &Point::new(-1.0, -1.0, 1.0)));
         MINI_CHECK!(TOLERANCE.is_point_close(&result.vertex_point(1).unwrap(), &Point::new(1.0, -1.0, 1.0)));
         MINI_CHECK!(TOLERANCE.is_point_close(&result.vertex_point(2).unwrap(), &Point::new(1.0, 1.0, 1.0)));
@@ -408,7 +406,7 @@ pub fn run_xform_project_to_plane() -> TestResult {
         let mv = Xform::translation(0.0, 0.0, 1.0);
         let proj = Xform::project_to_plane(&plane);
         let xf = &proj * &mv;
-        let tp = |x: f64, y: f64, z: f64| -> Point { let mut p = Point::new(x, y, z); p.xform = xf.clone(); p.transformed() };
+        let tp = |x: f64, y: f64, z: f64| -> Point { Point::new(x, y, z).transformed(&xf) };
         let outline = Polyline::new(vec![
             tp(-1.0, -1.0, -1.0),
             tp(1.0, -1.0, -1.0),
@@ -438,7 +436,7 @@ pub fn run_xform_project_to_plane_by_axis() -> TestResult {
         let mv = Xform::translation(0.0, 0.0, 1.0);
         let proj = Xform::project_to_plane_by_axis(&plane, &direction);
         let xf = &proj * &mv;
-        let tp = |x: f64, y: f64, z: f64| -> Point { let mut p = Point::new(x, y, z); p.xform = xf.clone(); p.transformed() };
+        let tp = |x: f64, y: f64, z: f64| -> Point { Point::new(x, y, z).transformed(&xf) };
         let outline = Polyline::new(vec![
             tp(-1.0, -1.0, 1.0),
             tp(1.0, -1.0, -1.0),
@@ -466,8 +464,8 @@ pub fn run_xform_inverse() -> TestResult {
         let composite = &t * &s;
         let inv = composite.inverse().unwrap();
         let mesh = Mesh::create_box(2.0, 2.0, 2.0);
-        let forward = mesh.transformed(Some(&composite));
-        let roundtrip = forward.transformed(Some(&inv));
+        let forward = mesh.transformed(&composite);
+        let roundtrip = forward.transformed(&inv);
         MINI_CHECK!(TOLERANCE.is_point_close(&roundtrip.vertex_point(0).unwrap(), &Point::new(-1.0, -1.0, -1.0)));
         MINI_CHECK!(TOLERANCE.is_point_close(&roundtrip.vertex_point(1).unwrap(), &Point::new(1.0, -1.0, -1.0)));
         MINI_CHECK!(TOLERANCE.is_point_close(&roundtrip.vertex_point(2).unwrap(), &Point::new(1.0, 1.0, -1.0)));
@@ -559,37 +557,32 @@ pub fn run_xform_transform_geometry() -> TestResult {
         let t = Xform::translation(10.0, 20.0, 30.0);
 
         // Transform Point: (1,2,3) -> (11,22,33)
-        let mut pt = Point::new(1.0, 2.0, 3.0);
-        pt.xform = t.clone();
-        let pt_transformed = pt.transformed();
+        let pt = Point::new(1.0, 2.0, 3.0);
+        let pt_transformed = pt.transformed(&t.clone());
 
         // Transform Vector: translation should NOT affect vectors
-        let mut v = Vector::new(1.0, 0.0, 0.0);
-        v.xform = t.clone();
-        let v_transformed = v.transformed();
+        let v = Vector::new(1.0, 0.0, 0.0);
+        let v_transformed = v.transformed(&t.clone());
 
         // Transform Line: (0,0,0)-(1,0,0) -> (10,20,30)-(11,20,30)
-        let mut ln = Line::new(0.0, 0.0, 0.0, 1.0, 0.0, 0.0);
-        ln.xform = t.clone();
-        let ln_transformed = ln.transformed();
+        let ln = Line::new(0.0, 0.0, 0.0, 1.0, 0.0, 0.0);
+        let ln_transformed = ln.transformed(&t.clone());
 
         // Transform Plane: origin (0,0,0) -> (10,20,30)
-        let mut pl = Plane::new(
+        let pl = Plane::new(
             Point::new(0.0, 0.0, 0.0),
             Vector::new(1.0, 0.0, 0.0),
             Vector::new(0.0, 1.0, 0.0),
         );
-        pl.xform = t.clone();
-        let pl_transformed = pl.transformed();
+        let pl_transformed = pl.transformed(&t.clone());
 
         // Transform Polyline: 3 points translated
-        let mut poly = Polyline::new(vec![
+        let poly = Polyline::new(vec![
             Point::new(0.0, 0.0, 0.0),
             Point::new(1.0, 0.0, 0.0),
             Point::new(1.0, 1.0, 0.0),
         ]);
-        poly.xform = t.clone();
-        let poly_transformed = poly.transformed();
+        let poly_transformed = poly.transformed(&t.clone());
         let pts = poly_transformed.get_points();
 
         MINI_CHECK!(TOLERANCE.is_point_close(&pt_transformed, &Point::new(11.0, 22.0, 33.0)));

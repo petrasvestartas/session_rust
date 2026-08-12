@@ -19,7 +19,6 @@ pub struct NurbsCurve {
     pub width: f64,
     pub pointcolors: Vec<Color>,
     pub linecolors: Vec<Color>,
-    pub xform: Xform,
     pub m_dim: usize,
     pub m_is_rat: bool,
     pub m_order: usize,
@@ -74,7 +73,6 @@ impl Serialize for NurbsCurve {
         map.serialize_entry("pointcolors", &pointcolors_flat)?;
         map.serialize_entry("type", "NurbsCurve")?;
         map.serialize_entry("width", &self.width)?;
-        map.serialize_entry("xform", &self.xform)?;
         map.end()
     }
 }
@@ -102,8 +100,6 @@ impl<'de> Deserialize<'de> for NurbsCurve {
             order: usize,
             #[serde(default)]
             width: Option<f64>,
-            #[serde(default)]
-            xform: Option<Xform>,
         }
         let data = NurbsCurveData::deserialize(deserializer)?;
         let cv_stride = data.cv_stride.unwrap_or_else(|| {
@@ -132,7 +128,6 @@ impl<'de> Deserialize<'de> for NurbsCurve {
             width: data.width.unwrap_or(1.0),
             pointcolors,
             linecolors,
-            xform: data.xform.unwrap_or_else(Xform::identity),
             m_dim: data.dimension,
             m_is_rat: data.is_rational,
             m_order: data.order,
@@ -870,7 +865,6 @@ impl NurbsCurve {
             width: 1.0,
             pointcolors: Vec::new(),
             linecolors: Vec::new(),
-            xform: Xform::identity(),
             m_dim: dimension,
             m_is_rat: is_rational,
             m_order: order,
@@ -890,7 +884,6 @@ impl NurbsCurve {
             width: 1.0,
             pointcolors: Vec::new(),
             linecolors: Vec::new(),
-            xform: Xform::identity(),
             m_dim: 0,
             m_is_rat: false,
             m_order: 0,
@@ -3036,11 +3029,7 @@ impl NurbsCurve {
 
 
 
-    pub fn transform(&mut self, xf: Option<&Xform>) {
-        let xform = match xf {
-            Some(x) => x.clone(),
-            None => self.xform.clone(),
-        };
+    pub fn transform(&mut self, xform: &Xform) {
         for i in 0..self.m_cv_count {
             if let Some(p) = self.get_cv(i) {
                 let x = xform.m[0] * p[0] + xform.m[4] * p[1] + xform.m[8] * p[2] + xform.m[12];
@@ -3056,10 +3045,10 @@ impl NurbsCurve {
         }
     }
 
-    pub fn transformed(&self, xf: Option<&Xform>) -> NurbsCurve {
+    pub fn transformed(&self, xform: &Xform) -> NurbsCurve {
         let mut result = self.clone();
         result.guid = std::sync::OnceLock::new();
-        result.transform(xf);
+        result.transform(xform);
         result
     }
 
@@ -3101,7 +3090,13 @@ impl NurbsCurve {
     /// Convert to protobuf binary format
     pub fn to_protobuf(&self) -> Vec<u8> {
         use prost::Message;
-        let proto = crate::proto::NurbsCurve {
+        self.to_proto().encode_to_vec()
+    }
+
+
+    /// The proto struct itself — pb_dumps encodes it; Session embeds it directly.
+    pub fn to_proto(&self) -> crate::proto::NurbsCurve {
+        crate::proto::NurbsCurve {
             guid: self.guid().to_string(),
             name: self.name.clone(),
             dimension: self.m_dim as i32,
@@ -3120,20 +3115,19 @@ impl NurbsCurve {
                 guid: String::new(), name: String::new(),
                 r: c.r, g: c.g, b: c.b, a: c.a,
             }).collect(),
-            xform: Some(crate::proto::Xform {
-                guid: self.xform.guid().to_string(),
-                name: self.xform.name.clone(),
-                matrix: self.xform.m.iter().map(|&v| v as f64).collect(),
-            }),
-        };
-        proto.encode_to_vec()
+        }
     }
 
 
     /// Create NurbsCurve from protobuf binary data
     pub fn from_protobuf(data: &[u8]) -> Result<Self, Box<dyn std::error::Error>> {
         use prost::Message;
-        let proto = crate::proto::NurbsCurve::decode(data)?;
+        Ok(Self::from_proto(crate::proto::NurbsCurve::decode(data)?))
+    }
+
+
+    /// Build from an already-decoded proto — pb_loads decodes then calls this.
+    pub fn from_proto(proto: crate::proto::NurbsCurve) -> Self {
         let mut curve = Self::new(
             proto.dimension as usize,
             proto.is_rational,
@@ -3146,16 +3140,7 @@ impl NurbsCurve {
         curve.m_cv = proto.cvs.into_iter().map(|v| v as f64).collect();
         curve.pointcolors = proto.pointcolors.iter().map(|c| Color::new(c.r, c.g, c.b, c.a)).collect();
         curve.linecolors = proto.linecolors.iter().map(|c| Color::new(c.r, c.g, c.b, c.a)).collect();
-        if let Some(xform) = proto.xform {
-            curve.xform.set_guid(xform.guid.clone());
-            curve.xform.name = xform.name;
-            for (i, val) in xform.matrix.iter().enumerate() {
-                if i < 16 {
-                    curve.xform.m[i] = *val as f64;
-                }
-            }
-        }
-        Ok(curve)
+        curve
     }
 
 

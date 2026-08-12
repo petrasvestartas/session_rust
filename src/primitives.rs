@@ -313,8 +313,7 @@ impl Primitives {
         let vertex_keys: Vec<usize> = vertices
             .iter()
             .map(|v| {
-                let mut transformed = v.clone(); transformed.xform = xform.clone(); transformed = transformed.transformed();
-                mesh.add_vertex(transformed, None)
+                mesh.add_vertex(v.transformed(xform), None)
             })
             .collect();
         for tri in triangles {
@@ -443,8 +442,7 @@ impl Primitives {
 
         let mut body_vertex_map = Vec::new();
         for v in &body_geometry.0 {
-            let mut transformed = v.clone(); transformed.xform = body_xform.clone(); transformed = transformed.transformed();
-            let key = mesh.add_vertex(transformed, None);
+            let key = mesh.add_vertex(v.transformed(&body_xform), None);
             body_vertex_map.push(key);
         }
         for tri in &body_geometry.1 {
@@ -454,8 +452,7 @@ impl Primitives {
 
         let mut cone_vertex_map = Vec::new();
         for v in &cone_geometry.0 {
-            let mut transformed = v.clone(); transformed.xform = cone_xform.clone(); transformed = transformed.transformed();
-            let key = mesh.add_vertex(transformed, None);
+            let key = mesh.add_vertex(v.transformed(&cone_xform), None);
             cone_vertex_map.push(key);
         }
         for tri in &cone_geometry.1 {
@@ -671,7 +668,7 @@ impl Primitives {
         if !curve.is_valid() { return NurbsSurface::new(); }
         let mut translated = curve.duplicate();
         let t = Xform::translation(direction[0], direction[1], direction[2]);
-        translated.transform(Some(&t));
+        translated.transform(&t);
         Self::create_ruled(curve, &translated)
     }
 
@@ -1170,8 +1167,8 @@ impl Primitives {
             rot.m[10] = fx[2]*prof_x[2] + fy[2]*prof_y[2] + fz[2]*prof_normal[2];
             rot.m[12] = fo[0]; rot.m[13] = fo[1]; rot.m[14] = fo[2];
 
-            prof_copy.transform(Some(&t1x));
-            prof_copy.transform(Some(&rot));
+            prof_copy.transform(&t1x);
+            prof_copy.transform(&rot);
             positioned_profiles.push(prof_copy);
         }
 
@@ -1290,10 +1287,10 @@ impl Primitives {
 
             let mut prof_copy = interp_shape;
             let t1 = Xform::translation(-interp_start[0], -interp_start[1], -interp_start[2]);
-            prof_copy.transform(Some(&t1));
+            prof_copy.transform(&t1);
 
             let sc = Xform::scale_xyz(scale_factor, scale_factor, scale_factor);
-            prof_copy.transform(Some(&sc));
+            prof_copy.transform(&sc);
 
             let tangent_orig = frames1[i].z_axis();
             let mut x_dir = Vector::new(dx, dy, dz);
@@ -1322,7 +1319,7 @@ impl Primitives {
             rot.m[10] = tangent[2]*prof_side[2] + x_dir[2]*prof_dir[2] + y_dir[2]*prof_up[2];
             rot.m[12] = p1[0]; rot.m[13] = p1[1]; rot.m[14] = p1[2];
 
-            prof_copy.transform(Some(&rot));
+            prof_copy.transform(&rot);
             positioned_profiles.push(prof_copy);
         }
 

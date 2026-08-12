@@ -89,17 +89,16 @@ pub fn run_vector_transformation() -> TestResult {
         use crate::tolerance::PI;
 
         let mut v = Vector::new(1.0, 2.0, 3.0);
-        v.xform = Xform::translation(10.0, 20.0, 30.0);
-        let v_transformed = v.transformed();
-        v.transform();
+        let v_xf = Xform::translation(10.0, 20.0, 30.0);
+        let v_transformed = v.transformed(&v_xf);
+        v.transform(&v_xf);
 
         MINI_CHECK!(v_transformed[0] == 1.0 && v_transformed[1] == 2.0 && v_transformed[2] == 3.0);
         MINI_CHECK!(v[0] == 1.0 && v[1] == 2.0 && v[2] == 3.0);
-        MINI_CHECK!(v.xform == Xform::identity());
 
         let mut v2 = Vector::new(1.0, 0.0, 0.0);
-        v2.xform = Xform::rotation_z(PI / 2.0, false);
-        v2.transform();
+        let v2_xf = Xform::rotation_z(PI / 2.0, false);
+        v2.transform(&v2_xf);
         MINI_CHECK!(TOLERANCE.is_close(v2[0], 0.0) && TOLERANCE.is_close(v2[1], 1.0) && TOLERANCE.is_close(v2[2], 0.0));
     })
 }

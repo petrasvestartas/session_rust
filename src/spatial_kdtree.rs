@@ -27,8 +27,8 @@ impl SpatialKDTree {
 
     fn build(points: &[Point], indices: &mut [usize], depth: usize) -> Box<Node> {
         let axis = depth % 3;
-        indices.sort_by(|&a, &b| points[a][axis].partial_cmp(&points[b][axis]).unwrap());
         let mid = indices.len() / 2;
+        indices.select_nth_unstable_by(mid, |&a, &b| points[a][axis].total_cmp(&points[b][axis]));
         let left = if mid > 0 { Some(Self::build(points, &mut indices[..mid], depth + 1)) } else { None };
         let right = if mid + 1 < indices.len() { Some(Self::build(points, &mut indices[mid + 1..], depth + 1)) } else { None };
         Box::new(Node { idx: indices[mid], axis, left, right })
@@ -63,15 +63,37 @@ impl SpatialKDTree {
         (best_idx, best_d2.sqrt())
     }
 
+    fn heap_push(heap: &mut Vec<(f64, usize)>, item: (f64, usize)) {
+        heap.push(item);
+        let mut i = heap.len() - 1;
+        while i > 0 && heap[(i - 1) / 2].0 < heap[i].0 {
+            heap.swap(i, (i - 1) / 2);
+            i = (i - 1) / 2;
+        }
+    }
+
+    fn heap_replace(heap: &mut Vec<(f64, usize)>, item: (f64, usize)) {
+        heap[0] = item;
+        let mut i = 0;
+        loop {
+            let l = 2 * i + 1;
+            let r = 2 * i + 2;
+            let mut m = i;
+            if l < heap.len() && heap[l].0 > heap[m].0 { m = l; }
+            if r < heap.len() && heap[r].0 > heap[m].0 { m = r; }
+            if m == i { break; }
+            heap.swap(i, m);
+            i = m;
+        }
+    }
+
     fn nearest_k_rec(node: &Option<Box<Node>>, points: &[Point], query: &Point, k: usize, heap: &mut Vec<(f64, usize)>) {
         let node = match node { Some(n) => n, None => return };
         let d = Self::dist_sq(query, &points[node.idx]);
         if heap.len() < k {
-            heap.push((d, node.idx));
-            heap.sort_by(|a, b| b.0.partial_cmp(&a.0).unwrap());
+            Self::heap_push(heap, (d, node.idx));
         } else if d < heap[0].0 {
-            heap[0] = (d, node.idx);
-            heap.sort_by(|a, b| b.0.partial_cmp(&a.0).unwrap());
+            Self::heap_replace(heap, (d, node.idx));
         }
         let diff = query[node.axis] - points[node.idx][node.axis];
         let (near, far) = if diff <= 0.0 { (&node.left, &node.right) } else { (&node.right, &node.left) };
@@ -82,6 +104,9 @@ impl SpatialKDTree {
     }
 
     pub fn nearest_k(&self, query: &Point, k: usize) -> Vec<(usize, f64)> {
+        if k == 0 {
+            return Vec::new();
+        }
         let mut heap: Vec<(f64, usize)> = Vec::new();
         Self::nearest_k_rec(&self.root, &self.points, query, k, &mut heap);
         let mut result: Vec<(usize, f64)> = heap.iter().map(|&(d2, i)| (i, d2.sqrt())).collect();

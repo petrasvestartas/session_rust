@@ -71,8 +71,6 @@ pub struct Mesh {
     objectcolor: Color,                        // Object color
     #[serde(skip)]
     pub color_mode: ColorMode,                 // Active color mode
-    #[serde(default = "Xform::identity")]
-    pub xform: Xform,   // Transformation matrix
     // Cached triangle BVH for ray queries (not serialized)
     #[serde(skip)]
     pub tri_bvh: Option<SpatialBVH>,
@@ -262,7 +260,6 @@ impl Mesh {
             widths: Vec::new(),
             objectcolor: Color::white(),
             color_mode: ColorMode::OBJECTCOLOR,
-            xform: Xform::identity(),
             tri_bvh: None,
             tri_tris: Vec::new(),
             tri_vertices: Vec::new(),
@@ -1691,6 +1688,33 @@ impl Mesh {
         Some(face_key)
     }
 
+    /// Recreate `halfedge` from `vertex` + `face` alone.
+    ///
+    /// Every write to the halfedge map lives inside a face-creation loop, so the map carries no
+    /// information the faces do not already have - which is why `pb_dumps` stops serializing it and
+    /// calls this on the way back in. The rules are `add_face`'s: the directed edge u->v belongs to
+    /// its face, and the twin v->u is seeded to `None` unless a face already claimed it. Order is
+    /// irrelevant - a shared edge ends up owned from both sides either way.
+    ///
+    /// Colors and widths are NOT touched here: `add_face` grows those vectors as it discovers
+    /// edges, but on a load path they are restored from the wire.
+    pub fn rebuild_halfedges(&mut self) {
+        self.halfedge.clear();
+        for vkey in self.vertex.keys() {
+            self.halfedge.insert(*vkey, HashMap::new());
+        }
+        let faces: Vec<(usize, Vec<usize>)> =
+            self.face.iter().map(|(&fkey, verts)| (fkey, verts.clone())).collect();
+        for (fkey, verts) in faces {
+            for i in 0..verts.len() {
+                let u = verts[i];
+                let v = verts[(i + 1) % verts.len()];
+                self.halfedge.entry(u).or_default().insert(v, Some(fkey));
+                self.halfedge.entry(v).or_default().entry(u).or_insert(None);
+            }
+        }
+    }
+
     pub fn remove_face(&mut self, fkey: usize) {
         let verts = match self.face.get(&fkey) {
             Some(v) => v.clone(),
@@ -2267,15 +2291,10 @@ impl Mesh {
     // Transformation
     ///////////////////////////////////////////////////////////////////////////////////////////
 
-    pub fn transform<'a>(&mut self, xf: impl Into<Option<&'a Xform>>) {
-        let xform = match xf.into() {
-            Some(x) => x.clone(),
-            None => self.xform.clone(),
-        };
+    pub fn transform(&mut self, xform: &Xform) {
         for v in self.vertex.values_mut() {
             let mut pt = Point::new(v.x, v.y, v.z);
-            pt.xform = xform.clone();
-            pt.transform();
+            pt.transform(xform);
             v.x = pt[0];
             v.y = pt[1];
             v.z = pt[2];
@@ -2283,9 +2302,9 @@ impl Mesh {
         self.invalidate_triangle_bvh();
     }
 
-    pub fn transformed<'a>(&self, xf: impl Into<Option<&'a Xform>>) -> Self {
+    pub fn transformed(&self, xform: &Xform) -> Self {
         let mut result = self.clone();
-        result.transform(xf.into());
+        result.transform(xform);
         result
     }
 
@@ -2373,8 +2392,7 @@ impl Mesh {
             "linecolors": linecolors_flat,
             "objectcolor": serde_json::to_value(&self.objectcolor).unwrap_or(serde_json::Value::Null),
             "color_mode": self.color_mode.to_str(),
-            "widths": self.widths,
-            "xform": serde_json::to_value(&self.xform).unwrap_or(serde_json::Value::Null)
+            "widths": self.widths
         })
     }
 
@@ -2463,11 +2481,6 @@ impl Mesh {
         if let Some(widths) = data.get("widths").and_then(|v| v.as_array()) {
             mesh.widths = widths.iter().filter_map(|v| v.as_f64().map(|x| x as f64)).collect();
         }
-        if let Some(xf) = data.get("xform") {
-            if let Ok(xform) = serde_json::from_value::<crate::Xform>(xf.clone()) {
-                mesh.xform = xform;
-            }
-        }
 
         if let Some(oc) = data.get("objectcolor") {
             if let Ok(color) = serde_json::from_value::<Color>(oc.clone()) {
@@ -2530,6 +2543,11 @@ impl Mesh {
 
     pub fn pb_dumps(&self) -> Vec<u8> {
         use prost::Message;
+        self.to_proto().encode_to_vec()
+    }
+
+    /// The proto struct itself — pb_dumps encodes it; Session embeds it directly.
+    pub fn to_proto(&self) -> crate::proto::Mesh {
         use std::collections::HashMap;
 
         let mut vertices: HashMap<u64, crate::proto::VertexData> = HashMap::new();
@@ -2566,6 +2584,9 @@ impl Mesh {
             });
         }
 
+        // Halfedge connectivity IS serialized: the halfedge map is the mesh's topology structure
+        // and is stored, not recomputed. (`rebuild_halfedges` exists for meshes built by hand and
+        // as the loader's fallback for a file that carries no map.)
         let mut halfedges: HashMap<u64, crate::proto::HalfedgeMap> = HashMap::new();
         for (&u, neighbors) in &self.halfedge {
             let mut neighbor_map: HashMap<u64, u64> = HashMap::new();
@@ -2634,7 +2655,7 @@ impl Mesh {
             triangulation_map.insert(fkey as u64, tri_list);
         }
 
-        let proto = crate::proto::Mesh {
+        crate::proto::Mesh {
             guid: self.guid().to_string(),
             name: self.name.clone(),
             vertices,
@@ -2657,20 +2678,17 @@ impl Mesh {
                 a: self.objectcolor.a,
             }),
             color_mode: self.color_mode.to_i32(),
-            xform: Some(crate::proto::Xform {
-                guid: self.xform.guid().to_string(),
-                name: self.xform.name.clone(),
-                matrix: self.xform.m.iter().map(|&v| v as f64).collect(),
-            }),
             triangulation: triangulation_map,
-        };
-        proto.encode_to_vec()
+        }
     }
 
     pub fn pb_loads(data: &[u8]) -> Result<Self, Box<dyn std::error::Error>> {
         use prost::Message;
+        Ok(Self::from_proto(crate::proto::Mesh::decode(data)?))
+    }
 
-        let proto = crate::proto::Mesh::decode(data)?;
+    /// Build from an already-decoded proto — pb_loads decodes then calls this.
+    pub fn from_proto(proto: crate::proto::Mesh) -> Self {
         let mut mesh = Self::new();
         mesh.set_guid(proto.guid.clone());
         mesh.name = proto.name;
@@ -2715,13 +2733,19 @@ impl Mesh {
             mesh.triangulation.insert(fkey as usize, tris);
         }
 
-        for (u, hmap) in proto.halfedges {
-            let mut neighbors: std::collections::HashMap<usize, Option<usize>> = std::collections::HashMap::new();
-            for (v, fkey) in hmap.neighbors {
-                let fkey_opt = if fkey == u64::MAX { None } else { Some(fkey as usize) };
-                neighbors.insert(v as usize, fkey_opt);
+        // The map is written by pb_dumps, so it is normally present. Rebuild only as a fallback
+        // for a file that carries none (hand-built, or produced by an older/foreign writer).
+        if proto.halfedges.is_empty() {
+            mesh.rebuild_halfedges();
+        } else {
+            for (u, hmap) in proto.halfedges {
+                let mut neighbors: std::collections::HashMap<usize, Option<usize>> = std::collections::HashMap::new();
+                for (v, fkey) in hmap.neighbors {
+                    let fkey_opt = if fkey == u64::MAX { None } else { Some(fkey as usize) };
+                    neighbors.insert(v as usize, fkey_opt);
+                }
+                mesh.halfedge.insert(u as usize, neighbors);
             }
-            mesh.halfedge.insert(u as usize, neighbors);
         }
 
         for edata in proto.edge_data {
@@ -2764,16 +2788,6 @@ impl Mesh {
         }
         mesh.color_mode = ColorMode::from_i32(proto.color_mode);
 
-        if let Some(xform) = proto.xform {
-            mesh.xform.set_guid(xform.guid.clone());
-            mesh.xform.name = xform.name;
-            for (i, val) in xform.matrix.iter().enumerate() {
-                if i < 16 {
-                    mesh.xform.m[i] = *val as f64;
-                }
-            }
-        }
-
         // Update max_vertex and max_face
         if let Some(&max_v) = mesh.vertex.keys().max() {
             mesh.max_vertex = max_v + 1;
@@ -2782,7 +2796,7 @@ impl Mesh {
             mesh.max_face = max_f + 1;
         }
 
-        Ok(mesh)
+        mesh
     }
 
     pub fn pb_dump(&self, filepath: &str) {
@@ -2987,7 +3001,7 @@ impl std::fmt::Debug for Mesh {
 impl PartialEq for Mesh {
     fn eq(&self, other: &Self) -> bool {
         self.name == other.name && self.vertex == other.vertex
-            && self.face == other.face && self.xform == other.xform
+            && self.face == other.face
     }
 }
 

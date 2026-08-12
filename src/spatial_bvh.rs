@@ -1,6 +1,6 @@
 // SpatialBVH — binary tree with OBB leaves, Morton-code (LBVH) construction.
 // Use for: collision detection and closest-point between many dynamic objects.
-//   Handles oriented boxes; supports OBB-OBB overlap as the inner test.
+//   Handles oriented boxes via their tight world-space AABBs (half-axes projected).
 // Prefer over SpatialAABBTree when objects rotate or you need OBB tightness.
 // Prefer over SpatialRTree  when all queries are nearest-object, not region overlap.
 // Prefer over SpatialKDTree when objects are volumetric (not point clouds).
@@ -148,8 +148,8 @@ impl SpatialBVH {
     /// Build SpatialBVH from bounding boxes with GUIDs
     pub fn build_with_guids(&mut self, boxes_with_guids: &[(OBB, String)]) {
         if boxes_with_guids.is_empty() {
-            self.root = None;
             self.object_guids.clear();
+            self.build(&[]);
             return;
         }
 
@@ -178,6 +178,21 @@ impl SpatialBVH {
     }
 
     pub fn build(&mut self, bounding_boxes: &[OBB]) {
+        let aabbs: Vec<AABB> = bounding_boxes.iter().map(aabb_from_obb).collect();
+        self.build_leaf_aabbs(&aabbs);
+    }
+
+    pub fn build_from_boxes(&mut self, boxes: &[OBB], ws: f64) {
+        self.world_size = ws;
+        self.build(boxes);
+    }
+
+    pub fn build_from_aabbs(&mut self, aabbs: &[AABB], ws: f64) {
+        self.world_size = ws;
+        self.build_leaf_aabbs(aabbs);
+    }
+
+    fn build_leaf_aabbs(&mut self, bounding_boxes: &[AABB]) {
         if bounding_boxes.is_empty() {
             self.root = None;
             self.arena.clear();
@@ -190,12 +205,7 @@ impl SpatialBVH {
             .iter()
             .enumerate()
             .map(|(i, bbox)| {
-                let morton_code = calculate_morton_code(
-                    bbox.center[0],
-                    bbox.center[1],
-                    bbox.center[2],
-                    self.world_size,
-                );
+                let morton_code = calculate_morton_code(bbox.cx, bbox.cy, bbox.cz, self.world_size);
                 ObjectInfo { id: i, morton_code }
             })
             .collect();
@@ -235,7 +245,7 @@ impl SpatialBVH {
         if n == 1 {
             // Single leaf - build arena only
             let id = objects[0].id;
-            let aabb = aabb_from_obb(&bounding_boxes[id]);
+            let aabb = bounding_boxes[id];
 
             self.arena.clear();
             self.arena.push(FlatNode {
@@ -336,7 +346,7 @@ impl SpatialBVH {
         let mut leaves: Vec<TempNode> = Vec::with_capacity(n);
         for obj in objects.iter() {
             let id = obj.id;
-            let aabb = aabb_from_obb(&bounding_boxes[id]);
+            let aabb = bounding_boxes[id];
             leaves.push(TempNode {
                 left: None,
                 right: None,
@@ -527,13 +537,13 @@ impl SpatialBVH {
         stack.push(self.arena_root);
 
         while let Some(node_idx) = stack.pop() {
-            check_count += 1;
             let node = &self.arena[node_idx as usize];
 
             // Early exit if query doesn't intersect this node's AABB
             if !query_aabb.intersects(&node.aabb) {
                 continue;
             }
+            check_count += 1;
 
             // If leaf node, check for collision
             if node.object_id >= 0 {
@@ -541,7 +551,7 @@ impl SpatialBVH {
                 // Don't check collision with self
                 if node_object_id != object_id
                     && node_object_id < bounding_boxes.len()
-                    && self.aabb_intersect(query_bbox, &bounding_boxes[node_object_id])
+                    && query_aabb.intersects(&aabb_from_obb(&bounding_boxes[node_object_id]))
                 {
                     collisions.push(node_object_id);
                 }
@@ -840,21 +850,19 @@ impl SpatialBVH {
         let mut stack: Vec<i32> = Vec::with_capacity(64);
         stack.push(self.arena_root);
 
+        // Collect leaf hits with their entry distance, then order near-to-far (matches C++/py)
+        let mut found: Vec<(f64, usize)> = Vec::new();
         while let Some(node_idx) = stack.pop() {
             let node = &self.arena[node_idx as usize];
 
-            if let Some((_tmin, tmax)) = Self::ray_bvhaabb_intersect(origin, direction, &node.aabb)
-            {
-                if tmax < 0.0 {
-                    continue;
-                }
-            } else {
-                continue;
-            }
+            let tmin = match Self::ray_bvhaabb_intersect(origin, direction, &node.aabb) {
+                Some((tmin, tmax)) if tmax >= 0.0 => tmin,
+                _ => continue,
+            };
 
             if node.object_id >= 0 {
                 // Leaf node
-                candidate_leaf_ids.push(node.object_id as usize);
+                found.push((tmin, node.object_id as usize));
                 continue;
             }
 
@@ -867,6 +875,8 @@ impl SpatialBVH {
             }
         }
 
+        found.sort_by(|a, b| a.0.total_cmp(&b.0));
+        candidate_leaf_ids.extend(found.iter().map(|&(_, id)| id));
         !candidate_leaf_ids.is_empty()
     }
 }

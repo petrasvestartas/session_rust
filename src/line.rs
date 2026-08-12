@@ -23,8 +23,6 @@ pub struct Line {
     _z1: f64,
     pub width: f64,
     pub linecolor: Color,
-    #[serde(default = "Xform::identity")]
-    pub xform: Xform,
 }
 
 impl Default for Line {
@@ -40,7 +38,6 @@ impl Default for Line {
             name: "my_line".to_string(),
             linecolor: Color::black(),
             width: 1.0,
-            xform: Xform::identity(),
         }
     }
 }
@@ -194,14 +191,12 @@ impl Line {
         copy
     }
 
-    pub fn transform(&mut self) {
+    pub fn transform(&mut self, xform: &Xform) {
         let mut start = Point::new(self._x0, self._y0, self._z0);
         let mut end = Point::new(self._x1, self._y1, self._z1);
 
-        start.xform = self.xform.clone();
-        start.transform();
-        end.xform = self.xform.clone();
-        end.transform();
+        start.transform(xform);
+        end.transform(xform);
 
         self._x0 = start[0];
         self._y0 = start[1];
@@ -209,12 +204,11 @@ impl Line {
         self._x1 = end[0];
         self._y1 = end[1];
         self._z1 = end[2];
-        self.xform = Xform::identity();
     }
 
-    pub fn transformed(&self) -> Self {
+    pub fn transformed(&self, xform: &Xform) -> Self {
         let mut result = self.clone();
-        result.transform();
+        result.transform(xform);
         result
     }
 
@@ -388,10 +382,9 @@ impl Line {
     // Protobuf Serialization
     ///////////////////////////////////////////////////////////////////////////////////////////
 
-    /// Convert to protobuf binary format.
-    pub fn pb_dumps(&self) -> Vec<u8> {
-        use prost::Message;
-        let proto = crate::proto::Line {
+    /// The proto struct itself — pb_dumps encodes it; Session embeds it directly.
+    pub fn to_proto(&self) -> crate::proto::Line {
+        crate::proto::Line {
             start: Some(crate::proto::Point {
                 x: self._x0 as f64,
                 y: self._y0 as f64,
@@ -400,7 +393,6 @@ impl Line {
                 name: String::new(),
                 width: 1.0,
                 pointcolor: None,
-                xform: None,
             }),
             end: Some(crate::proto::Point {
                 x: self._x1 as f64,
@@ -410,11 +402,9 @@ impl Line {
                 name: String::new(),
                 width: 1.0,
                 pointcolor: None,
-                xform: None,
             }),
             guid: self.guid().to_string(),
             name: self.name.clone(),
-            xform: None,
             width: self.width,
             linecolor: Some(crate::proto::Color {
                 guid: self.linecolor.guid().to_string(),
@@ -424,14 +414,17 @@ impl Line {
                 b: self.linecolor.b,
                 a: self.linecolor.a,
             }),
-        };
-        proto.encode_to_vec()
+        }
     }
 
-    /// Create from protobuf binary data.
-    pub fn pb_loads(data: &[u8]) -> Result<Self, prost::DecodeError> {
+    /// Convert to protobuf binary format.
+    pub fn pb_dumps(&self) -> Vec<u8> {
         use prost::Message;
-        let proto = crate::proto::Line::decode(data)?;
+        self.to_proto().encode_to_vec()
+    }
+
+    /// Build from an already-decoded proto — pb_loads decodes then calls this.
+    pub fn from_proto(proto: crate::proto::Line) -> Self {
         let start = proto.start.unwrap_or_default();
         let end = proto.end.unwrap_or_default();
         let mut line = Self::new(start.x as f64, start.y as f64, start.z as f64, end.x as f64, end.y as f64, end.z as f64);
@@ -446,7 +439,13 @@ impl Line {
             line.linecolor.b = color.b;
             line.linecolor.a = color.a;
         }
-        Ok(line)
+        line
+    }
+
+    /// Create from protobuf binary data.
+    pub fn pb_loads(data: &[u8]) -> Result<Self, prost::DecodeError> {
+        use prost::Message;
+        Ok(Self::from_proto(crate::proto::Line::decode(data)?))
     }
 
     /// Write protobuf to file.

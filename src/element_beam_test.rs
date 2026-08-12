@@ -105,9 +105,9 @@ pub fn run_beam_session_geometry() -> TestResult {
         use crate::element::{Element, ElementGeometry};
         use crate::Xform;
 
-        let mut b = Element::beam(0.1, 0.2, 3.0, "my_beam");
-        b.session_transformation = Xform::translation(10.0, 0.0, 0.0);
-        let sg = b.session_geometry();
+        let b = Element::beam(0.1, 0.2, 3.0, "my_beam");
+        let b_xf = Xform::translation(10.0, 0.0, 0.0);
+        let sg = b.session_geometry(&b_xf);
 
         MINI_CHECK!(matches!(&sg, ElementGeometry::Mesh(_)));
         if let ElementGeometry::Mesh(mesh) = &sg {
@@ -120,10 +120,8 @@ pub fn run_beam_session_geometry() -> TestResult {
 pub fn run_beam_json_roundtrip() -> TestResult {
     MINI_TEST!("Json Roundtrip", {
         use crate::element::Element;
-        use crate::Xform;
 
-        let mut b = Element::beam(0.15, 0.3, 5.0, "json_beam");
-        b.session_transformation = Xform::translation(1.0, 2.0, 3.0);
+        let b = Element::beam(0.15, 0.3, 5.0, "json_beam");
 
         let fname = "serialization/test_beam_element.json";
         b.file_json_dump(fname);
@@ -139,10 +137,8 @@ pub fn run_beam_json_roundtrip() -> TestResult {
 pub fn run_beam_protobuf_roundtrip() -> TestResult {
     MINI_TEST!("Protobuf Roundtrip", {
         use crate::element::Element;
-        use crate::Xform;
 
-        let mut b = Element::beam(0.15, 0.3, 5.0, "proto_beam");
-        b.session_transformation = Xform::translation(1.0, 2.0, 3.0);
+        let b = Element::beam(0.15, 0.3, 5.0, "proto_beam");
 
         let path = "serialization/test_beam_element.bin";
         b.pb_dump(path);

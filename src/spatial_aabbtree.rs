@@ -1,4 +1,4 @@
-// SpatialAABBTree — flat contiguous BVH over axis-aligned boxes (SAH median split).
+// SpatialAABBTree — flat contiguous BVH over axis-aligned boxes (longest-axis median split).
 // Use for: closest-point on static mesh faces, ray-mesh intersection.
 //   Build once, query many times. Cache-friendly nodes.
 // Prefer over SpatialBVH  when geometry is static and all volumes are world-aligned.
@@ -78,7 +78,7 @@ impl SpatialAABBTree {
         ids.select_nth_unstable_by(mid, |&a, &b| {
             let ba = &aabbs[a as usize]; let bb = &aabbs[b as usize];
             let (ka, kb) = match axis { 0 => (ba.cx, bb.cx), 1 => (ba.cy, bb.cy), _ => (ba.cz, bb.cz) };
-            ka.partial_cmp(&kb).unwrap()
+            ka.total_cmp(&kb)
         });
 
         let (left_ids, right_ids) = ids.split_at_mut(mid);

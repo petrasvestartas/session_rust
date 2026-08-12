@@ -14,42 +14,19 @@
       0.0,
       1.0
     ],
-    "guid": "b0c9d636-32cc-4b8a-9dc1-3b727f377680",
+    "guid": "31bf7681-01ad-41ef-b90d-2a2865320176",
     "linecolor": {
       "a": 1.0,
       "b": 1.0,
       "g": 0.0,
-      "guid": "053b0d3f-3d8a-4e5d-a211-41f259d85a15",
+      "guid": "0b1b9420-011e-4fd0-b46a-d22eb5da1849",
       "name": "blue",
       "r": 0.0,
       "type": "Color"
     },
     "name": "my_plane",
     "type": "Plane",
-    "width": 1.0,
-    "xform": {
-      "guid": "019d73dc-e043-437c-b0da-92ea4ca3f585",
-      "m": [
-        1.0,
-        0.0,
-        0.0,
-        0.0,
-        0.0,
-        1.0,
-        0.0,
-        0.0,
-        0.0,
-        0.0,
-        1.0,
-        0.0,
-        0.0,
-        0.0,
-        0.0,
-        1.0
-      ],
-      "name": "my_xform",
-      "type": "Xform"
-    }
+    "width": 1.0
   },
   "geometry_data": {
     "default_edge_attributes": {},
@@ -99,7 +76,7 @@
       ]
     },
     "facedata": {},
-    "guid": "82c6ffcf-427e-41ea-b6a9-bacaef8763f4",
+    "guid": "1d7912e0-f8ee-46c6-b9c0-da3485315d05",
     "halfedge": {
       "0": {
         "1": 2,
@@ -195,33 +172,10 @@
         "y": 2.0,
         "z": -0.3
       }
-    },
-    "xform": {
-      "guid": "6b7549e9-2d9c-472d-ab9a-45502f92d52f",
-      "m": [
-        1.0,
-        0.0,
-        0.0,
-        0.0,
-        0.0,
-        1.0,
-        0.0,
-        0.0,
-        0.0,
-        0.0,
-        1.0,
-        0.0,
-        0.0,
-        0.0,
-        0.0,
-        1.0
-      ],
-      "name": "my_xform",
-      "type": "Xform"
     }
   },
   "geometry_type": "Mesh",
-  "guid": "5c15d8cc-6ee2-440b-ae25-e4e76eaf5206",
+  "guid": "e1ee57bf-06d0-4b2b-afd5-883fbc747162",
   "j_mf": [
     [
       [
@@ -291,29 +245,6 @@
       -0.3
     ]
   ],
-  "session_transformation": {
-    "guid": "eb7b199b-5e52-4ed5-81dc-634ddfc07344",
-    "m": [
-      1.0,
-      0.0,
-      0.0,
-      0.0,
-      0.0,
-      1.0,
-      0.0,
-      0.0,
-      0.0,
-      0.0,
-      1.0,
-      0.0,
-      0.0,
-      0.0,
-      0.0,
-      1.0
-    ],
-    "name": "my_xform",
-    "type": "Xform"
-  },
   "thickness": 0.3,
   "type": "ElementPlate"
 }
