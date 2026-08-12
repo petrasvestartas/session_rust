@@ -51,6 +51,8 @@ pub mod nurbscurve;
 pub mod nurbssurface;
 #[cfg(all(feature = "pdf", not(target_arch = "wasm32")))]
 pub mod pdf;
+#[cfg(all(feature = "pdf", not(target_arch = "wasm32")))]
+pub mod pdf_test;
 pub mod file_obj;
 pub mod file_obj_test;
 pub mod io;
