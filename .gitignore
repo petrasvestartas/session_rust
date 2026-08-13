@@ -9,3 +9,7 @@ Cargo.lock
 
 # OS
 .DS_Store
+
+# Test roundtrip artifacts: rewritten by every minitest run (fresh random GUIDs =
+# perpetual churn) and regenerated on the first run of a fresh clone.
+serialization/test_*
