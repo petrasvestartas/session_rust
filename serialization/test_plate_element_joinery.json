@@ -14,12 +14,12 @@
       0.0,
       1.0
     ],
-    "guid": "f717edf4-a4e5-4b56-8e74-c61567560c94",
+    "guid": "4f7f06e4-ad8c-4378-b04e-3e2b262d55c9",
     "linecolor": {
       "a": 1.0,
       "b": 1.0,
       "g": 0.0,
-      "guid": "c1391b39-2c8a-4f11-b668-162fdbfdbdb4",
+      "guid": "d9933285-d07f-4cc1-a184-9afd888aa9a4",
       "name": "blue",
       "r": 0.0,
       "type": "Color"
@@ -76,7 +76,7 @@
       ]
     },
     "facedata": {},
-    "guid": "84aaa8d2-6ba3-4bcf-b974-9bd6b2c58702",
+    "guid": "a5ab9c04-b415-43ea-bdf4-d04ddaa11f4b",
     "halfedge": {
       "0": {
         "1": 2,
@@ -175,7 +175,7 @@
     }
   },
   "geometry_type": "Mesh",
-  "guid": "1185c746-6f8b-47bd-ae39-e6c1244533ae",
+  "guid": "b3562a9f-4aeb-434c-99ad-bfdacfe0895e",
   "j_mf": [
     [
       [

@@ -48,7 +48,7 @@
       ]
     },
     "facedata": {},
-    "guid": "071d6144-3945-4dcc-a153-e9a28d3a6be9",
+    "guid": "9bd4c7f1-6676-4079-a69a-14dcd7a18e6d",
     "halfedge": {
       "0": {
         "1": 2,
@@ -147,7 +147,7 @@
     }
   },
   "geometry_type": "Mesh",
-  "guid": "a8faf820-f92c-4db1-9d50-13ef9d5f9824",
+  "guid": "988e4919-5501-4b2b-b55b-f9425c503a01",
   "j_mf": [],
   "joint_types": [],
   "key": "",

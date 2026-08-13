@@ -48,7 +48,7 @@
       ]
     },
     "facedata": {},
-    "guid": "94b97c40-c6c7-41d5-ae39-dd2f46afdbe9",
+    "guid": "f64b51b2-4152-4f72-8cbf-7822e3faa817",
     "halfedge": {
       "0": {
         "1": 2,
@@ -147,7 +147,7 @@
     }
   },
   "geometry_type": "Mesh",
-  "guid": "4c4511ee-ad23-46f9-87fb-72da8b7aabad",
+  "guid": "da457177-40c4-45dc-9aad-8ceadc3d40f6",
   "height": 4.0,
   "name": "json_col",
   "type": "ElementColumn",

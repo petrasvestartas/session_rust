@@ -48,7 +48,7 @@
       ]
     },
     "facedata": {},
-    "guid": "c489195a-f46b-466c-9e83-09c0eb38a864",
+    "guid": "5ffe784f-cf65-4f52-94bb-88645ec0f4f4",
     "halfedge": {
       "0": {
         "1": 2,
@@ -147,7 +147,7 @@
     }
   },
   "geometry_type": "Mesh",
-  "guid": "d8dc63e4-65b3-4e11-881e-e14c3b3fe40d",
+  "guid": "52e4bebd-d2ae-4a03-95dc-e5a7f8eb10ab",
   "length": 5.0,
   "name": "json_beam",
   "type": "ElementBeam",
