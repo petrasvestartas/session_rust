@@ -17,7 +17,7 @@
       ]
     },
     "facedata": {},
-    "guid": "e9dc5904-8933-4069-bb86-aa76a7de7525",
+    "guid": "ea934b5f-e84a-4d92-88ff-fa1817425213",
     "halfedge": {
       "0": {
         "1": 0,
@@ -68,7 +68,7 @@
     }
   },
   "geometry_type": "Mesh",
-  "guid": "8793de32-d79d-4d92-819d-cb45572a06c3",
+  "guid": "f09b5d2d-7623-4ea9-8452-e55a94aa0805",
   "name": "json_test",
   "type": "Element"
 }
