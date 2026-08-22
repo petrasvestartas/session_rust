@@ -4,7 +4,7 @@ use crate::tolerance::TOLERANCE;
 
 pub fn run_nurbssurface_trimmed_constructor() -> TestResult {
     MINI_TEST!("Constructor", {
-        use crate::nurbssurface_trimmed::NurbsSurfaceTrimmed;
+        use crate::NurbsSurfaceTrimmed;
         use crate::NurbsSurface;
         use crate::NurbsCurve;
         use crate::Point;
@@ -47,7 +47,7 @@ pub fn run_nurbssurface_trimmed_constructor() -> TestResult {
 
 pub fn run_nurbssurface_trimmed_constructor_planar() -> TestResult {
     MINI_TEST!("Constructor Planar", {
-        use crate::nurbssurface_trimmed::NurbsSurfaceTrimmed;
+        use crate::NurbsSurfaceTrimmed;
         use crate::NurbsCurve;
         use crate::Point;
         use crate::tolerance::PI;
@@ -134,7 +134,7 @@ pub fn run_nurbssurface_trimmed_constructor_planar() -> TestResult {
 
 pub fn run_nurbssurface_trimmed_constructor_hole() -> TestResult {
     MINI_TEST!("Constructor Hole", {
-        use crate::nurbssurface_trimmed::NurbsSurfaceTrimmed;
+        use crate::NurbsSurfaceTrimmed;
         use crate::NurbsSurface;
         use crate::NurbsCurve;
         use crate::Point;
@@ -181,7 +181,7 @@ pub fn run_nurbssurface_trimmed_constructor_hole() -> TestResult {
 
 pub fn run_nurbssurface_trimmed_accessors() -> TestResult {
     MINI_TEST!("Accessors", {
-        use crate::nurbssurface_trimmed::NurbsSurfaceTrimmed;
+        use crate::NurbsSurfaceTrimmed;
         use crate::NurbsSurface;
         use crate::NurbsCurve;
         use crate::Point;
@@ -218,7 +218,7 @@ pub fn run_nurbssurface_trimmed_accessors() -> TestResult {
 
 pub fn run_nurbssurface_trimmed_add_inner_loop() -> TestResult {
     MINI_TEST!("Add Inner Loop", {
-        use crate::nurbssurface_trimmed::NurbsSurfaceTrimmed;
+        use crate::NurbsSurfaceTrimmed;
         use crate::NurbsSurface;
         use crate::NurbsCurve;
         use crate::Point;
@@ -267,7 +267,7 @@ pub fn run_nurbssurface_trimmed_add_inner_loop() -> TestResult {
 
 pub fn run_nurbssurface_trimmed_point_at() -> TestResult {
     MINI_TEST!("Point At", {
-        use crate::nurbssurface_trimmed::NurbsSurfaceTrimmed;
+        use crate::NurbsSurfaceTrimmed;
         use crate::NurbsSurface;
         use crate::NurbsCurve;
         use crate::Point;
@@ -305,7 +305,7 @@ pub fn run_nurbssurface_trimmed_point_at() -> TestResult {
 
 pub fn run_nurbssurface_trimmed_mesh() -> TestResult {
     MINI_TEST!("Mesh", {
-        use crate::nurbssurface_trimmed::NurbsSurfaceTrimmed;
+        use crate::NurbsSurfaceTrimmed;
         use crate::NurbsSurface;
         use crate::NurbsCurve;
         use crate::Point;
@@ -404,7 +404,7 @@ pub fn run_nurbssurface_trimmed_mesh() -> TestResult {
 
 pub fn run_nurbssurface_trimmed_split_by_uv_curves() -> TestResult {
     MINI_TEST!("Split By UV Curves", {
-        use crate::nurbssurface_trimmed::NurbsSurfaceTrimmed;
+        use crate::NurbsSurfaceTrimmed;
         use crate::NurbsCurve;
         use crate::Point;
         use crate::Primitives;
@@ -438,7 +438,7 @@ pub fn run_nurbssurface_trimmed_split_by_uv_curves() -> TestResult {
 
 pub fn run_nurbssurface_trimmed_transformation() -> TestResult {
     MINI_TEST!("Transformation", {
-        use crate::nurbssurface_trimmed::NurbsSurfaceTrimmed;
+        use crate::NurbsSurfaceTrimmed;
         use crate::NurbsSurface;
         use crate::NurbsCurve;
         use crate::Point;
@@ -474,7 +474,7 @@ pub fn run_nurbssurface_trimmed_transformation() -> TestResult {
 
 pub fn run_nurbssurface_trimmed_json_roundtrip() -> TestResult {
     MINI_TEST!("Json Roundtrip", {
-        use crate::nurbssurface_trimmed::NurbsSurfaceTrimmed;
+        use crate::NurbsSurfaceTrimmed;
         use crate::NurbsSurface;
         use crate::NurbsCurve;
         use crate::Point;
@@ -521,7 +521,7 @@ pub fn run_nurbssurface_trimmed_json_roundtrip() -> TestResult {
 
 pub fn run_nurbssurface_trimmed_protobuf_roundtrip() -> TestResult {
     MINI_TEST!("Protobuf Roundtrip", {
-        use crate::nurbssurface_trimmed::NurbsSurfaceTrimmed;
+        use crate::NurbsSurfaceTrimmed;
         use crate::NurbsSurface;
         use crate::NurbsCurve;
         use crate::Point;

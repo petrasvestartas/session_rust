@@ -22,6 +22,8 @@ pub struct Line {
     #[serde(rename = "z1")]
     _z1: f64,
     pub width: f64,
+    /// Dash pattern: alternating on/off lengths in mm, repeating. Empty = solid.
+    pub dash: Vec<f64>,
     pub linecolor: Color,
 }
 
@@ -38,6 +40,7 @@ impl Default for Line {
             name: "my_line".to_string(),
             linecolor: Color::black(),
             width: 1.0,
+            dash: Vec::new(),
         }
     }
 }
@@ -406,6 +409,7 @@ impl Line {
             guid: self.guid().to_string(),
             name: self.name.clone(),
             width: self.width,
+            dash: self.dash.clone(),
             linecolor: Some(crate::proto::Color {
                 guid: self.linecolor.guid().to_string(),
                 name: self.linecolor.name.clone(),
@@ -431,6 +435,7 @@ impl Line {
         line.set_guid(proto.guid);
         line.name = proto.name;
         if proto.width > 0.0 { line.width = proto.width; }
+        line.dash = proto.dash;
         if let Some(color) = proto.linecolor {
             line.linecolor.set_guid(color.guid.clone());
             line.linecolor.name = color.name;

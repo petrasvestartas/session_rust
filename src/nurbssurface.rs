@@ -2347,17 +2347,6 @@ impl NurbsSurface {
     // STRING REPRESENTATION
     ///////////////////////////////////////////////////////////////////////////////////////////
 
-    /// Get string representation (matches Python to_string format)
-    pub fn to_string(&self) -> String {
-        format!(
-            "NurbsSurface(name={}, degree=({},{}), cvs=({},{}))",
-            self.name,
-            self.degree(0),
-            self.degree(1),
-            self.m_cv_count[0],
-            self.m_cv_count[1]
-        )
-    }
 
     pub fn repr(&self) -> String {
         let mut result = format!("NurbsSurface(\n  name={},\n  degree=({},{}),\n  cvs=({},{}),\n  rational={},\n  control_points=[\n",
@@ -2630,9 +2619,19 @@ impl Clone for NurbsSurface {
     }
 }
 
+// Display is the single source of the string form; `to_string()` comes from the blanket
+// ToString impl, so call sites are unchanged and match Python's `to_string()`.
 impl std::fmt::Display for NurbsSurface {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}", self.to_string())
+        write!(
+            f,
+            "NurbsSurface(name={}, degree=({},{}), cvs=({},{}))",
+            self.name,
+            self.degree(0),
+            self.degree(1),
+            self.m_cv_count[0],
+            self.m_cv_count[1]
+        )
     }
 }
 

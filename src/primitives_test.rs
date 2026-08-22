@@ -4,8 +4,8 @@ use crate::tolerance::TOLERANCE;
 
 pub fn run_primitives_mesh_arrow() -> TestResult {
     MINI_TEST!("Mesh Arrow", {
-        use crate::primitives::Primitives;
-        use crate::line::Line;
+        use crate::Primitives;
+        use crate::Line;
 
         let line = Line::new(0.0, 0.0, 0.0, 0.0, 0.0, 8.0);
         let m = Primitives::arrow_mesh(&line, 1.0);
@@ -17,8 +17,8 @@ pub fn run_primitives_mesh_arrow() -> TestResult {
 
 pub fn run_primitives_mesh_cylinder() -> TestResult {
     MINI_TEST!("Mesh Cylinder", {
-        use crate::primitives::Primitives;
-        use crate::line::Line;
+        use crate::Primitives;
+        use crate::Line;
 
         let line = Line::new(0.0, 0.0, 0.0, 0.0, 0.0, 8.0);
         let m = Primitives::cylinder_mesh(&line, 1.0);
@@ -30,10 +30,10 @@ pub fn run_primitives_mesh_cylinder() -> TestResult {
 
 pub fn run_primitives_mesh_edge_pipes() -> TestResult {
     MINI_TEST!("Mesh Edge Pipes", {
-        use crate::primitives::Primitives;
-        use crate::mesh::Mesh;
-        use crate::point::Point;
-        use crate::color::Color;
+        use crate::Primitives;
+        use crate::Mesh;
+        use crate::Point;
+        use crate::Color;
 
         let mut mesh = Mesh::new();
         let v0 = mesh.add_vertex(Point::new(0.0, 0.0, 0.0), None);
@@ -52,8 +52,8 @@ pub fn run_primitives_mesh_edge_pipes() -> TestResult {
 
 pub fn run_primitives_nurbscurve_polyline() -> TestResult {
     MINI_TEST!("Nurbscurve Polyline", {
-        use crate::nurbscurve::NurbsCurve;
-        use crate::point::Point;
+        use crate::NurbsCurve;
+        use crate::Point;
 
         let c = NurbsCurve::create(false, 1, &[
             Point::new(0.0, 0.0, 0.0),
@@ -74,7 +74,7 @@ pub fn run_primitives_nurbscurve_polyline() -> TestResult {
 
 pub fn run_primitives_nurbscurve_circle() -> TestResult {
     MINI_TEST!("Nurbscurve Circle", {
-        use crate::primitives::Primitives;
+        use crate::Primitives;
 
         let c = Primitives::circle(0.0, 0.0, 0.0, 1.0);
 
@@ -86,7 +86,7 @@ pub fn run_primitives_nurbscurve_circle() -> TestResult {
 
 pub fn run_primitives_nurbscurve_ellipse() -> TestResult {
     MINI_TEST!("Nurbscurve Ellipse", {
-        use crate::primitives::Primitives;
+        use crate::Primitives;
 
         let c = Primitives::ellipse(0.0, 0.0, 0.0, 2.0, 1.0);
 
@@ -98,8 +98,8 @@ pub fn run_primitives_nurbscurve_ellipse() -> TestResult {
 
 pub fn run_primitives_nurbscurve_arc() -> TestResult {
     MINI_TEST!("Nurbscurve Arc", {
-        use crate::primitives::Primitives;
-        use crate::point::Point;
+        use crate::Primitives;
+        use crate::Point;
 
         let start = Point::new(0.0, 0.0, 0.0);
         let mid = Point::new(1.0, 1.0, 0.0);
@@ -114,8 +114,8 @@ pub fn run_primitives_nurbscurve_arc() -> TestResult {
 
 pub fn run_primitives_nurbscurve_parabola() -> TestResult {
     MINI_TEST!("Nurbscurve Parabola", {
-        use crate::primitives::Primitives;
-        use crate::point::Point;
+        use crate::Primitives;
+        use crate::Point;
 
         let p0 = Point::new(-1.0, 1.0, 0.0);
         let p1 = Point::new(0.0, 0.0, 0.0);
@@ -130,8 +130,8 @@ pub fn run_primitives_nurbscurve_parabola() -> TestResult {
 
 pub fn run_primitives_nurbscurve_hyperbola() -> TestResult {
     MINI_TEST!("Nurbscurve Hyperbola", {
-        use crate::primitives::Primitives;
-        use crate::point::Point;
+        use crate::Primitives;
+        use crate::Point;
 
         let center = Point::new(0.0, 0.0, 0.0);
         let c = Primitives::hyperbola(&center, 1.0, 1.0, 1.0);
@@ -144,7 +144,7 @@ pub fn run_primitives_nurbscurve_hyperbola() -> TestResult {
 
 pub fn run_primitives_nurbscurve_spiral() -> TestResult {
     MINI_TEST!("Nurbscurve Spiral", {
-        use crate::primitives::Primitives;
+        use crate::Primitives;
 
         let c = Primitives::spiral(1.0, 2.0, 1.0, 5.0);
 
@@ -156,7 +156,7 @@ pub fn run_primitives_nurbscurve_spiral() -> TestResult {
 
 pub fn run_primitives_nurbssurface_cylinder() -> TestResult {
     MINI_TEST!("Nurbssurface Cylinder", {
-        use crate::primitives::Primitives;
+        use crate::Primitives;
 
         let s = Primitives::cylinder_surface(0.0, 0.0, 0.0, 1.0, 5.0);
 
@@ -186,7 +186,7 @@ pub fn run_primitives_nurbssurface_cylinder() -> TestResult {
 
 pub fn run_primitives_nurbssurface_cone() -> TestResult {
     MINI_TEST!("Nurbssurface Cone", {
-        use crate::primitives::Primitives;
+        use crate::Primitives;
 
         let s = Primitives::cone_surface(0.0, 0.0, 0.0, 1.0, 5.0);
 
@@ -216,7 +216,7 @@ pub fn run_primitives_nurbssurface_cone() -> TestResult {
 
 pub fn run_primitives_nurbssurface_sphere() -> TestResult {
     MINI_TEST!("Nurbssurface Sphere", {
-        use crate::primitives::Primitives;
+        use crate::Primitives;
 
         let s = Primitives::sphere_surface(0.0, 0.0, 0.0, 2.0);
 
@@ -251,7 +251,7 @@ pub fn run_primitives_nurbssurface_sphere() -> TestResult {
 
 pub fn run_primitives_nurbssurface_quad_sphere() -> TestResult {
     MINI_TEST!("Nurbssurface Quad Sphere", {
-        use crate::primitives::Primitives;
+        use crate::Primitives;
 
         let r = 5.0_f64;
         let faces = Primitives::quad_sphere(0.0, 0.0, 0.0, r);
@@ -285,7 +285,7 @@ pub fn run_primitives_nurbssurface_quad_sphere() -> TestResult {
 
 pub fn run_primitives_nurbssurface_torus() -> TestResult {
     MINI_TEST!("Nurbssurface Torus", {
-        use crate::primitives::Primitives;
+        use crate::Primitives;
 
         let s = Primitives::torus_surface(0.0, 0.0, 0.0, 3.0, 1.0);
 
@@ -313,12 +313,14 @@ pub fn run_primitives_nurbssurface_torus() -> TestResult {
     })
 }
 
+// Literal matches the C++ and Python test text verbatim; parity beats the constant.
+#[allow(clippy::approx_constant)]
 pub fn run_primitives_nurbssurface_ruled() -> TestResult {
     MINI_TEST!("Nurbssurface Ruled", {
-        use crate::primitives::Primitives;
-        use crate::nurbscurve::NurbsCurve;
-        use crate::point::Point;
-        use crate::vector::Vector;
+        use crate::Primitives;
+        use crate::NurbsCurve;
+        use crate::Point;
+        use crate::Vector;
 
         let pts_a = vec![
             Point::new(3.0, 0.0, 0.0),
@@ -427,9 +429,9 @@ pub fn run_primitives_nurbssurface_ruled() -> TestResult {
 
 pub fn run_primitives_nurbssurface_planar() -> TestResult {
     MINI_TEST!("Nurbssurface Planar", {
-        use crate::primitives::Primitives;
-        use crate::nurbscurve::NurbsCurve;
-        use crate::point::Point;
+        use crate::Primitives;
+        use crate::NurbsCurve;
+        use crate::Point;
 
         // Hardcoded expected CVs include create_planar's least-squares
         // fitting noise; libm cos/sin precision varies by platform (esp.
@@ -536,10 +538,10 @@ pub fn run_primitives_nurbssurface_planar() -> TestResult {
 
 pub fn run_primitives_nurbssurface_extrusion() -> TestResult {
     MINI_TEST!("Nurbssurface Extrusion", {
-        use crate::primitives::Primitives;
-        use crate::nurbscurve::NurbsCurve;
-        use crate::point::Point;
-        use crate::vector::Vector;
+        use crate::Primitives;
+        use crate::NurbsCurve;
+        use crate::Point;
+        use crate::Vector;
 
         let dir = Vector::new(0.0, 1.0, 5.0);
 
@@ -623,9 +625,9 @@ pub fn run_primitives_nurbssurface_extrusion() -> TestResult {
 
 pub fn run_primitives_nurbssurface_loft() -> TestResult {
     MINI_TEST!("Nurbssurface Loft", {
-        use crate::primitives::Primitives;
-        use crate::nurbscurve::NurbsCurve;
-        use crate::point::Point;
+        use crate::Primitives;
+        use crate::NurbsCurve;
+        use crate::Point;
 
         let c1 = Primitives::circle(0.0, 0.0, 0.0, 2.0);
         let c2 = Primitives::circle(0.0, 0.0, 2.0, 1.0);
@@ -722,10 +724,10 @@ pub fn run_primitives_nurbssurface_loft() -> TestResult {
 
 pub fn run_primitives_nurbssurface_revolve() -> TestResult {
     MINI_TEST!("Nurbssurface Revolve", {
-        use crate::primitives::Primitives;
-        use crate::nurbscurve::NurbsCurve;
-        use crate::point::Point;
-        use crate::vector::Vector;
+        use crate::Primitives;
+        use crate::NurbsCurve;
+        use crate::Point;
+        use crate::Vector;
 
         let pa = NurbsCurve::create(false, 3, &[
             Point::new(1.5, 0.0, 0.0),
@@ -833,9 +835,9 @@ pub fn run_primitives_nurbssurface_revolve() -> TestResult {
 
 pub fn run_primitives_nurbssurface_sweep() -> TestResult {
     MINI_TEST!("Nurbssurface Sweep", {
-        use crate::primitives::Primitives;
-        use crate::nurbscurve::NurbsCurve;
-        use crate::point::Point;
+        use crate::Primitives;
+        use crate::NurbsCurve;
+        use crate::Point;
 
         let rail = NurbsCurve::create(false, 2, &[
             Point::new(0.0, 0.0, 0.0),
@@ -902,9 +904,9 @@ pub fn run_primitives_nurbssurface_sweep() -> TestResult {
 
 pub fn run_primitives_nurbssurface_edge() -> TestResult {
     MINI_TEST!("Nurbssurface Edge", {
-        use crate::primitives::Primitives;
-        use crate::nurbscurve::NurbsCurve;
-        use crate::point::Point;
+        use crate::Primitives;
+        use crate::NurbsCurve;
+        use crate::Point;
 
         let pts_south = vec![
             Point::new(1.0, 20.569076, 0.0),
@@ -965,7 +967,7 @@ pub fn run_primitives_nurbssurface_edge() -> TestResult {
 
 pub fn run_primitives_mesh_quad_mesh() -> TestResult {
     MINI_TEST!("Mesh Quad Mesh", {
-        use crate::primitives::Primitives;
+        use crate::Primitives;
 
         let cyl = Primitives::cylinder_surface(0.0, 0.0, 0.0, 1.0, 5.0);
         let m = Primitives::quad_mesh(&cyl, 8, 4);
@@ -983,7 +985,7 @@ pub fn run_primitives_mesh_quad_mesh() -> TestResult {
 
 pub fn run_primitives_mesh_diamond_mesh() -> TestResult {
     MINI_TEST!("Mesh Diamond Mesh", {
-        use crate::primitives::Primitives;
+        use crate::Primitives;
 
         let cyl = Primitives::cylinder_surface(0.0, 0.0, 0.0, 1.0, 5.0);
         let m = Primitives::diamond_mesh(&cyl, 8, 4);
@@ -1001,7 +1003,7 @@ pub fn run_primitives_mesh_diamond_mesh() -> TestResult {
 
 pub fn run_primitives_mesh_hex_mesh() -> TestResult {
     MINI_TEST!("Mesh Hex Mesh", {
-        use crate::primitives::Primitives;
+        use crate::Primitives;
 
         let cyl = Primitives::cylinder_surface(0.0, 0.0, 0.0, 1.0, 5.0);
         let m = Primitives::hex_mesh(&cyl, 6, 4, 1.0/3.0);
@@ -1019,7 +1021,7 @@ pub fn run_primitives_mesh_hex_mesh() -> TestResult {
 
 pub fn run_primitives_mesh_cone_subdivisions() -> TestResult {
     MINI_TEST!("Mesh Cone Subdivisions", {
-        use crate::primitives::Primitives;
+        use crate::Primitives;
 
         let cone = Primitives::cone_surface(0.0, 0.0, 0.0, 3.0, 5.0);
 
@@ -1042,8 +1044,8 @@ pub fn run_primitives_mesh_cone_subdivisions() -> TestResult {
 
 pub fn run_primitives_nurbscurve_interpolated() -> TestResult {
     MINI_TEST!("Nurbscurve Interpolated", {
-        use crate::primitives::Primitives;
-        use crate::point::Point;
+        use crate::Primitives;
+        use crate::Point;
         use crate::nurbsknot::CurveNurbsKnotStyle;
 
         let points = vec![
@@ -1095,7 +1097,7 @@ pub fn run_primitives_nurbscurve_interpolated() -> TestResult {
 
 pub fn run_primitives_mesh_tetrahedron() -> TestResult {
     MINI_TEST!("Mesh Tetrahedron", {
-        use crate::primitives::Primitives;
+        use crate::Primitives;
 
         let m = Primitives::tetrahedron(2.0);
         MINI_CHECK!(m.is_valid());
@@ -1106,7 +1108,7 @@ pub fn run_primitives_mesh_tetrahedron() -> TestResult {
 
 pub fn run_primitives_mesh_cube() -> TestResult {
     MINI_TEST!("Mesh Cube", {
-        use crate::primitives::Primitives;
+        use crate::Primitives;
 
         let m = Primitives::cube(2.0);
         MINI_CHECK!(m.is_valid());
@@ -1117,7 +1119,7 @@ pub fn run_primitives_mesh_cube() -> TestResult {
 
 pub fn run_primitives_mesh_octahedron() -> TestResult {
     MINI_TEST!("Mesh Octahedron", {
-        use crate::primitives::Primitives;
+        use crate::Primitives;
 
         let m = Primitives::octahedron(2.0);
         MINI_CHECK!(m.is_valid());
@@ -1128,7 +1130,7 @@ pub fn run_primitives_mesh_octahedron() -> TestResult {
 
 pub fn run_primitives_mesh_icosahedron() -> TestResult {
     MINI_TEST!("Mesh Icosahedron", {
-        use crate::primitives::Primitives;
+        use crate::Primitives;
 
         let m = Primitives::icosahedron(2.0);
         MINI_CHECK!(m.is_valid());
@@ -1139,7 +1141,7 @@ pub fn run_primitives_mesh_icosahedron() -> TestResult {
 
 pub fn run_primitives_nurbssurface_wave() -> TestResult {
     MINI_TEST!("Nurbssurface Wave", {
-        use crate::primitives::Primitives;
+        use crate::Primitives;
 
         let srf = Primitives::wave_surface(10.0, 2.0);
         MINI_CHECK!(srf.is_valid());

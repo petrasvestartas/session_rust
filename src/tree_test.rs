@@ -3,7 +3,7 @@ use crate::mini_test::TestResult;
 
 pub fn run_treenode_constructor() -> TestResult {
     MINI_TEST!("Constructor", {
-        use crate::tree::TreeNode;
+        use crate::TreeNode;
 
         // Default constructor
         let n0 = TreeNode::new("my_node");
@@ -30,7 +30,7 @@ pub fn run_treenode_constructor() -> TestResult {
 
 pub fn run_treenode_json_roundtrip() -> TestResult {
     MINI_TEST!("Json Roundtrip", {
-        use crate::tree::TreeNode;
+        use crate::TreeNode;
 
         let original = TreeNode::new("test_node");
         let child = TreeNode::new("child_node");
@@ -48,7 +48,7 @@ pub fn run_treenode_json_roundtrip() -> TestResult {
 
 pub fn run_treenode_is_root() -> TestResult {
     MINI_TEST!("Is Root", {
-        use crate::tree::TreeNode;
+        use crate::TreeNode;
 
         let root = TreeNode::new("root");
         let child = TreeNode::new("child");
@@ -61,7 +61,7 @@ pub fn run_treenode_is_root() -> TestResult {
 
 pub fn run_treenode_is_leaf() -> TestResult {
     MINI_TEST!("Is Leaf", {
-        use crate::tree::TreeNode;
+        use crate::TreeNode;
 
         let parent = TreeNode::new("parent");
         let child = TreeNode::new("child");
@@ -74,7 +74,7 @@ pub fn run_treenode_is_leaf() -> TestResult {
 
 pub fn run_treenode_tree() -> TestResult {
     MINI_TEST!("Tree", {
-        use crate::tree::TreeNode;
+        use crate::TreeNode;
 
         let n = TreeNode::new("standalone");
 
@@ -84,7 +84,7 @@ pub fn run_treenode_tree() -> TestResult {
 
 pub fn run_treenode_add() -> TestResult {
     MINI_TEST!("Add", {
-        use crate::tree::TreeNode;
+        use crate::TreeNode;
 
         let parent = TreeNode::new("parent");
         let child = TreeNode::new("child");
@@ -97,7 +97,7 @@ pub fn run_treenode_add() -> TestResult {
 
 pub fn run_treenode_remove() -> TestResult {
     MINI_TEST!("Remove", {
-        use crate::tree::TreeNode;
+        use crate::TreeNode;
 
         let parent = TreeNode::new("parent");
         let child = TreeNode::new("child");
@@ -112,7 +112,7 @@ pub fn run_treenode_remove() -> TestResult {
 
 pub fn run_treenode_parent() -> TestResult {
     MINI_TEST!("Parent", {
-        use crate::tree::TreeNode;
+        use crate::TreeNode;
 
         let root = TreeNode::new("root");
         let child = TreeNode::new("child");
@@ -125,7 +125,7 @@ pub fn run_treenode_parent() -> TestResult {
 
 pub fn run_treenode_ancestors() -> TestResult {
     MINI_TEST!("Ancestors", {
-        use crate::tree::TreeNode;
+        use crate::TreeNode;
 
         let root = TreeNode::new("root");
         let mid = TreeNode::new("mid");
@@ -143,7 +143,7 @@ pub fn run_treenode_ancestors() -> TestResult {
 
 pub fn run_treenode_descendants() -> TestResult {
     MINI_TEST!("Descendants", {
-        use crate::tree::TreeNode;
+        use crate::TreeNode;
 
         let root = TreeNode::new("root");
         let mid = TreeNode::new("mid");
@@ -161,7 +161,7 @@ pub fn run_treenode_descendants() -> TestResult {
 
 pub fn run_treenode_children() -> TestResult {
     MINI_TEST!("Children", {
-        use crate::tree::TreeNode;
+        use crate::TreeNode;
 
         let parent = TreeNode::new("parent");
         let c1 = TreeNode::new("c1");
@@ -179,7 +179,7 @@ pub fn run_treenode_children() -> TestResult {
 
 pub fn run_treenode_traverse() -> TestResult {
     MINI_TEST!("Traverse", {
-        use crate::tree::TreeNode;
+        use crate::TreeNode;
 
         let root = TreeNode::new("root");
         let a = TreeNode::new("a");
@@ -199,7 +199,7 @@ pub fn run_treenode_traverse() -> TestResult {
 
 pub fn run_tree_constructor() -> TestResult {
     MINI_TEST!("Constructor", {
-        use crate::tree::Tree;
+        use crate::Tree;
 
         // Default constructor
         let t0 = Tree::default();
@@ -219,7 +219,7 @@ pub fn run_tree_constructor() -> TestResult {
 
 pub fn run_tree_json_roundtrip() -> TestResult {
     MINI_TEST!("Json Roundtrip", {
-        use crate::tree::Tree;
+        use crate::Tree;
         use crate::TreeNode;
 
         let mut original = Tree::new("test_tree");
@@ -244,7 +244,7 @@ pub fn run_tree_json_roundtrip() -> TestResult {
 
 pub fn run_tree_protobuf_roundtrip() -> TestResult {
     MINI_TEST!("Protobuf Roundtrip", {
-        use crate::tree::Tree;
+        use crate::Tree;
         use crate::TreeNode;
 
         let mut original = Tree::new("test_tree");
@@ -262,7 +262,7 @@ pub fn run_tree_protobuf_roundtrip() -> TestResult {
 
 pub fn run_tree_root() -> TestResult {
     MINI_TEST!("Root", {
-        use crate::tree::Tree;
+        use crate::Tree;
         use crate::TreeNode;
 
         let mut t = Tree::new("t");
@@ -276,7 +276,7 @@ pub fn run_tree_root() -> TestResult {
 
 pub fn run_tree_add() -> TestResult {
     MINI_TEST!("Add", {
-        use crate::tree::Tree;
+        use crate::Tree;
         use crate::TreeNode;
 
         let mut t = Tree::new("t");
@@ -291,7 +291,7 @@ pub fn run_tree_add() -> TestResult {
 
 pub fn run_tree_nodes() -> TestResult {
     MINI_TEST!("Nodes", {
-        use crate::tree::Tree;
+        use crate::Tree;
         use crate::TreeNode;
 
         let mut t = Tree::new("t");
@@ -310,7 +310,7 @@ pub fn run_tree_nodes() -> TestResult {
 
 pub fn run_tree_remove() -> TestResult {
     MINI_TEST!("Remove", {
-        use crate::tree::Tree;
+        use crate::Tree;
         use crate::TreeNode;
 
         let mut t = Tree::new("t");
@@ -326,7 +326,7 @@ pub fn run_tree_remove() -> TestResult {
 
 pub fn run_tree_leaves() -> TestResult {
     MINI_TEST!("Leaves", {
-        use crate::tree::Tree;
+        use crate::Tree;
         use crate::TreeNode;
 
         let mut t = Tree::new("t");
@@ -347,7 +347,7 @@ pub fn run_tree_leaves() -> TestResult {
 
 pub fn run_tree_traverse() -> TestResult {
     MINI_TEST!("Traverse", {
-        use crate::tree::Tree;
+        use crate::Tree;
         use crate::TreeNode;
 
         let mut t = Tree::new("t");
@@ -368,7 +368,7 @@ pub fn run_tree_traverse() -> TestResult {
 
 pub fn run_tree_get_node_by_name() -> TestResult {
     MINI_TEST!("Get Node By Name", {
-        use crate::tree::Tree;
+        use crate::Tree;
         use crate::TreeNode;
 
         let mut t = Tree::new("t");
@@ -386,7 +386,7 @@ pub fn run_tree_get_node_by_name() -> TestResult {
 
 pub fn run_tree_get_nodes_by_name() -> TestResult {
     MINI_TEST!("Get Nodes By Name", {
-        use crate::tree::Tree;
+        use crate::Tree;
         use crate::TreeNode;
 
         let mut t = Tree::new("t");
@@ -405,7 +405,7 @@ pub fn run_tree_get_nodes_by_name() -> TestResult {
 
 pub fn run_tree_find_node_by_guid() -> TestResult {
     MINI_TEST!("Find Node By Guid", {
-        use crate::tree::Tree;
+        use crate::Tree;
         use crate::TreeNode;
 
         let mut t = Tree::new("t");
@@ -423,7 +423,7 @@ pub fn run_tree_find_node_by_guid() -> TestResult {
 
 pub fn run_tree_add_child_by_guid() -> TestResult {
     MINI_TEST!("Add Child By Guid", {
-        use crate::tree::Tree;
+        use crate::Tree;
         use crate::TreeNode;
 
         let mut t = Tree::new("t");
@@ -444,7 +444,7 @@ pub fn run_tree_add_child_by_guid() -> TestResult {
 
 pub fn run_tree_get_children_guids() -> TestResult {
     MINI_TEST!("Get Children Guids", {
-        use crate::tree::Tree;
+        use crate::Tree;
         use crate::TreeNode;
 
         let mut t = Tree::new("t");

@@ -104,7 +104,7 @@ pub fn run_nurbssurface_constructor() -> TestResult {
 
 pub fn run_nurbssurface_booleans_queries() -> TestResult {
     MINI_TEST!("Booleans Queries", {
-        use crate::primitives::Primitives;
+        use crate::Primitives;
 
         let s = Primitives::sphere_surface(0.0, 0.0, 0.0, 5.0);
 
@@ -519,9 +519,9 @@ pub fn run_nurbssurface_division() -> TestResult {
 
 pub fn run_nurbssurface_evaluation() -> TestResult {
     MINI_TEST!("Evaluation", {
-        use crate::nurbssurface::NurbsSurface;
-        use crate::point::Point;
-        use crate::vector::Vector;
+        use crate::NurbsSurface;
+        use crate::Point;
+        use crate::Vector;
 
         let points = vec![
             // i=0
@@ -580,8 +580,8 @@ pub fn run_nurbssurface_evaluation() -> TestResult {
 
 pub fn run_nurbssurface_modification() -> TestResult {
     MINI_TEST!("Modification", {
-        use crate::nurbssurface::NurbsSurface;
-        use crate::point::Point;
+        use crate::NurbsSurface;
+        use crate::Point;
 
         let points = vec![
             // i=0
@@ -962,7 +962,7 @@ pub fn run_nurbssurface_split_by_brep() -> TestResult {
     MINI_TEST!("Split By Brep", {
         use crate::NurbsSurface;
         use crate::Point;
-        use crate::brep::BRep;
+        use crate::BRep;
 
         let flat = NurbsSurface::create(false, false, 1, 1, 2, 2, &[
             Point::new(-3.0, -3.0, 0.0),
@@ -985,8 +985,8 @@ pub fn run_nurbssurface_split_by_brep() -> TestResult {
 
 pub fn run_nurbssurface_json_roundtrip() -> TestResult {
     MINI_TEST!("Json Roundtrip", {
-        use crate::nurbssurface::NurbsSurface;
-        use crate::point::Point;
+        use crate::NurbsSurface;
+        use crate::Point;
         use std::path::PathBuf;
 
         let points = vec![
@@ -1035,8 +1035,8 @@ pub fn run_nurbssurface_json_roundtrip() -> TestResult {
 
 pub fn run_nurbssurface_protobuf_roundtrip() -> TestResult {
     MINI_TEST!("Protobuf Roundtrip", {
-        use crate::nurbssurface::NurbsSurface;
-        use crate::point::Point;
+        use crate::NurbsSurface;
+        use crate::Point;
         use std::path::PathBuf;
 
         let points = vec![
@@ -1081,7 +1081,7 @@ pub fn run_nurbssurface_protobuf_roundtrip() -> TestResult {
 pub fn run_nurbssurface_closest_point() -> TestResult {
     MINI_TEST!("ClosestPoint", {
         use crate::Point;
-        use crate::primitives::Primitives;
+        use crate::Primitives;
         // Sphere radius 2 at origin: closest surface point to an outside point is radial.
         let sphere = Primitives::sphere_surface(0.0, 0.0, 0.0, 2.0);
         let cp = sphere.closest_point(&Point::new(5.0, 0.0, 0.0));
@@ -1135,7 +1135,7 @@ pub fn run_nurbssurface_create_from_parameters() -> TestResult {
         // intersections_with_line (surface_intersections_with_line.py): a vertical line
         // through (1.5, 1.5) hits the surface once at (1.5, 1.5, 1.125). Validated vs
         // OCCT GeomAPI_IntCS (validation harness, dev <= 1.6e-16).
-        use crate::line::Line;
+        use crate::Line;
         let hits = s.intersections_with_line(&Line::new(1.5, 1.5, -5.0, 1.5, 1.5, 5.0));
         MINI_CHECK!(hits.len() == 1);
         MINI_CHECK!(TOLERANCE.is_point_close(&hits[0], &Point::new(1.5, 1.5, 1.125)));

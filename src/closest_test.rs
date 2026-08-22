@@ -314,7 +314,7 @@ pub fn run_closest_nurbscurves_closest() -> TestResult {
 
 pub fn run_closest_boxes_closest() -> TestResult {
     MINI_TEST!("Boxes Closest", {
-        use crate::aabb::AABB;
+        use crate::AABB;
         use crate::Closest;
 
         // 3 boxes: first two touching faces (shared at x=1), third far away

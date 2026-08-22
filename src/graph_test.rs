@@ -7,7 +7,7 @@ use crate::mini_test::TestResult;
 
 pub fn run_vertex_constructor() -> TestResult {
     MINI_TEST!("Constructor", {
-        use crate::graph::Vertex;
+        use crate::Vertex;
 
         // Default constructor
         let v0 = Vertex::default();
@@ -25,7 +25,7 @@ pub fn run_vertex_constructor() -> TestResult {
 
 pub fn run_vertex_json_roundtrip() -> TestResult {
     MINI_TEST!("Json Roundtrip", {
-        use crate::graph::Vertex;
+        use crate::Vertex;
         use crate::file_encoders::{file_json_dump, file_json_load};
         let original = Vertex::new(Some("v0".to_string()), Some("test_attribute".to_string()));
         file_json_dump(&original, "serialization/test_vertex.json", false).unwrap();
@@ -42,7 +42,7 @@ pub fn run_vertex_json_roundtrip() -> TestResult {
 
 pub fn run_edge_constructor() -> TestResult {
     MINI_TEST!("Constructor", {
-        use crate::graph::Edge;
+        use crate::Edge;
 
         // Constructor with v0/v1/attribute
         let e = Edge::new(
@@ -61,7 +61,7 @@ pub fn run_edge_constructor() -> TestResult {
 
 pub fn run_edge_json_roundtrip() -> TestResult {
     MINI_TEST!("Json Roundtrip", {
-        use crate::graph::Edge;
+        use crate::Edge;
         use crate::file_encoders::{file_json_dump, file_json_load};
         let original = Edge::new(
             Some("my_edge".to_string()),
@@ -80,7 +80,7 @@ pub fn run_edge_json_roundtrip() -> TestResult {
 
 pub fn run_edge_vertices() -> TestResult {
     MINI_TEST!("Vertices", {
-        use crate::graph::Edge;
+        use crate::Edge;
         let e = Edge::new(
             Some("my_edge".to_string()),
             Some("a".to_string()),
@@ -95,7 +95,7 @@ pub fn run_edge_vertices() -> TestResult {
 
 pub fn run_edge_connects() -> TestResult {
     MINI_TEST!("Connects", {
-        use crate::graph::Edge;
+        use crate::Edge;
         let e = Edge::new(
             Some("my_edge".to_string()),
             Some("a".to_string()),
@@ -111,7 +111,7 @@ pub fn run_edge_connects() -> TestResult {
 
 pub fn run_edge_other_vertex() -> TestResult {
     MINI_TEST!("Other Vertex", {
-        use crate::graph::Edge;
+        use crate::Edge;
         let e = Edge::new(
             Some("my_edge".to_string()),
             Some("a".to_string()),
@@ -130,7 +130,7 @@ pub fn run_edge_other_vertex() -> TestResult {
 
 pub fn run_graph_constructor() -> TestResult {
     MINI_TEST!("Constructor", {
-        use crate::graph::Graph;
+        use crate::Graph;
 
         // Default constructor
         let g0 = Graph::default();
@@ -146,7 +146,7 @@ pub fn run_graph_constructor() -> TestResult {
 
 pub fn run_graph_json_roundtrip() -> TestResult {
     MINI_TEST!("Json Roundtrip", {
-        use crate::graph::Graph;
+        use crate::Graph;
         let mut original = Graph::new("test_graph");
         original.add_node("node1", "Node 1");
         original.add_node("node2", "Node 2");
@@ -162,7 +162,7 @@ pub fn run_graph_json_roundtrip() -> TestResult {
 
 pub fn run_graph_protobuf_roundtrip() -> TestResult {
     MINI_TEST!("Protobuf Roundtrip", {
-        use crate::graph::Graph;
+        use crate::Graph;
         let mut original = Graph::new("test_graph");
         original.add_node("node1", "Node 1");
         original.add_node("node2", "Node 2");
@@ -178,7 +178,7 @@ pub fn run_graph_protobuf_roundtrip() -> TestResult {
 
 pub fn run_graph_has_node() -> TestResult {
     MINI_TEST!("Has Node", {
-        use crate::graph::Graph;
+        use crate::Graph;
         let mut g = Graph::new("g");
         g.add_node("a", "");
 
@@ -189,7 +189,7 @@ pub fn run_graph_has_node() -> TestResult {
 
 pub fn run_graph_has_edge() -> TestResult {
     MINI_TEST!("Has Edge", {
-        use crate::graph::Graph;
+        use crate::Graph;
         let mut g = Graph::new("g");
         g.add_edge("a", "b", "");
 
@@ -200,7 +200,7 @@ pub fn run_graph_has_edge() -> TestResult {
 
 pub fn run_graph_add_node() -> TestResult {
     MINI_TEST!("Add Node", {
-        use crate::graph::Graph;
+        use crate::Graph;
         let mut g = Graph::new("g");
         let key = g.add_node("a", "");
 
@@ -212,7 +212,7 @@ pub fn run_graph_add_node() -> TestResult {
 
 pub fn run_graph_add_edge() -> TestResult {
     MINI_TEST!("Add Edge", {
-        use crate::graph::Graph;
+        use crate::Graph;
         let mut g = Graph::new("g");
         let edge = g.add_edge("a", "b", "");
         let (u, v) = edge;
@@ -224,7 +224,7 @@ pub fn run_graph_add_edge() -> TestResult {
 
 pub fn run_graph_remove_node() -> TestResult {
     MINI_TEST!("Remove Node", {
-        use crate::graph::Graph;
+        use crate::Graph;
         let mut g = Graph::new("g");
         g.add_edge("a", "b", "");
         g.remove_node("a");
@@ -236,7 +236,7 @@ pub fn run_graph_remove_node() -> TestResult {
 
 pub fn run_graph_remove_edge() -> TestResult {
     MINI_TEST!("Remove Edge", {
-        use crate::graph::Graph;
+        use crate::Graph;
         let mut g = Graph::new("g");
         g.add_edge("a", "b", "");
         g.remove_edge(("a", "b"));
@@ -249,7 +249,7 @@ pub fn run_graph_remove_edge() -> TestResult {
 
 pub fn run_graph_get_vertices() -> TestResult {
     MINI_TEST!("Get Vertices", {
-        use crate::graph::Graph;
+        use crate::Graph;
         let mut g = Graph::new("g");
         g.add_node("a", "");
         g.add_node("b", "");
@@ -262,7 +262,7 @@ pub fn run_graph_get_vertices() -> TestResult {
 
 pub fn run_graph_get_edges() -> TestResult {
     MINI_TEST!("Get Edges", {
-        use crate::graph::Graph;
+        use crate::Graph;
         let mut g = Graph::new("g");
         g.add_edge("a", "b", "");
         g.add_edge("b", "c", "");
@@ -275,7 +275,7 @@ pub fn run_graph_get_edges() -> TestResult {
 
 pub fn run_graph_neighbors() -> TestResult {
     MINI_TEST!("Neighbors", {
-        use crate::graph::Graph;
+        use crate::Graph;
         let mut g = Graph::new("g");
         g.add_edge("a", "b", "");
         g.add_edge("a", "c", "");
@@ -288,7 +288,7 @@ pub fn run_graph_neighbors() -> TestResult {
 
 pub fn run_graph_get_neighbors() -> TestResult {
     MINI_TEST!("Get Neighbors", {
-        use crate::graph::Graph;
+        use crate::Graph;
         let mut g = Graph::new("g");
         g.add_edge("a", "b", "");
         g.add_edge("a", "c", "");
@@ -301,7 +301,7 @@ pub fn run_graph_get_neighbors() -> TestResult {
 
 pub fn run_graph_number_of_vertices() -> TestResult {
     MINI_TEST!("Number Of Vertices", {
-        use crate::graph::Graph;
+        use crate::Graph;
         let mut g = Graph::new("g");
         g.add_node("a", "");
         g.add_node("b", "");
@@ -313,7 +313,7 @@ pub fn run_graph_number_of_vertices() -> TestResult {
 
 pub fn run_graph_number_of_edges() -> TestResult {
     MINI_TEST!("Number Of Edges", {
-        use crate::graph::Graph;
+        use crate::Graph;
         let mut g = Graph::new("g");
         g.add_edge("a", "b", "");
         g.add_edge("b", "c", "");
@@ -324,7 +324,7 @@ pub fn run_graph_number_of_edges() -> TestResult {
 
 pub fn run_graph_clear() -> TestResult {
     MINI_TEST!("Clear", {
-        use crate::graph::Graph;
+        use crate::Graph;
         let mut g = Graph::new("g");
         g.add_edge("a", "b", "");
         g.clear();
@@ -336,7 +336,7 @@ pub fn run_graph_clear() -> TestResult {
 
 pub fn run_graph_node_attribute() -> TestResult {
     MINI_TEST!("Node Attribute", {
-        use crate::graph::Graph;
+        use crate::Graph;
         let mut g = Graph::new("g");
         g.add_node("a", "initial");
         g.node_attribute("a", Some("updated"));
@@ -347,7 +347,7 @@ pub fn run_graph_node_attribute() -> TestResult {
 
 pub fn run_graph_edge_attribute() -> TestResult {
     MINI_TEST!("Edge Attribute", {
-        use crate::graph::Graph;
+        use crate::Graph;
         let mut g = Graph::new("g");
         g.add_edge("a", "b", "initial");
         g.edge_attribute("a", "b", Some("updated"));
@@ -358,7 +358,7 @@ pub fn run_graph_edge_attribute() -> TestResult {
 
 pub fn run_graph_bfs() -> TestResult {
     MINI_TEST!("Bfs", {
-        use crate::graph::Graph;
+        use crate::Graph;
         let mut g = Graph::new("g");
         g.add_edge("a", "b", "");
         g.add_edge("b", "c", "");
@@ -373,7 +373,7 @@ pub fn run_graph_bfs() -> TestResult {
 
 pub fn run_graph_dfs() -> TestResult {
     MINI_TEST!("Dfs", {
-        use crate::graph::Graph;
+        use crate::Graph;
         let mut g = Graph::new("g");
         g.add_edge("a", "b", "");
         g.add_edge("b", "c", "");
@@ -388,7 +388,7 @@ pub fn run_graph_dfs() -> TestResult {
 
 pub fn run_graph_connected_components() -> TestResult {
     MINI_TEST!("Connected Components", {
-        use crate::graph::Graph;
+        use crate::Graph;
         let mut g = Graph::new("g");
         g.add_edge("a", "b", "");
         g.add_edge("b", "c", "");
@@ -405,7 +405,7 @@ pub fn run_graph_connected_components() -> TestResult {
 
 pub fn run_graph_shortest_path() -> TestResult {
     MINI_TEST!("Shortest Path", {
-        use crate::graph::Graph;
+        use crate::Graph;
         let mut g = Graph::new("g");
         g.add_edge("a", "b", "");
         g.add_edge("b", "c", "");
@@ -422,7 +422,7 @@ pub fn run_graph_shortest_path() -> TestResult {
 
 pub fn run_graph_has_cycle() -> TestResult {
     MINI_TEST!("Has Cycle", {
-        use crate::graph::Graph;
+        use crate::Graph;
         let mut g = Graph::new("g");
         g.add_edge("a", "b", "");
         g.add_edge("b", "c", "");
@@ -438,7 +438,7 @@ pub fn run_graph_has_cycle() -> TestResult {
 
 pub fn run_graph_cycle_basis() -> TestResult {
     MINI_TEST!("Cycle Basis", {
-        use crate::graph::Graph;
+        use crate::Graph;
         let mut g = Graph::new("g");
         g.add_edge("a", "b", "");
         g.add_edge("b", "c", "");

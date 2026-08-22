@@ -1609,6 +1609,7 @@ REGISTER_MINI_TEST!("Mesh", "From Polylines", crate::mesh_test::run_mesh_from_po
 REGISTER_MINI_TEST!("Mesh", "From Lines", crate::mesh_test::run_mesh_from_lines);
 REGISTER_MINI_TEST!("Mesh", "From Polygon With Holes", crate::mesh_test::run_mesh_from_polygon_with_holes);
 REGISTER_MINI_TEST!("Mesh", "Loft", crate::mesh_test::run_mesh_loft);
+REGISTER_MINI_TEST!("Mesh", "Loft concave with holes and collinear", crate::mesh_test::run_mesh_loft_concave_with_holes_and_collinear);
 REGISTER_MINI_TEST!("Mesh", "From Polygon With Holes Many", crate::mesh_test::run_mesh_from_polygon_with_holes_many);
 REGISTER_MINI_TEST!("Mesh", "Loft Many", crate::mesh_test::run_mesh_loft_many);
 REGISTER_MINI_TEST!("Mesh", "Loft with quads and triangles", crate::mesh_test::run_mesh_loft_panels);

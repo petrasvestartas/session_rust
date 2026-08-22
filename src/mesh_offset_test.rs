@@ -3,7 +3,7 @@ use crate::mini_test::TestResult;
 
 pub fn run_mesh_offset_from_mesh() -> TestResult {
     MINI_TEST!("from_mesh", {
-        use crate::mesh_offset::MeshOffset;
+        use crate::MeshOffset;
         use crate::Mesh;
         use crate::Point;
         let pts = vec![
@@ -26,7 +26,7 @@ REGISTER_MINI_TEST!("MeshOffset", "from_mesh", crate::mesh_offset_test::run_mesh
 
 pub fn run_mesh_offset_from_mesh_grid() -> TestResult {
     MINI_TEST!("from_mesh_grid", {
-        use crate::mesh_offset::MeshOffset;
+        use crate::MeshOffset;
         use crate::Mesh;
         use crate::Point;
         let pts = vec![
@@ -57,7 +57,7 @@ REGISTER_MINI_TEST!("MeshOffset", "from_mesh_grid", crate::mesh_offset_test::run
 
 pub fn run_mesh_offset_from_mesh_layers() -> TestResult {
     MINI_TEST!("from_mesh_layers", {
-        use crate::mesh_offset::MeshOffset;
+        use crate::MeshOffset;
         use crate::Mesh;
         use crate::Point;
         let pts = vec![
@@ -82,7 +82,7 @@ REGISTER_MINI_TEST!("MeshOffset", "from_mesh_layers", crate::mesh_offset_test::r
 
 pub fn run_mesh_offset_file_json_dump() -> TestResult {
     MINI_TEST!("file_json_dump", {
-        use crate::mesh_offset::MeshOffset;
+        use crate::MeshOffset;
         use crate::Mesh;
         use crate::Point;
         let pts = vec![
@@ -117,7 +117,7 @@ REGISTER_MINI_TEST!("MeshOffset", "file_json_load", crate::mesh_offset_test::run
 
 pub fn run_mesh_offset_to_proto() -> TestResult {
     MINI_TEST!("to_proto", {
-        use crate::mesh_offset::MeshOffset;
+        use crate::MeshOffset;
         use crate::Mesh;
         use crate::Point;
         let pts = vec![

@@ -37,7 +37,7 @@ pub fn run_column_constructor() -> TestResult {
 
 pub fn run_column_setters() -> TestResult {
     MINI_TEST!("Setters", {
-        use crate::element::Element;
+        use crate::Element;
 
         let mut c = Element::column(0.4, 0.4, 3.0, "my_column");
         c.set_width(0.5);
@@ -53,7 +53,7 @@ pub fn run_column_setters() -> TestResult {
 
 pub fn run_column_center_line() -> TestResult {
     MINI_TEST!("Center Line", {
-        use crate::element::Element;
+        use crate::Element;
 
         let c = Element::column(0.4, 0.4, 5.0, "my_column");
         let cl = c.center_line().unwrap();
@@ -65,7 +65,7 @@ pub fn run_column_center_line() -> TestResult {
 
 pub fn run_column_extend() -> TestResult {
     MINI_TEST!("Extend", {
-        use crate::element::Element;
+        use crate::Element;
 
         let mut c = Element::column(0.4, 0.4, 3.0, "my_column");
         c.extend(0.5);
@@ -76,7 +76,7 @@ pub fn run_column_extend() -> TestResult {
 
 pub fn run_column_aabb() -> TestResult {
     MINI_TEST!("AABB", {
-        use crate::element::Element;
+        use crate::Element;
 
         let mut c = Element::column(0.4, 0.4, 3.0, "my_column");
         let aabb = c.aabb();
@@ -89,7 +89,7 @@ pub fn run_column_aabb() -> TestResult {
 
 pub fn run_column_compute_point() -> TestResult {
     MINI_TEST!("Compute Point", {
-        use crate::element::Element;
+        use crate::Element;
 
         let mut c = Element::column(0.4, 0.4, 3.0, "my_column");
         let pt = c.point();
@@ -119,7 +119,7 @@ pub fn run_column_session_geometry() -> TestResult {
 
 pub fn run_column_json_roundtrip() -> TestResult {
     MINI_TEST!("Json Roundtrip", {
-        use crate::element::Element;
+        use crate::Element;
 
         let c = Element::column(0.5, 0.6, 4.0, "json_col");
 
@@ -136,7 +136,7 @@ pub fn run_column_json_roundtrip() -> TestResult {
 
 pub fn run_column_protobuf_roundtrip() -> TestResult {
     MINI_TEST!("Protobuf Roundtrip", {
-        use crate::element::Element;
+        use crate::Element;
 
         let c = Element::column(0.5, 0.6, 4.0, "proto_col");
 
@@ -157,7 +157,7 @@ pub fn run_column_protobuf_roundtrip() -> TestResult {
 
 pub fn run_column_polylines() -> TestResult {
     MINI_TEST!("Polylines", {
-        use crate::element::Element;
+        use crate::Element;
         let mut c = Element::column(0.4, 0.4, 3.0, "my_column");
         let pls = c.polylines();
         MINI_CHECK!(pls.len() == 6);
@@ -167,7 +167,7 @@ pub fn run_column_polylines() -> TestResult {
 
 pub fn run_column_planes() -> TestResult {
     MINI_TEST!("Planes", {
-        use crate::element::Element;
+        use crate::Element;
         let mut c = Element::column(0.4, 0.4, 3.0, "my_column");
         let pls = c.planes();
         MINI_CHECK!(pls.len() == 6);
@@ -178,7 +178,7 @@ pub fn run_column_planes() -> TestResult {
 
 pub fn run_column_edge_vectors() -> TestResult {
     MINI_TEST!("Edge Vectors", {
-        use crate::element::Element;
+        use crate::Element;
         let mut c = Element::column(0.4, 0.4, 3.0, "my_column");
         let evs = c.edge_vectors();
         MINI_CHECK!(evs.len() == 12);
@@ -187,7 +187,7 @@ pub fn run_column_edge_vectors() -> TestResult {
 
 pub fn run_column_axis() -> TestResult {
     MINI_TEST!("Axis", {
-        use crate::element::Element;
+        use crate::Element;
         let mut c = Element::column(0.4, 0.4, 5.0, "my_column");
         let ax = c.axis().unwrap();
         MINI_CHECK!(TOLERANCE.is_close(ax.start()[2], 0.0));

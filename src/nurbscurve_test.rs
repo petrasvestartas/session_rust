@@ -194,7 +194,7 @@ pub fn run_nurbscurve_join() -> TestResult {
     MINI_TEST!("Join", {
         use crate::NurbsCurve;
         use crate::Point;
-        use crate::primitives::Primitives;
+        use crate::Primitives;
 
         let arc1 = Primitives::arc(&Point::new(-1.0, 0.0, 0.0), &Point::new(0.0, 1.0, 0.0), &Point::new(1.0, 0.0, 0.0));
         let mut arc2 = Primitives::arc(&Point::new(1.0, 0.0, 0.0), &Point::new(1.5, -1.0, 0.0), &Point::new(1.0, -2.0, 0.0));
@@ -855,7 +855,7 @@ pub fn run_nurbscurve_curvature() -> TestResult {
     MINI_TEST!("Curvature", {
         use crate::NurbsCurve;
         use crate::Point;
-        use crate::primitives::Primitives;
+        use crate::Primitives;
 
         // A circle of radius R is an exact rational NURBS with constant curvature 1/R.
         let r = 2.0;

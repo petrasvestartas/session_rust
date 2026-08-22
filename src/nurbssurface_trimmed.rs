@@ -1652,11 +1652,6 @@ impl NurbsSurfaceTrimmed {
         copy
     }
 
-    pub fn to_string(&self) -> String {
-        format!("NurbsSurfaceTrimmed(name={}, trimmed={}, holes={})",
-                self.name, self.is_trimmed(), self.inner_loop_count())
-    }
-
     pub fn repr(&self) -> String {
         format!("NurbsSurfaceTrimmed(\n  name={},\n  trimmed={},\n  holes={},\n  surface={}\n)",
                 self.name, self.is_trimmed(), self.inner_loop_count(), self.m_surface.to_string())
@@ -1806,8 +1801,11 @@ impl PartialEq for NurbsSurfaceTrimmed {
     }
 }
 
+// Display is the single source of the string form; `to_string()` comes from the blanket
+// ToString impl, so call sites are unchanged and match Python's `to_string()`.
 impl std::fmt::Display for NurbsSurfaceTrimmed {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}", self.to_string())
+        write!(f, "NurbsSurfaceTrimmed(name={}, trimmed={}, holes={})",
+               self.name, self.is_trimmed(), self.inner_loop_count())
     }
 }

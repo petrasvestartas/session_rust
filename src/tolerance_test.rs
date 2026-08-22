@@ -47,6 +47,8 @@ pub fn run_tolerance_is_between() -> TestResult {
     })
 }
 
+// Literal matches the C++ and Python test text verbatim; parity beats the constant.
+#[allow(clippy::approx_constant)]
 pub fn run_tolerance_format_number() -> TestResult {
     MINI_TEST!("Format Number", {
         use crate::tolerance::TOLERANCE;
@@ -141,7 +143,7 @@ pub fn run_tolerance_rad_deg() -> TestResult {
     MINI_TEST!("Rad Deg Conversion", {
         use crate::tolerance::rad_to_deg;
         use crate::tolerance::deg_to_rad;
-        use crate::tolerance::Tolerance;
+        use crate::Tolerance;
         let r0 = rad_to_deg(Tolerance::PI);
         let r1 = deg_to_rad(180.0);
         let r2 = deg_to_rad(rad_to_deg(1.234));
@@ -154,7 +156,7 @@ pub fn run_tolerance_rad_deg() -> TestResult {
 
 pub fn run_tolerance_to_radians() -> TestResult {
     MINI_TEST!("To Radians", {
-        use crate::tolerance::Tolerance;
+        use crate::Tolerance;
         let r0 = Tolerance::to_radians(180.0);
         let r1 = Tolerance::to_radians(90.0);
         let r2 = Tolerance::to_radians(0.0);
@@ -167,7 +169,7 @@ pub fn run_tolerance_to_radians() -> TestResult {
 
 pub fn run_tolerance_to_degrees() -> TestResult {
     MINI_TEST!("To Degrees", {
-        use crate::tolerance::Tolerance;
+        use crate::Tolerance;
         let d0 = Tolerance::to_degrees(Tolerance::PI);
         let d1 = Tolerance::to_degrees(Tolerance::PI / 2.0);
         let d2 = Tolerance::to_degrees(0.0);
@@ -255,9 +257,11 @@ pub fn run_tolerance_key_xy() -> TestResult {
     })
 }
 
+// Literal matches the C++ and Python test text verbatim; parity beats the constant.
+#[allow(clippy::approx_constant)]
 pub fn run_tolerance_round_to() -> TestResult {
     MINI_TEST!("Round To", {
-        use crate::tolerance::Tolerance;
+        use crate::Tolerance;
         let r0 = Tolerance::round_to(3.14159, 2);
         let r1 = Tolerance::round_to(2.5, 0);
 

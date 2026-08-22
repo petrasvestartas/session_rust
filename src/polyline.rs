@@ -18,6 +18,8 @@ pub struct Polyline {
     pub plane: Plane,
     plane_dirty: bool,
     pub width: f64,
+    /// Dash pattern: alternating on/off lengths in mm, repeating. Empty = solid.
+    pub dash: Vec<f64>,
     pub linecolor: Color,
 }
 
@@ -30,6 +32,7 @@ impl Default for Polyline {
             plane: Plane::default(),
             plane_dirty: true,
             width: 1.0,
+            dash: Vec::new(),
             linecolor: Color::black(),
         }
     }
@@ -50,6 +53,7 @@ impl Polyline {
             plane: Plane::default(),
             plane_dirty: true,
             width: 1.0,
+            dash: Vec::new(),
             linecolor: Color::black(),
         }
     }
@@ -110,6 +114,7 @@ impl Polyline {
             plane: Plane::default(),
             plane_dirty: true,
             width: 1.0,
+            dash: Vec::new(),
             linecolor: Color::black(),
         }
     }
@@ -141,6 +146,7 @@ impl Polyline {
             plane: self.plane.clone(),
             plane_dirty: self.plane_dirty,
             width: self.width,
+            dash: self.dash.clone(),
             linecolor: self.linecolor.clone(),
         }
     }
@@ -513,6 +519,7 @@ impl Polyline {
          map.serialize_entry("name", &self.name)?;
          map.serialize_entry("coords", &self.coords)?;
          map.serialize_entry("width", &self.width)?;
+         map.serialize_entry("dash", &self.dash)?;
          map.serialize_entry("linecolor", &self.linecolor)?;
          map.end()
      }
@@ -571,6 +578,12 @@ impl Polyline {
              .map(|v| serde_json::from_value(v.clone()).unwrap_or_else(|_| Color::white()))
              .unwrap_or_else(Color::white);
 
+         let dash: Vec<f64> = value
+             .get("dash")
+             .and_then(|v| v.as_array())
+             .map(|arr| arr.iter().filter_map(|v| v.as_f64()).collect())
+             .unwrap_or_default();
+
          let polyline = Polyline {
              guid: { let c = std::sync::OnceLock::new(); let _ = c.set(guid_str); c },
              name,
@@ -578,6 +591,7 @@ impl Polyline {
              plane: Plane::default(),
              plane_dirty: true,
              width,
+             dash,
              linecolor,
          };
          Ok(polyline)
@@ -638,6 +652,7 @@ impl Polyline {
             name: self.name.clone(),
             coords: self.coords.iter().map(|&v| v as f64).collect(),
             width: self.width as f64,
+            dash: self.dash.clone(),
             linecolor: Some(crate::proto::Color {
                 guid: self.linecolor.guid().to_string(),
                 name: self.linecolor.name.clone(),
@@ -669,6 +684,7 @@ impl Polyline {
         pl.set_guid(proto.guid);
         pl.name = proto.name;
         pl.width = proto.width as f64;
+        pl.dash = proto.dash;
 
         if let Some(color) = proto.linecolor {
             pl.linecolor.set_guid(color.guid);

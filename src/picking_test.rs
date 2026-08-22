@@ -3,9 +3,9 @@
 #[cfg(test)]
 mod picking_tests {
     use crate::{Color, Mesh, Point, Vector};
-    use crate::session::Session;
-    use crate::xform::Xform;
-    use crate::tolerance::Tolerance;
+    use crate::Session;
+    use crate::Xform;
+    use crate::Tolerance;
 
     const MM_TO_UNIT: f64 = 0.001;
 
@@ -264,9 +264,9 @@ mod picking_tests {
     /// otherwise Morton codes get clamped and BVH is wrong.
     #[test]
     fn test_bvh_world_size_covers_far_objects() {
-        use crate::spatial_bvh::SpatialBVH;
-        use crate::obb::OBB;
-        use crate::aabb::AABB;
+        use crate::SpatialBVH;
+        use crate::OBB;
+        use crate::AABB;
 
         let positions: &[(f64, f64, f64, f64)] = &[
             (   0.0,    0.0,    0.0, 400.0),

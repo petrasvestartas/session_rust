@@ -783,7 +783,7 @@ pub fn run_intersection_surface_plane_uv() -> TestResult {
         use crate::Plane;
         use crate::Point;
         use crate::Vector;
-        use crate::primitives::Primitives;
+        use crate::Primitives;
 
         let cyl = Primitives::cylinder_surface(0.0, 0.0, 0.0, 1.0, 4.0);
         let plane = Plane::from_point_normal(Point::new(0.0, 0.0, 2.0), Vector::new(0.3, 0.0, 1.0));
@@ -834,7 +834,7 @@ pub fn run_intersection_surface_surface() -> TestResult {
         use crate::intersection;
         use crate::NurbsSurface;
         use crate::Point;
-        use crate::primitives::Primitives;
+        use crate::Primitives;
 
         let lies_on_curve = |curve3d: &crate::NurbsCurve, pcurve: &crate::NurbsCurve, surface: &NurbsSurface| -> f64 {
             let (u0, u1) = surface.domain(0).unwrap();
@@ -895,7 +895,7 @@ pub fn run_intersection_surface_surface_accuracy() -> TestResult {
     MINI_TEST!("Surface Surface Accuracy", {
         use crate::NurbsSurface;
         use crate::Point;
-        use crate::primitives::Primitives;
+        use crate::Primitives;
         use crate::intersection::surface_surface;
 
         // Every intersection point must lie on BOTH analytic surfaces to ~1e-6,

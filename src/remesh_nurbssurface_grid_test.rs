@@ -3,7 +3,7 @@ use crate::mini_test::TestResult;
 
 pub fn run_remesh_nurbssurface_grid_sphere() -> TestResult {
     MINI_TEST!("Sphere", {
-        use crate::primitives::Primitives;
+        use crate::Primitives;
         use crate::remesh_nurbssurface_grid::RemeshNurbsSurfaceGrid;
 
         let s = Primitives::sphere_surface(0.0, 0.0, 0.0, 1.0);
@@ -17,7 +17,7 @@ pub fn run_remesh_nurbssurface_grid_sphere() -> TestResult {
 
 pub fn run_remesh_nurbssurface_grid_torus() -> TestResult {
     MINI_TEST!("Torus", {
-        use crate::primitives::Primitives;
+        use crate::Primitives;
         use crate::remesh_nurbssurface_grid::RemeshNurbsSurfaceGrid;
 
         let s = Primitives::torus_surface(0.0, 0.0, 0.0, 3.0, 1.0);
@@ -31,7 +31,7 @@ pub fn run_remesh_nurbssurface_grid_torus() -> TestResult {
 
 pub fn run_remesh_nurbssurface_grid_cylinder() -> TestResult {
     MINI_TEST!("Cylinder", {
-        use crate::primitives::Primitives;
+        use crate::Primitives;
         use crate::remesh_nurbssurface_grid::RemeshNurbsSurfaceGrid;
 
         let s = Primitives::cylinder_surface(0.0, 0.0, 0.0, 1.0, 5.0);
@@ -45,7 +45,7 @@ pub fn run_remesh_nurbssurface_grid_cylinder() -> TestResult {
 
 pub fn run_remesh_nurbssurface_grid_cone() -> TestResult {
     MINI_TEST!("Cone", {
-        use crate::primitives::Primitives;
+        use crate::Primitives;
         use crate::remesh_nurbssurface_grid::RemeshNurbsSurfaceGrid;
 
         let s = Primitives::cone_surface(0.0, 0.0, 0.0, 1.0, 5.0);
@@ -59,7 +59,7 @@ pub fn run_remesh_nurbssurface_grid_cone() -> TestResult {
 
 pub fn run_remesh_nurbssurface_grid_doubly_curved() -> TestResult {
     MINI_TEST!("Doubly Curved", {
-        use crate::primitives::Primitives;
+        use crate::Primitives;
         use crate::remesh_nurbssurface_grid::RemeshNurbsSurfaceGrid;
 
         let s = Primitives::wave_surface(1.0, 0.5);
@@ -73,7 +73,7 @@ pub fn run_remesh_nurbssurface_grid_doubly_curved() -> TestResult {
 
 pub fn run_remesh_nurbssurface_grid_grid_target() -> TestResult {
     MINI_TEST!("Grid Target", {
-        use crate::primitives::Primitives;
+        use crate::Primitives;
         use crate::remesh_nurbssurface_grid::RemeshNurbsSurfaceGrid;
 
         let s = Primitives::wave_surface(1.0, 0.5);
@@ -89,8 +89,8 @@ pub fn run_remesh_nurbssurface_grid_grid_target() -> TestResult {
 
 pub fn run_remesh_nurbssurface_grid_flat_quad() -> TestResult {
     MINI_TEST!("Flat Quad", {
-        use crate::nurbssurface::NurbsSurface;
-        use crate::point::Point;
+        use crate::NurbsSurface;
+        use crate::Point;
         use crate::remesh_nurbssurface_grid::RemeshNurbsSurfaceGrid;
 
         let s = NurbsSurface::create(false, false, 1, 1, 2, 2, &[
@@ -109,8 +109,8 @@ pub fn run_remesh_nurbssurface_grid_flat_quad() -> TestResult {
 
 pub fn run_remesh_nurbssurface_grid_flat_triangle() -> TestResult {
     MINI_TEST!("Flat Triangle", {
-        use crate::nurbssurface::NurbsSurface;
-        use crate::point::Point;
+        use crate::NurbsSurface;
+        use crate::Point;
         use crate::remesh_nurbssurface_grid::RemeshNurbsSurfaceGrid;
 
         let s = NurbsSurface::create(false, false, 1, 1, 2, 2, &[
@@ -129,8 +129,8 @@ pub fn run_remesh_nurbssurface_grid_flat_triangle() -> TestResult {
 
 pub fn run_remesh_nurbssurface_grid_double_curved_triangle() -> TestResult {
     MINI_TEST!("Double-Curved Triangle", {
-        use crate::nurbssurface::NurbsSurface;
-        use crate::point::Point;
+        use crate::NurbsSurface;
+        use crate::Point;
         use crate::remesh_nurbssurface_grid::RemeshNurbsSurfaceGrid;
 
         let pts = vec![

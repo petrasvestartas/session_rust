@@ -133,6 +133,7 @@ pub fn run_line_json_roundtrip() -> TestResult {
 
         let mut l = Line::new(42.1, 84.2, 126.3, 168.4, 210.5, 252.6);
         l.name = "test_line".to_string();
+        l.dash = vec![3.0, 2.0];
 
         //   jsondump()      │ String       │ to JSON string (object)
         //   jsonload(s)     │ String       │ from JSON string (object)
@@ -165,6 +166,7 @@ pub fn run_line_json_roundtrip() -> TestResult {
         MINI_CHECK!(TOLERANCE.is_close(loaded[3], 168.4));
         MINI_CHECK!(TOLERANCE.is_close(loaded[4], 210.5));
         MINI_CHECK!(TOLERANCE.is_close(loaded[5], 252.6));
+        MINI_CHECK!(loaded.dash == vec![3.0, 2.0]);
     })
 }
 
@@ -174,6 +176,7 @@ pub fn run_line_protobuf_roundtrip() -> TestResult {
 
         let mut l = Line::new(42.1, 84.2, 126.3, 168.4, 210.5, 252.6);
         l.name = "test_line".to_string();
+        l.dash = vec![3.0, 2.0];
 
         //   pb_dumps()      | bytes        | to protobuf bytes
         //   pb_loads(b)     | bytes        | from protobuf bytes
@@ -200,6 +203,7 @@ pub fn run_line_protobuf_roundtrip() -> TestResult {
         MINI_CHECK!(TOLERANCE.is_close(loaded[3], 168.4));
         MINI_CHECK!(TOLERANCE.is_close(loaded[4], 210.5));
         MINI_CHECK!(TOLERANCE.is_close(loaded[5], 252.6));
+        MINI_CHECK!(loaded.dash == vec![3.0, 2.0]);
         MINI_CHECK!(loaded.guid() == l.guid());
     })
 }

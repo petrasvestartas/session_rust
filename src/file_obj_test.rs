@@ -7,7 +7,7 @@ pub fn run_file_obj_read_bunny() -> TestResult {
     MINI_TEST!("Read Bunny", {
         // load Stanford Bunny (real-world OBJ: 2503 vertices, 4968 faces)
         use std::path::PathBuf;
-        use crate::file_obj::read_file_obj;
+        use crate::read_file_obj;
         let src_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
         let bunny_path = src_dir.parent().unwrap().join("session_data").join("bunny.obj");
         if !bunny_path.exists() {

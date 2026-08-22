@@ -158,7 +158,7 @@ pub fn run_session_add_nurbssurface() -> TestResult {
 pub fn run_session_add_brep() -> TestResult {
     MINI_TEST!("Add Brep", {
         use crate::Session;
-        use crate::brep::BRep;
+        use crate::BRep;
         let mut session = Session::default();
         let brep = BRep::create_box(1.0, 1.0, 1.0);
         let guid = brep.guid().to_string();
@@ -172,7 +172,7 @@ pub fn run_session_add_brep() -> TestResult {
 pub fn run_session_add_element() -> TestResult {
     MINI_TEST!("Add Element", {
         use crate::{Session, Point};
-        use crate::element::Element;
+        use crate::Element;
         let mut session = Session::default();
         let polygon = vec![Point::new(0.0,0.0,0.0), Point::new(2.0,0.0,0.0), Point::new(2.0,2.0,0.0), Point::new(0.0,2.0,0.0)];
         let plate = Element::plate(polygon, 0.2, "p1");
@@ -396,7 +396,7 @@ pub fn run_session_get_geometry() -> TestResult {
 pub fn run_session_compute_face_to_face() -> TestResult {
     MINI_TEST!("Compute Face To Face", {
         use crate::{Session, Point};
-        use crate::element::Element;
+        use crate::Element;
         let mut session = Session::default();
         let p1 = Element::plate(vec![Point::new(0.0,0.0,0.0), Point::new(1.0,0.0,0.0), Point::new(1.0,1.0,0.0), Point::new(0.0,1.0,0.0)], 0.2, "p1");
         let p2 = Element::plate(vec![Point::new(0.0,0.0,-0.2), Point::new(1.0,0.0,-0.2), Point::new(1.0,1.0,-0.2), Point::new(0.0,1.0,-0.2)], 0.2, "p2");

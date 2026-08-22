@@ -125,6 +125,13 @@ impl PointCloud {
         self._coords.push(point[2]);
     }
 
+    /// The flat coordinate array itself, [x0, y0, z0, x1, ...]. A renderer walking millions of
+    /// points cannot afford `get_point` per point: that builds a `Point`, and a `Point` owns a
+    /// name and a colour, so a 13.8M-point scan spends most of its walk in the allocator.
+    pub fn coords(&self) -> &[f64] {
+        &self._coords
+    }
+
     /// Get all points as a vector
     pub fn get_points(&self) -> Vec<Point> {
         let mut points = Vec::with_capacity(self.point_count());
@@ -170,6 +177,12 @@ impl PointCloud {
         self._colors.push((color.g * 255.0).round() as i32);
         self._colors.push((color.b * 255.0).round() as i32);
         self._colors.push((color.a * 255.0).round() as i32);
+    }
+
+    /// The flat colour array itself, [r0, g0, b0, a0, r1, ...] as 0-255 - the same encoding the
+    /// proto carries. Same reason as `coords`: `get_color` builds a `Color`, which owns a name.
+    pub fn colors(&self) -> &[i32] {
+        &self._colors
     }
 
     /// Get all colors as a vector
@@ -362,7 +375,7 @@ impl PointCloud {
     pub fn from_proto(proto: crate::proto::PointCloud) -> Self {
         let mut pc = Self::from_coords(
             proto.coords.into_iter().map(|v| v as f64).collect(),
-            proto.colors.iter().map(|&c| c as i32).collect(),
+            proto.colors.into_iter().map(|c| c as i32).collect(),
             proto.normals.into_iter().map(|v| v as f64).collect(),
         );
         pc.set_guid(proto.guid);

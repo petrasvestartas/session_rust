@@ -4,7 +4,7 @@ use crate::tolerance::TOLERANCE;
 
 pub fn run_bvh_constructor() -> TestResult {
     MINI_TEST!("Constructor", {
-        use crate::spatial_bvh::SpatialBVH;
+        use crate::SpatialBVH;
         use crate::OBB;
         use crate::Point;
         use crate::Vector;

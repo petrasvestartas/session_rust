@@ -3,8 +3,8 @@ use crate::mini_test::TestResult;
 
 pub fn run_remesh_nurbssurface_adaptive_constructor() -> TestResult {
     MINI_TEST!("Constructor", {
-        use crate::primitives::Primitives;
-        use crate::remesh_nurbssurface_adaptive::RemeshNurbsSurfaceAdaptive;
+        use crate::Primitives;
+        use crate::RemeshNurbsSurfaceAdaptive;
 
         let s = Primitives::sphere_surface(0.0, 0.0, 0.0, 1.0);
         let ta = RemeshNurbsSurfaceAdaptive::new(s);
@@ -18,8 +18,8 @@ pub fn run_remesh_nurbssurface_adaptive_constructor() -> TestResult {
 
 pub fn run_remesh_nurbssurface_adaptive_parameters() -> TestResult {
     MINI_TEST!("Parameters", {
-        use crate::primitives::Primitives;
-        use crate::remesh_nurbssurface_adaptive::RemeshNurbsSurfaceAdaptive;
+        use crate::Primitives;
+        use crate::RemeshNurbsSurfaceAdaptive;
 
         let s = Primitives::sphere_surface(0.0, 0.0, 0.0, 1.0);
         let mut ta = RemeshNurbsSurfaceAdaptive::new(s);
@@ -37,8 +37,8 @@ pub fn run_remesh_nurbssurface_adaptive_parameters() -> TestResult {
 
 pub fn run_remesh_nurbssurface_adaptive_mesh() -> TestResult {
     MINI_TEST!("Mesh", {
-        use crate::primitives::Primitives;
-        use crate::remesh_nurbssurface_adaptive::RemeshNurbsSurfaceAdaptive;
+        use crate::Primitives;
+        use crate::RemeshNurbsSurfaceAdaptive;
 
         let s = Primitives::sphere_surface(0.0, 0.0, 0.0, 1.0);
         let ta = RemeshNurbsSurfaceAdaptive::new(s);
@@ -51,8 +51,8 @@ pub fn run_remesh_nurbssurface_adaptive_mesh() -> TestResult {
 
 pub fn run_remesh_nurbssurface_adaptive_torus() -> TestResult {
     MINI_TEST!("Torus", {
-        use crate::primitives::Primitives;
-        use crate::remesh_nurbssurface_adaptive::RemeshNurbsSurfaceAdaptive;
+        use crate::Primitives;
+        use crate::RemeshNurbsSurfaceAdaptive;
 
         let s = Primitives::torus_surface(0.0, 0.0, 0.0, 3.0, 1.0);
         let m = RemeshNurbsSurfaceAdaptive::new(s).mesh();
@@ -64,8 +64,8 @@ pub fn run_remesh_nurbssurface_adaptive_torus() -> TestResult {
 
 pub fn run_remesh_nurbssurface_adaptive_cylinder() -> TestResult {
     MINI_TEST!("Cylinder", {
-        use crate::primitives::Primitives;
-        use crate::remesh_nurbssurface_adaptive::RemeshNurbsSurfaceAdaptive;
+        use crate::Primitives;
+        use crate::RemeshNurbsSurfaceAdaptive;
 
         let s = Primitives::cylinder_surface(0.0, 0.0, 0.0, 1.0, 5.0);
         let m = RemeshNurbsSurfaceAdaptive::new(s).mesh();
@@ -77,8 +77,8 @@ pub fn run_remesh_nurbssurface_adaptive_cylinder() -> TestResult {
 
 pub fn run_remesh_nurbssurface_adaptive_cone() -> TestResult {
     MINI_TEST!("Cone", {
-        use crate::primitives::Primitives;
-        use crate::remesh_nurbssurface_adaptive::RemeshNurbsSurfaceAdaptive;
+        use crate::Primitives;
+        use crate::RemeshNurbsSurfaceAdaptive;
 
         let s = Primitives::cone_surface(0.0, 0.0, 0.0, 1.0, 5.0);
         let m = RemeshNurbsSurfaceAdaptive::new(s).mesh();
@@ -90,8 +90,8 @@ pub fn run_remesh_nurbssurface_adaptive_cone() -> TestResult {
 
 pub fn run_remesh_nurbssurface_adaptive_doubly_curved() -> TestResult {
     MINI_TEST!("Doubly Curved", {
-        use crate::primitives::Primitives;
-        use crate::remesh_nurbssurface_adaptive::RemeshNurbsSurfaceAdaptive;
+        use crate::Primitives;
+        use crate::RemeshNurbsSurfaceAdaptive;
 
         let s = Primitives::wave_surface(1.0, 0.5);
         let m = RemeshNurbsSurfaceAdaptive::new(s).mesh();
@@ -103,8 +103,8 @@ pub fn run_remesh_nurbssurface_adaptive_doubly_curved() -> TestResult {
 
 pub fn run_remesh_nurbssurface_adaptive_flat() -> TestResult {
     MINI_TEST!("Flat", {
-        use crate::primitives::Primitives;
-        use crate::remesh_nurbssurface_adaptive::RemeshNurbsSurfaceAdaptive;
+        use crate::Primitives;
+        use crate::RemeshNurbsSurfaceAdaptive;
 
         let s = Primitives::wave_surface(1.0, 0.0);
         let m = RemeshNurbsSurfaceAdaptive::new(s).mesh();
@@ -116,9 +116,9 @@ pub fn run_remesh_nurbssurface_adaptive_flat() -> TestResult {
 
 pub fn run_remesh_nurbssurface_adaptive_singular_triangle() -> TestResult {
     MINI_TEST!("Singular Triangle", {
-        use crate::nurbssurface::NurbsSurface;
-        use crate::point::Point;
-        use crate::remesh_nurbssurface_adaptive::RemeshNurbsSurfaceAdaptive;
+        use crate::NurbsSurface;
+        use crate::Point;
+        use crate::RemeshNurbsSurfaceAdaptive;
 
         let pts = vec![
             Point::new(0.0, 0.0, 0.0),
@@ -138,9 +138,9 @@ pub fn run_remesh_nurbssurface_adaptive_singular_triangle() -> TestResult {
 
 pub fn run_remesh_nurbssurface_adaptive_double_curved_triangle() -> TestResult {
     MINI_TEST!("Double-Curved Triangle", {
-        use crate::nurbssurface::NurbsSurface;
-        use crate::point::Point;
-        use crate::remesh_nurbssurface_adaptive::RemeshNurbsSurfaceAdaptive;
+        use crate::NurbsSurface;
+        use crate::Point;
+        use crate::RemeshNurbsSurfaceAdaptive;
 
         let pts = vec![
             Point::new(0.0, 0.0, 0.0),

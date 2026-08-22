@@ -37,7 +37,7 @@ pub fn run_beam_constructor() -> TestResult {
 
 pub fn run_beam_setters() -> TestResult {
     MINI_TEST!("Setters", {
-        use crate::element::Element;
+        use crate::Element;
 
         let mut b = Element::beam(0.1, 0.2, 3.0, "my_beam");
         b.set_width(0.15);
@@ -53,7 +53,7 @@ pub fn run_beam_setters() -> TestResult {
 
 pub fn run_beam_center_line() -> TestResult {
     MINI_TEST!("Center Line", {
-        use crate::element::Element;
+        use crate::Element;
 
         let b = Element::beam(0.1, 0.2, 5.0, "my_beam");
         let cl = b.center_line().unwrap();
@@ -65,7 +65,7 @@ pub fn run_beam_center_line() -> TestResult {
 
 pub fn run_beam_extend() -> TestResult {
     MINI_TEST!("Extend", {
-        use crate::element::Element;
+        use crate::Element;
 
         let mut b = Element::beam(0.1, 0.2, 3.0, "my_beam");
         b.extend(0.5);
@@ -76,7 +76,7 @@ pub fn run_beam_extend() -> TestResult {
 
 pub fn run_beam_aabb() -> TestResult {
     MINI_TEST!("AABB", {
-        use crate::element::Element;
+        use crate::Element;
 
         let mut b = Element::beam(0.1, 0.2, 3.0, "my_beam");
         let aabb = b.aabb();
@@ -89,7 +89,7 @@ pub fn run_beam_aabb() -> TestResult {
 
 pub fn run_beam_compute_point() -> TestResult {
     MINI_TEST!("Compute Point", {
-        use crate::element::Element;
+        use crate::Element;
 
         let mut b = Element::beam(0.1, 0.2, 3.0, "my_beam");
         let pt = b.point();
@@ -119,7 +119,7 @@ pub fn run_beam_session_geometry() -> TestResult {
 
 pub fn run_beam_json_roundtrip() -> TestResult {
     MINI_TEST!("Json Roundtrip", {
-        use crate::element::Element;
+        use crate::Element;
 
         let b = Element::beam(0.15, 0.3, 5.0, "json_beam");
 
@@ -136,7 +136,7 @@ pub fn run_beam_json_roundtrip() -> TestResult {
 
 pub fn run_beam_protobuf_roundtrip() -> TestResult {
     MINI_TEST!("Protobuf Roundtrip", {
-        use crate::element::Element;
+        use crate::Element;
 
         let b = Element::beam(0.15, 0.3, 5.0, "proto_beam");
 
@@ -157,7 +157,7 @@ pub fn run_beam_protobuf_roundtrip() -> TestResult {
 
 pub fn run_beam_polylines() -> TestResult {
     MINI_TEST!("Polylines", {
-        use crate::element::Element;
+        use crate::Element;
         let mut b = Element::beam(0.1, 0.2, 3.0, "my_beam");
         let pls = b.polylines();
         MINI_CHECK!(pls.len() == 6);
@@ -167,7 +167,7 @@ pub fn run_beam_polylines() -> TestResult {
 
 pub fn run_beam_planes() -> TestResult {
     MINI_TEST!("Planes", {
-        use crate::element::Element;
+        use crate::Element;
         let mut b = Element::beam(0.1, 0.2, 3.0, "my_beam");
         let pls = b.planes();
         MINI_CHECK!(pls.len() == 6);
@@ -178,7 +178,7 @@ pub fn run_beam_planes() -> TestResult {
 
 pub fn run_beam_edge_vectors() -> TestResult {
     MINI_TEST!("Edge Vectors", {
-        use crate::element::Element;
+        use crate::Element;
         let mut b = Element::beam(0.1, 0.2, 3.0, "my_beam");
         let evs = b.edge_vectors();
         MINI_CHECK!(evs.len() == 12);
@@ -187,7 +187,7 @@ pub fn run_beam_edge_vectors() -> TestResult {
 
 pub fn run_beam_axis() -> TestResult {
     MINI_TEST!("Axis", {
-        use crate::element::Element;
+        use crate::Element;
         let mut b = Element::beam(0.1, 0.2, 5.0, "my_beam");
         let ax = b.axis().unwrap();
         MINI_CHECK!(TOLERANCE.is_close(ax.start()[2], 0.0));

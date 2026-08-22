@@ -553,6 +553,8 @@ impl Point {
     }
 
     /// Approximate dihedral angle in degrees between half-planes (p,q,r) and (p,q,s).
+    // Literal matches Point::dihedral_angle_deg in C++ and Python verbatim.
+    #[allow(clippy::approx_constant)]
     pub fn dihedral_angle_deg(p: &Point, q: &Point, r: &Point, s: &Point) -> f64 {
         use crate::tolerance::Tolerance;
         let pq = Vector::new(q[0] - p[0], q[1] - p[1], q[2] - p[2]);

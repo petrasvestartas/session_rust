@@ -79,7 +79,7 @@ pub fn run_element_place() -> TestResult {
 pub fn run_element_add_feature() -> TestResult {
     MINI_TEST!("Add Feature", {
         use crate::Mesh;
-        use crate::element::Element;
+        use crate::Element;
         use crate::Point;
 
         let m = Mesh::from_vertices_and_faces(
@@ -104,7 +104,7 @@ pub fn run_element_add_feature() -> TestResult {
 pub fn run_element_aabb() -> TestResult {
     MINI_TEST!("AABB", {
         use crate::Mesh;
-        use crate::element::Element;
+        use crate::Element;
         use crate::Point;
 
         let m = Mesh::from_vertices_and_faces(
@@ -128,7 +128,7 @@ pub fn run_element_aabb() -> TestResult {
 pub fn run_element_obb() -> TestResult {
     MINI_TEST!("OBB", {
         use crate::Mesh;
-        use crate::element::Element;
+        use crate::Element;
         use crate::Point;
 
         let m = Mesh::from_vertices_and_faces(
@@ -182,7 +182,7 @@ pub fn run_element_session_geometry() -> TestResult {
 pub fn run_element_reset() -> TestResult {
     MINI_TEST!("Reset", {
         use crate::Mesh;
-        use crate::element::Element;
+        use crate::Element;
         use crate::Point;
 
         let m = Mesh::from_vertices_and_faces(
@@ -210,7 +210,7 @@ pub fn run_element_reset() -> TestResult {
 pub fn run_element_compute_point() -> TestResult {
     MINI_TEST!("Compute Point", {
         use crate::Mesh;
-        use crate::element::Element;
+        use crate::Element;
         use crate::Point;
 
         let m = Mesh::from_vertices_and_faces(
@@ -234,7 +234,7 @@ pub fn run_element_compute_point() -> TestResult {
 pub fn run_element_brep_aabb() -> TestResult {
     MINI_TEST!("Brep Aabb", {
         use crate::BRep;
-        use crate::element::Element;
+        use crate::Element;
 
         let b = BRep::create_box(2.0, 3.0, 4.0);
         let mut e = Element::from_brep(b, "brep_element");
@@ -307,7 +307,7 @@ pub fn run_element_protobuf_roundtrip() -> TestResult {
 pub fn run_element_polylines() -> TestResult {
     MINI_TEST!("Polylines", {
         use crate::Mesh;
-        use crate::element::Element;
+        use crate::Element;
         use crate::Point;
 
         let m = Mesh::from_vertices_and_faces(

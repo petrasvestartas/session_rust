@@ -651,6 +651,9 @@ pub struct Line {
     /// Line color
     #[prost(message, optional, tag = "7")]
     pub linecolor: ::core::option::Option<Color>,
+    /// Dash pattern: on/off lengths in mm, repeating; empty = solid
+    #[prost(double, repeated, tag = "8")]
+    pub dash: ::prost::alloc::vec::Vec<f64>,
 }
 /// Matrix message representing an NxM matrix
 #[derive(Clone, PartialEq, ::prost::Message)]
@@ -715,6 +718,9 @@ pub struct Polyline {
     /// Line color
     #[prost(message, optional, tag = "5")]
     pub linecolor: ::core::option::Option<Color>,
+    /// Dash pattern: on/off lengths in mm, repeating; empty = solid
+    #[prost(double, repeated, tag = "7")]
+    pub dash: ::prost::alloc::vec::Vec<f64>,
 }
 /// PointCloud message representing a collection of 3D points with optional colors and normals
 /// Stores data as flat arrays for efficient serialization

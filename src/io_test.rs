@@ -7,7 +7,7 @@ pub fn run_io_read_bunny() -> TestResult {
     MINI_TEST!("Read Bunny", {
         // load Stanford Bunny (real-world XYZ point cloud: 397 points)
         use std::path::PathBuf;
-        use crate::io::read_xyz;
+        use crate::read_xyz;
         let src_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
         let bunny_path = src_dir.parent().unwrap().join("session_data").join("bunny.xyz");
         if !bunny_path.exists() {
@@ -66,7 +66,7 @@ pub fn run_io_string_roundtrip() -> TestResult {
 
 pub fn run_io_read_colors() -> TestResult {
     MINI_TEST!("Read Colors", {
-        use crate::io::read_xyz_from_str;
+        use crate::read_xyz_from_str;
         // "x y z r g b" (0-255): point 0 red, point 1 green
         let cloud = read_xyz_from_str("0 0 0 255 0 0\n1 0 0 0 255 0\n");
         MINI_CHECK!(cloud.point_count() == 2);

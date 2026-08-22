@@ -1,7 +1,8 @@
 use crate::{MINI_CHECK, MINI_TEST, REGISTER_MINI_TEST};
 use crate::mini_test::TestResult;
+use crate::tolerance::PI;
 
-const PI2: f64 = 6.283185307179586476;
+const PI2: f64 = 2.0 * PI;
 
 #[test]
 fn test_boolean_polyline_overlapping_squares() {

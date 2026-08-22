@@ -55,7 +55,7 @@ pub fn run_plate_default_polygon() -> TestResult {
 
 pub fn run_plate_setters() -> TestResult {
     MINI_TEST!("Setters", {
-        use crate::element::Element;
+        use crate::Element;
         use crate::Point;
 
         let mut p = Element::plate_default();
@@ -95,7 +95,7 @@ pub fn run_plate_mesh_topology() -> TestResult {
 
 pub fn run_plate_aabb() -> TestResult {
     MINI_TEST!("AABB", {
-        use crate::element::Element;
+        use crate::Element;
         use crate::Point;
 
         let polygon = vec![
@@ -115,7 +115,7 @@ pub fn run_plate_aabb() -> TestResult {
 
 pub fn run_plate_compute_point() -> TestResult {
     MINI_TEST!("Compute Point", {
-        use crate::element::Element;
+        use crate::Element;
         use crate::Point;
 
         let polygon = vec![
@@ -154,7 +154,7 @@ pub fn run_plate_triangle_polygon() -> TestResult {
 
 pub fn run_plate_json_roundtrip() -> TestResult {
     MINI_TEST!("Json Roundtrip", {
-        use crate::element::Element;
+        use crate::Element;
         use crate::Point;
 
         let polygon = vec![
@@ -178,7 +178,7 @@ pub fn run_plate_json_roundtrip() -> TestResult {
 
 pub fn run_plate_protobuf_roundtrip() -> TestResult {
     MINI_TEST!("Protobuf Roundtrip", {
-        use crate::element::Element;
+        use crate::Element;
         use crate::Point;
 
         let polygon = vec![
@@ -202,7 +202,7 @@ pub fn run_plate_protobuf_roundtrip() -> TestResult {
 
 pub fn run_plate_from_top_bottom() -> TestResult {
     MINI_TEST!("From Top Bottom", {
-        use crate::element::Element;
+        use crate::Element;
         use crate::Point;
 
         let bottom = vec![Point::new(0.0,0.0,0.0), Point::new(2.0,0.0,0.0), Point::new(2.0,2.0,0.0), Point::new(0.0,2.0,0.0), Point::new(0.0,0.0,0.0)];
@@ -226,7 +226,7 @@ pub fn run_plate_from_top_bottom() -> TestResult {
 
 pub fn run_plate_polylines() -> TestResult {
     MINI_TEST!("Polylines", {
-        use crate::element::Element;
+        use crate::Element;
         use crate::Point;
         let polygon = vec![Point::new(0.0,0.0,0.0), Point::new(1.0,0.0,0.0), Point::new(1.0,1.0,0.0), Point::new(0.0,1.0,0.0)];
         let mut p = Element::plate(polygon, 0.2, "my_plate");
@@ -240,7 +240,7 @@ pub fn run_plate_polylines() -> TestResult {
 
 pub fn run_plate_planes() -> TestResult {
     MINI_TEST!("Planes", {
-        use crate::element::Element;
+        use crate::Element;
         use crate::Point;
         let polygon = vec![Point::new(0.0,0.0,0.0), Point::new(1.0,0.0,0.0), Point::new(1.0,1.0,0.0), Point::new(0.0,1.0,0.0)];
         let mut p = Element::plate(polygon, 0.2, "my_plate");
@@ -253,7 +253,7 @@ pub fn run_plate_planes() -> TestResult {
 
 pub fn run_plate_edge_vectors() -> TestResult {
     MINI_TEST!("Edge Vectors", {
-        use crate::element::Element;
+        use crate::Element;
         use crate::Point;
         let polygon = vec![Point::new(0.0,0.0,0.0), Point::new(1.0,0.0,0.0), Point::new(1.0,1.0,0.0), Point::new(0.0,1.0,0.0)];
         let mut p = Element::plate(polygon, 0.2, "my_plate");
@@ -268,7 +268,7 @@ pub fn run_plate_edge_vectors() -> TestResult {
 
 pub fn run_plate_axis() -> TestResult {
     MINI_TEST!("Axis", {
-        use crate::element::Element;
+        use crate::Element;
         use crate::Point;
         let polygon = vec![Point::new(0.0,0.0,0.0), Point::new(2.0,0.0,0.0), Point::new(2.0,2.0,0.0), Point::new(0.0,2.0,0.0)];
         let mut p = Element::plate(polygon, 0.4, "my_plate");
@@ -282,7 +282,7 @@ pub fn run_plate_axis() -> TestResult {
 
 pub fn run_plate_joint_types() -> TestResult {
     MINI_TEST!("Joint Types", {
-        use crate::element::Element;
+        use crate::Element;
         let mut p = Element::plate_default();
         MINI_CHECK!(p.joint_types().unwrap().is_empty());
         p.set_joint_types(vec![1, 2, 3, 4]);
@@ -294,7 +294,7 @@ pub fn run_plate_joint_types() -> TestResult {
 
 pub fn run_plate_j_mf() -> TestResult {
     MINI_TEST!("J Mf", {
-        use crate::element::Element;
+        use crate::Element;
         let mut p = Element::plate_default();
         MINI_CHECK!(p.j_mf().unwrap().is_empty());
         p.set_j_mf(vec![
@@ -311,7 +311,7 @@ pub fn run_plate_j_mf() -> TestResult {
 
 pub fn run_plate_key() -> TestResult {
     MINI_TEST!("Key", {
-        use crate::element::Element;
+        use crate::Element;
         let mut p = Element::plate_default();
         MINI_CHECK!(p.key().unwrap() == "");
         p.set_key("plate_A".to_string());
@@ -321,8 +321,8 @@ pub fn run_plate_key() -> TestResult {
 
 pub fn run_plate_component_plane() -> TestResult {
     MINI_TEST!("Component Plane", {
-        use crate::element::Element;
-        use crate::plane::Plane;
+        use crate::Element;
+        use crate::Plane;
         use crate::Point;
         use crate::Vector;
         let mut p = Element::plate_default();
@@ -336,8 +336,8 @@ pub fn run_plate_component_plane() -> TestResult {
 
 pub fn run_plate_json_roundtrip_joinery() -> TestResult {
     MINI_TEST!("Json Roundtrip Joinery", {
-        use crate::element::Element;
-        use crate::plane::Plane;
+        use crate::Element;
+        use crate::Plane;
         use crate::Point;
         use crate::Vector;
 
@@ -362,8 +362,8 @@ pub fn run_plate_json_roundtrip_joinery() -> TestResult {
 
 pub fn run_plate_protobuf_roundtrip_joinery() -> TestResult {
     MINI_TEST!("Protobuf Roundtrip Joinery", {
-        use crate::element::Element;
-        use crate::plane::Plane;
+        use crate::Element;
+        use crate::Plane;
         use crate::Point;
         use crate::Vector;
 
