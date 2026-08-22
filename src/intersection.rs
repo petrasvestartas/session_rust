@@ -4816,6 +4816,39 @@ pub fn face_to_face(
     use crate::polyline::Polyline;
     use crate::vector::Vector;
 
+    // Per-face inflated AABBs, once for every face of every element — straight off the raw
+    // coords, no Point allocation. Two faces can only yield a NON-EMPTY contact area if their
+    // inflated boxes overlap, so the pair loop rejects on six compares before any plane math
+    // or polygon boolean runs. This is what kills the coplanar-but-distant pairs (two faces on
+    // the same infinite plane, metres apart) that used to reach boolean_op_plane and return
+    // empty. Conservative by the coplanar tolerance, so accepted pairs are unchanged.
+    let tol = if coplanar_tolerance < 0.0 {
+        crate::tolerance::Tolerance::APPROXIMATION
+    } else {
+        coplanar_tolerance
+    };
+    let face_boxes: Vec<Vec<[f64; 6]>> = polylines
+        .iter()
+        .map(|faces| {
+            faces
+                .iter()
+                .map(|f| {
+                    let mut bx = [
+                        f64::INFINITY, f64::INFINITY, f64::INFINITY,
+                        f64::NEG_INFINITY, f64::NEG_INFINITY, f64::NEG_INFINITY,
+                    ];
+                    for p in f.coords.chunks_exact(3) {
+                        bx[0] = bx[0].min(p[0]); bx[3] = bx[3].max(p[0]);
+                        bx[1] = bx[1].min(p[1]); bx[4] = bx[4].max(p[1]);
+                        bx[2] = bx[2].min(p[2]); bx[5] = bx[5].max(p[2]);
+                    }
+                    for k in 0..3 { bx[k] -= tol; bx[k + 3] += tol; }
+                    bx
+                })
+                .collect()
+        })
+        .collect();
+
     let mut results = Vec::new();
     let mut idx = 0;
     while idx + 1 < adjacency.len() {
@@ -4826,9 +4859,18 @@ pub fn face_to_face(
         let mut found = false;
         for i in 0..planes[a].len() {
             if found { break; }
+            // Hoisted out of the j loop: origin()/z_axis() clone per call, and the old code
+            // re-cloned face i's pair for every face j.
+            let oa = planes[a][i].origin();
+            let za = planes[a][i].z_axis();
+            let ba = &face_boxes[a][i];
             for j in 0..planes[b].len() {
-                let oa = planes[a][i].origin();
-                let za = planes[a][i].z_axis();
+                let bb = &face_boxes[b][j];
+                if ba[0] > bb[3] || bb[0] > ba[3]
+                    || ba[1] > bb[4] || bb[1] > ba[4]
+                    || ba[2] > bb[5] || bb[2] > ba[5] {
+                    continue;
+                }
                 let ob = planes[b][j].origin();
                 let zb = planes[b][j].z_axis();
                 if !Plane::is_coplanar_from_normals(&oa, &za, &ob, &zb, false, coplanar_tolerance) {
