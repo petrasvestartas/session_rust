@@ -417,7 +417,7 @@ pub fn run_tree_find_node_by_guid() -> TestResult {
 
         MINI_CHECK!(found.is_some());
         MINI_CHECK!(found.unwrap().borrow().guid() == root_guid);
-        MINI_CHECK!(t.find_node_by_guid(&"missing-guid".to_string()).is_none());
+        MINI_CHECK!(t.find_node_by_guid("missing-guid").is_none());
     })
 }
 
@@ -435,9 +435,12 @@ pub fn run_tree_add_child_by_guid() -> TestResult {
         t.add(&b, Some(&root));
         let a_guid = a.borrow().guid().to_string();
         let b_guid = b.borrow().guid().to_string();
+        let root_guid = root.borrow().guid().to_string();
         let ok = t.add_child_by_guid(&a_guid, &b_guid);
+        let cycle = t.add_child_by_guid(&b_guid, &root_guid);
 
         MINI_CHECK!(ok);
+        MINI_CHECK!(!cycle);
         MINI_CHECK!(a.borrow().children().len() == 1);
     })
 }

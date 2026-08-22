@@ -1,5 +1,6 @@
 use serde::{Deserialize, Serialize};
 use std::cell::RefCell;
+use std::collections::VecDeque;
 use std::fmt;
 use std::rc::{Rc, Weak};
 
@@ -102,8 +103,7 @@ impl TreeNode {
 
     /// Remove a child node, returning true if it was found and removed
     pub fn remove(&mut self, child: &Rc<RefCell<TreeNode>>) -> bool {
-        let child_guid = child.borrow().guid().to_string();
-        if let Some(pos) = self.children.iter().position(|c| c.borrow().guid() == child_guid) {
+        if let Some(pos) = self.children.iter().position(|c| Rc::ptr_eq(c, child)) {
             let removed = self.children.remove(pos);
             removed.borrow_mut().parent = None;
             true
@@ -177,7 +177,7 @@ impl TreeNode {
         match strategy {
             "depthfirst" => self.depth_first_traverse(order),
             "breadthfirst" => self.breadth_first_traverse(),
-            _ => vec![],
+            _ => panic!("Unknown traversal strategy: {}", strategy),
         }
     }
 
@@ -185,7 +185,7 @@ impl TreeNode {
         match order {
             "preorder" => self.preorder_traverse(),
             "postorder" => self.postorder_traverse(),
-            _ => vec![],
+            _ => panic!("Unknown traversal order: {}", order),
         }
     }
 
@@ -208,13 +208,13 @@ impl TreeNode {
 
     fn breadth_first_traverse(&self) -> Vec<Rc<RefCell<TreeNode>>> {
         let mut result = Vec::new();
-        let mut queue = Vec::new();
-        queue.push(self.weak_self.upgrade().unwrap());
-        while let Some(node) = queue.pop() {
+        let mut queue = VecDeque::new();
+        queue.push_back(self.weak_self.upgrade().unwrap());
+        while let Some(node) = queue.pop_front() {
             let children = node.borrow().children();
             result.push(Rc::clone(&node));
             for child in children {
-                queue.insert(0, child);
+                queue.push_back(child);
             }
         }
         result
@@ -345,6 +345,9 @@ impl Tree {
     /// Add a node to the tree (parent=None adds as root)
     pub fn add(&mut self, node: &Rc<RefCell<TreeNode>>, parent: Option<&Rc<RefCell<TreeNode>>>) {
         if parent.is_none() {
+            if self.root_node.is_some() {
+                panic!("Tree already has a root node");
+            }
             self.root_node = Some(Rc::clone(node));
         } else if let Some(parent_node) = parent {
             parent_node.borrow_mut().add(node);
@@ -363,42 +366,20 @@ impl Tree {
     /// Remove a node from the tree
     pub fn remove(&mut self, node: &Rc<RefCell<TreeNode>>) -> bool {
         if let Some(root) = &self.root_node {
-            let node_guid = node.borrow().guid().to_string();
-            if root.borrow().guid() == node_guid {
+            if Rc::ptr_eq(root, node) {
                 self.root_node = None;
                 true
-            } else if let Some(parent) = self.find_parent_of_node(&node_guid) {
-                parent.borrow_mut().remove(node)
             } else {
-                false
+                let parent = node.borrow().parent();
+                if let Some(parent) = parent {
+                    parent.borrow_mut().remove(node)
+                } else {
+                    false
+                }
             }
         } else {
             false
         }
-    }
-
-    fn find_parent_of_node(&self, node_guid: &String) -> Option<Rc<RefCell<TreeNode>>> {
-        if let Some(root) = &self.root_node {
-            Self::find_parent_recursive(root, node_guid)
-        } else {
-            None
-        }
-    }
-
-    fn find_parent_recursive(
-        node: &Rc<RefCell<TreeNode>>,
-        target_guid: &String,
-    ) -> Option<Rc<RefCell<TreeNode>>> {
-        let children = node.borrow().children();
-        for child in children {
-            if child.borrow().guid() == *target_guid {
-                return Some(Rc::clone(node));
-            }
-            if let Some(found) = Self::find_parent_recursive(&child, target_guid) {
-                return Some(found);
-            }
-        }
-        None
     }
 
     /// All leaf nodes
@@ -429,18 +410,21 @@ impl Tree {
     }
 
     /// Find a node by its GUID
-    pub fn find_node_by_guid(&self, node_guid: &String) -> Option<Rc<RefCell<TreeNode>>> {
-        self.nodes().into_iter().find(|n| n.borrow().guid() == *node_guid)
+    pub fn find_node_by_guid(&self, node_guid: &str) -> Option<Rc<RefCell<TreeNode>>> {
+        self.nodes().into_iter().find(|n| n.borrow().guid() == node_guid)
     }
 
     /// Reparent a child by GUID; returns true if both nodes were found
-    pub fn add_child_by_guid(&mut self, parent_guid: &String, child_guid: &String) -> bool {
+    pub fn add_child_by_guid(&mut self, parent_guid: &str, child_guid: &str) -> bool {
         let parent_node = self.find_node_by_guid(parent_guid);
         let child_node = self.find_node_by_guid(child_guid);
         if let (Some(parent), Some(child)) = (parent_node, child_node) {
             let current_parent = child.borrow().parent();
             if let Some(cp) = current_parent {
                 cp.borrow_mut().remove(&child);
+            } else {
+                // Child is not currently in any parent, we can't move it
+                return false;
             }
             parent.borrow_mut().add(&child);
             true
@@ -450,7 +434,7 @@ impl Tree {
     }
 
     /// GUIDs of children of a node by GUID
-    pub fn get_children_guids(&self, node_guid: &String) -> Vec<String> {
+    pub fn get_children_guids(&self, node_guid: &str) -> Vec<String> {
         if let Some(node) = self.find_node_by_guid(node_guid) {
             node.borrow().children().iter().map(|c| c.borrow().guid().to_string()).collect()
         } else {
@@ -460,7 +444,7 @@ impl Tree {
 
     /// Convenience overload taking a &str
     pub fn get_children(&self, node_guid: &str) -> Vec<String> {
-        self.get_children_guids(&node_guid.to_string())
+        self.get_children_guids(node_guid)
     }
 
     /// Print the hierarchy to stdout
@@ -597,7 +581,7 @@ impl Tree {
 
 impl fmt::Display for Tree {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "Tree({}, {})", self.name, self.guid())
+        write!(f, "Tree: {}", self.name)
     }
 }
 
