@@ -53,7 +53,7 @@ protoc-bin-vendored = "3.2"
 pollster = "0.4"
 
 [profile.dev]
-opt-level = 0
+opt-level = 1
 debug = 1
 
 [profile.release]

@@ -81,9 +81,16 @@ fn intersect_planes(planes: &[(f64, f64, f64, f64)], fallback: &Point) -> Point 
 
 fn offset_vertices(mesh: &Mesh, planes: &HashMap<usize, (f64, f64, f64, f64)>) -> HashMap<usize, Point> {
     let mut result = HashMap::new();
+    // vertex -> incident faces in ONE face walk (a per-vertex vertex_faces() call is O(F)
+    // now that topology is lazy - this loop over all vertices would be quadratic)
+    let mut vf: HashMap<usize, Vec<usize>> = HashMap::new();
+    for (&fkey, verts) in &mesh.face {
+        for &v in verts { vf.entry(v).or_default().push(fkey); }
+    }
+    for f in vf.values_mut() { f.sort_unstable(); }
     for vk in mesh.vertices() {
         let vp = match mesh.vertex_point(vk) { Some(p) => p, None => continue };
-        let fkeys = match mesh.vertex_faces(vk) { Some(f) => f, None => { result.insert(vk, vp); continue; } };
+        let fkeys = match vf.get(&vk) { Some(f) => f.clone(), None => { result.insert(vk, vp); continue; } };
         if fkeys.is_empty() {
             result.insert(vk, vp);
             continue;

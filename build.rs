@@ -53,6 +53,25 @@ fn main() {
 
     let mut cfg = prost_build::Config::new();
     cfg.out_dir(&staging);
+    // Map fields as BTreeMap, so the encoding is reproducible: prost writes a map in ITERATION
+    // order and Rust seeds every HashMap differently, so `pb_dumps()` of one unchanged object
+    // produced different bytes on every run - a golden file or a content hash over saved output
+    // would flake.
+    //
+    // Mesh's four BIG maps (vertices, faces, halfedges, triangulation) are deliberately NOT in
+    // this list. A B-tree there cost 55% on every DECODE - 218 -> 338 ms on one 52 MB sheet,
+    // paid by every file load - to fix an order that only matters when WRITING. They stay
+    // HashMap for the read path, and `MeshEnc` in mesh.rs sorts them at encode time instead.
+    cfg.btree_map([
+        ".session_proto.Graph.vertices",
+        ".session_proto.VertexData.attributes",
+        ".session_proto.FaceData.attributes",
+        ".session_proto.EdgeData.attributes",
+        ".session_proto.HalfedgeMap.neighbors",
+        ".session_proto.Mesh.default_vertex_attributes",
+        ".session_proto.Mesh.default_face_attributes",
+        ".session_proto.Mesh.default_edge_attributes",
+    ]);
     cfg.compile_protos(&proto_files, &[&proto_dir])
         .expect("prost-build: compile_protos");
 

@@ -97,15 +97,18 @@ pub struct VertexData {
     #[prost(double, tag = "3")]
     pub z: f64,
     /// Custom vertex attributes
-    #[prost(map = "string, double", tag = "4")]
-    pub attributes: ::std::collections::HashMap<::prost::alloc::string::String, f64>,
+    #[prost(btree_map = "string, double", tag = "4")]
+    pub attributes: ::prost::alloc::collections::BTreeMap<
+        ::prost::alloc::string::String,
+        f64,
+    >,
 }
 /// Halfedge connectivity (stored as nested maps)
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct HalfedgeMap {
     /// vertex_key -> halfedge_key
-    #[prost(map = "uint64, uint64", tag = "1")]
-    pub neighbors: ::std::collections::HashMap<u64, u64>,
+    #[prost(btree_map = "uint64, uint64", tag = "1")]
+    pub neighbors: ::prost::alloc::collections::BTreeMap<u64, u64>,
 }
 /// Hole ring (inner ring for face with holes)
 #[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
@@ -120,8 +123,11 @@ pub struct FaceData {
     #[prost(uint64, repeated, tag = "1")]
     pub vertices: ::prost::alloc::vec::Vec<u64>,
     /// Custom face attributes
-    #[prost(map = "string, double", tag = "2")]
-    pub attributes: ::std::collections::HashMap<::prost::alloc::string::String, f64>,
+    #[prost(btree_map = "string, double", tag = "2")]
+    pub attributes: ::prost::alloc::collections::BTreeMap<
+        ::prost::alloc::string::String,
+        f64,
+    >,
     /// Inner rings (holes)
     #[prost(message, repeated, tag = "3")]
     pub holes: ::prost::alloc::vec::Vec<HoleRing>,
@@ -134,8 +140,11 @@ pub struct EdgeData {
     #[prost(uint64, tag = "2")]
     pub vertex2: u64,
     /// Custom edge attributes
-    #[prost(map = "string, double", tag = "3")]
-    pub attributes: ::std::collections::HashMap<::prost::alloc::string::String, f64>,
+    #[prost(btree_map = "string, double", tag = "3")]
+    pub attributes: ::prost::alloc::collections::BTreeMap<
+        ::prost::alloc::string::String,
+        f64,
+    >,
 }
 /// Flat triangle list (3 vertex keys per triangle)
 #[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
@@ -165,20 +174,20 @@ pub struct Mesh {
     #[prost(message, repeated, tag = "6")]
     pub edge_data: ::prost::alloc::vec::Vec<EdgeData>,
     /// Default vertex attrs
-    #[prost(map = "string, double", tag = "7")]
-    pub default_vertex_attributes: ::std::collections::HashMap<
+    #[prost(btree_map = "string, double", tag = "7")]
+    pub default_vertex_attributes: ::prost::alloc::collections::BTreeMap<
         ::prost::alloc::string::String,
         f64,
     >,
     /// Default face attrs
-    #[prost(map = "string, double", tag = "8")]
-    pub default_face_attributes: ::std::collections::HashMap<
+    #[prost(btree_map = "string, double", tag = "8")]
+    pub default_face_attributes: ::prost::alloc::collections::BTreeMap<
         ::prost::alloc::string::String,
         f64,
     >,
     /// Default edge attrs
-    #[prost(map = "string, double", tag = "9")]
-    pub default_edge_attributes: ::std::collections::HashMap<
+    #[prost(btree_map = "string, double", tag = "9")]
+    pub default_edge_attributes: ::prost::alloc::collections::BTreeMap<
         ::prost::alloc::string::String,
         f64,
     >,
@@ -583,8 +592,11 @@ pub struct Graph {
     #[prost(string, tag = "2")]
     pub guid: ::prost::alloc::string::String,
     /// vertex_name -> Vertex
-    #[prost(map = "string, message", tag = "3")]
-    pub vertices: ::std::collections::HashMap<::prost::alloc::string::String, Vertex>,
+    #[prost(btree_map = "string, message", tag = "3")]
+    pub vertices: ::prost::alloc::collections::BTreeMap<
+        ::prost::alloc::string::String,
+        Vertex,
+    >,
     /// List of edges
     #[prost(message, repeated, tag = "4")]
     pub edges: ::prost::alloc::vec::Vec<Edge>,

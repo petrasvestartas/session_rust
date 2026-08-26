@@ -265,6 +265,13 @@ impl Session {
     /// calling `world_xform` per object: that does a whole-tree scan to find each node, which
     /// is quadratic over a session.
     pub fn world_xforms(&self) -> HashMap<String, Xform> {
+        // Nothing to compose: with no local transforms every composed frame IS the identity,
+        // and every caller already falls back to identity for a guid the map lacks. Walking
+        // the tree anyway costs one String clone + hash insert per NODE - measured at 38 ms
+        // and 58,572 wasted entries on one flat PDF sheet, paid again on every rebuild.
+        if self.xforms.is_empty() {
+            return HashMap::new();
+        }
         fn walk(
             node: &Rc<RefCell<TreeNode>>,
             parent_xform: &Xform,
@@ -507,7 +514,7 @@ impl Session {
         };
 
         // Build Graph proto
-        let mut vertices_map: std::collections::HashMap<String, crate::proto::Vertex> = std::collections::HashMap::new();
+        let mut vertices_map: std::collections::BTreeMap<String, crate::proto::Vertex> = std::collections::BTreeMap::new();
         for v in self.graph.get_vertices() {
             vertices_map.insert(v.name.clone(), crate::proto::Vertex {
                 name: v.name.clone(),

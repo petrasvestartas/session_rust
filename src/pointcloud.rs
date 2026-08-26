@@ -185,6 +185,11 @@ impl PointCloud {
         &self._colors
     }
 
+    /// The flat normal array, [nx0, ny0, nz0, ...]; empty when the cloud has none
+    pub fn normals(&self) -> &[f64]{
+        &self._normals
+    }
+
     /// Get all colors as a vector
     pub fn get_colors(&self) -> Vec<Color> {
         let mut colors = Vec::with_capacity(self.color_count());

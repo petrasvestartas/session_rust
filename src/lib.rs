@@ -109,6 +109,8 @@ pub mod mesh_offset;
 pub mod mesh_offset_test;
 pub mod spatial_kdtree;
 pub mod spatial_kdtree_test;
+pub mod spatial_octree;
+pub mod spatial_octree_test;
 pub mod boolean_polyline_test;
 pub mod picking_test;
 
@@ -151,3 +153,4 @@ pub use matrix::Matrix;
 pub use convex_hull::ConvexHull;
 pub use mesh_offset::{MeshOffset, MeshOffsetLayers};
 pub use spatial_kdtree::SpatialKDTree;
+pub use spatial_octree::SpatialOctree;

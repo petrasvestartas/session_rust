@@ -519,7 +519,7 @@ impl Graph {
 
     pub fn pb_dumps(&self) -> Vec<u8> {
         use prost::Message;
-        use std::collections::HashMap as ProtoMap;
+        use std::collections::BTreeMap as ProtoMap; // the generated proto map type - sorted, so the encoding is reproducible
 
         let mut proto_vertices: ProtoMap<String, crate::proto::Vertex> = ProtoMap::new();
         for (name, vertex) in &self.vertices {

@@ -36,6 +36,22 @@ pub struct RenderMesh {
     pub indices: Vec<u32>,
 }
 
+/// `nx`/`ny`/`nz` read in ONE walk of the attribute map instead of three hashed lookups.
+/// A vertex carries a handful of attributes, so scanning them beats hashing three String keys —
+/// and this runs once per render row: 1.1M lookups on a single 360k-vertex sheet.
+fn vertex_normal(v: &crate::mesh::VertexData) -> [f32; 3] {
+    let (mut nx, mut ny, mut nz) = (0.0f64, 0.0f64, 0.0f64);
+    for (k, &val) in &v.attributes {
+        match k.as_str() {
+            "nx" => nx = val,
+            "ny" => ny = val,
+            "nz" => nz = val,
+            _ => {}
+        }
+    }
+    [nx as f32, ny as f32, nz as f32]
+}
+
 impl Mesh {
     /// Flatten this f64 mesh into an f32 [`RenderMesh`] for direct GPU upload.
     ///
@@ -46,12 +62,36 @@ impl Mesh {
     /// cover every vertex), else the object color. Faces use the cached `triangulation` if present, else a
     /// triangle fan — matching the viewer's original `mesh_to_vertices`.
     pub fn to_render(&self) -> RenderMesh {
-        let mut keys: Vec<usize> = self.vertex.keys().copied().collect();
-        keys.sort_unstable();
-        let mut key_to_idx: std::collections::HashMap<usize, u32> = std::collections::HashMap::with_capacity(keys.len());
-        for (i, &k) in keys.iter().enumerate() {
-            key_to_idx.insert(k, i as u32);
+        // Sorted (key, data) pairs, taken in ONE pass over the vertex map. The old shape —
+        // sorted keys, then `self.vertex[k]` per vertex and `key_to_idx.get()` per triangle
+        // corner — paid a hash lookup for data it had already walked past.
+        let mut rows: Vec<(usize, &crate::mesh::VertexData)> =
+            self.vertex.iter().map(|(&k, v)| (k, v)).collect();
+        rows.sort_unstable_by_key(|&(k, _)| k);
+        let keys: Vec<usize> = rows.iter().map(|&(k, _)| k).collect();
+
+        // key -> row index. Vertex keys are dense 0..n in every file the kernel writes, so a
+        // flat Vec (u32::MAX = no such vertex) turns the corner lookups below into array reads.
+        // A sparse key space (a mesh after deletions) falls back to the map.
+        let max_key = keys.last().copied().unwrap_or(0);
+        let dense = max_key < 4 * keys.len().max(1);
+        let mut idx_vec: Vec<u32> = Vec::new();
+        let mut key_to_idx: std::collections::HashMap<usize, u32> = std::collections::HashMap::new();
+        if dense {
+            idx_vec = vec![u32::MAX; max_key + 1];
+            for (i, &k) in keys.iter().enumerate() {
+                idx_vec[k] = i as u32;
+            }
+        } else {
+            key_to_idx = keys.iter().enumerate().map(|(i, &k)| (k, i as u32)).collect();
         }
+        let row_of = |k: usize| -> Option<u32> {
+            if dense {
+                idx_vec.get(k).copied().filter(|&i| i != u32::MAX)
+            } else {
+                key_to_idx.get(&k).copied()
+            }
+        };
 
         let oc = self.objectcolor();
         let object_color = [oc.r, oc.g, oc.b, 1.0];
@@ -97,13 +137,10 @@ impl Mesh {
                     }
                     for &vk in tri {
                         let v = &self.vertex[&vk];
-                        let nx = v.attributes.get("nx").copied().unwrap_or(0.0);
-                        let ny = v.attributes.get("ny").copied().unwrap_or(0.0);
-                        let nz = v.attributes.get("nz").copied().unwrap_or(0.0);
                         indices.push(vertices.len() as u32);
                         vertices.push(RenderVertex {
                             position: [v.x as f32, v.y as f32, v.z as f32],
-                            normal: [nx as f32, ny as f32, nz as f32],
+                            normal: vertex_normal(v),
                             color,
                         });
                     }
@@ -113,11 +150,7 @@ impl Mesh {
         }
 
         let mut vertices: Vec<RenderVertex> = Vec::with_capacity(keys.len());
-        for (idx, k) in keys.iter().enumerate() {
-            let v = &self.vertex[k];
-            let nx = v.attributes.get("nx").copied().unwrap_or(0.0);
-            let ny = v.attributes.get("ny").copied().unwrap_or(0.0);
-            let nz = v.attributes.get("nz").copied().unwrap_or(0.0);
+        for (idx, &(_, v)) in rows.iter().enumerate() {
             let color = if has_point_colors {
                 let c = &point_colors[idx];
                 [c.r, c.g, c.b, 1.0]
@@ -126,7 +159,7 @@ impl Mesh {
             };
             vertices.push(RenderVertex {
                 position: [v.x as f32, v.y as f32, v.z as f32],
-                normal: [nx as f32, ny as f32, nz as f32],
+                normal: vertex_normal(v),
                 color,
             });
         }
@@ -138,8 +171,8 @@ impl Mesh {
             if let Some(tris) = self.triangulation.get(&fk) {
                 if !tris.is_empty() {
                     for tri in tris {
-                        if let (Some(&a), Some(&b), Some(&c)) =
-                            (key_to_idx.get(&tri[0]), key_to_idx.get(&tri[1]), key_to_idx.get(&tri[2]))
+                        if let (Some(a), Some(b), Some(c)) =
+                            (row_of(tri[0]), row_of(tri[1]), row_of(tri[2]))
                         {
                             indices.push(a);
                             indices.push(b);
@@ -153,17 +186,17 @@ impl Mesh {
             if verts_of_face.len() < 3 {
                 continue;
             }
-            let v0 = match key_to_idx.get(&verts_of_face[0]) {
-                Some(&i) => i,
+            let v0 = match row_of(verts_of_face[0]) {
+                Some(i) => i,
                 None => continue,
             };
             for i in 1..(verts_of_face.len() - 1) {
-                let a = match key_to_idx.get(&verts_of_face[i]) {
-                    Some(&i) => i,
+                let a = match row_of(verts_of_face[i]) {
+                    Some(i) => i,
                     None => continue,
                 };
-                let b = match key_to_idx.get(&verts_of_face[i + 1]) {
-                    Some(&i) => i,
+                let b = match row_of(verts_of_face[i + 1]) {
+                    Some(i) => i,
                     None => continue,
                 };
                 indices.push(v0);

@@ -86,13 +86,103 @@ pub struct Mesh {
     pub(crate) gpu_cache: crate::render_mesh::GpuCache, // accessed by render_mesh::{gpu_mesh, invalidate_gpu}
 }
 
+/// A vertex's attribute map, paid for ONLY when the vertex has attributes.
+///
+/// This is a `HashMap<String, f64>` in every way that matters at a call site - `get`, `insert`,
+/// `len`, iteration, `collect()` - but it costs 8 bytes inside `VertexData` instead of 48, and it
+/// touches the heap only once something is actually stored in it.
+///
+/// The reason is the shape of real data. A mesh from a PDF sheet or a scan carries positions and
+/// nothing else: 362,581 vertices, ZERO attribute entries, and 48 bytes per vertex of empty map
+/// header regardless - 17 MB of one sheet's 52 MB. Attributes are a NURBS-tessellation and
+/// vertex-colour feature (u/v, r/g/b, nx/ny/nz); those meshes are thousands of vertices, not
+/// millions, and one `Box` each is nothing to them.
+///
+/// `BTreeMap` inside, not `HashMap`: the order is then alphabetical instead of seeded-random,
+/// which is what the JSON dumps want and what `std::map` gives the C++ side.
+#[derive(Debug, Clone, Default, PartialEq)]
+pub struct Attributes(Option<Box<std::collections::BTreeMap<String, f64>>>);
+
+impl Attributes {
+    pub fn new() -> Self { Self(None) }
+    pub fn get(&self, key: &str) -> Option<&f64> { self.0.as_ref().and_then(|m| m.get(key)) }
+    pub fn contains_key(&self, key: &str) -> bool { self.get(key).is_some() }
+    pub fn len(&self) -> usize { self.0.as_ref().map_or(0, |m| m.len()) }
+    pub fn is_empty(&self) -> bool { self.len() == 0 }
+    pub fn clear(&mut self) { self.0 = None }
+    pub fn insert(&mut self, key: String, value: f64) -> Option<f64> {
+        self.0.get_or_insert_with(Default::default).insert(key, value)
+    }
+    pub fn remove(&mut self, key: &str) -> Option<f64> {
+        let out = self.0.as_mut().and_then(|m| m.remove(key));
+        // Back to the un-allocated state, so a map that empties out stops costing anything.
+        if self.is_empty() { self.0 = None }
+        out
+    }
+    pub fn iter(&self) -> std::collections::btree_map::Iter<'_, String, f64> {
+        // An empty map's iterator, so callers never special-case the None arm. `Box::leak` is not
+        // needed: a fresh empty BTreeMap has no allocation, but it also has no lifetime here -
+        // hence the static empty below.
+        static EMPTY: std::sync::OnceLock<std::collections::BTreeMap<String, f64>> = std::sync::OnceLock::new();
+        match &self.0 {
+            Some(m) => m.iter(),
+            None => EMPTY.get_or_init(Default::default).iter(),
+        }
+    }
+    pub fn keys(&self) -> impl Iterator<Item = &String> { self.iter().map(|(k, _)| k) }
+    pub fn values(&self) -> impl Iterator<Item = &f64> { self.iter().map(|(_, v)| v) }
+}
+
+impl<'a> IntoIterator for &'a Attributes {
+    type Item = (&'a String, &'a f64);
+    type IntoIter = std::collections::btree_map::Iter<'a, String, f64>;
+    fn into_iter(self) -> Self::IntoIter { self.iter() }
+}
+
+impl IntoIterator for Attributes {
+    type Item = (String, f64);
+    type IntoIter = std::collections::btree_map::IntoIter<String, f64>;
+    fn into_iter(self) -> Self::IntoIter {
+        self.0.map_or_else(Default::default, |m| *m).into_iter()
+    }
+}
+
+impl FromIterator<(String, f64)> for Attributes {
+    fn from_iter<T: IntoIterator<Item = (String, f64)>>(it: T) -> Self {
+        let m: std::collections::BTreeMap<String, f64> = it.into_iter().collect();
+        if m.is_empty() { Self(None) } else { Self(Some(Box::new(m))) }
+    }
+}
+
+impl Extend<(String, f64)> for Attributes {
+    fn extend<T: IntoIterator<Item = (String, f64)>>(&mut self, it: T) {
+        for (k, v) in it { self.insert(k, v); }
+    }
+}
+
+impl Serialize for Attributes {
+    fn serialize<S: serde::Serializer>(&self, s: S) -> Result<S::Ok, S::Error> {
+        use serde::ser::SerializeMap;
+        let mut m = s.serialize_map(Some(self.len()))?;
+        for (k, v) in self.iter() { m.serialize_entry(k, v)?; }
+        m.end()
+    }
+}
+
+impl<'de> Deserialize<'de> for Attributes {
+    fn deserialize<D: serde::Deserializer<'de>>(d: D) -> Result<Self, D::Error> {
+        let m = std::collections::BTreeMap::<String, f64>::deserialize(d)?;
+        Ok(if m.is_empty() { Self(None) } else { Self(Some(Box::new(m))) })
+    }
+}
+
 /// Vertex data containing position and attributes
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct VertexData {
     pub x: f64,                           // X coordinate
     pub y: f64,                           // Y coordinate
     pub z: f64,                           // Z coordinate
-    pub attributes: HashMap<String, f64>, // Vertex attributes
+    pub attributes: Attributes,           // Vertex attributes, 8 B when there are none
 }
 
 impl VertexData {
@@ -101,7 +191,7 @@ impl VertexData {
             x: point[0],
             y: point[1],
             z: point[2],
-            attributes: HashMap::new(),
+            attributes: Attributes::new(),
         }
     }
 
@@ -1190,37 +1280,28 @@ impl Mesh {
                 }
             }
         }
-        for (u, nbrs) in &self.halfedge {
-            for (v, fkey) in nbrs {
-                if fkey.is_none() && !hole_edges.contains(&(*u, *v)) { return false; }
-            }
+        let dfe = self.directed_face_edges();
+        for &(u, v) in &dfe {
+            // a face edge whose reverse no face walks is a border - unless a declared hole
+            // ring owns it (hole_edges holds both directions)
+            if !dfe.contains(&(v, u)) && !hole_edges.contains(&(v, u)) { return false; }
         }
-        !self.halfedge.is_empty()
+        !self.vertex.is_empty()
     }
 
     pub fn is_vertex_on_boundary(&self, vertex_key: usize) -> bool {
-        if let Some(neigh) = self.halfedge.get(&vertex_key) {
-            for (_v, face_opt) in neigh.iter() {
-                if face_opt.is_none() {
-                    return true;
-                }
-            }
-        }
-
-        for (_u, neigh) in self.halfedge.iter() {
-            if let Some(face_opt) = neigh.get(&vertex_key) {
-                if face_opt.is_none() {
-                    return true;
-                }
+        let dfe = self.directed_face_edges();
+        for &(u, v) in &dfe {
+            if !dfe.contains(&(v, u)) && (u == vertex_key || v == vertex_key) {
+                return true;
             }
         }
         false
     }
 
     pub fn is_edge_on_boundary(&self, u: usize, v: usize) -> bool {
-        let f0 = self.halfedge.get(&u).and_then(|m| m.get(&v));
-        let f1 = self.halfedge.get(&v).and_then(|m| m.get(&u));
-        f0.map_or(true, |f| f.is_none()) || f1.map_or(true, |f| f.is_none())
+        let dfe = self.directed_face_edges();
+        !(dfe.contains(&(u, v)) && dfe.contains(&(v, u)))
     }
 
     pub fn is_face_on_boundary(&self, face_key: usize) -> bool {
@@ -1263,58 +1344,31 @@ impl Mesh {
     }
 
     pub fn number_of_edges(&self) -> usize {
-        let mut seen = HashSet::new();
-        let mut count = 0;
-
-        for u in self.halfedge.keys() {
-            if let Some(neighbors) = self.halfedge.get(u) {
-                for v in neighbors.keys() {
-                    let edge = if u < v { (*u, *v) } else { (*v, *u) };
-                    if seen.insert(edge) {
-                        count += 1;
-                    }
-                }
-            }
-        }
-
-        count
+        let dfe = self.directed_face_edges();
+        dfe.iter().filter(|&&(u, v)| u < v || !dfe.contains(&(v, u))).count()
     }
 
     pub fn edges(&self) -> Vec<(usize, usize)> {
-        let mut seen = HashSet::new();
-        let mut outer: Vec<usize> = self.halfedge.keys().cloned().collect();
-        outer.sort();
-        let mut result = Vec::new();
-        for u in outer {
-            let mut inner: Vec<usize> = self.halfedge[&u].keys().cloned().collect();
-            inner.sort();
-            for v in inner {
-                let edge = if u < v { (u, v) } else { (v, u) };
-                if seen.insert(edge) {
-                    result.push(edge);
-                }
-            }
-        }
+        let dfe = self.directed_face_edges();
+        let mut result: Vec<(usize, usize)> = dfe.iter()
+            .map(|&(u, v)| if u < v { (u, v) } else { (v, u) })
+            .collect::<HashSet<_>>()
+            .into_iter()
+            .collect();
+        result.sort();
         result
     }
 
     pub fn naked_edges(&self, boundary: bool) -> Vec<(usize, usize)> {
-        let mut seen = HashSet::new();
-        let mut outer: Vec<usize> = self.halfedge.keys().cloned().collect();
-        outer.sort();
-        let mut result = Vec::new();
-        for u in outer {
-            let mut inner: Vec<usize> = self.halfedge[&u].keys().cloned().collect();
-            inner.sort();
-            for v in inner {
-                let edge = if u < v { (u, v) } else { (v, u) };
-                if seen.insert(edge) {
-                    if self.is_edge_on_boundary(edge.0, edge.1) == boundary {
-                        result.push(edge);
-                    }
-                }
-            }
-        }
+        // one directed set for the whole call - never one per edge (that walk is quadratic)
+        let dfe = self.directed_face_edges();
+        let mut result: Vec<(usize, usize)> = dfe.iter()
+            .map(|&(u, v)| if u < v { (u, v) } else { (v, u) })
+            .collect::<HashSet<_>>()
+            .into_iter()
+            .filter(|&(u, v)| (!(dfe.contains(&(u, v)) && dfe.contains(&(v, u)))) == boundary)
+            .collect();
+        result.sort();
         result
     }
 
@@ -1492,6 +1546,7 @@ impl Mesh {
     }
 
     pub fn orient_outward(&mut self) -> bool {
+        self.ensure_halfedges();
         if self.face.is_empty() || !self.naked_edges(true).is_empty() {
             return false;
         }
@@ -1609,6 +1664,7 @@ impl Mesh {
     ///////////////////////////////////////////////////////////////////////////////////////////
 
     pub fn add_vertex(&mut self, position: Point, key: Option<usize>) -> usize {
+        self.ensure_halfedges();
         let vertex_key = match key {
             Some(k) => {
                 if k >= self.max_vertex {
@@ -1633,6 +1689,7 @@ impl Mesh {
     }
 
     pub fn add_face(&mut self, vertices: Vec<usize>, fkey: Option<usize>) -> Option<usize> {
+        self.ensure_halfedges();
         if vertices.len() < 3 {
             return None;
         }
@@ -1698,24 +1755,64 @@ impl Mesh {
     ///
     /// Colors and widths are NOT touched here: `add_face` grows those vectors as it discovers
     /// edges, but on a load path they are restored from the wire.
-    pub fn rebuild_halfedges(&mut self) {
-        self.halfedge.clear();
-        for vkey in self.vertex.keys() {
-            self.halfedge.insert(*vkey, HashMap::new());
+    /// Every (u, v) some face ring walks, as a flat set. The halfedge-free backbone of the
+    /// pure readers (is_closed, edges, boundaries): one transient allocation per call instead
+    /// of a persistent nested-map structure per mesh.
+    fn directed_face_edges(&self) -> std::collections::HashSet<(usize, usize)> {
+        let mut s = std::collections::HashSet::with_capacity(self.face.len() * 4);
+        for verts in self.face.values() {
+            let n = verts.len();
+            for i in 0..n {
+                s.insert((verts[i], verts[(i + 1) % n]));
+            }
         }
-        let faces: Vec<(usize, Vec<usize>)> =
-            self.face.iter().map(|(&fkey, verts)| (fkey, verts.clone())).collect();
-        for (fkey, verts) in faces {
+        s
+    }
+
+    /// Face-derived halfedge connectivity, computed WITHOUT mutating - `to_proto` borrows it
+    /// when the lazy map was never built, so the wire format never changes.
+    fn compute_halfedges(&self) -> HashMap<usize, HashMap<usize, Option<usize>>> {
+        let mut he: HashMap<usize, HashMap<usize, Option<usize>>> =
+            HashMap::with_capacity(self.vertex.len());
+        for vkey in self.vertex.keys() {
+            he.insert(*vkey, HashMap::new());
+        }
+        // SORTED face keys, and the FIRST face to walk a directed edge owns it - the same rule
+        // as `edge_face_map`. Walking `self.face` in HashMap order let the LAST face win, so on a
+        // mesh where two faces walk the same directed edge the halfedge map came out different
+        // run to run, and `jsondump`/`file_json_dump` of that mesh was not reproducible.
+        let mut fkeys: Vec<usize> = self.face.keys().copied().collect();
+        fkeys.sort_unstable();
+        for fkey in fkeys {
+            let verts = &self.face[&fkey];
             for i in 0..verts.len() {
                 let u = verts[i];
                 let v = verts[(i + 1) % verts.len()];
-                self.halfedge.entry(u).or_default().insert(v, Some(fkey));
-                self.halfedge.entry(v).or_default().entry(u).or_insert(None);
+                let slot = he.entry(u).or_default().entry(v).or_insert(None);
+                if slot.is_none() { *slot = Some(fkey); }
+                he.entry(v).or_default().entry(u).or_insert(None);
             }
+        }
+        he
+    }
+
+    pub fn rebuild_halfedges(&mut self) {
+        self.halfedge = self.compute_halfedges();
+    }
+
+    /// Topology is LAZY: a freshly DECODED mesh carries no halfedge map - measured as the
+    /// dominant decode-time and memory cost on dense scenes (a nested HashMap per vertex,
+    /// per mesh). Every EDIT entry point calls this first; the pure readers are face-based
+    /// and never build it. Constructed meshes (add_vertex/add_face from empty) maintain the
+    /// map incrementally exactly as before, so this fires only on decoded-then-edited meshes.
+    pub fn ensure_halfedges(&mut self) {
+        if self.halfedge.is_empty() && !self.face.is_empty() {
+            self.rebuild_halfedges();
         }
     }
 
     pub fn remove_face(&mut self, fkey: usize) {
+        self.ensure_halfedges();
         let verts = match self.face.get(&fkey) {
             Some(v) => v.clone(),
             None => return,
@@ -1748,6 +1845,7 @@ impl Mesh {
     }
 
     pub fn remove_vertex(&mut self, vkey: usize) {
+        self.ensure_halfedges();
         if !self.vertex.contains_key(&vkey) { return; }
         let faces_to_remove: Vec<usize> = self.face.iter()
             .filter(|(_, verts)| verts.contains(&vkey))
@@ -1769,6 +1867,7 @@ impl Mesh {
     }
 
     pub fn remove_edge(&mut self, u: usize, v: usize) {
+        self.ensure_halfedges();
         let mut faces_to_remove = Vec::new();
         if let Some(f) = self.halfedge.get(&u).and_then(|m| m.get(&v)).and_then(|&f| f) {
             faces_to_remove.push(f);
@@ -1790,6 +1889,7 @@ impl Mesh {
     }
 
     pub fn flip_face(&mut self, fkey: usize) {
+        self.ensure_halfedges();
         let fv = match self.face.get(&fkey) {
             Some(v) => v.clone(),
             None => return,
@@ -1824,34 +1924,61 @@ impl Mesh {
     ///////////////////////////////////////////////////////////////////////////////////////////
 
     pub fn edge_edges(&self, u: usize, v: usize) -> Option<Vec<(usize, usize)>> {
-        let uv = self.halfedge.get(&u).map_or(false, |m| m.contains_key(&v));
-        let vu = self.halfedge.get(&v).map_or(false, |m| m.contains_key(&u));
-        if !uv && !vu { return None; }
+        let dfe = self.directed_face_edges();
+        if !dfe.contains(&(u, v)) && !dfe.contains(&(v, u)) { return None; }
+        let ends = |x: usize| -> Vec<usize> {
+            let mut keys: Vec<usize> = dfe.iter()
+                .filter_map(|&(a, b)| if a == x { Some(b) } else if b == x { Some(a) } else { None })
+                .collect::<std::collections::HashSet<_>>()
+                .into_iter()
+                .collect();
+            keys.sort();
+            keys
+        };
         let mut edges = Vec::new();
-        if let Some(neighbors) = self.halfedge.get(&u) {
-            let mut keys: Vec<usize> = neighbors.keys().copied().collect();
-            keys.sort();
-            for w in keys { if w != v { edges.push((u, w)); } }
-        }
-        if let Some(neighbors) = self.halfedge.get(&v) {
-            let mut keys: Vec<usize> = neighbors.keys().copied().collect();
-            keys.sort();
-            for w in keys { if w != u { edges.push((v, w)); } }
-        }
+        for w in ends(u) { if w != v { edges.push((u, w)); } }
+        for w in ends(v) { if w != u { edges.push((v, w)); } }
         Some(edges)
     }
 
+    /// Every directed face edge -> its face key, in ONE face walk. The bulk form of
+    /// `edge_faces` for per-edge loops (a per-call `edge_faces` is O(E) face-based, so a
+    /// loop over all edges would be quadratic - build this once instead).
+    pub fn edge_face_map(&self) -> HashMap<(usize, usize), usize> {
+        let mut m: HashMap<(usize, usize), usize> = HashMap::with_capacity(self.face.len() * 4);
+        // SORTED keys, and the FIRST face to walk a directed edge keeps it. Iterating `self.face`
+        // directly walked the faces in HashMap order and `insert` let the LAST one win, so on a
+        // mesh where two faces walk the same directed edge - an inconsistently wound or
+        // non-manifold patch - the winner changed run to run. Rust seeds every HashMap
+        // differently, so two loads of the SAME file in one process disagreed: floor_model.pb
+        // came back with different packed `facing` words on 2 of its 15,095 wireframe edges, and
+        // a golden-image test on such a mesh flakes. Same walk order as `edges_with_colors`.
+        let mut fkeys: Vec<usize> = self.face.keys().copied().collect();
+        fkeys.sort_unstable();
+        for fkey in fkeys {
+            let verts = &self.face[&fkey];
+            let n = verts.len();
+            for i in 0..n {
+                m.entry((verts[i], verts[(i + 1) % n])).or_insert(fkey);
+            }
+        }
+        m
+    }
+
     pub fn edge_faces(&self, u: usize, v: usize) -> Option<Vec<usize>> {
-        let f0 = self.halfedge.get(&u).and_then(|m| m.get(&v)).copied().flatten();
-        let f1 = self.halfedge.get(&v).and_then(|m| m.get(&u)).copied().flatten();
-        if f0.is_none() && f1.is_none() { return None; }
-        Some([f0, f1].iter().filter_map(|f| *f).collect())
+        // ORDER IS THE CONTRACT: the face walking (u, v) first, then the one walking (v, u) -
+        // the two sides of the directed edge, exactly what the halfedge map used to answer.
+        // Collecting by iterating `self.face` instead would hand back HashMap order, i.e. a
+        // different answer run to run.
+        let efm = self.edge_face_map();
+        let out: Vec<usize> = [efm.get(&(u, v)), efm.get(&(v, u))]
+            .into_iter().flatten().copied().collect();
+        if out.is_empty() { None } else { Some(out) }
     }
 
     pub fn edge_line(&self, u: usize, v: usize) -> Option<Line> {
-        let uv = self.halfedge.get(&u).map_or(false, |m| m.contains_key(&v));
-        let vu = self.halfedge.get(&v).map_or(false, |m| m.contains_key(&u));
-        if !uv && !vu { return None; }
+        let dfe = self.directed_face_edges();
+        if !dfe.contains(&(u, v)) && !dfe.contains(&(v, u)) { return None; }
         Some(Line::from_points(&self.vertex_point(u)?, &self.vertex_point(v)?))
     }
 
@@ -1863,8 +1990,9 @@ impl Mesh {
 
     pub fn face_faces(&self, face_key: usize) -> Option<Vec<usize>> {
         let fe = self.face_edges(face_key)?;
+        let efm = self.edge_face_map();
         Some(fe.into_iter()
-            .filter_map(|(u, v)| self.halfedge.get(&v)?.get(&u).copied().flatten())
+            .filter_map(|(u, v)| efm.get(&(v, u)).copied())
             .collect())
     }
 
@@ -1882,17 +2010,20 @@ impl Mesh {
     }
 
     pub fn vertex_edges(&self, vertex_key: usize) -> Option<Vec<(usize, usize)>> {
-        let neighbors = self.halfedge.get(&vertex_key)?;
-        let mut keys: Vec<usize> = neighbors.keys().copied().collect();
+        if !self.vertex.contains_key(&vertex_key) { return None; }
+        let mut keys = self.vertex_vertices(vertex_key)?;
         keys.sort();
         Some(keys.into_iter().map(|u| (vertex_key, u)).collect())
     }
 
     pub fn vertex_faces(&self, vertex_key: usize) -> Option<Vec<usize>> {
-        let neighbors = self.halfedge.get(&vertex_key)?;
-        let mut keys: Vec<usize> = neighbors.keys().copied().collect();
+        if !self.vertex.contains_key(&vertex_key) { return None; }
+        // same order as the halfedge version: neighbors sorted, each mapped to the face of
+        // the DIRECTED edge (v, u) - one entry per incident face, no duplicates
+        let efm = self.edge_face_map();
+        let mut keys = self.vertex_vertices(vertex_key)?;
         keys.sort();
-        Some(keys.into_iter().filter_map(|k| neighbors[&k]).collect())
+        Some(keys.into_iter().filter_map(|u| efm.get(&(vertex_key, u)).copied()).collect())
     }
 
     pub fn vertex_point(&self, vertex_key: usize) -> Option<Point> {
@@ -1900,8 +2031,13 @@ impl Mesh {
     }
 
     pub fn vertex_vertices(&self, vertex_key: usize) -> Option<Vec<usize>> {
-        let neighbors = self.halfedge.get(&vertex_key)?;
-        let mut keys: Vec<usize> = neighbors.keys().copied().collect();
+        if !self.vertex.contains_key(&vertex_key) { return None; }
+        let dfe = self.directed_face_edges();
+        let mut keys: Vec<usize> = dfe.iter()
+            .filter_map(|&(u, v)| if u == vertex_key { Some(v) } else if v == vertex_key { Some(u) } else { None })
+            .collect::<std::collections::HashSet<_>>()
+            .into_iter()
+            .collect();
         keys.sort();
         Some(keys)
     }
@@ -1912,8 +2048,13 @@ impl Mesh {
 
     pub fn area(&self) -> f64 {
         let mut total = 0.0;
-        for fk in self.face.keys() {
-            if let Some(a) = self.face_area(*fk) {
+        // SORTED, because floating-point addition is not associative: summing in HashMap order
+        // gave a result that differed in the last bits between two loads of the same file, and a
+        // test comparing areas exactly then flakes.
+        let mut fkeys: Vec<usize> = self.face.keys().copied().collect();
+        fkeys.sort_unstable();
+        for fk in fkeys {
+            if let Some(a) = self.face_area(fk) {
                 total += a;
             }
         }
@@ -1922,8 +2063,11 @@ impl Mesh {
 
     pub fn centroid(&self) -> Point {
         let mut x = 0.0_f64; let mut y = 0.0_f64; let mut z = 0.0_f64;
-        for vk in self.vertex.keys() {
-            let p = self.vertex_point(*vk).unwrap();
+        // Sorted for the same reason as `area`: a reproducible summation order.
+        let mut vkeys: Vec<usize> = self.vertex.keys().copied().collect();
+        vkeys.sort_unstable();
+        for vk in vkeys {
+            let p = self.vertex_point(vk).unwrap();
             x += p[0]; y += p[1]; z += p[2];
         }
         let n = if self.vertex.is_empty() { 1.0 } else { self.vertex.len() as f64 };
@@ -2235,7 +2379,11 @@ impl Mesh {
 
     pub fn volume(&self) -> f64 {
         let mut total = 0.0;
-        for (_, vkeys) in &self.face {
+        // Sorted for the same reason as `area`: a reproducible summation order.
+        let mut fkeys: Vec<usize> = self.face.keys().copied().collect();
+        fkeys.sort_unstable();
+        for fk in fkeys {
+            let vkeys = &self.face[&fk];
             if vkeys.len() < 3 {
                 continue;
             }
@@ -2378,7 +2526,11 @@ impl Mesh {
             "vertex": self.vertex,
             "face": self.face,
             "face_holes": serde_json::Value::Object(face_holes_json),
-            "halfedge": self.halfedge,
+            "halfedge": if self.halfedge.is_empty() && !self.face.is_empty() {
+                self.compute_halfedges()
+            } else {
+                self.halfedge.clone()
+            },
             "facedata": self.facedata,
             "edgedata": self.edgedata,
             "default_vertex_attributes": self.default_vertex_attributes,
@@ -2552,7 +2704,7 @@ impl Mesh {
 
         let mut vertices: HashMap<u64, crate::proto::VertexData> = HashMap::new();
         for (&vkey, vdata) in &self.vertex {
-            let mut attrs: HashMap<String, f64> = HashMap::new();
+            let mut attrs: std::collections::BTreeMap<String, f64> = std::collections::BTreeMap::new();
             for (k, v) in &vdata.attributes {
                 attrs.insert(k.clone(), *v as f64);
             }
@@ -2566,7 +2718,7 @@ impl Mesh {
 
         let mut faces: HashMap<u64, crate::proto::FaceData> = HashMap::new();
         for (&fkey, fverts) in &self.face {
-            let mut attrs: HashMap<String, f64> = HashMap::new();
+            let mut attrs: std::collections::BTreeMap<String, f64> = std::collections::BTreeMap::new();
             if let Some(fdata) = self.facedata.get(&fkey) {
                 for (k, v) in fdata {
                     attrs.insert(k.clone(), *v as f64);
@@ -2588,8 +2740,17 @@ impl Mesh {
         // and is stored, not recomputed. (`rebuild_halfedges` exists for meshes built by hand and
         // as the loader's fallback for a file that carries no map.)
         let mut halfedges: HashMap<u64, crate::proto::HalfedgeMap> = HashMap::new();
-        for (&u, neighbors) in &self.halfedge {
-            let mut neighbor_map: HashMap<u64, u64> = HashMap::new();
+        // lazy topology: if this mesh was decoded and never edited, the map was never built -
+        // compute it transiently so the WIRE stays exactly what it always was
+        let he_owned;
+        let he_src = if self.halfedge.is_empty() && !self.face.is_empty() {
+            he_owned = self.compute_halfedges();
+            &he_owned
+        } else {
+            &self.halfedge
+        };
+        for (&u, neighbors) in he_src {
+            let mut neighbor_map: std::collections::BTreeMap<u64, u64> = std::collections::BTreeMap::new();
             for (&v, &fkey_opt) in neighbors {
                 neighbor_map.insert(v as u64, fkey_opt.unwrap_or(usize::MAX) as u64);
             }
@@ -2599,8 +2760,14 @@ impl Mesh {
         }
 
         let mut edge_data_vec: Vec<crate::proto::EdgeData> = Vec::new();
-        for ((v1, v2), attrs) in &self.edgedata {
-            let mut attr_map: HashMap<String, f64> = HashMap::new();
+        // SORTED: `edge_data` is a repeated field, so its order IS the bytes. Walking the
+        // `edgedata` HashMap put the entries in a different order on every run.
+        let mut ekeys: Vec<(usize, usize)> = self.edgedata.keys().copied().collect();
+        ekeys.sort_unstable();
+        for ek in ekeys {
+            let (v1, v2) = (&ek.0, &ek.1);
+            let attrs = &self.edgedata[&ek];
+            let mut attr_map: std::collections::BTreeMap<String, f64> = std::collections::BTreeMap::new();
             for (k, v) in attrs {
                 attr_map.insert(k.clone(), *v as f64);
             }
@@ -2693,26 +2860,26 @@ impl Mesh {
         mesh.set_guid(proto.guid.clone());
         mesh.name = proto.name;
 
+        // Sized up front: a 360k-vertex sheet otherwise rehashes the whole table a dozen times
+        // on the way up, and the growth copies dominate the insert.
+        mesh.vertex.reserve(proto.vertices.len());
+        mesh.face.reserve(proto.faces.len());
         for (vkey, vdata) in proto.vertices {
-            let mut attrs: std::collections::HashMap<String, f64> = std::collections::HashMap::new();
-            for (k, v) in vdata.attributes {
-                attrs.insert(k, v as f64);
-            }
             mesh.vertex.insert(vkey as usize, VertexData {
-                x: vdata.x as f64,
-                y: vdata.y as f64,
-                z: vdata.z as f64,
-                attributes: attrs,
+                x: vdata.x,
+                y: vdata.y,
+                z: vdata.z,
+                // MOVED, not rebuilt: prost already decoded this map, and the old copy loop
+                // re-hashed every key into a second allocation for an identical result.
+                attributes: vdata.attributes.into_iter().collect(),
             });
-            mesh.halfedge.entry(vkey as usize).or_insert_with(std::collections::HashMap::new);
         }
 
         for (fkey, fdata) in proto.faces {
             let verts: Vec<usize> = fdata.vertices.iter().map(|&v| v as usize).collect();
             mesh.face.insert(fkey as usize, verts);
             if !fdata.attributes.is_empty() {
-                let attrs: std::collections::HashMap<String, f64> = fdata.attributes.into_iter().map(|(k, v)| (k, v as f64)).collect();
-                mesh.facedata.insert(fkey as usize, attrs);
+                mesh.facedata.insert(fkey as usize, fdata.attributes.into_iter().collect());
             }
             if !fdata.holes.is_empty() {
                 let rings: Vec<Vec<usize>> = fdata.holes.iter()
@@ -2733,30 +2900,20 @@ impl Mesh {
             mesh.triangulation.insert(fkey as usize, tris);
         }
 
-        // The map is written by pb_dumps, so it is normally present. Rebuild only as a fallback
-        // for a file that carries none (hand-built, or produced by an older/foreign writer).
-        if proto.halfedges.is_empty() {
-            mesh.rebuild_halfedges();
-        } else {
-            for (u, hmap) in proto.halfedges {
-                let mut neighbors: std::collections::HashMap<usize, Option<usize>> = std::collections::HashMap::new();
-                for (v, fkey) in hmap.neighbors {
-                    let fkey_opt = if fkey == u64::MAX { None } else { Some(fkey as usize) };
-                    neighbors.insert(v as usize, fkey_opt);
-                }
-                mesh.halfedge.insert(u as usize, neighbors);
-            }
-        }
+        // Topology is LAZY: the wire may carry a halfedges map (older writers), but decoding
+        // it into a nested HashMap per vertex was the single biggest load cost for dense
+        // scenes - and the viewer never reads it. `ensure_halfedges` rebuilds from faces the
+        // first time an EDIT needs it; `to_proto` computes it transiently so the wire format
+        // is unchanged. The pure readers (is_closed, edges, boundaries) are face-based.
 
         for edata in proto.edge_data {
             let key = (edata.vertex1 as usize, edata.vertex2 as usize);
-            let attrs: std::collections::HashMap<String, f64> = edata.attributes.into_iter().map(|(k, v)| (k, v as f64)).collect();
-            mesh.edgedata.insert(key, attrs);
+            mesh.edgedata.insert(key, edata.attributes.into_iter().collect());
         }
 
-        mesh.default_vertex_attributes = proto.default_vertex_attributes.into_iter().map(|(k, v)| (k, v as f64)).collect();
-        mesh.default_face_attributes = proto.default_face_attributes.into_iter().map(|(k, v)| (k, v as f64)).collect();
-        mesh.default_edge_attributes = proto.default_edge_attributes.into_iter().map(|(k, v)| (k, v as f64)).collect();
+        mesh.default_vertex_attributes = proto.default_vertex_attributes.into_iter().collect();
+        mesh.default_face_attributes = proto.default_face_attributes.into_iter().collect();
+        mesh.default_edge_attributes = proto.default_edge_attributes.into_iter().collect();
 
         mesh.pointcolors = proto.pointcolors.iter().map(|c| {
             let mut color = Color::new(c.r, c.g, c.b, c.a);

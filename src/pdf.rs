@@ -703,10 +703,18 @@ pub fn import_pdf(src: &str, stem: &str, page_no: i32) {
     // of thousands - per-object overhead (guid, graph node, xform, proto framing) was most of
     // the .pb and most of the viewer's parse time.
     let (mut n_dropped, mut n_bad) = (0, 0);
-    let mut buckets: BTreeMap<(usize, [u8; 4]), (Color, Vec<P>, Vec<usize>)> = BTreeMap::new();
-    let push_part = |buckets: &mut BTreeMap<(usize, [u8; 4]), (Color, Vec<P>, Vec<usize>)>,
-                         layer: usize, c: &Color, verts: &[P], tris: &[usize]| {
-        let e = buckets.entry((layer, ckey(c))).or_insert_with(|| (c.clone(), Vec::new(), Vec::new()));
+    // KIND is part of the key, ahead of the colour, and TEXT sorts last: a page paints its
+    // regions and then its lettering on top, and merging both into one (layer, colour) bucket
+    // threw that away - the buckets came out in COLOUR order, so black lettering (0,0,0) was
+    // emitted first and every hatch painted over it. Every glyph is known to be a glyph right
+    // here (`st.glyph_refs`), so this is the document's own distinction, not a guess about what
+    // a black fill might be.
+    const KIND_REGION: u8 = 0;
+    const KIND_TEXT: u8 = 1;
+    let mut buckets: BTreeMap<(usize, u8, [u8; 4]), (Color, Vec<P>, Vec<usize>)> = BTreeMap::new();
+    let push_part = |buckets: &mut BTreeMap<(usize, u8, [u8; 4]), (Color, Vec<P>, Vec<usize>)>,
+                         layer: usize, kind: u8, c: &Color, verts: &[P], tris: &[usize]| {
+        let e = buckets.entry((layer, kind, ckey(c))).or_insert_with(|| (c.clone(), Vec::new(), Vec::new()));
         let base = e.1.len();
         e.1.extend_from_slice(verts);
         e.2.extend(tris.iter().map(|t| t + base));
@@ -714,7 +722,7 @@ pub fn import_pdf(src: &str, stem: &str, page_no: i32) {
     for (f, (v, t, bad)) in st.fills.iter().zip(&tri_fills) {
         if t.is_empty() { n_dropped += 1; continue }
         if *bad { n_bad += 1; }
-        push_part(&mut buckets, f.layer, &f.c, v, t);
+        push_part(&mut buckets, f.layer, KIND_REGION, &f.c, v, t);
     }
     for gr in &st.glyph_refs {
         if gr.g.islands.is_empty() { if !gr.g.empty { n_dropped += 1; } continue }
@@ -724,17 +732,20 @@ pub fn import_pdf(src: &str, stem: &str, page_no: i32) {
                 let (x, y) = (q[0], -q[1]);   // cache space negated y (flip-0 walk)
                 [a * x + c2 * y + e, st.flip - (b * x + d * y + f)]
             }).collect();
-            push_part(&mut buckets, gr.layer, &gr.c, &tv, t);
+            push_part(&mut buckets, gr.layer, KIND_TEXT, &gr.c, &tv, t);
         }
     }
     n_bad += st.glyph_cache.values().flatten().filter(|g| g.bad).count();
 
     let mut n_meshes = 0;
-    for ((layer, _), (c, verts, tris)) in buckets {
+    for ((layer, kind, _), (c, verts, tris)) in buckets {
         let mut m = Mesh::new();
         for p in &verts { m.add_vertex(Point::new(p[0], p[1], 0.0), None); }
         for t in tris.chunks_exact(3) { m.add_face(vec![t[0], t[1], t[2]], None); }
         if m.number_of_faces() == 0 { continue }
+        // The viewer reads this name to put lettering in front of the ink lanes - a fill has no
+        // other channel to say what it is, and 21 names on a sheet cost nothing.
+        m.name = if kind == KIND_TEXT { "text".to_string() } else { "fill".to_string() };
         m.set_objectcolor(c);
         // A fill is flat colour: drop the auto-seeded per-vertex/per-face vecs, which would
         // otherwise dominate the .pb.
