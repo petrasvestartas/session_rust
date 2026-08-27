@@ -261,7 +261,7 @@ impl Delaunay {
             self.vs[iter1].edges = combined;
             self.vs[iter2].edges.clear();
             let edges1: Vec<usize> = self.vs[iter1].edges.clone();
-            'outer: for &e1 in &edges1 {
+            for &e1 in &edges1 {
                 if is_horiz_e(&self.es[e1], &self.vs) || self.es[e1].vb != iter1 { continue; }
                 let edges1b: Vec<usize> = self.vs[iter1].edges.clone();
                 for &e2 in &edges1b {
@@ -274,7 +274,7 @@ impl Delaunay {
                     let pv = self.vs[iter1].pt;
                     if cps(pt1, pv, pt2) != 0 { continue; }
                     if t1y < t2y { self.split_edge(e1, e2); } else { self.split_edge(e2, e1); }
-                    break 'outer;
+                    break;
                 }
             }
             iter2 += 1;
