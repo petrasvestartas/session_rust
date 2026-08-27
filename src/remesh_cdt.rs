@@ -92,7 +92,7 @@ fn shortest_dist_seg(pt: P64, sp1: P64, sp2: P64) -> f64 {
 }
 
 fn segs_intersect(s1a: P64, s1b: P64, s2a: P64, s2b: P64) -> u8 {
-    if s1a == s2a || s1b == s2a || s1b == s2b { return IX_NONE; }
+    if s1a == s2a || s1b == s2a || s1b == s2b || s1a == s2b { return IX_NONE; }
     let dy1 = (s1b.y - s1a.y) as f64; let dx1 = (s1b.x - s1a.x) as f64;
     let dy2 = (s2b.y - s2a.y) as f64; let dx2 = (s2b.x - s2a.x) as f64;
     let cp = dy1*dx2 - dy2*dx1;
@@ -729,7 +729,7 @@ pub(crate) fn cdt_triangulate(border_2d: &[Point], holes_2d: &[Vec<Point>]) -> V
                 let (xi, yi) = (poly[i].x, poly[i].y);
                 let (xj, yj) = (poly[j].x, poly[j].y);
                 if (yi > py) != (yj > py) {
-                    let xi_cross = xj as f64 + (py - yj) as f64 * (xi - xj) as f64 / (yj - yi) as f64;
+                    let xi_cross = xi as f64 + (py - yi) as f64 * (xj - xi) as f64 / (yj - yi) as f64;
                     if (px as f64) < xi_cross { inside = !inside; }
                 }
                 j = i;

@@ -381,6 +381,71 @@ pub fn run_remesh_cdt_irregular_tilted_polyline_with_holes() -> TestResult {
     })
 }
 
+pub fn run_remesh_cdt_plate_failing_15_vert_outer_4_holes() -> TestResult {
+    MINI_TEST!("plate_failing 15-vert outer + 4 holes", {
+        use crate::remesh_cdt::RemeshCDT;
+        use crate::Polyline;
+        use crate::Point;
+
+        let border = vec![
+            Point::new(734.392021, -1906.59468, 1101.588031),
+            Point::new(632.396858, -1838.597905, 948.595287),
+            Point::new(624.453132, -1769.270846, 984.70313),
+            Point::new(113.775484, -1428.81908, 218.686657),
+            Point::new(121.719209, -1498.146139, 182.578814),
+            Point::new(15.607979, -1427.40532, 23.411969),
+            Point::new(0.0, -1441.0, -18.0),
+            Point::new(0.0, -1893.0, -357.0),
+            Point::new(13.416408, -1917.0, -348.167184),
+            Point::new(104.290124, -1917.0, -166.419752),
+            Point::new(118.441096, -1964.169906, -173.495238),
+            Point::new(664.077103, -1964.169906, 917.776777),
+            Point::new(649.926131, -1917.0, 924.852263),
+            Point::new(736.583592, -1917.0, 1098.167184),
+            Point::new(734.392021, -1906.59468, 1101.588031),
+        ];
+        let h1 = vec![
+            Point::new(322.544527, -1917.0, 270.089054),
+            Point::new(213.417326, -1917.0, 51.834651),
+            Point::new(199.266354, -1869.830094, 58.910137),
+            Point::new(308.393555, -1869.830094, 277.16454),
+            Point::new(322.544527, -1917.0, 270.089054),
+        ];
+        let h2 = vec![
+            Point::new(540.79893, -1917.0, 706.59786),
+            Point::new(431.671728, -1917.0, 488.343457),
+            Point::new(417.520757, -1869.830094, 495.418943),
+            Point::new(526.647958, -1869.830094, 713.673346),
+            Point::new(540.79893, -1917.0, 706.59786),
+        ];
+        let h3 = vec![
+            Point::new(424.153936, -1667.753669, 660.242619),
+            Point::new(526.289465, -1735.844022, 813.445914),
+            Point::new(530.261328, -1770.507552, 795.391992),
+            Point::new(428.125798, -1702.417199, 642.188697),
+            Point::new(424.153936, -1667.753669, 660.242619),
+        ];
+        let h4 = vec![
+            Point::new(219.882876, -1531.572963, 353.83603),
+            Point::new(322.018406, -1599.663316, 507.039325),
+            Point::new(325.990269, -1634.326846, 488.985403),
+            Point::new(223.854739, -1566.236493, 335.782108),
+            Point::new(219.882876, -1531.572963, 353.83603),
+        ];
+        let m = RemeshCDT::from_polylines(
+            &[
+                Polyline::new(border),
+                Polyline::new(h1),
+                Polyline::new(h2),
+                Polyline::new(h3),
+                Polyline::new(h4),
+            ],
+            false, false);
+
+        MINI_CHECK!(m.is_valid());
+    })
+}
+
 REGISTER_MINI_TEST!("RemeshCDT", "Triangulate", crate::remesh_cdt_test::run_remesh_cdt_triangulate);
 REGISTER_MINI_TEST!("RemeshCDT", "Triangle", crate::remesh_cdt_test::run_remesh_cdt_triangle);
 REGISTER_MINI_TEST!("RemeshCDT", "Rectangle", crate::remesh_cdt_test::run_remesh_cdt_rectangle);
@@ -392,3 +457,4 @@ REGISTER_MINI_TEST!("RemeshCDT", "Duplicate vertices", crate::remesh_cdt_test::r
 REGISTER_MINI_TEST!("RemeshCDT", "Tilted rectangle with rectangle hole", crate::remesh_cdt_test::run_remesh_cdt_tilted_rectangle_with_rectangle_hole);
 REGISTER_MINI_TEST!("RemeshCDT", "Irregular tilted polyline.", crate::remesh_cdt_test::run_remesh_cdt_irregular_tilted_polyline);
 REGISTER_MINI_TEST!("RemeshCDT", "Irregular tilted polyline with holes.", crate::remesh_cdt_test::run_remesh_cdt_irregular_tilted_polyline_with_holes);
+REGISTER_MINI_TEST!("RemeshCDT", "plate_failing 15-vert outer + 4 holes", crate::remesh_cdt_test::run_remesh_cdt_plate_failing_15_vert_outer_4_holes);
