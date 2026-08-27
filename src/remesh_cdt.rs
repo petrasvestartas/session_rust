@@ -513,7 +513,16 @@ impl Delaunay {
         if left_turning(path[i_prev], path[i], path[i_next]) { self.vs[v0].inner_lm = true; }
         let mut v_prev = v0;
         i = i_next;
-        loop {
+        // Degeneracy guard: a valid simple path is walked in O(len) advances. A degenerate or
+        // self-intersecting path (e.g. an inexact conic pcurve that collapses to a collinear/looping
+        // run after integer quantization) can spin these sweep loops forever -> bound the total work
+        // and discard the path if the budget is blown, so the CDT can never hang the kernel.
+        let mut steps: usize = 0;
+        let budget = 16 * length + 256;
+        let mut bailed = false;
+        'walk: loop {
+            steps += 1;
+            if steps > budget { bailed = true; break 'walk; }
             self.loc_mins.push(v_prev);
             let vp_pt = self.vs[v_prev].pt;
             if self.lowermost == NULL
@@ -523,26 +532,43 @@ impl Delaunay {
             i_next = next_idx(i, length);
             if cps(self.vs[v_prev].pt, path[i], path[i_next]) == 0 { i = i_next; continue; }
             while path[i].y <= self.vs[v_prev].pt.y {
+                steps += 1;
+                if steps > budget { bailed = true; break 'walk; }
                 let vn = self.vs.len();
                 self.vs.push(V2 { pt: path[i], edges: Vec::new(), inner_lm: false });
                 self.create_edge(v_prev, vn, ASCEND);
                 v_prev = vn;
                 i = i_next; i_next = next_idx(i, length);
-                while cps(self.vs[v_prev].pt, path[i], path[i_next]) == 0 { i = i_next; i_next = next_idx(i, length); }
+                while cps(self.vs[v_prev].pt, path[i], path[i_next]) == 0 {
+                    steps += 1;
+                    if steps > budget { bailed = true; break 'walk; }
+                    i = i_next; i_next = next_idx(i, length);
+                }
             }
             let mut v_prev_prev = v_prev;
             while i != i0 && path[i].y >= self.vs[v_prev].pt.y {
+                steps += 1;
+                if steps > budget { bailed = true; break 'walk; }
                 let vn = self.vs.len();
                 self.vs.push(V2 { pt: path[i], edges: Vec::new(), inner_lm: false });
                 self.create_edge(vn, v_prev, DESCEND);
                 v_prev_prev = v_prev; v_prev = vn;
                 i = i_next; i_next = next_idx(i, length);
-                while cps(self.vs[v_prev].pt, path[i], path[i_next]) == 0 { i = i_next; i_next = next_idx(i, length); }
+                while cps(self.vs[v_prev].pt, path[i], path[i_next]) == 0 {
+                    steps += 1;
+                    if steps > budget { bailed = true; break 'walk; }
+                    i = i_next; i_next = next_idx(i, length);
+                }
             }
             if i == i0 { break; }
             if left_turning(self.vs[v_prev_prev].pt, self.vs[v_prev].pt, path[i]) {
                 self.vs[v_prev].inner_lm = true;
             }
+        }
+        if bailed {
+            // Sweep budget blown -> degenerate/self-intersecting path; discard its partial edges.
+            for j in vert_cnt..self.vs.len() { self.vs[j].edges.clear(); }
+            return;
         }
         self.create_edge(v0, v_prev, DESCEND);
         let n_new = self.vs.len() - vert_cnt;
@@ -638,8 +664,19 @@ impl Delaunay {
                 if vb == vl { self.tri_left(e, vb, curr_y); }
             }
         }
+        // Legalize all interior diagonal edges. force_legal re-pushes up to 4 neighbours per flip, so
+        // on degenerate / near-cocircular integer points the InCircle vs turn signs can disagree and two
+        // edges flip-flop forever. Bound the total flips: a valid triangulation legalizes in O(n) flips,
+        // far under this budget; a degenerate one stops early with a still-valid (non-optimal) mesh.
         if self.use_del {
-            while let Some(e) = self.pending.pop() { self.force_legal(e); }
+            let mut flips: usize = 0;
+            let flip_budget = 64 * self.vs.len() + 4096;
+            while !self.pending.is_empty() {
+                flips += 1;
+                if flips > flip_budget { break; }
+                let e = self.pending.pop().unwrap();
+                self.force_legal(e);
+            }
         }
         let mut res = Vec::new();
         for ti in 0..self.ts.len() {
