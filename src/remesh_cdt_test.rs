@@ -381,6 +381,35 @@ pub fn run_remesh_cdt_irregular_tilted_polyline_with_holes() -> TestResult {
     })
 }
 
+pub fn run_remesh_cdt_degenerate_hole_keeps_flat_indices() -> TestResult {
+    MINI_TEST!("Degenerate hole keeps flat indices", {
+        use crate::remesh_cdt::RemeshCDT;
+        use crate::Polyline;
+        use crate::Point;
+
+        let border = Polyline::new(vec![
+            Point::new(0.0, 0.0, 0.0),
+            Point::new(4.0, 0.0, 0.0),
+            Point::new(4.0, 4.0, 0.0),
+            Point::new(0.0, 4.0, 0.0),
+        ]);
+        let degen = Polyline::new(vec![
+            Point::new(1.5, 2.0, 0.0),
+            Point::new(2.5, 2.0, 0.0),
+        ]);
+        let hole = Polyline::new(vec![
+            Point::new(1.0, 1.0, 0.0),
+            Point::new(1.0, 3.0, 0.0),
+            Point::new(3.0, 3.0, 0.0),
+            Point::new(3.0, 1.0, 0.0),
+        ]);
+        let tris = RemeshCDT::triangulate(&[border, degen, hole]);
+        let mx = tris.iter().map(|t| t.0.max(t.1).max(t.2)).max().unwrap_or(0);
+
+        MINI_CHECK!(!tris.is_empty() && mx == 9);
+    })
+}
+
 pub fn run_remesh_cdt_large_coordinates() -> TestResult {
     MINI_TEST!("Large coordinates", {
         use crate::remesh_cdt::RemeshCDT;
@@ -477,3 +506,4 @@ REGISTER_MINI_TEST!("RemeshCDT", "Irregular tilted polyline.", crate::remesh_cdt
 REGISTER_MINI_TEST!("RemeshCDT", "Irregular tilted polyline with holes.", crate::remesh_cdt_test::run_remesh_cdt_irregular_tilted_polyline_with_holes);
 REGISTER_MINI_TEST!("RemeshCDT", "plate_failing 15-vert outer + 4 holes", crate::remesh_cdt_test::run_remesh_cdt_plate_failing_15_vert_outer_4_holes);
 REGISTER_MINI_TEST!("RemeshCDT", "Large coordinates", crate::remesh_cdt_test::run_remesh_cdt_large_coordinates);
+REGISTER_MINI_TEST!("RemeshCDT", "Degenerate hole keeps flat indices", crate::remesh_cdt_test::run_remesh_cdt_degenerate_hole_keeps_flat_indices);
