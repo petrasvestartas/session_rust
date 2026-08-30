@@ -36,6 +36,7 @@ pub fn run_plate_constructor() -> TestResult {
         MINI_CHECK!(pstr == "ElementPlate(plate1, 4 pts, 0.2)");
         MINI_CHECK!(prepr == format!("ElementPlate({}, plate1, 4 pts, 0.2)", guid));
         MINI_CHECK!(pcopy == p && pcopy.guid() != p.guid());
+        MINI_CHECK!(TOLERANCE.is_close(pcopy.polygon_top().unwrap()[0][2], -0.2));
         MINI_CHECK!(p == p2);
         MINI_CHECK!(p != p3);
     })
@@ -60,6 +61,7 @@ pub fn run_plate_setters() -> TestResult {
 
         let mut p = Element::plate_default();
         p.set_thickness(0.3);
+        let top_z = p.polygon_top().unwrap()[0][2];
         p.set_polygon(vec![
             Point::new(0.0, 0.0, 0.0),
             Point::new(3.0, 0.0, 0.0),
@@ -70,6 +72,8 @@ pub fn run_plate_setters() -> TestResult {
         MINI_CHECK!(p.thickness() == Some(0.3));
         MINI_CHECK!(p.polygon().unwrap().len() == 4);
         MINI_CHECK!(p.has_geometry());
+        MINI_CHECK!(TOLERANCE.is_close(top_z, -0.3));
+        MINI_CHECK!(TOLERANCE.is_close(p.polygon_top().unwrap()[1][0], 3.0));
     })
 }
 
@@ -173,6 +177,8 @@ pub fn run_plate_json_roundtrip() -> TestResult {
         MINI_CHECK!(TOLERANCE.is_close(loaded.thickness().unwrap(), 0.3));
         MINI_CHECK!(loaded.polygon().unwrap().len() == 4);
         MINI_CHECK!(TOLERANCE.is_close(loaded.polygon().unwrap()[1][0], 2.0));
+        MINI_CHECK!(TOLERANCE.is_close(loaded.polygon().unwrap()[0][2], 0.0));
+        MINI_CHECK!(TOLERANCE.is_close(loaded.polygon_top().unwrap()[0][2], -0.3));
     })
 }
 
@@ -187,16 +193,23 @@ pub fn run_plate_protobuf_roundtrip() -> TestResult {
             Point::new(2.0, 2.0, 0.0),
             Point::new(0.0, 2.0, 0.0),
         ];
-        let p = Element::plate(polygon, 0.3, "proto_plate");
+        let p = Element::plate(polygon.clone(), 0.3, "proto_plate");
 
         let path = "serialization/test_plate_element.bin";
         p.pb_dump(path);
         let loaded = Element::pb_load(path).unwrap();
+        let top = vec![Point::new(0.0,0.0,1.0), Point::new(2.0,0.0,1.0), Point::new(2.0,2.0,1.0), Point::new(0.0,2.0,1.0)];
+        let p2 = Element::plate_from_top_bottom(polygon, top, "proto_tb_plate");
+        p2.pb_dump(path);
+        let loaded2 = Element::pb_load(path).unwrap();
 
         MINI_CHECK!(loaded.name == "proto_plate");
         MINI_CHECK!(TOLERANCE.is_close(loaded.thickness().unwrap(), 0.3));
         MINI_CHECK!(loaded.polygon().unwrap().len() == 4);
         MINI_CHECK!(TOLERANCE.is_close(loaded.polygon().unwrap()[1][0], 2.0));
+        MINI_CHECK!(TOLERANCE.is_close(loaded.polygon().unwrap()[0][2], 0.0));
+        MINI_CHECK!(TOLERANCE.is_close(loaded.polygon_top().unwrap()[0][2], -0.3));
+        MINI_CHECK!(TOLERANCE.is_close(loaded2.polygon_top().unwrap()[0][2], 1.0));
     })
 }
 

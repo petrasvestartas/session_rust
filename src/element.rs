@@ -460,6 +460,14 @@ impl Element {
         }
     }
 
+    pub fn set_polygon_top(&mut self, pts: Vec<Point>) {
+        if let ElementKind::Plate { polygon, polygon_top, .. } = &mut self.kind {
+            *polygon_top = pts.iter().map(|p| Point::new(p[0], p[1], p[2])).collect();
+            self.geometry = ElementGeometry::Mesh(Self::compute_plate_geometry_explicit(polygon, polygon_top));
+            self.reset();
+        }
+    }
+
     pub fn center_line(&self) -> Option<Line> {
         match &self.kind {
             ElementKind::Column { height, .. } => Some(Line::new(0.0, 0.0, 0.0, 0.0, 0.0, *height)),
@@ -1087,13 +1095,13 @@ impl Element {
                     }
                 }
                 let thickness = data["thickness"].as_f64().unwrap_or(0.1) as f64;
+                // Stored arrays are already oriented; plate_from_top_bottom would re-run its swap.
                 let mut elem = if polygon.is_empty() {
                     Self::plate_default()
-                } else if !polygon_top.is_empty() {
-                    Self::plate_from_top_bottom(polygon, polygon_top, "my_plate")
                 } else {
                     Self::plate(polygon, thickness, "my_plate")
                 };
+                if !polygon_top.is_empty() { elem.set_polygon_top(polygon_top); }
                 if let Some(g) = data["guid"].as_str() { elem.set_guid(g.to_string()); }
                 elem.name = data["name"].as_str().unwrap_or(&elem.name).to_string();
                 if let Some(jt) = data.get("joint_types") {
@@ -1313,11 +1321,9 @@ impl Element {
                         }
                     }
                 }
-                if !polygon_top.is_empty() {
-                    Self::plate_from_top_bottom(polygon, polygon_top, "my_plate")
-                } else {
-                    Self::plate(polygon, params["thickness"].as_f64().unwrap() as f64, "my_plate")
-                }
+                let mut plate = Self::plate(polygon, params["thickness"].as_f64().unwrap() as f64, "my_plate");
+                if !polygon_top.is_empty() { plate.set_polygon_top(polygon_top); }
+                plate
             }
             "Mesh" => {
                 let mut e = Self::new("my_element");
