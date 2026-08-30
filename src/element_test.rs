@@ -79,7 +79,9 @@ pub fn run_element_place() -> TestResult {
 pub fn run_element_add_feature() -> TestResult {
     MINI_TEST!("Add Feature", {
         use crate::Mesh;
-        use crate::Element;
+        use crate::BRep;
+        use crate::Xform;
+        use crate::element::{Element, ElementGeometry};
         use crate::Point;
 
         let m = Mesh::from_vertices_and_faces(
@@ -96,8 +98,15 @@ pub fn run_element_add_feature() -> TestResult {
         fn my_feature(geo: Mesh) -> Mesh { geo }
         e.add_feature(my_feature);
 
+        // Features are Mesh -> Mesh, so BRep geometry passes through untouched
+        fn empty_mesh(_geo: Mesh) -> Mesh { Mesh::new() }
+        let mut eb = Element::from_brep(BRep::create_box(1.0, 1.0, 1.0), "brep_feature");
+        eb.add_feature(empty_mesh);
+        let sg = eb.session_geometry(&Xform::identity());
+
         MINI_CHECK!(e.is_dirty());
         MINI_CHECK!(e.features_count() == 1);
+        MINI_CHECK!(matches!(sg, ElementGeometry::BRep(_)));
     })
 }
 
