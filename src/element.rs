@@ -899,13 +899,14 @@ impl Element {
         match &self.kind {
             ElementKind::Column { height, .. } => Some(Line::new(0.0, 0.0, 0.0, 0.0, 0.0, *height)),
             ElementKind::Beam { length, .. } => Some(Line::new(0.0, 0.0, 0.0, 0.0, 0.0, *length)),
-            ElementKind::Plate { polygon, thickness, .. } => {
-                let normal = Self::polygon_normal(polygon);
-                let n = polygon.len() as f64;
-                let cx = polygon.iter().map(|p| p[0]).sum::<f64>() / n;
-                let cy = polygon.iter().map(|p| p[1]).sum::<f64>() / n;
-                let cz = polygon.iter().map(|p| p[2]).sum::<f64>() / n;
-                Some(Line::new(cx, cy, cz, cx - normal[0] * thickness, cy - normal[1] * thickness, cz - normal[2] * thickness))
+            ElementKind::Plate { polygon, polygon_top, .. } => {
+                // Bottom centroid to top centroid: polygon_top is a normal offset of polygon
+                // only for thickness-built plates, never for explicit top/bottom ones.
+                let n = polygon.len().min(polygon_top.len());
+                let nf = n as f64;
+                let (bcx, bcy, bcz) = polygon.iter().take(n).fold((0.0, 0.0, 0.0), |(x, y, z), p| (x + p[0], y + p[1], z + p[2]));
+                let (tcx, tcy, tcz) = polygon_top.iter().take(n).fold((0.0, 0.0, 0.0), |(x, y, z), p| (x + p[0], y + p[1], z + p[2]));
+                Some(Line::new(bcx / nf, bcy / nf, bcz / nf, tcx / nf, tcy / nf, tcz / nf))
             }
             _ => None,
         }
