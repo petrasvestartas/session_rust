@@ -271,12 +271,17 @@ pub fn run_plate_axis() -> TestResult {
         use crate::Element;
         use crate::Point;
         let polygon = vec![Point::new(0.0,0.0,0.0), Point::new(2.0,0.0,0.0), Point::new(2.0,2.0,0.0), Point::new(0.0,2.0,0.0)];
-        let mut p = Element::plate(polygon, 0.4, "my_plate");
+        let mut p = Element::plate(polygon.clone(), 0.4, "my_plate");
         let ax = p.axis().unwrap();
+        let top = vec![Point::new(0.0,0.0,1.0), Point::new(2.0,0.0,1.0), Point::new(2.0,2.0,1.0), Point::new(0.0,2.0,1.0)];
+        let mut p2 = Element::plate_from_top_bottom(polygon, top, "my_plate");
+        let ax2 = p2.axis().unwrap();
         MINI_CHECK!(TOLERANCE.is_close(ax.start()[0], 1.0));
         MINI_CHECK!(TOLERANCE.is_close(ax.start()[1], 1.0));
         MINI_CHECK!(TOLERANCE.is_close(ax.start()[2], 0.0));
         MINI_CHECK!(TOLERANCE.is_close(ax.end()[2], -0.4));
+        MINI_CHECK!(TOLERANCE.is_close(ax2.start()[2], 0.0));
+        MINI_CHECK!(TOLERANCE.is_close(ax2.end()[2], 1.0));
     })
 }
 
