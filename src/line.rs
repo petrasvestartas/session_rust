@@ -544,14 +544,11 @@ impl Line {
     /// Extend this line in place by `ext_start` at the start end and
     /// `ext_end` at the end.
     pub fn extend(&mut self, ext_start: f64, ext_end: f64) {
-        let s = self.start();
-        let e = self.end();
-        let mut v = e.clone() - s.clone();
-        v.normalize_self();
-        let new_s = s - (v.clone() * ext_start);
-        let new_e = e + (v * ext_end);
-        self._x0 = new_s[0]; self._y0 = new_s[1]; self._z0 = new_s[2];
-        self._x1 = new_e[0]; self._y1 = new_e[1]; self._z1 = new_e[2];
+        let mut s = self.start();
+        let mut e = self.end();
+        crate::polyline::Polyline::extend_line_segment(&mut s, &mut e, ext_start, ext_end);
+        self._x0 = s[0]; self._y0 = s[1]; self._z0 = s[2];
+        self._x1 = e[0]; self._y1 = e[1]; self._z1 = e[2];
     }
 
 }
