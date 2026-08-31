@@ -311,7 +311,18 @@ pub fn run_line_fit_points() -> TestResult {
         ];
         let l_fit = Line::fit_points(&fit_pts, None);
 
+        // Spread along Y only: unreachable from a single X seed.
+        let fit_y = vec![
+            Point::new(0.0, 0.0, 0.0),
+            Point::new(0.0, 1.0, 0.0),
+            Point::new(0.0, 2.0, 0.0),
+            Point::new(0.0, 3.0, 0.0),
+        ];
+        let l_fit_y = Line::fit_points(&fit_y, None);
+
         MINI_CHECK!(l_fit.length() > 0.0);
+        MINI_CHECK!(TOLERANCE.is_close(l_fit_y.length(), 3.0));
+        MINI_CHECK!(TOLERANCE.is_close(l_fit_y.to_direction()[1].abs(), 1.0));
     })
 }
 
