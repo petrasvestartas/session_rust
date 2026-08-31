@@ -273,6 +273,7 @@ pub fn run_line_closest_point() -> TestResult {
         let (t1, cp1) = l.closest_point(&p1, true);
         let (t2, cp2) = l.closest_point(&p2, true);
         let (t3, cp3) = l.closest_point(&p3, true);
+        let (t4, cp4) = l.closest_point(&p3, false);
 
         MINI_CHECK!(cp1[0] == 5.0 && cp1[1] == 0.0 && cp1[2] == 0.0);
         MINI_CHECK!(cp2[0] == 0.0 && cp2[1] == 0.0 && cp2[2] == 0.0);
@@ -280,6 +281,7 @@ pub fn run_line_closest_point() -> TestResult {
         MINI_CHECK!(TOLERANCE.is_close(t1, 0.5));
         MINI_CHECK!(TOLERANCE.is_close(t2, 0.0));
         MINI_CHECK!(TOLERANCE.is_close(t3, 1.0));
+        MINI_CHECK!(TOLERANCE.is_close(t4, 1.5) && cp4[0] == 15.0);
     })
 }
 
@@ -354,7 +356,9 @@ pub fn run_line_overlap() -> TestResult {
         use crate::{Line, Point};
         let l0 = Line::from_points(&Point::new(0.0, 0.0, 0.0), &Point::new(10.0, 0.0, 0.0));
         let l1 = Line::from_points(&Point::new(5.0, 0.0, 0.0), &Point::new(15.0, 0.0, 0.0));
-        let out = l0.overlap(&l1).unwrap();
+        let out = l0.overlap(&l1);
+        MINI_CHECK!(out.is_some());
+        let out = out.unwrap();
         MINI_CHECK!(TOLERANCE.is_close(out.start()[0], 5.0));
         MINI_CHECK!(TOLERANCE.is_close(out.end()[0], 10.0));
     })
@@ -365,7 +369,9 @@ pub fn run_line_overlap_average() -> TestResult {
         use crate::{Line, Point};
         let l0 = Line::from_points(&Point::new(0.0, 0.0, 0.0), &Point::new(10.0, 0.0, 0.0));
         let l1 = Line::from_points(&Point::new(5.0, 0.0, 0.0), &Point::new(15.0, 0.0, 0.0));
-        let out = l0.overlap_average(&l1).unwrap();
+        let out = l0.overlap_average(&l1);
+        MINI_CHECK!(out.is_some());
+        let out = out.unwrap();
         MINI_CHECK!(TOLERANCE.is_close(out.start()[0], 5.0));
         MINI_CHECK!(TOLERANCE.is_close(out.end()[0], 10.0));
     })
@@ -373,11 +379,19 @@ pub fn run_line_overlap_average() -> TestResult {
 
 pub fn run_line_extend() -> TestResult {
     MINI_TEST!("Extend", {
-        use crate::{Line, Point};
+        use crate::{Color, Line, Point};
         let mut l = Line::from_points(&Point::new(0.0, 0.0, 0.0), &Point::new(10.0, 0.0, 0.0));
+        l.name = "beam".to_string();
+        l.width = 3.0;
+        l.dash = vec![2.0, 1.0];
+        l.linecolor = Color::with_name(1.0, 0.0, 0.0, 1.0, "red");
+        let gid = l.guid().to_string();
         l.extend(1.0, 2.0);
         MINI_CHECK!(TOLERANCE.is_close(l.start()[0], -1.0));
         MINI_CHECK!(TOLERANCE.is_close(l.end()[0], 12.0));
+        MINI_CHECK!(l.name == "beam" && l.width == 3.0);
+        MINI_CHECK!(l.dash == vec![2.0, 1.0]);
+        MINI_CHECK!(l.linecolor.r == 1.0 && l.guid() == gid);
     })
 }
 
