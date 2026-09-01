@@ -198,6 +198,26 @@ pub fn run_graph_has_edge() -> TestResult {
     })
 }
 
+pub fn run_graph_has_guid() -> TestResult {
+    MINI_TEST!("Has Guid", {
+        use crate::graph::{Edge, Vertex};
+        // A guid is lazily minted, so ASKING for one creates it. The writers used to ask for
+        // every vertex and edge, which minted 34,592 UUIDs for one drawing sheet and wrote
+        // 1.3 MB of them into a file whose reader discards them. has_guid() answers without
+        // minting, so a thing nobody names never pays for one.
+        let v = Vertex::new(Some("a".to_string()), None);
+        let e = Edge::new(None, Some("a".to_string()), Some("b".to_string()), None);
+
+        MINI_CHECK!(!v.has_guid());              // nobody has asked
+        MINI_CHECK!(!e.has_guid());
+
+        let minted = v.guid().to_string();
+        MINI_CHECK!(!minted.is_empty());
+        MINI_CHECK!(v.has_guid());               // asking created it
+        MINI_CHECK!(v.guid() == minted);         // and it is stable
+    })
+}
+
 pub fn run_graph_add_node() -> TestResult {
     MINI_TEST!("Add Node", {
         use crate::Graph;
@@ -461,6 +481,7 @@ REGISTER_MINI_TEST!("Graph", "Json Roundtrip", crate::graph_test::run_graph_json
 REGISTER_MINI_TEST!("Graph", "Protobuf Roundtrip", crate::graph_test::run_graph_protobuf_roundtrip);
 REGISTER_MINI_TEST!("Graph", "Has Node", crate::graph_test::run_graph_has_node);
 REGISTER_MINI_TEST!("Graph", "Has Edge", crate::graph_test::run_graph_has_edge);
+REGISTER_MINI_TEST!("Graph", "Has Guid", crate::graph_test::run_graph_has_guid);
 REGISTER_MINI_TEST!("Graph", "Add Node", crate::graph_test::run_graph_add_node);
 REGISTER_MINI_TEST!("Graph", "Add Edge", crate::graph_test::run_graph_add_edge);
 REGISTER_MINI_TEST!("Graph", "Remove Node", crate::graph_test::run_graph_remove_node);

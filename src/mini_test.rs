@@ -939,6 +939,7 @@ pub fn get_all_tests() -> Vec<RegisteredTest> {
         RegisteredTest { group: "Graph", name: "Protobuf Roundtrip", func: run_graph_protobuf_roundtrip },
         RegisteredTest { group: "Graph", name: "Has Node", func: run_graph_has_node },
         RegisteredTest { group: "Graph", name: "Has Edge", func: run_graph_has_edge },
+        RegisteredTest { group: "Graph", name: "Has Guid", func: run_graph_has_guid },
         RegisteredTest { group: "Graph", name: "Add Node", func: run_graph_add_node },
         RegisteredTest { group: "Graph", name: "Add Edge", func: run_graph_add_edge },
         RegisteredTest { group: "Graph", name: "Remove Node", func: run_graph_remove_node },
