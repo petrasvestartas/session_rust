@@ -28,7 +28,6 @@ pub enum ElementGeometry {
 /// The kernel does not know how to APPLY one: `feature_type` means something only to the
 /// package that wrote it. It knows enough to DRAW one, which is what lets a viewer show
 /// features from a package it has never heard of.
-// No PartialEq in the derive: Polyline does not implement it.
 #[derive(Debug, Clone, Default)]
 pub struct ElementFeature {
     /// Lazily minted, like every other identity in the kernel - a feature nobody names never
@@ -68,6 +67,146 @@ impl ElementFeature {
 
     pub fn set_guid(&self, g: String) {
         let _ = self.guid.set(g);
+    }
+}
+
+/// `element_data` is opaque BYTES and JSON has no byte type, so it travels as hex. Hex rather
+/// than base64 because it is a handful of lines in each of the three languages and needs no
+/// dependency in any of them - and this has to encode identically in all three, or the JSON
+/// stops being a cross-language format.
+fn to_hex(bytes: &[u8]) -> String {
+    let mut out = String::with_capacity(bytes.len() * 2);
+    for b in bytes { out.push_str(&format!("{:02x}", b)); }
+    out
+}
+
+fn from_hex(hex: &str) -> Vec<u8> {
+    (0..hex.len().saturating_sub(1))
+        .step_by(2)
+        .filter_map(|i| u8::from_str_radix(&hex[i..i + 2], 16).ok())
+        .collect()
+}
+
+/// Data equality, not identity: two features describing the same cut on the same face ARE
+/// equal, exactly as `Polyline` ignores its guid.
+impl PartialEq for ElementFeature {
+    fn eq(&self, other: &Self) -> bool {
+        self.name == other.name
+            && self.feature_type == other.feature_type
+            && self.face_index == other.face_index
+            && self.outlines == other.outlines
+    }
+}
+
+impl ElementFeature {
+    pub fn str(&self) -> String {
+        format!("ElementFeature({}, face {}, {} outline(s))",
+                self.feature_type, self.face_index, self.outlines.len())
+    }
+
+    ///////////////////////////////////////////////////////////////////////////////////////////
+    // JSON
+    ///////////////////////////////////////////////////////////////////////////////////////////
+
+    /// A feature serializes on its own, not only as part of its host. A package that stores a
+    /// library of standard cuts, or reports one across a wire, has a single feature in hand and
+    /// nothing to attach it to - and every other class in the kernel round-trips by itself.
+    pub fn jsondump(&self) -> serde_json::Value {
+        serde_json::json!({
+            "face_index": self.face_index,
+            "feature_type": self.feature_type,
+            "guid": self.guid(),
+            "name": self.name,
+            "outlines": self.outlines.iter()
+                .map(|o| serde_json::to_value(o).unwrap_or(serde_json::Value::Null))
+                .collect::<Vec<_>>(),
+            "type": "ElementFeature",
+        })
+    }
+
+    pub fn jsonload_value(data: &serde_json::Value) -> Self {
+        let f = Self::new(
+            data["feature_type"].as_str().unwrap_or(""),
+            data["face_index"].as_i64().unwrap_or(-1) as i32,
+            data["outlines"].as_array().map(|os| {
+                os.iter().filter_map(|o| serde_json::from_value(o.clone()).ok()).collect()
+            }).unwrap_or_default(),
+            data["name"].as_str().unwrap_or(""),
+        );
+        // Assigned, not minted: a feature read back is the SAME feature, so anything holding its
+        // guid still finds it. Absent means the file predates the field - leave the lazy mint.
+        if let Some(g) = data["guid"].as_str() {
+            if !g.is_empty() { f.set_guid(g.to_string()); }
+        }
+        f
+    }
+
+    pub fn jsonload(json_str: &str) -> Result<Self, Box<dyn std::error::Error>> {
+        let data: serde_json::Value = serde_json::from_str(json_str)?;
+        Ok(Self::jsonload_value(&data))
+    }
+
+    pub fn file_json_dumps(&self) -> String {
+        let sorted = crate::file_encoders::sort_json_keys(self.jsondump());
+        serde_json::to_string(&sorted).unwrap_or_default()
+    }
+
+    pub fn file_json_loads(s: &str) -> Self {
+        Self::jsonload(s).unwrap_or_default()
+    }
+
+    pub fn file_json_dump(&self, filepath: &str) {
+        let sorted = crate::file_encoders::sort_json_keys(self.jsondump());
+        let json = serde_json::to_string_pretty(&sorted).unwrap_or_default();
+        fs::write(filepath, json).expect("Failed to write JSON file");
+    }
+
+    pub fn file_json_load(filepath: &str) -> Self {
+        let json = fs::read_to_string(filepath).expect("Failed to read JSON file");
+        Self::file_json_loads(&json)
+    }
+
+    ///////////////////////////////////////////////////////////////////////////////////////////
+    // Protobuf
+    ///////////////////////////////////////////////////////////////////////////////////////////
+
+    pub fn pb_dumps(&self) -> Vec<u8> {
+        let proto = crate::proto::ElementFeature {
+            guid: self.guid().to_string(),
+            name: self.name.clone(),
+            feature_type: self.feature_type.clone(),
+            face_index: self.face_index,
+            outlines: self.outlines.iter()
+                .map(|o| prost::Message::decode(o.pb_dumps().as_slice()).unwrap_or_default())
+                .collect(),
+        };
+        prost::Message::encode_to_vec(&proto)
+    }
+
+    pub fn pb_loads(data: &[u8]) -> Result<Self, Box<dyn std::error::Error>> {
+        let proto: crate::proto::ElementFeature = prost::Message::decode(data)?;
+        let mut outlines = Vec::with_capacity(proto.outlines.len());
+        for o in &proto.outlines {
+            outlines.push(Polyline::pb_loads(&prost::Message::encode_to_vec(o))?);
+        }
+        let f = Self::new(&proto.feature_type, proto.face_index, outlines, &proto.name);
+        if !proto.guid.is_empty() { f.set_guid(proto.guid.clone()); }
+        Ok(f)
+    }
+
+    pub fn pb_dump(&self, filepath: &str) {
+        fs::write(filepath, self.pb_dumps()).expect("Failed to write protobuf file");
+    }
+
+    pub fn pb_load(filepath: &str) -> Result<Self, Box<dyn std::error::Error>> {
+        let data = fs::read(filepath)?;
+        Self::pb_loads(&data)
+    }
+}
+
+impl fmt::Display for ElementFeature {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}", self.str())
     }
 }
 
@@ -484,10 +623,19 @@ impl Element {
                     ElementGeometry::BRep(b) => (serde_json::to_value(b).unwrap_or(serde_json::Value::Null), "BRep"),
                     ElementGeometry::None => (serde_json::Value::Null, "None"),
                 };
+                // Everything the element carries, not just the two fields it had before the
+                // registry: a format that silently drops five of them is not a serialization
+                // format, and `file_json_dump` has to round-trip whatever `pb_dumps` does, or
+                // the two disagree about what an Element is.
                 serde_json::json!({
+                    "dimensions": self.dimensions.as_ref().map(|d| serde_json::to_value(d).unwrap_or(serde_json::Value::Null)),
+                    "element_data": to_hex(&self.element_data),
+                    "element_type": self.element_type,
+                    "features": self.features.iter().map(|f| f.jsondump()).collect::<Vec<_>>(),
                     "geometry_data": geo_data,
                     "geometry_type": geo_type,
                     "guid": self.guid(),
+                    "insertion_vectors": self.insertion_vectors.iter().map(|v| serde_json::to_value(v).unwrap_or(serde_json::Value::Null)).collect::<Vec<_>>(),
                     "name": self.name,
                     "type": "Element",
                 })
@@ -513,6 +661,20 @@ impl Element {
                 }
                 if let Some(g) = data["guid"].as_str() { elem.set_guid(g.to_string()); }
                 elem.name = data["name"].as_str().unwrap_or(&elem.name).to_string();
+                // null, not absent-or-empty: (0,0,0) is a legitimate authored dimension, so the
+                // two cases stay distinguishable here exactly as `Option` keeps them apart on
+                // the wire.
+                if !data["dimensions"].is_null() {
+                    elem.dimensions = serde_json::from_value(data["dimensions"].clone()).ok();
+                }
+                elem.element_type = data["element_type"].as_str().unwrap_or("").to_string();
+                elem.element_data = from_hex(data["element_data"].as_str().unwrap_or(""));
+                if let Some(fs) = data["features"].as_array() {
+                    elem.features = fs.iter().map(ElementFeature::jsonload_value).collect();
+                }
+                if let Some(vs) = data["insertion_vectors"].as_array() {
+                    elem.insertion_vectors = vs.iter().filter_map(|v| serde_json::from_value(v.clone()).ok()).collect();
+                }
                 elem
             
     }
@@ -676,9 +838,81 @@ impl<'de> Deserialize<'de> for Element {
     }
 }
 
+/// The factory a downstream package registers for its own `element_type`.
+///
+/// Takes the full serialized `session_proto.Element` bytes - the same bytes `pb_loads` takes,
+/// so a factory can read the base fields as well as `element_data` - and returns `None` to
+/// decline, which falls back to a base element rather than failing the load.
+pub type ElementFactory = fn(&[u8]) -> Option<Element>;
+
+fn element_registry() -> &'static std::sync::Mutex<std::collections::BTreeMap<String, ElementFactory>> {
+    static REGISTRY: std::sync::OnceLock<std::sync::Mutex<std::collections::BTreeMap<String, ElementFactory>>> =
+        std::sync::OnceLock::new();
+    REGISTRY.get_or_init(|| std::sync::Mutex::new(std::collections::BTreeMap::new()))
+}
+
+impl Element {
+    ///////////////////////////////////////////////////////////////////////////////////////////
+    // Polymorphic elements
+    ///////////////////////////////////////////////////////////////////////////////////////////
+
+    /// This element's own type name, written to `element_type`. Empty for a plain Element.
+    ///
+    /// Rust has no inheritance, so where C++ and Python override this in a subclass, a Rust
+    /// package sets the field and reads it back. The METHOD exists so the three kernels answer
+    /// the same question by the same name, which is what the cross-language tests compare.
+    pub fn element_type_name(&self) -> &str { &self.element_type }
+
+    /// This element's own state, opaque to the kernel. Empty for a plain Element.
+    pub fn element_data_dumps(&self) -> &[u8] { &self.element_data }
+
+    /// Register `factory` for `type_name`. Idempotent re-registration of the same name replaces
+    /// the previous factory. Call it once, before loading anything.
+    pub fn register_type(type_name: &str, factory: ElementFactory) {
+        if let Ok(mut r) = element_registry().lock() {
+            r.insert(type_name.to_string(), factory);
+        }
+    }
+
+    pub fn is_registered(type_name: &str) -> bool {
+        element_registry().lock().map(|r| r.contains_key(type_name)).unwrap_or(false)
+    }
+
+    pub fn registered_types() -> Vec<String> {
+        element_registry().lock().map(|r| r.keys().cloned().collect()).unwrap_or_default()
+    }
+
+    /// Load an element, giving a registered package first refusal on its own type. Falls back to
+    /// a base Element when `element_type` is empty OR names a type nobody registered - an unknown
+    /// domain type degrades to its geometry rather than failing the whole Session, which is what
+    /// lets a viewer open a file written by a package it does not have.
+    ///
+    /// The fallback keeps `element_type` and `element_data` (see `pb_loads`), so re-saving an
+    /// element loaded this way writes the bytes the package wrote rather than erasing them.
+    pub fn pb_loads_polymorphic(data: &[u8]) -> Result<Self, Box<dyn std::error::Error>> {
+        let proto: crate::proto::Element = prost::Message::decode(data)?;
+        if !proto.element_type.is_empty() {
+            let factory = element_registry().lock().ok().and_then(|r| r.get(&proto.element_type).copied());
+            if let Some(f) = factory {
+                if let Some(derived) = f(data) { return Ok(derived); }
+            }
+        }
+        Self::pb_loads(data)
+    }
+}
+
 impl PartialEq for Element {
     fn eq(&self, other: &Self) -> bool {
-        self.name == other.name && self.geometry_type_name() == other.geometry_type_name()
+        // Data equality, not identity - the guid is excluded, exactly as in Line. Every field
+        // that survives a round trip is compared, so `pb_loads(e.pb_dumps()) == e` is a real
+        // test rather than one that passes on two fields and ignores the other five.
+        self.name == other.name
+            && self.geometry_type_name() == other.geometry_type_name()
+            && self.element_type == other.element_type
+            && self.element_data == other.element_data
+            && self.insertion_vectors == other.insertion_vectors
+            && self.dimensions == other.dimensions
+            && self.features == other.features
     }
 }
 

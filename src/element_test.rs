@@ -457,6 +457,148 @@ pub fn run_element_dimensions_are_nominal_not_measured() -> TestResult {
     })
 }
 
+pub fn run_element_unknown_type_survives_resave() -> TestResult {
+    MINI_TEST!("UnknownTypeSurvivesResave", {
+        use crate::element::Element;
+
+        // The whole point of element_type/element_data: a viewer WITHOUT the wood package opens
+        // a wood file, edits something else, and saves. If the kernel does not carry these two
+        // through, that save silently destroys the payload - the geometry still looks right, so
+        // nothing announces the loss. This is the test that would have caught it.
+        let mut plate = Element::from_mesh(unit_quad(), "plate");
+        plate.element_type = "wood::Plate".to_string();
+        plate.element_data = b"the package's own bytes".to_vec();
+        let original = plate.pb_dumps();
+
+        let loaded = Element::pb_loads(&original).unwrap();
+        MINI_CHECK!(loaded.element_type_name() == "wood::Plate");
+        MINI_CHECK!(loaded.element_data_dumps() == b"the package's own bytes");
+
+        let resaved = Element::pb_loads(&loaded.pb_dumps()).unwrap();
+        MINI_CHECK!(resaved.element_type == "wood::Plate");
+        MINI_CHECK!(resaved.element_data == b"the package's own bytes".to_vec());
+    })
+}
+
+pub fn run_element_duplicate_keeps_every_field() -> TestResult {
+    MINI_TEST!("DuplicateKeepsEveryField", {
+        use crate::element::{Element, ElementFeature};
+        use crate::Vector;
+
+        // A copy that drops fields is the same silent data loss as a save that drops them, and
+        // a duplicate is what an assembly does to place the same part twice.
+        let mut e = Element::from_mesh(unit_quad(), "original");
+        e.insertion_vectors = vec![Vector::new(0.0, 0.0, 1.0)];
+        e.dimensions = Some(Vector::new(120.0, 80.0, 12.5));
+        e.features = vec![ElementFeature::new("cut", 2, vec![], "notch")];
+
+        let copy = e.duplicate();
+
+        MINI_CHECK!(copy == e);                   // every carried field compares equal
+        MINI_CHECK!(copy.guid() != e.guid());     // but it is a different object
+        MINI_CHECK!(copy.insertion_vectors.len() == 1);
+        MINI_CHECK!(copy.dimensions.is_some());
+        MINI_CHECK!(copy.features.len() == 1);
+    })
+}
+
+pub fn run_element_equality_compares_carried_fields() -> TestResult {
+    MINI_TEST!("EqualityComparesCarriedFields", {
+        use crate::element::Element;
+        use crate::Vector;
+
+        // Equality that looks at name and geometry only makes every round-trip test above
+        // vacuous: it would pass while the loader dropped all five of the other fields.
+        let a = Element::from_mesh(unit_quad(), "same");
+        let mut b = Element::from_mesh(unit_quad(), "same");
+        MINI_CHECK!(a == b);
+
+        b.dimensions = Some(Vector::new(1.0, 2.0, 3.0));
+        MINI_CHECK!(a != b);
+    })
+}
+
+///////////////////////////////////////////////////////////////////////////////////////////
+// ElementFeature
+///////////////////////////////////////////////////////////////////////////////////////////
+
+pub fn run_element_feature_constructor() -> TestResult {
+    MINI_TEST!("Constructor", {
+        use crate::element::ElementFeature;
+        use crate::{Point, Polyline};
+
+        let outline = Polyline::new(vec![Point::new(0.0, 0.0, 0.0), Point::new(1.0, 0.0, 0.0),
+                                         Point::new(1.0, 1.0, 0.0), Point::new(0.0, 0.0, 0.0)]);
+        let f = ElementFeature::new("cut", 2, vec![outline.clone()], "notch");
+
+        MINI_CHECK!(f.feature_type == "cut");
+        MINI_CHECK!(f.face_index == 2);
+        MINI_CHECK!(f.name == "notch");
+        MINI_CHECK!(f.outlines.len() == 1);
+
+        let same = ElementFeature::new("cut", 2, vec![outline.clone()], "notch");
+        MINI_CHECK!(f == same);
+        MINI_CHECK!(!(f != same));
+        // Data equality, not identity - the two guids differ and the features are still equal.
+        MINI_CHECK!(f.guid() != same.guid());
+
+        let other = ElementFeature::new("drill", 2, vec![outline], "notch");
+        MINI_CHECK!(f != other);
+
+        MINI_CHECK!(f.str() == "ElementFeature(cut, face 2, 1 outline(s))");
+        MINI_CHECK!(format!("{}", f) == f.str());
+
+        let empty = ElementFeature::default();
+        MINI_CHECK!(empty.face_index == 0);
+        MINI_CHECK!(empty.outlines.is_empty());
+    })
+}
+
+pub fn run_element_feature_json_roundtrip() -> TestResult {
+    MINI_TEST!("Json Roundtrip", {
+        use crate::element::ElementFeature;
+        use crate::{Point, Polyline};
+
+        let f = ElementFeature::new("cut", 2,
+            vec![Polyline::new(vec![Point::new(0.0, 0.0, 0.0), Point::new(1.0, 0.0, 0.0),
+                                    Point::new(1.0, 1.0, 0.0), Point::new(0.0, 0.0, 0.0)])],
+            "notch");
+        let feature_guid = f.guid().to_string();
+
+        let fname = "serialization/test_element_feature.json";
+        f.file_json_dump(fname);
+        let loaded = ElementFeature::file_json_load(fname);
+
+        MINI_CHECK!(loaded == f);
+        MINI_CHECK!(loaded.outlines.len() == 1);
+        // Read back, not re-minted: whoever holds the guid must still find this feature.
+        MINI_CHECK!(loaded.guid() == feature_guid);
+    })
+}
+
+pub fn run_element_feature_protobuf_roundtrip() -> TestResult {
+    MINI_TEST!("Protobuf Roundtrip", {
+        use crate::element::ElementFeature;
+        use crate::{Point, Polyline};
+
+        let f = ElementFeature::new("drill", 5,
+            vec![Polyline::new(vec![Point::new(0.0, 0.0, 0.0), Point::new(1.0, 0.0, 0.0),
+                                    Point::new(1.0, 1.0, 0.0), Point::new(0.0, 0.0, 0.0)])],
+            "hole");
+        let feature_guid = f.guid().to_string();
+
+        let path = "serialization/test_element_feature.bin";
+        f.pb_dump(path);
+        let loaded = ElementFeature::pb_load(path).unwrap();
+
+        MINI_CHECK!(loaded == f);
+        MINI_CHECK!(loaded.feature_type == "drill");
+        MINI_CHECK!(loaded.face_index == 5);
+        MINI_CHECK!(loaded.outlines.len() == 1);
+        MINI_CHECK!(loaded.guid() == feature_guid);
+    })
+}
+
 ///////////////////////////////////////////////////////////////////////////////////////////
 // Registration
 ///////////////////////////////////////////////////////////////////////////////////////////
@@ -478,3 +620,9 @@ REGISTER_MINI_TEST!("Element", "RegistryUnknownTypeDegrades", crate::element_tes
 REGISTER_MINI_TEST!("Element", "RegistryLeavesBaseBytesUnchanged", crate::element_test::run_element_registry_leaves_base_bytes_unchanged);
 REGISTER_MINI_TEST!("Element", "FeaturesRoundTrip", crate::element_test::run_element_features_round_trip);
 REGISTER_MINI_TEST!("Element", "DimensionsAreNominalNotMeasured", crate::element_test::run_element_dimensions_are_nominal_not_measured);
+REGISTER_MINI_TEST!("Element", "UnknownTypeSurvivesResave", crate::element_test::run_element_unknown_type_survives_resave);
+REGISTER_MINI_TEST!("Element", "DuplicateKeepsEveryField", crate::element_test::run_element_duplicate_keeps_every_field);
+REGISTER_MINI_TEST!("Element", "EqualityComparesCarriedFields", crate::element_test::run_element_equality_compares_carried_fields);
+REGISTER_MINI_TEST!("ElementFeature", "Constructor", crate::element_test::run_element_feature_constructor);
+REGISTER_MINI_TEST!("ElementFeature", "Json Roundtrip", crate::element_test::run_element_feature_json_roundtrip);
+REGISTER_MINI_TEST!("ElementFeature", "Protobuf Roundtrip", crate::element_test::run_element_feature_protobuf_roundtrip);

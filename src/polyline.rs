@@ -2265,6 +2265,24 @@ thread_local! {
         ));
 }
 
+/// Compare polylines by value (ignoring GUIDs), rounded to `Tolerance::ROUNDING` decimals -
+/// the same comparison `Polyline::operator==` makes in C++ and `__eq__` makes in Python. Rust
+/// was the only one of the three without it, which is why `ElementFeature` could not derive
+/// `PartialEq` and `Element::eq` could not compare its features.
+impl PartialEq for Polyline {
+    fn eq(&self, other: &Self) -> bool {
+        if self.name != other.name { return false; }
+        if self.point_count() != other.point_count() { return false; }
+        let r = 10f64.powi(crate::tolerance::Tolerance::ROUNDING);
+        for i in 0..self.coords.len() {
+            if (self.coords[i] * r).round() != (other.coords[i] * r).round() { return false; }
+        }
+        if (self.width * r).round() != (other.width * r).round() { return false; }
+        if self.linecolor != other.linecolor { return false; }
+        true
+    }
+}
+
 impl fmt::Display for Polyline {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(
