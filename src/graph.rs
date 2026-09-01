@@ -60,6 +60,17 @@ impl fmt::Display for Edge {
 
 impl Vertex {
     /// Initialize a new Vertex.
+    /// Whether this identity has actually been minted.
+    ///
+    /// A serializer that calls `guid()` MINTS one for everything it writes, which defeats the
+    /// lazy scheme everywhere it is used on a bulk collection: a drawing sheet with 34,592
+    /// graph vertices generated 34,592 UUIDs at write time and put ~1.3 MB of them in the file
+    /// for a `Session::pb_loads` that discards every one. Ask this first, and write nothing
+    /// when the answer is no.
+    pub fn has_guid(&self) -> bool {
+        self.guid.get().is_some()
+    }
+
     pub fn guid(&self) -> &str {
         self.guid.get_or_init(|| uuid::Uuid::new_v4().to_string())
     }
@@ -125,6 +136,17 @@ impl Default for Edge {
 
 impl Edge {
     /// Initialize a new Edge.
+    /// Whether this identity has actually been minted.
+    ///
+    /// A serializer that calls `guid()` MINTS one for everything it writes, which defeats the
+    /// lazy scheme everywhere it is used on a bulk collection: a drawing sheet with 34,592
+    /// graph vertices generated 34,592 UUIDs at write time and put ~1.3 MB of them in the file
+    /// for a `Session::pb_loads` that discards every one. Ask this first, and write nothing
+    /// when the answer is no.
+    pub fn has_guid(&self) -> bool {
+        self.guid.get().is_some()
+    }
+
     pub fn guid(&self) -> &str {
         self.guid.get_or_init(|| uuid::Uuid::new_v4().to_string())
     }
@@ -213,6 +235,17 @@ impl Default for Graph {
 
 impl Graph {
     /// Creates a new, empty `Graph` with a specific name.
+    /// Whether this identity has actually been minted.
+    ///
+    /// A serializer that calls `guid()` MINTS one for everything it writes, which defeats the
+    /// lazy scheme everywhere it is used on a bulk collection: a drawing sheet with 34,592
+    /// graph vertices generated 34,592 UUIDs at write time and put ~1.3 MB of them in the file
+    /// for a `Session::pb_loads` that discards every one. Ask this first, and write nothing
+    /// when the answer is no.
+    pub fn has_guid(&self) -> bool {
+        self.guid.get().is_some()
+    }
+
     pub fn guid(&self) -> &str {
         self.guid.get_or_init(|| uuid::Uuid::new_v4().to_string())
     }
@@ -517,15 +550,29 @@ impl Graph {
     // Protobuf Serialization
     ///////////////////////////////////////////////////////////////////////////////////////////
 
-    pub fn pb_dumps(&self) -> Vec<u8> {
-        use prost::Message;
+    /// The one place a Graph becomes a proto message.
+    ///
+    /// `Session::pb_dumps` used to build this inline, and the two copies drifted: this one
+    /// deduplicates, the Session one did not. `edges` stores every edge TWICE - once under each
+    /// endpoint - so a Session written by Rust carried 98 edges for 49, while C++ and Python
+    /// both delegate here and wrote 49. The bytes round-tripped either way (re-inserting an edge
+    /// is idempotent), so nothing failed; the file was just bigger and the three languages
+    /// disagreed about the same session.
+    pub(crate) fn to_proto(&self) -> crate::proto::Graph {
         use std::collections::BTreeMap as ProtoMap; // the generated proto map type - sorted, so the encoding is reproducible
 
         let mut proto_vertices: ProtoMap<String, crate::proto::Vertex> = ProtoMap::new();
         for (name, vertex) in &self.vertices {
             proto_vertices.insert(name.clone(), crate::proto::Vertex {
                 name: vertex.name.clone(),
-                guid: vertex.guid().to_string(),
+                // `get()`, not `guid()`: a vertex's identity is its NAME - which is already the
+                // object's guid - so its own guid field is vestigial, and `Session::pb_loads`
+                // proves it by discarding the value on the way back in. Calling `guid()` here
+                // MINTED one for every vertex that never had one, so a sheet with 34,592
+                // vertices generated 34,592 UUIDs at write time and wrote ~1.3 MB of them for
+                // a reader that throws them away. Empty is zero bytes in proto3, and a graph
+                // whose vertices really do carry guids still round-trips through `pb_loads`.
+                guid: if vertex.has_guid() { vertex.guid().to_string() } else { String::new() },
                 attribute: vertex.attribute.clone(),
                 index: vertex.index,
             });
@@ -538,7 +585,7 @@ impl Graph {
                 let key = if u < v { (u.clone(), v.clone()) } else { (v.clone(), u.clone()) };
                 if seen.insert(key) {
                     proto_edges.push(crate::proto::Edge {
-                        guid: edge.guid().to_string(),
+                        guid: if edge.has_guid() { edge.guid().to_string() } else { String::new() },
                         name: edge.name.clone(),
                         v0: edge.v0.clone(),
                         v1: edge.v1.clone(),
@@ -549,15 +596,19 @@ impl Graph {
             }
         }
 
-        let proto = crate::proto::Graph {
+        crate::proto::Graph {
             name: self.name.clone(),
             guid: self.guid().to_string(),
             vertices: proto_vertices,
             edges: proto_edges,
             vertex_count: self.vertex_count,
             edge_count: self.edge_count,
-        };
-        proto.encode_to_vec()
+        }
+    }
+
+    pub fn pb_dumps(&self) -> Vec<u8> {
+        use prost::Message;
+        self.to_proto().encode_to_vec()
     }
 
     pub fn pb_loads(data: &[u8]) -> Result<Self, Box<dyn std::error::Error>> {

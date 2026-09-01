@@ -1075,6 +1075,8 @@ pub fn get_all_tests() -> Vec<RegisteredTest> {
         RegisteredTest { group: "Element", name: "FeaturesRoundTrip", func: run_element_features_round_trip },
         RegisteredTest { group: "Element", name: "DimensionsAreNominalNotMeasured", func: run_element_dimensions_are_nominal_not_measured },
         RegisteredTest { group: "Element", name: "UnknownTypeSurvivesResave", func: run_element_unknown_type_survives_resave },
+        RegisteredTest { group: "Element", name: "RegistryJsonRoundTrip", func: run_element_registry_json_round_trip },
+        RegisteredTest { group: "Element", name: "ThrowingFactoryDegradesToBase", func: run_element_throwing_factory_degrades_to_base },
         RegisteredTest { group: "Element", name: "DuplicateKeepsEveryField", func: run_element_duplicate_keeps_every_field },
         RegisteredTest { group: "Element", name: "EqualityComparesCarriedFields", func: run_element_equality_compares_carried_fields },
         RegisteredTest { group: "ElementFeature", name: "Constructor", func: run_element_feature_constructor },

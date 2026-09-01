@@ -899,6 +899,24 @@ impl Element {
         }
         Self::pb_loads(data)
     }
+
+    /// The same, from JSON - and through the SAME factory, not a second registry.
+    ///
+    /// A factory takes serialized proto bytes. That is the only contract, and it stays the only
+    /// contract: this reads the JSON into a base Element, which carries `element_type` and
+    /// `element_data` through unchanged, and re-encodes THAT for the factory. So a package
+    /// registers once and both formats reconstruct its type. Without this the JSON path could
+    /// not rebuild a derived element at all - it kept the payload but always handed back a base.
+    pub fn file_json_loads_polymorphic(s: &str) -> Self {
+        let base = Self::file_json_loads(s);
+        if !base.element_type.is_empty() {
+            let factory = element_registry().lock().ok().and_then(|r| r.get(&base.element_type).copied());
+            if let Some(f) = factory {
+                if let Some(derived) = f(&base.pb_dumps()) { return derived; }
+            }
+        }
+        base
+    }
 }
 
 impl PartialEq for Element {

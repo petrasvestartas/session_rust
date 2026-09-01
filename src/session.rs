@@ -513,37 +513,10 @@ impl Session {
             root: self.tree.root().map(|r| treenode_to_proto(&r)),
         };
 
-        // Build Graph proto
-        let mut vertices_map: std::collections::BTreeMap<String, crate::proto::Vertex> = std::collections::BTreeMap::new();
-        for v in self.graph.get_vertices() {
-            vertices_map.insert(v.name.clone(), crate::proto::Vertex {
-                name: v.name.clone(),
-                guid: v.guid().to_string(),
-                attribute: v.attribute.clone(),
-                index: v.index,
-            });
-        }
-        let mut edges_proto: Vec<crate::proto::Edge> = Vec::new();
-        for (_u, neighbors) in &self.graph.edges {
-            for (_v, edge) in neighbors {
-                edges_proto.push(crate::proto::Edge {
-                    guid: edge.guid().to_string(),
-                    name: edge.name.clone(),
-                    v0: edge.v0.clone(),
-                    v1: edge.v1.clone(),
-                    attribute: edge.attribute.clone(),
-                    index: edge.index,
-                });
-            }
-        }
-        let graph_proto = crate::proto::Graph {
-            name: self.graph.name.clone(),
-            guid: self.graph.guid().to_string(),
-            vertices: vertices_map,
-            edges: edges_proto,
-            vertex_count: self.graph.vertex_count,
-            edge_count: self.graph.edge_count,
-        };
+        // One helper, not a second copy. The inline version this replaces did not deduplicate
+        // `graph.edges` (which holds every edge under BOTH endpoints), so Rust wrote 98 edges
+        // where C++ and Python - both of which delegate to the Graph writer - wrote 49.
+        let graph_proto = self.graph.to_proto();
 
         // Xforms in canonical order() sequence — a map would not be deterministic
         let xforms_proto: Vec<crate::proto::XformEntry> = self

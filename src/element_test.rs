@@ -457,6 +457,54 @@ pub fn run_element_dimensions_are_nominal_not_measured() -> TestResult {
     })
 }
 
+pub fn run_element_registry_json_round_trip() -> TestResult {
+    MINI_TEST!("RegistryJsonRoundTrip", {
+        use crate::element::Element;
+
+        // The JSON path reconstructs the derived type too, through the SAME factory. Before
+        // this, JSON kept the payload but always handed back a base - so a package could round
+        // trip through .pb and not through .json, for no reason a caller could see.
+        //
+        // Rust has no inheritance, so "the derived type came back" is expressed as "the
+        // package's factory ran and produced the element": it renames what it builds.
+        fn build(data: &[u8]) -> Option<Element> {
+            let mut e = Element::pb_loads(data).ok()?;
+            e.name = format!("{}_via_factory", e.name);
+            Some(e)
+        }
+        Element::register_type("TestPlate", build);
+
+        let mut plate = Element::from_mesh(unit_quad(), "plate_json");
+        plate.element_type = "TestPlate".to_string();
+        plate.element_data = b"9.5,7,8".to_vec();
+
+        let loaded = Element::file_json_loads_polymorphic(&plate.file_json_dumps());
+
+        MINI_CHECK!(loaded.name == "plate_json_via_factory");
+        MINI_CHECK!(loaded.element_type == "TestPlate");
+        MINI_CHECK!(loaded.element_data == b"9.5,7,8".to_vec());
+    })
+}
+
+pub fn run_element_throwing_factory_degrades_to_base() -> TestResult {
+    MINI_TEST!("ThrowingFactoryDegradesToBase", {
+        use crate::element::{Element, ElementGeometry};
+
+        // A factory that declines is a bug in that package, and it must not take the whole
+        // Session down: one malformed element must not make every other element unreachable.
+        // C++ and Python express the same failure by throwing; a Rust factory returns None.
+        fn decline(_data: &[u8]) -> Option<Element> { None }
+        Element::register_type("Exploding", decline);
+
+        let mut victim = Element::from_mesh(unit_quad(), "victim");
+        victim.element_type = "Exploding".to_string();
+
+        let loaded = Element::pb_loads_polymorphic(&victim.pb_dumps()).unwrap();
+        MINI_CHECK!(loaded.name == "victim");
+        MINI_CHECK!(matches!(loaded.geometry(), ElementGeometry::Mesh(_)));
+    })
+}
+
 pub fn run_element_unknown_type_survives_resave() -> TestResult {
     MINI_TEST!("UnknownTypeSurvivesResave", {
         use crate::element::Element;
@@ -626,3 +674,5 @@ REGISTER_MINI_TEST!("Element", "EqualityComparesCarriedFields", crate::element_t
 REGISTER_MINI_TEST!("ElementFeature", "Constructor", crate::element_test::run_element_feature_constructor);
 REGISTER_MINI_TEST!("ElementFeature", "Json Roundtrip", crate::element_test::run_element_feature_json_roundtrip);
 REGISTER_MINI_TEST!("ElementFeature", "Protobuf Roundtrip", crate::element_test::run_element_feature_protobuf_roundtrip);
+REGISTER_MINI_TEST!("Element", "RegistryJsonRoundTrip", crate::element_test::run_element_registry_json_round_trip);
+REGISTER_MINI_TEST!("Element", "ThrowingFactoryDegradesToBase", crate::element_test::run_element_throwing_factory_degrades_to_base);
