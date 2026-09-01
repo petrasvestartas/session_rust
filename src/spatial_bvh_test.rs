@@ -462,6 +462,10 @@ pub fn run_bvh_build_from_aabbs() -> TestResult {
         MINI_CHECK!(hits.len() == 2);
         MINI_CHECK!(hits.contains(&0));
         MINI_CHECK!(hits.contains(&1));
+
+        bvh.build_from_aabbs(&[], 50.0);
+
+        MINI_CHECK!(TOLERANCE.is_close(bvh.world_size, 50.0));
     })
 }
 
