@@ -388,9 +388,6 @@ pub fn get_all_tests() -> Vec<RegisteredTest> {
     use crate::spatial_rtree_test::*;
     use crate::session_config_test::*;
     use crate::element_test::*;
-    use crate::element_column_test::*;
-    use crate::element_beam_test::*;
-    use crate::element_plate_test::*;
     use crate::mesh_offset_test::*;
     use crate::aabb_test::*;
     use crate::boolean_polyline_test::*;
@@ -842,7 +839,6 @@ pub fn get_all_tests() -> Vec<RegisteredTest> {
         RegisteredTest { group: "Session", name: "Get Object", func: run_session_get_object },
         RegisteredTest { group: "Session", name: "Remove Object", func: run_session_remove_object },
         RegisteredTest { group: "Session", name: "Get Geometry", func: run_session_get_geometry },
-        RegisteredTest { group: "Session", name: "Compute Face To Face", func: run_session_compute_face_to_face },
         RegisteredTest { group: "Session", name: "Json Roundtrip", func: run_session_json_roundtrip },
         RegisteredTest { group: "Session", name: "Protobuf Roundtrip", func: run_session_protobuf_roundtrip },
         RegisteredTest { group: "Session", name: "Set Xform", func: run_session_set_xform },
@@ -1072,55 +1068,6 @@ pub fn get_all_tests() -> Vec<RegisteredTest> {
         RegisteredTest { group: "Element", name: "Json Roundtrip", func: run_element_json_roundtrip },
         RegisteredTest { group: "Element", name: "Protobuf Roundtrip", func: run_element_protobuf_roundtrip },
         RegisteredTest { group: "Element", name: "Polylines", func: run_element_polylines },
-        // ElementColumn tests
-        RegisteredTest { group: "ElementColumn", name: "Constructor", func: run_column_constructor },
-        RegisteredTest { group: "ElementColumn", name: "Setters", func: run_column_setters },
-        RegisteredTest { group: "ElementColumn", name: "Center Line", func: run_column_center_line },
-        RegisteredTest { group: "ElementColumn", name: "Extend", func: run_column_extend },
-        RegisteredTest { group: "ElementColumn", name: "AABB", func: run_column_aabb },
-        RegisteredTest { group: "ElementColumn", name: "Compute Point", func: run_column_compute_point },
-        RegisteredTest { group: "ElementColumn", name: "Session Geometry", func: run_column_session_geometry },
-        RegisteredTest { group: "ElementColumn", name: "Json Roundtrip", func: run_column_json_roundtrip },
-        RegisteredTest { group: "ElementColumn", name: "Protobuf Roundtrip", func: run_column_protobuf_roundtrip },
-        RegisteredTest { group: "ElementColumn", name: "Polylines", func: run_column_polylines },
-        RegisteredTest { group: "ElementColumn", name: "Planes", func: run_column_planes },
-        RegisteredTest { group: "ElementColumn", name: "Edge Vectors", func: run_column_edge_vectors },
-        RegisteredTest { group: "ElementColumn", name: "Axis", func: run_column_axis },
-        // ElementBeam tests
-        RegisteredTest { group: "ElementBeam", name: "Constructor", func: run_beam_constructor },
-        RegisteredTest { group: "ElementBeam", name: "Setters", func: run_beam_setters },
-        RegisteredTest { group: "ElementBeam", name: "Center Line", func: run_beam_center_line },
-        RegisteredTest { group: "ElementBeam", name: "Extend", func: run_beam_extend },
-        RegisteredTest { group: "ElementBeam", name: "AABB", func: run_beam_aabb },
-        RegisteredTest { group: "ElementBeam", name: "Compute Point", func: run_beam_compute_point },
-        RegisteredTest { group: "ElementBeam", name: "Session Geometry", func: run_beam_session_geometry },
-        RegisteredTest { group: "ElementBeam", name: "Json Roundtrip", func: run_beam_json_roundtrip },
-        RegisteredTest { group: "ElementBeam", name: "Protobuf Roundtrip", func: run_beam_protobuf_roundtrip },
-        RegisteredTest { group: "ElementBeam", name: "Polylines", func: run_beam_polylines },
-        RegisteredTest { group: "ElementBeam", name: "Planes", func: run_beam_planes },
-        RegisteredTest { group: "ElementBeam", name: "Edge Vectors", func: run_beam_edge_vectors },
-        RegisteredTest { group: "ElementBeam", name: "Axis", func: run_beam_axis },
-        // ElementPlate tests
-        RegisteredTest { group: "ElementPlate", name: "Constructor", func: run_plate_constructor },
-        RegisteredTest { group: "ElementPlate", name: "Default Polygon", func: run_plate_default_polygon },
-        RegisteredTest { group: "ElementPlate", name: "Setters", func: run_plate_setters },
-        RegisteredTest { group: "ElementPlate", name: "Mesh Topology", func: run_plate_mesh_topology },
-        RegisteredTest { group: "ElementPlate", name: "AABB", func: run_plate_aabb },
-        RegisteredTest { group: "ElementPlate", name: "Compute Point", func: run_plate_compute_point },
-        RegisteredTest { group: "ElementPlate", name: "Triangle Polygon", func: run_plate_triangle_polygon },
-        RegisteredTest { group: "ElementPlate", name: "Json Roundtrip", func: run_plate_json_roundtrip },
-        RegisteredTest { group: "ElementPlate", name: "Protobuf Roundtrip", func: run_plate_protobuf_roundtrip },
-        RegisteredTest { group: "ElementPlate", name: "From Top Bottom", func: run_plate_from_top_bottom },
-        RegisteredTest { group: "ElementPlate", name: "Polylines", func: run_plate_polylines },
-        RegisteredTest { group: "ElementPlate", name: "Planes", func: run_plate_planes },
-        RegisteredTest { group: "ElementPlate", name: "Edge Vectors", func: run_plate_edge_vectors },
-        RegisteredTest { group: "ElementPlate", name: "Axis", func: run_plate_axis },
-        RegisteredTest { group: "ElementPlate", name: "Joint Types", func: run_plate_joint_types },
-        RegisteredTest { group: "ElementPlate", name: "J Mf", func: run_plate_j_mf },
-        RegisteredTest { group: "ElementPlate", name: "Key", func: run_plate_key },
-        RegisteredTest { group: "ElementPlate", name: "Component Plane", func: run_plate_component_plane },
-        RegisteredTest { group: "ElementPlate", name: "Json Roundtrip Joinery", func: run_plate_json_roundtrip_joinery },
-        RegisteredTest { group: "ElementPlate", name: "Protobuf Roundtrip Joinery", func: run_plate_protobuf_roundtrip_joinery },
         RegisteredTest { group: "MeshOffset", name: "from_mesh", func: run_mesh_offset_from_mesh },
         RegisteredTest { group: "MeshOffset", name: "from_mesh_grid", func: run_mesh_offset_from_mesh_grid },
         RegisteredTest { group: "MeshOffset", name: "from_mesh_layers", func: run_mesh_offset_from_mesh_layers },

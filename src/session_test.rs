@@ -171,11 +171,10 @@ pub fn run_session_add_brep() -> TestResult {
 
 pub fn run_session_add_element() -> TestResult {
     MINI_TEST!("Add Element", {
-        use crate::{Session, Point};
+        use crate::Session;
         use crate::Element;
         let mut session = Session::default();
-        let polygon = vec![Point::new(0.0,0.0,0.0), Point::new(2.0,0.0,0.0), Point::new(2.0,2.0,0.0), Point::new(0.0,2.0,0.0)];
-        let plate = Element::plate(polygon, 0.2, "p1");
+        let plate = Element::new("p1");
         let guid = plate.guid().to_string();
         session.add_element(plate, None);
 
@@ -362,8 +361,7 @@ pub fn run_session_remove_object() -> TestResult {
         session.add_point(point, None);
         let removed = session.remove_object(&guid);
 
-        let polygon = vec![Point::new(0.0,0.0,0.0), Point::new(2.0,0.0,0.0), Point::new(2.0,2.0,0.0), Point::new(0.0,2.0,0.0)];
-        let plate = crate::element::Element::plate(polygon, 0.2, "p1");
+        let plate = crate::element::Element::new("p1");
         let eguid = plate.guid().to_string();
         session.add_element(plate, None);
         let eremoved = session.remove_object(&eguid);
@@ -390,24 +388,6 @@ pub fn run_session_get_geometry() -> TestResult {
         let geom = session.get_geometry();
 
         MINI_CHECK!(geom.points.len() == 1);
-    })
-}
-
-pub fn run_session_compute_face_to_face() -> TestResult {
-    MINI_TEST!("Compute Face To Face", {
-        use crate::{Session, Point};
-        use crate::Element;
-        let mut session = Session::default();
-        let p1 = Element::plate(vec![Point::new(0.0,0.0,0.0), Point::new(1.0,0.0,0.0), Point::new(1.0,1.0,0.0), Point::new(0.0,1.0,0.0)], 0.2, "p1");
-        let p2 = Element::plate(vec![Point::new(0.0,0.0,-0.2), Point::new(1.0,0.0,-0.2), Point::new(1.0,1.0,-0.2), Point::new(0.0,1.0,-0.2)], 0.2, "p2");
-        let g1 = p1.guid().to_string();
-        let g2 = p2.guid().to_string();
-        session.add_element(p1, None);
-        session.add_element(p2, None);
-        session.compute_face_to_face(5.0, 0.001);
-
-        MINI_CHECK!(session.objects.elements.len() == 2);
-        MINI_CHECK!(session.graph.has_edge((&g1, &g2)));
     })
 }
 
@@ -734,7 +714,6 @@ REGISTER_MINI_TEST!("Session", "Ray Cast", crate::session_test::run_session_ray_
 REGISTER_MINI_TEST!("Session", "Get Object", crate::session_test::run_session_get_object);
 REGISTER_MINI_TEST!("Session", "Remove Object", crate::session_test::run_session_remove_object);
 REGISTER_MINI_TEST!("Session", "Get Geometry", crate::session_test::run_session_get_geometry);
-REGISTER_MINI_TEST!("Session", "Compute Face To Face", crate::session_test::run_session_compute_face_to_face);
 REGISTER_MINI_TEST!("Session", "Json Roundtrip", crate::session_test::run_session_json_roundtrip);
 REGISTER_MINI_TEST!("Session", "Protobuf Roundtrip", crate::session_test::run_session_protobuf_roundtrip);
 REGISTER_MINI_TEST!("Session", "Lookup Mutation Roundtrip", crate::session_test::run_session_lookup_mutation_roundtrip);

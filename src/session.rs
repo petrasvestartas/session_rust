@@ -1298,60 +1298,6 @@ impl Session {
         node
     }
 
-    pub fn compute_face_to_face(&mut self, inflate: f64, coplanar_tolerance: f64) {
-        let n = self.objects.elements.len();
-        if n == 0 { return; }
-        self.objects = self.objects_synced(); // pull lookup-truth in before reading geometry
-
-        // Step A: Fast AABB from raw polygon data (no Polyline construction)
-        let mut aabbs: Vec<crate::obb::OBB> = Vec::with_capacity(n);
-        for elem in &self.objects.elements {
-            aabbs.push(elem.compute_aabb_fast(inflate));
-        }
-
-        // Step B: SpatialBVH broad phase
-        let mut bvh = crate::spatial_bvh::SpatialBVH::new();
-        bvh.build(&aabbs);
-        let mut adjacency: Vec<i32> = Vec::new();
-        for i in 0..n {
-            let hits = bvh.query_aabb(&aabbs[i]);
-            for j in hits {
-                if (i as i32) < (j as i32) {
-                    adjacency.push(i as i32);
-                    adjacency.push(j as i32);
-                    adjacency.push(-1);
-                    adjacency.push(-1);
-                }
-            }
-        }
-
-        // Step C: Cache polylines + planes, then face-to-face
-        let mut all_polys: Vec<Vec<crate::polyline::Polyline>> = Vec::with_capacity(n);
-        let mut all_planes: Vec<Vec<crate::plane::Plane>> = Vec::with_capacity(n);
-        for elem in self.objects.elements.iter_mut() {
-            let elem = Rc::make_mut(elem); // COW: polylines()/planes() fill lazy caches
-            all_polys.push(elem.polylines());
-            all_planes.push(elem.planes());
-        }
-        // Heal the COW split from the cache fill above: lookup re-points at the filled
-        // elements, so the objects==lookup sharing invariant holds again.
-        for elem in &self.objects.elements {
-            self.lookup.insert(elem.guid().to_string(), Geometry::Element(Rc::clone(elem)));
-        }
-        let elem_guids: Vec<String> = self.objects.elements.iter().map(|e| e.guid().to_string()).collect();
-        let joints = crate::intersection::face_to_face(&adjacency, &all_polys, &all_planes, coplanar_tolerance);
-
-        let g = self.add_group("Joints");
-        for (k, (a, b, fi, fj, typ, poly)) in joints.into_iter().enumerate() {
-            let mut jpl = poly;
-            jpl.name = format!("joint_{k}");
-            let jpl_guid = jpl.guid().to_string();
-            self.add_polyline(jpl, Some(&g));
-            self.add_edge(&elem_guids[a as usize], &elem_guids[b as usize],
-                &format!("{fi},{fj},{typ},{jpl_guid}"));
-        }
-    }
-
     /// Adds a TreeNode to the tree hierarchy.
     ///
     /// # Arguments

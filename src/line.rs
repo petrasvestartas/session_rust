@@ -387,37 +387,17 @@ impl Line {
 
     /// The proto struct itself — pb_dumps encodes it; Session embeds it directly.
     pub fn to_proto(&self) -> crate::proto::Line {
+        // P6: coords packed, colour packed, both via the shared helpers. The two `Point`
+        // sub-messages were serialization-only wrappers (the kernel stores flat _x0.._z1)
+        // and each carried a redundant `width: 1.0` fixed64.
         crate::proto::Line {
-            start: Some(crate::proto::Point {
-                x: self._x0 as f64,
-                y: self._y0 as f64,
-                z: self._z0 as f64,
-                guid: String::new(),
-                name: String::new(),
-                width: 1.0,
-                pointcolor: None,
-            }),
-            end: Some(crate::proto::Point {
-                x: self._x1 as f64,
-                y: self._y1 as f64,
-                z: self._z1 as f64,
-                guid: String::new(),
-                name: String::new(),
-                width: 1.0,
-                pointcolor: None,
-            }),
             guid: self.guid().to_string(),
             name: self.name.clone(),
             width: self.width,
             dash: self.dash.clone(),
-            linecolor: Some(crate::proto::Color {
-                guid: self.linecolor.guid().to_string(),
-                name: self.linecolor.name.clone(),
-                r: self.linecolor.r,
-                g: self.linecolor.g,
-                b: self.linecolor.b,
-                a: self.linecolor.a,
-            }),
+            coords: vec![self._x0, self._y0, self._z0, self._x1, self._y1, self._z1],
+            linecolor_rgba: Color::pack(std::slice::from_ref(&self.linecolor)),
+            linecolor_name: self.linecolor.name.clone(),
         }
     }
 
@@ -429,20 +409,20 @@ impl Line {
 
     /// Build from an already-decoded proto — pb_loads decodes then calls this.
     pub fn from_proto(proto: crate::proto::Line) -> Self {
-        let start = proto.start.unwrap_or_default();
-        let end = proto.end.unwrap_or_default();
-        let mut line = Self::new(start.x as f64, start.y as f64, start.z as f64, end.x as f64, end.y as f64, end.z as f64);
+        let c = &proto.coords;
+        // A well-formed Line always carries 6; guard so a truncated file cannot panic.
+        let mut line = if c.len() == 6 {
+            Self::new(c[0], c[1], c[2], c[3], c[4], c[5])
+        } else {
+            Self::default()
+        };
         line.set_guid(proto.guid);
         line.name = proto.name;
         if proto.width > 0.0 { line.width = proto.width; }
         line.dash = proto.dash;
-        if let Some(color) = proto.linecolor {
-            line.linecolor.set_guid(color.guid.clone());
-            line.linecolor.name = color.name;
-            line.linecolor.r = color.r;
-            line.linecolor.g = color.g;
-            line.linecolor.b = color.b;
-            line.linecolor.a = color.a;
+        if let Some(mut color) = Color::unpack(&proto.linecolor_rgba).into_iter().next() {
+            if !proto.linecolor_name.is_empty() { color.name = proto.linecolor_name; }
+            line.linecolor = color;
         }
         line
     }

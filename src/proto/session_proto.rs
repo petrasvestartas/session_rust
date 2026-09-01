@@ -103,13 +103,6 @@ pub struct VertexData {
         f64,
     >,
 }
-/// Halfedge connectivity (stored as nested maps)
-#[derive(Clone, PartialEq, ::prost::Message)]
-pub struct HalfedgeMap {
-    /// vertex_key -> halfedge_key
-    #[prost(btree_map = "uint64, uint64", tag = "1")]
-    pub neighbors: ::prost::alloc::collections::BTreeMap<u64, u64>,
-}
 /// Hole ring (inner ring for face with holes)
 #[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
 pub struct HoleRing {
@@ -167,9 +160,6 @@ pub struct Mesh {
     /// face_key -> FaceData
     #[prost(map = "uint64, message", tag = "4")]
     pub faces: ::std::collections::HashMap<u64, FaceData>,
-    /// Halfedge connectivity
-    #[prost(map = "uint64, message", tag = "5")]
-    pub halfedges: ::std::collections::HashMap<u64, HalfedgeMap>,
     /// Edge custom data
     #[prost(message, repeated, tag = "6")]
     pub edge_data: ::prost::alloc::vec::Vec<EdgeData>,
@@ -191,15 +181,6 @@ pub struct Mesh {
         ::prost::alloc::string::String,
         f64,
     >,
-    /// Vertex colors
-    #[prost(message, repeated, tag = "10")]
-    pub pointcolors: ::prost::alloc::vec::Vec<Color>,
-    /// Face colors
-    #[prost(message, repeated, tag = "11")]
-    pub facecolors: ::prost::alloc::vec::Vec<Color>,
-    /// Edge colors
-    #[prost(message, repeated, tag = "12")]
-    pub linecolors: ::prost::alloc::vec::Vec<Color>,
     /// Edge widths
     #[prost(double, repeated, tag = "13")]
     pub widths: ::prost::alloc::vec::Vec<f64>,
@@ -212,6 +193,21 @@ pub struct Mesh {
     /// Face triangulation (face_key -> flat triangle vertex keys)
     #[prost(map = "uint64, message", tag = "17")]
     pub triangulation: ::std::collections::HashMap<u64, TriList>,
+    /// ── P6: packed colour arrays, 4 floats per colour (r,g,b,a) ──
+    /// `repeated Color` costs a sub-message per element carrying a 36-char guid String and a
+    /// name — 66 B per colour against 16 B of actual data, and ~500-800k String allocations
+    /// per sheet load. Packed float is bit-exact, memcpy-decodable and sliceable.
+    ///
+    /// Bulk colours carry NO guid and NO name. The guid was never identity — colour equality
+    /// ignores it in all three languages and it is lazily minted. The name is always the
+    /// default for bulk colours (every producer pushes Color::white()/black()); a Line, which
+    /// CAN be named, keeps a zero-cost `linecolor_name` string instead.
+    #[prost(float, repeated, tag = "18")]
+    pub pointcolors_rgba: ::prost::alloc::vec::Vec<f32>,
+    #[prost(float, repeated, tag = "19")]
+    pub facecolors_rgba: ::prost::alloc::vec::Vec<f32>,
+    #[prost(float, repeated, tag = "20")]
+    pub linecolors_rgba: ::prost::alloc::vec::Vec<f32>,
 }
 /// NurbsSurface message representing a Non-Uniform Rational B-Spline surface
 #[derive(Clone, PartialEq, ::prost::Message)]
@@ -471,43 +467,12 @@ pub struct Edge {
     #[prost(int32, tag = "6")]
     pub index: i32,
 }
-/// Plane message representing a 3D plane with minimal storage
-/// Uses flat frame array: \[ox, oy, oz, xx, xy, xz, yx, yy, yz, zx, zy, zz\]
-/// Plane equation coefficients (a, b, c, d) are computed from z_axis and origin
-#[derive(Clone, PartialEq, ::prost::Message)]
-pub struct Plane {
-    /// Unique identifier
-    #[prost(string, tag = "1")]
-    pub guid: ::prost::alloc::string::String,
-    /// Plane name
-    #[prost(string, tag = "2")]
-    pub name: ::prost::alloc::string::String,
-    /// Frame: origin(3) + x_axis(3) + y_axis(3) + z_axis(3) = 12 doubles
-    #[prost(double, repeated, tag = "3")]
-    pub frame: ::prost::alloc::vec::Vec<f64>,
-    /// Width for plane visualization
-    #[prost(double, tag = "4")]
-    pub width: f64,
-    /// Color of the plane
-    #[prost(message, optional, tag = "6")]
-    pub linecolor: ::core::option::Option<Color>,
-}
-#[derive(Clone, Copy, PartialEq, ::prost::Message)]
-pub struct JointConnection {
-    #[prost(int32, tag = "1")]
-    pub joint_id: i32,
-    #[prost(bool, tag = "2")]
-    pub is_male: bool,
-    #[prost(double, tag = "3")]
-    pub parameter: f64,
-}
-#[derive(Clone, PartialEq, ::prost::Message)]
-pub struct FaceJoints {
-    #[prost(message, repeated, tag = "1")]
-    pub connections: ::prost::alloc::vec::Vec<JointConnection>,
-}
-/// Element message wrapping geometry with transformation and metadata
-#[derive(Clone, PartialEq, ::prost::Message)]
+/// Element message wrapping geometry with metadata.
+///
+/// An Element is a geometry container and nothing more: a name, a guid, and one serialized
+/// geometry payload. The Beam/Column/Plate kinds and their timber-joinery fields were removed
+/// (see below) — an Element no longer knows what it "is", only what geometry it holds.
+#[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
 pub struct Element {
     /// Element name
     #[prost(string, tag = "1")]
@@ -521,18 +486,6 @@ pub struct Element {
     /// Serialized geometry bytes
     #[prost(bytes = "vec", tag = "4")]
     pub geometry_data: ::prost::alloc::vec::Vec<u8>,
-    /// Per-edge joint type codes
-    #[prost(int32, repeated, tag = "6")]
-    pub joint_types: ::prost::alloc::vec::Vec<i32>,
-    /// Per-face joint connections
-    #[prost(message, repeated, tag = "7")]
-    pub j_mf: ::prost::alloc::vec::Vec<FaceJoints>,
-    /// Component identifier
-    #[prost(string, tag = "8")]
-    pub key: ::prost::alloc::string::String,
-    /// Reference plane for the component
-    #[prost(message, optional, tag = "9")]
-    pub component_plane: ::core::option::Option<Plane>,
 }
 /// Encoders message for serialization metadata and options
 #[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
@@ -645,12 +598,6 @@ pub struct InstanceRef {
 /// Line message representing a line segment
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct Line {
-    /// Start point
-    #[prost(message, optional, tag = "1")]
-    pub start: ::core::option::Option<Point>,
-    /// End point
-    #[prost(message, optional, tag = "2")]
-    pub end: ::core::option::Option<Point>,
     /// Unique identifier
     #[prost(string, tag = "3")]
     pub guid: ::prost::alloc::string::String,
@@ -660,12 +607,33 @@ pub struct Line {
     /// Line width
     #[prost(double, tag = "6")]
     pub width: f64,
-    /// Line color
-    #[prost(message, optional, tag = "7")]
-    pub linecolor: ::core::option::Option<Color>,
     /// Dash pattern: on/off lengths in mm, repeating; empty = solid
     #[prost(double, repeated, tag = "8")]
     pub dash: ::prost::alloc::vec::Vec<f64>,
+    /// ── P6: the two hot fields, flattened ──
+    /// A Line is the most numerous object in a drawing sheet (89,835 in one measured file,
+    /// 178 B each on the wire for 48 B of data), so its per-object overhead IS the sheet
+    /// load cost — and that cost is per-OBJECT, not per-byte: sheets decode at 95 ms/MB
+    /// against 28 ms/MB for a point cloud, the difference being String and sub-message
+    /// allocation.
+    ///
+    /// coords: \[x0,y0,z0,x1,y1,z1\] packed, replacing the two `Point` sub-messages. The kernel
+    /// stores flat _x0.._z1 and never held Points at all — they were serialization-only
+    /// wrappers, and each also carried a redundant `width: 1.0` fixed64.
+    ///
+    /// linecolor_rgba: 4 packed floats. The `Color` sub-message carried a 36-char guid String
+    /// (~38 B) for a colour whose equality ignores the guid — dropped outright.
+    ///
+    /// linecolor_name: colour equality DOES compare the name, so it needs a home. proto3 omits
+    /// an empty string entirely, so the default ("my_color") costs ZERO bytes on the wire —
+    /// which is every line in a drawing sheet. Only a deliberately named colour pays, and it
+    /// pays 8 bytes instead of a whole sub-message.
+    #[prost(double, repeated, tag = "9")]
+    pub coords: ::prost::alloc::vec::Vec<f64>,
+    #[prost(float, repeated, tag = "10")]
+    pub linecolor_rgba: ::prost::alloc::vec::Vec<f32>,
+    #[prost(string, tag = "11")]
+    pub linecolor_name: ::prost::alloc::string::String,
 }
 /// Matrix message representing an NxM matrix
 #[derive(Clone, PartialEq, ::prost::Message)]
@@ -710,6 +678,27 @@ pub struct NurbsSurfaceTrimmed {
     /// Surface color
     #[prost(message, optional, tag = "7")]
     pub surfacecolor: ::core::option::Option<Color>,
+}
+/// Plane message representing a 3D plane with minimal storage
+/// Uses flat frame array: \[ox, oy, oz, xx, xy, xz, yx, yy, yz, zx, zy, zz\]
+/// Plane equation coefficients (a, b, c, d) are computed from z_axis and origin
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct Plane {
+    /// Unique identifier
+    #[prost(string, tag = "1")]
+    pub guid: ::prost::alloc::string::String,
+    /// Plane name
+    #[prost(string, tag = "2")]
+    pub name: ::prost::alloc::string::String,
+    /// Frame: origin(3) + x_axis(3) + y_axis(3) + z_axis(3) = 12 doubles
+    #[prost(double, repeated, tag = "3")]
+    pub frame: ::prost::alloc::vec::Vec<f64>,
+    /// Width for plane visualization
+    #[prost(double, tag = "4")]
+    pub width: f64,
+    /// Color of the plane
+    #[prost(message, optional, tag = "6")]
+    pub linecolor: ::core::option::Option<Color>,
 }
 /// Polyline message representing a connected sequence of points
 /// Stores coordinates as a flat array \[x0, y0, z0, x1, y1, z1, ...\] for efficiency

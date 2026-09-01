@@ -2736,29 +2736,6 @@ impl Mesh {
             });
         }
 
-        // Halfedge connectivity IS serialized: the halfedge map is the mesh's topology structure
-        // and is stored, not recomputed. (`rebuild_halfedges` exists for meshes built by hand and
-        // as the loader's fallback for a file that carries no map.)
-        let mut halfedges: HashMap<u64, crate::proto::HalfedgeMap> = HashMap::new();
-        // lazy topology: if this mesh was decoded and never edited, the map was never built -
-        // compute it transiently so the WIRE stays exactly what it always was
-        let he_owned;
-        let he_src = if self.halfedge.is_empty() && !self.face.is_empty() {
-            he_owned = self.compute_halfedges();
-            &he_owned
-        } else {
-            &self.halfedge
-        };
-        for (&u, neighbors) in he_src {
-            let mut neighbor_map: std::collections::BTreeMap<u64, u64> = std::collections::BTreeMap::new();
-            for (&v, &fkey_opt) in neighbors {
-                neighbor_map.insert(v as u64, fkey_opt.unwrap_or(usize::MAX) as u64);
-            }
-            halfedges.insert(u as u64, crate::proto::HalfedgeMap {
-                neighbors: neighbor_map,
-            });
-        }
-
         let mut edge_data_vec: Vec<crate::proto::EdgeData> = Vec::new();
         // SORTED: `edge_data` is a repeated field, so its order IS the bytes. Walking the
         // `edgedata` HashMap put the entries in a different order on every run.
@@ -2778,38 +2755,12 @@ impl Mesh {
             });
         }
 
-        let pointcolors: Vec<crate::proto::Color> = self.pointcolors.iter().map(|c| {
-            crate::proto::Color {
-                guid: c.guid().to_string(),
-                name: c.name.clone(),
-                r: c.r,
-                g: c.g,
-                b: c.b,
-                a: c.a,
-            }
-        }).collect();
-
-        let facecolors: Vec<crate::proto::Color> = self.facecolors.iter().map(|c| {
-            crate::proto::Color {
-                guid: c.guid().to_string(),
-                name: c.name.clone(),
-                r: c.r,
-                g: c.g,
-                b: c.b,
-                a: c.a,
-            }
-        }).collect();
-
-        let linecolors: Vec<crate::proto::Color> = self.linecolors.iter().map(|c| {
-            crate::proto::Color {
-                guid: c.guid().to_string(),
-                name: c.name.clone(),
-                r: c.r,
-                g: c.g,
-                b: c.b,
-                a: c.a,
-            }
-        }).collect();
+        // P6: bulk colours go out as packed floats, 4 per colour. A list holding a NAMED
+        // colour keeps the old sub-message shape, because the packed form has nowhere to
+        // put a name and Color equality compares it.
+        let pointcolors_rgba = Color::pack(&self.pointcolors);
+        let facecolors_rgba = Color::pack(&self.facecolors);
+        let linecolors_rgba = Color::pack(&self.linecolors);
 
         let mut triangulation_map: HashMap<u64, crate::proto::TriList> = HashMap::new();
         for (&fkey, tris) in &self.triangulation {
@@ -2827,14 +2778,13 @@ impl Mesh {
             name: self.name.clone(),
             vertices,
             faces,
-            halfedges,
             edge_data: edge_data_vec,
             default_vertex_attributes: self.default_vertex_attributes.iter().map(|(k, v)| (k.clone(), *v as f64)).collect(),
             default_face_attributes: self.default_face_attributes.iter().map(|(k, v)| (k.clone(), *v as f64)).collect(),
             default_edge_attributes: self.default_edge_attributes.iter().map(|(k, v)| (k.clone(), *v as f64)).collect(),
-            pointcolors,
-            facecolors,
-            linecolors,
+            pointcolors_rgba,
+            facecolors_rgba,
+            linecolors_rgba,
             widths: self.widths.iter().map(|&v| v as f64).collect(),
             objectcolor: Some(crate::proto::Color {
                 guid: self.objectcolor.guid().to_string(),
@@ -2915,26 +2865,9 @@ impl Mesh {
         mesh.default_face_attributes = proto.default_face_attributes.into_iter().collect();
         mesh.default_edge_attributes = proto.default_edge_attributes.into_iter().collect();
 
-        mesh.pointcolors = proto.pointcolors.iter().map(|c| {
-            let mut color = Color::new(c.r, c.g, c.b, c.a);
-            color.set_guid(c.guid.clone());
-            color.name = c.name.clone();
-            color
-        }).collect();
-
-        mesh.facecolors = proto.facecolors.iter().map(|c| {
-            let mut color = Color::new(c.r, c.g, c.b, c.a);
-            color.set_guid(c.guid.clone());
-            color.name = c.name.clone();
-            color
-        }).collect();
-
-        mesh.linecolors = proto.linecolors.iter().map(|c| {
-            let mut color = Color::new(c.r, c.g, c.b, c.a);
-            color.set_guid(c.guid.clone());
-            color.name = c.name.clone();
-            color
-        }).collect();
+        mesh.pointcolors = Color::unpack(&proto.pointcolors_rgba);
+        mesh.facecolors = Color::unpack(&proto.facecolors_rgba);
+        mesh.linecolors = Color::unpack(&proto.linecolors_rgba);
 
         mesh.widths = proto.widths.into_iter().map(|v| v as f64).collect();
 

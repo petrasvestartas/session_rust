@@ -1038,8 +1038,8 @@ fn execute_internal(sc: &mut Sc, ct: i32) -> bool {
 
 // ── Convex intersection fast path (Sutherland-Hodgman) ──────────────────
 //
-// For convex CCW inputs (which all ElementPlate faces are — top, bottom, and
-// every side face is a convex quad), the full Vatti scanline is enormous
+// For convex CCW inputs (a box's top, bottom and side faces are all convex
+// quads), the full Vatti scanline is enormous
 // overkill. Sutherland-Hodgman runs in O(na*nb) with ~6 flops per vertex,
 // no fixed-point conversion, no priority queue, no allocator churn.
 //
@@ -1273,8 +1273,8 @@ fn boolean_op_inner(
         }
         // Convex intersection fast path: we've just verified via any_cross==true
         // that the polygons actually intersect AND we haven't short-circuited via
-        // disjoint-AABB or no-crossing. For convex CCW quads (every ElementPlate
-        // face — see element.rs:760-800), Sutherland-Hodgman in float64 skips the
+        // disjoint-AABB or no-crossing. For convex CCW quads,
+        // Sutherland-Hodgman in float64 skips the
         // rest of the Vatti sweep-line pipeline below. For non-convex inputs this
         // falls through to the full Vatti path as before.
         if clip_type == 0

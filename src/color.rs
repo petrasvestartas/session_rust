@@ -81,6 +81,28 @@ impl Color {
         }
     }
 
+    /// P6: a bulk colour list as packed floats, 4 per colour (r, g, b, a).
+    ///
+    /// ONE implementation for every type that carries bulk colours (Mesh, Line, NurbsCurve,
+    /// NurbsSurface). Do not copy this into a geometry module: the whole point of P6 is that
+    /// serialization stops being per-type mapping code.
+    ///
+    /// No guid (equality ignores it; it is lazily minted, not identity) and no name (bulk
+    /// colours always carry the default). A single nameable colour — a Line's — stores its
+    /// name in a sibling string field that costs nothing when empty.
+    pub fn pack(colors: &[Color]) -> Vec<f32> {
+        let mut packed = Vec::with_capacity(colors.len() * 4);
+        for c in colors {
+            packed.extend_from_slice(&[c.r, c.g, c.b, c.a]);
+        }
+        packed
+    }
+
+    /// P6: rebuild a bulk colour list from the packed array.
+    pub fn unpack(packed: &[f32]) -> Vec<Color> {
+        packed.chunks_exact(4).map(|c| Color::new(c[0], c[1], c[2], c[3])).collect()
+    }
+
     /// Create a new color with RGBA values and custom name.
     pub fn with_name(r: f32, g: f32, b: f32, a: f32, name: &str) -> Self {
         Color {
