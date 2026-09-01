@@ -516,6 +516,15 @@ pub struct ElementFeature {
     /// Geometry of the modification
     #[prost(message, repeated, tag = "4")]
     pub outlines: ::prost::alloc::vec::Vec<Polyline>,
+    /// A feature is addressable in its own right: the package that wrote a joint needs to name it
+    /// again later - to update it, to report a clash against it, to let a viewer select one of the
+    /// forty cuts on a beam. The only other handle is the index in `features`, and that moves the
+    /// moment an earlier feature is removed. Empty in files written before this field existed, in
+    /// which case the reader leaves the lazy mint to whoever asks first.
+    ///
+    /// Unique identifier, stable across a round trip
+    #[prost(string, tag = "5")]
+    pub guid: ::prost::alloc::string::String,
 }
 /// Element message wrapping geometry with metadata.
 ///

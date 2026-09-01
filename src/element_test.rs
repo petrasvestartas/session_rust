@@ -417,14 +417,10 @@ pub fn run_element_features_round_trip() -> TestResult {
         let mut e = Element::from_mesh(unit_quad(), "plate_0");
         e.insertion_vectors = vec![Vector::new(0.0, 0.0, 1.0), Vector::new(1.0, 0.0, 0.0)];
         e.dimensions = Some(Vector::new(120.0, 80.0, 12.5));
-        e.features.push(ElementFeature {
-            name: "notch".to_string(),
-            feature_type: "cut".to_string(),
-            face_index: 2,
-            outlines: vec![Polyline::new(vec![
-                Point::new(0.0, 0.0, 0.0), Point::new(1.0, 0.0, 0.0),
-                Point::new(1.0, 1.0, 0.0), Point::new(0.0, 0.0, 0.0)])],
-        });
+        e.features.push(ElementFeature::new("cut", 2, vec![Polyline::new(vec![
+            Point::new(0.0, 0.0, 0.0), Point::new(1.0, 0.0, 0.0),
+            Point::new(1.0, 1.0, 0.0), Point::new(0.0, 0.0, 0.0)])], "notch"));
+        let feature_guid = e.features[0].guid().to_string();
 
         let loaded = Element::pb_loads(&e.pb_dumps()).unwrap();
 
@@ -437,6 +433,9 @@ pub fn run_element_features_round_trip() -> TestResult {
         MINI_CHECK!(loaded.features[0].face_index == 2);
         MINI_CHECK!(loaded.features[0].name == "notch");
         MINI_CHECK!(loaded.features[0].outlines.len() == 1);
+        // The guid is the feature's handle: a package that wrote a joint has to find it again, and
+        // the index in `features` moves the moment an earlier feature is removed.
+        MINI_CHECK!(loaded.features[0].guid() == feature_guid);
     })
 }
 

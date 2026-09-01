@@ -31,6 +31,14 @@ pub enum ElementGeometry {
 // No PartialEq in the derive: Polyline does not implement it.
 #[derive(Debug, Clone, Default)]
 pub struct ElementFeature {
+    /// Lazily minted, like every other identity in the kernel - a feature nobody names never
+    /// pays for a guid.
+    ///
+    /// A feature is addressable in its own right: the package that wrote a joint needs to name
+    /// it again later, to update it, to report a clash against it, or to let a viewer select one
+    /// of the forty cuts on a beam. The only other handle is the index in `features`, and that
+    /// moves the moment an earlier feature is removed.
+    guid: std::sync::OnceLock<String>,
     /// Human-readable label.
     pub name: String,
     /// What kind of modification, e.g. "cut", "drill", "joint" - the package's vocabulary.
@@ -39,6 +47,28 @@ pub struct ElementFeature {
     pub face_index: i32,
     /// Geometry of the modification.
     pub outlines: Vec<Polyline>,
+}
+
+impl ElementFeature {
+    /// Same argument order as the C++ and Python constructors: what the modification IS, where
+    /// it applies, its geometry, then the optional label.
+    pub fn new(feature_type: &str, face_index: i32, outlines: Vec<Polyline>, name: &str) -> Self {
+        Self {
+            guid: std::sync::OnceLock::new(),
+            name: name.to_string(),
+            feature_type: feature_type.to_string(),
+            face_index,
+            outlines,
+        }
+    }
+
+    pub fn guid(&self) -> &str {
+        self.guid.get_or_init(|| uuid::Uuid::new_v4().to_string())
+    }
+
+    pub fn set_guid(&self, g: String) {
+        let _ = self.guid.set(g);
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -547,6 +577,7 @@ impl Element {
         proto.dimensions = self.dimensions.as_ref()
             .and_then(|d| prost::Message::decode(d.pb_dumps().as_slice()).ok());
         proto.features = self.features.iter().map(|f| crate::proto::ElementFeature {
+            guid: f.guid().to_string(),
             name: f.name.clone(),
             feature_type: f.feature_type.clone(),
             face_index: f.face_index,
@@ -604,12 +635,20 @@ impl Element {
             for o in &f.outlines {
                 outlines.push(Polyline::pb_loads(&prost::Message::encode_to_vec(o))?);
             }
-            elem.features.push(ElementFeature {
+            let feature = ElementFeature {
+                guid: std::sync::OnceLock::new(),
                 name: f.name.clone(),
                 feature_type: f.feature_type.clone(),
                 face_index: f.face_index,
                 outlines,
-            });
+            };
+            // Assigned, not minted: a feature off the wire is the SAME feature the package
+            // wrote, and anything holding its guid must still find it. Empty means the file
+            // predates the field, so the lazy mint is left to whoever asks first.
+            if !f.guid.is_empty() {
+                feature.set_guid(f.guid.clone());
+            }
+            elem.features.push(feature);
         }
         Ok(elem)
     }
