@@ -581,6 +581,25 @@ pub fn run_bvh_ray_cast() -> TestResult {
     })
 }
 
+pub fn run_bvh_coincident_centers() -> TestResult {
+    MINI_TEST!("Coincident Centers", {
+        use crate::{SpatialBVH, OBB, Point, Vector};
+        // Identical centers collapse every Morton code to 0; the tree comes from the index tiebreak
+        let boxes: Vec<OBB> = (0..5)
+            .map(|_| OBB::new(Point::new(0.0, 0.0, 0.0),
+                Vector::new(1.0, 0.0, 0.0), Vector::new(0.0, 1.0, 0.0),
+                Vector::new(0.0, 0.0, 1.0), Vector::new(1.0, 1.0, 1.0)))
+            .collect();
+        let bvh = SpatialBVH::from_boxes(&boxes, 100.0);
+        let (pairs, colliding_indices, _checks) = bvh.check_all_collisions(&boxes);
+        let hits = bvh.query_aabb(&boxes[0]);
+
+        MINI_CHECK!(pairs.len() == 10);
+        MINI_CHECK!(colliding_indices.len() == 5);
+        MINI_CHECK!(hits.len() == 5);
+    })
+}
+
 REGISTER_MINI_TEST!("SpatialBVH", "Constructor", crate::spatial_bvh_test::run_bvh_constructor);
 REGISTER_MINI_TEST!("SpatialBVH", "Expand Bits", crate::spatial_bvh_test::run_bvh_expand_bits);
 REGISTER_MINI_TEST!("SpatialBVH", "Morton Code Origin", crate::spatial_bvh_test::run_bvh_morton_code_origin);
@@ -604,3 +623,4 @@ REGISTER_MINI_TEST!("SpatialBVH", "Build With Guids", crate::spatial_bvh_test::r
 REGISTER_MINI_TEST!("SpatialBVH", "Check All Collisions Guids", crate::spatial_bvh_test::run_bvh_check_all_collisions_guids);
 REGISTER_MINI_TEST!("SpatialBVH", "Find Collisions", crate::spatial_bvh_test::run_bvh_find_collisions);
 REGISTER_MINI_TEST!("SpatialBVH", "Ray Cast", crate::spatial_bvh_test::run_bvh_ray_cast);
+REGISTER_MINI_TEST!("SpatialBVH", "Coincident Centers", crate::spatial_bvh_test::run_bvh_coincident_centers);
