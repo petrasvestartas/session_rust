@@ -18,12 +18,37 @@ pub enum ElementGeometry {
     BRep(BRep),
 }
 
+/// One modification applied to a host element - a cut, a drill, a joint pocket.
+///
+/// The serializable half of what [`Element::add_geometry_op`] cannot be: that takes a function
+/// pointer, so an operation applied in memory vanishes the moment the Session is written.
+/// Domains worked around it by adding flat arrays to Element - a joint type code per face -
+/// which is how timber fields ended up in element.proto and had to be reserved out again.
+///
+/// The kernel does not know how to APPLY one: `feature_type` means something only to the
+/// package that wrote it. It knows enough to DRAW one, which is what lets a viewer show
+/// features from a package it has never heard of.
+// No PartialEq in the derive: Polyline does not implement it.
+#[derive(Debug, Clone, Default)]
+pub struct ElementFeature {
+    /// Human-readable label.
+    pub name: String,
+    /// What kind of modification, e.g. "cut", "drill", "joint" - the package's vocabulary.
+    pub feature_type: String,
+    /// Face of the host this applies to; -1 = the whole element.
+    pub face_index: i32,
+    /// Geometry of the modification.
+    pub outlines: Vec<Polyline>,
+}
+
 #[derive(Debug, Clone)]
 pub struct Element {
     guid: std::sync::OnceLock<String>,
     pub name: String,
     geometry: ElementGeometry,
-    features: Vec<fn(Mesh) -> Mesh>,
+    /// Callables applied lazily when geometry is computed - NOT serializable. Renamed off
+    /// "feature" so the serializable `features` below can own that name.
+    geometry_ops: Vec<fn(Mesh) -> Mesh>,
     is_dirty: bool,
     cached_aabb: Option<OBB>,
     cached_obb: Option<OBB>,
@@ -33,6 +58,37 @@ pub struct Element {
     cached_planes: Option<Vec<Plane>>,
     cached_edge_vectors: Option<Vec<Vector>>,
     cached_axis: Option<Line>,
+
+    // ── Polymorphic elements ────────────────────────────────────────────────────────────
+    // Rust has no inheritance, so the C++ factory registry (session_cpp/src/element.cpp) has
+    // no direct analogue here - there is no base class to return a derived instance through.
+    // What Rust MUST do instead is not destroy the information: a downstream package writes
+    // its type name and its own state into these two fields, and anything that loads a
+    // Session and writes it back has to hand them on untouched. Dropping them would mean a
+    // Rust tool - the viewer, say - silently strips wood's joinery data off every element it
+    // round-trips, while the geometry still looks right.
+    //
+    // A Rust consumer that wants the domain type matches on `element_type` and decodes
+    // `element_data` itself; that dispatch is the package's business, not the kernel's.
+    /// Class name of the derived element, empty for a plain Element. See element.proto.
+    pub element_type: String,
+    /// The derived type's own state, opaque here. Empty for a plain Element.
+    pub element_data: Vec<u8>,
+
+    /// Modifications carried BY this element, and written with it.
+    pub features: Vec<ElementFeature>,
+
+    /// Direction(s) the element is inserted along when the assembly is put together. General
+    /// to any assembly: it is what an assembly sequence is ordered by.
+    pub insertion_vectors: Vec<Vector>,
+
+    /// NOMINAL extents in this element's own frame - authored intent, NOT a measurement.
+    /// Plate: x/y outline extent, z thickness. Beam: x/y cross-section, z length.
+    ///
+    /// Deliberately distinct from [`Element::obb`], which MEASURES the geometry that exists.
+    /// The two are allowed to disagree: a thickness drives a loft before there is any geometry
+    /// to measure. `None` = never authored, which `(0,0,0)` does not mean.
+    pub dimensions: Option<Vector>,
 }
 
 impl Element {
@@ -45,7 +101,7 @@ impl Element {
             guid: std::sync::OnceLock::new(),
             name: name.to_string(),
             geometry: ElementGeometry::None,
-            features: Vec::new(),
+            geometry_ops: Vec::new(),
             is_dirty: true,
             cached_aabb: None,
             cached_obb: None,
@@ -55,6 +111,11 @@ impl Element {
             cached_planes: None,
             cached_edge_vectors: None,
             cached_axis: None,
+            element_type: String::new(),
+            element_data: Vec::new(),
+            features: Vec::new(),
+            insertion_vectors: Vec::new(),
+            dimensions: None,
         }
     }
 
@@ -64,7 +125,7 @@ impl Element {
             guid: std::sync::OnceLock::new(),
             name: name.to_string(),
             geometry: ElementGeometry::Mesh(geometry),
-            features: Vec::new(),
+            geometry_ops: Vec::new(),
             is_dirty: true,
             cached_aabb: None,
             cached_obb: None,
@@ -74,6 +135,11 @@ impl Element {
             cached_planes: None,
             cached_edge_vectors: None,
             cached_axis: None,
+            element_type: String::new(),
+            element_data: Vec::new(),
+            features: Vec::new(),
+            insertion_vectors: Vec::new(),
+            dimensions: None,
         }
     }
 
@@ -83,7 +149,7 @@ impl Element {
             guid: std::sync::OnceLock::new(),
             name: name.to_string(),
             geometry: ElementGeometry::BRep(geometry),
-            features: Vec::new(),
+            geometry_ops: Vec::new(),
             is_dirty: true,
             cached_aabb: None,
             cached_obb: None,
@@ -93,6 +159,11 @@ impl Element {
             cached_planes: None,
             cached_edge_vectors: None,
             cached_axis: None,
+            element_type: String::new(),
+            element_data: Vec::new(),
+            features: Vec::new(),
+            insertion_vectors: Vec::new(),
+            dimensions: None,
         }
     }
 
@@ -146,7 +217,7 @@ impl Element {
             ElementGeometry::None => ElementGeometry::None,
             ElementGeometry::Mesh(mesh) => {
                 let mut geo = mesh.clone();
-                for f in &self.features { geo = f(geo); }
+                for f in &self.geometry_ops { geo = f(geo); }
                 if !xform.is_identity() {
                     geo.transform(xform);
                 }
@@ -202,8 +273,8 @@ impl Element {
     // Mutators
     ///////////////////////////////////////////////////////////////////////////////////////////
 
-    pub fn add_feature(&mut self, f: fn(Mesh) -> Mesh) {
-        self.features.push(f);
+    pub fn add_geometry_op(&mut self, f: fn(Mesh) -> Mesh) {
+        self.geometry_ops.push(f);
         self.is_dirty = true;
     }
 
@@ -244,6 +315,7 @@ impl Element {
         self.cached_axis = None;
     }
 
+    pub fn geometry_ops_count(&self) -> usize { self.geometry_ops.len() }
     pub fn features_count(&self) -> usize { self.features.len() }
     pub fn cached_aabb_ref(&self) -> &Option<OBB> { &self.cached_aabb }
     pub fn cached_obb_ref(&self) -> &Option<OBB> { &self.cached_obb }
@@ -464,6 +536,24 @@ impl Element {
                 }
             }
         
+        // Both empty for a plain Element, and proto3 does not emit empty scalars - so a base
+        // element's bytes are unchanged by this, keeping the golden files valid.
+        proto.element_type = self.element_type.clone();
+        proto.element_data = self.element_data.clone();
+
+        proto.insertion_vectors = self.insertion_vectors.iter()
+            .map(|v| prost::Message::decode(v.pb_dumps().as_slice()).unwrap_or_default())
+            .collect();
+        proto.dimensions = self.dimensions.as_ref()
+            .and_then(|d| prost::Message::decode(d.pb_dumps().as_slice()).ok());
+        proto.features = self.features.iter().map(|f| crate::proto::ElementFeature {
+            name: f.name.clone(),
+            feature_type: f.feature_type.clone(),
+            face_index: f.face_index,
+            outlines: f.outlines.iter()
+                .map(|o| prost::Message::decode(o.pb_dumps().as_slice()).unwrap_or_default())
+                .collect(),
+        }).collect();
 
         proto
     }
@@ -497,6 +587,30 @@ impl Element {
 
         elem.set_guid(proto.guid.clone());
         elem.name = proto.name.clone();
+        elem.element_type = proto.element_type.clone();
+        elem.element_data = proto.element_data.clone();
+
+        for v in &proto.insertion_vectors {
+            elem.insertion_vectors.push(Vector::pb_loads(&prost::Message::encode_to_vec(v))?);
+        }
+        // `Option`, not a zero check: (0,0,0) is a legitimate authored value and must not be
+        // confused with "never authored".
+        elem.dimensions = match &proto.dimensions {
+            Some(d) => Some(Vector::pb_loads(&prost::Message::encode_to_vec(d))?),
+            None => None,
+        };
+        for f in &proto.features {
+            let mut outlines = Vec::new();
+            for o in &f.outlines {
+                outlines.push(Polyline::pb_loads(&prost::Message::encode_to_vec(o))?);
+            }
+            elem.features.push(ElementFeature {
+                name: f.name.clone(),
+                feature_type: f.feature_type.clone(),
+                face_index: f.face_index,
+                outlines,
+            });
+        }
         Ok(elem)
     }
 

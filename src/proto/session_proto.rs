@@ -467,12 +467,62 @@ pub struct Edge {
     #[prost(int32, tag = "6")]
     pub index: i32,
 }
+/// Polyline message representing a connected sequence of points
+/// Stores coordinates as a flat array \[x0, y0, z0, x1, y1, z1, ...\] for efficiency
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct Polyline {
+    /// Unique identifier
+    #[prost(string, tag = "1")]
+    pub guid: ::prost::alloc::string::String,
+    /// Polyline name
+    #[prost(string, tag = "2")]
+    pub name: ::prost::alloc::string::String,
+    /// Flat array of coordinates \[x0, y0, z0, x1, y1, z1, ...\]
+    #[prost(double, repeated, tag = "3")]
+    pub coords: ::prost::alloc::vec::Vec<f64>,
+    /// Line width
+    #[prost(double, tag = "4")]
+    pub width: f64,
+    /// Line color
+    #[prost(message, optional, tag = "5")]
+    pub linecolor: ::core::option::Option<Color>,
+    /// Dash pattern: on/off lengths in mm, repeating; empty = solid
+    #[prost(double, repeated, tag = "7")]
+    pub dash: ::prost::alloc::vec::Vec<f64>,
+}
+/// One modification applied to a host element - a cut, a drill, a joint pocket.
+///
+/// This is the serializable half of what `Element::add_feature` never could be: that takes a
+/// std::function<Mesh(Mesh)>, so a feature applied in memory vanished the moment the Session
+/// was written. Domains worked around it by adding their own flat arrays to Element - which is
+/// how `joint_types` (one int per face) ended up in this file, and why it had to be reserved
+/// out again. An ElementFeature carries the same information in a shape every domain can use: what the
+/// modification is, which face it lands on, and the outlines it cuts.
+///
+/// The kernel does not know how to APPLY one; `feature_type` means something only to the
+/// package that wrote it. It does know enough to draw it, which is what lets a viewer show
+/// features from a package it has never heard of.
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct ElementFeature {
+    /// Human-readable label
+    #[prost(string, tag = "1")]
+    pub name: ::prost::alloc::string::String,
+    /// What kind of modification, e.g. "cut", "drill", "joint"
+    #[prost(string, tag = "2")]
+    pub feature_type: ::prost::alloc::string::String,
+    /// Face of the host this applies to; -1 = the whole element
+    #[prost(int32, tag = "3")]
+    pub face_index: i32,
+    /// Geometry of the modification
+    #[prost(message, repeated, tag = "4")]
+    pub outlines: ::prost::alloc::vec::Vec<Polyline>,
+}
 /// Element message wrapping geometry with metadata.
 ///
 /// An Element is a geometry container and nothing more: a name, a guid, and one serialized
 /// geometry payload. The Beam/Column/Plate kinds and their timber-joinery fields were removed
 /// (see below) — an Element no longer knows what it "is", only what geometry it holds.
-#[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
+#[derive(Clone, PartialEq, ::prost::Message)]
 pub struct Element {
     /// Element name
     #[prost(string, tag = "1")]
@@ -486,6 +536,43 @@ pub struct Element {
     /// Serialized geometry bytes
     #[prost(bytes = "vec", tag = "4")]
     pub geometry_data: ::prost::alloc::vec::Vec<u8>,
+    /// Class name of the DERIVED element, for polymorphic decode - the element's own type,
+    /// where `geometry_type` above is the type of the geometry it holds. Empty means a plain
+    /// Element, so proto3 omits it and a base element's bytes are unchanged by this field.
+    ///
+    /// The kernel does not know what any of these names mean. A downstream package (wood's
+    /// plate, say) registers a factory under its own name; the loader looks the name up and
+    /// hands the factory the bytes. That is what lets a domain type round-trip through a
+    /// Session without the kernel growing a single domain-specific field - which is exactly
+    /// what the removals above were for.
+    #[prost(string, tag = "10")]
+    pub element_type: ::prost::alloc::string::String,
+    /// The derived type's own payload, encoded by whoever registered `element_type`. Opaque
+    /// here on purpose: the kernel copies it through untouched, so a viewer that knows only
+    /// `geometry_data` keeps working against files written by a package it has never heard of.
+    #[prost(bytes = "vec", tag = "11")]
+    pub element_data: ::prost::alloc::vec::Vec<u8>,
+    /// Direction the element is inserted along when the assembly is put together. General to any
+    /// assembly, not just joinery: it is what an assembly sequence is ordered by. Plural because
+    /// an element with several jointed faces can admit a different direction per face.
+    #[prost(message, repeated, tag = "12")]
+    pub insertion_vectors: ::prost::alloc::vec::Vec<Vector>,
+    /// NOMINAL extents in the element's own frame - authored design intent, NOT a measurement.
+    /// For a plate x/y are the outline extent and z is the thickness; for a beam x/y are the
+    /// cross-section and z the length. One field, both domains.
+    ///
+    /// Deliberately distinct from `Element::obb()`, which MEASURES the geometry that exists.
+    /// These two are allowed to disagree: thickness drives a loft before there is any geometry to
+    /// measure, so the nominal value has to exist first and outlive whatever is built from it.
+    /// Read obb() when you want to know how big the thing is; read this when you want to know how
+    /// big it was meant to be.
+    #[prost(message, optional, tag = "13")]
+    pub dimensions: ::core::option::Option<Vector>,
+    /// Modifications applied to this element. Replaces the per-domain arrays that used to live in
+    /// fields 6-9 - a joint type code is a feature on a face, which is what those were spelling
+    /// out one array at a time.
+    #[prost(message, repeated, tag = "14")]
+    pub features: ::prost::alloc::vec::Vec<ElementFeature>,
 }
 /// Encoders message for serialization metadata and options
 #[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
@@ -699,29 +786,6 @@ pub struct Plane {
     /// Color of the plane
     #[prost(message, optional, tag = "6")]
     pub linecolor: ::core::option::Option<Color>,
-}
-/// Polyline message representing a connected sequence of points
-/// Stores coordinates as a flat array \[x0, y0, z0, x1, y1, z1, ...\] for efficiency
-#[derive(Clone, PartialEq, ::prost::Message)]
-pub struct Polyline {
-    /// Unique identifier
-    #[prost(string, tag = "1")]
-    pub guid: ::prost::alloc::string::String,
-    /// Polyline name
-    #[prost(string, tag = "2")]
-    pub name: ::prost::alloc::string::String,
-    /// Flat array of coordinates \[x0, y0, z0, x1, y1, z1, ...\]
-    #[prost(double, repeated, tag = "3")]
-    pub coords: ::prost::alloc::vec::Vec<f64>,
-    /// Line width
-    #[prost(double, tag = "4")]
-    pub width: f64,
-    /// Line color
-    #[prost(message, optional, tag = "5")]
-    pub linecolor: ::core::option::Option<Color>,
-    /// Dash pattern: on/off lengths in mm, repeating; empty = solid
-    #[prost(double, repeated, tag = "7")]
-    pub dash: ::prost::alloc::vec::Vec<f64>,
 }
 /// PointCloud message representing a collection of 3D points with optional colors and normals
 /// Stores data as flat arrays for efficient serialization

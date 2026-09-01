@@ -396,8 +396,9 @@ pub fn get_all_tests() -> Vec<RegisteredTest> {
     use crate::io_test::*;
     use crate::matrix_test::*;
     use crate::spatial_kdtree_test::*;
+    use crate::spatial_octree_test::*;
 
-    vec![
+    let mut tests = vec![
         // BRep tests
         RegisteredTest { group: "BRep", name: "Constructor", func: run_brep_constructor },
         RegisteredTest { group: "BRep", name: "Create Box", func: run_brep_create_box },
@@ -1058,7 +1059,7 @@ pub fn get_all_tests() -> Vec<RegisteredTest> {
         // Element tests
         RegisteredTest { group: "Element", name: "Constructor", func: run_element_constructor },
         RegisteredTest { group: "Element", name: "Place", func: run_element_place },
-        RegisteredTest { group: "Element", name: "Add Feature", func: run_element_add_feature },
+        RegisteredTest { group: "Element", name: "Add Geometry Op", func: run_element_add_feature },
         RegisteredTest { group: "Element", name: "AABB", func: run_element_aabb },
         RegisteredTest { group: "Element", name: "OBB", func: run_element_obb },
         RegisteredTest { group: "Element", name: "Session Geometry", func: run_element_session_geometry },
@@ -1068,6 +1069,11 @@ pub fn get_all_tests() -> Vec<RegisteredTest> {
         RegisteredTest { group: "Element", name: "Json Roundtrip", func: run_element_json_roundtrip },
         RegisteredTest { group: "Element", name: "Protobuf Roundtrip", func: run_element_protobuf_roundtrip },
         RegisteredTest { group: "Element", name: "Polylines", func: run_element_polylines },
+        RegisteredTest { group: "Element", name: "RegistryRoundTrip", func: run_element_registry_round_trip },
+        RegisteredTest { group: "Element", name: "RegistryUnknownTypeDegrades", func: run_element_registry_unknown_type_degrades },
+        RegisteredTest { group: "Element", name: "RegistryLeavesBaseBytesUnchanged", func: run_element_registry_leaves_base_bytes_unchanged },
+        RegisteredTest { group: "Element", name: "FeaturesRoundTrip", func: run_element_features_round_trip },
+        RegisteredTest { group: "Element", name: "DimensionsAreNominalNotMeasured", func: run_element_dimensions_are_nominal_not_measured },
         RegisteredTest { group: "MeshOffset", name: "from_mesh", func: run_mesh_offset_from_mesh },
         RegisteredTest { group: "MeshOffset", name: "from_mesh_grid", func: run_mesh_offset_from_mesh_grid },
         RegisteredTest { group: "MeshOffset", name: "from_mesh_layers", func: run_mesh_offset_from_mesh_layers },
@@ -1135,7 +1141,34 @@ pub fn get_all_tests() -> Vec<RegisteredTest> {
         RegisteredTest { group: "SpatialKDTree", name: "Nearest", func: run_kdtree_nearest },
         RegisteredTest { group: "SpatialKDTree", name: "Nearest K", func: run_kdtree_nearest_k },
         RegisteredTest { group: "SpatialKDTree", name: "Radius Search", func: run_kdtree_radius_search },
-    ]
+        // Io tests - were registered by macro only; see the drift guard in run_all.
+        // PointCloud tests - were registered by macro only; see the drift guard in run_all.
+        RegisteredTest { group: "PointCloud", name: "Coords", func: run_pointcloud_coords },
+        RegisteredTest { group: "PointCloud", name: "Colors", func: run_pointcloud_colors },
+        // RemeshCDT tests - were registered by macro only; see the drift guard in run_all.
+        RegisteredTest { group: "RemeshCDT", name: "plate_failing 15-vert outer + 4 holes", func: run_remesh_cdt_plate_failing_15_vert_outer_4_holes },
+        RegisteredTest { group: "RemeshCDT", name: "Large coordinates", func: run_remesh_cdt_large_coordinates },
+        RegisteredTest { group: "RemeshCDT", name: "Degenerate hole keeps flat indices", func: run_remesh_cdt_degenerate_hole_keeps_flat_indices },
+        // SpatialOctree tests - were registered by macro only; see the drift guard in run_all.
+        RegisteredTest { group: "SpatialOctree", name: "Constructor", func: run_octree_constructor },
+        RegisteredTest { group: "SpatialOctree", name: "Node Count", func: run_octree_node_count },
+        RegisteredTest { group: "SpatialOctree", name: "Node Cube", func: run_octree_node_cube },
+        RegisteredTest { group: "SpatialOctree", name: "Node Level", func: run_octree_node_level },
+        RegisteredTest { group: "SpatialOctree", name: "Node Spacing", func: run_octree_node_spacing },
+        RegisteredTest { group: "SpatialOctree", name: "Node Range", func: run_octree_node_range },
+        RegisteredTest { group: "SpatialOctree", name: "Children", func: run_octree_children },
+        RegisteredTest { group: "SpatialOctree", name: "Order", func: run_octree_order },
+        RegisteredTest { group: "SpatialOctree", name: "From Coords", func: run_octree_from_coords },
+    ];
+
+    // Feature-gated exactly like its REGISTER_MINI_TEST! in io_test.rs, so the drift guard in
+    // run_all() sees the same set on both sides whether or not `pdf` is enabled.
+    #[cfg(all(feature = "pdf", not(target_arch = "wasm32")))]
+    tests.push(RegisteredTest {
+        group: "Io", name: "Import Minimal", func: run_io_pdf_import_minimal,
+    });
+
+    tests
 }
 
 /// Run all registered Rust mini-tests for this crate and write JSON results
@@ -1155,6 +1188,51 @@ pub fn run_all(language: &str) -> Result<(), Box<dyn std::error::Error>> {
     }
     
     println!("[rust-minitest] Inventory found {} groups", groups.len());
+
+    // ── Guard the two registration paths against drift ──────────────────────────────────
+    //
+    // A test is registered TWICE: by REGISTER_MINI_TEST! (inventory, the primary path) and by
+    // hand in get_all_tests() below, which exists as a Windows fallback AND as the canonical
+    // ordering oracle. The merge that follows dedups by NAME, so when the two disagree the
+    // result is not an error - it is an extra test. Renaming "Add Feature" to "Add Geometry
+    // Op" in the macro but not in the table silently produced 18 Element tests where the
+    // other two languages had 17, and the cross-language parity check then failed several
+    // steps downstream with no hint that a rename was the cause.
+    //
+    // Compare the two sets up front and say exactly which entries drifted.
+    {
+        use std::collections::BTreeSet;
+        let from_inventory: BTreeSet<(&str, &str)> =
+            inventory::iter::<RegisteredTest>.into_iter().map(|t| (t.group, t.name)).collect();
+        let from_table: BTreeSet<(&str, &str)> =
+            get_all_tests().iter().map(|t| (t.group, t.name)).collect();
+
+        // Only meaningful when inventory actually collected something: on a platform where it
+        // yields nothing the table IS the registration, and every entry would look "missing".
+        if !from_inventory.is_empty() {
+            let missing_from_table: Vec<_> = from_inventory.difference(&from_table).collect();
+            let missing_from_macros: Vec<_> = from_table.difference(&from_inventory).collect();
+
+            if !missing_from_table.is_empty() || !missing_from_macros.is_empty() {
+                let mut message = String::from(
+                    "test registration drift: REGISTER_MINI_TEST! and get_all_tests() disagree.\n\
+                     Every test must appear in BOTH - the macro registers it, the table orders \
+                     it and covers platforms where inventory finds nothing.\n");
+                for (group, name) in &missing_from_table {
+                    message.push_str(&format!(
+                        "  registered by macro, ABSENT from get_all_tests(): {group}::{name}\n"));
+                }
+                for (group, name) in &missing_from_macros {
+                    message.push_str(&format!(
+                        "  in get_all_tests(), NOT registered by macro:      {group}::{name}\n"));
+                }
+                message.push_str(
+                    "A rename usually shows up as one of each: the old name on one side, the \
+                     new name on the other.\n");
+                return Err(message.into());
+            }
+        }
+    }
 
     // Merge manual tests (covers modules inventory may miss on Windows)
     for t in get_all_tests() {
