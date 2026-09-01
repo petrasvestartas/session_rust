@@ -733,11 +733,15 @@ impl Element {
         proto.element_type = self.element_type.clone();
         proto.element_data = self.element_data.clone();
 
+        // Packed triples, not sub-messages. Not for the bytes - a unit axis is 2 B CHEAPER as a
+        // sub-message - but for the shape: no per-entry `name` String allocated on decode, and
+        // no serialize-then-reparse round trip. See element.proto.
         proto.insertion_vectors = self.insertion_vectors.iter()
-            .map(|v| prost::Message::decode(v.pb_dumps().as_slice()).unwrap_or_default())
+            .flat_map(|v| [v[0], v[1], v[2]])
             .collect();
         proto.dimensions = self.dimensions.as_ref()
-            .and_then(|d| prost::Message::decode(d.pb_dumps().as_slice()).ok());
+            .map(|d| vec![d[0], d[1], d[2]])
+            .unwrap_or_default();
         proto.features = self.features.iter().map(|f| crate::proto::ElementFeature {
             guid: f.guid().to_string(),
             name: f.name.clone(),
@@ -783,14 +787,14 @@ impl Element {
         elem.element_type = proto.element_type.clone();
         elem.element_data = proto.element_data.clone();
 
-        for v in &proto.insertion_vectors {
-            elem.insertion_vectors.push(Vector::pb_loads(&prost::Message::encode_to_vec(v))?);
-        }
-        // `Option`, not a zero check: (0,0,0) is a legitimate authored value and must not be
-        // confused with "never authored".
-        elem.dimensions = match &proto.dimensions {
-            Some(d) => Some(Vector::pb_loads(&prost::Message::encode_to_vec(d))?),
-            None => None,
+        elem.insertion_vectors = proto.insertion_vectors.chunks_exact(3)
+            .map(|c| Vector::new(c[0], c[1], c[2]))
+            .collect();
+        // Length, not a zero check: (0,0,0) is a legitimate authored value and must not be
+        // confused with "never authored", which is what an EMPTY field means here.
+        elem.dimensions = match proto.dimensions.len() {
+            3 => Some(Vector::new(proto.dimensions[0], proto.dimensions[1], proto.dimensions[2])),
+            _ => None,
         };
         for f in &proto.features {
             let mut outlines = Vec::new();

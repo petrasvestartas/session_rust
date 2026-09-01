@@ -564,8 +564,22 @@ pub struct Element {
     /// Direction the element is inserted along when the assembly is put together. General to any
     /// assembly, not just joinery: it is what an assembly sequence is ordered by. Plural because
     /// an element with several jointed faces can admit a different direction per face.
-    #[prost(message, repeated, tag = "12")]
-    pub insertion_vectors: ::prost::alloc::vec::Vec<Vector>,
+    ///
+    /// Packed x,y,z triples, not `repeated Vector` - length/24 gives the count.
+    ///
+    /// NOT for the bytes: measured, a `Vector` sub-message costs 22 B for a unit axis (proto3
+    /// omits the two zero components) against 24 B packed, so for the insertion vector a caller
+    /// actually writes - (0,0,1) - the packed form is 2 B LARGER. It only wins on general
+    /// directions, at 40 B -> 24 B.
+    ///
+    /// The reason is shape. A direction is a number, not a thing: it has no identity, and the
+    /// `name` every Vector sub-message carries ("my_vector", 11 B) is meaningless on one. Packed
+    /// means a fixed stride, no per-entry String allocated on decode, and no serialize-then
+    /// -reparse round trip in any of the three kernels - and it matches every other coordinate
+    /// field in the schema. Decode cost, not file size, is where this schema pays; see
+    /// SESSION_DATASTRUCTURE_PLAN.md P6.
+    #[prost(double, repeated, tag = "12")]
+    pub insertion_vectors: ::prost::alloc::vec::Vec<f64>,
     /// NOMINAL extents in the element's own frame - authored design intent, NOT a measurement.
     /// For a plate x/y are the outline extent and z is the thickness; for a beam x/y are the
     /// cross-section and z the length. One field, both domains.
@@ -575,8 +589,10 @@ pub struct Element {
     /// measure, so the nominal value has to exist first and outlive whatever is built from it.
     /// Read obb() when you want to know how big the thing is; read this when you want to know how
     /// big it was meant to be.
-    #[prost(message, optional, tag = "13")]
-    pub dimensions: ::core::option::Option<Vector>,
+    /// Packed x,y,z - EMPTY means never authored, three values means authored, which is the same
+    /// distinction the optional sub-message drew and (0,0,0) must not be confused with.
+    #[prost(double, repeated, tag = "13")]
+    pub dimensions: ::prost::alloc::vec::Vec<f64>,
     /// Modifications applied to this element. Replaces the per-domain arrays that used to live in
     /// fields 6-9 - a joint type code is a feature on a face, which is what those were spelling
     /// out one array at a time.
