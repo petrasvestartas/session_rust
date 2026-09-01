@@ -895,6 +895,7 @@ pub fn get_all_tests() -> Vec<RegisteredTest> {
         RegisteredTest { group: "SpatialBVH", name: "Build With Guids", func: run_bvh_build_with_guids },
         RegisteredTest { group: "SpatialBVH", name: "Check All Collisions Guids", func: run_bvh_check_all_collisions_guids },
         RegisteredTest { group: "SpatialBVH", name: "Find Collisions", func: run_bvh_find_collisions },
+        RegisteredTest { group: "SpatialBVH", name: "Ray Cast", func: run_bvh_ray_cast },
         RegisteredTest { group: "SpatialBVH", name: "Constructor", func: run_bvh_constructor },
         // Quaternion tests
         RegisteredTest { group: "Quaternion", name: "Json Roundtrip", func: run_quaternion_json_roundtrip },
