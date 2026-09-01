@@ -578,6 +578,17 @@ pub fn run_bvh_ray_cast() -> TestResult {
 
         MINI_CHECK!(!any);
         MINI_CHECK!(behind.is_empty());
+        // A ray travelling inside the plane of a zero-thickness box still reports it
+        let flat = vec![
+            OBB::new(Point::new(0.0, 0.0, 0.0),
+                Vector::new(1.0, 0.0, 0.0), Vector::new(0.0, 1.0, 0.0),
+                Vector::new(0.0, 0.0, 1.0), Vector::new(0.0, 1.0, 1.0)),
+        ];
+        let flat_bvh = SpatialBVH::from_boxes(&flat, 100.0);
+        let mut coplanar: Vec<usize> = Vec::new();
+
+        MINI_CHECK!(flat_bvh.ray_cast(&Point::new(0.0, 0.0, -5.0), &Vector::new(0.0, 0.0, 1.0), &mut coplanar, true));
+        MINI_CHECK!(coplanar.len() == 1);
     })
 }
 

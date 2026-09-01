@@ -823,10 +823,17 @@ impl SpatialBVH {
             1.0 / direction[2]
         };
 
+        // Seed from the unbounded interval so all three slabs fold the same way. f64::min/max
+        // already ignore the 0*inf = NaN a degenerate slab produces; the C++ and Python ports
+        // only drop it once a slab is folded in, so seeding tmin/tmax from x turned a ray
+        // travelling inside a flat box into a miss there. One shape keeps that from drifting.
+        let mut tmin = f64::NEG_INFINITY;
+        let mut tmax = f64::INFINITY;
+
         let tx1 = (min_x - origin[0]) * invx;
         let tx2 = (max_x - origin[0]) * invx;
-        let mut tmin = tx1.min(tx2);
-        let mut tmax = tx1.max(tx2);
+        tmin = tmin.max(tx1.min(tx2));
+        tmax = tmax.min(tx1.max(tx2));
 
         let ty1 = (min_y - origin[1]) * invy;
         let ty2 = (max_y - origin[1]) * invy;
