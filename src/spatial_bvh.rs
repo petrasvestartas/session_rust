@@ -763,12 +763,12 @@ impl SpatialBVH {
             }
         }
 
-        let mut colliding_indices: Vec<usize> = visited
+        // enumerate() already yields ascending indices, so the filter output is sorted
+        let colliding_indices: Vec<usize> = visited
             .iter()
             .enumerate()
             .filter_map(|(idx, v)| if *v { Some(idx) } else { None })
             .collect();
-        colliding_indices.sort_unstable();
 
         (all_collisions, colliding_indices, total_checks)
     }
