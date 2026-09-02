@@ -114,6 +114,8 @@ pub mod picking_test;
 pub use aabb::AABB;
 pub use obb::OBB;
 pub use brep::BRep;
+pub use brep::BRepOrientation;
+pub use brep::BRepRef;
 pub use spatial_aabbtree::SpatialAABBTree;
 pub use spatial_bvh::SpatialBVH;
 pub use closest::Closest;

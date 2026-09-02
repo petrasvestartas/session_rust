@@ -1754,7 +1754,7 @@ impl NurbsSurface {
     /// Extract isoparametric curve from surface
     ///
     /// # Arguments
-    /// * `dir` - Direction (0=iso-u curve where v varies, 1=iso-v curve where u varies)
+    /// * `dir` - Direction that VARIES along the curve (0 = curve along u at v=c, 1 = curve along v at u=c)
     /// * `c` - Parameter value at which to extract the curve
     /// 
     /// # Returns

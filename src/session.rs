@@ -732,7 +732,7 @@ impl Session {
                 OBB::from_point(tp(&p.origin()), inflate * 10.0)
             }
             Geometry::BRep(b) => {
-                let mut points: Vec<Point> = b.m_vertices.iter().map(|p| tp(p)).collect();
+                let mut points: Vec<Point> = b.m_vertices.iter().map(|v| tp(&v.point)).collect();
                 // Sample surface points to cover curved surfaces (e.g. sphere with only pole vertices)
                 for srf in &b.m_surfaces {
                     if let (Some((u0, u1)), Some((v0, v1))) = (srf.domain(0), srf.domain(1)) {

@@ -552,7 +552,7 @@ impl Element {
             ElementGeometry::BRep(brep) => {
                 if brep.m_vertices.is_empty() { return Point::new(0.0, 0.0, 0.0); }
                 let (mut sx, mut sy, mut sz) = (0.0, 0.0, 0.0);
-                for p in &brep.m_vertices {
+                for p in brep.vertex_points() {
                     sx += p[0]; sy += p[1]; sz += p[2];
                 }
                 let n = brep.m_vertices.len() as f64;
@@ -572,7 +572,7 @@ impl Element {
             }
             ElementGeometry::BRep(brep) => {
                 if brep.m_vertices.is_empty() { return OBB::from_point(Point::new(0.0, 0.0, 0.0), inflate); }
-                OBB::from_points(&brep.m_vertices, inflate)
+                OBB::from_points(&brep.vertex_points(), inflate)
             }
             ElementGeometry::None => OBB::from_point(Point::new(0.0, 0.0, 0.0), inflate),
         }

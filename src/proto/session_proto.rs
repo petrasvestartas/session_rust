@@ -307,14 +307,35 @@ pub struct NurbsCurve {
     #[prost(message, repeated, tag = "13")]
     pub linecolors: ::prost::alloc::vec::Vec<Color>,
 }
-#[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
-pub struct BRepVertex {
+/// TopoDS_Shape: an oriented reference to a sub-shape (index into the owning table).
+#[derive(Clone, Copy, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct BRepRef {
     #[prost(int32, tag = "1")]
-    pub point_index: i32,
-    #[prost(int32, repeated, tag = "2")]
-    pub edge_indices: ::prost::alloc::vec::Vec<i32>,
+    pub index: i32,
+    #[prost(enumeration = "BRepOrientation", tag = "2")]
+    pub orientation: i32,
 }
-#[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
+/// BRep_TVertex
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct BRepVertex {
+    #[prost(message, optional, tag = "1")]
+    pub point: ::core::option::Option<Point>,
+    #[prost(double, tag = "2")]
+    pub tolerance: f64,
+}
+/// BRep_CurveOnSurface / BRep_CurveOnClosedSurface: curve_2d_index_2 is the pcurve of the
+/// REVERSED use of the edge on a closed surface (seam); -1 otherwise.
+#[derive(Clone, Copy, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct BRepCurveOnSurface {
+    #[prost(int32, tag = "1")]
+    pub surface_index: i32,
+    #[prost(int32, tag = "2")]
+    pub curve_2d_index: i32,
+    #[prost(int32, tag = "3")]
+    pub curve_2d_index_2: i32,
+}
+/// BRep_TEdge: curve_3d_index is -1 for a degenerated edge (pole/apex).
+#[derive(Clone, PartialEq, ::prost::Message)]
 pub struct BRepEdge {
     #[prost(int32, tag = "1")]
     pub curve_3d_index: i32,
@@ -322,42 +343,44 @@ pub struct BRepEdge {
     pub start_vertex: i32,
     #[prost(int32, tag = "3")]
     pub end_vertex: i32,
-    #[prost(int32, repeated, tag = "4")]
-    pub trim_indices: ::prost::alloc::vec::Vec<i32>,
+    #[prost(double, tag = "4")]
+    pub tolerance: f64,
+    #[prost(bool, tag = "5")]
+    pub degenerated: bool,
+    #[prost(message, repeated, tag = "6")]
+    pub pcurves: ::prost::alloc::vec::Vec<BRepCurveOnSurface>,
 }
-#[derive(Clone, Copy, PartialEq, Eq, Hash, ::prost::Message)]
-pub struct BRepTrim {
-    #[prost(int32, tag = "1")]
-    pub curve_2d_index: i32,
-    #[prost(int32, tag = "2")]
-    pub edge_index: i32,
-    #[prost(int32, tag = "3")]
-    pub loop_index: i32,
-    #[prost(bool, tag = "4")]
-    pub reversed: bool,
-    #[prost(enumeration = "BRepTrimType", tag = "5")]
-    pub r#type: i32,
+/// TopoDS_TWire
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct BRepWire {
+    #[prost(message, repeated, tag = "1")]
+    pub edges: ::prost::alloc::vec::Vec<BRepRef>,
 }
-#[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
-pub struct BRepLoop {
-    #[prost(int32, repeated, tag = "1")]
-    pub trim_indices: ::prost::alloc::vec::Vec<i32>,
-    #[prost(int32, tag = "2")]
-    pub face_index: i32,
-    #[prost(enumeration = "BRepLoopType", tag = "3")]
-    pub r#type: i32,
-}
+/// BRep_TFace: the first wire is the outer boundary.
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct BRepFace {
     #[prost(int32, tag = "1")]
     pub surface_index: i32,
-    #[prost(int32, repeated, tag = "2")]
-    pub loop_indices: ::prost::alloc::vec::Vec<i32>,
-    #[prost(bool, tag = "3")]
-    pub reversed: bool,
+    #[prost(message, repeated, tag = "2")]
+    pub wires: ::prost::alloc::vec::Vec<BRepRef>,
+    #[prost(double, tag = "3")]
+    pub tolerance: f64,
     #[prost(message, optional, tag = "4")]
     pub facecolor: ::core::option::Option<Color>,
 }
+/// TopoDS_TShell
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct BRepShell {
+    #[prost(message, repeated, tag = "1")]
+    pub faces: ::prost::alloc::vec::Vec<BRepRef>,
+}
+/// TopoDS_TSolid
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct BRepSolid {
+    #[prost(message, repeated, tag = "1")]
+    pub shells: ::prost::alloc::vec::Vec<BRepRef>,
+}
+/// TopoDS_Compound: the free shapes are those no parent references.
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct BRep {
     #[prost(string, tag = "1")]
@@ -371,76 +394,51 @@ pub struct BRep {
     #[prost(message, repeated, tag = "5")]
     pub surfaces: ::prost::alloc::vec::Vec<NurbsSurface>,
     #[prost(message, repeated, tag = "6")]
-    pub vertices: ::prost::alloc::vec::Vec<Point>,
+    pub vertices: ::prost::alloc::vec::Vec<BRepVertex>,
     #[prost(message, repeated, tag = "7")]
-    pub topology_vertices: ::prost::alloc::vec::Vec<BRepVertex>,
+    pub edges: ::prost::alloc::vec::Vec<BRepEdge>,
     #[prost(message, repeated, tag = "8")]
-    pub topology_edges: ::prost::alloc::vec::Vec<BRepEdge>,
+    pub wires: ::prost::alloc::vec::Vec<BRepWire>,
     #[prost(message, repeated, tag = "9")]
-    pub trims: ::prost::alloc::vec::Vec<BRepTrim>,
-    #[prost(message, repeated, tag = "10")]
-    pub loops: ::prost::alloc::vec::Vec<BRepLoop>,
-    #[prost(message, repeated, tag = "11")]
     pub faces: ::prost::alloc::vec::Vec<BRepFace>,
+    #[prost(message, repeated, tag = "10")]
+    pub shells: ::prost::alloc::vec::Vec<BRepShell>,
+    #[prost(message, repeated, tag = "11")]
+    pub solids: ::prost::alloc::vec::Vec<BRepSolid>,
     #[prost(double, tag = "12")]
     pub width: f64,
     #[prost(message, optional, tag = "13")]
     pub surfacecolor: ::core::option::Option<Color>,
 }
+/// TopAbs_Orientation: carried by the parent -> child reference, never by the shape.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord, ::prost::Enumeration)]
 #[repr(i32)]
-pub enum BRepTrimType {
-    TrimBoundary = 0,
-    TrimMated = 1,
-    TrimSeam = 2,
-    TrimSingular = 3,
+pub enum BRepOrientation {
+    OrientationForward = 0,
+    OrientationReversed = 1,
+    OrientationInternal = 2,
+    OrientationExternal = 3,
 }
-impl BRepTrimType {
+impl BRepOrientation {
     /// String value of the enum field names used in the ProtoBuf definition.
     ///
     /// The values are not transformed in any way and thus are considered stable
     /// (if the ProtoBuf definition does not change) and safe for programmatic use.
     pub fn as_str_name(&self) -> &'static str {
         match self {
-            Self::TrimBoundary => "TRIM_BOUNDARY",
-            Self::TrimMated => "TRIM_MATED",
-            Self::TrimSeam => "TRIM_SEAM",
-            Self::TrimSingular => "TRIM_SINGULAR",
+            Self::OrientationForward => "ORIENTATION_FORWARD",
+            Self::OrientationReversed => "ORIENTATION_REVERSED",
+            Self::OrientationInternal => "ORIENTATION_INTERNAL",
+            Self::OrientationExternal => "ORIENTATION_EXTERNAL",
         }
     }
     /// Creates an enum from field names used in the ProtoBuf definition.
     pub fn from_str_name(value: &str) -> ::core::option::Option<Self> {
         match value {
-            "TRIM_BOUNDARY" => Some(Self::TrimBoundary),
-            "TRIM_MATED" => Some(Self::TrimMated),
-            "TRIM_SEAM" => Some(Self::TrimSeam),
-            "TRIM_SINGULAR" => Some(Self::TrimSingular),
-            _ => None,
-        }
-    }
-}
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord, ::prost::Enumeration)]
-#[repr(i32)]
-pub enum BRepLoopType {
-    LoopOuter = 0,
-    LoopInner = 1,
-}
-impl BRepLoopType {
-    /// String value of the enum field names used in the ProtoBuf definition.
-    ///
-    /// The values are not transformed in any way and thus are considered stable
-    /// (if the ProtoBuf definition does not change) and safe for programmatic use.
-    pub fn as_str_name(&self) -> &'static str {
-        match self {
-            Self::LoopOuter => "LOOP_OUTER",
-            Self::LoopInner => "LOOP_INNER",
-        }
-    }
-    /// Creates an enum from field names used in the ProtoBuf definition.
-    pub fn from_str_name(value: &str) -> ::core::option::Option<Self> {
-        match value {
-            "LOOP_OUTER" => Some(Self::LoopOuter),
-            "LOOP_INNER" => Some(Self::LoopInner),
+            "ORIENTATION_FORWARD" => Some(Self::OrientationForward),
+            "ORIENTATION_REVERSED" => Some(Self::OrientationReversed),
+            "ORIENTATION_INTERNAL" => Some(Self::OrientationInternal),
+            "ORIENTATION_EXTERNAL" => Some(Self::OrientationExternal),
             _ => None,
         }
     }
