@@ -2437,11 +2437,14 @@ impl NurbsSurface {
             order_v: self.m_order[1] as i32,
             cv_count_u: self.m_cv_count[0] as i32,
             cv_count_v: self.m_cv_count[1] as i32,
-            cv_stride_u: self.m_cv_stride[0] as i32,
-            cv_stride_v: self.m_cv_stride[1] as i32,
+            // the wire is row-major: stride[0]=cv_size*cv_count[1], stride[1]=cv_size (C++ layout)
+            cv_stride_u: (self.cv_size() * self.m_cv_count[1]) as i32,
+            cv_stride_v: self.cv_size() as i32,
             nurbsknots_u: self.m_nurbsknot[0].iter().map(|&v| v as f64).collect(),
             nurbsknots_v: self.m_nurbsknot[1].iter().map(|&v| v as f64).collect(),
-            cvs: self.m_cv.iter().map(|&v| v as f64).collect(),
+            cvs: (0..self.m_cv_count[0])
+                .flat_map(|ci| (0..self.m_cv_count[1]).flat_map(move |cj| self.cv(ci, cj).unwrap_or(&[]).to_vec()))
+                .collect(),
             width: self.width as f64,
             pointcolors: self.pointcolors.iter().map(|c| crate::proto::Color {
                 guid: String::new(), name: String::new(),
@@ -2511,9 +2514,18 @@ impl NurbsSurface {
             surface.m_nurbsknot[1] = proto.nurbsknots_v.into_iter().map(|v| v as f64).collect();
         }
 
-        // Load control vertices
-        if proto.cvs.len() == surface.m_cv.len() {
-            surface.m_cv = proto.cvs.into_iter().map(|v| v as f64).collect();
+        // Load control vertices - the wire is row-major (see to_proto); honor its strides
+        let cv_sz = surface.cv_size();
+        let stride_u = if proto.cv_stride_u > 0 { proto.cv_stride_u as usize } else { cv_sz * surface.m_cv_count[1] };
+        let stride_v = if proto.cv_stride_v > 0 { proto.cv_stride_v as usize } else { cv_sz };
+        for i in 0..surface.m_cv_count[0] {
+            for j in 0..surface.m_cv_count[1] {
+                let src = i * stride_u + j * stride_v;
+                let dst = i * surface.m_cv_stride[0] + j * surface.m_cv_stride[1];
+                for d in 0..cv_sz {
+                    if src + d < proto.cvs.len() { surface.m_cv[dst + d] = proto.cvs[src + d]; }
+                }
+            }
         }
 
         surface.pointcolors = proto.pointcolors.iter().map(|c| Color::new(c.r, c.g, c.b, c.a)).collect();
