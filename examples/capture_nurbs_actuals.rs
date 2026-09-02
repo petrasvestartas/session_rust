@@ -19,7 +19,7 @@ fn main() {
         Point::new(2.406227, 1.288248, 0.0),
         Point::new(2.15032, 1.868606, 0.0),
     ];
-    let mut curve = NurbsCurve::create(false, 2, &points);
+    let curve = NurbsCurve::create(false, 2, &points);
 
     println!("=== Evaluation test (line 449-) ===");
     println!("length = {}", curve.length(None));

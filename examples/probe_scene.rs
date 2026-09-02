@@ -16,25 +16,26 @@ fn main() {
 
         for guid in s.order() {
             let Some(g) = s.get_object(&guid) else { continue };
+            let world = s.world_xform(&guid);
             let (kind, xf, pts): (&str, &Xform, Vec<Point>) = match g {
-                Geometry::Point(p) => ("point", &session.world_xform(&guid), vec![Point::new(p[0], p[1], p[2])]),
+                Geometry::Point(p) => ("point", &world, vec![Point::new(p[0], p[1], p[2])]),
                 Geometry::Line(l) => {
                     *colors.entry(format!("{:?}", l.linecolor.to_f32())).or_default() += 1;
                     *widths.entry(format!("{:.2}", l.width)).or_default() += 1;
-                    ("line", &session.world_xform(&guid), vec![l.start(), l.end()])
+                    ("line", &world, vec![l.start(), l.end()])
                 }
                 Geometry::Polyline(pl) => {
                     *colors.entry(format!("{:?}", pl.linecolor.to_f32())).or_default() += 1;
                     *widths.entry(format!("{:.2}", pl.width)).or_default() += 1;
-                    ("polyline", &session.world_xform(&guid), pl.get_points())
+                    ("polyline", &world, pl.get_points())
                 }
-                Geometry::PointCloud(pc) => ("pointcloud", &session.world_xform(&guid), pc.get_points()),
-                Geometry::Mesh(m) => ("mesh", &session.world_xform(&guid), m.vertex.values().map(|v| Point::new(v.x, v.y, v.z)).collect()),
-                Geometry::NurbsCurve(c) => ("nurbscurve", &session.world_xform(&guid), vec![c.point_at_start(), c.point_at_end()]),
-                Geometry::NurbsSurface(sf) => ("nurbssurface", &session.world_xform(&guid), vec![]),
-                Geometry::BRep(b) => ("brep", &session.world_xform(&guid), vec![]),
-                Geometry::Plane(p) => ("plane", &session.world_xform(&guid), vec![p.origin()]),
-                Geometry::OBB(o) => ("obb", &session.world_xform(&guid), vec![]),
+                Geometry::PointCloud(pc) => ("pointcloud", &world, pc.get_points()),
+                Geometry::Mesh(m) => ("mesh", &world, m.vertex.values().map(|v| Point::new(v.x, v.y, v.z)).collect()),
+                Geometry::NurbsCurve(c) => ("nurbscurve", &world, vec![c.point_at_start(), c.point_at_end()]),
+                Geometry::NurbsSurface(sf) => ("nurbssurface", &world, vec![]),
+                Geometry::BRep(b) => ("brep", &world, vec![]),
+                Geometry::Plane(p) => ("plane", &world, vec![p.origin()]),
+                Geometry::OBB(o) => ("obb", &world, vec![]),
                 Geometry::Element(_) => ("element", &id, vec![]),
             };
             *counts.entry(kind).or_default() += 1;

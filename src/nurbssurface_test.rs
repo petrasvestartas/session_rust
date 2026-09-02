@@ -314,9 +314,11 @@ pub fn run_nurbssurface_nurbsknot_access() -> TestResult {
         }
 
         // Set nurbsknots
-        let _is_set = s.set_nurbsknot(0, 2, 0.5);
+        let is_set = s.set_nurbsknot(0, 2, 0.5);
+        MINI_CHECK!(is_set);
         MINI_CHECK!(s.nurbsknot(0, 2).unwrap() == 0.5);
-        let _is_set = s.set_nurbsknot(0, 2, 0.0);
+        let is_set = s.set_nurbsknot(0, 2, 0.0);
+        MINI_CHECK!(is_set);
 
         // Verify start multiplicity
         let mult_u_start = s.nurbsknot_multiplicity(0, 0);
@@ -364,10 +366,12 @@ pub fn run_nurbssurface_domain() -> TestResult {
 
         // Get domain 0 - 1
         let domain_u = s.domain(0).unwrap();
-        let _domain_v = s.domain(1).unwrap();
+        let domain_v = s.domain(1).unwrap();
 
         MINI_CHECK!(TOLERANCE.is_close(domain_u.0, 0.0));
         MINI_CHECK!(TOLERANCE.is_close(domain_u.1, 1.0));
+        MINI_CHECK!(TOLERANCE.is_close(domain_v.0, 0.0));
+        MINI_CHECK!(TOLERANCE.is_close(domain_v.1, 1.0));
 
         // Set Domain
         let is_set_u = s.set_domain(0, -1.1, 2.3);

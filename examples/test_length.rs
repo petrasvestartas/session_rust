@@ -15,5 +15,5 @@ fn main() {
         Point::new(2.15032, 1.868606, 0.0),
     ];
     let curve = NurbsCurve::create(false, 2, &points);
-    println!("Rust:   {:.10}", curve.length(1e-6));
+    println!("Rust:   {:.10}", curve.length(Some(1e-6)));
 }

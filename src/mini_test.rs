@@ -398,7 +398,7 @@ pub fn get_all_tests() -> Vec<RegisteredTest> {
     use crate::spatial_kdtree_test::*;
     use crate::spatial_octree_test::*;
 
-    let mut tests = vec![
+    let tests = vec![
         // BRep tests
         RegisteredTest { group: "BRep", name: "Constructor", func: run_brep_constructor },
         RegisteredTest { group: "BRep", name: "Create Box", func: run_brep_create_box },
@@ -1165,9 +1165,11 @@ pub fn get_all_tests() -> Vec<RegisteredTest> {
     // Feature-gated exactly like its REGISTER_MINI_TEST! in io_test.rs, so the drift guard in
     // run_all() sees the same set on both sides whether or not `pdf` is enabled.
     #[cfg(all(feature = "pdf", not(target_arch = "wasm32")))]
-    tests.push(RegisteredTest {
-        group: "Io", name: "Import Minimal", func: run_io_pdf_import_minimal,
-    });
+    let tests = {
+        let mut tests = tests;
+        tests.push(RegisteredTest { group: "Io", name: "Import Minimal", func: run_io_pdf_import_minimal });
+        tests
+    };
 
     tests
 }
@@ -1330,4 +1332,13 @@ pub fn run_all(language: &str) -> Result<(), Box<dyn std::error::Error>> {
 
     println!("[rust-minitest] {total_passed}/{total_tests} passed");
     Ok(())
+}
+
+#[cfg(test)]
+mod harness {
+    /// `cargo test` runs the same registered suite as `cargo run --bin minitest`.
+    #[test]
+    fn minitest_suite() {
+        super::run_all("rust").expect("minitest suite failed");
+    }
 }

@@ -266,7 +266,6 @@ mod picking_tests {
     fn test_bvh_world_size_covers_far_objects() {
         use crate::SpatialBVH;
         use crate::OBB;
-        use crate::AABB;
 
         let positions: &[(f64, f64, f64, f64)] = &[
             (   0.0,    0.0,    0.0, 400.0),

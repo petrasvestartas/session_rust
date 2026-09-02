@@ -374,13 +374,6 @@ pub struct NurbsSurfaceTrimmed {
     #[serde(rename = "inner_loops")]
     #[serde(default)]
     pub m_inner_loops: Vec<NurbsCurve>,
-    // Transient per-run segmentation of the outer/inner loops (one pcurve per boundary run),
-    // populated by split_by_uv_curves; consumed by BRep::split_with so each run becomes a
-    // separate mating edge (watertight imprinting). Not serialized.
-    #[serde(skip)]
-    pub m_outer_segments: Vec<NurbsCurve>,
-    #[serde(skip)]
-    pub m_inner_segments: Vec<Vec<NurbsCurve>>,
     // Optional plane-cut definition: when set, the trim region is { (S-q0).n <= 0 } and the
     // mesh comes from mesh_by_plane (boundary on the plane, seams welded) instead of the UV loop.
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -405,8 +398,6 @@ impl NurbsSurfaceTrimmed {
             m_surface: NurbsSurface::new(),
             m_outer_loop: None,
             m_inner_loops: Vec::new(),
-            m_outer_segments: Vec::new(),
-            m_inner_segments: Vec::new(),
             cut_q0: None,
             cut_n: None,
             cut_planes: Vec::new(),
@@ -962,9 +953,7 @@ impl NurbsSurfaceTrimmed {
 
         // ---- 7. Emit one trimmed surface per face ----
         // Collapse consecutive same-curve half-edges into exact trims (border runs become
-        // straight segments), each oriented tail->head along the face walk. Returns the run
-        // pieces in connected order; the caller joins them into one loop and keeps them as the
-        // segmentation for watertight edge imprinting.
+        // straight segments), each oriented tail->head along the face walk.
         let cycle_to_segments = |cycle: &Vec<usize>| -> Vec<NurbsCurve> {
             struct Run { cidx: i32, va: usize, vb: usize, ta: f64, tb: f64 }
             let mut runs: Vec<Run> = Vec::new();
@@ -1019,26 +1008,24 @@ impl NurbsSurfaceTrimmed {
             pieces
         };
 
-        // Join the run pieces into one closed loop. Returns (loop, segments, seg_valid):
-        // on success the segments reconstruct the loop exactly; otherwise a polyline-fallback
-        // loop is returned and seg_valid is false.
-        let cycle_to_loop = |cycle: &Vec<usize>| -> (NurbsCurve, Vec<NurbsCurve>, bool) {
+        // Join the run pieces into one closed loop; a polyline loop from the face walk is the
+        // fallback when the pieces do not chain.
+        let cycle_to_loop = |cycle: &Vec<usize>| -> NurbsCurve {
             let pieces = cycle_to_segments(cycle);
             if pieces.is_empty() {
-                return (NurbsCurve::default(), Vec::new(), false);
+                return NurbsCurve::default();
             }
             let mut joined = NurbsCurve::join(&pieces, Some(snap_uv * 4.0));
             if joined.len() == 1 && joined[0].is_closed() {
-                return (joined.remove(0), pieces, true);
+                return joined.remove(0);
             }
-            // Fallback: polyline loop from the face walk
             let mut loop_pts: Vec<Point> = Vec::new();
             for &hi in cycle {
                 let a = verts[hes[hi].0];
                 loop_pts.push(Point::new(a[0], a[1], 0.0));
             }
             loop_pts.push(Point::new(loop_pts[0][0], loop_pts[0][1], 0.0));
-            (NurbsCurve::create(false, 1, &loop_pts), Vec::new(), false)
+            NurbsCurve::create(false, 1, &loop_pts)
         };
 
         let loop_signed_area = |loop_crv: &NurbsCurve| -> f64 {
@@ -1054,34 +1041,23 @@ impl NurbsSurfaceTrimmed {
             s * 0.5
         };
 
-        // Reverse a head-to-tail segment list in place so it still traces the loop head-to-tail
-        // after the joined loop was reversed (reverse the order AND each segment).
-        let reverse_segments = |segs: &mut Vec<NurbsCurve>| {
-            segs.reverse();
-            for s in segs.iter_mut() { s.reverse(); }
-        };
-
         let mut result: Vec<NurbsSurfaceTrimmed> = Vec::new();
         for (fi, (cycle, _area)) in pos_faces.iter().enumerate() {
-            let (mut outer, mut outer_segs, outer_seg_valid) = cycle_to_loop(cycle);
+            let mut outer = cycle_to_loop(cycle);
             if !outer.is_valid() {
                 continue;
             }
             if loop_signed_area(&outer) < 0.0 {
                 outer.reverse();
-                if outer_seg_valid { reverse_segments(&mut outer_segs); }
             }
             let mut ts = NurbsSurfaceTrimmed::create(srf, &outer);
-            if outer_seg_valid { ts.m_outer_segments = outer_segs; }
             for hole_cycle in &holes_of[fi] {
-                let (mut hole, mut hole_segs, hole_seg_valid) = cycle_to_loop(hole_cycle);
+                let mut hole = cycle_to_loop(hole_cycle);
                 if hole.is_valid() {
                     if loop_signed_area(&hole) > 0.0 {
                         hole.reverse();
-                        if hole_seg_valid { reverse_segments(&mut hole_segs); }
                     }
                     ts.add_inner_loop(hole);
-                    ts.m_inner_segments.push(if hole_seg_valid { hole_segs } else { Vec::new() });
                 }
             }
             result.push(ts);

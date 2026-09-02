@@ -1,7 +1,7 @@
 use session_rust::{NurbsSurface, Point};
 
 fn main() {
-    let mut srf = NurbsSurface::create_raw(3, false, 4, 4, 5, 5).unwrap();
+    let mut srf = NurbsSurface::create_raw(3, false, 4, 4, 5, 5, false, false, 1.0, 1.0).unwrap();
     srf.make_clamped_uniform_nurbsknot_vector(0, 1.0);
     srf.make_clamped_uniform_nurbsknot_vector(1, 1.0);
 
@@ -42,7 +42,7 @@ fn main() {
     println!("First 10 points (row 0):");
     for j in 0..10 {
         let u = u_min + (u_max - u_min) * 0.0 / 9.0;
-        let v = v_min + (v_max - v_min) * (j as f32) / 9.0;
+        let v = v_min + (v_max - v_min) * (j as f64) / 9.0;
         let pt = srf.point_at(u, v).unwrap();
         println!("({:.3}, {:.3}, {:.3})", pt[0], pt[1], pt[2]);
     }
@@ -50,7 +50,7 @@ fn main() {
     println!("\nNext 10 points (row 1):");
     for j in 0..10 {
         let u = u_min + (u_max - u_min) * 1.0 / 9.0;
-        let v = v_min + (v_max - v_min) * (j as f32) / 9.0;
+        let v = v_min + (v_max - v_min) * (j as f64) / 9.0;
         let pt = srf.point_at(u, v).unwrap();
         println!("({:.3}, {:.3}, {:.3})", pt[0], pt[1], pt[2]);
     }
@@ -58,7 +58,7 @@ fn main() {
     println!("\nRow 2 points:");
     for j in 0..10 {
         let u = u_min + (u_max - u_min) * 2.0 / 9.0;
-        let v = v_min + (v_max - v_min) * (j as f32) / 9.0;
+        let v = v_min + (v_max - v_min) * (j as f64) / 9.0;
         let pt = srf.point_at(u, v).unwrap();
         println!("({:.3}, {:.3}, {:.3})", pt[0], pt[1], pt[2]);
     }

@@ -45,7 +45,7 @@ fn main() {
             [3.0, 3.0, 2.0],
         ]),
     ];
-    let mut m_rect = Mesh::loft(&rect_bot, &rect_top, true);
+    let mut m_rect = Mesh::loft(&rect_bot, &rect_top, true, true);
     m_rect.name = "plate_rect".to_string();
     session.add_mesh(m_rect.clone(), Some(&g));
 
@@ -112,7 +112,7 @@ fn main() {
             [2223.416, 97.448, 178.317],
         ]),
     ];
-    let mut m_annen = Mesh::loft(&annen_bot, &annen_top, true);
+    let mut m_annen = Mesh::loft(&annen_bot, &annen_top, true, true);
     m_annen.name = "plate_annen".to_string();
     session.add_mesh(m_annen.clone(), Some(&g));
 
@@ -139,7 +139,7 @@ fn main() {
             [ 0.0, 0.0, 1.5],
         ]),
     ];
-    let mut m_collin = Mesh::loft(&col_bot, &col_top, true);
+    let mut m_collin = Mesh::loft(&col_bot, &col_top, true, true);
     m_collin.name = "plate_collin".to_string();
     session.add_mesh(m_collin.clone(), Some(&g));
 
