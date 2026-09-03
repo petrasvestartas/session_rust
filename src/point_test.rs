@@ -205,6 +205,38 @@ pub fn run_point_squared_distance() -> TestResult {
     })
 }
 
+pub fn run_point_interpolate() -> TestResult {
+    MINI_TEST!("Interpolate", {
+        use crate::Point;
+
+        let a = Point::new(0.0, 0.0, 0.0);
+        let b = Point::new(10.0, 0.0, 0.0);
+        let pts0 = Point::interpolate(&a, &b, 3, 0);
+        let pts1 = Point::interpolate(&a, &b, 3, 1);
+        let pts2 = Point::interpolate(&a, &b, 3, 2);
+
+        MINI_CHECK!(pts0.len() == 3 && pts0[0][0] == 2.5 && pts0[2][0] == 7.5);
+        MINI_CHECK!(pts1.len() == 5 && pts1[0][0] == 0.0 && pts1[4][0] == 10.0);
+        MINI_CHECK!(pts2.len() == 4 && pts2[0][0] == 0.0 && pts2[3][0] == 7.5);
+    })
+}
+
+pub fn run_point_lerp() -> TestResult {
+    MINI_TEST!("Lerp", {
+        use crate::Point;
+
+        let a = Point::new(0.0, 0.0, 0.0);
+        let b = Point::new(10.0, 20.0, 30.0);
+        let mid = Point::lerp(&a, &b, 0.5);
+        let start = Point::lerp(&a, &b, 0.0);
+        let end = Point::lerp(&a, &b, 1.0);
+
+        MINI_CHECK!(mid[0] == 5.0 && mid[1] == 10.0 && mid[2] == 15.0);
+        MINI_CHECK!(start[0] == 0.0 && start[1] == 0.0 && start[2] == 0.0);
+        MINI_CHECK!(end[0] == 10.0 && end[1] == 20.0 && end[2] == 30.0);
+    })
+}
+
 pub fn run_point_area() -> TestResult {
     MINI_TEST!("Area", {
         use crate::Point;
@@ -277,6 +309,8 @@ REGISTER_MINI_TEST!("Point", "Is Ccw", crate::point_test::run_point_is_ccw);
 REGISTER_MINI_TEST!("Point", "Mid Point", crate::point_test::run_point_mid_point);
 REGISTER_MINI_TEST!("Point", "Distance", crate::point_test::run_point_distance);
 REGISTER_MINI_TEST!("Point", "Squared Distance", crate::point_test::run_point_squared_distance);
+REGISTER_MINI_TEST!("Point", "Interpolate", crate::point_test::run_point_interpolate);
+REGISTER_MINI_TEST!("Point", "Lerp", crate::point_test::run_point_lerp);
 REGISTER_MINI_TEST!("Point", "Area", crate::point_test::run_point_area);
 REGISTER_MINI_TEST!("Point", "Centroid Quad", crate::point_test::run_point_centroid_quad);
 REGISTER_MINI_TEST!("Point", "Centroid", crate::point_test::run_point_centroid);
