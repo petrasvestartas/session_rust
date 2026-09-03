@@ -18,6 +18,21 @@ pub struct PointCloud {
     _colors: Vec<i32>,
     /// Flat normals [nx0, ny0, nz0, ...]
     _normals: Vec<f64>,
+    /// LOD octree over the points, one flat array per SpatialOctree node field. Built by
+    /// build_lod(), which PERMUTES the three arrays above into octree order - so a node is one
+    /// contiguous (_lod_first, _lod_count) range and the order permutation never has to be
+    /// stored. Empty means no octree.
+    _lod_min: Vec<f64>,
+    _lod_size: Vec<f64>,
+    _lod_spacing: Vec<f64>,
+    _lod_level: Vec<i32>,
+    _lod_first: Vec<i32>,
+    _lod_count: Vec<i32>,
+    _lod_children: Vec<i32>,
+    /// STABLE per-point ids, one per point, parallel to _coords. Assigned once by the first
+    /// build_lod and permuted with the points ever after, so an index that moves does not take
+    /// the point's identity with it. Empty = no tree yet, so the index IS the id.
+    _point_ids: Vec<u32>,
 }
 
 impl Default for PointCloud {
@@ -29,6 +44,14 @@ impl Default for PointCloud {
             _coords: Vec::new(),
             _colors: Vec::new(),
             _normals: Vec::new(),
+            _lod_min: Vec::new(),
+            _lod_size: Vec::new(),
+            _lod_spacing: Vec::new(),
+            _lod_level: Vec::new(),
+            _lod_first: Vec::new(),
+            _lod_count: Vec::new(),
+            _lod_children: Vec::new(),
+            _point_ids: Vec::new(),
         }
     }
 }
@@ -72,6 +95,14 @@ impl PointCloud {
             _coords: coords,
             _colors: colors,
             _normals: normals,
+            _lod_min: Vec::new(),
+            _lod_size: Vec::new(),
+            _lod_spacing: Vec::new(),
+            _lod_level: Vec::new(),
+            _lod_first: Vec::new(),
+            _lod_count: Vec::new(),
+            _lod_children: Vec::new(),
+            _point_ids: Vec::new(),
         }
     }
 
@@ -309,6 +340,136 @@ impl PointCloud {
     }
 
     ///////////////////////////////////////////////////////////////////////////////////////////
+    // LOD Octree
+    ///////////////////////////////////////////////////////////////////////////////////////////
+
+    /// Build the LOD octree and REORDER the points into octree order. Every point's index
+    /// changes; a node becomes one contiguous range. Expensive - about 10 s on 14 M points -
+    /// so it is called once by whoever writes the cloud, never per construction.
+    pub fn build_lod(&mut self, root_spacing: f64, leaf_capacity: usize) {
+        let tree = crate::SpatialOctree::from_coords(&self._coords, root_spacing, leaf_capacity);
+        let order = tree.order();
+
+        // Identity is minted HERE, before the first permutation, so an id records where a point
+        // began. After this the ids travel with the points and the index is free to move.
+        if self._point_ids.is_empty() {
+            self._point_ids = (0..self._coords.len() as u32 / 3).collect();
+        }
+
+        // Permute the three parallel arrays into octree order. This is what lets a node be one
+        // (first, count) range, so `order` itself never has to be stored - 4 bytes a point.
+        let mut coords = Vec::with_capacity(self._coords.len());
+        let mut colors = Vec::with_capacity(self._colors.len());
+        let mut normals = Vec::with_capacity(self._normals.len());
+        let mut ids = Vec::with_capacity(self._point_ids.len());
+        let has_colors = self._colors.len() == order.len() * 4;
+        let has_normals = self._normals.len() == order.len() * 3;
+        for &idx in order {
+            ids.push(self._point_ids[idx]);
+            coords.extend_from_slice(&self._coords[idx * 3..idx * 3 + 3]);
+            if has_colors {
+                colors.extend_from_slice(&self._colors[idx * 4..idx * 4 + 4]);
+            }
+            if has_normals {
+                normals.extend_from_slice(&self._normals[idx * 3..idx * 3 + 3]);
+            }
+        }
+        self._coords = coords;
+        self._point_ids = ids;
+        if has_colors {
+            self._colors = colors;
+        }
+        if has_normals {
+            self._normals = normals;
+        }
+
+        let n = tree.node_count();
+        self._lod_min.clear();
+        self._lod_size.clear();
+        self._lod_spacing.clear();
+        self._lod_level.clear();
+        self._lod_first.clear();
+        self._lod_count.clear();
+        self._lod_children.clear();
+        for i in 0..n {
+            let (center, size) = tree.node_cube(i);
+            self._lod_min.push(center[0] - size * 0.5);
+            self._lod_min.push(center[1] - size * 0.5);
+            self._lod_min.push(center[2] - size * 0.5);
+            self._lod_size.push(size);
+            self._lod_spacing.push(tree.node_spacing(i));
+            self._lod_level.push(tree.node_level(i) as i32);
+            let (first, count) = tree.node_range(i);
+            self._lod_first.push(first as i32);
+            self._lod_count.push(count as i32);
+            let kids = tree.children(i);
+            for k in 0..8 {
+                self._lod_children.push(kids.get(k).map_or(-1, |&c| c as i32));
+            }
+        }
+    }
+
+    /// True when an octree has been built
+    pub fn has_lod(&self) -> bool {
+        !self._lod_size.is_empty()
+    }
+
+    /// Number of octree nodes
+    pub fn lod_node_count(&self) -> usize {
+        self._lod_size.len()
+    }
+
+    /// Node cube: center and edge length
+    pub fn lod_cube(&self, i: usize) -> (Point, f64) {
+        let half = self._lod_size[i] * 0.5;
+        (Point::new(self._lod_min[i * 3] + half, self._lod_min[i * 3 + 1] + half, self._lod_min[i * 3 + 2] + half), self._lod_size[i])
+    }
+
+    /// Grid-accept spacing of a node
+    pub fn lod_spacing(&self, i: usize) -> f64 {
+        self._lod_spacing[i]
+    }
+
+    /// Node depth from the root
+    pub fn lod_level(&self, i: usize) -> i32 {
+        self._lod_level[i]
+    }
+
+    /// Node point range as (first, count) into the reordered arrays
+    pub fn lod_range(&self, i: usize) -> (i32, i32) {
+        (self._lod_first[i], self._lod_count[i])
+    }
+
+    /// Present child node indices, compacted, -1 padding
+    pub fn lod_children(&self, i: usize) -> Vec<i32> {
+        self._lod_children[i * 8..i * 8 + 8].to_vec()
+    }
+
+    ///////////////////////////////////////////////////////////////////////////////////////////
+    // Stable Point Ids
+    ///////////////////////////////////////////////////////////////////////////////////////////
+
+    /// The stable ids, parallel to the points. Empty until a tree is built.
+    pub fn point_ids(&self) -> &[u32] {
+        &self._point_ids
+    }
+
+    /// The stable id of a point, by its CURRENT index. Falls back to the index itself while no
+    /// tree has been built, which is exactly what the id would have been.
+    pub fn point_id(&self, index: usize) -> u32 {
+        if self._point_ids.is_empty() { index as u32 } else { self._point_ids[index] }
+    }
+
+    /// Where a stable id lives NOW, or None if this cloud has no such point. Linear: a caller
+    /// resolving many ids should build its own map.
+    pub fn index_of_id(&self, id: u32) -> Option<usize> {
+        if self._point_ids.is_empty() {
+            return ((id as usize) < self._coords.len() / 3).then_some(id as usize);
+        }
+        self._point_ids.iter().position(|&v| v == id)
+    }
+
+    ///////////////////////////////////////////////////////////////////////////////////////////
     // JSON Serialization
     ///////////////////////////////////////////////////////////////////////////////////////////
 
@@ -366,6 +527,14 @@ impl PointCloud {
             colors: self._colors.iter().map(|&c| c as u32).collect(),
             normals: self._normals.iter().map(|&v| v as f64).collect(),
             point_size: self.point_size as f64,
+            lod_min: self._lod_min.clone(),
+            lod_size: self._lod_size.clone(),
+            lod_spacing: self._lod_spacing.clone(),
+            lod_level: self._lod_level.clone(),
+            lod_first: self._lod_first.clone(),
+            lod_count: self._lod_count.clone(),
+            lod_children: self._lod_children.clone(),
+            point_ids: self._point_ids.clone(),
         }
     }
 
@@ -386,6 +555,14 @@ impl PointCloud {
         pc.set_guid(proto.guid);
         pc.name = proto.name;
         pc.point_size = if proto.point_size > 0.0 { proto.point_size as f64 } else { 1.0 };
+        pc._lod_min = proto.lod_min;
+        pc._lod_size = proto.lod_size;
+        pc._lod_spacing = proto.lod_spacing;
+        pc._lod_level = proto.lod_level;
+        pc._lod_first = proto.lod_first;
+        pc._lod_count = proto.lod_count;
+        pc._lod_children = proto.lod_children;
+        pc._point_ids = proto.point_ids;
 
         pc
     }
@@ -413,6 +590,9 @@ impl PartialEq for PointCloud {
             && self._coords == other._coords
             && self._colors == other._colors
             && self._normals == other._normals
+            && self._lod_first == other._lod_first
+            && self._lod_count == other._lod_count
+            && self._point_ids == other._point_ids
     }
 }
 
@@ -502,7 +682,7 @@ impl Serialize for PointCloud {
         S: Serializer,
     {
         use serde::ser::SerializeStruct;
-        let mut state = serializer.serialize_struct("PointCloud", 8)?;
+        let mut state = serializer.serialize_struct("PointCloud", 16)?;
 
         state.serialize_field("type", "PointCloud")?;
         state.serialize_field("guid", self.guid())?;
@@ -511,6 +691,14 @@ impl Serialize for PointCloud {
         state.serialize_field("colors", &self._colors)?;
         state.serialize_field("normals", &self._normals)?;
         state.serialize_field("point_size", &self.point_size)?;
+        state.serialize_field("lod_children", &self._lod_children)?;
+        state.serialize_field("lod_count", &self._lod_count)?;
+        state.serialize_field("lod_first", &self._lod_first)?;
+        state.serialize_field("lod_level", &self._lod_level)?;
+        state.serialize_field("lod_min", &self._lod_min)?;
+        state.serialize_field("lod_size", &self._lod_size)?;
+        state.serialize_field("lod_spacing", &self._lod_spacing)?;
+        state.serialize_field("point_ids", &self._point_ids)?;
 
         state.end()
     }
@@ -534,6 +722,22 @@ impl<'de> Deserialize<'de> for PointCloud {
             Normals,
             #[serde(rename = "point_size")]
             PointSize,
+            #[serde(rename = "lod_children")]
+            LodChildren,
+            #[serde(rename = "lod_count")]
+            LodCount,
+            #[serde(rename = "lod_first")]
+            LodFirst,
+            #[serde(rename = "lod_level")]
+            LodLevel,
+            #[serde(rename = "lod_min")]
+            LodMin,
+            #[serde(rename = "lod_size")]
+            LodSize,
+            #[serde(rename = "lod_spacing")]
+            LodSpacing,
+            #[serde(rename = "point_ids")]
+            PointIds,
         }
 
         struct PointCloudVisitor;
@@ -555,6 +759,14 @@ impl<'de> Deserialize<'de> for PointCloud {
                 let mut colors: Option<Vec<i32>> = None;
                 let mut normals: Option<Vec<f64>> = None;
                 let mut point_size = None;
+                let mut lod_children: Option<Vec<i32>> = None;
+                let mut lod_count: Option<Vec<i32>> = None;
+                let mut lod_first: Option<Vec<i32>> = None;
+                let mut lod_level: Option<Vec<i32>> = None;
+                let mut lod_min: Option<Vec<f64>> = None;
+                let mut lod_size: Option<Vec<f64>> = None;
+                let mut lod_spacing: Option<Vec<f64>> = None;
+                let mut point_ids: Option<Vec<u32>> = None;
 
                 while let Some(key) = map.next_key()? {
                     match key {
@@ -579,6 +791,30 @@ impl<'de> Deserialize<'de> for PointCloud {
                         Field::PointSize => {
                             point_size = Some(map.next_value()?);
                         }
+                        Field::LodChildren => {
+                            lod_children = Some(map.next_value()?);
+                        }
+                        Field::LodCount => {
+                            lod_count = Some(map.next_value()?);
+                        }
+                        Field::LodFirst => {
+                            lod_first = Some(map.next_value()?);
+                        }
+                        Field::LodLevel => {
+                            lod_level = Some(map.next_value()?);
+                        }
+                        Field::LodMin => {
+                            lod_min = Some(map.next_value()?);
+                        }
+                        Field::LodSize => {
+                            lod_size = Some(map.next_value()?);
+                        }
+                        Field::LodSpacing => {
+                            lod_spacing = Some(map.next_value()?);
+                        }
+                        Field::PointIds => {
+                            point_ids = Some(map.next_value()?);
+                        }
                     }
                 }
 
@@ -596,6 +832,14 @@ impl<'de> Deserialize<'de> for PointCloud {
                     _coords: coords,
                     _colors: colors,
                     _normals: normals,
+                    _lod_min: lod_min.unwrap_or_default(),
+                    _lod_size: lod_size.unwrap_or_default(),
+                    _lod_spacing: lod_spacing.unwrap_or_default(),
+                    _lod_level: lod_level.unwrap_or_default(),
+                    _lod_first: lod_first.unwrap_or_default(),
+                    _lod_count: lod_count.unwrap_or_default(),
+                    _lod_children: lod_children.unwrap_or_default(),
+                    _point_ids: point_ids.unwrap_or_default(),
                 })
             }
         }

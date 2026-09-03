@@ -832,6 +832,54 @@ pub struct PointCloud {
     /// Point size for display
     #[prost(double, tag = "6")]
     pub point_size: f64,
+    /// Potree-style LOD octree over `coords`, one flat array per SpatialOctree node field.
+    /// `coords`/`colors`/`normals` are stored in OCTREE ORDER, so a node is one contiguous
+    /// (lod_first, lod_count) range and the order permutation never has to ship - it would be
+    /// 4 bytes a point, 55 MB on a 13.8 M cloud. Empty arrays mean no octree was built.
+    ///
+    /// Flat parallel arrays, not a `repeated LodNode`: packed fixed-width fields give the exact
+    /// node count from a length prefix and can be sliced by byte range, which a message with
+    /// variable-length entries cannot.
+    ///
+    /// node cube minimum, 3 per node
+    #[prost(double, repeated, tag = "8")]
+    pub lod_min: ::prost::alloc::vec::Vec<f64>,
+    /// node cube edge, 1 per node
+    #[prost(double, repeated, tag = "9")]
+    pub lod_size: ::prost::alloc::vec::Vec<f64>,
+    /// grid-accept spacing, 1 per node
+    #[prost(double, repeated, tag = "10")]
+    pub lod_spacing: ::prost::alloc::vec::Vec<f64>,
+    /// depth from the root, 1 per node
+    #[prost(int32, repeated, tag = "11")]
+    pub lod_level: ::prost::alloc::vec::Vec<i32>,
+    /// first point row of the node, 1 per node
+    #[prost(int32, repeated, tag = "12")]
+    pub lod_first: ::prost::alloc::vec::Vec<i32>,
+    /// points in the node, 1 per node
+    #[prost(int32, repeated, tag = "13")]
+    pub lod_count: ::prost::alloc::vec::Vec<i32>,
+    /// Present children only, COMPACTED into the first slots and padded with -1 - the octant
+    /// position is dropped by SpatialOctree::children() and a screen-error walk never needs it,
+    /// because every child carries its own cube and spacing.
+    ///
+    /// 8 slots per node, -1 = unused
+    #[prost(int32, repeated, tag = "14")]
+    pub lod_children: ::prost::alloc::vec::Vec<i32>,
+    /// STABLE per-point identity, one per point, in the same order as `coords`.
+    ///
+    /// Building the LOD permutes the points, so a point's INDEX means nothing across a re-export:
+    /// the same point in one test cloud was row 118514 before a tree was attached and 248274
+    /// after. An id is assigned once, before the first permutation, and is carried through every
+    /// later one - so a selection, an annotation or a measurement can name a point and still find
+    /// it in the next export.
+    ///
+    /// Empty means identity is implicit: no tree has been built, so the index IS the id, and the
+    /// 4 bytes a point are not spent. `fixed32` rather than `uint32` on purpose - packed varints
+    /// would cost 1-5 bytes each and could not be sliced by byte range, which is the property the
+    /// rest of this message is built on.
+    #[prost(fixed32, repeated, tag = "15")]
+    pub point_ids: ::prost::alloc::vec::Vec<u32>,
 }
 /// Component message for custom domain objects (e.g. FloorBuilder, WallBuilder)
 /// Allows external packages to store arbitrary serializable objects in a Session.

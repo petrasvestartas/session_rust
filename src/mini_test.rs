@@ -581,6 +581,8 @@ pub fn get_all_tests() -> Vec<RegisteredTest> {
         // PointCloud tests
         RegisteredTest { group: "PointCloud", name: "Constructor", func: run_pointcloud_constructor },
         RegisteredTest { group: "PointCloud", name: "Transform", func: run_pointcloud_transform },
+        RegisteredTest { group: "PointCloud", name: "Build Lod", func: run_pointcloud_build_lod },
+        RegisteredTest { group: "PointCloud", name: "Point Ids", func: run_pointcloud_point_ids },
         RegisteredTest { group: "PointCloud", name: "Json Roundtrip", func: run_pointcloud_json_roundtrip },
         RegisteredTest { group: "PointCloud", name: "Protobuf Roundtrip", func: run_pointcloud_protobuf_roundtrip },
         RegisteredTest { group: "PointCloud", name: "From Coords", func: run_pointcloud_from_coords },

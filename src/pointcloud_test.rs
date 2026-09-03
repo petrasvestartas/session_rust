@@ -412,6 +412,36 @@ pub fn run_pointcloud_protobuf_roundtrip() -> TestResult {
     })
 }
 
+pub fn run_pointcloud_point_ids() -> TestResult {
+    MINI_TEST!("Point Ids", {
+        use crate::PointCloud;
+
+        let coords = vec![0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 1.0, 1.0, 0.0, 0.0, 0.0, 1.0, 1.0, 0.0, 1.0, 0.0, 1.0, 1.0, 1.0, 1.0, 1.0];
+        let mut pc = PointCloud::from_coords(coords, vec![], vec![]);
+        let before = pc.get_point(5);
+        pc.build_lod(1.0, 2);
+
+        MINI_CHECK!(pc.point_ids().len() == 8);
+        MINI_CHECK!(pc.index_of_id(5).is_some());
+        MINI_CHECK!(pc.get_point(pc.index_of_id(5).unwrap()) == before);
+    })
+}
+
+pub fn run_pointcloud_build_lod() -> TestResult {
+    MINI_TEST!("Build Lod", {
+        use crate::PointCloud;
+
+        let coords = vec![0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 1.0, 1.0, 0.0, 0.0, 0.0, 1.0, 1.0, 0.0, 1.0, 0.0, 1.0, 1.0, 1.0, 1.0, 1.0];
+        let mut pc = PointCloud::from_coords(coords, vec![], vec![]);
+        pc.build_lod(1.0, 2);
+
+        MINI_CHECK!(pc.has_lod());
+        MINI_CHECK!(pc.lod_node_count() == 8);
+        MINI_CHECK!(pc.lod_range(0) == (0, 1));
+        MINI_CHECK!(pc.coords().len() == 24);
+    })
+}
+
 REGISTER_MINI_TEST!("PointCloud", "Constructor", crate::pointcloud_test::run_pointcloud_constructor);
 REGISTER_MINI_TEST!("PointCloud", "From Coords", crate::pointcloud_test::run_pointcloud_from_coords);
 REGISTER_MINI_TEST!("PointCloud", "Point Count", crate::pointcloud_test::run_pointcloud_point_count);
@@ -435,5 +465,7 @@ REGISTER_MINI_TEST!("PointCloud", "Add Normal", crate::pointcloud_test::run_poin
 REGISTER_MINI_TEST!("PointCloud", "Get Normals", crate::pointcloud_test::run_pointcloud_get_normals);
 REGISTER_MINI_TEST!("PointCloud", "Transform", crate::pointcloud_test::run_pointcloud_transform);
 REGISTER_MINI_TEST!("PointCloud", "Transformed", crate::pointcloud_test::run_pointcloud_transformed);
+REGISTER_MINI_TEST!("PointCloud", "Point Ids", crate::pointcloud_test::run_pointcloud_point_ids);
+REGISTER_MINI_TEST!("PointCloud", "Build Lod", crate::pointcloud_test::run_pointcloud_build_lod);
 REGISTER_MINI_TEST!("PointCloud", "Json Roundtrip", crate::pointcloud_test::run_pointcloud_json_roundtrip);
 REGISTER_MINI_TEST!("PointCloud", "Protobuf Roundtrip", crate::pointcloud_test::run_pointcloud_protobuf_roundtrip);
