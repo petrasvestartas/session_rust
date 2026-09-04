@@ -119,19 +119,34 @@ impl Line {
             cyz += dy * dz;
         }
 
-        // Power iteration to find dominant eigenvector
-        let (mut vx, mut vy, mut vz) = (1.0, 0.0, 0.0);
-        for _ in 0..100 {
-            let nx = cxx * vx + cxy * vy + cxz * vz;
-            let ny = cxy * vx + cyy * vy + cyz * vz;
-            let nz = cxz * vx + cyz * vy + czz * vz;
-            let mag = (nx * nx + ny * ny + nz * nz).sqrt();
-            if mag < 1e-15 {
-                break;
+        // Power iteration seeded from every axis: a seed orthogonal to the dominant
+        // eigenvector never reaches it, so keep the largest Rayleigh quotient.
+        let (mut vx, mut vy, mut vz, mut best) = (1.0, 0.0, 0.0, -1.0);
+        for seed in 0..3 {
+            let mut sx = if seed == 0 { 1.0 } else { 0.0 };
+            let mut sy = if seed == 1 { 1.0 } else { 0.0 };
+            let mut sz = if seed == 2 { 1.0 } else { 0.0 };
+            for _ in 0..100 {
+                let nx = cxx * sx + cxy * sy + cxz * sz;
+                let ny = cxy * sx + cyy * sy + cyz * sz;
+                let nz = cxz * sx + cyz * sy + czz * sz;
+                let mag = (nx * nx + ny * ny + nz * nz).sqrt();
+                if mag < 1e-15 {
+                    break;
+                }
+                sx = nx / mag;
+                sy = ny / mag;
+                sz = nz / mag;
             }
-            vx = nx / mag;
-            vy = ny / mag;
-            vz = nz / mag;
+            let eig = sx * (cxx * sx + cxy * sy + cxz * sz)
+                + sy * (cxy * sx + cyy * sy + cyz * sz)
+                + sz * (cxz * sx + cyz * sy + czz * sz);
+            if eig > best {
+                best = eig;
+                vx = sx;
+                vy = sy;
+                vz = sz;
+            }
         }
 
         // Determine line extent from projected points
@@ -509,14 +524,11 @@ impl Line {
     /// Extend this line in place by `ext_start` at the start end and
     /// `ext_end` at the end.
     pub fn extend(&mut self, ext_start: f64, ext_end: f64) {
-        let s = self.start();
-        let e = self.end();
-        let mut v = e.clone() - s.clone();
-        v.normalize_self();
-        let new_s = s - (v.clone() * ext_start);
-        let new_e = e + (v * ext_end);
-        self._x0 = new_s[0]; self._y0 = new_s[1]; self._z0 = new_s[2];
-        self._x1 = new_e[0]; self._y1 = new_e[1]; self._z1 = new_e[2];
+        let mut s = self.start();
+        let mut e = self.end();
+        crate::polyline::Polyline::extend_line_segment(&mut s, &mut e, ext_start, ext_end);
+        self._x0 = s[0]; self._y0 = s[1]; self._z0 = s[2];
+        self._x1 = e[0]; self._y1 = e[1]; self._z1 = e[2];
     }
 
 }
