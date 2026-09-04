@@ -141,7 +141,8 @@ pub fn run_polyline_rectangle() -> TestResult {
         use crate::Polyline;
         use crate::Vector;
 
-        let r = Polyline::rectangle(&Point::new(0.0, 0.0, 0.0), &Vector::x_axis(), &Vector::y_axis(), 2.0, 1.0, true);
+        let o = Point::new(0.0, 0.0, 0.0);
+        let r = Polyline::rectangle(&o, &Vector::x_axis(), &Vector::y_axis(), 2.0, 1.0, true);
 
         MINI_CHECK!(r.point_count() == 5);
         MINI_CHECK!(r.is_closed());
