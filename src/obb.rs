@@ -69,7 +69,7 @@ impl OBB {
             z_axis: Vector::new(0.0, 0.0, 1.0),
             half_size: Vector::new(a.hx, a.hy, a.hz),
             guid: std::sync::OnceLock::new(),
-            name: String::new(),
+            name: "my_obb".to_string(),
         }
     }
 
@@ -228,7 +228,7 @@ impl OBB {
             z_axis,
             half_size,
             guid: std::sync::OnceLock::new(),
-            name: String::new(),
+            name: "my_obb".to_string(),
         }
     }
 
@@ -695,7 +695,7 @@ impl Default for OBB {
             z_axis: Vector::new(0.0, 0.0, 1.0),
             half_size: Vector::new(0.5, 0.5, 0.5),
             guid: std::sync::OnceLock::new(),
-            name: String::new(),
+            name: "my_obb".to_string(),
         }
     }
 }
