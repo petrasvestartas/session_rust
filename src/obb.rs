@@ -479,70 +479,7 @@ impl OBB {
     }
 
     pub fn collides_with(&self, other: &OBB) -> bool {
-        let center_pt = Point::new(self.center[0], self.center[1], self.center[2]);
-        let other_center_pt = Point::new(other.center[0], other.center[1], other.center[2]);
-        let relative_position = Vector::from_points(&center_pt, &other_center_pt);
-
-        !(Self::separating_plane_exists(&relative_position, &self.x_axis, self, other)
-            || Self::separating_plane_exists(&relative_position, &self.y_axis, self, other)
-            || Self::separating_plane_exists(&relative_position, &self.z_axis, self, other)
-            || Self::separating_plane_exists(&relative_position, &other.x_axis, self, other)
-            || Self::separating_plane_exists(&relative_position, &other.y_axis, self, other)
-            || Self::separating_plane_exists(&relative_position, &other.z_axis, self, other)
-            || Self::separating_plane_exists(
-                &relative_position,
-                &self.x_axis.cross(&other.x_axis),
-                self,
-                other,
-            )
-            || Self::separating_plane_exists(
-                &relative_position,
-                &self.x_axis.cross(&other.y_axis),
-                self,
-                other,
-            )
-            || Self::separating_plane_exists(
-                &relative_position,
-                &self.x_axis.cross(&other.z_axis),
-                self,
-                other,
-            )
-            || Self::separating_plane_exists(
-                &relative_position,
-                &self.y_axis.cross(&other.x_axis),
-                self,
-                other,
-            )
-            || Self::separating_plane_exists(
-                &relative_position,
-                &self.y_axis.cross(&other.y_axis),
-                self,
-                other,
-            )
-            || Self::separating_plane_exists(
-                &relative_position,
-                &self.y_axis.cross(&other.z_axis),
-                self,
-                other,
-            )
-            || Self::separating_plane_exists(
-                &relative_position,
-                &self.z_axis.cross(&other.x_axis),
-                self,
-                other,
-            )
-            || Self::separating_plane_exists(
-                &relative_position,
-                &self.z_axis.cross(&other.y_axis),
-                self,
-                other,
-            )
-            || Self::separating_plane_exists(
-                &relative_position,
-                &self.z_axis.cross(&other.z_axis),
-                self,
-                other,
-            ))
+        self.collides_with_rtcd(other)
     }
 
     pub fn collides_with_rtcd(&self, other: &OBB) -> bool {
