@@ -458,14 +458,14 @@ impl OBB {
     ) -> bool {
         let dot_rp = relative_position.dot(axis).abs();
 
-        let v1 = box1.x_axis.clone() * box1.half_size[0];
-        let v2 = box1.y_axis.clone() * box1.half_size[1];
-        let v3 = box1.z_axis.clone() * box1.half_size[2];
+        let v1 = &box1.x_axis * box1.half_size[0];
+        let v2 = &box1.y_axis * box1.half_size[1];
+        let v3 = &box1.z_axis * box1.half_size[2];
         let proj1 = v1.dot(axis).abs() + v2.dot(axis).abs() + v3.dot(axis).abs();
 
-        let v4 = box2.x_axis.clone() * box2.half_size[0];
-        let v5 = box2.y_axis.clone() * box2.half_size[1];
-        let v6 = box2.z_axis.clone() * box2.half_size[2];
+        let v4 = &box2.x_axis * box2.half_size[0];
+        let v5 = &box2.y_axis * box2.half_size[1];
+        let v6 = &box2.z_axis * box2.half_size[2];
         let proj2 = v4.dot(axis).abs() + v5.dot(axis).abs() + v6.dot(axis).abs();
 
         dot_rp > (proj1 + proj2)
