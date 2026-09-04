@@ -11,7 +11,7 @@ pub mod proto {
 
 
 pub mod prelude {
-    pub use crate::session::{Geometry, RayHit, Session};
+    pub use crate::session::{FromGeometry, Geometry, RayHit, Session};
     pub use crate::{
         Color, Line, Mesh, NurbsCurve, NurbsSurface, Plane, Point, PointCloud,
         Polyline, Vector, OBB,
@@ -141,7 +141,7 @@ pub use quaternion::Quaternion;
 pub use remesh_nurbssurface_adaptive::RemeshNurbsSurfaceAdaptive;
 pub use remesh_nurbssurface_grid::remesh_nurbssurface_grid;
 pub use spatial_rtree::SpatialRTree;
-pub use session::{Geometry, Session};
+pub use session::{FromGeometry, Geometry, Session};
 pub use session_config::SessionConfig;
 pub use tolerance::Tolerance;
 pub use tree::{Tree, TreeNode};

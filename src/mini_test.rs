@@ -823,6 +823,7 @@ pub fn get_all_tests() -> Vec<RegisteredTest> {
         RegisteredTest { group: "Session", name: "Add Line", func: run_session_add_line },
         RegisteredTest { group: "Session", name: "Add Plane", func: run_session_add_plane },
         RegisteredTest { group: "Session", name: "Add Polyline", func: run_session_add_polyline },
+        RegisteredTest { group: "Session", name: "Select By Type", func: run_session_select_by_type },
         RegisteredTest { group: "Session", name: "Add Pointcloud", func: run_session_add_pointcloud },
         RegisteredTest { group: "Session", name: "Add Mesh", func: run_session_add_mesh },
         RegisteredTest { group: "Session", name: "Add Element", func: run_session_add_element },

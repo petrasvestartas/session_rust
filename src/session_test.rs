@@ -87,6 +87,39 @@ pub fn run_session_add_polyline() -> TestResult {
     })
 }
 
+pub fn run_session_select_by_type() -> TestResult {
+    MINI_TEST!("Select By Type", {
+        use crate::{Mesh, Point, Polyline, Session};
+        let mut session = Session::default();
+        let g0 = session.add_group("g0");
+        let g1 = session.add_group("g1");
+        let g2 = session.add_group("g2");
+
+        session.add_polyline(
+            Polyline::new(vec![Point::new(0.0, 0.0, 0.0), Point::new(1.0, 0.0, 0.0)]),
+            Some(&g0),
+        );
+        session.add_polyline(
+            Polyline::new(vec![Point::new(0.0, 1.0, 0.0), Point::new(1.0, 1.0, 0.0)]),
+            Some(&g0),
+        );
+        session.add_polyline(
+            Polyline::new(vec![Point::new(0.0, 2.0, 0.0), Point::new(1.0, 2.0, 0.0)]),
+            Some(&g1),
+        );
+        session.add_point(Point::new(9.0, 9.0, 9.0), Some(&g2));
+
+        let groups: Vec<Vec<Polyline>> = session.select_by_type();
+
+        MINI_CHECK!(groups.len() == 2);
+        MINI_CHECK!(groups[0].len() == 2);
+        MINI_CHECK!(groups[1].len() == 1);
+        MINI_CHECK!(TOLERANCE.is_close(groups[1][0].get_points()[0][1], 2.0));
+
+        MINI_CHECK!(session.select_by_type::<Mesh>().is_empty());
+    })
+}
+
 pub fn run_session_add_pointcloud() -> TestResult {
     MINI_TEST!("Add Pointcloud", {
         use crate::{Session, PointCloud, Point};
@@ -697,6 +730,7 @@ REGISTER_MINI_TEST!("Session", "Add Line", crate::session_test::run_session_add_
 REGISTER_MINI_TEST!("Session", "Add Plane", crate::session_test::run_session_add_plane);
 REGISTER_MINI_TEST!("Session", "Add OBB", crate::session_test::run_session_add_obb);
 REGISTER_MINI_TEST!("Session", "Add Polyline", crate::session_test::run_session_add_polyline);
+REGISTER_MINI_TEST!("Session", "Select By Type", crate::session_test::run_session_select_by_type);
 REGISTER_MINI_TEST!("Session", "Add Pointcloud", crate::session_test::run_session_add_pointcloud);
 REGISTER_MINI_TEST!("Session", "Add Mesh", crate::session_test::run_session_add_mesh);
 REGISTER_MINI_TEST!("Session", "Add Nurbscurve", crate::session_test::run_session_add_nurbscurve);
