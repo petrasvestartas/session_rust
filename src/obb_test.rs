@@ -189,7 +189,7 @@ pub fn run_obb_protobuf_roundtrip() -> TestResult {
 
 pub fn run_obb_accessors() -> crate::mini_test::TestResult {
     use crate::tolerance::TOLERANCE;
-    use crate::{OBB, Point};
+    use crate::{OBB, Point, Vector};
     MINI_TEST!("Accessors", {
         // axis-aligned OBB: center=(1,2,3), half_size=(1,2,3), dims 2×4×6
         let pts = vec![
@@ -214,6 +214,13 @@ pub fn run_obb_accessors() -> crate::mini_test::TestResult {
         MINI_CHECK!(b.corner(true, true, true) == Point::new(2.0, 4.0, 6.0));
         MINI_CHECK!(b.get_corners().len() == 8);
         MINI_CHECK!(b.get_edges().len() == 12);
+
+        let c45 = 2.0_f64.sqrt() * 0.5;
+        let rotated = OBB::new(Point::new(0.0, 0.0, 0.0), Vector::new(c45, c45, 0.0), Vector::new(-c45, c45, 0.0), Vector::new(0.0, 0.0, 1.0), Vector::new(1.0, 1.0, 1.0));
+
+        MINI_CHECK!(TOLERANCE.is_close(rotated.min_point()[0], -2.0_f64.sqrt()));
+        MINI_CHECK!(TOLERANCE.is_close(rotated.max_point()[1], 2.0_f64.sqrt()));
+
         let c = OBB::from_point(Point::new(5.0, 2.0, 3.0), 1.0);
         b.union_with(&c);
 
@@ -228,6 +235,7 @@ pub fn run_obb_from_geometry() -> TestResult {
         use crate::NurbsCurve;
         use crate::NurbsSurface;
         use crate::OBB;
+        use crate::Plane;
         use crate::Point;
         use crate::PointCloud;
         use crate::Polyline;
@@ -296,6 +304,17 @@ pub fn run_obb_from_geometry() -> TestResult {
         let bb_ns = OBB::from_nurbssurface(&surf_ns, 0.0);
 
         MINI_CHECK!(bb_ns.is_valid());
+
+        let plane = Plane::xy_plane();
+        let bb_pl_plane = OBB::from_polyline_with_plane(&Polyline::new(vec![
+            Point::new(0.0, 0.0, 0.0),
+            Point::new(4.0, 0.0, 0.0),
+            Point::new(4.0, 4.0, 4.0),
+        ]), &plane, 0.0);
+        let bb_mesh_plane = OBB::from_mesh_with_plane(&Primitives::cube(2.0), &plane, 0.0);
+
+        MINI_CHECK!(TOLERANCE.is_close(bb_pl_plane.half_size[0], 2.0));
+        MINI_CHECK!(TOLERANCE.is_close(bb_mesh_plane.volume(), 8.0));
     })
 }
 
@@ -304,6 +323,7 @@ pub fn run_obb_from_plane() -> TestResult {
         use crate::OBB;
         use crate::Plane;
         use crate::Point;
+        use crate::Vector;
 
         let plane = Plane::xy_plane();
         let box_ = OBB::from_plane(&plane, 2.0, 3.0, 4.0);
@@ -324,6 +344,23 @@ pub fn run_obb_from_plane() -> TestResult {
         MINI_CHECK!(TOLERANCE.is_close(bb.half_size[0], 1.0));
         MINI_CHECK!(TOLERANCE.is_close(bb.half_size[1], 1.5));
         MINI_CHECK!(TOLERANCE.is_close(bb.x_axis[0], 1.0));
+
+        let c45 = 2.0_f64.sqrt() * 0.5;
+        let rotated = Plane::new(Point::new(10.0, 0.0, 0.0), Vector::new(c45, c45, 0.0), Vector::new(-c45, c45, 0.0));
+        let mut box_pts: Vec<Point> = Vec::new();
+        for u in [0.0, 2.0] {
+            for v in [0.0, 4.0] {
+                for w in [0.0, 6.0] {
+                    box_pts.push(Point::new(10.0 + (u - v) * c45, (u + v) * c45, w));
+                }
+            }
+        }
+        let rb = OBB::from_points_with_plane(&box_pts, &rotated, 0.0);
+
+        MINI_CHECK!(TOLERANCE.is_close(rb.half_size[0], 1.0));
+        MINI_CHECK!(TOLERANCE.is_close(rb.half_size[1], 2.0));
+        MINI_CHECK!(TOLERANCE.is_close(rb.center[0], 10.0 - c45));
+        MINI_CHECK!(TOLERANCE.is_close(rb.center[1], 3.0 * c45));
     })
 }
 

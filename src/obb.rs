@@ -61,6 +61,10 @@ impl OBB {
         Self::from_aabb(AABB::from_polyline(polyline, inflate))
     }
 
+    pub fn from_polyline_with_plane(polyline: &crate::polyline::Polyline, plane: &Plane, inflate: f64) -> Self {
+        Self::from_points_with_plane(&polyline.get_points(), plane, inflate)
+    }
+
     pub fn from_aabb(a: AABB) -> Self {
         OBB {
             center: Point::new(a.cx, a.cy, a.cz),
@@ -69,7 +73,7 @@ impl OBB {
             z_axis: Vector::new(0.0, 0.0, 1.0),
             half_size: Vector::new(a.hx, a.hy, a.hz),
             guid: std::sync::OnceLock::new(),
-            name: String::new(),
+            name: "my_obb".to_string(),
         }
     }
 
@@ -185,7 +189,11 @@ impl OBB {
         let x_axis = plane.x_axis();
         let y_axis = plane.y_axis();
         let z_axis = plane.z_axis();
-        let plane_to_xy = Xform::plane_to_xy(&origin, &x_axis, &y_axis, &z_axis);
+        // plane_to_xy stores the basis as matrix COLUMNS, so it rotates local->world in
+        // both directions and its forward call yields the inverse frame for every plane
+        // that is not axis-aligned. world_to_frame / frame_to_world are the real pair.
+        let world_to_local = Xform::world_to_frame(&origin, &x_axis, &y_axis, &z_axis);
+        let local_to_world = Xform::frame_to_world(&origin, &x_axis, &y_axis, &z_axis);
 
         let mut min_x = f64::MAX;
         let mut min_y = f64::MAX;
@@ -195,7 +203,7 @@ impl OBB {
         let mut max_z = f64::MIN;
 
         for pt in points {
-            let local_pt = pt.transformed(&plane_to_xy);
+            let local_pt = pt.transformed(&world_to_local);
             min_x = min_x.min(local_pt[0]);
             min_y = min_y.min(local_pt[1]);
             min_z = min_z.min(local_pt[2]);
@@ -215,8 +223,7 @@ impl OBB {
             (max_z - min_z) * 0.5 + inflate,
         );
 
-        let xy_to_plane = Xform::xy_to_plane(&origin, &x_axis, &y_axis, &z_axis);
-        let world_center = local_center.transformed(&xy_to_plane);
+        let world_center = local_center.transformed(&local_to_world);
 
         OBB {
             center: world_center,
@@ -225,7 +232,7 @@ impl OBB {
             z_axis,
             half_size,
             guid: std::sync::OnceLock::new(),
-            name: String::new(),
+            name: "my_obb".to_string(),
         }
     }
 
@@ -455,14 +462,14 @@ impl OBB {
     ) -> bool {
         let dot_rp = relative_position.dot(axis).abs();
 
-        let v1 = box1.x_axis.clone() * box1.half_size[0];
-        let v2 = box1.y_axis.clone() * box1.half_size[1];
-        let v3 = box1.z_axis.clone() * box1.half_size[2];
+        let v1 = &box1.x_axis * box1.half_size[0];
+        let v2 = &box1.y_axis * box1.half_size[1];
+        let v3 = &box1.z_axis * box1.half_size[2];
         let proj1 = v1.dot(axis).abs() + v2.dot(axis).abs() + v3.dot(axis).abs();
 
-        let v4 = box2.x_axis.clone() * box2.half_size[0];
-        let v5 = box2.y_axis.clone() * box2.half_size[1];
-        let v6 = box2.z_axis.clone() * box2.half_size[2];
+        let v4 = &box2.x_axis * box2.half_size[0];
+        let v5 = &box2.y_axis * box2.half_size[1];
+        let v6 = &box2.z_axis * box2.half_size[2];
         let proj2 = v4.dot(axis).abs() + v5.dot(axis).abs() + v6.dot(axis).abs();
 
         dot_rp > (proj1 + proj2)
@@ -476,70 +483,7 @@ impl OBB {
     }
 
     pub fn collides_with(&self, other: &OBB) -> bool {
-        let center_pt = Point::new(self.center[0], self.center[1], self.center[2]);
-        let other_center_pt = Point::new(other.center[0], other.center[1], other.center[2]);
-        let relative_position = Vector::from_points(&center_pt, &other_center_pt);
-
-        !(Self::separating_plane_exists(&relative_position, &self.x_axis, self, other)
-            || Self::separating_plane_exists(&relative_position, &self.y_axis, self, other)
-            || Self::separating_plane_exists(&relative_position, &self.z_axis, self, other)
-            || Self::separating_plane_exists(&relative_position, &other.x_axis, self, other)
-            || Self::separating_plane_exists(&relative_position, &other.y_axis, self, other)
-            || Self::separating_plane_exists(&relative_position, &other.z_axis, self, other)
-            || Self::separating_plane_exists(
-                &relative_position,
-                &self.x_axis.cross(&other.x_axis),
-                self,
-                other,
-            )
-            || Self::separating_plane_exists(
-                &relative_position,
-                &self.x_axis.cross(&other.y_axis),
-                self,
-                other,
-            )
-            || Self::separating_plane_exists(
-                &relative_position,
-                &self.x_axis.cross(&other.z_axis),
-                self,
-                other,
-            )
-            || Self::separating_plane_exists(
-                &relative_position,
-                &self.y_axis.cross(&other.x_axis),
-                self,
-                other,
-            )
-            || Self::separating_plane_exists(
-                &relative_position,
-                &self.y_axis.cross(&other.y_axis),
-                self,
-                other,
-            )
-            || Self::separating_plane_exists(
-                &relative_position,
-                &self.y_axis.cross(&other.z_axis),
-                self,
-                other,
-            )
-            || Self::separating_plane_exists(
-                &relative_position,
-                &self.z_axis.cross(&other.x_axis),
-                self,
-                other,
-            )
-            || Self::separating_plane_exists(
-                &relative_position,
-                &self.z_axis.cross(&other.y_axis),
-                self,
-                other,
-            )
-            || Self::separating_plane_exists(
-                &relative_position,
-                &self.z_axis.cross(&other.z_axis),
-                self,
-                other,
-            ))
+        self.collides_with_rtcd(other)
     }
 
     pub fn collides_with_rtcd(&self, other: &OBB) -> bool {
@@ -755,7 +699,7 @@ impl Default for OBB {
             z_axis: Vector::new(0.0, 0.0, 1.0),
             half_size: Vector::new(0.5, 0.5, 0.5),
             guid: std::sync::OnceLock::new(),
-            name: String::new(),
+            name: "my_obb".to_string(),
         }
     }
 }
