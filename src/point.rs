@@ -473,6 +473,31 @@ impl Point {
         }
     }
 
+    /// Linear interpolation between two points.
+    /// kind: 0=no endpoints (default), 1=both endpoints, 2=start only
+    pub fn interpolate(from: &Point, to: &Point, steps: usize, kind: u8) -> Vec<Point> {
+        let mut pts = Vec::with_capacity(steps + 2);
+        if kind == 1 || kind == 2 {
+            pts.push(from.clone());
+        }
+        for i in 1..=steps {
+            pts.push(Point::lerp(from, to, i as f64 / (steps + 1) as f64));
+        }
+        if kind == 1 {
+            pts.push(to.clone());
+        }
+        pts
+    }
+
+    /// Lerp: single point at parameter t in [0, 1].
+    pub fn lerp(a: &Point, b: &Point, t: f64) -> Point {
+        Point::new(
+            a[0] + t * (b[0] - a[0]),
+            a[1] + t * (b[1] - a[1]),
+            a[2] + t * (b[2] - a[2]),
+        )
+    }
+
     /// Calculate the area of a 2D polygon using the shoelace formula.
     ///
     /// # Arguments

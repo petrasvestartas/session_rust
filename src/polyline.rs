@@ -1428,35 +1428,7 @@ impl Polyline {
 
     /// Linear interpolation: type 0=no endpoints, 1=both, 2=start only.
     pub fn interpolate_points(from: &Point, to: &Point, steps: usize, kind: u8) -> Vec<Point> {
-        let lerp = |t: f64| {
-            Point::new(
-                from[0] + t * (to[0] - from[0]),
-                from[1] + t * (to[1] - from[1]),
-                from[2] + t * (to[2] - from[2]),
-            )
-        };
-        let mut pts = Vec::new();
-        match kind {
-            1 => {
-                pts.push(from.clone());
-                for i in 1..=steps {
-                    pts.push(lerp(i as f64 / (steps + 1) as f64));
-                }
-                pts.push(to.clone());
-            }
-            2 => {
-                pts.push(from.clone());
-                for i in 1..=steps {
-                    pts.push(lerp(i as f64 / (steps + 1) as f64));
-                }
-            }
-            _ => {
-                for i in 1..=steps {
-                    pts.push(lerp(i as f64 / (steps + 1) as f64));
-                }
-            }
-        }
-        pts
+        Point::interpolate(from, to, steps, kind)
     }
 
     /// 2D convex hull (quickhull) in the polygon's local plane.

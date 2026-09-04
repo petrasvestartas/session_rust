@@ -441,6 +441,8 @@ pub fn get_all_tests() -> Vec<RegisteredTest> {
         RegisteredTest { group: "Point", name: "Mid Point", func: run_point_mid_point },
         RegisteredTest { group: "Point", name: "Distance", func: run_point_distance },
         RegisteredTest { group: "Point", name: "Squared Distance", func: run_point_squared_distance },
+        RegisteredTest { group: "Point", name: "Interpolate", func: run_point_interpolate },
+        RegisteredTest { group: "Point", name: "Lerp", func: run_point_lerp },
         RegisteredTest { group: "Point", name: "Area", func: run_point_area },
         RegisteredTest { group: "Point", name: "Centroid Quad", func: run_point_centroid_quad },
         RegisteredTest { group: "Point", name: "Centroid", func: run_point_centroid },
