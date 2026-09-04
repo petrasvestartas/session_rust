@@ -122,8 +122,9 @@ impl Polyline {
         Self::from_coords(coords)
     }
 
-    /// Create a rectangle with its corner at the plane origin, sides along x_axis and y_axis.
-    pub fn rectangle(plane: &Plane, width: f64, height: f64, close: bool) -> Self {
+    /// Create a rectangle with its corner at origin, sides along x_axis and y_axis.
+    pub fn rectangle(origin: &Point, x_axis: &Vector, y_axis: &Vector, width: f64, height: f64, close: bool) -> Self {
+        let plane = Plane::new(origin.clone(), x_axis.clone(), y_axis.clone());
         let o = plane.origin();
         let x = plane.x_axis() * width;
         let y = plane.y_axis() * height;
