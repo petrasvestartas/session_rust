@@ -61,6 +61,10 @@ impl OBB {
         Self::from_aabb(AABB::from_polyline(polyline, inflate))
     }
 
+    pub fn from_polyline_with_plane(polyline: &crate::polyline::Polyline, plane: &Plane, inflate: f64) -> Self {
+        Self::from_points_with_plane(&polyline.get_points(), plane, inflate)
+    }
+
     pub fn from_aabb(a: AABB) -> Self {
         OBB {
             center: Point::new(a.cx, a.cy, a.cz),
