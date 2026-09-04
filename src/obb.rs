@@ -185,7 +185,11 @@ impl OBB {
         let x_axis = plane.x_axis();
         let y_axis = plane.y_axis();
         let z_axis = plane.z_axis();
-        let plane_to_xy = Xform::plane_to_xy(&origin, &x_axis, &y_axis, &z_axis);
+        // plane_to_xy stores the basis as matrix COLUMNS, so it rotates local->world in
+        // both directions and its forward call yields the inverse frame for every plane
+        // that is not axis-aligned. world_to_frame / frame_to_world are the real pair.
+        let world_to_local = Xform::world_to_frame(&origin, &x_axis, &y_axis, &z_axis);
+        let local_to_world = Xform::frame_to_world(&origin, &x_axis, &y_axis, &z_axis);
 
         let mut min_x = f64::MAX;
         let mut min_y = f64::MAX;
@@ -195,7 +199,7 @@ impl OBB {
         let mut max_z = f64::MIN;
 
         for pt in points {
-            let local_pt = pt.transformed(&plane_to_xy);
+            let local_pt = pt.transformed(&world_to_local);
             min_x = min_x.min(local_pt[0]);
             min_y = min_y.min(local_pt[1]);
             min_z = min_z.min(local_pt[2]);
@@ -215,8 +219,7 @@ impl OBB {
             (max_z - min_z) * 0.5 + inflate,
         );
 
-        let xy_to_plane = Xform::xy_to_plane(&origin, &x_axis, &y_axis, &z_axis);
-        let world_center = local_center.transformed(&xy_to_plane);
+        let world_center = local_center.transformed(&local_to_world);
 
         OBB {
             center: world_center,
