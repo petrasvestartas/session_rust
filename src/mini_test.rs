@@ -533,6 +533,7 @@ pub fn get_all_tests() -> Vec<RegisteredTest> {
         RegisteredTest { group: "Polyline", name: "Average Plane", func: run_polyline_average_plane },
         RegisteredTest { group: "Polyline", name: "From Coords", func: run_polyline_from_coords },
         RegisteredTest { group: "Polyline", name: "From Sides", func: run_polyline_from_sides },
+        RegisteredTest { group: "Polyline", name: "Rectangle", func: run_polyline_rectangle },
         RegisteredTest { group: "Polyline", name: "Closest Point To Line", func: run_polyline_closest_point_to_line },
         RegisteredTest { group: "Polyline", name: "Line Line Overlap", func: run_polyline_line_line_overlap },
         RegisteredTest { group: "Polyline", name: "Line Line Average", func: run_polyline_line_line_average },
