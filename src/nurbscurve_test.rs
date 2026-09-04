@@ -1,6 +1,6 @@
-use crate::{MINI_CHECK, MINI_TEST, REGISTER_MINI_TEST};
 use crate::mini_test::TestResult;
-use crate::tolerance::{TOLERANCE, PI};
+use crate::tolerance::{PI, TOLERANCE};
+use crate::{MINI_CHECK, MINI_TEST, REGISTER_MINI_TEST};
 
 pub fn run_nurbscurve_constructor() -> TestResult {
     MINI_TEST!("Constructor", {
@@ -47,9 +47,9 @@ pub fn run_nurbscurve_constructor() -> TestResult {
 
 pub fn run_nurbscurve_create_interpolated() -> TestResult {
     MINI_TEST!("Create Interpolated", {
+        use crate::nurbsknot::CurveNurbsKnotStyle;
         use crate::NurbsCurve;
         use crate::Point;
-        use crate::nurbsknot::CurveNurbsKnotStyle;
 
         let points = vec![
             Point::new(14.0, 9.0, 0.0),
@@ -75,20 +75,42 @@ pub fn run_nurbscurve_create_interpolated() -> TestResult {
 
         // Rhino parity: interior CVs match Rhino CreateInterpolatedCurve (Chord)
         // bit-for-bit (validated by the OCCT/Rhino harness in validation/).
-        MINI_CHECK!(TOLERANCE.is_point_close(&c.get_cv(1).unwrap(), &Point::new(15.342776949, 13.734888836, 0.0)));
-        MINI_CHECK!(TOLERANCE.is_point_close(&c.get_cv(3).unwrap(), &Point::new(24.678472471, 0.354555126, 0.0)));
-        MINI_CHECK!(TOLERANCE.is_point_close(&c.get_cv(5).unwrap(), &Point::new(39.626394361, 15.472490151, 0.0)));
+        MINI_CHECK!(TOLERANCE.is_point_close(
+            &c.get_cv(1).unwrap(),
+            &Point::new(15.342776949, 13.734888836, 0.0)
+        ));
+        MINI_CHECK!(TOLERANCE.is_point_close(
+            &c.get_cv(3).unwrap(),
+            &Point::new(24.678472471, 0.354555126, 0.0)
+        ));
+        MINI_CHECK!(TOLERANCE.is_point_close(
+            &c.get_cv(5).unwrap(),
+            &Point::new(39.626394361, 15.472490151, 0.0)
+        ));
 
         // OCCT parity: with CurveInterpStyle::Occt the control points match
         // OCCT GeomAPI_Interpolate exactly (oracle: validation/compare_interp.py).
         use crate::nurbsknot::CurveInterpStyle;
-        let co = NurbsCurve::create_interpolated_styled(&points, CurveNurbsKnotStyle::Chord, CurveInterpStyle::Occt);
+        let co = NurbsCurve::create_interpolated_styled(
+            &points,
+            CurveNurbsKnotStyle::Chord,
+            CurveInterpStyle::Occt,
+        );
         MINI_CHECK!(co.cv_count() == 7);
         MINI_CHECK!(TOLERANCE.is_point_close(&co.get_cv(0).unwrap(), &points[0]));
         MINI_CHECK!(TOLERANCE.is_point_close(&co.get_cv(6).unwrap(), &points[4]));
-        MINI_CHECK!(TOLERANCE.is_point_close(&co.get_cv(1).unwrap(), &Point::new(17.3526678158, 24.4472657919, 0.0)));
-        MINI_CHECK!(TOLERANCE.is_point_close(&co.get_cv(3).unwrap(), &Point::new(24.7854378511, 2.1457823679, 0.0)));
-        MINI_CHECK!(TOLERANCE.is_point_close(&co.get_cv(5).unwrap(), &Point::new(39.1865250566, 18.5349257754, 0.0)));
+        MINI_CHECK!(TOLERANCE.is_point_close(
+            &co.get_cv(1).unwrap(),
+            &Point::new(17.3526678158, 24.4472657919, 0.0)
+        ));
+        MINI_CHECK!(TOLERANCE.is_point_close(
+            &co.get_cv(3).unwrap(),
+            &Point::new(24.7854378511, 2.1457823679, 0.0)
+        ));
+        MINI_CHECK!(TOLERANCE.is_point_close(
+            &co.get_cv(5).unwrap(),
+            &Point::new(39.1865250566, 18.5349257754, 0.0)
+        ));
 
         // Periodic closed curve
         let closed_pts = vec![
@@ -122,36 +144,60 @@ pub fn run_nurbscurve_create_from_parameters() -> TestResult {
         // Validated bit-for-bit against OCCT (validation/compare_curve_eval.py).
 
         // from_points: 4 control points, clamped cubic (knots [0,1] mults [4,4]).
-        let p4 = vec![Point::new(0.0,0.0,0.0), Point::new(3.0,6.0,0.0),
-                      Point::new(6.0,-3.0,3.0), Point::new(10.0,0.0,0.0)];
-        let c = NurbsCurve::create_from_parameters(&p4, &[1.0,1.0,1.0,1.0], &[0.0,1.0], &[4,4], 3, false);
+        let p4 = vec![
+            Point::new(0.0, 0.0, 0.0),
+            Point::new(3.0, 6.0, 0.0),
+            Point::new(6.0, -3.0, 3.0),
+            Point::new(10.0, 0.0, 0.0),
+        ];
+        let c = NurbsCurve::create_from_parameters(
+            &p4,
+            &[1.0, 1.0, 1.0, 1.0],
+            &[0.0, 1.0],
+            &[4, 4],
+            3,
+            false,
+        );
         MINI_CHECK!(c.is_valid());
         MINI_CHECK!(c.degree() == 3);
         MINI_CHECK!(c.cv_count() == 4);
         MINI_CHECK!(!c.is_rational());
         let (d0, d1) = c.domain();
         MINI_CHECK!((d0 - 0.0).abs() < 1e-12 && (d1 - 1.0).abs() < 1e-12);
-        MINI_CHECK!(TOLERANCE.is_point_close(&c.get_cv(0).unwrap(), &Point::new(0.0,0.0,0.0)));
-        MINI_CHECK!(TOLERANCE.is_point_close(&c.get_cv(3).unwrap(), &Point::new(10.0,0.0,0.0)));
+        MINI_CHECK!(TOLERANCE.is_point_close(&c.get_cv(0).unwrap(), &Point::new(0.0, 0.0, 0.0)));
+        MINI_CHECK!(TOLERANCE.is_point_close(&c.get_cv(3).unwrap(), &Point::new(10.0, 0.0, 0.0)));
         MINI_CHECK!(TOLERANCE.is_point_close(&c.point_at(0.5), &Point::new(4.625, 1.125, 1.125)));
 
         // from_circle (radius 1): degree-2 rational, 9 poles, exact unit circle.
         let w = 0.5 * (2.0_f64).sqrt();
         let cpts = vec![
-            Point::new(0.0,-1.0,0.0), Point::new(-1.0,-1.0,0.0), Point::new(-1.0,0.0,0.0),
-            Point::new(-1.0,1.0,0.0), Point::new(0.0,1.0,0.0), Point::new(1.0,1.0,0.0),
-            Point::new(1.0,0.0,0.0), Point::new(1.0,-1.0,0.0), Point::new(0.0,-1.0,0.0)];
+            Point::new(0.0, -1.0, 0.0),
+            Point::new(-1.0, -1.0, 0.0),
+            Point::new(-1.0, 0.0, 0.0),
+            Point::new(-1.0, 1.0, 0.0),
+            Point::new(0.0, 1.0, 0.0),
+            Point::new(1.0, 1.0, 0.0),
+            Point::new(1.0, 0.0, 0.0),
+            Point::new(1.0, -1.0, 0.0),
+            Point::new(0.0, -1.0, 0.0),
+        ];
         let circle = NurbsCurve::create_from_parameters(
-            &cpts, &[1.0,w,1.0,w,1.0,w,1.0,w,1.0], &[0.0,0.25,0.5,0.75,1.0], &[3,2,2,2,3], 2, false);
+            &cpts,
+            &[1.0, w, 1.0, w, 1.0, w, 1.0, w, 1.0],
+            &[0.0, 0.25, 0.5, 0.75, 1.0],
+            &[3, 2, 2, 2, 3],
+            2,
+            false,
+        );
         MINI_CHECK!(circle.is_valid());
         MINI_CHECK!(circle.degree() == 2);
         MINI_CHECK!(circle.cv_count() == 9);
         MINI_CHECK!(circle.is_rational());
-        MINI_CHECK!(TOLERANCE.is_point_close(&circle.point_at(0.5), &Point::new(0.0,1.0,0.0)));
+        MINI_CHECK!(TOLERANCE.is_point_close(&circle.point_at(0.5), &Point::new(0.0, 1.0, 0.0)));
         MINI_CHECK!(TOLERANCE.is_point_close(&circle.point_at(0.125), &Point::new(-w, -w, 0.0)));
         for k in 0..=16 {
             let pp = circle.point_at(k as f64 / 16.0);
-            MINI_CHECK!(((pp[0]*pp[0] + pp[1]*pp[1]).sqrt() - 1.0).abs() < 1e-9);
+            MINI_CHECK!(((pp[0] * pp[0] + pp[1] * pp[1]).sqrt() - 1.0).abs() < 1e-9);
         }
     })
 }
@@ -162,10 +208,12 @@ pub fn run_nurbscurve_create_fitted() -> TestResult {
         use crate::Point;
 
         // Open: 21 points on sine wave → fit with 8 CVs
-        let pts: Vec<Point> = (0..=20).map(|i| {
-            let t = i as f64 * 2.0 * PI / 20.0;
-            Point::new(t, 3.0 * t.sin(), 0.0)
-        }).collect();
+        let pts: Vec<Point> = (0..=20)
+            .map(|i| {
+                let t = i as f64 * 2.0 * PI / 20.0;
+                Point::new(t, 3.0 * t.sin(), 0.0)
+            })
+            .collect();
 
         let c = NurbsCurve::create_fitted(&pts, 8, 3, false);
 
@@ -177,10 +225,12 @@ pub fn run_nurbscurve_create_fitted() -> TestResult {
         MINI_CHECK!(TOLERANCE.is_point_close(&c.point_at(d1), &pts[20]));
 
         // Periodic: 24 points on circle → fit with 10 free CVs
-        let cpts: Vec<Point> = (0..24).map(|i| {
-            let a = i as f64 * 2.0 * PI / 24.0;
-            Point::new(a.cos(), a.sin(), 0.0)
-        }).collect();
+        let cpts: Vec<Point> = (0..24)
+            .map(|i| {
+                let a = i as f64 * 2.0 * PI / 24.0;
+                Point::new(a.cos(), a.sin(), 0.0)
+            })
+            .collect();
 
         let cp = NurbsCurve::create_fitted(&cpts, 10, 3, true);
 
@@ -196,13 +246,24 @@ pub fn run_nurbscurve_join() -> TestResult {
         use crate::Point;
         use crate::Primitives;
 
-        let arc1 = Primitives::arc(&Point::new(-1.0, 0.0, 0.0), &Point::new(0.0, 1.0, 0.0), &Point::new(1.0, 0.0, 0.0));
-        let mut arc2 = Primitives::arc(&Point::new(1.0, 0.0, 0.0), &Point::new(1.5, -1.0, 0.0), &Point::new(1.0, -2.0, 0.0));
+        let arc1 = Primitives::arc(
+            &Point::new(-1.0, 0.0, 0.0),
+            &Point::new(0.0, 1.0, 0.0),
+            &Point::new(1.0, 0.0, 0.0),
+        );
+        let mut arc2 = Primitives::arc(
+            &Point::new(1.0, 0.0, 0.0),
+            &Point::new(1.5, -1.0, 0.0),
+            &Point::new(1.0, -2.0, 0.0),
+        );
         let pts = vec![Point::new(1.0, -2.0, 0.0), Point::new(-1.0, 0.0, 0.0)];
         let line = NurbsCurve::create(false, 1, &pts);
         arc2.reverse();
 
-        let joined = NurbsCurve::join(&[line.duplicate(), arc1.duplicate(), arc2.duplicate()], None);
+        let joined = NurbsCurve::join(
+            &[line.duplicate(), arc1.duplicate(), arc2.duplicate()],
+            None,
+        );
 
         MINI_CHECK!(joined.len() == 1);
         MINI_CHECK!(joined[0].is_valid());
@@ -210,9 +271,21 @@ pub fn run_nurbscurve_join() -> TestResult {
         MINI_CHECK!(joined[0].degree() == 2);
         MINI_CHECK!(joined[0].cv_count() == 7);
 
-        let l1 = NurbsCurve::create(false, 1, &[Point::new(0.0, 0.0, 0.0), Point::new(1.0, 0.0, 0.0)]);
-        let l2 = NurbsCurve::create(false, 1, &[Point::new(1.0, 0.0, 0.0), Point::new(1.0, 1.0, 0.0)]);
-        let l3 = NurbsCurve::create(false, 1, &[Point::new(9.0, 9.0, 0.0), Point::new(8.0, 8.0, 0.0)]);
+        let l1 = NurbsCurve::create(
+            false,
+            1,
+            &[Point::new(0.0, 0.0, 0.0), Point::new(1.0, 0.0, 0.0)],
+        );
+        let l2 = NurbsCurve::create(
+            false,
+            1,
+            &[Point::new(1.0, 0.0, 0.0), Point::new(1.0, 1.0, 0.0)],
+        );
+        let l3 = NurbsCurve::create(
+            false,
+            1,
+            &[Point::new(9.0, 9.0, 0.0), Point::new(8.0, 8.0, 0.0)],
+        );
 
         let separate = NurbsCurve::join(&[l1, l3, l2], None);
 
@@ -225,8 +298,8 @@ pub fn run_nurbscurve_join() -> TestResult {
 pub fn run_nurbscurve_attributes() -> TestResult {
     MINI_TEST!("Attributes", {
         use crate::NurbsCurve;
-        use crate::Point;
         use crate::Plane;
+        use crate::Point;
 
         let points = vec![
             Point::new(0.0, 0.0, 0.0),
@@ -237,9 +310,9 @@ pub fn run_nurbscurve_attributes() -> TestResult {
 
         let mut curve = NurbsCurve::create(false, 2, &points);
 
-        /////////////////////////////////////////////
+        // ═══════════════════════════════════════════════════════════════════════════
         // Boolean Queries
-        /////////////////////////////////////////////
+        // ═══════════════════════════════════════════════════════════════════════════
 
         // Whole curve
         let is_valid = curve.is_valid();
@@ -291,9 +364,9 @@ pub fn run_nurbscurve_attributes() -> TestResult {
         MINI_CHECK!(is_duplicate);
         MINI_CHECK!(is_continuous);
 
-        /////////////////////////////////////////////
+        // ═══════════════════════════════════════════════════════════════════════════
         // NurbsKnot Operations
-        /////////////////////////////////////////////
+        // ═══════════════════════════════════════════════════════════════════════════
 
         // Insert nurbsknot into curve
         // Useful for splitting curves at a parameter
@@ -314,9 +387,9 @@ pub fn run_nurbscurve_attributes() -> TestResult {
         MINI_CHECK!(TOLERANCE.is_close(greville[2], 2.639616503217201));
         MINI_CHECK!(TOLERANCE.is_close(greville[3], 3.519488670956267));
 
-        /////////////////////////////////////////////
+        // ═══════════════════════════════════════════════════════════════════════════
         // Accessors
-        /////////////////////////////////////////////
+        // ═══════════════════════════════════════════════════════════════════════════
         // Memory layout 2-2D, 3-3D
         let dimension = curve.dimension();
         MINI_CHECK!(dimension == 3);
@@ -343,11 +416,11 @@ pub fn run_nurbscurve_attributes() -> TestResult {
         // NurbsKnot vector: [0, 0, 0 ↑, 1 ↑, 2 ↑, 3, 3, 3]  (cubic, 5 CVs)
         let span_count = curve.span_count();
         MINI_CHECK!(span_count == 2);
-        /////////////////////////////////////////////////////
+        // ═══════════════════════════════════════════════════════════════════════════
         // Control Vertex Access
         //  m_cv = [x0, y0, z0, (w0), x1, y1, z1, (w1), ...]
         //          └─── CV 0 ───┘    └─── CV 1 ───┘
-        /////////////////////////////////////////////////////
+        // ═══════════════════════════════════════════════════════════════════════════
 
         // Get pointer to control vertex
         // Each CV occupies m_cv_stride doubles:
@@ -383,9 +456,9 @@ pub fn run_nurbscurve_attributes() -> TestResult {
         curve.set_weight(2, 0.5);
         MINI_CHECK!(curve.weight(2) == 0.5);
 
-        /////////////////////////////////////////////////////
+        // ═══════════════════════════════════════════════════════════════════════════
         // NurbsKnot Access
-        /////////////////////////////////////////////////////
+        // ═══════════════════════════════════════════════════════════════════════════
 
         // Get nurbsknot value at index
         let nurbsknot3 = curve.nurbsknot(3).unwrap();
@@ -398,11 +471,11 @@ pub fn run_nurbscurve_attributes() -> TestResult {
         MINI_CHECK!(TOLERANCE.is_close(curve.nurbsknot(4).unwrap(), end_nurbsknot));
 
         // Count repeated nurbsknots at index [0, 0, 1, 1, 2]
-        let m0 = curve.nurbsknot_multiplicity(0);  // 2 (two 0's)
-        let m1 = curve.nurbsknot_multiplicity(1);  // 2 (still counting the 0's)
-        let m2 = curve.nurbsknot_multiplicity(2);  // 1 (single 0.5)
-        let m3 = curve.nurbsknot_multiplicity(3);  // 2 (single 1's)
-        let m4 = curve.nurbsknot_multiplicity(4);  // 2 (single 2)
+        let m0 = curve.nurbsknot_multiplicity(0); // 2 (two 0's)
+        let m1 = curve.nurbsknot_multiplicity(1); // 2 (still counting the 0's)
+        let m2 = curve.nurbsknot_multiplicity(2); // 1 (single 0.5)
+        let m3 = curve.nurbsknot_multiplicity(3); // 2 (single 1's)
+        let m4 = curve.nurbsknot_multiplicity(4); // 2 (single 2)
         MINI_CHECK!(m0 == 2);
         MINI_CHECK!(m1 == 2);
         MINI_CHECK!(m2 == 1);
@@ -430,9 +503,9 @@ pub fn run_nurbscurve_attributes() -> TestResult {
         let cx0 = cvs[0];
         MINI_CHECK!(cx0 == 0.0);
 
-        /////////////////////////////////////////////////////
+        // ═══════════════════════════════════════════════════════════════════════════
         // Domain & Parameterization - HERE
-        /////////////////////////////////////////////////////
+        // ═══════════════════════════════════════════════════════════════════════════
 
         // get start and end of the curve interval
         let (start, end) = curve.domain();
@@ -454,13 +527,18 @@ pub fn run_nurbscurve_attributes() -> TestResult {
 
         // Span of distict nurbsknot intervals
         let intervals = curve.get_span_vector();
-        MINI_CHECK!(TOLERANCE.is_close(intervals[0], 0.0) && TOLERANCE.is_close(intervals[1], 0.5) && TOLERANCE.is_close(intervals[2], 1.0));
+        MINI_CHECK!(
+            TOLERANCE.is_close(intervals[0], 0.0)
+                && TOLERANCE.is_close(intervals[1], 0.5)
+                && TOLERANCE.is_close(intervals[2], 1.0)
+        );
 
-        /////////////////////////////////////////////////////
+        // ═══════════════════════════════════════════════════════════════════════════
         // Geometric checks
-        /////////////////////////////////////////////////////
+        // ═══════════════════════════════════════════════════════════════════════════
 
-        let (found, t_out) = curve.get_next_discontinuity(2, curve.domain_start(), curve.domain_end());
+        let (found, t_out) =
+            curve.get_next_discontinuity(2, curve.domain_start(), curve.domain_end());
         MINI_CHECK!(found && TOLERANCE.is_close(t_out, 0.5));
     })
 }
@@ -469,7 +547,6 @@ pub fn run_nurbscurve_conversions() -> TestResult {
     MINI_TEST!("Conversions", {
         use crate::NurbsCurve;
         use crate::Point;
-
 
         let points = vec![
             Point::new(0.0, 0.0, 0.0),
@@ -493,24 +570,60 @@ pub fn run_nurbscurve_conversions() -> TestResult {
         let (div_pts, _div_params) = curve.divide_by_count(10, true);
 
         MINI_CHECK!(div_pts.len() == 10);
-        MINI_CHECK!(TOLERANCE.is_point_close(&div_pts[0], &Point::new(0.000000000000000, 0.000000000000000, 0.000000000000000)));
-        MINI_CHECK!(TOLERANCE.is_point_close(&div_pts[1], &Point::new(0.328571016773017, 0.598213507757063, 0.000000000000000)));
-        MINI_CHECK!(TOLERANCE.is_point_close(&div_pts[2], &Point::new(0.740744944144815, 1.140321237310326, 0.000000000000000)));
-        MINI_CHECK!(TOLERANCE.is_point_close(&div_pts[3], &Point::new(1.338524001477341, 1.232716038191446, 0.000000000000000)));
-        MINI_CHECK!(TOLERANCE.is_point_close(&div_pts[4], &Point::new(1.712929668000343, 0.664818751028787, 0.000000000000000)));
-        MINI_CHECK!(TOLERANCE.is_point_close(&div_pts[5], &Point::new(2.287070333148604, 0.664818752348101, 0.000000000000000)));
-        MINI_CHECK!(TOLERANCE.is_point_close(&div_pts[6], &Point::new(2.661475999779531, 1.232716039392177, 0.000000000000000)));
-        MINI_CHECK!(TOLERANCE.is_point_close(&div_pts[7], &Point::new(3.259255057037078, 1.140321236176910, 0.000000000000000)));
-        MINI_CHECK!(TOLERANCE.is_point_close(&div_pts[8], &Point::new(3.671428983538974, 0.598213507250245, 0.000000000000000)));
-        MINI_CHECK!(TOLERANCE.is_point_close(&div_pts[9], &Point::new(4.000000000000000, 0.000000000000000, 0.000000000000000)));
+        MINI_CHECK!(TOLERANCE.is_point_close(
+            &div_pts[0],
+            &Point::new(0.000000000000000, 0.000000000000000, 0.000000000000000)
+        ));
+        MINI_CHECK!(TOLERANCE.is_point_close(
+            &div_pts[1],
+            &Point::new(0.328571016773017, 0.598213507757063, 0.000000000000000)
+        ));
+        MINI_CHECK!(TOLERANCE.is_point_close(
+            &div_pts[2],
+            &Point::new(0.740744944144815, 1.140321237310326, 0.000000000000000)
+        ));
+        MINI_CHECK!(TOLERANCE.is_point_close(
+            &div_pts[3],
+            &Point::new(1.338524001477341, 1.232716038191446, 0.000000000000000)
+        ));
+        MINI_CHECK!(TOLERANCE.is_point_close(
+            &div_pts[4],
+            &Point::new(1.712929668000343, 0.664818751028787, 0.000000000000000)
+        ));
+        MINI_CHECK!(TOLERANCE.is_point_close(
+            &div_pts[5],
+            &Point::new(2.287070333148604, 0.664818752348101, 0.000000000000000)
+        ));
+        MINI_CHECK!(TOLERANCE.is_point_close(
+            &div_pts[6],
+            &Point::new(2.661475999779531, 1.232716039392177, 0.000000000000000)
+        ));
+        MINI_CHECK!(TOLERANCE.is_point_close(
+            &div_pts[7],
+            &Point::new(3.259255057037078, 1.140321236176910, 0.000000000000000)
+        ));
+        MINI_CHECK!(TOLERANCE.is_point_close(
+            &div_pts[8],
+            &Point::new(3.671428983538974, 0.598213507250245, 0.000000000000000)
+        ));
+        MINI_CHECK!(TOLERANCE.is_point_close(
+            &div_pts[9],
+            &Point::new(4.000000000000000, 0.000000000000000, 0.000000000000000)
+        ));
 
         // divide_by_length
         let (len_pts, _len_params) = curve.divide_by_length(0.5);
 
         MINI_CHECK!(len_pts.len() == 13);
         MINI_CHECK!(TOLERANCE.is_point_close(&len_pts[0], &Point::new(0.0, 0.0, 0.0)));
-        MINI_CHECK!(TOLERANCE.is_point_close(&len_pts[6], &Point::new(1.928691288503169, 0.510169864670676, 0.0)));
-        MINI_CHECK!(TOLERANCE.is_point_close(&len_pts[12], &Point::new(3.934494396222682, 0.128829843907475, 0.0)));
+        MINI_CHECK!(TOLERANCE.is_point_close(
+            &len_pts[6],
+            &Point::new(1.928691288503169, 0.510169864670676, 0.0)
+        ));
+        MINI_CHECK!(TOLERANCE.is_point_close(
+            &len_pts[12],
+            &Point::new(3.934494396222682, 0.128829843907475, 0.0)
+        ));
     })
 }
 
@@ -519,7 +632,6 @@ pub fn run_nurbscurve_evaluation() -> TestResult {
         use crate::NurbsCurve;
         use crate::Point;
         use crate::Vector;
-
 
         let points = vec![
             Point::new(1.957614, 1.140253, -0.191281),
@@ -589,34 +701,97 @@ pub fn run_nurbscurve_evaluation() -> TestResult {
 
         // Perpendicular frame at (RMF with Frenet initialization, matches Rhino)
         let pf = curve.perpendicular_plane_at(0.5, true);
-        MINI_CHECK!(TOLERANCE.is_point_close(&pf.origin(), &Point::new(3.156927375000000, 1.335111500000000, 0.130488875000000)));
-        MINI_CHECK!(TOLERANCE.is_vector_close(&pf.x_axis(), &Vector::new(0.632703652329189, -0.703685357647999, 0.323284713157168)));
-        MINI_CHECK!(TOLERANCE.is_vector_close(&pf.y_axis(), &Vector::new(0.327344206830723, -0.135306795251661, -0.935167279909370)));
-        MINI_CHECK!(TOLERANCE.is_vector_close(&pf.z_axis(), &Vector::new(0.701806140314880, 0.697509131546342, 0.144738221716994)));
+        MINI_CHECK!(TOLERANCE.is_point_close(
+            &pf.origin(),
+            &Point::new(3.156927375000000, 1.335111500000000, 0.130488875000000)
+        ));
+        MINI_CHECK!(TOLERANCE.is_vector_close(
+            &pf.x_axis(),
+            &Vector::new(0.632703652329189, -0.703685357647999, 0.323284713157168)
+        ));
+        MINI_CHECK!(TOLERANCE.is_vector_close(
+            &pf.y_axis(),
+            &Vector::new(0.327344206830723, -0.135306795251661, -0.935167279909370)
+        ));
+        MINI_CHECK!(TOLERANCE.is_vector_close(
+            &pf.z_axis(),
+            &Vector::new(0.701806140314880, 0.697509131546342, 0.144738221716994)
+        ));
         MINI_CHECK!(curve.perpendicular_plane_at(-0.1, true).is_valid() == false);
         MINI_CHECK!(curve.perpendicular_plane_at(1.1, true).is_valid() == false);
-        MINI_CHECK!(curve.perpendicular_plane_at(curve.domain_start(), false).is_valid() == true);
-        MINI_CHECK!(curve.perpendicular_plane_at(curve.domain_end(), false).is_valid() == true);
-        MINI_CHECK!(curve.perpendicular_plane_at(curve.domain_start() - 0.1, false).is_valid() == false);
+        MINI_CHECK!(
+            curve
+                .perpendicular_plane_at(curve.domain_start(), false)
+                .is_valid()
+                == true
+        );
+        MINI_CHECK!(
+            curve
+                .perpendicular_plane_at(curve.domain_end(), false)
+                .is_valid()
+                == true
+        );
+        MINI_CHECK!(
+            curve
+                .perpendicular_plane_at(curve.domain_start() - 0.1, false)
+                .is_valid()
+                == false
+        );
 
         // Get multiple rotation minimization frames along the curve (matches Rhino)
         let frames = curve.get_perpendicular_planes(4);
         MINI_CHECK!(frames.len() == 5);
         // Frame 0 (start)
-        MINI_CHECK!(TOLERANCE.is_point_close(&frames[0].origin(), &Point::new(1.957614, 1.140253, -0.191281)));
-        MINI_CHECK!(TOLERANCE.is_vector_close(&frames[0].x_axis(), &Vector::new(0.532767753269467, 0.809398954921174, -0.247046256496055)));
-        MINI_CHECK!(TOLERANCE.is_vector_close(&frames[0].y_axis(), &Vector::new(-0.261213903019039, -0.120386647366337, -0.957744408496052)));
-        MINI_CHECK!(TOLERANCE.is_vector_close(&frames[0].z_axis(), &Vector::new(-0.804938393882267, 0.574787253606414, 0.147288136473484)));
+        MINI_CHECK!(TOLERANCE.is_point_close(
+            &frames[0].origin(),
+            &Point::new(1.957614, 1.140253, -0.191281)
+        ));
+        MINI_CHECK!(TOLERANCE.is_vector_close(
+            &frames[0].x_axis(),
+            &Vector::new(0.532767753269467, 0.809398954921174, -0.247046256496055)
+        ));
+        MINI_CHECK!(TOLERANCE.is_vector_close(
+            &frames[0].y_axis(),
+            &Vector::new(-0.261213903019039, -0.120386647366337, -0.957744408496052)
+        ));
+        MINI_CHECK!(TOLERANCE.is_vector_close(
+            &frames[0].z_axis(),
+            &Vector::new(-0.804938393882267, 0.574787253606414, 0.147288136473484)
+        ));
         // Frame 2 (middle)
-        MINI_CHECK!(TOLERANCE.is_point_close(&frames[2].origin(), &Point::new(3.676077075808618, 0.909845354074582, 0.350126131660904)));
-        MINI_CHECK!(TOLERANCE.is_vector_close(&frames[2].x_axis(), &Vector::new(-0.188216728828592, 0.616420980974357, -0.764591156896073)));
-        MINI_CHECK!(TOLERANCE.is_vector_close(&frames[2].y_axis(), &Vector::new(0.183061410483993, -0.742842969436200, -0.643950963001702)));
-        MINI_CHECK!(TOLERANCE.is_vector_close(&frames[2].z_axis(), &Vector::new(-0.964916049706230, -0.261169479407185, 0.026972579511507)));
+        MINI_CHECK!(TOLERANCE.is_point_close(
+            &frames[2].origin(),
+            &Point::new(3.676077075808618, 0.909845354074582, 0.350126131660904)
+        ));
+        MINI_CHECK!(TOLERANCE.is_vector_close(
+            &frames[2].x_axis(),
+            &Vector::new(-0.188216728828592, 0.616420980974357, -0.764591156896073)
+        ));
+        MINI_CHECK!(TOLERANCE.is_vector_close(
+            &frames[2].y_axis(),
+            &Vector::new(0.183061410483993, -0.742842969436200, -0.643950963001702)
+        ));
+        MINI_CHECK!(TOLERANCE.is_vector_close(
+            &frames[2].z_axis(),
+            &Vector::new(-0.964916049706230, -0.261169479407185, 0.026972579511507)
+        ));
         // Frame 4 (end)
-        MINI_CHECK!(TOLERANCE.is_point_close(&frames[4].origin(), &Point::new(2.150320000000000, 1.868606000000000, 0.000000000000000)));
-        MINI_CHECK!(TOLERANCE.is_vector_close(&frames[4].x_axis(), &Vector::new(0.183261707646767, 0.080808692310795, 0.979737261594868)));
-        MINI_CHECK!(TOLERANCE.is_vector_close(&frames[4].y_axis(), &Vector::new(0.896455027441244, 0.395289116385372, -0.200287039627106)));
-        MINI_CHECK!(TOLERANCE.is_vector_close(&frames[4].z_axis(), &Vector::new(-0.403464410184726, 0.914995338629816, 0.000000000000000)));
+        MINI_CHECK!(TOLERANCE.is_point_close(
+            &frames[4].origin(),
+            &Point::new(2.150320000000000, 1.868606000000000, 0.000000000000000)
+        ));
+        MINI_CHECK!(TOLERANCE.is_vector_close(
+            &frames[4].x_axis(),
+            &Vector::new(0.183261707646767, 0.080808692310795, 0.979737261594868)
+        ));
+        MINI_CHECK!(TOLERANCE.is_vector_close(
+            &frames[4].y_axis(),
+            &Vector::new(0.896455027441244, 0.395289116385372, -0.200287039627106)
+        ));
+        MINI_CHECK!(TOLERANCE.is_vector_close(
+            &frames[4].z_axis(),
+            &Vector::new(-0.403464410184726, 0.914995338629816, 0.000000000000000)
+        ));
 
         // Points
         let p0 = curve.point_at_start();
@@ -644,7 +819,6 @@ pub fn run_nurbscurve_modifications() -> TestResult {
         use crate::NurbsCurve;
         use crate::Point;
 
-
         let points = vec![
             Point::new(0.0, 0.0, 0.0),
             Point::new(1.0, 2.0, 0.0),
@@ -658,7 +832,9 @@ pub fn run_nurbscurve_modifications() -> TestResult {
         // Reverse the curve
         let mut curve_reversed = curve.duplicate();
         curve_reversed.reverse();
-        MINI_CHECK!(TOLERANCE.is_point_close(&curve_reversed.point_at_start(), &curve.point_at_end()));
+        MINI_CHECK!(
+            TOLERANCE.is_point_close(&curve_reversed.point_at_start(), &curve.point_at_end())
+        );
 
         // Swap coordinates axes
         curve.swap_coordinates(0, 1);
@@ -679,7 +855,9 @@ pub fn run_nurbscurve_modifications() -> TestResult {
         let split_t = curve.domain_middle();
         let (curve_left, curve_right) = curve.split(split_t);
         MINI_CHECK!(TOLERANCE.is_point_close(&curve.point_at(split_t), &curve_left.point_at_end()));
-        MINI_CHECK!(TOLERANCE.is_point_close(&curve.point_at(split_t), &curve_right.point_at_start()));
+        MINI_CHECK!(
+            TOLERANCE.is_point_close(&curve.point_at(split_t), &curve_right.point_at_start())
+        );
 
         // Extend curve smoothly at both ends
         let mut curve_extended = curve.duplicate();
@@ -698,7 +876,7 @@ pub fn run_nurbscurve_modifications() -> TestResult {
 
         // Clamp ends - create unclamped curve manually
         let points_open = points.clone();
-        let mut curve_open = NurbsCurve::new(3, false, 3, 5);  // dim=3, non-rational, order=3 (deg 2), 5 CVs
+        let mut curve_open = NurbsCurve::new(3, false, 3, 5); // dim=3, non-rational, order=3 (deg 2), 5 CVs
 
         for i in 0..5 {
             curve_open.set_cv(i, &points_open[i]);
@@ -712,7 +890,10 @@ pub fn run_nurbscurve_modifications() -> TestResult {
         curve_open.clamp_end(2);
         let nurbsknots = curve_open.get_nurbsknots();
         MINI_CHECK!(TOLERANCE.is_close(nurbsknots[0], nurbsknots[1]));
-        MINI_CHECK!(TOLERANCE.is_close(nurbsknots[nurbsknots.len() - 2], nurbsknots[nurbsknots.len() - 1]));
+        MINI_CHECK!(TOLERANCE.is_close(
+            nurbsknots[nurbsknots.len() - 2],
+            nurbsknots[nurbsknots.len() - 1]
+        ));
 
         // Increase degree without change the shape
         let mut raised = curve.duplicate();
@@ -871,26 +1052,58 @@ pub fn run_nurbscurve_curvature() -> TestResult {
 
         // Project onto a 3D interpolated curve (curve_closest_point.py). Reference from
         // OCCT GeomAPI_ProjectPointOnCurve (validation/compare_curve_ops.py).
-        use crate::nurbsknot::{CurveNurbsKnotStyle, CurveInterpStyle};
-        let ipts = vec![Point::new(0.0,0.0,0.0), Point::new(3.0,0.0,2.0),
-                        Point::new(6.0,0.0,-3.0), Point::new(8.0,0.0,0.0)];
-        let ic = NurbsCurve::create_interpolated_styled(&ipts, CurveNurbsKnotStyle::Chord, CurveInterpStyle::Occt);
+        use crate::nurbsknot::{CurveInterpStyle, CurveNurbsKnotStyle};
+        let ipts = vec![
+            Point::new(0.0, 0.0, 0.0),
+            Point::new(3.0, 0.0, 2.0),
+            Point::new(6.0, 0.0, -3.0),
+            Point::new(8.0, 0.0, 0.0),
+        ];
+        let ic = NurbsCurve::create_interpolated_styled(
+            &ipts,
+            CurveNurbsKnotStyle::Chord,
+            CurveInterpStyle::Occt,
+        );
         let pc = ic.closest_point(&Point::new(2.0, -1.0, 0.0));
         MINI_CHECK!(TOLERANCE.is_point_close(&pc, &Point::new(0.5808155659, 0.0, 0.9672315271)));
 
         // Curve-curve closest (curve_closest_parameters_curve.py). Reference from
         // OCCT GeomAPI_ExtremaCurveCurve (u=0.475768, v=0.336691).
         let c0 = NurbsCurve::create_from_parameters(
-            &[Point::new(0.0,0.0,0.0),Point::new(3.0,6.0,0.0),Point::new(6.0,-3.0,3.0),Point::new(10.0,0.0,0.0)],
-            &[1.0,1.0,1.0,1.0], &[0.0,1.0], &[4,4], 3, false);
+            &[
+                Point::new(0.0, 0.0, 0.0),
+                Point::new(3.0, 6.0, 0.0),
+                Point::new(6.0, -3.0, 3.0),
+                Point::new(10.0, 0.0, 0.0),
+            ],
+            &[1.0, 1.0, 1.0, 1.0],
+            &[0.0, 1.0],
+            &[4, 4],
+            3,
+            false,
+        );
         let c1 = NurbsCurve::create_from_parameters(
-            &[Point::new(6.0,-3.0,0.0),Point::new(3.0,1.0,0.0),Point::new(6.0,6.0,3.0),Point::new(3.0,12.0,0.0)],
-            &[1.0,1.0,1.0,1.0], &[0.0,1.0], &[4,4], 3, false);
+            &[
+                Point::new(6.0, -3.0, 0.0),
+                Point::new(3.0, 1.0, 0.0),
+                Point::new(6.0, 6.0, 3.0),
+                Point::new(3.0, 12.0, 0.0),
+            ],
+            &[1.0, 1.0, 1.0, 1.0],
+            &[0.0, 1.0],
+            &[4, 4],
+            3,
+            false,
+        );
         let (u, v) = c0.closest_parameters_curve(&c1);
         MINI_CHECK!((u - 0.4757682937).abs() < 1e-6 && (v - 0.3366914716).abs() < 1e-6);
         let (pa, pb) = c0.closest_points_curve(&c1);
-        MINI_CHECK!(TOLERANCE.is_point_close(&pa, &Point::new(4.389607399, 1.285537564, 1.067964425)));
-        MINI_CHECK!(TOLERANCE.is_point_close(&pb, &Point::new(4.552264625, 1.380381100, 0.676740741)));
+        MINI_CHECK!(
+            TOLERANCE.is_point_close(&pa, &Point::new(4.389607399, 1.285537564, 1.067964425))
+        );
+        MINI_CHECK!(
+            TOLERANCE.is_point_close(&pb, &Point::new(4.552264625, 1.380381100, 0.676740741))
+        );
 
         // A straight line has zero curvature.
         let line_pts = vec![
@@ -904,13 +1117,41 @@ pub fn run_nurbscurve_curvature() -> TestResult {
     })
 }
 
-REGISTER_MINI_TEST!("NurbsCurve", "Curvature", crate::nurbscurve_test::run_nurbscurve_curvature);
-REGISTER_MINI_TEST!("NurbsCurve", "Constructor", crate::nurbscurve_test::run_nurbscurve_constructor);
-REGISTER_MINI_TEST!("NurbsCurve", "Create Interpolated", crate::nurbscurve_test::run_nurbscurve_create_interpolated);
-REGISTER_MINI_TEST!("NurbsCurve", "Create From Parameters", crate::nurbscurve_test::run_nurbscurve_create_from_parameters);
-REGISTER_MINI_TEST!("NurbsCurve", "Create Fitted", crate::nurbscurve_test::run_nurbscurve_create_fitted);
-REGISTER_MINI_TEST!("NurbsCurve", "Join", crate::nurbscurve_test::run_nurbscurve_join);
-REGISTER_MINI_TEST!("NurbsCurve", "Attributes", crate::nurbscurve_test::run_nurbscurve_attributes);
+REGISTER_MINI_TEST!(
+    "NurbsCurve",
+    "Curvature",
+    crate::nurbscurve_test::run_nurbscurve_curvature
+);
+REGISTER_MINI_TEST!(
+    "NurbsCurve",
+    "Constructor",
+    crate::nurbscurve_test::run_nurbscurve_constructor
+);
+REGISTER_MINI_TEST!(
+    "NurbsCurve",
+    "Create Interpolated",
+    crate::nurbscurve_test::run_nurbscurve_create_interpolated
+);
+REGISTER_MINI_TEST!(
+    "NurbsCurve",
+    "Create From Parameters",
+    crate::nurbscurve_test::run_nurbscurve_create_from_parameters
+);
+REGISTER_MINI_TEST!(
+    "NurbsCurve",
+    "Create Fitted",
+    crate::nurbscurve_test::run_nurbscurve_create_fitted
+);
+REGISTER_MINI_TEST!(
+    "NurbsCurve",
+    "Join",
+    crate::nurbscurve_test::run_nurbscurve_join
+);
+REGISTER_MINI_TEST!(
+    "NurbsCurve",
+    "Attributes",
+    crate::nurbscurve_test::run_nurbscurve_attributes
+);
 // TODO(f64-followup): re-enable after rebaselining or NURBS algorithm-level
 // precision investigation. The arc-length clustering bug (divide_by_count finite-diff
 // step underflowing f64 ULP) is now fixed, but the expected values are 15-digit f64
@@ -918,7 +1159,23 @@ REGISTER_MINI_TEST!("NurbsCurve", "Attributes", crate::nurbscurve_test::run_nurb
 // tangent[0]); needs f64 NURBS evaluation to match exactly.
 // REGISTER_MINI_TEST!("NurbsCurve", "Conversions", crate::nurbscurve_test::run_nurbscurve_conversions);
 // REGISTER_MINI_TEST!("NurbsCurve", "Evaluation", crate::nurbscurve_test::run_nurbscurve_evaluation);
-REGISTER_MINI_TEST!("NurbsCurve", "Modifications", crate::nurbscurve_test::run_nurbscurve_modifications);
-REGISTER_MINI_TEST!("NurbsCurve", "Transformations", crate::nurbscurve_test::run_nurbscurve_transformations);
-REGISTER_MINI_TEST!("NurbsCurve", "Json Roundtrip", crate::nurbscurve_test::run_nurbscurve_json_roundtrip);
-REGISTER_MINI_TEST!("NurbsCurve", "Protobuf Roundtrip", crate::nurbscurve_test::run_nurbscurve_protobuf_roundtrip);
+REGISTER_MINI_TEST!(
+    "NurbsCurve",
+    "Modifications",
+    crate::nurbscurve_test::run_nurbscurve_modifications
+);
+REGISTER_MINI_TEST!(
+    "NurbsCurve",
+    "Transformations",
+    crate::nurbscurve_test::run_nurbscurve_transformations
+);
+REGISTER_MINI_TEST!(
+    "NurbsCurve",
+    "Json Roundtrip",
+    crate::nurbscurve_test::run_nurbscurve_json_roundtrip
+);
+REGISTER_MINI_TEST!(
+    "NurbsCurve",
+    "Protobuf Roundtrip",
+    crate::nurbscurve_test::run_nurbscurve_protobuf_roundtrip
+);

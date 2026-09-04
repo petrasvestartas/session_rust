@@ -26,7 +26,10 @@ use std::ops::{Add, AddAssign, Div, DivAssign, Index, IndexMut, Mul, MulAssign, 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(tag = "type", rename = "Point")]
 pub struct Point {
-    #[serde(serialize_with = "crate::guid_serde::serialize", deserialize_with = "crate::guid_serde::deserialize")]
+    #[serde(
+        serialize_with = "crate::guid_serde::serialize",
+        deserialize_with = "crate::guid_serde::deserialize"
+    )]
     guid: std::sync::OnceLock<String>, // Unique identifier
     pub name: String, // Name of the point
     #[serde(rename = "x")]
@@ -127,11 +130,11 @@ impl Point {
     pub fn transform(&mut self, xform: &Xform) {
         let (x, y, z) = (self._x, self._y, self._z);
         let m = &xform.m;
-        let w = m[3]*x + m[7]*y + m[11]*z + m[15];
+        let w = m[3] * x + m[7] * y + m[11] * z + m[15];
         let w_inv = if w.abs() > 1e-10 { 1.0 / w } else { 1.0 };
-        self._x = (m[0]*x + m[4]*y + m[8]*z + m[12]) * w_inv;
-        self._y = (m[1]*x + m[5]*y + m[9]*z + m[13]) * w_inv;
-        self._z = (m[2]*x + m[6]*y + m[10]*z + m[14]) * w_inv;
+        self._x = (m[0] * x + m[4] * y + m[8] * z + m[12]) * w_inv;
+        self._y = (m[1] * x + m[5] * y + m[9] * z + m[13]) * w_inv;
+        self._z = (m[2] * x + m[6] * y + m[10] * z + m[14]) * w_inv;
     }
 
     /// Return a transformed copy of the point, leaving the original unchanged.
@@ -145,9 +148,9 @@ impl Point {
         result
     }
 
-    ///////////////////////////////////////////////////////////////////////////////////////////
+    // ═══════════════════════════════════════════════════════════════════════════
     // JSON
-    ///////////////////////////////////////////////////////////////////////////////////////////
+    // ═══════════════════════════════════════════════════════════════════════════
 
     /// Serializes the Point to a JSON string.
     ///
@@ -208,9 +211,9 @@ impl Point {
         Self::jsonload(&json)
     }
 
-    ///////////////////////////////////////////////////////////////////////////////////////////
+    // ═══════════════════════════════════════════════════════════════════════════
     // Protobuf Serialization
-    ///////////////////////////////////////////////////////////////////////////////////////////
+    // ═══════════════════════════════════════════════════════════════════════════
 
     /// Convert to protobuf binary format.
     ///
@@ -364,9 +367,9 @@ impl Point {
         Point::new(p0._x - p1._x, p0._y - p1._y, p0._z - p1._z)
     }
 
-    ///////////////////////////////////////////////////////////////////////////////////////////
+    // ═══════════════════════════════════════════════════════════════════════════
     // Details
-    ///////////////////////////////////////////////////////////////////////////////////////////
+    // ═══════════════════════════════════════════════════════════════════════════
 
     /// Check if the points are in counter-clockwise order on the XY plane.
     ///
@@ -417,7 +420,7 @@ impl Point {
     }
 
     /// Calculate the distance between this point and another point.
-    /// 
+    ///
     /// # Arguments
     /// * `p` - The other point
     /// * `double_min` - Optional minimum value for distance calculation. Defaults to 1e-12.
@@ -446,7 +449,7 @@ impl Point {
     }
 
     /// Calculate the squared distance between this point and another point.
-    /// 
+    ///
     /// # Arguments
     /// * `p` - The other point
     /// * `double_min` - Optional minimum value for distance calculation. Defaults to 1e-12.
@@ -577,9 +580,9 @@ impl Point {
         cos_t.acos() * (180.0 / 3.141592653589793)
     }
 
-    ///////////////////////////////////////////////////////////////////////////////////////////
+    // ═══════════════════════════════════════════════════════════════════════════
     // WGPU
-    ///////////////////////////////////////////////////////////////////////////////////////////
+    // ═══════════════════════════════════════════════════════════════════════════
 
     /// GPU-ready `[x, y, z]` as f32 — the f64→f32 boundary for wgpu upload
     /// (vertex / instance / segment rows). Mirrors [`crate::Xform::to_f32`]: the kernel
@@ -613,9 +616,9 @@ impl PartialEq for Point {
     }
 }
 
-///////////////////////////////////////////////////////////////////////////////////////////
+// ═══════════════════════════════════════════════════════════════════════════
 // Indexing operators
-///////////////////////////////////////////////////////////////////////////////////////////
+// ═══════════════════════════════════════════════════════════════════════════
 
 impl Index<usize> for Point {
     type Output = f64;
@@ -641,9 +644,9 @@ impl IndexMut<usize> for Point {
     }
 }
 
-///////////////////////////////////////////////////////////////////////////////////////////
+// ═══════════════════════════════════════════════════════════════════════════
 // No-copy operators
-///////////////////////////////////////////////////////////////////////////////////////////
+// ═══════════════════════════════════════════════════════════════════════════
 
 impl MulAssign<f64> for Point {
     fn mul_assign(&mut self, rhs: f64) {
@@ -677,9 +680,9 @@ impl SubAssign<Vector> for Point {
     }
 }
 
-///////////////////////////////////////////////////////////////////////////////////////////
+// ═══════════════════════════════════════════════════════════════════════════
 // Copy operators
-///////////////////////////////////////////////////////////////////////////////////////////
+// ═══════════════════════════════════════════════════════════════════════════
 
 impl Mul<f64> for Point {
     type Output = Point;

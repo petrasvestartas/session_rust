@@ -76,7 +76,9 @@ impl ElementFeature {
 /// stops being a cross-language format.
 fn to_hex(bytes: &[u8]) -> String {
     let mut out = String::with_capacity(bytes.len() * 2);
-    for b in bytes { out.push_str(&format!("{:02x}", b)); }
+    for b in bytes {
+        out.push_str(&format!("{:02x}", b));
+    }
     out
 }
 
@@ -100,13 +102,17 @@ impl PartialEq for ElementFeature {
 
 impl ElementFeature {
     pub fn str(&self) -> String {
-        format!("ElementFeature({}, face {}, {} outline(s))",
-                self.feature_type, self.face_index, self.outlines.len())
+        format!(
+            "ElementFeature({}, face {}, {} outline(s))",
+            self.feature_type,
+            self.face_index,
+            self.outlines.len()
+        )
     }
 
-    ///////////////////////////////////////////////////////////////////////////////////////////
+    // ═══════════════════════════════════════════════════════════════════════════
     // JSON
-    ///////////////////////////////////////////////////////////////////////////////////////////
+    // ═══════════════════════════════════════════════════════════════════════════
 
     /// A feature serializes on its own, not only as part of its host. A package that stores a
     /// library of standard cuts, or reports one across a wire, has a single feature in hand and
@@ -128,15 +134,22 @@ impl ElementFeature {
         let f = Self::new(
             data["feature_type"].as_str().unwrap_or(""),
             data["face_index"].as_i64().unwrap_or(-1) as i32,
-            data["outlines"].as_array().map(|os| {
-                os.iter().filter_map(|o| serde_json::from_value(o.clone()).ok()).collect()
-            }).unwrap_or_default(),
+            data["outlines"]
+                .as_array()
+                .map(|os| {
+                    os.iter()
+                        .filter_map(|o| serde_json::from_value(o.clone()).ok())
+                        .collect()
+                })
+                .unwrap_or_default(),
             data["name"].as_str().unwrap_or(""),
         );
         // Assigned, not minted: a feature read back is the SAME feature, so anything holding its
         // guid still finds it. Absent means the file predates the field - leave the lazy mint.
         if let Some(g) = data["guid"].as_str() {
-            if !g.is_empty() { f.set_guid(g.to_string()); }
+            if !g.is_empty() {
+                f.set_guid(g.to_string());
+            }
         }
         f
     }
@@ -166,9 +179,9 @@ impl ElementFeature {
         Self::file_json_loads(&json)
     }
 
-    ///////////////////////////////////////////////////////////////////////////////////////////
+    // ═══════════════════════════════════════════════════════════════════════════
     // Protobuf
-    ///////////////////////////////////////////////////////////////////////////////////////////
+    // ═══════════════════════════════════════════════════════════════════════════
 
     pub fn pb_dumps(&self) -> Vec<u8> {
         let proto = crate::proto::ElementFeature {
@@ -176,7 +189,9 @@ impl ElementFeature {
             name: self.name.clone(),
             feature_type: self.feature_type.clone(),
             face_index: self.face_index,
-            outlines: self.outlines.iter()
+            outlines: self
+                .outlines
+                .iter()
                 .map(|o| prost::Message::decode(o.pb_dumps().as_slice()).unwrap_or_default())
                 .collect(),
         };
@@ -190,7 +205,9 @@ impl ElementFeature {
             outlines.push(Polyline::pb_loads(&prost::Message::encode_to_vec(o))?);
         }
         let f = Self::new(&proto.feature_type, proto.face_index, outlines, &proto.name);
-        if !proto.guid.is_empty() { f.set_guid(proto.guid.clone()); }
+        if !proto.guid.is_empty() {
+            f.set_guid(proto.guid.clone());
+        }
         Ok(f)
     }
 
@@ -261,9 +278,9 @@ pub struct Element {
 }
 
 impl Element {
-    ///////////////////////////////////////////////////////////////////////////////////////////
+    // ═══════════════════════════════════════════════════════════════════════════
     // Constructors
-    ///////////////////////////////////////////////////////////////////////////////////////////
+    // ═══════════════════════════════════════════════════════════════════════════
 
     pub fn new(name: &str) -> Self {
         Self {
@@ -288,7 +305,6 @@ impl Element {
         }
     }
 
-
     pub fn from_mesh(geometry: Mesh, name: &str) -> Self {
         Self {
             guid: std::sync::OnceLock::new(),
@@ -311,7 +327,6 @@ impl Element {
             dimensions: None,
         }
     }
-
 
     pub fn from_brep(geometry: BRep, name: &str) -> Self {
         Self {
@@ -336,7 +351,6 @@ impl Element {
         }
     }
 
-
     pub fn guid(&self) -> &str {
         self.guid.get_or_init(|| uuid::Uuid::new_v4().to_string())
     }
@@ -360,12 +374,16 @@ impl Element {
         result
     }
 
-    ///////////////////////////////////////////////////////////////////////////////////////////
+    // ═══════════════════════════════════════════════════════════════════════════
     // Properties
-    ///////////////////////////////////////////////////////////////////////////////////////////
+    // ═══════════════════════════════════════════════════════════════════════════
 
-    pub fn geometry(&self) -> &ElementGeometry { &self.geometry }
-    pub fn is_dirty(&self) -> bool { self.is_dirty }
+    pub fn geometry(&self) -> &ElementGeometry {
+        &self.geometry
+    }
+    pub fn is_dirty(&self) -> bool {
+        self.is_dirty
+    }
 
     pub fn has_geometry(&self) -> bool {
         !matches!(self.geometry, ElementGeometry::None)
@@ -386,7 +404,9 @@ impl Element {
             ElementGeometry::None => ElementGeometry::None,
             ElementGeometry::Mesh(mesh) => {
                 let mut geo = mesh.clone();
-                for f in &self.geometry_ops { geo = f(geo); }
+                for f in &self.geometry_ops {
+                    geo = f(geo);
+                }
                 if !xform.is_identity() {
                     geo.transform(xform);
                 }
@@ -430,17 +450,17 @@ impl Element {
         self.cached_point.clone().unwrap()
     }
 
-    ///////////////////////////////////////////////////////////////////////////////////////////
+    // ═══════════════════════════════════════════════════════════════════════════
     // Column/Beam/Plate Accessors
-    ///////////////////////////////////////////////////////////////////////////////////////////
+    // ═══════════════════════════════════════════════════════════════════════════
 
-    ///////////////////////////////////////////////////////////////////////////////////////////
+    // ═══════════════════════════════════════════════════════════════════════════
     // Column/Beam/Plate Setters
-    ///////////////////////////////////////////////////////////////////////////////////////////
+    // ═══════════════════════════════════════════════════════════════════════════
 
-    ///////////////////////////////////////////////////////////////////////////////////////////
+    // ═══════════════════════════════════════════════════════════════════════════
     // Mutators
-    ///////////////////////////////////////////////////////////////////////////////////////////
+    // ═══════════════════════════════════════════════════════════════════════════
 
     pub fn add_geometry_op(&mut self, f: fn(Mesh) -> Mesh) {
         self.geometry_ops.push(f);
@@ -484,12 +504,24 @@ impl Element {
         self.cached_axis = None;
     }
 
-    pub fn geometry_ops_count(&self) -> usize { self.geometry_ops.len() }
-    pub fn features_count(&self) -> usize { self.features.len() }
-    pub fn cached_aabb_ref(&self) -> &Option<OBB> { &self.cached_aabb }
-    pub fn cached_obb_ref(&self) -> &Option<OBB> { &self.cached_obb }
-    pub fn cached_collision_mesh_ref(&self) -> &Option<Mesh> { &self.cached_collision_mesh }
-    pub fn cached_point_ref(&self) -> &Option<Point> { &self.cached_point }
+    pub fn geometry_ops_count(&self) -> usize {
+        self.geometry_ops.len()
+    }
+    pub fn features_count(&self) -> usize {
+        self.features.len()
+    }
+    pub fn cached_aabb_ref(&self) -> &Option<OBB> {
+        &self.cached_aabb
+    }
+    pub fn cached_obb_ref(&self) -> &Option<OBB> {
+        &self.cached_obb
+    }
+    pub fn cached_collision_mesh_ref(&self) -> &Option<Mesh> {
+        &self.cached_collision_mesh
+    }
+    pub fn cached_point_ref(&self) -> &Option<Point> {
+        &self.cached_point
+    }
 
     /// Explicitly-set polylines. Nothing derives them any more: they used to be computed from
     /// the Column/Beam/Plate kind, and the Generic arm always returned empty.
@@ -512,9 +544,9 @@ impl Element {
         self.cached_axis.clone()
     }
 
-    ///////////////////////////////////////////////////////////////////////////////////////////
+    // ═══════════════════════════════════════════════════════════════════════════
     // Computation
-    ///////////////////////////////////////////////////////////////////////////////////////////
+    // ═══════════════════════════════════════════════════════════════════════════
 
     fn compute_aabb(&self) -> OBB {
         let geo = self.session_geometry(&Xform::identity());
@@ -533,7 +565,9 @@ impl Element {
     }
 
     fn compute_collision_mesh(&self) -> Mesh {
-        if let ElementGeometry::Mesh(mesh) = self.session_geometry(&Xform::identity()) { return mesh; }
+        if let ElementGeometry::Mesh(mesh) = self.session_geometry(&Xform::identity()) {
+            return mesh;
+        }
         Mesh::new()
     }
 
@@ -541,19 +575,27 @@ impl Element {
         let geo = self.session_geometry(&Xform::identity());
         match &geo {
             ElementGeometry::Mesh(mesh) => {
-                if mesh.vertex.is_empty() { return Point::new(0.0, 0.0, 0.0); }
+                if mesh.vertex.is_empty() {
+                    return Point::new(0.0, 0.0, 0.0);
+                }
                 let (mut sx, mut sy, mut sz) = (0.0, 0.0, 0.0);
                 for (_, v) in &mesh.vertex {
-                    sx += v.x; sy += v.y; sz += v.z;
+                    sx += v.x;
+                    sy += v.y;
+                    sz += v.z;
                 }
                 let n = mesh.vertex.len() as f64;
                 Point::new(sx / n, sy / n, sz / n)
             }
             ElementGeometry::BRep(brep) => {
-                if brep.m_vertices.is_empty() { return Point::new(0.0, 0.0, 0.0); }
+                if brep.m_vertices.is_empty() {
+                    return Point::new(0.0, 0.0, 0.0);
+                }
                 let (mut sx, mut sy, mut sz) = (0.0, 0.0, 0.0);
                 for p in brep.vertex_points() {
-                    sx += p[0]; sy += p[1]; sz += p[2];
+                    sx += p[0];
+                    sy += p[1];
+                    sz += p[2];
                 }
                 let n = brep.m_vertices.len() as f64;
                 Point::new(sx / n, sy / n, sz / n)
@@ -567,11 +609,15 @@ impl Element {
         match geo {
             ElementGeometry::Mesh(mesh) => {
                 let points: Vec<Point> = mesh.vertex.values().map(|v| v.position()).collect();
-                if points.is_empty() { return OBB::from_point(Point::new(0.0, 0.0, 0.0), inflate); }
+                if points.is_empty() {
+                    return OBB::from_point(Point::new(0.0, 0.0, 0.0), inflate);
+                }
                 OBB::from_points(&points, inflate)
             }
             ElementGeometry::BRep(brep) => {
-                if brep.m_vertices.is_empty() { return OBB::from_point(Point::new(0.0, 0.0, 0.0), inflate); }
+                if brep.m_vertices.is_empty() {
+                    return OBB::from_point(Point::new(0.0, 0.0, 0.0), inflate);
+                }
                 OBB::from_points(&brep.vertex_points(), inflate)
             }
             ElementGeometry::None => OBB::from_point(Point::new(0.0, 0.0, 0.0), inflate),
@@ -589,7 +635,9 @@ impl Element {
             nz += (c[0] - nx_pt[0]) * (c[1] + nx_pt[1]);
         }
         let mag = (nx * nx + ny * ny + nz * nz).sqrt();
-        if mag < 1e-12 { return Vector::new(0.0, 0.0, 1.0); }
+        if mag < 1e-12 {
+            return Vector::new(0.0, 0.0, 1.0);
+        }
         Vector::new(nx / mag, ny / mag, nz / mag)
     }
 
@@ -597,9 +645,9 @@ impl Element {
         OBB::from_point(Point::new(0.0, 0.0, 0.0), inflate)
     }
 
-    ///////////////////////////////////////////////////////////////////////////////////////////
+    // ═══════════════════════════════════════════════════════════════════════════
     // Operators
-    ///////////////////////////////////////////////////////////////////////////////////////////
+    // ═══════════════════════════════════════════════════════════════════════════
 
     pub fn type_name(&self) -> &str {
         "Element"
@@ -610,36 +658,46 @@ impl Element {
     }
 
     pub fn repr(&self) -> String {
-        format!("Element({}, {}, {})", self.guid(), self.name, self.geometry_type_name())
+        format!(
+            "Element({}, {}, {})",
+            self.guid(),
+            self.name,
+            self.geometry_type_name()
+        )
     }
 
-    ///////////////////////////////////////////////////////////////////////////////////////////
+    // ═══════════════════════════════════════════════════════════════════════════
     // JSON
-    ///////////////////////////////////////////////////////////////////////////////////////////
+    // ═══════════════════════════════════════════════════════════════════════════
 
     pub fn jsondump(&self) -> serde_json::Value {
-                        let (geo_data, geo_type) = match &self.geometry {
-                    ElementGeometry::Mesh(m) => (serde_json::to_value(m).unwrap_or(serde_json::Value::Null), "Mesh"),
-                    ElementGeometry::BRep(b) => (serde_json::to_value(b).unwrap_or(serde_json::Value::Null), "BRep"),
-                    ElementGeometry::None => (serde_json::Value::Null, "None"),
-                };
-                // Everything the element carries, not just the two fields it had before the
-                // registry: a format that silently drops five of them is not a serialization
-                // format, and `file_json_dump` has to round-trip whatever `pb_dumps` does, or
-                // the two disagree about what an Element is.
-                serde_json::json!({
-                    "dimensions": self.dimensions.as_ref().map(|d| serde_json::to_value(d).unwrap_or(serde_json::Value::Null)),
-                    "element_data": to_hex(&self.element_data),
-                    "element_type": self.element_type,
-                    "features": self.features.iter().map(|f| f.jsondump()).collect::<Vec<_>>(),
-                    "geometry_data": geo_data,
-                    "geometry_type": geo_type,
-                    "guid": self.guid(),
-                    "insertion_vectors": self.insertion_vectors.iter().map(|v| serde_json::to_value(v).unwrap_or(serde_json::Value::Null)).collect::<Vec<_>>(),
-                    "name": self.name,
-                    "type": "Element",
-                })
-            
+        let (geo_data, geo_type) = match &self.geometry {
+            ElementGeometry::Mesh(m) => (
+                serde_json::to_value(m).unwrap_or(serde_json::Value::Null),
+                "Mesh",
+            ),
+            ElementGeometry::BRep(b) => (
+                serde_json::to_value(b).unwrap_or(serde_json::Value::Null),
+                "BRep",
+            ),
+            ElementGeometry::None => (serde_json::Value::Null, "None"),
+        };
+        // Everything the element carries, not just the two fields it had before the
+        // registry: a format that silently drops five of them is not a serialization
+        // format, and `file_json_dump` has to round-trip whatever `pb_dumps` does, or
+        // the two disagree about what an Element is.
+        serde_json::json!({
+            "dimensions": self.dimensions.as_ref().map(|d| serde_json::to_value(d).unwrap_or(serde_json::Value::Null)),
+            "element_data": to_hex(&self.element_data),
+            "element_type": self.element_type,
+            "features": self.features.iter().map(|f| f.jsondump()).collect::<Vec<_>>(),
+            "geometry_data": geo_data,
+            "geometry_type": geo_type,
+            "guid": self.guid(),
+            "insertion_vectors": self.insertion_vectors.iter().map(|v| serde_json::to_value(v).unwrap_or(serde_json::Value::Null)).collect::<Vec<_>>(),
+            "name": self.name,
+            "type": "Element",
+        })
     }
 
     pub fn jsonload(json_str: &str) -> Result<Self, Box<dyn std::error::Error>> {
@@ -648,35 +706,39 @@ impl Element {
     }
 
     pub fn jsonload_value(data: &serde_json::Value) -> Self {
-                let geo_type = data["geometry_type"].as_str().unwrap_or("None");
-                let mut elem = Self::new("my_element");
-                if geo_type == "Mesh" && !data["geometry_data"].is_null() {
-                    if let Ok(mesh) = serde_json::from_value::<Mesh>(data["geometry_data"].clone()) {
-                        elem.geometry = ElementGeometry::Mesh(mesh);
-                    }
-                } else if geo_type == "BRep" && !data["geometry_data"].is_null() {
-                    if let Ok(brep) = serde_json::from_value::<BRep>(data["geometry_data"].clone()) {
-                        elem.geometry = ElementGeometry::BRep(brep);
-                    }
-                }
-                if let Some(g) = data["guid"].as_str() { elem.set_guid(g.to_string()); }
-                elem.name = data["name"].as_str().unwrap_or(&elem.name).to_string();
-                // null, not absent-or-empty: (0,0,0) is a legitimate authored dimension, so the
-                // two cases stay distinguishable here exactly as `Option` keeps them apart on
-                // the wire.
-                if !data["dimensions"].is_null() {
-                    elem.dimensions = serde_json::from_value(data["dimensions"].clone()).ok();
-                }
-                elem.element_type = data["element_type"].as_str().unwrap_or("").to_string();
-                elem.element_data = from_hex(data["element_data"].as_str().unwrap_or(""));
-                if let Some(fs) = data["features"].as_array() {
-                    elem.features = fs.iter().map(ElementFeature::jsonload_value).collect();
-                }
-                if let Some(vs) = data["insertion_vectors"].as_array() {
-                    elem.insertion_vectors = vs.iter().filter_map(|v| serde_json::from_value(v.clone()).ok()).collect();
-                }
-                elem
-            
+        let geo_type = data["geometry_type"].as_str().unwrap_or("None");
+        let mut elem = Self::new("my_element");
+        if geo_type == "Mesh" && !data["geometry_data"].is_null() {
+            if let Ok(mesh) = serde_json::from_value::<Mesh>(data["geometry_data"].clone()) {
+                elem.geometry = ElementGeometry::Mesh(mesh);
+            }
+        } else if geo_type == "BRep" && !data["geometry_data"].is_null() {
+            if let Ok(brep) = serde_json::from_value::<BRep>(data["geometry_data"].clone()) {
+                elem.geometry = ElementGeometry::BRep(brep);
+            }
+        }
+        if let Some(g) = data["guid"].as_str() {
+            elem.set_guid(g.to_string());
+        }
+        elem.name = data["name"].as_str().unwrap_or(&elem.name).to_string();
+        // null, not absent-or-empty: (0,0,0) is a legitimate authored dimension, so the
+        // two cases stay distinguishable here exactly as `Option` keeps them apart on
+        // the wire.
+        if !data["dimensions"].is_null() {
+            elem.dimensions = serde_json::from_value(data["dimensions"].clone()).ok();
+        }
+        elem.element_type = data["element_type"].as_str().unwrap_or("").to_string();
+        elem.element_data = from_hex(data["element_data"].as_str().unwrap_or(""));
+        if let Some(fs) = data["features"].as_array() {
+            elem.features = fs.iter().map(ElementFeature::jsonload_value).collect();
+        }
+        if let Some(vs) = data["insertion_vectors"].as_array() {
+            elem.insertion_vectors = vs
+                .iter()
+                .filter_map(|v| serde_json::from_value(v.clone()).ok())
+                .collect();
+        }
+        elem
     }
 
     pub fn file_json_dumps(&self) -> String {
@@ -699,9 +761,9 @@ impl Element {
         Self::file_json_loads(&json)
     }
 
-    ///////////////////////////////////////////////////////////////////////////////////////////
+    // ═══════════════════════════════════════════════════════════════════════════
     // Protobuf
-    ///////////////////////////////////////////////////////////////////////////////////////////
+    // ═══════════════════════════════════════════════════════════════════════════
 
     pub fn pb_dumps(&self) -> Vec<u8> {
         use prost::Message;
@@ -714,20 +776,20 @@ impl Element {
         proto.guid = self.guid().to_string();
         proto.name = self.name.clone();
 
-            match &self.geometry {
-                ElementGeometry::Mesh(m) => {
-                    proto.geometry_type = "Mesh".to_string();
-                    proto.geometry_data = m.pb_dumps();
-                }
-                ElementGeometry::BRep(b) => {
-                    proto.geometry_type = "BRep".to_string();
-                    proto.geometry_data = b.pb_dumps();
-                }
-                ElementGeometry::None => {
-                    proto.geometry_type = "None".to_string();
-                }
+        match &self.geometry {
+            ElementGeometry::Mesh(m) => {
+                proto.geometry_type = "Mesh".to_string();
+                proto.geometry_data = m.pb_dumps();
             }
-        
+            ElementGeometry::BRep(b) => {
+                proto.geometry_type = "BRep".to_string();
+                proto.geometry_data = b.pb_dumps();
+            }
+            ElementGeometry::None => {
+                proto.geometry_type = "None".to_string();
+            }
+        }
+
         // Both empty for a plain Element, and proto3 does not emit empty scalars - so a base
         // element's bytes are unchanged by this, keeping the golden files valid.
         proto.element_type = self.element_type.clone();
@@ -736,21 +798,31 @@ impl Element {
         // Packed triples, not sub-messages. Not for the bytes - a unit axis is 2 B CHEAPER as a
         // sub-message - but for the shape: no per-entry `name` String allocated on decode, and
         // no serialize-then-reparse round trip. See element.proto.
-        proto.insertion_vectors = self.insertion_vectors.iter()
+        proto.insertion_vectors = self
+            .insertion_vectors
+            .iter()
             .flat_map(|v| [v[0], v[1], v[2]])
             .collect();
-        proto.dimensions = self.dimensions.as_ref()
+        proto.dimensions = self
+            .dimensions
+            .as_ref()
             .map(|d| vec![d[0], d[1], d[2]])
             .unwrap_or_default();
-        proto.features = self.features.iter().map(|f| crate::proto::ElementFeature {
-            guid: f.guid().to_string(),
-            name: f.name.clone(),
-            feature_type: f.feature_type.clone(),
-            face_index: f.face_index,
-            outlines: f.outlines.iter()
-                .map(|o| prost::Message::decode(o.pb_dumps().as_slice()).unwrap_or_default())
-                .collect(),
-        }).collect();
+        proto.features = self
+            .features
+            .iter()
+            .map(|f| crate::proto::ElementFeature {
+                guid: f.guid().to_string(),
+                name: f.name.clone(),
+                feature_type: f.feature_type.clone(),
+                face_index: f.face_index,
+                outlines: f
+                    .outlines
+                    .iter()
+                    .map(|o| prost::Message::decode(o.pb_dumps().as_slice()).unwrap_or_default())
+                    .collect(),
+            })
+            .collect();
 
         proto
     }
@@ -787,13 +859,19 @@ impl Element {
         elem.element_type = proto.element_type.clone();
         elem.element_data = proto.element_data.clone();
 
-        elem.insertion_vectors = proto.insertion_vectors.chunks_exact(3)
+        elem.insertion_vectors = proto
+            .insertion_vectors
+            .chunks_exact(3)
             .map(|c| Vector::new(c[0], c[1], c[2]))
             .collect();
         // Length, not a zero check: (0,0,0) is a legitimate authored value and must not be
         // confused with "never authored", which is what an EMPTY field means here.
         elem.dimensions = match proto.dimensions.len() {
-            3 => Some(Vector::new(proto.dimensions[0], proto.dimensions[1], proto.dimensions[2])),
+            3 => Some(Vector::new(
+                proto.dimensions[0],
+                proto.dimensions[1],
+                proto.dimensions[2],
+            )),
             _ => None,
         };
         for f in &proto.features {
@@ -849,26 +927,32 @@ impl<'de> Deserialize<'de> for Element {
 /// decline, which falls back to a base element rather than failing the load.
 pub type ElementFactory = fn(&[u8]) -> Option<Element>;
 
-fn element_registry() -> &'static std::sync::Mutex<std::collections::BTreeMap<String, ElementFactory>> {
-    static REGISTRY: std::sync::OnceLock<std::sync::Mutex<std::collections::BTreeMap<String, ElementFactory>>> =
-        std::sync::OnceLock::new();
+fn element_registry(
+) -> &'static std::sync::Mutex<std::collections::BTreeMap<String, ElementFactory>> {
+    static REGISTRY: std::sync::OnceLock<
+        std::sync::Mutex<std::collections::BTreeMap<String, ElementFactory>>,
+    > = std::sync::OnceLock::new();
     REGISTRY.get_or_init(|| std::sync::Mutex::new(std::collections::BTreeMap::new()))
 }
 
 impl Element {
-    ///////////////////////////////////////////////////////////////////////////////////////////
+    // ═══════════════════════════════════════════════════════════════════════════
     // Polymorphic elements
-    ///////////////////////////////////////////////////////////////////////////////////////////
+    // ═══════════════════════════════════════════════════════════════════════════
 
     /// This element's own type name, written to `element_type`. Empty for a plain Element.
     ///
     /// Rust has no inheritance, so where C++ and Python override this in a subclass, a Rust
     /// package sets the field and reads it back. The METHOD exists so the three kernels answer
     /// the same question by the same name, which is what the cross-language tests compare.
-    pub fn element_type_name(&self) -> &str { &self.element_type }
+    pub fn element_type_name(&self) -> &str {
+        &self.element_type
+    }
 
     /// This element's own state, opaque to the kernel. Empty for a plain Element.
-    pub fn element_data_dumps(&self) -> &[u8] { &self.element_data }
+    pub fn element_data_dumps(&self) -> &[u8] {
+        &self.element_data
+    }
 
     /// Register `factory` for `type_name`. Idempotent re-registration of the same name replaces
     /// the previous factory. Call it once, before loading anything.
@@ -879,11 +963,17 @@ impl Element {
     }
 
     pub fn is_registered(type_name: &str) -> bool {
-        element_registry().lock().map(|r| r.contains_key(type_name)).unwrap_or(false)
+        element_registry()
+            .lock()
+            .map(|r| r.contains_key(type_name))
+            .unwrap_or(false)
     }
 
     pub fn registered_types() -> Vec<String> {
-        element_registry().lock().map(|r| r.keys().cloned().collect()).unwrap_or_default()
+        element_registry()
+            .lock()
+            .map(|r| r.keys().cloned().collect())
+            .unwrap_or_default()
     }
 
     /// Load an element, giving a registered package first refusal on its own type. Falls back to
@@ -896,9 +986,14 @@ impl Element {
     pub fn pb_loads_polymorphic(data: &[u8]) -> Result<Self, Box<dyn std::error::Error>> {
         let proto: crate::proto::Element = prost::Message::decode(data)?;
         if !proto.element_type.is_empty() {
-            let factory = element_registry().lock().ok().and_then(|r| r.get(&proto.element_type).copied());
+            let factory = element_registry()
+                .lock()
+                .ok()
+                .and_then(|r| r.get(&proto.element_type).copied());
             if let Some(f) = factory {
-                if let Some(derived) = f(data) { return Ok(derived); }
+                if let Some(derived) = f(data) {
+                    return Ok(derived);
+                }
             }
         }
         Self::pb_loads(data)
@@ -914,9 +1009,14 @@ impl Element {
     pub fn file_json_loads_polymorphic(s: &str) -> Self {
         let base = Self::file_json_loads(s);
         if !base.element_type.is_empty() {
-            let factory = element_registry().lock().ok().and_then(|r| r.get(&base.element_type).copied());
+            let factory = element_registry()
+                .lock()
+                .ok()
+                .and_then(|r| r.get(&base.element_type).copied());
             if let Some(f) = factory {
-                if let Some(derived) = f(&base.pb_dumps()) { return derived; }
+                if let Some(derived) = f(&base.pb_dumps()) {
+                    return derived;
+                }
             }
         }
         base

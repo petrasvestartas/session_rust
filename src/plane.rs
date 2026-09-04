@@ -1,6 +1,6 @@
 use crate::{Color, Point, Polyline, Vector, Xform};
-use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use serde::ser::SerializeMap;
+use serde::{Deserialize, Deserializer, Serialize, Serializer};
 
 #[derive(Debug, Clone)]
 pub struct Plane {
@@ -32,12 +32,23 @@ impl Serialize for Plane {
         map.serialize_entry("guid", self.guid())?;
         map.serialize_entry("name", &self.name)?;
         // Single flat frame array of 12 numbers: origin + x_axis + y_axis + z_axis
-        map.serialize_entry("frame", &[
-            self._origin[0], self._origin[1], self._origin[2],
-            self._x_axis[0], self._x_axis[1], self._x_axis[2],
-            self._y_axis[0], self._y_axis[1], self._y_axis[2],
-            self._z_axis[0], self._z_axis[1], self._z_axis[2],
-        ])?;
+        map.serialize_entry(
+            "frame",
+            &[
+                self._origin[0],
+                self._origin[1],
+                self._origin[2],
+                self._x_axis[0],
+                self._x_axis[1],
+                self._x_axis[2],
+                self._y_axis[0],
+                self._y_axis[1],
+                self._y_axis[2],
+                self._z_axis[0],
+                self._z_axis[1],
+                self._z_axis[2],
+            ],
+        )?;
         map.serialize_entry("width", &self.width)?;
         map.end()
     }
@@ -54,7 +65,7 @@ impl<'de> Deserialize<'de> for Plane {
         struct PlaneData {
             guid: String,
             name: String,
-            frame: [f64; 12],  // [ox, oy, oz, xx, xy, xz, yx, yy, yz, zx, zy, zz]
+            frame: [f64; 12], // [ox, oy, oz, xx, xy, xz, yx, yy, yz, zx, zy, zz]
             #[serde(default = "default_width")]
             width: f64,
             #[serde(default)]
@@ -204,12 +215,18 @@ impl Plane {
     pub fn from_point_normal_opt(point: Point, normal: Vector, normalize: bool) -> Self {
         let origin = point.clone();
         let mut z_axis = normal;
-        if normalize { z_axis.normalize_self(); }
+        if normalize {
+            z_axis.normalize_self();
+        }
         let mut x_axis = Vector::default();
         x_axis.perpendicular_to(&z_axis);
-        if normalize { x_axis.normalize_self(); }
+        if normalize {
+            x_axis.normalize_self();
+        }
         let mut y_axis = z_axis.cross(&x_axis);
-        if normalize { y_axis.normalize_self(); }
+        if normalize {
+            y_axis.normalize_self();
+        }
 
         let a = z_axis[0];
         let b = z_axis[1];
@@ -282,16 +299,24 @@ impl Plane {
         let mut cy = 0.0_f64;
         let mut cz = 0.0_f64;
         for p in &points {
-            cx += p[0]; cy += p[1]; cz += p[2];
+            cx += p[0];
+            cy += p[1];
+            cz += p[2];
         }
-        cx /= n; cy /= n; cz /= n;
+        cx /= n;
+        cy /= n;
+        cz /= n;
 
         let (mut cxx, mut cyy, mut czz) = (0.0, 0.0, 0.0);
         let (mut cxy, mut cxz, mut cyz) = (0.0, 0.0, 0.0);
         for p in &points {
             let (dx, dy, dz) = (p[0] - cx, p[1] - cy, p[2] - cz);
-            cxx += dx * dx; cyy += dy * dy; czz += dz * dz;
-            cxy += dx * dy; cxz += dx * dz; cyz += dy * dz;
+            cxx += dx * dx;
+            cyy += dy * dy;
+            czz += dz * dz;
+            cxy += dx * dy;
+            cxz += dx * dz;
+            cyz += dy * dz;
         }
 
         let mut eigvec = [[0.0_f64; 3]; 3];
@@ -309,12 +334,20 @@ impl Plane {
                 let ny = cov[1][0] * vx + cov[1][1] * vy + cov[1][2] * vz;
                 let nz = cov[2][0] * vx + cov[2][1] * vy + cov[2][2] * vz;
                 let mag = (nx * nx + ny * ny + nz * nz).sqrt();
-                if mag < 1e-15 { break; }
-                vx = nx / mag; vy = ny / mag; vz = nz / mag;
+                if mag < 1e-15 {
+                    break;
+                }
+                vx = nx / mag;
+                vy = ny / mag;
+                vz = nz / mag;
             }
             eigvec[e] = [vx, vy, vz];
-            eigval[e] = cov[0][0]*vx*vx + cov[1][1]*vy*vy + cov[2][2]*vz*vz
-                       + 2.0*cov[0][1]*vx*vy + 2.0*cov[0][2]*vx*vz + 2.0*cov[1][2]*vy*vz;
+            eigval[e] = cov[0][0] * vx * vx
+                + cov[1][1] * vy * vy
+                + cov[2][2] * vz * vz
+                + 2.0 * cov[0][1] * vx * vy
+                + 2.0 * cov[0][2] * vx * vz
+                + 2.0 * cov[1][2] * vy * vz;
             for i in 0..3 {
                 for j in 0..3 {
                     cov[i][j] -= eigval[e] * eigvec[e][i] * eigvec[e][j];
@@ -439,7 +472,9 @@ impl Plane {
 
     /// Check if plane is valid
     pub fn is_valid(&self) -> bool {
-        self._x_axis.magnitude() > 1e-14 && self._y_axis.magnitude() > 1e-14 && self._z_axis.magnitude() > 1e-14
+        self._x_axis.magnitude() > 1e-14
+            && self._y_axis.magnitude() > 1e-14
+            && self._z_axis.magnitude() > 1e-14
     }
 
     /// Create plane from frame (origin, x, y, z) without normalization
@@ -573,7 +608,6 @@ impl Plane {
 
         self._x_axis = new_x;
         self._y_axis = new_y;
-
     }
 
     pub fn is_same_direction(plane0: &Plane, plane1: &Plane, can_be_flipped: bool) -> bool {
@@ -612,21 +646,34 @@ impl Plane {
     }
 
     pub fn is_coplanar_from_normals(
-        origin0: &Point, normal0: &Vector,
-        origin1: &Point, normal1: &Vector,
+        origin0: &Point,
+        normal0: &Vector,
+        origin1: &Point,
+        normal1: &Vector,
         can_be_flipped: bool,
         tolerance: f64,
     ) -> bool {
         let n0 = normal0.clone();
         let n1 = normal1.clone();
         let parallel = n0.is_parallel_to(&n1);
-        if can_be_flipped { if parallel == 0 { return false; } }
-        else { if parallel != -1 { return false; } }
+        if can_be_flipped {
+            if parallel == 0 {
+                return false;
+            }
+        } else {
+            if parallel != -1 {
+                return false;
+            }
+        }
         let (a0, b0, c0) = (n0[0], n0[1], n0[2]);
         let d0 = -(a0 * origin0[0] + b0 * origin0[1] + c0 * origin0[2]);
         let (a1, b1, c1) = (n1[0], n1[1], n1[2]);
         let d1 = -(a1 * origin1[0] + b1 * origin1[1] + c1 * origin1[2]);
-        let tol = if tolerance < 0.0 { crate::tolerance::Tolerance::APPROXIMATION } else { tolerance };
+        let tol = if tolerance < 0.0 {
+            crate::tolerance::Tolerance::APPROXIMATION
+        } else {
+            tolerance
+        };
         let dist0 = (a0 * origin1[0] + b0 * origin1[1] + c0 * origin1[2] + d0).abs();
         let dist1 = (a1 * origin0[0] + b1 * origin0[1] + c1 * origin0[2] + d1).abs();
         dist0 < tol && dist1 < tol
@@ -693,12 +740,12 @@ impl std::ops::Sub<Vector> for Plane {
 
 impl PartialEq for Plane {
     fn eq(&self, other: &Self) -> bool {
-        self.name == other.name &&
-        self._origin == other._origin &&
-        self._x_axis == other._x_axis &&
-        self._y_axis == other._y_axis &&
-        self._z_axis == other._z_axis &&
-        self.linecolor == other.linecolor
+        self.name == other.name
+            && self._origin == other._origin
+            && self._x_axis == other._x_axis
+            && self._y_axis == other._y_axis
+            && self._z_axis == other._z_axis
+            && self.linecolor == other.linecolor
     }
 }
 
@@ -765,9 +812,9 @@ impl Plane {
         let b1 = self.base1();
         let n = &self._z_axis;
         let mut b2 = Vector::new(
-            n[1]*b1[2] - n[2]*b1[1],
-            n[2]*b1[0] - n[0]*b1[2],
-            n[0]*b1[1] - n[1]*b1[0],
+            n[1] * b1[2] - n[2] * b1[1],
+            n[2] * b1[0] - n[0] * b1[2],
+            n[0] * b1[1] - n[1] * b1[0],
         );
         b2.normalize_self();
         b2
@@ -779,18 +826,53 @@ impl Plane {
         let x = &self._x_axis;
         let y = &self._y_axis;
         let z = &self._z_axis;
-        let c0 = Point::new(o[0] - x[0]*s - y[0]*s, o[1] - x[1]*s - y[1]*s, o[2] - x[2]*s - y[2]*s);
-        let c1 = Point::new(o[0] + x[0]*s - y[0]*s, o[1] + x[1]*s - y[1]*s, o[2] + x[2]*s - y[2]*s);
-        let c2 = Point::new(o[0] + x[0]*s + y[0]*s, o[1] + x[1]*s + y[1]*s, o[2] + x[2]*s + y[2]*s);
-        let c3 = Point::new(o[0] - x[0]*s + y[0]*s, o[1] - x[1]*s + y[1]*s, o[2] - x[2]*s + y[2]*s);
-        let mut rect = Polyline::new(vec![c0, c1, c2, c3, Point::new(o[0] - x[0]*s - y[0]*s, o[1] - x[1]*s - y[1]*s, o[2] - x[2]*s - y[2]*s)]);
+        let c0 = Point::new(
+            o[0] - x[0] * s - y[0] * s,
+            o[1] - x[1] * s - y[1] * s,
+            o[2] - x[2] * s - y[2] * s,
+        );
+        let c1 = Point::new(
+            o[0] + x[0] * s - y[0] * s,
+            o[1] + x[1] * s - y[1] * s,
+            o[2] + x[2] * s - y[2] * s,
+        );
+        let c2 = Point::new(
+            o[0] + x[0] * s + y[0] * s,
+            o[1] + x[1] * s + y[1] * s,
+            o[2] + x[2] * s + y[2] * s,
+        );
+        let c3 = Point::new(
+            o[0] - x[0] * s + y[0] * s,
+            o[1] - x[1] * s + y[1] * s,
+            o[2] - x[2] * s + y[2] * s,
+        );
+        let mut rect = Polyline::new(vec![
+            c0,
+            c1,
+            c2,
+            c3,
+            Point::new(
+                o[0] - x[0] * s - y[0] * s,
+                o[1] - x[1] * s - y[1] * s,
+                o[2] - x[2] * s - y[2] * s,
+            ),
+        ]);
         rect.linecolor = self.linecolor.clone();
         let origin_pt = Point::new(o[0], o[1], o[2]);
-        let mut x_line = Polyline::new(vec![origin_pt.clone(), Point::new(o[0] + x[0]*s, o[1] + x[1]*s, o[2] + x[2]*s)]);
+        let mut x_line = Polyline::new(vec![
+            origin_pt.clone(),
+            Point::new(o[0] + x[0] * s, o[1] + x[1] * s, o[2] + x[2] * s),
+        ]);
         x_line.linecolor = Color::red();
-        let mut y_line = Polyline::new(vec![origin_pt.clone(), Point::new(o[0] + y[0]*s, o[1] + y[1]*s, o[2] + y[2]*s)]);
+        let mut y_line = Polyline::new(vec![
+            origin_pt.clone(),
+            Point::new(o[0] + y[0] * s, o[1] + y[1] * s, o[2] + y[2] * s),
+        ]);
         y_line.linecolor = Color::green();
-        let mut z_line = Polyline::new(vec![origin_pt, Point::new(o[0] + z[0]*s, o[1] + z[1]*s, o[2] + z[2]*s)]);
+        let mut z_line = Polyline::new(vec![
+            origin_pt,
+            Point::new(o[0] + z[0] * s, o[1] + z[1] * s, o[2] + z[2] * s),
+        ]);
         z_line.linecolor = Color::blue();
         vec![rect, x_line, y_line, z_line]
     }
@@ -801,7 +883,12 @@ impl std::fmt::Display for Plane {
         write!(
             f,
             "Plane(origin={}, x_axis={}, y_axis={}, z_axis={}, guid={}, name={})",
-            self._origin, self._x_axis, self._y_axis, self._z_axis, self.guid(), self.name
+            self._origin,
+            self._x_axis,
+            self._y_axis,
+            self._z_axis,
+            self.guid(),
+            self.name
         )
     }
 }
@@ -894,9 +981,9 @@ impl Plane {
         Self::jsonload(&json)
     }
 
-    ///////////////////////////////////////////////////////////////////////////////////////////
+    // ═══════════════════════════════════════════════════════════════════════════
     // WGPU
-    ///////////////////////////////////////////////////////////////////////////////////////////
+    // ═══════════════════════════════════════════════════════════════════════════
 
     /// GPU-ready `[f32; 16]` frame matrix, column-major to match [`crate::Xform::to_f32`]:
     /// columns are x_axis, y_axis, z_axis, then origin (translation). Upload as a model /
@@ -907,10 +994,22 @@ impl Plane {
         let z = &self._z_axis;
         let o = &self._origin;
         [
-            x[0] as f32, x[1] as f32, x[2] as f32, 0.0,
-            y[0] as f32, y[1] as f32, y[2] as f32, 0.0,
-            z[0] as f32, z[1] as f32, z[2] as f32, 0.0,
-            o[0] as f32, o[1] as f32, o[2] as f32, 1.0,
+            x[0] as f32,
+            x[1] as f32,
+            x[2] as f32,
+            0.0,
+            y[0] as f32,
+            y[1] as f32,
+            y[2] as f32,
+            0.0,
+            z[0] as f32,
+            z[1] as f32,
+            z[2] as f32,
+            0.0,
+            o[0] as f32,
+            o[1] as f32,
+            o[2] as f32,
+            1.0,
         ]
     }
 }
@@ -930,10 +1029,18 @@ impl Plane {
             guid: self.guid().to_string(),
             name: self.name.clone(),
             frame: vec![
-                self._origin[0] as f64, self._origin[1] as f64, self._origin[2] as f64,
-                self._x_axis[0] as f64, self._x_axis[1] as f64, self._x_axis[2] as f64,
-                self._y_axis[0] as f64, self._y_axis[1] as f64, self._y_axis[2] as f64,
-                self._z_axis[0] as f64, self._z_axis[1] as f64, self._z_axis[2] as f64,
+                self._origin[0] as f64,
+                self._origin[1] as f64,
+                self._origin[2] as f64,
+                self._x_axis[0] as f64,
+                self._x_axis[1] as f64,
+                self._x_axis[2] as f64,
+                self._y_axis[0] as f64,
+                self._y_axis[1] as f64,
+                self._y_axis[2] as f64,
+                self._z_axis[0] as f64,
+                self._z_axis[1] as f64,
+                self._z_axis[2] as f64,
             ],
             width: self.width as f64,
             linecolor: Some(crate::proto::Color {
@@ -956,10 +1063,26 @@ impl Plane {
     /// Build from an already-decoded proto — pb_loads decodes then calls this.
     pub fn from_proto(proto: crate::proto::Plane) -> Self {
         // Parse frame array
-        let origin = Point::new(proto.frame[0] as f64, proto.frame[1] as f64, proto.frame[2] as f64);
-        let x_axis = Vector::new(proto.frame[3] as f64, proto.frame[4] as f64, proto.frame[5] as f64);
-        let y_axis = Vector::new(proto.frame[6] as f64, proto.frame[7] as f64, proto.frame[8] as f64);
-        let z_axis = Vector::new(proto.frame[9] as f64, proto.frame[10] as f64, proto.frame[11] as f64);
+        let origin = Point::new(
+            proto.frame[0] as f64,
+            proto.frame[1] as f64,
+            proto.frame[2] as f64,
+        );
+        let x_axis = Vector::new(
+            proto.frame[3] as f64,
+            proto.frame[4] as f64,
+            proto.frame[5] as f64,
+        );
+        let y_axis = Vector::new(
+            proto.frame[6] as f64,
+            proto.frame[7] as f64,
+            proto.frame[8] as f64,
+        );
+        let z_axis = Vector::new(
+            proto.frame[9] as f64,
+            proto.frame[10] as f64,
+            proto.frame[11] as f64,
+        );
 
         // Compute plane equation coefficients
         let a = z_axis[0];
@@ -982,7 +1105,11 @@ impl Plane {
         Plane {
             guid,
             name: proto.name,
-            width: if proto.width > 0.0 { proto.width as f64 } else { 1.0 },
+            width: if proto.width > 0.0 {
+                proto.width as f64
+            } else {
+                1.0
+            },
             linecolor: color,
             _origin: origin,
             _x_axis: x_axis,

@@ -32,7 +32,10 @@ use std::ops::{
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(tag = "type", rename = "Vector")]
 pub struct Vector {
-    #[serde(serialize_with = "crate::guid_serde::serialize", deserialize_with = "crate::guid_serde::deserialize")]
+    #[serde(
+        serialize_with = "crate::guid_serde::serialize",
+        deserialize_with = "crate::guid_serde::deserialize"
+    )]
     guid: std::sync::OnceLock<String>,
     pub name: String,
     #[serde(rename = "x")]
@@ -49,7 +52,7 @@ pub struct Vector {
 
 impl Default for Vector {
     fn default() -> Self {
-        Self{
+        Self {
             _x: 0.0,
             _y: 0.0,
             _z: 0.0,
@@ -125,7 +128,6 @@ impl Vector {
         copy.guid = std::sync::OnceLock::new();
         copy
     }
-
 
     /// Simple string form (like Python __str__): just coordinates.
     ///
@@ -218,9 +220,9 @@ impl Vector {
         Self::new(p1[0] - p0[0], p1[1] - p0[1], p1[2] - p0[2])
     }
 
-    ///////////////////////////////////////////////////////////////////////////////////////////
+    // ═══════════════════════════════════════════════════════════════════════════
     // Vector Operations
-    ///////////////////////////////////////////////////////////////////////////////////////////
+    // ═══════════════════════════════════════════════════════════════════════════
 
     /// Invalidates the cached magnitude when coordinates change.
     fn invalidate_magnitude_cache(&self) {
@@ -290,9 +292,9 @@ impl Vector {
     pub fn transform(&mut self, xform: &Xform) {
         let (x, y, z) = (self._x, self._y, self._z);
         let m = &xform.m;
-        self._x = m[0]*x + m[4]*y + m[8]*z;
-        self._y = m[1]*x + m[5]*y + m[9]*z;
-        self._z = m[2]*x + m[6]*y + m[10]*z;
+        self._x = m[0] * x + m[4] * y + m[8] * z;
+        self._y = m[1] * x + m[5] * y + m[9] * z;
+        self._z = m[2] * x + m[6] * y + m[10] * z;
     }
 
     /// Return a transformed copy of the vector, leaving the original unchanged.
@@ -312,7 +314,6 @@ impl Vector {
         self._z = -self._z;
         // Length magnitude stays the same, no need to invalidate cache
     }
-
 
     /// Computes the dot product with another vector.
     ///
@@ -380,7 +381,6 @@ impl Vector {
 
         angle
     }
-
 
     /// Computes the angle between vector XY components in degrees.
     ///
@@ -466,8 +466,6 @@ impl Vector {
         }
     }
 
-
-
     /// Checks if this vector is perpendicular to another vector.
     ///
     /// Two vectors are perpendicular if their dot product is zero
@@ -483,8 +481,6 @@ impl Vector {
     pub fn is_perpendicular_to(&self, other: &Vector) -> bool {
         self.dot(other).abs() < Tolerance::ZERO_TOLERANCE
     }
-
-
 
     /// Set this vector to be perpendicular to the given vector.
     ///
@@ -566,7 +562,6 @@ impl Vector {
         a != 0.0
     }
 
-
     /// Gets a leveled vector scaled by vertical height.
     ///
     /// Creates a normalized copy of this vector and scales it based on
@@ -598,9 +593,9 @@ impl Vector {
         copy
     }
 
-    ///////////////////////////////////////////////////////////////////////////////////////////
+    // ═══════════════════════════════════════════════════════════════════════════
     // Static Methods
-    ///////////////////////////////////////////////////////////////////////////////////////////
+    // ═══════════════════════════════════════════════════════════════════════════
 
     /// Computes the third side of a triangle using the cosine law.
     ///
@@ -932,9 +927,9 @@ impl Vector {
         }
     }
 
-    ///////////////////////////////////////////////////////////////////////////////////////////
+    // ═══════════════════════════════════════════════════════════════════════════
     // JSON
-    ///////////////////////////////////////////////////////////////////////////////////////////
+    // ═══════════════════════════════════════════════════════════════════════════
 
     /// Serializes the Vector to a JSON string.
     ///
@@ -979,9 +974,9 @@ impl Vector {
         Self::jsonload(&json)
     }
 
-    ///////////////////////////////////////////////////////////////////////////////////////////
+    // ═══════════════════════════════════════════════════════════════════════════
     // Protobuf Serialization
-    ///////////////////////////////////////////////////////////////////////////////////////////
+    // ═══════════════════════════════════════════════════════════════════════════
 
     /// Convert to protobuf binary format.
     ///
@@ -990,7 +985,7 @@ impl Vector {
     /// A Vec<u8> containing the serialized protobuf data.
     pub fn pb_dumps(&self) -> Vec<u8> {
         use prost::Message;
-        
+
         let proto = crate::proto::Vector {
             x: self._x as f64,
             y: self._y as f64,
@@ -1011,7 +1006,7 @@ impl Vector {
     /// A Result containing the deserialized Vector or an error.
     pub fn pb_loads(data: &[u8]) -> Result<Self, Box<dyn std::error::Error>> {
         use prost::Message;
-        
+
         let proto = crate::proto::Vector::decode(data)?;
 
         let mut v = Self::new(proto.x as f64, proto.y as f64, proto.z as f64);
@@ -1044,9 +1039,9 @@ impl Vector {
         Self::pb_loads(&data).expect("Failed to parse protobuf")
     }
 
-    ///////////////////////////////////////////////////////////////////////////////////////////
+    // ═══════════════════════════════════════════════════════════════════════════
     // WGPU
-    ///////////////////////////////////////////////////////////////////////////////////////////
+    // ═══════════════════════════════════════════════════════════════════════════
 
     /// GPU-ready `[x, y, z]` as f32 — the f64→f32 boundary for wgpu upload (normals,
     /// directions, axis rows). Mirrors [`crate::Point::to_f32`]; the kernel keeps f64.
@@ -1095,11 +1090,7 @@ impl Add for Vector {
     type Output = Vector;
 
     fn add(self, other: Vector) -> Vector {
-        Vector::new(
-            self[0] + other[0],
-            self[1] + other[1],
-            self[2] + other[2],
-        )
+        Vector::new(self[0] + other[0], self[1] + other[1], self[2] + other[2])
     }
 }
 
@@ -1107,11 +1098,7 @@ impl Add for &Vector {
     type Output = Vector;
 
     fn add(self, other: &Vector) -> Vector {
-        Vector::new(
-            self[0] + other[0],
-            self[1] + other[1],
-            self[2] + other[2],
-        )
+        Vector::new(self[0] + other[0], self[1] + other[1], self[2] + other[2])
     }
 }
 
@@ -1119,11 +1106,7 @@ impl Add<Vector> for &Vector {
     type Output = Vector;
 
     fn add(self, other: Vector) -> Vector {
-        Vector::new(
-            self[0] + other[0],
-            self[1] + other[1],
-            self[2] + other[2],
-        )
+        Vector::new(self[0] + other[0], self[1] + other[1], self[2] + other[2])
     }
 }
 
@@ -1131,11 +1114,7 @@ impl Sub for Vector {
     type Output = Vector;
 
     fn sub(self, other: Vector) -> Vector {
-        Vector::new(
-            self[0] - other[0],
-            self[1] - other[1],
-            self[2] - other[2],
-        )
+        Vector::new(self[0] - other[0], self[1] - other[1], self[2] - other[2])
     }
 }
 
@@ -1143,11 +1122,7 @@ impl Sub for &Vector {
     type Output = Vector;
 
     fn sub(self, other: &Vector) -> Vector {
-        Vector::new(
-            self[0] - other[0],
-            self[1] - other[1],
-            self[2] - other[2],
-        )
+        Vector::new(self[0] - other[0], self[1] - other[1], self[2] - other[2])
     }
 }
 
@@ -1155,11 +1130,7 @@ impl Sub<Vector> for &Vector {
     type Output = Vector;
 
     fn sub(self, other: Vector) -> Vector {
-        Vector::new(
-            self[0] - other[0],
-            self[1] - other[1],
-            self[2] - other[2],
-        )
+        Vector::new(self[0] - other[0], self[1] - other[1], self[2] - other[2])
     }
 }
 

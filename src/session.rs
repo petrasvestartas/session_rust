@@ -1,13 +1,13 @@
 use crate::{
-    BRep, Element, OBB, Graph, Line, Mesh, NurbsCurve, NurbsSurface, Objects, Plane, Point,
-    PointCloud, Polyline, Tolerance, Tree, TreeNode, SpatialBVH, Xform,
+    BRep, Element, Graph, Line, Mesh, NurbsCurve, NurbsSurface, Objects, Plane, Point, PointCloud,
+    Polyline, SpatialBVH, Tolerance, Tree, TreeNode, Xform, OBB,
 };
 use serde::{Deserialize, Serialize};
 use std::cell::RefCell;
 use std::collections::HashMap;
 use std::fmt;
-use std::rc::Rc;
 use std::fs;
+use std::rc::Rc;
 
 /// Enum representing all possible geometry types in a Session.
 /// This is equivalent to C++'s std::variant<std::shared_ptr<...>> for heterogeneous geometry
@@ -49,6 +49,41 @@ impl Geometry {
     }
 }
 
+/// Extracts a concrete geometry type out of a `Geometry` variant. C++ gets this for free from
+/// `std::get_if` on the variant and Python from `isinstance`; Rust needs the mapping spelled
+/// out so `select_by_type` can be generic over the type rather than the enum.
+pub trait FromGeometry: Sized {
+    /// The object inside `geometry`, or None when the variant holds another type.
+    fn from_geometry(geometry: &Geometry) -> Option<&Self>;
+}
+
+macro_rules! impl_from_geometry {
+    ($($variant:ident => $type:ty),* $(,)?) => {
+        $(impl FromGeometry for $type {
+            fn from_geometry(geometry: &Geometry) -> Option<&Self> {
+                match geometry {
+                    Geometry::$variant(g) => Some(g.as_ref()),
+                    _ => None,
+                }
+            }
+        })*
+    };
+}
+
+impl_from_geometry!(
+    OBB => OBB,
+    BRep => BRep,
+    Element => Element,
+    Line => Line,
+    Mesh => Mesh,
+    NurbsCurve => NurbsCurve,
+    NurbsSurface => NurbsSurface,
+    Plane => Plane,
+    Point => Point,
+    PointCloud => PointCloud,
+    Polyline => Polyline,
+);
+
 /// A Session containing geometry objects with hierarchical and graph structures.
 ///
 /// The Session serves as a container for managing geometry objects (currently Points)
@@ -58,7 +93,10 @@ impl Geometry {
 #[serde(tag = "type", rename = "Session")]
 pub struct Session {
     /// Unique identifier for the session
-    #[serde(serialize_with = "crate::guid_serde::serialize", deserialize_with = "crate::guid_serde::deserialize")]
+    #[serde(
+        serialize_with = "crate::guid_serde::serialize",
+        deserialize_with = "crate::guid_serde::deserialize"
+    )]
     guid: std::sync::OnceLock<String>,
     /// Human-readable name for the session
     pub name: String,
@@ -203,24 +241,45 @@ impl Session {
     /// Viewers and reconcile key their rows off this.
     pub fn order(&self) -> Vec<String> {
         let mut order = Vec::with_capacity(self.lookup.len());
-        for p in &self.objects.points { order.push(p.guid().to_string()); }
-        for l in &self.objects.lines { order.push(l.guid().to_string()); }
-        for p in &self.objects.planes { order.push(p.guid().to_string()); }
-        for b in &self.objects.bboxes { order.push(b.guid().to_string()); }
-        for p in &self.objects.polylines { order.push(p.guid().to_string()); }
-        for p in &self.objects.pointclouds { order.push(p.guid().to_string()); }
-        for m in &self.objects.meshes { order.push(m.guid().to_string()); }
-        for n in &self.objects.nurbscurves { order.push(n.guid().to_string()); }
-        for n in &self.objects.nurbssurfaces { order.push(n.guid().to_string()); }
-        for b in &self.objects.breps { order.push(b.guid().to_string()); }
-        for e in &self.objects.elements { order.push(e.guid().to_string()); }
+        for p in &self.objects.points {
+            order.push(p.guid().to_string());
+        }
+        for l in &self.objects.lines {
+            order.push(l.guid().to_string());
+        }
+        for p in &self.objects.planes {
+            order.push(p.guid().to_string());
+        }
+        for b in &self.objects.bboxes {
+            order.push(b.guid().to_string());
+        }
+        for p in &self.objects.polylines {
+            order.push(p.guid().to_string());
+        }
+        for p in &self.objects.pointclouds {
+            order.push(p.guid().to_string());
+        }
+        for m in &self.objects.meshes {
+            order.push(m.guid().to_string());
+        }
+        for n in &self.objects.nurbscurves {
+            order.push(n.guid().to_string());
+        }
+        for n in &self.objects.nurbssurfaces {
+            order.push(n.guid().to_string());
+        }
+        for b in &self.objects.breps {
+            order.push(b.guid().to_string());
+        }
+        for e in &self.objects.elements {
+            order.push(e.guid().to_string());
+        }
         order
     }
 
-    ///////////////////////////////////////////////////////////////////////////////////////////
+    // ═══════════════════════════════════════════════════════════════════════════
     // XFORMS — the one place a transformation is stored
-    ///////////////////////////////////////////////////////////////////////////////////////////
-
+    // ═══════════════════════════════════════════════════════════════════════════
 
     /// Sets the LOCAL transform of an object, relative to its tree parent.
     pub fn set_xform(&mut self, guid: &str, xform: Xform) {
@@ -230,7 +289,10 @@ impl Session {
 
     /// The LOCAL transform of an object, identity when none was set.
     pub fn xform(&self, guid: &str) -> Xform {
-        self.xforms.get(guid).cloned().unwrap_or_else(Xform::identity)
+        self.xforms
+            .get(guid)
+            .cloned()
+            .unwrap_or_else(Xform::identity)
     }
 
     /// Removes an object's local transform, returning whether one was present.
@@ -325,9 +387,9 @@ impl Session {
         ordered
     }
 
-    ///////////////////////////////////////////////////////////////////////////////////////////
+    // ═══════════════════════════════════════════════════════════════════════════
     // JSON
-    ///////////////////////////////////////////////////////////////////////////////////////////
+    // ═══════════════════════════════════════════════════════════════════════════
 
     /// Serializes the Session to a JSON string.
     ///
@@ -402,13 +464,22 @@ impl Session {
             );
         }
         for polyline in &objects.polylines {
-            lookup.insert(polyline.guid().to_string(), Geometry::Polyline(Rc::clone(polyline)));
+            lookup.insert(
+                polyline.guid().to_string(),
+                Geometry::Polyline(Rc::clone(polyline)),
+            );
         }
         for nurbscurve in &objects.nurbscurves {
-            lookup.insert(nurbscurve.guid().to_string(), Geometry::NurbsCurve(Rc::clone(nurbscurve)));
+            lookup.insert(
+                nurbscurve.guid().to_string(),
+                Geometry::NurbsCurve(Rc::clone(nurbscurve)),
+            );
         }
         for nurbssurface in &objects.nurbssurfaces {
-            lookup.insert(nurbssurface.guid().to_string(), Geometry::NurbsSurface(Rc::clone(nurbssurface)));
+            lookup.insert(
+                nurbssurface.guid().to_string(),
+                Geometry::NurbsSurface(Rc::clone(nurbssurface)),
+            );
         }
         for brep in &objects.breps {
             lookup.insert(brep.guid().to_string(), Geometry::BRep(Rc::clone(brep)));
@@ -429,7 +500,11 @@ impl Session {
         }
 
         let session = Session {
-            guid: { let lock = std::sync::OnceLock::new(); let _ = lock.set(json_obj["guid"].as_str().unwrap_or("").to_string()); lock },
+            guid: {
+                let lock = std::sync::OnceLock::new();
+                let _ = lock.set(json_obj["guid"].as_str().unwrap_or("").to_string());
+                lock
+            },
             name: json_obj["name"]
                 .as_str()
                 .unwrap_or("my_session")
@@ -467,9 +542,9 @@ impl Session {
         Self::jsonload(&json).unwrap_or_else(|_| Self::default())
     }
 
-    ///////////////////////////////////////////////////////////////////////////////////////////
+    // ═══════════════════════════════════════════════════════════════════════════
     // Protobuf
-    ///////////////////////////////////////////////////////////////////////////////////////////
+    // ═══════════════════════════════════════════════════════════════════════════
 
     pub fn pb_dumps(&self) -> Vec<u8> {
         use prost::Message;
@@ -483,26 +558,52 @@ impl Session {
         };
         // to_proto directly — the old decode(pb_dumps()) round-trip re-encoded and re-decoded
         // every object just to obtain the proto struct it was built from.
-        for p in &objects.points { objects_proto.points.push(p.to_proto()); }
-        for l in &objects.lines { objects_proto.lines.push(l.to_proto()); }
-        for pl in &objects.planes { objects_proto.planes.push(pl.to_proto()); }
-        for b in &objects.bboxes { objects_proto.bboxes.push(b.to_proto()); }
-        for pl in &objects.polylines { objects_proto.polylines.push(pl.to_proto()); }
-        for pc in &objects.pointclouds { objects_proto.pointclouds.push(pc.to_proto()); }
-        for m in &objects.meshes { objects_proto.meshes.push(m.to_proto()); }
-        for nc in &objects.nurbscurves { objects_proto.nurbscurves.push(nc.to_proto()); }
-        for ns in &objects.nurbssurfaces { objects_proto.nurbssurfaces.push(ns.to_proto()); }
-        for b in &objects.breps { objects_proto.breps.push(b.to_proto()); }
-        for e in &objects.elements { objects_proto.elements.push(e.to_proto()); }
+        for p in &objects.points {
+            objects_proto.points.push(p.to_proto());
+        }
+        for l in &objects.lines {
+            objects_proto.lines.push(l.to_proto());
+        }
+        for pl in &objects.planes {
+            objects_proto.planes.push(pl.to_proto());
+        }
+        for b in &objects.bboxes {
+            objects_proto.bboxes.push(b.to_proto());
+        }
+        for pl in &objects.polylines {
+            objects_proto.polylines.push(pl.to_proto());
+        }
+        for pc in &objects.pointclouds {
+            objects_proto.pointclouds.push(pc.to_proto());
+        }
+        for m in &objects.meshes {
+            objects_proto.meshes.push(m.to_proto());
+        }
+        for nc in &objects.nurbscurves {
+            objects_proto.nurbscurves.push(nc.to_proto());
+        }
+        for ns in &objects.nurbssurfaces {
+            objects_proto.nurbssurfaces.push(ns.to_proto());
+        }
+        for b in &objects.breps {
+            objects_proto.breps.push(b.to_proto());
+        }
+        for e in &objects.elements {
+            objects_proto.elements.push(e.to_proto());
+        }
 
         // Build Tree proto
         fn treenode_to_proto(node: &Rc<RefCell<TreeNode>>) -> crate::proto::TreeNode {
             let b = node.borrow();
-            let children: Vec<crate::proto::TreeNode> = b.children().iter().map(|c| treenode_to_proto(c)).collect();
+            let children: Vec<crate::proto::TreeNode> =
+                b.children().iter().map(|c| treenode_to_proto(c)).collect();
             crate::proto::TreeNode {
                 guid: b.guid().to_string(),
                 name: b.name.clone(),
-                parent_guid: b.parent().map(|p| p.borrow().guid().to_string()).unwrap_or_default(),
+                parent_guid: b
+                    .parent()
+                    .map(|p| p.borrow().guid().to_string())
+                    .unwrap_or_default(),
                 children,
                 color: None,
             }
@@ -569,25 +670,40 @@ impl Session {
                 session.objects.bboxes.push(Rc::new(OBB::from_proto(b)?));
             }
             for pl in objects_proto.polylines {
-                session.objects.polylines.push(Rc::new(Polyline::from_proto(pl)));
+                session
+                    .objects
+                    .polylines
+                    .push(Rc::new(Polyline::from_proto(pl)));
             }
             for pc in objects_proto.pointclouds {
-                session.objects.pointclouds.push(Rc::new(PointCloud::from_proto(pc)));
+                session
+                    .objects
+                    .pointclouds
+                    .push(Rc::new(PointCloud::from_proto(pc)));
             }
             for m in objects_proto.meshes {
                 session.objects.meshes.push(Rc::new(Mesh::from_proto(m)));
             }
             for nc in objects_proto.nurbscurves {
-                session.objects.nurbscurves.push(Rc::new(NurbsCurve::from_proto(nc)));
+                session
+                    .objects
+                    .nurbscurves
+                    .push(Rc::new(NurbsCurve::from_proto(nc)));
             }
             for ns in objects_proto.nurbssurfaces {
-                session.objects.nurbssurfaces.push(Rc::new(NurbsSurface::from_proto(ns)?));
+                session
+                    .objects
+                    .nurbssurfaces
+                    .push(Rc::new(NurbsSurface::from_proto(ns)?));
             }
             for b in objects_proto.breps {
                 session.objects.breps.push(Rc::new(BRep::from_proto(b)?));
             }
             for e in objects_proto.elements {
-                session.objects.elements.push(Rc::new(Element::from_proto(e)?));
+                session
+                    .objects
+                    .elements
+                    .push(Rc::new(Element::from_proto(e)?));
             }
         }
 
@@ -623,37 +739,63 @@ impl Session {
 
         // Rebuild lookup
         for bbox in &session.objects.bboxes {
-            session.lookup.insert(bbox.guid().to_string(), Geometry::OBB(Rc::clone(bbox)));
+            session
+                .lookup
+                .insert(bbox.guid().to_string(), Geometry::OBB(Rc::clone(bbox)));
         }
         for line in &session.objects.lines {
-            session.lookup.insert(line.guid().to_string(), Geometry::Line(Rc::clone(line)));
+            session
+                .lookup
+                .insert(line.guid().to_string(), Geometry::Line(Rc::clone(line)));
         }
         for mesh in &session.objects.meshes {
-            session.lookup.insert(mesh.guid().to_string(), Geometry::Mesh(Rc::clone(mesh)));
+            session
+                .lookup
+                .insert(mesh.guid().to_string(), Geometry::Mesh(Rc::clone(mesh)));
         }
         for plane in &session.objects.planes {
-            session.lookup.insert(plane.guid().to_string(), Geometry::Plane(Rc::clone(plane)));
+            session
+                .lookup
+                .insert(plane.guid().to_string(), Geometry::Plane(Rc::clone(plane)));
         }
         for point in &session.objects.points {
-            session.lookup.insert(point.guid().to_string(), Geometry::Point(Rc::clone(point)));
+            session
+                .lookup
+                .insert(point.guid().to_string(), Geometry::Point(Rc::clone(point)));
         }
         for pointcloud in &session.objects.pointclouds {
-            session.lookup.insert(pointcloud.guid().to_string(), Geometry::PointCloud(Rc::clone(pointcloud)));
+            session.lookup.insert(
+                pointcloud.guid().to_string(),
+                Geometry::PointCloud(Rc::clone(pointcloud)),
+            );
         }
         for polyline in &session.objects.polylines {
-            session.lookup.insert(polyline.guid().to_string(), Geometry::Polyline(Rc::clone(polyline)));
+            session.lookup.insert(
+                polyline.guid().to_string(),
+                Geometry::Polyline(Rc::clone(polyline)),
+            );
         }
         for nurbscurve in &session.objects.nurbscurves {
-            session.lookup.insert(nurbscurve.guid().to_string(), Geometry::NurbsCurve(Rc::clone(nurbscurve)));
+            session.lookup.insert(
+                nurbscurve.guid().to_string(),
+                Geometry::NurbsCurve(Rc::clone(nurbscurve)),
+            );
         }
         for nurbssurface in &session.objects.nurbssurfaces {
-            session.lookup.insert(nurbssurface.guid().to_string(), Geometry::NurbsSurface(Rc::clone(nurbssurface)));
+            session.lookup.insert(
+                nurbssurface.guid().to_string(),
+                Geometry::NurbsSurface(Rc::clone(nurbssurface)),
+            );
         }
         for brep in &session.objects.breps {
-            session.lookup.insert(brep.guid().to_string(), Geometry::BRep(Rc::clone(brep)));
+            session
+                .lookup
+                .insert(brep.guid().to_string(), Geometry::BRep(Rc::clone(brep)));
         }
         for elem in &session.objects.elements {
-            session.lookup.insert(elem.guid().to_string(), Geometry::Element(Rc::clone(elem)));
+            session
+                .lookup
+                .insert(elem.guid().to_string(), Geometry::Element(Rc::clone(elem)));
         }
 
         // Rebuild xforms
@@ -681,9 +823,9 @@ impl Session {
         Self::pb_loads(&data).expect("Failed to parse protobuf")
     }
 
-    ///////////////////////////////////////////////////////////////////////////////////////////
+    // ═══════════════════════════════════════════════════════════════════════════
     // SpatialBVH Collision Detection
-    ///////////////////////////////////////////////////////////////////////////////////////////
+    // ═══════════════════════════════════════════════════════════════════════════
 
     /// Compute bounding box for a geometry object, inflated by tolerance
     /// Bounding box of an object in WORLD placement. `xform` is its cumulative transform from
@@ -728,9 +870,7 @@ impl Session {
                 inflated.transform(xform);
                 inflated
             }
-            Geometry::Plane(p) => {
-                OBB::from_point(tp(&p.origin()), inflate * 10.0)
-            }
+            Geometry::Plane(p) => OBB::from_point(tp(&p.origin()), inflate * 10.0),
             Geometry::BRep(b) => {
                 let mut points: Vec<Point> = b.m_vertices.iter().map(|v| tp(&v.point)).collect();
                 // Sample surface points to cover curved surfaces (e.g. sphere with only pole vertices)
@@ -806,8 +946,13 @@ impl Session {
 
         let world = self.world_xforms();
         for guid in self.order() {
-            let Some(geometry) = self.lookup.get(&guid) else { continue };
-            let bbox = Self::compute_bounding_box(geometry, world.get(&guid).unwrap_or(&Xform::identity()));
+            let Some(geometry) = self.lookup.get(&guid) else {
+                continue;
+            };
+            let bbox = Self::compute_bounding_box(
+                geometry,
+                world.get(&guid).unwrap_or(&Xform::identity()),
+            );
             boxes_with_guids.push((bbox, guid));
         }
 
@@ -835,9 +980,9 @@ impl Session {
         collision_pairs
     }
 
-    ///////////////////////////////////////////////////////////////////////////////////////////
+    // ═══════════════════════════════════════════════════════════════════════════
     // Ray SpatialBVH Cache
-    ///////////////////////////////////////////////////////////////////////////////////////////
+    // ═══════════════════════════════════════════════════════════════════════════
 
     /// LAZY: boxes are recomputed here from the document in canonical order() — always fresh
     /// (an object mutated through `lookup` gets a fresh box, unlike the old eager add-time
@@ -851,7 +996,10 @@ impl Session {
         let world = self.world_xforms();
         for guid in self.order() {
             if let Some(geometry) = self.lookup.get(&guid) {
-                boxes.push(Self::compute_bounding_box(geometry, world.get(&guid).unwrap_or(&Xform::identity())));
+                boxes.push(Self::compute_bounding_box(
+                    geometry,
+                    world.get(&guid).unwrap_or(&Xform::identity()),
+                ));
                 self.cached_guids.push(guid);
             }
         }
@@ -910,8 +1058,10 @@ impl Session {
         for (idx, guid) in self.cached_guids.iter().enumerate() {
             if let Some(geom) = self.lookup.get(guid) {
                 match geom {
-                    Geometry::Line(_) | Geometry::Polyline(_)
-                    | Geometry::Point(_) | Geometry::PointCloud(_) => {
+                    Geometry::Line(_)
+                    | Geometry::Polyline(_)
+                    | Geometry::Point(_)
+                    | Geometry::PointCloud(_) => {
                         if !candidates.contains(&idx) {
                             candidates.push(idx);
                         }
@@ -953,9 +1103,7 @@ impl Session {
                     }
                 }
                 Geometry::Line(l) => {
-                    if let Some(p) =
-                        crate::intersection::line_line(&ray_line, l, tolerance)
-                    {
+                    if let Some(p) = crate::intersection::line_line(&ray_line, l, tolerance) {
                         hit_point = Some(p);
                     }
                 }
@@ -966,11 +1114,9 @@ impl Session {
                     if pl_points.len() >= 2 {
                         for i in 0..(pl_points.len() - 1) {
                             let seg = Line::from_points(&pl_points[i], &pl_points[i + 1]);
-                            if let Some(p) = crate::intersection::line_line(
-                                &ray_line,
-                                &seg,
-                                tolerance,
-                            ) {
+                            if let Some(p) =
+                                crate::intersection::line_line(&ray_line, &seg, tolerance)
+                            {
                                 let dx = p[0] - origin[0];
                                 let dy = p[1] - origin[1];
                                 let dz = p[2] - origin[2];
@@ -1034,7 +1180,8 @@ impl Session {
                         let cross_x = vy * dir_unit[2] - vz * dir_unit[1];
                         let cross_y = vz * dir_unit[0] - vx * dir_unit[2];
                         let cross_z = vx * dir_unit[1] - vy * dir_unit[0];
-                        let dist = (cross_x * cross_x + cross_y * cross_y + cross_z * cross_z).sqrt();
+                        let dist =
+                            (cross_x * cross_x + cross_y * cross_y + cross_z * cross_z).sqrt();
                         if dist <= tolerance {
                             let t = vx * dir_unit[0] + vy * dir_unit[1] + vz * dir_unit[2];
                             if t >= 0.0 && t < best_t {
@@ -1084,7 +1231,9 @@ impl Session {
         }
 
         hits_all.sort_by(|a, b| {
-            a.distance.partial_cmp(&b.distance).unwrap_or(std::cmp::Ordering::Equal)
+            a.distance
+                .partial_cmp(&b.distance)
+                .unwrap_or(std::cmp::Ordering::Equal)
         });
         hits_all
     }
@@ -1099,14 +1248,19 @@ impl Session {
         tolerance: f64,
     ) -> Vec<RayHit> {
         let hits_all = self.ray_cast(origin, direction, tolerance);
-        if hits_all.is_empty() { return Vec::new(); }
+        if hits_all.is_empty() {
+            return Vec::new();
+        }
         let min_d = hits_all[0].distance;
-        hits_all.into_iter().filter(|h| (h.distance - min_d).abs() <= tolerance).collect()
+        hits_all
+            .into_iter()
+            .filter(|h| (h.distance - min_d).abs() <= tolerance)
+            .collect()
     }
 
-    ///////////////////////////////////////////////////////////////////////////////////////////
+    // ═══════════════════════════════════════════════════════════════════════════
     // Details
-    ///////////////////////////////////////////////////////////////////////////////////////////
+    // ═══════════════════════════════════════════════════════════════════════════
 
     /// Adds a point to the Session.
     ///
@@ -1118,7 +1272,11 @@ impl Session {
     ///
     /// # Returns
     /// The TreeNode created for this point
-    pub fn add_point(&mut self, point: Point, parent: Option<&Rc<RefCell<TreeNode>>>) -> Rc<RefCell<TreeNode>> {
+    pub fn add_point(
+        &mut self,
+        point: Point,
+        parent: Option<&Rc<RefCell<TreeNode>>>,
+    ) -> Rc<RefCell<TreeNode>> {
         let guid = point.guid().to_string();
         let name = point.name.clone();
         let point = Rc::new(point);
@@ -1127,11 +1285,17 @@ impl Session {
         self.bvh_cache_dirty = true;
         self.graph.add_node(&guid, &format!("point_{name}"));
         let node = TreeNode::new(&guid);
-        if let Some(p) = parent { self.tree.add(&node, Some(p)); }
+        if let Some(p) = parent {
+            self.tree.add(&node, Some(p));
+        }
         node
     }
 
-    pub fn add_line(&mut self, line: Line, parent: Option<&Rc<RefCell<TreeNode>>>) -> Rc<RefCell<TreeNode>> {
+    pub fn add_line(
+        &mut self,
+        line: Line,
+        parent: Option<&Rc<RefCell<TreeNode>>>,
+    ) -> Rc<RefCell<TreeNode>> {
         let guid = line.guid().to_string();
         let name = line.name.clone();
         let line = Rc::new(line);
@@ -1140,11 +1304,17 @@ impl Session {
         self.bvh_cache_dirty = true;
         self.graph.add_node(&guid, &format!("line_{name}"));
         let node = TreeNode::new(&guid);
-        if let Some(p) = parent { self.tree.add(&node, Some(p)); }
+        if let Some(p) = parent {
+            self.tree.add(&node, Some(p));
+        }
         node
     }
 
-    pub fn add_plane(&mut self, plane: Plane, parent: Option<&Rc<RefCell<TreeNode>>>) -> Rc<RefCell<TreeNode>> {
+    pub fn add_plane(
+        &mut self,
+        plane: Plane,
+        parent: Option<&Rc<RefCell<TreeNode>>>,
+    ) -> Rc<RefCell<TreeNode>> {
         let guid = plane.guid().to_string();
         let name = plane.name.clone();
         let plane = Rc::new(plane);
@@ -1153,7 +1323,9 @@ impl Session {
         self.bvh_cache_dirty = true;
         self.graph.add_node(&guid, &format!("plane_{name}"));
         let node = TreeNode::new(&guid);
-        if let Some(p) = parent { self.tree.add(&node, Some(p)); }
+        if let Some(p) = parent {
+            self.tree.add(&node, Some(p));
+        }
         node
     }
 
@@ -1168,35 +1340,53 @@ impl Session {
         TreeNode::new(&guid)
     }
 
-    pub fn add_polyline(&mut self, polyline: Polyline, parent: Option<&Rc<RefCell<TreeNode>>>) -> Rc<RefCell<TreeNode>> {
+    pub fn add_polyline(
+        &mut self,
+        polyline: Polyline,
+        parent: Option<&Rc<RefCell<TreeNode>>>,
+    ) -> Rc<RefCell<TreeNode>> {
         let guid = polyline.guid().to_string();
         // Boxes are computed lazily in rebuild_ray_bvh_cache (from the canonical order) —
         // adds only mark the cache dirty.
         let label = format!("polyline_{}", polyline.name);
         let polyline = Rc::new(polyline);
         self.objects.polylines.push(Rc::clone(&polyline));
-        self.lookup.insert(guid.clone(), Geometry::Polyline(polyline));
+        self.lookup
+            .insert(guid.clone(), Geometry::Polyline(polyline));
         self.bvh_cache_dirty = true;
         self.graph.add_node(&guid, &label);
         let node = TreeNode::new(&guid);
-        if let Some(p) = parent { self.tree.add(&node, Some(p)); }
+        if let Some(p) = parent {
+            self.tree.add(&node, Some(p));
+        }
         node
     }
 
-    pub fn add_pointcloud(&mut self, pointcloud: PointCloud, parent: Option<&Rc<RefCell<TreeNode>>>) -> Rc<RefCell<TreeNode>> {
+    pub fn add_pointcloud(
+        &mut self,
+        pointcloud: PointCloud,
+        parent: Option<&Rc<RefCell<TreeNode>>>,
+    ) -> Rc<RefCell<TreeNode>> {
         let guid = pointcloud.guid().to_string();
         let name = pointcloud.name.clone();
         let pointcloud = Rc::new(pointcloud);
         self.objects.pointclouds.push(Rc::clone(&pointcloud));
-        self.lookup.insert(guid.clone(), Geometry::PointCloud(pointcloud));
+        self.lookup
+            .insert(guid.clone(), Geometry::PointCloud(pointcloud));
         self.bvh_cache_dirty = true;
         self.graph.add_node(&guid, &format!("pointcloud_{name}"));
         let node = TreeNode::new(&guid);
-        if let Some(p) = parent { self.tree.add(&node, Some(p)); }
+        if let Some(p) = parent {
+            self.tree.add(&node, Some(p));
+        }
         node
     }
 
-    pub fn add_mesh(&mut self, mesh: Mesh, parent: Option<&Rc<RefCell<TreeNode>>>) -> Rc<RefCell<TreeNode>> {
+    pub fn add_mesh(
+        &mut self,
+        mesh: Mesh,
+        parent: Option<&Rc<RefCell<TreeNode>>>,
+    ) -> Rc<RefCell<TreeNode>> {
         let guid = mesh.guid().to_string();
         let name = mesh.name.clone();
         let mesh = Rc::new(mesh);
@@ -1205,37 +1395,57 @@ impl Session {
         self.bvh_cache_dirty = true;
         self.graph.add_node(&guid, &format!("mesh_{name}"));
         let node = TreeNode::new(&guid);
-        if let Some(p) = parent { self.tree.add(&node, Some(p)); }
+        if let Some(p) = parent {
+            self.tree.add(&node, Some(p));
+        }
         node
     }
 
-    pub fn add_nurbscurve(&mut self, nurbscurve: NurbsCurve, parent: Option<&Rc<RefCell<TreeNode>>>) -> Rc<RefCell<TreeNode>> {
+    pub fn add_nurbscurve(
+        &mut self,
+        nurbscurve: NurbsCurve,
+        parent: Option<&Rc<RefCell<TreeNode>>>,
+    ) -> Rc<RefCell<TreeNode>> {
         let guid = nurbscurve.guid().to_string();
         let name = nurbscurve.name.clone();
         let nurbscurve = Rc::new(nurbscurve);
         self.objects.nurbscurves.push(Rc::clone(&nurbscurve));
-        self.lookup.insert(guid.clone(), Geometry::NurbsCurve(nurbscurve));
+        self.lookup
+            .insert(guid.clone(), Geometry::NurbsCurve(nurbscurve));
         self.bvh_cache_dirty = true;
         self.graph.add_node(&guid, &format!("nurbscurve_{name}"));
         let node = TreeNode::new(&guid);
-        if let Some(p) = parent { self.tree.add(&node, Some(p)); }
+        if let Some(p) = parent {
+            self.tree.add(&node, Some(p));
+        }
         node
     }
 
-    pub fn add_nurbssurface(&mut self, nurbssurface: NurbsSurface, parent: Option<&Rc<RefCell<TreeNode>>>) -> Rc<RefCell<TreeNode>> {
+    pub fn add_nurbssurface(
+        &mut self,
+        nurbssurface: NurbsSurface,
+        parent: Option<&Rc<RefCell<TreeNode>>>,
+    ) -> Rc<RefCell<TreeNode>> {
         let guid = nurbssurface.guid().to_string();
         let name = nurbssurface.name.clone();
         let nurbssurface = Rc::new(nurbssurface);
         self.objects.nurbssurfaces.push(Rc::clone(&nurbssurface));
-        self.lookup.insert(guid.clone(), Geometry::NurbsSurface(nurbssurface));
+        self.lookup
+            .insert(guid.clone(), Geometry::NurbsSurface(nurbssurface));
         self.bvh_cache_dirty = true;
         self.graph.add_node(&guid, &format!("nurbssurface_{name}"));
         let node = TreeNode::new(&guid);
-        if let Some(p) = parent { self.tree.add(&node, Some(p)); }
+        if let Some(p) = parent {
+            self.tree.add(&node, Some(p));
+        }
         node
     }
 
-    pub fn add_brep(&mut self, brep: BRep, parent: Option<&Rc<RefCell<TreeNode>>>) -> Rc<RefCell<TreeNode>> {
+    pub fn add_brep(
+        &mut self,
+        brep: BRep,
+        parent: Option<&Rc<RefCell<TreeNode>>>,
+    ) -> Rc<RefCell<TreeNode>> {
         let guid = brep.guid().to_string();
         let name = brep.name.clone();
         let brep = Rc::new(brep);
@@ -1244,21 +1454,33 @@ impl Session {
         self.bvh_cache_dirty = true;
         self.graph.add_node(&guid, &format!("brep_{name}"));
         let node = TreeNode::new(&guid);
-        if let Some(p) = parent { self.tree.add(&node, Some(p)); }
+        if let Some(p) = parent {
+            self.tree.add(&node, Some(p));
+        }
         node
     }
 
-    pub fn add_component(&mut self, component: crate::objects::Component, parent: Option<&Rc<RefCell<TreeNode>>>) -> Rc<RefCell<TreeNode>> {
+    pub fn add_component(
+        &mut self,
+        component: crate::objects::Component,
+        parent: Option<&Rc<RefCell<TreeNode>>>,
+    ) -> Rc<RefCell<TreeNode>> {
         let guid = component.guid().to_string();
         let name = component.name.clone();
         self.objects.components.push(component);
         self.graph.add_node(&guid, &format!("component_{name}"));
         let node = TreeNode::new(&guid);
-        if let Some(p) = parent { self.tree.add(&node, Some(p)); }
+        if let Some(p) = parent {
+            self.tree.add(&node, Some(p));
+        }
         node
     }
 
-    pub fn add_element(&mut self, element: Element, parent: Option<&Rc<RefCell<TreeNode>>>) -> Rc<RefCell<TreeNode>> {
+    pub fn add_element(
+        &mut self,
+        element: Element,
+        parent: Option<&Rc<RefCell<TreeNode>>>,
+    ) -> Rc<RefCell<TreeNode>> {
         let guid = element.guid().to_string();
         let name = element.name.clone();
         let element = Rc::new(element);
@@ -1267,7 +1489,9 @@ impl Session {
         self.bvh_cache_dirty = true;
         self.graph.add_node(&guid, &format!("element_{name}"));
         let node = TreeNode::new(&guid);
-        if let Some(p) = parent { self.tree.add(&node, Some(p)); }
+        if let Some(p) = parent {
+            self.tree.add(&node, Some(p));
+        }
         node
     }
 
@@ -1276,8 +1500,11 @@ impl Session {
     /// # Arguments
     /// * `node` - The TreeNode to add
     /// * `parent` - Optional parent TreeNode (defaults to root if None)
-    pub fn add<'a>(&mut self, node: &Rc<RefCell<TreeNode>>, parent: impl Into<Option<&'a Rc<RefCell<TreeNode>>>>)
-    where
+    pub fn add<'a>(
+        &mut self,
+        node: &Rc<RefCell<TreeNode>>,
+        parent: impl Into<Option<&'a Rc<RefCell<TreeNode>>>>,
+    ) where
         Rc<RefCell<TreeNode>>: 'a,
     {
         let parent_opt = parent.into();
@@ -1319,9 +1546,9 @@ impl Session {
         self.graph.add_edge(from_guid, to_guid, attribute);
     }
 
-    ///////////////////////////////////////////////////////////////////////////////////////////
+    // ═══════════════════════════════════════════════════════════════════════════
     // Details - Lookup
-    ///////////////////////////////////////////////////////////////////////////////////////////
+    // ═══════════════════════════════════════════════════════════════════════════
 
     /// Gets a geometry object by its GUID.
     ///
@@ -1332,6 +1559,34 @@ impl Session {
     /// An Option containing a reference to the Geometry enum if found, or None if not found.
     pub fn get_object(&self, guid: &str) -> Option<&Geometry> {
         self.lookup.get(guid)
+    }
+
+    /// Select objects of one type, grouped by the top-level nodes of the tree.
+    ///
+    /// # Returns
+    /// One vector per direct child of the root, in tree order, each holding that subtree's
+    /// objects of type `T` in depth-first order. A child holding no object of type `T`
+    /// contributes no vector, so the result has no empty entries.
+    pub fn select_by_type<T: FromGeometry + Clone>(&self) -> Vec<Vec<T>> {
+        let mut groups = Vec::new();
+        let Some(root) = self.tree.root() else {
+            return groups;
+        };
+        let children = root.borrow().children();
+        for group in children {
+            let mut items = Vec::new();
+            let descendants = group.borrow().descendants();
+            for node in descendants {
+                let name = node.borrow().name.clone();
+                if let Some(object) = self.get_object(&name).and_then(T::from_geometry) {
+                    items.push(object.clone());
+                }
+            }
+            if !items.is_empty() {
+                groups.push(items);
+            }
+        }
+        groups
     }
 
     /// Remove a geometry object by its GUID.
@@ -1378,9 +1633,9 @@ impl Session {
         true
     }
 
-    ///////////////////////////////////////////////////////////////////////////////////////////
+    // ═══════════════════════════════════════════════════════════════════════════
     // Details - Tree
-    ///////////////////////////////////////////////////////////////////////////////////////////
+    // ═══════════════════════════════════════════════════════════════════════════
 
     /// Add a parent-child relationship in the tree structure.
     ///
@@ -1406,9 +1661,9 @@ impl Session {
         self.tree.get_children(guid)
     }
 
-    ///////////////////////////////////////////////////////////////////////////////////////////
+    // ═══════════════════════════════════════════════════════════════════════════
     // Details - Graph
-    ///////////////////////////////////////////////////////////////////////////////////////////
+    // ═══════════════════════════════════════════════════════════════════════════
 
     /// Add a relationship edge in the graph structure.
     ///
@@ -1431,9 +1686,9 @@ impl Session {
         self.graph.get_neighbors(guid)
     }
 
-    ///////////////////////////////////////////////////////////////////////////////////////////
+    // ═══════════════════════════════════════════════════════════════════════════
     // Details - Transformed Geometry
-    ///////////////////////////////////////////////////////////////////////////////////////////
+    // ═══════════════════════════════════════════════════════════════════════════
 
     /// All geometry with its hierarchical placement BAKED into the coordinates.
     ///
@@ -1453,7 +1708,9 @@ impl Session {
         macro_rules! bake {
             ($vec:expr) => {
                 for item in $vec.iter_mut() {
-                    let Some(xform) = world.get(item.guid()) else { continue };
+                    let Some(xform) = world.get(item.guid()) else {
+                        continue;
+                    };
                     if !xform.is_identity() {
                         Rc::make_mut(item).transform(xform);
                     }
@@ -1473,7 +1730,9 @@ impl Session {
 
         // An Element holds its own geometry, so its placement is baked through session_geometry.
         for item in objects.elements.iter_mut() {
-            let Some(xform) = world.get(item.guid()) else { continue };
+            let Some(xform) = world.get(item.guid()) else {
+                continue;
+            };
             if !xform.is_identity() {
                 Rc::make_mut(item).place(xform);
             }
@@ -1496,4 +1755,3 @@ impl fmt::Display for Session {
         )
     }
 }
-

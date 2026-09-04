@@ -1,12 +1,17 @@
 use crate::{Color, Point, Vector, Xform};
 use serde::{Deserialize, Serialize};
 use std::fmt;
-use std::ops::{Add, AddAssign, Div, DivAssign, Index, IndexMut, Mul, MulAssign, Neg, Sub, SubAssign};
+use std::ops::{
+    Add, AddAssign, Div, DivAssign, Index, IndexMut, Mul, MulAssign, Neg, Sub, SubAssign,
+};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(tag = "type", rename = "Line")]
 pub struct Line {
-    #[serde(serialize_with = "crate::guid_serde::serialize", deserialize_with = "crate::guid_serde::deserialize")]
+    #[serde(
+        serialize_with = "crate::guid_serde::serialize",
+        deserialize_with = "crate::guid_serde::deserialize"
+    )]
     guid: std::sync::OnceLock<String>,
     pub name: String,
     #[serde(rename = "x0")]
@@ -148,29 +153,45 @@ impl Line {
                     t_max = t_max.max(t);
                 }
                 let hl = t_min.abs().max(t_max.abs());
-                if hl < 1e-10 { 0.5 } else { hl }
+                if hl < 1e-10 {
+                    0.5
+                } else {
+                    hl
+                }
             }
         };
 
         // Create line from centroid +/- direction * half_len
         Self::new(
-            cx - vx * half_len, cy - vy * half_len, cz - vz * half_len,
-            cx + vx * half_len, cy + vy * half_len, cz + vz * half_len,
+            cx - vx * half_len,
+            cy - vy * half_len,
+            cz - vz * half_len,
+            cx + vx * half_len,
+            cy + vy * half_len,
+            cz + vz * half_len,
         )
     }
 
     pub fn from_point_and_vector(point: &Point, vector: &Vector) -> Self {
         Self::new(
-            point[0], point[1], point[2],
-            point[0] + vector[0], point[1] + vector[1], point[2] + vector[2],
+            point[0],
+            point[1],
+            point[2],
+            point[0] + vector[0],
+            point[1] + vector[1],
+            point[2] + vector[2],
         )
     }
 
     pub fn from_point_direction_length(point: &Point, direction: &Vector, length: f64) -> Self {
         let d = direction.normalized();
         Self::new(
-            point[0], point[1], point[2],
-            point[0] + d[0] * length, point[1] + d[1] * length, point[2] + d[2] * length,
+            point[0],
+            point[1],
+            point[2],
+            point[0] + d[0] * length,
+            point[1] + d[1] * length,
+            point[2] + d[2] * length,
         )
     }
 
@@ -325,7 +346,9 @@ impl Line {
         if len_sq < 1e-20 {
             return (0.0, self.start());
         }
-        let mut t = ((point[0] - self._x0) * dx + (point[1] - self._y0) * dy + (point[2] - self._z0) * dz) / len_sq;
+        let mut t =
+            ((point[0] - self._x0) * dx + (point[1] - self._y0) * dy + (point[2] - self._z0) * dz)
+                / len_sq;
         if limited {
             t = t.clamp(0.0, 1.0);
         }
@@ -381,9 +404,9 @@ impl Line {
         Self::jsonload(&json)
     }
 
-    ///////////////////////////////////////////////////////////////////////////////////////////
+    // ═══════════════════════════════════════════════════════════════════════════
     // Protobuf Serialization
-    ///////////////////////////////////////////////////////////////////////////////////////////
+    // ═══════════════════════════════════════════════════════════════════════════
 
     /// The proto struct itself — pb_dumps encodes it; Session embeds it directly.
     pub fn to_proto(&self) -> crate::proto::Line {
@@ -418,10 +441,14 @@ impl Line {
         };
         line.set_guid(proto.guid);
         line.name = proto.name;
-        if proto.width > 0.0 { line.width = proto.width; }
+        if proto.width > 0.0 {
+            line.width = proto.width;
+        }
         line.dash = proto.dash;
         if let Some(mut color) = Color::unpack(&proto.linecolor_rgba).into_iter().next() {
-            if !proto.linecolor_name.is_empty() { color.name = proto.linecolor_name; }
+            if !proto.linecolor_name.is_empty() {
+                color.name = proto.linecolor_name;
+            }
             line.linecolor = color;
         }
         line
@@ -503,7 +530,11 @@ impl Line {
         let e1 = other.end();
         let (a, b) = crate::polyline::Polyline::line_line_overlap_average(&s0, &e0, &s1, &e1);
         let out = Line::from_points(&a, &b);
-        if out.squared_length() > 0.0 { Some(out) } else { None }
+        if out.squared_length() > 0.0 {
+            Some(out)
+        } else {
+            None
+        }
     }
 
     /// Extend this line in place by `ext_start` at the start end and
@@ -515,10 +546,13 @@ impl Line {
         v.normalize_self();
         let new_s = s - (v.clone() * ext_start);
         let new_e = e + (v * ext_end);
-        self._x0 = new_s[0]; self._y0 = new_s[1]; self._z0 = new_s[2];
-        self._x1 = new_e[0]; self._y1 = new_e[1]; self._z1 = new_e[2];
+        self._x0 = new_s[0];
+        self._y0 = new_s[1];
+        self._z0 = new_s[2];
+        self._x1 = new_e[0];
+        self._y1 = new_e[1];
+        self._z1 = new_e[2];
     }
-
 }
 
 impl Index<usize> for Line {
@@ -706,8 +740,6 @@ impl PartialEq for Line {
             && self.linecolor == other.linecolor
     }
 }
-
-
 
 #[path = "line_test.rs"]
 #[cfg(test)]

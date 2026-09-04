@@ -3,7 +3,9 @@ use crate::{Color, Line, Plane, Point, Tolerance, Vector, Xform};
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use serde_json::Value;
 use std::fmt;
-use std::ops::{Add, AddAssign, Div, DivAssign, Index, IndexMut, Mul, MulAssign, Neg, Sub, SubAssign};
+use std::ops::{
+    Add, AddAssign, Div, DivAssign, Index, IndexMut, Mul, MulAssign, Neg, Sub, SubAssign,
+};
 
 /// A polyline defined by a collection of coordinates with an associated plane.
 ///
@@ -65,12 +67,25 @@ impl Polyline {
             let p0 = Point::new(self.coords[0], self.coords[1], self.coords[2]);
             let mut found = false;
             for i in 1..n {
-                let v1 = Vector::new(self.coords[i*3]-p0[0], self.coords[i*3+1]-p0[1], self.coords[i*3+2]-p0[2]);
-                if v1[0]*v1[0]+v1[1]*v1[1]+v1[2]*v1[2] < 1e-20 { continue; }
-                for j in (i+1)..n {
-                    let v2 = Vector::new(self.coords[j*3]-p0[0], self.coords[j*3+1]-p0[1], self.coords[j*3+2]-p0[2]);
+                let v1 = Vector::new(
+                    self.coords[i * 3] - p0[0],
+                    self.coords[i * 3 + 1] - p0[1],
+                    self.coords[i * 3 + 2] - p0[2],
+                );
+                if v1[0] * v1[0] + v1[1] * v1[1] + v1[2] * v1[2] < 1e-20 {
+                    continue;
+                }
+                for j in (i + 1)..n {
+                    let v2 = Vector::new(
+                        self.coords[j * 3] - p0[0],
+                        self.coords[j * 3 + 1] - p0[1],
+                        self.coords[j * 3 + 2] - p0[2],
+                    );
                     let mut normal = v1.cross(&v2);
-                    if normal[0]*normal[0]+normal[1]*normal[1]+normal[2]*normal[2] < 1e-20 { continue; }
+                    if normal[0] * normal[0] + normal[1] * normal[1] + normal[2] * normal[2] < 1e-20
+                    {
+                        continue;
+                    }
                     normal.normalize_self();
                     let mut v1n = v1.clone();
                     v1n.normalize_self();
@@ -80,7 +95,9 @@ impl Polyline {
                     found = true;
                     break;
                 }
-                if found { break; }
+                if found {
+                    break;
+                }
             }
             self.plane_dirty = false;
         }
@@ -182,7 +199,11 @@ impl Polyline {
     /// A polyline with n points has n-1 segments.
     pub fn segment_count(&self) -> usize {
         let n = self.point_count();
-        if n > 1 { n - 1 } else { 0 }
+        if n > 1 {
+            n - 1
+        } else {
+            0
+        }
     }
 
     /// Returns all segments as Line objects.
@@ -192,8 +213,12 @@ impl Polyline {
             let idx0 = i * 3;
             let idx1 = (i + 1) * 3;
             result.push(Line::new(
-                self.coords[idx0], self.coords[idx0 + 1], self.coords[idx0 + 2],
-                self.coords[idx1], self.coords[idx1 + 1], self.coords[idx1 + 2],
+                self.coords[idx0],
+                self.coords[idx0 + 1],
+                self.coords[idx0 + 2],
+                self.coords[idx1],
+                self.coords[idx1 + 1],
+                self.coords[idx1 + 2],
             ));
         }
         result
@@ -256,14 +281,14 @@ impl Polyline {
         let d = (divs - 1) as f64;
         let mut coords = Vec::with_capacity(divs * 3);
         for k in 0..divs {
-            let t  = k as f64 / d;
-            let s  = 1.0 - t;
+            let t = k as f64 / d;
+            let s = 1.0 - t;
             let s2 = s * s;
             let ts = 2.0 * s * t;
             let t2 = t * t;
-            coords.push(s2*p0[0] + ts*p1[0] + t2*p2[0]);
-            coords.push(s2*p0[1] + ts*p1[1] + t2*p2[1]);
-            coords.push(s2*p0[2] + ts*p1[2] + t2*p2[2]);
+            coords.push(s2 * p0[0] + ts * p1[0] + t2 * p2[0]);
+            coords.push(s2 * p0[1] + ts * p1[1] + t2 * p2[1]);
+            coords.push(s2 * p0[2] + ts * p1[2] + t2 * p2[2]);
         }
         Self::from_coords(coords)
     }
@@ -377,13 +402,12 @@ impl Polyline {
         result
     }
 
-
     /// Translate every point of this polyline by `v` (in place).
     /// Mirrors C++ `Polyline::translate`.
     pub fn translate(&mut self, v: &Vector) {
         for i in 0..self.point_count() {
             let idx = i * 3;
-            self.coords[idx]     += v[0];
+            self.coords[idx] += v[0];
             self.coords[idx + 1] += v[1];
             self.coords[idx + 2] += v[2];
         }
@@ -411,7 +435,7 @@ impl Polyline {
             let dx = p[0] - last[0];
             let dy = p[1] - last[1];
             let dz = p[2] - last[2];
-            if dx*dx + dy*dy + dz*dz >= tol_sq {
+            if dx * dx + dy * dy + dz * dz >= tol_sq {
                 cleaned.push(p.clone());
             }
         }
@@ -441,13 +465,29 @@ impl Polyline {
         let y_axis = y_axis * radius;
 
         let sv0 = segment_vector * (length * -0.5);
-        let sv1 = segment_vector * (length *  0.5);
+        let sv1 = segment_vector * (length * 0.5);
 
         let mut v: [Vector; 4] = [
-            Vector::new(-x_axis[0] - y_axis[0], -x_axis[1] - y_axis[1], -x_axis[2] - y_axis[2]),
-            Vector::new( x_axis[0] - y_axis[0],  x_axis[1] - y_axis[1],  x_axis[2] - y_axis[2]),
-            Vector::new( x_axis[0] + y_axis[0],  x_axis[1] + y_axis[1],  x_axis[2] + y_axis[2]),
-            Vector::new(-x_axis[0] + y_axis[0], -x_axis[1] + y_axis[1], -x_axis[2] + y_axis[2]),
+            Vector::new(
+                -x_axis[0] - y_axis[0],
+                -x_axis[1] - y_axis[1],
+                -x_axis[2] - y_axis[2],
+            ),
+            Vector::new(
+                x_axis[0] - y_axis[0],
+                x_axis[1] - y_axis[1],
+                x_axis[2] - y_axis[2],
+            ),
+            Vector::new(
+                x_axis[0] + y_axis[0],
+                x_axis[1] + y_axis[1],
+                x_axis[2] + y_axis[2],
+            ),
+            Vector::new(
+                -x_axis[0] + y_axis[0],
+                -x_axis[1] + y_axis[1],
+                -x_axis[2] + y_axis[2],
+            ),
         ];
         if !middle {
             if flip_male == 1 {
@@ -458,7 +498,11 @@ impl Polyline {
         }
 
         let pt = |sv: &Vector, uv: &Vector| -> Point {
-            Point::new(p[0]+sv[0]+uv[0], p[1]+sv[1]+uv[1], p[2]+sv[2]+uv[2])
+            Point::new(
+                p[0] + sv[0] + uv[0],
+                p[1] + sv[1] + uv[1],
+                p[2] + sv[2] + uv[2],
+            )
         };
         let rect0 = Polyline::new(vec![
             pt(&sv0, &v[1]),
@@ -492,7 +536,7 @@ impl Polyline {
         let dx = pj[0] - pi[0];
         let dy = pj[1] - pi[1];
         let dz = pj[2] - pi[2];
-        let len = (dx*dx + dy*dy + dz*dz).sqrt();
+        let len = (dx * dx + dy * dy + dz * dz).sqrt();
         if len < 1e-12 {
             return;
         }
@@ -500,8 +544,8 @@ impl Polyline {
         let ux = dx * inv * distance;
         let uy = dy * inv * distance;
         let uz = dz * inv * distance;
-        let new_pi = Point::new(pi[0]-ux, pi[1]-uy, pi[2]-uz);
-        let new_pj = Point::new(pj[0]+ux, pj[1]+uy, pj[2]+uz);
+        let new_pi = Point::new(pi[0] - ux, pi[1] - uy, pi[2] - uz);
+        let new_pj = Point::new(pj[0] + ux, pj[1] + uy, pj[2] + uz);
         self.set_point(i, &new_pi);
         self.set_point(j, &new_pj);
         if i == 0 {
@@ -512,110 +556,125 @@ impl Polyline {
         }
     }
 
-     /// Recompute plane if we have at least 3 points
-     fn recompute_plane_if_needed(&mut self) {
-         self.plane_dirty = true;
-     }
+    /// Recompute plane if we have at least 3 points
+    fn recompute_plane_if_needed(&mut self) {
+        self.plane_dirty = true;
+    }
+}
 
- }
+impl Serialize for Polyline {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        use serde::ser::SerializeMap;
+        let mut map = serializer.serialize_map(Some(7))?;
+        map.serialize_entry("type", "Polyline")?;
+        map.serialize_entry("guid", self.guid())?;
+        map.serialize_entry("name", &self.name)?;
+        map.serialize_entry("coords", &self.coords)?;
+        map.serialize_entry("width", &self.width)?;
+        map.serialize_entry("dash", &self.dash)?;
+        map.serialize_entry("linecolor", &self.linecolor)?;
+        map.end()
+    }
+}
 
- impl Serialize for Polyline {
-     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-     where
-         S: Serializer,
-     {
-         use serde::ser::SerializeMap;
-         let mut map = serializer.serialize_map(Some(7))?;
-         map.serialize_entry("type", "Polyline")?;
-         map.serialize_entry("guid", self.guid())?;
-         map.serialize_entry("name", &self.name)?;
-         map.serialize_entry("coords", &self.coords)?;
-         map.serialize_entry("width", &self.width)?;
-         map.serialize_entry("dash", &self.dash)?;
-         map.serialize_entry("linecolor", &self.linecolor)?;
-         map.end()
-     }
- }
+impl<'de> Deserialize<'de> for Polyline {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        let value: Value = Value::deserialize(deserializer)?;
 
- impl<'de> Deserialize<'de> for Polyline {
-     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-     where
-         D: Deserializer<'de>,
-     {
-         let value: Value = Value::deserialize(deserializer)?;
+        let guid_str = value
+            .get("guid")
+            .and_then(|v| v.as_str())
+            .map(|s| s.to_string())
+            .unwrap_or_else(|| uuid::Uuid::new_v4().to_string());
 
-         let guid_str = value
-             .get("guid")
-             .and_then(|v| v.as_str())
-             .map(|s| s.to_string())
-             .unwrap_or_else(|| uuid::Uuid::new_v4().to_string());
+        let name = value
+            .get("name")
+            .and_then(|v| v.as_str())
+            .map(|s| s.to_string())
+            .unwrap_or_else(|| "my_polyline".to_string());
 
-         let name = value
-             .get("name")
-             .and_then(|v| v.as_str())
-             .map(|s| s.to_string())
-             .unwrap_or_else(|| "my_polyline".to_string());
+        // Support both coords format and legacy points format
+        let coords: Vec<f64> = if let Some(coords_val) = value.get("coords") {
+            coords_val
+                .as_array()
+                .map(|arr| {
+                    arr.iter()
+                        .filter_map(|v| v.as_f64().map(|x| x as f64))
+                        .collect()
+                })
+                .unwrap_or_default()
+        } else if let Some(points_val) = value.get("points") {
+            // Legacy format with full Point objects
+            let mut coords = Vec::new();
+            if let Some(arr) = points_val.as_array() {
+                for pt_val in arr {
+                    if let (Some(x), Some(y), Some(z)) = (
+                        pt_val
+                            .get("x")
+                            .or_else(|| pt_val.get("_x"))
+                            .and_then(|v| v.as_f64()),
+                        pt_val
+                            .get("y")
+                            .or_else(|| pt_val.get("_y"))
+                            .and_then(|v| v.as_f64()),
+                        pt_val
+                            .get("z")
+                            .or_else(|| pt_val.get("_z"))
+                            .and_then(|v| v.as_f64()),
+                    ) {
+                        coords.push(x as f64);
+                        coords.push(y as f64);
+                        coords.push(z as f64);
+                    }
+                }
+            }
+            coords
+        } else {
+            Vec::new()
+        };
 
-         // Support both coords format and legacy points format
-         let coords: Vec<f64> = if let Some(coords_val) = value.get("coords") {
-             coords_val
-                 .as_array()
-                 .map(|arr| arr.iter().filter_map(|v| v.as_f64().map(|x| x as f64)).collect())
-                 .unwrap_or_default()
-         } else if let Some(points_val) = value.get("points") {
-             // Legacy format with full Point objects
-             let mut coords = Vec::new();
-             if let Some(arr) = points_val.as_array() {
-                 for pt_val in arr {
-                     if let (Some(x), Some(y), Some(z)) = (
-                         pt_val.get("x").or_else(|| pt_val.get("_x")).and_then(|v| v.as_f64()),
-                         pt_val.get("y").or_else(|| pt_val.get("_y")).and_then(|v| v.as_f64()),
-                         pt_val.get("z").or_else(|| pt_val.get("_z")).and_then(|v| v.as_f64()),
-                     ) {
-                         coords.push(x as f64);
-                         coords.push(y as f64);
-                         coords.push(z as f64);
-                     }
-                 }
-             }
-             coords
-         } else {
-             Vec::new()
-         };
+        let width = value.get("width").and_then(|v| v.as_f64()).unwrap_or(1.0) as f64;
 
-         let width = value.get("width").and_then(|v| v.as_f64()).unwrap_or(1.0) as f64;
+        let linecolor = value
+            .get("linecolor")
+            .map(|v| serde_json::from_value(v.clone()).unwrap_or_else(|_| Color::white()))
+            .unwrap_or_else(Color::white);
 
-         let linecolor = value
-             .get("linecolor")
-             .map(|v| serde_json::from_value(v.clone()).unwrap_or_else(|_| Color::white()))
-             .unwrap_or_else(Color::white);
+        let dash: Vec<f64> = value
+            .get("dash")
+            .and_then(|v| v.as_array())
+            .map(|arr| arr.iter().filter_map(|v| v.as_f64()).collect())
+            .unwrap_or_default();
 
-         let dash: Vec<f64> = value
-             .get("dash")
-             .and_then(|v| v.as_array())
-             .map(|arr| arr.iter().filter_map(|v| v.as_f64()).collect())
-             .unwrap_or_default();
+        let polyline = Polyline {
+            guid: {
+                let c = std::sync::OnceLock::new();
+                let _ = c.set(guid_str);
+                c
+            },
+            name,
+            coords,
+            plane: Plane::default(),
+            plane_dirty: true,
+            width,
+            dash,
+            linecolor,
+        };
+        Ok(polyline)
+    }
+}
 
-         let polyline = Polyline {
-             guid: { let c = std::sync::OnceLock::new(); let _ = c.set(guid_str); c },
-             name,
-             coords,
-             plane: Plane::default(),
-             plane_dirty: true,
-             width,
-             dash,
-             linecolor,
-         };
-         Ok(polyline)
-     }
- }
-
- impl Polyline {
-
-     /// Serializes the Polyline to a JSON string.
-     pub fn jsondump(&self) -> Result<String, Box<dyn std::error::Error>> {
-         crate::file_encoders::sorted_json_string(self)
-     }
+impl Polyline {
+    /// Serializes the Polyline to a JSON string.
+    pub fn jsondump(&self) -> Result<String, Box<dyn std::error::Error>> {
+        crate::file_encoders::sorted_json_string(self)
+    }
 
     /// Deserializes a Polyline from a JSON string.
     pub fn jsonload(json_data: &str) -> Result<Self, Box<dyn std::error::Error>> {
@@ -643,9 +702,9 @@ impl Polyline {
         Self::jsonload(&json)
     }
 
-    ///////////////////////////////////////////////////////////////////////////////////////////
+    // ═══════════════════════════════════════════════════════════════════════════
     // Protobuf Serialization
-    ///////////////////////////////////////////////////////////////////////////////////////////
+    // ═══════════════════════════════════════════════════════════════════════════
 
     /// Convert to protobuf binary format.
     ///
@@ -734,9 +793,9 @@ impl Polyline {
         Self::pb_loads(&data).expect("Failed to parse protobuf")
     }
 
-    ///////////////////////////////////////////////////////////////////////////////////////////
+    // ═══════════════════════════════════════════════════════════════════════════
     // Geometric Utilities
-    ///////////////////////////////////////////////////////////////////////////////////////////
+    // ═══════════════════════════════════════════════════════════════════════════
 
     /// Shift polyline points by specified number of positions
     pub fn shift(&mut self, times: i32) {
@@ -807,15 +866,15 @@ impl Polyline {
             let px = point[0] - line_start[0];
             let py = point[1] - line_start[1];
             let pz = point[2] - line_start[2];
-            
+
             // Vector from line_end to point
             let qx = point[0] - line_end[0];
             let qy = point[1] - line_end[1];
             let qz = point[2] - line_end[2];
-            
+
             let dist_start_sq = px * px + py * py + pz * pz;
             let dist_end_sq = qx * qx + qy * qy + qz * qz;
-            
+
             if dist_start_sq <= dist_end_sq {
                 (px * dx + py * dy + pz * dz) / dod
             } else {
@@ -911,7 +970,7 @@ impl Polyline {
             let mid0_dy = mid_line0_end[1] - mid_line0_start[1];
             let mid0_dz = mid_line0_end[2] - mid_line0_start[2];
             let mid0_mag_sq = mid0_dx * mid0_dx + mid0_dy * mid0_dy + mid0_dz * mid0_dz;
-            
+
             let mid1_dx = mid_line1_end[0] - mid_line1_start[0];
             let mid1_dy = mid_line1_end[1] - mid_line1_start[1];
             let mid1_dz = mid_line1_end[2] - mid_line1_start[2];
@@ -945,8 +1004,7 @@ impl Polyline {
         t_values.sort_by(|a, b| a.partial_cmp(b).unwrap());
 
         let output_start = Self::point_at(line_start, line_end, t_values[0]);
-        let output_end =
-            Self::point_at(line_start, line_end, t_values[t_values.len() - 1]);
+        let output_end = Self::point_at(line_start, line_end, t_values[t_values.len() - 1]);
 
         if (t_values[0] - t_values[t_values.len() - 1]).abs() > Tolerance::ZERO_TOLERANCE {
             Some((output_start, output_end))
@@ -1005,7 +1063,13 @@ impl Polyline {
         };
 
         let keep_sign: f64 = match flip {
-            Some(f) => if f { 1.0 } else { -1.0 },
+            Some(f) => {
+                if f {
+                    1.0
+                } else {
+                    -1.0
+                }
+            }
             None => {
                 // Arc-length midpoint
                 let half_len = self.length() * 0.5;
@@ -1016,31 +1080,50 @@ impl Polyline {
                 'outer: for i in 0..n_pts - 1 {
                     let i0 = i * 3;
                     let i1 = (i + 1) * 3;
-                    let ax = self.coords[i0];   let ay = self.coords[i0+1]; let az = self.coords[i0+2];
-                    let bx = self.coords[i1];   let by = self.coords[i1+1]; let bz = self.coords[i1+2];
-                    let dx = bx-ax; let dy = by-ay; let dz = bz-az;
-                    let seg_len = (dx*dx + dy*dy + dz*dz).sqrt();
+                    let ax = self.coords[i0];
+                    let ay = self.coords[i0 + 1];
+                    let az = self.coords[i0 + 2];
+                    let bx = self.coords[i1];
+                    let by = self.coords[i1 + 1];
+                    let bz = self.coords[i1 + 2];
+                    let dx = bx - ax;
+                    let dy = by - ay;
+                    let dz = bz - az;
+                    let seg_len = (dx * dx + dy * dy + dz * dz).sqrt();
                     if acc + seg_len >= half_len {
-                        let t = if seg_len > 1e-14 { (half_len - acc) / seg_len } else { 0.0 };
-                        mx = ax + t*dx; my = ay + t*dy; mz = az + t*dz;
+                        let t = if seg_len > 1e-14 {
+                            (half_len - acc) / seg_len
+                        } else {
+                            0.0
+                        };
+                        mx = ax + t * dx;
+                        my = ay + t * dy;
+                        mz = az + t * dz;
                         break 'outer;
                     }
                     acc += seg_len;
                 }
-                if signed_dist(mx, my, mz) >= 0.0 { 1.0 } else { -1.0 }
+                if signed_dist(mx, my, mz) >= 0.0 {
+                    1.0
+                } else {
+                    -1.0
+                }
             }
         };
 
-        let on_keep_side = |px: f64, py: f64, pz: f64| -> bool {
-            signed_dist(px, py, pz) * keep_sign >= 0.0
-        };
+        let on_keep_side =
+            |px: f64, py: f64, pz: f64| -> bool { signed_dist(px, py, pz) * keep_sign >= 0.0 };
 
         let mut result: Vec<f64> = Vec::new();
         for i in 0..n_pts - 1 {
             let i0 = i * 3;
             let i1 = (i + 1) * 3;
-            let ax = self.coords[i0];   let ay = self.coords[i0+1]; let az = self.coords[i0+2];
-            let bx = self.coords[i1];   let by = self.coords[i1+1]; let bz = self.coords[i1+2];
+            let ax = self.coords[i0];
+            let ay = self.coords[i0 + 1];
+            let az = self.coords[i0 + 2];
+            let bx = self.coords[i1];
+            let by = self.coords[i1 + 1];
+            let bz = self.coords[i1 + 2];
             if on_keep_side(ax, ay, az) {
                 result.extend_from_slice(&[ax, ay, az]);
             }
@@ -1048,14 +1131,20 @@ impl Polyline {
             let db = signed_dist(bx, by, bz);
             if (da > 0.0) != (db > 0.0) {
                 let t = da / (da - db);
-                result.extend_from_slice(&[ax + t*(bx-ax),
-                                           ay + t*(by-ay),
-                                           az + t*(bz-az)]);
+                result.extend_from_slice(&[
+                    ax + t * (bx - ax),
+                    ay + t * (by - ay),
+                    az + t * (bz - az),
+                ]);
             }
         }
         let last = (n_pts - 1) * 3;
-        if on_keep_side(self.coords[last], self.coords[last+1], self.coords[last+2]) {
-            result.extend_from_slice(&self.coords[last..last+3]);
+        if on_keep_side(
+            self.coords[last],
+            self.coords[last + 1],
+            self.coords[last + 2],
+        ) {
+            result.extend_from_slice(&self.coords[last..last + 3]);
         }
 
         // Remove consecutive near-duplicate points
@@ -1064,14 +1153,14 @@ impl Polyline {
         let mut k = 0;
         while k + 2 < result.len() {
             if deduped.len() < 3 {
-                deduped.extend_from_slice(&result[k..k+3]);
+                deduped.extend_from_slice(&result[k..k + 3]);
             } else {
                 let n = deduped.len();
-                let dx = result[k]   - deduped[n-3];
-                let dy = result[k+1] - deduped[n-2];
-                let dz = result[k+2] - deduped[n-1];
-                if (dx*dx + dy*dy + dz*dz).sqrt() > tol {
-                    deduped.extend_from_slice(&result[k..k+3]);
+                let dx = result[k] - deduped[n - 3];
+                let dy = result[k + 1] - deduped[n - 2];
+                let dz = result[k + 2] - deduped[n - 1];
+                if (dx * dx + dy * dy + dz * dz).sqrt() > tol {
+                    deduped.extend_from_slice(&result[k..k + 3]);
                 }
             }
             k += 3;
@@ -1113,17 +1202,30 @@ impl Polyline {
         while changed {
             changed = false;
             let m = pts.len();
-            if m < 3 { break; }
+            if m < 3 {
+                break;
+            }
             let mut out = Vec::new();
             for i in 0..m {
                 let p = (i + m - 1) % m;
                 let nx = (i + 1) % m;
-                if !closed && (i == 0 || i == m - 1) { out.push(pts[i].clone()); continue; }
-                let (ax, ay, az) = (pts[i][0]-pts[p][0], pts[i][1]-pts[p][1], pts[i][2]-pts[p][2]);
-                let (bx, by, bz) = (pts[nx][0]-pts[i][0], pts[nx][1]-pts[i][1], pts[nx][2]-pts[i][2]);
-                let (cx, cy, cz) = (ay*bz-az*by, az*bx-ax*bz, ax*by-ay*bx);
-                let (a2, b2) = (ax*ax+ay*ay+az*az, bx*bx+by*by+bz*bz);
-                if a2 < zt2 || b2 < zt2 || cx*cx+cy*cy+cz*cz < tol*tol*a2*b2 {
+                if !closed && (i == 0 || i == m - 1) {
+                    out.push(pts[i].clone());
+                    continue;
+                }
+                let (ax, ay, az) = (
+                    pts[i][0] - pts[p][0],
+                    pts[i][1] - pts[p][1],
+                    pts[i][2] - pts[p][2],
+                );
+                let (bx, by, bz) = (
+                    pts[nx][0] - pts[i][0],
+                    pts[nx][1] - pts[i][1],
+                    pts[nx][2] - pts[i][2],
+                );
+                let (cx, cy, cz) = (ay * bz - az * by, az * bx - ax * bz, ax * by - ay * bx);
+                let (a2, b2) = (ax * ax + ay * ay + az * az, bx * bx + by * by + bz * bz);
+                if a2 < zt2 || b2 < zt2 || cx * cx + cy * cy + cz * cz < tol * tol * a2 * b2 {
                     changed = true;
                 } else {
                     out.push(pts[i].clone());
@@ -1151,7 +1253,11 @@ impl Polyline {
         }
 
         let total = self.point_count();
-        let n = if self.is_closed() && total > 1 { total - 1 } else { total };
+        let n = if self.is_closed() && total > 1 {
+            total - 1
+        } else {
+            total
+        };
 
         let mut sum_x = 0.0;
         let mut sum_y = 0.0;
@@ -1185,12 +1291,18 @@ impl Polyline {
             let y1 = coords[j][1];
             if y0 <= py {
                 if y1 > py {
-                    let x0 = coords[i][0]; let x1 = coords[j][0];
-                    if (x1 - x0) * (py - y0) - (px - x0) * (y1 - y0) > 0.0 { winding += 1; }
+                    let x0 = coords[i][0];
+                    let x1 = coords[j][0];
+                    if (x1 - x0) * (py - y0) - (px - x0) * (y1 - y0) > 0.0 {
+                        winding += 1;
+                    }
                 }
             } else if y1 <= py {
-                let x0 = coords[i][0]; let x1 = coords[j][0];
-                if (x1 - x0) * (py - y0) - (px - x0) * (y1 - y0) < 0.0 { winding -= 1; }
+                let x0 = coords[i][0];
+                let x1 = coords[j][0];
+                if (x1 - x0) * (py - y0) - (px - x0) * (y1 - y0) < 0.0 {
+                    winding -= 1;
+                }
             }
         }
         winding != 0
@@ -1423,9 +1535,12 @@ impl Polyline {
 
         for i in 0..polyline0.point_count() {
             let idx = i * 3;
-            let x = polyline0.coords[idx] + (polyline1.coords[idx] - polyline0.coords[idx]) * weight;
-            let y = polyline0.coords[idx + 1] + (polyline1.coords[idx + 1] - polyline0.coords[idx + 1]) * weight;
-            let z = polyline0.coords[idx + 2] + (polyline1.coords[idx + 2] - polyline0.coords[idx + 2]) * weight;
+            let x =
+                polyline0.coords[idx] + (polyline1.coords[idx] - polyline0.coords[idx]) * weight;
+            let y = polyline0.coords[idx + 1]
+                + (polyline1.coords[idx + 1] - polyline0.coords[idx + 1]) * weight;
+            let z = polyline0.coords[idx + 2]
+                + (polyline1.coords[idx + 2] - polyline0.coords[idx + 2]) * weight;
             result.coords.push(x);
             result.coords.push(y);
             result.coords.push(z);
@@ -1477,66 +1592,124 @@ impl Polyline {
         let pts = polygon.get_points();
 
         // Project to 2D
-        let pts2d: Vec<[f64; 2]> = pts.iter().map(|p| {
-            let dx = p[0] - orig[0];
-            let dy = p[1] - orig[1];
-            let dz = p[2] - orig[2];
-            [dx * xa[0] + dy * xa[1] + dz * xa[2],
-             dx * ya[0] + dy * ya[1] + dz * ya[2]]
-        }).collect();
+        let pts2d: Vec<[f64; 2]> = pts
+            .iter()
+            .map(|p| {
+                let dx = p[0] - orig[0];
+                let dy = p[1] - orig[1];
+                let dz = p[2] - orig[2];
+                [
+                    dx * xa[0] + dy * xa[1] + dz * xa[2],
+                    dx * ya[0] + dy * ya[1] + dz * ya[2],
+                ]
+            })
+            .collect();
 
         fn ccw_2d(ax: f64, ay: f64, bx: f64, by: f64, px: f64, py: f64) -> f64 {
             (bx - ax) * (py - ay) - (by - ay) * (px - ax)
         }
-        fn qh_recurse(v: &[[f64; 2]], ax: f64, ay: f64, bx: f64, by: f64, hull: &mut Vec<[f64; 2]>) {
-            if v.is_empty() { return; }
-            let (fi, _) = v.iter().enumerate()
+        fn qh_recurse(
+            v: &[[f64; 2]],
+            ax: f64,
+            ay: f64,
+            bx: f64,
+            by: f64,
+            hull: &mut Vec<[f64; 2]>,
+        ) {
+            if v.is_empty() {
+                return;
+            }
+            let (fi, _) = v
+                .iter()
+                .enumerate()
                 .max_by(|(_, a), (_, b)| {
                     ccw_2d(ax, ay, bx, by, a[0], a[1])
                         .partial_cmp(&ccw_2d(ax, ay, bx, by, b[0], b[1]))
                         .unwrap()
-                }).unwrap();
-            let fx = v[fi][0]; let fy = v[fi][1];
-            let left: Vec<_> = v.iter().filter(|p| ccw_2d(ax, ay, fx, fy, p[0], p[1]) > 0.0).cloned().collect();
+                })
+                .unwrap();
+            let fx = v[fi][0];
+            let fy = v[fi][1];
+            let left: Vec<_> = v
+                .iter()
+                .filter(|p| ccw_2d(ax, ay, fx, fy, p[0], p[1]) > 0.0)
+                .cloned()
+                .collect();
             qh_recurse(&left, ax, ay, fx, fy, hull);
             hull.push([fx, fy]);
-            let right: Vec<_> = v.iter().filter(|p| ccw_2d(fx, fy, bx, by, p[0], p[1]) > 0.0).cloned().collect();
+            let right: Vec<_> = v
+                .iter()
+                .filter(|p| ccw_2d(fx, fy, bx, by, p[0], p[1]) > 0.0)
+                .cloned()
+                .collect();
             qh_recurse(&right, fx, fy, bx, by, hull);
         }
 
-        let ai = pts2d.iter().enumerate().min_by(|(_, a), (_, b)| a[0].partial_cmp(&b[0]).unwrap()).map(|(i, _)| i).unwrap_or(0);
-        let bi = pts2d.iter().enumerate().max_by(|(_, a), (_, b)| a[0].partial_cmp(&b[0]).unwrap()).map(|(i, _)| i).unwrap_or(0);
+        let ai = pts2d
+            .iter()
+            .enumerate()
+            .min_by(|(_, a), (_, b)| a[0].partial_cmp(&b[0]).unwrap())
+            .map(|(i, _)| i)
+            .unwrap_or(0);
+        let bi = pts2d
+            .iter()
+            .enumerate()
+            .max_by(|(_, a), (_, b)| a[0].partial_cmp(&b[0]).unwrap())
+            .map(|(i, _)| i)
+            .unwrap_or(0);
         let (ax, ay) = (pts2d[ai][0], pts2d[ai][1]);
         let (bx, by) = (pts2d[bi][0], pts2d[bi][1]);
 
-        let left: Vec<_>  = pts2d.iter().filter(|p| ccw_2d(ax, ay, bx, by, p[0], p[1]) > 0.0).cloned().collect();
-        let right: Vec<_> = pts2d.iter().filter(|p| ccw_2d(ax, ay, bx, by, p[0], p[1]) <= 0.0).cloned().collect();
+        let left: Vec<_> = pts2d
+            .iter()
+            .filter(|p| ccw_2d(ax, ay, bx, by, p[0], p[1]) > 0.0)
+            .cloned()
+            .collect();
+        let right: Vec<_> = pts2d
+            .iter()
+            .filter(|p| ccw_2d(ax, ay, bx, by, p[0], p[1]) <= 0.0)
+            .cloned()
+            .collect();
         let mut hull = vec![[ax, ay]];
         qh_recurse(&left, ax, ay, bx, by, &mut hull);
         hull.push([bx, by]);
         qh_recurse(&right, bx, by, ax, ay, &mut hull);
 
-        let pts3d: Vec<Point> = hull.iter().map(|h| {
-            Point::new(orig[0] + h[0] * xa[0] + h[1] * ya[0],
-                       orig[1] + h[0] * xa[1] + h[1] * ya[1],
-                       orig[2] + h[0] * xa[2] + h[1] * ya[2])
-        }).collect();
+        let pts3d: Vec<Point> = hull
+            .iter()
+            .map(|h| {
+                Point::new(
+                    orig[0] + h[0] * xa[0] + h[1] * ya[0],
+                    orig[1] + h[0] * xa[1] + h[1] * ya[1],
+                    orig[2] + h[0] * xa[2] + h[1] * ya[2],
+                )
+            })
+            .collect();
         Polyline::new(pts3d)
     }
 
     /// Minimum-area bounding rectangle via rotating calipers; returns closed 5-pt Polyline.
     pub fn bounding_rectangle(polygon: &Polyline) -> Option<Polyline> {
         let hull = Self::quick_hull(polygon);
-        if hull.point_count() <= 2 { return None; }
+        if hull.point_count() <= 2 {
+            return None;
+        }
         let (orig, xa, ya, _za) = polygon.get_average_plane();
 
         // Project hull to 2D
         let hull_pts = hull.get_points();
-        let hull2d: Vec<[f64; 2]> = hull_pts.iter().map(|p| {
-            let dx = p[0] - orig[0]; let dy = p[1] - orig[1]; let dz = p[2] - orig[2];
-            [dx * xa[0] + dy * xa[1] + dz * xa[2],
-             dx * ya[0] + dy * ya[1] + dz * ya[2]]
-        }).collect();
+        let hull2d: Vec<[f64; 2]> = hull_pts
+            .iter()
+            .map(|p| {
+                let dx = p[0] - orig[0];
+                let dy = p[1] - orig[1];
+                let dz = p[2] - orig[2];
+                [
+                    dx * xa[0] + dy * xa[1] + dz * xa[2],
+                    dx * ya[0] + dy * ya[1] + dz * ya[2],
+                ]
+            })
+            .collect();
 
         let mut best_area = f64::MAX;
         let mut best = (0.0f64, 0.0f64, 0.0f64, 0.0f64, 0.0f64);
@@ -1546,15 +1719,19 @@ impl Polyline {
             let ex = hull2d[j][0] - hull2d[i][0];
             let ey = hull2d[j][1] - hull2d[i][1];
             let len = (ex * ex + ey * ey).sqrt();
-            if len < 1e-12 { continue; }
+            if len < 1e-12 {
+                continue;
+            }
             let (ca, sa) = (ex / len, ey / len);
             let (mut min_u, mut max_u) = (f64::MAX, f64::MIN);
             let (mut min_v, mut max_v) = (f64::MAX, f64::MIN);
             for h in &hull2d {
-                let u =  h[0] * ca + h[1] * sa;
+                let u = h[0] * ca + h[1] * sa;
                 let v = -h[0] * sa + h[1] * ca;
-                min_u = min_u.min(u); max_u = max_u.max(u);
-                min_v = min_v.min(v); max_v = max_v.max(v);
+                min_u = min_u.min(u);
+                max_u = max_u.max(u);
+                min_v = min_v.min(v);
+                max_v = max_v.max(v);
             }
             let area = (max_u - min_u) * (max_v - min_v);
             if area < best_area {
@@ -1566,36 +1743,68 @@ impl Polyline {
         let (ca, sa) = (angle.cos(), angle.sin());
         let rot_back = |u: f64, v: f64| -> [f64; 2] { [u * ca - v * sa, u * sa + v * ca] };
         let to3d = |u2: f64, v2: f64| -> Point {
-            Point::new(orig[0] + u2 * xa[0] + v2 * ya[0],
-                       orig[1] + u2 * xa[1] + v2 * ya[1],
-                       orig[2] + u2 * xa[2] + v2 * ya[2])
+            Point::new(
+                orig[0] + u2 * xa[0] + v2 * ya[0],
+                orig[1] + u2 * xa[1] + v2 * ya[1],
+                orig[2] + u2 * xa[2] + v2 * ya[2],
+            )
         };
-        let c = [rot_back(min_u, min_v), rot_back(min_u, max_v),
-                 rot_back(max_u, max_v), rot_back(max_u, min_v)];
+        let c = [
+            rot_back(min_u, min_v),
+            rot_back(min_u, max_v),
+            rot_back(max_u, max_v),
+            rot_back(max_u, min_v),
+        ];
         let mut pts3d: Vec<Point> = c.iter().map(|h| to3d(h[0], h[1])).collect();
         pts3d.push(pts3d[0].clone());
         Some(Polyline::new(pts3d))
     }
 
     /// Grid of interior points; offset_dist currently unused; div_dist = grid spacing.
-    pub fn grid_of_points_in_polygon(polygon: &Polyline, offset_dist: f64, div_dist: f64, max_pts: usize) -> Vec<Point> {
-        if div_dist < 1e-12 { return Vec::new(); }
+    pub fn grid_of_points_in_polygon(
+        polygon: &Polyline,
+        offset_dist: f64,
+        div_dist: f64,
+        max_pts: usize,
+    ) -> Vec<Point> {
+        if div_dist < 1e-12 {
+            return Vec::new();
+        }
         let (orig, xa, ya, _za) = polygon.get_average_plane();
         let pts = polygon.get_points();
 
         // Build 2D polygon, skip duplicate last point if closed
         let last = if pts.len() > 1 {
-            let a = &pts[0]; let b = &pts[pts.len()-1];
-            if (a[0]-b[0]).abs()<1e-10 && (a[1]-b[1]).abs()<1e-10 && (a[2]-b[2]).abs()<1e-10
-                { pts.len() - 1 } else { pts.len() }
-        } else { pts.len() };
+            let a = &pts[0];
+            let b = &pts[pts.len() - 1];
+            if (a[0] - b[0]).abs() < 1e-10
+                && (a[1] - b[1]).abs() < 1e-10
+                && (a[2] - b[2]).abs() < 1e-10
+            {
+                pts.len() - 1
+            } else {
+                pts.len()
+            }
+        } else {
+            pts.len()
+        };
 
-        let mut poly2d: Vec<[f64; 2]> = pts[..last].iter().map(|p| {
-            let dx = p[0]-orig[0]; let dy = p[1]-orig[1]; let dz = p[2]-orig[2];
-            [dx*xa[0]+dy*xa[1]+dz*xa[2], dx*ya[0]+dy*ya[1]+dz*ya[2]]
-        }).collect();
+        let mut poly2d: Vec<[f64; 2]> = pts[..last]
+            .iter()
+            .map(|p| {
+                let dx = p[0] - orig[0];
+                let dy = p[1] - orig[1];
+                let dz = p[2] - orig[2];
+                [
+                    dx * xa[0] + dy * xa[1] + dz * xa[2],
+                    dx * ya[0] + dy * ya[1] + dz * ya[2],
+                ]
+            })
+            .collect();
 
-        if poly2d.is_empty() { return Vec::new(); }
+        if poly2d.is_empty() {
+            return Vec::new();
+        }
 
         // Miter offset in 2D (negative = inward, positive = outward). Reuses
         // the same algorithm as Intersection::offset_in_3d. Falls back to the
@@ -1605,59 +1814,70 @@ impl Polyline {
             let mut signed_area = 0.0;
             for i in 0..n {
                 let a = poly2d[i];
-                let b = poly2d[(i+1) % n];
-                signed_area += a[0]*b[1] - b[0]*a[1];
+                let b = poly2d[(i + 1) % n];
+                signed_area += a[0] * b[1] - b[0] * a[1];
             }
-            let delta = if signed_area < 0.0 { -offset_dist } else { offset_dist };
+            let delta = if signed_area < 0.0 {
+                -offset_dist
+            } else {
+                offset_dist
+            };
 
             let mut normals: Vec<[f64; 2]> = Vec::with_capacity(n);
             for i in 0..n {
                 let a = poly2d[i];
-                let b = poly2d[(i+1) % n];
-                let ex = b[0]-a[0];
-                let ey = b[1]-a[1];
-                let len = (ex*ex + ey*ey).sqrt();
-                if len < 1e-12 { normals.push([0.0, 0.0]); }
-                else { normals.push([ey/len, -ex/len]); }
+                let b = poly2d[(i + 1) % n];
+                let ex = b[0] - a[0];
+                let ey = b[1] - a[1];
+                let len = (ex * ex + ey * ey).sqrt();
+                if len < 1e-12 {
+                    normals.push([0.0, 0.0]);
+                } else {
+                    normals.push([ey / len, -ex / len]);
+                }
             }
 
             let mut out: Vec<[f64; 2]> = Vec::with_capacity(n * 3);
             for i in 0..n {
                 let np = normals[(i + n - 1) % n];
                 let nn = normals[i];
-                let cos_a = np[0]*nn[0] + np[1]*nn[1];
-                let sin_a = np[0]*nn[1] - np[1]*nn[0];
+                let cos_a = np[0] * nn[0] + np[1] * nn[1];
+                let sin_a = np[0] * nn[1] - np[1] * nn[0];
                 let denom = 1.0 + cos_a;
                 let concave = (cos_a > -0.999) && (sin_a * delta < 0.0) && (offset_dist > 0.0);
                 if concave {
-                    out.push([poly2d[i][0] + np[0]*delta, poly2d[i][1] + np[1]*delta]);
+                    out.push([poly2d[i][0] + np[0] * delta, poly2d[i][1] + np[1] * delta]);
                     out.push([poly2d[i][0], poly2d[i][1]]);
-                    out.push([poly2d[i][0] + nn[0]*delta, poly2d[i][1] + nn[1]*delta]);
+                    out.push([poly2d[i][0] + nn[0] * delta, poly2d[i][1] + nn[1] * delta]);
                 } else if denom.abs() < 1e-9 {
-                    let mx = (np[0]+nn[0])*0.5;
-                    let my = (np[1]+nn[1])*0.5;
-                    out.push([poly2d[i][0] + mx*delta, poly2d[i][1] + my*delta]);
+                    let mx = (np[0] + nn[0]) * 0.5;
+                    let my = (np[1] + nn[1]) * 0.5;
+                    out.push([poly2d[i][0] + mx * delta, poly2d[i][1] + my * delta]);
                 } else {
-                    let bx = (np[0]+nn[0])/denom;
-                    let by = (np[1]+nn[1])/denom;
-                    out.push([poly2d[i][0] + bx*delta, poly2d[i][1] + by*delta]);
+                    let bx = (np[0] + nn[0]) / denom;
+                    let by = (np[1] + nn[1]) / denom;
+                    out.push([poly2d[i][0] + bx * delta, poly2d[i][1] + by * delta]);
                 }
             }
 
             let mut out_area = 0.0;
             for i in 0..out.len() {
                 let a = out[i];
-                let b = out[(i+1) % out.len()];
-                out_area += a[0]*b[1] - b[0]*a[1];
+                let b = out[(i + 1) % out.len()];
+                out_area += a[0] * b[1] - b[0] * a[1];
             }
-            if out.len() >= 3 && out_area.abs() > 1e-4 { poly2d = out; }
+            if out.len() >= 3 && out_area.abs() > 1e-4 {
+                poly2d = out;
+            }
         }
 
         let (mut x_min, mut x_max) = (f64::MAX, f64::MIN);
         let (mut y_min, mut y_max) = (f64::MAX, f64::MIN);
         for p in &poly2d {
-            x_min = x_min.min(p[0]); x_max = x_max.max(p[0]);
-            y_min = y_min.min(p[1]); y_max = y_max.max(p[1]);
+            x_min = x_min.min(p[0]);
+            x_max = x_max.max(p[0]);
+            y_min = y_min.min(p[1]);
+            y_max = y_max.max(p[1]);
         }
 
         fn pt_in_poly(px: f64, py: f64, poly: &[[f64; 2]]) -> bool {
@@ -1665,9 +1885,11 @@ impl Polyline {
             let mut inside = false;
             let mut j = n - 1;
             for i in 0..n {
-                let xi = poly[i][0]; let yi = poly[i][1];
-                let xj = poly[j][0]; let yj = poly[j][1];
-                if ((yi > py) != (yj > py)) && (px < (xj-xi)*(py-yi)/(yj-yi)+xi) {
+                let xi = poly[i][0];
+                let yi = poly[i][1];
+                let xj = poly[j][0];
+                let yj = poly[j][1];
+                if ((yi > py) != (yj > py)) && (px < (xj - xi) * (py - yi) / (yj - yi) + xi) {
                     inside = !inside;
                 }
                 j = i;
@@ -1682,9 +1904,9 @@ impl Polyline {
             while v <= y_max + 1e-10 && result.len() < max_pts {
                 if pt_in_poly(u, v, &poly2d) {
                     result.push(Point::new(
-                        orig[0] + u*xa[0] + v*ya[0],
-                        orig[1] + u*xa[1] + v*ya[1],
-                        orig[2] + u*xa[2] + v*ya[2],
+                        orig[0] + u * xa[0] + v * ya[0],
+                        orig[1] + u * xa[1] + v * ya[1],
+                        orig[2] + u * xa[2] + v * ya[2],
                     ));
                 }
                 v += div_dist;
@@ -1702,7 +1924,11 @@ impl Polyline {
         }
 
         let closed = self.is_closed();
-        let n = if closed && total > 1 { total - 1 } else { total };
+        let n = if closed && total > 1 {
+            total - 1
+        } else {
+            total
+        };
         let points = self.get_points();
 
         let mut average_normal = Vector::new(0.0, 0.0, 0.0);
@@ -1732,7 +1958,10 @@ impl Polyline {
             let ez = pt[2] - line_start[2];
             return (ex * ex + ey * ey + ez * ez).sqrt();
         }
-        let t = ((pt[0] - line_start[0]) * dx + (pt[1] - line_start[1]) * dy + (pt[2] - line_start[2]) * dz) / len_sq;
+        let t = ((pt[0] - line_start[0]) * dx
+            + (pt[1] - line_start[1]) * dy
+            + (pt[2] - line_start[2]) * dz)
+            / len_sq;
         let t = t.max(0.0).min(1.0);
         let cx = line_start[0] + t * dx;
         let cy = line_start[1] + t * dy;
@@ -1743,8 +1972,16 @@ impl Polyline {
         (ex * ex + ey * ey + ez * ez).sqrt()
     }
 
-    fn simplify_rdp(points: &[Point], start: usize, end: usize, tolerance: f64, keep: &mut Vec<bool>) {
-        if end <= start + 1 { return; }
+    fn simplify_rdp(
+        points: &[Point],
+        start: usize,
+        end: usize,
+        tolerance: f64,
+        keep: &mut Vec<bool>,
+    ) {
+        if end <= start + 1 {
+            return;
+        }
         let mut max_dist = 0.0_f64;
         let mut max_idx = start;
         for i in (start + 1)..end {
@@ -1763,12 +2000,19 @@ impl Polyline {
 
     pub fn simplify_points(points: &[Point], tolerance: f64) -> Vec<Point> {
         let n = points.len();
-        if n < 3 { return points.to_vec(); }
+        if n < 3 {
+            return points.to_vec();
+        }
         let mut keep = vec![false; n];
         keep[0] = true;
         keep[n - 1] = true;
         Self::simplify_rdp(points, 0, n - 1, tolerance, &mut keep);
-        points.iter().enumerate().filter(|(i, _)| keep[*i]).map(|(_, p)| p.clone()).collect()
+        points
+            .iter()
+            .enumerate()
+            .filter(|(i, _)| keep[*i])
+            .map(|(_, p)| p.clone())
+            .collect()
     }
 
     pub fn simplify(&self, tolerance: f64) -> Polyline {
@@ -1781,12 +2025,21 @@ impl Polyline {
     /// polylines[0] is the outer boundary; polylines[1..] are holes.
     pub fn polylabel(polylines: &[Polyline], precision: f64) -> (Point, crate::plane::Plane, f64) {
         if polylines.is_empty() {
-            return (Point::new(0.0, 0.0, 0.0), crate::plane::Plane::default(), 0.0);
+            return (
+                Point::new(0.0, 0.0, 0.0),
+                crate::plane::Plane::default(),
+                0.0,
+            );
         }
         let (orig, xa, ya, za) = polylines[0].get_average_plane();
         let to2d = |p: &Point| -> [f64; 2] {
-            let dx = p[0]-orig[0]; let dy = p[1]-orig[1]; let dz = p[2]-orig[2];
-            [dx*xa[0]+dy*xa[1]+dz*xa[2], dx*ya[0]+dy*ya[1]+dz*ya[2]]
+            let dx = p[0] - orig[0];
+            let dy = p[1] - orig[1];
+            let dz = p[2] - orig[2];
+            [
+                dx * xa[0] + dy * xa[1] + dz * xa[2],
+                dx * ya[0] + dy * ya[1] + dz * ya[2],
+            ]
         };
 
         let mut rings2d: Vec<Vec<[f64; 2]>> = Vec::with_capacity(polylines.len());
@@ -1794,31 +2047,49 @@ impl Polyline {
         for pl in polylines {
             let pts = pl.get_points();
             let last = if pts.len() > 1 {
-                let a = &pts[0]; let b = &pts[pts.len()-1];
-                if (a[0]-b[0]).abs()<1e-10 && (a[1]-b[1]).abs()<1e-10 && (a[2]-b[2]).abs()<1e-10
-                    { pts.len() - 1 } else { pts.len() }
-            } else { pts.len() };
+                let a = &pts[0];
+                let b = &pts[pts.len() - 1];
+                if (a[0] - b[0]).abs() < 1e-10
+                    && (a[1] - b[1]).abs() < 1e-10
+                    && (a[2] - b[2]).abs() < 1e-10
+                {
+                    pts.len() - 1
+                } else {
+                    pts.len()
+                }
+            } else {
+                pts.len()
+            };
             let mut ring: Vec<[f64; 2]> = Vec::with_capacity(last);
             let (mut mnx, mut mxx) = (f64::INFINITY, f64::NEG_INFINITY);
             let (mut mny, mut mxy) = (f64::INFINITY, f64::NEG_INFINITY);
             for p in &pts[..last] {
                 let uv = to2d(p);
-                mnx = mnx.min(uv[0]); mxx = mxx.max(uv[0]);
-                mny = mny.min(uv[1]); mxy = mxy.max(uv[1]);
+                mnx = mnx.min(uv[0]);
+                mxx = mxx.max(uv[0]);
+                mny = mny.min(uv[1]);
+                mxy = mxy.max(uv[1]);
                 ring.push(uv);
             }
-            let dx = mxx - mnx; let dy = mxy - mny;
-            sizes.push(dx*dx + dy*dy);
+            let dx = mxx - mnx;
+            let dy = mxy - mny;
+            sizes.push(dx * dx + dy * dy);
             rings2d.push(ring);
         }
         let mut ids: Vec<usize> = (0..rings2d.len()).collect();
-        ids.sort_by(|&a, &b| sizes[b].partial_cmp(&sizes[a]).unwrap_or(std::cmp::Ordering::Equal));
+        ids.sort_by(|&a, &b| {
+            sizes[b]
+                .partial_cmp(&sizes[a])
+                .unwrap_or(std::cmp::Ordering::Equal)
+        });
         let polygon: Vec<Vec<[f64; 2]>> = ids.iter().map(|&i| rings2d[i].clone()).collect();
 
         let cr = mapbox_polylabel(&polygon, precision);
-        let center = Point::new(orig[0] + cr[0]*xa[0] + cr[1]*ya[0],
-                                orig[1] + cr[0]*xa[1] + cr[1]*ya[1],
-                                orig[2] + cr[0]*xa[2] + cr[1]*ya[2]);
+        let center = Point::new(
+            orig[0] + cr[0] * xa[0] + cr[1] * ya[0],
+            orig[1] + cr[0] * xa[1] + cr[1] * ya[1],
+            orig[2] + cr[0] * xa[2] + cr[1] * ya[2],
+        );
         let plane = crate::plane::Plane::new(orig.clone(), xa.clone(), ya.clone());
         let _ = za;
         (center, plane, cr[2])
@@ -1836,10 +2107,9 @@ impl Polyline {
         let (center, plane, r) = Self::polylabel(polylines, precision);
         let radius = r * scale;
 
-        let is_direction_valid =
-            division_direction_in_3d[0] != 0.0 ||
-            division_direction_in_3d[1] != 0.0 ||
-            division_direction_in_3d[2] != 0.0;
+        let is_direction_valid = division_direction_in_3d[0] != 0.0
+            || division_direction_in_3d[1] != 0.0
+            || division_direction_in_3d[2] != 0.0;
 
         let mut edge_i: usize = 0;
         let mut edge_j: usize = 0;
@@ -1847,19 +2117,38 @@ impl Polyline {
         if orient_to_closest_edge {
             for (i, pl) in polylines.iter().enumerate() {
                 let pts = pl.get_points();
-                if pts.len() < 2 { continue; }
-                for j in 0..pts.len()-1 {
-                    let a = &pts[j]; let b = &pts[j+1];
-                    let ex = b[0]-a[0]; let ey = b[1]-a[1]; let ez = b[2]-a[2];
-                    let len2 = ex*ex + ey*ey + ez*ez;
-                    if len2 <= 0.0 { continue; }
-                    let px = center[0]-a[0]; let py = center[1]-a[1]; let pz = center[2]-a[2];
-                    let t = (px*ex + py*ey + pz*ez) / len2;
-                    if t < 0.0 || t > 1.0 { continue; }
-                    let cx = a[0]+t*ex; let cy = a[1]+t*ey; let cz = a[2]+t*ez;
-                    let dx = center[0]-cx; let dy = center[1]-cy; let dz = center[2]-cz;
-                    let d2 = dx*dx + dy*dy + dz*dz;
-                    if d2 < best_sq { best_sq = d2; edge_i = i; edge_j = j; }
+                if pts.len() < 2 {
+                    continue;
+                }
+                for j in 0..pts.len() - 1 {
+                    let a = &pts[j];
+                    let b = &pts[j + 1];
+                    let ex = b[0] - a[0];
+                    let ey = b[1] - a[1];
+                    let ez = b[2] - a[2];
+                    let len2 = ex * ex + ey * ey + ez * ez;
+                    if len2 <= 0.0 {
+                        continue;
+                    }
+                    let px = center[0] - a[0];
+                    let py = center[1] - a[1];
+                    let pz = center[2] - a[2];
+                    let t = (px * ex + py * ey + pz * ez) / len2;
+                    if t < 0.0 || t > 1.0 {
+                        continue;
+                    }
+                    let cx = a[0] + t * ex;
+                    let cy = a[1] + t * ey;
+                    let cz = a[2] + t * ez;
+                    let dx = center[0] - cx;
+                    let dy = center[1] - cy;
+                    let dz = center[2] - cz;
+                    let d2 = dx * dx + dy * dy + dz * dz;
+                    if d2 < best_sq {
+                        best_sq = d2;
+                        edge_i = i;
+                        edge_j = j;
+                    }
                 }
             }
         }
@@ -1869,26 +2158,34 @@ impl Polyline {
         if is_direction_valid || orient_to_closest_edge {
             let dir = if orient_to_closest_edge && best_sq.is_finite() {
                 let pts = polylines[edge_i].get_points();
-                Vector::new(pts[edge_j+1][0]-pts[edge_j][0],
-                            pts[edge_j+1][1]-pts[edge_j][1],
-                            pts[edge_j+1][2]-pts[edge_j][2])
+                Vector::new(
+                    pts[edge_j + 1][0] - pts[edge_j][0],
+                    pts[edge_j + 1][1] - pts[edge_j][1],
+                    pts[edge_j + 1][2] - pts[edge_j][2],
+                )
             } else {
                 division_direction_in_3d.clone()
             };
             x_axis = dir.clone();
-            y_axis = Vector::new(dir[1]*z_axis_ref[2] - dir[2]*z_axis_ref[1],
-                                 dir[2]*z_axis_ref[0] - dir[0]*z_axis_ref[2],
-                                 dir[0]*z_axis_ref[1] - dir[1]*z_axis_ref[0]);
+            y_axis = Vector::new(
+                dir[1] * z_axis_ref[2] - dir[2] * z_axis_ref[1],
+                dir[2] * z_axis_ref[0] - dir[0] * z_axis_ref[2],
+                dir[0] * z_axis_ref[1] - dir[1] * z_axis_ref[0],
+            );
         } else {
             x_axis = plane.x_axis().clone();
             y_axis = plane.y_axis().clone();
         }
         let mut z_axis = z_axis_ref;
         let unit = |v: &mut Vector| {
-            let l = (v[0]*v[0]+v[1]*v[1]+v[2]*v[2]).sqrt();
-            if l > 0.0 { *v = Vector::new(v[0]/l, v[1]/l, v[2]/l); }
+            let l = (v[0] * v[0] + v[1] * v[1] + v[2] * v[2]).sqrt();
+            if l > 0.0 {
+                *v = Vector::new(v[0] / l, v[1] / l, v[2] / l);
+            }
         };
-        unit(&mut x_axis); unit(&mut y_axis); unit(&mut z_axis);
+        unit(&mut x_axis);
+        unit(&mut y_axis);
+        unit(&mut z_axis);
 
         let mut points: Vec<Point> = Vec::with_capacity(division);
         let pi_rad = std::f64::consts::PI / 180.0;
@@ -1898,9 +2195,11 @@ impl Polyline {
             let r = (45.0 + deg) * pi_rad;
             let u = radius * r.cos();
             let v = radius * r.sin();
-            points.push(Point::new(center[0] + u*x_axis[0] + v*y_axis[0],
-                                   center[1] + u*x_axis[1] + v*y_axis[1],
-                                   center[2] + u*x_axis[2] + v*y_axis[2]));
+            points.push(Point::new(
+                center[0] + u * x_axis[0] + v * y_axis[0],
+                center[1] + u * x_axis[1] + v * y_axis[1],
+                center[2] + u * x_axis[2] + v * y_axis[2],
+            ));
         }
         points
     }
@@ -1908,15 +2207,23 @@ impl Polyline {
 
 // ========== mapbox polylabel helpers (native) ==========
 fn pl_seg_dist_sq(px: f64, py: f64, ax: f64, ay: f64, bx: f64, by: f64) -> f64 {
-    let mut x = ax; let mut y = ay;
-    let mut dx = bx - x; let mut dy = by - y;
+    let mut x = ax;
+    let mut y = ay;
+    let mut dx = bx - x;
+    let mut dy = by - y;
     if dx != 0.0 || dy != 0.0 {
-        let t = ((px - x) * dx + (py - y) * dy) / (dx*dx + dy*dy);
-        if t > 1.0 { x = bx; y = by; }
-        else if t > 0.0 { x += dx * t; y += dy * t; }
+        let t = ((px - x) * dx + (py - y) * dy) / (dx * dx + dy * dy);
+        if t > 1.0 {
+            x = bx;
+            y = by;
+        } else if t > 0.0 {
+            x += dx * t;
+            y += dy * t;
+        }
     }
-    dx = px - x; dy = py - y;
-    dx*dx + dy*dy
+    dx = px - x;
+    dy = py - y;
+    dx * dx + dy * dy
 }
 
 fn pl_point_to_poly_dist(px: f64, py: f64, polygon: &[Vec<[f64; 2]>]) -> f64 {
@@ -1924,12 +2231,16 @@ fn pl_point_to_poly_dist(px: f64, py: f64, polygon: &[Vec<[f64; 2]>]) -> f64 {
     let mut min_sq = f64::INFINITY;
     for ring in polygon {
         let len = ring.len();
-        if len == 0 { continue; }
+        if len == 0 {
+            continue;
+        }
         let mut j = len - 1;
         for i in 0..len {
-            let ax = ring[i][0]; let ay = ring[i][1];
-            let bx = ring[j][0]; let by = ring[j][1];
-            if (ay > py) != (by > py) && (px < (bx-ax)*(py-ay)/(by-ay) + ax) {
+            let ax = ring[i][0];
+            let ay = ring[i][1];
+            let bx = ring[j][0];
+            let by = ring[j][1];
+            if (ay > py) != (by > py) && (px < (bx - ax) * (py - ay) / (by - ay) + ax) {
                 inside = !inside;
             }
             min_sq = min_sq.min(pl_seg_dist_sq(px, py, ax, ay, bx, by));
@@ -1940,17 +2251,41 @@ fn pl_point_to_poly_dist(px: f64, py: f64, polygon: &[Vec<[f64; 2]>]) -> f64 {
 }
 
 #[derive(Clone, Copy)]
-struct PCell { cx: f64, cy: f64, h: f64, d: f64, mx: f64 }
+struct PCell {
+    cx: f64,
+    cy: f64,
+    h: f64,
+    d: f64,
+    mx: f64,
+}
 impl PCell {
     fn new(cx: f64, cy: f64, h: f64, polygon: &[Vec<[f64; 2]>]) -> Self {
         let d = pl_point_to_poly_dist(cx, cy, polygon);
-        PCell { cx, cy, h, d, mx: d + h * std::f64::consts::SQRT_2 }
+        PCell {
+            cx,
+            cy,
+            h,
+            d,
+            mx: d + h * std::f64::consts::SQRT_2,
+        }
     }
 }
-impl PartialEq for PCell { fn eq(&self, o: &Self) -> bool { self.mx == o.mx } }
+impl PartialEq for PCell {
+    fn eq(&self, o: &Self) -> bool {
+        self.mx == o.mx
+    }
+}
 impl Eq for PCell {}
-impl PartialOrd for PCell { fn partial_cmp(&self, o: &Self) -> Option<std::cmp::Ordering> { self.mx.partial_cmp(&o.mx) } }
-impl Ord for PCell { fn cmp(&self, o: &Self) -> std::cmp::Ordering { self.partial_cmp(o).unwrap_or(std::cmp::Ordering::Equal) } }
+impl PartialOrd for PCell {
+    fn partial_cmp(&self, o: &Self) -> Option<std::cmp::Ordering> {
+        self.mx.partial_cmp(&o.mx)
+    }
+}
+impl Ord for PCell {
+    fn cmp(&self, o: &Self) -> std::cmp::Ordering {
+        self.partial_cmp(o).unwrap_or(std::cmp::Ordering::Equal)
+    }
+}
 
 fn pl_centroid_cell(polygon: &[Vec<[f64; 2]>]) -> PCell {
     let mut area = 0.0;
@@ -1960,16 +2295,20 @@ fn pl_centroid_cell(polygon: &[Vec<[f64; 2]>]) -> PCell {
     let len = ring.len();
     let mut j = len - 1;
     for i in 0..len {
-        let ax = ring[i][0]; let ay = ring[i][1];
-        let bx = ring[j][0]; let by = ring[j][1];
-        let f = ax*by - bx*ay;
-        cx += (ax+bx)*f;
-        cy += (ay+by)*f;
+        let ax = ring[i][0];
+        let ay = ring[i][1];
+        let bx = ring[j][0];
+        let by = ring[j][1];
+        let f = ax * by - bx * ay;
+        cx += (ax + bx) * f;
+        cy += (ay + by) * f;
         area += f * 3.0;
         j = i;
     }
-    if area == 0.0 { return PCell::new(ring[0][0], ring[0][1], 0.0, polygon); }
-    PCell::new(cx/area, cy/area, 0.0, polygon)
+    if area == 0.0 {
+        return PCell::new(ring[0][0], ring[0][1], 0.0, polygon);
+    }
+    PCell::new(cx / area, cy / area, 0.0, polygon)
 }
 
 fn mapbox_polylabel(polygon: &[Vec<[f64; 2]>], precision: f64) -> [f64; 3] {
@@ -1977,13 +2316,18 @@ fn mapbox_polylabel(polygon: &[Vec<[f64; 2]>], precision: f64) -> [f64; 3] {
     let (mut mnx, mut mxx) = (f64::INFINITY, f64::NEG_INFINITY);
     let (mut mny, mut mxy) = (f64::INFINITY, f64::NEG_INFINITY);
     for p in outer {
-        mnx = mnx.min(p[0]); mxx = mxx.max(p[0]);
-        mny = mny.min(p[1]); mxy = mxy.max(p[1]);
+        mnx = mnx.min(p[0]);
+        mxx = mxx.max(p[0]);
+        mny = mny.min(p[1]);
+        mxy = mxy.max(p[1]);
     }
-    let sx = mxx - mnx; let sy = mxy - mny;
+    let sx = mxx - mnx;
+    let sy = mxy - mny;
     let cell_size = sx.min(sy);
     let mut h = cell_size / 2.0;
-    if cell_size == 0.0 { return [mnx, mny, 0.0]; }
+    if cell_size == 0.0 {
+        return [mnx, mny, 0.0];
+    }
 
     let mut queue: std::collections::BinaryHeap<PCell> = std::collections::BinaryHeap::new();
     let mut x = mnx;
@@ -1997,12 +2341,18 @@ fn mapbox_polylabel(polygon: &[Vec<[f64; 2]>], precision: f64) -> [f64; 3] {
     }
 
     let mut best = pl_centroid_cell(polygon);
-    let bbox_c = PCell::new(mnx + sx/2.0, mny + sy/2.0, 0.0, polygon);
-    if bbox_c.d > best.d { best = bbox_c; }
+    let bbox_c = PCell::new(mnx + sx / 2.0, mny + sy / 2.0, 0.0, polygon);
+    if bbox_c.d > best.d {
+        best = bbox_c;
+    }
 
     while let Some(cell) = queue.pop() {
-        if cell.d > best.d { best = cell; }
-        if cell.mx - best.d <= precision { continue; }
+        if cell.d > best.d {
+            best = cell;
+        }
+        if cell.mx - best.d <= precision {
+            continue;
+        }
         h = cell.h / 2.0;
         queue.push(PCell::new(cell.cx - h, cell.cy - h, h, polygon));
         queue.push(PCell::new(cell.cx + h, cell.cy - h, h, polygon));
@@ -2146,7 +2496,10 @@ impl Polyline {
         crate::boolean_polyline::boolean_op(a, b, clip_type)
     }
 
-    pub fn clip_open_against_closed(open_subject: &Polyline, closed_clip: &Polyline) -> Vec<Polyline> {
+    pub fn clip_open_against_closed(
+        open_subject: &Polyline,
+        closed_clip: &Polyline,
+    ) -> Vec<Polyline> {
         crate::boolean_polyline::clip_open_against_closed(open_subject, closed_clip)
     }
 
@@ -2154,14 +2507,33 @@ impl Polyline {
         crate::boolean_polyline::compute_count(a, b, clip_type)
     }
 
-    pub fn compute_raw(a_xy: &[f64], na: usize, b_xy: &[f64], nb: usize, clip_type: i32, out_xy: &mut [f64], max_out: usize) -> i32 {
+    pub fn compute_raw(
+        a_xy: &[f64],
+        na: usize,
+        b_xy: &[f64],
+        nb: usize,
+        clip_type: i32,
+        out_xy: &mut [f64],
+        max_out: usize,
+    ) -> i32 {
         crate::boolean_polyline::compute_raw(a_xy, na, b_xy, nb, clip_type, out_xy, max_out)
     }
 
-    pub fn boolean_op_plane(a: &Polyline, b: &Polyline, plane: &crate::plane::Plane, clip_type: i32) -> Vec<Polyline> {
-        let ox = plane.origin()[0]; let oy = plane.origin()[1]; let oz = plane.origin()[2];
-        let xx = plane.x_axis()[0]; let xy = plane.x_axis()[1]; let xz = plane.x_axis()[2];
-        let yx = plane.y_axis()[0]; let yy = plane.y_axis()[1]; let yz = plane.y_axis()[2];
+    pub fn boolean_op_plane(
+        a: &Polyline,
+        b: &Polyline,
+        plane: &crate::plane::Plane,
+        clip_type: i32,
+    ) -> Vec<Polyline> {
+        let ox = plane.origin()[0];
+        let oy = plane.origin()[1];
+        let oz = plane.origin()[2];
+        let xx = plane.x_axis()[0];
+        let xy = plane.x_axis()[1];
+        let xz = plane.x_axis()[2];
+        let yx = plane.y_axis()[0];
+        let yy = plane.y_axis()[1];
+        let yz = plane.y_axis()[2];
 
         // Reuse thread-local Polyline wrappers for the projected 2D inputs.
         // This avoids 2 fresh Polyline allocations per call (each with a
@@ -2177,20 +2549,20 @@ impl Polyline {
             pa2d.coords.clear();
             pa2d.coords.reserve(na * 3);
             for i in 0..na {
-                let dx = a.coords[i*3] - ox;
-                let dy = a.coords[i*3+1] - oy;
-                let dz = a.coords[i*3+2] - oz;
-                pa2d.coords.push(dx*xx + dy*xy + dz*xz);
-                pa2d.coords.push(dx*yx + dy*yy + dz*yz);
+                let dx = a.coords[i * 3] - ox;
+                let dy = a.coords[i * 3 + 1] - oy;
+                let dz = a.coords[i * 3 + 2] - oz;
+                pa2d.coords.push(dx * xx + dy * xy + dz * xz);
+                pa2d.coords.push(dx * yx + dy * yy + dz * yz);
                 pa2d.coords.push(0.0);
             }
             // Snap closing point if nearly closed (within 1mm)
             if na >= 4 {
-                let dx = pa2d.coords[(na-1)*3] - pa2d.coords[0];
-                let dy = pa2d.coords[(na-1)*3+1] - pa2d.coords[1];
-                if dx*dx + dy*dy < 1.0 {
-                    pa2d.coords[(na-1)*3] = pa2d.coords[0];
-                    pa2d.coords[(na-1)*3+1] = pa2d.coords[1];
+                let dx = pa2d.coords[(na - 1) * 3] - pa2d.coords[0];
+                let dy = pa2d.coords[(na - 1) * 3 + 1] - pa2d.coords[1];
+                if dx * dx + dy * dy < 1.0 {
+                    pa2d.coords[(na - 1) * 3] = pa2d.coords[0];
+                    pa2d.coords[(na - 1) * 3 + 1] = pa2d.coords[1];
                 }
             }
 
@@ -2199,19 +2571,19 @@ impl Polyline {
             pb2d.coords.clear();
             pb2d.coords.reserve(nb * 3);
             for i in 0..nb {
-                let dx = b.coords[i*3] - ox;
-                let dy = b.coords[i*3+1] - oy;
-                let dz = b.coords[i*3+2] - oz;
-                pb2d.coords.push(dx*xx + dy*xy + dz*xz);
-                pb2d.coords.push(dx*yx + dy*yy + dz*yz);
+                let dx = b.coords[i * 3] - ox;
+                let dy = b.coords[i * 3 + 1] - oy;
+                let dz = b.coords[i * 3 + 2] - oz;
+                pb2d.coords.push(dx * xx + dy * xy + dz * xz);
+                pb2d.coords.push(dx * yx + dy * yy + dz * yz);
                 pb2d.coords.push(0.0);
             }
             if nb >= 4 {
-                let dx = pb2d.coords[(nb-1)*3] - pb2d.coords[0];
-                let dy = pb2d.coords[(nb-1)*3+1] - pb2d.coords[1];
-                if dx*dx + dy*dy < 1.0 {
-                    pb2d.coords[(nb-1)*3] = pb2d.coords[0];
-                    pb2d.coords[(nb-1)*3+1] = pb2d.coords[1];
+                let dx = pb2d.coords[(nb - 1) * 3] - pb2d.coords[0];
+                let dy = pb2d.coords[(nb - 1) * 3 + 1] - pb2d.coords[1];
+                if dx * dx + dy * dy < 1.0 {
+                    pb2d.coords[(nb - 1) * 3] = pb2d.coords[0];
+                    pb2d.coords[(nb - 1) * 3 + 1] = pb2d.coords[1];
                 }
             }
 
@@ -2225,11 +2597,11 @@ impl Polyline {
             for r in results.iter_mut() {
                 let n = r.coords.len() / 3;
                 for i in 0..n {
-                    let u = r.coords[i*3];
-                    let v = r.coords[i*3+1];
-                    r.coords[i*3]   = ox + u*xx + v*yx;
-                    r.coords[i*3+1] = oy + u*xy + v*yy;
-                    r.coords[i*3+2] = oz + u*xz + v*yz;
+                    let u = r.coords[i * 3];
+                    let v = r.coords[i * 3 + 1];
+                    r.coords[i * 3] = ox + u * xx + v * yx;
+                    r.coords[i * 3 + 1] = oy + u * xy + v * yy;
+                    r.coords[i * 3 + 2] = oz + u * xz + v * yz;
                 }
             }
             results
@@ -2244,22 +2616,26 @@ fn ensure_ccw_inplace(coords: &mut Vec<f64>) {
     let n = coords.len() / 3;
     let mut m = n;
     if m >= 4 {
-        let dx = coords[(m-1)*3] - coords[0];
-        let dy = coords[(m-1)*3+1] - coords[1];
-        if dx*dx + dy*dy < 1e-10 { m -= 1; }
+        let dx = coords[(m - 1) * 3] - coords[0];
+        let dy = coords[(m - 1) * 3 + 1] - coords[1];
+        if dx * dx + dy * dy < 1e-10 {
+            m -= 1;
+        }
     }
-    if m < 3 { return; }
+    if m < 3 {
+        return;
+    }
     let mut area = 0.0;
     for i in 0..m {
         let j = (i + 1) % m;
-        area += coords[i*3] * coords[j*3+1] - coords[j*3] * coords[i*3+1];
+        area += coords[i * 3] * coords[j * 3 + 1] - coords[j * 3] * coords[i * 3 + 1];
     }
     if area < 0.0 {
-        for i in 0..n/2 {
+        for i in 0..n / 2 {
             let j = n - 1 - i;
-            coords.swap(i*3, j*3);
-            coords.swap(i*3+1, j*3+1);
-            coords.swap(i*3+2, j*3+2);
+            coords.swap(i * 3, j * 3);
+            coords.swap(i * 3 + 1, j * 3 + 1);
+            coords.swap(i * 3 + 2, j * 3 + 2);
         }
     }
 }
@@ -2283,14 +2659,24 @@ thread_local! {
 /// `PartialEq` and `Element::eq` could not compare its features.
 impl PartialEq for Polyline {
     fn eq(&self, other: &Self) -> bool {
-        if self.name != other.name { return false; }
-        if self.point_count() != other.point_count() { return false; }
+        if self.name != other.name {
+            return false;
+        }
+        if self.point_count() != other.point_count() {
+            return false;
+        }
         let r = 10f64.powi(crate::tolerance::Tolerance::ROUNDING);
         for i in 0..self.coords.len() {
-            if (self.coords[i] * r).round() != (other.coords[i] * r).round() { return false; }
+            if (self.coords[i] * r).round() != (other.coords[i] * r).round() {
+                return false;
+            }
         }
-        if (self.width * r).round() != (other.width * r).round() { return false; }
-        if self.linecolor != other.linecolor { return false; }
+        if (self.width * r).round() != (other.width * r).round() {
+            return false;
+        }
+        if self.linecolor != other.linecolor {
+            return false;
+        }
         true
     }
 }

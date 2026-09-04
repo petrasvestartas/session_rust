@@ -1,7 +1,7 @@
-﻿use crate::{OBB, Color, Line, Point, Tolerance, Vector, Xform, SpatialBVH};
 use crate::polyline::Polyline;
 use crate::remesh_cdt;
 use crate::tolerance::PI;
+use crate::{Color, Line, Point, SpatialBVH, Tolerance, Vector, Xform, OBB};
 use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
 
@@ -9,7 +9,8 @@ use std::collections::{HashMap, HashSet};
 #[derive(Clone, PartialEq, Default, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub enum ColorMode {
-    #[default] OBJECTCOLOR,
+    #[default]
+    OBJECTCOLOR,
     POINTCOLORS,
     FACECOLORS,
     NONE,
@@ -17,16 +18,36 @@ pub enum ColorMode {
 
 impl ColorMode {
     fn to_i32(&self) -> i32 {
-        match self { Self::OBJECTCOLOR => 0, Self::POINTCOLORS => 1, Self::FACECOLORS => 2, Self::NONE => 3 }
+        match self {
+            Self::OBJECTCOLOR => 0,
+            Self::POINTCOLORS => 1,
+            Self::FACECOLORS => 2,
+            Self::NONE => 3,
+        }
     }
     fn from_i32(v: i32) -> Self {
-        match v { 1 => Self::POINTCOLORS, 2 => Self::FACECOLORS, 3 => Self::NONE, _ => Self::OBJECTCOLOR }
+        match v {
+            1 => Self::POINTCOLORS,
+            2 => Self::FACECOLORS,
+            3 => Self::NONE,
+            _ => Self::OBJECTCOLOR,
+        }
     }
     fn to_str(&self) -> &'static str {
-        match self { Self::OBJECTCOLOR => "objectcolor", Self::POINTCOLORS => "pointcolors", Self::FACECOLORS => "facecolors", Self::NONE => "none" }
+        match self {
+            Self::OBJECTCOLOR => "objectcolor",
+            Self::POINTCOLORS => "pointcolors",
+            Self::FACECOLORS => "facecolors",
+            Self::NONE => "none",
+        }
     }
     fn from_str(s: &str) -> Self {
-        match s { "pointcolors" => Self::POINTCOLORS, "facecolors" => Self::FACECOLORS, "none" => Self::NONE, _ => Self::OBJECTCOLOR }
+        match s {
+            "pointcolors" => Self::POINTCOLORS,
+            "facecolors" => Self::FACECOLORS,
+            "none" => Self::NONE,
+            _ => Self::OBJECTCOLOR,
+        }
     }
 }
 
@@ -53,11 +74,14 @@ pub struct Mesh {
     #[serde(skip)]
     pub triangulation: HashMap<usize, Vec<[usize; 3]>>, // Cached triangulations
     #[serde(skip)]
-    pub face_holes: HashMap<usize, Vec<Vec<usize>>>,    // Face hole rings
+    pub face_holes: HashMap<usize, Vec<Vec<usize>>>, // Face hole rings
     max_vertex: usize,                                           // Next vertex key
     max_face: usize,                                             // Next face key
-    #[serde(serialize_with = "crate::guid_serde::serialize", deserialize_with = "crate::guid_serde::deserialize")]
-    guid: std::sync::OnceLock<String>,                          // Unique identifier
+    #[serde(
+        serialize_with = "crate::guid_serde::serialize",
+        deserialize_with = "crate::guid_serde::deserialize"
+    )]
+    guid: std::sync::OnceLock<String>, // Unique identifier
     pub name: String,                                            // Mesh name
     #[serde(skip)]
     pointcolors: Vec<Color>,                   // Vertex colors
@@ -104,39 +128,62 @@ pub struct Mesh {
 pub struct Attributes(Option<Box<std::collections::BTreeMap<String, f64>>>);
 
 impl Attributes {
-    pub fn new() -> Self { Self(None) }
-    pub fn get(&self, key: &str) -> Option<&f64> { self.0.as_ref().and_then(|m| m.get(key)) }
-    pub fn contains_key(&self, key: &str) -> bool { self.get(key).is_some() }
-    pub fn len(&self) -> usize { self.0.as_ref().map_or(0, |m| m.len()) }
-    pub fn is_empty(&self) -> bool { self.len() == 0 }
-    pub fn clear(&mut self) { self.0 = None }
+    pub fn new() -> Self {
+        Self(None)
+    }
+    pub fn get(&self, key: &str) -> Option<&f64> {
+        self.0.as_ref().and_then(|m| m.get(key))
+    }
+    pub fn contains_key(&self, key: &str) -> bool {
+        self.get(key).is_some()
+    }
+    pub fn len(&self) -> usize {
+        self.0.as_ref().map_or(0, |m| m.len())
+    }
+    pub fn is_empty(&self) -> bool {
+        self.len() == 0
+    }
+    pub fn clear(&mut self) {
+        self.0 = None
+    }
     pub fn insert(&mut self, key: String, value: f64) -> Option<f64> {
-        self.0.get_or_insert_with(Default::default).insert(key, value)
+        self.0
+            .get_or_insert_with(Default::default)
+            .insert(key, value)
     }
     pub fn remove(&mut self, key: &str) -> Option<f64> {
         let out = self.0.as_mut().and_then(|m| m.remove(key));
         // Back to the un-allocated state, so a map that empties out stops costing anything.
-        if self.is_empty() { self.0 = None }
+        if self.is_empty() {
+            self.0 = None
+        }
         out
     }
     pub fn iter(&self) -> std::collections::btree_map::Iter<'_, String, f64> {
         // An empty map's iterator, so callers never special-case the None arm. `Box::leak` is not
         // needed: a fresh empty BTreeMap has no allocation, but it also has no lifetime here -
         // hence the static empty below.
-        static EMPTY: std::sync::OnceLock<std::collections::BTreeMap<String, f64>> = std::sync::OnceLock::new();
+        static EMPTY: std::sync::OnceLock<std::collections::BTreeMap<String, f64>> =
+            std::sync::OnceLock::new();
         match &self.0 {
             Some(m) => m.iter(),
             None => EMPTY.get_or_init(Default::default).iter(),
         }
     }
-    pub fn keys(&self) -> impl Iterator<Item = &String> { self.iter().map(|(k, _)| k) }
-    pub fn values(&self) -> impl Iterator<Item = &f64> { self.iter().map(|(_, v)| v) }
+    pub fn keys(&self) -> impl Iterator<Item = &String> {
+        self.iter().map(|(k, _)| k)
+    }
+    pub fn values(&self) -> impl Iterator<Item = &f64> {
+        self.iter().map(|(_, v)| v)
+    }
 }
 
 impl<'a> IntoIterator for &'a Attributes {
     type Item = (&'a String, &'a f64);
     type IntoIter = std::collections::btree_map::Iter<'a, String, f64>;
-    fn into_iter(self) -> Self::IntoIter { self.iter() }
+    fn into_iter(self) -> Self::IntoIter {
+        self.iter()
+    }
 }
 
 impl IntoIterator for Attributes {
@@ -150,13 +197,19 @@ impl IntoIterator for Attributes {
 impl FromIterator<(String, f64)> for Attributes {
     fn from_iter<T: IntoIterator<Item = (String, f64)>>(it: T) -> Self {
         let m: std::collections::BTreeMap<String, f64> = it.into_iter().collect();
-        if m.is_empty() { Self(None) } else { Self(Some(Box::new(m))) }
+        if m.is_empty() {
+            Self(None)
+        } else {
+            Self(Some(Box::new(m)))
+        }
     }
 }
 
 impl Extend<(String, f64)> for Attributes {
     fn extend<T: IntoIterator<Item = (String, f64)>>(&mut self, it: T) {
-        for (k, v) in it { self.insert(k, v); }
+        for (k, v) in it {
+            self.insert(k, v);
+        }
     }
 }
 
@@ -164,7 +217,9 @@ impl Serialize for Attributes {
     fn serialize<S: serde::Serializer>(&self, s: S) -> Result<S::Ok, S::Error> {
         use serde::ser::SerializeMap;
         let mut m = s.serialize_map(Some(self.len()))?;
-        for (k, v) in self.iter() { m.serialize_entry(k, v)?; }
+        for (k, v) in self.iter() {
+            m.serialize_entry(k, v)?;
+        }
         m.end()
     }
 }
@@ -172,17 +227,21 @@ impl Serialize for Attributes {
 impl<'de> Deserialize<'de> for Attributes {
     fn deserialize<D: serde::Deserializer<'de>>(d: D) -> Result<Self, D::Error> {
         let m = std::collections::BTreeMap::<String, f64>::deserialize(d)?;
-        Ok(if m.is_empty() { Self(None) } else { Self(Some(Box::new(m))) })
+        Ok(if m.is_empty() {
+            Self(None)
+        } else {
+            Self(Some(Box::new(m)))
+        })
     }
 }
 
 /// Vertex data containing position and attributes
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct VertexData {
-    pub x: f64,                           // X coordinate
-    pub y: f64,                           // Y coordinate
-    pub z: f64,                           // Z coordinate
-    pub attributes: Attributes,           // Vertex attributes, 8 B when there are none
+    pub x: f64,                 // X coordinate
+    pub y: f64,                 // Y coordinate
+    pub z: f64,                 // Z coordinate
+    pub attributes: Attributes, // Vertex attributes, 8 B when there are none
 }
 
 impl VertexData {
@@ -272,10 +331,11 @@ fn lp_newell_normal(pts: &[Point]) -> (f64, f64, f64) {
     let (mut nx, mut ny, mut nz) = (0.0f64, 0.0, 0.0);
     let n = pts.len();
     for i in 0..n {
-        let a = &pts[i]; let b = &pts[(i+1)%n];
-        nx += (a[1]-b[1]) * (a[2]+b[2]);
-        ny += (a[2]-b[2]) * (a[0]+b[0]);
-        nz += (a[0]-b[0]) * (a[1]+b[1]);
+        let a = &pts[i];
+        let b = &pts[(i + 1) % n];
+        nx += (a[1] - b[1]) * (a[2] + b[2]);
+        ny += (a[2] - b[2]) * (a[0] + b[0]);
+        nz += (a[0] - b[0]) * (a[1] + b[1]);
     }
     (nx, ny, nz)
 }
@@ -287,38 +347,60 @@ fn lp_merge_collinear(pts: &mut Vec<Point>, vkeys: &mut Vec<usize>) {
     while changed {
         changed = false;
         let m = pts.len();
-        if m < 3 { break; }
+        if m < 3 {
+            break;
+        }
         let mut np: Vec<Point> = Vec::new();
         let mut nk: Vec<usize> = Vec::new();
         for i in 0..m {
-            let p = (i+m-1)%m; let nx = (i+1)%m;
-            let (ax, ay, az) = (pts[i][0]-pts[p][0], pts[i][1]-pts[p][1], pts[i][2]-pts[p][2]);
-            let (bx, by, bz) = (pts[nx][0]-pts[i][0], pts[nx][1]-pts[i][1], pts[nx][2]-pts[i][2]);
-            let (cx, cy, cz) = (ay*bz-az*by, az*bx-ax*bz, ax*by-ay*bx);
-            let (a2, b2) = (ax*ax+ay*ay+az*az, bx*bx+by*by+bz*bz);
-            if a2 < zt2 || b2 < zt2 || cx*cx+cy*cy+cz*cz < tol*tol*a2*b2 {
+            let p = (i + m - 1) % m;
+            let nx = (i + 1) % m;
+            let (ax, ay, az) = (
+                pts[i][0] - pts[p][0],
+                pts[i][1] - pts[p][1],
+                pts[i][2] - pts[p][2],
+            );
+            let (bx, by, bz) = (
+                pts[nx][0] - pts[i][0],
+                pts[nx][1] - pts[i][1],
+                pts[nx][2] - pts[i][2],
+            );
+            let (cx, cy, cz) = (ay * bz - az * by, az * bx - ax * bz, ax * by - ay * bx);
+            let (a2, b2) = (ax * ax + ay * ay + az * az, bx * bx + by * by + bz * bz);
+            if a2 < zt2 || b2 < zt2 || cx * cx + cy * cy + cz * cz < tol * tol * a2 * b2 {
                 changed = true;
             } else {
-                np.push(pts[i].clone()); nk.push(vkeys[i]);
+                np.push(pts[i].clone());
+                nk.push(vkeys[i]);
             }
         }
-        *pts = np; *vkeys = nk;
+        *pts = np;
+        *vkeys = nk;
     }
 }
 
 fn lp_offset_toward(p: &Point, cx: f64, cy: f64, cz: f64, gap: f64) -> Point {
-    let (mut dx, mut dy, mut dz) = (cx-p[0], cy-p[1], cz-p[2]);
-    let len = (dx*dx+dy*dy+dz*dz).sqrt();
-    if len > 1e-10 { dx *= gap/len; dy *= gap/len; dz *= gap/len; }
-    Point::new(p[0]+dx, p[1]+dy, p[2]+dz)
+    let (mut dx, mut dy, mut dz) = (cx - p[0], cy - p[1], cz - p[2]);
+    let len = (dx * dx + dy * dy + dz * dz).sqrt();
+    if len > 1e-10 {
+        dx *= gap / len;
+        dy *= gap / len;
+        dz *= gap / len;
+    }
+    Point::new(p[0] + dx, p[1] + dy, p[2] + dz)
 }
 
 fn lp_face_centroid(m: &Mesh, fk: usize) -> Point {
     let vkeys = m.face_vertices(fk).unwrap();
     let (mut cx, mut cy, mut cz) = (0.0f64, 0.0, 0.0);
-    for &vk in vkeys { let p = m.vertex_point(vk).unwrap(); cx += p[0]; cy += p[1]; cz += p[2]; }
+    for &vk in vkeys {
+        let p = m.vertex_point(vk).unwrap();
+        cx += p[0];
+        cy += p[1];
+        cz += p[2];
+    }
     let n = vkeys.len() as f64;
-    Point::new(cx/n, cy/n, cz/n)
+    Point::new(cx / n, cy / n, cz / n)
 }
 
 impl Mesh {
@@ -358,9 +440,9 @@ impl Mesh {
         }
     }
 
-    ///////////////////////////////////////////////////////////////////////////////////////////
+    // ═══════════════════════════════════════════════════════════════════════════
     // Construction
-    ///////////////////////////////////////////////////////////////////////////////////////////
+    // ═══════════════════════════════════════════════════════════════════════════
 
     pub fn from_vertices_and_faces(vertices: Vec<Point>, faces: Vec<Vec<usize>>) -> Self {
         let mut mesh = Mesh::new();
@@ -421,40 +503,59 @@ impl Mesh {
                 continue;
             }
             let np = vkeys.len();
-        if np >= 4 {
-            if let Some(fk) = mesh.add_face(vkeys.clone(), None) {
-                let (mut nx, mut ny, mut nz) = (0.0f64, 0.0, 0.0);
-                for i in 0..np {
-                    let a = &poly[i];
-                    let b = &poly[(i + 1) % np];
-                    nx += (a[1] - b[1]) * (a[2] + b[2]);
-                    ny += (a[2] - b[2]) * (a[0] + b[0]);
-                    nz += (a[0] - b[0]) * (a[1] + b[1]);
+            if np >= 4 {
+                if let Some(fk) = mesh.add_face(vkeys.clone(), None) {
+                    let (mut nx, mut ny, mut nz) = (0.0f64, 0.0, 0.0);
+                    for i in 0..np {
+                        let a = &poly[i];
+                        let b = &poly[(i + 1) % np];
+                        nx += (a[1] - b[1]) * (a[2] + b[2]);
+                        ny += (a[2] - b[2]) * (a[0] + b[0]);
+                        nz += (a[0] - b[0]) * (a[1] + b[1]);
+                    }
+                    let nlen = (nx * nx + ny * ny + nz * nz).sqrt();
+                    if nlen > 1e-12 {
+                        nx /= nlen;
+                        ny /= nlen;
+                        nz /= nlen;
+                        let (mut ux, mut uy, mut uz) = (1.0f64, 0.0, 0.0);
+                        if nx.abs() > 0.9 {
+                            ux = 0.0;
+                            uy = 1.0;
+                            uz = 0.0;
+                        }
+                        let dot = ux * nx + uy * ny + uz * nz;
+                        ux -= dot * nx;
+                        uy -= dot * ny;
+                        uz -= dot * nz;
+                        let um = (ux * ux + uy * uy + uz * uz).sqrt();
+                        ux /= um;
+                        uy /= um;
+                        uz /= um;
+                        let (vx, vy, vz) =
+                            (ny * uz - nz * uy, nz * ux - nx * uz, nx * uy - ny * ux);
+                        let nk = vkeys.len();
+                        let bpts: Vec<Point> = poly[..nk]
+                            .iter()
+                            .map(|p| {
+                                Point::new(
+                                    p[0] * ux + p[1] * uy + p[2] * uz,
+                                    p[0] * vx + p[1] * vy + p[2] * vz,
+                                    0.0,
+                                )
+                            })
+                            .collect();
+                        let tris = remesh_cdt::cdt_triangulate(&bpts, &[]);
+                        let tri_list: Vec<[usize; 3]> = tris
+                            .iter()
+                            .map(|&(a, b, c)| [vkeys[a], vkeys[b], vkeys[c]])
+                            .collect();
+                        mesh.triangulation.insert(fk, tri_list);
+                    }
                 }
-                let nlen = (nx*nx + ny*ny + nz*nz).sqrt();
-                if nlen > 1e-12 {
-                    nx /= nlen; ny /= nlen; nz /= nlen;
-                    let (mut ux, mut uy, mut uz) = (1.0f64, 0.0, 0.0);
-                    if nx.abs() > 0.9 { ux = 0.0; uy = 1.0; uz = 0.0; }
-                    let dot = ux*nx + uy*ny + uz*nz;
-                    ux -= dot*nx; uy -= dot*ny; uz -= dot*nz;
-                    let um = (ux*ux + uy*uy + uz*uz).sqrt();
-                    ux /= um; uy /= um; uz /= um;
-                    let (vx, vy, vz) = (ny*uz - nz*uy, nz*ux - nx*uz, nx*uy - ny*ux);
-                    let nk = vkeys.len();
-                    let bpts: Vec<Point> = poly[..nk].iter().map(|p| Point::new(
-                        p[0]*ux + p[1]*uy + p[2]*uz,
-                        p[0]*vx + p[1]*vy + p[2]*vz, 0.0)).collect();
-                    let tris = remesh_cdt::cdt_triangulate(&bpts, &[]);
-                    let tri_list: Vec<[usize; 3]> = tris.iter().map(|&(a, b, c)| {
-                        [vkeys[a], vkeys[b], vkeys[c]]
-                    }).collect();
-                    mesh.triangulation.insert(fk, tri_list);
-                }
+            } else {
+                let _ = mesh.add_face(vkeys, None);
             }
-        } else {
-            let _ = mesh.add_face(vkeys, None);
-        }
         }
 
         mesh
@@ -476,13 +577,31 @@ impl Mesh {
             let (mut minx, mut miny, mut minz) = (all_pts[0][0], all_pts[0][1], all_pts[0][2]);
             let (mut maxx, mut maxy, mut maxz) = (minx, miny, minz);
             for p in &all_pts {
-                if p[0] < minx { minx = p[0]; } if p[0] > maxx { maxx = p[0]; }
-                if p[1] < miny { miny = p[1]; } if p[1] > maxy { maxy = p[1]; }
-                if p[2] < minz { minz = p[2]; } if p[2] > maxz { maxz = p[2]; }
+                if p[0] < minx {
+                    minx = p[0];
+                }
+                if p[0] > maxx {
+                    maxx = p[0];
+                }
+                if p[1] < miny {
+                    miny = p[1];
+                }
+                if p[1] > maxy {
+                    maxy = p[1];
+                }
+                if p[2] < minz {
+                    minz = p[2];
+                }
+                if p[2] > maxz {
+                    maxz = p[2];
+                }
             }
-            let diag = ((maxx-minx).powi(2) + (maxy-miny).powi(2) + (maxz-minz).powi(2)).sqrt();
+            let diag =
+                ((maxx - minx).powi(2) + (maxy - miny).powi(2) + (maxz - minz).powi(2)).sqrt();
             eps = diag * 1e-6;
-            if eps < 1e-12 { eps = 1e-12; }
+            if eps < 1e-12 {
+                eps = 1e-12;
+            }
         }
 
         let mut vmap: HashMap<(i64, i64, i64), usize> = HashMap::new();
@@ -505,7 +624,9 @@ impl Mesh {
         for ln in lines {
             let a = get_vid(&ln.start());
             let b = get_vid(&ln.end());
-            if a == b { continue; }
+            if a == b {
+                continue;
+            }
             adj.entry(a).or_default().push(b);
             adj.entry(b).or_default().push(a);
         }
@@ -536,27 +657,40 @@ impl Mesh {
         for &u in &adj_keys {
             let nbrs: Vec<usize> = adj.get(&u).cloned().unwrap_or_default();
             for &v in &nbrs {
-                if visited.contains(&(u, v)) { continue; }
+                if visited.contains(&(u, v)) {
+                    continue;
+                }
                 let mut cycle: Vec<usize> = Vec::new();
                 let (mut cu, mut cv) = (u, v);
                 let mut valid = true;
                 loop {
-                    if visited.contains(&(cu, cv)) { break; }
+                    if visited.contains(&(cu, cv)) {
+                        break;
+                    }
                     visited.insert((cu, cv));
                     cycle.push(cu);
                     let cv_nbrs = match adj.get(&cv) {
                         Some(n) => n,
-                        None => { valid = false; break; }
+                        None => {
+                            valid = false;
+                            break;
+                        }
                     };
                     let idx = match cv_nbrs.iter().position(|&x| x == cu) {
                         Some(i) => i,
-                        None => { valid = false; break; }
+                        None => {
+                            valid = false;
+                            break;
+                        }
                     };
                     let prev_idx = if idx == 0 { cv_nbrs.len() - 1 } else { idx - 1 };
                     let nxt = cv_nbrs[prev_idx];
                     cu = cv;
                     cv = nxt;
-                    if cycle.len() > nv * 2 { valid = false; break; }
+                    if cycle.len() > nv * 2 {
+                        valid = false;
+                        break;
+                    }
                 }
                 if valid && cycle.len() >= 3 {
                     face_cycles.push(cycle);
@@ -572,11 +706,14 @@ impl Mesh {
                 let mut area = 0.0_f64;
                 for j in 0..cn {
                     let a = cyc[j];
-                    let b = cyc[(j+1)%cn];
+                    let b = cyc[(j + 1) % cn];
                     area += verts[a][0] * verts[b][1] - verts[b][0] * verts[a][1];
                 }
                 area *= 0.5;
-                if area < min_area { min_area = area; min_idx = i; }
+                if area < min_area {
+                    min_area = area;
+                    min_idx = i;
+                }
             }
             face_cycles.remove(min_idx);
         }
@@ -590,16 +727,26 @@ impl Mesh {
             let fvkeys: Vec<usize> = cycle.iter().map(|&i| vkeys[i]).collect();
             if let Some(fkey) = mesh.add_face(fvkeys, None) {
                 let mut ordered: Vec<usize> = cycle.clone();
-                let mut bpts: Vec<Point> = ordered.iter().map(|&i| Point::new(verts[i][0], verts[i][1], 0.0)).collect();
-                let area: f64 = (0..bpts.len()).map(|j| {
-                    let k = (j + 1) % bpts.len();
-                    bpts[j][0] * bpts[k][1] - bpts[k][0] * bpts[j][1]
-                }).sum::<f64>() * 0.5;
-                if area < 0.0 { bpts.reverse(); ordered.reverse(); }
+                let mut bpts: Vec<Point> = ordered
+                    .iter()
+                    .map(|&i| Point::new(verts[i][0], verts[i][1], 0.0))
+                    .collect();
+                let area: f64 = (0..bpts.len())
+                    .map(|j| {
+                        let k = (j + 1) % bpts.len();
+                        bpts[j][0] * bpts[k][1] - bpts[k][0] * bpts[j][1]
+                    })
+                    .sum::<f64>()
+                    * 0.5;
+                if area < 0.0 {
+                    bpts.reverse();
+                    ordered.reverse();
+                }
                 let tris = remesh_cdt::cdt_triangulate(&bpts, &[]);
-                let tri_list: Vec<[usize; 3]> = tris.iter().map(|&(a, b, c)| {
-                    [vkeys[ordered[a]], vkeys[ordered[b]], vkeys[ordered[c]]]
-                }).collect();
+                let tri_list: Vec<[usize; 3]> = tris
+                    .iter()
+                    .map(|&(a, b, c)| [vkeys[ordered[a]], vkeys[ordered[b]], vkeys[ordered[c]]])
+                    .collect();
                 mesh.triangulation.insert(fkey, tri_list);
             }
         }
@@ -615,7 +762,12 @@ impl Mesh {
         crate::remesh_cdt::RemeshCDT::from_polylines(polylines, false, !sort_by_bbox)
     }
 
-    pub fn loft(polylines0: &[Polyline], polylines1: &[Polyline], cap: bool, fix_collinear: bool) -> Self {
+    pub fn loft(
+        polylines0: &[Polyline],
+        polylines1: &[Polyline],
+        cap: bool,
+        fix_collinear: bool,
+    ) -> Self {
         if polylines0.is_empty() || polylines1.is_empty() || polylines0.len() != polylines1.len() {
             return Mesh::new();
         }
@@ -623,23 +775,47 @@ impl Mesh {
         let mut max_diag = 0.0_f64;
         for (i, pl) in polylines0.iter().enumerate() {
             let pts = pl.get_points();
-            if pts.is_empty() { continue; }
+            if pts.is_empty() {
+                continue;
+            }
             let (mut minx, mut miny, mut minz) = (pts[0][0], pts[0][1], pts[0][2]);
             let (mut maxx, mut maxy, mut maxz) = (minx, miny, minz);
             for p in &pts {
-                if p[0] < minx { minx = p[0]; } if p[0] > maxx { maxx = p[0]; }
-                if p[1] < miny { miny = p[1]; } if p[1] > maxy { maxy = p[1]; }
-                if p[2] < minz { minz = p[2]; } if p[2] > maxz { maxz = p[2]; }
+                if p[0] < minx {
+                    minx = p[0];
+                }
+                if p[0] > maxx {
+                    maxx = p[0];
+                }
+                if p[1] < miny {
+                    miny = p[1];
+                }
+                if p[1] > maxy {
+                    maxy = p[1];
+                }
+                if p[2] < minz {
+                    minz = p[2];
+                }
+                if p[2] > maxz {
+                    maxz = p[2];
+                }
             }
-            let (dx, dy, dz) = (maxx-minx, maxy-miny, maxz-minz);
-            let diag = (dx*dx + dy*dy + dz*dz).sqrt();
-            if diag > max_diag { max_diag = diag; border_idx = i; }
+            let (dx, dy, dz) = (maxx - minx, maxy - miny, maxz - minz);
+            let diag = (dx * dx + dy * dy + dz * dz).sqrt();
+            if diag > max_diag {
+                max_diag = diag;
+                border_idx = i;
+            }
         }
         let get_open = |pl: &Polyline| -> Vec<Point> {
             let mut pts = pl.get_points();
             if pts.len() > 1 {
-                let f = pts[0].clone(); let b = pts[pts.len()-1].clone();
-                if (f[0]-b[0]).abs() < 1e-12 && (f[1]-b[1]).abs() < 1e-12 && (f[2]-b[2]).abs() < 1e-12 {
+                let f = pts[0].clone();
+                let b = pts[pts.len() - 1].clone();
+                if (f[0] - b[0]).abs() < 1e-12
+                    && (f[1] - b[1]).abs() < 1e-12
+                    && (f[2] - b[2]).abs() < 1e-12
+                {
                     pts.pop();
                 }
             }
@@ -649,34 +825,47 @@ impl Mesh {
         {
             let c0 = polylines0[border_idx].center();
             let c1 = polylines1[border_idx].center();
-            let btt = Vector::new(c1[0]-c0[0], c1[1]-c0[1], c1[2]-c0[2]);
+            let btt = Vector::new(c1[0] - c0[0], c1[1] - c0[1], c1[2] - c0[2]);
             if zaxis.dot(&btt) < 0.0 {
                 yaxis = Vector::new(-yaxis[0], -yaxis[1], -yaxis[2]);
             }
         }
         let proj = |p: &Point| -> Point {
-            let dx = p[0]-origin[0]; let dy = p[1]-origin[1]; let dz = p[2]-origin[2];
-            Point::new(dx*xaxis[0]+dy*xaxis[1]+dz*xaxis[2], dx*yaxis[0]+dy*yaxis[1]+dz*yaxis[2], 0.0)
+            let dx = p[0] - origin[0];
+            let dy = p[1] - origin[1];
+            let dz = p[2] - origin[2];
+            Point::new(
+                dx * xaxis[0] + dy * xaxis[1] + dz * xaxis[2],
+                dx * yaxis[0] + dy * yaxis[1] + dz * yaxis[2],
+                0.0,
+            )
         };
         let sarea = |pts: &[Point]| -> f64 {
             let n = pts.len();
             let mut a = 0.0;
             for i in 0..n {
-                let j = (i+1) % n;
-                let pi = proj(&pts[i]); let pj = proj(&pts[j]);
-                a += pi[0]*pj[1] - pj[0]*pi[1];
+                let j = (i + 1) % n;
+                let pi = proj(&pts[i]);
+                let pj = proj(&pts[j]);
+                a += pi[0] * pj[1] - pj[0] * pi[1];
             }
             a * 0.5
         };
         let mut order: Vec<usize> = vec![border_idx];
-        for i in 0..polylines0.len() { if i != border_idx { order.push(i); } }
+        for i in 0..polylines0.len() {
+            if i != border_idx {
+                order.push(i);
+            }
+        }
         let mut poly_infos: Vec<(usize, usize, usize, usize)> = Vec::new(); // (bot_off, bot_n, top_off, top_n)
         let mut all_bot: Vec<Point> = Vec::new();
         let mut all_top: Vec<Point> = Vec::new();
         let strip_shared_collinear = |bot: &mut Vec<Point>, top: &mut Vec<Point>| {
             let cdt_scale = 1.0e6_f64;
             let cross_q = |a: &Point, b: &Point, c: &Point| -> i64 {
-                let pa = proj(a); let pb = proj(b); let pc = proj(c);
+                let pa = proj(a);
+                let pb = proj(b);
+                let pc = proj(c);
                 let iax = (pa[0] * cdt_scale).round() as i64;
                 let iay = (pa[1] * cdt_scale).round() as i64;
                 let ibx = (pb[0] * cdt_scale).round() as i64;
@@ -708,124 +897,187 @@ impl Mesh {
             let mut top = get_open(&polylines1[idx]);
             let area = sarea(&bot);
             if (oi == 0 && area < 0.0) || (oi != 0 && area > 0.0) {
-                bot.reverse(); top.reverse();
+                bot.reverse();
+                top.reverse();
             }
-            if bot.len() == top.len() { strip_shared_collinear(&mut bot, &mut top); }
+            if bot.len() == top.len() {
+                strip_shared_collinear(&mut bot, &mut top);
+            }
             poly_infos.push((all_bot.len(), bot.len(), all_top.len(), top.len()));
             all_bot.extend(bot.into_iter());
             all_top.extend(top.into_iter());
         }
         let mut mesh = Mesh::new();
-        let bvk: Vec<usize> = all_bot.iter().map(|p| mesh.add_vertex(p.clone(), None)).collect();
-        let tvk: Vec<usize> = all_top.iter().map(|p| mesh.add_vertex(p.clone(), None)).collect();
+        let bvk: Vec<usize> = all_bot
+            .iter()
+            .map(|p| mesh.add_vertex(p.clone(), None))
+            .collect();
+        let tvk: Vec<usize> = all_top
+            .iter()
+            .map(|p| mesh.add_vertex(p.clone(), None))
+            .collect();
         if cap {
             let (_, bot_n0, _, top_n0) = poly_infos[0];
             // Bottom cap CDT
             let b2d: Vec<Point> = (0..bot_n0).map(|i| proj(&all_bot[i])).collect();
-            let bh2d: Vec<Vec<Point>> = poly_infos[1..].iter().map(|&(off,cnt,_,_)| {
-                (off..off+cnt).map(|i| proj(&all_bot[i])).collect()
-            }).collect();
+            let bh2d: Vec<Vec<Point>> = poly_infos[1..]
+                .iter()
+                .map(|&(off, cnt, _, _)| (off..off + cnt).map(|i| proj(&all_bot[i])).collect())
+                .collect();
             let b_tris = remesh_cdt::cdt_triangulate(&b2d, &bh2d);
             let bot_fvkeys: Vec<usize> = (0..bot_n0).rev().map(|i| bvk[i]).collect();
             if let Some(fk_bot) = mesh.add_face(bot_fvkeys, None) {
                 if !bh2d.is_empty() {
-                    let hole_rings: Vec<Vec<usize>> = poly_infos[1..].iter()
-                        .map(|&(off,cnt,_,_)| (off..off+cnt).map(|i| bvk[i]).collect())
+                    let hole_rings: Vec<Vec<usize>> = poly_infos[1..]
+                        .iter()
+                        .map(|&(off, cnt, _, _)| (off..off + cnt).map(|i| bvk[i]).collect())
                         .collect();
                     mesh.face_holes.insert(fk_bot, hole_rings);
                 }
-                let mut tri_list: Vec<[usize;3]> = b_tris.iter().map(|&(a,b,c)| [bvk[a], bvk[c], bvk[b]]).collect();
+                let mut tri_list: Vec<[usize; 3]> = b_tris
+                    .iter()
+                    .map(|&(a, b, c)| [bvk[a], bvk[c], bvk[b]])
+                    .collect();
                 if fix_collinear {
-                    let vk2d: std::collections::HashMap<usize,(f64,f64)> = (0..bot_n0).map(|i| { let p = proj(&all_bot[i]); (bvk[i], (p[0],p[1])) }).collect();
+                    let vk2d: std::collections::HashMap<usize, (f64, f64)> = (0..bot_n0)
+                        .map(|i| {
+                            let p = proj(&all_bot[i]);
+                            (bvk[i], (p[0], p[1]))
+                        })
+                        .collect();
                     let fv: Vec<usize> = (0..bot_n0).rev().map(|i| bvk[i]).collect();
                     let mut chg = true;
                     while chg {
                         chg = false;
-                        let tv: std::collections::HashSet<usize> = tri_list.iter().flat_map(|t| t.iter().copied()).collect();
+                        let tv: std::collections::HashSet<usize> =
+                            tri_list.iter().flat_map(|t| t.iter().copied()).collect();
                         let n = fv.len();
                         'outer: for k in 0..n {
                             let b_vk = fv[k];
-                            if tv.contains(&b_vk) { continue; }
-                            let a_vk = fv[(k+n-1)%n]; let c_vk = fv[(k+1)%n];
+                            if tv.contains(&b_vk) {
+                                continue;
+                            }
+                            let a_vk = fv[(k + n - 1) % n];
+                            let c_vk = fv[(k + 1) % n];
                             for j in 0..tri_list.len() {
-                                let ha = tri_list[j].contains(&a_vk); let hc = tri_list[j].contains(&c_vk);
-                                if !ha || !hc { continue; }
+                                let ha = tri_list[j].contains(&a_vk);
+                                let hc = tri_list[j].contains(&c_vk);
+                                if !ha || !hc {
+                                    continue;
+                                }
                                 let ft = tri_list[j];
-                                let (t1, t2) = if (ft[0]==a_vk||ft[0]==c_vk) && (ft[1]==a_vk||ft[1]==c_vk) {
-                                    ([ft[0],b_vk,ft[2]], [b_vk,ft[1],ft[2]])
-                                } else if (ft[1]==a_vk||ft[1]==c_vk) && (ft[2]==a_vk||ft[2]==c_vk) {
-                                    ([ft[0],ft[1],b_vk], [ft[0],b_vk,ft[2]])
+                                let (t1, t2) = if (ft[0] == a_vk || ft[0] == c_vk)
+                                    && (ft[1] == a_vk || ft[1] == c_vk)
+                                {
+                                    ([ft[0], b_vk, ft[2]], [b_vk, ft[1], ft[2]])
+                                } else if (ft[1] == a_vk || ft[1] == c_vk)
+                                    && (ft[2] == a_vk || ft[2] == c_vk)
+                                {
+                                    ([ft[0], ft[1], b_vk], [ft[0], b_vk, ft[2]])
                                 } else {
-                                    ([ft[0],ft[1],b_vk], [b_vk,ft[1],ft[2]])
+                                    ([ft[0], ft[1], b_vk], [b_vk, ft[1], ft[2]])
                                 };
-                                tri_list[j] = t1; tri_list.push(t2); chg = true; break 'outer;
+                                tri_list[j] = t1;
+                                tri_list.push(t2);
+                                chg = true;
+                                break 'outer;
                             }
                         }
                     }
                     let sc = 1e6_f64;
                     tri_list.retain(|t| {
-                        let (u0,v0) = vk2d.get(&t[0]).copied().unwrap_or((0.0,0.0));
-                        let (u1,v1) = vk2d.get(&t[1]).copied().unwrap_or((0.0,0.0));
-                        let (u2,v2) = vk2d.get(&t[2]).copied().unwrap_or((0.0,0.0));
-                        let iu0=(u0*sc).round() as i64; let iv0=(v0*sc).round() as i64;
-                        let iu1=(u1*sc).round() as i64; let iv1=(v1*sc).round() as i64;
-                        let iu2=(u2*sc).round() as i64; let iv2=(v2*sc).round() as i64;
-                        (iu1-iu0)*(iv2-iv0)-(iv1-iv0)*(iu2-iu0) != 0
+                        let (u0, v0) = vk2d.get(&t[0]).copied().unwrap_or((0.0, 0.0));
+                        let (u1, v1) = vk2d.get(&t[1]).copied().unwrap_or((0.0, 0.0));
+                        let (u2, v2) = vk2d.get(&t[2]).copied().unwrap_or((0.0, 0.0));
+                        let iu0 = (u0 * sc).round() as i64;
+                        let iv0 = (v0 * sc).round() as i64;
+                        let iu1 = (u1 * sc).round() as i64;
+                        let iv1 = (v1 * sc).round() as i64;
+                        let iu2 = (u2 * sc).round() as i64;
+                        let iv2 = (v2 * sc).round() as i64;
+                        (iu1 - iu0) * (iv2 - iv0) - (iv1 - iv0) * (iu2 - iu0) != 0
                     });
                 }
                 mesh.triangulation.insert(fk_bot, tri_list);
             }
             // Top cap CDT
             let t2d: Vec<Point> = (0..top_n0).map(|i| proj(&all_top[i])).collect();
-            let th2d: Vec<Vec<Point>> = poly_infos[1..].iter().map(|&(_,_,off,cnt)| {
-                (off..off+cnt).map(|i| proj(&all_top[i])).collect()
-            }).collect();
+            let th2d: Vec<Vec<Point>> = poly_infos[1..]
+                .iter()
+                .map(|&(_, _, off, cnt)| (off..off + cnt).map(|i| proj(&all_top[i])).collect())
+                .collect();
             let t_tris = remesh_cdt::cdt_triangulate(&t2d, &th2d);
             let top_fvkeys: Vec<usize> = (0..top_n0).map(|i| tvk[i]).collect();
             if let Some(fk_top) = mesh.add_face(top_fvkeys, None) {
                 if !th2d.is_empty() {
-                    let hole_rings: Vec<Vec<usize>> = poly_infos[1..].iter()
-                        .map(|&(_,_,off,cnt)| (off..off+cnt).map(|i| tvk[i]).collect())
+                    let hole_rings: Vec<Vec<usize>> = poly_infos[1..]
+                        .iter()
+                        .map(|&(_, _, off, cnt)| (off..off + cnt).map(|i| tvk[i]).collect())
                         .collect();
                     mesh.face_holes.insert(fk_top, hole_rings);
                 }
-                let mut tri_list: Vec<[usize;3]> = t_tris.iter().map(|&(a,b,c)| [tvk[a], tvk[b], tvk[c]]).collect();
+                let mut tri_list: Vec<[usize; 3]> = t_tris
+                    .iter()
+                    .map(|&(a, b, c)| [tvk[a], tvk[b], tvk[c]])
+                    .collect();
                 if fix_collinear {
-                    let vk2d: std::collections::HashMap<usize,(f64,f64)> = (0..top_n0).map(|i| { let p = proj(&all_top[i]); (tvk[i], (p[0],p[1])) }).collect();
+                    let vk2d: std::collections::HashMap<usize, (f64, f64)> = (0..top_n0)
+                        .map(|i| {
+                            let p = proj(&all_top[i]);
+                            (tvk[i], (p[0], p[1]))
+                        })
+                        .collect();
                     let fv: Vec<usize> = (0..top_n0).map(|i| tvk[i]).collect();
                     let mut chg = true;
                     while chg {
                         chg = false;
-                        let tv: std::collections::HashSet<usize> = tri_list.iter().flat_map(|t| t.iter().copied()).collect();
+                        let tv: std::collections::HashSet<usize> =
+                            tri_list.iter().flat_map(|t| t.iter().copied()).collect();
                         let n = fv.len();
                         'outer: for k in 0..n {
                             let b_vk = fv[k];
-                            if tv.contains(&b_vk) { continue; }
-                            let a_vk = fv[(k+n-1)%n]; let c_vk = fv[(k+1)%n];
+                            if tv.contains(&b_vk) {
+                                continue;
+                            }
+                            let a_vk = fv[(k + n - 1) % n];
+                            let c_vk = fv[(k + 1) % n];
                             for j in 0..tri_list.len() {
-                                let ha = tri_list[j].contains(&a_vk); let hc = tri_list[j].contains(&c_vk);
-                                if !ha || !hc { continue; }
+                                let ha = tri_list[j].contains(&a_vk);
+                                let hc = tri_list[j].contains(&c_vk);
+                                if !ha || !hc {
+                                    continue;
+                                }
                                 let ft = tri_list[j];
-                                let (t1, t2) = if (ft[0]==a_vk||ft[0]==c_vk) && (ft[1]==a_vk||ft[1]==c_vk) {
-                                    ([ft[0],b_vk,ft[2]], [b_vk,ft[1],ft[2]])
-                                } else if (ft[1]==a_vk||ft[1]==c_vk) && (ft[2]==a_vk||ft[2]==c_vk) {
-                                    ([ft[0],ft[1],b_vk], [ft[0],b_vk,ft[2]])
+                                let (t1, t2) = if (ft[0] == a_vk || ft[0] == c_vk)
+                                    && (ft[1] == a_vk || ft[1] == c_vk)
+                                {
+                                    ([ft[0], b_vk, ft[2]], [b_vk, ft[1], ft[2]])
+                                } else if (ft[1] == a_vk || ft[1] == c_vk)
+                                    && (ft[2] == a_vk || ft[2] == c_vk)
+                                {
+                                    ([ft[0], ft[1], b_vk], [ft[0], b_vk, ft[2]])
                                 } else {
-                                    ([ft[0],ft[1],b_vk], [b_vk,ft[1],ft[2]])
+                                    ([ft[0], ft[1], b_vk], [b_vk, ft[1], ft[2]])
                                 };
-                                tri_list[j] = t1; tri_list.push(t2); chg = true; break 'outer;
+                                tri_list[j] = t1;
+                                tri_list.push(t2);
+                                chg = true;
+                                break 'outer;
                             }
                         }
                     }
                     let sc = 1e6_f64;
                     tri_list.retain(|t| {
-                        let (u0,v0) = vk2d.get(&t[0]).copied().unwrap_or((0.0,0.0));
-                        let (u1,v1) = vk2d.get(&t[1]).copied().unwrap_or((0.0,0.0));
-                        let (u2,v2) = vk2d.get(&t[2]).copied().unwrap_or((0.0,0.0));
-                        let iu0=(u0*sc).round() as i64; let iv0=(v0*sc).round() as i64;
-                        let iu1=(u1*sc).round() as i64; let iv1=(v1*sc).round() as i64;
-                        let iu2=(u2*sc).round() as i64; let iv2=(v2*sc).round() as i64;
-                        (iu1-iu0)*(iv2-iv0)-(iv1-iv0)*(iu2-iu0) != 0
+                        let (u0, v0) = vk2d.get(&t[0]).copied().unwrap_or((0.0, 0.0));
+                        let (u1, v1) = vk2d.get(&t[1]).copied().unwrap_or((0.0, 0.0));
+                        let (u2, v2) = vk2d.get(&t[2]).copied().unwrap_or((0.0, 0.0));
+                        let iu0 = (u0 * sc).round() as i64;
+                        let iv0 = (v0 * sc).round() as i64;
+                        let iu1 = (u1 * sc).round() as i64;
+                        let iv1 = (v1 * sc).round() as i64;
+                        let iu2 = (u2 * sc).round() as i64;
+                        let iv2 = (v2 * sc).round() as i64;
+                        (iu1 - iu0) * (iv2 - iv0) - (iv1 - iv0) * (iu2 - iu0) != 0
                     });
                 }
                 mesh.triangulation.insert(fk_top, tri_list);
@@ -834,61 +1086,101 @@ impl Mesh {
         // Side faces: align by longest edge, quads for equal counts, zipper+triangles otherwise
         let edsq = |pts: &[Point], i: usize| -> f64 {
             let j = (i + 1) % pts.len();
-            let (dx, dy, dz) = (pts[j][0]-pts[i][0], pts[j][1]-pts[i][1], pts[j][2]-pts[i][2]);
-            dx*dx + dy*dy + dz*dz
+            let (dx, dy, dz) = (
+                pts[j][0] - pts[i][0],
+                pts[j][1] - pts[i][1],
+                pts[j][2] - pts[i][2],
+            );
+            dx * dx + dy * dy + dz * dz
         };
         for &(bot_off, bot_n, top_off, top_n) in &poly_infos {
-            let bpts = &all_bot[bot_off..bot_off+bot_n];
-            let tpts = &all_top[top_off..top_off+top_n];
-            let ia = (0..bot_n).max_by(|&a, &b| edsq(bpts, a).partial_cmp(&edsq(bpts, b)).unwrap()).unwrap_or(0);
+            let bpts = &all_bot[bot_off..bot_off + bot_n];
+            let tpts = &all_top[top_off..top_off + top_n];
+            let ia = (0..bot_n)
+                .max_by(|&a, &b| edsq(bpts, a).partial_cmp(&edsq(bpts, b)).unwrap())
+                .unwrap_or(0);
             let ib = if bot_n == top_n {
                 let align_cost = |cand: usize| -> f64 {
-                    (0..bot_n).map(|k| {
-                        let pb = proj(&bpts[(ia+k)%bot_n]);
-                        let pt = proj(&tpts[(cand+k)%top_n]);
-                        (pt[0]-pb[0])*(pt[0]-pb[0]) + (pt[1]-pb[1])*(pt[1]-pb[1])
-                    }).sum::<f64>()
+                    (0..bot_n)
+                        .map(|k| {
+                            let pb = proj(&bpts[(ia + k) % bot_n]);
+                            let pt = proj(&tpts[(cand + k) % top_n]);
+                            (pt[0] - pb[0]) * (pt[0] - pb[0]) + (pt[1] - pb[1]) * (pt[1] - pb[1])
+                        })
+                        .sum::<f64>()
                 };
-                (0..top_n).min_by(|&a, &b| align_cost(a).partial_cmp(&align_cost(b)).unwrap()).unwrap_or(0)
-            } else { 0 };
+                (0..top_n)
+                    .min_by(|&a, &b| align_cost(a).partial_cmp(&align_cost(b)).unwrap())
+                    .unwrap_or(0)
+            } else {
+                0
+            };
             if bot_n == top_n {
                 for k in 0..bot_n {
-                    let (cb, ct) = (bot_off+(ia+k)%bot_n, top_off+(ib+k)%top_n);
-                    let (nb, nt) = (bot_off+(ia+k+1)%bot_n, top_off+(ib+k+1)%top_n);
+                    let (cb, ct) = (bot_off + (ia + k) % bot_n, top_off + (ib + k) % top_n);
+                    let (nb, nt) = (
+                        bot_off + (ia + k + 1) % bot_n,
+                        top_off + (ib + k + 1) % top_n,
+                    );
                     mesh.add_face(vec![bvk[cb], bvk[nb], tvk[nt], tvk[ct]], None);
                 }
                 continue;
             }
-            let mut b_arcs = vec![0.0_f64; bot_n+1];
+            let mut b_arcs = vec![0.0_f64; bot_n + 1];
             for k in 0..bot_n {
-                let (i, j) = ((ia+k)%bot_n, (ia+k+1)%bot_n);
-                let (dx, dy, dz) = (bpts[j][0]-bpts[i][0], bpts[j][1]-bpts[i][1], bpts[j][2]-bpts[i][2]);
-                b_arcs[k+1] = b_arcs[k] + (dx*dx+dy*dy+dz*dz).sqrt();
+                let (i, j) = ((ia + k) % bot_n, (ia + k + 1) % bot_n);
+                let (dx, dy, dz) = (
+                    bpts[j][0] - bpts[i][0],
+                    bpts[j][1] - bpts[i][1],
+                    bpts[j][2] - bpts[i][2],
+                );
+                b_arcs[k + 1] = b_arcs[k] + (dx * dx + dy * dy + dz * dz).sqrt();
             }
-            let mut t_arcs = vec![0.0_f64; top_n+1];
+            let mut t_arcs = vec![0.0_f64; top_n + 1];
             for k in 0..top_n {
-                let (i, j) = ((ib+k)%top_n, (ib+k+1)%top_n);
-                let (dx, dy, dz) = (tpts[j][0]-tpts[i][0], tpts[j][1]-tpts[i][1], tpts[j][2]-tpts[i][2]);
-                t_arcs[k+1] = t_arcs[k] + (dx*dx+dy*dy+dz*dz).sqrt();
+                let (i, j) = ((ib + k) % top_n, (ib + k + 1) % top_n);
+                let (dx, dy, dz) = (
+                    tpts[j][0] - tpts[i][0],
+                    tpts[j][1] - tpts[i][1],
+                    tpts[j][2] - tpts[i][2],
+                );
+                t_arcs[k + 1] = t_arcs[k] + (dx * dx + dy * dy + dz * dz).sqrt();
             }
-            let inv_b = if b_arcs[bot_n] > 0.0 { 1.0/b_arcs[bot_n] } else { 1.0 };
-            let inv_t = if t_arcs[top_n] > 0.0 { 1.0/t_arcs[top_n] } else { 1.0 };
+            let inv_b = if b_arcs[bot_n] > 0.0 {
+                1.0 / b_arcs[bot_n]
+            } else {
+                1.0
+            };
+            let inv_t = if t_arcs[top_n] > 0.0 {
+                1.0 / t_arcs[top_n]
+            } else {
+                1.0
+            };
             let (mut bi, mut ti) = (0usize, 0usize);
             while bi < bot_n || ti < top_n {
-                let (cb, ct) = (bot_off+(ia+bi)%bot_n, top_off+(ib+ti)%top_n);
-                let (nb, nt) = (bot_off+(ia+bi+1)%bot_n, top_off+(ib+ti+1)%top_n);
+                let (cb, ct) = (bot_off + (ia + bi) % bot_n, top_off + (ib + ti) % top_n);
+                let (nb, nt) = (
+                    bot_off + (ia + bi + 1) % bot_n,
+                    top_off + (ib + ti + 1) % top_n,
+                );
                 if bi >= bot_n {
-                    mesh.add_face(vec![bvk[cb], tvk[ct], tvk[nt]], None); ti += 1;
+                    mesh.add_face(vec![bvk[cb], tvk[ct], tvk[nt]], None);
+                    ti += 1;
                 } else if ti >= top_n {
-                    mesh.add_face(vec![bvk[cb], bvk[nb], tvk[ct]], None); bi += 1;
+                    mesh.add_face(vec![bvk[cb], bvk[nb], tvk[ct]], None);
+                    bi += 1;
                 } else {
-                    let (bp, tp) = (b_arcs[bi+1]*inv_b, t_arcs[ti+1]*inv_t);
-                    if (bp-tp).abs() < 1e-9 {
-                        mesh.add_face(vec![bvk[cb], bvk[nb], tvk[nt], tvk[ct]], None); bi += 1; ti += 1;
+                    let (bp, tp) = (b_arcs[bi + 1] * inv_b, t_arcs[ti + 1] * inv_t);
+                    if (bp - tp).abs() < 1e-9 {
+                        mesh.add_face(vec![bvk[cb], bvk[nb], tvk[nt], tvk[ct]], None);
+                        bi += 1;
+                        ti += 1;
                     } else if bp < tp {
-                        mesh.add_face(vec![bvk[cb], bvk[nb], tvk[ct]], None); bi += 1;
+                        mesh.add_face(vec![bvk[cb], bvk[nb], tvk[ct]], None);
+                        bi += 1;
                     } else {
-                        mesh.add_face(vec![bvk[cb], tvk[ct], tvk[nt]], None); ti += 1;
+                        mesh.add_face(vec![bvk[cb], tvk[ct], tvk[nt]], None);
+                        ti += 1;
                     }
                 }
             }
@@ -896,21 +1188,42 @@ impl Mesh {
         mesh
     }
 
-    pub fn from_polygon_with_holes_many(inputs: Vec<Vec<Vec<Point>>>, sort_by_bbox: bool, parallel: bool) -> Vec<Self> {
+    pub fn from_polygon_with_holes_many(
+        inputs: Vec<Vec<Vec<Point>>>,
+        sort_by_bbox: bool,
+        parallel: bool,
+    ) -> Vec<Self> {
         if parallel && inputs.len() > 1 {
             use rayon::prelude::*;
-            inputs.into_par_iter().map(|input| Mesh::from_polygon_with_holes(&input, sort_by_bbox)).collect()
+            inputs
+                .into_par_iter()
+                .map(|input| Mesh::from_polygon_with_holes(&input, sort_by_bbox))
+                .collect()
         } else {
-            inputs.iter().map(|input| Mesh::from_polygon_with_holes(input, sort_by_bbox)).collect()
+            inputs
+                .iter()
+                .map(|input| Mesh::from_polygon_with_holes(input, sort_by_bbox))
+                .collect()
         }
     }
 
-    pub fn loft_many(pairs: Vec<(Vec<Polyline>, Vec<Polyline>)>, cap: bool, parallel: bool, fix_collinear: bool) -> Vec<Self> {
+    pub fn loft_many(
+        pairs: Vec<(Vec<Polyline>, Vec<Polyline>)>,
+        cap: bool,
+        parallel: bool,
+        fix_collinear: bool,
+    ) -> Vec<Self> {
         if parallel && pairs.len() > 1 {
             use rayon::prelude::*;
-            pairs.into_par_iter().map(|(p0, p1)| Mesh::loft(&p0, &p1, cap, fix_collinear)).collect()
+            pairs
+                .into_par_iter()
+                .map(|(p0, p1)| Mesh::loft(&p0, &p1, cap, fix_collinear))
+                .collect()
         } else {
-            pairs.iter().map(|(p0, p1)| Mesh::loft(p0, p1, cap, fix_collinear)).collect()
+            pairs
+                .iter()
+                .map(|(p0, p1)| Mesh::loft(p0, p1, cap, fix_collinear))
+                .collect()
         }
     }
 
@@ -930,7 +1243,8 @@ impl Mesh {
         let mut dists: Vec<(f64, usize, usize)> = Vec::with_capacity(tfks.len() * bfks.len());
         for ti in 0..tfks.len() {
             for bi in 0..bfks.len() {
-                let d = lp_face_centroid(&top_mesh, tfks[ti]).distance(&lp_face_centroid(&bot_mesh, bfks[bi]), None);
+                let d = lp_face_centroid(&top_mesh, tfks[ti])
+                    .distance(&lp_face_centroid(&bot_mesh, bfks[bi]), None);
                 dists.push((d, ti, bi));
             }
         }
@@ -939,53 +1253,100 @@ impl Mesh {
         let mut bot_used = vec![false; bfks.len()];
         let mut face_match: Vec<(usize, usize)> = Vec::new();
         for &(_, ti, bi) in &dists {
-            if top_used[ti] || bot_used[bi] { continue; }
+            if top_used[ti] || bot_used[bi] {
+                continue;
+            }
             face_match.push((tfks[ti], bfks[bi]));
-            top_used[ti] = true; bot_used[bi] = true;
+            top_used[ti] = true;
+            bot_used[bi] = true;
         }
         face_match.sort();
         let mut panels: Vec<LoftPanel> = Vec::with_capacity(face_match.len());
         for (tfk, bfk) in face_match {
             let mut panel = LoftPanel {
-                mesh: Mesh::new(), top_face_key: 0, bot_face_key: 0,
-                wall_faces: Vec::new(), orig_top_to_local: HashMap::new(),
-                orig_bot_to_local: HashMap::new(), top_vertices: Vec::new(), bot_vertices: Vec::new(),
+                mesh: Mesh::new(),
+                top_face_key: 0,
+                bot_face_key: 0,
+                wall_faces: Vec::new(),
+                orig_top_to_local: HashMap::new(),
+                orig_bot_to_local: HashMap::new(),
+                top_vertices: Vec::new(),
+                bot_vertices: Vec::new(),
                 face_roles: HashMap::new(),
             };
             let mut top_vkeys: Vec<usize> = top_mesh.face_vertices(tfk).unwrap().clone();
             let mut bot_vkeys: Vec<usize> = bot_mesh.face_vertices(bfk).unwrap().clone();
-            let mut top_pts: Vec<Point> = top_vkeys.iter().map(|&vk| top_mesh.vertex_point(vk).unwrap()).collect();
-            let mut bot_pts: Vec<Point> = bot_vkeys.iter().map(|&vk| bot_mesh.vertex_point(vk).unwrap()).collect();
+            let mut top_pts: Vec<Point> = top_vkeys
+                .iter()
+                .map(|&vk| top_mesh.vertex_point(vk).unwrap())
+                .collect();
+            let mut bot_pts: Vec<Point> = bot_vkeys
+                .iter()
+                .map(|&vk| bot_mesh.vertex_point(vk).unwrap())
+                .collect();
             lp_merge_collinear(&mut top_pts, &mut top_vkeys);
             lp_merge_collinear(&mut bot_pts, &mut bot_vkeys);
             {
                 let sz = top_pts.len();
                 let mut max_te = 0.0f64;
-                for i in 0..sz { max_te = max_te.max(top_pts[i].distance(&top_pts[(i+1)%sz], None)); }
+                for i in 0..sz {
+                    max_te = max_te.max(top_pts[i].distance(&top_pts[(i + 1) % sz], None));
+                }
                 let stol = max_te * 0.001;
-                let mut tp: Vec<Point> = Vec::new(); let mut tk: Vec<usize> = Vec::new();
+                let mut tp: Vec<Point> = Vec::new();
+                let mut tk: Vec<usize> = Vec::new();
                 for i in 0..top_pts.len() {
                     if tp.is_empty() || tp.last().unwrap().distance(&top_pts[i], None) > stol {
-                        tp.push(top_pts[i].clone()); tk.push(top_vkeys[i]);
+                        tp.push(top_pts[i].clone());
+                        tk.push(top_vkeys[i]);
                     }
                 }
-                while tp.len() >= 3 && tp.last().unwrap().distance(&tp[0], None) <= stol { tp.pop(); tk.pop(); }
-                if tp.len() >= 3 { top_pts = tp; top_vkeys = tk; }
+                while tp.len() >= 3 && tp.last().unwrap().distance(&tp[0], None) <= stol {
+                    tp.pop();
+                    tk.pop();
+                }
+                if tp.len() >= 3 {
+                    top_pts = tp;
+                    top_vkeys = tk;
+                }
             }
-            let n = top_pts.len(); let m = bot_pts.len();
+            let n = top_pts.len();
+            let m = bot_pts.len();
             let (mut tcx, mut tcy, mut tcz) = (0.0f64, 0.0, 0.0);
             let (mut bcx, mut bcy, mut bcz) = (0.0f64, 0.0, 0.0);
-            for p in &top_pts { tcx += p[0]; tcy += p[1]; tcz += p[2]; }
-            for p in &bot_pts { bcx += p[0]; bcy += p[1]; bcz += p[2]; }
-            tcx /= n as f64; tcy /= n as f64; tcz /= n as f64;
-            bcx /= m as f64; bcy /= m as f64; bcz /= m as f64;
-            let (mut ax, mut ay, mut az) = (tcx-bcx, tcy-bcy, tcz-bcz);
-            let alen = (ax*ax+ay*ay+az*az).sqrt();
-            if alen > 1e-12 { ax /= alen; ay /= alen; az /= alen; }
+            for p in &top_pts {
+                tcx += p[0];
+                tcy += p[1];
+                tcz += p[2];
+            }
+            for p in &bot_pts {
+                bcx += p[0];
+                bcy += p[1];
+                bcz += p[2];
+            }
+            tcx /= n as f64;
+            tcy /= n as f64;
+            tcz /= n as f64;
+            bcx /= m as f64;
+            bcy /= m as f64;
+            bcz /= m as f64;
+            let (mut ax, mut ay, mut az) = (tcx - bcx, tcy - bcy, tcz - bcz);
+            let alen = (ax * ax + ay * ay + az * az).sqrt();
+            if alen > 1e-12 {
+                ax /= alen;
+                ay /= alen;
+                az /= alen;
+            }
             let (tnx, tny, tnz) = lp_newell_normal(&top_pts);
-            if tnx*ax+tny*ay+tnz*az < 0.0 { top_pts.reverse(); top_vkeys.reverse(); }
+            if tnx * ax + tny * ay + tnz * az < 0.0 {
+                top_pts.reverse();
+                top_vkeys.reverse();
+            }
             let (bnx, bny, bnz) = lp_newell_normal(&bot_pts);
-            if bnx*ax+bny*ay+bnz*az > 0.0 { bot_pts.reverse(); bot_vkeys.reverse(); }
+            if bnx * ax + bny * ay + bnz * az > 0.0 {
+                bot_pts.reverse();
+                bot_vkeys.reverse();
+            }
             for i in 0..n {
                 let lk = panel.mesh.add_vertex(top_pts[i].clone(), None);
                 panel.orig_top_to_local.insert(top_vkeys[i], lk);
@@ -997,50 +1358,97 @@ impl Mesh {
                 panel.bot_vertices.push(lk);
             }
             if add_caps {
-                let top_cap: Vec<usize> = top_vkeys.iter().map(|&vk| panel.orig_top_to_local[&vk]).collect();
+                let top_cap: Vec<usize> = top_vkeys
+                    .iter()
+                    .map(|&vk| panel.orig_top_to_local[&vk])
+                    .collect();
                 let top_cap_fk = panel.mesh.add_face(top_cap.clone(), None);
-                if let Some(fk) = top_cap_fk { panel.top_face_key = fk; }
+                if let Some(fk) = top_cap_fk {
+                    panel.top_face_key = fk;
+                }
                 if let Some(fk) = top_cap_fk {
                     if top_cap.len() >= 3 {
                         let (mut nx, mut ny, mut nz) = lp_newell_normal(&top_pts);
-                        let mag = (nx*nx+ny*ny+nz*nz).sqrt();
+                        let mag = (nx * nx + ny * ny + nz * nz).sqrt();
                         if mag > 1e-12 {
-                            nx /= mag; ny /= mag; nz /= mag;
-                            let (mut ux, mut uy, mut uz) = if nx.abs() > 0.9 { (0.0f64, 1.0, 0.0) } else { (1.0f64, 0.0, 0.0) };
-                            let dot = ux*nx+uy*ny+uz*nz;
-                            ux -= dot*nx; uy -= dot*ny; uz -= dot*nz;
-                            let um = (ux*ux+uy*uy+uz*uz).sqrt(); ux /= um; uy /= um; uz /= um;
-                            let (vx, vy, vz) = (ny*uz-nz*uy, nz*ux-nx*uz, nx*uy-ny*ux);
-                            let bpts: Vec<Point> = top_pts.iter().map(|p| Point::new(p[0]*ux+p[1]*uy+p[2]*uz, p[0]*vx+p[1]*vy+p[2]*vz, 0.0)).collect();
+                            nx /= mag;
+                            ny /= mag;
+                            nz /= mag;
+                            let (mut ux, mut uy, mut uz) = if nx.abs() > 0.9 {
+                                (0.0f64, 1.0, 0.0)
+                            } else {
+                                (1.0f64, 0.0, 0.0)
+                            };
+                            let dot = ux * nx + uy * ny + uz * nz;
+                            ux -= dot * nx;
+                            uy -= dot * ny;
+                            uz -= dot * nz;
+                            let um = (ux * ux + uy * uy + uz * uz).sqrt();
+                            ux /= um;
+                            uy /= um;
+                            uz /= um;
+                            let (vx, vy, vz) =
+                                (ny * uz - nz * uy, nz * ux - nx * uz, nx * uy - ny * ux);
+                            let bpts: Vec<Point> = top_pts
+                                .iter()
+                                .map(|p| {
+                                    Point::new(
+                                        p[0] * ux + p[1] * uy + p[2] * uz,
+                                        p[0] * vx + p[1] * vy + p[2] * vz,
+                                        0.0,
+                                    )
+                                })
+                                .collect();
                             let tris = remesh_cdt::cdt_triangulate(&bpts, &[]);
                             if !tris.is_empty() {
-                                let tri_list: Vec<[usize;3]> = tris.iter().map(|&(a,b,c)| [top_cap[a], top_cap[b], top_cap[c]]).collect();
+                                let tri_list: Vec<[usize; 3]> = tris
+                                    .iter()
+                                    .map(|&(a, b, c)| [top_cap[a], top_cap[b], top_cap[c]])
+                                    .collect();
                                 panel.mesh.triangulation.insert(fk, tri_list);
                             }
                         }
                     }
                 }
             }
-            let top_mids: Vec<Point> = (0..n).map(|i| Point::new(
-                (top_pts[i][0]+top_pts[(i+1)%n][0])*0.5,
-                (top_pts[i][1]+top_pts[(i+1)%n][1])*0.5,
-                (top_pts[i][2]+top_pts[(i+1)%n][2])*0.5)).collect();
-            let bot_mids: Vec<Point> = (0..m).map(|j| Point::new(
-                (bot_pts[j][0]+bot_pts[(j+1)%m][0])*0.5,
-                (bot_pts[j][1]+bot_pts[(j+1)%m][1])*0.5,
-                (bot_pts[j][2]+bot_pts[(j+1)%m][2])*0.5)).collect();
-            let mut bot_to_top = vec![-1i64; m]; let mut bot_dist = vec![f64::INFINITY; m];
+            let top_mids: Vec<Point> = (0..n)
+                .map(|i| {
+                    Point::new(
+                        (top_pts[i][0] + top_pts[(i + 1) % n][0]) * 0.5,
+                        (top_pts[i][1] + top_pts[(i + 1) % n][1]) * 0.5,
+                        (top_pts[i][2] + top_pts[(i + 1) % n][2]) * 0.5,
+                    )
+                })
+                .collect();
+            let bot_mids: Vec<Point> = (0..m)
+                .map(|j| {
+                    Point::new(
+                        (bot_pts[j][0] + bot_pts[(j + 1) % m][0]) * 0.5,
+                        (bot_pts[j][1] + bot_pts[(j + 1) % m][1]) * 0.5,
+                        (bot_pts[j][2] + bot_pts[(j + 1) % m][2]) * 0.5,
+                    )
+                })
+                .collect();
+            let mut bot_to_top = vec![-1i64; m];
+            let mut bot_dist = vec![f64::INFINITY; m];
             for j in 0..m {
                 for i in 0..n {
                     let d = bot_mids[j].distance(&top_mids[i], None);
-                    if d < bot_dist[j] { bot_dist[j] = d; bot_to_top[j] = i as i64; }
+                    if d < bot_dist[j] {
+                        bot_dist[j] = d;
+                        bot_to_top[j] = i as i64;
+                    }
                 }
             }
-            let mut top_to_bot = vec![-1i64; n]; let mut top_dist = vec![f64::INFINITY; n];
+            let mut top_to_bot = vec![-1i64; n];
+            let mut top_dist = vec![f64::INFINITY; n];
             for i in 0..n {
                 for j in 0..m {
                     let d = top_mids[i].distance(&bot_mids[j], None);
-                    if d < top_dist[i] { top_dist[i] = d; top_to_bot[i] = j as i64; }
+                    if d < top_dist[i] {
+                        top_dist[i] = d;
+                        top_to_bot[i] = j as i64;
+                    }
                 }
             }
             let avg: f64 = bot_dist.iter().sum::<f64>() / m as f64;
@@ -1048,82 +1456,146 @@ impl Mesh {
             let mut top_used_edge = vec![false; n];
             for j in 0..m {
                 let b0 = panel.orig_bot_to_local[&bot_vkeys[j]];
-                let b1 = panel.orig_bot_to_local[&bot_vkeys[(j+1)%m]];
+                let b1 = panel.orig_bot_to_local[&bot_vkeys[(j + 1) % m]];
                 let ti = bot_to_top[j];
                 if ti >= 0 && bot_dist[j] <= threshold && top_to_bot[ti as usize] == j as i64 {
                     let ti = ti as usize;
                     let t0 = panel.orig_top_to_local[&top_vkeys[ti]];
-                    let t1 = panel.orig_top_to_local[&top_vkeys[(ti+1)%n]];
+                    let t1 = panel.orig_top_to_local[&top_vkeys[(ti + 1) % n]];
                     let face_fk = if edge_gap > 0.0 {
                         let pb0 = panel.mesh.vertex_point(b0).unwrap();
                         let pb1 = panel.mesh.vertex_point(b1).unwrap();
                         let pt0 = panel.mesh.vertex_point(t0).unwrap();
                         let pt1 = panel.mesh.vertex_point(t1).unwrap();
-                        let cx = (pb0[0]+pb1[0]+pt0[0]+pt1[0])*0.25;
-                        let cy = (pb0[1]+pb1[1]+pt0[1]+pt1[1])*0.25;
-                        let cz = (pb0[2]+pb1[2]+pt0[2]+pt1[2])*0.25;
-                        let nb0 = panel.mesh.add_vertex(lp_offset_toward(&pb0, cx, cy, cz, edge_gap), None);
-                        let nb1 = panel.mesh.add_vertex(lp_offset_toward(&pb1, cx, cy, cz, edge_gap), None);
+                        let cx = (pb0[0] + pb1[0] + pt0[0] + pt1[0]) * 0.25;
+                        let cy = (pb0[1] + pb1[1] + pt0[1] + pt1[1]) * 0.25;
+                        let cz = (pb0[2] + pb1[2] + pt0[2] + pt1[2]) * 0.25;
+                        let nb0 = panel
+                            .mesh
+                            .add_vertex(lp_offset_toward(&pb0, cx, cy, cz, edge_gap), None);
+                        let nb1 = panel
+                            .mesh
+                            .add_vertex(lp_offset_toward(&pb1, cx, cy, cz, edge_gap), None);
                         panel.mesh.add_face(vec![nb0, t1, t0, nb1], None)
                     } else {
                         panel.mesh.add_face(vec![b0, t1, t0, b1], None)
                     };
                     if let Some(fk) = face_fk {
                         panel.wall_faces.push(LoftWallFace {
-                            face_key: fk, face_index: 0, is_quad: true,
-                            top_v0: top_vkeys[ti], top_v1: top_vkeys[(ti+1)%n],
-                            bot_v0: bot_vkeys[(j+1)%m], bot_v1: bot_vkeys[j],
+                            face_key: fk,
+                            face_index: 0,
+                            is_quad: true,
+                            top_v0: top_vkeys[ti],
+                            top_v1: top_vkeys[(ti + 1) % n],
+                            bot_v0: bot_vkeys[(j + 1) % m],
+                            bot_v1: bot_vkeys[j],
                         });
                     }
                     top_used_edge[ti] = true;
                 } else if !skip_triangles {
-                    let mut best_d = f64::INFINITY; let mut best_tv = 0usize;
+                    let mut best_d = f64::INFINITY;
+                    let mut best_tv = 0usize;
                     for i in 0..n {
                         let d = bot_mids[j].distance(&top_pts[i], None);
-                        if d < best_d { best_d = d; best_tv = i; }
+                        if d < best_d {
+                            best_d = d;
+                            best_tv = i;
+                        }
                     }
                     let tv = panel.orig_top_to_local[&top_vkeys[best_tv]];
                     if let Some(fk) = panel.mesh.add_face(vec![b0, tv, b1], None) {
-                        panel.wall_faces.push(LoftWallFace { face_key: fk, face_index: 0, is_quad: false, top_v0: 0, top_v1: 0, bot_v0: 0, bot_v1: 0 });
+                        panel.wall_faces.push(LoftWallFace {
+                            face_key: fk,
+                            face_index: 0,
+                            is_quad: false,
+                            top_v0: 0,
+                            top_v1: 0,
+                            bot_v0: 0,
+                            bot_v1: 0,
+                        });
                     }
                 }
             }
             if !skip_triangles {
                 for i in 0..n {
-                    if top_used_edge[i] { continue; }
+                    if top_used_edge[i] {
+                        continue;
+                    }
                     let t0 = panel.orig_top_to_local[&top_vkeys[i]];
-                    let t1 = panel.orig_top_to_local[&top_vkeys[(i+1)%n]];
-                    let mut best_d = f64::INFINITY; let mut best_bv = 0usize;
+                    let t1 = panel.orig_top_to_local[&top_vkeys[(i + 1) % n]];
+                    let mut best_d = f64::INFINITY;
+                    let mut best_bv = 0usize;
                     for j in 0..m {
                         let d = top_mids[i].distance(&bot_pts[j], None);
-                        if d < best_d { best_d = d; best_bv = j; }
+                        if d < best_d {
+                            best_d = d;
+                            best_bv = j;
+                        }
                     }
                     let bv = panel.orig_bot_to_local[&bot_vkeys[best_bv]];
                     if let Some(fk) = panel.mesh.add_face(vec![t1, t0, bv], None) {
-                        panel.wall_faces.push(LoftWallFace { face_key: fk, face_index: 0, is_quad: false, top_v0: 0, top_v1: 0, bot_v0: 0, bot_v1: 0 });
+                        panel.wall_faces.push(LoftWallFace {
+                            face_key: fk,
+                            face_index: 0,
+                            is_quad: false,
+                            top_v0: 0,
+                            top_v1: 0,
+                            bot_v0: 0,
+                            bot_v1: 0,
+                        });
                     }
                 }
             }
             if add_caps {
-                let bot_cap: Vec<usize> = (0..m).map(|j| panel.orig_bot_to_local[&bot_vkeys[j]]).collect();
+                let bot_cap: Vec<usize> = (0..m)
+                    .map(|j| panel.orig_bot_to_local[&bot_vkeys[j]])
+                    .collect();
                 let bot_cap_fk = panel.mesh.add_face(bot_cap.clone(), None);
-                if let Some(fk) = bot_cap_fk { panel.bot_face_key = fk; }
+                if let Some(fk) = bot_cap_fk {
+                    panel.bot_face_key = fk;
+                }
                 if let Some(fk) = bot_cap_fk {
                     if bot_cap.len() >= 3 {
                         let (mut bcnx, mut bcny, mut bcnz) = lp_newell_normal(&bot_pts);
-                        let bcmag = (bcnx*bcnx+bcny*bcny+bcnz*bcnz).sqrt();
+                        let bcmag = (bcnx * bcnx + bcny * bcny + bcnz * bcnz).sqrt();
                         if bcmag > 1e-12 {
-                            bcnx /= bcmag; bcny /= bcmag; bcnz /= bcmag;
-                            let (mut bcux, mut bcuy, mut bcuz) = if bcnx.abs() > 0.9 { (0.0f64, 1.0, 0.0) } else { (1.0f64, 0.0, 0.0) };
-                            let bcdot = bcux*bcnx+bcuy*bcny+bcuz*bcnz;
-                            bcux -= bcdot*bcnx; bcuy -= bcdot*bcny; bcuz -= bcdot*bcnz;
-                            let bcum = (bcux*bcux+bcuy*bcuy+bcuz*bcuz).sqrt();
-                            bcux /= bcum; bcuy /= bcum; bcuz /= bcum;
-                            let (bcvx, bcvy, bcvz) = (bcny*bcuz-bcnz*bcuy, bcnz*bcux-bcnx*bcuz, bcnx*bcuy-bcny*bcux);
-                            let bpts2: Vec<Point> = bot_pts.iter().map(|p| Point::new(p[0]*bcux+p[1]*bcuy+p[2]*bcuz, p[0]*bcvx+p[1]*bcvy+p[2]*bcvz, 0.0)).collect();
+                            bcnx /= bcmag;
+                            bcny /= bcmag;
+                            bcnz /= bcmag;
+                            let (mut bcux, mut bcuy, mut bcuz) = if bcnx.abs() > 0.9 {
+                                (0.0f64, 1.0, 0.0)
+                            } else {
+                                (1.0f64, 0.0, 0.0)
+                            };
+                            let bcdot = bcux * bcnx + bcuy * bcny + bcuz * bcnz;
+                            bcux -= bcdot * bcnx;
+                            bcuy -= bcdot * bcny;
+                            bcuz -= bcdot * bcnz;
+                            let bcum = (bcux * bcux + bcuy * bcuy + bcuz * bcuz).sqrt();
+                            bcux /= bcum;
+                            bcuy /= bcum;
+                            bcuz /= bcum;
+                            let (bcvx, bcvy, bcvz) = (
+                                bcny * bcuz - bcnz * bcuy,
+                                bcnz * bcux - bcnx * bcuz,
+                                bcnx * bcuy - bcny * bcux,
+                            );
+                            let bpts2: Vec<Point> = bot_pts
+                                .iter()
+                                .map(|p| {
+                                    Point::new(
+                                        p[0] * bcux + p[1] * bcuy + p[2] * bcuz,
+                                        p[0] * bcvx + p[1] * bcvy + p[2] * bcvz,
+                                        0.0,
+                                    )
+                                })
+                                .collect();
                             let btris = remesh_cdt::cdt_triangulate(&bpts2, &[]);
                             if !btris.is_empty() {
-                                let tri_list: Vec<[usize;3]> = btris.iter().map(|&(a,b,c)| [bot_cap[a], bot_cap[b], bot_cap[c]]).collect();
+                                let tri_list: Vec<[usize; 3]> = btris
+                                    .iter()
+                                    .map(|&(a, b, c)| [bot_cap[a], bot_cap[b], bot_cap[c]])
+                                    .collect();
                                 panel.mesh.triangulation.insert(fk, tri_list);
                             }
                         }
@@ -1140,18 +1612,28 @@ impl Mesh {
             for wi in 0..panels[pi].wall_faces.len() {
                 let fk = panels[pi].wall_faces[wi].face_key;
                 panels[pi].wall_faces[wi].face_index = *fkey_to_idx.get(&fk).unwrap();
-                let role = if panels[pi].wall_faces[wi].is_quad { "QuadWall" } else { "TriWall" };
+                let role = if panels[pi].wall_faces[wi].is_quad {
+                    "QuadWall"
+                } else {
+                    "TriWall"
+                };
                 panels[pi].face_roles.insert(fk, role);
             }
             let tfk = panels[pi].top_face_key;
-            if tfk != 0 { panels[pi].face_roles.insert(tfk, "TopCap"); }
+            if tfk != 0 {
+                panels[pi].face_roles.insert(tfk, "TopCap");
+            }
             let bfk = panels[pi].bot_face_key;
-            if bfk != 0 { panels[pi].face_roles.insert(bfk, "BotCap"); }
+            if bfk != 0 {
+                panels[pi].face_roles.insert(bfk, "BotCap");
+            }
         }
         let mut edge_to_wall: HashMap<(usize, usize), (usize, usize)> = HashMap::new();
         for pi in 0..panels.len() {
             for wi in 0..panels[pi].wall_faces.len() {
-                if !panels[pi].wall_faces[wi].is_quad { continue; }
+                if !panels[pi].wall_faces[wi].is_quad {
+                    continue;
+                }
                 let v0 = panels[pi].wall_faces[wi].top_v0;
                 let v1 = panels[pi].wall_faces[wi].top_v1;
                 edge_to_wall.insert((v0, v1), (pi, wi));
@@ -1160,21 +1642,39 @@ impl Mesh {
         let mut adjacency: Vec<LoftAdjPair> = Vec::new();
         for pi in 0..panels.len() {
             for wi in 0..panels[pi].wall_faces.len() {
-                if !panels[pi].wall_faces[wi].is_quad { continue; }
+                if !panels[pi].wall_faces[wi].is_quad {
+                    continue;
+                }
                 let v0 = panels[pi].wall_faces[wi].top_v0;
                 let v1 = panels[pi].wall_faces[wi].top_v1;
                 if let Some(&(pj, wj)) = edge_to_wall.get(&(v1, v0)) {
-                    if pj > pi { adjacency.push(LoftAdjPair { pi, wi, pj, wj }); }
+                    if pj > pi {
+                        adjacency.push(LoftAdjPair { pi, wi, pj, wj });
+                    }
                 }
             }
         }
         let mut top_ordered = Mesh::new();
         let mut bot_ordered = Mesh::new();
         for i in 0..panels.len() {
-            let top_pts: Vec<Point> = panels[i].top_vertices.iter().map(|&lk| panels[i].mesh.vertex_point(lk).unwrap()).collect();
-            let bot_pts: Vec<Point> = panels[i].bot_vertices.iter().map(|&lk| panels[i].mesh.vertex_point(lk).unwrap()).collect();
-            let tvks: Vec<usize> = top_pts.into_iter().map(|pt| top_ordered.add_vertex(pt, None)).collect();
-            let bvks: Vec<usize> = bot_pts.into_iter().map(|pt| bot_ordered.add_vertex(pt, None)).collect();
+            let top_pts: Vec<Point> = panels[i]
+                .top_vertices
+                .iter()
+                .map(|&lk| panels[i].mesh.vertex_point(lk).unwrap())
+                .collect();
+            let bot_pts: Vec<Point> = panels[i]
+                .bot_vertices
+                .iter()
+                .map(|&lk| panels[i].mesh.vertex_point(lk).unwrap())
+                .collect();
+            let tvks: Vec<usize> = top_pts
+                .into_iter()
+                .map(|pt| top_ordered.add_vertex(pt, None))
+                .collect();
+            let bvks: Vec<usize> = bot_pts
+                .into_iter()
+                .map(|pt| bot_ordered.add_vertex(pt, None))
+                .collect();
             top_ordered.add_face(tvks, Some(i));
             bot_ordered.add_face(bvks, Some(i));
         }
@@ -1185,13 +1685,13 @@ impl Mesh {
         let (hx, hy, hz) = (x * 0.5, y * 0.5, z * 0.5);
         let vertices = vec![
             Point::new(-hx, -hy, -hz),
-            Point::new( hx, -hy, -hz),
-            Point::new( hx,  hy, -hz),
-            Point::new(-hx,  hy, -hz),
-            Point::new(-hx, -hy,  hz),
-            Point::new( hx, -hy,  hz),
-            Point::new( hx,  hy,  hz),
-            Point::new(-hx,  hy,  hz),
+            Point::new(hx, -hy, -hz),
+            Point::new(hx, hy, -hz),
+            Point::new(-hx, hy, -hz),
+            Point::new(-hx, -hy, hz),
+            Point::new(hx, -hy, hz),
+            Point::new(hx, hy, hz),
+            Point::new(-hx, hy, hz),
         ];
         let faces = vec![
             vec![0, 3, 2, 1],
@@ -1231,21 +1731,35 @@ impl Mesh {
             Point::new(-s * phi, 0.0, -s * ip),
         ];
         let idx: [[usize; 5]; 12] = [
-            [0, 8,10, 2,16], [0,16,17, 1,12], [0,12,14, 4, 8],
-            [1,17, 3,11, 9], [1, 9, 5,14,12], [2,10, 6,15,13],
-            [2,13, 3,17,16], [3,13,15, 7,11], [4,14, 5,19,18],
-            [4,18, 6,10, 8], [5, 9,11, 7,19], [6,18,19, 7,15],
+            [0, 8, 10, 2, 16],
+            [0, 16, 17, 1, 12],
+            [0, 12, 14, 4, 8],
+            [1, 17, 3, 11, 9],
+            [1, 9, 5, 14, 12],
+            [2, 10, 6, 15, 13],
+            [2, 13, 3, 17, 16],
+            [3, 13, 15, 7, 11],
+            [4, 14, 5, 19, 18],
+            [4, 18, 6, 10, 8],
+            [5, 9, 11, 7, 19],
+            [6, 18, 19, 7, 15],
         ];
         let mut faces: Vec<Vec<Point>> = Vec::new();
         for f in &idx {
-            faces.push(vec![verts[f[0]].clone(), verts[f[1]].clone(), verts[f[2]].clone(), verts[f[3]].clone(), verts[f[4]].clone()]);
+            faces.push(vec![
+                verts[f[0]].clone(),
+                verts[f[1]].clone(),
+                verts[f[2]].clone(),
+                verts[f[3]].clone(),
+                verts[f[4]].clone(),
+            ]);
         }
         Mesh::from_polylines(faces, None)
     }
 
-    ///////////////////////////////////////////////////////////////////////////////////////////
+    // ═══════════════════════════════════════════════════════════════════════════
     // Boolean Queries
-    ///////////////////////////////////////////////////////////////////////////////////////////
+    // ═══════════════════════════════════════════════════════════════════════════
 
     pub fn is_empty(&self) -> bool {
         self.vertex.is_empty()
@@ -1269,12 +1783,14 @@ impl Mesh {
     }
 
     pub fn is_closed(&self) -> bool {
-        let mut hole_edges: std::collections::HashSet<(usize, usize)> = std::collections::HashSet::new();
+        let mut hole_edges: std::collections::HashSet<(usize, usize)> =
+            std::collections::HashSet::new();
         for (_, rings) in &self.face_holes {
             for ring in rings {
                 let n = ring.len();
                 for i in 0..n {
-                    let a = ring[i]; let b = ring[(i + 1) % n];
+                    let a = ring[i];
+                    let b = ring[(i + 1) % n];
                     hole_edges.insert((a, b));
                     hole_edges.insert((b, a));
                 }
@@ -1284,7 +1800,9 @@ impl Mesh {
         for &(u, v) in &dfe {
             // a face edge whose reverse no face walks is a border - unless a declared hole
             // ring owns it (hole_edges holds both directions)
-            if !dfe.contains(&(v, u)) && !hole_edges.contains(&(v, u)) { return false; }
+            if !dfe.contains(&(v, u)) && !hole_edges.contains(&(v, u)) {
+                return false;
+            }
         }
         !self.vertex.is_empty()
     }
@@ -1311,9 +1829,9 @@ impl Mesh {
         }
     }
 
-    ///////////////////////////////////////////////////////////////////////////////////////////
+    // ═══════════════════════════════════════════════════════════════════════════
     // Basic Queries
-    ///////////////////////////////////////////////////////////////////////////////////////////
+    // ═══════════════════════════════════════════════════════════════════════════
 
     pub fn strip_render_data(&mut self) {
         self.halfedge.clear();
@@ -1345,12 +1863,15 @@ impl Mesh {
 
     pub fn number_of_edges(&self) -> usize {
         let dfe = self.directed_face_edges();
-        dfe.iter().filter(|&&(u, v)| u < v || !dfe.contains(&(v, u))).count()
+        dfe.iter()
+            .filter(|&&(u, v)| u < v || !dfe.contains(&(v, u)))
+            .count()
     }
 
     pub fn edges(&self) -> Vec<(usize, usize)> {
         let dfe = self.directed_face_edges();
-        let mut result: Vec<(usize, usize)> = dfe.iter()
+        let mut result: Vec<(usize, usize)> = dfe
+            .iter()
             .map(|&(u, v)| if u < v { (u, v) } else { (v, u) })
             .collect::<HashSet<_>>()
             .into_iter()
@@ -1362,7 +1883,8 @@ impl Mesh {
     pub fn naked_edges(&self, boundary: bool) -> Vec<(usize, usize)> {
         // one directed set for the whole call - never one per edge (that walk is quadratic)
         let dfe = self.directed_face_edges();
-        let mut result: Vec<(usize, usize)> = dfe.iter()
+        let mut result: Vec<(usize, usize)> = dfe
+            .iter()
             .map(|&(u, v)| if u < v { (u, v) } else { (v, u) })
             .collect::<HashSet<_>>()
             .into_iter()
@@ -1391,7 +1913,11 @@ impl Mesh {
                 let v = vs[(i + 1) % vs.len()];
                 let e = if u < v { (u, v) } else { (v, u) };
                 if seen.insert(e) {
-                    let c = self.linecolors.get(ci).cloned().unwrap_or_else(Color::black);
+                    let c = self
+                        .linecolors
+                        .get(ci)
+                        .cloned()
+                        .unwrap_or_else(Color::black);
                     out.push((e.0, e.1, c));
                     ci += 1;
                 }
@@ -1450,24 +1976,70 @@ impl Mesh {
         self.invalidate_triangle_bvh();
     }
 
-    pub fn set_pointcolors(&mut self, v: Vec<Color>) { self.pointcolors = v; self.color_mode = ColorMode::POINTCOLORS; self.gpu_cache.0 = None; }
-    pub fn set_facecolors(&mut self, v: Vec<Color>) { self.facecolors = v; self.color_mode = ColorMode::FACECOLORS; }
-    pub fn set_linecolors(&mut self, v: Vec<Color>, w: Vec<f64>) { self.linecolors = v; if !w.is_empty() { self.widths = w; } }
-    pub fn set_objectcolor(&mut self, c: Color) { self.objectcolor = c; self.gpu_cache.0 = None; }
+    pub fn set_pointcolors(&mut self, v: Vec<Color>) {
+        self.pointcolors = v;
+        self.color_mode = ColorMode::POINTCOLORS;
+        self.gpu_cache.0 = None;
+    }
+    pub fn set_facecolors(&mut self, v: Vec<Color>) {
+        self.facecolors = v;
+        self.color_mode = ColorMode::FACECOLORS;
+    }
+    pub fn set_linecolors(&mut self, v: Vec<Color>, w: Vec<f64>) {
+        self.linecolors = v;
+        if !w.is_empty() {
+            self.widths = w;
+        }
+    }
+    pub fn set_objectcolor(&mut self, c: Color) {
+        self.objectcolor = c;
+        self.gpu_cache.0 = None;
+    }
 
-    pub fn get_pointcolors(&self) -> &[Color]      { &self.pointcolors }
-    pub fn get_facecolors(&self) -> &[Color]       { &self.facecolors }
-    pub fn get_linecolors(&self) -> &[Color]       { &self.linecolors }
-    pub fn widths(&self) -> &[f64]                 { &self.widths }
-    pub fn objectcolor(&self) -> &Color            { &self.objectcolor }
-    pub fn pointcolors_mut(&mut self) -> &mut [Color] { &mut self.pointcolors }
-    pub fn facecolors_mut(&mut self) -> &mut [Color]  { &mut self.facecolors }
-    pub fn linecolors_mut(&mut self) -> &mut [Color]  { &mut self.linecolors }
-    pub fn widths_mut(&mut self) -> &mut [f64]        { &mut self.widths }
+    pub fn get_pointcolors(&self) -> &[Color] {
+        &self.pointcolors
+    }
+    pub fn get_facecolors(&self) -> &[Color] {
+        &self.facecolors
+    }
+    pub fn get_linecolors(&self) -> &[Color] {
+        &self.linecolors
+    }
+    pub fn widths(&self) -> &[f64] {
+        &self.widths
+    }
+    pub fn objectcolor(&self) -> &Color {
+        &self.objectcolor
+    }
+    pub fn pointcolors_mut(&mut self) -> &mut [Color] {
+        &mut self.pointcolors
+    }
+    pub fn facecolors_mut(&mut self) -> &mut [Color] {
+        &mut self.facecolors
+    }
+    pub fn linecolors_mut(&mut self) -> &mut [Color] {
+        &mut self.linecolors
+    }
+    pub fn widths_mut(&mut self) -> &mut [f64] {
+        &mut self.widths
+    }
 
-    pub fn clear_pointcolors(&mut self) { self.pointcolors.clear(); if self.color_mode == ColorMode::POINTCOLORS { self.color_mode = ColorMode::OBJECTCOLOR; } }
-    pub fn clear_facecolors(&mut self) { self.facecolors.clear(); if self.color_mode == ColorMode::FACECOLORS { self.color_mode = ColorMode::OBJECTCOLOR; } }
-    pub fn clear_linecolors(&mut self) { self.linecolors.clear(); self.widths.clear(); }
+    pub fn clear_pointcolors(&mut self) {
+        self.pointcolors.clear();
+        if self.color_mode == ColorMode::POINTCOLORS {
+            self.color_mode = ColorMode::OBJECTCOLOR;
+        }
+    }
+    pub fn clear_facecolors(&mut self) {
+        self.facecolors.clear();
+        if self.color_mode == ColorMode::FACECOLORS {
+            self.color_mode = ColorMode::OBJECTCOLOR;
+        }
+    }
+    pub fn clear_linecolors(&mut self) {
+        self.linecolors.clear();
+        self.widths.clear();
+    }
 
     pub fn unify_winding(&mut self) -> bool {
         if self.face.len() < 2 {
@@ -1501,8 +2073,16 @@ impl Mesh {
                 for i in 0..n {
                     let u_orig = verts[i];
                     let v_orig = verts[(i + 1) % n];
-                    let (eff_u, eff_v) = if is_flipped { (v_orig, u_orig) } else { (u_orig, v_orig) };
-                    let edge = if u_orig < v_orig { (u_orig, v_orig) } else { (v_orig, u_orig) };
+                    let (eff_u, eff_v) = if is_flipped {
+                        (v_orig, u_orig)
+                    } else {
+                        (u_orig, v_orig)
+                    };
+                    let edge = if u_orig < v_orig {
+                        (u_orig, v_orig)
+                    } else {
+                        (v_orig, u_orig)
+                    };
                     if let Some(adj_list) = edge_faces.get(&edge) {
                         for &(adj_key, adj_u, adj_v) in adj_list {
                             if adj_key == f || visited.contains(&adj_key) {
@@ -1530,7 +2110,8 @@ impl Mesh {
         for neighbors in self.halfedge.values_mut() {
             neighbors.clear();
         }
-        let face_items: Vec<(usize, Vec<usize>)> = self.face.iter().map(|(&k, v)| (k, v.clone())).collect();
+        let face_items: Vec<(usize, Vec<usize>)> =
+            self.face.iter().map(|(&k, v)| (k, v.clone())).collect();
         for (fkey, verts) in face_items {
             let n = verts.len();
             for i in 0..n {
@@ -1550,7 +2131,8 @@ impl Mesh {
         if self.face.is_empty() || !self.naked_edges(true).is_empty() {
             return false;
         }
-        let face_items: Vec<(usize, Vec<usize>)> = self.face.iter().map(|(&k, v)| (k, v.clone())).collect();
+        let face_items: Vec<(usize, Vec<usize>)> =
+            self.face.iter().map(|(&k, v)| (k, v.clone())).collect();
         let mut vol = 0.0f64;
         for (_fk, verts) in &face_items {
             let n = verts.len();
@@ -1559,8 +2141,8 @@ impl Mesh {
                 let p1 = self.vertex_point(verts[i]).unwrap();
                 let p2 = self.vertex_point(verts[i + 1]).unwrap();
                 vol += p0[0] * (p1[1] * p2[2] - p1[2] * p2[1])
-                     + p0[1] * (p1[2] * p2[0] - p1[0] * p2[2])
-                     + p0[2] * (p1[0] * p2[1] - p1[1] * p2[0]);
+                    + p0[1] * (p1[2] * p2[0] - p1[0] * p2[2])
+                    + p0[2] * (p1[0] * p2[1] - p1[1] * p2[0]);
             }
         }
         if vol >= 0.0 {
@@ -1572,7 +2154,8 @@ impl Mesh {
         for neighbors in self.halfedge.values_mut() {
             neighbors.clear();
         }
-        let face_items2: Vec<(usize, Vec<usize>)> = self.face.iter().map(|(&k, v)| (k, v.clone())).collect();
+        let face_items2: Vec<(usize, Vec<usize>)> =
+            self.face.iter().map(|(&k, v)| (k, v.clone())).collect();
         for (fk, verts) in face_items2 {
             let n = verts.len();
             for i in 0..n {
@@ -1602,24 +2185,35 @@ impl Mesh {
     }
 
     pub fn weld(&self, tolerance: f64) -> Mesh {
-        if self.vertex.is_empty() { return Mesh::new(); }
+        if self.vertex.is_empty() {
+            return Mesh::new();
+        }
 
         let mut vkeys: Vec<usize> = self.vertex.keys().copied().collect();
         vkeys.sort();
-        let positions: Vec<Point> = vkeys.iter().map(|k| {
-            let v = &self.vertex[k];
-            Point::new(v.x, v.y, v.z)
-        }).collect();
+        let positions: Vec<Point> = vkeys
+            .iter()
+            .map(|k| {
+                let v = &self.vertex[k];
+                Point::new(v.x, v.y, v.z)
+            })
+            .collect();
         let n = vkeys.len();
 
         let mut parent: Vec<usize> = (0..n).collect();
         fn find(parent: &mut Vec<usize>, mut x: usize) -> usize {
-            while parent[x] != x { parent[x] = parent[parent[x]]; x = parent[x]; }
+            while parent[x] != x {
+                parent[x] = parent[parent[x]];
+                x = parent[x];
+            }
             x
         }
 
         if tolerance > 0.0 {
-            let boxes: Vec<OBB> = positions.iter().map(|p| OBB::from_point(p.clone(), tolerance)).collect();
+            let boxes: Vec<OBB> = positions
+                .iter()
+                .map(|p| OBB::from_point(p.clone(), tolerance))
+                .collect();
             let ws = SpatialBVH::compute_world_size(&boxes);
             let bvh = SpatialBVH::from_boxes(&boxes, ws);
             let (pairs, _, _) = bvh.check_all_collisions(&boxes);
@@ -1627,21 +2221,28 @@ impl Mesh {
                 if positions[i].distance(&positions[j], None) <= tolerance {
                     let ri = find(&mut parent, i);
                     let rj = find(&mut parent, j);
-                    if ri != rj { parent[ri] = rj; }
+                    if ri != rj {
+                        parent[ri] = rj;
+                    }
                 }
             }
         }
 
-        let mut root_to_rep: std::collections::HashMap<usize, usize> = std::collections::HashMap::new();
+        let mut root_to_rep: std::collections::HashMap<usize, usize> =
+            std::collections::HashMap::new();
         for i in 0..n {
             let root = find(&mut parent, i);
             let entry = root_to_rep.entry(root).or_insert(vkeys[i]);
-            if vkeys[i] < *entry { *entry = vkeys[i]; }
+            if vkeys[i] < *entry {
+                *entry = vkeys[i];
+            }
         }
-        let vkey_to_rep: std::collections::HashMap<usize, usize> = (0..n).map(|i| {
-            let root = find(&mut parent, i);
-            (vkeys[i], root_to_rep[&root])
-        }).collect();
+        let vkey_to_rep: std::collections::HashMap<usize, usize> = (0..n)
+            .map(|i| {
+                let root = find(&mut parent, i);
+                (vkeys[i], root_to_rep[&root])
+            })
+            .collect();
 
         let mut m = Mesh::new();
         let mut added: std::collections::HashSet<usize> = std::collections::HashSet::new();
@@ -1659,9 +2260,9 @@ impl Mesh {
         m
     }
 
-    ///////////////////////////////////////////////////////////////////////////////////////////
+    // ═══════════════════════════════════════════════════════════════════════════
     // Vertex and Face Operations
-    ///////////////////////////////////////////////////////////////////////////////////////////
+    // ═══════════════════════════════════════════════════════════════════════════
 
     pub fn add_vertex(&mut self, position: Point, key: Option<usize>) -> usize {
         self.ensure_halfedges();
@@ -1789,7 +2390,9 @@ impl Mesh {
                 let u = verts[i];
                 let v = verts[(i + 1) % verts.len()];
                 let slot = he.entry(u).or_default().entry(v).or_insert(None);
-                if slot.is_none() { *slot = Some(fkey); }
+                if slot.is_none() {
+                    *slot = Some(fkey);
+                }
                 he.entry(v).or_default().entry(u).or_insert(None);
             }
         }
@@ -1826,10 +2429,19 @@ impl Mesh {
                     nbrs.insert(v, None);
                 }
             }
-            let v_to_u_none = self.halfedge.get(&v).and_then(|m| m.get(&u)).map(|f| f.is_none()).unwrap_or(false);
+            let v_to_u_none = self
+                .halfedge
+                .get(&v)
+                .and_then(|m| m.get(&u))
+                .map(|f| f.is_none())
+                .unwrap_or(false);
             if v_to_u_none {
-                if let Some(nbrs) = self.halfedge.get_mut(&u) { nbrs.remove(&v); }
-                if let Some(nbrs) = self.halfedge.get_mut(&v) { nbrs.remove(&u); }
+                if let Some(nbrs) = self.halfedge.get_mut(&u) {
+                    nbrs.remove(&v);
+                }
+                if let Some(nbrs) = self.halfedge.get_mut(&v) {
+                    nbrs.remove(&u);
+                }
             }
         }
         self.face.remove(&fkey);
@@ -1837,17 +2449,27 @@ impl Mesh {
         self.facedata.remove(&fkey);
         self.face_holes.remove(&fkey);
         let n_edges = self.number_of_edges();
-        if self.linecolors.len() > n_edges { self.linecolors.truncate(n_edges); }
-        if self.widths.len() > n_edges { self.widths.truncate(n_edges); }
+        if self.linecolors.len() > n_edges {
+            self.linecolors.truncate(n_edges);
+        }
+        if self.widths.len() > n_edges {
+            self.widths.truncate(n_edges);
+        }
         let n_faces = self.face.len();
-        if self.facecolors.len() > n_faces { self.facecolors.truncate(n_faces); }
+        if self.facecolors.len() > n_faces {
+            self.facecolors.truncate(n_faces);
+        }
         self.invalidate_triangle_bvh();
     }
 
     pub fn remove_vertex(&mut self, vkey: usize) {
         self.ensure_halfedges();
-        if !self.vertex.contains_key(&vkey) { return; }
-        let faces_to_remove: Vec<usize> = self.face.iter()
+        if !self.vertex.contains_key(&vkey) {
+            return;
+        }
+        let faces_to_remove: Vec<usize> = self
+            .face
+            .iter()
             .filter(|(_, verts)| verts.contains(&vkey))
             .map(|(&fk, _)| fk)
             .collect();
@@ -1856,35 +2478,59 @@ impl Mesh {
         }
         if let Some(nbrs) = self.halfedge.remove(&vkey) {
             for (v, _) in nbrs {
-                if let Some(m) = self.halfedge.get_mut(&v) { m.remove(&vkey); }
+                if let Some(m) = self.halfedge.get_mut(&v) {
+                    m.remove(&vkey);
+                }
             }
         }
         self.edgedata.retain(|k, _| k.0 != vkey && k.1 != vkey);
         self.vertex.remove(&vkey);
         let n_vertices = self.vertex.len();
-        if self.pointcolors.len() > n_vertices { self.pointcolors.truncate(n_vertices); }
+        if self.pointcolors.len() > n_vertices {
+            self.pointcolors.truncate(n_vertices);
+        }
         self.invalidate_triangle_bvh();
     }
 
     pub fn remove_edge(&mut self, u: usize, v: usize) {
         self.ensure_halfedges();
         let mut faces_to_remove = Vec::new();
-        if let Some(f) = self.halfedge.get(&u).and_then(|m| m.get(&v)).and_then(|&f| f) {
+        if let Some(f) = self
+            .halfedge
+            .get(&u)
+            .and_then(|m| m.get(&v))
+            .and_then(|&f| f)
+        {
             faces_to_remove.push(f);
         }
-        if let Some(f) = self.halfedge.get(&v).and_then(|m| m.get(&u)).and_then(|&f| f) {
-            if !faces_to_remove.contains(&f) { faces_to_remove.push(f); }
+        if let Some(f) = self
+            .halfedge
+            .get(&v)
+            .and_then(|m| m.get(&u))
+            .and_then(|&f| f)
+        {
+            if !faces_to_remove.contains(&f) {
+                faces_to_remove.push(f);
+            }
         }
         for fk in faces_to_remove {
             self.remove_face(fk);
         }
-        if let Some(nbrs) = self.halfedge.get_mut(&u) { nbrs.remove(&v); }
-        if let Some(nbrs) = self.halfedge.get_mut(&v) { nbrs.remove(&u); }
+        if let Some(nbrs) = self.halfedge.get_mut(&u) {
+            nbrs.remove(&v);
+        }
+        if let Some(nbrs) = self.halfedge.get_mut(&v) {
+            nbrs.remove(&u);
+        }
         self.edgedata.remove(&(u, v));
         self.edgedata.remove(&(v, u));
         let n_edges = self.number_of_edges();
-        if self.linecolors.len() > n_edges { self.linecolors.truncate(n_edges); }
-        if self.widths.len() > n_edges { self.widths.truncate(n_edges); }
+        if self.linecolors.len() > n_edges {
+            self.linecolors.truncate(n_edges);
+        }
+        if self.widths.len() > n_edges {
+            self.widths.truncate(n_edges);
+        }
         self.invalidate_triangle_bvh();
     }
 
@@ -1907,7 +2553,8 @@ impl Mesh {
         for neighbors in self.halfedge.values_mut() {
             neighbors.clear();
         }
-        let face_items: Vec<(usize, Vec<usize>)> = self.face.iter().map(|(&k, v)| (k, v.clone())).collect();
+        let face_items: Vec<(usize, Vec<usize>)> =
+            self.face.iter().map(|(&k, v)| (k, v.clone())).collect();
         for (fkey, verts) in face_items {
             let n = verts.len();
             for i in 0..n {
@@ -1919,16 +2566,27 @@ impl Mesh {
         }
     }
 
-    ///////////////////////////////////////////////////////////////////////////////////////////
+    // ═══════════════════════════════════════════════════════════════════════════
     // Connectivity Queries
-    ///////////////////////////////////////////////////////////////////////////////////////////
+    // ═══════════════════════════════════════════════════════════════════════════
 
     pub fn edge_edges(&self, u: usize, v: usize) -> Option<Vec<(usize, usize)>> {
         let dfe = self.directed_face_edges();
-        if !dfe.contains(&(u, v)) && !dfe.contains(&(v, u)) { return None; }
+        if !dfe.contains(&(u, v)) && !dfe.contains(&(v, u)) {
+            return None;
+        }
         let ends = |x: usize| -> Vec<usize> {
-            let mut keys: Vec<usize> = dfe.iter()
-                .filter_map(|&(a, b)| if a == x { Some(b) } else if b == x { Some(a) } else { None })
+            let mut keys: Vec<usize> = dfe
+                .iter()
+                .filter_map(|&(a, b)| {
+                    if a == x {
+                        Some(b)
+                    } else if b == x {
+                        Some(a)
+                    } else {
+                        None
+                    }
+                })
                 .collect::<std::collections::HashSet<_>>()
                 .into_iter()
                 .collect();
@@ -1936,8 +2594,16 @@ impl Mesh {
             keys
         };
         let mut edges = Vec::new();
-        for w in ends(u) { if w != v { edges.push((u, w)); } }
-        for w in ends(v) { if w != u { edges.push((v, w)); } }
+        for w in ends(u) {
+            if w != v {
+                edges.push((u, w));
+            }
+        }
+        for w in ends(v) {
+            if w != u {
+                edges.push((v, w));
+            }
+        }
         Some(edges)
     }
 
@@ -1972,14 +2638,26 @@ impl Mesh {
         // different answer run to run.
         let efm = self.edge_face_map();
         let out: Vec<usize> = [efm.get(&(u, v)), efm.get(&(v, u))]
-            .into_iter().flatten().copied().collect();
-        if out.is_empty() { None } else { Some(out) }
+            .into_iter()
+            .flatten()
+            .copied()
+            .collect();
+        if out.is_empty() {
+            None
+        } else {
+            Some(out)
+        }
     }
 
     pub fn edge_line(&self, u: usize, v: usize) -> Option<Line> {
         let dfe = self.directed_face_edges();
-        if !dfe.contains(&(u, v)) && !dfe.contains(&(v, u)) { return None; }
-        Some(Line::from_points(&self.vertex_point(u)?, &self.vertex_point(v)?))
+        if !dfe.contains(&(u, v)) && !dfe.contains(&(v, u)) {
+            return None;
+        }
+        Some(Line::from_points(
+            &self.vertex_point(u)?,
+            &self.vertex_point(v)?,
+        ))
     }
 
     pub fn face_edges(&self, face_key: usize) -> Option<Vec<(usize, usize)>> {
@@ -1991,9 +2669,11 @@ impl Mesh {
     pub fn face_faces(&self, face_key: usize) -> Option<Vec<usize>> {
         let fe = self.face_edges(face_key)?;
         let efm = self.edge_face_map();
-        Some(fe.into_iter()
-            .filter_map(|(u, v)| efm.get(&(v, u)).copied())
-            .collect())
+        Some(
+            fe.into_iter()
+                .filter_map(|(u, v)| efm.get(&(v, u)).copied())
+                .collect(),
+        )
     }
 
     pub fn face_points(&self, face_key: usize) -> Option<Vec<Point>> {
@@ -2010,20 +2690,28 @@ impl Mesh {
     }
 
     pub fn vertex_edges(&self, vertex_key: usize) -> Option<Vec<(usize, usize)>> {
-        if !self.vertex.contains_key(&vertex_key) { return None; }
+        if !self.vertex.contains_key(&vertex_key) {
+            return None;
+        }
         let mut keys = self.vertex_vertices(vertex_key)?;
         keys.sort();
         Some(keys.into_iter().map(|u| (vertex_key, u)).collect())
     }
 
     pub fn vertex_faces(&self, vertex_key: usize) -> Option<Vec<usize>> {
-        if !self.vertex.contains_key(&vertex_key) { return None; }
+        if !self.vertex.contains_key(&vertex_key) {
+            return None;
+        }
         // same order as the halfedge version: neighbors sorted, each mapped to the face of
         // the DIRECTED edge (v, u) - one entry per incident face, no duplicates
         let efm = self.edge_face_map();
         let mut keys = self.vertex_vertices(vertex_key)?;
         keys.sort();
-        Some(keys.into_iter().filter_map(|u| efm.get(&(vertex_key, u)).copied()).collect())
+        Some(
+            keys.into_iter()
+                .filter_map(|u| efm.get(&(vertex_key, u)).copied())
+                .collect(),
+        )
     }
 
     pub fn vertex_point(&self, vertex_key: usize) -> Option<Point> {
@@ -2031,10 +2719,21 @@ impl Mesh {
     }
 
     pub fn vertex_vertices(&self, vertex_key: usize) -> Option<Vec<usize>> {
-        if !self.vertex.contains_key(&vertex_key) { return None; }
+        if !self.vertex.contains_key(&vertex_key) {
+            return None;
+        }
         let dfe = self.directed_face_edges();
-        let mut keys: Vec<usize> = dfe.iter()
-            .filter_map(|&(u, v)| if u == vertex_key { Some(v) } else if v == vertex_key { Some(u) } else { None })
+        let mut keys: Vec<usize> = dfe
+            .iter()
+            .filter_map(|&(u, v)| {
+                if u == vertex_key {
+                    Some(v)
+                } else if v == vertex_key {
+                    Some(u)
+                } else {
+                    None
+                }
+            })
             .collect::<std::collections::HashSet<_>>()
             .into_iter()
             .collect();
@@ -2042,9 +2741,9 @@ impl Mesh {
         Some(keys)
     }
 
-    ///////////////////////////////////////////////////////////////////////////////////////////
+    // ═══════════════════════════════════════════════════════════════════════════
     // Geometric Properties
-    ///////////////////////////////////////////////////////////////////////////////////////////
+    // ═══════════════════════════════════════════════════════════════════════════
 
     pub fn area(&self) -> f64 {
         let mut total = 0.0;
@@ -2062,90 +2761,151 @@ impl Mesh {
     }
 
     pub fn centroid(&self) -> Point {
-        let mut x = 0.0_f64; let mut y = 0.0_f64; let mut z = 0.0_f64;
+        let mut x = 0.0_f64;
+        let mut y = 0.0_f64;
+        let mut z = 0.0_f64;
         // Sorted for the same reason as `area`: a reproducible summation order.
         let mut vkeys: Vec<usize> = self.vertex.keys().copied().collect();
         vkeys.sort_unstable();
         for vk in vkeys {
             let p = self.vertex_point(vk).unwrap();
-            x += p[0]; y += p[1]; z += p[2];
+            x += p[0];
+            y += p[1];
+            z += p[2];
         }
-        let n = if self.vertex.is_empty() { 1.0 } else { self.vertex.len() as f64 };
+        let n = if self.vertex.is_empty() {
+            1.0
+        } else {
+            self.vertex.len() as f64
+        };
         Point::new(x / n, y / n, z / n)
     }
 
     pub fn dihedral_angle(&self, u: usize, v: usize) -> Option<f64> {
         let ef = self.edge_faces(u, v)?;
-        if ef.len() < 2 { return None; }
+        if ef.len() < 2 {
+            return None;
+        }
         let n0 = self.face_normal(ef[0])?;
         let n1 = self.face_normal(ef[1])?;
         let dot = n0.dot(&n1).clamp(-1.0, 1.0);
         Some((PI - dot.acos()) * 180.0 / PI)
     }
 
-    pub fn dihedral_angles(&self, scale: f64)
-        -> (std::collections::BTreeMap<(usize, usize), f64>, Vec<Polyline>, Vec<Point>)
-    {
-        let mut angles: std::collections::BTreeMap<(usize, usize), f64> = std::collections::BTreeMap::new();
+    pub fn dihedral_angles(
+        &self,
+        scale: f64,
+    ) -> (
+        std::collections::BTreeMap<(usize, usize), f64>,
+        Vec<Polyline>,
+        Vec<Point>,
+    ) {
+        let mut angles: std::collections::BTreeMap<(usize, usize), f64> =
+            std::collections::BTreeMap::new();
         let mut arcs: Vec<Polyline> = Vec::new();
         let mut points: Vec<Point> = Vec::new();
         let arc_n: usize = 12;
         for (u, v) in self.edges() {
-            let da = match self.dihedral_angle(u, v) { Some(a) => a, None => continue };
+            let da = match self.dihedral_angle(u, v) {
+                Some(a) => a,
+                None => continue,
+            };
             angles.insert((u, v), da);
             let deg = da;
-            let ep0 = match self.vertex_point(u) { Some(p) => p, None => continue };
-            let ep1 = match self.vertex_point(v) { Some(p) => p, None => continue };
-            let mx = (ep0[0]+ep1[0])*0.5;
-            let my = (ep0[1]+ep1[1])*0.5;
-            let mz = (ep0[2]+ep1[2])*0.5;
+            let ep0 = match self.vertex_point(u) {
+                Some(p) => p,
+                None => continue,
+            };
+            let ep1 = match self.vertex_point(v) {
+                Some(p) => p,
+                None => continue,
+            };
+            let mx = (ep0[0] + ep1[0]) * 0.5;
+            let my = (ep0[1] + ep1[1]) * 0.5;
+            let mz = (ep0[2] + ep1[2]) * 0.5;
             if scale == 0.0 {
                 let mut pt = Point::new(mx, my, mz);
                 pt.name = deg.to_string();
-                pt.pointcolor = Color::new(240.0/255.0, 220.0/255.0, 0.0, 1.0);
+                pt.pointcolor = Color::new(240.0 / 255.0, 220.0 / 255.0, 0.0, 1.0);
                 points.push(pt);
                 continue;
             }
-            let ef = match self.edge_faces(u, v) { Some(f) => f, None => continue };
-            if ef.len() < 2 { continue; }
-            let ex = ep1[0]-ep0[0]; let ey = ep1[1]-ep0[1]; let ez = ep1[2]-ep0[2];
-            let elen = (ex*ex+ey*ey+ez*ez).sqrt();
-            if elen < 1e-10 { continue; }
-            let ex = ex/elen; let ey = ey/elen; let ez = ez/elen;
-            let fc0 = match self.face_centroid(ef[0]) { Some(p) => p, None => continue };
-            let fc1 = match self.face_centroid(ef[1]) { Some(p) => p, None => continue };
-            let mut d0x = fc0[0]-mx; let mut d0y = fc0[1]-my; let mut d0z = fc0[2]-mz;
-            let dot0 = d0x*ex+d0y*ey+d0z*ez;
-            d0x -= dot0*ex; d0y -= dot0*ey; d0z -= dot0*ez;
-            let d0len = (d0x*d0x+d0y*d0y+d0z*d0z).sqrt();
-            if d0len < 1e-10 { continue; }
-            let d0x = d0x/d0len; let d0y = d0y/d0len; let d0z = d0z/d0len;
-            let mut d1x = fc1[0]-mx; let mut d1y = fc1[1]-my; let mut d1z = fc1[2]-mz;
-            let dot1 = d1x*ex+d1y*ey+d1z*ez;
-            d1x -= dot1*ex; d1y -= dot1*ey; d1z -= dot1*ez;
-            let d1len = (d1x*d1x+d1y*d1y+d1z*d1z).sqrt();
-            if d1len < 1e-10 { continue; }
-            let d1x = d1x/d1len; let d1y = d1y/d1len; let d1z = d1z/d1len;
-            let theta = (d0x*d1x+d0y*d1y+d0z*d1z).clamp(-1.0, 1.0).acos();
-            if theta.sin().abs() < 1e-10 { continue; }
+            let ef = match self.edge_faces(u, v) {
+                Some(f) => f,
+                None => continue,
+            };
+            if ef.len() < 2 {
+                continue;
+            }
+            let ex = ep1[0] - ep0[0];
+            let ey = ep1[1] - ep0[1];
+            let ez = ep1[2] - ep0[2];
+            let elen = (ex * ex + ey * ey + ez * ez).sqrt();
+            if elen < 1e-10 {
+                continue;
+            }
+            let ex = ex / elen;
+            let ey = ey / elen;
+            let ez = ez / elen;
+            let fc0 = match self.face_centroid(ef[0]) {
+                Some(p) => p,
+                None => continue,
+            };
+            let fc1 = match self.face_centroid(ef[1]) {
+                Some(p) => p,
+                None => continue,
+            };
+            let mut d0x = fc0[0] - mx;
+            let mut d0y = fc0[1] - my;
+            let mut d0z = fc0[2] - mz;
+            let dot0 = d0x * ex + d0y * ey + d0z * ez;
+            d0x -= dot0 * ex;
+            d0y -= dot0 * ey;
+            d0z -= dot0 * ez;
+            let d0len = (d0x * d0x + d0y * d0y + d0z * d0z).sqrt();
+            if d0len < 1e-10 {
+                continue;
+            }
+            let d0x = d0x / d0len;
+            let d0y = d0y / d0len;
+            let d0z = d0z / d0len;
+            let mut d1x = fc1[0] - mx;
+            let mut d1y = fc1[1] - my;
+            let mut d1z = fc1[2] - mz;
+            let dot1 = d1x * ex + d1y * ey + d1z * ez;
+            d1x -= dot1 * ex;
+            d1y -= dot1 * ey;
+            d1z -= dot1 * ez;
+            let d1len = (d1x * d1x + d1y * d1y + d1z * d1z).sqrt();
+            if d1len < 1e-10 {
+                continue;
+            }
+            let d1x = d1x / d1len;
+            let d1y = d1y / d1len;
+            let d1z = d1z / d1len;
+            let theta = (d0x * d1x + d0y * d1y + d0z * d1z).clamp(-1.0, 1.0).acos();
+            if theta.sin().abs() < 1e-10 {
+                continue;
+            }
             let mut arc_pts: Vec<Point> = Vec::new();
             for j in 0..=arc_n {
                 let t = j as f64 / arc_n as f64;
-                let w1 = ((1.0-t)*theta).sin() / theta.sin();
-                let w2 = (t*theta).sin() / theta.sin();
+                let w1 = ((1.0 - t) * theta).sin() / theta.sin();
+                let w2 = (t * theta).sin() / theta.sin();
                 arc_pts.push(Point::new(
-                    mx+(w1*d0x+w2*d1x)*scale,
-                    my+(w1*d0y+w2*d1y)*scale,
-                    mz+(w1*d0z+w2*d1z)*scale));
+                    mx + (w1 * d0x + w2 * d1x) * scale,
+                    my + (w1 * d0y + w2 * d1y) * scale,
+                    mz + (w1 * d0z + w2 * d1z) * scale,
+                ));
             }
             let mut arc = Polyline::new(arc_pts.clone());
             arc.name = format!("dihedral_e{}_{}={}", u, v, deg);
-            arc.linecolor = Color::new(240.0/255.0, 220.0/255.0, 0.0, 1.0);
+            arc.linecolor = Color::new(240.0 / 255.0, 220.0 / 255.0, 0.0, 1.0);
             arcs.push(arc);
-            let mid = &arc_pts[arc_n/2];
+            let mid = &arc_pts[arc_n / 2];
             let mut pt = Point::new(mid[0], mid[1], mid[2]);
             pt.name = deg.to_string();
-            pt.pointcolor = Color::new(240.0/255.0, 220.0/255.0, 0.0, 1.0);
+            pt.pointcolor = Color::new(240.0 / 255.0, 220.0 / 255.0, 0.0, 1.0);
             points.push(pt);
         }
         (angles, arcs, points)
@@ -2175,11 +2935,17 @@ impl Mesh {
 
     pub fn face_centroid(&self, face_key: usize) -> Option<Point> {
         let verts = self.face.get(&face_key)?;
-        if verts.is_empty() { return None; }
-        let mut x = 0.0_f64; let mut y = 0.0_f64; let mut z = 0.0_f64;
+        if verts.is_empty() {
+            return None;
+        }
+        let mut x = 0.0_f64;
+        let mut y = 0.0_f64;
+        let mut z = 0.0_f64;
         for vk in verts {
             let p = self.vertex_point(*vk)?;
-            x += p[0]; y += p[1]; z += p[2];
+            x += p[0];
+            y += p[1];
+            z += p[2];
         }
         let n = verts.len() as f64;
         Some(Point::new(x / n, y / n, z / n))
@@ -2308,30 +3074,53 @@ impl Mesh {
         let mut acc: HashMap<usize, [f64; 3]> = HashMap::new();
         for (_, vkeys) in &self.face {
             let n = vkeys.len();
-            if n < 3 { continue; }
+            if n < 3 {
+                continue;
+            }
             let mut pts: Vec<[f64; 3]> = Vec::with_capacity(n);
             let mut ok = true;
             for &vk in vkeys {
                 match self.vertex.get(&vk) {
                     Some(vd) => pts.push([vd.x, vd.y, vd.z]),
-                    None => { ok = false; break; }
+                    None => {
+                        ok = false;
+                        break;
+                    }
                 }
             }
-            if !ok { continue; }
-            let ex = pts[1][0]-pts[0][0]; let ey = pts[1][1]-pts[0][1]; let ez = pts[1][2]-pts[0][2];
-            let fx = pts[2][0]-pts[0][0]; let fy = pts[2][1]-pts[0][1]; let fz = pts[2][2]-pts[0][2];
-            let cnx = ey*fz-ez*fy; let cny = ez*fx-ex*fz; let cnz = ex*fy-ey*fx;
-            let len = (cnx*cnx + cny*cny + cnz*cnz).sqrt();
-            if len < Tolerance::ZERO_TOLERANCE { continue; }
-            let ux = cnx/len; let uy = cny/len; let uz = cnz/len;
+            if !ok {
+                continue;
+            }
+            let ex = pts[1][0] - pts[0][0];
+            let ey = pts[1][1] - pts[0][1];
+            let ez = pts[1][2] - pts[0][2];
+            let fx = pts[2][0] - pts[0][0];
+            let fy = pts[2][1] - pts[0][1];
+            let fz = pts[2][2] - pts[0][2];
+            let cnx = ey * fz - ez * fy;
+            let cny = ez * fx - ex * fz;
+            let cnz = ex * fy - ey * fx;
+            let len = (cnx * cnx + cny * cny + cnz * cnz).sqrt();
+            if len < Tolerance::ZERO_TOLERANCE {
+                continue;
+            }
+            let ux = cnx / len;
+            let uy = cny / len;
+            let uz = cnz / len;
             let area = match weighting {
                 NormalWeighting::Area => {
                     let mut a = 0.0_f64;
-                    for i in 1..(n-1) {
-                        let ax = pts[i][0]-pts[0][0]; let ay = pts[i][1]-pts[0][1]; let az = pts[i][2]-pts[0][2];
-                        let bx = pts[i+1][0]-pts[0][0]; let by = pts[i+1][1]-pts[0][1]; let bz = pts[i+1][2]-pts[0][2];
-                        let cx = ay*bz-az*by; let cy = az*bx-ax*bz; let cz = ax*by-ay*bx;
-                        a += (cx*cx + cy*cy + cz*cz).sqrt() * 0.5;
+                    for i in 1..(n - 1) {
+                        let ax = pts[i][0] - pts[0][0];
+                        let ay = pts[i][1] - pts[0][1];
+                        let az = pts[i][2] - pts[0][2];
+                        let bx = pts[i + 1][0] - pts[0][0];
+                        let by = pts[i + 1][1] - pts[0][1];
+                        let bz = pts[i + 1][2] - pts[0][2];
+                        let cx = ay * bz - az * by;
+                        let cy = az * bx - ax * bz;
+                        let cz = ax * by - ay * bx;
+                        a += (cx * cx + cy * cy + cz * cz).sqrt() * 0.5;
                     }
                     a
                 }
@@ -2342,13 +3131,23 @@ impl Mesh {
                     NormalWeighting::Uniform => 1.0,
                     NormalWeighting::Area => area,
                     NormalWeighting::Angle => {
-                        let prev = (i + n - 1) % n; let next = (i + 1) % n;
-                        let ax = pts[prev][0]-pts[i][0]; let ay = pts[prev][1]-pts[i][1]; let az = pts[prev][2]-pts[i][2];
-                        let bx = pts[next][0]-pts[i][0]; let by = pts[next][1]-pts[i][1]; let bz = pts[next][2]-pts[i][2];
-                        let a_len = (ax*ax + ay*ay + az*az).sqrt();
-                        let b_len = (bx*bx + by*by + bz*bz).sqrt();
-                        if a_len < Tolerance::ZERO_TOLERANCE || b_len < Tolerance::ZERO_TOLERANCE { 0.0 }
-                        else { ((ax*bx + ay*by + az*bz) / (a_len * b_len)).clamp(-1.0, 1.0).acos() }
+                        let prev = (i + n - 1) % n;
+                        let next = (i + 1) % n;
+                        let ax = pts[prev][0] - pts[i][0];
+                        let ay = pts[prev][1] - pts[i][1];
+                        let az = pts[prev][2] - pts[i][2];
+                        let bx = pts[next][0] - pts[i][0];
+                        let by = pts[next][1] - pts[i][1];
+                        let bz = pts[next][2] - pts[i][2];
+                        let a_len = (ax * ax + ay * ay + az * az).sqrt();
+                        let b_len = (bx * bx + by * by + bz * bz).sqrt();
+                        if a_len < Tolerance::ZERO_TOLERANCE || b_len < Tolerance::ZERO_TOLERANCE {
+                            0.0
+                        } else {
+                            ((ax * bx + ay * by + az * bz) / (a_len * b_len))
+                                .clamp(-1.0, 1.0)
+                                .acos()
+                        }
                     }
                 };
                 let v = acc.entry(vkeys[i]).or_insert([0.0, 0.0, 0.0]);
@@ -2359,9 +3158,9 @@ impl Mesh {
         }
         let mut normals = HashMap::new();
         for (&vk, v) in &acc {
-            let len = (v[0]*v[0] + v[1]*v[1] + v[2]*v[2]).sqrt();
+            let len = (v[0] * v[0] + v[1] * v[1] + v[2] * v[2]).sqrt();
             if len > Tolerance::ZERO_TOLERANCE {
-                normals.insert(vk, Vector::new(v[0]/len, v[1]/len, v[2]/len));
+                normals.insert(vk, Vector::new(v[0] / len, v[1] / len, v[2] / len));
             }
         }
         normals
@@ -2387,21 +3186,30 @@ impl Mesh {
             if vkeys.len() < 3 {
                 continue;
             }
-            let p0 = match self.vertex_point(vkeys[0]) { Some(p) => p, None => continue };
+            let p0 = match self.vertex_point(vkeys[0]) {
+                Some(p) => p,
+                None => continue,
+            };
             for i in 1..(vkeys.len() - 1) {
-                let p1 = match self.vertex_point(vkeys[i]) { Some(p) => p, None => continue };
-                let p2 = match self.vertex_point(vkeys[i + 1]) { Some(p) => p, None => continue };
+                let p1 = match self.vertex_point(vkeys[i]) {
+                    Some(p) => p,
+                    None => continue,
+                };
+                let p2 = match self.vertex_point(vkeys[i + 1]) {
+                    Some(p) => p,
+                    None => continue,
+                };
                 total += p0[0] * (p1[1] * p2[2] - p1[2] * p2[1])
-                       + p0[1] * (p1[2] * p2[0] - p1[0] * p2[2])
-                       + p0[2] * (p1[0] * p2[1] - p1[1] * p2[0]);
+                    + p0[1] * (p1[2] * p2[0] - p1[0] * p2[2])
+                    + p0[2] * (p1[0] * p2[1] - p1[1] * p2[0]);
             }
         }
         total.abs() / 6.0
     }
 
-    ///////////////////////////////////////////////////////////////////////////////////////////
+    // ═══════════════════════════════════════════════════════════════════════════
     // Basic Queries
-    ///////////////////////////////////////////////////////////////////////////////////////////
+    // ═══════════════════════════════════════════════════════════════════════════
 
     pub fn vertex_index(&self) -> HashMap<usize, usize> {
         let mut keys: Vec<usize> = self.vertex.keys().copied().collect();
@@ -2435,9 +3243,9 @@ impl Mesh {
         (vertices, faces)
     }
 
-    ///////////////////////////////////////////////////////////////////////////////////////////
+    // ═══════════════════════════════════════════════════════════════════════════
     // Transformation
-    ///////////////////////////////////////////////////////////////////////////////////////////
+    // ═══════════════════════════════════════════════════════════════════════════
 
     pub fn transform(&mut self, xform: &Xform) {
         for v in self.vertex.values_mut() {
@@ -2479,33 +3287,55 @@ impl Mesh {
         self.guid = std::sync::OnceLock::new();
     }
 
-    ///////////////////////////////////////////////////////////////////////////////////////////
+    // ═══════════════════════════════════════════════════════════════════════════
     // JSON
-    ///////////////////////////////////////////////////////////////////////////////////////////
+    // ═══════════════════════════════════════════════════════════════════════════
 
     /// Serializes the Mesh to JSON data
     pub fn jsondump(&self) -> serde_json::Value {
         let pointcolors_flat: Vec<u8> = self
             .pointcolors
             .iter()
-            .flat_map(|c| vec![(c.r * 255.0) as u8, (c.g * 255.0) as u8, (c.b * 255.0) as u8, (c.a * 255.0) as u8])
+            .flat_map(|c| {
+                vec![
+                    (c.r * 255.0) as u8,
+                    (c.g * 255.0) as u8,
+                    (c.b * 255.0) as u8,
+                    (c.a * 255.0) as u8,
+                ]
+            })
             .collect();
 
         let facecolors_flat: Vec<u8> = self
             .facecolors
             .iter()
-            .flat_map(|c| vec![(c.r * 255.0) as u8, (c.g * 255.0) as u8, (c.b * 255.0) as u8, (c.a * 255.0) as u8])
+            .flat_map(|c| {
+                vec![
+                    (c.r * 255.0) as u8,
+                    (c.g * 255.0) as u8,
+                    (c.b * 255.0) as u8,
+                    (c.a * 255.0) as u8,
+                ]
+            })
             .collect();
 
         let linecolors_flat: Vec<u8> = self
             .linecolors
             .iter()
-            .flat_map(|c| vec![(c.r * 255.0) as u8, (c.g * 255.0) as u8, (c.b * 255.0) as u8, (c.a * 255.0) as u8])
+            .flat_map(|c| {
+                vec![
+                    (c.r * 255.0) as u8,
+                    (c.g * 255.0) as u8,
+                    (c.b * 255.0) as u8,
+                    (c.a * 255.0) as u8,
+                ]
+            })
             .collect();
 
         let mut tri_json = serde_json::Map::new();
         for (&fk, tris) in &self.triangulation {
-            let tri_arr: Vec<serde_json::Value> = tris.iter()
+            let tri_arr: Vec<serde_json::Value> = tris
+                .iter()
                 .map(|t| serde_json::json!([t[0], t[1], t[2]]))
                 .collect();
             tri_json.insert(fk.to_string(), serde_json::Value::Array(tri_arr));
@@ -2513,9 +3343,8 @@ impl Mesh {
 
         let mut face_holes_json = serde_json::Map::new();
         for (&fk, rings) in &self.face_holes {
-            let rings_arr: Vec<serde_json::Value> = rings.iter()
-                .map(|ring| serde_json::json!(ring))
-                .collect();
+            let rings_arr: Vec<serde_json::Value> =
+                rings.iter().map(|ring| serde_json::json!(ring)).collect();
             face_holes_json.insert(fk.to_string(), serde_json::Value::Array(rings_arr));
         }
 
@@ -2568,9 +3397,15 @@ impl Mesh {
             for (fk_str, rings_val) in fh_obj {
                 if let Ok(fk) = fk_str.parse::<usize>() {
                     if let Some(rings_arr) = rings_val.as_array() {
-                        let rings: Vec<Vec<usize>> = rings_arr.iter()
-                            .filter_map(|r| r.as_array().map(|a| a.iter()
-                                .filter_map(|v| v.as_u64().map(|n| n as usize)).collect()))
+                        let rings: Vec<Vec<usize>> = rings_arr
+                            .iter()
+                            .filter_map(|r| {
+                                r.as_array().map(|a| {
+                                    a.iter()
+                                        .filter_map(|v| v.as_u64().map(|n| n as usize))
+                                        .collect()
+                                })
+                            })
                             .collect();
                         mesh.face_holes.insert(fk, rings);
                     }
@@ -2602,7 +3437,14 @@ impl Mesh {
             mesh.pointcolors = rgba_values
                 .chunks(4)
                 .filter(|c| c.len() == 4)
-                .map(|c| Color::new(c[0] as f32 / 255.0, c[1] as f32 / 255.0, c[2] as f32 / 255.0, c[3] as f32 / 255.0))
+                .map(|c| {
+                    Color::new(
+                        c[0] as f32 / 255.0,
+                        c[1] as f32 / 255.0,
+                        c[2] as f32 / 255.0,
+                        c[3] as f32 / 255.0,
+                    )
+                })
                 .collect();
         }
 
@@ -2614,7 +3456,14 @@ impl Mesh {
             mesh.facecolors = rgba_values
                 .chunks(4)
                 .filter(|c| c.len() == 4)
-                .map(|c| Color::new(c[0] as f32 / 255.0, c[1] as f32 / 255.0, c[2] as f32 / 255.0, c[3] as f32 / 255.0))
+                .map(|c| {
+                    Color::new(
+                        c[0] as f32 / 255.0,
+                        c[1] as f32 / 255.0,
+                        c[2] as f32 / 255.0,
+                        c[3] as f32 / 255.0,
+                    )
+                })
                 .collect();
         }
 
@@ -2626,12 +3475,22 @@ impl Mesh {
             mesh.linecolors = rgba_values
                 .chunks(4)
                 .filter(|c| c.len() == 4)
-                .map(|c| Color::new(c[0] as f32 / 255.0, c[1] as f32 / 255.0, c[2] as f32 / 255.0, c[3] as f32 / 255.0))
+                .map(|c| {
+                    Color::new(
+                        c[0] as f32 / 255.0,
+                        c[1] as f32 / 255.0,
+                        c[2] as f32 / 255.0,
+                        c[3] as f32 / 255.0,
+                    )
+                })
                 .collect();
         }
 
         if let Some(widths) = data.get("widths").and_then(|v| v.as_array()) {
-            mesh.widths = widths.iter().filter_map(|v| v.as_f64().map(|x| x as f64)).collect();
+            mesh.widths = widths
+                .iter()
+                .filter_map(|v| v.as_f64().map(|x| x as f64))
+                .collect();
         }
 
         if let Some(oc) = data.get("objectcolor") {
@@ -2647,11 +3506,16 @@ impl Mesh {
             for (fk_str, tris_val) in tri_obj {
                 if let Ok(fk) = fk_str.parse::<usize>() {
                     if let Some(tris_arr) = tris_val.as_array() {
-                        let tris: Vec<[usize; 3]> = tris_arr.iter()
+                        let tris: Vec<[usize; 3]> = tris_arr
+                            .iter()
                             .filter_map(|t| {
                                 let a = t.as_array()?;
                                 if a.len() >= 3 {
-                                    Some([a[0].as_u64()? as usize, a[1].as_u64()? as usize, a[2].as_u64()? as usize])
+                                    Some([
+                                        a[0].as_u64()? as usize,
+                                        a[1].as_u64()? as usize,
+                                        a[2].as_u64()? as usize,
+                                    ])
                                 } else {
                                     None
                                 }
@@ -2689,9 +3553,9 @@ impl Mesh {
         })
     }
 
-    ///////////////////////////////////////////////////////////////////////////////////////////
+    // ═══════════════════════════════════════════════════════════════════════════
     // Protobuf
-    ///////////////////////////////////////////////////////////////////////////////////////////
+    // ═══════════════════════════════════════════════════════════════════════════
 
     pub fn pb_dumps(&self) -> Vec<u8> {
         use prost::Message;
@@ -2704,36 +3568,51 @@ impl Mesh {
 
         let mut vertices: HashMap<u64, crate::proto::VertexData> = HashMap::new();
         for (&vkey, vdata) in &self.vertex {
-            let mut attrs: std::collections::BTreeMap<String, f64> = std::collections::BTreeMap::new();
+            let mut attrs: std::collections::BTreeMap<String, f64> =
+                std::collections::BTreeMap::new();
             for (k, v) in &vdata.attributes {
                 attrs.insert(k.clone(), *v as f64);
             }
-            vertices.insert(vkey as u64, crate::proto::VertexData {
-                x: vdata.x as f64,
-                y: vdata.y as f64,
-                z: vdata.z as f64,
-                attributes: attrs,
-            });
+            vertices.insert(
+                vkey as u64,
+                crate::proto::VertexData {
+                    x: vdata.x as f64,
+                    y: vdata.y as f64,
+                    z: vdata.z as f64,
+                    attributes: attrs,
+                },
+            );
         }
 
         let mut faces: HashMap<u64, crate::proto::FaceData> = HashMap::new();
         for (&fkey, fverts) in &self.face {
-            let mut attrs: std::collections::BTreeMap<String, f64> = std::collections::BTreeMap::new();
+            let mut attrs: std::collections::BTreeMap<String, f64> =
+                std::collections::BTreeMap::new();
             if let Some(fdata) = self.facedata.get(&fkey) {
                 for (k, v) in fdata {
                     attrs.insert(k.clone(), *v as f64);
                 }
             }
-            let holes: Vec<crate::proto::HoleRing> = self.face_holes.get(&fkey)
-                .map(|rings| rings.iter().map(|ring| crate::proto::HoleRing {
-                    vertices: ring.iter().map(|&v| v as u64).collect(),
-                }).collect())
+            let holes: Vec<crate::proto::HoleRing> = self
+                .face_holes
+                .get(&fkey)
+                .map(|rings| {
+                    rings
+                        .iter()
+                        .map(|ring| crate::proto::HoleRing {
+                            vertices: ring.iter().map(|&v| v as u64).collect(),
+                        })
+                        .collect()
+                })
                 .unwrap_or_default();
-            faces.insert(fkey as u64, crate::proto::FaceData {
-                vertices: fverts.iter().map(|&v| v as u64).collect(),
-                attributes: attrs,
-                holes,
-            });
+            faces.insert(
+                fkey as u64,
+                crate::proto::FaceData {
+                    vertices: fverts.iter().map(|&v| v as u64).collect(),
+                    attributes: attrs,
+                    holes,
+                },
+            );
         }
 
         let mut edge_data_vec: Vec<crate::proto::EdgeData> = Vec::new();
@@ -2744,7 +3623,8 @@ impl Mesh {
         for ek in ekeys {
             let (v1, v2) = (&ek.0, &ek.1);
             let attrs = &self.edgedata[&ek];
-            let mut attr_map: std::collections::BTreeMap<String, f64> = std::collections::BTreeMap::new();
+            let mut attr_map: std::collections::BTreeMap<String, f64> =
+                std::collections::BTreeMap::new();
             for (k, v) in attrs {
                 attr_map.insert(k.clone(), *v as f64);
             }
@@ -2764,7 +3644,9 @@ impl Mesh {
 
         let mut triangulation_map: HashMap<u64, crate::proto::TriList> = HashMap::new();
         for (&fkey, tris) in &self.triangulation {
-            let mut tri_list = crate::proto::TriList { vertices: Vec::new() };
+            let mut tri_list = crate::proto::TriList {
+                vertices: Vec::new(),
+            };
             for t in tris {
                 tri_list.vertices.push(t[0] as u64);
                 tri_list.vertices.push(t[1] as u64);
@@ -2779,9 +3661,21 @@ impl Mesh {
             vertices,
             faces,
             edge_data: edge_data_vec,
-            default_vertex_attributes: self.default_vertex_attributes.iter().map(|(k, v)| (k.clone(), *v as f64)).collect(),
-            default_face_attributes: self.default_face_attributes.iter().map(|(k, v)| (k.clone(), *v as f64)).collect(),
-            default_edge_attributes: self.default_edge_attributes.iter().map(|(k, v)| (k.clone(), *v as f64)).collect(),
+            default_vertex_attributes: self
+                .default_vertex_attributes
+                .iter()
+                .map(|(k, v)| (k.clone(), *v as f64))
+                .collect(),
+            default_face_attributes: self
+                .default_face_attributes
+                .iter()
+                .map(|(k, v)| (k.clone(), *v as f64))
+                .collect(),
+            default_edge_attributes: self
+                .default_edge_attributes
+                .iter()
+                .map(|(k, v)| (k.clone(), *v as f64))
+                .collect(),
             pointcolors_rgba,
             facecolors_rgba,
             linecolors_rgba,
@@ -2815,24 +3709,30 @@ impl Mesh {
         mesh.vertex.reserve(proto.vertices.len());
         mesh.face.reserve(proto.faces.len());
         for (vkey, vdata) in proto.vertices {
-            mesh.vertex.insert(vkey as usize, VertexData {
-                x: vdata.x,
-                y: vdata.y,
-                z: vdata.z,
-                // MOVED, not rebuilt: prost already decoded this map, and the old copy loop
-                // re-hashed every key into a second allocation for an identical result.
-                attributes: vdata.attributes.into_iter().collect(),
-            });
+            mesh.vertex.insert(
+                vkey as usize,
+                VertexData {
+                    x: vdata.x,
+                    y: vdata.y,
+                    z: vdata.z,
+                    // MOVED, not rebuilt: prost already decoded this map, and the old copy loop
+                    // re-hashed every key into a second allocation for an identical result.
+                    attributes: vdata.attributes.into_iter().collect(),
+                },
+            );
         }
 
         for (fkey, fdata) in proto.faces {
             let verts: Vec<usize> = fdata.vertices.iter().map(|&v| v as usize).collect();
             mesh.face.insert(fkey as usize, verts);
             if !fdata.attributes.is_empty() {
-                mesh.facedata.insert(fkey as usize, fdata.attributes.into_iter().collect());
+                mesh.facedata
+                    .insert(fkey as usize, fdata.attributes.into_iter().collect());
             }
             if !fdata.holes.is_empty() {
-                let rings: Vec<Vec<usize>> = fdata.holes.iter()
+                let rings: Vec<Vec<usize>> = fdata
+                    .holes
+                    .iter()
                     .map(|h| h.vertices.iter().map(|&v| v as usize).collect())
                     .collect();
                 mesh.face_holes.insert(fkey as usize, rings);
@@ -2844,7 +3744,11 @@ impl Mesh {
             let mut tris: Vec<[usize; 3]> = Vec::new();
             let mut i = 0;
             while i + 2 < vlist.len() {
-                tris.push([vlist[i] as usize, vlist[i+1] as usize, vlist[i+2] as usize]);
+                tris.push([
+                    vlist[i] as usize,
+                    vlist[i + 1] as usize,
+                    vlist[i + 2] as usize,
+                ]);
                 i += 3;
             }
             mesh.triangulation.insert(fkey as usize, tris);
@@ -2858,7 +3762,8 @@ impl Mesh {
 
         for edata in proto.edge_data {
             let key = (edata.vertex1 as usize, edata.vertex2 as usize);
-            mesh.edgedata.insert(key, edata.attributes.into_iter().collect());
+            mesh.edgedata
+                .insert(key, edata.attributes.into_iter().collect());
         }
 
         mesh.default_vertex_attributes = proto.default_vertex_attributes.into_iter().collect();
@@ -2899,9 +3804,9 @@ impl Mesh {
         Self::pb_loads(&data).expect("Failed to parse protobuf")
     }
 
-    ///////////////////////////////////////////////////////////////////////////////////////////
+    // ═══════════════════════════════════════════════════════════════════════════
     // Triangle BVH Cache
-    ///////////////////////////////////////////////////////////////////////////////////////////
+    // ═══════════════════════════════════════════════════════════════════════════
 
     pub fn build_triangle_bvh(&mut self) {
         self.ensure_triangle_bvh();
@@ -2922,7 +3827,11 @@ impl Mesh {
         let (vertices, faces) = self.to_vertices_and_faces();
         let mut vertex_keys: Vec<usize> = self.vertex.keys().cloned().collect();
         vertex_keys.sort();
-        let vkey_to_idx: HashMap<usize, usize> = vertex_keys.iter().enumerate().map(|(i, &k)| (k, i)).collect();
+        let vkey_to_idx: HashMap<usize, usize> = vertex_keys
+            .iter()
+            .enumerate()
+            .map(|(i, &k)| (k, i))
+            .collect();
         let mut face_keys: Vec<usize> = self.face.keys().cloned().collect();
         face_keys.sort();
         let mut tris: Vec<[usize; 3]> = Vec::new();
@@ -2940,7 +3849,11 @@ impl Mesh {
                         let i1 = vkey_to_idx[&t[1]];
                         let i2 = vkey_to_idx[&t[2]];
                         tris.push([i0, i1, i2]);
-                        let pts = [vertices[i0].clone(), vertices[i1].clone(), vertices[i2].clone()];
+                        let pts = [
+                            vertices[i0].clone(),
+                            vertices[i1].clone(),
+                            vertices[i2].clone(),
+                        ];
                         tri_boxes.push(OBB::from_points(&pts, 0.0));
                     }
                     continue;
@@ -2950,7 +3863,11 @@ impl Mesh {
             for i in 1..(face.len() - 1) {
                 let t = [v0, face[i], face[i + 1]];
                 tris.push(t);
-                let pts = [vertices[t[0]].clone(), vertices[t[1]].clone(), vertices[t[2]].clone()];
+                let pts = [
+                    vertices[t[0]].clone(),
+                    vertices[t[1]].clone(),
+                    vertices[t[2]].clone(),
+                ];
                 tri_boxes.push(OBB::from_points(&pts, 0.0));
             }
         }
@@ -3031,9 +3948,9 @@ impl Mesh {
         best_p
     }
 
-    ///////////////////////////////////////////////////////////////////////////////////////////
+    // ═══════════════════════════════════════════════════════════════════════════
     // Color and Width Management
-    ///////////////////////////////////////////////////////////////////////////////////////////
+    // ═══════════════════════════════════════════════════════════════════════════
 
     pub fn set_vertex_color(&mut self, index: usize, color: Color) {
         if index < self.pointcolors.len() {
@@ -3064,34 +3981,53 @@ impl Mesh {
     }
 
     pub fn str(&self) -> String {
-        format!("Mesh(name={}, vertices={}, faces={})",
-            self.name, self.number_of_vertices(), self.number_of_faces())
+        format!(
+            "Mesh(name={}, vertices={}, faces={})",
+            self.name,
+            self.number_of_vertices(),
+            self.number_of_faces()
+        )
     }
 
     pub fn repr(&self) -> String {
-        format!("Mesh(\n  name={},\n  vertices={},\n  faces={},\n  edges={}\n)",
-            self.name, self.number_of_vertices(), self.number_of_faces(), self.number_of_edges())
+        format!(
+            "Mesh(\n  name={},\n  vertices={},\n  faces={},\n  edges={}\n)",
+            self.name,
+            self.number_of_vertices(),
+            self.number_of_faces(),
+            self.number_of_edges()
+        )
     }
 }
 
 impl std::fmt::Display for Mesh {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "Mesh(name={}, vertices={}, faces={})",
-            self.name, self.number_of_vertices(), self.number_of_faces())
+        write!(
+            f,
+            "Mesh(name={}, vertices={}, faces={})",
+            self.name,
+            self.number_of_vertices(),
+            self.number_of_faces()
+        )
     }
 }
 
 impl std::fmt::Debug for Mesh {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "Mesh(\n  name={},\n  vertices={},\n  faces={},\n  edges={}\n)",
-            self.name, self.number_of_vertices(), self.number_of_faces(), self.number_of_edges())
+        write!(
+            f,
+            "Mesh(\n  name={},\n  vertices={},\n  faces={},\n  edges={}\n)",
+            self.name,
+            self.number_of_vertices(),
+            self.number_of_faces(),
+            self.number_of_edges()
+        )
     }
 }
 
 impl PartialEq for Mesh {
     fn eq(&self, other: &Self) -> bool {
-        self.name == other.name && self.vertex == other.vertex
-            && self.face == other.face
+        self.name == other.name && self.vertex == other.vertex && self.face == other.face
     }
 }
 

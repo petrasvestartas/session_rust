@@ -7,7 +7,10 @@ use std::fmt;
 #[serde(tag = "type", rename = "Vertex")]
 pub struct Vertex {
     /// The unique identifier of the vertex.
-    #[serde(serialize_with = "crate::guid_serde::serialize", deserialize_with = "crate::guid_serde::deserialize")]
+    #[serde(
+        serialize_with = "crate::guid_serde::serialize",
+        deserialize_with = "crate::guid_serde::deserialize"
+    )]
     guid: std::sync::OnceLock<String>,
     /// The name of the vertex.
     pub name: String,
@@ -33,7 +36,10 @@ impl fmt::Display for Graph {
         write!(
             f,
             "Graph({}, {}, vertices={}, edges={})",
-            self.name, self.guid(), self.vertex_count, self.edge_count
+            self.name,
+            self.guid(),
+            self.vertex_count,
+            self.edge_count
         )
     }
 }
@@ -43,7 +49,10 @@ impl fmt::Display for Vertex {
         write!(
             f,
             "Vertex({}, {}, attr={}, index={})",
-            self.name, self.guid(), self.attribute, self.index
+            self.name,
+            self.guid(),
+            self.attribute,
+            self.index
         )
     }
 }
@@ -53,7 +62,12 @@ impl fmt::Display for Edge {
         write!(
             f,
             "Edge({}, {}, {} -> {}, attr={}, index={})",
-            self.name, self.guid(), self.v0, self.v1, self.attribute, self.index
+            self.name,
+            self.guid(),
+            self.v0,
+            self.v1,
+            self.attribute,
+            self.index
         )
     }
 }
@@ -87,9 +101,9 @@ impl Vertex {
         }
     }
 
-    ///////////////////////////////////////////////////////////////////////////////////////////
+    // ═══════════════════════════════════════════════════════════════════════════
     // JSON
-    ///////////////////////////////////////////////////////////////////////////////////////////
+    // ═══════════════════════════════════════════════════════════════════════════
 
     /// Convert the Vertex to a JSON-serializable string.
     pub fn jsondump(&self) -> Result<String, Box<dyn std::error::Error>> {
@@ -107,7 +121,10 @@ impl Vertex {
 #[serde(tag = "type", rename = "Edge")]
 pub struct Edge {
     /// The unique identifier of the edge.
-    #[serde(serialize_with = "crate::guid_serde::serialize", deserialize_with = "crate::guid_serde::deserialize")]
+    #[serde(
+        serialize_with = "crate::guid_serde::serialize",
+        deserialize_with = "crate::guid_serde::deserialize"
+    )]
     guid: std::sync::OnceLock<String>,
     /// The name of the edge.
     pub name: String,
@@ -170,9 +187,9 @@ impl Edge {
         }
     }
 
-    ///////////////////////////////////////////////////////////////////////////////////////////
+    // ═══════════════════════════════════════════════════════════════════════════
     // JSON
-    ///////////////////////////////////////////////////////////////////////////////////////////
+    // ═══════════════════════════════════════════════════════════════════════════
 
     /// Convert the Edge to a JSON-serializable string.
     pub fn jsondump(&self) -> Result<String, Box<dyn std::error::Error>> {
@@ -208,7 +225,10 @@ impl Edge {
 #[serde(tag = "type", rename = "Graph")]
 pub struct Graph {
     // Public fields, similar to C++
-    #[serde(serialize_with = "crate::guid_serde::serialize", deserialize_with = "crate::guid_serde::deserialize")]
+    #[serde(
+        serialize_with = "crate::guid_serde::serialize",
+        deserialize_with = "crate::guid_serde::deserialize"
+    )]
     guid: std::sync::OnceLock<String>,
     pub name: String,
     pub vertex_count: i32,
@@ -443,9 +463,9 @@ impl Graph {
         }
     }
 
-    ///////////////////////////////////////////////////////////////////////////////////////////
+    // ═══════════════════════════════════════════════════════════════════════════
     // JSON
-    ///////////////////////////////////////////////////////////////////////////////////////////
+    // ═══════════════════════════════════════════════════════════════════════════
 
     /// Serializes the Graph to a JSON string.
     pub fn jsondump(&self) -> Result<String, serde_json::Error> {
@@ -546,9 +566,9 @@ impl Graph {
         Self::jsonload(&json_data).map_err(|e| e.into())
     }
 
-    ///////////////////////////////////////////////////////////////////////////////////////////
+    // ═══════════════════════════════════════════════════════════════════════════
     // Protobuf Serialization
-    ///////////////////////////////////////////////////////////////////////////////////////////
+    // ═══════════════════════════════════════════════════════════════════════════
 
     /// The one place a Graph becomes a proto message.
     ///
@@ -563,29 +583,44 @@ impl Graph {
 
         let mut proto_vertices: ProtoMap<String, crate::proto::Vertex> = ProtoMap::new();
         for (name, vertex) in &self.vertices {
-            proto_vertices.insert(name.clone(), crate::proto::Vertex {
-                name: vertex.name.clone(),
-                // `get()`, not `guid()`: a vertex's identity is its NAME - which is already the
-                // object's guid - so its own guid field is vestigial, and `Session::pb_loads`
-                // proves it by discarding the value on the way back in. Calling `guid()` here
-                // MINTED one for every vertex that never had one, so a sheet with 34,592
-                // vertices generated 34,592 UUIDs at write time and wrote ~1.3 MB of them for
-                // a reader that throws them away. Empty is zero bytes in proto3, and a graph
-                // whose vertices really do carry guids still round-trips through `pb_loads`.
-                guid: if vertex.has_guid() { vertex.guid().to_string() } else { String::new() },
-                attribute: vertex.attribute.clone(),
-                index: vertex.index,
-            });
+            proto_vertices.insert(
+                name.clone(),
+                crate::proto::Vertex {
+                    name: vertex.name.clone(),
+                    // `get()`, not `guid()`: a vertex's identity is its NAME - which is already the
+                    // object's guid - so its own guid field is vestigial, and `Session::pb_loads`
+                    // proves it by discarding the value on the way back in. Calling `guid()` here
+                    // MINTED one for every vertex that never had one, so a sheet with 34,592
+                    // vertices generated 34,592 UUIDs at write time and wrote ~1.3 MB of them for
+                    // a reader that throws them away. Empty is zero bytes in proto3, and a graph
+                    // whose vertices really do carry guids still round-trips through `pb_loads`.
+                    guid: if vertex.has_guid() {
+                        vertex.guid().to_string()
+                    } else {
+                        String::new()
+                    },
+                    attribute: vertex.attribute.clone(),
+                    index: vertex.index,
+                },
+            );
         }
 
         let mut proto_edges = Vec::new();
         let mut seen = std::collections::HashSet::new();
         for (u, neighbors) in &self.edges {
             for (v, edge) in neighbors {
-                let key = if u < v { (u.clone(), v.clone()) } else { (v.clone(), u.clone()) };
+                let key = if u < v {
+                    (u.clone(), v.clone())
+                } else {
+                    (v.clone(), u.clone())
+                };
                 if seen.insert(key) {
                     proto_edges.push(crate::proto::Edge {
-                        guid: if edge.has_guid() { edge.guid().to_string() } else { String::new() },
+                        guid: if edge.has_guid() {
+                            edge.guid().to_string()
+                        } else {
+                            String::new()
+                        },
                         name: edge.name.clone(),
                         v0: edge.v0.clone(),
                         v1: edge.v1.clone(),
@@ -640,8 +675,16 @@ impl Graph {
                 ..Default::default()
             };
             edge.set_guid(e.guid.clone());
-            graph.edges.entry(e.v0.clone()).or_default().insert(e.v1.clone(), edge.clone());
-            graph.edges.entry(e.v1.clone()).or_default().insert(e.v0.clone(), edge);
+            graph
+                .edges
+                .entry(e.v0.clone())
+                .or_default()
+                .insert(e.v1.clone(), edge.clone());
+            graph
+                .edges
+                .entry(e.v1.clone())
+                .or_default()
+                .insert(e.v0.clone(), edge);
         }
 
         Ok(graph)
@@ -656,9 +699,9 @@ impl Graph {
         Self::pb_loads(&data).expect("Failed to parse protobuf")
     }
 
-    ///////////////////////////////////////////////////////////////////////////////////////////
+    // ═══════════════════════════════════════════════════════════════════════════
     // Algorithms
-    ///////////////////////////////////////////////////////////////////////////////////////////
+    // ═══════════════════════════════════════════════════════════════════════════
 
     pub fn bfs(&self, start: &str) -> Vec<String> {
         if !self.has_node(start) {
@@ -743,7 +786,8 @@ impl Graph {
         if u == v {
             return vec![u.to_string()];
         }
-        let mut parent: std::collections::HashMap<String, Option<String>> = std::collections::HashMap::new();
+        let mut parent: std::collections::HashMap<String, Option<String>> =
+            std::collections::HashMap::new();
         parent.insert(u.to_string(), None);
         let mut queue = std::collections::VecDeque::new();
         queue.push_back(u.to_string());
@@ -789,7 +833,8 @@ impl Graph {
             if visited.contains(&start) {
                 continue;
             }
-            let mut parent: std::collections::HashMap<String, String> = std::collections::HashMap::new();
+            let mut parent: std::collections::HashMap<String, String> =
+                std::collections::HashMap::new();
             parent.insert(start.clone(), String::new());
             let mut queue = std::collections::VecDeque::new();
             queue.push_back(start.clone());

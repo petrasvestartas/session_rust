@@ -1,5 +1,5 @@
-use crate::{Line, Point};
 use crate::closest::Closest;
+use crate::{Line, Point};
 
 pub fn line_line_parameters(
     line0: &Line,
@@ -225,9 +225,21 @@ pub fn line_plane(line: &Line, plane: &crate::Plane, is_finite: bool) -> Option<
     let s = 1.0 - t;
 
     let output = Point::new(
-        if line[0] == line[3] { line[0] } else { s * line[0] + t * line[3] },
-        if line[1] == line[4] { line[1] } else { s * line[1] + t * line[4] },
-        if line[2] == line[5] { line[2] } else { s * line[2] + t * line[5] },
+        if line[0] == line[3] {
+            line[0]
+        } else {
+            s * line[0] + t * line[3]
+        },
+        if line[1] == line[4] {
+            line[1]
+        } else {
+            s * line[1] + t * line[4]
+        },
+        if line[2] == line[5] {
+            line[2]
+        } else {
+            s * line[2] + t * line[5]
+        },
     );
 
     if is_finite && !(0.0..=1.0).contains(&t) {
@@ -373,9 +385,7 @@ pub fn ray_sphere(line: &Line, center: &Point, radius: f64) -> Option<Vec<Point>
     let o_z = origin[2] - center[2];
 
     // Quadratic equation coefficients
-    let a = direction[0] * direction[0]
-        + direction[1] * direction[1]
-        + direction[2] * direction[2];
+    let a = direction[0] * direction[0] + direction[1] * direction[1] + direction[2] * direction[2];
     let b = 2.0 * (direction[0] * o_x + direction[1] * o_y + direction[2] * o_z);
     let c = o_x * o_x + o_y * o_y + o_z * o_z - radius * radius;
 
@@ -506,12 +516,12 @@ pub fn ray_triangle(
     ))
 }
 
-//==========================================================================================
+// ═══════════════════════════════════════════════════════════════════════════
 // NURBS Curve Intersection Functions
-//==========================================================================================
+// ═══════════════════════════════════════════════════════════════════════════
 
-use crate::{NurbsCurve, NurbsSurface, Plane, Tolerance, Vector};
 use crate::nurbsknot::CurveNurbsKnotStyle;
+use crate::{NurbsCurve, NurbsSurface, Plane, Tolerance, Vector};
 
 fn curve_signed_distance_to_plane(pt: &Point, plane: &Plane) -> f64 {
     let v = Vector::new(
@@ -562,7 +572,12 @@ fn curve_find_root_bisection(
     }
 }
 
-fn curve_refine_intersection_newton(curve: &NurbsCurve, plane: &Plane, t: &mut f64, tolerance: f64) -> bool {
+fn curve_refine_intersection_newton(
+    curve: &NurbsCurve,
+    plane: &Plane,
+    t: &mut f64,
+    tolerance: f64,
+) -> bool {
     let max_iterations = 10;
     let step_tolerance = tolerance * 0.01;
 
@@ -665,7 +680,9 @@ pub fn curve_plane(curve: &NurbsCurve, plane: &Plane, tolerance: Option<f64>) ->
             let d1 = curve_signed_distance_to_plane(&curve.point_at(t1), plane);
 
             if d0 * d1 < 0.0 {
-                if let Some(mut t_intersection) = curve_find_root_bisection(curve, plane, t0, t1, tol) {
+                if let Some(mut t_intersection) =
+                    curve_find_root_bisection(curve, plane, t0, t1, tol)
+                {
                     let mut is_new = true;
                     for &existing in &intersections {
                         if (existing - t_intersection).abs() < tol * 2.0 {
@@ -697,7 +714,11 @@ pub fn curve_plane_points(curve: &NurbsCurve, plane: &Plane, tolerance: Option<f
 }
 
 /// Curve-plane intersection using Bézier clipping (advanced method)
-pub fn curve_plane_bezier_clipping(curve: &NurbsCurve, plane: &Plane, tolerance: Option<f64>) -> Vec<f64> {
+pub fn curve_plane_bezier_clipping(
+    curve: &NurbsCurve,
+    plane: &Plane,
+    tolerance: Option<f64>,
+) -> Vec<f64> {
     let tol = tolerance.unwrap_or(Tolerance::ZERO_TOLERANCE);
 
     if !curve.is_valid() {
@@ -753,7 +774,10 @@ pub fn curve_plane_bezier_clipping(curve: &NurbsCurve, plane: &Plane, tolerance:
                 }
 
                 let pt_final = curve.point_at(t);
-                if curve_signed_distance_to_plane(&pt_final, plane).abs() < tol && ta <= t && t <= tb {
+                if curve_signed_distance_to_plane(&pt_final, plane).abs() < tol
+                    && ta <= t
+                    && t <= tb
+                {
                     results.push(t);
                 }
             }
@@ -823,7 +847,11 @@ pub fn curve_plane_bezier_clipping(curve: &NurbsCurve, plane: &Plane, tolerance:
 }
 
 /// Curve-plane intersection using algebraic/hodograph method
-pub fn curve_plane_algebraic(curve: &NurbsCurve, plane: &Plane, tolerance: Option<f64>) -> Vec<f64> {
+pub fn curve_plane_algebraic(
+    curve: &NurbsCurve,
+    plane: &Plane,
+    tolerance: Option<f64>,
+) -> Vec<f64> {
     let tol = tolerance.unwrap_or(Tolerance::ZERO_TOLERANCE);
 
     if !curve.is_valid() {
@@ -901,7 +929,9 @@ pub fn curve_plane_algebraic(curve: &NurbsCurve, plane: &Plane, tolerance: Optio
 
         let pt_final = curve.point_at(t);
         if curve_signed_distance_to_plane(&pt_final, plane).abs() < tol {
-            let is_duplicate = results.iter().any(|&existing_t: &f64| (t - existing_t).abs() < tol * 2.0);
+            let is_duplicate = results
+                .iter()
+                .any(|&existing_t: &f64| (t - existing_t).abs() < tol * 2.0);
             if !is_duplicate {
                 results.push(t);
             }
@@ -913,7 +943,11 @@ pub fn curve_plane_algebraic(curve: &NurbsCurve, plane: &Plane, tolerance: Optio
 }
 
 /// Curve-plane intersection using production CAD kernel method
-pub fn curve_plane_production(curve: &NurbsCurve, plane: &Plane, tolerance: Option<f64>) -> Vec<f64> {
+pub fn curve_plane_production(
+    curve: &NurbsCurve,
+    plane: &Plane,
+    tolerance: Option<f64>,
+) -> Vec<f64> {
     let tol = tolerance.unwrap_or(Tolerance::ZERO_TOLERANCE);
 
     if !curve.is_valid() {
@@ -987,7 +1021,10 @@ pub fn curve_plane_production(curve: &NurbsCurve, plane: &Plane, tolerance: Opti
                 }
 
                 let pt_final = curve.point_at(t);
-                if curve_signed_distance_to_plane(&pt_final, plane).abs() < tol && ta <= t && t <= tb {
+                if curve_signed_distance_to_plane(&pt_final, plane).abs() < tol
+                    && ta <= t
+                    && t <= tb
+                {
                     let is_duplicate = results.iter().any(|&e| (t - e).abs() < tol * 2.0);
                     if !is_duplicate {
                         results.push(t);
@@ -1026,8 +1063,11 @@ pub fn curve_plane_production(curve: &NurbsCurve, plane: &Plane, tolerance: Opti
                             }
                         }
 
-                        if curve_signed_distance_to_plane(&curve.point_at(t_root), plane).abs() < tol {
-                            let is_duplicate = results.iter().any(|&e| (t_root - e).abs() < tol * 2.0);
+                        if curve_signed_distance_to_plane(&curve.point_at(t_root), plane).abs()
+                            < tol
+                        {
+                            let is_duplicate =
+                                results.iter().any(|&e| (t_root - e).abs() < tol * 2.0);
                             if !is_duplicate {
                                 results.push(t_root);
                             }
@@ -1055,17 +1095,30 @@ pub fn curve_closest_point(curve: &NurbsCurve, test_point: &Point, t0: f64, t1: 
 
 /// Find intersection curves between a NURBS surface and a plane
 /// Find intersection points between a ray (Line) and a mesh using brute-force triangle testing.
-pub fn ray_mesh(line: &Line, mesh: &crate::Mesh, epsilon: f64, find_all: bool) -> Option<Vec<Point>> {
+pub fn ray_mesh(
+    line: &Line,
+    mesh: &crate::Mesh,
+    epsilon: f64,
+    find_all: bool,
+) -> Option<Vec<Point>> {
     let (vertices, faces) = mesh.to_vertices_and_faces();
     let mut tris: Vec<(Point, Point, Point)> = Vec::new();
     for face in &faces {
-        if face.len() < 3 { continue; }
+        if face.len() < 3 {
+            continue;
+        }
         let v0 = &vertices[face[0]];
         for j in 1..face.len() - 1 {
-            tris.push((v0.clone(), vertices[face[j]].clone(), vertices[face[j + 1]].clone()));
+            tris.push((
+                v0.clone(),
+                vertices[face[j]].clone(),
+                vertices[face[j + 1]].clone(),
+            ));
         }
     }
-    if tris.is_empty() { return None; }
+    if tris.is_empty() {
+        return None;
+    }
 
     let origin = line.start();
     let direction = line.to_vector().normalized();
@@ -1074,15 +1127,17 @@ pub fn ray_mesh(line: &Line, mesh: &crate::Mesh, epsilon: f64, find_all: bool) -
     for (v0, v1, v2) in &tris {
         if let Some(p) = ray_triangle(line, v0, v1, v2, epsilon) {
             let t = (p[0] - origin[0]) * direction[0]
-                  + (p[1] - origin[1]) * direction[1]
-                  + (p[2] - origin[2]) * direction[2];
+                + (p[1] - origin[1]) * direction[1]
+                + (p[2] - origin[2]) * direction[2];
             if t >= 0.0 {
                 hits.push((t, p));
             }
         }
     }
 
-    if hits.is_empty() { return None; }
+    if hits.is_empty() {
+        return None;
+    }
     hits.sort_by(|a, b| a.0.partial_cmp(&b.0).unwrap());
     if find_all {
         Some(hits.into_iter().map(|(_, p)| p).collect())
@@ -1092,19 +1147,33 @@ pub fn ray_mesh(line: &Line, mesh: &crate::Mesh, epsilon: f64, find_all: bool) -
 }
 
 /// Find intersection points between a ray (Line) and a mesh using SpatialBVH acceleration.
-pub fn ray_mesh_bvh(line: &Line, mesh: &crate::Mesh, epsilon: f64, find_all: bool) -> Option<Vec<Point>> {
+pub fn ray_mesh_bvh(
+    line: &Line,
+    mesh: &crate::Mesh,
+    epsilon: f64,
+    find_all: bool,
+) -> Option<Vec<Point>> {
     let (vertices, faces) = mesh.to_vertices_and_faces();
     let mut tris: Vec<(Point, Point, Point)> = Vec::new();
     for face in &faces {
-        if face.len() < 3 { continue; }
+        if face.len() < 3 {
+            continue;
+        }
         let v0 = &vertices[face[0]];
         for j in 1..face.len() - 1 {
-            tris.push((v0.clone(), vertices[face[j]].clone(), vertices[face[j + 1]].clone()));
+            tris.push((
+                v0.clone(),
+                vertices[face[j]].clone(),
+                vertices[face[j + 1]].clone(),
+            ));
         }
     }
-    if tris.is_empty() { return None; }
+    if tris.is_empty() {
+        return None;
+    }
 
-    let tri_boxes: Vec<crate::OBB> = tris.iter()
+    let tri_boxes: Vec<crate::OBB> = tris
+        .iter()
         .map(|(v0, v1, v2)| crate::OBB::from_points(&[v0.clone(), v1.clone(), v2.clone()], 0.0))
         .collect();
 
@@ -1115,23 +1184,29 @@ pub fn ray_mesh_bvh(line: &Line, mesh: &crate::Mesh, epsilon: f64, find_all: boo
     let direction = line.to_vector().normalized();
     let mut candidate_ids: Vec<usize> = Vec::new();
     let found = bvh.ray_cast(&origin, &direction, &mut candidate_ids, true);
-    if !found { return None; }
+    if !found {
+        return None;
+    }
 
     let mut hits: Vec<(f64, Point)> = Vec::new();
     for idx in candidate_ids {
-        if idx >= tris.len() { continue; }
+        if idx >= tris.len() {
+            continue;
+        }
         let (ref v0, ref v1, ref v2) = tris[idx];
         if let Some(p) = ray_triangle(line, v0, v1, v2, epsilon) {
             let t = (p[0] - origin[0]) * direction[0]
-                  + (p[1] - origin[1]) * direction[1]
-                  + (p[2] - origin[2]) * direction[2];
+                + (p[1] - origin[1]) * direction[1]
+                + (p[2] - origin[2]) * direction[2];
             if t >= 0.0 {
                 hits.push((t, p));
             }
         }
     }
 
-    if hits.is_empty() { return None; }
+    if hits.is_empty() {
+        return None;
+    }
     hits.sort_by(|a, b| a.0.partial_cmp(&b.0).unwrap());
     if find_all {
         Some(hits.into_iter().map(|(_, p)| p).collect())
@@ -1145,9 +1220,19 @@ pub fn ray_mesh_bvh(line: &Line, mesh: &crate::Mesh, epsilon: f64, find_all: boo
 /// Returns (traces, step, uv_to_3d, uv_to_3d_min) where traces is a list of
 /// (uv_trace, uv_unwrapped, is_loop): wrapped UV samples, seam-unwrapped UV
 /// samples, and whether the trace is a closed loop.
-fn surface_plane_traces(surface: &NurbsSurface, plane: &Plane, tolerance: f64) -> (Vec<(Vec<(f64, f64)>, Vec<(f64, f64)>, bool)>, f64, f64, f64) {
-    let (u0, u1) = match surface.domain(0) { Some(d) => d, None => return (Vec::new(), 0.0, 1.0, 1.0) };
-    let (v0, v1) = match surface.domain(1) { Some(d) => d, None => return (Vec::new(), 0.0, 1.0, 1.0) };
+fn surface_plane_traces(
+    surface: &NurbsSurface,
+    plane: &Plane,
+    tolerance: f64,
+) -> (Vec<(Vec<(f64, f64)>, Vec<(f64, f64)>, bool)>, f64, f64, f64) {
+    let (u0, u1) = match surface.domain(0) {
+        Some(d) => d,
+        None => return (Vec::new(), 0.0, 1.0, 1.0),
+    };
+    let (v0, v1) = match surface.domain(1) {
+        Some(d) => d,
+        None => return (Vec::new(), 0.0, 1.0, 1.0),
+    };
     let range_u = u1 - u0;
     let range_v = v1 - v0;
     let closed_u = surface.is_closed(0);
@@ -1156,7 +1241,9 @@ fn surface_plane_traces(surface: &NurbsSurface, plane: &Plane, tolerance: f64) -
     let wrap_u = |u: f64| -> f64 {
         if closed_u {
             let mut t = (u - u0) % range_u;
-            if t < 0.0 { t += range_u; }
+            if t < 0.0 {
+                t += range_u;
+            }
             return u0 + t;
         }
         u.max(u0).min(u1)
@@ -1164,7 +1251,9 @@ fn surface_plane_traces(surface: &NurbsSurface, plane: &Plane, tolerance: f64) -
     let wrap_v = |v: f64| -> f64 {
         if closed_v {
             let mut t = (v - v0) % range_v;
-            if t < 0.0 { t += range_v; }
+            if t < 0.0 {
+                t += range_v;
+            }
             return v0 + t;
         }
         v.max(v0).min(v1)
@@ -1174,13 +1263,17 @@ fn surface_plane_traces(surface: &NurbsSurface, plane: &Plane, tolerance: f64) -
     let p0 = plane.origin();
 
     let g = |u: f64, v: f64| -> f64 {
-        let p = surface.point_at(wrap_u(u), wrap_v(v)).unwrap_or(Point::new(0.0, 0.0, 0.0));
+        let p = surface
+            .point_at(wrap_u(u), wrap_v(v))
+            .unwrap_or(Point::new(0.0, 0.0, 0.0));
         (p[0] - p0[0]) * pn[0] + (p[1] - p0[1]) * pn[1] + (p[2] - p0[2]) * pn[2]
     };
 
     let g_and_grad = |u: f64, v: f64| -> (f64, f64, f64) {
         let derivs = surface.evaluate(wrap_u(u), wrap_v(v), 1);
-        if derivs.len() < 3 { return (g(u, v), 0.0, 0.0); }
+        if derivs.len() < 3 {
+            return (g(u, v), 0.0, 0.0);
+        }
         let s = &derivs[0];
         let su = &derivs[2];
         let sv = &derivs[1];
@@ -1193,9 +1286,13 @@ fn surface_plane_traces(surface: &NurbsSurface, plane: &Plane, tolerance: f64) -
     let newton_correct = |u: &mut f64, v: &mut f64| -> bool {
         for _ in 0..10 {
             let (val, gu, gv) = g_and_grad(*u, *v);
-            if val.abs() < tolerance { return true; }
+            if val.abs() < tolerance {
+                return true;
+            }
             let mag2 = gu * gu + gv * gv;
-            if mag2 < 1e-28 { return false; }
+            if mag2 < 1e-28 {
+                return false;
+            }
             *u -= val * gu / mag2;
             *v -= val * gv / mag2;
             *u = wrap_u(*u);
@@ -1214,15 +1311,25 @@ fn surface_plane_traces(surface: &NurbsSurface, plane: &Plane, tolerance: f64) -
 
     let mu = (u0 + u1) * 0.5;
     let mv = (v0 + v1) * 0.5;
-    let pmid = surface.point_at(mu, mv).unwrap_or(Point::new(0.0, 0.0, 0.0));
-    let pmid_u = surface.point_at(wrap_u(mu + du), mv).unwrap_or(Point::new(0.0, 0.0, 0.0));
-    let pmid_v = surface.point_at(mu, wrap_v(mv + dv)).unwrap_or(Point::new(0.0, 0.0, 0.0));
+    let pmid = surface
+        .point_at(mu, mv)
+        .unwrap_or(Point::new(0.0, 0.0, 0.0));
+    let pmid_u = surface
+        .point_at(wrap_u(mu + du), mv)
+        .unwrap_or(Point::new(0.0, 0.0, 0.0));
+    let pmid_v = surface
+        .point_at(mu, wrap_v(mv + dv))
+        .unwrap_or(Point::new(0.0, 0.0, 0.0));
     let uv_to_3d_u = pmid.distance(&pmid_u, None) / du;
     let uv_to_3d_v = pmid.distance(&pmid_v, None) / dv;
     let mut uv_to_3d = uv_to_3d_u.max(uv_to_3d_v);
     let mut uv_to_3d_min = uv_to_3d_u.min(uv_to_3d_v);
-    if uv_to_3d < 1e-10 { uv_to_3d = 1.0; }
-    if uv_to_3d_min < 1e-10 { uv_to_3d_min = 1.0; }
+    if uv_to_3d < 1e-10 {
+        uv_to_3d = 1.0;
+    }
+    if uv_to_3d_min < 1e-10 {
+        uv_to_3d_min = 1.0;
+    }
 
     let cols = nv + 1;
     let mut dist = vec![0.0f64; ((nu + 1) * cols) as usize];
@@ -1231,12 +1338,18 @@ fn surface_plane_traces(surface: &NurbsSurface, plane: &Plane, tolerance: f64) -
         for j in 0..=nv {
             let v = v0 + dv * j as f64;
             let mut d = g(u, v);
-            if d == 0.0 { d = -1e-14; }
+            if d == 0.0 {
+                d = -1e-14;
+            }
             dist[(i * cols + j) as usize] = d;
         }
     }
 
-    struct Seed { u: f64, v: f64, used: bool }
+    struct Seed {
+        u: f64,
+        v: f64,
+        used: bool,
+    }
     let mut seeds: Vec<Seed> = Vec::new();
 
     // Horizontal edges
@@ -1250,7 +1363,11 @@ fn surface_plane_traces(surface: &NurbsSurface, plane: &Plane, tolerance: f64) -
                 let mut su = u0 + du * (i as f64 + t);
                 let mut sv = v0 + dv * j as f64;
                 if newton_correct(&mut su, &mut sv) {
-                    seeds.push(Seed { u: su, v: sv, used: false });
+                    seeds.push(Seed {
+                        u: su,
+                        v: sv,
+                        used: false,
+                    });
                 }
             }
         }
@@ -1266,7 +1383,11 @@ fn surface_plane_traces(surface: &NurbsSurface, plane: &Plane, tolerance: f64) -
                 let mut su = u0 + du * i as f64;
                 let mut sv = v0 + dv * (j as f64 + t);
                 if newton_correct(&mut su, &mut sv) {
-                    seeds.push(Seed { u: su, v: sv, used: false });
+                    seeds.push(Seed {
+                        u: su,
+                        v: sv,
+                        used: false,
+                    });
                 }
             }
         }
@@ -1275,11 +1396,19 @@ fn surface_plane_traces(surface: &NurbsSurface, plane: &Plane, tolerance: f64) -
     // Deduplicate seeds (3D distance)
     let seed_tol_3d = (du.max(dv)) * uv_to_3d;
     for i in 0..seeds.len() {
-        if seeds[i].used { continue; }
-        let pi = surface.point_at(seeds[i].u, seeds[i].v).unwrap_or(Point::new(0.0, 0.0, 0.0));
+        if seeds[i].used {
+            continue;
+        }
+        let pi = surface
+            .point_at(seeds[i].u, seeds[i].v)
+            .unwrap_or(Point::new(0.0, 0.0, 0.0));
         for j in (i + 1)..seeds.len() {
-            if seeds[j].used { continue; }
-            let pj = surface.point_at(seeds[j].u, seeds[j].v).unwrap_or(Point::new(0.0, 0.0, 0.0));
+            if seeds[j].used {
+                continue;
+            }
+            let pj = surface
+                .point_at(seeds[j].u, seeds[j].v)
+                .unwrap_or(Point::new(0.0, 0.0, 0.0));
             if pi.distance(&pj, None) < seed_tol_3d {
                 seeds[j].used = true;
             }
@@ -1295,7 +1424,9 @@ fn surface_plane_traces(surface: &NurbsSurface, plane: &Plane, tolerance: f64) -
     let mut traces: Vec<(Vec<(f64, f64)>, Vec<(f64, f64)>, bool)> = Vec::new();
 
     for seed_idx in 0..seeds.len() {
-        if seeds[seed_idx].used { continue; }
+        if seeds[seed_idx].used {
+            continue;
+        }
         seeds[seed_idx].used = true;
         let seed_u = seeds[seed_idx].u;
         let seed_v = seeds[seed_idx].v;
@@ -1304,94 +1435,122 @@ fn surface_plane_traces(surface: &NurbsSurface, plane: &Plane, tolerance: f64) -
         let tangent_at_uv = |u: f64, v: f64, dir: f64| -> Option<(f64, f64)> {
             let (_, gu, gv) = g_and_grad(u, v);
             let mag = f64::hypot(gu, gv);
-            if mag < 1e-14 { return None; }
+            if mag < 1e-14 {
+                return None;
+            }
             Some((-gv / mag * dir, gu / mag * dir))
         };
 
         // Trace one direction; returns (points, closed)
-        let trace_dir = |su: f64, sv: f64, dir: f64, seeds: &mut Vec<Seed>| -> (Vec<(f64, f64)>, bool) {
-            let mut out: Vec<(f64, f64)> = Vec::new();
-            let mut u = su;
-            let mut v = sv;
-            let mut prev_tu = 0.0f64;
-            let mut prev_tv = 0.0f64;
-            let p_start = surface.point_at(su, sv).unwrap_or(Point::new(0.0, 0.0, 0.0));
-            let mut p_prev = p_start.clone();
-            let mut dist_traveled = 0.0f64;
+        let trace_dir =
+            |su: f64, sv: f64, dir: f64, seeds: &mut Vec<Seed>| -> (Vec<(f64, f64)>, bool) {
+                let mut out: Vec<(f64, f64)> = Vec::new();
+                let mut u = su;
+                let mut v = sv;
+                let mut prev_tu = 0.0f64;
+                let mut prev_tv = 0.0f64;
+                let p_start = surface
+                    .point_at(su, sv)
+                    .unwrap_or(Point::new(0.0, 0.0, 0.0));
+                let mut p_prev = p_start.clone();
+                let mut dist_traveled = 0.0f64;
 
-            for _ in 0..max_steps {
-                let (mut tu, mut tv) = match tangent_at_uv(u, v, dir) {
-                    Some(t) => t,
-                    None => {
-                        if f64::hypot(prev_tu, prev_tv) < 1e-14 { break; }
-                        (prev_tu, prev_tv)
+                for _ in 0..max_steps {
+                    let (mut tu, mut tv) = match tangent_at_uv(u, v, dir) {
+                        Some(t) => t,
+                        None => {
+                            if f64::hypot(prev_tu, prev_tv) < 1e-14 {
+                                break;
+                            }
+                            (prev_tu, prev_tv)
+                        }
+                    };
+
+                    // Adaptive step
+                    let mut local_step = step;
+                    if f64::hypot(prev_tu, prev_tv) > 1e-14 {
+                        let dot = (tu * prev_tu + tv * prev_tv).max(-1.0).min(1.0);
+                        if dot < 0.95 {
+                            local_step = step * 0.25;
+                        } else if dot < 0.985 {
+                            local_step = step * 0.5;
+                        }
                     }
-                };
 
-                // Adaptive step
-                let mut local_step = step;
-                if f64::hypot(prev_tu, prev_tv) > 1e-14 {
-                    let dot = (tu * prev_tu + tv * prev_tv).max(-1.0).min(1.0);
-                    if dot < 0.95 { local_step = step * 0.25; }
-                    else if dot < 0.985 { local_step = step * 0.5; }
-                }
+                    // RK2: midpoint tangent
+                    let u_mid = u + local_step * 0.5 * tu;
+                    let v_mid = v + local_step * 0.5 * tv;
+                    if let Some((tu2, tv2)) = tangent_at_uv(u_mid, v_mid, dir) {
+                        tu = tu2;
+                        tv = tv2;
+                    }
+                    prev_tu = tu;
+                    prev_tv = tv;
 
-                // RK2: midpoint tangent
-                let u_mid = u + local_step * 0.5 * tu;
-                let v_mid = v + local_step * 0.5 * tv;
-                if let Some((tu2, tv2)) = tangent_at_uv(u_mid, v_mid, dir) {
-                    tu = tu2;
-                    tv = tv2;
-                }
-                prev_tu = tu;
-                prev_tv = tv;
+                    let mut un = u + local_step * tu;
+                    let mut vn = v + local_step * tv;
 
-                let mut un = u + local_step * tu;
-                let mut vn = v + local_step * tv;
+                    let mut hit_boundary = false;
+                    if (!closed_u && (un < u0 || un > u1)) || (!closed_v && (vn < v0 || vn > v1)) {
+                        let mut tc = 1.0f64;
+                        if !closed_u && tu > 0.0 && un > u1 {
+                            tc = tc.min((u1 - u) / (local_step * tu));
+                        }
+                        if !closed_u && tu < 0.0 && un < u0 {
+                            tc = tc.min((u0 - u) / (local_step * tu));
+                        }
+                        if !closed_v && tv > 0.0 && vn > v1 {
+                            tc = tc.min((v1 - v) / (local_step * tv));
+                        }
+                        if !closed_v && tv < 0.0 && vn < v0 {
+                            tc = tc.min((v0 - v) / (local_step * tv));
+                        }
+                        un = u + tc * local_step * tu;
+                        vn = v + tc * local_step * tv;
+                        hit_boundary = true;
+                    }
+                    un = wrap_u(un);
+                    vn = wrap_v(vn);
 
-                let mut hit_boundary = false;
-                if (!closed_u && (un < u0 || un > u1)) || (!closed_v && (vn < v0 || vn > v1)) {
-                    let mut tc = 1.0f64;
-                    if !closed_u && tu > 0.0 && un > u1 { tc = tc.min((u1 - u) / (local_step * tu)); }
-                    if !closed_u && tu < 0.0 && un < u0 { tc = tc.min((u0 - u) / (local_step * tu)); }
-                    if !closed_v && tv > 0.0 && vn > v1 { tc = tc.min((v1 - v) / (local_step * tv)); }
-                    if !closed_v && tv < 0.0 && vn < v0 { tc = tc.min((v0 - v) / (local_step * tv)); }
-                    un = u + tc * local_step * tu;
-                    vn = v + tc * local_step * tv;
-                    hit_boundary = true;
-                }
-                un = wrap_u(un);
-                vn = wrap_v(vn);
+                    if !newton_correct(&mut un, &mut vn) {
+                        break;
+                    }
 
-                if !newton_correct(&mut un, &mut vn) { break; }
+                    let p_cur = surface
+                        .point_at(un, vn)
+                        .unwrap_or(Point::new(0.0, 0.0, 0.0));
+                    dist_traveled += p_prev.distance(&p_cur, None);
 
-                let p_cur = surface.point_at(un, vn).unwrap_or(Point::new(0.0, 0.0, 0.0));
-                dist_traveled += p_prev.distance(&p_cur, None);
+                    // Loop closure
+                    if dist_traveled > close_tol_3d * 3.0
+                        && p_start.distance(&p_cur, None) < close_tol_3d
+                    {
+                        out.push((un, vn));
+                        return (out, true);
+                    }
 
-                // Loop closure
-                if dist_traveled > close_tol_3d * 3.0 && p_start.distance(&p_cur, None) < close_tol_3d {
                     out.push((un, vn));
-                    return (out, true);
-                }
+                    u = un;
+                    v = vn;
+                    p_prev = p_cur.clone();
 
-                out.push((un, vn));
-                u = un;
-                v = vn;
-                p_prev = p_cur.clone();
+                    if hit_boundary {
+                        break;
+                    }
 
-                if hit_boundary { break; }
-
-                for other in seeds.iter_mut() {
-                    if !other.used {
-                        let po = surface.point_at(other.u, other.v).unwrap_or(Point::new(0.0, 0.0, 0.0));
-                        if p_cur.distance(&po, None) < consume_tol_3d {
-                            other.used = true;
+                    for other in seeds.iter_mut() {
+                        if !other.used {
+                            let po = surface
+                                .point_at(other.u, other.v)
+                                .unwrap_or(Point::new(0.0, 0.0, 0.0));
+                            if p_cur.distance(&po, None) < consume_tol_3d {
+                                other.used = true;
+                            }
                         }
                     }
                 }
-            }
-            (out, false)
-        };
+                (out, false)
+            };
 
         let (fwd, fwd_closed) = trace_dir(seed_u, seed_v, 1.0, &mut seeds);
         let bwd = if !fwd_closed {
@@ -1410,14 +1569,25 @@ fn surface_plane_traces(surface: &NurbsSurface, plane: &Plane, tolerance: f64) -
             uv_trace.push(*p);
         }
 
-        if uv_trace.len() < 4 { continue; }
+        if uv_trace.len() < 4 {
+            continue;
+        }
 
         // Detect closed loops
-        let p_first = surface.point_at(uv_trace[0].0, uv_trace[0].1).unwrap_or(Point::new(0.0, 0.0, 0.0));
-        let p_last = surface.point_at(uv_trace.last().unwrap().0, uv_trace.last().unwrap().1).unwrap_or(Point::new(0.0, 0.0, 0.0));
-        let is_loop = fwd_closed || (uv_trace.len() >= 6 && p_first.distance(&p_last, None) < close_tol_3d);
-        if is_loop { uv_trace.pop(); }
-        if uv_trace.len() < 4 { continue; }
+        let p_first = surface
+            .point_at(uv_trace[0].0, uv_trace[0].1)
+            .unwrap_or(Point::new(0.0, 0.0, 0.0));
+        let p_last = surface
+            .point_at(uv_trace.last().unwrap().0, uv_trace.last().unwrap().1)
+            .unwrap_or(Point::new(0.0, 0.0, 0.0));
+        let is_loop =
+            fwd_closed || (uv_trace.len() >= 6 && p_first.distance(&p_last, None) < close_tol_3d);
+        if is_loop {
+            uv_trace.pop();
+        }
+        if uv_trace.len() < 4 {
+            continue;
+        }
 
         // Unwrap UV trace for smooth interpolation across seams
         let mut uv_unwrapped = uv_trace.clone();
@@ -1425,12 +1595,18 @@ fn surface_plane_traces(surface: &NurbsSurface, plane: &Plane, tolerance: f64) -
             let du_jump = uv_unwrapped[i].0 - uv_unwrapped[i - 1].0;
             let dv_jump = uv_unwrapped[i].1 - uv_unwrapped[i - 1].1;
             if closed_u {
-                if du_jump > range_u * 0.5 { uv_unwrapped[i].0 -= range_u; }
-                else if du_jump < -range_u * 0.5 { uv_unwrapped[i].0 += range_u; }
+                if du_jump > range_u * 0.5 {
+                    uv_unwrapped[i].0 -= range_u;
+                } else if du_jump < -range_u * 0.5 {
+                    uv_unwrapped[i].0 += range_u;
+                }
             }
             if closed_v {
-                if dv_jump > range_v * 0.5 { uv_unwrapped[i].1 -= range_v; }
-                else if dv_jump < -range_v * 0.5 { uv_unwrapped[i].1 += range_v; }
+                if dv_jump > range_v * 0.5 {
+                    uv_unwrapped[i].1 -= range_v;
+                } else if dv_jump < -range_v * 0.5 {
+                    uv_unwrapped[i].1 += range_v;
+                }
             }
         }
 
@@ -1445,7 +1621,15 @@ fn surface_plane_traces(surface: &NurbsSurface, plane: &Plane, tolerance: f64) -
 /// Tries exact circle recognition, then ellipse recognition for closed loops
 /// (when allow_conics), then adaptive plane-constrained least-squares fitting.
 /// Returns an invalid curve on failure.
-fn surface_plane_fit_3d(all_pts: &[Point], is_loop: bool, plane: &Plane, step: f64, uv_to_3d: f64, uv_to_3d_min: f64, allow_conics: bool) -> NurbsCurve {
+fn surface_plane_fit_3d(
+    all_pts: &[Point],
+    is_loop: bool,
+    plane: &Plane,
+    step: f64,
+    uv_to_3d: f64,
+    uv_to_3d_min: f64,
+    allow_conics: bool,
+) -> NurbsCurve {
     // 4. Circle detection
     let mut crv = NurbsCurve::new(3, false, 4, 0);
     if allow_conics && is_loop && all_pts.len() >= 6 {
@@ -1456,7 +1640,10 @@ fn surface_plane_fit_3d(all_pts: &[Point], is_loop: bool, plane: &Plane, step: f
             let dx = p[0] - po[0];
             let dy = p[1] - po[1];
             let dz = p[2] - po[2];
-            (dx * ax[0] + dy * ax[1] + dz * ax[2], dx * ay[0] + dy * ay[1] + dz * ay[2])
+            (
+                dx * ax[0] + dy * ax[1] + dz * ax[2],
+                dx * ay[0] + dy * ay[1] + dz * ay[2],
+            )
         };
 
         let n = all_pts.len();
@@ -1495,7 +1682,9 @@ fn surface_plane_fit_3d(all_pts: &[Point], is_loop: bool, plane: &Plane, step: f
                 let wts: [f64; 9] = [1.0, w, 1.0, w, 1.0, w, 1.0, w, 1.0];
                 crv = NurbsCurve::new(3, true, 3, 9);
                 let nurbsknots: [f64; 10] = [0.0, 0.0, 1.0, 1.0, 2.0, 2.0, 3.0, 3.0, 4.0, 4.0];
-                for i in 0..10 { crv.set_nurbsknot(i, nurbsknots[i]); }
+                for i in 0..10 {
+                    crv.set_nurbsknot(i, nurbsknots[i]);
+                }
                 for i in 0..9 {
                     let px = cx3d + radius * (cx_[i] * ax[0] + cy_[i] * ay[0]);
                     let py = cy3d + radius * (cx_[i] * ax[1] + cy_[i] * ay[1]);
@@ -1515,7 +1704,10 @@ fn surface_plane_fit_3d(all_pts: &[Point], is_loop: bool, plane: &Plane, step: f
             let dx = p[0] - po[0];
             let dy = p[1] - po[1];
             let dz = p[2] - po[2];
-            (dx * ax[0] + dy * ax[1] + dz * ax[2], dx * ay[0] + dy * ay[1] + dz * ay[2])
+            (
+                dx * ax[0] + dy * ax[1] + dz * ax[2],
+                dx * ay[0] + dy * ay[1] + dz * ay[2],
+            )
         };
 
         let n = all_pts.len();
@@ -1535,17 +1727,26 @@ fn surface_plane_fit_3d(all_pts: &[Point], is_loop: bool, plane: &Plane, step: f
         // Solve 5x5 system by Gaussian elimination
         let mut m_mat = [[0.0f64; 6]; 5];
         for r in 0..5 {
-            for c in 0..5 { m_mat[r][c] = ata[r][c]; }
+            for c in 0..5 {
+                m_mat[r][c] = ata[r][c];
+            }
             m_mat[r][5] = atb[r];
         }
         let mut ok = true;
         for col in 0..5 {
-            if !ok { break; }
+            if !ok {
+                break;
+            }
             let mut pivot = col;
             for r in (col + 1)..5 {
-                if m_mat[r][col].abs() > m_mat[pivot][col].abs() { pivot = r; }
+                if m_mat[r][col].abs() > m_mat[pivot][col].abs() {
+                    pivot = r;
+                }
             }
-            if m_mat[pivot][col].abs() < 1e-20 { ok = false; break; }
+            if m_mat[pivot][col].abs() < 1e-20 {
+                ok = false;
+                break;
+            }
             if pivot != col {
                 for j in col..=5 {
                     let tmp = m_mat[col][j];
@@ -1555,14 +1756,18 @@ fn surface_plane_fit_3d(all_pts: &[Point], is_loop: bool, plane: &Plane, step: f
             }
             for r in (col + 1)..5 {
                 let f = m_mat[r][col] / m_mat[col][col];
-                for j in col..=5 { m_mat[r][j] -= f * m_mat[col][j]; }
+                for j in col..=5 {
+                    m_mat[r][j] -= f * m_mat[col][j];
+                }
             }
         }
         let mut coef = [0.0f64; 5];
         if ok {
             for i in (0..5).rev() {
                 let mut s = m_mat[i][5];
-                for j in (i + 1)..5 { s -= m_mat[i][j] * coef[j]; }
+                for j in (i + 1)..5 {
+                    s -= m_mat[i][j] * coef[j];
+                }
                 coef[i] = s / m_mat[i][i];
             }
         }
@@ -1620,7 +1825,9 @@ fn surface_plane_fit_3d(all_pts: &[Point], is_loop: bool, plane: &Plane, step: f
                     let wts: [f64; 9] = [1.0, w, 1.0, w, 1.0, w, 1.0, w, 1.0];
                     crv = NurbsCurve::new(3, true, 3, 9);
                     let nurbsknots: [f64; 10] = [0.0, 0.0, 1.0, 1.0, 2.0, 2.0, 3.0, 3.0, 4.0, 4.0];
-                    for i in 0..10 { crv.set_nurbsknot(i, nurbsknots[i]); }
+                    for i in 0..10 {
+                        crv.set_nurbsknot(i, nurbsknots[i]);
+                    }
                     for i in 0..9 {
                         let px = cx3d + semi_a * cx_[i] * ea[0] + semi_b * cy_[i] * eb[0];
                         let py = cy3d + semi_a * cx_[i] * ea[1] + semi_b * cy_[i] * eb[1];
@@ -1652,7 +1859,9 @@ fn surface_plane_fit_3d(all_pts: &[Point], is_loop: bool, plane: &Plane, step: f
     // 5. 2D plane-constrained fitting for non-circular/elliptical curves
     if !crv.is_valid() {
         let m = all_pts.len();
-        if m < 4 { return NurbsCurve::new(3, false, 4, 0); }
+        if m < 4 {
+            return NurbsCurve::new(3, false, 4, 0);
+        }
 
         let ax = plane.x_axis();
         let ay = plane.y_axis();
@@ -1678,7 +1887,9 @@ fn surface_plane_fit_3d(all_pts: &[Point], is_loop: bool, plane: &Plane, step: f
             total_len += pts_2d[0].distance(&pts_2d[m - 1], None);
         }
         if total_len > 1e-14 {
-            for i in 1..m { chords[i] /= total_len; }
+            for i in 1..m {
+                chords[i] /= total_len;
+            }
         }
 
         let fit_tol = step * (uv_to_3d + uv_to_3d_min) * 0.5;
@@ -1699,16 +1910,22 @@ fn surface_plane_fit_3d(all_pts: &[Point], is_loop: bool, plane: &Plane, step: f
         let max_cvs = (m as i32) - 1;
         let mut crv_2d = NurbsCurve::new(3, false, 4, 0);
         for _ in 0..5 {
-            if target_cvs > max_cvs { break; }
+            if target_cvs > max_cvs {
+                break;
+            }
             crv_2d = NurbsCurve::create_fitted(&pts_2d, target_cvs as usize, 3, is_loop);
-            if !crv_2d.is_valid() { break; }
+            if !crv_2d.is_valid() {
+                break;
+            }
             let (ft0, ft1) = crv_2d.domain();
             let mut max_dev = 0.0f64;
             for i in 0..m {
                 let t = ft0 + (ft1 - ft0) * chords[i];
                 max_dev = max_dev.max(crv_2d.point_at(t).distance(&pts_2d[i], None));
             }
-            if max_dev < fit_tol { break; }
+            if max_dev < fit_tol {
+                break;
+            }
             target_cvs = (target_cvs * 2).min(max_cvs);
         }
         if !crv_2d.is_valid() {
@@ -1726,11 +1943,14 @@ fn surface_plane_fit_3d(all_pts: &[Point], is_loop: bool, plane: &Plane, step: f
                 if let Some(cv2) = crv.get_cv(i) {
                     let cx = cv2[0];
                     let cy = cv2[1];
-                    crv.set_cv(i, &Point::new(
-                        po[0] + cx * ax[0] + cy * ay[0],
-                        po[1] + cx * ax[1] + cy * ay[1],
-                        po[2] + cx * ax[2] + cy * ay[2],
-                    ));
+                    crv.set_cv(
+                        i,
+                        &Point::new(
+                            po[0] + cx * ax[0] + cy * ay[0],
+                            po[1] + cx * ax[1] + cy * ay[1],
+                            po[2] + cx * ax[2] + cy * ay[2],
+                        ),
+                    );
                 }
             }
         }
@@ -1739,20 +1959,39 @@ fn surface_plane_fit_3d(all_pts: &[Point], is_loop: bool, plane: &Plane, step: f
 }
 
 /// Find intersection curves between a NURBS surface and a plane
-pub fn surface_plane(surface: &NurbsSurface, plane: &Plane, tolerance: Option<f64>) -> Vec<NurbsCurve> {
-    if !surface.is_valid() { return vec![]; }
-    let tolerance = tolerance.unwrap_or(Tolerance::ZERO_TOLERANCE).max(Tolerance::ZERO_TOLERANCE);
+pub fn surface_plane(
+    surface: &NurbsSurface,
+    plane: &Plane,
+    tolerance: Option<f64>,
+) -> Vec<NurbsCurve> {
+    if !surface.is_valid() {
+        return vec![];
+    }
+    let tolerance = tolerance
+        .unwrap_or(Tolerance::ZERO_TOLERANCE)
+        .max(Tolerance::ZERO_TOLERANCE);
 
     let (traces, step, uv_to_3d, uv_to_3d_min) = surface_plane_traces(surface, plane, tolerance);
 
     let mut result: Vec<NurbsCurve> = Vec::new();
     for (uv_trace, _uv_unwrapped, is_loop) in &traces {
         // 3. Evaluate all trace points to 3D
-        let all_pts: Vec<Point> = uv_trace.iter()
+        let all_pts: Vec<Point> = uv_trace
+            .iter()
             .map(|&(u, v)| surface.point_at(u, v).unwrap_or(Point::new(0.0, 0.0, 0.0)))
             .collect();
-        let crv = surface_plane_fit_3d(&all_pts, *is_loop, plane, step, uv_to_3d, uv_to_3d_min, true);
-        if !crv.is_valid() { continue; }
+        let crv = surface_plane_fit_3d(
+            &all_pts,
+            *is_loop,
+            plane,
+            step,
+            uv_to_3d,
+            uv_to_3d_min,
+            true,
+        );
+        if !crv.is_valid() {
+            continue;
+        }
 
         // Deduplicate: skip if ALL sample points are close to an existing curve
         let (ct0, ct1) = crv.domain();
@@ -1766,11 +2005,19 @@ pub fn surface_plane(surface: &NurbsSurface, plane: &Plane, tolerance: Option<f6
                 let ep = existing.point_at(et0 + (et1 - et0) * f);
                 let em = existing.point_at((et0 + et1) * 0.5);
                 let d = cp.distance(&ep, None).min(cp.distance(&em, None));
-                if d > dup_tol { all_close = false; break; }
+                if d > dup_tol {
+                    all_close = false;
+                    break;
+                }
             }
-            if all_close { dup = true; break; }
+            if all_close {
+                dup = true;
+                break;
+            }
         }
-        if !dup { result.push(crv); }
+        if !dup {
+            result.push(crv);
+        }
     }
 
     result
@@ -1778,7 +2025,11 @@ pub fn surface_plane(surface: &NurbsSurface, plane: &Plane, tolerance: Option<f6
 
 /// Keep only the sub-segments of a UV pcurve on `target` whose lifted 3D point
 /// lies within the (bounded) cutter footprint (closest point gap ~ 0).
-fn clip_pcurve_to_cutter(target: &NurbsSurface, pc: &NurbsCurve, cutter: &NurbsSurface) -> Vec<NurbsCurve> {
+fn clip_pcurve_to_cutter(
+    target: &NurbsSurface,
+    pc: &NurbsCurve,
+    cutter: &NurbsSurface,
+) -> Vec<NurbsCurve> {
     let n = (pc.cv_count() * 4).max(16);
     let (d0, d1) = pc.domain();
     let (cu0, cu1) = cutter.domain(0).unwrap_or((0.0, 1.0));
@@ -1796,22 +2047,28 @@ fn clip_pcurve_to_cutter(target: &NurbsSurface, pc: &NurbsCurve, cutter: &NurbsS
     let q00 = cutter.point_at(cu0, cv0).unwrap_or(zero.clone());
     let q10 = cutter.point_at(cu1, cv0).unwrap_or(zero.clone());
     let q01 = cutter.point_at(cu0, cv1).unwrap_or(zero.clone());
-    let eu = crate::vector::Vector::new(q10[0]-q00[0], q10[1]-q00[1], q10[2]-q00[2]);
-    let ev = crate::vector::Vector::new(q01[0]-q00[0], q01[1]-q00[1], q01[2]-q00[2]);
-    let eu2 = eu[0]*eu[0]+eu[1]*eu[1]+eu[2]*eu[2];
-    let ev2 = ev[0]*ev[0]+ev[1]*ev[1]+ev[2]*ev[2];
+    let eu = crate::vector::Vector::new(q10[0] - q00[0], q10[1] - q00[1], q10[2] - q00[2]);
+    let ev = crate::vector::Vector::new(q01[0] - q00[0], q01[1] - q00[1], q01[2] - q00[2]);
+    let eu2 = eu[0] * eu[0] + eu[1] * eu[1] + eu[2] * eu[2];
+    let ev2 = ev[0] * ev[0] + ev[1] * ev[1] + ev[2] * ev[2];
     let fast_planar = eu2 > 1e-28 && ev2 > 1e-28;
     let gap = |t: f64| -> f64 {
         let uv = pc.point_at(t);
-        let p3 = target.point_at(uv[0], uv[1]).unwrap_or(crate::point::Point::new(0.0, 0.0, 0.0));
+        let p3 = target
+            .point_at(uv[0], uv[1])
+            .unwrap_or(crate::point::Point::new(0.0, 0.0, 0.0));
         if fast_planar {
-            let (dx, dy, dz) = (p3[0]-q00[0], p3[1]-q00[1], p3[2]-q00[2]);
-            let a = ((dx*eu[0]+dy*eu[1]+dz*eu[2]) / eu2).max(0.0).min(1.0);
-            let b = ((dx*ev[0]+dy*ev[1]+dz*ev[2]) / ev2).max(0.0).min(1.0);
-            let cx = q00[0]+a*eu[0]+b*ev[0];
-            let cy = q00[1]+a*eu[1]+b*ev[1];
-            let cz = q00[2]+a*eu[2]+b*ev[2];
-            return ((p3[0]-cx).powi(2)+(p3[1]-cy).powi(2)+(p3[2]-cz).powi(2)).sqrt();
+            let (dx, dy, dz) = (p3[0] - q00[0], p3[1] - q00[1], p3[2] - q00[2]);
+            let a = ((dx * eu[0] + dy * eu[1] + dz * eu[2]) / eu2)
+                .max(0.0)
+                .min(1.0);
+            let b = ((dx * ev[0] + dy * ev[1] + dz * ev[2]) / ev2)
+                .max(0.0)
+                .min(1.0);
+            let cx = q00[0] + a * eu[0] + b * ev[0];
+            let cy = q00[1] + a * eu[1] + b * ev[1];
+            let cz = q00[2] + a * eu[2] + b * ev[2];
+            return ((p3[0] - cx).powi(2) + (p3[1] - cy).powi(2) + (p3[2] - cz).powi(2)).sqrt();
         }
         crate::closest::Closest::surface_point(cutter, &p3, 0.0, 0.0, 0.0, 0.0).2
     };
@@ -1819,7 +2076,11 @@ fn clip_pcurve_to_cutter(target: &NurbsSurface, pc: &NurbsCurve, cutter: &NurbsS
         let (mut a, mut b) = (t_in, t_out);
         for _ in 0..20 {
             let tm = (a + b) * 0.5;
-            if gap(tm) < on_tol { a = tm; } else { b = tm; }
+            if gap(tm) < on_tol {
+                a = tm;
+            } else {
+                b = tm;
+            }
         }
         b
     };
@@ -1834,9 +2095,19 @@ fn clip_pcurve_to_cutter(target: &NurbsSurface, pc: &NurbsCurve, cutter: &NurbsS
     while i <= n {
         if flags[i].1 {
             let mut j = i;
-            while j + 1 <= n && flags[j + 1].1 { j += 1; }
-            let ta = if i == 0 { flags[i].0 } else { refine(flags[i].0, flags[i - 1].0) };
-            let tb = if j == n { flags[j].0 } else { refine(flags[j].0, flags[j + 1].0) };
+            while j + 1 <= n && flags[j + 1].1 {
+                j += 1;
+            }
+            let ta = if i == 0 {
+                flags[i].0
+            } else {
+                refine(flags[i].0, flags[i - 1].0)
+            };
+            let tb = if j == n {
+                flags[j].0
+            } else {
+                refine(flags[j].0, flags[j + 1].0)
+            };
             if tb - ta > (d1 - d0) * 1e-6 {
                 let mut piece = pc.duplicate();
                 if piece.trim(ta, tb) && piece.is_valid() {
@@ -1856,7 +2127,11 @@ fn clip_pcurve_to_cutter(target: &NurbsSurface, pc: &NurbsCurve, cutter: &NurbsS
 /// Fast path: if the cutter is planar, intersect the target with the cutter's
 /// plane (surface_plane_uv) and clip the result to the cutter footprint.
 /// Otherwise use the surface/surface intersection (already domain-clipped).
-pub fn cut_curves_on_surface(target: &NurbsSurface, cutter: &NurbsSurface, tolerance: Option<f64>) -> Vec<NurbsCurve> {
+pub fn cut_curves_on_surface(
+    target: &NurbsSurface,
+    cutter: &NurbsSurface,
+    tolerance: Option<f64>,
+) -> Vec<NurbsCurve> {
     // Route through surface_surface so the closed-form analytic dispatch (plane/cylinder/
     // sphere/cone/torus) is used when the pair is recognized -- exact AND fast. Marching is the
     // fallback only for unrecognized freeform pairs. The intersection pcurve on `target` is then
@@ -1874,12 +2149,18 @@ pub fn cut_curves_on_surface(target: &NurbsSurface, cutter: &NurbsSurface, toler
         } else if matches!(rt.as_ref(), Some(RecSurf::Sphere(..))) {
             // OCCT-style analytic per-point inverse (atan2 longitude) -> exact seam crossings.
             let mut v = analytic_sphere_pullback(target, rt.as_ref().unwrap(), c3d);
-            if v.is_empty() { v = Closest::surface_curve(target, c3d, 0.0, 0.0, tolerance); }
-            if v.is_empty() { v.push(tr.1.clone()); }
+            if v.is_empty() {
+                v = Closest::surface_curve(target, c3d, 0.0, 0.0, tolerance);
+            }
+            if v.is_empty() {
+                v.push(tr.1.clone());
+            }
             v
         } else {
             let mut v = Closest::surface_curve(target, c3d, 0.0, 0.0, tolerance);
-            if v.is_empty() { v.push(tr.1.clone()); }
+            if v.is_empty() {
+                v.push(tr.1.clone());
+            }
             v
         };
         for pc in pcs {
@@ -1900,12 +2181,26 @@ pub fn cut_curves_on_surface(target: &NurbsSurface, cutter: &NurbsSurface, toler
 /// inside the surface domain. Both curves are reparameterized to [0, 1] by
 /// chord length; the pcurve is a tolerance companion of the 3D curve, not an
 /// exact reparameterization.
-pub fn surface_plane_uv(surface: &NurbsSurface, plane: &Plane, tolerance: Option<f64>) -> Vec<(NurbsCurve, NurbsCurve)> {
-    if !surface.is_valid() { return vec![]; }
-    let tolerance = tolerance.unwrap_or(Tolerance::ZERO_TOLERANCE).max(Tolerance::ZERO_TOLERANCE);
+pub fn surface_plane_uv(
+    surface: &NurbsSurface,
+    plane: &Plane,
+    tolerance: Option<f64>,
+) -> Vec<(NurbsCurve, NurbsCurve)> {
+    if !surface.is_valid() {
+        return vec![];
+    }
+    let tolerance = tolerance
+        .unwrap_or(Tolerance::ZERO_TOLERANCE)
+        .max(Tolerance::ZERO_TOLERANCE);
 
-    let (u0, u1) = match surface.domain(0) { Some(d) => d, None => return vec![] };
-    let (v0, v1) = match surface.domain(1) { Some(d) => d, None => return vec![] };
+    let (u0, u1) = match surface.domain(0) {
+        Some(d) => d,
+        None => return vec![],
+    };
+    let (v0, v1) = match surface.domain(1) {
+        Some(d) => d,
+        None => return vec![],
+    };
     let range_u = u1 - u0;
     let range_v = v1 - v0;
     let closed_u = surface.is_closed(0);
@@ -1914,7 +2209,9 @@ pub fn surface_plane_uv(surface: &NurbsSurface, plane: &Plane, tolerance: Option
     let wrap_u = |u: f64| -> f64 {
         if closed_u {
             let mut t = (u - u0) % range_u;
-            if t < 0.0 { t += range_u; }
+            if t < 0.0 {
+                t += range_u;
+            }
             return u0 + t;
         }
         u.max(u0).min(u1)
@@ -1922,7 +2219,9 @@ pub fn surface_plane_uv(surface: &NurbsSurface, plane: &Plane, tolerance: Option
     let wrap_v = |v: f64| -> f64 {
         if closed_v {
             let mut t = (v - v0) % range_v;
-            if t < 0.0 { t += range_v; }
+            if t < 0.0 {
+                t += range_v;
+            }
             return v0 + t;
         }
         v.max(v0).min(v1)
@@ -1933,7 +2232,9 @@ pub fn surface_plane_uv(surface: &NurbsSurface, plane: &Plane, tolerance: Option
 
     let g_and_grad = |u: f64, v: f64| -> (f64, f64, f64) {
         let derivs = surface.evaluate(wrap_u(u), wrap_v(v), 1);
-        if derivs.len() < 3 { return (0.0, 0.0, 0.0); }
+        if derivs.len() < 3 {
+            return (0.0, 0.0, 0.0);
+        }
         let s = &derivs[0];
         let su = &derivs[2];
         let sv = &derivs[1];
@@ -1947,12 +2248,18 @@ pub fn surface_plane_uv(surface: &NurbsSurface, plane: &Plane, tolerance: Option
     let seam_newton = |mut cu: f64, mut cv_: f64, axis: i32| -> (f64, f64) {
         for _ in 0..10 {
             let (val, gu, gv) = g_and_grad(cu, cv_);
-            if val.abs() < tolerance { break; }
+            if val.abs() < tolerance {
+                break;
+            }
             if axis == 0 {
-                if gv.abs() < 1e-14 { break; }
+                if gv.abs() < 1e-14 {
+                    break;
+                }
                 cv_ -= val / gv;
             } else {
-                if gu.abs() < 1e-14 { break; }
+                if gu.abs() < 1e-14 {
+                    break;
+                }
                 cu -= val / gu;
             }
         }
@@ -1970,7 +2277,8 @@ pub fn surface_plane_uv(surface: &NurbsSurface, plane: &Plane, tolerance: Option
         let is_loop = *is_loop;
         // Trace-level dedup against already kept traces (3-sample proximity)
         let m = uv_trace.len();
-        let trace_pts3: Vec<Point> = uv_trace.iter()
+        let trace_pts3: Vec<Point> = uv_trace
+            .iter()
             .map(|&(u, v)| surface.point_at(u, v).unwrap_or(Point::new(0.0, 0.0, 0.0)))
             .collect();
         let mut dup = false;
@@ -1982,11 +2290,19 @@ pub fn surface_plane_uv(surface: &NurbsSurface, plane: &Plane, tolerance: Option
                 for k in (0..other.len()).step_by(5) {
                     dmin = dmin.min(cp.distance(&other[k], None));
                 }
-                if dmin > dup_tol { all_close = false; break; }
+                if dmin > dup_tol {
+                    all_close = false;
+                    break;
+                }
             }
-            if all_close { dup = true; break; }
+            if all_close {
+                dup = true;
+                break;
+            }
         }
-        if dup { continue; }
+        if dup {
+            continue;
+        }
         kept_pts3.push(trace_pts3);
 
         // Extend closed loops with a virtual copy of the first point
@@ -1997,12 +2313,20 @@ pub fn surface_plane_uv(surface: &NurbsSurface, plane: &Plane, tolerance: Option
             let mut du_j = pts[0].0 - pts[pts.len() - 1].0;
             let mut dv_j = pts[0].1 - pts[pts.len() - 1].1;
             if closed_u {
-                while du_j > range_u * 0.5 { du_j -= range_u; }
-                while du_j < -range_u * 0.5 { du_j += range_u; }
+                while du_j > range_u * 0.5 {
+                    du_j -= range_u;
+                }
+                while du_j < -range_u * 0.5 {
+                    du_j += range_u;
+                }
             }
             if closed_v {
-                while dv_j > range_v * 0.5 { dv_j -= range_v; }
-                while dv_j < -range_v * 0.5 { dv_j += range_v; }
+                while dv_j > range_v * 0.5 {
+                    dv_j -= range_v;
+                }
+                while dv_j < -range_v * 0.5 {
+                    dv_j += range_v;
+                }
             }
             closure_du = (pts[pts.len() - 1].0 + du_j) - pts[0].0;
             closure_dv = (pts[pts.len() - 1].1 + dv_j) - pts[0].1;
@@ -2022,7 +2346,9 @@ pub fn surface_plane_uv(surface: &NurbsSurface, plane: &Plane, tolerance: Option
                 for k in (k0.min(k1) + 1)..=(k0.max(k1)) {
                     let l = u0 + k as f64 * range_u;
                     let t = (l - pa.0) / (pb.0 - pa.0);
-                    if 0.0 < t && t < 1.0 { crossings.push((t, 0, l)); }
+                    if 0.0 < t && t < 1.0 {
+                        crossings.push((t, 0, l));
+                    }
                 }
             }
             if closed_v && (pb.1 - pa.1).abs() > 1e-15 {
@@ -2031,7 +2357,9 @@ pub fn surface_plane_uv(surface: &NurbsSurface, plane: &Plane, tolerance: Option
                 for k in (k0.min(k1) + 1)..=(k0.max(k1)) {
                     let l = v0 + k as f64 * range_v;
                     let t = (l - pa.1) / (pb.1 - pa.1);
-                    if 0.0 < t && t < 1.0 { crossings.push((t, 1, l)); }
+                    if 0.0 < t && t < 1.0 {
+                        crossings.push((t, 1, l));
+                    }
                 }
             }
             crossings.sort_by(|a, b| a.partial_cmp(b).unwrap());
@@ -2088,44 +2416,68 @@ pub fn surface_plane_uv(surface: &NurbsSurface, plane: &Plane, tolerance: Option
                 let (a, b) = (w[0], w[1]);
                 pieces.push((out_pts[a..=b].to_vec(), false));
             }
-            let mut wrap_piece: Vec<(f64, f64)> = out_pts[cross_idx[cross_idx.len() - 1]..].to_vec();
+            let mut wrap_piece: Vec<(f64, f64)> =
+                out_pts[cross_idx[cross_idx.len() - 1]..].to_vec();
             for p in &out_pts[1..=cross_idx[0]] {
                 wrap_piece.push((p.0 + closure_du, p.1 + closure_dv));
             }
             pieces.push((wrap_piece, false));
         } else {
             let mut bounds: Vec<usize> = vec![0];
-            for &c in &cross_idx { bounds.push(c); }
+            for &c in &cross_idx {
+                bounds.push(c);
+            }
             bounds.push(out_pts.len() - 1);
             for w in bounds.windows(2) {
                 let (a, b) = (w[0], w[1]);
-                if b > a { pieces.push((out_pts[a..=b].to_vec(), false)); }
+                if b > a {
+                    pieces.push((out_pts[a..=b].to_vec(), false));
+                }
             }
         }
 
         for (mut piece_pts, piece_loop) in pieces {
-            if piece_pts.len() < 2 { continue; }
+            if piece_pts.len() < 2 {
+                continue;
+            }
             // Shift the piece into the base domain
             let mid = piece_pts[piece_pts.len() / 2];
             if closed_u {
                 let k_u = ((mid.0 - u0) / range_u).floor();
                 if k_u != 0.0 {
-                    for p in piece_pts.iter_mut() { p.0 -= k_u * range_u; }
+                    for p in piece_pts.iter_mut() {
+                        p.0 -= k_u * range_u;
+                    }
                 }
             }
             if closed_v {
                 let k_v = ((mid.1 - v0) / range_v).floor();
                 if k_v != 0.0 {
-                    for p in piece_pts.iter_mut() { p.1 -= k_v * range_v; }
+                    for p in piece_pts.iter_mut() {
+                        p.1 -= k_v * range_v;
+                    }
                 }
             }
 
-            let pts3: Vec<Point> = piece_pts.iter()
-                .map(|&(u, v)| surface.point_at(wrap_u(u), wrap_v(v)).unwrap_or(Point::new(0.0, 0.0, 0.0)))
+            let pts3: Vec<Point> = piece_pts
+                .iter()
+                .map(|&(u, v)| {
+                    surface
+                        .point_at(wrap_u(u), wrap_v(v))
+                        .unwrap_or(Point::new(0.0, 0.0, 0.0))
+                })
                 .collect();
 
             // Fit the 3D curve (plane-constrained; circle/ellipse for full loops)
-            let mut crv3 = surface_plane_fit_3d(&pts3, piece_loop, plane, step, uv_to_3d, uv_to_3d_min, false);
+            let mut crv3 = surface_plane_fit_3d(
+                &pts3,
+                piece_loop,
+                plane,
+                step,
+                uv_to_3d,
+                uv_to_3d_min,
+                false,
+            );
             if !crv3.is_valid() {
                 crv3 = if piece_loop {
                     NurbsCurve::create_interpolated(&pts3, CurveNurbsKnotStyle::ChordPeriodic)
@@ -2133,10 +2485,13 @@ pub fn surface_plane_uv(surface: &NurbsSurface, plane: &Plane, tolerance: Option
                     NurbsCurve::create_interpolated(&pts3, CurveNurbsKnotStyle::Chord)
                 };
             }
-            if !crv3.is_valid() { continue; }
+            if !crv3.is_valid() {
+                continue;
+            }
 
             // Fit the UV pcurve
-            let pts_uv: Vec<Point> = piece_pts.iter()
+            let pts_uv: Vec<Point> = piece_pts
+                .iter()
                 .map(|&(u, v)| Point::new(u, v, 0.0))
                 .collect();
             let mp = pts_uv.len();
@@ -2165,23 +2520,31 @@ pub fn surface_plane_uv(surface: &NurbsSurface, plane: &Plane, tolerance: Option
                 total_len += pts_uv[0].distance(&pts_uv[mp - 1], None);
             }
             if total_len > 1e-14 {
-                for i in 1..mp { chords[i] /= total_len; }
+                for i in 1..mp {
+                    chords[i] /= total_len;
+                }
             }
 
             let mut target_cvs = 8_i32.max((total_turning / 0.5) as i32 + 6);
             let max_cvs = (mp as i32) - 1;
             let mut pcurve = NurbsCurve::new(3, false, 4, 0);
             for _ in 0..5 {
-                if target_cvs > max_cvs { break; }
+                if target_cvs > max_cvs {
+                    break;
+                }
                 pcurve = NurbsCurve::create_fitted(&pts_uv, target_cvs as usize, 3, piece_loop);
-                if !pcurve.is_valid() { break; }
+                if !pcurve.is_valid() {
+                    break;
+                }
                 let (ft0, ft1) = pcurve.domain();
                 let mut max_dev = 0.0f64;
                 for i in 0..mp {
                     let t = ft0 + (ft1 - ft0) * chords[i];
                     max_dev = max_dev.max(pcurve.point_at(t).distance(&pts_uv[i], None));
                 }
-                if max_dev < fit_tol_uv { break; }
+                if max_dev < fit_tol_uv {
+                    break;
+                }
                 target_cvs = (target_cvs * 2).min(max_cvs);
             }
 
@@ -2192,7 +2555,9 @@ pub fn surface_plane_uv(surface: &NurbsSurface, plane: &Plane, tolerance: Option
                     NurbsCurve::create_interpolated(&pts_uv, CurveNurbsKnotStyle::Chord)
                 };
             }
-            if !pcurve.is_valid() { continue; }
+            if !pcurve.is_valid() {
+                continue;
+            }
 
             crv3.set_domain(0.0, 1.0);
             pcurve.set_domain(0.0, 1.0);
@@ -2207,7 +2572,8 @@ pub fn surface_plane_uv(surface: &NurbsSurface, plane: &Plane, tolerance: Option
                 max_off = max_off.max(val.abs());
             }
             if max_off > vali_tol && target_cvs * 2 <= max_cvs {
-                let mut refit = NurbsCurve::create_fitted(&pts_uv, (target_cvs * 2) as usize, 3, piece_loop);
+                let mut refit =
+                    NurbsCurve::create_fitted(&pts_uv, (target_cvs * 2) as usize, 3, piece_loop);
                 if refit.is_valid() {
                     refit.set_domain(0.0, 1.0);
                     pcurve = refit;
@@ -2223,18 +2589,26 @@ pub fn surface_plane_uv(surface: &NurbsSurface, plane: &Plane, tolerance: Option
 
 /// Solve an n x n linear system by Gaussian elimination with pivoting.
 fn solve_gauss(m: &[Vec<f64>], rhs: &[f64], n: usize) -> Option<Vec<f64>> {
-    let mut a: Vec<Vec<f64>> = (0..n).map(|r| {
-        let mut row = m[r].clone();
-        row.push(rhs[r]);
-        row
-    }).collect();
+    let mut a: Vec<Vec<f64>> = (0..n)
+        .map(|r| {
+            let mut row = m[r].clone();
+            row.push(rhs[r]);
+            row
+        })
+        .collect();
     for col in 0..n {
         let mut pivot = col;
         for r in (col + 1)..n {
-            if a[r][col].abs() > a[pivot][col].abs() { pivot = r; }
+            if a[r][col].abs() > a[pivot][col].abs() {
+                pivot = r;
+            }
         }
-        if a[pivot][col].abs() < 1e-20 { return None; }
-        if pivot != col { a.swap(col, pivot); }
+        if a[pivot][col].abs() < 1e-20 {
+            return None;
+        }
+        if pivot != col {
+            a.swap(col, pivot);
+        }
         for r in (col + 1)..n {
             let f = a[r][col] / a[col][col];
             for j in col..=n {
@@ -2255,8 +2629,16 @@ fn solve_gauss(m: &[Vec<f64>], rhs: &[f64], n: usize) -> Option<Vec<f64>> {
 
 /// Return two unit vectors spanning the plane perpendicular to unit n.
 fn ortho_basis(n: [f64; 3]) -> ([f64; 3], [f64; 3]) {
-    let ax = if n[0].abs() <= n[1].abs() && n[0].abs() <= n[2].abs() { 1.0 } else { 0.0 };
-    let ay = if ax == 0.0 && n[1].abs() <= n[2].abs() { 1.0 } else { 0.0 };
+    let ax = if n[0].abs() <= n[1].abs() && n[0].abs() <= n[2].abs() {
+        1.0
+    } else {
+        0.0
+    };
+    let ay = if ax == 0.0 && n[1].abs() <= n[2].abs() {
+        1.0
+    } else {
+        0.0
+    };
     let az = if ax == 0.0 && ay == 0.0 { 1.0 } else { 0.0 };
     // u = (ax,ay,az) x n, then v = n x u
     let ux = ay * n[2] - az * n[1];
@@ -2307,7 +2689,8 @@ fn jacobi_eig3(m: &[[f64; 3]; 3]) -> ([f64; 3], [[f64; 3]; 3]) {
                 continue;
             }
             let theta = (a[q][q] - a[p][p]) / (2.0 * a[p][q]);
-            let t = (if theta >= 0.0 { 1.0 } else { -1.0 }) / (theta.abs() + (theta * theta + 1.0).sqrt());
+            let t = (if theta >= 0.0 { 1.0 } else { -1.0 })
+                / (theta.abs() + (theta * theta + 1.0).sqrt());
             let c = 1.0 / (t * t + 1.0).sqrt();
             let s = t * c;
             for k in 0..3 {
@@ -2338,7 +2721,15 @@ fn jacobi_eig3(m: &[[f64; 3]; 3]) -> ([f64; 3], [[f64; 3]; 3]) {
 
 /// Exact 9-CV rational NURBS ellipse: center, in-plane orthonormal axes
 /// ea/eb, semi-axes semi_a/semi_b. Geometrically exact.
-fn exact_ellipse(cx: f64, cy: f64, cz: f64, ea: [f64; 3], eb: [f64; 3], semi_a: f64, semi_b: f64) -> NurbsCurve {
+fn exact_ellipse(
+    cx: f64,
+    cy: f64,
+    cz: f64,
+    ea: [f64; 3],
+    eb: [f64; 3],
+    semi_a: f64,
+    semi_b: f64,
+) -> NurbsCurve {
     let w = (2.0_f64).sqrt() / 2.0;
     let px = [1.0, 1.0, 0.0, -1.0, -1.0, -1.0, 0.0, 1.0, 1.0];
     let py = [0.0, 1.0, 1.0, 1.0, 0.0, -1.0, -1.0, -1.0, 0.0];
@@ -2530,7 +2921,12 @@ fn fit_cone(surface: &NurbsSurface, tol: f64) -> Option<([f64; 3], [f64; 3], f64
     let w = [w[0] / wl, w[1] / wl, w[2] / wl];
     let mut angs: Vec<f64> = Vec::new();
     for gg in &gs {
-        angs.push((gg[0] * w[0] + gg[1] * w[1] + gg[2] * w[2]).max(-1.0).min(1.0).acos());
+        angs.push(
+            (gg[0] * w[0] + gg[1] * w[1] + gg[2] * w[2])
+                .max(-1.0)
+                .min(1.0)
+                .acos(),
+        );
     }
     let alpha = angs.iter().sum::<f64>() / angs.len() as f64;
     if alpha < 1e-4 || alpha > std::f64::consts::PI / 2.0 - 1e-4 {
@@ -2540,7 +2936,9 @@ fn fit_cone(surface: &NurbsSurface, tol: f64) -> Option<([f64; 3], [f64; 3], f64
     for p in &pts {
         let d = [p[0] - vv[0], p[1] - vv[1], p[2] - vv[2]];
         let axd = d[0] * w[0] + d[1] * w[1] + d[2] * w[2];
-        let perp = (0.0_f64).max((d[0] * d[0] + d[1] * d[1] + d[2] * d[2]) - axd * axd).sqrt();
+        let perp = (0.0_f64)
+            .max((d[0] * d[0] + d[1] * d[1] + d[2] * d[2]) - axd * axd)
+            .sqrt();
         if (perp - axd * alpha.tan()).abs() * ca > tol {
             return None;
         }
@@ -2604,7 +3002,10 @@ fn fit_torus(surface: &NurbsSurface, tol: f64) -> Option<([f64; 3], [f64; 3], f6
     let mut pts: Vec<[f64; 3]> = Vec::new();
     for i in 0..8 {
         for j in 0..8 {
-            let p = surface.point_at(u0 + (u1 - u0) * i as f64 / 8.0, v0 + (v1 - v0) * j as f64 / 8.0)?;
+            let p = surface.point_at(
+                u0 + (u1 - u0) * i as f64 / 8.0,
+                v0 + (v1 - v0) * j as f64 / 8.0,
+            )?;
             pts.push([p[0], p[1], p[2]]);
         }
     }
@@ -2744,7 +3145,13 @@ fn plane_sphere(o: [f64; 3], nraw: [f64; 3], c: [f64; 3], r: f64) -> Option<Nurb
     Some(exact_circle(cc[0], cc[1], cc[2], xa, ya, rr))
 }
 
-fn plane_cylinder(o: [f64; 3], nraw: [f64; 3], p_pt: [f64; 3], wraw: [f64; 3], r: f64) -> Option<NurbsCurve> {
+fn plane_cylinder(
+    o: [f64; 3],
+    nraw: [f64; 3],
+    p_pt: [f64; 3],
+    wraw: [f64; 3],
+    r: f64,
+) -> Option<NurbsCurve> {
     let nu = vunit(nraw);
     let w = vunit(wraw);
     let wn = w[0] * nu[0] + w[1] * nu[1] + w[2] * nu[2];
@@ -2761,7 +3168,15 @@ fn plane_cylinder(o: [f64; 3], nraw: [f64; 3], p_pt: [f64; 3], wraw: [f64; 3], r
     }
     let minor = vunit(mraw);
     let major = vunit([w[0] - wn * nu[0], w[1] - wn * nu[1], w[2] - wn * nu[2]]);
-    Some(exact_ellipse(cc[0], cc[1], cc[2], major, minor, r / wn.abs(), r))
+    Some(exact_ellipse(
+        cc[0],
+        cc[1],
+        cc[2],
+        major,
+        minor,
+        r / wn.abs(),
+        r,
+    ))
 }
 
 fn line_cone(x0: [f64; 3], d: [f64; 3], v: [f64; 3], w: [f64; 3], alpha: f64) -> Vec<f64> {
@@ -2777,7 +3192,11 @@ fn line_cone(x0: [f64; 3], d: [f64; 3], v: [f64; 3], w: [f64; 3], alpha: f64) ->
     let qb = 2.0 * aa * bb - 2.0 * ca2 * dd;
     let qc = aa * aa - ca2 * cc;
     if qa.abs() < 1e-14 {
-        return if qb.abs() < 1e-300 { vec![] } else { vec![-qc / qb] };
+        return if qb.abs() < 1e-300 {
+            vec![]
+        } else {
+            vec![-qc / qb]
+        };
     }
     let disc = qb * qb - 4.0 * qa * qc;
     if disc < 0.0 {
@@ -2787,7 +3206,13 @@ fn line_cone(x0: [f64; 3], d: [f64; 3], v: [f64; 3], w: [f64; 3], alpha: f64) ->
     vec![(-qb - sq) / (2.0 * qa), (-qb + sq) / (2.0 * qa)]
 }
 
-fn plane_cone(o: [f64; 3], nraw: [f64; 3], v: [f64; 3], wraw: [f64; 3], alpha: f64) -> Option<NurbsCurve> {
+fn plane_cone(
+    o: [f64; 3],
+    nraw: [f64; 3],
+    v: [f64; 3],
+    wraw: [f64; 3],
+    alpha: f64,
+) -> Option<NurbsCurve> {
     let nu = vunit(nraw);
     let w = vunit(wraw);
     let wn = w[0] * nu[0] + w[1] * nu[1] + w[2] * nu[2];
@@ -2817,10 +3242,24 @@ fn plane_cone(o: [f64; 3], nraw: [f64; 3], v: [f64; 3], wraw: [f64; 3], alpha: f
     if ts.len() != 2 {
         return None; // parabola/hyperbola (unbounded) -> not an ellipse
     }
-    let a_pt = [vp[0] + ts[0] * major0[0], vp[1] + ts[0] * major0[1], vp[2] + ts[0] * major0[2]];
-    let bp = [vp[0] + ts[1] * major0[0], vp[1] + ts[1] * major0[1], vp[2] + ts[1] * major0[2]];
-    let cc = [(a_pt[0] + bp[0]) * 0.5, (a_pt[1] + bp[1]) * 0.5, (a_pt[2] + bp[2]) * 0.5];
-    let semi_major = 0.5 * ((bp[0] - a_pt[0]).powi(2) + (bp[1] - a_pt[1]).powi(2) + (bp[2] - a_pt[2]).powi(2)).sqrt();
+    let a_pt = [
+        vp[0] + ts[0] * major0[0],
+        vp[1] + ts[0] * major0[1],
+        vp[2] + ts[0] * major0[2],
+    ];
+    let bp = [
+        vp[0] + ts[1] * major0[0],
+        vp[1] + ts[1] * major0[1],
+        vp[2] + ts[1] * major0[2],
+    ];
+    let cc = [
+        (a_pt[0] + bp[0]) * 0.5,
+        (a_pt[1] + bp[1]) * 0.5,
+        (a_pt[2] + bp[2]) * 0.5,
+    ];
+    let semi_major = 0.5
+        * ((bp[0] - a_pt[0]).powi(2) + (bp[1] - a_pt[1]).powi(2) + (bp[2] - a_pt[2]).powi(2))
+            .sqrt();
     let major = vunit([bp[0] - a_pt[0], bp[1] - a_pt[1], bp[2] - a_pt[2]]);
     let tm = line_cone(cc, m, v, w, alpha);
     if tm.len() != 2 {
@@ -2830,14 +3269,23 @@ fn plane_cone(o: [f64; 3], nraw: [f64; 3], v: [f64; 3], wraw: [f64; 3], alpha: f
     if semi_major < 1e-12 || semi_minor < 1e-12 {
         return None;
     }
-    Some(exact_ellipse(cc[0], cc[1], cc[2], major, m, semi_major, semi_minor))
+    Some(exact_ellipse(
+        cc[0], cc[1], cc[2], major, m, semi_major, semi_minor,
+    ))
 }
 
 /// Plane ∩ torus. Returns None if the plane is not perpendicular to the torus
 /// axis (a non-perpendicular cut is a quartic, not a conic -> marcher). Otherwise
 /// returns up to two concentric circles (the two tube cross-sections), or an
 /// empty list if the plane misses the tube.
-fn plane_torus(o: [f64; 3], nraw: [f64; 3], c: [f64; 3], wraw: [f64; 3], rr: f64, r: f64) -> Option<Vec<NurbsCurve>> {
+fn plane_torus(
+    o: [f64; 3],
+    nraw: [f64; 3],
+    c: [f64; 3],
+    wraw: [f64; 3],
+    rr: f64,
+    r: f64,
+) -> Option<Vec<NurbsCurve>> {
     let nu = vunit(nraw);
     let w = vunit(wraw);
     let wn = w[0] * nu[0] + w[1] * nu[1] + w[2] * nu[2];
@@ -2865,32 +3313,50 @@ fn plane_torus(o: [f64; 3], nraw: [f64; 3], c: [f64; 3], wraw: [f64; 3], rr: f64
 /// exact case but no intersection), or None (not an analytically-exact pair ->
 /// caller falls back to marching).
 // Tri-state result of an exact plane/plane SSI clipped to both (finite) faces.
-enum PpResult { Line(NurbsCurve), Empty, Marcher }
+enum PpResult {
+    Line(NurbsCurve),
+    Empty,
+    Marcher,
+}
 
-fn ssi_plane_plane(sa: &NurbsSurface, oa: [f64; 3], na_raw: [f64; 3],
-                   sb: &NurbsSurface, ob: [f64; 3], nb_raw: [f64; 3]) -> PpResult {
-    let dot = |a: [f64; 3], b: [f64; 3]| a[0]*b[0] + a[1]*b[1] + a[2]*b[2];
+fn ssi_plane_plane(
+    sa: &NurbsSurface,
+    oa: [f64; 3],
+    na_raw: [f64; 3],
+    sb: &NurbsSurface,
+    ob: [f64; 3],
+    nb_raw: [f64; 3],
+) -> PpResult {
+    let dot = |a: [f64; 3], b: [f64; 3]| a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
     let na = vunit(na_raw);
     let nb = vunit(nb_raw);
     let v = vcross(na, nb);
     let vl = dot(v, v).sqrt();
-    if vl < 1e-9 { return PpResult::Marcher; }  // parallel/coincident -> marcher
-    // Anchor: point of the intersection line closest to origin (two-plane closed form).
+    if vl < 1e-9 {
+        return PpResult::Marcher;
+    } // parallel/coincident -> marcher
+      // Anchor: point of the intersection line closest to origin (two-plane closed form).
     let da = dot(na, oa);
     let db = dot(nb, ob);
     let nb_x_v = vcross(nb, v);
     let v_x_na = vcross(v, na);
     let inv = 1.0 / (vl * vl);
-    let anchor = [(da*nb_x_v[0] + db*v_x_na[0]) * inv,
-                  (da*nb_x_v[1] + db*v_x_na[1]) * inv,
-                  (da*nb_x_v[2] + db*v_x_na[2]) * inv];
-    let dir = [v[0]/vl, v[1]/vl, v[2]/vl];
+    let anchor = [
+        (da * nb_x_v[0] + db * v_x_na[0]) * inv,
+        (da * nb_x_v[1] + db * v_x_na[1]) * inv,
+        (da * nb_x_v[2] + db * v_x_na[2]) * inv,
+    ];
+    let dir = [v[0] / vl, v[1] / vl, v[2] / vl];
 
     let axis_clip = |c: f64, d: f64, t0: &mut f64, t1: &mut f64| -> bool {
-        if d.abs() < 1e-15 { return c >= -1e-9 && c <= 1.0 + 1e-9; }
+        if d.abs() < 1e-15 {
+            return c >= -1e-9 && c <= 1.0 + 1e-9;
+        }
         let mut ta = (0.0 - c) / d;
         let mut tb = (1.0 - c) / d;
-        if ta > tb { std::mem::swap(&mut ta, &mut tb); }
+        if ta > tb {
+            std::mem::swap(&mut ta, &mut tb);
+        }
         *t0 = (*t0).max(ta);
         *t1 = (*t1).min(tb);
         true
@@ -2905,27 +3371,44 @@ fn ssi_plane_plane(sa: &NurbsSurface, oa: [f64; 3], na_raw: [f64; 3],
         let pu = s.point_at(u1, v0).unwrap_or(Point::new(0.0, 0.0, 0.0));
         let pv = s.point_at(u0, v1).unwrap_or(Point::new(0.0, 0.0, 0.0));
         let o3 = [o[0], o[1], o[2]];
-        let eu = [pu[0]-o[0], pu[1]-o[1], pu[2]-o[2]];
-        let ev = [pv[0]-o[0], pv[1]-o[1], pv[2]-o[2]];
-        let exx = dot(eu, eu); let eyy = dot(ev, ev); let exy = dot(eu, ev);
-        let det = exx*eyy - exy*exy;
-        if det.abs() < 1e-18 { return PpResult::Marcher; }
+        let eu = [pu[0] - o[0], pu[1] - o[1], pu[2] - o[2]];
+        let ev = [pv[0] - o[0], pv[1] - o[1], pv[2] - o[2]];
+        let exx = dot(eu, eu);
+        let eyy = dot(ev, ev);
+        let exy = dot(eu, ev);
+        let det = exx * eyy - exy * exy;
+        if det.abs() < 1e-18 {
+            return PpResult::Marcher;
+        }
         let frac = |r: [f64; 3]| -> (f64, f64) {
-            let rx = dot(r, eu); let ry = dot(r, ev);
-            ((eyy*rx - exy*ry) / det, (exx*ry - exy*rx) / det)
+            let rx = dot(r, eu);
+            let ry = dot(r, ev);
+            ((eyy * rx - exy * ry) / det, (exx * ry - exy * rx) / det)
         };
-        let (a0, b0) = frac([anchor[0]-o3[0], anchor[1]-o3[1], anchor[2]-o3[2]]);
+        let (a0, b0) = frac([anchor[0] - o3[0], anchor[1] - o3[1], anchor[2] - o3[2]]);
         let (dav, dbv) = frac(dir);
         let mut t0: f64 = -1e300;
         let mut t1: f64 = 1e300;
-        if !axis_clip(a0, dav, &mut t0, &mut t1) || !axis_clip(b0, dbv, &mut t0, &mut t1) || t0 > t1 {
+        if !axis_clip(a0, dav, &mut t0, &mut t1) || !axis_clip(b0, dbv, &mut t0, &mut t1) || t0 > t1
+        {
             return PpResult::Empty;
         }
-        tmin = tmin.max(t0); tmax = tmax.min(t1);
+        tmin = tmin.max(t0);
+        tmax = tmax.min(t1);
     }
-    if tmax - tmin <= 1e-9 { return PpResult::Empty; }
-    let a = Point::new(anchor[0]+tmin*dir[0], anchor[1]+tmin*dir[1], anchor[2]+tmin*dir[2]);
-    let b = Point::new(anchor[0]+tmax*dir[0], anchor[1]+tmax*dir[1], anchor[2]+tmax*dir[2]);
+    if tmax - tmin <= 1e-9 {
+        return PpResult::Empty;
+    }
+    let a = Point::new(
+        anchor[0] + tmin * dir[0],
+        anchor[1] + tmin * dir[1],
+        anchor[2] + tmin * dir[2],
+    );
+    let b = Point::new(
+        anchor[0] + tmax * dir[0],
+        anchor[1] + tmax * dir[1],
+        anchor[2] + tmax * dir[2],
+    );
     let mut c3 = NurbsCurve::create(false, 1, &[a, b]);
     c3.set_domain(0.0, 1.0);
     PpResult::Line(c3)
@@ -2939,28 +3422,34 @@ fn ssi_plane_plane(sa: &NurbsSurface, oa: [f64; 3], na_raw: [f64; 3],
 fn analytic_pcurve(srf: &NurbsSurface, recog: &RecSurf, c3d: &NurbsCurve) -> Option<NurbsCurve> {
     let (u0, u1) = srf.domain(0)?;
     let (v0, v1) = srf.domain(1)?;
-    let dot = |a: [f64; 3], b: [f64; 3]| a[0]*b[0] + a[1]*b[1] + a[2]*b[2];
+    let dot = |a: [f64; 3], b: [f64; 3]| a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
     match recog {
         RecSurf::Plane(_o, _n) => {
             let o = srf.point_at(u0, v0)?;
             let pu = srf.point_at(u1, v0)?;
             let pv = srf.point_at(u0, v1)?;
-            let ex = [pu[0]-o[0], pu[1]-o[1], pu[2]-o[2]];
-            let ey = [pv[0]-o[0], pv[1]-o[1], pv[2]-o[2]];
-            let exx = dot(ex, ex); let eyy = dot(ey, ey); let exy = dot(ex, ey);
-            let det = exx*eyy - exy*exy;
-            if det.abs() < 1e-18 { return None; }
+            let ex = [pu[0] - o[0], pu[1] - o[1], pu[2] - o[2]];
+            let ey = [pv[0] - o[0], pv[1] - o[1], pv[2] - o[2]];
+            let exx = dot(ex, ex);
+            let eyy = dot(ey, ey);
+            let exy = dot(ex, ey);
+            let det = exx * eyy - exy * exy;
+            if det.abs() < 1e-18 {
+                return None;
+            }
             let mut pc = c3d.clone();
             for i in 0..c3d.cv_count() {
                 let p = c3d.get_cv(i)?;
-                let r = [p[0]-o[0], p[1]-o[1], p[2]-o[2]];
-                let rx = dot(r, ex); let ry = dot(r, ey);
-                let a = (eyy*rx - exy*ry) / det;
-                let b = (exx*ry - exy*rx) / det;
-                let u = u0 + a*(u1-u0); let v = v0 + b*(v1-v0);
+                let r = [p[0] - o[0], p[1] - o[1], p[2] - o[2]];
+                let rx = dot(r, ex);
+                let ry = dot(r, ey);
+                let a = (eyy * rx - exy * ry) / det;
+                let b = (exx * ry - exy * rx) / det;
+                let u = u0 + a * (u1 - u0);
+                let v = v0 + b * (v1 - v0);
                 if c3d.is_rational() {
                     let w = c3d.weight(i);
-                    pc.set_cv_4d(i, u*w, v*w, 0.0, w);
+                    pc.set_cv_4d(i, u * w, v * w, 0.0, w);
                 } else {
                     pc.set_cv(i, &Point::new(u, v, 0.0));
                 }
@@ -2971,89 +3460,168 @@ fn analytic_pcurve(srf: &NurbsSurface, recog: &RecSurf, c3d: &NurbsCurve) -> Opt
             let ap = *p1;
             let mut ax = *p2;
             let an = dot(ax, ax).sqrt();
-            if an < 1e-12 { return None; }
-            ax = [ax[0]/an, ax[1]/an, ax[2]/an];
-            let height = |p: Point| { let r = [p[0]-ap[0], p[1]-ap[1], p[2]-ap[2]]; dot(r, ax) };
-            let um = 0.5*(u0+u1);
+            if an < 1e-12 {
+                return None;
+            }
+            ax = [ax[0] / an, ax[1] / an, ax[2] / an];
+            let height = |p: Point| {
+                let r = [p[0] - ap[0], p[1] - ap[1], p[2] - ap[2]];
+                dot(r, ax)
+            };
+            let um = 0.5 * (u0 + u1);
             let h0 = height(srf.point_at(um, v0)?);
             let h1 = height(srf.point_at(um, v1)?);
-            if (h1-h0).abs() < 1e-12 { return None; }
-            let (t0, t1) = c3d.domain();
-            let mut hmin: f64 = 1e300; let mut hmax: f64 = -1e300; let mut hsum = 0.0; let mut ns = 0;
-            for i in 0..=32 {
-                let h = height(c3d.point_at(t0 + (t1-t0)*i as f64/32.0));
-                hmin = hmin.min(h); hmax = hmax.max(h); hsum += h; ns += 1;
+            if (h1 - h0).abs() < 1e-12 {
+                return None;
             }
-            if hmax - hmin > 1e-5 * (h1-h0).abs() { return None; }  // oblique -> fallback
-            if c3d.point_at(t0).distance(&c3d.point_at(t1), None) > 1e-6 * ((h1-h0).abs() + 1.0) { return None; }
+            let (t0, t1) = c3d.domain();
+            let mut hmin: f64 = 1e300;
+            let mut hmax: f64 = -1e300;
+            let mut hsum = 0.0;
+            let mut ns = 0;
+            for i in 0..=32 {
+                let h = height(c3d.point_at(t0 + (t1 - t0) * i as f64 / 32.0));
+                hmin = hmin.min(h);
+                hmax = hmax.max(h);
+                hsum += h;
+                ns += 1;
+            }
+            if hmax - hmin > 1e-5 * (h1 - h0).abs() {
+                return None;
+            } // oblique -> fallback
+            if c3d.point_at(t0).distance(&c3d.point_at(t1), None) > 1e-6 * ((h1 - h0).abs() + 1.0) {
+                return None;
+            }
             let hc = hsum / ns as f64;
-            let vc = v0 + (hc-h0)/(h1-h0)*(v1-v0);
-            if vc < v0.min(v1) - 1e-9 || vc > v0.max(v1) + 1e-9 { return None; }
-            Some(NurbsCurve::create(false, 1, &[Point::new(u0, vc, 0.0), Point::new(u1, vc, 0.0)]))
+            let vc = v0 + (hc - h0) / (h1 - h0) * (v1 - v0);
+            if vc < v0.min(v1) - 1e-9 || vc > v0.max(v1) + 1e-9 {
+                return None;
+            }
+            Some(NurbsCurve::create(
+                false,
+                1,
+                &[Point::new(u0, vc, 0.0), Point::new(u1, vc, 0.0)],
+            ))
         }
         RecSurf::Sphere(c, r) => {
-            let um = 0.5*(u0+u1);
+            let um = 0.5 * (u0 + u1);
             let sp = srf.point_at(um, v0)?;
             let np = srf.point_at(um, v1)?;
-            let mut ax = [np[0]-sp[0], np[1]-sp[1], np[2]-sp[2]];
+            let mut ax = [np[0] - sp[0], np[1] - sp[1], np[2] - sp[2]];
             let an = dot(ax, ax).sqrt();
-            if an < 1e-12 { return None; }
-            ax = [ax[0]/an, ax[1]/an, ax[2]/an];
-            let cc = *c;
-            let height = |p: Point| { let rr = [p[0]-cc[0], p[1]-cc[1], p[2]-cc[2]]; dot(rr, ax) };
-            let (t0, t1) = c3d.domain();
-            let mut hmin: f64 = 1e300; let mut hmax: f64 = -1e300; let mut hsum = 0.0; let mut ns = 0;
-            for i in 0..=32 {
-                let h = height(c3d.point_at(t0 + (t1-t0)*i as f64/32.0));
-                hmin = hmin.min(h); hmax = hmax.max(h); hsum += h; ns += 1;
+            if an < 1e-12 {
+                return None;
             }
-            if hmax - hmin > *r * 1e-4 { return None; }
-            if c3d.point_at(t0).distance(&c3d.point_at(t1), None) > *r * 1e-3 { return None; }
+            ax = [ax[0] / an, ax[1] / an, ax[2] / an];
+            let cc = *c;
+            let height = |p: Point| {
+                let rr = [p[0] - cc[0], p[1] - cc[1], p[2] - cc[2]];
+                dot(rr, ax)
+            };
+            let (t0, t1) = c3d.domain();
+            let mut hmin: f64 = 1e300;
+            let mut hmax: f64 = -1e300;
+            let mut hsum = 0.0;
+            let mut ns = 0;
+            for i in 0..=32 {
+                let h = height(c3d.point_at(t0 + (t1 - t0) * i as f64 / 32.0));
+                hmin = hmin.min(h);
+                hmax = hmax.max(h);
+                hsum += h;
+                ns += 1;
+            }
+            if hmax - hmin > *r * 1e-4 {
+                return None;
+            }
+            if c3d.point_at(t0).distance(&c3d.point_at(t1), None) > *r * 1e-3 {
+                return None;
+            }
             let hc = hsum / ns as f64;
-            let mut va = v0; let mut vb = v1;
+            let mut va = v0;
+            let mut vb = v1;
             let mut ha = height(srf.point_at(um, va)?);
             let hb = height(srf.point_at(um, vb)?);
-            if (hc-ha)*(hc-hb) > 0.0 { return None; }
-            for _ in 0..60 {
-                let vm = 0.5*(va+vb);
-                let hm = height(srf.point_at(um, vm).unwrap_or(Point::new(0.0, 0.0, 0.0)));
-                if (hm-hc)*(ha-hc) <= 0.0 { vb = vm; } else { va = vm; ha = hm; }
+            if (hc - ha) * (hc - hb) > 0.0 {
+                return None;
             }
-            let vc = 0.5*(va+vb);
-            Some(NurbsCurve::create(false, 1, &[Point::new(u0, vc, 0.0), Point::new(u1, vc, 0.0)]))
+            for _ in 0..60 {
+                let vm = 0.5 * (va + vb);
+                let hm = height(srf.point_at(um, vm).unwrap_or(Point::new(0.0, 0.0, 0.0)));
+                if (hm - hc) * (ha - hc) <= 0.0 {
+                    vb = vm;
+                } else {
+                    va = vm;
+                    ha = hm;
+                }
+            }
+            let vc = 0.5 * (va + vb);
+            Some(NurbsCurve::create(
+                false,
+                1,
+                &[Point::new(u0, vc, 0.0), Point::new(u1, vc, 0.0)],
+            ))
         }
         RecSurf::Cone(p1, p2, _r) => {
             // A circle perpendicular to the cone axis (a coaxial "parallel") -> exact v=const line.
             // (recog.r is the cone HALF-ANGLE, not a length, so use a curve-length scale for tolerances.)
             let mut ax = *p2;
             let an = dot(ax, ax).sqrt();
-            if an < 1e-12 { return None; }
-            ax = [ax[0]/an, ax[1]/an, ax[2]/an];
-            let aa = *p1;   // apex
-            let height = |p: Point| { let r = [p[0]-aa[0], p[1]-aa[1], p[2]-aa[2]]; dot(r, ax) };
-            let (t0, t1) = c3d.domain();
-            let clen = c3d.point_at(t0).distance(&c3d.point_at(0.5*(t0+t1)), None);
-            let hscale = clen.max(1e-9);
-            let mut hmin: f64 = 1e300; let mut hmax: f64 = -1e300; let mut hsum = 0.0; let mut ns = 0;
-            for i in 0..=32 {
-                let h = height(c3d.point_at(t0 + (t1-t0)*i as f64/32.0));
-                hmin = hmin.min(h); hmax = hmax.max(h); hsum += h; ns += 1;
+            if an < 1e-12 {
+                return None;
             }
-            if hmax - hmin > hscale * 1e-4 { return None; }   // oblique conic -> projection
-            if c3d.point_at(t0).distance(&c3d.point_at(t1), None) > hscale * 1e-3 { return None; }  // not a full wrap
+            ax = [ax[0] / an, ax[1] / an, ax[2] / an];
+            let aa = *p1; // apex
+            let height = |p: Point| {
+                let r = [p[0] - aa[0], p[1] - aa[1], p[2] - aa[2]];
+                dot(r, ax)
+            };
+            let (t0, t1) = c3d.domain();
+            let clen = c3d
+                .point_at(t0)
+                .distance(&c3d.point_at(0.5 * (t0 + t1)), None);
+            let hscale = clen.max(1e-9);
+            let mut hmin: f64 = 1e300;
+            let mut hmax: f64 = -1e300;
+            let mut hsum = 0.0;
+            let mut ns = 0;
+            for i in 0..=32 {
+                let h = height(c3d.point_at(t0 + (t1 - t0) * i as f64 / 32.0));
+                hmin = hmin.min(h);
+                hmax = hmax.max(h);
+                hsum += h;
+                ns += 1;
+            }
+            if hmax - hmin > hscale * 1e-4 {
+                return None;
+            } // oblique conic -> projection
+            if c3d.point_at(t0).distance(&c3d.point_at(t1), None) > hscale * 1e-3 {
+                return None;
+            } // not a full wrap
             let hc = hsum / ns as f64;
-            let um2 = 0.5*(u0+u1);
-            let mut va = v0; let mut vb = v1;
+            let um2 = 0.5 * (u0 + u1);
+            let mut va = v0;
+            let mut vb = v1;
             let mut ha = height(srf.point_at(um2, va)?);
             let hb = height(srf.point_at(um2, vb)?);
-            if (hc-ha)*(hc-hb) > 0.0 { return None; }   // height out of v-range
+            if (hc - ha) * (hc - hb) > 0.0 {
+                return None;
+            } // height out of v-range
             for _ in 0..60 {
-                let vmid = 0.5*(va+vb);
+                let vmid = 0.5 * (va + vb);
                 let hm = height(srf.point_at(um2, vmid).unwrap_or(Point::new(0.0, 0.0, 0.0)));
-                if (hm-hc)*(ha-hc) <= 0.0 { vb = vmid; } else { va = vmid; ha = hm; }
+                if (hm - hc) * (ha - hc) <= 0.0 {
+                    vb = vmid;
+                } else {
+                    va = vmid;
+                    ha = hm;
+                }
             }
-            let vc = 0.5*(va+vb);
-            Some(NurbsCurve::create(false, 1, &[Point::new(u0, vc, 0.0), Point::new(u1, vc, 0.0)]))
+            let vc = 0.5 * (va + vb);
+            Some(NurbsCurve::create(
+                false,
+                1,
+                &[Point::new(u0, vc, 0.0), Point::new(u1, vc, 0.0)],
+            ))
         }
         _ => None,
     }
@@ -3065,30 +3633,62 @@ fn analytic_pcurve(srf: &NurbsSurface, recog: &RecSurf, c3d: &NurbsCurve) -> Opt
 /// the iterative projector got ~0.18 wrong), and the nonlinear meridian v is found from a height
 /// table. Returns the seam-split arcs (a circle straddling the seam -> 2 arcs, each anchored on
 /// the seam), as exact-endpoint degree-1 polylines. Empty if not a usable sphere/circle.
-fn analytic_sphere_pullback(srf: &NurbsSurface, recog: &RecSurf, c3d: &NurbsCurve) -> Vec<NurbsCurve> {
-    let cc = match recog { RecSurf::Sphere(c, _r) => *c, _ => return vec![] };
-    let (u0, u1) = match srf.domain(0) { Some(d) => d, None => return vec![] };
-    let (v0, v1) = match srf.domain(1) { Some(d) => d, None => return vec![] };
+fn analytic_sphere_pullback(
+    srf: &NurbsSurface,
+    recog: &RecSurf,
+    c3d: &NurbsCurve,
+) -> Vec<NurbsCurve> {
+    let cc = match recog {
+        RecSurf::Sphere(c, _r) => *c,
+        _ => return vec![],
+    };
+    let (u0, u1) = match srf.domain(0) {
+        Some(d) => d,
+        None => return vec![],
+    };
+    let (v0, v1) = match srf.domain(1) {
+        Some(d) => d,
+        None => return vec![],
+    };
     let range_u = u1 - u0;
-    if range_u < 1e-9 { return vec![]; }
-    let dot = |a: [f64; 3], b: [f64; 3]| a[0]*b[0] + a[1]*b[1] + a[2]*b[2];
+    if range_u < 1e-9 {
+        return vec![];
+    }
+    let dot = |a: [f64; 3], b: [f64; 3]| a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
     let um = 0.5 * (u0 + u1);
     let vm = 0.5 * (v0 + v1);
     // Polar axis Zs (south->north pole), and the equatorial frame Xs (u=u0 meridian dir), Ys.
-    let sp = match srf.point_at(um, v0) { Some(p) => p, None => return vec![] };
-    let np = match srf.point_at(um, v1) { Some(p) => p, None => return vec![] };
-    let mut zs = [np[0]-sp[0], np[1]-sp[1], np[2]-sp[2]];
+    let sp = match srf.point_at(um, v0) {
+        Some(p) => p,
+        None => return vec![],
+    };
+    let np = match srf.point_at(um, v1) {
+        Some(p) => p,
+        None => return vec![],
+    };
+    let mut zs = [np[0] - sp[0], np[1] - sp[1], np[2] - sp[2]];
     let zn = dot(zs, zs).sqrt();
-    if zn < 1e-12 { return vec![]; }
-    zs = [zs[0]/zn, zs[1]/zn, zs[2]/zn];
-    let p0 = match srf.point_at(u0, vm) { Some(p) => p, None => return vec![] };
-    let x0 = [p0[0]-cc[0], p0[1]-cc[1], p0[2]-cc[2]];
+    if zn < 1e-12 {
+        return vec![];
+    }
+    zs = [zs[0] / zn, zs[1] / zn, zs[2] / zn];
+    let p0 = match srf.point_at(u0, vm) {
+        Some(p) => p,
+        None => return vec![],
+    };
+    let x0 = [p0[0] - cc[0], p0[1] - cc[1], p0[2] - cc[2]];
     let h0 = dot(x0, zs);
-    let mut xs = [x0[0]-h0*zs[0], x0[1]-h0*zs[1], x0[2]-h0*zs[2]];
+    let mut xs = [x0[0] - h0 * zs[0], x0[1] - h0 * zs[1], x0[2] - h0 * zs[2]];
     let xn = dot(xs, xs).sqrt();
-    if xn < 1e-12 { return vec![]; }
-    xs = [xs[0]/xn, xs[1]/xn, xs[2]/xn];
-    let ys = [zs[1]*xs[2]-zs[2]*xs[1], zs[2]*xs[0]-zs[0]*xs[2], zs[0]*xs[1]-zs[1]*xs[0]];
+    if xn < 1e-12 {
+        return vec![];
+    }
+    xs = [xs[0] / xn, xs[1] / xn, xs[2] / xn];
+    let ys = [
+        zs[1] * xs[2] - zs[2] * xs[1],
+        zs[2] * xs[0] - zs[0] * xs[2],
+        zs[0] * xs[1] - zs[1] * xs[0],
+    ];
     const PI: f64 = std::f64::consts::PI;
     const TWO_PI: f64 = 2.0 * PI;
     // (u -> longitude) table along the equator. The NURBS sphere's u is the RATIONAL-quadratic
@@ -3102,11 +3702,15 @@ fn analytic_sphere_pullback(srf: &NurbsSurface, recog: &RecSurf, c3d: &NurbsCurv
     for k in 0..=nt {
         let u = u0 + range_u * k as f64 / nt as f64;
         let p = srf.point_at(u, vm).unwrap_or(Point::new(0.0, 0.0, 0.0));
-        let r = [p[0]-cc[0], p[1]-cc[1], p[2]-cc[2]];
+        let r = [p[0] - cc[0], p[1] - cc[1], p[2] - cc[2]];
         let mut lon = dot(r, ys).atan2(dot(r, xs));
         if k > 0 {
-            while lon - tlon[k-1] > PI { lon -= TWO_PI; }
-            while lon - tlon[k-1] < -PI { lon += TWO_PI; }
+            while lon - tlon[k - 1] > PI {
+                lon -= TWO_PI;
+            }
+            while lon - tlon[k - 1] < -PI {
+                lon += TWO_PI;
+            }
         }
         tu[k] = u;
         tlon[k] = lon;
@@ -3115,17 +3719,33 @@ fn analytic_sphere_pullback(srf: &NurbsSurface, recog: &RecSurf, c3d: &NurbsCurv
     let lon_lo = tlon[0].min(tlon[nt]);
     let lon_hi = tlon[0].max(tlon[nt]);
     let u_from_lon = |mut lon: f64| -> f64 {
-        while lon < lon_lo - 1e-9 { lon += TWO_PI; }
-        while lon > lon_hi + 1e-9 { lon -= TWO_PI; }
+        while lon < lon_lo - 1e-9 {
+            lon += TWO_PI;
+        }
+        while lon > lon_hi + 1e-9 {
+            lon -= TWO_PI;
+        }
         let mut lo = 0usize;
         let mut hi = nt;
         while hi - lo > 1 {
             let mid = (lo + hi) / 2;
-            let above = if lon_incr { tlon[mid] < lon } else { tlon[mid] > lon };
-            if above { lo = mid; } else { hi = mid; }
+            let above = if lon_incr {
+                tlon[mid] < lon
+            } else {
+                tlon[mid] > lon
+            };
+            if above {
+                lo = mid;
+            } else {
+                hi = mid;
+            }
         }
         let denom = tlon[hi] - tlon[lo];
-        let f = if denom.abs() > 1e-15 { (lon - tlon[lo]) / denom } else { 0.0 };
+        let f = if denom.abs() > 1e-15 {
+            (lon - tlon[lo]) / denom
+        } else {
+            0.0
+        };
         tu[lo] + (tu[hi] - tu[lo]) * f
     };
     // height(v) along a meridian (independent of u by sphere symmetry) is MONOTONE pole-to-pole.
@@ -3135,29 +3755,47 @@ fn analytic_sphere_pullback(srf: &NurbsSurface, recog: &RecSurf, c3d: &NurbsCurv
     for k in 0..=nt {
         let v = v0 + (v1 - v0) * k as f64 / nt as f64;
         let p = srf.point_at(um, v).unwrap_or(Point::new(0.0, 0.0, 0.0));
-        let r = [p[0]-cc[0], p[1]-cc[1], p[2]-cc[2]];
+        let r = [p[0] - cc[0], p[1] - cc[1], p[2] - cc[2]];
         tv[k] = v;
         th[k] = dot(r, zs);
     }
     let incr = th[nt] >= th[0];
-    if (th[nt] - th[0]).abs() < 1e-12 { return vec![]; }
+    if (th[nt] - th[0]).abs() < 1e-12 {
+        return vec![];
+    }
     let v_from_height = |h: f64| -> f64 {
         if incr {
-            if h <= th[0] { return tv[0]; }
-            if h >= th[nt] { return tv[nt]; }
+            if h <= th[0] {
+                return tv[0];
+            }
+            if h >= th[nt] {
+                return tv[nt];
+            }
         } else {
-            if h >= th[0] { return tv[0]; }
-            if h <= th[nt] { return tv[nt]; }
+            if h >= th[0] {
+                return tv[0];
+            }
+            if h <= th[nt] {
+                return tv[nt];
+            }
         }
         let mut lo = 0usize;
         let mut hi = nt;
         while hi - lo > 1 {
             let mid = (lo + hi) / 2;
             let above = if incr { th[mid] < h } else { th[mid] > h };
-            if above { lo = mid; } else { hi = mid; }
+            if above {
+                lo = mid;
+            } else {
+                hi = mid;
+            }
         }
         let denom = th[hi] - th[lo];
-        let f = if denom.abs() > 1e-15 { (h - th[lo]) / denom } else { 0.0 };
+        let f = if denom.abs() > 1e-15 {
+            (h - th[lo]) / denom
+        } else {
+            0.0
+        };
         tv[lo] + (tv[hi] - tv[lo]) * f
     };
     // Sample the 3D curve; project each point analytically -> (u_unwrapped, v).
@@ -3167,18 +3805,24 @@ fn analytic_sphere_pullback(srf: &NurbsSurface, recog: &RecSurf, c3d: &NurbsCurv
     let mut prev_u = 0.0_f64;
     for i in 0..=n {
         let p = c3d.point_at(t0 + (t1 - t0) * i as f64 / n as f64);
-        let r = [p[0]-cc[0], p[1]-cc[1], p[2]-cc[2]];
+        let r = [p[0] - cc[0], p[1] - cc[1], p[2] - cc[2]];
         let lon = dot(r, ys).atan2(dot(r, xs)); // (-pi, pi], exact
         let h = dot(r, zs);
         let mut u = u_from_lon(lon); // exact NURBS u (not the linear approx)
         if i > 0 {
-            while u - prev_u > range_u * 0.5 { u -= range_u; }
-            while u - prev_u < -range_u * 0.5 { u += range_u; }
+            while u - prev_u > range_u * 0.5 {
+                u -= range_u;
+            }
+            while u - prev_u < -range_u * 0.5 {
+                u += range_u;
+            }
         }
         prev_u = u;
         uv.push([u, v_from_height(h)]);
     }
-    if uv.len() < 2 { return vec![]; }
+    if uv.len() < 2 {
+        return vec![];
+    }
     // Split the continuous (u,v) polyline into arcs by "domain copy" index k = floor((u-u0)/range).
     // When k changes between consecutive samples the curve crosses a seam: end the current arc
     // EXACTLY on the seam (u0 or u1) and start the next on the opposite seam, each shifted into
@@ -3194,19 +3838,27 @@ fn analytic_sphere_pullback(srf: &NurbsSurface, recog: &RecSurf, c3d: &NurbsCurv
             let step: i64 = if ki > cur_k { 1 } else { -1 };
             let nk = cur_k + step;
             let seam_cont = u0 + (if step > 0 { nk } else { cur_k }) as f64 * range_u; // boundary crossed
-            let denom = uv[i][0] - uv[i-1][0];
-            let mut f = if denom.abs() > 1e-15 { (seam_cont - uv[i-1][0]) / denom } else { 0.0 };
+            let denom = uv[i][0] - uv[i - 1][0];
+            let mut f = if denom.abs() > 1e-15 {
+                (seam_cont - uv[i - 1][0]) / denom
+            } else {
+                0.0
+            };
             f = f.max(0.0).min(1.0);
-            let vc = uv[i-1][1] + (uv[i][1] - uv[i-1][1]) * f;
+            let vc = uv[i - 1][1] + (uv[i][1] - uv[i - 1][1]) * f;
             seg.push(Point::new(seam_cont - cur_k as f64 * range_u, vc, 0.0)); // end at u1 (step>0) or u0
-            if seg.len() >= 2 { out.push(NurbsCurve::create(false, 1, &seg)); }
+            if seg.len() >= 2 {
+                out.push(NurbsCurve::create(false, 1, &seg));
+            }
             seg.clear();
             seg.push(Point::new(seam_cont - nk as f64 * range_u, vc, 0.0)); // start at u0 (step>0) or u1
             cur_k = nk;
         }
         seg.push(Point::new(uv[i][0] - cur_k as f64 * range_u, uv[i][1], 0.0));
     }
-    if seg.len() >= 2 { out.push(NurbsCurve::create(false, 1, &seg)); }
+    if seg.len() >= 2 {
+        out.push(NurbsCurve::create(false, 1, &seg));
+    }
     out
 }
 
@@ -3231,7 +3883,9 @@ fn axes_coaxial(p1: [f64; 3], d1: [f64; 3], p2: [f64; 3], d2: [f64; 3], tol: f64
     let u1 = vunit(d1);
     let u2 = vunit(d2);
     let cx = vcross(u1, u2);
-    if vdot(cx, cx).sqrt() > tol { return false; }
+    if vdot(cx, cx).sqrt() > tol {
+        return false;
+    }
     point_axis_dist(p1, u1, p2) <= tol
 }
 fn cyl_span(srf: &NurbsSurface, apt: [f64; 3], adir: [f64; 3]) -> (f64, f64) {
@@ -3250,7 +3904,13 @@ fn cyl_span(srf: &NurbsSurface, apt: [f64; 3], adir: [f64; 3]) -> (f64, f64) {
     }
     (smin, smax)
 }
-fn lines_closest_point(p1: [f64; 3], d1: [f64; 3], p2: [f64; 3], d2: [f64; 3], tol: f64) -> Option<[f64; 3]> {
+fn lines_closest_point(
+    p1: [f64; 3],
+    d1: [f64; 3],
+    p2: [f64; 3],
+    d2: [f64; 3],
+    tol: f64,
+) -> Option<[f64; 3]> {
     let u = vunit(d1);
     let v = vunit(d2);
     let w0 = [p1[0] - p2[0], p1[1] - p2[1], p1[2] - p2[2]];
@@ -3260,21 +3920,39 @@ fn lines_closest_point(p1: [f64; 3], d1: [f64; 3], p2: [f64; 3], d2: [f64; 3], t
     let d = vdot(u, w0);
     let e = vdot(v, w0);
     let den = a * c - b * b;
-    if den.abs() < 1e-12 { return None; }
+    if den.abs() < 1e-12 {
+        return None;
+    }
     let sc = (b * e - c * d) / den;
     let tc = (a * e - b * d) / den;
     let q1 = [p1[0] + sc * u[0], p1[1] + sc * u[1], p1[2] + sc * u[2]];
     let q2 = [p2[0] + tc * v[0], p2[1] + tc * v[1], p2[2] + tc * v[2]];
     let diff = [q1[0] - q2[0], q1[1] - q2[1], q1[2] - q2[2]];
-    if vdot(diff, diff).sqrt() > tol { return None; }
-    Some([0.5 * (q1[0] + q2[0]), 0.5 * (q1[1] + q2[1]), 0.5 * (q1[2] + q2[2])])
+    if vdot(diff, diff).sqrt() > tol {
+        return None;
+    }
+    Some([
+        0.5 * (q1[0] + q2[0]),
+        0.5 * (q1[1] + q2[1]),
+        0.5 * (q1[2] + q2[2]),
+    ])
 }
-fn ssi_cylinder_sphere(cyl_p: [f64; 3], cyl_w: [f64; 3], rc: f64, sph_c: [f64; 3], r_sph: f64) -> Option<Vec<NurbsCurve>> {
+fn ssi_cylinder_sphere(
+    cyl_p: [f64; 3],
+    cyl_w: [f64; 3],
+    rc: f64,
+    sph_c: [f64; 3],
+    r_sph: f64,
+) -> Option<Vec<NurbsCurve>> {
     let ktol = 1e-6;
     let w = vunit(cyl_w);
-    if point_axis_dist(cyl_p, w, sph_c) > ktol { return None; }
+    if point_axis_dist(cyl_p, w, sph_c) > ktol {
+        return None;
+    }
     let mut out: Vec<NurbsCurve> = Vec::new();
-    if r_sph < rc - ktol { return Some(out); }
+    if r_sph < rc - ktol {
+        return Some(out);
+    }
     let dist = (r_sph * r_sph - rc * rc).max(0.0).sqrt();
     let (xa, ya) = ortho_basis(w);
     if dist <= ktol {
@@ -3282,33 +3960,66 @@ fn ssi_cylinder_sphere(cyl_p: [f64; 3], cyl_w: [f64; 3], rc: f64, sph_c: [f64; 3
         return Some(out);
     }
     for s in [dist, -dist] {
-        let cc = [sph_c[0] + s * w[0], sph_c[1] + s * w[1], sph_c[2] + s * w[2]];
+        let cc = [
+            sph_c[0] + s * w[0],
+            sph_c[1] + s * w[1],
+            sph_c[2] + s * w[2],
+        ];
         out.push(exact_circle(cc[0], cc[1], cc[2], xa, ya, rc));
     }
     Some(out)
 }
-fn ssi_cylinder_cone(cyl_p: [f64; 3], cyl_w: [f64; 3], rc: f64, cone_apex: [f64; 3], cone_a: [f64; 3], alpha: f64) -> Option<Vec<NurbsCurve>> {
+fn ssi_cylinder_cone(
+    cyl_p: [f64; 3],
+    cyl_w: [f64; 3],
+    rc: f64,
+    cone_apex: [f64; 3],
+    cone_a: [f64; 3],
+    alpha: f64,
+) -> Option<Vec<NurbsCurve>> {
     let ktol = 1e-6;
     let w = vunit(cyl_w);
     let a = vunit(cone_a);
-    if !axes_coaxial(cyl_p, w, cone_apex, a, ktol) { return None; }
+    if !axes_coaxial(cyl_p, w, cone_apex, a, ktol) {
+        return None;
+    }
     let ta = alpha.tan();
-    if ta < 1e-9 { return None; }
+    if ta < 1e-9 {
+        return None;
+    }
     let s = rc / ta;
     let mut out: Vec<NurbsCurve> = Vec::new();
-    if s < ktol { return Some(out); }
-    let cc = [cone_apex[0] + s * a[0], cone_apex[1] + s * a[1], cone_apex[2] + s * a[2]];
+    if s < ktol {
+        return Some(out);
+    }
+    let cc = [
+        cone_apex[0] + s * a[0],
+        cone_apex[1] + s * a[1],
+        cone_apex[2] + s * a[2],
+    ];
     let (xa, ya) = ortho_basis(a);
     out.push(exact_circle(cc[0], cc[1], cc[2], xa, ya, rc));
     Some(out)
 }
-fn ssi_cone_sphere(cone_apex: [f64; 3], cone_a: [f64; 3], alpha: f64, sph_c: [f64; 3], r_sph: f64) -> Option<Vec<NurbsCurve>> {
+fn ssi_cone_sphere(
+    cone_apex: [f64; 3],
+    cone_a: [f64; 3],
+    alpha: f64,
+    sph_c: [f64; 3],
+    r_sph: f64,
+) -> Option<Vec<NurbsCurve>> {
     let ktol = 1e-6;
     let a = vunit(cone_a);
-    if point_axis_dist(cone_apex, a, sph_c) > ktol { return None; }
+    if point_axis_dist(cone_apex, a, sph_c) > ktol {
+        return None;
+    }
     let dsign = axial_coord(cone_apex, a, sph_c);
     let d = dsign.abs();
-    let dir = if d > ktol && dsign < 0.0 { [-a[0], -a[1], -a[2]] } else { a };
+    let dir = if d > ktol && dsign < 0.0 {
+        [-a[0], -a[1], -a[2]]
+    } else {
+        a
+    };
     let t = alpha.tan();
     let t2 = t * t;
     let aq = 1.0 + t2;
@@ -3316,7 +4027,9 @@ fn ssi_cone_sphere(cone_apex: [f64; 3], cone_a: [f64; 3], alpha: f64, sph_c: [f6
     let cq = t2 * d * d - r_sph * r_sph;
     let disc = bq * bq - 4.0 * aq * cq;
     let mut out: Vec<NurbsCurve> = Vec::new();
-    if disc < -ktol { return Some(out); }
+    if disc < -ktol {
+        return Some(out);
+    }
     let sq = disc.max(0.0).sqrt();
     let xs: Vec<f64> = if sq <= ktol {
         vec![-bq / (2.0 * aq)]
@@ -3326,16 +4039,32 @@ fn ssi_cone_sphere(cone_apex: [f64; 3], cone_a: [f64; 3], alpha: f64, sph_c: [f6
     let (xa, ya) = ortho_basis(a);
     for x in xs {
         let s_ax = d + x;
-        if s_ax < ktol { continue; }
+        if s_ax < ktol {
+            continue;
+        }
         let rr = t * s_ax;
-        if rr < ktol { continue; }
-        let cc = [cone_apex[0] + s_ax * dir[0], cone_apex[1] + s_ax * dir[1], cone_apex[2] + s_ax * dir[2]];
+        if rr < ktol {
+            continue;
+        }
+        let cc = [
+            cone_apex[0] + s_ax * dir[0],
+            cone_apex[1] + s_ax * dir[1],
+            cone_apex[2] + s_ax * dir[2],
+        ];
         out.push(exact_circle(cc[0], cc[1], cc[2], xa, ya, rr));
     }
     Some(out)
 }
-fn ssi_cylinder_cylinder(sa: &NurbsSurface, p1: [f64; 3], w1raw: [f64; 3], r1: f64,
-                         sb: &NurbsSurface, p2: [f64; 3], w2raw: [f64; 3], r2: f64) -> Option<Vec<NurbsCurve>> {
+fn ssi_cylinder_cylinder(
+    sa: &NurbsSurface,
+    p1: [f64; 3],
+    w1raw: [f64; 3],
+    r1: f64,
+    sb: &NurbsSurface,
+    p2: [f64; 3],
+    w2raw: [f64; 3],
+    r2: f64,
+) -> Option<Vec<NurbsCurve>> {
     let ktol = 1e-6;
     let w1 = vunit(w1raw);
     let w2 = vunit(w2raw);
@@ -3345,59 +4074,128 @@ fn ssi_cylinder_cylinder(sa: &NurbsSurface, p1: [f64; 3], w1raw: [f64; 3], r1: f
     if sinmag <= ktol {
         let dline = point_axis_dist(p1, w1, p2);
         if dline <= ktol {
-            if (r1 - r2).abs() <= ktol { return None; }  // coincident axis & radius -> marcher
-            return Some(out);                            // coaxial, different radii -> no intersection
+            if (r1 - r2).abs() <= ktol {
+                return None;
+            } // coincident axis & radius -> marcher
+            return Some(out); // coaxial, different radii -> no intersection
         }
         let off = vdot([p2[0] - p1[0], p2[1] - p1[1], p2[2] - p1[2]], w1);
-        let p2p = [p2[0] - off * w1[0], p2[1] - off * w1[1], p2[2] - off * w1[2]];
+        let p2p = [
+            p2[0] - off * w1[0],
+            p2[1] - off * w1[1],
+            p2[2] - off * w1[2],
+        ];
         let d = dline;
-        if d > r1 + r2 + ktol { return Some(out); }
-        if d < (r1 - r2).abs() - ktol { return Some(out); }
+        if d > r1 + r2 + ktol {
+            return Some(out);
+        }
+        if d < (r1 - r2).abs() - ktol {
+            return Some(out);
+        }
         let xdir = vunit([p2p[0] - p1[0], p2p[1] - p1[1], p2p[2] - p1[2]]);
         let ydir = vunit(vcross(w1, xdir));
         let aa = (r1 * r1 - r2 * r2 + d * d) / (2.0 * d);
         let h = (r1 * r1 - aa * aa).max(0.0).sqrt();
-        let foot = [p1[0] + aa * xdir[0], p1[1] + aa * xdir[1], p1[2] + aa * xdir[2]];
+        let foot = [
+            p1[0] + aa * xdir[0],
+            p1[1] + aa * xdir[1],
+            p1[2] + aa * xdir[2],
+        ];
         let (s0a, s1a) = cyl_span(sa, p1, w1);
         let (s0b, s1b) = cyl_span(sb, p1, w1);
         let slo = s0a.max(s0b);
         let shi = s1a.min(s1b);
-        if shi - slo <= ktol { return Some(out); }
+        if shi - slo <= ktol {
+            return Some(out);
+        }
         let emit = |bp: [f64; 3], out: &mut Vec<NurbsCurve>| {
-            let e0 = [bp[0] + slo * w1[0], bp[1] + slo * w1[1], bp[2] + slo * w1[2]];
-            let e1 = [bp[0] + shi * w1[0], bp[1] + shi * w1[1], bp[2] + shi * w1[2]];
-            let mut ln = NurbsCurve::create(false, 1, &[Point::new(e0[0], e0[1], e0[2]), Point::new(e1[0], e1[1], e1[2])]);
+            let e0 = [
+                bp[0] + slo * w1[0],
+                bp[1] + slo * w1[1],
+                bp[2] + slo * w1[2],
+            ];
+            let e1 = [
+                bp[0] + shi * w1[0],
+                bp[1] + shi * w1[1],
+                bp[2] + shi * w1[2],
+            ];
+            let mut ln = NurbsCurve::create(
+                false,
+                1,
+                &[
+                    Point::new(e0[0], e0[1], e0[2]),
+                    Point::new(e1[0], e1[1], e1[2]),
+                ],
+            );
             ln.set_domain(0.0, 1.0);
             out.push(ln);
         };
         if h <= ktol {
             emit(foot, &mut out);
         } else {
-            emit([foot[0] + h * ydir[0], foot[1] + h * ydir[1], foot[2] + h * ydir[2]], &mut out);
-            emit([foot[0] - h * ydir[0], foot[1] - h * ydir[1], foot[2] - h * ydir[2]], &mut out);
+            emit(
+                [
+                    foot[0] + h * ydir[0],
+                    foot[1] + h * ydir[1],
+                    foot[2] + h * ydir[2],
+                ],
+                &mut out,
+            );
+            emit(
+                [
+                    foot[0] - h * ydir[0],
+                    foot[1] - h * ydir[1],
+                    foot[2] - h * ydir[2],
+                ],
+                &mut out,
+            );
         }
         return Some(out);
     }
     let rmax = r1.max(r2);
-    if rmax < 1e-12 || (r1 - r2).abs() / rmax > 1e-6 { return None; }
+    if rmax < 1e-12 || (r1 - r2).abs() / rmax > 1e-6 {
+        return None;
+    }
     let pint = lines_closest_point(p1, w1, p2, w2, ktol)?;
     let r = 0.5 * (r1 + r2);
     let ang = vdot(w1, w2).max(-1.0).min(1.0).acos();
     let sh = (0.5 * ang).sin();
     let ch = (0.5 * ang).cos();
-    if sh < 1e-9 || ch < 1e-9 { return None; }
+    if sh < 1e-9 || ch < 1e-9 {
+        return None;
+    }
     let minor = vunit(cx);
     let maj1 = vunit([w1[0] + w2[0], w1[1] + w2[1], w1[2] + w2[2]]);
     let maj2 = vunit([w1[0] - w2[0], w1[1] - w2[1], w1[2] - w2[2]]);
-    out.push(exact_ellipse(pint[0], pint[1], pint[2], maj1, minor, r / sh, r));
-    out.push(exact_ellipse(pint[0], pint[1], pint[2], maj2, minor, r / ch, r));
+    out.push(exact_ellipse(
+        pint[0],
+        pint[1],
+        pint[2],
+        maj1,
+        minor,
+        r / sh,
+        r,
+    ));
+    out.push(exact_ellipse(
+        pint[0],
+        pint[1],
+        pint[2],
+        maj2,
+        minor,
+        r / ch,
+        r,
+    ));
     Some(out)
 }
 
-fn analytic_ssi(a: &NurbsSurface, b: &NurbsSurface, tolerance: Option<f64>) -> Option<Vec<(NurbsCurve, NurbsCurve, NurbsCurve)>> {
+fn analytic_ssi(
+    a: &NurbsSurface,
+    b: &NurbsSurface,
+    tolerance: Option<f64>,
+) -> Option<Vec<(NurbsCurve, NurbsCurve, NurbsCurve)>> {
     let tol = match tolerance {
         Some(t) if t > 0.0 => t,
-        _ => 1e-12,  // SSI default tolerance: match Python/C++ (1e-12), not Rust ZERO_TOLERANCE (1e-7)
+        _ => 1e-12, // SSI default tolerance: match Python/C++ (1e-12), not Rust ZERO_TOLERANCE (1e-7)
     };
     let rtol = tol.max(1e-7) * 1e4;
     let ra = recognize_surface(a, rtol)?;
@@ -3418,24 +4216,36 @@ fn analytic_ssi(a: &NurbsSurface, b: &NurbsSurface, tolerance: Option<f64>) -> O
         (RecSurf::Plane(oa, na), RecSurf::Plane(ob, nb)) => {
             match ssi_plane_plane(a, *oa, *na, b, *ob, *nb) {
                 PpResult::Line(c) => vec![c],
-                PpResult::Empty => vec![],          // recognized, finite faces disjoint -> []
-                PpResult::Marcher => return None,   // parallel/coincident -> marcher
+                PpResult::Empty => vec![], // recognized, finite faces disjoint -> []
+                PpResult::Marcher => return None, // parallel/coincident -> marcher
             }
         }
         (RecSurf::Plane(o, n), RecSurf::Sphere(c, r)) => single(plane_sphere(*o, *n, *c, *r)),
         (RecSurf::Sphere(c, r), RecSurf::Plane(o, n)) => single(plane_sphere(*o, *n, *c, *r)),
-        (RecSurf::Plane(o, n), RecSurf::Cylinder(p, w, r)) => single(plane_cylinder(*o, *n, *p, *w, *r)),
-        (RecSurf::Cylinder(p, w, r), RecSurf::Plane(o, n)) => single(plane_cylinder(*o, *n, *p, *w, *r)),
-        (RecSurf::Plane(o, n), RecSurf::Cone(v, w, alpha)) => single(plane_cone(*o, *n, *v, *w, *alpha)),
-        (RecSurf::Cone(v, w, alpha), RecSurf::Plane(o, n)) => single(plane_cone(*o, *n, *v, *w, *alpha)),
-        (RecSurf::Plane(o, n), RecSurf::Torus(c, w, rr, r)) => match plane_torus(*o, *n, *c, *w, *rr, *r) {
-            Some(v) => v,
-            None => return None,
-        },
-        (RecSurf::Torus(c, w, rr, r), RecSurf::Plane(o, n)) => match plane_torus(*o, *n, *c, *w, *rr, *r) {
-            Some(v) => v,
-            None => return None,
-        },
+        (RecSurf::Plane(o, n), RecSurf::Cylinder(p, w, r)) => {
+            single(plane_cylinder(*o, *n, *p, *w, *r))
+        }
+        (RecSurf::Cylinder(p, w, r), RecSurf::Plane(o, n)) => {
+            single(plane_cylinder(*o, *n, *p, *w, *r))
+        }
+        (RecSurf::Plane(o, n), RecSurf::Cone(v, w, alpha)) => {
+            single(plane_cone(*o, *n, *v, *w, *alpha))
+        }
+        (RecSurf::Cone(v, w, alpha), RecSurf::Plane(o, n)) => {
+            single(plane_cone(*o, *n, *v, *w, *alpha))
+        }
+        (RecSurf::Plane(o, n), RecSurf::Torus(c, w, rr, r)) => {
+            match plane_torus(*o, *n, *c, *w, *rr, *r) {
+                Some(v) => v,
+                None => return None,
+            }
+        }
+        (RecSurf::Torus(c, w, rr, r), RecSurf::Plane(o, n)) => {
+            match plane_torus(*o, *n, *c, *w, *rr, *r) {
+                Some(v) => v,
+                None => return None,
+            }
+        }
         (RecSurf::Sphere(c1, r1), RecSurf::Sphere(c2, r2)) => {
             let dv = [c2[0] - c1[0], c2[1] - c1[1], c2[2] - c1[2]];
             let dist = (dv[0] * dv[0] + dv[1] * dv[1] + dv[2] * dv[2]).sqrt();
@@ -3453,20 +4263,48 @@ fn analytic_ssi(a: &NurbsSurface, b: &NurbsSurface, tolerance: Option<f64>) -> O
             single(c3)
         }
         // Coaxial / canonical quadric pairs (exact conics from IntAna_QuadQuadGeo).
-        (RecSurf::Cylinder(p, w, r), RecSurf::Sphere(c, sr)) =>
-            match ssi_cylinder_sphere(*p, *w, *r, *c, *sr) { Some(v) => v, None => return None },
-        (RecSurf::Sphere(c, sr), RecSurf::Cylinder(p, w, r)) =>
-            match ssi_cylinder_sphere(*p, *w, *r, *c, *sr) { Some(v) => v, None => return None },
-        (RecSurf::Cylinder(p, w, r), RecSurf::Cone(v2, w2, alpha)) =>
-            match ssi_cylinder_cone(*p, *w, *r, *v2, *w2, *alpha) { Some(v) => v, None => return None },
-        (RecSurf::Cone(v2, w2, alpha), RecSurf::Cylinder(p, w, r)) =>
-            match ssi_cylinder_cone(*p, *w, *r, *v2, *w2, *alpha) { Some(v) => v, None => return None },
-        (RecSurf::Cone(v2, w2, alpha), RecSurf::Sphere(c, sr)) =>
-            match ssi_cone_sphere(*v2, *w2, *alpha, *c, *sr) { Some(v) => v, None => return None },
-        (RecSurf::Sphere(c, sr), RecSurf::Cone(v2, w2, alpha)) =>
-            match ssi_cone_sphere(*v2, *w2, *alpha, *c, *sr) { Some(v) => v, None => return None },
-        (RecSurf::Cylinder(pa, wa, ra_r), RecSurf::Cylinder(pb, wb, rb_r)) =>
-            match ssi_cylinder_cylinder(a, *pa, *wa, *ra_r, b, *pb, *wb, *rb_r) { Some(v) => v, None => return None },
+        (RecSurf::Cylinder(p, w, r), RecSurf::Sphere(c, sr)) => {
+            match ssi_cylinder_sphere(*p, *w, *r, *c, *sr) {
+                Some(v) => v,
+                None => return None,
+            }
+        }
+        (RecSurf::Sphere(c, sr), RecSurf::Cylinder(p, w, r)) => {
+            match ssi_cylinder_sphere(*p, *w, *r, *c, *sr) {
+                Some(v) => v,
+                None => return None,
+            }
+        }
+        (RecSurf::Cylinder(p, w, r), RecSurf::Cone(v2, w2, alpha)) => {
+            match ssi_cylinder_cone(*p, *w, *r, *v2, *w2, *alpha) {
+                Some(v) => v,
+                None => return None,
+            }
+        }
+        (RecSurf::Cone(v2, w2, alpha), RecSurf::Cylinder(p, w, r)) => {
+            match ssi_cylinder_cone(*p, *w, *r, *v2, *w2, *alpha) {
+                Some(v) => v,
+                None => return None,
+            }
+        }
+        (RecSurf::Cone(v2, w2, alpha), RecSurf::Sphere(c, sr)) => {
+            match ssi_cone_sphere(*v2, *w2, *alpha, *c, *sr) {
+                Some(v) => v,
+                None => return None,
+            }
+        }
+        (RecSurf::Sphere(c, sr), RecSurf::Cone(v2, w2, alpha)) => {
+            match ssi_cone_sphere(*v2, *w2, *alpha, *c, *sr) {
+                Some(v) => v,
+                None => return None,
+            }
+        }
+        (RecSurf::Cylinder(pa, wa, ra_r), RecSurf::Cylinder(pb, wb, rb_r)) => {
+            match ssi_cylinder_cylinder(a, *pa, *wa, *ra_r, b, *pb, *wb, *rb_r) {
+                Some(v) => v,
+                None => return None,
+            }
+        }
         _ => return None, // not an analytically-exact pair -> marcher
     };
 
@@ -3497,23 +4335,31 @@ fn analytic_ssi(a: &NurbsSurface, b: &NurbsSurface, tolerance: Option<f64>) -> O
 /// pcurves are tolerance companions, not exact reparameterizations. Marching
 /// terminates at tangencies (n_a parallel n_b); tangential intersections are
 /// unsupported.
-pub fn surface_surface(a: &NurbsSurface, b: &NurbsSurface, tolerance: Option<f64>) -> Vec<(NurbsCurve, NurbsCurve, NurbsCurve)> {
+pub fn surface_surface(
+    a: &NurbsSurface,
+    b: &NurbsSurface,
+    tolerance: Option<f64>,
+) -> Vec<(NurbsCurve, NurbsCurve, NurbsCurve)> {
     if a.is_valid() && b.is_valid() {
         if let Some(ana) = analytic_ssi(a, b, tolerance) {
             return ana;
         }
     }
-    if !a.is_valid() || !b.is_valid() { return vec![]; }
+    if !a.is_valid() || !b.is_valid() {
+        return vec![];
+    }
     let tolerance = match tolerance {
         Some(t) if t > 0.0 => t,
-        _ => 1e-12,  // SSI default tolerance: match Python/C++ (1e-12), not Rust ZERO_TOLERANCE (1e-7)
+        _ => 1e-12, // SSI default tolerance: match Python/C++ (1e-12), not Rust ZERO_TOLERANCE (1e-7)
     };
 
     // Planar dispatch: reuse the plane tracer when either surface is planar
     let plane_from = |srf: &NurbsSurface| -> Plane {
         let (s0, s1) = srf.domain(0).unwrap();
         let (t0, t1) = srf.domain(1).unwrap();
-        let po = srf.point_at((s0 + s1) * 0.5, (t0 + t1) * 0.5).unwrap_or(Point::new(0.0, 0.0, 0.0));
+        let po = srf
+            .point_at((s0 + s1) * 0.5, (t0 + t1) * 0.5)
+            .unwrap_or(Point::new(0.0, 0.0, 0.0));
         let nn = srf.normal_at((s0 + s1) * 0.5, (t0 + t1) * 0.5);
         Plane::from_point_normal(po, Vector::new(nn[0], nn[1], nn[2]))
     };
@@ -3559,7 +4405,9 @@ pub fn surface_surface(a: &NurbsSurface, b: &NurbsSurface, tolerance: Option<f64
         move |t: f64| -> f64 {
             if closed {
                 let mut f = (t - c0) % rng;
-                if f < 0.0 { f += rng; }
+                if f < 0.0 {
+                    f += rng;
+                }
                 return c0 + f;
             }
             t.max(c0).min(c1)
@@ -3595,35 +4443,74 @@ pub fn surface_surface(a: &NurbsSurface, b: &NurbsSurface, tolerance: Option<f64
 
     // ---- Seed cells: half-resolution sample grids + sag-inflated AABBs ----
     // box = (minx, miny, minz, maxx, maxy, maxz, cu, cv)
-    let cell_boxes = |srf: &NurbsSurface, c0u: f64, dcu: f64, ncu: usize, c0v: f64, dcv: f64, ncv: usize| -> Vec<[f64; 8]> {
+    let cell_boxes = |srf: &NurbsSurface,
+                      c0u: f64,
+                      dcu: f64,
+                      ncu: usize,
+                      c0v: f64,
+                      dcv: f64,
+                      ncv: usize|
+     -> Vec<[f64; 8]> {
         let mut s_grid: Vec<Vec<Point>> = Vec::with_capacity(2 * ncu + 1);
         for i in 0..(2 * ncu + 1) {
             let mut row = Vec::with_capacity(2 * ncv + 1);
             for j in 0..(2 * ncv + 1) {
-                row.push(srf.point_at(c0u + dcu * 0.5 * i as f64, c0v + dcv * 0.5 * j as f64).unwrap_or(Point::new(0.0, 0.0, 0.0)));
+                row.push(
+                    srf.point_at(c0u + dcu * 0.5 * i as f64, c0v + dcv * 0.5 * j as f64)
+                        .unwrap_or(Point::new(0.0, 0.0, 0.0)),
+                );
             }
             s_grid.push(row);
         }
         let mut boxes = Vec::new();
         for ci in 0..ncu {
             for cj in 0..ncv {
-                let mut xs = f64::INFINITY; let mut ys = f64::INFINITY; let mut zs = f64::INFINITY;
-                let mut xl = f64::NEG_INFINITY; let mut yl = f64::NEG_INFINITY; let mut zl = f64::NEG_INFINITY;
+                let mut xs = f64::INFINITY;
+                let mut ys = f64::INFINITY;
+                let mut zs = f64::INFINITY;
+                let mut xl = f64::NEG_INFINITY;
+                let mut yl = f64::NEG_INFINITY;
+                let mut zl = f64::NEG_INFINITY;
                 for i in (2 * ci)..(2 * ci + 3) {
                     for j in (2 * cj)..(2 * cj + 3) {
                         let p = &s_grid[i][j];
-                        xs = xs.min(p[0]); ys = ys.min(p[1]); zs = zs.min(p[2]);
-                        xl = xl.max(p[0]); yl = yl.max(p[1]); zl = zl.max(p[2]);
+                        xs = xs.min(p[0]);
+                        ys = ys.min(p[1]);
+                        zs = zs.min(p[2]);
+                        xl = xl.max(p[0]);
+                        yl = yl.max(p[1]);
+                        zl = zl.max(p[2]);
                     }
                 }
                 let ctr = &s_grid[2 * ci + 1][2 * cj + 1];
-                let cx = (s_grid[2*ci][2*cj][0] + s_grid[2*ci+2][2*cj][0] + s_grid[2*ci][2*cj+2][0] + s_grid[2*ci+2][2*cj+2][0]) * 0.25;
-                let cy = (s_grid[2*ci][2*cj][1] + s_grid[2*ci+2][2*cj][1] + s_grid[2*ci][2*cj+2][1] + s_grid[2*ci+2][2*cj+2][1]) * 0.25;
-                let cz = (s_grid[2*ci][2*cj][2] + s_grid[2*ci+2][2*cj][2] + s_grid[2*ci][2*cj+2][2] + s_grid[2*ci+2][2*cj+2][2]) * 0.25;
-                let sag = ((ctr[0]-cx).powi(2) + (ctr[1]-cy).powi(2) + (ctr[2]-cz).powi(2)).sqrt();
+                let cx = (s_grid[2 * ci][2 * cj][0]
+                    + s_grid[2 * ci + 2][2 * cj][0]
+                    + s_grid[2 * ci][2 * cj + 2][0]
+                    + s_grid[2 * ci + 2][2 * cj + 2][0])
+                    * 0.25;
+                let cy = (s_grid[2 * ci][2 * cj][1]
+                    + s_grid[2 * ci + 2][2 * cj][1]
+                    + s_grid[2 * ci][2 * cj + 2][1]
+                    + s_grid[2 * ci + 2][2 * cj + 2][1])
+                    * 0.25;
+                let cz = (s_grid[2 * ci][2 * cj][2]
+                    + s_grid[2 * ci + 2][2 * cj][2]
+                    + s_grid[2 * ci][2 * cj + 2][2]
+                    + s_grid[2 * ci + 2][2 * cj + 2][2])
+                    * 0.25;
+                let sag =
+                    ((ctr[0] - cx).powi(2) + (ctr[1] - cy).powi(2) + (ctr[2] - cz).powi(2)).sqrt();
                 let inf = 2.0 * sag + tolerance;
-                boxes.push([xs - inf, ys - inf, zs - inf, xl + inf, yl + inf, zl + inf,
-                            c0u + dcu * (ci as f64 + 0.5), c0v + dcv * (cj as f64 + 0.5)]);
+                boxes.push([
+                    xs - inf,
+                    ys - inf,
+                    zs - inf,
+                    xl + inf,
+                    yl + inf,
+                    zl + inf,
+                    c0u + dcu * (ci as f64 + 0.5),
+                    c0v + dcv * (cj as f64 + 0.5),
+                ]);
             }
         }
         boxes
@@ -3635,20 +4522,35 @@ pub fn surface_surface(a: &NurbsSurface, b: &NurbsSurface, tolerance: Option<f64
     let cell_3d = |boxes: &[[f64; 8]]| -> f64 {
         let mut best = f64::INFINITY;
         for bx in boxes.iter().take(64) {
-            let d = ((bx[3]-bx[0]).powi(2) + (bx[4]-bx[1]).powi(2) + (bx[5]-bx[2]).powi(2)).sqrt();
-            if 1e-12 < d && d < best { best = d; }
+            let d = ((bx[3] - bx[0]).powi(2) + (bx[4] - bx[1]).powi(2) + (bx[5] - bx[2]).powi(2))
+                .sqrt();
+            if 1e-12 < d && d < best {
+                best = d;
+            }
         }
-        if best < f64::INFINITY { best } else { 1.0 }
+        if best < f64::INFINITY {
+            best
+        } else {
+            1.0
+        }
     };
 
     let h_init = cell_3d(&boxes_a).min(cell_3d(&boxes_b)) * 0.25;
     let conv_tol = tolerance.max(h_init * 1e-7);
 
     let clamp_open = |x: &mut [f64; 4]| {
-        if !a_closed_u { x[0] = x[0].max(au0).min(au1); }
-        if !a_closed_v { x[1] = x[1].max(av0).min(av1); }
-        if !b_closed_u { x[2] = x[2].max(bu0).min(bu1); }
-        if !b_closed_v { x[3] = x[3].max(bv0).min(bv1); }
+        if !a_closed_u {
+            x[0] = x[0].max(au0).min(au1);
+        }
+        if !a_closed_v {
+            x[1] = x[1].max(av0).min(av1);
+        }
+        if !b_closed_u {
+            x[2] = x[2].max(bu0).min(bu1);
+        }
+        if !b_closed_v {
+            x[3] = x[3].max(bv0).min(bv1);
+        }
     };
 
     let correct = |x: &mut [f64; 4], pin: Option<(&[f64; 3], &[f64; 3])>| -> bool {
@@ -3656,8 +4558,10 @@ pub fn surface_surface(a: &NurbsSurface, b: &NurbsSurface, tolerance: Option<f64
         for _ in 0..8 {
             let (sa, sau, sav) = eval_a(x[0], x[1]);
             let (sb, sbu, sbv) = eval_b(x[2], x[3]);
-            let f = [sa[0]-sb[0], sa[1]-sb[1], sa[2]-sb[2]];
-            if (f[0]*f[0] + f[1]*f[1] + f[2]*f[2]).sqrt() < conv_tol { return true; }
+            let f = [sa[0] - sb[0], sa[1] - sb[1], sa[2] - sb[2]];
+            if (f[0] * f[0] + f[1] * f[1] + f[2] * f[2]).sqrt() < conv_tol {
+                return true;
+            }
             let j: [[f64; 4]; 3] = [
                 [sau[0], sav[0], -sbu[0], -sbv[0]],
                 [sau[1], sav[1], -sbu[1], -sbv[1]],
@@ -3665,31 +4569,54 @@ pub fn surface_surface(a: &NurbsSurface, b: &NurbsSurface, tolerance: Option<f64
             ];
             match pin {
                 None => {
-                    let jjt: Vec<Vec<f64>> = (0..3).map(|r| {
-                        (0..3).map(|q| (0..4).map(|c| j[r][c]*j[q][c]).sum()).collect()
-                    }).collect();
-                    let y = match solve_gauss(&jjt, &f, 3) { Some(y) => y, None => return false };
+                    let jjt: Vec<Vec<f64>> = (0..3)
+                        .map(|r| {
+                            (0..3)
+                                .map(|q| (0..4).map(|c| j[r][c] * j[q][c]).sum())
+                                .collect()
+                        })
+                        .collect();
+                    let y = match solve_gauss(&jjt, &f, 3) {
+                        Some(y) => y,
+                        None => return false,
+                    };
                     for c in 0..4 {
-                        x[c] -= (0..3).map(|r| j[r][c]*y[r]).sum::<f64>();
+                        x[c] -= (0..3).map(|r| j[r][c] * y[r]).sum::<f64>();
                     }
                 }
                 Some((d, pp)) => {
                     let m: Vec<Vec<f64>> = vec![
-                        j[0].to_vec(), j[1].to_vec(), j[2].to_vec(),
-                        vec![d[0]*sau[0]+d[1]*sau[1]+d[2]*sau[2],
-                             d[0]*sav[0]+d[1]*sav[1]+d[2]*sav[2], 0.0, 0.0],
+                        j[0].to_vec(),
+                        j[1].to_vec(),
+                        j[2].to_vec(),
+                        vec![
+                            d[0] * sau[0] + d[1] * sau[1] + d[2] * sau[2],
+                            d[0] * sav[0] + d[1] * sav[1] + d[2] * sav[2],
+                            0.0,
+                            0.0,
+                        ],
                     ];
-                    let rhs = [f[0], f[1], f[2],
-                               d[0]*(sa[0]-pp[0]) + d[1]*(sa[1]-pp[1]) + d[2]*(sa[2]-pp[2])];
-                    let dx = match solve_gauss(&m, &rhs, 4) { Some(dx) => dx, None => return false };
-                    for c in 0..4 { x[c] -= dx[c]; }
+                    let rhs = [
+                        f[0],
+                        f[1],
+                        f[2],
+                        d[0] * (sa[0] - pp[0]) + d[1] * (sa[1] - pp[1]) + d[2] * (sa[2] - pp[2]),
+                    ];
+                    let dx = match solve_gauss(&m, &rhs, 4) {
+                        Some(dx) => dx,
+                        None => return false,
+                    };
+                    for c in 0..4 {
+                        x[c] -= dx[c];
+                    }
                 }
             }
             clamp_open(x);
         }
         let (sa, _, _) = eval_a(x[0], x[1]);
         let (sb, _, _) = eval_b(x[2], x[3]);
-        let g = ((sa[0]-sb[0]).powi(2) + (sa[1]-sb[1]).powi(2) + (sa[2]-sb[2]).powi(2)).sqrt();
+        let g =
+            ((sa[0] - sb[0]).powi(2) + (sa[1] - sb[1]).powi(2) + (sa[2] - sb[2]).powi(2)).sqrt();
         g < conv_tol * 10.0
     };
 
@@ -3698,26 +4625,47 @@ pub fn surface_surface(a: &NurbsSurface, b: &NurbsSurface, tolerance: Option<f64
     let seed_tol_3d = cell_3d(&boxes_a).max(cell_3d(&boxes_b));
     let mut pair_budget: i64 = 20000;
     'outer: for ba in &boxes_a {
-        if pair_budget < 0 { break; }
+        if pair_budget < 0 {
+            break;
+        }
         for bb in &boxes_b {
-            if bb[0] > ba[3] || bb[3] < ba[0] || bb[1] > ba[4] || bb[4] < ba[1] || bb[2] > ba[5] || bb[5] < ba[2] {
+            if bb[0] > ba[3]
+                || bb[3] < ba[0]
+                || bb[1] > ba[4]
+                || bb[4] < ba[1]
+                || bb[2] > ba[5]
+                || bb[5] < ba[2]
+            {
                 continue;
             }
             pair_budget -= 1;
-            if pair_budget < 0 { break 'outer; }
+            if pair_budget < 0 {
+                break 'outer;
+            }
             let mut x = [ba[6], ba[7], bb[6], bb[7]];
-            if !correct(&mut x, None) { continue; }
+            if !correct(&mut x, None) {
+                continue;
+            }
             let (sa, _, _) = eval_a(x[0], x[1]);
             let mut dup = false;
             for sd in &seeds {
                 let (so, _, _) = eval_a(sd[0], sd[1]);
-                if ((sa[0]-so[0]).powi(2) + (sa[1]-so[1]).powi(2) + (sa[2]-so[2]).powi(2)).sqrt() < seed_tol_3d {
+                if ((sa[0] - so[0]).powi(2) + (sa[1] - so[1]).powi(2) + (sa[2] - so[2]).powi(2))
+                    .sqrt()
+                    < seed_tol_3d
+                {
                     dup = true;
                     break;
                 }
             }
             if !dup {
-                seeds.push([a_wrap_u(x[0]), a_wrap_v(x[1]), b_wrap_u(x[2]), b_wrap_v(x[3]), 0.0]);
+                seeds.push([
+                    a_wrap_u(x[0]),
+                    a_wrap_v(x[1]),
+                    b_wrap_u(x[2]),
+                    b_wrap_v(x[3]),
+                    0.0,
+                ]);
             }
         }
     }
@@ -3728,122 +4676,216 @@ pub fn surface_surface(a: &NurbsSurface, b: &NurbsSurface, tolerance: Option<f64
     let consume_tol = h_init * 2.0;
 
     // Returns (dir, Sa, Sau, Sav, Sbu, Sbv) or None at tangency
-    let tangent_3d = |x: &[f64; 4], dir_sign: f64| -> Option<([f64; 3], Vector, Vector, Vector, Vector, Vector)> {
+    let tangent_3d = |x: &[f64; 4],
+                      dir_sign: f64|
+     -> Option<([f64; 3], Vector, Vector, Vector, Vector, Vector)> {
         let (sa, sau, sav) = eval_a(x[0], x[1]);
         let (_sb, sbu, sbv) = eval_b(x[2], x[3]);
-        let na = [sau[1]*sav[2]-sau[2]*sav[1], sau[2]*sav[0]-sau[0]*sav[2], sau[0]*sav[1]-sau[1]*sav[0]];
-        let nb = [sbu[1]*sbv[2]-sbu[2]*sbv[1], sbu[2]*sbv[0]-sbu[0]*sbv[2], sbu[0]*sbv[1]-sbu[1]*sbv[0]];
-        let d = [na[1]*nb[2]-na[2]*nb[1], na[2]*nb[0]-na[0]*nb[2], na[0]*nb[1]-na[1]*nb[0]];
-        let dl = (d[0]*d[0] + d[1]*d[1] + d[2]*d[2]).sqrt();
-        let nal = (na[0]*na[0] + na[1]*na[1] + na[2]*na[2]).sqrt();
-        let nbl = (nb[0]*nb[0] + nb[1]*nb[1] + nb[2]*nb[2]).sqrt();
-        if dl < 1e-4 * nal * nbl || dl < 1e-30 { return None; }
-        Some(([d[0]/dl*dir_sign, d[1]/dl*dir_sign, d[2]/dl*dir_sign], sa, sau, sav, sbu, sbv))
+        let na = [
+            sau[1] * sav[2] - sau[2] * sav[1],
+            sau[2] * sav[0] - sau[0] * sav[2],
+            sau[0] * sav[1] - sau[1] * sav[0],
+        ];
+        let nb = [
+            sbu[1] * sbv[2] - sbu[2] * sbv[1],
+            sbu[2] * sbv[0] - sbu[0] * sbv[2],
+            sbu[0] * sbv[1] - sbu[1] * sbv[0],
+        ];
+        let d = [
+            na[1] * nb[2] - na[2] * nb[1],
+            na[2] * nb[0] - na[0] * nb[2],
+            na[0] * nb[1] - na[1] * nb[0],
+        ];
+        let dl = (d[0] * d[0] + d[1] * d[1] + d[2] * d[2]).sqrt();
+        let nal = (na[0] * na[0] + na[1] * na[1] + na[2] * na[2]).sqrt();
+        let nbl = (nb[0] * nb[0] + nb[1] * nb[1] + nb[2] * nb[2]).sqrt();
+        if dl < 1e-4 * nal * nbl || dl < 1e-30 {
+            return None;
+        }
+        Some((
+            [
+                d[0] / dl * dir_sign,
+                d[1] / dl * dir_sign,
+                d[2] / dl * dir_sign,
+            ],
+            sa,
+            sau,
+            sav,
+            sbu,
+            sbv,
+        ))
     };
 
     // trace_dir: returns (out_pts, is_closed)
-    let trace_dir = |x0: &[f64; 4], dir_sign: f64, seeds: &mut Vec<[f64; 5]>| -> (Vec<[f64; 4]>, bool) {
-        let mut out: Vec<[f64; 4]> = Vec::new();
-        let mut x = *x0;
-        let mut prev_d: Option<[f64; 3]> = None;
-        let (sa0, _, _) = eval_a(x[0], x[1]);
-        let p_start = [sa0[0], sa0[1], sa0[2]];
-        let mut p_prev = p_start;
-        let mut dist_traveled = 0.0;
-        let mut h = h_init;
-        let mut smooth = 0;
-        for _step in 0..max_steps {
-            let tng = match tangent_3d(&x, dir_sign) { Some(t) => t, None => break };
-            let (d, sa, sau, sav, sbu, sbv) = tng;
-            let mut accepted = false;
-            let mut attempts = 0;
-            let mut xn = [0.0f64; 4];
-            let mut p_cur = [0.0f64; 3];
-            let mut step_len = 0.0;
-            let mut hit_boundary = false;
-            while attempts < 7 && !accepted {
-                let duv_a = solve_gauss(
-                    &[vec![sau[0].powi(2)+sau[1].powi(2)+sau[2].powi(2), sau[0]*sav[0]+sau[1]*sav[1]+sau[2]*sav[2]],
-                      vec![sau[0]*sav[0]+sau[1]*sav[1]+sau[2]*sav[2], sav[0].powi(2)+sav[1].powi(2)+sav[2].powi(2)]],
-                    &[h*(d[0]*sau[0]+d[1]*sau[1]+d[2]*sau[2]), h*(d[0]*sav[0]+d[1]*sav[1]+d[2]*sav[2])], 2);
-                let duv_b = solve_gauss(
-                    &[vec![sbu[0].powi(2)+sbu[1].powi(2)+sbu[2].powi(2), sbu[0]*sbv[0]+sbu[1]*sbv[1]+sbu[2]*sbv[2]],
-                      vec![sbu[0]*sbv[0]+sbu[1]*sbv[1]+sbu[2]*sbv[2], sbv[0].powi(2)+sbv[1].powi(2)+sbv[2].powi(2)]],
-                    &[h*(d[0]*sbu[0]+d[1]*sbu[1]+d[2]*sbu[2]), h*(d[0]*sbv[0]+d[1]*sbv[1]+d[2]*sbv[2])], 2);
-                let (duv_a, duv_b) = match (duv_a, duv_b) {
-                    (Some(da), Some(db)) => (da, db),
-                    _ => return (out, false),
+    let trace_dir =
+        |x0: &[f64; 4], dir_sign: f64, seeds: &mut Vec<[f64; 5]>| -> (Vec<[f64; 4]>, bool) {
+            let mut out: Vec<[f64; 4]> = Vec::new();
+            let mut x = *x0;
+            let mut prev_d: Option<[f64; 3]> = None;
+            let (sa0, _, _) = eval_a(x[0], x[1]);
+            let p_start = [sa0[0], sa0[1], sa0[2]];
+            let mut p_prev = p_start;
+            let mut dist_traveled = 0.0;
+            let mut h = h_init;
+            let mut smooth = 0;
+            for _step in 0..max_steps {
+                let tng = match tangent_3d(&x, dir_sign) {
+                    Some(t) => t,
+                    None => break,
                 };
-                let delta = [duv_a[0], duv_a[1], duv_b[0], duv_b[1]];
-                let mut tc = 1.0f64;
-                hit_boundary = false;
-                for &(idx, lo, hi, closed) in &[(0usize, au0, au1, a_closed_u), (1, av0, av1, a_closed_v),
-                                                (2, bu0, bu1, b_closed_u), (3, bv0, bv1, b_closed_v)] {
-                    if closed || delta[idx].abs() < 1e-15 { continue; }
-                    if x[idx] + delta[idx] > hi {
-                        tc = tc.min((hi - x[idx]) / delta[idx]);
-                        hit_boundary = true;
-                    }
-                    if x[idx] + delta[idx] < lo {
-                        tc = tc.min((lo - x[idx]) / delta[idx]);
-                        hit_boundary = true;
-                    }
-                }
-                let mut xn_local = [0.0f64; 4];
-                for k in 0..4 { xn_local[k] = x[k] + tc * delta[k]; }
-                let p_pred = [sa[0] + d[0]*h*tc, sa[1] + d[1]*h*tc, sa[2] + d[2]*h*tc];
-                if !correct(&mut xn_local, Some((&d, &p_pred))) { return (out, false); }
-                xn = xn_local;
-                let (san, _, _) = eval_a(xn[0], xn[1]);
-                p_cur = [san[0], san[1], san[2]];
-                step_len = ((p_cur[0]-p_prev[0]).powi(2) + (p_cur[1]-p_prev[1]).powi(2) + (p_cur[2]-p_prev[2]).powi(2)).sqrt();
-                if let Some(pd) = prev_d {
-                    if step_len > 1e-14 {
-                        let sd_ = [(p_cur[0]-p_prev[0])/step_len, (p_cur[1]-p_prev[1])/step_len, (p_cur[2]-p_prev[2])/step_len];
-                        let ddot = sd_[0]*pd[0] + sd_[1]*pd[1] + sd_[2]*pd[2];
-                        if ddot < 0.985 && attempts < 6 && !hit_boundary {
-                            h *= 0.5;
-                            attempts += 1;
-                            smooth = 0;
+                let (d, sa, sau, sav, sbu, sbv) = tng;
+                let mut accepted = false;
+                let mut attempts = 0;
+                let mut xn = [0.0f64; 4];
+                let mut p_cur = [0.0f64; 3];
+                let mut step_len = 0.0;
+                let mut hit_boundary = false;
+                while attempts < 7 && !accepted {
+                    let duv_a = solve_gauss(
+                        &[
+                            vec![
+                                sau[0].powi(2) + sau[1].powi(2) + sau[2].powi(2),
+                                sau[0] * sav[0] + sau[1] * sav[1] + sau[2] * sav[2],
+                            ],
+                            vec![
+                                sau[0] * sav[0] + sau[1] * sav[1] + sau[2] * sav[2],
+                                sav[0].powi(2) + sav[1].powi(2) + sav[2].powi(2),
+                            ],
+                        ],
+                        &[
+                            h * (d[0] * sau[0] + d[1] * sau[1] + d[2] * sau[2]),
+                            h * (d[0] * sav[0] + d[1] * sav[1] + d[2] * sav[2]),
+                        ],
+                        2,
+                    );
+                    let duv_b = solve_gauss(
+                        &[
+                            vec![
+                                sbu[0].powi(2) + sbu[1].powi(2) + sbu[2].powi(2),
+                                sbu[0] * sbv[0] + sbu[1] * sbv[1] + sbu[2] * sbv[2],
+                            ],
+                            vec![
+                                sbu[0] * sbv[0] + sbu[1] * sbv[1] + sbu[2] * sbv[2],
+                                sbv[0].powi(2) + sbv[1].powi(2) + sbv[2].powi(2),
+                            ],
+                        ],
+                        &[
+                            h * (d[0] * sbu[0] + d[1] * sbu[1] + d[2] * sbu[2]),
+                            h * (d[0] * sbv[0] + d[1] * sbv[1] + d[2] * sbv[2]),
+                        ],
+                        2,
+                    );
+                    let (duv_a, duv_b) = match (duv_a, duv_b) {
+                        (Some(da), Some(db)) => (da, db),
+                        _ => return (out, false),
+                    };
+                    let delta = [duv_a[0], duv_a[1], duv_b[0], duv_b[1]];
+                    let mut tc = 1.0f64;
+                    hit_boundary = false;
+                    for &(idx, lo, hi, closed) in &[
+                        (0usize, au0, au1, a_closed_u),
+                        (1, av0, av1, a_closed_v),
+                        (2, bu0, bu1, b_closed_u),
+                        (3, bv0, bv1, b_closed_v),
+                    ] {
+                        if closed || delta[idx].abs() < 1e-15 {
                             continue;
+                        }
+                        if x[idx] + delta[idx] > hi {
+                            tc = tc.min((hi - x[idx]) / delta[idx]);
+                            hit_boundary = true;
+                        }
+                        if x[idx] + delta[idx] < lo {
+                            tc = tc.min((lo - x[idx]) / delta[idx]);
+                            hit_boundary = true;
+                        }
+                    }
+                    let mut xn_local = [0.0f64; 4];
+                    for k in 0..4 {
+                        xn_local[k] = x[k] + tc * delta[k];
+                    }
+                    let p_pred = [
+                        sa[0] + d[0] * h * tc,
+                        sa[1] + d[1] * h * tc,
+                        sa[2] + d[2] * h * tc,
+                    ];
+                    if !correct(&mut xn_local, Some((&d, &p_pred))) {
+                        return (out, false);
+                    }
+                    xn = xn_local;
+                    let (san, _, _) = eval_a(xn[0], xn[1]);
+                    p_cur = [san[0], san[1], san[2]];
+                    step_len = ((p_cur[0] - p_prev[0]).powi(2)
+                        + (p_cur[1] - p_prev[1]).powi(2)
+                        + (p_cur[2] - p_prev[2]).powi(2))
+                    .sqrt();
+                    if let Some(pd) = prev_d {
+                        if step_len > 1e-14 {
+                            let sd_ = [
+                                (p_cur[0] - p_prev[0]) / step_len,
+                                (p_cur[1] - p_prev[1]) / step_len,
+                                (p_cur[2] - p_prev[2]) / step_len,
+                            ];
+                            let ddot = sd_[0] * pd[0] + sd_[1] * pd[1] + sd_[2] * pd[2];
+                            if ddot < 0.985 && attempts < 6 && !hit_boundary {
+                                h *= 0.5;
+                                attempts += 1;
+                                smooth = 0;
+                                continue;
+                            }
+                        }
+                    }
+                    accepted = true;
+                }
+                if !accepted {
+                    break;
+                }
+                prev_d = Some(d);
+                smooth += 1;
+                if smooth >= 5 && h < h_init * 2.0 {
+                    h *= 1.4;
+                    smooth = 0;
+                }
+                x = xn;
+                dist_traveled += step_len;
+                if dist_traveled > close_tol * 3.0
+                    && ((p_cur[0] - p_start[0]).powi(2)
+                        + (p_cur[1] - p_start[1]).powi(2)
+                        + (p_cur[2] - p_start[2]).powi(2))
+                    .sqrt()
+                        < close_tol
+                {
+                    out.push(x);
+                    return (out, true);
+                }
+                out.push(x);
+                p_prev = p_cur;
+                if hit_boundary {
+                    break;
+                }
+                for sd in seeds.iter_mut() {
+                    if sd[4] == 0.0 {
+                        let (so, _, _) = eval_a(sd[0], sd[1]);
+                        if ((p_cur[0] - so[0]).powi(2)
+                            + (p_cur[1] - so[1]).powi(2)
+                            + (p_cur[2] - so[2]).powi(2))
+                        .sqrt()
+                            < consume_tol
+                        {
+                            sd[4] = 1.0;
                         }
                     }
                 }
-                accepted = true;
             }
-            if !accepted { break; }
-            prev_d = Some(d);
-            smooth += 1;
-            if smooth >= 5 && h < h_init * 2.0 {
-                h *= 1.4;
-                smooth = 0;
-            }
-            x = xn;
-            dist_traveled += step_len;
-            if dist_traveled > close_tol * 3.0 &&
-               ((p_cur[0]-p_start[0]).powi(2) + (p_cur[1]-p_start[1]).powi(2) + (p_cur[2]-p_start[2]).powi(2)).sqrt() < close_tol {
-                out.push(x);
-                return (out, true);
-            }
-            out.push(x);
-            p_prev = p_cur;
-            if hit_boundary { break; }
-            for sd in seeds.iter_mut() {
-                if sd[4] == 0.0 {
-                    let (so, _, _) = eval_a(sd[0], sd[1]);
-                    if ((p_cur[0]-so[0]).powi(2) + (p_cur[1]-so[1]).powi(2) + (p_cur[2]-so[2]).powi(2)).sqrt() < consume_tol {
-                        sd[4] = 1.0;
-                    }
-                }
-            }
-        }
-        (out, false)
-    };
+            (out, false)
+        };
 
     // axes: (idx, c0, range, closed)
     let axes: [(usize, f64, f64, bool); 4] = [
-        (0, au0, a_range_u, a_closed_u), (1, av0, a_range_v, a_closed_v),
-        (2, bu0, b_range_u, b_closed_u), (3, bv0, b_range_v, b_closed_v),
+        (0, au0, a_range_u, a_closed_u),
+        (1, av0, a_range_v, a_closed_v),
+        (2, bu0, b_range_u, b_closed_u),
+        (3, bv0, b_range_v, b_closed_v),
     ];
 
     let eval3_q = |q: &[f64]| -> [f64; 3] {
@@ -3854,10 +4896,14 @@ pub fn surface_surface(a: &NurbsSurface, b: &NurbsSurface, tolerance: Option<f64
     let mut result: Vec<(NurbsCurve, NurbsCurve, NurbsCurve)> = Vec::new();
     let mut kept_pts3: Vec<Vec<[f64; 3]>> = Vec::new();
     for si in 0..seeds.len() {
-        if seeds[si][4] != 0.0 { continue; }
+        if seeds[si][4] != 0.0 {
+            continue;
+        }
         seeds[si][4] = 1.0;
         let mut x0 = [seeds[si][0], seeds[si][1], seeds[si][2], seeds[si][3]];
-        if !correct(&mut x0, None) { continue; }
+        if !correct(&mut x0, None) {
+            continue;
+        }
         let (fwd, fwd_closed) = trace_dir(&x0, 1.0, &mut seeds);
         let bwd = if !fwd_closed {
             trace_dir(&x0, -1.0, &mut seeds).0
@@ -3873,13 +4919,17 @@ pub fn surface_surface(a: &NurbsSurface, b: &NurbsSurface, tolerance: Option<f64
         for p in &fwd {
             quad.push(*p);
         }
-        if quad.len() < 4 { continue; }
+        if quad.len() < 4 {
+            continue;
+        }
 
         // Unwrap all four parameters along the trace
         for i in 1..quad.len() {
             for &(idx, _c0, rng, closed) in &axes {
-                if !closed { continue; }
-                let jump = quad[i][idx] - quad[i-1][idx];
+                if !closed {
+                    continue;
+                }
+                let jump = quad[i][idx] - quad[i - 1][idx];
                 if jump > rng * 0.5 {
                     quad[i][idx] -= rng;
                 } else if jump < -rng * 0.5 {
@@ -3890,10 +4940,17 @@ pub fn surface_surface(a: &NurbsSurface, b: &NurbsSurface, tolerance: Option<f64
 
         let p_first = eval3_q(&quad[0]);
         let p_last = eval3_q(&quad[quad.len() - 1]);
-        let gap2 = ((p_first[0]-p_last[0]).powi(2) + (p_first[1]-p_last[1]).powi(2) + (p_first[2]-p_last[2]).powi(2)).sqrt();
+        let gap2 = ((p_first[0] - p_last[0]).powi(2)
+            + (p_first[1] - p_last[1]).powi(2)
+            + (p_first[2] - p_last[2]).powi(2))
+        .sqrt();
         let is_loop = fwd_closed || (quad.len() >= 6 && gap2 < close_tol);
-        if is_loop { quad.pop(); }
-        if quad.len() < 4 { continue; }
+        if is_loop {
+            quad.pop();
+        }
+        if quad.len() < 4 {
+            continue;
+        }
 
         // Trace-level dedup against already kept traces. The tolerance must be tight relative to the
         // spacing between DISTINCT intersection branches: two perpendicular cylinders (Steinmetz) have
@@ -3911,13 +4968,26 @@ pub fn surface_surface(a: &NurbsSurface, b: &NurbsSurface, tolerance: Option<f64
                 let mut dmin = dup_tol + 1.0;
                 for k in 0..other.len() {
                     let op = other[k];
-                    dmin = dmin.min(((cp[0]-op[0]).powi(2) + (cp[1]-op[1]).powi(2) + (cp[2]-op[2]).powi(2)).sqrt());
+                    dmin = dmin.min(
+                        ((cp[0] - op[0]).powi(2)
+                            + (cp[1] - op[1]).powi(2)
+                            + (cp[2] - op[2]).powi(2))
+                        .sqrt(),
+                    );
                 }
-                if dmin > dup_tol { all_close = false; break; }
+                if dmin > dup_tol {
+                    all_close = false;
+                    break;
+                }
             }
-            if all_close { dup = true; break; }
+            if all_close {
+                dup = true;
+                break;
+            }
         }
-        if dup { continue; }
+        if dup {
+            continue;
+        }
         kept_pts3.push(trace_pts3);
 
         // Densify: fill large 3D gaps (grown steps / fwd-bwd junction) with
@@ -3925,26 +4995,32 @@ pub fn surface_surface(a: &NurbsSurface, b: &NurbsSurface, tolerance: Option<f64
         let gap3 = |qi: &[f64; 4], qj: &[f64; 4]| -> f64 {
             let pi = eval3_q(qi);
             let pj = eval3_q(qj);
-            ((pi[0]-pj[0]).powi(2) + (pi[1]-pj[1]).powi(2) + (pi[2]-pj[2]).powi(2)).sqrt()
+            ((pi[0] - pj[0]).powi(2) + (pi[1] - pj[1]).powi(2) + (pi[2] - pj[2]).powi(2)).sqrt()
         };
         for _gp in 0..4 {
             let mut gg: Vec<f64> = Vec::with_capacity(quad.len().saturating_sub(1));
-            for i in 0..quad.len()-1 {
-                gg.push(gap3(&quad[i], &quad[i+1]));
+            for i in 0..quad.len() - 1 {
+                gg.push(gap3(&quad[i], &quad[i + 1]));
             }
-            if gg.is_empty() { break; }
+            if gg.is_empty() {
+                break;
+            }
             let mut sorted = gg.clone();
             sorted.sort_by(|a, b| a.partial_cmp(b).unwrap());
-            let med = sorted[sorted.len()/2];
-            if med <= 0.0 { break; }
+            let med = sorted[sorted.len() / 2];
+            if med <= 0.0 {
+                break;
+            }
             let mut changed = false;
             let mut i = 0;
-            while i < quad.len()-1 && quad.len() < 4000 {
-                if gap3(&quad[i], &quad[i+1]) > 1.5*med {
+            while i < quad.len() - 1 && quad.len() < 4000 {
+                if gap3(&quad[i], &quad[i + 1]) > 1.5 * med {
                     let mut mid = [0.0f64; 4];
-                    for k in 0..4 { mid[k] = (quad[i][k]+quad[i+1][k])*0.5; }
+                    for k in 0..4 {
+                        mid[k] = (quad[i][k] + quad[i + 1][k]) * 0.5;
+                    }
                     if correct(&mut mid, None) {
-                        quad.insert(i+1, mid);
+                        quad.insert(i + 1, mid);
                         changed = true;
                         i += 2;
                         continue;
@@ -3952,7 +5028,9 @@ pub fn surface_surface(a: &NurbsSurface, b: &NurbsSurface, tolerance: Option<f64
                 }
                 i += 1;
             }
-            if !changed { break; }
+            if !changed {
+                break;
+            }
         }
 
         // Closed-loop virtual closure point across all four parameters
@@ -3962,8 +5040,12 @@ pub fn surface_surface(a: &NurbsSurface, b: &NurbsSurface, tolerance: Option<f64
             for &(idx, _c0, rng, closed) in &axes {
                 let mut jump = quad[0][idx] - quad[quad.len() - 1][idx];
                 if closed {
-                    while jump > rng * 0.5 { jump -= rng; }
-                    while jump < -rng * 0.5 { jump += rng; }
+                    while jump > rng * 0.5 {
+                        jump -= rng;
+                    }
+                    while jump < -rng * 0.5 {
+                        jump += rng;
+                    }
                 }
                 virt[idx] = quad[quad.len() - 1][idx] + jump;
                 closure[idx] = virt[idx] - quad[0][idx];
@@ -3979,19 +5061,25 @@ pub fn surface_surface(a: &NurbsSurface, b: &NurbsSurface, tolerance: Option<f64
             let pb_ = quad[i];
             let mut crossings: Vec<(f64, usize, f64)> = Vec::new();
             for &(idx, c0, rng, closed) in &axes {
-                if !closed || (pb_[idx] - pa_[idx]).abs() <= 1e-15 { continue; }
+                if !closed || (pb_[idx] - pa_[idx]).abs() <= 1e-15 {
+                    continue;
+                }
                 let k0 = ((pa_[idx] - c0) / rng).floor() as i64;
                 let k1 = ((pb_[idx] - c0) / rng).floor() as i64;
                 for k in (k0.min(k1) + 1)..=(k0.max(k1)) {
                     let l = c0 + k as f64 * rng;
                     let t = (l - pa_[idx]) / (pb_[idx] - pa_[idx]);
-                    if 0.0 < t && t < 1.0 { crossings.push((t, idx, l)); }
+                    if 0.0 < t && t < 1.0 {
+                        crossings.push((t, idx, l));
+                    }
                 }
             }
             crossings.sort_by(|a, b| a.partial_cmp(b).unwrap());
             for &(t, idx, l) in &crossings {
                 let mut cp = [0.0f64; 4];
-                for k in 0..4 { cp[k] = pa_[k] + (pb_[k] - pa_[k]) * t; }
+                for k in 0..4 {
+                    cp[k] = pa_[k] + (pb_[k] - pa_[k]) * t;
+                }
                 cp[idx] = l;
                 // The crossing was linearly interpolated; Newton-correct it onto
                 // both surfaces so the piece boundary is accurate (1e-6), not off
@@ -4004,10 +5092,13 @@ pub fn surface_surface(a: &NurbsSurface, b: &NurbsSurface, tolerance: Option<f64
             if i < quad.len() - 1 {
                 let mut on_seam = false;
                 for &(idx, c0, rng, closed) in &axes {
-                    if !closed { continue; }
+                    if !closed {
+                        continue;
+                    }
                     let k = ((pb_[idx] - c0) / rng).round();
                     let l = c0 + k * rng;
-                    if (pb_[idx] - l).abs() < rng * 1e-9 && (pb_[idx] - pa_[idx]).abs() > rng * 1e-9 {
+                    if (pb_[idx] - l).abs() < rng * 1e-9 && (pb_[idx] - pa_[idx]).abs() > rng * 1e-9
+                    {
                         let last = out_pts.len() - 1;
                         out_pts[last][idx] = l;
                         on_seam = true;
@@ -4021,7 +5112,9 @@ pub fn surface_surface(a: &NurbsSurface, b: &NurbsSurface, tolerance: Option<f64
 
         let mut wrap_drift = false;
         for &(idx, _c0, rng, _closed) in &axes {
-            if closure[idx].abs() > rng * 0.5 { wrap_drift = true; }
+            if closure[idx].abs() > rng * 0.5 {
+                wrap_drift = true;
+            }
         }
         let mut pieces: Vec<(Vec<[f64; 4]>, bool)> = Vec::new();
         if cross_idx.is_empty() {
@@ -4034,38 +5127,55 @@ pub fn surface_surface(a: &NurbsSurface, b: &NurbsSurface, tolerance: Option<f64
             let mut wrap_piece: Vec<[f64; 4]> = out_pts[cross_idx[cross_idx.len() - 1]..].to_vec();
             for p in &out_pts[1..=cross_idx[0]] {
                 let mut wp = [0.0f64; 4];
-                for k in 0..4 { wp[k] = p[k] + closure[k]; }
+                for k in 0..4 {
+                    wp[k] = p[k] + closure[k];
+                }
                 wrap_piece.push(wp);
             }
             pieces.push((wrap_piece, false));
         } else {
             let mut bounds: Vec<usize> = vec![0];
-            for &c in &cross_idx { bounds.push(c); }
+            for &c in &cross_idx {
+                bounds.push(c);
+            }
             bounds.push(out_pts.len() - 1);
             for w in bounds.windows(2) {
                 let (ia, ib) = (w[0], w[1]);
-                if ib > ia { pieces.push((out_pts[ia..=ib].to_vec(), false)); }
+                if ib > ia {
+                    pieces.push((out_pts[ia..=ib].to_vec(), false));
+                }
             }
         }
 
         for (mut piece_pts, piece_loop) in pieces {
-            if piece_pts.len() < 2 { continue; }
+            if piece_pts.len() < 2 {
+                continue;
+            }
             let mid = piece_pts[piece_pts.len() / 2];
             for &(idx, c0, rng, closed) in &axes {
-                if !closed { continue; }
+                if !closed {
+                    continue;
+                }
                 let k_s = ((mid[idx] - c0) / rng).floor();
                 if k_s != 0.0 {
-                    for p in piece_pts.iter_mut() { p[idx] -= k_s * rng; }
+                    for p in piece_pts.iter_mut() {
+                        p[idx] -= k_s * rng;
+                    }
                 }
             }
 
             let mut pts3: Vec<[f64; 3]> = piece_pts.iter().map(|p| eval3_q(p)).collect();
             let mut chord3 = 0.0;
             for i in 1..pts3.len() {
-                chord3 += ((pts3[i][0]-pts3[i-1][0]).powi(2) + (pts3[i][1]-pts3[i-1][1]).powi(2) + (pts3[i][2]-pts3[i-1][2]).powi(2)).sqrt();
+                chord3 += ((pts3[i][0] - pts3[i - 1][0]).powi(2)
+                    + (pts3[i][1] - pts3[i - 1][1]).powi(2)
+                    + (pts3[i][2] - pts3[i - 1][2]).powi(2))
+                .sqrt();
             }
             // Degenerate sliver pieces between near-coincident crossings
-            if chord3 < h_init * 0.5 { continue; }
+            if chord3 < h_init * 0.5 {
+                continue;
+            }
 
             // Deflection-refine this piece: insert Newton-corrected midpoints
             // wherever the 3D curve deviates from its chord by more than the
@@ -4083,15 +5193,25 @@ pub fn surface_surface(a: &NurbsSurface, b: &NurbsSurface, tolerance: Option<f64
                     let p3a = eval3_q(&pa2);
                     let p3b = eval3_q(&pb2);
                     let mut mid = [0.0f64; 4];
-                    for k in 0..4 { mid[k] = (pa2[k] + pb2[k]) * 0.5; }
+                    for k in 0..4 {
+                        mid[k] = (pa2[k] + pb2[k]) * 0.5;
+                    }
                     if correct(&mut mid, None) {
                         let p3m = eval3_q(&mid);
-                        let ex = p3b[0]-p3a[0]; let ey = p3b[1]-p3a[1]; let ez = p3b[2]-p3a[2];
-                        let l2 = ex*ex + ey*ey + ez*ez;
+                        let ex = p3b[0] - p3a[0];
+                        let ey = p3b[1] - p3a[1];
+                        let ez = p3b[2] - p3a[2];
+                        let l2 = ex * ex + ey * ey + ez * ez;
                         let dev = if l2 > 1e-30 {
-                            let tt = ((p3m[0]-p3a[0])*ex + (p3m[1]-p3a[1])*ey + (p3m[2]-p3a[2])*ez) / l2;
-                            let cx = p3a[0]+tt*ex; let cy = p3a[1]+tt*ey; let cz = p3a[2]+tt*ez;
-                            ((p3m[0]-cx).powi(2) + (p3m[1]-cy).powi(2) + (p3m[2]-cz).powi(2)).sqrt()
+                            let tt = ((p3m[0] - p3a[0]) * ex
+                                + (p3m[1] - p3a[1]) * ey
+                                + (p3m[2] - p3a[2]) * ez)
+                                / l2;
+                            let cx = p3a[0] + tt * ex;
+                            let cy = p3a[1] + tt * ey;
+                            let cz = p3a[2] + tt * ez;
+                            ((p3m[0] - cx).powi(2) + (p3m[1] - cy).powi(2) + (p3m[2] - cz).powi(2))
+                                .sqrt()
                         } else {
                             0.0
                         };
@@ -4104,7 +5224,9 @@ pub fn surface_surface(a: &NurbsSurface, b: &NurbsSurface, tolerance: Option<f64
                     i += 1;
                 }
                 piece_pts = new_pp;
-                if !refined { break; }
+                if !refined {
+                    break;
+                }
             }
             pts3 = piece_pts.iter().map(|p| eval3_q(p)).collect();
 
@@ -4112,30 +5234,34 @@ pub fn surface_surface(a: &NurbsSurface, b: &NurbsSurface, tolerance: Option<f64
                 let mp = pts2.len();
                 let mut total_turning = 0.0f64;
                 for i in 1..(mp.saturating_sub(1)) {
-                    let dx1 = pts2[i][0] - pts2[i-1][0];
-                    let dy1 = pts2[i][1] - pts2[i-1][1];
-                    let dz1 = pts2[i][2] - pts2[i-1][2];
-                    let dx2 = pts2[i+1][0] - pts2[i][0];
-                    let dy2 = pts2[i+1][1] - pts2[i][1];
-                    let dz2 = pts2[i+1][2] - pts2[i][2];
-                    let l1 = (dx1*dx1 + dy1*dy1 + dz1*dz1).sqrt();
-                    let l2 = (dx2*dx2 + dy2*dy2 + dz2*dz2).sqrt();
+                    let dx1 = pts2[i][0] - pts2[i - 1][0];
+                    let dy1 = pts2[i][1] - pts2[i - 1][1];
+                    let dz1 = pts2[i][2] - pts2[i - 1][2];
+                    let dx2 = pts2[i + 1][0] - pts2[i][0];
+                    let dy2 = pts2[i + 1][1] - pts2[i][1];
+                    let dz2 = pts2[i + 1][2] - pts2[i][2];
+                    let l1 = (dx1 * dx1 + dy1 * dy1 + dz1 * dz1).sqrt();
+                    let l2 = (dx2 * dx2 + dy2 * dy2 + dz2 * dz2).sqrt();
                     if l1 > 1e-14 && l2 > 1e-14 {
-                        let c = ((dx1*dx2 + dy1*dy2 + dz1*dz2) / (l1*l2)).max(-1.0).min(1.0);
+                        let c = ((dx1 * dx2 + dy1 * dy2 + dz1 * dz2) / (l1 * l2))
+                            .max(-1.0)
+                            .min(1.0);
                         total_turning += c.acos();
                     }
                 }
                 let mut chords = vec![0.0f64; mp];
                 let mut total_len = 0.0f64;
                 for i in 1..mp {
-                    total_len += pts2[i].distance(&pts2[i-1], None);
+                    total_len += pts2[i].distance(&pts2[i - 1], None);
                     chords[i] = total_len;
                 }
                 if piece_loop && mp > 1 {
-                    total_len += pts2[0].distance(&pts2[mp-1], None);
+                    total_len += pts2[0].distance(&pts2[mp - 1], None);
                 }
                 if total_len > 1e-14 {
-                    for i in 1..mp { chords[i] /= total_len; }
+                    for i in 1..mp {
+                        chords[i] /= total_len;
+                    }
                 }
                 // Compact least-squares first (keep best valid); if it cannot
                 // reach the tolerance, interpolate EXACTLY through the dense,
@@ -4146,7 +5272,9 @@ pub fn surface_surface(a: &NurbsSurface, b: &NurbsSurface, tolerance: Option<f64
                 let mut best_dev = f64::INFINITY;
                 while target_cvs <= max_cvs {
                     let crv = NurbsCurve::create_fitted(pts2, target_cvs as usize, 3, piece_loop);
-                    if !crv.is_valid() { break; }
+                    if !crv.is_valid() {
+                        break;
+                    }
                     let (ft0, ft1) = crv.domain();
                     let mut dev = 0.0f64;
                     for i in 0..mp {
@@ -4157,7 +5285,9 @@ pub fn surface_surface(a: &NurbsSurface, b: &NurbsSurface, tolerance: Option<f64
                         best = crv;
                         best_dev = dev;
                     }
-                    if dev < fit_tol_track { break; }
+                    if dev < fit_tol_track {
+                        break;
+                    }
                     target_cvs *= 2;
                 }
                 if best_dev >= fit_tol_track {
@@ -4177,12 +5307,20 @@ pub fn surface_surface(a: &NurbsSurface, b: &NurbsSurface, tolerance: Option<f64
             };
 
             let pts3_p: Vec<Point> = pts3.iter().map(|p| Point::new(p[0], p[1], p[2])).collect();
-            let pts_pa: Vec<Point> = piece_pts.iter().map(|p| Point::new(p[0], p[1], 0.0)).collect();
-            let pts_pb: Vec<Point> = piece_pts.iter().map(|p| Point::new(p[2], p[3], 0.0)).collect();
+            let pts_pa: Vec<Point> = piece_pts
+                .iter()
+                .map(|p| Point::new(p[0], p[1], 0.0))
+                .collect();
+            let pts_pb: Vec<Point> = piece_pts
+                .iter()
+                .map(|p| Point::new(p[2], p[3], 0.0))
+                .collect();
             let crv3 = fit_track(&pts3_p, (tolerance * 10.0).max(1e-7));
             let pcurve_a = fit_track(&pts_pa, a_du.min(a_dv) * 1e-4);
             let pcurve_b = fit_track(&pts_pb, b_du.min(b_dv) * 1e-4);
-            if !crv3.is_valid() || !pcurve_a.is_valid() || !pcurve_b.is_valid() { continue; }
+            if !crv3.is_valid() || !pcurve_a.is_valid() || !pcurve_b.is_valid() {
+                continue;
+            }
             result.push((crv3, pcurve_a, pcurve_b));
         }
     }
@@ -4198,19 +5336,29 @@ use crate::Polyline;
 fn vectors_nearly_parallel(v0: &Vector, v1: &Vector, angle_tol: f64) -> bool {
     let m0 = v0.magnitude();
     let m1 = v1.magnitude();
-    if m0 < Tolerance::ZERO_TOLERANCE || m1 < Tolerance::ZERO_TOLERANCE { return false; }
+    if m0 < Tolerance::ZERO_TOLERANCE || m1 < Tolerance::ZERO_TOLERANCE {
+        return false;
+    }
     let cos_angle = v0.dot(v1) / (m0 * m1);
     cos_angle.abs() >= angle_tol.cos()
 }
 
 /// 3-plane intersection with parallelism guard (0.1 rad default).
 pub fn plane_plane_plane_check(
-    p0: &Plane, p1: &Plane, p2: &Plane,
+    p0: &Plane,
+    p1: &Plane,
+    p2: &Plane,
     angle_tol: f64,
 ) -> Option<Point> {
-    if vectors_nearly_parallel(&p0.z_axis(), &p1.z_axis(), angle_tol) { return None; }
-    if vectors_nearly_parallel(&p0.z_axis(), &p2.z_axis(), angle_tol) { return None; }
-    if vectors_nearly_parallel(&p1.z_axis(), &p2.z_axis(), angle_tol) { return None; }
+    if vectors_nearly_parallel(&p0.z_axis(), &p1.z_axis(), angle_tol) {
+        return None;
+    }
+    if vectors_nearly_parallel(&p0.z_axis(), &p2.z_axis(), angle_tol) {
+        return None;
+    }
+    if vectors_nearly_parallel(&p1.z_axis(), &p2.z_axis(), angle_tol) {
+        return None;
+    }
     plane_plane_plane(p0, p1, p2)
 }
 
@@ -4243,7 +5391,10 @@ pub fn plane_4lines(plane: &Plane, l0: &Line, l1: &Line, l2: &Line, l3: &Line) -
 
 /// Build joint quad from collision face and two bounding planes.
 pub fn get_quad_from_line_topbottomplanes(
-    face_plane: &Plane, line: &Line, plane0: &Plane, plane1: &Plane,
+    face_plane: &Plane,
+    line: &Line,
+    plane0: &Plane,
+    plane1: &Plane,
 ) -> Option<Polyline> {
     let dir = line.to_vector();
     let s = line.start();
@@ -4258,10 +5409,10 @@ pub fn get_quad_from_line_topbottomplanes(
 }
 
 /// Scale direction vector to span the distance between two planes.
-pub fn scale_vector_to_distance_of_2planes(
-    dir: &Vector, p0: &Plane, p1: &Plane,
-) -> Option<Vector> {
-    if dir.magnitude() < Tolerance::ZERO_TOLERANCE { return None; }
+pub fn scale_vector_to_distance_of_2planes(dir: &Vector, p0: &Plane, p1: &Plane) -> Option<Vector> {
+    if dir.magnitude() < Tolerance::ZERO_TOLERANCE {
+        return None;
+    }
     let origin = Point::new(0.0, 0.0, 0.0);
     let tip = Point::new(dir[0], dir[1], dir[2]);
     let ray = Line::new(origin[0], origin[1], origin[2], tip[0], tip[1], tip[2]);
@@ -4271,28 +5422,40 @@ pub fn scale_vector_to_distance_of_2planes(
     // Validity: squared-distance ratio < 10 (mirrors CGAL)
     let n1 = p1.z_axis();
     let n1_mag = n1.magnitude();
-    if n1_mag < Tolerance::ZERO_TOLERANCE { return None; }
+    if n1_mag < Tolerance::ZERO_TOLERANCE {
+        return None;
+    }
     let o0 = p0.origin();
     let d = (o0[0] - p1.origin()[0]) * n1[0] / n1_mag
-          + (o0[1] - p1.origin()[1]) * n1[1] / n1_mag
-          + (o0[2] - p1.origin()[2]) * n1[2] / n1_mag;
+        + (o0[1] - p1.origin()[1]) * n1[1] / n1_mag
+        + (o0[2] - p1.origin()[2]) * n1[2] / n1_mag;
     let dist_ortho_sq = d * d;
-    if dist_ortho_sq < Tolerance::ZERO_TOLERANCE { return None; }
+    if dist_ortho_sq < Tolerance::ZERO_TOLERANCE {
+        return None;
+    }
     let dist_sq = output.dot(&output);
-    if dist_sq / dist_ortho_sq >= 10.0 { return None; }
+    if dist_sq / dist_ortho_sq >= 10.0 {
+        return None;
+    }
     Some(output)
 }
 
 /// Orthogonal vector between two line-pairs (each defined by plane×plane).
 pub fn get_orthogonal_vector_between_two_plane_pairs(
-    pp0_0: &Plane, pp1_0: &Plane, pp1_1: &Plane,
+    pp0_0: &Plane,
+    pp1_0: &Plane,
+    pp1_1: &Plane,
 ) -> Option<Vector> {
     let l0 = plane_plane(pp0_0, pp1_0)?;
     let l1 = plane_plane(pp0_0, pp1_1)?;
     let (t0, t1) = line_line_parameters(&l0, &l1, 0.0, false, true)?;
     let pt0 = l0.point_at(t0);
     let pt1 = l1.point_at(t1);
-    Some(Vector::new(pt1[0] - pt0[0], pt1[1] - pt0[1], pt1[2] - pt0[2]))
+    Some(Vector::new(
+        pt1[0] - pt0[0],
+        pt1[1] - pt0[1],
+        pt1[2] - pt0[2],
+    ))
 }
 
 /// Clip line segment to region between two planes (in-place-style, returns new Line).
@@ -4306,7 +5469,9 @@ pub fn line_two_planes(line: &Line, p0: &Plane, p1: &Plane) -> Option<Line> {
 /// Returns (points, edge_ids) if exactly 2 intersections are found.
 pub fn polyline_plane(poly: &Polyline, plane: &Plane) -> Option<(Vec<Point>, Vec<usize>)> {
     let n = poly.point_count();
-    if n < 2 { return None; }
+    if n < 2 {
+        return None;
+    }
     let mut points = Vec::new();
     let mut ids = Vec::new();
     for i in 0..n - 1 {
@@ -4323,22 +5488,30 @@ pub fn polyline_plane(poly: &Polyline, plane: &Plane) -> Option<(Vec<Point>, Vec
             }
         }
     }
-    if points.len() == 2 { Some((points, ids)) } else { None }
+    if points.len() == 2 {
+        Some((points, ids))
+    } else {
+        None
+    }
 }
 
 /// Intersect polyline perimeter with plane → single segment, aligned to reference start.
 pub fn polyline_plane_to_line(poly: &Polyline, plane: &Plane, align_start: &Point) -> Option<Line> {
     let (pts, _) = polyline_plane(poly, plane)?;
-    let d0sq = (pts[0][0]-align_start[0]).powi(2)
-             + (pts[0][1]-align_start[1]).powi(2)
-             + (pts[0][2]-align_start[2]).powi(2);
-    let d1sq = (pts[1][0]-align_start[0]).powi(2)
-             + (pts[1][1]-align_start[1]).powi(2)
-             + (pts[1][2]-align_start[2]).powi(2);
+    let d0sq = (pts[0][0] - align_start[0]).powi(2)
+        + (pts[0][1] - align_start[1]).powi(2)
+        + (pts[0][2] - align_start[2]).powi(2);
+    let d1sq = (pts[1][0] - align_start[0]).powi(2)
+        + (pts[1][1] - align_start[1]).powi(2)
+        + (pts[1][2] - align_start[2]).powi(2);
     if d0sq <= d1sq {
-        Some(Line::new(pts[0][0], pts[0][1], pts[0][2], pts[1][0], pts[1][1], pts[1][2]))
+        Some(Line::new(
+            pts[0][0], pts[0][1], pts[0][2], pts[1][0], pts[1][1], pts[1][2],
+        ))
     } else {
-        Some(Line::new(pts[1][0], pts[1][1], pts[1][2], pts[0][0], pts[0][1], pts[0][2]))
+        Some(Line::new(
+            pts[1][0], pts[1][1], pts[1][2], pts[0][0], pts[0][1], pts[0][2],
+        ))
     }
 }
 
@@ -4382,7 +5555,7 @@ pub fn orthogonal_vector_between_two_plane_pairs(
     let l1 = plane_plane(pp00, pp11)?;
     let p1 = l1.start();
     let ldir = l0.to_vector();
-    let len_sq = ldir[0]*ldir[0] + ldir[1]*ldir[1] + ldir[2]*ldir[2];
+    let len_sq = ldir[0] * ldir[0] + ldir[1] * ldir[1] + ldir[2] * ldir[2];
     if len_sq < 1e-20 {
         return None;
     }
@@ -4390,11 +5563,11 @@ pub fn orthogonal_vector_between_two_plane_pairs(
     let vx = p1[0] - l0s[0];
     let vy = p1[1] - l0s[1];
     let vz = p1[2] - l0s[2];
-    let t = (vx*ldir[0] + vy*ldir[1] + vz*ldir[2]) / len_sq;
-    let px = l0s[0] + ldir[0]*t;
-    let py = l0s[1] + ldir[1]*t;
-    let pz = l0s[2] + ldir[2]*t;
-    Some(Vector::new(p1[0]-px, p1[1]-py, p1[2]-pz))
+    let t = (vx * ldir[0] + vy * ldir[1] + vz * ldir[2]) / len_sq;
+    let px = l0s[0] + ldir[0] * t;
+    let py = l0s[1] + ldir[1] * t;
+    let pz = l0s[2] + ldir[2] * t;
+    Some(Vector::new(p1[0] - px, p1[1] - py, p1[2] - pz))
 }
 
 /// Clip an open joint outline against a closed plate polygon in 2D.
@@ -4414,24 +5587,28 @@ pub fn closed_and_open_paths_2d(
     yax.normalize_self();
 
     let to_2d = |pp: &Point| -> (f64, f64) {
-        let dx = pp[0]-origin[0];
-        let dy = pp[1]-origin[1];
-        let dz = pp[2]-origin[2];
-        (dx*xax[0]+dy*xax[1]+dz*xax[2],
-         dx*yax[0]+dy*yax[1]+dz*yax[2])
+        let dx = pp[0] - origin[0];
+        let dy = pp[1] - origin[1];
+        let dz = pp[2] - origin[2];
+        (
+            dx * xax[0] + dy * xax[1] + dz * xax[2],
+            dx * yax[0] + dy * yax[1] + dz * yax[2],
+        )
     };
     let to_3d = |u: f64, v: f64| -> Point {
-        Point::new(origin[0] + u*xax[0] + v*yax[0],
-                   origin[1] + u*xax[1] + v*yax[1],
-                   origin[2] + u*xax[2] + v*yax[2])
+        Point::new(
+            origin[0] + u * xax[0] + v * yax[0],
+            origin[1] + u * xax[1] + v * yax[1],
+            origin[2] + u * xax[2] + v * yax[2],
+        )
     };
 
     // Plate outline (2D), strip closing duplicate.
     let mut plate_n = plate.point_count();
     if plate_n > 1 {
         let f = plate.get_point(0).unwrap();
-        let l = plate.get_point(plate_n-1).unwrap();
-        if (f[0]-l[0]).abs() < 1e-6 && (f[1]-l[1]).abs() < 1e-6 && (f[2]-l[2]).abs() < 1e-6 {
+        let l = plate.get_point(plate_n - 1).unwrap();
+        if (f[0] - l[0]).abs() < 1e-6 && (f[1] - l[1]).abs() < 1e-6 && (f[2] - l[2]).abs() < 1e-6 {
             plate_n -= 1;
         }
     }
@@ -4454,42 +5631,50 @@ pub fn closed_and_open_paths_2d(
         let n = plate2d.len();
         for i in 0..n {
             let a = plate2d[i];
-            let b = plate2d[(i+1) % n];
+            let b = plate2d[(i + 1) % n];
             if a.1 <= py {
                 if b.1 > py {
-                    let e = (b.0-a.0)*(py-a.1) - (px-a.0)*(b.1-a.1);
-                    if e > 0.0 { wn += 1; }
+                    let e = (b.0 - a.0) * (py - a.1) - (px - a.0) * (b.1 - a.1);
+                    if e > 0.0 {
+                        wn += 1;
+                    }
                 }
             } else if b.1 <= py {
-                let e = (b.0-a.0)*(py-a.1) - (px-a.0)*(b.1-a.1);
-                if e < 0.0 { wn -= 1; }
+                let e = (b.0 - a.0) * (py - a.1) - (px - a.0) * (b.1 - a.1);
+                if e < 0.0 {
+                    wn -= 1;
+                }
             }
         }
         wn != 0
     };
 
-    let seg_seg_2d = |s0: (f64, f64), s1: (f64, f64), e0: (f64, f64), e1: (f64, f64)| -> Option<(f64, f64)> {
-        let sx = s1.0-s0.0; let sy = s1.1-s0.1;
-        let ex = e1.0-e0.0; let ey = e1.1-e0.1;
-        let denom = sx*ey - sy*ex;
-        if denom.abs() < 1e-20 {
-            return None;
-        }
-        let dx = e0.0-s0.0; let dy = e0.1-s0.1;
-        let t_s = (dx*ey - dy*ex) / denom;
-        let t_e = (dx*sy - dy*sx) / denom;
-        Some((t_s, t_e))
-    };
+    let seg_seg_2d =
+        |s0: (f64, f64), s1: (f64, f64), e0: (f64, f64), e1: (f64, f64)| -> Option<(f64, f64)> {
+            let sx = s1.0 - s0.0;
+            let sy = s1.1 - s0.1;
+            let ex = e1.0 - e0.0;
+            let ey = e1.1 - e0.1;
+            let denom = sx * ey - sy * ex;
+            if denom.abs() < 1e-20 {
+                return None;
+            }
+            let dx = e0.0 - s0.0;
+            let dy = e0.1 - s0.1;
+            let t_s = (dx * ey - dy * ex) / denom;
+            let t_e = (dx * sy - dy * sx) / denom;
+            Some((t_s, t_e))
+        };
 
     const EPS: f64 = 1e-9;
     let mut pieces: Vec<Vec<(f64, f64)>> = Vec::new();
-    for s in 0..joint2d.len()-1 {
+    for s in 0..joint2d.len() - 1 {
         let p0 = joint2d[s];
-        let p1 = joint2d[s+1];
+        let p1 = joint2d[s + 1];
         let mut ts: Vec<f64> = vec![0.0];
         for i in 0..plate2d.len() {
             let a = plate2d[i];
-            let b = plate2d[(i+1) % plate2d.len()];
+            let b = plate2d[(i + 1) % plate2d.len()];
             if let Some((t_s, t_e)) = seg_seg_2d(p0, p1, a, b) {
                 if t_s > EPS && t_s < 1.0 - EPS && t_e >= -EPS && t_e <= 1.0 + EPS {
                     ts.push(t_s);
@@ -4501,13 +5686,16 @@ pub fn closed_and_open_paths_2d(
         ts.dedup_by(|a, b| (*a - *b).abs() < EPS);
 
         let mut current: Vec<(f64, f64)> = Vec::new();
-        for i in 0..ts.len()-1 {
-            let t_mid = 0.5 * (ts[i] + ts[i+1]);
-            let mx = p0.0 + (p1.0-p0.0)*t_mid;
-            let my = p0.1 + (p1.1-p0.1)*t_mid;
+        for i in 0..ts.len() - 1 {
+            let t_mid = 0.5 * (ts[i] + ts[i + 1]);
+            let mx = p0.0 + (p1.0 - p0.0) * t_mid;
+            let my = p0.1 + (p1.1 - p0.1) * t_mid;
             if pip(mx, my) {
-                let sub_a = (p0.0 + (p1.0-p0.0)*ts[i],   p0.1 + (p1.1-p0.1)*ts[i]);
-                let sub_b = (p0.0 + (p1.0-p0.0)*ts[i+1], p0.1 + (p1.1-p0.1)*ts[i+1]);
+                let sub_a = (p0.0 + (p1.0 - p0.0) * ts[i], p0.1 + (p1.1 - p0.1) * ts[i]);
+                let sub_b = (
+                    p0.0 + (p1.0 - p0.0) * ts[i + 1],
+                    p0.1 + (p1.1 - p0.1) * ts[i + 1],
+                );
                 if current.is_empty() {
                     current.push(sub_a);
                     current.push(sub_b);
@@ -4515,7 +5703,7 @@ pub fn closed_and_open_paths_2d(
                     let last = *current.last().unwrap();
                     let dx = last.0 - sub_a.0;
                     let dy = last.1 - sub_a.1;
-                    if dx*dx + dy*dy < 1e-18 {
+                    if dx * dx + dy * dy < 1e-18 {
                         current.push(sub_b);
                     } else {
                         pieces.push(std::mem::take(&mut current));
@@ -4533,20 +5721,24 @@ pub fn closed_and_open_paths_2d(
     }
 
     let sq2 = |a: (f64, f64), b: (f64, f64)| -> f64 {
-        let dx = a.0-b.0; let dy = a.1-b.1;
-        dx*dx + dy*dy
+        let dx = a.0 - b.0;
+        let dy = a.1 - b.1;
+        dx * dx + dy * dy
     };
     const DISTANCE_SQ: f64 = 0.01;
     let mut c2d: Vec<(f64, f64)> = Vec::new();
     let mut count = 0i32;
     for piece in &pieces {
-        if piece.len() <= 1 { continue; }
+        if piece.len() <= 1 {
+            continue;
+        }
         if count == 0 {
             c2d = piece.clone();
         } else {
             let mut pts = piece.clone();
             if sq2(*c2d.last().unwrap(), pts[0]) > DISTANCE_SQ
-                && sq2(*c2d.last().unwrap(), *pts.last().unwrap()) > DISTANCE_SQ {
+                && sq2(*c2d.last().unwrap(), *pts.last().unwrap()) > DISTANCE_SQ
+            {
                 c2d.reverse();
             }
             if sq2(*c2d.last().unwrap(), pts[0]) > sq2(*c2d.last().unwrap(), *pts.last().unwrap()) {
@@ -4564,38 +5756,53 @@ pub fn closed_and_open_paths_2d(
     }
 
     let closest_param = |p: (f64, f64), a: (f64, f64), b: (f64, f64)| -> f64 {
-        let abx = b.0-a.0; let aby = b.1-a.1;
-        let l2 = abx*abx + aby*aby;
-        if l2 < 1e-20 { return 0.0; }
-        let apx = p.0-a.0; let apy = p.1-a.1;
-        let mut t = (apx*abx + apy*aby) / l2;
-        if t < 0.0 { t = 0.0; }
-        if t > 1.0 { t = 1.0; }
+        let abx = b.0 - a.0;
+        let aby = b.1 - a.1;
+        let l2 = abx * abx + aby * aby;
+        if l2 < 1e-20 {
+            return 0.0;
+        }
+        let apx = p.0 - a.0;
+        let apy = p.1 - a.1;
+        let mut t = (apx * abx + apy * aby) / l2;
+        if t < 0.0 {
+            t = 0.0;
+        }
+        if t > 1.0 {
+            t = 1.0;
+        }
         t
     };
     let sq_dist_seg = |p: (f64, f64), a: (f64, f64), b: (f64, f64)| -> f64 {
-        let abx = b.0-a.0; let aby = b.1-a.1;
-        let l2 = abx*abx + aby*aby;
+        let abx = b.0 - a.0;
+        let aby = b.1 - a.1;
+        let l2 = abx * abx + aby * aby;
         if l2 < 1e-20 {
-            let dx = p.0-a.0; let dy = p.1-a.1;
-            return dx*dx + dy*dy;
+            let dx = p.0 - a.0;
+            let dy = p.1 - a.1;
+            return dx * dx + dy * dy;
         }
-        let apx = p.0-a.0; let apy = p.1-a.1;
-        let mut t = (apx*abx + apy*aby) / l2;
-        if t < 0.0 { t = 0.0; }
-        if t > 1.0 { t = 1.0; }
-        let px = a.0 + t*abx;
-        let py = a.1 + t*aby;
-        let dx = p.0-px;
-        let dy = p.1-py;
-        dx*dx + dy*dy
+        let apx = p.0 - a.0;
+        let apy = p.1 - a.1;
+        let mut t = (apx * abx + apy * aby) / l2;
+        if t < 0.0 {
+            t = 0.0;
+        }
+        if t > 1.0 {
+            t = 1.0;
+        }
+        let px = a.0 + t * abx;
+        let py = a.1 + t * aby;
+        let dx = p.0 - px;
+        let dy = p.1 - py;
+        dx * dx + dy * dy
     };
 
     let mut t0 = -1.0_f64;
     let mut t1 = -1.0_f64;
     for i in 0..plate2d.len() {
         let a = plate2d[i];
-        let b = plate2d[(i+1) % plate2d.len()];
+        let b = plate2d[(i + 1) % plate2d.len()];
         for jj in 0..2 {
             let idx = if jj == 0 { 0 } else { c2d.len() - 1 };
             let d = sq_dist_seg(c2d[idx], a, b);
@@ -4605,7 +5812,9 @@ pub fn closed_and_open_paths_2d(
                 t1 = i as f64 + closest_param(*c2d.last().unwrap(), a, b);
             }
         }
-        if t0 >= 0.0 && t1 >= 0.0 { break; }
+        if t0 >= 0.0 && t1 >= 0.0 {
+            break;
+        }
     }
 
     let mut reverse_flag = t0 > t1;
@@ -4629,7 +5838,8 @@ pub fn closed_and_open_paths_2d(
 pub fn line_line_3d(cutter: &Line, seg: &Line) -> Option<Point> {
     let (t0, _) = line_line_parameters(cutter, seg, 0.0, false, false)?;
     Some(cutter.point_at(t0))
-}/// Port of cgal_box_search.h:252-496 line_line_intersection_with_properties.
+}
+/// Port of cgal_box_search.h:252-496 line_line_intersection_with_properties.
 /// Classifies two finite segments s0/s1 as end-to-end, side-to-end, or cross
 /// based on above_closer_to_edge in [0,1]. n_segs_*/cur_seg_* give the segment's
 /// position within its parent polyline (used for full-polyline parameter
@@ -4683,9 +5893,15 @@ pub fn line_line_classified(
         let dz = a[2] - b[2];
         dx * dx + dy * dy + dz * dz < DIST_SQ
     };
-    let endcase = |pp: Point, dv0: Vector, dv1: Vector,
-                   p0: &mut Point, p1: &mut Point, v0: &mut Vector, v1: &mut Vector,
-                   type0: &mut bool, type1: &mut bool| {
+    let endcase = |pp: Point,
+                   dv0: Vector,
+                   dv1: Vector,
+                   p0: &mut Point,
+                   p1: &mut Point,
+                   v0: &mut Vector,
+                   v1: &mut Vector,
+                   type0: &mut bool,
+                   type1: &mut bool| {
         *p0 = pp.clone();
         *p1 = pp;
         *v0 = dv0;
@@ -4695,10 +5911,62 @@ pub fn line_line_classified(
         *type0 = false;
         *type1 = false;
     };
-    if eq(&s0.start(), &s1.start()) { endcase(s0.start(), s0.end() - s0.start(), s1.end() - s1.start(), p0, p1, v0, v1, type0, type1); return true; }
-    if eq(&s0.start(), &s1.end())   { endcase(s0.start(), s0.end() - s0.start(), s1.start() - s1.end(), p0, p1, v0, v1, type0, type1); return true; }
-    if eq(&s0.end(),   &s1.start()) { endcase(s0.end(),   s0.start() - s0.end(), s1.end() - s1.start(), p0, p1, v0, v1, type0, type1); return true; }
-    if eq(&s0.end(),   &s1.end())   { endcase(s0.end(),   s0.start() - s0.end(), s1.start() - s1.end(), p0, p1, v0, v1, type0, type1); return true; }
+    if eq(&s0.start(), &s1.start()) {
+        endcase(
+            s0.start(),
+            s0.end() - s0.start(),
+            s1.end() - s1.start(),
+            p0,
+            p1,
+            v0,
+            v1,
+            type0,
+            type1,
+        );
+        return true;
+    }
+    if eq(&s0.start(), &s1.end()) {
+        endcase(
+            s0.start(),
+            s0.end() - s0.start(),
+            s1.start() - s1.end(),
+            p0,
+            p1,
+            v0,
+            v1,
+            type0,
+            type1,
+        );
+        return true;
+    }
+    if eq(&s0.end(), &s1.start()) {
+        endcase(
+            s0.end(),
+            s0.start() - s0.end(),
+            s1.end() - s1.start(),
+            p0,
+            p1,
+            v0,
+            v1,
+            type0,
+            type1,
+        );
+        return true;
+    }
+    if eq(&s0.end(), &s1.end()) {
+        endcase(
+            s0.end(),
+            s0.start() - s0.end(),
+            s1.start() - s1.end(),
+            p0,
+            p1,
+            v0,
+            v1,
+            type0,
+            type1,
+        );
+        return true;
+    }
 
     if *is_parallel {
         v0.normalize_self();
@@ -4706,14 +5974,15 @@ pub fn line_line_classified(
         let signed_t = |src: &Point, unit: &Vector, q: &Point| -> f64 {
             (q[0] - src[0]) * unit[0] + (q[1] - src[1]) * unit[1] + (q[2] - src[2]) * unit[2]
         };
-        let proj_onto_line = |l: &Line, q: &Point| -> Point {
-            l.closest_point(q, false).1
-        };
+        let proj_onto_line = |l: &Line, q: &Point| -> Point { l.closest_point(q, false).1 };
         let mut pts: Vec<(f64, f64)> = Vec::new();
         let push = |q: &Point, pts: &mut Vec<(f64, f64)>| {
             let q0 = proj_onto_line(s0, q);
             let q1 = proj_onto_line(s1, q);
-            pts.push((signed_t(&s0.start(), v0, &q0), signed_t(&s1.start(), v1, &q1)));
+            pts.push((
+                signed_t(&s0.start(), v0, &q0),
+                signed_t(&s1.start(), v1, &q1),
+            ));
         };
         push(&s0.start(), &mut pts);
         push(&s0.end(), &mut pts);
@@ -4740,18 +6009,32 @@ pub fn line_line_classified(
             s1.start()[1] + pts[2].1 * v1[1],
             s1.start()[2] + pts[2].1 * v1[2],
         );
-        let m0 = Point::new((seg0_a[0] + seg0_b[0]) * 0.5, (seg0_a[1] + seg0_b[1]) * 0.5, (seg0_a[2] + seg0_b[2]) * 0.5);
-        let m1 = Point::new((seg1_a[0] + seg1_b[0]) * 0.5, (seg1_a[1] + seg1_b[1]) * 0.5, (seg1_a[2] + seg1_b[2]) * 0.5);
-        let avg = Point::new((m0[0] + m1[0]) * 0.5, (m0[1] + m1[1]) * 0.5, (m0[2] + m1[2]) * 0.5);
+        let m0 = Point::new(
+            (seg0_a[0] + seg0_b[0]) * 0.5,
+            (seg0_a[1] + seg0_b[1]) * 0.5,
+            (seg0_a[2] + seg0_b[2]) * 0.5,
+        );
+        let m1 = Point::new(
+            (seg1_a[0] + seg1_b[0]) * 0.5,
+            (seg1_a[1] + seg1_b[1]) * 0.5,
+            (seg1_a[2] + seg1_b[2]) * 0.5,
+        );
+        let avg = Point::new(
+            (m0[0] + m1[0]) * 0.5,
+            (m0[1] + m1[1]) * 0.5,
+            (m0[2] + m1[2]) * 0.5,
+        );
         *p0 = proj_onto_line(s0, &avg);
         *p1 = proj_onto_line(s1, &avg);
-        let t_of = |l: &Line, q: &Point| -> f64 {
-            l.closest_point(q, false).0
-        };
+        let t_of = |l: &Line, q: &Point| -> f64 { l.closest_point(q, false).0 };
         let t0_v = t_of(s0, p0);
         let t1_v = t_of(s1, p1);
-        if t0_v > 0.5 { *v0 = Vector::new(-v0[0], -v0[1], -v0[2]); }
-        if t1_v > 0.5 { *v1 = Vector::new(-v1[0], -v1[1], -v1[2]); }
+        if t0_v > 0.5 {
+            *v0 = Vector::new(-v0[0], -v0[1], -v0[2]);
+        }
+        if t1_v > 0.5 {
+            *v1 = Vector::new(-v1[0], -v1[1], -v1[2]);
+        }
         *type0 = false;
         *type1 = false;
         return true;
@@ -4782,12 +6065,21 @@ pub fn line_line_classified(
     } else {
         *type0 = !(close0 > above_closer_to_edge);
         *type1 = !(close1 > above_closer_to_edge);
-        if close0 > close1 && !*type0 && !*type1 { *type0 = false; *type1 = true; }
-        else if close0 < close1 && !*type0 && !*type1 { *type0 = true; *type1 = false; }
+        if close0 > close1 && !*type0 && !*type1 {
+            *type0 = false;
+            *type1 = true;
+        } else if close0 < close1 && !*type0 && !*type1 {
+            *type0 = true;
+            *type1 = false;
+        }
     }
 
-    if tt0 > 0.5 && !*type0 { *v0 = Vector::new(-v0[0], -v0[1], -v0[2]); }
-    if tt1 > 0.5 && !*type1 { *v1 = Vector::new(-v1[0], -v1[1], -v1[2]); }
+    if tt0 > 0.5 && !*type0 {
+        *v0 = Vector::new(-v0[0], -v0[1], -v0[2]);
+    }
+    if tt1 > 0.5 && !*type1 {
+        *v1 = Vector::new(-v1[0], -v1[1], -v1[2]);
+    }
     true
 }
 
@@ -4801,7 +6093,9 @@ pub fn closest_point_on_segment(pt: &Point, seg: &Line) -> (Point, f64) {
 /// Linear remap: map val from [from1,to1] to [from2,to2].
 pub fn remap(val: f64, from1: f64, to1: f64, from2: f64, to2: f64) -> f64 {
     let span = to1 - from1;
-    if span.abs() < Tolerance::ZERO_TOLERANCE { return from2; }
+    if span.abs() < Tolerance::ZERO_TOLERANCE {
+        return from2;
+    }
     let t = (val - from1) / span;
     from2 + t * (to2 - from2)
 }
@@ -4834,15 +6128,25 @@ pub fn face_to_face(
                 .iter()
                 .map(|f| {
                     let mut bx = [
-                        f64::INFINITY, f64::INFINITY, f64::INFINITY,
-                        f64::NEG_INFINITY, f64::NEG_INFINITY, f64::NEG_INFINITY,
+                        f64::INFINITY,
+                        f64::INFINITY,
+                        f64::INFINITY,
+                        f64::NEG_INFINITY,
+                        f64::NEG_INFINITY,
+                        f64::NEG_INFINITY,
                     ];
                     for p in f.coords.chunks_exact(3) {
-                        bx[0] = bx[0].min(p[0]); bx[3] = bx[3].max(p[0]);
-                        bx[1] = bx[1].min(p[1]); bx[4] = bx[4].max(p[1]);
-                        bx[2] = bx[2].min(p[2]); bx[5] = bx[5].max(p[2]);
+                        bx[0] = bx[0].min(p[0]);
+                        bx[3] = bx[3].max(p[0]);
+                        bx[1] = bx[1].min(p[1]);
+                        bx[4] = bx[4].max(p[1]);
+                        bx[2] = bx[2].min(p[2]);
+                        bx[5] = bx[5].max(p[2]);
                     }
-                    for k in 0..3 { bx[k] -= tol; bx[k + 3] += tol; }
+                    for k in 0..3 {
+                        bx[k] -= tol;
+                        bx[k + 3] += tol;
+                    }
                     bx
                 })
                 .collect()
@@ -4858,7 +6162,9 @@ pub fn face_to_face(
 
         let mut found = false;
         for i in 0..planes[a].len() {
-            if found { break; }
+            if found {
+                break;
+            }
             // Hoisted out of the j loop: origin()/z_axis() clone per call, and the old code
             // re-cloned face i's pair for every face j.
             let oa = planes[a][i].origin();
@@ -4866,9 +6172,13 @@ pub fn face_to_face(
             let ba = &face_boxes[a][i];
             for j in 0..planes[b].len() {
                 let bb = &face_boxes[b][j];
-                if ba[0] > bb[3] || bb[0] > ba[3]
-                    || ba[1] > bb[4] || bb[1] > ba[4]
-                    || ba[2] > bb[5] || bb[2] > ba[5] {
+                if ba[0] > bb[3]
+                    || bb[0] > ba[3]
+                    || ba[1] > bb[4]
+                    || bb[1] > ba[4]
+                    || ba[2] > bb[5]
+                    || bb[2] > ba[5]
+                {
                     continue;
                 }
                 let ob = planes[b][j].origin();
@@ -4878,7 +6188,9 @@ pub fn face_to_face(
                 }
 
                 let pts_i = polylines[a][i].get_points();
-                if pts_i.len() < 2 { continue; }
+                if pts_i.len() < 2 {
+                    continue;
+                }
                 let mut edge = Vector::new(
                     pts_i[1][0] - pts_i[0][0],
                     pts_i[1][1] - pts_i[0][1],
@@ -4891,10 +6203,16 @@ pub fn face_to_face(
                 let pln = Plane::from_axes(pts_i[0].clone(), edge, yax, zax);
 
                 let bools = Polyline::boolean_op_plane(&polylines[a][i], &polylines[b][j], &pln, 0);
-                if bools.is_empty() || bools[0].point_count() < 3 { continue; }
+                if bools.is_empty() || bools[0].point_count() < 3 {
+                    continue;
+                }
 
                 let typ = (if i > 1 { 0 } else { 1 }) + (if j > 1 { 0 } else { 1 });
-                let jpl = if bools[0].is_closed() { bools[0].clone() } else { bools[0].closed() };
+                let jpl = if bools[0].is_closed() {
+                    bools[0].clone()
+                } else {
+                    bools[0].closed()
+                };
                 results.push((a as i32, b as i32, i as i32, j as i32, typ as i32, jpl));
                 found = true;
                 break;
@@ -5124,19 +6442,21 @@ fn line_line_overlap_average(l0: &Line, l1: &Line) -> Option<Line> {
 /// Used by `face_to_face_wood` to scale joint volume rectangles by the
 /// `JOINT_VOLUME_EXTENSION` config: extending opposite edges by the same
 /// amount preserves the rectangle and grows it uniformly along that axis.
-fn extend_polyline_edge_equally(
-    poly: &mut crate::Polyline,
-    edge_idx: usize,
-    distance: f64,
-) {
+fn extend_polyline_edge_equally(poly: &mut crate::Polyline, edge_idx: usize, distance: f64) {
     let n = poly.point_count();
     if n < 2 || edge_idx + 1 >= n {
         return;
     }
     let i = edge_idx;
     let j = edge_idx + 1;
-    let pi = match poly.get_point(i) { Some(p) => p, None => return };
-    let pj = match poly.get_point(j) { Some(p) => p, None => return };
+    let pi = match poly.get_point(i) {
+        Some(p) => p,
+        None => return,
+    };
+    let pj = match poly.get_point(j) {
+        Some(p) => p,
+        None => return,
+    };
     let dx = pj[0] - pi[0];
     let dy = pj[1] - pi[1];
     let dz = pj[2] - pi[2];
@@ -5222,7 +6542,11 @@ pub fn face_to_face_wood(
     // Convenience accessors with bounds protection (same defaults as C++ when
     // the array is too short — falls back to 0 in production builds).
     let ext = |k: usize| -> f64 {
-        config.joint_volume_extension.get(k + extension_id).copied().unwrap_or(0.0)
+        config
+            .joint_volume_extension
+            .get(k + extension_id)
+            .copied()
+            .unwrap_or(0.0)
     };
     let ext_w = ext(0); // edges 0,2 → joint width  scaling
     let ext_h = ext(1); // edges 1,3 → joint height scaling
@@ -5295,7 +6619,8 @@ pub fn face_to_face_wood(
             // is the "natural axis" of the side face (in the wood library's
             // top/bottom + side convention, side `k` connects vertices `k`
             // of the top and bottom rings).
-            let mut joint_line0 = Line::from_points(&Point::new(0.0, 0.0, 0.0), &Point::new(0.0, 0.0, 0.0));
+            let mut joint_line0 =
+                Line::from_points(&Point::new(0.0, 0.0, 0.0), &Point::new(0.0, 0.0, 0.0));
             // Average plane of the two reference (top + bottom) faces of
             // element 0 — i.e. the mid-thickness plane of element 0.
             let avg_plane_0 = Plane::from_point_normal(
@@ -5317,11 +6642,8 @@ pub fn face_to_face_wood(
                 // Intersect joint area with the average plane → 1D segment.
                 // The Rust helper aligns the result so its start is closest
                 // to the alignment_segment's start point.
-                let line_opt = polyline_plane_to_line(
-                    &joint_area,
-                    &avg_plane_0,
-                    &alignment_segment.start(),
-                );
+                let line_opt =
+                    polyline_plane_to_line(&joint_area, &avg_plane_0, &alignment_segment.start());
                 let line = line_opt?;
                 if line.squared_length() <= config.distance_squared {
                     return None;
@@ -5341,7 +6663,8 @@ pub fn face_to_face_wood(
             }
 
             // ── 6. Same for side-B alignment line (`joint_line1`). ──
-            let mut joint_line1 = Line::from_points(&Point::new(0.0, 0.0, 0.0), &Point::new(0.0, 0.0, 0.0));
+            let mut joint_line1 =
+                Line::from_points(&Point::new(0.0, 0.0, 0.0), &Point::new(0.0, 0.0, 0.0));
             let avg_plane_1 = Plane::from_point_normal(
                 Point::mid_point(&polylines_1[0].get_point(0)?, &polylines_1[1].get_point(0)?),
                 planes_1[0].z_axis(),
@@ -5355,11 +6678,8 @@ pub fn face_to_face_wood(
                 let b1 = polylines_1[1].get_point(j - 1)?;
                 let alignment_segment =
                     Line::from_points(&Point::mid_point(&a0, &a1), &Point::mid_point(&b0, &b1));
-                let line_opt = polyline_plane_to_line(
-                    &joint_area,
-                    &avg_plane_1,
-                    &alignment_segment.start(),
-                );
+                let line_opt =
+                    polyline_plane_to_line(&joint_area, &avg_plane_1, &alignment_segment.start());
                 let line = line_opt?;
                 if line.squared_length() <= config.distance_squared {
                     return None;
@@ -5391,14 +6711,12 @@ pub fn face_to_face_wood(
                 let joint_line_extension_limit = (ext_l * 2.0).powi(2);
                 let limit_min_squared = config.limit_min_joint_length.powi(2);
                 if i > 1
-                    && joint_line_extension_limit
-                        > joint_line0.squared_length() - limit_min_squared
+                    && joint_line_extension_limit > joint_line0.squared_length() - limit_min_squared
                 {
                     return None;
                 }
                 if j > 1
-                    && joint_line_extension_limit
-                        > joint_line1.squared_length() - limit_min_squared
+                    && joint_line_extension_limit > joint_line1.squared_length() - limit_min_squared
                 {
                     return None;
                 }
@@ -5453,9 +6771,7 @@ pub fn face_to_face_wood(
                 );
                 let parallel = v0.is_parallel_to(&v1);
 
-                if parallel == 0
-                    || config.face_to_face_side_to_side_joints_all_treated_as_rotated
-                {
+                if parallel == 0 || config.face_to_face_side_to_side_joints_all_treated_as_rotated {
                     // ──────────────────────────────────────────────
                     // Rotated / perpendicular elements (type 13)
                     // ──────────────────────────────────────────────
@@ -5466,25 +6782,20 @@ pub fn face_to_face_wood(
                     // joint area into 2D, take its AABB, and extrude it to
                     // a thickness rectangle in 3D.
 
-                    let average_segment = if Point::distance(
-                        &joint_line0.start(),
-                        &joint_line1.start(),
-                        None,
-                    ) < Point::distance(
-                        &joint_line0.start(),
-                        &joint_line1.end(),
-                        None,
-                    ) {
-                        Line::from_points(
-                            &Point::mid_point(&joint_line0.start(), &joint_line1.start()),
-                            &Point::mid_point(&joint_line0.end(), &joint_line1.end()),
-                        )
-                    } else {
-                        Line::from_points(
-                            &Point::mid_point(&joint_line0.start(), &joint_line1.end()),
-                            &Point::mid_point(&joint_line0.end(), &joint_line1.start()),
-                        )
-                    };
+                    let average_segment =
+                        if Point::distance(&joint_line0.start(), &joint_line1.start(), None)
+                            < Point::distance(&joint_line0.start(), &joint_line1.end(), None)
+                        {
+                            Line::from_points(
+                                &Point::mid_point(&joint_line0.start(), &joint_line1.start()),
+                                &Point::mid_point(&joint_line0.end(), &joint_line1.end()),
+                            )
+                        } else {
+                            Line::from_points(
+                                &Point::mid_point(&joint_line0.start(), &joint_line1.end()),
+                                &Point::mid_point(&joint_line0.end(), &joint_line1.start()),
+                            )
+                        };
                     let axis_segment =
                         if config.face_to_face_side_to_side_joints_rotated_joint_as_average {
                             average_segment
@@ -5555,10 +6866,8 @@ pub fn face_to_face_wood(
                     // Project joint area into the local 2D frame and grab
                     // its axis-aligned bounding box.
                     let pts3d = joint_area.get_points();
-                    let proj_pts: Vec<Point> = pts3d
-                        .iter()
-                        .map(|p| xform_apply_point(&xform, p))
-                        .collect();
+                    let proj_pts: Vec<Point> =
+                        pts3d.iter().map(|p| xform_apply_point(&xform, p)).collect();
                     if proj_pts.is_empty() {
                         return None;
                     }
@@ -5597,10 +6906,9 @@ pub fn face_to_face_wood(
                     let mut offset_vector = if dir_set { dir.clone() } else { z.clone() };
                     offset_vector.normalize_self();
                     let d0 = 0.5
-                        * planes_0[0].origin().distance(
-                            &planes_0[1].projection(&planes_0[0].origin()),
-                            None,
-                        );
+                        * planes_0[0]
+                            .origin()
+                            .distance(&planes_0[1].projection(&planes_0[0].origin()), None);
                     offset_vector = Vector::new(
                         offset_vector[0] * d0,
                         offset_vector[1] * d0,
@@ -5724,22 +7032,14 @@ pub fn face_to_face_wood(
 
                     // Dihedral angle of the joint edge in the tetrahedron
                     // (lj.start, lj.end, center0, center1).
-                    let center0 =
-                        avg_plane_0.projection(&polylines_0[0].center());
-                    let center1 =
-                        avg_plane_1.projection(&polylines_1[0].center());
-                    let dihedral = approximate_dihedral_angle(
-                        &lj.start(),
-                        &lj.end(),
-                        &center0,
-                        &center1,
-                    );
+                    let center0 = avg_plane_0.projection(&polylines_0[0].center());
+                    let center1 = avg_plane_1.projection(&polylines_1[0].center());
+                    let dihedral =
+                        approximate_dihedral_angle(&lj.start(), &lj.end(), &center0, &center1);
 
                     if dihedral < 20.0 {
                         return None;
-                    } else if dihedral
-                        <= config.face_to_face_side_to_side_joints_dihedral_angle
-                    {
+                    } else if dihedral <= config.face_to_face_side_to_side_joints_dihedral_angle {
                         // ────── Out-of-plane (type 11) ──────
                         //
                         // Probe the joint axis 90° (in the face plane) to
@@ -5884,10 +7184,9 @@ pub fn face_to_face_wood(
                         // each with the two end planes → 4 joint volumes.
 
                         let d0 = 0.5
-                            * planes_0[0].origin().distance(
-                                &planes_0[1].projection(&planes_0[0].origin()),
-                                None,
-                            );
+                            * planes_0[0]
+                                .origin()
+                                .distance(&planes_0[1].projection(&planes_0[0].origin()), None);
                         let offset_plane_0 = planes_0[i].translate_by_normal(-d0);
                         let offset_plane_1 = planes_0[i].translate_by_normal(d0);
 
@@ -5911,12 +7210,8 @@ pub fn face_to_face_wood(
                             offset_plane_1.clone(),
                             planes_0[1].clone(),
                         ];
-                        let loop_planes_1: [Plane; 4] = [
-                            offset_plane_0.clone(),
-                            p1_0,
-                            offset_plane_1.clone(),
-                            p1_1,
-                        ];
+                        let loop_planes_1: [Plane; 4] =
+                            [offset_plane_0.clone(), p1_0, offset_plane_1.clone(), p1_1];
 
                         let mut vol0 = plane_4planes(&pl_end0, &loop_planes_0)?;
                         let mut vol1 = plane_4planes(&pl_end1, &loop_planes_0)?;
@@ -5996,17 +7291,12 @@ pub fn face_to_face_wood(
                 };
                 let quad_0 = quad_0_owned?;
 
-                let mut offset_vector = get_orthogonal_vector_between_two_plane_pairs(
-                    &plane0_0,
-                    &plane1_0,
-                    &plane1_1,
-                )?;
+                let mut offset_vector =
+                    get_orthogonal_vector_between_two_plane_pairs(&plane0_0, &plane1_0, &plane1_1)?;
                 if dir_set {
-                    if let Some(scaled) = scale_vector_to_distance_of_2planes(
-                        &dir,
-                        &plane1_0,
-                        &plane1_1,
-                    ) {
+                    if let Some(scaled) =
+                        scale_vector_to_distance_of_2planes(&dir, &plane1_0, &plane1_1)
+                    {
                         offset_vector = scaled;
                     }
                 }
@@ -6094,16 +7384,16 @@ pub fn face_to_face_wood(
                 // Element thicknesses across the matched face.
                 let next_plane_0 = if i == 0 { 1 } else { 0 };
                 let next_plane_1 = if j == 0 { 1 } else { 0 };
-                let dist_0 = planes_0[i]
-                    .origin()
-                    .distance(&planes_0[next_plane_0].projection(&planes_0[i].origin()), None);
-                let dist_1 = planes_1[j]
-                    .origin()
-                    .distance(&planes_1[next_plane_1].projection(&planes_1[j].origin()), None);
-                let dir0 =
-                    Vector::new(dir0[0] * dist_0, dir0[1] * dist_0, dir0[2] * dist_0);
-                let dir1 =
-                    Vector::new(dir1[0] * dist_1, dir1[1] * dist_1, dir1[2] * dist_1);
+                let dist_0 = planes_0[i].origin().distance(
+                    &planes_0[next_plane_0].projection(&planes_0[i].origin()),
+                    None,
+                );
+                let dist_1 = planes_1[j].origin().distance(
+                    &planes_1[next_plane_1].projection(&planes_1[j].origin()),
+                    None,
+                );
+                let dir0 = Vector::new(dir0[0] * dist_0, dir0[1] * dist_0, dir0[2] * dist_0);
+                let dir1 = Vector::new(dir1[0] * dist_1, dir1[1] * dist_1, dir1[2] * dist_1);
 
                 // Translate the rectangles.
                 for k in 0..vol_a.point_count() {
@@ -6208,16 +7498,19 @@ pub fn polyline_boolean_2d_in_plane(
         let mut pts2d: Vec<Point> = Vec::with_capacity(n + 1);
         for i in 0..n {
             let p = pl.get_point(i).unwrap();
-            let dx = p[0]-origin[0]; let dy = p[1]-origin[1]; let dz = p[2]-origin[2];
-            let u = dx*xax[0] + dy*xax[1] + dz*xax[2];
-            let v = dx*yax[0] + dy*yax[1] + dz*yax[2];
+            let dx = p[0] - origin[0];
+            let dy = p[1] - origin[1];
+            let dz = p[2] - origin[2];
+            let u = dx * xax[0] + dy * xax[1] + dz * xax[2];
+            let v = dx * yax[0] + dy * yax[1] + dz * yax[2];
             pts2d.push(Point::new(u, v, 0.0));
         }
         if pts2d.len() > 1 {
             let f = &pts2d[0];
             let l = pts2d.last().unwrap();
-            let dx = f[0]-l[0]; let dy = f[1]-l[1];
-            if dx*dx + dy*dy > 1e-12 {
+            let dx = f[0] - l[0];
+            let dy = f[1] - l[1];
+            if dx * dx + dy * dy > 1e-12 {
                 let p0 = pts2d[0].clone();
                 pts2d.push(p0);
             }
@@ -6235,7 +7528,11 @@ pub fn polyline_boolean_2d_in_plane(
         if u.is_empty() {
             return None;
         }
-        if inter.is_empty() { u } else { Polyline::boolean_op(&u[0], &inter[0], 2) }
+        if inter.is_empty() {
+            u
+        } else {
+            Polyline::boolean_op(&u[0], &inter[0], 2)
+        }
     } else {
         return None;
     };
@@ -6247,9 +7544,10 @@ pub fn polyline_boolean_2d_in_plane(
     let mut nc = c.point_count();
     if nc > 1 {
         let f = c.get_point(0).unwrap();
-        let l = c.get_point(nc-1).unwrap();
-        let dx = f[0]-l[0]; let dy = f[1]-l[1];
-        if dx*dx + dy*dy < 1e-12 {
+        let l = c.get_point(nc - 1).unwrap();
+        let dx = f[0] - l[0];
+        let dy = f[1] - l[1];
+        if dx * dx + dy * dy < 1e-12 {
             nc -= 1;
         }
     }
@@ -6265,7 +7563,7 @@ pub fn polyline_boolean_2d_in_plane(
             if let Some(last) = collapsed.last() {
                 let dx = p[0] - last[0];
                 let dy = p[1] - last[1];
-                if dx*dx + dy*dy < eps_sq {
+                if dx * dx + dy * dy < eps_sq {
                     continue;
                 }
             }
@@ -6274,7 +7572,7 @@ pub fn polyline_boolean_2d_in_plane(
         if collapsed.len() >= 2 {
             let dx = collapsed.last().unwrap()[0] - collapsed[0][0];
             let dy = collapsed.last().unwrap()[1] - collapsed[0][1];
-            if dx*dx + dy*dy < eps_sq {
+            if dx * dx + dy * dy < eps_sq {
                 collapsed.pop();
             }
         }
@@ -6291,8 +7589,8 @@ pub fn polyline_boolean_2d_in_plane(
     let mut area = 0.0;
     for i in 0..nc {
         let p0 = &src2d[i];
-        let p1 = &src2d[(i+1) % nc];
-        area += p0[0]*p1[1] - p1[0]*p0[1];
+        let p1 = &src2d[(i + 1) % nc];
+        area += p0[0] * p1[1] - p1[0] * p0[1];
     }
     if area.abs() * 0.5 <= min_area {
         return None;
@@ -6300,11 +7598,12 @@ pub fn polyline_boolean_2d_in_plane(
 
     let mut pts: Vec<Point> = Vec::with_capacity(nc + 1);
     for p in &src2d {
-        let u = p[0]; let v = p[1];
+        let u = p[0];
+        let v = p[1];
         pts.push(Point::new(
-            origin[0] + u*xax[0] + v*yax[0],
-            origin[1] + u*xax[1] + v*yax[1],
-            origin[2] + u*xax[2] + v*yax[2],
+            origin[0] + u * xax[0] + v * yax[0],
+            origin[1] + u * xax[1] + v * yax[1],
+            origin[2] + u * xax[2] + v * yax[2],
         ));
     }
     pts.push(pts[0].clone());
@@ -6327,15 +7626,17 @@ pub fn offset_in_3d(polyline: &mut Polyline, plane: &crate::Plane, offset: f64) 
     let mut path: Vec<(f64, f64)> = Vec::with_capacity(n_raw);
     for i in 0..n_raw {
         let p = polyline.get_point(i).unwrap();
-        let dx = p[0] - origin[0]; let dy = p[1] - origin[1]; let dz = p[2] - origin[2];
-        let u = dx*xax[0] + dy*xax[1] + dz*xax[2];
-        let v = dx*yax[0] + dy*yax[1] + dz*yax[2];
+        let dx = p[0] - origin[0];
+        let dy = p[1] - origin[1];
+        let dz = p[2] - origin[2];
+        let u = dx * xax[0] + dy * xax[1] + dz * xax[2];
+        let v = dx * yax[0] + dy * yax[1] + dz * yax[2];
         path.push((u, v));
     }
     if path.len() >= 2 {
         let dx = path.last().unwrap().0 - path[0].0;
         let dy = path.last().unwrap().1 - path[0].1;
-        if dx*dx + dy*dy < 1e-12 {
+        if dx * dx + dy * dy < 1e-12 {
             path.pop();
         }
     }
@@ -6347,7 +7648,7 @@ pub fn offset_in_3d(polyline: &mut Polyline, plane: &crate::Plane, offset: f64) 
     let mut signed_area = 0.0;
     for i in 0..n {
         let (ax, ay) = path[i];
-        let (bx, by) = path[(i+1) % n];
+        let (bx, by) = path[(i + 1) % n];
         signed_area += ax * by - bx * ay;
     }
     let delta = if signed_area < 0.0 { -offset } else { offset };
@@ -6355,13 +7656,14 @@ pub fn offset_in_3d(polyline: &mut Polyline, plane: &crate::Plane, offset: f64) 
     let mut normals: Vec<(f64, f64)> = Vec::with_capacity(n);
     for i in 0..n {
         let (ax, ay) = path[i];
-        let (bx, by) = path[(i+1) % n];
-        let ex = bx - ax; let ey = by - ay;
-        let len = (ex*ex + ey*ey).sqrt();
+        let (bx, by) = path[(i + 1) % n];
+        let ex = bx - ax;
+        let ey = by - ay;
+        let len = (ex * ex + ey * ey).sqrt();
         if len < 1e-12 {
             normals.push((0.0, 0.0));
         } else {
-            normals.push((ey/len, -ex/len));
+            normals.push((ey / len, -ex / len));
         }
     }
 
@@ -6369,8 +7671,8 @@ pub fn offset_in_3d(polyline: &mut Polyline, plane: &crate::Plane, offset: f64) 
     for i in 0..n {
         let (npx, npy) = normals[(i + n - 1) % n];
         let (nnx, nny) = normals[i];
-        let cos_a = npx*nnx + npy*nny;
-        let sin_a = npx*nny - npy*nnx;
+        let cos_a = npx * nnx + npy * nny;
+        let sin_a = npx * nny - npy * nnx;
         let denom = 1.0 + cos_a;
         let concave = (cos_a > -0.999) && (sin_a * delta < 0.0) && (offset > 0.0);
         let (px, py) = path[i];
@@ -6379,12 +7681,13 @@ pub fn offset_in_3d(polyline: &mut Polyline, plane: &crate::Plane, offset: f64) 
             out.push((px, py));
             out.push((px + nnx * delta, py + nny * delta));
         } else if denom.abs() < 1e-9 {
-            let bx = npx + nnx; let by = npy + nny;
-            let bl = (bx*bx + by*by).sqrt();
+            let bx = npx + nnx;
+            let by = npy + nny;
+            let bl = (bx * bx + by * by).sqrt();
             if bl < 1e-12 {
                 out.push((px + nnx * delta, py + nny * delta));
             } else {
-                out.push((px + (bx/bl) * delta, py + (by/bl) * delta));
+                out.push((px + (bx / bl) * delta, py + (by / bl) * delta));
             }
         } else {
             let k = delta / denom;
@@ -6399,7 +7702,7 @@ pub fn offset_in_3d(polyline: &mut Polyline, plane: &crate::Plane, offset: f64) 
     let mut out_area = 0.0;
     for i in 0..nout {
         let (ax, ay) = out[i];
-        let (bx, by) = out[(i+1) % nout];
+        let (bx, by) = out[(i + 1) % nout];
         out_area += ax * by - bx * ay;
     }
     if out_area.abs() * 0.5 < 0.0001 {
@@ -6410,7 +7713,10 @@ pub fn offset_in_3d(polyline: &mut Polyline, plane: &crate::Plane, offset: f64) 
     let mut cd = (out[0].0 - path[0].0).powi(2) + (out[0].1 - path[0].1).powi(2);
     for i in 1..nout {
         let d = (out[i].0 - path[0].0).powi(2) + (out[i].1 - path[0].1).powi(2);
-        if d < cd { cd = d; cp = i; }
+        if d < cd {
+            cd = d;
+            cp = i;
+        }
     }
     if cp != 0 {
         out.rotate_left(cp);
@@ -6419,9 +7725,9 @@ pub fn offset_in_3d(polyline: &mut Polyline, plane: &crate::Plane, offset: f64) 
     let mut pts: Vec<Point> = Vec::with_capacity(nout + 1);
     for &(u, v) in &out {
         pts.push(Point::new(
-            origin[0] + u*xax[0] + v*yax[0],
-            origin[1] + u*xax[1] + v*yax[1],
-            origin[2] + u*xax[2] + v*yax[2],
+            origin[0] + u * xax[0] + v * yax[0],
+            origin[1] + u * xax[1] + v * yax[1],
+            origin[2] + u * xax[2] + v * yax[2],
         ));
     }
     pts.push(pts[0].clone());
@@ -6438,7 +7744,9 @@ pub fn adjacency_search(elements: &mut [crate::element::Element], inflate: f64) 
     for elem in elements.iter_mut() {
         let mut pts: Vec<Point> = Vec::new();
         for pl in elem.polylines() {
-            for p in pl.get_points() { pts.push(p); }
+            for p in pl.get_points() {
+                pts.push(p);
+            }
         }
         obbs.push(OBB::from_points(&pts, inflate));
     }

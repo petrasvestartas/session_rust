@@ -1,7 +1,7 @@
-use crate::{Line, Plane, Point, Vector};
 use crate::tolerance::Tolerance;
-use serde::{Deserialize, Deserializer, Serializer};
+use crate::{Line, Plane, Point, Vector};
 use serde::ser::SerializeMap;
+use serde::{Deserialize, Deserializer, Serializer};
 use std::fmt;
 use std::ops::{Index, IndexMut, Mul, MulAssign};
 
@@ -44,7 +44,9 @@ impl<'de> Deserialize<'de> for Xform {
             m: [f64; 16],
         }
         fn default_matrix() -> [f64; 16] {
-            [1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0]
+            [
+                1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0,
+            ]
         }
         let data = XformData::deserialize(deserializer)?;
         let guid = std::sync::OnceLock::new();
@@ -61,9 +63,9 @@ impl<'de> Deserialize<'de> for Xform {
 }
 
 impl Xform {
-    ///////////////////////////////////////////////////////////////////////////////////////////
+    // ═══════════════════════════════════════════════════════════════════════════
     // Constructors
-    ///////////////////////////////////////////////////////////////////////////////////////////
+    // ═══════════════════════════════════════════════════════════════════════════
 
     pub fn new() -> Self {
         Self::identity()
@@ -81,12 +83,21 @@ impl Xform {
     pub fn identity() -> Self {
         use std::sync::OnceLock;
         static IDENTITY: OnceLock<Xform> = OnceLock::new();
-        IDENTITY.get_or_init(|| {
-            let mut m = [0.0f64; 16];
-            m[0] = 1.0; m[5] = 1.0; m[10] = 1.0; m[15] = 1.0;
-            Xform { typ: "Xform".to_string(), guid: std::sync::OnceLock::new(),
-                    name: "my_xform".to_string(), m }
-        }).clone()
+        IDENTITY
+            .get_or_init(|| {
+                let mut m = [0.0f64; 16];
+                m[0] = 1.0;
+                m[5] = 1.0;
+                m[10] = 1.0;
+                m[15] = 1.0;
+                Xform {
+                    typ: "Xform".to_string(),
+                    guid: std::sync::OnceLock::new(),
+                    name: "my_xform".to_string(),
+                    m,
+                }
+            })
+            .clone()
     }
 
     pub fn from_cols(col_x: Vector, col_y: Vector, col_z: Vector) -> Self {
@@ -117,9 +128,9 @@ impl Xform {
         let _ = self.guid.set(g);
     }
 
-    ///////////////////////////////////////////////////////////////////////////////////////////
+    // ═══════════════════════════════════════════════════════════════════════════
     // Transformations
-    ///////////////////////////////////////////////////////////////////////////////////////////
+    // ═══════════════════════════════════════════════════════════════════════════
 
     pub fn translation(x: f64, y: f64, z: f64) -> Self {
         let mut xform = Self::identity();
@@ -130,7 +141,11 @@ impl Xform {
     }
 
     pub fn rotation_x(angle: f64, degrees: bool) -> Self {
-        let angle = if degrees { angle * Tolerance::TO_RADIANS } else { angle };
+        let angle = if degrees {
+            angle * Tolerance::TO_RADIANS
+        } else {
+            angle
+        };
         let mut xform = Self::identity();
 
         let cos_angle = angle.cos();
@@ -145,7 +160,11 @@ impl Xform {
     }
 
     pub fn rotation_y(angle: f64, degrees: bool) -> Self {
-        let angle = if degrees { angle * Tolerance::TO_RADIANS } else { angle };
+        let angle = if degrees {
+            angle * Tolerance::TO_RADIANS
+        } else {
+            angle
+        };
         let mut xform = Self::identity();
 
         let cos_angle = angle.cos();
@@ -160,7 +179,11 @@ impl Xform {
     }
 
     pub fn rotation_z(angle: f64, degrees: bool) -> Self {
-        let angle = if degrees { angle * Tolerance::TO_RADIANS } else { angle };
+        let angle = if degrees {
+            angle * Tolerance::TO_RADIANS
+        } else {
+            angle
+        };
         let mut xform = Self::identity();
         let cos_angle = angle.cos();
         let sin_angle = angle.sin();
@@ -174,7 +197,11 @@ impl Xform {
     }
 
     pub fn rotation(axis: &Vector, angle: f64, degrees: bool) -> Self {
-        let angle = if degrees { angle * Tolerance::TO_RADIANS } else { angle };
+        let angle = if degrees {
+            angle * Tolerance::TO_RADIANS
+        } else {
+            angle
+        };
         let axis = axis.normalized();
 
         let mut xform = Self::identity();
@@ -305,10 +332,22 @@ impl Xform {
         let (nx, ny, nz) = (n[0], n[1], n[2]);
         let d = o[0] * nx + o[1] * ny + o[2] * nz;
         let mut xform = Xform::new();
-        xform.m[0]  = 1.0 - nx * nx;  xform.m[4]  = -nx * ny;        xform.m[8]  = -nx * nz;        xform.m[12] = nx * d;
-        xform.m[1]  = -ny * nx;       xform.m[5]  = 1.0 - ny * ny;   xform.m[9]  = -ny * nz;        xform.m[13] = ny * d;
-        xform.m[2]  = -nz * nx;       xform.m[6]  = -nz * ny;        xform.m[10] = 1.0 - nz * nz;   xform.m[14] = nz * d;
-        xform.m[3]  = 0.0;            xform.m[7]  = 0.0;             xform.m[11] = 0.0;              xform.m[15] = 1.0;
+        xform.m[0] = 1.0 - nx * nx;
+        xform.m[4] = -nx * ny;
+        xform.m[8] = -nx * nz;
+        xform.m[12] = nx * d;
+        xform.m[1] = -ny * nx;
+        xform.m[5] = 1.0 - ny * ny;
+        xform.m[9] = -ny * nz;
+        xform.m[13] = ny * d;
+        xform.m[2] = -nz * nx;
+        xform.m[6] = -nz * ny;
+        xform.m[10] = 1.0 - nz * nz;
+        xform.m[14] = nz * d;
+        xform.m[3] = 0.0;
+        xform.m[7] = 0.0;
+        xform.m[11] = 0.0;
+        xform.m[15] = 1.0;
         xform
     }
 
@@ -321,16 +360,28 @@ impl Xform {
         let s = 1.0 / dot_nd;
         let d = o[0] * nx + o[1] * ny + o[2] * nz;
         let mut xform = Xform::new();
-        xform.m[0]  = 1.0 - dx*s*nx;  xform.m[4]  = -dx*s*ny;        xform.m[8]  = -dx*s*nz;        xform.m[12] = dx*s*d;
-        xform.m[1]  = -dy*s*nx;       xform.m[5]  = 1.0 - dy*s*ny;   xform.m[9]  = -dy*s*nz;        xform.m[13] = dy*s*d;
-        xform.m[2]  = -dz*s*nx;       xform.m[6]  = -dz*s*ny;        xform.m[10] = 1.0 - dz*s*nz;   xform.m[14] = dz*s*d;
-        xform.m[3]  = 0.0;            xform.m[7]  = 0.0;             xform.m[11] = 0.0;              xform.m[15] = 1.0;
+        xform.m[0] = 1.0 - dx * s * nx;
+        xform.m[4] = -dx * s * ny;
+        xform.m[8] = -dx * s * nz;
+        xform.m[12] = dx * s * d;
+        xform.m[1] = -dy * s * nx;
+        xform.m[5] = 1.0 - dy * s * ny;
+        xform.m[9] = -dy * s * nz;
+        xform.m[13] = dy * s * d;
+        xform.m[2] = -dz * s * nx;
+        xform.m[6] = -dz * s * ny;
+        xform.m[10] = 1.0 - dz * s * nz;
+        xform.m[14] = dz * s * d;
+        xform.m[3] = 0.0;
+        xform.m[7] = 0.0;
+        xform.m[11] = 0.0;
+        xform.m[15] = 1.0;
         xform
     }
 
-    ///////////////////////////////////////////////////////////////////////////////////////////
+    // ═══════════════════════════════════════════════════════════════════════════
     // Details
-    ///////////////////////////////////////////////////////////////////////////////////////////
+    // ═══════════════════════════════════════════════════════════════════════════
 
     pub fn inverse(&self) -> Option<Xform> {
         let s0 = self.m[0] * self.m[5] - self.m[1] * self.m[4];
@@ -370,9 +421,9 @@ impl Xform {
         Some(res)
     }
 
-    ///////////////////////////////////////////////////////////////////////////////////////////
+    // ═══════════════════════════════════════════════════════════════════════════
     // Apply Transformations
-    ///////////////////////////////////////////////////////////////////////////////////////////
+    // ═══════════════════════════════════════════════════════════════════════════
 
     pub fn transform_point(&self, p: &Point) -> Point {
         let x = self.m[0] * p[0] + self.m[4] * p[1] + self.m[8] * p[2] + self.m[12];
@@ -566,7 +617,10 @@ impl Xform {
     /// main_5.cpp:782 (which mirrored wood `wood_joint.cpp:103`).
     ///
     /// Returns `Xform::identity()` if the rectangle is degenerate.
-    pub fn from_change_of_basis(rect0: &crate::polyline::Polyline, rect1: &crate::polyline::Polyline) -> Self {
+    pub fn from_change_of_basis(
+        rect0: &crate::polyline::Polyline,
+        rect1: &crate::polyline::Polyline,
+    ) -> Self {
         if rect0.point_count() < 4 || rect1.point_count() < 1 {
             return Xform::identity();
         }
@@ -626,31 +680,35 @@ impl Xform {
             }};
         }
 
-        norm_row!(i0); elim!(i0, i1); elim!(i0, i2);
+        norm_row!(i0);
+        elim!(i0, i1);
+        elim!(i0, i2);
         if r[i1][i1].abs() < r[i2][i2].abs() {
             std::mem::swap(&mut i1, &mut i2);
         }
         if r[i1][i1] == 0.0 {
             return Xform::identity();
         }
-        norm_row!(i1); elim!(i1, i0); elim!(i1, i2);
+        norm_row!(i1);
+        elim!(i1, i0);
+        elim!(i1, i2);
         if r[i2][i2] == 0.0 {
             return Xform::identity();
         }
-        norm_row!(i2); elim!(i2, i0); elim!(i2, i1);
+        norm_row!(i2);
+        elim!(i2, i0);
+        elim!(i2, i1);
 
-        let tx = o0[0] - (r[0][3]*o1x + r[0][4]*o1y + r[0][5]*o1z);
-        let ty = o0[1] - (r[1][3]*o1x + r[1][4]*o1y + r[1][5]*o1z);
-        let tz = o0[2] - (r[2][3]*o1x + r[2][4]*o1y + r[2][5]*o1z);
+        let tx = o0[0] - (r[0][3] * o1x + r[0][4] * o1y + r[0][5] * o1z);
+        let ty = o0[1] - (r[1][3] * o1x + r[1][4] * o1y + r[1][5] * o1z);
+        let tz = o0[2] - (r[2][3] * o1x + r[2][4] * o1y + r[2][5] * o1z);
         Xform {
             typ: "Xform".to_string(),
             guid: std::sync::OnceLock::new(),
             name: "my_xform".to_string(),
             m: [
-                r[0][3], r[1][3], r[2][3], 0.0,
-                r[0][4], r[1][4], r[2][4], 0.0,
-                r[0][5], r[1][5], r[2][5], 0.0,
-                tx,      ty,      tz,      1.0,
+                r[0][3], r[1][3], r[2][3], 0.0, r[0][4], r[1][4], r[2][4], 0.0, r[0][5], r[1][5],
+                r[2][5], 0.0, tx, ty, tz, 1.0,
             ],
         }
     }
@@ -755,7 +813,12 @@ impl Xform {
     /// Use this when you need a faithful 3D projection — especially when the
     /// input geometry's normal can align with one of the basis axes (where
     /// `plane_to_xy` collapses a dimension). See wood_main.cpp type-13 branch.
-    pub fn world_to_frame(origin: &Point, x_axis: &Vector, y_axis: &Vector, z_axis: &Vector) -> Self {
+    pub fn world_to_frame(
+        origin: &Point,
+        x_axis: &Vector,
+        y_axis: &Vector,
+        z_axis: &Vector,
+    ) -> Self {
         let mut x = x_axis.clone();
         let mut y = y_axis.clone();
         let mut z = z_axis.clone();
@@ -764,9 +827,15 @@ impl Xform {
         z.normalize_self();
 
         let mut f = Self::identity();
-        f.m[0] = x[0]; f.m[4] = x[1]; f.m[8]  = x[2];
-        f.m[1] = y[0]; f.m[5] = y[1]; f.m[9]  = y[2];
-        f.m[2] = z[0]; f.m[6] = z[1]; f.m[10] = z[2];
+        f.m[0] = x[0];
+        f.m[4] = x[1];
+        f.m[8] = x[2];
+        f.m[1] = y[0];
+        f.m[5] = y[1];
+        f.m[9] = y[2];
+        f.m[2] = z[0];
+        f.m[6] = z[1];
+        f.m[10] = z[2];
 
         let t = Self::translation(-origin[0], -origin[1], -origin[2]);
         &f * &t
@@ -774,7 +843,12 @@ impl Xform {
 
     /// Inverse of `world_to_frame`: local (u,v,w) -> world point at
     /// `origin + u*x_hat + v*y_hat + w*z_hat`.
-    pub fn frame_to_world(origin: &Point, x_axis: &Vector, y_axis: &Vector, z_axis: &Vector) -> Self {
+    pub fn frame_to_world(
+        origin: &Point,
+        x_axis: &Vector,
+        y_axis: &Vector,
+        z_axis: &Vector,
+    ) -> Self {
         let mut x = x_axis.clone();
         let mut y = y_axis.clone();
         let mut z = z_axis.clone();
@@ -783,9 +857,15 @@ impl Xform {
         z.normalize_self();
 
         let mut f = Self::identity();
-        f.m[0] = x[0]; f.m[1] = x[1]; f.m[2]  = x[2];
-        f.m[4] = y[0]; f.m[5] = y[1]; f.m[6]  = y[2];
-        f.m[8] = z[0]; f.m[9] = z[1]; f.m[10] = z[2];
+        f.m[0] = x[0];
+        f.m[1] = x[1];
+        f.m[2] = x[2];
+        f.m[4] = y[0];
+        f.m[5] = y[1];
+        f.m[6] = y[2];
+        f.m[8] = z[0];
+        f.m[9] = z[1];
+        f.m[10] = z[2];
 
         let t = Self::translation(origin[0], origin[1], origin[2]);
         &t * &f
@@ -799,10 +879,22 @@ impl Xform {
         let o = frame.origin();
 
         let mut xf = Self::identity();
-        xf.m[0] = x[0]; xf.m[4] = y[0]; xf.m[8]  = z[0]; xf.m[12] = o[0];
-        xf.m[1] = x[1]; xf.m[5] = y[1]; xf.m[9]  = z[1]; xf.m[13] = o[1];
-        xf.m[2] = x[2]; xf.m[6] = y[2]; xf.m[10] = z[2]; xf.m[14] = o[2];
-        xf.m[3] = 0.0;  xf.m[7] = 0.0;  xf.m[11] = 0.0;  xf.m[15] = 1.0;
+        xf.m[0] = x[0];
+        xf.m[4] = y[0];
+        xf.m[8] = z[0];
+        xf.m[12] = o[0];
+        xf.m[1] = x[1];
+        xf.m[5] = y[1];
+        xf.m[9] = z[1];
+        xf.m[13] = o[1];
+        xf.m[2] = x[2];
+        xf.m[6] = y[2];
+        xf.m[10] = z[2];
+        xf.m[14] = o[2];
+        xf.m[3] = 0.0;
+        xf.m[7] = 0.0;
+        xf.m[11] = 0.0;
+        xf.m[15] = 1.0;
         xf
     }
 
@@ -829,7 +921,11 @@ impl Xform {
     }
 
     pub fn axis_rotation(angle: f64, axis: &Vector, degrees: bool) -> Self {
-        let angle = if degrees { angle * Tolerance::TO_RADIANS } else { angle };
+        let angle = if degrees {
+            angle * Tolerance::TO_RADIANS
+        } else {
+            angle
+        };
         let c = angle.cos();
         let s = angle.sin();
         let ux = axis[0];
@@ -855,16 +951,16 @@ impl Xform {
 
     pub fn to_cols(&self) -> [[f64; 4]; 4] {
         [
-            [self.m[0],  self.m[1],  self.m[2],  self.m[3] ],
-            [self.m[4],  self.m[5],  self.m[6],  self.m[7] ],
-            [self.m[8],  self.m[9],  self.m[10], self.m[11]],
+            [self.m[0], self.m[1], self.m[2], self.m[3]],
+            [self.m[4], self.m[5], self.m[6], self.m[7]],
+            [self.m[8], self.m[9], self.m[10], self.m[11]],
             [self.m[12], self.m[13], self.m[14], self.m[15]],
         ]
     }
 
-    ///////////////////////////////////////////////////////////////////////////////////////////
+    // ═══════════════════════════════════════════════════════════════════════════
     // JSON
-    ///////////////////////////////////////////////////////////////////////////////////////////
+    // ═══════════════════════════════════════════════════════════════════════════
 
     pub fn jsondump(&self) -> Result<String, Box<dyn std::error::Error>> {
         crate::file_encoders::sorted_json_string(self)
@@ -893,9 +989,9 @@ impl Xform {
         Self::jsonload(&json)
     }
 
-    ///////////////////////////////////////////////////////////////////////////////////////////
+    // ═══════════════════════════════════════════════════════════════════════════
     // Protobuf
-    ///////////////////////////////////////////////////////////////////////////////////////////
+    // ═══════════════════════════════════════════════════════════════════════════
 
     /// Convert to protobuf binary format.
     ///
@@ -962,9 +1058,9 @@ impl Xform {
         Self::pb_loads(&data).expect("Failed to parse protobuf")
     }
 
-    ///////////////////////////////////////////////////////////////////////////////////////////
+    // ═══════════════════════════════════════════════════════════════════════════
     // String Representations
-    ///////////////////////////////////////////////////////////////////////////////////////////
+    // ═══════════════════════════════════════════════════════════════════════════
 
     /// Minimal string representation (matrix rows)
     pub fn str(&self) -> String {
@@ -993,9 +1089,9 @@ impl Xform {
         copy
     }
 
-    ///////////////////////////////////////////////////////////////////////////////////////////
+    // ═══════════════════════════════════════════════════════════════════════════
     // WGPU
-    ///////////////////////////////////////////////////////////////////////////////////////////
+    // ═══════════════════════════════════════════════════════════════════════════
 
     /// The 16 matrix elements as f32, same column-major order as `m` — ready to upload
     /// to a GPU uniform (`bytemuck::cast_slice(&xform.to_f32())`).

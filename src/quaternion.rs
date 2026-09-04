@@ -70,7 +70,13 @@ impl<'de> Deserialize<'de> for Quaternion {
 impl Quaternion {
     /// Internal helper: create quaternion preserving typ/name but new guid
     fn apply(&self, scalar: f64, vector: Vector) -> Self {
-        Quaternion { typ: self.typ.clone(), guid: std::sync::OnceLock::new(), name: self.name.clone(), scalar, vector }
+        Quaternion {
+            typ: self.typ.clone(),
+            guid: std::sync::OnceLock::new(),
+            name: self.name.clone(),
+            scalar,
+            vector,
+        }
     }
 
     /// Construct from scalar w and vector components (xi, yj, zk)
@@ -240,32 +246,59 @@ impl Quaternion {
     /// objects, or computing the relative rotation between two coordinate
     /// systems. (Rhino: Quaternion.Rotation(plane, plane))
     pub fn from_rotation(plane_a: &Plane, plane_b: &Plane) -> Self {
-        let xa = plane_a.x_axis_ref(); let ya = plane_a.y_axis_ref(); let za = plane_a.z_axis_ref();
-        let xb = plane_b.x_axis_ref(); let yb = plane_b.y_axis_ref(); let zb = plane_b.z_axis_ref();
+        let xa = plane_a.x_axis_ref();
+        let ya = plane_a.y_axis_ref();
+        let za = plane_a.z_axis_ref();
+        let xb = plane_b.x_axis_ref();
+        let yb = plane_b.y_axis_ref();
+        let zb = plane_b.z_axis_ref();
         let mut m = [[0.0_f64; 3]; 3];
-        m[0][0] = xb[0]*xa[0] + yb[0]*ya[0] + zb[0]*za[0];
-        m[0][1] = xb[0]*xa[1] + yb[0]*ya[1] + zb[0]*za[1];
-        m[0][2] = xb[0]*xa[2] + yb[0]*ya[2] + zb[0]*za[2];
-        m[1][0] = xb[1]*xa[0] + yb[1]*ya[0] + zb[1]*za[0];
-        m[1][1] = xb[1]*xa[1] + yb[1]*ya[1] + zb[1]*za[1];
-        m[1][2] = xb[1]*xa[2] + yb[1]*ya[2] + zb[1]*za[2];
-        m[2][0] = xb[2]*xa[0] + yb[2]*ya[0] + zb[2]*za[0];
-        m[2][1] = xb[2]*xa[1] + yb[2]*ya[1] + zb[2]*za[1];
-        m[2][2] = xb[2]*xa[2] + yb[2]*ya[2] + zb[2]*za[2];
+        m[0][0] = xb[0] * xa[0] + yb[0] * ya[0] + zb[0] * za[0];
+        m[0][1] = xb[0] * xa[1] + yb[0] * ya[1] + zb[0] * za[1];
+        m[0][2] = xb[0] * xa[2] + yb[0] * ya[2] + zb[0] * za[2];
+        m[1][0] = xb[1] * xa[0] + yb[1] * ya[0] + zb[1] * za[0];
+        m[1][1] = xb[1] * xa[1] + yb[1] * ya[1] + zb[1] * za[1];
+        m[1][2] = xb[1] * xa[2] + yb[1] * ya[2] + zb[1] * za[2];
+        m[2][0] = xb[2] * xa[0] + yb[2] * ya[0] + zb[2] * za[0];
+        m[2][1] = xb[2] * xa[1] + yb[2] * ya[1] + zb[2] * za[1];
+        m[2][2] = xb[2] * xa[2] + yb[2] * ya[2] + zb[2] * za[2];
         let mut is_identity = true;
         let eps = 1.490116119385e-8_f64;
         'outer: for i in 0..3 {
             for j in 0..3 {
-                let d = if i == j { (m[i][i] - 1.0).abs() } else { m[i][j].abs() };
-                if d > eps { is_identity = false; break 'outer; }
+                let d = if i == j {
+                    (m[i][i] - 1.0).abs()
+                } else {
+                    m[i][j].abs()
+                };
+                if d > eps {
+                    is_identity = false;
+                    break 'outer;
+                }
             }
         }
-        if is_identity { return Self::from_components(1.0, Vector::new(0.0, 0.0, 0.0)); }
-        let i = if m[0][0] >= m[1][1] { if m[0][0] >= m[2][2] { 0 } else { 2 } } else { if m[1][1] >= m[2][2] { 1 } else { 2 } };
+        if is_identity {
+            return Self::from_components(1.0, Vector::new(0.0, 0.0, 0.0));
+        }
+        let i = if m[0][0] >= m[1][1] {
+            if m[0][0] >= m[2][2] {
+                0
+            } else {
+                2
+            }
+        } else {
+            if m[1][1] >= m[2][2] {
+                1
+            } else {
+                2
+            }
+        };
         let j = (i + 1) % 3;
         let k = (i + 2) % 3;
         let s_init = 1.0 + m[i][i] - m[j][j] - m[k][k];
-        if s_init <= 0.0 { return Self::from_components(1.0, Vector::new(0.0, 0.0, 0.0)); }
+        if s_init <= 0.0 {
+            return Self::from_components(1.0, Vector::new(0.0, 0.0, 0.0));
+        }
         let r = s_init.sqrt();
         let s = 0.5 / r;
         let mut q = [0.0_f64; 3];
@@ -281,9 +314,20 @@ impl Quaternion {
     /// kernel. Inverse: from_rotation(xy_plane(), result).
     /// (Rhino: Quaternion.GetRotation(out plane))
     pub fn get_rotation(&self) -> Plane {
-        let a = self.scalar; let b = self.vector[0]; let c = self.vector[1]; let d = self.vector[2];
-        let xaxis = Vector::new(a*a + b*b - c*c - d*d, 2.0*(a*d + b*c),       2.0*(b*d - a*c));
-        let yaxis = Vector::new(2.0*(b*c - a*d),       a*a - b*b + c*c - d*d, 2.0*(a*b + c*d));
+        let a = self.scalar;
+        let b = self.vector[0];
+        let c = self.vector[1];
+        let d = self.vector[2];
+        let xaxis = Vector::new(
+            a * a + b * b - c * c - d * d,
+            2.0 * (a * d + b * c),
+            2.0 * (b * d - a * c),
+        );
+        let yaxis = Vector::new(
+            2.0 * (b * c - a * d),
+            a * a - b * b + c * c - d * d,
+            2.0 * (a * b + c * d),
+        );
         Plane::new(Point::new(0.0, 0.0, 0.0), xaxis, yaxis)
     }
 
@@ -311,7 +355,10 @@ impl Quaternion {
 
     /// Squared magnitude
     pub fn magnitude_squared(&self) -> f64 {
-        self.scalar * self.scalar + self.vector[0] * self.vector[0] + self.vector[1] * self.vector[1] + self.vector[2] * self.vector[2]
+        self.scalar * self.scalar
+            + self.vector[0] * self.vector[0]
+            + self.vector[1] * self.vector[1]
+            + self.vector[2] * self.vector[2]
     }
 
     /// Return a unit-length copy. Use periodically after composing many
@@ -452,7 +499,10 @@ impl Quaternion {
     pub fn pb_loads(data: &[u8]) -> Result<Self, Box<dyn std::error::Error>> {
         use prost::Message;
         let proto = crate::proto::Quaternion::decode(data)?;
-        let mut q = Self::from_components(proto.a as f64, Vector::new(proto.b as f64, proto.c as f64, proto.d as f64));
+        let mut q = Self::from_components(
+            proto.a as f64,
+            Vector::new(proto.b as f64, proto.c as f64, proto.d as f64),
+        );
         q.name = proto.name;
         Ok(q)
     }
@@ -469,9 +519,9 @@ impl Quaternion {
         Self::pb_loads(&data).expect("Failed to parse protobuf")
     }
 
-    ///////////////////////////////////////////////////////////////////////////////////////////
+    // ═══════════════════════════════════════════════════════════════════════════
     // WGPU
-    ///////////////////////////////////////////////////////////////////////////////////////////
+    // ═══════════════════════════════════════════════════════════════════════════
 
     /// GPU-ready `[x, y, z, w]` as f32 — the standard xyzw quaternion layout for GPU
     /// upload (camera / orientation rows). Mirrors [`crate::Xform::to_f32`]; kernel stays f64.
@@ -517,7 +567,9 @@ impl Mul<Quaternion> for Quaternion {
 
     fn mul(self, rhs: Quaternion) -> Self::Output {
         let new_s = self.scalar * rhs.scalar - self.vector.dot(&rhs.vector);
-        let new_v = rhs.vector.clone() * self.scalar + self.vector.clone() * rhs.scalar + self.vector.cross(&rhs.vector);
+        let new_v = rhs.vector.clone() * self.scalar
+            + self.vector.clone() * rhs.scalar
+            + self.vector.cross(&rhs.vector);
         Self::from_components(new_s, new_v)
     }
 }

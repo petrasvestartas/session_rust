@@ -10,7 +10,10 @@ use std::ops::{Index, IndexMut};
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(tag = "type", rename = "InstanceRef")]
 pub struct InstanceRef {
-    #[serde(serialize_with = "crate::guid_serde::serialize", deserialize_with = "crate::guid_serde::deserialize")]
+    #[serde(
+        serialize_with = "crate::guid_serde::serialize",
+        deserialize_with = "crate::guid_serde::deserialize"
+    )]
     guid: std::sync::OnceLock<String>,
     pub name: String,
     pub definition_guid: String,
@@ -132,9 +135,9 @@ impl InstanceRef {
         Self::jsonload(&json)
     }
 
-    ///////////////////////////////////////////////////////////////////////////////////////////
+    // ═══════════════════════════════════════════════════════════════════════════
     // Protobuf Serialization
-    ///////////////////////////////////////////////////////////////////////////////////////////
+    // ═══════════════════════════════════════════════════════════════════════════
 
     pub fn pb_dumps(&self) -> Vec<u8> {
         use prost::Message;

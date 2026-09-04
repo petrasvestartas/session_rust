@@ -1,4 +1,4 @@
-use crate::{AABB, Plane, Point, Vector, Xform};
+use crate::{Plane, Point, Vector, Xform, AABB};
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -9,7 +9,10 @@ pub struct OBB {
     pub y_axis: Vector,
     pub z_axis: Vector,
     pub half_size: Vector,
-    #[serde(serialize_with = "crate::guid_serde::serialize", deserialize_with = "crate::guid_serde::deserialize")]
+    #[serde(
+        serialize_with = "crate::guid_serde::serialize",
+        deserialize_with = "crate::guid_serde::deserialize"
+    )]
     guid: std::sync::OnceLock<String>,
     pub name: String,
 }
@@ -73,7 +76,11 @@ impl OBB {
         }
     }
 
-    pub fn from_nurbscurve(curve: &crate::nurbscurve::NurbsCurve, inflate: f64, tight: bool) -> Self {
+    pub fn from_nurbscurve(
+        curve: &crate::nurbscurve::NurbsCurve,
+        inflate: f64,
+        tight: bool,
+    ) -> Self {
         Self::from_aabb(AABB::from_nurbscurve(curve, inflate, tight))
     }
 
@@ -242,7 +249,11 @@ impl OBB {
         Self::from_aabb(AABB::from_pointcloud(pointcloud, inflate))
     }
 
-    pub fn from_pointcloud_with_plane(pointcloud: &crate::pointcloud::PointCloud, plane: &Plane, inflate: f64) -> Self {
+    pub fn from_pointcloud_with_plane(
+        pointcloud: &crate::pointcloud::PointCloud,
+        plane: &Plane,
+        inflate: f64,
+    ) -> Self {
         Self::from_points_with_plane(&pointcloud.get_points(), plane, inflate)
     }
 
@@ -250,8 +261,15 @@ impl OBB {
         Self::from_aabb(AABB::from_nurbssurface(surface, inflate))
     }
 
-    pub fn from_nurbssurface_with_plane(surface: &crate::nurbssurface::NurbsSurface, plane: &Plane, inflate: f64) -> Self {
-        if !surface.is_valid() || surface.cv_count_dir(Some(0)) == 0 || surface.cv_count_dir(Some(1)) == 0 {
+    pub fn from_nurbssurface_with_plane(
+        surface: &crate::nurbssurface::NurbsSurface,
+        plane: &Plane,
+        inflate: f64,
+    ) -> Self {
+        if !surface.is_valid()
+            || surface.cv_count_dir(Some(0)) == 0
+            || surface.cv_count_dir(Some(1)) == 0
+        {
             return OBB::default();
         }
         let mut points = Vec::new();
@@ -303,11 +321,7 @@ impl OBB {
         [
             self.point_at(self.half_size[0], self.half_size[1], -self.half_size[2]),
             self.point_at(-self.half_size[0], self.half_size[1], -self.half_size[2]),
-            self.point_at(
-                -self.half_size[0],
-                -self.half_size[1],
-                -self.half_size[2],
-            ),
+            self.point_at(-self.half_size[0], -self.half_size[1], -self.half_size[2]),
             self.point_at(self.half_size[0], -self.half_size[1], -self.half_size[2]),
             self.point_at(self.half_size[0], self.half_size[1], self.half_size[2]),
             self.point_at(-self.half_size[0], self.half_size[1], self.half_size[2]),
@@ -320,11 +334,7 @@ impl OBB {
         [
             self.point_at(self.half_size[0], self.half_size[1], -self.half_size[2]),
             self.point_at(-self.half_size[0], self.half_size[1], -self.half_size[2]),
-            self.point_at(
-                -self.half_size[0],
-                -self.half_size[1],
-                -self.half_size[2],
-            ),
+            self.point_at(-self.half_size[0], -self.half_size[1], -self.half_size[2]),
             self.point_at(self.half_size[0], -self.half_size[1], -self.half_size[2]),
             self.point_at(self.half_size[0], self.half_size[1], -self.half_size[2]),
             self.point_at(self.half_size[0], self.half_size[1], self.half_size[2]),
@@ -389,9 +399,21 @@ impl OBB {
     }
 
     pub fn corner(&self, x_max: bool, y_max: bool, z_max: bool) -> Point {
-        let ox = if x_max { self.half_size[0] } else { -self.half_size[0] };
-        let oy = if y_max { self.half_size[1] } else { -self.half_size[1] };
-        let oz = if z_max { self.half_size[2] } else { -self.half_size[2] };
+        let ox = if x_max {
+            self.half_size[0]
+        } else {
+            -self.half_size[0]
+        };
+        let oy = if y_max {
+            self.half_size[1]
+        } else {
+            -self.half_size[1]
+        };
+        let oz = if z_max {
+            self.half_size[2]
+        } else {
+            -self.half_size[2]
+        };
         self.point_at(ox, oy, oz)
     }
 
@@ -428,9 +450,12 @@ impl OBB {
             let lx = dx * self.x_axis[0] + dy * self.x_axis[1] + dz * self.x_axis[2];
             let ly = dx * self.y_axis[0] + dy * self.y_axis[1] + dz * self.y_axis[2];
             let lz = dx * self.z_axis[0] + dy * self.z_axis[1] + dz * self.z_axis[2];
-            min_x = min_x.min(lx); max_x = max_x.max(lx);
-            min_y = min_y.min(ly); max_y = max_y.max(ly);
-            min_z = min_z.min(lz); max_z = max_z.max(lz);
+            min_x = min_x.min(lx);
+            max_x = max_x.max(lx);
+            min_y = min_y.min(ly);
+            max_y = max_y.max(ly);
+            min_z = min_z.min(lz);
+            max_z = max_z.max(lz);
         }
         let ox = (min_x + max_x) * 0.5;
         let oy = (min_y + max_y) * 0.5;
@@ -546,29 +571,79 @@ impl OBB {
         const EPS: f64 = 1e-9;
         let (a0, a1, a2) = (self.half_size[0], self.half_size[1], self.half_size[2]);
         let (b0, b1, b2) = (other.half_size[0], other.half_size[1], other.half_size[2]);
-        let (r00, r01, r02) = (self.x_axis.dot(&other.x_axis), self.x_axis.dot(&other.y_axis), self.x_axis.dot(&other.z_axis));
-        let (r10, r11, r12) = (self.y_axis.dot(&other.x_axis), self.y_axis.dot(&other.y_axis), self.y_axis.dot(&other.z_axis));
-        let (r20, r21, r22) = (self.z_axis.dot(&other.x_axis), self.z_axis.dot(&other.y_axis), self.z_axis.dot(&other.z_axis));
-        let d = Vector::new(other.center[0] - self.center[0], other.center[1] - self.center[1], other.center[2] - self.center[2]);
-        let (t0, t1, t2) = (d.dot(&self.x_axis), d.dot(&self.y_axis), d.dot(&self.z_axis));
+        let (r00, r01, r02) = (
+            self.x_axis.dot(&other.x_axis),
+            self.x_axis.dot(&other.y_axis),
+            self.x_axis.dot(&other.z_axis),
+        );
+        let (r10, r11, r12) = (
+            self.y_axis.dot(&other.x_axis),
+            self.y_axis.dot(&other.y_axis),
+            self.y_axis.dot(&other.z_axis),
+        );
+        let (r20, r21, r22) = (
+            self.z_axis.dot(&other.x_axis),
+            self.z_axis.dot(&other.y_axis),
+            self.z_axis.dot(&other.z_axis),
+        );
+        let d = Vector::new(
+            other.center[0] - self.center[0],
+            other.center[1] - self.center[1],
+            other.center[2] - self.center[2],
+        );
+        let (t0, t1, t2) = (
+            d.dot(&self.x_axis),
+            d.dot(&self.y_axis),
+            d.dot(&self.z_axis),
+        );
         let (ar00, ar01, ar02) = (r00.abs() + EPS, r01.abs() + EPS, r02.abs() + EPS);
         let (ar10, ar11, ar12) = (r10.abs() + EPS, r11.abs() + EPS, r12.abs() + EPS);
         let (ar20, ar21, ar22) = (r20.abs() + EPS, r21.abs() + EPS, r22.abs() + EPS);
-        if t0.abs() > a0 + b0 * ar00 + b1 * ar01 + b2 * ar02 { return false; }
-        if t1.abs() > a1 + b0 * ar10 + b1 * ar11 + b2 * ar12 { return false; }
-        if t2.abs() > a2 + b0 * ar20 + b1 * ar21 + b2 * ar22 { return false; }
-        if (t0 * r00 + t1 * r10 + t2 * r20).abs() > a0 * ar00 + a1 * ar10 + a2 * ar20 + b0 { return false; }
-        if (t0 * r01 + t1 * r11 + t2 * r21).abs() > a0 * ar01 + a1 * ar11 + a2 * ar21 + b1 { return false; }
-        if (t0 * r02 + t1 * r12 + t2 * r22).abs() > a0 * ar02 + a1 * ar12 + a2 * ar22 + b2 { return false; }
-        if (t2 * r10 - t1 * r20).abs() > a1 * ar20 + a2 * ar10 + b1 * ar02 + b2 * ar01 { return false; }
-        if (t2 * r11 - t1 * r21).abs() > a1 * ar21 + a2 * ar11 + b0 * ar02 + b2 * ar00 { return false; }
-        if (t2 * r12 - t1 * r22).abs() > a1 * ar22 + a2 * ar12 + b0 * ar01 + b1 * ar00 { return false; }
-        if (t0 * r20 - t2 * r00).abs() > a0 * ar20 + a2 * ar00 + b1 * ar12 + b2 * ar11 { return false; }
-        if (t0 * r21 - t2 * r01).abs() > a0 * ar21 + a2 * ar01 + b0 * ar12 + b2 * ar10 { return false; }
-        if (t0 * r22 - t2 * r02).abs() > a0 * ar22 + a2 * ar02 + b0 * ar11 + b1 * ar10 { return false; }
-        if (t1 * r00 - t0 * r10).abs() > a0 * ar10 + a1 * ar00 + b1 * ar22 + b2 * ar21 { return false; }
-        if (t1 * r01 - t0 * r11).abs() > a0 * ar11 + a1 * ar01 + b0 * ar22 + b2 * ar20 { return false; }
-        if (t1 * r02 - t0 * r12).abs() > a0 * ar12 + a1 * ar02 + b0 * ar21 + b1 * ar20 { return false; }
+        if t0.abs() > a0 + b0 * ar00 + b1 * ar01 + b2 * ar02 {
+            return false;
+        }
+        if t1.abs() > a1 + b0 * ar10 + b1 * ar11 + b2 * ar12 {
+            return false;
+        }
+        if t2.abs() > a2 + b0 * ar20 + b1 * ar21 + b2 * ar22 {
+            return false;
+        }
+        if (t0 * r00 + t1 * r10 + t2 * r20).abs() > a0 * ar00 + a1 * ar10 + a2 * ar20 + b0 {
+            return false;
+        }
+        if (t0 * r01 + t1 * r11 + t2 * r21).abs() > a0 * ar01 + a1 * ar11 + a2 * ar21 + b1 {
+            return false;
+        }
+        if (t0 * r02 + t1 * r12 + t2 * r22).abs() > a0 * ar02 + a1 * ar12 + a2 * ar22 + b2 {
+            return false;
+        }
+        if (t2 * r10 - t1 * r20).abs() > a1 * ar20 + a2 * ar10 + b1 * ar02 + b2 * ar01 {
+            return false;
+        }
+        if (t2 * r11 - t1 * r21).abs() > a1 * ar21 + a2 * ar11 + b0 * ar02 + b2 * ar00 {
+            return false;
+        }
+        if (t2 * r12 - t1 * r22).abs() > a1 * ar22 + a2 * ar12 + b0 * ar01 + b1 * ar00 {
+            return false;
+        }
+        if (t0 * r20 - t2 * r00).abs() > a0 * ar20 + a2 * ar00 + b1 * ar12 + b2 * ar11 {
+            return false;
+        }
+        if (t0 * r21 - t2 * r01).abs() > a0 * ar21 + a2 * ar01 + b0 * ar12 + b2 * ar10 {
+            return false;
+        }
+        if (t0 * r22 - t2 * r02).abs() > a0 * ar22 + a2 * ar02 + b0 * ar11 + b1 * ar10 {
+            return false;
+        }
+        if (t1 * r00 - t0 * r10).abs() > a0 * ar10 + a1 * ar00 + b1 * ar22 + b2 * ar21 {
+            return false;
+        }
+        if (t1 * r01 - t0 * r11).abs() > a0 * ar11 + a1 * ar01 + b0 * ar22 + b2 * ar20 {
+            return false;
+        }
+        if (t1 * r02 - t0 * r12).abs() > a0 * ar12 + a1 * ar02 + b0 * ar21 + b1 * ar20 {
+            return false;
+        }
         true
     }
 
@@ -580,21 +655,51 @@ impl OBB {
         );
         let (x1, y1, z1) = (&self.x_axis, &self.y_axis, &self.z_axis);
         let (x2, y2, z2) = (&other.x_axis, &other.y_axis, &other.z_axis);
-        if Self::separating_plane_exists(&relative_position, x1, self, other) { return false; }
-        if Self::separating_plane_exists(&relative_position, y1, self, other) { return false; }
-        if Self::separating_plane_exists(&relative_position, z1, self, other) { return false; }
-        if Self::separating_plane_exists(&relative_position, x2, self, other) { return false; }
-        if Self::separating_plane_exists(&relative_position, y2, self, other) { return false; }
-        if Self::separating_plane_exists(&relative_position, z2, self, other) { return false; }
-        if Self::separating_plane_exists(&relative_position, &x1.cross(x2), self, other) { return false; }
-        if Self::separating_plane_exists(&relative_position, &x1.cross(y2), self, other) { return false; }
-        if Self::separating_plane_exists(&relative_position, &x1.cross(z2), self, other) { return false; }
-        if Self::separating_plane_exists(&relative_position, &y1.cross(x2), self, other) { return false; }
-        if Self::separating_plane_exists(&relative_position, &y1.cross(y2), self, other) { return false; }
-        if Self::separating_plane_exists(&relative_position, &y1.cross(z2), self, other) { return false; }
-        if Self::separating_plane_exists(&relative_position, &z1.cross(x2), self, other) { return false; }
-        if Self::separating_plane_exists(&relative_position, &z1.cross(y2), self, other) { return false; }
-        if Self::separating_plane_exists(&relative_position, &z1.cross(z2), self, other) { return false; }
+        if Self::separating_plane_exists(&relative_position, x1, self, other) {
+            return false;
+        }
+        if Self::separating_plane_exists(&relative_position, y1, self, other) {
+            return false;
+        }
+        if Self::separating_plane_exists(&relative_position, z1, self, other) {
+            return false;
+        }
+        if Self::separating_plane_exists(&relative_position, x2, self, other) {
+            return false;
+        }
+        if Self::separating_plane_exists(&relative_position, y2, self, other) {
+            return false;
+        }
+        if Self::separating_plane_exists(&relative_position, z2, self, other) {
+            return false;
+        }
+        if Self::separating_plane_exists(&relative_position, &x1.cross(x2), self, other) {
+            return false;
+        }
+        if Self::separating_plane_exists(&relative_position, &x1.cross(y2), self, other) {
+            return false;
+        }
+        if Self::separating_plane_exists(&relative_position, &x1.cross(z2), self, other) {
+            return false;
+        }
+        if Self::separating_plane_exists(&relative_position, &y1.cross(x2), self, other) {
+            return false;
+        }
+        if Self::separating_plane_exists(&relative_position, &y1.cross(y2), self, other) {
+            return false;
+        }
+        if Self::separating_plane_exists(&relative_position, &y1.cross(z2), self, other) {
+            return false;
+        }
+        if Self::separating_plane_exists(&relative_position, &z1.cross(x2), self, other) {
+            return false;
+        }
+        if Self::separating_plane_exists(&relative_position, &z1.cross(y2), self, other) {
+            return false;
+        }
+        if Self::separating_plane_exists(&relative_position, &z1.cross(z2), self, other) {
+            return false;
+        }
         true
     }
 
@@ -681,7 +786,9 @@ impl OBB {
             x_axis: Some(crate::proto::Vector::decode(self.x_axis.pb_dumps().as_slice()).unwrap()),
             y_axis: Some(crate::proto::Vector::decode(self.y_axis.pb_dumps().as_slice()).unwrap()),
             z_axis: Some(crate::proto::Vector::decode(self.z_axis.pb_dumps().as_slice()).unwrap()),
-            half_size: Some(crate::proto::Vector::decode(self.half_size.pb_dumps().as_slice()).unwrap()),
+            half_size: Some(
+                crate::proto::Vector::decode(self.half_size.pb_dumps().as_slice()).unwrap(),
+            ),
             guid: self.guid().to_string(),
             name: self.name.clone(),
         }
@@ -693,7 +800,9 @@ impl OBB {
     }
 
     /// Build from an already-decoded proto — pb_loads decodes then calls this.
-    pub fn from_proto(proto: crate::proto::BoundingBox) -> Result<Self, Box<dyn std::error::Error>> {
+    pub fn from_proto(
+        proto: crate::proto::BoundingBox,
+    ) -> Result<Self, Box<dyn std::error::Error>> {
         use prost::Message;
         let center = if let Some(p) = &proto.center {
             crate::point::Point::pb_loads(&p.encode_to_vec())?
@@ -735,9 +844,9 @@ impl OBB {
         Self::pb_loads(&data).expect("Failed to parse protobuf")
     }
 
-    ///////////////////////////////////////////////////////////////////////////////////////////
+    // ═══════════════════════════════════════════════════════════════════════════
     // WGPU
-    ///////////////////////////////////////////////////////////////////////////////////////////
+    // ═══════════════════════════════════════════════════════════════════════════
 
     /// The 8 box corners as f32 `[x, y, z]` rows — ready for a wireframe-box vertex/segment
     /// buffer. Same winding as [`corners`](Self::corners); the kernel keeps f64.
@@ -763,4 +872,3 @@ impl Default for OBB {
 #[cfg(test)]
 #[path = "obb_test.rs"]
 mod obb_test;
-

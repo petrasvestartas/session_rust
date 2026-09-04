@@ -1,18 +1,18 @@
-use crate::element::Element;
-use crate::obb::OBB;
 use crate::brep::BRep;
+use crate::element::Element;
 use crate::line::Line;
 use crate::mesh::Mesh;
 use crate::nurbscurve::NurbsCurve;
 use crate::nurbssurface::NurbsSurface;
+use crate::obb::OBB;
 use crate::plane::Plane;
 use crate::point::Point;
 use crate::pointcloud::PointCloud;
 use crate::polyline::Polyline;
 use serde::{Deserialize, Serialize};
-use std::rc::Rc;
 use std::fmt;
 use std::fs;
+use std::rc::Rc;
 
 /// A custom domain object stored generically in a Session.
 ///
@@ -32,7 +32,9 @@ pub struct Component {
 }
 
 impl Component {
-    pub fn guid(&self) -> &str { &self.guid }
+    pub fn guid(&self) -> &str {
+        &self.guid
+    }
 
     pub fn pb_dumps(&self) -> Vec<u8> {
         use prost::Message;
@@ -63,7 +65,10 @@ impl Component {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(tag = "type", rename = "Objects")]
 pub struct Objects {
-    #[serde(serialize_with = "crate::guid_serde::serialize", deserialize_with = "crate::guid_serde::deserialize")]
+    #[serde(
+        serialize_with = "crate::guid_serde::serialize",
+        deserialize_with = "crate::guid_serde::deserialize"
+    )]
     guid: std::sync::OnceLock<String>,
     pub name: String,
     pub points: Vec<Rc<Point>>,
@@ -120,9 +125,9 @@ impl Objects {
         }
     }
 
-    ///////////////////////////////////////////////////////////////////////////////////////////
+    // ═══════════════════════════════════════════════════════════════════════════
     // JSON
-    ///////////////////////////////////////////////////////////////////////////////////////////
+    // ═══════════════════════════════════════════════════════════════════════════
 
     /// Serializes the Objects to a JSON string.
     pub fn jsondump(&self) -> Result<String, Box<dyn std::error::Error>> {
@@ -152,51 +157,75 @@ impl Objects {
         Self::jsonload(&json).unwrap_or_else(|_| Self::default())
     }
 
-    ///////////////////////////////////////////////////////////////////////////////////////////
+    // ═══════════════════════════════════════════════════════════════════════════
     // Protobuf
-    ///////////////////////////////////////////////////////////////////////////////////////////
+    // ═══════════════════════════════════════════════════════════════════════════
 
     pub fn pb_dumps(&self) -> Vec<u8> {
         use prost::Message;
         let proto = crate::proto::Objects {
             name: self.name.clone(),
             guid: self.guid().to_string(),
-            points: self.points.iter().map(|p| {
-                crate::proto::Point::decode(p.pb_dumps().as_slice()).unwrap()
-            }).collect(),
-            lines: self.lines.iter().map(|l| {
-                crate::proto::Line::decode(l.pb_dumps().as_slice()).unwrap()
-            }).collect(),
-            planes: self.planes.iter().map(|p| {
-                crate::proto::Plane::decode(p.pb_dumps().as_slice()).unwrap()
-            }).collect(),
-            bboxes: self.bboxes.iter().map(|b| {
-                crate::proto::BoundingBox::decode(b.pb_dumps().as_slice()).unwrap()
-            }).collect(),
-            polylines: self.polylines.iter().map(|p| {
-                crate::proto::Polyline::decode(p.pb_dumps().as_slice()).unwrap()
-            }).collect(),
-            pointclouds: self.pointclouds.iter().map(|p| {
-                crate::proto::PointCloud::decode(p.pb_dumps().as_slice()).unwrap()
-            }).collect(),
-            meshes: self.meshes.iter().map(|m| {
-                crate::proto::Mesh::decode(m.pb_dumps().as_slice()).unwrap()
-            }).collect(),
-            nurbscurves: self.nurbscurves.iter().map(|nc| {
-                crate::proto::NurbsCurve::decode(nc.pb_dumps().as_slice()).unwrap()
-            }).collect(),
-            nurbssurfaces: self.nurbssurfaces.iter().map(|ns| {
-                crate::proto::NurbsSurface::decode(ns.pb_dumps().as_slice()).unwrap()
-            }).collect(),
-            breps: self.breps.iter().map(|b| {
-                crate::proto::BRep::decode(b.pb_dumps().as_slice()).unwrap()
-            }).collect(),
-            elements: self.elements.iter().map(|e| {
-                crate::proto::Element::decode(e.pb_dumps().as_slice()).unwrap()
-            }).collect(),
-            components: self.components.iter().map(|c| {
-                crate::proto::Component::decode(c.pb_dumps().as_slice()).unwrap()
-            }).collect(),
+            points: self
+                .points
+                .iter()
+                .map(|p| crate::proto::Point::decode(p.pb_dumps().as_slice()).unwrap())
+                .collect(),
+            lines: self
+                .lines
+                .iter()
+                .map(|l| crate::proto::Line::decode(l.pb_dumps().as_slice()).unwrap())
+                .collect(),
+            planes: self
+                .planes
+                .iter()
+                .map(|p| crate::proto::Plane::decode(p.pb_dumps().as_slice()).unwrap())
+                .collect(),
+            bboxes: self
+                .bboxes
+                .iter()
+                .map(|b| crate::proto::BoundingBox::decode(b.pb_dumps().as_slice()).unwrap())
+                .collect(),
+            polylines: self
+                .polylines
+                .iter()
+                .map(|p| crate::proto::Polyline::decode(p.pb_dumps().as_slice()).unwrap())
+                .collect(),
+            pointclouds: self
+                .pointclouds
+                .iter()
+                .map(|p| crate::proto::PointCloud::decode(p.pb_dumps().as_slice()).unwrap())
+                .collect(),
+            meshes: self
+                .meshes
+                .iter()
+                .map(|m| crate::proto::Mesh::decode(m.pb_dumps().as_slice()).unwrap())
+                .collect(),
+            nurbscurves: self
+                .nurbscurves
+                .iter()
+                .map(|nc| crate::proto::NurbsCurve::decode(nc.pb_dumps().as_slice()).unwrap())
+                .collect(),
+            nurbssurfaces: self
+                .nurbssurfaces
+                .iter()
+                .map(|ns| crate::proto::NurbsSurface::decode(ns.pb_dumps().as_slice()).unwrap())
+                .collect(),
+            breps: self
+                .breps
+                .iter()
+                .map(|b| crate::proto::BRep::decode(b.pb_dumps().as_slice()).unwrap())
+                .collect(),
+            elements: self
+                .elements
+                .iter()
+                .map(|e| crate::proto::Element::decode(e.pb_dumps().as_slice()).unwrap())
+                .collect(),
+            components: self
+                .components
+                .iter()
+                .map(|c| crate::proto::Component::decode(c.pb_dumps().as_slice()).unwrap())
+                .collect(),
         };
         proto.encode_to_vec()
     }
@@ -208,40 +237,74 @@ impl Objects {
         objects.set_guid(proto.guid.clone());
         objects.name = proto.name;
         for p in &proto.points {
-            objects.points.push(Rc::new(crate::point::Point::pb_loads(&p.encode_to_vec())?));
+            objects
+                .points
+                .push(Rc::new(crate::point::Point::pb_loads(&p.encode_to_vec())?));
         }
         for l in &proto.lines {
-            objects.lines.push(Rc::new(crate::line::Line::pb_loads(&l.encode_to_vec())?));
+            objects
+                .lines
+                .push(Rc::new(crate::line::Line::pb_loads(&l.encode_to_vec())?));
         }
         for p in &proto.planes {
-            objects.planes.push(Rc::new(crate::plane::Plane::pb_loads(&p.encode_to_vec())?));
+            objects
+                .planes
+                .push(Rc::new(crate::plane::Plane::pb_loads(&p.encode_to_vec())?));
         }
         for b in &proto.bboxes {
-            objects.bboxes.push(Rc::new(crate::obb::OBB::pb_loads(&b.encode_to_vec())?));
+            objects
+                .bboxes
+                .push(Rc::new(crate::obb::OBB::pb_loads(&b.encode_to_vec())?));
         }
         for p in &proto.polylines {
-            objects.polylines.push(Rc::new(crate::polyline::Polyline::pb_loads(&p.encode_to_vec())?));
+            objects
+                .polylines
+                .push(Rc::new(crate::polyline::Polyline::pb_loads(
+                    &p.encode_to_vec(),
+                )?));
         }
         for p in &proto.pointclouds {
-            objects.pointclouds.push(Rc::new(crate::pointcloud::PointCloud::pb_loads(&p.encode_to_vec())));
+            objects
+                .pointclouds
+                .push(Rc::new(crate::pointcloud::PointCloud::pb_loads(
+                    &p.encode_to_vec(),
+                )));
         }
         for m in &proto.meshes {
-            objects.meshes.push(Rc::new(crate::mesh::Mesh::pb_loads(&m.encode_to_vec())?));
+            objects
+                .meshes
+                .push(Rc::new(crate::mesh::Mesh::pb_loads(&m.encode_to_vec())?));
         }
         for nc in &proto.nurbscurves {
-            objects.nurbscurves.push(Rc::new(crate::nurbscurve::NurbsCurve::pb_loads(&nc.encode_to_vec())?));
+            objects
+                .nurbscurves
+                .push(Rc::new(crate::nurbscurve::NurbsCurve::pb_loads(
+                    &nc.encode_to_vec(),
+                )?));
         }
         for ns in &proto.nurbssurfaces {
-            objects.nurbssurfaces.push(Rc::new(crate::nurbssurface::NurbsSurface::pb_loads(&ns.encode_to_vec())?));
+            objects
+                .nurbssurfaces
+                .push(Rc::new(crate::nurbssurface::NurbsSurface::pb_loads(
+                    &ns.encode_to_vec(),
+                )?));
         }
         for b in &proto.breps {
-            objects.breps.push(Rc::new(crate::brep::BRep::pb_loads(&b.encode_to_vec())?));
+            objects
+                .breps
+                .push(Rc::new(crate::brep::BRep::pb_loads(&b.encode_to_vec())?));
         }
         for e in &proto.elements {
-            objects.elements.push(Rc::new(crate::element::Element::pb_loads(&e.encode_to_vec())?));
+            objects
+                .elements
+                .push(Rc::new(crate::element::Element::pb_loads(
+                    &e.encode_to_vec(),
+                )?));
         }
         for c in &proto.components {
-            objects.components.push(Component::pb_loads(&c.encode_to_vec())?);
+            objects
+                .components
+                .push(Component::pb_loads(&c.encode_to_vec())?);
         }
         Ok(objects)
     }

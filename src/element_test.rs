@@ -1,16 +1,16 @@
-use crate::{MINI_CHECK, MINI_TEST, REGISTER_MINI_TEST};
 use crate::mini_test::TestResult;
 use crate::tolerance::TOLERANCE;
+use crate::{MINI_CHECK, MINI_TEST, REGISTER_MINI_TEST};
 
-///////////////////////////////////////////////////////////////////////////////////////////
+// ═══════════════════════════════════════════════════════════════════════════
 // Element
-///////////////////////////////////////////////////////////////////////////////////////////
+// ═══════════════════════════════════════════════════════════════════════════
 
 pub fn run_element_constructor() -> TestResult {
     MINI_TEST!("Constructor", {
-        use crate::Mesh;
         use crate::element::{Element, ElementGeometry};
         use crate::BRep;
+        use crate::Mesh;
         use crate::Point;
 
         let m = Mesh::from_vertices_and_faces(
@@ -50,10 +50,10 @@ pub fn run_element_constructor() -> TestResult {
 
 pub fn run_element_place() -> TestResult {
     MINI_TEST!("Place", {
-        use crate::Mesh;
-        use crate::Xform;
         use crate::element::{Element, ElementGeometry};
+        use crate::Mesh;
         use crate::Point;
+        use crate::Xform;
 
         let m = Mesh::from_vertices_and_faces(
             vec![
@@ -70,7 +70,11 @@ pub fn run_element_place() -> TestResult {
 
         MINI_CHECK!(e.is_dirty());
         if let ElementGeometry::Mesh(mesh) = e.geometry() {
-            let min_x = mesh.vertex.values().map(|v| v.x).fold(f64::INFINITY, f64::min);
+            let min_x = mesh
+                .vertex
+                .values()
+                .map(|v| v.x)
+                .fold(f64::INFINITY, f64::min);
             MINI_CHECK!(min_x > 9.0);
         }
     })
@@ -78,11 +82,11 @@ pub fn run_element_place() -> TestResult {
 
 pub fn run_element_add_feature() -> TestResult {
     MINI_TEST!("Add Geometry Op", {
-        use crate::Mesh;
-        use crate::BRep;
-        use crate::Xform;
         use crate::element::{Element, ElementGeometry};
+        use crate::BRep;
+        use crate::Mesh;
         use crate::Point;
+        use crate::Xform;
 
         let m = Mesh::from_vertices_and_faces(
             vec![
@@ -95,11 +99,15 @@ pub fn run_element_add_feature() -> TestResult {
         );
         let mut e = Element::from_mesh(m, "my_element");
 
-        fn my_feature(geo: Mesh) -> Mesh { geo }
+        fn my_feature(geo: Mesh) -> Mesh {
+            geo
+        }
         e.add_geometry_op(my_feature);
 
         // Features are Mesh -> Mesh, so BRep geometry passes through untouched
-        fn empty_mesh(_geo: Mesh) -> Mesh { Mesh::new() }
+        fn empty_mesh(_geo: Mesh) -> Mesh {
+            Mesh::new()
+        }
         let mut eb = Element::from_brep(BRep::create_box(1.0, 1.0, 1.0), "brep_feature");
         eb.add_geometry_op(empty_mesh);
         let sg = eb.session_geometry(&Xform::identity());
@@ -112,8 +120,8 @@ pub fn run_element_add_feature() -> TestResult {
 
 pub fn run_element_aabb() -> TestResult {
     MINI_TEST!("AABB", {
-        use crate::Mesh;
         use crate::Element;
+        use crate::Mesh;
         use crate::Point;
 
         let m = Mesh::from_vertices_and_faces(
@@ -136,8 +144,8 @@ pub fn run_element_aabb() -> TestResult {
 
 pub fn run_element_obb() -> TestResult {
     MINI_TEST!("OBB", {
-        use crate::Mesh;
         use crate::Element;
+        use crate::Mesh;
         use crate::Point;
 
         let m = Mesh::from_vertices_and_faces(
@@ -159,10 +167,10 @@ pub fn run_element_obb() -> TestResult {
 
 pub fn run_element_session_geometry() -> TestResult {
     MINI_TEST!("Session Geometry", {
-        use crate::Mesh;
-        use crate::Xform;
         use crate::element::{Element, ElementGeometry};
+        use crate::Mesh;
         use crate::Point;
+        use crate::Xform;
 
         let m = Mesh::from_vertices_and_faces(
             vec![
@@ -190,8 +198,8 @@ pub fn run_element_session_geometry() -> TestResult {
 
 pub fn run_element_reset() -> TestResult {
     MINI_TEST!("Reset", {
-        use crate::Mesh;
         use crate::Element;
+        use crate::Mesh;
         use crate::Point;
 
         let m = Mesh::from_vertices_and_faces(
@@ -218,8 +226,8 @@ pub fn run_element_reset() -> TestResult {
 
 pub fn run_element_compute_point() -> TestResult {
     MINI_TEST!("Compute Point", {
-        use crate::Mesh;
         use crate::Element;
+        use crate::Mesh;
         use crate::Point;
 
         let m = Mesh::from_vertices_and_faces(
@@ -261,8 +269,8 @@ pub fn run_element_brep_aabb() -> TestResult {
 
 pub fn run_element_json_roundtrip() -> TestResult {
     MINI_TEST!("Json Roundtrip", {
-        use crate::Mesh;
         use crate::element::{Element, ElementGeometry};
+        use crate::Mesh;
         use crate::Point;
 
         let m = Mesh::from_vertices_and_faces(
@@ -290,8 +298,8 @@ pub fn run_element_json_roundtrip() -> TestResult {
 
 pub fn run_element_protobuf_roundtrip() -> TestResult {
     MINI_TEST!("Protobuf Roundtrip", {
-        use crate::BRep;
         use crate::element::{Element, ElementGeometry};
+        use crate::BRep;
 
         let b = BRep::create_box(2.0, 3.0, 4.0);
         let e = Element::from_brep(b, "proto_test");
@@ -309,19 +317,24 @@ pub fn run_element_protobuf_roundtrip() -> TestResult {
     })
 }
 
-///////////////////////////////////////////////////////////////////////////////////////////
+// ═══════════════════════════════════════════════════════════════════════════
 // Element - Polylines
-///////////////////////////////////////////////////////////////////////////////////////////
+// ═══════════════════════════════════════════════════════════════════════════
 
 pub fn run_element_polylines() -> TestResult {
     MINI_TEST!("Polylines", {
-        use crate::Mesh;
         use crate::Element;
+        use crate::Mesh;
         use crate::Point;
 
         let m = Mesh::from_vertices_and_faces(
-            vec![Point::new(0.0,0.0,0.0), Point::new(1.0,0.0,0.0), Point::new(1.0,1.0,0.0), Point::new(0.0,1.0,0.0)],
-            vec![vec![0,1,2,3]],
+            vec![
+                Point::new(0.0, 0.0, 0.0),
+                Point::new(1.0, 0.0, 0.0),
+                Point::new(1.0, 1.0, 0.0),
+                Point::new(0.0, 1.0, 0.0),
+            ],
+            vec![vec![0, 1, 2, 3]],
         );
         let mut e = Element::from_mesh(m, "test_element");
 
@@ -332,20 +345,24 @@ pub fn run_element_polylines() -> TestResult {
     })
 }
 
-///////////////////////////////////////////////////////////////////////////////////////////
+// ═══════════════════════════════════════════════════════════════════════════
 // Element - polymorphic registry
 //
 // Rust has no inheritance, so unlike C++/Python there is no factory returning a derived
 // element. What Rust guarantees instead is that it never DESTROYS a derived element: the
 // type name and payload a downstream package wrote survive a load/save untouched, so a Rust
 // tool can round-trip a file whose domain type it has never heard of.
-///////////////////////////////////////////////////////////////////////////////////////////
+// ═══════════════════════════════════════════════════════════════════════════
 
 fn unit_quad() -> crate::Mesh {
     use crate::Point;
     crate::Mesh::from_vertices_and_faces(
-        vec![Point::new(0.0, 0.0, 0.0), Point::new(1.0, 0.0, 0.0),
-             Point::new(1.0, 1.0, 0.0), Point::new(0.0, 1.0, 0.0)],
+        vec![
+            Point::new(0.0, 0.0, 0.0),
+            Point::new(1.0, 0.0, 0.0),
+            Point::new(1.0, 1.0, 0.0),
+            Point::new(0.0, 1.0, 0.0),
+        ],
         vec![vec![0, 1, 2, 3]],
     )
 }
@@ -417,9 +434,17 @@ pub fn run_element_features_round_trip() -> TestResult {
         let mut e = Element::from_mesh(unit_quad(), "plate_0");
         e.insertion_vectors = vec![Vector::new(0.0, 0.0, 1.0), Vector::new(1.0, 0.0, 0.0)];
         e.dimensions = Some(Vector::new(120.0, 80.0, 12.5));
-        e.features.push(ElementFeature::new("cut", 2, vec![Polyline::new(vec![
-            Point::new(0.0, 0.0, 0.0), Point::new(1.0, 0.0, 0.0),
-            Point::new(1.0, 1.0, 0.0), Point::new(0.0, 0.0, 0.0)])], "notch"));
+        e.features.push(ElementFeature::new(
+            "cut",
+            2,
+            vec![Polyline::new(vec![
+                Point::new(0.0, 0.0, 0.0),
+                Point::new(1.0, 0.0, 0.0),
+                Point::new(1.0, 1.0, 0.0),
+                Point::new(0.0, 0.0, 0.0),
+            ])],
+            "notch",
+        ));
         let feature_guid = e.features[0].guid().to_string();
 
         let loaded = Element::pb_loads(&e.pb_dumps()).unwrap();
@@ -447,13 +472,13 @@ pub fn run_element_dimensions_are_nominal_not_measured() -> TestResult {
         // dimensions is AUTHORED intent; obb() MEASURES what exists. They are allowed to
         // disagree, and this pins that they are genuinely independent.
         let mut e = Element::from_mesh(unit_quad(), "plate");
-        MINI_CHECK!(e.dimensions.is_none());              // never authored
+        MINI_CHECK!(e.dimensions.is_none()); // never authored
 
         e.dimensions = Some(Vector::new(120.0, 80.0, 12.5)); // nothing like the unit quad
         let measured = e.obb();
 
         MINI_CHECK!((e.dimensions.as_ref().unwrap()[0] - 120.0).abs() < 1e-9);
-        MINI_CHECK!(measured.half_size[0] < 1.0);         // the geometry is still a unit quad
+        MINI_CHECK!(measured.half_size[0] < 1.0); // the geometry is still a unit quad
     })
 }
 
@@ -493,7 +518,9 @@ pub fn run_element_throwing_factory_degrades_to_base() -> TestResult {
         // A factory that declines is a bug in that package, and it must not take the whole
         // Session down: one malformed element must not make every other element unreachable.
         // C++ and Python express the same failure by throwing; a Rust factory returns None.
-        fn decline(_data: &[u8]) -> Option<Element> { None }
+        fn decline(_data: &[u8]) -> Option<Element> {
+            None
+        }
         Element::register_type("Exploding", decline);
 
         let mut victim = Element::from_mesh(unit_quad(), "victim");
@@ -542,8 +569,8 @@ pub fn run_element_duplicate_keeps_every_field() -> TestResult {
 
         let copy = e.duplicate();
 
-        MINI_CHECK!(copy == e);                   // every carried field compares equal
-        MINI_CHECK!(copy.guid() != e.guid());     // but it is a different object
+        MINI_CHECK!(copy == e); // every carried field compares equal
+        MINI_CHECK!(copy.guid() != e.guid()); // but it is a different object
         MINI_CHECK!(copy.insertion_vectors.len() == 1);
         MINI_CHECK!(copy.dimensions.is_some());
         MINI_CHECK!(copy.features.len() == 1);
@@ -566,17 +593,21 @@ pub fn run_element_equality_compares_carried_fields() -> TestResult {
     })
 }
 
-///////////////////////////////////////////////////////////////////////////////////////////
+// ═══════════════════════════════════════════════════════════════════════════
 // ElementFeature
-///////////////////////////////////////////////////////////////////////////////////////////
+// ═══════════════════════════════════════════════════════════════════════════
 
 pub fn run_element_feature_constructor() -> TestResult {
     MINI_TEST!("Constructor", {
         use crate::element::ElementFeature;
         use crate::{Point, Polyline};
 
-        let outline = Polyline::new(vec![Point::new(0.0, 0.0, 0.0), Point::new(1.0, 0.0, 0.0),
-                                         Point::new(1.0, 1.0, 0.0), Point::new(0.0, 0.0, 0.0)]);
+        let outline = Polyline::new(vec![
+            Point::new(0.0, 0.0, 0.0),
+            Point::new(1.0, 0.0, 0.0),
+            Point::new(1.0, 1.0, 0.0),
+            Point::new(0.0, 0.0, 0.0),
+        ]);
         let f = ElementFeature::new("cut", 2, vec![outline.clone()], "notch");
 
         MINI_CHECK!(f.feature_type == "cut");
@@ -607,10 +638,17 @@ pub fn run_element_feature_json_roundtrip() -> TestResult {
         use crate::element::ElementFeature;
         use crate::{Point, Polyline};
 
-        let f = ElementFeature::new("cut", 2,
-            vec![Polyline::new(vec![Point::new(0.0, 0.0, 0.0), Point::new(1.0, 0.0, 0.0),
-                                    Point::new(1.0, 1.0, 0.0), Point::new(0.0, 0.0, 0.0)])],
-            "notch");
+        let f = ElementFeature::new(
+            "cut",
+            2,
+            vec![Polyline::new(vec![
+                Point::new(0.0, 0.0, 0.0),
+                Point::new(1.0, 0.0, 0.0),
+                Point::new(1.0, 1.0, 0.0),
+                Point::new(0.0, 0.0, 0.0),
+            ])],
+            "notch",
+        );
         let feature_guid = f.guid().to_string();
 
         let fname = "serialization/test_element_feature.json";
@@ -629,10 +667,17 @@ pub fn run_element_feature_protobuf_roundtrip() -> TestResult {
         use crate::element::ElementFeature;
         use crate::{Point, Polyline};
 
-        let f = ElementFeature::new("drill", 5,
-            vec![Polyline::new(vec![Point::new(0.0, 0.0, 0.0), Point::new(1.0, 0.0, 0.0),
-                                    Point::new(1.0, 1.0, 0.0), Point::new(0.0, 0.0, 0.0)])],
-            "hole");
+        let f = ElementFeature::new(
+            "drill",
+            5,
+            vec![Polyline::new(vec![
+                Point::new(0.0, 0.0, 0.0),
+                Point::new(1.0, 0.0, 0.0),
+                Point::new(1.0, 1.0, 0.0),
+                Point::new(0.0, 0.0, 0.0),
+            ])],
+            "hole",
+        );
         let feature_guid = f.guid().to_string();
 
         let path = "serialization/test_element_feature.bin";
@@ -647,32 +692,116 @@ pub fn run_element_feature_protobuf_roundtrip() -> TestResult {
     })
 }
 
-///////////////////////////////////////////////////////////////////////////////////////////
+// ═══════════════════════════════════════════════════════════════════════════
 // Registration
-///////////////////////////////////////////////////////////////////////////////////////////
+// ═══════════════════════════════════════════════════════════════════════════
 
-REGISTER_MINI_TEST!("Element", "Constructor", crate::element_test::run_element_constructor);
+REGISTER_MINI_TEST!(
+    "Element",
+    "Constructor",
+    crate::element_test::run_element_constructor
+);
 REGISTER_MINI_TEST!("Element", "Place", crate::element_test::run_element_place);
-REGISTER_MINI_TEST!("Element", "Add Geometry Op", crate::element_test::run_element_add_feature);
+REGISTER_MINI_TEST!(
+    "Element",
+    "Add Geometry Op",
+    crate::element_test::run_element_add_feature
+);
 REGISTER_MINI_TEST!("Element", "AABB", crate::element_test::run_element_aabb);
 REGISTER_MINI_TEST!("Element", "OBB", crate::element_test::run_element_obb);
-REGISTER_MINI_TEST!("Element", "Session Geometry", crate::element_test::run_element_session_geometry);
+REGISTER_MINI_TEST!(
+    "Element",
+    "Session Geometry",
+    crate::element_test::run_element_session_geometry
+);
 REGISTER_MINI_TEST!("Element", "Reset", crate::element_test::run_element_reset);
-REGISTER_MINI_TEST!("Element", "Compute Point", crate::element_test::run_element_compute_point);
-REGISTER_MINI_TEST!("Element", "Brep Aabb", crate::element_test::run_element_brep_aabb);
-REGISTER_MINI_TEST!("Element", "Json Roundtrip", crate::element_test::run_element_json_roundtrip);
-REGISTER_MINI_TEST!("Element", "Protobuf Roundtrip", crate::element_test::run_element_protobuf_roundtrip);
-REGISTER_MINI_TEST!("Element", "Polylines", crate::element_test::run_element_polylines);
-REGISTER_MINI_TEST!("Element", "RegistryRoundTrip", crate::element_test::run_element_registry_round_trip);
-REGISTER_MINI_TEST!("Element", "RegistryUnknownTypeDegrades", crate::element_test::run_element_registry_unknown_type_degrades);
-REGISTER_MINI_TEST!("Element", "RegistryLeavesBaseBytesUnchanged", crate::element_test::run_element_registry_leaves_base_bytes_unchanged);
-REGISTER_MINI_TEST!("Element", "FeaturesRoundTrip", crate::element_test::run_element_features_round_trip);
-REGISTER_MINI_TEST!("Element", "DimensionsAreNominalNotMeasured", crate::element_test::run_element_dimensions_are_nominal_not_measured);
-REGISTER_MINI_TEST!("Element", "UnknownTypeSurvivesResave", crate::element_test::run_element_unknown_type_survives_resave);
-REGISTER_MINI_TEST!("Element", "DuplicateKeepsEveryField", crate::element_test::run_element_duplicate_keeps_every_field);
-REGISTER_MINI_TEST!("Element", "EqualityComparesCarriedFields", crate::element_test::run_element_equality_compares_carried_fields);
-REGISTER_MINI_TEST!("ElementFeature", "Constructor", crate::element_test::run_element_feature_constructor);
-REGISTER_MINI_TEST!("ElementFeature", "Json Roundtrip", crate::element_test::run_element_feature_json_roundtrip);
-REGISTER_MINI_TEST!("ElementFeature", "Protobuf Roundtrip", crate::element_test::run_element_feature_protobuf_roundtrip);
-REGISTER_MINI_TEST!("Element", "RegistryJsonRoundTrip", crate::element_test::run_element_registry_json_round_trip);
-REGISTER_MINI_TEST!("Element", "ThrowingFactoryDegradesToBase", crate::element_test::run_element_throwing_factory_degrades_to_base);
+REGISTER_MINI_TEST!(
+    "Element",
+    "Compute Point",
+    crate::element_test::run_element_compute_point
+);
+REGISTER_MINI_TEST!(
+    "Element",
+    "Brep Aabb",
+    crate::element_test::run_element_brep_aabb
+);
+REGISTER_MINI_TEST!(
+    "Element",
+    "Json Roundtrip",
+    crate::element_test::run_element_json_roundtrip
+);
+REGISTER_MINI_TEST!(
+    "Element",
+    "Protobuf Roundtrip",
+    crate::element_test::run_element_protobuf_roundtrip
+);
+REGISTER_MINI_TEST!(
+    "Element",
+    "Polylines",
+    crate::element_test::run_element_polylines
+);
+REGISTER_MINI_TEST!(
+    "Element",
+    "RegistryRoundTrip",
+    crate::element_test::run_element_registry_round_trip
+);
+REGISTER_MINI_TEST!(
+    "Element",
+    "RegistryUnknownTypeDegrades",
+    crate::element_test::run_element_registry_unknown_type_degrades
+);
+REGISTER_MINI_TEST!(
+    "Element",
+    "RegistryLeavesBaseBytesUnchanged",
+    crate::element_test::run_element_registry_leaves_base_bytes_unchanged
+);
+REGISTER_MINI_TEST!(
+    "Element",
+    "FeaturesRoundTrip",
+    crate::element_test::run_element_features_round_trip
+);
+REGISTER_MINI_TEST!(
+    "Element",
+    "DimensionsAreNominalNotMeasured",
+    crate::element_test::run_element_dimensions_are_nominal_not_measured
+);
+REGISTER_MINI_TEST!(
+    "Element",
+    "UnknownTypeSurvivesResave",
+    crate::element_test::run_element_unknown_type_survives_resave
+);
+REGISTER_MINI_TEST!(
+    "Element",
+    "DuplicateKeepsEveryField",
+    crate::element_test::run_element_duplicate_keeps_every_field
+);
+REGISTER_MINI_TEST!(
+    "Element",
+    "EqualityComparesCarriedFields",
+    crate::element_test::run_element_equality_compares_carried_fields
+);
+REGISTER_MINI_TEST!(
+    "ElementFeature",
+    "Constructor",
+    crate::element_test::run_element_feature_constructor
+);
+REGISTER_MINI_TEST!(
+    "ElementFeature",
+    "Json Roundtrip",
+    crate::element_test::run_element_feature_json_roundtrip
+);
+REGISTER_MINI_TEST!(
+    "ElementFeature",
+    "Protobuf Roundtrip",
+    crate::element_test::run_element_feature_protobuf_roundtrip
+);
+REGISTER_MINI_TEST!(
+    "Element",
+    "RegistryJsonRoundTrip",
+    crate::element_test::run_element_registry_json_round_trip
+);
+REGISTER_MINI_TEST!(
+    "Element",
+    "ThrowingFactoryDegradesToBase",
+    crate::element_test::run_element_throwing_factory_degrades_to_base
+);

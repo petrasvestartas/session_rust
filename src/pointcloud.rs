@@ -116,9 +116,9 @@ impl PointCloud {
         let _ = self.guid.set(g);
     }
 
-    ///////////////////////////////////////////////////////////////////////////////////////////
+    // ═══════════════════════════════════════════════════════════════════════════
     // Point Access
-    ///////////////////////////////////////////////////////////////////////////////////////////
+    // ═══════════════════════════════════════════════════════════════════════════
 
     /// Number of points
     pub fn point_count(&self) -> usize {
@@ -138,7 +138,11 @@ impl PointCloud {
     /// Get point at index
     pub fn get_point(&self, index: usize) -> Point {
         let idx = index * 3;
-        Point::new(self._coords[idx], self._coords[idx + 1], self._coords[idx + 2])
+        Point::new(
+            self._coords[idx],
+            self._coords[idx + 1],
+            self._coords[idx + 2],
+        )
     }
 
     /// Set point at index
@@ -168,14 +172,18 @@ impl PointCloud {
         let mut points = Vec::with_capacity(self.point_count());
         for i in 0..self.point_count() {
             let idx = i * 3;
-            points.push(Point::new(self._coords[idx], self._coords[idx + 1], self._coords[idx + 2]));
+            points.push(Point::new(
+                self._coords[idx],
+                self._coords[idx + 1],
+                self._coords[idx + 2],
+            ));
         }
         points
     }
 
-    ///////////////////////////////////////////////////////////////////////////////////////////
+    // ═══════════════════════════════════════════════════════════════════════════
     // Color Access
-    ///////////////////////////////////////////////////////////////////////////////////////////
+    // ═══════════════════════════════════════════════════════════════════════════
 
     /// Number of colors
     pub fn color_count(&self) -> usize {
@@ -217,7 +225,7 @@ impl PointCloud {
     }
 
     /// The flat normal array, [nx0, ny0, nz0, ...]; empty when the cloud has none
-    pub fn normals(&self) -> &[f64]{
+    pub fn normals(&self) -> &[f64] {
         &self._normals
     }
 
@@ -236,9 +244,9 @@ impl PointCloud {
         colors
     }
 
-    ///////////////////////////////////////////////////////////////////////////////////////////
+    // ═══════════════════════════════════════════════════════════════════════════
     // Normal Access
-    ///////////////////////////////////////////////////////////////////////////////////////////
+    // ═══════════════════════════════════════════════════════════════════════════
 
     /// Number of normals
     pub fn normal_count(&self) -> usize {
@@ -248,7 +256,11 @@ impl PointCloud {
     /// Get normal at index
     pub fn get_normal(&self, index: usize) -> Vector {
         let idx = index * 3;
-        Vector::new(self._normals[idx], self._normals[idx + 1], self._normals[idx + 2])
+        Vector::new(
+            self._normals[idx],
+            self._normals[idx + 1],
+            self._normals[idx + 2],
+        )
     }
 
     /// Set normal at index
@@ -271,14 +283,18 @@ impl PointCloud {
         let mut normals = Vec::with_capacity(self.normal_count());
         for i in 0..self.normal_count() {
             let idx = i * 3;
-            normals.push(Vector::new(self._normals[idx], self._normals[idx + 1], self._normals[idx + 2]));
+            normals.push(Vector::new(
+                self._normals[idx],
+                self._normals[idx + 1],
+                self._normals[idx + 2],
+            ));
         }
         normals
     }
 
-    ///////////////////////////////////////////////////////////////////////////////////////////
+    // ═══════════════════════════════════════════════════════════════════════════
     // String Representations
-    ///////////////////////////////////////////////////////////////////////////////////////////
+    // ═══════════════════════════════════════════════════════════════════════════
 
     /// Simple string form (like Python __str__)
     pub fn str(&self) -> String {
@@ -296,9 +312,9 @@ impl PointCloud {
         )
     }
 
-    ///////////////////////////////////////////////////////////////////////////////////////////
+    // ═══════════════════════════════════════════════════════════════════════════
     // Duplicate and Equality
-    ///////////////////////////////////////////////////////////////////////////////////////////
+    // ═══════════════════════════════════════════════════════════════════════════
 
     /// Deep copy this cloud with a new guid
     pub fn duplicate(&self) -> Self {
@@ -307,15 +323,19 @@ impl PointCloud {
         result
     }
 
-    ///////////////////////////////////////////////////////////////////////////////////////////
+    // ═══════════════════════════════════════════════════════════════════════════
     // Transformation
-    ///////////////////////////////////////////////////////////////////////////////////////////
+    // ═══════════════════════════════════════════════════════════════════════════
 
     /// Apply a transformation to this cloud in place
     pub fn transform(&mut self, xform: &Xform) {
         for i in 0..self.point_count() {
             let idx = i * 3;
-            let mut pt = Point::new(self._coords[idx], self._coords[idx + 1], self._coords[idx + 2]);
+            let mut pt = Point::new(
+                self._coords[idx],
+                self._coords[idx + 1],
+                self._coords[idx + 2],
+            );
             pt.transform(xform);
             self._coords[idx] = pt[0];
             self._coords[idx + 1] = pt[1];
@@ -324,7 +344,11 @@ impl PointCloud {
 
         for i in 0..self.normal_count() {
             let idx = i * 3;
-            let mut n = Vector::new(self._normals[idx], self._normals[idx + 1], self._normals[idx + 2]);
+            let mut n = Vector::new(
+                self._normals[idx],
+                self._normals[idx + 1],
+                self._normals[idx + 2],
+            );
             n.transform(xform);
             self._normals[idx] = n[0];
             self._normals[idx + 1] = n[1];
@@ -339,9 +363,9 @@ impl PointCloud {
         result
     }
 
-    ///////////////////////////////////////////////////////////////////////////////////////////
+    // ═══════════════════════════════════════════════════════════════════════════
     // LOD Octree
-    ///////////////////////////////////////////////////////////////////////////////////////////
+    // ═══════════════════════════════════════════════════════════════════════════
 
     /// Build the LOD octree and REORDER the points into octree order. Every point's index
     /// changes; a node becomes one contiguous range. Expensive - about 10 s on 14 M points -
@@ -404,7 +428,8 @@ impl PointCloud {
             self._lod_count.push(count as i32);
             let kids = tree.children(i);
             for k in 0..8 {
-                self._lod_children.push(kids.get(k).map_or(-1, |&c| c as i32));
+                self._lod_children
+                    .push(kids.get(k).map_or(-1, |&c| c as i32));
             }
         }
     }
@@ -422,7 +447,14 @@ impl PointCloud {
     /// Node cube: center and edge length
     pub fn lod_cube(&self, i: usize) -> (Point, f64) {
         let half = self._lod_size[i] * 0.5;
-        (Point::new(self._lod_min[i * 3] + half, self._lod_min[i * 3 + 1] + half, self._lod_min[i * 3 + 2] + half), self._lod_size[i])
+        (
+            Point::new(
+                self._lod_min[i * 3] + half,
+                self._lod_min[i * 3 + 1] + half,
+                self._lod_min[i * 3 + 2] + half,
+            ),
+            self._lod_size[i],
+        )
     }
 
     /// Grid-accept spacing of a node
@@ -445,9 +477,9 @@ impl PointCloud {
         self._lod_children[i * 8..i * 8 + 8].to_vec()
     }
 
-    ///////////////////////////////////////////////////////////////////////////////////////////
+    // ═══════════════════════════════════════════════════════════════════════════
     // Stable Point Ids
-    ///////////////////////////////////////////////////////////////////////////////////////////
+    // ═══════════════════════════════════════════════════════════════════════════
 
     /// The stable ids, parallel to the points. Empty until a tree is built.
     pub fn point_ids(&self) -> &[u32] {
@@ -457,7 +489,11 @@ impl PointCloud {
     /// The stable id of a point, by its CURRENT index. Falls back to the index itself while no
     /// tree has been built, which is exactly what the id would have been.
     pub fn point_id(&self, index: usize) -> u32 {
-        if self._point_ids.is_empty() { index as u32 } else { self._point_ids[index] }
+        if self._point_ids.is_empty() {
+            index as u32
+        } else {
+            self._point_ids[index]
+        }
     }
 
     /// Where a stable id lives NOW, or None if this cloud has no such point. Linear: a caller
@@ -469,9 +505,9 @@ impl PointCloud {
         self._point_ids.iter().position(|&v| v == id)
     }
 
-    ///////////////////////////////////////////////////////////////////////////////////////////
+    // ═══════════════════════════════════════════════════════════════════════════
     // JSON Serialization
-    ///////////////////////////////////////////////////////////////////////////////////////////
+    // ═══════════════════════════════════════════════════════════════════════════
 
     /// Serialize to JSON string
     pub fn jsondump(&self) -> Result<String, Box<dyn std::error::Error>> {
@@ -506,9 +542,9 @@ impl PointCloud {
         Self::jsonload(&json_str)
     }
 
-    ///////////////////////////////////////////////////////////////////////////////////////////
+    // ═══════════════════════════════════════════════════════════════════════════
     // Protobuf Serialization
-    ///////////////////////////////////////////////////////////////////////////////////////////
+    // ═══════════════════════════════════════════════════════════════════════════
 
     /// Convert to protobuf binary bytes
     pub fn pb_dumps(&self) -> Vec<u8> {
@@ -554,7 +590,11 @@ impl PointCloud {
         );
         pc.set_guid(proto.guid);
         pc.name = proto.name;
-        pc.point_size = if proto.point_size > 0.0 { proto.point_size as f64 } else { 1.0 };
+        pc.point_size = if proto.point_size > 0.0 {
+            proto.point_size as f64
+        } else {
+            1.0
+        };
         pc._lod_min = proto.lod_min;
         pc._lod_size = proto.lod_size;
         pc._lod_spacing = proto.lod_spacing;
@@ -580,9 +620,9 @@ impl PointCloud {
     }
 }
 
-///////////////////////////////////////////////////////////////////////////////////////////
+// ═══════════════════════════════════════════════════════════════════════════
 // PartialEq
-///////////////////////////////////////////////////////////////////////////////////////////
+// ═══════════════════════════════════════════════════════════════════════════
 
 impl PartialEq for PointCloud {
     fn eq(&self, other: &Self) -> bool {
@@ -596,9 +636,9 @@ impl PartialEq for PointCloud {
     }
 }
 
-///////////////////////////////////////////////////////////////////////////////////////////
+// ═══════════════════════════════════════════════════════════════════════════
 // No-copy Operators
-///////////////////////////////////////////////////////////////////////////////////////////
+// ═══════════════════════════════════════════════════════════════════════════
 
 impl AddAssign<Vector> for PointCloud {
     fn add_assign(&mut self, other: Vector) {
@@ -622,9 +662,9 @@ impl SubAssign<Vector> for PointCloud {
     }
 }
 
-///////////////////////////////////////////////////////////////////////////////////////////
+// ═══════════════════════════════════════════════════════════════════════════
 // Copy Operators
-///////////////////////////////////////////////////////////////////////////////////////////
+// ═══════════════════════════════════════════════════════════════════════════
 
 impl Add<Vector> for PointCloud {
     type Output = PointCloud;
@@ -672,9 +712,9 @@ impl fmt::Display for PointCloud {
     }
 }
 
-///////////////////////////////////////////////////////////////////////////////////////////
+// ═══════════════════════════════════════════════════════════════════════════
 // Custom Serialization - Flat arrays for efficiency
-///////////////////////////////////////////////////////////////////////////////////////////
+// ═══════════════════════════════════════════════════════════════════════════
 
 impl Serialize for PointCloud {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
@@ -826,7 +866,11 @@ impl<'de> Deserialize<'de> for PointCloud {
                 let point_size = point_size.unwrap_or(1.0);
 
                 Ok(PointCloud {
-                    guid: { let c = std::sync::OnceLock::new(); let _ = c.set(guid_str); c },
+                    guid: {
+                        let c = std::sync::OnceLock::new();
+                        let _ = c.set(guid_str);
+                        c
+                    },
                     name,
                     point_size,
                     _coords: coords,
@@ -845,7 +889,13 @@ impl<'de> Deserialize<'de> for PointCloud {
         }
 
         const FIELDS: &[&str] = &[
-            "type", "guid", "name", "coords", "colors", "normals", "point_size",
+            "type",
+            "guid",
+            "name",
+            "coords",
+            "colors",
+            "normals",
+            "point_size",
         ];
         deserializer.deserialize_struct("PointCloud", FIELDS, PointCloudVisitor)
     }

@@ -1,5 +1,5 @@
-use serde::{Deserialize, Deserializer, Serializer};
 use serde::ser::SerializeMap;
+use serde::{Deserialize, Deserializer, Serializer};
 use std::fmt;
 use std::ops::{Add, Index, IndexMut, Mul, Sub};
 
@@ -126,9 +126,9 @@ impl Mul for Matrix {
 }
 
 impl Matrix {
-    ///////////////////////////////////////////////////////////////////////////////////////////
+    // ═══════════════════════════════════════════════════════════════════════════
     // Constructors
-    ///////////////////////////////////////////////////////////////////////////////////////////
+    // ═══════════════════════════════════════════════════════════════════════════
 
     pub fn zeros(rows: usize, cols: usize) -> Self {
         Matrix {
@@ -192,9 +192,9 @@ impl Matrix {
         let _ = self.guid.set(g);
     }
 
-    ///////////////////////////////////////////////////////////////////////////////////////////
+    // ═══════════════════════════════════════════════════════════════════════════
     // Properties
-    ///////////////////////////////////////////////////////////////////////////////////////////
+    // ═══════════════════════════════════════════════════════════════════════════
 
     pub fn is_square(&self) -> bool {
         self.rows == self.cols
@@ -245,23 +245,37 @@ impl Matrix {
             .collect();
         format!(
             "Matrix(name='{}', guid='{}...', rows={}, cols={}, data=[{}])",
-            self.name, guid_prefix, self.rows, self.cols, rows_str.join("; ")
+            self.name,
+            guid_prefix,
+            self.rows,
+            self.cols,
+            rows_str.join("; ")
         )
     }
 
-    ///////////////////////////////////////////////////////////////////////////////////////////
+    // ═══════════════════════════════════════════════════════════════════════════
     // Basic Operations
-    ///////////////////////////////////////////////////////////////////////////////////////////
+    // ═══════════════════════════════════════════════════════════════════════════
 
     pub fn add_mat(&self, other: &Matrix) -> Matrix {
         assert!(self.rows == other.rows && self.cols == other.cols);
-        let data: Vec<f64> = self.data.iter().zip(other.data.iter()).map(|(a, b)| a + b).collect();
+        let data: Vec<f64> = self
+            .data
+            .iter()
+            .zip(other.data.iter())
+            .map(|(a, b)| a + b)
+            .collect();
         Self::from_vec(self.rows, self.cols, data)
     }
 
     pub fn subtract(&self, other: &Matrix) -> Matrix {
         assert!(self.rows == other.rows && self.cols == other.cols);
-        let data: Vec<f64> = self.data.iter().zip(other.data.iter()).map(|(a, b)| a - b).collect();
+        let data: Vec<f64> = self
+            .data
+            .iter()
+            .zip(other.data.iter())
+            .map(|(a, b)| a - b)
+            .collect();
         Self::from_vec(self.rows, self.cols, data)
     }
 
@@ -295,9 +309,9 @@ impl Matrix {
         result
     }
 
-    ///////////////////////////////////////////////////////////////////////////////////////////
+    // ═══════════════════════════════════════════════════════════════════════════
     // Linear Algebra
-    ///////////////////////////////////////////////////////////////////////////////////////////
+    // ═══════════════════════════════════════════════════════════════════════════
 
     fn lu_internal(&self) -> (Matrix, Matrix, Matrix, usize) {
         let n = self.rows;
@@ -316,13 +330,19 @@ impl Matrix {
             }
             if max_row != k {
                 for j in 0..n {
-                    let tmp = u[(k, j)]; u[(k, j)] = u[(max_row, j)]; u[(max_row, j)] = tmp;
+                    let tmp = u[(k, j)];
+                    u[(k, j)] = u[(max_row, j)];
+                    u[(max_row, j)] = tmp;
                 }
                 for j in 0..n {
-                    let tmp = p[(k, j)]; p[(k, j)] = p[(max_row, j)]; p[(max_row, j)] = tmp;
+                    let tmp = p[(k, j)];
+                    p[(k, j)] = p[(max_row, j)];
+                    p[(max_row, j)] = tmp;
                 }
                 for j in 0..k {
-                    let tmp = l[(k, j)]; l[(k, j)] = l[(max_row, j)]; l[(max_row, j)] = tmp;
+                    let tmp = l[(k, j)];
+                    l[(k, j)] = l[(max_row, j)];
+                    l[(max_row, j)] = tmp;
                 }
                 swaps += 1;
             }
@@ -379,7 +399,9 @@ impl Matrix {
         let mut result = Self::zeros(n, n);
         let eye = Self::identity(n);
         for col in 0..n {
-            let pb: Vec<f64> = (0..n).map(|i| (0..n).map(|j| p[(i, j)] * eye[(j, col)]).sum()).collect();
+            let pb: Vec<f64> = (0..n)
+                .map(|i| (0..n).map(|j| p[(i, j)] * eye[(j, col)]).sum())
+                .collect();
             let mut y = vec![0.0f64; n];
             for i in 0..n {
                 y[i] = pb[i];
@@ -413,7 +435,9 @@ impl Matrix {
                 return None;
             }
         }
-        let pb: Vec<f64> = (0..n).map(|i| (0..n).map(|j| p[(i, j)] * b[(j, 0)]).sum()).collect();
+        let pb: Vec<f64> = (0..n)
+            .map(|i| (0..n).map(|j| p[(i, j)] * b[(j, 0)]).sum())
+            .collect();
         let mut y = vec![0.0f64; n];
         for i in 0..n {
             y[i] = pb[i];
@@ -438,7 +462,9 @@ impl Matrix {
 
     pub fn qr_decompose(&self) -> (Matrix, Matrix) {
         let (m, n) = (self.rows, self.cols);
-        let a_cols: Vec<Vec<f64>> = (0..n).map(|j| (0..m).map(|i| self[(i, j)]).collect()).collect();
+        let a_cols: Vec<Vec<f64>> = (0..n)
+            .map(|j| (0..m).map(|i| self[(i, j)]).collect())
+            .collect();
         let mut q_cols: Vec<Vec<f64>> = Vec::new();
         let mut r = Self::zeros(n, n);
         for j in 0..n {
@@ -520,7 +546,9 @@ impl Matrix {
                 break;
             }
         }
-        (0..n).map(|i| (a[(i, i)], (0..n).map(|j| v[(j, i)]).collect())).collect()
+        (0..n)
+            .map(|i| (a[(i, i)], (0..n).map(|j| v[(j, i)]).collect()))
+            .collect()
     }
 
     pub fn svd(&self) -> (Matrix, Vec<f64>, Matrix) {
@@ -592,9 +620,9 @@ impl Matrix {
         sv.iter().filter(|&&s| s > threshold).count()
     }
 
-    ///////////////////////////////////////////////////////////////////////////////////////////
+    // ═══════════════════════════════════════════════════════════════════════════
     // JSON Serialization
-    ///////////////////////////////////////////////////////////////////////////////////////////
+    // ═══════════════════════════════════════════════════════════════════════════
 
     pub fn jsondump(&self) -> Result<String, Box<dyn std::error::Error>> {
         crate::file_encoders::sorted_json_string(self)
@@ -623,9 +651,9 @@ impl Matrix {
         Self::jsonload(&json)
     }
 
-    ///////////////////////////////////////////////////////////////////////////////////////////
+    // ═══════════════════════════════════════════════════════════════════════════
     // Protobuf Serialization
-    ///////////////////////////////////////////////////////////////////////////////////////////
+    // ═══════════════════════════════════════════════════════════════════════════
 
     pub fn pb_dumps(&self) -> Vec<u8> {
         use prost::Message;
@@ -642,7 +670,11 @@ impl Matrix {
     pub fn pb_loads(data: &[u8]) -> Result<Self, Box<dyn std::error::Error>> {
         use prost::Message;
         let proto = crate::proto::Matrix::decode(data)?;
-        let mut m = Self::from_vec(proto.rows as usize, proto.cols as usize, proto.data.into_iter().map(|v| v as f64).collect());
+        let mut m = Self::from_vec(
+            proto.rows as usize,
+            proto.cols as usize,
+            proto.data.into_iter().map(|v| v as f64).collect(),
+        );
         m.set_guid(proto.guid);
         m.name = proto.name;
         Ok(m)

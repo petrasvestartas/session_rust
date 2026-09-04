@@ -14,11 +14,25 @@ pub struct AABB {
 
 impl AABB {
     pub fn new(cx: f64, cy: f64, cz: f64, hx: f64, hy: f64, hz: f64) -> Self {
-        AABB { cx, cy, cz, hx, hy, hz }
+        AABB {
+            cx,
+            cy,
+            cz,
+            hx,
+            hy,
+            hz,
+        }
     }
 
     pub fn from_point(point: &Point, inflate: f64) -> Self {
-        AABB { cx: point[0], cy: point[1], cz: point[2], hx: inflate, hy: inflate, hz: inflate }
+        AABB {
+            cx: point[0],
+            cy: point[1],
+            cz: point[2],
+            hx: inflate,
+            hy: inflate,
+            hz: inflate,
+        }
     }
 
     pub fn from_points(points: &[Point], inflate: f64) -> Self {
@@ -67,9 +81,21 @@ impl AABB {
             let x = coords[i * 3];
             let y = coords[i * 3 + 1];
             let z = coords[i * 3 + 2];
-            if x < min_x { min_x = x; } else if x > max_x { max_x = x; }
-            if y < min_y { min_y = y; } else if y > max_y { max_y = y; }
-            if z < min_z { min_z = z; } else if z > max_z { max_z = z; }
+            if x < min_x {
+                min_x = x;
+            } else if x > max_x {
+                max_x = x;
+            }
+            if y < min_y {
+                min_y = y;
+            } else if y > max_y {
+                max_y = y;
+            }
+            if z < min_z {
+                min_z = z;
+            } else if z > max_z {
+                max_z = z;
+            }
         }
         AABB {
             cx: (min_x + max_x) * 0.5,
@@ -99,7 +125,11 @@ impl AABB {
         Self::from_points(&pointcloud.get_points(), inflate)
     }
 
-    pub fn from_nurbscurve(curve: &crate::nurbscurve::NurbsCurve, inflate: f64, tight: bool) -> Self {
+    pub fn from_nurbscurve(
+        curve: &crate::nurbscurve::NurbsCurve,
+        inflate: f64,
+        tight: bool,
+    ) -> Self {
         if !curve.is_valid() || curve.cv_count() == 0 {
             return AABB::default();
         }
@@ -177,7 +207,10 @@ impl AABB {
     }
 
     pub fn from_nurbssurface(surface: &crate::nurbssurface::NurbsSurface, inflate: f64) -> Self {
-        if !surface.is_valid() || surface.cv_count_dir(Some(0)) == 0 || surface.cv_count_dir(Some(1)) == 0 {
+        if !surface.is_valid()
+            || surface.cv_count_dir(Some(0)) == 0
+            || surface.cv_count_dir(Some(1)) == 0
+        {
             return AABB::default();
         }
         let mut points = Vec::new();
@@ -240,9 +273,12 @@ impl AABB {
     }
 
     pub fn contains(&self, pt: &Point) -> bool {
-        pt[0] >= self.cx - self.hx && pt[0] <= self.cx + self.hx
-            && pt[1] >= self.cy - self.hy && pt[1] <= self.cy + self.hy
-            && pt[2] >= self.cz - self.hz && pt[2] <= self.cz + self.hz
+        pt[0] >= self.cx - self.hx
+            && pt[0] <= self.cx + self.hx
+            && pt[1] >= self.cy - self.hy
+            && pt[1] <= self.cy + self.hy
+            && pt[2] >= self.cz - self.hz
+            && pt[2] <= self.cz + self.hz
     }
 
     pub fn corner(&self, x_max: bool, y_max: bool, z_max: bool) -> Point {
@@ -286,9 +322,12 @@ impl AABB {
         let max_x = (self.cx + self.hx).max(other.cx + other.hx);
         let max_y = (self.cy + self.hy).max(other.cy + other.hy);
         let max_z = (self.cz + self.hz).max(other.cz + other.hz);
-        self.cx = (min_x + max_x) * 0.5; self.hx = (max_x - min_x) * 0.5;
-        self.cy = (min_y + max_y) * 0.5; self.hy = (max_y - min_y) * 0.5;
-        self.cz = (min_z + max_z) * 0.5; self.hz = (max_z - min_z) * 0.5;
+        self.cx = (min_x + max_x) * 0.5;
+        self.hx = (max_x - min_x) * 0.5;
+        self.cy = (min_y + max_y) * 0.5;
+        self.hy = (max_y - min_y) * 0.5;
+        self.cz = (min_z + max_z) * 0.5;
+        self.hz = (max_z - min_z) * 0.5;
     }
 
     pub fn inflate(&mut self, amount: f64) {
@@ -325,9 +364,9 @@ impl AABB {
         }
     }
 
-    ///////////////////////////////////////////////////////////////////////////////////////////
+    // ═══════════════════════════════════════════════════════════════════════════
     // WGPU
-    ///////////////////////////////////////////////////////////////////////////////////////////
+    // ═══════════════════════════════════════════════════════════════════════════
 
     /// The 8 box corners as f32 `[x, y, z]` rows — ready for a wireframe-box vertex/segment
     /// buffer. Same winding as [`corners`](Self::corners); the kernel keeps f64.

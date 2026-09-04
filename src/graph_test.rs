@@ -1,9 +1,9 @@
-use crate::{MINI_CHECK, MINI_TEST, REGISTER_MINI_TEST};
 use crate::mini_test::TestResult;
+use crate::{MINI_CHECK, MINI_TEST, REGISTER_MINI_TEST};
 
-///////////////////////////////////////////////////////////////////////////////////////////
+// ═══════════════════════════════════════════════════════════════════════════
 // Vertex
-///////////////////////////////////////////////////////////////////////////////////////////
+// ═══════════════════════════════════════════════════════════════════════════
 
 pub fn run_vertex_constructor() -> TestResult {
     MINI_TEST!("Constructor", {
@@ -25,8 +25,8 @@ pub fn run_vertex_constructor() -> TestResult {
 
 pub fn run_vertex_json_roundtrip() -> TestResult {
     MINI_TEST!("Json Roundtrip", {
-        use crate::Vertex;
         use crate::file_encoders::{file_json_dump, file_json_load};
+        use crate::Vertex;
         let original = Vertex::new(Some("v0".to_string()), Some("test_attribute".to_string()));
         file_json_dump(&original, "serialization/test_vertex.json", false).unwrap();
         let loaded = file_json_load::<Vertex>("serialization/test_vertex.json").unwrap();
@@ -36,9 +36,9 @@ pub fn run_vertex_json_roundtrip() -> TestResult {
     })
 }
 
-///////////////////////////////////////////////////////////////////////////////////////////
+// ═══════════════════════════════════════════════════════════════════════════
 // Edge
-///////////////////////////////////////////////////////////////////////////////////////////
+// ═══════════════════════════════════════════════════════════════════════════
 
 pub fn run_edge_constructor() -> TestResult {
     MINI_TEST!("Constructor", {
@@ -61,8 +61,8 @@ pub fn run_edge_constructor() -> TestResult {
 
 pub fn run_edge_json_roundtrip() -> TestResult {
     MINI_TEST!("Json Roundtrip", {
-        use crate::Edge;
         use crate::file_encoders::{file_json_dump, file_json_load};
+        use crate::Edge;
         let original = Edge::new(
             Some("my_edge".to_string()),
             Some("v0".to_string()),
@@ -124,9 +124,9 @@ pub fn run_edge_other_vertex() -> TestResult {
     })
 }
 
-///////////////////////////////////////////////////////////////////////////////////////////
+// ═══════════════════════════════════════════════════════════════════════════
 // Graph
-///////////////////////////////////////////////////////////////////////////////////////////
+// ═══════════════════════════════════════════════════════════════════════════
 
 pub fn run_graph_constructor() -> TestResult {
     MINI_TEST!("Constructor", {
@@ -151,7 +151,9 @@ pub fn run_graph_json_roundtrip() -> TestResult {
         original.add_node("node1", "Node 1");
         original.add_node("node2", "Node 2");
         original.add_edge("node1", "node2", "edge1");
-        original.file_json_dump("serialization/test_graph.json").unwrap();
+        original
+            .file_json_dump("serialization/test_graph.json")
+            .unwrap();
         let loaded = Graph::file_json_load("serialization/test_graph.json").unwrap();
 
         MINI_CHECK!(loaded.number_of_vertices() == 2);
@@ -208,13 +210,13 @@ pub fn run_graph_has_guid() -> TestResult {
         let v = Vertex::new(Some("a".to_string()), None);
         let e = Edge::new(None, Some("a".to_string()), Some("b".to_string()), None);
 
-        MINI_CHECK!(!v.has_guid());              // nobody has asked
+        MINI_CHECK!(!v.has_guid()); // nobody has asked
         MINI_CHECK!(!e.has_guid());
 
         let minted = v.guid().to_string();
         MINI_CHECK!(!minted.is_empty());
-        MINI_CHECK!(v.has_guid());               // asking created it
-        MINI_CHECK!(v.guid() == minted);         // and it is stable
+        MINI_CHECK!(v.has_guid()); // asking created it
+        MINI_CHECK!(v.guid() == minted); // and it is stable
     })
 }
 
@@ -469,35 +471,111 @@ pub fn run_graph_cycle_basis() -> TestResult {
     })
 }
 
-REGISTER_MINI_TEST!("Vertex", "Constructor", crate::graph_test::run_vertex_constructor);
-REGISTER_MINI_TEST!("Vertex", "Json Roundtrip", crate::graph_test::run_vertex_json_roundtrip);
-REGISTER_MINI_TEST!("Edge", "Constructor", crate::graph_test::run_edge_constructor);
-REGISTER_MINI_TEST!("Edge", "Json Roundtrip", crate::graph_test::run_edge_json_roundtrip);
+REGISTER_MINI_TEST!(
+    "Vertex",
+    "Constructor",
+    crate::graph_test::run_vertex_constructor
+);
+REGISTER_MINI_TEST!(
+    "Vertex",
+    "Json Roundtrip",
+    crate::graph_test::run_vertex_json_roundtrip
+);
+REGISTER_MINI_TEST!(
+    "Edge",
+    "Constructor",
+    crate::graph_test::run_edge_constructor
+);
+REGISTER_MINI_TEST!(
+    "Edge",
+    "Json Roundtrip",
+    crate::graph_test::run_edge_json_roundtrip
+);
 REGISTER_MINI_TEST!("Edge", "Vertices", crate::graph_test::run_edge_vertices);
 REGISTER_MINI_TEST!("Edge", "Connects", crate::graph_test::run_edge_connects);
-REGISTER_MINI_TEST!("Edge", "Other Vertex", crate::graph_test::run_edge_other_vertex);
-REGISTER_MINI_TEST!("Graph", "Constructor", crate::graph_test::run_graph_constructor);
-REGISTER_MINI_TEST!("Graph", "Json Roundtrip", crate::graph_test::run_graph_json_roundtrip);
-REGISTER_MINI_TEST!("Graph", "Protobuf Roundtrip", crate::graph_test::run_graph_protobuf_roundtrip);
+REGISTER_MINI_TEST!(
+    "Edge",
+    "Other Vertex",
+    crate::graph_test::run_edge_other_vertex
+);
+REGISTER_MINI_TEST!(
+    "Graph",
+    "Constructor",
+    crate::graph_test::run_graph_constructor
+);
+REGISTER_MINI_TEST!(
+    "Graph",
+    "Json Roundtrip",
+    crate::graph_test::run_graph_json_roundtrip
+);
+REGISTER_MINI_TEST!(
+    "Graph",
+    "Protobuf Roundtrip",
+    crate::graph_test::run_graph_protobuf_roundtrip
+);
 REGISTER_MINI_TEST!("Graph", "Has Node", crate::graph_test::run_graph_has_node);
 REGISTER_MINI_TEST!("Graph", "Has Edge", crate::graph_test::run_graph_has_edge);
 REGISTER_MINI_TEST!("Graph", "Has Guid", crate::graph_test::run_graph_has_guid);
 REGISTER_MINI_TEST!("Graph", "Add Node", crate::graph_test::run_graph_add_node);
 REGISTER_MINI_TEST!("Graph", "Add Edge", crate::graph_test::run_graph_add_edge);
-REGISTER_MINI_TEST!("Graph", "Remove Node", crate::graph_test::run_graph_remove_node);
-REGISTER_MINI_TEST!("Graph", "Remove Edge", crate::graph_test::run_graph_remove_edge);
-REGISTER_MINI_TEST!("Graph", "Get Vertices", crate::graph_test::run_graph_get_vertices);
+REGISTER_MINI_TEST!(
+    "Graph",
+    "Remove Node",
+    crate::graph_test::run_graph_remove_node
+);
+REGISTER_MINI_TEST!(
+    "Graph",
+    "Remove Edge",
+    crate::graph_test::run_graph_remove_edge
+);
+REGISTER_MINI_TEST!(
+    "Graph",
+    "Get Vertices",
+    crate::graph_test::run_graph_get_vertices
+);
 REGISTER_MINI_TEST!("Graph", "Get Edges", crate::graph_test::run_graph_get_edges);
 REGISTER_MINI_TEST!("Graph", "Neighbors", crate::graph_test::run_graph_neighbors);
-REGISTER_MINI_TEST!("Graph", "Get Neighbors", crate::graph_test::run_graph_get_neighbors);
-REGISTER_MINI_TEST!("Graph", "Number Of Vertices", crate::graph_test::run_graph_number_of_vertices);
-REGISTER_MINI_TEST!("Graph", "Number Of Edges", crate::graph_test::run_graph_number_of_edges);
+REGISTER_MINI_TEST!(
+    "Graph",
+    "Get Neighbors",
+    crate::graph_test::run_graph_get_neighbors
+);
+REGISTER_MINI_TEST!(
+    "Graph",
+    "Number Of Vertices",
+    crate::graph_test::run_graph_number_of_vertices
+);
+REGISTER_MINI_TEST!(
+    "Graph",
+    "Number Of Edges",
+    crate::graph_test::run_graph_number_of_edges
+);
 REGISTER_MINI_TEST!("Graph", "Clear", crate::graph_test::run_graph_clear);
-REGISTER_MINI_TEST!("Graph", "Node Attribute", crate::graph_test::run_graph_node_attribute);
-REGISTER_MINI_TEST!("Graph", "Edge Attribute", crate::graph_test::run_graph_edge_attribute);
+REGISTER_MINI_TEST!(
+    "Graph",
+    "Node Attribute",
+    crate::graph_test::run_graph_node_attribute
+);
+REGISTER_MINI_TEST!(
+    "Graph",
+    "Edge Attribute",
+    crate::graph_test::run_graph_edge_attribute
+);
 REGISTER_MINI_TEST!("Graph", "Bfs", crate::graph_test::run_graph_bfs);
 REGISTER_MINI_TEST!("Graph", "Dfs", crate::graph_test::run_graph_dfs);
-REGISTER_MINI_TEST!("Graph", "Connected Components", crate::graph_test::run_graph_connected_components);
-REGISTER_MINI_TEST!("Graph", "Shortest Path", crate::graph_test::run_graph_shortest_path);
+REGISTER_MINI_TEST!(
+    "Graph",
+    "Connected Components",
+    crate::graph_test::run_graph_connected_components
+);
+REGISTER_MINI_TEST!(
+    "Graph",
+    "Shortest Path",
+    crate::graph_test::run_graph_shortest_path
+);
 REGISTER_MINI_TEST!("Graph", "Has Cycle", crate::graph_test::run_graph_has_cycle);
-REGISTER_MINI_TEST!("Graph", "Cycle Basis", crate::graph_test::run_graph_cycle_basis);
+REGISTER_MINI_TEST!(
+    "Graph",
+    "Cycle Basis",
+    crate::graph_test::run_graph_cycle_basis
+);
