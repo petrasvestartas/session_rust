@@ -125,6 +125,21 @@ pub fn run_polyline_from_sides() -> TestResult {
 }
 REGISTER_MINI_TEST!("Polyline", "From Sides", crate::polyline_test::run_polyline_from_sides);
 
+pub fn run_polyline_rectangle() -> TestResult {
+    MINI_TEST!("Rectangle", {
+        use crate::Plane;
+        use crate::Polyline;
+
+        let r = Polyline::rectangle(&Plane::xy_plane(), 2.0, 1.0, true);
+
+        MINI_CHECK!(r.point_count() == 5);
+        MINI_CHECK!(r.is_closed());
+        MINI_CHECK!(TOLERANCE.is_close(r.get_points()[2][0], 2.0));
+        MINI_CHECK!(TOLERANCE.is_close(r.get_points()[2][1], 1.0));
+    })
+}
+REGISTER_MINI_TEST!("Polyline", "Rectangle", crate::polyline_test::run_polyline_rectangle);
+
 pub fn run_polyline_transformation() -> TestResult {
     MINI_TEST!("Transformation", {
         use crate::Polyline;

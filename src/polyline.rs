@@ -105,6 +105,18 @@ impl Polyline {
         Self::from_coords(coords)
     }
 
+    /// Create a rectangle with its corner at the plane origin, sides along x_axis and y_axis.
+    pub fn rectangle(plane: &Plane, width: f64, height: f64, close: bool) -> Self {
+        let o = plane.origin();
+        let x = plane.x_axis() * width;
+        let y = plane.y_axis() * height;
+        let mut pts = vec![o.clone(), &o + &x, &(&o + &x) + &y, &o + &y];
+        if close {
+            pts.push(pts[0].clone());
+        }
+        Self::new(pts)
+    }
+
     /// Creates a Polyline from a flat coordinate array.
     pub fn from_coords(coords: Vec<f64>) -> Self {
         Self {
