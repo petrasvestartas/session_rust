@@ -718,10 +718,8 @@ impl NurbsSurface {
             Some(c) => c,
             None => return false,
         };
-        for _ in 0..nurbsknot_multiplicity {
-            if !crv.insert_nurbsknot(nurbsknot_value, 1) {
-                return false;
-            }
+        if !crv.insert_nurbsknot(nurbsknot_value, nurbsknot_multiplicity) {
+            return false;
         }
         self.from_curve_internal(&crv, dir)
     }

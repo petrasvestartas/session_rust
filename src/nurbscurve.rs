@@ -35,6 +35,10 @@ impl PartialEq for NurbsCurve {
             && self.m_order == other.m_order
             && self.m_cv_count == other.m_cv_count
             && self.m_cv_stride == other.m_cv_stride
+            && self.name == other.name
+            && (self.width - other.width).abs() <= Tolerance::ZERO_TOLERANCE
+            && self.pointcolors == other.pointcolors
+            && self.linecolors == other.linecolors
             && self.m_nurbsknot == other.m_nurbsknot
             && self.m_cv == other.m_cv
     }
@@ -48,7 +52,14 @@ impl Serialize for NurbsCurve {
         let mut map = serializer.serialize_map(Some(14))?;
         let control_points: Vec<Vec<f64>> = (0..self.m_cv_count)
             .map(|i| {
-                if let Some(p) = self.get_cv(i) {
+                // 4D for rational curves: dropping w loses the weights and the reloaded
+                // curve is invalid (cv array too short for its stride).
+                if self.m_is_rat {
+                    match self.get_cv_4d(i) {
+                        Some((x, y, z, w)) => vec![x, y, z, w],
+                        None => vec![0.0, 0.0, 0.0, 0.0],
+                    }
+                } else if let Some(p) = self.get_cv(i) {
                     vec![p[0], p[1], p[2]]
                 } else {
                     vec![0.0, 0.0, 0.0]
@@ -1204,6 +1215,11 @@ impl NurbsCurve {
         if self.m_nurbsknot.len() != self.m_order + self.m_cv_count - 2 {
             return false;
         }
+        // Storage must actually hold m_cv_count CVs: a count/array mismatch (e.g. a partially
+        // merged join) otherwise passes validation and every point_at indexes past the end.
+        if self.m_cv.len() < (self.m_cv_count - 1) * self.m_cv_stride + self.cv_size() {
+            return false;
+        }
         // Check for sufficient distinct nurbsknots
         if self.m_order >= 2 && self.m_cv_count >= self.m_order {
             let idx1 = self.m_order - 2;
@@ -1234,9 +1250,44 @@ impl NurbsCurve {
 
     /// Check if curve is periodic (wraps around seamlessly)
     pub fn is_periodic(&self) -> bool {
-        // For now, return false - full implementation would check
-        // if the curve is clamped and if removing end nurbsknots makes it periodic
-        false
+        if self.m_order < 2
+            || self.m_cv_count < self.m_order
+            || self.m_nurbsknot.len() < self.m_order
+        {
+            return false;
+        }
+
+        // Check if last degree CVs match first degree CVs
+        let deg = self.degree();
+        for i in 0..deg {
+            match (self.get_cv(i), self.get_cv(self.m_cv_count - deg + i)) {
+                (Some(p0), Some(p1)) => {
+                    if p0.distance(&p1, None) > Tolerance::ZERO_TOLERANCE {
+                        return false;
+                    }
+                }
+                _ => return false,
+            }
+        }
+
+        // Check nurbsknot spacing is uniform across ALL nurbsknots (not just interior)
+        let kc = self.nurbsknot_count();
+        if kc < 2 {
+            return false;
+        }
+        let delta = self.m_nurbsknot[self.m_order - 1] - self.m_nurbsknot[self.m_order - 2];
+        if delta < Tolerance::ZERO_TOLERANCE {
+            return false;
+        }
+        for i in 1..kc {
+            if ((self.m_nurbsknot[i] - self.m_nurbsknot[i - 1]) - delta).abs()
+                > Tolerance::ZERO_TOLERANCE
+            {
+                return false;
+            }
+        }
+
+        true
     }
 
     /// Check if curve is a straight line within tolerance
@@ -1588,6 +1639,11 @@ impl NurbsCurve {
         if self.m_dim > 2 {
             self.m_cv[idx + 2] = point[2];
         }
+        if self.m_is_rat {
+            // The point is euclidean, so the weight resets: keeping a stale one makes
+            // get_cv divide by it and return a different point than was set.
+            self.m_cv[idx + self.m_dim] = 1.0;
+        }
     }
 
     /// Get control vertex at index
@@ -1697,12 +1753,13 @@ impl NurbsCurve {
         self.m_cv[idx]
     }
 
-    /// Set weight at control vertex index
+    /// Set weight at control vertex index (converts to rational if needed)
     pub fn set_weight(&mut self, cv_index: usize, weight: f64) -> bool {
         if cv_index >= self.m_cv_count {
             return false;
         }
-        if !self.m_is_rat {
+        // A non-rational CV has no weight slot, so the curve converts first
+        if !self.m_is_rat && !self.make_rational() {
             return false;
         }
         let idx = cv_index * self.m_cv_stride + self.m_dim;
@@ -1844,7 +1901,13 @@ impl NurbsCurve {
                 .iter()
                 .filter(|&&v| (v - nurbsknot_value).abs() <= tol)
                 .count();
+            if mult >= nurbsknot_multiplicity {
+                // Already at the requested multiplicity (e.g. splitting a degree-1 polyline
+                // exactly at a vertex nurbsknot) -- nothing to insert, and that is success.
+                return true;
+            }
             if mult >= p {
+                // Cannot increase multiplicity beyond degree for interior nurbsknots
                 return false;
             }
 
@@ -2118,7 +2181,9 @@ impl NurbsCurve {
         ];
 
         let mut total = 0.0;
-        let n_spans = self.span_count();
+        // Count nurbsknot INTERVALS, not span_count(): a repeated interior nurbsknot makes
+        // span_count() smaller than the interval count, and the trailing spans go unintegrated.
+        let n_spans = self.m_cv_count - self.m_order + 1;
         const SUBDIVISIONS: usize = 4;
 
         for span in 0..n_spans {
@@ -2285,7 +2350,7 @@ impl NurbsCurve {
 
         let (t0, t1) = self.domain();
         let dom_len = t1 - t0;
-        let h = dom_len * 1e-4; // f64-safe finite-diff step (C++ uses 1e-8 for double; 1e-8 underflows f64 ULP, halting arc-length integration)
+        let h = dom_len * 1e-8;
 
         // 5-point Gauss-Legendre nodes and weights for [-1, 1]
         const GL_NODES: [f64; 5] = [
@@ -2455,7 +2520,7 @@ impl NurbsCurve {
 
         let (t0, t1) = self.domain();
         let dom_len = t1 - t0;
-        let h = dom_len * 1e-4; // f64-safe finite-diff step (C++ uses 1e-8 for double; 1e-8 underflows f64 ULP, halting arc-length integration)
+        let h = dom_len * 1e-8;
 
         // 5-point Gauss-Legendre nodes and weights for [-1, 1]
         const GL_NODES: [f64; 5] = [
@@ -3121,26 +3186,15 @@ impl NurbsCurve {
             return (NurbsCurve::default(), NurbsCurve::default());
         }
 
-        // Simple approach: use dense point sampling and rebuild curves
-        let num_samples = (self.m_cv_count * 4).max(20);
+        // Copy the curve and trim each half. Resampling instead would return an
+        // approximation with a rebuilt parameterization, and a failed trim MUST fail the
+        // split: handing back the whole curve as a piece is silent overlap corruption.
+        let mut left = self.duplicate();
+        let mut right = self.duplicate();
 
-        // Left curve points
-        let mut left_points = Vec::new();
-        for i in 0..=num_samples {
-            let param = t0 + (t - t0) * (i as f64) / (num_samples as f64);
-            left_points.push(self.point_at(param));
+        if !left.trim(t0, t) || !right.trim(t, t1) {
+            return (NurbsCurve::default(), NurbsCurve::default());
         }
-
-        // Right curve points
-        let mut right_points = Vec::new();
-        for i in 0..=num_samples {
-            let param = t + (t1 - t) * (i as f64) / (num_samples as f64);
-            right_points.push(self.point_at(param));
-        }
-
-        let degree = self.degree();
-        let left = NurbsCurve::create(false, degree, &left_points);
-        let right = NurbsCurve::create(false, degree, &right_points);
 
         (left, right)
     }
@@ -3236,10 +3290,15 @@ impl NurbsCurve {
         let mut new_cv = vec![0.0; self.m_cv_count * new_stride];
 
         for i in 0..self.m_cv_count {
-            let old_idx = i * self.m_cv_stride;
-            let new_idx = i * new_stride;
-            for j in 0..self.m_dim {
-                new_cv[new_idx + j] = self.m_cv[old_idx + j];
+            if let Some(p) = self.get_cv(i) {
+                let new_idx = i * new_stride;
+                new_cv[new_idx] = p[0];
+                if self.m_dim > 1 {
+                    new_cv[new_idx + 1] = p[1];
+                }
+                if self.m_dim > 2 {
+                    new_cv[new_idx + 2] = p[2];
+                }
             }
         }
 
@@ -3567,6 +3626,7 @@ impl NurbsCurve {
         );
         curve.set_guid(proto.guid.clone());
         curve.name = proto.name;
+        curve.width = if proto.width != 0.0 { proto.width } else { 1.0 };
         curve.m_nurbsknot = proto.nurbsknots.into_iter().map(|v| v as f64).collect();
         curve.m_cv = proto.cvs.into_iter().map(|v| v as f64).collect();
         curve.pointcolors = proto
