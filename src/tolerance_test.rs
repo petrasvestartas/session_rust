@@ -1,6 +1,5 @@
-use crate::{MINI_CHECK, MINI_TEST, REGISTER_MINI_TEST};
 use crate::mini_test::TestResult;
-
+use crate::{MINI_CHECK, MINI_TEST, REGISTER_MINI_TEST};
 
 pub fn run_tolerance_is_zero() -> TestResult {
     MINI_TEST!("Is Zero", {
@@ -141,8 +140,8 @@ pub fn run_tolerance_triangle_edge_by_angle() -> TestResult {
 
 pub fn run_tolerance_rad_deg() -> TestResult {
     MINI_TEST!("Rad Deg Conversion", {
-        use crate::tolerance::rad_to_deg;
         use crate::tolerance::deg_to_rad;
+        use crate::tolerance::rad_to_deg;
         use crate::Tolerance;
         let r0 = rad_to_deg(Tolerance::PI);
         let r1 = deg_to_rad(180.0);
@@ -341,30 +340,134 @@ pub fn run_tolerance_temporary() -> TestResult {
     })
 }
 
-REGISTER_MINI_TEST!("Tolerance", "Is Zero", crate::tolerance_test::run_tolerance_is_zero);
-REGISTER_MINI_TEST!("Tolerance", "Is Close", crate::tolerance_test::run_tolerance_is_close);
-REGISTER_MINI_TEST!("Tolerance", "Is Positive", crate::tolerance_test::run_tolerance_is_positive);
-REGISTER_MINI_TEST!("Tolerance", "Is Negative", crate::tolerance_test::run_tolerance_is_negative);
-REGISTER_MINI_TEST!("Tolerance", "Is Between", crate::tolerance_test::run_tolerance_is_between);
-REGISTER_MINI_TEST!("Tolerance", "Format Number", crate::tolerance_test::run_tolerance_format_number);
+REGISTER_MINI_TEST!(
+    "Tolerance",
+    "Is Zero",
+    crate::tolerance_test::run_tolerance_is_zero
+);
+REGISTER_MINI_TEST!(
+    "Tolerance",
+    "Is Close",
+    crate::tolerance_test::run_tolerance_is_close
+);
+REGISTER_MINI_TEST!(
+    "Tolerance",
+    "Is Positive",
+    crate::tolerance_test::run_tolerance_is_positive
+);
+REGISTER_MINI_TEST!(
+    "Tolerance",
+    "Is Negative",
+    crate::tolerance_test::run_tolerance_is_negative
+);
+REGISTER_MINI_TEST!(
+    "Tolerance",
+    "Is Between",
+    crate::tolerance_test::run_tolerance_is_between
+);
+REGISTER_MINI_TEST!(
+    "Tolerance",
+    "Format Number",
+    crate::tolerance_test::run_tolerance_format_number
+);
 REGISTER_MINI_TEST!("Tolerance", "Key", crate::tolerance_test::run_tolerance_key);
-REGISTER_MINI_TEST!("Tolerance", "To Radians", crate::tolerance_test::run_tolerance_to_radians);
-REGISTER_MINI_TEST!("Tolerance", "To Degrees", crate::tolerance_test::run_tolerance_to_degrees);
-REGISTER_MINI_TEST!("Tolerance", "Runtime Modification", crate::tolerance_test::run_tolerance_runtime_modification);
-REGISTER_MINI_TEST!("Tolerance", "Unique From Two Int", crate::tolerance_test::run_tolerance_unique_from_two_int);
-REGISTER_MINI_TEST!("Tolerance", "Wrap Index", crate::tolerance_test::run_tolerance_wrap_index);
-REGISTER_MINI_TEST!("Tolerance", "Triangle Edge By Angle", crate::tolerance_test::run_tolerance_triangle_edge_by_angle);
-REGISTER_MINI_TEST!("Tolerance", "Rad Deg Conversion", crate::tolerance_test::run_tolerance_rad_deg);
-REGISTER_MINI_TEST!("Tolerance", "Count Digits", crate::tolerance_test::run_tolerance_count_digits);
-REGISTER_MINI_TEST!("Tolerance", "Is Angle Zero", crate::tolerance_test::run_tolerance_is_angle_zero);
-REGISTER_MINI_TEST!("Tolerance", "Is Angles Close", crate::tolerance_test::run_tolerance_is_angles_close);
-REGISTER_MINI_TEST!("Tolerance", "Is Point Close", crate::tolerance_test::run_tolerance_is_point_close);
-REGISTER_MINI_TEST!("Tolerance", "Is Allclose", crate::tolerance_test::run_tolerance_is_allclose);
-REGISTER_MINI_TEST!("Tolerance", "Key Xy", crate::tolerance_test::run_tolerance_key_xy);
-REGISTER_MINI_TEST!("Tolerance", "Round To", crate::tolerance_test::run_tolerance_round_to);
-REGISTER_MINI_TEST!("Tolerance", "Precision From Tolerance", crate::tolerance_test::run_tolerance_precision_from_tolerance);
-REGISTER_MINI_TEST!("Tolerance", "Tolerance", crate::tolerance_test::run_tolerance_tolerance);
-REGISTER_MINI_TEST!("Tolerance", "Compare", crate::tolerance_test::run_tolerance_compare);
-REGISTER_MINI_TEST!("Tolerance", "Is Finite", crate::tolerance_test::run_tolerance_is_finite);
-REGISTER_MINI_TEST!("Tolerance", "Is Vector Close", crate::tolerance_test::run_tolerance_is_vector_close);
-REGISTER_MINI_TEST!("Tolerance", "Temporary", crate::tolerance_test::run_tolerance_temporary);
+REGISTER_MINI_TEST!(
+    "Tolerance",
+    "To Radians",
+    crate::tolerance_test::run_tolerance_to_radians
+);
+REGISTER_MINI_TEST!(
+    "Tolerance",
+    "To Degrees",
+    crate::tolerance_test::run_tolerance_to_degrees
+);
+REGISTER_MINI_TEST!(
+    "Tolerance",
+    "Runtime Modification",
+    crate::tolerance_test::run_tolerance_runtime_modification
+);
+REGISTER_MINI_TEST!(
+    "Tolerance",
+    "Unique From Two Int",
+    crate::tolerance_test::run_tolerance_unique_from_two_int
+);
+REGISTER_MINI_TEST!(
+    "Tolerance",
+    "Wrap Index",
+    crate::tolerance_test::run_tolerance_wrap_index
+);
+REGISTER_MINI_TEST!(
+    "Tolerance",
+    "Triangle Edge By Angle",
+    crate::tolerance_test::run_tolerance_triangle_edge_by_angle
+);
+REGISTER_MINI_TEST!(
+    "Tolerance",
+    "Rad Deg Conversion",
+    crate::tolerance_test::run_tolerance_rad_deg
+);
+REGISTER_MINI_TEST!(
+    "Tolerance",
+    "Count Digits",
+    crate::tolerance_test::run_tolerance_count_digits
+);
+REGISTER_MINI_TEST!(
+    "Tolerance",
+    "Is Angle Zero",
+    crate::tolerance_test::run_tolerance_is_angle_zero
+);
+REGISTER_MINI_TEST!(
+    "Tolerance",
+    "Is Angles Close",
+    crate::tolerance_test::run_tolerance_is_angles_close
+);
+REGISTER_MINI_TEST!(
+    "Tolerance",
+    "Is Point Close",
+    crate::tolerance_test::run_tolerance_is_point_close
+);
+REGISTER_MINI_TEST!(
+    "Tolerance",
+    "Is Allclose",
+    crate::tolerance_test::run_tolerance_is_allclose
+);
+REGISTER_MINI_TEST!(
+    "Tolerance",
+    "Key Xy",
+    crate::tolerance_test::run_tolerance_key_xy
+);
+REGISTER_MINI_TEST!(
+    "Tolerance",
+    "Round To",
+    crate::tolerance_test::run_tolerance_round_to
+);
+REGISTER_MINI_TEST!(
+    "Tolerance",
+    "Precision From Tolerance",
+    crate::tolerance_test::run_tolerance_precision_from_tolerance
+);
+REGISTER_MINI_TEST!(
+    "Tolerance",
+    "Tolerance",
+    crate::tolerance_test::run_tolerance_tolerance
+);
+REGISTER_MINI_TEST!(
+    "Tolerance",
+    "Compare",
+    crate::tolerance_test::run_tolerance_compare
+);
+REGISTER_MINI_TEST!(
+    "Tolerance",
+    "Is Finite",
+    crate::tolerance_test::run_tolerance_is_finite
+);
+REGISTER_MINI_TEST!(
+    "Tolerance",
+    "Is Vector Close",
+    crate::tolerance_test::run_tolerance_is_vector_close
+);
+REGISTER_MINI_TEST!(
+    "Tolerance",
+    "Temporary",
+    crate::tolerance_test::run_tolerance_temporary
+);

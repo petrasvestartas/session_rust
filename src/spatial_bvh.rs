@@ -4,12 +4,15 @@
 // Prefer over SpatialAABBTree when objects rotate or you need OBB tightness.
 // Prefer over SpatialRTree  when all queries are nearest-object, not region overlap.
 // Prefer over SpatialKDTree when objects are volumetric (not point clouds).
-use crate::{AABB, OBB, Point, Vector};
+use crate::{Point, Vector, AABB, OBB};
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SpatialBVHNode {
-    #[serde(serialize_with = "crate::guid_serde::serialize", deserialize_with = "crate::guid_serde::deserialize")]
+    #[serde(
+        serialize_with = "crate::guid_serde::serialize",
+        deserialize_with = "crate::guid_serde::deserialize"
+    )]
     guid: std::sync::OnceLock<String>,
     pub left: Option<Box<SpatialBVHNode>>,
     pub right: Option<Box<SpatialBVHNode>>,
@@ -51,14 +54,14 @@ fn aabb_from_obb(b: &OBB) -> AABB {
     // Project each OBB half-axis onto the world axes to get the world-space half-extents.
     // This is correct regardless of the OBB's orientation.
     let hx = b.half_size[0] * b.x_axis[0].abs()
-           + b.half_size[1] * b.y_axis[0].abs()
-           + b.half_size[2] * b.z_axis[0].abs();
+        + b.half_size[1] * b.y_axis[0].abs()
+        + b.half_size[2] * b.z_axis[0].abs();
     let hy = b.half_size[0] * b.x_axis[1].abs()
-           + b.half_size[1] * b.y_axis[1].abs()
-           + b.half_size[2] * b.z_axis[1].abs();
+        + b.half_size[1] * b.y_axis[1].abs()
+        + b.half_size[2] * b.z_axis[1].abs();
     let hz = b.half_size[0] * b.x_axis[2].abs()
-           + b.half_size[1] * b.y_axis[2].abs()
-           + b.half_size[2] * b.z_axis[2].abs();
+        + b.half_size[1] * b.y_axis[2].abs()
+        + b.half_size[2] * b.z_axis[2].abs();
     AABB::new(b.center[0], b.center[1], b.center[2], hx, hy, hz)
 }
 
@@ -73,7 +76,10 @@ struct FlatNode {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SpatialBVH {
-    #[serde(serialize_with = "crate::guid_serde::serialize", deserialize_with = "crate::guid_serde::deserialize")]
+    #[serde(
+        serialize_with = "crate::guid_serde::serialize",
+        deserialize_with = "crate::guid_serde::deserialize"
+    )]
     guid: std::sync::OnceLock<String>,
     pub name: String,
     pub root: Option<Box<SpatialBVHNode>>,
@@ -209,9 +215,12 @@ impl SpatialBVH {
         let mut lo = [f64::INFINITY; 3];
         let mut hi = [f64::NEG_INFINITY; 3];
         for b in bounding_boxes {
-            lo[0] = lo[0].min(b.cx); hi[0] = hi[0].max(b.cx);
-            lo[1] = lo[1].min(b.cy); hi[1] = hi[1].max(b.cy);
-            lo[2] = lo[2].min(b.cz); hi[2] = hi[2].max(b.cz);
+            lo[0] = lo[0].min(b.cx);
+            hi[0] = hi[0].max(b.cx);
+            lo[1] = lo[1].min(b.cy);
+            hi[1] = hi[1].max(b.cy);
+            lo[2] = lo[2].min(b.cz);
+            hi[2] = hi[2].max(b.cz);
         }
         // ONE scale for all three axes (the scene's bounding CUBE): per-axis stretch would
         // blow a nearly-flat axis up to the full 1024 cells and scatter xy-neighbours in the
@@ -416,11 +425,7 @@ impl SpatialBVH {
         }
 
         // Post-order compute internal AABBs
-        fn compute_internal(
-            idx: usize,
-            internals: &mut [TempNode],
-            leaves: &[TempNode],
-        ) -> AABB {
+        fn compute_internal(idx: usize, internals: &mut [TempNode], leaves: &[TempNode]) -> AABB {
             let (left, right) = (
                 internals[idx].left.clone().expect("left child"),
                 internals[idx].right.clone().expect("right child"),
@@ -775,10 +780,7 @@ impl SpatialBVH {
 
     /// Check for all collisions and return GUID pairs directly
     /// Uses the internally stored object_guids from build_with_guids
-    pub fn check_all_collisions_guids(
-        &self,
-        bounding_boxes: &[OBB],
-    ) -> Vec<(String, String)> {
+    pub fn check_all_collisions_guids(&self, bounding_boxes: &[OBB]) -> Vec<(String, String)> {
         let (collision_pairs, _, _) = self.check_all_collisions(bounding_boxes);
 
         // Convert indices to GUIDs

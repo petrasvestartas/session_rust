@@ -1,10 +1,10 @@
-use crate::{MINI_CHECK, MINI_TEST, REGISTER_MINI_TEST};
 use crate::mini_test::TestResult;
+use crate::{MINI_CHECK, MINI_TEST, REGISTER_MINI_TEST};
 
 pub fn run_mesh_offset_from_mesh() -> TestResult {
     MINI_TEST!("from_mesh", {
-        use crate::MeshOffset;
         use crate::Mesh;
+        use crate::MeshOffset;
         use crate::Point;
         let pts = vec![
             Point::new(0.0, 0.0, 0.0),
@@ -22,12 +22,16 @@ pub fn run_mesh_offset_from_mesh() -> TestResult {
         MINI_CHECK!(result.number_of_faces() == 6);
     })
 }
-REGISTER_MINI_TEST!("MeshOffset", "from_mesh", crate::mesh_offset_test::run_mesh_offset_from_mesh);
+REGISTER_MINI_TEST!(
+    "MeshOffset",
+    "from_mesh",
+    crate::mesh_offset_test::run_mesh_offset_from_mesh
+);
 
 pub fn run_mesh_offset_from_mesh_grid() -> TestResult {
     MINI_TEST!("from_mesh_grid", {
-        use crate::MeshOffset;
         use crate::Mesh;
+        use crate::MeshOffset;
         use crate::Point;
         let pts = vec![
             Point::new(0.0, 0.0, 0.0),
@@ -53,12 +57,16 @@ pub fn run_mesh_offset_from_mesh_grid() -> TestResult {
         MINI_CHECK!(result.number_of_faces() == 16);
     })
 }
-REGISTER_MINI_TEST!("MeshOffset", "from_mesh_grid", crate::mesh_offset_test::run_mesh_offset_from_mesh_grid);
+REGISTER_MINI_TEST!(
+    "MeshOffset",
+    "from_mesh_grid",
+    crate::mesh_offset_test::run_mesh_offset_from_mesh_grid
+);
 
 pub fn run_mesh_offset_from_mesh_layers() -> TestResult {
     MINI_TEST!("from_mesh_layers", {
-        use crate::MeshOffset;
         use crate::Mesh;
+        use crate::MeshOffset;
         use crate::Point;
         let pts = vec![
             Point::new(0.0, 0.0, 0.0),
@@ -78,12 +86,16 @@ pub fn run_mesh_offset_from_mesh_layers() -> TestResult {
         MINI_CHECK!(layers.sides.number_of_faces() == 4);
     })
 }
-REGISTER_MINI_TEST!("MeshOffset", "from_mesh_layers", crate::mesh_offset_test::run_mesh_offset_from_mesh_layers);
+REGISTER_MINI_TEST!(
+    "MeshOffset",
+    "from_mesh_layers",
+    crate::mesh_offset_test::run_mesh_offset_from_mesh_layers
+);
 
 pub fn run_mesh_offset_file_json_dump() -> TestResult {
     MINI_TEST!("file_json_dump", {
-        use crate::MeshOffset;
         use crate::Mesh;
+        use crate::MeshOffset;
         use crate::Point;
         let pts = vec![
             Point::new(0.0, 0.0, 0.0),
@@ -101,7 +113,11 @@ pub fn run_mesh_offset_file_json_dump() -> TestResult {
         MINI_CHECK!(loaded.number_of_faces() == result.number_of_faces());
     })
 }
-REGISTER_MINI_TEST!("MeshOffset", "file_json_dump", crate::mesh_offset_test::run_mesh_offset_file_json_dump);
+REGISTER_MINI_TEST!(
+    "MeshOffset",
+    "file_json_dump",
+    crate::mesh_offset_test::run_mesh_offset_file_json_dump
+);
 
 pub fn run_mesh_offset_file_json_load() -> TestResult {
     MINI_TEST!("file_json_load", {
@@ -113,12 +129,16 @@ pub fn run_mesh_offset_file_json_load() -> TestResult {
         MINI_CHECK!(loaded.number_of_faces() == 6);
     })
 }
-REGISTER_MINI_TEST!("MeshOffset", "file_json_load", crate::mesh_offset_test::run_mesh_offset_file_json_load);
+REGISTER_MINI_TEST!(
+    "MeshOffset",
+    "file_json_load",
+    crate::mesh_offset_test::run_mesh_offset_file_json_load
+);
 
 pub fn run_mesh_offset_to_proto() -> TestResult {
     MINI_TEST!("to_proto", {
-        use crate::MeshOffset;
         use crate::Mesh;
+        use crate::MeshOffset;
         use crate::Point;
         let pts = vec![
             Point::new(0.0, 0.0, 0.0),
@@ -136,7 +156,11 @@ pub fn run_mesh_offset_to_proto() -> TestResult {
         MINI_CHECK!(loaded.number_of_faces() == result.number_of_faces());
     })
 }
-REGISTER_MINI_TEST!("MeshOffset", "to_proto", crate::mesh_offset_test::run_mesh_offset_to_proto);
+REGISTER_MINI_TEST!(
+    "MeshOffset",
+    "to_proto",
+    crate::mesh_offset_test::run_mesh_offset_to_proto
+);
 
 pub fn run_mesh_offset_from_proto() -> TestResult {
     MINI_TEST!("from_proto", {
@@ -148,4 +172,8 @@ pub fn run_mesh_offset_from_proto() -> TestResult {
         MINI_CHECK!(loaded.number_of_faces() == 6);
     })
 }
-REGISTER_MINI_TEST!("MeshOffset", "from_proto", crate::mesh_offset_test::run_mesh_offset_from_proto);
+REGISTER_MINI_TEST!(
+    "MeshOffset",
+    "from_proto",
+    crate::mesh_offset_test::run_mesh_offset_from_proto
+);

@@ -15,7 +15,10 @@ struct Rect {
     m_max: [f64; 3],
 }
 
-const EMPTY_RECT: Rect = Rect { m_min: [0.0; 3], m_max: [0.0; 3] };
+const EMPTY_RECT: Rect = Rect {
+    m_min: [0.0; 3],
+    m_max: [0.0; 3],
+};
 
 #[derive(Clone, Copy)]
 struct Branch {
@@ -24,7 +27,11 @@ struct Branch {
     m_data: i32,
 }
 
-const EMPTY_BRANCH: Branch = Branch { m_rect: EMPTY_RECT, m_child: NULL_IDX, m_data: 0 };
+const EMPTY_BRANCH: Branch = Branch {
+    m_rect: EMPTY_RECT,
+    m_child: NULL_IDX,
+    m_data: 0,
+};
 
 struct RTreeNode {
     m_count: i32,
@@ -34,9 +41,15 @@ struct RTreeNode {
 
 impl RTreeNode {
     fn new() -> Self {
-        RTreeNode { m_count: 0, m_level: 0, m_branch: [EMPTY_BRANCH; MAXNODES + 1] }
+        RTreeNode {
+            m_count: 0,
+            m_level: 0,
+            m_branch: [EMPTY_BRANCH; MAXNODES + 1],
+        }
     }
-    fn is_leaf(&self) -> bool { self.m_level == 0 }
+    fn is_leaf(&self) -> bool {
+        self.m_level == 0
+    }
 }
 
 struct PartitionVars {
@@ -78,7 +91,12 @@ pub struct SpatialRTree {
 
 impl SpatialRTree {
     pub fn new() -> Self {
-        let mut rt = SpatialRTree { nodes: Vec::new(), free_list: Vec::new(), m_root: 0, m_size: 0 };
+        let mut rt = SpatialRTree {
+            nodes: Vec::new(),
+            free_list: Vec::new(),
+            m_root: 0,
+            m_size: 0,
+        };
         rt.m_root = rt.alloc_node();
         rt
     }
@@ -102,7 +120,9 @@ impl SpatialRTree {
     fn free_subtree(&mut self, node_idx: usize) {
         if !self.nodes[node_idx].is_leaf() {
             let count = self.nodes[node_idx].m_count as usize;
-            let children: Vec<usize> = (0..count).map(|i| self.nodes[node_idx].m_branch[i].m_child).collect();
+            let children: Vec<usize> = (0..count)
+                .map(|i| self.nodes[node_idx].m_branch[i].m_child)
+                .collect();
             for child in children {
                 self.free_subtree(child);
             }
@@ -111,7 +131,10 @@ impl SpatialRTree {
     }
 
     fn make_rect(&self, a_min: [f64; 3], a_max: [f64; 3]) -> Rect {
-        Rect { m_min: a_min, m_max: a_max }
+        Rect {
+            m_min: a_min,
+            m_max: a_max,
+        }
     }
 
     fn calc_rect_volume(&self, rect: &Rect) -> f64 {
@@ -150,7 +173,12 @@ impl SpatialRTree {
         rect
     }
 
-    fn add_branch(&mut self, branch: Branch, node_idx: usize, new_node: &mut Option<usize>) -> bool {
+    fn add_branch(
+        &mut self,
+        branch: Branch,
+        node_idx: usize,
+        new_node: &mut Option<usize>,
+    ) -> bool {
         let count = self.nodes[node_idx].m_count as usize;
         if count < MAXNODES {
             self.nodes[node_idx].m_branch[count] = branch;
@@ -223,7 +251,10 @@ impl SpatialRTree {
         if part_vars.m_count[group] == 0 {
             part_vars.m_cover[group] = part_vars.m_branch_buf[index].m_rect;
         } else {
-            let combined = self.combine_rect(&part_vars.m_branch_buf[index].m_rect, &part_vars.m_cover[group]);
+            let combined = self.combine_rect(
+                &part_vars.m_branch_buf[index].m_rect,
+                &part_vars.m_cover[group],
+            );
             part_vars.m_cover[group] = combined;
         }
         part_vars.m_area[group] = self.calc_rect_volume(&part_vars.m_cover[group]);
@@ -240,7 +271,10 @@ impl SpatialRTree {
         }
         for i in 0..part_vars.m_total as usize - 1 {
             for j in i + 1..part_vars.m_total as usize {
-                let combined = self.combine_rect(&part_vars.m_branch_buf[i].m_rect, &part_vars.m_branch_buf[j].m_rect);
+                let combined = self.combine_rect(
+                    &part_vars.m_branch_buf[i].m_rect,
+                    &part_vars.m_branch_buf[j].m_rect,
+                );
                 let waste = self.calc_rect_volume(&combined) - area[i] - area[j];
                 if waste > worst {
                     worst = waste;
@@ -257,17 +291,19 @@ impl SpatialRTree {
         let branch_count = part_vars.m_branch_count;
         self.init_part_vars(part_vars, branch_count, min_fill);
         self.pick_seeds(part_vars);
-        while (part_vars.m_count[0] + part_vars.m_count[1]) < part_vars.m_total &&
-              part_vars.m_count[0] < (part_vars.m_total - part_vars.m_min_fill) &&
-              part_vars.m_count[1] < (part_vars.m_total - part_vars.m_min_fill)
+        while (part_vars.m_count[0] + part_vars.m_count[1]) < part_vars.m_total
+            && part_vars.m_count[0] < (part_vars.m_total - part_vars.m_min_fill)
+            && part_vars.m_count[1] < (part_vars.m_total - part_vars.m_min_fill)
         {
             let mut biggest_diff: f64 = -1.0;
             let mut chosen: usize = 0;
             let mut better_group: usize = 0;
             for i in 0..part_vars.m_total as usize {
                 if part_vars.m_partition[i] == NOT_TAKEN {
-                    let r0 = self.combine_rect(&part_vars.m_branch_buf[i].m_rect, &part_vars.m_cover[0]);
-                    let r1 = self.combine_rect(&part_vars.m_branch_buf[i].m_rect, &part_vars.m_cover[1]);
+                    let r0 =
+                        self.combine_rect(&part_vars.m_branch_buf[i].m_rect, &part_vars.m_cover[0]);
+                    let r1 =
+                        self.combine_rect(&part_vars.m_branch_buf[i].m_rect, &part_vars.m_cover[1]);
                     let growth0 = self.calc_rect_volume(&r0) - part_vars.m_area[0];
                     let growth1 = self.calc_rect_volume(&r1) - part_vars.m_area[1];
                     let mut diff = growth1 - growth0;
@@ -282,7 +318,9 @@ impl SpatialRTree {
                         biggest_diff = diff;
                         chosen = i;
                         better_group = group;
-                    } else if diff == biggest_diff && part_vars.m_count[group] < part_vars.m_count[better_group] {
+                    } else if diff == biggest_diff
+                        && part_vars.m_count[group] < part_vars.m_count[better_group]
+                    {
                         chosen = i;
                         better_group = group;
                     }
@@ -291,7 +329,11 @@ impl SpatialRTree {
             self.classify_branch(chosen, better_group, part_vars);
         }
         if (part_vars.m_count[0] + part_vars.m_count[1]) < part_vars.m_total {
-            let group: usize = if part_vars.m_count[0] >= part_vars.m_total - part_vars.m_min_fill { 1 } else { 0 };
+            let group: usize = if part_vars.m_count[0] >= part_vars.m_total - part_vars.m_min_fill {
+                1
+            } else {
+                0
+            };
             for i in 0..part_vars.m_total as usize {
                 if part_vars.m_partition[i] == NOT_TAKEN {
                     self.classify_branch(i, group, part_vars);
@@ -338,7 +380,11 @@ impl SpatialRTree {
                 let child_cover = self.node_cover(child_idx);
                 self.nodes[node_idx].m_branch[idx].m_rect = child_cover;
                 let new_cover = self.node_cover(new_idx);
-                let new_b = Branch { m_rect: new_cover, m_child: new_idx, m_data: 0 };
+                let new_b = Branch {
+                    m_rect: new_cover,
+                    m_child: new_idx,
+                    m_data: 0,
+                };
                 let mut out: Option<usize> = None;
                 self.add_branch(new_b, node_idx, &mut out);
                 out
@@ -360,8 +406,16 @@ impl SpatialRTree {
             let new_root = self.alloc_node();
             let old_level = self.nodes[old_root].m_level;
             self.nodes[new_root].m_level = old_level + 1;
-            let b1 = Branch { m_rect: self.node_cover(old_root), m_child: old_root, m_data: 0 };
-            let b2 = Branch { m_rect: self.node_cover(new_node), m_child: new_node, m_data: 0 };
+            let b1 = Branch {
+                m_rect: self.node_cover(old_root),
+                m_child: old_root,
+                m_data: 0,
+            };
+            let b2 = Branch {
+                m_rect: self.node_cover(new_node),
+                m_child: new_node,
+                m_data: 0,
+            };
             let mut dummy: Option<usize> = None;
             self.add_branch(b1, new_root, &mut dummy);
             self.add_branch(b2, new_root, &mut dummy);
@@ -369,7 +423,13 @@ impl SpatialRTree {
         }
     }
 
-    fn search_internal(&self, rect: &Rect, node_idx: usize, count: &mut i32, callback: &mut impl FnMut(i32) -> bool) -> bool {
+    fn search_internal(
+        &self,
+        rect: &Rect,
+        node_idx: usize,
+        count: &mut i32,
+        callback: &mut impl FnMut(i32) -> bool,
+    ) -> bool {
         if self.nodes[node_idx].is_leaf() {
             let node_count = self.nodes[node_idx].m_count as usize;
             for i in 0..node_count {
@@ -397,7 +457,13 @@ impl SpatialRTree {
         true
     }
 
-    fn remove_rect_internal(&mut self, rect: &Rect, data: i32, node_idx: usize, reinsert_list: &mut Vec<usize>) -> bool {
+    fn remove_rect_internal(
+        &mut self,
+        rect: &Rect,
+        data: i32,
+        node_idx: usize,
+        reinsert_list: &mut Vec<usize>,
+    ) -> bool {
         if self.nodes[node_idx].is_leaf() {
             let count = self.nodes[node_idx].m_count as usize;
             for i in 0..count {
@@ -433,7 +499,11 @@ impl SpatialRTree {
     }
 
     pub fn insert(&mut self, a_min: [f64; 3], a_max: [f64; 3], a_data: i32) {
-        let branch = Branch { m_rect: self.make_rect(a_min, a_max), m_child: NULL_IDX, m_data: a_data };
+        let branch = Branch {
+            m_rect: self.make_rect(a_min, a_max),
+            m_child: NULL_IDX,
+            m_data: a_data,
+        };
         self.insert_branch_internal(branch, 0);
         self.m_size += 1;
     }
@@ -468,7 +538,12 @@ impl SpatialRTree {
         true
     }
 
-    pub fn search(&self, a_min: [f64; 3], a_max: [f64; 3], mut a_callback: impl FnMut(i32) -> bool) -> i32 {
+    pub fn search(
+        &self,
+        a_min: [f64; 3],
+        a_max: [f64; 3],
+        mut a_callback: impl FnMut(i32) -> bool,
+    ) -> i32 {
         let rect = self.make_rect(a_min, a_max);
         let mut count: i32 = 0;
         self.search_internal(&rect, self.m_root, &mut count, &mut a_callback);
@@ -483,5 +558,7 @@ impl SpatialRTree {
         self.m_size = 0;
     }
 
-    pub fn count(&self) -> i32 { self.m_size }
+    pub fn count(&self) -> i32 {
+        self.m_size
+    }
 }

@@ -1,13 +1,12 @@
-use crate::{MINI_CHECK, MINI_TEST, REGISTER_MINI_TEST};
 use crate::mini_test::TestResult;
 use crate::tolerance::TOLERANCE;
-
+use crate::{MINI_CHECK, MINI_TEST, REGISTER_MINI_TEST};
 
 pub fn run_obb_constructor() -> TestResult {
     MINI_TEST!("Constructor", {
-        use crate::OBB;
         use crate::Point;
         use crate::Vector;
+        use crate::OBB;
 
         // from_point
         let mut bb1 = OBB::from_point(Point::new(5.0, 5.0, 5.0), 2.0);
@@ -16,10 +15,7 @@ pub fn run_obb_constructor() -> TestResult {
         MINI_CHECK!(TOLERANCE.is_close(bb1.half_size[0], 2.0));
 
         // from_points (AABB)
-        let pts = vec![
-            Point::new(0.0, 0.0, 0.0),
-            Point::new(2.0, 3.0, 4.0),
-        ];
+        let pts = vec![Point::new(0.0, 0.0, 0.0), Point::new(2.0, 3.0, 4.0)];
         let bb2 = OBB::from_points(&pts, 0.0);
         let mn = bb2.min_point();
         let mx = bb2.max_point();
@@ -62,10 +58,8 @@ pub fn run_obb_constructor() -> TestResult {
         MINI_CHECK!(TOLERANCE.is_close(p_max_pt[0], 2.0) && TOLERANCE.is_close(p_max_pt[2], 4.0));
 
         // inflate
-        let mut bb3 = OBB::from_points(&[
-            Point::new(0.0, 0.0, 0.0),
-            Point::new(2.0, 2.0, 2.0),
-        ], 0.0);
+        let mut bb3 =
+            OBB::from_points(&[Point::new(0.0, 0.0, 0.0), Point::new(2.0, 2.0, 2.0)], 0.0);
         bb3.inflate(1.0);
 
         MINI_CHECK!(TOLERANCE.is_close(bb3.min_point()[0], -1.0));
@@ -81,8 +75,8 @@ pub fn run_obb_constructor() -> TestResult {
 
 pub fn run_obb_collision() -> TestResult {
     MINI_TEST!("Collision", {
-        use crate::OBB;
         use crate::Point;
+        use crate::OBB;
 
         let bb1 = OBB::from_point(Point::new(0.0, 0.0, 0.0), 1.0);
         let bb2 = OBB::from_point(Point::new(1.5, 0.0, 0.0), 1.0);
@@ -101,14 +95,11 @@ pub fn run_obb_collision() -> TestResult {
 
 pub fn run_obb_transformation() -> TestResult {
     MINI_TEST!("Transformation", {
-        use crate::OBB;
         use crate::Point;
         use crate::Xform;
+        use crate::OBB;
 
-        let pts = vec![
-            Point::new(0.0, 0.0, 0.0),
-            Point::new(1.0, 1.0, 0.0),
-        ];
+        let pts = vec![Point::new(0.0, 0.0, 0.0), Point::new(1.0, 1.0, 0.0)];
         let mut bb = OBB::from_points(&pts, 0.0);
         let bb_xf = Xform::translation(0.0, 0.0, 5.0);
 
@@ -124,8 +115,8 @@ pub fn run_obb_transformation() -> TestResult {
 
 pub fn run_obb_json_roundtrip() -> TestResult {
     MINI_TEST!("Json Roundtrip", {
-        use crate::OBB;
         use crate::Point;
+        use crate::OBB;
 
         let mut bb = OBB::from_point(Point::new(1.0, 2.0, 3.0), 5.0);
         bb.name = "test_bbox".to_string();
@@ -159,8 +150,8 @@ pub fn run_obb_json_roundtrip() -> TestResult {
 
 pub fn run_obb_protobuf_roundtrip() -> TestResult {
     MINI_TEST!("Protobuf Roundtrip", {
-        use crate::OBB;
         use crate::Point;
+        use crate::OBB;
 
         let mut bb = OBB::from_point(Point::new(1.0, 2.0, 3.0), 5.0);
         bb.name = "test_bbox_proto".to_string();
@@ -189,7 +180,7 @@ pub fn run_obb_protobuf_roundtrip() -> TestResult {
 
 pub fn run_obb_accessors() -> crate::mini_test::TestResult {
     use crate::tolerance::TOLERANCE;
-    use crate::{OBB, Point};
+    use crate::{Point, OBB};
     MINI_TEST!("Accessors", {
         // axis-aligned OBB: center=(1,2,3), half_size=(1,2,3), dims 2×4×6
         let pts = vec![
@@ -227,23 +218,26 @@ pub fn run_obb_from_geometry() -> TestResult {
         use crate::Line;
         use crate::NurbsCurve;
         use crate::NurbsSurface;
-        use crate::OBB;
         use crate::Point;
         use crate::PointCloud;
         use crate::Polyline;
         use crate::Primitives;
         use crate::Vector;
+        use crate::OBB;
 
         let bb_line = OBB::from_line(&Line::new(0.0, 0.0, 0.0, 4.0, 0.0, 0.0), 0.1);
 
         MINI_CHECK!(bb_line.is_valid());
         MINI_CHECK!(TOLERANCE.is_close(bb_line.center[0], 2.0));
 
-        let bb_pl = OBB::from_polyline(&Polyline::new(vec![
-            Point::new(0.0, 0.0, 0.0),
-            Point::new(4.0, 0.0, 0.0),
-            Point::new(4.0, 4.0, 4.0),
-        ]), 0.0);
+        let bb_pl = OBB::from_polyline(
+            &Polyline::new(vec![
+                Point::new(0.0, 0.0, 0.0),
+                Point::new(4.0, 0.0, 0.0),
+                Point::new(4.0, 4.0, 4.0),
+            ]),
+            0.0,
+        );
 
         MINI_CHECK!(bb_pl.is_valid());
         MINI_CHECK!(bb_pl.volume() > 0.0);
@@ -254,45 +248,65 @@ pub fn run_obb_from_geometry() -> TestResult {
         MINI_CHECK!(TOLERANCE.is_close(bb_mesh.center[0], 0.0));
         MINI_CHECK!(TOLERANCE.is_close(bb_mesh.volume(), 8.0));
 
-        let bb_pc = OBB::from_pointcloud(&PointCloud::new(
-            vec![
-                Point::new(0.0, 0.0, 0.0),
-                Point::new(2.0, 0.0, 0.0),
-                Point::new(0.0, 2.0, 0.0),
-                Point::new(0.0, 0.0, 2.0),
-            ],
-            vec![
-                Vector::new(0.0, 0.0, 1.0),
-                Vector::new(0.0, 0.0, 1.0),
-                Vector::new(0.0, 0.0, 1.0),
-                Vector::new(0.0, 0.0, 1.0),
-            ],
-            vec![
-                Color::new(1.0, 0.0, 0.0, 1.0),
-                Color::new(0.0, 1.0, 0.0, 1.0),
-                Color::new(0.0, 0.0, 1.0, 1.0),
-                Color::new(1.0, 1.0, 0.0, 1.0),
-            ],
-        ), 0.0);
+        let bb_pc = OBB::from_pointcloud(
+            &PointCloud::new(
+                vec![
+                    Point::new(0.0, 0.0, 0.0),
+                    Point::new(2.0, 0.0, 0.0),
+                    Point::new(0.0, 2.0, 0.0),
+                    Point::new(0.0, 0.0, 2.0),
+                ],
+                vec![
+                    Vector::new(0.0, 0.0, 1.0),
+                    Vector::new(0.0, 0.0, 1.0),
+                    Vector::new(0.0, 0.0, 1.0),
+                    Vector::new(0.0, 0.0, 1.0),
+                ],
+                vec![
+                    Color::new(1.0, 0.0, 0.0, 1.0),
+                    Color::new(0.0, 1.0, 0.0, 1.0),
+                    Color::new(0.0, 0.0, 1.0, 1.0),
+                    Color::new(1.0, 1.0, 0.0, 1.0),
+                ],
+            ),
+            0.0,
+        );
 
         MINI_CHECK!(bb_pc.is_valid());
         MINI_CHECK!(bb_pc.volume() > 0.0);
 
-        let bb_nc = OBB::from_nurbscurve(&NurbsCurve::create(false, 2, &[
-            Point::new(0.0, 0.0, 0.0),
-            Point::new(1.0, 0.0, 0.0),
-            Point::new(2.0, 0.0, 0.0),
-            Point::new(3.0, 0.0, 0.0),
-        ]), 0.5, false);
+        let bb_nc = OBB::from_nurbscurve(
+            &NurbsCurve::create(
+                false,
+                2,
+                &[
+                    Point::new(0.0, 0.0, 0.0),
+                    Point::new(1.0, 0.0, 0.0),
+                    Point::new(2.0, 0.0, 0.0),
+                    Point::new(3.0, 0.0, 0.0),
+                ],
+            ),
+            0.5,
+            false,
+        );
 
         MINI_CHECK!(bb_nc.is_valid());
 
-        let surf_ns = NurbsSurface::create(false, false, 1, 1, 2, 2, &[
-            Point::new(0.0, 0.0, 0.0),
-            Point::new(2.0, 0.0, 0.0),
-            Point::new(0.0, 2.0, 0.0),
-            Point::new(2.0, 2.0, 2.0),
-        ]).unwrap();
+        let surf_ns = NurbsSurface::create(
+            false,
+            false,
+            1,
+            1,
+            2,
+            2,
+            &[
+                Point::new(0.0, 0.0, 0.0),
+                Point::new(2.0, 0.0, 0.0),
+                Point::new(0.0, 2.0, 0.0),
+                Point::new(2.0, 2.0, 2.0),
+            ],
+        )
+        .unwrap();
         let bb_ns = OBB::from_nurbssurface(&surf_ns, 0.0);
 
         MINI_CHECK!(bb_ns.is_valid());
@@ -301,9 +315,9 @@ pub fn run_obb_from_geometry() -> TestResult {
 
 pub fn run_obb_from_plane() -> TestResult {
     MINI_TEST!("From Plane", {
-        use crate::OBB;
         use crate::Plane;
         use crate::Point;
+        use crate::OBB;
 
         let plane = Plane::xy_plane();
         let box_ = OBB::from_plane(&plane, 2.0, 3.0, 4.0);
@@ -329,9 +343,9 @@ pub fn run_obb_from_plane() -> TestResult {
 
 pub fn run_obb_two_rectangles() -> TestResult {
     MINI_TEST!("Two Rectangles", {
-        use crate::OBB;
         use crate::Point;
         use crate::Vector;
+        use crate::OBB;
 
         let bb = OBB::new(
             Point::new(1.0, 2.0, 3.0),
@@ -355,11 +369,30 @@ pub fn run_obb_two_rectangles() -> TestResult {
 
 REGISTER_MINI_TEST!("OBB", "Constructor", crate::obb_test::run_obb_constructor);
 REGISTER_MINI_TEST!("OBB", "Collision", crate::obb_test::run_obb_collision);
-REGISTER_MINI_TEST!("OBB", "Transformation", crate::obb_test::run_obb_transformation);
-REGISTER_MINI_TEST!("OBB", "Json Roundtrip", crate::obb_test::run_obb_json_roundtrip);
-REGISTER_MINI_TEST!("OBB", "Protobuf Roundtrip", crate::obb_test::run_obb_protobuf_roundtrip);
+REGISTER_MINI_TEST!(
+    "OBB",
+    "Transformation",
+    crate::obb_test::run_obb_transformation
+);
+REGISTER_MINI_TEST!(
+    "OBB",
+    "Json Roundtrip",
+    crate::obb_test::run_obb_json_roundtrip
+);
+REGISTER_MINI_TEST!(
+    "OBB",
+    "Protobuf Roundtrip",
+    crate::obb_test::run_obb_protobuf_roundtrip
+);
 REGISTER_MINI_TEST!("OBB", "Accessors", crate::obb_test::run_obb_accessors);
-REGISTER_MINI_TEST!("OBB", "From Geometry", crate::obb_test::run_obb_from_geometry);
+REGISTER_MINI_TEST!(
+    "OBB",
+    "From Geometry",
+    crate::obb_test::run_obb_from_geometry
+);
 REGISTER_MINI_TEST!("OBB", "From Plane", crate::obb_test::run_obb_from_plane);
-REGISTER_MINI_TEST!("OBB", "Two Rectangles", crate::obb_test::run_obb_two_rectangles);
-
+REGISTER_MINI_TEST!(
+    "OBB",
+    "Two Rectangles",
+    crate::obb_test::run_obb_two_rectangles
+);

@@ -1,5 +1,5 @@
-use crate::{MINI_CHECK, MINI_TEST, REGISTER_MINI_TEST};
 use crate::mini_test::TestResult;
+use crate::{MINI_CHECK, MINI_TEST, REGISTER_MINI_TEST};
 
 pub fn run_rtree_constructor() -> TestResult {
     MINI_TEST!("Constructor", {
@@ -256,14 +256,58 @@ pub fn run_rtree_search_100_boxes() -> TestResult {
     })
 }
 
-REGISTER_MINI_TEST!("SpatialRTree", "Constructor", crate::spatial_rtree_test::run_rtree_constructor);
-REGISTER_MINI_TEST!("SpatialRTree", "Creation", crate::spatial_rtree_test::run_rtree_creation);
-REGISTER_MINI_TEST!("SpatialRTree", "Insert", crate::spatial_rtree_test::run_rtree_insert);
-REGISTER_MINI_TEST!("SpatialRTree", "Insert Multiple", crate::spatial_rtree_test::run_rtree_insert_multiple);
-REGISTER_MINI_TEST!("SpatialRTree", "Search Hit", crate::spatial_rtree_test::run_rtree_search_hit);
-REGISTER_MINI_TEST!("SpatialRTree", "Search Miss", crate::spatial_rtree_test::run_rtree_search_miss);
-REGISTER_MINI_TEST!("SpatialRTree", "Remove", crate::spatial_rtree_test::run_rtree_remove);
-REGISTER_MINI_TEST!("SpatialRTree", "Remove All", crate::spatial_rtree_test::run_rtree_remove_all);
-REGISTER_MINI_TEST!("SpatialRTree", "Search Count", crate::spatial_rtree_test::run_rtree_search_count);
-REGISTER_MINI_TEST!("SpatialRTree", "Search Stop", crate::spatial_rtree_test::run_rtree_search_stop);
-REGISTER_MINI_TEST!("SpatialRTree", "Search 100 Boxes", crate::spatial_rtree_test::run_rtree_search_100_boxes);
+REGISTER_MINI_TEST!(
+    "SpatialRTree",
+    "Constructor",
+    crate::spatial_rtree_test::run_rtree_constructor
+);
+REGISTER_MINI_TEST!(
+    "SpatialRTree",
+    "Creation",
+    crate::spatial_rtree_test::run_rtree_creation
+);
+REGISTER_MINI_TEST!(
+    "SpatialRTree",
+    "Insert",
+    crate::spatial_rtree_test::run_rtree_insert
+);
+REGISTER_MINI_TEST!(
+    "SpatialRTree",
+    "Insert Multiple",
+    crate::spatial_rtree_test::run_rtree_insert_multiple
+);
+REGISTER_MINI_TEST!(
+    "SpatialRTree",
+    "Search Hit",
+    crate::spatial_rtree_test::run_rtree_search_hit
+);
+REGISTER_MINI_TEST!(
+    "SpatialRTree",
+    "Search Miss",
+    crate::spatial_rtree_test::run_rtree_search_miss
+);
+REGISTER_MINI_TEST!(
+    "SpatialRTree",
+    "Remove",
+    crate::spatial_rtree_test::run_rtree_remove
+);
+REGISTER_MINI_TEST!(
+    "SpatialRTree",
+    "Remove All",
+    crate::spatial_rtree_test::run_rtree_remove_all
+);
+REGISTER_MINI_TEST!(
+    "SpatialRTree",
+    "Search Count",
+    crate::spatial_rtree_test::run_rtree_search_count
+);
+REGISTER_MINI_TEST!(
+    "SpatialRTree",
+    "Search Stop",
+    crate::spatial_rtree_test::run_rtree_search_stop
+);
+REGISTER_MINI_TEST!(
+    "SpatialRTree",
+    "Search 100 Boxes",
+    crate::spatial_rtree_test::run_rtree_search_100_boxes
+);

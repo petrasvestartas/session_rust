@@ -21,7 +21,11 @@ pub struct SpatialKDTree {
 impl SpatialKDTree {
     pub fn new(points: Vec<Point>) -> Self {
         let mut indices: Vec<usize> = (0..points.len()).collect();
-        let root = if points.is_empty() { None } else { Some(Self::build(&points, &mut indices, 0)) };
+        let root = if points.is_empty() {
+            None
+        } else {
+            Some(Self::build(&points, &mut indices, 0))
+        };
         SpatialKDTree { points, root }
     }
 
@@ -29,9 +33,22 @@ impl SpatialKDTree {
         let axis = depth % 3;
         let mid = indices.len() / 2;
         indices.select_nth_unstable_by(mid, |&a, &b| points[a][axis].total_cmp(&points[b][axis]));
-        let left = if mid > 0 { Some(Self::build(points, &mut indices[..mid], depth + 1)) } else { None };
-        let right = if mid + 1 < indices.len() { Some(Self::build(points, &mut indices[mid + 1..], depth + 1)) } else { None };
-        Box::new(Node { idx: indices[mid], axis, left, right })
+        let left = if mid > 0 {
+            Some(Self::build(points, &mut indices[..mid], depth + 1))
+        } else {
+            None
+        };
+        let right = if mid + 1 < indices.len() {
+            Some(Self::build(points, &mut indices[mid + 1..], depth + 1))
+        } else {
+            None
+        };
+        Box::new(Node {
+            idx: indices[mid],
+            axis,
+            left,
+            right,
+        })
     }
 
     fn dist_sq(a: &Point, b: &Point) -> f64 {
@@ -41,15 +58,28 @@ impl SpatialKDTree {
         dx * dx + dy * dy + dz * dz
     }
 
-    fn nearest_1(node: &Option<Box<Node>>, points: &[Point], query: &Point, best_idx: &mut usize, best_d2: &mut f64) {
-        let node = match node { Some(n) => n, None => return };
+    fn nearest_1(
+        node: &Option<Box<Node>>,
+        points: &[Point],
+        query: &Point,
+        best_idx: &mut usize,
+        best_d2: &mut f64,
+    ) {
+        let node = match node {
+            Some(n) => n,
+            None => return,
+        };
         let d = Self::dist_sq(query, &points[node.idx]);
         if d < *best_d2 {
             *best_d2 = d;
             *best_idx = node.idx;
         }
         let diff = query[node.axis] - points[node.idx][node.axis];
-        let (near, far) = if diff <= 0.0 { (&node.left, &node.right) } else { (&node.right, &node.left) };
+        let (near, far) = if diff <= 0.0 {
+            (&node.left, &node.right)
+        } else {
+            (&node.right, &node.left)
+        };
         Self::nearest_1(near, points, query, best_idx, best_d2);
         if diff * diff < *best_d2 {
             Self::nearest_1(far, points, query, best_idx, best_d2);
@@ -79,16 +109,31 @@ impl SpatialKDTree {
             let l = 2 * i + 1;
             let r = 2 * i + 2;
             let mut m = i;
-            if l < heap.len() && heap[l].0 > heap[m].0 { m = l; }
-            if r < heap.len() && heap[r].0 > heap[m].0 { m = r; }
-            if m == i { break; }
+            if l < heap.len() && heap[l].0 > heap[m].0 {
+                m = l;
+            }
+            if r < heap.len() && heap[r].0 > heap[m].0 {
+                m = r;
+            }
+            if m == i {
+                break;
+            }
             heap.swap(i, m);
             i = m;
         }
     }
 
-    fn nearest_k_rec(node: &Option<Box<Node>>, points: &[Point], query: &Point, k: usize, heap: &mut Vec<(f64, usize)>) {
-        let node = match node { Some(n) => n, None => return };
+    fn nearest_k_rec(
+        node: &Option<Box<Node>>,
+        points: &[Point],
+        query: &Point,
+        k: usize,
+        heap: &mut Vec<(f64, usize)>,
+    ) {
+        let node = match node {
+            Some(n) => n,
+            None => return,
+        };
         let d = Self::dist_sq(query, &points[node.idx]);
         if heap.len() < k {
             Self::heap_push(heap, (d, node.idx));
@@ -96,7 +141,11 @@ impl SpatialKDTree {
             Self::heap_replace(heap, (d, node.idx));
         }
         let diff = query[node.axis] - points[node.idx][node.axis];
-        let (near, far) = if diff <= 0.0 { (&node.left, &node.right) } else { (&node.right, &node.left) };
+        let (near, far) = if diff <= 0.0 {
+            (&node.left, &node.right)
+        } else {
+            (&node.right, &node.left)
+        };
         Self::nearest_k_rec(near, points, query, k, heap);
         if heap.len() < k || diff * diff < heap[0].0 {
             Self::nearest_k_rec(far, points, query, k, heap);
@@ -114,14 +163,27 @@ impl SpatialKDTree {
         result
     }
 
-    fn radius_rec(node: &Option<Box<Node>>, points: &[Point], query: &Point, radius_sq: f64, result: &mut Vec<(usize, f64)>) {
-        let node = match node { Some(n) => n, None => return };
+    fn radius_rec(
+        node: &Option<Box<Node>>,
+        points: &[Point],
+        query: &Point,
+        radius_sq: f64,
+        result: &mut Vec<(usize, f64)>,
+    ) {
+        let node = match node {
+            Some(n) => n,
+            None => return,
+        };
         let d = Self::dist_sq(query, &points[node.idx]);
         if d <= radius_sq {
             result.push((node.idx, d.sqrt()));
         }
         let diff = query[node.axis] - points[node.idx][node.axis];
-        let (near, far) = if diff <= 0.0 { (&node.left, &node.right) } else { (&node.right, &node.left) };
+        let (near, far) = if diff <= 0.0 {
+            (&node.left, &node.right)
+        } else {
+            (&node.right, &node.left)
+        };
         Self::radius_rec(near, points, query, radius_sq, result);
         if diff * diff <= radius_sq {
             Self::radius_rec(far, points, query, radius_sq, result);
@@ -130,7 +192,13 @@ impl SpatialKDTree {
 
     pub fn radius_search(&self, query: &Point, radius: f64) -> Vec<(usize, f64)> {
         let mut result = Vec::new();
-        Self::radius_rec(&self.root, &self.points, query, radius * radius, &mut result);
+        Self::radius_rec(
+            &self.root,
+            &self.points,
+            query,
+            radius * radius,
+            &mut result,
+        );
         result.sort_by(|a, b| a.1.partial_cmp(&b.1).unwrap());
         result
     }

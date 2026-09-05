@@ -1,8 +1,7 @@
-use crate::{MINI_CHECK, MINI_TEST, REGISTER_MINI_TEST};
 use crate::mini_test::TestResult;
-use crate::tolerance::TOLERANCE;
 use crate::tolerance::PI;
-
+use crate::tolerance::TOLERANCE;
+use crate::{MINI_CHECK, MINI_TEST, REGISTER_MINI_TEST};
 
 pub fn run_plane_constructor() -> TestResult {
     MINI_TEST!("Constructor", {
@@ -71,19 +70,46 @@ pub fn run_plane_constructor() -> TestResult {
         let pl_sub = pl_base.clone() - offset.clone();
 
         MINI_CHECK!(pl.name == "my_plane" && !pl.guid().is_empty());
-        MINI_CHECK!(TOLERANCE.is_close(origin[0], 0.0) && TOLERANCE.is_close(origin[1], 0.0) && TOLERANCE.is_close(origin[2], 0.0));
-        MINI_CHECK!(TOLERANCE.is_close(x_axis[0], 1.0) && TOLERANCE.is_close(y_axis[1], 1.0) && TOLERANCE.is_close(z_axis[2], 1.0));
-        MINI_CHECK!(TOLERANCE.is_close(a, 0.0) && TOLERANCE.is_close(b, 0.0) && TOLERANCE.is_close(c, 1.0) && TOLERANCE.is_close(d, 0.0));
-        MINI_CHECK!(TOLERANCE.is_close(ax0[0], 1.0) && TOLERANCE.is_close(ax1[1], 1.0) && TOLERANCE.is_close(ax2[2], 1.0));
+        MINI_CHECK!(
+            TOLERANCE.is_close(origin[0], 0.0)
+                && TOLERANCE.is_close(origin[1], 0.0)
+                && TOLERANCE.is_close(origin[2], 0.0)
+        );
+        MINI_CHECK!(
+            TOLERANCE.is_close(x_axis[0], 1.0)
+                && TOLERANCE.is_close(y_axis[1], 1.0)
+                && TOLERANCE.is_close(z_axis[2], 1.0)
+        );
+        MINI_CHECK!(
+            TOLERANCE.is_close(a, 0.0)
+                && TOLERANCE.is_close(b, 0.0)
+                && TOLERANCE.is_close(c, 1.0)
+                && TOLERANCE.is_close(d, 0.0)
+        );
+        MINI_CHECK!(
+            TOLERANCE.is_close(ax0[0], 1.0)
+                && TOLERANCE.is_close(ax1[1], 1.0)
+                && TOLERANCE.is_close(ax2[2], 1.0)
+        );
         MINI_CHECK!(plstr == "0.000000, 0.000000, 0.000000\n1.000000, 0.000000, 0.000000\n0.000000, 1.000000, 0.000000\n0.000000, 0.000000, 1.000000");
         MINI_CHECK!(plrepr == "Plane(my_plane, 0.000000, 0.000000, 0.000000, 0.000000, 0.000000, 1.000000, Color(blue, 0.0, 0.0, 1.0, 1.0))");
         MINI_CHECK!(plcopy == pl && plcopy.guid() != pl.guid());
-        MINI_CHECK!(TOLERANCE.is_close(pl_pn.origin()[2], 5.0) && TOLERANCE.is_close(pl_pn.z_axis()[2], 1.0));
+        MINI_CHECK!(
+            TOLERANCE.is_close(pl_pn.origin()[2], 5.0)
+                && TOLERANCE.is_close(pl_pn.z_axis()[2], 1.0)
+        );
         MINI_CHECK!(TOLERANCE.is_close(pl_pts.c(), 1.0));
         MINI_CHECK!(TOLERANCE.is_close(pl_2pts.x_axis()[0], 1.0));
         MINI_CHECK!(xy.name == "xy_plane" && yz.name == "yz_plane" && xz.name == "xz_plane");
-        MINI_CHECK!(TOLERANCE.is_close(pl_iadd.origin()[0], 1.0) && TOLERANCE.is_close(pl_iadd.origin()[1], 2.0) && TOLERANCE.is_close(pl_iadd.origin()[2], 3.0));
-        MINI_CHECK!(TOLERANCE.is_close(pl_isub.origin()[0], -1.0) && TOLERANCE.is_close(pl_isub.origin()[2], -3.0));
+        MINI_CHECK!(
+            TOLERANCE.is_close(pl_iadd.origin()[0], 1.0)
+                && TOLERANCE.is_close(pl_iadd.origin()[1], 2.0)
+                && TOLERANCE.is_close(pl_iadd.origin()[2], 3.0)
+        );
+        MINI_CHECK!(
+            TOLERANCE.is_close(pl_isub.origin()[0], -1.0)
+                && TOLERANCE.is_close(pl_isub.origin()[2], -3.0)
+        );
         MINI_CHECK!(TOLERANCE.is_close(pl_add.origin()[2], 3.0));
         MINI_CHECK!(TOLERANCE.is_close(pl_sub.origin()[2], -3.0));
     })
@@ -280,20 +306,60 @@ pub fn run_plane_protobuf_roundtrip() -> TestResult {
     })
 }
 
-REGISTER_MINI_TEST!("Plane", "Constructor", crate::plane_test::run_plane_constructor);
+REGISTER_MINI_TEST!(
+    "Plane",
+    "Constructor",
+    crate::plane_test::run_plane_constructor
+);
 REGISTER_MINI_TEST!("Plane", "Is Valid", crate::plane_test::run_plane_is_valid);
 REGISTER_MINI_TEST!("Plane", "Reverse", crate::plane_test::run_plane_reverse);
 REGISTER_MINI_TEST!("Plane", "Rotate", crate::plane_test::run_plane_rotate);
-REGISTER_MINI_TEST!("Plane", "Is Right Hand", crate::plane_test::run_plane_is_right_hand);
-REGISTER_MINI_TEST!("Plane", "Is Same Direction", crate::plane_test::run_plane_is_same_direction);
-REGISTER_MINI_TEST!("Plane", "Is Same Position", crate::plane_test::run_plane_is_same_position);
-REGISTER_MINI_TEST!("Plane", "Is Coplanar", crate::plane_test::run_plane_is_coplanar);
-REGISTER_MINI_TEST!("Plane", "Translate By Normal", crate::plane_test::run_plane_translate_by_normal);
-REGISTER_MINI_TEST!("Plane", "Base1 Base2", crate::plane_test::run_plane_base1_base2);
+REGISTER_MINI_TEST!(
+    "Plane",
+    "Is Right Hand",
+    crate::plane_test::run_plane_is_right_hand
+);
+REGISTER_MINI_TEST!(
+    "Plane",
+    "Is Same Direction",
+    crate::plane_test::run_plane_is_same_direction
+);
+REGISTER_MINI_TEST!(
+    "Plane",
+    "Is Same Position",
+    crate::plane_test::run_plane_is_same_position
+);
+REGISTER_MINI_TEST!(
+    "Plane",
+    "Is Coplanar",
+    crate::plane_test::run_plane_is_coplanar
+);
+REGISTER_MINI_TEST!(
+    "Plane",
+    "Translate By Normal",
+    crate::plane_test::run_plane_translate_by_normal
+);
+REGISTER_MINI_TEST!(
+    "Plane",
+    "Base1 Base2",
+    crate::plane_test::run_plane_base1_base2
+);
 REGISTER_MINI_TEST!("Plane", "Transform", crate::plane_test::run_plane_transform);
-REGISTER_MINI_TEST!("Plane", "Transformed", crate::plane_test::run_plane_transformed);
-REGISTER_MINI_TEST!("Plane", "Json Roundtrip", crate::plane_test::run_plane_json_roundtrip);
-REGISTER_MINI_TEST!("Plane", "Protobuf Roundtrip", crate::plane_test::run_plane_protobuf_roundtrip);
+REGISTER_MINI_TEST!(
+    "Plane",
+    "Transformed",
+    crate::plane_test::run_plane_transformed
+);
+REGISTER_MINI_TEST!(
+    "Plane",
+    "Json Roundtrip",
+    crate::plane_test::run_plane_json_roundtrip
+);
+REGISTER_MINI_TEST!(
+    "Plane",
+    "Protobuf Roundtrip",
+    crate::plane_test::run_plane_protobuf_roundtrip
+);
 
 pub fn run_plane_has_on_negative_side() -> TestResult {
     MINI_TEST!("Has On Negative Side", {
@@ -305,4 +371,8 @@ pub fn run_plane_has_on_negative_side() -> TestResult {
         MINI_CHECK!(!pl.has_on_negative_side(&above));
     })
 }
-REGISTER_MINI_TEST!("Plane", "Has On Negative Side", crate::plane_test::run_plane_has_on_negative_side);
+REGISTER_MINI_TEST!(
+    "Plane",
+    "Has On Negative Side",
+    crate::plane_test::run_plane_has_on_negative_side
+);

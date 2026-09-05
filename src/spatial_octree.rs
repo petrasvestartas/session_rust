@@ -45,7 +45,10 @@ impl SpatialOctree {
     /// Coords are only read during construction - nothing is stored, so a renderer can
     /// hand its flat table over without a copy.
     pub fn from_coords(coords: &[f64], root_spacing: f64, leaf_capacity: usize) -> Self {
-        let mut tree = SpatialOctree { nodes: Vec::new(), order: Vec::new() };
+        let mut tree = SpatialOctree {
+            nodes: Vec::new(),
+            order: Vec::new(),
+        };
         let n = coords.len() / 3;
         if n == 0 {
             return tree;
@@ -68,9 +71,26 @@ impl SpatialOctree {
         tree
     }
 
-    fn build(&mut self, coords: &[f64], min: [f64; 3], size: f64, level: usize, spacing: f64, idxs: Vec<usize>, leaf_capacity: usize) -> usize {
+    fn build(
+        &mut self,
+        coords: &[f64],
+        min: [f64; 3],
+        size: f64,
+        level: usize,
+        spacing: f64,
+        idxs: Vec<usize>,
+        leaf_capacity: usize,
+    ) -> usize {
         let node_id = self.nodes.len();
-        self.nodes.push(Node { min, size, level, spacing, first: self.order.len(), count: 0, children: [-1; 8] });
+        self.nodes.push(Node {
+            min,
+            size,
+            level,
+            spacing,
+            first: self.order.len(),
+            count: 0,
+            children: [-1; 8],
+        });
         if idxs.len() <= leaf_capacity || level >= MAX_LEVEL {
             self.nodes[node_id].count = idxs.len();
             self.order.extend(idxs);
@@ -90,9 +110,15 @@ impl SpatialOctree {
                 accepted.push(i);
             } else {
                 let mut b = 0usize;
-                if coords[i * 3] >= center[0] { b |= 1; }
-                if coords[i * 3 + 1] >= center[1] { b |= 2; }
-                if coords[i * 3 + 2] >= center[2] { b |= 4; }
+                if coords[i * 3] >= center[0] {
+                    b |= 1;
+                }
+                if coords[i * 3 + 1] >= center[1] {
+                    b |= 2;
+                }
+                if coords[i * 3 + 2] >= center[2] {
+                    b |= 4;
+                }
                 buckets[b].push(i);
             }
         }
@@ -106,7 +132,15 @@ impl SpatialOctree {
                     min[1] + ((b >> 1) & 1) as f64 * half,
                     min[2] + ((b >> 2) & 1) as f64 * half,
                 ];
-                let child_id = self.build(coords, child_min, half, level + 1, spacing * 0.5, bucket, leaf_capacity);
+                let child_id = self.build(
+                    coords,
+                    child_min,
+                    half,
+                    level + 1,
+                    spacing * 0.5,
+                    bucket,
+                    leaf_capacity,
+                );
                 self.nodes[node_id].children[b] = child_id as i32;
             }
         }
@@ -120,7 +154,10 @@ impl SpatialOctree {
     pub fn node_cube(&self, i: usize) -> (Point, f64) {
         let node = &self.nodes[i];
         let half = node.size * 0.5;
-        (Point::new(node.min[0] + half, node.min[1] + half, node.min[2] + half), node.size)
+        (
+            Point::new(node.min[0] + half, node.min[1] + half, node.min[2] + half),
+            node.size,
+        )
     }
 
     pub fn node_level(&self, i: usize) -> usize {
@@ -137,7 +174,12 @@ impl SpatialOctree {
     }
 
     pub fn children(&self, i: usize) -> Vec<usize> {
-        self.nodes[i].children.iter().filter(|&&c| c >= 0).map(|&c| c as usize).collect()
+        self.nodes[i]
+            .children
+            .iter()
+            .filter(|&&c| c >= 0)
+            .map(|&c| c as usize)
+            .collect()
     }
 
     pub fn order(&self) -> &[usize] {

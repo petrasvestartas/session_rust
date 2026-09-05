@@ -74,7 +74,11 @@ pub fn domain_tolerance(a: f64, b: f64) -> f64 {
     const SQRT_EPSILON: f64 = 1.4901161193847656e-08;
     const EPSILON: f64 = 2.220446049250313e-16;
     let tol = (a.abs() + b.abs() + (a - b).abs()) * SQRT_EPSILON;
-    if tol < EPSILON { EPSILON } else { tol }
+    if tol < EPSILON {
+        EPSILON
+    } else {
+        tol
+    }
 }
 
 /// Create a clamped uniform nurbsknot vector.
@@ -90,20 +94,20 @@ pub fn make_clamped_uniform(order: usize, cv_count: usize, delta: f64) -> Vec<f6
     if order < 2 || cv_count < order || delta <= 0.0 {
         return Vec::new();
     }
-    
+
     let kc = nurbsknot_count(order, cv_count);
     let mut nurbsknot = vec![0.0; kc];
-    
+
     // Fill interior nurbsknots: from index (order-2) to (cv_count-1)
     let mut k = 0.0;
     for i in (order - 2)..cv_count {
         nurbsknot[i] = k;
         k += delta;
     }
-    
+
     // Clamp both ends
     clamp(order, cv_count, &mut nurbsknot, 2);
-    
+
     nurbsknot
 }
 
@@ -120,16 +124,16 @@ pub fn make_periodic_uniform(order: usize, cv_count: usize, delta: f64) -> Vec<f
     if order < 2 || cv_count < order || delta <= 0.0 {
         return Vec::new();
     }
-    
+
     let kc = nurbsknot_count(order, cv_count);
     let mut nurbsknot = vec![0.0; kc];
-    
+
     let mut k = 0.0;
     for i in 0..kc {
         nurbsknot[i] = k;
         k += delta;
     }
-    
+
     nurbsknot
 }
 
@@ -147,12 +151,12 @@ pub fn clamp(order: usize, cv_count: usize, nurbsknot: &mut [f64], end: i32) -> 
     if order < 2 || cv_count < order {
         return false;
     }
-    
+
     let kc = nurbsknot_count(order, cv_count);
     if nurbsknot.len() != kc {
         return false;
     }
-    
+
     // Clamp left end
     if end == 0 || end == 2 {
         let clamp_value = nurbsknot[order - 2];
@@ -160,7 +164,7 @@ pub fn clamp(order: usize, cv_count: usize, nurbsknot: &mut [f64], end: i32) -> 
             nurbsknot[i] = clamp_value;
         }
     }
-    
+
     // Clamp right end
     if end == 1 || end == 2 {
         let clamp_value = nurbsknot[cv_count - 1];
@@ -168,7 +172,7 @@ pub fn clamp(order: usize, cv_count: usize, nurbsknot: &mut [f64], end: i32) -> 
             nurbsknot[i] = clamp_value;
         }
     }
-    
+
     true
 }
 
@@ -185,26 +189,26 @@ pub fn is_valid(order: usize, cv_count: usize, nurbsknot: &[f64]) -> bool {
     if order < 2 || cv_count < order {
         return false;
     }
-    
+
     let kc = nurbsknot_count(order, cv_count);
     if nurbsknot.len() != kc {
         return false;
     }
-    
+
     // Check non-decreasing
     for i in 1..kc {
         if nurbsknot[i] < nurbsknot[i - 1] {
             return false;
         }
     }
-    
+
     // Check no degenerate spans (nurbsknot[i] < nurbsknot[i + order - 1])
     for i in 0..(kc - order + 1) {
         if nurbsknot[i] >= nurbsknot[i + order - 1] {
             return false;
         }
     }
-    
+
     true
 }
 
@@ -222,15 +226,15 @@ pub fn is_clamped(order: usize, cv_count: usize, nurbsknot: &[f64], end: i32) ->
     if order < 2 || cv_count < order {
         return false;
     }
-    
+
     let kc = nurbsknot_count(order, cv_count);
     if nurbsknot.len() != kc {
         return false;
     }
-    
+
     let mult = order - 1;
     const TOL: f64 = 1e-10;
-    
+
     // Check left end
     if end == 0 || end == 2 {
         if mult > kc {
@@ -243,7 +247,7 @@ pub fn is_clamped(order: usize, cv_count: usize, nurbsknot: &[f64], end: i32) ->
             }
         }
     }
-    
+
     // Check right end
     if end == 1 || end == 2 {
         if mult > kc {
@@ -256,7 +260,7 @@ pub fn is_clamped(order: usize, cv_count: usize, nurbsknot: &[f64], end: i32) ->
             }
         }
     }
-    
+
     true
 }
 
@@ -273,24 +277,24 @@ pub fn is_periodic(order: usize, cv_count: usize, nurbsknot: &[f64]) -> bool {
     if order < 2 || cv_count < order {
         return false;
     }
-    
+
     let kc = nurbsknot_count(order, cv_count);
     if nurbsknot.len() != kc || kc < 2 {
         return false;
     }
-    
+
     let delta = nurbsknot[1] - nurbsknot[0];
     if delta <= 0.0 {
         return false;
     }
-    
+
     const TOL: f64 = 1e-10;
     for i in 2..kc {
         if ((nurbsknot[i] - nurbsknot[i - 1]) - delta).abs() > TOL {
             return false;
         }
     }
-    
+
     true
 }
 
@@ -307,36 +311,36 @@ pub fn is_uniform(order: usize, cv_count: usize, nurbsknot: &[f64]) -> bool {
     if order < 2 || cv_count < order {
         return false;
     }
-    
+
     let kc = nurbsknot_count(order, cv_count);
     if nurbsknot.len() != kc {
         return false;
     }
-    
+
     // Check interior nurbsknots (from order-2 to cv_count-1)
     if cv_count <= order {
-        return true;  // No interior nurbsknots
+        return true; // No interior nurbsknots
     }
-    
+
     let start_idx = order - 2;
     let end_idx = cv_count - 1;
-    
+
     if end_idx <= start_idx {
         return true;
     }
-    
+
     let delta = nurbsknot[start_idx + 1] - nurbsknot[start_idx];
     if delta <= 0.0 {
         return false;
     }
-    
+
     const TOL: f64 = 1e-10;
     for i in (start_idx + 2)..=end_idx {
         if ((nurbsknot[i] - nurbsknot[i - 1]) - delta).abs() > TOL {
             return false;
         }
     }
-    
+
     true
 }
 
@@ -353,7 +357,7 @@ pub fn get_domain(order: usize, cv_count: usize, nurbsknot: &[f64]) -> (f64, f64
     if order < 2 || cv_count < order || nurbsknot.len() < nurbsknot_count(order, cv_count) {
         return (0.0, 0.0);
     }
-    
+
     (nurbsknot[order - 2], nurbsknot[cv_count - 1])
 }
 
@@ -372,22 +376,22 @@ pub fn set_domain(order: usize, cv_count: usize, nurbsknot: &mut [f64], t0: f64,
     if order < 2 || cv_count < order || t0 >= t1 {
         return false;
     }
-    
+
     let kc = nurbsknot_count(order, cv_count);
     if nurbsknot.len() != kc {
         return false;
     }
-    
+
     let (old_t0, old_t1) = get_domain(order, cv_count, nurbsknot);
     if old_t1 <= old_t0 {
         return false;
     }
-    
+
     let scale = (t1 - t0) / (old_t1 - old_t0);
     for i in 0..kc {
         nurbsknot[i] = t0 + (nurbsknot[i] - old_t0) * scale;
     }
-    
+
     true
 }
 
@@ -404,22 +408,22 @@ pub fn reverse(order: usize, cv_count: usize, nurbsknot: &mut [f64]) -> bool {
     if order < 2 || cv_count < order {
         return false;
     }
-    
+
     let kc = nurbsknot_count(order, cv_count);
     if nurbsknot.len() != kc {
         return false;
     }
-    
+
     // Reverse the array
     nurbsknot.reverse();
-    
+
     // Negate and shift to maintain same domain direction
     let t0 = nurbsknot[0];
     let t1 = nurbsknot[kc - 1];
     for i in 0..kc {
         nurbsknot[i] = t0 + t1 - nurbsknot[i];
     }
-    
+
     true
 }
 
@@ -433,20 +437,25 @@ pub fn reverse(order: usize, cv_count: usize, nurbsknot: &mut [f64]) -> bool {
 ///
 /// # Returns
 /// Multiplicity of the nurbsknot at the given index.
-pub fn multiplicity(order: usize, cv_count: usize, nurbsknot: &[f64], nurbsknot_index: usize) -> usize {
+pub fn multiplicity(
+    order: usize,
+    cv_count: usize,
+    nurbsknot: &[f64],
+    nurbsknot_index: usize,
+) -> usize {
     if order < 2 || cv_count < order {
         return 0;
     }
-    
+
     let kc = nurbsknot_count(order, cv_count);
     if nurbsknot.len() != kc || nurbsknot_index >= kc {
         return 0;
     }
-    
+
     let nurbsknot_value = nurbsknot[nurbsknot_index];
     let mut mult = 1usize;
     const TOL: f64 = 1e-14;
-    
+
     // Count preceding equal nurbsknots
     let mut i = nurbsknot_index;
     while i > 0 {
@@ -457,7 +466,7 @@ pub fn multiplicity(order: usize, cv_count: usize, nurbsknot: &[f64], nurbsknot_
             break;
         }
     }
-    
+
     // Count following equal nurbsknots
     let mut i = nurbsknot_index + 1;
     while i < kc {
@@ -468,7 +477,7 @@ pub fn multiplicity(order: usize, cv_count: usize, nurbsknot: &[f64], nurbsknot_
             break;
         }
     }
-    
+
     mult
 }
 
@@ -485,21 +494,21 @@ pub fn span_count(order: usize, cv_count: usize, nurbsknot: &[f64]) -> usize {
     if order < 2 || cv_count < order {
         return 0;
     }
-    
+
     let kc = nurbsknot_count(order, cv_count);
     if nurbsknot.len() != kc {
         return 0;
     }
-    
+
     let mut count = 0;
-    let d = order - 1;  // degree
-    
+    let d = order - 1; // degree
+
     for i in 0..(cv_count - order + 1) {
         if nurbsknot[i + d - 1] < nurbsknot[i + d] {
             count += 1;
         }
     }
-    
+
     count
 }
 
@@ -516,25 +525,25 @@ pub fn get_span_vector(order: usize, cv_count: usize, nurbsknot: &[f64]) -> Vec<
     if order < 2 || cv_count < order {
         return Vec::new();
     }
-    
+
     let kc = nurbsknot_count(order, cv_count);
     if nurbsknot.len() != kc {
         return Vec::new();
     }
-    
+
     let mut spans = Vec::new();
     const TOL: f64 = 1e-14;
-    
+
     for i in 0..(kc - 1) {
         if (nurbsknot[i + 1] - nurbsknot[i]).abs() > TOL {
             spans.push(nurbsknot[i]);
         }
     }
-    
+
     if kc > 0 {
         spans.push(nurbsknot[kc - 1]);
     }
-    
+
     spans
 }
 
@@ -552,16 +561,16 @@ pub fn find_span(order: usize, cv_count: usize, nurbsknot: &[f64], t: f64) -> us
     if order < 2 || cv_count < order {
         return 0;
     }
-    
+
     let kc = nurbsknot_count(order, cv_count);
     if nurbsknot.len() != kc {
         return 0;
     }
-    
+
     // Shift by (order - 2) as in OpenNURBS
     let nurbsknot_offset = order - 2;
     let span_len = cv_count - order + 2;
-    
+
     // Handle boundary cases
     if t <= nurbsknot[nurbsknot_offset] {
         return 0;
@@ -569,11 +578,11 @@ pub fn find_span(order: usize, cv_count: usize, nurbsknot: &[f64], t: f64) -> us
     if t >= nurbsknot[nurbsknot_offset + span_len - 1] {
         return span_len - 2;
     }
-    
+
     // Binary search
     let mut low = 0;
     let mut high = span_len - 1;
-    
+
     while high > low + 1 {
         let mid = (low + high) / 2;
         if t < nurbsknot[nurbsknot_offset + mid] {
@@ -582,7 +591,7 @@ pub fn find_span(order: usize, cv_count: usize, nurbsknot: &[f64], t: f64) -> us
             low = mid;
         }
     }
-    
+
     low
 }
 
@@ -600,12 +609,12 @@ pub fn superfluous_nurbsknot(order: usize, cv_count: usize, nurbsknot: &[f64], e
     if order < 2 || cv_count < order {
         return 0.0;
     }
-    
+
     let kc = nurbsknot_count(order, cv_count);
     if nurbsknot.len() != kc {
         return 0.0;
     }
-    
+
     if end == 0 {
         // First superfluous nurbsknot
         2.0 * nurbsknot[0] - nurbsknot[order - 2]
@@ -627,8 +636,8 @@ pub fn greville_abcissa(order: usize, nurbsknot: &[f64]) -> f64 {
     if order < 2 || nurbsknot.len() < order - 1 {
         return 0.0;
     }
-    
-    let d = order - 1;  // degree
+
+    let d = order - 1; // degree
     let sum: f64 = nurbsknot[..d].iter().sum();
     sum / d as f64
 }
@@ -643,19 +652,28 @@ pub fn greville_abcissa(order: usize, nurbsknot: &[f64]) -> f64 {
 ///
 /// # Returns
 /// Vector of Greville abscissae.
-pub fn get_greville_abcissae(order: usize, cv_count: usize, nurbsknot: &[f64], periodic: bool) -> Vec<f64> {
+pub fn get_greville_abcissae(
+    order: usize,
+    cv_count: usize,
+    nurbsknot: &[f64],
+    periodic: bool,
+) -> Vec<f64> {
     if order < 2 || cv_count < order {
         return Vec::new();
     }
-    
+
     let kc = nurbsknot_count(order, cv_count);
     if nurbsknot.len() != kc {
         return Vec::new();
     }
-    
-    let d = order - 1;  // degree
-    let count = if periodic { cv_count - order + 1 } else { cv_count };
-    
+
+    let d = order - 1; // degree
+    let count = if periodic {
+        cv_count - order + 1
+    } else {
+        cv_count
+    };
+
     let mut g = vec![0.0; count];
 
     for i in 0..count {
@@ -677,7 +695,13 @@ pub fn get_greville_abcissae(order: usize, cv_count: usize, nurbsknot: &[f64], p
 ///
 /// # Returns
 /// Solution vector (length n * dim), or None if singular.
-pub fn solve_tridiagonal(dim: usize, lower: &[f64], diag: &[f64], upper: &[f64], rhs: &[f64]) -> Option<Vec<f64>> {
+pub fn solve_tridiagonal(
+    dim: usize,
+    lower: &[f64],
+    diag: &[f64],
+    upper: &[f64],
+    rhs: &[f64],
+) -> Option<Vec<f64>> {
     let n = diag.len();
     if n < 1 || dim < 1 || lower.len() < n || upper.len() < n || rhs.len() < n * dim {
         return None;
@@ -738,7 +762,7 @@ pub fn compute_parameters(points: &[f64], dim: usize, style: CurveNurbsKnotStyle
         return params;
     }
 
-    let base_style = (style as u8) % 3;  // 0=Uniform, 1=Chord, 2=ChordSquareRoot
+    let base_style = (style as u8) % 3; // 0=Uniform, 1=Chord, 2=ChordSquareRoot
 
     for i in 1..point_count {
         let mut dist_sq = 0.0;
@@ -749,9 +773,9 @@ pub fn compute_parameters(points: &[f64], dim: usize, style: CurveNurbsKnotStyle
         let dist = dist_sq.sqrt();
 
         let delta = match base_style {
-            0 => 1.0,           // Uniform
-            1 => dist,          // Chord
-            2 => dist.sqrt(),   // ChordSquareRoot (centripetal)
+            0 => 1.0,         // Uniform
+            1 => dist,        // Chord
+            2 => dist.sqrt(), // ChordSquareRoot (centripetal)
             _ => dist,
         };
 
@@ -776,7 +800,7 @@ pub fn build_interp_nurbsknots(params: &[f64], degree: usize) -> Vec<f64> {
     }
 
     let order = degree + 1;
-    let cv_count = n + 2;  // Natural end conditions add 2 CVs
+    let cv_count = n + 2; // Natural end conditions add 2 CVs
     let kc = nurbsknot_count(order, cv_count);
 
     let mut nurbsknots = vec![0.0; kc];
@@ -860,19 +884,28 @@ pub fn build_fitted_nurbsknots(params: &[f64], num_cvs: usize, degree: usize) ->
     nurbsknots
 }
 
-pub fn build_fitted_nurbsknots_adaptive(params: &[f64], points: &[f64], dim: usize, num_cvs: usize, degree: usize, scale: f64) -> Vec<f64> {
+pub fn build_fitted_nurbsknots_adaptive(
+    params: &[f64],
+    points: &[f64],
+    dim: usize,
+    num_cvs: usize,
+    degree: usize,
+    scale: f64,
+) -> Vec<f64> {
     let m = params.len();
     if m < 3 || points.is_empty() {
         return build_fitted_nurbsknots(params, num_cvs, degree);
     }
 
     let mut turn = vec![0.0; m];
-    for i in 1..m-1 {
+    for i in 1..m - 1 {
         let (mut dot, mut len1sq, mut len2sq) = (0.0, 0.0, 0.0);
         for d in 0..dim {
-            let a = points[i*dim+d] - points[(i-1)*dim+d];
-            let b = points[(i+1)*dim+d] - points[i*dim+d];
-            dot += a * b; len1sq += a * a; len2sq += b * b;
+            let a = points[i * dim + d] - points[(i - 1) * dim + d];
+            let b = points[(i + 1) * dim + d] - points[i * dim + d];
+            dot += a * b;
+            len1sq += a * a;
+            len2sq += b * b;
         }
         let (len1, len2) = (len1sq.sqrt(), len2sq.sqrt());
         if len1 > 1e-14 && len2 > 1e-14 {
@@ -882,32 +915,57 @@ pub fn build_fitted_nurbsknots_adaptive(params: &[f64], points: &[f64], dim: usi
     }
 
     let mut cum = vec![0.0; m];
-    for i in 0..m-1 {
-        let mut chord = params[i+1] - params[i];
-        if chord < 1e-14 { chord = 1e-14; }
-        cum[i+1] = cum[i] + chord * (1.0 + scale * (turn[i] + turn[i+1]) * 0.5);
+    for i in 0..m - 1 {
+        let mut chord = params[i + 1] - params[i];
+        if chord < 1e-14 {
+            chord = 1e-14;
+        }
+        cum[i + 1] = cum[i] + chord * (1.0 + scale * (turn[i] + turn[i + 1]) * 0.5);
     }
-    let total = cum[m-1];
+    let total = cum[m - 1];
 
     let n_interior = num_cvs - degree - 1;
     let order = degree + 1;
     let kc = nurbsknot_count(order, num_cvs);
     let mut nurbsknots = vec![0.0; kc];
-    for i in 0..degree { nurbsknots[i] = params[0]; }
+    for i in 0..degree {
+        nurbsknots[i] = params[0];
+    }
 
     for j in 1..=n_interior {
         let target = total * j as f64 / (n_interior + 1) as f64;
         let (mut lo, mut hi) = (0usize, m - 2);
-        while lo < hi { let mid = (lo + hi) / 2; if cum[mid+1] < target { lo = mid + 1; } else { hi = mid; } }
-        let frac = if cum[lo+1] > cum[lo] { (target - cum[lo]) / (cum[lo+1] - cum[lo]) } else { 0.0 };
-        nurbsknots[degree - 1 + j] = params[lo] + frac * (params[lo+1] - params[lo]);
+        while lo < hi {
+            let mid = (lo + hi) / 2;
+            if cum[mid + 1] < target {
+                lo = mid + 1;
+            } else {
+                hi = mid;
+            }
+        }
+        let frac = if cum[lo + 1] > cum[lo] {
+            (target - cum[lo]) / (cum[lo + 1] - cum[lo])
+        } else {
+            0.0
+        };
+        nurbsknots[degree - 1 + j] = params[lo] + frac * (params[lo + 1] - params[lo]);
     }
 
-    for i in (num_cvs - 1)..kc { nurbsknots[i] = params[m - 1]; }
+    for i in (num_cvs - 1)..kc {
+        nurbsknots[i] = params[m - 1];
+    }
     nurbsknots
 }
 
-pub fn build_fitted_nurbsknots_periodic_adaptive(params: &[f64], points: &[f64], n: usize, dim: usize, num_cvs: usize, degree: usize, scale: f64) -> Vec<f64> {
+pub fn build_fitted_nurbsknots_periodic_adaptive(
+    params: &[f64],
+    points: &[f64],
+    n: usize,
+    dim: usize,
+    num_cvs: usize,
+    degree: usize,
+    scale: f64,
+) -> Vec<f64> {
     let cv_count = num_cvs + degree;
     let order = degree + 1;
     let kc = cv_count + order - 2;
@@ -915,7 +973,9 @@ pub fn build_fitted_nurbsknots_periodic_adaptive(params: &[f64], points: &[f64],
 
     if n < 3 || points.is_empty() {
         let delta = big_t / num_cvs as f64;
-        return (0..kc).map(|i| (i as f64 - degree as f64 + 1.0) * delta).collect();
+        return (0..kc)
+            .map(|i| (i as f64 - degree as f64 + 1.0) * delta)
+            .collect();
     }
 
     let mut turn = vec![0.0; n];
@@ -924,9 +984,11 @@ pub fn build_fitted_nurbsknots_periodic_adaptive(params: &[f64], points: &[f64],
         let next = (i + 1) % n;
         let (mut dot, mut len1sq, mut len2sq) = (0.0, 0.0, 0.0);
         for d in 0..dim {
-            let a = points[i*dim+d] - points[prev*dim+d];
-            let b = points[next*dim+d] - points[i*dim+d];
-            dot += a * b; len1sq += a * a; len2sq += b * b;
+            let a = points[i * dim + d] - points[prev * dim + d];
+            let b = points[next * dim + d] - points[i * dim + d];
+            dot += a * b;
+            len1sq += a * a;
+            len2sq += b * b;
         }
         let (len1, len2) = (len1sq.sqrt(), len2sq.sqrt());
         if len1 > 1e-14 && len2 > 1e-14 {
@@ -937,10 +999,12 @@ pub fn build_fitted_nurbsknots_periodic_adaptive(params: &[f64], points: &[f64],
 
     let mut cum = vec![0.0; n + 1];
     for i in 0..n {
-        let mut chord = params[i+1] - params[i];
-        if chord < 1e-14 { chord = 1e-14; }
+        let mut chord = params[i + 1] - params[i];
+        if chord < 1e-14 {
+            chord = 1e-14;
+        }
         let next = (i + 1) % n;
-        cum[i+1] = cum[i] + chord * (1.0 + scale * (turn[i] + turn[next]) * 0.5);
+        cum[i + 1] = cum[i] + chord * (1.0 + scale * (turn[i] + turn[next]) * 0.5);
     }
     let total = cum[n];
 
@@ -948,13 +1012,26 @@ pub fn build_fitted_nurbsknots_periodic_adaptive(params: &[f64], points: &[f64],
     for j in 0..num_cvs {
         let target = total * j as f64 / num_cvs as f64;
         let (mut lo, mut hi) = (0usize, n - 1);
-        while lo < hi { let mid = (lo + hi) / 2; if cum[mid+1] < target { lo = mid + 1; } else { hi = mid; } }
-        let frac = if cum[lo+1] > cum[lo] { (target - cum[lo]) / (cum[lo+1] - cum[lo]) } else { 0.0 };
-        base[j] = params[lo] + frac * (params[lo+1] - params[lo]);
+        while lo < hi {
+            let mid = (lo + hi) / 2;
+            if cum[mid + 1] < target {
+                lo = mid + 1;
+            } else {
+                hi = mid;
+            }
+        }
+        let frac = if cum[lo + 1] > cum[lo] {
+            (target - cum[lo]) / (cum[lo + 1] - cum[lo])
+        } else {
+            0.0
+        };
+        base[j] = params[lo] + frac * (params[lo + 1] - params[lo]);
     }
 
     let mut intervals = vec![0.0; num_cvs];
-    for j in 0..num_cvs-1 { intervals[j] = base[j+1] - base[j]; }
+    for j in 0..num_cvs - 1 {
+        intervals[j] = base[j + 1] - base[j];
+    }
     intervals[num_cvs - 1] = big_t - base[num_cvs - 1];
 
     let mut nurbsknots = vec![0.0; kc];
@@ -962,14 +1039,20 @@ pub fn build_fitted_nurbsknots_periodic_adaptive(params: &[f64], points: &[f64],
     for i in 1..degree {
         nurbsknots[degree - 1 - i] = nurbsknots[degree - i] - intervals[num_cvs - i];
     }
-    for i in 0..kc-degree {
+    for i in 0..kc - degree {
         nurbsknots[degree + i] = nurbsknots[degree - 1 + i] + intervals[i % num_cvs];
     }
 
     nurbsknots
 }
 
-pub fn solve_banded_spd(dim: usize, n: usize, half_bw: usize, band: &mut [f64], rhs: &mut [f64]) -> bool {
+pub fn solve_banded_spd(
+    dim: usize,
+    n: usize,
+    half_bw: usize,
+    band: &mut [f64],
+    rhs: &mut [f64],
+) -> bool {
     let bw1 = half_bw + 1;
 
     for i in 0..n {
@@ -982,7 +1065,9 @@ pub fn solve_banded_spd(dim: usize, n: usize, half_bw: usize, band: &mut [f64], 
             }
             if i == j {
                 let val = band[i * bw1] - sum;
-                if val <= 1e-30 { return false; }
+                if val <= 1e-30 {
+                    return false;
+                }
                 band[i * bw1] = val.sqrt();
             } else {
                 band[i * bw1 + (i - j)] = (band[i * bw1 + (i - j)] - sum) / band[j * bw1];

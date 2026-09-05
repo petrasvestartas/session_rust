@@ -1,5 +1,5 @@
-use crate::{MINI_CHECK, MINI_TEST, REGISTER_MINI_TEST};
 use crate::mini_test::TestResult;
+use crate::{MINI_CHECK, MINI_TEST, REGISTER_MINI_TEST};
 
 pub fn run_objects_constructor() -> TestResult {
     MINI_TEST!("Constructor", {
@@ -14,11 +14,15 @@ pub fn run_objects_constructor() -> TestResult {
 
 pub fn run_objects_json_roundtrip() -> TestResult {
     MINI_TEST!("Json Roundtrip", {
-        use crate::{Objects, Point};
         use crate::file_encoders::{file_json_dump, file_json_load};
+        use crate::{Objects, Point};
         let mut original = Objects::new();
-        original.points.push(std::rc::Rc::new(Point::new(1.0, 2.0, 3.0)));
-        original.points.push(std::rc::Rc::new(Point::new(4.0, 5.0, 6.0)));
+        original
+            .points
+            .push(std::rc::Rc::new(Point::new(1.0, 2.0, 3.0)));
+        original
+            .points
+            .push(std::rc::Rc::new(Point::new(4.0, 5.0, 6.0)));
         file_json_dump(&original, "serialization/test_objects.json", false).unwrap();
         let loaded = file_json_load::<Objects>("serialization/test_objects.json").unwrap();
         MINI_CHECK!(loaded.points.len() == original.points.len());
@@ -29,8 +33,12 @@ pub fn run_objects_protobuf_roundtrip() -> TestResult {
     MINI_TEST!("Protobuf Roundtrip", {
         use crate::{Objects, Point};
         let mut original = Objects::new();
-        original.points.push(std::rc::Rc::new(Point::new(1.0, 2.0, 3.0)));
-        original.points.push(std::rc::Rc::new(Point::new(4.0, 5.0, 6.0)));
+        original
+            .points
+            .push(std::rc::Rc::new(Point::new(1.0, 2.0, 3.0)));
+        original
+            .points
+            .push(std::rc::Rc::new(Point::new(4.0, 5.0, 6.0)));
         original.pb_dump("serialization/test_objects.bin");
         let loaded = Objects::pb_load("serialization/test_objects.bin");
         MINI_CHECK!(loaded.points.len() == original.points.len());
@@ -44,13 +52,13 @@ pub fn run_objects_component_constructor() -> TestResult {
         use crate::Component;
 
         let mut extra = std::collections::HashMap::new();
-        extra.insert("size".to_string(),   serde_json::json!(3000));
+        extra.insert("size".to_string(), serde_json::json!(3000));
         extra.insert("height".to_string(), serde_json::json!(650));
 
         let c = Component {
             type_name: "FloorBuilder".to_string(),
-            guid:       uuid::Uuid::new_v4().to_string(),
-            name:       "floor_builder".to_string(),
+            guid: uuid::Uuid::new_v4().to_string(),
+            name: "floor_builder".to_string(),
             extra,
         };
 
@@ -66,27 +74,33 @@ pub fn run_objects_component_json_roundtrip() -> TestResult {
         // Round-trip a Component through JSON: all custom fields must survive.
         // jsondump produces a flat dict (type/guid/name + extra fields).
         // jsonload reconstructs it; serde flatten handles the extra fields.
-        use crate::{Objects, Component};
         use crate::file_encoders::{file_json_dump, file_json_load};
+        use crate::{Component, Objects};
 
         let mut extra = std::collections::HashMap::new();
-        extra.insert("size".to_string(),   serde_json::json!(3000));
+        extra.insert("size".to_string(), serde_json::json!(3000));
         extra.insert("height".to_string(), serde_json::json!(650));
-        extra.insert("rise".to_string(),   serde_json::json!(453));
+        extra.insert("rise".to_string(), serde_json::json!(453));
 
         let original_guid = uuid::Uuid::new_v4().to_string();
         let c = Component {
             type_name: "FloorBuilder".to_string(),
-            guid:       original_guid.clone(),
-            name:       "floor_builder".to_string(),
+            guid: original_guid.clone(),
+            name: "floor_builder".to_string(),
             extra,
         };
 
         let mut original = Objects::new();
         original.components.push(c);
 
-        file_json_dump(&original, "serialization/test_objects_component.json", false).unwrap();
-        let loaded = file_json_load::<Objects>("serialization/test_objects_component.json").unwrap();
+        file_json_dump(
+            &original,
+            "serialization/test_objects_component.json",
+            false,
+        )
+        .unwrap();
+        let loaded =
+            file_json_load::<Objects>("serialization/test_objects_component.json").unwrap();
 
         MINI_CHECK!(loaded.components.len() == 1);
         MINI_CHECK!(loaded.components[0].type_name == "FloorBuilder");
@@ -100,17 +114,17 @@ pub fn run_objects_component_protobuf_roundtrip() -> TestResult {
     MINI_TEST!("Component Protobuf Roundtrip", {
         // Custom fields are serialised as a JSON string inside the proto message
         // and reconstructed into a HashMap on load — all values survive.
-        use crate::{Objects, Component};
+        use crate::{Component, Objects};
 
         let mut extra = std::collections::HashMap::new();
-        extra.insert("size".to_string(),   serde_json::json!(3000));
+        extra.insert("size".to_string(), serde_json::json!(3000));
         extra.insert("height".to_string(), serde_json::json!(650));
 
         let original_guid = uuid::Uuid::new_v4().to_string();
         let c = Component {
             type_name: "FloorBuilder".to_string(),
-            guid:       original_guid.clone(),
-            name:       "floor_builder".to_string(),
+            guid: original_guid.clone(),
+            name: "floor_builder".to_string(),
             extra,
         };
 
@@ -127,9 +141,33 @@ pub fn run_objects_component_protobuf_roundtrip() -> TestResult {
     })
 }
 
-REGISTER_MINI_TEST!("Objects", "Constructor",                crate::objects_test::run_objects_constructor);
-REGISTER_MINI_TEST!("Objects", "Json Roundtrip",             crate::objects_test::run_objects_json_roundtrip);
-REGISTER_MINI_TEST!("Objects", "Protobuf Roundtrip",         crate::objects_test::run_objects_protobuf_roundtrip);
-REGISTER_MINI_TEST!("Objects", "Component Constructor",      crate::objects_test::run_objects_component_constructor);
-REGISTER_MINI_TEST!("Objects", "Component Json Roundtrip",   crate::objects_test::run_objects_component_json_roundtrip);
-REGISTER_MINI_TEST!("Objects", "Component Protobuf Roundtrip", crate::objects_test::run_objects_component_protobuf_roundtrip);
+REGISTER_MINI_TEST!(
+    "Objects",
+    "Constructor",
+    crate::objects_test::run_objects_constructor
+);
+REGISTER_MINI_TEST!(
+    "Objects",
+    "Json Roundtrip",
+    crate::objects_test::run_objects_json_roundtrip
+);
+REGISTER_MINI_TEST!(
+    "Objects",
+    "Protobuf Roundtrip",
+    crate::objects_test::run_objects_protobuf_roundtrip
+);
+REGISTER_MINI_TEST!(
+    "Objects",
+    "Component Constructor",
+    crate::objects_test::run_objects_component_constructor
+);
+REGISTER_MINI_TEST!(
+    "Objects",
+    "Component Json Roundtrip",
+    crate::objects_test::run_objects_component_json_roundtrip
+);
+REGISTER_MINI_TEST!(
+    "Objects",
+    "Component Protobuf Roundtrip",
+    crate::objects_test::run_objects_component_protobuf_roundtrip
+);

@@ -13,8 +13,14 @@ pub struct MeshOffsetLayers {
 fn offset_planes(mesh: &Mesh, distance: f64) -> HashMap<usize, (f64, f64, f64, f64)> {
     let mut planes = HashMap::new();
     for fk in mesh.faces() {
-        let c = match mesh.face_centroid(fk) { Some(p) => p, None => continue };
-        let n = match mesh.face_normal(fk) { Some(v) => v, None => continue };
+        let c = match mesh.face_centroid(fk) {
+            Some(p) => p,
+            None => continue,
+        };
+        let n = match mesh.face_normal(fk) {
+            Some(v) => v,
+            None => continue,
+        };
         let (a, b, c_) = (n[0], n[1], n[2]);
         let ox = c[0] + distance * a;
         let oy = c[1] + distance * b;
@@ -34,7 +40,11 @@ fn intersect_planes(planes: &[(f64, f64, f64, f64)], fallback: &Point) -> Point 
         let (a, b, c, d) = planes[0];
         let d_rhs = -d;
         let t = d_rhs - (a * fallback[0] + b * fallback[1] + c * fallback[2]);
-        return Point::new(fallback[0] + t * a, fallback[1] + t * b, fallback[2] + t * c);
+        return Point::new(
+            fallback[0] + t * a,
+            fallback[1] + t * b,
+            fallback[2] + t * c,
+        );
     }
     const EPS: f64 = 1e-8;
     let mut mat = [[0.0f64; 3]; 3];
@@ -67,35 +77,55 @@ fn intersect_planes(planes: &[(f64, f64, f64, f64)], fallback: &Point) -> Point 
         return fallback.clone();
     }
     let inv = 1.0 / det;
-    let x = inv * (rhs[0] * (mat[1][1] * mat[2][2] - mat[1][2] * mat[2][1])
-        - mat[0][1] * (rhs[1] * mat[2][2] - mat[1][2] * rhs[2])
-        + mat[0][2] * (rhs[1] * mat[2][1] - mat[1][1] * rhs[2]));
-    let y = inv * (mat[0][0] * (rhs[1] * mat[2][2] - mat[1][2] * rhs[2])
-        - rhs[0] * (mat[1][0] * mat[2][2] - mat[1][2] * mat[2][0])
-        + mat[0][2] * (mat[1][0] * rhs[2] - rhs[1] * mat[2][0]));
-    let z = inv * (mat[0][0] * (mat[1][1] * rhs[2] - rhs[1] * mat[2][1])
-        - mat[0][1] * (mat[1][0] * rhs[2] - rhs[1] * mat[2][0])
-        + rhs[0] * (mat[1][0] * mat[2][1] - mat[1][1] * mat[2][0]));
+    let x = inv
+        * (rhs[0] * (mat[1][1] * mat[2][2] - mat[1][2] * mat[2][1])
+            - mat[0][1] * (rhs[1] * mat[2][2] - mat[1][2] * rhs[2])
+            + mat[0][2] * (rhs[1] * mat[2][1] - mat[1][1] * rhs[2]));
+    let y = inv
+        * (mat[0][0] * (rhs[1] * mat[2][2] - mat[1][2] * rhs[2])
+            - rhs[0] * (mat[1][0] * mat[2][2] - mat[1][2] * mat[2][0])
+            + mat[0][2] * (mat[1][0] * rhs[2] - rhs[1] * mat[2][0]));
+    let z = inv
+        * (mat[0][0] * (mat[1][1] * rhs[2] - rhs[1] * mat[2][1])
+            - mat[0][1] * (mat[1][0] * rhs[2] - rhs[1] * mat[2][0])
+            + rhs[0] * (mat[1][0] * mat[2][1] - mat[1][1] * mat[2][0]));
     Point::new(x, y, z)
 }
 
-fn offset_vertices(mesh: &Mesh, planes: &HashMap<usize, (f64, f64, f64, f64)>) -> HashMap<usize, Point> {
+fn offset_vertices(
+    mesh: &Mesh,
+    planes: &HashMap<usize, (f64, f64, f64, f64)>,
+) -> HashMap<usize, Point> {
     let mut result = HashMap::new();
     // vertex -> incident faces in ONE face walk (a per-vertex vertex_faces() call is O(F)
     // now that topology is lazy - this loop over all vertices would be quadratic)
     let mut vf: HashMap<usize, Vec<usize>> = HashMap::new();
     for (&fkey, verts) in &mesh.face {
-        for &v in verts { vf.entry(v).or_default().push(fkey); }
+        for &v in verts {
+            vf.entry(v).or_default().push(fkey);
+        }
     }
-    for f in vf.values_mut() { f.sort_unstable(); }
+    for f in vf.values_mut() {
+        f.sort_unstable();
+    }
     for vk in mesh.vertices() {
-        let vp = match mesh.vertex_point(vk) { Some(p) => p, None => continue };
-        let fkeys = match vf.get(&vk) { Some(f) => f.clone(), None => { result.insert(vk, vp); continue; } };
+        let vp = match mesh.vertex_point(vk) {
+            Some(p) => p,
+            None => continue,
+        };
+        let fkeys = match vf.get(&vk) {
+            Some(f) => f.clone(),
+            None => {
+                result.insert(vk, vp);
+                continue;
+            }
+        };
         if fkeys.is_empty() {
             result.insert(vk, vp);
             continue;
         }
-        let adj: Vec<(f64, f64, f64, f64)> = fkeys.iter()
+        let adj: Vec<(f64, f64, f64, f64)> = fkeys
+            .iter()
             .filter_map(|fk| planes.get(fk).copied())
             .collect();
         result.insert(vk, intersect_planes(&adj, &vp));
@@ -128,7 +158,10 @@ impl MeshOffset {
         }
 
         for (u, v) in mesh.naked_edges(true) {
-            result.add_face(vec![bot_vmap[&u], bot_vmap[&v], top_vmap[&v], top_vmap[&u]], None);
+            result.add_face(
+                vec![bot_vmap[&u], bot_vmap[&v], top_vmap[&v], top_vmap[&u]],
+                None,
+            );
         }
 
         result
@@ -177,6 +210,10 @@ impl MeshOffset {
             sides.add_face(vec![s_bot[&u], s_bot[&v], s_top[&v], s_top[&u]], None);
         }
 
-        MeshOffsetLayers { top, bottom: bot, sides }
+        MeshOffsetLayers {
+            top,
+            bottom: bot,
+            sides,
+        }
     }
 }

@@ -13,10 +13,10 @@
 //! it flattens + uploads ONCE and caches the resulting [`GpuMesh`], so the viewer
 //! does zero conversion and only re-uploads when the mesh actually changes.
 
-use bytemuck::{Pod, Zeroable};
+use crate::color::Color;
 use crate::mesh::Mesh;
 use crate::point::Point;
-use crate::color::Color;
+use bytemuck::{Pod, Zeroable};
 
 /// One interleaved GPU vertex: position + normal + linear RGBA color, all f32,
 /// tightly packed. Mirror this layout in the viewer's `wgpu::VertexBufferLayout`
@@ -76,14 +76,19 @@ impl Mesh {
         let max_key = keys.last().copied().unwrap_or(0);
         let dense = max_key < 4 * keys.len().max(1);
         let mut idx_vec: Vec<u32> = Vec::new();
-        let mut key_to_idx: std::collections::HashMap<usize, u32> = std::collections::HashMap::new();
+        let mut key_to_idx: std::collections::HashMap<usize, u32> =
+            std::collections::HashMap::new();
         if dense {
             idx_vec = vec![u32::MAX; max_key + 1];
             for (i, &k) in keys.iter().enumerate() {
                 idx_vec[k] = i as u32;
             }
         } else {
-            key_to_idx = keys.iter().enumerate().map(|(i, &k)| (k, i as u32)).collect();
+            key_to_idx = keys
+                .iter()
+                .enumerate()
+                .map(|(i, &k)| (k, i as u32))
+                .collect();
         }
         let row_of = |k: usize| -> Option<u32> {
             if dense {
@@ -99,15 +104,16 @@ impl Mesh {
         // Honor the mesh's color_mode: per-vertex colors only when POINTCOLORS is the active mode
         // (and they cover every vertex). Otherwise the object color wins — so `set_objectcolor`
         // takes effect even though `add_vertex` seeds a white point-color per vertex.
-        let has_point_colors =
-            self.color_mode == crate::mesh::ColorMode::POINTCOLORS && point_colors.len() == keys.len();
-        
+        let has_point_colors = self.color_mode == crate::mesh::ColorMode::POINTCOLORS
+            && point_colors.len() == keys.len();
+
         // FACECOLORS: flat per-face color needs duplicated vertices
         // a shared vertex can only one vertex.
         // Same gate style as pointcolors: the Mode is the user-set signal.
         // facecolors is private to mesh.rs
         // from this sibling module use get_facecolors().
-        let has_face_colors = self.color_mode == crate::mesh::ColorMode::FACECOLORS && self.get_facecolors().len() == self.face.len();
+        let has_face_colors = self.color_mode == crate::mesh::ColorMode::FACECOLORS
+            && self.get_facecolors().len() == self.face.len();
 
         if has_face_colors {
             let face_colors = self.get_facecolors();
@@ -122,17 +128,17 @@ impl Mesh {
                 if let Some(cached) = self.triangulation.get(fk) {
                     tris.extend_from_slice(cached);
                 }
-                if tris.is_empty(){
+                if tris.is_empty() {
                     let vs = &self.face[fk];
                     if vs.len() < 3 {
                         continue;
                     }
-                    for i in 1..(vs.len() -1){
-                        tris.push([vs[0], vs[i], vs[i+1]]);
+                    for i in 1..(vs.len() - 1) {
+                        tris.push([vs[0], vs[i], vs[i + 1]]);
                     }
                 }
-                for tri in &tris{
-                    if tri.iter().any(|vk| !self.vertex.contains_key(vk)){
+                for tri in &tris {
+                    if tri.iter().any(|vk| !self.vertex.contains_key(vk)) {
                         continue;
                     }
                     for &vk in tri {
@@ -214,7 +220,10 @@ impl Mesh {
     /// exact; genuine per-edge colors wait for the first-class edge path, which
     /// needs edge↔`linecolors` index alignment that `edges()` doesn't yet promise.
     pub fn edge_color(&self) -> Color {
-        self.get_linecolors().first().cloned().unwrap_or_else(Color::black)
+        self.get_linecolors()
+            .first()
+            .cloned()
+            .unwrap_or_else(Color::black)
     }
 
     /// Drop the cached GPU buffers so the next `gpu_mesh()` rebuilds them. Called

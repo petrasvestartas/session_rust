@@ -41,47 +41,81 @@ fn main() {
 
     // Expected coordinates from OpenNURBS (first 20 points)
     let expected = vec![
-        (0.000, 0.000, -2.500), (0.000, 0.598, -1.176), (0.000, 1.081, -0.429), (0.000, 1.481, -0.093), (0.000, 1.833, -0.003),
-        (0.000, 2.167, -0.003), (0.000, 2.519, -0.093), (0.000, 2.919, -0.429), (0.000, 3.402, -1.176), (0.000, 4.000, -2.500),
-        (0.598, 0.000, -1.176), (0.598, 0.598, -0.407), (0.598, 1.081, 0.282), (0.598, 1.481, 0.815), (0.598, 1.833, 1.118),
-        (0.598, 2.167, 1.118), (0.598, 2.519, 0.815), (0.598, 2.919, 0.282), (0.598, 3.402, -0.407), (0.598, 4.000, -1.176),
+        (0.000, 0.000, -2.500),
+        (0.000, 0.598, -1.176),
+        (0.000, 1.081, -0.429),
+        (0.000, 1.481, -0.093),
+        (0.000, 1.833, -0.003),
+        (0.000, 2.167, -0.003),
+        (0.000, 2.519, -0.093),
+        (0.000, 2.919, -0.429),
+        (0.000, 3.402, -1.176),
+        (0.000, 4.000, -2.500),
+        (0.598, 0.000, -1.176),
+        (0.598, 0.598, -0.407),
+        (0.598, 1.081, 0.282),
+        (0.598, 1.481, 0.815),
+        (0.598, 1.833, 1.118),
+        (0.598, 2.167, 1.118),
+        (0.598, 2.519, 0.815),
+        (0.598, 2.919, 0.282),
+        (0.598, 3.402, -0.407),
+        (0.598, 4.000, -1.176),
     ];
 
     let mut max_error = 0.0;
     let mut max_error_point = 0;
     let mut idx = 0;
 
-    for i in 0..2 {  // First 2 rows
+    for i in 0..2 {
+        // First 2 rows
         for j in 0..10 {
             let u = u_min + (u_max - u_min) * (i as f64) / 9.0;
             let v = v_min + (v_max - v_min) * (j as f64) / 9.0;
             let pt = srf.point_at(u, v).unwrap();
-            
+
             let (exp_x, exp_y, exp_z) = expected[idx];
-            
+
             // Compute raw errors (before rounding)
             let error_x = (pt[0] - exp_x).abs();
             let error_y = (pt[1] - exp_y).abs();
             let error_z = (pt[2] - exp_z).abs();
             let max_component_error = error_x.max(error_y).max(error_z);
-            
+
             if max_component_error > max_error {
                 max_error = max_component_error;
                 max_error_point = idx;
             }
-            
-            println!("Point {}: actual=({:.10}, {:.10}, {:.10}) expected=({:.3}, {:.3}, {:.3})",
-                idx, pt[0], pt[1], pt[2], exp_x, exp_y, exp_z);
-            println!("  Errors: x={:.2e}, y={:.2e}, z={:.2e}", error_x, error_y, error_z);
-            
+
+            println!(
+                "Point {}: actual=({:.10}, {:.10}, {:.10}) expected=({:.3}, {:.3}, {:.3})",
+                idx, pt[0], pt[1], pt[2], exp_x, exp_y, exp_z
+            );
+            println!(
+                "  Errors: x={:.2e}, y={:.2e}, z={:.2e}",
+                error_x, error_y, error_z
+            );
+
             idx += 1;
         }
     }
 
     println!("\n=== PRECISION ANALYSIS ===");
-    println!("Maximum rounding error: {:.10} (at point {})", max_error, max_error_point);
+    println!(
+        "Maximum rounding error: {:.10} (at point {})",
+        max_error, max_error_point
+    );
     println!("Maximum error in decimal places: {:.2}", -max_error.log10());
-    println!("All coordinates match to 3 decimals (0.001): {}", max_error < 0.001);
-    println!("All coordinates match to 6 decimals (1e-6): {}", max_error < 1e-6);
-    println!("All coordinates match to 10 decimals (1e-10): {}", max_error < 1e-10);
+    println!(
+        "All coordinates match to 3 decimals (0.001): {}",
+        max_error < 0.001
+    );
+    println!(
+        "All coordinates match to 6 decimals (1e-6): {}",
+        max_error < 1e-6
+    );
+    println!(
+        "All coordinates match to 10 decimals (1e-10): {}",
+        max_error < 1e-10
+    );
 }

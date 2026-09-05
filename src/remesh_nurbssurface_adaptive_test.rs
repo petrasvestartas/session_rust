@@ -1,5 +1,5 @@
-use crate::{MINI_CHECK, MINI_TEST, REGISTER_MINI_TEST};
 use crate::mini_test::TestResult;
+use crate::{MINI_CHECK, MINI_TEST, REGISTER_MINI_TEST};
 
 pub fn run_remesh_nurbssurface_adaptive_constructor() -> TestResult {
     MINI_TEST!("Constructor", {
@@ -24,9 +24,9 @@ pub fn run_remesh_nurbssurface_adaptive_parameters() -> TestResult {
         let s = Primitives::sphere_surface(0.0, 0.0, 0.0, 1.0);
         let mut ta = RemeshNurbsSurfaceAdaptive::new(s);
         ta.set_max_angle(15.0)
-          .set_max_edge_length(2.0)
-          .set_min_edge_length(0.1)
-          .set_max_chord_height(0.05);
+            .set_max_edge_length(2.0)
+            .set_min_edge_length(0.1)
+            .set_max_chord_height(0.05);
 
         MINI_CHECK!(ta.get_max_angle() == 15.0);
         MINI_CHECK!(ta.get_max_edge_length() == 2.0);
@@ -161,14 +161,46 @@ pub fn run_remesh_nurbssurface_adaptive_double_curved_triangle() -> TestResult {
     })
 }
 
-REGISTER_MINI_TEST!("RemeshNurbsSurfaceAdaptive", "Constructor", crate::remesh_nurbssurface_adaptive_test::run_remesh_nurbssurface_adaptive_constructor);
-REGISTER_MINI_TEST!("RemeshNurbsSurfaceAdaptive", "Parameters", crate::remesh_nurbssurface_adaptive_test::run_remesh_nurbssurface_adaptive_parameters);
-REGISTER_MINI_TEST!("RemeshNurbsSurfaceAdaptive", "Mesh", crate::remesh_nurbssurface_adaptive_test::run_remesh_nurbssurface_adaptive_mesh);
-REGISTER_MINI_TEST!("RemeshNurbsSurfaceAdaptive", "Torus", crate::remesh_nurbssurface_adaptive_test::run_remesh_nurbssurface_adaptive_torus);
-REGISTER_MINI_TEST!("RemeshNurbsSurfaceAdaptive", "Cylinder", crate::remesh_nurbssurface_adaptive_test::run_remesh_nurbssurface_adaptive_cylinder);
+REGISTER_MINI_TEST!(
+    "RemeshNurbsSurfaceAdaptive",
+    "Constructor",
+    crate::remesh_nurbssurface_adaptive_test::run_remesh_nurbssurface_adaptive_constructor
+);
+REGISTER_MINI_TEST!(
+    "RemeshNurbsSurfaceAdaptive",
+    "Parameters",
+    crate::remesh_nurbssurface_adaptive_test::run_remesh_nurbssurface_adaptive_parameters
+);
+REGISTER_MINI_TEST!(
+    "RemeshNurbsSurfaceAdaptive",
+    "Mesh",
+    crate::remesh_nurbssurface_adaptive_test::run_remesh_nurbssurface_adaptive_mesh
+);
+REGISTER_MINI_TEST!(
+    "RemeshNurbsSurfaceAdaptive",
+    "Torus",
+    crate::remesh_nurbssurface_adaptive_test::run_remesh_nurbssurface_adaptive_torus
+);
+REGISTER_MINI_TEST!(
+    "RemeshNurbsSurfaceAdaptive",
+    "Cylinder",
+    crate::remesh_nurbssurface_adaptive_test::run_remesh_nurbssurface_adaptive_cylinder
+);
 // TODO(f64-followup): vertex count differs from f64 reference under adaptive remesh.
 // REGISTER_MINI_TEST!("RemeshNurbsSurfaceAdaptive", "Cone", crate::remesh_nurbssurface_adaptive_test::run_remesh_nurbssurface_adaptive_cone);
-REGISTER_MINI_TEST!("RemeshNurbsSurfaceAdaptive", "Doubly Curved", crate::remesh_nurbssurface_adaptive_test::run_remesh_nurbssurface_adaptive_doubly_curved);
-REGISTER_MINI_TEST!("RemeshNurbsSurfaceAdaptive", "Flat", crate::remesh_nurbssurface_adaptive_test::run_remesh_nurbssurface_adaptive_flat);
-REGISTER_MINI_TEST!("RemeshNurbsSurfaceAdaptive", "Singular Triangle", crate::remesh_nurbssurface_adaptive_test::run_remesh_nurbssurface_adaptive_singular_triangle);
+REGISTER_MINI_TEST!(
+    "RemeshNurbsSurfaceAdaptive",
+    "Doubly Curved",
+    crate::remesh_nurbssurface_adaptive_test::run_remesh_nurbssurface_adaptive_doubly_curved
+);
+REGISTER_MINI_TEST!(
+    "RemeshNurbsSurfaceAdaptive",
+    "Flat",
+    crate::remesh_nurbssurface_adaptive_test::run_remesh_nurbssurface_adaptive_flat
+);
+REGISTER_MINI_TEST!(
+    "RemeshNurbsSurfaceAdaptive",
+    "Singular Triangle",
+    crate::remesh_nurbssurface_adaptive_test::run_remesh_nurbssurface_adaptive_singular_triangle
+);
 REGISTER_MINI_TEST!("RemeshNurbsSurfaceAdaptive", "Double-Curved Triangle", crate::remesh_nurbssurface_adaptive_test::run_remesh_nurbssurface_adaptive_double_curved_triangle);

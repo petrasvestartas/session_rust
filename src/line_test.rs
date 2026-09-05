@@ -1,14 +1,13 @@
-use crate::{MINI_CHECK, MINI_TEST, REGISTER_MINI_TEST};
 use crate::mini_test::TestResult;
 use crate::tolerance::TOLERANCE;
-
+use crate::{MINI_CHECK, MINI_TEST, REGISTER_MINI_TEST};
 
 pub fn run_line_constructor() -> TestResult {
     MINI_TEST!("Constructor", {
+        use crate::Color;
         use crate::Line;
         use crate::Point;
         use crate::Vector;
-        use crate::Color;
 
         // Constructor
         let mut l = Line::new(1.0, 2.0, 3.0, 4.0, 5.0, 6.0);
@@ -82,8 +81,11 @@ pub fn run_line_constructor() -> TestResult {
 
         // get_middle_line
         let (ms, me) = Line::get_middle_line(
-            &Point::new(0.0, 0.0, 0.0), &Point::new(2.0, 0.0, 0.0),
-            &Point::new(0.0, 2.0, 0.0), &Point::new(2.0, 2.0, 0.0));
+            &Point::new(0.0, 0.0, 0.0),
+            &Point::new(2.0, 0.0, 0.0),
+            &Point::new(0.0, 2.0, 0.0),
+            &Point::new(2.0, 2.0, 0.0),
+        );
 
         MINI_CHECK!(l.name == "my_line" && !l.guid().is_empty());
         MINI_CHECK!(l[0] == 10.0 && l[1] == 20.0 && l[2] == 30.0);
@@ -371,18 +373,50 @@ pub fn run_line_extend() -> TestResult {
 }
 
 // Register tests with the shared registry for run_all("rust")
-REGISTER_MINI_TEST!("Line", "Constructor", crate::line_test::run_line_constructor);
-REGISTER_MINI_TEST!("Line", "Transformation", crate::line_test::run_line_transformation);
-REGISTER_MINI_TEST!("Line", "Json Roundtrip", crate::line_test::run_line_json_roundtrip);
-REGISTER_MINI_TEST!("Line", "Protobuf Roundtrip", crate::line_test::run_line_protobuf_roundtrip);
+REGISTER_MINI_TEST!(
+    "Line",
+    "Constructor",
+    crate::line_test::run_line_constructor
+);
+REGISTER_MINI_TEST!(
+    "Line",
+    "Transformation",
+    crate::line_test::run_line_transformation
+);
+REGISTER_MINI_TEST!(
+    "Line",
+    "Json Roundtrip",
+    crate::line_test::run_line_json_roundtrip
+);
+REGISTER_MINI_TEST!(
+    "Line",
+    "Protobuf Roundtrip",
+    crate::line_test::run_line_protobuf_roundtrip
+);
 REGISTER_MINI_TEST!("Line", "Length", crate::line_test::run_line_length);
 REGISTER_MINI_TEST!("Line", "To Vector", crate::line_test::run_line_to_vector);
-REGISTER_MINI_TEST!("Line", "To Direction", crate::line_test::run_line_to_direction);
+REGISTER_MINI_TEST!(
+    "Line",
+    "To Direction",
+    crate::line_test::run_line_to_direction
+);
 REGISTER_MINI_TEST!("Line", "Point At", crate::line_test::run_line_point_at);
-REGISTER_MINI_TEST!("Line", "Closest Point", crate::line_test::run_line_closest_point);
-REGISTER_MINI_TEST!("Line", "Start End Center", crate::line_test::run_line_start_end_center);
+REGISTER_MINI_TEST!(
+    "Line",
+    "Closest Point",
+    crate::line_test::run_line_closest_point
+);
+REGISTER_MINI_TEST!(
+    "Line",
+    "Start End Center",
+    crate::line_test::run_line_start_end_center
+);
 REGISTER_MINI_TEST!("Line", "Fit Points", crate::line_test::run_line_fit_points);
 REGISTER_MINI_TEST!("Line", "Subdivide", crate::line_test::run_line_subdivide);
 REGISTER_MINI_TEST!("Line", "Overlap", crate::line_test::run_line_overlap);
-REGISTER_MINI_TEST!("Line", "Overlap Average", crate::line_test::run_line_overlap_average);
+REGISTER_MINI_TEST!(
+    "Line",
+    "Overlap Average",
+    crate::line_test::run_line_overlap_average
+);
 REGISTER_MINI_TEST!("Line", "Extend", crate::line_test::run_line_extend);

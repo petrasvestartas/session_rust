@@ -1,8 +1,8 @@
 //! Tests for nurbsknot module.
 
-use crate::{MINI_CHECK, MINI_TEST, REGISTER_MINI_TEST};
 use crate::mini_test::TestResult;
 use crate::tolerance::TOLERANCE;
+use crate::{MINI_CHECK, MINI_TEST, REGISTER_MINI_TEST};
 
 pub fn run_make_clamped_uniform() -> TestResult {
     MINI_TEST!("Make Clamped Uniform", {
@@ -60,7 +60,9 @@ pub fn run_reverse() -> TestResult {
         // 0 0 0 0.5 1 2 2 2 -> 0 0 0 1 1.5 2 2 2
         let mut nurbsknots_asym = vec![0.0, 0.0, 0.0, 0.5, 1.0, 2.0, 2.0, 2.0];
         nurbsknot::reverse(4, 6, &mut nurbsknots_asym);
-        MINI_CHECK!(TOLERANCE.is_allclose(&nurbsknots_asym, &[0.0, 0.0, 0.0, 1.0, 1.5, 2.0, 2.0, 2.0]));
+        MINI_CHECK!(
+            TOLERANCE.is_allclose(&nurbsknots_asym, &[0.0, 0.0, 0.0, 1.0, 1.5, 2.0, 2.0, 2.0])
+        );
     })
 }
 
@@ -101,7 +103,7 @@ pub fn run_compute_parameters() -> TestResult {
     MINI_TEST!("Compute Parameters", {
         use crate::nurbsknot;
 
-        let pts = [0.0,0.0,0.0, 1.0,0.0,0.0, 2.0,0.0,0.0, 3.0,0.0,0.0];
+        let pts = [0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 2.0, 0.0, 0.0, 3.0, 0.0, 0.0];
         // Chord-length parameterization: since all gaps are 1.0, params = {0, 1, 2, 3}
         let t = nurbsknot::compute_parameters(&pts, 3, nurbsknot::CurveNurbsKnotStyle::Chord);
         MINI_CHECK!(TOLERANCE.is_allclose(&t, &[0.0, 1.0, 2.0, 3.0]));
@@ -148,7 +150,9 @@ pub fn run_build_fitted_nurbsknots_adaptive() -> TestResult {
         // Builds nurbsknot vectors for least-squares fitting
         // Concentrates nurbsknots where curvature is high (sharp turns)
         // For collinear points (zero curvature), interior nurbsknots are evenly distributed
-        let pts = [0.0,0.0,0.0, 1.0,0.0,0.0, 2.0,0.0,0.0, 3.0,0.0,0.0, 4.0,0.0,0.0];
+        let pts = [
+            0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 2.0, 0.0, 0.0, 3.0, 0.0, 0.0, 4.0, 0.0, 0.0,
+        ];
         let params = [0.0, 1.0, 2.0, 3.0, 4.0];
         let nurbsknots = nurbsknot::build_fitted_nurbsknots_adaptive(&params, &pts, 3, 5, 3, 3.0);
         MINI_CHECK!(TOLERANCE.is_allclose(&nurbsknots, &[0.0, 0.0, 0.0, 2.0, 4.0, 4.0, 4.0]));
@@ -161,10 +165,14 @@ pub fn run_build_fitted_nurbsknots_periodic_adaptive() -> TestResult {
 
         // Periodic version for closed curves -- nurbsknots wrap around
         // For a regular square (equal turns, equal chords), nurbsknots are uniformly spaced
-        let pts = [0.0,0.0,0.0, 1.0,0.0,0.0, 1.0,1.0,0.0, 0.0,1.0,0.0];
+        let pts = [0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 1.0, 1.0, 0.0, 0.0, 1.0, 0.0];
         let params = [0.0, 1.0, 2.0, 3.0, 4.0];
-        let nurbsknots = nurbsknot::build_fitted_nurbsknots_periodic_adaptive(&params, &pts, 4, 3, 4, 3, 3.0);
-        MINI_CHECK!(TOLERANCE.is_allclose(&nurbsknots, &[-2.0, -1.0, 0.0, 1.0, 2.0, 3.0, 4.0, 5.0, 6.0]));
+        let nurbsknots =
+            nurbsknot::build_fitted_nurbsknots_periodic_adaptive(&params, &pts, 4, 3, 4, 3, 3.0);
+        MINI_CHECK!(TOLERANCE.is_allclose(
+            &nurbsknots,
+            &[-2.0, -1.0, 0.0, 1.0, 2.0, 3.0, 4.0, 5.0, 6.0]
+        ));
     })
 }
 
@@ -184,15 +192,59 @@ pub fn run_solve_banded_spd() -> TestResult {
 }
 
 // Register all tests
-REGISTER_MINI_TEST!("NurbsKnot", "Make Clamped Uniform", crate::nurbsknot_test::run_make_clamped_uniform);
-REGISTER_MINI_TEST!("NurbsKnot", "Make Periodic Uniform", crate::nurbsknot_test::run_make_periodic_uniform);
-REGISTER_MINI_TEST!("NurbsKnot", "Is Clamped", crate::nurbsknot_test::run_is_clamped);
+REGISTER_MINI_TEST!(
+    "NurbsKnot",
+    "Make Clamped Uniform",
+    crate::nurbsknot_test::run_make_clamped_uniform
+);
+REGISTER_MINI_TEST!(
+    "NurbsKnot",
+    "Make Periodic Uniform",
+    crate::nurbsknot_test::run_make_periodic_uniform
+);
+REGISTER_MINI_TEST!(
+    "NurbsKnot",
+    "Is Clamped",
+    crate::nurbsknot_test::run_is_clamped
+);
 REGISTER_MINI_TEST!("NurbsKnot", "Reverse", crate::nurbsknot_test::run_reverse);
-REGISTER_MINI_TEST!("NurbsKnot", "Find Span", crate::nurbsknot_test::run_find_span);
-REGISTER_MINI_TEST!("NurbsKnot", "Solve Tridiagonal", crate::nurbsknot_test::run_solve_tridiagonal);
-REGISTER_MINI_TEST!("NurbsKnot", "Compute Parameters", crate::nurbsknot_test::run_compute_parameters);
-REGISTER_MINI_TEST!("NurbsKnot", "Build Interpolation NurbsKnots", crate::nurbsknot_test::run_build_interp_nurbsknots);
-REGISTER_MINI_TEST!("NurbsKnot", "Evaluation Basis", crate::nurbsknot_test::run_eval_basis);
-REGISTER_MINI_TEST!("NurbsKnot", "Build Fitted NurbsKnots Adaptive", crate::nurbsknot_test::run_build_fitted_nurbsknots_adaptive);
-REGISTER_MINI_TEST!("NurbsKnot", "Build Fitted NurbsKnots Periodic Adaptive", crate::nurbsknot_test::run_build_fitted_nurbsknots_periodic_adaptive);
-REGISTER_MINI_TEST!("NurbsKnot", "Solve Banded SPD", crate::nurbsknot_test::run_solve_banded_spd);
+REGISTER_MINI_TEST!(
+    "NurbsKnot",
+    "Find Span",
+    crate::nurbsknot_test::run_find_span
+);
+REGISTER_MINI_TEST!(
+    "NurbsKnot",
+    "Solve Tridiagonal",
+    crate::nurbsknot_test::run_solve_tridiagonal
+);
+REGISTER_MINI_TEST!(
+    "NurbsKnot",
+    "Compute Parameters",
+    crate::nurbsknot_test::run_compute_parameters
+);
+REGISTER_MINI_TEST!(
+    "NurbsKnot",
+    "Build Interpolation NurbsKnots",
+    crate::nurbsknot_test::run_build_interp_nurbsknots
+);
+REGISTER_MINI_TEST!(
+    "NurbsKnot",
+    "Evaluation Basis",
+    crate::nurbsknot_test::run_eval_basis
+);
+REGISTER_MINI_TEST!(
+    "NurbsKnot",
+    "Build Fitted NurbsKnots Adaptive",
+    crate::nurbsknot_test::run_build_fitted_nurbsknots_adaptive
+);
+REGISTER_MINI_TEST!(
+    "NurbsKnot",
+    "Build Fitted NurbsKnots Periodic Adaptive",
+    crate::nurbsknot_test::run_build_fitted_nurbsknots_periodic_adaptive
+);
+REGISTER_MINI_TEST!(
+    "NurbsKnot",
+    "Solve Banded SPD",
+    crate::nurbsknot_test::run_solve_banded_spd
+);

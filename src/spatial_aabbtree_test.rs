@@ -1,12 +1,11 @@
-use crate::{MINI_CHECK, MINI_TEST, REGISTER_MINI_TEST};
 use crate::mini_test::TestResult;
 use crate::tolerance::TOLERANCE;
-
+use crate::{MINI_CHECK, MINI_TEST, REGISTER_MINI_TEST};
 
 pub fn run_spatial_aabbtree_constructor() -> TestResult {
     MINI_TEST!("Constructor", {
-        use crate::AABB;
         use crate::Closest;
+        use crate::AABB;
 
         // SpatialAABBTree: O(n log n) build, O(log n) cull — prune candidates before exact test
         let box0 = AABB::new(0.0, 0.0, 0.0, 0.5, 0.5, 0.5);
@@ -96,7 +95,7 @@ pub fn run_spatial_aabbtree_node_count() -> TestResult {
             vkeys.push(m.add_vertex(Point::new(i as f64, 0.5, 0.0), None));
         }
         for i in 0..100 {
-            m.add_face(vec![vkeys[i*3], vkeys[i*3+1], vkeys[i*3+2]], None);
+            m.add_face(vec![vkeys[i * 3], vkeys[i * 3 + 1], vkeys[i * 3 + 2]], None);
         }
         let (_cp, _fk, d) = Closest::mesh_point_aabb(&m, &Point::new(50.0, 0.0, 0.0));
 
@@ -107,8 +106,8 @@ pub fn run_spatial_aabbtree_node_count() -> TestResult {
 pub fn run_spatial_aabbtree_mesh_point_aabb() -> TestResult {
     MINI_TEST!("Mesh Point Aabb", {
         use crate::Closest;
-        use crate::Primitives;
         use crate::Point;
+        use crate::Primitives;
 
         let m = Primitives::cube(2.0);
         let (cp1, _fk1, d1) = Closest::mesh_point_aabb(&m, &Point::new(0.0, 0.0, 2.0));
@@ -123,8 +122,8 @@ pub fn run_spatial_aabbtree_mesh_point_aabb() -> TestResult {
 pub fn run_spatial_aabbtree_mesh_point_aabb_matches_bvh() -> TestResult {
     MINI_TEST!("Mesh Point Aabb Matches Bvh", {
         use crate::Closest;
-        use crate::Primitives;
         use crate::Point;
+        use crate::Primitives;
 
         let m = Primitives::cube(2.0);
         let tp = Point::new(0.3, 0.7, 1.5);
@@ -164,11 +163,43 @@ pub fn run_spatial_aabbtree_query_aabb() -> TestResult {
     })
 }
 
-REGISTER_MINI_TEST!("SpatialAABBTree", "Constructor", crate::spatial_aabbtree_test::run_spatial_aabbtree_constructor);
-REGISTER_MINI_TEST!("SpatialAABBTree", "Build Empty", crate::spatial_aabbtree_test::run_spatial_aabbtree_build_empty);
-REGISTER_MINI_TEST!("SpatialAABBTree", "Build Single", crate::spatial_aabbtree_test::run_spatial_aabbtree_build_single);
-REGISTER_MINI_TEST!("SpatialAABBTree", "Build Multiple", crate::spatial_aabbtree_test::run_spatial_aabbtree_build_multiple);
-REGISTER_MINI_TEST!("SpatialAABBTree", "Node Count", crate::spatial_aabbtree_test::run_spatial_aabbtree_node_count);
-REGISTER_MINI_TEST!("SpatialAABBTree", "Mesh Point Aabb", crate::spatial_aabbtree_test::run_spatial_aabbtree_mesh_point_aabb);
-REGISTER_MINI_TEST!("SpatialAABBTree", "Mesh Point Aabb Matches Bvh", crate::spatial_aabbtree_test::run_spatial_aabbtree_mesh_point_aabb_matches_bvh);
-REGISTER_MINI_TEST!("SpatialAABBTree", "Query Aabb", crate::spatial_aabbtree_test::run_spatial_aabbtree_query_aabb);
+REGISTER_MINI_TEST!(
+    "SpatialAABBTree",
+    "Constructor",
+    crate::spatial_aabbtree_test::run_spatial_aabbtree_constructor
+);
+REGISTER_MINI_TEST!(
+    "SpatialAABBTree",
+    "Build Empty",
+    crate::spatial_aabbtree_test::run_spatial_aabbtree_build_empty
+);
+REGISTER_MINI_TEST!(
+    "SpatialAABBTree",
+    "Build Single",
+    crate::spatial_aabbtree_test::run_spatial_aabbtree_build_single
+);
+REGISTER_MINI_TEST!(
+    "SpatialAABBTree",
+    "Build Multiple",
+    crate::spatial_aabbtree_test::run_spatial_aabbtree_build_multiple
+);
+REGISTER_MINI_TEST!(
+    "SpatialAABBTree",
+    "Node Count",
+    crate::spatial_aabbtree_test::run_spatial_aabbtree_node_count
+);
+REGISTER_MINI_TEST!(
+    "SpatialAABBTree",
+    "Mesh Point Aabb",
+    crate::spatial_aabbtree_test::run_spatial_aabbtree_mesh_point_aabb
+);
+REGISTER_MINI_TEST!(
+    "SpatialAABBTree",
+    "Mesh Point Aabb Matches Bvh",
+    crate::spatial_aabbtree_test::run_spatial_aabbtree_mesh_point_aabb_matches_bvh
+);
+REGISTER_MINI_TEST!(
+    "SpatialAABBTree",
+    "Query Aabb",
+    crate::spatial_aabbtree_test::run_spatial_aabbtree_query_aabb
+);

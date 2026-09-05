@@ -1,7 +1,6 @@
-use crate::{MINI_CHECK, MINI_TEST, REGISTER_MINI_TEST};
 use crate::mini_test::TestResult;
 use crate::tolerance::TOLERANCE;
-
+use crate::{MINI_CHECK, MINI_TEST, REGISTER_MINI_TEST};
 
 pub fn run_instance_ref_constructor() -> TestResult {
     MINI_TEST!("Constructor", {
@@ -128,7 +127,23 @@ pub fn run_instance_ref_protobuf_roundtrip() -> TestResult {
 }
 
 // Register tests with the shared registry for run_all("rust")
-REGISTER_MINI_TEST!("InstanceRef", "Constructor", crate::instance_ref_test::run_instance_ref_constructor);
-REGISTER_MINI_TEST!("InstanceRef", "Transformation", crate::instance_ref_test::run_instance_ref_transformation);
-REGISTER_MINI_TEST!("InstanceRef", "Json Roundtrip", crate::instance_ref_test::run_instance_ref_json_roundtrip);
-REGISTER_MINI_TEST!("InstanceRef", "Protobuf Roundtrip", crate::instance_ref_test::run_instance_ref_protobuf_roundtrip);
+REGISTER_MINI_TEST!(
+    "InstanceRef",
+    "Constructor",
+    crate::instance_ref_test::run_instance_ref_constructor
+);
+REGISTER_MINI_TEST!(
+    "InstanceRef",
+    "Transformation",
+    crate::instance_ref_test::run_instance_ref_transformation
+);
+REGISTER_MINI_TEST!(
+    "InstanceRef",
+    "Json Roundtrip",
+    crate::instance_ref_test::run_instance_ref_json_roundtrip
+);
+REGISTER_MINI_TEST!(
+    "InstanceRef",
+    "Protobuf Roundtrip",
+    crate::instance_ref_test::run_instance_ref_protobuf_roundtrip
+);

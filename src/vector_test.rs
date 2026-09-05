@@ -1,17 +1,16 @@
-use crate::{MINI_CHECK, MINI_TEST, REGISTER_MINI_TEST};
 use crate::mini_test::TestResult;
 use crate::tolerance::TOLERANCE;
-
+use crate::{MINI_CHECK, MINI_TEST, REGISTER_MINI_TEST};
 
 pub fn run_vector_constructor() -> TestResult {
     MINI_TEST!("Constructor", {
-        use crate::Vector;
         use crate::Point;
+        use crate::Vector;
 
         // Constructor
         let mut v = Vector::new(1.0, 2.0, 3.0);
         let p0 = Point::new(1.0, 2.0, 3.0);
-        let p1 = Point::new(2.0, 4.0, 6.0);    
+        let p1 = Point::new(2.0, 4.0, 6.0);
         let v_2p = Vector::from_points(&p0, &p1);
 
         // Setters
@@ -55,11 +54,11 @@ pub fn run_vector_constructor() -> TestResult {
         let vzero = Vector::zero();
 
         MINI_CHECK!(
-            v.name == "my_vector" &&
-            v[0] == 10.0 &&
-            v[1] == 20.0 &&
-            v[2] == 30.0 &&
-            !v.guid().is_empty()
+            v.name == "my_vector"
+                && v[0] == 10.0
+                && v[1] == 20.0
+                && v[2] == 30.0
+                && !v.guid().is_empty()
         );
         MINI_CHECK!(x == 10.0 && y == 20.0 && z == 30.0);
         MINI_CHECK!(v_2p[0] == 1.0 && v_2p[1] == 2.0 && v_2p[2] == 3.0);
@@ -84,9 +83,9 @@ pub fn run_vector_constructor() -> TestResult {
 
 pub fn run_vector_transformation() -> TestResult {
     MINI_TEST!("Transformation", {
+        use crate::tolerance::PI;
         use crate::Vector;
         use crate::Xform;
-        use crate::tolerance::PI;
 
         let mut v = Vector::new(1.0, 2.0, 3.0);
         let v_xf = Xform::translation(10.0, 20.0, 30.0);
@@ -99,7 +98,11 @@ pub fn run_vector_transformation() -> TestResult {
         let mut v2 = Vector::new(1.0, 0.0, 0.0);
         let v2_xf = Xform::rotation_z(PI / 2.0, false);
         v2.transform(&v2_xf);
-        MINI_CHECK!(TOLERANCE.is_close(v2[0], 0.0) && TOLERANCE.is_close(v2[1], 1.0) && TOLERANCE.is_close(v2[2], 0.0));
+        MINI_CHECK!(
+            TOLERANCE.is_close(v2[0], 0.0)
+                && TOLERANCE.is_close(v2[1], 1.0)
+                && TOLERANCE.is_close(v2[2], 0.0)
+        );
     })
 }
 
@@ -184,13 +187,12 @@ pub fn run_vector_cross_product() -> TestResult {
 
         // Perpendicular, area = 3*4=12
         let a = Vector::new(3.0, 0.0, 0.0);
-        let b = Vector::new(0.0, 4.0, 0.0); 
+        let b = Vector::new(0.0, 4.0, 0.0);
         let cross = a.cross(&b);
         let area = (cross[0].powi(2) + cross[1].powi(2) + cross[2].powi(2)).sqrt();
-        
+
         MINI_CHECK!(vn[0] == 0.0 && vn[1] == 0.0 && vn[2] == 1.0);
         MINI_CHECK!(TOLERANCE.is_close(area, 12.0));
-
     })
 }
 
@@ -199,17 +201,17 @@ pub fn run_vector_angle() -> TestResult {
         use crate::Vector;
 
         // angle(): Angle between two vectors (degrees)
-        let v1 = Vector::new(1.0, 0.0, 0.0);  // x-axis
-        let v2 = Vector::new(0.0, 1.0, 0.0);  // y-axis
-        let v3 = Vector::new(1.0, 1.0, 0.0);  // 45° from x-axis
+        let v1 = Vector::new(1.0, 0.0, 0.0); // x-axis
+        let v2 = Vector::new(0.0, 1.0, 0.0); // y-axis
+        let v3 = Vector::new(1.0, 1.0, 0.0); // 45° from x-axis
 
-        let angle_90 = v1.angle(&v2, false);  // v1 to v2: 90°
-        let angle_45 = v1.angle(&v3, false);  // v1 to v3: 45°
+        let angle_90 = v1.angle(&v2, false); // v1 to v2: 90°
+        let angle_45 = v1.angle(&v3, false); // v1 to v3: 45°
 
         // angle_between_vector_xy_components(): Angle of vector's XY projection from +X axis (atan2)
-        let v_30 = Vector::new(3.0_f64.sqrt(), 1.0, 0.0);  // 30° from x-axis
-        let v_60 = Vector::new(1.0, 3.0_f64.sqrt(), 0.0);  // 60° from x-axis
-        let v_neg = Vector::new(-1.0, 1.0, 0.0);           // 135° from x-axis
+        let v_30 = Vector::new(3.0_f64.sqrt(), 1.0, 0.0); // 30° from x-axis
+        let v_60 = Vector::new(1.0, 3.0_f64.sqrt(), 0.0); // 60° from x-axis
+        let v_neg = Vector::new(-1.0, 1.0, 0.0); // 135° from x-axis
 
         let xy_angle_30 = Vector::angle_between_vector_xy_components(&v_30);
         let xy_angle_60 = Vector::angle_between_vector_xy_components(&v_60);
@@ -262,9 +264,9 @@ pub fn run_vector_is_parallel_to() -> TestResult {
 
         // is_parallel_to returns: 1 (parallel), -1 (anti-parallel), 0 (not parallel)
         let v1 = Vector::new(2.0, 2.0, 2.0);
-        let v2 = Vector::new(4.0, 4.0, 4.0);      // parallel (same direction)
-        let v3 = Vector::new(-1.0, -1.0, -1.0);   // anti-parallel (opposite direction)
-        let v4 = Vector::new(1.0, 0.0, 0.0);      // not parallel
+        let v2 = Vector::new(4.0, 4.0, 4.0); // parallel (same direction)
+        let v3 = Vector::new(-1.0, -1.0, -1.0); // anti-parallel (opposite direction)
+        let v4 = Vector::new(1.0, 0.0, 0.0); // not parallel
 
         MINI_CHECK!(v1.is_parallel_to(&v2) == 1);
         MINI_CHECK!(v1.is_parallel_to(&v3) == -1);
@@ -286,12 +288,12 @@ pub fn run_vector_is_perpendicular_to() -> TestResult {
         let z_axis = Vector::new(0.0, 0.0, 1.0);
         let mut x_axis = Vector::zero();
         // x_axis is now perpendicular to z_axis
-        x_axis.perpendicular_to(&z_axis);  
+        x_axis.perpendicular_to(&z_axis);
 
         let arbitrary = Vector::new(1.0, 2.0, 3.0);
         let mut perp = Vector::zero();
         // perp is now perpendicular to arbitrary
-        perp.perpendicular_to(&arbitrary);  
+        perp.perpendicular_to(&arbitrary);
 
         MINI_CHECK!(v1.is_perpendicular_to(&v2));
         MINI_CHECK!(v1.is_perpendicular_to(&v3));
@@ -324,9 +326,9 @@ pub fn run_vector_cos_sin_laws() -> TestResult {
         let c = 5.0; // hypotenuse, opposite to angle C (90°)
 
         // angle_from_cosine_law(adj1, adj2, opposite) -> angle opposite to 'opposite' side
-        let angle_a = Vector::angle_from_cosine_law(b, c, a, true); 
-        let angle_b = Vector::angle_from_cosine_law(a, c, b, true); 
-        let angle_c = Vector::angle_from_cosine_law(a, b, c, true); 
+        let angle_a = Vector::angle_from_cosine_law(b, c, a, true);
+        let angle_b = Vector::angle_from_cosine_law(a, c, b, true);
+        let angle_c = Vector::angle_from_cosine_law(a, b, c, true);
 
         // given 2 angles + 1 side, find other side
         let side_a = Vector::side_from_sine_law(angle_a, angle_b, b, true);
@@ -334,7 +336,7 @@ pub fn run_vector_cos_sin_laws() -> TestResult {
         let side_c = Vector::side_from_sine_law(angle_c, angle_a, a, true);
 
         //  given 2 sides + included angle, find 3rd side
-        let computed_c = Vector::cosine_law(a, b, angle_c, true); 
+        let computed_c = Vector::cosine_law(a, b, angle_c, true);
         let computed_a = Vector::cosine_law(b, c, angle_a, true);
         let computed_b = Vector::cosine_law(a, c, angle_b, true);
 
@@ -534,25 +536,89 @@ pub fn run_vector_protobuf_roundtrip() -> TestResult {
 }
 
 // Register tests with the shared registry for run_all("rust")
-REGISTER_MINI_TEST!("Vector", "Constructor", crate::vector_test::run_vector_constructor);
-REGISTER_MINI_TEST!("Vector", "Transformation", crate::vector_test::run_vector_transformation);
-REGISTER_MINI_TEST!("Vector", "Magnitude", crate::vector_test::run_vector_magnitude);
-REGISTER_MINI_TEST!("Vector", "Normalize", crate::vector_test::run_vector_normalize);
+REGISTER_MINI_TEST!(
+    "Vector",
+    "Constructor",
+    crate::vector_test::run_vector_constructor
+);
+REGISTER_MINI_TEST!(
+    "Vector",
+    "Transformation",
+    crate::vector_test::run_vector_transformation
+);
+REGISTER_MINI_TEST!(
+    "Vector",
+    "Magnitude",
+    crate::vector_test::run_vector_magnitude
+);
+REGISTER_MINI_TEST!(
+    "Vector",
+    "Normalize",
+    crate::vector_test::run_vector_normalize
+);
 REGISTER_MINI_TEST!("Vector", "Reverse", crate::vector_test::run_vector_reverse);
-REGISTER_MINI_TEST!("Vector", "Dot Product", crate::vector_test::run_vector_dot_product);
-REGISTER_MINI_TEST!("Vector", "Cross Product", crate::vector_test::run_vector_cross_product);
+REGISTER_MINI_TEST!(
+    "Vector",
+    "Dot Product",
+    crate::vector_test::run_vector_dot_product
+);
+REGISTER_MINI_TEST!(
+    "Vector",
+    "Cross Product",
+    crate::vector_test::run_vector_cross_product
+);
 REGISTER_MINI_TEST!("Vector", "Angle", crate::vector_test::run_vector_angle);
-REGISTER_MINI_TEST!("Vector", "Projection", crate::vector_test::run_vector_projection);
-REGISTER_MINI_TEST!("Vector", "Is Parallel To", crate::vector_test::run_vector_is_parallel_to);
-REGISTER_MINI_TEST!("Vector", "Is Perpendicular To", crate::vector_test::run_vector_is_perpendicular_to);
-REGISTER_MINI_TEST!("Vector", "Get Leveled Vector", crate::vector_test::run_vector_get_leveled_vector);
-REGISTER_MINI_TEST!("Vector", "Cos Sin Laws", crate::vector_test::run_vector_cos_sin_laws);
-REGISTER_MINI_TEST!("Vector", "Sum Of Vectors", crate::vector_test::run_vector_sum_of_vectors);
+REGISTER_MINI_TEST!(
+    "Vector",
+    "Projection",
+    crate::vector_test::run_vector_projection
+);
+REGISTER_MINI_TEST!(
+    "Vector",
+    "Is Parallel To",
+    crate::vector_test::run_vector_is_parallel_to
+);
+REGISTER_MINI_TEST!(
+    "Vector",
+    "Is Perpendicular To",
+    crate::vector_test::run_vector_is_perpendicular_to
+);
+REGISTER_MINI_TEST!(
+    "Vector",
+    "Get Leveled Vector",
+    crate::vector_test::run_vector_get_leveled_vector
+);
+REGISTER_MINI_TEST!(
+    "Vector",
+    "Cos Sin Laws",
+    crate::vector_test::run_vector_cos_sin_laws
+);
+REGISTER_MINI_TEST!(
+    "Vector",
+    "Sum Of Vectors",
+    crate::vector_test::run_vector_sum_of_vectors
+);
 REGISTER_MINI_TEST!("Vector", "Average", crate::vector_test::run_vector_average);
 REGISTER_MINI_TEST!("Vector", "Is Zero", crate::vector_test::run_vector_is_zero);
 REGISTER_MINI_TEST!("Vector", "Scale", crate::vector_test::run_vector_scale);
 REGISTER_MINI_TEST!("Vector", "Reflect", crate::vector_test::run_vector_reflect);
-REGISTER_MINI_TEST!("Vector", "Average Normal", crate::vector_test::run_vector_average_normal);
-REGISTER_MINI_TEST!("Vector", "Interpolate Points", crate::vector_test::run_vector_interpolate_points);
-REGISTER_MINI_TEST!("Vector", "Json Roundtrip", crate::vector_test::run_vector_json_roundtrip);
-REGISTER_MINI_TEST!("Vector", "Protobuf Roundtrip", crate::vector_test::run_vector_protobuf_roundtrip);
+REGISTER_MINI_TEST!(
+    "Vector",
+    "Average Normal",
+    crate::vector_test::run_vector_average_normal
+);
+REGISTER_MINI_TEST!(
+    "Vector",
+    "Interpolate Points",
+    crate::vector_test::run_vector_interpolate_points
+);
+REGISTER_MINI_TEST!(
+    "Vector",
+    "Json Roundtrip",
+    crate::vector_test::run_vector_json_roundtrip
+);
+REGISTER_MINI_TEST!(
+    "Vector",
+    "Protobuf Roundtrip",
+    crate::vector_test::run_vector_protobuf_roundtrip
+);

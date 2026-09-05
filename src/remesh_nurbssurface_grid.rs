@@ -16,7 +16,13 @@ impl RemeshNurbsSurfaceGrid {
     /// normal deviation per subdivision (smaller → denser on curved spans) and
     /// `chord_factor` is the chord-height tolerance as a fraction of the bbox diagonal
     /// (smaller → denser). The defaults (20.0, 0.005) reproduce `from_u_v`.
-    pub fn from_u_v_q(s: NurbsSurface, max_u: usize, max_v: usize, max_angle_deg: f64, chord_factor: f64) -> Mesh {
+    pub fn from_u_v_q(
+        s: NurbsSurface,
+        max_u: usize,
+        max_v: usize,
+        max_angle_deg: f64,
+        chord_factor: f64,
+    ) -> Mesh {
         let usp = s.get_span_vector(0);
         let vsp = s.get_span_vector(1);
         let ns_u = usp.len() - 1;
@@ -29,19 +35,31 @@ impl RemeshNurbsSurfaceGrid {
         for i in 0..s.cv_count_dir(Some(0)) {
             for j in 0..s.cv_count_dir(Some(1)) {
                 if let Some(p) = s.get_cv(i, j) {
-                    if p[0] < minx { minx = p[0]; }
-                    if p[1] < miny { miny = p[1]; }
-                    if p[2] < minz { minz = p[2]; }
-                    if p[0] > maxx { maxx = p[0]; }
-                    if p[1] > maxy { maxy = p[1]; }
-                    if p[2] > maxz { maxz = p[2]; }
+                    if p[0] < minx {
+                        minx = p[0];
+                    }
+                    if p[1] < miny {
+                        miny = p[1];
+                    }
+                    if p[2] < minz {
+                        minz = p[2];
+                    }
+                    if p[0] > maxx {
+                        maxx = p[0];
+                    }
+                    if p[1] > maxy {
+                        maxy = p[1];
+                    }
+                    if p[2] > maxz {
+                        maxz = p[2];
+                    }
                 }
             }
         }
         let dx = maxx - minx;
         let dy = maxy - miny;
         let dz = maxz - minz;
-        let bbox_diag = (dx*dx + dy*dy + dz*dz).sqrt();
+        let bbox_diag = (dx * dx + dy * dy + dz * dz).sqrt();
 
         let span_subs = |dir: usize, sp: &[f64], osp: &[f64]| -> Vec<usize> {
             let n = sp.len() - 1;
@@ -61,19 +79,33 @@ impl RemeshNurbsSurfaceGrid {
                         let mut has_first = false;
                         for k in 0..=4 {
                             let t = t0 + k as f64 * (t1 - t0) / 4.0;
-                            let nrm = if dir == 0 { s.normal_at(t, sv) } else { s.normal_at(sv, t) };
+                            let nrm = if dir == 0 {
+                                s.normal_at(t, sv)
+                            } else {
+                                s.normal_at(sv, t)
+                            };
                             let (nx, ny, nz) = (nrm[0], nrm[1], nrm[2]);
-                            let len = (nx*nx + ny*ny + nz*nz).sqrt();
-                            if len < 1e-10 { continue; }
-                            let (nx, ny, nz) = (nx/len, ny/len, nz/len);
-                            if !has_first { fn3 = [nx, ny, nz]; has_first = true; }
+                            let len = (nx * nx + ny * ny + nz * nz).sqrt();
+                            if len < 1e-10 {
+                                continue;
+                            }
+                            let (nx, ny, nz) = (nx / len, ny / len, nz / len);
+                            if !has_first {
+                                fn3 = [nx, ny, nz];
+                                has_first = true;
+                            }
                             ln3 = [nx, ny, nz];
                         }
                         let total_angle = if has_first {
-                            let dot = (fn3[0]*ln3[0] + fn3[1]*ln3[1] + fn3[2]*ln3[2]).clamp(-1.0, 1.0);
+                            let dot = (fn3[0] * ln3[0] + fn3[1] * ln3[1] + fn3[2] * ln3[2])
+                                .clamp(-1.0, 1.0);
                             dot.acos() * 180.0 / Tolerance::PI
-                        } else { 0.0 };
-                        if total_angle > max_angle { max_angle = total_angle; }
+                        } else {
+                            0.0
+                        };
+                        if total_angle > max_angle {
+                            max_angle = total_angle;
+                        }
                     }
                     subs[i] = ((max_angle / max_angle_deg).ceil() as usize).clamp(1, 24);
                 }
@@ -82,7 +114,7 @@ impl RemeshNurbsSurfaceGrid {
                 let mut max_dev = 0.0_f64;
                 let nc = n_other.min(3);
                 for ci in 0..=nc {
-                    let sv = osp[0] + ci as f64 * (osp[osp.len()-1] - osp[0]) / nc.max(1) as f64;
+                    let sv = osp[0] + ci as f64 * (osp[osp.len() - 1] - osp[0]) / nc.max(1) as f64;
                     let (p0, p1) = if dir == 0 {
                         (s.point_at(t0, sv), s.point_at(t1, sv))
                     } else {
@@ -94,7 +126,11 @@ impl RemeshNurbsSurfaceGrid {
                         for k in 1..=3 {
                             let frac = k as f64 / 4.0;
                             let tm = t0 + frac * (t1 - t0);
-                            let pm = if dir == 0 { s.point_at(tm, sv) } else { s.point_at(sv, tm) };
+                            let pm = if dir == 0 {
+                                s.point_at(tm, sv)
+                            } else {
+                                s.point_at(sv, tm)
+                            };
                             if let Some(pm) = pm {
                                 let lx = px0 + frac * (px1 - px0);
                                 let ly = py0 + frac * (py1 - py0);
@@ -102,18 +138,24 @@ impl RemeshNurbsSurfaceGrid {
                                 let ddx = pm[0] - lx;
                                 let ddy = pm[1] - ly;
                                 let ddz = pm[2] - lz;
-                                let dev = (ddx*ddx + ddy*ddy + ddz*ddz).sqrt();
-                                if dev > max_dev { max_dev = dev; }
+                                let dev = (ddx * ddx + ddy * ddy + ddz * ddz).sqrt();
+                                if dev > max_dev {
+                                    max_dev = dev;
+                                }
                             }
                         }
                     }
                 }
                 if max_dev > chord_tol {
                     let chord_subs = ((max_dev / chord_tol).sqrt().ceil() as usize).clamp(2, 24);
-                    if chord_subs > subs[i] { subs[i] = chord_subs; }
+                    if chord_subs > subs[i] {
+                        subs[i] = chord_subs;
+                    }
                 }
 
-                if degree_dir > 1 && subs[i] < 2 { subs[i] = 2; }
+                if degree_dir > 1 && subs[i] < 2 {
+                    subs[i] = 2;
+                }
             }
             subs
         };
@@ -125,19 +167,19 @@ impl RemeshNurbsSurfaceGrid {
         {
             let total_u = u_subs.iter().sum::<usize>() + 1;
             let total_v = v_subs.iter().sum::<usize>() + 1;
-            let v_mid = (vsp[0] + vsp[vsp.len()-1]) * 0.5;
-            let u_mid = (usp[0] + usp[usp.len()-1]) * 0.5;
+            let v_mid = (vsp[0] + vsp[vsp.len() - 1]) * 0.5;
+            let u_mid = (usp[0] + usp[usp.len() - 1]) * 0.5;
             let mut u_len = 0.0_f64;
             let n_sample_u = total_u.max(10);
             if let Some(p0) = s.point_at(usp[0], v_mid) {
                 let mut prev = (p0[0], p0[1], p0[2]);
                 for i in 1..=n_sample_u {
-                    let u = usp[0] + i as f64 * (usp[usp.len()-1] - usp[0]) / n_sample_u as f64;
+                    let u = usp[0] + i as f64 * (usp[usp.len() - 1] - usp[0]) / n_sample_u as f64;
                     if let Some(p1) = s.point_at(u, v_mid) {
                         let ddx = p1[0] - prev.0;
                         let ddy = p1[1] - prev.1;
                         let ddz = p1[2] - prev.2;
-                        u_len += (ddx*ddx + ddy*ddy + ddz*ddz).sqrt();
+                        u_len += (ddx * ddx + ddy * ddy + ddz * ddz).sqrt();
                         prev = (p1[0], p1[1], p1[2]);
                     }
                 }
@@ -147,12 +189,12 @@ impl RemeshNurbsSurfaceGrid {
             if let Some(p0) = s.point_at(u_mid, vsp[0]) {
                 let mut prev = (p0[0], p0[1], p0[2]);
                 for i in 1..=n_sample_v {
-                    let v = vsp[0] + i as f64 * (vsp[vsp.len()-1] - vsp[0]) / n_sample_v as f64;
+                    let v = vsp[0] + i as f64 * (vsp[vsp.len() - 1] - vsp[0]) / n_sample_v as f64;
                     if let Some(p1) = s.point_at(u_mid, v) {
                         let ddx = p1[0] - prev.0;
                         let ddy = p1[1] - prev.1;
                         let ddz = p1[2] - prev.2;
-                        v_len += (ddx*ddx + ddy*ddy + ddz*ddz).sqrt();
+                        v_len += (ddx * ddx + ddy * ddy + ddz * ddz).sqrt();
                         prev = (p1[0], p1[1], p1[2]);
                     }
                 }
@@ -177,12 +219,18 @@ impl RemeshNurbsSurfaceGrid {
 
         // Bilinear twist check (skip for singular surfaces — fan triangulation handles those)
         if deg_u == 1 && deg_v == 1 && !s.is_singular(0) && !s.is_singular(2) {
-            let chord_tol = if bbox_diag > 0.0 { bbox_diag * chord_factor } else { 1e-6 };
+            let chord_tol = if bbox_diag > 0.0 {
+                bbox_diag * chord_factor
+            } else {
+                1e-6
+            };
             let mut max_twist = 0.0_f64;
             for i in 0..ns_u {
                 for j in 0..ns_v {
-                    let u0 = usp[i]; let u1 = usp[i + 1];
-                    let v0 = vsp[j]; let v1 = vsp[j + 1];
+                    let u0 = usp[i];
+                    let u1 = usp[i + 1];
+                    let v0 = vsp[j];
+                    let v1 = vsp[j + 1];
                     let pm = s.point_at((u0 + u1) * 0.5, (v0 + v1) * 0.5);
                     let p00 = s.point_at(u0, v0);
                     let p11 = s.point_at(u1, v1);
@@ -193,15 +241,26 @@ impl RemeshNurbsSurfaceGrid {
                         let ddx = pm[0] - mx;
                         let ddy = pm[1] - my;
                         let ddz = pm[2] - mz;
-                        let twist = (ddx*ddx + ddy*ddy + ddz*ddz).sqrt();
-                        if twist > max_twist { max_twist = twist; }
+                        let twist = (ddx * ddx + ddy * ddy + ddz * ddz).sqrt();
+                        if twist > max_twist {
+                            max_twist = twist;
+                        }
                     }
                 }
             }
             if max_twist > chord_tol {
-                let twist_subs = ((2.0 * (max_twist / chord_tol).sqrt()).ceil() as usize).clamp(4, 24);
-                for sv in &mut u_subs { if *sv < twist_subs { *sv = twist_subs; } }
-                for sv in &mut v_subs { if *sv < twist_subs { *sv = twist_subs; } }
+                let twist_subs =
+                    ((2.0 * (max_twist / chord_tol).sqrt()).ceil() as usize).clamp(4, 24);
+                for sv in &mut u_subs {
+                    if *sv < twist_subs {
+                        *sv = twist_subs;
+                    }
+                }
+                for sv in &mut v_subs {
+                    if *sv < twist_subs {
+                        *sv = twist_subs;
+                    }
+                }
             }
         }
 
@@ -224,23 +283,36 @@ impl RemeshNurbsSurfaceGrid {
             }
         }
 
-        let v_mid = (vsp[0] + vsp[vsp.len()-1]) * 0.5;
-        let u_mid = (usp[0] + usp[usp.len()-1]) * 0.5;
+        let v_mid = (vsp[0] + vsp[vsp.len() - 1]) * 0.5;
+        let u_mid = (usp[0] + usp[usp.len() - 1]) * 0.5;
 
         let arclen_params = |n: usize, sp: &[f64], fixed: f64, is_u: bool| -> Vec<f64> {
             let nsample = (n * 20).max(200);
-            let st: Vec<f64> = (0..=nsample).map(|k| sp[0] + k as f64 * (sp[sp.len()-1] - sp[0]) / nsample as f64).collect();
+            let st: Vec<f64> = (0..=nsample)
+                .map(|k| sp[0] + k as f64 * (sp[sp.len() - 1] - sp[0]) / nsample as f64)
+                .collect();
             let mut sl = vec![0.0_f64; nsample + 1];
-            let p0 = if is_u { s.point_at(sp[0], fixed) } else { s.point_at(fixed, sp[0]) };
+            let p0 = if is_u {
+                s.point_at(sp[0], fixed)
+            } else {
+                s.point_at(fixed, sp[0])
+            };
             let mut prev = p0.map(|p| (p[0], p[1], p[2])).unwrap_or((0.0, 0.0, 0.0));
             for k in 1..=nsample {
-                let p1 = if is_u { s.point_at(st[k], fixed) } else { s.point_at(fixed, st[k]) };
+                let p1 = if is_u {
+                    s.point_at(st[k], fixed)
+                } else {
+                    s.point_at(fixed, st[k])
+                };
                 if let Some(p1) = p1 {
-                    let d = ((p1[0]-prev.0).powi(2) + (p1[1]-prev.1).powi(2) + (p1[2]-prev.2).powi(2)).sqrt();
-                    sl[k] = sl[k-1] + d;
+                    let d = ((p1[0] - prev.0).powi(2)
+                        + (p1[1] - prev.1).powi(2)
+                        + (p1[2] - prev.2).powi(2))
+                    .sqrt();
+                    sl[k] = sl[k - 1] + d;
                     prev = (p1[0], p1[1], p1[2]);
                 } else {
-                    sl[k] = sl[k-1];
+                    sl[k] = sl[k - 1];
                 }
             }
             let total_len = sl[nsample];
@@ -248,12 +320,18 @@ impl RemeshNurbsSurfaceGrid {
             let mut j = 0usize;
             for i in 1..(n - 1) {
                 let target = total_len * i as f64 / (n - 1) as f64;
-                while j < nsample && sl[j] < target { j += 1; }
-                let ta = if j > 0 { st[j-1] } else { st[0] };
+                while j < nsample && sl[j] < target {
+                    j += 1;
+                }
+                let ta = if j > 0 { st[j - 1] } else { st[0] };
                 let tb = st[j];
-                let la = if j > 0 { sl[j-1] } else { sl[0] };
+                let la = if j > 0 { sl[j - 1] } else { sl[0] };
                 let lb = sl[j];
-                let frac = if lb > la { (target - la) / (lb - la) } else { 0.0 };
+                let frac = if lb > la {
+                    (target - la) / (lb - la)
+                } else {
+                    0.0
+                };
                 params.push(ta + frac * (tb - ta));
             }
             params.push(*sp.last().unwrap());
@@ -297,7 +375,9 @@ impl RemeshNurbsSurfaceGrid {
             let mut max_gap = 0.0_f64;
             for i in 1..params.len() {
                 let g = params[i] - params[i - 1];
-                if g > max_gap { max_gap = g; }
+                if g > max_gap {
+                    max_gap = g;
+                }
             }
             if max_gap > 0.0 && wrap_gap > max_gap * 1.5 {
                 let extra = ((wrap_gap / max_gap).ceil() as usize).saturating_sub(1);
@@ -346,7 +426,9 @@ impl RemeshNurbsSurfaceGrid {
         for i in 0..nu {
             let mut row: Vec<usize> = Vec::new();
             for j in j_start..j_end {
-                let p = s.point_at(us[i], vs[j]).unwrap_or(Point::new(0.0, 0.0, 0.0));
+                let p = s
+                    .point_at(us[i], vs[j])
+                    .unwrap_or(Point::new(0.0, 0.0, 0.0));
                 let vk = result.add_vertex(p, None);
                 if let Some(vd) = result.vertex.get_mut(&vk) {
                     vd.attributes.insert("u".to_string(), us[i]);
@@ -357,9 +439,7 @@ impl RemeshNurbsSurfaceGrid {
             vkey_grid.push(row);
         }
 
-        let grid_idx = |i: usize, j: usize| -> usize {
-            vkey_grid[i][j - j_start]
-        };
+        let grid_idx = |i: usize, j: usize| -> usize { vkey_grid[i][j - j_start] };
 
         let nu_faces = if closed_u { nu } else { nu - 1 };
 
@@ -367,12 +447,19 @@ impl RemeshNurbsSurfaceGrid {
         if sing_v0 {
             for i in 0..nu_faces {
                 let i1 = (i + 1) % nu;
-                result.add_face(vec![south_pole, grid_idx(i1, j_start), grid_idx(i, j_start)], None);
+                result.add_face(
+                    vec![south_pole, grid_idx(i1, j_start), grid_idx(i, j_start)],
+                    None,
+                );
             }
         }
 
         // Interior grid faces
-        let nv_interior = if closed_v && !sing_v0 && !sing_v1 { nv_grid } else { nv_grid - 1 };
+        let nv_interior = if closed_v && !sing_v0 && !sing_v1 {
+            nv_grid
+        } else {
+            nv_grid - 1
+        };
         for i in 0..nu_faces {
             for jj in 0..nv_interior {
                 let j = jj + j_start;
@@ -401,7 +488,10 @@ impl RemeshNurbsSurfaceGrid {
             let j_last = j_end - 1;
             for i in 0..nu_faces {
                 let i1 = (i + 1) % nu;
-                result.add_face(vec![grid_idx(i, j_last), grid_idx(i1, j_last), north_pole], None);
+                result.add_face(
+                    vec![grid_idx(i, j_last), grid_idx(i1, j_last), north_pole],
+                    None,
+                );
             }
         }
 
@@ -413,19 +503,39 @@ impl RemeshNurbsSurfaceGrid {
         let face_keys: Vec<usize> = result.face.keys().cloned().collect();
         for fk in &face_keys {
             if let Some(vids) = result.face.get(fk) {
-                if vids.len() < 3 { continue; }
-                let pos0 = result.vertex.get(&vids[0]).map(|v| v.position()).unwrap_or(Point::new(0.0, 0.0, 0.0));
-                let pos1 = result.vertex.get(&vids[1]).map(|v| v.position()).unwrap_or(Point::new(0.0, 0.0, 0.0));
-                let pos2 = result.vertex.get(&vids[2]).map(|v| v.position()).unwrap_or(Point::new(0.0, 0.0, 0.0));
-                let e1x = pos1[0]-pos0[0]; let e1y = pos1[1]-pos0[1]; let e1z = pos1[2]-pos0[2];
-                let e2x = pos2[0]-pos0[0]; let e2y = pos2[1]-pos0[1]; let e2z = pos2[2]-pos0[2];
-                let fnx = e1y*e2z - e1z*e2y;
-                let fny = e1z*e2x - e1x*e2z;
-                let fnz = e1x*e2y - e1y*e2x;
+                if vids.len() < 3 {
+                    continue;
+                }
+                let pos0 = result
+                    .vertex
+                    .get(&vids[0])
+                    .map(|v| v.position())
+                    .unwrap_or(Point::new(0.0, 0.0, 0.0));
+                let pos1 = result
+                    .vertex
+                    .get(&vids[1])
+                    .map(|v| v.position())
+                    .unwrap_or(Point::new(0.0, 0.0, 0.0));
+                let pos2 = result
+                    .vertex
+                    .get(&vids[2])
+                    .map(|v| v.position())
+                    .unwrap_or(Point::new(0.0, 0.0, 0.0));
+                let e1x = pos1[0] - pos0[0];
+                let e1y = pos1[1] - pos0[1];
+                let e1z = pos1[2] - pos0[2];
+                let e2x = pos2[0] - pos0[0];
+                let e2y = pos2[1] - pos0[1];
+                let e2z = pos2[2] - pos0[2];
+                let fnx = e1y * e2z - e1z * e2y;
+                let fny = e1z * e2x - e1x * e2z;
+                let fnz = e1x * e2y - e1y * e2x;
                 let vids_clone: Vec<usize> = vids.clone();
                 for vi in vids_clone {
                     let e = vn_map.entry(vi).or_insert((0.0, 0.0, 0.0));
-                    e.0 += fnx; e.1 += fny; e.2 += fnz;
+                    e.0 += fnx;
+                    e.1 += fny;
+                    e.2 += fnz;
                 }
             }
         }
@@ -433,8 +543,16 @@ impl RemeshNurbsSurfaceGrid {
         for vk in vkeys {
             // Winding-consistent direction from the accumulated face normals.
             let (mut fx, mut fy, mut fz) = vn_map.get(&vk).copied().unwrap_or((0.0, 0.0, 1.0));
-            let flen = (fx*fx + fy*fy + fz*fz).sqrt();
-            if flen > 1e-15 { fx /= flen; fy /= flen; fz /= flen; } else { fx = 0.0; fy = 0.0; fz = 1.0; }
+            let flen = (fx * fx + fy * fy + fz * fz).sqrt();
+            if flen > 1e-15 {
+                fx /= flen;
+                fy /= flen;
+                fz /= flen;
+            } else {
+                fx = 0.0;
+                fy = 0.0;
+                fz = 1.0;
+            }
             // Prefer the ANALYTIC surface normal at this vertex's (u,v) — smooth shading
             // like Rhino, which stays smooth even on a coarse mesh — oriented to agree
             // with the mesh winding. Fall back to the face normal at poles / where the
@@ -453,11 +571,17 @@ impl RemeshNurbsSurfaceGrid {
             if !is_pole {
                 if let Some((u, v)) = uv {
                     let na = s.normal_at(u, v);
-                    let nl = (na[0]*na[0] + na[1]*na[1] + na[2]*na[2]).sqrt();
+                    let nl = (na[0] * na[0] + na[1] * na[1] + na[2] * na[2]).sqrt();
                     if nl > 1e-9 {
-                        let (mut ax, mut ay, mut az) = (na[0]/nl, na[1]/nl, na[2]/nl);
-                        if ax*fx + ay*fy + az*fz < 0.0 { ax = -ax; ay = -ay; az = -az; }
-                        nx = ax; ny = ay; nz = az;
+                        let (mut ax, mut ay, mut az) = (na[0] / nl, na[1] / nl, na[2] / nl);
+                        if ax * fx + ay * fy + az * fz < 0.0 {
+                            ax = -ax;
+                            ay = -ay;
+                            az = -az;
+                        }
+                        nx = ax;
+                        ny = ay;
+                        nz = az;
                     }
                 }
             }

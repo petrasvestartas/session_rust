@@ -1260,6 +1260,12 @@ impl Session {
 
     // ═══════════════════════════════════════════════════════════════════════════
     // Details
+    //
+    // Every add_* below SKIPS an object that carries nothing to draw, and returns None
+    // instead of a node: an empty point cloud, a polyline of fewer than two points, a mesh
+    // without faces. The check lives here so no caller has to write it, and so a scene never
+    // holds an object a viewer cannot render. The types that cannot be empty - a point, a
+    // line, a plane, a box, an element, a component - keep returning a node outright.
     // ═══════════════════════════════════════════════════════════════════════════
 
     /// Adds a point to the Session.
@@ -1344,7 +1350,10 @@ impl Session {
         &mut self,
         polyline: Polyline,
         parent: Option<&Rc<RefCell<TreeNode>>>,
-    ) -> Rc<RefCell<TreeNode>> {
+    ) -> Option<Rc<RefCell<TreeNode>>> {
+        if polyline.point_count() < 2 {
+            return None;
+        }
         let guid = polyline.guid().to_string();
         // Boxes are computed lazily in rebuild_ray_bvh_cache (from the canonical order) —
         // adds only mark the cache dirty.
@@ -1359,14 +1368,17 @@ impl Session {
         if let Some(p) = parent {
             self.tree.add(&node, Some(p));
         }
-        node
+        Some(node)
     }
 
     pub fn add_pointcloud(
         &mut self,
         pointcloud: PointCloud,
         parent: Option<&Rc<RefCell<TreeNode>>>,
-    ) -> Rc<RefCell<TreeNode>> {
+    ) -> Option<Rc<RefCell<TreeNode>>> {
+        if pointcloud.is_empty() {
+            return None;
+        }
         let guid = pointcloud.guid().to_string();
         let name = pointcloud.name.clone();
         let pointcloud = Rc::new(pointcloud);
@@ -1379,14 +1391,17 @@ impl Session {
         if let Some(p) = parent {
             self.tree.add(&node, Some(p));
         }
-        node
+        Some(node)
     }
 
     pub fn add_mesh(
         &mut self,
         mesh: Mesh,
         parent: Option<&Rc<RefCell<TreeNode>>>,
-    ) -> Rc<RefCell<TreeNode>> {
+    ) -> Option<Rc<RefCell<TreeNode>>> {
+        if mesh.is_empty() || mesh.number_of_faces() == 0 {
+            return None;
+        }
         let guid = mesh.guid().to_string();
         let name = mesh.name.clone();
         let mesh = Rc::new(mesh);
@@ -1398,14 +1413,17 @@ impl Session {
         if let Some(p) = parent {
             self.tree.add(&node, Some(p));
         }
-        node
+        Some(node)
     }
 
     pub fn add_nurbscurve(
         &mut self,
         nurbscurve: NurbsCurve,
         parent: Option<&Rc<RefCell<TreeNode>>>,
-    ) -> Rc<RefCell<TreeNode>> {
+    ) -> Option<Rc<RefCell<TreeNode>>> {
+        if nurbscurve.cv_count() < 2 {
+            return None;
+        }
         let guid = nurbscurve.guid().to_string();
         let name = nurbscurve.name.clone();
         let nurbscurve = Rc::new(nurbscurve);
@@ -1418,14 +1436,17 @@ impl Session {
         if let Some(p) = parent {
             self.tree.add(&node, Some(p));
         }
-        node
+        Some(node)
     }
 
     pub fn add_nurbssurface(
         &mut self,
         nurbssurface: NurbsSurface,
         parent: Option<&Rc<RefCell<TreeNode>>>,
-    ) -> Rc<RefCell<TreeNode>> {
+    ) -> Option<Rc<RefCell<TreeNode>>> {
+        if nurbssurface.cv_count_dir(None) == 0 {
+            return None;
+        }
         let guid = nurbssurface.guid().to_string();
         let name = nurbssurface.name.clone();
         let nurbssurface = Rc::new(nurbssurface);
@@ -1438,14 +1459,17 @@ impl Session {
         if let Some(p) = parent {
             self.tree.add(&node, Some(p));
         }
-        node
+        Some(node)
     }
 
     pub fn add_brep(
         &mut self,
         brep: BRep,
         parent: Option<&Rc<RefCell<TreeNode>>>,
-    ) -> Rc<RefCell<TreeNode>> {
+    ) -> Option<Rc<RefCell<TreeNode>>> {
+        if brep.face_count() == 0 && brep.vertex_count() == 0 {
+            return None;
+        }
         let guid = brep.guid().to_string();
         let name = brep.name.clone();
         let brep = Rc::new(brep);
@@ -1457,7 +1481,7 @@ impl Session {
         if let Some(p) = parent {
             self.tree.add(&node, Some(p));
         }
-        node
+        Some(node)
     }
 
     pub fn add_component(

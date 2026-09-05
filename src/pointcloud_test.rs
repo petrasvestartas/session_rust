@@ -1,13 +1,13 @@
-use crate::{MINI_CHECK, MINI_TEST, REGISTER_MINI_TEST};
 use crate::mini_test::TestResult;
 use crate::tolerance::TOLERANCE;
+use crate::{MINI_CHECK, MINI_TEST, REGISTER_MINI_TEST};
 
 pub fn run_pointcloud_constructor() -> TestResult {
     MINI_TEST!("Constructor", {
-        use crate::PointCloud;
-        use crate::Point;
-        use crate::Vector;
         use crate::Color;
+        use crate::Point;
+        use crate::PointCloud;
+        use crate::Vector;
 
         // Default constructor (empty cloud)
         let pc0 = PointCloud::default();
@@ -50,10 +50,26 @@ pub fn run_pointcloud_constructor() -> TestResult {
         MINI_CHECK!(pcrepr == "PointCloud(my_pointcloud, 3 points, 3 colors, 3 normals)");
         MINI_CHECK!(pccopy == pc && pccopy.guid() != pc.guid());
         MINI_CHECK!(pcother != pc);
-        MINI_CHECK!(TOLERANCE.is_close(pc_iadd.get_point(0)[0], 11.0) && TOLERANCE.is_close(pc_iadd.get_point(0)[1], 22.0) && TOLERANCE.is_close(pc_iadd.get_point(0)[2], 33.0));
-        MINI_CHECK!(TOLERANCE.is_close(pc_isub.get_point(0)[0], -9.0) && TOLERANCE.is_close(pc_isub.get_point(0)[1], -18.0) && TOLERANCE.is_close(pc_isub.get_point(0)[2], -27.0));
-        MINI_CHECK!(TOLERANCE.is_close(pc_add.get_point(0)[0], 11.0) && TOLERANCE.is_close(pc_add.get_point(0)[1], 22.0) && TOLERANCE.is_close(pc_add.get_point(0)[2], 33.0));
-        MINI_CHECK!(TOLERANCE.is_close(pc_sub.get_point(0)[0], -9.0) && TOLERANCE.is_close(pc_sub.get_point(0)[1], -18.0) && TOLERANCE.is_close(pc_sub.get_point(0)[2], -27.0));
+        MINI_CHECK!(
+            TOLERANCE.is_close(pc_iadd.get_point(0)[0], 11.0)
+                && TOLERANCE.is_close(pc_iadd.get_point(0)[1], 22.0)
+                && TOLERANCE.is_close(pc_iadd.get_point(0)[2], 33.0)
+        );
+        MINI_CHECK!(
+            TOLERANCE.is_close(pc_isub.get_point(0)[0], -9.0)
+                && TOLERANCE.is_close(pc_isub.get_point(0)[1], -18.0)
+                && TOLERANCE.is_close(pc_isub.get_point(0)[2], -27.0)
+        );
+        MINI_CHECK!(
+            TOLERANCE.is_close(pc_add.get_point(0)[0], 11.0)
+                && TOLERANCE.is_close(pc_add.get_point(0)[1], 22.0)
+                && TOLERANCE.is_close(pc_add.get_point(0)[2], 33.0)
+        );
+        MINI_CHECK!(
+            TOLERANCE.is_close(pc_sub.get_point(0)[0], -9.0)
+                && TOLERANCE.is_close(pc_sub.get_point(0)[1], -18.0)
+                && TOLERANCE.is_close(pc_sub.get_point(0)[2], -27.0)
+        );
     })
 }
 
@@ -75,10 +91,18 @@ pub fn run_pointcloud_from_coords() -> TestResult {
 
 pub fn run_pointcloud_point_count() -> TestResult {
     MINI_TEST!("Point Count", {
-        use crate::PointCloud;
         use crate::Point;
+        use crate::PointCloud;
 
-        let pc = PointCloud::new(vec![Point::new(0.0, 0.0, 0.0), Point::new(1.0, 0.0, 0.0), Point::new(0.0, 1.0, 0.0)], vec![], vec![]);
+        let pc = PointCloud::new(
+            vec![
+                Point::new(0.0, 0.0, 0.0),
+                Point::new(1.0, 0.0, 0.0),
+                Point::new(0.0, 1.0, 0.0),
+            ],
+            vec![],
+            vec![],
+        );
 
         MINI_CHECK!(pc.point_count() == 3);
     })
@@ -86,10 +110,14 @@ pub fn run_pointcloud_point_count() -> TestResult {
 
 pub fn run_pointcloud_len() -> TestResult {
     MINI_TEST!("Len", {
-        use crate::PointCloud;
         use crate::Point;
+        use crate::PointCloud;
 
-        let pc = PointCloud::new(vec![Point::new(0.0, 0.0, 0.0), Point::new(1.0, 0.0, 0.0)], vec![], vec![]);
+        let pc = PointCloud::new(
+            vec![Point::new(0.0, 0.0, 0.0), Point::new(1.0, 0.0, 0.0)],
+            vec![],
+            vec![],
+        );
 
         MINI_CHECK!(pc.len() == 2);
     })
@@ -97,8 +125,8 @@ pub fn run_pointcloud_len() -> TestResult {
 
 pub fn run_pointcloud_is_empty() -> TestResult {
     MINI_TEST!("Is Empty", {
-        use crate::PointCloud;
         use crate::Point;
+        use crate::PointCloud;
 
         let pc0 = PointCloud::default();
         let pc1 = PointCloud::new(vec![Point::new(0.0, 0.0, 0.0)], vec![], vec![]);
@@ -110,10 +138,14 @@ pub fn run_pointcloud_is_empty() -> TestResult {
 
 pub fn run_pointcloud_get_point() -> TestResult {
     MINI_TEST!("Get Point", {
-        use crate::PointCloud;
         use crate::Point;
+        use crate::PointCloud;
 
-        let pc = PointCloud::new(vec![Point::new(1.0, 2.0, 3.0), Point::new(4.0, 5.0, 6.0)], vec![], vec![]);
+        let pc = PointCloud::new(
+            vec![Point::new(1.0, 2.0, 3.0), Point::new(4.0, 5.0, 6.0)],
+            vec![],
+            vec![],
+        );
         let pt = pc.get_point(1);
 
         MINI_CHECK!(TOLERANCE.is_close(pt[0], 4.0));
@@ -124,8 +156,8 @@ pub fn run_pointcloud_get_point() -> TestResult {
 
 pub fn run_pointcloud_set_point() -> TestResult {
     MINI_TEST!("Set Point", {
-        use crate::PointCloud;
         use crate::Point;
+        use crate::PointCloud;
 
         let mut pc = PointCloud::new(vec![Point::new(0.0, 0.0, 0.0)], vec![], vec![]);
         pc.set_point(0, &Point::new(4.0, 5.0, 6.0));
@@ -138,8 +170,8 @@ pub fn run_pointcloud_set_point() -> TestResult {
 
 pub fn run_pointcloud_add_point() -> TestResult {
     MINI_TEST!("Add Point", {
-        use crate::PointCloud;
         use crate::Point;
+        use crate::PointCloud;
 
         let mut pc = PointCloud::default();
         pc.add_point(&Point::new(1.0, 2.0, 3.0));
@@ -153,10 +185,14 @@ pub fn run_pointcloud_add_point() -> TestResult {
 
 pub fn run_pointcloud_get_points() -> TestResult {
     MINI_TEST!("Get Points", {
-        use crate::PointCloud;
         use crate::Point;
+        use crate::PointCloud;
 
-        let pc = PointCloud::new(vec![Point::new(1.0, 2.0, 3.0), Point::new(4.0, 5.0, 6.0)], vec![], vec![]);
+        let pc = PointCloud::new(
+            vec![Point::new(1.0, 2.0, 3.0), Point::new(4.0, 5.0, 6.0)],
+            vec![],
+            vec![],
+        );
         let points = pc.get_points();
 
         MINI_CHECK!(points.len() == 2);
@@ -167,10 +203,17 @@ pub fn run_pointcloud_get_points() -> TestResult {
 
 pub fn run_pointcloud_color_count() -> TestResult {
     MINI_TEST!("Color Count", {
-        use crate::PointCloud;
         use crate::Color;
+        use crate::PointCloud;
 
-        let pc = PointCloud::new(vec![], vec![], vec![Color::new(1.0, 0.0, 0.0, 1.0), Color::new(0.0, 1.0, 0.0, 1.0)]);
+        let pc = PointCloud::new(
+            vec![],
+            vec![],
+            vec![
+                Color::new(1.0, 0.0, 0.0, 1.0),
+                Color::new(0.0, 1.0, 0.0, 1.0),
+            ],
+        );
 
         MINI_CHECK!(pc.color_count() == 2);
     })
@@ -178,10 +221,17 @@ pub fn run_pointcloud_color_count() -> TestResult {
 
 pub fn run_pointcloud_get_color() -> TestResult {
     MINI_TEST!("Get Color", {
-        use crate::PointCloud;
         use crate::Color;
+        use crate::PointCloud;
 
-        let pc = PointCloud::new(vec![], vec![], vec![Color::new(1.0, 0.0, 0.0, 1.0), Color::new(0.0, 1.0, 0.0, 1.0)]);
+        let pc = PointCloud::new(
+            vec![],
+            vec![],
+            vec![
+                Color::new(1.0, 0.0, 0.0, 1.0),
+                Color::new(0.0, 1.0, 0.0, 1.0),
+            ],
+        );
         let c = pc.get_color(1);
 
         MINI_CHECK!(c.r == 0.0 && c.g == 1.0 && c.b == 0.0 && c.a == 1.0);
@@ -190,35 +240,48 @@ pub fn run_pointcloud_get_color() -> TestResult {
 
 pub fn run_pointcloud_set_color() -> TestResult {
     MINI_TEST!("Set Color", {
-        use crate::PointCloud;
         use crate::Color;
+        use crate::PointCloud;
 
         let mut pc = PointCloud::new(vec![], vec![], vec![Color::new(0.0, 0.0, 0.0, 0.0)]);
         pc.set_color(0, &Color::new(1.0, 0.0, 0.0, 1.0));
 
-        MINI_CHECK!(TOLERANCE.is_close(pc.get_color(0).r as f64, 1.0) && pc.get_color(0).g == 0.0 && pc.get_color(0).b == 0.0 && pc.get_color(0).a == 1.0);
+        MINI_CHECK!(
+            TOLERANCE.is_close(pc.get_color(0).r as f64, 1.0)
+                && pc.get_color(0).g == 0.0
+                && pc.get_color(0).b == 0.0
+                && pc.get_color(0).a == 1.0
+        );
     })
 }
 
 pub fn run_pointcloud_add_color() -> TestResult {
     MINI_TEST!("Add Color", {
-        use crate::PointCloud;
         use crate::Color;
+        use crate::PointCloud;
 
         let mut pc = PointCloud::default();
         pc.add_color(&Color::new(1.0, 0.0, 0.0, 1.0));
 
         MINI_CHECK!(pc.color_count() == 1);
-        MINI_CHECK!(TOLERANCE.is_close(pc.get_color(0).r as f64, 1.0) && pc.get_color(0).g == 0.0 && pc.get_color(0).b == 0.0);
+        MINI_CHECK!(
+            TOLERANCE.is_close(pc.get_color(0).r as f64, 1.0)
+                && pc.get_color(0).g == 0.0
+                && pc.get_color(0).b == 0.0
+        );
     })
 }
 
 pub fn run_pointcloud_coords() -> TestResult {
     MINI_TEST!("Coords", {
-        use crate::PointCloud;
         use crate::Point;
+        use crate::PointCloud;
 
-        let pc = PointCloud::new(vec![Point::new(1.0, 2.0, 3.0), Point::new(4.0, 5.0, 6.0)], vec![], vec![]);
+        let pc = PointCloud::new(
+            vec![Point::new(1.0, 2.0, 3.0), Point::new(4.0, 5.0, 6.0)],
+            vec![],
+            vec![],
+        );
         let coords = pc.coords();
 
         MINI_CHECK!(coords.len() == 6);
@@ -229,8 +292,8 @@ pub fn run_pointcloud_coords() -> TestResult {
 
 pub fn run_pointcloud_colors() -> TestResult {
     MINI_TEST!("Colors", {
-        use crate::PointCloud;
         use crate::Color;
+        use crate::PointCloud;
 
         let pc = PointCloud::new(vec![], vec![], vec![Color::new(1.0, 0.0, 0.0, 1.0)]);
         let colors = pc.colors();
@@ -242,10 +305,17 @@ pub fn run_pointcloud_colors() -> TestResult {
 
 pub fn run_pointcloud_get_colors() -> TestResult {
     MINI_TEST!("Get Colors", {
-        use crate::PointCloud;
         use crate::Color;
+        use crate::PointCloud;
 
-        let pc = PointCloud::new(vec![], vec![], vec![Color::new(1.0, 0.0, 0.0, 1.0), Color::new(0.0, 1.0, 0.0, 1.0)]);
+        let pc = PointCloud::new(
+            vec![],
+            vec![],
+            vec![
+                Color::new(1.0, 0.0, 0.0, 1.0),
+                Color::new(0.0, 1.0, 0.0, 1.0),
+            ],
+        );
         let colors = pc.get_colors();
 
         MINI_CHECK!(colors.len() == 2);
@@ -259,7 +329,11 @@ pub fn run_pointcloud_normal_count() -> TestResult {
         use crate::PointCloud;
         use crate::Vector;
 
-        let pc = PointCloud::new(vec![], vec![Vector::new(0.0, 0.0, 1.0), Vector::new(0.0, 0.0, 1.0)], vec![]);
+        let pc = PointCloud::new(
+            vec![],
+            vec![Vector::new(0.0, 0.0, 1.0), Vector::new(0.0, 0.0, 1.0)],
+            vec![],
+        );
 
         MINI_CHECK!(pc.normal_count() == 2);
     })
@@ -270,7 +344,11 @@ pub fn run_pointcloud_get_normal() -> TestResult {
         use crate::PointCloud;
         use crate::Vector;
 
-        let pc = PointCloud::new(vec![], vec![Vector::new(0.0, 0.0, 1.0), Vector::new(1.0, 0.0, 0.0)], vec![]);
+        let pc = PointCloud::new(
+            vec![],
+            vec![Vector::new(0.0, 0.0, 1.0), Vector::new(1.0, 0.0, 0.0)],
+            vec![],
+        );
         let n = pc.get_normal(1);
 
         MINI_CHECK!(TOLERANCE.is_close(n[0], 1.0));
@@ -311,7 +389,11 @@ pub fn run_pointcloud_get_normals() -> TestResult {
         use crate::PointCloud;
         use crate::Vector;
 
-        let pc = PointCloud::new(vec![], vec![Vector::new(0.0, 0.0, 1.0), Vector::new(1.0, 0.0, 0.0)], vec![]);
+        let pc = PointCloud::new(
+            vec![],
+            vec![Vector::new(0.0, 0.0, 1.0), Vector::new(1.0, 0.0, 0.0)],
+            vec![],
+        );
         let normals = pc.get_normals();
 
         MINI_CHECK!(normals.len() == 2);
@@ -322,8 +404,8 @@ pub fn run_pointcloud_get_normals() -> TestResult {
 
 pub fn run_pointcloud_transform() -> TestResult {
     MINI_TEST!("Transform", {
-        use crate::PointCloud;
         use crate::Point;
+        use crate::PointCloud;
         use crate::Xform;
 
         let mut pc = PointCloud::new(vec![Point::new(1.0, 2.0, 3.0)], vec![], vec![]);
@@ -338,8 +420,8 @@ pub fn run_pointcloud_transform() -> TestResult {
 
 pub fn run_pointcloud_transformed() -> TestResult {
     MINI_TEST!("Transformed", {
-        use crate::PointCloud;
         use crate::Point;
+        use crate::PointCloud;
         use crate::Xform;
 
         let pc = PointCloud::new(vec![Point::new(1.0, 2.0, 3.0)], vec![], vec![]);
@@ -355,15 +437,18 @@ pub fn run_pointcloud_transformed() -> TestResult {
 
 pub fn run_pointcloud_json_roundtrip() -> TestResult {
     MINI_TEST!("Json Roundtrip", {
-        use crate::PointCloud;
-        use crate::Point;
-        use crate::Vector;
         use crate::Color;
+        use crate::Point;
+        use crate::PointCloud;
+        use crate::Vector;
 
         let mut pc = PointCloud::new(
             vec![Point::new(1.0, 2.0, 3.0), Point::new(4.0, 5.0, 6.0)],
             vec![Vector::new(0.0, 0.0, 1.0), Vector::new(0.0, 0.0, 1.0)],
-            vec![Color::new(1.0, 0.0, 0.0, 1.0), Color::new(0.0, 1.0, 0.0, 1.0)],
+            vec![
+                Color::new(1.0, 0.0, 0.0, 1.0),
+                Color::new(0.0, 1.0, 0.0, 1.0),
+            ],
         );
         pc.name = "test_pointcloud".to_string();
 
@@ -388,15 +473,18 @@ pub fn run_pointcloud_json_roundtrip() -> TestResult {
 
 pub fn run_pointcloud_protobuf_roundtrip() -> TestResult {
     MINI_TEST!("Protobuf Roundtrip", {
-        use crate::PointCloud;
-        use crate::Point;
-        use crate::Vector;
         use crate::Color;
+        use crate::Point;
+        use crate::PointCloud;
+        use crate::Vector;
 
         let mut pc = PointCloud::new(
             vec![Point::new(1.0, 2.0, 3.0), Point::new(4.0, 5.0, 6.0)],
             vec![Vector::new(0.0, 0.0, 1.0), Vector::new(0.0, 0.0, 1.0)],
-            vec![Color::new(1.0, 0.0, 0.0, 1.0), Color::new(0.0, 1.0, 0.0, 1.0)],
+            vec![
+                Color::new(1.0, 0.0, 0.0, 1.0),
+                Color::new(0.0, 1.0, 0.0, 1.0),
+            ],
         );
         pc.name = "test_pointcloud".to_string();
 
@@ -416,7 +504,10 @@ pub fn run_pointcloud_point_ids() -> TestResult {
     MINI_TEST!("Point Ids", {
         use crate::PointCloud;
 
-        let coords = vec![0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 1.0, 1.0, 0.0, 0.0, 0.0, 1.0, 1.0, 0.0, 1.0, 0.0, 1.0, 1.0, 1.0, 1.0, 1.0];
+        let coords = vec![
+            0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 1.0, 1.0, 0.0, 0.0, 0.0, 1.0, 1.0, 0.0,
+            1.0, 0.0, 1.0, 1.0, 1.0, 1.0, 1.0,
+        ];
         let mut pc = PointCloud::from_coords(coords, vec![], vec![]);
         let before = pc.get_point(5);
         pc.build_lod(1.0, 2);
@@ -431,7 +522,10 @@ pub fn run_pointcloud_build_lod() -> TestResult {
     MINI_TEST!("Build Lod", {
         use crate::PointCloud;
 
-        let coords = vec![0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 1.0, 1.0, 0.0, 0.0, 0.0, 1.0, 1.0, 0.0, 1.0, 0.0, 1.0, 1.0, 1.0, 1.0, 1.0];
+        let coords = vec![
+            0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 1.0, 1.0, 0.0, 0.0, 0.0, 1.0, 1.0, 0.0,
+            1.0, 0.0, 1.0, 1.0, 1.0, 1.0, 1.0,
+        ];
         let mut pc = PointCloud::from_coords(coords, vec![], vec![]);
         pc.build_lod(1.0, 2);
 
@@ -442,30 +536,138 @@ pub fn run_pointcloud_build_lod() -> TestResult {
     })
 }
 
-REGISTER_MINI_TEST!("PointCloud", "Constructor", crate::pointcloud_test::run_pointcloud_constructor);
-REGISTER_MINI_TEST!("PointCloud", "From Coords", crate::pointcloud_test::run_pointcloud_from_coords);
-REGISTER_MINI_TEST!("PointCloud", "Point Count", crate::pointcloud_test::run_pointcloud_point_count);
-REGISTER_MINI_TEST!("PointCloud", "Len", crate::pointcloud_test::run_pointcloud_len);
-REGISTER_MINI_TEST!("PointCloud", "Is Empty", crate::pointcloud_test::run_pointcloud_is_empty);
-REGISTER_MINI_TEST!("PointCloud", "Get Point", crate::pointcloud_test::run_pointcloud_get_point);
-REGISTER_MINI_TEST!("PointCloud", "Set Point", crate::pointcloud_test::run_pointcloud_set_point);
-REGISTER_MINI_TEST!("PointCloud", "Add Point", crate::pointcloud_test::run_pointcloud_add_point);
-REGISTER_MINI_TEST!("PointCloud", "Get Points", crate::pointcloud_test::run_pointcloud_get_points);
-REGISTER_MINI_TEST!("PointCloud", "Color Count", crate::pointcloud_test::run_pointcloud_color_count);
-REGISTER_MINI_TEST!("PointCloud", "Get Color", crate::pointcloud_test::run_pointcloud_get_color);
-REGISTER_MINI_TEST!("PointCloud", "Set Color", crate::pointcloud_test::run_pointcloud_set_color);
-REGISTER_MINI_TEST!("PointCloud", "Add Color", crate::pointcloud_test::run_pointcloud_add_color);
-REGISTER_MINI_TEST!("PointCloud", "Coords", crate::pointcloud_test::run_pointcloud_coords);
-REGISTER_MINI_TEST!("PointCloud", "Colors", crate::pointcloud_test::run_pointcloud_colors);
-REGISTER_MINI_TEST!("PointCloud", "Get Colors", crate::pointcloud_test::run_pointcloud_get_colors);
-REGISTER_MINI_TEST!("PointCloud", "Normal Count", crate::pointcloud_test::run_pointcloud_normal_count);
-REGISTER_MINI_TEST!("PointCloud", "Get Normal", crate::pointcloud_test::run_pointcloud_get_normal);
-REGISTER_MINI_TEST!("PointCloud", "Set Normal", crate::pointcloud_test::run_pointcloud_set_normal);
-REGISTER_MINI_TEST!("PointCloud", "Add Normal", crate::pointcloud_test::run_pointcloud_add_normal);
-REGISTER_MINI_TEST!("PointCloud", "Get Normals", crate::pointcloud_test::run_pointcloud_get_normals);
-REGISTER_MINI_TEST!("PointCloud", "Transform", crate::pointcloud_test::run_pointcloud_transform);
-REGISTER_MINI_TEST!("PointCloud", "Transformed", crate::pointcloud_test::run_pointcloud_transformed);
-REGISTER_MINI_TEST!("PointCloud", "Point Ids", crate::pointcloud_test::run_pointcloud_point_ids);
-REGISTER_MINI_TEST!("PointCloud", "Build Lod", crate::pointcloud_test::run_pointcloud_build_lod);
-REGISTER_MINI_TEST!("PointCloud", "Json Roundtrip", crate::pointcloud_test::run_pointcloud_json_roundtrip);
-REGISTER_MINI_TEST!("PointCloud", "Protobuf Roundtrip", crate::pointcloud_test::run_pointcloud_protobuf_roundtrip);
+REGISTER_MINI_TEST!(
+    "PointCloud",
+    "Constructor",
+    crate::pointcloud_test::run_pointcloud_constructor
+);
+REGISTER_MINI_TEST!(
+    "PointCloud",
+    "From Coords",
+    crate::pointcloud_test::run_pointcloud_from_coords
+);
+REGISTER_MINI_TEST!(
+    "PointCloud",
+    "Point Count",
+    crate::pointcloud_test::run_pointcloud_point_count
+);
+REGISTER_MINI_TEST!(
+    "PointCloud",
+    "Len",
+    crate::pointcloud_test::run_pointcloud_len
+);
+REGISTER_MINI_TEST!(
+    "PointCloud",
+    "Is Empty",
+    crate::pointcloud_test::run_pointcloud_is_empty
+);
+REGISTER_MINI_TEST!(
+    "PointCloud",
+    "Get Point",
+    crate::pointcloud_test::run_pointcloud_get_point
+);
+REGISTER_MINI_TEST!(
+    "PointCloud",
+    "Set Point",
+    crate::pointcloud_test::run_pointcloud_set_point
+);
+REGISTER_MINI_TEST!(
+    "PointCloud",
+    "Add Point",
+    crate::pointcloud_test::run_pointcloud_add_point
+);
+REGISTER_MINI_TEST!(
+    "PointCloud",
+    "Get Points",
+    crate::pointcloud_test::run_pointcloud_get_points
+);
+REGISTER_MINI_TEST!(
+    "PointCloud",
+    "Color Count",
+    crate::pointcloud_test::run_pointcloud_color_count
+);
+REGISTER_MINI_TEST!(
+    "PointCloud",
+    "Get Color",
+    crate::pointcloud_test::run_pointcloud_get_color
+);
+REGISTER_MINI_TEST!(
+    "PointCloud",
+    "Set Color",
+    crate::pointcloud_test::run_pointcloud_set_color
+);
+REGISTER_MINI_TEST!(
+    "PointCloud",
+    "Add Color",
+    crate::pointcloud_test::run_pointcloud_add_color
+);
+REGISTER_MINI_TEST!(
+    "PointCloud",
+    "Coords",
+    crate::pointcloud_test::run_pointcloud_coords
+);
+REGISTER_MINI_TEST!(
+    "PointCloud",
+    "Colors",
+    crate::pointcloud_test::run_pointcloud_colors
+);
+REGISTER_MINI_TEST!(
+    "PointCloud",
+    "Get Colors",
+    crate::pointcloud_test::run_pointcloud_get_colors
+);
+REGISTER_MINI_TEST!(
+    "PointCloud",
+    "Normal Count",
+    crate::pointcloud_test::run_pointcloud_normal_count
+);
+REGISTER_MINI_TEST!(
+    "PointCloud",
+    "Get Normal",
+    crate::pointcloud_test::run_pointcloud_get_normal
+);
+REGISTER_MINI_TEST!(
+    "PointCloud",
+    "Set Normal",
+    crate::pointcloud_test::run_pointcloud_set_normal
+);
+REGISTER_MINI_TEST!(
+    "PointCloud",
+    "Add Normal",
+    crate::pointcloud_test::run_pointcloud_add_normal
+);
+REGISTER_MINI_TEST!(
+    "PointCloud",
+    "Get Normals",
+    crate::pointcloud_test::run_pointcloud_get_normals
+);
+REGISTER_MINI_TEST!(
+    "PointCloud",
+    "Transform",
+    crate::pointcloud_test::run_pointcloud_transform
+);
+REGISTER_MINI_TEST!(
+    "PointCloud",
+    "Transformed",
+    crate::pointcloud_test::run_pointcloud_transformed
+);
+REGISTER_MINI_TEST!(
+    "PointCloud",
+    "Point Ids",
+    crate::pointcloud_test::run_pointcloud_point_ids
+);
+REGISTER_MINI_TEST!(
+    "PointCloud",
+    "Build Lod",
+    crate::pointcloud_test::run_pointcloud_build_lod
+);
+REGISTER_MINI_TEST!(
+    "PointCloud",
+    "Json Roundtrip",
+    crate::pointcloud_test::run_pointcloud_json_roundtrip
+);
+REGISTER_MINI_TEST!(
+    "PointCloud",
+    "Protobuf Roundtrip",
+    crate::pointcloud_test::run_pointcloud_protobuf_roundtrip
+);

@@ -1,6 +1,6 @@
-use crate::{MINI_CHECK, MINI_TEST, REGISTER_MINI_TEST};
 use crate::mini_test::TestResult;
 use crate::tolerance::TOLERANCE;
+use crate::{MINI_CHECK, MINI_TEST, REGISTER_MINI_TEST};
 
 pub fn run_matrix_constructor() -> TestResult {
     MINI_TEST!("Constructor", {
@@ -202,7 +202,11 @@ pub fn run_matrix_lu_decompose() -> TestResult {
 pub fn run_matrix_qr_decompose() -> TestResult {
     MINI_TEST!("Qr Decompose", {
         use crate::Matrix;
-        let a = Matrix::from_vec(3, 3, vec![12.0, -51.0, 4.0, 6.0, 167.0, -68.0, -4.0, 24.0, -41.0]);
+        let a = Matrix::from_vec(
+            3,
+            3,
+            vec![12.0, -51.0, 4.0, 6.0, 167.0, -68.0, -4.0, 24.0, -41.0],
+        );
         let (q, r) = a.qr_decompose();
         let qt = q.transpose();
         let qtq = qt.multiply(&q);
@@ -325,22 +329,70 @@ pub fn run_matrix_protobuf_roundtrip() -> TestResult {
     })
 }
 
-REGISTER_MINI_TEST!("Matrix", "Constructor", crate::matrix_test::run_matrix_constructor);
-REGISTER_MINI_TEST!("Matrix", "Properties", crate::matrix_test::run_matrix_properties);
+REGISTER_MINI_TEST!(
+    "Matrix",
+    "Constructor",
+    crate::matrix_test::run_matrix_constructor
+);
+REGISTER_MINI_TEST!(
+    "Matrix",
+    "Properties",
+    crate::matrix_test::run_matrix_properties
+);
 REGISTER_MINI_TEST!("Matrix", "Add", crate::matrix_test::run_matrix_add);
-REGISTER_MINI_TEST!("Matrix", "Subtract", crate::matrix_test::run_matrix_subtract);
+REGISTER_MINI_TEST!(
+    "Matrix",
+    "Subtract",
+    crate::matrix_test::run_matrix_subtract
+);
 REGISTER_MINI_TEST!("Matrix", "Scale", crate::matrix_test::run_matrix_scale);
-REGISTER_MINI_TEST!("Matrix", "Multiply", crate::matrix_test::run_matrix_multiply);
-REGISTER_MINI_TEST!("Matrix", "Transpose", crate::matrix_test::run_matrix_transpose);
-REGISTER_MINI_TEST!("Matrix", "Determinant", crate::matrix_test::run_matrix_determinant);
+REGISTER_MINI_TEST!(
+    "Matrix",
+    "Multiply",
+    crate::matrix_test::run_matrix_multiply
+);
+REGISTER_MINI_TEST!(
+    "Matrix",
+    "Transpose",
+    crate::matrix_test::run_matrix_transpose
+);
+REGISTER_MINI_TEST!(
+    "Matrix",
+    "Determinant",
+    crate::matrix_test::run_matrix_determinant
+);
 REGISTER_MINI_TEST!("Matrix", "Inverse", crate::matrix_test::run_matrix_inverse);
 REGISTER_MINI_TEST!("Matrix", "Solve", crate::matrix_test::run_matrix_solve);
-REGISTER_MINI_TEST!("Matrix", "Lu Decompose", crate::matrix_test::run_matrix_lu_decompose);
-REGISTER_MINI_TEST!("Matrix", "Qr Decompose", crate::matrix_test::run_matrix_qr_decompose);
-REGISTER_MINI_TEST!("Matrix", "Cholesky", crate::matrix_test::run_matrix_cholesky);
-REGISTER_MINI_TEST!("Matrix", "Eigenvalues", crate::matrix_test::run_matrix_eigenvalues);
+REGISTER_MINI_TEST!(
+    "Matrix",
+    "Lu Decompose",
+    crate::matrix_test::run_matrix_lu_decompose
+);
+REGISTER_MINI_TEST!(
+    "Matrix",
+    "Qr Decompose",
+    crate::matrix_test::run_matrix_qr_decompose
+);
+REGISTER_MINI_TEST!(
+    "Matrix",
+    "Cholesky",
+    crate::matrix_test::run_matrix_cholesky
+);
+REGISTER_MINI_TEST!(
+    "Matrix",
+    "Eigenvalues",
+    crate::matrix_test::run_matrix_eigenvalues
+);
 REGISTER_MINI_TEST!("Matrix", "Svd", crate::matrix_test::run_matrix_svd);
 REGISTER_MINI_TEST!("Matrix", "Norms", crate::matrix_test::run_matrix_norms);
 REGISTER_MINI_TEST!("Matrix", "Rank", crate::matrix_test::run_matrix_rank);
-REGISTER_MINI_TEST!("Matrix", "Json Roundtrip", crate::matrix_test::run_matrix_json_roundtrip);
-REGISTER_MINI_TEST!("Matrix", "Protobuf Roundtrip", crate::matrix_test::run_matrix_protobuf_roundtrip);
+REGISTER_MINI_TEST!(
+    "Matrix",
+    "Json Roundtrip",
+    crate::matrix_test::run_matrix_json_roundtrip
+);
+REGISTER_MINI_TEST!(
+    "Matrix",
+    "Protobuf Roundtrip",
+    crate::matrix_test::run_matrix_protobuf_roundtrip
+);

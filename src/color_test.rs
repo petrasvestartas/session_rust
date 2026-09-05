@@ -160,9 +160,9 @@ mod tests {
 // Mini-test framework tests (for cross-language test comparison)
 // ============================================================================
 
-use crate::{MINI_CHECK, MINI_TEST, REGISTER_MINI_TEST};
 use crate::mini_test::TestResult;
 use crate::tolerance::TOLERANCE;
+use crate::{MINI_CHECK, MINI_TEST, REGISTER_MINI_TEST};
 
 pub fn run_color_constructor() -> TestResult {
     MINI_TEST!("Constructor", {
@@ -337,8 +337,24 @@ pub fn run_color_presets() -> TestResult {
 }
 
 // Register tests with the shared registry for run_all("rust")
-REGISTER_MINI_TEST!("Color", "Constructor", crate::color_test::run_color_constructor);
-REGISTER_MINI_TEST!("Color", "Json Roundtrip", crate::color_test::run_color_json_roundtrip);
-REGISTER_MINI_TEST!("Color", "Protobuf Roundtrip", crate::color_test::run_color_protobuf_roundtrip);
-REGISTER_MINI_TEST!("Color", "Conversion", crate::color_test::run_color_conversion);
+REGISTER_MINI_TEST!(
+    "Color",
+    "Constructor",
+    crate::color_test::run_color_constructor
+);
+REGISTER_MINI_TEST!(
+    "Color",
+    "Json Roundtrip",
+    crate::color_test::run_color_json_roundtrip
+);
+REGISTER_MINI_TEST!(
+    "Color",
+    "Protobuf Roundtrip",
+    crate::color_test::run_color_protobuf_roundtrip
+);
+REGISTER_MINI_TEST!(
+    "Color",
+    "Conversion",
+    crate::color_test::run_color_conversion
+);
 REGISTER_MINI_TEST!("Color", "Presets", crate::color_test::run_color_presets);

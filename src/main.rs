@@ -1,5 +1,6 @@
 use session_rust::{
-    read_file_obj, OBB, Line, Mesh, NurbsCurve, Plane, Point, Session, Tolerance, Vector, SpatialBVH,
+    read_file_obj, Line, Mesh, NurbsCurve, Plane, Point, Session, SpatialBVH, Tolerance, Vector,
+    OBB,
 };
 use std::path::Path;
 use std::time::Instant;
@@ -48,12 +49,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     }
 
     if let Some(ppp) = session_rust::intersection::plane_plane_plane(&pl0, &pl1, &pl2) {
-        println!(
-            "5. plane_plane_plane: {}, {}, {}",
-            ppp[0],
-            ppp[1],
-            ppp[2]
-        );
+        println!("5. plane_plane_plane: {}, {}, {}", ppp[0], ppp[1], ppp[2]);
     }
 
     let min = Point::new(214.0, 192.0, 484.0);
@@ -367,19 +363,23 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     }
 
     println!("\n=== NURBS Curve-Plane Intersection Test (Rust) ===");
-    
+
     // Create NURBS curve from 3 points with degree 2
     let p0 = Point::new(0.0, 0.0, -453.0);
     let p1 = Point::new(1500.0, 0.0, -147.0);
     let p2 = Point::new(3000.0, 0.0, -147.0);
-    
+
     let points = vec![p0, p1, p2];
     let degree = 2;
-    
+
     // Create a clamped NURBS curve
     let curve = NurbsCurve::create(false, degree, &points);
-    println!("Created NURBS curve: degree={}, cv_count={}", curve.degree(), curve.cv_count());
-    
+    println!(
+        "Created NURBS curve: degree={}, cv_count={}",
+        curve.degree(),
+        curve.cv_count()
+    );
+
     // Create planes perpendicular to X-axis at regular intervals
     let mut planes = Vec::new();
     for i in 0..7 {
@@ -387,17 +387,19 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         let normal = Vector::new(1.0, 0.0, 0.0);
         planes.push(Plane::from_point_normal(origin, normal));
     }
-    
+
     println!("\nIntersecting curve with {} planes:", planes.len());
-    
+
     // Intersect curve with each plane using intersection module
     let mut sampled_points = Vec::new();
     for plane in &planes {
-        let intersection_points = session_rust::intersection::curve_plane_points(&curve, plane, None);
-        
+        let intersection_points =
+            session_rust::intersection::curve_plane_points(&curve, plane, None);
+
         if !intersection_points.is_empty() {
             sampled_points.push(intersection_points[0].clone());
-            println!("  Plane at x={}: ({:.2}, {:.2}, {:.2})",
+            println!(
+                "  Plane at x={}: ({:.2}, {:.2}, {:.2})",
                 plane.origin()[0],
                 intersection_points[0][0],
                 intersection_points[0][1],
@@ -407,7 +409,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             println!("  Plane at x={}: No intersection", plane.origin()[0]);
         }
     }
-    
+
     println!("\nTotal sampled points: {}", sampled_points.len());
 
     Ok(())

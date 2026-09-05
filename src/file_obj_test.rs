@@ -1,15 +1,18 @@
-use crate::{MINI_CHECK, MINI_TEST, REGISTER_MINI_TEST};
 use crate::mini_test::TestResult;
 use crate::tolerance::TOLERANCE;
-
+use crate::{MINI_CHECK, MINI_TEST, REGISTER_MINI_TEST};
 
 pub fn run_file_obj_read_bunny() -> TestResult {
     MINI_TEST!("Read Bunny", {
         // load Stanford Bunny (real-world OBJ: 2503 vertices, 4968 faces)
-        use std::path::PathBuf;
         use crate::read_file_obj;
+        use std::path::PathBuf;
         let src_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-        let bunny_path = src_dir.parent().unwrap().join("session_data").join("bunny.obj");
+        let bunny_path = src_dir
+            .parent()
+            .unwrap()
+            .join("session_data")
+            .join("bunny.obj");
         if !bunny_path.exists() {
             return Ok(());
         }
@@ -20,7 +23,9 @@ pub fn run_file_obj_read_bunny() -> TestResult {
         let (vertices, faces) = mesh.to_vertices_and_faces();
         MINI_CHECK!(vertices.len() == 2503);
         MINI_CHECK!(faces.len() == 4968);
-        let has_non_zero = vertices.iter().any(|v| v[0] != 0.0 || v[1] != 0.0 || v[2] != 0.0);
+        let has_non_zero = vertices
+            .iter()
+            .any(|v| v[0] != 0.0 || v[1] != 0.0 || v[2] != 0.0);
         MINI_CHECK!(has_non_zero);
         MINI_CHECK!(faces.iter().all(|f| f.len() >= 3));
     })
@@ -29,8 +34,8 @@ pub fn run_file_obj_read_bunny() -> TestResult {
 pub fn run_file_obj_write_read_roundtrip() -> TestResult {
     MINI_TEST!("Write Read Roundtrip", {
         // build a small mesh (4 verts, 2 faces), write to OBJ, read back, compare counts
-        use crate::{Mesh, Point};
         use crate::file_obj::{read_file_obj, write_file_obj};
+        use crate::{Mesh, Point};
         use std::path::PathBuf;
         let mut original_mesh = Mesh::new();
         let v0 = original_mesh.add_vertex(Point::new(0.0, 0.0, 0.0), None);
@@ -43,7 +48,9 @@ pub fn run_file_obj_write_read_roundtrip() -> TestResult {
         MINI_CHECK!(original_mesh.number_of_vertices() == 4);
         MINI_CHECK!(original_mesh.number_of_faces() == 2);
         let src_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-        let temp_file = src_dir.join("serialization").join("test_temp_roundtrip.obj");
+        let temp_file = src_dir
+            .join("serialization")
+            .join("test_temp_roundtrip.obj");
         let temp_str = temp_file.to_str().unwrap();
         write_file_obj(&original_mesh, temp_str).unwrap();
         MINI_CHECK!(temp_file.exists());
@@ -56,8 +63,8 @@ pub fn run_file_obj_write_read_roundtrip() -> TestResult {
 
 pub fn run_file_obj_string_roundtrip() -> TestResult {
     MINI_TEST!("String Roundtrip", {
-        use crate::{Mesh, Point};
         use crate::file_obj::{read_file_obj_from_str, write_file_obj_to_string};
+        use crate::{Mesh, Point};
         let mut original_mesh = Mesh::new();
         let v0 = original_mesh.add_vertex(Point::new(0.0, 0.0, 0.0), None);
         let v1 = original_mesh.add_vertex(Point::new(1.0, 0.0, 0.0), None);
@@ -74,6 +81,18 @@ pub fn run_file_obj_string_roundtrip() -> TestResult {
     })
 }
 
-REGISTER_MINI_TEST!("FileObj", "Read Bunny", crate::file_obj_test::run_file_obj_read_bunny);
-REGISTER_MINI_TEST!("FileObj", "String Roundtrip", crate::file_obj_test::run_file_obj_string_roundtrip);
-REGISTER_MINI_TEST!("FileObj", "Write Read Roundtrip", crate::file_obj_test::run_file_obj_write_read_roundtrip);
+REGISTER_MINI_TEST!(
+    "FileObj",
+    "Read Bunny",
+    crate::file_obj_test::run_file_obj_read_bunny
+);
+REGISTER_MINI_TEST!(
+    "FileObj",
+    "String Roundtrip",
+    crate::file_obj_test::run_file_obj_string_roundtrip
+);
+REGISTER_MINI_TEST!(
+    "FileObj",
+    "Write Read Roundtrip",
+    crate::file_obj_test::run_file_obj_write_read_roundtrip
+);

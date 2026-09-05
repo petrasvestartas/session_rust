@@ -1,5 +1,5 @@
-use crate::{MINI_CHECK, MINI_TEST, REGISTER_MINI_TEST};
 use crate::mini_test::TestResult;
+use crate::{MINI_CHECK, MINI_TEST, REGISTER_MINI_TEST};
 
 pub fn run_treenode_constructor() -> TestResult {
     MINI_TEST!("Constructor", {
@@ -467,29 +467,93 @@ pub fn run_tree_get_children_guids() -> TestResult {
     })
 }
 
-REGISTER_MINI_TEST!("TreeNode", "Constructor", crate::tree_test::run_treenode_constructor);
-REGISTER_MINI_TEST!("TreeNode", "Json Roundtrip", crate::tree_test::run_treenode_json_roundtrip);
-REGISTER_MINI_TEST!("TreeNode", "Is Root", crate::tree_test::run_treenode_is_root);
-REGISTER_MINI_TEST!("TreeNode", "Is Leaf", crate::tree_test::run_treenode_is_leaf);
+REGISTER_MINI_TEST!(
+    "TreeNode",
+    "Constructor",
+    crate::tree_test::run_treenode_constructor
+);
+REGISTER_MINI_TEST!(
+    "TreeNode",
+    "Json Roundtrip",
+    crate::tree_test::run_treenode_json_roundtrip
+);
+REGISTER_MINI_TEST!(
+    "TreeNode",
+    "Is Root",
+    crate::tree_test::run_treenode_is_root
+);
+REGISTER_MINI_TEST!(
+    "TreeNode",
+    "Is Leaf",
+    crate::tree_test::run_treenode_is_leaf
+);
 REGISTER_MINI_TEST!("TreeNode", "Tree", crate::tree_test::run_treenode_tree);
 REGISTER_MINI_TEST!("TreeNode", "Add", crate::tree_test::run_treenode_add);
 REGISTER_MINI_TEST!("TreeNode", "Remove", crate::tree_test::run_treenode_remove);
 REGISTER_MINI_TEST!("TreeNode", "Parent", crate::tree_test::run_treenode_parent);
-REGISTER_MINI_TEST!("TreeNode", "Ancestors", crate::tree_test::run_treenode_ancestors);
-REGISTER_MINI_TEST!("TreeNode", "Descendants", crate::tree_test::run_treenode_descendants);
-REGISTER_MINI_TEST!("TreeNode", "Children", crate::tree_test::run_treenode_children);
-REGISTER_MINI_TEST!("TreeNode", "Traverse", crate::tree_test::run_treenode_traverse);
-REGISTER_MINI_TEST!("Tree", "Constructor", crate::tree_test::run_tree_constructor);
-REGISTER_MINI_TEST!("Tree", "Json Roundtrip", crate::tree_test::run_tree_json_roundtrip);
-REGISTER_MINI_TEST!("Tree", "Protobuf Roundtrip", crate::tree_test::run_tree_protobuf_roundtrip);
+REGISTER_MINI_TEST!(
+    "TreeNode",
+    "Ancestors",
+    crate::tree_test::run_treenode_ancestors
+);
+REGISTER_MINI_TEST!(
+    "TreeNode",
+    "Descendants",
+    crate::tree_test::run_treenode_descendants
+);
+REGISTER_MINI_TEST!(
+    "TreeNode",
+    "Children",
+    crate::tree_test::run_treenode_children
+);
+REGISTER_MINI_TEST!(
+    "TreeNode",
+    "Traverse",
+    crate::tree_test::run_treenode_traverse
+);
+REGISTER_MINI_TEST!(
+    "Tree",
+    "Constructor",
+    crate::tree_test::run_tree_constructor
+);
+REGISTER_MINI_TEST!(
+    "Tree",
+    "Json Roundtrip",
+    crate::tree_test::run_tree_json_roundtrip
+);
+REGISTER_MINI_TEST!(
+    "Tree",
+    "Protobuf Roundtrip",
+    crate::tree_test::run_tree_protobuf_roundtrip
+);
 REGISTER_MINI_TEST!("Tree", "Root", crate::tree_test::run_tree_root);
 REGISTER_MINI_TEST!("Tree", "Add", crate::tree_test::run_tree_add);
 REGISTER_MINI_TEST!("Tree", "Nodes", crate::tree_test::run_tree_nodes);
 REGISTER_MINI_TEST!("Tree", "Remove", crate::tree_test::run_tree_remove);
 REGISTER_MINI_TEST!("Tree", "Leaves", crate::tree_test::run_tree_leaves);
 REGISTER_MINI_TEST!("Tree", "Traverse", crate::tree_test::run_tree_traverse);
-REGISTER_MINI_TEST!("Tree", "Get Node By Name", crate::tree_test::run_tree_get_node_by_name);
-REGISTER_MINI_TEST!("Tree", "Get Nodes By Name", crate::tree_test::run_tree_get_nodes_by_name);
-REGISTER_MINI_TEST!("Tree", "Find Node By Guid", crate::tree_test::run_tree_find_node_by_guid);
-REGISTER_MINI_TEST!("Tree", "Add Child By Guid", crate::tree_test::run_tree_add_child_by_guid);
-REGISTER_MINI_TEST!("Tree", "Get Children Guids", crate::tree_test::run_tree_get_children_guids);
+REGISTER_MINI_TEST!(
+    "Tree",
+    "Get Node By Name",
+    crate::tree_test::run_tree_get_node_by_name
+);
+REGISTER_MINI_TEST!(
+    "Tree",
+    "Get Nodes By Name",
+    crate::tree_test::run_tree_get_nodes_by_name
+);
+REGISTER_MINI_TEST!(
+    "Tree",
+    "Find Node By Guid",
+    crate::tree_test::run_tree_find_node_by_guid
+);
+REGISTER_MINI_TEST!(
+    "Tree",
+    "Add Child By Guid",
+    crate::tree_test::run_tree_add_child_by_guid
+);
+REGISTER_MINI_TEST!(
+    "Tree",
+    "Get Children Guids",
+    crate::tree_test::run_tree_get_children_guids
+);

@@ -1,11 +1,11 @@
-use crate::{MINI_CHECK, MINI_TEST, REGISTER_MINI_TEST};
 use crate::mini_test::TestResult;
 use crate::tolerance::TOLERANCE;
+use crate::{MINI_CHECK, MINI_TEST, REGISTER_MINI_TEST};
 
 pub fn run_encoders_file_json_dump_load() -> TestResult {
     MINI_TEST!("Json Dump Load", {
-        use crate::Point;
         use crate::file_encoders::{file_json_dump, file_json_load};
+        use crate::Point;
         use std::fs;
 
         let mut original = Point::new(1.5, 2.5, 3.5);
@@ -25,8 +25,8 @@ pub fn run_encoders_file_json_dump_load() -> TestResult {
 
 pub fn run_encoders_file_json_dumps_loads() -> TestResult {
     MINI_TEST!("Json Dumps Loads", {
-        use crate::Vector;
         use crate::file_encoders::{file_json_dumps, file_json_loads};
+        use crate::Vector;
 
         let mut original = Vector::new(42.1, 84.2, 126.3);
         original.name = "test_vector".to_string();
@@ -43,8 +43,8 @@ pub fn run_encoders_file_json_dumps_loads() -> TestResult {
 
 pub fn run_encoders_file_encode_collection_values() -> TestResult {
     MINI_TEST!("Encode Collection Values", {
-        use crate::Point;
         use crate::file_encoders::file_json_dumps;
+        use crate::Point;
 
         let points = vec![
             Point::new(1.0, 2.0, 3.0),
@@ -64,8 +64,8 @@ pub fn run_encoders_file_encode_collection_values() -> TestResult {
 
 pub fn run_encoders_file_encode_collection_shared_ptr() -> TestResult {
     MINI_TEST!("Encode Collection Shared Ptr", {
-        use crate::Line;
         use crate::file_encoders::file_json_dumps;
+        use crate::Line;
 
         let lines = vec![
             Line::new(0.0, 0.0, 0.0, 1.0, 0.0, 0.0),
@@ -83,13 +83,10 @@ pub fn run_encoders_file_encode_collection_shared_ptr() -> TestResult {
 
 pub fn run_encoders_file_decode_collection() -> TestResult {
     MINI_TEST!("Decode Collection", {
-        use crate::Point;
         use crate::file_encoders::{file_json_dumps, file_json_loads};
+        use crate::Point;
 
-        let original_points = vec![
-            Point::new(1.0, 2.0, 3.0),
-            Point::new(4.0, 5.0, 6.0),
-        ];
+        let original_points = vec![Point::new(1.0, 2.0, 3.0), Point::new(4.0, 5.0, 6.0)];
         let json_str = file_json_dumps(&original_points, false).unwrap();
         let decoded: Vec<Point> = file_json_loads(&json_str).unwrap();
 
@@ -101,13 +98,10 @@ pub fn run_encoders_file_decode_collection() -> TestResult {
 
 pub fn run_encoders_file_decode_collection_ptr() -> TestResult {
     MINI_TEST!("Decode Collection Ptr", {
-        use crate::Vector;
         use crate::file_encoders::{file_json_dumps, file_json_loads};
+        use crate::Vector;
 
-        let original_vectors = vec![
-            Vector::new(1.0, 0.0, 0.0),
-            Vector::new(0.0, 1.0, 0.0),
-        ];
+        let original_vectors = vec![Vector::new(1.0, 0.0, 0.0), Vector::new(0.0, 1.0, 0.0)];
         let json_str = file_json_dumps(&original_vectors, false).unwrap();
         let decoded: Vec<Vector> = file_json_loads(&json_str).unwrap();
 
@@ -119,8 +113,8 @@ pub fn run_encoders_file_decode_collection_ptr() -> TestResult {
 
 pub fn run_encoders_nested_collections() -> TestResult {
     MINI_TEST!("Nested Collections", {
-        use crate::Line;
         use crate::file_encoders::{file_json_dumps, file_json_loads};
+        use crate::Line;
 
         let lines = vec![
             Line::new(0.0, 0.0, 0.0, 1.0, 0.0, 0.0),
@@ -137,8 +131,8 @@ pub fn run_encoders_nested_collections() -> TestResult {
 
 pub fn run_encoders_roundtrip_file_io() -> TestResult {
     MINI_TEST!("Roundtrip File Io", {
-        use crate::Vector;
         use crate::file_encoders::{file_json_dump, file_json_load};
+        use crate::Vector;
         use std::fs;
 
         let vectors = vec![
@@ -158,8 +152,8 @@ pub fn run_encoders_roundtrip_file_io() -> TestResult {
 
 pub fn run_encoders_pretty_vs_compact() -> TestResult {
     MINI_TEST!("Pretty Vs Compact", {
-        use crate::Point;
         use crate::file_encoders::{file_json_dumps, file_json_loads};
+        use crate::Point;
 
         let point = Point::new(1.0, 2.0, 3.0);
         let pretty = file_json_dumps(&point, true).unwrap();
@@ -204,8 +198,8 @@ pub fn run_encoders_decode_primitives() -> TestResult {
 
 pub fn run_encoders_decode_list() -> TestResult {
     MINI_TEST!("Decode List", {
-        use crate::Point;
         use crate::file_encoders::{file_json_dumps, file_json_loads};
+        use crate::Point;
 
         let data = vec![1i32, 2, 3];
         let json_str = file_json_dumps(&data, false).unwrap();
@@ -215,10 +209,7 @@ pub fn run_encoders_decode_list() -> TestResult {
         MINI_CHECK!(loaded[0] == 1);
         MINI_CHECK!(loaded[2] == 3);
 
-        let points = vec![
-            Point::new(1.0, 2.0, 3.0),
-            Point::new(4.0, 5.0, 6.0),
-        ];
+        let points = vec![Point::new(1.0, 2.0, 3.0), Point::new(4.0, 5.0, 6.0)];
         let json_str = file_json_dumps(&points, false).unwrap();
         let decoded: Vec<Point> = file_json_loads(&json_str).unwrap();
 
@@ -228,8 +219,8 @@ pub fn run_encoders_decode_list() -> TestResult {
 
 pub fn run_encoders_decode_dict() -> TestResult {
     MINI_TEST!("Decode Dict", {
-        use crate::Vector;
         use crate::file_encoders::{file_json_dumps, file_json_loads};
+        use crate::Vector;
         use std::collections::HashMap;
 
         let mut data = HashMap::new();
@@ -253,7 +244,10 @@ pub fn run_encoders_list_in_list_in_list() -> TestResult {
     MINI_TEST!("List In List In List", {
         use crate::file_encoders::{file_json_dumps, file_json_loads};
 
-        let data = vec![vec![vec![1i32, 2], vec![3, 4]], vec![vec![5, 6], vec![7, 8]]];
+        let data = vec![
+            vec![vec![1i32, 2], vec![3, 4]],
+            vec![vec![5, 6], vec![7, 8]],
+        ];
         let json_str = file_json_dumps(&data, false).unwrap();
         let loaded: Vec<Vec<Vec<i32>>> = file_json_loads(&json_str).unwrap();
 
@@ -265,13 +259,10 @@ pub fn run_encoders_list_in_list_in_list() -> TestResult {
 
 pub fn run_encoders_dict_of_lists() -> TestResult {
     MINI_TEST!("Dict Of Lists", {
-        use crate::Point;
         use crate::file_encoders::file_json_loads;
+        use crate::Point;
 
-        let points = vec![
-            Point::new(1.0, 0.0, 0.0),
-            Point::new(0.0, 1.0, 0.0),
-        ];
+        let points = vec![Point::new(1.0, 0.0, 0.0), Point::new(0.0, 1.0, 0.0)];
         let data = serde_json::json!({
             "numbers": [1, 2, 3],
             "letters": ["a", "b", "c"],
@@ -291,8 +282,8 @@ pub fn run_encoders_dict_of_lists() -> TestResult {
 
 pub fn run_encoders_list_of_dict() -> TestResult {
     MINI_TEST!("List Of Dict", {
-        use crate::Point;
         use crate::file_encoders::file_json_loads;
+        use crate::Point;
 
         let point = Point::new(1.0, 2.0, 3.0);
         let data = serde_json::json!([
@@ -313,9 +304,9 @@ pub fn run_encoders_list_of_dict() -> TestResult {
 
 pub fn run_encoders_dict_of_dicts() -> TestResult {
     MINI_TEST!("Dict Of Dicts", {
+        use crate::file_encoders::file_json_loads;
         use crate::Point;
         use crate::Vector;
-        use crate::file_encoders::file_json_loads;
 
         let point = Point::new(1.0, 2.0, 3.0);
         let vec = Vector::new(0.0, 0.0, 1.0);
@@ -326,29 +317,98 @@ pub fn run_encoders_dict_of_dicts() -> TestResult {
         let json_str = data.to_string();
         let loaded: serde_json::Value = file_json_loads(&json_str).unwrap();
 
-        MINI_CHECK!(TOLERANCE.is_close(loaded["config"]["tolerance"].as_f64().unwrap() as f64, 0.001));
+        MINI_CHECK!(TOLERANCE.is_close(
+            loaded["config"]["tolerance"].as_f64().unwrap() as f64,
+            0.001
+        ));
         MINI_CHECK!(loaded["config"]["scale"] == 1000);
 
-        let loaded_point: Point = serde_json::from_value(loaded["geometry"]["point"].clone()).unwrap();
-        let loaded_vec: Vector = serde_json::from_value(loaded["geometry"]["vector"].clone()).unwrap();
+        let loaded_point: Point =
+            serde_json::from_value(loaded["geometry"]["point"].clone()).unwrap();
+        let loaded_vec: Vector =
+            serde_json::from_value(loaded["geometry"]["vector"].clone()).unwrap();
         MINI_CHECK!(TOLERANCE.is_close(loaded_point[0], 1.0));
         MINI_CHECK!(TOLERANCE.is_close(loaded_vec[2], 1.0));
     })
 }
 
-REGISTER_MINI_TEST!("FileEncoders", "Json Dump Load", crate::file_encoders_test::run_encoders_file_json_dump_load);
-REGISTER_MINI_TEST!("FileEncoders", "Json Dumps Loads", crate::file_encoders_test::run_encoders_file_json_dumps_loads);
-REGISTER_MINI_TEST!("FileEncoders", "Encode Collection Values", crate::file_encoders_test::run_encoders_file_encode_collection_values);
-REGISTER_MINI_TEST!("FileEncoders", "Encode Collection Shared Ptr", crate::file_encoders_test::run_encoders_file_encode_collection_shared_ptr);
-REGISTER_MINI_TEST!("FileEncoders", "Decode Collection", crate::file_encoders_test::run_encoders_file_decode_collection);
-REGISTER_MINI_TEST!("FileEncoders", "Decode Collection Ptr", crate::file_encoders_test::run_encoders_file_decode_collection_ptr);
-REGISTER_MINI_TEST!("FileEncoders", "Nested Collections", crate::file_encoders_test::run_encoders_nested_collections);
-REGISTER_MINI_TEST!("FileEncoders", "Roundtrip File Io", crate::file_encoders_test::run_encoders_roundtrip_file_io);
-REGISTER_MINI_TEST!("FileEncoders", "Pretty Vs Compact", crate::file_encoders_test::run_encoders_pretty_vs_compact);
-REGISTER_MINI_TEST!("FileEncoders", "Decode Primitives", crate::file_encoders_test::run_encoders_decode_primitives);
-REGISTER_MINI_TEST!("FileEncoders", "Decode List", crate::file_encoders_test::run_encoders_decode_list);
-REGISTER_MINI_TEST!("FileEncoders", "Decode Dict", crate::file_encoders_test::run_encoders_decode_dict);
-REGISTER_MINI_TEST!("FileEncoders", "List In List In List", crate::file_encoders_test::run_encoders_list_in_list_in_list);
-REGISTER_MINI_TEST!("FileEncoders", "Dict Of Lists", crate::file_encoders_test::run_encoders_dict_of_lists);
-REGISTER_MINI_TEST!("FileEncoders", "List Of Dict", crate::file_encoders_test::run_encoders_list_of_dict);
-REGISTER_MINI_TEST!("FileEncoders", "Dict Of Dicts", crate::file_encoders_test::run_encoders_dict_of_dicts);
+REGISTER_MINI_TEST!(
+    "FileEncoders",
+    "Json Dump Load",
+    crate::file_encoders_test::run_encoders_file_json_dump_load
+);
+REGISTER_MINI_TEST!(
+    "FileEncoders",
+    "Json Dumps Loads",
+    crate::file_encoders_test::run_encoders_file_json_dumps_loads
+);
+REGISTER_MINI_TEST!(
+    "FileEncoders",
+    "Encode Collection Values",
+    crate::file_encoders_test::run_encoders_file_encode_collection_values
+);
+REGISTER_MINI_TEST!(
+    "FileEncoders",
+    "Encode Collection Shared Ptr",
+    crate::file_encoders_test::run_encoders_file_encode_collection_shared_ptr
+);
+REGISTER_MINI_TEST!(
+    "FileEncoders",
+    "Decode Collection",
+    crate::file_encoders_test::run_encoders_file_decode_collection
+);
+REGISTER_MINI_TEST!(
+    "FileEncoders",
+    "Decode Collection Ptr",
+    crate::file_encoders_test::run_encoders_file_decode_collection_ptr
+);
+REGISTER_MINI_TEST!(
+    "FileEncoders",
+    "Nested Collections",
+    crate::file_encoders_test::run_encoders_nested_collections
+);
+REGISTER_MINI_TEST!(
+    "FileEncoders",
+    "Roundtrip File Io",
+    crate::file_encoders_test::run_encoders_roundtrip_file_io
+);
+REGISTER_MINI_TEST!(
+    "FileEncoders",
+    "Pretty Vs Compact",
+    crate::file_encoders_test::run_encoders_pretty_vs_compact
+);
+REGISTER_MINI_TEST!(
+    "FileEncoders",
+    "Decode Primitives",
+    crate::file_encoders_test::run_encoders_decode_primitives
+);
+REGISTER_MINI_TEST!(
+    "FileEncoders",
+    "Decode List",
+    crate::file_encoders_test::run_encoders_decode_list
+);
+REGISTER_MINI_TEST!(
+    "FileEncoders",
+    "Decode Dict",
+    crate::file_encoders_test::run_encoders_decode_dict
+);
+REGISTER_MINI_TEST!(
+    "FileEncoders",
+    "List In List In List",
+    crate::file_encoders_test::run_encoders_list_in_list_in_list
+);
+REGISTER_MINI_TEST!(
+    "FileEncoders",
+    "Dict Of Lists",
+    crate::file_encoders_test::run_encoders_dict_of_lists
+);
+REGISTER_MINI_TEST!(
+    "FileEncoders",
+    "List Of Dict",
+    crate::file_encoders_test::run_encoders_list_of_dict
+);
+REGISTER_MINI_TEST!(
+    "FileEncoders",
+    "Dict Of Dicts",
+    crate::file_encoders_test::run_encoders_dict_of_dicts
+);

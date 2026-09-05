@@ -4,7 +4,6 @@ use std::collections::VecDeque;
 use std::fmt;
 use std::rc::{Rc, Weak};
 
-
 /// A node of a tree data structure
 #[derive(Debug)]
 pub struct TreeNode {
@@ -238,7 +237,11 @@ impl TreeNode {
             guid: self.guid().to_string(),
             name: self.name.clone(),
             color: self.color,
-            children: self.children.iter().map(|c| c.borrow().to_serde()).collect(),
+            children: self
+                .children
+                .iter()
+                .map(|c| c.borrow().to_serde())
+                .collect(),
         }
     }
 
@@ -298,7 +301,11 @@ impl<'de> Deserialize<'de> for Tree {
     {
         let serde_tree = TreeSerde::deserialize(deserializer)?;
         let mut tree = Tree {
-            guid: { let lock = std::sync::OnceLock::new(); let _ = lock.set(serde_tree.guid); lock },
+            guid: {
+                let lock = std::sync::OnceLock::new();
+                let _ = lock.set(serde_tree.guid);
+                lock
+            },
             name: serde_tree.name,
             root_node: None,
         };
@@ -384,7 +391,10 @@ impl Tree {
 
     /// All leaf nodes
     pub fn leaves(&self) -> Vec<Rc<RefCell<TreeNode>>> {
-        self.nodes().into_iter().filter(|n| n.borrow().is_leaf()).collect()
+        self.nodes()
+            .into_iter()
+            .filter(|n| n.borrow().is_leaf())
+            .collect()
     }
 
     /// Traverse from root ("depthfirst"|"breadthfirst", "preorder"|"postorder")
@@ -398,7 +408,9 @@ impl Tree {
 
     /// First node with the given name
     pub fn get_node_by_name(&self, node_name: &str) -> Option<Rc<RefCell<TreeNode>>> {
-        self.nodes().into_iter().find(|n| n.borrow().name == node_name)
+        self.nodes()
+            .into_iter()
+            .find(|n| n.borrow().name == node_name)
     }
 
     /// All nodes with the given name
@@ -411,7 +423,9 @@ impl Tree {
 
     /// Find a node by its GUID
     pub fn find_node_by_guid(&self, node_guid: &str) -> Option<Rc<RefCell<TreeNode>>> {
-        self.nodes().into_iter().find(|n| n.borrow().guid() == node_guid)
+        self.nodes()
+            .into_iter()
+            .find(|n| n.borrow().guid() == node_guid)
     }
 
     /// Reparent a child by GUID; returns true if both nodes were found
@@ -436,7 +450,11 @@ impl Tree {
     /// GUIDs of children of a node by GUID
     pub fn get_children_guids(&self, node_guid: &str) -> Vec<String> {
         if let Some(node) = self.find_node_by_guid(node_guid) {
-            node.borrow().children().iter().map(|c| c.borrow().guid().to_string()).collect()
+            node.borrow()
+                .children()
+                .iter()
+                .map(|c| c.borrow().guid().to_string())
+                .collect()
         } else {
             vec![]
         }
@@ -456,7 +474,12 @@ impl Tree {
 
     fn print_node(node: &Rc<RefCell<TreeNode>>, level: usize) {
         let indent = "  ".repeat(level);
-        println!("{}├── {} ({})", indent, node.borrow().name, node.borrow().guid());
+        println!(
+            "{}├── {} ({})",
+            indent,
+            node.borrow().name,
+            node.borrow().guid()
+        );
         for child in node.borrow().children() {
             Self::print_node(&child, level + 1);
         }
@@ -544,15 +567,18 @@ impl Tree {
         let proto = crate::proto::Tree::decode(data)?;
         let mut tree = Tree::new(&proto.name);
         tree.set_guid(proto.guid.clone());
-        fn proto_to_serde(
-            proto_node: &crate::proto::TreeNode,
-        ) -> TreeNodeSerde {
+        fn proto_to_serde(proto_node: &crate::proto::TreeNode) -> TreeNodeSerde {
             TreeNodeSerde {
                 guid: proto_node.guid.clone(),
                 name: proto_node.name.clone(),
-                color: proto_node.color.as_ref()
-                    .filter(|c| c.a > 0.0)
-                    .map(|c| [(c.r * 255.0).round() as u8, (c.g * 255.0).round() as u8, (c.b * 255.0).round() as u8, (c.a * 255.0).round() as u8]),
+                color: proto_node.color.as_ref().filter(|c| c.a > 0.0).map(|c| {
+                    [
+                        (c.r * 255.0).round() as u8,
+                        (c.g * 255.0).round() as u8,
+                        (c.b * 255.0).round() as u8,
+                        (c.a * 255.0).round() as u8,
+                    ]
+                }),
                 children: proto_node
                     .children
                     .iter()

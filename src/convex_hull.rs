@@ -19,24 +19,36 @@ impl ConvexHull {
             return points.to_vec();
         }
         let mut pts: Vec<&Point> = points.iter().collect();
-        pts.sort_by(|a, b| a[0].partial_cmp(&b[0]).unwrap().then(a[1].partial_cmp(&b[1]).unwrap()));
+        pts.sort_by(|a, b| {
+            a[0].partial_cmp(&b[0])
+                .unwrap()
+                .then(a[1].partial_cmp(&b[1]).unwrap())
+        });
         let mut lower: Vec<&Point> = Vec::new();
         for p in &pts {
-            while lower.len() >= 2 && Self::cross_2d(lower[lower.len() - 2], lower[lower.len() - 1], p) <= 0.0 {
+            while lower.len() >= 2
+                && Self::cross_2d(lower[lower.len() - 2], lower[lower.len() - 1], p) <= 0.0
+            {
                 lower.pop();
             }
             lower.push(p);
         }
         let mut upper: Vec<&Point> = Vec::new();
         for p in pts.iter().rev() {
-            while upper.len() >= 2 && Self::cross_2d(upper[upper.len() - 2], upper[upper.len() - 1], p) <= 0.0 {
+            while upper.len() >= 2
+                && Self::cross_2d(upper[upper.len() - 2], upper[upper.len() - 1], p) <= 0.0
+            {
                 upper.pop();
             }
             upper.push(p);
         }
         lower.pop();
         upper.pop();
-        lower.iter().chain(upper.iter()).map(|p| (*p).clone()).collect()
+        lower
+            .iter()
+            .chain(upper.iter())
+            .map(|p| (*p).clone())
+            .collect()
     }
 
     // -------------------------------------------------------------------------
@@ -58,7 +70,13 @@ impl ConvexHull {
         nx * (d[0] - a[0]) + ny * (d[1] - a[1]) + nz * (d[2] - a[2])
     }
 
-    fn farthest_point(pts_idx: &[usize], points: &[Point], a: &Point, b: &Point, c: &Point) -> Option<usize> {
+    fn farthest_point(
+        pts_idx: &[usize],
+        points: &[Point],
+        a: &Point,
+        b: &Point,
+        c: &Point,
+    ) -> Option<usize> {
         let mut best_idx = None;
         let mut best_vol = 0.0_f64;
         for &i in pts_idx {
@@ -71,11 +89,28 @@ impl ConvexHull {
         best_idx
     }
 
-    fn visible_from(pts_idx: &[usize], points: &[Point], a: &Point, b: &Point, c: &Point) -> Vec<usize> {
-        pts_idx.iter().filter(|&&i| Self::signed_volume(a, b, c, &points[i]) > 1e-10).cloned().collect()
+    fn visible_from(
+        pts_idx: &[usize],
+        points: &[Point],
+        a: &Point,
+        b: &Point,
+        c: &Point,
+    ) -> Vec<usize> {
+        pts_idx
+            .iter()
+            .filter(|&&i| Self::signed_volume(a, b, c, &points[i]) > 1e-10)
+            .cloned()
+            .collect()
     }
 
-    fn quickhull_3d_faces(points: &[Point], pts_idx: &[usize], a: usize, b: usize, c: usize, faces: &mut Vec<(usize, usize, usize)>) {
+    fn quickhull_3d_faces(
+        points: &[Point],
+        pts_idx: &[usize],
+        a: usize,
+        b: usize,
+        c: usize,
+        faces: &mut Vec<(usize, usize, usize)>,
+    ) {
         let visible = Self::visible_from(pts_idx, points, &points[a], &points[b], &points[c]);
         if visible.is_empty() {
             faces.push((a, b, c));
@@ -86,9 +121,12 @@ impl ConvexHull {
                 faces.push((a, b, c));
             }
             Some(apex) => {
-                let v_ab = Self::visible_from(&visible, points, &points[a], &points[b], &points[apex]);
-                let v_bc = Self::visible_from(&visible, points, &points[b], &points[c], &points[apex]);
-                let v_ca = Self::visible_from(&visible, points, &points[c], &points[a], &points[apex]);
+                let v_ab =
+                    Self::visible_from(&visible, points, &points[a], &points[b], &points[apex]);
+                let v_bc =
+                    Self::visible_from(&visible, points, &points[b], &points[c], &points[apex]);
+                let v_ca =
+                    Self::visible_from(&visible, points, &points[c], &points[a], &points[apex]);
                 Self::quickhull_3d_faces(points, &v_ab, a, b, apex, faces);
                 Self::quickhull_3d_faces(points, &v_bc, b, c, apex, faces);
                 Self::quickhull_3d_faces(points, &v_ca, c, a, apex, faces);
@@ -100,25 +138,39 @@ impl ConvexHull {
         let n = points.len();
         let mut mesh = Mesh::new();
         if n < 4 {
-            let vkeys: Vec<usize> = points.iter().map(|p| mesh.add_vertex(p.clone(), None)).collect();
+            let vkeys: Vec<usize> = points
+                .iter()
+                .map(|p| mesh.add_vertex(p.clone(), None))
+                .collect();
             if n == 3 {
                 mesh.add_face(vkeys, None);
             }
             return mesh;
         }
         // Use first-maximum semantics (like Python's max()) for consistent tie-breaking
-        let first_max = |iter: &mut dyn Iterator<Item = usize>, key: &dyn Fn(usize) -> f64| -> usize {
-            iter.fold(None::<(usize, f64)>, |acc, i| {
-                let d = key(i);
-                match acc {
-                    None => Some((i, d)),
-                    Some((bi, bd)) => if d > bd { Some((i, d)) } else { Some((bi, bd)) },
-                }
-            }).map(|(i, _)| i).unwrap()
-        };
+        let first_max =
+            |iter: &mut dyn Iterator<Item = usize>, key: &dyn Fn(usize) -> f64| -> usize {
+                iter.fold(None::<(usize, f64)>, |acc, i| {
+                    let d = key(i);
+                    match acc {
+                        None => Some((i, d)),
+                        Some((bi, bd)) => {
+                            if d > bd {
+                                Some((i, d))
+                            } else {
+                                Some((bi, bd))
+                            }
+                        }
+                    }
+                })
+                .map(|(i, _)| i)
+                .unwrap()
+            };
         let p0 = first_max(&mut (0..n), &|i| -points[i][0]);
         let p1 = first_max(&mut (0..n), &|i| {
-            (points[i][0] - points[p0][0]).powi(2) + (points[i][1] - points[p0][1]).powi(2) + (points[i][2] - points[p0][2]).powi(2)
+            (points[i][0] - points[p0][0]).powi(2)
+                + (points[i][1] - points[p0][1]).powi(2)
+                + (points[i][2] - points[p0][2]).powi(2)
         });
         let ax = points[p1][0] - points[p0][0];
         let ay = points[p1][1] - points[p0][1];
@@ -133,16 +185,19 @@ impl ConvexHull {
             cx * cx + cy * cy + cz * cz
         };
         let p2 = first_max(&mut (0..n).filter(|&i| i != p0 && i != p1), &dist_to_line);
-        let p3 = first_max(&mut (0..n).filter(|&i| i != p0 && i != p1 && i != p2), &|i| {
-            Self::signed_volume(&points[p0], &points[p1], &points[p2], &points[i]).abs()
-        });
+        let p3 = first_max(
+            &mut (0..n).filter(|&i| i != p0 && i != p1 && i != p2),
+            &|i| Self::signed_volume(&points[p0], &points[p1], &points[p2], &points[i]).abs(),
+        );
 
         let (mut p1, mut p2) = (p1, p2);
         if Self::signed_volume(&points[p0], &points[p1], &points[p2], &points[p3]) > 0.0 {
             std::mem::swap(&mut p1, &mut p2);
         }
 
-        let rest: Vec<usize> = (0..n).filter(|&i| i != p0 && i != p1 && i != p2 && i != p3).collect();
+        let rest: Vec<usize> = (0..n)
+            .filter(|&i| i != p0 && i != p1 && i != p2 && i != p3)
+            .collect();
         let mut faces: Vec<(usize, usize, usize)> = Vec::new();
         Self::quickhull_3d_faces(points, &rest, p0, p1, p2, &mut faces);
         Self::quickhull_3d_faces(points, &rest, p0, p3, p1, &mut faces);

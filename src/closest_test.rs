@@ -1,7 +1,6 @@
-use crate::{MINI_CHECK, MINI_TEST, REGISTER_MINI_TEST};
 use crate::mini_test::TestResult;
 use crate::tolerance::TOLERANCE;
-
+use crate::{MINI_CHECK, MINI_TEST, REGISTER_MINI_TEST};
 
 pub fn run_closest_line_point() -> TestResult {
     MINI_TEST!("Line Point", {
@@ -33,8 +32,8 @@ pub fn run_closest_line_point() -> TestResult {
 pub fn run_closest_polyline_point() -> TestResult {
     MINI_TEST!("Polyline Point", {
         use crate::Closest;
-        use crate::Polyline;
         use crate::Point;
+        use crate::Polyline;
 
         let pl = Polyline::new(vec![
             Point::new(0.0, 0.0, 0.0),
@@ -104,24 +103,26 @@ pub fn run_closest_surface_point() -> TestResult {
         ];
         let srf = NurbsSurface::create(false, false, 3, 3, 4, 4, &pts).unwrap();
 
-        let (u, v, dist) = Closest::surface_point(&srf, &Point::new(1.5, 1.5, 2.0), 0.0, 0.0, 0.0, 0.0);
+        let (u, v, dist) =
+            Closest::surface_point(&srf, &Point::new(1.5, 1.5, 2.0), 0.0, 0.0, 0.0, 0.0);
 
         MINI_CHECK!(dist < 1.5);
         let cp = srf.point_at(u, v).unwrap();
         MINI_CHECK!(TOLERANCE.is_close(cp.distance(&Point::new(1.5, 1.5, 2.0), None), dist));
 
-        let (_u2, _v2, dist2) = Closest::surface_point(&srf, &Point::new(0.0, 0.0, 0.0), 0.0, 0.0, 0.0, 0.0);
+        let (_u2, _v2, dist2) =
+            Closest::surface_point(&srf, &Point::new(0.0, 0.0, 0.0), 0.0, 0.0, 0.0, 0.0);
         MINI_CHECK!(dist2 < 0.01);
     })
 }
 
 pub fn run_closest_surface_curve() -> TestResult {
     MINI_TEST!("Surface Curve", {
+        use crate::nurbsknot::CurveNurbsKnotStyle;
         use crate::Closest;
         use crate::NurbsCurve;
         use crate::Point;
         use crate::Primitives;
-        use crate::nurbsknot::CurveNurbsKnotStyle;
 
         let cyl = Primitives::cylinder_surface(0.0, 0.0, 0.0, 1.0, 4.0);
         let (u0, u1) = cyl.domain(0).unwrap();
@@ -151,7 +152,8 @@ pub fn run_closest_surface_curve() -> TestResult {
             }
             for i in 0..17 {
                 let p2 = pcurve.point_at(i as f64 / 16.0);
-                if p2[0] < u0 - 1e-6 || p2[0] > u1 + 1e-6 || p2[1] < v0 - 1e-6 || p2[1] > v1 + 1e-6 {
+                if p2[0] < u0 - 1e-6 || p2[0] > u1 + 1e-6 || p2[1] < v0 - 1e-6 || p2[1] > v1 + 1e-6
+                {
                     inside = false;
                 }
             }
@@ -159,7 +161,11 @@ pub fn run_closest_surface_curve() -> TestResult {
         MINI_CHECK!(on_border == 2);
         MINI_CHECK!(inside);
 
-        let off = NurbsCurve::create(false, 1, &[Point::new(20.0, 20.0, 20.0), Point::new(30.0, 30.0, 30.0)]);
+        let off = NurbsCurve::create(
+            false,
+            1,
+            &[Point::new(20.0, 20.0, 20.0), Point::new(30.0, 30.0, 30.0)],
+        );
 
         MINI_CHECK!(Closest::surface_curve(&cyl, &off, 0.0, 0.0, None).len() == 0);
     })
@@ -168,8 +174,8 @@ pub fn run_closest_surface_curve() -> TestResult {
 pub fn run_closest_mesh_point() -> TestResult {
     MINI_TEST!("Mesh Point", {
         use crate::Closest;
-        use crate::Primitives;
         use crate::Point;
+        use crate::Primitives;
 
         let m = Primitives::cube(2.0);
 
@@ -186,8 +192,8 @@ pub fn run_closest_mesh_point() -> TestResult {
 pub fn run_closest_mesh_point_aabb() -> TestResult {
     MINI_TEST!("Mesh Point AABB", {
         use crate::Closest;
-        use crate::Primitives;
         use crate::Point;
+        use crate::Primitives;
 
         let m = Primitives::cube(2.0);
 
@@ -204,15 +210,19 @@ pub fn run_closest_mesh_point_aabb() -> TestResult {
 pub fn run_closest_pointcloud_point() -> TestResult {
     MINI_TEST!("Pointcloud Point", {
         use crate::Closest;
-        use crate::PointCloud;
         use crate::Point;
+        use crate::PointCloud;
 
-        let pc = PointCloud::new(vec![
-            Point::new(0.0, 0.0, 0.0),
-            Point::new(5.0, 0.0, 0.0),
-            Point::new(10.0, 0.0, 0.0),
-            Point::new(10.0, 10.0, 0.0),
-        ], vec![], vec![]);
+        let pc = PointCloud::new(
+            vec![
+                Point::new(0.0, 0.0, 0.0),
+                Point::new(5.0, 0.0, 0.0),
+                Point::new(10.0, 0.0, 0.0),
+                Point::new(10.0, 10.0, 0.0),
+            ],
+            vec![],
+            vec![],
+        );
 
         let (cp1, i1, d1) = Closest::pointcloud_point(&pc, &Point::new(4.0, 0.0, 0.0));
 
@@ -229,16 +239,20 @@ pub fn run_closest_pointcloud_point() -> TestResult {
 pub fn run_closest_pointcloud_point_kdtree() -> TestResult {
     MINI_TEST!("Pointcloud Point SpatialKDTree", {
         use crate::Closest;
-        use crate::PointCloud;
         use crate::Point;
+        use crate::PointCloud;
 
         // SpatialKDTree variant: same result as linear scan, O(log n) query
-        let pc = PointCloud::new(vec![
-            Point::new(0.0, 0.0, 0.0),
-            Point::new(5.0, 0.0, 0.0),
-            Point::new(10.0, 0.0, 0.0),
-            Point::new(10.0, 10.0, 0.0),
-        ], vec![], vec![]);
+        let pc = PointCloud::new(
+            vec![
+                Point::new(0.0, 0.0, 0.0),
+                Point::new(5.0, 0.0, 0.0),
+                Point::new(10.0, 0.0, 0.0),
+                Point::new(10.0, 10.0, 0.0),
+            ],
+            vec![],
+            vec![],
+        );
 
         let (cp1, i1, d1) = Closest::pointcloud_point_kdtree(&pc, &Point::new(4.0, 0.0, 0.0));
 
@@ -275,13 +289,16 @@ pub fn run_closest_lines_closest() -> TestResult {
 pub fn run_closest_polylines_closest() -> TestResult {
     MINI_TEST!("Polylines Closest", {
         use crate::Closest;
-        use crate::Polyline;
         use crate::Point;
+        use crate::Polyline;
 
         let pls = vec![
             Polyline::new(vec![Point::new(0.0, 0.0, 0.0), Point::new(5.0, 0.0, 0.0)]),
             Polyline::new(vec![Point::new(5.0, 0.0, 0.0), Point::new(10.0, 0.0, 0.0)]),
-            Polyline::new(vec![Point::new(100.0, 0.0, 0.0), Point::new(110.0, 0.0, 0.0)]),
+            Polyline::new(vec![
+                Point::new(100.0, 0.0, 0.0),
+                Point::new(110.0, 0.0, 0.0),
+            ]),
         ];
 
         let pairs = Closest::polylines_closest(&pls, 0.01);
@@ -299,9 +316,21 @@ pub fn run_closest_nurbscurves_closest() -> TestResult {
         use crate::Point;
 
         let curves = vec![
-            NurbsCurve::create(false, 1, &[Point::new(0.0, 0.0, 0.0), Point::new(5.0, 0.0, 0.0)]),
-            NurbsCurve::create(false, 1, &[Point::new(5.0, 0.0, 0.0), Point::new(10.0, 0.0, 0.0)]),
-            NurbsCurve::create(false, 1, &[Point::new(100.0, 0.0, 0.0), Point::new(110.0, 0.0, 0.0)]),
+            NurbsCurve::create(
+                false,
+                1,
+                &[Point::new(0.0, 0.0, 0.0), Point::new(5.0, 0.0, 0.0)],
+            ),
+            NurbsCurve::create(
+                false,
+                1,
+                &[Point::new(5.0, 0.0, 0.0), Point::new(10.0, 0.0, 0.0)],
+            ),
+            NurbsCurve::create(
+                false,
+                1,
+                &[Point::new(100.0, 0.0, 0.0), Point::new(110.0, 0.0, 0.0)],
+            ),
         ];
 
         let pairs = Closest::nurbscurves_closest(&curves, 0.01);
@@ -314,8 +343,8 @@ pub fn run_closest_nurbscurves_closest() -> TestResult {
 
 pub fn run_closest_boxes_closest() -> TestResult {
     MINI_TEST!("Boxes Closest", {
-        use crate::AABB;
         use crate::Closest;
+        use crate::AABB;
 
         // 3 boxes: first two touching faces (shared at x=1), third far away
         let boxes = vec![
@@ -332,16 +361,68 @@ pub fn run_closest_boxes_closest() -> TestResult {
     })
 }
 
-REGISTER_MINI_TEST!("Closest", "Line Point", crate::closest_test::run_closest_line_point);
-REGISTER_MINI_TEST!("Closest", "Polyline Point", crate::closest_test::run_closest_polyline_point);
-REGISTER_MINI_TEST!("Closest", "Curve Point", crate::closest_test::run_closest_curve_point);
-REGISTER_MINI_TEST!("Closest", "Surface Point", crate::closest_test::run_closest_surface_point);
-REGISTER_MINI_TEST!("Closest", "Surface Curve", crate::closest_test::run_closest_surface_curve);
-REGISTER_MINI_TEST!("Closest", "Mesh Point", crate::closest_test::run_closest_mesh_point);
-REGISTER_MINI_TEST!("Closest", "Mesh Point AABB", crate::closest_test::run_closest_mesh_point_aabb);
-REGISTER_MINI_TEST!("Closest", "Pointcloud Point", crate::closest_test::run_closest_pointcloud_point);
-REGISTER_MINI_TEST!("Closest", "Pointcloud Point SpatialKDTree", crate::closest_test::run_closest_pointcloud_point_kdtree);
-REGISTER_MINI_TEST!("Closest", "Lines Closest", crate::closest_test::run_closest_lines_closest);
-REGISTER_MINI_TEST!("Closest", "Polylines Closest", crate::closest_test::run_closest_polylines_closest);
-REGISTER_MINI_TEST!("Closest", "Nurbscurves Closest", crate::closest_test::run_closest_nurbscurves_closest);
-REGISTER_MINI_TEST!("Closest", "Boxes Closest", crate::closest_test::run_closest_boxes_closest);
+REGISTER_MINI_TEST!(
+    "Closest",
+    "Line Point",
+    crate::closest_test::run_closest_line_point
+);
+REGISTER_MINI_TEST!(
+    "Closest",
+    "Polyline Point",
+    crate::closest_test::run_closest_polyline_point
+);
+REGISTER_MINI_TEST!(
+    "Closest",
+    "Curve Point",
+    crate::closest_test::run_closest_curve_point
+);
+REGISTER_MINI_TEST!(
+    "Closest",
+    "Surface Point",
+    crate::closest_test::run_closest_surface_point
+);
+REGISTER_MINI_TEST!(
+    "Closest",
+    "Surface Curve",
+    crate::closest_test::run_closest_surface_curve
+);
+REGISTER_MINI_TEST!(
+    "Closest",
+    "Mesh Point",
+    crate::closest_test::run_closest_mesh_point
+);
+REGISTER_MINI_TEST!(
+    "Closest",
+    "Mesh Point AABB",
+    crate::closest_test::run_closest_mesh_point_aabb
+);
+REGISTER_MINI_TEST!(
+    "Closest",
+    "Pointcloud Point",
+    crate::closest_test::run_closest_pointcloud_point
+);
+REGISTER_MINI_TEST!(
+    "Closest",
+    "Pointcloud Point SpatialKDTree",
+    crate::closest_test::run_closest_pointcloud_point_kdtree
+);
+REGISTER_MINI_TEST!(
+    "Closest",
+    "Lines Closest",
+    crate::closest_test::run_closest_lines_closest
+);
+REGISTER_MINI_TEST!(
+    "Closest",
+    "Polylines Closest",
+    crate::closest_test::run_closest_polylines_closest
+);
+REGISTER_MINI_TEST!(
+    "Closest",
+    "Nurbscurves Closest",
+    crate::closest_test::run_closest_nurbscurves_closest
+);
+REGISTER_MINI_TEST!(
+    "Closest",
+    "Boxes Closest",
+    crate::closest_test::run_closest_boxes_closest
+);

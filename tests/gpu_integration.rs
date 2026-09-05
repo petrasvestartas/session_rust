@@ -11,9 +11,7 @@
 //! Skipped (with a printed reason) if no wgpu adapter is available — e.g.
 //! macOS-Intel CI runner without a usable GPU.
 
-use session_rust::gpu_session::{
-    GpuSession, InstanceData, DEFAULT_INSTANCE_CAP,
-};
+use session_rust::gpu_session::{GpuSession, InstanceData, DEFAULT_INSTANCE_CAP};
 use session_rust::{
     Color, Line, Mesh, NurbsCurve, Plane, Point, PointCloud, Polyline, Session, Vector, OBB,
 };
@@ -22,13 +20,11 @@ use session_rust::{
 /// (typical for CI without GPU) so tests can skip gracefully.
 fn try_make_device() -> Option<(wgpu::Device, wgpu::Queue)> {
     let instance = wgpu::Instance::default();
-    let adapter_opt = pollster::block_on(instance.request_adapter(
-        &wgpu::RequestAdapterOptions {
-            power_preference: wgpu::PowerPreference::default(),
-            compatible_surface: None,
-            force_fallback_adapter: false,
-        },
-    ))
+    let adapter_opt = pollster::block_on(instance.request_adapter(&wgpu::RequestAdapterOptions {
+        power_preference: wgpu::PowerPreference::default(),
+        compatible_surface: None,
+        force_fallback_adapter: false,
+    }))
     .ok();
     let adapter = adapter_opt?;
     pollster::block_on(adapter.request_device(&wgpu::DeviceDescriptor {
@@ -53,7 +49,10 @@ fn build_session_with_every_type() -> Session {
     let pc = PointCloud::new(
         vec![Point::new(0.0, 0.0, 0.0), Point::new(1.0, 0.0, 0.0)],
         Vec::new(),
-        vec![Color::new(1.0, 0.0, 0.0, 1.0), Color::new(0.0, 1.0, 0.0, 1.0)],
+        vec![
+            Color::new(1.0, 0.0, 0.0, 1.0),
+            Color::new(0.0, 1.0, 0.0, 1.0),
+        ],
     );
     let _ = s.add_pointcloud(pc, None);
 
@@ -99,7 +98,9 @@ fn rebuild_from_session_populates_arenas_and_pick_table() {
     // Every object should have a pick-table entry that round-trips
     for (guid, _) in &session.lookup {
         let id = gpu.pick.instance_id(guid).expect("guid not in pick table");
-        let back = gpu.guid_for_instance(id).expect("instance_id not in pick table");
+        let back = gpu
+            .guid_for_instance(id)
+            .expect("instance_id not in pick table");
         assert_eq!(back, guid.as_str(), "round-trip mismatch");
     }
 
@@ -171,10 +172,7 @@ fn instance_buffer_grows_past_default_cap() {
         gpu.instance_capacity
     );
     // CPU mirror should match the actual number of added points
-    assert_eq!(
-        gpu.instances_cpu.len() as u32,
-        DEFAULT_INSTANCE_CAP + 16
-    );
+    assert_eq!(gpu.instances_cpu.len() as u32, DEFAULT_INSTANCE_CAP + 16);
 }
 
 #[test]

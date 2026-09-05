@@ -1,6 +1,6 @@
-use crate::{MINI_CHECK, MINI_TEST, REGISTER_MINI_TEST};
 use crate::mini_test::TestResult;
 use crate::tolerance::PI;
+use crate::{MINI_CHECK, MINI_TEST, REGISTER_MINI_TEST};
 
 pub fn run_convex_hull_hull_2d() -> TestResult {
     MINI_TEST!("Hull 2d", {
@@ -19,7 +19,11 @@ pub fn run_convex_hull_hull_2d() -> TestResult {
         MINI_CHECK!(hull.len() == 4);
     })
 }
-REGISTER_MINI_TEST!("ConvexHull", "Hull 2d", crate::convex_hull_test::run_convex_hull_hull_2d);
+REGISTER_MINI_TEST!(
+    "ConvexHull",
+    "Hull 2d",
+    crate::convex_hull_test::run_convex_hull_hull_2d
+);
 
 pub fn run_convex_hull_hull_2d_collinear() -> TestResult {
     MINI_TEST!("Hull 2d Collinear", {
@@ -37,7 +41,11 @@ pub fn run_convex_hull_hull_2d_collinear() -> TestResult {
         MINI_CHECK!(hull.len() >= 3);
     })
 }
-REGISTER_MINI_TEST!("ConvexHull", "Hull 2d Collinear", crate::convex_hull_test::run_convex_hull_hull_2d_collinear);
+REGISTER_MINI_TEST!(
+    "ConvexHull",
+    "Hull 2d Collinear",
+    crate::convex_hull_test::run_convex_hull_hull_2d_collinear
+);
 
 pub fn run_convex_hull_hull_2d_circle() -> TestResult {
     MINI_TEST!("Hull 2d Circle", {
@@ -55,7 +63,11 @@ pub fn run_convex_hull_hull_2d_circle() -> TestResult {
         MINI_CHECK!(hull.len() == n);
     })
 }
-REGISTER_MINI_TEST!("ConvexHull", "Hull 2d Circle", crate::convex_hull_test::run_convex_hull_hull_2d_circle);
+REGISTER_MINI_TEST!(
+    "ConvexHull",
+    "Hull 2d Circle",
+    crate::convex_hull_test::run_convex_hull_hull_2d_circle
+);
 
 pub fn run_convex_hull_hull_3d() -> TestResult {
     MINI_TEST!("Hull 3d", {
@@ -74,7 +86,11 @@ pub fn run_convex_hull_hull_3d() -> TestResult {
         MINI_CHECK!(mesh.number_of_faces() == 4);
     })
 }
-REGISTER_MINI_TEST!("ConvexHull", "Hull 3d", crate::convex_hull_test::run_convex_hull_hull_3d);
+REGISTER_MINI_TEST!(
+    "ConvexHull",
+    "Hull 3d",
+    crate::convex_hull_test::run_convex_hull_hull_3d
+);
 
 pub fn run_convex_hull_hull_3d_cube() -> TestResult {
     MINI_TEST!("Hull 3d Cube", {
@@ -97,5 +113,8 @@ pub fn run_convex_hull_hull_3d_cube() -> TestResult {
         MINI_CHECK!(mesh.number_of_faces() == 12);
     })
 }
-REGISTER_MINI_TEST!("ConvexHull", "Hull 3d Cube", crate::convex_hull_test::run_convex_hull_hull_3d_cube);
-
+REGISTER_MINI_TEST!(
+    "ConvexHull",
+    "Hull 3d Cube",
+    crate::convex_hull_test::run_convex_hull_hull_3d_cube
+);

@@ -1,11 +1,10 @@
-use crate::{MINI_CHECK, MINI_TEST, REGISTER_MINI_TEST};
 use crate::mini_test::TestResult;
 use crate::tolerance::TOLERANCE;
-
+use crate::{MINI_CHECK, MINI_TEST, REGISTER_MINI_TEST};
 
 pub fn run_aabb_constructor() -> crate::mini_test::TestResult {
     use crate::tolerance::TOLERANCE;
-    use crate::{AABB, Point};
+    use crate::{Point, AABB};
     MINI_TEST!("Constructor", {
         // AABB(0,0,0, 1,2,3) — dims 2×4×6
         let a = AABB::new(0.0, 0.0, 0.0, 1.0, 2.0, 3.0);
@@ -32,7 +31,10 @@ pub fn run_aabb_constructor() -> crate::mini_test::TestResult {
         a.union_with(&b);
         MINI_CHECK!(a.min_point() == Point::new(-1.0, -2.0, -3.0));
         MINI_CHECK!(a.max_point() == Point::new(6.0, 2.0, 3.0));
-        let c = AABB::merge(AABB::new(0.0, 0.0, 0.0, 1.0, 1.0, 1.0), AABB::new(4.0, 0.0, 0.0, 1.0, 1.0, 1.0));
+        let c = AABB::merge(
+            AABB::new(0.0, 0.0, 0.0, 1.0, 1.0, 1.0),
+            AABB::new(4.0, 0.0, 0.0, 1.0, 1.0, 1.0),
+        );
         MINI_CHECK!(c.min_point() == Point::new(-1.0, -1.0, -1.0));
         MINI_CHECK!(c.max_point() == Point::new(5.0, 1.0, 1.0));
     })
@@ -40,7 +42,6 @@ pub fn run_aabb_constructor() -> crate::mini_test::TestResult {
 
 pub fn run_aabb_from_geometry() -> TestResult {
     MINI_TEST!("From Geometry", {
-        use crate::AABB;
         use crate::Color;
         use crate::Line;
         use crate::NurbsCurve;
@@ -50,16 +51,14 @@ pub fn run_aabb_from_geometry() -> TestResult {
         use crate::Polyline;
         use crate::Primitives;
         use crate::Vector;
+        use crate::AABB;
 
         let a_pt = AABB::from_point(&Point::new(1.0, 2.0, 3.0), 0.5);
 
         MINI_CHECK!(a_pt.center() == Point::new(1.0, 2.0, 3.0));
         MINI_CHECK!(TOLERANCE.is_close(a_pt.hx, 0.5));
 
-        let a_pts = AABB::from_points(&[
-            Point::new(0.0, 0.0, 0.0),
-            Point::new(3.0, 4.0, 5.0),
-        ], 0.0);
+        let a_pts = AABB::from_points(&[Point::new(0.0, 0.0, 0.0), Point::new(3.0, 4.0, 5.0)], 0.0);
 
         MINI_CHECK!(a_pts.min_point() == Point::new(0.0, 0.0, 0.0));
         MINI_CHECK!(a_pts.max_point() == Point::new(3.0, 4.0, 5.0));
@@ -87,14 +86,8 @@ pub fn run_aabb_from_geometry() -> TestResult {
         MINI_CHECK!(a_mesh.max_point() == Point::new(1.0, 1.0, 1.0));
 
         let pc = PointCloud::new(
-            vec![
-                Point::new(0.0, 0.0, 0.0),
-                Point::new(4.0, 2.0, 6.0),
-            ],
-            vec![
-                Vector::new(0.0, 0.0, 1.0),
-                Vector::new(0.0, 0.0, 1.0),
-            ],
+            vec![Point::new(0.0, 0.0, 0.0), Point::new(4.0, 2.0, 6.0)],
+            vec![Vector::new(0.0, 0.0, 1.0), Vector::new(0.0, 0.0, 1.0)],
             vec![
                 Color::new(1.0, 0.0, 0.0, 1.0),
                 Color::new(0.0, 1.0, 0.0, 1.0),
@@ -105,23 +98,36 @@ pub fn run_aabb_from_geometry() -> TestResult {
         MINI_CHECK!(a_pc.min_point() == Point::new(0.0, 0.0, 0.0));
         MINI_CHECK!(a_pc.max_point() == Point::new(4.0, 2.0, 6.0));
 
-        let curve = NurbsCurve::create(false, 2, &[
-            Point::new(0.0, 0.0, 0.0),
-            Point::new(1.0, 0.0, 0.0),
-            Point::new(2.0, 0.0, 0.0),
-            Point::new(3.0, 0.0, 0.0),
-        ]);
+        let curve = NurbsCurve::create(
+            false,
+            2,
+            &[
+                Point::new(0.0, 0.0, 0.0),
+                Point::new(1.0, 0.0, 0.0),
+                Point::new(2.0, 0.0, 0.0),
+                Point::new(3.0, 0.0, 0.0),
+            ],
+        );
         let a_nc = AABB::from_nurbscurve(&curve, 0.5, false);
 
         MINI_CHECK!(a_nc.is_valid());
         MINI_CHECK!(a_nc.contains(&Point::new(1.5, 0.0, 0.0)));
 
-        let surf = NurbsSurface::create(false, false, 1, 1, 2, 2, &[
-            Point::new(0.0, 0.0, 0.0),
-            Point::new(2.0, 0.0, 0.0),
-            Point::new(0.0, 2.0, 0.0),
-            Point::new(2.0, 2.0, 2.0),
-        ]).unwrap();
+        let surf = NurbsSurface::create(
+            false,
+            false,
+            1,
+            1,
+            2,
+            2,
+            &[
+                Point::new(0.0, 0.0, 0.0),
+                Point::new(2.0, 0.0, 0.0),
+                Point::new(0.0, 2.0, 0.0),
+                Point::new(2.0, 2.0, 2.0),
+            ],
+        )
+        .unwrap();
         let a_ns = AABB::from_nurbssurface(&surf, 0.0);
 
         MINI_CHECK!(a_ns.is_valid());
@@ -129,5 +135,13 @@ pub fn run_aabb_from_geometry() -> TestResult {
     })
 }
 
-REGISTER_MINI_TEST!("AABB", "Constructor", crate::aabb_test::run_aabb_constructor);
-REGISTER_MINI_TEST!("AABB", "From Geometry", crate::aabb_test::run_aabb_from_geometry);
+REGISTER_MINI_TEST!(
+    "AABB",
+    "Constructor",
+    crate::aabb_test::run_aabb_constructor
+);
+REGISTER_MINI_TEST!(
+    "AABB",
+    "From Geometry",
+    crate::aabb_test::run_aabb_from_geometry
+);

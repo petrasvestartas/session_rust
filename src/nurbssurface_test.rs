@@ -1,6 +1,6 @@
-use crate::{MINI_CHECK, MINI_TEST, REGISTER_MINI_TEST};
 use crate::mini_test::TestResult;
 use crate::tolerance::TOLERANCE;
+use crate::{MINI_CHECK, MINI_TEST, REGISTER_MINI_TEST};
 
 pub fn run_nurbssurface_constructor() -> TestResult {
     MINI_TEST!("Constructor", {
@@ -64,41 +64,146 @@ pub fn run_nurbssurface_constructor() -> TestResult {
         MINI_CHECK!(srepr == "NurbsSurface(\n  name=my_nurbssurface,\n  degree=(3,3),\n  cvs=(4,4),\n  rational=false,\n  control_points=[\n    0, 0, 0\n    -1, 0.75, 2\n    -1, 4.25, 2\n    0, 5, 0\n    0.75, -1, 2\n    1.25, 1.25, 4\n    1.25, 3.75, 4\n    0.75, 6, 2\n    4.25, -1, 2\n    3.75, 1.25, 4\n    3.75, 3.75, 4\n    4.25, 6, 2\n    5, 0, 0\n    6, 0.75, 2\n    6, 4.25, 2\n    5, 5, 0\n  ]\n)");
         MINI_CHECK!(scopy.cv_count_dir(None) == s.cv_count_dir(None));
         MINI_CHECK!(scopy.guid() != s.guid());
-        MINI_CHECK!(TOLERANCE.is_point_close(&p[0][0], &Point::new(0.000000000000000, 0.000000000000000, 0.000000000000000)));
-        MINI_CHECK!(TOLERANCE.is_point_close(&p[0][1], &Point::new(-0.416666666666667, 0.578703703703704, 0.833333333333333)));
-        MINI_CHECK!(TOLERANCE.is_point_close(&p[0][2], &Point::new(-0.666666666666667, 1.462962962962963, 1.333333333333333)));
-        MINI_CHECK!(TOLERANCE.is_point_close(&p[0][3], &Point::new(-0.750000000000000, 2.500000000000000, 1.500000000000000)));
-        MINI_CHECK!(TOLERANCE.is_point_close(&p[0][4], &Point::new(-0.666666666666667, 3.537037037037037, 1.333333333333333)));
-        MINI_CHECK!(TOLERANCE.is_point_close(&p[0][5], &Point::new(-0.416666666666667, 4.421296296296297, 0.833333333333333)));
-        MINI_CHECK!(TOLERANCE.is_point_close(&p[0][6], &Point::new(0.000000000000000, 5.000000000000000, 0.000000000000000)));
-        MINI_CHECK!(TOLERANCE.is_point_close(&p[1][0], &Point::new(0.992187500000000, -0.562500000000000, 1.125000000000000)));
-        MINI_CHECK!(TOLERANCE.is_point_close(&p[1][1], &Point::new(0.881510416666667, 0.333912037037037, 1.958333333333334)));
-        MINI_CHECK!(TOLERANCE.is_point_close(&p[1][2], &Point::new(0.815104166666667, 1.379629629629630, 2.458333333333333)));
-        MINI_CHECK!(TOLERANCE.is_point_close(&p[1][3], &Point::new(0.792968750000000, 2.500000000000000, 2.625000000000000)));
-        MINI_CHECK!(TOLERANCE.is_point_close(&p[1][4], &Point::new(0.815104166666667, 3.620370370370370, 2.458333333333334)));
-        MINI_CHECK!(TOLERANCE.is_point_close(&p[1][5], &Point::new(0.881510416666667, 4.666087962962964, 1.958333333333333)));
-        MINI_CHECK!(TOLERANCE.is_point_close(&p[1][6], &Point::new(0.992187500000000, 5.562500000000000, 1.125000000000000)));
-        MINI_CHECK!(TOLERANCE.is_point_close(&p[2][0], &Point::new(2.500000000000000, -0.750000000000000, 1.500000000000000)));
-        MINI_CHECK!(TOLERANCE.is_point_close(&p[2][1], &Point::new(2.500000000000000, 0.252314814814815, 2.333333333333334)));
-        MINI_CHECK!(TOLERANCE.is_point_close(&p[2][2], &Point::new(2.500000000000000, 1.351851851851852, 2.833333333333334)));
-        MINI_CHECK!(TOLERANCE.is_point_close(&p[2][3], &Point::new(2.500000000000000, 2.500000000000000, 3.000000000000000)));
-        MINI_CHECK!(TOLERANCE.is_point_close(&p[2][4], &Point::new(2.500000000000000, 3.648148148148148, 2.833333333333333)));
-        MINI_CHECK!(TOLERANCE.is_point_close(&p[2][5], &Point::new(2.500000000000000, 4.747685185185186, 2.333333333333333)));
-        MINI_CHECK!(TOLERANCE.is_point_close(&p[2][6], &Point::new(2.500000000000000, 5.750000000000000, 1.500000000000000)));
-        MINI_CHECK!(TOLERANCE.is_point_close(&p[3][0], &Point::new(4.007812500000000, -0.562500000000000, 1.125000000000000)));
-        MINI_CHECK!(TOLERANCE.is_point_close(&p[3][1], &Point::new(4.118489583333334, 0.333912037037037, 1.958333333333333)));
-        MINI_CHECK!(TOLERANCE.is_point_close(&p[3][2], &Point::new(4.184895833333334, 1.379629629629630, 2.458333333333333)));
-        MINI_CHECK!(TOLERANCE.is_point_close(&p[3][3], &Point::new(4.207031250000000, 2.500000000000000, 2.625000000000000)));
-        MINI_CHECK!(TOLERANCE.is_point_close(&p[3][4], &Point::new(4.184895833333333, 3.620370370370370, 2.458333333333333)));
-        MINI_CHECK!(TOLERANCE.is_point_close(&p[3][5], &Point::new(4.118489583333333, 4.666087962962964, 1.958333333333333)));
-        MINI_CHECK!(TOLERANCE.is_point_close(&p[3][6], &Point::new(4.007812500000000, 5.562500000000000, 1.125000000000000)));
-        MINI_CHECK!(TOLERANCE.is_point_close(&p[4][0], &Point::new(5.000000000000000, 0.000000000000000, 0.000000000000000)));
-        MINI_CHECK!(TOLERANCE.is_point_close(&p[4][1], &Point::new(5.416666666666668, 0.578703703703704, 0.833333333333333)));
-        MINI_CHECK!(TOLERANCE.is_point_close(&p[4][2], &Point::new(5.666666666666668, 1.462962962962963, 1.333333333333333)));
-        MINI_CHECK!(TOLERANCE.is_point_close(&p[4][3], &Point::new(5.750000000000000, 2.500000000000000, 1.500000000000000)));
-        MINI_CHECK!(TOLERANCE.is_point_close(&p[4][4], &Point::new(5.666666666666666, 3.537037037037037, 1.333333333333333)));
-        MINI_CHECK!(TOLERANCE.is_point_close(&p[4][5], &Point::new(5.416666666666667, 4.421296296296297, 0.833333333333333)));
-        MINI_CHECK!(TOLERANCE.is_point_close(&p[4][6], &Point::new(5.000000000000000, 5.000000000000000, 0.000000000000000)));
+        MINI_CHECK!(TOLERANCE.is_point_close(
+            &p[0][0],
+            &Point::new(0.000000000000000, 0.000000000000000, 0.000000000000000)
+        ));
+        MINI_CHECK!(TOLERANCE.is_point_close(
+            &p[0][1],
+            &Point::new(-0.416666666666667, 0.578703703703704, 0.833333333333333)
+        ));
+        MINI_CHECK!(TOLERANCE.is_point_close(
+            &p[0][2],
+            &Point::new(-0.666666666666667, 1.462962962962963, 1.333333333333333)
+        ));
+        MINI_CHECK!(TOLERANCE.is_point_close(
+            &p[0][3],
+            &Point::new(-0.750000000000000, 2.500000000000000, 1.500000000000000)
+        ));
+        MINI_CHECK!(TOLERANCE.is_point_close(
+            &p[0][4],
+            &Point::new(-0.666666666666667, 3.537037037037037, 1.333333333333333)
+        ));
+        MINI_CHECK!(TOLERANCE.is_point_close(
+            &p[0][5],
+            &Point::new(-0.416666666666667, 4.421296296296297, 0.833333333333333)
+        ));
+        MINI_CHECK!(TOLERANCE.is_point_close(
+            &p[0][6],
+            &Point::new(0.000000000000000, 5.000000000000000, 0.000000000000000)
+        ));
+        MINI_CHECK!(TOLERANCE.is_point_close(
+            &p[1][0],
+            &Point::new(0.992187500000000, -0.562500000000000, 1.125000000000000)
+        ));
+        MINI_CHECK!(TOLERANCE.is_point_close(
+            &p[1][1],
+            &Point::new(0.881510416666667, 0.333912037037037, 1.958333333333334)
+        ));
+        MINI_CHECK!(TOLERANCE.is_point_close(
+            &p[1][2],
+            &Point::new(0.815104166666667, 1.379629629629630, 2.458333333333333)
+        ));
+        MINI_CHECK!(TOLERANCE.is_point_close(
+            &p[1][3],
+            &Point::new(0.792968750000000, 2.500000000000000, 2.625000000000000)
+        ));
+        MINI_CHECK!(TOLERANCE.is_point_close(
+            &p[1][4],
+            &Point::new(0.815104166666667, 3.620370370370370, 2.458333333333334)
+        ));
+        MINI_CHECK!(TOLERANCE.is_point_close(
+            &p[1][5],
+            &Point::new(0.881510416666667, 4.666087962962964, 1.958333333333333)
+        ));
+        MINI_CHECK!(TOLERANCE.is_point_close(
+            &p[1][6],
+            &Point::new(0.992187500000000, 5.562500000000000, 1.125000000000000)
+        ));
+        MINI_CHECK!(TOLERANCE.is_point_close(
+            &p[2][0],
+            &Point::new(2.500000000000000, -0.750000000000000, 1.500000000000000)
+        ));
+        MINI_CHECK!(TOLERANCE.is_point_close(
+            &p[2][1],
+            &Point::new(2.500000000000000, 0.252314814814815, 2.333333333333334)
+        ));
+        MINI_CHECK!(TOLERANCE.is_point_close(
+            &p[2][2],
+            &Point::new(2.500000000000000, 1.351851851851852, 2.833333333333334)
+        ));
+        MINI_CHECK!(TOLERANCE.is_point_close(
+            &p[2][3],
+            &Point::new(2.500000000000000, 2.500000000000000, 3.000000000000000)
+        ));
+        MINI_CHECK!(TOLERANCE.is_point_close(
+            &p[2][4],
+            &Point::new(2.500000000000000, 3.648148148148148, 2.833333333333333)
+        ));
+        MINI_CHECK!(TOLERANCE.is_point_close(
+            &p[2][5],
+            &Point::new(2.500000000000000, 4.747685185185186, 2.333333333333333)
+        ));
+        MINI_CHECK!(TOLERANCE.is_point_close(
+            &p[2][6],
+            &Point::new(2.500000000000000, 5.750000000000000, 1.500000000000000)
+        ));
+        MINI_CHECK!(TOLERANCE.is_point_close(
+            &p[3][0],
+            &Point::new(4.007812500000000, -0.562500000000000, 1.125000000000000)
+        ));
+        MINI_CHECK!(TOLERANCE.is_point_close(
+            &p[3][1],
+            &Point::new(4.118489583333334, 0.333912037037037, 1.958333333333333)
+        ));
+        MINI_CHECK!(TOLERANCE.is_point_close(
+            &p[3][2],
+            &Point::new(4.184895833333334, 1.379629629629630, 2.458333333333333)
+        ));
+        MINI_CHECK!(TOLERANCE.is_point_close(
+            &p[3][3],
+            &Point::new(4.207031250000000, 2.500000000000000, 2.625000000000000)
+        ));
+        MINI_CHECK!(TOLERANCE.is_point_close(
+            &p[3][4],
+            &Point::new(4.184895833333333, 3.620370370370370, 2.458333333333333)
+        ));
+        MINI_CHECK!(TOLERANCE.is_point_close(
+            &p[3][5],
+            &Point::new(4.118489583333333, 4.666087962962964, 1.958333333333333)
+        ));
+        MINI_CHECK!(TOLERANCE.is_point_close(
+            &p[3][6],
+            &Point::new(4.007812500000000, 5.562500000000000, 1.125000000000000)
+        ));
+        MINI_CHECK!(TOLERANCE.is_point_close(
+            &p[4][0],
+            &Point::new(5.000000000000000, 0.000000000000000, 0.000000000000000)
+        ));
+        MINI_CHECK!(TOLERANCE.is_point_close(
+            &p[4][1],
+            &Point::new(5.416666666666668, 0.578703703703704, 0.833333333333333)
+        ));
+        MINI_CHECK!(TOLERANCE.is_point_close(
+            &p[4][2],
+            &Point::new(5.666666666666668, 1.462962962962963, 1.333333333333333)
+        ));
+        MINI_CHECK!(TOLERANCE.is_point_close(
+            &p[4][3],
+            &Point::new(5.750000000000000, 2.500000000000000, 1.500000000000000)
+        ));
+        MINI_CHECK!(TOLERANCE.is_point_close(
+            &p[4][4],
+            &Point::new(5.666666666666666, 3.537037037037037, 1.333333333333333)
+        ));
+        MINI_CHECK!(TOLERANCE.is_point_close(
+            &p[4][5],
+            &Point::new(5.416666666666667, 4.421296296296297, 0.833333333333333)
+        ));
+        MINI_CHECK!(TOLERANCE.is_point_close(
+            &p[4][6],
+            &Point::new(5.000000000000000, 5.000000000000000, 0.000000000000000)
+        ));
     })
 }
 
@@ -338,7 +443,6 @@ pub fn run_nurbssurface_domain() -> TestResult {
         use crate::NurbsSurface;
         use crate::Point;
 
-
         let points = vec![
             // i=0
             Point::new(0.0, 0.0, 0.0),
@@ -394,7 +498,6 @@ pub fn run_nurbssurface_division() -> TestResult {
         use crate::Point;
         use crate::Vector;
 
-
         let points = vec![
             // i=0
             Point::new(0.0, 0.0, 0.0),
@@ -427,37 +530,121 @@ pub fn run_nurbssurface_division() -> TestResult {
         let (planes, _uvs1) = s.divide_by_count_planes(3, 3);
 
         MINI_CHECK!(TOLERANCE.is_point_close(&division_points[0][0], &Point::new(0.0, 0.0, 0.0)));
-        MINI_CHECK!(TOLERANCE.is_point_close(&division_points[0][1], &Point::new(-0.666666666666667, 1.46296296296296, 1.33333333333333)));
-        MINI_CHECK!(TOLERANCE.is_point_close(&division_points[0][2], &Point::new(-0.666666666666667, 3.53703703703704, 1.33333333333333)));
+        MINI_CHECK!(TOLERANCE.is_point_close(
+            &division_points[0][1],
+            &Point::new(-0.666666666666667, 1.46296296296296, 1.33333333333333)
+        ));
+        MINI_CHECK!(TOLERANCE.is_point_close(
+            &division_points[0][2],
+            &Point::new(-0.666666666666667, 3.53703703703704, 1.33333333333333)
+        ));
         MINI_CHECK!(TOLERANCE.is_point_close(&division_points[0][3], &Point::new(0.0, 5.0, 0.0)));
-        MINI_CHECK!(TOLERANCE.is_point_close(&division_points[1][0], &Point::new(1.46296296296296, -0.666666666666667, 1.33333333333333)));
-        MINI_CHECK!(TOLERANCE.is_point_close(&division_points[1][1], &Point::new(1.3641975308642, 1.3641975308642, 2.66666666666667)));
-        MINI_CHECK!(TOLERANCE.is_point_close(&division_points[1][2], &Point::new(1.3641975308642, 3.6358024691358, 2.66666666666667)));
-        MINI_CHECK!(TOLERANCE.is_point_close(&division_points[1][3], &Point::new(1.46296296296296, 5.66666666666667, 1.33333333333333)));
-        MINI_CHECK!(TOLERANCE.is_point_close(&division_points[2][0], &Point::new(3.53703703703704, -0.666666666666667, 1.33333333333333)));
-        MINI_CHECK!(TOLERANCE.is_point_close(&division_points[2][1], &Point::new(3.6358024691358, 1.3641975308642, 2.66666666666667)));
-        MINI_CHECK!(TOLERANCE.is_point_close(&division_points[2][2], &Point::new(3.6358024691358, 3.6358024691358, 2.66666666666667)));
-        MINI_CHECK!(TOLERANCE.is_point_close(&division_points[2][3], &Point::new(3.53703703703704, 5.66666666666667, 1.33333333333333)));
+        MINI_CHECK!(TOLERANCE.is_point_close(
+            &division_points[1][0],
+            &Point::new(1.46296296296296, -0.666666666666667, 1.33333333333333)
+        ));
+        MINI_CHECK!(TOLERANCE.is_point_close(
+            &division_points[1][1],
+            &Point::new(1.3641975308642, 1.3641975308642, 2.66666666666667)
+        ));
+        MINI_CHECK!(TOLERANCE.is_point_close(
+            &division_points[1][2],
+            &Point::new(1.3641975308642, 3.6358024691358, 2.66666666666667)
+        ));
+        MINI_CHECK!(TOLERANCE.is_point_close(
+            &division_points[1][3],
+            &Point::new(1.46296296296296, 5.66666666666667, 1.33333333333333)
+        ));
+        MINI_CHECK!(TOLERANCE.is_point_close(
+            &division_points[2][0],
+            &Point::new(3.53703703703704, -0.666666666666667, 1.33333333333333)
+        ));
+        MINI_CHECK!(TOLERANCE.is_point_close(
+            &division_points[2][1],
+            &Point::new(3.6358024691358, 1.3641975308642, 2.66666666666667)
+        ));
+        MINI_CHECK!(TOLERANCE.is_point_close(
+            &division_points[2][2],
+            &Point::new(3.6358024691358, 3.6358024691358, 2.66666666666667)
+        ));
+        MINI_CHECK!(TOLERANCE.is_point_close(
+            &division_points[2][3],
+            &Point::new(3.53703703703704, 5.66666666666667, 1.33333333333333)
+        ));
         MINI_CHECK!(TOLERANCE.is_point_close(&division_points[3][0], &Point::new(5.0, 0.0, 0.0)));
-        MINI_CHECK!(TOLERANCE.is_point_close(&division_points[3][1], &Point::new(5.66666666666667, 1.46296296296296, 1.33333333333333)));
-        MINI_CHECK!(TOLERANCE.is_point_close(&division_points[3][2], &Point::new(5.66666666666667, 3.53703703703704, 1.33333333333333)));
+        MINI_CHECK!(TOLERANCE.is_point_close(
+            &division_points[3][1],
+            &Point::new(5.66666666666667, 1.46296296296296, 1.33333333333333)
+        ));
+        MINI_CHECK!(TOLERANCE.is_point_close(
+            &division_points[3][2],
+            &Point::new(5.66666666666667, 3.53703703703704, 1.33333333333333)
+        ));
         MINI_CHECK!(TOLERANCE.is_point_close(&division_points[3][3], &Point::new(5.0, 5.0, 0.0)));
-        MINI_CHECK!(TOLERANCE.is_vector_close(&vectors[0][0], &Vector::new(-0.704360725060499, -0.704360725060499, -0.0880450906325624)));
-        MINI_CHECK!(TOLERANCE.is_vector_close(&vectors[0][1], &Vector::new(-0.722897836195991, -0.327787263130091, 0.608255068661856)));
-        MINI_CHECK!(TOLERANCE.is_vector_close(&vectors[0][2], &Vector::new(-0.722897836195991, 0.327787263130091, 0.608255068661856)));
-        MINI_CHECK!(TOLERANCE.is_vector_close(&vectors[0][3], &Vector::new(-0.704360725060499, 0.704360725060499, -0.0880450906325624)));
-        MINI_CHECK!(TOLERANCE.is_vector_close(&vectors[1][0], &Vector::new(-0.327787263130091, -0.722897836195991, 0.608255068661856)));
-        MINI_CHECK!(TOLERANCE.is_vector_close(&vectors[1][1], &Vector::new(-0.280457757277237, -0.280457757277237, 0.917979788865771)));
-        MINI_CHECK!(TOLERANCE.is_vector_close(&vectors[1][2], &Vector::new(-0.280457757277237, 0.280457757277237, 0.917979788865771)));
-        MINI_CHECK!(TOLERANCE.is_vector_close(&vectors[1][3], &Vector::new(-0.327787263130091, 0.722897836195991, 0.608255068661856)));
-        MINI_CHECK!(TOLERANCE.is_vector_close(&vectors[2][0], &Vector::new(0.327787263130091, -0.722897836195991, 0.608255068661856)));
-        MINI_CHECK!(TOLERANCE.is_vector_close(&vectors[2][1], &Vector::new(0.280457757277237, -0.280457757277237, 0.917979788865771)));
-        MINI_CHECK!(TOLERANCE.is_vector_close(&vectors[2][2], &Vector::new(0.280457757277237, 0.280457757277237, 0.917979788865771)));
-        MINI_CHECK!(TOLERANCE.is_vector_close(&vectors[2][3], &Vector::new(0.327787263130091, 0.722897836195991, 0.608255068661856)));
-        MINI_CHECK!(TOLERANCE.is_vector_close(&vectors[3][0], &Vector::new(0.704360725060499, -0.704360725060499, -0.0880450906325624)));
-        MINI_CHECK!(TOLERANCE.is_vector_close(&vectors[3][1], &Vector::new(0.722897836195991, -0.327787263130091, 0.608255068661856)));
-        MINI_CHECK!(TOLERANCE.is_vector_close(&vectors[3][2], &Vector::new(0.722897836195991, 0.327787263130091, 0.608255068661856)));
-        MINI_CHECK!(TOLERANCE.is_vector_close(&vectors[3][3], &Vector::new(0.704360725060499, 0.704360725060499, -0.0880450906325624)));
+        MINI_CHECK!(TOLERANCE.is_vector_close(
+            &vectors[0][0],
+            &Vector::new(-0.704360725060499, -0.704360725060499, -0.0880450906325624)
+        ));
+        MINI_CHECK!(TOLERANCE.is_vector_close(
+            &vectors[0][1],
+            &Vector::new(-0.722897836195991, -0.327787263130091, 0.608255068661856)
+        ));
+        MINI_CHECK!(TOLERANCE.is_vector_close(
+            &vectors[0][2],
+            &Vector::new(-0.722897836195991, 0.327787263130091, 0.608255068661856)
+        ));
+        MINI_CHECK!(TOLERANCE.is_vector_close(
+            &vectors[0][3],
+            &Vector::new(-0.704360725060499, 0.704360725060499, -0.0880450906325624)
+        ));
+        MINI_CHECK!(TOLERANCE.is_vector_close(
+            &vectors[1][0],
+            &Vector::new(-0.327787263130091, -0.722897836195991, 0.608255068661856)
+        ));
+        MINI_CHECK!(TOLERANCE.is_vector_close(
+            &vectors[1][1],
+            &Vector::new(-0.280457757277237, -0.280457757277237, 0.917979788865771)
+        ));
+        MINI_CHECK!(TOLERANCE.is_vector_close(
+            &vectors[1][2],
+            &Vector::new(-0.280457757277237, 0.280457757277237, 0.917979788865771)
+        ));
+        MINI_CHECK!(TOLERANCE.is_vector_close(
+            &vectors[1][3],
+            &Vector::new(-0.327787263130091, 0.722897836195991, 0.608255068661856)
+        ));
+        MINI_CHECK!(TOLERANCE.is_vector_close(
+            &vectors[2][0],
+            &Vector::new(0.327787263130091, -0.722897836195991, 0.608255068661856)
+        ));
+        MINI_CHECK!(TOLERANCE.is_vector_close(
+            &vectors[2][1],
+            &Vector::new(0.280457757277237, -0.280457757277237, 0.917979788865771)
+        ));
+        MINI_CHECK!(TOLERANCE.is_vector_close(
+            &vectors[2][2],
+            &Vector::new(0.280457757277237, 0.280457757277237, 0.917979788865771)
+        ));
+        MINI_CHECK!(TOLERANCE.is_vector_close(
+            &vectors[2][3],
+            &Vector::new(0.327787263130091, 0.722897836195991, 0.608255068661856)
+        ));
+        MINI_CHECK!(TOLERANCE.is_vector_close(
+            &vectors[3][0],
+            &Vector::new(0.704360725060499, -0.704360725060499, -0.0880450906325624)
+        ));
+        MINI_CHECK!(TOLERANCE.is_vector_close(
+            &vectors[3][1],
+            &Vector::new(0.722897836195991, -0.327787263130091, 0.608255068661856)
+        ));
+        MINI_CHECK!(TOLERANCE.is_vector_close(
+            &vectors[3][2],
+            &Vector::new(0.722897836195991, 0.327787263130091, 0.608255068661856)
+        ));
+        MINI_CHECK!(TOLERANCE.is_vector_close(
+            &vectors[3][3],
+            &Vector::new(0.704360725060499, 0.704360725060499, -0.0880450906325624)
+        ));
         MINI_CHECK!(TOLERANCE.is_close(uvs0[0][0].0, 0.0) && TOLERANCE.is_close(uvs0[0][0].1, 0.0));
         MINI_CHECK!(TOLERANCE.is_close(uvs0[0][1].0, 0.0));
         MINI_CHECK!(TOLERANCE.is_close(uvs0[0][1].1, 0.333333333333333));
@@ -486,38 +673,134 @@ pub fn run_nurbssurface_division() -> TestResult {
         MINI_CHECK!(TOLERANCE.is_close(uvs0[3][2].0, 1.0));
         MINI_CHECK!(TOLERANCE.is_close(uvs0[3][2].1, 0.666666666666667));
         MINI_CHECK!(TOLERANCE.is_close(uvs0[3][3].0, 1.0) && TOLERANCE.is_close(uvs0[3][3].1, 1.0));
-        MINI_CHECK!(TOLERANCE.is_vector_close(&planes[0][0].x_axis(), &Vector::new(0.317999364001908, -0.423999152002544, 0.847998304005088)));
-        MINI_CHECK!(TOLERANCE.is_vector_close(&planes[0][1].x_axis(), &Vector::new(0.657483781160109, -0.0556600026378928, 0.751410035611553)));
-        MINI_CHECK!(TOLERANCE.is_vector_close(&planes[0][2].x_axis(), &Vector::new(0.657483781160109, 0.055660002637893, 0.751410035611553)));
-        MINI_CHECK!(TOLERANCE.is_vector_close(&planes[0][3].x_axis(), &Vector::new(0.317999364001908, 0.423999152002544, 0.847998304005088)));
-        MINI_CHECK!(TOLERANCE.is_vector_close(&planes[1][0].x_axis(), &Vector::new(0.93542594448836, -0.158100159631836, 0.316200319263671)));
-        MINI_CHECK!(TOLERANCE.is_vector_close(&planes[1][1].x_axis(), &Vector::new(0.957938608304167, -0.0211991946512679, 0.286189127792116)));
-        MINI_CHECK!(TOLERANCE.is_vector_close(&planes[1][2].x_axis(), &Vector::new(0.957938608304167, 0.0211991946512677, 0.286189127792116)));
-        MINI_CHECK!(TOLERANCE.is_vector_close(&planes[1][3].x_axis(), &Vector::new(0.93542594448836, 0.158100159631835, 0.316200319263671)));
-        MINI_CHECK!(TOLERANCE.is_vector_close(&planes[2][0].x_axis(), &Vector::new(0.93542594448836, 0.158100159631835, -0.316200319263671)));
-        MINI_CHECK!(TOLERANCE.is_vector_close(&planes[2][1].x_axis(), &Vector::new(0.957938608304167, 0.0211991946512679, -0.286189127792116)));
-        MINI_CHECK!(TOLERANCE.is_vector_close(&planes[2][2].x_axis(), &Vector::new(0.957938608304167, -0.021199194651268, -0.286189127792116)));
-        MINI_CHECK!(TOLERANCE.is_vector_close(&planes[2][3].x_axis(), &Vector::new(0.93542594448836, -0.158100159631836, -0.316200319263671)));
-        MINI_CHECK!(TOLERANCE.is_vector_close(&planes[3][0].x_axis(), &Vector::new(0.317999364001908, 0.423999152002544, -0.847998304005088)));
-        MINI_CHECK!(TOLERANCE.is_vector_close(&planes[3][1].x_axis(), &Vector::new(0.657483781160109, 0.0556600026378928, -0.751410035611553)));
-        MINI_CHECK!(TOLERANCE.is_vector_close(&planes[3][2].x_axis(), &Vector::new(0.657483781160109, -0.0556600026378928, -0.751410035611553)));
-        MINI_CHECK!(TOLERANCE.is_vector_close(&planes[3][3].x_axis(), &Vector::new(0.317999364001908, -0.423999152002544, -0.847998304005088)));
-        MINI_CHECK!(TOLERANCE.is_vector_close(&planes[0][0].y_axis(), &Vector::new(-0.423999152002544, 0.317999364001908, 0.847998304005088)));
-        MINI_CHECK!(TOLERANCE.is_vector_close(&planes[0][1].y_axis(), &Vector::new(-0.158100159631836, 0.93542594448836, 0.316200319263671)));
-        MINI_CHECK!(TOLERANCE.is_vector_close(&planes[0][2].y_axis(), &Vector::new(0.158100159631835, 0.93542594448836, -0.316200319263671)));
-        MINI_CHECK!(TOLERANCE.is_vector_close(&planes[0][3].y_axis(), &Vector::new(0.423999152002544, 0.317999364001908, -0.847998304005088)));
-        MINI_CHECK!(TOLERANCE.is_vector_close(&planes[1][0].y_axis(), &Vector::new(-0.0556600026378928, 0.657483781160109, 0.751410035611553)));
-        MINI_CHECK!(TOLERANCE.is_vector_close(&planes[1][1].y_axis(), &Vector::new(-0.0211991946512679, 0.957938608304167, 0.286189127792116)));
-        MINI_CHECK!(TOLERANCE.is_vector_close(&planes[1][2].y_axis(), &Vector::new(0.0211991946512679, 0.957938608304167, -0.286189127792116)));
-        MINI_CHECK!(TOLERANCE.is_vector_close(&planes[1][3].y_axis(), &Vector::new(0.0556600026378928, 0.657483781160109, -0.751410035611553)));
-        MINI_CHECK!(TOLERANCE.is_vector_close(&planes[2][0].y_axis(), &Vector::new(0.0556600026378928, 0.657483781160109, 0.751410035611553)));
-        MINI_CHECK!(TOLERANCE.is_vector_close(&planes[2][1].y_axis(), &Vector::new(0.0211991946512678, 0.957938608304167, 0.286189127792116)));
-        MINI_CHECK!(TOLERANCE.is_vector_close(&planes[2][2].y_axis(), &Vector::new(-0.0211991946512678, 0.957938608304167, -0.286189127792116)));
-        MINI_CHECK!(TOLERANCE.is_vector_close(&planes[2][3].y_axis(), &Vector::new(-0.0556600026378928, 0.657483781160109, -0.751410035611553)));
-        MINI_CHECK!(TOLERANCE.is_vector_close(&planes[3][0].y_axis(), &Vector::new(0.423999152002544, 0.317999364001908, 0.847998304005088)));
-        MINI_CHECK!(TOLERANCE.is_vector_close(&planes[3][1].y_axis(), &Vector::new(0.158100159631835, 0.93542594448836, 0.316200319263671)));
-        MINI_CHECK!(TOLERANCE.is_vector_close(&planes[3][2].y_axis(), &Vector::new(-0.158100159631836, 0.93542594448836, -0.316200319263671)));
-        MINI_CHECK!(TOLERANCE.is_vector_close(&planes[3][3].y_axis(), &Vector::new(-0.423999152002544, 0.317999364001908, -0.847998304005088)));
+        MINI_CHECK!(TOLERANCE.is_vector_close(
+            &planes[0][0].x_axis(),
+            &Vector::new(0.317999364001908, -0.423999152002544, 0.847998304005088)
+        ));
+        MINI_CHECK!(TOLERANCE.is_vector_close(
+            &planes[0][1].x_axis(),
+            &Vector::new(0.657483781160109, -0.0556600026378928, 0.751410035611553)
+        ));
+        MINI_CHECK!(TOLERANCE.is_vector_close(
+            &planes[0][2].x_axis(),
+            &Vector::new(0.657483781160109, 0.055660002637893, 0.751410035611553)
+        ));
+        MINI_CHECK!(TOLERANCE.is_vector_close(
+            &planes[0][3].x_axis(),
+            &Vector::new(0.317999364001908, 0.423999152002544, 0.847998304005088)
+        ));
+        MINI_CHECK!(TOLERANCE.is_vector_close(
+            &planes[1][0].x_axis(),
+            &Vector::new(0.93542594448836, -0.158100159631836, 0.316200319263671)
+        ));
+        MINI_CHECK!(TOLERANCE.is_vector_close(
+            &planes[1][1].x_axis(),
+            &Vector::new(0.957938608304167, -0.0211991946512679, 0.286189127792116)
+        ));
+        MINI_CHECK!(TOLERANCE.is_vector_close(
+            &planes[1][2].x_axis(),
+            &Vector::new(0.957938608304167, 0.0211991946512677, 0.286189127792116)
+        ));
+        MINI_CHECK!(TOLERANCE.is_vector_close(
+            &planes[1][3].x_axis(),
+            &Vector::new(0.93542594448836, 0.158100159631835, 0.316200319263671)
+        ));
+        MINI_CHECK!(TOLERANCE.is_vector_close(
+            &planes[2][0].x_axis(),
+            &Vector::new(0.93542594448836, 0.158100159631835, -0.316200319263671)
+        ));
+        MINI_CHECK!(TOLERANCE.is_vector_close(
+            &planes[2][1].x_axis(),
+            &Vector::new(0.957938608304167, 0.0211991946512679, -0.286189127792116)
+        ));
+        MINI_CHECK!(TOLERANCE.is_vector_close(
+            &planes[2][2].x_axis(),
+            &Vector::new(0.957938608304167, -0.021199194651268, -0.286189127792116)
+        ));
+        MINI_CHECK!(TOLERANCE.is_vector_close(
+            &planes[2][3].x_axis(),
+            &Vector::new(0.93542594448836, -0.158100159631836, -0.316200319263671)
+        ));
+        MINI_CHECK!(TOLERANCE.is_vector_close(
+            &planes[3][0].x_axis(),
+            &Vector::new(0.317999364001908, 0.423999152002544, -0.847998304005088)
+        ));
+        MINI_CHECK!(TOLERANCE.is_vector_close(
+            &planes[3][1].x_axis(),
+            &Vector::new(0.657483781160109, 0.0556600026378928, -0.751410035611553)
+        ));
+        MINI_CHECK!(TOLERANCE.is_vector_close(
+            &planes[3][2].x_axis(),
+            &Vector::new(0.657483781160109, -0.0556600026378928, -0.751410035611553)
+        ));
+        MINI_CHECK!(TOLERANCE.is_vector_close(
+            &planes[3][3].x_axis(),
+            &Vector::new(0.317999364001908, -0.423999152002544, -0.847998304005088)
+        ));
+        MINI_CHECK!(TOLERANCE.is_vector_close(
+            &planes[0][0].y_axis(),
+            &Vector::new(-0.423999152002544, 0.317999364001908, 0.847998304005088)
+        ));
+        MINI_CHECK!(TOLERANCE.is_vector_close(
+            &planes[0][1].y_axis(),
+            &Vector::new(-0.158100159631836, 0.93542594448836, 0.316200319263671)
+        ));
+        MINI_CHECK!(TOLERANCE.is_vector_close(
+            &planes[0][2].y_axis(),
+            &Vector::new(0.158100159631835, 0.93542594448836, -0.316200319263671)
+        ));
+        MINI_CHECK!(TOLERANCE.is_vector_close(
+            &planes[0][3].y_axis(),
+            &Vector::new(0.423999152002544, 0.317999364001908, -0.847998304005088)
+        ));
+        MINI_CHECK!(TOLERANCE.is_vector_close(
+            &planes[1][0].y_axis(),
+            &Vector::new(-0.0556600026378928, 0.657483781160109, 0.751410035611553)
+        ));
+        MINI_CHECK!(TOLERANCE.is_vector_close(
+            &planes[1][1].y_axis(),
+            &Vector::new(-0.0211991946512679, 0.957938608304167, 0.286189127792116)
+        ));
+        MINI_CHECK!(TOLERANCE.is_vector_close(
+            &planes[1][2].y_axis(),
+            &Vector::new(0.0211991946512679, 0.957938608304167, -0.286189127792116)
+        ));
+        MINI_CHECK!(TOLERANCE.is_vector_close(
+            &planes[1][3].y_axis(),
+            &Vector::new(0.0556600026378928, 0.657483781160109, -0.751410035611553)
+        ));
+        MINI_CHECK!(TOLERANCE.is_vector_close(
+            &planes[2][0].y_axis(),
+            &Vector::new(0.0556600026378928, 0.657483781160109, 0.751410035611553)
+        ));
+        MINI_CHECK!(TOLERANCE.is_vector_close(
+            &planes[2][1].y_axis(),
+            &Vector::new(0.0211991946512678, 0.957938608304167, 0.286189127792116)
+        ));
+        MINI_CHECK!(TOLERANCE.is_vector_close(
+            &planes[2][2].y_axis(),
+            &Vector::new(-0.0211991946512678, 0.957938608304167, -0.286189127792116)
+        ));
+        MINI_CHECK!(TOLERANCE.is_vector_close(
+            &planes[2][3].y_axis(),
+            &Vector::new(-0.0556600026378928, 0.657483781160109, -0.751410035611553)
+        ));
+        MINI_CHECK!(TOLERANCE.is_vector_close(
+            &planes[3][0].y_axis(),
+            &Vector::new(0.423999152002544, 0.317999364001908, 0.847998304005088)
+        ));
+        MINI_CHECK!(TOLERANCE.is_vector_close(
+            &planes[3][1].y_axis(),
+            &Vector::new(0.158100159631835, 0.93542594448836, 0.316200319263671)
+        ));
+        MINI_CHECK!(TOLERANCE.is_vector_close(
+            &planes[3][2].y_axis(),
+            &Vector::new(-0.158100159631836, 0.93542594448836, -0.316200319263671)
+        ));
+        MINI_CHECK!(TOLERANCE.is_vector_close(
+            &planes[3][3].y_axis(),
+            &Vector::new(-0.423999152002544, 0.317999364001908, -0.847998304005088)
+        ));
     })
 }
 
@@ -612,7 +895,6 @@ pub fn run_nurbssurface_modification() -> TestResult {
 
         let s = NurbsSurface::create(false, false, 3, 3, 4, 4, &points).unwrap();
 
-
         // Reverse one direction
         let mut s_rev = s.clone();
         s_rev.reverse(0);
@@ -636,14 +918,23 @@ pub fn run_nurbssurface_modification() -> TestResult {
         s_trim.trim(0, (0.25, 0.75));
         MINI_CHECK!(TOLERANCE.is_close(s_trim.domain(0).unwrap().0, 0.25));
         MINI_CHECK!(TOLERANCE.is_close(s_trim.domain(0).unwrap().1, 0.75));
-        MINI_CHECK!(TOLERANCE.is_point_close(&s.point_at(0.25, 0.5).unwrap(), &s_trim.point_at(0.25, 0.5).unwrap()));
+        MINI_CHECK!(TOLERANCE.is_point_close(
+            &s.point_at(0.25, 0.5).unwrap(),
+            &s_trim.point_at(0.25, 0.5).unwrap()
+        ));
 
         // Split surface into 4 quadrants, check shared corner point is the same
         let (west, east) = s.split(0, 0.5);
         let west = west.unwrap();
         let east = east.unwrap();
-        let (ww, we) = west.split(1, (west.domain(1).unwrap().0 + west.domain(1).unwrap().1) / 2.0);
-        let (ew, ee) = east.split(1, (east.domain(1).unwrap().0 + east.domain(1).unwrap().1) / 2.0);
+        let (ww, we) = west.split(
+            1,
+            (west.domain(1).unwrap().0 + west.domain(1).unwrap().1) / 2.0,
+        );
+        let (ew, ee) = east.split(
+            1,
+            (east.domain(1).unwrap().0 + east.domain(1).unwrap().1) / 2.0,
+        );
         let ww = ww.unwrap();
         let we = we.unwrap();
         let ew = ew.unwrap();
@@ -730,9 +1021,9 @@ pub fn run_nurbssurface_transformations() -> TestResult {
 pub fn run_nurbssurface_meshing() -> TestResult {
     MINI_TEST!("Meshing", {
         use crate::NurbsCurve;
+        use crate::Point;
         use crate::Primitives;
         use crate::Vector;
-        use crate::Point;
 
         // 1. Sphere — two poles, closed U, rational
         let sphere = Primitives::sphere_surface(0.0, 0.0, 0.0, 3.0);
@@ -751,92 +1042,135 @@ pub fn run_nurbssurface_meshing() -> TestResult {
         MINI_CHECK!(mesh_torus.is_valid());
 
         // 4. Loft — varying radius circles, closed U, multi-span V
-        let loft = Primitives::create_loft(&[
-            Primitives::circle(0.0, 38.0, 0.0, 2.0),
-            Primitives::circle(0.0, 38.0, 2.0, 1.0),
-            Primitives::circle(0.0, 38.0, 4.0, 1.5),
-            Primitives::circle(0.0, 38.0, 6.0, 0.8)], 3);
+        let loft = Primitives::create_loft(
+            &[
+                Primitives::circle(0.0, 38.0, 0.0, 2.0),
+                Primitives::circle(0.0, 38.0, 2.0, 1.0),
+                Primitives::circle(0.0, 38.0, 4.0, 1.5),
+                Primitives::circle(0.0, 38.0, 6.0, 0.8),
+            ],
+            3,
+        );
         let mesh_loft = loft.mesh();
         MINI_CHECK!(mesh_loft.is_valid());
 
         // 5. Extrusion (circle) — closed U, linear V, rational
         let ext_dir = Vector::new(0.0, 0.0, 5.0);
-        let cylinder = Primitives::create_extrusion(&Primitives::circle(0.0, 52.0, 0.0, 3.0), &ext_dir);
+        let cylinder =
+            Primitives::create_extrusion(&Primitives::circle(0.0, 52.0, 0.0, 3.0), &ext_dir);
         let mesh_cylinder = cylinder.mesh();
         MINI_CHECK!(mesh_cylinder.is_valid());
 
         // 6. Ruled — bilinear (degree 1x1), tests twist subdivision
-        let ra = NurbsCurve::create(false, 1, &[
-            Point::new(0.0, 64.0, 0.0),
-            Point::new(5.0, 64.0, 5.0),
-        ]);
-        let rb = NurbsCurve::create(false, 1, &[
-            Point::new(0.0, 69.0, 5.0),
-            Point::new(5.0, 69.0, 0.0),
-        ]);
+        let ra = NurbsCurve::create(
+            false,
+            1,
+            &[Point::new(0.0, 64.0, 0.0), Point::new(5.0, 64.0, 5.0)],
+        );
+        let rb = NurbsCurve::create(
+            false,
+            1,
+            &[Point::new(0.0, 69.0, 5.0), Point::new(5.0, 69.0, 0.0)],
+        );
         let hypar = Primitives::create_ruled(&ra, &rb);
         let mesh_hypar = hypar.mesh();
         MINI_CHECK!(mesh_hypar.is_valid());
 
         // 7. Sweep1 — circle along curved rail
         let profile = Primitives::circle(0.0, 0.0, 0.0, 1.0);
-        let rail = NurbsCurve::create(false, 2, &[
-            Point::new(0.0, 76.0, 0.0),
-            Point::new(0.0, 81.0, 0.0),
-            Point::new(2.0, 85.0, 0.0),
-        ]);
+        let rail = NurbsCurve::create(
+            false,
+            2,
+            &[
+                Point::new(0.0, 76.0, 0.0),
+                Point::new(0.0, 81.0, 0.0),
+                Point::new(2.0, 85.0, 0.0),
+            ],
+        );
         let sweep1 = Primitives::create_sweep1(&rail, &profile);
         let mesh_sweep1 = sweep1.mesh();
         MINI_CHECK!(mesh_sweep1.is_valid());
 
         // 8. Sweep2 — two rails + cross sections
-        let r1 = NurbsCurve::create(false, 2, &[
-            Point::new(0.0, 89.0, 0.0),
-            Point::new(1.0, 93.0, 0.0),
-            Point::new(2.0, 94.0, 0.0),
-        ]);
-        let r2 = NurbsCurve::create(false, 2, &[
-            Point::new(4.0, 89.0, 0.0),
-            Point::new(4.0, 93.0, 0.0),
-            Point::new(3.0, 94.0, 0.0),
-        ]);
-        let sh1 = NurbsCurve::create(false, 2, &[
-            Point::new(0.0, 89.0, 0.0),
-            Point::new(2.0, 89.0, 2.0),
-            Point::new(4.0, 89.0, 0.0),
-        ]);
-        let sh2 = NurbsCurve::create(false, 2, &[
-            Point::new(2.0, 94.0, 0.0),
-            Point::new(2.5, 94.0, 1.5),
-            Point::new(3.0, 94.0, 0.0),
-        ]);
+        let r1 = NurbsCurve::create(
+            false,
+            2,
+            &[
+                Point::new(0.0, 89.0, 0.0),
+                Point::new(1.0, 93.0, 0.0),
+                Point::new(2.0, 94.0, 0.0),
+            ],
+        );
+        let r2 = NurbsCurve::create(
+            false,
+            2,
+            &[
+                Point::new(4.0, 89.0, 0.0),
+                Point::new(4.0, 93.0, 0.0),
+                Point::new(3.0, 94.0, 0.0),
+            ],
+        );
+        let sh1 = NurbsCurve::create(
+            false,
+            2,
+            &[
+                Point::new(0.0, 89.0, 0.0),
+                Point::new(2.0, 89.0, 2.0),
+                Point::new(4.0, 89.0, 0.0),
+            ],
+        );
+        let sh2 = NurbsCurve::create(
+            false,
+            2,
+            &[
+                Point::new(2.0, 94.0, 0.0),
+                Point::new(2.5, 94.0, 1.5),
+                Point::new(3.0, 94.0, 0.0),
+            ],
+        );
         let sweep2 = Primitives::create_sweep2(&r1, &r2, &[sh1, sh2]);
         let mesh_sweep2 = sweep2.mesh();
         MINI_CHECK!(mesh_sweep2.is_valid());
 
         // 9. Edge surface (Coons patch) — 4 boundary curves
-        let south = NurbsCurve::create(false, 3, &[
-            Point::new(1.0, 104.0, 0.0),
-            Point::new(1.0, 106.0, 3.0),
-            Point::new(1.0, 109.0, 3.0),
-            Point::new(1.0, 111.0, 0.0),
-        ]);
-        let west  = NurbsCurve::create(false, 2, &[
-            Point::new(10.0, 104.0, 0.0),
-            Point::new(5.5, 104.0, 3.5),
-            Point::new(1.0, 104.0, 0.0),
-        ]);
-        let north = NurbsCurve::create(false, 3, &[
-            Point::new(10.0, 104.0, 0.0),
-            Point::new(10.0, 106.0, 3.0),
-            Point::new(10.0, 109.0, 3.0),
-            Point::new(10.0, 111.0, 0.0),
-        ]);
-        let east  = NurbsCurve::create(false, 2, &[
-            Point::new(10.0, 111.0, 0.0),
-            Point::new(5.5, 111.0, 3.5),
-            Point::new(1.0, 111.0, 0.0),
-        ]);
+        let south = NurbsCurve::create(
+            false,
+            3,
+            &[
+                Point::new(1.0, 104.0, 0.0),
+                Point::new(1.0, 106.0, 3.0),
+                Point::new(1.0, 109.0, 3.0),
+                Point::new(1.0, 111.0, 0.0),
+            ],
+        );
+        let west = NurbsCurve::create(
+            false,
+            2,
+            &[
+                Point::new(10.0, 104.0, 0.0),
+                Point::new(5.5, 104.0, 3.5),
+                Point::new(1.0, 104.0, 0.0),
+            ],
+        );
+        let north = NurbsCurve::create(
+            false,
+            3,
+            &[
+                Point::new(10.0, 104.0, 0.0),
+                Point::new(10.0, 106.0, 3.0),
+                Point::new(10.0, 109.0, 3.0),
+                Point::new(10.0, 111.0, 0.0),
+            ],
+        );
+        let east = NurbsCurve::create(
+            false,
+            2,
+            &[
+                Point::new(10.0, 111.0, 0.0),
+                Point::new(5.5, 111.0, 3.5),
+                Point::new(1.0, 111.0, 0.0),
+            ],
+        );
         let arched = Primitives::create_edge(&south, &west, &north, &east);
         let mesh_arched = arched.mesh();
         MINI_CHECK!(mesh_arched.is_valid());
@@ -847,13 +1181,17 @@ pub fn run_nurbssurface_meshing() -> TestResult {
         MINI_CHECK!(mesh_wave.is_valid());
 
         // 11. Planar — mesh() early exit: 2 triangles
-        let planar = NurbsCurve::create(false, 1, &[
-            Point::new(0.0, 132.0, 0.0),
-            Point::new(6.0, 132.0, 0.0),
-            Point::new(6.0, 136.0, 0.0),
-            Point::new(0.0, 136.0, 0.0),
-            Point::new(0.0, 132.0, 0.0),
-        ]);
+        let planar = NurbsCurve::create(
+            false,
+            1,
+            &[
+                Point::new(0.0, 132.0, 0.0),
+                Point::new(6.0, 132.0, 0.0),
+                Point::new(6.0, 136.0, 0.0),
+                Point::new(0.0, 136.0, 0.0),
+                Point::new(0.0, 132.0, 0.0),
+            ],
+        );
         let pln = Primitives::create_planar(&planar);
         let mesh_planar = pln.mesh();
         MINI_CHECK!(mesh_planar.is_valid());
@@ -864,8 +1202,8 @@ pub fn run_nurbssurface_split_by_plane() -> TestResult {
     MINI_TEST!("Split By Plane", {
         use crate::Plane;
         use crate::Point;
-        use crate::Vector;
         use crate::Primitives;
+        use crate::Vector;
 
         let cyl = Primitives::cylinder_surface(0.0, 0.0, 0.0, 1.0, 4.0);
         let plane = Plane::from_point_normal(Point::new(0.0, 0.0, 2.0), Vector::new(0.3, 0.0, 1.0));
@@ -880,7 +1218,8 @@ pub fn run_nurbssurface_split_by_plane() -> TestResult {
         }
 
         let sphere = Primitives::sphere_surface(0.0, 0.0, 0.0, 1.0);
-        let plane2 = Plane::from_point_normal(Point::new(0.0, 0.0, 0.3), Vector::new(0.0, 0.0, 1.0));
+        let plane2 =
+            Plane::from_point_normal(Point::new(0.0, 0.0, 0.3), Vector::new(0.0, 0.0, 1.0));
 
         let caps = sphere.split_by_plane(&plane2, None);
 
@@ -890,18 +1229,19 @@ pub fn run_nurbssurface_split_by_plane() -> TestResult {
 
 pub fn run_nurbssurface_split_by_curves() -> TestResult {
     MINI_TEST!("Split By Curves", {
+        use crate::nurbsknot::CurveNurbsKnotStyle;
         use crate::Closest;
         use crate::NurbsCurve;
         use crate::Point;
         use crate::Primitives;
-        use crate::nurbsknot::CurveNurbsKnotStyle;
 
         let wave = Primitives::wave_surface(10.0, 1.0);
         let mut lift_pts = Vec::new();
         for i in 0..21 {
             let x = 10.0 * i as f64 / 20.0;
             let y = 5.0 + 2.0 * x.sin();
-            let (u, v, _d) = Closest::surface_point(&wave, &Point::new(x, y, 0.0), 0.0, 0.0, 0.0, 0.0);
+            let (u, v, _d) =
+                Closest::surface_point(&wave, &Point::new(x, y, 0.0), 0.0, 0.0, 0.0, 0.0);
             lift_pts.push(wave.point_at(u, v).unwrap());
         }
         let crv = NurbsCurve::create_interpolated(&lift_pts, CurveNurbsKnotStyle::Chord);
@@ -912,7 +1252,11 @@ pub fn run_nurbssurface_split_by_curves() -> TestResult {
         MINI_CHECK!(parts[0].is_trimmed());
         MINI_CHECK!(parts[1].is_trimmed());
 
-        let off = NurbsCurve::create(false, 1, &[Point::new(50.0, 50.0, 50.0), Point::new(60.0, 60.0, 60.0)]);
+        let off = NurbsCurve::create(
+            false,
+            1,
+            &[Point::new(50.0, 50.0, 50.0), Point::new(60.0, 60.0, 60.0)],
+        );
 
         let whole = wave.split_by_curves(&[off], None);
 
@@ -944,12 +1288,21 @@ pub fn run_nurbssurface_split_by_surface() -> TestResult {
         use crate::Primitives;
 
         let cyl = Primitives::cylinder_surface(0.0, 0.0, -2.0, 1.0, 4.0);
-        let flat = NurbsSurface::create(false, false, 1, 1, 2, 2, &[
-            Point::new(-3.0, -3.0, 0.0),
-            Point::new(-3.0, 3.0, 0.0),
-            Point::new(3.0, -3.0, 0.0),
-            Point::new(3.0, 3.0, 0.0),
-        ]).unwrap();
+        let flat = NurbsSurface::create(
+            false,
+            false,
+            1,
+            1,
+            2,
+            2,
+            &[
+                Point::new(-3.0, -3.0, 0.0),
+                Point::new(-3.0, 3.0, 0.0),
+                Point::new(3.0, -3.0, 0.0),
+                Point::new(3.0, 3.0, 0.0),
+            ],
+        )
+        .unwrap();
 
         let parts = cyl.split_by_surface(&flat, None);
 
@@ -964,16 +1317,25 @@ pub fn run_nurbssurface_split_by_surface() -> TestResult {
 
 pub fn run_nurbssurface_split_by_brep() -> TestResult {
     MINI_TEST!("Split By Brep", {
+        use crate::BRep;
         use crate::NurbsSurface;
         use crate::Point;
-        use crate::BRep;
 
-        let flat = NurbsSurface::create(false, false, 1, 1, 2, 2, &[
-            Point::new(-3.0, -3.0, 0.0),
-            Point::new(-3.0, 3.0, 0.0),
-            Point::new(3.0, -3.0, 0.0),
-            Point::new(3.0, 3.0, 0.0),
-        ]).unwrap();
+        let flat = NurbsSurface::create(
+            false,
+            false,
+            1,
+            1,
+            2,
+            2,
+            &[
+                Point::new(-3.0, -3.0, 0.0),
+                Point::new(-3.0, 3.0, 0.0),
+                Point::new(3.0, -3.0, 0.0),
+                Point::new(3.0, 3.0, 0.0),
+            ],
+        )
+        .unwrap();
         let cutter = BRep::create_box(2.0, 2.0, 2.0);
 
         let parts = flat.split_by_brep(&cutter, None);
@@ -1108,13 +1470,44 @@ pub fn run_nurbssurface_create_from_parameters() -> TestResult {
         // Mirrors compas_occt OCCNurbsSurface.from_parameters / from_points (surface_from_points.py).
         // Validated pointwise against OCCT (validation/compare_surface_eval.py).
         let grid = vec![
-            vec![Point::new(0.0,0.0,0.0), Point::new(1.0,0.0,0.0), Point::new(2.0,0.0,0.0), Point::new(3.0,0.0,0.0)],
-            vec![Point::new(0.0,1.0,0.0), Point::new(1.0,1.0,2.0), Point::new(2.0,1.0,2.0), Point::new(3.0,1.0,0.0)],
-            vec![Point::new(0.0,2.0,0.0), Point::new(1.0,2.0,2.0), Point::new(2.0,2.0,2.0), Point::new(3.0,2.0,0.0)],
-            vec![Point::new(0.0,3.0,0.0), Point::new(1.0,3.0,0.0), Point::new(2.0,3.0,0.0), Point::new(3.0,3.0,0.0)],
+            vec![
+                Point::new(0.0, 0.0, 0.0),
+                Point::new(1.0, 0.0, 0.0),
+                Point::new(2.0, 0.0, 0.0),
+                Point::new(3.0, 0.0, 0.0),
+            ],
+            vec![
+                Point::new(0.0, 1.0, 0.0),
+                Point::new(1.0, 1.0, 2.0),
+                Point::new(2.0, 1.0, 2.0),
+                Point::new(3.0, 1.0, 0.0),
+            ],
+            vec![
+                Point::new(0.0, 2.0, 0.0),
+                Point::new(1.0, 2.0, 2.0),
+                Point::new(2.0, 2.0, 2.0),
+                Point::new(3.0, 2.0, 0.0),
+            ],
+            vec![
+                Point::new(0.0, 3.0, 0.0),
+                Point::new(1.0, 3.0, 0.0),
+                Point::new(2.0, 3.0, 0.0),
+                Point::new(3.0, 3.0, 0.0),
+            ],
         ];
         let w: Vec<Vec<f64>> = vec![vec![1.0; 4]; 4];
-        let s = NurbsSurface::create_from_parameters(&grid, &w, &[0.0,1.0], &[0.0,1.0], &[4,4], &[4,4], 3, 3, false, false);
+        let s = NurbsSurface::create_from_parameters(
+            &grid,
+            &w,
+            &[0.0, 1.0],
+            &[0.0, 1.0],
+            &[4, 4],
+            &[4, 4],
+            3,
+            3,
+            false,
+            false,
+        );
         MINI_CHECK!(s.is_valid());
         MINI_CHECK!(s.degree(0) == 3 && s.degree(1) == 3);
         MINI_CHECK!(s.cv_count_dir(Some(0)) == 4 && s.cv_count_dir(Some(1)) == 4);
@@ -1123,10 +1516,19 @@ pub fn run_nurbssurface_create_from_parameters() -> TestResult {
         let (v0, v1) = s.domain(1).unwrap();
         MINI_CHECK!(u0.abs() < 1e-12 && (u1 - 1.0).abs() < 1e-12);
         MINI_CHECK!(v0.abs() < 1e-12 && (v1 - 1.0).abs() < 1e-12);
-        MINI_CHECK!(TOLERANCE.is_point_close(&s.point_at(0.0, 0.0).unwrap(), &Point::new(0.0, 0.0, 0.0)));
-        MINI_CHECK!(TOLERANCE.is_point_close(&s.point_at(1.0, 1.0).unwrap(), &Point::new(3.0, 3.0, 0.0)));
-        MINI_CHECK!(TOLERANCE.is_point_close(&s.point_at(0.5, 0.5).unwrap(), &Point::new(1.5, 1.5, 1.125)));
-        MINI_CHECK!(TOLERANCE.is_point_close(&s.point_at(0.37, 0.41).unwrap(), &Point::new(1.11, 1.23, 1.01496402)));
+        MINI_CHECK!(
+            TOLERANCE.is_point_close(&s.point_at(0.0, 0.0).unwrap(), &Point::new(0.0, 0.0, 0.0))
+        );
+        MINI_CHECK!(
+            TOLERANCE.is_point_close(&s.point_at(1.0, 1.0).unwrap(), &Point::new(3.0, 3.0, 0.0))
+        );
+        MINI_CHECK!(
+            TOLERANCE.is_point_close(&s.point_at(0.5, 0.5).unwrap(), &Point::new(1.5, 1.5, 1.125))
+        );
+        MINI_CHECK!(TOLERANCE.is_point_close(
+            &s.point_at(0.37, 0.41).unwrap(),
+            &Point::new(1.11, 1.23, 1.01496402)
+        ));
 
         // frame_at (surface_frames.py): origin == point_at, z-axis == normal_at.
         // Normal validated vs OCCT D1uxD1v (validation/compare_surface_eval.py).
@@ -1134,7 +1536,11 @@ pub fn run_nurbssurface_create_from_parameters() -> TestResult {
         MINI_CHECK!(TOLERANCE.is_point_close(&fr.origin(), &s.point_at(0.3, 0.4).unwrap()));
         let n = s.normal_at(0.3, 0.4);
         let za = fr.z_axis();
-        MINI_CHECK!((za[0]-n[0]).abs() < 1e-9 && (za[1]-n[1]).abs() < 1e-9 && (za[2]-n[2]).abs() < 1e-9);
+        MINI_CHECK!(
+            (za[0] - n[0]).abs() < 1e-9
+                && (za[1] - n[1]).abs() < 1e-9
+                && (za[2] - n[2]).abs() < 1e-9
+        );
 
         // intersections_with_line (surface_intersections_with_line.py): a vertical line
         // through (1.5, 1.5) hits the surface once at (1.5, 1.5, 1.125). Validated vs
@@ -1147,23 +1553,103 @@ pub fn run_nurbssurface_create_from_parameters() -> TestResult {
 }
 
 // Register tests with the shared registry
-REGISTER_MINI_TEST!("NurbsSurface", "ClosestPoint", crate::nurbssurface_test::run_nurbssurface_closest_point);
-REGISTER_MINI_TEST!("NurbsSurface", "Constructor", crate::nurbssurface_test::run_nurbssurface_constructor);
-REGISTER_MINI_TEST!("NurbsSurface", "Create From Parameters", crate::nurbssurface_test::run_nurbssurface_create_from_parameters);
-REGISTER_MINI_TEST!("NurbsSurface", "Booleans Queries", crate::nurbssurface_test::run_nurbssurface_booleans_queries);
-REGISTER_MINI_TEST!("NurbsSurface", "Attributes", crate::nurbssurface_test::run_nurbssurface_attributes);
-REGISTER_MINI_TEST!("NurbsSurface", "Control Vertices Access", crate::nurbssurface_test::run_nurbssurface_control_vertices_access);
-REGISTER_MINI_TEST!("NurbsSurface", "NurbsKnot Access", crate::nurbssurface_test::run_nurbssurface_nurbsknot_access);
-REGISTER_MINI_TEST!("NurbsSurface", "Domain", crate::nurbssurface_test::run_nurbssurface_domain);
-REGISTER_MINI_TEST!("NurbsSurface", "Division", crate::nurbssurface_test::run_nurbssurface_division);
-REGISTER_MINI_TEST!("NurbsSurface", "Evaluation", crate::nurbssurface_test::run_nurbssurface_evaluation);
-REGISTER_MINI_TEST!("NurbsSurface", "Modification", crate::nurbssurface_test::run_nurbssurface_modification);
-REGISTER_MINI_TEST!("NurbsSurface", "Transformations", crate::nurbssurface_test::run_nurbssurface_transformations);
-REGISTER_MINI_TEST!("NurbsSurface", "Meshing", crate::nurbssurface_test::run_nurbssurface_meshing);
-REGISTER_MINI_TEST!("NurbsSurface", "Split By Plane", crate::nurbssurface_test::run_nurbssurface_split_by_plane);
-REGISTER_MINI_TEST!("NurbsSurface", "Split By Curves", crate::nurbssurface_test::run_nurbssurface_split_by_curves);
-REGISTER_MINI_TEST!("NurbsSurface", "Split By Line", crate::nurbssurface_test::run_nurbssurface_split_by_line);
-REGISTER_MINI_TEST!("NurbsSurface", "Split By Surface", crate::nurbssurface_test::run_nurbssurface_split_by_surface);
-REGISTER_MINI_TEST!("NurbsSurface", "Split By Brep", crate::nurbssurface_test::run_nurbssurface_split_by_brep);
-REGISTER_MINI_TEST!("NurbsSurface", "Json Roundtrip", crate::nurbssurface_test::run_nurbssurface_json_roundtrip);
-REGISTER_MINI_TEST!("NurbsSurface", "Protobuf Roundtrip", crate::nurbssurface_test::run_nurbssurface_protobuf_roundtrip);
+REGISTER_MINI_TEST!(
+    "NurbsSurface",
+    "ClosestPoint",
+    crate::nurbssurface_test::run_nurbssurface_closest_point
+);
+REGISTER_MINI_TEST!(
+    "NurbsSurface",
+    "Constructor",
+    crate::nurbssurface_test::run_nurbssurface_constructor
+);
+REGISTER_MINI_TEST!(
+    "NurbsSurface",
+    "Create From Parameters",
+    crate::nurbssurface_test::run_nurbssurface_create_from_parameters
+);
+REGISTER_MINI_TEST!(
+    "NurbsSurface",
+    "Booleans Queries",
+    crate::nurbssurface_test::run_nurbssurface_booleans_queries
+);
+REGISTER_MINI_TEST!(
+    "NurbsSurface",
+    "Attributes",
+    crate::nurbssurface_test::run_nurbssurface_attributes
+);
+REGISTER_MINI_TEST!(
+    "NurbsSurface",
+    "Control Vertices Access",
+    crate::nurbssurface_test::run_nurbssurface_control_vertices_access
+);
+REGISTER_MINI_TEST!(
+    "NurbsSurface",
+    "NurbsKnot Access",
+    crate::nurbssurface_test::run_nurbssurface_nurbsknot_access
+);
+REGISTER_MINI_TEST!(
+    "NurbsSurface",
+    "Domain",
+    crate::nurbssurface_test::run_nurbssurface_domain
+);
+REGISTER_MINI_TEST!(
+    "NurbsSurface",
+    "Division",
+    crate::nurbssurface_test::run_nurbssurface_division
+);
+REGISTER_MINI_TEST!(
+    "NurbsSurface",
+    "Evaluation",
+    crate::nurbssurface_test::run_nurbssurface_evaluation
+);
+REGISTER_MINI_TEST!(
+    "NurbsSurface",
+    "Modification",
+    crate::nurbssurface_test::run_nurbssurface_modification
+);
+REGISTER_MINI_TEST!(
+    "NurbsSurface",
+    "Transformations",
+    crate::nurbssurface_test::run_nurbssurface_transformations
+);
+REGISTER_MINI_TEST!(
+    "NurbsSurface",
+    "Meshing",
+    crate::nurbssurface_test::run_nurbssurface_meshing
+);
+REGISTER_MINI_TEST!(
+    "NurbsSurface",
+    "Split By Plane",
+    crate::nurbssurface_test::run_nurbssurface_split_by_plane
+);
+REGISTER_MINI_TEST!(
+    "NurbsSurface",
+    "Split By Curves",
+    crate::nurbssurface_test::run_nurbssurface_split_by_curves
+);
+REGISTER_MINI_TEST!(
+    "NurbsSurface",
+    "Split By Line",
+    crate::nurbssurface_test::run_nurbssurface_split_by_line
+);
+REGISTER_MINI_TEST!(
+    "NurbsSurface",
+    "Split By Surface",
+    crate::nurbssurface_test::run_nurbssurface_split_by_surface
+);
+REGISTER_MINI_TEST!(
+    "NurbsSurface",
+    "Split By Brep",
+    crate::nurbssurface_test::run_nurbssurface_split_by_brep
+);
+REGISTER_MINI_TEST!(
+    "NurbsSurface",
+    "Json Roundtrip",
+    crate::nurbssurface_test::run_nurbssurface_json_roundtrip
+);
+REGISTER_MINI_TEST!(
+    "NurbsSurface",
+    "Protobuf Roundtrip",
+    crate::nurbssurface_test::run_nurbssurface_protobuf_roundtrip
+);

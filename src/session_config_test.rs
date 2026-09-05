@@ -1,7 +1,6 @@
-use crate::{MINI_CHECK, MINI_TEST, REGISTER_MINI_TEST};
 use crate::mini_test::TestResult;
 use crate::session_config::SESSION_CONFIG;
-
+use crate::{MINI_CHECK, MINI_TEST, REGISTER_MINI_TEST};
 
 pub fn run_session_config_runtime_modification() -> TestResult {
     MINI_TEST!("Runtime Modification", {
@@ -22,4 +21,8 @@ pub fn run_session_config_runtime_modification() -> TestResult {
     })
 }
 
-REGISTER_MINI_TEST!("SessionConfig", "Runtime Modification", crate::session_config_test::run_session_config_runtime_modification);
+REGISTER_MINI_TEST!(
+    "SessionConfig",
+    "Runtime Modification",
+    crate::session_config_test::run_session_config_runtime_modification
+);

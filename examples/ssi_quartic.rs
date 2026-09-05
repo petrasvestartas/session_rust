@@ -59,8 +59,17 @@ fn main() {
     };
     let cc200 = cc_err(200);
     let cc_dense = cc_err(2000);
-    println!("cyl x cyl  : curves={} on-surface err N=200 {:.3e}  (dense N=2000 {:.3e})", triples.len(), cc200, cc_dense);
-    assert!(cc200 < 1e-6, "cyl x cyl on-surface error too large: {:.3e}", cc200);
+    println!(
+        "cyl x cyl  : curves={} on-surface err N=200 {:.3e}  (dense N=2000 {:.3e})",
+        triples.len(),
+        cc200,
+        cc_dense
+    );
+    assert!(
+        cc200 < 1e-6,
+        "cyl x cyl on-surface error too large: {:.3e}",
+        cc200
+    );
 
     // ---- Case 2: sphere x cylinder ----
     // sphere radius 2 at origin; cylinder radius 0.3 at (1.3, 0, -3), axis +z.
@@ -84,8 +93,20 @@ fn main() {
     };
     let sc200 = sc_err(200);
     let sc_dense = sc_err(2000);
-    println!("sphere x cyl: curves={} on-surface err N=200 {:.3e}  (dense N=2000 {:.3e})", triples2.len(), sc200, sc_dense);
-    assert!(sc200 < 1e-6, "sphere x cyl on-surface error too large: {:.3e}", sc200);
+    println!(
+        "sphere x cyl: curves={} on-surface err N=200 {:.3e}  (dense N=2000 {:.3e})",
+        triples2.len(),
+        sc200,
+        sc_dense
+    );
+    assert!(
+        sc200 < 1e-6,
+        "sphere x cyl on-surface error too large: {:.3e}",
+        sc200
+    );
 
-    println!("PASS: quartic SSI on-surface errors < 1e-6 (cyl x cyl {:.3e}, sphere x cyl {:.3e})", cc200, sc200);
+    println!(
+        "PASS: quartic SSI on-surface errors < 1e-6 (cyl x cyl {:.3e}, sphere x cyl {:.3e})",
+        cc200, sc200
+    );
 }

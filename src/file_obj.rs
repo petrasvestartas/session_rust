@@ -88,7 +88,9 @@ pub fn read_file_obj_polylines(filepath: &str) -> io::Result<Vec<Polyline>> {
 
     for raw in content.lines() {
         let line = raw.trim();
-        if line.is_empty() || line.starts_with('#') { continue; }
+        if line.is_empty() || line.starts_with('#') {
+            continue;
+        }
         if line.starts_with("v ") {
             let mut parts = line.split_whitespace();
             let _ = parts.next();
@@ -103,7 +105,9 @@ pub fn read_file_obj_polylines(filepath: &str) -> io::Result<Vec<Polyline>> {
             let _u1 = parts.next();
             curv_indices.clear();
             for tok in parts {
-                if let Ok(idx) = tok.parse::<i64>() { curv_indices.push(idx); }
+                if let Ok(idx) = tok.parse::<i64>() {
+                    curv_indices.push(idx);
+                }
             }
             in_curv = true;
         } else if line.starts_with("end") && in_curv {
@@ -111,9 +115,13 @@ pub fn read_file_obj_polylines(filepath: &str) -> io::Result<Vec<Polyline>> {
                 let mut pts: Vec<Point> = Vec::new();
                 for idx in &curv_indices {
                     let vi = (*idx - 1) as usize;
-                    if vi < verts.len() { pts.push(verts[vi].clone()); }
+                    if vi < verts.len() {
+                        pts.push(verts[vi].clone());
+                    }
                 }
-                if pts.len() >= 3 { polylines.push(Polyline::new(pts)); }
+                if pts.len() >= 3 {
+                    polylines.push(Polyline::new(pts));
+                }
             }
             in_curv = false;
         }

@@ -1,7 +1,7 @@
-use crate::{MINI_CHECK, MINI_TEST, REGISTER_MINI_TEST};
 use crate::mini_test::TestResult;
-use crate::tolerance::TOLERANCE;
 use crate::tolerance::PI;
+use crate::tolerance::TOLERANCE;
+use crate::{MINI_CHECK, MINI_TEST, REGISTER_MINI_TEST};
 
 pub fn run_session_constructor() -> TestResult {
     MINI_TEST!("Constructor", {
@@ -17,7 +17,7 @@ pub fn run_session_constructor() -> TestResult {
 
 pub fn run_session_add_point() -> TestResult {
     MINI_TEST!("Add Point", {
-        use crate::{Session, Point};
+        use crate::{Point, Session};
         let mut session = Session::default();
         let point = Point::new(1.0, 2.0, 3.0);
         let guid = point.guid().to_string();
@@ -31,7 +31,7 @@ pub fn run_session_add_point() -> TestResult {
 
 pub fn run_session_add_line() -> TestResult {
     MINI_TEST!("Add Line", {
-        use crate::{Session, Line};
+        use crate::{Line, Session};
         let mut session = Session::default();
         let line = Line::new(0.0, 0.0, 0.0, 1.0, 0.0, 0.0);
         let guid = line.guid().to_string();
@@ -44,7 +44,7 @@ pub fn run_session_add_line() -> TestResult {
 
 pub fn run_session_add_plane() -> TestResult {
     MINI_TEST!("Add Plane", {
-        use crate::{Session, Plane};
+        use crate::{Plane, Session};
         let mut session = Session::default();
         let plane = Plane::xy_plane();
         let guid = plane.guid().to_string();
@@ -57,7 +57,7 @@ pub fn run_session_add_plane() -> TestResult {
 
 pub fn run_session_add_obb() -> TestResult {
     MINI_TEST!("Add OBB", {
-        use crate::{Session, OBB, Point, Vector};
+        use crate::{Point, Session, Vector, OBB};
         let mut session = Session::default();
         let obb = OBB::new(
             Point::new(0.0, 0.0, 0.0),
@@ -76,9 +76,13 @@ pub fn run_session_add_obb() -> TestResult {
 
 pub fn run_session_add_polyline() -> TestResult {
     MINI_TEST!("Add Polyline", {
-        use crate::{Session, Polyline, Point};
+        use crate::{Point, Polyline, Session};
         let mut session = Session::default();
-        let pl = Polyline::new(vec![Point::new(0.0,0.0,0.0), Point::new(1.0,0.0,0.0), Point::new(1.0,1.0,0.0)]);
+        let pl = Polyline::new(vec![
+            Point::new(0.0, 0.0, 0.0),
+            Point::new(1.0, 0.0, 0.0),
+            Point::new(1.0, 1.0, 0.0),
+        ]);
         let guid = pl.guid().to_string();
         session.add_polyline(pl, None);
 
@@ -87,44 +91,15 @@ pub fn run_session_add_polyline() -> TestResult {
     })
 }
 
-pub fn run_session_select_by_type() -> TestResult {
-    MINI_TEST!("Select By Type", {
-        use crate::{Mesh, Point, Polyline, Session};
-        let mut session = Session::default();
-        let g0 = session.add_group("g0");
-        let g1 = session.add_group("g1");
-        let g2 = session.add_group("g2");
-
-        session.add_polyline(
-            Polyline::new(vec![Point::new(0.0, 0.0, 0.0), Point::new(1.0, 0.0, 0.0)]),
-            Some(&g0),
-        );
-        session.add_polyline(
-            Polyline::new(vec![Point::new(0.0, 1.0, 0.0), Point::new(1.0, 1.0, 0.0)]),
-            Some(&g0),
-        );
-        session.add_polyline(
-            Polyline::new(vec![Point::new(0.0, 2.0, 0.0), Point::new(1.0, 2.0, 0.0)]),
-            Some(&g1),
-        );
-        session.add_point(Point::new(9.0, 9.0, 9.0), Some(&g2));
-
-        let groups: Vec<Vec<Polyline>> = session.select_by_type();
-
-        MINI_CHECK!(groups.len() == 2);
-        MINI_CHECK!(groups[0].len() == 2);
-        MINI_CHECK!(groups[1].len() == 1);
-        MINI_CHECK!(TOLERANCE.is_close(groups[1][0].get_points()[0][1], 2.0));
-
-        MINI_CHECK!(session.select_by_type::<Mesh>().is_empty());
-    })
-}
-
 pub fn run_session_add_pointcloud() -> TestResult {
     MINI_TEST!("Add Pointcloud", {
-        use crate::{Session, PointCloud, Point};
+        use crate::{Point, PointCloud, Session};
         let mut session = Session::default();
-        let pc = PointCloud::new(vec![Point::new(0.0,0.0,0.0), Point::new(1.0,0.0,0.0)], vec![], vec![]);
+        let pc = PointCloud::new(
+            vec![Point::new(0.0, 0.0, 0.0), Point::new(1.0, 0.0, 0.0)],
+            vec![],
+            vec![],
+        );
         let guid = pc.guid().to_string();
         session.add_pointcloud(pc, None);
 
@@ -135,12 +110,12 @@ pub fn run_session_add_pointcloud() -> TestResult {
 
 pub fn run_session_add_mesh() -> TestResult {
     MINI_TEST!("Add Mesh", {
-        use crate::{Session, Mesh, Point};
+        use crate::{Mesh, Point, Session};
         let mut session = Session::default();
         let mut mesh = Mesh::new();
-        let v0 = mesh.add_vertex(Point::new(0.0,0.0,0.0), None);
-        let v1 = mesh.add_vertex(Point::new(1.0,0.0,0.0), None);
-        let v2 = mesh.add_vertex(Point::new(0.0,1.0,0.0), None);
+        let v0 = mesh.add_vertex(Point::new(0.0, 0.0, 0.0), None);
+        let v1 = mesh.add_vertex(Point::new(1.0, 0.0, 0.0), None);
+        let v2 = mesh.add_vertex(Point::new(0.0, 1.0, 0.0), None);
         mesh.add_face(vec![v0, v1, v2], None);
         let guid = mesh.guid().to_string();
         session.add_mesh(mesh, None);
@@ -152,7 +127,7 @@ pub fn run_session_add_mesh() -> TestResult {
 
 pub fn run_session_add_nurbscurve() -> TestResult {
     MINI_TEST!("Add Nurbscurve", {
-        use crate::{Session, NurbsCurve, Point};
+        use crate::{NurbsCurve, Point, Session};
         let mut session = Session::default();
         let pts = vec![
             Point::new(0.0, 0.0, 0.0),
@@ -171,13 +146,25 @@ pub fn run_session_add_nurbscurve() -> TestResult {
 
 pub fn run_session_add_nurbssurface() -> TestResult {
     MINI_TEST!("Add Nurbssurface", {
-        use crate::{Session, NurbsSurface, Point};
+        use crate::{NurbsSurface, Point, Session};
         let mut session = Session::default();
         let pts = vec![
-            Point::new(0.0, 0.0, 0.0), Point::new(0.0, 1.0, 0.0), Point::new(0.0, 2.0, 0.0), Point::new(0.0, 3.0, 0.0),
-            Point::new(1.0, 0.0, 0.0), Point::new(1.0, 1.0, 0.0), Point::new(1.0, 2.0, 0.0), Point::new(1.0, 3.0, 0.0),
-            Point::new(2.0, 0.0, 0.0), Point::new(2.0, 1.0, 0.0), Point::new(2.0, 2.0, 0.0), Point::new(2.0, 3.0, 0.0),
-            Point::new(3.0, 0.0, 0.0), Point::new(3.0, 1.0, 0.0), Point::new(3.0, 2.0, 0.0), Point::new(3.0, 3.0, 0.0),
+            Point::new(0.0, 0.0, 0.0),
+            Point::new(0.0, 1.0, 0.0),
+            Point::new(0.0, 2.0, 0.0),
+            Point::new(0.0, 3.0, 0.0),
+            Point::new(1.0, 0.0, 0.0),
+            Point::new(1.0, 1.0, 0.0),
+            Point::new(1.0, 2.0, 0.0),
+            Point::new(1.0, 3.0, 0.0),
+            Point::new(2.0, 0.0, 0.0),
+            Point::new(2.0, 1.0, 0.0),
+            Point::new(2.0, 2.0, 0.0),
+            Point::new(2.0, 3.0, 0.0),
+            Point::new(3.0, 0.0, 0.0),
+            Point::new(3.0, 1.0, 0.0),
+            Point::new(3.0, 2.0, 0.0),
+            Point::new(3.0, 3.0, 0.0),
         ];
         let ns = NurbsSurface::create(false, false, 3, 3, 4, 4, &pts).unwrap();
         let guid = ns.guid().to_string();
@@ -190,8 +177,8 @@ pub fn run_session_add_nurbssurface() -> TestResult {
 
 pub fn run_session_add_brep() -> TestResult {
     MINI_TEST!("Add Brep", {
-        use crate::Session;
         use crate::BRep;
+        use crate::Session;
         let mut session = Session::default();
         let brep = BRep::create_box(1.0, 1.0, 1.0);
         let guid = brep.guid().to_string();
@@ -204,8 +191,8 @@ pub fn run_session_add_brep() -> TestResult {
 
 pub fn run_session_add_element() -> TestResult {
     MINI_TEST!("Add Element", {
-        use crate::Session;
         use crate::Element;
+        use crate::Session;
         let mut session = Session::default();
         let plate = Element::new("p1");
         let guid = plate.guid().to_string();
@@ -214,6 +201,39 @@ pub fn run_session_add_element() -> TestResult {
         MINI_CHECK!(session.objects.elements.len() == 1);
         MINI_CHECK!(session.lookup.contains_key(&guid));
         MINI_CHECK!(session.graph.has_node(&guid));
+    })
+}
+
+pub fn run_session_add_empty_geometry() -> TestResult {
+    MINI_TEST!("Add Empty Geometry", {
+        use crate::{BRep, Mesh, NurbsCurve, NurbsSurface, Point, PointCloud, Polyline, Session};
+        // Nothing to draw is never added: the caller does not test its geometry first.
+        let mut session = Session::default();
+        let group = session.add_group("empty");
+
+        MINI_CHECK!(session
+            .add_polyline(Polyline::new(vec![Point::new(0.0, 0.0, 0.0)]), Some(&group))
+            .is_none());
+        MINI_CHECK!(session
+            .add_pointcloud(PointCloud::new(vec![], vec![], vec![]), Some(&group))
+            .is_none());
+        MINI_CHECK!(session.add_mesh(Mesh::new(), Some(&group)).is_none());
+        MINI_CHECK!(session
+            .add_nurbscurve(NurbsCurve::default(), Some(&group))
+            .is_none());
+        MINI_CHECK!(session
+            .add_nurbssurface(NurbsSurface::default(), Some(&group))
+            .is_none());
+        MINI_CHECK!(session.add_brep(BRep::new(), Some(&group)).is_none());
+
+        // A mesh with vertices but no faces draws nothing either.
+        let mut vertices_only = Mesh::new();
+        vertices_only.add_vertex(Point::new(0.0, 0.0, 0.0), None);
+        MINI_CHECK!(session.add_mesh(vertices_only, Some(&group)).is_none());
+
+        MINI_CHECK!(session.lookup.is_empty());
+        MINI_CHECK!(session.order().is_empty());
+        MINI_CHECK!(group.borrow().children().is_empty());
     })
 }
 
@@ -229,7 +249,7 @@ pub fn run_session_add_group() -> TestResult {
 
 pub fn run_session_add_edge() -> TestResult {
     MINI_TEST!("Add Edge", {
-        use crate::{Session, Point};
+        use crate::{Point, Session};
         let mut session = Session::default();
         let p1 = Point::new(1.0, 2.0, 3.0);
         let p2 = Point::new(4.0, 5.0, 6.0);
@@ -245,10 +265,10 @@ pub fn run_session_add_edge() -> TestResult {
 
 pub fn run_session_add_hierarchy() -> TestResult {
     MINI_TEST!("Add Hierarchy", {
-        use crate::{Session, Point};
+        use crate::{Point, Session};
         let mut session = Session::default();
-        let p1 = Point::new(0.0,0.0,0.0);
-        let p2 = Point::new(1.0,0.0,0.0);
+        let p1 = Point::new(0.0, 0.0, 0.0);
+        let p2 = Point::new(1.0, 0.0, 0.0);
         let n1 = session.add_point(p1, None);
         let n2 = session.add_point(p2, None);
         session.add(&n1, None);
@@ -263,10 +283,10 @@ pub fn run_session_add_hierarchy() -> TestResult {
 
 pub fn run_session_get_children() -> TestResult {
     MINI_TEST!("Get Children", {
-        use crate::{Session, Point};
+        use crate::{Point, Session};
         let mut session = Session::default();
-        let p1 = Point::new(0.0,0.0,0.0);
-        let p2 = Point::new(1.0,0.0,0.0);
+        let p1 = Point::new(0.0, 0.0, 0.0);
+        let p2 = Point::new(1.0, 0.0, 0.0);
         let n1 = session.add_point(p1, None);
         let n2 = session.add_point(p2, None);
         session.add(&n1, None);
@@ -284,10 +304,10 @@ pub fn run_session_get_children() -> TestResult {
 
 pub fn run_session_add_relationship() -> TestResult {
     MINI_TEST!("Add Relationship", {
-        use crate::{Session, Point};
+        use crate::{Point, Session};
         let mut session = Session::default();
-        let p1 = Point::new(0.0,0.0,0.0);
-        let p2 = Point::new(1.0,0.0,0.0);
+        let p1 = Point::new(0.0, 0.0, 0.0);
+        let p2 = Point::new(1.0, 0.0, 0.0);
         let g1 = p1.guid().to_string();
         let g2 = p2.guid().to_string();
         session.add_point(p1, None);
@@ -300,10 +320,10 @@ pub fn run_session_add_relationship() -> TestResult {
 
 pub fn run_session_get_neighbours() -> TestResult {
     MINI_TEST!("Get Neighbours", {
-        use crate::{Session, Point};
+        use crate::{Point, Session};
         let mut session = Session::default();
-        let p1 = Point::new(0.0,0.0,0.0);
-        let p2 = Point::new(1.0,0.0,0.0);
+        let p1 = Point::new(0.0, 0.0, 0.0);
+        let p2 = Point::new(1.0, 0.0, 0.0);
         let g1 = p1.guid().to_string();
         let g2 = p2.guid().to_string();
         session.add_point(p1, None);
@@ -319,7 +339,7 @@ pub fn run_session_get_neighbours() -> TestResult {
 
 pub fn run_session_get_collisions() -> TestResult {
     MINI_TEST!("Get Collisions", {
-        use crate::{Session, OBB, Point, Vector};
+        use crate::{Point, Session, Vector, OBB};
         let mut session = Session::default();
         let obb1 = OBB::new(
             Point::new(0.0, 0.0, 0.0),
@@ -345,7 +365,7 @@ pub fn run_session_get_collisions() -> TestResult {
 
 pub fn run_session_ray_cast() -> TestResult {
     MINI_TEST!("Ray Cast", {
-        use crate::{Session, Mesh, Point, Vector, Xform};
+        use crate::{Mesh, Point, Session, Vector, Xform};
         let mut session = Session::default();
         let mut mesh = Mesh::new();
         let v0 = mesh.add_vertex(Point::new(-1.0, -1.0, 0.0), None);
@@ -353,7 +373,11 @@ pub fn run_session_ray_cast() -> TestResult {
         let v2 = mesh.add_vertex(Point::new(0.0, 1.0, 0.0), None);
         mesh.add_face(vec![v0, v1, v2], None);
         session.add_mesh(mesh, None);
-        let hits = session.ray_cast(&Point::new(0.0, 0.0, 2.0), &Vector::new(0.0, 0.0, -1.0), 1e-3);
+        let hits = session.ray_cast(
+            &Point::new(0.0, 0.0, 2.0),
+            &Vector::new(0.0, 0.0, -1.0),
+            1e-3,
+        );
 
         MINI_CHECK!(hits.len() >= 1);
 
@@ -365,7 +389,11 @@ pub fn run_session_ray_cast() -> TestResult {
         let placed_guid = placed.guid().to_string();
         session.add_mesh(placed, None);
         session.set_xform(&placed_guid, Xform::translation(100.0, 0.0, 0.0));
-        let hits2 = session.ray_cast(&Point::new(100.0, 0.0, 2.0), &Vector::new(0.0, 0.0, -1.0), 1e-3);
+        let hits2 = session.ray_cast(
+            &Point::new(100.0, 0.0, 2.0),
+            &Vector::new(0.0, 0.0, -1.0),
+            1e-3,
+        );
 
         MINI_CHECK!(hits2.len() >= 1);
         MINI_CHECK!(TOLERANCE.is_close(hits2[0].point[0], 100.0));
@@ -374,7 +402,7 @@ pub fn run_session_ray_cast() -> TestResult {
 
 pub fn run_session_get_object() -> TestResult {
     MINI_TEST!("Get Object", {
-        use crate::{Session, Point};
+        use crate::{Point, Session};
         let mut session = Session::default();
         let point = Point::new(1.0, 2.0, 3.0);
         let guid = point.guid().to_string();
@@ -387,7 +415,7 @@ pub fn run_session_get_object() -> TestResult {
 
 pub fn run_session_remove_object() -> TestResult {
     MINI_TEST!("Remove Object", {
-        use crate::{Session, Point};
+        use crate::{Point, Session};
         let mut session = Session::default();
         let point = Point::new(1.0, 2.0, 3.0);
         let guid = point.guid().to_string();
@@ -413,7 +441,7 @@ pub fn run_session_remove_object() -> TestResult {
 
 pub fn run_session_get_geometry() -> TestResult {
     MINI_TEST!("Get Geometry", {
-        use crate::{Session, Point};
+        use crate::{Point, Session};
         let mut session = Session::default();
         let point = Point::new(1.0, 2.0, 3.0);
         session.add_point(point, None);
@@ -426,7 +454,7 @@ pub fn run_session_get_geometry() -> TestResult {
 
 pub fn run_session_json_roundtrip() -> TestResult {
     MINI_TEST!("Json Roundtrip", {
-        use crate::{Session, Point};
+        use crate::{Point, Session};
         let mut session = Session::default();
         let p1 = Point::new(1.0, 2.0, 3.0);
         let p2 = Point::new(4.0, 5.0, 6.0);
@@ -455,7 +483,7 @@ pub fn run_session_json_roundtrip() -> TestResult {
 
 pub fn run_session_protobuf_roundtrip() -> TestResult {
     MINI_TEST!("Protobuf Roundtrip", {
-        use crate::{Session, Point};
+        use crate::{Point, Session};
         let mut session = Session::default();
         let p1 = Point::new(1.0, 2.0, 3.0);
         let p2 = Point::new(4.0, 5.0, 6.0);
@@ -476,13 +504,15 @@ pub fn run_session_protobuf_roundtrip() -> TestResult {
 
 pub fn run_session_lookup_mutation_roundtrip() -> TestResult {
     MINI_TEST!("Lookup Mutation Roundtrip", {
-        use crate::{Session, Line, Geometry};
+        use crate::{Geometry, Line, Session};
         let mut session = Session::default();
         let line = Line::new(0.0, 0.0, 0.0, 1.0, 0.0, 0.0);
         let guid = line.guid().to_string();
         session.add_line(line, None);
 
-        if let Some(Geometry::Line(l)) = session.lookup.get_mut(&guid) { std::rc::Rc::make_mut(l).width = 5.0; }
+        if let Some(Geometry::Line(l)) = session.lookup.get_mut(&guid) {
+            std::rc::Rc::make_mut(l).width = 5.0;
+        }
 
         let fname = "serialization/test_session_lookup.bin";
         session.pb_dump(fname);
@@ -495,7 +525,7 @@ pub fn run_session_lookup_mutation_roundtrip() -> TestResult {
 
 pub fn run_session_order() -> TestResult {
     MINI_TEST!("Order", {
-        use crate::{Session, Line, Point};
+        use crate::{Line, Point, Session};
         let mut session = Session::default();
         let line = Line::new(0.0, 0.0, 0.0, 1.0, 0.0, 0.0);
         let point = Point::new(1.0, 2.0, 3.0);
@@ -519,7 +549,7 @@ pub fn run_session_order() -> TestResult {
 
 pub fn run_session_set_xform() -> TestResult {
     MINI_TEST!("Set Xform", {
-        use crate::{Session, Point, Xform};
+        use crate::{Point, Session, Xform};
         let mut session = Session::default();
         let point = Point::new(1.0, 2.0, 3.0);
         let guid = point.guid().to_string();
@@ -541,7 +571,7 @@ pub fn run_session_set_xform() -> TestResult {
 
 pub fn run_session_world_xform_hierarchy() -> TestResult {
     MINI_TEST!("World Xform Hierarchy", {
-        use crate::{Session, Point, Xform};
+        use crate::{Point, Session, Xform};
         let mut session = Session::default();
         let a = Point::new(0.0, 0.0, 0.0);
         let b = Point::new(0.0, 0.0, 0.0);
@@ -576,7 +606,7 @@ pub fn run_session_world_xform_hierarchy() -> TestResult {
 
 pub fn run_session_xform_roundtrip() -> TestResult {
     MINI_TEST!("Xform Roundtrip", {
-        use crate::{Session, Point, Xform};
+        use crate::{Point, Session, Xform};
         let mut session = Session::default();
         let point = Point::new(1.0, 2.0, 3.0);
         let guid = point.guid().to_string();
@@ -597,7 +627,7 @@ pub fn run_session_xform_roundtrip() -> TestResult {
 
 pub fn run_session_tree_transformation_hierarchy() -> TestResult {
     MINI_TEST!("Tree Transformation Hierarchy", {
-        use crate::{Session, Point, Vector, Mesh, Plane, Xform};
+        use crate::{Mesh, Plane, Point, Session, Vector, Xform};
         let mut scene = Session::new("tree_transformation_test");
 
         let create_box = |cx: f64, cy: f64, cz: f64, size: f64| -> Mesh {
@@ -624,13 +654,13 @@ pub fn run_session_tree_transformation_hierarchy() -> TestResult {
 
         let box1 = create_box(0.0, 0.0, 0.0, 2.0);
         let box1_guid = box1.guid().to_string();
-        let box1_node = scene.add_mesh(box1, None);
+        let box1_node = scene.add_mesh(box1, None).unwrap();
         let box2 = create_box(0.0, 0.0, 0.0, 2.0);
         let box2_guid = box2.guid().to_string();
-        let box2_node = scene.add_mesh(box2, None);
+        let box2_node = scene.add_mesh(box2, None).unwrap();
         let box3 = create_box(0.0, 0.0, 0.0, 2.0);
         let box3_guid = box3.guid().to_string();
-        let box3_node = scene.add_mesh(box3, None);
+        let box3_node = scene.add_mesh(box3, None).unwrap();
 
         scene.add(&box1_node, None);
         scene.add(&box2_node, &box1_node);
@@ -643,7 +673,10 @@ pub fn run_session_tree_transformation_hierarchy() -> TestResult {
         let plane_to = Plane::new(box1_top, x.clone(), y.clone());
         let xy_to_top = Xform::plane_to_plane(&plane_from, &plane_to);
         scene.set_xform(&box1_guid, Xform::rotation_z(PI / 1.5, false) * xy_to_top);
-        scene.set_xform(&box2_guid, Xform::translation(2.0, 0.0, 0.0) * Xform::rotation_z(PI / 6.0, false));
+        scene.set_xform(
+            &box2_guid,
+            Xform::translation(2.0, 0.0, 0.0) * Xform::rotation_z(PI / 6.0, false),
+        );
         scene.set_xform(&box3_guid, Xform::translation(2.0, 0.0, 0.0));
 
         // get_geometry BAKES the cumulative placement into the coordinates, so the deepest box
@@ -666,12 +699,12 @@ pub fn run_session_add_component() -> TestResult {
         // and registers it in the graph under its guid.
         // The lookup is NOT in the geometry lookup (components are not geometry)
         // but they ARE in the tree and graph.
-        use crate::{Session, Component};
+        use crate::{Component, Session};
 
         let mut session = Session::default();
 
         let mut extra = std::collections::HashMap::new();
-        extra.insert("size".to_string(),   serde_json::json!(3000));
+        extra.insert("size".to_string(), serde_json::json!(3000));
         extra.insert("height".to_string(), serde_json::json!(650));
 
         let guid = uuid::Uuid::new_v4().to_string();
@@ -695,66 +728,202 @@ pub fn run_session_component_json_roundtrip() -> TestResult {
     MINI_TEST!("Component Json Roundtrip", {
         // A session with a component serialises to JSON and back.
         // All custom fields in `extra` must survive the round-trip.
-        use crate::{Session, Component};
         use crate::file_encoders::{file_json_dump, file_json_load};
+        use crate::{Component, Session};
 
         let mut session = Session::default();
 
         let mut extra = std::collections::HashMap::new();
-        extra.insert("size".to_string(),   serde_json::json!(3000));
+        extra.insert("size".to_string(), serde_json::json!(3000));
         extra.insert("height".to_string(), serde_json::json!(650));
-        extra.insert("rise".to_string(),   serde_json::json!(453));
+        extra.insert("rise".to_string(), serde_json::json!(453));
 
         let guid = uuid::Uuid::new_v4().to_string();
-        session.add_component(Component {
-            type_name: "FloorBuilder".to_string(),
-            guid: guid.clone(),
-            name: "floor_builder".to_string(),
-            extra,
-        }, None);
+        session.add_component(
+            Component {
+                type_name: "FloorBuilder".to_string(),
+                guid: guid.clone(),
+                name: "floor_builder".to_string(),
+                extra,
+            },
+            None,
+        );
 
         file_json_dump(&session, "serialization/test_session_component.json", false).unwrap();
-        let loaded = file_json_load::<Session>("serialization/test_session_component.json").unwrap();
+        let loaded =
+            file_json_load::<Session>("serialization/test_session_component.json").unwrap();
 
         MINI_CHECK!(loaded.objects.components.len() == 1);
         MINI_CHECK!(loaded.objects.components[0].guid == guid);
         MINI_CHECK!(loaded.objects.components[0].type_name == "FloorBuilder");
-        MINI_CHECK!(loaded.objects.components[0].extra["size"]   == serde_json::json!(3000));
-        MINI_CHECK!(loaded.objects.components[0].extra["rise"]   == serde_json::json!(453));
+        MINI_CHECK!(loaded.objects.components[0].extra["size"] == serde_json::json!(3000));
+        MINI_CHECK!(loaded.objects.components[0].extra["rise"] == serde_json::json!(453));
     })
 }
 
-REGISTER_MINI_TEST!("Session", "Constructor", crate::session_test::run_session_constructor);
-REGISTER_MINI_TEST!("Session", "Add Point", crate::session_test::run_session_add_point);
-REGISTER_MINI_TEST!("Session", "Add Line", crate::session_test::run_session_add_line);
-REGISTER_MINI_TEST!("Session", "Add Plane", crate::session_test::run_session_add_plane);
-REGISTER_MINI_TEST!("Session", "Add OBB", crate::session_test::run_session_add_obb);
-REGISTER_MINI_TEST!("Session", "Add Polyline", crate::session_test::run_session_add_polyline);
-REGISTER_MINI_TEST!("Session", "Select By Type", crate::session_test::run_session_select_by_type);
-REGISTER_MINI_TEST!("Session", "Add Pointcloud", crate::session_test::run_session_add_pointcloud);
-REGISTER_MINI_TEST!("Session", "Add Mesh", crate::session_test::run_session_add_mesh);
-REGISTER_MINI_TEST!("Session", "Add Nurbscurve", crate::session_test::run_session_add_nurbscurve);
-REGISTER_MINI_TEST!("Session", "Add Nurbssurface", crate::session_test::run_session_add_nurbssurface);
-REGISTER_MINI_TEST!("Session", "Add Brep", crate::session_test::run_session_add_brep);
-REGISTER_MINI_TEST!("Session", "Add Element", crate::session_test::run_session_add_element);
-REGISTER_MINI_TEST!("Session", "Add Group", crate::session_test::run_session_add_group);
-REGISTER_MINI_TEST!("Session", "Add Edge", crate::session_test::run_session_add_edge);
-REGISTER_MINI_TEST!("Session", "Add Hierarchy", crate::session_test::run_session_add_hierarchy);
-REGISTER_MINI_TEST!("Session", "Get Children", crate::session_test::run_session_get_children);
-REGISTER_MINI_TEST!("Session", "Add Relationship", crate::session_test::run_session_add_relationship);
-REGISTER_MINI_TEST!("Session", "Get Neighbours", crate::session_test::run_session_get_neighbours);
-REGISTER_MINI_TEST!("Session", "Get Collisions", crate::session_test::run_session_get_collisions);
-REGISTER_MINI_TEST!("Session", "Ray Cast", crate::session_test::run_session_ray_cast);
-REGISTER_MINI_TEST!("Session", "Get Object", crate::session_test::run_session_get_object);
-REGISTER_MINI_TEST!("Session", "Remove Object", crate::session_test::run_session_remove_object);
-REGISTER_MINI_TEST!("Session", "Get Geometry", crate::session_test::run_session_get_geometry);
-REGISTER_MINI_TEST!("Session", "Json Roundtrip", crate::session_test::run_session_json_roundtrip);
-REGISTER_MINI_TEST!("Session", "Protobuf Roundtrip", crate::session_test::run_session_protobuf_roundtrip);
-REGISTER_MINI_TEST!("Session", "Lookup Mutation Roundtrip", crate::session_test::run_session_lookup_mutation_roundtrip);
+REGISTER_MINI_TEST!(
+    "Session",
+    "Constructor",
+    crate::session_test::run_session_constructor
+);
+REGISTER_MINI_TEST!(
+    "Session",
+    "Add Point",
+    crate::session_test::run_session_add_point
+);
+REGISTER_MINI_TEST!(
+    "Session",
+    "Add Line",
+    crate::session_test::run_session_add_line
+);
+REGISTER_MINI_TEST!(
+    "Session",
+    "Add Plane",
+    crate::session_test::run_session_add_plane
+);
+REGISTER_MINI_TEST!(
+    "Session",
+    "Add OBB",
+    crate::session_test::run_session_add_obb
+);
+REGISTER_MINI_TEST!(
+    "Session",
+    "Add Polyline",
+    crate::session_test::run_session_add_polyline
+);
+REGISTER_MINI_TEST!(
+    "Session",
+    "Add Pointcloud",
+    crate::session_test::run_session_add_pointcloud
+);
+REGISTER_MINI_TEST!(
+    "Session",
+    "Add Mesh",
+    crate::session_test::run_session_add_mesh
+);
+REGISTER_MINI_TEST!(
+    "Session",
+    "Add Nurbscurve",
+    crate::session_test::run_session_add_nurbscurve
+);
+REGISTER_MINI_TEST!(
+    "Session",
+    "Add Nurbssurface",
+    crate::session_test::run_session_add_nurbssurface
+);
+REGISTER_MINI_TEST!(
+    "Session",
+    "Add Brep",
+    crate::session_test::run_session_add_brep
+);
+REGISTER_MINI_TEST!(
+    "Session",
+    "Add Element",
+    crate::session_test::run_session_add_element
+);
+REGISTER_MINI_TEST!(
+    "Session",
+    "Add Empty Geometry",
+    crate::session_test::run_session_add_empty_geometry
+);
+REGISTER_MINI_TEST!(
+    "Session",
+    "Add Group",
+    crate::session_test::run_session_add_group
+);
+REGISTER_MINI_TEST!(
+    "Session",
+    "Add Edge",
+    crate::session_test::run_session_add_edge
+);
+REGISTER_MINI_TEST!(
+    "Session",
+    "Add Hierarchy",
+    crate::session_test::run_session_add_hierarchy
+);
+REGISTER_MINI_TEST!(
+    "Session",
+    "Get Children",
+    crate::session_test::run_session_get_children
+);
+REGISTER_MINI_TEST!(
+    "Session",
+    "Add Relationship",
+    crate::session_test::run_session_add_relationship
+);
+REGISTER_MINI_TEST!(
+    "Session",
+    "Get Neighbours",
+    crate::session_test::run_session_get_neighbours
+);
+REGISTER_MINI_TEST!(
+    "Session",
+    "Get Collisions",
+    crate::session_test::run_session_get_collisions
+);
+REGISTER_MINI_TEST!(
+    "Session",
+    "Ray Cast",
+    crate::session_test::run_session_ray_cast
+);
+REGISTER_MINI_TEST!(
+    "Session",
+    "Get Object",
+    crate::session_test::run_session_get_object
+);
+REGISTER_MINI_TEST!(
+    "Session",
+    "Remove Object",
+    crate::session_test::run_session_remove_object
+);
+REGISTER_MINI_TEST!(
+    "Session",
+    "Get Geometry",
+    crate::session_test::run_session_get_geometry
+);
+REGISTER_MINI_TEST!(
+    "Session",
+    "Json Roundtrip",
+    crate::session_test::run_session_json_roundtrip
+);
+REGISTER_MINI_TEST!(
+    "Session",
+    "Protobuf Roundtrip",
+    crate::session_test::run_session_protobuf_roundtrip
+);
+REGISTER_MINI_TEST!(
+    "Session",
+    "Lookup Mutation Roundtrip",
+    crate::session_test::run_session_lookup_mutation_roundtrip
+);
 REGISTER_MINI_TEST!("Session", "Order", crate::session_test::run_session_order);
-REGISTER_MINI_TEST!("Session", "Set Xform", crate::session_test::run_session_set_xform);
-REGISTER_MINI_TEST!("Session", "World Xform Hierarchy", crate::session_test::run_session_world_xform_hierarchy);
-REGISTER_MINI_TEST!("Session", "Xform Roundtrip", crate::session_test::run_session_xform_roundtrip);
-REGISTER_MINI_TEST!("Session", "Tree Transformation Hierarchy", crate::session_test::run_session_tree_transformation_hierarchy);
-REGISTER_MINI_TEST!("Session", "Add Component",              crate::session_test::run_session_add_component);
-REGISTER_MINI_TEST!("Session", "Component Json Roundtrip",   crate::session_test::run_session_component_json_roundtrip);
+REGISTER_MINI_TEST!(
+    "Session",
+    "Set Xform",
+    crate::session_test::run_session_set_xform
+);
+REGISTER_MINI_TEST!(
+    "Session",
+    "World Xform Hierarchy",
+    crate::session_test::run_session_world_xform_hierarchy
+);
+REGISTER_MINI_TEST!(
+    "Session",
+    "Xform Roundtrip",
+    crate::session_test::run_session_xform_roundtrip
+);
+REGISTER_MINI_TEST!(
+    "Session",
+    "Tree Transformation Hierarchy",
+    crate::session_test::run_session_tree_transformation_hierarchy
+);
+REGISTER_MINI_TEST!(
+    "Session",
+    "Add Component",
+    crate::session_test::run_session_add_component
+);
+REGISTER_MINI_TEST!(
+    "Session",
+    "Component Json Roundtrip",
+    crate::session_test::run_session_component_json_roundtrip
+);
