@@ -562,6 +562,8 @@ pub fn run_nurbscurve_attributes() -> TestResult {
                 && TOLERANCE.is_close(intervals[1], 0.5)
                 && TOLERANCE.is_close(intervals[2], 1.0)
         );
+        // An empty curve has no spans to report.
+        MINI_CHECK!(NurbsCurve::default().get_span_vector().is_empty());
 
         // ═══════════════════════════════════════════════════════════════════════════
         // Geometric checks
