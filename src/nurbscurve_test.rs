@@ -581,6 +581,13 @@ pub fn run_nurbscurve_conversions() -> TestResult {
         MINI_CHECK!(TOLERANCE.is_point_close(&adaptive_pts[13], &Point::new(2.0, 0.5, 0.0)));
         MINI_CHECK!(TOLERANCE.is_point_close(&adaptive_pts[26], &Point::new(4.0, 0.0, 0.0)));
 
+        // A closed curve has a zero-length start-to-end chord: the subdivision must still
+        // sample it instead of returning the degenerate two-point polyline.
+        use crate::Primitives;
+        let circle = Primitives::circle(0.0, 0.0, 0.0, 2.0);
+        let (circle_pts, _circle_params) = circle.to_polyline_adaptive(0.1, 0.0, 0.0);
+        MINI_CHECK!(circle_pts.len() == 25);
+
         // divide_by_count
         let (div_pts, _div_params) = curve.divide_by_count(10, true);
 
