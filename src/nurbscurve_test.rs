@@ -959,6 +959,8 @@ pub fn run_nurbscurve_modifications() -> TestResult {
             Point::new(0.0, -1.0, 0.0),
         ];
         let mut c = NurbsCurve::create(true, 2, &closed_pts);
+        // Uniformly spaced nurbsknots plus wrapped CVs: the seam can move anywhere.
+        MINI_CHECK!(c.is_periodic());
         let expected_start = c.point_at(c.domain_middle());
         c.change_closed_curve_seam(c.domain_middle());
         MINI_CHECK!(TOLERANCE.is_point_close(&c.point_at_start(), &expected_start));

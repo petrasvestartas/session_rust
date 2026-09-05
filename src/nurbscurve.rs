@@ -1241,9 +1241,44 @@ impl NurbsCurve {
 
     /// Check if curve is periodic (wraps around seamlessly)
     pub fn is_periodic(&self) -> bool {
-        // For now, return false - full implementation would check
-        // if the curve is clamped and if removing end nurbsknots makes it periodic
-        false
+        if self.m_order < 2
+            || self.m_cv_count < self.m_order
+            || self.m_nurbsknot.len() < self.m_order
+        {
+            return false;
+        }
+
+        // Check if last degree CVs match first degree CVs
+        let deg = self.degree();
+        for i in 0..deg {
+            match (self.get_cv(i), self.get_cv(self.m_cv_count - deg + i)) {
+                (Some(p0), Some(p1)) => {
+                    if p0.distance(&p1, None) > Tolerance::ZERO_TOLERANCE {
+                        return false;
+                    }
+                }
+                _ => return false,
+            }
+        }
+
+        // Check nurbsknot spacing is uniform across ALL nurbsknots (not just interior)
+        let kc = self.nurbsknot_count();
+        if kc < 2 {
+            return false;
+        }
+        let delta = self.m_nurbsknot[self.m_order - 1] - self.m_nurbsknot[self.m_order - 2];
+        if delta < Tolerance::ZERO_TOLERANCE {
+            return false;
+        }
+        for i in 1..kc {
+            if ((self.m_nurbsknot[i] - self.m_nurbsknot[i - 1]) - delta).abs()
+                > Tolerance::ZERO_TOLERANCE
+            {
+                return false;
+            }
+        }
+
+        true
     }
 
     /// Check if curve is a straight line within tolerance
