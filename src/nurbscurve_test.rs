@@ -642,6 +642,20 @@ pub fn run_nurbscurve_conversions() -> TestResult {
             &Point::new(4.000000000000000, 0.000000000000000, 0.000000000000000)
         ));
 
+        // Dividing a polyline is an arc-length division, not a division of the parameter
+        // range: the middle of a 1 + 9 long polyline is at x = 5, not at its middle vertex.
+        let poly = NurbsCurve::create(
+            false,
+            1,
+            &[
+                Point::new(0.0, 0.0, 0.0),
+                Point::new(1.0, 0.0, 0.0),
+                Point::new(10.0, 0.0, 0.0),
+            ],
+        );
+        let (poly_pts, _poly_params) = poly.divide_by_count(3, true);
+        MINI_CHECK!((poly_pts[1][0] - 5.0).abs() < 1e-6);
+
         // divide_by_length
         let (len_pts, _len_params) = curve.divide_by_length(0.5);
 
