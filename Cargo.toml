@@ -49,9 +49,6 @@ wgpu = { version = "29", features = ["fragile-send-sync-non-atomic-wasm"] }
 prost-build = "0.14"
 protoc-bin-vendored = "3.2"
 
-[dev-dependencies]
-pollster = "0.4"
-
 [profile.dev]
 opt-level = 1
 debug = 1
