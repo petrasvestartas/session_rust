@@ -328,6 +328,12 @@ pub fn run_nurbscurve_attributes() -> TestResult {
 
         MINI_CHECK!(is_valid);
 
+        // Storage must back the CV count: a short array otherwise passes validation and
+        // every point_at reads past the end.
+        let mut truncated = curve.duplicate();
+        truncated.m_cv.pop();
+        MINI_CHECK!(!truncated.is_valid());
+
         // Check whole nurbsknot vector for
         // For correct size: order + cv_count - 2
         // Non-decreasing (can repeat, can't go down)

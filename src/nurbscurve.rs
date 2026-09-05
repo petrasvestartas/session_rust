@@ -1215,6 +1215,11 @@ impl NurbsCurve {
         if self.m_nurbsknot.len() != self.m_order + self.m_cv_count - 2 {
             return false;
         }
+        // Storage must actually hold m_cv_count CVs: a count/array mismatch (e.g. a partially
+        // merged join) otherwise passes validation and every point_at indexes past the end.
+        if self.m_cv.len() < (self.m_cv_count - 1) * self.m_cv_stride + self.cv_size() {
+            return false;
+        }
         // Check for sufficient distinct nurbsknots
         if self.m_order >= 2 && self.m_cv_count >= self.m_order {
             let idx1 = self.m_order - 2;
