@@ -48,7 +48,14 @@ impl Serialize for NurbsCurve {
         let mut map = serializer.serialize_map(Some(14))?;
         let control_points: Vec<Vec<f64>> = (0..self.m_cv_count)
             .map(|i| {
-                if let Some(p) = self.get_cv(i) {
+                // 4D for rational curves: dropping w loses the weights and the reloaded
+                // curve is invalid (cv array too short for its stride).
+                if self.m_is_rat {
+                    match self.get_cv_4d(i) {
+                        Some((x, y, z, w)) => vec![x, y, z, w],
+                        None => vec![0.0, 0.0, 0.0, 0.0],
+                    }
+                } else if let Some(p) = self.get_cv(i) {
                     vec![p[0], p[1], p[2]]
                 } else {
                     vec![0.0, 0.0, 0.0]

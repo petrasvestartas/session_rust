@@ -1015,6 +1015,14 @@ pub fn run_nurbscurve_json_roundtrip() -> TestResult {
         MINI_CHECK!(loaded_json == curve);
         MINI_CHECK!(loaded_json_string == curve);
         MINI_CHECK!(loaded_from_file == curve);
+
+        // A rational curve survives the round trip only if the weights ride along: its
+        // control points are dumped in homogeneous form.
+        let mut rational = curve.duplicate();
+        rational.make_rational();
+        rational.set_weight(1, 0.5);
+        let loaded_rational = NurbsCurve::file_json_loads(&rational.file_json_dumps());
+        MINI_CHECK!(loaded_rational == rational);
     })
 }
 
