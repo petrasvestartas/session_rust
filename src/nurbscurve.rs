@@ -2305,7 +2305,7 @@ impl NurbsCurve {
 
         let (t0, t1) = self.domain();
         let dom_len = t1 - t0;
-        let h = dom_len * 1e-4; // f64-safe finite-diff step (C++ uses 1e-8 for double; 1e-8 underflows f64 ULP, halting arc-length integration)
+        let h = dom_len * 1e-8;
 
         // 5-point Gauss-Legendre nodes and weights for [-1, 1]
         const GL_NODES: [f64; 5] = [
@@ -2475,7 +2475,7 @@ impl NurbsCurve {
 
         let (t0, t1) = self.domain();
         let dom_len = t1 - t0;
-        let h = dom_len * 1e-4; // f64-safe finite-diff step (C++ uses 1e-8 for double; 1e-8 underflows f64 ULP, halting arc-length integration)
+        let h = dom_len * 1e-8;
 
         // 5-point Gauss-Legendre nodes and weights for [-1, 1]
         const GL_NODES: [f64; 5] = [

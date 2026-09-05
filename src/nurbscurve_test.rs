@@ -1088,6 +1088,8 @@ pub fn run_nurbscurve_curvature() -> TestResult {
             let t = t0 + (t1 - t0) * (i as f64) / 8.0;
             MINI_CHECK!((circle.curvature_at(t) - 1.0 / r).abs() < 1e-6);
         }
+        // The exact rational circle integrates to its exact circumference.
+        MINI_CHECK!((circle.length(None) - 2.0 * PI * r).abs() < 1e-9);
         // Closest point: an outside point projects radially onto the circle.
         let cp = circle.closest_point(&Point::new(5.0, 0.0, 0.0));
         MINI_CHECK!((cp[0] - 2.0).abs() < 1e-5 && cp[1].abs() < 1e-5 && cp[2].abs() < 1e-5);
