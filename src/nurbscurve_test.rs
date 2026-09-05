@@ -490,10 +490,7 @@ pub fn run_nurbscurve_attributes() -> TestResult {
         // set_cv takes a euclidean point: it must read back unchanged on a rational curve,
         // where a stale weight would scale it.
         curve.set_cv(2, &Point::new(7.0, 8.0, 9.0));
-        MINI_CHECK!(TOLERANCE.is_point_close(
-            &curve.get_cv(2).unwrap(),
-            &Point::new(7.0, 8.0, 9.0)
-        ));
+        MINI_CHECK!(TOLERANCE.is_point_close(&curve.get_cv(2).unwrap(), &Point::new(7.0, 8.0, 9.0)));
 
         // ═══════════════════════════════════════════════════════════════════════════
         // NurbsKnot Access
@@ -950,10 +947,7 @@ pub fn run_nurbscurve_modifications() -> TestResult {
         }
         let uniform_w_mid = curve_uniform_w.point_at_middle();
         MINI_CHECK!(curve_uniform_w.make_non_rational(false));
-        MINI_CHECK!(TOLERANCE.is_point_close(
-            &curve_uniform_w.point_at_middle(),
-            &uniform_w_mid
-        ));
+        MINI_CHECK!(TOLERANCE.is_point_close(&curve_uniform_w.point_at_middle(), &uniform_w_mid));
 
         // Clamp ends - create unclamped curve manually
         let points_open = points.clone();
