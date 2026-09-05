@@ -1844,7 +1844,13 @@ impl NurbsCurve {
                 .iter()
                 .filter(|&&v| (v - nurbsknot_value).abs() <= tol)
                 .count();
+            if mult >= nurbsknot_multiplicity {
+                // Already at the requested multiplicity (e.g. splitting a degree-1 polyline
+                // exactly at a vertex nurbsknot) -- nothing to insert, and that is success.
+                return true;
+            }
             if mult >= p {
+                // Cannot increase multiplicity beyond degree for interior nurbsknots
                 return false;
             }
 
