@@ -1194,13 +1194,16 @@ REGISTER_MINI_TEST!(
     "Attributes",
     crate::nurbscurve_test::run_nurbscurve_attributes
 );
-// TODO(f64-followup): re-enable after rebaselining or NURBS algorithm-level
-// precision investigation. The arc-length clustering bug (divide_by_count finite-diff
-// step underflowing f64 ULP) is now fixed, but the expected values are 15-digit f64
-// outputs that f64 evaluation still diverges from by more than tolerance (e.g. div_pts[1],
-// tangent[0]); needs f64 NURBS evaluation to match exactly.
-// REGISTER_MINI_TEST!("NurbsCurve", "Conversions", crate::nurbscurve_test::run_nurbscurve_conversions);
-// REGISTER_MINI_TEST!("NurbsCurve", "Evaluation", crate::nurbscurve_test::run_nurbscurve_evaluation);
+REGISTER_MINI_TEST!(
+    "NurbsCurve",
+    "Conversions",
+    crate::nurbscurve_test::run_nurbscurve_conversions
+);
+REGISTER_MINI_TEST!(
+    "NurbsCurve",
+    "Evaluation",
+    crate::nurbscurve_test::run_nurbscurve_evaluation
+);
 REGISTER_MINI_TEST!(
     "NurbsCurve",
     "Modifications",

@@ -1650,9 +1650,16 @@ pub fn get_all_tests() -> Vec<RegisteredTest> {
             name: "Attributes",
             func: run_nurbscurve_attributes,
         },
-        // TODO(f64-followup): rebaseline high-precision expected values for f64 NURBS
-        // RegisteredTest { group: "NurbsCurve", name: "Conversions", func: run_nurbscurve_conversions },
-        // RegisteredTest { group: "NurbsCurve", name: "Evaluation", func: run_nurbscurve_evaluation },
+        RegisteredTest {
+            group: "NurbsCurve",
+            name: "Conversions",
+            func: run_nurbscurve_conversions,
+        },
+        RegisteredTest {
+            group: "NurbsCurve",
+            name: "Evaluation",
+            func: run_nurbscurve_evaluation,
+        },
         RegisteredTest {
             group: "NurbsCurve",
             name: "Modifications",
