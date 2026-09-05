@@ -1753,12 +1753,13 @@ impl NurbsCurve {
         self.m_cv[idx]
     }
 
-    /// Set weight at control vertex index
+    /// Set weight at control vertex index (converts to rational if needed)
     pub fn set_weight(&mut self, cv_index: usize, weight: f64) -> bool {
         if cv_index >= self.m_cv_count {
             return false;
         }
-        if !self.m_is_rat {
+        // A non-rational CV has no weight slot, so the curve converts first
+        if !self.m_is_rat && !self.make_rational() {
             return false;
         }
         let idx = cv_index * self.m_cv_stride + self.m_dim;
