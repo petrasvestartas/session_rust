@@ -3136,26 +3136,15 @@ impl NurbsCurve {
             return (NurbsCurve::default(), NurbsCurve::default());
         }
 
-        // Simple approach: use dense point sampling and rebuild curves
-        let num_samples = (self.m_cv_count * 4).max(20);
+        // Copy the curve and trim each half. Resampling instead would return an
+        // approximation with a rebuilt parameterization, and a failed trim MUST fail the
+        // split: handing back the whole curve as a piece is silent overlap corruption.
+        let mut left = self.duplicate();
+        let mut right = self.duplicate();
 
-        // Left curve points
-        let mut left_points = Vec::new();
-        for i in 0..=num_samples {
-            let param = t0 + (t - t0) * (i as f64) / (num_samples as f64);
-            left_points.push(self.point_at(param));
+        if !left.trim(t0, t) || !right.trim(t, t1) {
+            return (NurbsCurve::default(), NurbsCurve::default());
         }
-
-        // Right curve points
-        let mut right_points = Vec::new();
-        for i in 0..=num_samples {
-            let param = t + (t1 - t) * (i as f64) / (num_samples as f64);
-            right_points.push(self.point_at(param));
-        }
-
-        let degree = self.degree();
-        let left = NurbsCurve::create(false, degree, &left_points);
-        let right = NurbsCurve::create(false, degree, &right_points);
 
         (left, right)
     }

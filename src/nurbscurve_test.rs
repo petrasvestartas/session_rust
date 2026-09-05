@@ -865,6 +865,11 @@ pub fn run_nurbscurve_modifications() -> TestResult {
         MINI_CHECK!(
             TOLERANCE.is_point_close(&curve.point_at(split_t), &curve_right.point_at_start())
         );
+        // Each piece keeps the parameterization and the geometry of the original curve.
+        MINI_CHECK!(TOLERANCE.is_point_close(
+            &curve_left.point_at_middle(),
+            &curve.point_at((curve.domain_start() + split_t) * 0.5)
+        ));
 
         // Extend curve smoothly at both ends
         let mut curve_extended = curve.duplicate();
