@@ -334,6 +334,14 @@ pub fn run_nurbscurve_attributes() -> TestResult {
         truncated.m_cv.pop();
         MINI_CHECK!(!truncated.is_valid());
 
+        // A curve needs a non-empty domain: equal end nurbsknots leave nothing to evaluate.
+        let mut flat = curve.duplicate();
+        for i in 0..flat.nurbsknot_count() {
+            flat.set_nurbsknot(i, 1.0);
+        }
+        MINI_CHECK!(!flat.is_valid());
+        MINI_CHECK!(!flat.is_valid_nurbsknot_vector());
+
         // Check whole nurbsknot vector for
         // For correct size: order + cv_count - 2
         // Non-decreasing (can repeat, can't go down)
