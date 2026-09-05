@@ -3244,10 +3244,15 @@ impl NurbsCurve {
         let mut new_cv = vec![0.0; self.m_cv_count * new_stride];
 
         for i in 0..self.m_cv_count {
-            let old_idx = i * self.m_cv_stride;
-            let new_idx = i * new_stride;
-            for j in 0..self.m_dim {
-                new_cv[new_idx + j] = self.m_cv[old_idx + j];
+            if let Some(p) = self.get_cv(i) {
+                let new_idx = i * new_stride;
+                new_cv[new_idx] = p[0];
+                if self.m_dim > 1 {
+                    new_cv[new_idx + 1] = p[1];
+                }
+                if self.m_dim > 2 {
+                    new_cv[new_idx + 2] = p[2];
+                }
             }
         }
 

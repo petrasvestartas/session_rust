@@ -881,6 +881,20 @@ pub fn run_nurbscurve_modifications() -> TestResult {
         curve_rational.make_non_rational(true);
         MINI_CHECK!(curve_rational.length(None) == original_length);
 
+        // Uniform non-unit weights are removable without moving the curve: the CVs must be
+        // divided by the weight, not copied in homogeneous form.
+        let mut curve_uniform_w = curve.duplicate();
+        curve_uniform_w.make_rational();
+        for i in 0..curve_uniform_w.cv_count() {
+            curve_uniform_w.set_weight(i, 2.0);
+        }
+        let uniform_w_mid = curve_uniform_w.point_at_middle();
+        MINI_CHECK!(curve_uniform_w.make_non_rational(false));
+        MINI_CHECK!(TOLERANCE.is_point_close(
+            &curve_uniform_w.point_at_middle(),
+            &uniform_w_mid
+        ));
+
         // Clamp ends - create unclamped curve manually
         let points_open = points.clone();
         let mut curve_open = NurbsCurve::new(3, false, 3, 5); // dim=3, non-rational, order=3 (deg 2), 5 CVs
