@@ -1103,6 +1103,13 @@ pub fn run_nurbscurve_protobuf_roundtrip() -> TestResult {
 
         MINI_CHECK!(loaded_proto_string == curve);
         MINI_CHECK!(loaded == curve);
+
+        // The presentation fields ride along too: width survives the round trip.
+        let mut styled = curve.duplicate();
+        styled.width = 2.5;
+        let loaded_styled = NurbsCurve::pb_loads(&styled.pb_dumps()).unwrap();
+        MINI_CHECK!(loaded_styled.width == 2.5);
+        MINI_CHECK!(loaded_styled == styled);
     })
 }
 

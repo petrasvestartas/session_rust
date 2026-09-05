@@ -35,6 +35,10 @@ impl PartialEq for NurbsCurve {
             && self.m_order == other.m_order
             && self.m_cv_count == other.m_cv_count
             && self.m_cv_stride == other.m_cv_stride
+            && self.name == other.name
+            && (self.width - other.width).abs() <= Tolerance::ZERO_TOLERANCE
+            && self.pointcolors == other.pointcolors
+            && self.linecolors == other.linecolors
             && self.m_nurbsknot == other.m_nurbsknot
             && self.m_cv == other.m_cv
     }
@@ -3616,6 +3620,7 @@ impl NurbsCurve {
         );
         curve.set_guid(proto.guid.clone());
         curve.name = proto.name;
+        curve.width = if proto.width != 0.0 { proto.width } else { 1.0 };
         curve.m_nurbsknot = proto.nurbsknots.into_iter().map(|v| v as f64).collect();
         curve.m_cv = proto.cvs.into_iter().map(|v| v as f64).collect();
         curve.pointcolors = proto
