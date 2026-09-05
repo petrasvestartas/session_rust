@@ -1595,6 +1595,11 @@ impl NurbsCurve {
         if self.m_dim > 2 {
             self.m_cv[idx + 2] = point[2];
         }
+        if self.m_is_rat {
+            // The point is euclidean, so the weight resets: keeping a stale one makes
+            // get_cv divide by it and return a different point than was set.
+            self.m_cv[idx + self.m_dim] = 1.0;
+        }
     }
 
     /// Get control vertex at index
