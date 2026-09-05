@@ -405,6 +405,7 @@ pub fn run_nurbscurve_attributes() -> TestResult {
         let kinked_length = kinked.length(None);
         kinked.insert_nurbsknot(1.5, 2);
         MINI_CHECK!(TOLERANCE.is_close(kinked.length(None), kinked_length));
+        MINI_CHECK!(kinked.span_count() == 3);
 
         // Useful for controlling curve by cv on lying on it
         let greville0 = curve.greville_abcissa(0);
