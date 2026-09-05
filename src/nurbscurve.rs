@@ -2118,7 +2118,9 @@ impl NurbsCurve {
         ];
 
         let mut total = 0.0;
-        let n_spans = self.span_count();
+        // Count nurbsknot INTERVALS, not span_count(): a repeated interior nurbsknot makes
+        // span_count() smaller than the interval count, and the trailing spans go unintegrated.
+        let n_spans = self.m_cv_count - self.m_order + 1;
         const SUBDIVISIONS: usize = 4;
 
         for span in 0..n_spans {

@@ -376,6 +376,13 @@ pub fn run_nurbscurve_attributes() -> TestResult {
         copy_curve.insert_nurbsknot(1.5, 1);
         MINI_CHECK!(TOLERANCE.is_point_close(&before_pt, &copy_curve.point_at(1.5)));
 
+        // A repeated interior nurbsknot ends a span early: the length must still cover
+        // every span past it.
+        let mut kinked = curve.duplicate();
+        let kinked_length = kinked.length(None);
+        kinked.insert_nurbsknot(1.5, 2);
+        MINI_CHECK!(TOLERANCE.is_close(kinked.length(None), kinked_length));
+
         // Useful for controlling curve by cv on lying on it
         let greville0 = curve.greville_abcissa(0);
         MINI_CHECK!(TOLERANCE.is_close(greville0, 0.0));
