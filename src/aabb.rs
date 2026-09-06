@@ -64,8 +64,8 @@ impl AABB {
     }
 
     /// Build an AABB directly from a stride-3 coord buffer (e.g. `Polyline::coords`)
-    /// without constructing an intermediate `Vec<Point>`. Used on hot paths like
-    /// `Session::add_polyline` where the caller already has raw coords.
+    /// without constructing an intermediate `Vec<Point>`, for callers that already
+    /// hold raw coords. No caller in this repo yet.
     pub fn from_coords_stride3(coords: &[f64], inflate: f64) -> Self {
         if coords.len() < 3 {
             return AABB::default();
@@ -108,8 +108,7 @@ impl AABB {
     }
 
     pub fn from_line(line: &crate::line::Line, inflate: f64) -> Self {
-        let points = vec![line.start(), line.end()];
-        Self::from_points(&points, inflate)
+        Self::from_points(&[line.start(), line.end()], inflate)
     }
 
     pub fn from_polyline(polyline: &crate::polyline::Polyline, inflate: f64) -> Self {
@@ -148,15 +147,15 @@ impl AABB {
         }
         const NUM_SAMPLES: usize = 20;
         let dt = (t1 - t0) / NUM_SAMPLES as f64;
-        for axis in 0..3 {
-            for i in 0..NUM_SAMPLES {
-                let t_start = t0 + i as f64 * dt;
-                let t_end = t_start + dt;
-                let deriv_start = curve.evaluate(t_start, 1);
-                let deriv_end = curve.evaluate(t_end, 1);
-                if deriv_start.len() < 2 || deriv_end.len() < 2 {
-                    continue;
-                }
+        for i in 0..NUM_SAMPLES {
+            let t_start = t0 + i as f64 * dt;
+            let t_end = t_start + dt;
+            let deriv_start = curve.evaluate(t_start, 1);
+            let deriv_end = curve.evaluate(t_end, 1);
+            if deriv_start.len() < 2 || deriv_end.len() < 2 {
+                continue;
+            }
+            for axis in 0..3 {
                 let mut d_start = deriv_start[1][axis];
                 let d_end = deriv_end[1][axis];
                 if d_start * d_end < 0.0 {
@@ -266,9 +265,9 @@ impl AABB {
     }
 
     pub fn closest_point(&self, pt: &Point) -> Point {
-        let x = pt[0].max(self.cx - self.hx).min(self.cx + self.hx);
-        let y = pt[1].max(self.cy - self.hy).min(self.cy + self.hy);
-        let z = pt[2].max(self.cz - self.hz).min(self.cz + self.hz);
+        let x = (self.cx - self.hx).max((self.cx + self.hx).min(pt[0]));
+        let y = (self.cy - self.hy).max((self.cy + self.hy).min(pt[1]));
+        let z = (self.cz - self.hz).max((self.cz + self.hz).min(pt[2]));
         Point::new(x, y, z)
     }
 
@@ -296,18 +295,18 @@ impl AABB {
     pub fn get_edges(&self) -> Vec<crate::line::Line> {
         let c = self.corners();
         vec![
-            crate::line::Line::new(c[0][0], c[0][1], c[0][2], c[1][0], c[1][1], c[1][2]),
-            crate::line::Line::new(c[1][0], c[1][1], c[1][2], c[2][0], c[2][1], c[2][2]),
-            crate::line::Line::new(c[2][0], c[2][1], c[2][2], c[3][0], c[3][1], c[3][2]),
-            crate::line::Line::new(c[3][0], c[3][1], c[3][2], c[0][0], c[0][1], c[0][2]),
-            crate::line::Line::new(c[4][0], c[4][1], c[4][2], c[5][0], c[5][1], c[5][2]),
-            crate::line::Line::new(c[5][0], c[5][1], c[5][2], c[6][0], c[6][1], c[6][2]),
-            crate::line::Line::new(c[6][0], c[6][1], c[6][2], c[7][0], c[7][1], c[7][2]),
-            crate::line::Line::new(c[7][0], c[7][1], c[7][2], c[4][0], c[4][1], c[4][2]),
-            crate::line::Line::new(c[0][0], c[0][1], c[0][2], c[4][0], c[4][1], c[4][2]),
-            crate::line::Line::new(c[1][0], c[1][1], c[1][2], c[5][0], c[5][1], c[5][2]),
-            crate::line::Line::new(c[2][0], c[2][1], c[2][2], c[6][0], c[6][1], c[6][2]),
-            crate::line::Line::new(c[3][0], c[3][1], c[3][2], c[7][0], c[7][1], c[7][2]),
+            crate::line::Line::from_points(&c[0], &c[1]),
+            crate::line::Line::from_points(&c[1], &c[2]),
+            crate::line::Line::from_points(&c[2], &c[3]),
+            crate::line::Line::from_points(&c[3], &c[0]),
+            crate::line::Line::from_points(&c[4], &c[5]),
+            crate::line::Line::from_points(&c[5], &c[6]),
+            crate::line::Line::from_points(&c[6], &c[7]),
+            crate::line::Line::from_points(&c[7], &c[4]),
+            crate::line::Line::from_points(&c[0], &c[4]),
+            crate::line::Line::from_points(&c[1], &c[5]),
+            crate::line::Line::from_points(&c[2], &c[6]),
+            crate::line::Line::from_points(&c[3], &c[7]),
         ]
     }
 
@@ -316,18 +315,7 @@ impl AABB {
     }
 
     pub fn union_with(&mut self, other: &AABB) {
-        let min_x = (self.cx - self.hx).min(other.cx - other.hx);
-        let min_y = (self.cy - self.hy).min(other.cy - other.hy);
-        let min_z = (self.cz - self.hz).min(other.cz - other.hz);
-        let max_x = (self.cx + self.hx).max(other.cx + other.hx);
-        let max_y = (self.cy + self.hy).max(other.cy + other.hy);
-        let max_z = (self.cz + self.hz).max(other.cz + other.hz);
-        self.cx = (min_x + max_x) * 0.5;
-        self.hx = (max_x - min_x) * 0.5;
-        self.cy = (min_y + max_y) * 0.5;
-        self.hy = (max_y - min_y) * 0.5;
-        self.cz = (min_z + max_z) * 0.5;
-        self.hz = (max_z - min_z) * 0.5;
+        *self = AABB::merge(*self, *other);
     }
 
     pub fn inflate(&mut self, amount: f64) {
