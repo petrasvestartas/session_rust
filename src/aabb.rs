@@ -296,18 +296,18 @@ impl AABB {
     pub fn get_edges(&self) -> Vec<crate::line::Line> {
         let c = self.corners();
         vec![
-            crate::line::Line::new(c[0][0], c[0][1], c[0][2], c[1][0], c[1][1], c[1][2]),
-            crate::line::Line::new(c[1][0], c[1][1], c[1][2], c[2][0], c[2][1], c[2][2]),
-            crate::line::Line::new(c[2][0], c[2][1], c[2][2], c[3][0], c[3][1], c[3][2]),
-            crate::line::Line::new(c[3][0], c[3][1], c[3][2], c[0][0], c[0][1], c[0][2]),
-            crate::line::Line::new(c[4][0], c[4][1], c[4][2], c[5][0], c[5][1], c[5][2]),
-            crate::line::Line::new(c[5][0], c[5][1], c[5][2], c[6][0], c[6][1], c[6][2]),
-            crate::line::Line::new(c[6][0], c[6][1], c[6][2], c[7][0], c[7][1], c[7][2]),
-            crate::line::Line::new(c[7][0], c[7][1], c[7][2], c[4][0], c[4][1], c[4][2]),
-            crate::line::Line::new(c[0][0], c[0][1], c[0][2], c[4][0], c[4][1], c[4][2]),
-            crate::line::Line::new(c[1][0], c[1][1], c[1][2], c[5][0], c[5][1], c[5][2]),
-            crate::line::Line::new(c[2][0], c[2][1], c[2][2], c[6][0], c[6][1], c[6][2]),
-            crate::line::Line::new(c[3][0], c[3][1], c[3][2], c[7][0], c[7][1], c[7][2]),
+            crate::line::Line::from_points(&c[0], &c[1]),
+            crate::line::Line::from_points(&c[1], &c[2]),
+            crate::line::Line::from_points(&c[2], &c[3]),
+            crate::line::Line::from_points(&c[3], &c[0]),
+            crate::line::Line::from_points(&c[4], &c[5]),
+            crate::line::Line::from_points(&c[5], &c[6]),
+            crate::line::Line::from_points(&c[6], &c[7]),
+            crate::line::Line::from_points(&c[7], &c[4]),
+            crate::line::Line::from_points(&c[0], &c[4]),
+            crate::line::Line::from_points(&c[1], &c[5]),
+            crate::line::Line::from_points(&c[2], &c[6]),
+            crate::line::Line::from_points(&c[3], &c[7]),
         ]
     }
 
