@@ -315,18 +315,7 @@ impl AABB {
     }
 
     pub fn union_with(&mut self, other: &AABB) {
-        let min_x = (self.cx - self.hx).min(other.cx - other.hx);
-        let min_y = (self.cy - self.hy).min(other.cy - other.hy);
-        let min_z = (self.cz - self.hz).min(other.cz - other.hz);
-        let max_x = (self.cx + self.hx).max(other.cx + other.hx);
-        let max_y = (self.cy + self.hy).max(other.cy + other.hy);
-        let max_z = (self.cz + self.hz).max(other.cz + other.hz);
-        self.cx = (min_x + max_x) * 0.5;
-        self.hx = (max_x - min_x) * 0.5;
-        self.cy = (min_y + max_y) * 0.5;
-        self.hy = (max_y - min_y) * 0.5;
-        self.cz = (min_z + max_z) * 0.5;
-        self.hz = (max_z - min_z) * 0.5;
+        *self = AABB::merge(*self, *other);
     }
 
     pub fn inflate(&mut self, amount: f64) {
