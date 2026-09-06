@@ -64,8 +64,8 @@ impl AABB {
     }
 
     /// Build an AABB directly from a stride-3 coord buffer (e.g. `Polyline::coords`)
-    /// without constructing an intermediate `Vec<Point>`. Used on hot paths like
-    /// `Session::add_polyline` where the caller already has raw coords.
+    /// without constructing an intermediate `Vec<Point>`, for callers that already
+    /// hold raw coords. No caller in this repo yet.
     pub fn from_coords_stride3(coords: &[f64], inflate: f64) -> Self {
         if coords.len() < 3 {
             return AABB::default();
