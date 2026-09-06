@@ -108,8 +108,7 @@ impl AABB {
     }
 
     pub fn from_line(line: &crate::line::Line, inflate: f64) -> Self {
-        let points = vec![line.start(), line.end()];
-        Self::from_points(&points, inflate)
+        Self::from_points(&[line.start(), line.end()], inflate)
     }
 
     pub fn from_polyline(polyline: &crate::polyline::Polyline, inflate: f64) -> Self {
