@@ -266,9 +266,9 @@ impl AABB {
     }
 
     pub fn closest_point(&self, pt: &Point) -> Point {
-        let x = pt[0].max(self.cx - self.hx).min(self.cx + self.hx);
-        let y = pt[1].max(self.cy - self.hy).min(self.cy + self.hy);
-        let z = pt[2].max(self.cz - self.hz).min(self.cz + self.hz);
+        let x = (self.cx - self.hx).max((self.cx + self.hx).min(pt[0]));
+        let y = (self.cy - self.hy).max((self.cy + self.hy).min(pt[1]));
+        let z = (self.cz - self.hz).max((self.cz + self.hz).min(pt[2]));
         Point::new(x, y, z)
     }
 

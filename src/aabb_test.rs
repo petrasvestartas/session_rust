@@ -16,6 +16,8 @@ pub fn run_aabb_constructor() -> crate::mini_test::TestResult {
         MINI_CHECK!(TOLERANCE.is_close(a.volume(), 48.0));
         MINI_CHECK!(a.closest_point(&Point::new(0.0, 0.0, 0.0)) == Point::new(0.0, 0.0, 0.0));
         MINI_CHECK!(a.closest_point(&Point::new(10.0, 0.0, 0.0)) == Point::new(1.0, 0.0, 0.0));
+        // a negative half-size inverts the box; the clamp then resolves to cx - hx
+        MINI_CHECK!(AABB::new(0.0, 0.0, 0.0, -1.0, -1.0, -1.0).closest_point(&Point::new(0.0, 0.0, 0.0)) == Point::new(1.0, 1.0, 1.0));
         MINI_CHECK!(a.contains(&Point::new(0.0, 0.0, 0.0)));
         MINI_CHECK!(!a.contains(&Point::new(10.0, 0.0, 0.0)));
         MINI_CHECK!(a.corner(false, false, false) == Point::new(-1.0, -2.0, -3.0));
