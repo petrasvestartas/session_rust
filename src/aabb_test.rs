@@ -3,7 +3,6 @@ use crate::tolerance::TOLERANCE;
 use crate::{MINI_CHECK, MINI_TEST, REGISTER_MINI_TEST};
 
 pub fn run_aabb_constructor() -> crate::mini_test::TestResult {
-    use crate::tolerance::TOLERANCE;
     use crate::{Point, AABB};
     MINI_TEST!("Constructor", {
         // AABB(0,0,0, 1,2,3) — dims 2×4×6
