@@ -113,6 +113,21 @@ pub fn run_aabb_from_geometry() -> TestResult {
         MINI_CHECK!(a_nc.is_valid());
         MINI_CHECK!(a_nc.contains(&Point::new(1.5, 0.0, 0.0)));
 
+        let bulge = NurbsCurve::create(
+            false,
+            2,
+            &[
+                Point::new(0.0, 0.0, 0.0),
+                Point::new(1.0, 2.0, 0.0),
+                Point::new(2.0, 1.0, 0.0),
+            ],
+        );
+        let a_hull = AABB::from_nurbscurve(&bulge, 0.0, false);
+        let a_tight = AABB::from_nurbscurve(&bulge, 0.0, true);
+
+        MINI_CHECK!(TOLERANCE.is_close(a_hull.max_point()[1], 2.0));
+        MINI_CHECK!(TOLERANCE.is_close(a_tight.max_point()[1], 4.0 / 3.0));
+
         let surf = NurbsSurface::create(
             false,
             false,

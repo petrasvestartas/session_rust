@@ -148,15 +148,15 @@ impl AABB {
         }
         const NUM_SAMPLES: usize = 20;
         let dt = (t1 - t0) / NUM_SAMPLES as f64;
-        for axis in 0..3 {
-            for i in 0..NUM_SAMPLES {
-                let t_start = t0 + i as f64 * dt;
-                let t_end = t_start + dt;
-                let deriv_start = curve.evaluate(t_start, 1);
-                let deriv_end = curve.evaluate(t_end, 1);
-                if deriv_start.len() < 2 || deriv_end.len() < 2 {
-                    continue;
-                }
+        for i in 0..NUM_SAMPLES {
+            let t_start = t0 + i as f64 * dt;
+            let t_end = t_start + dt;
+            let deriv_start = curve.evaluate(t_start, 1);
+            let deriv_end = curve.evaluate(t_end, 1);
+            if deriv_start.len() < 2 || deriv_end.len() < 2 {
+                continue;
+            }
+            for axis in 0..3 {
                 let mut d_start = deriv_start[1][axis];
                 let d_end = deriv_end[1][axis];
                 if d_start * d_end < 0.0 {
