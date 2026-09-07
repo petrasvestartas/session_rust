@@ -2951,20 +2951,27 @@ impl Mesh {
         Some(Point::new(x / n, y / n, z / n))
     }
 
+    /// Newell's normal: the area-weighted sum over every edge of the face, which is the
+    /// normal the face's WINDING implies whatever its shape. The obvious cross product of
+    /// the first three vertices is the same thing on a triangle and on a convex polygon, but
+    /// it INVERTS when the second corner is reflex - and a boolean cut leaves plenty of
+    /// those. Everything downstream that orients against this normal (triangulate_faces,
+    /// vertex_normal, mesh_offset) inherits that inversion, so it is fixed at the source.
     pub fn face_normal(&self, face_key: usize) -> Option<Vector> {
         let vertices = self.face.get(&face_key)?;
         if vertices.len() < 3 {
             return None;
         }
 
-        let p0 = self.vertex_point(vertices[0])?;
-        let p1 = self.vertex_point(vertices[1])?;
-        let p2 = self.vertex_point(vertices[2])?;
+        let mut normal = Vector::new(0.0, 0.0, 0.0);
+        for i in 0..vertices.len() {
+            let a = self.vertex_point(vertices[i])?;
+            let b = self.vertex_point(vertices[(i + 1) % vertices.len()])?;
+            normal[0] += (a[1] - b[1]) * (a[2] + b[2]);
+            normal[1] += (a[2] - b[2]) * (a[0] + b[0]);
+            normal[2] += (a[0] - b[0]) * (a[1] + b[1]);
+        }
 
-        let u = Vector::new(p1[0] - p0[0], p1[1] - p0[1], p1[2] - p0[2]);
-        let v = Vector::new(p2[0] - p0[0], p2[1] - p0[1], p2[2] - p0[2]);
-
-        let normal = u.cross(&v);
         let len = normal.magnitude();
         if len > Tolerance::ZERO_TOLERANCE {
             Some(Vector::new(
@@ -2975,6 +2982,89 @@ impl Mesh {
         } else {
             None
         }
+    }
+
+    /// Make the face windings consistent and, on a closed mesh, outward - so a reader can
+    /// trust a face normal.
+    ///
+    /// Two passes downstream read the winding and nothing else: the ink lanes decide an edge
+    /// is visible from `dot(face_normal, toward_eye) > 0`, and `triangulate_faces` orients its
+    /// CDT against the same normal. A file that wound a face the other way therefore draws the
+    /// wrong lines AND the wrong facing, which is not something a viewer can repair per edge.
+    /// This is the one place to settle it: on the way in.
+    ///
+    /// A mesh that is already right pays for ONE scan of its directed edges and nothing else -
+    /// no halfedge map, which `from_proto` deliberately leaves unbuilt. Only a mesh that
+    /// actually disagrees pays for `unify_winding`, and only a CLOSED one is turned outward:
+    /// an open mesh has no outside, which is precisely why the viewer flags it and skips the
+    /// facing cull rather than guessing.
+    pub fn orient_faces(&mut self) {
+        if self.face.len() < 2 {
+            return;
+        }
+
+        // A consistently wound mesh walks every directed edge at most once. A repeat means two
+        // faces sharing an edge walk it the SAME way, which is the definition of disagreeing.
+        let mut walked: HashSet<(usize, usize)> = HashSet::with_capacity(self.face.len() * 4);
+        let mut consistent = true;
+        for verts in self.face.values() {
+            let n = verts.len();
+            for i in 0..n {
+                if !walked.insert((verts[i], verts[(i + 1) % n])) {
+                    consistent = false;
+                }
+            }
+        }
+        if !consistent {
+            // Flips what disagrees, then turns the result outward if it is a closed solid.
+            self.unify_winding();
+            return;
+        }
+
+        // Consistent, but possibly inside-out. Only a closed mesh has an answer, and an edge
+        // walked one way with no twin the other is a border.
+        if walked.iter().any(|&(u, v)| !walked.contains(&(v, u))) {
+            return;
+        }
+        if self.signed_volume() >= 0.0 {
+            return;
+        }
+        for verts in self.face.values_mut() {
+            verts.reverse();
+        }
+        // A hole ring winds against its outer loop; reversing one without the other would put
+        // them the same way round and the CDT would read the hole as a second boundary.
+        for rings in self.face_holes.values_mut() {
+            for ring in rings.iter_mut() {
+                ring.reverse();
+            }
+        }
+        // Both are derived from the winding that just changed. `from_proto` leaves halfedges
+        // unbuilt on purpose and `ensure_halfedges` rebuilds on demand, so dropping is enough.
+        self.halfedge.clear();
+        self.triangulation.clear();
+    }
+
+    /// Six times the volume the winding encloses, by the divergence theorem: positive when the
+    /// faces wind outward. A face is fanned from its first vertex, whose signed tetrahedra sum
+    /// to the polygon's own contribution whether it is convex or not.
+    fn signed_volume(&self) -> f64 {
+        let mut total = 0.0;
+        for verts in self.face.values() {
+            if verts.len() < 3 {
+                continue;
+            }
+            let Some(p0) = self.vertex_point(verts[0]) else { continue };
+            for i in 1..verts.len() - 1 {
+                let (Some(p1), Some(p2)) = (self.vertex_point(verts[i]), self.vertex_point(verts[i + 1])) else {
+                    continue;
+                };
+                total += p0[0] * (p1[1] * p2[2] - p1[2] * p2[1])
+                    + p0[1] * (p1[2] * p2[0] - p1[0] * p2[2])
+                    + p0[2] * (p1[0] * p2[1] - p1[1] * p2[0]);
+            }
+        }
+        total
     }
 
     /// Fill `triangulation` for every face a fan would get wrong.
@@ -3894,6 +3984,10 @@ impl Mesh {
         if let Some(&max_f) = mesh.face.keys().max() {
             mesh.max_face = max_f + 1;
         }
+
+        // Winding first: `triangulate_faces` orients its triangles against the face normal,
+        // which is only meaningful once the windings agree and point outward.
+        mesh.orient_faces();
 
         // A file that carried no triangulation would otherwise be fanned from vertex 0 at
         // render time, which is wrong for any concave face. Faces the file DID triangulate
