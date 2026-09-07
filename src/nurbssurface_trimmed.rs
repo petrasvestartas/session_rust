@@ -836,7 +836,9 @@ impl NurbsSurfaceTrimmed {
         };
 
         // ---- 1. Sample cutters into tagged UV polylines ----
-        let samp_tol = range_u.max(range_v) * 1e-3;
+        // The split faces carry these polylines as their trim pcurves, so the sampling sag is
+        // a direct geometric error of the result.
+        let samp_tol = range_u.max(range_v) * 2e-5;
         struct PolyLine {
             cidx: i32,
             pts: Vec<[f64; 2]>,
@@ -865,7 +867,7 @@ impl NurbsSurfaceTrimmed {
             }
             let (ct0, ct1) = crv.domain();
             let mut entries: Vec<[f64; 3]> = Vec::new();
-            let n = (crv.cv_count() * 4).max(16);
+            let n = (crv.cv_count() * 4).max(16).min(2048);
             for i in 0..=n {
                 let t = ct0 + (ct1 - ct0) * i as f64 / n as f64;
                 let p = crv.point_at(t);
@@ -962,6 +964,19 @@ impl NurbsSurfaceTrimmed {
                 ts: vec![v1, v0],
             });
         }
+
+        // ---- 1b. Drop degenerate cut polylines ----
+        // A cutter whose whole UV extent is below a few snap widths yields a sliver cell whose
+        // lifted loop corrupts memory downstream. Border sides are always kept.
+        let min_ext = (snap_uv * 8.0).max(range_u.min(range_v) * 1e-5);
+        polylines.retain(|p| {
+            is_boundary(p.cidx)
+                || p.pts
+                    .windows(2)
+                    .map(|w| (w[1][0] - w[0][0]).hypot(w[1][1] - w[0][1]))
+                    .sum::<f64>()
+                    >= min_ext
+        });
 
         // ---- 2. Segment-segment intersections (Newton-refined on real curves) ----
         fn seg_seg(
@@ -1405,14 +1420,21 @@ impl NurbsSurfaceTrimmed {
                 if run.cidx >= 0 {
                     let crv = &pcurves[run.cidx as usize];
                     let (c0, c1) = crv.domain();
-                    let lo = run.ta.min(run.tb);
-                    let hi_ = run.ta.max(run.tb);
+                    // Clamp to the curve domain: a snapped run can carry an endpoint parameter a
+                    // hair outside [c0,c1], and trimming out-of-domain corrupts memory.
+                    let lo = run.ta.min(run.tb).max(c0);
+                    let hi_ = run.ta.max(run.tb).min(c1);
                     let mut piece = crv.duplicate();
                     let mut piece_ok = true;
                     if hi_ - lo < (c1 - c0) - 1e-12 && hi_ - lo > 1e-14 {
                         if !piece.trim(lo, hi_) {
                             piece_ok = false;
                         }
+                    } else if hi_ - lo <= 1e-14 {
+                        // zero param span: a FULL wrap of a closed pcurve lands ta==tb on the
+                        // period seam -- keep the whole curve; a genuinely degenerate run is
+                        // skipped (its endpoint chord below is zero-length and pushes nothing).
+                        piece_ok = run.va == run.vb && piece.is_closed();
                     }
                     if piece_ok && piece.is_valid() {
                         if run.ta > run.tb {
@@ -1442,9 +1464,27 @@ impl NurbsSurfaceTrimmed {
             if pieces.is_empty() {
                 return NurbsCurve::default();
             }
-            let mut joined = NurbsCurve::join(&pieces, Some(snap_uv * 4.0));
-            if joined.len() == 1 && joined[0].is_closed() {
-                return joined.remove(0);
+            let join_tol = snap_uv * 4.0;
+            let mut joined = NurbsCurve::join(&pieces, Some(join_tol));
+            if joined.len() == 1 && joined[0].is_valid() {
+                // is_closed() demands ZERO_TOLERANCE; a loop reassembled from trimmed pieces
+                // closes within the join tolerance. Weld the last CV onto the first (clamped
+                // ends ARE CVs) rather than fall back to a polyline that discards the exact
+                // curve representation.
+                let gap = joined[0]
+                    .point_at_start()
+                    .distance(&joined[0].point_at_end(), None);
+                if !joined[0].is_closed() && gap <= join_tol && joined[0].cv_count() > 1 {
+                    let last = joined[0].cv_count() - 1;
+                    if let (Some((x, y, z, _)), Some((_, _, _, we))) =
+                        (joined[0].get_cv_4d(0), joined[0].get_cv_4d(last))
+                    {
+                        joined[0].set_cv_4d(last, x, y, z, we);
+                    }
+                }
+                if joined[0].is_closed() {
+                    return joined.remove(0);
+                }
             }
             let mut loop_pts: Vec<Point> = Vec::new();
             for &hi in cycle {
@@ -1530,7 +1570,7 @@ impl NurbsSurfaceTrimmed {
         let range_u = sdom_u.1 - sdom_u.0;
         let range_v = sdom_v.1 - sdom_v.0;
 
-        let n_samples = std::cmp::max(curve_3d.cv_count() * 4, 32);
+        let n_samples = std::cmp::min(std::cmp::max(curve_3d.cv_count() * 4, 32), 2048);
         let mut uv_pts = Vec::new();
         for i in 0..n_samples {
             let t = dom.0 + (dom.1 - dom.0) * i as f64 / n_samples as f64;
@@ -1637,7 +1677,7 @@ impl NurbsSurfaceTrimmed {
                     .map(|p| [p[0] as f64, p[1] as f64])
                     .collect()
             } else {
-                let n = (crv.cv_count() * 4).max(16);
+                let n = (crv.cv_count() * 4).max(16).min(2048);
                 let (sampled, _) = crv.divide_by_count(n, true);
                 sampled.iter().map(|p| [p[0] as f64, p[1] as f64]).collect()
             };
@@ -1680,7 +1720,14 @@ impl NurbsSurfaceTrimmed {
                         let cz = pa[2] + t * ez;
                         ((pm[0] - cx).powi(2) + (pm[1] - cy).powi(2) + (pm[2] - cz).powi(2)).sqrt()
                     } else {
-                        0.0
+                        // Degenerate 3D chord: the two endpoints coincide in 3D. This is either a
+                        // true singular edge (the whole segment collapses to a point -> pm == pa,
+                        // dev stays ~0, no refinement) or a seam-wrap edge (a single UV segment that
+                        // wraps a periodic surface, e.g. a cylinder/sphere rim u:0->2pi -> pm lies on
+                        // the far side). Measure deviation as the midpoint-to-endpoint 3D distance so
+                        // seam-wrap edges get subdivided into the underlying circle instead of a chord.
+                        ((pm[0] - pa[0]).powi(2) + (pm[1] - pa[1]).powi(2) + (pm[2] - pa[2]).powi(2))
+                            .sqrt()
                     };
                     if dev > deflection && depth < 6 {
                         stack.push(([mu, mv], sb, depth + 1));
