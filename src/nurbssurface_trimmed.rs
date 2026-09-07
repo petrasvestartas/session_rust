@@ -216,6 +216,7 @@ impl Delaunay2D {
             let ti = bad[bfs_front];
             bfs_front += 1;
             if !self.triangles[ti as usize].alive {
+                bad[bfs_front - 1] = -1;
                 continue;
             }
             let [v0, v1, v2] = self.triangles[ti as usize].v;
@@ -243,33 +244,10 @@ impl Delaunay2D {
                     }
                 }
             } else {
-                // mark as not-bad: remove from bad list
-                // handled by only using `bad` entries that stay valid
+                bad[bfs_front - 1] = -1;
             }
         }
-        // Filter: keep only truly bad triangles
-        let bad: Vec<i32> = bad
-            .into_iter()
-            .filter(|&ti| {
-                if !self.triangles[ti as usize].alive {
-                    return false;
-                }
-                let [v0, v1, v2] = self.triangles[ti as usize].v;
-                let ax = self.vertices[v0 as usize].x;
-                let ay = self.vertices[v0 as usize].y;
-                let bx = self.vertices[v1 as usize].x;
-                let by = self.vertices[v1 as usize].y;
-                let cx = self.vertices[v2 as usize].x;
-                let cy = self.vertices[v2 as usize].y;
-                let o = Self::orient2d(ax, ay, bx, by, cx, cy);
-                let ic = if o > 0.0 {
-                    Self::in_circumcircle(ax, ay, bx, by, cx, cy, x, y)
-                } else {
-                    Self::in_circumcircle(ax, ay, cx, cy, bx, by, x, y)
-                };
-                ic > 0.0
-            })
-            .collect();
+        bad.retain(|&ti| ti >= 0);
         if bad.is_empty() {
             self.vertices.pop();
             return -1;
@@ -1299,7 +1277,7 @@ impl NurbsSurfaceTrimmed {
             }
             let mut cycle = Vec::new();
             let mut cur = hi;
-            while !visited[cur] {
+            while cur != usize::MAX && !visited[cur] {
                 visited[cur] = true;
                 cycle.push(cur);
                 cur = next_he[cur];
@@ -1787,6 +1765,10 @@ impl NurbsSurfaceTrimmed {
             inside
         };
         let inside_trim = |u: f64, v: f64| -> bool {
+            // outer-bbox reject first: refinement probes most triangles outside the trim region
+            if u < bb_umin || u > bb_umax || v < bb_vmin || v > bb_vmax {
+                return false;
+            }
             if !point_in_polygon(u, v, &outer_uv) {
                 return false;
             }
