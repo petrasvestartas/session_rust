@@ -99,6 +99,10 @@ impl Point {
         }
     }
 
+    pub fn has_guid(&self) -> bool {
+        self.guid.get().is_some()
+    }
+
     pub fn guid(&self) -> &str {
         self.guid.get_or_init(|| uuid::Uuid::new_v4().to_string())
     }
@@ -228,7 +232,7 @@ impl Point {
     /// The proto struct itself — pb_dumps encodes it; Session embeds it directly.
     pub fn to_proto(&self) -> crate::proto::Point {
         crate::proto::Point {
-            guid: self.guid().to_string(),
+            guid: self.guid.get().cloned().unwrap_or_default(),
             name: self.name.clone(),
             x: self._x as f64,
             y: self._y as f64,
@@ -262,7 +266,9 @@ impl Point {
     /// Build from an already-decoded proto — pb_loads decodes then calls this.
     pub fn from_proto(proto: crate::proto::Point) -> Self {
         let mut pt = Self::new(proto.x as f64, proto.y as f64, proto.z as f64);
-        pt.set_guid(proto.guid);
+        if !proto.guid.is_empty() {
+            pt.set_guid(proto.guid);
+        }
         pt.name = proto.name;
         pt.width = proto.width as f64;
 

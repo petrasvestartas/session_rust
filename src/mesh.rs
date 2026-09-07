@@ -3468,6 +3468,10 @@ impl Mesh {
         m
     }
 
+    pub fn has_guid(&self) -> bool {
+        self.guid.get().is_some()
+    }
+
     pub fn guid(&self) -> &str {
         self.guid.get_or_init(|| uuid::Uuid::new_v4().to_string())
     }
@@ -3850,7 +3854,7 @@ impl Mesh {
         }
 
         crate::proto::Mesh {
-            guid: self.guid().to_string(),
+            guid: self.guid.get().cloned().unwrap_or_default(),
             name: self.name.clone(),
             vertices,
             faces,
@@ -3895,7 +3899,9 @@ impl Mesh {
     /// Build from an already-decoded proto — pb_loads decodes then calls this.
     pub fn from_proto(proto: crate::proto::Mesh) -> Self {
         let mut mesh = Self::new();
-        mesh.set_guid(proto.guid.clone());
+        if !proto.guid.is_empty() {
+            mesh.set_guid(proto.guid.clone());
+        }
         mesh.name = proto.name;
 
         // Sized up front: a 360k-vertex sheet otherwise rehashes the whole table a dozen times

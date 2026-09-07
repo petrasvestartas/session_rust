@@ -54,6 +54,10 @@ impl InstanceRef {
         }
     }
 
+    pub fn has_guid(&self) -> bool {
+        self.guid.get().is_some()
+    }
+
     pub fn guid(&self) -> &str {
         self.guid.get_or_init(|| uuid::Uuid::new_v4().to_string())
     }
@@ -142,7 +146,7 @@ impl InstanceRef {
     pub fn pb_dumps(&self) -> Vec<u8> {
         use prost::Message;
         let proto = crate::proto::InstanceRef {
-            guid: self.guid().to_string(),
+            guid: self.guid.get().cloned().unwrap_or_default(),
             name: self.name.clone(),
             definition_guid: self.definition_guid.clone(),
             xform: Some(crate::proto::Xform {
@@ -167,7 +171,9 @@ impl InstanceRef {
         use prost::Message;
         let proto = crate::proto::InstanceRef::decode(data)?;
         let mut ref_ = Self::new(&proto.definition_guid, Xform::identity());
-        ref_.set_guid(proto.guid);
+        if !proto.guid.is_empty() {
+            ref_.set_guid(proto.guid);
+        }
         ref_.name = proto.name;
         if let Some(x) = proto.xform {
             ref_.xform.name = x.name;

@@ -157,11 +157,12 @@ pub fn run_obb_protobuf_roundtrip() -> TestResult {
         bb.name = "test_bbox_proto".to_string();
 
         // Bytes
+        let guid = bb.guid().to_string();
         let b = bb.pb_dumps();
         let loaded_s = OBB::pb_loads(&b).unwrap();
 
         MINI_CHECK!(loaded_s.name == "test_bbox_proto");
-        MINI_CHECK!(loaded_s.guid() == bb.guid());
+        MINI_CHECK!(loaded_s.guid() == guid);
         MINI_CHECK!(TOLERANCE.is_close(loaded_s.center[0], 1.0));
 
         // File
@@ -172,7 +173,7 @@ pub fn run_obb_protobuf_roundtrip() -> TestResult {
         let loaded = OBB::pb_load(fname);
 
         MINI_CHECK!(loaded.name == "test_bbox_proto");
-        MINI_CHECK!(loaded.guid() == bb.guid());
+        MINI_CHECK!(loaded.guid() == guid);
         MINI_CHECK!(TOLERANCE.is_close(loaded.center[0], 1.0));
         MINI_CHECK!(TOLERANCE.is_close(loaded.half_size[0], 5.0));
     })

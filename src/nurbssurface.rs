@@ -2875,6 +2875,10 @@ impl NurbsSurface {
         copy
     }
 
+    pub fn has_guid(&self) -> bool {
+        self.guid.get().is_some()
+    }
+
     pub fn guid(&self) -> &str {
         self.guid.get_or_init(|| uuid::Uuid::new_v4().to_string())
     }
@@ -2933,7 +2937,7 @@ impl NurbsSurface {
         use prost::Message;
 
         crate::proto::NurbsSurface {
-            guid: self.guid().to_string(),
+            guid: self.guid.get().cloned().unwrap_or_default(),
             name: self.name.clone(),
             dimension: self.m_dim as i32,
             is_rational: self.m_is_rat,
@@ -3039,7 +3043,9 @@ impl NurbsSurface {
         };
 
         // Load metadata
-        surface.set_guid(proto.guid.clone());
+        if !proto.guid.is_empty() {
+            surface.set_guid(proto.guid.clone());
+        }
         surface.name = proto.name;
         surface.width = proto.width as f64;
 

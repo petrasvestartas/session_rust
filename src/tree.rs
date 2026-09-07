@@ -75,6 +75,10 @@ impl TreeNode {
     }
 
     /// Lazy GUID accessor
+    pub fn has_guid(&self) -> bool {
+        self.guid.get().is_some()
+    }
+
     pub fn guid(&self) -> &str {
         self.guid.get_or_init(|| uuid::Uuid::new_v4().to_string())
     }
@@ -234,7 +238,7 @@ impl TreeNode {
 
     pub(crate) fn to_serde(&self) -> TreeNodeSerde {
         TreeNodeSerde {
-            guid: self.guid().to_string(),
+            guid: self.guid.get().cloned().unwrap_or_default(),
             name: self.name.clone(),
             color: self.color,
             children: self
@@ -286,7 +290,7 @@ impl Serialize for Tree {
         S: serde::Serializer,
     {
         let serde_tree = TreeSerde {
-            guid: self.guid().to_string(),
+            guid: self.guid.get().cloned().unwrap_or_default(),
             name: self.name.clone(),
             root: self.root_node.as_ref().map(|r| r.borrow().to_serde()),
         };
@@ -326,6 +330,10 @@ struct TreeSerde {
 
 impl Tree {
     /// Lazy GUID accessor
+    pub fn has_guid(&self) -> bool {
+        self.guid.get().is_some()
+    }
+
     pub fn guid(&self) -> &str {
         self.guid.get_or_init(|| uuid::Uuid::new_v4().to_string())
     }
@@ -485,7 +493,7 @@ impl Tree {
     /// Serialize to JSON string
     pub fn jsondump(&self) -> Result<String, Box<dyn std::error::Error>> {
         let serde_tree = TreeSerde {
-            guid: self.guid().to_string(),
+            guid: self.guid.get().cloned().unwrap_or_default(),
             name: self.name.clone(),
             root: self.root_node.as_ref().map(|r| r.borrow().to_serde()),
         };
@@ -551,7 +559,7 @@ impl Tree {
         }
         let root_proto = self.root_node.as_ref().map(|r| node_to_proto(r));
         let proto = crate::proto::Tree {
-            guid: self.guid().to_string(),
+            guid: self.guid.get().cloned().unwrap_or_default(),
             name: self.name.clone(),
             root: root_proto,
         };
@@ -563,7 +571,9 @@ impl Tree {
         use prost::Message;
         let proto = crate::proto::Tree::decode(data)?;
         let mut tree = Tree::new(&proto.name);
-        tree.set_guid(proto.guid.clone());
+        if !proto.guid.is_empty() {
+            tree.set_guid(proto.guid.clone());
+        }
         fn proto_to_serde(proto_node: &crate::proto::TreeNode) -> TreeNodeSerde {
             TreeNodeSerde {
                 guid: proto_node.guid.clone(),

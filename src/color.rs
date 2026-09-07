@@ -120,6 +120,10 @@ impl Color {
         }
     }
 
+    pub fn has_guid(&self) -> bool {
+        self.guid.get().is_some()
+    }
+
     pub fn guid(&self) -> &str {
         self.guid.get_or_init(|| uuid::Uuid::new_v4().to_string())
     }
@@ -434,7 +438,7 @@ impl Color {
     pub fn pb_dumps(&self) -> Vec<u8> {
         use prost::Message;
         let proto = crate::proto::Color {
-            guid: self.guid().to_string(),
+            guid: self.guid.get().cloned().unwrap_or_default(),
             name: self.name.clone(),
             r: self.r,
             g: self.g,
@@ -449,7 +453,9 @@ impl Color {
         use prost::Message;
         let proto = crate::proto::Color::decode(data)?;
         let mut color = Self::new(proto.r, proto.g, proto.b, proto.a);
-        color.set_guid(proto.guid);
+        if !proto.guid.is_empty() {
+            color.set_guid(proto.guid);
+        }
         color.name = proto.name;
         Ok(color)
     }

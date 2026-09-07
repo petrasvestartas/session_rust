@@ -633,7 +633,7 @@ impl Graph {
 
         crate::proto::Graph {
             name: self.name.clone(),
-            guid: self.guid().to_string(),
+            guid: self.guid.get().cloned().unwrap_or_default(),
             vertices: proto_vertices,
             edges: proto_edges,
             vertex_count: self.vertex_count,
@@ -650,7 +650,9 @@ impl Graph {
         use prost::Message;
         let proto = crate::proto::Graph::decode(data)?;
         let mut graph = Graph::new(&proto.name);
-        graph.set_guid(proto.guid.clone());
+        if !proto.guid.is_empty() {
+            graph.set_guid(proto.guid.clone());
+        }
         graph.vertex_count = proto.vertex_count;
         graph.edge_count = proto.edge_count;
 

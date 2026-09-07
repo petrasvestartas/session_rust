@@ -563,6 +563,10 @@ impl BRep {
         copy
     }
 
+    pub fn has_guid(&self) -> bool {
+        self.guid.get().is_some()
+    }
+
     pub fn guid(&self) -> &str {
         self.guid.get_or_init(|| uuid::Uuid::new_v4().to_string())
     }
@@ -1616,7 +1620,7 @@ impl BRep {
     pub fn to_proto(&self) -> crate::proto::BRep {
         use prost::Message;
         crate::proto::BRep {
-            guid: self.guid().to_string(),
+            guid: self.guid.get().cloned().unwrap_or_default(),
             name: self.name.clone(),
             curves_2d: self
                 .m_curves_2d
@@ -1728,7 +1732,9 @@ impl BRep {
     pub fn from_proto(proto: crate::proto::BRep) -> Result<Self, Box<dyn std::error::Error>> {
         use prost::Message;
         let mut b = BRep::new();
-        b.set_guid(proto.guid.clone());
+        if !proto.guid.is_empty() {
+            b.set_guid(proto.guid.clone());
+        }
         b.name = proto.name;
         b.width = proto.width;
         for c in &proto.curves_2d {

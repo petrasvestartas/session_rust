@@ -1139,6 +1139,10 @@ impl NurbsCurve {
         copy
     }
 
+    pub fn has_guid(&self) -> bool {
+        self.guid.get().is_some()
+    }
+
     pub fn guid(&self) -> &str {
         self.guid.get_or_init(|| uuid::Uuid::new_v4().to_string())
     }
@@ -3514,7 +3518,7 @@ impl NurbsCurve {
     /// The proto struct itself — pb_dumps encodes it; Session embeds it directly.
     pub fn to_proto(&self) -> crate::proto::NurbsCurve {
         crate::proto::NurbsCurve {
-            guid: self.guid().to_string(),
+            guid: self.guid.get().cloned().unwrap_or_default(),
             name: self.name.clone(),
             dimension: self.m_dim as i32,
             is_rational: self.m_is_rat,
@@ -3565,7 +3569,9 @@ impl NurbsCurve {
             proto.order as usize,
             proto.cv_count as usize,
         );
-        curve.set_guid(proto.guid.clone());
+        if !proto.guid.is_empty() {
+            curve.set_guid(proto.guid.clone());
+        }
         curve.name = proto.name;
         curve.m_nurbsknot = proto.nurbsknots.into_iter().map(|v| v as f64).collect();
         curve.m_cv = proto.cvs.into_iter().map(|v| v as f64).collect();

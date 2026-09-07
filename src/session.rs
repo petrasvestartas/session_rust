@@ -10,11 +10,6 @@ use std::fs;
 use std::rc::Rc;
 
 /// Enum representing all possible geometry types in a Session.
-/// This is equivalent to C++'s std::variant<std::shared_ptr<...>> for heterogeneous geometry
-/// storage. Every variant holds an Rc SHARED with the objects vectors — ONE allocation per
-/// object (the shared_ptr model), enum stays pointer-sized (16 B). Reads are unaffected
-/// (deref coercion); writes go copy-on-write via Rc::make_mut, and objects_synced() re-shares
-/// any COW splits at save time.
 #[derive(Debug, Clone)]
 pub enum Geometry {
     OBB(Rc<OBB>),
@@ -31,7 +26,6 @@ pub enum Geometry {
 }
 
 impl Geometry {
-    /// Get the GUID of the geometry object
     pub fn guid(&self) -> &str {
         match self {
             Geometry::OBB(g) => g.guid(),
@@ -50,8 +44,6 @@ impl Geometry {
 }
 
 /// Extracts a concrete geometry type out of a `Geometry` variant. C++ gets this for free from
-/// `std::get_if` on the variant and Python from `isinstance`; Rust needs the mapping spelled
-/// out so `select_by_type` can be generic over the type rather than the enum.
 pub trait FromGeometry: Sized {
     /// The object inside `geometry`, or None when the variant holds another type.
     fn from_geometry(geometry: &Geometry) -> Option<&Self>;
@@ -85,10 +77,6 @@ impl_from_geometry!(
 );
 
 /// A Session containing geometry objects with hierarchical and graph structures.
-///
-/// The Session serves as a container for managing geometry objects (currently Points)
-/// along with their relationships through tree and graph data structures. It provides
-/// JSON serialization capabilities for cross-language interoperability.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(tag = "type", rename = "Session")]
 pub struct Session {
@@ -101,11 +89,9 @@ pub struct Session {
     /// Human-readable name for the session
     pub name: String,
     /// Typed collections in INSERTION ORDER — the serialization layout. Between loads and
-    /// saves `lookup` is the mutable truth; every save path syncs from it (objects_synced).
     #[serde(rename = "objects")]
     pub objects: Objects,
     /// Guid → geometry: THE authoritative store between load and save. Mutate objects HERE;
-    /// jsondump/pb_dumps read this truth back in objects' insertion order.
     #[serde(skip)]
     pub lookup: HashMap<String, Geometry>,
     /// Hierarchical tree structure for organizing objects
@@ -115,9 +101,6 @@ pub struct Session {
     #[serde(rename = "graph")]
     pub graph: Graph,
     /// Guid → LOCAL transform, relative to the tree parent. THE only place a transform is
-    /// stored: geometry types carry no transformation member. Cumulative placement comes from
-    /// `world_xform`, which multiplies down the tree. Serialized explicitly by
-    /// jsondump/pb_dumps in `order()` sequence (a HashMap has no deterministic order).
     #[serde(skip)]
     pub xforms: HashMap<String, Xform>,
     /// Boundary Volume Hierarchy for spatial collision detection
@@ -145,6 +128,10 @@ pub struct RayHit {
 }
 
 impl RayHit {
+    pub fn has_guid(&self) -> bool {
+        self.guid.get().is_some()
+    }
+
     pub fn guid(&self) -> &str {
         self.guid.get_or_init(|| uuid::Uuid::new_v4().to_string())
     }
@@ -159,13 +146,10 @@ impl Default for Session {
 
 impl Session {
     /// Creates a new Session with the specified name.
-    ///
-    /// # Arguments
-    /// * `name` - The name for the session
-    ///
-    /// # Returns
-    /// A new Session instance with a unique GUID, empty objects collection,
-    /// and initialized tree and graph structures.
+    pub fn has_guid(&self) -> bool {
+        self.guid.get().is_some()
+    }
+
     pub fn guid(&self) -> &str {
         self.guid.get_or_init(|| uuid::Uuid::new_v4().to_string())
     }
@@ -204,11 +188,6 @@ impl Session {
     }
 
     /// The objects collections refreshed from `lookup` (the authoritative store), keeping the
-    /// vectors' insertion order — so a mutation made through `lookup` (the sanctioned path) is
-    /// what jsondump/pb_dumps write, and serialization order stays deterministic.
-    /// DIRECTION CONTRACT: lookup wins. A COW split created by `Rc::make_mut` on an
-    /// `objects.*` slot is NOT persisted — mutate through `lookup`, or re-point the lookup
-    /// entry afterwards (see compute_face_to_face).
     fn objects_synced(&self) -> Objects {
         let mut objects = self.objects.clone();
         macro_rules! sync {
@@ -237,8 +216,6 @@ impl Session {
     }
 
     /// Canonical object order: the objects vectors walked in one fixed type sequence —
-    /// deterministic across runs AND languages (lookup/map iteration is neither).
-    /// Viewers and reconcile key their rows off this.
     pub fn order(&self) -> Vec<String> {
         let mut order = Vec::with_capacity(self.lookup.len());
         for p in &self.objects.points {
@@ -305,9 +282,6 @@ impl Session {
     }
 
     /// The CUMULATIVE placement of an object: every ancestor's transform multiplied down the
-    /// tree onto its own. An object with no tree node is its own root and returns its local
-    /// transform — objects added without a parent are never attached, so treating a missing
-    /// node as identity would silently move them to the origin.
     pub fn world_xform(&self, guid: &str) -> Xform {
         let mut acc = self.xform(guid);
         if let Some(node) = self.tree.get_node_by_name(guid) {
@@ -324,13 +298,8 @@ impl Session {
     }
 
     /// Every object's cumulative placement, computed in ONE downward pass. Use this instead of
-    /// calling `world_xform` per object: that does a whole-tree scan to find each node, which
-    /// is quadratic over a session.
     pub fn world_xforms(&self) -> HashMap<String, Xform> {
         // Nothing to compose: with no local transforms every composed frame IS the identity,
-        // and every caller already falls back to identity for a guid the map lacks. Walking
-        // the tree anyway costs one String clone + hash insert per NODE - measured at 38 ms
-        // and 58,572 wasted entries on one flat PDF sheet, paid again on every rebuild.
         if self.xforms.is_empty() {
             return HashMap::new();
         }
@@ -363,9 +332,6 @@ impl Session {
     }
 
     /// The xforms in canonical `order()` sequence, identity entries omitted — the exact
-    /// sequence jsondump and pb_dumps write, so both formats share one order.
-    /// Group nodes carry transforms too but hold no geometry, so they are absent from
-    /// `order()`; they follow, sorted by guid, or a group's placement would be lost on save.
     fn xforms_ordered(&self) -> Vec<(String, Xform)> {
         let mut ordered = Vec::new();
         for guid in self.order() {
@@ -392,10 +358,6 @@ impl Session {
     // ═══════════════════════════════════════════════════════════════════════════
 
     /// Serializes the Session to a JSON string.
-    ///
-    /// # Returns
-    /// A Result containing the JSON string representation of the Session,
-    /// or an error if serialization fails.
     pub fn jsondump(&self) -> Result<String, Box<dyn std::error::Error>> {
         let graph_json: serde_json::Value = serde_json::from_str(&self.graph.jsondump()?)?;
 
@@ -424,12 +386,6 @@ impl Session {
     }
 
     /// Deserializes Session from a JSON string.
-    ///
-    /// # Arguments
-    /// * `json_data` - The JSON string to deserialize
-    ///
-    /// # Returns
-    /// A Result containing the deserialized Session, or an error if parsing fails.
     pub fn jsonload(json_data: &str) -> Result<Self, Box<dyn std::error::Error>> {
         let json_obj: serde_json::Value = serde_json::from_str(json_data)?;
 
@@ -615,8 +571,6 @@ impl Session {
         };
 
         // One helper, not a second copy. The inline version this replaces did not deduplicate
-        // `graph.edges` (which holds every edge under BOTH endpoints), so Rust wrote 98 edges
-        // where C++ and Python - both of which delegate to the Graph writer - wrote 49.
         let graph_proto = self.graph.to_proto();
 
         // Xforms in canonical order() sequence — a map would not be deterministic
@@ -635,7 +589,7 @@ impl Session {
 
         let proto = crate::proto::Session {
             name: self.name.clone(),
-            guid: self.guid().to_string(),
+            guid: self.guid.get().cloned().unwrap_or_default(),
             objects: Some(objects_proto),
             tree: Some(tree_proto),
             graph: Some(graph_proto),
@@ -650,7 +604,9 @@ impl Session {
         let proto = crate::proto::Session::decode(data)?;
 
         let mut session = Session::new(&proto.name);
-        session.set_guid(proto.guid.clone());
+        if !proto.guid.is_empty() {
+            session.set_guid(proto.guid.clone());
+        }
 
         // Rebuild objects — from_proto by value (moved out of the decoded Session proto); the
         // old path re-ENCODED each decoded proto object and decoded it a second time.
@@ -828,8 +784,6 @@ impl Session {
     // ═══════════════════════════════════════════════════════════════════════════
 
     /// Compute bounding box for a geometry object, inflated by tolerance
-    /// Bounding box of an object in WORLD placement. `xform` is its cumulative transform from
-    /// `world_xform` — the geometry itself stores no placement, so it must be supplied here.
     fn compute_bounding_box(geometry: &Geometry, xform: &Xform) -> OBB {
         let inflate = Tolerance::APPROXIMATION;
         let tp = |p: &Point| -> Point { xform.transform_point(p) };
@@ -931,15 +885,6 @@ impl Session {
     }
 
     /// Get all collision pairs using SpatialBVH and add them as graph edges.
-    ///
-    /// Automatically:
-    /// - Computes bounding boxes for all objects with tolerance inflation
-    /// - Builds/rebuilds the SpatialBVH with auto-computed world size
-    /// - Detects all collision pairs
-    /// - Adds collision edges to the graph
-    ///
-    /// # Returns
-    /// A vector of tuples (guid1, guid2) representing colliding geometry pairs
     pub fn get_collisions(&mut self) -> Vec<(String, String)> {
         // Collect all objects with their bounding boxes and GUIDs
         let mut boxes_with_guids: Vec<(OBB, String)> = Vec::new();
@@ -985,10 +930,6 @@ impl Session {
     // ═══════════════════════════════════════════════════════════════════════════
 
     /// LAZY: boxes are recomputed here from the document in canonical order() — always fresh
-    /// (an object mutated through `lookup` gets a fresh box, unlike the old eager add-time
-    /// cache), deterministic across runs and languages, and the boxes are LOCAL: the BVH
-    /// copies them into its nodes, so nothing box-shaped is retained on Session
-    /// (`cached_boxes` stays empty; kept only for API compatibility).
     fn rebuild_ray_bvh_cache(&mut self) {
         self.cached_boxes.clear();
         self.cached_guids.clear();
@@ -1053,8 +994,6 @@ impl Session {
         bvh.ray_cast(origin, &dir_unit, &mut candidates, true);
 
         // Thin geometry (Line/Polyline/Point/PointCloud) has near-degenerate BVH
-        // boxes (inflated by only 0.001mm) so the ray rarely hits them. Always add
-        // them as candidates so the line_line / point distance tests run.
         for (idx, guid) in self.cached_guids.iter().enumerate() {
             if let Some(geom) = self.lookup.get(guid) {
                 match geom {
@@ -1134,8 +1073,6 @@ impl Session {
                 }
                 Geometry::Mesh(m) => {
                     // The session holds the placement: cast in the mesh's LOCAL frame, return a WORLD hit.
-                    // COW only when the triangle BVH is missing — a shared mesh with a built BVH
-                    // is cast through &self (no clone after every save/re-share).
                     if !m.has_triangle_bvh() {
                         Rc::make_mut(m).build_triangle_bvh();
                     }
@@ -1200,8 +1137,6 @@ impl Session {
                 }
                 Geometry::BRep(_) => {
                     // BRep tessellation is expensive (re-tessellates every call).
-                    // Viewers must use pre-cached tessellations with pre-built BVH.
-                    // hit_point stays None — callers handle BReps separately.
                 }
                 Geometry::NurbsCurve(_) => {
                     // Exact ray-curve intersection is out of scope; viewers pick via sampled polylines.
@@ -1239,8 +1174,6 @@ impl Session {
     }
 
     /// Like `ray_cast` but filters to only hits within `tolerance` of the nearest.
-    /// Useful when you want "the object at the cursor" without iterating through
-    /// everything behind it.
     pub fn ray_cast_nearest(
         &mut self,
         origin: &Point,
@@ -1262,22 +1195,9 @@ impl Session {
     // Details
     //
     // Every add_* below SKIPS an object that carries nothing to draw, and returns None
-    // instead of a node: an empty point cloud, a polyline of fewer than two points, a mesh
-    // without faces. The check lives here so no caller has to write it, and so a scene never
-    // holds an object a viewer cannot render. The types that cannot be empty - a point, a
-    // line, a plane, a box, an element, a component - keep returning a node outright.
     // ═══════════════════════════════════════════════════════════════════════════
 
     /// Adds a point to the Session.
-    ///
-    /// The point is added to the objects collection, lookup table, graph as a node,
-    /// and tree as a child of the root node.
-    ///
-    /// # Arguments
-    /// * `point` - The Point object to add to the session
-    ///
-    /// # Returns
-    /// The TreeNode created for this point
     pub fn add_point(
         &mut self,
         point: Point,
@@ -1520,10 +1440,6 @@ impl Session {
     }
 
     /// Adds a TreeNode to the tree hierarchy.
-    ///
-    /// # Arguments
-    /// * `node` - The TreeNode to add
-    /// * `parent` - Optional parent TreeNode (defaults to root if None)
     pub fn add<'a>(
         &mut self,
         node: &Rc<RefCell<TreeNode>>,
@@ -1561,11 +1477,6 @@ impl Session {
     }
 
     /// Adds an edge between two geometry objects in the graph.
-    ///
-    /// # Arguments
-    /// * `from_guid` - The GUID of the source object
-    /// * `to_guid` - The GUID of the target object
-    /// * `attribute` - The attribute or label for the edge
     pub fn add_edge(&mut self, from_guid: &str, to_guid: &str, attribute: &str) {
         self.graph.add_edge(from_guid, to_guid, attribute);
     }
@@ -1575,22 +1486,11 @@ impl Session {
     // ═══════════════════════════════════════════════════════════════════════════
 
     /// Gets a geometry object by its GUID.
-    ///
-    /// # Arguments
-    /// * `guid` - The GUID of the object to retrieve
-    ///
-    /// # Returns
-    /// An Option containing a reference to the Geometry enum if found, or None if not found.
     pub fn get_object(&self, guid: &str) -> Option<&Geometry> {
         self.lookup.get(guid)
     }
 
     /// Select objects of one type, grouped by the top-level nodes of the tree.
-    ///
-    /// # Returns
-    /// One vector per direct child of the root, in tree order, each holding that subtree's
-    /// objects of type `T` in depth-first order. A child holding no object of type `T`
-    /// contributes no vector, so the result has no empty entries.
     pub fn select_by_type<T: FromGeometry + Clone>(&self) -> Vec<Vec<T>> {
         let mut groups = Vec::new();
         let Some(root) = self.tree.root() else {
@@ -1614,12 +1514,6 @@ impl Session {
     }
 
     /// Remove a geometry object by its GUID.
-    ///
-    /// # Arguments
-    /// * `guid` - The UUID of the geometry object to remove.
-    ///
-    /// # Returns
-    /// `true` if the object was removed, `false` if not found.
     pub fn remove_object(&mut self, guid: &str) -> bool {
         // Check if object exists in lookup table
         if !self.lookup.contains_key(guid) {
@@ -1662,25 +1556,12 @@ impl Session {
     // ═══════════════════════════════════════════════════════════════════════════
 
     /// Add a parent-child relationship in the tree structure.
-    ///
-    /// # Arguments
-    /// * `parent_guid` - The GUID of the parent geometry object.
-    /// * `child_guid` - The GUID of the child geometry object.
-    ///
-    /// # Returns
-    /// `true` if the relationship was added successfully.
     pub fn add_hierarchy(&mut self, parent_guid: &str, child_guid: &str) -> bool {
         self.tree
             .add_child_by_guid(&parent_guid.to_string(), &child_guid.to_string())
     }
 
     /// Get all children GUIDs of a geometry object in the tree.
-    ///
-    /// # Arguments
-    /// * `guid` - The GUID of the geometry object.
-    ///
-    /// # Returns
-    /// A vector containing the GUIDs of all children of the specified geometry object.
     pub fn get_children(&self, guid: &str) -> Vec<String> {
         self.tree.get_children(guid)
     }
@@ -1690,22 +1571,11 @@ impl Session {
     // ═══════════════════════════════════════════════════════════════════════════
 
     /// Add a relationship edge in the graph structure.
-    ///
-    /// # Arguments
-    /// * `from_guid` - The GUID of the source geometry object.
-    /// * `to_guid` - The GUID of the target geometry object.
-    /// * `relationship_type` - The type of relationship.
     pub fn add_relationship(&mut self, from_guid: &str, to_guid: &str, relationship_type: &str) {
         self.graph.add_edge(from_guid, to_guid, relationship_type);
     }
 
     /// Get all GUIDs connected to the given GUID in the graph.
-    ///
-    /// # Arguments
-    /// * `guid` - The GUID of the geometry object.
-    ///
-    /// # Returns
-    /// A vector containing the GUIDs of all connected geometry objects.
     pub fn get_neighbours(&self, guid: &str) -> Vec<String> {
         self.graph.get_neighbors(guid)
     }
@@ -1715,14 +1585,6 @@ impl Session {
     // ═══════════════════════════════════════════════════════════════════════════
 
     /// All geometry with its hierarchical placement BAKED into the coordinates.
-    ///
-    /// Each object is transformed by its cumulative `world_xform` — its own transform with
-    /// every ancestor's multiplied down the tree. The result is a FLATTENED snapshot: every
-    /// guid's world transform is identity by construction, so never pair it back with
-    /// `self.xforms` or the placement would be applied twice.
-    ///
-    /// # Returns
-    /// Objects collection with transformed geometry
     pub fn get_geometry(&self) -> Objects {
         let mut objects = self.objects_synced(); // lookup is the truth
         let world = self.world_xforms();

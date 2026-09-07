@@ -103,13 +103,14 @@ pub fn run_instance_ref_protobuf_roundtrip() -> TestResult {
         r.flags = 5;
 
         // Bytes
+        let guid = r.guid().to_string();
         let b = r.pb_dumps();
         let loaded_s = InstanceRef::pb_loads(&b).unwrap();
 
         MINI_CHECK!(loaded_s.name == "test_ref");
         MINI_CHECK!(loaded_s.definition_guid == "def-xyz");
         MINI_CHECK!(loaded_s.flags == 5);
-        MINI_CHECK!(loaded_s.guid() == r.guid());
+        MINI_CHECK!(loaded_s.guid() == guid);
         MINI_CHECK!(TOLERANCE.is_close(loaded_s[14], 3.0));
 
         // File
@@ -119,7 +120,7 @@ pub fn run_instance_ref_protobuf_roundtrip() -> TestResult {
 
         MINI_CHECK!(loaded.name == "test_ref");
         MINI_CHECK!(loaded.definition_guid == "def-xyz");
-        MINI_CHECK!(loaded.guid() == r.guid());
+        MINI_CHECK!(loaded.guid() == guid);
         MINI_CHECK!(TOLERANCE.is_close(loaded[12], 1.0));
         MINI_CHECK!(TOLERANCE.is_close(loaded[13], 2.0));
         MINI_CHECK!(TOLERANCE.is_close(loaded[14], 3.0));

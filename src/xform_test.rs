@@ -995,11 +995,12 @@ pub fn run_xform_protobuf_roundtrip() -> TestResult {
         xform.name = "test_xform_proto".to_string();
 
         let filename = "serialization/test_xform.bin";
+        let guid = xform.guid().to_string();
         xform.pb_dump(filename);
         let loaded = Xform::pb_load(filename);
 
         MINI_CHECK!(loaded.name == "test_xform_proto");
-        MINI_CHECK!(loaded.guid() == xform.guid());
+        MINI_CHECK!(loaded.guid() == guid);
         MINI_CHECK!(TOLERANCE.is_close(loaded.m[0], 1.0) && TOLERANCE.is_close(loaded.m[1], 0.0));
         MINI_CHECK!(TOLERANCE.is_close(loaded.m[2], 0.0) && TOLERANCE.is_close(loaded.m[3], 0.0));
         MINI_CHECK!(TOLERANCE.is_close(loaded.m[4], 0.0) && TOLERANCE.is_close(loaded.m[5], 1.0));

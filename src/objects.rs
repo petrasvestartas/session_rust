@@ -110,6 +110,10 @@ impl Default for Objects {
 }
 
 impl Objects {
+    pub fn has_guid(&self) -> bool {
+        self.guid.get().is_some()
+    }
+
     pub fn guid(&self) -> &str {
         self.guid.get_or_init(|| uuid::Uuid::new_v4().to_string())
     }
@@ -165,7 +169,7 @@ impl Objects {
         use prost::Message;
         let proto = crate::proto::Objects {
             name: self.name.clone(),
-            guid: self.guid().to_string(),
+            guid: self.guid.get().cloned().unwrap_or_default(),
             points: self
                 .points
                 .iter()
@@ -234,7 +238,9 @@ impl Objects {
         use prost::Message;
         let proto = crate::proto::Objects::decode(data)?;
         let mut objects = Objects::new();
-        objects.set_guid(proto.guid.clone());
+        if !proto.guid.is_empty() {
+            objects.set_guid(proto.guid.clone());
+        }
         objects.name = proto.name;
         for p in &proto.points {
             objects

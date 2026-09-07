@@ -186,12 +186,13 @@ pub fn run_line_protobuf_roundtrip() -> TestResult {
         //   pb_load(path)   | file         | read from file
 
         // Bytes
+        let guid = l.guid().to_string();
         let b = l.pb_dumps();
         let loaded_s = Line::pb_loads(&b).unwrap();
 
         MINI_CHECK!(loaded_s.name == "test_line");
         MINI_CHECK!(TOLERANCE.is_close(loaded_s[0], 42.1));
-        MINI_CHECK!(loaded_s.guid() == l.guid());
+        MINI_CHECK!(loaded_s.guid() == guid);
 
         // File
         let fname = "serialization/test_line.bin";
@@ -206,7 +207,7 @@ pub fn run_line_protobuf_roundtrip() -> TestResult {
         MINI_CHECK!(TOLERANCE.is_close(loaded[4], 210.5));
         MINI_CHECK!(TOLERANCE.is_close(loaded[5], 252.6));
         MINI_CHECK!(loaded.dash == vec![3.0, 2.0]);
-        MINI_CHECK!(loaded.guid() == l.guid());
+        MINI_CHECK!(loaded.guid() == guid);
     })
 }
 

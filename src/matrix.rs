@@ -184,6 +184,10 @@ impl Matrix {
         m
     }
 
+    pub fn has_guid(&self) -> bool {
+        self.guid.get().is_some()
+    }
+
     pub fn guid(&self) -> &str {
         self.guid.get_or_init(|| uuid::Uuid::new_v4().to_string())
     }
@@ -658,7 +662,7 @@ impl Matrix {
     pub fn pb_dumps(&self) -> Vec<u8> {
         use prost::Message;
         let proto = crate::proto::Matrix {
-            guid: self.guid().to_string(),
+            guid: self.guid.get().cloned().unwrap_or_default(),
             name: self.name.clone(),
             rows: self.rows as i32,
             cols: self.cols as i32,
@@ -675,7 +679,9 @@ impl Matrix {
             proto.cols as usize,
             proto.data.into_iter().map(|v| v as f64).collect(),
         );
-        m.set_guid(proto.guid);
+        if !proto.guid.is_empty() {
+            m.set_guid(proto.guid);
+        }
         m.name = proto.name;
         Ok(m)
     }

@@ -107,6 +107,10 @@ impl PointCloud {
     }
 
     /// Lazy GUID accessor
+    pub fn has_guid(&self) -> bool {
+        self.guid.get().is_some()
+    }
+
     pub fn guid(&self) -> &str {
         self.guid.get_or_init(|| uuid::Uuid::new_v4().to_string())
     }
@@ -557,7 +561,7 @@ impl PointCloud {
         use crate::proto;
 
         proto::PointCloud {
-            guid: self.guid().to_string(),
+            guid: self.guid.get().cloned().unwrap_or_default(),
             name: self.name.clone(),
             coords: self._coords.iter().map(|&v| v as f64).collect(),
             colors: self._colors.iter().map(|&c| c as u32).collect(),
@@ -588,7 +592,9 @@ impl PointCloud {
             proto.colors.into_iter().map(|c| c as i32).collect(),
             proto.normals.into_iter().map(|v| v as f64).collect(),
         );
-        pc.set_guid(proto.guid);
+        if !proto.guid.is_empty() {
+            pc.set_guid(proto.guid);
+        }
         pc.name = proto.name;
         pc.point_size = if proto.point_size > 0.0 {
             proto.point_size as f64

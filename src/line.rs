@@ -195,6 +195,10 @@ impl Line {
         )
     }
 
+    pub fn has_guid(&self) -> bool {
+        self.guid.get().is_some()
+    }
+
     pub fn guid(&self) -> &str {
         self.guid.get_or_init(|| uuid::Uuid::new_v4().to_string())
     }
@@ -414,7 +418,7 @@ impl Line {
         // sub-messages were serialization-only wrappers (the kernel stores flat _x0.._z1)
         // and each carried a redundant `width: 1.0` fixed64.
         crate::proto::Line {
-            guid: self.guid().to_string(),
+            guid: self.guid.get().cloned().unwrap_or_default(),
             name: self.name.clone(),
             width: self.width,
             dash: self.dash.clone(),
@@ -439,7 +443,9 @@ impl Line {
         } else {
             Self::default()
         };
-        line.set_guid(proto.guid);
+        if !proto.guid.is_empty() {
+            line.set_guid(proto.guid);
+        }
         line.name = proto.name;
         if proto.width > 0.0 {
             line.width = proto.width;

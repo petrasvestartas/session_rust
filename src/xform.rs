@@ -120,6 +120,10 @@ impl Xform {
         Self::from_cols(col_x.clone(), col_y.clone(), col_z.clone())
     }
 
+    pub fn has_guid(&self) -> bool {
+        self.guid.get().is_some()
+    }
+
     pub fn guid(&self) -> &str {
         self.guid.get_or_init(|| uuid::Uuid::new_v4().to_string())
     }
@@ -1002,7 +1006,7 @@ impl Xform {
         use prost::Message;
 
         let proto = crate::proto::Xform {
-            guid: self.guid().to_string(),
+            guid: self.guid.get().cloned().unwrap_or_default(),
             name: self.name.clone(),
             matrix: self.m.iter().map(|&v| v as f64).collect(),
         };
@@ -1024,7 +1028,9 @@ impl Xform {
         let proto = crate::proto::Xform::decode(data)?;
 
         let mut xform = Self::identity();
-        xform.set_guid(proto.guid);
+        if !proto.guid.is_empty() {
+            xform.set_guid(proto.guid);
+        }
         xform.name = proto.name;
         for (i, val) in proto.matrix.iter().enumerate() {
             if i < 16 {

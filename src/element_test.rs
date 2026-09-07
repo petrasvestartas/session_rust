@@ -377,10 +377,11 @@ pub fn run_element_registry_round_trip() -> TestResult {
         plate.element_type = "TestPlate".to_string();
         plate.element_data = b"12.5,30,11,20".to_vec();
 
+        let guid = plate.guid().to_string();
         let loaded = Element::pb_loads(&plate.pb_dumps()).unwrap();
 
         // Identity, base state and the domain payload all survived.
-        MINI_CHECK!(loaded.guid() == plate.guid());
+        MINI_CHECK!(loaded.guid() == guid);
         MINI_CHECK!(loaded.name == "plate_0");
         MINI_CHECK!(matches!(loaded.geometry(), ElementGeometry::Mesh(_)));
         MINI_CHECK!(loaded.element_type == "TestPlate");

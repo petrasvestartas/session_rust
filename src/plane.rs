@@ -516,6 +516,10 @@ impl Plane {
         }
     }
 
+    pub fn has_guid(&self) -> bool {
+        self.guid.get().is_some()
+    }
+
     pub fn guid(&self) -> &str {
         self.guid.get_or_init(|| uuid::Uuid::new_v4().to_string())
     }
@@ -1026,7 +1030,7 @@ impl Plane {
     pub fn to_proto(&self) -> crate::proto::Plane {
         // Use single flat frame array of 12 numbers
         crate::proto::Plane {
-            guid: self.guid().to_string(),
+            guid: self.guid.get().cloned().unwrap_or_default(),
             name: self.name.clone(),
             frame: vec![
                 self._origin[0] as f64,
@@ -1101,7 +1105,9 @@ impl Plane {
         }
 
         let guid = std::sync::OnceLock::new();
-        let _ = guid.set(proto.guid);
+        if !proto.guid.is_empty() {
+            let _ = guid.set(proto.guid);
+        }
         Plane {
             guid,
             name: proto.name,

@@ -1492,6 +1492,10 @@ impl NurbsSurfaceTrimmed {
         result
     }
 
+    pub fn has_guid(&self) -> bool {
+        self.guid.get().is_some()
+    }
+
     pub fn guid(&self) -> &str {
         self.guid.get_or_init(|| uuid::Uuid::new_v4().to_string())
     }
@@ -2584,7 +2588,7 @@ impl NurbsSurfaceTrimmed {
             .collect();
 
         let proto = crate::proto::NurbsSurfaceTrimmed {
-            guid: self.guid().to_string(),
+            guid: self.guid.get().cloned().unwrap_or_default(),
             name: self.name.clone(),
             width: self.width as f64,
             surface: Some(surface_proto),
@@ -2607,7 +2611,9 @@ impl NurbsSurfaceTrimmed {
 
         let proto = crate::proto::NurbsSurfaceTrimmed::decode(data)?;
         let mut ts = Self::new();
-        ts.set_guid(proto.guid.clone());
+        if !proto.guid.is_empty() {
+            ts.set_guid(proto.guid.clone());
+        }
         ts.name = proto.name;
         ts.width = proto.width as f64;
 

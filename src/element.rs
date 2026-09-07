@@ -61,6 +61,10 @@ impl ElementFeature {
         }
     }
 
+    pub fn has_guid(&self) -> bool {
+        self.guid.get().is_some()
+    }
+
     pub fn guid(&self) -> &str {
         self.guid.get_or_init(|| uuid::Uuid::new_v4().to_string())
     }
@@ -185,7 +189,7 @@ impl ElementFeature {
 
     pub fn pb_dumps(&self) -> Vec<u8> {
         let proto = crate::proto::ElementFeature {
-            guid: self.guid().to_string(),
+            guid: self.guid.get().cloned().unwrap_or_default(),
             name: self.name.clone(),
             feature_type: self.feature_type.clone(),
             face_index: self.face_index,
@@ -206,7 +210,7 @@ impl ElementFeature {
         }
         let f = Self::new(&proto.feature_type, proto.face_index, outlines, &proto.name);
         if !proto.guid.is_empty() {
-            f.set_guid(proto.guid.clone());
+                f.set_guid(proto.guid.clone());
         }
         Ok(f)
     }
@@ -349,6 +353,10 @@ impl Element {
             insertion_vectors: Vec::new(),
             dimensions: None,
         }
+    }
+
+    pub fn has_guid(&self) -> bool {
+        self.guid.get().is_some()
     }
 
     pub fn guid(&self) -> &str {
@@ -773,7 +781,7 @@ impl Element {
     /// The proto struct itself — pb_dumps encodes it; Session embeds it directly.
     pub fn to_proto(&self) -> crate::proto::Element {
         let mut proto = crate::proto::Element::default();
-        proto.guid = self.guid().to_string();
+        proto.guid = self.guid.get().cloned().unwrap_or_default();
         proto.name = self.name.clone();
 
         match &self.geometry {
@@ -854,7 +862,9 @@ impl Element {
             _ => Self::new("my_element"),
         };
 
-        elem.set_guid(proto.guid.clone());
+        if !proto.guid.is_empty() {
+            elem.set_guid(proto.guid.clone());
+        }
         elem.name = proto.name.clone();
         elem.element_type = proto.element_type.clone();
         elem.element_data = proto.element_data.clone();

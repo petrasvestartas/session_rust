@@ -133,6 +133,10 @@ impl Quaternion {
     }
 
     /// Lazy GUID accessor
+    pub fn has_guid(&self) -> bool {
+        self.guid.get().is_some()
+    }
+
     pub fn guid(&self) -> &str {
         self.guid.get_or_init(|| uuid::Uuid::new_v4().to_string())
     }

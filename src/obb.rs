@@ -283,6 +283,10 @@ impl OBB {
         Self::from_points_with_plane(&points, plane, inflate)
     }
 
+    pub fn has_guid(&self) -> bool {
+        self.guid.get().is_some()
+    }
+
     pub fn guid(&self) -> &str {
         self.guid.get_or_init(|| uuid::Uuid::new_v4().to_string())
     }
@@ -789,7 +793,7 @@ impl OBB {
             half_size: Some(
                 crate::proto::Vector::decode(self.half_size.pb_dumps().as_slice()).unwrap(),
             ),
-            guid: self.guid().to_string(),
+            guid: self.guid.get().cloned().unwrap_or_default(),
             name: self.name.clone(),
         }
     }
@@ -830,7 +834,9 @@ impl OBB {
             crate::vector::Vector::new(0.5, 0.5, 0.5)
         };
         let mut bbox = OBB::new(center, x_axis, y_axis, z_axis, half_size);
-        bbox.set_guid(proto.guid);
+        if !proto.guid.is_empty() {
+            bbox.set_guid(proto.guid);
+        }
         bbox.name = proto.name;
         Ok(bbox)
     }

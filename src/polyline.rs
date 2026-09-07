@@ -156,6 +156,10 @@ impl Polyline {
         }
     }
 
+    pub fn has_guid(&self) -> bool {
+        self.guid.get().is_some()
+    }
+
     pub fn guid(&self) -> &str {
         self.guid.get_or_init(|| uuid::Uuid::new_v4().to_string())
     }
@@ -727,7 +731,7 @@ impl Polyline {
     /// The proto struct itself — pb_dumps encodes it; Session embeds it directly.
     pub fn to_proto(&self) -> crate::proto::Polyline {
         crate::proto::Polyline {
-            guid: self.guid().to_string(),
+            guid: self.guid.get().cloned().unwrap_or_default(),
             name: self.name.clone(),
             coords: self.coords.iter().map(|&v| v as f64).collect(),
             width: self.width as f64,
@@ -760,7 +764,9 @@ impl Polyline {
     /// Build from an already-decoded proto — pb_loads decodes then calls this.
     pub fn from_proto(proto: crate::proto::Polyline) -> Self {
         let mut pl = Self::from_coords(proto.coords.into_iter().map(|v| v as f64).collect());
-        pl.set_guid(proto.guid);
+        if !proto.guid.is_empty() {
+            pl.set_guid(proto.guid);
+        }
         pl.name = proto.name;
         pl.width = proto.width as f64;
         pl.dash = proto.dash;
