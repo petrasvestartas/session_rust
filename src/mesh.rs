@@ -2977,6 +2977,110 @@ impl Mesh {
         }
     }
 
+    /// Fill `triangulation` for every face a fan would get wrong.
+    ///
+    /// `to_render` falls back to a fan from vertex 0 when a face carries no cached
+    /// triangulation, and a fan is only valid for a CONVEX polygon: fanned from vertex 0,
+    /// a concave face throws triangles outside its own outline, which is what overlapping
+    /// edges on a shaded solid look like. CDT respects the boundary, so every face with
+    /// more than three vertices gets one. Faces that already carry a triangulation are
+    /// left alone - the constructors that build one (loft, polygon-with-holes) know more
+    /// about their face than this does.
+    pub fn triangulate_faces(&mut self) {
+        for face_key in self.faces() {
+            if self.triangulation.contains_key(&face_key) {
+                continue;
+            }
+            let Some(keys) = self.face_vertices(face_key).cloned() else { continue };
+            if keys.len() < 4 {
+                continue;
+            }
+            let (Some(points), Some(normal)) = (self.face_points(face_key), self.face_normal(face_key)) else {
+                continue;
+            };
+
+            // Project onto the face's own plane: CDT is 2D, and the third coordinate is
+            // what the fan was ignoring anyway.
+            let (nx, ny, nz) = (normal[0], normal[1], normal[2]);
+            let mut u = Vector::new(1.0, 0.0, 0.0);
+            if nx.abs() > 0.9 {
+                u = Vector::new(0.0, 1.0, 0.0);
+            }
+            let (ux, uy, uz) = (
+                ny * u[2] - nz * u[1],
+                nz * u[0] - nx * u[2],
+                nx * u[1] - ny * u[0],
+            );
+            let length = (ux * ux + uy * uy + uz * uz).sqrt();
+            if length < 1e-12 {
+                continue;
+            }
+            let (ux, uy, uz) = (ux / length, uy / length, uz / length);
+            let (vx, vy, vz) = (ny * uz - nz * uy, nz * ux - nx * uz, nx * uy - ny * ux);
+
+            let flat: Vec<Point> = points
+                .iter()
+                .map(|p| {
+                    Point::new(
+                        p[0] * ux + p[1] * uy + p[2] * uz,
+                        p[0] * vx + p[1] * vy + p[2] * vz,
+                        0.0,
+                    )
+                })
+                .collect();
+
+            // Test the thing that actually matters: does the fan `to_render` would use put a
+            // triangle the wrong way round? A convexity predicate is a proxy for that, and a
+            // poor one on the warped faces a loft produces - their projection to one plane is
+            // not faithful, so a concave-looking polygon may fan fine and a convex-looking one
+            // may not. So fan it, measure it, and only intervene when the fan is actually wrong.
+            let fan_is_wrong = (1..keys.len() - 1).any(|i| {
+                let (p0, p1, p2) = (&points[0], &points[i], &points[i + 1]);
+                let (e1x, e1y, e1z) = (p1[0] - p0[0], p1[1] - p0[1], p1[2] - p0[2]);
+                let (e2x, e2y, e2z) = (p2[0] - p0[0], p2[1] - p0[1], p2[2] - p0[2]);
+                let cross = [
+                    e1y * e2z - e1z * e2y,
+                    e1z * e2x - e1x * e2z,
+                    e1x * e2y - e1y * e2x,
+                ];
+                cross[0] * nx + cross[1] * ny + cross[2] * nz < 0.0
+            });
+            if !fan_is_wrong {
+                continue;
+            }
+
+            let tris = remesh_cdt::cdt_triangulate(&flat, &[]);
+            if tris.is_empty() {
+                continue;
+            }
+
+            // cdt_triangulate makes no promise about winding, and a backwards triangle
+            // shades dark and confuses the edge pass, which reads adjacent face normals.
+            // So every triangle is checked against the face's own normal and flipped if it
+            // disagrees - the same lesson as elsewhere: orient explicitly, never assume.
+            let oriented: Vec<[usize; 3]> = tris
+                .iter()
+                .map(|&(a, b, c)| {
+                    let (p0, p1, p2) = (&points[a], &points[b], &points[c]);
+                    let (e1x, e1y, e1z) = (p1[0] - p0[0], p1[1] - p0[1], p1[2] - p0[2]);
+                    let (e2x, e2y, e2z) = (p2[0] - p0[0], p2[1] - p0[1], p2[2] - p0[2]);
+                    let cross = [
+                        e1y * e2z - e1z * e2y,
+                        e1z * e2x - e1x * e2z,
+                        e1x * e2y - e1y * e2x,
+                    ];
+                    let dot = cross[0] * nx + cross[1] * ny + cross[2] * nz;
+                    if dot < 0.0 {
+                        [keys[a], keys[c], keys[b]]
+                    } else {
+                        [keys[a], keys[b], keys[c]]
+                    }
+                })
+                .collect();
+            self.triangulation.insert(face_key, oriented);
+        }
+    }
+
     pub fn face_normals(&self) -> HashMap<usize, Vector> {
         let mut normals = HashMap::new();
         for face_key in self.face.keys() {
@@ -3790,6 +3894,11 @@ impl Mesh {
         if let Some(&max_f) = mesh.face.keys().max() {
             mesh.max_face = max_f + 1;
         }
+
+        // A file that carried no triangulation would otherwise be fanned from vertex 0 at
+        // render time, which is wrong for any concave face. Faces the file DID triangulate
+        // are left as they are.
+        mesh.triangulate_faces();
 
         mesh
     }
