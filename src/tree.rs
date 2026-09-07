@@ -467,21 +467,18 @@ impl Tree {
 
     /// Print the hierarchy to stdout
     pub fn print_hierarchy(&self) {
-        if let Some(root) = &self.root_node {
-            Self::print_node(root, 0);
+        match &self.root_node {
+            Some(root) => Self::print_node(root, "", true),
+            None => println!("Empty tree"),
         }
     }
 
-    fn print_node(node: &Rc<RefCell<TreeNode>>, level: usize) {
-        let indent = "  ".repeat(level);
-        println!(
-            "{}├── {} ({})",
-            indent,
-            node.borrow().name,
-            node.borrow().guid()
-        );
-        for child in node.borrow().children() {
-            Self::print_node(&child, level + 1);
+    fn print_node(node: &Rc<RefCell<TreeNode>>, prefix: &str, last: bool) {
+        println!("{}{}{}", prefix, if last { "└── " } else { "├── " }, node.borrow());
+        let prefix = format!("{}{}", prefix, if last { "    " } else { "│   " });
+        let children = node.borrow().children();
+        for (i, child) in children.iter().enumerate() {
+            Self::print_node(child, &prefix, i + 1 == children.len());
         }
     }
 
