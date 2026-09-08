@@ -1209,8 +1209,7 @@ pub fn run_intersection_polyline_plane() -> TestResult {
         }
 
         // Plane through two opposite vertices: each vertex is reported once.
-        let diag =
-            Plane::from_point_normal(Point::new(0.0, 0.0, 0.0), Vector::new(1.0, -1.0, 0.0));
+        let diag = Plane::from_point_normal(Point::new(0.0, 0.0, 0.0), Vector::new(1.0, -1.0, 0.0));
         let dresult = intersection::polyline_plane(&poly, &diag);
         MINI_CHECK!(dresult.is_some());
         let (dpts, dids) = dresult.unwrap();
@@ -1488,9 +1487,15 @@ pub fn run_intersection_polyline_plane_to_line() -> TestResult {
 
         // Four crossings (non-convex comb): the line spans the EXTREME pair.
         let comb = Polyline::new(vec![
-            Point::new(0.0, 0.0, 0.0), Point::new(4.0, 0.0, 0.0), Point::new(4.0, 3.0, 0.0),
-            Point::new(3.0, 3.0, 0.0), Point::new(3.0, 1.0, 0.0), Point::new(1.0, 1.0, 0.0),
-            Point::new(1.0, 3.0, 0.0), Point::new(0.0, 3.0, 0.0), Point::new(0.0, 0.0, 0.0),
+            Point::new(0.0, 0.0, 0.0),
+            Point::new(4.0, 0.0, 0.0),
+            Point::new(4.0, 3.0, 0.0),
+            Point::new(3.0, 3.0, 0.0),
+            Point::new(3.0, 1.0, 0.0),
+            Point::new(1.0, 1.0, 0.0),
+            Point::new(1.0, 3.0, 0.0),
+            Point::new(0.0, 3.0, 0.0),
+            Point::new(0.0, 0.0, 0.0),
         ]);
         let wide = polyline_plane_to_line(&comb, &pln, &Point::new(0.0, 0.0, 0.0)).unwrap();
         MINI_CHECK!(TOLERANCE.is_close(wide.start()[0], 0.0));
@@ -1567,6 +1572,21 @@ pub fn run_intersection_closed_and_open_paths_2d() -> TestResult {
         let t_hi = t0.max(t1);
         MINI_CHECK!(TOLERANCE.is_close(t_lo, 1.5));
         MINI_CHECK!(TOLERANCE.is_close(t_hi, 3.5));
+
+        // Joint running exactly ALONG the plate's top edge: the winding number puts
+        // that boundary outside, so only the collinear overlap keeps the flush side.
+        let flush = Polyline::new(vec![
+            Point::new(-2.0, 10.0, 0.0),
+            Point::new(12.0, 10.0, 0.0),
+        ]);
+        let flush_result = closed_and_open_paths_2d(&plate, &flush, &pln);
+        MINI_CHECK!(flush_result.is_some());
+        let (flush_out, (flush_t0, flush_t1)) = flush_result.unwrap();
+        MINI_CHECK!(flush_out.point_count() == 2);
+        MINI_CHECK!(TOLERANCE.is_close(flush_out.get_point(0).unwrap()[0], 10.0));
+        MINI_CHECK!(TOLERANCE.is_close(flush_out.get_point(1).unwrap()[0], 0.0));
+        MINI_CHECK!(TOLERANCE.is_close(flush_t0, 2.0));
+        MINI_CHECK!(TOLERANCE.is_close(flush_t1, 3.0));
     })
 }
 REGISTER_MINI_TEST!(

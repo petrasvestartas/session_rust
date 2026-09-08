@@ -1093,7 +1093,7 @@ pub fn curve_closest_point(curve: &NurbsCurve, test_point: &Point, t0: f64, t1: 
     Closest::curve_point(curve, test_point, t0, t1)
 }
 
-/// Find intersection curves between a NURBS surface and a plane
+/// Flatten a mesh into a triangle fan per face, skipping degenerate faces.
 fn mesh_triangles(mesh: &crate::Mesh) -> Vec<(Point, Point, Point)> {
     let (vertices, faces) = mesh.to_vertices_and_faces();
     let mut tris: Vec<(Point, Point, Point)> = Vec::new();
@@ -5704,12 +5704,66 @@ pub fn closed_and_open_paths_2d(
             Some((t_s, t_e))
         };
 
+    // A joint edge lying ON a plate edge is a boundary case the winding number
+    // cannot classify: report its parametric overlap so the caller keeps it
+    // instead of dropping the joint's flush side.
+    let collinear_overlap =
+        |s0: (f64, f64), s1: (f64, f64), e0: (f64, f64), e1: (f64, f64)| -> Option<(f64, f64)> {
+            let sx = s1.0 - s0.0;
+            let sy = s1.1 - s0.1;
+            let ex = e1.0 - e0.0;
+            let ey = e1.1 - e0.1;
+            let sl2 = sx * sx + sy * sy;
+            let el2 = ex * ex + ey * ey;
+            if sl2 < 1e-20 || el2 < 1e-20 {
+                return None;
+            }
+            let cross_norm = (sx * ey - sy * ex) / (sl2 * el2).sqrt();
+            const ANGLE_SIN_EPS: f64 = 1e-4; // 0.006 deg - true parallel
+            if cross_norm.abs() > ANGLE_SIN_EPS {
+                return None;
+            }
+            let apx = s0.0 - e0.0;
+            let apy = s0.1 - e0.1;
+            let perp = (apx * ey - apy * ex) / el2.sqrt();
+            const DIST_EPS: f64 = 1e-3; // 0.001 mm - true FP noise
+            if perp.abs() > DIST_EPS {
+                return None;
+            }
+            let ts0 = (apx * ex + apy * ey) / el2;
+            let bpx = s1.0 - e0.0;
+            let bpy = s1.1 - e0.1;
+            let ts1 = (bpx * ex + bpy * ey) / el2;
+            let ov_min = ts0.min(ts1).max(0.0);
+            let ov_max = ts0.max(ts1).min(1.0);
+            if ov_max - ov_min < 1e-9 {
+                return None;
+            }
+            let tsr = ts1 - ts0;
+            if tsr.abs() < 1e-20 {
+                return None;
+            }
+            let mut t_enter = (ov_min - ts0) / tsr;
+            let mut t_exit = (ov_max - ts0) / tsr;
+            if t_enter > t_exit {
+                std::mem::swap(&mut t_enter, &mut t_exit);
+            }
+            t_enter = t_enter.max(0.0);
+            t_exit = t_exit.min(1.0);
+            if t_exit - t_enter > 1e-9 {
+                Some((t_enter, t_exit))
+            } else {
+                None
+            }
+        };
+
     const EPS: f64 = 1e-9;
     let mut pieces: Vec<Vec<(f64, f64)>> = Vec::new();
     for s in 0..joint2d.len() - 1 {
         let p0 = joint2d[s];
         let p1 = joint2d[s + 1];
         let mut ts: Vec<f64> = vec![0.0];
+        let mut coll_ranges: Vec<(f64, f64)> = Vec::new();
         for i in 0..plate2d.len() {
             let a = plate2d[i];
             let b = plate2d[(i + 1) % plate2d.len()];
@@ -5718,17 +5772,33 @@ pub fn closed_and_open_paths_2d(
                     ts.push(t_s);
                 }
             }
+            if let Some(c) = collinear_overlap(p0, p1, a, b) {
+                coll_ranges.push(c);
+                if c.0 > EPS && c.0 < 1.0 - EPS {
+                    ts.push(c.0);
+                }
+                if c.1 > EPS && c.1 < 1.0 - EPS {
+                    ts.push(c.1);
+                }
+            }
         }
         ts.push(1.0);
         ts.sort_by(|a, b| a.partial_cmp(b).unwrap());
         ts.dedup_by(|a, b| (*a - *b).abs() < EPS);
+
+        let sub_is_collinear = |t_a: f64, t_b: f64| -> bool {
+            let t_mid = 0.5 * (t_a + t_b);
+            coll_ranges
+                .iter()
+                .any(|r| t_mid >= r.0 - EPS && t_mid <= r.1 + EPS)
+        };
 
         let mut current: Vec<(f64, f64)> = Vec::new();
         for i in 0..ts.len() - 1 {
             let t_mid = 0.5 * (ts[i] + ts[i + 1]);
             let mx = p0.0 + (p1.0 - p0.0) * t_mid;
             let my = p0.1 + (p1.1 - p0.1) * t_mid;
-            if pip(mx, my) {
+            if pip(mx, my) || sub_is_collinear(ts[i], ts[i + 1]) {
                 let sub_a = (p0.0 + (p1.0 - p0.0) * ts[i], p0.1 + (p1.1 - p0.1) * ts[i]);
                 let sub_b = (
                     p0.0 + (p1.0 - p0.0) * ts[i + 1],
