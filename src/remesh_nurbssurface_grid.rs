@@ -16,6 +16,9 @@ impl RemeshNurbsSurfaceGrid {
     /// normal deviation per subdivision (smaller → denser on curved spans) and
     /// `chord_factor` is the chord-height tolerance as a fraction of the bbox diagonal
     /// (smaller → denser). The defaults (20.0, 0.005) reproduce `from_u_v`.
+    /// Normals are finite unit surface normals aligned with winding. Singular poles use
+    /// area-weighted adjacent normals, accumulated in face-key order; zero/non-finite
+    /// estimates fall back to +Z. No world-unit tolerance gates normal normalization.
     pub fn from_u_v_q(
         s: NurbsSurface,
         max_u: usize,
@@ -500,7 +503,8 @@ impl RemeshNurbsSurfaceGrid {
         for vk in result.vertex.keys() {
             vn_map.insert(*vk, (0.0, 0.0, 0.0));
         }
-        let face_keys: Vec<usize> = result.face.keys().cloned().collect();
+        let mut face_keys: Vec<usize> = result.face.keys().cloned().collect();
+        face_keys.sort_unstable();
         for fk in &face_keys {
             if let Some(vids) = result.face.get(fk) {
                 if vids.len() < 3 {
@@ -544,7 +548,7 @@ impl RemeshNurbsSurfaceGrid {
             // Winding-consistent direction from the accumulated face normals.
             let (mut fx, mut fy, mut fz) = vn_map.get(&vk).copied().unwrap_or((0.0, 0.0, 1.0));
             let flen = (fx * fx + fy * fy + fz * fz).sqrt();
-            if flen > 1e-15 {
+            if flen.is_finite() && flen > 0.0 {
                 fx /= flen;
                 fy /= flen;
                 fz /= flen;
@@ -570,9 +574,15 @@ impl RemeshNurbsSurfaceGrid {
             let (mut nx, mut ny, mut nz) = (fx, fy, fz);
             if !is_pole {
                 if let Some((u, v)) = uv {
-                    let na = s.normal_at(u, v);
+                    // Read the derivative cross: normal_at returns a +Z sentinel at U poles.
+                    let derivatives = s.evaluate(u, v, 1);
+                    let mut na = [0.0; 3];
+                    if derivatives.len() >= 3 {
+                        let normal = derivatives[2].cross(&derivatives[1]);
+                        na = [normal[0], normal[1], normal[2]];
+                    }
                     let nl = (na[0] * na[0] + na[1] * na[1] + na[2] * na[2]).sqrt();
-                    if nl > 1e-9 {
+                    if nl.is_finite() && nl > 0.0 {
                         let (mut ax, mut ay, mut az) = (na[0] / nl, na[1] / nl, na[2] / nl);
                         if ax * fx + ay * fy + az * fz < 0.0 {
                             ax = -ax;
@@ -590,7 +600,123 @@ impl RemeshNurbsSurfaceGrid {
             }
         }
 
+        Self::split_crease_normals(&s, &mut result);
         result
+    }
+    /// Split shading vertices only at internal C0 knots with different one-sided normals.
+    /// Exact positions and UV samples stay unchanged; coincident smooth knot joins stay shared.
+    pub(crate) fn split_crease_normals(s: &NurbsSurface, mesh: &mut Mesh) {
+        let mut candidates = HashMap::<usize, u8>::new();
+        for (&key, vd) in &mesh.vertex {
+            let (Some(&u), Some(&v)) = (vd.attributes.get("u"), vd.attributes.get("v")) else {
+                continue;
+            };
+            let uv = [u, v];
+            let mut flags = 0;
+            for dir in 0..2 {
+                let Some((start, end)) = s.domain(dir) else {
+                    continue;
+                };
+                let value = uv[dir];
+                if value <= start || value >= end {
+                    continue;
+                }
+                let multiplicity = s.m_nurbsknot[dir]
+                    .iter()
+                    .filter(|&&knot| knot == value)
+                    .count();
+                if multiplicity < s.degree(dir) {
+                    continue;
+                }
+                let mut lo = uv;
+                let mut hi = uv;
+                lo[dir] = value.next_down();
+                hi[dir] = value.next_up();
+                let a = s.normal_at(lo[0], lo[1]);
+                let b = s.normal_at(hi[0], hi[1]);
+                let aa = a[0] * a[0] + a[1] * a[1] + a[2] * a[2];
+                let bb = b[0] * b[0] + b[1] * b[1] + b[2] * b[2];
+                let dot = (a[0] * b[0] + a[1] * b[1] + a[2] * b[2]) / (aa * bb).sqrt();
+                if dot.is_finite() && dot < 1.0 - 64.0 * f64::EPSILON {
+                    flags |= 1 << dir;
+                }
+            }
+            if flags != 0 {
+                candidates.insert(key, flags);
+            }
+        }
+        if candidates.is_empty() {
+            return;
+        }
+        let mut copies = HashMap::<(usize, u8), usize>::new();
+        let mut used = std::collections::HashSet::new();
+        let mut face_keys: Vec<usize> = mesh.face.keys().copied().collect();
+        face_keys.sort_unstable();
+        for face_key in face_keys {
+            let vertices = mesh.face[&face_key].clone();
+            let mut center = [0.0; 2];
+            for key in &vertices {
+                center[0] += mesh.vertex[key].attributes.get("u").copied().unwrap_or(0.0);
+                center[1] += mesh.vertex[key].attributes.get("v").copied().unwrap_or(0.0);
+            }
+            center[0] /= vertices.len() as f64;
+            center[1] /= vertices.len() as f64;
+            let face_normal = mesh.face_normal(face_key);
+            let mut split = vertices.clone();
+            for (corner, &key) in vertices.iter().enumerate() {
+                let Some(&flags) = candidates.get(&key) else {
+                    continue;
+                };
+                let original = mesh.vertex[&key].clone();
+                let mut uv = [
+                    *original.attributes.get("u").unwrap(),
+                    *original.attributes.get("v").unwrap(),
+                ];
+                let mut side = 0;
+                for dir in 0..2 {
+                    if flags & (1 << dir) == 0 {
+                        continue;
+                    }
+                    if center[dir] > uv[dir] {
+                        side |= 1 << dir;
+                        uv[dir] = uv[dir].next_up();
+                    } else {
+                        uv[dir] = uv[dir].next_down();
+                    }
+                }
+                let target = if let Some(&target) = copies.get(&(key, side)) {
+                    target
+                } else {
+                    let target = if used.insert(key) {
+                        key
+                    } else {
+                        let target = mesh.add_vertex(original.position(), None);
+                        mesh.vertex.insert(target, original);
+                        target
+                    };
+                    copies.insert((key, side), target);
+                    target
+                };
+                let n = s.normal_at(uv[0], uv[1]);
+                let length = (n[0] * n[0] + n[1] * n[1] + n[2] * n[2]).sqrt();
+                if length.is_finite() && length > 0.0 {
+                    let mut sign = 1.0;
+                    if let Some(ref f) = face_normal {
+                        if n[0] * f[0] + n[1] * f[1] + n[2] * f[2] < 0.0 {
+                            sign = -1.0;
+                        }
+                    }
+                    mesh.vertex.get_mut(&target).unwrap().set_normal(
+                        sign * n[0] / length,
+                        sign * n[1] / length,
+                        sign * n[2] / length,
+                    );
+                }
+                split[corner] = target;
+            }
+            mesh.face.insert(face_key, split);
+        }
+        mesh.rebuild_halfedges();
     }
 }
 

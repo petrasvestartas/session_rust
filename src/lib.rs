@@ -129,7 +129,7 @@ pub use mesh::{LoftPanel, LoftWallFace, Mesh};
 pub use mesh_offset::{MeshOffset, MeshOffsetLayers};
 pub use nurbscurve::NurbsCurve;
 pub use nurbssurface::NurbsSurface;
-pub use nurbssurface_trimmed::NurbsSurfaceTrimmed;
+pub use nurbssurface_trimmed::{NurbsSurfaceTrimmed, TrimLoops};
 pub use obb::OBB;
 pub use objects::{Component, Objects};
 pub use plane::Plane;

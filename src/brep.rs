@@ -1342,11 +1342,14 @@ impl BRep {
                 (polygon_signed_area(&outer).abs() - domain_area).abs() < 1e-3 * domain_area;
         }
 
-        // Phase 2: direct faces. Record the 3D boundary discretisation along every edge shared
-        // with a CDT face so both sides tessellate the seam with the same points.
+        // Phase 2: direct faces. The first incident grid supplies the canonical edge polygon.
+        // Mismatching incident grids are rebuilt with these constraints and their interior UV seeds.
+        let mut rebuild_grid = vec![false; nf];
         let mut fmesh: Vec<Mesh> = (0..nf).map(|_| Mesh::new()).collect();
         let mut edge_bnd: std::collections::HashMap<usize, Vec<Point>> =
             std::collections::HashMap::new();
+        let mut edge_basis = std::collections::BTreeMap::<usize, (usize, usize, Vec<f64>)>::new();
+        let mut edge_samples = std::collections::HashMap::<usize, Vec<(f64, Point)>>::new();
         for fi in 0..nf {
             if !face_direct[fi] {
                 continue;
@@ -1371,13 +1374,10 @@ impl BRep {
             let vtol = (v1 - v0) * 0.001;
             for er in self.wire_edges(&face.wires[0]) {
                 let eidx = er.index as usize;
-                if edge_bnd.contains_key(&eidx) {
-                    continue;
-                }
                 let shared = self
                     .edge_faces(eidx)
                     .iter()
-                    .any(|fr| fr.index as usize != fi && !face_direct[fr.index as usize]);
+                    .any(|fr| fr.index as usize != fi);
                 if !shared {
                     continue;
                 }
@@ -1414,94 +1414,252 @@ impl BRep {
                     }
                 }
                 pts.sort_by(|a, b| a.0.partial_cmp(&b.0).unwrap_or(std::cmp::Ordering::Equal));
+                pts.dedup_by(|a, b| a.0 == b.0);
                 if pts.len() >= 2 {
-                    edge_bnd.insert(eidx, pts.into_iter().map(|(_, p)| p).collect());
+                    let varying = if at_v0 || at_v1 { 0 } else { 1 };
+                    let (t0, t1) = c2d.domain();
+                    let parameters: Vec<f64> = pts
+                        .iter()
+                        .map(|(t, _)| {
+                            t0 + (t - sp[varying]) / (ep[varying] - sp[varying]) * (t1 - t0)
+                        })
+                        .collect();
+                    let points: Vec<Point> = pts.into_iter().map(|(_, p)| p).collect();
+                    if let Some(canonical) = edge_bnd.get(&eidx) {
+                        let matches = canonical.len() == points.len()
+                            && (canonical
+                                .iter()
+                                .zip(&points)
+                                .all(|(a, b)| same_boundary_point(a, b))
+                                || canonical
+                                    .iter()
+                                    .zip(points.iter().rev())
+                                    .all(|(a, b)| same_boundary_point(a, b)));
+                        rebuild_grid[fi] |= !matches;
+                    } else {
+                        edge_bnd.insert(eidx, points);
+                        edge_basis.insert(eidx, (fi, ci as usize, parameters));
+                    }
                 }
             }
         }
 
-        // Phase 3: CDT faces. Shared edges reuse the direct face's boundary points projected into
-        // this face's planar patch; every other edge samples its own pcurve.
+        // A constrained triangle cannot reduce the angular error between fixed
+        // boundary endpoints by inserting more interior centroids. Refine the
+        // canonical polygon first, then rebuild every incident face with it.
+        for (&edge, (face, pcurve, parameters)) in &edge_basis {
+            let curved_cdt = self.edge_faces(edge).iter().any(|incident| {
+                let fi = incident.index as usize;
+                (!face_direct[fi] || rebuild_grid[fi])
+                    && !self.m_surfaces[self.m_faces[fi].surface_index as usize].is_planar(0.0)
+            });
+            if !curved_cdt {
+                continue;
+            }
+            let surface = &self.m_surfaces[self.m_faces[*face].surface_index as usize];
+            let curve = &self.m_curves_2d[*pcurve];
+            let points = &edge_bnd[&edge];
+            let mut samples: Vec<_> = parameters
+                .iter()
+                .zip(points)
+                .map(|(&t, p)| (t, curve.point_at(t), p.clone()))
+                .collect();
+            samples.sort_by(|a, b| a.0.total_cmp(&b.0));
+            if self.m_edges[edge].start_vertex == self.m_edges[edge].end_vertex {
+                let end = curve.domain().1;
+                if samples.last().is_some_and(|sample| sample.0 < end) {
+                    samples.push((end, curve.point_at(end), samples[0].2.clone()));
+                }
+            }
+            let count = samples.len();
+            let (angle, chord) = quality.unwrap_or((20.0, 0.005));
+            let refined = refine_surface_boundary(surface, curve, samples, angle, chord);
+            if refined.len() > count {
+                edge_samples.insert(
+                    edge,
+                    refined
+                        .iter()
+                        .map(|sample| (sample.0, sample.1.clone()))
+                        .collect(),
+                );
+                edge_bnd.insert(edge, refined.into_iter().map(|sample| sample.2).collect());
+                for incident in self.edge_faces(edge) {
+                    rebuild_grid[incident.index as usize] = true;
+                }
+            }
+        }
+
+        for fi in 0..nf {
+            if rebuild_grid[fi] {
+                face_direct[fi] = false;
+            }
+        }
+
+        // Phase 3: CDT faces preserve their supplied boundary-node identities. Shared
+        // XYZ samples are mapped onto the actual pcurve and checked in model space.
         for fi in 0..nf {
             if face_direct[fi] {
                 continue;
             }
             let face = &self.m_faces[fi];
             let srf = &self.m_surfaces[face.surface_index as usize];
-            let proj: Option<(Point, [f64; 3], [f64; 3], f64, f64)> =
-                match (srf.get_cv(0, 0), srf.get_cv(1, 0), srf.get_cv(0, 1)) {
-                    (Some(a), Some(b), Some(c)) if srf.degree(0) == 1 && srf.degree(1) == 1 => {
-                        let eu = [b[0] - a[0], b[1] - a[1], b[2] - a[2]];
-                        let ev = [c[0] - a[0], c[1] - a[1], c[2] - a[2]];
-                        let eu2 = eu[0] * eu[0] + eu[1] * eu[1] + eu[2] * eu[2];
-                        let ev2 = ev[0] * ev[0] + ev[1] * ev[1] + ev[2] * ev[2];
-                        if eu2 > 1e-28 && ev2 > 1e-28 {
-                            Some((a, eu, ev, eu2, ev2))
-                        } else {
-                            None
-                        }
-                    }
-                    _ => None,
-                };
-            let mut ts = NurbsSurfaceTrimmed::new();
-            ts.m_surface = srf.clone();
-            for (wi, wr) in face.wires.iter().enumerate() {
-                let mut loop_pts: Vec<Point> = Vec::new();
-                for er in self.wire_edges(wr) {
-                    let ci = self.pcurve_index(er.index as usize, fi, er.orientation);
-                    if ci < 0 {
-                        continue;
-                    }
-                    let crv = &self.m_curves_2d[ci as usize];
-                    let mut seg: Vec<Point>;
-                    if let (Some((a, eu, ev, eu2, ev2)), Some(bnd)) =
-                        (proj.as_ref(), edge_bnd.get(&(er.index as usize)))
+            let (angle, chord) = quality.unwrap_or((20.0, 0.005));
+            let mut loops = crate::nurbssurface_trimmed::TrimLoops::default();
+            if rebuild_grid[fi] {
+                let (u0, u1) = srf.domain(0).unwrap();
+                let (v0, v1) = srf.domain(1).unwrap();
+                for vertex in fmesh[fi].vertex.values() {
+                    if let (Some(&u), Some(&v)) =
+                        (vertex.attributes.get("u"), vertex.attributes.get("v"))
                     {
-                        seg = bnd
-                            .iter()
-                            .map(|pt| {
-                                let d = [pt[0] - a[0], pt[1] - a[1], pt[2] - a[2]];
-                                Point::new(
-                                    (d[0] * eu[0] + d[1] * eu[1] + d[2] * eu[2]) / *eu2,
-                                    (d[0] * ev[0] + d[1] * ev[1] + d[2] * ev[2]) / *ev2,
-                                    0.0,
-                                )
-                            })
-                            .collect();
-                        let start = crv.point_at(if er.orientation == BRepOrientation::Reversed {
-                            crv.domain().1
-                        } else {
-                            crv.domain().0
-                        });
-                        if seg[0].distance(&start, None) > seg[seg.len() - 1].distance(&start, None)
-                        {
-                            seg.reverse();
-                        }
-                    } else {
-                        seg = if crv.degree() <= 1 && !crv.is_rational() {
-                            (0..crv.cv_count()).filter_map(|k| crv.get_cv(k)).collect()
-                        } else {
-                            crv.divide_by_count((crv.cv_count() * 4).max(16), true).0
-                        };
-                        if er.orientation == BRepOrientation::Reversed {
-                            seg.reverse();
+                        if u > u0 && u < u1 && v > v0 && v < v1 {
+                            loops.interior_uv.push(Point::new(u, v, 0.0));
                         }
                     }
-                    for k in 0..seg.len().saturating_sub(1) {
-                        loop_pts.push(seg[k].clone());
-                    }
-                }
-                if loop_pts.len() < 3 {
-                    continue;
-                }
-                let loop_crv = NurbsCurve::create(true, 1, &loop_pts);
-                if wi == 0 {
-                    ts.m_outer_loop = Some(loop_crv);
-                } else {
-                    ts.m_inner_loops.push(loop_crv);
                 }
             }
-            fmesh[fi] = ts.mesh();
+            let mut uses: Vec<(usize, usize, usize, usize)> = Vec::new();
+            let mut valid = true;
+            for (wi, wr) in face.wires.iter().enumerate() {
+                let mut uv = Vec::new();
+                let mut xyz = Vec::new();
+                for er in self.wire_edges(wr) {
+                    let ei = er.index as usize;
+                    let edge = &self.m_edges[ei];
+                    let ci = self.pcurve_index(ei, fi, er.orientation);
+                    if ci < 0 {
+                        valid = false;
+                        break;
+                    }
+                    let crv = &self.m_curves_2d[ci as usize];
+                    let mut samples: Vec<(f64, Point, Point)> = Vec::new();
+                    if let Some(points) = edge_bnd.get(&ei) {
+                        for (index, p) in points.iter().enumerate() {
+                            let cached = edge_basis
+                                .get(&ei)
+                                .filter(|basis| basis.0 == fi && basis.1 == ci as usize)
+                                .and_then(|_| edge_samples.get(&ei))
+                                .and_then(|samples| samples.get(index));
+                            let (mut t, mut q) = if let Some(sample) = cached {
+                                sample.clone()
+                            } else {
+                                let (u, v) = srf.closest_parameters(p);
+                                let t = crv.closest_parameter(&Point::new(u, v, 0.0));
+                                (t, crv.point_at(t))
+                            };
+                            let scale = p[0].abs().max(p[1].abs()).max(p[2].abs()).max(1.0);
+                            let tolerance = edge
+                                .tolerance
+                                .max(face.tolerance)
+                                .max(f64::EPSILON.sqrt() * scale);
+                            if srf
+                                .point_at(q[0], q[1])
+                                .is_none_or(|lifted| lifted.distance(p, None) > tolerance)
+                            {
+                                t = boundary_parameter(srf, crv, p);
+                                q = crv.point_at(t);
+                                if srf
+                                    .point_at(q[0], q[1])
+                                    .is_none_or(|lifted| lifted.distance(p, None) > tolerance)
+                                {
+                                    valid = false;
+                                    break;
+                                }
+                            }
+                            samples.push((t, q, p.clone()));
+                        }
+                        samples.sort_by(|a, b| a.0.total_cmp(&b.0));
+                        samples.dedup_by(|a, b| a.0 == b.0);
+                    } else {
+                        let count = (crv.cv_count() * 4)
+                            .max((360.0 / angle.max(0.1)).ceil() as usize)
+                            .min(4096);
+                        let (points, parameters) =
+                            if crv.degree() <= 1 && !crv.is_rational() && srf.is_planar(0.0) {
+                                let points =
+                                    (0..crv.cv_count()).filter_map(|k| crv.get_cv(k)).collect();
+                                let parameters = (0..crv.cv_count())
+                                    .map(|k| crv.greville_abcissa(k))
+                                    .collect();
+                                (points, parameters)
+                            } else {
+                                crv.divide_by_count(count, true)
+                            };
+                        for (q, t) in points.into_iter().zip(parameters) {
+                            let Some(p) = srf.point_at(q[0], q[1]) else {
+                                valid = false;
+                                break;
+                            };
+                            samples.push((t, q, p));
+                        }
+                        samples = refine_surface_boundary(srf, crv, samples, angle, chord);
+                        edge_bnd
+                            .insert(ei, samples.iter().map(|sample| sample.2.clone()).collect());
+                    }
+                    if edge.start_vertex == edge.end_vertex && samples.len() > 1 {
+                        let first = samples[0].clone();
+                        let last = samples.last().unwrap();
+                        if last.2[0] != first.2[0]
+                            || last.2[1] != first.2[1]
+                            || last.2[2] != first.2[2]
+                        {
+                            samples.push((crv.domain().1, first.1, first.2));
+                        }
+                    }
+                    if er.orientation == BRepOrientation::Reversed {
+                        samples.reverse();
+                    }
+                    if samples.len() < 2 {
+                        valid = false;
+                        break;
+                    }
+                    uses.push((ei, wi, uv.len(), samples.len()));
+                    for (_, q, p) in samples.into_iter().take(uses.last().unwrap().3 - 1) {
+                        uv.push(q);
+                        xyz.push(p);
+                    }
+                }
+                loops.uv.push(uv);
+                loops.xyz.push(xyz);
+            }
+            if !valid {
+                continue;
+            }
+            let mut ts = NurbsSurfaceTrimmed::new();
+            ts.m_surface = srf.clone();
+            // Hash-map order must not change constrained refinement or boundary visibility.
+            loops
+                .interior_uv
+                .sort_by(|a, b| a[0].total_cmp(&b[0]).then(a[1].total_cmp(&b[1])));
+            fmesh[fi] = ts.mesh_loops(&loops, angle, chord);
+            // Each occurrence keeps both ends, including the next edge's starting vertex.
+            for (use_id, &(edge, li, start, count)) in uses.iter().enumerate() {
+                let length = loops.uv[li].len();
+                if length == 0 {
+                    continue;
+                }
+                for sample in 0..count {
+                    let key = format!("boundary/{li}/{}", (start + sample) % length);
+                    for vd in fmesh[fi].vertex.values_mut() {
+                        if vd.attributes.contains_key(&key) {
+                            vd.attributes
+                                .insert(format!("brep_edge/{edge}/{use_id}/{sample}"), 1.0);
+                        }
+                    }
+                    if sample + 1 < count {
+                        let interval =
+                            format!("boundary_interval/{li}/{}", (start + sample) % length);
+                        for vd in fmesh[fi].vertex.values_mut() {
+                            if let Some(&t) = vd.attributes.get(&interval) {
+                                vd.attributes.insert(
+                                    format!("brep_edge_interval/{edge}/{use_id}/{sample}"),
+                                    t,
+                                );
+                            }
+                        }
+                    }
+                }
+            }
         }
 
         // A Reversed face has its outward normal opposite to the surface normal: flip winding
@@ -2122,4 +2280,168 @@ impl std::fmt::Display for BRep {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{}", self.str())
     }
+}
+
+/// Locate a point on the actual lifted pcurve when a surface inversion reaches
+/// the wrong periodic branch or a singular endpoint. The bracket stays on this use.
+fn boundary_parameter(surface: &NurbsSurface, curve: &NurbsCurve, point: &Point) -> f64 {
+    let (start, end) = curve.domain();
+    let distance = |t: f64| {
+        let uv = curve.point_at(t);
+        surface
+            .point_at(uv[0], uv[1])
+            .map_or(f64::INFINITY, |p| p.distance(point, None))
+    };
+    let count = (curve.cv_count() * 4).clamp(32, 4096);
+    let step = (end - start) / count as f64;
+    let mut best = start;
+    let mut error = distance(start);
+    for index in 1..=count {
+        let t = if index == count {
+            end
+        } else {
+            start + index as f64 * step
+        };
+        let candidate = distance(t);
+        if candidate < error {
+            best = t;
+            error = candidate;
+        }
+    }
+    let mut left = (best - step).max(start);
+    let mut right = (best + step).min(end);
+    let ratio = (5.0f64.sqrt() - 1.0) * 0.5;
+    let mut a = right - ratio * (right - left);
+    let mut b = left + ratio * (right - left);
+    let mut da = distance(a);
+    let mut db = distance(b);
+    for _ in 0..64 {
+        if da < db {
+            right = b;
+            b = a;
+            db = da;
+            a = right - ratio * (right - left);
+            da = distance(a);
+        } else {
+            left = a;
+            a = b;
+            da = db;
+            b = left + ratio * (right - left);
+            db = distance(b);
+        }
+    }
+    if da < error {
+        best = a;
+        error = da;
+    }
+    if db < error {
+        best = b;
+    }
+    best
+}
+
+/// Unit normal on a boundary, taking the one-sided limit at a singular endpoint.
+/// Undefined derivatives do not manufacture an angular error against a +Z sentinel.
+fn boundary_normal(
+    surface: &NurbsSurface,
+    curve: &NurbsCurve,
+    t: f64,
+    toward: f64,
+) -> Option<Vector> {
+    for at in [t, t + (toward - t) * 1e-6] {
+        let uv = curve.point_at(at);
+        let derivatives = surface.evaluate(uv[0], uv[1], 1);
+        if derivatives.len() < 3 {
+            continue;
+        }
+        let mut n = derivatives[1].cross(&derivatives[2]);
+        let scale = n[0].abs().max(n[1].abs()).max(n[2].abs());
+        if !scale.is_finite() || scale == 0.0 {
+            continue;
+        }
+        n = n / scale;
+        let length = n.magnitude();
+        if length.is_finite() && length > 0.0 {
+            return Some(n / length);
+        }
+    }
+    None
+}
+
+/// Refine the lifted pcurve using the same angular and chord criteria as the face.
+/// Existing samples remain exact; every inserted point is shared by incident faces.
+/// Eight split levels and at most 4096 added points per edge bound refinement work.
+fn refine_surface_boundary(
+    surface: &NurbsSurface,
+    curve: &NurbsCurve,
+    samples: Vec<(f64, Point, Point)>,
+    angle: f64,
+    chord: f64,
+) -> Vec<(f64, Point, Point)> {
+    if samples.len() < 2 {
+        return samples;
+    }
+    let mut low = [f64::INFINITY; 3];
+    let mut high = [f64::NEG_INFINITY; 3];
+    for u in 0..surface.cv_count_dir(Some(0)) {
+        for v in 0..surface.cv_count_dir(Some(1)) {
+            if let Some(p) = surface.get_cv(u, v) {
+                for axis in 0..3 {
+                    low[axis] = low[axis].min(p[axis]);
+                    high[axis] = high[axis].max(p[axis]);
+                }
+            }
+        }
+    }
+    let diagonal =
+        ((high[0] - low[0]).powi(2) + (high[1] - low[1]).powi(2) + (high[2] - low[2]).powi(2))
+            .sqrt();
+    let tolerance = diagonal * chord;
+    let cosine = angle.clamp(0.1, 179.0).to_radians().cos();
+    let mut result = Vec::with_capacity(samples.len());
+    let mut added = 0;
+    for pair in samples.windows(2) {
+        let mut stack = vec![(pair[0].clone(), pair[1].clone(), 0)];
+        while let Some((a, b, depth)) = stack.pop() {
+            let t = (a.0 + b.0) * 0.5;
+            let uv = curve.point_at(t);
+            let Some(point) = surface.point_at(uv[0], uv[1]) else {
+                result.push(a);
+                continue;
+            };
+            let center = Point::new(
+                (a.2[0] + b.2[0]) * 0.5,
+                (a.2[1] + b.2[1]) * 0.5,
+                (a.2[2] + b.2[2]) * 0.5,
+            );
+            let normals = [
+                boundary_normal(surface, curve, a.0, b.0),
+                boundary_normal(surface, curve, t, a.0),
+                boundary_normal(surface, curve, b.0, a.0),
+            ];
+            let mut angular = false;
+            for i in 0..3 {
+                for j in i + 1..3 {
+                    if let (Some(a), Some(b)) = (&normals[i], &normals[j]) {
+                        angular |= a[0] * b[0] + a[1] * b[1] + a[2] * b[2] < cosine;
+                    }
+                }
+            }
+            if (point.distance(&center, None) > tolerance || angular) && depth < 8 && added < 4096 {
+                added += 1;
+                let middle = (t, uv, point);
+                stack.push((middle.clone(), b, depth + 1));
+                stack.push((a, middle, depth + 1));
+            } else {
+                result.push(a);
+            }
+        }
+    }
+    result.push(samples.last().unwrap().clone());
+    result
+}
+
+/// Compare canonical boundary positions without geometric tolerance or identity substitution.
+fn same_boundary_point(a: &Point, b: &Point) -> bool {
+    a[0] == b[0] && a[1] == b[1] && a[2] == b[2]
 }

@@ -404,6 +404,7 @@ pub fn get_all_tests() -> Vec<RegisteredTest> {
 
     let tests = vec![
         // BRep tests
+        RegisteredTest {group: "BRep", name: "Shared Grid Boundary", func: run_brep_shared_grid_boundary},
         RegisteredTest {
             group: "BRep",
             name: "Constructor",
@@ -1861,6 +1862,13 @@ pub fn get_all_tests() -> Vec<RegisteredTest> {
             func: run_solve_banded_spd,
         },
         // NurbsSurfaceTrimmed tests
+        RegisteredTest { group: "NurbsSurfaceTrimmed", name: "Singular Planar Normal", func: run_nurbssurface_trimmed_singular_planar_normal },
+        RegisteredTest { group: "NurbsSurfaceTrimmed", name: "Crease Loops", func: run_nurbssurface_trimmed_crease_loops },
+        RegisteredTest {
+            group: "NurbsSurfaceTrimmed",
+            name: "Mesh Loops",
+            func: run_nurbssurface_trimmed_mesh_loops,
+        },
         RegisteredTest {
             group: "NurbsSurfaceTrimmed",
             name: "Constructor",
@@ -3375,7 +3383,18 @@ pub fn get_all_tests() -> Vec<RegisteredTest> {
             name: "Double-Curved Triangle",
             func: run_remesh_nurbssurface_adaptive_double_curved_triangle,
         },
+        RegisteredTest {
+            group: "RemeshNurbsSurfaceGrid",
+            name: "Crease Normals",
+            func: run_remesh_nurbssurface_grid_crease_normals,
+        },
         // RemeshNurbsSurfaceGrid tests
+        RegisteredTest { group: "RemeshNurbsSurfaceGrid", name: "Singular Planar Normal", func: run_remesh_nurbssurface_grid_singular_planar_normal },
+        RegisteredTest {
+            group: "RemeshNurbsSurfaceGrid",
+            name: "Analytic Normals",
+            func: run_remesh_nurbssurface_grid_analytic_normals,
+        },
         RegisteredTest {
             group: "RemeshNurbsSurfaceGrid",
             name: "Sphere",

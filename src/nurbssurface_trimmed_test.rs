@@ -52,10 +52,10 @@ pub fn run_nurbssurface_trimmed_constructor() -> TestResult {
 
 pub fn run_nurbssurface_trimmed_constructor_planar() -> TestResult {
     MINI_TEST!("Constructor Planar", {
-        use crate::tolerance::PI;
         use crate::NurbsCurve;
         use crate::NurbsSurfaceTrimmed;
         use crate::Point;
+        use crate::tolerance::PI;
 
         // Planar curve boundary
         let pts = vec![
@@ -367,11 +367,11 @@ pub fn run_nurbssurface_trimmed_point_at() -> TestResult {
 
 pub fn run_nurbssurface_trimmed_mesh() -> TestResult {
     MINI_TEST!("Mesh", {
-        use crate::tolerance::PI;
         use crate::NurbsCurve;
         use crate::NurbsSurface;
         use crate::NurbsSurfaceTrimmed;
         use crate::Point;
+        use crate::tolerance::PI;
 
         // Planar rectangle: bilinear 6x6 surface, outer loop at 0.05..0.95
         let mut srf =
@@ -736,3 +736,188 @@ REGISTER_MINI_TEST!(
     "Protobuf Roundtrip",
     crate::nurbssurface_trimmed_test::run_nurbssurface_trimmed_protobuf_roundtrip
 );
+
+pub fn run_nurbssurface_trimmed_mesh_loops() -> TestResult {
+    MINI_TEST!("Mesh Loops", {
+        use crate::{NurbsSurface, NurbsSurfaceTrimmed, Point, Primitives, TrimLoops};
+        let planar = NurbsSurface::create(
+            false,
+            false,
+            1,
+            1,
+            2,
+            2,
+            &[
+                Point::new(0.0, 0.0, 0.0),
+                Point::new(0.0, 4.0, 0.0),
+                Point::new(4.0, 0.0, 0.0),
+                Point::new(4.0, 4.0, 0.0),
+            ],
+        )
+        .unwrap();
+        for surface in [planar, Primitives::wave_surface(1.0, 0.5)] {
+            let mut ts = NurbsSurfaceTrimmed::new();
+            ts.m_surface = surface;
+            let mut loops = TrimLoops::default();
+            for (low, high) in [(0.0, 1.0), (0.25, 0.75)] {
+                let mut uv = Vec::new();
+                let corners = [(low, low), (high, low), (high, high), (low, high)];
+                for side in 0..4 {
+                    let a = corners[side];
+                    let b = corners[(side + 1) % 4];
+                    for sample in 0..8 {
+                        let t = sample as f64 / 8.0;
+                        uv.push(Point::new(
+                            a.0 + t * (b.0 - a.0),
+                            a.1 + t * (b.1 - a.1),
+                            0.0,
+                        ));
+                    }
+                }
+                let xyz = uv
+                    .iter()
+                    .map(|p| ts.m_surface.point_at(p[0], p[1]).unwrap())
+                    .collect();
+                loops.uv.push(uv);
+                loops.xyz.push(xyz);
+            }
+            let mesh = ts.mesh_loops(&loops, 20.0, 0.005);
+            MINI_CHECK!(!mesh.face.is_empty());
+            for (li, points) in loops.xyz.iter().enumerate() {
+                for (sample, p) in points.iter().enumerate() {
+                    let key = format!("boundary/{li}/{sample}");
+                    let vd = mesh
+                        .vertex
+                        .values()
+                        .find(|vd| vd.attributes.contains_key(&key))
+                        .unwrap();
+                    MINI_CHECK!(vd.x == p[0] && vd.y == p[1] && vd.z == p[2]);
+                }
+            }
+            for vertices in mesh.face.values() {
+                let mut u = 0.0;
+                let mut v = 0.0;
+                for key in vertices {
+                    u += mesh.vertex[key].attributes.get("u").unwrap();
+                    v += mesh.vertex[key].attributes.get("v").unwrap();
+                }
+                u /= vertices.len() as f64;
+                v /= vertices.len() as f64;
+                MINI_CHECK!(!(u > 0.25 && u < 0.75 && v > 0.25 && v < 0.75));
+            }
+            loops.xyz[0].pop();
+            MINI_CHECK!(ts.mesh_loops(&loops, 20.0, 0.005).face.is_empty());
+        }
+    })
+}
+REGISTER_MINI_TEST!(
+    "NurbsSurfaceTrimmed",
+    "Mesh Loops",
+    crate::nurbssurface_trimmed_test::run_nurbssurface_trimmed_mesh_loops
+);
+
+pub fn run_nurbssurface_trimmed_crease_loops() -> TestResult {
+    MINI_TEST!("Crease Loops", {
+        use crate::{NurbsSurface, NurbsSurfaceTrimmed, Point, TrimLoops};
+        let mut ts = NurbsSurfaceTrimmed::new();
+        ts.m_surface = NurbsSurface::create(
+            false,
+            false,
+            1,
+            1,
+            3,
+            2,
+            &[
+                Point::new(0., 0., 0.),
+                Point::new(0., 1., 0.),
+                Point::new(1., 0., 0.),
+                Point::new(1., 1., 0.),
+                Point::new(2., 0., 1.),
+                Point::new(2., 1., 1.),
+            ],
+        )
+        .unwrap();
+        let mut loops = TrimLoops::default();
+        for corners in [
+            [(0.1, 0.1), (1.9, 0.1), (1.9, 0.9), (0.1, 0.9)],
+            [(0.8, 0.4), (1.2, 0.4), (1.2, 0.6), (0.8, 0.6)],
+        ] {
+            loops.uv.push(
+                corners
+                    .iter()
+                    .map(|&(u, v)| Point::new(u, v, 0.0))
+                    .collect(),
+            );
+        }
+        let mesh = ts.mesh_loops(&loops, 20.0, 0.005);
+        MINI_CHECK!(mesh.vertex.len() == 16 && mesh.face.len() == 12);
+        let (mut flat, mut tilted) = (0, 0);
+        for vd in mesh.vertex.values() {
+            if vd.attributes.get("u") == Some(&1.0) {
+                MINI_CHECK!(
+                    vd.attributes
+                        .keys()
+                        .any(|key| key.starts_with("boundary_interval/"))
+                );
+                MINI_CHECK!(vd.z == 0.0);
+                let normal = vd.normal().unwrap();
+                if normal[0].abs() < 1e-12 {
+                    flat += 1;
+                }
+                if (normal[0] + 0.5f64.sqrt()).abs() < 1e-12 {
+                    tilted += 1;
+                }
+            }
+        }
+        MINI_CHECK!(flat == 4 && tilted == 4);
+        for face in mesh.face.values() {
+            let us: Vec<f64> = face
+                .iter()
+                .map(|key| *mesh.vertex[key].attributes.get("u").unwrap())
+                .collect();
+            let vs: Vec<f64> = face
+                .iter()
+                .map(|key| *mesh.vertex[key].attributes.get("v").unwrap())
+                .collect();
+            MINI_CHECK!(
+                !(us.iter().copied().fold(f64::INFINITY, f64::min) < 1.0
+                    && us.iter().copied().fold(f64::NEG_INFINITY, f64::max) > 1.0)
+            );
+            let u = us.iter().sum::<f64>() / 3.0;
+            let v = vs.iter().sum::<f64>() / 3.0;
+            MINI_CHECK!(!(u > 0.8 && u < 1.2 && v > 0.4 && v < 0.6));
+        }
+    })
+}
+REGISTER_MINI_TEST!(
+    "NurbsSurfaceTrimmed",
+    "Crease Loops",
+    crate::nurbssurface_trimmed_test::run_nurbssurface_trimmed_crease_loops
+);
+
+/// A collapsed planar corner has no analytic normal; its own triangle fan defines it.
+pub fn run_nurbssurface_trimmed_singular_planar_normal() -> TestResult {
+    MINI_TEST!("Singular Planar Normal", {
+        use crate::{NurbsSurface, NurbsSurfaceTrimmed, Point, TrimLoops};
+        let mut trimmed = NurbsSurfaceTrimmed::new();
+        trimmed.m_surface = NurbsSurface::create(false, false, 1, 1, 2, 2, &[
+            Point::new(-1.0,0.0,0.0), Point::new(0.0,0.0,1.0),
+            Point::new(1.0,0.0,0.0), Point::new(0.0,0.0,1.0),
+        ]).unwrap();
+        let mut loops = TrimLoops::default();
+        loops.uv.push(vec![Point::new(0.0,0.0,0.0),Point::new(1.0,0.0,0.0),
+            Point::new(1.0,1.0,0.0),Point::new(0.0,1.0,0.0)]);
+        let mesh = trimmed.mesh_loops(&loops,5.0,0.001);
+        MINI_CHECK!(!mesh.face.is_empty());
+        let mut apex = false;
+        for vertex in mesh.vertex.values() {
+            let normal = vertex.normal().unwrap();
+            MINI_CHECK!(normal[0].abs() < 1e-12 && normal[2].abs() < 1e-12);
+            MINI_CHECK!((normal[1].abs()-1.0).abs() < 1e-12);
+            apex |= vertex.z == 1.0;
+        }
+        MINI_CHECK!(apex);
+    })
+}
+REGISTER_MINI_TEST!("NurbsSurfaceTrimmed", "Singular Planar Normal",
+    crate::nurbssurface_trimmed_test::run_nurbssurface_trimmed_singular_planar_normal);

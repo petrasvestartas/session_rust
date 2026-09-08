@@ -791,8 +791,29 @@ pub fn run_primitives_nurbssurface_extrusion() -> TestResult {
         MINI_CHECK!(s_wavy.is_valid());
         MINI_CHECK!(s_wavy.degree(0) == 1 && s_wavy.degree(1) == 1);
         MINI_CHECK!(s_wavy.cv_count_dir(Some(0)) == 4 && s_wavy.cv_count_dir(Some(1)) == 2);
-        MINI_CHECK!(m_wavy.number_of_vertices() == 8);
+        // Each planar panel owns its crease normals: eight positions, twelve shading vertices.
+        MINI_CHECK!(m_wavy.number_of_vertices() == 12);
         MINI_CHECK!(m_wavy.number_of_faces() == 6);
+        for i in 0..4 {
+            for j in 0..2 {
+                let position = s_wavy.get_cv(i, j).unwrap();
+                let copies = m_wavy
+                    .vertex
+                    .values()
+                    .filter(|vertex| TOLERANCE.is_point_close(&vertex.position(), &position))
+                    .count();
+                MINI_CHECK!(copies == if i == 0 || i == 3 { 1 } else { 2 });
+            }
+        }
+        for (&key, corners) in &m_wavy.face {
+            let normal = m_wavy.face_normal(key).unwrap();
+            for corner in corners {
+                let shading = m_wavy.vertex[corner].normal().unwrap();
+                for axis in 0..3 {
+                    MINI_CHECK!((shading[axis] - normal[axis]).abs() < 1e-9);
+                }
+            }
+        }
         MINI_CHECK!(
             TOLERANCE.is_point_close(&s_wavy.get_cv(0, 0).unwrap(), &Point::new(40.0, 3.0, 0.0))
         );

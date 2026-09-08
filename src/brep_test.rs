@@ -871,3 +871,126 @@ REGISTER_MINI_TEST!(
     crate::brep_test::run_brep_protobuf_roundtrip
 );
 REGISTER_MINI_TEST!("BRep", "Volume", crate::brep_test::run_brep_volume);
+
+pub fn run_brep_shared_grid_boundary() -> TestResult {
+    MINI_TEST!("Shared Grid Boundary", {
+        use crate::brep::{BRepOrientation, BRepRef};
+        use crate::remesh_nurbssurface_grid::RemeshNurbsSurfaceGrid;
+        use crate::{BRep, Mesh, NurbsCurve, NurbsSurface, Point};
+        let mut b = BRep::new();
+        let mut surfaces = Vec::new();
+        for face in 0..2 {
+            let mut points = Vec::new();
+            for i in 0..3 {
+                for j in 0..2 {
+                    let z = if i != 1 {
+                        0.0
+                    } else if j == 0 || face == 0 {
+                        0.5
+                    } else {
+                        4.0
+                    };
+                    points.push(Point::new(
+                        i as f64 * 0.5,
+                        j as f64 * if face == 0 { 1.0 } else { -1.0 },
+                        z,
+                    ));
+                }
+            }
+            let surface = NurbsSurface::create(false, false, 2, 1, 3, 2, &points).unwrap();
+            let si = b.add_surface(&surface);
+            let corners = [[0.0, 0.0], [1.0, 0.0], [1.0, 1.0], [0.0, 1.0]];
+            let vertices: Vec<usize> = corners
+                .iter()
+                .map(|q| b.add_vertex(&surface.point_at(q[0], q[1]).unwrap(), 0.0))
+                .collect();
+            let mut edges = Vec::new();
+            for side in 0..4 {
+                let a = corners[side];
+                let z = corners[(side + 1) % 4];
+                let edge = if side == 0 && face == 1 {
+                    0
+                } else {
+                    let dir = if a[0] != z[0] { 0 } else { 1 };
+                    let mut curve = surface.iso_curve(dir, a[1 - dir]).unwrap();
+                    if a[dir] > z[dir] {
+                        curve.reverse();
+                    }
+                    let ci = b.add_curve_3d(&curve);
+                    b.add_edge(
+                        ci as i32,
+                        vertices[side] as i32,
+                        vertices[(side + 1) % 4] as i32,
+                    )
+                };
+                let pc = NurbsCurve::create(
+                    false,
+                    1,
+                    &[Point::new(a[0], a[1], 0.0), Point::new(z[0], z[1], 0.0)],
+                );
+                let ci = b.add_curve_2d(&pc);
+                b.add_pcurve(edge, si, ci as i32, -1);
+                edges.push(BRepRef::new(edge as i32, BRepOrientation::Forward));
+            }
+            let wi = b.add_wire(&edges);
+            b.add_face(
+                si as i32,
+                &[BRepRef::new(wi as i32, BRepOrientation::Forward)],
+                1e-8,
+            );
+            surfaces.push(surface);
+        }
+        let boundary = |mesh: &Mesh| {
+            let mut points: Vec<[f64; 3]> = mesh
+                .vertex
+                .values()
+                .filter(|v| v.attributes.get("v") == Some(&0.0))
+                .map(|v| [v.x, v.y, v.z])
+                .collect();
+            points.sort_by(|a, b| a[0].total_cmp(&b[0]));
+            points
+        };
+        let original: Vec<Mesh> = surfaces
+            .iter()
+            .map(|s| RemeshNurbsSurfaceGrid::from_u_v_q(s.clone(), 0, 0, 20.0, 0.005))
+            .collect();
+        MINI_CHECK!(boundary(&original[0]).len() == 7 && boundary(&original[1]).len() == 11);
+        let meshes = b.face_meshes_q(Some((20.0, 0.005)));
+        let first = boundary(&meshes[0]);
+        let second = boundary(&meshes[1]);
+        MINI_CHECK!(first == second && first.len() == 7);
+        MINI_CHECK!(meshes[0].face.len() == original[0].face.len() && !meshes[1].face.is_empty());
+        let mut maximum = 0.0f64;
+        for pair in first.windows(2) {
+            let (a, z) = (pair[0], pair[1]);
+            let u = (a[0] + z[0]) * 0.5;
+            let actual = surfaces[0].point_at(u, 0.0).unwrap();
+            let sag = (0..3)
+                .map(|d| (actual[d] - (a[d] + z[d]) * 0.5).powi(2))
+                .sum::<f64>()
+                .sqrt();
+            maximum = maximum.max(sag);
+        }
+        MINI_CHECK!(maximum <= 0.005 * 1.5);
+        let original = RemeshNurbsSurfaceGrid::from_u_v_q(surfaces[0].clone(), 0, 0, 5.0, 0.001);
+        let meshes = b.face_meshes_q(Some((5.0, 0.001)));
+        let first = boundary(&meshes[0]);
+        MINI_CHECK!(
+            first == boundary(&meshes[1])
+                && !meshes[0].face.is_empty()
+                && !meshes[1].face.is_empty()
+        );
+        MINI_CHECK!(boundary(&original).iter().all(|p| first.contains(p)));
+        let cosine = 5.0f64.to_radians().cos();
+        for pair in first.windows(2) {
+            let a = surfaces[0].normal_at(pair[0][0], 0.0);
+            let z = surfaces[0].normal_at(pair[1][0], 0.0);
+            MINI_CHECK!(a.dot(&z) >= cosine - 64.0 * f64::EPSILON);
+        }
+    })
+}
+REGISTER_MINI_TEST!(
+    "BRep",
+    "Shared Grid Boundary",
+    crate::brep_test::run_brep_shared_grid_boundary
+);
