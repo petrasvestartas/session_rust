@@ -492,13 +492,23 @@ pub fn run_intersection_ray_mesh_first() -> TestResult {
                 Point::new(0.0, 1.0, 1.0),
             ],
         ];
-        let mesh = Mesh::from_polylines(polygons, None);
+        let mesh = Mesh::from_polylines(polygons.clone(), None);
         let line = Line::new(0.5, 0.5, -1.0, 0.5, 0.5, 0.0);
         let hits = intersection::ray_mesh(&line, &mesh, 1e-6, false);
 
         MINI_CHECK!(hits.is_some());
         let hits = hits.unwrap();
         MINI_CHECK!(hits.len() == 1);
+
+        // find_all=false returns the CLOSEST hit, even when a farther face comes
+        // first in face order.
+        let far_mesh = Mesh::from_polylines(vec![polygons[1].clone(), polygons[0].clone()], None);
+        let closest = intersection::ray_mesh(&line, &far_mesh, 1e-6, false);
+
+        MINI_CHECK!(closest.is_some());
+        let closest = closest.unwrap();
+        MINI_CHECK!(closest.len() == 1);
+        MINI_CHECK!(closest[0][2].abs() < 1e-3);
     })
 }
 
