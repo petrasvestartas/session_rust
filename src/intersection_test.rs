@@ -1197,6 +1197,17 @@ pub fn run_intersection_polyline_plane() -> TestResult {
         for p in &pts {
             MINI_CHECK!(p[0].abs() < 1e-9);
         }
+
+        // Plane through two opposite vertices: each vertex is reported once.
+        let diag =
+            Plane::from_point_normal(Point::new(0.0, 0.0, 0.0), Vector::new(1.0, -1.0, 0.0));
+        let dresult = intersection::polyline_plane(&poly, &diag);
+        MINI_CHECK!(dresult.is_some());
+        let (dpts, dids) = dresult.unwrap();
+        MINI_CHECK!(dpts.len() == 2);
+        MINI_CHECK!(dids[0] == 0 && dids[1] == 2);
+        MINI_CHECK!(TOLERANCE.is_close(dpts[0][0], -1.0));
+        MINI_CHECK!(TOLERANCE.is_close(dpts[1][0], 1.0));
     })
 }
 
@@ -1464,6 +1475,16 @@ pub fn run_intersection_polyline_plane_to_line() -> TestResult {
         let out = polyline_plane_to_line(&poly, &pln, &Point::new(0.0, 0.0, 0.0)).unwrap();
         MINI_CHECK!(TOLERANCE.is_close(out.start()[0], 0.0));
         MINI_CHECK!(TOLERANCE.is_close(out.end()[0], 4.0));
+
+        // Four crossings (non-convex comb): the line spans the EXTREME pair.
+        let comb = Polyline::new(vec![
+            Point::new(0.0, 0.0, 0.0), Point::new(4.0, 0.0, 0.0), Point::new(4.0, 3.0, 0.0),
+            Point::new(3.0, 3.0, 0.0), Point::new(3.0, 1.0, 0.0), Point::new(1.0, 1.0, 0.0),
+            Point::new(1.0, 3.0, 0.0), Point::new(0.0, 3.0, 0.0), Point::new(0.0, 0.0, 0.0),
+        ]);
+        let wide = polyline_plane_to_line(&comb, &pln, &Point::new(0.0, 0.0, 0.0)).unwrap();
+        MINI_CHECK!(TOLERANCE.is_close(wide.start()[0], 0.0));
+        MINI_CHECK!(TOLERANCE.is_close(wide.end()[0], 4.0));
     })
 }
 REGISTER_MINI_TEST!(

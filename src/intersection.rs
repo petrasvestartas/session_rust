@@ -5466,7 +5466,7 @@ pub fn line_two_planes(line: &Line, p0: &Plane, p1: &Plane) -> Option<Line> {
 }
 
 /// Intersect all polyline perimeter edges with a plane.
-/// Returns (points, edge_ids) if exactly 2 intersections are found.
+/// Returns (points, edge_ids) if any intersection is found.
 pub fn polyline_plane(poly: &Polyline, plane: &Plane) -> Option<(Vec<Point>, Vec<usize>)> {
     let n = poly.point_count();
     if n < 2 {
@@ -5478,7 +5478,34 @@ pub fn polyline_plane(poly: &Polyline, plane: &Plane) -> Option<(Vec<Point>, Vec
         if let (Some(a), Some(b)) = (poly.get_point(i), poly.get_point(i + 1)) {
             let va = plane_value_at(plane, &a);
             let vb = plane_value_at(plane, &b);
-            if va.abs() < Tolerance::ZERO_TOLERANCE || vb.abs() < Tolerance::ZERO_TOLERANCE {
+            let a_on = va.abs() < Tolerance::ZERO_TOLERANCE;
+            let b_on = vb.abs() < Tolerance::ZERO_TOLERANCE;
+            // A segment lying IN the plane has no single crossing to report, but a
+            // polyline crossing exactly THROUGH a vertex must report it once: emit
+            // the on-plane vertex as the crossing of the segment it STARTS, so the
+            // segment that ends there stays silent and no duplicate is produced.
+            if a_on && b_on {
+                continue;
+            }
+            if a_on {
+                points.push(a);
+                ids.push(i);
+                continue;
+            }
+            if b_on {
+                // Handled as the next segment's 'a' - except on the final segment
+                // of an OPEN polyline, where 'b' never becomes an 'a'.
+                if i + 2 == n {
+                    if let Some(front) = poly.get_point(0) {
+                        let closes = (b[0] - front[0]).abs() < Tolerance::ZERO_TOLERANCE
+                            && (b[1] - front[1]).abs() < Tolerance::ZERO_TOLERANCE
+                            && (b[2] - front[2]).abs() < Tolerance::ZERO_TOLERANCE;
+                        if !closes {
+                            points.push(b);
+                            ids.push(i);
+                        }
+                    }
+                }
                 continue;
             }
             let seg = Line::new(a[0], a[1], a[2], b[0], b[1], b[2]);
@@ -5488,30 +5515,50 @@ pub fn polyline_plane(poly: &Polyline, plane: &Plane) -> Option<(Vec<Point>, Vec
             }
         }
     }
-    if points.len() == 2 {
-        Some((points, ids))
-    } else {
+    if points.is_empty() {
         None
+    } else {
+        Some((points, ids))
     }
 }
 
 /// Intersect polyline perimeter with plane → single segment, aligned to reference start.
 pub fn polyline_plane_to_line(poly: &Polyline, plane: &Plane, align_start: &Point) -> Option<Line> {
     let (pts, _) = polyline_plane(poly, plane)?;
-    let d0sq = (pts[0][0] - align_start[0]).powi(2)
-        + (pts[0][1] - align_start[1]).powi(2)
-        + (pts[0][2] - align_start[2]).powi(2);
-    let d1sq = (pts[1][0] - align_start[0]).powi(2)
-        + (pts[1][1] - align_start[1]).powi(2)
-        + (pts[1][2] - align_start[2]).powi(2);
+    if pts.len() < 2 {
+        return None;
+    }
+    // With more than 2 crossings (non-convex contact patch) the first two in
+    // edge order are an arbitrary sub-chord; take the EXTREME pair so the joint
+    // line spans the full patch. For exactly 2 crossings this is unchanged.
+    let (mut ia, mut ib) = (0usize, 1usize);
+    if pts.len() > 2 {
+        let mut best = -1.0;
+        for i in 0..pts.len() - 1 {
+            for j in i + 1..pts.len() {
+                let dx = pts[i][0] - pts[j][0];
+                let dy = pts[i][1] - pts[j][1];
+                let dz = pts[i][2] - pts[j][2];
+                let d = dx * dx + dy * dy + dz * dz;
+                if d > best {
+                    best = d;
+                    ia = i;
+                    ib = j;
+                }
+            }
+        }
+    }
+    let (a, b) = (&pts[ia], &pts[ib]);
+    let d0sq = (a[0] - align_start[0]).powi(2)
+        + (a[1] - align_start[1]).powi(2)
+        + (a[2] - align_start[2]).powi(2);
+    let d1sq = (b[0] - align_start[0]).powi(2)
+        + (b[1] - align_start[1]).powi(2)
+        + (b[2] - align_start[2]).powi(2);
     if d0sq <= d1sq {
-        Some(Line::new(
-            pts[0][0], pts[0][1], pts[0][2], pts[1][0], pts[1][1], pts[1][2],
-        ))
+        Some(Line::new(a[0], a[1], a[2], b[0], b[1], b[2]))
     } else {
-        Some(Line::new(
-            pts[1][0], pts[1][1], pts[1][2], pts[0][0], pts[0][1], pts[0][2],
-        ))
+        Some(Line::new(b[0], b[1], b[2], a[0], a[1], a[2]))
     }
 }
 
