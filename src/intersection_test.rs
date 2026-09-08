@@ -306,6 +306,16 @@ pub fn run_intersection_ray_box() -> TestResult {
         let points = points.unwrap();
         MINI_CHECK!((points[0][0] - (-1.0)).abs() < 1e-4);
         MINI_CHECK!((points[1][0] - 1.0).abs() < 1e-4);
+
+        // Ray grazing the min-y and min-z faces: a zero direction component must
+        // give 0 * f64::MAX == 0, not a NaN that drops the slab constraint.
+        let graze = Line::new(0.0, -1.0, -1.0, 1.0, -1.0, -1.0);
+        let gpts = intersection::ray_box(&graze, &box_, -10.0, 10.0);
+        MINI_CHECK!(gpts.is_some());
+        let gpts = gpts.unwrap();
+        MINI_CHECK!(gpts.len() == 2);
+        MINI_CHECK!(gpts[0][0].abs() < 1e-4);
+        MINI_CHECK!((gpts[1][0] - 1.0).abs() < 1e-4);
     })
 }
 

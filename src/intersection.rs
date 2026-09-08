@@ -303,17 +303,17 @@ pub fn ray_box(line: &Line, box_: &crate::OBB, t0: f64, t1: f64) -> Option<Vec<P
     let inv_dir_x = if direction[0] != 0.0 {
         1.0 / direction[0]
     } else {
-        f64::INFINITY
+        f64::MAX
     };
     let inv_dir_y = if direction[1] != 0.0 {
         1.0 / direction[1]
     } else {
-        f64::INFINITY
+        f64::MAX
     };
     let inv_dir_z = if direction[2] != 0.0 {
         1.0 / direction[2]
     } else {
-        f64::INFINITY
+        f64::MAX
     };
 
     // Calculate intersections with X slabs
