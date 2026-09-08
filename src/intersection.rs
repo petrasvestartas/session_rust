@@ -1094,13 +1094,7 @@ pub fn curve_closest_point(curve: &NurbsCurve, test_point: &Point, t0: f64, t1: 
 }
 
 /// Find intersection curves between a NURBS surface and a plane
-/// Find intersection points between a ray (Line) and a mesh using brute-force triangle testing.
-pub fn ray_mesh(
-    line: &Line,
-    mesh: &crate::Mesh,
-    epsilon: f64,
-    find_all: bool,
-) -> Option<Vec<Point>> {
+fn mesh_triangles(mesh: &crate::Mesh) -> Vec<(Point, Point, Point)> {
     let (vertices, faces) = mesh.to_vertices_and_faces();
     let mut tris: Vec<(Point, Point, Point)> = Vec::new();
     for face in &faces {
@@ -1116,6 +1110,17 @@ pub fn ray_mesh(
             ));
         }
     }
+    tris
+}
+
+/// Find intersection points between a ray (Line) and a mesh using brute-force triangle testing.
+pub fn ray_mesh(
+    line: &Line,
+    mesh: &crate::Mesh,
+    epsilon: f64,
+    find_all: bool,
+) -> Option<Vec<Point>> {
+    let tris = mesh_triangles(mesh);
     if tris.is_empty() {
         return None;
     }
@@ -1153,21 +1158,7 @@ pub fn ray_mesh_bvh(
     epsilon: f64,
     find_all: bool,
 ) -> Option<Vec<Point>> {
-    let (vertices, faces) = mesh.to_vertices_and_faces();
-    let mut tris: Vec<(Point, Point, Point)> = Vec::new();
-    for face in &faces {
-        if face.len() < 3 {
-            continue;
-        }
-        let v0 = &vertices[face[0]];
-        for j in 1..face.len() - 1 {
-            tris.push((
-                v0.clone(),
-                vertices[face[j]].clone(),
-                vertices[face[j + 1]].clone(),
-            ));
-        }
-    }
+    let tris = mesh_triangles(mesh);
     if tris.is_empty() {
         return None;
     }
