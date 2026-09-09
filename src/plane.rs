@@ -261,8 +261,7 @@ impl Plane {
         let v2 = point3.clone() - point1.clone();
         let mut z_axis = v1.cross(&v2);
         z_axis.normalize_self();
-        let mut x_axis = Vector::default();
-        x_axis.perpendicular_to(&z_axis);
+        let mut x_axis = v1;
         x_axis.normalize_self();
         let mut y_axis = z_axis.cross(&x_axis);
         y_axis.normalize_self();

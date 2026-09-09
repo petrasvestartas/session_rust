@@ -44,7 +44,7 @@ pub fn run_plane_constructor() -> TestResult {
         // From three points
         let pts = vec![
             Point::new(0.0, 0.0, 0.0),
-            Point::new(1.0, 0.0, 0.0),
+            Point::new(1.0, 1.0, 0.0),
             Point::new(0.0, 1.0, 0.0),
         ];
         let pl_pts = Plane::from_points(pts);
@@ -98,7 +98,10 @@ pub fn run_plane_constructor() -> TestResult {
             TOLERANCE.is_close(pl_pn.origin()[2], 5.0)
                 && TOLERANCE.is_close(pl_pn.z_axis()[2], 1.0)
         );
-        MINI_CHECK!(TOLERANCE.is_close(pl_pts.c(), 1.0));
+        MINI_CHECK!(
+            TOLERANCE.is_close(pl_pts.c(), 1.0)
+                && TOLERANCE.is_close(pl_pts.x_axis()[0], pl_pts.x_axis()[1])
+        );
         MINI_CHECK!(TOLERANCE.is_close(pl_2pts.x_axis()[0], 1.0));
         MINI_CHECK!(xy.name == "xy_plane" && yz.name == "yz_plane" && xz.name == "xz_plane");
         MINI_CHECK!(
