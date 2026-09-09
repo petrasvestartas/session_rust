@@ -1038,20 +1038,20 @@ impl Plane {
             guid: self.guid.get().cloned().unwrap_or_default(),
             name: self.name.clone(),
             frame: vec![
-                self._origin[0] as f64,
-                self._origin[1] as f64,
-                self._origin[2] as f64,
-                self._x_axis[0] as f64,
-                self._x_axis[1] as f64,
-                self._x_axis[2] as f64,
-                self._y_axis[0] as f64,
-                self._y_axis[1] as f64,
-                self._y_axis[2] as f64,
-                self._z_axis[0] as f64,
-                self._z_axis[1] as f64,
-                self._z_axis[2] as f64,
+                self._origin[0],
+                self._origin[1],
+                self._origin[2],
+                self._x_axis[0],
+                self._x_axis[1],
+                self._x_axis[2],
+                self._y_axis[0],
+                self._y_axis[1],
+                self._y_axis[2],
+                self._z_axis[0],
+                self._z_axis[1],
+                self._z_axis[2],
             ],
-            width: self.width as f64,
+            width: self.width,
             linecolor: Some(crate::proto::Color {
                 guid: self.linecolor.guid().to_string(),
                 name: self.linecolor.name.clone(),
@@ -1071,27 +1071,17 @@ impl Plane {
 
     /// Build from an already-decoded proto — pb_loads decodes then calls this.
     pub fn from_proto(proto: crate::proto::Plane) -> Self {
-        // Parse frame array
-        let origin = Point::new(
-            proto.frame[0] as f64,
-            proto.frame[1] as f64,
-            proto.frame[2] as f64,
-        );
-        let x_axis = Vector::new(
-            proto.frame[3] as f64,
-            proto.frame[4] as f64,
-            proto.frame[5] as f64,
-        );
-        let y_axis = Vector::new(
-            proto.frame[6] as f64,
-            proto.frame[7] as f64,
-            proto.frame[8] as f64,
-        );
-        let z_axis = Vector::new(
-            proto.frame[9] as f64,
-            proto.frame[10] as f64,
-            proto.frame[11] as f64,
-        );
+        // Parse frame array; a short frame leaves the default XY frame, as in C++
+        let mut origin = Point::new(0.0, 0.0, 0.0);
+        let mut x_axis = Vector::x_axis();
+        let mut y_axis = Vector::y_axis();
+        let mut z_axis = Vector::z_axis();
+        if proto.frame.len() >= 12 {
+            origin = Point::new(proto.frame[0], proto.frame[1], proto.frame[2]);
+            x_axis = Vector::new(proto.frame[3], proto.frame[4], proto.frame[5]);
+            y_axis = Vector::new(proto.frame[6], proto.frame[7], proto.frame[8]);
+            z_axis = Vector::new(proto.frame[9], proto.frame[10], proto.frame[11]);
+        }
 
         // Compute plane equation coefficients
         let a = z_axis[0];

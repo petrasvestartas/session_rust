@@ -313,9 +313,15 @@ pub fn run_plane_protobuf_roundtrip() -> TestResult {
         let fname = "serialization/test_plane.bin";
         pl.pb_dump(fname);
         let loaded = Plane::pb_load(fname);
+        let mut wide = Plane::xy_plane();
+        wide.width = 3.0;
+        let round_tripped = Plane::pb_loads(&wide.pb_dumps()).unwrap();
+        let empty = Plane::pb_loads(&[]).unwrap();
 
         MINI_CHECK!(loaded.name == "test_plane");
         MINI_CHECK!(TOLERANCE.is_close(loaded.c(), 1.0));
+        MINI_CHECK!(TOLERANCE.is_close(round_tripped.width, 3.0));
+        MINI_CHECK!(TOLERANCE.is_close(empty.c(), 1.0));
     })
 }
 
