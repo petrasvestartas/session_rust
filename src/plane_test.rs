@@ -8,6 +8,7 @@ pub fn run_plane_constructor() -> TestResult {
         use crate::Plane;
         use crate::Point;
         use crate::Vector;
+        use crate::Color;
 
         // Default constructor - XY plane at origin
         let pl = Plane::default();
@@ -65,7 +66,8 @@ pub fn run_plane_constructor() -> TestResult {
         pl_iadd += offset.clone();
         let mut pl_isub = Plane::xy_plane();
         pl_isub -= offset.clone();
-        let pl_base = Plane::xy_plane();
+        let mut pl_base = Plane::xy_plane();
+        pl_base.linecolor = Color::red();
         let pl_add = pl_base.clone() + offset.clone();
         let pl_sub = pl_base.clone() - offset.clone();
 
@@ -113,8 +115,12 @@ pub fn run_plane_constructor() -> TestResult {
             TOLERANCE.is_close(pl_isub.origin()[0], -1.0)
                 && TOLERANCE.is_close(pl_isub.origin()[2], -3.0)
         );
-        MINI_CHECK!(TOLERANCE.is_close(pl_add.origin()[2], 3.0));
-        MINI_CHECK!(TOLERANCE.is_close(pl_sub.origin()[2], -3.0));
+        MINI_CHECK!(
+            TOLERANCE.is_close(pl_add.origin()[2], 3.0) && pl_add.linecolor == Color::red()
+        );
+        MINI_CHECK!(
+            TOLERANCE.is_close(pl_sub.origin()[2], -3.0) && pl_sub.linecolor == Color::red()
+        );
     })
 }
 
@@ -285,6 +291,8 @@ pub fn run_plane_transformed() -> TestResult {
 pub fn run_plane_json_roundtrip() -> TestResult {
     MINI_TEST!("Json Roundtrip", {
         use crate::Plane;
+        use crate::Point;
+        use crate::Vector;
 
         let mut pl = Plane::xy_plane();
         pl.name = "test_plane".to_string();
@@ -297,9 +305,20 @@ pub fn run_plane_json_roundtrip() -> TestResult {
         let fname = "serialization/test_plane.json";
         pl.file_json_dump(fname).unwrap();
         let loaded = Plane::file_json_load(fname).unwrap();
+        let flipped = Plane::from_frame(
+            Point::new(0.0, 0.0, 0.0),
+            Vector::new(1.0, 0.0, 0.0),
+            Vector::new(0.0, 1.0, 0.0),
+            Vector::new(0.0, 0.0, -1.0),
+        );
+        let round_tripped = Plane::file_json_loads(&flipped.file_json_dumps());
 
         MINI_CHECK!(loaded.name == "test_plane");
         MINI_CHECK!(TOLERANCE.is_close(loaded.c(), 1.0));
+        MINI_CHECK!(
+            TOLERANCE.is_close(round_tripped.z_axis()[2], -1.0)
+                && TOLERANCE.is_close(round_tripped.c(), -1.0)
+        );
     })
 }
 
