@@ -159,14 +159,23 @@ pub fn run_plane_rotate() -> TestResult {
 pub fn run_plane_is_right_hand() -> TestResult {
     MINI_TEST!("Is Right Hand", {
         use crate::Plane;
+        use crate::Point;
+        use crate::Vector;
 
         let xy = Plane::xy_plane();
         let yz = Plane::yz_plane();
         let xz = Plane::xz_plane();
+        let half = Plane::from_frame(
+            Point::new(0.0, 0.0, 0.0),
+            Vector::new(1.0, 0.0, 0.0),
+            Vector::new(0.0, 1.0, 0.0),
+            Vector::new(0.0, 0.0, 0.5),
+        );
 
         MINI_CHECK!(xy.is_right_hand());
         MINI_CHECK!(yz.is_right_hand());
         MINI_CHECK!(xz.is_right_hand());
+        MINI_CHECK!(!half.is_right_hand());
     })
 }
 

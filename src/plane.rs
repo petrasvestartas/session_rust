@@ -572,7 +572,8 @@ impl Plane {
     /// `true` if the plane is right-handed, `false` otherwise.
     pub fn is_right_hand(&self) -> bool {
         let cross = self._x_axis.cross(&self._y_axis);
-        cross.dot(&self._z_axis) > 0.0
+        let dot_product = cross.dot(&self._z_axis);
+        dot_product > 0.999
     }
 
     pub fn a(&self) -> f64 {
