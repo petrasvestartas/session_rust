@@ -55,6 +55,13 @@ pub fn run_plane_constructor() -> TestResult {
         let p2 = Point::new(1.0, 0.0, 0.0);
         let pl_2pts = Plane::from_two_points(p1, p2);
 
+        // Non-unit x-axis with a y-axis that is not perpendicular to it
+        let pl_skew = Plane::new(
+            Point::new(0.0, 0.0, 0.0),
+            Vector::new(2.0, 0.0, 0.0),
+            Vector::new(1.0, 1.0, 0.0),
+        );
+
         // Standard planes
         let xy = Plane::xy_plane();
         let yz = Plane::yz_plane();
@@ -105,6 +112,10 @@ pub fn run_plane_constructor() -> TestResult {
                 && TOLERANCE.is_close(pl_pts.x_axis()[0], pl_pts.x_axis()[1])
         );
         MINI_CHECK!(TOLERANCE.is_close(pl_2pts.x_axis()[0], 1.0));
+        MINI_CHECK!(
+            TOLERANCE.is_close(pl_skew.x_axis().dot(&pl_skew.y_axis()), 0.0)
+                && pl_skew.is_right_hand()
+        );
         MINI_CHECK!(xy.name == "xy_plane" && yz.name == "yz_plane" && xz.name == "xz_plane");
         MINI_CHECK!(
             TOLERANCE.is_close(pl_iadd.origin()[0], 1.0)
