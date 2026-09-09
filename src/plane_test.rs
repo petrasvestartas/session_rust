@@ -232,6 +232,7 @@ pub fn run_plane_translate_by_normal() -> TestResult {
 
         MINI_CHECK!(TOLERANCE.is_close(moved.origin()[2], 5.0));
         MINI_CHECK!(TOLERANCE.is_close(pl.origin()[2], 0.0));
+        MINI_CHECK!(moved.name == pl.name);
     })
 }
 

@@ -761,7 +761,12 @@ impl Plane {
 
         let new_origin = self._origin.clone() + (normal * distance);
 
-        Plane::new(new_origin, self._x_axis.clone(), self._y_axis.clone())
+        Plane::with_name(
+            new_origin,
+            self._x_axis.clone(),
+            self._y_axis.clone(),
+            self.name.clone(),
+        )
     }
 
     /// Sign test using the cached plane equation `ax + by + cz + d`.
