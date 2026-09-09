@@ -104,6 +104,12 @@ impl TreeNode {
         self.children.push(Rc::clone(child));
     }
 
+    /// Add a child node at a position among the children
+    pub fn insert(&mut self, index: usize, child: &Rc<RefCell<TreeNode>>) {
+        child.borrow_mut().parent = Some(self.weak_self.clone());
+        self.children.insert(index, Rc::clone(child));
+    }
+
     /// Remove a child node, returning true if it was found and removed
     pub fn remove(&mut self, child: &Rc<RefCell<TreeNode>>) -> bool {
         if let Some(pos) = self.children.iter().position(|c| Rc::ptr_eq(c, child)) {
@@ -378,23 +384,17 @@ impl Tree {
         }
     }
 
-    /// Remove a node from the tree
-    pub fn remove(&mut self, node: &Rc<RefCell<TreeNode>>) -> bool {
-        if let Some(root) = &self.root_node {
-            if Rc::ptr_eq(root, node) {
-                self.root_node = None;
-                true
-            } else {
-                let parent = node.borrow().parent();
-                if let Some(parent) = parent {
-                    parent.borrow_mut().remove(node)
-                } else {
-                    false
-                }
-            }
-        } else {
-            false
+    /// Remove a node from the tree, returning the detached node with its subtree intact so a
+    /// caller can keep or re-add it; None when the node is not in the tree
+    pub fn remove(&mut self, node: &Rc<RefCell<TreeNode>>) -> Option<Rc<RefCell<TreeNode>>> {
+        let root = self.root_node.as_ref()?;
+        if Rc::ptr_eq(root, node) {
+            self.root_node = None;
+            return Some(Rc::clone(node));
         }
+        let parent = node.borrow().parent()?;
+        let removed = parent.borrow_mut().remove(node);
+        removed.then(|| Rc::clone(node))
     }
 
     /// All leaf nodes

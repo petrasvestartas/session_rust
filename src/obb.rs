@@ -295,6 +295,11 @@ impl OBB {
         let _ = self.guid.set(g);
     }
 
+    /// Clear the guid so a FRESH one mints lazily on next read — the duplicate/copy enabler.
+    pub fn refresh_guid(&mut self) {
+        self.guid = std::sync::OnceLock::new();
+    }
+
     pub fn aabb(&self) -> AABB {
         let ex = self.half_size[0];
         let ey = self.half_size[1];

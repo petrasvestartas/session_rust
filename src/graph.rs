@@ -403,6 +403,19 @@ impl Graph {
         self.neighbors(node)
     }
 
+    /// The edges incident to a node as (other, attribute, forward); forward is true when
+    /// `node` is the edge's v0, so `add_edge` can be replayed with the vertices in their
+    /// original order. An unknown node has no edges.
+    pub fn edges_of(&self, node: &str) -> Vec<(String, String, bool)> {
+        let mut out = Vec::new();
+        if let Some(neighbors) = self.edges.get(node) {
+            for (other, edge) in neighbors {
+                out.push((other.clone(), edge.attribute.clone(), edge.v0 == node));
+            }
+        }
+        out
+    }
+
     /// Removes a node and all its edges from the graph.
     pub fn remove_node(&mut self, key: &str) {
         if !self.has_node(key) {

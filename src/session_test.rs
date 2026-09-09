@@ -91,6 +91,40 @@ pub fn run_session_add_polyline() -> TestResult {
     })
 }
 
+pub fn run_session_select_by_type() -> TestResult {
+    MINI_TEST!("Select By Type", {
+        use crate::{Mesh, Point, Polyline, Session};
+
+        let mut session = Session::default();
+        let g0 = session.add_group("g0");
+        let g1 = session.add_group("g1");
+        let g2 = session.add_group("g2");
+
+        session.add_polyline(
+            Polyline::new(vec![Point::new(0.0, 0.0, 0.0), Point::new(1.0, 0.0, 0.0)]),
+            Some(&g0),
+        );
+        session.add_polyline(
+            Polyline::new(vec![Point::new(0.0, 1.0, 0.0), Point::new(1.0, 1.0, 0.0)]),
+            Some(&g0),
+        );
+        session.add_polyline(
+            Polyline::new(vec![Point::new(0.0, 2.0, 0.0), Point::new(1.0, 2.0, 0.0)]),
+            Some(&g1),
+        );
+        session.add_point(Point::new(9.0, 9.0, 9.0), Some(&g2));
+
+        let groups = session.select_by_type::<Polyline>();
+
+        MINI_CHECK!(groups.len() == 2);
+        MINI_CHECK!(groups[0].len() == 2);
+        MINI_CHECK!(groups[1].len() == 1);
+        MINI_CHECK!(TOLERANCE.is_close(groups[1][0].get_point(0).unwrap()[1], 2.0));
+
+        MINI_CHECK!(session.select_by_type::<Mesh>().is_empty());
+    })
+}
+
 pub fn run_session_add_pointcloud() -> TestResult {
     MINI_TEST!("Add Pointcloud", {
         use crate::{Point, PointCloud, Session};
@@ -452,6 +486,28 @@ pub fn run_session_get_geometry() -> TestResult {
     })
 }
 
+pub fn run_session_get_geometry_is_pure() -> TestResult {
+    MINI_TEST!("Get Geometry Is Pure", {
+        // get_geometry() returns a flattened SNAPSHOT and must never touch the session's own
+        // geometry, so calling it twice gives the same answer.
+        use crate::{Point, Session, Xform};
+
+        let mut session = Session::default();
+        let point = Point::new(1.0, 2.0, 3.0);
+        let guid = point.guid().to_string();
+        session.add_point(point.clone(), None);
+        session.set_xform(&guid, Xform::translation(10.0, 0.0, 0.0));
+
+        let first = session.get_geometry().points[0].clone();
+        let second = session.get_geometry().points[0].clone();
+
+        MINI_CHECK!(TOLERANCE.is_close(first[0], 11.0));
+        MINI_CHECK!(TOLERANCE.is_close(second[0], 11.0));
+        MINI_CHECK!(TOLERANCE.is_close(point[0], 1.0));
+        MINI_CHECK!(TOLERANCE.is_close(session.objects.points[0][0], 1.0));
+    })
+}
+
 pub fn run_session_json_roundtrip() -> TestResult {
     MINI_TEST!("Json Roundtrip", {
         use crate::{Point, Session};
@@ -761,6 +817,235 @@ pub fn run_session_component_json_roundtrip() -> TestResult {
     })
 }
 
+pub fn run_session_document_workflow() -> TestResult {
+    MINI_TEST!("Document Workflow", {
+        use crate::session::FromGeometry;
+        use crate::{Geometry, Point, Session, Xform};
+        use std::rc::Rc;
+
+        let mut session = Session::default();
+        let a = Point::new(1.0, 0.0, 0.0);
+        let b = Point::new(2.0, 0.0, 0.0);
+        let c = Point::new(3.0, 0.0, 0.0);
+        let a_guid = a.guid().to_string();
+        let b_guid = b.guid().to_string();
+        let c_guid = c.guid().to_string();
+        session.add_point(a, None);
+        session.add_point(b, None);
+        session.add_point(c, None);
+
+        session.replace(
+            &b_guid,
+            Geometry::Point(Rc::new(Point::new(20.0, 0.0, 0.0))),
+        );
+        session.remove_object(&c_guid);
+        let shift = Xform::translation(0.0, 5.0, 0.0);
+        session.set_xform(&a_guid, shift.clone());
+
+        let fname = "serialization/test_session_document.bin";
+        session.pb_dump(fname);
+        let loaded = Session::pb_load(fname);
+
+        MINI_CHECK!(loaded.lookup.len() == 2);
+        MINI_CHECK!(loaded.lookup.contains_key(&a_guid));
+        MINI_CHECK!(loaded.lookup.contains_key(&b_guid));
+        MINI_CHECK!(!loaded.lookup.contains_key(&c_guid));
+        MINI_CHECK!(TOLERANCE.is_close(
+            Point::from_geometry(&loaded.lookup[&b_guid]).unwrap()[0],
+            20.0
+        ));
+        MINI_CHECK!(loaded.xform(&a_guid) == shift);
+        MINI_CHECK!(loaded.history.depth() == 0);
+    })
+}
+
+pub fn run_session_undo_remove() -> TestResult {
+    MINI_TEST!("Undo Remove", {
+        use crate::{Point, Session, Xform};
+
+        let mut session = Session::default();
+        let group = session.add_group("g");
+        let a = Point::new(1.0, 0.0, 0.0);
+        let b = Point::new(2.0, 0.0, 0.0);
+        let c = Point::new(3.0, 0.0, 0.0);
+        let a_guid = a.guid().to_string();
+        let b_guid = b.guid().to_string();
+        let c_guid = c.guid().to_string();
+        session.add_point(a, Some(&group));
+        let b_node = session.add_point(b, Some(&group));
+        session.add_point(c, Some(&b_node));
+        session.add_edge(&a_guid, &b_guid, "connection");
+        let shift = Xform::translation(0.0, 5.0, 0.0);
+        session.set_xform(&b_guid, shift.clone());
+
+        session.begin("remove");
+        session.remove_object(&b_guid);
+        session.commit();
+        let gone = !session.lookup.contains_key(&b_guid) && group.borrow().children().len() == 1;
+        session.undo();
+
+        MINI_CHECK!(gone);
+        MINI_CHECK!(session.lookup.contains_key(&b_guid));
+        MINI_CHECK!(session.objects.points[1].guid() == b_guid);
+        MINI_CHECK!(group.borrow().children()[1].borrow().name == b_guid);
+        MINI_CHECK!(
+            group.borrow().children()[1].borrow().children()[0]
+                .borrow()
+                .name
+                == c_guid
+        );
+        MINI_CHECK!(session.graph.has_edge((&a_guid, &b_guid)));
+        MINI_CHECK!(
+            session.graph.edge_attribute(&a_guid, &b_guid, None) == Some("connection".to_string())
+        );
+        MINI_CHECK!(session.xform(&b_guid) == shift);
+
+        session.redo();
+
+        MINI_CHECK!(!session.lookup.contains_key(&b_guid));
+        MINI_CHECK!(session.objects.points.len() == 2);
+        MINI_CHECK!(group.borrow().children().len() == 1);
+        MINI_CHECK!(!session.graph.has_edge((&a_guid, &b_guid)));
+        MINI_CHECK!(session.xform(&b_guid) == Xform::identity());
+    })
+}
+
+pub fn run_session_undo_add() -> TestResult {
+    MINI_TEST!("Undo Add", {
+        use crate::session::FromGeometry;
+        use crate::{Point, Session};
+
+        let mut session = Session::default();
+        let group = session.add_group("g");
+        session.add_point(Point::new(0.0, 0.0, 0.0), Some(&group));
+        let point = Point::new(1.0, 2.0, 3.0);
+        let guid = point.guid().to_string();
+
+        session.begin("add");
+        session.add_point(point, Some(&group));
+        session.commit();
+        session.undo();
+        let gone = !session.lookup.contains_key(&guid) && session.objects.points.len() == 1;
+        session.redo();
+
+        MINI_CHECK!(gone);
+        MINI_CHECK!(session.lookup.contains_key(&guid));
+        MINI_CHECK!(session.objects.points[1].guid() == guid);
+        MINI_CHECK!(group.borrow().children()[1].borrow().name == guid);
+        MINI_CHECK!(session.graph.has_node(&guid));
+        MINI_CHECK!(TOLERANCE.is_close(
+            Point::from_geometry(&session.lookup[&guid]).unwrap()[2],
+            3.0
+        ));
+    })
+}
+
+pub fn run_session_undo_replace() -> TestResult {
+    MINI_TEST!("Undo Replace", {
+        use crate::session::FromGeometry;
+        use crate::{Geometry, Point, Session};
+        use std::rc::Rc;
+
+        let mut session = Session::default();
+        let point = Point::new(1.0, 2.0, 3.0);
+        let guid = point.guid().to_string();
+        session.add_point(point, None);
+
+        session.begin("replace");
+        session.replace(&guid, Geometry::Point(Rc::new(Point::new(9.0, 9.0, 9.0))));
+        session.commit();
+        let replaced = Point::from_geometry(&session.lookup[&guid]).unwrap()[0];
+        session.undo();
+        let restored = Point::from_geometry(&session.lookup[&guid]).unwrap()[0];
+        session.redo();
+
+        MINI_CHECK!(TOLERANCE.is_close(replaced, 9.0));
+        MINI_CHECK!(TOLERANCE.is_close(restored, 1.0));
+        MINI_CHECK!(TOLERANCE.is_close(
+            Point::from_geometry(&session.lookup[&guid]).unwrap()[0],
+            9.0
+        ));
+        MINI_CHECK!(session.objects.points[0].guid() == guid);
+        MINI_CHECK!(session.objects.points.len() == 1);
+    })
+}
+
+pub fn run_session_undo_xform() -> TestResult {
+    MINI_TEST!("Undo Xform", {
+        use crate::{Point, Session, Xform};
+
+        let mut session = Session::default();
+        let point = Point::new(1.0, 2.0, 3.0);
+        let guid = point.guid().to_string();
+        session.add_point(point, None);
+        let shift = Xform::translation(5.0, 0.0, 0.0);
+
+        session.begin("move");
+        session.set_xform(&guid, shift.clone());
+        session.commit();
+        session.undo();
+        let cleared = session.xform(&guid) == Xform::identity();
+        session.redo();
+
+        session.begin("reset");
+        session.remove_xform(&guid);
+        session.commit();
+        session.undo();
+
+        MINI_CHECK!(cleared);
+        MINI_CHECK!(session.xform(&guid) == shift);
+        MINI_CHECK!(session.xforms.len() == 1);
+    })
+}
+
+pub fn run_session_history_purged_on_save() -> TestResult {
+    MINI_TEST!("History Purged On Save", {
+        use crate::{Point, Session};
+
+        let mut session = Session::default();
+
+        session.begin("add");
+        session.add_point(Point::new(0.0, 0.0, 0.0), None);
+        session.commit();
+        let before_pb = session.history.depth();
+        session.pb_dumps();
+        let after_pb = session.history.depth();
+
+        session.begin("add");
+        session.add_point(Point::new(1.0, 0.0, 0.0), None);
+        session.commit();
+        let before_json = session.history.depth();
+        session.file_json_dumps();
+
+        MINI_CHECK!(before_pb == 1);
+        MINI_CHECK!(after_pb == 0);
+        MINI_CHECK!(before_json == 1);
+        MINI_CHECK!(session.history.depth() == 0);
+        MINI_CHECK!(!session.undo());
+        MINI_CHECK!(session.objects.points.len() == 2);
+    })
+}
+
+pub fn run_session_history_capacity() -> TestResult {
+    MINI_TEST!("History Capacity", {
+        use crate::{Point, Session};
+
+        let mut session = Session::default();
+        for i in 0..70 {
+            session.begin("add");
+            session.add_point(Point::new(i as f64, 0.0, 0.0), None);
+            session.commit();
+        }
+        let depth = session.history.depth();
+        while session.undo() {}
+
+        MINI_CHECK!(depth == 64);
+        MINI_CHECK!(!session.history.can_undo());
+        MINI_CHECK!(session.objects.points.len() == 6);
+        MINI_CHECK!(TOLERANCE.is_close(session.objects.points[5][0], 5.0));
+    })
+}
+
 REGISTER_MINI_TEST!(
     "Session",
     "Constructor",
@@ -790,6 +1075,11 @@ REGISTER_MINI_TEST!(
     "Session",
     "Add Polyline",
     crate::session_test::run_session_add_polyline
+);
+REGISTER_MINI_TEST!(
+    "Session",
+    "Select By Type",
+    crate::session_test::run_session_select_by_type
 );
 REGISTER_MINI_TEST!(
     "Session",
@@ -883,6 +1173,11 @@ REGISTER_MINI_TEST!(
 );
 REGISTER_MINI_TEST!(
     "Session",
+    "Get Geometry Is Pure",
+    crate::session_test::run_session_get_geometry_is_pure
+);
+REGISTER_MINI_TEST!(
+    "Session",
     "Json Roundtrip",
     crate::session_test::run_session_json_roundtrip
 );
@@ -926,4 +1221,39 @@ REGISTER_MINI_TEST!(
     "Session",
     "Component Json Roundtrip",
     crate::session_test::run_session_component_json_roundtrip
+);
+REGISTER_MINI_TEST!(
+    "Session",
+    "Document Workflow",
+    crate::session_test::run_session_document_workflow
+);
+REGISTER_MINI_TEST!(
+    "Session",
+    "Undo Remove",
+    crate::session_test::run_session_undo_remove
+);
+REGISTER_MINI_TEST!(
+    "Session",
+    "Undo Add",
+    crate::session_test::run_session_undo_add
+);
+REGISTER_MINI_TEST!(
+    "Session",
+    "Undo Replace",
+    crate::session_test::run_session_undo_replace
+);
+REGISTER_MINI_TEST!(
+    "Session",
+    "Undo Xform",
+    crate::session_test::run_session_undo_xform
+);
+REGISTER_MINI_TEST!(
+    "Session",
+    "History Purged On Save",
+    crate::session_test::run_session_history_purged_on_save
+);
+REGISTER_MINI_TEST!(
+    "Session",
+    "History Capacity",
+    crate::session_test::run_session_history_capacity
 );

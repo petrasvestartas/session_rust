@@ -9,7 +9,7 @@ fn main() {
         .expect("usage: verify_slim_pb <file.pb>");
     let old = std::fs::read(&path).unwrap();
 
-    let a = session_rust::Session::pb_loads(&old).unwrap();
+    let mut a = session_rust::Session::pb_loads(&old).unwrap();
 
     // Halfedge maps as the ORIGINAL file stored them (that file predates the writer change,
     // so pb_loads read them off the wire rather than rebuilding).

@@ -1,3 +1,4 @@
+use crate::history::{clone, History, Op, ReplaceOp, Tombstone, XformOp};
 use crate::{
     BRep, Element, Graph, Line, Mesh, NurbsCurve, NurbsSurface, Objects, Plane, Point, PointCloud,
     Polyline, SpatialBVH, Tolerance, Tree, TreeNode, Xform, OBB,
@@ -41,6 +42,46 @@ impl Geometry {
             Geometry::Polyline(g) => g.guid(),
         }
     }
+
+    pub fn name(&self) -> &str {
+        match self {
+            Geometry::OBB(g) => &g.name,
+            Geometry::BRep(g) => &g.name,
+            Geometry::Element(g) => &g.name,
+            Geometry::Line(g) => &g.name,
+            Geometry::Mesh(g) => &g.name,
+            Geometry::NurbsCurve(g) => &g.name,
+            Geometry::NurbsSurface(g) => &g.name,
+            Geometry::Plane(g) => &g.name,
+            Geometry::Point(g) => &g.name,
+            Geometry::PointCloud(g) => &g.name,
+            Geometry::Polyline(g) => &g.name,
+        }
+    }
+
+    /// Overwrite the guid: a minted one is cleared first, since `set_guid` never replaces one.
+    pub fn set_guid(&mut self, guid: &str) {
+        macro_rules! reset {
+            ($rc:expr) => {{
+                let g = Rc::make_mut($rc);
+                g.refresh_guid();
+                g.set_guid(guid.to_string());
+            }};
+        }
+        match self {
+            Geometry::OBB(g) => reset!(g),
+            Geometry::BRep(g) => reset!(g),
+            Geometry::Element(g) => reset!(g),
+            Geometry::Line(g) => reset!(g),
+            Geometry::Mesh(g) => reset!(g),
+            Geometry::NurbsCurve(g) => reset!(g),
+            Geometry::NurbsSurface(g) => reset!(g),
+            Geometry::Plane(g) => reset!(g),
+            Geometry::Point(g) => reset!(g),
+            Geometry::PointCloud(g) => reset!(g),
+            Geometry::Polyline(g) => reset!(g),
+        }
+    }
 }
 
 /// Extracts a concrete geometry type out of a `Geometry` variant. C++ gets this for free from
@@ -76,6 +117,44 @@ impl_from_geometry!(
     Polyline => Polyline,
 );
 
+/// The Objects vectors in `order()` sequence, each with the prefix of its graph node attribute.
+pub const COLLECTIONS: [(&str, &str); 12] = [
+    ("points", "point"),
+    ("lines", "line"),
+    ("planes", "plane"),
+    ("bboxes", "bbox"),
+    ("polylines", "polyline"),
+    ("pointclouds", "pointcloud"),
+    ("meshes", "mesh"),
+    ("nurbscurves", "nurbscurve"),
+    ("nurbssurfaces", "nurbssurface"),
+    ("breps", "brep"),
+    ("elements", "element"),
+    ("components", "component"),
+];
+
+/// Python reaches a typed vector by collection NAME (`getattr(objects, collection)`); Rust
+/// needs the vector and its `Geometry` variant spelled out, so `$op!(vec, Variant)` runs once
+/// for the named collection. Components are not geometry and have no arm.
+macro_rules! typed {
+    ($collection:expr, $objects:expr, $op:ident) => {
+        match $collection {
+            "points" => $op!($objects.points, Point),
+            "lines" => $op!($objects.lines, Line),
+            "planes" => $op!($objects.planes, Plane),
+            "bboxes" => $op!($objects.bboxes, OBB),
+            "polylines" => $op!($objects.polylines, Polyline),
+            "pointclouds" => $op!($objects.pointclouds, PointCloud),
+            "meshes" => $op!($objects.meshes, Mesh),
+            "nurbscurves" => $op!($objects.nurbscurves, NurbsCurve),
+            "nurbssurfaces" => $op!($objects.nurbssurfaces, NurbsSurface),
+            "breps" => $op!($objects.breps, BRep),
+            "elements" => $op!($objects.elements, Element),
+            _ => {}
+        }
+    };
+}
+
 /// A Session containing geometry objects with hierarchical and graph structures.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(tag = "type", rename = "Session")]
@@ -103,6 +182,10 @@ pub struct Session {
     /// Guid → LOCAL transform, relative to the tree parent. THE only place a transform is
     #[serde(skip)]
     pub xforms: HashMap<String, Xform>,
+    /// Undo/redo buffer, in memory only. Ops are recorded ONLY while a transaction is open
+    /// (`begin` ... `commit`), and every save purges it, as Rhino does.
+    #[serde(skip)]
+    pub history: History,
     /// Boundary Volume Hierarchy for spatial collision detection
     #[serde(skip)]
     pub bvh: SpatialBVH,
@@ -179,6 +262,7 @@ impl Session {
             tree,
             graph,
             xforms: HashMap::new(),
+            history: History::new(),
             bvh,
             cached_ray_bvh: None,
             cached_guids: Vec::new(),
@@ -260,6 +344,14 @@ impl Session {
 
     /// Sets the LOCAL transform of an object, relative to its tree parent.
     pub fn set_xform(&mut self, guid: &str, xform: Xform) {
+        if self.history.current.is_some() {
+            let before = self.xforms.get(guid).cloned();
+            self.history.record(Op::Xform(XformOp::new(
+                guid.to_string(),
+                before,
+                Some(xform.clone()),
+            )));
+        }
         self.xforms.insert(guid.to_string(), xform);
         self.bvh_cache_dirty = true;
     }
@@ -274,6 +366,11 @@ impl Session {
 
     /// Removes an object's local transform, returning whether one was present.
     pub fn remove_xform(&mut self, guid: &str) -> bool {
+        let before = self.xforms.get(guid).cloned();
+        if before.is_some() && self.history.current.is_some() {
+            self.history
+                .record(Op::Xform(XformOp::new(guid.to_string(), before, None)));
+        }
         let removed = self.xforms.remove(guid).is_some();
         if removed {
             self.bvh_cache_dirty = true;
@@ -470,6 +567,7 @@ impl Session {
             tree,
             graph,
             xforms,
+            history: History::new(),
             bvh: SpatialBVH::new(),
             cached_ray_bvh: None,
             cached_guids: Vec::new(),
@@ -480,7 +578,8 @@ impl Session {
         Ok(session)
     }
 
-    pub fn file_json_dumps(&self) -> String {
+    pub fn file_json_dumps(&mut self) -> String {
+        self.history.clear();
         self.jsondump().unwrap_or_default()
     }
 
@@ -488,7 +587,8 @@ impl Session {
         Self::jsonload(s).unwrap_or_else(|_| Self::default())
     }
 
-    pub fn file_json_dump(&self, filepath: &str) {
+    pub fn file_json_dump(&mut self, filepath: &str) {
+        self.history.clear();
         let json = self.jsondump().unwrap_or_default();
         fs::write(filepath, json).expect("Failed to write JSON file");
     }
@@ -502,8 +602,9 @@ impl Session {
     // Protobuf
     // ═══════════════════════════════════════════════════════════════════════════
 
-    pub fn pb_dumps(&self) -> Vec<u8> {
+    pub fn pb_dumps(&mut self) -> Vec<u8> {
         use prost::Message;
+        self.history.clear();
 
         // Build Objects proto — from the lookup-synced view (lookup is the mutable truth)
         let objects = self.objects_synced();
@@ -770,7 +871,8 @@ impl Session {
         Ok(session)
     }
 
-    pub fn pb_dump(&self, path: &str) {
+    pub fn pb_dump(&mut self, path: &str) {
+        self.history.clear();
         std::fs::write(path, self.pb_dumps()).expect("Failed to write protobuf file");
     }
 
@@ -1197,24 +1299,61 @@ impl Session {
     // Every add_* below SKIPS an object that carries nothing to draw, and returns None
     // ═══════════════════════════════════════════════════════════════════════════
 
+    fn _add_object(
+        &mut self,
+        collection: &str,
+        obj: Geometry,
+        type_prefix: &str,
+        parent: Option<&Rc<RefCell<TreeNode>>>,
+    ) -> Rc<RefCell<TreeNode>> {
+        let guid = obj.guid().to_string();
+        let attribute = format!("{type_prefix}_{}", obj.name());
+        let mut obj_index = 0;
+        macro_rules! push {
+            ($vec:expr, $variant:ident) => {
+                if let Geometry::$variant(g) = &obj {
+                    $vec.push(Rc::clone(g));
+                    obj_index = $vec.len() as i64 - 1;
+                }
+            };
+        }
+        typed!(collection, self.objects, push);
+        let snapshot = self.history.current.is_some().then(|| clone(&obj));
+        self.lookup.insert(guid.clone(), obj);
+        self.bvh_cache_dirty = true;
+        self.graph.add_node(&guid, &attribute);
+        let node = TreeNode::new(&guid);
+        let mut parent_guid = None;
+        let mut index = 0;
+        if let Some(p) = parent {
+            self.add(&node, Some(p));
+            parent_guid = Some(p.borrow().name.clone());
+            index = p.borrow().children().len() - 1;
+        }
+        if let Some(obj) = snapshot {
+            self.history.record(Op::Add(Tombstone::new(
+                guid,
+                obj,
+                collection.to_string(),
+                obj_index,
+                None,
+                parent_guid,
+                index,
+                None,
+                attribute,
+                Vec::new(),
+            )));
+        }
+        node
+    }
+
     /// Adds a point to the Session.
     pub fn add_point(
         &mut self,
         point: Point,
         parent: Option<&Rc<RefCell<TreeNode>>>,
     ) -> Rc<RefCell<TreeNode>> {
-        let guid = point.guid().to_string();
-        let name = point.name.clone();
-        let point = Rc::new(point);
-        self.objects.points.push(Rc::clone(&point));
-        self.lookup.insert(guid.clone(), Geometry::Point(point));
-        self.bvh_cache_dirty = true;
-        self.graph.add_node(&guid, &format!("point_{name}"));
-        let node = TreeNode::new(&guid);
-        if let Some(p) = parent {
-            self.tree.add(&node, Some(p));
-        }
-        node
+        self._add_object("points", Geometry::Point(Rc::new(point)), "point", parent)
     }
 
     pub fn add_line(
@@ -1222,18 +1361,7 @@ impl Session {
         line: Line,
         parent: Option<&Rc<RefCell<TreeNode>>>,
     ) -> Rc<RefCell<TreeNode>> {
-        let guid = line.guid().to_string();
-        let name = line.name.clone();
-        let line = Rc::new(line);
-        self.objects.lines.push(Rc::clone(&line));
-        self.lookup.insert(guid.clone(), Geometry::Line(line));
-        self.bvh_cache_dirty = true;
-        self.graph.add_node(&guid, &format!("line_{name}"));
-        let node = TreeNode::new(&guid);
-        if let Some(p) = parent {
-            self.tree.add(&node, Some(p));
-        }
-        node
+        self._add_object("lines", Geometry::Line(Rc::new(line)), "line", parent)
     }
 
     pub fn add_plane(
@@ -1241,29 +1369,11 @@ impl Session {
         plane: Plane,
         parent: Option<&Rc<RefCell<TreeNode>>>,
     ) -> Rc<RefCell<TreeNode>> {
-        let guid = plane.guid().to_string();
-        let name = plane.name.clone();
-        let plane = Rc::new(plane);
-        self.objects.planes.push(Rc::clone(&plane));
-        self.lookup.insert(guid.clone(), Geometry::Plane(plane));
-        self.bvh_cache_dirty = true;
-        self.graph.add_node(&guid, &format!("plane_{name}"));
-        let node = TreeNode::new(&guid);
-        if let Some(p) = parent {
-            self.tree.add(&node, Some(p));
-        }
-        node
+        self._add_object("planes", Geometry::Plane(Rc::new(plane)), "plane", parent)
     }
 
     pub fn add_obb(&mut self, bbox: OBB) -> Rc<RefCell<TreeNode>> {
-        let guid = bbox.guid().to_string();
-        let name = bbox.name.clone();
-        let bbox = Rc::new(bbox);
-        self.objects.bboxes.push(Rc::clone(&bbox));
-        self.lookup.insert(guid.clone(), Geometry::OBB(bbox));
-        self.bvh_cache_dirty = true;
-        self.graph.add_node(&guid, &format!("bbox_{name}"));
-        TreeNode::new(&guid)
+        self._add_object("bboxes", Geometry::OBB(Rc::new(bbox)), "bbox", None)
     }
 
     pub fn add_polyline(
@@ -1274,21 +1384,12 @@ impl Session {
         if polyline.point_count() < 2 {
             return None;
         }
-        let guid = polyline.guid().to_string();
-        // Boxes are computed lazily in rebuild_ray_bvh_cache (from the canonical order) —
-        // adds only mark the cache dirty.
-        let label = format!("polyline_{}", polyline.name);
-        let polyline = Rc::new(polyline);
-        self.objects.polylines.push(Rc::clone(&polyline));
-        self.lookup
-            .insert(guid.clone(), Geometry::Polyline(polyline));
-        self.bvh_cache_dirty = true;
-        self.graph.add_node(&guid, &label);
-        let node = TreeNode::new(&guid);
-        if let Some(p) = parent {
-            self.tree.add(&node, Some(p));
-        }
-        Some(node)
+        Some(self._add_object(
+            "polylines",
+            Geometry::Polyline(Rc::new(polyline)),
+            "polyline",
+            parent,
+        ))
     }
 
     pub fn add_pointcloud(
@@ -1299,19 +1400,12 @@ impl Session {
         if pointcloud.is_empty() {
             return None;
         }
-        let guid = pointcloud.guid().to_string();
-        let name = pointcloud.name.clone();
-        let pointcloud = Rc::new(pointcloud);
-        self.objects.pointclouds.push(Rc::clone(&pointcloud));
-        self.lookup
-            .insert(guid.clone(), Geometry::PointCloud(pointcloud));
-        self.bvh_cache_dirty = true;
-        self.graph.add_node(&guid, &format!("pointcloud_{name}"));
-        let node = TreeNode::new(&guid);
-        if let Some(p) = parent {
-            self.tree.add(&node, Some(p));
-        }
-        Some(node)
+        Some(self._add_object(
+            "pointclouds",
+            Geometry::PointCloud(Rc::new(pointcloud)),
+            "pointcloud",
+            parent,
+        ))
     }
 
     pub fn add_mesh(
@@ -1322,18 +1416,7 @@ impl Session {
         if mesh.is_empty() || mesh.number_of_faces() == 0 {
             return None;
         }
-        let guid = mesh.guid().to_string();
-        let name = mesh.name.clone();
-        let mesh = Rc::new(mesh);
-        self.objects.meshes.push(Rc::clone(&mesh));
-        self.lookup.insert(guid.clone(), Geometry::Mesh(mesh));
-        self.bvh_cache_dirty = true;
-        self.graph.add_node(&guid, &format!("mesh_{name}"));
-        let node = TreeNode::new(&guid);
-        if let Some(p) = parent {
-            self.tree.add(&node, Some(p));
-        }
-        Some(node)
+        Some(self._add_object("meshes", Geometry::Mesh(Rc::new(mesh)), "mesh", parent))
     }
 
     pub fn add_nurbscurve(
@@ -1344,19 +1427,12 @@ impl Session {
         if nurbscurve.cv_count() < 2 {
             return None;
         }
-        let guid = nurbscurve.guid().to_string();
-        let name = nurbscurve.name.clone();
-        let nurbscurve = Rc::new(nurbscurve);
-        self.objects.nurbscurves.push(Rc::clone(&nurbscurve));
-        self.lookup
-            .insert(guid.clone(), Geometry::NurbsCurve(nurbscurve));
-        self.bvh_cache_dirty = true;
-        self.graph.add_node(&guid, &format!("nurbscurve_{name}"));
-        let node = TreeNode::new(&guid);
-        if let Some(p) = parent {
-            self.tree.add(&node, Some(p));
-        }
-        Some(node)
+        Some(self._add_object(
+            "nurbscurves",
+            Geometry::NurbsCurve(Rc::new(nurbscurve)),
+            "nurbscurve",
+            parent,
+        ))
     }
 
     pub fn add_nurbssurface(
@@ -1367,19 +1443,12 @@ impl Session {
         if nurbssurface.cv_count_dir(None) == 0 {
             return None;
         }
-        let guid = nurbssurface.guid().to_string();
-        let name = nurbssurface.name.clone();
-        let nurbssurface = Rc::new(nurbssurface);
-        self.objects.nurbssurfaces.push(Rc::clone(&nurbssurface));
-        self.lookup
-            .insert(guid.clone(), Geometry::NurbsSurface(nurbssurface));
-        self.bvh_cache_dirty = true;
-        self.graph.add_node(&guid, &format!("nurbssurface_{name}"));
-        let node = TreeNode::new(&guid);
-        if let Some(p) = parent {
-            self.tree.add(&node, Some(p));
-        }
-        Some(node)
+        Some(self._add_object(
+            "nurbssurfaces",
+            Geometry::NurbsSurface(Rc::new(nurbssurface)),
+            "nurbssurface",
+            parent,
+        ))
     }
 
     pub fn add_brep(
@@ -1390,20 +1459,26 @@ impl Session {
         if brep.face_count() == 0 && brep.vertex_count() == 0 {
             return None;
         }
-        let guid = brep.guid().to_string();
-        let name = brep.name.clone();
-        let brep = Rc::new(brep);
-        self.objects.breps.push(Rc::clone(&brep));
-        self.lookup.insert(guid.clone(), Geometry::BRep(brep));
-        self.bvh_cache_dirty = true;
-        self.graph.add_node(&guid, &format!("brep_{name}"));
-        let node = TreeNode::new(&guid);
-        if let Some(p) = parent {
-            self.tree.add(&node, Some(p));
-        }
-        Some(node)
+        Some(self._add_object("breps", Geometry::BRep(Rc::new(brep)), "brep", parent))
     }
 
+    /// Kept even with no geometry: an Element is a data record - features, insertion vectors,
+    /// element_data a consumer reads back - and dropping one would lose that on a round trip.
+    pub fn add_element(
+        &mut self,
+        element: Element,
+        parent: Option<&Rc<RefCell<TreeNode>>>,
+    ) -> Rc<RefCell<TreeNode>> {
+        self._add_object(
+            "elements",
+            Geometry::Element(Rc::new(element)),
+            "element",
+            parent,
+        )
+    }
+
+    /// A component is not geometry: it has no `Geometry` variant, so it lives in
+    /// `objects.components` only and is outside the history.
     pub fn add_component(
         &mut self,
         component: crate::objects::Component,
@@ -1413,25 +1488,6 @@ impl Session {
         let name = component.name.clone();
         self.objects.components.push(component);
         self.graph.add_node(&guid, &format!("component_{name}"));
-        let node = TreeNode::new(&guid);
-        if let Some(p) = parent {
-            self.tree.add(&node, Some(p));
-        }
-        node
-    }
-
-    pub fn add_element(
-        &mut self,
-        element: Element,
-        parent: Option<&Rc<RefCell<TreeNode>>>,
-    ) -> Rc<RefCell<TreeNode>> {
-        let guid = element.guid().to_string();
-        let name = element.name.clone();
-        let element = Rc::new(element);
-        self.objects.elements.push(Rc::clone(&element));
-        self.lookup.insert(guid.clone(), Geometry::Element(element));
-        self.bvh_cache_dirty = true;
-        self.graph.add_node(&guid, &format!("element_{name}"));
         let node = TreeNode::new(&guid);
         if let Some(p) = parent {
             self.tree.add(&node, Some(p));
@@ -1513,42 +1569,230 @@ impl Session {
         groups
     }
 
-    /// Remove a geometry object by its GUID.
+    /// Remove an object by its GUID from every live table at once: its typed vector,
+    /// `lookup`, its xform, its tree node (with the subtree) and its graph node with every
+    /// incident edge. The removal record is the tombstone that undo restores from.
     pub fn remove_object(&mut self, guid: &str) -> bool {
-        // Check if object exists in lookup table
-        if !self.lookup.contains_key(guid) {
+        let Some(op) = self._detach(guid) else {
             return false;
+        };
+        self.history.record(Op::Remove(op));
+        true
+    }
+
+    /// Swap the object stored under `guid` for `obj`, which takes over that guid, in its typed
+    /// vector and `lookup`, and refresh its graph node attribute.
+    ///
+    /// This is the recorded edit: undo restores the previous object, redo the new one, as
+    /// absolute snapshots. Mutating an object in place through `lookup` stays possible and
+    /// is NOT recorded - history only sees what goes through `replace`.
+    pub fn replace(&mut self, guid: &str, obj: Geometry) -> bool {
+        let Some(before) = self.lookup.get(guid) else {
+            return false;
+        };
+        let mut obj = obj;
+        obj.set_guid(guid);
+        if self.history.current.is_some() {
+            self.history.record(Op::Replace(ReplaceOp::new(
+                guid.to_string(),
+                clone(before),
+                clone(&obj),
+            )));
         }
+        self._swap(guid, obj);
+        true
+    }
 
-        // Remove from all object collections
-        self.objects.points.retain(|p| p.guid() != guid);
-        self.objects.lines.retain(|l| l.guid() != guid);
-        self.objects.polylines.retain(|p| p.guid() != guid);
-        self.objects.planes.retain(|p| p.guid() != guid);
-        self.objects.bboxes.retain(|b| b.guid() != guid);
-        self.objects.meshes.retain(|m| m.guid() != guid);
-        self.objects.pointclouds.retain(|p| p.guid() != guid);
-        self.objects.nurbscurves.retain(|c| c.guid() != guid);
-        self.objects.nurbssurfaces.retain(|s| s.guid() != guid);
-        self.objects.breps.retain(|b| b.guid() != guid);
-        self.objects.elements.retain(|e| e.guid() != guid);
+    // ═══════════════════════════════════════════════════════════════════════════
+    // Details - History
+    // ═══════════════════════════════════════════════════════════════════════════
 
-        // Remove from lookup table
+    /// Open a history transaction: every add, remove, replace and xform change until
+    /// `commit` becomes one undo step.
+    pub fn begin(&mut self, label: &str) {
+        self.history.begin(label);
+    }
+
+    pub fn commit(&mut self) {
+        self.history.commit();
+    }
+
+    /// `History::undo` walks the session it belongs to, which the borrow checker forbids
+    /// through `self.history`; the buffer is taken out for the call and put back after.
+    pub fn undo(&mut self) -> bool {
+        let mut history = std::mem::take(&mut self.history);
+        let undone = history.undo(self);
+        self.history = history;
+        undone
+    }
+
+    pub fn redo(&mut self) -> bool {
+        let mut history = std::mem::take(&mut self.history);
+        let redone = history.redo(self);
+        self.history = history;
+        redone
+    }
+
+    /// Which Objects vector holds a guid, and where; ("", -1) when none does.
+    fn _locate(&self, guid: &str) -> (String, i64) {
+        macro_rules! find {
+            ($vec:expr, $name:expr) => {
+                if let Some(i) = $vec.iter().position(|item| item.guid() == guid) {
+                    return ($name.to_string(), i as i64);
+                }
+            };
+        }
+        find!(self.objects.points, "points");
+        find!(self.objects.lines, "lines");
+        find!(self.objects.planes, "planes");
+        find!(self.objects.bboxes, "bboxes");
+        find!(self.objects.polylines, "polylines");
+        find!(self.objects.pointclouds, "pointclouds");
+        find!(self.objects.meshes, "meshes");
+        find!(self.objects.nurbscurves, "nurbscurves");
+        find!(self.objects.nurbssurfaces, "nurbssurfaces");
+        find!(self.objects.breps, "breps");
+        find!(self.objects.elements, "elements");
+        find!(self.objects.components, "components");
+        (String::new(), -1)
+    }
+
+    /// Take an object out of every live table, unrecorded, returning its tombstone.
+    pub(crate) fn _detach(&mut self, guid: &str) -> Option<Tombstone> {
+        let obj = clone(self.lookup.get(guid)?);
+        let (collection, obj_index) = self._locate(guid);
+        if obj_index >= 0 {
+            macro_rules! pop {
+                ($vec:expr, $variant:ident) => {{
+                    $vec.remove(obj_index as usize);
+                }};
+            }
+            typed!(collection.as_str(), self.objects, pop);
+        }
         self.lookup.remove(guid);
-        self.xforms.remove(guid);
-        self.invalidate_bvh_cache();
+        let xform = self.xforms.remove(guid);
+        self.bvh_cache_dirty = true;
 
-        // Remove from tree - find node by GUID and remove it
-        if let Some(node) = self.tree.find_node_by_guid(&guid.to_string()) {
-            self.tree.remove(&node);
+        let mut parent_guid = None;
+        let mut index = 0;
+        let mut node = self.tree.get_node_by_name(guid);
+        if let Some(found) = node.take() {
+            if let Some(parent) = found.borrow().parent() {
+                parent_guid = Some(parent.borrow().name.clone());
+                let children = parent.borrow().children();
+                index = children
+                    .iter()
+                    .position(|c| Rc::ptr_eq(c, &found))
+                    .unwrap_or(0);
+            }
+            node = self.tree.remove(&found);
         }
 
-        // Remove from graph using string GUID
+        let mut attribute = String::new();
+        let mut edges = Vec::new();
         if self.graph.has_node(guid) {
+            attribute = self.graph.node_attribute(guid, None).unwrap_or_default();
+            edges = self.graph.edges_of(guid);
             self.graph.remove_node(guid);
         }
 
-        true
+        Some(Tombstone::new(
+            guid.to_string(),
+            obj,
+            collection,
+            obj_index,
+            xform,
+            parent_guid,
+            index,
+            node,
+            attribute,
+            edges,
+        ))
+    }
+
+    /// Put an object back from its tombstone, unrecorded: typed vector at its old index,
+    /// `lookup`, xform, tree node under the same parent at the same index with its subtree,
+    /// graph node and every incident edge whose other end is still present.
+    pub(crate) fn _attach(&mut self, op: &Tombstone) {
+        let obj = clone(&op.obj);
+        let obj_index = op.obj_index.max(0) as usize;
+        macro_rules! insert {
+            ($vec:expr, $variant:ident) => {
+                if let Geometry::$variant(g) = &obj {
+                    $vec.insert(obj_index.min($vec.len()), Rc::clone(g));
+                }
+            };
+        }
+        typed!(op.collection.as_str(), self.objects, insert);
+        self.lookup.insert(op.guid.clone(), obj);
+        if let Some(xform) = &op.xform {
+            self.xforms.insert(op.guid.clone(), xform.clone());
+        }
+        self.bvh_cache_dirty = true;
+
+        let node = match &op.node {
+            Some(node) => Rc::clone(node),
+            None => TreeNode::new(&op.guid),
+        };
+        if let Some(parent_guid) = &op.parent_guid {
+            if let Some(parent) = self.tree.get_node_by_name(parent_guid) {
+                let count = parent.borrow().children().len();
+                parent.borrow_mut().insert(op.index.min(count), &node);
+            }
+        }
+
+        self.graph.add_node(&op.guid, &op.attribute);
+        for (other, attribute, forward) in &op.edges {
+            if !self.graph.has_node(other) {
+                continue;
+            }
+            if *forward {
+                self.graph.add_edge(&op.guid, other, attribute);
+            } else {
+                self.graph.add_edge(other, &op.guid, attribute);
+            }
+        }
+    }
+
+    /// Store `obj` under `guid` in its typed vector and `lookup`, unrecorded.
+    pub(crate) fn _swap(&mut self, guid: &str, obj: Geometry) {
+        let (collection, obj_index) = self._locate(guid);
+        if obj_index < 0 {
+            return;
+        }
+        let obj_index = obj_index as usize;
+        macro_rules! store {
+            ($vec:expr, $variant:ident) => {
+                if let Geometry::$variant(g) = &obj {
+                    $vec[obj_index] = Rc::clone(g);
+                }
+            };
+        }
+        typed!(collection.as_str(), self.objects, store);
+        let mut attribute = String::new();
+        for (name, prefix) in COLLECTIONS {
+            if name == collection {
+                attribute = format!("{prefix}_{}", obj.name());
+            }
+        }
+        self.lookup.insert(guid.to_string(), obj);
+        self.bvh_cache_dirty = true;
+        if self.graph.has_node(guid) {
+            self.graph.node_attribute(guid, Some(&attribute));
+        }
+    }
+
+    /// Set or drop (None) the local transform under `guid`, unrecorded.
+    pub(crate) fn _place(&mut self, guid: &str, xform: Option<&Xform>) {
+        match xform {
+            None => {
+                self.xforms.remove(guid);
+            }
+            Some(xform) => {
+                self.xforms.insert(guid.to_string(), xform.clone());
+            }
+        }
+        self.bvh_cache_dirty = true;
     }
 
     // ═══════════════════════════════════════════════════════════════════════════

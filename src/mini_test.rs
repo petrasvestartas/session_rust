@@ -368,6 +368,7 @@ pub fn get_all_tests() -> Vec<RegisteredTest> {
     use crate::file_encoders_test::*;
     use crate::file_obj_test::*;
     use crate::graph_test::*;
+    use crate::history_test::*;
     use crate::instance_ref_test::*;
     use crate::intersection_test::*;
     use crate::io_test::*;
@@ -2555,6 +2556,72 @@ pub fn get_all_tests() -> Vec<RegisteredTest> {
             group: "Session",
             name: "Component Json Roundtrip",
             func: run_session_component_json_roundtrip,
+        },
+        RegisteredTest {
+            group: "Session",
+            name: "Select By Type",
+            func: run_session_select_by_type,
+        },
+        RegisteredTest {
+            group: "Session",
+            name: "Get Geometry Is Pure",
+            func: run_session_get_geometry_is_pure,
+        },
+        RegisteredTest {
+            group: "Session",
+            name: "Document Workflow",
+            func: run_session_document_workflow,
+        },
+        RegisteredTest {
+            group: "Session",
+            name: "Undo Remove",
+            func: run_session_undo_remove,
+        },
+        RegisteredTest {
+            group: "Session",
+            name: "Undo Add",
+            func: run_session_undo_add,
+        },
+        RegisteredTest {
+            group: "Session",
+            name: "Undo Replace",
+            func: run_session_undo_replace,
+        },
+        RegisteredTest {
+            group: "Session",
+            name: "Undo Xform",
+            func: run_session_undo_xform,
+        },
+        RegisteredTest {
+            group: "Session",
+            name: "History Purged On Save",
+            func: run_session_history_purged_on_save,
+        },
+        RegisteredTest {
+            group: "Session",
+            name: "History Capacity",
+            func: run_session_history_capacity,
+        },
+        // History tests
+        RegisteredTest {
+            group: "History",
+            name: "Constructor",
+            func: run_history_constructor,
+        },
+        RegisteredTest {
+            group: "History",
+            name: "Begin Commit",
+            func: run_history_begin_commit,
+        },
+        RegisteredTest {
+            group: "History",
+            name: "Undo Redo",
+            func: run_history_undo_redo,
+        },
+        RegisteredTest {
+            group: "History",
+            name: "Clear",
+            func: run_history_clear,
         },
         // SessionConfig tests
         RegisteredTest {
