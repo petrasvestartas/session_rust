@@ -116,6 +116,7 @@ pub fn run_plane_constructor() -> TestResult {
             TOLERANCE.is_close(pl_skew.x_axis().dot(&pl_skew.y_axis()), 0.0)
                 && pl_skew.is_right_hand()
         );
+        MINI_CHECK!(!xy.has_guid());
         MINI_CHECK!(xy.name == "xy_plane" && yz.name == "yz_plane" && xz.name == "xz_plane");
         MINI_CHECK!(
             TOLERANCE.is_close(pl_iadd.origin()[0], 1.0)
