@@ -230,6 +230,7 @@ impl Objects {
                 .iter()
                 .map(|c| crate::proto::Component::decode(c.pb_dumps().as_slice()).unwrap())
                 .collect(),
+            sheets: Vec::new(),
         };
         proto.encode_to_vec()
     }

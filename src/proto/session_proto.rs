@@ -881,6 +881,51 @@ pub struct PointCloud {
     #[prost(fixed32, repeated, tag = "15")]
     pub point_ids: ::prost::alloc::vec::Vec<u32>,
 }
+/// Sheet: one drawing's linework flattened to segments, published for RANGE reads.
+///
+/// The viewer never needs the whole file to start drawing. Every big array is a packed
+/// FIXED-WIDTH field - double, fixed32, float - so a reader that scans the protobuf tags in
+/// the first kilobytes knows the byte offset and length of every array, and can fetch any
+/// slice of it with one HTTP Range request: segment i is bytes [48*i, 48*i+48) of `coords`,
+/// [4*i, 4*i+4) of `colors`, `widths` and `source_ids`. `uint32` (varint) would break this -
+/// 1 to 5 bytes each, no way to seek - so it is only used for the two scalar counts, which
+/// are read once from the header. Field numbers are wire order, so `source_ids` at 15 is the
+/// LAST array in the file: everything a first paint needs comes before it.
+///
+/// Per-entity metadata (guid, name, kind, authored pen) is NOT in this message. It lives in a
+/// side table named by `meta`: magic `SHM1`, u32 LE count, count records of u64 LE offset and
+/// u64 LE length relative to the byte after the table, then UTF-8 JSON blobs. A segment's
+/// `source_ids` entry is its record index, so a pick resolves to one blob by one more Range.
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct Sheet {
+    /// Unique identifier
+    #[prost(string, tag = "1")]
+    pub guid: ::prost::alloc::string::String,
+    /// Sheet name
+    #[prost(string, tag = "2")]
+    pub name: ::prost::alloc::string::String,
+    /// 6 per segment: x0 y0 z0 x1 y1 z1, world mm
+    #[prost(double, repeated, tag = "3")]
+    pub coords: ::prost::alloc::vec::Vec<f64>,
+    /// one RGBA8 per segment, low byte red
+    #[prost(fixed32, repeated, tag = "4")]
+    pub colors: ::prost::alloc::vec::Vec<u32>,
+    /// pen width in mm per segment, 0 = hairline
+    #[prost(float, repeated, tag = "5")]
+    pub widths: ::prost::alloc::vec::Vec<f32>,
+    /// number of segments
+    #[prost(uint32, tag = "6")]
+    pub segment_count: u32,
+    /// records in the side table
+    #[prost(uint32, tag = "7")]
+    pub entity_count: u32,
+    /// side-table file name relative to this file, empty = none
+    #[prost(string, tag = "8")]
+    pub meta: ::prost::alloc::string::String,
+    /// entity id per segment, index into the side table; the LAST field
+    #[prost(fixed32, repeated, tag = "15")]
+    pub source_ids: ::prost::alloc::vec::Vec<u32>,
+}
 /// Component message for custom domain objects (e.g. FloorBuilder, WallBuilder)
 /// Allows external packages to store arbitrary serializable objects in a Session.
 #[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
@@ -943,6 +988,9 @@ pub struct Objects {
     /// Collection of custom domain objects
     #[prost(message, repeated, tag = "16")]
     pub components: ::prost::alloc::vec::Vec<Component>,
+    /// Collection of sheets
+    #[prost(message, repeated, tag = "17")]
+    pub sheets: ::prost::alloc::vec::Vec<Sheet>,
 }
 /// Quaternion message for representing rotations
 #[derive(Clone, PartialEq, ::prost::Message)]
