@@ -889,16 +889,7 @@ impl Plane {
 
 impl std::fmt::Display for Plane {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(
-            f,
-            "Plane(origin={}, x_axis={}, y_axis={}, z_axis={}, guid={}, name={})",
-            self._origin,
-            self._x_axis,
-            self._y_axis,
-            self._z_axis,
-            self.guid(),
-            self.name
-        )
+        write!(f, "{}", self.str())
     }
 }
 
