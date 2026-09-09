@@ -281,6 +281,7 @@ pub fn run_plane_transform() -> TestResult {
         MINI_CHECK!(TOLERANCE.is_close(pl.origin()[0], 1.0));
         MINI_CHECK!(TOLERANCE.is_close(pl.origin()[1], 2.0));
         MINI_CHECK!(TOLERANCE.is_close(pl.origin()[2], 3.0));
+        MINI_CHECK!(TOLERANCE.is_close(pl.d(), -3.0));
     })
 }
 
@@ -297,6 +298,7 @@ pub fn run_plane_transformed() -> TestResult {
         MINI_CHECK!(TOLERANCE.is_close(pl2.origin()[1], 2.0));
         MINI_CHECK!(TOLERANCE.is_close(pl2.origin()[2], 3.0));
         MINI_CHECK!(TOLERANCE.is_close(pl.origin()[0], 0.0));
+        MINI_CHECK!(TOLERANCE.is_close(pl2.d(), -3.0) && TOLERANCE.is_close(pl.d(), 0.0));
     })
 }
 

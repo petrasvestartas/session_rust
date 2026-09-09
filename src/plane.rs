@@ -889,6 +889,12 @@ impl Plane {
         self._x_axis.transform(xform);
         self._y_axis.transform(xform);
         self._z_axis.transform(xform);
+
+        self._a = self._z_axis[0];
+        self._b = self._z_axis[1];
+        self._c = self._z_axis[2];
+        self._d =
+            -(self._a * self._origin[0] + self._b * self._origin[1] + self._c * self._origin[2]);
     }
 
     pub fn transformed(&self, xform: &Xform) -> Self {
