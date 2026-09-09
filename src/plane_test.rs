@@ -5,10 +5,10 @@ use crate::{MINI_CHECK, MINI_TEST, REGISTER_MINI_TEST};
 
 pub fn run_plane_constructor() -> TestResult {
     MINI_TEST!("Constructor", {
+        use crate::Color;
         use crate::Plane;
         use crate::Point;
         use crate::Vector;
-        use crate::Color;
 
         // Default constructor - XY plane at origin
         let pl = Plane::default();

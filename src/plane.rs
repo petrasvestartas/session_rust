@@ -855,13 +855,7 @@ impl Plane {
             o[1] - x[1] * s + y[1] * s,
             o[2] - x[2] * s + y[2] * s,
         );
-        let mut rect = Polyline::new(vec![
-            c0.clone(),
-            c1,
-            c2,
-            c3,
-            c0,
-        ]);
+        let mut rect = Polyline::new(vec![c0.clone(), c1, c2, c3, c0]);
         rect.linecolor = self.linecolor.clone();
         let origin_pt = Point::new(o[0], o[1], o[2]);
         let mut x_line = Polyline::new(vec![
