@@ -615,10 +615,10 @@ impl Plane {
     }
 
     pub fn is_same_direction(plane0: &Plane, plane1: &Plane, can_be_flipped: bool) -> bool {
-        let n0 = plane0._z_axis.clone();
-        let n1 = plane1._z_axis.clone();
+        let n0 = &plane0._z_axis;
+        let n1 = &plane1._z_axis;
 
-        let parallel = n0.is_parallel_to(&n1);
+        let parallel = n0.is_parallel_to(n1);
 
         if can_be_flipped {
             parallel != 0
@@ -657,9 +657,9 @@ impl Plane {
         can_be_flipped: bool,
         tolerance: f64,
     ) -> bool {
-        let n0 = normal0.clone();
-        let n1 = normal1.clone();
-        let parallel = n0.is_parallel_to(&n1);
+        let n0 = normal0;
+        let n1 = normal1;
+        let parallel = n0.is_parallel_to(n1);
         if can_be_flipped {
             if parallel == 0 {
                 return false;
@@ -726,7 +726,7 @@ impl std::ops::Add<Vector> for Plane {
     type Output = Plane;
 
     fn add(self, other: Vector) -> Plane {
-        let mut result = self.clone();
+        let mut result = self;
         result += other;
         result
     }
@@ -736,7 +736,7 @@ impl std::ops::Sub<Vector> for Plane {
     type Output = Plane;
 
     fn sub(self, other: Vector) -> Plane {
-        let mut result = self.clone();
+        let mut result = self;
         result -= other;
         result
     }
@@ -856,15 +856,11 @@ impl Plane {
             o[2] - x[2] * s + y[2] * s,
         );
         let mut rect = Polyline::new(vec![
-            c0,
+            c0.clone(),
             c1,
             c2,
             c3,
-            Point::new(
-                o[0] - x[0] * s - y[0] * s,
-                o[1] - x[1] * s - y[1] * s,
-                o[2] - x[2] * s - y[2] * s,
-            ),
+            c0,
         ]);
         rect.linecolor = self.linecolor.clone();
         let origin_pt = Point::new(o[0], o[1], o[2]);
