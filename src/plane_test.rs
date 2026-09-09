@@ -426,3 +426,16 @@ REGISTER_MINI_TEST!(
     "Has On Negative Side",
     crate::plane_test::run_plane_has_on_negative_side
 );
+
+pub fn run_plane_project() -> TestResult {
+    MINI_TEST!("Project", {
+        use crate::Plane;
+        use crate::Point;
+        let pl = Plane::xy_plane();
+        let above = Point::new(1.0, 2.0, 5.0);
+        let on_plane = pl.projection(&above);
+        MINI_CHECK!(TOLERANCE.is_close(on_plane[0], 1.0) && TOLERANCE.is_close(on_plane[1], 2.0));
+        MINI_CHECK!(TOLERANCE.is_close(on_plane[2], 0.0));
+    })
+}
+REGISTER_MINI_TEST!("Plane", "Project", crate::plane_test::run_plane_project);

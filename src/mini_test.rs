@@ -1272,6 +1272,11 @@ pub fn get_all_tests() -> Vec<RegisteredTest> {
             name: "Has On Negative Side",
             func: run_plane_has_on_negative_side,
         },
+        RegisteredTest {
+            group: "Plane",
+            name: "Project",
+            func: run_plane_project,
+        },
         // PointCloud tests
         RegisteredTest {
             group: "PointCloud",
