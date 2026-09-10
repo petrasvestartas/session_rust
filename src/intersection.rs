@@ -303,17 +303,17 @@ pub fn ray_box(line: &Line, box_: &crate::OBB, t0: f64, t1: f64) -> Option<Vec<P
     let inv_dir_x = if direction[0] != 0.0 {
         1.0 / direction[0]
     } else {
-        f64::INFINITY
+        f64::MAX
     };
     let inv_dir_y = if direction[1] != 0.0 {
         1.0 / direction[1]
     } else {
-        f64::INFINITY
+        f64::MAX
     };
     let inv_dir_z = if direction[2] != 0.0 {
         1.0 / direction[2]
     } else {
-        f64::INFINITY
+        f64::MAX
     };
 
     // Calculate intersections with X slabs
@@ -1093,14 +1093,8 @@ pub fn curve_closest_point(curve: &NurbsCurve, test_point: &Point, t0: f64, t1: 
     Closest::curve_point(curve, test_point, t0, t1)
 }
 
-/// Find intersection curves between a NURBS surface and a plane
-/// Find intersection points between a ray (Line) and a mesh using brute-force triangle testing.
-pub fn ray_mesh(
-    line: &Line,
-    mesh: &crate::Mesh,
-    epsilon: f64,
-    find_all: bool,
-) -> Option<Vec<Point>> {
+/// Flatten a mesh into a triangle fan per face, skipping degenerate faces.
+fn mesh_triangles(mesh: &crate::Mesh) -> Vec<(Point, Point, Point)> {
     let (vertices, faces) = mesh.to_vertices_and_faces();
     let mut tris: Vec<(Point, Point, Point)> = Vec::new();
     for face in &faces {
@@ -1116,6 +1110,17 @@ pub fn ray_mesh(
             ));
         }
     }
+    tris
+}
+
+/// Find intersection points between a ray (Line) and a mesh using brute-force triangle testing.
+pub fn ray_mesh(
+    line: &Line,
+    mesh: &crate::Mesh,
+    epsilon: f64,
+    find_all: bool,
+) -> Option<Vec<Point>> {
+    let tris = mesh_triangles(mesh);
     if tris.is_empty() {
         return None;
     }
@@ -1153,21 +1158,7 @@ pub fn ray_mesh_bvh(
     epsilon: f64,
     find_all: bool,
 ) -> Option<Vec<Point>> {
-    let (vertices, faces) = mesh.to_vertices_and_faces();
-    let mut tris: Vec<(Point, Point, Point)> = Vec::new();
-    for face in &faces {
-        if face.len() < 3 {
-            continue;
-        }
-        let v0 = &vertices[face[0]];
-        for j in 1..face.len() - 1 {
-            tris.push((
-                v0.clone(),
-                vertices[face[j]].clone(),
-                vertices[face[j + 1]].clone(),
-            ));
-        }
-    }
+    let tris = mesh_triangles(mesh);
     if tris.is_empty() {
         return None;
     }
@@ -5466,7 +5457,7 @@ pub fn line_two_planes(line: &Line, p0: &Plane, p1: &Plane) -> Option<Line> {
 }
 
 /// Intersect all polyline perimeter edges with a plane.
-/// Returns (points, edge_ids) if exactly 2 intersections are found.
+/// Returns (points, edge_ids) if any intersection is found.
 pub fn polyline_plane(poly: &Polyline, plane: &Plane) -> Option<(Vec<Point>, Vec<usize>)> {
     let n = poly.point_count();
     if n < 2 {
@@ -5478,7 +5469,34 @@ pub fn polyline_plane(poly: &Polyline, plane: &Plane) -> Option<(Vec<Point>, Vec
         if let (Some(a), Some(b)) = (poly.get_point(i), poly.get_point(i + 1)) {
             let va = plane_value_at(plane, &a);
             let vb = plane_value_at(plane, &b);
-            if va.abs() < Tolerance::ZERO_TOLERANCE || vb.abs() < Tolerance::ZERO_TOLERANCE {
+            let a_on = va.abs() < Tolerance::ZERO_TOLERANCE;
+            let b_on = vb.abs() < Tolerance::ZERO_TOLERANCE;
+            // A segment lying IN the plane has no single crossing to report, but a
+            // polyline crossing exactly THROUGH a vertex must report it once: emit
+            // the on-plane vertex as the crossing of the segment it STARTS, so the
+            // segment that ends there stays silent and no duplicate is produced.
+            if a_on && b_on {
+                continue;
+            }
+            if a_on {
+                points.push(a);
+                ids.push(i);
+                continue;
+            }
+            if b_on {
+                // Handled as the next segment's 'a' - except on the final segment
+                // of an OPEN polyline, where 'b' never becomes an 'a'.
+                if i + 2 == n {
+                    if let Some(front) = poly.get_point(0) {
+                        let closes = (b[0] - front[0]).abs() < Tolerance::ZERO_TOLERANCE
+                            && (b[1] - front[1]).abs() < Tolerance::ZERO_TOLERANCE
+                            && (b[2] - front[2]).abs() < Tolerance::ZERO_TOLERANCE;
+                        if !closes {
+                            points.push(b);
+                            ids.push(i);
+                        }
+                    }
+                }
                 continue;
             }
             let seg = Line::new(a[0], a[1], a[2], b[0], b[1], b[2]);
@@ -5488,30 +5506,50 @@ pub fn polyline_plane(poly: &Polyline, plane: &Plane) -> Option<(Vec<Point>, Vec
             }
         }
     }
-    if points.len() == 2 {
-        Some((points, ids))
-    } else {
+    if points.is_empty() {
         None
+    } else {
+        Some((points, ids))
     }
 }
 
 /// Intersect polyline perimeter with plane → single segment, aligned to reference start.
 pub fn polyline_plane_to_line(poly: &Polyline, plane: &Plane, align_start: &Point) -> Option<Line> {
     let (pts, _) = polyline_plane(poly, plane)?;
-    let d0sq = (pts[0][0] - align_start[0]).powi(2)
-        + (pts[0][1] - align_start[1]).powi(2)
-        + (pts[0][2] - align_start[2]).powi(2);
-    let d1sq = (pts[1][0] - align_start[0]).powi(2)
-        + (pts[1][1] - align_start[1]).powi(2)
-        + (pts[1][2] - align_start[2]).powi(2);
+    if pts.len() < 2 {
+        return None;
+    }
+    // With more than 2 crossings (non-convex contact patch) the first two in
+    // edge order are an arbitrary sub-chord; take the EXTREME pair so the joint
+    // line spans the full patch. For exactly 2 crossings this is unchanged.
+    let (mut ia, mut ib) = (0usize, 1usize);
+    if pts.len() > 2 {
+        let mut best = -1.0;
+        for i in 0..pts.len() - 1 {
+            for j in i + 1..pts.len() {
+                let dx = pts[i][0] - pts[j][0];
+                let dy = pts[i][1] - pts[j][1];
+                let dz = pts[i][2] - pts[j][2];
+                let d = dx * dx + dy * dy + dz * dz;
+                if d > best {
+                    best = d;
+                    ia = i;
+                    ib = j;
+                }
+            }
+        }
+    }
+    let (a, b) = (&pts[ia], &pts[ib]);
+    let d0sq = (a[0] - align_start[0]).powi(2)
+        + (a[1] - align_start[1]).powi(2)
+        + (a[2] - align_start[2]).powi(2);
+    let d1sq = (b[0] - align_start[0]).powi(2)
+        + (b[1] - align_start[1]).powi(2)
+        + (b[2] - align_start[2]).powi(2);
     if d0sq <= d1sq {
-        Some(Line::new(
-            pts[0][0], pts[0][1], pts[0][2], pts[1][0], pts[1][1], pts[1][2],
-        ))
+        Some(Line::new(a[0], a[1], a[2], b[0], b[1], b[2]))
     } else {
-        Some(Line::new(
-            pts[1][0], pts[1][1], pts[1][2], pts[0][0], pts[0][1], pts[0][2],
-        ))
+        Some(Line::new(b[0], b[1], b[2], a[0], a[1], a[2]))
     }
 }
 
@@ -5666,12 +5704,66 @@ pub fn closed_and_open_paths_2d(
             Some((t_s, t_e))
         };
 
+    // A joint edge lying ON a plate edge is a boundary case the winding number
+    // cannot classify: report its parametric overlap so the caller keeps it
+    // instead of dropping the joint's flush side.
+    let collinear_overlap =
+        |s0: (f64, f64), s1: (f64, f64), e0: (f64, f64), e1: (f64, f64)| -> Option<(f64, f64)> {
+            let sx = s1.0 - s0.0;
+            let sy = s1.1 - s0.1;
+            let ex = e1.0 - e0.0;
+            let ey = e1.1 - e0.1;
+            let sl2 = sx * sx + sy * sy;
+            let el2 = ex * ex + ey * ey;
+            if sl2 < 1e-20 || el2 < 1e-20 {
+                return None;
+            }
+            let cross_norm = (sx * ey - sy * ex) / (sl2 * el2).sqrt();
+            const ANGLE_SIN_EPS: f64 = 1e-4; // 0.006 deg - true parallel
+            if cross_norm.abs() > ANGLE_SIN_EPS {
+                return None;
+            }
+            let apx = s0.0 - e0.0;
+            let apy = s0.1 - e0.1;
+            let perp = (apx * ey - apy * ex) / el2.sqrt();
+            const DIST_EPS: f64 = 1e-3; // 0.001 mm - true FP noise
+            if perp.abs() > DIST_EPS {
+                return None;
+            }
+            let ts0 = (apx * ex + apy * ey) / el2;
+            let bpx = s1.0 - e0.0;
+            let bpy = s1.1 - e0.1;
+            let ts1 = (bpx * ex + bpy * ey) / el2;
+            let ov_min = ts0.min(ts1).max(0.0);
+            let ov_max = ts0.max(ts1).min(1.0);
+            if ov_max - ov_min < 1e-9 {
+                return None;
+            }
+            let tsr = ts1 - ts0;
+            if tsr.abs() < 1e-20 {
+                return None;
+            }
+            let mut t_enter = (ov_min - ts0) / tsr;
+            let mut t_exit = (ov_max - ts0) / tsr;
+            if t_enter > t_exit {
+                std::mem::swap(&mut t_enter, &mut t_exit);
+            }
+            t_enter = t_enter.max(0.0);
+            t_exit = t_exit.min(1.0);
+            if t_exit - t_enter > 1e-9 {
+                Some((t_enter, t_exit))
+            } else {
+                None
+            }
+        };
+
     const EPS: f64 = 1e-9;
     let mut pieces: Vec<Vec<(f64, f64)>> = Vec::new();
     for s in 0..joint2d.len() - 1 {
         let p0 = joint2d[s];
         let p1 = joint2d[s + 1];
         let mut ts: Vec<f64> = vec![0.0];
+        let mut coll_ranges: Vec<(f64, f64)> = Vec::new();
         for i in 0..plate2d.len() {
             let a = plate2d[i];
             let b = plate2d[(i + 1) % plate2d.len()];
@@ -5680,17 +5772,33 @@ pub fn closed_and_open_paths_2d(
                     ts.push(t_s);
                 }
             }
+            if let Some(c) = collinear_overlap(p0, p1, a, b) {
+                coll_ranges.push(c);
+                if c.0 > EPS && c.0 < 1.0 - EPS {
+                    ts.push(c.0);
+                }
+                if c.1 > EPS && c.1 < 1.0 - EPS {
+                    ts.push(c.1);
+                }
+            }
         }
         ts.push(1.0);
         ts.sort_by(|a, b| a.partial_cmp(b).unwrap());
         ts.dedup_by(|a, b| (*a - *b).abs() < EPS);
+
+        let sub_is_collinear = |t_a: f64, t_b: f64| -> bool {
+            let t_mid = 0.5 * (t_a + t_b);
+            coll_ranges
+                .iter()
+                .any(|r| t_mid >= r.0 - EPS && t_mid <= r.1 + EPS)
+        };
 
         let mut current: Vec<(f64, f64)> = Vec::new();
         for i in 0..ts.len() - 1 {
             let t_mid = 0.5 * (ts[i] + ts[i + 1]);
             let mx = p0.0 + (p1.0 - p0.0) * t_mid;
             let my = p0.1 + (p1.1 - p0.1) * t_mid;
-            if pip(mx, my) {
+            if pip(mx, my) || sub_is_collinear(ts[i], ts[i + 1]) {
                 let sub_a = (p0.0 + (p1.0 - p0.0) * ts[i], p0.1 + (p1.1 - p0.1) * ts[i]);
                 let sub_b = (
                     p0.0 + (p1.0 - p0.0) * ts[i + 1],
