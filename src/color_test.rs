@@ -206,6 +206,7 @@ pub fn run_color_constructor() -> TestResult {
         MINI_CHECK!(ccopy.guid() != red.guid());
         MINI_CHECK!(red != Color::with_name(1.0, 0.0, 0.0, 0.5, "red"));
         MINI_CHECK!(cclamp.r == 1.0 && cclamp.g == 0.0 && cclamp.b == 0.5 && cclamp.a == 1.0);
+        MINI_CHECK!(Color::new(1.0, 0.5, 0.25, 1.0).str() == "1.0, 0.5, 0.2, 1.0");
     })
 }
 
