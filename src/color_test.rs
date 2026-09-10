@@ -193,6 +193,9 @@ pub fn run_color_constructor() -> TestResult {
         let mut cother = Color::new(1.0, 0.0, 0.0, 1.0);
         cother.name = "red".to_string();
 
+        // Out-of-range values clamp to [0, 1]
+        let cclamp = Color::new(2.0, -1.0, 0.5, 5.0);
+
         MINI_CHECK!(red.name == "red");
         MINI_CHECK!(!red.guid().is_empty());
         MINI_CHECK!(red.r == 1.0 && red.g == 0.0 && red.b == 0.0 && red.a == 1.0);
@@ -201,6 +204,8 @@ pub fn run_color_constructor() -> TestResult {
         MINI_CHECK!(crepr == "Color(red, 1.0, 0.0, 0.0, 1.0)");
         MINI_CHECK!(ccopy == cother);
         MINI_CHECK!(ccopy.guid() != red.guid());
+        MINI_CHECK!(red != Color::with_name(1.0, 0.0, 0.0, 0.5, "red"));
+        MINI_CHECK!(cclamp.r == 1.0 && cclamp.g == 0.0 && cclamp.b == 0.5 && cclamp.a == 1.0);
     })
 }
 
@@ -336,6 +341,23 @@ pub fn run_color_presets() -> TestResult {
     })
 }
 
+pub fn run_color_palette() -> TestResult {
+    MINI_TEST!("Palette", {
+        use crate::Color;
+
+        let mut palette = Color::palette();
+
+        // Every call builds fresh colors, so mutating one leaves the presets alone
+        palette[0].name = "mutated".to_string();
+
+        MINI_CHECK!(palette.len() == 12);
+        MINI_CHECK!(palette[0] == Color::with_name(1.0, 0.0, 0.0, 1.0, "mutated"));
+        MINI_CHECK!(palette[11] == Color::with_name(1.0, 0.0, 0.5, 1.0, "pink"));
+        MINI_CHECK!(Color::palette()[0] == Color::with_name(1.0, 0.0, 0.0, 1.0, "red"));
+        MINI_CHECK!(Color::red().name == "red");
+    })
+}
+
 // Register tests with the shared registry for run_all("rust")
 REGISTER_MINI_TEST!(
     "Color",
@@ -358,3 +380,4 @@ REGISTER_MINI_TEST!(
     crate::color_test::run_color_conversion
 );
 REGISTER_MINI_TEST!("Color", "Presets", crate::color_test::run_color_presets);
+REGISTER_MINI_TEST!("Color", "Palette", crate::color_test::run_color_palette);
