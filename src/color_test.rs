@@ -230,6 +230,12 @@ pub fn run_color_json_roundtrip() -> TestResult {
         MINI_CHECK!(loaded.g == 0.5);
         MINI_CHECK!(loaded.b == 0.25);
         MINI_CHECK!(loaded.a == 1.0);
+
+        // Alpha, name and guid are optional
+        let partial = Color::file_json_loads("{\"b\": 0.0, \"g\": 0.0, \"r\": 1.0}");
+
+        MINI_CHECK!(partial.name == "my_color");
+        MINI_CHECK!(partial.r == 1.0 && partial.a == 1.0);
     })
 }
 
