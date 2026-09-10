@@ -562,6 +562,11 @@ pub fn get_all_tests() -> Vec<RegisteredTest> {
             name: "Presets",
             func: run_color_presets,
         },
+        RegisteredTest {
+            group: "Color",
+            name: "Palette",
+            func: run_color_palette,
+        },
         // Point tests
         RegisteredTest {
             group: "Point",
