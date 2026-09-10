@@ -400,7 +400,7 @@ impl Color {
 
 impl Default for Color {
     fn default() -> Self {
-        Self::white()
+        Color::new(1.0, 1.0, 1.0, 1.0)
     }
 }
 
