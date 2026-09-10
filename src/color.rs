@@ -55,14 +55,10 @@ impl<'de> Deserialize<'de> for Color {
             1.0
         }
         let data = ColorData::deserialize(deserializer)?;
-        let c = Color {
-            guid: std::sync::OnceLock::new(),
-            name: data.name.unwrap_or_else(|| "my_color".to_string()),
-            r: data.r.clamp(0.0, 1.0),
-            g: data.g.clamp(0.0, 1.0),
-            b: data.b.clamp(0.0, 1.0),
-            a: data.a.clamp(0.0, 1.0),
-        };
+        let mut c = Color::new(data.r, data.g, data.b, data.a);
+        if let Some(n) = data.name {
+            c.name = n;
+        }
         if let Some(g) = data.guid {
             c.set_guid(g);
         }
@@ -73,14 +69,7 @@ impl<'de> Deserialize<'de> for Color {
 impl Color {
     /// Create a new color with RGBA values in range [0.0, 1.0].
     pub fn new(r: f32, g: f32, b: f32, a: f32) -> Self {
-        Color {
-            guid: std::sync::OnceLock::new(),
-            name: "my_color".to_string(),
-            r: r.clamp(0.0, 1.0),
-            g: g.clamp(0.0, 1.0),
-            b: b.clamp(0.0, 1.0),
-            a: a.clamp(0.0, 1.0),
-        }
+        Color::with_name(r, g, b, a, "my_color")
     }
 
     /// P6: a bulk colour list as packed floats, 4 per colour (r, g, b, a).
@@ -134,14 +123,7 @@ impl Color {
 
     /// Duplicate the color (creates a copy with new GUID).
     pub fn duplicate(&self) -> Self {
-        Color {
-            guid: std::sync::OnceLock::new(),
-            name: self.name.clone(),
-            r: self.r,
-            g: self.g,
-            b: self.b,
-            a: self.a,
-        }
+        Color::with_name(self.r, self.g, self.b, self.a, &self.name)
     }
 
     // ═══════════════════════════════════════════════════════════════════════════
@@ -355,7 +337,7 @@ impl Color {
 
     /// Simple string representation: "r, g, b, a" with one decimal place.
     pub fn str(&self) -> String {
-        format!("{:.1}, {:.1}, {:.1}, {:.1}", self.r, self.g, self.b, self.a)
+        self.to_string()
     }
 
     /// Detailed representation: "Color(name, r, g, b, a)".
