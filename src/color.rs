@@ -370,14 +370,14 @@ impl Color {
     // Details
     // ═══════════════════════════════════════════════════════════════════════════
 
-    /// Return RGBA as [r, g, b, a] float array (values already in [0.0, 1.0]).
-    pub fn to_float_array(&self) -> [f32; 4] {
+    /// Convert to normalized float array [0-1].
+    pub fn to_unified_array(&self) -> [f32; 4] {
         [self.r, self.g, self.b, self.a]
     }
 
-    /// Create color from float values [0.0, 1.0].
-    pub fn from_float(r: f32, g: f32, b: f32, a: f32) -> Self {
-        Color::new(r, g, b, a)
+    /// Create color from normalized float values [0-1].
+    pub fn from_unified_array(arr: [f32; 4]) -> Self {
+        Color::new(arr[0], arr[1], arr[2], arr[3])
     }
 
     // ═══════════════════════════════════════════════════════════════════════════

@@ -100,15 +100,15 @@ mod tests {
     }
 
     #[test]
-    fn test_color_to_float_array() {
+    fn test_color_to_unified_array() {
         let color = Color::new(1.0, 0.5, 0.25, 1.0);
-        let float_array = color.to_float_array();
+        let float_array = color.to_unified_array();
         assert_eq!(float_array, [1.0, 0.5, 0.25, 1.0]);
     }
 
     #[test]
-    fn test_color_from_float() {
-        let color = Color::from_float(1.0, 0.5, 0.25, 1.0);
+    fn test_color_from_unified_array() {
+        let color = Color::from_unified_array([1.0, 0.5, 0.25, 1.0]);
         assert_eq!(color.r, 1.0);
         assert_eq!(color.g, 0.5);
         assert_eq!(color.b, 0.25);
@@ -251,8 +251,8 @@ pub fn run_color_conversion() -> TestResult {
         use crate::Color;
 
         let color = Color::new(1.0, 0.5, 0.25, 1.0);
-        let flts = color.to_float_array();
-        let color2 = Color::from_float(flts[0], flts[1], flts[2], flts[3]);
+        let flts = color.to_unified_array();
+        let color2 = Color::from_unified_array(flts);
 
         MINI_CHECK!(TOLERANCE.is_close(flts[0] as f64, 1.0));
         MINI_CHECK!(TOLERANCE.is_close(flts[1] as f64, 0.5));
