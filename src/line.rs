@@ -250,7 +250,7 @@ impl Line {
     }
 
     pub fn transformed(&self, xform: &Xform) -> Self {
-        let mut result = self.clone();
+        let mut result = self.duplicate();
         result.transform(xform);
         result
     }
@@ -702,7 +702,7 @@ impl Add<&Vector> for &Line {
     type Output = Line;
 
     fn add(self, other: &Vector) -> Line {
-        self.clone() + other
+        self.duplicate() + other
     }
 }
 
@@ -710,7 +710,7 @@ impl Sub<&Vector> for &Line {
     type Output = Line;
 
     fn sub(self, other: &Vector) -> Line {
-        self.clone() - other
+        self.duplicate() - other
     }
 }
 
@@ -718,7 +718,7 @@ impl Mul<f64> for &Line {
     type Output = Line;
 
     fn mul(self, factor: f64) -> Line {
-        self.clone() * factor
+        self.duplicate() * factor
     }
 }
 
@@ -726,7 +726,7 @@ impl Div<f64> for &Line {
     type Output = Line;
 
     fn div(self, factor: f64) -> Line {
-        self.clone() / factor
+        self.duplicate() / factor
     }
 }
 
