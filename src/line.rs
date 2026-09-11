@@ -154,9 +154,10 @@ impl Line {
             }
         }
 
-        // Determine line extent from projected points
-        let half_len = match length {
-            Some(len) => len / 2.0,
+        // Span the projected extent. The centroid is not its midpoint, so mirroring the longer
+        // half returned a line longer than the points it was fitted to.
+        let (t_min, t_max) = match length {
+            Some(len) => (-len / 2.0, len / 2.0),
             None => {
                 let (mut t_min, mut t_max): (f64, f64) = (0.0, 0.0);
                 for p in points {
@@ -167,23 +168,22 @@ impl Line {
                     t_min = t_min.min(t);
                     t_max = t_max.max(t);
                 }
-                let hl = t_min.abs().max(t_max.abs());
-                if hl < 1e-10 {
-                    0.5
+                if t_max - t_min < 1e-10 {
+                    (-0.5, 0.5)
                 } else {
-                    hl
+                    (t_min, t_max)
                 }
             }
         };
 
-        // Create line from centroid +/- direction * half_len
+        // Create line from centroid + direction * t
         Self::new(
-            cx - vx * half_len,
-            cy - vy * half_len,
-            cz - vz * half_len,
-            cx + vx * half_len,
-            cy + vy * half_len,
-            cz + vz * half_len,
+            cx + vx * t_min,
+            cy + vy * t_min,
+            cz + vz * t_min,
+            cx + vx * t_max,
+            cy + vy * t_max,
+            cz + vz * t_max,
         )
     }
 
