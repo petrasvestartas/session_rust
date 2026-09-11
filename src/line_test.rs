@@ -149,6 +149,7 @@ pub fn run_line_json_roundtrip() -> TestResult {
         let loaded_j = Line::jsonload(&js).unwrap();
 
         MINI_CHECK!(loaded_j.name == "test_line");
+        MINI_CHECK!(TOLERANCE.is_close(loaded_j[0], 42.1));
 
         // String
         let s = l.file_json_dumps();
@@ -357,7 +358,9 @@ pub fn run_line_overlap() -> TestResult {
         use crate::{Line, Point};
         let l0 = Line::from_points(&Point::new(0.0, 0.0, 0.0), &Point::new(10.0, 0.0, 0.0));
         let l1 = Line::from_points(&Point::new(5.0, 0.0, 0.0), &Point::new(15.0, 0.0, 0.0));
-        let out = l0.overlap(&l1).unwrap();
+        let out = l0.overlap(&l1);
+        MINI_CHECK!(out.is_some());
+        let out = out.unwrap();
         MINI_CHECK!(TOLERANCE.is_close(out.start()[0], 5.0));
         MINI_CHECK!(TOLERANCE.is_close(out.end()[0], 10.0));
     })
@@ -368,7 +371,9 @@ pub fn run_line_overlap_average() -> TestResult {
         use crate::{Line, Point};
         let l0 = Line::from_points(&Point::new(0.0, 0.0, 0.0), &Point::new(10.0, 0.0, 0.0));
         let l1 = Line::from_points(&Point::new(5.0, 0.0, 0.0), &Point::new(15.0, 0.0, 0.0));
-        let out = l0.overlap_average(&l1).unwrap();
+        let out = l0.overlap_average(&l1);
+        MINI_CHECK!(out.is_some());
+        let out = out.unwrap();
         MINI_CHECK!(TOLERANCE.is_close(out.start()[0], 5.0));
         MINI_CHECK!(TOLERANCE.is_close(out.end()[0], 10.0));
     })
@@ -376,11 +381,19 @@ pub fn run_line_overlap_average() -> TestResult {
 
 pub fn run_line_extend() -> TestResult {
     MINI_TEST!("Extend", {
-        use crate::{Line, Point};
+        use crate::{Color, Line, Point};
         let mut l = Line::from_points(&Point::new(0.0, 0.0, 0.0), &Point::new(10.0, 0.0, 0.0));
+        l.name = "beam".to_string();
+        l.width = 3.0;
+        l.dash = vec![2.0, 1.0];
+        l.linecolor = Color::with_name(1.0, 0.0, 0.0, 1.0, "red");
+        let gid = l.guid().to_string();
         l.extend(1.0, 2.0);
         MINI_CHECK!(TOLERANCE.is_close(l.start()[0], -1.0));
         MINI_CHECK!(TOLERANCE.is_close(l.end()[0], 12.0));
+        MINI_CHECK!(l.name == "beam" && l.width == 3.0);
+        MINI_CHECK!(l.dash == vec![2.0, 1.0]);
+        MINI_CHECK!(l.linecolor.r == 1.0 && l.guid() == gid);
     })
 }
 
