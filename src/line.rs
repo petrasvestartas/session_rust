@@ -256,10 +256,7 @@ impl Line {
     }
 
     pub fn length(&self) -> f64 {
-        let dx = self._x1 - self._x0;
-        let dy = self._y1 - self._y0;
-        let dz = self._z1 - self._z0;
-        (dx * dx + dy * dy + dz * dz).sqrt()
+        self.squared_length().sqrt()
     }
 
     pub fn squared_length(&self) -> f64 {
