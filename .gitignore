@@ -13,3 +13,7 @@ Cargo.lock
 # Test roundtrip artifacts: rewritten by every minitest run (fresh random GUIDs =
 # perpetual churn) and regenerated on the first run of a fresh clone.
 serialization/test_*
+
+# Claude Code per-machine files
+.claude/settings.local.json
+CLAUDE.local.md
