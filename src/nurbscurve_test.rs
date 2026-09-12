@@ -132,6 +132,15 @@ pub fn run_nurbscurve_create_interpolated() -> TestResult {
         MINI_CHECK!(cp.degree() == 3);
         MINI_CHECK!(cp.cv_count() == 13);
         MINI_CHECK!(cp.is_closed());
+
+        // A periodic curve wraps the first (order - 1) points, so fewer points than the
+        // order have nothing to wrap and must not be read past the end of the input.
+        let too_few = NurbsCurve::create(
+            true,
+            3,
+            &[Point::new(0.0, 0.0, 0.0), Point::new(1.0, 0.0, 0.0)],
+        );
+        MINI_CHECK!(!too_few.is_valid());
     })
 }
 
@@ -319,6 +328,20 @@ pub fn run_nurbscurve_attributes() -> TestResult {
 
         MINI_CHECK!(is_valid);
 
+        // Storage must back the CV count: a short array otherwise passes validation and
+        // every point_at reads past the end.
+        let mut truncated = curve.duplicate();
+        truncated.m_cv.pop();
+        MINI_CHECK!(!truncated.is_valid());
+
+        // A curve needs a non-empty domain: equal end nurbsknots leave nothing to evaluate.
+        let mut flat = curve.duplicate();
+        for i in 0..flat.nurbsknot_count() {
+            flat.set_nurbsknot(i, 1.0);
+        }
+        MINI_CHECK!(!flat.is_valid());
+        MINI_CHECK!(!flat.is_valid_nurbsknot_vector());
+
         // Check whole nurbsknot vector for
         // For correct size: order + cv_count - 2
         // Non-decreasing (can repeat, can't go down)
@@ -375,6 +398,14 @@ pub fn run_nurbscurve_attributes() -> TestResult {
         let before_pt = copy_curve.point_at(1.5);
         copy_curve.insert_nurbsknot(1.5, 1);
         MINI_CHECK!(TOLERANCE.is_point_close(&before_pt, &copy_curve.point_at(1.5)));
+
+        // A repeated interior nurbsknot ends a span early: the length must still cover
+        // every span past it.
+        let mut kinked = curve.duplicate();
+        let kinked_length = kinked.length(None);
+        kinked.insert_nurbsknot(1.5, 2);
+        MINI_CHECK!(TOLERANCE.is_close(kinked.length(None), kinked_length));
+        MINI_CHECK!(kinked.span_count() == 3);
 
         // Useful for controlling curve by cv on lying on it
         let greville0 = curve.greville_abcissa(0);
@@ -443,6 +474,12 @@ pub fn run_nurbscurve_attributes() -> TestResult {
         MINI_CHECK!(curve.get_cv(2).unwrap()[1] == 0.0);
         MINI_CHECK!(curve.get_cv(2).unwrap()[2] == 0.5);
 
+        // A weight has nowhere to live on a non-rational curve, so set_weight converts it
+        let mut weighted = curve.duplicate();
+        weighted.set_weight(1, 0.5);
+        MINI_CHECK!(weighted.is_rational());
+        MINI_CHECK!(weighted.weight(1) == 0.5);
+
         // Use for rational curvers like circles, ellipses
         curve.set_cv_4d(2, 2.0, 0.0, 0.5, 0.707);
         let (x, y, z, w) = curve.get_cv_4d(2).unwrap();
@@ -455,6 +492,11 @@ pub fn run_nurbscurve_attributes() -> TestResult {
         // Set the weight of a control vertex
         curve.set_weight(2, 0.5);
         MINI_CHECK!(curve.weight(2) == 0.5);
+
+        // set_cv takes a euclidean point: it must read back unchanged on a rational curve,
+        // where a stale weight would scale it.
+        curve.set_cv(2, &Point::new(7.0, 8.0, 9.0));
+        MINI_CHECK!(TOLERANCE.is_point_close(&curve.get_cv(2).unwrap(), &Point::new(7.0, 8.0, 9.0)));
 
         // ═══════════════════════════════════════════════════════════════════════════
         // NurbsKnot Access
@@ -532,6 +574,8 @@ pub fn run_nurbscurve_attributes() -> TestResult {
                 && TOLERANCE.is_close(intervals[1], 0.5)
                 && TOLERANCE.is_close(intervals[2], 1.0)
         );
+        // An empty curve has no spans to report.
+        MINI_CHECK!(NurbsCurve::default().get_span_vector().is_empty());
 
         // ═══════════════════════════════════════════════════════════════════════════
         // Geometric checks
@@ -565,6 +609,13 @@ pub fn run_nurbscurve_conversions() -> TestResult {
         MINI_CHECK!(TOLERANCE.is_point_close(&adaptive_pts[0], &Point::new(0.0, 0.0, 0.0)));
         MINI_CHECK!(TOLERANCE.is_point_close(&adaptive_pts[13], &Point::new(2.0, 0.5, 0.0)));
         MINI_CHECK!(TOLERANCE.is_point_close(&adaptive_pts[26], &Point::new(4.0, 0.0, 0.0)));
+
+        // A closed curve has a zero-length start-to-end chord: the subdivision must still
+        // sample it instead of returning the degenerate two-point polyline.
+        use crate::Primitives;
+        let circle = Primitives::circle(0.0, 0.0, 0.0, 2.0);
+        let (circle_pts, _circle_params) = circle.to_polyline_adaptive(0.1, 0.0, 0.0);
+        MINI_CHECK!(circle_pts.len() == 25);
 
         // divide_by_count
         let (div_pts, _div_params) = curve.divide_by_count(10, true);
@@ -610,6 +661,20 @@ pub fn run_nurbscurve_conversions() -> TestResult {
             &div_pts[9],
             &Point::new(4.000000000000000, 0.000000000000000, 0.000000000000000)
         ));
+
+        // Dividing a polyline is an arc-length division, not a division of the parameter
+        // range: the middle of a 1 + 9 long polyline is at x = 5, not at its middle vertex.
+        let poly = NurbsCurve::create(
+            false,
+            1,
+            &[
+                Point::new(0.0, 0.0, 0.0),
+                Point::new(1.0, 0.0, 0.0),
+                Point::new(10.0, 0.0, 0.0),
+            ],
+        );
+        let (poly_pts, _poly_params) = poly.divide_by_count(3, true);
+        MINI_CHECK!((poly_pts[1][0] - 5.0).abs() < 1e-6);
 
         // divide_by_length
         let (len_pts, _len_params) = curve.divide_by_length(0.5);
@@ -858,6 +923,11 @@ pub fn run_nurbscurve_modifications() -> TestResult {
         MINI_CHECK!(
             TOLERANCE.is_point_close(&curve.point_at(split_t), &curve_right.point_at_start())
         );
+        // Each piece keeps the parameterization and the geometry of the original curve.
+        MINI_CHECK!(TOLERANCE.is_point_close(
+            &curve_left.point_at_middle(),
+            &curve.point_at((curve.domain_start() + split_t) * 0.5)
+        ));
 
         // Extend curve smoothly at both ends
         let mut curve_extended = curve.duplicate();
@@ -873,6 +943,17 @@ pub fn run_nurbscurve_modifications() -> TestResult {
 
         curve_rational.make_non_rational(true);
         MINI_CHECK!(curve_rational.length(None) == original_length);
+
+        // Uniform non-unit weights are removable without moving the curve: the CVs must be
+        // divided by the weight, not copied in homogeneous form.
+        let mut curve_uniform_w = curve.duplicate();
+        curve_uniform_w.make_rational();
+        for i in 0..curve_uniform_w.cv_count() {
+            curve_uniform_w.set_weight(i, 2.0);
+        }
+        let uniform_w_mid = curve_uniform_w.point_at_middle();
+        MINI_CHECK!(curve_uniform_w.make_non_rational(false));
+        MINI_CHECK!(TOLERANCE.is_point_close(&curve_uniform_w.point_at_middle(), &uniform_w_mid));
 
         // Clamp ends - create unclamped curve manually
         let points_open = points.clone();
@@ -909,6 +990,8 @@ pub fn run_nurbscurve_modifications() -> TestResult {
             Point::new(0.0, -1.0, 0.0),
         ];
         let mut c = NurbsCurve::create(true, 2, &closed_pts);
+        // Uniformly spaced nurbsknots plus wrapped CVs: the seam can move anywhere.
+        MINI_CHECK!(c.is_periodic());
         let expected_start = c.point_at(c.domain_middle());
         c.change_closed_curve_seam(c.domain_middle());
         MINI_CHECK!(TOLERANCE.is_point_close(&c.point_at_start(), &expected_start));
@@ -994,6 +1077,14 @@ pub fn run_nurbscurve_json_roundtrip() -> TestResult {
         MINI_CHECK!(loaded_json == curve);
         MINI_CHECK!(loaded_json_string == curve);
         MINI_CHECK!(loaded_from_file == curve);
+
+        // A rational curve survives the round trip only if the weights ride along: its
+        // control points are dumped in homogeneous form.
+        let mut rational = curve.duplicate();
+        rational.make_rational();
+        rational.set_weight(1, 0.5);
+        let loaded_rational = NurbsCurve::file_json_loads(&rational.file_json_dumps());
+        MINI_CHECK!(loaded_rational == rational);
     })
 }
 
@@ -1029,6 +1120,13 @@ pub fn run_nurbscurve_protobuf_roundtrip() -> TestResult {
 
         MINI_CHECK!(loaded_proto_string == curve);
         MINI_CHECK!(loaded == curve);
+
+        // The presentation fields ride along too: width survives the round trip.
+        let mut styled = curve.duplicate();
+        styled.width = 2.5;
+        let loaded_styled = NurbsCurve::pb_loads(&styled.pb_dumps()).unwrap();
+        MINI_CHECK!(loaded_styled.width == 2.5);
+        MINI_CHECK!(loaded_styled == styled);
     })
 }
 
@@ -1046,6 +1144,8 @@ pub fn run_nurbscurve_curvature() -> TestResult {
             let t = t0 + (t1 - t0) * (i as f64) / 8.0;
             MINI_CHECK!((circle.curvature_at(t) - 1.0 / r).abs() < 1e-6);
         }
+        // The exact rational circle integrates to its exact circumference.
+        MINI_CHECK!((circle.length(None) - 2.0 * PI * r).abs() < 1e-9);
         // Closest point: an outside point projects radially onto the circle.
         let cp = circle.closest_point(&Point::new(5.0, 0.0, 0.0));
         MINI_CHECK!((cp[0] - 2.0).abs() < 1e-5 && cp[1].abs() < 1e-5 && cp[2].abs() < 1e-5);
@@ -1152,13 +1252,16 @@ REGISTER_MINI_TEST!(
     "Attributes",
     crate::nurbscurve_test::run_nurbscurve_attributes
 );
-// TODO(f64-followup): re-enable after rebaselining or NURBS algorithm-level
-// precision investigation. The arc-length clustering bug (divide_by_count finite-diff
-// step underflowing f64 ULP) is now fixed, but the expected values are 15-digit f64
-// outputs that f64 evaluation still diverges from by more than tolerance (e.g. div_pts[1],
-// tangent[0]); needs f64 NURBS evaluation to match exactly.
-// REGISTER_MINI_TEST!("NurbsCurve", "Conversions", crate::nurbscurve_test::run_nurbscurve_conversions);
-// REGISTER_MINI_TEST!("NurbsCurve", "Evaluation", crate::nurbscurve_test::run_nurbscurve_evaluation);
+REGISTER_MINI_TEST!(
+    "NurbsCurve",
+    "Conversions",
+    crate::nurbscurve_test::run_nurbscurve_conversions
+);
+REGISTER_MINI_TEST!(
+    "NurbsCurve",
+    "Evaluation",
+    crate::nurbscurve_test::run_nurbscurve_evaluation
+);
 REGISTER_MINI_TEST!(
     "NurbsCurve",
     "Modifications",
