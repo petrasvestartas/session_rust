@@ -124,24 +124,40 @@ impl Line {
             cyz += dy * dz;
         }
 
-        // Power iteration to find dominant eigenvector
-        let (mut vx, mut vy, mut vz) = (1.0, 0.0, 0.0);
-        for _ in 0..100 {
-            let nx = cxx * vx + cxy * vy + cxz * vz;
-            let ny = cxy * vx + cyy * vy + cyz * vz;
-            let nz = cxz * vx + cyz * vy + czz * vz;
-            let mag = (nx * nx + ny * ny + nz * nz).sqrt();
-            if mag < 1e-15 {
-                break;
+        // Power iteration seeded from every axis: a seed orthogonal to the dominant
+        // eigenvector never reaches it, so keep the largest Rayleigh quotient.
+        let (mut vx, mut vy, mut vz, mut best) = (1.0, 0.0, 0.0, -1.0);
+        for seed in 0..3 {
+            let mut sx = if seed == 0 { 1.0 } else { 0.0 };
+            let mut sy = if seed == 1 { 1.0 } else { 0.0 };
+            let mut sz = if seed == 2 { 1.0 } else { 0.0 };
+            for _ in 0..100 {
+                let nx = cxx * sx + cxy * sy + cxz * sz;
+                let ny = cxy * sx + cyy * sy + cyz * sz;
+                let nz = cxz * sx + cyz * sy + czz * sz;
+                let mag = (nx * nx + ny * ny + nz * nz).sqrt();
+                if mag < 1e-15 {
+                    break;
+                }
+                sx = nx / mag;
+                sy = ny / mag;
+                sz = nz / mag;
             }
-            vx = nx / mag;
-            vy = ny / mag;
-            vz = nz / mag;
+            let eig = sx * (cxx * sx + cxy * sy + cxz * sz)
+                + sy * (cxy * sx + cyy * sy + cyz * sz)
+                + sz * (cxz * sx + cyz * sy + czz * sz);
+            if eig > best {
+                best = eig;
+                vx = sx;
+                vy = sy;
+                vz = sz;
+            }
         }
 
-        // Determine line extent from projected points
-        let half_len = match length {
-            Some(len) => len / 2.0,
+        // Span the projected extent. The centroid is not its midpoint, so mirroring the longer
+        // half returned a line longer than the points it was fitted to.
+        let (t_min, t_max) = match length {
+            Some(len) => (-len / 2.0, len / 2.0),
             None => {
                 let (mut t_min, mut t_max): (f64, f64) = (0.0, 0.0);
                 for p in points {
@@ -152,23 +168,22 @@ impl Line {
                     t_min = t_min.min(t);
                     t_max = t_max.max(t);
                 }
-                let hl = t_min.abs().max(t_max.abs());
-                if hl < 1e-10 {
-                    0.5
+                if t_max - t_min < 1e-10 {
+                    (-0.5, 0.5)
                 } else {
-                    hl
+                    (t_min, t_max)
                 }
             }
         };
 
-        // Create line from centroid +/- direction * half_len
+        // Create line from centroid + direction * t
         Self::new(
-            cx - vx * half_len,
-            cy - vy * half_len,
-            cz - vz * half_len,
-            cx + vx * half_len,
-            cy + vy * half_len,
-            cz + vz * half_len,
+            cx + vx * t_min,
+            cy + vy * t_min,
+            cz + vz * t_min,
+            cx + vx * t_max,
+            cy + vy * t_max,
+            cz + vz * t_max,
         )
     }
 
@@ -235,16 +250,13 @@ impl Line {
     }
 
     pub fn transformed(&self, xform: &Xform) -> Self {
-        let mut result = self.clone();
+        let mut result = self.duplicate();
         result.transform(xform);
         result
     }
 
     pub fn length(&self) -> f64 {
-        let dx = self._x1 - self._x0;
-        let dy = self._y1 - self._y0;
-        let dz = self._z1 - self._z0;
-        (dx * dx + dy * dy + dz * dz).sqrt()
+        self.squared_length().sqrt()
     }
 
     pub fn squared_length(&self) -> f64 {
@@ -546,18 +558,15 @@ impl Line {
     /// Extend this line in place by `ext_start` at the start end and
     /// `ext_end` at the end.
     pub fn extend(&mut self, ext_start: f64, ext_end: f64) {
-        let s = self.start();
-        let e = self.end();
-        let mut v = e.clone() - s.clone();
-        v.normalize_self();
-        let new_s = s - (v.clone() * ext_start);
-        let new_e = e + (v * ext_end);
-        self._x0 = new_s[0];
-        self._y0 = new_s[1];
-        self._z0 = new_s[2];
-        self._x1 = new_e[0];
-        self._y1 = new_e[1];
-        self._z1 = new_e[2];
+        let mut s = self.start();
+        let mut e = self.end();
+        crate::polyline::Polyline::extend_line_segment(&mut s, &mut e, ext_start, ext_end);
+        self._x0 = s[0];
+        self._y0 = s[1];
+        self._z0 = s[2];
+        self._x1 = e[0];
+        self._y1 = e[1];
+        self._z1 = e[2];
     }
 }
 
@@ -687,7 +696,7 @@ impl Add<&Vector> for &Line {
     type Output = Line;
 
     fn add(self, other: &Vector) -> Line {
-        self.clone() + other
+        self.duplicate() + other
     }
 }
 
@@ -695,7 +704,7 @@ impl Sub<&Vector> for &Line {
     type Output = Line;
 
     fn sub(self, other: &Vector) -> Line {
-        self.clone() - other
+        self.duplicate() - other
     }
 }
 
@@ -703,7 +712,7 @@ impl Mul<f64> for &Line {
     type Output = Line;
 
     fn mul(self, factor: f64) -> Line {
-        self.clone() * factor
+        self.duplicate() * factor
     }
 }
 
@@ -711,7 +720,7 @@ impl Div<f64> for &Line {
     type Output = Line;
 
     fn div(self, factor: f64) -> Line {
-        self.clone() / factor
+        self.duplicate() / factor
     }
 }
 
