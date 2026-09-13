@@ -237,3 +237,85 @@ REGISTER_MINI_TEST!(
     "Split Surface By Curves",
     crate::simple_split_test::run_split_surface_by_curves
 );
+
+pub fn run_split_line_by_curves() -> TestResult {
+    MINI_TEST!("Split Line By Curves", {
+        use crate::simple_split::split_line_by_curves;
+        use crate::{Line, NurbsCurve, Point};
+        let mut line = Line::from_points(&Point::new(-2., 0., 0.), &Point::new(2., 0., 0.));
+        line.name = "retained".into();
+        line.width = 3.;
+        line.dash = vec![1., 2.];
+        let cutter =
+            NurbsCurve::create(false, 1, &[Point::new(0., -2., 0.), Point::new(0., 2., 0.)]);
+        let pieces = split_line_by_curves(&line, &[cutter], 1e-6).unwrap();
+        MINI_CHECK!(pieces.len() == 2);
+        MINI_CHECK!(
+            pieces[0]
+                .point_at(1.)
+                .distance(&Point::new(0., 0., 0.), None)
+                < 1e-6
+        );
+        MINI_CHECK!(
+            pieces[1]
+                .point_at(0.)
+                .distance(&Point::new(0., 0., 0.), None)
+                < 1e-6
+        );
+        MINI_CHECK!(
+            pieces[0].name == line.name
+                && pieces[0].width == line.width
+                && pieces[0].dash == line.dash
+        );
+        MINI_CHECK!(line.length() == 4.);
+    })
+}
+pub fn run_split_polyline_by_curves() -> TestResult {
+    MINI_TEST!("Split Polyline By Curves", {
+        use crate::simple_split::split_polyline_by_curves;
+        use crate::{NurbsCurve, Point, Polyline};
+        let mut polyline = Polyline::new(vec![
+            Point::new(-2., 0., 0.),
+            Point::new(2., 0., 0.),
+            Point::new(2., 3., 0.),
+        ]);
+        polyline.name = "retained".into();
+        polyline.width = 3.;
+        polyline.dash = vec![1., 2.];
+        let cutter =
+            NurbsCurve::create(false, 1, &[Point::new(0., -2., 0.), Point::new(0., 2., 0.)]);
+        let pieces = split_polyline_by_curves(&polyline, &[cutter], 1e-6).unwrap();
+        MINI_CHECK!(pieces.len() == 2);
+        MINI_CHECK!(pieces[0].point_count() == 2 && pieces[1].point_count() == 3);
+        MINI_CHECK!(
+            pieces[1]
+                .get_point(1)
+                .unwrap()
+                .distance(&Point::new(2., 0., 0.), None)
+                < 1e-6
+        );
+        MINI_CHECK!(
+            pieces[1]
+                .get_point(2)
+                .unwrap()
+                .distance(&Point::new(2., 3., 0.), None)
+                < 1e-6
+        );
+        MINI_CHECK!(
+            pieces[0].name == polyline.name
+                && pieces[0].width == polyline.width
+                && pieces[0].dash == polyline.dash
+        );
+        MINI_CHECK!(polyline.point_count() == 3);
+    })
+}
+REGISTER_MINI_TEST!(
+    "SimpleSplit",
+    "Split Line By Curves",
+    crate::simple_split_test::run_split_line_by_curves
+);
+REGISTER_MINI_TEST!(
+    "SimpleSplit",
+    "Split Polyline By Curves",
+    crate::simple_split_test::run_split_polyline_by_curves
+);

@@ -1161,3 +1161,48 @@ pub fn split_surface_by_curves(
     result.add_face(si as i32, &[BRepRef::new(wi as i32, FORWARD)], 0.0);
     split_brep_face_by_curves(&result, 0, cutters, tolerance)
 }
+
+/// Split a line at isolated 3D intersections, retaining line types and display attributes.
+pub fn split_line_by_curves(
+    line: &crate::Line,
+    cutters: &[NurbsCurve],
+    tolerance: f64,
+) -> Result<Vec<crate::Line>, String> {
+    let curve = NurbsCurve::create(false, 1, &[line.point_at(0.), line.point_at(1.)]);
+    split_curve_by_curves(&curve, cutters, tolerance)?
+        .into_iter()
+        .map(|piece| {
+            let mut next = crate::Line::from_points(&piece.point_at_start(), &piece.point_at_end());
+            next.name = line.name.clone();
+            next.width = line.width;
+            next.dash = line.dash.clone();
+            next.linecolor = line.linecolor.clone();
+            Ok(next)
+        })
+        .collect()
+}
+/// Split a polyline, retaining each original corner, piece order and display attributes.
+pub fn split_polyline_by_curves(
+    polyline: &crate::Polyline,
+    cutters: &[NurbsCurve],
+    tolerance: f64,
+) -> Result<Vec<crate::Polyline>, String> {
+    let curve = NurbsCurve::create(false, 1, &polyline.get_points());
+    split_curve_by_curves(&curve, cutters, tolerance)?
+        .into_iter()
+        .map(|piece| {
+            let mut next = crate::Polyline::new(
+                piece
+                    .get_span_vector()
+                    .into_iter()
+                    .map(|t| piece.point_at(t))
+                    .collect(),
+            );
+            next.name = polyline.name.clone();
+            next.width = polyline.width;
+            next.dash = polyline.dash.clone();
+            next.linecolor = polyline.linecolor.clone();
+            Ok(next)
+        })
+        .collect()
+}
