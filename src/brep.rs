@@ -1340,6 +1340,19 @@ impl BRep {
             let domain_area = (u1 - u0) * (v1 - v0);
             face_direct[fi] =
                 (polygon_signed_area(&outer).abs() - domain_area).abs() < 1e-3 * domain_area;
+            // Topological edge ends must be domain corners; internal polyline controls are not new vertices.
+            let mesh_brep = self;
+            for er in mesh_brep.wire_edges(&face.wires[0]) {
+                let ci = mesh_brep.pcurve_index(er.index as usize, fi, er.orientation);
+                if ci < 0 { continue; }
+                let curve = &mesh_brep.m_curves_2d[ci as usize];
+                for k in [0, curve.cv_count().saturating_sub(1)] {
+                    let p = curve.get_cv(k).unwrap_or_default();
+                    let corner_u = (p[0] - u0).abs().min((p[0] - u1).abs()) <= (u1 - u0) * 1e-9;
+                    let corner_v = (p[1] - v0).abs().min((p[1] - v1).abs()) <= (v1 - v0) * 1e-9;
+                    if !corner_u || !corner_v { face_direct[fi] = false; }
+                }
+            }
         }
 
         // Phase 2: direct faces. The first incident grid supplies the canonical edge polygon.

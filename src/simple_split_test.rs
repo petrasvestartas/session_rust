@@ -98,6 +98,11 @@ pub fn run_split_brep_face_by_curves() -> TestResult {
         MINI_CHECK!(split.face_count() == 7);
         MINI_CHECK!(split.is_valid() && split.is_solid());
         MINI_CHECK!(box_.face_count() == 6);
+        let meshes = split.face_meshes_q(Some((20., 0.005)));
+        MINI_CHECK!((meshes[0].area() - 50.).abs() < 1e-6);
+        MINI_CHECK!((meshes[6].area() - 50.).abs() < 1e-6);
+        let neighbor_area: f64 = (1..6).map(|i| meshes[i].area()).sum();
+        MINI_CHECK!((neighbor_area - 500.).abs() < 1e-6);
         let closed = NurbsCurve::create(
             false,
             3,

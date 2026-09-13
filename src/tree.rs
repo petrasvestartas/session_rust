@@ -280,7 +280,7 @@ impl fmt::Display for TreeNode {
 }
 
 /// A hierarchical data structure with parent-child relationships.
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub struct Tree {
     /// Lazily generated unique identifier
     guid: std::sync::OnceLock<String>,
@@ -288,6 +288,17 @@ pub struct Tree {
     pub name: String,
     /// Root node of the tree (None for empty tree)
     root_node: Option<Rc<RefCell<TreeNode>>>,
+}
+
+/// Session copy-on-write and undo snapshots must own independent node hierarchies.
+impl Clone for Tree {
+    fn clone(&self) -> Self {
+        Self {
+            guid: self.guid.clone(),
+            name: self.name.clone(),
+            root_node: self.root_node.as_ref().map(|root| TreeNode::from_serde(root.borrow().to_serde())),
+        }
+    }
 }
 
 impl Serialize for Tree {
