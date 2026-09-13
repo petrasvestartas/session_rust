@@ -629,7 +629,3 @@ impl Default for Quaternion {
         Self::identity()
     }
 }
-
-#[cfg(test)]
-#[path = "quaternion_test.rs"]
-mod tests;

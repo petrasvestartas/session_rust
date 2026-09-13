@@ -1225,7 +1225,3 @@ impl MulAssign for Xform {
         *self = &*self * &rhs;
     }
 }
-
-#[cfg(test)]
-#[path = "xform_test.rs"]
-mod tests;

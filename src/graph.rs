@@ -944,7 +944,3 @@ impl Graph {
         }
     }
 }
-
-#[cfg(test)]
-#[path = "graph_test.rs"]
-mod graph_test;

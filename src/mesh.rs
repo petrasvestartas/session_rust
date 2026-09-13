@@ -4239,7 +4239,3 @@ impl PartialEq for Mesh {
         self.name == other.name && self.vertex == other.vertex && self.face == other.face
     }
 }
-
-#[cfg(test)]
-#[path = "mesh_test.rs"]
-mod mesh_test;

@@ -746,7 +746,3 @@ impl PartialEq for Line {
             && self.linecolor == other.linecolor
     }
 }
-
-#[path = "line_test.rs"]
-#[cfg(test)]
-mod line_test;

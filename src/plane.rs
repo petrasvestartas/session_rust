@@ -1145,7 +1145,3 @@ impl Plane {
         Self::pb_loads(&data).expect("Failed to parse protobuf")
     }
 }
-
-#[cfg(test)]
-#[path = "plane_test.rs"]
-mod plane_test;

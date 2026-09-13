@@ -46,7 +46,6 @@ pub fn run_tolerance_is_between() -> TestResult {
     })
 }
 
-// Literal matches the C++ and Python test text verbatim; parity beats the constant.
 #[allow(clippy::approx_constant)]
 pub fn run_tolerance_format_number() -> TestResult {
     MINI_TEST!("Format Number", {
@@ -60,42 +59,140 @@ pub fn run_tolerance_format_number() -> TestResult {
 pub fn run_tolerance_key() -> TestResult {
     MINI_TEST!("Key", {
         use crate::tolerance::TOLERANCE;
-        let result = TOLERANCE.key([1.0, 2.0, 3.0], -999);
+        let result = TOLERANCE.key(1.0, 2.0, 3.0, -999);
 
         MINI_CHECK!(result == "1.000,2.000,3.000");
     })
 }
 
+pub fn run_tolerance_to_radians() -> TestResult {
+    MINI_TEST!("To Radians", {
+        use crate::Tolerance;
+        let r0 = Tolerance::to_radians(180.0);
+        let r1 = Tolerance::to_radians(90.0);
+        let r2 = Tolerance::to_radians(0.0);
+
+        MINI_CHECK!((r0 - Tolerance::PI).abs() < 1e-9);
+        MINI_CHECK!((r1 - Tolerance::PI / 2.0).abs() < 1e-9);
+        MINI_CHECK!(r2.abs() < 1e-9);
+    })
+}
+
+pub fn run_tolerance_to_degrees() -> TestResult {
+    MINI_TEST!("To Degrees", {
+        use crate::Tolerance;
+        let d0 = Tolerance::to_degrees(Tolerance::PI);
+        let d1 = Tolerance::to_degrees(Tolerance::PI / 2.0);
+        let d2 = Tolerance::to_degrees(0.0);
+
+        MINI_CHECK!((d0 - 180.0).abs() < 1e-9);
+        MINI_CHECK!((d1 - 90.0).abs() < 1e-9);
+        MINI_CHECK!(d2.abs() < 1e-9);
+    })
+}
+
 pub fn run_tolerance_runtime_modification() -> TestResult {
     MINI_TEST!("Runtime Modification", {
-        use crate::tolerance::TOLERANCE;
-        // Defend against test pollution: other tests may have set_absolute'd
-        // without restoring (e.g. primitives_test when an assertion fires early).
-        TOLERANCE.reset();
-        let original_absolute = TOLERANCE.absolute();
-        let original_relative = TOLERANCE.relative();
+        use crate::Tolerance;
 
-        MINI_CHECK!(original_absolute == 1e-5);
-        MINI_CHECK!(original_relative == 1e-5);
+        let mut tolerance = Tolerance::default();
+        let original_absolute = tolerance.absolute();
+        let original_relative = tolerance.relative();
 
-        // Modify tolerance values at runtime
-        TOLERANCE.set_absolute(1e-7);
-        TOLERANCE.set_relative(1e-7);
-        MINI_CHECK!(TOLERANCE.absolute() == 1e-7);
-        MINI_CHECK!(TOLERANCE.relative() == 1e-7);
+        MINI_CHECK!(original_absolute == 1e-9);
+        MINI_CHECK!(original_relative == 1e-6);
 
-        // Test with new tolerance - 1e-6 difference now fails is_close
-        let close_with_tight = TOLERANCE.is_close(1.0, 1.0 + 1e-6);
+        tolerance.set_absolute(1e-12);
+        tolerance.set_relative(1e-12);
+        MINI_CHECK!(tolerance.absolute() == 1e-12);
+        MINI_CHECK!(tolerance.relative() == 1e-12);
+
+        let close_with_tight = tolerance.is_close(1.0, 1.0 + 1e-11);
         MINI_CHECK!(!close_with_tight);
 
-        // Reset to defaults
-        TOLERANCE.reset();
-        MINI_CHECK!(TOLERANCE.absolute() == 1e-5);
-        MINI_CHECK!(TOLERANCE.relative() == 1e-5);
+        tolerance.reset();
+        MINI_CHECK!(tolerance.absolute() == 1e-9);
+        MINI_CHECK!(tolerance.relative() == 1e-6);
 
-        // Same test now passes with default tolerance
-        let close_with_default = TOLERANCE.is_close(1.0, 1.0 + 1e-6);
+        let close_with_default = tolerance.is_close(1.0, 1.0 + 1e-11);
         MINI_CHECK!(close_with_default);
+    })
+}
+
+pub fn run_tolerance_json_roundtrip() -> TestResult {
+    MINI_TEST!("Json Roundtrip", {
+        use crate::Tolerance;
+
+        let mut tolerance = Tolerance::new("MM");
+        tolerance.set_absolute(1e-8);
+        tolerance.set_angular(2e-6);
+        tolerance.set_angulardeflection(0.2);
+        tolerance.set_approximation(0.002);
+        tolerance.set_lineardeflection(0.003);
+        tolerance.set_precision(4);
+        tolerance.set_relative(3e-6);
+
+        let filename = "serialization/test_tolerance.json";
+        tolerance.file_json_dump(filename).unwrap();
+        let loaded = Tolerance::file_json_load(filename).unwrap();
+        let parsed = Tolerance::file_json_loads(&tolerance.file_json_dumps().unwrap()).unwrap();
+
+        MINI_CHECK!(loaded.unit() == "MM");
+        MINI_CHECK!(loaded.absolute() == 1e-8);
+        MINI_CHECK!(loaded.angular() == 2e-6);
+        MINI_CHECK!(loaded.angulardeflection() == 0.2);
+        MINI_CHECK!(loaded.approximation() == 0.002);
+        MINI_CHECK!(loaded.lineardeflection() == 0.003);
+        MINI_CHECK!(loaded.precision() == 4);
+        MINI_CHECK!(loaded.relative() == 3e-6);
+        MINI_CHECK!(parsed.relative() == 3e-6);
+    })
+}
+
+pub fn run_tolerance_protobuf_roundtrip() -> TestResult {
+    MINI_TEST!("Protobuf Roundtrip", {
+        use crate::Tolerance;
+
+        let mut tolerance = Tolerance::new("MM");
+        tolerance.set_absolute(1e-8);
+        tolerance.set_angular(2e-6);
+        tolerance.set_angulardeflection(0.2);
+        tolerance.set_approximation(0.002);
+        tolerance.set_lineardeflection(0.003);
+        tolerance.set_precision(4);
+        tolerance.set_relative(3e-6);
+
+        let filename = "serialization/test_tolerance.bin";
+        tolerance.pb_dump(filename).unwrap();
+        let loaded = Tolerance::pb_load(filename).unwrap();
+        let parsed = Tolerance::pb_loads(&tolerance.pb_dumps()).unwrap();
+        let converted = Tolerance::from_proto(tolerance.to_proto());
+
+        MINI_CHECK!(loaded.unit() == "MM");
+        MINI_CHECK!(loaded.absolute() == 1e-8);
+        MINI_CHECK!(loaded.angular() == 2e-6);
+        MINI_CHECK!(loaded.angulardeflection() == 0.2);
+        MINI_CHECK!(loaded.approximation() == 0.002);
+        MINI_CHECK!(loaded.lineardeflection() == 0.003);
+        MINI_CHECK!(loaded.precision() == 4);
+        MINI_CHECK!(loaded.relative() == 3e-6);
+        MINI_CHECK!(parsed.relative() == 3e-6);
+        MINI_CHECK!(converted.relative() == 3e-6);
+    })
+}
+
+pub fn run_tolerance_serialization_errors() -> TestResult {
+    MINI_TEST!("Serialization Errors", {
+        use crate::Tolerance;
+
+        let tolerance = Tolerance::default();
+        let malformed = Tolerance::pb_loads(&[0xff]).is_err();
+        let json_write_failed = tolerance.file_json_dump("").is_err();
+        let pb_write_failed = tolerance.pb_dump("").is_err();
+
+        MINI_CHECK!(malformed);
+        MINI_CHECK!(json_write_failed);
+        MINI_CHECK!(pb_write_failed);
     })
 }
 
@@ -153,32 +250,6 @@ pub fn run_tolerance_rad_deg() -> TestResult {
     })
 }
 
-pub fn run_tolerance_to_radians() -> TestResult {
-    MINI_TEST!("To Radians", {
-        use crate::Tolerance;
-        let r0 = Tolerance::to_radians(180.0);
-        let r1 = Tolerance::to_radians(90.0);
-        let r2 = Tolerance::to_radians(0.0);
-
-        MINI_CHECK!((r0 - Tolerance::PI).abs() < 1e-9);
-        MINI_CHECK!((r1 - Tolerance::PI / 2.0).abs() < 1e-9);
-        MINI_CHECK!(r2.abs() < 1e-9);
-    })
-}
-
-pub fn run_tolerance_to_degrees() -> TestResult {
-    MINI_TEST!("To Degrees", {
-        use crate::Tolerance;
-        let d0 = Tolerance::to_degrees(Tolerance::PI);
-        let d1 = Tolerance::to_degrees(Tolerance::PI / 2.0);
-        let d2 = Tolerance::to_degrees(0.0);
-
-        MINI_CHECK!((d0 - 180.0).abs() < 1e-9);
-        MINI_CHECK!((d1 - 90.0).abs() < 1e-9);
-        MINI_CHECK!(d2.abs() < 1e-9);
-    })
-}
-
 pub fn run_tolerance_count_digits() -> TestResult {
     MINI_TEST!("Count Digits", {
         use crate::tolerance::count_digits;
@@ -201,7 +272,6 @@ pub fn run_tolerance_count_digits() -> TestResult {
 pub fn run_tolerance_is_angle_zero() -> TestResult {
     MINI_TEST!("Is Angle Zero", {
         use crate::tolerance::TOLERANCE;
-        // Angular tolerance default is 1e-6
         let r0 = TOLERANCE.is_angle_zero(1e-8);
         let r1 = TOLERANCE.is_angle_zero(0.1);
 
@@ -250,13 +320,12 @@ pub fn run_tolerance_is_allclose() -> TestResult {
 pub fn run_tolerance_key_xy() -> TestResult {
     MINI_TEST!("Key Xy", {
         use crate::tolerance::TOLERANCE;
-        let result = TOLERANCE.key_xy([1.0, 2.0], -999);
+        let result = TOLERANCE.key_xy(1.0, 2.0, -999);
 
         MINI_CHECK!(result == "1.000,2.000");
     })
 }
 
-// Literal matches the C++ and Python test text verbatim; parity beats the constant.
 #[allow(clippy::approx_constant)]
 pub fn run_tolerance_round_to() -> TestResult {
     MINI_TEST!("Round To", {
@@ -272,19 +341,15 @@ pub fn run_tolerance_round_to() -> TestResult {
 pub fn run_tolerance_precision_from_tolerance() -> TestResult {
     MINI_TEST!("Precision From Tolerance", {
         use crate::tolerance::TOLERANCE;
-        // Defend against test pollution.
-        TOLERANCE.reset();
-        // Default absolute tolerance is 1e-5 -> precision should be 5
-        let prec = TOLERANCE.precision_from_tolerance(None);
+        let prec = TOLERANCE.precision_from_tolerance(-1.0);
 
-        MINI_CHECK!(prec == 5);
+        MINI_CHECK!(prec == 9);
     })
 }
 
 pub fn run_tolerance_tolerance() -> TestResult {
     MINI_TEST!("Tolerance", {
         use crate::tolerance::TOLERANCE;
-        // rtol * abs(truevalue) + atol
         let result = TOLERANCE.tolerance(1.0, 1e-6, 1e-9);
 
         MINI_CHECK!((result - (1e-6 + 1e-9)).abs() < 1e-18);
@@ -304,8 +369,9 @@ pub fn run_tolerance_compare() -> TestResult {
 
 pub fn run_tolerance_is_finite() -> TestResult {
     MINI_TEST!("Is Finite", {
-        let r0 = 1.0_f64.is_finite();
-        let r1 = f64::INFINITY.is_finite();
+        use crate::tolerance::is_finite;
+        let r0 = is_finite(1.0);
+        let r1 = is_finite(f64::INFINITY);
 
         MINI_CHECK!(r0);
         MINI_CHECK!(!r1);
@@ -328,15 +394,35 @@ pub fn run_tolerance_is_vector_close() -> TestResult {
 
 pub fn run_tolerance_temporary() -> TestResult {
     MINI_TEST!("Temporary", {
-        use crate::tolerance::TOLERANCE;
-        let original = TOLERANCE.absolute();
-        let inside = TOLERANCE.temporary(|t| {
-            t.set_absolute(1e-12);
-            t.absolute()
-        });
+        use crate::Tolerance;
 
-        MINI_CHECK!(inside == 1e-12);
-        MINI_CHECK!(TOLERANCE.absolute() == original);
+        let mut tolerance = Tolerance::default();
+        let original = tolerance.absolute();
+        let inside = tolerance.temporary(|guard| {
+            guard.set_absolute(1e-12);
+            guard.absolute() == 1e-12
+        });
+        let restored = tolerance.absolute() == original;
+
+        MINI_CHECK!(inside);
+        MINI_CHECK!(restored);
+
+        // Release builds use panic = "abort", so only unwind-capable builds can
+        // exercise restoration while a panic crosses the temporary callback.
+        #[cfg(panic = "unwind")]
+        {
+            let threw = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                tolerance.temporary(|guard| {
+                    guard.set_absolute(1e-12);
+                    panic!("test");
+                });
+            }))
+            .is_err();
+            let restored_after_error = tolerance.absolute() == original;
+
+            MINI_CHECK!(threw);
+            MINI_CHECK!(restored_after_error);
+        }
     })
 }
 
@@ -385,6 +471,21 @@ REGISTER_MINI_TEST!(
     "Tolerance",
     "Runtime Modification",
     crate::tolerance_test::run_tolerance_runtime_modification
+);
+REGISTER_MINI_TEST!(
+    "Tolerance",
+    "Json Roundtrip",
+    crate::tolerance_test::run_tolerance_json_roundtrip
+);
+REGISTER_MINI_TEST!(
+    "Tolerance",
+    "Protobuf Roundtrip",
+    crate::tolerance_test::run_tolerance_protobuf_roundtrip
+);
+REGISTER_MINI_TEST!(
+    "Tolerance",
+    "Serialization Errors",
+    crate::tolerance_test::run_tolerance_serialization_errors
 );
 REGISTER_MINI_TEST!(
     "Tolerance",

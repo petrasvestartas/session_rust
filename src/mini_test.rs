@@ -562,6 +562,11 @@ pub fn get_all_tests() -> Vec<RegisteredTest> {
             name: "Presets",
             func: run_color_presets,
         },
+        RegisteredTest {
+            group: "Color",
+            name: "Serialization Errors",
+            func: run_color_serialization_errors,
+        },
         // Point tests
         RegisteredTest {
             group: "Point",
@@ -772,11 +777,6 @@ pub fn get_all_tests() -> Vec<RegisteredTest> {
         },
         RegisteredTest {
             group: "Tolerance",
-            name: "Runtime Modification",
-            func: run_tolerance_runtime_modification,
-        },
-        RegisteredTest {
-            group: "Tolerance",
             name: "To Radians",
             func: run_tolerance_to_radians,
         },
@@ -784,6 +784,26 @@ pub fn get_all_tests() -> Vec<RegisteredTest> {
             group: "Tolerance",
             name: "To Degrees",
             func: run_tolerance_to_degrees,
+        },
+        RegisteredTest {
+            group: "Tolerance",
+            name: "Runtime Modification",
+            func: run_tolerance_runtime_modification,
+        },
+        RegisteredTest {
+            group: "Tolerance",
+            name: "Json Roundtrip",
+            func: run_tolerance_json_roundtrip,
+        },
+        RegisteredTest {
+            group: "Tolerance",
+            name: "Protobuf Roundtrip",
+            func: run_tolerance_protobuf_roundtrip,
+        },
+        RegisteredTest {
+            group: "Tolerance",
+            name: "Serialization Errors",
+            func: run_tolerance_serialization_errors,
         },
         RegisteredTest {
             group: "Tolerance",
@@ -3970,6 +3990,16 @@ pub fn get_all_tests() -> Vec<RegisteredTest> {
             group: "Matrix",
             name: "Protobuf Roundtrip",
             func: run_matrix_protobuf_roundtrip,
+        },
+        RegisteredTest {
+            group: "Matrix",
+            name: "Serialization Errors",
+            func: run_matrix_serialization_errors,
+        },
+        RegisteredTest {
+            group: "Matrix",
+            name: "Shape Errors",
+            func: run_matrix_shape_errors,
         },
         // SpatialKDTree tests
         RegisteredTest {

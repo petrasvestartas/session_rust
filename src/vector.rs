@@ -1319,7 +1319,3 @@ pub fn interpolate_points(from: &Point, to: &Point, steps: usize, type_: usize) 
     }
     pts
 }
-
-#[cfg(test)]
-#[path = "vector_test.rs"]
-mod tests;

@@ -337,7 +337,3 @@ impl fmt::Display for Objects {
         )
     }
 }
-
-#[cfg(test)]
-#[path = "objects_test.rs"]
-mod objects_test;

@@ -1058,7 +1058,3 @@ impl fmt::Display for Element {
         write!(f, "{}", self.str())
     }
 }
-
-#[cfg(test)]
-#[path = "element_test.rs"]
-mod element_test;

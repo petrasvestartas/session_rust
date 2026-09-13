@@ -2928,7 +2928,3 @@ pub fn clip_open_against_closed(open_subject: &Polyline, closed_clip: &Polyline)
     flush(&mut cur, &mut result);
     result
 }
-
-#[cfg(test)]
-#[path = "boolean_polyline_test.rs"]
-mod boolean_polyline_test;

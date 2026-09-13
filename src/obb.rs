@@ -879,7 +879,3 @@ impl Default for OBB {
         }
     }
 }
-
-#[cfg(test)]
-#[path = "obb_test.rs"]
-mod obb_test;

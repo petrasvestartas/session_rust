@@ -623,7 +623,3 @@ impl Default for Tree {
         Self::new("my_tree")
     }
 }
-
-#[cfg(test)]
-#[path = "tree_test.rs"]
-mod tree_test;

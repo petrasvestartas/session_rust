@@ -238,7 +238,3 @@ impl PartialEq for InstanceRef {
             && self.flags == other.flags
     }
 }
-
-#[path = "instance_ref_test.rs"]
-#[cfg(test)]
-mod instance_ref_test;
