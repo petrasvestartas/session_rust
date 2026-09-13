@@ -100,15 +100,15 @@ mod tests {
     }
 
     #[test]
-    fn test_color_to_float_array() {
+    fn test_color_to_unified_array() {
         let color = Color::new(1.0, 0.5, 0.25, 1.0);
-        let float_array = color.to_float_array();
+        let float_array = color.to_unified_array();
         assert_eq!(float_array, [1.0, 0.5, 0.25, 1.0]);
     }
 
     #[test]
-    fn test_color_from_float() {
-        let color = Color::from_float(1.0, 0.5, 0.25, 1.0);
+    fn test_color_from_unified_array() {
+        let color = Color::from_unified_array([1.0, 0.5, 0.25, 1.0]);
         assert_eq!(color.r, 1.0);
         assert_eq!(color.g, 0.5);
         assert_eq!(color.b, 0.25);
@@ -193,6 +193,9 @@ pub fn run_color_constructor() -> TestResult {
         let mut cother = Color::new(1.0, 0.0, 0.0, 1.0);
         cother.name = "red".to_string();
 
+        // Out-of-range values clamp to [0, 1]
+        let cclamp = Color::new(2.0, -1.0, 0.5, 5.0);
+
         MINI_CHECK!(red.name == "red");
         MINI_CHECK!(!red.guid().is_empty());
         MINI_CHECK!(red.r == 1.0 && red.g == 0.0 && red.b == 0.0 && red.a == 1.0);
@@ -201,6 +204,9 @@ pub fn run_color_constructor() -> TestResult {
         MINI_CHECK!(crepr == "Color(red, 1.0, 0.0, 0.0, 1.0)");
         MINI_CHECK!(ccopy == cother);
         MINI_CHECK!(ccopy.guid() != red.guid());
+        MINI_CHECK!(red != Color::with_name(1.0, 0.0, 0.0, 0.5, "red"));
+        MINI_CHECK!(cclamp.r == 1.0 && cclamp.g == 0.0 && cclamp.b == 0.5 && cclamp.a == 1.0);
+        MINI_CHECK!(Color::new(1.0, 0.5, 0.25, 1.0).str() == "1.0, 0.5, 0.2, 1.0");
     })
 }
 
@@ -224,6 +230,12 @@ pub fn run_color_json_roundtrip() -> TestResult {
         MINI_CHECK!(loaded.g == 0.5);
         MINI_CHECK!(loaded.b == 0.25);
         MINI_CHECK!(loaded.a == 1.0);
+
+        // Alpha, name and guid are optional
+        let partial = Color::file_json_loads("{\"b\": 0.0, \"g\": 0.0, \"r\": 1.0}");
+
+        MINI_CHECK!(partial.name == "my_color");
+        MINI_CHECK!(partial.r == 1.0 && partial.a == 1.0);
     })
 }
 
@@ -251,8 +263,8 @@ pub fn run_color_conversion() -> TestResult {
         use crate::Color;
 
         let color = Color::new(1.0, 0.5, 0.25, 1.0);
-        let flts = color.to_float_array();
-        let color2 = Color::from_float(flts[0], flts[1], flts[2], flts[3]);
+        let flts = color.to_unified_array();
+        let color2 = Color::from_unified_array(flts);
 
         MINI_CHECK!(TOLERANCE.is_close(flts[0] as f64, 1.0));
         MINI_CHECK!(TOLERANCE.is_close(flts[1] as f64, 0.5));
@@ -336,6 +348,23 @@ pub fn run_color_presets() -> TestResult {
     })
 }
 
+pub fn run_color_palette() -> TestResult {
+    MINI_TEST!("Palette", {
+        use crate::Color;
+
+        let mut palette = Color::palette();
+
+        // Every call builds fresh colors, so mutating one leaves the presets alone
+        palette[0].name = "mutated".to_string();
+
+        MINI_CHECK!(palette.len() == 12);
+        MINI_CHECK!(palette[0] == Color::with_name(1.0, 0.0, 0.0, 1.0, "mutated"));
+        MINI_CHECK!(palette[11] == Color::with_name(1.0, 0.0, 0.5, 1.0, "pink"));
+        MINI_CHECK!(Color::palette()[0] == Color::with_name(1.0, 0.0, 0.0, 1.0, "red"));
+        MINI_CHECK!(Color::red().name == "red");
+    })
+}
+
 // Register tests with the shared registry for run_all("rust")
 REGISTER_MINI_TEST!(
     "Color",
@@ -358,3 +387,4 @@ REGISTER_MINI_TEST!(
     crate::color_test::run_color_conversion
 );
 REGISTER_MINI_TEST!("Color", "Presets", crate::color_test::run_color_presets);
+REGISTER_MINI_TEST!("Color", "Palette", crate::color_test::run_color_palette);
