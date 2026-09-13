@@ -3,7 +3,6 @@ use crate::tolerance::TOLERANCE;
 use crate::{MINI_CHECK, MINI_TEST, REGISTER_MINI_TEST};
 
 pub fn run_aabb_constructor() -> crate::mini_test::TestResult {
-    use crate::tolerance::TOLERANCE;
     use crate::{Point, AABB};
     MINI_TEST!("Constructor", {
         // AABB(0,0,0, 1,2,3) — dims 2×4×6
@@ -16,6 +15,9 @@ pub fn run_aabb_constructor() -> crate::mini_test::TestResult {
         MINI_CHECK!(TOLERANCE.is_close(a.volume(), 48.0));
         MINI_CHECK!(a.closest_point(&Point::new(0.0, 0.0, 0.0)) == Point::new(0.0, 0.0, 0.0));
         MINI_CHECK!(a.closest_point(&Point::new(10.0, 0.0, 0.0)) == Point::new(1.0, 0.0, 0.0));
+        // a negative half-size inverts the box; the clamp then resolves to cx - hx
+        let inv = AABB::new(0.0, 0.0, 0.0, -1.0, -1.0, -1.0);
+        MINI_CHECK!(inv.closest_point(&Point::new(0.0, 0.0, 0.0)) == Point::new(1.0, 1.0, 1.0));
         MINI_CHECK!(a.contains(&Point::new(0.0, 0.0, 0.0)));
         MINI_CHECK!(!a.contains(&Point::new(10.0, 0.0, 0.0)));
         MINI_CHECK!(a.corner(false, false, false) == Point::new(-1.0, -2.0, -3.0));
@@ -112,6 +114,21 @@ pub fn run_aabb_from_geometry() -> TestResult {
 
         MINI_CHECK!(a_nc.is_valid());
         MINI_CHECK!(a_nc.contains(&Point::new(1.5, 0.0, 0.0)));
+
+        let bulge = NurbsCurve::create(
+            false,
+            2,
+            &[
+                Point::new(0.0, 0.0, 0.0),
+                Point::new(1.0, 2.0, 0.0),
+                Point::new(2.0, 1.0, 0.0),
+            ],
+        );
+        let a_hull = AABB::from_nurbscurve(&bulge, 0.0, false);
+        let a_tight = AABB::from_nurbscurve(&bulge, 0.0, true);
+
+        MINI_CHECK!(TOLERANCE.is_close(a_hull.max_point()[1], 2.0));
+        MINI_CHECK!(TOLERANCE.is_close(a_tight.max_point()[1], 4.0 / 3.0));
 
         let surf = NurbsSurface::create(
             false,
