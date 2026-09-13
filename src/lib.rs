@@ -155,3 +155,6 @@ pub use tolerance::Tolerance;
 pub use tree::{Tree, TreeNode};
 pub use vector::Vector;
 pub use xform::Xform;
+
+pub mod simple_split;
+pub mod simple_split_test;

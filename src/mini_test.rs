@@ -358,6 +358,7 @@ macro_rules! MINI_TEST_FN {
 
 /// Get all tests manually (fallback when inventory doesn't work, and canonical order oracle)
 pub fn get_all_tests() -> Vec<RegisteredTest> {
+    use crate::simple_split_test::*;
     use crate::aabb_test::*;
     use crate::boolean_polyline_test::*;
     use crate::brep_test::*;
@@ -4095,6 +4096,22 @@ pub fn get_all_tests() -> Vec<RegisteredTest> {
             group: "SpatialOctree",
             name: "From Coords",
             func: run_octree_from_coords,
+        },
+        // Source-geometry split tests
+        RegisteredTest {
+            group: "SimpleSplit",
+            name: "Split Curve By Curves",
+            func: run_split_curve_by_curves,
+        },
+        RegisteredTest {
+            group: "SimpleSplit",
+            name: "Split BRep Face By Curves",
+            func: run_split_brep_face_by_curves,
+        },
+        RegisteredTest {
+            group: "SimpleSplit",
+            name: "Split Surface By Curves",
+            func: run_split_surface_by_curves,
         },
     ];
 

@@ -3296,12 +3296,18 @@ impl NurbsCurve {
         let trim_start = t0 > d0 + Tolerance::ZERO_TOLERANCE;
         let trim_end = t1 < d1 - Tolerance::ZERO_TOLERANCE;
         if trim_start {
-            if !self.insert_nurbsknot(t0, p) {
+            // This baseline insert API counts additions; trim needs target multiplicity p.
+            let existing = self.m_nurbsknot.iter().filter(|&&k| (k - t0).abs() < Tolerance::ZERO_TOLERANCE).count();
+            let missing = p.saturating_sub(existing);
+            if missing > 0 && !self.insert_nurbsknot(t0, missing) {
                 return false;
             }
         }
         if trim_end {
-            if !self.insert_nurbsknot(t1, p) {
+            // This baseline insert API counts additions; trim needs target multiplicity p.
+            let existing = self.m_nurbsknot.iter().filter(|&&k| (k - t1).abs() < Tolerance::ZERO_TOLERANCE).count();
+            let missing = p.saturating_sub(existing);
+            if missing > 0 && !self.insert_nurbsknot(t1, missing) {
                 return false;
             }
         }
