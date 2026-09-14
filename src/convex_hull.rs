@@ -193,6 +193,12 @@ impl ConvexHull {
                 p3 = i;
             }
         }
+        if best_distance <= 1e-20 || best_volume <= 1e-20 {
+            for point in points {
+                mesh.add_vertex(point.clone(), None);
+            }
+            return mesh;
+        }
         if signed_volume(&points[p0], &points[p1], &points[p2], &points[p3]) > 0.0 {
             std::mem::swap(&mut p1, &mut p2);
         }

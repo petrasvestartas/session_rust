@@ -84,6 +84,15 @@ pub fn run_convex_hull_hull_3d() -> TestResult {
 
         MINI_CHECK!(mesh.number_of_vertices() == 4);
         MINI_CHECK!(mesh.number_of_faces() == 4);
+
+        let degenerate = ConvexHull::hull_3d(&[
+            Point::new(0.0, 0.0, 0.0),
+            Point::new(1.0, 0.0, 0.0),
+            Point::new(2.0, 0.0, 0.0),
+            Point::new(3.0, 0.0, 0.0),
+        ]);
+        MINI_CHECK!(degenerate.number_of_vertices() == 4);
+        MINI_CHECK!(degenerate.number_of_faces() == 0);
     })
 }
 REGISTER_MINI_TEST!(
