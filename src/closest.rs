@@ -1247,7 +1247,7 @@ impl Closest {
     /// Index pairs of lines whose endpoints come within threshold of each other
     pub fn lines_closest(lines: &[Line], threshold: f64) -> Vec<(usize, usize)> {
         let mut pairs = Vec::new();
-        if lines.len() < 2 {
+        if threshold < 0.0 || lines.len() < 2 {
             return pairs;
         }
         let mut aabbs = Vec::with_capacity(lines.len());
@@ -1277,7 +1277,7 @@ impl Closest {
     /// Index pairs of polylines whose vertices come within threshold of each other
     pub fn polylines_closest(polylines: &[Polyline], threshold: f64) -> Vec<(usize, usize)> {
         let mut pairs = Vec::new();
-        if polylines.len() < 2 {
+        if threshold < 0.0 || polylines.len() < 2 {
             return pairs;
         }
         let mut aabbs = Vec::with_capacity(polylines.len());
@@ -1310,7 +1310,7 @@ impl Closest {
     /// Index pairs of curves whose endpoints come within threshold of each other
     pub fn nurbscurves_closest(curves: &[NurbsCurve], threshold: f64) -> Vec<(usize, usize)> {
         let mut pairs = Vec::new();
-        if curves.len() < 2 {
+        if threshold < 0.0 || curves.len() < 2 {
             return pairs;
         }
         let mut aabbs = Vec::with_capacity(curves.len());
@@ -1341,7 +1341,7 @@ impl Closest {
     /// Index pairs of boxes within threshold of each other
     pub fn boxes_closest(boxes: &[AABB], threshold: f64) -> Vec<(usize, usize)> {
         let mut pairs = Vec::new();
-        if boxes.len() < 2 {
+        if threshold < 0.0 || boxes.len() < 2 {
             return pairs;
         }
         let mut inflated = Vec::with_capacity(boxes.len());

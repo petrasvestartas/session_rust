@@ -360,6 +360,7 @@ pub fn run_closest_boxes_closest() -> TestResult {
         MINI_CHECK!(pairs.len() == 1);
         MINI_CHECK!(pairs[0].0 == 0);
         MINI_CHECK!(pairs[0].1 == 1);
+        MINI_CHECK!(Closest::boxes_closest(&boxes, -0.01).is_empty());
     })
 }
 
