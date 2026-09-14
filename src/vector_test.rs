@@ -443,9 +443,11 @@ pub fn run_vector_average_normal() -> TestResult {
             Point::new(0.0, 0.0, 0.0),
         ];
         let n = Vector::average_normal(&square);
+        let empty = Vector::average_normal(&[]);
 
         MINI_CHECK!(TOLERANCE.is_close(n[2].abs(), 1.0));
         MINI_CHECK!(TOLERANCE.is_close(n[0], 0.0) && TOLERANCE.is_close(n[1], 0.0));
+        MINI_CHECK!(empty.is_zero());
     })
 }
 

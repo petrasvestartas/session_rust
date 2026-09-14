@@ -442,6 +442,9 @@ impl Vector {
 
     /// Unit area-weighted normal of a polygon by Newell's method
     pub fn average_normal(points: &[Point]) -> Vector {
+        if points.is_empty() {
+            return Vector::zero();
+        }
         let last = points.len() - 1;
         let dx = points[last][0] - points[0][0];
         let dy = points[last][1] - points[0][1];
