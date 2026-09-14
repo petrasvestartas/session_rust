@@ -15,6 +15,9 @@ use std::fs;
 use std::sync::Mutex;
 use std::sync::OnceLock;
 
+// Geometry is kept inline to preserve the public enum API shared with C++/Python;
+// boxing either variant would add allocations and break pattern matching callers.
+#[allow(clippy::large_enum_variant)]
 #[derive(Debug, Clone)]
 pub enum ElementGeometry {
     None,
@@ -364,6 +367,7 @@ impl Element {
     pub fn aabb(&mut self) -> OBB {
         if self.is_dirty || self.cached_aabb.is_none() {
             self.cached_aabb = Some(self.compute_aabb());
+            self.is_dirty = false;
         }
         self.cached_aabb.clone().unwrap()
     }
@@ -371,6 +375,7 @@ impl Element {
     pub fn obb(&mut self) -> OBB {
         if self.is_dirty || self.cached_obb.is_none() {
             self.cached_obb = Some(self.compute_obb());
+            self.is_dirty = false;
         }
         self.cached_obb.clone().unwrap()
     }
@@ -378,6 +383,7 @@ impl Element {
     pub fn collision_mesh(&mut self) -> Mesh {
         if self.is_dirty || self.cached_collision_mesh.is_none() {
             self.cached_collision_mesh = Some(self.compute_collision_mesh());
+            self.is_dirty = false;
         }
         self.cached_collision_mesh.clone().unwrap()
     }
@@ -385,6 +391,7 @@ impl Element {
     pub fn point(&mut self) -> Point {
         if self.is_dirty || self.cached_point.is_none() {
             self.cached_point = Some(self.compute_point());
+            self.is_dirty = false;
         }
         self.cached_point.clone().unwrap()
     }
@@ -392,6 +399,7 @@ impl Element {
     pub fn polylines(&mut self) -> Vec<Polyline> {
         if self.is_dirty || self.cached_polylines.is_none() {
             self.cached_polylines = Some(self.compute_polylines());
+            self.is_dirty = false;
         }
         self.cached_polylines.clone().unwrap()
     }
@@ -399,6 +407,7 @@ impl Element {
     pub fn planes(&mut self) -> Vec<Plane> {
         if self.is_dirty || self.cached_planes.is_none() {
             self.cached_planes = Some(self.compute_planes());
+            self.is_dirty = false;
         }
         self.cached_planes.clone().unwrap()
     }
@@ -406,6 +415,7 @@ impl Element {
     pub fn edge_vectors(&mut self) -> Vec<Vector> {
         if self.is_dirty || self.cached_edge_vectors.is_none() {
             self.cached_edge_vectors = Some(self.compute_edge_vectors());
+            self.is_dirty = false;
         }
         self.cached_edge_vectors.clone().unwrap()
     }
@@ -413,6 +423,7 @@ impl Element {
     pub fn axis(&mut self) -> Option<Line> {
         if self.is_dirty || self.cached_axis.is_none() {
             self.cached_axis = self.compute_axis();
+            self.is_dirty = false;
         }
         self.cached_axis.clone()
     }
@@ -476,7 +487,7 @@ impl Element {
 
     pub fn add_geometry_op(&mut self, f: fn(Mesh) -> Mesh) {
         self.geometry_ops.push(f);
-        self.is_dirty = true;
+        self.reset();
     }
 
     pub fn set_features(&mut self, features: Vec<ElementFeature>) {
@@ -498,17 +509,17 @@ impl Element {
     /// Bake a placement into the element's own geometry, invalidating the cached boxes.
     pub fn place(&mut self, xform: &Xform) {
         self.geometry = self.session_geometry(xform);
-        self.is_dirty = true;
+        self.reset();
     }
 
     pub fn set_geometry(&mut self, geo: Mesh) {
         self.geometry = ElementGeometry::Mesh(geo);
-        self.is_dirty = true;
+        self.reset();
     }
 
     pub fn set_brep_geometry(&mut self, geo: BRep) {
         self.geometry = ElementGeometry::BRep(geo);
-        self.is_dirty = true;
+        self.reset();
     }
 
     pub fn set_polylines(&mut self, polys: Vec<Polyline>) {

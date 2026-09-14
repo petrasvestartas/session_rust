@@ -141,6 +141,14 @@ pub fn run_element_aabb() -> TestResult {
         MINI_CHECK!(TOLERANCE.is_close(aabb.half_size[0], 0.5));
         MINI_CHECK!(TOLERANCE.is_close(aabb.half_size[1], 0.5));
         MINI_CHECK!(TOLERANCE.is_close(aabb.half_size[2], 0.0));
+        MINI_CHECK!(!e.is_dirty());
+
+        fn identity(geo: Mesh) -> Mesh {
+            geo
+        }
+        e.add_geometry_op(identity);
+        MINI_CHECK!(e.is_dirty());
+        MINI_CHECK!(e.cached_aabb().is_none());
     })
 }
 
