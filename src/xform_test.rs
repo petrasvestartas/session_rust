@@ -241,6 +241,7 @@ pub fn run_xform_rotation_axis() -> TestResult {
             &result.vertex_point(7).unwrap(),
             &Point::new(t, t - k, t + k)
         ));
+        MINI_CHECK!(Xform::rotation(&Vector::zero(), PI / 3.0, false).is_identity());
     })
 }
 

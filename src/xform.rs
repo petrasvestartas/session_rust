@@ -141,6 +141,9 @@ impl Xform {
             angle
         };
         let mut xform = Self::new();
+        if axis.is_zero() {
+            return Self::identity();
+        }
         let unit = axis.normalized();
         let cos_angle = angle.cos();
         let sin_angle = angle.sin();
@@ -173,7 +176,7 @@ impl Xform {
     }
 
     /// Change of basis from frame 1 to frame 0
-    #[allow(clippy::too_many_arguments)]
+    #[allow(clippy::needless_range_loop, clippy::too_many_arguments)]
     pub fn change_basis(
         origin_1: &Point,
         x_axis_1: &Vector,
