@@ -2104,6 +2104,37 @@ fn v_select(
     vec![a.clone()]
 }
 
+fn v_select_count(
+    a_count: usize,
+    b_count: usize,
+    a_in_b: bool,
+    b_in_a: bool,
+    clip_type: i32,
+) -> i32 {
+    if clip_type == 0 {
+        if a_in_b {
+            return a_count as i32;
+        }
+        if b_in_a {
+            return b_count as i32;
+        }
+        return 0;
+    }
+    if clip_type == 1 {
+        if a_in_b {
+            return b_count as i32;
+        }
+        if b_in_a {
+            return a_count as i32;
+        }
+        return (a_count + b_count) as i32;
+    }
+    if a_in_b {
+        return 0;
+    }
+    a_count as i32
+}
+
 fn v_any_cross(va: &[BIVec2], vb: &[BIVec2]) -> bool {
     let na = va.len();
     let nb = vb.len();
@@ -2371,7 +2402,13 @@ impl BooleanPolyline {
                 return 0;
             }
             if a_max_x < b_min_x || b_max_x < a_min_x || a_max_y < b_min_y || b_max_y < a_min_y {
-                return 0;
+                return v_select_count(
+                    ca.len() / 3,
+                    cb.len() / 3,
+                    pip_vertex(sc, sc.vtx_pool[va_head.unwrap()].pt, vb_head.unwrap()),
+                    pip_vertex(sc, sc.vtx_pool[vb_head.unwrap()].pt, va_head.unwrap()),
+                    clip_type,
+                );
             }
             if !v_execute_internal(sc, clip_type) {
                 return 0;

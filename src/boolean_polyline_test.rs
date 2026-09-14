@@ -6,6 +6,7 @@ const PI2: f64 = 2.0 * PI;
 
 pub fn run_boolean_polyline_overlapping_squares() -> TestResult {
     MINI_TEST!("Overlapping Squares", {
+        use crate::BooleanPolyline;
         use crate::Point;
         use crate::Polyline;
 
@@ -32,6 +33,29 @@ pub fn run_boolean_polyline_overlapping_squares() -> TestResult {
         MINI_CHECK!(uni[0].point_count() > 0);
         MINI_CHECK!(!diff.is_empty());
         MINI_CHECK!(diff[0].point_count() > 0);
+
+        let far_a = Polyline::new(vec![
+            Point::new(10.0, -1.0, 0.0),
+            Point::new(12.0, -1.0, 0.0),
+            Point::new(12.0, 1.0, 0.0),
+            Point::new(10.0, 1.0, 0.0),
+            Point::new(10.0, -1.0, 0.0),
+        ]);
+        let far_b = Polyline::new(vec![
+            Point::new(14.0, -1.0, 0.0),
+            Point::new(16.0, -1.0, 0.0),
+            Point::new(16.0, 1.0, 0.0),
+            Point::new(14.0, 1.0, 0.0),
+            Point::new(14.0, -1.0, 0.0),
+        ]);
+        MINI_CHECK!(BooleanPolyline::compute_count(&far_a, &far_b, 0) == 0);
+        MINI_CHECK!(
+            BooleanPolyline::compute_count(&far_a, &far_b, 1)
+                == (far_a.point_count() + far_b.point_count()) as i32
+        );
+        MINI_CHECK!(
+            BooleanPolyline::compute_count(&far_a, &far_b, 2) == far_a.point_count() as i32
+        );
     })
 }
 
