@@ -69,6 +69,9 @@ impl Quaternion {
 
     /// Unit quaternion rotating by angle radians around axis
     pub fn from_axis_angle(axis: Vector, angle: f64) -> Self {
+        if axis.magnitude() < 1e-10 {
+            return Self::identity();
+        }
         let ax = axis.normalized();
         let half = angle * 0.5;
         Self::new(half.cos(), ax * half.sin())
@@ -120,16 +123,16 @@ impl Quaternion {
         let yb = plane_b.y_axis();
         let zb = plane_b.z_axis();
         let mut m = [[0.0_f64; 3]; 3];
-        for i in 0..3 {
-            for j in 0..3 {
-                m[i][j] = xb[i] * xa[j] + yb[i] * ya[j] + zb[i] * za[j];
+        for (i, row) in m.iter_mut().enumerate() {
+            for (j, cell) in row.iter_mut().enumerate() {
+                *cell = xb[i] * xa[j] + yb[i] * ya[j] + zb[i] * za[j];
             }
         }
         let eps = 1.490116119385e-8;
         let mut is_identity = true;
-        for i in 0..3 {
-            for j in 0..3 {
-                if (m[i][j] - if i == j { 1.0 } else { 0.0 }).abs() > eps {
+        for (i, row) in m.iter().enumerate() {
+            for (j, &value) in row.iter().enumerate() {
+                if (value - if i == j { 1.0 } else { 0.0 }).abs() > eps {
                     is_identity = false;
                 }
             }
@@ -251,14 +254,19 @@ impl Quaternion {
 
     /// Spherical interpolation at constant angular velocity
     pub fn slerp(&self, other: &Self, amount: f64) -> Self {
-        let dot_val = self.dot(other);
+        let mut target = other.clone();
+        let mut dot_val = self.dot(&target);
+        if dot_val < 0.0 {
+            target = -target;
+            dot_val = -dot_val;
+        }
         if dot_val > 0.9995 {
-            return (self.clone() + (other.clone() - self.clone()) * amount).normalized();
+            return (self.clone() + (target - self.clone()) * amount).normalized();
         }
         let theta = dot_val.clamp(-1.0, 1.0).acos();
         let scale1 = (theta * (1.0 - amount)).sin();
         let scale2 = (theta * amount).sin();
-        (self.clone() * scale1 + other.clone() * scale2) * (1.0 / theta.sin())
+        (self.clone() * scale1 + target * scale2) * (1.0 / theta.sin())
     }
 
     /// Normalized linear interpolation, cheaper than slerp

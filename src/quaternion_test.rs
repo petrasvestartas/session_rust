@@ -116,6 +116,9 @@ pub fn run_quaternion_from_axis_angle() -> TestResult {
 
         MINI_CHECK!(TOLERANCE.is_close(q.scalar, (PI / 4.0).cos()));
         MINI_CHECK!(TOLERANCE.is_close(q.vector[2], (PI / 4.0).sin()));
+
+        let zero_axis = Quaternion::from_axis_angle(Vector::new(0.0, 0.0, 0.0), PI / 2.0);
+        MINI_CHECK!(zero_axis == Quaternion::identity());
     })
 }
 
@@ -299,6 +302,11 @@ pub fn run_quaternion_slerp() -> TestResult {
         let half = Quaternion::from_axis_angle(Vector::new(0.0, 0.0, 1.0), 0.0005);
 
         MINI_CHECK!(TOLERANCE.is_close(mid2.scalar, half.scalar));
+
+        let antipodal = -Quaternion::identity();
+        let same_rotation = q1.slerp(&antipodal, 0.5);
+        MINI_CHECK!(TOLERANCE.is_close(same_rotation.scalar, 1.0));
+        MINI_CHECK!(TOLERANCE.is_close(same_rotation.vector.magnitude(), 0.0));
     })
 }
 
