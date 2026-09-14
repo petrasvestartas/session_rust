@@ -46,9 +46,9 @@ impl AABB {
         let mut min_x = f64::MAX;
         let mut min_y = f64::MAX;
         let mut min_z = f64::MAX;
-        let mut max_x = f64::MIN;
-        let mut max_y = f64::MIN;
-        let mut max_z = f64::MIN;
+        let mut max_x = f64::NEG_INFINITY;
+        let mut max_y = f64::NEG_INFINITY;
+        let mut max_z = f64::NEG_INFINITY;
         for pt in points {
             min_x = min_x.min(pt[0]);
             min_y = min_y.min(pt[1]);

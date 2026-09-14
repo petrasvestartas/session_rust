@@ -72,6 +72,13 @@ pub fn run_aabb_from_geometry() -> TestResult {
         MINI_CHECK!(a_pts.min_point() == Point::new(0.0, 0.0, 0.0));
         MINI_CHECK!(a_pts.max_point() == Point::new(3.0, 4.0, 5.0));
 
+        let a_negative = AABB::from_points(
+            &[Point::new(-5.0, -4.0, -3.0), Point::new(-1.0, -2.0, -1.0)],
+            0.0,
+        );
+        MINI_CHECK!(a_negative.min_point() == Point::new(-5.0, -4.0, -3.0));
+        MINI_CHECK!(a_negative.max_point() == Point::new(-1.0, -2.0, -1.0));
+
         let ln = Line::new(0.0, 0.0, 0.0, 4.0, 0.0, 0.0);
         let a_line = AABB::from_line(&ln, 1.0);
 
