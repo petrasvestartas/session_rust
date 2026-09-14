@@ -1,9 +1,3 @@
-// SpatialRTree — R-tree with dynamic insert/delete (Guttman split, fan-out 4–8).
-// Use for: "find all objects overlapping this region" (spatial range queries).
-//   Supports live insertion and deletion; good for mutable object sets.
-// Prefer over SpatialAABBTree/SpatialBVH when data changes frequently.
-// Prefer over SpatialKDTree  when querying volumes/boxes, not bare point clouds.
-// Note: k-NN is possible but slower than SpatialKDTree for pure point queries.
 const MAXNODES: usize = 8;
 const MINNODES: usize = 4;
 const NOT_TAKEN: i32 = -1;
@@ -33,20 +27,21 @@ const EMPTY_BRANCH: Branch = Branch {
     m_data: 0,
 };
 
-struct RTreeNode {
+struct Node {
     m_count: i32,
     m_level: i32,
     m_branch: [Branch; MAXNODES + 1],
 }
 
-impl RTreeNode {
+impl Node {
     fn new() -> Self {
-        RTreeNode {
+        Node {
             m_count: 0,
             m_level: 0,
             m_branch: [EMPTY_BRANCH; MAXNODES + 1],
         }
     }
+
     fn is_leaf(&self) -> bool {
         self.m_level == 0
     }
@@ -82,8 +77,9 @@ impl PartitionVars {
     }
 }
 
+/// R-tree with dynamic insert and remove (Guttman quadratic split, fan-out 4 to 8) for box overlap queries.
 pub struct SpatialRTree {
-    nodes: Vec<RTreeNode>,
+    nodes: Vec<Node>,
     free_list: Vec<usize>,
     m_root: usize,
     m_size: i32,
@@ -91,43 +87,85 @@ pub struct SpatialRTree {
 
 impl SpatialRTree {
     pub fn new() -> Self {
-        let mut rt = SpatialRTree {
+        let mut tree = SpatialRTree {
             nodes: Vec::new(),
             free_list: Vec::new(),
             m_root: 0,
             m_size: 0,
         };
-        rt.m_root = rt.alloc_node();
-        rt
+        tree.m_root = tree.alloc_node();
+        tree
+    }
+
+    pub fn count(&self) -> i32 {
+        self.m_size
+    }
+
+    pub fn insert(&mut self, a_min: [f64; 3], a_max: [f64; 3], a_data: i32) {
+        let branch = Branch {
+            m_rect: self.make_rect(a_min, a_max),
+            m_child: NULL_IDX,
+            m_data: a_data,
+        };
+        self.insert_branch_internal(branch, 0);
+        self.m_size += 1;
+    }
+
+    pub fn remove(&mut self, a_min: [f64; 3], a_max: [f64; 3], a_data: i32) -> bool {
+        let rect = self.make_rect(a_min, a_max);
+        let mut reinsert_list: Vec<usize> = Vec::new();
+        let root = self.m_root;
+        if !self.remove_rect_internal(&rect, a_data, root, &mut reinsert_list) {
+            return false;
+        }
+        for node in reinsert_list {
+            let count = self.nodes[node].m_count as usize;
+            let level = self.nodes[node].m_level;
+            for i in 0..count {
+                let branch = self.nodes[node].m_branch[i];
+                self.insert_branch_internal(branch, level);
+            }
+            self.free_node(node);
+        }
+        while !self.nodes[self.m_root].is_leaf() && self.nodes[self.m_root].m_count == 1 {
+            let old_root = self.m_root;
+            self.m_root = self.nodes[old_root].m_branch[0].m_child;
+            self.free_node(old_root);
+        }
+        self.m_size -= 1;
+        true
+    }
+
+    pub fn remove_all(&mut self) {
+        self.nodes.clear();
+        self.free_list.clear();
+        self.m_root = self.alloc_node();
+        self.m_size = 0;
+    }
+
+    pub fn search(
+        &self,
+        a_min: [f64; 3],
+        a_max: [f64; 3],
+        mut a_callback: impl FnMut(i32) -> bool,
+    ) -> i32 {
+        let rect = self.make_rect(a_min, a_max);
+        let mut count: i32 = 0;
+        self.search_internal(&rect, self.m_root, &mut count, &mut a_callback);
+        count
     }
 
     fn alloc_node(&mut self) -> usize {
         if let Some(idx) = self.free_list.pop() {
-            self.nodes[idx] = RTreeNode::new();
-            idx
-        } else {
-            let idx = self.nodes.len();
-            self.nodes.push(RTreeNode::new());
-            idx
+            self.nodes[idx] = Node::new();
+            return idx;
         }
+        self.nodes.push(Node::new());
+        self.nodes.len() - 1
     }
 
-    fn free_node(&mut self, idx: usize) {
-        self.free_list.push(idx);
-    }
-
-    #[allow(dead_code)]
-    fn free_subtree(&mut self, node_idx: usize) {
-        if !self.nodes[node_idx].is_leaf() {
-            let count = self.nodes[node_idx].m_count as usize;
-            let children: Vec<usize> = (0..count)
-                .map(|i| self.nodes[node_idx].m_branch[i].m_child)
-                .collect();
-            for child in children {
-                self.free_subtree(child);
-            }
-        }
-        self.free_node(node_idx);
+    fn free_node(&mut self, node: usize) {
+        self.free_list.push(node);
     }
 
     fn make_rect(&self, a_min: [f64; 3], a_max: [f64; 3]) -> Rect {
@@ -138,7 +176,7 @@ impl SpatialRTree {
     }
 
     fn calc_rect_volume(&self, rect: &Rect) -> f64 {
-        let mut volume = 1.0f64;
+        let mut volume = 1.0;
         for i in 0..3 {
             volume *= rect.m_max[i] - rect.m_min[i];
         }
@@ -163,47 +201,37 @@ impl SpatialRTree {
         true
     }
 
-    fn node_cover(&self, node_idx: usize) -> Rect {
-        let mut rect = self.nodes[node_idx].m_branch[0].m_rect;
-        let count = self.nodes[node_idx].m_count as usize;
-        for i in 1..count {
-            let br = self.nodes[node_idx].m_branch[i].m_rect;
-            rect = self.combine_rect(&rect, &br);
+    fn node_cover(&self, node: usize) -> Rect {
+        let mut rect = self.nodes[node].m_branch[0].m_rect;
+        for i in 1..self.nodes[node].m_count as usize {
+            rect = self.combine_rect(&rect, &self.nodes[node].m_branch[i].m_rect);
         }
         rect
     }
 
-    fn add_branch(
-        &mut self,
-        branch: Branch,
-        node_idx: usize,
-        new_node: &mut Option<usize>,
-    ) -> bool {
-        let count = self.nodes[node_idx].m_count as usize;
-        if count < MAXNODES {
-            self.nodes[node_idx].m_branch[count] = branch;
-            self.nodes[node_idx].m_count += 1;
-            false
-        } else {
-            let nn = self.split_node(node_idx, branch);
-            *new_node = Some(nn);
-            true
+    fn add_branch(&mut self, branch: Branch, node: usize) -> Option<usize> {
+        let count = self.nodes[node].m_count as usize;
+        if count == MAXNODES {
+            return Some(self.split_node(node, branch));
         }
+        self.nodes[node].m_branch[count] = branch;
+        self.nodes[node].m_count += 1;
+        None
     }
 
-    fn disconnect_branch(&mut self, node_idx: usize, index: usize) {
-        let last = self.nodes[node_idx].m_count as usize - 1;
-        self.nodes[node_idx].m_branch[index] = self.nodes[node_idx].m_branch[last];
-        self.nodes[node_idx].m_count -= 1;
+    fn disconnect_branch(&mut self, node: usize, index: usize) {
+        let last = self.nodes[node].m_count as usize - 1;
+        assert!(index <= last);
+        self.nodes[node].m_branch[index] = self.nodes[node].m_branch[last];
+        self.nodes[node].m_count -= 1;
     }
 
-    fn pick_branch(&self, rect: &Rect, node_idx: usize) -> usize {
-        let mut best_incr: f64 = -1.0;
-        let mut best_area: f64 = -1.0;
-        let mut best: usize = 0;
-        let count = self.nodes[node_idx].m_count as usize;
-        for i in 0..count {
-            let cur = self.nodes[node_idx].m_branch[i].m_rect;
+    fn pick_branch(&self, rect: &Rect, node: usize) -> usize {
+        let mut best_incr = -1.0;
+        let mut best_area = -1.0;
+        let mut best = 0;
+        for i in 0..self.nodes[node].m_count as usize {
+            let cur = self.nodes[node].m_branch[i].m_rect;
             let area = self.calc_rect_volume(&cur);
             let combined = self.combine_rect(rect, &cur);
             let incr = self.calc_rect_volume(&combined) - area;
@@ -216,21 +244,20 @@ impl SpatialRTree {
         best
     }
 
-    fn get_branches(&mut self, node_idx: usize, branch: Branch, part_vars: &mut PartitionVars) {
-        let count = self.nodes[node_idx].m_count as usize;
-        assert!(count == MAXNODES);
+    fn get_branches(&mut self, node: usize, branch: Branch, part_vars: &mut PartitionVars) {
+        assert!(self.nodes[node].m_count as usize == MAXNODES);
         for i in 0..MAXNODES {
-            part_vars.m_branch_buf[i] = self.nodes[node_idx].m_branch[i];
+            part_vars.m_branch_buf[i] = self.nodes[node].m_branch[i];
         }
         part_vars.m_branch_buf[MAXNODES] = branch;
         part_vars.m_branch_count = MAXNODES as i32 + 1;
-        let mut cover_split = part_vars.m_branch_buf[0].m_rect;
+        part_vars.m_cover_split = part_vars.m_branch_buf[0].m_rect;
         for i in 1..MAXNODES + 1 {
-            cover_split = self.combine_rect(&cover_split, &part_vars.m_branch_buf[i].m_rect);
+            part_vars.m_cover_split =
+                self.combine_rect(&part_vars.m_cover_split, &part_vars.m_branch_buf[i].m_rect);
         }
-        part_vars.m_cover_split = cover_split;
-        part_vars.m_cover_split_area = self.calc_rect_volume(&cover_split);
-        self.nodes[node_idx].m_count = 0;
+        part_vars.m_cover_split_area = self.calc_rect_volume(&part_vars.m_cover_split);
+        self.nodes[node].m_count = 0;
     }
 
     fn init_part_vars(&self, part_vars: &mut PartitionVars, max_rects: i32, min_fill: i32) {
@@ -251,26 +278,26 @@ impl SpatialRTree {
         if part_vars.m_count[group] == 0 {
             part_vars.m_cover[group] = part_vars.m_branch_buf[index].m_rect;
         } else {
-            let combined = self.combine_rect(
+            part_vars.m_cover[group] = self.combine_rect(
                 &part_vars.m_branch_buf[index].m_rect,
                 &part_vars.m_cover[group],
             );
-            part_vars.m_cover[group] = combined;
         }
         part_vars.m_area[group] = self.calc_rect_volume(&part_vars.m_cover[group]);
         part_vars.m_count[group] += 1;
     }
 
     fn pick_seeds(&self, part_vars: &mut PartitionVars) {
-        let mut seed0: usize = 0;
-        let mut seed1: usize = 1;
+        let mut seed0 = 0;
+        let mut seed1 = 1;
         let mut worst = -part_vars.m_cover_split_area - 1.0;
-        let mut area = [0.0f64; MAXNODES + 1];
-        for i in 0..part_vars.m_total as usize {
+        let mut area = [0.0; MAXNODES + 1];
+        let total = part_vars.m_total as usize;
+        for i in 0..total {
             area[i] = self.calc_rect_volume(&part_vars.m_branch_buf[i].m_rect);
         }
-        for i in 0..part_vars.m_total as usize - 1 {
-            for j in i + 1..part_vars.m_total as usize {
+        for i in 0..total - 1 {
+            for j in i + 1..total {
                 let combined = self.combine_rect(
                     &part_vars.m_branch_buf[i].m_rect,
                     &part_vars.m_branch_buf[j].m_rect,
@@ -295,41 +322,40 @@ impl SpatialRTree {
             && part_vars.m_count[0] < (part_vars.m_total - part_vars.m_min_fill)
             && part_vars.m_count[1] < (part_vars.m_total - part_vars.m_min_fill)
         {
-            let mut biggest_diff: f64 = -1.0;
-            let mut chosen: usize = 0;
-            let mut better_group: usize = 0;
+            let mut biggest_diff = -1.0;
+            let mut chosen = 0;
+            let mut better_group = 0;
             for i in 0..part_vars.m_total as usize {
-                if part_vars.m_partition[i] == NOT_TAKEN {
-                    let r0 =
-                        self.combine_rect(&part_vars.m_branch_buf[i].m_rect, &part_vars.m_cover[0]);
-                    let r1 =
-                        self.combine_rect(&part_vars.m_branch_buf[i].m_rect, &part_vars.m_cover[1]);
-                    let growth0 = self.calc_rect_volume(&r0) - part_vars.m_area[0];
-                    let growth1 = self.calc_rect_volume(&r1) - part_vars.m_area[1];
-                    let mut diff = growth1 - growth0;
-                    let group: usize;
-                    if diff >= 0.0 {
-                        group = 0;
-                    } else {
-                        group = 1;
-                        diff = -diff;
-                    }
-                    if diff > biggest_diff {
-                        biggest_diff = diff;
-                        chosen = i;
-                        better_group = group;
-                    } else if diff == biggest_diff
-                        && part_vars.m_count[group] < part_vars.m_count[better_group]
-                    {
-                        chosen = i;
-                        better_group = group;
-                    }
+                if part_vars.m_partition[i] != NOT_TAKEN {
+                    continue;
+                }
+                let r0 =
+                    self.combine_rect(&part_vars.m_branch_buf[i].m_rect, &part_vars.m_cover[0]);
+                let r1 =
+                    self.combine_rect(&part_vars.m_branch_buf[i].m_rect, &part_vars.m_cover[1]);
+                let growth0 = self.calc_rect_volume(&r0) - part_vars.m_area[0];
+                let growth1 = self.calc_rect_volume(&r1) - part_vars.m_area[1];
+                let mut diff = growth1 - growth0;
+                let mut group = 0;
+                if diff < 0.0 {
+                    group = 1;
+                    diff = -diff;
+                }
+                if diff > biggest_diff {
+                    biggest_diff = diff;
+                    chosen = i;
+                    better_group = group;
+                } else if diff == biggest_diff
+                    && part_vars.m_count[group] < part_vars.m_count[better_group]
+                {
+                    chosen = i;
+                    better_group = group;
                 }
             }
             self.classify_branch(chosen, better_group, part_vars);
         }
         if (part_vars.m_count[0] + part_vars.m_count[1]) < part_vars.m_total {
-            let group: usize = if part_vars.m_count[0] >= part_vars.m_total - part_vars.m_min_fill {
+            let group = if part_vars.m_count[0] >= part_vars.m_total - part_vars.m_min_fill {
                 1
             } else {
                 0
@@ -344,114 +370,94 @@ impl SpatialRTree {
 
     fn load_nodes(&mut self, node_a: usize, node_b: usize, part_vars: &mut PartitionVars) {
         for i in 0..part_vars.m_total as usize {
-            let g = part_vars.m_partition[i] as usize;
-            let target = if g == 0 { node_a } else { node_b };
-            let branch = part_vars.m_branch_buf[i];
-            let mut dummy: Option<usize> = None;
-            self.add_branch(branch, target, &mut dummy);
+            let target = if part_vars.m_partition[i] == 0 {
+                node_a
+            } else {
+                node_b
+            };
+            self.add_branch(part_vars.m_branch_buf[i], target);
         }
     }
 
-    fn split_node(&mut self, node_idx: usize, branch: Branch) -> usize {
+    fn split_node(&mut self, node: usize, branch: Branch) -> usize {
         let mut part_vars = PartitionVars::new();
-        self.get_branches(node_idx, branch, &mut part_vars);
+        self.get_branches(node, branch, &mut part_vars);
         self.choose_partition(&mut part_vars, MINNODES as i32);
         let new_node = self.alloc_node();
-        let level = self.nodes[node_idx].m_level;
-        self.nodes[new_node].m_level = level;
-        self.load_nodes(node_idx, new_node, &mut part_vars);
+        self.nodes[new_node].m_level = self.nodes[node].m_level;
+        self.load_nodes(node, new_node, &mut part_vars);
         new_node
     }
 
-    fn insert_rect_rec(&mut self, branch: Branch, node_idx: usize, level: i32) -> Option<usize> {
-        let node_level = self.nodes[node_idx].m_level;
-        if node_level > level {
-            let idx = self.pick_branch(&branch.m_rect, node_idx);
-            let branch_rect = branch.m_rect;
-            let child_idx = self.nodes[node_idx].m_branch[idx].m_child;
-            let other = self.insert_rect_rec(branch, child_idx, level);
-            if other.is_none() {
-                let br_rect = self.nodes[node_idx].m_branch[idx].m_rect;
-                let combined = self.combine_rect(&br_rect, &branch_rect);
-                self.nodes[node_idx].m_branch[idx].m_rect = combined;
-                None
-            } else {
-                let new_idx = other.unwrap();
-                let child_cover = self.node_cover(child_idx);
-                self.nodes[node_idx].m_branch[idx].m_rect = child_cover;
-                let new_cover = self.node_cover(new_idx);
-                let new_b = Branch {
-                    m_rect: new_cover,
-                    m_child: new_idx,
-                    m_data: 0,
-                };
-                let mut out: Option<usize> = None;
-                self.add_branch(new_b, node_idx, &mut out);
-                out
-            }
-        } else if node_level == level {
-            let mut out: Option<usize> = None;
-            self.add_branch(branch, node_idx, &mut out);
-            out
-        } else {
-            unreachable!()
+    fn insert_rect_rec(&mut self, branch: Branch, node: usize, level: i32) -> Option<usize> {
+        if self.nodes[node].m_level == level {
+            return self.add_branch(branch, node);
         }
+        assert!(self.nodes[node].m_level > level);
+        let idx = self.pick_branch(&branch.m_rect, node);
+        let child = self.nodes[node].m_branch[idx].m_child;
+        let other = self.insert_rect_rec(branch, child, level);
+        if other.is_none() {
+            self.nodes[node].m_branch[idx].m_rect =
+                self.combine_rect(&self.nodes[node].m_branch[idx].m_rect, &branch.m_rect);
+            return None;
+        }
+        self.nodes[node].m_branch[idx].m_rect = self.node_cover(child);
+        let new_b = Branch {
+            m_rect: self.node_cover(other.unwrap()),
+            m_child: other.unwrap(),
+            m_data: 0,
+        };
+        self.add_branch(new_b, node)
     }
 
     fn insert_branch_internal(&mut self, branch: Branch, level: i32) {
         let root = self.m_root;
-        let maybe_split = self.insert_rect_rec(branch, root, level);
-        if let Some(new_node) = maybe_split {
-            let old_root = self.m_root;
-            let new_root = self.alloc_node();
-            let old_level = self.nodes[old_root].m_level;
-            self.nodes[new_root].m_level = old_level + 1;
-            let b1 = Branch {
-                m_rect: self.node_cover(old_root),
-                m_child: old_root,
-                m_data: 0,
-            };
-            let b2 = Branch {
-                m_rect: self.node_cover(new_node),
-                m_child: new_node,
-                m_data: 0,
-            };
-            let mut dummy: Option<usize> = None;
-            self.add_branch(b1, new_root, &mut dummy);
-            self.add_branch(b2, new_root, &mut dummy);
-            self.m_root = new_root;
+        let new_node = self.insert_rect_rec(branch, root, level);
+        if new_node.is_none() {
+            return;
         }
+        let old_root = self.m_root;
+        self.m_root = self.alloc_node();
+        self.nodes[self.m_root].m_level = self.nodes[old_root].m_level + 1;
+        let b1 = Branch {
+            m_rect: self.node_cover(old_root),
+            m_child: old_root,
+            m_data: 0,
+        };
+        let b2 = Branch {
+            m_rect: self.node_cover(new_node.unwrap()),
+            m_child: new_node.unwrap(),
+            m_data: 0,
+        };
+        let root = self.m_root;
+        self.add_branch(b1, root);
+        self.add_branch(b2, root);
     }
 
     fn search_internal(
         &self,
         rect: &Rect,
-        node_idx: usize,
+        node: usize,
         count: &mut i32,
         callback: &mut impl FnMut(i32) -> bool,
     ) -> bool {
-        if self.nodes[node_idx].is_leaf() {
-            let node_count = self.nodes[node_idx].m_count as usize;
-            for i in 0..node_count {
-                let br_rect = self.nodes[node_idx].m_branch[i].m_rect;
-                if self.overlaps(rect, &br_rect) {
-                    *count += 1;
-                    let br_data = self.nodes[node_idx].m_branch[i].m_data;
-                    if !callback(br_data) {
-                        return false;
-                    }
-                }
+        for i in 0..self.nodes[node].m_count as usize {
+            if !self.overlaps(rect, &self.nodes[node].m_branch[i].m_rect) {
+                continue;
             }
-        } else {
-            let node_count = self.nodes[node_idx].m_count as usize;
-            for i in 0..node_count {
-                let br_rect = self.nodes[node_idx].m_branch[i].m_rect;
-                if self.overlaps(rect, &br_rect) {
-                    let child = self.nodes[node_idx].m_branch[i].m_child;
-                    if !self.search_internal(rect, child, count, callback) {
-                        return false;
-                    }
+            if self.nodes[node].is_leaf() {
+                *count += 1;
+                if !callback(self.nodes[node].m_branch[i].m_data) {
+                    return false;
                 }
+            } else if !self.search_internal(
+                rect,
+                self.nodes[node].m_branch[i].m_child,
+                count,
+                callback,
+            ) {
+                return false;
             }
         }
         true
@@ -461,104 +467,32 @@ impl SpatialRTree {
         &mut self,
         rect: &Rect,
         data: i32,
-        node_idx: usize,
+        node: usize,
         reinsert_list: &mut Vec<usize>,
     ) -> bool {
-        if self.nodes[node_idx].is_leaf() {
-            let count = self.nodes[node_idx].m_count as usize;
-            for i in 0..count {
-                let br_data = self.nodes[node_idx].m_branch[i].m_data;
-                let br_rect = self.nodes[node_idx].m_branch[i].m_rect;
-                if br_data == data && self.overlaps(rect, &br_rect) {
-                    self.disconnect_branch(node_idx, i);
-                    return true;
+        for i in 0..self.nodes[node].m_count as usize {
+            if !self.overlaps(rect, &self.nodes[node].m_branch[i].m_rect) {
+                continue;
+            }
+            if self.nodes[node].is_leaf() {
+                if self.nodes[node].m_branch[i].m_data != data {
+                    continue;
                 }
+                self.disconnect_branch(node, i);
+                return true;
             }
-            false
-        } else {
-            let count = self.nodes[node_idx].m_count as usize;
-            for i in 0..count {
-                let child_rect = self.nodes[node_idx].m_branch[i].m_rect;
-                if self.overlaps(rect, &child_rect) {
-                    let child_idx = self.nodes[node_idx].m_branch[i].m_child;
-                    if self.remove_rect_internal(rect, data, child_idx, reinsert_list) {
-                        let child_count = self.nodes[child_idx].m_count;
-                        if child_count >= MINNODES as i32 {
-                            let new_cover = self.node_cover(child_idx);
-                            self.nodes[node_idx].m_branch[i].m_rect = new_cover;
-                        } else {
-                            reinsert_list.push(child_idx);
-                            self.disconnect_branch(node_idx, i);
-                        }
-                        return true;
-                    }
-                }
+            let child = self.nodes[node].m_branch[i].m_child;
+            if !self.remove_rect_internal(rect, data, child, reinsert_list) {
+                continue;
             }
-            false
-        }
-    }
-
-    pub fn insert(&mut self, a_min: [f64; 3], a_max: [f64; 3], a_data: i32) {
-        let branch = Branch {
-            m_rect: self.make_rect(a_min, a_max),
-            m_child: NULL_IDX,
-            m_data: a_data,
-        };
-        self.insert_branch_internal(branch, 0);
-        self.m_size += 1;
-    }
-
-    pub fn remove(&mut self, a_min: [f64; 3], a_max: [f64; 3], a_data: i32) -> bool {
-        let rect = self.make_rect(a_min, a_max);
-        let mut reinsert_list: Vec<usize> = Vec::new();
-        let root = self.m_root;
-        if !self.remove_rect_internal(&rect, a_data, root, &mut reinsert_list) {
-            return false;
-        }
-        for node_idx in reinsert_list {
-            let count = self.nodes[node_idx].m_count;
-            let level = self.nodes[node_idx].m_level;
-            for i in 0..count as usize {
-                let branch = self.nodes[node_idx].m_branch[i];
-                self.insert_branch_internal(branch, level);
-            }
-            self.free_node(node_idx);
-        }
-        loop {
-            let root = self.m_root;
-            if !self.nodes[root].is_leaf() && self.nodes[root].m_count == 1 {
-                let child = self.nodes[root].m_branch[0].m_child;
-                self.free_node(root);
-                self.m_root = child;
+            if self.nodes[child].m_count as usize >= MINNODES {
+                self.nodes[node].m_branch[i].m_rect = self.node_cover(child);
             } else {
-                break;
+                reinsert_list.push(child);
+                self.disconnect_branch(node, i);
             }
+            return true;
         }
-        self.m_size -= 1;
-        true
-    }
-
-    pub fn search(
-        &self,
-        a_min: [f64; 3],
-        a_max: [f64; 3],
-        mut a_callback: impl FnMut(i32) -> bool,
-    ) -> i32 {
-        let rect = self.make_rect(a_min, a_max);
-        let mut count: i32 = 0;
-        self.search_internal(&rect, self.m_root, &mut count, &mut a_callback);
-        count
-    }
-
-    pub fn remove_all(&mut self) {
-        self.nodes.clear();
-        self.free_list.clear();
-        let root = self.alloc_node();
-        self.m_root = root;
-        self.m_size = 0;
-    }
-
-    pub fn count(&self) -> i32 {
-        self.m_size
+        false
     }
 }

@@ -9,11 +9,8 @@ pub fn run_vertex_constructor() -> TestResult {
     MINI_TEST!("Constructor", {
         use crate::Vertex;
 
-        // Default constructor
         let v0 = Vertex::default();
-
-        // Constructor with name + attribute
-        let v = Vertex::new(Some("v_named".to_string()), Some("attr".to_string()));
+        let v = Vertex::new("v_named", "attr");
 
         MINI_CHECK!(v0.name == "my_vertex");
         MINI_CHECK!(v0.attribute == "");
@@ -25,11 +22,15 @@ pub fn run_vertex_constructor() -> TestResult {
 
 pub fn run_vertex_json_roundtrip() -> TestResult {
     MINI_TEST!("Json Roundtrip", {
-        use crate::file_encoders::{file_json_dump, file_json_load};
+        use crate::file_encoders::file_json_dump;
+        use crate::file_encoders::file_json_load;
         use crate::Vertex;
-        let original = Vertex::new(Some("v0".to_string()), Some("test_attribute".to_string()));
-        file_json_dump(&original, "serialization/test_vertex.json", false).unwrap();
-        let loaded = file_json_load::<Vertex>("serialization/test_vertex.json").unwrap();
+
+        let original = Vertex::new("v0", "test_attribute");
+
+        let fname = "serialization/test_vertex.json";
+        file_json_dump(&original, fname, false).unwrap();
+        let loaded = file_json_load::<Vertex>(fname).unwrap();
 
         MINI_CHECK!(loaded.name == original.name);
         MINI_CHECK!(loaded.attribute == original.attribute);
@@ -44,13 +45,7 @@ pub fn run_edge_constructor() -> TestResult {
     MINI_TEST!("Constructor", {
         use crate::Edge;
 
-        // Constructor with v0/v1/attribute
-        let e = Edge::new(
-            Some("my_edge".to_string()),
-            Some("a".to_string()),
-            Some("b".to_string()),
-            Some("attr".to_string()),
-        );
+        let e = Edge::new("a", "b", "attr");
 
         MINI_CHECK!(e.v0 == "a");
         MINI_CHECK!(e.v1 == "b");
@@ -61,16 +56,15 @@ pub fn run_edge_constructor() -> TestResult {
 
 pub fn run_edge_json_roundtrip() -> TestResult {
     MINI_TEST!("Json Roundtrip", {
-        use crate::file_encoders::{file_json_dump, file_json_load};
+        use crate::file_encoders::file_json_dump;
+        use crate::file_encoders::file_json_load;
         use crate::Edge;
-        let original = Edge::new(
-            Some("my_edge".to_string()),
-            Some("v0".to_string()),
-            Some("v1".to_string()),
-            Some("test_edge_attr".to_string()),
-        );
-        file_json_dump(&original, "serialization/test_edge.json", false).unwrap();
-        let loaded = file_json_load::<Edge>("serialization/test_edge.json").unwrap();
+
+        let original = Edge::new("v0", "v1", "test_edge_attr");
+
+        let fname = "serialization/test_edge.json";
+        file_json_dump(&original, fname, false).unwrap();
+        let loaded = file_json_load::<Edge>(fname).unwrap();
 
         MINI_CHECK!(loaded.name == original.name);
         MINI_CHECK!(loaded.v0 == original.v0);
@@ -81,12 +75,8 @@ pub fn run_edge_json_roundtrip() -> TestResult {
 pub fn run_edge_vertices() -> TestResult {
     MINI_TEST!("Vertices", {
         use crate::Edge;
-        let e = Edge::new(
-            Some("my_edge".to_string()),
-            Some("a".to_string()),
-            Some("b".to_string()),
-            None,
-        );
+
+        let e = Edge::new("a", "b", "");
         let (u, v) = e.vertices();
 
         MINI_CHECK!(u == "a" && v == "b");
@@ -96,12 +86,8 @@ pub fn run_edge_vertices() -> TestResult {
 pub fn run_edge_connects() -> TestResult {
     MINI_TEST!("Connects", {
         use crate::Edge;
-        let e = Edge::new(
-            Some("my_edge".to_string()),
-            Some("a".to_string()),
-            Some("b".to_string()),
-            None,
-        );
+
+        let e = Edge::new("a", "b", "");
 
         MINI_CHECK!(e.connects("a"));
         MINI_CHECK!(e.connects("b"));
@@ -112,12 +98,8 @@ pub fn run_edge_connects() -> TestResult {
 pub fn run_edge_other_vertex() -> TestResult {
     MINI_TEST!("Other Vertex", {
         use crate::Edge;
-        let e = Edge::new(
-            Some("my_edge".to_string()),
-            Some("a".to_string()),
-            Some("b".to_string()),
-            None,
-        );
+
+        let e = Edge::new("a", "b", "");
 
         MINI_CHECK!(e.other_vertex("a") == "b");
         MINI_CHECK!(e.other_vertex("b") == "a");
@@ -132,29 +114,31 @@ pub fn run_graph_constructor() -> TestResult {
     MINI_TEST!("Constructor", {
         use crate::Graph;
 
-        // Default constructor
         let g0 = Graph::default();
-
-        // Constructor with name
         let g = Graph::new("my_named_graph");
+        let gstr = g0.str();
 
         MINI_CHECK!(g0.name == "my_graph");
         MINI_CHECK!(!g0.guid().is_empty());
+        MINI_CHECK!(g0.vertex_count == 0);
+        MINI_CHECK!(g0.edge_count == 0);
         MINI_CHECK!(g.name == "my_named_graph");
+        MINI_CHECK!(gstr.contains("my_graph"));
     })
 }
 
 pub fn run_graph_json_roundtrip() -> TestResult {
     MINI_TEST!("Json Roundtrip", {
         use crate::Graph;
+
         let mut original = Graph::new("test_graph");
         original.add_node("node1", "Node 1");
         original.add_node("node2", "Node 2");
         original.add_edge("node1", "node2", "edge1");
-        original
-            .file_json_dump("serialization/test_graph.json")
-            .unwrap();
-        let loaded = Graph::file_json_load("serialization/test_graph.json").unwrap();
+
+        let fname = "serialization/test_graph.json";
+        original.file_json_dump(fname).unwrap();
+        let loaded = Graph::file_json_load(fname).unwrap();
 
         MINI_CHECK!(loaded.number_of_vertices() == 2);
         MINI_CHECK!(loaded.number_of_edges() == 1);
@@ -165,12 +149,15 @@ pub fn run_graph_json_roundtrip() -> TestResult {
 pub fn run_graph_protobuf_roundtrip() -> TestResult {
     MINI_TEST!("Protobuf Roundtrip", {
         use crate::Graph;
+
         let mut original = Graph::new("test_graph");
         original.add_node("node1", "Node 1");
         original.add_node("node2", "Node 2");
         original.add_edge("node1", "node2", "edge1");
-        original.pb_dump("serialization/test_graph.bin");
-        let loaded = Graph::pb_load("serialization/test_graph.bin");
+
+        let filename = "serialization/test_graph.bin";
+        original.pb_dump(filename);
+        let loaded = Graph::pb_load(filename);
 
         MINI_CHECK!(loaded.number_of_vertices() == 2);
         MINI_CHECK!(loaded.number_of_edges() == 1);
@@ -181,6 +168,7 @@ pub fn run_graph_protobuf_roundtrip() -> TestResult {
 pub fn run_graph_has_node() -> TestResult {
     MINI_TEST!("Has Node", {
         use crate::Graph;
+
         let mut g = Graph::new("g");
         g.add_node("a", "");
 
@@ -192,6 +180,7 @@ pub fn run_graph_has_node() -> TestResult {
 pub fn run_graph_has_edge() -> TestResult {
     MINI_TEST!("Has Edge", {
         use crate::Graph;
+
         let mut g = Graph::new("g");
         g.add_edge("a", "b", "");
 
@@ -202,27 +191,26 @@ pub fn run_graph_has_edge() -> TestResult {
 
 pub fn run_graph_has_guid() -> TestResult {
     MINI_TEST!("Has Guid", {
-        use crate::graph::{Edge, Vertex};
-        // A guid is lazily minted, so ASKING for one creates it. The writers used to ask for
-        // every vertex and edge, which minted 34,592 UUIDs for one drawing sheet and wrote
-        // 1.3 MB of them into a file whose reader discards them. has_guid() answers without
-        // minting, so a thing nobody names never pays for one.
-        let v = Vertex::new(Some("a".to_string()), None);
-        let e = Edge::new(None, Some("a".to_string()), Some("b".to_string()), None);
+        use crate::Edge;
+        use crate::Vertex;
 
-        MINI_CHECK!(!v.has_guid()); // nobody has asked
+        let v = Vertex::new("a", "");
+        let e = Edge::new("a", "b", "");
+
+        MINI_CHECK!(!v.has_guid());
         MINI_CHECK!(!e.has_guid());
 
         let minted = v.guid().to_string();
         MINI_CHECK!(!minted.is_empty());
-        MINI_CHECK!(v.has_guid()); // asking created it
-        MINI_CHECK!(v.guid() == minted); // and it is stable
+        MINI_CHECK!(v.has_guid());
+        MINI_CHECK!(v.guid() == minted);
     })
 }
 
 pub fn run_graph_add_node() -> TestResult {
     MINI_TEST!("Add Node", {
         use crate::Graph;
+
         let mut g = Graph::new("g");
         let key = g.add_node("a", "");
 
@@ -235,6 +223,7 @@ pub fn run_graph_add_node() -> TestResult {
 pub fn run_graph_add_edge() -> TestResult {
     MINI_TEST!("Add Edge", {
         use crate::Graph;
+
         let mut g = Graph::new("g");
         let edge = g.add_edge("a", "b", "");
         let (u, v) = edge;
@@ -247,6 +236,7 @@ pub fn run_graph_add_edge() -> TestResult {
 pub fn run_graph_remove_node() -> TestResult {
     MINI_TEST!("Remove Node", {
         use crate::Graph;
+
         let mut g = Graph::new("g");
         g.add_edge("a", "b", "");
         g.remove_node("a");
@@ -259,6 +249,7 @@ pub fn run_graph_remove_node() -> TestResult {
 pub fn run_graph_remove_edge() -> TestResult {
     MINI_TEST!("Remove Edge", {
         use crate::Graph;
+
         let mut g = Graph::new("g");
         g.add_edge("a", "b", "");
         g.remove_edge(("a", "b"));
@@ -272,6 +263,7 @@ pub fn run_graph_remove_edge() -> TestResult {
 pub fn run_graph_get_vertices() -> TestResult {
     MINI_TEST!("Get Vertices", {
         use crate::Graph;
+
         let mut g = Graph::new("g");
         g.add_node("a", "");
         g.add_node("b", "");
@@ -285,6 +277,7 @@ pub fn run_graph_get_vertices() -> TestResult {
 pub fn run_graph_get_edges() -> TestResult {
     MINI_TEST!("Get Edges", {
         use crate::Graph;
+
         let mut g = Graph::new("g");
         g.add_edge("a", "b", "");
         g.add_edge("b", "c", "");
@@ -298,6 +291,7 @@ pub fn run_graph_get_edges() -> TestResult {
 pub fn run_graph_neighbors() -> TestResult {
     MINI_TEST!("Neighbors", {
         use crate::Graph;
+
         let mut g = Graph::new("g");
         g.add_edge("a", "b", "");
         g.add_edge("a", "c", "");
@@ -311,6 +305,7 @@ pub fn run_graph_neighbors() -> TestResult {
 pub fn run_graph_get_neighbors() -> TestResult {
     MINI_TEST!("Get Neighbors", {
         use crate::Graph;
+
         let mut g = Graph::new("g");
         g.add_edge("a", "b", "");
         g.add_edge("a", "c", "");
@@ -324,6 +319,7 @@ pub fn run_graph_get_neighbors() -> TestResult {
 pub fn run_graph_number_of_vertices() -> TestResult {
     MINI_TEST!("Number Of Vertices", {
         use crate::Graph;
+
         let mut g = Graph::new("g");
         g.add_node("a", "");
         g.add_node("b", "");
@@ -336,6 +332,7 @@ pub fn run_graph_number_of_vertices() -> TestResult {
 pub fn run_graph_number_of_edges() -> TestResult {
     MINI_TEST!("Number Of Edges", {
         use crate::Graph;
+
         let mut g = Graph::new("g");
         g.add_edge("a", "b", "");
         g.add_edge("b", "c", "");
@@ -347,6 +344,7 @@ pub fn run_graph_number_of_edges() -> TestResult {
 pub fn run_graph_clear() -> TestResult {
     MINI_TEST!("Clear", {
         use crate::Graph;
+
         let mut g = Graph::new("g");
         g.add_edge("a", "b", "");
         g.clear();
@@ -359,6 +357,7 @@ pub fn run_graph_clear() -> TestResult {
 pub fn run_graph_node_attribute() -> TestResult {
     MINI_TEST!("Node Attribute", {
         use crate::Graph;
+
         let mut g = Graph::new("g");
         g.add_node("a", "initial");
         g.node_attribute("a", Some("updated"));
@@ -370,6 +369,7 @@ pub fn run_graph_node_attribute() -> TestResult {
 pub fn run_graph_edge_attribute() -> TestResult {
     MINI_TEST!("Edge Attribute", {
         use crate::Graph;
+
         let mut g = Graph::new("g");
         g.add_edge("a", "b", "initial");
         g.edge_attribute("a", "b", Some("updated"));
@@ -381,6 +381,7 @@ pub fn run_graph_edge_attribute() -> TestResult {
 pub fn run_graph_bfs() -> TestResult {
     MINI_TEST!("Bfs", {
         use crate::Graph;
+
         let mut g = Graph::new("g");
         g.add_edge("a", "b", "");
         g.add_edge("b", "c", "");
@@ -396,6 +397,7 @@ pub fn run_graph_bfs() -> TestResult {
 pub fn run_graph_dfs() -> TestResult {
     MINI_TEST!("Dfs", {
         use crate::Graph;
+
         let mut g = Graph::new("g");
         g.add_edge("a", "b", "");
         g.add_edge("b", "c", "");
@@ -411,6 +413,7 @@ pub fn run_graph_dfs() -> TestResult {
 pub fn run_graph_connected_components() -> TestResult {
     MINI_TEST!("Connected Components", {
         use crate::Graph;
+
         let mut g = Graph::new("g");
         g.add_edge("a", "b", "");
         g.add_edge("b", "c", "");
@@ -428,6 +431,7 @@ pub fn run_graph_connected_components() -> TestResult {
 pub fn run_graph_shortest_path() -> TestResult {
     MINI_TEST!("Shortest Path", {
         use crate::Graph;
+
         let mut g = Graph::new("g");
         g.add_edge("a", "b", "");
         g.add_edge("b", "c", "");
@@ -445,6 +449,7 @@ pub fn run_graph_shortest_path() -> TestResult {
 pub fn run_graph_has_cycle() -> TestResult {
     MINI_TEST!("Has Cycle", {
         use crate::Graph;
+
         let mut g = Graph::new("g");
         g.add_edge("a", "b", "");
         g.add_edge("b", "c", "");
@@ -461,6 +466,7 @@ pub fn run_graph_has_cycle() -> TestResult {
 pub fn run_graph_cycle_basis() -> TestResult {
     MINI_TEST!("Cycle Basis", {
         use crate::Graph;
+
         let mut g = Graph::new("g");
         g.add_edge("a", "b", "");
         g.add_edge("b", "c", "");

@@ -111,11 +111,11 @@ pub fn run_intersection_plane_plane() -> TestResult {
 
         let p0 = Point::new(0.0, 0.0, 0.0);
         let n0 = Vector::new(0.0, 0.0, 1.0);
-        let plane0 = Plane::from_point_normal(p0, n0);
+        let plane0 = Plane::from_point_normal(p0, n0, None);
 
         let p1 = Point::new(0.0, 0.0, 0.0);
         let n1 = Vector::new(0.0, 1.0, 0.0);
-        let plane1 = Plane::from_point_normal(p1, n1);
+        let plane1 = Plane::from_point_normal(p1, n1, None);
 
         let output = intersection::plane_plane(&plane0, &plane1);
 
@@ -172,7 +172,7 @@ pub fn run_intersection_line_plane() -> TestResult {
 
         let p = Point::new(0.0, 0.0, 1.0);
         let n = Vector::new(0.0, 0.0, 1.0);
-        let plane = Plane::from_point_normal(p, n);
+        let plane = Plane::from_point_normal(p, n, None);
 
         let line = Line::new(0.0, 0.0, 0.0, 0.0, 0.0, 2.0);
 
@@ -196,7 +196,7 @@ pub fn run_intersection_line_plane_parallel() -> TestResult {
 
         let p = Point::new(0.0, 0.0, 1.0);
         let n = Vector::new(0.0, 0.0, 1.0);
-        let plane = Plane::from_point_normal(p, n);
+        let plane = Plane::from_point_normal(p, n, None);
 
         let line = Line::new(0.0, 0.0, 0.0, 1.0, 0.0, 0.0);
 
@@ -272,15 +272,15 @@ pub fn run_intersection_plane_plane_plane_parallel() -> TestResult {
 
         let p0 = Point::new(0.0, 0.0, 0.0);
         let n0 = Vector::new(0.0, 0.0, 1.0);
-        let plane0 = Plane::from_point_normal(p0, n0);
+        let plane0 = Plane::from_point_normal(p0, n0, None);
 
         let p1 = Point::new(0.0, 0.0, 1.0);
         let n1 = Vector::new(0.0, 0.0, 1.0);
-        let plane1 = Plane::from_point_normal(p1, n1);
+        let plane1 = Plane::from_point_normal(p1, n1, None);
 
         let p2 = Point::new(0.0, 0.0, 0.0);
         let n2 = Vector::new(1.0, 0.0, 0.0);
-        let plane2 = Plane::from_point_normal(p2, n2);
+        let plane2 = Plane::from_point_normal(p2, n2, None);
 
         let output = intersection::plane_plane_plane(&plane0, &plane1, &plane2);
 
@@ -298,6 +298,7 @@ pub fn run_intersection_ray_box() -> TestResult {
         let box_ = OBB::from_points(
             &[Point::new(-1.0, -1.0, -1.0), Point::new(1.0, 1.0, 1.0)],
             0.0,
+            None,
         );
         let line = Line::new(-5.0, 0.0, 0.0, -4.0, 0.0, 0.0);
         let points = intersection::ray_box(&line, &box_, 0.0, 100.0);
@@ -319,6 +320,7 @@ pub fn run_intersection_ray_box_miss() -> TestResult {
         let box_ = OBB::from_points(
             &[Point::new(-1.0, -1.0, -1.0), Point::new(1.0, 1.0, 1.0)],
             0.0,
+            None,
         );
         let line = Line::new(-5.0, 5.0, 0.0, -4.0, 5.0, 0.0);
         let points = intersection::ray_box(&line, &box_, 0.0, 100.0);
@@ -646,7 +648,7 @@ pub fn run_intersection_ray_box_real_world() -> TestResult {
         let l0 = Line::new(500.0, -573.576, -819.152, 500.0, 573.576, 819.152);
         let min_pt = Point::new(214.0, 192.0, 484.0);
         let max_pt = Point::new(694.0, 567.0, 796.0);
-        let box_ = OBB::from_points(&[min_pt, max_pt], 0.0);
+        let box_ = OBB::from_points(&[min_pt, max_pt], 0.0, None);
         let points = intersection::ray_box(&l0, &box_, 0.0, 1000.0);
 
         MINI_CHECK!(points.is_some());
@@ -720,7 +722,8 @@ pub fn run_intersection_surface_plane() -> TestResult {
             Point::new(10.0, 10.0, 10.0),
         ];
         let srf = NurbsSurface::create(false, false, 1, 1, 2, 2, &pts).unwrap();
-        let plane = Plane::from_point_normal(Point::new(0.0, 0.0, 5.0), Vector::new(0.0, 0.0, 1.0));
+        let plane =
+            Plane::from_point_normal(Point::new(0.0, 0.0, 5.0), Vector::new(0.0, 0.0, 1.0), None);
         let curves = intersection::surface_plane(&srf, &plane, None);
 
         MINI_CHECK!(curves.len() == 1);
@@ -757,7 +760,8 @@ pub fn run_intersection_surface_plane_curved() -> TestResult {
             }
         }
         let srf = NurbsSurface::create(false, false, 3, 3, 4, 4, &pts).unwrap();
-        let plane = Plane::from_point_normal(Point::new(0.0, 0.0, 3.0), Vector::new(0.0, 0.0, 1.0));
+        let plane =
+            Plane::from_point_normal(Point::new(0.0, 0.0, 3.0), Vector::new(0.0, 0.0, 1.0), None);
         let curves = intersection::surface_plane(&srf, &plane, None);
 
         MINI_CHECK!(curves.len() >= 1);
@@ -787,7 +791,8 @@ pub fn run_intersection_surface_plane_miss() -> TestResult {
             Point::new(10.0, 10.0, 0.0),
         ];
         let srf = NurbsSurface::create(false, false, 1, 1, 2, 2, &pts).unwrap();
-        let plane = Plane::from_point_normal(Point::new(0.0, 0.0, 5.0), Vector::new(0.0, 0.0, 1.0));
+        let plane =
+            Plane::from_point_normal(Point::new(0.0, 0.0, 5.0), Vector::new(0.0, 0.0, 1.0), None);
         let curves = intersection::surface_plane(&srf, &plane, None);
 
         MINI_CHECK!(curves.len() == 0);
@@ -803,7 +808,8 @@ pub fn run_intersection_surface_plane_uv() -> TestResult {
         use crate::Vector;
 
         let cyl = Primitives::cylinder_surface(0.0, 0.0, 0.0, 1.0, 4.0);
-        let plane = Plane::from_point_normal(Point::new(0.0, 0.0, 2.0), Vector::new(0.3, 0.0, 1.0));
+        let plane =
+            Plane::from_point_normal(Point::new(0.0, 0.0, 2.0), Vector::new(0.3, 0.0, 1.0), None);
         let pairs = intersection::surface_plane_uv(&cyl, &plane, None);
 
         MINI_CHECK!(pairs.len() == 1);
@@ -835,7 +841,7 @@ pub fn run_intersection_surface_plane_uv() -> TestResult {
 
         let torus = Primitives::torus_surface(0.0, 0.0, 0.0, 2.0, 0.5);
         let plane2 =
-            Plane::from_point_normal(Point::new(0.0, 0.0, 0.0), Vector::new(0.0, 0.0, 1.0));
+            Plane::from_point_normal(Point::new(0.0, 0.0, 0.0), Vector::new(0.0, 0.0, 1.0), None);
         let pairs2 = intersection::surface_plane_uv(&torus, &plane2, None);
 
         MINI_CHECK!(pairs2.len() == 2);
@@ -1050,22 +1056,40 @@ pub fn run_intersection_plane_plane_plane_check_parallel() -> TestResult {
         use crate::{Plane, Vector};
 
         // Two parallel planes → should return None
-        let p0 =
-            Plane::from_point_normal(crate::Point::new(0.0, 0.0, 0.0), Vector::new(0.0, 0.0, 1.0));
-        let p1 =
-            Plane::from_point_normal(crate::Point::new(0.0, 0.0, 1.0), Vector::new(0.0, 0.0, 1.0));
-        let p2 =
-            Plane::from_point_normal(crate::Point::new(0.0, 0.0, 2.0), Vector::new(0.0, 0.0, 1.0));
+        let p0 = Plane::from_point_normal(
+            crate::Point::new(0.0, 0.0, 0.0),
+            Vector::new(0.0, 0.0, 1.0),
+            None,
+        );
+        let p1 = Plane::from_point_normal(
+            crate::Point::new(0.0, 0.0, 1.0),
+            Vector::new(0.0, 0.0, 1.0),
+            None,
+        );
+        let p2 = Plane::from_point_normal(
+            crate::Point::new(0.0, 0.0, 2.0),
+            Vector::new(0.0, 0.0, 1.0),
+            None,
+        );
 
         MINI_CHECK!(intersection::plane_plane_plane_check(&p0, &p1, &p2, 0.1).is_none());
 
         // Three valid planes
-        let px =
-            Plane::from_point_normal(crate::Point::new(1.0, 0.0, 0.0), Vector::new(1.0, 0.0, 0.0));
-        let py =
-            Plane::from_point_normal(crate::Point::new(0.0, 2.0, 0.0), Vector::new(0.0, 1.0, 0.0));
-        let pz =
-            Plane::from_point_normal(crate::Point::new(0.0, 0.0, 3.0), Vector::new(0.0, 0.0, 1.0));
+        let px = Plane::from_point_normal(
+            crate::Point::new(1.0, 0.0, 0.0),
+            Vector::new(1.0, 0.0, 0.0),
+            None,
+        );
+        let py = Plane::from_point_normal(
+            crate::Point::new(0.0, 2.0, 0.0),
+            Vector::new(0.0, 1.0, 0.0),
+            None,
+        );
+        let pz = Plane::from_point_normal(
+            crate::Point::new(0.0, 0.0, 3.0),
+            Vector::new(0.0, 0.0, 1.0),
+            None,
+        );
         let pt = intersection::plane_plane_plane_check(&px, &py, &pz, 0.1);
         MINI_CHECK!(pt.is_some());
         let pt = pt.unwrap();
@@ -1081,12 +1105,13 @@ pub fn run_intersection_plane_4planes() -> TestResult {
         use crate::{Plane, Point, Vector};
 
         // main = z=0; boundary planes cycle left→bottom→right→top (adjacent pairs non-parallel)
-        let main = Plane::from_point_normal(Point::new(0.0, 0.0, 0.0), Vector::new(0.0, 0.0, 1.0));
+        let main =
+            Plane::from_point_normal(Point::new(0.0, 0.0, 0.0), Vector::new(0.0, 0.0, 1.0), None);
         let planes = [
-            Plane::from_point_normal(Point::new(-1.0, 0.0, 0.0), Vector::new(1.0, 0.0, 0.0)), // x=-1
-            Plane::from_point_normal(Point::new(0.0, -1.0, 0.0), Vector::new(0.0, 1.0, 0.0)), // y=-1
-            Plane::from_point_normal(Point::new(1.0, 0.0, 0.0), Vector::new(1.0, 0.0, 0.0)), // x= 1
-            Plane::from_point_normal(Point::new(0.0, 1.0, 0.0), Vector::new(0.0, 1.0, 0.0)), // y= 1
+            Plane::from_point_normal(Point::new(-1.0, 0.0, 0.0), Vector::new(1.0, 0.0, 0.0), None), // x=-1
+            Plane::from_point_normal(Point::new(0.0, -1.0, 0.0), Vector::new(0.0, 1.0, 0.0), None), // y=-1
+            Plane::from_point_normal(Point::new(1.0, 0.0, 0.0), Vector::new(1.0, 0.0, 0.0), None), // x= 1
+            Plane::from_point_normal(Point::new(0.0, 1.0, 0.0), Vector::new(0.0, 1.0, 0.0), None), // y= 1
         ];
         let result = intersection::plane_4planes(&main, &planes);
 
@@ -1110,12 +1135,13 @@ pub fn run_intersection_plane_4planes_open() -> TestResult {
         use crate::intersection;
         use crate::{Plane, Point, Vector};
 
-        let main = Plane::from_point_normal(Point::new(0.0, 0.0, 0.0), Vector::new(0.0, 0.0, 1.0));
+        let main =
+            Plane::from_point_normal(Point::new(0.0, 0.0, 0.0), Vector::new(0.0, 0.0, 1.0), None);
         let planes = [
-            Plane::from_point_normal(Point::new(-1.0, 0.0, 0.0), Vector::new(1.0, 0.0, 0.0)),
-            Plane::from_point_normal(Point::new(0.0, -1.0, 0.0), Vector::new(0.0, 1.0, 0.0)),
-            Plane::from_point_normal(Point::new(1.0, 0.0, 0.0), Vector::new(1.0, 0.0, 0.0)),
-            Plane::from_point_normal(Point::new(0.0, 1.0, 0.0), Vector::new(0.0, 1.0, 0.0)),
+            Plane::from_point_normal(Point::new(-1.0, 0.0, 0.0), Vector::new(1.0, 0.0, 0.0), None),
+            Plane::from_point_normal(Point::new(0.0, -1.0, 0.0), Vector::new(0.0, 1.0, 0.0), None),
+            Plane::from_point_normal(Point::new(1.0, 0.0, 0.0), Vector::new(1.0, 0.0, 0.0), None),
+            Plane::from_point_normal(Point::new(0.0, 1.0, 0.0), Vector::new(0.0, 1.0, 0.0), None),
         ];
         let result = intersection::plane_4planes_open(&main, &planes);
 
@@ -1131,7 +1157,8 @@ pub fn run_intersection_plane_4lines() -> TestResult {
         use crate::intersection;
         use crate::{Line, Plane, Point, Vector};
 
-        let plane = Plane::from_point_normal(Point::new(0.0, 0.0, 0.0), Vector::new(0.0, 0.0, 1.0));
+        let plane =
+            Plane::from_point_normal(Point::new(0.0, 0.0, 0.0), Vector::new(0.0, 0.0, 1.0), None);
         // Four edges of a square in XY projected to the plane
         let l0 = Line::new(-1.0, -1.0, -1.0, -1.0, 1.0, 1.0);
         let l1 = Line::new(1.0, -1.0, -1.0, 1.0, 1.0, 1.0);
@@ -1153,8 +1180,10 @@ pub fn run_intersection_scale_vector_to_distance_of_2planes() -> TestResult {
         use crate::intersection;
         use crate::{Plane, Point, Vector};
 
-        let p0 = Plane::from_point_normal(Point::new(0.0, 0.0, 0.0), Vector::new(0.0, 0.0, 1.0));
-        let p1 = Plane::from_point_normal(Point::new(0.0, 0.0, 3.0), Vector::new(0.0, 0.0, 1.0));
+        let p0 =
+            Plane::from_point_normal(Point::new(0.0, 0.0, 0.0), Vector::new(0.0, 0.0, 1.0), None);
+        let p1 =
+            Plane::from_point_normal(Point::new(0.0, 0.0, 3.0), Vector::new(0.0, 0.0, 1.0), None);
         let dir = Vector::new(0.0, 0.0, 1.0);
         let result = intersection::scale_vector_to_distance_of_2planes(&dir, &p0, &p1);
 
@@ -1178,7 +1207,8 @@ pub fn run_intersection_polyline_plane() -> TestResult {
             Point::new(-1.0, -1.0, 0.0), // closed
         ]);
 
-        let plane = Plane::from_point_normal(Point::new(0.0, 0.0, 0.0), Vector::new(1.0, 0.0, 0.0));
+        let plane =
+            Plane::from_point_normal(Point::new(0.0, 0.0, 0.0), Vector::new(1.0, 0.0, 0.0), None);
         let result = intersection::polyline_plane(&poly, &plane);
 
         MINI_CHECK!(result.is_some());
@@ -1450,7 +1480,8 @@ pub fn run_intersection_polyline_plane_to_line() -> TestResult {
             Point::new(0.0, 4.0, 0.0),
             Point::new(0.0, 0.0, 0.0),
         ]);
-        let pln = Plane::from_point_normal(Point::new(0.0, 2.0, 0.0), Vector::new(0.0, 1.0, 0.0));
+        let pln =
+            Plane::from_point_normal(Point::new(0.0, 2.0, 0.0), Vector::new(0.0, 1.0, 0.0), None);
         let out = polyline_plane_to_line(&poly, &pln, &Point::new(0.0, 0.0, 0.0)).unwrap();
         MINI_CHECK!(TOLERANCE.is_close(out.start()[0], 0.0));
         MINI_CHECK!(TOLERANCE.is_close(out.end()[0], 4.0));
@@ -1469,9 +1500,9 @@ pub fn run_intersection_quad_from_line_top_bottom_planes() -> TestResult {
         let face = Plane::xy_plane();
         let line = Line::new(0.0, 0.0, 0.0, 10.0, 0.0, 0.0);
         let plane0 =
-            Plane::from_point_normal(Point::new(0.0, -2.0, 0.0), Vector::new(0.0, 1.0, 0.0));
+            Plane::from_point_normal(Point::new(0.0, -2.0, 0.0), Vector::new(0.0, 1.0, 0.0), None);
         let plane1 =
-            Plane::from_point_normal(Point::new(0.0, 2.0, 0.0), Vector::new(0.0, 1.0, 0.0));
+            Plane::from_point_normal(Point::new(0.0, 2.0, 0.0), Vector::new(0.0, 1.0, 0.0), None);
         let out = quad_from_line_top_bottom_planes(&face, &line, &plane0, &plane1).unwrap();
         MINI_CHECK!(out.point_count() == 5);
         MINI_CHECK!(TOLERANCE.is_close(out.get_point(0).unwrap()[1].abs(), 2.0));
@@ -1490,8 +1521,10 @@ pub fn run_intersection_orthogonal_vector_between_two_plane_pairs() -> TestResul
         use crate::intersection::orthogonal_vector_between_two_plane_pairs;
         use crate::{Plane, Point, Vector};
         let pp00 = Plane::xy_plane();
-        let pp10 = Plane::from_point_normal(Point::new(0.0, 0.0, 0.0), Vector::new(1.0, 0.0, 0.0));
-        let pp11 = Plane::from_point_normal(Point::new(4.0, 0.0, 0.0), Vector::new(1.0, 0.0, 0.0));
+        let pp10 =
+            Plane::from_point_normal(Point::new(0.0, 0.0, 0.0), Vector::new(1.0, 0.0, 0.0), None);
+        let pp11 =
+            Plane::from_point_normal(Point::new(4.0, 0.0, 0.0), Vector::new(1.0, 0.0, 0.0), None);
         let out = orthogonal_vector_between_two_plane_pairs(&pp00, &pp10, &pp11).unwrap();
         let mag = (out[0] * out[0] + out[1] * out[1] + out[2] * out[2]).sqrt();
         MINI_CHECK!(TOLERANCE.is_close(mag, 4.0));

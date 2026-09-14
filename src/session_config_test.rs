@@ -1,23 +1,34 @@
 use crate::mini_test::TestResult;
-use crate::session_config::SESSION_CONFIG;
 use crate::{MINI_CHECK, MINI_TEST, REGISTER_MINI_TEST};
 
 pub fn run_session_config_runtime_modification() -> TestResult {
     MINI_TEST!("Runtime Modification", {
-        // SessionConfig holds global rendering/export flags.
-        // explode_mesh_faces: when true, each mesh face is a separate mesh (for coloring)
-        // scale_factor: unit conversion multiplier applied during export (1.0 = meters)
-        // Modify config at runtime, then reset() restores all defaults.
+        use crate::session_config::{SessionConfig, SESSION_CONFIG};
 
-        MINI_CHECK!(SESSION_CONFIG.explode_mesh_faces() == false);
-        SESSION_CONFIG.set_explode_mesh_faces(true);
-        MINI_CHECK!(SESSION_CONFIG.explode_mesh_faces() == true);
-        MINI_CHECK!((SESSION_CONFIG.scale_factor() - 1.0).abs() < 1e-10);
-        SESSION_CONFIG.set_scale_factor(0.001);
-        MINI_CHECK!((SESSION_CONFIG.scale_factor() - 0.001).abs() < 1e-10);
         SESSION_CONFIG.reset();
-        MINI_CHECK!(SESSION_CONFIG.explode_mesh_faces() == false);
-        MINI_CHECK!((SESSION_CONFIG.scale_factor() - 1.0).abs() < 1e-10);
+        let mut config = SessionConfig::new();
+        let other = SessionConfig::new();
+
+        MINI_CHECK!(!config.explode_mesh_faces);
+        MINI_CHECK!(config.scale_factor == 1.0);
+        config.explode_mesh_faces = true;
+        config.scale_factor = 0.001;
+        MINI_CHECK!(config.explode_mesh_faces);
+        MINI_CHECK!(config.scale_factor == 0.001);
+        MINI_CHECK!(!other.explode_mesh_faces);
+        MINI_CHECK!(other.scale_factor == 1.0);
+        MINI_CHECK!(!SESSION_CONFIG.explode_mesh_faces());
+        MINI_CHECK!(SESSION_CONFIG.scale_factor() == 1.0);
+        SESSION_CONFIG.set_explode_mesh_faces(true);
+        SESSION_CONFIG.set_scale_factor(0.001);
+        MINI_CHECK!(SESSION_CONFIG.explode_mesh_faces());
+        MINI_CHECK!(SESSION_CONFIG.scale_factor() == 0.001);
+        SESSION_CONFIG.reset();
+        MINI_CHECK!(!SESSION_CONFIG.explode_mesh_faces());
+        MINI_CHECK!(SESSION_CONFIG.scale_factor() == 1.0);
+        config.reset();
+        MINI_CHECK!(!config.explode_mesh_faces);
+        MINI_CHECK!(config.scale_factor == 1.0);
     })
 }
 

@@ -35,6 +35,8 @@ pub mod file_encoders;
 pub mod file_encoders_test;
 pub mod file_obj;
 pub mod file_obj_test;
+pub mod file_step;
+pub mod file_step_test;
 pub mod graph;
 pub mod graph_test;
 pub mod guid_serde;
@@ -69,6 +71,8 @@ pub mod objects;
 pub mod objects_test;
 #[cfg(all(feature = "pdf", not(target_arch = "wasm32")))]
 pub mod pdf;
+#[cfg(all(feature = "pdf", not(target_arch = "wasm32")))]
+pub mod pdf_test;
 pub mod picking_test;
 pub mod plane;
 pub mod plane_test;
@@ -113,6 +117,7 @@ pub mod xform;
 pub mod xform_test;
 
 pub use aabb::AABB;
+pub use boolean_polyline::BooleanPolyline;
 pub use brep::BRep;
 pub use brep::BRepOrientation;
 pub use brep::BRepRef;
@@ -120,7 +125,10 @@ pub use closest::Closest;
 pub use color::Color;
 pub use convex_hull::ConvexHull;
 pub use element::Element;
-pub use file_obj::{read_file_obj, read_file_obj_polylines, write_file_obj};
+pub use file_obj::{
+    read_file_obj, read_file_obj_from_str, read_file_obj_polylines, write_file_obj,
+    write_file_obj_to_string,
+};
 pub use graph::Vertex;
 pub use graph::{Edge, Graph};
 pub use history::History;
@@ -142,7 +150,7 @@ pub use polyline::Polyline;
 pub use primitives::Primitives;
 pub use quaternion::Quaternion;
 pub use remesh_nurbssurface_adaptive::RemeshNurbsSurfaceAdaptive;
-pub use remesh_nurbssurface_grid::remesh_nurbssurface_grid;
+pub use remesh_nurbssurface_grid::RemeshNurbsSurfaceGrid;
 pub use render_mesh::{GpuCache, GpuMesh, RenderMesh, RenderVertex};
 pub use session::{Geometry, Session};
 pub use session_config::SessionConfig;
@@ -155,3 +163,6 @@ pub use tolerance::Tolerance;
 pub use tree::{Tree, TreeNode};
 pub use vector::Vector;
 pub use xform::Xform;
+
+pub mod simple_split;
+pub mod simple_split_test;

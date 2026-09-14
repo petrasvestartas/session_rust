@@ -8,47 +8,33 @@ pub fn run_xform_constructor() -> TestResult {
         use crate::Point;
         use crate::Xform;
 
-        // Constructor (identity by default)
         let x = Xform::new();
-
-        // Matrix access
         let m00 = x.m[0];
         let m11 = x.m[5];
         let m22 = x.m[10];
         let m33 = x.m[15];
-
-        // Check identity
         let is_id = x.is_identity();
-
-        // From matrix constructor
         let xfrom = Xform::from_matrix([
             1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 5.0, 10.0, 15.0, 1.0,
         ]);
-
-        // Minimal and Full String Representation
         let xstr = x.str();
         let xrepr = x.repr();
-
-        // Copy (duplicates everything except guid)
         let xcopy = x.duplicate();
         let xother = Xform::new();
-
-        // Matrix multiplication (*)
         let t = Xform::translation(10.0, 0.0, 0.0);
         let s = Xform::scale_xyz(2.0, 1.0, 1.0);
         let combined = &t * &s;
         let p = Point::new(1.0, 0.0, 0.0);
         let result = p.transformed(&combined);
-
-        // In-place multiplication (*=)
         let mut t2 = Xform::translation(10.0, 0.0, 0.0);
         t2 *= s;
         let p2 = Point::new(1.0, 0.0, 0.0);
         let result2 = p2.transformed(&t2);
 
-        MINI_CHECK!(x.name == "my_xform" && !x.guid().is_empty());
+        MINI_CHECK!(x.name == "my_xform");
+        MINI_CHECK!(!x.guid().is_empty());
         MINI_CHECK!(m00 == 1.0 && m11 == 1.0 && m22 == 1.0 && m33 == 1.0);
-        MINI_CHECK!(is_id == true);
+        MINI_CHECK!(is_id);
         MINI_CHECK!(xfrom.m[12] == 5.0 && xfrom.m[13] == 10.0 && xfrom.m[14] == 15.0);
         MINI_CHECK!(xstr == "[1.000000, 0.000000, 0.000000, 0.000000]\n[0.000000, 1.000000, 0.000000, 0.000000]\n[0.000000, 0.000000, 1.000000, 0.000000]\n[0.000000, 0.000000, 0.000000, 1.000000]");
         MINI_CHECK!(xrepr == format!("Xform(my_xform, {})", &x.guid()[..8]));
@@ -835,7 +821,6 @@ pub fn run_xform_inverse() -> TestResult {
             &roundtrip.vertex_point(7).unwrap(),
             &Point::new(-1.0, 1.0, 1.0)
         ));
-
         let mut p = Xform::identity();
         p.m[0] = 1.2;
         p.m[5] = 0.8;
@@ -914,36 +899,25 @@ pub fn run_xform_transform_geometry() -> TestResult {
         use crate::Vector;
         use crate::Xform;
 
-        // Simple translation by (10, 20, 30)
         let t = Xform::translation(10.0, 20.0, 30.0);
-
-        // Transform Point: (1,2,3) -> (11,22,33)
         let pt = Point::new(1.0, 2.0, 3.0);
-        let pt_transformed = pt.transformed(&t.clone());
-
-        // Transform Vector: translation should NOT affect vectors
+        let pt_transformed = pt.transformed(&t);
         let v = Vector::new(1.0, 0.0, 0.0);
-        let v_transformed = v.transformed(&t.clone());
-
-        // Transform Line: (0,0,0)-(1,0,0) -> (10,20,30)-(11,20,30)
+        let v_transformed = v.transformed(&t);
         let ln = Line::new(0.0, 0.0, 0.0, 1.0, 0.0, 0.0);
-        let ln_transformed = ln.transformed(&t.clone());
-
-        // Transform Plane: origin (0,0,0) -> (10,20,30)
+        let ln_transformed = ln.transformed(&t);
         let pl = Plane::new(
             Point::new(0.0, 0.0, 0.0),
             Vector::new(1.0, 0.0, 0.0),
             Vector::new(0.0, 1.0, 0.0),
         );
-        let pl_transformed = pl.transformed(&t.clone());
-
-        // Transform Polyline: 3 points translated
+        let pl_transformed = pl.transformed(&t);
         let poly = Polyline::new(vec![
             Point::new(0.0, 0.0, 0.0),
             Point::new(1.0, 0.0, 0.0),
             Point::new(1.0, 1.0, 0.0),
         ]);
-        let poly_transformed = poly.transformed(&t.clone());
+        let poly_transformed = poly.transformed(&t);
         let pts = poly_transformed.get_points();
 
         MINI_CHECK!(TOLERANCE.is_point_close(&pt_transformed, &Point::new(11.0, 22.0, 33.0)));
@@ -969,7 +943,6 @@ pub fn run_xform_json_roundtrip() -> TestResult {
 
         let mut xform = Xform::translation(1.0, 2.0, 3.0);
         xform.name = "test_xform".to_string();
-
         let filename = "serialization/test_xform.json";
         xform.file_json_dump(filename).unwrap();
         let loaded = Xform::file_json_load(filename).unwrap();
@@ -993,7 +966,6 @@ pub fn run_xform_protobuf_roundtrip() -> TestResult {
 
         let mut xform = Xform::translation(1.0, 2.0, 3.0);
         xform.name = "test_xform_proto".to_string();
-
         let filename = "serialization/test_xform.bin";
         let guid = xform.guid().to_string();
         xform.pb_dump(filename);
@@ -1009,6 +981,26 @@ pub fn run_xform_protobuf_roundtrip() -> TestResult {
         MINI_CHECK!(TOLERANCE.is_close(loaded.m[10], 1.0) && TOLERANCE.is_close(loaded.m[11], 0.0));
         MINI_CHECK!(TOLERANCE.is_close(loaded.m[12], 1.0) && TOLERANCE.is_close(loaded.m[13], 2.0));
         MINI_CHECK!(TOLERANCE.is_close(loaded.m[14], 3.0) && TOLERANCE.is_close(loaded.m[15], 1.0));
+    })
+}
+
+pub fn run_xform_from_change_of_basis() -> TestResult {
+    MINI_TEST!("From Change Of Basis", {
+        use crate::Point;
+        use crate::Polyline;
+        use crate::Xform;
+
+        let rect0 = Polyline::new(vec![
+            Point::new(0.0, 0.0, 0.0),
+            Point::new(2.0, 0.0, 0.0),
+            Point::new(2.0, 3.0, 0.0),
+            Point::new(0.0, 3.0, 0.0),
+        ]);
+        let rect1 = Polyline::new(vec![Point::new(0.0, 0.0, 4.0)]);
+        let xf = Xform::from_change_of_basis(&rect0, &rect1);
+        MINI_CHECK!(TOLERANCE.is_close(xf.m[12], 1.0));
+        MINI_CHECK!(TOLERANCE.is_close(xf.m[13], 1.5));
+        MINI_CHECK!(TOLERANCE.is_close(xf.m[14], 2.0));
     })
 }
 
@@ -1126,22 +1118,6 @@ REGISTER_MINI_TEST!(
     crate::xform_test::run_xform_protobuf_roundtrip
 );
 
-pub fn run_xform_from_change_of_basis() -> TestResult {
-    MINI_TEST!("From Change Of Basis", {
-        use crate::{Point, Polyline, Xform};
-        let rect0 = Polyline::new(vec![
-            Point::new(0.0, 0.0, 0.0),
-            Point::new(2.0, 0.0, 0.0),
-            Point::new(2.0, 3.0, 0.0),
-            Point::new(0.0, 3.0, 0.0),
-        ]);
-        let rect1 = Polyline::new(vec![Point::new(0.0, 0.0, 4.0)]);
-        let xf = Xform::from_change_of_basis(&rect0, &rect1);
-        MINI_CHECK!(TOLERANCE.is_close(xf.m[12], 1.0));
-        MINI_CHECK!(TOLERANCE.is_close(xf.m[13], 1.5));
-        MINI_CHECK!(TOLERANCE.is_close(xf.m[14], 2.0));
-    })
-}
 REGISTER_MINI_TEST!(
     "Xform",
     "From Change Of Basis",

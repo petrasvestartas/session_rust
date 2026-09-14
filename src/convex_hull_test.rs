@@ -6,7 +6,7 @@ pub fn run_convex_hull_hull_2d() -> TestResult {
     MINI_TEST!("Hull 2d", {
         use crate::ConvexHull;
         use crate::Point;
-        let pts = vec![
+        let points = vec![
             Point::new(0.0, 0.0, 0.0),
             Point::new(1.0, 0.0, 0.0),
             Point::new(1.0, 1.0, 0.0),
@@ -14,7 +14,7 @@ pub fn run_convex_hull_hull_2d() -> TestResult {
             Point::new(0.5, 0.5, 0.0),
             Point::new(0.3, 0.3, 0.0),
         ];
-        let hull = ConvexHull::hull_2d(&pts);
+        let hull = ConvexHull::hull_2d(&points);
 
         MINI_CHECK!(hull.len() == 4);
     })
@@ -29,14 +29,14 @@ pub fn run_convex_hull_hull_2d_collinear() -> TestResult {
     MINI_TEST!("Hull 2d Collinear", {
         use crate::ConvexHull;
         use crate::Point;
-        let pts = vec![
+        let points = vec![
             Point::new(0.0, 0.0, 0.0),
             Point::new(1.0, 0.0, 0.0),
             Point::new(2.0, 0.0, 0.0),
             Point::new(3.0, 0.0, 0.0),
             Point::new(1.5, 1.0, 0.0),
         ];
-        let hull = ConvexHull::hull_2d(&pts);
+        let hull = ConvexHull::hull_2d(&points);
 
         MINI_CHECK!(hull.len() >= 3);
     })
@@ -52,13 +52,13 @@ pub fn run_convex_hull_hull_2d_circle() -> TestResult {
         use crate::ConvexHull;
         use crate::Point;
         let n = 12_usize;
-        let mut pts = vec![];
+        let mut points = vec![];
         for i in 0..n {
             let angle = 2.0 * PI * i as f64 / n as f64;
-            pts.push(Point::new(angle.cos(), angle.sin(), 0.0));
+            points.push(Point::new(angle.cos(), angle.sin(), 0.0));
         }
-        pts.push(Point::new(0.0, 0.0, 0.0));
-        let hull = ConvexHull::hull_2d(&pts);
+        points.push(Point::new(0.0, 0.0, 0.0));
+        let hull = ConvexHull::hull_2d(&points);
 
         MINI_CHECK!(hull.len() == n);
     })
@@ -73,14 +73,14 @@ pub fn run_convex_hull_hull_3d() -> TestResult {
     MINI_TEST!("Hull 3d", {
         use crate::ConvexHull;
         use crate::Point;
-        let pts = vec![
+        let points = vec![
             Point::new(0.0, 0.0, 0.0),
             Point::new(1.0, 0.0, 0.0),
             Point::new(0.0, 1.0, 0.0),
             Point::new(0.0, 0.0, 1.0),
             Point::new(0.25, 0.25, 0.25),
         ];
-        let mesh = ConvexHull::hull_3d(&pts);
+        let mesh = ConvexHull::hull_3d(&points);
 
         MINI_CHECK!(mesh.number_of_vertices() == 4);
         MINI_CHECK!(mesh.number_of_faces() == 4);
@@ -96,7 +96,7 @@ pub fn run_convex_hull_hull_3d_cube() -> TestResult {
     MINI_TEST!("Hull 3d Cube", {
         use crate::ConvexHull;
         use crate::Point;
-        let pts = vec![
+        let points = vec![
             Point::new(0.0, 0.0, 0.0),
             Point::new(1.0, 0.0, 0.0),
             Point::new(1.0, 1.0, 0.0),
@@ -107,7 +107,7 @@ pub fn run_convex_hull_hull_3d_cube() -> TestResult {
             Point::new(0.0, 1.0, 1.0),
             Point::new(0.5, 0.5, 0.5),
         ];
-        let mesh = ConvexHull::hull_3d(&pts);
+        let mesh = ConvexHull::hull_3d(&points);
 
         MINI_CHECK!(mesh.number_of_vertices() == 8);
         MINI_CHECK!(mesh.number_of_faces() == 12);

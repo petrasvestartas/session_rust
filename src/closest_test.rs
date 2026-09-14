@@ -118,6 +118,7 @@ pub fn run_closest_surface_point() -> TestResult {
 
 pub fn run_closest_surface_curve() -> TestResult {
     MINI_TEST!("Surface Curve", {
+        use crate::nurbsknot::CurveInterpStyle;
         use crate::nurbsknot::CurveNurbsKnotStyle;
         use crate::Closest;
         use crate::NurbsCurve;
@@ -135,9 +136,13 @@ pub fn run_closest_surface_curve() -> TestResult {
             let z = 1.0 + 2.0 * i as f64 / 20.0;
             crv_pts.push(Point::new(a.cos(), a.sin(), z));
         }
-        let crv = NurbsCurve::create_interpolated(&crv_pts, CurveNurbsKnotStyle::Chord);
+        let crv = NurbsCurve::create_interpolated(
+            &crv_pts,
+            CurveNurbsKnotStyle::Chord,
+            CurveInterpStyle::Rhino,
+        );
 
-        let pcurves = Closest::surface_curve(&cyl, &crv, 0.0, 0.0, None);
+        let pcurves = Closest::surface_curve(&cyl, &crv, 0.0, 0.0, 0.0);
 
         MINI_CHECK!(pcurves.len() == 2);
         let mut on_border = 0;
@@ -167,7 +172,7 @@ pub fn run_closest_surface_curve() -> TestResult {
             &[Point::new(20.0, 20.0, 20.0), Point::new(30.0, 30.0, 30.0)],
         );
 
-        MINI_CHECK!(Closest::surface_curve(&cyl, &off, 0.0, 0.0, None).len() == 0);
+        MINI_CHECK!(Closest::surface_curve(&cyl, &off, 0.0, 0.0, 0.0).is_empty());
     })
 }
 
@@ -242,7 +247,6 @@ pub fn run_closest_pointcloud_point_kdtree() -> TestResult {
         use crate::Point;
         use crate::PointCloud;
 
-        // SpatialKDTree variant: same result as linear scan, O(log n) query
         let pc = PointCloud::new(
             vec![
                 Point::new(0.0, 0.0, 0.0),
@@ -271,7 +275,6 @@ pub fn run_closest_lines_closest() -> TestResult {
         use crate::Closest;
         use crate::Line;
 
-        // 3 lines: first two sharing an endpoint, third far away
         let lines = vec![
             Line::new(0.0, 0.0, 0.0, 5.0, 0.0, 0.0),
             Line::new(5.0, 0.0, 0.0, 10.0, 0.0, 0.0),
@@ -346,7 +349,6 @@ pub fn run_closest_boxes_closest() -> TestResult {
         use crate::Closest;
         use crate::AABB;
 
-        // 3 boxes: first two touching faces (shared at x=1), third far away
         let boxes = vec![
             AABB::new(0.0, 0.0, 0.0, 1.0, 1.0, 1.0),
             AABB::new(2.0, 0.0, 0.0, 1.0, 1.0, 1.0),

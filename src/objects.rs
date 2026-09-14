@@ -275,7 +275,7 @@ impl Objects {
                 .pointclouds
                 .push(Rc::new(crate::pointcloud::PointCloud::pb_loads(
                     &p.encode_to_vec(),
-                )));
+                )?));
         }
         for m in &proto.meshes {
             objects
@@ -337,7 +337,3 @@ impl fmt::Display for Objects {
         )
     }
 }
-
-#[cfg(test)]
-#[path = "objects_test.rs"]
-mod objects_test;

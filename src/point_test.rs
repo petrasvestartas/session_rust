@@ -8,28 +8,22 @@ pub fn run_point_constructor() -> TestResult {
         use crate::Point;
         use crate::Vector;
 
-        // Constructor
         let mut p = Point::new(1.0, 2.0, 3.0);
 
-        // Setters
         p[0] = 10.0;
         p[1] = 20.0;
         p[2] = 30.0;
 
-        // Getters
         let x = p[0];
         let y = p[1];
         let z = p[2];
 
-        // Minimal and full string representation
         let pstr = p.str();
         let prepr = p.repr();
 
-        // Copy (duplicate everything but guid)
         let pcopy = p.duplicate();
         let pother = Point::new(1.0, 2.0, 3.0);
 
-        // No-copy operators
         let mut pmult = p.duplicate();
         pmult *= 2.0;
         let mut pdiv = p.duplicate();
@@ -39,33 +33,25 @@ pub fn run_point_constructor() -> TestResult {
         let mut psub = p.duplicate();
         psub -= Vector::new(1.0, 1.0, 1.0);
 
-        // Copy operators
         let result_mul = &p * 2.0;
         let result_div = &p / 2.0;
         let result_add = &p + Vector::new(1.0, 1.0, 1.0);
-        let diff_point = &p - Vector::new(1.0, 1.0, 1.0);
+        let result_sub = &p - Vector::new(1.0, 1.0, 1.0);
+        let result_diff = &p - &pother;
 
-        // Static sum and sub methods
         let p1 = Point::new(1.0, 2.0, 3.0);
         let p2 = Point::new(4.0, 5.0, 6.0);
         let psum = Point::sum(&p1, &p2);
         let pdif = Point::sub(&p2, &p1);
 
-        MINI_CHECK!(
-            p.name == "my_point"
-                && p[0] == 10.0
-                && p[1] == 20.0
-                && p[2] == 30.0
-                && p.width == 1.0
-                && p.pointcolor == Color::black()
-                && !p.guid().is_empty()
-        );
+        MINI_CHECK!(p.name == "my_point");
+        MINI_CHECK!(p[0] == 10.0 && p[1] == 20.0 && p[2] == 30.0);
+        MINI_CHECK!(p.width == 1.0);
+        MINI_CHECK!(p.pointcolor == Color::black());
+        MINI_CHECK!(!p.guid().is_empty());
         MINI_CHECK!(x == 10.0 && y == 20.0 && z == 30.0);
         MINI_CHECK!(pstr == "10.000000, 20.000000, 30.000000");
-        MINI_CHECK!(
-            prepr
-                == "Point(my_point, 10.000000, 20.000000, 30.000000, Color(0, 0, 0, 1), 1.000000)"
-        );
+        MINI_CHECK!(prepr == "Point(my_point, 10.000000, 20.000000, 30.000000, Color(black, 0.0, 0.0, 0.0, 1.0), 1.000000)");
         MINI_CHECK!(pcopy == p && pcopy.guid() != p.guid());
         MINI_CHECK!(pother != p);
         MINI_CHECK!(pmult[0] == 20.0 && pmult[1] == 40.0 && pmult[2] == 60.0);
@@ -75,7 +61,8 @@ pub fn run_point_constructor() -> TestResult {
         MINI_CHECK!(result_mul[0] == 20.0 && result_mul[1] == 40.0 && result_mul[2] == 60.0);
         MINI_CHECK!(result_div[0] == 5.0 && result_div[1] == 10.0 && result_div[2] == 15.0);
         MINI_CHECK!(result_add[0] == 11.0 && result_add[1] == 21.0 && result_add[2] == 31.0);
-        MINI_CHECK!(diff_point[0] == 9.0 && diff_point[1] == 19.0 && diff_point[2] == 29.0);
+        MINI_CHECK!(result_sub[0] == 9.0 && result_sub[1] == 19.0 && result_sub[2] == 29.0);
+        MINI_CHECK!(result_diff[0] == 9.0 && result_diff[1] == 18.0 && result_diff[2] == 27.0);
         MINI_CHECK!(psum[0] == 5.0 && psum[1] == 7.0 && psum[2] == 9.0);
         MINI_CHECK!(pdif[0] == 3.0 && pdif[1] == 3.0 && pdif[2] == 3.0);
     })
@@ -87,11 +74,11 @@ pub fn run_point_transformation() -> TestResult {
         use crate::Xform;
 
         let mut p = Point::new(1.0, 2.0, 3.0);
-        let p_xf = Xform::translation(1.0, 2.0, 3.0);
-        let p_transformed = p.transformed(&p_xf); // Make a copy
-        p.transform(&p_xf);
+        let xform = Xform::translation(1.0, 2.0, 3.0);
+        let moved = p.transformed(&xform);
+        p.transform(&xform);
 
-        MINI_CHECK!(p_transformed[0] == 2.0 && p_transformed[1] == 4.0 && p_transformed[2] == 6.0);
+        MINI_CHECK!(moved[0] == 2.0 && moved[1] == 4.0 && moved[2] == 6.0);
         MINI_CHECK!(p[0] == 2.0 && p[1] == 4.0 && p[2] == 6.0);
     })
 }
@@ -105,24 +92,17 @@ pub fn run_point_json_roundtrip() -> TestResult {
         p.width = 2.0;
         p.pointcolor = Color::new(1.0, 0.5, 0.25, 1.0);
 
-        //   file_json_dumps()    │ String       │ to JSON string
-        //   file_json_loads(s)   │ String       │ from JSON string
-        //   file_json_dump(path) │ file         │ write to file
-        //   file_json_load(path) │ file         │ read from file
-
         let filename = "serialization/test_point.json";
         p.file_json_dump(filename).unwrap();
         let loaded = Point::file_json_load(filename).unwrap();
 
-        MINI_CHECK!(loaded.name == p.name);
-        MINI_CHECK!(loaded[0] == p[0]);
-        MINI_CHECK!(loaded[1] == p[1]);
-        MINI_CHECK!(loaded[2] == p[2]);
-        MINI_CHECK!(loaded.width == p.width);
-        MINI_CHECK!(loaded.pointcolor.r == 1.0);
-        MINI_CHECK!(loaded.pointcolor.g == 0.5);
-        MINI_CHECK!(loaded.pointcolor.b == 0.25);
-        MINI_CHECK!(loaded.pointcolor.a == 1.0);
+        MINI_CHECK!(loaded.name == "test_point");
+        MINI_CHECK!(loaded[0] == 1.5 && loaded[1] == 2.5 && loaded[2] == 3.5);
+        MINI_CHECK!(loaded.width == 2.0);
+        MINI_CHECK!(loaded.pointcolor[0] == 1.0);
+        MINI_CHECK!(loaded.pointcolor[1] == 0.5);
+        MINI_CHECK!(loaded.pointcolor[2] == 0.25);
+        MINI_CHECK!(loaded.pointcolor[3] == 1.0);
     })
 }
 
@@ -131,8 +111,7 @@ pub fn run_point_protobuf_roundtrip() -> TestResult {
         use crate::Color;
         use crate::Point;
 
-        let mut p = Point::new(1.5, 2.5, 3.5);
-        p.name = "test_point".to_string();
+        let mut p = Point::with_name(1.5, 2.5, 3.5, "test_point");
         p.width = 2.0;
         p.pointcolor = Color::new(1.0, 0.5, 0.25, 1.0);
 
@@ -140,15 +119,13 @@ pub fn run_point_protobuf_roundtrip() -> TestResult {
         p.pb_dump(filename);
         let loaded = Point::pb_load(filename);
 
-        MINI_CHECK!(loaded.name == p.name);
-        MINI_CHECK!(loaded[0] == p[0]);
-        MINI_CHECK!(loaded[1] == p[1]);
-        MINI_CHECK!(loaded[2] == p[2]);
-        MINI_CHECK!(loaded.width == p.width);
-        MINI_CHECK!(loaded.pointcolor.r == 1.0);
-        MINI_CHECK!(loaded.pointcolor.g == 0.5);
-        MINI_CHECK!(loaded.pointcolor.b == 0.25);
-        MINI_CHECK!(loaded.pointcolor.a == 1.0);
+        MINI_CHECK!(loaded.name == "test_point");
+        MINI_CHECK!(loaded[0] == 1.5 && loaded[1] == 2.5 && loaded[2] == 3.5);
+        MINI_CHECK!(loaded.width == 2.0);
+        MINI_CHECK!(loaded.pointcolor[0] == 1.0);
+        MINI_CHECK!(loaded.pointcolor[1] == 0.5);
+        MINI_CHECK!(loaded.pointcolor[2] == 0.25);
+        MINI_CHECK!(loaded.pointcolor[3] == 1.0);
     })
 }
 
@@ -159,13 +136,11 @@ pub fn run_point_is_ccw() -> TestResult {
         let p0 = Point::new(0.0, 0.0, 0.0);
         let p1 = Point::new(1.0, 0.0, 0.0);
         let p2 = Point::new(0.05, 1.0, 0.0);
+        let ccw = Point::is_ccw(&p0, &p1, &p2);
+        let cw = Point::is_ccw(&p2, &p1, &p0);
 
-        // Points must be oriented to xy plane.
-        let is_counter_clock_wise = Point::is_ccw(&p0, &p1, &p2);
-        let is_clock_wise = Point::is_ccw(&p2, &p1, &p0);
-
-        MINI_CHECK!(is_counter_clock_wise);
-        MINI_CHECK!(!is_clock_wise);
+        MINI_CHECK!(ccw);
+        MINI_CHECK!(!cw);
     })
 }
 
@@ -205,6 +180,27 @@ pub fn run_point_squared_distance() -> TestResult {
     })
 }
 
+pub fn run_point_interpolate() -> TestResult {
+    MINI_TEST!("Interpolate", {
+        use crate::Point;
+
+        let a = Point::new(0.0, 0.0, 0.0);
+        let b = Point::new(4.0, 8.0, 12.0);
+        let half = Point::lerp(&a, &b, 0.5);
+        let inner = Point::interpolate(&a, &b, 3, 0);
+        let both = Point::interpolate(&a, &b, 3, 1);
+        let start = Point::interpolate(&a, &b, 3, 2);
+
+        MINI_CHECK!(half[0] == 2.0 && half[1] == 4.0 && half[2] == 6.0);
+        MINI_CHECK!(inner.len() == 3);
+        MINI_CHECK!(inner[0][0] == 1.0 && inner[1][0] == 2.0 && inner[2][0] == 3.0);
+        MINI_CHECK!(both.len() == 5);
+        MINI_CHECK!(both[0][0] == 0.0 && both[4][0] == 4.0);
+        MINI_CHECK!(start.len() == 4);
+        MINI_CHECK!(start[0][0] == 0.0 && start[3][0] == 3.0);
+    })
+}
+
 pub fn run_point_area() -> TestResult {
     MINI_TEST!("Area", {
         use crate::Point;
@@ -213,7 +209,7 @@ pub fn run_point_area() -> TestResult {
         let p1 = Point::new(2.0, 0.0, 0.0);
         let p2 = Point::new(2.0, 2.0, 0.0);
         let p3 = Point::new(0.0, 2.0, 0.0);
-        let area = Point::area(&vec![p0, p1, p2, p3]);
+        let area = Point::area(&[p0, p1, p2, p3]);
 
         MINI_CHECK!(area == 4.0);
     })
@@ -227,7 +223,7 @@ pub fn run_point_centroid_quad() -> TestResult {
         let p1 = Point::new(2.0, 0.0, 1.0);
         let p2 = Point::new(2.0, 2.0, 2.0);
         let p3 = Point::new(0.0, 2.0, 1.0);
-        let centroid = Point::centroid_quad(&vec![p0, p1, p2, p3]).unwrap();
+        let centroid = Point::centroid_quad(&[p0, p1, p2, p3]).unwrap();
 
         MINI_CHECK!(TOLERANCE.is_close(centroid[0], 1.0));
         MINI_CHECK!(TOLERANCE.is_close(centroid[1], 1.0));
@@ -243,7 +239,7 @@ pub fn run_point_centroid() -> TestResult {
         let p1 = Point::new(2.0, 0.0, 0.0);
         let p2 = Point::new(2.0, 2.0, 0.0);
         let p3 = Point::new(0.0, 2.0, 0.0);
-        let centroid = Point::centroid(&vec![p0, p1, p2, p3]);
+        let centroid = Point::centroid(&[p0, p1, p2, p3]);
 
         MINI_CHECK!(TOLERANCE.is_close(centroid[0], 1.0));
         MINI_CHECK!(TOLERANCE.is_close(centroid[1], 1.0));
@@ -255,8 +251,6 @@ pub fn run_point_dihedral_angle_deg() -> TestResult {
     MINI_TEST!("Dihedral Angle Deg", {
         use crate::Point;
 
-        // Edge from origin to (1,0,0); r at (0,1,0); s at (0,0,1).
-        // Both half-planes share the X edge; angle is 90 degrees.
         let p = Point::new(0.0, 0.0, 0.0);
         let q = Point::new(1.0, 0.0, 0.0);
         let r = Point::new(0.0, 1.0, 0.0);
@@ -267,7 +261,6 @@ pub fn run_point_dihedral_angle_deg() -> TestResult {
     })
 }
 
-// Register tests with the shared registry for run_all("rust")
 REGISTER_MINI_TEST!(
     "Point",
     "Constructor",
@@ -295,6 +288,11 @@ REGISTER_MINI_TEST!(
     "Point",
     "Squared Distance",
     crate::point_test::run_point_squared_distance
+);
+REGISTER_MINI_TEST!(
+    "Point",
+    "Interpolate",
+    crate::point_test::run_point_interpolate
 );
 REGISTER_MINI_TEST!("Point", "Area", crate::point_test::run_point_area);
 REGISTER_MINI_TEST!(

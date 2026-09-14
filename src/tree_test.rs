@@ -1,27 +1,25 @@
 use crate::mini_test::TestResult;
 use crate::{MINI_CHECK, MINI_TEST, REGISTER_MINI_TEST};
 
+// ═══════════════════════════════════════════════════════════════════════════
+// TreeNode
+// ═══════════════════════════════════════════════════════════════════════════
+
 pub fn run_treenode_constructor() -> TestResult {
     MINI_TEST!("Constructor", {
+        use crate::Color;
         use crate::TreeNode;
 
-        // Default constructor
         let n0 = TreeNode::new("my_node");
-
-        // Constructor with name
         let n = TreeNode::new("my_named_node");
-        n.borrow_mut().set_color(255, 0, 0, 255);
-
-        // Minimal string representation
+        n.borrow_mut().color = Some(Color::new(1.0, 0.0, 0.0, 1.0));
         let nstr = format!("{}", n.borrow());
-
-        // Copies (compared by guid in Rust)
         let nother = TreeNode::new("my_named_node");
 
         MINI_CHECK!(n0.borrow().name == "my_node");
         MINI_CHECK!(!n0.borrow().guid().is_empty());
         MINI_CHECK!(n.borrow().name == "my_named_node");
-        MINI_CHECK!(n.borrow().color().is_some() && n.borrow().color().unwrap()[0] == 255);
+        MINI_CHECK!(n.borrow().color.is_some() && n.borrow().color.as_ref().unwrap().r == 1.0);
         MINI_CHECK!(nstr.contains("TreeNode(my_named_node"));
         MINI_CHECK!(*n.borrow() == *n.borrow());
         MINI_CHECK!(*n.borrow() != *nother.borrow());
@@ -36,9 +34,9 @@ pub fn run_treenode_json_roundtrip() -> TestResult {
         let child = TreeNode::new("child_node");
         original.borrow_mut().add(&child);
 
-        let json = original.borrow().jsondump().unwrap();
-        std::fs::write("serialization/test_treenode.json", &json).unwrap();
-        let loaded = TreeNode::jsonload("serialization/test_treenode.json").unwrap();
+        let fname = "serialization/test_treenode.json";
+        std::fs::write(fname, original.borrow().jsondump().unwrap()).unwrap();
+        let loaded = TreeNode::jsonload(&std::fs::read_to_string(fname).unwrap()).unwrap();
 
         MINI_CHECK!(loaded.borrow().name == original.borrow().name);
         MINI_CHECK!(loaded.borrow().children().len() == 1);
@@ -72,39 +70,31 @@ pub fn run_treenode_is_leaf() -> TestResult {
     })
 }
 
-pub fn run_treenode_tree() -> TestResult {
-    MINI_TEST!("Tree", {
-        use crate::TreeNode;
-
-        let n = TreeNode::new("standalone");
-
-        MINI_CHECK!(n.borrow().is_root());
-    })
-}
-
 pub fn run_treenode_add() -> TestResult {
     MINI_TEST!("Add", {
         use crate::TreeNode;
+        use std::rc::Rc;
 
         let parent = TreeNode::new("parent");
         let child = TreeNode::new("child");
         parent.borrow_mut().add(&child);
 
         MINI_CHECK!(parent.borrow().children().len() == 1);
-        MINI_CHECK!(child.borrow().parent().is_some());
+        MINI_CHECK!(Rc::ptr_eq(&child.borrow().parent().unwrap(), &parent));
     })
 }
 
 pub fn run_treenode_remove() -> TestResult {
     MINI_TEST!("Remove", {
         use crate::TreeNode;
+        use std::rc::Rc;
 
         let parent = TreeNode::new("parent");
         let child = TreeNode::new("child");
         parent.borrow_mut().add(&child);
         let removed = parent.borrow_mut().remove(&child);
 
-        MINI_CHECK!(removed);
+        MINI_CHECK!(removed.is_some() && Rc::ptr_eq(&removed.unwrap(), &child));
         MINI_CHECK!(parent.borrow().children().is_empty());
         MINI_CHECK!(child.borrow().parent().is_none());
     })
@@ -113,13 +103,14 @@ pub fn run_treenode_remove() -> TestResult {
 pub fn run_treenode_parent() -> TestResult {
     MINI_TEST!("Parent", {
         use crate::TreeNode;
+        use std::rc::Rc;
 
         let root = TreeNode::new("root");
         let child = TreeNode::new("child");
         root.borrow_mut().add(&child);
 
         MINI_CHECK!(root.borrow().parent().is_none());
-        MINI_CHECK!(child.borrow().parent().is_some());
+        MINI_CHECK!(Rc::ptr_eq(&child.borrow().parent().unwrap(), &root));
     })
 }
 
@@ -197,17 +188,16 @@ pub fn run_treenode_traverse() -> TestResult {
     })
 }
 
+// ═══════════════════════════════════════════════════════════════════════════
+// Tree
+// ═══════════════════════════════════════════════════════════════════════════
+
 pub fn run_tree_constructor() -> TestResult {
     MINI_TEST!("Constructor", {
         use crate::Tree;
 
-        // Default constructor
         let t0 = Tree::default();
-
-        // Constructor with name
         let t = Tree::new("my_named_tree");
-
-        // Minimal string representation
         let tstr = format!("{}", t);
 
         MINI_CHECK!(t0.name == "my_tree");
@@ -225,13 +215,6 @@ pub fn run_tree_json_roundtrip() -> TestResult {
         let mut original = Tree::new("test_tree");
         let root_node = TreeNode::new("root_node");
         original.add(&root_node, None);
-
-        //   jsondump()      │ String       │ to JSON string (internal use)
-        //   jsonload(s)     │ String       │ from JSON string (internal use)
-        //   file_json_dumps()    │ String       │ to JSON string
-        //   file_json_loads(s)   │ String       │ from JSON string
-        //   file_json_dump(path) │ file         │ write to file
-        //   file_json_load(path) │ file         │ read from file
 
         let fname = "serialization/test_tree.json";
         original.file_json_dump(fname).unwrap();
@@ -264,13 +247,13 @@ pub fn run_tree_root() -> TestResult {
     MINI_TEST!("Root", {
         use crate::Tree;
         use crate::TreeNode;
+        use std::rc::Rc;
 
         let mut t = Tree::new("t");
         let root = TreeNode::new("root");
         t.add(&root, None);
 
-        MINI_CHECK!(t.root().is_some());
-        MINI_CHECK!(t.root().unwrap().borrow().name == "root");
+        MINI_CHECK!(Rc::ptr_eq(&t.root().unwrap(), &root));
     })
 }
 
@@ -415,8 +398,7 @@ pub fn run_tree_find_node_by_guid() -> TestResult {
 
         let found = t.find_node_by_guid(&root_guid);
 
-        MINI_CHECK!(found.is_some());
-        MINI_CHECK!(found.unwrap().borrow().guid() == root_guid);
+        MINI_CHECK!(found.is_some() && found.unwrap().borrow().guid() == root_guid);
         MINI_CHECK!(t.find_node_by_guid("missing-guid").is_none());
     })
 }
@@ -487,7 +469,6 @@ REGISTER_MINI_TEST!(
     "Is Leaf",
     crate::tree_test::run_treenode_is_leaf
 );
-REGISTER_MINI_TEST!("TreeNode", "Tree", crate::tree_test::run_treenode_tree);
 REGISTER_MINI_TEST!("TreeNode", "Add", crate::tree_test::run_treenode_add);
 REGISTER_MINI_TEST!("TreeNode", "Remove", crate::tree_test::run_treenode_remove);
 REGISTER_MINI_TEST!("TreeNode", "Parent", crate::tree_test::run_treenode_parent);

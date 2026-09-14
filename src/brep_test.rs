@@ -2,8 +2,7 @@ use crate::mini_test::TestResult;
 use crate::tolerance::PI;
 use crate::{MINI_CHECK, MINI_TEST, REGISTER_MINI_TEST};
 
-// Every non-degenerated edge of a solid is used by exactly two faces with opposite
-// composed orientations (the manifold contract BRepCheck enforces).
+/// Every non-degenerated edge of a solid is used by exactly two faces with opposite composed orientations
 fn edges_manifold(b: &crate::BRep) -> bool {
     for ei in 0..b.edge_count() {
         if b.m_edges[ei].degenerated {
@@ -20,17 +19,198 @@ fn edges_manifold(b: &crate::BRep) -> bool {
     true
 }
 
+/// Sorted positions of the mesh vertices on the v = 0 side
+fn boundary_points(mesh: &crate::Mesh) -> Vec<[f64; 3]> {
+    let mut points: Vec<[f64; 3]> = Vec::new();
+    for v in mesh.vertex.values() {
+        if v.attributes.get("v") == Some(&0.0) {
+            points.push([v.x, v.y, v.z]);
+        }
+    }
+    points.sort_by(|a, b| a[0].total_cmp(&b[0]));
+    points
+}
+
+/// Unit planar quad face with straight edges and pcurves; returns the face index
+fn build_quad_face(b: &mut crate::BRep) -> usize {
+    use crate::brep::BRepOrientation;
+    use crate::brep::BRepRef;
+    use crate::NurbsCurve;
+    use crate::NurbsSurface;
+    use crate::Point;
+
+    let mut srf = NurbsSurface::new(3, false, 2, 2, 2, 2);
+    srf.set_cv(0, 0, &Point::new(0.0, 0.0, 0.0));
+    srf.set_cv(1, 0, &Point::new(1.0, 0.0, 0.0));
+    srf.set_cv(0, 1, &Point::new(0.0, 1.0, 0.0));
+    srf.set_cv(1, 1, &Point::new(1.0, 1.0, 0.0));
+    let si = b.add_surface(&srf);
+    let corners = [
+        Point::new(0.0, 0.0, 0.0),
+        Point::new(1.0, 0.0, 0.0),
+        Point::new(1.0, 1.0, 0.0),
+        Point::new(0.0, 1.0, 0.0),
+    ];
+    for corner in &corners {
+        b.add_vertex(corner, 0.0);
+    }
+    let mut refs = Vec::new();
+    for i in 0..4usize {
+        let j = (i + 1) % 4;
+        let ci = b.add_curve_3d(&NurbsCurve::create(
+            false,
+            1,
+            &[corners[i].clone(), corners[j].clone()],
+        ));
+        let ei = b.add_edge(ci as i32, i as i32, j as i32);
+        let c2 = b.add_curve_2d(&NurbsCurve::create(
+            false,
+            1,
+            &[corners[i].clone(), corners[j].clone()],
+        ));
+        b.add_pcurve(ei, si, c2 as i32, -1);
+        refs.push(BRepRef::new(ei as i32, BRepOrientation::Forward));
+    }
+    let wi = b.add_wire(&refs);
+    b.add_face(
+        si as i32,
+        &[BRepRef::new(wi as i32, BRepOrientation::Forward)],
+        0.0,
+    )
+}
+
+pub fn run_brep_shared_grid_boundary() -> TestResult {
+    MINI_TEST!("Shared Grid Boundary", {
+        use crate::brep::BRepOrientation;
+        use crate::brep::BRepRef;
+        use crate::remesh_nurbssurface_grid::RemeshNurbsSurfaceGrid;
+        use crate::BRep;
+        use crate::Mesh;
+        use crate::NurbsCurve;
+        use crate::NurbsSurface;
+        use crate::Point;
+
+        let mut b = BRep::new();
+        let mut surfaces = Vec::new();
+        for face in 0..2 {
+            let mut points = Vec::new();
+            for i in 0..3 {
+                for j in 0..2 {
+                    let z = if i != 1 {
+                        0.0
+                    } else if j == 0 || face == 0 {
+                        0.5
+                    } else {
+                        4.0
+                    };
+                    points.push(Point::new(
+                        i as f64 * 0.5,
+                        j as f64 * if face == 0 { 1.0 } else { -1.0 },
+                        z,
+                    ));
+                }
+            }
+            let surface = NurbsSurface::create(false, false, 2, 1, 3, 2, &points).unwrap();
+            let si = b.add_surface(&surface);
+            let corners = [[0.0, 0.0], [1.0, 0.0], [1.0, 1.0], [0.0, 1.0]];
+            let mut vertices = Vec::new();
+            for corner in &corners {
+                vertices.push(b.add_vertex(&surface.point_at(corner[0], corner[1]).unwrap(), 0.0));
+            }
+            let mut edges = Vec::new();
+            for side in 0..4 {
+                let a = corners[side];
+                let z = corners[(side + 1) % 4];
+                let mut edge = 0;
+                if side != 0 || face != 1 {
+                    let dir = if a[0] != z[0] { 0 } else { 1 };
+                    let mut curve = surface.iso_curve(dir, a[1 - dir]).unwrap();
+                    if a[dir] > z[dir] {
+                        curve.reverse();
+                    }
+                    let ci = b.add_curve_3d(&curve);
+                    edge = b.add_edge(
+                        ci as i32,
+                        vertices[side] as i32,
+                        vertices[(side + 1) % 4] as i32,
+                    );
+                }
+                let pc = NurbsCurve::create(
+                    false,
+                    1,
+                    &[Point::new(a[0], a[1], 0.0), Point::new(z[0], z[1], 0.0)],
+                );
+                let ci = b.add_curve_2d(&pc);
+                b.add_pcurve(edge, si, ci as i32, -1);
+                edges.push(BRepRef::new(edge as i32, BRepOrientation::Forward));
+            }
+            let wi = b.add_wire(&edges);
+            b.add_face(
+                si as i32,
+                &[BRepRef::new(wi as i32, BRepOrientation::Forward)],
+                1e-8,
+            );
+            surfaces.push(surface);
+        }
+        let mut original: Vec<Mesh> = Vec::new();
+        for s in &surfaces {
+            original.push(RemeshNurbsSurfaceGrid::from_u_v_q(
+                s.clone(),
+                0,
+                0,
+                20.0,
+                0.005,
+            ));
+        }
+        MINI_CHECK!(
+            boundary_points(&original[0]).len() == 7 && boundary_points(&original[1]).len() == 11
+        );
+        let mut meshes = b.face_meshes_q(Some((20.0, 0.005)));
+        let mut first = boundary_points(&meshes[0]);
+        let second = boundary_points(&meshes[1]);
+        MINI_CHECK!(first == second && first.len() == 7);
+        MINI_CHECK!(meshes[0].face.len() == original[0].face.len() && !meshes[1].face.is_empty());
+        let mut maximum = 0.0f64;
+        for i in 0..first.len() - 1 {
+            let a = first[i];
+            let z = first[i + 1];
+            let actual = surfaces[0].point_at((a[0] + z[0]) * 0.5, 0.0).unwrap();
+            let mut sag = 0.0f64;
+            for d in 0..3 {
+                sag += (actual[d] - (a[d] + z[d]) * 0.5).powi(2);
+            }
+            maximum = maximum.max(sag.sqrt());
+        }
+        MINI_CHECK!(maximum <= 0.005 * 1.5);
+        let refined = RemeshNurbsSurfaceGrid::from_u_v_q(surfaces[0].clone(), 0, 0, 5.0, 0.001);
+        meshes = b.face_meshes_q(Some((5.0, 0.001)));
+        first = boundary_points(&meshes[0]);
+        MINI_CHECK!(
+            first == boundary_points(&meshes[1])
+                && !meshes[0].face.is_empty()
+                && !meshes[1].face.is_empty()
+        );
+        for point in boundary_points(&refined) {
+            MINI_CHECK!(first.contains(&point));
+        }
+        let cosine = (5.0 * PI / 180.0).cos();
+        for i in 0..first.len() - 1 {
+            let a = surfaces[0].normal_at(first[i][0], 0.0);
+            let z = surfaces[0].normal_at(first[i + 1][0], 0.0);
+            MINI_CHECK!(a.dot(&z) >= cosine - 64.0 * f64::EPSILON);
+        }
+    })
+}
+
 pub fn run_brep_constructor() -> TestResult {
     MINI_TEST!("Constructor", {
         use crate::BRep;
 
         let b = BRep::new();
 
-        // String representations
         let sstr = b.str();
         let srepr = b.repr();
 
-        // Copy (new guid)
         let bcopy = b.duplicate();
 
         MINI_CHECK!(!b.is_valid());
@@ -90,15 +270,15 @@ pub fn run_brep_accessors() -> TestResult {
 
 pub fn run_brep_add_face() -> TestResult {
     MINI_TEST!("Add Face", {
-        use crate::brep::{BRepOrientation, BRepRef};
+        use crate::brep::BRepOrientation;
+        use crate::brep::BRepRef;
         use crate::BRep;
         use crate::NurbsCurve;
         use crate::NurbsSurface;
         use crate::Point;
 
         let mut b = BRep::new();
-        let mut srf =
-            NurbsSurface::create_raw(3, false, 2, 2, 2, 2, false, false, 1.0, 1.0).unwrap();
+        let mut srf = NurbsSurface::new(3, false, 2, 2, 2, 2);
         srf.set_cv(0, 0, &Point::new(0.0, 0.0, 0.0));
         srf.set_cv(1, 0, &Point::new(1.0, 0.0, 0.0));
         srf.set_cv(0, 1, &Point::new(0.0, 1.0, 0.0));
@@ -112,8 +292,8 @@ pub fn run_brep_add_face() -> TestResult {
             Point::new(0.0, 1.0, 0.0),
         ];
         let mut refs = Vec::new();
-        for i in 0..4 {
-            b.add_vertex(&corners[i], 0.0);
+        for corner in &corners {
+            b.add_vertex(corner, 0.0);
         }
         for i in 0..4usize {
             let j = (i + 1) % 4;
@@ -237,7 +417,10 @@ pub fn run_brep_is_closed() -> TestResult {
 
 pub fn run_brep_wire_edges() -> TestResult {
     MINI_TEST!("Wire Edges", {
-        use crate::brep::{brep_compose, brep_reverse, BRepOrientation, BRepRef};
+        use crate::brep::brep_compose;
+        use crate::brep::brep_reverse;
+        use crate::brep::BRepOrientation;
+        use crate::brep::BRepRef;
         use crate::BRep;
 
         let b = BRep::create_box(2.0, 3.0, 4.0);
@@ -391,16 +574,18 @@ pub fn run_brep_json_roundtrip() -> TestResult {
         b.width = 2.0;
         b.surfacecolor = Color::new(1.0, 0.5, 0.25, 1.0);
 
-        // String
+        let json = b.jsondump().unwrap();
+        let loaded_json = BRep::jsonload(&json).unwrap();
+
         let json_string = b.file_json_dumps();
         let loaded_json_string = BRep::file_json_loads(&json_string);
 
-        // File
         let src_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
         let filename = src_dir.join("serialization").join("test_brep.json");
-        b.file_json_dump(filename.to_str().unwrap());
-        let loaded_from_file = BRep::file_json_load(filename.to_str().unwrap());
+        b.file_json_dump(filename.to_str().unwrap()).unwrap();
+        let loaded_from_file = BRep::file_json_load(filename.to_str().unwrap()).unwrap();
 
+        MINI_CHECK!(loaded_json == b);
         MINI_CHECK!(loaded_json_string == b);
         MINI_CHECK!(loaded_from_file == b);
         MINI_CHECK!(loaded_from_file.is_solid());
@@ -726,7 +911,6 @@ pub fn run_brep_mesh_orientation() -> TestResult {
     MINI_TEST!("Mesh Orientation", {
         use crate::BRep;
 
-        // Reversed faces must flip winding; an unflipped bore inflates the volume.
         let bh = BRep::create_block_with_hole(8.0, 6.0, 4.0, 1.5);
         let vol = bh.mesh().volume();
         let reference = 8.0 * 6.0 * 4.0 - PI * 1.5 * 1.5 * 4.0;
@@ -747,11 +931,9 @@ pub fn run_brep_protobuf_roundtrip() -> TestResult {
         b.width = 2.0;
         b.surfacecolor = Color::new(1.0, 0.5, 0.25, 1.0);
 
-        // String
         let proto_bytes = b.pb_dumps();
         let loaded_proto_string = BRep::pb_loads(&proto_bytes).unwrap();
 
-        // File
         let src_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
         let filename = src_dir.join("serialization").join("test_brep.bin");
         b.pb_dump(filename.to_str().unwrap());
@@ -769,18 +951,242 @@ pub fn run_brep_volume() -> TestResult {
     MINI_TEST!("Volume", {
         use crate::BRep;
 
-        let bx = BRep::create_box(2.0, 3.0, 4.0); // 2x3x4 -> 24
-        let cyl = BRep::create_cylinder(1.0, 4.0); // pi r^2 h = 4 pi
-        let sph = BRep::create_sphere(2.0); // 4/3 pi r^3
+        let bx = BRep::create_box(2.0, 3.0, 4.0);
+        let cyl = BRep::create_cylinder(1.0, 4.0);
+        let sph = BRep::create_sphere(2.0);
         let (vbox, vcyl, vsph) = (bx.volume(), cyl.volume(), sph.volume());
 
-        // Tessellated volume: the default grid density is 2-4% under the analytic value.
         MINI_CHECK!((vbox - 24.0).abs() < 1e-9);
         MINI_CHECK!((vcyl - 4.0 * PI).abs() / (4.0 * PI) < 0.05);
         MINI_CHECK!((vsph - (4.0 / 3.0) * PI * 8.0).abs() / ((4.0 / 3.0) * PI * 8.0) < 0.05);
     })
 }
 
+pub fn run_brep_face_polylines_box() -> TestResult {
+    MINI_TEST!("Face Polylines Box", {
+        use crate::BRep;
+
+        let b = BRep::create_box(2.0, 2.0, 2.0);
+        let pls = b.face_polylines();
+        let pls_planes = b.face_planes();
+        MINI_CHECK!(pls.len() == 6);
+        MINI_CHECK!(pls_planes.len() == pls.len());
+
+        let mut seen = [[false, false], [false, false], [false, false]];
+        for fi in 0..pls.len() {
+            let p = &pls[fi];
+            let pl = &pls_planes[fi];
+            MINI_CHECK!(p.point_count() == 5);
+            MINI_CHECK!(p.get_point(0) == p.get_point(4));
+
+            let mut axis = 3;
+            let mut sign = 0.0;
+            for a in 0..3 {
+                let mut constant = true;
+                for i in 1..p.point_count() {
+                    if (p[i][a] - p[0][a]).abs() > 1e-9 {
+                        constant = false;
+                        break;
+                    }
+                }
+                if constant && (p[0][a].abs() - 1.0).abs() < 1e-9 {
+                    axis = a;
+                    sign = if p[0][a] > 0.0 { 1.0 } else { -1.0 };
+                    break;
+                }
+            }
+            MINI_CHECK!(axis < 3);
+            MINI_CHECK!((pl.origin()[axis] - sign).abs() < 1e-9);
+
+            let n = pl.z_axis();
+            MINI_CHECK!((n[axis].abs() - 1.0).abs() < 1e-6);
+            for a2 in 0..3 {
+                if a2 != axis {
+                    MINI_CHECK!(n[a2].abs() < 1e-6);
+                }
+            }
+
+            let normal_sign = if n[axis] > 0.0 { 1 } else { 0 };
+            MINI_CHECK!(!seen[axis][normal_sign]);
+            seen[axis][normal_sign] = true;
+        }
+        for axis in &seen {
+            for sign in axis {
+                MINI_CHECK!(*sign);
+            }
+        }
+    })
+}
+
+pub fn run_brep_face_polylines_cylinder_caps_only() -> TestResult {
+    MINI_TEST!("Face Polylines Cylinder Caps Only", {
+        use crate::BRep;
+
+        let b = BRep::create_cylinder(1.0, 4.0);
+        MINI_CHECK!(b.face_count() == 3);
+        MINI_CHECK!(b.face_polylines().len() == 2);
+        MINI_CHECK!(b.face_planes().len() == 2);
+    })
+}
+
+pub fn run_brep_face_polylines_ignores_holes() -> TestResult {
+    MINI_TEST!("Face Polylines Ignores Holes", {
+        use crate::BRep;
+
+        let b = BRep::create_block_with_hole(4.0, 4.0, 2.0, 1.0);
+        let pls = b.face_polylines();
+        MINI_CHECK!(pls.len() == 6);
+        MINI_CHECK!(pls.len() == b.face_planes().len());
+        for p in &pls {
+            MINI_CHECK!(p.point_count() == 5);
+            for i in 0..p.point_count() {
+                let pt = &p[i];
+                let on_bounds = (pt[0].abs() - 2.0).abs() < 1e-6
+                    || (pt[1].abs() - 2.0).abs() < 1e-6
+                    || (pt[2].abs() - 1.0).abs() < 1e-6;
+                MINI_CHECK!(on_bounds);
+                let radius_to_z_axis = (pt[0] * pt[0] + pt[1] * pt[1]).sqrt();
+                MINI_CHECK!(radius_to_z_axis > 1.0 + 1e-6);
+            }
+        }
+    })
+}
+
+pub fn run_brep_face_polylines_no_planar_faces() -> TestResult {
+    MINI_TEST!("Face Polylines No Planar Faces", {
+        use crate::BRep;
+
+        let b = BRep::create_sphere(1.0);
+        MINI_CHECK!(b.face_polylines().is_empty());
+        MINI_CHECK!(b.face_planes().is_empty());
+    })
+}
+
+pub fn run_brep_face_planes_reversed_flip() -> TestResult {
+    MINI_TEST!("Face Planes Reversed Flip", {
+        use crate::brep::BRepOrientation;
+        use crate::brep::BRepRef;
+        use crate::BRep;
+
+        let mut b = BRep::new();
+        let fi_forward = build_quad_face(&mut b);
+        b.add_shell(&[BRepRef::new(fi_forward as i32, BRepOrientation::Forward)]);
+        let fi_reversed = build_quad_face(&mut b);
+        b.add_shell(&[BRepRef::new(fi_reversed as i32, BRepOrientation::Reversed)]);
+
+        MINI_CHECK!(b.face_orientation(fi_forward) == BRepOrientation::Forward);
+        MINI_CHECK!(b.face_orientation(fi_reversed) == BRepOrientation::Reversed);
+
+        let planes = b.face_planes();
+        MINI_CHECK!(planes.len() == 2);
+        let n_forward = planes[0].z_axis();
+        let n_reversed = planes[1].z_axis();
+        MINI_CHECK!((n_forward[0] + n_reversed[0]).abs() < 1e-9);
+        MINI_CHECK!((n_forward[1] + n_reversed[1]).abs() < 1e-9);
+        MINI_CHECK!((n_forward[2] + n_reversed[2]).abs() < 1e-9);
+    })
+}
+
+pub fn run_brep_face_planes_point_outward() -> TestResult {
+    MINI_TEST!("Face Planes Point Outward", {
+        use crate::BRep;
+
+        let bx = BRep::create_box(2.0, 2.0, 2.0);
+        let box_planes = bx.face_planes();
+        MINI_CHECK!(box_planes.len() == 6);
+        for pl in &box_planes {
+            let o = pl.origin();
+            let n = pl.z_axis();
+            let d = o[0] * n[0] + o[1] * n[1] + o[2] * n[2];
+            MINI_CHECK!(d > 0.0);
+        }
+
+        let cyl = BRep::create_cylinder(1.0, 4.0);
+        let cyl_planes = cyl.face_planes();
+        MINI_CHECK!(cyl_planes.len() == 2);
+        for pl in &cyl_planes {
+            let o = pl.origin();
+            let n = pl.z_axis();
+            let mid_z = 2.0;
+            MINI_CHECK!((o[2] - mid_z) * n[2] > 0.0);
+        }
+    })
+}
+
+pub fn run_brep_face_planes_outward_block_with_hole() -> TestResult {
+    MINI_TEST!("Face Planes Outward Block With Hole", {
+        use crate::BRep;
+        use crate::Point;
+
+        let b = BRep::create_block_with_hole(4.0, 4.0, 2.0, 1.0);
+        MINI_CHECK!(b.is_solid());
+        let solid_centroid = Point::centroid(&b.vertex_points());
+        let planes = b.face_planes();
+        MINI_CHECK!(planes.len() == 6);
+        for pl in &planes {
+            let o = pl.origin();
+            let n = pl.z_axis();
+            let d = (o[0] - solid_centroid[0]) * n[0]
+                + (o[1] - solid_centroid[1]) * n[1]
+                + (o[2] - solid_centroid[2]) * n[2];
+            MINI_CHECK!(d > 0.0);
+        }
+    })
+}
+
+pub fn run_brep_face_planes_outward_under_mirrored_winding() -> TestResult {
+    MINI_TEST!("Face Planes Outward Under Mirrored Winding", {
+        use crate::brep::BRepOrientation;
+        use crate::BRep;
+        use crate::Point;
+        use crate::Xform;
+
+        let mirror = Xform::scale_xyz(-1.0, 1.0, 1.0);
+        let b = BRep::create_box(2.0, 2.0, 2.0).transformed(&mirror);
+        MINI_CHECK!(b.is_solid());
+
+        let pls = b.face_polylines();
+        let planes = b.face_planes();
+        MINI_CHECK!(pls.len() == 6);
+        MINI_CHECK!(planes.len() == 6);
+
+        let solid_centroid = Point::centroid(&b.vertex_points());
+
+        for fi in 0..pls.len() {
+            let o = planes[fi].origin();
+            let n = planes[fi].z_axis();
+            let d = (o[0] - solid_centroid[0]) * n[0]
+                + (o[1] - solid_centroid[1]) * n[1]
+                + (o[2] - solid_centroid[2]) * n[2];
+            MINI_CHECK!(d > 0.0);
+
+            let mut expected = Vec::new();
+            for er in b.wire_edges(&b.m_faces[fi].wires[0]) {
+                let edge = &b.m_edges[er.index as usize];
+                let reversed = er.orientation == BRepOrientation::Reversed;
+                let start = if reversed {
+                    edge.end_vertex
+                } else {
+                    edge.start_vertex
+                };
+                expected.push(b.m_vertices[start as usize].point.clone());
+            }
+            expected.push(expected[0].clone());
+
+            let actual = pls[fi].get_points();
+            MINI_CHECK!(actual.len() == expected.len());
+            for k in 0..actual.len() {
+                MINI_CHECK!(actual[k] == expected[k]);
+            }
+        }
+    })
+}
+
+REGISTER_MINI_TEST!(
+    "BRep",
+    "Shared Grid Boundary",
+    crate::brep_test::run_brep_shared_grid_boundary
+);
 REGISTER_MINI_TEST!(
     "BRep",
     "Constructor",
@@ -871,126 +1277,43 @@ REGISTER_MINI_TEST!(
     crate::brep_test::run_brep_protobuf_roundtrip
 );
 REGISTER_MINI_TEST!("BRep", "Volume", crate::brep_test::run_brep_volume);
-
-pub fn run_brep_shared_grid_boundary() -> TestResult {
-    MINI_TEST!("Shared Grid Boundary", {
-        use crate::brep::{BRepOrientation, BRepRef};
-        use crate::remesh_nurbssurface_grid::RemeshNurbsSurfaceGrid;
-        use crate::{BRep, Mesh, NurbsCurve, NurbsSurface, Point};
-        let mut b = BRep::new();
-        let mut surfaces = Vec::new();
-        for face in 0..2 {
-            let mut points = Vec::new();
-            for i in 0..3 {
-                for j in 0..2 {
-                    let z = if i != 1 {
-                        0.0
-                    } else if j == 0 || face == 0 {
-                        0.5
-                    } else {
-                        4.0
-                    };
-                    points.push(Point::new(
-                        i as f64 * 0.5,
-                        j as f64 * if face == 0 { 1.0 } else { -1.0 },
-                        z,
-                    ));
-                }
-            }
-            let surface = NurbsSurface::create(false, false, 2, 1, 3, 2, &points).unwrap();
-            let si = b.add_surface(&surface);
-            let corners = [[0.0, 0.0], [1.0, 0.0], [1.0, 1.0], [0.0, 1.0]];
-            let vertices: Vec<usize> = corners
-                .iter()
-                .map(|q| b.add_vertex(&surface.point_at(q[0], q[1]).unwrap(), 0.0))
-                .collect();
-            let mut edges = Vec::new();
-            for side in 0..4 {
-                let a = corners[side];
-                let z = corners[(side + 1) % 4];
-                let edge = if side == 0 && face == 1 {
-                    0
-                } else {
-                    let dir = if a[0] != z[0] { 0 } else { 1 };
-                    let mut curve = surface.iso_curve(dir, a[1 - dir]).unwrap();
-                    if a[dir] > z[dir] {
-                        curve.reverse();
-                    }
-                    let ci = b.add_curve_3d(&curve);
-                    b.add_edge(
-                        ci as i32,
-                        vertices[side] as i32,
-                        vertices[(side + 1) % 4] as i32,
-                    )
-                };
-                let pc = NurbsCurve::create(
-                    false,
-                    1,
-                    &[Point::new(a[0], a[1], 0.0), Point::new(z[0], z[1], 0.0)],
-                );
-                let ci = b.add_curve_2d(&pc);
-                b.add_pcurve(edge, si, ci as i32, -1);
-                edges.push(BRepRef::new(edge as i32, BRepOrientation::Forward));
-            }
-            let wi = b.add_wire(&edges);
-            b.add_face(
-                si as i32,
-                &[BRepRef::new(wi as i32, BRepOrientation::Forward)],
-                1e-8,
-            );
-            surfaces.push(surface);
-        }
-        let boundary = |mesh: &Mesh| {
-            let mut points: Vec<[f64; 3]> = mesh
-                .vertex
-                .values()
-                .filter(|v| v.attributes.get("v") == Some(&0.0))
-                .map(|v| [v.x, v.y, v.z])
-                .collect();
-            points.sort_by(|a, b| a[0].total_cmp(&b[0]));
-            points
-        };
-        let original: Vec<Mesh> = surfaces
-            .iter()
-            .map(|s| RemeshNurbsSurfaceGrid::from_u_v_q(s.clone(), 0, 0, 20.0, 0.005))
-            .collect();
-        MINI_CHECK!(boundary(&original[0]).len() == 7 && boundary(&original[1]).len() == 11);
-        let meshes = b.face_meshes_q(Some((20.0, 0.005)));
-        let first = boundary(&meshes[0]);
-        let second = boundary(&meshes[1]);
-        MINI_CHECK!(first == second && first.len() == 7);
-        MINI_CHECK!(meshes[0].face.len() == original[0].face.len() && !meshes[1].face.is_empty());
-        let mut maximum = 0.0f64;
-        for pair in first.windows(2) {
-            let (a, z) = (pair[0], pair[1]);
-            let u = (a[0] + z[0]) * 0.5;
-            let actual = surfaces[0].point_at(u, 0.0).unwrap();
-            let sag = (0..3)
-                .map(|d| (actual[d] - (a[d] + z[d]) * 0.5).powi(2))
-                .sum::<f64>()
-                .sqrt();
-            maximum = maximum.max(sag);
-        }
-        MINI_CHECK!(maximum <= 0.005 * 1.5);
-        let original = RemeshNurbsSurfaceGrid::from_u_v_q(surfaces[0].clone(), 0, 0, 5.0, 0.001);
-        let meshes = b.face_meshes_q(Some((5.0, 0.001)));
-        let first = boundary(&meshes[0]);
-        MINI_CHECK!(
-            first == boundary(&meshes[1])
-                && !meshes[0].face.is_empty()
-                && !meshes[1].face.is_empty()
-        );
-        MINI_CHECK!(boundary(&original).iter().all(|p| first.contains(p)));
-        let cosine = 5.0f64.to_radians().cos();
-        for pair in first.windows(2) {
-            let a = surfaces[0].normal_at(pair[0][0], 0.0);
-            let z = surfaces[0].normal_at(pair[1][0], 0.0);
-            MINI_CHECK!(a.dot(&z) >= cosine - 64.0 * f64::EPSILON);
-        }
-    })
-}
 REGISTER_MINI_TEST!(
     "BRep",
-    "Shared Grid Boundary",
-    crate::brep_test::run_brep_shared_grid_boundary
+    "Face Polylines Box",
+    crate::brep_test::run_brep_face_polylines_box
+);
+REGISTER_MINI_TEST!(
+    "BRep",
+    "Face Polylines Cylinder Caps Only",
+    crate::brep_test::run_brep_face_polylines_cylinder_caps_only
+);
+REGISTER_MINI_TEST!(
+    "BRep",
+    "Face Polylines Ignores Holes",
+    crate::brep_test::run_brep_face_polylines_ignores_holes
+);
+REGISTER_MINI_TEST!(
+    "BRep",
+    "Face Polylines No Planar Faces",
+    crate::brep_test::run_brep_face_polylines_no_planar_faces
+);
+REGISTER_MINI_TEST!(
+    "BRep",
+    "Face Planes Reversed Flip",
+    crate::brep_test::run_brep_face_planes_reversed_flip
+);
+REGISTER_MINI_TEST!(
+    "BRep",
+    "Face Planes Point Outward",
+    crate::brep_test::run_brep_face_planes_point_outward
+);
+REGISTER_MINI_TEST!(
+    "BRep",
+    "Face Planes Outward Block With Hole",
+    crate::brep_test::run_brep_face_planes_outward_block_with_hole
+);
+REGISTER_MINI_TEST!(
+    "BRep",
+    "Face Planes Outward Under Mirrored Winding",
+    crate::brep_test::run_brep_face_planes_outward_under_mirrored_winding
 );

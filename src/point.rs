@@ -1,28 +1,12 @@
+use crate::tolerance::Tolerance;
+use crate::tolerance::TOLERANCE;
 use crate::{Color, Vector, Xform};
 use serde::{Deserialize, Serialize};
 use std::fmt;
 use std::ops::{Add, AddAssign, Div, DivAssign, Index, IndexMut, Mul, MulAssign, Sub, SubAssign};
-/// A 3D point with visual properties and JSON serialization support.
-///
-/// The Point struct represents a location in 3D space with x, y, z coordinates.
-/// It includes visual properties like color and width for display purposes,
-/// as well as transformation matrix support.
-///
-/// # Attributes
-///
-/// * `guid` - Unique identifier for the point.
-/// * `name` - Name of the point.
-/// * `width` - Width of the point for display.
-/// * `pointcolor` - Color of the point.
-/// * `xform` - Transformation matrix.
-///
-/// # Examples
-///
-/// ```
-/// # use session_rust::Point;
-/// let p = Point::new(1.0, 2.0, 3.0);
-/// let dist = p.distance(&Point::new(4.0, 5.0, 6.0), None);
-/// ```
+use std::sync::OnceLock;
+
+/// A 3D point with display width and color
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(tag = "type", rename = "Point")]
 pub struct Point {
@@ -30,73 +14,47 @@ pub struct Point {
         serialize_with = "crate::guid_serde::serialize",
         deserialize_with = "crate::guid_serde::deserialize"
     )]
-    guid: std::sync::OnceLock<String>, // Unique identifier
-    pub name: String, // Name of the point
+    guid: OnceLock<String>,
+    pub name: String,
+    pub width: f64,
+    pub pointcolor: Color,
     #[serde(rename = "x")]
-    _x: f64, // X coordinate (private)
+    _x: f64,
     #[serde(rename = "y")]
-    _y: f64, // Y coordinate (private)
+    _y: f64,
     #[serde(rename = "z")]
-    _z: f64, // Z coordinate (private)
-    pub width: f64,   // Width of the point
-    pub pointcolor: Color, // Color of the point
+    _z: f64,
 }
 
 impl Default for Point {
     fn default() -> Self {
-        Self {
-            _x: 0.0,
-            _y: 0.0,
-            _z: 0.0,
-            guid: std::sync::OnceLock::new(),
-            name: "my_point".to_string(),
-            pointcolor: Color::black(),
-            width: 1.0,
-        }
+        Self::new(0.0, 0.0, 0.0)
     }
 }
 
 impl Point {
-    /// Creates a new Point with specified coordinates.
-    ///
-    /// # Arguments
-    ///
-    /// * `x` - X coordinate of the point.
-    /// * `y` - Y coordinate of the point.
-    /// * `z` - Z coordinate of the point.
-    ///
-    /// # Returns
-    ///
-    /// A new Point with the specified coordinates and a unique GUID.
     pub fn new(x: f64, y: f64, z: f64) -> Self {
+        Self::with_name(x, y, z, "my_point")
+    }
+
+    /// Construct from coordinates and a name
+    pub fn with_name(x: f64, y: f64, z: f64, name: &str) -> Self {
         Self {
+            guid: OnceLock::new(),
+            name: name.to_string(),
+            width: 1.0,
+            pointcolor: Color::black(),
             _x: x,
             _y: y,
             _z: z,
-            ..Default::default()
         }
     }
 
-    /// Creates a new Point with specified coordinates and name.
-    ///
-    /// # Arguments
-    ///
-    /// * `x` - X coordinate of the point.
-    /// * `y` - Y coordinate of the point.
-    /// * `z` - Z coordinate of the point.
-    /// * `name` - Name for the point.
-    ///
-    /// # Returns
-    ///
-    /// A new Point with the specified coordinates, name, and a unique GUID.
-    pub fn with_name(x: f64, y: f64, z: f64, name: &str) -> Self {
-        Self {
-            _x: x,
-            _y: y,
-            _z: z,
-            name: name.to_string(),
-            ..Default::default()
-        }
+    /// Copy (new guid, same data)
+    pub fn duplicate(&self) -> Self {
+        let mut copy = self.clone();
+        copy.guid = OnceLock::new();
+        copy
     }
 
     pub fn has_guid(&self) -> bool {
@@ -111,28 +69,34 @@ impl Point {
         let _ = self.guid.set(g);
     }
 
-    /// Clear the guid so a FRESH one mints lazily on next read — the duplicate/copy enabler.
+    /// Clear the guid so a fresh one mints lazily on next read
     pub fn refresh_guid(&mut self) {
-        self.guid = std::sync::OnceLock::new();
+        self.guid = OnceLock::new();
     }
 
-    /// Deep copy this point with a new GUID.
-    ///
-    /// Creates a clone of this point with all properties copied
-    /// but assigns a new unique GUID.
-    ///
-    /// # Returns
-    ///
-    /// A new Point with identical values but a different GUID.
-    pub fn duplicate(&self) -> Self {
-        let mut copy = self.clone();
-        copy.guid = std::sync::OnceLock::new();
-        copy
+    // ═══════════════════════════════════════════════════════════════════════════
+    // Operators
+    // ═══════════════════════════════════════════════════════════════════════════
+
+    /// Coordinate-wise sum of two points
+    pub fn sum(p0: &Point, p1: &Point) -> Self {
+        Point::new(p0[0] + p1[0], p0[1] + p1[1], p0[2] + p1[2])
     }
 
-    /// Apply a transformation to the point coordinates, in place.
+    /// Coordinate-wise difference of two points
+    pub fn sub(p0: &Point, p1: &Point) -> Self {
+        Point::new(p0[0] - p1[0], p0[1] - p1[1], p0[2] - p1[2])
+    }
+
+    // ═══════════════════════════════════════════════════════════════════════════
+    // Transformation
+    // ═══════════════════════════════════════════════════════════════════════════
+
+    /// Transform in place
     pub fn transform(&mut self, xform: &Xform) {
-        let (x, y, z) = (self._x, self._y, self._z);
+        let x = self._x;
+        let y = self._y;
+        let z = self._z;
         let m = &xform.m;
         let w = m[3] * x + m[7] * y + m[11] * z + m[15];
         let w_inv = if w.abs() > 1e-10 { 1.0 / w } else { 1.0 };
@@ -141,397 +105,126 @@ impl Point {
         self._z = (m[2] * x + m[6] * y + m[10] * z + m[14]) * w_inv;
     }
 
-    /// Return a transformed copy of the point, leaving the original unchanged.
-    ///
-    /// # Returns
-    ///
-    /// A new transformed Point.
+    /// Transformed copy
     pub fn transformed(&self, xform: &Xform) -> Self {
-        let mut result = self.clone();
+        let mut result = self.duplicate();
         result.transform(xform);
         result
     }
 
     // ═══════════════════════════════════════════════════════════════════════════
-    // JSON
+    // Geometry
     // ═══════════════════════════════════════════════════════════════════════════
 
-    /// Serializes the Point to a JSON string.
-    ///
-    /// # Returns
-    ///
-    /// A Result containing the pretty-printed JSON string or an error.
-    pub fn jsondump(&self) -> Result<String, Box<dyn std::error::Error>> {
-        crate::file_encoders::sorted_json_string(self)
-    }
-
-    /// Deserializes a Point from a JSON string.
-    ///
-    /// # Arguments
-    ///
-    /// * `json_data` - JSON string containing point data.
-    ///
-    /// # Returns
-    ///
-    /// A Result containing the deserialized Point or an error.
-    pub fn jsonload(json_data: &str) -> Result<Self, Box<dyn std::error::Error>> {
-        Ok(serde_json::from_str(json_data)?)
-    }
-
-    pub fn file_json_dumps(&self) -> String {
-        self.jsondump().unwrap_or_default()
-    }
-
-    pub fn file_json_loads(json_string: &str) -> Self {
-        Self::jsonload(json_string).unwrap_or_else(|_| Self::default())
-    }
-
-    /// Serializes the Point to a JSON file.
-    ///
-    /// # Arguments
-    ///
-    /// * `filepath` - Path to the output file.
-    ///
-    /// # Returns
-    ///
-    /// A Result indicating success or an error.
-    pub fn file_json_dump(&self, filepath: &str) -> Result<(), Box<dyn std::error::Error>> {
-        let json = self.jsondump()?;
-        std::fs::write(filepath, json)?;
-        Ok(())
-    }
-
-    /// Deserializes a Point from a JSON file.
-    ///
-    /// # Arguments
-    ///
-    /// * `filepath` - Path to the JSON file.
-    ///
-    /// # Returns
-    ///
-    /// A Result containing the deserialized Point or an error.
-    pub fn file_json_load(filepath: &str) -> Result<Self, Box<dyn std::error::Error>> {
-        let json = std::fs::read_to_string(filepath)?;
-        Self::jsonload(&json)
-    }
-
-    // ═══════════════════════════════════════════════════════════════════════════
-    // Protobuf Serialization
-    // ═══════════════════════════════════════════════════════════════════════════
-
-    /// Convert to protobuf binary format.
-    ///
-    /// # Returns
-    ///
-    /// A Vec<u8> containing the serialized protobuf data.
-    pub fn pb_dumps(&self) -> Vec<u8> {
-        use prost::Message;
-        self.to_proto().encode_to_vec()
-    }
-
-    /// The proto struct itself — pb_dumps encodes it; Session embeds it directly.
-    pub fn to_proto(&self) -> crate::proto::Point {
-        crate::proto::Point {
-            guid: self.guid.get().cloned().unwrap_or_default(),
-            name: self.name.clone(),
-            x: self._x as f64,
-            y: self._y as f64,
-            z: self._z as f64,
-            width: self.width as f64,
-            pointcolor: Some(crate::proto::Color {
-                guid: self.pointcolor.guid().to_string(),
-                name: self.pointcolor.name.clone(),
-                r: self.pointcolor.r,
-                g: self.pointcolor.g,
-                b: self.pointcolor.b,
-                a: self.pointcolor.a,
-            }),
-        }
-    }
-
-    /// Create Point from protobuf binary data.
-    ///
-    /// # Arguments
-    ///
-    /// * `data` - Byte slice containing protobuf-encoded point data.
-    ///
-    /// # Returns
-    ///
-    /// A Result containing the deserialized Point or an error.
-    pub fn pb_loads(data: &[u8]) -> Result<Self, Box<dyn std::error::Error>> {
-        use prost::Message;
-        Ok(Self::from_proto(crate::proto::Point::decode(data)?))
-    }
-
-    /// Build from an already-decoded proto — pb_loads decodes then calls this.
-    pub fn from_proto(proto: crate::proto::Point) -> Self {
-        let mut pt = Self::new(proto.x as f64, proto.y as f64, proto.z as f64);
-        if !proto.guid.is_empty() {
-            pt.set_guid(proto.guid);
-        }
-        pt.name = proto.name;
-        pt.width = proto.width as f64;
-
-        if let Some(color) = proto.pointcolor {
-            pt.pointcolor.name = color.name;
-            pt.pointcolor.r = color.r;
-            pt.pointcolor.g = color.g;
-            pt.pointcolor.b = color.b;
-            pt.pointcolor.a = color.a;
-        }
-
-        pt
-    }
-
-    /// Write protobuf to file.
-    ///
-    /// # Arguments
-    ///
-    /// * `filepath` - Path to the output file.
-    pub fn pb_dump(&self, filepath: &str) {
-        let data = self.pb_dumps();
-        std::fs::write(filepath, data).expect("Failed to write protobuf file");
-    }
-
-    /// Read protobuf from file.
-    ///
-    /// # Arguments
-    ///
-    /// * `filepath` - Path to the protobuf file.
-    ///
-    /// # Returns
-    ///
-    /// The deserialized Point.
-    pub fn pb_load(filepath: &str) -> Self {
-        let data = std::fs::read(filepath).expect("Failed to read protobuf file");
-        Self::pb_loads(&data).expect("Failed to parse protobuf")
-    }
-
-    /// Simple string form (like Python __str__): just coordinates.
-    ///
-    /// # Returns
-    ///
-    /// A string in the format "x, y, z".
-    pub fn str(&self) -> String {
-        use crate::tolerance::TOLERANCE;
-        let prec = crate::tolerance::Tolerance::ROUNDING;
-        format!(
-            "{}, {}, {}",
-            TOLERANCE.format_number(self._x, prec),
-            TOLERANCE.format_number(self._y, prec),
-            TOLERANCE.format_number(self._z, prec),
-        )
-    }
-
-    /// Detailed representation (like Python __repr__).
-    ///
-    /// # Returns
-    ///
-    /// A string with full point details including name, coordinates, color, and width.
-    pub fn repr(&self) -> String {
-        use crate::tolerance::TOLERANCE;
-        let prec = crate::tolerance::Tolerance::ROUNDING;
-        format!(
-            "Point({}, {}, {}, {}, Color({}, {}, {}, {}), {})",
-            self.name,
-            TOLERANCE.format_number(self._x, prec),
-            TOLERANCE.format_number(self._y, prec),
-            TOLERANCE.format_number(self._z, prec),
-            self.pointcolor.r,
-            self.pointcolor.g,
-            self.pointcolor.b,
-            self.pointcolor.a,
-            TOLERANCE.format_number(self.width, prec),
-        )
-    }
-
-    /// Returns a new point that is the sum of two points.
-    ///
-    /// # Arguments
-    ///
-    /// * `p0` - First point.
-    /// * `p1` - Second point.
-    ///
-    /// # Returns
-    ///
-    /// A new Point with coordinates (p0.x + p1.x, p0.y + p1.y, p0.z + p1.z).
-    pub fn sum(p0: &Point, p1: &Point) -> Self {
-        Point::new(p0._x + p1._x, p0._y + p1._y, p0._z + p1._z)
-    }
-
-    /// Returns a new point that is the difference of two points.
-    ///
-    /// # Arguments
-    ///
-    /// * `p0` - First point.
-    /// * `p1` - Second point.
-    ///
-    /// # Returns
-    ///
-    /// A new Point with coordinates (p0.x - p1.x, p0.y - p1.y, p0.z - p1.z).
-    pub fn sub(p0: &Point, p1: &Point) -> Self {
-        Point::new(p0._x - p1._x, p0._y - p1._y, p0._z - p1._z)
-    }
-
-    // ═══════════════════════════════════════════════════════════════════════════
-    // Details
-    // ═══════════════════════════════════════════════════════════════════════════
-
-    /// Check if the points are in counter-clockwise order on the XY plane.
-    ///
-    /// # Arguments
-    ///
-    /// * `a` - First point.
-    /// * `b` - Second point.
-    /// * `c` - Third point.
-    ///
-    /// # Returns
-    ///
-    /// `true` if the points are in counter-clockwise order, `false` otherwise.
-    pub fn ccw(a: &Point, b: &Point, c: &Point) -> bool {
-        (c._y - a._y) * (b._x - a._x) > (b._y - a._y) * (c._x - a._x)
-    }
-
-    /// Alias for `ccw` - check if points are in counter-clockwise order.
-    ///
-    /// # Arguments
-    ///
-    /// * `a` - First point.
-    /// * `b` - Second point.
-    /// * `c` - Third point.
-    ///
-    /// # Returns
-    ///
-    /// `true` if the points are in counter-clockwise order, `false` otherwise.
+    /// True when a, b, c turn counter-clockwise in the xy plane
     pub fn is_ccw(a: &Point, b: &Point, c: &Point) -> bool {
-        Self::ccw(a, b, c)
+        (c[1] - a[1]) * (b[0] - a[0]) > (b[1] - a[1]) * (c[0] - a[0])
     }
 
-    /// Calculate the mid point between two points.
-    ///
-    /// # Arguments
-    ///
-    /// * `a` - First point.
-    /// * `b` - Second point.
-    ///
-    /// # Returns
-    ///
-    /// A new Point at the midpoint between `a` and `b`.
+    /// Mid point between a and b
     pub fn mid_point(a: &Point, b: &Point) -> Point {
         Point::new(
-            (a._x + b._x) / 2.0,
-            (a._y + b._y) / 2.0,
-            (a._z + b._z) / 2.0,
+            (a[0] + b[0]) / 2.0,
+            (a[1] + b[1]) / 2.0,
+            (a[2] + b[2]) / 2.0,
         )
     }
 
-    /// Calculate the distance between this point and another point.
-    ///
-    /// # Arguments
-    /// * `p` - The other point
-    /// * `double_min` - Optional minimum value for distance calculation. Defaults to 1e-12.
+    /// Distance to p, scaled to stay finite for large coordinates
     pub fn distance(&self, p: &Point, double_min: Option<f64>) -> f64 {
         let double_min = double_min.unwrap_or(1e-12);
-        let mut dx = (self[0] - p[0]).abs();
-        let mut dy = (self[1] - p[1]).abs();
-        let mut dz = (self[2] - p[2]).abs();
-
-        // Reorder coordinates to put largest in dx
+        let mut dx = (self._x - p[0]).abs();
+        let mut dy = (self._y - p[1]).abs();
+        let mut dz = (self._z - p[2]).abs();
         if dy >= dx && dy >= dz {
             std::mem::swap(&mut dx, &mut dy);
         } else if dz >= dx && dz >= dy {
             std::mem::swap(&mut dx, &mut dz);
         }
-
         if dx > double_min {
             dy /= dx;
             dz /= dx;
-            dx * (1.0 + dy * dy + dz * dz).sqrt()
-        } else if dx > 0.0 && dx.is_finite() {
-            dx
-        } else {
-            0.0
+            return dx * (1.0 + dy * dy + dz * dz).sqrt();
         }
+        if dx > 0.0 && dx.is_finite() {
+            return dx;
+        }
+        0.0
     }
 
-    /// Calculate the squared distance between this point and another point.
-    ///
-    /// # Arguments
-    /// * `p` - The other point
-    /// * `double_min` - Optional minimum value for distance calculation. Defaults to 1e-12.
+    /// Squared distance to p, scaled to stay finite for large coordinates
     pub fn squared_distance(&self, p: &Point, double_min: Option<f64>) -> f64 {
         let double_min = double_min.unwrap_or(1e-12);
-        let mut dx = (self[0] - p[0]).abs();
-        let mut dy = (self[1] - p[1]).abs();
-        let mut dz = (self[2] - p[2]).abs();
-
+        let mut dx = (self._x - p[0]).abs();
+        let mut dy = (self._y - p[1]).abs();
+        let mut dz = (self._z - p[2]).abs();
         if dy >= dx && dy >= dz {
             std::mem::swap(&mut dx, &mut dy);
         } else if dz >= dx && dz >= dy {
             std::mem::swap(&mut dx, &mut dz);
         }
-
         if dx > double_min {
             dy /= dx;
             dz /= dx;
-            dx * dx * (1.0 + dy * dy + dz * dz)
-        } else if dx > 0.0 && dx.is_finite() {
-            dx * dx
-        } else {
-            0.0
+            return dx * dx * (1.0 + dy * dy + dz * dz);
         }
+        if dx > 0.0 && dx.is_finite() {
+            return dx * dx;
+        }
+        0.0
     }
 
-    /// Calculate the area of a 2D polygon using the shoelace formula.
-    ///
-    /// # Arguments
-    ///
-    /// * `points` - Slice of points defining the polygon vertices.
-    ///
-    /// # Returns
-    ///
-    /// The area of the polygon.
+    /// Point at parameter t in [0, 1] between a and b
+    pub fn lerp(a: &Point, b: &Point, t: f64) -> Point {
+        Point::new(
+            a[0] + t * (b[0] - a[0]),
+            a[1] + t * (b[1] - a[1]),
+            a[2] + t * (b[2] - a[2]),
+        )
+    }
+
+    /// Evenly spaced points between from and to (kind: 0=no endpoints, 1=both, 2=start only)
+    pub fn interpolate(from: &Point, to: &Point, steps: usize, kind: usize) -> Vec<Point> {
+        let mut points = Vec::new();
+        if kind == 1 || kind == 2 {
+            points.push(from.duplicate());
+        }
+        for i in 1..=steps {
+            points.push(Point::lerp(from, to, i as f64 / (steps + 1) as f64));
+        }
+        if kind == 1 {
+            points.push(to.duplicate());
+        }
+        points
+    }
+
+    /// Shoelace area of a polygon in the xy plane
     pub fn area(points: &[Point]) -> f64 {
         let n = points.len();
         let mut area = 0.0;
-
         for i in 0..n {
             let j = (i + 1) % n;
             area += points[i][0] * points[j][1];
             area -= points[j][0] * points[i][1];
         }
-
         area.abs() / 2.0
     }
 
-    /// Calculate the centroid of a quadrilateral.
-    ///
-    /// # Arguments
-    ///
-    /// * `vertices` - Slice of exactly 4 points defining the quadrilateral.
-    ///
-    /// # Returns
-    ///
-    /// A Result containing the centroid Point, or an error if not 4 vertices.
+    /// Area-weighted centroid of a quadrilateral
     pub fn centroid_quad(vertices: &[Point]) -> Result<Point, &'static str> {
         if vertices.len() != 4 {
             return Err("Polygon must have exactly 4 vertices.");
         }
-
         let mut total_area = 0.0;
         let mut centroid_sum = Vector::new(0.0, 0.0, 0.0);
-
         for i in 0..4 {
             let p0 = &vertices[i];
             let p1 = &vertices[(i + 1) % 4];
             let p2 = &vertices[(i + 2) % 4];
-
             let tri_area =
-                ((p0[0] * (p1[1] - p2[1]) + p1[0] * (p2[1] - p0[1]) + p2[0] * (p0[1] - p1[1]))
-                    .abs())
+                (p0[0] * (p1[1] - p2[1]) + p1[0] * (p2[1] - p0[1]) + p2[0] * (p0[1] - p1[1])).abs()
                     / 2.0;
             total_area += tri_area;
-
             let tri_centroid = Vector::new(
                 (p0[0] + p1[0] + p2[0]) / 3.0,
                 (p0[1] + p1[1] + p2[1]) / 3.0,
@@ -539,12 +232,11 @@ impl Point {
             );
             centroid_sum += tri_centroid * tri_area;
         }
-
         let result = centroid_sum / total_area;
         Ok(Point::new(result[0], result[1], result[2]))
     }
 
-    /// Average of an arbitrary list of points.
+    /// Arithmetic mean of points; empty input returns the origin
     pub fn centroid(points: &[Point]) -> Point {
         if points.is_empty() {
             return Point::new(0.0, 0.0, 0.0);
@@ -561,11 +253,9 @@ impl Point {
         Point::new(cx / n, cy / n, cz / n)
     }
 
-    /// Approximate dihedral angle in degrees between half-planes (p,q,r) and (p,q,s).
-    // Literal matches Point::dihedral_angle_deg in C++ and Python verbatim.
+    /// Unsigned dihedral angle in degrees of edge pq between half-planes pqr and pqs
     #[allow(clippy::approx_constant)]
     pub fn dihedral_angle_deg(p: &Point, q: &Point, r: &Point, s: &Point) -> f64 {
-        use crate::tolerance::Tolerance;
         let pq = Vector::new(q[0] - p[0], q[1] - p[1], q[2] - p[2]);
         let pr = Vector::new(r[0] - p[0], r[1] - p[1], r[2] - p[2]);
         let ps = Vector::new(s[0] - p[0], s[1] - p[1], s[2] - p[2]);
@@ -587,12 +277,130 @@ impl Point {
     }
 
     // ═══════════════════════════════════════════════════════════════════════════
-    // WGPU
+    // JSON
     // ═══════════════════════════════════════════════════════════════════════════
 
-    /// GPU-ready `[x, y, z]` as f32 — the f64→f32 boundary for wgpu upload
-    /// (vertex / instance / segment rows). Mirrors [`crate::Xform::to_f32`]: the kernel
-    /// keeps f64, this casts only at the point of upload.
+    pub fn jsondump(&self) -> Result<String, Box<dyn std::error::Error>> {
+        crate::file_encoders::sorted_json_string(self)
+    }
+
+    pub fn jsonload(json_data: &str) -> Result<Self, Box<dyn std::error::Error>> {
+        Ok(serde_json::from_str(json_data)?)
+    }
+
+    pub fn file_json_dumps(&self) -> String {
+        self.jsondump().unwrap_or_default()
+    }
+
+    pub fn file_json_loads(json_string: &str) -> Self {
+        Self::jsonload(json_string).unwrap_or_default()
+    }
+
+    pub fn file_json_dump(&self, filepath: &str) -> Result<(), Box<dyn std::error::Error>> {
+        std::fs::write(filepath, self.jsondump()?)?;
+        Ok(())
+    }
+
+    pub fn file_json_load(filepath: &str) -> Result<Self, Box<dyn std::error::Error>> {
+        Self::jsonload(&std::fs::read_to_string(filepath)?)
+    }
+
+    // ═══════════════════════════════════════════════════════════════════════════
+    // Protobuf
+    // ═══════════════════════════════════════════════════════════════════════════
+
+    pub fn pb_dumps(&self) -> Vec<u8> {
+        use prost::Message;
+        self.to_proto().encode_to_vec()
+    }
+
+    pub fn pb_loads(data: &[u8]) -> Result<Self, Box<dyn std::error::Error>> {
+        use prost::Message;
+        Ok(Self::from_proto(crate::proto::Point::decode(data)?))
+    }
+
+    pub fn pb_dump(&self, filepath: &str) {
+        let data = self.pb_dumps();
+        std::fs::write(filepath, data).expect("Failed to write protobuf file");
+    }
+
+    pub fn pb_load(filepath: &str) -> Self {
+        let data = std::fs::read(filepath).expect("Failed to read protobuf file");
+        Self::pb_loads(&data).expect("Failed to parse protobuf")
+    }
+
+    /// The proto message; pb_dumps encodes it and Session embeds it
+    pub fn to_proto(&self) -> crate::proto::Point {
+        crate::proto::Point {
+            guid: self.guid.get().cloned().unwrap_or_default(),
+            name: self.name.clone(),
+            x: self._x,
+            y: self._y,
+            z: self._z,
+            width: self.width,
+            pointcolor: Some(crate::proto::Color {
+                guid: String::new(),
+                name: self.pointcolor.name.clone(),
+                r: self.pointcolor.r,
+                g: self.pointcolor.g,
+                b: self.pointcolor.b,
+                a: self.pointcolor.a,
+            }),
+        }
+    }
+
+    /// Point from a decoded proto message
+    pub fn from_proto(proto: crate::proto::Point) -> Self {
+        let mut point = Self::new(proto.x, proto.y, proto.z);
+        if !proto.guid.is_empty() {
+            point.set_guid(proto.guid);
+        }
+        point.name = proto.name;
+        point.width = proto.width;
+        if let Some(color) = proto.pointcolor {
+            point.pointcolor.name = color.name;
+            point.pointcolor.r = color.r;
+            point.pointcolor.g = color.g;
+            point.pointcolor.b = color.b;
+            point.pointcolor.a = color.a;
+        }
+        point
+    }
+
+    // ═══════════════════════════════════════════════════════════════════════════
+    // String
+    // ═══════════════════════════════════════════════════════════════════════════
+
+    /// "x, y, z"
+    pub fn str(&self) -> String {
+        let prec = Tolerance::ROUNDING;
+        format!(
+            "{}, {}, {}",
+            TOLERANCE.format_number(self._x, prec),
+            TOLERANCE.format_number(self._y, prec),
+            TOLERANCE.format_number(self._z, prec)
+        )
+    }
+
+    /// "Point(name, x, y, z, Color(...), width)"
+    pub fn repr(&self) -> String {
+        let prec = Tolerance::ROUNDING;
+        format!(
+            "Point({}, {}, {}, {}, {}, {})",
+            self.name,
+            TOLERANCE.format_number(self._x, prec),
+            TOLERANCE.format_number(self._y, prec),
+            TOLERANCE.format_number(self._z, prec),
+            self.pointcolor.repr(),
+            TOLERANCE.format_number(self.width, prec)
+        )
+    }
+
+    // ═══════════════════════════════════════════════════════════════════════════
+    // SESSION_VIEWER
+    // ═══════════════════════════════════════════════════════════════════════════
+
+    /// GPU-ready [x, y, z] as f32, the f64 to f32 boundary for wgpu upload
     pub fn to_f32(&self) -> [f32; 3] {
         [self._x as f32, self._y as f32, self._z as f32]
     }
@@ -600,30 +408,12 @@ impl Point {
 
 impl fmt::Display for Point {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        use crate::tolerance::TOLERANCE;
-        write!(
-            f,
-            "Point(x={}, y={}, z={})",
-            TOLERANCE.format_number(self._x, -999),
-            TOLERANCE.format_number(self._y, -999),
-            TOLERANCE.format_number(self._z, -999)
-        )
-    }
-}
-
-impl PartialEq for Point {
-    fn eq(&self, other: &Self) -> bool {
-        self.name == other.name
-            && (self._x * 1000000.0).round() == (other._x * 1000000.0).round()
-            && (self._y * 1000000.0).round() == (other._y * 1000000.0).round()
-            && (self._z * 1000000.0).round() == (other._z * 1000000.0).round()
-            && (self.width * 1000000.0).round() == (other.width * 1000000.0).round()
-            && self.pointcolor == other.pointcolor
+        write!(f, "{}", self.str())
     }
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
-// Indexing operators
+// Operators
 // ═══════════════════════════════════════════════════════════════════════════
 
 impl Index<usize> for Point {
@@ -650,143 +440,141 @@ impl IndexMut<usize> for Point {
     }
 }
 
-// ═══════════════════════════════════════════════════════════════════════════
-// No-copy operators
-// ═══════════════════════════════════════════════════════════════════════════
+impl PartialEq for Point {
+    fn eq(&self, other: &Self) -> bool {
+        self.name == other.name
+            && (self._x * 1000000.0).round() == (other._x * 1000000.0).round()
+            && (self._y * 1000000.0).round() == (other._y * 1000000.0).round()
+            && (self._z * 1000000.0).round() == (other._z * 1000000.0).round()
+            && (self.width * 1000000.0).round() == (other.width * 1000000.0).round()
+            && self.pointcolor == other.pointcolor
+    }
+}
 
 impl MulAssign<f64> for Point {
-    fn mul_assign(&mut self, rhs: f64) {
-        self._x *= rhs;
-        self._y *= rhs;
-        self._z *= rhs;
+    fn mul_assign(&mut self, factor: f64) {
+        self._x *= factor;
+        self._y *= factor;
+        self._z *= factor;
     }
 }
 
 impl DivAssign<f64> for Point {
-    fn div_assign(&mut self, rhs: f64) {
-        self._x /= rhs;
-        self._y /= rhs;
-        self._z /= rhs;
+    fn div_assign(&mut self, factor: f64) {
+        self._x /= factor;
+        self._y /= factor;
+        self._z /= factor;
     }
 }
 
 impl AddAssign<Vector> for Point {
-    fn add_assign(&mut self, rhs: Vector) {
-        self._x += rhs[0];
-        self._y += rhs[1];
-        self._z += rhs[2];
+    fn add_assign(&mut self, other: Vector) {
+        self._x += other[0];
+        self._y += other[1];
+        self._z += other[2];
     }
 }
 
 impl SubAssign<Vector> for Point {
-    fn sub_assign(&mut self, rhs: Vector) {
-        self._x -= rhs[0];
-        self._y -= rhs[1];
-        self._z -= rhs[2];
+    fn sub_assign(&mut self, other: Vector) {
+        self._x -= other[0];
+        self._y -= other[1];
+        self._z -= other[2];
     }
 }
-
-// ═══════════════════════════════════════════════════════════════════════════
-// Copy operators
-// ═══════════════════════════════════════════════════════════════════════════
 
 impl Mul<f64> for Point {
     type Output = Point;
 
-    fn mul(self, rhs: f64) -> Self::Output {
-        Point::new(self._x * rhs, self._y * rhs, self._z * rhs)
+    fn mul(self, factor: f64) -> Point {
+        Point::new(self._x * factor, self._y * factor, self._z * factor)
     }
 }
 
 impl Div<f64> for Point {
     type Output = Point;
 
-    fn div(self, rhs: f64) -> Self::Output {
-        Point::new(self._x / rhs, self._y / rhs, self._z / rhs)
-    }
-}
-
-impl Sub<Point> for Point {
-    type Output = Vector;
-
-    fn sub(self, rhs: Point) -> Self::Output {
-        Vector::new(self._x - rhs._x, self._y - rhs._y, self._z - rhs._z)
+    fn div(self, factor: f64) -> Point {
+        Point::new(self._x / factor, self._y / factor, self._z / factor)
     }
 }
 
 impl Add<Vector> for Point {
     type Output = Point;
 
-    fn add(self, rhs: Vector) -> Self::Output {
-        Point::new(self._x + rhs[0], self._y + rhs[1], self._z + rhs[2])
+    fn add(self, other: Vector) -> Point {
+        Point::new(self._x + other[0], self._y + other[1], self._z + other[2])
     }
 }
 
 impl Sub<Vector> for Point {
     type Output = Point;
 
-    fn sub(self, rhs: Vector) -> Self::Output {
-        Point::new(self._x - rhs[0], self._y - rhs[1], self._z - rhs[2])
+    fn sub(self, other: Vector) -> Point {
+        Point::new(self._x - other[0], self._y - other[1], self._z - other[2])
     }
 }
 
-// Reference operators (avoid cloning)
+impl Sub<Point> for Point {
+    type Output = Vector;
+
+    fn sub(self, other: Point) -> Vector {
+        Vector::new(self._x - other._x, self._y - other._y, self._z - other._z)
+    }
+}
+
 impl Mul<f64> for &Point {
     type Output = Point;
 
-    fn mul(self, rhs: f64) -> Self::Output {
-        Point::new(self._x * rhs, self._y * rhs, self._z * rhs)
+    fn mul(self, factor: f64) -> Point {
+        Point::new(self._x * factor, self._y * factor, self._z * factor)
     }
 }
 
 impl Div<f64> for &Point {
     type Output = Point;
 
-    fn div(self, rhs: f64) -> Self::Output {
-        Point::new(self._x / rhs, self._y / rhs, self._z / rhs)
+    fn div(self, factor: f64) -> Point {
+        Point::new(self._x / factor, self._y / factor, self._z / factor)
     }
 }
 
 impl Add<Vector> for &Point {
     type Output = Point;
 
-    fn add(self, rhs: Vector) -> Self::Output {
-        Point::new(self._x + rhs[0], self._y + rhs[1], self._z + rhs[2])
+    fn add(self, other: Vector) -> Point {
+        Point::new(self._x + other[0], self._y + other[1], self._z + other[2])
     }
 }
 
 impl Add<&Vector> for &Point {
     type Output = Point;
 
-    fn add(self, rhs: &Vector) -> Self::Output {
-        Point::new(self._x + rhs[0], self._y + rhs[1], self._z + rhs[2])
+    fn add(self, other: &Vector) -> Point {
+        Point::new(self._x + other[0], self._y + other[1], self._z + other[2])
     }
 }
 
 impl Sub<Vector> for &Point {
     type Output = Point;
 
-    fn sub(self, rhs: Vector) -> Self::Output {
-        Point::new(self._x - rhs[0], self._y - rhs[1], self._z - rhs[2])
+    fn sub(self, other: Vector) -> Point {
+        Point::new(self._x - other[0], self._y - other[1], self._z - other[2])
     }
 }
 
 impl Sub<&Vector> for &Point {
     type Output = Point;
 
-    fn sub(self, rhs: &Vector) -> Self::Output {
-        Point::new(self._x - rhs[0], self._y - rhs[1], self._z - rhs[2])
+    fn sub(self, other: &Vector) -> Point {
+        Point::new(self._x - other[0], self._y - other[1], self._z - other[2])
     }
 }
 
 impl Sub<&Point> for &Point {
     type Output = Vector;
 
-    fn sub(self, rhs: &Point) -> Self::Output {
-        Vector::new(self._x - rhs._x, self._y - rhs._y, self._z - rhs._z)
+    fn sub(self, other: &Point) -> Vector {
+        Vector::new(self._x - other._x, self._y - other._y, self._z - other._z)
     }
 }
-
-#[cfg(test)]
-#[path = "point_test.rs"]
-mod point_test;

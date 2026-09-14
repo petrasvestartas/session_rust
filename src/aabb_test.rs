@@ -2,38 +2,47 @@ use crate::mini_test::TestResult;
 use crate::tolerance::TOLERANCE;
 use crate::{MINI_CHECK, MINI_TEST, REGISTER_MINI_TEST};
 
-pub fn run_aabb_constructor() -> crate::mini_test::TestResult {
-    use crate::tolerance::TOLERANCE;
-    use crate::{Point, AABB};
+pub fn run_aabb_constructor() -> TestResult {
     MINI_TEST!("Constructor", {
-        // AABB(0,0,0, 1,2,3) — dims 2×4×6
-        let a = AABB::new(0.0, 0.0, 0.0, 1.0, 2.0, 3.0);
+        use crate::Point;
+        use crate::AABB;
 
+        let mut a = AABB::new(0.0, 0.0, 0.0, 1.0, 2.0, 3.0);
+        let empty = AABB::default();
+
+        MINI_CHECK!(empty == AABB::new(0.0, 0.0, 0.0, 0.0, 0.0, 0.0));
+        MINI_CHECK!(a == AABB::new(0.0, 0.0, 0.0, 1.0, 2.0, 3.0));
+        MINI_CHECK!(a != empty);
+        MINI_CHECK!(a.str() == "0.000000, 0.000000, 0.000000, 1.000000, 2.000000, 3.000000");
+        MINI_CHECK!(a.repr() == "AABB(0.000000, 0.000000, 0.000000, 1.000000, 2.000000, 3.000000)");
         MINI_CHECK!(TOLERANCE.is_close(a.area(), 88.0));
         MINI_CHECK!(a.center() == Point::new(0.0, 0.0, 0.0));
         MINI_CHECK!(TOLERANCE.is_close(a.diagonal(), 2.0 * 14.0_f64.sqrt()));
         MINI_CHECK!(a.is_valid());
         MINI_CHECK!(TOLERANCE.is_close(a.volume(), 48.0));
+
         MINI_CHECK!(a.closest_point(&Point::new(0.0, 0.0, 0.0)) == Point::new(0.0, 0.0, 0.0));
         MINI_CHECK!(a.closest_point(&Point::new(10.0, 0.0, 0.0)) == Point::new(1.0, 0.0, 0.0));
         MINI_CHECK!(a.contains(&Point::new(0.0, 0.0, 0.0)));
         MINI_CHECK!(!a.contains(&Point::new(10.0, 0.0, 0.0)));
+
         MINI_CHECK!(a.corner(false, false, false) == Point::new(-1.0, -2.0, -3.0));
         MINI_CHECK!(a.corner(true, true, true) == Point::new(1.0, 2.0, 3.0));
         MINI_CHECK!(a.get_corners().len() == 8);
         MINI_CHECK!(a.get_edges().len() == 12);
+
         MINI_CHECK!(a.point_at(1.0, 0.0, 0.0) == Point::new(1.0, 0.0, 0.0));
         MINI_CHECK!(a.point_at(0.0, 0.0, 0.0) == Point::new(0.0, 0.0, 0.0));
+
         MINI_CHECK!(a.intersects(&AABB::new(0.5, 0.0, 0.0, 0.5, 0.5, 0.5)));
         MINI_CHECK!(!a.intersects(&AABB::new(10.0, 0.0, 0.0, 0.5, 0.5, 0.5)));
-        let mut a = a;
         let b = AABB::new(5.0, 0.0, 0.0, 1.0, 1.0, 1.0);
         a.union_with(&b);
         MINI_CHECK!(a.min_point() == Point::new(-1.0, -2.0, -3.0));
         MINI_CHECK!(a.max_point() == Point::new(6.0, 2.0, 3.0));
         let c = AABB::merge(
-            AABB::new(0.0, 0.0, 0.0, 1.0, 1.0, 1.0),
-            AABB::new(4.0, 0.0, 0.0, 1.0, 1.0, 1.0),
+            &AABB::new(0.0, 0.0, 0.0, 1.0, 1.0, 1.0),
+            &AABB::new(4.0, 0.0, 0.0, 1.0, 1.0, 1.0),
         );
         MINI_CHECK!(c.min_point() == Point::new(-1.0, -1.0, -1.0));
         MINI_CHECK!(c.max_point() == Point::new(5.0, 1.0, 1.0));

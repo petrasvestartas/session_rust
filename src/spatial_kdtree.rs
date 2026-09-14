@@ -1,205 +1,232 @@
-// SpatialKDTree — alternating-axis median split over bare 3D points.
-// Use for: k-nearest-neighbor queries on point clouds (fastest option).
-//   Points only — no volumes, no boxes, no rotation.
-// Prefer over SpatialAABBTree/SpatialBVH when data is a point cloud, not triangle faces.
-// Prefer over SpatialRTree   when queries are k-NN, not region overlap.
-// Note: static structure; rebuild required after point insertion.
 use crate::point::Point;
+
+const STACK_SIZE: usize = 64;
+const NULL_IDX: usize = usize::MAX;
 
 struct Node {
     idx: usize,
     axis: usize,
-    left: Option<Box<Node>>,
-    right: Option<Box<Node>>,
+    left: usize,
+    right: usize,
 }
 
+#[derive(Clone, Copy)]
+struct Range {
+    lo: usize,
+    hi: usize,
+    depth: usize,
+    parent: usize,
+    is_left: bool,
+}
+
+impl Range {
+    fn new(lo: usize, hi: usize, depth: usize, parent: usize, is_left: bool) -> Self {
+        Range {
+            lo,
+            hi,
+            depth,
+            parent,
+            is_left,
+        }
+    }
+}
+
+#[derive(Clone, Copy)]
+struct Visit {
+    node: usize,
+    bound: f64,
+}
+
+const EMPTY_RANGE: Range = Range {
+    lo: 0,
+    hi: 0,
+    depth: 0,
+    parent: NULL_IDX,
+    is_left: false,
+};
+
+const EMPTY_VISIT: Visit = Visit {
+    node: NULL_IDX,
+    bound: 0.0,
+};
+
+/// KD-tree with alternating-axis median split over points for nearest, k-nearest and radius queries.
 pub struct SpatialKDTree {
     points: Vec<Point>,
-    root: Option<Box<Node>>,
+    nodes: Vec<Node>,
 }
 
 impl SpatialKDTree {
     pub fn new(points: Vec<Point>) -> Self {
-        let mut indices: Vec<usize> = (0..points.len()).collect();
-        let root = if points.is_empty() {
-            None
-        } else {
-            Some(Self::build(&points, &mut indices, 0))
+        let mut tree = SpatialKDTree {
+            points,
+            nodes: Vec::new(),
         };
-        SpatialKDTree { points, root }
+        tree.build();
+        tree
     }
 
-    fn build(points: &[Point], indices: &mut [usize], depth: usize) -> Box<Node> {
-        let axis = depth % 3;
-        let mid = indices.len() / 2;
-        indices.select_nth_unstable_by(mid, |&a, &b| points[a][axis].total_cmp(&points[b][axis]));
-        let left = if mid > 0 {
-            Some(Self::build(points, &mut indices[..mid], depth + 1))
-        } else {
-            None
-        };
-        let right = if mid + 1 < indices.len() {
-            Some(Self::build(points, &mut indices[mid + 1..], depth + 1))
-        } else {
-            None
-        };
-        Box::new(Node {
-            idx: indices[mid],
-            axis,
-            left,
-            right,
-        })
+    fn build(&mut self) {
+        let n = self.points.len();
+        let mut indices: Vec<usize> = (0..n).collect();
+        self.nodes.reserve(n);
+        let mut stack = [EMPTY_RANGE; STACK_SIZE];
+        let mut top = 0;
+        if n > 0 {
+            stack[top] = Range::new(0, n, 0, NULL_IDX, false);
+            top += 1;
+        }
+        while top > 0 {
+            top -= 1;
+            let range = stack[top];
+            let axis = range.depth % 3;
+            let mid = range.lo + (range.hi - range.lo) / 2;
+            let points = &self.points;
+            indices[range.lo..range.hi].select_nth_unstable_by(mid - range.lo, |&a, &b| {
+                points[a][axis].total_cmp(&points[b][axis])
+            });
+            let node = self.nodes.len();
+            self.nodes.push(Node {
+                idx: indices[mid],
+                axis,
+                left: NULL_IDX,
+                right: NULL_IDX,
+            });
+            if range.parent != NULL_IDX && range.is_left {
+                self.nodes[range.parent].left = node;
+            }
+            if range.parent != NULL_IDX && !range.is_left {
+                self.nodes[range.parent].right = node;
+            }
+            if range.lo < mid {
+                assert!(top < STACK_SIZE);
+                stack[top] = Range::new(range.lo, mid, range.depth + 1, node, true);
+                top += 1;
+            }
+            if mid + 1 < range.hi {
+                assert!(top < STACK_SIZE);
+                stack[top] = Range::new(mid + 1, range.hi, range.depth + 1, node, false);
+                top += 1;
+            }
+        }
     }
 
-    fn dist_sq(a: &Point, b: &Point) -> f64 {
+    fn push(&self, stack: &mut [Visit; STACK_SIZE], top: &mut usize, node: usize, bound: f64) {
+        if node == NULL_IDX {
+            return;
+        }
+        assert!(*top < STACK_SIZE);
+        stack[*top] = Visit { node, bound };
+        *top += 1;
+    }
+
+    fn dist_sq(&self, a: &Point, b: &Point) -> f64 {
         let dx = a[0] - b[0];
         let dy = a[1] - b[1];
         let dz = a[2] - b[2];
         dx * dx + dy * dy + dz * dz
     }
 
-    fn nearest_1(
-        node: &Option<Box<Node>>,
-        points: &[Point],
-        query: &Point,
-        best_idx: &mut usize,
-        best_d2: &mut f64,
-    ) {
-        let node = match node {
-            Some(n) => n,
-            None => return,
-        };
-        let d = Self::dist_sq(query, &points[node.idx]);
-        if d < *best_d2 {
-            *best_d2 = d;
-            *best_idx = node.idx;
+    fn insert_sorted(&self, best: &mut Vec<(usize, f64)>, idx: usize, d2: f64, k: usize) {
+        let mut pos = best.len();
+        while pos > 0 && best[pos - 1].1 > d2 {
+            pos -= 1;
         }
-        let diff = query[node.axis] - points[node.idx][node.axis];
-        let (near, far) = if diff <= 0.0 {
-            (&node.left, &node.right)
-        } else {
-            (&node.right, &node.left)
-        };
-        Self::nearest_1(near, points, query, best_idx, best_d2);
-        if diff * diff < *best_d2 {
-            Self::nearest_1(far, points, query, best_idx, best_d2);
+        best.insert(pos, (idx, d2));
+        if best.len() > k {
+            best.pop();
         }
     }
 
     pub fn nearest(&self, query: &Point) -> (usize, f64) {
-        let mut best_idx = 0;
+        let mut best = 0;
         let mut best_d2 = f64::INFINITY;
-        Self::nearest_1(&self.root, &self.points, query, &mut best_idx, &mut best_d2);
-        (best_idx, best_d2.sqrt())
-    }
-
-    fn heap_push(heap: &mut Vec<(f64, usize)>, item: (f64, usize)) {
-        heap.push(item);
-        let mut i = heap.len() - 1;
-        while i > 0 && heap[(i - 1) / 2].0 < heap[i].0 {
-            heap.swap(i, (i - 1) / 2);
-            i = (i - 1) / 2;
+        let mut stack = [EMPTY_VISIT; STACK_SIZE];
+        let mut top = 0;
+        if !self.nodes.is_empty() {
+            self.push(&mut stack, &mut top, 0, 0.0);
         }
-    }
-
-    fn heap_replace(heap: &mut Vec<(f64, usize)>, item: (f64, usize)) {
-        heap[0] = item;
-        let mut i = 0;
-        loop {
-            let l = 2 * i + 1;
-            let r = 2 * i + 2;
-            let mut m = i;
-            if l < heap.len() && heap[l].0 > heap[m].0 {
-                m = l;
+        while top > 0 {
+            top -= 1;
+            let visit = stack[top];
+            if visit.bound >= best_d2 {
+                continue;
             }
-            if r < heap.len() && heap[r].0 > heap[m].0 {
-                m = r;
+            let node = &self.nodes[visit.node];
+            let d2 = self.dist_sq(query, &self.points[node.idx]);
+            if d2 < best_d2 {
+                best_d2 = d2;
+                best = node.idx;
             }
-            if m == i {
-                break;
-            }
-            heap.swap(i, m);
-            i = m;
+            let diff = query[node.axis] - self.points[node.idx][node.axis];
+            let near = if diff <= 0.0 { node.left } else { node.right };
+            let far = if diff <= 0.0 { node.right } else { node.left };
+            self.push(&mut stack, &mut top, far, diff * diff);
+            self.push(&mut stack, &mut top, near, 0.0);
         }
-    }
-
-    fn nearest_k_rec(
-        node: &Option<Box<Node>>,
-        points: &[Point],
-        query: &Point,
-        k: usize,
-        heap: &mut Vec<(f64, usize)>,
-    ) {
-        let node = match node {
-            Some(n) => n,
-            None => return,
-        };
-        let d = Self::dist_sq(query, &points[node.idx]);
-        if heap.len() < k {
-            Self::heap_push(heap, (d, node.idx));
-        } else if d < heap[0].0 {
-            Self::heap_replace(heap, (d, node.idx));
-        }
-        let diff = query[node.axis] - points[node.idx][node.axis];
-        let (near, far) = if diff <= 0.0 {
-            (&node.left, &node.right)
-        } else {
-            (&node.right, &node.left)
-        };
-        Self::nearest_k_rec(near, points, query, k, heap);
-        if heap.len() < k || diff * diff < heap[0].0 {
-            Self::nearest_k_rec(far, points, query, k, heap);
-        }
+        (best, best_d2.sqrt())
     }
 
     pub fn nearest_k(&self, query: &Point, k: usize) -> Vec<(usize, f64)> {
+        let mut best: Vec<(usize, f64)> = Vec::new();
         if k == 0 {
-            return Vec::new();
+            return best;
         }
-        let mut heap: Vec<(f64, usize)> = Vec::new();
-        Self::nearest_k_rec(&self.root, &self.points, query, k, &mut heap);
-        let mut result: Vec<(usize, f64)> = heap.iter().map(|&(d2, i)| (i, d2.sqrt())).collect();
-        result.sort_by(|a, b| a.1.partial_cmp(&b.1).unwrap());
-        result
-    }
-
-    fn radius_rec(
-        node: &Option<Box<Node>>,
-        points: &[Point],
-        query: &Point,
-        radius_sq: f64,
-        result: &mut Vec<(usize, f64)>,
-    ) {
-        let node = match node {
-            Some(n) => n,
-            None => return,
-        };
-        let d = Self::dist_sq(query, &points[node.idx]);
-        if d <= radius_sq {
-            result.push((node.idx, d.sqrt()));
+        let mut stack = [EMPTY_VISIT; STACK_SIZE];
+        let mut top = 0;
+        if !self.nodes.is_empty() {
+            self.push(&mut stack, &mut top, 0, 0.0);
         }
-        let diff = query[node.axis] - points[node.idx][node.axis];
-        let (near, far) = if diff <= 0.0 {
-            (&node.left, &node.right)
-        } else {
-            (&node.right, &node.left)
-        };
-        Self::radius_rec(near, points, query, radius_sq, result);
-        if diff * diff <= radius_sq {
-            Self::radius_rec(far, points, query, radius_sq, result);
+        while top > 0 {
+            top -= 1;
+            let visit = stack[top];
+            let full = best.len() == k;
+            if full && visit.bound >= best[best.len() - 1].1 {
+                continue;
+            }
+            let node = &self.nodes[visit.node];
+            let d2 = self.dist_sq(query, &self.points[node.idx]);
+            if !full || d2 < best[best.len() - 1].1 {
+                self.insert_sorted(&mut best, node.idx, d2, k);
+            }
+            let diff = query[node.axis] - self.points[node.idx][node.axis];
+            let near = if diff <= 0.0 { node.left } else { node.right };
+            let far = if diff <= 0.0 { node.right } else { node.left };
+            self.push(&mut stack, &mut top, far, diff * diff);
+            self.push(&mut stack, &mut top, near, 0.0);
         }
+        for hit in best.iter_mut() {
+            hit.1 = hit.1.sqrt();
+        }
+        best
     }
 
     pub fn radius_search(&self, query: &Point, radius: f64) -> Vec<(usize, f64)> {
-        let mut result = Vec::new();
-        Self::radius_rec(
-            &self.root,
-            &self.points,
-            query,
-            radius * radius,
-            &mut result,
-        );
-        result.sort_by(|a, b| a.1.partial_cmp(&b.1).unwrap());
+        let mut result: Vec<(usize, f64)> = Vec::new();
+        let r2 = radius * radius;
+        let mut stack = [EMPTY_VISIT; STACK_SIZE];
+        let mut top = 0;
+        if !self.nodes.is_empty() {
+            self.push(&mut stack, &mut top, 0, 0.0);
+        }
+        while top > 0 {
+            top -= 1;
+            let visit = stack[top];
+            if visit.bound > r2 {
+                continue;
+            }
+            let node = &self.nodes[visit.node];
+            let d2 = self.dist_sq(query, &self.points[node.idx]);
+            if d2 <= r2 {
+                result.push((node.idx, d2.sqrt()));
+            }
+            let diff = query[node.axis] - self.points[node.idx][node.axis];
+            let near = if diff <= 0.0 { node.left } else { node.right };
+            let far = if diff <= 0.0 { node.right } else { node.left };
+            self.push(&mut stack, &mut top, far, diff * diff);
+            self.push(&mut stack, &mut top, near, 0.0);
+        }
+        result.sort_by(|a, b| a.1.total_cmp(&b.1));
         result
     }
 }

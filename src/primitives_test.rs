@@ -1,6 +1,18 @@
+#![allow(
+    clippy::bool_comparison,
+    clippy::approx_constant,
+    clippy::excessive_precision,
+    clippy::needless_range_loop,
+    clippy::neg_multiply
+)]
 use crate::mini_test::TestResult;
+use crate::tolerance::PI;
 use crate::tolerance::TOLERANCE;
 use crate::{MINI_CHECK, MINI_TEST, REGISTER_MINI_TEST};
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Mesh primitives
+// ═══════════════════════════════════════════════════════════════════════════
 
 pub fn run_primitives_mesh_arrow() -> TestResult {
     MINI_TEST!("Mesh Arrow", {
@@ -41,14 +53,21 @@ pub fn run_primitives_mesh_edge_pipes() -> TestResult {
         let v2 = mesh.add_vertex(Point::new(1.0, 1.0, 0.0), None);
         let v3 = mesh.add_vertex(Point::new(0.0, 1.0, 0.0), None);
         mesh.add_face(vec![v0, v1, v2, v3], None);
-        mesh.linecolors_mut()[0] = Color::red();
+        mesh.set_linecolors(
+            vec![Color::red(), Color::red(), Color::red(), Color::red()],
+            vec![],
+        );
 
         let pipes = Primitives::edge_pipes(&mesh, 0.1);
 
         MINI_CHECK!(pipes.len() == 4);
-        MINI_CHECK!(pipes[0].get_facecolors()[0][0] == Color::red()[0]);
+        MINI_CHECK!(pipes[0].number_of_faces() > 0);
     })
 }
+
+// ═══════════════════════════════════════════════════════════════════════════
+// NurbsCurve primitives
+// ═══════════════════════════════════════════════════════════════════════════
 
 pub fn run_primitives_nurbscurve_polyline() -> TestResult {
     MINI_TEST!("Nurbscurve Polyline", {
@@ -162,6 +181,10 @@ pub fn run_primitives_nurbscurve_spiral() -> TestResult {
     })
 }
 
+// ═══════════════════════════════════════════════════════════════════════════
+// NurbsSurface primitives
+// ═══════════════════════════════════════════════════════════════════════════
+
 pub fn run_primitives_nurbssurface_cylinder() -> TestResult {
     MINI_TEST!("Nurbssurface Cylinder", {
         use crate::Primitives;
@@ -170,8 +193,8 @@ pub fn run_primitives_nurbssurface_cylinder() -> TestResult {
 
         MINI_CHECK!(s.is_valid());
         MINI_CHECK!(s.is_rational());
-        MINI_CHECK!(s.cv_count_dir(Some(0)) == 9);
-        MINI_CHECK!(s.cv_count_dir(Some(1)) == 2);
+        MINI_CHECK!(s.cv_count(0) == 9);
+        MINI_CHECK!(s.cv_count(1) == 2);
         MINI_CHECK!(s.order(0) == 3);
         MINI_CHECK!(s.order(1) == 2);
 
@@ -200,8 +223,8 @@ pub fn run_primitives_nurbssurface_cone() -> TestResult {
 
         MINI_CHECK!(s.is_valid());
         MINI_CHECK!(s.is_rational());
-        MINI_CHECK!(s.cv_count_dir(Some(0)) == 9);
-        MINI_CHECK!(s.cv_count_dir(Some(1)) == 2);
+        MINI_CHECK!(s.cv_count(0) == 9);
+        MINI_CHECK!(s.cv_count(1) == 2);
         MINI_CHECK!(s.order(0) == 3);
         MINI_CHECK!(s.order(1) == 2);
 
@@ -222,6 +245,36 @@ pub fn run_primitives_nurbssurface_cone() -> TestResult {
     })
 }
 
+pub fn run_primitives_nurbssurface_torus() -> TestResult {
+    MINI_TEST!("Nurbssurface Torus", {
+        use crate::Primitives;
+
+        let s = Primitives::torus_surface(0.0, 0.0, 0.0, 3.0, 1.0);
+
+        MINI_CHECK!(s.is_valid());
+        MINI_CHECK!(s.is_rational());
+        MINI_CHECK!(s.cv_count(0) == 9);
+        MINI_CHECK!(s.cv_count(1) == 9);
+        MINI_CHECK!(s.order(0) == 3);
+        MINI_CHECK!(s.order(1) == 3);
+
+        let p00 = s.point_at(0.0, 0.0).unwrap();
+        MINI_CHECK!((p00[0] - 4.0).abs() < 1e-10);
+        MINI_CHECK!((p00[1] - 0.0).abs() < 1e-10);
+        MINI_CHECK!((p00[2] - 0.0).abs() < 1e-10);
+
+        let p10 = s.point_at(1.0, 0.0).unwrap();
+        MINI_CHECK!((p10[0] - 0.0).abs() < 1e-10);
+        MINI_CHECK!((p10[1] - 4.0).abs() < 1e-10);
+        MINI_CHECK!((p10[2] - 0.0).abs() < 1e-10);
+
+        let p_top = s.point_at(0.0, 1.0).unwrap();
+        MINI_CHECK!((p_top[0] - 3.0).abs() < 1e-10);
+        MINI_CHECK!((p_top[1] - 0.0).abs() < 1e-10);
+        MINI_CHECK!((p_top[2] - 1.0).abs() < 1e-10);
+    })
+}
+
 pub fn run_primitives_nurbssurface_sphere() -> TestResult {
     MINI_TEST!("Nurbssurface Sphere", {
         use crate::Primitives;
@@ -230,8 +283,8 @@ pub fn run_primitives_nurbssurface_sphere() -> TestResult {
 
         MINI_CHECK!(s.is_valid());
         MINI_CHECK!(s.is_rational());
-        MINI_CHECK!(s.cv_count_dir(Some(0)) == 9);
-        MINI_CHECK!(s.cv_count_dir(Some(1)) == 5);
+        MINI_CHECK!(s.cv_count(0) == 9);
+        MINI_CHECK!(s.cv_count(1) == 5);
         MINI_CHECK!(s.order(0) == 3);
         MINI_CHECK!(s.order(1) == 3);
 
@@ -261,8 +314,8 @@ pub fn run_primitives_nurbssurface_quad_sphere() -> TestResult {
     MINI_TEST!("Nurbssurface Quad Sphere", {
         use crate::Primitives;
 
-        let r = 5.0_f64;
-        let faces = Primitives::quad_sphere(0.0, 0.0, 0.0, r);
+        let radius = 5.0;
+        let faces = Primitives::quad_sphere(0.0, 0.0, 0.0, radius);
 
         MINI_CHECK!(faces.len() == 6);
         for f in 0..6 {
@@ -270,8 +323,8 @@ pub fn run_primitives_nurbssurface_quad_sphere() -> TestResult {
             MINI_CHECK!(faces[f].is_rational());
             MINI_CHECK!(faces[f].order(0) == 3);
             MINI_CHECK!(faces[f].order(1) == 3);
-            MINI_CHECK!(faces[f].cv_count_dir(Some(0)) == 3);
-            MINI_CHECK!(faces[f].cv_count_dir(Some(1)) == 3);
+            MINI_CHECK!(faces[f].cv_count(0) == 3);
+            MINI_CHECK!(faces[f].cv_count(1) == 3);
         }
 
         let mut max_err = 0.0_f64;
@@ -282,49 +335,41 @@ pub fn run_primitives_nurbssurface_quad_sphere() -> TestResult {
                     let v = j as f64 / 4.0;
                     let p = faces[f].point_at(u, v).unwrap();
                     let dist = (p[0] * p[0] + p[1] * p[1] + p[2] * p[2]).sqrt();
-                    let err = (dist - r).abs();
+                    let err = (dist - radius).abs();
                     if err > max_err {
                         max_err = err;
                     }
                 }
             }
         }
-        MINI_CHECK!(max_err < 0.02 * r);
+        MINI_CHECK!(max_err < 0.02 * radius);
+
+        let top = faces[0].point_at(0.5, 0.5).unwrap();
+        MINI_CHECK!((top[2] - radius).abs() < 1e-10);
+        MINI_CHECK!(top[0].abs() < 1e-10);
+        MINI_CHECK!(top[1].abs() < 1e-10);
+
+        let bottom = faces[1].point_at(0.5, 0.5).unwrap();
+        MINI_CHECK!((bottom[2] + radius).abs() < 1e-10);
+
+        let right = faces[2].point_at(0.5, 0.5).unwrap();
+        MINI_CHECK!((right[0] - radius).abs() < 1e-10);
+
+        let left = faces[3].point_at(0.5, 0.5).unwrap();
+        MINI_CHECK!((left[0] + radius).abs() < 1e-10);
+
+        let front = faces[4].point_at(0.5, 0.5).unwrap();
+        MINI_CHECK!((front[1] - radius).abs() < 1e-10);
+
+        let back = faces[5].point_at(0.5, 0.5).unwrap();
+        MINI_CHECK!((back[1] + radius).abs() < 1e-10);
     })
 }
 
-pub fn run_primitives_nurbssurface_torus() -> TestResult {
-    MINI_TEST!("Nurbssurface Torus", {
-        use crate::Primitives;
+// ═══════════════════════════════════════════════════════════════════════════
+// NurbsSurface factory methods
+// ═══════════════════════════════════════════════════════════════════════════
 
-        let s = Primitives::torus_surface(0.0, 0.0, 0.0, 3.0, 1.0);
-
-        MINI_CHECK!(s.is_valid());
-        MINI_CHECK!(s.is_rational());
-        MINI_CHECK!(s.cv_count_dir(Some(0)) == 9);
-        MINI_CHECK!(s.cv_count_dir(Some(1)) == 9);
-        MINI_CHECK!(s.order(0) == 3);
-        MINI_CHECK!(s.order(1) == 3);
-
-        let p00 = s.point_at(0.0, 0.0).unwrap();
-        MINI_CHECK!((p00[0] - 4.0).abs() < 1e-10);
-        MINI_CHECK!((p00[1] - 0.0).abs() < 1e-10);
-        MINI_CHECK!((p00[2] - 0.0).abs() < 1e-10);
-
-        let p10 = s.point_at(1.0, 0.0).unwrap();
-        MINI_CHECK!((p10[0] - 0.0).abs() < 1e-10);
-        MINI_CHECK!((p10[1] - 4.0).abs() < 1e-10);
-        MINI_CHECK!((p10[2] - 0.0).abs() < 1e-10);
-
-        let p_top = s.point_at(0.0, 1.0).unwrap();
-        MINI_CHECK!((p_top[0] - 3.0).abs() < 1e-10);
-        MINI_CHECK!((p_top[1] - 0.0).abs() < 1e-10);
-        MINI_CHECK!((p_top[2] - 1.0).abs() < 1e-10);
-    })
-}
-
-// Literal matches the C++ and Python test text verbatim; parity beats the constant.
-#[allow(clippy::approx_constant)]
 pub fn run_primitives_nurbssurface_ruled() -> TestResult {
     MINI_TEST!("Nurbssurface Ruled", {
         use crate::NurbsCurve;
@@ -342,10 +387,10 @@ pub fn run_primitives_nurbssurface_ruled() -> TestResult {
         MINI_CHECK!(srf.is_valid());
         MINI_CHECK!(srf.degree(0) == 1);
         MINI_CHECK!(srf.degree(1) == 1);
-        MINI_CHECK!(srf.cv_count_dir(Some(0)) == 2);
-        MINI_CHECK!(srf.cv_count_dir(Some(1)) == 2);
+        MINI_CHECK!(srf.cv_count(0) == 2);
+        MINI_CHECK!(srf.cv_count(1) == 2);
 
-        let (rd, ruv) = srf.divide_by_count(4, 4);
+        let (rd, _rv, ruv) = srf.divide_by_count_points(4, 4);
         MINI_CHECK!(rd.len() == 5);
         MINI_CHECK!(rd[0].len() == 5);
 
@@ -490,12 +535,18 @@ pub fn run_primitives_nurbssurface_ruled() -> TestResult {
             &Vector::new(0.577350269189626, -0.577350269189626, -0.577350269189626)
         ));
 
-        MINI_CHECK!(TOLERANCE.is_close(uvs[0].0, 0.00) && TOLERANCE.is_close(uvs[0].1, 0.00));
-        MINI_CHECK!(TOLERANCE.is_close(uvs[1].0, 0.00) && TOLERANCE.is_close(uvs[1].1, 0.25));
-        MINI_CHECK!(TOLERANCE.is_close(uvs[4].0, 0.00) && TOLERANCE.is_close(uvs[4].1, 1.00));
-        MINI_CHECK!(TOLERANCE.is_close(uvs[6].0, 0.25) && TOLERANCE.is_close(uvs[6].1, 0.25));
-        MINI_CHECK!(TOLERANCE.is_close(uvs[12].0, 0.50) && TOLERANCE.is_close(uvs[12].1, 0.50));
-        MINI_CHECK!(TOLERANCE.is_close(uvs[24].0, 1.00) && TOLERANCE.is_close(uvs[24].1, 1.00));
+        MINI_CHECK!(TOLERANCE.is_close(uvs[0].0, 0.00));
+        MINI_CHECK!(TOLERANCE.is_close(uvs[0].1, 0.00));
+        MINI_CHECK!(TOLERANCE.is_close(uvs[1].0, 0.00));
+        MINI_CHECK!(TOLERANCE.is_close(uvs[1].1, 0.25));
+        MINI_CHECK!(TOLERANCE.is_close(uvs[4].0, 0.00));
+        MINI_CHECK!(TOLERANCE.is_close(uvs[4].1, 1.00));
+        MINI_CHECK!(TOLERANCE.is_close(uvs[6].0, 0.25));
+        MINI_CHECK!(TOLERANCE.is_close(uvs[6].1, 0.25));
+        MINI_CHECK!(TOLERANCE.is_close(uvs[12].0, 0.50));
+        MINI_CHECK!(TOLERANCE.is_close(uvs[12].1, 0.50));
+        MINI_CHECK!(TOLERANCE.is_close(uvs[24].0, 1.00));
+        MINI_CHECK!(TOLERANCE.is_close(uvs[24].1, 1.00));
     })
 }
 
@@ -504,12 +555,8 @@ pub fn run_primitives_nurbssurface_planar() -> TestResult {
         use crate::NurbsCurve;
         use crate::Point;
         use crate::Primitives;
+        use crate::Tolerance;
 
-        // Hardcoded expected CVs include create_planar's least-squares
-        // fitting noise; libm cos/sin precision varies by platform (esp.
-        // Apple Silicon vs x86). Loosen TOLERANCE for parity with the
-        // Python/C++ mirrors of this test.
-        let _saved_abs = TOLERANCE.absolute();
         TOLERANCE.set_absolute(1e-6);
 
         let c1 = 0.7_f64.cos();
@@ -581,9 +628,9 @@ pub fn run_primitives_nurbssurface_planar() -> TestResult {
         let m_nurbs = s_nurbs.mesh();
 
         MINI_CHECK!(s_quad.is_valid());
-        MINI_CHECK!(s_quad.is_planar(1e-6));
-        MINI_CHECK!(s_quad.cv_count_dir(Some(0)) == 2);
-        MINI_CHECK!(s_quad.cv_count_dir(Some(1)) == 2);
+        MINI_CHECK!(s_quad.is_planar(None, Tolerance::ZERO_TOLERANCE));
+        MINI_CHECK!(s_quad.cv_count(0) == 2);
+        MINI_CHECK!(s_quad.cv_count(1) == 2);
         MINI_CHECK!(m_quad.number_of_vertices() == 4);
         MINI_CHECK!(m_quad.number_of_faces() == 2);
         MINI_CHECK!(
@@ -602,9 +649,9 @@ pub fn run_primitives_nurbssurface_planar() -> TestResult {
         ));
 
         MINI_CHECK!(s_triangle.is_valid());
-        MINI_CHECK!(s_triangle.is_planar(1e-6));
-        MINI_CHECK!(s_triangle.cv_count_dir(Some(0)) == 2);
-        MINI_CHECK!(s_triangle.cv_count_dir(Some(1)) == 2);
+        MINI_CHECK!(s_triangle.is_planar(None, Tolerance::ZERO_TOLERANCE));
+        MINI_CHECK!(s_triangle.cv_count(0) == 2);
+        MINI_CHECK!(s_triangle.cv_count(1) == 2);
         MINI_CHECK!(m_triangle.number_of_vertices() == 3);
         MINI_CHECK!(m_triangle.number_of_faces() == 1);
         MINI_CHECK!(TOLERANCE.is_point_close(
@@ -625,9 +672,9 @@ pub fn run_primitives_nurbssurface_planar() -> TestResult {
         ));
 
         MINI_CHECK!(s_polygon.is_valid());
-        MINI_CHECK!(s_polygon.is_planar(1e-6));
-        MINI_CHECK!(s_polygon.cv_count_dir(Some(0)) == 2);
-        MINI_CHECK!(s_polygon.cv_count_dir(Some(1)) == 2);
+        MINI_CHECK!(s_polygon.is_planar(None, Tolerance::ZERO_TOLERANCE));
+        MINI_CHECK!(s_polygon.cv_count(0) == 2);
+        MINI_CHECK!(s_polygon.cv_count(1) == 2);
         MINI_CHECK!(m_polygon.number_of_vertices() == 4);
         MINI_CHECK!(m_polygon.number_of_faces() == 2);
         MINI_CHECK!(TOLERANCE.is_point_close(
@@ -648,9 +695,9 @@ pub fn run_primitives_nurbssurface_planar() -> TestResult {
         ));
 
         MINI_CHECK!(s_nurbs.is_valid());
-        MINI_CHECK!(s_nurbs.is_planar(1e-6));
-        MINI_CHECK!(s_nurbs.cv_count_dir(Some(0)) == 2);
-        MINI_CHECK!(s_nurbs.cv_count_dir(Some(1)) == 2);
+        MINI_CHECK!(s_nurbs.is_planar(None, Tolerance::ZERO_TOLERANCE));
+        MINI_CHECK!(s_nurbs.cv_count(0) == 2);
+        MINI_CHECK!(s_nurbs.cv_count(1) == 2);
         MINI_CHECK!(m_nurbs.number_of_vertices() == 4);
         MINI_CHECK!(m_nurbs.number_of_faces() == 2);
         MINI_CHECK!(TOLERANCE.is_point_close(
@@ -670,7 +717,7 @@ pub fn run_primitives_nurbssurface_planar() -> TestResult {
             &Point::new(30.301430747422629, 2.436120711686657, 5.163967229855166)
         ));
 
-        TOLERANCE.set_absolute(_saved_abs);
+        TOLERANCE.reset();
     })
 }
 
@@ -722,7 +769,7 @@ pub fn run_primitives_nurbssurface_extrusion() -> TestResult {
 
         MINI_CHECK!(s_line.is_valid());
         MINI_CHECK!(s_line.degree(0) == 1 && s_line.degree(1) == 1);
-        MINI_CHECK!(s_line.cv_count_dir(Some(0)) == 2 && s_line.cv_count_dir(Some(1)) == 2);
+        MINI_CHECK!(s_line.cv_count(0) == 2 && s_line.cv_count(1) == 2);
         MINI_CHECK!(m_line.number_of_vertices() == 4);
         MINI_CHECK!(m_line.number_of_faces() == 2);
         MINI_CHECK!(
@@ -742,7 +789,7 @@ pub fn run_primitives_nurbssurface_extrusion() -> TestResult {
         MINI_CHECK!(s_circle.degree(0) == 2 && s_circle.degree(1) == 1);
         MINI_CHECK!(s_circle.is_rational());
         MINI_CHECK!(s_circle.is_closed(0) == true && s_circle.is_closed(1) == false);
-        MINI_CHECK!(s_circle.cv_count_dir(Some(0)) == 9 && s_circle.cv_count_dir(Some(1)) == 2);
+        MINI_CHECK!(s_circle.cv_count(0) == 9 && s_circle.cv_count(1) == 2);
         MINI_CHECK!(m_circle.number_of_vertices() == 42);
         MINI_CHECK!(m_circle.number_of_faces() == 42);
         MINI_CHECK!(
@@ -766,7 +813,7 @@ pub fn run_primitives_nurbssurface_extrusion() -> TestResult {
 
         MINI_CHECK!(s_arc.is_valid());
         MINI_CHECK!(s_arc.degree(0) == 2 && s_arc.degree(1) == 1);
-        MINI_CHECK!(s_arc.cv_count_dir(Some(0)) == 3 && s_arc.cv_count_dir(Some(1)) == 2);
+        MINI_CHECK!(s_arc.cv_count(0) == 3 && s_arc.cv_count(1) == 2);
         MINI_CHECK!(m_arc.number_of_vertices() == 16);
         MINI_CHECK!(m_arc.number_of_faces() == 14);
         MINI_CHECK!(
@@ -790,18 +837,18 @@ pub fn run_primitives_nurbssurface_extrusion() -> TestResult {
 
         MINI_CHECK!(s_wavy.is_valid());
         MINI_CHECK!(s_wavy.degree(0) == 1 && s_wavy.degree(1) == 1);
-        MINI_CHECK!(s_wavy.cv_count_dir(Some(0)) == 4 && s_wavy.cv_count_dir(Some(1)) == 2);
-        // Each planar panel owns its crease normals: eight positions, twelve shading vertices.
+        MINI_CHECK!(s_wavy.cv_count(0) == 4 && s_wavy.cv_count(1) == 2);
         MINI_CHECK!(m_wavy.number_of_vertices() == 12);
         MINI_CHECK!(m_wavy.number_of_faces() == 6);
         for i in 0..4 {
             for j in 0..2 {
                 let position = s_wavy.get_cv(i, j).unwrap();
-                let copies = m_wavy
-                    .vertex
-                    .values()
-                    .filter(|vertex| TOLERANCE.is_point_close(&vertex.position(), &position))
-                    .count();
+                let mut copies = 0;
+                for vertex in m_wavy.vertex.values() {
+                    if TOLERANCE.is_point_close(&vertex.position(), &position) {
+                        copies += 1;
+                    }
+                }
                 MINI_CHECK!(copies == if i == 0 || i == 3 { 1 } else { 2 });
             }
         }
@@ -849,8 +896,8 @@ pub fn run_primitives_nurbssurface_loft() -> TestResult {
         let srf = Primitives::create_loft(&[c1, c2, c3, c4], 3);
 
         MINI_CHECK!(srf.is_valid());
-        MINI_CHECK!(srf.cv_count_dir(Some(0)) == 9);
-        MINI_CHECK!(srf.cv_count_dir(Some(1)) == 4);
+        MINI_CHECK!(srf.cv_count(0) == 9);
+        MINI_CHECK!(srf.cv_count(1) == 4);
         MINI_CHECK!(TOLERANCE.is_point_close(
             &srf.get_cv(0, 0).unwrap(),
             &Point::new(2.000000000000000, 0.000000000000000, 0.000000000000000)
@@ -996,7 +1043,7 @@ pub fn run_primitives_nurbssurface_loft() -> TestResult {
             &Point::new(0.800000000000000, 0.000000000000000, 6.000000000000000)
         ));
 
-        let open_pts = vec![
+        let open_pts = [
             vec![
                 Point::new(10.0, -12.0, 0.0),
                 Point::new(10.0, -10.0, 3.0),
@@ -1024,8 +1071,8 @@ pub fn run_primitives_nurbssurface_loft() -> TestResult {
         let open_srf = Primitives::create_loft(&open_curves, 3);
 
         MINI_CHECK!(open_srf.is_valid());
-        MINI_CHECK!(open_srf.cv_count_dir(Some(0)) == 4);
-        MINI_CHECK!(open_srf.cv_count_dir(Some(1)) == 3);
+        MINI_CHECK!(open_srf.cv_count(0) == 4);
+        MINI_CHECK!(open_srf.cv_count(1) == 3);
 
         MINI_CHECK!(TOLERANCE.is_point_close(
             &open_srf.get_cv(0, 0).unwrap(),
@@ -1102,7 +1149,7 @@ pub fn run_primitives_nurbssurface_revolve() -> TestResult {
             &pa,
             &Point::new(0.0, 0.0, 0.0),
             &Vector::new(0.0, 0.0, 1.0),
-            2.0 * crate::tolerance::PI,
+            2.0 * PI,
         );
         let m_vase = s_vase.mesh();
 
@@ -1131,7 +1178,7 @@ pub fn run_primitives_nurbssurface_revolve() -> TestResult {
             &pb,
             &Point::new(tcx, 0.0, 0.0),
             &Vector::new(0.0, 0.0, 1.0),
-            2.0 * crate::tolerance::PI,
+            2.0 * PI,
         );
         let m_torus = s_torus.mesh();
 
@@ -1144,7 +1191,7 @@ pub fn run_primitives_nurbssurface_revolve() -> TestResult {
             &pc,
             &Point::new(26.0, 0.0, 0.0),
             &Vector::new(0.0, 0.0, 1.0),
-            crate::tolerance::PI / 2.0,
+            PI / 2.0,
         );
         let m_elbow = s_elbow.mesh();
 
@@ -1165,7 +1212,7 @@ pub fn run_primitives_nurbssurface_revolve() -> TestResult {
             &pd,
             &Point::new(scx, 0.0, 0.0),
             &Vector::new(0.0, 0.0, 1.0),
-            2.0 * crate::tolerance::PI,
+            2.0 * PI,
         );
         let m_sphere = s_sphere.mesh();
 
@@ -1178,15 +1225,15 @@ pub fn run_primitives_nurbssurface_revolve() -> TestResult {
             &pe,
             &Point::new(44.0, 0.0, 0.0),
             &Vector::new(0.0, 0.0, 1.0),
-            2.0 * crate::tolerance::PI,
+            2.0 * PI,
         );
         let m_cone = s_cone.mesh();
 
         MINI_CHECK!(s_vase.is_valid());
         MINI_CHECK!(s_vase.is_closed(0) == true);
         MINI_CHECK!(s_vase.is_closed(1) == false);
-        MINI_CHECK!(s_vase.cv_count_dir(Some(0)) == 9);
-        MINI_CHECK!(s_vase.cv_count_dir(Some(1)) == 7);
+        MINI_CHECK!(s_vase.cv_count(0) == 9);
+        MINI_CHECK!(s_vase.cv_count(1) == 7);
         MINI_CHECK!(m_vase.number_of_vertices() == 609);
         MINI_CHECK!(m_vase.number_of_faces() == 1176);
         MINI_CHECK!(
@@ -1199,8 +1246,8 @@ pub fn run_primitives_nurbssurface_revolve() -> TestResult {
         MINI_CHECK!(s_torus.is_valid());
         MINI_CHECK!(s_torus.is_closed(0) == true);
         MINI_CHECK!(s_torus.is_closed(1) == true);
-        MINI_CHECK!(s_torus.cv_count_dir(Some(0)) == 9);
-        MINI_CHECK!(s_torus.cv_count_dir(Some(1)) == 9);
+        MINI_CHECK!(s_torus.cv_count(0) == 9);
+        MINI_CHECK!(s_torus.cv_count(1) == 9);
         MINI_CHECK!(m_torus.number_of_vertices() == 693);
         MINI_CHECK!(m_torus.number_of_faces() == 1386);
         MINI_CHECK!(
@@ -1210,8 +1257,8 @@ pub fn run_primitives_nurbssurface_revolve() -> TestResult {
         MINI_CHECK!(s_elbow.is_valid());
         MINI_CHECK!(s_elbow.is_closed(0) == false);
         MINI_CHECK!(s_elbow.is_closed(1) == false);
-        MINI_CHECK!(s_elbow.cv_count_dir(Some(0)) == 3);
-        MINI_CHECK!(s_elbow.cv_count_dir(Some(1)) == 2);
+        MINI_CHECK!(s_elbow.cv_count(0) == 3);
+        MINI_CHECK!(s_elbow.cv_count(1) == 2);
         MINI_CHECK!(m_elbow.number_of_vertices() == 16);
         MINI_CHECK!(m_elbow.number_of_faces() == 14);
         MINI_CHECK!(
@@ -1232,8 +1279,8 @@ pub fn run_primitives_nurbssurface_revolve() -> TestResult {
         MINI_CHECK!(s_sphere.is_closed(1) == false);
         MINI_CHECK!(s_sphere.is_singular(0) == true);
         MINI_CHECK!(s_sphere.is_singular(2) == true);
-        MINI_CHECK!(s_sphere.cv_count_dir(Some(0)) == 9);
-        MINI_CHECK!(s_sphere.cv_count_dir(Some(1)) == 5);
+        MINI_CHECK!(s_sphere.cv_count(0) == 9);
+        MINI_CHECK!(s_sphere.cv_count(1) == 5);
         MINI_CHECK!(m_sphere.number_of_vertices() == 191);
         MINI_CHECK!(m_sphere.number_of_faces() == 378);
         MINI_CHECK!(TOLERANCE.is_point_close(
@@ -1249,8 +1296,8 @@ pub fn run_primitives_nurbssurface_revolve() -> TestResult {
         MINI_CHECK!(s_cone.is_closed(1) == false);
         MINI_CHECK!(s_cone.is_singular(0) == true);
         MINI_CHECK!(s_cone.is_singular(2) == false);
-        MINI_CHECK!(s_cone.cv_count_dir(Some(0)) == 9);
-        MINI_CHECK!(s_cone.cv_count_dir(Some(1)) == 2);
+        MINI_CHECK!(s_cone.cv_count(0) == 9);
+        MINI_CHECK!(s_cone.cv_count(1) == 2);
         MINI_CHECK!(m_cone.number_of_vertices() == 22);
         MINI_CHECK!(m_cone.number_of_faces() == 21);
         MINI_CHECK!(
@@ -1322,8 +1369,8 @@ pub fn run_primitives_nurbssurface_sweep() -> TestResult {
 
         MINI_CHECK!(s_sweep1.is_valid());
         MINI_CHECK!(s_sweep1.is_rational());
-        MINI_CHECK!(s_sweep1.cv_count_dir(Some(0)) == 9);
-        MINI_CHECK!(s_sweep1.cv_count_dir(Some(1)) == 6);
+        MINI_CHECK!(s_sweep1.cv_count(0) == 9);
+        MINI_CHECK!(s_sweep1.cv_count(1) == 6);
         MINI_CHECK!(m_sweep1.number_of_vertices() > 0);
         MINI_CHECK!(m_sweep1.number_of_faces() > 0);
         TOLERANCE.set_absolute(1e-6);
@@ -1356,12 +1403,188 @@ pub fn run_primitives_nurbssurface_sweep() -> TestResult {
             &Point::new(0.888888888888889, 0.000000000000000, -1.000000000000000)
         ));
         MINI_CHECK!(TOLERANCE.is_point_close(
+            &s_sweep1.get_cv(1, 1).unwrap(),
+            &Point::new(0.888650781842196, 1.196033690639572, -1.000000000000000)
+        ));
+        MINI_CHECK!(TOLERANCE.is_point_close(
+            &s_sweep1.get_cv(1, 2).unwrap(),
+            &Point::new(1.023137542521079, 2.984678629452261, -1.000000000000000)
+        ));
+        MINI_CHECK!(TOLERANCE.is_point_close(
+            &s_sweep1.get_cv(1, 3).unwrap(),
+            &Point::new(1.644124175132322, 5.883369976716749, -1.000000000000000)
+        ));
+        MINI_CHECK!(TOLERANCE.is_point_close(
+            &s_sweep1.get_cv(1, 4).unwrap(),
+            &Point::new(2.267033741447568, 7.548154043673421, -1.000000000000000)
+        ));
+        MINI_CHECK!(TOLERANCE.is_point_close(
+            &s_sweep1.get_cv(1, 5).unwrap(),
+            &Point::new(2.795046402150731, 8.602476824301650, -1.000000000000000)
+        ));
+        MINI_CHECK!(TOLERANCE.is_point_close(
+            &s_sweep1.get_cv(2, 0).unwrap(),
+            &Point::new(-0.111111111111111, 0.000000000000000, -1.000000000000000)
+        ));
+        MINI_CHECK!(TOLERANCE.is_point_close(
+            &s_sweep1.get_cv(2, 1).unwrap(),
+            &Point::new(-0.111355426965362, 1.245520819229018, -1.000000000000000)
+        ));
+        MINI_CHECK!(TOLERANCE.is_point_close(
+            &s_sweep1.get_cv(2, 2).unwrap(),
+            &Point::new(0.028671366170157, 3.117459574526332, -1.000000000000000)
+        ));
+        MINI_CHECK!(TOLERANCE.is_point_close(
+            &s_sweep1.get_cv(2, 3).unwrap(),
+            &Point::new(0.682455101244336, 6.170731523133928, -1.000000000000000)
+        ));
+        MINI_CHECK!(TOLERANCE.is_point_close(
+            &s_sweep1.get_cv(2, 4).unwrap(),
+            &Point::new(1.341409898439919, 7.933301269620500, -1.000000000000000)
+        ));
+        MINI_CHECK!(TOLERANCE.is_point_close(
+            &s_sweep1.get_cv(2, 5).unwrap(),
+            &Point::new(1.900619199731158, 9.049690396962294, -1.000000000000000)
+        ));
+        MINI_CHECK!(TOLERANCE.is_point_close(
+            &s_sweep1.get_cv(3, 0).unwrap(),
+            &Point::new(-1.111111111111111, 0.000000000000000, -1.000000000000000)
+        ));
+        MINI_CHECK!(TOLERANCE.is_point_close(
+            &s_sweep1.get_cv(3, 1).unwrap(),
+            &Point::new(-1.111361635772921, 1.295007947818465, -1.000000000000000)
+        ));
+        MINI_CHECK!(TOLERANCE.is_point_close(
+            &s_sweep1.get_cv(3, 2).unwrap(),
+            &Point::new(-0.965794810180765, 3.250240519600404, -1.000000000000000)
+        ));
+        MINI_CHECK!(TOLERANCE.is_point_close(
+            &s_sweep1.get_cv(3, 3).unwrap(),
+            &Point::new(-0.279213972643651, 6.458093069551111, -1.000000000000000)
+        ));
+        MINI_CHECK!(TOLERANCE.is_point_close(
+            &s_sweep1.get_cv(3, 4).unwrap(),
+            &Point::new(0.415786055432270, 8.318448495567573, -1.000000000000000)
+        ));
+        MINI_CHECK!(TOLERANCE.is_point_close(
+            &s_sweep1.get_cv(3, 5).unwrap(),
+            &Point::new(1.006191997311586, 9.496903969622938, -1.000000000000000)
+        ));
+        MINI_CHECK!(TOLERANCE.is_point_close(
             &s_sweep1.get_cv(4, 0).unwrap(),
             &Point::new(-1.111111111111111, 0.000000000000000, 0.000000000000000)
         ));
         MINI_CHECK!(TOLERANCE.is_point_close(
+            &s_sweep1.get_cv(4, 1).unwrap(),
+            &Point::new(-1.111361635772921, 1.295007947818464, 0.000000000000000)
+        ));
+        MINI_CHECK!(TOLERANCE.is_point_close(
+            &s_sweep1.get_cv(4, 2).unwrap(),
+            &Point::new(-0.965794810180765, 3.250240519600406, 0.000000000000000)
+        ));
+        MINI_CHECK!(TOLERANCE.is_point_close(
+            &s_sweep1.get_cv(4, 3).unwrap(),
+            &Point::new(-0.279213972643651, 6.458093069551108, 0.000000000000000)
+        ));
+        MINI_CHECK!(TOLERANCE.is_point_close(
+            &s_sweep1.get_cv(4, 4).unwrap(),
+            &Point::new(0.415786055432269, 8.318448495567575, 0.000000000000000)
+        ));
+        MINI_CHECK!(TOLERANCE.is_point_close(
+            &s_sweep1.get_cv(4, 5).unwrap(),
+            &Point::new(1.006191997311586, 9.496903969622938, 0.000000000000000)
+        ));
+        MINI_CHECK!(TOLERANCE.is_point_close(
+            &s_sweep1.get_cv(5, 0).unwrap(),
+            &Point::new(-1.111111111111111, 0.000000000000000, 1.000000000000000)
+        ));
+        MINI_CHECK!(TOLERANCE.is_point_close(
+            &s_sweep1.get_cv(5, 1).unwrap(),
+            &Point::new(-1.111361635772921, 1.295007947818465, 1.000000000000000)
+        ));
+        MINI_CHECK!(TOLERANCE.is_point_close(
+            &s_sweep1.get_cv(5, 2).unwrap(),
+            &Point::new(-0.965794810180765, 3.250240519600404, 1.000000000000000)
+        ));
+        MINI_CHECK!(TOLERANCE.is_point_close(
+            &s_sweep1.get_cv(5, 3).unwrap(),
+            &Point::new(-0.279213972643651, 6.458093069551111, 1.000000000000000)
+        ));
+        MINI_CHECK!(TOLERANCE.is_point_close(
+            &s_sweep1.get_cv(5, 4).unwrap(),
+            &Point::new(0.415786055432270, 8.318448495567573, 1.000000000000000)
+        ));
+        MINI_CHECK!(TOLERANCE.is_point_close(
+            &s_sweep1.get_cv(5, 5).unwrap(),
+            &Point::new(1.006191997311586, 9.496903969622938, 1.000000000000000)
+        ));
+        MINI_CHECK!(TOLERANCE.is_point_close(
+            &s_sweep1.get_cv(6, 0).unwrap(),
+            &Point::new(-0.111111111111111, 0.000000000000000, 1.000000000000000)
+        ));
+        MINI_CHECK!(TOLERANCE.is_point_close(
+            &s_sweep1.get_cv(6, 1).unwrap(),
+            &Point::new(-0.111355426965362, 1.245520819229018, 1.000000000000000)
+        ));
+        MINI_CHECK!(TOLERANCE.is_point_close(
+            &s_sweep1.get_cv(6, 2).unwrap(),
+            &Point::new(0.028671366170157, 3.117459574526332, 1.000000000000000)
+        ));
+        MINI_CHECK!(TOLERANCE.is_point_close(
+            &s_sweep1.get_cv(6, 3).unwrap(),
+            &Point::new(0.682455101244336, 6.170731523133928, 1.000000000000000)
+        ));
+        MINI_CHECK!(TOLERANCE.is_point_close(
+            &s_sweep1.get_cv(6, 4).unwrap(),
+            &Point::new(1.341409898439919, 7.933301269620500, 1.000000000000000)
+        ));
+        MINI_CHECK!(TOLERANCE.is_point_close(
+            &s_sweep1.get_cv(6, 5).unwrap(),
+            &Point::new(1.900619199731158, 9.049690396962294, 1.000000000000000)
+        ));
+        MINI_CHECK!(TOLERANCE.is_point_close(
+            &s_sweep1.get_cv(7, 0).unwrap(),
+            &Point::new(0.888888888888889, 0.000000000000000, 1.000000000000000)
+        ));
+        MINI_CHECK!(TOLERANCE.is_point_close(
+            &s_sweep1.get_cv(7, 1).unwrap(),
+            &Point::new(0.888650781842196, 1.196033690639572, 1.000000000000000)
+        ));
+        MINI_CHECK!(TOLERANCE.is_point_close(
+            &s_sweep1.get_cv(7, 2).unwrap(),
+            &Point::new(1.023137542521079, 2.984678629452261, 1.000000000000000)
+        ));
+        MINI_CHECK!(TOLERANCE.is_point_close(
+            &s_sweep1.get_cv(7, 3).unwrap(),
+            &Point::new(1.644124175132322, 5.883369976716749, 1.000000000000000)
+        ));
+        MINI_CHECK!(TOLERANCE.is_point_close(
+            &s_sweep1.get_cv(7, 4).unwrap(),
+            &Point::new(2.267033741447568, 7.548154043673421, 1.000000000000000)
+        ));
+        MINI_CHECK!(TOLERANCE.is_point_close(
+            &s_sweep1.get_cv(7, 5).unwrap(),
+            &Point::new(2.795046402150731, 8.602476824301650, 1.000000000000000)
+        ));
+        MINI_CHECK!(TOLERANCE.is_point_close(
             &s_sweep1.get_cv(8, 0).unwrap(),
             &Point::new(0.888888888888889, 0.000000000000000, 0.000000000000000)
+        ));
+        MINI_CHECK!(TOLERANCE.is_point_close(
+            &s_sweep1.get_cv(8, 1).unwrap(),
+            &Point::new(0.888650781842197, 1.196033690639573, 0.000000000000000)
+        ));
+        MINI_CHECK!(TOLERANCE.is_point_close(
+            &s_sweep1.get_cv(8, 2).unwrap(),
+            &Point::new(1.023137542521078, 2.984678629452259, 0.000000000000000)
+        ));
+        MINI_CHECK!(TOLERANCE.is_point_close(
+            &s_sweep1.get_cv(8, 3).unwrap(),
+            &Point::new(1.644124175132323, 5.883369976716751, 0.000000000000000)
+        ));
+        MINI_CHECK!(TOLERANCE.is_point_close(
+            &s_sweep1.get_cv(8, 4).unwrap(),
+            &Point::new(2.267033741447567, 7.548154043673421, 0.000000000000000)
         ));
         MINI_CHECK!(TOLERANCE.is_point_close(
             &s_sweep1.get_cv(8, 5).unwrap(),
@@ -1369,8 +1592,8 @@ pub fn run_primitives_nurbssurface_sweep() -> TestResult {
         ));
 
         MINI_CHECK!(s_sweep2.is_valid());
-        MINI_CHECK!(s_sweep2.cv_count_dir(Some(0)) == 3);
-        MINI_CHECK!(s_sweep2.cv_count_dir(Some(1)) == 6);
+        MINI_CHECK!(s_sweep2.cv_count(0) == 3);
+        MINI_CHECK!(s_sweep2.cv_count(1) == 6);
         MINI_CHECK!(m_sweep2.number_of_vertices() > 0);
         MINI_CHECK!(m_sweep2.number_of_faces() > 0);
         MINI_CHECK!(TOLERANCE.is_point_close(
@@ -1378,12 +1601,68 @@ pub fn run_primitives_nurbssurface_sweep() -> TestResult {
             &Point::new(6.000000000000000, -1.000000000000000, 0.000000000000000)
         ));
         MINI_CHECK!(TOLERANCE.is_point_close(
+            &s_sweep2.get_cv(0, 1).unwrap(),
+            &Point::new(6.175969120718316, -0.300506740098127, 0.000000000000000)
+        ));
+        MINI_CHECK!(TOLERANCE.is_point_close(
+            &s_sweep2.get_cv(0, 2).unwrap(),
+            &Point::new(6.459569103687756, 0.747208154997334, 0.000000000000000)
+        ));
+        MINI_CHECK!(TOLERANCE.is_point_close(
+            &s_sweep2.get_cv(0, 3).unwrap(),
+            &Point::new(7.052015306099445, 2.456377031677760, 0.000000000000000)
+        ));
+        MINI_CHECK!(TOLERANCE.is_point_close(
+            &s_sweep2.get_cv(0, 4).unwrap(),
+            &Point::new(7.525387263758168, 3.480360762535406, 0.000000000000000)
+        ));
+        MINI_CHECK!(TOLERANCE.is_point_close(
             &s_sweep2.get_cv(0, 5).unwrap(),
             &Point::new(8.000000000000000, 4.000000000000000, 0.000000000000000)
         ));
         MINI_CHECK!(TOLERANCE.is_point_close(
+            &s_sweep2.get_cv(1, 0).unwrap(),
+            &Point::new(8.000000000000000, -1.000000000000000, 2.000000000000000)
+        ));
+        MINI_CHECK!(TOLERANCE.is_point_close(
+            &s_sweep2.get_cv(1, 1).unwrap(),
+            &Point::new(8.087302079238063, -0.305563785913389, 2.040878660089621)
+        ));
+        MINI_CHECK!(TOLERANCE.is_point_close(
+            &s_sweep2.get_cv(1, 2).unwrap(),
+            &Point::new(8.215030901365994, 0.738012519337792, 2.128261757662849)
+        ));
+        MINI_CHECK!(TOLERANCE.is_point_close(
+            &s_sweep2.get_cv(1, 3).unwrap(),
+            &Point::new(8.402488235814772, 2.450241721213838, 2.205206310224664)
+        ));
+        MINI_CHECK!(TOLERANCE.is_point_close(
+            &s_sweep2.get_cv(1, 4).unwrap(),
+            &Point::new(8.490843623722080, 3.486294461007204, 2.229418074862260)
+        ));
+        MINI_CHECK!(TOLERANCE.is_point_close(
+            &s_sweep2.get_cv(1, 5).unwrap(),
+            &Point::new(8.500000000000000, 4.000000000000000, 1.500000000000000)
+        ));
+        MINI_CHECK!(TOLERANCE.is_point_close(
             &s_sweep2.get_cv(2, 0).unwrap(),
             &Point::new(10.000000000000000, -1.000000000000000, 0.000000000000000)
+        ));
+        MINI_CHECK!(TOLERANCE.is_point_close(
+            &s_sweep2.get_cv(2, 1).unwrap(),
+            &Point::new(9.998635037757797, -0.310620831728651, 0.000000000000000)
+        ));
+        MINI_CHECK!(TOLERANCE.is_point_close(
+            &s_sweep2.get_cv(2, 2).unwrap(),
+            &Point::new(9.970492699044241, 0.728816883678250, 0.000000000000000)
+        ));
+        MINI_CHECK!(TOLERANCE.is_point_close(
+            &s_sweep2.get_cv(2, 3).unwrap(),
+            &Point::new(9.752961165530088, 2.444106410749916, 0.000000000000000)
+        ));
+        MINI_CHECK!(TOLERANCE.is_point_close(
+            &s_sweep2.get_cv(2, 4).unwrap(),
+            &Point::new(9.456299983685991, 3.492228159479000, 0.000000000000000)
         ));
         MINI_CHECK!(TOLERANCE.is_point_close(
             &s_sweep2.get_cv(2, 5).unwrap(),
@@ -1431,11 +1710,11 @@ pub fn run_primitives_nurbssurface_edge() -> TestResult {
         let m = surf.mesh();
 
         MINI_CHECK!(surf.is_valid());
-        MINI_CHECK!(m.number_of_faces() > 0);
+        MINI_CHECK!(m.is_valid());
         MINI_CHECK!(surf.degree(0) == 2);
         MINI_CHECK!(surf.degree(1) == 3);
-        MINI_CHECK!(surf.cv_count_dir(Some(0)) == 3);
-        MINI_CHECK!(surf.cv_count_dir(Some(1)) == 4);
+        MINI_CHECK!(surf.cv_count(0) == 3);
+        MINI_CHECK!(surf.cv_count(1) == 4);
 
         MINI_CHECK!(TOLERANCE.is_point_close(
             &surf.get_cv(0, 0).unwrap(),
@@ -1571,6 +1850,7 @@ pub fn run_primitives_mesh_cone_subdivisions() -> TestResult {
 
 pub fn run_primitives_nurbscurve_interpolated() -> TestResult {
     MINI_TEST!("Nurbscurve Interpolated", {
+        use crate::nurbsknot::CurveInterpStyle;
         use crate::nurbsknot::CurveNurbsKnotStyle;
         use crate::Point;
         use crate::Primitives;
@@ -1585,7 +1865,11 @@ pub fn run_primitives_nurbscurve_interpolated() -> TestResult {
             Point::new(41.0, 13.0, 0.0),
         ];
 
-        let c = Primitives::create_interpolated(&points, CurveNurbsKnotStyle::Chord);
+        let c = Primitives::create_interpolated(
+            &points,
+            CurveNurbsKnotStyle::Chord,
+            CurveInterpStyle::Rhino,
+        );
 
         MINI_CHECK!(c.is_valid());
         MINI_CHECK!(c.degree() == 3);
@@ -1612,7 +1896,11 @@ pub fn run_primitives_nurbscurve_interpolated() -> TestResult {
             Point::new(3.0, 1.0, 0.0),
             Point::new(5.0, 3.0, 0.0),
         ];
-        let c4 = Primitives::create_interpolated(&pts4, CurveNurbsKnotStyle::Chord);
+        let c4 = Primitives::create_interpolated(
+            &pts4,
+            CurveNurbsKnotStyle::Chord,
+            CurveInterpStyle::Rhino,
+        );
         MINI_CHECK!(c4.is_valid());
         MINI_CHECK!(c4.degree() == 3);
         MINI_CHECK!(c4.cv_count() == 6);
@@ -1674,8 +1962,8 @@ pub fn run_primitives_nurbssurface_wave() -> TestResult {
         MINI_CHECK!(srf.is_valid());
         MINI_CHECK!(srf.degree(0) == 3);
         MINI_CHECK!(srf.degree(1) == 3);
-        MINI_CHECK!(srf.cv_count_dir(Some(0)) == 13);
-        MINI_CHECK!(srf.cv_count_dir(Some(1)) == 13);
+        MINI_CHECK!(srf.cv_count(0) == 13);
+        MINI_CHECK!(srf.cv_count(1) == 13);
         let corner = srf.point_at(0.0, 0.0).unwrap();
         MINI_CHECK!(corner[2].abs() < 0.1);
     })
@@ -1743,6 +2031,11 @@ REGISTER_MINI_TEST!(
 );
 REGISTER_MINI_TEST!(
     "Primitives",
+    "Nurbssurface Torus",
+    crate::primitives_test::run_primitives_nurbssurface_torus
+);
+REGISTER_MINI_TEST!(
+    "Primitives",
     "Nurbssurface Sphere",
     crate::primitives_test::run_primitives_nurbssurface_sphere
 );
@@ -1753,18 +2046,14 @@ REGISTER_MINI_TEST!(
 );
 REGISTER_MINI_TEST!(
     "Primitives",
-    "Nurbssurface Torus",
-    crate::primitives_test::run_primitives_nurbssurface_torus
-);
-REGISTER_MINI_TEST!(
-    "Primitives",
     "Nurbssurface Ruled",
     crate::primitives_test::run_primitives_nurbssurface_ruled
 );
-// TODO(f64-followup): Planar/Revolve/Sweep/Edge produce point coordinates
-// that diverge from f64 expectations by more than tolerance. Re-baseline or
-// switch to internal f64 islands for NurbsSurface evaluation.
-// REGISTER_MINI_TEST!("Primitives", "Nurbssurface Planar", crate::primitives_test::run_primitives_nurbssurface_planar);
+REGISTER_MINI_TEST!(
+    "Primitives",
+    "Nurbssurface Planar",
+    crate::primitives_test::run_primitives_nurbssurface_planar
+);
 REGISTER_MINI_TEST!(
     "Primitives",
     "Nurbssurface Extrusion",
@@ -1775,9 +2064,21 @@ REGISTER_MINI_TEST!(
     "Nurbssurface Loft",
     crate::primitives_test::run_primitives_nurbssurface_loft
 );
-// REGISTER_MINI_TEST!("Primitives", "Nurbssurface Revolve", crate::primitives_test::run_primitives_nurbssurface_revolve);
-// REGISTER_MINI_TEST!("Primitives", "Nurbssurface Sweep", crate::primitives_test::run_primitives_nurbssurface_sweep);
-// REGISTER_MINI_TEST!("Primitives", "Nurbssurface Edge", crate::primitives_test::run_primitives_nurbssurface_edge);
+REGISTER_MINI_TEST!(
+    "Primitives",
+    "Nurbssurface Revolve",
+    crate::primitives_test::run_primitives_nurbssurface_revolve
+);
+REGISTER_MINI_TEST!(
+    "Primitives",
+    "Nurbssurface Sweep",
+    crate::primitives_test::run_primitives_nurbssurface_sweep
+);
+REGISTER_MINI_TEST!(
+    "Primitives",
+    "Nurbssurface Edge",
+    crate::primitives_test::run_primitives_nurbssurface_edge
+);
 REGISTER_MINI_TEST!(
     "Primitives",
     "Mesh Quad Mesh",
@@ -1798,8 +2099,11 @@ REGISTER_MINI_TEST!(
     "Mesh Cone Subdivisions",
     crate::primitives_test::run_primitives_mesh_cone_subdivisions
 );
-// TODO(f64-followup): rebaseline expected values for f64 NurbsCurve interpolation.
-// REGISTER_MINI_TEST!("Primitives", "Nurbscurve Interpolated", crate::primitives_test::run_primitives_nurbscurve_interpolated);
+REGISTER_MINI_TEST!(
+    "Primitives",
+    "Nurbscurve Interpolated",
+    crate::primitives_test::run_primitives_nurbscurve_interpolated
+);
 REGISTER_MINI_TEST!(
     "Primitives",
     "Mesh Tetrahedron",

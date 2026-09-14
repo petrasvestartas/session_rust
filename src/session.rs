@@ -890,18 +890,18 @@ impl Session {
         let inflate = Tolerance::APPROXIMATION;
         let tp = |p: &Point| -> Point { xform.transform_point(p) };
         match geometry {
-            Geometry::Point(p) => OBB::from_point(tp(p), inflate),
+            Geometry::Point(p) => OBB::from_point(&tp(p), inflate),
             Geometry::Line(l) => {
                 let points = vec![tp(&l.start()), tp(&l.end())];
-                OBB::from_points(&points, inflate)
+                OBB::from_points(&points, inflate, None)
             }
             Geometry::Polyline(pl) => {
                 let points: Vec<Point> = pl.get_points().iter().map(|p| tp(p)).collect();
-                OBB::from_points(&points, inflate)
+                OBB::from_points(&points, inflate, None)
             }
             Geometry::PointCloud(pc) => {
                 let points: Vec<Point> = pc.get_points().iter().map(|p| tp(p)).collect();
-                OBB::from_points(&points, inflate)
+                OBB::from_points(&points, inflate, None)
             }
             Geometry::Mesh(m) => {
                 let points: Vec<Point> = m
@@ -910,9 +910,9 @@ impl Session {
                     .map(|v| tp(&Point::new(v.x, v.y, v.z)))
                     .collect();
                 if points.is_empty() {
-                    OBB::from_point(Point::new(0.0, 0.0, 0.0), inflate)
+                    OBB::from_point(&Point::new(0.0, 0.0, 0.0), inflate)
                 } else {
-                    OBB::from_points(&points, inflate)
+                    OBB::from_points(&points, inflate, None)
                 }
             }
             Geometry::OBB(bb) => {
@@ -926,7 +926,7 @@ impl Session {
                 inflated.transform(xform);
                 inflated
             }
-            Geometry::Plane(p) => OBB::from_point(tp(&p.origin()), inflate * 10.0),
+            Geometry::Plane(p) => OBB::from_point(&tp(&p.origin()), inflate * 10.0),
             Geometry::BRep(b) => {
                 let mut points: Vec<Point> = b.m_vertices.iter().map(|v| tp(&v.point)).collect();
                 // Sample surface points to cover curved surfaces (e.g. sphere with only pole vertices)
@@ -944,9 +944,9 @@ impl Session {
                     }
                 }
                 if points.is_empty() {
-                    OBB::from_point(Point::new(0.0, 0.0, 0.0), inflate)
+                    OBB::from_point(&Point::new(0.0, 0.0, 0.0), inflate)
                 } else {
-                    OBB::from_points(&points, inflate)
+                    OBB::from_points(&points, inflate, None)
                 }
             }
             Geometry::NurbsCurve(c) => {
@@ -957,24 +957,24 @@ impl Session {
                     }
                 }
                 if points.is_empty() {
-                    OBB::from_point(Point::new(0.0, 0.0, 0.0), inflate)
+                    OBB::from_point(&Point::new(0.0, 0.0, 0.0), inflate)
                 } else {
-                    OBB::from_points(&points, inflate)
+                    OBB::from_points(&points, inflate, None)
                 }
             }
             Geometry::NurbsSurface(s) => {
                 let mut points: Vec<Point> = Vec::new();
-                for i in 0..s.cv_count_dir(Some(0)) {
-                    for j in 0..s.cv_count_dir(Some(1)) {
+                for i in 0..s.cv_count(0) {
+                    for j in 0..s.cv_count(1) {
                         if let Some(p) = s.get_cv(i, j) {
                             points.push(tp(&p));
                         }
                     }
                 }
                 if points.is_empty() {
-                    OBB::from_point(Point::new(0.0, 0.0, 0.0), inflate)
+                    OBB::from_point(&Point::new(0.0, 0.0, 0.0), inflate)
                 } else {
-                    OBB::from_points(&points, inflate)
+                    OBB::from_points(&points, inflate, None)
                 }
             }
             Geometry::Element(e) => {
@@ -1176,7 +1176,7 @@ impl Session {
                 Geometry::Mesh(m) => {
                     // The session holds the placement: cast in the mesh's LOCAL frame, return a WORLD hit.
                     if !m.has_triangle_bvh() {
-                        Rc::make_mut(m).build_triangle_bvh();
+                        Rc::make_mut(m).build_triangle_bvh(false);
                     }
                     if let Some(inv) = placement.inverse() {
                         let local_ray = Line::from_points(
@@ -1440,7 +1440,7 @@ impl Session {
         nurbssurface: NurbsSurface,
         parent: Option<&Rc<RefCell<TreeNode>>>,
     ) -> Option<Rc<RefCell<TreeNode>>> {
-        if nurbssurface.cv_count_dir(None) == 0 {
+        if nurbssurface.cv_count_total() == 0 {
             return None;
         }
         Some(self._add_object(
@@ -1736,8 +1736,12 @@ impl Session {
         };
         if let Some(parent_guid) = &op.parent_guid {
             if let Some(parent) = self.tree.get_node_by_name(parent_guid) {
-                let count = parent.borrow().children().len();
-                parent.borrow_mut().insert(op.index.min(count), &node);
+                self.tree.add(&node, Some(&parent));
+                let children = parent.borrow().children();
+                for i in op.index.min(children.len() - 1)..children.len() - 1 {
+                    parent.borrow_mut().remove(&children[i]);
+                    parent.borrow_mut().add(&children[i]);
+                }
             }
         }
 
@@ -1807,7 +1811,7 @@ impl Session {
 
     /// Get all children GUIDs of a geometry object in the tree.
     pub fn get_children(&self, guid: &str) -> Vec<String> {
-        self.tree.get_children(guid)
+        self.tree.get_children_guids(guid)
     }
 
     // ═══════════════════════════════════════════════════════════════════════════

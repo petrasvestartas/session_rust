@@ -9,39 +9,31 @@ pub fn run_plane_constructor() -> TestResult {
         use crate::Point;
         use crate::Vector;
 
-        // Default constructor - XY plane at origin
         let pl = Plane::default();
 
-        // Origin and axes
         let origin = pl.origin();
         let x_axis = pl.x_axis();
         let y_axis = pl.y_axis();
         let z_axis = pl.z_axis();
 
-        // Plane equation coefficients (ax + by + cz + d = 0)
         let a = pl.a();
         let b = pl.b();
         let c = pl.c();
         let d = pl.d();
 
-        // Index access for axes
         let ax0 = &pl[0];
         let ax1 = &pl[1];
         let ax2 = &pl[2];
 
-        // Minimal and Full String Representation
         let plstr = pl.str();
         let plrepr = pl.repr();
 
-        // Copy (duplicates everything except guid)
         let plcopy = pl.duplicate();
 
-        // From point and normal
         let p = Point::new(0.0, 0.0, 5.0);
         let n = Vector::new(0.0, 0.0, 1.0);
-        let pl_pn = Plane::from_point_normal(p, n);
+        let pl_pn = Plane::from_point_normal(p, n, None);
 
-        // From three points
         let pts = vec![
             Point::new(0.0, 0.0, 0.0),
             Point::new(1.0, 0.0, 0.0),
@@ -49,17 +41,14 @@ pub fn run_plane_constructor() -> TestResult {
         ];
         let pl_pts = Plane::from_points(pts);
 
-        // From two points
         let p1 = Point::new(0.0, 0.0, 0.0);
         let p2 = Point::new(1.0, 0.0, 0.0);
         let pl_2pts = Plane::from_two_points(p1, p2);
 
-        // Standard planes
         let xy = Plane::xy_plane();
         let yz = Plane::yz_plane();
         let xz = Plane::xz_plane();
 
-        // Translation operators
         let offset = Vector::new(1.0, 2.0, 3.0);
         let mut pl_iadd = Plane::xy_plane();
         pl_iadd += offset.clone();
@@ -276,11 +265,6 @@ pub fn run_plane_json_roundtrip() -> TestResult {
         let mut pl = Plane::xy_plane();
         pl.name = "test_plane".to_string();
 
-        //   file_json_dumps()    │ String       │ to JSON string
-        //   file_json_loads(s)   │ String       │ from JSON string
-        //   file_json_dump(path) │ file         │ write to file
-        //   file_json_load(path) │ file         │ read from file
-
         let fname = "serialization/test_plane.json";
         pl.file_json_dump(fname).unwrap();
         let loaded = Plane::file_json_load(fname).unwrap();
@@ -303,6 +287,20 @@ pub fn run_plane_protobuf_roundtrip() -> TestResult {
 
         MINI_CHECK!(loaded.name == "test_plane");
         MINI_CHECK!(TOLERANCE.is_close(loaded.c(), 1.0));
+    })
+}
+
+pub fn run_plane_has_on_negative_side() -> TestResult {
+    MINI_TEST!("Has On Negative Side", {
+        use crate::Plane;
+        use crate::Point;
+
+        let pl = Plane::xy_plane();
+        let above = Point::new(0.0, 0.0, 1.0);
+        let below = Point::new(0.0, 0.0, -1.0);
+
+        MINI_CHECK!(pl.has_on_negative_side(&below));
+        MINI_CHECK!(!pl.has_on_negative_side(&above));
     })
 }
 
@@ -361,16 +359,6 @@ REGISTER_MINI_TEST!(
     crate::plane_test::run_plane_protobuf_roundtrip
 );
 
-pub fn run_plane_has_on_negative_side() -> TestResult {
-    MINI_TEST!("Has On Negative Side", {
-        use crate::{Plane, Point};
-        let pl = Plane::xy_plane();
-        let above = Point::new(0.0, 0.0, 1.0);
-        let below = Point::new(0.0, 0.0, -1.0);
-        MINI_CHECK!(pl.has_on_negative_side(&below));
-        MINI_CHECK!(!pl.has_on_negative_side(&above));
-    })
-}
 REGISTER_MINI_TEST!(
     "Plane",
     "Has On Negative Side",

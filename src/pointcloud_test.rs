@@ -9,10 +9,8 @@ pub fn run_pointcloud_constructor() -> TestResult {
         use crate::PointCloud;
         use crate::Vector;
 
-        // Default constructor (empty cloud)
         let pc0 = PointCloud::default();
 
-        // Constructor with points, normals, colors
         let p0 = Point::new(0.0, 0.0, 0.0);
         let p1 = Point::new(1.0, 0.0, 0.0);
         let p2 = Point::new(0.0, 1.0, 0.0);
@@ -24,23 +22,20 @@ pub fn run_pointcloud_constructor() -> TestResult {
         let c2 = Color::new(0.0, 0.0, 1.0, 1.0);
         let pc = PointCloud::new(vec![p0, p1, p2], vec![n0, n1, n2], vec![c0, c1, c2]);
 
-        // Minimal and Full String Representation
         let pcstr = pc.str();
         let pcrepr = pc.repr();
 
-        // Copy (duplicates everything except guid)
         let pccopy = pc.duplicate();
         let pcother = PointCloud::default();
 
-        // Copy operators
         let offset = Vector::new(10.0, 20.0, 30.0);
         let mut pc_iadd = PointCloud::new(vec![Point::new(1.0, 2.0, 3.0)], vec![], vec![]);
-        pc_iadd += offset.clone();
+        pc_iadd += &offset;
         let mut pc_isub = PointCloud::new(vec![Point::new(1.0, 2.0, 3.0)], vec![], vec![]);
-        pc_isub -= offset.clone();
+        pc_isub -= &offset;
         let pc3 = PointCloud::new(vec![Point::new(1.0, 2.0, 3.0)], vec![], vec![]);
-        let pc_add = &pc3 + offset.clone();
-        let pc_sub = &pc3 - offset.clone();
+        let pc_add = &pc3 + &offset;
+        let pc_sub = &pc3 - &offset;
 
         MINI_CHECK!(pc0.name == "my_pointcloud");
         MINI_CHECK!(!pc0.guid().is_empty());
@@ -247,7 +242,7 @@ pub fn run_pointcloud_set_color() -> TestResult {
         pc.set_color(0, &Color::new(1.0, 0.0, 0.0, 1.0));
 
         MINI_CHECK!(
-            TOLERANCE.is_close(pc.get_color(0).r as f64, 1.0)
+            pc.get_color(0).r == 1.0
                 && pc.get_color(0).g == 0.0
                 && pc.get_color(0).b == 0.0
                 && pc.get_color(0).a == 1.0
@@ -261,13 +256,11 @@ pub fn run_pointcloud_add_color() -> TestResult {
         use crate::PointCloud;
 
         let mut pc = PointCloud::default();
-        pc.add_color(&Color::new(1.0, 0.0, 0.0, 1.0));
+        pc.add_color(&Color::new(1.0, 0.0, 1.0, 1.0));
 
         MINI_CHECK!(pc.color_count() == 1);
         MINI_CHECK!(
-            TOLERANCE.is_close(pc.get_color(0).r as f64, 1.0)
-                && pc.get_color(0).g == 0.0
-                && pc.get_color(0).b == 0.0
+            pc.get_color(0).r == 1.0 && pc.get_color(0).g == 0.0 && pc.get_color(0).b == 1.0
         );
     })
 }
@@ -402,6 +395,42 @@ pub fn run_pointcloud_get_normals() -> TestResult {
     })
 }
 
+pub fn run_pointcloud_point_ids() -> TestResult {
+    MINI_TEST!("Point Ids", {
+        use crate::PointCloud;
+
+        let coords = vec![
+            0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 1.0, 1.0, 0.0, 0.0, 0.0, 1.0, 1.0, 0.0,
+            1.0, 0.0, 1.0, 1.0, 1.0, 1.0, 1.0,
+        ];
+        let mut pc = PointCloud::from_coords(coords, vec![], vec![]);
+        let before = pc.get_point(5);
+        pc.build_lod(1.0, 2);
+
+        MINI_CHECK!(pc.point_ids().len() == 8);
+        MINI_CHECK!(pc.index_of_id(5).is_some());
+        MINI_CHECK!(pc.get_point(pc.index_of_id(5).unwrap()) == before);
+    })
+}
+
+pub fn run_pointcloud_build_lod() -> TestResult {
+    MINI_TEST!("Build Lod", {
+        use crate::PointCloud;
+
+        let coords = vec![
+            0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 1.0, 1.0, 0.0, 0.0, 0.0, 1.0, 1.0, 0.0,
+            1.0, 0.0, 1.0, 1.0, 1.0, 1.0, 1.0,
+        ];
+        let mut pc = PointCloud::from_coords(coords, vec![], vec![]);
+        pc.build_lod(1.0, 2);
+
+        MINI_CHECK!(pc.has_lod());
+        MINI_CHECK!(pc.lod_node_count() == 8);
+        MINI_CHECK!(pc.lod_range(0).0 == 0 && pc.lod_range(0).1 == 1);
+        MINI_CHECK!(pc.coords().len() == 24);
+    })
+}
+
 pub fn run_pointcloud_transform() -> TestResult {
     MINI_TEST!("Transform", {
         use crate::Point;
@@ -452,13 +481,6 @@ pub fn run_pointcloud_json_roundtrip() -> TestResult {
         );
         pc.name = "test_pointcloud".to_string();
 
-        //   jsondump()      │ String       │ to JSON string (internal use)
-        //   jsonload(s)     │ String       │ from JSON string (internal use)
-        //   file_json_dumps()    │ String       │ to JSON string
-        //   file_json_loads(s)   │ String       │ from JSON string
-        //   file_json_dump(path) │ file         │ write to file
-        //   file_json_load(path) │ file         │ read from file
-
         let fname = "serialization/test_pointcloud.json";
         pc.file_json_dump(fname).unwrap();
         let loaded = PointCloud::file_json_load(fname).unwrap();
@@ -495,44 +517,8 @@ pub fn run_pointcloud_protobuf_roundtrip() -> TestResult {
         MINI_CHECK!(loaded.name == "test_pointcloud");
         MINI_CHECK!(loaded.len() == 2);
         MINI_CHECK!(TOLERANCE.is_close(loaded.get_point(0)[0], 1.0));
-        MINI_CHECK!(TOLERANCE.is_close(loaded.get_color(0).r as f64, 1.0));
+        MINI_CHECK!(loaded.get_color(0).r == 1.0);
         MINI_CHECK!(TOLERANCE.is_close(loaded.get_normal(0)[2], 1.0));
-    })
-}
-
-pub fn run_pointcloud_point_ids() -> TestResult {
-    MINI_TEST!("Point Ids", {
-        use crate::PointCloud;
-
-        let coords = vec![
-            0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 1.0, 1.0, 0.0, 0.0, 0.0, 1.0, 1.0, 0.0,
-            1.0, 0.0, 1.0, 1.0, 1.0, 1.0, 1.0,
-        ];
-        let mut pc = PointCloud::from_coords(coords, vec![], vec![]);
-        let before = pc.get_point(5);
-        pc.build_lod(1.0, 2);
-
-        MINI_CHECK!(pc.point_ids().len() == 8);
-        MINI_CHECK!(pc.index_of_id(5).is_some());
-        MINI_CHECK!(pc.get_point(pc.index_of_id(5).unwrap()) == before);
-    })
-}
-
-pub fn run_pointcloud_build_lod() -> TestResult {
-    MINI_TEST!("Build Lod", {
-        use crate::PointCloud;
-
-        let coords = vec![
-            0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 1.0, 1.0, 0.0, 0.0, 0.0, 1.0, 1.0, 0.0,
-            1.0, 0.0, 1.0, 1.0, 1.0, 1.0, 1.0,
-        ];
-        let mut pc = PointCloud::from_coords(coords, vec![], vec![]);
-        pc.build_lod(1.0, 2);
-
-        MINI_CHECK!(pc.has_lod());
-        MINI_CHECK!(pc.lod_node_count() == 8);
-        MINI_CHECK!(pc.lod_range(0) == (0, 1));
-        MINI_CHECK!(pc.coords().len() == 24);
     })
 }
 
@@ -643,16 +629,6 @@ REGISTER_MINI_TEST!(
 );
 REGISTER_MINI_TEST!(
     "PointCloud",
-    "Transform",
-    crate::pointcloud_test::run_pointcloud_transform
-);
-REGISTER_MINI_TEST!(
-    "PointCloud",
-    "Transformed",
-    crate::pointcloud_test::run_pointcloud_transformed
-);
-REGISTER_MINI_TEST!(
-    "PointCloud",
     "Point Ids",
     crate::pointcloud_test::run_pointcloud_point_ids
 );
@@ -660,6 +636,16 @@ REGISTER_MINI_TEST!(
     "PointCloud",
     "Build Lod",
     crate::pointcloud_test::run_pointcloud_build_lod
+);
+REGISTER_MINI_TEST!(
+    "PointCloud",
+    "Transform",
+    crate::pointcloud_test::run_pointcloud_transform
+);
+REGISTER_MINI_TEST!(
+    "PointCloud",
+    "Transformed",
+    crate::pointcloud_test::run_pointcloud_transformed
 );
 REGISTER_MINI_TEST!(
     "PointCloud",

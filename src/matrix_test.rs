@@ -19,6 +19,9 @@ pub fn run_matrix_constructor() -> TestResult {
         let sstr = m.str();
         let srepr = eye.repr();
         let d = ml.duplicate();
+        let short_guid = Matrix::default();
+        short_guid.set_guid("id".to_string());
+        let short_repr = short_guid.repr();
 
         MINI_CHECK!(m.rows == 2 && m.cols == 3);
         MINI_CHECK!(m.name == "my_matrix" && !m.guid().is_empty());
@@ -31,6 +34,7 @@ pub fn run_matrix_constructor() -> TestResult {
         MINI_CHECK!(sstr.contains("Matrix(2x3)"));
         MINI_CHECK!(srepr.contains("Matrix("));
         MINI_CHECK!(d == ml && d.guid() != ml.guid());
+        MINI_CHECK!(short_repr.contains("guid='id...'"));
     })
 }
 
@@ -60,12 +64,14 @@ pub fn run_matrix_add() -> TestResult {
         use crate::Matrix;
         let a = Matrix::from_vec(2, 2, vec![1.0, 2.0, 3.0, 4.0]);
         let b = Matrix::from_vec(2, 2, vec![5.0, 6.0, 7.0, 8.0]);
-        let c = a.add_mat(&b);
+        let c = a.add(&b);
+        let legacy = a.add_mat(&b);
         let d = a.clone() + b;
 
         MINI_CHECK!(c[(0, 0)] == 6.0 && c[(0, 1)] == 8.0);
         MINI_CHECK!(c[(1, 0)] == 10.0 && c[(1, 1)] == 12.0);
         MINI_CHECK!(c == d);
+        MINI_CHECK!(legacy == c);
     })
 }
 
@@ -105,8 +111,7 @@ pub fn run_matrix_multiply() -> TestResult {
 
         MINI_CHECK!(c.rows == 2 && c.cols == 2);
         MINI_CHECK!(TOLERANCE.is_close(c[(0, 0)], 58.0) && TOLERANCE.is_close(c[(0, 1)], 64.0));
-        MINI_CHECK!(TOLERANCE.is_close(c[(1, 0)], 139.0));
-        MINI_CHECK!(TOLERANCE.is_close(c[(1, 1)], 154.0));
+        MINI_CHECK!(TOLERANCE.is_close(c[(1, 0)], 139.0) && TOLERANCE.is_close(c[(1, 1)], 154.0));
         MINI_CHECK!(c == d);
     })
 }
@@ -145,19 +150,15 @@ pub fn run_matrix_inverse() -> TestResult {
         let inv = a.inverse();
         let singular = Matrix::from_vec(2, 2, vec![1.0, 2.0, 2.0, 4.0]);
         let inv_none = singular.inverse();
-        let prod = a.multiply(inv.as_ref().unwrap());
 
         MINI_CHECK!(inv.is_some());
+        let prod = a.multiply(inv.as_ref().unwrap());
         let inv = inv.unwrap();
-        MINI_CHECK!(TOLERANCE.is_close(inv[(0, 0)], 0.6));
-        MINI_CHECK!(TOLERANCE.is_close(inv[(0, 1)], -0.7));
-        MINI_CHECK!(TOLERANCE.is_close(inv[(1, 0)], -0.2));
-        MINI_CHECK!(TOLERANCE.is_close(inv[(1, 1)], 0.4));
+        MINI_CHECK!(TOLERANCE.is_close(inv[(0, 0)], 0.6) && TOLERANCE.is_close(inv[(0, 1)], -0.7));
+        MINI_CHECK!(TOLERANCE.is_close(inv[(1, 0)], -0.2) && TOLERANCE.is_close(inv[(1, 1)], 0.4));
         MINI_CHECK!(inv_none.is_none());
-        MINI_CHECK!(TOLERANCE.is_close(prod[(0, 0)], 1.0));
-        MINI_CHECK!(TOLERANCE.is_close(prod[(1, 1)], 1.0));
-        MINI_CHECK!(TOLERANCE.is_close(prod[(0, 1)], 0.0));
-        MINI_CHECK!(TOLERANCE.is_close(prod[(1, 0)], 0.0));
+        MINI_CHECK!(TOLERANCE.is_close(prod[(0, 0)], 1.0) && TOLERANCE.is_close(prod[(1, 1)], 1.0));
+        MINI_CHECK!(TOLERANCE.is_close(prod[(0, 1)], 0.0) && TOLERANCE.is_close(prod[(1, 0)], 0.0));
     })
 }
 
@@ -167,7 +168,6 @@ pub fn run_matrix_solve() -> TestResult {
         let a = Matrix::from_vec(2, 2, vec![2.0, 1.0, 1.0, 3.0]);
         let b = Matrix::from_vec(2, 1, vec![5.0, 10.0]);
         let x = a.solve(&b);
-        // 2x+y=5, x+3y=10 → x=1, y=3
 
         MINI_CHECK!(x.is_some());
         let x = x.unwrap();
@@ -190,10 +190,14 @@ pub fn run_matrix_lu_decompose() -> TestResult {
         let lu = l.multiply(&u);
 
         MINI_CHECK!(l.rows == 3 && u.cols == 3);
-        MINI_CHECK!(TOLERANCE.is_close(pa[(0, 0)], lu[(0, 0)]));
-        MINI_CHECK!(TOLERANCE.is_close(pa[(0, 1)], lu[(0, 1)]));
-        MINI_CHECK!(TOLERANCE.is_close(pa[(1, 0)], lu[(1, 0)]));
-        MINI_CHECK!(TOLERANCE.is_close(pa[(2, 2)], lu[(2, 2)]));
+        MINI_CHECK!(
+            TOLERANCE.is_close(pa[(0, 0)], lu[(0, 0)])
+                && TOLERANCE.is_close(pa[(0, 1)], lu[(0, 1)])
+        );
+        MINI_CHECK!(
+            TOLERANCE.is_close(pa[(1, 0)], lu[(1, 0)])
+                && TOLERANCE.is_close(pa[(2, 2)], lu[(2, 2)])
+        );
         MINI_CHECK!(TOLERANCE.is_close(l[(0, 1)], 0.0) && TOLERANCE.is_close(l[(0, 2)], 0.0));
         MINI_CHECK!(TOLERANCE.is_close(l[(1, 2)], 0.0));
     })
@@ -247,12 +251,14 @@ pub fn run_matrix_eigenvalues() -> TestResult {
         use crate::Matrix;
         let a = Matrix::from_vec(3, 3, vec![3.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 2.0]);
         let mut evs = a.eigenvalues();
+        let empty = Matrix::default().eigenvalues();
         evs.sort_by(|a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal));
 
         MINI_CHECK!(evs.len() == 3);
         MINI_CHECK!(TOLERANCE.is_close(evs[0], 1.0));
         MINI_CHECK!(TOLERANCE.is_close(evs[1], 2.0));
         MINI_CHECK!(TOLERANCE.is_close(evs[2], 3.0));
+        MINI_CHECK!(empty.is_empty());
     })
 }
 
@@ -305,27 +311,107 @@ pub fn run_matrix_json_roundtrip() -> TestResult {
         let filename = "serialization/test_matrix.json";
         a.file_json_dump(filename).unwrap();
         let loaded = Matrix::file_json_load(filename).unwrap();
+        let parsed = Matrix::file_json_loads(&a.file_json_dumps());
 
         MINI_CHECK!(loaded.name == "test_matrix");
         MINI_CHECK!(loaded.rows == 2 && loaded.cols == 3);
-        MINI_CHECK!(TOLERANCE.is_close(loaded[(0, 0)], 1.0));
-        MINI_CHECK!(TOLERANCE.is_close(loaded[(1, 2)], 6.0));
+        MINI_CHECK!(
+            TOLERANCE.is_close(loaded[(0, 0)], 1.0) && TOLERANCE.is_close(loaded[(1, 2)], 6.0)
+        );
+        MINI_CHECK!(parsed == a);
     })
 }
 
 pub fn run_matrix_protobuf_roundtrip() -> TestResult {
     MINI_TEST!("Protobuf Roundtrip", {
         use crate::Matrix;
+        let fresh = Matrix::default();
+        let fresh_proto = fresh.to_proto();
         let mut a = Matrix::from_vec(2, 3, vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0]);
         a.name = "test_matrix_proto".to_string();
+        let guid = a.guid().to_string();
         let filename = "serialization/test_matrix.bin";
         a.pb_dump(filename);
         let loaded = Matrix::pb_load(filename);
+        let parsed = Matrix::pb_loads(&a.pb_dumps()).unwrap();
+        let converted = Matrix::from_proto(a.to_proto()).unwrap();
 
+        MINI_CHECK!(!fresh.has_guid());
+        MINI_CHECK!(fresh_proto.guid.is_empty());
         MINI_CHECK!(loaded.name == "test_matrix_proto");
         MINI_CHECK!(loaded.rows == 2 && loaded.cols == 3);
-        MINI_CHECK!(TOLERANCE.is_close(loaded[(0, 0)], 1.0));
-        MINI_CHECK!(TOLERANCE.is_close(loaded[(1, 2)], 6.0));
+        MINI_CHECK!(
+            TOLERANCE.is_close(loaded[(0, 0)], 1.0) && TOLERANCE.is_close(loaded[(1, 2)], 6.0)
+        );
+        MINI_CHECK!(parsed == a);
+        MINI_CHECK!(converted == a);
+        MINI_CHECK!(loaded.guid() == guid && parsed.guid() == guid && converted.guid() == guid);
+    })
+}
+
+pub fn run_matrix_serialization_errors() -> TestResult {
+    MINI_TEST!("Serialization Errors", {
+        use crate::Matrix;
+
+        let matrix = Matrix::default();
+        let malformed_json = Matrix::jsonload("{}").is_err();
+        let malformed_pb = Matrix::pb_loads(&[0xff]).is_err();
+        let json_write_failed = matrix.file_json_dump("").is_err();
+
+        MINI_CHECK!(malformed_json);
+        MINI_CHECK!(malformed_pb);
+        MINI_CHECK!(json_write_failed);
+
+        #[cfg(panic = "unwind")]
+        {
+            let pb_write_failed = std::panic::catch_unwind(|| matrix.pb_dump("")).is_err();
+            MINI_CHECK!(pb_write_failed);
+        }
+    })
+}
+
+pub fn run_matrix_shape_errors() -> TestResult {
+    MINI_TEST!("Shape Errors", {
+        use crate::Matrix;
+
+        let json = r#"{"cols":2,"data":[1.0],"guid":"id","name":"bad","rows":2,"type":"Matrix"}"#;
+        let json_error = Matrix::jsonload(json).is_err();
+        let negative_proto = crate::proto::Matrix {
+            rows: -1,
+            cols: 2,
+            ..Default::default()
+        };
+        let proto_negative = Matrix::from_proto(negative_proto).is_err();
+        let data_proto = crate::proto::Matrix {
+            rows: 2,
+            cols: 2,
+            data: vec![1.0],
+            ..Default::default()
+        };
+        let proto_data = Matrix::from_proto(data_proto).is_err();
+
+        MINI_CHECK!(json_error);
+        MINI_CHECK!(proto_negative);
+        MINI_CHECK!(proto_data);
+
+        #[cfg(panic = "unwind")]
+        {
+            let overflow = std::panic::catch_unwind(|| Matrix::new(usize::MAX, 2)).is_err();
+            let data_size = std::panic::catch_unwind(|| Matrix::from_vec(2, 2, vec![1.0])).is_err();
+            let rows = std::panic::catch_unwind(|| Matrix::from_rows(&[vec![1.0, 2.0], vec![3.0]]))
+                .is_err();
+            let cols = std::panic::catch_unwind(|| Matrix::from_cols(&[vec![1.0, 2.0], vec![3.0]]))
+                .is_err();
+            let multiply =
+                std::panic::catch_unwind(|| Matrix::new(2, 3).multiply(&Matrix::new(2, 2)))
+                    .is_err();
+
+            MINI_CHECK!(overflow);
+            MINI_CHECK!(data_size);
+            MINI_CHECK!(rows);
+            MINI_CHECK!(cols);
+            MINI_CHECK!(multiply);
+        }
     })
 }
 
@@ -395,4 +481,14 @@ REGISTER_MINI_TEST!(
     "Matrix",
     "Protobuf Roundtrip",
     crate::matrix_test::run_matrix_protobuf_roundtrip
+);
+REGISTER_MINI_TEST!(
+    "Matrix",
+    "Serialization Errors",
+    crate::matrix_test::run_matrix_serialization_errors
+);
+REGISTER_MINI_TEST!(
+    "Matrix",
+    "Shape Errors",
+    crate::matrix_test::run_matrix_shape_errors
 );

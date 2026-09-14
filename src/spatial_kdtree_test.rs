@@ -6,8 +6,6 @@ pub fn run_kdtree_constructor() -> TestResult {
     MINI_TEST!("Constructor", {
         use crate::Point;
         use crate::SpatialKDTree;
-
-        // SpatialKDTree: O(n log n) build, O(log n) nearest — static point set closest search
         let pts = vec![
             Point::new(0.0, 0.0, 0.0),
             Point::new(3.0, 0.0, 0.0),
@@ -25,9 +23,6 @@ pub fn run_kdtree_nearest() -> TestResult {
     MINI_TEST!("Nearest", {
         use crate::Point;
         use crate::SpatialKDTree;
-
-        // 5 known points on a line: 0, 1, 2, 3, 4
-        // Query at 1.1 — nearest should be index 1 (point at x=1), distance 0.1
         let pts = vec![
             Point::new(0.0, 0.0, 0.0),
             Point::new(1.0, 0.0, 0.0),
@@ -48,9 +43,6 @@ pub fn run_kdtree_nearest_k() -> TestResult {
     MINI_TEST!("Nearest K", {
         use crate::Point;
         use crate::SpatialKDTree;
-
-        // 5 points on X axis: 0, 1, 2, 3, 4
-        // Query at 1.5 — 3 nearest are: x=1 (d=0.5), x=2 (d=0.5), x=3 (d=1.5)
         let pts = vec![
             Point::new(0.0, 0.0, 0.0),
             Point::new(1.0, 0.0, 0.0),
@@ -73,9 +65,6 @@ pub fn run_kdtree_radius_search() -> TestResult {
     MINI_TEST!("Radius Search", {
         use crate::Point;
         use crate::SpatialKDTree;
-
-        // 4 points: 0, 1, 2, 5 on X axis
-        // Query at 0.5, radius 1.1 — finds x=0 (d=0.5) and x=1 (d=0.5)
         let pts = vec![
             Point::new(0.0, 0.0, 0.0),
             Point::new(1.0, 0.0, 0.0),

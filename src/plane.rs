@@ -1,10 +1,16 @@
+use crate::tolerance::Tolerance;
+use crate::tolerance::TOLERANCE;
 use crate::{Color, Point, Polyline, Vector, Xform};
 use serde::ser::SerializeMap;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
+use std::fmt;
+use std::ops::{Add, AddAssign, Index, IndexMut, Sub, SubAssign};
+use std::sync::OnceLock;
 
+/// A plane defined by an origin and an orthonormal x, y, z frame
 #[derive(Debug, Clone)]
 pub struct Plane {
-    guid: std::sync::OnceLock<String>,
+    guid: OnceLock<String>,
     pub name: String,
     pub width: f64,
     pub linecolor: Color,
@@ -18,502 +24,40 @@ pub struct Plane {
     _d: f64,
 }
 
-// Custom serialization to use single flat frame array of 12 numbers
-// [ox, oy, oz, xx, xy, xz, yx, yy, yz, zx, zy, zz]
-// Plane equation coefficients (a, b, c, d) are computed on load, not stored
-impl Serialize for Plane {
-    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-    where
-        S: Serializer,
-    {
-        let mut map = serializer.serialize_map(Some(7))?;
-        map.serialize_entry("linecolor", &self.linecolor)?;
-        map.serialize_entry("type", "Plane")?;
-        map.serialize_entry("guid", self.guid())?;
-        map.serialize_entry("name", &self.name)?;
-        // Single flat frame array of 12 numbers: origin + x_axis + y_axis + z_axis
-        map.serialize_entry(
-            "frame",
-            &[
-                self._origin[0],
-                self._origin[1],
-                self._origin[2],
-                self._x_axis[0],
-                self._x_axis[1],
-                self._x_axis[2],
-                self._y_axis[0],
-                self._y_axis[1],
-                self._y_axis[2],
-                self._z_axis[0],
-                self._z_axis[1],
-                self._z_axis[2],
-            ],
-        )?;
-        map.serialize_entry("width", &self.width)?;
-        map.end()
-    }
-}
-
-// Custom deserialization to parse flat frame array of 12 numbers
-// Plane equation coefficients (a, b, c, d) are computed from z_axis and origin
-impl<'de> Deserialize<'de> for Plane {
-    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-    where
-        D: Deserializer<'de>,
-    {
-        #[derive(Deserialize)]
-        struct PlaneData {
-            guid: String,
-            name: String,
-            frame: [f64; 12], // [ox, oy, oz, xx, xy, xz, yx, yy, yz, zx, zy, zz]
-            #[serde(default = "default_width")]
-            width: f64,
-            #[serde(default)]
-            linecolor: Option<Color>,
-        }
-
-        fn default_width() -> f64 {
-            1.0
-        }
-
-        let data = PlaneData::deserialize(deserializer)?;
-
-        // Parse frame array
-        let origin = Point::new(data.frame[0], data.frame[1], data.frame[2]);
-        let x_axis = Vector::new(data.frame[3], data.frame[4], data.frame[5]);
-        let y_axis = Vector::new(data.frame[6], data.frame[7], data.frame[8]);
-        let z_axis = Vector::new(data.frame[9], data.frame[10], data.frame[11]);
-
-        // Compute plane equation coefficients from z_axis (normal) and origin
-        let a = z_axis[0];
-        let b = z_axis[1];
-        let c = z_axis[2];
-        let d = -(a * origin[0] + b * origin[1] + c * origin[2]);
-
-        let guid = std::sync::OnceLock::new();
-        let _ = guid.set(data.guid);
-        Ok(Plane {
-            guid,
-            name: data.name,
-            width: data.width,
-            linecolor: data.linecolor.unwrap_or_else(Color::blue),
-            _origin: origin,
-            _x_axis: x_axis,
-            _y_axis: y_axis,
-            _z_axis: z_axis,
-            _a: a,
-            _b: b,
-            _c: c,
-            _d: d,
-        })
-    }
-}
-
 impl Default for Plane {
     fn default() -> Self {
-        Self {
-            guid: std::sync::OnceLock::new(),
-            name: "my_plane".to_string(),
-            width: 1.0,
-            linecolor: Color::blue(),
-            _origin: Point::default(),
-            _x_axis: Vector::x_axis(),
-            _y_axis: Vector::y_axis(),
-            _z_axis: Vector::z_axis(),
-            _a: 0.0,
-            _b: 0.0,
-            _c: 1.0,
-            _d: 0.0,
-        }
+        Self::from_frame(
+            Point::default(),
+            Vector::x_axis(),
+            Vector::y_axis(),
+            Vector::z_axis(),
+        )
     }
 }
 
 impl Plane {
-    pub fn new(point: Point, mut x_axis: Vector, mut y_axis: Vector) -> Self {
+    /// Origin and two axes; x is normalized, y is made orthogonal to x, z = x × y
+    pub fn new(point: Point, x_axis: Vector, y_axis: Vector) -> Self {
+        Self::with_name(point, x_axis, y_axis, "my_plane")
+    }
+
+    /// Construct from origin, two axes and a name
+    pub fn with_name(point: Point, mut x_axis: Vector, mut y_axis: Vector, name: &str) -> Self {
         x_axis.normalize_self();
-        let dot_product = y_axis.dot(&x_axis);
-        y_axis -= x_axis.clone() * dot_product;
+        y_axis -= x_axis.clone() * y_axis.dot(&x_axis);
         y_axis.normalize_self();
         let mut z_axis = x_axis.cross(&y_axis);
         z_axis.normalize_self();
-
-        let a = z_axis[0];
-        let b = z_axis[1];
-        let c = z_axis[2];
-        let d = -(a * point[0] + b * point[1] + c * point[2]);
-
-        Self {
-            guid: std::sync::OnceLock::new(),
-            name: "my_plane".to_string(),
-            width: 1.0,
-            linecolor: Color::blue(),
-            _origin: point,
-            _x_axis: x_axis,
-            _y_axis: y_axis,
-            _z_axis: z_axis,
-            _a: a,
-            _b: b,
-            _c: c,
-            _d: d,
-        }
+        let mut plane = Self::from_frame(point, x_axis, y_axis, z_axis);
+        plane.name = name.to_string();
+        plane
     }
 
-    pub fn from_axes(origin: Point, x_axis: Vector, y_axis: Vector, z_axis: Vector) -> Self {
-        let a = z_axis[0];
-        let b = z_axis[1];
-        let c = z_axis[2];
-        let d = -(a * origin[0] + b * origin[1] + c * origin[2]);
-        Self {
-            guid: std::sync::OnceLock::new(),
-            name: "my_plane".to_string(),
-            width: 1.0,
-            linecolor: Color::blue(),
-            _origin: origin,
-            _x_axis: x_axis,
-            _y_axis: y_axis,
-            _z_axis: z_axis,
-            _a: a,
-            _b: b,
-            _c: c,
-            _d: d,
-        }
-    }
-
-    pub fn with_name(point: Point, mut x_axis: Vector, mut y_axis: Vector, name: String) -> Self {
-        x_axis.normalize_self();
-        let dot_product = y_axis.dot(&x_axis);
-        y_axis -= x_axis.clone() * dot_product;
-        y_axis.normalize_self();
-        let mut z_axis = x_axis.cross(&y_axis);
-        z_axis.normalize_self();
-
-        let a = z_axis[0];
-        let b = z_axis[1];
-        let c = z_axis[2];
-        let d = -(a * point[0] + b * point[1] + c * point[2]);
-
-        Self {
-            guid: std::sync::OnceLock::new(),
-            name,
-            width: 1.0,
-            linecolor: Color::blue(),
-            _origin: point,
-            _x_axis: x_axis,
-            _y_axis: y_axis,
-            _z_axis: z_axis,
-            _a: a,
-            _b: b,
-            _c: c,
-            _d: d,
-        }
-    }
-
-    pub fn from_point_normal(point: Point, normal: Vector) -> Self {
-        Self::from_point_normal_opt(point, normal, true)
-    }
-
-    pub fn from_point_normal_opt(point: Point, normal: Vector, normalize: bool) -> Self {
-        let origin = point.clone();
-        let mut z_axis = normal;
-        if normalize {
-            z_axis.normalize_self();
-        }
-        let mut x_axis = Vector::default();
-        x_axis.perpendicular_to(&z_axis);
-        if normalize {
-            x_axis.normalize_self();
-        }
-        let mut y_axis = z_axis.cross(&x_axis);
-        if normalize {
-            y_axis.normalize_self();
-        }
-
-        let a = z_axis[0];
-        let b = z_axis[1];
-        let c = z_axis[2];
-        let d = -(a * origin[0] + b * origin[1] + c * origin[2]);
-
-        Self {
-            guid: std::sync::OnceLock::new(),
-            name: "my_plane".to_string(),
-            width: 1.0,
-            linecolor: Color::blue(),
-            _origin: origin,
-            _x_axis: x_axis,
-            _y_axis: y_axis,
-            _z_axis: z_axis,
-            _a: a,
-            _b: b,
-            _c: c,
-            _d: d,
-        }
-    }
-
-    pub fn from_points(points: Vec<Point>) -> Self {
-        if points.len() < 3 {
-            return Self::default();
-        }
-
-        let point1 = &points[0];
-        let point2 = &points[1];
-        let point3 = &points[2];
-        let v1 = point2.clone() - point1.clone();
-        let v2 = point3.clone() - point1.clone();
-        let mut z_axis = v1.cross(&v2);
-        z_axis.normalize_self();
-        let mut x_axis = Vector::default();
-        x_axis.perpendicular_to(&z_axis);
-        x_axis.normalize_self();
-        let mut y_axis = z_axis.cross(&x_axis);
-        y_axis.normalize_self();
-        let origin = point1.clone();
-
-        let a = z_axis[0];
-        let b = z_axis[1];
-        let c = z_axis[2];
-        let d = -(a * origin[0] + b * origin[1] + c * origin[2]);
-
-        Self {
-            guid: std::sync::OnceLock::new(),
-            name: "my_plane".to_string(),
-            width: 1.0,
-            linecolor: Color::blue(),
-            _origin: origin,
-            _x_axis: x_axis,
-            _y_axis: y_axis,
-            _z_axis: z_axis,
-            _a: a,
-            _b: b,
-            _c: c,
-            _d: d,
-        }
-    }
-
-    pub fn from_points_pca(points: Vec<Point>) -> Self {
-        if points.len() < 3 {
-            return Self::default();
-        }
-
-        let n = points.len() as f64;
-        let mut cx = 0.0_f64;
-        let mut cy = 0.0_f64;
-        let mut cz = 0.0_f64;
-        for p in &points {
-            cx += p[0];
-            cy += p[1];
-            cz += p[2];
-        }
-        cx /= n;
-        cy /= n;
-        cz /= n;
-
-        let (mut cxx, mut cyy, mut czz) = (0.0, 0.0, 0.0);
-        let (mut cxy, mut cxz, mut cyz) = (0.0, 0.0, 0.0);
-        for p in &points {
-            let (dx, dy, dz) = (p[0] - cx, p[1] - cy, p[2] - cz);
-            cxx += dx * dx;
-            cyy += dy * dy;
-            czz += dz * dz;
-            cxy += dx * dy;
-            cxz += dx * dz;
-            cyz += dy * dz;
-        }
-
-        let mut eigvec = [[0.0_f64; 3]; 3];
-        let mut eigval = [0.0_f64; 3];
-        let mut cov = [[cxx, cxy, cxz], [cxy, cyy, cyz], [cxz, cyz, czz]];
-
-        for e in 0..3 {
-            let (mut vx, mut vy, mut vz) = match e {
-                0 => (1.0, 0.0, 0.0),
-                1 => (0.0, 1.0, 0.0),
-                _ => (0.0, 0.0, 1.0),
-            };
-            for _ in 0..100 {
-                let nx = cov[0][0] * vx + cov[0][1] * vy + cov[0][2] * vz;
-                let ny = cov[1][0] * vx + cov[1][1] * vy + cov[1][2] * vz;
-                let nz = cov[2][0] * vx + cov[2][1] * vy + cov[2][2] * vz;
-                let mag = (nx * nx + ny * ny + nz * nz).sqrt();
-                if mag < 1e-15 {
-                    break;
-                }
-                vx = nx / mag;
-                vy = ny / mag;
-                vz = nz / mag;
-            }
-            eigvec[e] = [vx, vy, vz];
-            eigval[e] = cov[0][0] * vx * vx
-                + cov[1][1] * vy * vy
-                + cov[2][2] * vz * vz
-                + 2.0 * cov[0][1] * vx * vy
-                + 2.0 * cov[0][2] * vx * vz
-                + 2.0 * cov[1][2] * vy * vz;
-            for i in 0..3 {
-                for j in 0..3 {
-                    cov[i][j] -= eigval[e] * eigvec[e][i] * eigvec[e][j];
-                }
-            }
-        }
-
-        let mut x_axis = Vector::new(eigvec[0][0], eigvec[0][1], eigvec[0][2]);
-        let y_tmp = Vector::new(eigvec[1][0], eigvec[1][1], eigvec[1][2]);
-        let mut z_axis = x_axis.cross(&y_tmp);
-        z_axis.normalize_self();
-        let mut y_axis = z_axis.cross(&x_axis);
-        y_axis.normalize_self();
-        x_axis.normalize_self();
-
-        let a = z_axis[0];
-        let b = z_axis[1];
-        let c = z_axis[2];
-        let d = -(a * cx + b * cy + c * cz);
-
-        Self {
-            guid: std::sync::OnceLock::new(),
-            name: "my_plane".to_string(),
-            width: 1.0,
-            linecolor: Color::blue(),
-            _origin: Point::new(cx, cy, cz),
-            _x_axis: x_axis,
-            _y_axis: y_axis,
-            _z_axis: z_axis,
-            _a: a,
-            _b: b,
-            _c: c,
-            _d: d,
-        }
-    }
-
-    pub fn from_two_points(point1: Point, point2: Point) -> Self {
-        let origin = point1.clone();
-
-        let mut direction = point2.clone() - point1.clone();
-        direction.normalize_self();
-        let mut z_axis = Vector::default();
-        z_axis.perpendicular_to(&direction);
-        z_axis.normalize_self();
-
-        let x_axis = direction;
-        let mut y_axis = z_axis.cross(&x_axis);
-        y_axis.normalize_self();
-
-        let a = z_axis[0];
-        let b = z_axis[1];
-        let c = z_axis[2];
-        let d = -(a * origin[0] + b * origin[1] + c * origin[2]);
-
-        Self {
-            guid: std::sync::OnceLock::new(),
-            name: "my_plane".to_string(),
-            width: 1.0,
-            linecolor: Color::blue(),
-            _origin: origin,
-            _x_axis: x_axis,
-            _y_axis: y_axis,
-            _z_axis: z_axis,
-            _a: a,
-            _b: b,
-            _c: c,
-            _d: d,
-        }
-    }
-
-    pub fn xy_plane() -> Self {
-        Self {
-            guid: std::sync::OnceLock::new(),
-            name: "xy_plane".to_string(),
-            width: 1.0,
-            linecolor: Color::blue(),
-            _origin: Point::new(0.0, 0.0, 0.0),
-            _x_axis: Vector::x_axis(),
-            _y_axis: Vector::y_axis(),
-            _z_axis: Vector::z_axis(),
-            _a: 0.0,
-            _b: 0.0,
-            _c: 1.0,
-            _d: 0.0,
-        }
-    }
-
-    pub fn yz_plane() -> Self {
-        Self {
-            guid: std::sync::OnceLock::new(),
-            name: "yz_plane".to_string(),
-            width: 1.0,
-            linecolor: Color::blue(),
-            _origin: Point::new(0.0, 0.0, 0.0),
-            _x_axis: Vector::y_axis(),
-            _y_axis: Vector::z_axis(),
-            _z_axis: Vector::x_axis(),
-            _a: 1.0,
-            _b: 0.0,
-            _c: 0.0,
-            _d: 0.0,
-        }
-    }
-
-    /// Create an invalid plane (all zeros)
-    pub fn invalid() -> Self {
-        Self {
-            guid: std::sync::OnceLock::new(),
-            name: "my_plane".to_string(),
-            width: 1.0,
-            linecolor: Color::blue(),
-            _origin: Point::new(0.0, 0.0, 0.0),
-            _x_axis: Vector::new(0.0, 0.0, 0.0),
-            _y_axis: Vector::new(0.0, 0.0, 0.0),
-            _z_axis: Vector::new(0.0, 0.0, 0.0),
-            _a: 0.0,
-            _b: 0.0,
-            _c: 0.0,
-            _d: 0.0,
-        }
-    }
-
-    /// Check if plane is valid
-    pub fn is_valid(&self) -> bool {
-        self._x_axis.magnitude() > 1e-14
-            && self._y_axis.magnitude() > 1e-14
-            && self._z_axis.magnitude() > 1e-14
-    }
-
-    /// Create plane from frame (origin, x, y, z) without normalization
-    pub fn from_frame(origin: Point, x_axis: Vector, y_axis: Vector, z_axis: Vector) -> Self {
-        let a = z_axis[0];
-        let b = z_axis[1];
-        let c = z_axis[2];
-        let d = -(a * origin[0] + b * origin[1] + c * origin[2]);
-        Self {
-            guid: std::sync::OnceLock::new(),
-            name: "my_plane".to_string(),
-            width: 1.0,
-            linecolor: Color::blue(),
-            _origin: origin,
-            _x_axis: x_axis,
-            _y_axis: y_axis,
-            _z_axis: z_axis,
-            _a: a,
-            _b: b,
-            _c: c,
-            _d: d,
-        }
-    }
-
-    pub fn xz_plane() -> Self {
-        Self {
-            guid: std::sync::OnceLock::new(),
-            name: "xz_plane".to_string(),
-            width: 1.0,
-            linecolor: Color::blue(),
-            _origin: Point::new(0.0, 0.0, 0.0),
-            _x_axis: Vector::x_axis(),
-            _y_axis: Vector::new(0.0, 0.0, -1.0),
-            _z_axis: Vector::new(0.0, 1.0, 0.0),
-            _a: 0.0,
-            _b: 1.0,
-            _c: 0.0,
-            _d: 0.0,
-        }
+    /// Copy (new guid, same data)
+    pub fn duplicate(&self) -> Self {
+        let mut copy = self.clone();
+        copy.guid = OnceLock::new();
+        copy
     }
 
     pub fn has_guid(&self) -> bool {
@@ -528,57 +72,25 @@ impl Plane {
         let _ = self.guid.set(g);
     }
 
-    /// Clear the guid so a FRESH one mints lazily on next read — the duplicate/copy enabler.
+    /// Clear the guid so a fresh one mints lazily on next read
     pub fn refresh_guid(&mut self) {
-        self.guid = std::sync::OnceLock::new();
+        self.guid = OnceLock::new();
     }
 
     pub fn origin(&self) -> Point {
         self._origin.clone()
     }
 
-    /// Returns a reference to the origin point (avoids clone).
-    pub fn origin_ref(&self) -> &Point {
-        &self._origin
-    }
-
     pub fn x_axis(&self) -> Vector {
         self._x_axis.clone()
-    }
-
-    /// Returns a reference to the x-axis (avoids clone).
-    pub fn x_axis_ref(&self) -> &Vector {
-        &self._x_axis
     }
 
     pub fn y_axis(&self) -> Vector {
         self._y_axis.clone()
     }
 
-    /// Returns a reference to the y-axis (avoids clone).
-    pub fn y_axis_ref(&self) -> &Vector {
-        &self._y_axis
-    }
-
     pub fn z_axis(&self) -> Vector {
         self._z_axis.clone()
-    }
-
-    /// Returns a reference to the z-axis (avoids clone).
-    pub fn z_axis_ref(&self) -> &Vector {
-        &self._z_axis
-    }
-
-    /// Check if the plane coordinate system is right-handed.
-    ///
-    /// A coordinate system is right-handed if z_axis = x_axis × y_axis.
-    ///
-    /// # Returns
-    ///
-    /// `true` if the plane is right-handed, `false` otherwise.
-    pub fn is_right_hand(&self) -> bool {
-        let cross = self._x_axis.cross(&self._y_axis);
-        cross.dot(&self._z_axis) > 0.0
     }
 
     pub fn a(&self) -> f64 {
@@ -597,10 +109,8 @@ impl Plane {
         self._d
     }
 
-    pub fn reverse(&mut self) {
-        std::mem::swap(&mut self._x_axis, &mut self._y_axis);
-        self._z_axis.reverse();
-
+    /// Recompute a, b, c, d from z_axis and origin
+    fn update_equation(&mut self) {
         self._a = self._z_axis[0];
         self._b = self._z_axis[1];
         self._c = self._z_axis[2];
@@ -608,52 +118,282 @@ impl Plane {
             -(self._a * self._origin[0] + self._b * self._origin[1] + self._c * self._origin[2]);
     }
 
+    // ═══════════════════════════════════════════════════════════════════════════
+    // Static constructors
+    // ═══════════════════════════════════════════════════════════════════════════
+
+    /// Frame taken as given, no normalization
+    pub fn from_frame(origin: Point, x_axis: Vector, y_axis: Vector, z_axis: Vector) -> Self {
+        let mut plane = Self {
+            guid: OnceLock::new(),
+            name: "my_plane".to_string(),
+            width: 1.0,
+            linecolor: Color::blue(),
+            _origin: origin,
+            _x_axis: x_axis,
+            _y_axis: y_axis,
+            _z_axis: z_axis,
+            _a: 0.0,
+            _b: 0.0,
+            _c: 0.0,
+            _d: 0.0,
+        };
+        plane.update_equation();
+        plane
+    }
+
+    /// Plane through point with normal as z axis (normalize: default true)
+    pub fn from_point_normal(point: Point, normal: Vector, normalize: Option<bool>) -> Self {
+        let normalize = normalize.unwrap_or(true);
+        let mut z_axis = normal;
+        if normalize {
+            z_axis.normalize_self();
+        }
+        let mut x_axis = Vector::default();
+        x_axis.perpendicular_to(&z_axis);
+        if normalize {
+            x_axis.normalize_self();
+        }
+        let mut y_axis = z_axis.cross(&x_axis);
+        if normalize {
+            y_axis.normalize_self();
+        }
+        Self::from_frame(point, x_axis, y_axis, z_axis)
+    }
+
+    /// Plane through the first three points, x axis along the first edge
+    pub fn from_points(points: Vec<Point>) -> Self {
+        if points.len() < 3 {
+            return Self::default();
+        }
+        let v1 = points[1].clone() - points[0].clone();
+        let v2 = points[2].clone() - points[0].clone();
+        let mut z_axis = v1.cross(&v2);
+        z_axis.normalize_self();
+        let mut x_axis = v1;
+        x_axis.normalize_self();
+        let mut y_axis = z_axis.cross(&x_axis);
+        y_axis.normalize_self();
+        Self::from_frame(points[0].clone(), x_axis, y_axis, z_axis)
+    }
+
+    /// Least-squares plane through points by power-iteration PCA
+    pub fn from_points_pca(points: Vec<Point>) -> Self {
+        if points.len() < 3 {
+            return Self::default();
+        }
+        let n = points.len() as f64;
+        let mut cx = 0.0;
+        let mut cy = 0.0;
+        let mut cz = 0.0;
+        for p in &points {
+            cx += p[0];
+            cy += p[1];
+            cz += p[2];
+        }
+        cx /= n;
+        cy /= n;
+        cz /= n;
+        let mut cxx = 0.0;
+        let mut cyy = 0.0;
+        let mut czz = 0.0;
+        let mut cxy = 0.0;
+        let mut cxz = 0.0;
+        let mut cyz = 0.0;
+        for p in &points {
+            let dx = p[0] - cx;
+            let dy = p[1] - cy;
+            let dz = p[2] - cz;
+            cxx += dx * dx;
+            cyy += dy * dy;
+            czz += dz * dz;
+            cxy += dx * dy;
+            cxz += dx * dz;
+            cyz += dy * dz;
+        }
+        let mut eigvec = [[0.0; 3]; 3];
+        let mut eigval = [0.0; 3];
+        let mut cov = [[cxx, cxy, cxz], [cxy, cyy, cyz], [cxz, cyz, czz]];
+        for e in 0..3 {
+            let mut vx = if e == 0 { 1.0 } else { 0.0 };
+            let mut vy = if e == 1 { 1.0 } else { 0.0 };
+            let mut vz = if e == 2 { 1.0 } else { 0.0 };
+            for _iter in 0..100 {
+                let nx = cov[0][0] * vx + cov[0][1] * vy + cov[0][2] * vz;
+                let ny = cov[1][0] * vx + cov[1][1] * vy + cov[1][2] * vz;
+                let nz = cov[2][0] * vx + cov[2][1] * vy + cov[2][2] * vz;
+                let mag = (nx * nx + ny * ny + nz * nz).sqrt();
+                if mag < 1e-15 {
+                    break;
+                }
+                vx = nx / mag;
+                vy = ny / mag;
+                vz = nz / mag;
+            }
+            eigvec[e][0] = vx;
+            eigvec[e][1] = vy;
+            eigvec[e][2] = vz;
+            eigval[e] = cov[0][0] * vx * vx
+                + cov[1][1] * vy * vy
+                + cov[2][2] * vz * vz
+                + 2.0 * cov[0][1] * vx * vy
+                + 2.0 * cov[0][2] * vx * vz
+                + 2.0 * cov[1][2] * vy * vz;
+            for i in 0..3 {
+                for j in 0..3 {
+                    cov[i][j] -= eigval[e] * eigvec[e][i] * eigvec[e][j];
+                }
+            }
+        }
+        let mut x_axis = Vector::new(eigvec[0][0], eigvec[0][1], eigvec[0][2]);
+        let mut y_axis = Vector::new(eigvec[1][0], eigvec[1][1], eigvec[1][2]);
+        let mut z_axis = x_axis.cross(&y_axis);
+        z_axis.normalize_self();
+        y_axis = z_axis.cross(&x_axis);
+        y_axis.normalize_self();
+        x_axis.normalize_self();
+        Self::from_frame(Point::new(cx, cy, cz), x_axis, y_axis, z_axis)
+    }
+
+    /// Plane with x axis from point1 to point2
+    pub fn from_two_points(point1: Point, point2: Point) -> Self {
+        let mut x_axis = point2 - point1.clone();
+        x_axis.normalize_self();
+        let mut z_axis = Vector::default();
+        z_axis.perpendicular_to(&x_axis);
+        z_axis.normalize_self();
+        let mut y_axis = z_axis.cross(&x_axis);
+        y_axis.normalize_self();
+        Self::from_frame(point1, x_axis, y_axis, z_axis)
+    }
+
+    /// All-zero frame; fails is_valid()
+    pub fn invalid() -> Self {
+        Self::from_frame(
+            Point::new(0.0, 0.0, 0.0),
+            Vector::new(0.0, 0.0, 0.0),
+            Vector::new(0.0, 0.0, 0.0),
+            Vector::new(0.0, 0.0, 0.0),
+        )
+    }
+
+    pub fn xy_plane() -> Self {
+        let mut plane = Self::from_frame(
+            Point::new(0.0, 0.0, 0.0),
+            Vector::x_axis(),
+            Vector::y_axis(),
+            Vector::z_axis(),
+        );
+        plane.name = "xy_plane".to_string();
+        plane
+    }
+
+    pub fn yz_plane() -> Self {
+        let mut plane = Self::from_frame(
+            Point::new(0.0, 0.0, 0.0),
+            Vector::y_axis(),
+            Vector::z_axis(),
+            Vector::x_axis(),
+        );
+        plane.name = "yz_plane".to_string();
+        plane
+    }
+
+    pub fn xz_plane() -> Self {
+        let mut plane = Self::from_frame(
+            Point::new(0.0, 0.0, 0.0),
+            Vector::x_axis(),
+            Vector::new(0.0, 0.0, -1.0),
+            Vector::new(0.0, 1.0, 0.0),
+        );
+        plane.name = "xz_plane".to_string();
+        plane
+    }
+
+    // ═══════════════════════════════════════════════════════════════════════════
+    // Transformation
+    // ═══════════════════════════════════════════════════════════════════════════
+
+    /// Transform in place
+    pub fn transform(&mut self, xform: &Xform) {
+        self._origin.transform(xform);
+        self._x_axis.transform(xform);
+        self._y_axis.transform(xform);
+        self._z_axis.transform(xform);
+        self.update_equation();
+    }
+
+    /// Transformed copy
+    pub fn transformed(&self, xform: &Xform) -> Self {
+        let mut result = self.clone();
+        result.transform(xform);
+        result
+    }
+
+    // ═══════════════════════════════════════════════════════════════════════════
+    // Geometry
+    // ═══════════════════════════════════════════════════════════════════════════
+
+    pub fn is_valid(&self) -> bool {
+        self._x_axis.magnitude() > 1e-14
+            && self._y_axis.magnitude() > 1e-14
+            && self._z_axis.magnitude() > 1e-14
+    }
+
+    /// Swap x and y and flip z
+    pub fn reverse(&mut self) {
+        std::mem::swap(&mut self._x_axis, &mut self._y_axis);
+        self._z_axis.reverse();
+        self.update_equation();
+    }
+
+    /// Rotate x and y around z
     pub fn rotate(&mut self, angles_in_radians: f64) {
         let cos_angle = angles_in_radians.cos();
         let sin_angle = angles_in_radians.sin();
-
         let new_x = self._x_axis.clone() * cos_angle + self._y_axis.clone() * sin_angle;
         let new_y = self._y_axis.clone() * cos_angle - self._x_axis.clone() * sin_angle;
-
         self._x_axis = new_x;
         self._y_axis = new_y;
     }
 
-    pub fn is_same_direction(plane0: &Plane, plane1: &Plane, can_be_flipped: bool) -> bool {
-        let n0 = plane0._z_axis.clone();
-        let n1 = plane1._z_axis.clone();
-
-        let parallel = n0.is_parallel_to(&n1);
-
-        if can_be_flipped {
-            parallel != 0
-        } else {
-            parallel == -1
-        }
+    /// True when x × y points along z
+    pub fn is_right_hand(&self) -> bool {
+        self._x_axis.cross(&self._y_axis).dot(&self._z_axis) > 0.999
     }
 
+    /// Normals parallel (can_be_flipped) or exactly opposite (!can_be_flipped)
+    pub fn is_same_direction(plane0: &Plane, plane1: &Plane, can_be_flipped: bool) -> bool {
+        let parallel = plane0._z_axis.is_parallel_to(&plane1._z_axis);
+        if can_be_flipped {
+            return parallel != 0;
+        }
+        parallel == -1
+    }
+
+    /// Each origin lies on the other plane
     pub fn is_same_position(plane0: &Plane, plane1: &Plane) -> bool {
         let dist0 = (plane0._a * plane1._origin[0]
             + plane0._b * plane1._origin[1]
             + plane0._c * plane1._origin[2]
             + plane0._d)
             .abs();
-
         let dist1 = (plane1._a * plane0._origin[0]
             + plane1._b * plane0._origin[1]
             + plane1._c * plane0._origin[2]
             + plane1._d)
             .abs();
-
-        let tolerance = crate::tolerance::Tolerance::APPROXIMATION;
+        let tolerance = Tolerance::APPROXIMATION;
         dist0 < tolerance && dist1 < tolerance
     }
 
+    /// Same direction and same position
     pub fn is_coplanar(plane0: &Plane, plane1: &Plane, can_be_flipped: bool) -> bool {
         Self::is_same_direction(plane0, plane1, can_be_flipped)
             && Self::is_same_position(plane0, plane1)
     }
 
+    /// is_coplanar from origin and normal pairs without building planes; tolerance < 0 uses APPROXIMATION
     pub fn is_coplanar_from_normals(
         origin0: &Point,
         normal0: &Vector,
@@ -662,146 +402,62 @@ impl Plane {
         can_be_flipped: bool,
         tolerance: f64,
     ) -> bool {
-        let n0 = normal0.clone();
-        let n1 = normal1.clone();
-        let parallel = n0.is_parallel_to(&n1);
-        if can_be_flipped {
-            if parallel == 0 {
-                return false;
-            }
+        let parallel = normal0.is_parallel_to(normal1);
+        if if can_be_flipped {
+            parallel == 0
         } else {
-            if parallel != -1 {
-                return false;
-            }
+            parallel != -1
+        } {
+            return false;
         }
-        let (a0, b0, c0) = (n0[0], n0[1], n0[2]);
-        let d0 = -(a0 * origin0[0] + b0 * origin0[1] + c0 * origin0[2]);
-        let (a1, b1, c1) = (n1[0], n1[1], n1[2]);
-        let d1 = -(a1 * origin1[0] + b1 * origin1[1] + c1 * origin1[2]);
+        let d0 = -(normal0[0] * origin0[0] + normal0[1] * origin0[1] + normal0[2] * origin0[2]);
+        let d1 = -(normal1[0] * origin1[0] + normal1[1] * origin1[1] + normal1[2] * origin1[2]);
+        let dist0 =
+            (normal0[0] * origin1[0] + normal0[1] * origin1[1] + normal0[2] * origin1[2] + d0)
+                .abs();
+        let dist1 =
+            (normal1[0] * origin0[0] + normal1[1] * origin0[1] + normal1[2] * origin0[2] + d1)
+                .abs();
         let tol = if tolerance < 0.0 {
-            crate::tolerance::Tolerance::APPROXIMATION
+            Tolerance::APPROXIMATION
         } else {
             tolerance
         };
-        let dist0 = (a0 * origin1[0] + b0 * origin1[1] + c0 * origin1[2] + d0).abs();
-        let dist1 = (a1 * origin0[0] + b1 * origin0[1] + c1 * origin0[2] + d1).abs();
         dist0 < tol && dist1 < tol
     }
-}
 
-impl std::ops::Index<usize> for Plane {
-    type Output = Vector;
-
-    fn index(&self, index: usize) -> &Self::Output {
-        match index {
-            0 => &self._x_axis,
-            1 => &self._y_axis,
-            _ => &self._z_axis,
-        }
-    }
-}
-
-impl std::ops::IndexMut<usize> for Plane {
-    fn index_mut(&mut self, index: usize) -> &mut Self::Output {
-        match index {
-            0 => &mut self._x_axis,
-            1 => &mut self._y_axis,
-            _ => &mut self._z_axis,
-        }
-    }
-}
-
-impl std::ops::AddAssign<Vector> for Plane {
-    fn add_assign(&mut self, other: Vector) {
-        self._origin += other;
-        self._d =
-            -(self._a * self._origin[0] + self._b * self._origin[1] + self._c * self._origin[2]);
-    }
-}
-
-impl std::ops::SubAssign<Vector> for Plane {
-    fn sub_assign(&mut self, other: Vector) {
-        self._origin -= other;
-        self._d =
-            -(self._a * self._origin[0] + self._b * self._origin[1] + self._c * self._origin[2]);
-    }
-}
-
-impl std::ops::Add<Vector> for Plane {
-    type Output = Plane;
-
-    fn add(self, other: Vector) -> Plane {
-        let mut result = self.clone();
-        result += other;
-        result
-    }
-}
-
-impl std::ops::Sub<Vector> for Plane {
-    type Output = Plane;
-
-    fn sub(self, other: Vector) -> Plane {
-        let mut result = self.clone();
-        result -= other;
-        result
-    }
-}
-
-impl PartialEq for Plane {
-    fn eq(&self, other: &Self) -> bool {
-        self.name == other.name
-            && self._origin == other._origin
-            && self._x_axis == other._x_axis
-            && self._y_axis == other._y_axis
-            && self._z_axis == other._z_axis
-            && self.linecolor == other.linecolor
-    }
-}
-
-impl Plane {
-    /// Translate (move) a plane along its normal direction by a specified distance
+    /// Copy moved along z by distance
     pub fn translate_by_normal(&self, distance: f64) -> Plane {
         let mut normal = self._z_axis.clone();
         normal.normalize_self();
-
-        let new_origin = self._origin.clone() + (normal * distance);
-
-        Plane::new(new_origin, self._x_axis.clone(), self._y_axis.clone())
-    }
-
-    /// Sign test using the cached plane equation `ax + by + cz + d`.
-    ///
-    /// Returns `true` if `p` lies on the negative side
-    /// (`a*p[0] + b*p[1] + c*p[2] + d < 0`). Mirrors CGAL's
-    /// `Plane_3::has_on_negative_side`.
-    pub fn has_on_negative_side(&self, p: &Point) -> bool {
-        (self.a() * p[0] + self.b() * p[1] + self.c() * p[2] + self.d()) < 0.0
-    }
-
-    /// Orthogonal projection of a point onto this plane.
-    /// Equivalent to CGAL's `Plane_3::projection(Point_3)`.
-    ///
-    /// Uses the cached plane equation `ax + by + cz + d = 0` so the signed
-    /// distance is computed without re-normalizing the normal — the plane
-    /// constructor already enforces a unit z_axis.
-    pub fn projection(&self, p: &Point) -> Point {
-        let signed_distance = self._a * p[0] + self._b * p[1] + self._c * p[2] + self._d;
-        Point::new(
-            p[0] - signed_distance * self._a,
-            p[1] - signed_distance * self._b,
-            p[2] - signed_distance * self._c,
+        Plane::with_name(
+            self._origin.clone() + normal * distance,
+            self._x_axis.clone(),
+            self._y_axis.clone(),
+            &self.name,
         )
     }
 
-    /// Canonical in-plane x-axis from the normal (smallest-|coef| pivot rule).
-    ///
-    /// Deterministic frame that depends only on the normal; used for 2D
-    /// projections that must be stable across different construction hints.
+    /// Orthogonal projection of p onto the plane
+    pub fn project(&self, p: &Point) -> Point {
+        let dist = self._a * p[0] + self._b * p[1] + self._c * p[2] + self._d;
+        Point::new(
+            p[0] - dist * self._a,
+            p[1] - dist * self._b,
+            p[2] - dist * self._c,
+        )
+    }
+
+    /// True when a*p[0] + b*p[1] + c*p[2] + d < 0
+    pub fn has_on_negative_side(&self, p: &Point) -> bool {
+        self._a * p[0] + self._b * p[1] + self._c * p[2] + self._d < 0.0
+    }
+
+    /// Canonical in-plane axis from the normal alone: zero the smallest normal coordinate, negate-swap the other two
     pub fn base1(&self) -> Vector {
-        let n = &self._z_axis;
-        let nx = n[0];
-        let ny = n[1];
-        let nz = n[2];
+        let nx = self._z_axis[0];
+        let ny = self._z_axis[1];
+        let nz = self._z_axis[2];
         let ax = nx.abs();
         let ay = ny.abs();
         let az = nz.abs();
@@ -816,19 +472,14 @@ impl Plane {
         b
     }
 
-    /// Canonical in-plane y-axis = normal × base1 (right-handed).
+    /// z × base1, unit length
     pub fn base2(&self) -> Vector {
-        let b1 = self.base1();
-        let n = &self._z_axis;
-        let mut b2 = Vector::new(
-            n[1] * b1[2] - n[2] * b1[1],
-            n[2] * b1[0] - n[0] * b1[2],
-            n[0] * b1[1] - n[1] * b1[0],
-        );
+        let mut b2 = self._z_axis.cross(&self.base1());
         b2.normalize_self();
         b2
     }
 
+    /// Square outline of side scale plus the three axes as polylines
     pub fn to_polylines(&self, scale: f64) -> Vec<Polyline> {
         let s = scale * 0.5;
         let o = &self._origin;
@@ -855,17 +506,7 @@ impl Plane {
             o[1] - x[1] * s + y[1] * s,
             o[2] - x[2] * s + y[2] * s,
         );
-        let mut rect = Polyline::new(vec![
-            c0,
-            c1,
-            c2,
-            c3,
-            Point::new(
-                o[0] - x[0] * s - y[0] * s,
-                o[1] - x[1] * s - y[1] * s,
-                o[2] - x[2] * s - y[2] * s,
-            ),
-        ]);
+        let mut rect = Polyline::new(vec![c0.clone(), c1, c2, c3, c0]);
         rect.linecolor = self.linecolor.clone();
         let origin_pt = Point::new(o[0], o[1], o[2]);
         let mut x_line = Polyline::new(vec![
@@ -885,81 +526,10 @@ impl Plane {
         z_line.linecolor = Color::blue();
         vec![rect, x_line, y_line, z_line]
     }
-}
 
-impl std::fmt::Display for Plane {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(
-            f,
-            "Plane(origin={}, x_axis={}, y_axis={}, z_axis={}, guid={}, name={})",
-            self._origin,
-            self._x_axis,
-            self._y_axis,
-            self._z_axis,
-            self.guid(),
-            self.name
-        )
-    }
-}
-
-impl Plane {
-    pub fn transform(&mut self, xform: &Xform) {
-        self._origin.transform(xform);
-        self._x_axis.transform(xform);
-        self._y_axis.transform(xform);
-        self._z_axis.transform(xform);
-    }
-
-    pub fn transformed(&self, xform: &Xform) -> Self {
-        let mut result = self.clone();
-        result.transform(xform);
-        result
-    }
-
-    /// Create a deep copy with a new GUID.
-    pub fn duplicate(&self) -> Self {
-        let mut result = self.clone();
-        result.guid = std::sync::OnceLock::new();
-        result
-    }
-
-    /// Minimal string representation.
-    pub fn str(&self) -> String {
-        use crate::tolerance::TOLERANCE;
-        let prec = crate::tolerance::Tolerance::ROUNDING;
-        format!(
-            "{}, {}, {}\n{}, {}, {}\n{}, {}, {}\n{}, {}, {}",
-            TOLERANCE.format_number(self._origin[0], prec),
-            TOLERANCE.format_number(self._origin[1], prec),
-            TOLERANCE.format_number(self._origin[2], prec),
-            TOLERANCE.format_number(self._x_axis[0], prec),
-            TOLERANCE.format_number(self._x_axis[1], prec),
-            TOLERANCE.format_number(self._x_axis[2], prec),
-            TOLERANCE.format_number(self._y_axis[0], prec),
-            TOLERANCE.format_number(self._y_axis[1], prec),
-            TOLERANCE.format_number(self._y_axis[2], prec),
-            TOLERANCE.format_number(self._z_axis[0], prec),
-            TOLERANCE.format_number(self._z_axis[1], prec),
-            TOLERANCE.format_number(self._z_axis[2], prec),
-        )
-    }
-
-    /// Full string representation.
-    pub fn repr(&self) -> String {
-        use crate::tolerance::TOLERANCE;
-        let prec = crate::tolerance::Tolerance::ROUNDING;
-        format!(
-            "Plane({}, {}, {}, {}, {}, {}, {}, {})",
-            self.name,
-            TOLERANCE.format_number(self._origin[0], prec),
-            TOLERANCE.format_number(self._origin[1], prec),
-            TOLERANCE.format_number(self._origin[2], prec),
-            TOLERANCE.format_number(self._z_axis[0], prec),
-            TOLERANCE.format_number(self._z_axis[1], prec),
-            TOLERANCE.format_number(self._z_axis[2], prec),
-            self.linecolor.repr(),
-        )
-    }
+    // ═══════════════════════════════════════════════════════════════════════════
+    // JSON
+    // ═══════════════════════════════════════════════════════════════════════════
 
     pub fn jsondump(&self) -> Result<String, Box<dyn std::error::Error>> {
         crate::file_encoders::sorted_json_string(self)
@@ -974,29 +544,137 @@ impl Plane {
     }
 
     pub fn file_json_loads(json_string: &str) -> Self {
-        Self::jsonload(json_string).unwrap_or_else(|_| Self::default())
+        Self::jsonload(json_string).unwrap_or_default()
     }
 
-    /// Write JSON to file.
     pub fn file_json_dump(&self, filepath: &str) -> Result<(), Box<dyn std::error::Error>> {
-        let json = self.jsondump()?;
-        std::fs::write(filepath, json)?;
+        std::fs::write(filepath, self.jsondump()?)?;
         Ok(())
     }
 
-    /// Read JSON from file.
     pub fn file_json_load(filepath: &str) -> Result<Self, Box<dyn std::error::Error>> {
-        let json = std::fs::read_to_string(filepath)?;
-        Self::jsonload(&json)
+        Self::jsonload(&std::fs::read_to_string(filepath)?)
     }
 
     // ═══════════════════════════════════════════════════════════════════════════
-    // WGPU
+    // Protobuf
     // ═══════════════════════════════════════════════════════════════════════════
 
-    /// GPU-ready `[f32; 16]` frame matrix, column-major to match [`crate::Xform::to_f32`]:
-    /// columns are x_axis, y_axis, z_axis, then origin (translation). Upload as a model /
-    /// basis mat4 for grid, gumball, and section planes. Kernel stays f64.
+    pub fn pb_dumps(&self) -> Vec<u8> {
+        use prost::Message;
+        self.to_proto().encode_to_vec()
+    }
+
+    pub fn pb_loads(data: &[u8]) -> Result<Self, Box<dyn std::error::Error>> {
+        use prost::Message;
+        Ok(Self::from_proto(crate::proto::Plane::decode(data)?))
+    }
+
+    pub fn pb_dump(&self, filepath: &str) {
+        let data = self.pb_dumps();
+        std::fs::write(filepath, data).expect("Failed to write protobuf file");
+    }
+
+    pub fn pb_load(filepath: &str) -> Self {
+        let data = std::fs::read(filepath).expect("Failed to read protobuf file");
+        Self::pb_loads(&data).expect("Failed to parse protobuf")
+    }
+
+    /// The proto message; pb_dumps encodes it and Session embeds it
+    pub fn to_proto(&self) -> crate::proto::Plane {
+        let mut frame = Vec::with_capacity(12);
+        for i in 0..3 {
+            frame.push(self._origin[i]);
+        }
+        for i in 0..3 {
+            frame.push(self._x_axis[i]);
+        }
+        for i in 0..3 {
+            frame.push(self._y_axis[i]);
+        }
+        for i in 0..3 {
+            frame.push(self._z_axis[i]);
+        }
+        crate::proto::Plane {
+            guid: self.guid.get().cloned().unwrap_or_default(),
+            name: self.name.clone(),
+            frame,
+            width: self.width,
+            linecolor: Some(crate::proto::Color {
+                guid: String::new(),
+                name: self.linecolor.name.clone(),
+                r: self.linecolor.r,
+                g: self.linecolor.g,
+                b: self.linecolor.b,
+                a: self.linecolor.a,
+            }),
+        }
+    }
+
+    /// Plane from a decoded proto message
+    pub fn from_proto(proto: crate::proto::Plane) -> Self {
+        let mut plane = Self::default();
+        if proto.frame.len() >= 12 {
+            plane = Self::from_frame(
+                Point::new(proto.frame[0], proto.frame[1], proto.frame[2]),
+                Vector::new(proto.frame[3], proto.frame[4], proto.frame[5]),
+                Vector::new(proto.frame[6], proto.frame[7], proto.frame[8]),
+                Vector::new(proto.frame[9], proto.frame[10], proto.frame[11]),
+            );
+        }
+        if !proto.guid.is_empty() {
+            plane.set_guid(proto.guid);
+        }
+        plane.name = proto.name;
+        if proto.width > 0.0 {
+            plane.width = proto.width;
+        }
+        if let Some(color) = proto.linecolor {
+            plane.linecolor.name = color.name;
+            plane.linecolor.r = color.r;
+            plane.linecolor.g = color.g;
+            plane.linecolor.b = color.b;
+            plane.linecolor.a = color.a;
+        }
+        plane
+    }
+
+    // ═══════════════════════════════════════════════════════════════════════════
+    // String
+    // ═══════════════════════════════════════════════════════════════════════════
+
+    /// "origin\nx_axis\ny_axis\nz_axis"
+    pub fn str(&self) -> String {
+        format!(
+            "{}\n{}\n{}\n{}",
+            self._origin.str(),
+            self._x_axis.str(),
+            self._y_axis.str(),
+            self._z_axis.str()
+        )
+    }
+
+    /// "Plane(name, ox, oy, oz, zx, zy, zz, Color(...))"
+    pub fn repr(&self) -> String {
+        let prec = Tolerance::ROUNDING;
+        format!(
+            "Plane({}, {}, {}, {}, {}, {}, {}, {})",
+            self.name,
+            TOLERANCE.format_number(self._origin[0], prec),
+            TOLERANCE.format_number(self._origin[1], prec),
+            TOLERANCE.format_number(self._origin[2], prec),
+            TOLERANCE.format_number(self._z_axis[0], prec),
+            TOLERANCE.format_number(self._z_axis[1], prec),
+            TOLERANCE.format_number(self._z_axis[2], prec),
+            self.linecolor.repr()
+        )
+    }
+
+    // ═══════════════════════════════════════════════════════════════════════════
+    // SESSION_VIEWER
+    // ═══════════════════════════════════════════════════════════════════════════
+
+    /// GPU-ready column-major [f32; 16] frame matrix (x, y, z, origin columns), the f64 to f32 boundary for wgpu upload
     pub fn to_f32(&self) -> [f32; 16] {
         let x = &self._x_axis;
         let y = &self._y_axis;
@@ -1023,129 +701,154 @@ impl Plane {
     }
 }
 
-// Protobuf serialization (requires "protobuf" feature)
-impl Plane {
-    /// Convert to protobuf binary format.
-    pub fn pb_dumps(&self) -> Vec<u8> {
-        use prost::Message;
-        self.to_proto().encode_to_vec()
-    }
-
-    /// The proto struct itself — pb_dumps encodes it; Session embeds it directly.
-    pub fn to_proto(&self) -> crate::proto::Plane {
-        // Use single flat frame array of 12 numbers
-        crate::proto::Plane {
-            guid: self.guid.get().cloned().unwrap_or_default(),
-            name: self.name.clone(),
-            frame: vec![
-                self._origin[0] as f64,
-                self._origin[1] as f64,
-                self._origin[2] as f64,
-                self._x_axis[0] as f64,
-                self._x_axis[1] as f64,
-                self._x_axis[2] as f64,
-                self._y_axis[0] as f64,
-                self._y_axis[1] as f64,
-                self._y_axis[2] as f64,
-                self._z_axis[0] as f64,
-                self._z_axis[1] as f64,
-                self._z_axis[2] as f64,
-            ],
-            width: self.width as f64,
-            linecolor: Some(crate::proto::Color {
-                guid: self.linecolor.guid().to_string(),
-                name: self.linecolor.name.clone(),
-                r: self.linecolor.r,
-                g: self.linecolor.g,
-                b: self.linecolor.b,
-                a: self.linecolor.a,
-            }),
-        }
-    }
-
-    /// Create Plane from protobuf binary data.
-    pub fn pb_loads(data: &[u8]) -> Result<Self, prost::DecodeError> {
-        use prost::Message;
-        Ok(Self::from_proto(crate::proto::Plane::decode(data)?))
-    }
-
-    /// Build from an already-decoded proto — pb_loads decodes then calls this.
-    pub fn from_proto(proto: crate::proto::Plane) -> Self {
-        // Parse frame array
-        let origin = Point::new(
-            proto.frame[0] as f64,
-            proto.frame[1] as f64,
-            proto.frame[2] as f64,
-        );
-        let x_axis = Vector::new(
-            proto.frame[3] as f64,
-            proto.frame[4] as f64,
-            proto.frame[5] as f64,
-        );
-        let y_axis = Vector::new(
-            proto.frame[6] as f64,
-            proto.frame[7] as f64,
-            proto.frame[8] as f64,
-        );
-        let z_axis = Vector::new(
-            proto.frame[9] as f64,
-            proto.frame[10] as f64,
-            proto.frame[11] as f64,
-        );
-
-        // Compute plane equation coefficients
-        let a = z_axis[0];
-        let b = z_axis[1];
-        let c = z_axis[2];
-        let d = -(a * origin[0] + b * origin[1] + c * origin[2]);
-
-        // Load linecolor
-        let mut color = Color::blue();
-        if let Some(c) = proto.linecolor {
-            color.name = c.name;
-            color.r = c.r;
-            color.g = c.g;
-            color.b = c.b;
-            color.a = c.a;
-        }
-
-        let guid = std::sync::OnceLock::new();
-        if !proto.guid.is_empty() {
-            let _ = guid.set(proto.guid);
-        }
-        Plane {
-            guid,
-            name: proto.name,
-            width: if proto.width > 0.0 {
-                proto.width as f64
-            } else {
-                1.0
-            },
-            linecolor: color,
-            _origin: origin,
-            _x_axis: x_axis,
-            _y_axis: y_axis,
-            _z_axis: z_axis,
-            _a: a,
-            _b: b,
-            _c: c,
-            _d: d,
-        }
-    }
-
-    /// Write protobuf to file.
-    pub fn pb_dump(&self, filepath: &str) {
-        let data = self.pb_dumps();
-        std::fs::write(filepath, data).expect("Failed to write protobuf file");
-    }
-
-    /// Read protobuf from file.
-    pub fn pb_load(filepath: &str) -> Self {
-        let data = std::fs::read(filepath).expect("Failed to read protobuf file");
-        Self::pb_loads(&data).expect("Failed to parse protobuf")
+impl fmt::Display for Plane {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}", self.str())
     }
 }
 
-#[cfg(test)]
-#[path = "plane_test.rs"]
-mod plane_test;
+// ═══════════════════════════════════════════════════════════════════════════
+// JSON
+// ═══════════════════════════════════════════════════════════════════════════
+
+/// Frame as one flat array of 12 numbers: origin, x_axis, y_axis, z_axis
+impl Serialize for Plane {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        let mut map = serializer.serialize_map(Some(6))?;
+        map.serialize_entry(
+            "frame",
+            &[
+                self._origin[0],
+                self._origin[1],
+                self._origin[2],
+                self._x_axis[0],
+                self._x_axis[1],
+                self._x_axis[2],
+                self._y_axis[0],
+                self._y_axis[1],
+                self._y_axis[2],
+                self._z_axis[0],
+                self._z_axis[1],
+                self._z_axis[2],
+            ],
+        )?;
+        map.serialize_entry("guid", self.guid())?;
+        map.serialize_entry("linecolor", &self.linecolor)?;
+        map.serialize_entry("name", &self.name)?;
+        map.serialize_entry("type", "Plane")?;
+        map.serialize_entry("width", &self.width)?;
+        map.end()
+    }
+}
+
+/// a, b, c, d are recomputed from the frame on load
+impl<'de> Deserialize<'de> for Plane {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        #[derive(Deserialize)]
+        struct PlaneData {
+            frame: [f64; 12],
+            guid: String,
+            #[serde(default)]
+            linecolor: Option<Color>,
+            name: String,
+            #[serde(default = "default_width")]
+            width: f64,
+        }
+
+        fn default_width() -> f64 {
+            1.0
+        }
+
+        let data = PlaneData::deserialize(deserializer)?;
+        let mut plane = Plane::from_frame(
+            Point::new(data.frame[0], data.frame[1], data.frame[2]),
+            Vector::new(data.frame[3], data.frame[4], data.frame[5]),
+            Vector::new(data.frame[6], data.frame[7], data.frame[8]),
+            Vector::new(data.frame[9], data.frame[10], data.frame[11]),
+        );
+        plane.set_guid(data.guid);
+        plane.name = data.name;
+        plane.width = data.width;
+        plane.linecolor = data.linecolor.unwrap_or_else(Color::blue);
+        Ok(plane)
+    }
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Operators
+// ═══════════════════════════════════════════════════════════════════════════
+
+impl Index<usize> for Plane {
+    type Output = Vector;
+
+    /// Axis by index (0=x, 1=y, 2=z)
+    fn index(&self, index: usize) -> &Self::Output {
+        match index {
+            0 => &self._x_axis,
+            1 => &self._y_axis,
+            _ => &self._z_axis,
+        }
+    }
+}
+
+impl IndexMut<usize> for Plane {
+    fn index_mut(&mut self, index: usize) -> &mut Self::Output {
+        match index {
+            0 => &mut self._x_axis,
+            1 => &mut self._y_axis,
+            _ => &mut self._z_axis,
+        }
+    }
+}
+
+impl PartialEq for Plane {
+    /// Same name, frame and linecolor; guid ignored
+    fn eq(&self, other: &Self) -> bool {
+        self.name == other.name
+            && self._origin == other._origin
+            && self._x_axis == other._x_axis
+            && self._y_axis == other._y_axis
+            && self._z_axis == other._z_axis
+            && self.linecolor == other.linecolor
+    }
+}
+
+impl AddAssign<Vector> for Plane {
+    fn add_assign(&mut self, other: Vector) {
+        self._origin += other;
+        self.update_equation();
+    }
+}
+
+impl SubAssign<Vector> for Plane {
+    fn sub_assign(&mut self, other: Vector) {
+        self._origin -= other;
+        self.update_equation();
+    }
+}
+
+impl Add<Vector> for Plane {
+    type Output = Plane;
+
+    fn add(self, other: Vector) -> Plane {
+        let mut result = self.clone();
+        result += other;
+        result
+    }
+}
+
+impl Sub<Vector> for Plane {
+    type Output = Plane;
+
+    fn sub(self, other: Vector) -> Plane {
+        let mut result = self.clone();
+        result -= other;
+        result
+    }
+}

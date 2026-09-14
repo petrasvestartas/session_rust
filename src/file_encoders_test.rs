@@ -4,14 +4,17 @@ use crate::{MINI_CHECK, MINI_TEST, REGISTER_MINI_TEST};
 
 pub fn run_encoders_file_json_dump_load() -> TestResult {
     MINI_TEST!("Json Dump Load", {
-        use crate::file_encoders::{file_json_dump, file_json_load};
+        use crate::file_encoders::file_json_dump;
+        use crate::file_encoders::file_json_load;
         use crate::Point;
         use std::fs;
 
         let mut original = Point::new(1.5, 2.5, 3.5);
         original.name = "test_point".to_string();
+
         let filepath = "serialization/test_encoders_point.json";
-        file_json_dump(&original, filepath, false).unwrap();
+        file_json_dump(&original, filepath, true).unwrap();
+
         let loaded: Point = file_json_load(filepath).unwrap();
 
         MINI_CHECK!(TOLERANCE.is_close(loaded[0], original[0]));
@@ -25,18 +28,23 @@ pub fn run_encoders_file_json_dump_load() -> TestResult {
 
 pub fn run_encoders_file_json_dumps_loads() -> TestResult {
     MINI_TEST!("Json Dumps Loads", {
-        use crate::file_encoders::{file_json_dumps, file_json_loads};
+        use crate::file_encoders::file_json_dumps;
+        use crate::file_encoders::file_json_loads;
         use crate::Vector;
 
         let mut original = Vector::new(42.1, 84.2, 126.3);
         original.name = "test_vector".to_string();
-        let json_str = file_json_dumps(&original, false).unwrap();
+
+        let json_str = file_json_dumps(&original, true).unwrap();
 
         MINI_CHECK!(!json_str.is_empty());
         MINI_CHECK!(json_str.contains("Vector"));
 
         let loaded: Vector = file_json_loads(&json_str).unwrap();
 
+        MINI_CHECK!(TOLERANCE.is_close(loaded[0], original[0]));
+        MINI_CHECK!(TOLERANCE.is_close(loaded[1], original[1]));
+        MINI_CHECK!(TOLERANCE.is_close(loaded[2], original[2]));
         MINI_CHECK!(loaded.name == original.name);
     })
 }
@@ -51,7 +59,8 @@ pub fn run_encoders_file_encode_collection_values() -> TestResult {
             Point::new(4.0, 5.0, 6.0),
             Point::new(7.0, 8.0, 9.0),
         ];
-        let json_str = file_json_dumps(&points, false).unwrap();
+
+        let json_str = file_json_dumps(&points, true).unwrap();
         let json_arr: serde_json::Value = serde_json::from_str(&json_str).unwrap();
 
         MINI_CHECK!(json_arr.is_array());
@@ -71,7 +80,8 @@ pub fn run_encoders_file_encode_collection_shared_ptr() -> TestResult {
             Line::new(0.0, 0.0, 0.0, 1.0, 0.0, 0.0),
             Line::new(0.0, 0.0, 0.0, 0.0, 1.0, 0.0),
         ];
-        let json_str = file_json_dumps(&lines, false).unwrap();
+
+        let json_str = file_json_dumps(&lines, true).unwrap();
         let json_arr: serde_json::Value = serde_json::from_str(&json_str).unwrap();
 
         MINI_CHECK!(json_arr.is_array());
@@ -83,44 +93,53 @@ pub fn run_encoders_file_encode_collection_shared_ptr() -> TestResult {
 
 pub fn run_encoders_file_decode_collection() -> TestResult {
     MINI_TEST!("Decode Collection", {
-        use crate::file_encoders::{file_json_dumps, file_json_loads};
+        use crate::file_encoders::file_json_dumps;
+        use crate::file_encoders::file_json_loads;
         use crate::Point;
 
         let original_points = vec![Point::new(1.0, 2.0, 3.0), Point::new(4.0, 5.0, 6.0)];
-        let json_str = file_json_dumps(&original_points, false).unwrap();
-        let decoded: Vec<Point> = file_json_loads(&json_str).unwrap();
 
-        MINI_CHECK!(decoded.len() == 2);
-        MINI_CHECK!(TOLERANCE.is_close(decoded[0][0], 1.0));
-        MINI_CHECK!(TOLERANCE.is_close(decoded[1][1], 5.0));
+        let json_str = file_json_dumps(&original_points, true).unwrap();
+        let decoded_points: Vec<Point> = file_json_loads(&json_str).unwrap();
+
+        MINI_CHECK!(decoded_points.len() == 2);
+        MINI_CHECK!(TOLERANCE.is_close(decoded_points[0][0], 1.0));
+        MINI_CHECK!(TOLERANCE.is_close(decoded_points[1][1], 5.0));
     })
 }
 
 pub fn run_encoders_file_decode_collection_ptr() -> TestResult {
     MINI_TEST!("Decode Collection Ptr", {
-        use crate::file_encoders::{file_json_dumps, file_json_loads};
+        use crate::file_encoders::file_json_dumps;
+        use crate::file_encoders::file_json_loads;
         use crate::Vector;
 
         let original_vectors = vec![Vector::new(1.0, 0.0, 0.0), Vector::new(0.0, 1.0, 0.0)];
-        let json_str = file_json_dumps(&original_vectors, false).unwrap();
-        let decoded: Vec<Vector> = file_json_loads(&json_str).unwrap();
 
-        MINI_CHECK!(decoded.len() == 2);
-        MINI_CHECK!(TOLERANCE.is_close(decoded[0][0], 1.0));
-        MINI_CHECK!(TOLERANCE.is_close(decoded[1][1], 1.0));
+        let json_str = file_json_dumps(&original_vectors, true).unwrap();
+        let decoded_vectors: Vec<Vector> = file_json_loads(&json_str).unwrap();
+
+        MINI_CHECK!(decoded_vectors.len() == 2);
+        MINI_CHECK!(TOLERANCE.is_close(decoded_vectors[0][0], 1.0));
+        MINI_CHECK!(TOLERANCE.is_close(decoded_vectors[1][1], 1.0));
     })
 }
 
 pub fn run_encoders_nested_collections() -> TestResult {
     MINI_TEST!("Nested Collections", {
-        use crate::file_encoders::{file_json_dumps, file_json_loads};
+        use crate::file_encoders::file_json_dumps;
+        use crate::file_encoders::file_json_loads;
         use crate::Line;
 
         let lines = vec![
             Line::new(0.0, 0.0, 0.0, 1.0, 0.0, 0.0),
             Line::new(0.0, 0.0, 0.0, 0.0, 1.0, 0.0),
         ];
-        let json_str = file_json_dumps(&lines, false).unwrap();
+
+        let json_str = file_json_dumps(&lines, true).unwrap();
+
+        MINI_CHECK!(!json_str.is_empty());
+
         let loaded: Vec<Line> = file_json_loads(&json_str).unwrap();
 
         MINI_CHECK!(loaded.len() == 2);
@@ -131,7 +150,8 @@ pub fn run_encoders_nested_collections() -> TestResult {
 
 pub fn run_encoders_roundtrip_file_io() -> TestResult {
     MINI_TEST!("Roundtrip File Io", {
-        use crate::file_encoders::{file_json_dump, file_json_load};
+        use crate::file_encoders::file_json_dump;
+        use crate::file_encoders::file_json_load;
         use crate::Vector;
         use std::fs;
 
@@ -140,11 +160,16 @@ pub fn run_encoders_roundtrip_file_io() -> TestResult {
             Vector::new(0.0, 1.0, 0.0),
             Vector::new(0.0, 0.0, 1.0),
         ];
-        let filepath = "serialization/test_encoders_collection.json";
-        file_json_dump(&vectors, filepath, false).unwrap();
-        let decoded: Vec<Vector> = file_json_load(filepath).unwrap();
 
-        MINI_CHECK!(decoded.len() == 3);
+        let filepath = "serialization/test_encoders_collection.json";
+        file_json_dump(&vectors, filepath, true).unwrap();
+
+        let decoded_vectors: Vec<Vector> = file_json_load(filepath).unwrap();
+
+        MINI_CHECK!(decoded_vectors.len() == 3);
+        MINI_CHECK!(TOLERANCE.is_close(decoded_vectors[0][0], 1.0));
+        MINI_CHECK!(TOLERANCE.is_close(decoded_vectors[1][1], 1.0));
+        MINI_CHECK!(TOLERANCE.is_close(decoded_vectors[2][2], 1.0));
 
         fs::remove_file(filepath).ok();
     })
@@ -152,10 +177,12 @@ pub fn run_encoders_roundtrip_file_io() -> TestResult {
 
 pub fn run_encoders_pretty_vs_compact() -> TestResult {
     MINI_TEST!("Pretty Vs Compact", {
-        use crate::file_encoders::{file_json_dumps, file_json_loads};
+        use crate::file_encoders::file_json_dumps;
+        use crate::file_encoders::file_json_loads;
         use crate::Point;
 
         let point = Point::new(1.0, 2.0, 3.0);
+
         let pretty = file_json_dumps(&point, true).unwrap();
         let compact = file_json_dumps(&point, false).unwrap();
 
@@ -171,85 +198,84 @@ pub fn run_encoders_pretty_vs_compact() -> TestResult {
     })
 }
 
-// Literal matches the C++ and Python test text verbatim; parity beats the constant.
 #[allow(clippy::approx_constant)]
 pub fn run_encoders_decode_primitives() -> TestResult {
     MINI_TEST!("Decode Primitives", {
-        use crate::file_encoders::{file_json_dumps, file_json_loads};
-
-        let json_str = file_json_dumps(&42i32, false).unwrap();
-        let loaded: i32 = file_json_loads(&json_str).unwrap();
+        let num: i32 = 42;
+        let json_str = serde_json::to_string(&num).unwrap();
+        let loaded: i32 = serde_json::from_str(&json_str).unwrap();
 
         MINI_CHECK!(loaded == 42);
 
-        let json_str = file_json_dumps(&3.14f64, false).unwrap();
-        let loaded: f64 = file_json_loads(&json_str).unwrap();
+        let float_val: f64 = 3.14;
+        let json_str = serde_json::to_string(&float_val).unwrap();
+        let loaded: f64 = serde_json::from_str(&json_str).unwrap();
         MINI_CHECK!(TOLERANCE.is_close(loaded, 3.14));
 
-        let json_str = file_json_dumps(&"hello", false).unwrap();
-        let loaded: String = file_json_loads(&json_str).unwrap();
+        let text = "hello";
+        let json_str = serde_json::to_string(&text).unwrap();
+        let loaded: String = serde_json::from_str(&json_str).unwrap();
         MINI_CHECK!(loaded == "hello");
 
-        let json_str = file_json_dumps(&true, false).unwrap();
-        let loaded: bool = file_json_loads(&json_str).unwrap();
+        let flag = true;
+        let json_str = serde_json::to_string(&flag).unwrap();
+        let loaded: bool = serde_json::from_str(&json_str).unwrap();
         MINI_CHECK!(loaded);
     })
 }
 
 pub fn run_encoders_decode_list() -> TestResult {
     MINI_TEST!("Decode List", {
-        use crate::file_encoders::{file_json_dumps, file_json_loads};
+        use crate::file_encoders::file_json_dumps;
+        use crate::file_encoders::file_json_loads;
         use crate::Point;
 
-        let data = vec![1i32, 2, 3];
-        let json_str = file_json_dumps(&data, false).unwrap();
-        let loaded: Vec<i32> = file_json_loads(&json_str).unwrap();
+        let data = vec![1, 2, 3];
+        let json_str = serde_json::to_string(&data).unwrap();
+        let loaded_vec: Vec<i32> = serde_json::from_str(&json_str).unwrap();
 
-        MINI_CHECK!(loaded.len() == 3);
-        MINI_CHECK!(loaded[0] == 1);
-        MINI_CHECK!(loaded[2] == 3);
+        MINI_CHECK!(loaded_vec.len() == 3);
+        MINI_CHECK!(loaded_vec[0] == 1);
+        MINI_CHECK!(loaded_vec[2] == 3);
 
         let points = vec![Point::new(1.0, 2.0, 3.0), Point::new(4.0, 5.0, 6.0)];
-        let json_str = file_json_dumps(&points, false).unwrap();
-        let decoded: Vec<Point> = file_json_loads(&json_str).unwrap();
 
+        let json_str = file_json_dumps(&points, true).unwrap();
+        let decoded: Vec<Point> = file_json_loads(&json_str).unwrap();
         MINI_CHECK!(decoded.len() == 2);
+        MINI_CHECK!(TOLERANCE.is_close(decoded[0][0], 1.0));
+        MINI_CHECK!(TOLERANCE.is_close(decoded[1][0], 4.0));
     })
 }
 
 pub fn run_encoders_decode_dict() -> TestResult {
     MINI_TEST!("Decode Dict", {
-        use crate::file_encoders::{file_json_dumps, file_json_loads};
+        use crate::file_encoders::file_json_dumps;
+        use crate::file_encoders::file_json_loads;
         use crate::Vector;
         use std::collections::HashMap;
 
         let mut data = HashMap::new();
-        data.insert("a".to_string(), 1i32);
-        data.insert("b".to_string(), 2i32);
-        let json_str = file_json_dumps(&data, false).unwrap();
-        let loaded: HashMap<String, i32> = file_json_loads(&json_str).unwrap();
+        data.insert("a".to_string(), 1);
+        data.insert("b".to_string(), 2);
+        let json_str = serde_json::to_string(&data).unwrap();
+        let loaded: HashMap<String, i32> = serde_json::from_str(&json_str).unwrap();
 
-        MINI_CHECK!(loaded.get("a") == Some(&1));
-        MINI_CHECK!(loaded.get("b") == Some(&2));
+        MINI_CHECK!(loaded["a"] == 1);
+        MINI_CHECK!(loaded["b"] == 2);
 
         let vec = Vector::new(1.0, 2.0, 3.0);
-        let json_str = file_json_dumps(&vec, false).unwrap();
-        let loaded_vec: Vector = file_json_loads(&json_str).unwrap();
-
+        let vec_json = file_json_dumps(&vec, true).unwrap();
+        let loaded_vec: Vector = file_json_loads(&vec_json).unwrap();
         MINI_CHECK!(TOLERANCE.is_close(loaded_vec[0], 1.0));
     })
 }
 
 pub fn run_encoders_list_in_list_in_list() -> TestResult {
     MINI_TEST!("List In List In List", {
-        use crate::file_encoders::{file_json_dumps, file_json_loads};
-
-        let data = vec![
-            vec![vec![1i32, 2], vec![3, 4]],
-            vec![vec![5, 6], vec![7, 8]],
-        ];
-        let json_str = file_json_dumps(&data, false).unwrap();
-        let loaded: Vec<Vec<Vec<i32>>> = file_json_loads(&json_str).unwrap();
+        let data = vec![vec![vec![1, 2], vec![3, 4]], vec![vec![5, 6], vec![7, 8]]];
+        let json_str = serde_json::to_string(&data).unwrap();
+        let loaded: Vec<Vec<Vec<i32>>> = serde_json::from_str(&json_str).unwrap();
 
         MINI_CHECK!(loaded[0][0][0] == 1);
         MINI_CHECK!(loaded[1][1][1] == 8);
@@ -263,17 +289,18 @@ pub fn run_encoders_dict_of_lists() -> TestResult {
         use crate::Point;
 
         let points = vec![Point::new(1.0, 0.0, 0.0), Point::new(0.0, 1.0, 0.0)];
+
         let data = serde_json::json!({
             "numbers": [1, 2, 3],
             "letters": ["a", "b", "c"],
             "points": points
         });
+
         let json_str = data.to_string();
         let loaded: serde_json::Value = file_json_loads(&json_str).unwrap();
 
         MINI_CHECK!(loaded["numbers"].as_array().unwrap().len() == 3);
         MINI_CHECK!(loaded["letters"][0] == "a");
-
         let loaded_points: Vec<Point> = serde_json::from_value(loaded["points"].clone()).unwrap();
         MINI_CHECK!(loaded_points.len() == 2);
         MINI_CHECK!(TOLERANCE.is_close(loaded_points[0][0], 1.0));
@@ -286,17 +313,19 @@ pub fn run_encoders_list_of_dict() -> TestResult {
         use crate::Point;
 
         let point = Point::new(1.0, 2.0, 3.0);
+
         let data = serde_json::json!([
             {"name": "point1", "value": 10},
             {"name": "point2", "value": 20},
             {"geometry": point}
         ]);
+
         let json_str = data.to_string();
         let loaded: serde_json::Value = file_json_loads(&json_str).unwrap();
 
+        MINI_CHECK!(loaded.as_array().unwrap().len() == 3);
         MINI_CHECK!(loaded[0]["name"] == "point1");
         MINI_CHECK!(loaded[1]["value"] == 20);
-
         let loaded_point: Point = serde_json::from_value(loaded[2]["geometry"].clone()).unwrap();
         MINI_CHECK!(TOLERANCE.is_close(loaded_point[2], 3.0));
     })
@@ -310,19 +339,17 @@ pub fn run_encoders_dict_of_dicts() -> TestResult {
 
         let point = Point::new(1.0, 2.0, 3.0);
         let vec = Vector::new(0.0, 0.0, 1.0);
+
         let data = serde_json::json!({
             "config": {"tolerance": 0.001, "scale": 1000},
             "geometry": {"point": point, "vector": vec}
         });
+
         let json_str = data.to_string();
         let loaded: serde_json::Value = file_json_loads(&json_str).unwrap();
 
-        MINI_CHECK!(TOLERANCE.is_close(
-            loaded["config"]["tolerance"].as_f64().unwrap() as f64,
-            0.001
-        ));
+        MINI_CHECK!(TOLERANCE.is_close(loaded["config"]["tolerance"].as_f64().unwrap(), 0.001));
         MINI_CHECK!(loaded["config"]["scale"] == 1000);
-
         let loaded_point: Point =
             serde_json::from_value(loaded["geometry"]["point"].clone()).unwrap();
         let loaded_vec: Vector =

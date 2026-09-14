@@ -1,24 +1,548 @@
 use std::collections::HashMap;
+use std::collections::HashSet;
 
 use crate::mesh::Mesh;
 use crate::nurbssurface::NurbsSurface;
 use crate::point::Point;
 use crate::tolerance::Tolerance;
+use crate::vector::Vector;
 
+const MAX_SUBS: usize = 24;
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Sampling
+// ═══════════════════════════════════════════════════════════════════════════
+
+/// Euclidean length without the zero gate of magnitude()
+fn norm(v: &Vector) -> f64 {
+    v.magnitude_squared().sqrt()
+}
+
+/// Surface point at t along dir with the other parameter fixed
+fn point_along(s: &NurbsSurface, dir: usize, t: f64, fixed: f64) -> Point {
+    if dir == 0 {
+        s.point_at(t, fixed).unwrap_or_default()
+    } else {
+        s.point_at(fixed, t).unwrap_or_default()
+    }
+}
+
+/// Surface normal at t along dir with the other parameter fixed
+fn normal_along(s: &NurbsSurface, dir: usize, t: f64, fixed: f64) -> Vector {
+    if dir == 0 {
+        s.normal_at(t, fixed)
+    } else {
+        s.normal_at(fixed, t)
+    }
+}
+
+/// Sv x Su unnormalized, zero when the surface cannot be evaluated; normal_at would give a +Z sentinel at a pole
+fn raw_normal(s: &NurbsSurface, u: f64, v: f64) -> Vector {
+    let derivatives = s.evaluate(u, v, 1);
+    if derivatives.len() < 3 {
+        return Vector::new(0.0, 0.0, 0.0);
+    }
+    derivatives[2].cross(&derivatives[1])
+}
+
+/// Diagonal of the control point bounding box
+fn bbox_diagonal(s: &NurbsSurface) -> f64 {
+    let mut lo = Point::new(1e30, 1e30, 1e30);
+    let mut hi = Point::new(-1e30, -1e30, -1e30);
+    for i in 0..s.cv_count(0) {
+        for j in 0..s.cv_count(1) {
+            let p = s.get_cv(i, j).unwrap_or_default();
+            for k in 0..3 {
+                lo[k] = lo[k].min(p[k]);
+                hi[k] = hi[k].max(p[k]);
+            }
+        }
+    }
+    norm(&(hi - lo))
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Subdivisions
+// ═══════════════════════════════════════════════════════════════════════════
+
+/// Largest turn of the unit normal in degrees over [t0, t1], sampled at the span midpoints of the other direction
+fn span_angle(s: &NurbsSurface, dir: usize, t0: f64, t1: f64, osp: &[f64]) -> f64 {
+    let mut max_angle = 0.0_f64;
+    for si in 0..osp.len() - 1 {
+        let fixed = (osp[si] + osp[si + 1]) * 0.5;
+        let mut first = Vector::new(0.0, 0.0, 0.0);
+        let mut last = Vector::new(0.0, 0.0, 0.0);
+        let mut has_first = false;
+        for k in 0..=4 {
+            let n = normal_along(s, dir, t0 + k as f64 * (t1 - t0) / 4.0, fixed);
+            let length = norm(&n);
+            if length < 1e-10 {
+                continue;
+            }
+            let unit = n / length;
+            if !has_first {
+                first = unit.clone();
+            }
+            has_first = true;
+            last = unit;
+        }
+        if !has_first {
+            continue;
+        }
+        let dot = first.dot(&last).clamp(-1.0, 1.0);
+        max_angle = max_angle.max(dot.acos() * 180.0 / Tolerance::PI);
+    }
+    max_angle
+}
+
+/// Largest height of [t0, t1] over its chord, at up to four positions across the other direction
+fn span_deviation(s: &NurbsSurface, dir: usize, t0: f64, t1: f64, osp: &[f64]) -> f64 {
+    let mut max_dev = 0.0_f64;
+    let nc = (osp.len() - 1).min(3);
+    for ci in 0..=nc {
+        let fixed = osp[0] + ci as f64 * (osp[osp.len() - 1] - osp[0]) / nc.max(1) as f64;
+        let p0 = point_along(s, dir, t0, fixed);
+        let p1 = point_along(s, dir, t1, fixed);
+        for k in 1..=3 {
+            let frac = k as f64 / 4.0;
+            let pm = point_along(s, dir, t0 + frac * (t1 - t0), fixed);
+            max_dev = max_dev.max(norm(&(pm - (&p0 + (&p1 - &p0) * frac))));
+        }
+    }
+    max_dev
+}
+
+/// Subdivisions per span along dir: the normal turn against max_angle_deg, the chord height against chord_tol, at least two on a curved span
+fn span_subs(
+    s: &NurbsSurface,
+    dir: usize,
+    sp: &[f64],
+    osp: &[f64],
+    max_angle_deg: f64,
+    chord_tol: f64,
+) -> Vec<usize> {
+    let degree = s.degree(dir);
+    let mut subs = vec![1; sp.len() - 1];
+    for i in 0..sp.len() - 1 {
+        if degree > 1 {
+            let angle = span_angle(s, dir, sp[i], sp[i + 1], osp);
+            subs[i] = ((angle / max_angle_deg).ceil() as usize).clamp(1, MAX_SUBS);
+        }
+        let dev = span_deviation(s, dir, sp[i], sp[i + 1], osp);
+        if dev > chord_tol {
+            subs[i] = subs[i].max(((dev / chord_tol).sqrt().ceil() as usize).clamp(2, MAX_SUBS));
+        }
+        if degree > 1 {
+            subs[i] = subs[i].max(2);
+        }
+    }
+    subs
+}
+
+/// Length of the iso-curve at fixed along dir as a polyline of n steps
+fn isocurve_length(s: &NurbsSurface, dir: usize, sp: &[f64], fixed: f64, n: usize) -> f64 {
+    let mut length = 0.0;
+    let mut prev = point_along(s, dir, sp[0], fixed);
+    for i in 1..=n {
+        let next = point_along(
+            s,
+            dir,
+            sp[0] + i as f64 * (sp[sp.len() - 1] - sp[0]) / n as f64,
+            fixed,
+        );
+        length += norm(&(&next - &prev));
+        prev = next;
+    }
+    length
+}
+
+/// Scale up the curved direction whose spacing is more than twice the other's
+fn balance_subs(
+    s: &NurbsSurface,
+    usp: &[f64],
+    vsp: &[f64],
+    u_subs: &mut [usize],
+    v_subs: &mut [usize],
+) {
+    let mut total_u = 1;
+    let mut total_v = 1;
+    for sub in u_subs.iter() {
+        total_u += sub;
+    }
+    for sub in v_subs.iter() {
+        total_v += sub;
+    }
+    let u_len = isocurve_length(
+        s,
+        0,
+        usp,
+        (vsp[0] + vsp[vsp.len() - 1]) * 0.5,
+        total_u.max(10),
+    );
+    let v_len = isocurve_length(
+        s,
+        1,
+        vsp,
+        (usp[0] + usp[usp.len() - 1]) * 0.5,
+        total_v.max(10),
+    );
+    if u_len <= 1e-14 || v_len <= 1e-14 {
+        return;
+    }
+    let ratio = (u_len / total_u as f64) / (v_len / total_v as f64);
+    if ratio > 2.0 && s.degree(0) > 1 {
+        let scale = ratio.sqrt();
+        for sub in u_subs.iter_mut() {
+            *sub = MAX_SUBS.min((*sub as f64 * scale).ceil() as usize);
+        }
+    } else if ratio < 0.5 && s.degree(1) > 1 {
+        let scale = (1.0 / ratio).sqrt();
+        for sub in v_subs.iter_mut() {
+            *sub = MAX_SUBS.min((*sub as f64 * scale).ceil() as usize);
+        }
+    }
+}
+
+/// Subdivisions both directions of a bilinear surface need for its twist, 1 when every span centre lies within twist_tol of its diagonal midpoint
+fn twist_subs(s: &NurbsSurface, usp: &[f64], vsp: &[f64], twist_tol: f64) -> usize {
+    let mut max_twist = 0.0_f64;
+    for i in 0..usp.len() - 1 {
+        for j in 0..vsp.len() - 1 {
+            let pm = s
+                .point_at((usp[i] + usp[i + 1]) * 0.5, (vsp[j] + vsp[j + 1]) * 0.5)
+                .unwrap_or_default();
+            let p00 = s.point_at(usp[i], vsp[j]).unwrap_or_default();
+            let p11 = s.point_at(usp[i + 1], vsp[j + 1]).unwrap_or_default();
+            max_twist = max_twist.max(norm(&(pm - Point::sum(&p00, &p11) * 0.5)));
+        }
+    }
+    if max_twist <= twist_tol {
+        return 1;
+    }
+    ((2.0 * (max_twist / twist_tol).sqrt()).ceil() as usize).clamp(4, MAX_SUBS)
+}
+
+/// One more subdivision on the largest span when the total is even, so a closed direction triangulates seamlessly
+fn make_odd(subs: &mut [usize]) {
+    let mut total = 0;
+    for sub in subs.iter() {
+        total += sub;
+    }
+    if total % 2 != 0 {
+        return;
+    }
+    let mut largest = 0;
+    for i in 1..subs.len() {
+        if subs[i] > subs[largest] {
+            largest = i;
+        }
+    }
+    subs[largest] += 1;
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Parameters
+// ═══════════════════════════════════════════════════════════════════════════
+
+/// n parameters spaced evenly by arc length along the iso-curve at fixed
+fn arclen_params(s: &NurbsSurface, dir: usize, n: usize, sp: &[f64], fixed: f64) -> Vec<f64> {
+    let nsample = (n * 20).max(200);
+    let mut st = vec![0.0; nsample + 1];
+    let mut sl = vec![0.0; nsample + 1];
+    let mut prev = point_along(s, dir, sp[0], fixed);
+    for k in 0..=nsample {
+        st[k] = sp[0] + k as f64 * (sp[sp.len() - 1] - sp[0]) / nsample as f64;
+        if k == 0 {
+            continue;
+        }
+        let next = point_along(s, dir, st[k], fixed);
+        sl[k] = sl[k - 1] + norm(&(&next - &prev));
+        prev = next;
+    }
+    let mut params = vec![sp[0]];
+    let mut j = 0;
+    for i in 1..n - 1 {
+        let target = sl[nsample] * i as f64 / (n - 1) as f64;
+        while j < nsample && sl[j] < target {
+            j += 1;
+        }
+        let a = if j > 0 { j - 1 } else { 0 };
+        let frac = if sl[j] > sl[a] {
+            (target - sl[a]) / (sl[j] - sl[a])
+        } else {
+            0.0
+        };
+        params.push(st[a] + frac * (st[j] - st[a]));
+    }
+    params.push(sp[sp.len() - 1]);
+    params
+}
+
+/// Every span split into its subdivisions, ending on the last span boundary
+fn span_params(sp: &[f64], subs: &[usize]) -> Vec<f64> {
+    let mut params = Vec::new();
+    for i in 0..sp.len() - 1 {
+        for sub in 0..subs[i] {
+            params.push(sp[i] + sub as f64 * (sp[i + 1] - sp[i]) / subs[i] as f64);
+        }
+    }
+    params.push(sp[sp.len() - 1]);
+    params
+}
+
+/// Closed direction: drop the duplicate end and fill a wrap gap wider than 1.5 times the largest step
+fn fix_closed_gap(params: &mut Vec<f64>, domain_end: f64) {
+    if params.len() < 3 {
+        return;
+    }
+    params.pop();
+    let wrap_gap = domain_end - params[params.len() - 1];
+    let mut max_gap = 0.0_f64;
+    for i in 1..params.len() {
+        max_gap = max_gap.max(params[i] - params[i - 1]);
+    }
+    if max_gap <= 0.0 || wrap_gap <= max_gap * 1.5 {
+        return;
+    }
+    let extra = (wrap_gap / max_gap).ceil() as usize - 1;
+    let step = wrap_gap / (extra + 1) as f64;
+    for _ in 1..=extra {
+        params.push(params[params.len() - 1] + step);
+    }
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Vertices and faces
+// ═══════════════════════════════════════════════════════════════════════════
+
+/// Vertex at S(u, v) tagged with its parameters
+fn add_vertex_uv(s: &NurbsSurface, mesh: &mut Mesh, u: f64, v: f64) -> usize {
+    let key = mesh.add_vertex(s.point_at(u, v).unwrap_or_default(), None);
+    mesh.vertex
+        .get_mut(&key)
+        .unwrap()
+        .attributes
+        .insert("u".to_string(), u);
+    mesh.vertex
+        .get_mut(&key)
+        .unwrap()
+        .attributes
+        .insert("v".to_string(), v);
+    key
+}
+
+/// Grid vertices row by row over us and the rows j_start..j_end of vs
+fn add_grid(
+    s: &NurbsSurface,
+    mesh: &mut Mesh,
+    us: &[f64],
+    vs: &[f64],
+    j_start: usize,
+    j_end: usize,
+) -> Vec<usize> {
+    let mut grid = Vec::new();
+    for &u in us {
+        for &v in &vs[j_start..j_end] {
+            grid.push(add_vertex_uv(s, mesh, u, v));
+        }
+    }
+    grid
+}
+
+/// Fans from the south pole, checkerboard-split quads, fans to the north pole
+fn add_faces(
+    mesh: &mut Mesh,
+    grid: &[usize],
+    nu: usize,
+    closed_u: bool,
+    wrap_v: bool,
+    south: Option<usize>,
+    north: Option<usize>,
+) {
+    let nv = grid.len() / nu;
+    let nu_faces = if closed_u { nu } else { nu - 1 };
+    let nv_faces = if wrap_v { nv } else { nv - 1 };
+    if let Some(south) = south {
+        for i in 0..nu_faces {
+            mesh.add_face(vec![south, grid[((i + 1) % nu) * nv], grid[i * nv]], None);
+        }
+    }
+    for i in 0..nu_faces {
+        for j in 0..nv_faces {
+            let i1 = (i + 1) % nu;
+            let j1 = (j + 1) % nv;
+            let v00 = grid[i * nv + j];
+            let v10 = grid[i1 * nv + j];
+            let v01 = grid[i * nv + j1];
+            let v11 = grid[i1 * nv + j1];
+            if (i + j) % 2 == 0 {
+                mesh.add_face(vec![v00, v10, v11], None);
+                mesh.add_face(vec![v00, v11, v01], None);
+            } else {
+                mesh.add_face(vec![v00, v10, v01], None);
+                mesh.add_face(vec![v10, v11, v01], None);
+            }
+        }
+    }
+    if let Some(north) = north {
+        for i in 0..nu_faces {
+            mesh.add_face(
+                vec![
+                    grid[i * nv + nv - 1],
+                    grid[((i + 1) % nu) * nv + nv - 1],
+                    north,
+                ],
+                None,
+            );
+        }
+    }
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Normals
+// ═══════════════════════════════════════════════════════════════════════════
+
+/// Sum of the unnormalized face normals around each vertex key, faces taken in key order
+fn fan_normals(mesh: &Mesh) -> Vec<Vector> {
+    let mut sums = vec![Vector::new(0.0, 0.0, 0.0); mesh.vertex.len()];
+    let mut face_keys: Vec<usize> = mesh.face.keys().copied().collect();
+    face_keys.sort_unstable();
+    for key in face_keys {
+        let vertices = &mesh.face[&key];
+        if vertices.len() < 3 {
+            continue;
+        }
+        let p0 = mesh.vertex[&vertices[0]].position();
+        let p1 = mesh.vertex[&vertices[1]].position();
+        let p2 = mesh.vertex[&vertices[2]].position();
+        let n = (&p1 - &p0).cross(&(&p2 - &p0));
+        for &vertex in vertices {
+            sums[vertex] += &n;
+        }
+    }
+    sums
+}
+
+/// Unit surface normal on the side of the fan normal; the fan normal at the poles and where the surface normal vanishes, +Z when the fan vanishes too
+fn set_normals(s: &NurbsSurface, mesh: &mut Mesh, south: Option<usize>, north: Option<usize>) {
+    let sums = fan_normals(mesh);
+    for (&key, vd) in mesh.vertex.iter_mut() {
+        let mut n = Vector::new(0.0, 0.0, 1.0);
+        let fan_length = norm(&sums[key]);
+        if fan_length.is_finite() && fan_length > 0.0 {
+            n = &sums[key] / fan_length;
+        }
+        if Some(key) != south && Some(key) != north {
+            let raw = raw_normal(
+                s,
+                *vd.attributes.get("u").unwrap(),
+                *vd.attributes.get("v").unwrap(),
+            );
+            let length = norm(&raw);
+            if length.is_finite() && length > 0.0 {
+                n = if raw.dot(&n) < 0.0 {
+                    -raw / length
+                } else {
+                    raw / length
+                };
+            }
+        }
+        vd.set_normal(n[0], n[1], n[2]);
+    }
+}
+
+/// Bit per direction where (u, v) sits on an internal knot of full multiplicity whose one-sided normals disagree
+fn crease_flags(s: &NurbsSurface, u: f64, v: f64) -> u32 {
+    let uv = [u, v];
+    let mut flags = 0;
+    for dir in 0..2 {
+        let (start, end) = s.domain(dir).unwrap_or_default();
+        let value = uv[dir];
+        if value <= start || value >= end {
+            continue;
+        }
+        if s.m_nurbsknot[dir]
+            .iter()
+            .filter(|&&knot| knot == value)
+            .count()
+            < s.degree(dir)
+        {
+            continue;
+        }
+        let mut lo = [u, v];
+        let mut hi = [u, v];
+        lo[dir] = value.next_down();
+        hi[dir] = value.next_up();
+        let a = s.normal_at(lo[0], lo[1]);
+        let b = s.normal_at(hi[0], hi[1]);
+        let length = (a.magnitude_squared() * b.magnitude_squared()).sqrt();
+        if length == 0.0 {
+            continue;
+        }
+        let dot = a.dot(&b) / length;
+        if dot.is_finite() && dot < 1.0 - 64.0 * f64::EPSILON {
+            flags |= 1 << dir;
+        }
+    }
+    flags
+}
+
+/// Nudge uv one ulp toward center in each flagged direction; bit per direction nudged upward
+fn crease_side(center: &[f64; 2], uv: &mut [f64; 2], flags: u32) -> u32 {
+    let mut side = 0;
+    for dir in 0..2 {
+        if flags & (1 << dir) == 0 {
+            continue;
+        }
+        let high = center[dir] > uv[dir];
+        if high {
+            side |= 1 << dir;
+        }
+        uv[dir] = if high {
+            uv[dir].next_up()
+        } else {
+            uv[dir].next_down()
+        };
+    }
+    side
+}
+
+/// Vertex carrying a corner: the original the first time its key is met, then one copy per (key, side)
+fn crease_target(
+    mesh: &mut Mesh,
+    copies: &mut HashMap<(usize, u32), usize>,
+    used: &mut HashSet<usize>,
+    key: usize,
+    side: u32,
+) -> usize {
+    let identity = (key, side);
+    if let Some(&target) = copies.get(&identity) {
+        return target;
+    }
+    if used.insert(key) {
+        copies.insert(identity, key);
+        return key;
+    }
+    let target = mesh.add_vertex(mesh.vertex[&key].position(), None);
+    mesh.vertex.insert(target, mesh.vertex[&key].clone());
+    copies.insert(identity, target);
+    target
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// RemeshNurbsSurfaceGrid
+// ═══════════════════════════════════════════════════════════════════════════
+
+/// Grid mesh of a NURBS surface: spans split by normal turn and chord height, poles fanned, seams closed
 pub struct RemeshNurbsSurfaceGrid;
 
 impl RemeshNurbsSurfaceGrid {
+    /// Grid at 20 degrees and 0.5 percent of the bbox diagonal; max_u and max_v fix the parameter counts when positive
     pub fn from_u_v(s: NurbsSurface, max_u: usize, max_v: usize) -> Mesh {
         Self::from_u_v_q(s, max_u, max_v, 20.0, 0.005)
     }
 
-    /// Adaptive grid mesh with explicit curvature controls. `max_angle_deg` caps the
-    /// normal deviation per subdivision (smaller → denser on curved spans) and
-    /// `chord_factor` is the chord-height tolerance as a fraction of the bbox diagonal
-    /// (smaller → denser). The defaults (20.0, 0.005) reproduce `from_u_v`.
-    /// Normals are finite unit surface normals aligned with winding. Singular poles use
-    /// area-weighted adjacent normals, accumulated in face-key order; zero/non-finite
-    /// estimates fall back to +Z. No world-unit tolerance gates normal normalization.
+    /// Grid with the normal turn per subdivision capped at max_angle_deg and the chord height at chord_factor of the bbox diagonal; vertex normals are unit surface normals on the fan side, fan normals at poles
     pub fn from_u_v_q(
         s: NurbsSurface,
         max_u: usize,
@@ -28,619 +552,93 @@ impl RemeshNurbsSurfaceGrid {
     ) -> Mesh {
         let usp = s.get_span_vector(0);
         let vsp = s.get_span_vector(1);
-        let ns_u = usp.len() - 1;
-        let ns_v = vsp.len() - 1;
-        let deg_u = s.degree(0);
-        let deg_v = s.degree(1);
-
-        let (mut minx, mut miny, mut minz) = (1e30_f64, 1e30_f64, 1e30_f64);
-        let (mut maxx, mut maxy, mut maxz) = (-1e30_f64, -1e30_f64, -1e30_f64);
-        for i in 0..s.cv_count_dir(Some(0)) {
-            for j in 0..s.cv_count_dir(Some(1)) {
-                if let Some(p) = s.get_cv(i, j) {
-                    if p[0] < minx {
-                        minx = p[0];
-                    }
-                    if p[1] < miny {
-                        miny = p[1];
-                    }
-                    if p[2] < minz {
-                        minz = p[2];
-                    }
-                    if p[0] > maxx {
-                        maxx = p[0];
-                    }
-                    if p[1] > maxy {
-                        maxy = p[1];
-                    }
-                    if p[2] > maxz {
-                        maxz = p[2];
-                    }
-                }
-            }
-        }
-        let dx = maxx - minx;
-        let dy = maxy - miny;
-        let dz = maxz - minz;
-        let bbox_diag = (dx * dx + dy * dy + dz * dz).sqrt();
-
-        let span_subs = |dir: usize, sp: &[f64], osp: &[f64]| -> Vec<usize> {
-            let n = sp.len() - 1;
-            let mut subs = vec![1usize; n];
-            let n_other = osp.len() - 1;
-            let s_positions: Vec<f64> = (0..n_other).map(|k| (osp[k] + osp[k + 1]) * 0.5).collect();
-            let degree_dir = if dir == 0 { deg_u } else { deg_v };
-            for i in 0..n {
-                let t0 = sp[i];
-                let t1 = sp[i + 1];
-                if degree_dir > 1 {
-                    let mut max_angle = 0.0_f64;
-                    for si in 0..n_other {
-                        let sv = s_positions[si];
-                        let mut fn3 = [0.0_f64; 3];
-                        let mut ln3 = [0.0_f64; 3];
-                        let mut has_first = false;
-                        for k in 0..=4 {
-                            let t = t0 + k as f64 * (t1 - t0) / 4.0;
-                            let nrm = if dir == 0 {
-                                s.normal_at(t, sv)
-                            } else {
-                                s.normal_at(sv, t)
-                            };
-                            let (nx, ny, nz) = (nrm[0], nrm[1], nrm[2]);
-                            let len = (nx * nx + ny * ny + nz * nz).sqrt();
-                            if len < 1e-10 {
-                                continue;
-                            }
-                            let (nx, ny, nz) = (nx / len, ny / len, nz / len);
-                            if !has_first {
-                                fn3 = [nx, ny, nz];
-                                has_first = true;
-                            }
-                            ln3 = [nx, ny, nz];
-                        }
-                        let total_angle = if has_first {
-                            let dot = (fn3[0] * ln3[0] + fn3[1] * ln3[1] + fn3[2] * ln3[2])
-                                .clamp(-1.0, 1.0);
-                            dot.acos() * 180.0 / Tolerance::PI
-                        } else {
-                            0.0
-                        };
-                        if total_angle > max_angle {
-                            max_angle = total_angle;
-                        }
-                    }
-                    subs[i] = ((max_angle / max_angle_deg).ceil() as usize).clamp(1, 24);
-                }
-
-                let chord_tol = bbox_diag * chord_factor;
-                let mut max_dev = 0.0_f64;
-                let nc = n_other.min(3);
-                for ci in 0..=nc {
-                    let sv = osp[0] + ci as f64 * (osp[osp.len() - 1] - osp[0]) / nc.max(1) as f64;
-                    let (p0, p1) = if dir == 0 {
-                        (s.point_at(t0, sv), s.point_at(t1, sv))
-                    } else {
-                        (s.point_at(sv, t0), s.point_at(sv, t1))
-                    };
-                    if let (Some(p0), Some(p1)) = (p0, p1) {
-                        let (px0, py0, pz0) = (p0[0], p0[1], p0[2]);
-                        let (px1, py1, pz1) = (p1[0], p1[1], p1[2]);
-                        for k in 1..=3 {
-                            let frac = k as f64 / 4.0;
-                            let tm = t0 + frac * (t1 - t0);
-                            let pm = if dir == 0 {
-                                s.point_at(tm, sv)
-                            } else {
-                                s.point_at(sv, tm)
-                            };
-                            if let Some(pm) = pm {
-                                let lx = px0 + frac * (px1 - px0);
-                                let ly = py0 + frac * (py1 - py0);
-                                let lz = pz0 + frac * (pz1 - pz0);
-                                let ddx = pm[0] - lx;
-                                let ddy = pm[1] - ly;
-                                let ddz = pm[2] - lz;
-                                let dev = (ddx * ddx + ddy * ddy + ddz * ddz).sqrt();
-                                if dev > max_dev {
-                                    max_dev = dev;
-                                }
-                            }
-                        }
-                    }
-                }
-                if max_dev > chord_tol {
-                    let chord_subs = ((max_dev / chord_tol).sqrt().ceil() as usize).clamp(2, 24);
-                    if chord_subs > subs[i] {
-                        subs[i] = chord_subs;
-                    }
-                }
-
-                if degree_dir > 1 && subs[i] < 2 {
-                    subs[i] = 2;
-                }
-            }
-            subs
-        };
-
-        let mut u_subs = span_subs(0, &usp, &vsp);
-        let mut v_subs = span_subs(1, &vsp, &usp);
-
-        // Arc-length aspect ratio balancing
-        {
-            let total_u = u_subs.iter().sum::<usize>() + 1;
-            let total_v = v_subs.iter().sum::<usize>() + 1;
-            let v_mid = (vsp[0] + vsp[vsp.len() - 1]) * 0.5;
-            let u_mid = (usp[0] + usp[usp.len() - 1]) * 0.5;
-            let mut u_len = 0.0_f64;
-            let n_sample_u = total_u.max(10);
-            if let Some(p0) = s.point_at(usp[0], v_mid) {
-                let mut prev = (p0[0], p0[1], p0[2]);
-                for i in 1..=n_sample_u {
-                    let u = usp[0] + i as f64 * (usp[usp.len() - 1] - usp[0]) / n_sample_u as f64;
-                    if let Some(p1) = s.point_at(u, v_mid) {
-                        let ddx = p1[0] - prev.0;
-                        let ddy = p1[1] - prev.1;
-                        let ddz = p1[2] - prev.2;
-                        u_len += (ddx * ddx + ddy * ddy + ddz * ddz).sqrt();
-                        prev = (p1[0], p1[1], p1[2]);
-                    }
-                }
-            }
-            let mut v_len = 0.0_f64;
-            let n_sample_v = total_v.max(10);
-            if let Some(p0) = s.point_at(u_mid, vsp[0]) {
-                let mut prev = (p0[0], p0[1], p0[2]);
-                for i in 1..=n_sample_v {
-                    let v = vsp[0] + i as f64 * (vsp[vsp.len() - 1] - vsp[0]) / n_sample_v as f64;
-                    if let Some(p1) = s.point_at(u_mid, v) {
-                        let ddx = p1[0] - prev.0;
-                        let ddy = p1[1] - prev.1;
-                        let ddz = p1[2] - prev.2;
-                        v_len += (ddx * ddx + ddy * ddy + ddz * ddz).sqrt();
-                        prev = (p1[0], p1[1], p1[2]);
-                    }
-                }
-            }
-            if u_len > 1e-14 && v_len > 1e-14 && total_u > 0 && total_v > 0 {
-                let spacing_u = u_len / total_u as f64;
-                let spacing_v = v_len / total_v as f64;
-                let ratio = spacing_u / spacing_v;
-                if ratio > 2.0 && deg_u > 1 {
-                    let scale = ratio.sqrt();
-                    for sv in &mut u_subs {
-                        *sv = ((*sv as f64 * scale).ceil() as usize).min(24);
-                    }
-                } else if ratio < 0.5 && deg_v > 1 {
-                    let scale = (1.0 / ratio).sqrt();
-                    for sv in &mut v_subs {
-                        *sv = ((*sv as f64 * scale).ceil() as usize).min(24);
-                    }
-                }
-            }
-        }
-
-        // Bilinear twist check (skip for singular surfaces — fan triangulation handles those)
-        if deg_u == 1 && deg_v == 1 && !s.is_singular(0) && !s.is_singular(2) {
-            let chord_tol = if bbox_diag > 0.0 {
-                bbox_diag * chord_factor
-            } else {
-                1e-6
-            };
-            let mut max_twist = 0.0_f64;
-            for i in 0..ns_u {
-                for j in 0..ns_v {
-                    let u0 = usp[i];
-                    let u1 = usp[i + 1];
-                    let v0 = vsp[j];
-                    let v1 = vsp[j + 1];
-                    let pm = s.point_at((u0 + u1) * 0.5, (v0 + v1) * 0.5);
-                    let p00 = s.point_at(u0, v0);
-                    let p11 = s.point_at(u1, v1);
-                    if let (Some(pm), Some(p00), Some(p11)) = (pm, p00, p11) {
-                        let mx = (p00[0] + p11[0]) * 0.5;
-                        let my = (p00[1] + p11[1]) * 0.5;
-                        let mz = (p00[2] + p11[2]) * 0.5;
-                        let ddx = pm[0] - mx;
-                        let ddy = pm[1] - my;
-                        let ddz = pm[2] - mz;
-                        let twist = (ddx * ddx + ddy * ddy + ddz * ddz).sqrt();
-                        if twist > max_twist {
-                            max_twist = twist;
-                        }
-                    }
-                }
-            }
-            if max_twist > chord_tol {
-                let twist_subs =
-                    ((2.0 * (max_twist / chord_tol).sqrt()).ceil() as usize).clamp(4, 24);
-                for sv in &mut u_subs {
-                    if *sv < twist_subs {
-                        *sv = twist_subs;
-                    }
-                }
-                for sv in &mut v_subs {
-                    if *sv < twist_subs {
-                        *sv = twist_subs;
-                    }
-                }
-            }
-        }
-
-        let closed_u = s.is_closed(0);
-        let closed_v = s.is_closed(1);
-
-        // Ensure odd total subdivisions for closed directions (seamless checkerboard triangulation)
-        if closed_u && max_u == 0 {
-            let total: usize = u_subs.iter().sum();
-            if total % 2 == 0 {
-                let m = (0..u_subs.len()).max_by_key(|&i| u_subs[i]).unwrap_or(0);
-                u_subs[m] += 1;
-            }
-        }
-        if closed_v && max_v == 0 {
-            let total: usize = v_subs.iter().sum();
-            if total % 2 == 0 {
-                let m = (0..v_subs.len()).max_by_key(|&i| v_subs[i]).unwrap_or(0);
-                v_subs[m] += 1;
-            }
-        }
-
-        let v_mid = (vsp[0] + vsp[vsp.len() - 1]) * 0.5;
-        let u_mid = (usp[0] + usp[usp.len() - 1]) * 0.5;
-
-        let arclen_params = |n: usize, sp: &[f64], fixed: f64, is_u: bool| -> Vec<f64> {
-            let nsample = (n * 20).max(200);
-            let st: Vec<f64> = (0..=nsample)
-                .map(|k| sp[0] + k as f64 * (sp[sp.len() - 1] - sp[0]) / nsample as f64)
-                .collect();
-            let mut sl = vec![0.0_f64; nsample + 1];
-            let p0 = if is_u {
-                s.point_at(sp[0], fixed)
-            } else {
-                s.point_at(fixed, sp[0])
-            };
-            let mut prev = p0.map(|p| (p[0], p[1], p[2])).unwrap_or((0.0, 0.0, 0.0));
-            for k in 1..=nsample {
-                let p1 = if is_u {
-                    s.point_at(st[k], fixed)
-                } else {
-                    s.point_at(fixed, st[k])
-                };
-                if let Some(p1) = p1 {
-                    let d = ((p1[0] - prev.0).powi(2)
-                        + (p1[1] - prev.1).powi(2)
-                        + (p1[2] - prev.2).powi(2))
-                    .sqrt();
-                    sl[k] = sl[k - 1] + d;
-                    prev = (p1[0], p1[1], p1[2]);
-                } else {
-                    sl[k] = sl[k - 1];
-                }
-            }
-            let total_len = sl[nsample];
-            let mut params = vec![sp[0]];
-            let mut j = 0usize;
-            for i in 1..(n - 1) {
-                let target = total_len * i as f64 / (n - 1) as f64;
-                while j < nsample && sl[j] < target {
-                    j += 1;
-                }
-                let ta = if j > 0 { st[j - 1] } else { st[0] };
-                let tb = st[j];
-                let la = if j > 0 { sl[j - 1] } else { sl[0] };
-                let lb = sl[j];
-                let frac = if lb > la {
-                    (target - la) / (lb - la)
-                } else {
-                    0.0
-                };
-                params.push(ta + frac * (tb - ta));
-            }
-            params.push(*sp.last().unwrap());
-            params
-        };
-
-        // Build parameter arrays
-        let us: Vec<f64> = if max_u > 0 {
-            arclen_params(max_u.max(2), &usp, v_mid, true)
-        } else {
-            let mut us = Vec::new();
-            for i in 0..ns_u {
-                for sv in 0..u_subs[i] {
-                    us.push(usp[i] + sv as f64 * (usp[i + 1] - usp[i]) / u_subs[i] as f64);
-                }
-            }
-            us.push(*usp.last().unwrap());
-            us
-        };
-        let vs: Vec<f64> = if max_v > 0 {
-            arclen_params(max_v.max(2), &vsp, u_mid, false)
-        } else {
-            let mut vs = Vec::new();
-            for i in 0..ns_v {
-                for sv in 0..v_subs[i] {
-                    vs.push(vsp[i] + sv as f64 * (vsp[i + 1] - vsp[i]) / v_subs[i] as f64);
-                }
-            }
-            vs.push(*vsp.last().unwrap());
-            vs
-        };
-
-        let fix_closed_gap = |params: Vec<f64>, spans: &[f64], closed: bool| -> Vec<f64> {
-            if !closed || params.len() < 3 {
-                return params;
-            }
-            let mut params = params;
-            params.pop();
-            let domain_end = *spans.last().unwrap();
-            let wrap_gap = domain_end - *params.last().unwrap();
-            let mut max_gap = 0.0_f64;
-            for i in 1..params.len() {
-                let g = params[i] - params[i - 1];
-                if g > max_gap {
-                    max_gap = g;
-                }
-            }
-            if max_gap > 0.0 && wrap_gap > max_gap * 1.5 {
-                let extra = ((wrap_gap / max_gap).ceil() as usize).saturating_sub(1);
-                let step = wrap_gap / (extra + 1) as f64;
-                for _ in 1..=extra {
-                    let last = *params.last().unwrap();
-                    params.push(last + step);
-                }
-            }
-            params
-        };
-
-        let us = fix_closed_gap(us, &usp, closed_u);
-        let vs = fix_closed_gap(vs, &vsp, closed_v);
-        let nu = us.len();
-        let nv_count = vs.len();
-
+        let bbox_diag = bbox_diagonal(&s);
+        let chord_tol = bbox_diag * chord_factor;
+        let mut u_subs = span_subs(&s, 0, &usp, &vsp, max_angle_deg, chord_tol);
+        let mut v_subs = span_subs(&s, 1, &vsp, &usp, max_angle_deg, chord_tol);
+        balance_subs(&s, &usp, &vsp, &mut u_subs, &mut v_subs);
         let sing_v0 = s.is_singular(0);
         let sing_v1 = s.is_singular(2);
-        let j_start: usize = if sing_v0 { 1 } else { 0 };
-        let j_end: usize = if sing_v1 { nv_count - 1 } else { nv_count };
-        let nv_grid = j_end - j_start;
-
-        let mut result = Mesh::new();
-        let mut south_pole: usize = 0;
-        let mut north_pole: usize = 0;
-        if sing_v0 {
-            if let Some(p) = s.point_at(us[0], vs[0]) {
-                south_pole = result.add_vertex(p, None);
-                if let Some(vd) = result.vertex.get_mut(&south_pole) {
-                    vd.attributes.insert("u".to_string(), us[0]);
-                    vd.attributes.insert("v".to_string(), vs[0]);
-                }
+        if s.degree(0) == 1 && s.degree(1) == 1 && !sing_v0 && !sing_v1 {
+            let twist = twist_subs(
+                &s,
+                &usp,
+                &vsp,
+                if bbox_diag > 0.0 { chord_tol } else { 1e-6 },
+            );
+            for sub in u_subs.iter_mut() {
+                *sub = (*sub).max(twist);
+            }
+            for sub in v_subs.iter_mut() {
+                *sub = (*sub).max(twist);
             }
         }
-        if sing_v1 {
-            if let Some(p) = s.point_at(us[0], vs[nv_count - 1]) {
-                north_pole = result.add_vertex(p, None);
-                if let Some(vd) = result.vertex.get_mut(&north_pole) {
-                    vd.attributes.insert("u".to_string(), us[0]);
-                    vd.attributes.insert("v".to_string(), vs[nv_count - 1]);
-                }
-            }
+        let closed_u = s.is_closed(0);
+        let closed_v = s.is_closed(1);
+        if closed_u && max_u == 0 {
+            make_odd(&mut u_subs);
         }
-        let mut vkey_grid: Vec<Vec<usize>> = Vec::new();
-        for i in 0..nu {
-            let mut row: Vec<usize> = Vec::new();
-            for j in j_start..j_end {
-                let p = s
-                    .point_at(us[i], vs[j])
-                    .unwrap_or(Point::new(0.0, 0.0, 0.0));
-                let vk = result.add_vertex(p, None);
-                if let Some(vd) = result.vertex.get_mut(&vk) {
-                    vd.attributes.insert("u".to_string(), us[i]);
-                    vd.attributes.insert("v".to_string(), vs[j]);
-                }
-                row.push(vk);
-            }
-            vkey_grid.push(row);
+        if closed_v && max_v == 0 {
+            make_odd(&mut v_subs);
         }
-
-        let grid_idx = |i: usize, j: usize| -> usize { vkey_grid[i][j - j_start] };
-
-        let nu_faces = if closed_u { nu } else { nu - 1 };
-
-        // South pole fan
-        if sing_v0 {
-            for i in 0..nu_faces {
-                let i1 = (i + 1) % nu;
-                result.add_face(
-                    vec![south_pole, grid_idx(i1, j_start), grid_idx(i, j_start)],
-                    None,
-                );
-            }
-        }
-
-        // Interior grid faces
-        let nv_interior = if closed_v && !sing_v0 && !sing_v1 {
-            nv_grid
+        let u_mid = (usp[0] + usp[usp.len() - 1]) * 0.5;
+        let v_mid = (vsp[0] + vsp[vsp.len() - 1]) * 0.5;
+        let mut us = if max_u > 0 {
+            arclen_params(&s, 0, max_u.max(2), &usp, v_mid)
         } else {
-            nv_grid - 1
+            span_params(&usp, &u_subs)
         };
-        for i in 0..nu_faces {
-            for jj in 0..nv_interior {
-                let j = jj + j_start;
-                let i1 = (i + 1) % nu;
-                let j1 = if closed_v && !sing_v0 && !sing_v1 {
-                    (jj + 1) % nv_grid + j_start
-                } else {
-                    j + 1
-                };
-                let v00 = grid_idx(i, j);
-                let v10 = grid_idx(i1, j);
-                let v01 = grid_idx(i, j1);
-                let v11 = grid_idx(i1, j1);
-                if (i + jj) % 2 == 0 {
-                    result.add_face(vec![v00, v10, v11], None);
-                    result.add_face(vec![v00, v11, v01], None);
-                } else {
-                    result.add_face(vec![v00, v10, v01], None);
-                    result.add_face(vec![v10, v11, v01], None);
-                }
-            }
+        let mut vs = if max_v > 0 {
+            arclen_params(&s, 1, max_v.max(2), &vsp, u_mid)
+        } else {
+            span_params(&vsp, &v_subs)
+        };
+        if closed_u {
+            fix_closed_gap(&mut us, usp[usp.len() - 1]);
         }
-
-        // North pole fan
+        if closed_v {
+            fix_closed_gap(&mut vs, vsp[vsp.len() - 1]);
+        }
+        let nv = vs.len();
+        let mut mesh = Mesh::new();
+        let mut south = None;
+        let mut north = None;
+        if sing_v0 {
+            south = Some(add_vertex_uv(&s, &mut mesh, us[0], vs[0]));
+        }
         if sing_v1 {
-            let j_last = j_end - 1;
-            for i in 0..nu_faces {
-                let i1 = (i + 1) % nu;
-                result.add_face(
-                    vec![grid_idx(i, j_last), grid_idx(i1, j_last), north_pole],
-                    None,
-                );
-            }
+            north = Some(add_vertex_uv(&s, &mut mesh, us[0], vs[nv - 1]));
         }
-
-        // Compute vertex normals from face normals
-        let mut vn_map: HashMap<usize, (f64, f64, f64)> = HashMap::new();
-        for vk in result.vertex.keys() {
-            vn_map.insert(*vk, (0.0, 0.0, 0.0));
-        }
-        let mut face_keys: Vec<usize> = result.face.keys().cloned().collect();
-        face_keys.sort_unstable();
-        for fk in &face_keys {
-            if let Some(vids) = result.face.get(fk) {
-                if vids.len() < 3 {
-                    continue;
-                }
-                let pos0 = result
-                    .vertex
-                    .get(&vids[0])
-                    .map(|v| v.position())
-                    .unwrap_or(Point::new(0.0, 0.0, 0.0));
-                let pos1 = result
-                    .vertex
-                    .get(&vids[1])
-                    .map(|v| v.position())
-                    .unwrap_or(Point::new(0.0, 0.0, 0.0));
-                let pos2 = result
-                    .vertex
-                    .get(&vids[2])
-                    .map(|v| v.position())
-                    .unwrap_or(Point::new(0.0, 0.0, 0.0));
-                let e1x = pos1[0] - pos0[0];
-                let e1y = pos1[1] - pos0[1];
-                let e1z = pos1[2] - pos0[2];
-                let e2x = pos2[0] - pos0[0];
-                let e2y = pos2[1] - pos0[1];
-                let e2z = pos2[2] - pos0[2];
-                let fnx = e1y * e2z - e1z * e2y;
-                let fny = e1z * e2x - e1x * e2z;
-                let fnz = e1x * e2y - e1y * e2x;
-                let vids_clone: Vec<usize> = vids.clone();
-                for vi in vids_clone {
-                    let e = vn_map.entry(vi).or_insert((0.0, 0.0, 0.0));
-                    e.0 += fnx;
-                    e.1 += fny;
-                    e.2 += fnz;
-                }
-            }
-        }
-        let vkeys: Vec<usize> = result.vertex.keys().cloned().collect();
-        for vk in vkeys {
-            // Winding-consistent direction from the accumulated face normals.
-            let (mut fx, mut fy, mut fz) = vn_map.get(&vk).copied().unwrap_or((0.0, 0.0, 1.0));
-            let flen = (fx * fx + fy * fy + fz * fz).sqrt();
-            if flen.is_finite() && flen > 0.0 {
-                fx /= flen;
-                fy /= flen;
-                fz /= flen;
-            } else {
-                fx = 0.0;
-                fy = 0.0;
-                fz = 1.0;
-            }
-            // Prefer the ANALYTIC surface normal at this vertex's (u,v) — smooth shading
-            // like Rhino, which stays smooth even on a coarse mesh — oriented to agree
-            // with the mesh winding. Fall back to the face normal at poles / where the
-            // analytic normal is degenerate.
-            let uv = result.vertex.get(&vk).and_then(|vd| {
-                match (vd.attributes.get("u"), vd.attributes.get("v")) {
-                    (Some(&u), Some(&v)) => Some((u, v)),
-                    _ => None,
-                }
-            });
-            // At a singular pole (e.g. a cone apex or sphere pole) the analytic normal is
-            // degenerate, so keep the face-averaged normal there — evaluating normal_at at
-            // the pole produced a black/garbage tip.
-            let is_pole = (sing_v0 && vk == south_pole) || (sing_v1 && vk == north_pole);
-            let (mut nx, mut ny, mut nz) = (fx, fy, fz);
-            if !is_pole {
-                if let Some((u, v)) = uv {
-                    // Read the derivative cross: normal_at returns a +Z sentinel at U poles.
-                    let derivatives = s.evaluate(u, v, 1);
-                    let mut na = [0.0; 3];
-                    if derivatives.len() >= 3 {
-                        let normal = derivatives[2].cross(&derivatives[1]);
-                        na = [normal[0], normal[1], normal[2]];
-                    }
-                    let nl = (na[0] * na[0] + na[1] * na[1] + na[2] * na[2]).sqrt();
-                    if nl.is_finite() && nl > 0.0 {
-                        let (mut ax, mut ay, mut az) = (na[0] / nl, na[1] / nl, na[2] / nl);
-                        if ax * fx + ay * fy + az * fz < 0.0 {
-                            ax = -ax;
-                            ay = -ay;
-                            az = -az;
-                        }
-                        nx = ax;
-                        ny = ay;
-                        nz = az;
-                    }
-                }
-            }
-            if let Some(vd) = result.vertex.get_mut(&vk) {
-                vd.set_normal(nx, ny, nz);
-            }
-        }
-
-        Self::split_crease_normals(&s, &mut result);
-        result
+        let grid = add_grid(
+            &s,
+            &mut mesh,
+            &us,
+            &vs,
+            if sing_v0 { 1 } else { 0 },
+            if sing_v1 { nv - 1 } else { nv },
+        );
+        add_faces(
+            &mut mesh,
+            &grid,
+            us.len(),
+            closed_u,
+            closed_v && !sing_v0 && !sing_v1,
+            south,
+            north,
+        );
+        set_normals(&s, &mut mesh, south, north);
+        Self::split_crease_normals(&s, &mut mesh);
+        mesh
     }
-    /// Split shading vertices only at internal C0 knots with different one-sided normals.
-    /// Exact positions and UV samples stay unchanged; coincident smooth knot joins stay shared.
+
+    /// Split shading vertices at internal C0 knots whose one-sided normals disagree
     pub(crate) fn split_crease_normals(s: &NurbsSurface, mesh: &mut Mesh) {
-        let mut candidates = HashMap::<usize, u8>::new();
+        let mut candidates = HashMap::<usize, u32>::new();
         for (&key, vd) in &mesh.vertex {
             let (Some(&u), Some(&v)) = (vd.attributes.get("u"), vd.attributes.get("v")) else {
                 continue;
             };
-            let uv = [u, v];
-            let mut flags = 0;
-            for dir in 0..2 {
-                let Some((start, end)) = s.domain(dir) else {
-                    continue;
-                };
-                let value = uv[dir];
-                if value <= start || value >= end {
-                    continue;
-                }
-                let multiplicity = s.m_nurbsknot[dir]
-                    .iter()
-                    .filter(|&&knot| knot == value)
-                    .count();
-                if multiplicity < s.degree(dir) {
-                    continue;
-                }
-                let mut lo = uv;
-                let mut hi = uv;
-                lo[dir] = value.next_down();
-                hi[dir] = value.next_up();
-                let a = s.normal_at(lo[0], lo[1]);
-                let b = s.normal_at(hi[0], hi[1]);
-                let aa = a[0] * a[0] + a[1] * a[1] + a[2] * a[2];
-                let bb = b[0] * b[0] + b[1] * b[1] + b[2] * b[2];
-                let dot = (a[0] * b[0] + a[1] * b[1] + a[2] * b[2]) / (aa * bb).sqrt();
-                if dot.is_finite() && dot < 1.0 - 64.0 * f64::EPSILON {
-                    flags |= 1 << dir;
-                }
-            }
+            let flags = crease_flags(s, u, v);
             if flags != 0 {
                 candidates.insert(key, flags);
             }
@@ -648,78 +646,49 @@ impl RemeshNurbsSurfaceGrid {
         if candidates.is_empty() {
             return;
         }
-        let mut copies = HashMap::<(usize, u8), usize>::new();
-        let mut used = std::collections::HashSet::new();
+        let mut copies = HashMap::<(usize, u32), usize>::new();
+        let mut used = HashSet::<usize>::new();
         let mut face_keys: Vec<usize> = mesh.face.keys().copied().collect();
         face_keys.sort_unstable();
         for face_key in face_keys {
-            let vertices = mesh.face[&face_key].clone();
-            let mut center = [0.0; 2];
-            for key in &vertices {
-                center[0] += mesh.vertex[key].attributes.get("u").copied().unwrap_or(0.0);
-                center[1] += mesh.vertex[key].attributes.get("v").copied().unwrap_or(0.0);
+            let mut vertices = mesh.face[&face_key].clone();
+            let mut center = [0.0, 0.0];
+            for &key in &vertices {
+                center[0] += mesh.vertex[&key].attributes.get("u").unwrap();
+                center[1] += mesh.vertex[&key].attributes.get("v").unwrap();
             }
             center[0] /= vertices.len() as f64;
             center[1] /= vertices.len() as f64;
             let face_normal = mesh.face_normal(face_key);
-            let mut split = vertices.clone();
-            for (corner, &key) in vertices.iter().enumerate() {
+            for slot in vertices.iter_mut() {
+                let key = *slot;
                 let Some(&flags) = candidates.get(&key) else {
                     continue;
                 };
-                let original = mesh.vertex[&key].clone();
                 let mut uv = [
-                    *original.attributes.get("u").unwrap(),
-                    *original.attributes.get("v").unwrap(),
+                    *mesh.vertex[&key].attributes.get("u").unwrap(),
+                    *mesh.vertex[&key].attributes.get("v").unwrap(),
                 ];
-                let mut side = 0;
-                for dir in 0..2 {
-                    if flags & (1 << dir) == 0 {
-                        continue;
-                    }
-                    if center[dir] > uv[dir] {
-                        side |= 1 << dir;
-                        uv[dir] = uv[dir].next_up();
-                    } else {
-                        uv[dir] = uv[dir].next_down();
-                    }
-                }
-                let target = if let Some(&target) = copies.get(&(key, side)) {
-                    target
-                } else {
-                    let target = if used.insert(key) {
-                        key
-                    } else {
-                        let target = mesh.add_vertex(original.position(), None);
-                        mesh.vertex.insert(target, original);
-                        target
-                    };
-                    copies.insert((key, side), target);
-                    target
-                };
+                let side = crease_side(&center, &mut uv, flags);
+                let target = crease_target(mesh, &mut copies, &mut used, key, side);
                 let n = s.normal_at(uv[0], uv[1]);
-                let length = (n[0] * n[0] + n[1] * n[1] + n[2] * n[2]).sqrt();
+                let length = norm(&n);
                 if length.is_finite() && length > 0.0 {
-                    let mut sign = 1.0;
-                    if let Some(ref f) = face_normal {
-                        if n[0] * f[0] + n[1] * f[1] + n[2] * f[2] < 0.0 {
-                            sign = -1.0;
-                        }
-                    }
+                    let sign = if face_normal.as_ref().is_some_and(|f| n.dot(f) < 0.0) {
+                        -1.0
+                    } else {
+                        1.0
+                    };
                     mesh.vertex.get_mut(&target).unwrap().set_normal(
                         sign * n[0] / length,
                         sign * n[1] / length,
                         sign * n[2] / length,
                     );
                 }
-                split[corner] = target;
+                *slot = target;
             }
-            mesh.face.insert(face_key, split);
+            mesh.face.insert(face_key, vertices);
         }
         mesh.rebuild_halfedges();
     }
-}
-
-pub fn remesh_nurbssurface_grid(surface: NurbsSurface, max_u: usize, max_v: usize) -> Mesh {
-    RemeshNurbsSurfaceGrid::from_u_v(surface, max_u, max_v)
 }

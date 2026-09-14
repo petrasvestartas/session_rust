@@ -55,7 +55,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let min = Point::new(214.0, 192.0, 484.0);
     let max = Point::new(694.0, 567.0, 796.0);
     let pts = vec![min.clone(), max.clone()];
-    let bbox = OBB::from_points(&pts, 0.0);
+    let bbox = OBB::from_points(&pts, 0.0, None);
     if let Some(intersection_points) = session_rust::intersection::ray_box(&l0, &bbox, 0.0, 1000.0)
     {
         if intersection_points.len() >= 2 {
@@ -125,7 +125,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                         vertices[t[1]].clone(),
                         vertices[t[2]].clone(),
                     ];
-                    tri_boxes.push(OBB::from_points(&pts, 0.0));
+                    tri_boxes.push(OBB::from_points(&pts, 0.0, None));
                 }
             }
         }
@@ -385,7 +385,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     for i in 0..7 {
         let origin = Point::new(i as f64 * 500.0, 0.0, 0.0);
         let normal = Vector::new(1.0, 0.0, 0.0);
-        planes.push(Plane::from_point_normal(origin, normal));
+        planes.push(Plane::from_point_normal(origin, normal, None));
     }
 
     println!("\nIntersecting curve with {} planes:", planes.len());

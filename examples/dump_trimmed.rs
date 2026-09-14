@@ -82,7 +82,7 @@ fn write_obj(name: &str, m: &Mesh) {
 }
 
 fn flat_srf(cx: f32, cy: f32, r: f32) -> NurbsSurface {
-    let mut srf = NurbsSurface::create_raw(3, false, 2, 2, 2, 2, false, false, 1.0, 1.0).unwrap();
+    let mut srf = NurbsSurface::new(3, false, 2, 2, 2, 2);
     srf.set_cv(0, 0, &Point::new((cx - r) as f64, (cy - r) as f64, 0.0));
     srf.set_cv(1, 0, &Point::new((cx + r) as f64, (cy - r) as f64, 0.0));
     srf.set_cv(0, 1, &Point::new((cx - r) as f64, (cy + r) as f64, 0.0));

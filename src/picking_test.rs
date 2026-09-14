@@ -320,7 +320,7 @@ mod picking_tests {
                     Point::new(cx - r, cy - r, cz - r),
                     Point::new(cx + r, cy + r, cz + r),
                 ];
-                OBB::from_points(&pts, 1.0)
+                OBB::from_points(&pts, 1.0, None)
             })
             .collect();
 

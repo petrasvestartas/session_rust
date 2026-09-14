@@ -1,10 +1,14 @@
-use crate::{Color, Point, Vector, Xform};
+use crate::tolerance::Tolerance;
+use crate::tolerance::TOLERANCE;
+use crate::{Color, Point, Polyline, Vector, Xform};
 use serde::{Deserialize, Serialize};
 use std::fmt;
 use std::ops::{
     Add, AddAssign, Div, DivAssign, Index, IndexMut, Mul, MulAssign, Neg, Sub, SubAssign,
 };
+use std::sync::OnceLock;
 
+/// A 3D line segment with display width, dash pattern and color
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(tag = "type", rename = "Line")]
 pub struct Line {
@@ -12,8 +16,11 @@ pub struct Line {
         serialize_with = "crate::guid_serde::serialize",
         deserialize_with = "crate::guid_serde::deserialize"
     )]
-    guid: std::sync::OnceLock<String>,
+    guid: OnceLock<String>,
     pub name: String,
+    pub width: f64,
+    pub dash: Vec<f64>,
+    pub linecolor: Color,
     #[serde(rename = "x0")]
     _x0: f64,
     #[serde(rename = "y0")]
@@ -26,173 +33,36 @@ pub struct Line {
     _y1: f64,
     #[serde(rename = "z1")]
     _z1: f64,
-    pub width: f64,
-    /// Dash pattern: alternating on/off lengths in mm, repeating. Empty = solid.
-    pub dash: Vec<f64>,
-    pub linecolor: Color,
 }
 
 impl Default for Line {
     fn default() -> Self {
-        Self {
-            _x0: 0.0,
-            _y0: 0.0,
-            _z0: 0.0,
-            _x1: 0.0,
-            _y1: 0.0,
-            _z1: 1.0,
-            guid: std::sync::OnceLock::new(),
-            name: "my_line".to_string(),
-            linecolor: Color::black(),
-            width: 1.0,
-            dash: Vec::new(),
-        }
+        Self::new(0.0, 0.0, 0.0, 0.0, 0.0, 1.0)
     }
 }
 
 impl Line {
     pub fn new(x0: f64, y0: f64, z0: f64, x1: f64, y1: f64, z1: f64) -> Self {
         Self {
+            guid: OnceLock::new(),
+            name: "my_line".to_string(),
+            width: 1.0,
+            dash: Vec::new(),
+            linecolor: Color::black(),
             _x0: x0,
             _y0: y0,
             _z0: z0,
             _x1: x1,
             _y1: y1,
             _z1: z1,
-            ..Default::default()
         }
     }
 
-    pub fn with_name(name: &str, x0: f64, y0: f64, z0: f64, x1: f64, y1: f64, z1: f64) -> Self {
-        Self {
-            name: name.to_string(),
-            _x0: x0,
-            _y0: y0,
-            _z0: z0,
-            _x1: x1,
-            _y1: y1,
-            _z1: z1,
-            ..Default::default()
-        }
-    }
-
-    pub fn from_points(p1: &Point, p2: &Point) -> Self {
-        Self::new(p1[0], p1[1], p1[2], p2[0], p2[1], p2[2])
-    }
-
-    /// Fit a line to a set of points using least squares (PCA).
-    ///
-    /// Uses Principal Component Analysis to find the best-fit line
-    /// that minimizes perpendicular distances to all points.
-    ///
-    /// # Arguments
-    /// * `points` - Slice of points to fit (minimum 2 required)
-    /// * `length` - Optional length of resulting line (None = auto from extent)
-    ///
-    /// # Panics
-    /// Panics if fewer than 2 points are provided.
-    pub fn fit_points(points: &[Point], length: Option<f64>) -> Self {
-        if points.len() < 2 {
-            panic!("At least 2 points are required for line fitting");
-        }
-
-        let n = points.len() as f64;
-
-        // Compute centroid
-        let (mut cx, mut cy, mut cz) = (0.0, 0.0, 0.0);
-        for p in points {
-            cx += p[0];
-            cy += p[1];
-            cz += p[2];
-        }
-        cx /= n;
-        cy /= n;
-        cz /= n;
-
-        // Compute covariance matrix elements
-        let (mut cxx, mut cyy, mut czz) = (0.0, 0.0, 0.0);
-        let (mut cxy, mut cxz, mut cyz) = (0.0, 0.0, 0.0);
-        for p in points {
-            let dx = p[0] - cx;
-            let dy = p[1] - cy;
-            let dz = p[2] - cz;
-            cxx += dx * dx;
-            cyy += dy * dy;
-            czz += dz * dz;
-            cxy += dx * dy;
-            cxz += dx * dz;
-            cyz += dy * dz;
-        }
-
-        // Power iteration to find dominant eigenvector
-        let (mut vx, mut vy, mut vz) = (1.0, 0.0, 0.0);
-        for _ in 0..100 {
-            let nx = cxx * vx + cxy * vy + cxz * vz;
-            let ny = cxy * vx + cyy * vy + cyz * vz;
-            let nz = cxz * vx + cyz * vy + czz * vz;
-            let mag = (nx * nx + ny * ny + nz * nz).sqrt();
-            if mag < 1e-15 {
-                break;
-            }
-            vx = nx / mag;
-            vy = ny / mag;
-            vz = nz / mag;
-        }
-
-        // Determine line extent from projected points
-        let half_len = match length {
-            Some(len) => len / 2.0,
-            None => {
-                let (mut t_min, mut t_max): (f64, f64) = (0.0, 0.0);
-                for p in points {
-                    let dx = p[0] - cx;
-                    let dy = p[1] - cy;
-                    let dz = p[2] - cz;
-                    let t = dx * vx + dy * vy + dz * vz;
-                    t_min = t_min.min(t);
-                    t_max = t_max.max(t);
-                }
-                let hl = t_min.abs().max(t_max.abs());
-                if hl < 1e-10 {
-                    0.5
-                } else {
-                    hl
-                }
-            }
-        };
-
-        // Create line from centroid +/- direction * half_len
-        Self::new(
-            cx - vx * half_len,
-            cy - vy * half_len,
-            cz - vz * half_len,
-            cx + vx * half_len,
-            cy + vy * half_len,
-            cz + vz * half_len,
-        )
-    }
-
-    pub fn from_point_and_vector(point: &Point, vector: &Vector) -> Self {
-        Self::new(
-            point[0],
-            point[1],
-            point[2],
-            point[0] + vector[0],
-            point[1] + vector[1],
-            point[2] + vector[2],
-        )
-    }
-
-    pub fn from_point_direction_length(point: &Point, direction: &Vector, length: f64) -> Self {
-        let d = direction.normalized();
-        Self::new(
-            point[0],
-            point[1],
-            point[2],
-            point[0] + d[0] * length,
-            point[1] + d[1] * length,
-            point[2] + d[2] * length,
-        )
+    /// Copy (new guid, same data)
+    pub fn duplicate(&self) -> Self {
+        let mut copy = self.clone();
+        copy.guid = OnceLock::new();
+        copy
     }
 
     pub fn has_guid(&self) -> bool {
@@ -207,25 +77,134 @@ impl Line {
         let _ = self.guid.set(g);
     }
 
-    /// Clear the guid so a FRESH one mints lazily on next read — the duplicate/copy enabler.
+    /// Clear the guid so a fresh one mints lazily on next read
     pub fn refresh_guid(&mut self) {
-        self.guid = std::sync::OnceLock::new();
+        self.guid = OnceLock::new();
     }
 
-    /// Create a duplicate with a new GUID.
-    pub fn duplicate(&self) -> Self {
-        let mut copy = self.clone();
-        copy.guid = std::sync::OnceLock::new();
-        copy
+    // ═══════════════════════════════════════════════════════════════════════════
+    // Static constructors
+    // ═══════════════════════════════════════════════════════════════════════════
+
+    pub fn from_points(p1: &Point, p2: &Point) -> Self {
+        Self::new(p1[0], p1[1], p1[2], p2[0], p2[1], p2[2])
     }
 
+    /// Line from point to point + vector
+    pub fn from_point_and_vector(point: &Point, vector: &Vector) -> Self {
+        Self::new(
+            point[0],
+            point[1],
+            point[2],
+            point[0] + vector[0],
+            point[1] + vector[1],
+            point[2] + vector[2],
+        )
+    }
+
+    /// Line from point along the normalized direction
+    pub fn from_point_direction_length(point: &Point, direction: &Vector, length: f64) -> Self {
+        let d = direction.normalized();
+        Self::new(
+            point[0],
+            point[1],
+            point[2],
+            point[0] + d[0] * length,
+            point[1] + d[1] * length,
+            point[2] + d[2] * length,
+        )
+    }
+
+    /// Least-squares line through points by power-iteration PCA; None spans the projected extent
+    pub fn fit_points(points: &[Point], length: Option<f64>) -> Self {
+        if points.len() < 2 {
+            panic!("At least 2 points are required for line fitting");
+        }
+        let n = points.len() as f64;
+        let mut cx = 0.0;
+        let mut cy = 0.0;
+        let mut cz = 0.0;
+        for p in points {
+            cx += p[0];
+            cy += p[1];
+            cz += p[2];
+        }
+        cx /= n;
+        cy /= n;
+        cz /= n;
+        let mut cxx = 0.0;
+        let mut cyy = 0.0;
+        let mut czz = 0.0;
+        let mut cxy = 0.0;
+        let mut cxz = 0.0;
+        let mut cyz = 0.0;
+        for p in points {
+            let dx = p[0] - cx;
+            let dy = p[1] - cy;
+            let dz = p[2] - cz;
+            cxx += dx * dx;
+            cyy += dy * dy;
+            czz += dz * dz;
+            cxy += dx * dy;
+            cxz += dx * dz;
+            cyz += dy * dz;
+        }
+        let mut vx = 1.0;
+        let mut vy = 0.0;
+        let mut vz = 0.0;
+        for _ in 0..100 {
+            let nx = cxx * vx + cxy * vy + cxz * vz;
+            let ny = cxy * vx + cyy * vy + cyz * vz;
+            let nz = cxz * vx + cyz * vy + czz * vz;
+            let mag = (nx * nx + ny * ny + nz * nz).sqrt();
+            if mag < 1e-15 {
+                break;
+            }
+            vx = nx / mag;
+            vy = ny / mag;
+            vz = nz / mag;
+        }
+        let mut half = length.unwrap_or(0.0) / 2.0;
+        if length.unwrap_or(0.0) <= 0.0 {
+            let mut t_min: f64 = 0.0;
+            let mut t_max: f64 = 0.0;
+            for p in points {
+                let t = (p[0] - cx) * vx + (p[1] - cy) * vy + (p[2] - cz) * vz;
+                t_min = t_min.min(t);
+                t_max = t_max.max(t);
+            }
+            half = t_min.abs().max(t_max.abs());
+            if half < 1e-10 {
+                half = 0.5;
+            }
+        }
+        Self::new(
+            cx - vx * half,
+            cy - vy * half,
+            cz - vz * half,
+            cx + vx * half,
+            cy + vy * half,
+            cz + vz * half,
+        )
+    }
+
+    /// Named line from coordinates
+    pub fn with_name(name: &str, x0: f64, y0: f64, z0: f64, x1: f64, y1: f64, z1: f64) -> Self {
+        let mut line = Self::new(x0, y0, z0, x1, y1, z1);
+        line.name = name.to_string();
+        line
+    }
+
+    // ═══════════════════════════════════════════════════════════════════════════
+    // Transformation
+    // ═══════════════════════════════════════════════════════════════════════════
+
+    /// Transform in place
     pub fn transform(&mut self, xform: &Xform) {
         let mut start = Point::new(self._x0, self._y0, self._z0);
         let mut end = Point::new(self._x1, self._y1, self._z1);
-
         start.transform(xform);
         end.transform(xform);
-
         self._x0 = start[0];
         self._y0 = start[1];
         self._z0 = start[2];
@@ -234,17 +213,19 @@ impl Line {
         self._z1 = end[2];
     }
 
+    /// Transformed copy
     pub fn transformed(&self, xform: &Xform) -> Self {
         let mut result = self.clone();
         result.transform(xform);
         result
     }
 
+    // ═══════════════════════════════════════════════════════════════════════════
+    // Geometry
+    // ═══════════════════════════════════════════════════════════════════════════
+
     pub fn length(&self) -> f64 {
-        let dx = self._x1 - self._x0;
-        let dy = self._y1 - self._y0;
-        let dz = self._z1 - self._z0;
-        (dx * dx + dy * dy + dz * dz).sqrt()
+        self.squared_length().sqrt()
     }
 
     pub fn squared_length(&self) -> f64 {
@@ -254,6 +235,7 @@ impl Line {
         dx * dx + dy * dy + dz * dz
     }
 
+    /// Vector from start to end
     pub fn to_vector(&self) -> Vector {
         Vector::new(
             self._x1 - self._x0,
@@ -262,68 +244,9 @@ impl Line {
         )
     }
 
+    /// Unit vector from start to end
     pub fn to_direction(&self) -> Vector {
         self.to_vector().normalized()
-    }
-
-    pub fn point_at(&self, t: f64) -> Point {
-        let s = 1.0 - t;
-        Point::new(
-            s * self._x0 + t * self._x1,
-            s * self._y0 + t * self._y1,
-            s * self._z0 + t * self._z1,
-        )
-    }
-
-    /// Extend both endpoints of this line by `distance` along its tangent.
-    /// Negative `distance` shortens the line; if the requested shortening
-    /// would collapse the line to zero length, the line is left unchanged.
-    /// Mirrors the wood-library helper `cgal::polyline_util::extend_equally`.
-    pub fn extend_equally(&mut self, distance: f64) {
-        let len = self.length();
-        if len < crate::tolerance::Tolerance::ZERO_TOLERANCE {
-            return;
-        }
-        // Don't allow the line to collapse to zero or invert.
-        if distance < 0.0 && (-distance) * 2.0 >= len {
-            return;
-        }
-        let inv_len = 1.0 / len;
-        let dx = (self._x1 - self._x0) * inv_len * distance;
-        let dy = (self._y1 - self._y0) * inv_len * distance;
-        let dz = (self._z1 - self._z0) * inv_len * distance;
-        self._x0 -= dx;
-        self._y0 -= dy;
-        self._z0 -= dz;
-        self._x1 += dx;
-        self._y1 += dy;
-        self._z1 += dz;
-    }
-
-    /// Subdivide line into n points.
-    pub fn subdivide(&self, n: usize) -> Vec<Point> {
-        if n < 2 {
-            panic!("n must be at least 2");
-        }
-        let mut points = Vec::with_capacity(n);
-        for i in 0..n {
-            let t = i as f64 / (n - 1) as f64;
-            points.push(self.point_at(t));
-        }
-        points
-    }
-
-    /// Subdivide line by approximate distance between points.
-    pub fn subdivide_by_distance(&self, distance: f64) -> Vec<Point> {
-        if distance <= 0.0 {
-            panic!("distance must be positive");
-        }
-        let len = self.length();
-        if len < 1e-10 {
-            return vec![self.start(), self.end()];
-        }
-        let n = 2.max((len / distance + 0.5) as usize + 1);
-        self.subdivide(n)
     }
 
     pub fn start(&self) -> Point {
@@ -342,6 +265,42 @@ impl Line {
         )
     }
 
+    /// Point at parameter t (0 = start, 1 = end)
+    pub fn point_at(&self, t: f64) -> Point {
+        let s = 1.0 - t;
+        Point::new(
+            s * self._x0 + t * self._x1,
+            s * self._y0 + t * self._y1,
+            s * self._z0 + t * self._z1,
+        )
+    }
+
+    /// n evenly spaced points including both ends
+    pub fn subdivide(&self, n: usize) -> Vec<Point> {
+        if n < 2 {
+            panic!("n must be at least 2");
+        }
+        let mut points = Vec::with_capacity(n);
+        for i in 0..n {
+            points.push(self.point_at(i as f64 / (n - 1) as f64));
+        }
+        points
+    }
+
+    /// Points spaced approximately distance apart including both ends
+    pub fn subdivide_by_distance(&self, distance: f64) -> Vec<Point> {
+        if distance <= 0.0 {
+            panic!("distance must be positive");
+        }
+        let total = self.length();
+        if total < 1e-10 {
+            return vec![self.start(), self.end()];
+        }
+        let n = 2.max((total / distance + 0.5) as usize + 1);
+        self.subdivide(n)
+    }
+
+    /// Parameter and closest point; limited clamps t to [0, 1]
     pub fn closest_point(&self, point: &Point, limited: bool) -> (f64, Point) {
         let dx = self._x1 - self._x0;
         let dy = self._y1 - self._y0;
@@ -359,25 +318,99 @@ impl Line {
         (t, self.point_at(t))
     }
 
-    /// Calculate middle line between two line segments
+    /// Midpoints of the paired starts and ends
     pub fn get_middle_line(
         line0_start: &Point,
         line0_end: &Point,
         line1_start: &Point,
         line1_end: &Point,
     ) -> (Point, Point) {
-        let p0 = Point::new(
+        let output_start = Point::new(
             (line0_start[0] + line1_start[0]) * 0.5,
             (line0_start[1] + line1_start[1]) * 0.5,
             (line0_start[2] + line1_start[2]) * 0.5,
         );
-        let p1 = Point::new(
+        let output_end = Point::new(
             (line0_end[0] + line1_end[0]) * 0.5,
             (line0_end[1] + line1_end[1]) * 0.5,
             (line0_end[2] + line1_end[2]) * 0.5,
         );
-        (p0, p1)
+        (output_start, output_end)
     }
+
+    /// Extreme sub-segment of line spanned by the projected points; None when empty
+    pub fn from_projected_points(line: &Line, points: &[Point]) -> Option<Line> {
+        let result = Polyline::line_from_projected_points(&line.start(), &line.end(), points)?;
+        Some(Line::from_points(&result.0, &result.1))
+    }
+
+    /// Collinear overlap with other; None when none or a single point
+    pub fn overlap(&self, other: &Line) -> Option<Line> {
+        let result =
+            Polyline::line_line_overlap(&self.start(), &self.end(), &other.start(), &other.end())?;
+        Some(Line::from_points(&result.0, &result.1))
+    }
+
+    /// Longer of the two midpoint pairings of overlap(other) and other.overlap(self); None when a point
+    pub fn overlap_average(&self, other: &Line) -> Option<Line> {
+        let result = Polyline::line_line_overlap_average(
+            &self.start(),
+            &self.end(),
+            &other.start(),
+            &other.end(),
+        );
+        let out = Line::from_points(&result.0, &result.1);
+        if out.squared_length() <= 0.0 {
+            return None;
+        }
+        Some(out)
+    }
+
+    /// Grow start by ext_start and end by ext_end
+    pub fn extend(&mut self, ext_start: f64, ext_end: f64) {
+        let mut s = self.start();
+        let mut e = self.end();
+        Polyline::extend_line_segment(&mut s, &mut e, ext_start, ext_end);
+        self._x0 = s[0];
+        self._y0 = s[1];
+        self._z0 = s[2];
+        self._x1 = e[0];
+        self._y1 = e[1];
+        self._z1 = e[2];
+    }
+
+    /// Grow both ends by dist, or by proportion of the length when non-zero
+    pub fn extend_equally(&mut self, dist: f64, proportion: f64) {
+        if dist == 0.0 && proportion == 0.0 {
+            return;
+        }
+        let mut s = self.start();
+        let mut e = self.end();
+        Polyline::extend_segment_equally_static(&mut s, &mut e, dist, proportion);
+        self._x0 = s[0];
+        self._y0 = s[1];
+        self._z0 = s[2];
+        self._x1 = e[0];
+        self._y1 = e[1];
+        self._z1 = e[2];
+    }
+
+    /// Shrink both ends by dist as a fraction of the length
+    pub fn scale(&mut self, dist: f64) {
+        let mut s = self.start();
+        let mut e = self.end();
+        Polyline::shrink_line_segment(&mut s, &mut e, dist);
+        self._x0 = s[0];
+        self._y0 = s[1];
+        self._z0 = s[2];
+        self._x1 = e[0];
+        self._y1 = e[1];
+        self._z1 = e[2];
+    }
+
+    // ═══════════════════════════════════════════════════════════════════════════
+    // JSON
+    // ═══════════════════════════════════════════════════════════════════════════
 
     pub fn jsondump(&self) -> Result<String, Box<dyn std::error::Error>> {
         crate::file_encoders::sorted_json_string(self)
@@ -392,57 +425,73 @@ impl Line {
     }
 
     pub fn file_json_loads(json_string: &str) -> Self {
-        Self::jsonload(json_string).unwrap_or_else(|_| Self::default())
+        Self::jsonload(json_string).unwrap_or_default()
     }
 
-    /// Serialize to JSON file.
     pub fn file_json_dump(&self, filepath: &str) -> Result<(), Box<dyn std::error::Error>> {
-        let json = self.jsondump()?;
-        std::fs::write(filepath, json)?;
+        std::fs::write(filepath, self.jsondump()?)?;
         Ok(())
     }
 
-    /// Deserialize from JSON file.
     pub fn file_json_load(filepath: &str) -> Result<Self, Box<dyn std::error::Error>> {
-        let json = std::fs::read_to_string(filepath)?;
-        Self::jsonload(&json)
+        Self::jsonload(&std::fs::read_to_string(filepath)?)
     }
 
     // ═══════════════════════════════════════════════════════════════════════════
-    // Protobuf Serialization
+    // Protobuf
     // ═══════════════════════════════════════════════════════════════════════════
 
-    /// The proto struct itself — pb_dumps encodes it; Session embeds it directly.
-    pub fn to_proto(&self) -> crate::proto::Line {
-        // P6: coords packed, colour packed, both via the shared helpers. The two `Point`
-        // sub-messages were serialization-only wrappers (the kernel stores flat _x0.._z1)
-        // and each carried a redundant `width: 1.0` fixed64.
-        crate::proto::Line {
-            guid: self.guid.get().cloned().unwrap_or_default(),
-            name: self.name.clone(),
-            width: self.width,
-            dash: self.dash.clone(),
-            coords: vec![self._x0, self._y0, self._z0, self._x1, self._y1, self._z1],
-            linecolor_rgba: Color::pack(std::slice::from_ref(&self.linecolor)),
-            linecolor_name: self.linecolor.name.clone(),
-        }
-    }
-
-    /// Convert to protobuf binary format.
     pub fn pb_dumps(&self) -> Vec<u8> {
         use prost::Message;
         self.to_proto().encode_to_vec()
     }
 
-    /// Build from an already-decoded proto — pb_loads decodes then calls this.
+    pub fn pb_loads(data: &[u8]) -> Result<Self, prost::DecodeError> {
+        use prost::Message;
+        Ok(Self::from_proto(crate::proto::Line::decode(data)?))
+    }
+
+    pub fn pb_dump(&self, filepath: &str) {
+        let data = self.pb_dumps();
+        std::fs::write(filepath, data).expect("Failed to write protobuf file");
+    }
+
+    pub fn pb_load(filepath: &str) -> Self {
+        let data = std::fs::read(filepath).expect("Failed to read protobuf file");
+        Self::pb_loads(&data).expect("Failed to parse protobuf")
+    }
+
+    /// The proto message; pb_dumps encodes it and Session embeds it
+    pub fn to_proto(&self) -> crate::proto::Line {
+        crate::proto::Line {
+            guid: self.guid.get().cloned().unwrap_or_default(),
+            name: self.name.clone(),
+            width: self.width,
+            coords: vec![self._x0, self._y0, self._z0, self._x1, self._y1, self._z1],
+            dash: self.dash.clone(),
+            linecolor_rgba: vec![
+                self.linecolor.r,
+                self.linecolor.g,
+                self.linecolor.b,
+                self.linecolor.a,
+            ],
+            linecolor_name: self.linecolor.name.clone(),
+        }
+    }
+
+    /// Line from a decoded proto message
     pub fn from_proto(proto: crate::proto::Line) -> Self {
-        let c = &proto.coords;
-        // A well-formed Line always carries 6; guard so a truncated file cannot panic.
-        let mut line = if c.len() == 6 {
-            Self::new(c[0], c[1], c[2], c[3], c[4], c[5])
-        } else {
-            Self::default()
-        };
+        let mut line = Self::default();
+        if proto.coords.len() == 6 {
+            line = Self::new(
+                proto.coords[0],
+                proto.coords[1],
+                proto.coords[2],
+                proto.coords[3],
+                proto.coords[4],
+                proto.coords[5],
+            );
+        }
         if !proto.guid.is_empty() {
             line.set_guid(proto.guid);
         }
@@ -451,37 +500,25 @@ impl Line {
             line.width = proto.width;
         }
         line.dash = proto.dash;
-        if let Some(mut color) = Color::unpack(&proto.linecolor_rgba).into_iter().next() {
+        if proto.linecolor_rgba.len() == 4 {
+            line.linecolor.r = proto.linecolor_rgba[0];
+            line.linecolor.g = proto.linecolor_rgba[1];
+            line.linecolor.b = proto.linecolor_rgba[2];
+            line.linecolor.a = proto.linecolor_rgba[3];
             if !proto.linecolor_name.is_empty() {
-                color.name = proto.linecolor_name;
+                line.linecolor.name = proto.linecolor_name;
             }
-            line.linecolor = color;
         }
         line
     }
 
-    /// Create from protobuf binary data.
-    pub fn pb_loads(data: &[u8]) -> Result<Self, prost::DecodeError> {
-        use prost::Message;
-        Ok(Self::from_proto(crate::proto::Line::decode(data)?))
-    }
+    // ═══════════════════════════════════════════════════════════════════════════
+    // String
+    // ═══════════════════════════════════════════════════════════════════════════
 
-    /// Write protobuf to file.
-    pub fn pb_dump(&self, filepath: &str) {
-        let data = self.pb_dumps();
-        std::fs::write(filepath, data).expect("Failed to write protobuf file");
-    }
-
-    /// Read protobuf from file.
-    pub fn pb_load(filepath: &str) -> Self {
-        let data = std::fs::read(filepath).expect("Failed to read protobuf file");
-        Self::pb_loads(&data).expect("Failed to parse protobuf")
-    }
-
-    /// Short string representation.
+    /// "x0, y0, z0, x1, y1, z1"
     pub fn str(&self) -> String {
-        use crate::tolerance::TOLERANCE;
-        let prec = crate::tolerance::Tolerance::ROUNDING;
+        let prec = Tolerance::ROUNDING;
         format!(
             "{}, {}, {}, {}, {}, {}",
             TOLERANCE.format_number(self._x0, prec),
@@ -489,16 +526,15 @@ impl Line {
             TOLERANCE.format_number(self._z0, prec),
             TOLERANCE.format_number(self._x1, prec),
             TOLERANCE.format_number(self._y1, prec),
-            TOLERANCE.format_number(self._z1, prec),
+            TOLERANCE.format_number(self._z1, prec)
         )
     }
 
-    /// Detailed string representation (like Python __repr__).
+    /// "Line(name, x0, y0, z0, x1, y1, z1, Color(...), width)"
     pub fn repr(&self) -> String {
-        use crate::tolerance::TOLERANCE;
-        let prec = crate::tolerance::Tolerance::ROUNDING;
+        let prec = Tolerance::ROUNDING;
         format!(
-            "Line({}, {}, {}, {}, {}, {}, {}, Color({}, {}, {}, {}), {})",
+            "Line({}, {}, {}, {}, {}, {}, {}, {}, {})",
             self.name,
             TOLERANCE.format_number(self._x0, prec),
             TOLERANCE.format_number(self._y0, prec),
@@ -506,60 +542,21 @@ impl Line {
             TOLERANCE.format_number(self._x1, prec),
             TOLERANCE.format_number(self._y1, prec),
             TOLERANCE.format_number(self._z1, prec),
-            self.linecolor.r,
-            self.linecolor.g,
-            self.linecolor.b,
-            self.linecolor.a,
-            TOLERANCE.format_number(self.width, prec),
+            self.linecolor.repr(),
+            TOLERANCE.format_number(self.width, prec)
         )
     }
+}
 
-    /// Return the overlapping segment between this line and `other`.
-    ///
-    /// Returns `None` if the segments do not overlap (or overlap at a point).
-    pub fn overlap(&self, other: &Line) -> Option<Line> {
-        let s0 = self.start();
-        let e0 = self.end();
-        let s1 = other.start();
-        let e1 = other.end();
-        let r = crate::polyline::Polyline::line_line_overlap(&s0, &e0, &s1, &e1)?;
-        Some(Line::from_points(&r.0, &r.1))
-    }
-
-    /// Return the average of the two reciprocal overlaps between this line and `other`.
-    ///
-    /// Returns `None` if the resulting overlap collapses to a point.
-    pub fn overlap_average(&self, other: &Line) -> Option<Line> {
-        let s0 = self.start();
-        let e0 = self.end();
-        let s1 = other.start();
-        let e1 = other.end();
-        let (a, b) = crate::polyline::Polyline::line_line_overlap_average(&s0, &e0, &s1, &e1);
-        let out = Line::from_points(&a, &b);
-        if out.squared_length() > 0.0 {
-            Some(out)
-        } else {
-            None
-        }
-    }
-
-    /// Extend this line in place by `ext_start` at the start end and
-    /// `ext_end` at the end.
-    pub fn extend(&mut self, ext_start: f64, ext_end: f64) {
-        let s = self.start();
-        let e = self.end();
-        let mut v = e.clone() - s.clone();
-        v.normalize_self();
-        let new_s = s - (v.clone() * ext_start);
-        let new_e = e + (v * ext_end);
-        self._x0 = new_s[0];
-        self._y0 = new_s[1];
-        self._z0 = new_s[2];
-        self._x1 = new_e[0];
-        self._y1 = new_e[1];
-        self._z1 = new_e[2];
+impl fmt::Display for Line {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}", self.str())
     }
 }
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Operators
+// ═══════════════════════════════════════════════════════════════════════════
 
 impl Index<usize> for Line {
     type Output = f64;
@@ -588,6 +585,20 @@ impl IndexMut<usize> for Line {
             5 => &mut self._z1,
             _ => panic!("Index out of bounds"),
         }
+    }
+}
+
+impl PartialEq for Line {
+    fn eq(&self, other: &Self) -> bool {
+        self.name == other.name
+            && (self._x0 * 1000000.0).round() == (other._x0 * 1000000.0).round()
+            && (self._y0 * 1000000.0).round() == (other._y0 * 1000000.0).round()
+            && (self._z0 * 1000000.0).round() == (other._z0 * 1000000.0).round()
+            && (self._x1 * 1000000.0).round() == (other._x1 * 1000000.0).round()
+            && (self._y1 * 1000000.0).round() == (other._y1 * 1000000.0).round()
+            && (self._z1 * 1000000.0).round() == (other._z1 * 1000000.0).round()
+            && (self.width * 1000000.0).round() == (other.width * 1000000.0).round()
+            && self.linecolor == other.linecolor
     }
 }
 
@@ -678,6 +689,7 @@ impl Div<f64> for Line {
 impl Neg for Line {
     type Output = Line;
 
+    /// Flipped copy (end to start)
     fn neg(self) -> Line {
         Line::new(self._x1, self._y1, self._z1, self._x0, self._y0, self._z0)
     }
@@ -722,31 +734,3 @@ impl Neg for &Line {
         Line::new(self._x1, self._y1, self._z1, self._x0, self._y0, self._z0)
     }
 }
-
-impl fmt::Display for Line {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(
-            f,
-            "Line({}, {}, {}, {}, {}, {})",
-            self._x0, self._y0, self._z0, self._x1, self._y1, self._z1
-        )
-    }
-}
-
-impl PartialEq for Line {
-    fn eq(&self, other: &Self) -> bool {
-        self.name == other.name
-            && (self._x0 * 1000000.0).round() == (other._x0 * 1000000.0).round()
-            && (self._y0 * 1000000.0).round() == (other._y0 * 1000000.0).round()
-            && (self._z0 * 1000000.0).round() == (other._z0 * 1000000.0).round()
-            && (self._x1 * 1000000.0).round() == (other._x1 * 1000000.0).round()
-            && (self._y1 * 1000000.0).round() == (other._y1 * 1000000.0).round()
-            && (self._z1 * 1000000.0).round() == (other._z1 * 1000000.0).round()
-            && (self.width * 1000000.0).round() == (other.width * 1000000.0).round()
-            && self.linecolor == other.linecolor
-    }
-}
-
-#[path = "line_test.rs"]
-#[cfg(test)]
-mod line_test;

@@ -1,20 +1,10 @@
-// SpatialOctree — Potree-style multi-resolution LOD octree over bare 3D points.
-// Use for: level-of-detail point-cloud rendering. Each node owns a spacing-limited
-//   SUBSAMPLE of the points (grid accept, first point wins, leftovers descend into
-//   octants at half the spacing), so drawing shallow nodes far away and deep nodes up
-//   close gives Potree's uniform on-screen density. `order()` is the permutation that
-//   makes every node's points CONTIGUOUS - upload points in that order and a node is
-//   one (first, count) range.
-// Prefer over SpatialKDTree when the question is "which points at what density",
-//   not "which point is nearest".
-// Note: static structure; rebuild required after point insertion.
 use std::collections::HashSet;
 
 use crate::point::Point;
 
-// Duplicate points can never be separated by subdivision: below this level the node
-// absorbs everything instead of recursing forever (spacing has shrunk by 2^21 anyway).
 const MAX_LEVEL: usize = 21;
+const STACK_SIZE: usize = 8 * MAX_LEVEL;
+const NULL_IDX: usize = usize::MAX;
 
 struct Node {
     min: [f64; 3],
@@ -23,9 +13,33 @@ struct Node {
     spacing: f64,
     first: usize,
     count: usize,
-    children: [i32; 8],
+    children: [usize; 8],
 }
 
+#[derive(Clone, Copy)]
+struct Task {
+    min: [f64; 3],
+    size: f64,
+    level: usize,
+    spacing: f64,
+    lo: usize,
+    hi: usize,
+    parent: usize,
+    octant: usize,
+}
+
+const EMPTY_TASK: Task = Task {
+    min: [0.0; 3],
+    size: 0.0,
+    level: 0,
+    spacing: 0.0,
+    lo: 0,
+    hi: 0,
+    parent: NULL_IDX,
+    octant: 0,
+};
+
+/// Potree-style LOD octree: every node keeps a spacing-limited subsample and order() makes each node's points contiguous.
 pub struct SpatialOctree {
     nodes: Vec<Node>,
     order: Vec<usize>,
@@ -39,20 +53,25 @@ impl SpatialOctree {
             coords.push(p[1]);
             coords.push(p[2]);
         }
-        Self::from_coords(&coords, root_spacing, leaf_capacity)
+        let mut tree = SpatialOctree {
+            nodes: Vec::new(),
+            order: Vec::new(),
+        };
+        tree.build(&coords, root_spacing, leaf_capacity);
+        tree
     }
 
-    /// Coords are only read during construction - nothing is stored, so a renderer can
-    /// hand its flat table over without a copy.
     pub fn from_coords(coords: &[f64], root_spacing: f64, leaf_capacity: usize) -> Self {
         let mut tree = SpatialOctree {
             nodes: Vec::new(),
             order: Vec::new(),
         };
+        tree.build(coords, root_spacing, leaf_capacity);
+        tree
+    }
+
+    fn root_cube(&self, coords: &[f64]) -> ([f64; 3], f64) {
         let n = coords.len() / 3;
-        if n == 0 {
-            return tree;
-        }
         let mut lo = [coords[0], coords[1], coords[2]];
         let mut hi = lo;
         for i in 1..n {
@@ -65,86 +84,124 @@ impl SpatialOctree {
         if size <= 0.0 {
             size = 1.0;
         }
-        let root_min = [0, 1, 2].map(|k| (lo[k] + hi[k]) * 0.5 - size * 0.5);
-        let idxs: Vec<usize> = (0..n).collect();
-        tree.build(coords, root_min, size, 0, root_spacing, idxs, leaf_capacity);
-        tree
+        let mut min = [0.0; 3];
+        for k in 0..3 {
+            min[k] = (lo[k] + hi[k]) * 0.5 - size * 0.5;
+        }
+        (min, size)
     }
 
-    fn build(
-        &mut self,
-        coords: &[f64],
-        min: [f64; 3],
-        size: f64,
-        level: usize,
-        spacing: f64,
-        idxs: Vec<usize>,
-        leaf_capacity: usize,
-    ) -> usize {
-        let node_id = self.nodes.len();
-        self.nodes.push(Node {
-            min,
-            size,
-            level,
-            spacing,
-            first: self.order.len(),
-            count: 0,
-            children: [-1; 8],
-        });
-        if idxs.len() <= leaf_capacity || level >= MAX_LEVEL {
-            self.nodes[node_id].count = idxs.len();
-            self.order.extend(idxs);
-            return node_id;
+    fn build(&mut self, coords: &[f64], root_spacing: f64, leaf_capacity: usize) {
+        let n = coords.len() / 3;
+        if n == 0 {
+            return;
         }
-        let cells = ((size / spacing).ceil() as i64).max(1);
-        let center = [0, 1, 2].map(|k| min[k] + size * 0.5);
-        let mut seen: HashSet<(i64, i64, i64)> = HashSet::new();
-        let mut accepted: Vec<usize> = Vec::new();
-        let mut buckets: [Vec<usize>; 8] = Default::default();
-        for i in idxs {
-            let key = [0, 1, 2].map(|k| {
-                let c = ((coords[i * 3 + k] - min[k]) / spacing).floor() as i64;
-                c.clamp(0, cells - 1)
+        let (root_min, root_size) = self.root_cube(coords);
+        let mut indices: Vec<usize> = (0..n).collect();
+        let mut stack = [EMPTY_TASK; STACK_SIZE];
+        let mut top = 0;
+        self.push(
+            &mut stack,
+            &mut top,
+            Task {
+                min: root_min,
+                size: root_size,
+                level: 0,
+                spacing: root_spacing,
+                lo: 0,
+                hi: n,
+                parent: NULL_IDX,
+                octant: 0,
+            },
+        );
+        while top > 0 {
+            top -= 1;
+            let task = stack[top];
+            let node = self.nodes.len();
+            self.nodes.push(Node {
+                min: task.min,
+                size: task.size,
+                level: task.level,
+                spacing: task.spacing,
+                first: self.order.len(),
+                count: 0,
+                children: [NULL_IDX; 8],
             });
-            if seen.insert((key[0], key[1], key[2])) {
-                accepted.push(i);
-            } else {
-                let mut b = 0usize;
-                if coords[i * 3] >= center[0] {
-                    b |= 1;
-                }
-                if coords[i * 3 + 1] >= center[1] {
-                    b |= 2;
-                }
-                if coords[i * 3 + 2] >= center[2] {
-                    b |= 4;
-                }
-                buckets[b].push(i);
+            if task.parent != NULL_IDX {
+                self.nodes[task.parent].children[task.octant] = node;
             }
-        }
-        self.nodes[node_id].count = accepted.len();
-        self.order.extend(accepted);
-        let half = size * 0.5;
-        for (b, bucket) in std::mem::take(&mut buckets).into_iter().enumerate() {
-            if !bucket.is_empty() {
-                let child_min = [
-                    min[0] + (b & 1) as f64 * half,
-                    min[1] + ((b >> 1) & 1) as f64 * half,
-                    min[2] + ((b >> 2) & 1) as f64 * half,
+            if task.hi - task.lo <= leaf_capacity || task.level >= MAX_LEVEL {
+                self.order.extend_from_slice(&indices[task.lo..task.hi]);
+                self.nodes[node].count = task.hi - task.lo;
+                continue;
+            }
+            let bounds = self.accept(coords, &task, &mut indices);
+            self.nodes[node].count = self.order.len() - self.nodes[node].first;
+            let half = task.size * 0.5;
+            for b in (0..8).rev() {
+                if bounds[b] == bounds[b + 1] {
+                    continue;
+                }
+                let min = [
+                    task.min[0] + (b & 1) as f64 * half,
+                    task.min[1] + ((b >> 1) & 1) as f64 * half,
+                    task.min[2] + ((b >> 2) & 1) as f64 * half,
                 ];
-                let child_id = self.build(
-                    coords,
-                    child_min,
-                    half,
-                    level + 1,
-                    spacing * 0.5,
-                    bucket,
-                    leaf_capacity,
+                self.push(
+                    &mut stack,
+                    &mut top,
+                    Task {
+                        min,
+                        size: half,
+                        level: task.level + 1,
+                        spacing: task.spacing * 0.5,
+                        lo: bounds[b],
+                        hi: bounds[b + 1],
+                        parent: node,
+                        octant: b,
+                    },
                 );
-                self.nodes[node_id].children[b] = child_id as i32;
             }
         }
-        node_id
+    }
+
+    fn accept(&mut self, coords: &[f64], task: &Task, indices: &mut [usize]) -> [usize; 9] {
+        let cells = ((task.size / task.spacing).ceil() as i64).max(1);
+        let half = task.size * 0.5;
+        let center = [task.min[0] + half, task.min[1] + half, task.min[2] + half];
+        let mut seen: HashSet<[i64; 3]> = HashSet::new();
+        let mut buckets: [Vec<usize>; 8] = Default::default();
+        for &idx in &indices[task.lo..task.hi] {
+            let mut key = [0i64; 3];
+            for k in 0..3 {
+                key[k] = (((coords[idx * 3 + k] - task.min[k]) / task.spacing).floor() as i64)
+                    .clamp(0, cells - 1);
+            }
+            if seen.insert(key) {
+                self.order.push(idx);
+                continue;
+            }
+            let mut octant = 0;
+            for k in 0..3 {
+                if coords[idx * 3 + k] >= center[k] {
+                    octant |= 1 << k;
+                }
+            }
+            buckets[octant].push(idx);
+        }
+        let mut bounds = [0usize; 9];
+        bounds[0] = task.lo;
+        for b in 0..8 {
+            bounds[b + 1] = bounds[b] + buckets[b].len();
+            indices[bounds[b]..bounds[b + 1]].copy_from_slice(&buckets[b]);
+        }
+        bounds
+    }
+
+    fn push(&self, stack: &mut [Task; STACK_SIZE], top: &mut usize, task: Task) {
+        assert!(*top < STACK_SIZE);
+        stack[*top] = task;
+        *top += 1;
     }
 
     pub fn node_count(&self) -> usize {
@@ -174,12 +231,13 @@ impl SpatialOctree {
     }
 
     pub fn children(&self, i: usize) -> Vec<usize> {
-        self.nodes[i]
-            .children
-            .iter()
-            .filter(|&&c| c >= 0)
-            .map(|&c| c as usize)
-            .collect()
+        let mut result: Vec<usize> = Vec::new();
+        for c in self.nodes[i].children {
+            if c != NULL_IDX {
+                result.push(c);
+            }
+        }
+        result
     }
 
     pub fn order(&self) -> &[usize] {

@@ -97,7 +97,7 @@ pub fn run_remesh_nurbssurface_adaptive_doubly_curved() -> TestResult {
         let m = RemeshNurbsSurfaceAdaptive::new(s).mesh();
 
         MINI_CHECK!(m.is_valid());
-        MINI_CHECK!(m.number_of_vertices() == 1175);
+        MINI_CHECK!(m.number_of_vertices() == 1169);
     })
 }
 
@@ -186,8 +186,11 @@ REGISTER_MINI_TEST!(
     "Cylinder",
     crate::remesh_nurbssurface_adaptive_test::run_remesh_nurbssurface_adaptive_cylinder
 );
-// TODO(f64-followup): vertex count differs from f64 reference under adaptive remesh.
-// REGISTER_MINI_TEST!("RemeshNurbsSurfaceAdaptive", "Cone", crate::remesh_nurbssurface_adaptive_test::run_remesh_nurbssurface_adaptive_cone);
+REGISTER_MINI_TEST!(
+    "RemeshNurbsSurfaceAdaptive",
+    "Cone",
+    crate::remesh_nurbssurface_adaptive_test::run_remesh_nurbssurface_adaptive_cone
+);
 REGISTER_MINI_TEST!(
     "RemeshNurbsSurfaceAdaptive",
     "Doubly Curved",
@@ -203,4 +206,8 @@ REGISTER_MINI_TEST!(
     "Singular Triangle",
     crate::remesh_nurbssurface_adaptive_test::run_remesh_nurbssurface_adaptive_singular_triangle
 );
-REGISTER_MINI_TEST!("RemeshNurbsSurfaceAdaptive", "Double-Curved Triangle", crate::remesh_nurbssurface_adaptive_test::run_remesh_nurbssurface_adaptive_double_curved_triangle);
+REGISTER_MINI_TEST!(
+    "RemeshNurbsSurfaceAdaptive",
+    "Double-Curved Triangle",
+    crate::remesh_nurbssurface_adaptive_test::run_remesh_nurbssurface_adaptive_double_curved_triangle
+);

@@ -9,14 +9,14 @@ pub fn run_obb_constructor() -> TestResult {
         use crate::OBB;
 
         // from_point
-        let mut bb1 = OBB::from_point(Point::new(5.0, 5.0, 5.0), 2.0);
+        let mut bb1 = OBB::from_point(&Point::new(5.0, 5.0, 5.0), 2.0);
 
         MINI_CHECK!(TOLERANCE.is_close(bb1.center[0], 5.0));
         MINI_CHECK!(TOLERANCE.is_close(bb1.half_size[0], 2.0));
 
         // from_points (AABB)
         let pts = vec![Point::new(0.0, 0.0, 0.0), Point::new(2.0, 3.0, 4.0)];
-        let bb2 = OBB::from_points(&pts, 0.0);
+        let bb2 = OBB::from_points(&pts, 0.0, None);
         let mn = bb2.min_point();
         let mx = bb2.max_point();
 
@@ -24,7 +24,7 @@ pub fn run_obb_constructor() -> TestResult {
         MINI_CHECK!(TOLERANCE.is_close(mx[0], 2.0) && TOLERANCE.is_close(mx[2], 4.0));
 
         // OBB constructor
-        let obb = OBB::new(
+        let box_ = OBB::new(
             Point::new(0.0, 0.0, 0.0),
             Vector::new(1.0, 0.0, 0.0),
             Vector::new(0.0, 1.0, 0.0),
@@ -32,9 +32,18 @@ pub fn run_obb_constructor() -> TestResult {
             Vector::new(1.0, 2.0, 3.0),
         );
 
-        MINI_CHECK!(TOLERANCE.is_close(obb.half_size[0], 1.0));
-        MINI_CHECK!(TOLERANCE.is_close(obb.half_size[1], 2.0));
-        MINI_CHECK!(TOLERANCE.is_close(obb.half_size[2], 3.0));
+        MINI_CHECK!(TOLERANCE.is_close(box_.half_size[0], 1.0));
+        MINI_CHECK!(TOLERANCE.is_close(box_.half_size[1], 2.0));
+        MINI_CHECK!(TOLERANCE.is_close(box_.half_size[2], 3.0));
+
+        // operators
+        let same = box_.duplicate();
+
+        MINI_CHECK!(box_ == same);
+        MINI_CHECK!(box_ != bb1);
+        MINI_CHECK!(box_.guid() != same.guid());
+        MINI_CHECK!(box_.str() == "0.000000, 0.000000, 0.000000\n1.000000, 0.000000, 0.000000\n0.000000, 1.000000, 0.000000\n0.000000, 0.000000, 1.000000\n1.000000, 2.000000, 3.000000");
+        MINI_CHECK!(box_.repr() == "OBB(my_obb, 0.000000, 0.000000, 0.000000, 1.000000, 0.000000, 0.000000, 0.000000, 1.000000, 0.000000, 0.000000, 0.000000, 1.000000, 1.000000, 2.000000, 3.000000)");
 
         // aabb
         let bb_aabb = bb2.aabb();
@@ -58,8 +67,11 @@ pub fn run_obb_constructor() -> TestResult {
         MINI_CHECK!(TOLERANCE.is_close(p_max_pt[0], 2.0) && TOLERANCE.is_close(p_max_pt[2], 4.0));
 
         // inflate
-        let mut bb3 =
-            OBB::from_points(&[Point::new(0.0, 0.0, 0.0), Point::new(2.0, 2.0, 2.0)], 0.0);
+        let mut bb3 = OBB::from_points(
+            &[Point::new(0.0, 0.0, 0.0), Point::new(2.0, 2.0, 2.0)],
+            0.0,
+            None,
+        );
         bb3.inflate(1.0);
 
         MINI_CHECK!(TOLERANCE.is_close(bb3.min_point()[0], -1.0));
@@ -78,9 +90,9 @@ pub fn run_obb_collision() -> TestResult {
         use crate::Point;
         use crate::OBB;
 
-        let bb1 = OBB::from_point(Point::new(0.0, 0.0, 0.0), 1.0);
-        let bb2 = OBB::from_point(Point::new(1.5, 0.0, 0.0), 1.0);
-        let bb3 = OBB::from_point(Point::new(5.0, 5.0, 5.0), 0.5);
+        let bb1 = OBB::from_point(&Point::new(0.0, 0.0, 0.0), 1.0);
+        let bb2 = OBB::from_point(&Point::new(1.5, 0.0, 0.0), 1.0);
+        let bb3 = OBB::from_point(&Point::new(5.0, 5.0, 5.0), 0.5);
 
         MINI_CHECK!(bb1.collides_with(&bb2));
         MINI_CHECK!(!bb1.collides_with(&bb3));
@@ -100,7 +112,7 @@ pub fn run_obb_transformation() -> TestResult {
         use crate::OBB;
 
         let pts = vec![Point::new(0.0, 0.0, 0.0), Point::new(1.0, 1.0, 0.0)];
-        let mut bb = OBB::from_points(&pts, 0.0);
+        let mut bb = OBB::from_points(&pts, 0.0, None);
         let bb_xf = Xform::translation(0.0, 0.0, 5.0);
 
         let bbt = bb.transformed(&bb_xf);
@@ -118,7 +130,7 @@ pub fn run_obb_json_roundtrip() -> TestResult {
         use crate::Point;
         use crate::OBB;
 
-        let mut bb = OBB::from_point(Point::new(1.0, 2.0, 3.0), 5.0);
+        let mut bb = OBB::from_point(&Point::new(1.0, 2.0, 3.0), 5.0);
         bb.name = "test_bbox".to_string();
 
         // JSON object (string)
@@ -139,8 +151,8 @@ pub fn run_obb_json_roundtrip() -> TestResult {
         let src_dir = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"));
         let fname = src_dir.join("serialization").join("test_obb.json");
         let fname = fname.to_str().unwrap();
-        bb.file_json_dump(fname);
-        let loaded = OBB::file_json_load(fname);
+        bb.file_json_dump(fname).unwrap();
+        let loaded = OBB::file_json_load(fname).unwrap();
 
         MINI_CHECK!(loaded.name == "test_bbox");
         MINI_CHECK!(TOLERANCE.is_close(loaded.center[0], 1.0));
@@ -153,7 +165,7 @@ pub fn run_obb_protobuf_roundtrip() -> TestResult {
         use crate::Point;
         use crate::OBB;
 
-        let mut bb = OBB::from_point(Point::new(1.0, 2.0, 3.0), 5.0);
+        let mut bb = OBB::from_point(&Point::new(1.0, 2.0, 3.0), 5.0);
         bb.name = "test_bbox_proto".to_string();
 
         // Bytes
@@ -179,10 +191,11 @@ pub fn run_obb_protobuf_roundtrip() -> TestResult {
     })
 }
 
-pub fn run_obb_accessors() -> crate::mini_test::TestResult {
-    use crate::tolerance::TOLERANCE;
-    use crate::{Point, OBB};
+pub fn run_obb_accessors() -> TestResult {
     MINI_TEST!("Accessors", {
+        use crate::Point;
+        use crate::OBB;
+
         // axis-aligned OBB: center=(1,2,3), half_size=(1,2,3), dims 2×4×6
         let pts = vec![
             Point::new(0.0, 0.0, 0.0),
@@ -192,7 +205,7 @@ pub fn run_obb_accessors() -> crate::mini_test::TestResult {
             Point::new(0.0, 0.0, 6.0),
             Point::new(2.0, 4.0, 6.0),
         ];
-        let mut b = OBB::from_points(&pts, 0.0);
+        let mut b = OBB::from_points(&pts, 0.0, None);
 
         MINI_CHECK!(TOLERANCE.is_close(b.area(), 88.0));
         MINI_CHECK!(TOLERANCE.is_close(b.diagonal(), 2.0 * 14.0_f64.sqrt()));
@@ -206,7 +219,7 @@ pub fn run_obb_accessors() -> crate::mini_test::TestResult {
         MINI_CHECK!(b.corner(true, true, true) == Point::new(2.0, 4.0, 6.0));
         MINI_CHECK!(b.get_corners().len() == 8);
         MINI_CHECK!(b.get_edges().len() == 12);
-        let c = OBB::from_point(Point::new(5.0, 2.0, 3.0), 1.0);
+        let c = OBB::from_point(&Point::new(5.0, 2.0, 3.0), 1.0);
         b.union_with(&c);
 
         MINI_CHECK!(TOLERANCE.is_close(b.half_size[0], 3.0));
@@ -226,7 +239,7 @@ pub fn run_obb_from_geometry() -> TestResult {
         use crate::Vector;
         use crate::OBB;
 
-        let bb_line = OBB::from_line(&Line::new(0.0, 0.0, 0.0, 4.0, 0.0, 0.0), 0.1);
+        let bb_line = OBB::from_line(&Line::new(0.0, 0.0, 0.0, 4.0, 0.0, 0.0), 0.1, None);
 
         MINI_CHECK!(bb_line.is_valid());
         MINI_CHECK!(TOLERANCE.is_close(bb_line.center[0], 2.0));
@@ -238,12 +251,13 @@ pub fn run_obb_from_geometry() -> TestResult {
                 Point::new(4.0, 4.0, 4.0),
             ]),
             0.0,
+            None,
         );
 
         MINI_CHECK!(bb_pl.is_valid());
         MINI_CHECK!(bb_pl.volume() > 0.0);
 
-        let bb_mesh = OBB::from_mesh(&Primitives::cube(2.0), 0.0);
+        let bb_mesh = OBB::from_mesh(&Primitives::cube(2.0), 0.0, None);
 
         MINI_CHECK!(bb_mesh.is_valid());
         MINI_CHECK!(TOLERANCE.is_close(bb_mesh.center[0], 0.0));
@@ -271,6 +285,7 @@ pub fn run_obb_from_geometry() -> TestResult {
                 ],
             ),
             0.0,
+            None,
         );
 
         MINI_CHECK!(bb_pc.is_valid());
@@ -289,6 +304,7 @@ pub fn run_obb_from_geometry() -> TestResult {
             ),
             0.5,
             false,
+            None,
         );
 
         MINI_CHECK!(bb_nc.is_valid());
@@ -308,7 +324,7 @@ pub fn run_obb_from_geometry() -> TestResult {
             ],
         )
         .unwrap();
-        let bb_ns = OBB::from_nurbssurface(&surf_ns, 0.0);
+        let bb_ns = OBB::from_nurbssurface(&surf_ns, 0.0, None);
 
         MINI_CHECK!(bb_ns.is_valid());
     })
@@ -334,7 +350,7 @@ pub fn run_obb_from_plane() -> TestResult {
             Point::new(2.0, 3.0, 0.0),
             Point::new(0.0, 3.0, 0.0),
         ];
-        let bb = OBB::from_points_with_plane(&pts, &plane, 0.0);
+        let bb = OBB::from_points(&pts, 0.0, Some(&plane));
 
         MINI_CHECK!(TOLERANCE.is_close(bb.half_size[0], 1.0));
         MINI_CHECK!(TOLERANCE.is_close(bb.half_size[1], 1.5));

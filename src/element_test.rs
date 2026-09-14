@@ -8,7 +8,8 @@ use crate::{MINI_CHECK, MINI_TEST, REGISTER_MINI_TEST};
 
 pub fn run_element_constructor() -> TestResult {
     MINI_TEST!("Constructor", {
-        use crate::element::{Element, ElementGeometry};
+        use crate::element::Element;
+        use crate::element::ElementGeometry;
         use crate::BRep;
         use crate::Mesh;
         use crate::Point;
@@ -24,6 +25,7 @@ pub fn run_element_constructor() -> TestResult {
         );
         let e = Element::from_mesh(m, "test_element");
 
+        let geo = e.geometry();
         let name = &e.name;
         let guid = e.guid().to_string();
         let dirty = e.is_dirty();
@@ -39,7 +41,7 @@ pub fn run_element_constructor() -> TestResult {
         MINI_CHECK!(name == "test_element");
         MINI_CHECK!(!guid.is_empty());
         MINI_CHECK!(dirty);
-        MINI_CHECK!(matches!(e.geometry(), ElementGeometry::Mesh(_)));
+        MINI_CHECK!(matches!(geo, ElementGeometry::Mesh(_)));
         MINI_CHECK!(estr == "Element(test_element, Mesh)");
         MINI_CHECK!(erepr == format!("Element({}, test_element, Mesh)", guid));
         MINI_CHECK!(ecopy == e && ecopy.guid() != e.guid());
@@ -50,7 +52,8 @@ pub fn run_element_constructor() -> TestResult {
 
 pub fn run_element_place() -> TestResult {
     MINI_TEST!("Place", {
-        use crate::element::{Element, ElementGeometry};
+        use crate::element::Element;
+        use crate::element::ElementGeometry;
         use crate::Mesh;
         use crate::Point;
         use crate::Xform;
@@ -70,19 +73,19 @@ pub fn run_element_place() -> TestResult {
 
         MINI_CHECK!(e.is_dirty());
         if let ElementGeometry::Mesh(mesh) = e.geometry() {
-            let min_x = mesh
-                .vertex
-                .values()
-                .map(|v| v.x)
-                .fold(f64::INFINITY, f64::min);
+            let mut min_x = f64::MAX;
+            for v in mesh.vertex.values() {
+                min_x = min_x.min(v.x);
+            }
             MINI_CHECK!(min_x > 9.0);
         }
     })
 }
 
-pub fn run_element_add_feature() -> TestResult {
+pub fn run_element_add_geometry_op() -> TestResult {
     MINI_TEST!("Add Geometry Op", {
-        use crate::element::{Element, ElementGeometry};
+        use crate::element::Element;
+        use crate::element::ElementGeometry;
         use crate::BRep;
         use crate::Mesh;
         use crate::Point;
@@ -104,7 +107,6 @@ pub fn run_element_add_feature() -> TestResult {
         }
         e.add_geometry_op(my_feature);
 
-        // Features are Mesh -> Mesh, so BRep geometry passes through untouched
         fn empty_mesh(_geo: Mesh) -> Mesh {
             Mesh::new()
         }
@@ -167,7 +169,8 @@ pub fn run_element_obb() -> TestResult {
 
 pub fn run_element_session_geometry() -> TestResult {
     MINI_TEST!("Session Geometry", {
-        use crate::element::{Element, ElementGeometry};
+        use crate::element::Element;
+        use crate::element::ElementGeometry;
         use crate::Mesh;
         use crate::Point;
         use crate::Xform;
@@ -187,11 +190,8 @@ pub fn run_element_session_geometry() -> TestResult {
 
         MINI_CHECK!(matches!(&sg, ElementGeometry::Mesh(_)));
         if let ElementGeometry::Mesh(mesh) = &sg {
-            let mut vkeys: Vec<usize> = mesh.vertex.keys().cloned().collect();
-            vkeys.sort();
-            let verts: Vec<_> = vkeys.iter().map(|k| mesh.vertex.get(k).unwrap()).collect();
-            MINI_CHECK!(TOLERANCE.is_close(verts[0].x, 10.0));
-            MINI_CHECK!(TOLERANCE.is_close(verts[1].x, 11.0));
+            MINI_CHECK!(TOLERANCE.is_close(mesh.vertex[&0].x, 10.0));
+            MINI_CHECK!(TOLERANCE.is_close(mesh.vertex[&1].x, 11.0));
         }
     })
 }
@@ -217,10 +217,10 @@ pub fn run_element_reset() -> TestResult {
         e.reset();
 
         MINI_CHECK!(e.is_dirty());
-        MINI_CHECK!(e.cached_aabb_ref().is_none());
-        MINI_CHECK!(e.cached_obb_ref().is_none());
-        MINI_CHECK!(e.cached_collision_mesh_ref().is_none());
-        MINI_CHECK!(e.cached_point_ref().is_none());
+        MINI_CHECK!(e.cached_aabb().is_none());
+        MINI_CHECK!(e.cached_obb().is_none());
+        MINI_CHECK!(e.cached_collision_mesh().is_none());
+        MINI_CHECK!(e.cached_point().is_none());
     })
 }
 
@@ -269,7 +269,8 @@ pub fn run_element_brep_aabb() -> TestResult {
 
 pub fn run_element_json_roundtrip() -> TestResult {
     MINI_TEST!("Json Roundtrip", {
-        use crate::element::{Element, ElementGeometry};
+        use crate::element::Element;
+        use crate::element::ElementGeometry;
         use crate::Mesh;
         use crate::Point;
 
@@ -298,7 +299,8 @@ pub fn run_element_json_roundtrip() -> TestResult {
 
 pub fn run_element_protobuf_roundtrip() -> TestResult {
     MINI_TEST!("Protobuf Roundtrip", {
-        use crate::element::{Element, ElementGeometry};
+        use crate::element::Element;
+        use crate::element::ElementGeometry;
         use crate::BRep;
 
         let b = BRep::create_box(2.0, 3.0, 4.0);
@@ -311,8 +313,8 @@ pub fn run_element_protobuf_roundtrip() -> TestResult {
         MINI_CHECK!(loaded.name == "proto_test");
         MINI_CHECK!(matches!(loaded.geometry(), ElementGeometry::BRep(_)));
         if let ElementGeometry::BRep(brep) = loaded.geometry() {
-            MINI_CHECK!(brep.m_faces.len() == 6);
-            MINI_CHECK!(brep.m_vertices.len() == 8);
+            MINI_CHECK!(brep.face_count() == 6);
+            MINI_CHECK!(brep.vertex_count() == 8);
         }
     })
 }
@@ -338,21 +340,38 @@ pub fn run_element_polylines() -> TestResult {
         );
         let mut e = Element::from_mesh(m, "test_element");
 
-        MINI_CHECK!(e.polylines().is_empty());
-        MINI_CHECK!(e.planes().is_empty());
+        MINI_CHECK!(e.polylines().len() == 1);
+        MINI_CHECK!(e.polylines()[0].point_count() == 5);
+        MINI_CHECK!(e.polylines()[0].get_point(0) == Some(Point::new(0.0, 0.0, 0.0)));
+        MINI_CHECK!(e.polylines()[0].get_point(4) == Some(Point::new(0.0, 0.0, 0.0)));
+        MINI_CHECK!(e.planes().len() == 1);
+        MINI_CHECK!(e.planes()[0].origin() == Point::new(0.5, 0.5, 0.0));
+        let normal = e.planes()[0].z_axis();
+        MINI_CHECK!(normal[0].abs() < 1e-12 && normal[1].abs() < 1e-12 && normal[2] > 0.0);
         MINI_CHECK!(e.edge_vectors().is_empty());
         MINI_CHECK!(e.axis().is_none());
     })
 }
 
+pub fn run_element_polylines_empty_without_mesh() -> TestResult {
+    MINI_TEST!("Polylines Empty Without Mesh", {
+        use crate::Element;
+
+        MINI_CHECK!(Element::new("no_geometry").polylines().is_empty());
+        MINI_CHECK!(Element::new("no_geometry").planes().is_empty());
+    })
+}
+
 // ═══════════════════════════════════════════════════════════════════════════
-// Element - polymorphic registry
-//
-// Rust has no inheritance, so unlike C++/Python there is no factory returning a derived
-// element. What Rust guarantees instead is that it never DESTROYS a derived element: the
-// type name and payload a downstream package wrote survive a load/save untouched, so a Rust
-// tool can round-trip a file whose domain type it has never heard of.
+// Element - Polymorphic registry
 // ═══════════════════════════════════════════════════════════════════════════
+
+/// Stand-in for a domain package's factory: Rust has no derived type to return, so it marks the element it built.
+fn test_plate(data: &[u8]) -> Option<crate::Element> {
+    let mut e = crate::Element::pb_loads(data).ok()?;
+    e.name = format!("{}_via_factory", e.name);
+    Some(e)
+}
 
 fn unit_quad() -> crate::Mesh {
     use crate::Point;
@@ -368,74 +387,57 @@ fn unit_quad() -> crate::Mesh {
 }
 
 pub fn run_element_registry_round_trip() -> TestResult {
-    MINI_TEST!("RegistryRoundTrip", {
-        use crate::element::{Element, ElementGeometry};
+    MINI_TEST!("Registry Round Trip", {
+        use crate::element::Element;
+        use crate::element::ElementGeometry;
 
-        // Stand-in for what a domain package writes: a type name the kernel does not know
-        // and a payload it never parses.
+        Element::register_type("TestPlate", test_plate);
+        MINI_CHECK!(Element::is_registered("TestPlate"));
+
         let mut plate = Element::from_mesh(unit_quad(), "plate_0");
         plate.element_type = "TestPlate".to_string();
         plate.element_data = b"12.5,30,11,20".to_vec();
-
         let guid = plate.guid().to_string();
-        let loaded = Element::pb_loads(&plate.pb_dumps()).unwrap();
+        let loaded = Element::pb_loads_polymorphic(&plate.pb_dumps()).unwrap();
 
-        // Identity, base state and the domain payload all survived.
+        MINI_CHECK!(loaded.name == "plate_0_via_factory");
+        MINI_CHECK!(loaded.element_type_name() == "TestPlate");
+
         MINI_CHECK!(loaded.guid() == guid);
-        MINI_CHECK!(loaded.name == "plate_0");
         MINI_CHECK!(matches!(loaded.geometry(), ElementGeometry::Mesh(_)));
-        MINI_CHECK!(loaded.element_type == "TestPlate");
-        MINI_CHECK!(loaded.element_data == b"12.5,30,11,20".to_vec());
+        MINI_CHECK!(loaded.element_data_dumps() == b"12.5,30,11,20");
     })
 }
 
 pub fn run_element_registry_unknown_type_degrades() -> TestResult {
-    MINI_TEST!("RegistryUnknownTypeDegrades", {
-        use crate::element::{Element, ElementGeometry};
+    MINI_TEST!("Registry Unknown Type Degrades", {
+        use crate::element::Element;
+        use crate::element::ElementGeometry;
 
-        // A file written by a package this binary does not have. It must still load, keeping
-        // its geometry - and must carry the payload back out again unchanged, so saving does
-        // not quietly strip data this build could not interpret.
-        let mut mystery = Element::from_mesh(unit_quad(), "mystery");
-        mystery.element_type = "NeverRegistered".to_string();
-        mystery.element_data = b"whatever this package meant".to_vec();
+        MINI_CHECK!(!Element::is_registered("NeverRegistered"));
 
-        let loaded = Element::pb_loads(&mystery.pb_dumps()).unwrap();
+        let mut proto = Element::from_mesh(unit_quad(), "mystery").to_proto();
+        proto.element_type = "NeverRegistered".to_string();
+        proto.element_data = b"whatever this package meant".to_vec();
+
+        let loaded = Element::pb_loads_polymorphic(&prost::Message::encode_to_vec(&proto)).unwrap();
         MINI_CHECK!(loaded.name == "mystery");
         MINI_CHECK!(matches!(loaded.geometry(), ElementGeometry::Mesh(_)));
-
-        let again = Element::pb_loads(&loaded.pb_dumps()).unwrap();
-        MINI_CHECK!(again.element_type == "NeverRegistered");
-        MINI_CHECK!(again.element_data == b"whatever this package meant".to_vec());
-    })
-}
-
-pub fn run_element_registry_leaves_base_bytes_unchanged() -> TestResult {
-    MINI_TEST!("RegistryLeavesBaseBytesUnchanged", {
-        use crate::element::Element;
-
-        // proto3 omits empty scalars, so adding element_type/element_data must not have
-        // changed one byte of a plain Element - the cross-language golden files depend on it.
-        let e = Element::from_mesh(unit_quad(), "plain");
-        let proto = e.to_proto();
-
-        MINI_CHECK!(proto.element_type.is_empty());
-        MINI_CHECK!(proto.element_data.is_empty());
     })
 }
 
 pub fn run_element_features_round_trip() -> TestResult {
-    MINI_TEST!("FeaturesRoundTrip", {
-        use crate::element::{Element, ElementFeature};
-        use crate::{Point, Polyline, Vector};
+    MINI_TEST!("Features Round Trip", {
+        use crate::element::Element;
+        use crate::element::ElementFeature;
+        use crate::Point;
+        use crate::Polyline;
+        use crate::Vector;
 
-        // insertion_vectors / dimensions / features are the general shape that replaced the
-        // per-domain arrays (joint_types and friends) that used to sit on this message. All
-        // three must survive a round trip or a domain reinvents its own fields.
         let mut e = Element::from_mesh(unit_quad(), "plate_0");
-        e.insertion_vectors = vec![Vector::new(0.0, 0.0, 1.0), Vector::new(1.0, 0.0, 0.0)];
-        e.dimensions = Some(Vector::new(120.0, 80.0, 12.5));
-        e.features.push(ElementFeature::new(
+        e.set_insertion_vectors(vec![Vector::new(0.0, 0.0, 1.0), Vector::new(1.0, 0.0, 0.0)]);
+        e.set_dimensions(Vector::new(120.0, 80.0, 12.5));
+        e.add_feature(ElementFeature::new(
             "cut",
             2,
             vec![Polyline::new(vec![
@@ -446,150 +448,140 @@ pub fn run_element_features_round_trip() -> TestResult {
             ])],
             "notch",
         ));
-        let feature_guid = e.features[0].guid().to_string();
+        let feature_guid = e.features()[0].guid().to_string();
 
         let loaded = Element::pb_loads(&e.pb_dumps()).unwrap();
 
-        MINI_CHECK!(loaded.insertion_vectors.len() == 2);
-        MINI_CHECK!(loaded.dimensions.is_some());
-        // z is the thickness - the whole reason this is a vector rather than one f64.
-        MINI_CHECK!((loaded.dimensions.as_ref().unwrap()[2] - 12.5).abs() < 1e-9);
-        MINI_CHECK!(loaded.features.len() == 1);
-        MINI_CHECK!(loaded.features[0].feature_type == "cut");
-        MINI_CHECK!(loaded.features[0].face_index == 2);
-        MINI_CHECK!(loaded.features[0].name == "notch");
-        MINI_CHECK!(loaded.features[0].outlines.len() == 1);
-        // The guid is the feature's handle: a package that wrote a joint has to find it again, and
-        // the index in `features` moves the moment an earlier feature is removed.
-        MINI_CHECK!(loaded.features[0].guid() == feature_guid);
+        MINI_CHECK!(loaded.insertion_vectors().len() == 2);
+        MINI_CHECK!(loaded.insertion_vectors()[0] == Vector::new(0.0, 0.0, 1.0));
+        MINI_CHECK!(loaded.dimensions().is_some());
+        MINI_CHECK!((loaded.dimensions().as_ref().unwrap()[2] - 12.5).abs() < 1e-9);
+        MINI_CHECK!(loaded.features().len() == 1);
+        MINI_CHECK!(loaded.features()[0].feature_type == "cut");
+        MINI_CHECK!(loaded.features()[0].face_index == 2);
+        MINI_CHECK!(loaded.features()[0].name == "notch");
+        MINI_CHECK!(loaded.features()[0].outlines.len() == 1);
+        MINI_CHECK!(loaded.features()[0].guid() == feature_guid);
     })
 }
 
 pub fn run_element_dimensions_are_nominal_not_measured() -> TestResult {
-    MINI_TEST!("DimensionsAreNominalNotMeasured", {
+    MINI_TEST!("Dimensions Are Nominal Not Measured", {
         use crate::element::Element;
         use crate::Vector;
 
-        // dimensions is AUTHORED intent; obb() MEASURES what exists. They are allowed to
-        // disagree, and this pins that they are genuinely independent.
         let mut e = Element::from_mesh(unit_quad(), "plate");
-        MINI_CHECK!(e.dimensions.is_none()); // never authored
+        MINI_CHECK!(e.dimensions().is_none());
 
-        e.dimensions = Some(Vector::new(120.0, 80.0, 12.5)); // nothing like the unit quad
+        e.set_dimensions(Vector::new(120.0, 80.0, 12.5));
         let measured = e.obb();
 
-        MINI_CHECK!((e.dimensions.as_ref().unwrap()[0] - 120.0).abs() < 1e-9);
-        MINI_CHECK!(measured.half_size[0] < 1.0); // the geometry is still a unit quad
+        MINI_CHECK!((e.dimensions().as_ref().unwrap()[0] - 120.0).abs() < 1e-9);
+        MINI_CHECK!(measured.half_size[0] < 1.0);
+    })
+}
+
+pub fn run_element_registry_leaves_base_bytes_unchanged() -> TestResult {
+    MINI_TEST!("Registry Leaves Base Bytes Unchanged", {
+        use crate::element::Element;
+
+        let e = Element::from_mesh(unit_quad(), "plain");
+        let proto: crate::proto::Element = prost::Message::decode(e.pb_dumps().as_slice()).unwrap();
+
+        MINI_CHECK!(proto.element_type.is_empty());
+        MINI_CHECK!(proto.element_data.is_empty());
+        MINI_CHECK!(e.element_type_name().is_empty());
     })
 }
 
 pub fn run_element_registry_json_round_trip() -> TestResult {
-    MINI_TEST!("RegistryJsonRoundTrip", {
+    MINI_TEST!("Registry Json Round Trip", {
         use crate::element::Element;
 
-        // The JSON path reconstructs the derived type too, through the SAME factory. Before
-        // this, JSON kept the payload but always handed back a base - so a package could round
-        // trip through .pb and not through .json, for no reason a caller could see.
-        //
-        // Rust has no inheritance, so "the derived type came back" is expressed as "the
-        // package's factory ran and produced the element": it renames what it builds.
-        fn build(data: &[u8]) -> Option<Element> {
-            let mut e = Element::pb_loads(data).ok()?;
-            e.name = format!("{}_via_factory", e.name);
-            Some(e)
-        }
-        Element::register_type("TestPlate", build);
+        Element::register_type("TestPlate", test_plate);
 
         let mut plate = Element::from_mesh(unit_quad(), "plate_json");
         plate.element_type = "TestPlate".to_string();
         plate.element_data = b"9.5,7,8".to_vec();
-
         let loaded = Element::file_json_loads_polymorphic(&plate.file_json_dumps());
 
         MINI_CHECK!(loaded.name == "plate_json_via_factory");
-        MINI_CHECK!(loaded.element_type == "TestPlate");
-        MINI_CHECK!(loaded.element_data == b"9.5,7,8".to_vec());
+        MINI_CHECK!(loaded.guid() == plate.guid());
+        MINI_CHECK!(loaded.element_type_name() == "TestPlate");
+        MINI_CHECK!(loaded.element_data_dumps() == b"9.5,7,8");
     })
 }
 
 pub fn run_element_throwing_factory_degrades_to_base() -> TestResult {
-    MINI_TEST!("ThrowingFactoryDegradesToBase", {
-        use crate::element::{Element, ElementGeometry};
+    MINI_TEST!("Throwing Factory Degrades To Base", {
+        use crate::element::Element;
+        use crate::element::ElementGeometry;
 
-        // A factory that declines is a bug in that package, and it must not take the whole
-        // Session down: one malformed element must not make every other element unreachable.
-        // C++ and Python express the same failure by throwing; a Rust factory returns None.
         fn decline(_data: &[u8]) -> Option<Element> {
             None
         }
         Element::register_type("Exploding", decline);
 
-        let mut victim = Element::from_mesh(unit_quad(), "victim");
-        victim.element_type = "Exploding".to_string();
+        let mut proto = Element::from_mesh(unit_quad(), "victim").to_proto();
+        proto.element_type = "Exploding".to_string();
 
-        let loaded = Element::pb_loads_polymorphic(&victim.pb_dumps()).unwrap();
+        let loaded = Element::pb_loads_polymorphic(&prost::Message::encode_to_vec(&proto)).unwrap();
         MINI_CHECK!(loaded.name == "victim");
         MINI_CHECK!(matches!(loaded.geometry(), ElementGeometry::Mesh(_)));
     })
 }
 
 pub fn run_element_unknown_type_survives_resave() -> TestResult {
-    MINI_TEST!("UnknownTypeSurvivesResave", {
+    MINI_TEST!("Unknown Type Survives Resave", {
         use crate::element::Element;
 
-        // The whole point of element_type/element_data: a viewer WITHOUT the wood package opens
-        // a wood file, edits something else, and saves. If the kernel does not carry these two
-        // through, that save silently destroys the payload - the geometry still looks right, so
-        // nothing announces the loss. This is the test that would have caught it.
-        let mut plate = Element::from_mesh(unit_quad(), "plate");
-        plate.element_type = "wood::Plate".to_string();
-        plate.element_data = b"the package's own bytes".to_vec();
-        let original = plate.pb_dumps();
+        let mut proto = Element::from_mesh(unit_quad(), "plate").to_proto();
+        proto.element_type = "wood::Plate".to_string();
+        proto.element_data = b"the package's own bytes".to_vec();
+        let original = prost::Message::encode_to_vec(&proto);
 
         let loaded = Element::pb_loads(&original).unwrap();
         MINI_CHECK!(loaded.element_type_name() == "wood::Plate");
         MINI_CHECK!(loaded.element_data_dumps() == b"the package's own bytes");
 
-        let resaved = Element::pb_loads(&loaded.pb_dumps()).unwrap();
+        let resaved: crate::proto::Element =
+            prost::Message::decode(loaded.pb_dumps().as_slice()).unwrap();
         MINI_CHECK!(resaved.element_type == "wood::Plate");
         MINI_CHECK!(resaved.element_data == b"the package's own bytes".to_vec());
     })
 }
 
 pub fn run_element_duplicate_keeps_every_field() -> TestResult {
-    MINI_TEST!("DuplicateKeepsEveryField", {
-        use crate::element::{Element, ElementFeature};
+    MINI_TEST!("Duplicate Keeps Every Field", {
+        use crate::element::Element;
+        use crate::element::ElementFeature;
         use crate::Vector;
 
-        // A copy that drops fields is the same silent data loss as a save that drops them, and
-        // a duplicate is what an assembly does to place the same part twice.
         let mut e = Element::from_mesh(unit_quad(), "original");
-        e.insertion_vectors = vec![Vector::new(0.0, 0.0, 1.0)];
-        e.dimensions = Some(Vector::new(120.0, 80.0, 12.5));
-        e.features = vec![ElementFeature::new("cut", 2, vec![], "notch")];
+        e.set_insertion_vectors(vec![Vector::new(0.0, 0.0, 1.0)]);
+        e.set_dimensions(Vector::new(120.0, 80.0, 12.5));
+        e.add_feature(ElementFeature::new("cut", 2, vec![], "notch"));
 
         let copy = e.duplicate();
 
-        MINI_CHECK!(copy == e); // every carried field compares equal
-        MINI_CHECK!(copy.guid() != e.guid()); // but it is a different object
-        MINI_CHECK!(copy.insertion_vectors.len() == 1);
-        MINI_CHECK!(copy.dimensions.is_some());
-        MINI_CHECK!(copy.features.len() == 1);
+        MINI_CHECK!(copy == e);
+        MINI_CHECK!(copy.guid() != e.guid());
+        MINI_CHECK!(copy.insertion_vectors().len() == 1);
+        MINI_CHECK!(copy.dimensions().is_some());
+        MINI_CHECK!(copy.features().len() == 1);
     })
 }
 
 pub fn run_element_equality_compares_carried_fields() -> TestResult {
-    MINI_TEST!("EqualityComparesCarriedFields", {
+    MINI_TEST!("Equality Compares Carried Fields", {
         use crate::element::Element;
         use crate::Vector;
 
-        // Equality that looks at name and geometry only makes every round-trip test above
-        // vacuous: it would pass while the loader dropped all five of the other fields.
         let a = Element::from_mesh(unit_quad(), "same");
         let mut b = Element::from_mesh(unit_quad(), "same");
         MINI_CHECK!(a == b);
 
-        b.dimensions = Some(Vector::new(1.0, 2.0, 3.0));
+        b.set_dimensions(Vector::new(1.0, 2.0, 3.0));
         MINI_CHECK!(a != b);
     })
 }
@@ -601,7 +593,8 @@ pub fn run_element_equality_compares_carried_fields() -> TestResult {
 pub fn run_element_feature_constructor() -> TestResult {
     MINI_TEST!("Constructor", {
         use crate::element::ElementFeature;
-        use crate::{Point, Polyline};
+        use crate::Point;
+        use crate::Polyline;
 
         let outline = Polyline::new(vec![
             Point::new(0.0, 0.0, 0.0),
@@ -619,17 +612,16 @@ pub fn run_element_feature_constructor() -> TestResult {
         let same = ElementFeature::new("cut", 2, vec![outline.clone()], "notch");
         MINI_CHECK!(f == same);
         MINI_CHECK!(!(f != same));
-        // Data equality, not identity - the two guids differ and the features are still equal.
         MINI_CHECK!(f.guid() != same.guid());
 
         let other = ElementFeature::new("drill", 2, vec![outline], "notch");
         MINI_CHECK!(f != other);
 
         MINI_CHECK!(f.str() == "ElementFeature(cut, face 2, 1 outline(s))");
-        MINI_CHECK!(format!("{}", f) == f.str());
+        MINI_CHECK!(f.repr() == f.str());
 
         let empty = ElementFeature::default();
-        MINI_CHECK!(empty.face_index == 0);
+        MINI_CHECK!(empty.face_index == -1);
         MINI_CHECK!(empty.outlines.is_empty());
     })
 }
@@ -637,7 +629,8 @@ pub fn run_element_feature_constructor() -> TestResult {
 pub fn run_element_feature_json_roundtrip() -> TestResult {
     MINI_TEST!("Json Roundtrip", {
         use crate::element::ElementFeature;
-        use crate::{Point, Polyline};
+        use crate::Point;
+        use crate::Polyline;
 
         let f = ElementFeature::new(
             "cut",
@@ -658,7 +651,6 @@ pub fn run_element_feature_json_roundtrip() -> TestResult {
 
         MINI_CHECK!(loaded == f);
         MINI_CHECK!(loaded.outlines.len() == 1);
-        // Read back, not re-minted: whoever holds the guid must still find this feature.
         MINI_CHECK!(loaded.guid() == feature_guid);
     })
 }
@@ -666,7 +658,8 @@ pub fn run_element_feature_json_roundtrip() -> TestResult {
 pub fn run_element_feature_protobuf_roundtrip() -> TestResult {
     MINI_TEST!("Protobuf Roundtrip", {
         use crate::element::ElementFeature;
-        use crate::{Point, Polyline};
+        use crate::Point;
+        use crate::Polyline;
 
         let f = ElementFeature::new(
             "drill",
@@ -706,7 +699,7 @@ REGISTER_MINI_TEST!("Element", "Place", crate::element_test::run_element_place);
 REGISTER_MINI_TEST!(
     "Element",
     "Add Geometry Op",
-    crate::element_test::run_element_add_feature
+    crate::element_test::run_element_add_geometry_op
 );
 REGISTER_MINI_TEST!("Element", "AABB", crate::element_test::run_element_aabb);
 REGISTER_MINI_TEST!("Element", "OBB", crate::element_test::run_element_obb);
@@ -743,42 +736,57 @@ REGISTER_MINI_TEST!(
 );
 REGISTER_MINI_TEST!(
     "Element",
-    "RegistryRoundTrip",
+    "Polylines Empty Without Mesh",
+    crate::element_test::run_element_polylines_empty_without_mesh
+);
+REGISTER_MINI_TEST!(
+    "Element",
+    "Registry Round Trip",
     crate::element_test::run_element_registry_round_trip
 );
 REGISTER_MINI_TEST!(
     "Element",
-    "RegistryUnknownTypeDegrades",
+    "Registry Unknown Type Degrades",
     crate::element_test::run_element_registry_unknown_type_degrades
 );
 REGISTER_MINI_TEST!(
     "Element",
-    "RegistryLeavesBaseBytesUnchanged",
-    crate::element_test::run_element_registry_leaves_base_bytes_unchanged
-);
-REGISTER_MINI_TEST!(
-    "Element",
-    "FeaturesRoundTrip",
+    "Features Round Trip",
     crate::element_test::run_element_features_round_trip
 );
 REGISTER_MINI_TEST!(
     "Element",
-    "DimensionsAreNominalNotMeasured",
+    "Dimensions Are Nominal Not Measured",
     crate::element_test::run_element_dimensions_are_nominal_not_measured
 );
 REGISTER_MINI_TEST!(
     "Element",
-    "UnknownTypeSurvivesResave",
+    "Registry Leaves Base Bytes Unchanged",
+    crate::element_test::run_element_registry_leaves_base_bytes_unchanged
+);
+REGISTER_MINI_TEST!(
+    "Element",
+    "Registry Json Round Trip",
+    crate::element_test::run_element_registry_json_round_trip
+);
+REGISTER_MINI_TEST!(
+    "Element",
+    "Throwing Factory Degrades To Base",
+    crate::element_test::run_element_throwing_factory_degrades_to_base
+);
+REGISTER_MINI_TEST!(
+    "Element",
+    "Unknown Type Survives Resave",
     crate::element_test::run_element_unknown_type_survives_resave
 );
 REGISTER_MINI_TEST!(
     "Element",
-    "DuplicateKeepsEveryField",
+    "Duplicate Keeps Every Field",
     crate::element_test::run_element_duplicate_keeps_every_field
 );
 REGISTER_MINI_TEST!(
     "Element",
-    "EqualityComparesCarriedFields",
+    "Equality Compares Carried Fields",
     crate::element_test::run_element_equality_compares_carried_fields
 );
 REGISTER_MINI_TEST!(
@@ -795,14 +803,4 @@ REGISTER_MINI_TEST!(
     "ElementFeature",
     "Protobuf Roundtrip",
     crate::element_test::run_element_feature_protobuf_roundtrip
-);
-REGISTER_MINI_TEST!(
-    "Element",
-    "RegistryJsonRoundTrip",
-    crate::element_test::run_element_registry_json_round_trip
-);
-REGISTER_MINI_TEST!(
-    "Element",
-    "ThrowingFactoryDegradesToBase",
-    crate::element_test::run_element_throwing_factory_degrades_to_base
 );

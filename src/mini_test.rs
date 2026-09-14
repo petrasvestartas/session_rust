@@ -367,6 +367,7 @@ pub fn get_all_tests() -> Vec<RegisteredTest> {
     use crate::element_test::*;
     use crate::file_encoders_test::*;
     use crate::file_obj_test::*;
+    use crate::file_step_test::*;
     use crate::graph_test::*;
     use crate::history_test::*;
     use crate::instance_ref_test::*;
@@ -393,6 +394,7 @@ pub fn get_all_tests() -> Vec<RegisteredTest> {
     use crate::remesh_nurbssurface_grid_test::*;
     use crate::session_config_test::*;
     use crate::session_test::*;
+    use crate::simple_split_test::*;
     use crate::spatial_aabbtree_test::*;
     use crate::spatial_bvh_test::*;
     use crate::spatial_kdtree_test::*;
@@ -405,7 +407,11 @@ pub fn get_all_tests() -> Vec<RegisteredTest> {
 
     let tests = vec![
         // BRep tests
-        RegisteredTest {group: "BRep", name: "Shared Grid Boundary", func: run_brep_shared_grid_boundary},
+        RegisteredTest {
+            group: "BRep",
+            name: "Shared Grid Boundary",
+            func: run_brep_shared_grid_boundary,
+        },
         RegisteredTest {
             group: "BRep",
             name: "Constructor",
@@ -536,6 +542,46 @@ pub fn get_all_tests() -> Vec<RegisteredTest> {
             name: "Volume",
             func: run_brep_volume,
         },
+        RegisteredTest {
+            group: "BRep",
+            name: "Face Polylines Box",
+            func: run_brep_face_polylines_box,
+        },
+        RegisteredTest {
+            group: "BRep",
+            name: "Face Polylines Cylinder Caps Only",
+            func: run_brep_face_polylines_cylinder_caps_only,
+        },
+        RegisteredTest {
+            group: "BRep",
+            name: "Face Polylines Ignores Holes",
+            func: run_brep_face_polylines_ignores_holes,
+        },
+        RegisteredTest {
+            group: "BRep",
+            name: "Face Polylines No Planar Faces",
+            func: run_brep_face_polylines_no_planar_faces,
+        },
+        RegisteredTest {
+            group: "BRep",
+            name: "Face Planes Reversed Flip",
+            func: run_brep_face_planes_reversed_flip,
+        },
+        RegisteredTest {
+            group: "BRep",
+            name: "Face Planes Point Outward",
+            func: run_brep_face_planes_point_outward,
+        },
+        RegisteredTest {
+            group: "BRep",
+            name: "Face Planes Outward Block With Hole",
+            func: run_brep_face_planes_outward_block_with_hole,
+        },
+        RegisteredTest {
+            group: "BRep",
+            name: "Face Planes Outward Under Mirrored Winding",
+            func: run_brep_face_planes_outward_under_mirrored_winding,
+        },
         // Color tests
         RegisteredTest {
             group: "Color",
@@ -561,6 +607,11 @@ pub fn get_all_tests() -> Vec<RegisteredTest> {
             group: "Color",
             name: "Presets",
             func: run_color_presets,
+        },
+        RegisteredTest {
+            group: "Color",
+            name: "Serialization Errors",
+            func: run_color_serialization_errors,
         },
         // Point tests
         RegisteredTest {
@@ -602,6 +653,11 @@ pub fn get_all_tests() -> Vec<RegisteredTest> {
             group: "Point",
             name: "Squared Distance",
             func: run_point_squared_distance,
+        },
+        RegisteredTest {
+            group: "Point",
+            name: "Interpolate",
+            func: run_point_interpolate,
         },
         RegisteredTest {
             group: "Point",
@@ -729,11 +785,6 @@ pub fn get_all_tests() -> Vec<RegisteredTest> {
             name: "Average Normal",
             func: run_vector_average_normal,
         },
-        RegisteredTest {
-            group: "Vector",
-            name: "Interpolate Points",
-            func: run_vector_interpolate_points,
-        },
         // Tolerance tests
         RegisteredTest {
             group: "Tolerance",
@@ -772,11 +823,6 @@ pub fn get_all_tests() -> Vec<RegisteredTest> {
         },
         RegisteredTest {
             group: "Tolerance",
-            name: "Runtime Modification",
-            func: run_tolerance_runtime_modification,
-        },
-        RegisteredTest {
-            group: "Tolerance",
             name: "To Radians",
             func: run_tolerance_to_radians,
         },
@@ -784,6 +830,26 @@ pub fn get_all_tests() -> Vec<RegisteredTest> {
             group: "Tolerance",
             name: "To Degrees",
             func: run_tolerance_to_degrees,
+        },
+        RegisteredTest {
+            group: "Tolerance",
+            name: "Runtime Modification",
+            func: run_tolerance_runtime_modification,
+        },
+        RegisteredTest {
+            group: "Tolerance",
+            name: "Json Roundtrip",
+            func: run_tolerance_json_roundtrip,
+        },
+        RegisteredTest {
+            group: "Tolerance",
+            name: "Protobuf Roundtrip",
+            func: run_tolerance_protobuf_roundtrip,
+        },
+        RegisteredTest {
+            group: "Tolerance",
+            name: "Serialization Errors",
+            func: run_tolerance_serialization_errors,
         },
         RegisteredTest {
             group: "Tolerance",
@@ -954,6 +1020,21 @@ pub fn get_all_tests() -> Vec<RegisteredTest> {
         },
         RegisteredTest {
             group: "Polyline",
+            name: "From Coords",
+            func: run_polyline_from_coords,
+        },
+        RegisteredTest {
+            group: "Polyline",
+            name: "From Sides",
+            func: run_polyline_from_sides,
+        },
+        RegisteredTest {
+            group: "Polyline",
+            name: "Rectangle",
+            func: run_polyline_rectangle,
+        },
+        RegisteredTest {
+            group: "Polyline",
             name: "Transformation",
             func: run_polyline_transformation,
         },
@@ -984,6 +1065,11 @@ pub fn get_all_tests() -> Vec<RegisteredTest> {
         },
         RegisteredTest {
             group: "Polyline",
+            name: "Closed",
+            func: run_polyline_closed,
+        },
+        RegisteredTest {
+            group: "Polyline",
             name: "Reverse",
             func: run_polyline_reverse,
         },
@@ -991,66 +1077,6 @@ pub fn get_all_tests() -> Vec<RegisteredTest> {
             group: "Polyline",
             name: "Closest Point",
             func: run_polyline_closest_point,
-        },
-        RegisteredTest {
-            group: "Polyline",
-            name: "Extend Segment",
-            func: run_polyline_extend_segment,
-        },
-        RegisteredTest {
-            group: "Polyline",
-            name: "Extend Segment Equally",
-            func: run_polyline_extend_segment_equally,
-        },
-        RegisteredTest {
-            group: "Polyline",
-            name: "Get Points",
-            func: run_polyline_get_points,
-        },
-        RegisteredTest {
-            group: "Polyline",
-            name: "Shift",
-            func: run_polyline_shift,
-        },
-        RegisteredTest {
-            group: "Polyline",
-            name: "Point At",
-            func: run_polyline_point_at,
-        },
-        RegisteredTest {
-            group: "Polyline",
-            name: "Is Clockwise",
-            func: run_polyline_is_clockwise,
-        },
-        RegisteredTest {
-            group: "Polyline",
-            name: "Convex Corners",
-            func: run_polyline_convex_corners,
-        },
-        RegisteredTest {
-            group: "Polyline",
-            name: "Tween",
-            func: run_polyline_tween,
-        },
-        RegisteredTest {
-            group: "Polyline",
-            name: "Average Plane",
-            func: run_polyline_average_plane,
-        },
-        RegisteredTest {
-            group: "Polyline",
-            name: "From Coords",
-            func: run_polyline_from_coords,
-        },
-        RegisteredTest {
-            group: "Polyline",
-            name: "From Sides",
-            func: run_polyline_from_sides,
-        },
-        RegisteredTest {
-            group: "Polyline",
-            name: "Rectangle",
-            func: run_polyline_rectangle,
         },
         RegisteredTest {
             group: "Polyline",
@@ -1084,6 +1110,16 @@ pub fn get_all_tests() -> Vec<RegisteredTest> {
         },
         RegisteredTest {
             group: "Polyline",
+            name: "Extend Segment",
+            func: run_polyline_extend_segment,
+        },
+        RegisteredTest {
+            group: "Polyline",
+            name: "Extend Segment Equally",
+            func: run_polyline_extend_segment_equally,
+        },
+        RegisteredTest {
+            group: "Polyline",
             name: "Extend Line Segment",
             func: run_polyline_extend_line_segment,
         },
@@ -1091,6 +1127,16 @@ pub fn get_all_tests() -> Vec<RegisteredTest> {
             group: "Polyline",
             name: "Shrink Line Segment",
             func: run_polyline_shrink_line_segment,
+        },
+        RegisteredTest {
+            group: "Polyline",
+            name: "Get Points",
+            func: run_polyline_get_points,
+        },
+        RegisteredTest {
+            group: "Polyline",
+            name: "Get Lines",
+            func: run_polyline_get_lines,
         },
         RegisteredTest {
             group: "Polyline",
@@ -1109,13 +1155,33 @@ pub fn get_all_tests() -> Vec<RegisteredTest> {
         },
         RegisteredTest {
             group: "Polyline",
-            name: "Closed",
-            func: run_polyline_closed,
+            name: "Shift",
+            func: run_polyline_shift,
         },
         RegisteredTest {
             group: "Polyline",
-            name: "Get Lines",
-            func: run_polyline_get_lines,
+            name: "Point At",
+            func: run_polyline_point_at,
+        },
+        RegisteredTest {
+            group: "Polyline",
+            name: "Is Clockwise",
+            func: run_polyline_is_clockwise,
+        },
+        RegisteredTest {
+            group: "Polyline",
+            name: "Convex Corners",
+            func: run_polyline_convex_corners,
+        },
+        RegisteredTest {
+            group: "Polyline",
+            name: "Tween",
+            func: run_polyline_tween,
+        },
+        RegisteredTest {
+            group: "Polyline",
+            name: "Average Plane",
+            func: run_polyline_average_plane,
         },
         RegisteredTest {
             group: "Polyline",
@@ -1558,7 +1624,7 @@ pub fn get_all_tests() -> Vec<RegisteredTest> {
         },
         RegisteredTest {
             group: "Mesh",
-            name: "Loft concave with holes and collinear",
+            name: "Loft Concave With Holes",
             func: run_mesh_loft_concave_with_holes_and_collinear,
         },
         RegisteredTest {
@@ -1573,6 +1639,11 @@ pub fn get_all_tests() -> Vec<RegisteredTest> {
         },
         RegisteredTest {
             group: "Mesh",
+            name: "Loft With Quads And Triangles",
+            func: run_mesh_loft_panels,
+        },
+        RegisteredTest {
+            group: "Mesh",
             name: "Boolean Queries",
             func: run_mesh_boolean_queries,
         },
@@ -1583,12 +1654,17 @@ pub fn get_all_tests() -> Vec<RegisteredTest> {
         },
         RegisteredTest {
             group: "Mesh",
+            name: "Edges",
+            func: run_mesh_edges,
+        },
+        RegisteredTest {
+            group: "Mesh",
             name: "Create Dodecahedron",
             func: run_mesh_create_dodecahedron,
         },
         RegisteredTest {
             group: "Mesh",
-            name: "Vertex and Face Operations",
+            name: "Vertex And Face Operations",
             func: run_mesh_vertex_and_face_operations,
         },
         RegisteredTest {
@@ -1618,62 +1694,164 @@ pub fn get_all_tests() -> Vec<RegisteredTest> {
         },
         RegisteredTest {
             group: "Mesh",
-            name: "Loft with quads and triangles",
-            func: run_mesh_loft_panels,
+            name: "Loft Plate Four Holes",
+            func: run_mesh_loft_plate_four_holes,
         },
         RegisteredTest {
             group: "Mesh",
-            name: "Edges",
-            func: run_mesh_edges,
-        },
-        RegisteredTest {
-            group: "Mesh",
-            name: "Loft plate_failing 15-vert outer + 3 holes",
-            func: run_mesh_loft_plate_failing,
-        },
-        RegisteredTest {
-            group: "Mesh",
-            name: "Loft plate_v2 15-vert outer + 3 holes",
+            name: "Loft Plate V2",
             func: run_mesh_loft_plate_v2,
+        },
+        RegisteredTest {
+            group: "Mesh",
+            name: "Loft Plate V3",
+            func: run_mesh_loft_plate_v3,
+        },
+        RegisteredTest {
+            group: "Mesh",
+            name: "Vertex Neighbors",
+            func: run_mesh_vertex_neighbors,
+        },
+        RegisteredTest {
+            group: "Mesh",
+            name: "Vertices On Boundary",
+            func: run_mesh_vertices_on_boundary,
+        },
+        RegisteredTest {
+            group: "Mesh",
+            name: "Edges On Boundary",
+            func: run_mesh_edges_on_boundary,
+        },
+        RegisteredTest {
+            group: "Mesh",
+            name: "Faces On Boundary",
+            func: run_mesh_faces_on_boundary,
+        },
+        RegisteredTest {
+            group: "Mesh",
+            name: "Halfedge Face",
+            func: run_mesh_halfedge_face,
+        },
+        RegisteredTest {
+            group: "Mesh",
+            name: "Halfedge After Before",
+            func: run_mesh_halfedge_after_before,
+        },
+        RegisteredTest {
+            group: "Mesh",
+            name: "Halfedge Loop",
+            func: run_mesh_halfedge_loop,
+        },
+        RegisteredTest {
+            group: "Mesh",
+            name: "Halfedge Strip",
+            func: run_mesh_halfedge_strip,
+        },
+        RegisteredTest {
+            group: "Mesh",
+            name: "Vertex Sample",
+            func: run_mesh_vertex_sample,
+        },
+        RegisteredTest {
+            group: "Mesh",
+            name: "Edge Sample",
+            func: run_mesh_edge_sample,
+        },
+        RegisteredTest {
+            group: "Mesh",
+            name: "Face Sample",
+            func: run_mesh_face_sample,
+        },
+        RegisteredTest {
+            group: "Mesh",
+            name: "Face Center",
+            func: run_mesh_face_center,
+        },
+        RegisteredTest {
+            group: "Mesh",
+            name: "Face Polygon",
+            func: run_mesh_face_polygon,
+        },
+        RegisteredTest {
+            group: "Mesh",
+            name: "Flip Cycles",
+            func: run_mesh_flip_cycles,
+        },
+        RegisteredTest {
+            group: "Mesh",
+            name: "Face Normal Unitized",
+            func: run_mesh_face_normal_unitized,
+        },
+        RegisteredTest {
+            group: "Mesh",
+            name: "Default Attributes",
+            func: run_mesh_default_attributes,
+        },
+        RegisteredTest {
+            group: "Mesh",
+            name: "Vertex Attribute",
+            func: run_mesh_vertex_attribute,
+        },
+        RegisteredTest {
+            group: "Mesh",
+            name: "Face Attribute",
+            func: run_mesh_face_attribute,
+        },
+        RegisteredTest {
+            group: "Mesh",
+            name: "Edge Attribute",
+            func: run_mesh_edge_attribute,
+        },
+        RegisteredTest {
+            group: "Mesh",
+            name: "Vertices Attribute Bulk",
+            func: run_mesh_vertices_attribute_bulk,
+        },
+        RegisteredTest {
+            group: "Mesh",
+            name: "Vertices Where",
+            func: run_mesh_vertices_where,
+        },
+        RegisteredTest {
+            group: "Mesh",
+            name: "Faces Where",
+            func: run_mesh_faces_where,
+        },
+        RegisteredTest {
+            group: "Mesh",
+            name: "Edges Where",
+            func: run_mesh_edges_where,
+        },
+        RegisteredTest {
+            group: "Mesh",
+            name: "Vertices Where Predicate",
+            func: run_mesh_vertices_where_predicate,
+        },
+        RegisteredTest {
+            group: "Mesh",
+            name: "Faces Where Predicate",
+            func: run_mesh_faces_where_predicate,
+        },
+        RegisteredTest {
+            group: "Mesh",
+            name: "Edges Where Predicate",
+            func: run_mesh_edges_where_predicate,
         },
         RegisteredTest {
             group: "Mesh",
             name: "Refresh Guid",
             func: run_mesh_refresh_guid,
         },
+        RegisteredTest {
+            group: "Mesh",
+            name: "Assignment Keeps Objectcolor",
+            func: run_mesh_assignment_keeps_objectcolor,
+        },
         // NurbsCurve tests
         RegisteredTest {
             group: "NurbsCurve",
             name: "Constructor",
             func: run_nurbscurve_constructor,
-        },
-        RegisteredTest {
-            group: "NurbsCurve",
-            name: "Attributes",
-            func: run_nurbscurve_attributes,
-        },
-        // TODO(f64-followup): rebaseline high-precision expected values for f64 NURBS
-        // RegisteredTest { group: "NurbsCurve", name: "Conversions", func: run_nurbscurve_conversions },
-        // RegisteredTest { group: "NurbsCurve", name: "Evaluation", func: run_nurbscurve_evaluation },
-        RegisteredTest {
-            group: "NurbsCurve",
-            name: "Modifications",
-            func: run_nurbscurve_modifications,
-        },
-        RegisteredTest {
-            group: "NurbsCurve",
-            name: "Json Roundtrip",
-            func: run_nurbscurve_json_roundtrip,
-        },
-        RegisteredTest {
-            group: "NurbsCurve",
-            name: "Protobuf Roundtrip",
-            func: run_nurbscurve_protobuf_roundtrip,
-        },
-        RegisteredTest {
-            group: "NurbsCurve",
-            name: "Transformations",
-            func: run_nurbscurve_transformations,
         },
         RegisteredTest {
             group: "NurbsCurve",
@@ -1692,13 +1870,53 @@ pub fn get_all_tests() -> Vec<RegisteredTest> {
         },
         RegisteredTest {
             group: "NurbsCurve",
+            name: "Join",
+            func: run_nurbscurve_join,
+        },
+        RegisteredTest {
+            group: "NurbsCurve",
+            name: "Attributes",
+            func: run_nurbscurve_attributes,
+        },
+        RegisteredTest {
+            group: "NurbsCurve",
+            name: "Conversions",
+            func: run_nurbscurve_conversions,
+        },
+        RegisteredTest {
+            group: "NurbsCurve",
+            name: "Evaluation",
+            func: run_nurbscurve_evaluation,
+        },
+        RegisteredTest {
+            group: "NurbsCurve",
+            name: "Modifications",
+            func: run_nurbscurve_modifications,
+        },
+        RegisteredTest {
+            group: "NurbsCurve",
+            name: "Transformations",
+            func: run_nurbscurve_transformations,
+        },
+        RegisteredTest {
+            group: "NurbsCurve",
+            name: "Json Roundtrip",
+            func: run_nurbscurve_json_roundtrip,
+        },
+        RegisteredTest {
+            group: "NurbsCurve",
+            name: "Protobuf Roundtrip",
+            func: run_nurbscurve_protobuf_roundtrip,
+        },
+        RegisteredTest {
+            group: "NurbsCurve",
             name: "Curvature",
             func: run_nurbscurve_curvature,
         },
         RegisteredTest {
             group: "NurbsCurve",
-            name: "Join",
-            func: run_nurbscurve_join,
+            name: "Closest Point",
+            func: run_nurbscurve_closest_point,
         },
         // NurbsSurface tests
         RegisteredTest {
@@ -1763,21 +1981,6 @@ pub fn get_all_tests() -> Vec<RegisteredTest> {
         },
         RegisteredTest {
             group: "NurbsSurface",
-            name: "Json Roundtrip",
-            func: run_nurbssurface_json_roundtrip,
-        },
-        RegisteredTest {
-            group: "NurbsSurface",
-            name: "Protobuf Roundtrip",
-            func: run_nurbssurface_protobuf_roundtrip,
-        },
-        RegisteredTest {
-            group: "NurbsSurface",
-            name: "ClosestPoint",
-            func: run_nurbssurface_closest_point,
-        },
-        RegisteredTest {
-            group: "NurbsSurface",
             name: "Split By Plane",
             func: run_nurbssurface_split_by_plane,
         },
@@ -1801,7 +2004,55 @@ pub fn get_all_tests() -> Vec<RegisteredTest> {
             name: "Split By Brep",
             func: run_nurbssurface_split_by_brep,
         },
+        RegisteredTest {
+            group: "NurbsSurface",
+            name: "Json Roundtrip",
+            func: run_nurbssurface_json_roundtrip,
+        },
+        RegisteredTest {
+            group: "NurbsSurface",
+            name: "Protobuf Roundtrip",
+            func: run_nurbssurface_protobuf_roundtrip,
+        },
+        RegisteredTest {
+            group: "NurbsSurface",
+            name: "Closest Point",
+            func: run_nurbssurface_closest_point,
+        },
+        RegisteredTest {
+            group: "NurbsSurface",
+            name: "Curvature",
+            func: run_nurbssurface_curvature,
+        },
+        // Source-geometry split tests
+        RegisteredTest {
+            group: "SimpleSplit",
+            name: "Split Curve By Curves",
+            func: run_split_curve_by_curves,
+        },
+        RegisteredTest {
+            group: "SimpleSplit",
+            name: "Split BRep Face By Curves",
+            func: run_split_brep_face_by_curves,
+        },
+        RegisteredTest {
+            group: "SimpleSplit",
+            name: "Split Surface By Curves",
+            func: run_split_surface_by_curves,
+        },
+        RegisteredTest { group: "SimpleSplit", name: "Split Line By Curves", func: run_split_line_by_curves },
+        RegisteredTest { group: "SimpleSplit", name: "Split Polyline By Curves", func: run_split_polyline_by_curves },
         // NurbsKnot tests
+        RegisteredTest {
+            group: "NurbsKnot",
+            name: "Nurbsknot Count",
+            func: run_nurbsknot_count,
+        },
+        RegisteredTest {
+            group: "NurbsKnot",
+            name: "Domain Tolerance",
+            func: run_domain_tolerance,
+        },
         RegisteredTest {
             group: "NurbsKnot",
             name: "Make Clamped Uniform",
@@ -1814,8 +2065,33 @@ pub fn get_all_tests() -> Vec<RegisteredTest> {
         },
         RegisteredTest {
             group: "NurbsKnot",
+            name: "Clamp",
+            func: run_clamp,
+        },
+        RegisteredTest {
+            group: "NurbsKnot",
+            name: "Is Valid",
+            func: run_is_valid,
+        },
+        RegisteredTest {
+            group: "NurbsKnot",
             name: "Is Clamped",
             func: run_is_clamped,
+        },
+        RegisteredTest {
+            group: "NurbsKnot",
+            name: "Is Periodic",
+            func: run_is_periodic,
+        },
+        RegisteredTest {
+            group: "NurbsKnot",
+            name: "Get Domain",
+            func: run_get_domain,
+        },
+        RegisteredTest {
+            group: "NurbsKnot",
+            name: "Set Domain",
+            func: run_set_domain,
         },
         RegisteredTest {
             group: "NurbsKnot",
@@ -1824,8 +2100,23 @@ pub fn get_all_tests() -> Vec<RegisteredTest> {
         },
         RegisteredTest {
             group: "NurbsKnot",
+            name: "Multiplicity",
+            func: run_multiplicity,
+        },
+        RegisteredTest {
+            group: "NurbsKnot",
+            name: "Span Count",
+            func: run_span_count,
+        },
+        RegisteredTest {
+            group: "NurbsKnot",
             name: "Find Span",
             func: run_find_span,
+        },
+        RegisteredTest {
+            group: "NurbsKnot",
+            name: "Get Greville Abcissae",
+            func: run_get_greville_abcissae,
         },
         RegisteredTest {
             group: "NurbsKnot",
@@ -1839,22 +2130,22 @@ pub fn get_all_tests() -> Vec<RegisteredTest> {
         },
         RegisteredTest {
             group: "NurbsKnot",
-            name: "Build Interpolation NurbsKnots",
+            name: "Build Interp Nurbsknots",
             func: run_build_interp_nurbsknots,
         },
         RegisteredTest {
             group: "NurbsKnot",
-            name: "Evaluation Basis",
+            name: "Eval Basis",
             func: run_eval_basis,
         },
         RegisteredTest {
             group: "NurbsKnot",
-            name: "Build Fitted NurbsKnots Adaptive",
+            name: "Build Fitted Nurbsknots Adaptive",
             func: run_build_fitted_nurbsknots_adaptive,
         },
         RegisteredTest {
             group: "NurbsKnot",
-            name: "Build Fitted NurbsKnots Periodic Adaptive",
+            name: "Build Fitted Nurbsknots Periodic Adaptive",
             func: run_build_fitted_nurbsknots_periodic_adaptive,
         },
         RegisteredTest {
@@ -1863,8 +2154,16 @@ pub fn get_all_tests() -> Vec<RegisteredTest> {
             func: run_solve_banded_spd,
         },
         // NurbsSurfaceTrimmed tests
-        RegisteredTest { group: "NurbsSurfaceTrimmed", name: "Singular Planar Normal", func: run_nurbssurface_trimmed_singular_planar_normal },
-        RegisteredTest { group: "NurbsSurfaceTrimmed", name: "Crease Loops", func: run_nurbssurface_trimmed_crease_loops },
+        RegisteredTest {
+            group: "NurbsSurfaceTrimmed",
+            name: "Singular Planar Normal",
+            func: run_nurbssurface_trimmed_singular_planar_normal,
+        },
+        RegisteredTest {
+            group: "NurbsSurfaceTrimmed",
+            name: "Crease Loops",
+            func: run_nurbssurface_trimmed_crease_loops,
+        },
         RegisteredTest {
             group: "NurbsSurfaceTrimmed",
             name: "Mesh Loops",
@@ -1900,11 +2199,15 @@ pub fn get_all_tests() -> Vec<RegisteredTest> {
             name: "Point At",
             func: run_nurbssurface_trimmed_point_at,
         },
-        // TODO(f64-followup): NurbsSurfaceTrimmed::mesh produces empty result under f64
         RegisteredTest {
             group: "NurbsSurfaceTrimmed",
             name: "Mesh",
             func: run_nurbssurface_trimmed_mesh,
+        },
+        RegisteredTest {
+            group: "NurbsSurfaceTrimmed",
+            name: "Split By UV Curves",
+            func: run_nurbssurface_trimmed_split_by_uv_curves,
         },
         RegisteredTest {
             group: "NurbsSurfaceTrimmed",
@@ -1920,11 +2223,6 @@ pub fn get_all_tests() -> Vec<RegisteredTest> {
             group: "NurbsSurfaceTrimmed",
             name: "Protobuf Roundtrip",
             func: run_nurbssurface_trimmed_protobuf_roundtrip,
-        },
-        RegisteredTest {
-            group: "NurbsSurfaceTrimmed",
-            name: "Split By UV Curves",
-            func: run_nurbssurface_trimmed_split_by_uv_curves,
         },
         // Closest tests
         RegisteredTest {
@@ -2005,6 +2303,11 @@ pub fn get_all_tests() -> Vec<RegisteredTest> {
         },
         RegisteredTest {
             group: "Primitives",
+            name: "Mesh Edge Pipes",
+            func: run_primitives_mesh_edge_pipes,
+        },
+        RegisteredTest {
+            group: "Primitives",
             name: "Nurbscurve Polyline",
             func: run_primitives_nurbscurve_polyline,
         },
@@ -2050,6 +2353,11 @@ pub fn get_all_tests() -> Vec<RegisteredTest> {
         },
         RegisteredTest {
             group: "Primitives",
+            name: "Nurbssurface Torus",
+            func: run_primitives_nurbssurface_torus,
+        },
+        RegisteredTest {
+            group: "Primitives",
             name: "Nurbssurface Sphere",
             func: run_primitives_nurbssurface_sphere,
         },
@@ -2060,16 +2368,14 @@ pub fn get_all_tests() -> Vec<RegisteredTest> {
         },
         RegisteredTest {
             group: "Primitives",
-            name: "Nurbssurface Torus",
-            func: run_primitives_nurbssurface_torus,
-        },
-        RegisteredTest {
-            group: "Primitives",
             name: "Nurbssurface Ruled",
             func: run_primitives_nurbssurface_ruled,
         },
-        // TODO(f64-followup): high-precision get_cv/closure assertions; rebaseline.
-        // RegisteredTest { group: "Primitives", name: "Nurbssurface Planar", func: run_primitives_nurbssurface_planar },
+        RegisteredTest {
+            group: "Primitives",
+            name: "Nurbssurface Planar",
+            func: run_primitives_nurbssurface_planar,
+        },
         RegisteredTest {
             group: "Primitives",
             name: "Nurbssurface Extrusion",
@@ -2080,9 +2386,21 @@ pub fn get_all_tests() -> Vec<RegisteredTest> {
             name: "Nurbssurface Loft",
             func: run_primitives_nurbssurface_loft,
         },
-        // RegisteredTest { group: "Primitives", name: "Nurbssurface Revolve", func: run_primitives_nurbssurface_revolve },
-        // RegisteredTest { group: "Primitives", name: "Nurbssurface Sweep", func: run_primitives_nurbssurface_sweep },
-        // RegisteredTest { group: "Primitives", name: "Nurbssurface Edge", func: run_primitives_nurbssurface_edge },
+        RegisteredTest {
+            group: "Primitives",
+            name: "Nurbssurface Revolve",
+            func: run_primitives_nurbssurface_revolve,
+        },
+        RegisteredTest {
+            group: "Primitives",
+            name: "Nurbssurface Sweep",
+            func: run_primitives_nurbssurface_sweep,
+        },
+        RegisteredTest {
+            group: "Primitives",
+            name: "Nurbssurface Edge",
+            func: run_primitives_nurbssurface_edge,
+        },
         RegisteredTest {
             group: "Primitives",
             name: "Mesh Quad Mesh",
@@ -2103,8 +2421,11 @@ pub fn get_all_tests() -> Vec<RegisteredTest> {
             name: "Mesh Cone Subdivisions",
             func: run_primitives_mesh_cone_subdivisions,
         },
-        // TODO(f64-followup): rebaseline f64 interpolation expected values.
-        // RegisteredTest { group: "Primitives", name: "Nurbscurve Interpolated", func: run_primitives_nurbscurve_interpolated },
+        RegisteredTest {
+            group: "Primitives",
+            name: "Nurbscurve Interpolated",
+            func: run_primitives_nurbscurve_interpolated,
+        },
         RegisteredTest {
             group: "Primitives",
             name: "Mesh Tetrahedron",
@@ -2129,11 +2450,6 @@ pub fn get_all_tests() -> Vec<RegisteredTest> {
             group: "Primitives",
             name: "Nurbssurface Wave",
             func: run_primitives_nurbssurface_wave,
-        },
-        RegisteredTest {
-            group: "Primitives",
-            name: "Mesh Edge Pipes",
-            func: run_primitives_mesh_edge_pipes,
         },
         // Intersection tests
         RegisteredTest {
@@ -2629,6 +2945,42 @@ pub fn get_all_tests() -> Vec<RegisteredTest> {
             name: "Runtime Modification",
             func: run_session_config_runtime_modification,
         },
+        // FileStep tests
+        RegisteredTest {
+            group: "FileStep",
+            name: "NurbsCurve Round Trip",
+            func: run_file_step_nurbscurve_round_trip,
+        },
+        RegisteredTest {
+            group: "FileStep",
+            name: "NurbsCurve Rational Round Trip",
+            func: run_file_step_nurbscurve_rational_round_trip,
+        },
+        RegisteredTest {
+            group: "FileStep",
+            name: "NurbsSurface Round Trip",
+            func: run_file_step_nurbssurface_round_trip,
+        },
+        RegisteredTest {
+            group: "FileStep",
+            name: "NurbsSurface Rational Round Trip",
+            func: run_file_step_nurbssurface_rational_round_trip,
+        },
+        RegisteredTest {
+            group: "FileStep",
+            name: "NurbsSurfaceTrimmed Round Trip",
+            func: run_file_step_nurbssurface_trimmed_round_trip,
+        },
+        RegisteredTest {
+            group: "FileStep",
+            name: "BRep Read Schoring",
+            func: run_file_step_brep_read_schoring,
+        },
+        RegisteredTest {
+            group: "FileStep",
+            name: "BRep Round Trip",
+            func: run_file_step_brep_round_trip,
+        },
         // FileObj tests
         RegisteredTest {
             group: "FileObj",
@@ -2663,12 +3015,12 @@ pub fn get_all_tests() -> Vec<RegisteredTest> {
         },
         RegisteredTest {
             group: "RemeshCDT",
-            name: "L-shape",
+            name: "L Shape",
             func: run_remesh_cdt_l_shape,
         },
         RegisteredTest {
             group: "RemeshCDT",
-            name: "U-shape",
+            name: "U Shape",
             func: run_remesh_cdt_u_shape,
         },
         RegisteredTest {
@@ -2678,28 +3030,43 @@ pub fn get_all_tests() -> Vec<RegisteredTest> {
         },
         RegisteredTest {
             group: "RemeshCDT",
-            name: "Rectangle with rectangle hole",
+            name: "Rectangle With Rectangle Hole",
             func: run_remesh_cdt_rectangle_with_rectangle_hole,
         },
         RegisteredTest {
             group: "RemeshCDT",
-            name: "Duplicate vertices",
+            name: "Duplicate Vertices",
             func: run_remesh_cdt_duplicate_vertices,
         },
         RegisteredTest {
             group: "RemeshCDT",
-            name: "Tilted rectangle with rectangle hole",
+            name: "Tilted Rectangle With Rectangle Hole",
             func: run_remesh_cdt_tilted_rectangle_with_rectangle_hole,
         },
         RegisteredTest {
             group: "RemeshCDT",
-            name: "Irregular tilted polyline.",
+            name: "Irregular Tilted Polyline",
             func: run_remesh_cdt_irregular_tilted_polyline,
         },
         RegisteredTest {
             group: "RemeshCDT",
-            name: "Irregular tilted polyline with holes.",
+            name: "Irregular Tilted Polyline With Holes",
             func: run_remesh_cdt_irregular_tilted_polyline_with_holes,
+        },
+        RegisteredTest {
+            group: "RemeshCDT",
+            name: "Degenerate Hole Keeps Flat Indices",
+            func: run_remesh_cdt_degenerate_hole_keeps_flat_indices,
+        },
+        RegisteredTest {
+            group: "RemeshCDT",
+            name: "Large Coordinates",
+            func: run_remesh_cdt_large_coordinates,
+        },
+        RegisteredTest {
+            group: "RemeshCDT",
+            name: "Plate Four Holes",
+            func: run_remesh_cdt_plate_four_holes,
         },
         // SpatialBVH tests
         RegisteredTest {
@@ -3231,11 +3598,6 @@ pub fn get_all_tests() -> Vec<RegisteredTest> {
         },
         RegisteredTest {
             group: "TreeNode",
-            name: "Tree",
-            func: run_treenode_tree,
-        },
-        RegisteredTest {
-            group: "TreeNode",
             name: "Add",
             func: run_treenode_add,
         },
@@ -3428,8 +3790,11 @@ pub fn get_all_tests() -> Vec<RegisteredTest> {
             name: "Cylinder",
             func: run_remesh_nurbssurface_adaptive_cylinder,
         },
-        // TODO(f64-followup): vertex count diverges under f64 adaptive remesh.
-        // RegisteredTest { group: "RemeshNurbsSurfaceAdaptive", name: "Cone", func: run_remesh_nurbssurface_adaptive_cone },
+        RegisteredTest {
+            group: "RemeshNurbsSurfaceAdaptive",
+            name: "Cone",
+            func: run_remesh_nurbssurface_adaptive_cone,
+        },
         RegisteredTest {
             group: "RemeshNurbsSurfaceAdaptive",
             name: "Doubly Curved",
@@ -3456,7 +3821,11 @@ pub fn get_all_tests() -> Vec<RegisteredTest> {
             func: run_remesh_nurbssurface_grid_crease_normals,
         },
         // RemeshNurbsSurfaceGrid tests
-        RegisteredTest { group: "RemeshNurbsSurfaceGrid", name: "Singular Planar Normal", func: run_remesh_nurbssurface_grid_singular_planar_normal },
+        RegisteredTest {
+            group: "RemeshNurbsSurfaceGrid",
+            name: "Singular Planar Normal",
+            func: run_remesh_nurbssurface_grid_singular_planar_normal,
+        },
         RegisteredTest {
             group: "RemeshNurbsSurfaceGrid",
             name: "Analytic Normals",
@@ -3577,7 +3946,7 @@ pub fn get_all_tests() -> Vec<RegisteredTest> {
         RegisteredTest {
             group: "Element",
             name: "Add Geometry Op",
-            func: run_element_add_feature,
+            func: run_element_add_geometry_op,
         },
         RegisteredTest {
             group: "Element",
@@ -3626,52 +3995,57 @@ pub fn get_all_tests() -> Vec<RegisteredTest> {
         },
         RegisteredTest {
             group: "Element",
-            name: "RegistryRoundTrip",
+            name: "Polylines Empty Without Mesh",
+            func: run_element_polylines_empty_without_mesh,
+        },
+        RegisteredTest {
+            group: "Element",
+            name: "Registry Round Trip",
             func: run_element_registry_round_trip,
         },
         RegisteredTest {
             group: "Element",
-            name: "RegistryUnknownTypeDegrades",
+            name: "Registry Unknown Type Degrades",
             func: run_element_registry_unknown_type_degrades,
         },
         RegisteredTest {
             group: "Element",
-            name: "RegistryLeavesBaseBytesUnchanged",
-            func: run_element_registry_leaves_base_bytes_unchanged,
-        },
-        RegisteredTest {
-            group: "Element",
-            name: "FeaturesRoundTrip",
+            name: "Features Round Trip",
             func: run_element_features_round_trip,
         },
         RegisteredTest {
             group: "Element",
-            name: "DimensionsAreNominalNotMeasured",
+            name: "Dimensions Are Nominal Not Measured",
             func: run_element_dimensions_are_nominal_not_measured,
         },
         RegisteredTest {
             group: "Element",
-            name: "UnknownTypeSurvivesResave",
-            func: run_element_unknown_type_survives_resave,
+            name: "Registry Leaves Base Bytes Unchanged",
+            func: run_element_registry_leaves_base_bytes_unchanged,
         },
         RegisteredTest {
             group: "Element",
-            name: "RegistryJsonRoundTrip",
+            name: "Registry Json Round Trip",
             func: run_element_registry_json_round_trip,
         },
         RegisteredTest {
             group: "Element",
-            name: "ThrowingFactoryDegradesToBase",
+            name: "Throwing Factory Degrades To Base",
             func: run_element_throwing_factory_degrades_to_base,
         },
         RegisteredTest {
             group: "Element",
-            name: "DuplicateKeepsEveryField",
+            name: "Unknown Type Survives Resave",
+            func: run_element_unknown_type_survives_resave,
+        },
+        RegisteredTest {
+            group: "Element",
+            name: "Duplicate Keeps Every Field",
             func: run_element_duplicate_keeps_every_field,
         },
         RegisteredTest {
             group: "Element",
-            name: "EqualityComparesCarriedFields",
+            name: "Equality Compares Carried Fields",
             func: run_element_equality_compares_carried_fields,
         },
         RegisteredTest {
@@ -3689,40 +4063,41 @@ pub fn get_all_tests() -> Vec<RegisteredTest> {
             name: "Protobuf Roundtrip",
             func: run_element_feature_protobuf_roundtrip,
         },
+        // MeshOffset tests
         RegisteredTest {
             group: "MeshOffset",
-            name: "from_mesh",
+            name: "From Mesh",
             func: run_mesh_offset_from_mesh,
         },
         RegisteredTest {
             group: "MeshOffset",
-            name: "from_mesh_grid",
+            name: "From Mesh Grid",
             func: run_mesh_offset_from_mesh_grid,
         },
         RegisteredTest {
             group: "MeshOffset",
-            name: "from_mesh_layers",
+            name: "From Mesh Layers",
             func: run_mesh_offset_from_mesh_layers,
         },
         RegisteredTest {
             group: "MeshOffset",
-            name: "file_json_dump",
-            func: run_mesh_offset_file_json_dump,
+            name: "Offset Planes",
+            func: run_mesh_offset_offset_planes,
         },
         RegisteredTest {
             group: "MeshOffset",
-            name: "file_json_load",
-            func: run_mesh_offset_file_json_load,
+            name: "Offset Vertices",
+            func: run_mesh_offset_offset_vertices,
         },
         RegisteredTest {
             group: "MeshOffset",
-            name: "to_proto",
-            func: run_mesh_offset_to_proto,
+            name: "Json Roundtrip",
+            func: run_mesh_offset_json_roundtrip,
         },
         RegisteredTest {
             group: "MeshOffset",
-            name: "from_proto",
-            func: run_mesh_offset_from_proto,
+            name: "Protobuf Roundtrip",
+            func: run_mesh_offset_protobuf_roundtrip,
         },
         // AABB tests
         RegisteredTest {
@@ -3862,18 +4237,13 @@ pub fn get_all_tests() -> Vec<RegisteredTest> {
         },
         RegisteredTest {
             group: "Io",
-            name: "String Roundtrip",
-            func: run_io_string_roundtrip,
-        },
-        RegisteredTest {
-            group: "Io",
             name: "Write Read Roundtrip",
             func: run_io_write_read_roundtrip,
         },
         RegisteredTest {
             group: "Io",
-            name: "Read Colors",
-            func: run_io_read_colors,
+            name: "String Roundtrip",
+            func: run_io_string_roundtrip,
         },
         // Matrix tests
         RegisteredTest {
@@ -3971,6 +4341,16 @@ pub fn get_all_tests() -> Vec<RegisteredTest> {
             name: "Protobuf Roundtrip",
             func: run_matrix_protobuf_roundtrip,
         },
+        RegisteredTest {
+            group: "Matrix",
+            name: "Serialization Errors",
+            func: run_matrix_serialization_errors,
+        },
+        RegisteredTest {
+            group: "Matrix",
+            name: "Shape Errors",
+            func: run_matrix_shape_errors,
+        },
         // SpatialKDTree tests
         RegisteredTest {
             group: "SpatialKDTree",
@@ -3992,7 +4372,6 @@ pub fn get_all_tests() -> Vec<RegisteredTest> {
             name: "Radius Search",
             func: run_kdtree_radius_search,
         },
-        // Io tests - were registered by macro only; see the drift guard in run_all.
         // PointCloud tests - were registered by macro only; see the drift guard in run_all.
         RegisteredTest {
             group: "PointCloud",
@@ -4003,22 +4382,6 @@ pub fn get_all_tests() -> Vec<RegisteredTest> {
             group: "PointCloud",
             name: "Colors",
             func: run_pointcloud_colors,
-        },
-        // RemeshCDT tests - were registered by macro only; see the drift guard in run_all.
-        RegisteredTest {
-            group: "RemeshCDT",
-            name: "plate_failing 15-vert outer + 4 holes",
-            func: run_remesh_cdt_plate_failing_15_vert_outer_4_holes,
-        },
-        RegisteredTest {
-            group: "RemeshCDT",
-            name: "Large coordinates",
-            func: run_remesh_cdt_large_coordinates,
-        },
-        RegisteredTest {
-            group: "RemeshCDT",
-            name: "Degenerate hole keeps flat indices",
-            func: run_remesh_cdt_degenerate_hole_keeps_flat_indices,
         },
         // SpatialOctree tests - were registered by macro only; see the drift guard in run_all.
         RegisteredTest {
@@ -4067,19 +4430,6 @@ pub fn get_all_tests() -> Vec<RegisteredTest> {
             func: run_octree_from_coords,
         },
     ];
-
-    // Feature-gated exactly like its REGISTER_MINI_TEST! in io_test.rs, so the drift guard in
-    // run_all() sees the same set on both sides whether or not `pdf` is enabled.
-    #[cfg(all(feature = "pdf", not(target_arch = "wasm32")))]
-    let tests = {
-        let mut tests = tests;
-        tests.push(RegisteredTest {
-            group: "Io",
-            name: "Import Minimal",
-            func: run_io_pdf_import_minimal,
-        });
-        tests
-    };
 
     tests
 }

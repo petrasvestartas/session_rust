@@ -1,9 +1,7 @@
 use session_rust::{NurbsSurface, Point};
 
 fn main() {
-    let mut srf = NurbsSurface::create_raw(3, false, 4, 4, 5, 5, false, false, 1.0, 1.0).unwrap();
-    srf.make_clamped_uniform_nurbsknot_vector(0, 1.0);
-    srf.make_clamped_uniform_nurbsknot_vector(1, 1.0);
+    let mut srf = NurbsSurface::new(3, false, 4, 4, 5, 5);
 
     // Set control points
     srf.set_cv(0, 0, &Point::new(0.0, 0.0, -2.5));
