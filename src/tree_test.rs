@@ -78,6 +78,8 @@ pub fn run_treenode_add() -> TestResult {
         let parent = TreeNode::new("parent");
         let child = TreeNode::new("child");
         parent.borrow_mut().add(&child);
+        let parent_clone = Rc::clone(&parent);
+        parent.borrow_mut().add(&parent_clone);
 
         MINI_CHECK!(parent.borrow().children().len() == 1);
         MINI_CHECK!(Rc::ptr_eq(&child.borrow().parent().unwrap(), &parent));
@@ -417,9 +419,8 @@ pub fn run_tree_add_child_by_guid() -> TestResult {
         t.add(&b, Some(&root));
         let a_guid = a.borrow().guid().to_string();
         let b_guid = b.borrow().guid().to_string();
-        let root_guid = root.borrow().guid().to_string();
         let ok = t.add_child_by_guid(&a_guid, &b_guid);
-        let cycle = t.add_child_by_guid(&b_guid, &root_guid);
+        let cycle = t.add_child_by_guid(&b_guid, &a_guid);
 
         MINI_CHECK!(ok);
         MINI_CHECK!(!cycle);

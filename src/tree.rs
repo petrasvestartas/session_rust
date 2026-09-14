@@ -58,6 +58,20 @@ impl TreeNode {
 
     /// Add a child node to this node
     pub fn add(&mut self, child: &Rc<RefCell<TreeNode>>) {
+        let Some(self_handle) = self.weak_self.upgrade() else {
+            return;
+        };
+        if Rc::ptr_eq(&self_handle, child) {
+            return;
+        }
+        let mut descendants = vec![Rc::clone(child)];
+        while let Some(node) = descendants.pop() {
+            if Rc::ptr_eq(&node, &self_handle) {
+                return;
+            }
+            let children = node.borrow().children.clone();
+            descendants.extend(children);
+        }
         child.borrow_mut().parent = Some(self.weak_self.clone());
         self.children.push(Rc::clone(child));
     }
@@ -274,12 +288,9 @@ impl Tree {
 
     /// First node with the given name (None if not found)
     pub fn get_node_by_name(&self, node_name: &str) -> Option<Rc<RefCell<TreeNode>>> {
-        for node in self.nodes() {
-            if node.borrow().name == node_name {
-                return Some(node);
-            }
-        }
-        None
+        self.nodes()
+            .into_iter()
+            .find(|node| node.borrow().name == node_name)
     }
 
     /// All nodes with the given name
@@ -295,12 +306,9 @@ impl Tree {
 
     /// Node with the given guid (None if not found)
     pub fn find_node_by_guid(&self, node_guid: &str) -> Option<Rc<RefCell<TreeNode>>> {
-        for node in self.nodes() {
-            if node.borrow().guid() == node_guid {
-                return Some(node);
-            }
-        }
-        None
+        self.nodes()
+            .into_iter()
+            .find(|node| node.borrow().guid() == node_guid)
     }
 
     /// Reparent a child by guid; false when either node is missing or the child is the root
@@ -311,6 +319,16 @@ impl Tree {
         let Some(child) = self.find_node_by_guid(child_guid) else {
             return false;
         };
+        if Rc::ptr_eq(&parent, &child) {
+            return false;
+        }
+        let mut ancestor = Some(Rc::clone(&parent));
+        while let Some(node) = ancestor {
+            if Rc::ptr_eq(&node, &child) {
+                return false;
+            }
+            ancestor = node.borrow().parent();
+        }
         let Some(current) = child.borrow().parent() else {
             return false;
         };
