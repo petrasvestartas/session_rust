@@ -3924,6 +3924,11 @@ pub fn get_all_tests() -> Vec<RegisteredTest> {
         },
         RegisteredTest {
             group: "SpatialRTree",
+            name: "Normalizes Reversed Bounds",
+            func: run_rtree_normalizes_reversed_bounds,
+        },
+        RegisteredTest {
+            group: "SpatialRTree",
             name: "Search 100 Boxes",
             func: run_rtree_search_100_boxes,
         },

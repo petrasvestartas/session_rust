@@ -21,7 +21,7 @@ pub fn run_rtree_constructor() -> TestResult {
 pub fn run_rtree_creation() -> TestResult {
     MINI_TEST!("Creation", {
         use crate::SpatialRTree;
-        let t = SpatialRTree::new();
+        let t = SpatialRTree::default();
 
         MINI_CHECK!(t.count() == 0);
     })
@@ -125,6 +125,24 @@ pub fn run_rtree_search_stop() -> TestResult {
         let hits = t.search([0.0, 0.0, 0.0], [1.0, 1.0, 1.0], |_| false);
 
         MINI_CHECK!(hits == 1);
+    })
+}
+
+pub fn run_rtree_normalizes_reversed_bounds() -> TestResult {
+    MINI_TEST!("Normalizes Reversed Bounds", {
+        use crate::SpatialRTree;
+        let mut t = SpatialRTree::new();
+        t.insert([1.0, 2.0, 3.0], [-1.0, -2.0, -3.0], 9);
+        let mut found = Vec::new();
+        let hits = t.search([2.0, 3.0, 4.0], [-2.0, -3.0, -4.0], |data| {
+            found.push(data);
+            true
+        });
+
+        MINI_CHECK!(hits == 1);
+        MINI_CHECK!(found == vec![9]);
+        MINI_CHECK!(t.remove([2.0, 3.0, 4.0], [-2.0, -3.0, -4.0], 9));
+        MINI_CHECK!(t.count() == 0);
     })
 }
 
@@ -301,6 +319,11 @@ REGISTER_MINI_TEST!(
     "SpatialRTree",
     "Search Stop",
     crate::spatial_rtree_test::run_rtree_search_stop
+);
+REGISTER_MINI_TEST!(
+    "SpatialRTree",
+    "Normalizes Reversed Bounds",
+    crate::spatial_rtree_test::run_rtree_normalizes_reversed_bounds
 );
 REGISTER_MINI_TEST!(
     "SpatialRTree",

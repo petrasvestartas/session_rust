@@ -170,8 +170,16 @@ impl SpatialRTree {
 
     fn make_rect(&self, a_min: [f64; 3], a_max: [f64; 3]) -> Rect {
         Rect {
-            m_min: a_min,
-            m_max: a_max,
+            m_min: [
+                a_min[0].min(a_max[0]),
+                a_min[1].min(a_max[1]),
+                a_min[2].min(a_max[2]),
+            ],
+            m_max: [
+                a_min[0].max(a_max[0]),
+                a_min[1].max(a_max[1]),
+                a_min[2].max(a_max[2]),
+            ],
         }
     }
 
@@ -293,8 +301,8 @@ impl SpatialRTree {
         let mut worst = -part_vars.m_cover_split_area - 1.0;
         let mut area = [0.0; MAXNODES + 1];
         let total = part_vars.m_total as usize;
-        for i in 0..total {
-            area[i] = self.calc_rect_volume(&part_vars.m_branch_buf[i].m_rect);
+        for (i, slot) in area.iter_mut().enumerate().take(total) {
+            *slot = self.calc_rect_volume(&part_vars.m_branch_buf[i].m_rect);
         }
         for i in 0..total - 1 {
             for j in i + 1..total {
@@ -494,5 +502,11 @@ impl SpatialRTree {
             return true;
         }
         false
+    }
+}
+
+impl Default for SpatialRTree {
+    fn default() -> Self {
+        Self::new()
     }
 }
