@@ -49,10 +49,10 @@ fn main() {
                     &world,
                     vec![c.point_at_start(), c.point_at_end()],
                 ),
-                Geometry::NurbsSurface(sf) => ("nurbssurface", &world, vec![]),
-                Geometry::BRep(b) => ("brep", &world, vec![]),
+                Geometry::NurbsSurface(_) => ("nurbssurface", &world, vec![]),
+                Geometry::BRep(_) => ("brep", &world, vec![]),
                 Geometry::Plane(p) => ("plane", &world, vec![p.origin()]),
-                Geometry::OBB(o) => ("obb", &world, vec![]),
+                Geometry::OBB(_) => ("obb", &world, vec![]),
                 Geometry::Element(_) => ("element", &id, vec![]),
             };
             *counts.entry(kind).or_default() += 1;

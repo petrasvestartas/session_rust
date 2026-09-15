@@ -288,6 +288,17 @@ pub fn run_line_fit_points() -> TestResult {
         let l_fit = Line::fit_points(&fit_pts, None);
 
         MINI_CHECK!(l_fit.length() > 0.0);
+
+        let l_vertical = Line::fit_points(
+            &[
+                Point::new(0.0, 0.0, 0.0),
+                Point::new(0.0, 1.0, 0.0),
+                Point::new(0.0, 2.0, 0.0),
+                Point::new(0.0, 3.0, 0.0),
+            ],
+            None,
+        );
+        MINI_CHECK!(l_vertical.to_direction()[1].abs() > 0.99);
     })
 }
 

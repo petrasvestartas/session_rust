@@ -293,6 +293,11 @@ impl Graph {
         if !self.has_node(v) {
             self.add_node(v, "");
         }
+        if self.has_edge((u, v)) {
+            self.edges.get_mut(u).unwrap().get_mut(v).unwrap().attribute = attribute.to_string();
+            self.edges.get_mut(v).unwrap().get_mut(u).unwrap().attribute = attribute.to_string();
+            return (u.to_string(), v.to_string());
+        }
         let mut edge = Edge::new(u, v, attribute);
         edge.index = self.edge_count;
         self.edges
@@ -321,6 +326,7 @@ impl Graph {
         }
         self.vertices.remove(key);
         self.reassign_indices();
+        self.reassign_edge_indices();
     }
 
     /// Remove an edge, keeping its nodes
@@ -342,8 +348,8 @@ impl Graph {
             list.push((vertex.index, vertex_name.clone()));
         }
         list.sort();
-        for i in 0..list.len() {
-            self.vertices.get_mut(&list[i].1).unwrap().index = i as i32;
+        for (i, (_, name)) in list.iter().enumerate() {
+            self.vertices.get_mut(name).unwrap().index = i as i32;
         }
         self.vertex_count = list.len() as i32;
     }
@@ -359,9 +365,7 @@ impl Graph {
             }
         }
         list.sort();
-        for i in 0..list.len() {
-            let u = &list[i].1;
-            let v = &list[i].2;
+        for (i, (_, u, v)) in list.iter().enumerate() {
             self.edges.get_mut(u).unwrap().get_mut(v).unwrap().index = i as i32;
             self.edges.get_mut(v).unwrap().get_mut(u).unwrap().index = i as i32;
         }

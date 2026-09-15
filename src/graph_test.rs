@@ -13,7 +13,7 @@ pub fn run_vertex_constructor() -> TestResult {
         let v = Vertex::new("v_named", "attr");
 
         MINI_CHECK!(v0.name == "my_vertex");
-        MINI_CHECK!(v0.attribute == "");
+        MINI_CHECK!(v0.attribute.is_empty());
         MINI_CHECK!(!v0.guid().is_empty());
         MINI_CHECK!(v.name == "v_named");
         MINI_CHECK!(v.attribute == "attr");
@@ -227,9 +227,12 @@ pub fn run_graph_add_edge() -> TestResult {
         let mut g = Graph::new("g");
         let edge = g.add_edge("a", "b", "");
         let (u, v) = edge;
+        g.add_edge("b", "a", "updated");
 
         MINI_CHECK!(u == "a" && v == "b");
         MINI_CHECK!(g.number_of_edges() == 1);
+        MINI_CHECK!(g.edge_count == 1);
+        MINI_CHECK!(g.edge_attribute("a", "b", None).as_deref() == Some("updated"));
     })
 }
 
@@ -243,6 +246,7 @@ pub fn run_graph_remove_node() -> TestResult {
 
         MINI_CHECK!(!g.has_node("a"));
         MINI_CHECK!(g.number_of_edges() == 0);
+        MINI_CHECK!(g.edge_count == 0);
     })
 }
 
@@ -423,7 +427,7 @@ pub fn run_graph_connected_components() -> TestResult {
         let comps = g.connected_components();
 
         MINI_CHECK!(comps.len() == 2);
-        MINI_CHECK!(g.is_connected() == false);
+        MINI_CHECK!(!g.is_connected());
         MINI_CHECK!(g.number_connected_components() == 2);
     })
 }
@@ -455,11 +459,11 @@ pub fn run_graph_has_cycle() -> TestResult {
         g.add_edge("b", "c", "");
         g.add_edge("c", "a", "");
 
-        MINI_CHECK!(g.has_cycle() == true);
+        MINI_CHECK!(g.has_cycle());
         let mut g2 = Graph::new("g2");
         g2.add_edge("x", "y", "");
         g2.add_edge("y", "z", "");
-        MINI_CHECK!(g2.has_cycle() == false);
+        MINI_CHECK!(!g2.has_cycle());
     })
 }
 

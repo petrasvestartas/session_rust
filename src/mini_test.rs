@@ -3723,6 +3723,11 @@ pub fn get_all_tests() -> Vec<RegisteredTest> {
             name: "Dict Of Dicts",
             func: run_encoders_dict_of_dicts,
         },
+        RegisteredTest {
+            group: "FileEncoders",
+            name: "Write Error",
+            func: run_encoders_write_error,
+        },
         // SpatialAABBTree tests
         RegisteredTest {
             group: "SpatialAABBTree",

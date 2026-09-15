@@ -114,7 +114,11 @@ pub fn run_color_conversion() -> TestResult {
         MINI_CHECK!(TOLERANCE.is_close(flts[3] as f64, 1.0));
         MINI_CHECK!(back == c);
         MINI_CHECK!(legacy == c && legacy_flts == flts);
-        MINI_CHECK!(unpacked.len() == 2 && unpacked[0] == c && unpacked[1] == Color::blue());
+        MINI_CHECK!(
+            unpacked.len() == 2
+                && unpacked[0] == c
+                && unpacked[1].to_unified_array() == Color::blue().to_unified_array()
+        );
         MINI_CHECK!(trailing.len() == 1 && trailing[0] == c);
     })
 }

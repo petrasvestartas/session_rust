@@ -439,3 +439,23 @@ REGISTER_MINI_TEST!(
     "Dict Of Dicts",
     crate::file_encoders_test::run_encoders_dict_of_dicts
 );
+
+pub fn run_encoders_write_error() -> TestResult {
+    MINI_TEST!("Write Error", {
+        use crate::file_encoders::file_json_dump;
+        use crate::Point;
+
+        let result = file_json_dump(
+            &Point::new(1.0, 2.0, 3.0),
+            "/definitely/missing-directory/test.json",
+            true,
+        );
+        MINI_CHECK!(result.is_err());
+    })
+}
+
+REGISTER_MINI_TEST!(
+    "FileEncoders",
+    "Write Error",
+    crate::file_encoders_test::run_encoders_write_error
+);

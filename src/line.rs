@@ -152,6 +152,13 @@ impl Line {
         let mut vx = 1.0;
         let mut vy = 0.0;
         let mut vz = 0.0;
+        if cyy > cxx && cyy >= czz {
+            vx = 0.0;
+            vy = 1.0;
+        } else if czz > cxx && czz > cyy {
+            vx = 0.0;
+            vz = 1.0;
+        }
         for _ in 0..100 {
             let nx = cxx * vx + cxy * vy + cxz * vz;
             let ny = cxy * vx + cyy * vy + cyz * vz;
