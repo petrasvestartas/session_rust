@@ -696,11 +696,8 @@ impl Delaunay {
         let mut steps = 0;
         let mut v_prev = v0;
         let mut i = i;
-        loop {
+        while steps < budget {
             steps += 1;
-            if steps > budget {
-                return false;
-            }
             self.loc_mins.push(v_prev);
             if self.lowermost == NULL_IDX
                 || sweep_before(self.vs[v_prev].pt, self.vs[self.lowermost].pt)
@@ -753,14 +750,14 @@ impl Delaunay {
                 }
             }
             if i == i0 {
-                break;
+                self.create_edge(v0, v_prev, EdgeKind::Descend);
+                return true;
             }
             if left_turning(self.vs[v_prev_prev].pt, self.vs[v_prev].pt, path[i]) {
                 self.vs[v_prev].inner_lm = true;
             }
         }
-        self.create_edge(v0, v_prev, EdgeKind::Descend);
-        true
+        false
     }
 
     /// Detach the edges of every vertex added since start
@@ -1123,8 +1120,8 @@ fn to_indices(
     for tri in tris {
         let mut f = [0usize; 3];
         let mut known = true;
-        for (k, corner) in tri.iter().enumerate() {
-            match indices.get(corner) {
+        for k in 0..3 {
+            match indices.get(&tri[k]) {
                 Some(&i) => f[k] = i,
                 None => known = false,
             }
@@ -1155,7 +1152,7 @@ fn strip_close(polyline: &Polyline) -> Vec<Point> {
 }
 
 /// Signed area of a 2D ring, positive when counter-clockwise
-fn signed_area(pts: &[Point]) -> f64 {
+pub(crate) fn signed_area(pts: &[Point]) -> f64 {
     let mut area = 0.0;
     let n = pts.len();
     for i in 0..n {
@@ -1192,7 +1189,7 @@ fn border_index(polylines: &[Polyline]) -> usize {
 }
 
 /// Plane coordinates of the points in the frame (origin, xaxis, yaxis)
-fn project_2d(pts: &[Point], origin: &Point, xaxis: &Vector, yaxis: &Vector) -> Vec<Point> {
+pub(crate) fn project_2d(pts: &[Point], origin: &Point, xaxis: &Vector, yaxis: &Vector) -> Vec<Point> {
     let mut out = Vec::with_capacity(pts.len());
     for p in pts {
         let dx = p[0] - origin[0];
@@ -1232,7 +1229,7 @@ fn build_mesh(border: &[Point], holes: &[Vec<Point>], tris: &[(usize, usize, usi
             vkeys.push(mesh.add_vertex(p.clone(), None));
         }
     }
-    if SESSION_CONFIG.explode_mesh_faces() {
+    if SESSION_CONFIG.read().explode_mesh_faces {
         for &(a, b, c) in tris {
             mesh.add_face(vec![vkeys[a], vkeys[b], vkeys[c]], None);
         }

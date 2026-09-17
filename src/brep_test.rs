@@ -386,7 +386,7 @@ pub fn run_brep_is_solid() -> TestResult {
             Point::new(0.0, 1.0, 0.0),
             Point::new(0.0, 0.0, 0.0),
         ]);
-        let sheet = BRep::from_polylines(&[quad]);
+        let sheet = BRep::from_polylines(&[quad], &[]);
 
         MINI_CHECK!(bx.is_solid() && edges_manifold(&bx));
         MINI_CHECK!(cyl.is_solid() && edges_manifold(&cyl));
@@ -761,7 +761,7 @@ pub fn run_brep_from_polylines() -> TestResult {
             c[3].clone(),
         ]);
 
-        let b = BRep::from_polylines(&[bottom, top, front, right, back, left]);
+        let b = BRep::from_polylines(&[bottom, top, front, right, back, left], &[]);
         let m = b.mesh();
 
         MINI_CHECK!(b.is_valid());
@@ -904,6 +904,74 @@ pub fn run_brep_from_nurbscurves_holes() -> TestResult {
         MINI_CHECK!(b.m_faces[0].wires[1].index == 1);
         MINI_CHECK!(!m.is_empty());
         MINI_CHECK!((m.area() - (100.0 - PI * 4.0)).abs() < 0.5);
+    })
+}
+
+/// 4 x 4 x 2 box with a 1 x 1 through-hole along z: bottom and top with a hole, four outer and four inner side quads
+fn box_with_square_hole() -> (Vec<crate::Polyline>, Vec<Vec<crate::Polyline>>) {
+    use crate::Point;
+    use crate::Polyline;
+    let ring = |pts: &[(f64, f64)], z: f64| {
+        let mut v: Vec<Point> = pts.iter().map(|(x, y)| Point::new(*x, *y, z)).collect();
+        v.push(Point::new(pts[0].0, pts[0].1, z));
+        Polyline::new(v)
+    };
+    let outer = [(-2.0, -2.0), (2.0, -2.0), (2.0, 2.0), (-2.0, 2.0)];
+    let inner = [(-0.5, -0.5), (0.5, -0.5), (0.5, 0.5), (-0.5, 0.5)];
+    let mut faces = vec![ring(&outer, 0.0), ring(&outer, 2.0)];
+    let mut holes = vec![vec![ring(&inner, 0.0)], vec![ring(&inner, 2.0)]];
+    for pts in [outer, inner] {
+        for i in 0..4 {
+            let a = pts[i];
+            let b = pts[(i + 1) % 4];
+            faces.push(Polyline::new(vec![
+                Point::new(a.0, a.1, 0.0),
+                Point::new(b.0, b.1, 0.0),
+                Point::new(b.0, b.1, 2.0),
+                Point::new(a.0, a.1, 2.0),
+                Point::new(a.0, a.1, 0.0),
+            ]));
+            holes.push(Vec::new());
+        }
+    }
+    (faces, holes)
+}
+
+pub fn run_brep_from_polylines_holes() -> TestResult {
+    MINI_TEST!("From Polylines Holes", {
+        use crate::BRep;
+
+        let (faces, holes) = box_with_square_hole();
+        let b = BRep::from_polylines(&faces, &holes);
+        MINI_CHECK!(b.face_count() == 10);
+        MINI_CHECK!(b.m_faces[0].wires.len() == 2);
+        MINI_CHECK!(b.is_solid());
+        MINI_CHECK!((b.mesh().volume() - 30.0).abs() < 1e-6);
+    })
+}
+
+pub fn run_brep_planar_fast_path() -> TestResult {
+    MINI_TEST!("Planar Fast Path", {
+        use crate::BRep;
+
+        let (faces, holes) = box_with_square_hole();
+        let b = BRep::from_polylines(&faces, &holes);
+        let fm = b.face_meshes();
+        MINI_CHECK!(fm.len() == 10);
+        MINI_CHECK!(fm[0].vertex.len() == 8 && fm[0].face.len() == 8);
+        MINI_CHECK!(fm[2].vertex.len() == 4 && fm[2].face.len() == 2);
+        let mut total = 0.0;
+        for m in &fm {
+            total += m.area();
+        }
+        MINI_CHECK!((total - 70.0).abs() < 1e-6);
+        let mut tagged = 0;
+        for vd in fm[0].vertex.values() {
+            if vd.attributes.keys().any(|key| key.starts_with("brep_edge/")) {
+                tagged += 1;
+            }
+        }
+        MINI_CHECK!(tagged == 8);
     })
 }
 
@@ -1193,6 +1261,16 @@ REGISTER_MINI_TEST!(
     crate::brep_test::run_brep_constructor
 );
 REGISTER_MINI_TEST!("BRep", "Create Box", crate::brep_test::run_brep_create_box);
+REGISTER_MINI_TEST!(
+    "BRep",
+    "From Polylines Holes",
+    crate::brep_test::run_brep_from_polylines_holes
+);
+REGISTER_MINI_TEST!(
+    "BRep",
+    "Planar Fast Path",
+    crate::brep_test::run_brep_planar_fast_path
+);
 REGISTER_MINI_TEST!("BRep", "Accessors", crate::brep_test::run_brep_accessors);
 REGISTER_MINI_TEST!("BRep", "Add Face", crate::brep_test::run_brep_add_face);
 REGISTER_MINI_TEST!("BRep", "Mesh", crate::brep_test::run_brep_mesh);

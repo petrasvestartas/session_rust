@@ -316,10 +316,19 @@ impl PolyFaceBuilder {
 
     /// Face on `srf` bounded by the vertex cycle `vi`; returns the face index
     fn face(&mut self, b: &mut BRep, srf: &NurbsSurface, vi: &[usize]) -> usize {
+        self.face_with_holes(b, srf, vi, &[])
+    }
+
+    /// Face on `srf` bounded by the vertex cycle `vi`, with one inner wire per hole cycle; returns the face index
+    fn face_with_holes(&mut self, b: &mut BRep, srf: &NurbsSurface, vi: &[usize], holes: &[Vec<usize>]) -> usize {
         let si = b.add_surface(srf);
         let refs = self.wire_refs(b, si, vi);
-        let wi = b.add_wire(&refs);
-        b.add_face(si as i32, &[BRepRef::new(wi as i32, F)], 0.0)
+        let mut wires = vec![BRepRef::new(b.add_wire(&refs) as i32, F)];
+        for hole in holes {
+            let hole_refs = self.wire_refs(b, si, hole);
+            wires.push(BRepRef::new(b.add_wire(&hole_refs) as i32, F));
+        }
+        b.add_face(si as i32, &wires, 0.0)
     }
 }
 
@@ -442,6 +451,29 @@ fn planar_patch_through(pts: &[Point], org: &Point, xa: &Vector, ya: &Vector) ->
         &plane_point(org, xa, ya, umin, vmax),
         &plane_point(org, xa, ya, umax, vmax),
     )
+}
+
+/// Signed area of a closed cycle of points seen in the plane (org, xa, ya): positive when it runs counter-clockwise
+fn signed_area_in_plane(pts: &[Point], org: &Point, xa: &Vector, ya: &Vector) -> f64 {
+    let mut area = 0.0;
+    let n = pts.len();
+    for i in 0..n {
+        let a = &pts[i];
+        let b = &pts[(i + 1) % n];
+        let au = (a[0] - org[0]) * xa[0] + (a[1] - org[1]) * xa[1] + (a[2] - org[2]) * xa[2];
+        let av = (a[0] - org[0]) * ya[0] + (a[1] - org[1]) * ya[1] + (a[2] - org[2]) * ya[2];
+        let bu = (b[0] - org[0]) * xa[0] + (b[1] - org[1]) * xa[1] + (b[2] - org[2]) * xa[2];
+        let bv = (b[0] - org[0]) * ya[0] + (b[1] - org[1]) * ya[1] + (b[2] - org[2]) * ya[2];
+        area += au * bv - bu * av;
+    }
+    area * 0.5
+}
+
+/// The vertices of a polyline without the closing duplicate
+fn open_points(pl: &Polyline) -> Vec<Point> {
+    let pts = pl.get_points();
+    let n = if pl.is_closed() { pts.len().saturating_sub(1) } else { pts.len() };
+    pts[..n].to_vec()
 }
 
 fn find_or_add_vertex(b: &mut BRep, p: &Point, tol: f64) -> usize {
@@ -930,17 +962,19 @@ fn direct_face(b: &BRep, fi: usize) -> bool {
     let srf = &b.m_surfaces[face.surface_index as usize];
     let (u0, u1) = srf.domain(0).unwrap_or((0.0, 1.0));
     let (v0, v1) = srf.domain(1).unwrap_or((0.0, 1.0));
-    // Topological edge ends must be domain corners; internal polyline controls are not new vertices.
-    let mesh_brep = b;
-    for er in mesh_brep.wire_edges(&face.wires[0]) {
-        let ci = mesh_brep.pcurve_index(er.index as usize, fi, er.orientation);
-        if ci < 0 { continue; }
-        let curve = &mesh_brep.m_curves_2d[ci as usize];
+    for er in b.wire_edges(&face.wires[0]) {
+        let ci = b.pcurve_index(er.index as usize, fi, er.orientation);
+        if ci < 0 {
+            continue;
+        }
+        let curve = &b.m_curves_2d[ci as usize];
         for k in [0, curve.cv_count().saturating_sub(1)] {
             let p = curve.get_cv(k).unwrap_or_default();
             let corner_u = (p[0] - u0).abs().min((p[0] - u1).abs()) <= (u1 - u0) * 1e-9;
             let corner_v = (p[1] - v0).abs().min((p[1] - v1).abs()) <= (v1 - v0) * 1e-9;
-            if !corner_u || !corner_v { return false; }
+            if !corner_u || !corner_v {
+                return false;
+            }
         }
     }
     let domain_area = (u1 - u0) * (v1 - v0);
@@ -1116,6 +1150,72 @@ fn grid_interior_uv(srf: &NurbsSurface, grid: &Mesh) -> Vec<Point> {
 }
 
 /// Phase 3: map the canonical points of edge `ei` onto pcurve `ci` of face `fi`, checked in model space; false when a point cannot be lifted
+/// Planarity tolerance for a surface of any size: 1e-9 of its control-point bounding box diagonal, never below the zero tolerance
+fn planar_patch_tolerance(srf: &NurbsSurface) -> f64 {
+    let mut lo: [f64; 3] = [1e300; 3];
+    let mut hi: [f64; 3] = [-1e300; 3];
+    for i in 0..srf.cv_count(0) {
+        for j in 0..srf.cv_count(1) {
+            let p = srf.get_cv(i, j).unwrap_or_default();
+            for k in 0..3 {
+                lo[k] = lo[k].min(p[k]);
+                hi[k] = hi[k].max(p[k]);
+            }
+        }
+    }
+    let diagonal = ((hi[0] - lo[0]).powi(2) + (hi[1] - lo[1]).powi(2) + (hi[2] - lo[2]).powi(2)).sqrt();
+    (1e-9 * diagonal).max(Tolerance::ZERO_TOLERANCE)
+}
+
+/// True for a surface flat within planar_patch_tolerance, whatever its coordinates
+fn is_planar_patch(srf: &NurbsSurface) -> bool {
+    srf.is_planar(None, planar_patch_tolerance(srf))
+}
+
+/// Surface parameters of a point on a degree-1 parallelogram patch by two dot products; None when the patch is not that shape
+fn planar_patch_uv(srf: &NurbsSurface, p: &Point) -> Option<(f64, f64)> {
+    if srf.degree(0) != 1 || srf.degree(1) != 1 || srf.cv_count(0) != 2 || srf.cv_count(1) != 2 {
+        return None;
+    }
+    let p00 = srf.get_cv(0, 0)?;
+    let p10 = srf.get_cv(1, 0)?;
+    let p01 = srf.get_cv(0, 1)?;
+    let p11 = srf.get_cv(1, 1)?;
+    let eu = p10.clone() - p00.clone();
+    let ev = p01.clone() - p00.clone();
+    let skew = (p11 - p10) - ev.clone();
+    if skew.magnitude() > planar_patch_tolerance(srf) {
+        return None;
+    }
+    let eu2 = eu.dot(&eu);
+    let ev2 = ev.dot(&ev);
+    if eu2 <= 0.0 || ev2 <= 0.0 {
+        return None;
+    }
+    let d = p.clone() - p00;
+    let (u0, u1) = srf.domain(0)?;
+    let (v0, v1) = srf.domain(1)?;
+    Some((u0 + d.dot(&eu) / eu2 * (u1 - u0), v0 + d.dot(&ev) / ev2 * (v1 - v0)))
+}
+
+/// Parameter of the closest point on a two-point degree-1 pcurve by one projection; None for any other curve
+fn linear_pcurve_parameter(crv: &NurbsCurve, uv: (f64, f64)) -> Option<f64> {
+    if crv.degree() != 1 || crv.is_rational() || crv.cv_count() != 2 {
+        return None;
+    }
+    let c0 = crv.get_cv(0)?;
+    let c1 = crv.get_cv(1)?;
+    let dx = c1[0] - c0[0];
+    let dy = c1[1] - c0[1];
+    let length_squared = dx * dx + dy * dy;
+    if length_squared <= 0.0 {
+        return None;
+    }
+    let fraction = (((uv.0 - c0[0]) * dx + (uv.1 - c0[1]) * dy) / length_squared).clamp(0.0, 1.0);
+    let (t0, t1) = crv.domain();
+    Some(t0 + fraction * (t1 - t0))
+}
+
 fn lift_canonical(
     b: &BRep,
     fi: usize,
@@ -1128,6 +1228,7 @@ fn lift_canonical(
     let edge = &b.m_edges[ei];
     let srf = &b.m_surfaces[face.surface_index as usize];
     let crv = &b.m_curves_2d[ci];
+    let planar = is_planar_patch(srf);
     let cached = boundary
         .basis
         .get(&ei)
@@ -1138,8 +1239,15 @@ fn lift_canonical(
         let (mut t, mut q) = if cached {
             boundary.samples[&ei][index].clone()
         } else {
-            let (u, v) = srf.closest_parameters(p);
-            let t = crv.closest_parameter(&Point::new(u, v, 0.0));
+            let patch_uv = if planar { planar_patch_uv(srf, p) } else { None };
+            let (u, v) = match patch_uv {
+                Some(uv) => uv,
+                None => srf.closest_parameters(p),
+            };
+            let t = match patch_uv.and_then(|uv| linear_pcurve_parameter(crv, uv)) {
+                Some(t) => t,
+                None => crv.closest_parameter(&Point::new(u, v, 0.0)),
+            };
             (t, crv.point_at(t))
         };
         let scale = p[0].abs().max(p[1].abs()).max(p[2].abs()).max(1.0);
@@ -1174,7 +1282,7 @@ fn fresh_samples(srf: &NurbsSurface, crv: &NurbsCurve, angle: f64, chord: f64) -
         .min(4096);
     let mut points = Vec::new();
     let mut parameters = Vec::new();
-    if crv.degree() <= 1 && !crv.is_rational() && srf.is_planar(None, 0.0) {
+    if crv.degree() <= 1 && !crv.is_rational() && is_planar_patch(srf) {
         for k in 0..crv.cv_count() {
             points.push(crv.get_cv(k).unwrap_or_default());
             parameters.push(crv.greville_abcissa(k));
@@ -1272,6 +1380,80 @@ fn trim_loops(
 }
 
 /// Tag every boundary vertex of a CDT mesh with the edge use it samples; each use keeps both ends, including the next edge's start
+/// Phase 3 for a planar face: the sampled loops triangulated as one polygon with holes, wound to the surface normal, every loop vertex tagged boundary/{loop}/{sample} as mesh_loops does; no grid, no surface evaluation
+fn planar_loops_mesh(srf: &NurbsSurface, loops: &TrimLoops) -> Mesh {
+    use crate::remesh_cdt::{cdt_triangulate, project_2d, signed_area};
+    let mut mesh = Mesh::new();
+    if loops.xyz.is_empty() || loops.xyz[0].len() < 3 {
+        return mesh;
+    }
+    let mut all_pts: Vec<Point> = Vec::new();
+    for loop_pts in &loops.xyz {
+        all_pts.extend(loop_pts.iter().cloned());
+    }
+    let (origin, xaxis, yaxis, _zaxis) = Polyline::new(all_pts).get_average_plane();
+    let mut border = loops.xyz[0].clone();
+    let mut border_2d = project_2d(&border, &origin, &xaxis, &yaxis);
+    if signed_area(&border_2d) < 0.0 {
+        border.reverse();
+        border_2d.reverse();
+    }
+    let mut holes: Vec<Vec<Point>> = Vec::new();
+    let mut holes_2d: Vec<Vec<Point>> = Vec::new();
+    for loop_pts in loops.xyz.iter().skip(1) {
+        if loop_pts.len() < 3 {
+            continue;
+        }
+        let mut hole = loop_pts.clone();
+        let mut hole_2d = project_2d(&hole, &origin, &xaxis, &yaxis);
+        if signed_area(&hole_2d) > 0.0 {
+            hole.reverse();
+            hole_2d.reverse();
+        }
+        holes.push(hole);
+        holes_2d.push(hole_2d);
+    }
+    let mut vkeys = Vec::new();
+    for p in &border {
+        vkeys.push(mesh.add_vertex(p.clone(), None));
+    }
+    for hole in &holes {
+        for p in hole {
+            vkeys.push(mesh.add_vertex(p.clone(), None));
+        }
+    }
+    for (a, b, c) in cdt_triangulate(&border_2d, &holes_2d) {
+        if a != b && b != c && c != a {
+            mesh.add_face(vec![vkeys[a], vkeys[b], vkeys[c]], None);
+        }
+    }
+    let (u0, u1) = srf.domain(0).unwrap_or((0.0, 1.0));
+    let (v0, v1) = srf.domain(1).unwrap_or((0.0, 1.0));
+    let normal = srf.normal_at(0.5 * (u0 + u1), 0.5 * (v0 + v1));
+    let first: Option<Vec<usize>> = mesh.face.values().next().cloned();
+    if let Some(fverts) = first {
+        let a = mesh.vertex[&fverts[0]].position();
+        let b = mesh.vertex[&fverts[1]].position();
+        let c = mesh.vertex[&fverts[2]].position();
+        if (b.clone() - a.clone()).cross(&(c - a)).dot(&normal) < 0.0 {
+            mesh.flip();
+        }
+    }
+    let mut lookup: HashMap<(u64, u64, u64), (usize, usize)> = HashMap::new();
+    for (li, loop_pts) in loops.xyz.iter().enumerate() {
+        for (k, p) in loop_pts.iter().enumerate() {
+            lookup.entry((p[0].to_bits(), p[1].to_bits(), p[2].to_bits())).or_insert((li, k));
+        }
+    }
+    for vd in mesh.vertex.values_mut() {
+        vd.set_normal(normal[0], normal[1], normal[2]);
+        if let Some(&(li, k)) = lookup.get(&(vd.x.to_bits(), vd.y.to_bits(), vd.z.to_bits())) {
+            vd.attributes.insert(format!("boundary/{li}/{k}"), 1.0);
+        }
+    }
+    mesh
+}
+
 fn tag_edge_uses(mesh: &mut Mesh, loops: &TrimLoops, uses: &[EdgeUse]) {
     for (use_id, &(edge, li, start, count)) in uses.iter().enumerate() {
         let length = loops.uv[li].len();
@@ -1710,32 +1892,49 @@ impl BRep {
         b
     }
 
-    /// One planar face per closed polyline; coincident vertices and edges are shared, closed sheets become solids
-    pub fn from_polylines(polylines: &[Polyline]) -> Self {
+    /// One planar face per closed polyline, holes[i] the closed polylines bounding the holes of face i; coincident vertices and edges are shared, closed sheets become solids
+    pub fn from_polylines(polylines: &[Polyline], holes: &[Vec<Polyline>]) -> Self {
         let mut b = BRep::new();
         b.name = "polysurface".to_string();
         let tol = 1e-6;
         let mut pb = PolyFaceBuilder::new();
-        for pl in polylines {
-            let pts = pl.get_points();
-            let n = if pl.is_closed() {
-                pts.len().saturating_sub(1)
-            } else {
-                pts.len()
-            };
-            if n < 3 {
+        for (pi, pl) in polylines.iter().enumerate() {
+            let pts = open_points(pl);
+            if pts.len() < 3 {
                 continue;
             }
             let (org, plane) = pl.get_fast_plane();
             if !plane.is_valid() {
                 continue;
             }
+            let xa = plane.x_axis();
+            let ya = plane.y_axis();
+            let outer_area = signed_area_in_plane(&pts, &org, &xa, &ya);
             let mut vi = Vec::new();
-            for pt in pts.iter().take(n) {
+            for pt in &pts {
                 vi.push(find_or_add_vertex(&mut b, pt, tol));
             }
-            let srf = planar_patch_through(&pts[..n], &org, &plane.x_axis(), &plane.y_axis());
-            pb.face(&mut b, &srf, &vi);
+            let mut all_pts = pts.clone();
+            let mut hole_cycles: Vec<Vec<usize>> = Vec::new();
+            if pi < holes.len() {
+                for h in &holes[pi] {
+                    let mut hp = open_points(h);
+                    if hp.len() < 3 {
+                        continue;
+                    }
+                    if signed_area_in_plane(&hp, &org, &xa, &ya) * outer_area > 0.0 {
+                        hp.reverse();
+                    }
+                    let mut cycle = Vec::new();
+                    for pt in &hp {
+                        cycle.push(find_or_add_vertex(&mut b, pt, tol));
+                    }
+                    hole_cycles.push(cycle);
+                    all_pts.extend(hp);
+                }
+            }
+            let srf = planar_patch_through(&all_pts, &org, &xa, &ya);
+            pb.face_with_holes(&mut b, &srf, &vi, &hole_cycles);
         }
         close_free_faces(&mut b);
         b
@@ -2212,9 +2411,13 @@ impl BRep {
             if !trim_loops(self, fi, &mut boundary, angle, chord, &mut loops, &mut uses) {
                 continue;
             }
-            let mut ts = NurbsSurfaceTrimmed::new();
-            ts.m_surface = srf.clone();
-            fmesh[fi] = ts.mesh_loops(&loops, angle, chord);
+            if loops.interior_uv.is_empty() && is_planar_patch(srf) {
+                fmesh[fi] = planar_loops_mesh(srf, &loops);
+            } else {
+                let mut ts = NurbsSurfaceTrimmed::new();
+                ts.m_surface = srf.clone();
+                fmesh[fi] = ts.mesh_loops(&loops, angle, chord);
+            }
             tag_edge_uses(&mut fmesh[fi], &loops, &uses);
         }
         for (fi, fm) in fmesh.iter_mut().enumerate() {

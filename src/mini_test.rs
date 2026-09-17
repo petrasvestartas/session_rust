@@ -529,6 +529,16 @@ pub fn get_all_tests() -> Vec<RegisteredTest> {
         },
         RegisteredTest {
             group: "BRep",
+            name: "From Polylines Holes",
+            func: run_brep_from_polylines_holes,
+        },
+        RegisteredTest {
+            group: "BRep",
+            name: "Planar Fast Path",
+            func: run_brep_planar_fast_path,
+        },
+        RegisteredTest {
+            group: "BRep",
             name: "Mesh Orientation",
             func: run_brep_mesh_orientation,
         },
@@ -2733,6 +2743,11 @@ pub fn get_all_tests() -> Vec<RegisteredTest> {
         },
         RegisteredTest {
             group: "Session",
+            name: "Copy",
+            func: run_session_copy,
+        },
+        RegisteredTest {
+            group: "Session",
             name: "Add Point",
             func: run_session_add_point,
         },
@@ -3521,6 +3536,11 @@ pub fn get_all_tests() -> Vec<RegisteredTest> {
             group: "Objects",
             name: "Component Json Roundtrip",
             func: run_objects_component_json_roundtrip,
+        },
+        RegisteredTest {
+            group: "Objects",
+            name: "Objects Component Json Roundtrip",
+            func: run_objects_objects_component_json_roundtrip,
         },
         RegisteredTest {
             group: "Objects",
