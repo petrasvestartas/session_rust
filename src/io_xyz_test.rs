@@ -2,7 +2,7 @@ use crate::mini_test::TestResult;
 use crate::tolerance::TOLERANCE;
 use crate::{MINI_CHECK, MINI_TEST, REGISTER_MINI_TEST};
 
-pub fn run_io_read_bunny() -> TestResult {
+pub fn run_io_xyz_read_bunny() -> TestResult {
     MINI_TEST!("Read Bunny", {
         use crate::read_xyz;
         use std::path::PathBuf;
@@ -29,7 +29,7 @@ pub fn run_io_read_bunny() -> TestResult {
     })
 }
 
-pub fn run_io_write_read_roundtrip() -> TestResult {
+pub fn run_io_xyz_write_read_roundtrip() -> TestResult {
     MINI_TEST!("Write Read Roundtrip", {
         use crate::read_xyz;
         use crate::write_xyz;
@@ -53,7 +53,7 @@ pub fn run_io_write_read_roundtrip() -> TestResult {
     })
 }
 
-pub fn run_io_string_roundtrip() -> TestResult {
+pub fn run_io_xyz_string_roundtrip() -> TestResult {
     MINI_TEST!("String Roundtrip", {
         use crate::read_xyz_from_str;
         use crate::write_xyz_to_string;
@@ -72,14 +72,14 @@ pub fn run_io_string_roundtrip() -> TestResult {
     })
 }
 
-REGISTER_MINI_TEST!("Io", "Read Bunny", crate::io_test::run_io_read_bunny);
+REGISTER_MINI_TEST!("IoXyz", "Read Bunny", crate::io_xyz_test::run_io_xyz_read_bunny);
 REGISTER_MINI_TEST!(
-    "Io",
+    "IoXyz",
     "Write Read Roundtrip",
-    crate::io_test::run_io_write_read_roundtrip
+    crate::io_xyz_test::run_io_xyz_write_read_roundtrip
 );
 REGISTER_MINI_TEST!(
-    "Io",
+    "IoXyz",
     "String Roundtrip",
-    crate::io_test::run_io_string_roundtrip
+    crate::io_xyz_test::run_io_xyz_string_roundtrip
 );

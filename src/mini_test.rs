@@ -372,7 +372,7 @@ pub fn get_all_tests() -> Vec<RegisteredTest> {
     use crate::history_test::*;
     use crate::instance_ref_test::*;
     use crate::intersection_test::*;
-    use crate::io_test::*;
+    use crate::io_xyz_test::*;
     use crate::line_test::*;
     use crate::matrix_test::*;
     use crate::mesh_offset_test::*;
@@ -4262,21 +4262,21 @@ pub fn get_all_tests() -> Vec<RegisteredTest> {
             name: "Protobuf Roundtrip",
             func: run_instance_ref_protobuf_roundtrip,
         },
-        // Io tests
+        // IoXyz tests
         RegisteredTest {
-            group: "Io",
+            group: "IoXyz",
             name: "Read Bunny",
-            func: run_io_read_bunny,
+            func: run_io_xyz_read_bunny,
         },
         RegisteredTest {
-            group: "Io",
+            group: "IoXyz",
             name: "Write Read Roundtrip",
-            func: run_io_write_read_roundtrip,
+            func: run_io_xyz_write_read_roundtrip,
         },
         RegisteredTest {
-            group: "Io",
+            group: "IoXyz",
             name: "String Roundtrip",
-            func: run_io_string_roundtrip,
+            func: run_io_xyz_string_roundtrip,
         },
         // Matrix tests
         RegisteredTest {
