@@ -18,12 +18,9 @@ pub struct Vertex {
         deserialize_with = "crate::guid_serde::deserialize"
     )]
     guid: OnceLock<String>,
-    /// Vertex name, also the key in Graph::vertices
-    pub name: String,
-    /// Vertex attribute data as string
-    pub attribute: String,
-    /// Integer index of the vertex, assigned by Graph
-    pub index: i32,
+    pub name: String,      // Vertex name, also the key in Graph::vertices.
+    pub attribute: String, // Vertex attribute data as string.
+    pub index: i32,        // Integer index of the vertex, assigned by Graph.
 }
 
 impl Default for Vertex {
@@ -99,16 +96,12 @@ pub struct Edge {
         deserialize_with = "crate::guid_serde::deserialize"
     )]
     guid: OnceLock<String>,
-    /// Edge name
-    pub name: String,
-    /// First vertex name
-    pub v0: String,
-    /// Second vertex name
-    pub v1: String,
-    /// Edge attribute data as string
-    pub attribute: String,
-    /// Integer index of the edge, assigned by Graph
-    pub index: i32,
+    pub name: String, // Edge name.
+
+    pub v0: String,        // First vertex name.
+    pub v1: String,        // Second vertex name.
+    pub attribute: String, // Edge attribute data as string.
+    pub index: i32,        // Integer index of the edge, assigned by Graph.
 }
 
 impl Default for Edge {
@@ -209,15 +202,11 @@ pub struct Graph {
         deserialize_with = "crate::guid_serde::deserialize"
     )]
     guid: OnceLock<String>,
-    /// Graph name
-    pub name: String,
-    /// Next available vertex index
-    pub vertex_count: i32,
-    /// Next available edge index
-    pub edge_count: i32,
+    pub name: String,      // Graph name.
+    pub vertex_count: i32, // Next available vertex index.
+    pub edge_count: i32,   // Next available edge index.
     vertices: BTreeMap<String, Vertex>,
-    /// node_name -> {neighbor_name -> Edge}, every edge stored in both directions
-    pub edges: BTreeMap<String, BTreeMap<String, Edge>>,
+    pub edges: BTreeMap<String, BTreeMap<String, Edge>>, // node_name -> {neighbor_name -> Edge}, every edge stored in both directions.
 }
 
 impl Default for Graph {

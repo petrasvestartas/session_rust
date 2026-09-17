@@ -8,21 +8,23 @@ pub fn run_closest_line_point() -> TestResult {
         use crate::Line;
         use crate::Point;
 
-        let l = Line::new(0.0, 0.0, 0.0, 10.0, 0.0, 0.0);
+        let line = Line::new(0.0, 0.0, 0.0, 10.0, 0.0, 0.0);
 
-        let (cp1, t1, d1) = Closest::line_point(&l, &Point::new(5.0, 5.0, 0.0));
+        let (cp1, t1, d1) = Closest::line_point(&line, &Point::new(5.0, 5.0, 0.0));
 
         MINI_CHECK!(TOLERANCE.is_close(cp1[0], 5.0));
         MINI_CHECK!(TOLERANCE.is_close(cp1[1], 0.0));
         MINI_CHECK!(TOLERANCE.is_close(t1, 0.5));
         MINI_CHECK!(TOLERANCE.is_close(d1, 5.0));
 
-        let (cp2, t2, d2) = Closest::line_point(&l, &Point::new(-5.0, 0.0, 0.0));
+        let (cp2, t2, d2) = Closest::line_point(&line, &Point::new(-5.0, 0.0, 0.0));
+
         MINI_CHECK!(TOLERANCE.is_close(cp2[0], 0.0));
         MINI_CHECK!(TOLERANCE.is_close(t2, 0.0));
         MINI_CHECK!(TOLERANCE.is_close(d2, 5.0));
 
-        let (cp3, t3, d3) = Closest::line_point(&l, &Point::new(15.0, 0.0, 0.0));
+        let (cp3, t3, d3) = Closest::line_point(&line, &Point::new(15.0, 0.0, 0.0));
+
         MINI_CHECK!(TOLERANCE.is_close(cp3[0], 10.0));
         MINI_CHECK!(TOLERANCE.is_close(t3, 1.0));
         MINI_CHECK!(TOLERANCE.is_close(d3, 5.0));
@@ -46,6 +48,7 @@ pub fn run_closest_polyline_point() -> TestResult {
         MINI_CHECK!(TOLERANCE.is_close(d1, 5.0));
 
         let (cp2, _t2, d2) = Closest::polyline_point(&pl, &Point::new(10.0, 5.0, 0.0));
+
         MINI_CHECK!(TOLERANCE.is_close(cp2[0], 10.0));
         MINI_CHECK!(TOLERANCE.is_close(cp2[1], 5.0));
         MINI_CHECK!(TOLERANCE.is_close(d2, 0.0));
@@ -70,9 +73,11 @@ pub fn run_closest_curve_point() -> TestResult {
 
         MINI_CHECK!(dist < 1.6);
         let cp = crv.point_at(t);
+
         MINI_CHECK!(TOLERANCE.is_close(cp.distance(&Point::new(2.0, 3.0, 0.0), None), dist));
 
         let (_t2, dist2) = Closest::curve_point(&crv, &Point::new(0.0, 0.0, 0.0), 0.0, 0.0);
+
         MINI_CHECK!(dist2 < 0.01);
     })
 }
@@ -108,10 +113,12 @@ pub fn run_closest_surface_point() -> TestResult {
 
         MINI_CHECK!(dist < 1.5);
         let cp = srf.point_at(u, v).unwrap();
+
         MINI_CHECK!(TOLERANCE.is_close(cp.distance(&Point::new(1.5, 1.5, 2.0), None), dist));
 
         let (_u2, _v2, dist2) =
             Closest::surface_point(&srf, &Point::new(0.0, 0.0, 0.0), 0.0, 0.0, 0.0, 0.0);
+
         MINI_CHECK!(dist2 < 0.01);
     })
 }
@@ -163,6 +170,7 @@ pub fn run_closest_surface_curve() -> TestResult {
                 }
             }
         }
+
         MINI_CHECK!(on_border == 2);
         MINI_CHECK!(inside);
 
@@ -190,6 +198,7 @@ pub fn run_closest_mesh_point() -> TestResult {
         MINI_CHECK!(TOLERANCE.is_close(d1, 1.0));
 
         let (_cp2, _fk2, d2) = Closest::mesh_point(&m, &Point::new(1.0, 1.0, 1.0));
+
         MINI_CHECK!(TOLERANCE.is_close(d2, 0.0));
     })
 }
@@ -208,6 +217,7 @@ pub fn run_closest_mesh_point_aabb() -> TestResult {
         MINI_CHECK!(TOLERANCE.is_close(d1, 1.0));
 
         let (_cp2, _fk2, d2) = Closest::mesh_point_aabb(&m, &Point::new(1.0, 1.0, 1.0));
+
         MINI_CHECK!(TOLERANCE.is_close(d2, 0.0));
     })
 }
@@ -236,6 +246,7 @@ pub fn run_closest_pointcloud_point() -> TestResult {
         MINI_CHECK!(TOLERANCE.is_close(d1, 1.0));
 
         let (_cp2, i2, d2) = Closest::pointcloud_point(&pc, &Point::new(10.0, 10.0, 0.0));
+
         MINI_CHECK!(TOLERANCE.is_close(d2, 0.0));
         MINI_CHECK!(i2 == 3);
     })
@@ -265,6 +276,7 @@ pub fn run_closest_pointcloud_point_kdtree() -> TestResult {
         MINI_CHECK!(TOLERANCE.is_close(d1, 1.0));
 
         let (_cp2, i2, d2) = Closest::pointcloud_point_kdtree(&pc, &Point::new(10.0, 10.0, 0.0));
+
         MINI_CHECK!(TOLERANCE.is_close(d2, 0.0));
         MINI_CHECK!(i2 == 3);
     })

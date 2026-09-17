@@ -60,11 +60,13 @@ fn add_ring(vertices: &mut Vec<Point>, n: usize, radius: f64, z: f64) {
 /// Face without consecutive duplicate vertices.
 fn dedup_face(face: &[usize]) -> Vec<usize> {
     let mut unique = Vec::new();
+
     for k in 0..face.len() {
         if face[k] != face[(k + 1) % face.len()] {
             unique.push(face[k]);
         }
     }
+
     unique
 }
 
@@ -81,10 +83,13 @@ fn surface_grid(
     let singular_south = surface.is_singular(0);
     let singular_north = surface.is_singular(2);
     let mut grid = vec![vec![0usize; v_count + 1]; u_count + 1];
+
     for i in 0..=u_count {
         let u = u0 + (u1 - u0) * i as f64 / u_count as f64;
+
         for j in 0..=v_count {
             let v = v0 + (v1 - v0) * j as f64 / v_count as f64;
+
             if closed_u && i == u_count {
                 grid[i][j] = grid[0][j];
             } else if singular_south && j == 0 && i > 0 {
@@ -96,6 +101,7 @@ fn surface_grid(
             }
         }
     }
+
     grid
 }
 
@@ -111,10 +117,13 @@ fn surface_mid_grid(
     let (v0, v1) = surface.domain(1).unwrap_or((0.0, 1.0));
     let closed_u = surface.is_closed(0);
     let mut grid = vec![vec![0usize; v_count]; u_count + 1];
+
     for i in 0..=u_count {
         let u = u0 + (u1 - u0) * i as f64 / u_count as f64;
+
         for j in 0..v_count {
             let v = v0 + (v1 - v0) * (j as f64 + t) / v_count as f64;
+
             if closed_u && i == u_count {
                 grid[i][j] = grid[0][j];
             } else {
@@ -122,6 +131,7 @@ fn surface_mid_grid(
             }
         }
     }
+
     grid
 }
 
@@ -135,6 +145,7 @@ fn merge_nurbsknot_vectors(a: &[f64], b: &[f64]) -> Vec<f64> {
     let mut merged = Vec::new();
     let mut i = 0;
     let mut j = 0;
+
     while i < a.len() && j < b.len() {
         if (a[i] - b[j]).abs() < tol {
             merged.push(a[i]);
@@ -148,27 +159,34 @@ fn merge_nurbsknot_vectors(a: &[f64], b: &[f64]) -> Vec<f64> {
             j += 1;
         }
     }
+
     while i < a.len() {
         merged.push(a[i]);
         i += 1;
     }
+
     while j < b.len() {
         merged.push(b[j]);
         j += 1;
     }
+
     merged
 }
 
+/// True when both nurbsknot vectors match within 1e-10.
 fn nurbsknot_vectors_equal(a: &[f64], b: &[f64]) -> bool {
     let tol = 1e-10;
+
     if a.len() != b.len() {
         return false;
     }
+
     for i in 0..a.len() {
         if (a[i] - b[i]).abs() > tol {
             return false;
         }
     }
+
     true
 }
 
@@ -177,21 +195,27 @@ fn make_curves_compatible(curves: &mut [NurbsCurve]) {
     if curves.len() < 2 {
         return;
     }
+
     let mut max_degree = 0;
     let mut any_rational = false;
+
     for c in curves.iter() {
         max_degree = max_degree.max(c.degree());
         any_rational = any_rational || c.is_rational();
     }
+
     for c in curves.iter_mut() {
         if c.degree() < max_degree {
             c.increase_degree(max_degree);
         }
+
         if any_rational {
             c.make_rational();
         }
     }
+
     let mut compatible = true;
+
     for i in 1..curves.len() {
         if curves[i].cv_count() != curves[0].cv_count()
             || !nurbsknot_vectors_equal(&curves[i].get_nurbsknots(), &curves[0].get_nurbsknots())
@@ -199,20 +223,27 @@ fn make_curves_compatible(curves: &mut [NurbsCurve]) {
             compatible = false;
         }
     }
+
     if compatible {
         return;
     }
+
     for c in curves.iter_mut() {
         c.set_domain(0.0, 1.0);
     }
+
     let mut unified = curves[0].get_nurbsknots();
+
     for i in 1..curves.len() {
         unified = merge_nurbsknot_vectors(&unified, &curves[i].get_nurbsknots());
     }
+
     let tol = 1e-10;
+
     for c in curves.iter_mut() {
         let nurbsknots = c.get_nurbsknots();
         let mut ci = 0;
+
         for ui in 0..unified.len() {
             if ci < nurbsknots.len() && (nurbsknots[ci] - unified[ui]).abs() < tol {
                 ci += 1;
@@ -234,18 +265,22 @@ fn bilinear_patch(p00: &Point, p10: &Point, p01: &Point, p11: &Point) -> NurbsSu
     srf.set_cv(1, 0, p10);
     srf.set_cv(0, 1, p01);
     srf.set_cv(1, 1, p11);
+
     srf
 }
 
 /// Unit direction of the longest edge of a closed polygon.
 fn longest_edge_dir(pts: &[Point]) -> Vector {
     let mut best = Vector::new(0.0, 0.0, 0.0);
+
     for i in 0..pts.len() {
         let edge = &pts[(i + 1) % pts.len()] - &pts[i];
+
         if edge.magnitude() > best.magnitude() {
             best = edge;
         }
     }
+
     best.normalized()
 }
 
@@ -255,6 +290,7 @@ fn bounded_patch(pts: &[Point], origin: &Point, x_axis: &Vector, y_axis: &Vector
     let mut max_u = -1e30;
     let mut min_v = 1e30;
     let mut max_v = -1e30;
+
     for pt in pts {
         let d = pt - origin;
         min_u = f64::min(min_u, d.dot(x_axis));
@@ -262,10 +298,13 @@ fn bounded_patch(pts: &[Point], origin: &Point, x_axis: &Vector, y_axis: &Vector
         min_v = f64::min(min_v, d.dot(y_axis));
         max_v = f64::max(max_v, d.dot(y_axis));
     }
+
     let mut pad = f64::max(max_u - min_u, max_v - min_v) * 0.05;
+
     if pad < 1e-6 {
         pad = 1.0;
     }
+
     min_u -= pad;
     max_u += pad;
     min_v -= pad;
@@ -287,17 +326,22 @@ fn loft_section_params(curves: &[NurbsCurve]) -> Vec<f64> {
     let n = curves.len();
     let cv_count = curves[0].cv_count();
     let mut v_params = vec![0.0; n];
+
     for k in 1..n {
         let mut sum = 0.0;
+
         for i in 0..cv_count {
             sum += curves[k - 1]
                 .get_cv(i)
                 .unwrap_or_default()
                 .distance(&curves[k].get_cv(i).unwrap_or_default(), None);
         }
+
         v_params[k] = v_params[k - 1] + sum / cv_count as f64;
     }
+
     let total = v_params[n - 1];
+
     for k in 0..n {
         v_params[k] = if total > 1e-14 {
             v_params[k] / total
@@ -305,6 +349,7 @@ fn loft_section_params(curves: &[NurbsCurve]) -> Vec<f64> {
             k as f64 / (n - 1) as f64
         };
     }
+
     v_params
 }
 
@@ -313,38 +358,48 @@ fn loft_nurbsknots(v_params: &[f64], order_v: usize) -> Vec<f64> {
     let n = v_params.len();
     let degree_v = order_v - 1;
     let mut nurbsknots = vec![v_params[0]; order_v + n - 2];
+
     for j in 1..=(n - order_v) {
         let mut sum = 0.0;
+
         for i in j..(j + degree_v) {
             sum += v_params[i];
         }
+
         nurbsknots[degree_v - 1 + j] = sum / degree_v as f64;
     }
+
     for i in (n - 1)..(order_v + n - 2) {
         nurbsknots[i] = v_params[n - 1];
     }
+
     nurbsknots
 }
 
 /// Row of the collocation matrix: the cv_count basis values at t.
 fn loft_basis_row(nurbsknots: &[f64], order: usize, cv_count: usize, t: f64) -> Vec<f64> {
     let mut row = vec![0.0; cv_count];
-    let span = nurbsknot::find_span(order, cv_count, nurbsknots, t);
+    let span = nurbsknot::find_span(order, cv_count, nurbsknots, t, 0, 0);
     let base = span + order - 1;
+
     if nurbsknots[base - 1] == nurbsknots[base] {
         row[if t <= nurbsknots[base] {
             span
         } else {
             span + order - 1
         }] = 1.0;
+
         return row;
     }
+
     let basis = nurbsknot::eval_basis(order, nurbsknots, span, t);
+
     for j in 0..order {
         if span + j < cv_count {
             row[span + j] = basis[j];
         }
     }
+
     row
 }
 
@@ -354,40 +409,52 @@ fn solve_linear(a: &[Vec<f64>], b: &[Vec<f64>]) -> Vec<Vec<f64>> {
     let mut b = b.to_vec();
     let n = a.len();
     let dim = b[0].len();
+
     for col in 0..n {
         let mut max_row = col;
+
         for row in (col + 1)..n {
             if a[row][col].abs() > a[max_row][col].abs() {
                 max_row = row;
             }
         }
+
         if a[max_row][col].abs() < 1e-14 {
             continue;
         }
+
         a.swap(col, max_row);
         b.swap(col, max_row);
+
         for row in (col + 1)..n {
             let factor = a[row][col] / a[col][col];
+
             for c in col..n {
                 a[row][c] -= factor * a[col][c];
             }
+
             for d in 0..dim {
                 b[row][d] -= factor * b[col][d];
             }
         }
     }
+
     let mut x = vec![vec![0.0; dim]; n];
+
     for row in (0..n).rev() {
         for d in 0..dim {
             x[row][d] = b[row][d];
+
             for c in (row + 1)..n {
                 x[row][d] -= a[row][c] * x[c][d];
             }
+
             if a[row][row].abs() > 1e-14 {
                 x[row][d] /= a[row][row];
             }
         }
     }
+
     x
 }
 
@@ -395,10 +462,12 @@ fn solve_linear(a: &[Vec<f64>], b: &[Vec<f64>]) -> Vec<Vec<f64>> {
 // Sweep helpers
 // ═══════════════════════════════════════════════════════════════════════════
 
+/// Point at fraction s from a to b.
 fn lerp_point(a: &Point, b: &Point, s: f64) -> Point {
     a + (b - a) * s
 }
 
+/// Vector at fraction s from a to b.
 fn lerp_vector(a: &Vector, b: &Vector, s: f64) -> Vector {
     a + (b - a) * s
 }
@@ -406,26 +475,34 @@ fn lerp_vector(a: &Vector, b: &Vector, s: f64) -> Vector {
 /// World to the profile frame: centroid origin, x toward the start point, z the profile normal.
 fn profile_to_xy(profile: &NurbsCurve) -> Xform {
     let mut centroid = Vector::new(0.0, 0.0, 0.0);
+
     for i in 0..profile.cv_count() {
         centroid += profile.get_cv(i).unwrap_or_default() - Point::new(0.0, 0.0, 0.0);
     }
+
     let origin = Point::new(0.0, 0.0, 0.0) + centroid / profile.cv_count() as f64;
     let (t0, t1) = profile.domain();
     let pa = profile.point_at(t0);
     let pb = profile.point_at(t0 + (t1 - t0) / 3.0);
     let pc = profile.point_at(t0 + 2.0 * (t1 - t0) / 3.0);
     let mut normal = (&pb - &pa).cross(&(&pc - &pa));
+
     if !normal.normalize_self() {
         normal = Vector::new(1.0, 0.0, 0.0);
     }
+
     let mut x_axis = &pa - &origin;
+
     if !x_axis.normalize_self() {
         x_axis = Vector::new(0.0, 1.0, 0.0);
     }
+
     x_axis -= &normal * x_axis.dot(&normal);
+
     if !x_axis.normalize_self() {
         x_axis = Vector::new(0.0, 1.0, 0.0);
     }
+
     Xform::world_to_frame(&origin, &x_axis, &normal.cross(&x_axis), &normal)
 }
 
@@ -433,20 +510,26 @@ fn profile_to_xy(profile: &NurbsCurve) -> Xform {
 fn shape_plane(shape: &NurbsCurve) -> Plane {
     let start = shape.point_at_start();
     let mut dir = &shape.point_at_end() - &start;
+
     if !dir.normalize_self() {
         dir = Vector::new(1.0, 0.0, 0.0);
     }
+
     let mut side = dir.cross(&Vector::new(0.0, 0.0, 1.0));
+
     if side.magnitude() < 1e-10 {
         side = dir.cross(&Vector::new(0.0, 1.0, 0.0));
     }
+
     let up = side.cross(&dir);
+
     Plane::new(start, dir, up)
 }
 
 /// Chord length of a shape, 1 when degenerate.
 fn shape_width(shape: &NurbsCurve) -> f64 {
     let width = shape.point_at_start().distance(&shape.point_at_end(), None);
+
     if width < 1e-14 {
         1.0
     } else {
@@ -464,30 +547,38 @@ fn chain_curves(input: &[NurbsCurve]) -> Vec<NurbsCurve> {
     let mut chain = vec![input[0].duplicate()];
     let mut used = vec![false; input.len()];
     used[0] = true;
+
     for _step in 1..input.len() {
         let tail = chain[chain.len() - 1].point_at_end();
         let mut found = false;
+
         for i in 0..input.len() {
             if found || used[i] {
                 continue;
             }
+
             let mut next = input[i].duplicate();
+
             if next.point_at_start().distance(&tail, None) >= tol
                 && next.point_at_end().distance(&tail, None) < tol
             {
                 next.reverse();
             }
+
             if next.point_at_start().distance(&tail, None) >= tol {
                 continue;
             }
+
             chain.push(next);
             used[i] = true;
             found = true;
         }
+
         if !found {
             return Vec::new();
         }
     }
+
     if chain[chain.len() - 1]
         .point_at_end()
         .distance(&chain[0].point_at_start(), None)
@@ -495,6 +586,7 @@ fn chain_curves(input: &[NurbsCurve]) -> Vec<NurbsCurve> {
     {
         return Vec::new();
     }
+
     chain
 }
 
@@ -502,9 +594,11 @@ fn chain_curves(input: &[NurbsCurve]) -> Vec<NurbsCurve> {
 fn normalized_greville(curve: &NurbsCurve) -> Vec<f64> {
     let mut grev = curve.get_greville_abcissae();
     let (t0, t1) = curve.domain();
+
     for g in grev.iter_mut() {
         *g = if t1 > t0 { (*g - t0) / (t1 - t0) } else { 0.0 };
     }
+
     grev
 }
 
@@ -528,6 +622,7 @@ impl Primitives {
         let mut mesh = Mesh::new();
         Self::add_geometry(&mut mesh, &Self::unit_cylinder_geometry(), &body);
         Self::add_geometry(&mut mesh, &Self::unit_cone_geometry(), &head);
+
         mesh
     }
 
@@ -539,6 +634,7 @@ impl Primitives {
             * &Xform::scale_xyz(radius * 2.0, radius * 2.0, line.length());
         let mut mesh = Mesh::new();
         Self::add_geometry(&mut mesh, &Self::unit_cylinder_geometry(), &xform);
+
         mesh
     }
 
@@ -550,6 +646,7 @@ impl Primitives {
             &Self::capsule_geometry(line.length(), radius),
             &Self::line_frame(line, &line.start()),
         );
+
         mesh
     }
 
@@ -559,6 +656,7 @@ impl Primitives {
         let colors = mesh.get_linecolors();
         let count = edges.len().min(colors.len());
         let mut pipes = Vec::new();
+
         for i in 0..count {
             let (u, v) = edges[i];
             let mut pipe = Self::capsule_mesh(
@@ -568,6 +666,7 @@ impl Primitives {
             pipe.set_facecolors(vec![colors[i].clone(); pipe.number_of_faces()]);
             pipes.push(pipe);
         }
+
         pipes
     }
 
@@ -600,6 +699,7 @@ impl Primitives {
                 Point::new(0.0, r, z0),
             ],
         ];
+
         Mesh::from_polylines(faces, Some(1e-10))
     }
 
@@ -622,6 +722,7 @@ impl Primitives {
             vec![v0.clone(), v4.clone(), v7.clone(), v3.clone()],
             vec![v1.clone(), v2.clone(), v6.clone(), v5.clone()],
         ];
+
         Mesh::from_polylines(faces, Some(1e-10))
     }
 
@@ -644,6 +745,7 @@ impl Primitives {
             vec![nz.clone(), ny.clone(), nx.clone()],
             vec![nz.clone(), px.clone(), ny.clone()],
         ];
+
         Mesh::from_polylines(faces, Some(1e-10))
     }
 
@@ -689,6 +791,7 @@ impl Primitives {
             [9, 8, 1],
         ];
         let mut faces = Vec::new();
+
         for f in &idx {
             faces.push(vec![
                 verts[f[0]].clone(),
@@ -696,6 +799,7 @@ impl Primitives {
                 verts[f[2]].clone(),
             ]);
         }
+
         Mesh::from_polylines(faces, Some(1e-10))
     }
 
@@ -711,15 +815,18 @@ impl Primitives {
     /// Full ellipse as a rational quadratic NURBS (9 CVs).
     pub fn ellipse(cx: f64, cy: f64, cz: f64, major_radius: f64, minor_radius: f64) -> NurbsCurve {
         let mut curve = NurbsCurve::new(3, true, 3, 9);
+
         for i in 0..10 {
             curve.set_nurbsknot(i, CIRCLE_NURBSKNOTS[i]);
         }
+
         for i in 0..9 {
             let w = CIRCLE_WEIGHTS[i];
             let px = cx + major_radius * CIRCLE_X[i];
             let py = cy + minor_radius * CIRCLE_Y[i];
             curve.set_cv_4d(i, px * w, py * w, cz * w, w);
         }
+
         curve
     }
 
@@ -728,16 +835,20 @@ impl Primitives {
         let chord = end - start;
         let chord_mid = start + &chord * 0.5;
         let sagitta = mid - &chord_mid;
+
         if chord.cross(&sagitta).magnitude() < Tolerance::ZERO_TOLERANCE {
             return NurbsCurve::create(false, 1, &[start.clone(), end.clone()]);
         }
+
         let h = chord.magnitude() * 0.5;
         let s = sagitta.magnitude();
         let radius = (h * h + s * s) / (2.0 * s);
         let mut w = (radius - s) / radius;
+
         if w.abs() < Tolerance::ZERO_TOLERANCE {
             w = Tolerance::ZERO_TOLERANCE;
         }
+
         let mut curve = NurbsCurve::new(3, true, 3, 3);
         curve.m_nurbsknot = vec![0.0, 0.0, 1.0, 1.0];
         curve.set_cv_4d(0, start[0], start[1], start[2], 1.0);
@@ -749,6 +860,7 @@ impl Primitives {
             w,
         );
         curve.set_cv_4d(2, end[0], end[1], end[2], 1.0);
+
         curve
     }
 
@@ -766,6 +878,7 @@ impl Primitives {
             ),
         );
         curve.set_cv(2, p2);
+
         curve
     }
 
@@ -773,6 +886,7 @@ impl Primitives {
     pub fn hyperbola(center: &Point, a: f64, b: f64, extent: f64) -> NurbsCurve {
         let segments = 8;
         let mut points = Vec::new();
+
         for i in 0..=segments {
             let t = -extent + 2.0 * extent * i as f64 / segments as f64;
             points.push(Point::new(
@@ -781,10 +895,13 @@ impl Primitives {
                 center[2],
             ));
         }
+
         let mut curve = NurbsCurve::default();
+
         if !curve.create_clamped_uniform(3, 4, &points, 1.0) {
             return NurbsCurve::default();
         }
+
         curve
     }
 
@@ -792,6 +909,7 @@ impl Primitives {
     pub fn spiral(start_radius: f64, end_radius: f64, pitch: f64, turns: f64) -> NurbsCurve {
         let segments = ((turns * 8.0) as usize).max(4);
         let mut points = Vec::new();
+
         for i in 0..=segments {
             let t = i as f64 / segments as f64;
             let angle = t * turns * 2.0 * PI;
@@ -802,10 +920,13 @@ impl Primitives {
                 t * turns * pitch,
             ));
         }
+
         let mut curve = NurbsCurve::default();
+
         if !curve.create_clamped_uniform(3, 4, &points, 1.0) {
             return NurbsCurve::default();
         }
+
         curve
     }
 
@@ -825,22 +946,28 @@ impl Primitives {
     /// Rational cylinder surface of degree 2x1 around the z axis through (cx, cy, cz).
     pub fn cylinder_surface(cx: f64, cy: f64, cz: f64, radius: f64, height: f64) -> NurbsSurface {
         let mut srf = NurbsSurface::new(3, true, 3, 2, 9, 2);
+
         for i in 0..10 {
             srf.set_nurbsknot(0, i, CIRCLE_NURBSKNOTS[i]);
         }
+
         set_circle_row(&mut srf, 0, cx, cy, cz, radius, 1.0);
         set_circle_row(&mut srf, 1, cx, cy, cz + height, radius, 1.0);
+
         srf
     }
 
     /// Rational cone surface of degree 2x1 with the apex at cz + height.
     pub fn cone_surface(cx: f64, cy: f64, cz: f64, radius: f64, height: f64) -> NurbsSurface {
         let mut srf = NurbsSurface::new(3, true, 3, 2, 9, 2);
+
         for i in 0..10 {
             srf.set_nurbsknot(0, i, CIRCLE_NURBSKNOTS[i]);
         }
+
         set_circle_row(&mut srf, 0, cx, cy, cz, radius, 1.0);
         set_circle_row(&mut srf, 1, cx, cy, cz + height, 0.0, 1.0);
+
         srf
     }
 
@@ -853,10 +980,12 @@ impl Primitives {
         minor_radius: f64,
     ) -> NurbsSurface {
         let mut srf = NurbsSurface::new(3, true, 3, 3, 9, 9);
+
         for i in 0..10 {
             srf.set_nurbsknot(0, i, CIRCLE_NURBSKNOTS[i]);
             srf.set_nurbsknot(1, i, CIRCLE_NURBSKNOTS[i]);
         }
+
         for j in 0..9 {
             set_circle_row(
                 &mut srf,
@@ -868,6 +997,7 @@ impl Primitives {
                 CIRCLE_WEIGHTS[j],
             );
         }
+
         srf
     }
 
@@ -878,12 +1008,15 @@ impl Primitives {
         let lat_w = [1.0, CIRCLE_W, 1.0, CIRCLE_W, 1.0];
         let v_nurbsknots = [0.0, 0.0, 1.0, 1.0, 2.0, 2.0];
         let mut srf = NurbsSurface::new(3, true, 3, 3, 9, 5);
+
         for i in 0..10 {
             srf.set_nurbsknot(0, i, CIRCLE_NURBSKNOTS[i]);
         }
+
         for i in 0..6 {
             srf.set_nurbsknot(1, i, v_nurbsknots[i]);
         }
+
         for j in 0..5 {
             set_circle_row(
                 &mut srf,
@@ -895,6 +1028,7 @@ impl Primitives {
                 lat_w[j],
             );
         }
+
         srf
     }
 
@@ -905,8 +1039,10 @@ impl Primitives {
         let wk = (2.0_f64 / 3.0).sqrt();
         let wc = (-72.0 - 32.0 * 6.0_f64.sqrt() + 48.0 * 3.0_f64.sqrt() + 56.0 * 2.0_f64.sqrt())
             / (48.0 * (1.0 + (2.0_f64 / 3.0).sqrt() - 1.0 / 3.0_f64.sqrt() - 1.0 / 2.0_f64.sqrt()));
+
         let k =
             radius * (1.0 - 1.0 / 3.0_f64.sqrt() + 2.0 * (2.0_f64 / 3.0).sqrt() - 2.0_f64.sqrt());
+
         let h = radius + k / wc;
         let zf: [[[f64; 4]; 3]; 3] = [
             [[-a, -a, a, 1.0], [-e, 0.0, e, wk], [-a, a, a, 1.0]],
@@ -922,8 +1058,10 @@ impl Primitives {
             [[1.0, 0.0, 0.0], [0.0, 0.0, -1.0], [0.0, 1.0, 0.0]],
         ];
         let mut faces = Vec::new();
+
         for f in 0..6 {
             let mut srf = NurbsSurface::new(3, true, 3, 3, 3, 3);
+
             for i in 0..3 {
                 for j in 0..3 {
                     let p = zf[i][j];
@@ -933,8 +1071,10 @@ impl Primitives {
                     srf.set_cv_4d(i, j, rx * p[3], ry * p[3], rz * p[3], p[3]);
                 }
             }
+
             faces.push(srf);
         }
+
         faces
     }
 
@@ -942,8 +1082,10 @@ impl Primitives {
     pub fn wave_surface(size: f64, amplitude: f64) -> NurbsSurface {
         let n = 13;
         let mut pts = Vec::new();
+
         for i in 0..n {
             let u = i as f64 / (n - 1) as f64;
+
             for j in 0..n {
                 let v = j as f64 / (n - 1) as f64;
                 pts.push(Point::new(
@@ -953,6 +1095,7 @@ impl Primitives {
                 ));
             }
         }
+
         NurbsSurface::create(false, false, 3, 3, n, n, &pts).unwrap_or_default()
     }
 
@@ -965,6 +1108,7 @@ impl Primitives {
         if !curve_a.is_valid() || !curve_b.is_valid() {
             return NurbsSurface::default();
         }
+
         let mut curves = vec![curve_a.duplicate(), curve_b.duplicate()];
         curves[0].set_domain(0.0, 1.0);
         curves[1].set_domain(0.0, 1.0);
@@ -972,12 +1116,15 @@ impl Primitives {
         let cv_count_u = curves[0].cv_count();
         let is_rat = curves[0].is_rational();
         let mut surface = NurbsSurface::new(3, is_rat, curves[0].order(), 2, cv_count_u, 2);
+
         if !surface.is_valid() {
             return NurbsSurface::default();
         }
+
         for i in 0..surface.nurbsknot_count(0) {
             surface.set_nurbsknot(0, i, curves[0].nurbsknot(i).unwrap_or_default());
         }
+
         for i in 0..cv_count_u {
             for j in 0..2 {
                 if is_rat {
@@ -988,6 +1135,7 @@ impl Primitives {
                 }
             }
         }
+
         surface
     }
 
@@ -996,12 +1144,14 @@ impl Primitives {
         if !curve.is_valid() {
             return NurbsSurface::default();
         }
+
         let mut translated = curve.duplicate();
         translated.transform(&Xform::translation(
             direction[0],
             direction[1],
             direction[2],
         ));
+
         Self::create_ruled(curve, &translated)
     }
 
@@ -1010,39 +1160,53 @@ impl Primitives {
         if !boundary.is_valid() {
             return NurbsSurface::default();
         }
+
         let mut pts = Vec::new();
+
         for i in 0..boundary.cv_count() {
             pts.push(boundary.get_cv(i).unwrap_or_default());
         }
+
         if pts.len() >= 2 && pts[0].distance(&pts[pts.len() - 1], None) < 1e-10 {
             pts.pop();
         }
+
         if pts.len() < 3 {
             return NurbsSurface::default();
         }
+
         if boundary.degree() <= 1 && pts.len() == 3 {
             return bilinear_patch(&pts[0], &pts[1], &pts[0], &pts[2]);
         }
+
         if boundary.degree() <= 1 && pts.len() == 4 {
             return bilinear_patch(&pts[0], &pts[1], &pts[3], &pts[2]);
         }
+
         if boundary.degree() <= 1 {
             let mut normal = (&pts[1] - &pts[0]).cross(&(&pts[2] - &pts[0]));
+
             if !normal.normalize_self() {
                 return NurbsSurface::default();
             }
+
             let x_axis = longest_edge_dir(&pts);
             let mut y_axis = normal.cross(&x_axis);
+
             if !y_axis.normalize_self() {
                 return NurbsSurface::default();
             }
+
             return bounded_patch(&pts, &pts[0], &x_axis, &y_axis);
         }
+
         let (samples, _params) = boundary.divide_by_count(20.max(boundary.cv_count() * 4), true);
         let plane = Plane::from_points_pca(samples.clone());
+
         if plane.z_axis().magnitude() < 1e-10 {
             return NurbsSurface::default();
         }
+
         bounded_patch(&samples, &plane.origin(), &plane.x_axis(), &plane.y_axis())
     }
 
@@ -1051,15 +1215,19 @@ impl Primitives {
         if input_curves.len() < 2 {
             return NurbsSurface::default();
         }
+
         for c in input_curves {
             if !c.is_valid() {
                 return NurbsSurface::default();
             }
         }
+
         let mut curves = Vec::new();
+
         for c in input_curves {
             curves.push(c.duplicate());
         }
+
         make_curves_compatible(&mut curves);
         let n = curves.len();
         let cv_count_u = curves[0].cv_count();
@@ -1068,22 +1236,30 @@ impl Primitives {
         let v_params = loft_section_params(&curves);
         let nurbsknots_v = loft_nurbsknots(&v_params, order_v);
         let mut surface = NurbsSurface::new(3, is_rat, curves[0].order(), order_v, cv_count_u, n);
+
         if !surface.is_valid() {
             return NurbsSurface::default();
         }
+
         for i in 0..surface.nurbsknot_count(0) {
             surface.set_nurbsknot(0, i, curves[0].nurbsknot(i).unwrap_or_default());
         }
+
         for i in 0..surface.nurbsknot_count(1) {
             surface.set_nurbsknot(1, i, nurbsknots_v[i]);
         }
+
         let mut basis = Vec::new();
+
         for k in 0..n {
             basis.push(loft_basis_row(&nurbsknots_v, order_v, n, v_params[k]));
         }
+
         let dim = if is_rat { 4 } else { 3 };
+
         for i in 0..cv_count_u {
             let mut rhs = vec![vec![0.0; dim]; n];
+
             for k in 0..n {
                 if is_rat {
                     let (x, y, z, w) = curves[k].get_cv_4d(i).unwrap_or_default();
@@ -1093,7 +1269,9 @@ impl Primitives {
                     rhs[k] = vec![p[0], p[1], p[2]];
                 }
             }
+
             let q = solve_linear(&basis, &rhs);
+
             for j in 0..n {
                 if is_rat {
                     surface.set_cv_4d(i, j, q[j][0], q[j][1], q[j][2], q[j][3]);
@@ -1102,6 +1280,7 @@ impl Primitives {
                 }
             }
         }
+
         surface
     }
 
@@ -1115,15 +1294,21 @@ impl Primitives {
         if !profile.is_valid() {
             return NurbsSurface::default();
         }
+
         let mut axis = axis_direction.clone();
+
         if !axis.normalize_self() {
             return NurbsSurface::default();
         }
+
         let angle = angle.abs().min(2.0 * PI);
+
         if angle < 1e-14 {
             return NurbsSurface::default();
         }
+
         let mut n_arcs = 4;
+
         if angle <= PI / 2.0 + 1e-10 {
             n_arcs = 1;
         } else if angle <= PI + 1e-10 {
@@ -1131,14 +1316,17 @@ impl Primitives {
         } else if angle <= 3.0 * PI / 2.0 + 1e-10 {
             n_arcs = 3;
         }
+
         let d_theta = angle / n_arcs as f64;
         let w_mid = (d_theta / 2.0).cos();
         let n_u = 2 * n_arcs + 1;
         let cv_count_v = profile.cv_count();
         let mut surface = NurbsSurface::new(3, true, 3, profile.order(), n_u, cv_count_v);
+
         if !surface.is_valid() {
             return NurbsSurface::default();
         }
+
         for i in 0..surface.nurbsknot_count(0) {
             surface.set_nurbsknot(
                 0,
@@ -1150,9 +1338,11 @@ impl Primitives {
                 },
             );
         }
+
         for i in 0..surface.nurbsknot_count(1) {
             surface.set_nurbsknot(1, i, profile.nurbsknot(i).unwrap_or_default());
         }
+
         for j in 0..cv_count_v {
             let p = profile.get_cv(j).unwrap_or_default();
             let profile_w = if profile.is_rational() {
@@ -1163,10 +1353,13 @@ impl Primitives {
             let center = axis_origin + &axis * (&p - axis_origin).dot(&axis);
             let mut x_local = &p - &center;
             let r = x_local.magnitude();
+
             if r > 1e-14 {
                 x_local /= r;
             }
+
             let y_local = axis.cross(&x_local);
+
             for i in 0..n_u {
                 let shoulder = i % 2 == 1;
                 let theta = (i / 2) as f64 * d_theta + if shoulder { d_theta / 2.0 } else { 0.0 };
@@ -1177,30 +1370,36 @@ impl Primitives {
                 surface.set_cv_4d(i, j, q[0] * w, q[1] * w, q[2] * w, w);
             }
         }
+
         surface
     }
 
-    /// Sweep of a closed profile along one rail.
+    /// Sweeps of a closed profile along one rail.
     pub fn create_sweep1(rail: &NurbsCurve, profile: &NurbsCurve) -> NurbsSurface {
         if !rail.is_valid() || !profile.is_valid() {
             return NurbsSurface::default();
         }
+
         let count = (rail.span_count() * 2 + 1).clamp(5, 200);
         let frames = rail.get_perpendicular_planes(count);
+
         if frames.is_empty() {
             return NurbsSurface::default();
         }
+
         let to_xy = profile_to_xy(profile);
         let mut sections = Vec::new();
+
         for frame in &frames {
             let mut section = profile.duplicate();
             section.transform(&(&Xform::to_frame(frame) * &to_xy));
             sections.push(section);
         }
+
         Self::create_loft(&sections, 3.min(sections.len() - 1))
     }
 
-    /// Sweep of shape curves between two rails.
+    /// Sweeps of shape curves between two rails.
     pub fn create_sweep2(
         rail1: &NurbsCurve,
         rail2: &NurbsCurve,
@@ -1209,31 +1408,40 @@ impl Primitives {
         if !rail1.is_valid() || !rail2.is_valid() || shapes.is_empty() {
             return NurbsSurface::default();
         }
+
         for shape in shapes {
             if !shape.is_valid() {
                 return NurbsSurface::default();
             }
         }
+
         let mut compat = Vec::new();
+
         for shape in shapes {
             compat.push(shape.duplicate());
         }
+
         make_curves_compatible(&mut compat);
         let n_shapes = compat.len();
         let mut planes = Vec::new();
         let mut widths = Vec::new();
+
         for shape in &compat {
             planes.push(shape_plane(shape));
             widths.push(shape_width(shape));
         }
+
         let count = (rail1.span_count().max(rail2.span_count()) * 2 + 1).clamp(5, 200);
         let (pts1, _params1) = rail1.divide_by_count(count + 1, true);
         let (pts2, _params2) = rail2.divide_by_count(count + 1, true);
         let frames = rail1.get_perpendicular_planes(count);
+
         if frames.is_empty() {
             return NurbsSurface::default();
         }
+
         let mut sections = Vec::new();
+
         for i in 0..frames.len().min(pts1.len()).min(pts2.len()) {
             let t = if frames.len() <= 1 {
                 0.0
@@ -1252,6 +1460,7 @@ impl Primitives {
                 (t * (n_shapes - 1) as f64 - j as f64).clamp(0.0, 1.0)
             };
             let mut section = compat[j].duplicate();
+
             for c in 0..section.cv_count() {
                 section.set_cv(
                     c,
@@ -1262,6 +1471,7 @@ impl Primitives {
                     ),
                 );
             }
+
             let source = Plane::new(
                 lerp_point(&planes[j].origin(), &planes[j1].origin(), s),
                 lerp_vector(&planes[j].x_axis(), &planes[j1].x_axis(), s),
@@ -1271,16 +1481,21 @@ impl Primitives {
             let p1 = pts1[i].clone();
             let mut x_dir = &pts2[i] - &p1;
             let rail_dist = x_dir.magnitude();
+
             if !x_dir.normalize_self() {
                 x_dir = frames[i].x_axis();
             }
+
             let mut y_dir = frames[i].z_axis().cross(&x_dir);
+
             if !y_dir.normalize_self() {
                 y_dir = frames[i].y_axis();
             }
+
             if y_dir.dot(&source.y_axis()) < 0.0 {
                 y_dir = -y_dir;
             }
+
             let scale = if rail_dist > 1e-14 && width > 1e-14 {
                 rail_dist / width
             } else {
@@ -1299,6 +1514,7 @@ impl Primitives {
             );
             sections.push(section);
         }
+
         Self::create_loft(&sections, 3.min(sections.len() - 1))
     }
 
@@ -1312,15 +1528,18 @@ impl Primitives {
         if !c0.is_valid() || !c1.is_valid() || !c2.is_valid() || !c3.is_valid() {
             return NurbsSurface::default();
         }
+
         let chain = chain_curves(&[
             c0.duplicate(),
             c1.duplicate(),
             c2.duplicate(),
             c3.duplicate(),
         ]);
+
         if chain.is_empty() {
             return NurbsSurface::default();
         }
+
         let mut v_pair = vec![chain[0].duplicate(), chain[2].duplicate()];
         v_pair[1].reverse();
         make_curves_compatible(&mut v_pair);
@@ -1341,30 +1560,37 @@ impl Primitives {
             cv_count_u,
             cv_count_v,
         );
+
         if !surface.is_valid() {
             return NurbsSurface::default();
         }
+
         for i in 0..surface.nurbsknot_count(0) {
             surface.set_nurbsknot(0, i, west.nurbsknot(i).unwrap_or_default());
         }
+
         for i in 0..surface.nurbsknot_count(1) {
             surface.set_nurbsknot(1, i, south.nurbsknot(i).unwrap_or_default());
         }
+
         let u_grev = normalized_greville(west);
         let v_grev = normalized_greville(south);
         let c00 = south.get_cv(0).unwrap_or_default();
         let c01 = south.get_cv(cv_count_v - 1).unwrap_or_default();
         let c10 = north.get_cv(0).unwrap_or_default();
         let c11 = north.get_cv(cv_count_v - 1).unwrap_or_default();
+
         for i in 0..cv_count_u {
             let ui = u_grev[i];
             let wi = west.get_cv(i).unwrap_or_default();
             let ei = east.get_cv(i).unwrap_or_default();
+
             for j in 0..cv_count_v {
                 let vj = v_grev[j];
                 let sj = south.get_cv(j).unwrap_or_default();
                 let nj = north.get_cv(j).unwrap_or_default();
                 let mut q = [0.0; 3];
+
                 for axis in 0..3 {
                     q[axis] = (1.0 - ui) * sj[axis]
                         + ui * nj[axis]
@@ -1375,9 +1601,11 @@ impl Primitives {
                         - ui * (1.0 - vj) * c10[axis]
                         - ui * vj * c11[axis];
                 }
+
                 surface.set_cv(i, j, &Point::new(q[0], q[1], q[2]));
             }
         }
+
         surface
     }
 
@@ -1391,11 +1619,13 @@ impl Primitives {
         let grid = surface_grid(surface, u_count, v_count, &mut mesh);
         let singular_south = surface.is_singular(0);
         let singular_north = surface.is_singular(2);
+
         if singular_south {
             for i in 0..u_count {
                 mesh.add_face(vec![grid[0][0], grid[i + 1][1], grid[i][1]], None);
             }
         }
+
         if singular_north {
             for i in 0..u_count {
                 mesh.add_face(
@@ -1408,8 +1638,10 @@ impl Primitives {
                 );
             }
         }
+
         let j0 = if singular_south { 1 } else { 0 };
         let j1 = if singular_north { v_count - 1 } else { v_count };
+
         for i in 0..u_count {
             for j in j0..j1 {
                 mesh.add_face(
@@ -1423,6 +1655,7 @@ impl Primitives {
                 );
             }
         }
+
         mesh
     }
 
@@ -1432,11 +1665,13 @@ impl Primitives {
         let grid = surface_grid(surface, u_count, v_count, &mut mesh);
         let closed_u = surface.is_closed(0);
         let u_end = if closed_u { u_count - 1 } else { u_count };
+
         for i in 0..=u_end {
             for j in 0..=v_count {
                 if (i + j) % 2 != 0 {
                     continue;
                 }
+
                 let center = grid[i][j];
                 let il = if i > 0 {
                     Some(i - 1)
@@ -1454,11 +1689,13 @@ impl Primitives {
                 let right = if i < u_count { grid[i + 1][j] } else { center };
                 let top = if j < v_count { grid[i][j + 1] } else { center };
                 let face = dedup_face(&[left, bottom, right, top]);
+
                 if face.len() >= 3 {
                     mesh.add_face(face, None);
                 }
             }
         }
+
         mesh
     }
 
@@ -1470,11 +1707,13 @@ impl Primitives {
         let mid_b = surface_mid_grid(surface, u_count, v_count, 1.0 - t, &mut mesh);
         let closed_u = surface.is_closed(0);
         let u_end = if closed_u { u_count - 1 } else { u_count };
+
         for i in 0..=u_end {
             for j in 0..=v_count {
                 if (i + j) % 2 != 0 {
                     continue;
                 }
+
                 let center = grid[i][j];
                 let il = if i > 0 {
                     Some(i - 1)
@@ -1510,11 +1749,13 @@ impl Primitives {
                 };
                 let tp = if j < v_count { mid_b[i][j] } else { center };
                 let face = dedup_face(&[ul, ll, bt, lr, ur, tp]);
+
                 if face.len() >= 3 {
                     mesh.add_face(face, None);
                 }
             }
         }
+
         mesh
     }
 
@@ -1529,11 +1770,13 @@ impl Primitives {
         add_ring(&mut vertices, n, 0.5, -0.5);
         add_ring(&mut vertices, n, 0.5, 0.5);
         let mut triangles = Vec::new();
+
         for i in 0..n {
             let next = (i + 1) % n;
             triangles.push([i, next, n + next]);
             triangles.push([i, n + next, n + i]);
         }
+
         (vertices, triangles)
     }
 
@@ -1543,9 +1786,11 @@ impl Primitives {
         let mut vertices = vec![Point::new(0.0, 0.0, 0.5)];
         add_ring(&mut vertices, n, 0.5, -0.5);
         let mut triangles = Vec::new();
+
         for i in 0..n {
             triangles.push([0, 1 + i, 1 + (i + 1) % n]);
         }
+
         (vertices, triangles)
     }
 
@@ -1567,6 +1812,7 @@ impl Primitives {
         add_ring(&mut vertices, n, r_hemi, length + off);
         vertices.push(Point::new(0.0, 0.0, length + radius));
         let mut triangles = Vec::new();
+
         for i in 0..n {
             let next = (i + 1) % n;
             triangles.push([i, next, top + next]);
@@ -1578,21 +1824,25 @@ impl Primitives {
             triangles.push([pole_a, hemi_a + next, hemi_a + i]);
             triangles.push([pole_b, hemi_b + i, hemi_b + next]);
         }
+
         (vertices, triangles)
     }
 
     /// Frame at origin with z along the line.
     fn line_frame(line: &Line, origin: &Point) -> Xform {
         let mut z_axis = line.to_vector();
+
         if !z_axis.normalize_self() {
             z_axis = Vector::new(0.0, 0.0, 1.0);
         }
+
         let pole = if z_axis[2].abs() < 0.9 {
             Vector::new(0.0, 0.0, 1.0)
         } else {
             Vector::new(1.0, 0.0, 0.0)
         };
         let x_axis = pole.cross(&z_axis);
+
         Xform::xy_to_plane(origin, &x_axis, &z_axis.cross(&x_axis), &z_axis)
     }
 
@@ -1600,9 +1850,11 @@ impl Primitives {
     fn add_geometry(mesh: &mut Mesh, geometry: &Geometry, xform: &Xform) {
         let (vertices, triangles) = geometry;
         let mut keys = Vec::new();
+
         for v in vertices {
             keys.push(mesh.add_vertex(v.transformed(xform), None));
         }
+
         for tri in triangles {
             mesh.add_face(vec![keys[tri[0]], keys[tri[1]], keys[tri[2]]], None);
         }

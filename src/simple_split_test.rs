@@ -102,7 +102,10 @@ pub fn run_split_brep_face_by_curves() -> TestResult {
         let meshes = split.face_meshes_q(Some((20., 0.005)));
         MINI_CHECK!((meshes[0].area() - 50.).abs() < 1e-6);
         MINI_CHECK!((meshes[6].area() - 50.).abs() < 1e-6);
-        let neighbor_area: f64 = (1..6).map(|i| meshes[i].area()).sum();
+        let mut neighbor_area = 0.0;
+        for mesh in &meshes[1..6] {
+            neighbor_area += mesh.area();
+        }
         MINI_CHECK!((neighbor_area - 500.).abs() < 1e-6);
         let closed = NurbsCurve::create(
             false,

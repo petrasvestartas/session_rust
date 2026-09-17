@@ -19,6 +19,7 @@ pub fn run_convex_hull_hull_2d() -> TestResult {
         MINI_CHECK!(hull.len() == 4);
     })
 }
+
 REGISTER_MINI_TEST!(
     "ConvexHull",
     "Hull 2d",
@@ -41,6 +42,7 @@ pub fn run_convex_hull_hull_2d_collinear() -> TestResult {
         MINI_CHECK!(hull.len() >= 3);
     })
 }
+
 REGISTER_MINI_TEST!(
     "ConvexHull",
     "Hull 2d Collinear",
@@ -63,6 +65,7 @@ pub fn run_convex_hull_hull_2d_circle() -> TestResult {
         MINI_CHECK!(hull.len() == n);
     })
 }
+
 REGISTER_MINI_TEST!(
     "ConvexHull",
     "Hull 2d Circle",
@@ -91,10 +94,12 @@ pub fn run_convex_hull_hull_3d() -> TestResult {
             Point::new(2.0, 0.0, 0.0),
             Point::new(3.0, 0.0, 0.0),
         ]);
+
         MINI_CHECK!(degenerate.number_of_vertices() == 4);
         MINI_CHECK!(degenerate.number_of_faces() == 0);
     })
 }
+
 REGISTER_MINI_TEST!(
     "ConvexHull",
     "Hull 3d",
@@ -122,6 +127,7 @@ pub fn run_convex_hull_hull_3d_cube() -> TestResult {
         MINI_CHECK!(mesh.number_of_faces() == 12);
     })
 }
+
 REGISTER_MINI_TEST!(
     "ConvexHull",
     "Hull 3d Cube",

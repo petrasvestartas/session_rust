@@ -8,16 +8,11 @@ use std::sync::OnceLock;
 #[derive(Debug, Clone)]
 pub struct Color {
     guid: OnceLock<String>,
-    /// Color name.
-    pub name: String,
-    /// Red component.
-    pub r: f32,
-    /// Green component.
-    pub g: f32,
-    /// Blue component.
-    pub b: f32,
-    /// Alpha component.
-    pub a: f32,
+    pub name: String, // Color name.
+    pub r: f32,       // Red component.
+    pub g: f32,       // Green component.
+    pub b: f32,       // Blue component.
+    pub a: f32,       // Alpha component.
 }
 
 impl Color {
@@ -204,34 +199,6 @@ impl Color {
         Self::new(arr[0], arr[1], arr[2], arr[3])
     }
 
-    /// Creates a color from RGBA floating-point components.
-    pub fn from_float(r: f32, g: f32, b: f32, a: f32) -> Self {
-        Self::new(r, g, b, a)
-    }
-
-    /// Returns the RGBA floating-point components.
-    pub fn to_float_array(&self) -> [f32; 4] {
-        self.to_unified_array()
-    }
-
-    /// Packs colors into contiguous RGBA floating-point components.
-    pub fn pack(colors: &[Color]) -> Vec<f32> {
-        let mut packed = Vec::with_capacity(colors.len() * 4);
-        for color in colors {
-            packed.extend_from_slice(&color.to_unified_array());
-        }
-        packed
-    }
-
-    /// Rebuilds colors from complete groups of four RGBA components.
-    pub fn unpack(packed: &[f32]) -> Vec<Color> {
-        let mut colors = Vec::with_capacity(packed.len() / 4);
-        for values in packed.chunks_exact(4) {
-            colors.push(Self::new(values[0], values[1], values[2], values[3]));
-        }
-        colors
-    }
-
     // ═══════════════════════════════════════════════════════════════════════════
     // JSON
     // ═══════════════════════════════════════════════════════════════════════════
@@ -286,9 +253,11 @@ impl Color {
     /// Constructs a color from its protobuf message.
     pub fn from_proto(proto: crate::proto::Color) -> Self {
         let color = Self::with_name(proto.r, proto.g, proto.b, proto.a, &proto.name);
+
         if !proto.guid.is_empty() {
             color.set_guid(proto.guid);
         }
+
         color
     }
 
@@ -386,6 +355,7 @@ impl PartialEq for Color {
             && self.a == other.a
     }
 }
+
 impl Default for Color {
     fn default() -> Self {
         Self::new(1.0, 1.0, 1.0, 1.0)

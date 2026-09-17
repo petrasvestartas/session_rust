@@ -77,6 +77,7 @@ pub fn run_element_place() -> TestResult {
             for v in mesh.vertex.values() {
                 min_x = min_x.min(v.x);
             }
+
             MINI_CHECK!(min_x > 9.0);
         }
     })
@@ -147,6 +148,7 @@ pub fn run_element_aabb() -> TestResult {
             geo
         }
         e.add_geometry_op(identity);
+
         MINI_CHECK!(e.is_dirty());
         MINI_CHECK!(e.cached_aabb().is_none());
     })
@@ -355,6 +357,7 @@ pub fn run_element_polylines() -> TestResult {
         MINI_CHECK!(e.planes().len() == 1);
         MINI_CHECK!(e.planes()[0].origin() == Point::new(0.5, 0.5, 0.0));
         let normal = e.planes()[0].z_axis();
+
         MINI_CHECK!(normal[0].abs() < 1e-12 && normal[1].abs() < 1e-12 && normal[2] > 0.0);
         MINI_CHECK!(e.edge_vectors().is_empty());
         MINI_CHECK!(e.axis().is_none());
@@ -378,6 +381,7 @@ pub fn run_element_polylines_empty_without_mesh() -> TestResult {
 fn test_plate(data: &[u8]) -> Option<crate::Element> {
     let mut e = crate::Element::pb_loads(data).ok()?;
     e.name = format!("{}_via_factory", e.name);
+
     Some(e)
 }
 
@@ -400,6 +404,7 @@ pub fn run_element_registry_round_trip() -> TestResult {
         use crate::element::ElementGeometry;
 
         Element::register_type("TestPlate", test_plate);
+
         MINI_CHECK!(Element::is_registered("TestPlate"));
 
         let mut plate = Element::from_mesh(unit_quad(), "plate_0");
@@ -429,6 +434,7 @@ pub fn run_element_registry_unknown_type_degrades() -> TestResult {
         proto.element_data = b"whatever this package meant".to_vec();
 
         let loaded = Element::pb_loads_polymorphic(&prost::Message::encode_to_vec(&proto)).unwrap();
+
         MINI_CHECK!(loaded.name == "mystery");
         MINI_CHECK!(matches!(loaded.geometry(), ElementGeometry::Mesh(_)));
     })
@@ -479,6 +485,7 @@ pub fn run_element_dimensions_are_nominal_not_measured() -> TestResult {
         use crate::Vector;
 
         let mut e = Element::from_mesh(unit_quad(), "plate");
+
         MINI_CHECK!(e.dimensions().is_none());
 
         e.set_dimensions(Vector::new(120.0, 80.0, 12.5));
@@ -534,6 +541,7 @@ pub fn run_element_throwing_factory_degrades_to_base() -> TestResult {
         proto.element_type = "Exploding".to_string();
 
         let loaded = Element::pb_loads_polymorphic(&prost::Message::encode_to_vec(&proto)).unwrap();
+
         MINI_CHECK!(loaded.name == "victim");
         MINI_CHECK!(matches!(loaded.geometry(), ElementGeometry::Mesh(_)));
     })
@@ -549,11 +557,13 @@ pub fn run_element_unknown_type_survives_resave() -> TestResult {
         let original = prost::Message::encode_to_vec(&proto);
 
         let loaded = Element::pb_loads(&original).unwrap();
+
         MINI_CHECK!(loaded.element_type_name() == "wood::Plate");
         MINI_CHECK!(loaded.element_data_dumps() == b"the package's own bytes");
 
         let resaved: crate::proto::Element =
             prost::Message::decode(loaded.pb_dumps().as_slice()).unwrap();
+
         MINI_CHECK!(resaved.element_type == "wood::Plate");
         MINI_CHECK!(resaved.element_data == b"the package's own bytes".to_vec());
     })
@@ -587,9 +597,11 @@ pub fn run_element_equality_compares_carried_fields() -> TestResult {
 
         let a = Element::from_mesh(unit_quad(), "same");
         let mut b = Element::from_mesh(unit_quad(), "same");
+
         MINI_CHECK!(a == b);
 
         b.set_dimensions(Vector::new(1.0, 2.0, 3.0));
+
         MINI_CHECK!(a != b);
     })
 }
@@ -618,17 +630,20 @@ pub fn run_element_feature_constructor() -> TestResult {
         MINI_CHECK!(f.outlines.len() == 1);
 
         let same = ElementFeature::new("cut", 2, vec![outline.clone()], "notch");
+
         MINI_CHECK!(f == same);
         MINI_CHECK!(!(f != same));
         MINI_CHECK!(f.guid() != same.guid());
 
         let other = ElementFeature::new("drill", 2, vec![outline], "notch");
+
         MINI_CHECK!(f != other);
 
         MINI_CHECK!(f.str() == "ElementFeature(cut, face 2, 1 outline(s))");
         MINI_CHECK!(f.repr() == f.str());
 
         let empty = ElementFeature::default();
+
         MINI_CHECK!(empty.face_index == -1);
         MINI_CHECK!(empty.outlines.is_empty());
     })

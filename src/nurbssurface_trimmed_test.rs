@@ -38,14 +38,17 @@ pub fn run_nurbssurface_trimmed_singular_planar_normal() -> TestResult {
             Point::new(0.0, 1.0, 0.0),
         ]);
         let mesh = trimmed.mesh_loops(&loops, 5.0, 0.001);
+
         MINI_CHECK!(!mesh.face.is_empty());
         let mut apex = false;
         for vertex in mesh.vertex.values() {
             let normal = vertex.normal().unwrap();
+
             MINI_CHECK!(normal[0].abs() < 1e-12 && normal[2].abs() < 1e-12);
             MINI_CHECK!((normal[1].abs() - 1.0).abs() < 1e-12);
             apex = apex || vertex.z == 1.0;
         }
+
         MINI_CHECK!(apex);
     })
 }
@@ -89,6 +92,7 @@ pub fn run_nurbssurface_trimmed_crease_loops() -> TestResult {
             Point::new(0.8, 0.6, 0.0),
         ]);
         let mesh = ts.mesh_loops(&loops, 20.0, 0.005);
+
         MINI_CHECK!(mesh.vertex.len() == 16 && mesh.face.len() == 12);
         let mut flat = 0;
         let mut tilted = 0;
@@ -102,6 +106,7 @@ pub fn run_nurbssurface_trimmed_crease_loops() -> TestResult {
                     interval = true;
                 }
             }
+
             MINI_CHECK!(interval && vd.z == 0.0);
             let normal = vd.normal().unwrap();
             if normal[0].abs() < 1e-12 {
@@ -111,6 +116,7 @@ pub fn run_nurbssurface_trimmed_crease_loops() -> TestResult {
                 tilted += 1;
             }
         }
+
         MINI_CHECK!(flat == 4 && tilted == 4);
         for face in mesh.face.values() {
             let mut low = f64::INFINITY;
@@ -132,9 +138,11 @@ pub fn run_nurbssurface_trimmed_crease_loops() -> TestResult {
                     .copied()
                     .unwrap_or(0.0);
             }
+
             MINI_CHECK!(!(low < 1.0 && high > 1.0));
             u /= 3.0;
             v /= 3.0;
+
             MINI_CHECK!(!(u > 0.8 && u < 1.2 && v > 0.4 && v < 0.6));
         }
     })
@@ -190,6 +198,7 @@ pub fn run_nurbssurface_trimmed_mesh_loops() -> TestResult {
                 loops.xyz.push(xyz);
             }
             let mesh = ts.mesh_loops(&loops, 20.0, 0.005);
+
             MINI_CHECK!(!mesh.face.is_empty());
             for li in 0..loops.xyz.len() {
                 let points = &loops.xyz[li];
@@ -204,6 +213,7 @@ pub fn run_nurbssurface_trimmed_mesh_loops() -> TestResult {
                             break;
                         }
                     }
+
                     MINI_CHECK!(found);
                 }
             }
@@ -216,9 +226,11 @@ pub fn run_nurbssurface_trimmed_mesh_loops() -> TestResult {
                 }
                 u /= vertices.len() as f64;
                 v /= vertices.len() as f64;
+
                 MINI_CHECK!(!(u > 0.25 && u < 0.75 && v > 0.25 && v < 0.75));
             }
             loops.xyz[0].pop();
+
             MINI_CHECK!(ts.mesh_loops(&loops, 20.0, 0.005).face.is_empty());
         }
     })
@@ -514,6 +526,7 @@ pub fn run_nurbssurface_trimmed_add_inner_loop() -> TestResult {
         MINI_CHECK!(got.is_valid());
 
         ts.clear_inner_loops();
+
         MINI_CHECK!(ts.inner_loop_count() == 0);
     })
 }
@@ -624,6 +637,7 @@ pub fn run_nurbssurface_trimmed_mesh() -> TestResult {
         }
         let ts_circ = NurbsSurfaceTrimmed::create(&srf, &circle_loop);
         let mc = ts_circ.mesh();
+
         MINI_CHECK!(!mc.is_empty());
         MINI_CHECK!(mc.number_of_vertices() >= 30);
         MINI_CHECK!(mc.number_of_faces() >= 30);
@@ -631,6 +645,7 @@ pub fn run_nurbssurface_trimmed_mesh() -> TestResult {
             let nx = vd.attributes.get("nx").copied().unwrap_or(0.0);
             let ny = vd.attributes.get("ny").copied().unwrap_or(0.0);
             let nz = vd.attributes.get("nz").copied().unwrap_or(0.0);
+
             MINI_CHECK!((nx * nx + ny * ny + nz * nz).sqrt() > 0.5);
         }
     })

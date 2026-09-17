@@ -10,11 +10,13 @@ fn are_finite(values: &[f64], count: usize) -> bool {
     if values.len() < count {
         return false;
     }
+
     for value in values.iter().take(count) {
         if !value.is_finite() {
             return false;
         }
     }
+
     true
 }
 
@@ -26,30 +28,22 @@ fn are_finite(values: &[f64], count: usize) -> bool {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
 #[repr(u8)]
 pub enum CurveNurbsKnotStyle {
-    /// Equal parameter spacing.
-    Uniform = 0,
-    /// Spacing proportional to chord length.
+    Uniform = 0, // Equal parameter spacing.
     #[default]
-    Chord = 1,
-    /// Spacing proportional to the square root of chord length.
-    ChordSquareRoot = 2,
-    /// Equal spacing for a periodic curve.
-    UniformPeriodic = 3,
-    /// Chord-length spacing for a periodic curve.
-    ChordPeriodic = 4,
-    /// Square-root chord spacing for a periodic curve.
-    ChordSquareRootPeriodic = 5,
+    Chord = 1, // Spacing proportional to chord length.
+    ChordSquareRoot = 2, // Spacing proportional to the square root of chord length.
+    UniformPeriodic = 3, // Equal spacing for a periodic curve.
+    ChordPeriodic = 4, // Chord-length spacing for a periodic curve.
+    ChordSquareRootPeriodic = 5, // Square-root chord spacing for a periodic curve.
 }
 
 /// End-tangent estimate for cubic curve interpolation.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
 #[repr(u8)]
 pub enum CurveInterpStyle {
-    /// Bessel end tangents matching Rhino.
     #[default]
-    Rhino = 0,
-    /// Cubic Lagrange end tangents matching OCCT.
-    Occt = 1,
+    Rhino = 0, // Bessel end tangents matching Rhino.
+    Occt = 1, // Cubic Lagrange end tangents matching OCCT.
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -62,6 +56,7 @@ pub fn nurbsknot_count(order: usize, cv_count: usize) -> usize {
     if order < 2 || cv_count < order {
         return 0;
     }
+
     order.checked_add(cv_count - 2).unwrap_or(0)
 }
 
@@ -71,8 +66,10 @@ pub fn domain_tolerance(a: f64, b: f64) -> f64 {
     if a == b {
         return 0.0;
     }
+
     let epsilon = f64::EPSILON;
     let tol = (a.abs() + b.abs() + (a - b).abs()) * epsilon.sqrt();
+
     if tol < epsilon {
         epsilon
     } else {
@@ -87,12 +84,15 @@ pub fn make_clamped_uniform(order: usize, cv_count: usize, delta: f64) -> Vec<f6
     }
 
     let kc = nurbsknot_count(order, cv_count);
+
     if kc == 0 {
         return Vec::new();
     }
+
     let mut nurbsknot = vec![0.0; kc];
 
     let mut k = 0.0;
+
     for value in nurbsknot.iter_mut().take(cv_count).skip(order - 2) {
         *value = k;
         k += delta;
@@ -109,12 +109,15 @@ pub fn make_periodic_uniform(order: usize, cv_count: usize, delta: f64) -> Vec<f
     }
 
     let kc = nurbsknot_count(order, cv_count);
+
     if kc == 0 {
         return Vec::new();
     }
+
     let mut nurbsknot = vec![0.0; kc];
 
     let mut k = 0.0;
+
     for value in &mut nurbsknot {
         *value = k;
         k += delta;
@@ -130,6 +133,7 @@ pub fn clamp(order: usize, cv_count: usize, nurbsknot: &mut [f64], end: i32) -> 
     }
 
     let kc = nurbsknot_count(order, cv_count);
+
     if kc == 0 || nurbsknot.len() != kc || !are_finite(nurbsknot, kc) {
         return false;
     }
@@ -158,6 +162,7 @@ pub fn is_valid(order: usize, cv_count: usize, nurbsknot: &[f64]) -> bool {
     }
 
     let kc = nurbsknot_count(order, cv_count);
+
     if kc == 0 || nurbsknot.len() != kc || !are_finite(nurbsknot, kc) {
         return false;
     }
@@ -184,6 +189,7 @@ pub fn is_clamped(order: usize, cv_count: usize, nurbsknot: &[f64], end: i32) ->
     }
 
     let kc = nurbsknot_count(order, cv_count);
+
     if kc == 0 || nurbsknot.len() != kc || !are_finite(nurbsknot, kc) {
         return false;
     }
@@ -195,7 +201,9 @@ pub fn is_clamped(order: usize, cv_count: usize, nurbsknot: &[f64], end: i32) ->
         if mult > kc {
             return false;
         }
+
         let start_value = nurbsknot[0];
+
         for value in nurbsknot.iter().take(mult).skip(1) {
             if (*value - start_value).abs() > tol {
                 return false;
@@ -207,7 +215,9 @@ pub fn is_clamped(order: usize, cv_count: usize, nurbsknot: &[f64], end: i32) ->
         if mult > kc {
             return false;
         }
+
         let end_value = nurbsknot[kc - 1];
+
         for value in nurbsknot.iter().rev().take(mult).skip(1) {
             if (*value - end_value).abs() > tol {
                 return false;
@@ -225,49 +235,25 @@ pub fn is_periodic(order: usize, cv_count: usize, nurbsknot: &[f64]) -> bool {
     }
 
     let kc = nurbsknot_count(order, cv_count);
+
     if kc < 2 || nurbsknot.len() != kc || !are_finite(nurbsknot, kc) {
         return false;
     }
 
     let delta = nurbsknot[1] - nurbsknot[0];
+
     if delta <= 0.0 {
         return false;
     }
 
     let tol = KNOT_TOLERANCE;
+
     for values in nurbsknot.windows(2).skip(1) {
         if ((values[1] - values[0]) - delta).abs() > tol {
             return false;
         }
     }
 
-    true
-}
-
-/// Returns whether the interior nurbsknots have uniform positive spacing.
-pub fn is_uniform(order: usize, cv_count: usize, nurbsknot: &[f64]) -> bool {
-    if order < 2 || cv_count < order {
-        return false;
-    }
-    let kc = nurbsknot_count(order, cv_count);
-    if kc == 0 || nurbsknot.len() != kc || !are_finite(nurbsknot, kc) {
-        return false;
-    }
-    if cv_count <= order {
-        return true;
-    }
-
-    let start = order - 2;
-    let end = cv_count - 1;
-    let delta = nurbsknot[start + 1] - nurbsknot[start];
-    if delta <= 0.0 {
-        return false;
-    }
-    for i in (start + 2)..=end {
-        if ((nurbsknot[i] - nurbsknot[i - 1]) - delta).abs() > KNOT_TOLERANCE {
-            return false;
-        }
-    }
     true
 }
 
@@ -278,11 +264,14 @@ pub fn get_domain(order: usize, cv_count: usize, nurbsknot: &[f64]) -> (f64, f64
     }
 
     let kc = nurbsknot_count(order, cv_count);
+
     if kc == 0 || nurbsknot.len() < kc {
         return (0.0, 0.0);
     }
+
     let start = nurbsknot[order - 2];
     let end = nurbsknot[cv_count - 1];
+
     if !start.is_finite() || !end.is_finite() {
         return (0.0, 0.0);
     }
@@ -297,16 +286,19 @@ pub fn set_domain(order: usize, cv_count: usize, nurbsknot: &mut [f64], t0: f64,
     }
 
     let kc = nurbsknot_count(order, cv_count);
+
     if kc == 0 || nurbsknot.len() != kc || !are_finite(nurbsknot, kc) {
         return false;
     }
 
     let (old_t0, old_t1) = get_domain(order, cv_count, nurbsknot);
+
     if old_t1 <= old_t0 {
         return false;
     }
 
     let scale = (t1 - t0) / (old_t1 - old_t0);
+
     for value in nurbsknot {
         *value = t0 + (*value - old_t0) * scale;
     }
@@ -321,6 +313,7 @@ pub fn reverse(order: usize, cv_count: usize, nurbsknot: &mut [f64]) -> bool {
     }
 
     let kc = nurbsknot_count(order, cv_count);
+
     if kc == 0 || nurbsknot.len() != kc || !are_finite(nurbsknot, kc) {
         return false;
     }
@@ -329,6 +322,7 @@ pub fn reverse(order: usize, cv_count: usize, nurbsknot: &mut [f64]) -> bool {
 
     let t0 = nurbsknot[0];
     let t1 = nurbsknot[kc - 1];
+
     for value in nurbsknot {
         *value = t0 + t1 - *value;
     }
@@ -348,6 +342,7 @@ pub fn multiplicity(
     }
 
     let kc = nurbsknot_count(order, cv_count);
+
     if kc == 0 || nurbsknot.len() != kc || nurbsknot_index >= kc || !are_finite(nurbsknot, kc) {
         return 0;
     }
@@ -357,12 +352,14 @@ pub fn multiplicity(
     let mut mult = 1;
 
     let mut i = nurbsknot_index;
+
     while i > 0 && (nurbsknot[i - 1] - nurbsknot_value).abs() < tol {
         mult += 1;
         i -= 1;
     }
 
     i = nurbsknot_index + 1;
+
     while i < kc && (nurbsknot[i] - nurbsknot_value).abs() < tol {
         mult += 1;
         i += 1;
@@ -378,12 +375,14 @@ pub fn span_count(order: usize, cv_count: usize, nurbsknot: &[f64]) -> usize {
     }
 
     let kc = nurbsknot_count(order, cv_count);
+
     if kc == 0 || nurbsknot.len() != kc || !are_finite(nurbsknot, kc) {
         return 0;
     }
 
     let d = order - 1;
     let mut count = 0;
+
     for i in 0..(cv_count - order + 1) {
         if nurbsknot[i + d - 1] < nurbsknot[i + d] {
             count += 1;
@@ -393,36 +392,23 @@ pub fn span_count(order: usize, cv_count: usize, nurbsknot: &[f64]) -> usize {
     count
 }
 
-/// Returns the distinct span breakpoints, or an empty vector for invalid arguments.
-pub fn get_span_vector(order: usize, cv_count: usize, nurbsknot: &[f64]) -> Vec<f64> {
-    if order < 2 || cv_count < order {
-        return Vec::new();
-    }
-    let kc = nurbsknot_count(order, cv_count);
-    if kc == 0 || nurbsknot.len() != kc || !are_finite(nurbsknot, kc) {
-        return Vec::new();
-    }
+/// Returns the index of the span containing finite parameter `t` in a valid nondecreasing nurbsknot vector.
+pub fn find_span(
+    order: usize,
+    cv_count: usize,
+    nurbsknot: &[f64],
+    t: f64,
+    side: i32,
+    hint: i32,
+) -> usize {
+    let _ = (side, hint);
 
-    let mut spans = Vec::new();
-    for i in 0..(kc - 1) {
-        if (nurbsknot[i + 1] - nurbsknot[i]).abs() > PIVOT_TOLERANCE {
-            spans.push(nurbsknot[i]);
-        }
-    }
-    spans.push(nurbsknot[kc - 1]);
-    spans
-}
-
-/// Returns the index of the span containing finite parameter `t`.
-///
-/// The nurbsknot vector must be valid and nondecreasing. The search checks only
-/// the endpoints and binary-search entries that it reads.
-pub fn find_span(order: usize, cv_count: usize, nurbsknot: &[f64], t: f64) -> usize {
     if order < 2 || cv_count < order || !t.is_finite() {
         return 0;
     }
 
     let kc = nurbsknot_count(order, cv_count);
+
     if kc == 0 || nurbsknot.len() != kc {
         return 0;
     }
@@ -431,6 +417,7 @@ pub fn find_span(order: usize, cv_count: usize, nurbsknot: &[f64], t: f64) -> us
     let span_len = cv_count - order + 2;
     let start = nurbsknot[nurbsknot_offset];
     let end = nurbsknot[nurbsknot_offset + span_len - 1];
+
     if !start.is_finite() || !end.is_finite() {
         return 0;
     }
@@ -438,18 +425,22 @@ pub fn find_span(order: usize, cv_count: usize, nurbsknot: &[f64], t: f64) -> us
     if t <= start {
         return 0;
     }
+
     if t >= end {
         return span_len - 2;
     }
 
     let mut low = 0;
     let mut high = span_len - 1;
+
     while high > low + 1 {
         let mid = low + (high - low) / 2;
         let mid_value = nurbsknot[nurbsknot_offset + mid];
+
         if !mid_value.is_finite() {
             return 0;
         }
+
         if t < mid_value {
             high = mid;
         } else {
@@ -458,46 +449,6 @@ pub fn find_span(order: usize, cv_count: usize, nurbsknot: &[f64], t: f64) -> us
     }
 
     low
-}
-
-/// Returns the omitted nurbsknot at `end`, or zero for invalid arguments.
-pub fn superfluous_nurbsknot(order: usize, cv_count: usize, nurbsknot: &[f64], end: i32) -> f64 {
-    if order < 2 || cv_count < order || !(0..=1).contains(&end) {
-        return 0.0;
-    }
-    let kc = nurbsknot_count(order, cv_count);
-    if kc == 0 || nurbsknot.len() != kc {
-        return 0.0;
-    }
-    if end == 0 {
-        let first = nurbsknot[0];
-        let inner = nurbsknot[order - 2];
-        if first.is_finite() && inner.is_finite() {
-            return 2.0 * first - inner;
-        }
-        return 0.0;
-    }
-    let last = nurbsknot[kc - 1];
-    let inner = nurbsknot[cv_count - order];
-    if last.is_finite() && inner.is_finite() {
-        return 2.0 * last - inner;
-    }
-    0.0
-}
-
-/// Returns one Greville abscissa, or zero for invalid arguments.
-pub fn greville_abcissa(order: usize, nurbsknot: &[f64]) -> f64 {
-    if order < 2 || nurbsknot.len() < order - 1 {
-        return 0.0;
-    }
-    let mut sum = 0.0;
-    for value in nurbsknot.iter().take(order - 1) {
-        if !value.is_finite() {
-            return 0.0;
-        }
-        sum += value;
-    }
-    sum / (order - 1) as f64
 }
 
 /// Returns the Greville abscissae, or an empty vector for invalid arguments.
@@ -512,6 +463,7 @@ pub fn get_greville_abcissae(
     }
 
     let kc = nurbsknot_count(order, cv_count);
+
     if kc == 0 || nurbsknot.len() != kc || !are_finite(nurbsknot, kc) {
         return Vec::new();
     }
@@ -526,9 +478,11 @@ pub fn get_greville_abcissae(
 
     for i in 0..count {
         let mut sum = 0.0;
+
         for j in 0..d {
             sum += nurbsknot[i + j];
         }
+
         g[i] = sum / d as f64;
     }
 
@@ -551,10 +505,13 @@ pub fn solve_tridiagonal(
     if n < 1 || dim < 1 {
         return None;
     }
+
     let rhs_count = n.checked_mul(dim)?;
+
     if lower.len() < n || diag.len() < n || upper.len() < n || rhs.len() < rhs_count {
         return None;
     }
+
     if !are_finite(lower, n)
         || !are_finite(diag, n)
         || !are_finite(upper, n)
@@ -571,17 +528,22 @@ pub fn solve_tridiagonal(
     if diag[0].abs() < eps {
         return None;
     }
+
     c_star[0] = upper[0] / diag[0];
+
     for d in 0..dim {
         d_star[d] = rhs[d] / diag[0];
     }
 
     for i in 1..n {
         let denom = diag[i] - lower[i] * c_star[i - 1];
+
         if denom.abs() < eps {
             return None;
         }
+
         c_star[i] = if i < n - 1 { upper[i] / denom } else { 0.0 };
+
         for d in 0..dim {
             d_star[i * dim + d] = (rhs[i * dim + d] - lower[i] * d_star[(i - 1) * dim + d]) / denom;
         }
@@ -610,11 +572,13 @@ pub fn compute_parameters(
     let Some(value_count) = point_count.checked_mul(dim) else {
         return Vec::new();
     };
+
     if point_count < 1 || dim < 1 || !are_finite(points, value_count) {
         return Vec::new();
     }
 
     let mut params = vec![0.0; point_count];
+
     if point_count < 2 {
         return params;
     }
@@ -623,18 +587,22 @@ pub fn compute_parameters(
 
     for i in 1..point_count {
         let mut dist = 0.0;
+
         for d in 0..dim {
             let diff = points[i * dim + d] - points[(i - 1) * dim + d];
             dist += diff * diff;
         }
+
         dist = dist.sqrt();
 
         let mut delta = dist;
+
         if base_style == 0 {
             delta = 1.0;
         } else if base_style == 2 {
             delta = dist.sqrt();
         }
+
         params[i] = params[i - 1] + delta;
     }
 
@@ -644,6 +612,7 @@ pub fn compute_parameters(
 /// Returns a clamped interpolation nurbsknot vector with natural end conditions.
 pub fn build_interp_nurbsknots(params: &[f64], degree: usize) -> Vec<f64> {
     let n = params.len();
+
     if n < 2 || degree < 1 || !are_finite(params, n) {
         return Vec::new();
     }
@@ -655,9 +624,11 @@ pub fn build_interp_nurbsknots(params: &[f64], degree: usize) -> Vec<f64> {
         return Vec::new();
     };
     let kc = nurbsknot_count(order, cv_count);
+
     if kc == 0 {
         return Vec::new();
     }
+
     let t_max = params[n - 1];
     let mut nurbsknots = vec![0.0; kc];
 
@@ -672,16 +643,16 @@ pub fn build_interp_nurbsknots(params: &[f64], degree: usize) -> Vec<f64> {
     nurbsknots
 }
 
-/// Returns the `order` nonzero B-spline basis values at `t` using Cox-de Boor evaluation.
-///
-/// The local nurbsknot window read for `span` must be finite.
+/// Returns the `order` nonzero B-spline basis values at `t` by Cox-de Boor evaluation over a finite span window.
 pub fn eval_basis(order: usize, nurbsknot: &[f64], span: usize, t: f64) -> Vec<f64> {
     if order < 1 || !t.is_finite() {
         return Vec::new();
     }
+
     if order == 1 {
         return vec![1.0];
     }
+
     let Some(double_order) = order.checked_mul(2) else {
         return Vec::new();
     };
@@ -689,9 +660,11 @@ pub fn eval_basis(order: usize, nurbsknot: &[f64], span: usize, t: f64) -> Vec<f
     let Some(end) = span.checked_add(width) else {
         return Vec::new();
     };
+
     if nurbsknot.len() < end {
         return Vec::new();
     }
+
     for value in &nurbsknot[span..end] {
         if !value.is_finite() {
             return Vec::new();
@@ -718,6 +691,7 @@ pub fn eval_basis(order: usize, nurbsknot: &[f64], span: usize, t: f64) -> Vec<f
             basis[r] = saved + right[r + 1] * temp;
             saved = left[j - r] * temp;
         }
+
         basis[j] = saved;
     }
 
@@ -728,25 +702,22 @@ pub fn eval_basis(order: usize, nurbsknot: &[f64], span: usize, t: f64) -> Vec<f
 // Fitting
 // ═══════════════════════════════════════════════════════════════════════════
 
-/// Returns a clamped fitting vector using averaged parameter spacing.
-pub fn build_fitted_nurbsknots(params: &[f64], num_cvs: usize, degree: usize) -> Vec<f64> {
+fn build_fitted_nurbsknots(params: &[f64], num_cvs: usize, degree: usize) -> Vec<f64> {
     let m = params.len();
-    if degree < 1 || num_cvs <= degree || m < num_cvs - degree || !are_finite(params, m) {
-        return Vec::new();
-    }
-    let Some(order) = degree.checked_add(1) else {
-        return Vec::new();
-    };
+    let n_interior = num_cvs - degree - 1;
+    let order = degree + 1;
     let kc = nurbsknot_count(order, num_cvs);
+
     if kc == 0 {
         return Vec::new();
     }
-    let n_interior = num_cvs - degree - 1;
+
     let mut nurbsknots = vec![0.0; kc];
 
     nurbsknots[..degree].fill(params[0]);
 
     let d = m as f64 / (num_cvs - degree) as f64;
+
     for j in 1..=n_interior {
         let i = (j as f64 * d) as usize;
         let alpha = j as f64 * d - i as f64;
@@ -762,6 +733,7 @@ fn turn_angle(points: &[f64], dim: usize, prev: usize, i: usize, next: usize) ->
     let mut dot = 0.0;
     let mut len1sq = 0.0;
     let mut len2sq = 0.0;
+
     for d in 0..dim {
         let a = points[i * dim + d] - points[prev * dim + d];
         let b = points[next * dim + d] - points[i * dim + d];
@@ -769,25 +741,31 @@ fn turn_angle(points: &[f64], dim: usize, prev: usize, i: usize, next: usize) ->
         len1sq += a * a;
         len2sq += b * b;
     }
+
     let len1 = len1sq.sqrt();
     let len2 = len2sq.sqrt();
+
     if len1 <= PIVOT_TOLERANCE || len2 <= PIVOT_TOLERANCE {
         return 0.0;
     }
+
     (dot / (len1 * len2)).clamp(-1.0, 1.0).acos()
 }
 
 fn locate_target(params: &[f64], cum: &[f64], last: usize, target: f64) -> f64 {
     let mut lo = 0;
     let mut hi = last;
+
     while lo < hi {
         let mid = lo + (hi - lo) / 2;
+
         if cum[mid + 1] < target {
             lo = mid + 1;
         } else {
             hi = mid;
         }
     }
+
     let frac = if cum[lo + 1] > cum[lo] {
         (target - cum[lo]) / (cum[lo + 1] - cum[lo])
     } else {
@@ -807,6 +785,7 @@ pub fn build_fitted_nurbsknots_adaptive(
     scale: f64,
 ) -> Vec<f64> {
     let m = point_count;
+
     if m < 2
         || dim < 1
         || num_cvs <= degree
@@ -816,39 +795,46 @@ pub fn build_fitted_nurbsknots_adaptive(
     {
         return Vec::new();
     }
+
     if m < 3 || points.is_empty() {
         if m < num_cvs - degree {
             return Vec::new();
         }
+
         return build_fitted_nurbsknots(params, num_cvs, degree);
     }
+
     let Some(value_count) = m.checked_mul(dim) else {
         return Vec::new();
     };
+
     if !are_finite(points, value_count) {
         return Vec::new();
     }
 
     let mut turn = vec![0.0; m];
+
     for (i, value) in turn.iter_mut().enumerate().take(m - 1).skip(1) {
         *value = turn_angle(points, dim, i - 1, i, i + 1);
     }
 
     let mut cum = vec![0.0; m];
+
     for i in 0..(m - 1) {
         let chord = (params[i + 1] - params[i]).max(PIVOT_TOLERANCE);
         cum[i + 1] = cum[i] + chord * (1.0 + scale * (turn[i] + turn[i + 1]) * 0.5);
     }
+
     let total = cum[m - 1];
 
     let n_interior = num_cvs - degree - 1;
-    let Some(order) = degree.checked_add(1) else {
-        return Vec::new();
-    };
+    let order = degree + 1;
     let kc = nurbsknot_count(order, num_cvs);
+
     if kc == 0 {
         return Vec::new();
     }
+
     let mut nurbsknots = vec![0.0; kc];
     nurbsknots[..degree].fill(params[0]);
 
@@ -879,6 +865,7 @@ pub fn build_fitted_nurbsknots_periodic_adaptive(
     let Some(param_count) = n.checked_add(1) else {
         return Vec::new();
     };
+
     if degree < 1
         || degree - 1 > num_cvs
         || !scale.is_finite()
@@ -895,30 +882,38 @@ pub fn build_fitted_nurbsknots_periodic_adaptive(
         return Vec::new();
     };
     let kc = nurbsknot_count(order, cv_count);
+
     if kc == 0 {
         return Vec::new();
     }
+
     let period = params[n];
     let mut nurbsknots = vec![0.0; kc];
 
     if !period.is_finite() || period <= 0.0 {
         return Vec::new();
     }
+
     if n < 3 || points.is_empty() {
         let delta = period / num_cvs as f64;
+
         for (i, value) in nurbsknots.iter_mut().enumerate() {
             *value = (i as f64 - degree as f64 + 1.0) * delta;
         }
+
         return nurbsknots;
     }
+
     let Some(value_count) = n.checked_mul(dim) else {
         return Vec::new();
     };
+
     if dim < 1 || !are_finite(points, value_count) {
         return Vec::new();
     }
 
     let mut turn = vec![0.0; n];
+
     for (i, value) in turn.iter_mut().enumerate() {
         *value = turn_angle(
             points,
@@ -930,26 +925,32 @@ pub fn build_fitted_nurbsknots_periodic_adaptive(
     }
 
     let mut cum = vec![0.0; n + 1];
+
     for i in 0..n {
         let chord = (params[i + 1] - params[i]).max(PIVOT_TOLERANCE);
         cum[i + 1] = cum[i] + chord * (1.0 + scale * (turn[i] + turn[(i + 1) % n]) * 0.5);
     }
+
     let total = cum[n];
 
     let mut base = vec![0.0; num_cvs];
+
     for (j, value) in base.iter_mut().enumerate() {
         *value = locate_target(params, &cum, n - 1, total * j as f64 / num_cvs as f64);
     }
 
     let mut intervals = vec![0.0; num_cvs];
+
     for j in 0..(num_cvs - 1) {
         intervals[j] = base[j + 1] - base[j];
     }
+
     intervals[num_cvs - 1] = period - base[num_cvs - 1];
 
     for i in 1..degree {
         nurbsknots[degree - 1 - i] = nurbsknots[degree - i] - intervals[num_cvs - i];
     }
+
     for i in 0..(kc - degree) {
         nurbsknots[degree + i] = nurbsknots[degree - 1 + i] + intervals[i % num_cvs];
     }
@@ -974,6 +975,7 @@ pub fn solve_banded_spd(
     let Some(rhs_count) = n.checked_mul(dim) else {
         return false;
     };
+
     if dim < 1 || n < 1 || !are_finite(band, band_count) || !are_finite(rhs, rhs_count) {
         return false;
     }
@@ -981,14 +983,18 @@ pub fn solve_banded_spd(
     for i in 0..n {
         for j in i.saturating_sub(half_bw)..=i {
             let mut sum = 0.0;
+
             for k in i.saturating_sub(half_bw)..j {
                 sum += band[i * bw1 + (i - k)] * band[j * bw1 + (j - k)];
             }
+
             if i == j {
                 let val = band[i * bw1] - sum;
+
                 if val <= POSITIVE_DEFINITE_TOLERANCE {
                     return false;
                 }
+
                 band[i * bw1] = val.sqrt();
             } else {
                 band[i * bw1 + (i - j)] = (band[i * bw1 + (i - j)] - sum) / band[j * bw1];
@@ -999,9 +1005,11 @@ pub fn solve_banded_spd(
     for i in 0..n {
         for d in 0..dim {
             let mut sum = 0.0;
+
             for k in i.saturating_sub(half_bw)..i {
                 sum += band[i * bw1 + (i - k)] * rhs[k * dim + d];
             }
+
             rhs[i * dim + d] = (rhs[i * dim + d] - sum) / band[i * bw1];
         }
     }
@@ -1010,9 +1018,11 @@ pub fn solve_banded_spd(
         for d in 0..dim {
             let mut sum = 0.0;
             let upper = i.saturating_add(bw1).min(n);
+
             for k in (i + 1)..upper {
                 sum += band[k * bw1 + (k - i)] * rhs[k * dim + d];
             }
+
             rhs[i * dim + d] = (rhs[i * dim + d] - sum) / band[i * bw1];
         }
     }

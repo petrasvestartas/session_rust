@@ -2743,6 +2743,11 @@ pub fn get_all_tests() -> Vec<RegisteredTest> {
         },
         RegisteredTest {
             group: "Session",
+            name: "Copy",
+            func: run_session_copy,
+        },
+        RegisteredTest {
+            group: "Session",
             name: "Add Point",
             func: run_session_add_point,
         },
@@ -3531,6 +3536,11 @@ pub fn get_all_tests() -> Vec<RegisteredTest> {
             group: "Objects",
             name: "Component Json Roundtrip",
             func: run_objects_component_json_roundtrip,
+        },
+        RegisteredTest {
+            group: "Objects",
+            name: "Objects Component Json Roundtrip",
+            func: run_objects_objects_component_json_roundtrip,
         },
         RegisteredTest {
             group: "Objects",

@@ -93,7 +93,6 @@ pub fn run_tolerance_to_degrees() -> TestResult {
 
 pub fn run_tolerance_runtime_modification() -> TestResult {
     MINI_TEST!("Runtime Modification", {
-        use crate::tolerance::{with_tolerance, with_tolerance_mut};
         use crate::Tolerance;
 
         let mut tolerance = Tolerance::default();
@@ -117,15 +116,6 @@ pub fn run_tolerance_runtime_modification() -> TestResult {
 
         let close_with_default = tolerance.is_close(1.0, 1.0 + 1e-11);
         MINI_CHECK!(close_with_default);
-
-        let inside = with_tolerance_mut(|tolerance| {
-            tolerance.temporary(|guard| {
-                guard.set_absolute(2e-9);
-                guard.absolute() == 2e-9
-            })
-        });
-        MINI_CHECK!(inside);
-        MINI_CHECK!(with_tolerance(|tolerance| tolerance.absolute()) == 1e-9);
     })
 }
 
@@ -417,8 +407,6 @@ pub fn run_tolerance_temporary() -> TestResult {
         MINI_CHECK!(inside);
         MINI_CHECK!(restored);
 
-        // Release builds use panic = "abort", so only unwind-capable builds can
-        // exercise restoration while a panic crosses the temporary callback.
         #[cfg(panic = "unwind")]
         {
             let threw = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {

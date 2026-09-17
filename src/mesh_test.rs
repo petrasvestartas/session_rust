@@ -11,9 +11,13 @@ pub fn run_mesh_constructor() -> TestResult {
 
         let vertices = Polyline::from_sides(6, 1.0, false).get_points();
         let mut mesh = Mesh::from_vertices_and_faces(vertices, vec![vec![0, 1, 2, 3, 4, 5]]);
-        let _sstr = mesh.str();
-        let _srepr = mesh.repr();
-        let _mcopy = mesh.clone();
+        let sstr = mesh.str();
+        let srepr = mesh.repr();
+        let mcopy = mesh.clone();
+
+        MINI_CHECK!(!sstr.is_empty());
+        MINI_CHECK!(!srepr.is_empty());
+        MINI_CHECK!(mcopy == mesh);
 
         MINI_CHECK!(mesh.is_valid());
         mesh.name = "hexagon".to_string();
@@ -21,6 +25,7 @@ pub fn run_mesh_constructor() -> TestResult {
         let palette = Color::palette();
 
         mesh.set_objectcolor(Color::grey());
+
         MINI_CHECK!(mesh.color_mode == ColorMode::OBJECTCOLOR);
 
         let mut pc: Vec<Color> = Vec::with_capacity(mesh.number_of_vertices());
@@ -28,6 +33,7 @@ pub fn run_mesh_constructor() -> TestResult {
             pc.push(palette[i % palette.len()].clone());
         }
         mesh.set_pointcolors(pc);
+
         MINI_CHECK!(mesh.color_mode == ColorMode::POINTCOLORS);
         MINI_CHECK!(mesh.get_pointcolors().len() == mesh.number_of_vertices());
 
@@ -36,6 +42,7 @@ pub fn run_mesh_constructor() -> TestResult {
             fc.push(palette[i % palette.len()].clone());
         }
         mesh.set_facecolors(fc);
+
         MINI_CHECK!(mesh.color_mode == ColorMode::FACECOLORS);
         MINI_CHECK!(mesh.get_facecolors().len() == mesh.number_of_faces());
 
@@ -45,22 +52,28 @@ pub fn run_mesh_constructor() -> TestResult {
             lc.push(palette[i % palette.len()].clone());
         }
         mesh.set_linecolors(lc, lw);
+
         MINI_CHECK!(mesh.color_mode == ColorMode::FACECOLORS);
         MINI_CHECK!(mesh.get_linecolors().len() == mesh.number_of_edges());
 
         mesh.color_mode = ColorMode::FACECOLORS;
+
         MINI_CHECK!(mesh.color_mode == ColorMode::FACECOLORS);
         mesh.clear_facecolors();
+
         MINI_CHECK!(mesh.color_mode == ColorMode::OBJECTCOLOR);
         MINI_CHECK!(mesh.get_facecolors().is_empty());
 
         mesh.color_mode = ColorMode::FACECOLORS;
+
         MINI_CHECK!(mesh.color_mode == ColorMode::FACECOLORS);
         mesh.clear_pointcolors();
+
         MINI_CHECK!(mesh.color_mode == ColorMode::FACECOLORS);
 
         mesh.color_mode = ColorMode::POINTCOLORS;
         mesh.clear_linecolors();
+
         MINI_CHECK!(mesh.color_mode == ColorMode::POINTCOLORS);
         MINI_CHECK!(mesh.get_linecolors().is_empty());
     })
@@ -256,6 +269,7 @@ pub fn run_mesh_from_polygon_with_holes() -> TestResult {
             ],
             true,
         );
+
         MINI_CHECK!(mesh_sorted.is_valid());
     })
 }
@@ -336,6 +350,7 @@ pub fn run_mesh_loft() -> TestResult {
         MINI_CHECK!(mesh.is_closed());
 
         let mesh_no_cap = Mesh::loft(&bottom, &top, false, true);
+
         MINI_CHECK!(mesh_no_cap.is_valid());
         MINI_CHECK!(!mesh_no_cap.is_closed());
     })
@@ -410,6 +425,7 @@ pub fn run_mesh_loft_concave_with_holes_and_collinear() -> TestResult {
             ]),
         ];
         let annen = Mesh::loft(&annen_bot, &annen_top, true, true);
+
         MINI_CHECK!(annen.is_valid());
         MINI_CHECK!(annen.is_closed());
         MINI_CHECK!(annen.vertex.len() == 40);
@@ -434,6 +450,7 @@ pub fn run_mesh_loft_concave_with_holes_and_collinear() -> TestResult {
             Point::new(0.0, 0.0, 1.5),
         ])];
         let colmesh = Mesh::loft(&col_bot, &col_top, true, true);
+
         MINI_CHECK!(colmesh.is_valid());
         MINI_CHECK!(colmesh.is_closed());
         MINI_CHECK!(colmesh.vertex.len() == 12);
@@ -471,6 +488,7 @@ pub fn run_mesh_from_polygon_with_holes_many() -> TestResult {
         MINI_CHECK!(meshes[2].is_valid());
         MINI_CHECK!(meshes[3].is_valid());
         let meshes_seq = Mesh::from_polygon_with_holes_many(inputs, false, false);
+
         MINI_CHECK!(meshes_seq[0].number_of_faces() == meshes[0].number_of_faces());
     })
 }
@@ -515,6 +533,7 @@ pub fn run_mesh_loft_many() -> TestResult {
         MINI_CHECK!(meshes[5].is_valid());
         MINI_CHECK!(meshes[5].is_closed());
         let meshes_seq = Mesh::loft_many(loft_inputs, true, false, true);
+
         MINI_CHECK!(meshes_seq[0].is_valid());
         MINI_CHECK!(meshes_seq[0].is_closed());
         MINI_CHECK!(meshes_seq[1].is_valid());
@@ -744,21 +763,27 @@ pub fn run_mesh_boolean_queries() -> TestResult {
         MINI_CHECK!(!empty);
 
         let valid = mesh.is_valid();
+
         MINI_CHECK!(valid);
 
         let closed = mesh.is_closed();
+
         MINI_CHECK!(!closed);
 
         let vertex_on_boundary = mesh.is_vertex_on_boundary(v0);
+
         MINI_CHECK!(!vertex_on_boundary);
 
         let edge_not_on_boundary = mesh.is_edge_on_boundary(v0, v1);
+
         MINI_CHECK!(!edge_not_on_boundary);
 
         let edge_on_boundary = mesh.is_edge_on_boundary(v1, v2);
+
         MINI_CHECK!(edge_on_boundary);
 
         let face_on_boundary = mesh.is_face_on_boundary(f0);
+
         MINI_CHECK!(face_on_boundary);
     })
 }
@@ -775,15 +800,19 @@ pub fn run_mesh_attributes() -> TestResult {
         MINI_CHECK!(n_vertices == 8);
 
         let n_faces = mesh.number_of_faces();
+
         MINI_CHECK!(n_faces == 6);
 
         let n_edges = mesh.number_of_edges();
+
         MINI_CHECK!(n_edges == 12);
 
         let euler = mesh.euler();
+
         MINI_CHECK!(euler == 2);
 
         let (pts, fidx) = mesh.to_vertices_and_faces();
+
         MINI_CHECK!(fidx.len() == n_faces);
         MINI_CHECK!(pts.len() == n_vertices);
         MINI_CHECK!(TOLERANCE.is_point_close(&pts[0], &Point::new(-0.5, -0.5, -0.5)));
@@ -802,6 +831,7 @@ pub fn run_mesh_attributes() -> TestResult {
         MINI_CHECK!(fidx[5] == vec![1, 2, 6, 5]);
 
         let vertex_to_index = mesh.vertex_index();
+
         MINI_CHECK!(vertex_to_index.len() == n_vertices);
         MINI_CHECK!(vertex_to_index[&0] == 0);
         MINI_CHECK!(vertex_to_index[&1] == 1);
@@ -813,6 +843,7 @@ pub fn run_mesh_attributes() -> TestResult {
         MINI_CHECK!(vertex_to_index[&7] == 7);
 
         let vertices = mesh.vertices();
+
         MINI_CHECK!(vertices.len() == 8);
         MINI_CHECK!(vertices[0] == 0);
         MINI_CHECK!(vertices[1] == 1);
@@ -823,6 +854,7 @@ pub fn run_mesh_attributes() -> TestResult {
         MINI_CHECK!(vertices[6] == 6);
         MINI_CHECK!(vertices[7] == 7);
         let faces = mesh.faces();
+
         MINI_CHECK!(faces.len() == 6);
         MINI_CHECK!(faces[0] == 0);
         MINI_CHECK!(faces[1] == 1);
@@ -831,6 +863,7 @@ pub fn run_mesh_attributes() -> TestResult {
         MINI_CHECK!(faces[4] == 4);
         MINI_CHECK!(faces[5] == 5);
         let edges = mesh.edges();
+
         MINI_CHECK!(edges.len() == 12);
         MINI_CHECK!(edges[0] == (0, 1));
         MINI_CHECK!(edges[1] == (0, 3));
@@ -849,17 +882,23 @@ pub fn run_mesh_attributes() -> TestResult {
         MINI_CHECK!(mesh.naked_faces(false).len() == 6);
         mesh.remove_face(mesh.faces()[0]);
         let ne = mesh.naked_edges(true);
+
         MINI_CHECK!(ne.len() == 4);
         MINI_CHECK!(ne[0] == (0, 1));
         let ni = mesh.naked_edges(false);
+
         MINI_CHECK!(ni.len() == 8);
         let nv = mesh.naked_vertices(true);
+
         MINI_CHECK!(nv.len() == 4);
         let nvi = mesh.naked_vertices(false);
+
         MINI_CHECK!(nvi.len() == 4);
         let nf = mesh.naked_faces(true);
+
         MINI_CHECK!(nf.len() == 4);
         let nfi = mesh.naked_faces(false);
+
         MINI_CHECK!(nfi.len() == 1);
     })
 }
@@ -930,16 +969,20 @@ pub fn run_mesh_vertex_and_face_operations() -> TestResult {
         MINI_CHECK!(mesh.add_face(vec![0, 1, 0], None).is_none());
 
         mesh.remove_vertex(0);
+
         MINI_CHECK!(mesh.number_of_vertices() == 7);
         MINI_CHECK!(mesh.number_of_faces() == 3);
 
         mesh.remove_edge(1, 2);
+
         MINI_CHECK!(mesh.number_of_faces() == 2);
 
         mesh.remove_face(1);
+
         MINI_CHECK!(mesh.number_of_faces() == 1);
 
         mesh.clear();
+
         MINI_CHECK!(mesh.is_empty());
 
         for v in &verts {
@@ -950,8 +993,10 @@ pub fn run_mesh_vertex_and_face_operations() -> TestResult {
         }
 
         mesh = mesh.unweld();
+
         MINI_CHECK!(mesh.number_of_vertices() == 24);
         mesh = mesh.weld(0.001);
+
         MINI_CHECK!(mesh.number_of_vertices() == 8);
         MINI_CHECK!(mesh.number_of_faces() == 6);
         let fv0 = mesh.face_vertices(0).unwrap();
@@ -960,6 +1005,7 @@ pub fn run_mesh_vertex_and_face_operations() -> TestResult {
         let fv3 = mesh.face_vertices(3).unwrap();
         let fv4 = mesh.face_vertices(4).unwrap();
         let fv5 = mesh.face_vertices(5).unwrap();
+
         MINI_CHECK!(fv0[0] == 0 && fv0[1] == 1 && fv0[2] == 2 && fv0[3] == 3);
         MINI_CHECK!(fv1[0] == 4 && fv1[1] == 5 && fv1[2] == 6 && fv1[3] == 7);
         MINI_CHECK!(fv2[0] == 0 && fv2[1] == 3 && fv2[2] == 5 && fv2[3] == 4);
@@ -974,6 +1020,7 @@ pub fn run_mesh_vertex_and_face_operations() -> TestResult {
         let fv3 = mesh.face_vertices(3).unwrap();
         let fv4 = mesh.face_vertices(4).unwrap();
         let fv5 = mesh.face_vertices(5).unwrap();
+
         MINI_CHECK!(fv0[0] == 3 && fv0[1] == 2 && fv0[2] == 1 && fv0[3] == 0);
         MINI_CHECK!(fv1[0] == 4 && fv1[1] == 5 && fv1[2] == 6 && fv1[3] == 7);
         MINI_CHECK!(fv2[0] == 0 && fv2[1] == 3 && fv2[2] == 5 && fv2[3] == 4);
@@ -988,6 +1035,7 @@ pub fn run_mesh_vertex_and_face_operations() -> TestResult {
         let fv3 = mesh.face_vertices(3).unwrap();
         let fv4 = mesh.face_vertices(4).unwrap();
         let fv5 = mesh.face_vertices(5).unwrap();
+
         MINI_CHECK!(fv0[0] == 0 && fv0[1] == 1 && fv0[2] == 2 && fv0[3] == 3);
         MINI_CHECK!(fv1[0] == 4 && fv1[1] == 5 && fv1[2] == 6 && fv1[3] == 7);
         MINI_CHECK!(fv2[0] == 0 && fv2[1] == 3 && fv2[2] == 5 && fv2[3] == 4);
@@ -1002,6 +1050,7 @@ pub fn run_mesh_vertex_and_face_operations() -> TestResult {
         let fv3 = mesh.face_vertices(3).unwrap();
         let fv4 = mesh.face_vertices(4).unwrap();
         let fv5 = mesh.face_vertices(5).unwrap();
+
         MINI_CHECK!(fv0[0] == 3 && fv0[1] == 2 && fv0[2] == 1 && fv0[3] == 0);
         MINI_CHECK!(fv1[0] == 7 && fv1[1] == 6 && fv1[2] == 5 && fv1[3] == 4);
         MINI_CHECK!(fv2[0] == 4 && fv2[1] == 5 && fv2[2] == 3 && fv2[3] == 0);
@@ -1016,6 +1065,7 @@ pub fn run_mesh_vertex_and_face_operations() -> TestResult {
         let fv3 = mesh.face_vertices(3).unwrap();
         let fv4 = mesh.face_vertices(4).unwrap();
         let fv5 = mesh.face_vertices(5).unwrap();
+
         MINI_CHECK!(fv0[0] == 0 && fv0[1] == 1 && fv0[2] == 2 && fv0[3] == 3);
         MINI_CHECK!(fv1[0] == 4 && fv1[1] == 5 && fv1[2] == 6 && fv1[3] == 7);
         MINI_CHECK!(fv2[0] == 0 && fv2[1] == 3 && fv2[2] == 5 && fv2[3] == 4);
@@ -1076,6 +1126,7 @@ pub fn run_mesh_connectivity_queries() -> TestResult {
             efp0.name = format!("f{}", ef0);
             let mut efp1 = mesh.face_centroid(ef1).unwrap();
             efp1.name = format!("f{}", ef1);
+
             MINI_CHECK!(ef.len() == 2);
             MINI_CHECK!(ef0 == 0 && ef1 == 1);
         }
@@ -1093,6 +1144,7 @@ pub fn run_mesh_connectivity_queries() -> TestResult {
             lmid2.name = format!("e{}-{}", fe[2].0, fe[2].1);
             let mut lmid3 = l3.center();
             lmid3.name = format!("e{}-{}", fe[3].0, fe[3].1);
+
             MINI_CHECK!(fe.len() == 4);
             MINI_CHECK!(fe[0] == (0, 1));
             MINI_CHECK!(fe[1] == (1, 2));
@@ -1104,17 +1156,20 @@ pub fn run_mesh_connectivity_queries() -> TestResult {
             let ff0 = ff[0];
             let mut ffp = mesh.face_centroid(ff0).unwrap();
             ffp.name = format!("f{}", ff0);
+
             MINI_CHECK!(ff.len() == 1);
             MINI_CHECK!(ff0 == 1);
         }
 
         if let Some(points) = mesh.face_points(f[0]) {
             let pointcount = points.len();
+
             MINI_CHECK!(pointcount == 4);
         }
 
         if let Some(pl) = mesh.face_polyline(f[0]) {
             let pointcount = pl.get_points().len();
+
             MINI_CHECK!(pointcount == 4);
         }
 
@@ -1131,6 +1186,7 @@ pub fn run_mesh_connectivity_queries() -> TestResult {
             p2.name = fv2.to_string();
             let mut p3 = mesh.vertex_point(fv3).unwrap();
             p3.name = fv3.to_string();
+
             MINI_CHECK!(fv0 == 0);
             MINI_CHECK!(fv1 == 1);
             MINI_CHECK!(fv2 == 2);
@@ -1166,6 +1222,7 @@ pub fn run_mesh_connectivity_queries() -> TestResult {
             fp0.name = format!("f{}", vf[0]);
             let mut fp1 = mesh.face_centroid(vf[1]).unwrap();
             fp1.name = format!("f{}", vf[1]);
+
             MINI_CHECK!(vf.len() == 2);
             MINI_CHECK!(vf[0] == 0);
             MINI_CHECK!(vf[1] == 1);
@@ -1204,17 +1261,20 @@ pub fn run_mesh_geometric_properties() -> TestResult {
         MINI_CHECK!(TOLERANCE.is_close(area, 46.4528898159021));
 
         let centroid = mesh.centroid();
+
         MINI_CHECK!(TOLERANCE.is_point_close(&centroid, &Point::new(0.0, 0.0, 0.0)));
 
         let (angles, _arcs, _points) = mesh.dihedral_angles(0.3, true, true);
 
         for angle in angles.values() {
             let angle_in_degrees = *angle;
+
             MINI_CHECK!(TOLERANCE.is_close(angle_in_degrees, 116.565051177078));
         }
 
         for f in mesh.faces() {
             let face_area = mesh.face_area(f);
+
             MINI_CHECK!(face_area.is_some());
             MINI_CHECK!(TOLERANCE.is_close(face_area.unwrap(), 3.87107415132518));
         }
@@ -1228,46 +1288,57 @@ pub fn run_mesh_geometric_properties() -> TestResult {
             &centroids[0],
             &Point::new(0.878115294937453, 0.0, 1.420820393249937)
         ));
+
         MINI_CHECK!(TOLERANCE.is_point_close(
             &centroids[1],
             &Point::new(1.420820393249937, 0.878115294937453, 0.0)
         ));
+
         MINI_CHECK!(TOLERANCE.is_point_close(
             &centroids[2],
             &Point::new(0.0, 1.420820393249937, 0.878115294937453)
         ));
+
         MINI_CHECK!(TOLERANCE.is_point_close(
             &centroids[3],
             &Point::new(0.878115294937453, 0.0, -1.420820393249937)
         ));
+
         MINI_CHECK!(TOLERANCE.is_point_close(
             &centroids[4],
             &Point::new(0.0, 1.420820393249937, -0.878115294937453)
         ));
+
         MINI_CHECK!(TOLERANCE.is_point_close(
             &centroids[5],
             &Point::new(0.0, -1.420820393249937, 0.878115294937453)
         ));
+
         MINI_CHECK!(TOLERANCE.is_point_close(
             &centroids[6],
             &Point::new(1.420820393249937, -0.878115294937453, 0.0)
         ));
+
         MINI_CHECK!(TOLERANCE.is_point_close(
             &centroids[7],
             &Point::new(0.0, -1.420820393249937, -0.878115294937453)
         ));
+
         MINI_CHECK!(TOLERANCE.is_point_close(
             &centroids[8],
             &Point::new(-1.420820393249937, 0.878115294937453, 0.0)
         ));
+
         MINI_CHECK!(TOLERANCE.is_point_close(
             &centroids[9],
             &Point::new(-0.878115294937453, 0.0, 1.420820393249937)
         ));
+
         MINI_CHECK!(TOLERANCE.is_point_close(
             &centroids[10],
             &Point::new(-0.878115294937453, 0.0, -1.420820393249937)
         ));
+
         MINI_CHECK!(TOLERANCE.is_point_close(
             &centroids[11],
             &Point::new(-1.420820393249937, -0.878115294937453, 0.0)
@@ -1276,6 +1347,7 @@ pub fn run_mesh_geometric_properties() -> TestResult {
         let face_normals = mesh.face_normals();
         for f in mesh.faces() {
             let fn_ = mesh.face_normal(f);
+
             MINI_CHECK!(fn_.is_some());
             MINI_CHECK!(TOLERANCE.is_vector_close(&face_normals[&f], &fn_.unwrap()));
         }
@@ -1284,46 +1356,57 @@ pub fn run_mesh_geometric_properties() -> TestResult {
             &face_normals[&0],
             &Vector::new(0.5257311121191336, 0.0, 0.85065080835204)
         ));
+
         MINI_CHECK!(TOLERANCE.is_vector_close(
             &face_normals[&1],
             &Vector::new(0.85065080835204, 0.5257311121191336, 0.0)
         ));
+
         MINI_CHECK!(TOLERANCE.is_vector_close(
             &face_normals[&2],
             &Vector::new(0.0, 0.85065080835204, 0.5257311121191336)
         ));
+
         MINI_CHECK!(TOLERANCE.is_vector_close(
             &face_normals[&3],
             &Vector::new(0.5257311121191336, 0.0, -0.85065080835204)
         ));
+
         MINI_CHECK!(TOLERANCE.is_vector_close(
             &face_normals[&4],
             &Vector::new(0.0, 0.85065080835204, -0.5257311121191336)
         ));
+
         MINI_CHECK!(TOLERANCE.is_vector_close(
             &face_normals[&5],
             &Vector::new(0.0, -0.85065080835204, 0.5257311121191336)
         ));
+
         MINI_CHECK!(TOLERANCE.is_vector_close(
             &face_normals[&6],
             &Vector::new(0.85065080835204, -0.5257311121191336, 0.0)
         ));
+
         MINI_CHECK!(TOLERANCE.is_vector_close(
             &face_normals[&7],
             &Vector::new(0.0, -0.85065080835204, -0.5257311121191336)
         ));
+
         MINI_CHECK!(TOLERANCE.is_vector_close(
             &face_normals[&8],
             &Vector::new(-0.85065080835204, 0.5257311121191336, 0.0)
         ));
+
         MINI_CHECK!(TOLERANCE.is_vector_close(
             &face_normals[&9],
             &Vector::new(-0.5257311121191336, 0.0, 0.85065080835204)
         ));
+
         MINI_CHECK!(TOLERANCE.is_vector_close(
             &face_normals[&10],
             &Vector::new(-0.5257311121191336, 0.0, -0.85065080835204)
         ));
+
         MINI_CHECK!(TOLERANCE.is_vector_close(
             &face_normals[&11],
             &Vector::new(-0.85065080835204, -0.5257311121191336, 0.0)
@@ -1333,6 +1416,7 @@ pub fn run_mesh_geometric_properties() -> TestResult {
             let fv = mesh.face_vertices(f).unwrap().clone();
             for v in fv {
                 let angle = mesh.vertex_angle_in_face(v, f);
+
                 MINI_CHECK!(angle.is_some());
                 MINI_CHECK!(TOLERANCE.is_close(angle.unwrap(), 1.8849555921538759));
             }
@@ -1341,6 +1425,7 @@ pub fn run_mesh_geometric_properties() -> TestResult {
         let vertex_normals = mesh.vertex_normals();
         for v in mesh.vertices() {
             let vn = mesh.vertex_normal(v);
+
             MINI_CHECK!(vn.is_some());
             MINI_CHECK!(TOLERANCE.is_vector_close(&vertex_normals[&v], &vn.unwrap()));
         }
@@ -1349,70 +1434,87 @@ pub fn run_mesh_geometric_properties() -> TestResult {
             &vertex_normals[&0],
             &Vector::new(0.5773502691896258, 0.5773502691896258, 0.5773502691896258)
         ));
+
         MINI_CHECK!(TOLERANCE.is_vector_close(
             &vertex_normals[&1],
             &Vector::new(0.0, 0.3568220897730899, 0.9341723589627158)
         ));
+
         MINI_CHECK!(TOLERANCE.is_vector_close(
             &vertex_normals[&2],
             &Vector::new(0.0, -0.3568220897730899, 0.9341723589627158)
         ));
+
         MINI_CHECK!(TOLERANCE.is_vector_close(
             &vertex_normals[&3],
             &Vector::new(0.5773502691896257, -0.5773502691896258, 0.5773502691896258)
         ));
+
         MINI_CHECK!(TOLERANCE.is_vector_close(
             &vertex_normals[&4],
             &Vector::new(0.9341723589627158, 0.0, 0.3568220897730899)
         ));
+
         MINI_CHECK!(TOLERANCE.is_vector_close(
             &vertex_normals[&5],
             &Vector::new(0.9341723589627158, 0.0, -0.3568220897730899)
         ));
+
         MINI_CHECK!(TOLERANCE.is_vector_close(
             &vertex_normals[&6],
             &Vector::new(0.5773502691896258, 0.5773502691896257, -0.5773502691896258)
         ));
+
         MINI_CHECK!(TOLERANCE.is_vector_close(
             &vertex_normals[&7],
             &Vector::new(0.3568220897730899, 0.9341723589627158, 0.0)
         ));
+
         MINI_CHECK!(TOLERANCE.is_vector_close(
             &vertex_normals[&8],
             &Vector::new(-0.3568220897730899, 0.9341723589627157, 0.0)
         ));
+
         MINI_CHECK!(TOLERANCE.is_vector_close(
             &vertex_normals[&9],
             &Vector::new(-0.5773502691896258, 0.5773502691896258, 0.5773502691896257)
         ));
+
         MINI_CHECK!(TOLERANCE.is_vector_close(
             &vertex_normals[&10],
             &Vector::new(0.5773502691896258, -0.5773502691896258, -0.5773502691896257)
         ));
+
         MINI_CHECK!(TOLERANCE.is_vector_close(
             &vertex_normals[&11],
             &Vector::new(0.0, -0.3568220897730899, -0.9341723589627157)
         ));
+
         MINI_CHECK!(TOLERANCE.is_vector_close(
             &vertex_normals[&12],
             &Vector::new(0.0, 0.3568220897730899, -0.9341723589627158)
         ));
+
         MINI_CHECK!(TOLERANCE.is_vector_close(
             &vertex_normals[&13],
             &Vector::new(-0.5773502691896257, 0.5773502691896258, -0.5773502691896258)
         ));
+
         MINI_CHECK!(TOLERANCE.is_vector_close(
             &vertex_normals[&14],
             &Vector::new(-0.5773502691896258, -0.5773502691896257, 0.5773502691896258)
         ));
+
         MINI_CHECK!(TOLERANCE.is_vector_close(
             &vertex_normals[&15],
             &Vector::new(-0.3568220897730899, -0.9341723589627157, 0.0)
         ));
+
         MINI_CHECK!(TOLERANCE.is_vector_close(
             &vertex_normals[&16],
             &Vector::new(0.3568220897730899, -0.9341723589627158, 0.0)
         ));
+
         MINI_CHECK!(TOLERANCE.is_vector_close(
             &vertex_normals[&17],
             &Vector::new(
@@ -1421,10 +1523,12 @@ pub fn run_mesh_geometric_properties() -> TestResult {
                 -0.5773502691896258
             )
         ));
+
         MINI_CHECK!(TOLERANCE.is_vector_close(
             &vertex_normals[&18],
             &Vector::new(-0.9341723589627157, 0.0, -0.3568220897730899)
         ));
+
         MINI_CHECK!(TOLERANCE.is_vector_close(
             &vertex_normals[&19],
             &Vector::new(-0.9341723589627158, 0.0, 0.3568220897730899)
@@ -1433,6 +1537,7 @@ pub fn run_mesh_geometric_properties() -> TestResult {
         let vertex_normals_weighted = mesh.vertex_normals_weighted(NormalWeighting::Angle);
         for v in mesh.vertices() {
             let vnw = mesh.vertex_normal_weighted(v, NormalWeighting::Angle);
+
             MINI_CHECK!(vnw.is_some());
             MINI_CHECK!(TOLERANCE.is_vector_close(&vertex_normals_weighted[&v], &vnw.unwrap()));
         }
@@ -1441,70 +1546,87 @@ pub fn run_mesh_geometric_properties() -> TestResult {
             &vertex_normals_weighted[&0],
             &Vector::new(0.5773502691896257, 0.5773502691896257, 0.5773502691896257)
         ));
+
         MINI_CHECK!(TOLERANCE.is_vector_close(
             &vertex_normals_weighted[&1],
             &Vector::new(0.0, 0.3568220897730899, 0.9341723589627158)
         ));
+
         MINI_CHECK!(TOLERANCE.is_vector_close(
             &vertex_normals_weighted[&2],
             &Vector::new(0.0, -0.3568220897730899, 0.9341723589627158)
         ));
+
         MINI_CHECK!(TOLERANCE.is_vector_close(
             &vertex_normals_weighted[&3],
             &Vector::new(0.5773502691896257, -0.5773502691896257, 0.5773502691896258)
         ));
+
         MINI_CHECK!(TOLERANCE.is_vector_close(
             &vertex_normals_weighted[&4],
             &Vector::new(0.9341723589627158, 0.0, 0.3568220897730899)
         ));
+
         MINI_CHECK!(TOLERANCE.is_vector_close(
             &vertex_normals_weighted[&5],
             &Vector::new(0.9341723589627158, 0.0, -0.3568220897730899)
         ));
+
         MINI_CHECK!(TOLERANCE.is_vector_close(
             &vertex_normals_weighted[&6],
             &Vector::new(0.5773502691896258, 0.5773502691896257, -0.5773502691896257)
         ));
+
         MINI_CHECK!(TOLERANCE.is_vector_close(
             &vertex_normals_weighted[&7],
             &Vector::new(0.3568220897730899, 0.9341723589627158, 0.0)
         ));
+
         MINI_CHECK!(TOLERANCE.is_vector_close(
             &vertex_normals_weighted[&8],
             &Vector::new(-0.3568220897730899, 0.9341723589627158, 0.0)
         ));
+
         MINI_CHECK!(TOLERANCE.is_vector_close(
             &vertex_normals_weighted[&9],
             &Vector::new(-0.5773502691896257, 0.5773502691896258, 0.5773502691896257)
         ));
+
         MINI_CHECK!(TOLERANCE.is_vector_close(
             &vertex_normals_weighted[&10],
             &Vector::new(0.5773502691896257, -0.5773502691896258, -0.5773502691896257)
         ));
+
         MINI_CHECK!(TOLERANCE.is_vector_close(
             &vertex_normals_weighted[&11],
             &Vector::new(0.0, -0.3568220897730899, -0.9341723589627158)
         ));
+
         MINI_CHECK!(TOLERANCE.is_vector_close(
             &vertex_normals_weighted[&12],
             &Vector::new(0.0, 0.3568220897730899, -0.9341723589627158)
         ));
+
         MINI_CHECK!(TOLERANCE.is_vector_close(
             &vertex_normals_weighted[&13],
             &Vector::new(-0.5773502691896257, 0.5773502691896257, -0.5773502691896258)
         ));
+
         MINI_CHECK!(TOLERANCE.is_vector_close(
             &vertex_normals_weighted[&14],
             &Vector::new(-0.5773502691896258, -0.5773502691896257, 0.5773502691896257)
         ));
+
         MINI_CHECK!(TOLERANCE.is_vector_close(
             &vertex_normals_weighted[&15],
             &Vector::new(-0.35682208977309, -0.9341723589627158, 0.0)
         ));
+
         MINI_CHECK!(TOLERANCE.is_vector_close(
             &vertex_normals_weighted[&16],
             &Vector::new(0.3568220897730899, -0.9341723589627158, 0.0)
         ));
+
         MINI_CHECK!(TOLERANCE.is_vector_close(
             &vertex_normals_weighted[&17],
             &Vector::new(
@@ -1513,16 +1635,19 @@ pub fn run_mesh_geometric_properties() -> TestResult {
                 -0.5773502691896257
             )
         ));
+
         MINI_CHECK!(TOLERANCE.is_vector_close(
             &vertex_normals_weighted[&18],
             &Vector::new(-0.9341723589627158, 0.0, -0.3568220897730899)
         ));
+
         MINI_CHECK!(TOLERANCE.is_vector_close(
             &vertex_normals_weighted[&19],
             &Vector::new(-0.9341723589627158, 0.0, 0.3568220897730899)
         ));
 
         let volume = mesh.volume();
+
         MINI_CHECK!(TOLERANCE.is_close(volume, 25.8630264921081));
     })
 }
@@ -1550,16 +1675,19 @@ pub fn run_mesh_transformation() -> TestResult {
         let mut mesh2 = mesh.duplicate();
         let x = Xform::translation(0.0, 0.0, 1.0);
         mesh2.transform(&x);
+
         MINI_CHECK!(mesh2.vertex_point(v0).unwrap()[2] == 1.0);
 
         let mesh3 = mesh.duplicate();
         let mesh3_xf = Xform::translation(0.0, 0.0, 10.0);
         let mesh3t = mesh3.transformed(&mesh3_xf);
+
         MINI_CHECK!(mesh3t.vertex_point(v0).unwrap()[2] == 10.0);
 
         let mesh4 = mesh.duplicate();
         let x = Xform::translation(0.0, 0.0, 10.0);
         let mesh4t = mesh4.transformed(&x);
+
         MINI_CHECK!(mesh4t.vertex_point(v0).unwrap()[2] == 10.0);
     })
 }
@@ -1599,6 +1727,7 @@ pub fn run_mesh_json_roundtrip() -> TestResult {
         let pmesh = Mesh::from_polylines(polys, None);
         let loaded_tri = Mesh::jsonload(&pmesh.jsondump()).unwrap();
         let fk = *pmesh.triangulation.keys().next().unwrap();
+
         MINI_CHECK!(!loaded_tri.triangulation.is_empty());
         MINI_CHECK!(loaded_tri.triangulation.contains_key(&fk));
 
@@ -1621,6 +1750,7 @@ pub fn run_mesh_json_roundtrip() -> TestResult {
         );
         let loaded_holes = Mesh::jsonload(&hmesh.jsondump()).unwrap();
         let hfk = *hmesh.face_holes.keys().next().unwrap();
+
         MINI_CHECK!(!loaded_holes.face_holes.is_empty());
         MINI_CHECK!(loaded_holes.face_holes[&hfk] == hmesh.face_holes[&hfk]);
     })
@@ -1657,6 +1787,7 @@ pub fn run_mesh_protobuf_roundtrip() -> TestResult {
         let pmesh = Mesh::from_polylines(polys, None);
         let loaded_tri = Mesh::pb_loads(&pmesh.pb_dumps()).unwrap();
         let fk = *pmesh.triangulation.keys().next().unwrap();
+
         MINI_CHECK!(!loaded_tri.triangulation.is_empty());
         MINI_CHECK!(loaded_tri.triangulation.contains_key(&fk));
 
@@ -1679,10 +1810,12 @@ pub fn run_mesh_protobuf_roundtrip() -> TestResult {
         );
         let loaded_holes = Mesh::pb_loads(&hmesh.pb_dumps()).unwrap();
         let hfk = *hmesh.face_holes.keys().next().unwrap();
+
         MINI_CHECK!(!loaded_holes.face_holes.is_empty());
         MINI_CHECK!(loaded_holes.face_holes[&hfk] == hmesh.face_holes[&hfk]);
     })
 }
+
 pub fn run_mesh_loft_plate_four_holes() -> TestResult {
     MINI_TEST!("Loft Plate Four Holes", {
         use crate::Mesh;
@@ -1783,6 +1916,7 @@ pub fn run_mesh_loft_plate_four_holes() -> TestResult {
             ]),
         ];
         let m = Mesh::loft(&bot, &top, true, true);
+
         MINI_CHECK!(m.is_valid());
     })
 }
@@ -1873,6 +2007,7 @@ pub fn run_mesh_loft_plate_v2() -> TestResult {
             ]),
         ];
         let m = Mesh::loft(&top, &bot, true, true);
+
         MINI_CHECK!(m.is_valid());
     })
 }
@@ -1963,6 +2098,7 @@ pub fn run_mesh_loft_plate_v3() -> TestResult {
             ]),
         ];
         let m = Mesh::loft(&top, &bot, true, true);
+
         MINI_CHECK!(m.is_valid());
     })
 }
@@ -1975,6 +2111,7 @@ pub fn run_mesh_vertex_neighbors() -> TestResult {
         let mut n0v = mesh.vertex_vertices(0).unwrap();
         n0.sort();
         n0v.sort();
+
         MINI_CHECK!(n0 == n0v);
         MINI_CHECK!(n0.len() == 3);
     })
@@ -1984,8 +2121,10 @@ pub fn run_mesh_vertices_on_boundary() -> TestResult {
     MINI_TEST!("Vertices On Boundary", {
         use crate::Mesh;
         let mut mesh = Mesh::create_box(1.0, 1.0, 1.0);
+
         MINI_CHECK!(mesh.vertices_on_boundary().is_empty());
         mesh.remove_face(mesh.faces()[0]);
+
         MINI_CHECK!(mesh.vertices_on_boundary().len() == 4);
     })
 }
@@ -1994,8 +2133,10 @@ pub fn run_mesh_edges_on_boundary() -> TestResult {
     MINI_TEST!("Edges On Boundary", {
         use crate::Mesh;
         let mut mesh = Mesh::create_box(1.0, 1.0, 1.0);
+
         MINI_CHECK!(mesh.edges_on_boundary().is_empty());
         mesh.remove_face(mesh.faces()[0]);
+
         MINI_CHECK!(mesh.edges_on_boundary().len() == 4);
     })
 }
@@ -2004,8 +2145,10 @@ pub fn run_mesh_faces_on_boundary() -> TestResult {
     MINI_TEST!("Faces On Boundary", {
         use crate::Mesh;
         let mut mesh = Mesh::create_box(1.0, 1.0, 1.0);
+
         MINI_CHECK!(mesh.faces_on_boundary().is_empty());
         mesh.remove_face(mesh.faces()[0]);
+
         MINI_CHECK!(mesh.faces_on_boundary().len() == 4);
     })
 }
@@ -2015,9 +2158,11 @@ pub fn run_mesh_halfedge_face() -> TestResult {
         use crate::Mesh;
         let mut mesh = Mesh::create_box(1.0, 1.0, 1.0);
         let f = mesh.halfedge_face((0, 3));
+
         MINI_CHECK!(f.is_some());
         MINI_CHECK!(f.unwrap() == 0);
         mesh.remove_face(0);
+
         MINI_CHECK!(mesh.halfedge_face((0, 3)).is_none());
     })
 }
@@ -2028,6 +2173,7 @@ pub fn run_mesh_halfedge_after_before() -> TestResult {
         let mesh = Mesh::create_box(1.0, 1.0, 1.0);
         let after = mesh.halfedge_after((0, 3));
         let before = mesh.halfedge_before((0, 3));
+
         MINI_CHECK!(after.is_some());
         MINI_CHECK!(after.unwrap() == (3, 2));
         MINI_CHECK!(before.is_some());
@@ -2040,6 +2186,7 @@ pub fn run_mesh_halfedge_loop() -> TestResult {
         use crate::Mesh;
         let mesh = Mesh::create_box(1.0, 1.0, 1.0);
         let loop_edges = mesh.halfedge_loop((0, 3));
+
         MINI_CHECK!(loop_edges.len() == 1);
         MINI_CHECK!(loop_edges[0] == (0, 3));
     })
@@ -2050,6 +2197,7 @@ pub fn run_mesh_halfedge_strip() -> TestResult {
         use crate::Mesh;
         let mesh = Mesh::create_box(1.0, 1.0, 1.0);
         let strip = mesh.halfedge_strip((0, 3));
+
         MINI_CHECK!(strip.len() == 5);
         MINI_CHECK!(strip[0] == (0, 3));
         MINI_CHECK!(strip[strip.len() - 1] == (0, 3));
@@ -2062,10 +2210,13 @@ pub fn run_mesh_vertex_sample() -> TestResult {
         use std::collections::HashSet;
         let mesh = Mesh::create_box(1.0, 1.0, 1.0);
         let s = mesh.vertex_sample(3, 42);
+
         MINI_CHECK!(s.len() == 3);
         let uniq: HashSet<usize> = s.iter().copied().collect();
+
         MINI_CHECK!(uniq.len() == 3);
         let s2 = mesh.vertex_sample(3, 42);
+
         MINI_CHECK!(s == s2);
     })
 }
@@ -2075,8 +2226,10 @@ pub fn run_mesh_edge_sample() -> TestResult {
         use crate::Mesh;
         let mesh = Mesh::create_box(1.0, 1.0, 1.0);
         let s = mesh.edge_sample(2, 7);
+
         MINI_CHECK!(s.len() == 2);
         let s2 = mesh.edge_sample(2, 7);
+
         MINI_CHECK!(s == s2);
     })
 }
@@ -2086,8 +2239,10 @@ pub fn run_mesh_face_sample() -> TestResult {
         use crate::Mesh;
         let mesh = Mesh::create_box(1.0, 1.0, 1.0);
         let s = mesh.face_sample(2, 11);
+
         MINI_CHECK!(s.len() == 2);
         let s2 = mesh.face_sample(2, 11);
+
         MINI_CHECK!(s == s2);
     })
 }
@@ -2098,6 +2253,7 @@ pub fn run_mesh_face_center() -> TestResult {
         let mesh = Mesh::create_box(2.0, 2.0, 2.0);
         let c = mesh.face_center(0).unwrap();
         let cc = mesh.face_centroid(0).unwrap();
+
         MINI_CHECK!(c == cc);
     })
 }
@@ -2108,6 +2264,7 @@ pub fn run_mesh_face_polygon() -> TestResult {
         let mesh = Mesh::create_box(1.0, 1.0, 1.0);
         let poly = mesh.face_polygon(0).unwrap();
         let pts = poly.get_points();
+
         MINI_CHECK!(pts.len() == 5);
         MINI_CHECK!(pts[0] == pts[pts.len() - 1]);
     })
@@ -2121,6 +2278,7 @@ pub fn run_mesh_flip_cycles() -> TestResult {
         let n0 = mesh.face_normal(0).unwrap();
         mesh.flip_cycles();
         let n0b = mesh.face_normal(0).unwrap();
+
         MINI_CHECK!((n0[0] + n0b[0]).abs() < Tolerance::ZERO_TOLERANCE);
         MINI_CHECK!((n0[1] + n0b[1]).abs() < Tolerance::ZERO_TOLERANCE);
         MINI_CHECK!((n0[2] + n0b[2]).abs() < Tolerance::ZERO_TOLERANCE);
@@ -2134,6 +2292,7 @@ pub fn run_mesh_face_normal_unitized() -> TestResult {
         let mesh = Mesh::create_box(2.0, 2.0, 2.0);
         let nu = mesh.face_normal_unitized(0, true).unwrap();
         let nn = mesh.face_normal_unitized(0, false).unwrap();
+
         MINI_CHECK!((nu.magnitude() - 1.0).abs() < Tolerance::ZERO_TOLERANCE);
         MINI_CHECK!(nn.magnitude() > 1.0);
     })
@@ -2146,6 +2305,7 @@ pub fn run_mesh_default_attributes() -> TestResult {
         mesh.update_default_vertex_attributes(&[("is_support", 0.0), ("load_z", 0.0)]);
         mesh.update_default_face_attributes(&[("stress", 0.0)]);
         mesh.update_default_edge_attributes(&[("weight", 1.0)]);
+
         MINI_CHECK!(mesh.default_vertex_attributes["is_support"] == 0.0);
         MINI_CHECK!(mesh.default_vertex_attributes["load_z"] == 0.0);
         MINI_CHECK!(mesh.default_face_attributes["stress"] == 0.0);
@@ -2159,6 +2319,7 @@ pub fn run_mesh_vertex_attribute() -> TestResult {
         let mut mesh = Mesh::create_box(1.0, 1.0, 1.0);
         mesh.update_default_vertex_attributes(&[("is_support", 0.0)]);
         mesh.set_vertex_attribute(0, "is_support", 1.0);
+
         MINI_CHECK!(mesh.vertex_attribute(0, "is_support").unwrap() == 1.0);
         MINI_CHECK!(mesh.vertex_attribute(1, "is_support").unwrap() == 0.0);
     })
@@ -2170,6 +2331,7 @@ pub fn run_mesh_face_attribute() -> TestResult {
         let mut mesh = Mesh::create_box(1.0, 1.0, 1.0);
         mesh.update_default_face_attributes(&[("stress", 0.0)]);
         mesh.set_face_attribute(0, "stress", 2.5);
+
         MINI_CHECK!(mesh.face_attribute(0, "stress").unwrap() == 2.5);
         MINI_CHECK!(mesh.face_attribute(1, "stress").unwrap() == 0.0);
     })
@@ -2181,6 +2343,7 @@ pub fn run_mesh_edge_attribute() -> TestResult {
         let mut mesh = Mesh::create_box(1.0, 1.0, 1.0);
         mesh.update_default_edge_attributes(&[("weight", 1.0)]);
         mesh.set_edge_attribute((0, 1), "weight", 5.0);
+
         MINI_CHECK!(mesh.edge_attribute((0, 1), "weight").unwrap() == 5.0);
         MINI_CHECK!(mesh.edge_attribute((0, 3), "weight").unwrap() == 1.0);
     })
@@ -2194,6 +2357,7 @@ pub fn run_mesh_vertices_attribute_bulk() -> TestResult {
         let keys = vec![0, 1, 2];
         mesh.set_vertices_attribute("is_support", 1.0, Some(&keys));
         let vals = mesh.vertices_attribute("is_support", None);
+
         MINI_CHECK!(vals[0].unwrap() == 1.0);
         MINI_CHECK!(vals[1].unwrap() == 1.0);
         MINI_CHECK!(vals[2].unwrap() == 1.0);
@@ -2210,6 +2374,7 @@ pub fn run_mesh_vertices_where() -> TestResult {
         mesh.set_vertices_attribute("is_support", 1.0, Some(&keys));
         let mut sup = mesh.vertices_where(&[("is_support", 1.0)]);
         sup.sort();
+
         MINI_CHECK!(sup.len() == 3);
         MINI_CHECK!(sup == vec![0, 2, 4]);
     })
@@ -2224,6 +2389,7 @@ pub fn run_mesh_faces_where() -> TestResult {
         mesh.set_face_attribute(4, "tag", 7.0);
         let mut out = mesh.faces_where(&[("tag", 7.0)]);
         out.sort();
+
         MINI_CHECK!(out == vec![2, 4]);
     })
 }
@@ -2235,6 +2401,7 @@ pub fn run_mesh_edges_where() -> TestResult {
         mesh.update_default_edge_attributes(&[("weight", 0.0)]);
         mesh.set_edge_attribute((0, 1), "weight", 3.0);
         let out = mesh.edges_where(&[("weight", 3.0)]);
+
         MINI_CHECK!(out.len() == 1);
         MINI_CHECK!(out[0] == (0, 1));
     })
@@ -2252,6 +2419,7 @@ pub fn run_mesh_vertices_where_predicate() -> TestResult {
             a.get("load").is_some_and(|v| *v > 4.0)
         });
         big.sort();
+
         MINI_CHECK!(big == vec![0, 1]);
     })
 }
@@ -2268,6 +2436,7 @@ pub fn run_mesh_faces_where_predicate() -> TestResult {
             a.get("area").is_some_and(|v| *v > 1.0)
         });
         big.sort();
+
         MINI_CHECK!(big == vec![0, 3]);
     })
 }
@@ -2282,6 +2451,7 @@ pub fn run_mesh_edges_where_predicate() -> TestResult {
         let big = mesh.edges_where_predicate(&|_e: (usize, usize), a: &HashMap<String, f64>| {
             a.get("weight").is_some_and(|v| *v > 1.0)
         });
+
         MINI_CHECK!(big.len() == 1);
         MINI_CHECK!(big[0] == (0, 1));
     })
@@ -2296,6 +2466,7 @@ pub fn run_mesh_refresh_guid() -> TestResult {
 
         MINI_CHECK!(copy.guid() == original);
         copy.refresh_guid();
+
         MINI_CHECK!(copy.guid() != original);
         MINI_CHECK!(mesh.guid() == original);
     })
@@ -2318,6 +2489,7 @@ pub fn run_mesh_assignment_keeps_objectcolor() -> TestResult {
         source.set_objectcolor(Color::with_name(0.72, 0.72, 0.74, 1.0, "grey"));
 
         let target = source.duplicate();
+
         MINI_CHECK!(target.get_objectcolor().r == source.get_objectcolor().r);
         MINI_CHECK!(target.get_objectcolor().g == source.get_objectcolor().g);
         MINI_CHECK!(target.get_objectcolor().b == source.get_objectcolor().b);

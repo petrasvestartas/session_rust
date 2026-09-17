@@ -15,6 +15,71 @@ pub fn run_session_constructor() -> TestResult {
     })
 }
 
+pub fn run_session_copy() -> TestResult {
+    MINI_TEST!("Copy", {
+        use crate::{Element, Point, Session, Xform};
+        let mut session = Session::new("original");
+        let point = Point::new(1.0, 2.0, 3.0);
+        let element = Element::new("plate");
+        let point_guid = point.guid().to_string();
+        let element_guid = element.guid().to_string();
+        let group = session.add_group("Group");
+        session.add_point(point, Some(&group));
+        session.add_element(element, Some(&group));
+        session.add_edge(&point_guid, &element_guid, "touching");
+        session.set_xform(&point_guid, Xform::translation(1.0, 0.0, 0.0));
+        let guid = session.guid().to_string();
+
+        let mut copy = session.clone();
+
+        MINI_CHECK!(copy.name == session.name);
+        MINI_CHECK!(copy.guid() == guid);
+        MINI_CHECK!(copy.objects.points.len() == 1);
+        MINI_CHECK!(copy.objects.elements.len() == 1);
+        MINI_CHECK!(copy.lookup.len() == session.lookup.len());
+        MINI_CHECK!(copy.graph.number_of_edges() == 1);
+        MINI_CHECK!(copy.xforms.len() == 1);
+        MINI_CHECK!(
+            copy.tree.root().unwrap().borrow().descendants().len()
+                == session.tree.root().unwrap().borrow().descendants().len()
+        );
+
+        MINI_CHECK!(!std::ptr::eq(&copy.objects.points, &session.objects.points));
+        MINI_CHECK!(!std::ptr::eq(
+            &copy.objects.elements,
+            &session.objects.elements
+        ));
+        MINI_CHECK!(!std::rc::Rc::ptr_eq(
+            &copy.tree.root().unwrap(),
+            &session.tree.root().unwrap()
+        ));
+        MINI_CHECK!(!std::rc::Rc::ptr_eq(
+            &copy.objects.points[0],
+            &session.objects.points[0]
+        ));
+        MINI_CHECK!(copy.objects.points[0].guid() == point_guid);
+        MINI_CHECK!(copy.objects.elements[0].guid() == element_guid);
+        MINI_CHECK!(copy.lookup.contains_key(&point_guid));
+
+        copy.objects.points.clear();
+        let copied_nodes = copy.tree.nodes();
+
+        MINI_CHECK!(copied_nodes.len() > 1);
+        copy.tree.remove(&copied_nodes[1]);
+
+        MINI_CHECK!(session.objects.points.len() == 1);
+        MINI_CHECK!(copy.objects.points.is_empty());
+        MINI_CHECK!(!session
+            .tree
+            .root()
+            .unwrap()
+            .borrow()
+            .descendants()
+            .is_empty());
+        MINI_CHECK!(copy.tree.root().unwrap().borrow().descendants().is_empty());
+    })
+}
+
 pub fn run_session_add_point() -> TestResult {
     MINI_TEST!("Add Point", {
         use crate::{Point, Session};
@@ -241,7 +306,6 @@ pub fn run_session_add_element() -> TestResult {
 pub fn run_session_add_empty_geometry() -> TestResult {
     MINI_TEST!("Add Empty Geometry", {
         use crate::{BRep, Mesh, NurbsCurve, NurbsSurface, Point, PointCloud, Polyline, Session};
-        // Nothing to draw is never added: the caller does not test its geometry first.
         let mut session = Session::default();
         let group = session.add_group("empty");
 
@@ -260,9 +324,9 @@ pub fn run_session_add_empty_geometry() -> TestResult {
             .is_none());
         MINI_CHECK!(session.add_brep(BRep::new(), Some(&group)).is_none());
 
-        // A mesh with vertices but no faces draws nothing either.
         let mut vertices_only = Mesh::new();
         vertices_only.add_vertex(Point::new(0.0, 0.0, 0.0), None);
+
         MINI_CHECK!(session.add_mesh(vertices_only, Some(&group)).is_none());
 
         MINI_CHECK!(session.lookup.is_empty());
@@ -393,7 +457,7 @@ pub fn run_session_get_collisions() -> TestResult {
         session.add_obb(obb2);
         let pairs = session.get_collisions();
 
-        MINI_CHECK!(pairs.len() >= 1);
+        MINI_CHECK!(!pairs.is_empty());
     })
 }
 
@@ -413,7 +477,7 @@ pub fn run_session_ray_cast() -> TestResult {
             1e-3,
         );
 
-        MINI_CHECK!(hits.len() >= 1);
+        MINI_CHECK!(!hits.is_empty());
 
         let mut placed = Mesh::new();
         let p0 = placed.add_vertex(Point::new(-1.0, -1.0, 0.0), None);
@@ -429,8 +493,8 @@ pub fn run_session_ray_cast() -> TestResult {
             1e-3,
         );
 
-        MINI_CHECK!(hits2.len() >= 1);
-        MINI_CHECK!(TOLERANCE.is_close(hits2[0].point[0], 100.0));
+        MINI_CHECK!(!hits2.is_empty());
+        MINI_CHECK!(TOLERANCE.is_close(hits2[0].hit_point[0], 100.0));
     })
 }
 
@@ -469,7 +533,7 @@ pub fn run_session_remove_object() -> TestResult {
         MINI_CHECK!(!session.lookup.contains_key(&guid));
         MINI_CHECK!(eremoved);
         MINI_CHECK!(session.objects.elements.is_empty());
-        MINI_CHECK!(!loaded.lookup.contains_key(&eguid)); // removed objects must not resurrect on save/load
+        MINI_CHECK!(!loaded.lookup.contains_key(&eguid));
     })
 }
 
@@ -488,8 +552,6 @@ pub fn run_session_get_geometry() -> TestResult {
 
 pub fn run_session_get_geometry_is_pure() -> TestResult {
     MINI_TEST!("Get Geometry Is Pure", {
-        // get_geometry() returns a flattened SNAPSHOT and must never touch the session's own
-        // geometry, so calling it twice gives the same answer.
         use crate::{Point, Session, Xform};
 
         let mut session = Session::default();
@@ -519,13 +581,6 @@ pub fn run_session_json_roundtrip() -> TestResult {
         session.add_point(p1, None);
         session.add_point(p2, None);
         session.add_edge(&g1, &g2, "connection");
-
-        //   jsondump()      │ String       │ to JSON string (internal use)
-        //   jsonload(s)     │ String       │ from JSON string (internal use)
-        //   file_json_dumps()    │ String       │ to JSON string
-        //   file_json_loads(s)   │ String       │ from JSON string
-        //   file_json_dump(path) │ file         │ write to file
-        //   file_json_load(path) │ file         │ read from file
 
         let fname = "serialization/test_session.json";
         session.file_json_dump(fname);
@@ -615,8 +670,6 @@ pub fn run_session_set_xform() -> TestResult {
         session.set_xform(&guid, shift.clone());
 
         MINI_CHECK!(session.xform(&guid) == shift);
-        // No parent was passed, so the object has no tree node: it is its own root and keeps
-        // its placement. Falling back to identity here would move it to the origin.
         MINI_CHECK!(session.world_xform(&guid) == shift);
         MINI_CHECK!(session.world_xforms()[&guid] == shift);
         MINI_CHECK!(session.xform("missing") == Xform::identity());
@@ -643,7 +696,6 @@ pub fn run_session_world_xform_hierarchy() -> TestResult {
         session.add(&b_node, &a_node);
         session.add(&c_node, &b_node);
 
-        // Rotation and translation do not commute, so a reversed fold fails these checks.
         let a_xform = Xform::rotation_z(PI / 2.0, false);
         let b_xform = Xform::translation(2.0, 0.0, 0.0);
         let c_xform = Xform::rotation_z(PI / 2.0, false);
@@ -681,40 +733,55 @@ pub fn run_session_xform_roundtrip() -> TestResult {
     })
 }
 
+/// A cube mesh of the given size centred on center.
+fn create_box(center: &crate::Point, size: f64) -> crate::Mesh {
+    use crate::{Mesh, Point};
+    let mut mesh = Mesh::new();
+    let h = size * 0.5;
+    let verts = [
+        Point::new(center[0] - h, center[1] - h, center[2] - h),
+        Point::new(center[0] + h, center[1] - h, center[2] - h),
+        Point::new(center[0] + h, center[1] + h, center[2] - h),
+        Point::new(center[0] - h, center[1] + h, center[2] - h),
+        Point::new(center[0] - h, center[1] - h, center[2] + h),
+        Point::new(center[0] + h, center[1] - h, center[2] + h),
+        Point::new(center[0] + h, center[1] + h, center[2] + h),
+        Point::new(center[0] - h, center[1] + h, center[2] + h),
+    ];
+    let mut keys = Vec::new();
+
+    for vert in &verts {
+        keys.push(mesh.add_vertex(vert.clone(), None));
+    }
+
+    let faces = [
+        [0, 1, 2, 3],
+        [4, 7, 6, 5],
+        [0, 4, 5, 1],
+        [2, 6, 7, 3],
+        [0, 3, 7, 4],
+        [1, 5, 6, 2],
+    ];
+
+    for f in faces {
+        mesh.add_face(vec![keys[f[0]], keys[f[1]], keys[f[2]], keys[f[3]]], None);
+    }
+
+    mesh
+}
+
 pub fn run_session_tree_transformation_hierarchy() -> TestResult {
     MINI_TEST!("Tree Transformation Hierarchy", {
-        use crate::{Mesh, Plane, Point, Session, Vector, Xform};
+        use crate::{Plane, Point, Session, Vector, Xform};
         let mut scene = Session::new("tree_transformation_test");
 
-        let create_box = |cx: f64, cy: f64, cz: f64, size: f64| -> Mesh {
-            let mut mesh = Mesh::new();
-            let h = size * 0.5;
-            let vkeys = [
-                mesh.add_vertex(Point::new(cx - h, cy - h, cz - h), None),
-                mesh.add_vertex(Point::new(cx + h, cy - h, cz - h), None),
-                mesh.add_vertex(Point::new(cx + h, cy + h, cz - h), None),
-                mesh.add_vertex(Point::new(cx - h, cy + h, cz - h), None),
-                mesh.add_vertex(Point::new(cx - h, cy - h, cz + h), None),
-                mesh.add_vertex(Point::new(cx + h, cy - h, cz + h), None),
-                mesh.add_vertex(Point::new(cx + h, cy + h, cz + h), None),
-                mesh.add_vertex(Point::new(cx - h, cy + h, cz + h), None),
-            ];
-            mesh.add_face(vec![vkeys[0], vkeys[1], vkeys[2], vkeys[3]], None);
-            mesh.add_face(vec![vkeys[4], vkeys[7], vkeys[6], vkeys[5]], None);
-            mesh.add_face(vec![vkeys[0], vkeys[4], vkeys[5], vkeys[1]], None);
-            mesh.add_face(vec![vkeys[2], vkeys[6], vkeys[7], vkeys[3]], None);
-            mesh.add_face(vec![vkeys[0], vkeys[3], vkeys[7], vkeys[4]], None);
-            mesh.add_face(vec![vkeys[1], vkeys[5], vkeys[6], vkeys[2]], None);
-            mesh
-        };
-
-        let box1 = create_box(0.0, 0.0, 0.0, 2.0);
+        let box1 = create_box(&Point::new(0.0, 0.0, 0.0), 2.0);
         let box1_guid = box1.guid().to_string();
         let box1_node = scene.add_mesh(box1, None).unwrap();
-        let box2 = create_box(0.0, 0.0, 0.0, 2.0);
+        let box2 = create_box(&Point::new(0.0, 0.0, 0.0), 2.0);
         let box2_guid = box2.guid().to_string();
         let box2_node = scene.add_mesh(box2, None).unwrap();
-        let box3 = create_box(0.0, 0.0, 0.0, 2.0);
+        let box3 = create_box(&Point::new(0.0, 0.0, 0.0), 2.0);
         let box3_guid = box3.guid().to_string();
         let box3_node = scene.add_mesh(box3, None).unwrap();
 
@@ -735,8 +802,6 @@ pub fn run_session_tree_transformation_hierarchy() -> TestResult {
         );
         scene.set_xform(&box3_guid, Xform::translation(2.0, 0.0, 0.0));
 
-        // get_geometry BAKES the cumulative placement into the coordinates, so the deepest box
-        // must land exactly where its world xform sends the original corner.
         let world3 = scene.world_xform(&box3_guid);
         let expected = world3.transform_point(&Point::new(-1.0, -1.0, -1.0));
         let transformed = scene.get_geometry();
@@ -751,10 +816,6 @@ pub fn run_session_tree_transformation_hierarchy() -> TestResult {
 
 pub fn run_session_add_component() -> TestResult {
     MINI_TEST!("Add Component", {
-        // add_component stores a custom domain object in session.objects.components
-        // and registers it in the graph under its guid.
-        // The lookup is NOT in the geometry lookup (components are not geometry)
-        // but they ARE in the tree and graph.
         use crate::{Component, Session};
 
         let mut session = Session::default();
@@ -774,16 +835,13 @@ pub fn run_session_add_component() -> TestResult {
         session.add_component(c, None);
 
         MINI_CHECK!(session.objects.components.len() == 1);
+        MINI_CHECK!(session.component_lookup.contains_key(&guid));
         MINI_CHECK!(session.graph.has_node(&guid));
-        MINI_CHECK!(session.objects.components[0].type_name == "FloorBuilder");
-        MINI_CHECK!(session.objects.components[0].extra["size"] == serde_json::json!(3000));
     })
 }
 
 pub fn run_session_component_json_roundtrip() -> TestResult {
     MINI_TEST!("Component Json Roundtrip", {
-        // A session with a component serialises to JSON and back.
-        // All custom fields in `extra` must survive the round-trip.
         use crate::file_encoders::{file_json_dump, file_json_load};
         use crate::{Component, Session};
 
@@ -1051,6 +1109,7 @@ REGISTER_MINI_TEST!(
     "Constructor",
     crate::session_test::run_session_constructor
 );
+REGISTER_MINI_TEST!("Session", "Copy", crate::session_test::run_session_copy);
 REGISTER_MINI_TEST!(
     "Session",
     "Add Point",

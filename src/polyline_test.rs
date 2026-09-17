@@ -885,9 +885,9 @@ pub fn run_polyline_boolean_op() -> TestResult {
             Point::new(5.0, 6.0, 0.0),
         ]);
 
-        let isect = Polyline::boolean_op(&sq_a, &sq_b, 0);
-        let uni = Polyline::boolean_op(&sq_a, &sq_b, 1);
-        let diff = Polyline::boolean_op(&sq_a, &sq_b, 2);
+        let isect = Polyline::boolean_op(&sq_a, &sq_b, 0, None);
+        let uni = Polyline::boolean_op(&sq_a, &sq_b, 1, None);
+        let diff = Polyline::boolean_op(&sq_a, &sq_b, 2, None);
 
         MINI_CHECK!(isect.len() == 1);
         MINI_CHECK!(isect[0].point_count() == 4);
@@ -896,9 +896,9 @@ pub fn run_polyline_boolean_op() -> TestResult {
         MINI_CHECK!(diff.len() == 1);
         MINI_CHECK!(diff[0].point_count() == 6);
 
-        let isect_in = Polyline::boolean_op(&sq_a, &sq_inside, 0);
-        let uni_in = Polyline::boolean_op(&sq_a, &sq_inside, 1);
-        let diff_in = Polyline::boolean_op(&sq_a, &sq_inside, 2);
+        let isect_in = Polyline::boolean_op(&sq_a, &sq_inside, 0, None);
+        let uni_in = Polyline::boolean_op(&sq_a, &sq_inside, 1, None);
+        let diff_in = Polyline::boolean_op(&sq_a, &sq_inside, 2, None);
 
         MINI_CHECK!(isect_in.len() == 1);
         MINI_CHECK!(isect_in[0].point_count() == 4);
@@ -907,9 +907,9 @@ pub fn run_polyline_boolean_op() -> TestResult {
         MINI_CHECK!(diff_in.len() == 1);
         MINI_CHECK!(diff_in[0].point_count() == 4);
 
-        let isect_dis = Polyline::boolean_op(&sq_a, &sq_disjoint, 0);
-        let uni_dis = Polyline::boolean_op(&sq_a, &sq_disjoint, 1);
-        let diff_dis = Polyline::boolean_op(&sq_a, &sq_disjoint, 2);
+        let isect_dis = Polyline::boolean_op(&sq_a, &sq_disjoint, 0, None);
+        let uni_dis = Polyline::boolean_op(&sq_a, &sq_disjoint, 1, None);
+        let diff_dis = Polyline::boolean_op(&sq_a, &sq_disjoint, 2, None);
 
         MINI_CHECK!(isect_dis.is_empty());
         MINI_CHECK!(uni_dis.len() == 2);
@@ -941,9 +941,9 @@ pub fn run_polyline_boolean_op_plane() -> TestResult {
             Point::new(0.0, 2.0, 5.0),
             Point::new(0.0, 0.0, 5.0),
         ]);
-        let isect = Polyline::boolean_op_plane(&sq_a, &sq_b, &plane, 0);
-        let uni = Polyline::boolean_op_plane(&sq_a, &sq_b, &plane, 1);
-        let diff = Polyline::boolean_op_plane(&sq_a, &sq_b, &plane, 2);
+        let isect = Polyline::boolean_op(&sq_a, &sq_b, 0, Some(&plane));
+        let uni = Polyline::boolean_op(&sq_a, &sq_b, 1, Some(&plane));
+        let diff = Polyline::boolean_op(&sq_a, &sq_b, 2, Some(&plane));
 
         MINI_CHECK!(isect.len() == 1);
         MINI_CHECK!(uni.len() == 1);

@@ -20,11 +20,11 @@ pub fn run_history_constructor() -> TestResult {
 
 pub fn run_history_begin_commit() -> TestResult {
     MINI_TEST!("Begin Commit", {
-        use crate::{Point, Session};
+        use crate::Point;
+        use crate::Session;
 
         let mut session = Session::default();
 
-        // An empty transaction is dropped, and nothing is recorded while none is open.
         session.history.begin("empty");
         session.history.commit();
         session.add_point(Point::new(0.0, 0.0, 0.0), None);
@@ -44,7 +44,8 @@ pub fn run_history_begin_commit() -> TestResult {
 pub fn run_history_undo_redo() -> TestResult {
     MINI_TEST!("Undo Redo", {
         use crate::session::FromGeometry;
-        use crate::{Point, Session};
+        use crate::Point;
+        use crate::Session;
 
         let mut session = Session::default();
         let point = Point::new(1.0, 2.0, 3.0);
@@ -65,6 +66,7 @@ pub fn run_history_undo_redo() -> TestResult {
             Point::from_geometry(&session.lookup[&guid]).unwrap()[2],
             3.0
         ));
+
         MINI_CHECK!(!session.history.can_redo());
         MINI_CHECK!(!session.redo());
     })
@@ -72,7 +74,8 @@ pub fn run_history_undo_redo() -> TestResult {
 
 pub fn run_history_clear() -> TestResult {
     MINI_TEST!("Clear", {
-        use crate::{Point, Session};
+        use crate::Point;
+        use crate::Session;
 
         let mut session = Session::default();
 

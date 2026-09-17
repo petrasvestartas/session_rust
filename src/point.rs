@@ -6,7 +6,7 @@ use std::fmt;
 use std::ops::{Add, AddAssign, Div, DivAssign, Index, IndexMut, Mul, MulAssign, Sub, SubAssign};
 use std::sync::OnceLock;
 
-/// A 3D point with display width and color
+/// A 3D point with display width and color.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(tag = "type", rename = "Point")]
 pub struct Point {
@@ -15,15 +15,15 @@ pub struct Point {
         deserialize_with = "crate::guid_serde::deserialize"
     )]
     guid: OnceLock<String>,
-    pub name: String,
-    pub width: f64,
-    pub pointcolor: Color,
+    pub name: String,      // Point name.
+    pub width: f64,        // Display width.
+    pub pointcolor: Color, // Display color.
     #[serde(rename = "x")]
-    _x: f64,
+    _x: f64, // X coordinate.
     #[serde(rename = "y")]
-    _y: f64,
+    _y: f64, // Y coordinate.
     #[serde(rename = "z")]
-    _z: f64,
+    _z: f64, // Z coordinate.
 }
 
 impl Default for Point {
@@ -33,11 +33,12 @@ impl Default for Point {
 }
 
 impl Point {
+    /// Constructs from coordinates with the default name.
     pub fn new(x: f64, y: f64, z: f64) -> Self {
         Self::with_name(x, y, z, "my_point")
     }
 
-    /// Construct from coordinates and a name
+    /// Constructs from coordinates and a name.
     pub fn with_name(x: f64, y: f64, z: f64, name: &str) -> Self {
         Self {
             guid: OnceLock::new(),
@@ -50,26 +51,30 @@ impl Point {
         }
     }
 
-    /// Copy (new guid, same data)
+    /// Copies with a new guid and the same data.
     pub fn duplicate(&self) -> Self {
         let mut copy = self.clone();
         copy.guid = OnceLock::new();
+
         copy
     }
 
+    /// Returns whether the lazy guid has been created.
     pub fn has_guid(&self) -> bool {
         self.guid.get().is_some()
     }
 
+    /// Returns the guid, creating it on first access.
     pub fn guid(&self) -> &str {
         self.guid.get_or_init(|| uuid::Uuid::new_v4().to_string())
     }
 
+    /// Sets the guid if it has not already been created.
     pub fn set_guid(&self, g: String) {
         let _ = self.guid.set(g);
     }
 
-    /// Clear the guid so a fresh one mints lazily on next read
+    /// Clears the guid so a fresh one mints lazily on the next read.
     pub fn refresh_guid(&mut self) {
         self.guid = OnceLock::new();
     }
@@ -78,12 +83,12 @@ impl Point {
     // Operators
     // ═══════════════════════════════════════════════════════════════════════════
 
-    /// Coordinate-wise sum of two points
+    /// Returns the coordinate-wise sum of two points.
     pub fn sum(p0: &Point, p1: &Point) -> Self {
         Point::new(p0[0] + p1[0], p0[1] + p1[1], p0[2] + p1[2])
     }
 
-    /// Coordinate-wise difference of two points
+    /// Returns the coordinate-wise difference of two points.
     pub fn sub(p0: &Point, p1: &Point) -> Self {
         Point::new(p0[0] - p1[0], p0[1] - p1[1], p0[2] - p1[2])
     }
@@ -92,7 +97,7 @@ impl Point {
     // Transformation
     // ═══════════════════════════════════════════════════════════════════════════
 
-    /// Transform in place
+    /// Transforms in place.
     pub fn transform(&mut self, xform: &Xform) {
         let x = self._x;
         let y = self._y;
@@ -105,10 +110,11 @@ impl Point {
         self._z = (m[2] * x + m[6] * y + m[10] * z + m[14]) * w_inv;
     }
 
-    /// Transformed copy
+    /// Returns a transformed copy.
     pub fn transformed(&self, xform: &Xform) -> Self {
         let mut result = self.duplicate();
         result.transform(xform);
+
         result
     }
 
@@ -116,12 +122,12 @@ impl Point {
     // Geometry
     // ═══════════════════════════════════════════════════════════════════════════
 
-    /// True when a, b, c turn counter-clockwise in the xy plane
+    /// Returns whether a, b, c turn counter-clockwise in the xy plane.
     pub fn is_ccw(a: &Point, b: &Point, c: &Point) -> bool {
         (c[1] - a[1]) * (b[0] - a[0]) > (b[1] - a[1]) * (c[0] - a[0])
     }
 
-    /// Mid point between a and b
+    /// Returns the mid point between this point and p.
     pub fn mid_point(a: &Point, b: &Point) -> Point {
         Point::new(
             (a[0] + b[0]) / 2.0,
@@ -130,93 +136,107 @@ impl Point {
         )
     }
 
-    /// Distance to p, scaled to stay finite for large coordinates
+    /// Returns the distance to p, scaled to stay finite for large coordinates.
     pub fn distance(&self, p: &Point, double_min: Option<f64>) -> f64 {
         let double_min = double_min.unwrap_or(1e-12);
         let mut dx = (self._x - p[0]).abs();
         let mut dy = (self._y - p[1]).abs();
         let mut dz = (self._z - p[2]).abs();
+
         if dy >= dx && dy >= dz {
             std::mem::swap(&mut dx, &mut dy);
         } else if dz >= dx && dz >= dy {
             std::mem::swap(&mut dx, &mut dz);
         }
+
         if dx > double_min {
             dy /= dx;
             dz /= dx;
+
             return dx * (1.0 + dy * dy + dz * dz).sqrt();
         }
+
         if dx > 0.0 && dx.is_finite() {
             return dx;
         }
+
         0.0
     }
 
-    /// Squared distance to p, scaled to stay finite for large coordinates
+    /// Returns the squared distance to p, scaled to stay finite for large coordinates.
     pub fn squared_distance(&self, p: &Point, double_min: Option<f64>) -> f64 {
         let double_min = double_min.unwrap_or(1e-12);
         let mut dx = (self._x - p[0]).abs();
         let mut dy = (self._y - p[1]).abs();
         let mut dz = (self._z - p[2]).abs();
+
         if dy >= dx && dy >= dz {
             std::mem::swap(&mut dx, &mut dy);
         } else if dz >= dx && dz >= dy {
             std::mem::swap(&mut dx, &mut dz);
         }
+
         if dx > double_min {
             dy /= dx;
             dz /= dx;
+
             return dx * dx * (1.0 + dy * dy + dz * dz);
         }
+
         if dx > 0.0 && dx.is_finite() {
             return dx * dx;
         }
+
         0.0
     }
 
-    /// Point at parameter t in [0, 1] between a and b
+    /// Returns the point at parameter t in [0, 1] between a and b.
     pub fn lerp(a: &Point, b: &Point, t: f64) -> Point {
-        Point::new(
-            a[0] + t * (b[0] - a[0]),
-            a[1] + t * (b[1] - a[1]),
-            a[2] + t * (b[2] - a[2]),
-        )
+        a + (b - a) * t
     }
 
-    /// Evenly spaced points between from and to (kind: 0=no endpoints, 1=both, 2=start only)
+    /// Returns evenly spaced points between from and to (kind: 0=no endpoints, 1=both, 2=start only).
     pub fn interpolate(from: &Point, to: &Point, steps: usize, kind: usize) -> Vec<Point> {
         let mut points = Vec::new();
+
         if kind == 1 || kind == 2 {
             points.push(from.duplicate());
         }
+
         for i in 1..=steps {
             points.push(Point::lerp(from, to, i as f64 / (steps + 1) as f64));
         }
+
         if kind == 1 {
             points.push(to.duplicate());
         }
+
         points
     }
 
-    /// Shoelace area of a polygon in the xy plane
+    /// Returns the shoelace area of a polygon in the xy plane.
     pub fn area(points: &[Point]) -> f64 {
         let n = points.len();
         let mut area = 0.0;
+
         for i in 0..n {
             let j = (i + 1) % n;
             area += points[i][0] * points[j][1];
             area -= points[j][0] * points[i][1];
         }
+
         area.abs() / 2.0
     }
 
-    /// Area-weighted centroid of a quadrilateral
+    /// Returns the area-weighted centroid of a quadrilateral, or an error when not four vertices.
     pub fn centroid_quad(vertices: &[Point]) -> Result<Point, &'static str> {
         if vertices.len() != 4 {
             return Err("Polygon must have exactly 4 vertices.");
         }
+
         let mut total_area = 0.0;
         let mut centroid_sum = Vector::new(0.0, 0.0, 0.0);
+
         for i in 0..4 {
             let p0 = &vertices[i];
             let p1 = &vertices[(i + 1) % 4];
@@ -224,6 +244,7 @@ impl Point {
             let tri_area =
                 (p0[0] * (p1[1] - p2[1]) + p1[0] * (p2[1] - p0[1]) + p2[0] * (p0[1] - p1[1])).abs()
                     / 2.0;
+
             total_area += tri_area;
             let tri_centroid = Vector::new(
                 (p0[0] + p1[0] + p2[0]) / 3.0,
@@ -232,47 +253,58 @@ impl Point {
             );
             centroid_sum += tri_centroid * tri_area;
         }
+
         let result = centroid_sum / total_area;
+
         Ok(Point::new(result[0], result[1], result[2]))
     }
 
-    /// Arithmetic mean of points; empty input returns the origin
+    /// Returns the arithmetic mean of points; empty input returns the origin.
     pub fn centroid(points: &[Point]) -> Point {
         if points.is_empty() {
             return Point::new(0.0, 0.0, 0.0);
         }
+
         let mut cx = 0.0;
         let mut cy = 0.0;
         let mut cz = 0.0;
+
         for p in points {
             cx += p[0];
             cy += p[1];
             cz += p[2];
         }
+
         let n = points.len() as f64;
+
         Point::new(cx / n, cy / n, cz / n)
     }
 
-    /// Unsigned dihedral angle in degrees of edge pq between half-planes pqr and pqs
+    /// Returns the unsigned dihedral angle in degrees of edge pq between half-planes pqr and pqs.
     #[allow(clippy::approx_constant)]
     pub fn dihedral_angle_deg(p: &Point, q: &Point, r: &Point, s: &Point) -> f64 {
-        let pq = Vector::new(q[0] - p[0], q[1] - p[1], q[2] - p[2]);
-        let pr = Vector::new(r[0] - p[0], r[1] - p[1], r[2] - p[2]);
-        let ps = Vector::new(s[0] - p[0], s[1] - p[1], s[2] - p[2]);
+        let pq = q - p;
+        let pr = r - p;
+        let ps = s - p;
         let n1 = pq.cross(&pr);
         let n2 = pq.cross(&ps);
         let m1 = n1.magnitude();
         let m2 = n2.magnitude();
+
         if m1 < Tolerance::ZERO_TOLERANCE || m2 < Tolerance::ZERO_TOLERANCE {
             return 0.0;
         }
+
         let mut cos_t = n1.dot(&n2) / (m1 * m2);
+
         if cos_t > 1.0 {
             cos_t = 1.0;
         }
+
         if cos_t < -1.0 {
             cos_t = -1.0;
         }
+
         cos_t.acos() * (180.0 / 3.141592653589793)
     }
 
@@ -280,27 +312,34 @@ impl Point {
     // JSON
     // ═══════════════════════════════════════════════════════════════════════════
 
+    /// Serializes to a JSON string.
     pub fn jsondump(&self) -> Result<String, Box<dyn std::error::Error>> {
         crate::file_encoders::sorted_json_string(self)
     }
 
+    /// Deserializes from a JSON string.
     pub fn jsonload(json_data: &str) -> Result<Self, Box<dyn std::error::Error>> {
         Ok(serde_json::from_str(json_data)?)
     }
 
+    /// Serializes to a JSON string.
     pub fn file_json_dumps(&self) -> String {
         self.jsondump().unwrap_or_default()
     }
 
+    /// Deserializes from a JSON string.
     pub fn file_json_loads(json_string: &str) -> Self {
         Self::jsonload(json_string).unwrap_or_default()
     }
 
+    /// Writes to a JSON file.
     pub fn file_json_dump(&self, filepath: &str) -> Result<(), Box<dyn std::error::Error>> {
         std::fs::write(filepath, self.jsondump()?)?;
+
         Ok(())
     }
 
+    /// Reads from a JSON file.
     pub fn file_json_load(filepath: &str) -> Result<Self, Box<dyn std::error::Error>> {
         Self::jsonload(&std::fs::read_to_string(filepath)?)
     }
@@ -309,27 +348,34 @@ impl Point {
     // Protobuf
     // ═══════════════════════════════════════════════════════════════════════════
 
+    /// Serializes to protobuf bytes.
     pub fn pb_dumps(&self) -> Vec<u8> {
         use prost::Message;
+
         self.to_proto().encode_to_vec()
     }
 
+    /// Deserializes from protobuf bytes.
     pub fn pb_loads(data: &[u8]) -> Result<Self, Box<dyn std::error::Error>> {
         use prost::Message;
+
         Ok(Self::from_proto(crate::proto::Point::decode(data)?))
     }
 
+    /// Writes to a protobuf file.
     pub fn pb_dump(&self, filepath: &str) {
         let data = self.pb_dumps();
         std::fs::write(filepath, data).expect("Failed to write protobuf file");
     }
 
+    /// Reads from a protobuf file.
     pub fn pb_load(filepath: &str) -> Self {
         let data = std::fs::read(filepath).expect("Failed to read protobuf file");
+
         Self::pb_loads(&data).expect("Failed to parse protobuf")
     }
 
-    /// The proto message; pb_dumps encodes it and Session embeds it
+    /// Converts to a protobuf message.
     pub fn to_proto(&self) -> crate::proto::Point {
         crate::proto::Point {
             guid: self.guid.get().cloned().unwrap_or_default(),
@@ -349,14 +395,17 @@ impl Point {
         }
     }
 
-    /// Point from a decoded proto message
+    /// Constructs from a protobuf message.
     pub fn from_proto(proto: crate::proto::Point) -> Self {
         let mut point = Self::new(proto.x, proto.y, proto.z);
+
         if !proto.guid.is_empty() {
             point.set_guid(proto.guid);
         }
+
         point.name = proto.name;
         point.width = proto.width;
+
         if let Some(color) = proto.pointcolor {
             point.pointcolor.name = color.name;
             point.pointcolor.r = color.r;
@@ -364,6 +413,7 @@ impl Point {
             point.pointcolor.b = color.b;
             point.pointcolor.a = color.a;
         }
+
         point
     }
 
@@ -382,7 +432,7 @@ impl Point {
         )
     }
 
-    /// "Point(name, x, y, z, Color(...), width)"
+    /// Returns "Point(name, x, y, z, Color(...), width)".
     pub fn repr(&self) -> String {
         let prec = Tolerance::ROUNDING;
         format!(
@@ -400,7 +450,7 @@ impl Point {
     // SESSION_VIEWER
     // ═══════════════════════════════════════════════════════════════════════════
 
-    /// GPU-ready [x, y, z] as f32, the f64 to f32 boundary for wgpu upload
+    /// Returns GPU-ready [x, y, z] as f32, the f64 to f32 boundary for wgpu upload.
     pub fn to_f32(&self) -> [f32; 3] {
         [self._x as f32, self._y as f32, self._z as f32]
     }

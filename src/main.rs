@@ -285,15 +285,15 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         let hits = scene.ray_cast(&ray_origin, &ray_direction, tolerance);
         println!("{} hit(s):", hits.len());
         for h in hits.iter() {
-            let name = if h.guid() == pt1_guid {
+            let name = if h.guid == pt1_guid {
                 pt1.name.clone()
-            } else if h.guid() == pt2_guid {
+            } else if h.guid == pt2_guid {
                 pt2.name.clone()
-            } else if h.guid() == line1_guid {
+            } else if h.guid == line1_guid {
                 line1.name.clone()
-            } else if h.guid() == plane1_guid {
+            } else if h.guid == plane1_guid {
                 plane1.name.clone()
-            } else if h.guid() == polyline1_guid {
+            } else if h.guid == polyline1_guid {
                 polyline1.name.clone()
             } else {
                 "unknown".to_string()

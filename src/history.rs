@@ -5,11 +5,9 @@ use std::cell::RefCell;
 use std::fmt;
 use std::rc::Rc;
 
-pub const CAPACITY: usize = 64;
+pub const CAPACITY: usize = 64; // Committed transactions kept; past it the oldest is dropped.
 
-/// A deep copy that KEEPS the guid: a snapshot must still name the object it stands for.
-/// `Geometry::clone` only bumps the Rc, so the inner value is cloned into a fresh Rc; every
-/// geometry's `clone()` preserves the guid (`duplicate()` is what mints a new one).
+/// Returns a deep copy that keeps the guid: Geometry::clone only bumps the Rc, so the inner value is cloned into a fresh one.
 pub fn clone(obj: &Geometry) -> Geometry {
     match obj {
         Geometry::OBB(g) => Geometry::OBB(Rc::new((**g).clone())),
@@ -30,34 +28,23 @@ pub fn clone(obj: &Geometry) -> Geometry {
 // Records
 // ═══════════════════════════════════════════════════════════════════════════
 
-/// Everything needed to put ONE object back into every live table of a session.
-///
-/// * `guid` - The object's guid; the clone carries the same one.
-/// * `obj` - A `clone()` of the object, never the live instance.
-/// * `collection` - The `Objects` vector it lives in: "points", "lines", ... "components".
-/// * `obj_index` - Its position in that vector, so the `order()` sequence survives a round trip.
-/// * `xform` - Its local transform, None when none was set.
-/// * `parent_guid` - Name of its tree parent, None when it was added without one.
-/// * `index` - Its position among the parent's children.
-/// * `node` - The detached tree node with its whole subtree, None for an add.
-/// * `attribute` - Its graph node attribute.
-/// * `edges` - Incident graph edges as (other_guid, attribute, forward), forward when the
-///   object was the edge's v0.
+/// Everything needed to put one object back into every live table of a session.
 #[derive(Debug, Clone)]
 pub struct Tombstone {
-    pub guid: String,
-    pub obj: Geometry,
-    pub collection: String,
-    pub obj_index: i64,
-    pub xform: Option<Xform>,
-    pub parent_guid: Option<String>,
-    pub index: usize,
-    pub node: Option<Rc<RefCell<TreeNode>>>,
-    pub attribute: String,
-    pub edges: Vec<(String, String, bool)>,
+    pub guid: String,         // The object's guid; the clone carries the same one.
+    pub obj: Geometry,        // A clone() of the object, never the live instance.
+    pub collection: String,   // The Objects list it lives in: "points", "lines", ... "components".
+    pub obj_index: i64, // Its position in that list, so the order() sequence survives a round trip.
+    pub xform: Option<Xform>, // Its local transform, None when none was set.
+    pub parent_guid: Option<String>, // Name of its tree parent, None when it was added without one.
+    pub index: usize,   // Its position among the parent's children.
+    pub node: Option<Rc<RefCell<TreeNode>>>, // The detached tree node with its whole subtree, None for an add.
+    pub attribute: String,                   // Its graph node attribute.
+    pub edges: Vec<(String, String, bool)>,  // Incident edges as (guid, attribute, forward).
 }
 
 impl Tombstone {
+    /// Constructs from every field of the kit.
     #[allow(clippy::too_many_arguments)]
     pub fn new(
         guid: String,
@@ -89,12 +76,13 @@ impl Tombstone {
 /// The object under `guid` was swapped: absolute before/after snapshots, never deltas.
 #[derive(Debug, Clone)]
 pub struct ReplaceOp {
-    pub guid: String,
-    pub before: Geometry,
-    pub after: Geometry,
+    pub guid: String,     // The object guid.
+    pub before: Geometry, // Snapshot before the change.
+    pub after: Geometry,  // Snapshot after the change.
 }
 
 impl ReplaceOp {
+    /// Constructs from the guid and the before and after snapshots.
     pub fn new(guid: String, before: Geometry, after: Geometry) -> Self {
         Self {
             guid,
@@ -104,15 +92,16 @@ impl ReplaceOp {
     }
 }
 
-/// The local transform under `guid` changed; None on either side means "none set".
+/// The local transform under `guid` changed; nullopt on either side means "none set".
 #[derive(Debug, Clone)]
 pub struct XformOp {
-    pub guid: String,
-    pub before: Option<Xform>,
-    pub after: Option<Xform>,
+    pub guid: String,          // The object guid.
+    pub before: Option<Xform>, // Snapshot before the change.
+    pub after: Option<Xform>,  // Snapshot after the change.
 }
 
 impl XformOp {
+    /// Constructs from the guid and the before and after transforms.
     pub fn new(guid: String, before: Option<Xform>, after: Option<Xform>) -> Self {
         Self {
             guid,
@@ -122,8 +111,7 @@ impl XformOp {
     }
 }
 
-/// One recorded op. `Add` and `Remove` share the tombstone shape: an add is undone by
-/// detaching the kit, a remove by attaching it again.
+/// One recorded op; `Add` and `Remove` share the tombstone, undone by detaching or attaching the kit.
 #[derive(Debug, Clone)]
 pub enum Op {
     Add(Tombstone),
@@ -133,6 +121,7 @@ pub enum Op {
 }
 
 impl Op {
+    /// Returns "add", "remove", "replace" or "xform".
     pub fn kind(&self) -> &str {
         match self {
             Op::Add(_) => "add",
@@ -142,6 +131,7 @@ impl Op {
         }
     }
 
+    /// Returns the guid of the object the op touched.
     pub fn guid(&self) -> &str {
         match self {
             Op::Add(op) | Op::Remove(op) => &op.guid,
@@ -152,6 +142,7 @@ impl Op {
 }
 
 impl fmt::Display for Op {
+    /// Writes the op string to a formatter.
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "{}({})", self.kind(), self.guid())
     }
@@ -160,11 +151,12 @@ impl fmt::Display for Op {
 /// One undoable step: a label and the ops it made, in the order they happened.
 #[derive(Debug, Clone)]
 pub struct Transaction {
-    pub label: String,
-    pub ops: Vec<Op>,
+    pub label: String, // What the step did.
+    pub ops: Vec<Op>,  // Ops in the order they happened.
 }
 
 impl Transaction {
+    /// Constructs an empty transaction with a label.
     pub fn new(label: &str) -> Self {
         Self {
             label: label.to_string(),
@@ -174,12 +166,14 @@ impl Transaction {
 }
 
 impl Default for Transaction {
+    /// Constructs an empty transaction with the default label.
     fn default() -> Self {
         Self::new("my_transaction")
     }
 }
 
 impl fmt::Display for Transaction {
+    /// Writes the transaction string to a formatter.
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "Transaction({}, {} ops)", self.label, self.ops.len())
     }
@@ -189,36 +183,31 @@ impl fmt::Display for Transaction {
 // History
 // ═══════════════════════════════════════════════════════════════════════════
 
-/// CAD-style undo/redo over a Session, in memory only.
-///
-/// A removed object leaves every live table at once; its `Op::Remove` is the tombstone that
-/// carries the resurrection kit. Records are only written while a transaction is open
-/// (`begin` ... `commit`), and every save purges the buffer, as Rhino does: history never
-/// crosses pb or JSON, and a loaded session starts with an empty one.
-///
-/// * `undo_stack` - Committed transactions, oldest first; capped at CAPACITY, the oldest dropped.
-/// * `redo_stack` - Undone transactions, cleared the moment a new transaction commits.
-/// * `current` - The open transaction, None between `commit` and the next `begin`.
+/// CAD-style undo/redo over a Session, in memory only: records exist between `begin` and `commit`, every save purges them.
 #[derive(Debug, Clone, Default)]
 pub struct History {
-    pub undo_stack: Vec<Transaction>,
-    pub redo_stack: Vec<Transaction>,
-    pub current: Option<Transaction>,
+    pub undo_stack: Vec<Transaction>, // Committed transactions, oldest first; capped at CAPACITY.
+    pub redo_stack: Vec<Transaction>, // Undone transactions, cleared the moment a new transaction commits.
+    pub current: Option<Transaction>, // The open transaction, None between commit and the next begin.
 }
 
 impl History {
+    /// Constructs an empty history.
     pub fn new() -> Self {
         Self::default()
     }
 
+    /// Returns whether a committed transaction can be undone.
     pub fn can_undo(&self) -> bool {
         !self.undo_stack.is_empty()
     }
 
+    /// Returns whether an undone transaction can be redone.
     pub fn can_redo(&self) -> bool {
         !self.redo_stack.is_empty()
     }
 
+    /// Returns the number of committed transactions.
     pub fn depth(&self) -> usize {
         self.undo_stack.len()
     }
@@ -231,21 +220,23 @@ impl History {
 
     /// Close the open transaction. An empty one is dropped; a real one clears redo.
     pub fn commit(&mut self) {
-        let transaction = self.current.take();
-        let Some(transaction) = transaction else {
+        let Some(transaction) = self.current.take() else {
             return;
         };
+
         if transaction.ops.is_empty() {
             return;
         }
+
         self.undo_stack.push(transaction);
         self.redo_stack.clear();
+
         if self.undo_stack.len() > CAPACITY {
             self.undo_stack.remove(0);
         }
     }
 
-    /// Append an op to the open transaction; a no-op when none is open.
+    /// Appends an op to the open transaction; a no-op when none is open.
     pub fn record(&mut self, op: Op) {
         let Some(current) = self.current.as_mut() else {
             return;
@@ -259,10 +250,13 @@ impl History {
         let Some(transaction) = self.undo_stack.pop() else {
             return false;
         };
-        for op in transaction.ops.iter().rev() {
-            self._revert(op, session);
+
+        for i in (0..transaction.ops.len()).rev() {
+            self._revert(&transaction.ops[i], session);
         }
+
         self.redo_stack.push(transaction);
+
         true
     }
 
@@ -272,36 +266,44 @@ impl History {
         let Some(transaction) = self.redo_stack.pop() else {
             return false;
         };
-        for op in transaction.ops.iter() {
-            self._apply(op, session);
+
+        for i in 0..transaction.ops.len() {
+            self._apply(&transaction.ops[i], session);
         }
+
         self.undo_stack.push(transaction);
+
         true
     }
 
+    /// Drops every transaction, open or committed.
     pub fn clear(&mut self) {
         self.undo_stack.clear();
         self.redo_stack.clear();
         self.current = None;
     }
 
+    /// Undoes one op against the session.
     fn _revert(&self, op: &Op, session: &mut Session) {
         match op {
             Op::Add(op) => {
                 session._detach(&op.guid);
             }
+
             Op::Remove(op) => session._attach(op),
             Op::Replace(op) => session._swap(&op.guid, clone(&op.before)),
             Op::Xform(op) => session._place(&op.guid, op.before.as_ref()),
         }
     }
 
+    /// Redoes one op against the session.
     fn _apply(&self, op: &Op, session: &mut Session) {
         match op {
             Op::Add(op) => session._attach(op),
             Op::Remove(op) => {
                 session._detach(&op.guid);
             }
+
             Op::Replace(op) => session._swap(&op.guid, clone(&op.after)),
             Op::Xform(op) => session._place(&op.guid, op.after.as_ref()),
         }
@@ -309,6 +311,7 @@ impl History {
 }
 
 impl fmt::Display for History {
+    /// Writes the history string to a formatter.
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(
             f,

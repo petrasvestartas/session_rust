@@ -8,13 +8,11 @@ pub fn run_obb_constructor() -> TestResult {
         use crate::Vector;
         use crate::OBB;
 
-        // from_point
         let mut bb1 = OBB::from_point(&Point::new(5.0, 5.0, 5.0), 2.0);
 
         MINI_CHECK!(TOLERANCE.is_close(bb1.center[0], 5.0));
         MINI_CHECK!(TOLERANCE.is_close(bb1.half_size[0], 2.0));
 
-        // from_points (AABB)
         let pts = vec![Point::new(0.0, 0.0, 0.0), Point::new(2.0, 3.0, 4.0)];
         let bb2 = OBB::from_points(&pts, 0.0, None);
         let mn = bb2.min_point();
@@ -23,7 +21,6 @@ pub fn run_obb_constructor() -> TestResult {
         MINI_CHECK!(TOLERANCE.is_close(mn[0], 0.0) && TOLERANCE.is_close(mn[2], 0.0));
         MINI_CHECK!(TOLERANCE.is_close(mx[0], 2.0) && TOLERANCE.is_close(mx[2], 4.0));
 
-        // OBB constructor
         let box_ = OBB::new(
             Point::new(0.0, 0.0, 0.0),
             Vector::new(1.0, 0.0, 0.0),
@@ -36,7 +33,6 @@ pub fn run_obb_constructor() -> TestResult {
         MINI_CHECK!(TOLERANCE.is_close(box_.half_size[1], 2.0));
         MINI_CHECK!(TOLERANCE.is_close(box_.half_size[2], 3.0));
 
-        // operators
         let same = box_.duplicate();
 
         MINI_CHECK!(box_ == same);
@@ -45,18 +41,15 @@ pub fn run_obb_constructor() -> TestResult {
         MINI_CHECK!(box_.str() == "0.000000, 0.000000, 0.000000\n1.000000, 0.000000, 0.000000\n0.000000, 1.000000, 0.000000\n0.000000, 0.000000, 1.000000\n1.000000, 2.000000, 3.000000");
         MINI_CHECK!(box_.repr() == "OBB(my_obb, 0.000000, 0.000000, 0.000000, 1.000000, 0.000000, 0.000000, 0.000000, 1.000000, 0.000000, 0.000000, 0.000000, 1.000000, 1.000000, 2.000000, 3.000000)");
 
-        // aabb
         let bb_aabb = bb2.aabb();
 
         MINI_CHECK!(TOLERANCE.is_close(bb_aabb.min_point()[0], 0.0));
         MINI_CHECK!(TOLERANCE.is_close(bb_aabb.max_point()[2], 4.0));
 
-        // corners
         let corners = bb2.corners();
 
         MINI_CHECK!(corners.len() == 8);
 
-        // point_at: center + x*x_axis + y*y_axis + z*z_axis (raw OBB offsets)
         let p_center = bb2.point_at(0.0, 0.0, 0.0);
         let hx = bb2.half_size[0];
         let hy = bb2.half_size[1];
@@ -66,7 +59,6 @@ pub fn run_obb_constructor() -> TestResult {
         MINI_CHECK!(TOLERANCE.is_close(p_center[0], 1.0) && TOLERANCE.is_close(p_center[2], 2.0));
         MINI_CHECK!(TOLERANCE.is_close(p_max_pt[0], 2.0) && TOLERANCE.is_close(p_max_pt[2], 4.0));
 
-        // inflate
         let mut bb3 = OBB::from_points(
             &[Point::new(0.0, 0.0, 0.0), Point::new(2.0, 2.0, 2.0)],
             0.0,
@@ -77,7 +69,6 @@ pub fn run_obb_constructor() -> TestResult {
         MINI_CHECK!(TOLERANCE.is_close(bb3.min_point()[0], -1.0));
         MINI_CHECK!(TOLERANCE.is_close(bb3.max_point()[0], 3.0));
 
-        // guid and name
         MINI_CHECK!(!bb1.guid().is_empty());
         bb1.name = "test_bbox".to_string();
 
@@ -133,21 +124,18 @@ pub fn run_obb_json_roundtrip() -> TestResult {
         let mut bb = OBB::from_point(&Point::new(1.0, 2.0, 3.0), 5.0);
         bb.name = "test_bbox".to_string();
 
-        // JSON object (string)
         let js = bb.jsondump().unwrap();
         let loaded_j = OBB::jsonload(&js).unwrap();
 
         MINI_CHECK!(loaded_j.name == "test_bbox");
         MINI_CHECK!(TOLERANCE.is_close(loaded_j.center[0], 1.0));
 
-        // String
         let s = bb.file_json_dumps();
         let loaded_s = OBB::file_json_loads(&s);
 
         MINI_CHECK!(loaded_s.name == "test_bbox");
         MINI_CHECK!(TOLERANCE.is_close(loaded_s.half_size[0], 5.0));
 
-        // File
         let src_dir = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"));
         let fname = src_dir.join("serialization").join("test_obb.json");
         let fname = fname.to_str().unwrap();
@@ -168,7 +156,6 @@ pub fn run_obb_protobuf_roundtrip() -> TestResult {
         let mut bb = OBB::from_point(&Point::new(1.0, 2.0, 3.0), 5.0);
         bb.name = "test_bbox_proto".to_string();
 
-        // Bytes
         let guid = bb.guid().to_string();
         let b = bb.pb_dumps();
         let loaded_s = OBB::pb_loads(&b).unwrap();
@@ -177,7 +164,6 @@ pub fn run_obb_protobuf_roundtrip() -> TestResult {
         MINI_CHECK!(loaded_s.guid() == guid);
         MINI_CHECK!(TOLERANCE.is_close(loaded_s.center[0], 1.0));
 
-        // File
         let src_dir = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"));
         let fname = src_dir.join("serialization").join("test_obb.bin");
         let fname = fname.to_str().unwrap();
@@ -196,7 +182,6 @@ pub fn run_obb_accessors() -> TestResult {
         use crate::Point;
         use crate::OBB;
 
-        // axis-aligned OBB: center=(1,2,3), half_size=(1,2,3), dims 2×4×6
         let pts = vec![
             Point::new(0.0, 0.0, 0.0),
             Point::new(2.0, 0.0, 0.0),
@@ -373,7 +358,6 @@ pub fn run_obb_two_rectangles() -> TestResult {
         );
         let rects = bb.two_rectangles();
 
-        // bottom rect (z=-4 offset): corners at z=-1; top rect (z=+4 offset): corners at z=7
         MINI_CHECK!(rects.len() == 10);
         MINI_CHECK!(rects[0] == Point::new(3.0, 5.0, -1.0));
         MINI_CHECK!(rects[2] == Point::new(-1.0, -1.0, -1.0));

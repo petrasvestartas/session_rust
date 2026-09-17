@@ -102,24 +102,12 @@ pub fn run_color_conversion() -> TestResult {
         let c = Color::new(1.0, 0.5, 0.25, 1.0);
         let flts = c.to_unified_array();
         let back = Color::from_unified_array(flts);
-        let legacy = Color::from_float(1.0, 0.5, 0.25, 1.0);
-        let legacy_flts = legacy.to_float_array();
-        let packed = Color::pack(&[c.clone(), Color::blue()]);
-        let unpacked = Color::unpack(&packed);
-        let trailing = Color::unpack(&[1.0, 0.5, 0.25, 1.0, 0.75]);
 
         MINI_CHECK!(TOLERANCE.is_close(flts[0] as f64, 1.0));
         MINI_CHECK!(TOLERANCE.is_close(flts[1] as f64, 0.5));
         MINI_CHECK!(TOLERANCE.is_close(flts[2] as f64, 0.25));
         MINI_CHECK!(TOLERANCE.is_close(flts[3] as f64, 1.0));
         MINI_CHECK!(back == c);
-        MINI_CHECK!(legacy == c && legacy_flts == flts);
-        MINI_CHECK!(
-            unpacked.len() == 2
-                && unpacked[0] == c
-                && unpacked[1].to_unified_array() == Color::blue().to_unified_array()
-        );
-        MINI_CHECK!(trailing.len() == 1 && trailing[0] == c);
     })
 }
 

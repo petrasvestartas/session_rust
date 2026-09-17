@@ -1,3 +1,4 @@
+#![allow(clippy::needless_range_loop)]
 use crate::mini_test::TestResult;
 use crate::tolerance::Tolerance;
 use crate::{MINI_CHECK, MINI_TEST, REGISTER_MINI_TEST};
@@ -35,11 +36,13 @@ pub fn run_remesh_nurbssurface_grid_singular_planar_normal() -> TestResult {
             for vertex_key in face {
                 let vertex = &mesh.vertex[vertex_key];
                 let normal = vertex.normal().unwrap();
+
                 MINI_CHECK!(normal[0].abs() < 1e-12 && normal[2].abs() < 1e-12);
                 MINI_CHECK!((normal[1].abs() - 1.0).abs() < 1e-12);
                 apex = apex || vertex.z == 1.0;
             }
         }
+
         MINI_CHECK!(apex);
     })
 }
@@ -68,6 +71,7 @@ pub fn run_remesh_nurbssurface_grid_crease_normals() -> TestResult {
         )
         .unwrap();
         let m = RemeshNurbsSurfaceGrid::from_u_v(s, 0, 0);
+
         MINI_CHECK!(m.vertex.len() == 8);
         MINI_CHECK!(m.face.len() == 4);
         let mut flat = 0;
@@ -84,6 +88,7 @@ pub fn run_remesh_nurbssurface_grid_crease_normals() -> TestResult {
                 tilted += 1;
             }
         }
+
         MINI_CHECK!(flat == 2 && tilted == 2);
     })
 }
@@ -98,15 +103,18 @@ pub fn run_remesh_nurbssurface_grid_analytic_normals() -> TestResult {
             Primitives::cylinder_surface(0.0, 0.0, 0.0, 1.0, 5.0),
             Primitives::cone_surface(0.0, 0.0, 0.0, 1.0, 5.0),
         ];
-        for (index, s) in surfaces.into_iter().enumerate() {
-            let m = RemeshNurbsSurfaceGrid::from_u_v_q(s, 0, 0, 30.0, 0.01);
+        for index in 0..surfaces.len() {
+            let s = &surfaces[index];
+            let m = RemeshNurbsSurfaceGrid::from_u_v_q(s.clone(), 0, 0, 30.0, 0.01);
             for vd in m.vertex.values() {
                 let n = vd.normal().unwrap();
                 let length = n[0] * n[0] + n[1] * n[1] + n[2] * n[2];
+
                 MINI_CHECK!((length - 1.0).abs() < Tolerance::ZERO_TOLERANCE);
                 if index < 2 {
                     let z = if index == 0 { vd.z } else { 0.0 };
                     let dot = vd.x * n[0] + vd.y * n[1] + z * n[2];
+
                     MINI_CHECK!((dot - 1.0).abs() < Tolerance::ZERO_TOLERANCE);
                 }
             }

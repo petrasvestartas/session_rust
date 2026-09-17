@@ -146,12 +146,6 @@ pub fn run_is_periodic() -> TestResult {
             cv_count,
             &nurbsknots_periodic
         ));
-        MINI_CHECK!(nurbsknot::is_uniform(order, cv_count, &nurbsknots_clamped));
-        let mut nurbsknots_uniform = nurbsknots_clamped;
-        nurbsknots_uniform[3] = 0.5;
-        MINI_CHECK!(!nurbsknot::is_uniform(order, cv_count, &nurbsknots_uniform));
-        nurbsknots_uniform[3] = f64::NAN;
-        MINI_CHECK!(!nurbsknot::is_uniform(order, cv_count, &nurbsknots_uniform));
     })
 }
 
@@ -242,13 +236,8 @@ pub fn run_span_count() -> TestResult {
         let cv_count = 5;
         let mut nurbsknots = nurbsknot::make_clamped_uniform(order, cv_count, 1.0);
         MINI_CHECK!(nurbsknot::span_count(order, cv_count, &nurbsknots) == 2);
-        MINI_CHECK!(TOLERANCE.is_allclose(
-            &nurbsknot::get_span_vector(order, cv_count, &nurbsknots),
-            &[0.0, 1.0, 2.0]
-        ));
         nurbsknots[3] = f64::NAN;
         MINI_CHECK!(nurbsknot::span_count(order, cv_count, &nurbsknots) == 0);
-        MINI_CHECK!(nurbsknot::get_span_vector(order, cv_count, &nurbsknots).is_empty());
     })
 }
 
@@ -259,20 +248,14 @@ pub fn run_find_span() -> TestResult {
         let order = 4;
         let cv_count = 5;
         let nurbsknots_clamped = nurbsknot::make_clamped_uniform(order, cv_count, 1.0);
-        let spancount0 = nurbsknot::find_span(order, cv_count, &nurbsknots_clamped, 0.5);
-        let spancount1 = nurbsknot::find_span(order, cv_count, &nurbsknots_clamped, 1.5);
+        let spancount0 = nurbsknot::find_span(order, cv_count, &nurbsknots_clamped, 0.5, 0, 0);
+        let spancount1 = nurbsknot::find_span(order, cv_count, &nurbsknots_clamped, 1.5, 0, 0);
         MINI_CHECK!(spancount0 == 0 && spancount1 == 1);
-        MINI_CHECK!(nurbsknot::find_span(order, cv_count, &nurbsknots_clamped, -1.0) == 0);
-        MINI_CHECK!(nurbsknot::find_span(order, cv_count, &nurbsknots_clamped, 3.0) == 1);
-        MINI_CHECK!(nurbsknot::find_span(order, cv_count, &nurbsknots_clamped, f64::NAN) == 0);
+        MINI_CHECK!(nurbsknot::find_span(order, cv_count, &nurbsknots_clamped, -1.0, 0, 0) == 0);
+        MINI_CHECK!(nurbsknot::find_span(order, cv_count, &nurbsknots_clamped, 3.0, 0, 0) == 1);
+        MINI_CHECK!(nurbsknot::find_span(order, cv_count, &nurbsknots_clamped, 0.5, -1, 42) == 0);
         MINI_CHECK!(
-            nurbsknot::superfluous_nurbsknot(order, cv_count, &nurbsknots_clamped, 0) == 0.0
-        );
-        MINI_CHECK!(
-            nurbsknot::superfluous_nurbsknot(order, cv_count, &nurbsknots_clamped, 1) == 4.0
-        );
-        MINI_CHECK!(
-            nurbsknot::superfluous_nurbsknot(order, cv_count, &nurbsknots_clamped, 2) == 0.0
+            nurbsknot::find_span(order, cv_count, &nurbsknots_clamped, f64::NAN, 0, 0) == 0
         );
     })
 }
@@ -288,8 +271,6 @@ pub fn run_get_greville_abcissae() -> TestResult {
         MINI_CHECK!(TOLERANCE.is_allclose(&greville, &[0.0, 1.0 / 3.0, 1.0, 5.0 / 3.0, 2.0]));
         let periodic = nurbsknot::get_greville_abcissae(order, cv_count, &nurbsknots, true);
         MINI_CHECK!(TOLERANCE.is_allclose(&periodic, &[0.0, 1.0 / 3.0]));
-        MINI_CHECK!(nurbsknot::greville_abcissa(order, &[0.0, 1.0, 2.0]) == 1.0);
-        MINI_CHECK!(nurbsknot::greville_abcissa(order, &[0.0, f64::NAN, 2.0]) == 0.0);
         nurbsknots[2] = f64::INFINITY;
         MINI_CHECK!(
             nurbsknot::get_greville_abcissae(order, cv_count, &nurbsknots, false).is_empty()
@@ -305,11 +286,13 @@ pub fn run_solve_tridiagonal() -> TestResult {
         let di = [2.0, 2.0];
         let up = [1.0, 0.0];
         let rh = [3.0, 3.0];
-        let sol = nurbsknot::solve_tridiagonal(1, 2, &lo, &di, &up, &rh).unwrap();
-        MINI_CHECK!(TOLERANCE.is_allclose(&sol, &[1.0, 1.0]));
+        let sol = nurbsknot::solve_tridiagonal(1, 2, &lo, &di, &up, &rh);
+        MINI_CHECK!(sol.is_some());
+        MINI_CHECK!(TOLERANCE.is_allclose(&sol.unwrap_or_default(), &[1.0, 1.0]));
         let rh2 = [3.0, 0.0, 3.0, 3.0];
-        let sol = nurbsknot::solve_tridiagonal(2, 2, &lo, &di, &up, &rh2).unwrap();
-        MINI_CHECK!(TOLERANCE.is_allclose(&sol, &[1.0, -1.0, 1.0, 2.0]));
+        let sol = nurbsknot::solve_tridiagonal(2, 2, &lo, &di, &up, &rh2);
+        MINI_CHECK!(sol.is_some());
+        MINI_CHECK!(TOLERANCE.is_allclose(&sol.unwrap_or_default(), &[1.0, -1.0, 1.0, 2.0]));
         let singular = [0.0, 2.0];
         MINI_CHECK!(nurbsknot::solve_tridiagonal(1, 2, &lo, &singular, &up, &rh).is_none());
         MINI_CHECK!(nurbsknot::solve_tridiagonal(usize::MAX, 2, &lo, &di, &up, &rh).is_none());
@@ -376,7 +359,7 @@ pub fn run_eval_basis() -> TestResult {
         let order = 4;
         let cv_count = 5;
         let nurbsknots = nurbsknot::make_clamped_uniform(order, cv_count, 1.0);
-        let span = nurbsknot::find_span(order, cv_count, &nurbsknots, 0.5);
+        let span = nurbsknot::find_span(order, cv_count, &nurbsknots, 0.5, 0, 0);
         let basis = nurbsknot::eval_basis(order, &nurbsknots, span, 0.5);
         MINI_CHECK!(TOLERANCE.is_allclose(&basis, &[0.125, 0.59375, 0.25, 0.03125]));
         MINI_CHECK!(TOLERANCE.is_allclose(&nurbsknot::eval_basis(1, &[], 0, 0.5), &[1.0]));
@@ -406,11 +389,6 @@ pub fn run_build_fitted_nurbsknots_adaptive() -> TestResult {
         MINI_CHECK!(TOLERANCE.is_allclose(&nurbsknots, &[0.0, 0.0, 0.0, 2.0, 4.0, 4.0, 4.0]));
         let fallback = nurbsknot::build_fitted_nurbsknots_adaptive(&params, &[], 5, 3, 5, 3, 3.0);
         MINI_CHECK!(TOLERANCE.is_allclose(&fallback, &[0.0, 0.0, 0.0, 1.5, 4.0, 4.0, 4.0]));
-        MINI_CHECK!(TOLERANCE.is_allclose(
-            &nurbsknot::build_fitted_nurbsknots(&params, 5, 3),
-            &fallback
-        ));
-        MINI_CHECK!(nurbsknot::build_fitted_nurbsknots(&[0.0, 1.0], 4, 1).is_empty());
         MINI_CHECK!(
             nurbsknot::build_fitted_nurbsknots_adaptive(&params, &pts, 5, 3, 3, 3, 3.0).is_empty()
         );

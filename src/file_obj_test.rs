@@ -19,6 +19,7 @@ pub fn run_file_obj_read_bunny() -> TestResult {
         MINI_CHECK!(mesh.number_of_vertices() == 2503);
         MINI_CHECK!(mesh.number_of_faces() == 4968);
         let (vertices, faces) = mesh.to_vertices_and_faces();
+
         MINI_CHECK!(vertices.len() == 2503);
         MINI_CHECK!(faces.len() == 4968);
         let mut has_non_zero = false;
@@ -27,6 +28,7 @@ pub fn run_file_obj_read_bunny() -> TestResult {
                 has_non_zero = true;
             }
         }
+
         MINI_CHECK!(has_non_zero);
         let mut all_polygons = true;
         for f in faces.iter() {
@@ -34,6 +36,7 @@ pub fn run_file_obj_read_bunny() -> TestResult {
                 all_polygons = false;
             }
         }
+
         MINI_CHECK!(all_polygons);
     })
 }
@@ -58,8 +61,10 @@ pub fn run_file_obj_write_read_roundtrip() -> TestResult {
         MINI_CHECK!(original_mesh.number_of_faces() == 2);
         let temp_file = "./serialization/test_temp_roundtrip.obj";
         write_file_obj(&original_mesh, temp_file).unwrap();
+
         MINI_CHECK!(PathBuf::from(temp_file).exists());
         let loaded_mesh = read_file_obj(temp_file).unwrap();
+
         MINI_CHECK!(loaded_mesh.number_of_vertices() == original_mesh.number_of_vertices());
         MINI_CHECK!(loaded_mesh.number_of_faces() == original_mesh.number_of_faces());
         std::fs::remove_file(temp_file).unwrap();

@@ -27,9 +27,11 @@ pub fn file_json_dumps<T: Serialize>(
     pretty: bool,
 ) -> Result<String, Box<dyn std::error::Error>> {
     let sorted = sort_json_keys(serde_json::to_value(data)?);
+
     if pretty {
         return Ok(serde_json::to_string_pretty(&sorted)?);
     }
+
     Ok(serde_json::to_string(&sorted)?)
 }
 
@@ -47,14 +49,18 @@ pub fn sort_json_keys(value: serde_json::Value) -> serde_json::Value {
             let mut entries: Vec<(String, serde_json::Value)> = map.into_iter().collect();
             entries.sort_by(|a, b| a.0.cmp(&b.0));
             let mut sorted = serde_json::Map::new();
+
             for (key, item) in entries {
                 sorted.insert(key, sort_json_keys(item));
             }
+
             serde_json::Value::Object(sorted)
         }
+
         serde_json::Value::Array(arr) => {
             serde_json::Value::Array(arr.into_iter().map(sort_json_keys).collect())
         }
+
         other => other,
     }
 }

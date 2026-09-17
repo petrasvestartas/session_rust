@@ -5,19 +5,12 @@ use serde::Deserialize;
 use serde::Serialize;
 use std::f64::consts::PI as STD_PI;
 
-/// Circle constant.
-pub const PI: f64 = STD_PI;
-/// Full turn in radians.
-pub const TWO_PI: f64 = 2.0 * STD_PI;
-/// Quarter turn in radians.
-pub const HALF_PI: f64 = STD_PI / 2.0;
-/// Radian-to-degree factor.
-pub const TO_DEGREES: f64 = 180.0 / STD_PI;
-/// Degree-to-radian factor.
-pub const TO_RADIANS: f64 = STD_PI / 180.0;
-
-/// Default coordinate-key scale.
-pub const SCALE: f64 = 1e6;
+pub const PI: f64 = STD_PI; // Circle constant.
+pub const TWO_PI: f64 = 2.0 * STD_PI; // Full turn in radians.
+pub const HALF_PI: f64 = STD_PI / 2.0; // Quarter turn in radians.
+pub const TO_DEGREES: f64 = 180.0 / STD_PI; // Radian-to-degree factor.
+pub const TO_RADIANS: f64 = STD_PI / 180.0; // Degree-to-radian factor.
+pub const SCALE: f64 = 1e6; // Default coordinate-key scale.
 
 /// Tolerance settings for geometric comparisons
 #[derive(Debug, Clone)]
@@ -58,37 +51,22 @@ impl Drop for ToleranceReset<'_> {
 }
 
 impl Tolerance {
-    /// Circle constant.
-    pub const PI: f64 = STD_PI;
-    /// Full turn in radians.
-    pub const TWO_PI: f64 = 2.0 * STD_PI;
-    /// Quarter turn in radians.
-    pub const HALF_PI: f64 = STD_PI / 2.0;
-    /// Radian-to-degree factor.
-    pub const TO_DEGREES: f64 = 180.0 / STD_PI;
-    /// Degree-to-radian factor.
-    pub const TO_RADIANS: f64 = STD_PI / 180.0;
+    pub const PI: f64 = STD_PI; // Circle constant.
+    pub const TWO_PI: f64 = 2.0 * STD_PI; // Full turn in radians.
+    pub const HALF_PI: f64 = STD_PI / 2.0; // Quarter turn in radians.
+    pub const TO_DEGREES: f64 = 180.0 / STD_PI; // Radian-to-degree factor.
+    pub const TO_RADIANS: f64 = STD_PI / 180.0; // Degree-to-radian factor.
 
-    /// Default absolute tolerance.
-    pub const ABSOLUTE: f64 = 1e-9;
-    /// Default relative tolerance.
-    pub const RELATIVE: f64 = 1e-6;
-    /// Default angular tolerance.
-    pub const ANGULAR: f64 = 1e-6;
-    /// Default approximation tolerance.
-    pub const APPROXIMATION: f64 = 1e-3;
-    /// Default decimal precision.
-    pub const PRECISION: i32 = 3;
-    /// Default linear deflection.
-    pub const LINEARDEFLECTION: f64 = 1e-3;
-    /// Default angular deflection.
-    pub const ANGULARDEFLECTION: f64 = 1e-1;
-    /// Angular tolerance in degrees.
-    pub const ANGLE_TOLERANCE_DEGREES: f64 = 0.11;
-    /// Used heavily by algorithms; do not change
-    pub const ZERO_TOLERANCE: f64 = 1e-12;
-    /// Default coordinate-key rounding.
-    pub const ROUNDING: i32 = 6;
+    pub const ABSOLUTE: f64 = 1e-9; // Default absolute tolerance.
+    pub const RELATIVE: f64 = 1e-6; // Default relative tolerance.
+    pub const ANGULAR: f64 = 1e-6; // Default angular tolerance.
+    pub const APPROXIMATION: f64 = 1e-3; // Default approximation tolerance.
+    pub const PRECISION: i32 = 3; // Default decimal precision.
+    pub const LINEARDEFLECTION: f64 = 1e-3; // Default linear deflection.
+    pub const ANGULARDEFLECTION: f64 = 1e-1; // Default angular deflection.
+    pub const ANGLE_TOLERANCE_DEGREES: f64 = 0.11; // Angular tolerance in degrees.
+    pub const ZERO_TOLERANCE: f64 = 1e-12; // Used heavily by algorithms; do not change.
+    pub const ROUNDING: i32 = 6; // Default coordinate-key rounding.
 
     /// Construct tolerance with a unit system ("M" or "MM")
     pub fn new(unit: &str) -> Self {
@@ -160,6 +138,7 @@ impl Tolerance {
         if value != "M" && value != "MM" {
             panic!("Invalid unit: {}", value);
         }
+
         self._unit = value.to_string();
     }
 
@@ -188,6 +167,7 @@ impl Tolerance {
         if value == 0 {
             panic!("Precision cannot be zero.");
         }
+
         self._precision = Some(value);
     }
 
@@ -268,13 +248,16 @@ impl Tolerance {
         if a.len() != b.len() {
             return false;
         }
+
         let rtol = self.relative();
         let atol = self.absolute();
+
         for i in 0..a.len() {
             if !self.compare(a[i], b[i], rtol, atol) {
                 return false;
             }
         }
+
         true
     }
 
@@ -298,14 +281,18 @@ impl Tolerance {
         } else {
             self.precision()
         };
+
         if prec == 0 {
             panic!("Precision cannot be zero.");
         }
+
         if prec == -1 {
             return format!("{},{},{}", x as i32, y as i32, z as i32);
         }
+
         if prec < -1 {
             let factor = 10.0_f64.powi(-prec - 1);
+
             return format!(
                 "{},{},{}",
                 ((x / factor).round() * factor) as i32,
@@ -313,16 +300,21 @@ impl Tolerance {
                 ((z / factor).round() * factor) as i32
             );
         }
+
         let threshold = 10.0_f64.powi(-prec) * 0.5;
+
         if x.abs() < threshold {
             x = 0.0;
         }
+
         if y.abs() < threshold {
             y = 0.0;
         }
+
         if z.abs() < threshold {
             z = 0.0;
         }
+
         format!("{:.p$},{:.p$},{:.p$}", x, y, z, p = prec as usize)
     }
 
@@ -333,27 +325,35 @@ impl Tolerance {
         } else {
             self.precision()
         };
+
         if prec == 0 {
             panic!("Precision cannot be zero.");
         }
+
         if prec == -1 {
             return format!("{},{}", x as i32, y as i32);
         }
+
         if prec < -1 {
             let factor = 10.0_f64.powi(-prec - 1);
+
             return format!(
                 "{},{}",
                 ((x / factor).round() * factor) as i32,
                 ((y / factor).round() * factor) as i32
             );
         }
+
         let threshold = 10.0_f64.powi(-prec) * 0.5;
+
         if x.abs() < threshold {
             x = 0.0;
         }
+
         if y.abs() < threshold {
             y = 0.0;
         }
+
         format!("{:.p$},{:.p$}", x, y, p = prec as usize)
     }
 
@@ -364,25 +364,32 @@ impl Tolerance {
         } else {
             self.precision()
         };
+
         if prec == 0 {
             panic!("Precision cannot be zero.");
         }
+
         if prec == -1 {
             return format!("{}", number.round() as i32);
         }
+
         if prec < -1 {
             let factor = 10.0_f64.powi(-prec - 1);
+
             return format!("{}", ((number / factor).round() * factor) as i32);
         }
+
         format!("{:.p$}", number, p = prec as usize)
     }
 
     /// Determine decimal precision from a tolerance value
     pub fn precision_from_tolerance(&self, tol: f64) -> i32 {
         let value = if tol >= 0.0 { tol } else { self.absolute() };
+
         if value >= 1.0 {
             return 0;
         }
+
         let text = format!("{:e}", value);
         let pos = match text.find("e-") {
             Some(pos) => pos,
@@ -700,6 +707,7 @@ impl GlobalTolerance {
         self.inner.read().precision_from_tolerance(tol)
     }
 }
+
 impl Default for GlobalTolerance {
     fn default() -> Self {
         Self::new()
@@ -708,22 +716,6 @@ impl Default for GlobalTolerance {
 
 /// Global tolerance instance
 pub static TOLERANCE: Lazy<GlobalTolerance> = Lazy::new(GlobalTolerance::new);
-
-/// Runs a callback while holding a shared lock on the global tolerance.
-pub fn with_tolerance<F, R>(f: F) -> R
-where
-    F: FnOnce(&Tolerance) -> R,
-{
-    f(&TOLERANCE.inner.read())
-}
-
-/// Runs a callback while holding an exclusive lock on the global tolerance.
-pub fn with_tolerance_mut<F, R>(f: F) -> R
-where
-    F: FnOnce(&mut Tolerance) -> R,
-{
-    f(&mut TOLERANCE.inner.write())
-}
 
 // ═══════════════════════════════════════════════════════════════════════════
 // Utilities
@@ -746,6 +738,7 @@ pub fn wrap_index(index: i32, n: i32) -> i32 {
     if n == 0 {
         return 0;
     }
+
     ((index % n) + n) % n
 }
 
@@ -767,8 +760,10 @@ pub fn deg_to_rad(degrees: f64) -> f64 {
 /// Number of decimal digits of the integer part of |n|; 0 when |n| < 1
 pub fn count_digits(n: f64) -> i32 {
     let value = n.abs();
+
     if value < 1.0 {
         return 0;
     }
+
     value.log10() as i32 + 1
 }

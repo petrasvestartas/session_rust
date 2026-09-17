@@ -65,13 +65,11 @@ pub fn run_matrix_add() -> TestResult {
         let a = Matrix::from_vec(2, 2, vec![1.0, 2.0, 3.0, 4.0]);
         let b = Matrix::from_vec(2, 2, vec![5.0, 6.0, 7.0, 8.0]);
         let c = a.add(&b);
-        let legacy = a.add_mat(&b);
         let d = a.clone() + b;
 
         MINI_CHECK!(c[(0, 0)] == 6.0 && c[(0, 1)] == 8.0);
         MINI_CHECK!(c[(1, 0)] == 10.0 && c[(1, 1)] == 12.0);
         MINI_CHECK!(c == d);
-        MINI_CHECK!(legacy == c);
     })
 }
 
@@ -185,11 +183,11 @@ pub fn run_matrix_lu_decompose() -> TestResult {
     MINI_TEST!("Lu Decompose", {
         use crate::Matrix;
         let a = Matrix::from_vec(3, 3, vec![2.0, 1.0, 1.0, 4.0, 3.0, 3.0, 8.0, 7.0, 9.0]);
-        let (l, u, p) = a.lu_decompose();
+        let (lower, u, p) = a.lu_decompose();
         let pa = p.multiply(&a);
-        let lu = l.multiply(&u);
+        let lu = lower.multiply(&u);
 
-        MINI_CHECK!(l.rows == 3 && u.cols == 3);
+        MINI_CHECK!(lower.rows == 3 && u.cols == 3);
         MINI_CHECK!(
             TOLERANCE.is_close(pa[(0, 0)], lu[(0, 0)])
                 && TOLERANCE.is_close(pa[(0, 1)], lu[(0, 1)])
@@ -198,8 +196,10 @@ pub fn run_matrix_lu_decompose() -> TestResult {
             TOLERANCE.is_close(pa[(1, 0)], lu[(1, 0)])
                 && TOLERANCE.is_close(pa[(2, 2)], lu[(2, 2)])
         );
-        MINI_CHECK!(TOLERANCE.is_close(l[(0, 1)], 0.0) && TOLERANCE.is_close(l[(0, 2)], 0.0));
-        MINI_CHECK!(TOLERANCE.is_close(l[(1, 2)], 0.0));
+        MINI_CHECK!(
+            TOLERANCE.is_close(lower[(0, 1)], 0.0) && TOLERANCE.is_close(lower[(0, 2)], 0.0)
+        );
+        MINI_CHECK!(TOLERANCE.is_close(lower[(1, 2)], 0.0));
     })
 }
 
@@ -230,12 +230,12 @@ pub fn run_matrix_cholesky() -> TestResult {
     MINI_TEST!("Cholesky", {
         use crate::Matrix;
         let a = Matrix::from_vec(3, 3, vec![4.0, 2.0, 2.0, 2.0, 5.0, 3.0, 2.0, 3.0, 6.0]);
-        let l = a.cholesky();
+        let lower = a.cholesky();
 
-        MINI_CHECK!(l.is_some());
-        let l = l.unwrap();
-        let lt = l.transpose();
-        let llt = l.multiply(&lt);
+        MINI_CHECK!(lower.is_some());
+        let lower = lower.unwrap();
+        let lt = lower.transpose();
+        let llt = lower.multiply(&lt);
         let not_spd = Matrix::from_vec(2, 2, vec![1.0, 2.0, 2.0, 1.0]);
         let l_none = not_spd.cholesky();
 
@@ -374,8 +374,9 @@ pub fn run_matrix_shape_errors() -> TestResult {
     MINI_TEST!("Shape Errors", {
         use crate::Matrix;
 
-        let json = r#"{"cols":2,"data":[1.0],"guid":"id","name":"bad","rows":2,"type":"Matrix"}"#;
-        let json_error = Matrix::jsonload(json).is_err();
+        let json_string =
+            r#"{"cols":2,"data":[1.0],"guid":"id","name":"bad","rows":2,"type":"Matrix"}"#;
+        let json = Matrix::jsonload(json_string).is_err();
         let negative_proto = crate::proto::Matrix {
             rows: -1,
             cols: 2,
@@ -390,7 +391,7 @@ pub fn run_matrix_shape_errors() -> TestResult {
         };
         let proto_data = Matrix::from_proto(data_proto).is_err();
 
-        MINI_CHECK!(json_error);
+        MINI_CHECK!(json);
         MINI_CHECK!(proto_negative);
         MINI_CHECK!(proto_data);
 

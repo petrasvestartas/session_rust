@@ -6,7 +6,7 @@ use std::fmt;
 use std::ops::{Index, IndexMut};
 use std::sync::OnceLock;
 
-/// A block reference: places a definition (by guid) at a transform
+/// A block reference: places a definition (by guid) at a transform.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(tag = "type", rename = "InstanceRef")]
 pub struct InstanceRef {
@@ -15,11 +15,11 @@ pub struct InstanceRef {
         deserialize_with = "crate::guid_serde::deserialize"
     )]
     guid: OnceLock<String>,
-    pub name: String,
-    pub definition_guid: String,
-    pub xform: Xform,
-    pub color: Color,
-    pub flags: u32,
+    pub name: String,            // Instance name.
+    pub definition_guid: String, // Guid of the referenced definition.
+    pub xform: Xform,            // Placement transform.
+    pub color: Color,            // Display color.
+    pub flags: u32,              // Instance flags.
 }
 
 impl Default for InstanceRef {
@@ -36,6 +36,7 @@ impl Default for InstanceRef {
 }
 
 impl InstanceRef {
+    /// Constructs from a definition guid and a placement.
     pub fn new(definition_guid: &str, xform: Xform) -> Self {
         Self {
             definition_guid: definition_guid.to_string(),
@@ -44,21 +45,25 @@ impl InstanceRef {
         }
     }
 
-    /// Copy (new guid, same data)
+    /// Copies with a new guid and the same data.
     pub fn duplicate(&self) -> Self {
         let mut copy = self.clone();
         copy.guid = OnceLock::new();
+
         copy
     }
 
+    /// Returns whether the lazy guid has been created.
     pub fn has_guid(&self) -> bool {
         self.guid.get().is_some()
     }
 
+    /// Returns the guid, creating it on first access.
     pub fn guid(&self) -> &str {
         self.guid.get_or_init(|| uuid::Uuid::new_v4().to_string())
     }
 
+    /// Sets the guid if it has not already been created.
     pub fn set_guid(&self, g: String) {
         let _ = self.guid.set(g);
     }
@@ -67,10 +72,11 @@ impl InstanceRef {
     // Static constructors
     // ═══════════════════════════════════════════════════════════════════════════
 
-    /// Instance with a name, a definition guid and a placement
+    /// Constructs from a name, a definition guid and a placement.
     pub fn with_name(name: &str, definition_guid: &str, xform: Xform) -> Self {
         let mut ref_ = Self::new(definition_guid, xform);
         ref_.name = name.to_string();
+
         ref_
     }
 
@@ -78,15 +84,16 @@ impl InstanceRef {
     // Transformation
     // ═══════════════════════════════════════════════════════════════════════════
 
-    /// Compose in place: xform = t * xform
+    /// Composes in place: xform = t * xform.
     pub fn transform(&mut self, t: &Xform) {
         self.xform = t * &self.xform;
     }
 
-    /// Composed copy
+    /// Returns a composed copy.
     pub fn transformed(&self, t: &Xform) -> Self {
         let mut result = self.duplicate();
         result.transform(t);
+
         result
     }
 
@@ -94,27 +101,34 @@ impl InstanceRef {
     // JSON
     // ═══════════════════════════════════════════════════════════════════════════
 
+    /// Serializes to a JSON string.
     pub fn jsondump(&self) -> Result<String, Box<dyn std::error::Error>> {
         crate::file_encoders::sorted_json_string(self)
     }
 
+    /// Deserializes from a JSON string.
     pub fn jsonload(json_data: &str) -> Result<Self, Box<dyn std::error::Error>> {
         Ok(serde_json::from_str(json_data)?)
     }
 
+    /// Serializes to a JSON string.
     pub fn file_json_dumps(&self) -> String {
         self.jsondump().unwrap_or_default()
     }
 
+    /// Deserializes from a JSON string.
     pub fn file_json_loads(json_string: &str) -> Self {
         Self::jsonload(json_string).unwrap_or_default()
     }
 
+    /// Writes to a JSON file.
     pub fn file_json_dump(&self, filepath: &str) -> Result<(), Box<dyn std::error::Error>> {
         std::fs::write(filepath, self.jsondump()?)?;
+
         Ok(())
     }
 
+    /// Reads from a JSON file.
     pub fn file_json_load(filepath: &str) -> Result<Self, Box<dyn std::error::Error>> {
         Self::jsonload(&std::fs::read_to_string(filepath)?)
     }
@@ -123,6 +137,7 @@ impl InstanceRef {
     // Protobuf
     // ═══════════════════════════════════════════════════════════════════════════
 
+    /// Serializes to protobuf bytes.
     pub fn pb_dumps(&self) -> Vec<u8> {
         use prost::Message;
         let proto = crate::proto::InstanceRef {
@@ -144,24 +159,31 @@ impl InstanceRef {
             }),
             flags: self.flags,
         };
+
         proto.encode_to_vec()
     }
 
+    /// Deserializes from protobuf bytes.
     pub fn pb_loads(data: &[u8]) -> Result<Self, Box<dyn std::error::Error>> {
         use prost::Message;
         let proto = crate::proto::InstanceRef::decode(data)?;
         let mut ref_ = Self::default();
+
         if !proto.guid.is_empty() {
             ref_.set_guid(proto.guid);
         }
+
         ref_.name = proto.name;
         ref_.definition_guid = proto.definition_guid;
+
         if let Some(proto_xform) = proto.xform {
             ref_.xform.name = proto_xform.name;
+
             for i in 0..proto_xform.matrix.len().min(16) {
                 ref_.xform.m[i] = proto_xform.matrix[i];
             }
         }
+
         if let Some(proto_color) = proto.color {
             ref_.color.name = proto_color.name;
             ref_.color.r = proto_color.r;
@@ -169,17 +191,22 @@ impl InstanceRef {
             ref_.color.b = proto_color.b;
             ref_.color.a = proto_color.a;
         }
+
         ref_.flags = proto.flags;
+
         Ok(ref_)
     }
 
+    /// Writes to a protobuf file.
     pub fn pb_dump(&self, filepath: &str) {
         let data = self.pb_dumps();
         std::fs::write(filepath, data).expect("Failed to write protobuf file");
     }
 
+    /// Reads from a protobuf file.
     pub fn pb_load(filepath: &str) -> Self {
         let data = std::fs::read(filepath).expect("Failed to read protobuf file");
+
         Self::pb_loads(&data).expect("Failed to parse protobuf")
     }
 
@@ -199,7 +226,7 @@ impl InstanceRef {
         )
     }
 
-    /// "InstanceRef(name, definition_guid, Color(...), flags)"
+    /// Returns "InstanceRef(name, definition_guid, Color(...), flags)".
     pub fn repr(&self) -> String {
         format!(
             "InstanceRef({}, {}, {}, {})",
@@ -229,6 +256,7 @@ impl Index<usize> for InstanceRef {
         if index >= 16 {
             panic!("Index out of bounds");
         }
+
         &self.xform.m[index]
     }
 }
@@ -238,6 +266,7 @@ impl IndexMut<usize> for InstanceRef {
         if index >= 16 {
             panic!("Index out of bounds");
         }
+
         &mut self.xform.m[index]
     }
 }
