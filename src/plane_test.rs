@@ -304,6 +304,20 @@ pub fn run_plane_has_on_negative_side() -> TestResult {
     })
 }
 
+pub fn run_plane_squared_distance() -> TestResult {
+    MINI_TEST!("Squared Distance", {
+        use crate::Plane;
+        use crate::Point;
+
+        let pl = Plane::xy_plane();
+        let above = Point::new(1.0, 2.0, 3.0);
+        let on = Point::new(4.0, 5.0, 0.0);
+
+        MINI_CHECK!(TOLERANCE.is_close(pl.squared_distance(&above), 9.0));
+        MINI_CHECK!(TOLERANCE.is_close(pl.squared_distance(&on), 0.0));
+    })
+}
+
 REGISTER_MINI_TEST!(
     "Plane",
     "Constructor",
@@ -363,4 +377,9 @@ REGISTER_MINI_TEST!(
     "Plane",
     "Has On Negative Side",
     crate::plane_test::run_plane_has_on_negative_side
+);
+REGISTER_MINI_TEST!(
+    "Plane",
+    "Squared Distance",
+    crate::plane_test::run_plane_squared_distance
 );

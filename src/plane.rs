@@ -453,6 +453,17 @@ impl Plane {
         self._a * p[0] + self._b * p[1] + self._c * p[2] + self._d < 0.0
     }
 
+    /// Squared distance from p to the plane
+    pub fn squared_distance(&self, p: &Point) -> f64 {
+        let value = self._a * p[0] + self._b * p[1] + self._c * p[2] + self._d;
+        let normal_sq = self._a * self._a + self._b * self._b + self._c * self._c;
+        if normal_sq > 1e-20 {
+            value * value / normal_sq
+        } else {
+            value * value
+        }
+    }
+
     /// Canonical in-plane axis from the normal alone: zero the smallest normal coordinate, negate-swap the other two
     pub fn base1(&self) -> Vector {
         let nx = self._z_axis[0];

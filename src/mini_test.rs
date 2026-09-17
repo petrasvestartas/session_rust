@@ -1344,6 +1344,11 @@ pub fn get_all_tests() -> Vec<RegisteredTest> {
             name: "Has On Negative Side",
             func: run_plane_has_on_negative_side,
         },
+        RegisteredTest {
+            group: "Plane",
+            name: "Squared Distance",
+            func: run_plane_squared_distance,
+        },
         // PointCloud tests
         RegisteredTest {
             group: "PointCloud",
@@ -2050,8 +2055,16 @@ pub fn get_all_tests() -> Vec<RegisteredTest> {
             name: "Split Surface By Curves",
             func: run_split_surface_by_curves,
         },
-        RegisteredTest { group: "SimpleSplit", name: "Split Line By Curves", func: run_split_line_by_curves },
-        RegisteredTest { group: "SimpleSplit", name: "Split Polyline By Curves", func: run_split_polyline_by_curves },
+        RegisteredTest {
+            group: "SimpleSplit",
+            name: "Split Line By Curves",
+            func: run_split_line_by_curves,
+        },
+        RegisteredTest {
+            group: "SimpleSplit",
+            name: "Split Polyline By Curves",
+            func: run_split_polyline_by_curves,
+        },
         // NurbsKnot tests
         RegisteredTest {
             group: "NurbsKnot",
