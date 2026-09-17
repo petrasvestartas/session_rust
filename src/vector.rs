@@ -1,4 +1,5 @@
 use crate::point::Point;
+use crate::polyline::Polyline;
 use crate::tolerance::Tolerance;
 use crate::tolerance::TOLERANCE;
 use crate::tolerance::{SCALE, TO_DEGREES, TO_RADIANS};
@@ -470,6 +471,11 @@ impl Vector {
         }
         normal.normalize_self();
         normal
+    }
+
+    /// Unit area-weighted normal of a polygon by Newell's method
+    pub fn average_normal_polyline(polyline: &Polyline) -> Vector {
+        Self::average_normal(&polyline.get_points())
     }
 
     // ═══════════════════════════════════════════════════════════════════════════

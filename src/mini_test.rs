@@ -785,6 +785,11 @@ pub fn get_all_tests() -> Vec<RegisteredTest> {
             name: "Average Normal",
             func: run_vector_average_normal,
         },
+        RegisteredTest {
+            group: "Vector",
+            name: "Average Normal Polyline",
+            func: run_vector_average_normal_polyline,
+        },
         // Tolerance tests
         RegisteredTest {
             group: "Tolerance",
@@ -1606,6 +1611,11 @@ pub fn get_all_tests() -> Vec<RegisteredTest> {
             group: "Mesh",
             name: "From Polylines",
             func: run_mesh_from_polylines,
+        },
+        RegisteredTest {
+            group: "Mesh",
+            name: "From Polylines Polyline",
+            func: run_mesh_from_polylines_polyline,
         },
         RegisteredTest {
             group: "Mesh",

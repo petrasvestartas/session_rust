@@ -451,6 +451,28 @@ pub fn run_vector_average_normal() -> TestResult {
     })
 }
 
+pub fn run_vector_average_normal_polyline() -> TestResult {
+    MINI_TEST!("Average Normal Polyline", {
+        use crate::Point;
+        use crate::Polyline;
+        use crate::Vector;
+
+        let square = Polyline::new(vec![
+            Point::new(0.0, 0.0, 0.0),
+            Point::new(1.0, 0.0, 0.0),
+            Point::new(1.0, 1.0, 0.0),
+            Point::new(0.0, 1.0, 0.0),
+            Point::new(0.0, 0.0, 0.0),
+        ]);
+        let n = Vector::average_normal_polyline(&square);
+        let empty = Vector::average_normal_polyline(&Polyline::default());
+
+        MINI_CHECK!(TOLERANCE.is_close(n[2].abs(), 1.0));
+        MINI_CHECK!(TOLERANCE.is_close(n[0], 0.0) && TOLERANCE.is_close(n[1], 0.0));
+        MINI_CHECK!(empty.is_zero());
+    })
+}
+
 pub fn run_vector_json_roundtrip() -> TestResult {
     MINI_TEST!("Json Roundtrip", {
         use crate::Vector;
@@ -566,6 +588,11 @@ REGISTER_MINI_TEST!(
     "Vector",
     "Average Normal",
     crate::vector_test::run_vector_average_normal
+);
+REGISTER_MINI_TEST!(
+    "Vector",
+    "Average Normal Polyline",
+    crate::vector_test::run_vector_average_normal_polyline
 );
 REGISTER_MINI_TEST!(
     "Vector",

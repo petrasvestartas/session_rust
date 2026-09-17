@@ -1618,6 +1618,15 @@ impl Mesh {
         mesh
     }
 
+    /// Mesh from a list of polylines, merging vertices within precision when given
+    pub fn from_polylines_polyline(polylines: &[Polyline], precision: Option<f64>) -> Self {
+        let mut polygons: Vec<Vec<Point>> = Vec::with_capacity(polylines.len());
+        for polyline in polylines {
+            polygons.push(polyline.get_points());
+        }
+        Self::from_polylines(polygons, precision)
+    }
+
     /// Grid spacing for merging line endpoints: the given precision or a millionth of the bbox diagonal
     fn lines_precision(pts: &[Point], precision: Option<f64>) -> f64 {
         let eps = precision.unwrap_or(0.0);

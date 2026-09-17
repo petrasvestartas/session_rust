@@ -105,6 +105,46 @@ pub fn run_mesh_from_polylines() -> TestResult {
     })
 }
 
+pub fn run_mesh_from_polylines_polyline() -> TestResult {
+    MINI_TEST!("From Polylines Polyline", {
+        use crate::Mesh;
+        use crate::Point;
+        use crate::Polyline;
+
+        let mesh = Mesh::from_polylines_polyline(
+            &[
+                Polyline::new(vec![
+                    Point::new(1.28955, 0.0, 1.127558),
+                    Point::new(0.85791, 0.0, 0.225512),
+                    Point::new(0.64209, -0.866025, -0.225512),
+                    Point::new(0.85791, -1.732051, 0.225512),
+                    Point::new(1.458565, -1.732051, 1.127558),
+                    Point::new(1.50537, -0.866025, 1.578581),
+                ]),
+                Polyline::new(vec![
+                    Point::new(0.64209, 0.866025, -0.225512),
+                    Point::new(0.114274, 0.866025, -0.686294),
+                    Point::new(-0.00537, 0.0, -1.578581),
+                    Point::new(0.21045, -0.866025, -1.127558),
+                    Point::new(0.64209, -0.866025, -0.225512),
+                    Point::new(0.85791, 0.0, 0.225512),
+                ]),
+                Polyline::new(vec![
+                    Point::new(1.28955, 1.732051, 1.127558),
+                    Point::new(0.85791, 1.732051, 0.225512),
+                    Point::new(0.64209, 0.866025, -0.225512),
+                    Point::new(0.85791, 0.0, 0.225512),
+                    Point::new(1.28955, 0.0, 1.127558),
+                    Point::new(1.853404, 0.866025, 1.578581),
+                ]),
+            ],
+            Some(0.001),
+        );
+
+        MINI_CHECK!(mesh.is_valid());
+    })
+}
+
 pub fn run_mesh_from_lines() -> TestResult {
     MINI_TEST!("From Lines", {
         use crate::Line;
@@ -2294,6 +2334,11 @@ REGISTER_MINI_TEST!(
     "Mesh",
     "From Polylines",
     crate::mesh_test::run_mesh_from_polylines
+);
+REGISTER_MINI_TEST!(
+    "Mesh",
+    "From Polylines Polyline",
+    crate::mesh_test::run_mesh_from_polylines_polyline
 );
 REGISTER_MINI_TEST!("Mesh", "From Lines", crate::mesh_test::run_mesh_from_lines);
 REGISTER_MINI_TEST!(
