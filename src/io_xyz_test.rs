@@ -72,7 +72,11 @@ pub fn run_io_xyz_string_roundtrip() -> TestResult {
     })
 }
 
-REGISTER_MINI_TEST!("IoXyz", "Read Bunny", crate::io_xyz_test::run_io_xyz_read_bunny);
+REGISTER_MINI_TEST!(
+    "IoXyz",
+    "Read Bunny",
+    crate::io_xyz_test::run_io_xyz_read_bunny
+);
 REGISTER_MINI_TEST!(
     "IoXyz",
     "Write Read Roundtrip",
