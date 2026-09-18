@@ -503,6 +503,24 @@ impl Plane {
     }
 
     /// Returns whether a*p[0] + b*p[1] + c*p[2] + d < 0.
+    /// Returns the plane point on the axis of the largest normal component, the other two coordinates zero.
+    pub fn axis_point(&self) -> Point {
+        let n = &self._z_axis;
+        let d = -n.dot(&Vector::new(self._origin[0], self._origin[1], self._origin[2]));
+        let fa = n[0].abs();
+        let fb = n[1].abs();
+        let fc = n[2].abs();
+
+        if fa > fb && fa > fc {
+            return Point::new(-d / n[0], 0.0, 0.0);
+        }
+        if fb > fc {
+            return Point::new(0.0, -d / n[1], 0.0);
+        }
+
+        Point::new(0.0, 0.0, -d / n[2])
+    }
+
     pub fn has_on_negative_side(&self, p: &Point) -> bool {
         self._a * p[0] + self._b * p[1] + self._c * p[2] + self._d < 0.0
     }

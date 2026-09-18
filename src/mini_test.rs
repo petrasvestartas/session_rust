@@ -1125,6 +1125,11 @@ pub fn get_all_tests() -> Vec<RegisteredTest> {
         },
         RegisteredTest {
             group: "Polyline",
+            name: "Trim Rectangles By Plane",
+            func: run_polyline_trim_rectangles_by_plane,
+        },
+        RegisteredTest {
+            group: "Polyline",
             name: "Extend Segment",
             func: run_polyline_extend_segment,
         },
@@ -1358,6 +1363,11 @@ pub fn get_all_tests() -> Vec<RegisteredTest> {
             group: "Plane",
             name: "Squared Distance",
             func: run_plane_squared_distance,
+        },
+        RegisteredTest {
+            group: "Plane",
+            name: "Axis Point",
+            func: run_plane_axis_point,
         },
         // PointCloud tests
         RegisteredTest {
@@ -1615,6 +1625,16 @@ pub fn get_all_tests() -> Vec<RegisteredTest> {
             group: "Xform",
             name: "From Change Of Basis",
             func: run_xform_from_change_of_basis,
+        },
+        RegisteredTest {
+            group: "Xform",
+            name: "World To Frame",
+            func: run_xform_world_to_frame,
+        },
+        RegisteredTest {
+            group: "Xform",
+            name: "Frame To World",
+            func: run_xform_frame_to_world,
         },
         // Mesh tests
         RegisteredTest {

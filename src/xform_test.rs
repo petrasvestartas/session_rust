@@ -1005,6 +1005,44 @@ pub fn run_xform_from_change_of_basis() -> TestResult {
     })
 }
 
+pub fn run_xform_world_to_frame() -> TestResult {
+    MINI_TEST!("World To Frame", {
+        use crate::Point;
+        use crate::Vector;
+        use crate::Xform;
+
+        let origin = Point::new(1.0, 2.0, 3.0);
+        let x_axis = Vector::new(0.0, 1.0, 0.0);
+        let y_axis = Vector::new(0.0, 0.0, 1.0);
+        let z_axis = Vector::new(1.0, 0.0, 0.0);
+        let xf = Xform::world_to_frame(&origin, &x_axis, &y_axis, &z_axis);
+        let p = Point::new(1.0, 4.0, 6.0).transformed(&xf);
+
+        MINI_CHECK!(TOLERANCE.is_close(p[0], 2.0));
+        MINI_CHECK!(TOLERANCE.is_close(p[1], 3.0));
+        MINI_CHECK!(TOLERANCE.is_close(p[2], 0.0));
+    })
+}
+
+pub fn run_xform_frame_to_world() -> TestResult {
+    MINI_TEST!("Frame To World", {
+        use crate::Point;
+        use crate::Vector;
+        use crate::Xform;
+
+        let origin = Point::new(1.0, 2.0, 3.0);
+        let x_axis = Vector::new(0.0, 1.0, 0.0);
+        let y_axis = Vector::new(0.0, 0.0, 1.0);
+        let z_axis = Vector::new(1.0, 0.0, 0.0);
+        let xf = Xform::frame_to_world(&origin, &x_axis, &y_axis, &z_axis);
+        let p = Point::new(2.0, 3.0, 0.0).transformed(&xf);
+
+        MINI_CHECK!(TOLERANCE.is_close(p[0], 1.0));
+        MINI_CHECK!(TOLERANCE.is_close(p[1], 4.0));
+        MINI_CHECK!(TOLERANCE.is_close(p[2], 6.0));
+    })
+}
+
 REGISTER_MINI_TEST!(
     "Xform",
     "Constructor",
@@ -1124,3 +1162,5 @@ REGISTER_MINI_TEST!(
     "From Change Of Basis",
     crate::xform_test::run_xform_from_change_of_basis
 );
+REGISTER_MINI_TEST!("Xform", "World To Frame", crate::xform_test::run_xform_world_to_frame);
+REGISTER_MINI_TEST!("Xform", "Frame To World", crate::xform_test::run_xform_frame_to_world);

@@ -1696,6 +1696,44 @@ impl Polyline {
         (rect0, rect1)
     }
 
+    /// Cuts two closed 5-point rectangles at plane, keeping the side on the positive half; false when a long edge misses the plane.
+    pub fn trim_rectangles_by_plane(first: &mut Polyline, second: &mut Polyline, plane: &Plane) -> bool {
+        if first.point_count() != 5 || second.point_count() != 5 {
+            return false;
+        }
+
+        let corner = |polyline: &Polyline, i: usize| polyline.get_point(i).unwrap_or_default();
+        let hits = [
+            crate::intersection::line_plane(&Line::from_points(&corner(first, 0), &corner(first, 1)), plane, false),
+            crate::intersection::line_plane(&Line::from_points(&corner(first, 3), &corner(first, 2)), plane, false),
+            crate::intersection::line_plane(&Line::from_points(&corner(second, 0), &corner(second, 1)), plane, false),
+            crate::intersection::line_plane(&Line::from_points(&corner(second, 3), &corner(second, 2)), plane, false),
+        ];
+        let mut points: Vec<Point> = Vec::with_capacity(4);
+        for hit in hits {
+            match hit {
+                Some(point) if (0..3).all(|i| point[i].is_finite()) => points.push(point),
+                _ => return false,
+            }
+        }
+
+        if plane.has_on_negative_side(&corner(first, 0)) {
+            first.set_point(0, &points[0]);
+            first.set_point(3, &points[1]);
+            first.set_point(4, &points[0]);
+            second.set_point(0, &points[2]);
+            second.set_point(3, &points[3]);
+            second.set_point(4, &points[2]);
+        } else {
+            first.set_point(1, &points[0]);
+            first.set_point(2, &points[1]);
+            second.set_point(1, &points[2]);
+            second.set_point(2, &points[3]);
+        }
+
+        true
+    }
+
     // ═══════════════════════════════════════════════════════════════════════════
     // JSON
     // ═══════════════════════════════════════════════════════════════════════════

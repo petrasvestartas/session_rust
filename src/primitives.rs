@@ -1843,7 +1843,7 @@ impl Primitives {
         };
         let x_axis = pole.cross(&z_axis);
 
-        Xform::xy_to_plane(origin, &x_axis, &z_axis.cross(&x_axis), &z_axis)
+        Xform::frame_to_world(origin, &x_axis, &z_axis.cross(&x_axis), &z_axis)
     }
 
     /// Appends transformed geometry to a mesh.

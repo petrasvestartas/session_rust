@@ -7766,7 +7766,7 @@ pub fn face_to_face_wood(
 
                     x = y.cross(&z);
 
-                    let xform = Xform::plane_to_xy(&o, &x, &y, &z);
+                    let xform = Xform::world_to_frame(&o, &x, &y, &z);
 
                     let pts3d = joint_area.get_points();
                     let proj_pts: Vec<Point> =

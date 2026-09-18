@@ -450,6 +450,38 @@ pub fn run_polyline_point_in_polygon_2d() -> TestResult {
     })
 }
 
+pub fn run_polyline_trim_rectangles_by_plane() -> TestResult {
+    MINI_TEST!("Trim Rectangles By Plane", {
+        use crate::Plane;
+        use crate::Point;
+        use crate::Polyline;
+        use crate::Vector;
+
+        let mut first = Polyline::new(vec![
+            Point::new(0.0, 0.0, 0.0),
+            Point::new(4.0, 0.0, 0.0),
+            Point::new(4.0, 1.0, 0.0),
+            Point::new(0.0, 1.0, 0.0),
+            Point::new(0.0, 0.0, 0.0),
+        ]);
+        let mut second = Polyline::new(vec![
+            Point::new(0.0, 0.0, 1.0),
+            Point::new(4.0, 0.0, 1.0),
+            Point::new(4.0, 1.0, 1.0),
+            Point::new(0.0, 1.0, 1.0),
+            Point::new(0.0, 0.0, 1.0),
+        ]);
+        let plane = Plane::from_point_normal(Point::new(3.0, 0.0, 0.0), Vector::new(-1.0, 0.0, 0.0), None);
+        let ok = Polyline::trim_rectangles_by_plane(&mut first, &mut second, &plane);
+
+        MINI_CHECK!(ok);
+        MINI_CHECK!(TOLERANCE.is_close(first[1][0], 3.0));
+        MINI_CHECK!(TOLERANCE.is_close(first[2][0], 3.0));
+        MINI_CHECK!(TOLERANCE.is_close(second[1][0], 3.0));
+        MINI_CHECK!(TOLERANCE.is_close(first[0][0], 0.0));
+    })
+}
+
 pub fn run_polyline_extend_segment() -> TestResult {
     MINI_TEST!("Extend Segment", {
         use crate::Point;
@@ -1209,6 +1241,11 @@ REGISTER_MINI_TEST!(
     "Polyline",
     "Point In Polygon 2d",
     crate::polyline_test::run_polyline_point_in_polygon_2d
+);
+REGISTER_MINI_TEST!(
+    "Polyline",
+    "Trim Rectangles By Plane",
+    crate::polyline_test::run_polyline_trim_rectangles_by_plane
 );
 REGISTER_MINI_TEST!(
     "Polyline",

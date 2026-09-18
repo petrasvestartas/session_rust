@@ -318,6 +318,22 @@ pub fn run_plane_squared_distance() -> TestResult {
     })
 }
 
+pub fn run_plane_axis_point() -> TestResult {
+    MINI_TEST!("Axis Point", {
+        use crate::Plane;
+        use crate::Point;
+        use crate::Vector;
+
+        let pl = Plane::from_point_normal(Point::new(1.0, 2.0, 3.0), Vector::new(0.0, 0.0, 1.0), None);
+        let p = pl.axis_point();
+
+        MINI_CHECK!(TOLERANCE.is_close(p[0], 0.0));
+        MINI_CHECK!(TOLERANCE.is_close(p[1], 0.0));
+        MINI_CHECK!(TOLERANCE.is_close(p[2], 3.0));
+        MINI_CHECK!(TOLERANCE.is_close(pl.squared_distance(&p), 0.0));
+    })
+}
+
 REGISTER_MINI_TEST!(
     "Plane",
     "Constructor",
@@ -383,3 +399,4 @@ REGISTER_MINI_TEST!(
     "Squared Distance",
     crate::plane_test::run_plane_squared_distance
 );
+REGISTER_MINI_TEST!("Plane", "Axis Point", crate::plane_test::run_plane_axis_point);

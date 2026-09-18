@@ -422,46 +422,6 @@ impl Xform {
         t1 * (r * t0)
     }
 
-    /// Constructs from frame axes as columns minus origin (local-to-world despite the name).
-    pub fn plane_to_xy(origin: &Point, x_axis: &Vector, y_axis: &Vector, z_axis: &Vector) -> Self {
-        let x = x_axis.normalized();
-        let y = y_axis.normalized();
-        let z = z_axis.normalized();
-        let t = Self::translation(-origin[0], -origin[1], -origin[2]);
-        let mut f = Self::new();
-        f.m[0] = x[0];
-        f.m[1] = x[1];
-        f.m[2] = x[2];
-        f.m[4] = y[0];
-        f.m[5] = y[1];
-        f.m[6] = y[2];
-        f.m[8] = z[0];
-        f.m[9] = z[1];
-        f.m[10] = z[2];
-
-        f * t
-    }
-
-    /// Constructs from frame axes as rows plus origin.
-    pub fn xy_to_plane(origin: &Point, x_axis: &Vector, y_axis: &Vector, z_axis: &Vector) -> Self {
-        let x = x_axis.normalized();
-        let y = y_axis.normalized();
-        let z = z_axis.normalized();
-        let mut f = Self::new();
-        f.m[0] = x[0];
-        f.m[4] = y[0];
-        f.m[8] = z[0];
-        f.m[1] = x[1];
-        f.m[5] = y[1];
-        f.m[9] = z[1];
-        f.m[2] = x[2];
-        f.m[6] = y[2];
-        f.m[10] = z[2];
-        let t = Self::translation(origin[0], origin[1], origin[2]);
-
-        t * f
-    }
-
     /// Constructs the world point to frame coordinates transform (axes as rows).
     pub fn world_to_frame(
         origin: &Point,
