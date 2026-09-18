@@ -167,6 +167,11 @@ impl Color {
         Self::with_name(0.75, 0.75, 0.75, 1.0, "silver")
     }
 
+    /// Returns opaque light grey, the default surface color of meshes, breps and surfaces.
+    pub fn lightgrey() -> Self {
+        Self::with_name(0.9, 0.9, 0.9, 1.0, "lightgrey")
+    }
+
     /// The 12 spectral colors in order
     pub fn palette() -> Vec<Color> {
         vec![

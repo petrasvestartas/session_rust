@@ -137,6 +137,7 @@ pub fn run_color_presets() -> TestResult {
         let navy = Color::navy();
         let purple = Color::purple();
         let silver = Color::silver();
+        let lightgrey = Color::lightgrey();
         let palette = Color::palette();
 
         MINI_CHECK!(white == Color::with_name(1.0, 1.0, 1.0, 1.0, "white"));
@@ -161,6 +162,7 @@ pub fn run_color_presets() -> TestResult {
         MINI_CHECK!(navy == Color::with_name(0.0, 0.0, 0.5, 1.0, "navy"));
         MINI_CHECK!(purple == Color::with_name(0.5, 0.0, 0.5, 1.0, "purple"));
         MINI_CHECK!(silver == Color::with_name(0.75, 0.75, 0.75, 1.0, "silver"));
+        MINI_CHECK!(lightgrey == Color::with_name(0.9, 0.9, 0.9, 1.0, "lightgrey"));
         MINI_CHECK!(
             palette
                 == vec![

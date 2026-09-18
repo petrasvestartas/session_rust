@@ -1608,7 +1608,7 @@ impl BRep {
             guid: std::sync::OnceLock::new(),
             name: "my_brep".to_string(),
             width: 1.0,
-            surfacecolor: Color::black(),
+            surfacecolor: Color::lightgrey(),
             m_surfaces: Vec::new(),
             m_curves_3d: Vec::new(),
             m_curves_2d: Vec::new(),

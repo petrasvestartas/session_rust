@@ -1696,7 +1696,7 @@ impl Mesh {
             facecolors: Vec::new(),
             linecolors: Vec::new(),
             widths: Vec::new(),
-            objectcolor: Color::white(),
+            objectcolor: Color::lightgrey(),
             max_vertex: 0,
             max_face: 0,
             triangulation: HashMap::new(),
@@ -3223,7 +3223,7 @@ impl Mesh {
         self.facecolors.clear();
         self.linecolors.clear();
         self.widths.clear();
-        self.objectcolor = Color::white();
+        self.objectcolor = Color::lightgrey();
         self.color_mode = ColorMode::OBJECTCOLOR;
         self.clear_triangle_bvh();
     }
