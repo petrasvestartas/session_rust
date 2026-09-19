@@ -49,6 +49,52 @@ pub fn run_aabb_constructor() -> TestResult {
     })
 }
 
+pub fn run_aabb_empty() -> TestResult {
+    MINI_TEST!("Empty", {
+        use crate::Point;
+        use crate::AABB;
+
+        let mut a = AABB::empty();
+        MINI_CHECK!(!a.is_valid());
+        MINI_CHECK!(TOLERANCE.is_close(a.diagonal(), 0.0));
+        a.union_with(&AABB::empty());
+        MINI_CHECK!(!a.is_valid());
+        a.union_with_point(1.0, 2.0, 3.0);
+        MINI_CHECK!(a.is_valid());
+        MINI_CHECK!(a.min_point() == Point::new(1.0, 2.0, 3.0));
+        MINI_CHECK!(a.max_point() == Point::new(1.0, 2.0, 3.0));
+        a.union_with_point(-1.0, 0.0, 5.0);
+        MINI_CHECK!(a.min_point() == Point::new(-1.0, 0.0, 3.0));
+        MINI_CHECK!(a.max_point() == Point::new(1.0, 2.0, 5.0));
+        a.union_with(&AABB::empty());
+        MINI_CHECK!(a.max_point() == Point::new(1.0, 2.0, 5.0));
+        let b = AABB::merge(&AABB::empty(), &AABB::new(4.0, 0.0, 0.0, 1.0, 1.0, 1.0));
+        MINI_CHECK!(b.min_point() == Point::new(3.0, -1.0, -1.0));
+        MINI_CHECK!(b.max_point() == Point::new(5.0, 1.0, 1.0));
+    })
+}
+
+pub fn run_aabb_transform() -> TestResult {
+    MINI_TEST!("Transform", {
+        use crate::Point;
+        use crate::Xform;
+        use crate::AABB;
+
+        let mut a = AABB::new(0.0, 0.0, 0.0, 1.0, 2.0, 3.0);
+        let moved = a.transformed(&Xform::translation(1.0, 2.0, 3.0));
+        MINI_CHECK!(moved.min_point() == Point::new(0.0, 0.0, 0.0));
+        MINI_CHECK!(moved.max_point() == Point::new(2.0, 4.0, 6.0));
+        let turned = a.transformed(&Xform::rotation_z(90.0, true));
+        MINI_CHECK!(turned.min_point() == Point::new(-2.0, -1.0, -3.0));
+        MINI_CHECK!(turned.max_point() == Point::new(2.0, 1.0, 3.0));
+        a.transform(&Xform::scale_xyz(2.0, 2.0, 2.0));
+        MINI_CHECK!(a.max_point() == Point::new(2.0, 4.0, 6.0));
+        MINI_CHECK!(!AABB::empty()
+            .transformed(&Xform::translation(1.0, 0.0, 0.0))
+            .is_valid());
+    })
+}
+
 pub fn run_aabb_from_geometry() -> TestResult {
     MINI_TEST!("From Geometry", {
         use crate::Color;
@@ -156,6 +202,8 @@ REGISTER_MINI_TEST!(
     "Constructor",
     crate::aabb_test::run_aabb_constructor
 );
+REGISTER_MINI_TEST!("AABB", "Empty", crate::aabb_test::run_aabb_empty);
+REGISTER_MINI_TEST!("AABB", "Transform", crate::aabb_test::run_aabb_transform);
 REGISTER_MINI_TEST!(
     "AABB",
     "From Geometry",

@@ -771,6 +771,80 @@ impl Xform {
         ]
     }
 
+    /// Returns the length of the first column: the uniform scale the matrix applies.
+    pub fn uniform_scale(&self) -> f64 {
+        (self.m[0] * self.m[0] + self.m[1] * self.m[1] + self.m[2] * self.m[2]).sqrt()
+    }
+
+    /// Returns the eye of a view-projection: where clip x, y and w vanish at once; orthographic has none, so the view direction pushed far back.
+    pub fn eye(&self) -> Point {
+        let rows = [
+            [self[(0, 0)], self[(0, 1)], self[(0, 2)]],
+            [self[(1, 0)], self[(1, 1)], self[(1, 2)]],
+            [self[(3, 0)], self[(3, 1)], self[(3, 2)]],
+        ];
+        let rhs = [-self[(0, 3)], -self[(1, 3)], -self[(3, 3)]];
+        let d = Xform::det3(&rows);
+        let mut norm = 1.0;
+
+        for row in rows {
+            norm *= (row[0] * row[0] + row[1] * row[1] + row[2] * row[2]).sqrt();
+        }
+
+        if d.abs() <= 1e-9 * norm.max(1e-30) {
+            let fx = self[(2, 0)];
+            let fy = self[(2, 1)];
+            let fz = self[(2, 2)];
+            let length = (fx * fx + fy * fy + fz * fz).sqrt().max(1e-30);
+
+            return Point::new(
+                fx / length * 1.0e9,
+                fy / length * 1.0e9,
+                fz / length * 1.0e9,
+            );
+        }
+
+        let mut eye = [0.0; 3];
+
+        for k in 0..3 {
+            let mut replaced = rows;
+
+            for row in 0..3 {
+                replaced[row][k] = rhs[row];
+            }
+
+            eye[k] = Xform::det3(&replaced) / d;
+        }
+
+        Point::new(eye[0], eye[1], eye[2])
+    }
+
+    /// Returns the half-height of an orthographic view-projection in world units, 0 in perspective.
+    pub fn ortho_half_height(&self) -> f64 {
+        let w2 =
+            self[(3, 0)] * self[(3, 0)] + self[(3, 1)] * self[(3, 1)] + self[(3, 2)] * self[(3, 2)];
+
+        if w2 > 1e-12 {
+            return 0.0;
+        }
+
+        let r1 =
+            self[(1, 0)] * self[(1, 0)] + self[(1, 1)] * self[(1, 1)] + self[(1, 2)] * self[(1, 2)];
+
+        if r1 <= 1e-30 {
+            return 0.0;
+        }
+
+        1.0 / r1.sqrt()
+    }
+
+    /// Returns the determinant of a 3x3 given by rows.
+    fn det3(m: &[[f64; 3]; 3]) -> f64 {
+        m[0][0] * (m[1][1] * m[2][2] - m[1][2] * m[2][1])
+            - m[0][1] * (m[1][0] * m[2][2] - m[1][2] * m[2][0])
+            + m[0][2] * (m[1][0] * m[2][1] - m[1][1] * m[2][0])
+    }
+
     // ═══════════════════════════════════════════════════════════════════════════
     // JSON
     // ═══════════════════════════════════════════════════════════════════════════

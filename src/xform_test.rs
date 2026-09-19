@@ -891,6 +891,56 @@ pub fn run_xform_to_cols() -> TestResult {
     })
 }
 
+pub fn run_xform_uniform_scale() -> TestResult {
+    MINI_TEST!("Uniform Scale", {
+        use crate::Xform;
+
+        MINI_CHECK!(TOLERANCE.is_close(Xform::scale_xyz(2.0, 2.0, 2.0).uniform_scale(), 2.0));
+        MINI_CHECK!(TOLERANCE.is_close(Xform::translation(1.0, 2.0, 3.0).uniform_scale(), 1.0));
+    })
+}
+
+pub fn run_xform_eye() -> TestResult {
+    MINI_TEST!("Eye", {
+        use crate::Point;
+        use crate::Vector;
+        use crate::Xform;
+
+        let view = Xform::look_at_right_handed(
+            &Point::new(1.0, 2.0, 5.0),
+            &Point::new(0.0, 0.0, 0.0),
+            &Vector::new(0.0, 1.0, 0.0),
+        );
+        let perspective = &Xform::perspective(PI / 2.0, 1.0, 1.0, 10.0) * &view;
+        let orthographic = &Xform::orthographic(-2.0, 2.0, -1.0, 1.0, 1.0, 10.0) * &view;
+        MINI_CHECK!(TOLERANCE.is_point_close(&perspective.eye(), &Point::new(1.0, 2.0, 5.0)));
+        MINI_CHECK!(
+            orthographic
+                .eye()
+                .distance(&Point::new(0.0, 0.0, 0.0), None)
+                > 1.0e8
+        );
+    })
+}
+
+pub fn run_xform_ortho_half_height() -> TestResult {
+    MINI_TEST!("Ortho Half Height", {
+        use crate::Point;
+        use crate::Vector;
+        use crate::Xform;
+
+        let view = Xform::look_at_right_handed(
+            &Point::new(1.0, 2.0, 5.0),
+            &Point::new(0.0, 0.0, 0.0),
+            &Vector::new(0.0, 1.0, 0.0),
+        );
+        let perspective = &Xform::perspective(PI / 2.0, 1.0, 1.0, 10.0) * &view;
+        let orthographic = &Xform::orthographic(-2.0, 2.0, -1.0, 1.0, 1.0, 10.0) * &view;
+        MINI_CHECK!(TOLERANCE.is_close(perspective.ortho_half_height(), 0.0));
+        MINI_CHECK!(TOLERANCE.is_close(orthographic.ortho_half_height(), 1.0));
+    })
+}
+
 pub fn run_xform_transform_geometry() -> TestResult {
     MINI_TEST!("Transform Geometry", {
         use crate::Line;
@@ -1143,6 +1193,17 @@ REGISTER_MINI_TEST!(
 REGISTER_MINI_TEST!("Xform", "To Cols", crate::xform_test::run_xform_to_cols);
 REGISTER_MINI_TEST!(
     "Xform",
+    "Uniform Scale",
+    crate::xform_test::run_xform_uniform_scale
+);
+REGISTER_MINI_TEST!("Xform", "Eye", crate::xform_test::run_xform_eye);
+REGISTER_MINI_TEST!(
+    "Xform",
+    "Ortho Half Height",
+    crate::xform_test::run_xform_ortho_half_height
+);
+REGISTER_MINI_TEST!(
+    "Xform",
     "Transform Geometry",
     crate::xform_test::run_xform_transform_geometry
 );
@@ -1162,5 +1223,13 @@ REGISTER_MINI_TEST!(
     "From Change Of Basis",
     crate::xform_test::run_xform_from_change_of_basis
 );
-REGISTER_MINI_TEST!("Xform", "World To Frame", crate::xform_test::run_xform_world_to_frame);
-REGISTER_MINI_TEST!("Xform", "Frame To World", crate::xform_test::run_xform_frame_to_world);
+REGISTER_MINI_TEST!(
+    "Xform",
+    "World To Frame",
+    crate::xform_test::run_xform_world_to_frame
+);
+REGISTER_MINI_TEST!(
+    "Xform",
+    "Frame To World",
+    crate::xform_test::run_xform_frame_to_world
+);

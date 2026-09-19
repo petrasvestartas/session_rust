@@ -1623,6 +1623,21 @@ pub fn get_all_tests() -> Vec<RegisteredTest> {
         },
         RegisteredTest {
             group: "Xform",
+            name: "Uniform Scale",
+            func: run_xform_uniform_scale,
+        },
+        RegisteredTest {
+            group: "Xform",
+            name: "Eye",
+            func: run_xform_eye,
+        },
+        RegisteredTest {
+            group: "Xform",
+            name: "Ortho Half Height",
+            func: run_xform_ortho_half_height,
+        },
+        RegisteredTest {
+            group: "Xform",
             name: "From Change Of Basis",
             func: run_xform_from_change_of_basis,
         },
@@ -4177,6 +4192,16 @@ pub fn get_all_tests() -> Vec<RegisteredTest> {
             group: "AABB",
             name: "Constructor",
             func: run_aabb_constructor,
+        },
+        RegisteredTest {
+            group: "AABB",
+            name: "Empty",
+            func: run_aabb_empty,
+        },
+        RegisteredTest {
+            group: "AABB",
+            name: "Transform",
+            func: run_aabb_transform,
         },
         RegisteredTest {
             group: "AABB",

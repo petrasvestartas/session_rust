@@ -1,6 +1,6 @@
 use crate::tolerance::Tolerance;
 use crate::tolerance::TOLERANCE;
-use crate::{Line, Mesh, NurbsCurve, NurbsSurface, Point, PointCloud, Polyline, Vector};
+use crate::{Line, Mesh, NurbsCurve, NurbsSurface, Point, PointCloud, Polyline, Vector, Xform};
 use std::fmt;
 
 const NUM_SAMPLES: usize = 20; // Samples per span when searching curve extrema.
@@ -166,9 +166,17 @@ impl AABB {
         Self::from_points(&points, inflate)
     }
 
-    /// Constructs the box enclosing both a and b.
+    /// Constructs the box enclosing both a and b; an invalid box contributes nothing.
     #[inline(always)]
     pub fn merge(a: &AABB, b: &AABB) -> AABB {
+        if !a.is_valid() {
+            return *b;
+        }
+
+        if !b.is_valid() {
+            return *a;
+        }
+
         let min_x = (a.cx - a.hx).min(b.cx - b.hx);
         let min_y = (a.cy - a.hy).min(b.cy - b.hy);
         let min_z = (a.cz - a.hz).min(b.cz - b.hz);
@@ -183,6 +191,11 @@ impl AABB {
             (max_y - min_y) * 0.5,
             (max_z - min_z) * 0.5,
         )
+    }
+
+    /// Constructs the box nothing has grown yet: negative half-sizes, so is_valid is false.
+    pub fn empty() -> Self {
+        AABB::new(0.0, 0.0, 0.0, -1.0, -1.0, -1.0)
     }
 
     /// Returns the parameter in [t_lo, t_hi] where the axis derivative crosses zero, by Newton steps bracketed by bisection.
@@ -275,6 +288,10 @@ impl AABB {
 
     /// Returns the length of the space diagonal.
     pub fn diagonal(&self) -> f64 {
+        if !self.is_valid() {
+            return 0.0;
+        }
+
         2.0 * (self.hx * self.hx + self.hy * self.hy + self.hz * self.hz).sqrt()
     }
 
@@ -377,9 +394,39 @@ impl AABB {
         self.hz += amount;
     }
 
-    /// Grows to enclose other.
+    /// Grows to enclose other; an invalid box contributes nothing.
     pub fn union_with(&mut self, other: &AABB) {
         *self = AABB::merge(self, other);
+    }
+
+    /// Grows to enclose (x, y, z); coordinates, not a Point, so a vertex loop allocates nothing.
+    pub fn union_with_point(&mut self, x: f64, y: f64, z: f64) {
+        *self = AABB::merge(self, &AABB::new(x, y, z, 0.0, 0.0, 0.0));
+    }
+
+    // ═══════════════════════════════════════════════════════════════════════════
+    // Transformation
+    // ═══════════════════════════════════════════════════════════════════════════
+
+    /// Replaces the box by the box of its eight transformed corners.
+    pub fn transform(&mut self, xform: &Xform) {
+        *self = self.transformed(xform);
+    }
+
+    /// Returns the box of the eight transformed corners; an invalid box stays invalid.
+    pub fn transformed(&self, xform: &Xform) -> AABB {
+        if !self.is_valid() {
+            return *self;
+        }
+
+        let mut out = AABB::empty();
+
+        for corner in self.corners() {
+            let p = xform.transform_point(&corner);
+            out.union_with_point(p[0], p[1], p[2]);
+        }
+
+        out
     }
 
     // ═══════════════════════════════════════════════════════════════════════════
