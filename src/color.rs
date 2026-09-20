@@ -169,7 +169,7 @@ impl Color {
 
     /// Returns opaque light grey, the default surface color of meshes, breps and surfaces.
     pub fn lightgrey() -> Self {
-        Self::with_name(0.9, 0.9, 0.9, 1.0, "lightgrey")
+        Self::with_name(0.94, 0.94, 0.94, 1.0, "lightgrey")
     }
 
     /// The 12 spectral colors in order
@@ -363,7 +363,7 @@ impl PartialEq for Color {
 
 impl Default for Color {
     fn default() -> Self {
-        Self::new(1.0, 1.0, 1.0, 1.0)
+        Self::new(0.94, 0.94, 0.94, 1.0)
     }
 }
 
