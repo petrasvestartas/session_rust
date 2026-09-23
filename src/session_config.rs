@@ -1,4 +1,3 @@
-use once_cell::sync::Lazy;
 use parking_lot::RwLock;
 
 /// Runtime settings used by session operations.
@@ -9,7 +8,7 @@ pub struct SessionConfig {
 
 impl SessionConfig {
     /// Creates settings with their default values.
-    pub fn new() -> Self {
+    pub const fn new() -> Self {
         Self {
             explode_mesh_faces: false,
             scale_factor: 1.0,
@@ -29,6 +28,4 @@ impl Default for SessionConfig {
     }
 }
 
-/// Process-wide settings used by session operations.
-pub static SESSION_CONFIG: Lazy<RwLock<SessionConfig>> =
-    Lazy::new(|| RwLock::new(SessionConfig::new()));
+pub static SESSION_CONFIG: RwLock<SessionConfig> = RwLock::new(SessionConfig::new()); // Process-wide settings used by session operations.

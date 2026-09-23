@@ -7,6 +7,7 @@ pub fn run_session_config_runtime_modification() -> TestResult {
         use crate::session_config::SESSION_CONFIG;
 
         SESSION_CONFIG.write().reset();
+
         let mut config = SessionConfig::new();
         let other = SessionConfig::new();
 
