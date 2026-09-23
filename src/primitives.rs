@@ -13,8 +13,6 @@ use crate::tolerance::PI;
 use crate::vector::Vector;
 use crate::xform::Xform;
 
-type Geometry = (Vec<Point>, Vec<[usize; 3]>);
-
 // ═══════════════════════════════════════════════════════════════════════════
 // Rational quadratic circle pattern
 // ═══════════════════════════════════════════════════════════════════════════
@@ -309,6 +307,7 @@ fn bounded_patch(pts: &[Point], origin: &Point, x_axis: &Vector, y_axis: &Vector
     max_u += pad;
     min_v -= pad;
     max_v += pad;
+
     bilinear_patch(
         &(origin + x_axis * min_u + y_axis * min_v),
         &(origin + x_axis * max_u + y_axis * min_v),
@@ -663,6 +662,7 @@ impl Primitives {
                 &Line::from_points(&mesh.vertex[&u].position(), &mesh.vertex[&v].position()),
                 radius,
             );
+
             pipe.set_facecolors(vec![colors[i].clone(); pipe.number_of_faces()]);
             pipes.push(pipe);
         }
@@ -852,13 +852,8 @@ impl Primitives {
         let mut curve = NurbsCurve::new(3, true, 3, 3);
         curve.m_nurbsknot = vec![0.0, 0.0, 1.0, 1.0];
         curve.set_cv_4d(0, start[0], start[1], start[2], 1.0);
-        curve.set_cv_4d(
-            1,
-            chord_mid[0] * w + sagitta[0],
-            chord_mid[1] * w + sagitta[1],
-            chord_mid[2] * w + sagitta[2],
-            w,
-        );
+        let weighted = &chord_mid * w + sagitta;
+        curve.set_cv_4d(1, weighted[0], weighted[1], weighted[2], w);
         curve.set_cv_4d(2, end[0], end[1], end[2], 1.0);
 
         curve
@@ -1039,10 +1034,8 @@ impl Primitives {
         let wk = (2.0_f64 / 3.0).sqrt();
         let wc = (-72.0 - 32.0 * 6.0_f64.sqrt() + 48.0 * 3.0_f64.sqrt() + 56.0 * 2.0_f64.sqrt())
             / (48.0 * (1.0 + (2.0_f64 / 3.0).sqrt() - 1.0 / 3.0_f64.sqrt() - 1.0 / 2.0_f64.sqrt()));
-
         let k =
             radius * (1.0 - 1.0 / 3.0_f64.sqrt() + 2.0 * (2.0_f64 / 3.0).sqrt() - 2.0_f64.sqrt());
-
         let h = radius + k / wc;
         let zf: [[[f64; 4]; 3]; 3] = [
             [[-a, -a, a, 1.0], [-e, 0.0, e, wk], [-a, a, a, 1.0]],
@@ -1113,6 +1106,7 @@ impl Primitives {
         curves[0].set_domain(0.0, 1.0);
         curves[1].set_domain(0.0, 1.0);
         make_curves_compatible(&mut curves);
+
         let cv_count_u = curves[0].cv_count();
         let is_rat = curves[0].is_rational();
         let mut surface = NurbsSurface::new(3, is_rat, curves[0].order(), 2, cv_count_u, 2);
@@ -1229,6 +1223,7 @@ impl Primitives {
         }
 
         make_curves_compatible(&mut curves);
+
         let n = curves.len();
         let cv_count_u = curves[0].cv_count();
         let is_rat = curves[0].is_rational();
@@ -1374,7 +1369,7 @@ impl Primitives {
         surface
     }
 
-    /// Sweeps of a closed profile along one rail.
+    /// Sweep of a closed profile along one rail.
     pub fn create_sweep1(rail: &NurbsCurve, profile: &NurbsCurve) -> NurbsSurface {
         if !rail.is_valid() || !profile.is_valid() {
             return NurbsSurface::default();
@@ -1399,7 +1394,7 @@ impl Primitives {
         Self::create_loft(&sections, 3.min(sections.len() - 1))
     }
 
-    /// Sweeps of shape curves between two rails.
+    /// Sweep of shape curves between two rails.
     pub fn create_sweep2(
         rail1: &NurbsCurve,
         rail2: &NurbsCurve,
@@ -1422,6 +1417,7 @@ impl Primitives {
         }
 
         make_curves_compatible(&mut compat);
+
         let n_shapes = compat.len();
         let mut planes = Vec::new();
         let mut widths = Vec::new();
@@ -1543,9 +1539,11 @@ impl Primitives {
         let mut v_pair = vec![chain[0].duplicate(), chain[2].duplicate()];
         v_pair[1].reverse();
         make_curves_compatible(&mut v_pair);
+
         let mut u_pair = vec![chain[3].duplicate(), chain[1].duplicate()];
         u_pair[0].reverse();
         make_curves_compatible(&mut u_pair);
+
         let south = &v_pair[0];
         let north = &v_pair[1];
         let west = &u_pair[0];
@@ -1764,11 +1762,12 @@ impl Primitives {
     // ═══════════════════════════════════════════════════════════════════════════
 
     /// Ten-sided unit cylinder: radius 0.5, z from -0.5 to 0.5.
-    fn unit_cylinder_geometry() -> Geometry {
+    fn unit_cylinder_geometry() -> (Vec<Point>, Vec<[usize; 3]>) {
         let n = 10;
         let mut vertices = Vec::new();
         add_ring(&mut vertices, n, 0.5, -0.5);
         add_ring(&mut vertices, n, 0.5, 0.5);
+
         let mut triangles = Vec::new();
 
         for i in 0..n {
@@ -1781,10 +1780,11 @@ impl Primitives {
     }
 
     /// Eight-sided unit cone: base radius 0.5 at z = -0.5, apex at z = 0.5.
-    fn unit_cone_geometry() -> Geometry {
+    fn unit_cone_geometry() -> (Vec<Point>, Vec<[usize; 3]>) {
         let n = 8;
         let mut vertices = vec![Point::new(0.0, 0.0, 0.5)];
         add_ring(&mut vertices, n, 0.5, -0.5);
+
         let mut triangles = Vec::new();
 
         for i in 0..n {
@@ -1795,7 +1795,7 @@ impl Primitives {
     }
 
     /// Ten-sided capsule along z from 0 to length with hemispherical caps.
-    fn capsule_geometry(length: f64, radius: f64) -> Geometry {
+    fn capsule_geometry(length: f64, radius: f64) -> (Vec<Point>, Vec<[usize; 3]>) {
         let n = 10;
         let r_hemi = radius * (PI / 4.0).sin();
         let off = radius * (PI / 4.0).cos();
@@ -1811,6 +1811,7 @@ impl Primitives {
         vertices.push(Point::new(0.0, 0.0, -radius));
         add_ring(&mut vertices, n, r_hemi, length + off);
         vertices.push(Point::new(0.0, 0.0, length + radius));
+
         let mut triangles = Vec::new();
 
         for i in 0..n {
@@ -1847,7 +1848,7 @@ impl Primitives {
     }
 
     /// Appends transformed geometry to a mesh.
-    fn add_geometry(mesh: &mut Mesh, geometry: &Geometry, xform: &Xform) {
+    fn add_geometry(mesh: &mut Mesh, geometry: &(Vec<Point>, Vec<[usize; 3]>), xform: &Xform) {
         let (vertices, triangles) = geometry;
         let mut keys = Vec::new();
 

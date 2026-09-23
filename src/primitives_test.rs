@@ -8,7 +8,9 @@
 use crate::mini_test::TestResult;
 use crate::tolerance::PI;
 use crate::tolerance::TOLERANCE;
-use crate::{MINI_CHECK, MINI_TEST, REGISTER_MINI_TEST};
+use crate::MINI_CHECK;
+use crate::MINI_TEST;
+use crate::REGISTER_MINI_TEST;
 
 // ═══════════════════════════════════════════════════════════════════════════
 // Mesh primitives
@@ -20,10 +22,10 @@ pub fn run_primitives_mesh_arrow() -> TestResult {
         use crate::Primitives;
 
         let line = Line::new(0.0, 0.0, 0.0, 0.0, 0.0, 8.0);
-        let m = Primitives::arrow_mesh(&line, 1.0);
+        let mesh = Primitives::arrow_mesh(&line, 1.0);
 
-        MINI_CHECK!(m.number_of_vertices() == 29);
-        MINI_CHECK!(m.number_of_faces() == 28);
+        MINI_CHECK!(mesh.number_of_vertices() == 29);
+        MINI_CHECK!(mesh.number_of_faces() == 28);
     })
 }
 
@@ -33,10 +35,10 @@ pub fn run_primitives_mesh_cylinder() -> TestResult {
         use crate::Primitives;
 
         let line = Line::new(0.0, 0.0, 0.0, 0.0, 0.0, 8.0);
-        let m = Primitives::cylinder_mesh(&line, 1.0);
+        let mesh = Primitives::cylinder_mesh(&line, 1.0);
 
-        MINI_CHECK!(m.number_of_vertices() == 20);
-        MINI_CHECK!(m.number_of_faces() == 20);
+        MINI_CHECK!(mesh.number_of_vertices() == 20);
+        MINI_CHECK!(mesh.number_of_faces() == 20);
     })
 }
 
@@ -74,7 +76,7 @@ pub fn run_primitives_nurbscurve_polyline() -> TestResult {
         use crate::NurbsCurve;
         use crate::Point;
 
-        let c = NurbsCurve::create(
+        let curve = NurbsCurve::create(
             false,
             1,
             &[
@@ -86,16 +88,18 @@ pub fn run_primitives_nurbscurve_polyline() -> TestResult {
             ],
         );
 
-        MINI_CHECK!(c.cv_count() == 5);
-        MINI_CHECK!(c.order() == 2);
-        MINI_CHECK!(c.degree() == 1);
-        MINI_CHECK!(c.is_rational() == false);
-        MINI_CHECK!(
-            TOLERANCE.is_point_close(&c.point_at(c.domain_start()), &Point::new(0.0, 0.0, 0.0))
-        );
-        MINI_CHECK!(
-            TOLERANCE.is_point_close(&c.point_at(c.domain_end()), &Point::new(4.0, 0.0, 0.0))
-        );
+        MINI_CHECK!(curve.cv_count() == 5);
+        MINI_CHECK!(curve.order() == 2);
+        MINI_CHECK!(curve.degree() == 1);
+        MINI_CHECK!(curve.is_rational() == false);
+        MINI_CHECK!(TOLERANCE.is_point_close(
+            &curve.point_at(curve.domain_start()),
+            &Point::new(0.0, 0.0, 0.0)
+        ));
+        MINI_CHECK!(TOLERANCE.is_point_close(
+            &curve.point_at(curve.domain_end()),
+            &Point::new(4.0, 0.0, 0.0)
+        ));
     })
 }
 
@@ -103,11 +107,11 @@ pub fn run_primitives_nurbscurve_circle() -> TestResult {
     MINI_TEST!("Nurbscurve Circle", {
         use crate::Primitives;
 
-        let c = Primitives::circle(0.0, 0.0, 0.0, 1.0);
+        let curve = Primitives::circle(0.0, 0.0, 0.0, 1.0);
 
-        MINI_CHECK!(c.cv_count() == 9);
-        MINI_CHECK!(c.order() == 3);
-        MINI_CHECK!(c.is_rational() == true);
+        MINI_CHECK!(curve.cv_count() == 9);
+        MINI_CHECK!(curve.order() == 3);
+        MINI_CHECK!(curve.is_rational() == true);
     })
 }
 
@@ -115,11 +119,11 @@ pub fn run_primitives_nurbscurve_ellipse() -> TestResult {
     MINI_TEST!("Nurbscurve Ellipse", {
         use crate::Primitives;
 
-        let c = Primitives::ellipse(0.0, 0.0, 0.0, 2.0, 1.0);
+        let curve = Primitives::ellipse(0.0, 0.0, 0.0, 2.0, 1.0);
 
-        MINI_CHECK!(c.cv_count() == 9);
-        MINI_CHECK!(c.order() == 3);
-        MINI_CHECK!(c.is_rational() == true);
+        MINI_CHECK!(curve.cv_count() == 9);
+        MINI_CHECK!(curve.order() == 3);
+        MINI_CHECK!(curve.is_rational() == true);
     })
 }
 
@@ -131,11 +135,11 @@ pub fn run_primitives_nurbscurve_arc() -> TestResult {
         let start = Point::new(0.0, 0.0, 0.0);
         let mid = Point::new(1.0, 1.0, 0.0);
         let end = Point::new(2.0, 0.0, 0.0);
-        let c = Primitives::arc(&start, &mid, &end);
+        let curve = Primitives::arc(&start, &mid, &end);
 
-        MINI_CHECK!(c.cv_count() == 3);
-        MINI_CHECK!(c.order() == 3);
-        MINI_CHECK!(c.is_rational() == true);
+        MINI_CHECK!(curve.cv_count() == 3);
+        MINI_CHECK!(curve.order() == 3);
+        MINI_CHECK!(curve.is_rational() == true);
     })
 }
 
@@ -147,11 +151,11 @@ pub fn run_primitives_nurbscurve_parabola() -> TestResult {
         let p0 = Point::new(-1.0, 1.0, 0.0);
         let p1 = Point::new(0.0, 0.0, 0.0);
         let p2 = Point::new(1.0, 1.0, 0.0);
-        let c = Primitives::parabola(&p0, &p1, &p2);
+        let curve = Primitives::parabola(&p0, &p1, &p2);
 
-        MINI_CHECK!(c.cv_count() == 3);
-        MINI_CHECK!(c.order() == 3);
-        MINI_CHECK!(c.is_rational() == false);
+        MINI_CHECK!(curve.cv_count() == 3);
+        MINI_CHECK!(curve.order() == 3);
+        MINI_CHECK!(curve.is_rational() == false);
     })
 }
 
@@ -161,11 +165,11 @@ pub fn run_primitives_nurbscurve_hyperbola() -> TestResult {
         use crate::Primitives;
 
         let center = Point::new(0.0, 0.0, 0.0);
-        let c = Primitives::hyperbola(&center, 1.0, 1.0, 1.0);
+        let curve = Primitives::hyperbola(&center, 1.0, 1.0, 1.0);
 
-        MINI_CHECK!(c.cv_count() >= 4);
-        MINI_CHECK!(c.order() == 4);
-        MINI_CHECK!(c.is_rational() == false);
+        MINI_CHECK!(curve.cv_count() >= 4);
+        MINI_CHECK!(curve.order() == 4);
+        MINI_CHECK!(curve.is_rational() == false);
     })
 }
 
@@ -173,11 +177,11 @@ pub fn run_primitives_nurbscurve_spiral() -> TestResult {
     MINI_TEST!("Nurbscurve Spiral", {
         use crate::Primitives;
 
-        let c = Primitives::spiral(1.0, 2.0, 1.0, 5.0);
+        let curve = Primitives::spiral(1.0, 2.0, 1.0, 5.0);
 
-        MINI_CHECK!(c.cv_count() >= 4);
-        MINI_CHECK!(c.order() == 4);
-        MINI_CHECK!(c.is_rational() == false);
+        MINI_CHECK!(curve.cv_count() >= 4);
+        MINI_CHECK!(curve.order() == 4);
+        MINI_CHECK!(curve.is_rational() == false);
     })
 }
 
@@ -189,28 +193,28 @@ pub fn run_primitives_nurbssurface_cylinder() -> TestResult {
     MINI_TEST!("Nurbssurface Cylinder", {
         use crate::Primitives;
 
-        let s = Primitives::cylinder_surface(0.0, 0.0, 0.0, 1.0, 5.0);
+        let surface = Primitives::cylinder_surface(0.0, 0.0, 0.0, 1.0, 5.0);
 
-        MINI_CHECK!(s.is_valid());
-        MINI_CHECK!(s.is_rational());
-        MINI_CHECK!(s.cv_count(0) == 9);
-        MINI_CHECK!(s.cv_count(1) == 2);
-        MINI_CHECK!(s.order(0) == 3);
-        MINI_CHECK!(s.order(1) == 2);
+        MINI_CHECK!(surface.is_valid());
+        MINI_CHECK!(surface.is_rational());
+        MINI_CHECK!(surface.cv_count(0) == 9);
+        MINI_CHECK!(surface.cv_count(1) == 2);
+        MINI_CHECK!(surface.order(0) == 3);
+        MINI_CHECK!(surface.order(1) == 2);
 
-        let p00 = s.point_at(0.0, 0.0).unwrap();
+        let p00 = surface.point_at(0.0, 0.0).unwrap();
 
         MINI_CHECK!((p00[0] - 1.0).abs() < 1e-10);
         MINI_CHECK!((p00[1] - 0.0).abs() < 1e-10);
         MINI_CHECK!((p00[2] - 0.0).abs() < 1e-10);
 
-        let p01 = s.point_at(0.0, 1.0).unwrap();
+        let p01 = surface.point_at(0.0, 1.0).unwrap();
 
         MINI_CHECK!((p01[0] - 1.0).abs() < 1e-10);
         MINI_CHECK!((p01[1] - 0.0).abs() < 1e-10);
         MINI_CHECK!((p01[2] - 5.0).abs() < 1e-10);
 
-        let pmid = s.point_at(1.0, 0.5).unwrap();
+        let pmid = surface.point_at(1.0, 0.5).unwrap();
 
         MINI_CHECK!((pmid[0] - 0.0).abs() < 1e-10);
         MINI_CHECK!((pmid[1] - 1.0).abs() < 1e-10);
@@ -222,28 +226,28 @@ pub fn run_primitives_nurbssurface_cone() -> TestResult {
     MINI_TEST!("Nurbssurface Cone", {
         use crate::Primitives;
 
-        let s = Primitives::cone_surface(0.0, 0.0, 0.0, 1.0, 5.0);
+        let surface = Primitives::cone_surface(0.0, 0.0, 0.0, 1.0, 5.0);
 
-        MINI_CHECK!(s.is_valid());
-        MINI_CHECK!(s.is_rational());
-        MINI_CHECK!(s.cv_count(0) == 9);
-        MINI_CHECK!(s.cv_count(1) == 2);
-        MINI_CHECK!(s.order(0) == 3);
-        MINI_CHECK!(s.order(1) == 2);
+        MINI_CHECK!(surface.is_valid());
+        MINI_CHECK!(surface.is_rational());
+        MINI_CHECK!(surface.cv_count(0) == 9);
+        MINI_CHECK!(surface.cv_count(1) == 2);
+        MINI_CHECK!(surface.order(0) == 3);
+        MINI_CHECK!(surface.order(1) == 2);
 
-        let pbase = s.point_at(0.0, 0.0).unwrap();
+        let pbase = surface.point_at(0.0, 0.0).unwrap();
 
         MINI_CHECK!((pbase[0] - 1.0).abs() < 1e-10);
         MINI_CHECK!((pbase[1] - 0.0).abs() < 1e-10);
         MINI_CHECK!((pbase[2] - 0.0).abs() < 1e-10);
 
-        let papex = s.point_at(0.0, 1.0).unwrap();
+        let papex = surface.point_at(0.0, 1.0).unwrap();
 
         MINI_CHECK!((papex[0] - 0.0).abs() < 1e-10);
         MINI_CHECK!((papex[1] - 0.0).abs() < 1e-10);
         MINI_CHECK!((papex[2] - 5.0).abs() < 1e-10);
 
-        let pmid = s.point_at(0.0, 0.5).unwrap();
+        let pmid = surface.point_at(0.0, 0.5).unwrap();
 
         MINI_CHECK!((pmid[0] - 0.5).abs() < 1e-10);
         MINI_CHECK!((pmid[1] - 0.0).abs() < 1e-10);
@@ -255,28 +259,28 @@ pub fn run_primitives_nurbssurface_torus() -> TestResult {
     MINI_TEST!("Nurbssurface Torus", {
         use crate::Primitives;
 
-        let s = Primitives::torus_surface(0.0, 0.0, 0.0, 3.0, 1.0);
+        let surface = Primitives::torus_surface(0.0, 0.0, 0.0, 3.0, 1.0);
 
-        MINI_CHECK!(s.is_valid());
-        MINI_CHECK!(s.is_rational());
-        MINI_CHECK!(s.cv_count(0) == 9);
-        MINI_CHECK!(s.cv_count(1) == 9);
-        MINI_CHECK!(s.order(0) == 3);
-        MINI_CHECK!(s.order(1) == 3);
+        MINI_CHECK!(surface.is_valid());
+        MINI_CHECK!(surface.is_rational());
+        MINI_CHECK!(surface.cv_count(0) == 9);
+        MINI_CHECK!(surface.cv_count(1) == 9);
+        MINI_CHECK!(surface.order(0) == 3);
+        MINI_CHECK!(surface.order(1) == 3);
 
-        let p00 = s.point_at(0.0, 0.0).unwrap();
+        let p00 = surface.point_at(0.0, 0.0).unwrap();
 
         MINI_CHECK!((p00[0] - 4.0).abs() < 1e-10);
         MINI_CHECK!((p00[1] - 0.0).abs() < 1e-10);
         MINI_CHECK!((p00[2] - 0.0).abs() < 1e-10);
 
-        let p10 = s.point_at(1.0, 0.0).unwrap();
+        let p10 = surface.point_at(1.0, 0.0).unwrap();
 
         MINI_CHECK!((p10[0] - 0.0).abs() < 1e-10);
         MINI_CHECK!((p10[1] - 4.0).abs() < 1e-10);
         MINI_CHECK!((p10[2] - 0.0).abs() < 1e-10);
 
-        let p_top = s.point_at(0.0, 1.0).unwrap();
+        let p_top = surface.point_at(0.0, 1.0).unwrap();
 
         MINI_CHECK!((p_top[0] - 3.0).abs() < 1e-10);
         MINI_CHECK!((p_top[1] - 0.0).abs() < 1e-10);
@@ -288,34 +292,34 @@ pub fn run_primitives_nurbssurface_sphere() -> TestResult {
     MINI_TEST!("Nurbssurface Sphere", {
         use crate::Primitives;
 
-        let s = Primitives::sphere_surface(0.0, 0.0, 0.0, 2.0);
+        let surface = Primitives::sphere_surface(0.0, 0.0, 0.0, 2.0);
 
-        MINI_CHECK!(s.is_valid());
-        MINI_CHECK!(s.is_rational());
-        MINI_CHECK!(s.cv_count(0) == 9);
-        MINI_CHECK!(s.cv_count(1) == 5);
-        MINI_CHECK!(s.order(0) == 3);
-        MINI_CHECK!(s.order(1) == 3);
+        MINI_CHECK!(surface.is_valid());
+        MINI_CHECK!(surface.is_rational());
+        MINI_CHECK!(surface.cv_count(0) == 9);
+        MINI_CHECK!(surface.cv_count(1) == 5);
+        MINI_CHECK!(surface.order(0) == 3);
+        MINI_CHECK!(surface.order(1) == 3);
 
-        let p00 = s.point_at(0.0, 0.0).unwrap();
+        let p00 = surface.point_at(0.0, 0.0).unwrap();
 
         MINI_CHECK!((p00[0] - 0.0).abs() < 1e-10);
         MINI_CHECK!((p00[1] - 0.0).abs() < 1e-10);
         MINI_CHECK!((p00[2] - (-2.0)).abs() < 1e-10);
 
-        let p_top = s.point_at(0.0, 2.0).unwrap();
+        let p_top = surface.point_at(0.0, 2.0).unwrap();
 
         MINI_CHECK!((p_top[0] - 0.0).abs() < 1e-10);
         MINI_CHECK!((p_top[1] - 0.0).abs() < 1e-10);
         MINI_CHECK!((p_top[2] - 2.0).abs() < 1e-10);
 
-        let p_eq = s.point_at(0.0, 1.0).unwrap();
+        let p_eq = surface.point_at(0.0, 1.0).unwrap();
 
         MINI_CHECK!((p_eq[0] - 2.0).abs() < 1e-10);
         MINI_CHECK!((p_eq[1] - 0.0).abs() < 1e-10);
         MINI_CHECK!((p_eq[2] - 0.0).abs() < 1e-10);
 
-        let p_eq2 = s.point_at(1.0, 1.0).unwrap();
+        let p_eq2 = surface.point_at(1.0, 1.0).unwrap();
 
         MINI_CHECK!((p_eq2[0] - 0.0).abs() < 1e-10);
         MINI_CHECK!((p_eq2[1] - 2.0).abs() < 1e-10);
@@ -331,6 +335,7 @@ pub fn run_primitives_nurbssurface_quad_sphere() -> TestResult {
         let faces = Primitives::quad_sphere(0.0, 0.0, 0.0, radius);
 
         MINI_CHECK!(faces.len() == 6);
+
         for f in 0..6 {
             MINI_CHECK!(faces[f].is_valid());
             MINI_CHECK!(faces[f].is_rational());
@@ -341,14 +346,17 @@ pub fn run_primitives_nurbssurface_quad_sphere() -> TestResult {
         }
 
         let mut max_err = 0.0_f64;
+
         for f in 0..6 {
             for i in 0..=4 {
                 let u = i as f64 / 4.0;
+
                 for j in 0..=4 {
                     let v = j as f64 / 4.0;
                     let p = faces[f].point_at(u, v).unwrap();
                     let dist = (p[0] * p[0] + p[1] * p[1] + p[2] * p[2]).sqrt();
                     let err = (dist - radius).abs();
+
                     if err > max_err {
                         max_err = err;
                     }
@@ -402,7 +410,7 @@ pub fn run_primitives_nurbssurface_ruled() -> TestResult {
         let crv_a = NurbsCurve::create(false, 1, &pts_a);
         let crv_b = NurbsCurve::create(false, 1, &pts_b);
         let srf = Primitives::create_ruled(&crv_a, &crv_b);
-        let _m = srf.mesh();
+        let _mesh = srf.mesh();
 
         MINI_CHECK!(srf.is_valid());
         MINI_CHECK!(srf.degree(0) == 1);
@@ -416,6 +424,7 @@ pub fn run_primitives_nurbssurface_ruled() -> TestResult {
         MINI_CHECK!(rd[0].len() == 5);
 
         let mut pts: Vec<Point> = Vec::new();
+
         for i in 0..rd.len() {
             for j in 0..rd[i].len() {
                 pts.push(rd[i][j].clone());
@@ -423,6 +432,7 @@ pub fn run_primitives_nurbssurface_ruled() -> TestResult {
         }
 
         let mut normals: Vec<Vector> = Vec::new();
+
         for i in 0..ruv.len() {
             for j in 0..ruv[i].len() {
                 normals.push(srf.normal_at(ruv[i][j].0, ruv[i][j].1));
@@ -430,6 +440,7 @@ pub fn run_primitives_nurbssurface_ruled() -> TestResult {
         }
 
         let mut uvs: Vec<(f64, f64)> = Vec::new();
+
         for i in 0..ruv.len() {
             for j in 0..ruv[i].len() {
                 uvs.push(ruv[i][j]);
@@ -887,10 +898,12 @@ pub fn run_primitives_nurbssurface_extrusion() -> TestResult {
         MINI_CHECK!(s_wavy.cv_count(0) == 4 && s_wavy.cv_count(1) == 2);
         MINI_CHECK!(m_wavy.number_of_vertices() == 12);
         MINI_CHECK!(m_wavy.number_of_faces() == 6);
+
         for i in 0..4 {
             for j in 0..2 {
                 let position = s_wavy.get_cv(i, j).unwrap();
                 let mut copies = 0;
+
                 for vertex in m_wavy.vertex.values() {
                     if TOLERANCE.is_point_close(&vertex.position(), &position) {
                         copies += 1;
@@ -900,10 +913,13 @@ pub fn run_primitives_nurbssurface_extrusion() -> TestResult {
                 MINI_CHECK!(copies == if i == 0 || i == 3 { 1 } else { 2 });
             }
         }
+
         for (&key, corners) in &m_wavy.face {
             let normal = m_wavy.face_normal(key).unwrap();
+
             for corner in corners {
                 let shading = m_wavy.vertex[corner].normal().unwrap();
+
                 for axis in 0..3 {
                     MINI_CHECK!((shading[axis] - normal[axis]).abs() < 1e-9);
                 }
@@ -1257,9 +1273,11 @@ pub fn run_primitives_nurbssurface_revolve() -> TestResult {
         let r = 1.5;
         let tcx = 14.0;
         let mut pb = NurbsCurve::new(3, true, 3, 9);
+
         for i in 0..10 {
             pb.set_nurbsknot(i, ck[i]);
         }
+
         for i in 0..9 {
             pb.set_cv_4d(
                 i,
@@ -1269,6 +1287,7 @@ pub fn run_primitives_nurbssurface_revolve() -> TestResult {
                 cw[i],
             );
         }
+
         let s_torus = Primitives::create_revolve(
             &pb,
             &Point::new(tcx, 0.0, 0.0),
@@ -1294,15 +1313,19 @@ pub fn run_primitives_nurbssurface_revolve() -> TestResult {
         let scx = 36.0;
         let mut pd = NurbsCurve::new(3, true, 3, 5);
         let sk = [0.0, 0.0, 1.0, 1.0, 2.0, 2.0];
+
         for i in 0..6 {
             pd.set_nurbsknot(i, sk[i]);
         }
+
         let spx = [0.0, sr, sr, sr, 0.0];
         let spz = [-sr, -sr, 0.0, sr, sr];
         let spw = [1.0, w, 1.0, w, 1.0];
+
         for i in 0..5 {
             pd.set_cv_4d(i, (scx + spx[i]) * spw[i], 0.0, spz[i] * spw[i], spw[i]);
         }
+
         let s_sphere = Primitives::create_revolve(
             &pd,
             &Point::new(scx, 0.0, 0.0),
@@ -1465,6 +1488,7 @@ pub fn run_primitives_nurbssurface_sweep() -> TestResult {
         MINI_CHECK!(s_sweep1.cv_count(1) == 6);
         MINI_CHECK!(m_sweep1.number_of_vertices() > 0);
         MINI_CHECK!(m_sweep1.number_of_faces() > 0);
+
         TOLERANCE.set_absolute(1e-6);
 
         MINI_CHECK!(TOLERANCE.is_point_close(
@@ -1870,10 +1894,10 @@ pub fn run_primitives_nurbssurface_edge() -> TestResult {
         let east = NurbsCurve::create(false, 2, &pts_east);
 
         let surf = Primitives::create_edge(&south, &west, &north, &east);
-        let m = surf.mesh();
+        let mesh = surf.mesh();
 
         MINI_CHECK!(surf.is_valid());
-        MINI_CHECK!(m.is_valid());
+        MINI_CHECK!(mesh.is_valid());
         MINI_CHECK!(surf.degree(0) == 2);
         MINI_CHECK!(surf.degree(1) == 3);
         MINI_CHECK!(surf.cv_count(0) == 3);
@@ -1950,11 +1974,11 @@ pub fn run_primitives_mesh_quad_mesh() -> TestResult {
         use crate::Primitives;
 
         let cyl = Primitives::cylinder_surface(0.0, 0.0, 0.0, 1.0, 5.0);
-        let m = Primitives::quad_mesh(&cyl, 8, 4);
+        let m1 = Primitives::quad_mesh(&cyl, 8, 4);
 
-        MINI_CHECK!(m.number_of_vertices() == 40);
-        MINI_CHECK!(m.number_of_faces() == 32);
-        MINI_CHECK!(m.is_valid());
+        MINI_CHECK!(m1.number_of_vertices() == 40);
+        MINI_CHECK!(m1.number_of_faces() == 32);
+        MINI_CHECK!(m1.is_valid());
 
         let sph = Primitives::sphere_surface(0.0, 0.0, 0.0, 3.0);
         let m2 = Primitives::quad_mesh(&sph, 8, 4);
@@ -1970,11 +1994,11 @@ pub fn run_primitives_mesh_diamond_mesh() -> TestResult {
         use crate::Primitives;
 
         let cyl = Primitives::cylinder_surface(0.0, 0.0, 0.0, 1.0, 5.0);
-        let m = Primitives::diamond_mesh(&cyl, 8, 4);
+        let m1 = Primitives::diamond_mesh(&cyl, 8, 4);
 
-        MINI_CHECK!(m.number_of_vertices() == 40);
-        MINI_CHECK!(m.number_of_faces() == 20);
-        MINI_CHECK!(m.is_valid());
+        MINI_CHECK!(m1.number_of_vertices() == 40);
+        MINI_CHECK!(m1.number_of_faces() == 20);
+        MINI_CHECK!(m1.is_valid());
 
         let sph = Primitives::sphere_surface(0.0, 0.0, 0.0, 3.0);
         let m2 = Primitives::diamond_mesh(&sph, 8, 4);
@@ -1990,11 +2014,11 @@ pub fn run_primitives_mesh_hex_mesh() -> TestResult {
         use crate::Primitives;
 
         let cyl = Primitives::cylinder_surface(0.0, 0.0, 0.0, 1.0, 5.0);
-        let m = Primitives::hex_mesh(&cyl, 6, 4, 1.0 / 3.0);
+        let m1 = Primitives::hex_mesh(&cyl, 6, 4, 1.0 / 3.0);
 
-        MINI_CHECK!(m.number_of_vertices() == 78);
-        MINI_CHECK!(m.number_of_faces() == 15);
-        MINI_CHECK!(m.is_valid());
+        MINI_CHECK!(m1.number_of_vertices() == 78);
+        MINI_CHECK!(m1.number_of_faces() == 15);
+        MINI_CHECK!(m1.is_valid());
 
         let sph = Primitives::sphere_surface(0.0, 0.0, 0.0, 3.0);
         let m2 = Primitives::hex_mesh(&sph, 6, 4, 1.0 / 3.0);
@@ -2048,31 +2072,31 @@ pub fn run_primitives_nurbscurve_interpolated() -> TestResult {
             Point::new(41.0, 13.0, 0.0),
         ];
 
-        let c = Primitives::create_interpolated(
+        let curve = Primitives::create_interpolated(
             &points,
             CurveNurbsKnotStyle::Chord,
             CurveInterpStyle::Rhino,
         );
 
-        MINI_CHECK!(c.is_valid());
-        MINI_CHECK!(c.degree() == 3);
-        MINI_CHECK!(c.order() == 4);
-        MINI_CHECK!(c.cv_count() == 9);
-        MINI_CHECK!(c.is_rational() == false);
+        MINI_CHECK!(curve.is_valid());
+        MINI_CHECK!(curve.degree() == 3);
+        MINI_CHECK!(curve.order() == 4);
+        MINI_CHECK!(curve.cv_count() == 9);
+        MINI_CHECK!(curve.is_rational() == false);
 
-        let (d0, d1) = c.domain();
-        let nurbsknots = c.get_nurbsknots();
+        let (d0, d1) = curve.domain();
+        let nurbsknots = curve.get_nurbsknots();
 
-        MINI_CHECK!(TOLERANCE.is_point_close(&c.point_at(d0), &points[0]));
-        MINI_CHECK!(TOLERANCE.is_point_close(&c.point_at(nurbsknots[3]), &points[1]));
-        MINI_CHECK!(TOLERANCE.is_point_close(&c.point_at(nurbsknots[4]), &points[2]));
-        MINI_CHECK!(TOLERANCE.is_point_close(&c.point_at(nurbsknots[5]), &points[3]));
-        MINI_CHECK!(TOLERANCE.is_point_close(&c.point_at(nurbsknots[6]), &points[4]));
-        MINI_CHECK!(TOLERANCE.is_point_close(&c.point_at(nurbsknots[7]), &points[5]));
-        MINI_CHECK!(TOLERANCE.is_point_close(&c.point_at(d1), &points[6]));
+        MINI_CHECK!(TOLERANCE.is_point_close(&curve.point_at(d0), &points[0]));
+        MINI_CHECK!(TOLERANCE.is_point_close(&curve.point_at(nurbsknots[3]), &points[1]));
+        MINI_CHECK!(TOLERANCE.is_point_close(&curve.point_at(nurbsknots[4]), &points[2]));
+        MINI_CHECK!(TOLERANCE.is_point_close(&curve.point_at(nurbsknots[5]), &points[3]));
+        MINI_CHECK!(TOLERANCE.is_point_close(&curve.point_at(nurbsknots[6]), &points[4]));
+        MINI_CHECK!(TOLERANCE.is_point_close(&curve.point_at(nurbsknots[7]), &points[5]));
+        MINI_CHECK!(TOLERANCE.is_point_close(&curve.point_at(d1), &points[6]));
 
-        MINI_CHECK!(TOLERANCE.is_point_close(&c.get_cv(0).unwrap(), &points[0]));
-        MINI_CHECK!(TOLERANCE.is_point_close(&c.get_cv(8).unwrap(), &points[6]));
+        MINI_CHECK!(TOLERANCE.is_point_close(&curve.get_cv(0).unwrap(), &points[0]));
+        MINI_CHECK!(TOLERANCE.is_point_close(&curve.get_cv(8).unwrap(), &points[6]));
 
         let pts4 = vec![
             Point::new(0.0, 0.0, 0.0),
@@ -2100,11 +2124,11 @@ pub fn run_primitives_mesh_tetrahedron() -> TestResult {
     MINI_TEST!("Mesh Tetrahedron", {
         use crate::Primitives;
 
-        let m = Primitives::tetrahedron(2.0);
+        let mesh = Primitives::tetrahedron(2.0);
 
-        MINI_CHECK!(m.is_valid());
-        MINI_CHECK!(m.number_of_vertices() == 4);
-        MINI_CHECK!(m.number_of_faces() == 4);
+        MINI_CHECK!(mesh.is_valid());
+        MINI_CHECK!(mesh.number_of_vertices() == 4);
+        MINI_CHECK!(mesh.number_of_faces() == 4);
     })
 }
 
@@ -2112,11 +2136,11 @@ pub fn run_primitives_mesh_cube() -> TestResult {
     MINI_TEST!("Mesh Cube", {
         use crate::Primitives;
 
-        let m = Primitives::cube(2.0);
+        let mesh = Primitives::cube(2.0);
 
-        MINI_CHECK!(m.is_valid());
-        MINI_CHECK!(m.number_of_vertices() == 8);
-        MINI_CHECK!(m.number_of_faces() == 6);
+        MINI_CHECK!(mesh.is_valid());
+        MINI_CHECK!(mesh.number_of_vertices() == 8);
+        MINI_CHECK!(mesh.number_of_faces() == 6);
     })
 }
 
@@ -2124,11 +2148,11 @@ pub fn run_primitives_mesh_octahedron() -> TestResult {
     MINI_TEST!("Mesh Octahedron", {
         use crate::Primitives;
 
-        let m = Primitives::octahedron(2.0);
+        let mesh = Primitives::octahedron(2.0);
 
-        MINI_CHECK!(m.is_valid());
-        MINI_CHECK!(m.number_of_vertices() == 6);
-        MINI_CHECK!(m.number_of_faces() == 8);
+        MINI_CHECK!(mesh.is_valid());
+        MINI_CHECK!(mesh.number_of_vertices() == 6);
+        MINI_CHECK!(mesh.number_of_faces() == 8);
     })
 }
 
@@ -2136,11 +2160,11 @@ pub fn run_primitives_mesh_icosahedron() -> TestResult {
     MINI_TEST!("Mesh Icosahedron", {
         use crate::Primitives;
 
-        let m = Primitives::icosahedron(2.0);
+        let mesh = Primitives::icosahedron(2.0);
 
-        MINI_CHECK!(m.is_valid());
-        MINI_CHECK!(m.number_of_vertices() == 12);
-        MINI_CHECK!(m.number_of_faces() == 20);
+        MINI_CHECK!(mesh.is_valid());
+        MINI_CHECK!(mesh.number_of_vertices() == 12);
+        MINI_CHECK!(mesh.number_of_faces() == 20);
     })
 }
 
@@ -2155,6 +2179,7 @@ pub fn run_primitives_nurbssurface_wave() -> TestResult {
         MINI_CHECK!(srf.degree(1) == 3);
         MINI_CHECK!(srf.cv_count(0) == 13);
         MINI_CHECK!(srf.cv_count(1) == 13);
+
         let corner = srf.point_at(0.0, 0.0).unwrap();
 
         MINI_CHECK!(corner[2].abs() < 0.1);
