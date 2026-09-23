@@ -1774,6 +1774,11 @@ pub fn get_all_tests() -> Vec<RegisteredTest> {
         },
         RegisteredTest {
             group: "Mesh",
+            name: "Cut By Plane",
+            func: run_mesh_cut_by_plane,
+        },
+        RegisteredTest {
+            group: "Mesh",
             name: "Json Roundtrip",
             func: run_mesh_json_roundtrip,
         },
@@ -1936,6 +1941,71 @@ pub fn get_all_tests() -> Vec<RegisteredTest> {
             group: "Mesh",
             name: "Assignment Keeps Objectcolor",
             func: run_mesh_assignment_keeps_objectcolor,
+        },
+        RegisteredTest {
+            group: "Mesh",
+            name: "From Polyline Pairs",
+            func: run_mesh_from_polyline_pairs,
+        },
+        RegisteredTest {
+            group: "Mesh",
+            name: "From Polyline Pairs Vnf",
+            func: run_mesh_from_polyline_pairs_vnf,
+        },
+        RegisteredTest {
+            group: "Mesh",
+            name: "Reflex Fold",
+            func: run_mesh_reflex_fold,
+        },
+        RegisteredTest {
+            group: "Mesh",
+            name: "Miter Contours",
+            func: run_mesh_miter_contours,
+        },
+        RegisteredTest {
+            group: "Mesh",
+            name: "Set Face Triangulation",
+            func: run_mesh_set_face_triangulation,
+        },
+        RegisteredTest {
+            group: "Mesh",
+            name: "Set Face Holes",
+            func: run_mesh_set_face_holes,
+        },
+        RegisteredTest {
+            group: "Mesh",
+            name: "Rebuild Halfedges",
+            func: run_mesh_rebuild_halfedges,
+        },
+        RegisteredTest {
+            group: "Mesh",
+            name: "Ensure Halfedges",
+            func: run_mesh_ensure_halfedges,
+        },
+        RegisteredTest {
+            group: "Mesh",
+            name: "Edge Face Map",
+            func: run_mesh_edge_face_map,
+        },
+        RegisteredTest {
+            group: "Mesh",
+            name: "Face Outlines",
+            func: run_mesh_face_outlines,
+        },
+        RegisteredTest {
+            group: "Mesh",
+            name: "Dihedral Angle",
+            func: run_mesh_dihedral_angle,
+        },
+        RegisteredTest {
+            group: "Mesh",
+            name: "Triangle Bvh",
+            func: run_mesh_triangle_bvh,
+        },
+        RegisteredTest {
+            group: "Mesh",
+            name: "Triangle Aabb Tree",
+            func: run_mesh_triangle_aabb_tree,
         },
         // NurbsCurve tests
         RegisteredTest {

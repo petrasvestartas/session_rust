@@ -4,10 +4,7 @@ use crate::spatial_aabbtree::SpatialAABBTree;
 use crate::tolerance::PI;
 use crate::{Color, Line, Plane, Point, SpatialBVH, Tolerance, Vector, Xform, AABB, OBB};
 use serde::{Deserialize, Serialize};
-use std::collections::{BTreeMap, HashMap, HashSet};
-
-/// Halfedge connectivity: vertex to neighbor to the face on that side.
-pub type Halfedges = HashMap<usize, HashMap<usize, Option<usize>>>;
+use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
 
 /// Predicate over a key and its merged attributes.
 pub type KeyPredicate<'a, K> = &'a dyn Fn(K, &HashMap<String, f64>) -> bool;
@@ -33,7 +30,7 @@ pub enum ColorMode {
 }
 
 impl ColorMode {
-    /// Returns the protobuf enum value.
+    /// Return the protobuf enum value.
     fn to_i32(&self) -> i32 {
         match self {
             Self::OBJECTCOLOR => 0,
@@ -43,7 +40,7 @@ impl ColorMode {
         }
     }
 
-    /// Returns the mode of a protobuf enum value, objectcolor when unknown.
+    /// Return the mode of a protobuf enum value, objectcolor when unknown.
     fn from_i32(v: i32) -> Self {
         match v {
             1 => Self::POINTCOLORS,
@@ -53,7 +50,7 @@ impl ColorMode {
         }
     }
 
-    /// Returns the lowercase name.
+    /// Return the lowercase name.
     fn to_str(&self) -> &'static str {
         match self {
             Self::OBJECTCOLOR => "objectcolor",
@@ -63,7 +60,7 @@ impl ColorMode {
         }
     }
 
-    /// Returns the mode named s, objectcolor when unknown.
+    /// Return the mode named s, objectcolor when unknown.
     fn from_str(s: &str) -> Self {
         match s {
             "pointcolors" => Self::POINTCOLORS,
@@ -88,44 +85,44 @@ pub enum NormalWeighting {
 pub struct Attributes(Option<Box<BTreeMap<String, f64>>>);
 
 impl Attributes {
-    /// Constructs an empty map.
+    /// Construct an empty map.
     pub fn new() -> Self {
         Self(None)
     }
 
-    /// Returns the value named key.
+    /// Return the value named key.
     pub fn get(&self, key: &str) -> Option<&f64> {
         self.0.as_ref().and_then(|m| m.get(key))
     }
 
-    /// Returns whether key is stored.
+    /// Return whether key is stored.
     pub fn contains_key(&self, key: &str) -> bool {
         self.get(key).is_some()
     }
 
-    /// Returns the number of entries.
+    /// Return the number of entries.
     pub fn len(&self) -> usize {
         self.0.as_ref().map_or(0, |m| m.len())
     }
 
-    /// Returns whether nothing is stored.
+    /// Return whether nothing is stored.
     pub fn is_empty(&self) -> bool {
         self.len() == 0
     }
 
-    /// Frees the map.
+    /// Free the map.
     pub fn clear(&mut self) {
         self.0 = None
     }
 
-    /// Stores a value, allocating the map on first use; the only entry point that can allocate.
+    /// Store a value, allocating the map on first use; the only entry point that can allocate.
     pub fn insert(&mut self, key: String, value: f64) -> Option<f64> {
         self.0
             .get_or_insert_with(Default::default)
             .insert(key, value)
     }
 
-    /// Removes key and frees the map when it becomes empty; returns the old value.
+    /// Remove key and free the map when it becomes empty; returns the old value.
     pub fn remove(&mut self, key: &str) -> Option<f64> {
         let out = self.0.as_mut().and_then(|m| m.remove(key));
 
@@ -136,7 +133,7 @@ impl Attributes {
         out
     }
 
-    /// Returns the map iterator, or a shared empty one.
+    /// Return the map iterator, or a shared empty one.
     pub fn iter(&self) -> std::collections::btree_map::Iter<'_, String, f64> {
         static EMPTY: std::sync::OnceLock<BTreeMap<String, f64>> = std::sync::OnceLock::new();
 
@@ -146,12 +143,12 @@ impl Attributes {
         }
     }
 
-    /// Iterates the names.
+    /// Iterate the names.
     pub fn keys(&self) -> impl Iterator<Item = &String> {
         self.iter().map(|(k, _)| k)
     }
 
-    /// Iterates the values.
+    /// Iterate the values.
     pub fn values(&self) -> impl Iterator<Item = &f64> {
         self.iter().map(|(_, v)| v)
     }
@@ -161,7 +158,7 @@ impl<'a> IntoIterator for &'a Attributes {
     type Item = (&'a String, &'a f64);
     type IntoIter = std::collections::btree_map::Iter<'a, String, f64>;
 
-    /// Iterates the entries.
+    /// Iterate the entries.
     fn into_iter(self) -> Self::IntoIter {
         self.iter()
     }
@@ -171,14 +168,14 @@ impl IntoIterator for Attributes {
     type Item = (String, f64);
     type IntoIter = std::collections::btree_map::IntoIter<String, f64>;
 
-    /// Iterates the entries.
+    /// Iterate the entries.
     fn into_iter(self) -> Self::IntoIter {
         self.0.map_or_else(Default::default, |m| *m).into_iter()
     }
 }
 
 impl FromIterator<(String, f64)> for Attributes {
-    /// Collects entries, allocating only when there are any.
+    /// Collect entries, allocating only when there are any.
     fn from_iter<T: IntoIterator<Item = (String, f64)>>(it: T) -> Self {
         let m: BTreeMap<String, f64> = it.into_iter().collect();
 
@@ -191,7 +188,7 @@ impl FromIterator<(String, f64)> for Attributes {
 }
 
 impl Extend<(String, f64)> for Attributes {
-    /// Stores every entry of it.
+    /// Store every entry of it.
     fn extend<T: IntoIterator<Item = (String, f64)>>(&mut self, it: T) {
         for (k, v) in it {
             self.insert(k, v);
@@ -200,7 +197,7 @@ impl Extend<(String, f64)> for Attributes {
 }
 
 impl Serialize for Attributes {
-    /// Serializes as a JSON map.
+    /// Serialize as a JSON map.
     fn serialize<S: serde::Serializer>(&self, s: S) -> Result<S::Ok, S::Error> {
         use serde::ser::SerializeMap;
         let mut m = s.serialize_map(Some(self.len()))?;
@@ -214,9 +211,10 @@ impl Serialize for Attributes {
 }
 
 impl<'de> Deserialize<'de> for Attributes {
-    /// Deserializes from a JSON map, allocating only when it is not empty.
+    /// Deserialize from a JSON map, allocating only when it is not empty.
     fn deserialize<D: serde::Deserializer<'de>>(d: D) -> Result<Self, D::Error> {
         let m = BTreeMap::<String, f64>::deserialize(d)?;
+
         Ok(if m.is_empty() {
             Self(None)
         } else {
@@ -235,7 +233,7 @@ pub struct VertexData {
 }
 
 impl VertexData {
-    /// Constructs at a point.
+    /// Construct at a point.
     pub fn new(point: Point) -> Self {
         Self {
             x: point[0],
@@ -245,19 +243,19 @@ impl VertexData {
         }
     }
 
-    /// Returns the position as a Point.
+    /// Return the position as a Point.
     pub fn position(&self) -> Point {
         Point::new(self.x, self.y, self.z)
     }
 
-    /// Sets the position from a Point.
+    /// Set the position from a Point.
     pub fn set_position(&mut self, point: Point) {
         self.x = point[0];
         self.y = point[1];
         self.z = point[2];
     }
 
-    /// Returns the vertex color as RGB, 0.5 grey when unset.
+    /// Return the vertex color as RGB, 0.5 grey when unset.
     pub fn color(&self) -> [f64; 3] {
         [
             self.attributes.get("r").copied().unwrap_or(0.5),
@@ -266,14 +264,14 @@ impl VertexData {
         ]
     }
 
-    /// Sets the vertex color.
+    /// Set the vertex color.
     pub fn set_color(&mut self, r: f64, g: f64, b: f64) {
         self.attributes.insert("r".to_string(), r);
         self.attributes.insert("g".to_string(), g);
         self.attributes.insert("b".to_string(), b);
     }
 
-    /// Returns the vertex normal when set.
+    /// Return the vertex normal when set.
     pub fn normal(&self) -> Option<[f64; 3]> {
         let nx = self.attributes.get("nx")?;
         let ny = self.attributes.get("ny")?;
@@ -282,7 +280,7 @@ impl VertexData {
         Some([*nx, *ny, *nz])
     }
 
-    /// Sets the vertex normal.
+    /// Set the vertex normal.
     pub fn set_normal(&mut self, nx: f64, ny: f64, nz: f64) {
         self.attributes.insert("nx".to_string(), nx);
         self.attributes.insert("ny".to_string(), ny);
@@ -294,44 +292,44 @@ impl VertexData {
 #[derive(Clone, Serialize, Deserialize)]
 #[serde(tag = "type", rename = "Mesh")]
 pub struct Mesh {
-    pub halfedge: Halfedges,                // Halfedge connectivity.
-    pub vertex: HashMap<usize, VertexData>, // Vertex data.
-    pub face: HashMap<usize, Vec<usize>>,   // Face vertex lists.
+    pub halfedge: HashMap<usize, HashMap<usize, Option<usize>>>, // Halfedge connectivity.
+    pub vertex: HashMap<usize, VertexData>,                      // Vertex data.
+    pub face: HashMap<usize, Vec<usize>>,                        // Face vertex lists.
     #[serde(skip)]
     pub face_holes: HashMap<usize, Vec<Vec<usize>>>, // Face hole rings.
-    pub facedata: HashMap<usize, HashMap<String, f64>>, // Face attributes.
+    pub facedata: HashMap<usize, HashMap<String, f64>>,          // Face attributes.
     pub edgedata: HashMap<(usize, usize), HashMap<String, f64>>, // Edge attributes.
-    pub default_vertex_attributes: HashMap<String, f64>, // Default vertex attrs.
-    pub default_face_attributes: HashMap<String, f64>, // Default face attrs.
-    pub default_edge_attributes: HashMap<String, f64>, // Default edge attrs.
+    pub default_vertex_attributes: HashMap<String, f64>,         // Default vertex attrs.
+    pub default_face_attributes: HashMap<String, f64>,           // Default face attrs.
+    pub default_edge_attributes: HashMap<String, f64>,           // Default edge attrs.
     #[serde(
         serialize_with = "crate::guid_serde::serialize",
         deserialize_with = "crate::guid_serde::deserialize"
     )]
     guid: std::sync::OnceLock<String>, // Lazy guid.
-    pub name: String,                       // Mesh name.
+    pub name: String,                                            // Mesh name.
     #[serde(skip)]
-    pub color_mode: ColorMode, // Active color mode.
+    pub color_mode: ColorMode,                 // Active color mode.
     #[serde(skip)]
-    pointcolors: Vec<Color>, // Vertex colors.
+    pointcolors: Vec<Color>,                   // Vertex colors.
     #[serde(skip)]
-    facecolors: Vec<Color>, // Face colors.
+    facecolors: Vec<Color>,                    // Face colors.
     #[serde(skip)]
-    linecolors: Vec<Color>, // Edge colors.
+    linecolors: Vec<Color>,                    // Edge colors.
     #[serde(skip)]
-    widths: Vec<f64>,     // Edge widths.
+    widths: Vec<f64>,                          // Edge widths.
     #[serde(skip)]
-    objectcolor: Color,   // Object color.
-    max_vertex: usize,                      // Next vertex key.
-    max_face: usize,                        // Next face key.
+    objectcolor: Color,                        // Object color.
+    max_vertex: usize,                                           // Next vertex key.
+    max_face: usize,                                             // Next face key.
     #[serde(skip)]
     pub triangulation: HashMap<usize, Vec<[usize; 3]>>, // Cached triangulations.
     #[serde(skip)]
-    triangle_bvh_built: bool, // Whether the triangle caches are current.
+    triangle_bvh_built: bool,                  // Whether the triangle caches are current.
     #[serde(skip)]
-    pub tri_bvh: Option<SpatialBVH>, // BVH over the cached triangle AABBs.
+    pub tri_bvh: Option<SpatialBVH>,           // BVH over the cached triangle AABBs.
     #[serde(skip)]
-    tri_aabbs: Vec<AABB>, // Per-triangle AABBs.
+    tri_aabbs: Vec<AABB>,                      // Per-triangle AABBs.
     #[serde(skip)]
     pub tri_tris: Vec<[usize; 3]>, // Triangle vertex indices into tri_vertices; session_viewer reads it for memory accounting.
     #[serde(skip)]
@@ -345,7 +343,7 @@ pub struct Mesh {
 }
 
 impl Default for Mesh {
-    /// Constructs an empty mesh.
+    /// Construct an empty mesh.
     fn default() -> Self {
         Self::new()
     }
@@ -354,7 +352,6 @@ impl Default for Mesh {
 // ═══════════════════════════════════════════════════════════════════════════
 // Helpers
 // ═══════════════════════════════════════════════════════════════════════════
-
 /// Unit Newell normal of a closed ring.
 fn newell_normal(pts: &[Point]) -> Vector {
     let n = pts.len();
@@ -469,7 +466,6 @@ fn signed_area_2d(pts: &[(f64, f64)]) -> f64 {
 // ═══════════════════════════════════════════════════════════════════════════
 // Loft
 // ═══════════════════════════════════════════════════════════════════════════
-
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum LoftFaceRole {
     TopCap,
@@ -537,15 +533,11 @@ struct LoftPoly {
     top: LoftRing,
 }
 
-/// Returns the 2D coordinates of p in the frame.
+/// Return the 2D coordinates of p in the frame.
 fn loft_project(frame: &LoftFrame, p: &Point) -> (f64, f64) {
-    let dx = p[0] - frame.origin[0];
-    let dy = p[1] - frame.origin[1];
-    let dz = p[2] - frame.origin[2];
-    (
-        dx * frame.xaxis[0] + dy * frame.xaxis[1] + dz * frame.xaxis[2],
-        dx * frame.yaxis[0] + dy * frame.yaxis[1] + dz * frame.yaxis[2],
-    )
+    let d = p - &frame.origin;
+
+    (d.dot(&frame.xaxis), d.dot(&frame.yaxis))
 }
 
 /// Polyline points without the closing duplicate.
@@ -565,7 +557,7 @@ fn loft_open_points(pl: &Polyline) -> Vec<Point> {
     pts
 }
 
-/// Returns the signed area of pts projected on the frame.
+/// Return the signed area of pts projected on the frame.
 fn loft_signed_area(frame: &LoftFrame, pts: &[Point]) -> f64 {
     let mut pts2d = Vec::with_capacity(pts.len());
 
@@ -626,7 +618,7 @@ fn loft_frame(bottom: &Polyline, top: &Polyline) -> LoftFrame {
     let bottom_to_top = &c1 - &c0;
 
     if zaxis.dot(&bottom_to_top) < 0.0 {
-        yaxis = Vector::new(-yaxis[0], -yaxis[1], -yaxis[2]);
+        yaxis = -yaxis;
     }
 
     LoftFrame {
@@ -660,7 +652,7 @@ fn loft_add_vkeys(mesh: &mut Mesh, pts: &[Point]) -> Vec<usize> {
     keys
 }
 
-/// Splits triangle j, which spans corners a and c, at boundary vertex b.
+/// Split triangle j, which spans corners a and c, at boundary vertex b.
 fn loft_split_triangle(tris: &mut Vec<[usize; 3]>, j: usize, a: usize, c: usize, b: usize) {
     let ft = tris[j];
     let (t1, t2) = if (ft[0] == a || ft[0] == c) && (ft[1] == a || ft[1] == c) {
@@ -674,7 +666,7 @@ fn loft_split_triangle(tris: &mut Vec<[usize; 3]>, j: usize, a: usize, c: usize,
     tris.push(t2);
 }
 
-/// Inserts boundary vertices the CDT skipped as collinear, one per pass.
+/// Insert boundary vertices the CDT skipped as collinear, one per pass.
 fn loft_fix_collinear(tris: &mut Vec<[usize; 3]>, fvkeys: &[usize]) {
     let n = fvkeys.len();
 
@@ -723,7 +715,7 @@ fn loft_fix_collinear(tris: &mut Vec<[usize; 3]>, fvkeys: &[usize]) {
     }
 }
 
-/// Drops triangles with zero area in the projected integer grid.
+/// Drop triangles with zero area in the projected integer grid.
 fn loft_drop_degenerate(tris: &[[usize; 3]], mesh: &Mesh, frame: &LoftFrame) -> Vec<[usize; 3]> {
     let sc = 1e6;
     let mut kept = Vec::with_capacity(tris.len());
@@ -876,7 +868,7 @@ fn loft_wall_start(frame: &LoftFrame, bpts: &[Point], tpts: &[Point]) -> (usize,
     (ia, ib)
 }
 
-/// Returns whether a and b coincide within 1e-10.
+/// Return whether a and b coincide within 1e-10.
 fn loft_same_point(a: &Point, b: &Point) -> bool {
     (a[0] - b[0]).abs() < 1e-10 && (a[1] - b[1]).abs() < 1e-10 && (a[2] - b[2]).abs() < 1e-10
 }
@@ -988,7 +980,7 @@ fn loft_walls_zipper(
     }
 }
 
-/// Adds the wall faces of one polygon, as quads when the rings match in size, zipped otherwise.
+/// Add the wall faces of one polygon, as quads when the rings match in size, zipped otherwise.
 fn loft_walls(
     mesh: &mut Mesh,
     frame: &LoftFrame,
@@ -1012,8 +1004,7 @@ fn loft_walls(
 // ═══════════════════════════════════════════════════════════════════════════
 // Loft panels
 // ═══════════════════════════════════════════════════════════════════════════
-
-/// Drops ring points collinear with their neighbors, until none is left.
+/// Drop ring points collinear with their neighbors, until none is left.
 fn lp_merge_collinear(pts: &mut Vec<Point>, vkeys: &mut Vec<usize>) {
     let tol = Tolerance::APPROXIMATION;
     let zt2 = Tolerance::ZERO_TOLERANCE * Tolerance::ZERO_TOLERANCE;
@@ -1052,6 +1043,7 @@ fn lp_merge_collinear(pts: &mut Vec<Point>, vkeys: &mut Vec<usize>) {
                 nk.push(vkeys[i]);
             }
         }
+
         *pts = np;
         *vkeys = nk;
 
@@ -1061,7 +1053,7 @@ fn lp_merge_collinear(pts: &mut Vec<Point>, vkeys: &mut Vec<usize>) {
     }
 }
 
-/// Drops ring points closer than a thousandth of the longest edge to their predecessor.
+/// Drop ring points closer than a thousandth of the longest edge to their predecessor.
 fn lp_merge_close(pts: &mut Vec<Point>, vkeys: &mut Vec<usize>) {
     let sz = pts.len();
     let mut max_edge = 0.0f64;
@@ -1089,11 +1081,12 @@ fn lp_merge_close(pts: &mut Vec<Point>, vkeys: &mut Vec<usize>) {
     if tp.len() < 3 {
         return;
     }
+
     *pts = tp;
     *vkeys = tk;
 }
 
-/// Returns p moved by gap toward (cx, cy, cz).
+/// Return p moved by gap toward (cx, cy, cz).
 fn lp_offset_toward(p: &Point, cx: f64, cy: f64, cz: f64, gap: f64) -> Point {
     let mut dx = cx - p[0];
     let mut dy = cy - p[1];
@@ -1106,10 +1099,10 @@ fn lp_offset_toward(p: &Point, cx: f64, cy: f64, cz: f64, gap: f64) -> Point {
         dz *= gap / len;
     }
 
-    Point::new(p[0] + dx, p[1] + dy, p[2] + dz)
+    p + Vector::new(dx, dy, dz)
 }
 
-/// Returns the average of the face vertex positions.
+/// Return the average of the face vertex positions.
 fn lp_face_centroid(m: &Mesh, fk: usize) -> Point {
     let vkeys = m.face_vertices(fk).unwrap();
     let mut cx = 0.0;
@@ -1163,7 +1156,7 @@ fn lp_match_faces(top_mesh: &Mesh, bot_mesh: &Mesh) -> Vec<(usize, usize)> {
     face_match
 }
 
-/// Reverses top and bottom rings so the top normal points from bottom to top and the bottom normal away.
+/// Reverse top and bottom rings so the top normal points from bottom to top and the bottom normal away.
 fn lp_orient_rings(
     top_pts: &mut [Point],
     top_vkeys: &mut [usize],
@@ -1534,7 +1527,6 @@ fn lp_ordered_mesh(panels: &[LoftPanel], top: bool) -> Mesh {
 // ═══════════════════════════════════════════════════════════════════════════
 // Miter contours
 // ═══════════════════════════════════════════════════════════════════════════
-
 /// Corners whose interior angle is below max_angle_deg.
 fn fold_chamfer_mask(pts: &[Point], max_angle_deg: f64) -> Vec<bool> {
     let n = pts.len();
@@ -1668,17 +1660,374 @@ fn miter_contour(corner_lines: &[Line], plane: &Plane) -> Vec<Point> {
     contour
 }
 
+// ═══════════════════════════════════════════════════════════════════════════
+// Cutting
+// ═══════════════════════════════════════════════════════════════════════════
+/// One face of a cut and the input face it came from.
+#[derive(Clone)]
+struct CutFace {
+    rings: Vec<Vec<usize>>, // Outer ring, then hole rings.
+    parent: Option<usize>,  // Input face key, none for a cap.
+}
+
+/// Positions of a key ring.
+fn cut_points(ring: &[usize], points: &BTreeMap<usize, Point>) -> Vec<Point> {
+    let mut result = Vec::with_capacity(ring.len());
+
+    for key in ring {
+        result.push(points[key].clone());
+    }
+
+    result
+}
+
+/// Twice the signed area of a key ring in plane coordinates.
+fn cut_area(ring: &[usize], uv: &BTreeMap<usize, (f64, f64)>) -> f64 {
+    let mut area = 0.0;
+
+    for i in 0..ring.len() {
+        let a = uv[&ring[i]];
+        let b = uv[&ring[(i + 1) % ring.len()]];
+        area += a.0 * b.1 - b.0 * a.1;
+    }
+
+    area
+}
+
+/// Whether p lies inside the key rings by the even-odd rule.
+fn cut_inside(p: (f64, f64), rings: &[Vec<usize>], uv: &BTreeMap<usize, (f64, f64)>) -> bool {
+    let mut inside = false;
+
+    for ring in rings {
+        for i in 0..ring.len() {
+            let a = uv[&ring[i]];
+            let b = uv[&ring[(i + 1) % ring.len()]];
+
+            if (a.1 > p.1) != (b.1 > p.1) && p.0 < a.0 + (p.1 - a.1) * (b.0 - a.0) / (b.1 - a.1) {
+                inside = !inside;
+            }
+        }
+    }
+
+    inside
+}
+
+/// Split a closed walk into simple loops where it revisits a vertex; loops under three vertices are dropped.
+fn cut_split(walk: &[usize], loops: &mut Vec<Vec<usize>>) {
+    let mut stack: Vec<usize> = Vec::new();
+    let mut index: BTreeMap<usize, usize> = BTreeMap::new();
+
+    for key in walk {
+        let Some(&start) = index.get(key) else {
+            index.insert(*key, stack.len());
+            stack.push(*key);
+            continue;
+        };
+
+        if stack.len() - start > 2 {
+            loops.push(stack[start..].to_vec());
+        }
+
+        for removed in &stack[start + 1..] {
+            index.remove(removed);
+        }
+
+        stack.truncate(start + 1);
+    }
+
+    if stack.len() > 2 {
+        loops.push(stack);
+    }
+}
+
+/// Closed loops of directed edges, turning sharpest left where loops meet; open chains are dropped.
+fn cut_loops(
+    mut edges: BTreeMap<usize, Vec<usize>>,
+    uv: &BTreeMap<usize, (f64, f64)>,
+) -> Vec<Vec<usize>> {
+    let mut loops = Vec::new();
+
+    while let Some(mut first) = edges.first_entry() {
+        let mut walk = vec![*first.key()];
+        let mut prev = walk[0];
+        let mut cur = first.get_mut().pop().unwrap_or(prev);
+
+        if first.get().is_empty() {
+            first.remove();
+        }
+
+        while cur != walk[0] {
+            let Some(targets) = edges.get_mut(&cur) else {
+                walk.clear();
+                break;
+            };
+
+            walk.push(cur);
+            let ax = uv[&cur].0 - uv[&prev].0;
+            let ay = uv[&cur].1 - uv[&prev].1;
+            let mut best = 0;
+            let mut turn = -4.0;
+
+            for (j, target) in targets.iter().enumerate() {
+                let bx = uv[target].0 - uv[&cur].0;
+                let by = uv[target].1 - uv[&cur].1;
+                let angle = (ax * by - ay * bx).atan2(ax * bx + ay * by);
+
+                if angle > turn {
+                    turn = angle;
+                    best = j;
+                }
+            }
+
+            prev = cur;
+            cur = targets.remove(best);
+
+            if targets.is_empty() {
+                edges.remove(&prev);
+            }
+        }
+
+        cut_split(&walk, &mut loops);
+    }
+
+    loops
+}
+
+/// Loops wound like the largest one become outer rings, each taking the opposite-wound loops inside it as holes.
+fn cut_regions(loops: &[Vec<usize>], uv: &BTreeMap<usize, (f64, f64)>) -> Vec<CutFace> {
+    let mut areas: Vec<f64> = Vec::with_capacity(loops.len());
+    let mut largest = 0.0f64;
+
+    for ring in loops {
+        let area = cut_area(ring, uv);
+        areas.push(area);
+
+        if area.abs() > largest.abs() {
+            largest = area;
+        }
+    }
+
+    let mut regions: Vec<CutFace> = Vec::new();
+    let mut sizes: Vec<f64> = Vec::new();
+
+    for (ring, area) in loops.iter().zip(&areas) {
+        if area * largest > 0.0 {
+            regions.push(CutFace {
+                rings: vec![ring.clone()],
+                parent: None,
+            });
+            sizes.push(area.abs());
+        }
+    }
+
+    for (ring, area) in loops.iter().zip(&areas) {
+        if area * largest >= 0.0 {
+            continue;
+        }
+
+        let a = uv[&ring[0]];
+        let b = uv[&ring[1]];
+        let mid = ((a.0 + b.0) * 0.5, (a.1 + b.1) * 0.5);
+        let mut owner: Option<usize> = None;
+
+        for (r, region) in regions.iter().enumerate() {
+            if cut_inside(mid, &region.rings[..1], uv) && owner.is_none_or(|o| sizes[r] < sizes[o])
+            {
+                owner = Some(r);
+            }
+        }
+
+        if let Some(o) = owner {
+            regions[o].rings.push(ring.clone());
+        }
+    }
+
+    regions
+}
+
+/// CDT of a face with hole rings, wound like its outer ring; empty when degenerate.
+fn cut_triangulation(piece: &CutFace, points: &BTreeMap<usize, Point>) -> Vec<[usize; 3]> {
+    let normal = newell_normal(&cut_points(&piece.rings[0], points));
+
+    if normal.magnitude() == 0.0 {
+        return Vec::new();
+    }
+
+    let plane = Plane::from_point_normal(points[&piece.rings[0][0]].clone(), normal, None);
+    let frame = LoftFrame {
+        origin: plane.origin(),
+        xaxis: plane.x_axis(),
+        yaxis: plane.y_axis(),
+    };
+    let mut rings_2d: Vec<Vec<Point>> = Vec::new();
+    let mut flat: Vec<usize> = Vec::new();
+
+    for ring in &piece.rings {
+        let mut ring_2d = Vec::with_capacity(ring.len());
+
+        for key in ring {
+            let (u, v) = loft_project(&frame, &points[key]);
+            ring_2d.push(Point::new(u, v, 0.0));
+            flat.push(*key);
+        }
+
+        rings_2d.push(ring_2d);
+    }
+
+    let mut triangles: Vec<[usize; 3]> = Vec::new();
+
+    for (a, b, c) in remesh_cdt::cdt_triangulate(&rings_2d[0], &rings_2d[1..]) {
+        triangles.push([flat[a], flat[b], flat[c]]);
+    }
+
+    loft_fix_collinear(&mut triangles, &piece.rings[0]);
+
+    triangles
+}
+
+/// Kept pieces of one crossed face from its rings with crossing vertices inserted, split along the plane in the face frame.
+fn cut_pieces(
+    rings: &[Vec<usize>],
+    normal: &Vector,
+    xaxis: &Vector,
+    distance: &BTreeMap<usize, f64>,
+    points: &BTreeMap<usize, Point>,
+    tolerance: f64,
+) -> Vec<CutFace> {
+    let frame = LoftFrame {
+        origin: points[&rings[0][0]].clone(),
+        xaxis: xaxis.clone(),
+        yaxis: normal.cross(xaxis),
+    };
+    let mut uv: BTreeMap<usize, (f64, f64)> = BTreeMap::new();
+    let mut edges: BTreeMap<usize, Vec<usize>> = BTreeMap::new();
+    let mut lines: BTreeSet<(usize, usize)> = BTreeSet::new();
+    let mut events: BTreeSet<usize> = BTreeSet::new();
+
+    for ring in rings {
+        for key in ring {
+            uv.insert(*key, loft_project(&frame, &points[key]));
+        }
+    }
+
+    for ring in rings {
+        for i in 0..ring.len() {
+            let a = ring[i];
+            let b = ring[(i + 1) % ring.len()];
+
+            if distance[&a] == 0.0 {
+                events.insert(a);
+            }
+
+            if distance[&a] == 0.0 && distance[&b] == 0.0 {
+                lines.insert((a.min(b), a.max(b)));
+            }
+
+            if distance[&a] >= 0.0
+                && distance[&b] >= 0.0
+                && (distance[&a] + distance[&b] > 0.0 || uv[&b].1 < uv[&a].1)
+            {
+                edges.entry(a).or_default().push(b);
+            }
+        }
+    }
+
+    let mut order: Vec<usize> = events.into_iter().collect();
+    order.sort_by(|a, b| {
+        uv[a]
+            .1
+            .partial_cmp(&uv[b].1)
+            .unwrap_or(std::cmp::Ordering::Equal)
+    });
+
+    for pair in order.windows(2) {
+        let a = uv[&pair[0]];
+        let b = uv[&pair[1]];
+        let mid = ((a.0 + b.0) * 0.5, (a.1 + b.1) * 0.5);
+        let line = (pair[0].min(pair[1]), pair[0].max(pair[1]));
+
+        if b.1 - a.1 > tolerance && !lines.contains(&line) && cut_inside(mid, rings, &uv) {
+            edges.entry(pair[1]).or_default().push(pair[0]);
+        }
+    }
+
+    cut_regions(&cut_loops(edges, &uv), &uv)
+}
+
+/// Key of the vertex where edge crosses the plane, added on first use as first plus the number of crossings so far.
+fn cut_crossing(
+    edge: (usize, usize),
+    crossings: &mut BTreeMap<(usize, usize), usize>,
+    distance: &mut BTreeMap<usize, f64>,
+    points: &mut BTreeMap<usize, Point>,
+    first: usize,
+) -> usize {
+    let edge = (edge.0.min(edge.1), edge.0.max(edge.1));
+
+    if let Some(key) = crossings.get(&edge) {
+        return *key;
+    }
+
+    let key = first + crossings.len();
+    let t = distance[&edge.0] / (distance[&edge.0] - distance[&edge.1]);
+    let point = &points[&edge.0] + &((&points[&edge.1] - &points[&edge.0]) * t);
+    points.insert(key, point);
+    distance.insert(key, 0.0);
+    crossings.insert(edge, key);
+
+    key
+}
+
+/// Caps closing the loops of unpaired half-edges that lie on the plane.
+fn cut_caps(
+    faces: &BTreeMap<usize, CutFace>,
+    distance: &BTreeMap<usize, f64>,
+    points: &BTreeMap<usize, Point>,
+    plane: &Plane,
+) -> Vec<CutFace> {
+    let frame = LoftFrame {
+        origin: plane.origin(),
+        xaxis: plane.y_axis(),
+        yaxis: plane.x_axis(),
+    };
+    let mut halfedges: BTreeSet<(usize, usize)> = BTreeSet::new();
+    let mut section: BTreeMap<usize, Vec<usize>> = BTreeMap::new();
+    let mut uv: BTreeMap<usize, (f64, f64)> = BTreeMap::new();
+
+    for piece in faces.values() {
+        for ring in &piece.rings {
+            for i in 0..ring.len() {
+                halfedges.insert((ring[i], ring[(i + 1) % ring.len()]));
+            }
+        }
+    }
+
+    for &(a, b) in &halfedges {
+        if distance[&a] == 0.0 && distance[&b] == 0.0 && !halfedges.contains(&(b, a)) {
+            section.entry(b).or_default().push(a);
+        }
+    }
+
+    for (key, d) in distance {
+        if *d == 0.0 {
+            uv.insert(*key, loft_project(&frame, &points[key]));
+        }
+    }
+
+    cut_regions(&cut_loops(section, &uv), &uv)
+}
+
 impl Mesh {
     // ═══════════════════════════════════════════════════════════════════════════
     // Constructors
     // ═══════════════════════════════════════════════════════════════════════════
-
-    /// Constructs an empty mesh.
+    /// Construct an empty mesh.
     pub fn new() -> Self {
         let mut default_vertex_attributes = HashMap::new();
         default_vertex_attributes.insert("x".to_string(), 0.0);
         default_vertex_attributes.insert("y".to_string(), 0.0);
         default_vertex_attributes.insert("z".to_string(), 0.0);
+
         Mesh {
             halfedge: HashMap::new(),
             vertex: HashMap::new(),
@@ -1711,7 +2060,7 @@ impl Mesh {
         }
     }
 
-    /// Copies with a new guid and the same data.
+    /// Copy with a new guid and the same data.
     pub fn duplicate(&self) -> Self {
         let mut m = self.clone();
         m.refresh_guid();
@@ -1719,27 +2068,10 @@ impl Mesh {
         m
     }
 
-    /// Returns whether the lazy guid has been created.
-    pub fn has_guid(&self) -> bool {
-        self.guid.get().is_some()
-    }
-
-    /// Returns the guid, creating it on first access.
-    pub fn guid(&self) -> &str {
-        self.guid.get_or_init(|| uuid::Uuid::new_v4().to_string())
-    }
-
-    /// Sets the guid if it has not already been created.
-    pub fn set_guid(&self, g: String) {
-        let _ = self.guid.set(g);
-    }
-
-    /// Clears the guid so a fresh one mints lazily on the next read.
-    pub fn refresh_guid(&mut self) {
-        self.guid = std::sync::OnceLock::new();
-    }
-
-    /// Constructs from a list of vertices and faces.
+    // ═══════════════════════════════════════════════════════════════════════════
+    // Static constructors
+    // ═══════════════════════════════════════════════════════════════════════════
+    /// Construct from a list of vertices and faces.
     pub fn from_vertices_and_faces(vertices: Vec<Point>, faces: Vec<Vec<usize>>) -> Self {
         let mut mesh = Mesh::new();
 
@@ -1791,7 +2123,7 @@ impl Mesh {
         vk
     }
 
-    /// Constructs from a list of polygons, merging vertices within precision when given.
+    /// Construct from a list of polygons, merging vertices within precision when given.
     pub fn from_polylines(polygons: Vec<Vec<Point>>, precision: Option<f64>) -> Self {
         let mut mesh = Mesh::new();
         let mut map_eps: HashMap<(i64, i64, i64), usize> = HashMap::new();
@@ -1848,7 +2180,7 @@ impl Mesh {
         mesh
     }
 
-    /// Mesh from a list of polylines, merging vertices within precision when given.
+    /// Construct from a list of polygons, merging vertices within precision when given.
     pub fn from_polylines_polyline(polylines: &[Polyline], precision: Option<f64>) -> Self {
         let mut polygons: Vec<Vec<Point>> = Vec::with_capacity(polylines.len());
 
@@ -1986,7 +2318,7 @@ impl Mesh {
         min_idx
     }
 
-    /// Constructs a planar mesh from a line network, optionally without its outer boundary face.
+    /// Construct a planar mesh from a line network, optionally without its outer boundary face.
     pub fn from_lines(lines: &[Line], delete_boundary_face: bool, precision: Option<f64>) -> Self {
         if lines.is_empty() {
             return Mesh::new();
@@ -2083,7 +2415,7 @@ impl Mesh {
         mesh
     }
 
-    /// Constructs from a polygon boundary with optional holes; sort_by_bbox picks the largest polyline as boundary.
+    /// Construct from a polygon boundary with optional holes; sort_by_bbox picks the largest polyline as boundary.
     pub fn from_polygon_with_holes(polylines: &[Vec<Point>], sort_by_bbox: bool) -> Self {
         if polylines.is_empty() {
             return Mesh::new();
@@ -2098,7 +2430,7 @@ impl Mesh {
         crate::remesh_cdt::RemeshCDT::from_polylines(&pls, false, !sort_by_bbox)
     }
 
-    /// Constructs a loft between two sets of polylines into a mesh volume, capped when cap is true.
+    /// Construct a loft between two sets of polylines into a mesh volume, capped when cap is true.
     pub fn loft(
         polylines0: &[Polyline],
         polylines1: &[Polyline],
@@ -2193,7 +2525,7 @@ impl Mesh {
         mesh
     }
 
-    /// Constructs a batch of from_polygon_with_holes, parallel when asked.
+    /// Construct a batch of from_polygon_with_holes, parallel when asked.
     pub fn from_polygon_with_holes_many(
         inputs: Vec<Vec<Vec<Point>>>,
         sort_by_bbox: bool,
@@ -2217,7 +2549,7 @@ impl Mesh {
         results
     }
 
-    /// Constructs a batch of loft, parallel when asked.
+    /// Construct a batch of loft, parallel when asked.
     pub fn loft_many(
         pairs: Vec<(Vec<Polyline>, Vec<Polyline>)>,
         cap: bool,
@@ -2242,7 +2574,7 @@ impl Mesh {
         results
     }
 
-    /// Constructs a loft of matched top/bottom polygon pairs into one panel each, with matched quad walls and triangle fill.
+    /// Construct a loft of matched top/bottom polygon pairs into one panel each, with matched quad walls and triangle fill.
     pub fn loft_panels(
         top_polygons: Vec<Vec<Point>>,
         bot_polygons: Vec<Vec<Point>>,
@@ -2273,6 +2605,7 @@ impl Mesh {
         let adjacency = lp_adjacency(&panels);
         let top_ordered = lp_ordered_mesh(&panels, true);
         let bot_ordered = lp_ordered_mesh(&panels, false);
+
         LoftResult {
             panels,
             adjacency,
@@ -2281,7 +2614,7 @@ impl Mesh {
         }
     }
 
-    /// Constructs a closed box centered at the origin: 8 vertices, 6 quads.
+    /// Construct a closed box centered at the origin: 8 vertices, 6 quads.
     pub fn create_box(x: f64, y: f64, z: f64) -> Self {
         let hx = x * 0.5;
         let hy = y * 0.5;
@@ -2308,7 +2641,7 @@ impl Mesh {
         Mesh::from_vertices_and_faces(vertices, faces)
     }
 
-    /// Constructs a dodecahedron with the given edge length.
+    /// Construct a dodecahedron with the given edge length.
     pub fn create_dodecahedron(edge: f64) -> Self {
         let phi = (1.0 + 5.0_f64.sqrt()) / 2.0;
         let ip = 1.0 / phi;
@@ -2388,7 +2721,7 @@ impl Mesh {
         Polyline::new(pts)
     }
 
-    /// Constructs a closed mesh from interleaved top/bottom polyline pairs [top0, bot0, ...], coordinates divided by scale.
+    /// Construct a closed mesh from interleaved top/bottom polyline pairs [top0, bot0, ...], coordinates divided by scale.
     pub fn from_polyline_pairs(pairs: &[Polyline], scale: f64) -> Self {
         if pairs.is_empty() || !pairs.len().is_multiple_of(2) {
             return Mesh::new();
@@ -2414,7 +2747,7 @@ impl Mesh {
         Mesh::loft(&top_polys, &bot_polys, true, true)
     }
 
-    /// Writes the flat vertex, normal and triangle arrays of a closed mesh from interleaved top/bottom polyline pairs.
+    /// Write the flat vertex, normal and triangle arrays of a closed mesh from interleaved top/bottom polyline pairs.
     pub fn from_polyline_pairs_vnf(
         pairs: &[Polyline],
         scale: f64,
@@ -2460,7 +2793,7 @@ impl Mesh {
         (out_vertices, out_normals, out_triangles)
     }
 
-    /// Constructs a ruled quad mesh by projecting profile onto planes perpendicular to cross_section.
+    /// Construct a ruled quad mesh by projecting profile onto planes perpendicular to cross_section.
     pub fn reflex_fold(cross_section: &Polyline, profile: &Polyline) -> Self {
         let n_cs = cross_section.point_count();
         let n_p = profile.point_count();
@@ -2527,7 +2860,7 @@ impl Mesh {
         Mesh::from_vertices_and_faces(all_pts, faces)
     }
 
-    /// Per-face miter plate contours of a shell: (top_chamfered, bot_chamfered, top_raw, bot_raw, face_normal).
+    /// Compute the per-face miter plate contours of a shell: (top_chamfered, bot_chamfered, top_raw, bot_raw, face_normal).
     pub fn miter_contours(
         shell: &Mesh,
         thickness: f64,
@@ -2572,11 +2905,7 @@ impl Mesh {
                 continue;
             }
 
-            let bot_origin = Point::new(
-                cen[0] + fn_[0] * 2.0 * thickness,
-                cen[1] + fn_[1] * 2.0 * thickness,
-                cen[2] + fn_[2] * 2.0 * thickness,
-            );
+            let bot_origin = &cen + &fn_ * 2.0 * thickness;
             let top_contour = miter_contour(
                 &corner_lines,
                 &Plane::from_point_normal(cen.clone(), fn_.clone(), None),
@@ -2603,37 +2932,56 @@ impl Mesh {
     // ═══════════════════════════════════════════════════════════════════════════
     // Accessors
     // ═══════════════════════════════════════════════════════════════════════════
+    /// Return whether the lazy guid has been created.
+    pub fn has_guid(&self) -> bool {
+        self.guid.get().is_some()
+    }
 
-    /// Stores vertex colors and render with them.
-    pub fn set_pointcolors(&mut self, v: Vec<Color>) {
-        self.pointcolors = v;
+    /// Return the guid, creating it on first access.
+    pub fn guid(&self) -> &str {
+        self.guid.get_or_init(|| uuid::Uuid::new_v4().to_string())
+    }
+
+    /// Set the guid if it has not already been created.
+    pub fn set_guid(&self, g: String) {
+        let _ = self.guid.set(g);
+    }
+
+    /// Clear the guid so a fresh one mints lazily on the next read.
+    pub fn refresh_guid(&mut self) {
+        self.guid = std::sync::OnceLock::new();
+    }
+
+    /// Store vertex colors and render with them.
+    pub fn set_pointcolors(&mut self, colors: Vec<Color>) {
+        self.pointcolors = colors;
         self.color_mode = ColorMode::POINTCOLORS;
         self.gpu_cache.0 = None;
     }
 
-    /// Stores face colors and render with them.
-    pub fn set_facecolors(&mut self, v: Vec<Color>) {
-        self.facecolors = v;
+    /// Store face colors and render with them.
+    pub fn set_facecolors(&mut self, colors: Vec<Color>) {
+        self.facecolors = colors;
         self.color_mode = ColorMode::FACECOLORS;
         self.gpu_cache.0 = None;
     }
 
-    /// Stores edge colors and, when given, edge widths.
-    pub fn set_linecolors(&mut self, v: Vec<Color>, w: Vec<f64>) {
-        self.linecolors = v;
+    /// Store edge colors and, when given, edge widths.
+    pub fn set_linecolors(&mut self, colors: Vec<Color>, line_widths: Vec<f64>) {
+        self.linecolors = colors;
 
-        if !w.is_empty() {
-            self.widths = w;
+        if !line_widths.is_empty() {
+            self.widths = line_widths;
         }
     }
 
-    /// Stores the object color.
-    pub fn set_objectcolor(&mut self, c: Color) {
-        self.objectcolor = c;
+    /// Store the object color.
+    pub fn set_objectcolor(&mut self, color: Color) {
+        self.objectcolor = color;
         self.gpu_cache.0 = None;
     }
 
-    /// Drops vertex colors, falling back to the object color when they were active.
+    /// Drop vertex colors, falling back to the object color when they were active.
     pub fn clear_pointcolors(&mut self) {
         self.pointcolors.clear();
 
@@ -2642,7 +2990,7 @@ impl Mesh {
         }
     }
 
-    /// Drops face colors, falling back to the object color when they were active.
+    /// Drop face colors, falling back to the object color when they were active.
     pub fn clear_facecolors(&mut self) {
         self.facecolors.clear();
 
@@ -2651,105 +2999,66 @@ impl Mesh {
         }
     }
 
-    /// Drops edge colors and widths.
+    /// Drop edge colors and widths.
     pub fn clear_linecolors(&mut self) {
         self.linecolors.clear();
         self.widths.clear();
     }
 
-    /// Returns the vertex colors.
+    /// Return the vertex colors.
     pub fn get_pointcolors(&self) -> &[Color] {
         &self.pointcolors
     }
 
-    /// Returns the face colors.
+    /// Return the face colors.
     pub fn get_facecolors(&self) -> &[Color] {
         &self.facecolors
     }
 
-    /// Returns the edge colors.
+    /// Return the edge colors.
     pub fn get_linecolors(&self) -> &[Color] {
         &self.linecolors
     }
 
-    /// Returns the edge widths.
+    /// Return the edge widths.
     pub fn get_widths(&self) -> &[f64] {
         &self.widths
     }
 
-    /// Returns the object color.
+    /// Return the object color.
     pub fn get_objectcolor(&self) -> &Color {
         &self.objectcolor
     }
 
-    /// Returns the cached triangulation per face.
+    /// Return the cached triangulation per face.
     pub fn get_triangulation(&self) -> &HashMap<usize, Vec<[usize; 3]>> {
         &self.triangulation
     }
 
-    /// Caches the triangles of face fk.
+    /// Cache the triangles of face fk.
     pub fn set_face_triangulation(&mut self, fk: usize, tris: Vec<[usize; 3]>) {
         self.triangulation.insert(fk, tris);
     }
 
-    /// Returns the hole rings per face.
+    /// Return the hole rings per face.
     pub fn get_face_holes(&self) -> &HashMap<usize, Vec<Vec<usize>>> {
         &self.face_holes
     }
 
-    /// Stores the hole rings of face fkey.
+    /// Store the hole rings of face fkey.
     pub fn set_face_holes(&mut self, fkey: usize, rings: Vec<Vec<usize>>) {
         self.face_holes.insert(fkey, rings);
-    }
-
-    /// Returns every directed edge (u, v) some face ring walks.
-    pub fn directed_face_edges(&self) -> HashSet<(usize, usize)> {
-        let mut s = HashSet::with_capacity(self.face.len() * 4);
-
-        for verts in self.face.values() {
-            let n = verts.len();
-
-            for i in 0..n {
-                s.insert((verts[i], verts[(i + 1) % n]));
-            }
-        }
-
-        s
-    }
-
-    /// Returns the face-derived halfedge connectivity, computed without mutating.
-    pub fn compute_halfedges(&self) -> Halfedges {
-        let mut he: Halfedges = HashMap::with_capacity(self.vertex.len());
-
-        for vkey in self.vertex.keys() {
-            he.insert(*vkey, HashMap::new());
-        }
-
-        for fkey in self.faces() {
-            let verts = &self.face[&fkey];
-            let n = verts.len();
-
-            for i in 0..n {
-                let u = verts[i];
-                let v = verts[(i + 1) % n];
-                he.entry(u).or_default().insert(v, Some(fkey));
-                he.entry(v).or_default().entry(u).or_insert(None);
-            }
-        }
-
-        he
     }
 
     // ═══════════════════════════════════════════════════════════════════════════
     // Boolean Queries
     // ═══════════════════════════════════════════════════════════════════════════
-
-    /// Returns whether the mesh has no vertices.
+    /// Return whether the mesh has no vertices.
     pub fn is_empty(&self) -> bool {
         self.vertex.is_empty()
     }
 
-    /// Returns whether every face has at least three existing vertices.
+    /// Return whether every face has at least three existing vertices.
     pub fn is_valid(&self) -> bool {
         if self.vertex.is_empty() || self.face.is_empty() {
             return false;
@@ -2770,7 +3079,7 @@ impl Mesh {
         true
     }
 
-    /// Returns whether every face edge has a twin face or a declared hole ring.
+    /// Return whether every face edge has a twin face or a declared hole ring.
     pub fn is_closed(&self) -> bool {
         let mut hole_edges: HashSet<(usize, usize)> = HashSet::new();
 
@@ -2796,7 +3105,7 @@ impl Mesh {
         !self.vertex.is_empty()
     }
 
-    /// Returns whether the vertex touches a boundary edge.
+    /// Return whether the vertex touches a boundary edge.
     pub fn is_vertex_on_boundary(&self, vertex_key: usize) -> bool {
         let dfe = self.directed_face_edges();
 
@@ -2809,14 +3118,14 @@ impl Mesh {
         false
     }
 
-    /// Returns whether the edge has a face on one side only.
+    /// Return whether the edge has a face on one side only.
     pub fn is_edge_on_boundary(&self, u: usize, v: usize) -> bool {
         let dfe = self.directed_face_edges();
 
         !(dfe.contains(&(u, v)) && dfe.contains(&(v, u)))
     }
 
-    /// Returns whether the face has a boundary edge.
+    /// Return whether the face has a boundary edge.
     pub fn is_face_on_boundary(&self, face_key: usize) -> bool {
         let Some(fe) = self.face_edges(face_key) else {
             return false;
@@ -2834,18 +3143,17 @@ impl Mesh {
     // ═══════════════════════════════════════════════════════════════════════════
     // Attributes
     // ═══════════════════════════════════════════════════════════════════════════
-
-    /// Returns the vertex count.
+    /// Return the vertex count.
     pub fn number_of_vertices(&self) -> usize {
         self.vertex.len()
     }
 
-    /// Returns the face count.
+    /// Return the face count.
     pub fn number_of_faces(&self) -> usize {
         self.face.len()
     }
 
-    /// Returns the undirected edge count.
+    /// Return the undirected edge count.
     pub fn number_of_edges(&self) -> usize {
         let dfe = self.directed_face_edges();
         let mut count = 0;
@@ -2859,13 +3167,13 @@ impl Mesh {
         count
     }
 
-    /// Returns the Euler characteristic V - E + F.
+    /// Return the Euler characteristic V - E + F.
     pub fn euler(&self) -> i32 {
         self.number_of_vertices() as i32 - self.number_of_edges() as i32
             + self.number_of_faces() as i32
     }
 
-    /// Returns the sorted vertex keys.
+    /// Return the sorted vertex keys.
     pub fn vertices(&self) -> Vec<usize> {
         let mut keys: Vec<usize> = self.vertex.keys().copied().collect();
         keys.sort();
@@ -2873,7 +3181,7 @@ impl Mesh {
         keys
     }
 
-    /// Returns the sorted face keys.
+    /// Return the sorted face keys.
     pub fn faces(&self) -> Vec<usize> {
         let mut keys: Vec<usize> = self.face.keys().copied().collect();
         keys.sort();
@@ -2881,7 +3189,7 @@ impl Mesh {
         keys
     }
 
-    /// Returns the undirected edges as sorted (u, v) pairs.
+    /// Return the undirected edges as sorted (u, v) pairs.
     pub fn edges(&self) -> Vec<(usize, usize)> {
         let mut seen: HashSet<(usize, usize)> = HashSet::new();
 
@@ -2895,7 +3203,7 @@ impl Mesh {
         result
     }
 
-    /// Returns the vertices and faces with sequential 0-based indices.
+    /// Return the vertices and faces with sequential 0-based indices.
     pub fn to_vertices_and_faces(&self) -> (Vec<Point>, Vec<Vec<usize>>) {
         let vertex_idx = self.vertex_index();
         let mut vertices: Vec<Point> = vec![Point::default(); self.vertex.len()];
@@ -2919,7 +3227,7 @@ impl Mesh {
         (vertices, faces)
     }
 
-    /// Returns the map from sparse vertex key to sequential index.
+    /// Return the map from sparse vertex key to sequential index.
     pub fn vertex_index(&self) -> HashMap<usize, usize> {
         let mut index_map = HashMap::with_capacity(self.vertex.len());
 
@@ -2930,7 +3238,7 @@ impl Mesh {
         index_map
     }
 
-    /// Returns the boundary (true) or interior (false) edges.
+    /// Return the boundary (true) or interior (false) edges.
     pub fn naked_edges(&self, boundary: bool) -> Vec<(usize, usize)> {
         let dfe = self.directed_face_edges();
         let mut seen: HashSet<(usize, usize)> = HashSet::new();
@@ -2954,7 +3262,7 @@ impl Mesh {
         result
     }
 
-    /// Returns the boundary (true) or interior (false) vertices.
+    /// Return the boundary (true) or interior (false) vertices.
     pub fn naked_vertices(&self, boundary: bool) -> Vec<usize> {
         let mut result = Vec::new();
 
@@ -2967,7 +3275,7 @@ impl Mesh {
         result
     }
 
-    /// Returns the boundary (true) or interior (false) faces.
+    /// Return the boundary (true) or interior (false) faces.
     pub fn naked_faces(&self, boundary: bool) -> Vec<usize> {
         let mut result = Vec::new();
 
@@ -2983,8 +3291,7 @@ impl Mesh {
     // ═══════════════════════════════════════════════════════════════════════════
     // Vertex and Face Operations
     // ═══════════════════════════════════════════════════════════════════════════
-
-    /// Adds a vertex, with an explicit key when given; returns the key.
+    /// Add a vertex, with an explicit key when given; returns the key.
     pub fn add_vertex(&mut self, position: Point, vkey: Option<usize>) -> usize {
         self.ensure_halfedges();
         let vertex_key = vkey.unwrap_or(self.max_vertex);
@@ -3001,7 +3308,7 @@ impl Mesh {
         vertex_key
     }
 
-    /// Adds a face, with an explicit key when given; returns the key or nullopt when invalid.
+    /// Add a face, with an explicit key when given; returns the key or nullopt when invalid.
     pub fn add_face(&mut self, vertices: Vec<usize>, fkey: Option<usize>) -> Option<usize> {
         self.ensure_halfedges();
 
@@ -3052,7 +3359,7 @@ impl Mesh {
         Some(face_key)
     }
 
-    /// Removes a vertex and every face that uses it.
+    /// Remove a vertex and every face that uses it.
     pub fn remove_vertex(&mut self, vkey: usize) {
         self.ensure_halfedges();
 
@@ -3090,7 +3397,7 @@ impl Mesh {
         self.clear_triangle_bvh();
     }
 
-    /// Removes a face and its orphaned halfedges.
+    /// Remove a face and its orphaned halfedges.
     pub fn remove_face(&mut self, fkey: usize) {
         self.ensure_halfedges();
         let Some(verts) = self.face.get(&fkey).cloned() else {
@@ -3144,7 +3451,7 @@ impl Mesh {
         self.clear_triangle_bvh();
     }
 
-    /// Removes an edge, its adjacent faces and its halfedges.
+    /// Remove an edge, its adjacent faces and its halfedges.
     pub fn remove_edge(&mut self, u: usize, v: usize) {
         self.ensure_halfedges();
         let mut faces_to_remove: Vec<usize> = Vec::new();
@@ -3188,7 +3495,7 @@ impl Mesh {
         self.clear_triangle_bvh();
     }
 
-    /// Reverses the winding of one face in place.
+    /// Reverse the winding of one face in place.
     pub fn flip_face(&mut self, fkey: usize) {
         self.ensure_halfedges();
         let Some(mut fv) = self.face.get(&fkey).cloned() else {
@@ -3199,7 +3506,7 @@ impl Mesh {
         self.add_face(fv, Some(fkey));
     }
 
-    /// Reverses the winding of every face.
+    /// Reverse the winding of every face.
     pub fn flip(&mut self) {
         for verts in self.face.values_mut() {
             verts.reverse();
@@ -3208,7 +3515,7 @@ impl Mesh {
         self.rebuild_halfedges();
     }
 
-    /// Frees the map.
+    /// Clear all mesh data.
     pub fn clear(&mut self) {
         self.halfedge.clear();
         self.vertex.clear();
@@ -3228,7 +3535,7 @@ impl Mesh {
         self.clear_triangle_bvh();
     }
 
-    /// Copies where every face owns its own vertices.
+    /// Copy where every face owns its own vertices.
     pub fn unweld(&self) -> Mesh {
         let mut m = Mesh::new();
 
@@ -3261,7 +3568,7 @@ impl Mesh {
         x
     }
 
-    /// Copies with vertices closer than tolerance merged; degenerate faces are dropped.
+    /// Copy with vertices closer than tolerance merged; degenerate faces are dropped.
     pub fn weld(&self, tolerance: f64) -> Mesh {
         if self.vertex.is_empty() {
             return Mesh::new();
@@ -3344,7 +3651,7 @@ impl Mesh {
         m
     }
 
-    /// Unifies face winding by BFS; returns true when any face was flipped.
+    /// Unify face winding by BFS; returns true when any face was flipped.
     pub fn unify_winding(&mut self) -> bool {
         if self.face.len() < 2 {
             return false;
@@ -3425,7 +3732,7 @@ impl Mesh {
         true
     }
 
-    /// Flips a closed mesh whose normals point inward; returns true when flipped.
+    /// Flip a closed mesh whose normals point inward; returns true when flipped.
     pub fn orient_outward(&mut self) -> bool {
         self.ensure_halfedges();
 
@@ -3461,12 +3768,12 @@ impl Mesh {
         true
     }
 
-    /// Recreates halfedge from vertex and face alone.
+    /// Recreate halfedge from vertex and face alone.
     pub fn rebuild_halfedges(&mut self) {
         self.halfedge = self.compute_halfedges();
     }
 
-    /// Builds the lazy halfedge map when it is empty and faces exist.
+    /// Build the lazy halfedge map when it is empty and faces exist.
     pub fn ensure_halfedges(&mut self) {
         if self.halfedge.is_empty() && !self.face.is_empty() {
             self.rebuild_halfedges();
@@ -3476,7 +3783,6 @@ impl Mesh {
     // ═══════════════════════════════════════════════════════════════════════════
     // Connectivity Queries
     // ═══════════════════════════════════════════════════════════════════════════
-
     /// Sorted neighbors of x over a directed edge set.
     fn edge_ends(dfe: &HashSet<(usize, usize)>, x: usize) -> Vec<usize> {
         let mut keys: HashSet<usize> = HashSet::new();
@@ -3495,7 +3801,7 @@ impl Mesh {
         sorted
     }
 
-    /// Returns the edges sharing a vertex with (u, v), excluding (u, v) and (v, u).
+    /// Return the edges sharing a vertex with (u, v), excluding (u, v) and (v, u).
     pub fn edge_edges(&self, u: usize, v: usize) -> Option<Vec<(usize, usize)>> {
         let dfe = self.directed_face_edges();
 
@@ -3520,7 +3826,7 @@ impl Mesh {
         Some(edges)
     }
 
-    /// Returns the faces on each side of an edge.
+    /// Return the faces on each side of an edge.
     pub fn edge_faces(&self, u: usize, v: usize) -> Option<Vec<usize>> {
         let mut result: Vec<usize> = Vec::new();
 
@@ -3549,7 +3855,7 @@ impl Mesh {
         Some(result)
     }
 
-    /// Returns every directed face edge mapped to its face key, in one face walk.
+    /// Return every directed face edge mapped to its face key, in one face walk.
     pub fn edge_face_map(&self) -> HashMap<(usize, usize), usize> {
         let mut m: HashMap<(usize, usize), usize> = HashMap::with_capacity(self.face.len() * 4);
 
@@ -3565,7 +3871,7 @@ impl Mesh {
         m
     }
 
-    /// Returns the edge as a Line.
+    /// Return the edge as a Line.
     pub fn edge_line(&self, u: usize, v: usize) -> Option<Line> {
         let dfe = self.directed_face_edges();
 
@@ -3579,7 +3885,7 @@ impl Mesh {
         Some(Line::from_points(&pu, &pv))
     }
 
-    /// Returns the edges of a face as (vi, vi+1) pairs.
+    /// Return the edges of a face as (vi, vi+1) pairs.
     pub fn face_edges(&self, face_key: usize) -> Option<Vec<(usize, usize)>> {
         let verts = self.face.get(&face_key)?;
         let n = verts.len();
@@ -3592,7 +3898,7 @@ impl Mesh {
         Some(edges)
     }
 
-    /// Returns the faces sharing an edge with a face.
+    /// Return the faces sharing an edge with a face.
     pub fn face_faces(&self, face_key: usize) -> Option<Vec<usize>> {
         let fe = self.face_edges(face_key)?;
         let efm = self.edge_face_map();
@@ -3607,7 +3913,7 @@ impl Mesh {
         Some(neighbors)
     }
 
-    /// Returns the points of a face.
+    /// Return the points of a face.
     pub fn face_points(&self, face_key: usize) -> Option<Vec<Point>> {
         let fv = self.face_vertices(face_key)?;
         let mut pts = Vec::with_capacity(fv.len());
@@ -3619,17 +3925,17 @@ impl Mesh {
         Some(pts)
     }
 
-    /// Returns the face as a Polyline.
+    /// Return the face as a Polyline.
     pub fn face_polyline(&self, face_key: usize) -> Option<Polyline> {
         Some(Polyline::new(self.face_points(face_key)?))
     }
 
-    /// Returns the vertex keys of a face.
+    /// Return the vertex keys of a face.
     pub fn face_vertices(&self, face_key: usize) -> Option<&Vec<usize>> {
         self.face.get(&face_key)
     }
 
-    /// Returns the edges incident to a vertex as (vertex_key, neighbor) pairs.
+    /// Return the edges incident to a vertex as (vertex_key, neighbor) pairs.
     pub fn vertex_edges(&self, vertex_key: usize) -> Option<Vec<(usize, usize)>> {
         let keys = self.vertex_vertices(vertex_key)?;
         let mut edges = Vec::with_capacity(keys.len());
@@ -3641,7 +3947,7 @@ impl Mesh {
         Some(edges)
     }
 
-    /// Returns the faces incident to a vertex.
+    /// Return the faces incident to a vertex.
     pub fn vertex_faces(&self, vertex_key: usize) -> Option<Vec<usize>> {
         let keys = self.vertex_vertices(vertex_key)?;
         let efm = self.edge_face_map();
@@ -3656,12 +3962,12 @@ impl Mesh {
         Some(faces)
     }
 
-    /// Returns the position of a vertex.
+    /// Return the position of a vertex.
     pub fn vertex_point(&self, vertex_key: usize) -> Option<Point> {
         Some(self.vertex.get(&vertex_key)?.position())
     }
 
-    /// Returns the neighboring vertices of a vertex.
+    /// Return the neighboring vertices of a vertex.
     pub fn vertex_vertices(&self, vertex_key: usize) -> Option<Vec<usize>> {
         if !self.vertex.contains_key(&vertex_key) {
             return None;
@@ -3670,7 +3976,7 @@ impl Mesh {
         Some(Mesh::edge_ends(&self.directed_face_edges(), vertex_key))
     }
 
-    /// Returns the neighbors of a vertex, in face-cycle order when ordered is true.
+    /// Return the neighbors of a vertex, in face-cycle order when ordered is true.
     pub fn vertex_neighbors(&self, vertex_key: usize, ordered: bool) -> Option<Vec<usize>> {
         let nbrs_map = self.halfedge.get(&vertex_key)?;
         let mut nbrs: Vec<usize> = nbrs_map.keys().copied().collect();
@@ -3716,8 +4022,7 @@ impl Mesh {
     // ═══════════════════════════════════════════════════════════════════════════
     // Boundary
     // ═══════════════════════════════════════════════════════════════════════════
-
-    /// Returns the vertices touching a boundary edge.
+    /// Return the vertices touching a boundary edge.
     pub fn vertices_on_boundary(&self) -> Vec<usize> {
         let mut out = Vec::new();
 
@@ -3730,7 +4035,7 @@ impl Mesh {
         out
     }
 
-    /// Returns the edges with a face on one side only.
+    /// Return the edges with a face on one side only.
     pub fn edges_on_boundary(&self) -> Vec<(usize, usize)> {
         let mut out = Vec::new();
 
@@ -3747,7 +4052,7 @@ impl Mesh {
         out
     }
 
-    /// Returns the faces with a boundary edge.
+    /// Return the faces with a boundary edge.
     pub fn faces_on_boundary(&self) -> Vec<usize> {
         let mut out = Vec::new();
 
@@ -3763,13 +4068,12 @@ impl Mesh {
     // ═══════════════════════════════════════════════════════════════════════════
     // Halfedge Navigation
     // ═══════════════════════════════════════════════════════════════════════════
-
-    /// Returns the face of a directed edge, nullopt when unknown or on the boundary.
+    /// Return the face of a directed edge, nullopt when unknown or on the boundary.
     pub fn halfedge_face(&self, edge: (usize, usize)) -> Option<usize> {
         *self.halfedge.get(&edge.0)?.get(&edge.1)?
     }
 
-    /// Returns the next directed edge around the face of edge.
+    /// Return the next directed edge around the face of edge.
     pub fn halfedge_after(&self, edge: (usize, usize)) -> Option<(usize, usize)> {
         let (u, v) = edge;
 
@@ -3793,7 +4097,7 @@ impl Mesh {
         None
     }
 
-    /// Returns the previous directed edge around the face of edge.
+    /// Return the previous directed edge around the face of edge.
     pub fn halfedge_before(&self, edge: (usize, usize)) -> Option<(usize, usize)> {
         let (u, v) = edge;
 
@@ -3862,7 +4166,7 @@ impl Mesh {
         edges
     }
 
-    /// Returns the directed edges around the face of edge, starting at edge.
+    /// Return the directed edges around the face of edge, starting at edge.
     pub fn halfedge_loop(&self, edge: (usize, usize)) -> Vec<(usize, usize)> {
         if self.is_edge_on_boundary(edge.0, edge.1) {
             return self.halfedge_loop_boundary(edge);
@@ -3895,7 +4199,7 @@ impl Mesh {
         edges
     }
 
-    /// Returns the directed edges straight across quads from edge until a boundary or a non-quad.
+    /// Return the directed edges straight across quads from edge until a boundary or a non-quad.
     pub fn halfedge_strip(&self, edge: (usize, usize)) -> Vec<(usize, usize)> {
         let (mut u, mut v) = edge;
         let mut edges = vec![edge];
@@ -3930,8 +4234,7 @@ impl Mesh {
     // ═══════════════════════════════════════════════════════════════════════════
     // Sampling
     // ═══════════════════════════════════════════════════════════════════════════
-
-    /// Returns size keys; seed 0 takes the first keys, any other seed drives a deterministic LCG.
+    /// Return size keys; seed 0 takes the first keys, any other seed drives a deterministic LCG.
     fn lcg_sample<T: Clone>(keys: &[T], size: usize, seed: u32) -> Vec<T> {
         if keys.is_empty() || size == 0 {
             return Vec::new();
@@ -3965,17 +4268,17 @@ impl Mesh {
         out
     }
 
-    /// Returns size vertex keys; seed 0 takes the first keys, any other seed drives a deterministic LCG.
+    /// Return size vertex keys; seed 0 takes the first keys, any other seed drives a deterministic LCG.
     pub fn vertex_sample(&self, size: usize, seed: u32) -> Vec<usize> {
         Mesh::lcg_sample(&self.vertices(), size, seed)
     }
 
-    /// Returns size edges; seed 0 takes the first edges, any other seed drives a deterministic LCG.
+    /// Return size edges; seed 0 takes the first edges, any other seed drives a deterministic LCG.
     pub fn edge_sample(&self, size: usize, seed: u32) -> Vec<(usize, usize)> {
         Mesh::lcg_sample(&self.edges(), size, seed)
     }
 
-    /// Returns size face keys; seed 0 takes the first keys, any other seed drives a deterministic LCG.
+    /// Return size face keys; seed 0 takes the first keys, any other seed drives a deterministic LCG.
     pub fn face_sample(&self, size: usize, seed: u32) -> Vec<usize> {
         Mesh::lcg_sample(&self.faces(), size, seed)
     }
@@ -3983,13 +4286,12 @@ impl Mesh {
     // ═══════════════════════════════════════════════════════════════════════════
     // Aliases
     // ═══════════════════════════════════════════════════════════════════════════
-
-    /// Returns the average of a face's vertex positions.
+    /// Return the average of a face's vertex positions.
     pub fn face_center(&self, face_key: usize) -> Option<Point> {
         self.face_centroid(face_key)
     }
 
-    /// Returns the face as a Polyline.
+    /// Return the face as a Polyline.
     pub fn face_polygon(&self, face_key: usize) -> Option<Polyline> {
         let mut pts = self.face_points(face_key)?;
 
@@ -4000,7 +4302,7 @@ impl Mesh {
         Some(Polyline::new(pts))
     }
 
-    /// Returns every face as a closed outline in face-key order; faces under three vertices are skipped.
+    /// Return every face as a closed outline in face-key order; faces under three vertices are skipped.
     pub fn face_outlines(&self) -> Vec<Polyline> {
         let mut outlines = Vec::with_capacity(self.face.len());
 
@@ -4017,7 +4319,7 @@ impl Mesh {
         outlines
     }
 
-    /// Reverses the winding of every face.
+    /// Reverse the winding of every face.
     pub fn flip_cycles(&mut self) {
         self.flip();
     }
@@ -4025,29 +4327,28 @@ impl Mesh {
     // ═══════════════════════════════════════════════════════════════════════════
     // Attribute API
     // ═══════════════════════════════════════════════════════════════════════════
-
-    /// Merges attrs into the default vertex attributes.
+    /// Merge attrs into the default vertex attributes.
     pub fn update_default_vertex_attributes(&mut self, attrs: &[(&str, f64)]) {
         for (k, v) in attrs {
             self.default_vertex_attributes.insert(k.to_string(), *v);
         }
     }
 
-    /// Merges attrs into the default face attributes.
+    /// Merge attrs into the default face attributes.
     pub fn update_default_face_attributes(&mut self, attrs: &[(&str, f64)]) {
         for (k, v) in attrs {
             self.default_face_attributes.insert(k.to_string(), *v);
         }
     }
 
-    /// Merges attrs into the default edge attributes.
+    /// Merge attrs into the default edge attributes.
     pub fn update_default_edge_attributes(&mut self, attrs: &[(&str, f64)]) {
         for (k, v) in attrs {
             self.default_edge_attributes.insert(k.to_string(), *v);
         }
     }
 
-    /// Returns the attribute of a vertex, falling back to the default; nullopt when neither exists.
+    /// Return the attribute of a vertex, falling back to the default; nullopt when neither exists.
     pub fn vertex_attribute(&self, key: usize, name: &str) -> Option<f64> {
         let data = self.vertex.get(&key)?;
 
@@ -4058,7 +4359,7 @@ impl Mesh {
         self.default_vertex_attributes.get(name).copied()
     }
 
-    /// Stores an attribute on a vertex.
+    /// Store an attribute on a vertex.
     pub fn set_vertex_attribute(&mut self, key: usize, name: &str, value: f64) {
         let Some(data) = self.vertex.get_mut(&key) else {
             return;
@@ -4066,7 +4367,7 @@ impl Mesh {
         data.attributes.insert(name.to_string(), value);
     }
 
-    /// Returns the attribute of a face, falling back to the default; nullopt when neither exists.
+    /// Return the attribute of a face, falling back to the default; nullopt when neither exists.
     pub fn face_attribute(&self, fkey: usize, name: &str) -> Option<f64> {
         if !self.face.contains_key(&fkey) {
             return None;
@@ -4079,7 +4380,7 @@ impl Mesh {
         self.default_face_attributes.get(name).copied()
     }
 
-    /// Stores an attribute on a face.
+    /// Store an attribute on a face.
     pub fn set_face_attribute(&mut self, fkey: usize, name: &str, value: f64) {
         if !self.face.contains_key(&fkey) {
             return;
@@ -4091,7 +4392,7 @@ impl Mesh {
             .insert(name.to_string(), value);
     }
 
-    /// Returns the attribute of an edge, falling back to the default; nullopt when neither exists.
+    /// Return the attribute of an edge, falling back to the default; nullopt when neither exists.
     pub fn edge_attribute(&self, edge: (usize, usize), name: &str) -> Option<f64> {
         let (u, v) = edge;
         let uv = self.halfedge.get(&u).is_some_and(|m| m.contains_key(&v));
@@ -4113,7 +4414,7 @@ impl Mesh {
         self.default_edge_attributes.get(name).copied()
     }
 
-    /// Stores an attribute on an edge.
+    /// Store an attribute on an edge.
     pub fn set_edge_attribute(&mut self, edge: (usize, usize), name: &str, value: f64) {
         let (u, v) = edge;
         let key = if self.edgedata.contains_key(&(v, u)) {
@@ -4127,7 +4428,7 @@ impl Mesh {
             .insert(name.to_string(), value);
     }
 
-    /// Returns the attribute of every vertex in keys; keys nullptr means all; the result holds nullopt for missing values.
+    /// Return the attribute of every vertex in keys; keys nullptr means all; the result holds nullopt for missing values.
     pub fn vertices_attribute(&self, name: &str, keys: Option<&[usize]>) -> Vec<Option<f64>> {
         let all = self.vertices();
         let keys = keys.unwrap_or(&all);
@@ -4140,7 +4441,7 @@ impl Mesh {
         out
     }
 
-    /// Stores an attribute on every vertex in keys; keys nullptr means all.
+    /// Store an attribute on every vertex in keys; keys nullptr means all.
     pub fn set_vertices_attribute(&mut self, name: &str, value: f64, keys: Option<&[usize]>) {
         let all = self.vertices();
         let keys = keys.unwrap_or(&all);
@@ -4150,7 +4451,7 @@ impl Mesh {
         }
     }
 
-    /// Returns the attribute of every face in keys; keys nullptr means all; the result holds nullopt for missing values.
+    /// Return the attribute of every face in keys; keys nullptr means all; the result holds nullopt for missing values.
     pub fn faces_attribute(&self, name: &str, keys: Option<&[usize]>) -> Vec<Option<f64>> {
         let all = self.faces();
         let keys = keys.unwrap_or(&all);
@@ -4163,7 +4464,7 @@ impl Mesh {
         out
     }
 
-    /// Stores an attribute on every face in keys; keys nullptr means all.
+    /// Store an attribute on every face in keys; keys nullptr means all.
     pub fn set_faces_attribute(&mut self, name: &str, value: f64, keys: Option<&[usize]>) {
         let all = self.faces();
         let keys = keys.unwrap_or(&all);
@@ -4173,7 +4474,7 @@ impl Mesh {
         }
     }
 
-    /// Returns the attribute of every edge in keys; keys nullptr means all; the result holds nullopt for missing values.
+    /// Return the attribute of every edge in keys; keys nullptr means all; the result holds nullopt for missing values.
     pub fn edges_attribute(&self, name: &str, keys: Option<&[(usize, usize)]>) -> Vec<Option<f64>> {
         let all = self.edges();
         let keys = keys.unwrap_or(&all);
@@ -4186,7 +4487,7 @@ impl Mesh {
         out
     }
 
-    /// Stores an attribute on every edge in keys; keys nullptr means all.
+    /// Store an attribute on every edge in keys; keys nullptr means all.
     pub fn set_edges_attribute(&mut self, name: &str, value: f64, keys: Option<&[(usize, usize)]>) {
         let all = self.edges();
         let keys = keys.unwrap_or(&all);
@@ -4196,7 +4497,7 @@ impl Mesh {
         }
     }
 
-    /// Returns the vertices whose attributes match every (name, value) condition.
+    /// Return the vertices whose attributes match every (name, value) condition.
     pub fn vertices_where(&self, conditions: &[(&str, f64)]) -> Vec<usize> {
         let mut out = Vec::new();
 
@@ -4220,7 +4521,7 @@ impl Mesh {
         out
     }
 
-    /// Returns the faces whose attributes match every (name, value) condition.
+    /// Return the faces whose attributes match every (name, value) condition.
     pub fn faces_where(&self, conditions: &[(&str, f64)]) -> Vec<usize> {
         let mut out = Vec::new();
 
@@ -4244,7 +4545,7 @@ impl Mesh {
         out
     }
 
-    /// Returns the edges whose attributes match every (name, value) condition.
+    /// Return the edges whose attributes match every (name, value) condition.
     pub fn edges_where(&self, conditions: &[(&str, f64)]) -> Vec<(usize, usize)> {
         let mut out = Vec::new();
 
@@ -4268,7 +4569,7 @@ impl Mesh {
         out
     }
 
-    /// Returns the vertices for which pred(key, attributes) is true.
+    /// Return the vertices for which pred(key, attributes) is true.
     pub fn vertices_where_predicate(&self, pred: KeyPredicate<usize>) -> Vec<usize> {
         let mut out = Vec::new();
 
@@ -4287,7 +4588,7 @@ impl Mesh {
         out
     }
 
-    /// Returns the faces for which pred(key, attributes) is true.
+    /// Return the faces for which pred(key, attributes) is true.
     pub fn faces_where_predicate(&self, pred: KeyPredicate<usize>) -> Vec<usize> {
         let mut out = Vec::new();
 
@@ -4308,7 +4609,7 @@ impl Mesh {
         out
     }
 
-    /// Returns the edges for which pred(edge, attributes) is true.
+    /// Return the edges for which pred(edge, attributes) is true.
     pub fn edges_where_predicate(&self, pred: KeyPredicate<(usize, usize)>) -> Vec<(usize, usize)> {
         let mut out = Vec::new();
 
@@ -4333,7 +4634,7 @@ impl Mesh {
         out
     }
 
-    /// Returns the face normal from the first three vertices; unitized false keeps twice the first-triangle area as length.
+    /// Return the face normal from the first three vertices; unitized false keeps twice the first-triangle area as length.
     pub fn face_normal_unitized(&self, face_key: usize, unitized: bool) -> Option<Vector> {
         let vertices = self.face_vertices(face_key)?;
 
@@ -4364,8 +4665,7 @@ impl Mesh {
     // ═══════════════════════════════════════════════════════════════════════════
     // Geometric Properties
     // ═══════════════════════════════════════════════════════════════════════════
-
-    /// Returns the total surface area of all faces.
+    /// Return the total surface area of all faces.
     pub fn area(&self) -> f64 {
         let mut total = 0.0;
 
@@ -4378,7 +4678,7 @@ impl Mesh {
         total
     }
 
-    /// Returns the average of all vertex positions.
+    /// Return the average of all vertex positions.
     pub fn centroid(&self) -> Point {
         let mut x = 0.0;
         let mut y = 0.0;
@@ -4400,7 +4700,7 @@ impl Mesh {
         Point::new(x / n, y / n, z / n)
     }
 
-    /// Returns the dihedral angle in degrees between the two faces sharing edge (u, v), nullopt on a boundary edge.
+    /// Return the dihedral angle in degrees between the two faces sharing edge (u, v), nullopt on a boundary edge.
     pub fn dihedral_angle(&self, u: usize, v: usize) -> Option<f64> {
         let ef = self.edge_faces(u, v)?;
 
@@ -4429,7 +4729,7 @@ impl Mesh {
         Some(&d / len)
     }
 
-    /// Returns the dihedral angles of all interior edges as (angles, arcs, points); arcs and label points are built when asked.
+    /// Return the dihedral angles of all interior edges as (angles, arcs, points); arcs and label points are built when asked.
     pub fn dihedral_angles(
         &self,
         scale: f64,
@@ -4491,11 +4791,7 @@ impl Mesh {
                 let t = j as f64 / arc_n as f64;
                 let w1 = ((1.0 - t) * theta).sin() / theta.sin();
                 let w2 = (t * theta).sin() / theta.sin();
-                arc_pts.push(Point::new(
-                    mid[0] + (w1 * d0[0] + w2 * d1[0]) * scale,
-                    mid[1] + (w1 * d0[1] + w2 * d1[1]) * scale,
-                    mid[2] + (w1 * d0[2] + w2 * d1[2]) * scale,
-                ));
+                arc_pts.push(&mid + (&d0 * w1 + &d1 * w2) * scale);
             }
 
             if with_arcs {
@@ -4520,7 +4816,7 @@ impl Mesh {
         (angles, arcs, points)
     }
 
-    /// Returns the area of a face.
+    /// Return the area of a face.
     pub fn face_area(&self, face_key: usize) -> Option<f64> {
         let vertices = self.face_vertices(face_key)?;
 
@@ -4542,7 +4838,7 @@ impl Mesh {
         Some(area)
     }
 
-    /// Returns the average of a face's vertex positions.
+    /// Return the average of a face's vertex positions.
     pub fn face_centroid(&self, face_key: usize) -> Option<Point> {
         let verts = self.face_vertices(face_key)?;
 
@@ -4566,12 +4862,12 @@ impl Mesh {
         Some(Point::new(x / n, y / n, z / n))
     }
 
-    /// Returns the unit normal of a face.
+    /// Return the unit normal of a face.
     pub fn face_normal(&self, face_key: usize) -> Option<Vector> {
         self.face_normal_unitized(face_key, true)
     }
 
-    /// Returns the unit normals of all faces.
+    /// Return the unit normals of all faces.
     pub fn face_normals(&self) -> HashMap<usize, Vector> {
         let mut normals = HashMap::new();
 
@@ -4584,7 +4880,7 @@ impl Mesh {
         normals
     }
 
-    /// Returns the angle at a vertex inside a face.
+    /// Return the angle at a vertex inside a face.
     pub fn vertex_angle_in_face(&self, vertex_key: usize, face_key: usize) -> Option<f64> {
         let vertices = self.face_vertices(face_key)?;
         let vertex_index = vertices.iter().position(|&v| v == vertex_key)?;
@@ -4604,12 +4900,12 @@ impl Mesh {
         Some((u.dot(&v) / (u_len * v_len)).clamp(-1.0, 1.0).acos())
     }
 
-    /// Returns the area-weighted vertex normal.
+    /// Return the area-weighted vertex normal.
     pub fn vertex_normal(&self, vertex_key: usize) -> Option<Vector> {
         self.vertex_normal_weighted(vertex_key, NormalWeighting::Area)
     }
 
-    /// Returns the vertex normal with the given weighting.
+    /// Return the vertex normal with the given weighting.
     pub fn vertex_normal_weighted(
         &self,
         vertex_key: usize,
@@ -4634,9 +4930,7 @@ impl Mesh {
                     .unwrap_or(1.0),
                 NormalWeighting::Uniform => 1.0,
             };
-            normal_acc[0] += fn_[0] * weight;
-            normal_acc[1] += fn_[1] * weight;
-            normal_acc[2] += fn_[2] * weight;
+            normal_acc += &fn_ * weight;
         }
 
         let len = normal_acc.magnitude();
@@ -4648,7 +4942,7 @@ impl Mesh {
         None
     }
 
-    /// Returns the area-weighted normals of all vertices.
+    /// Return the area-weighted normals of all vertices.
     pub fn vertex_normals(&self) -> HashMap<usize, Vector> {
         self.vertex_normals_weighted(NormalWeighting::Area)
     }
@@ -4670,7 +4964,7 @@ impl Mesh {
         (a.dot(&b) / (a_len * b_len)).clamp(-1.0, 1.0).acos()
     }
 
-    /// Returns the normals of all vertices with the given weighting.
+    /// Return the normals of all vertices with the given weighting.
     pub fn vertex_normals_weighted(&self, weighting: NormalWeighting) -> HashMap<usize, Vector> {
         let mut acc: HashMap<usize, Vector> = HashMap::new();
 
@@ -4698,10 +4992,7 @@ impl Mesh {
                     NormalWeighting::Area => area,
                     NormalWeighting::Angle => Mesh::corner_angle(&pts, i),
                 };
-                let v = acc.entry(vk).or_insert(Vector::new(0.0, 0.0, 0.0));
-                v[0] += normal[0] * weight;
-                v[1] += normal[1] * weight;
-                v[2] += normal[2] * weight;
+                *acc.entry(vk).or_insert(Vector::new(0.0, 0.0, 0.0)) += &normal * weight;
             }
         }
 
@@ -4718,7 +5009,7 @@ impl Mesh {
         normals
     }
 
-    /// Returns the enclosed volume of a closed mesh.
+    /// Return the enclosed volume of a closed mesh.
     pub fn volume(&self) -> f64 {
         let mut total = 0.0;
 
@@ -4751,7 +5042,6 @@ impl Mesh {
     // ═══════════════════════════════════════════════════════════════════════════
     // Triangle BVH
     // ═══════════════════════════════════════════════════════════════════════════
-
     /// Every triangle of the mesh: the stored triangulation of an n-gon, a fan from vertex 0 otherwise.
     fn triangle_tasks(&self, faces: &[Vec<usize>]) -> Vec<(usize, usize, usize, usize, usize)> {
         let vkey_to_idx = self.vertex_index();
@@ -4801,6 +5091,7 @@ impl Mesh {
         let max_x = p0[0].max(p1[0]).max(p2[0]) + 0.001;
         let max_y = p0[1].max(p1[1]).max(p2[1]) + 0.001;
         let max_z = p0[2].max(p1[2]).max(p2[2]) + 0.001;
+
         AABB::new(
             (min_x + max_x) * 0.5,
             (min_y + max_y) * 0.5,
@@ -4824,7 +5115,7 @@ impl Mesh {
         (2.2 * extent).max(10.0)
     }
 
-    /// Builds and cache the BVH over the triangulated faces.
+    /// Build and cache the BVH over the triangulated faces.
     pub fn build_triangle_bvh(&mut self, force: bool) {
         if self.triangle_bvh_built && !force {
             return;
@@ -4851,7 +5142,7 @@ impl Mesh {
         self.triangle_bvh_built = true;
     }
 
-    /// Collects the candidate triangle ids along a ray from the cached BVH; true when any.
+    /// Collect the candidate triangle ids along a ray from the cached BVH; true when any.
     pub fn triangle_bvh_ray_cast(
         &mut self,
         origin: &Point,
@@ -4867,7 +5158,7 @@ impl Mesh {
         bvh.ray_cast(origin, direction, candidate_ids, find_all)
     }
 
-    /// Looks up the face index, sub-triangle index and corners of a cached triangle id; false when out of range.
+    /// Look up the face index, sub-triangle index and corners of a cached triangle id; false when out of range.
     pub fn get_triangle_by_id(&self, tri_id: usize) -> Option<(usize, usize, Point, Point, Point)> {
         if tri_id >= self.tri_tris.len() || tri_id >= self.tri_face_subidx.len() {
             return None;
@@ -4892,7 +5183,7 @@ impl Mesh {
         ))
     }
 
-    /// Drops the cached BVH, AABB tree and triangle data.
+    /// Drop the cached BVH, AABB tree and triangle data.
     pub fn clear_triangle_bvh(&mut self) {
         self.triangle_bvh_built = false;
         self.tri_bvh = None;
@@ -4904,7 +5195,7 @@ impl Mesh {
         self.gpu_cache.0 = None;
     }
 
-    /// Builds and cache the AABB tree over the triangulated faces.
+    /// Build and cache the AABB tree over the triangulated faces.
     pub fn build_triangle_aabb_tree(&mut self, force: bool) {
         self.build_triangle_bvh(false);
 
@@ -4917,12 +5208,12 @@ impl Mesh {
         self.tri_aabb_tree = Some(tree);
     }
 
-    /// Returns the cached triangle BVH, nullptr before build_triangle_bvh.
+    /// Return the cached triangle BVH, nullptr before build_triangle_bvh.
     pub fn get_cached_bvh(&self) -> Option<&SpatialBVH> {
         self.tri_bvh.as_ref()
     }
 
-    /// Returns the cached triangle AABB tree, nullptr before build_triangle_aabb_tree.
+    /// Return the cached triangle AABB tree, nullptr before build_triangle_aabb_tree.
     pub fn get_cached_aabb_tree(&self) -> Option<&SpatialAABBTree> {
         self.tri_aabb_tree.as_ref()
     }
@@ -4930,13 +5221,12 @@ impl Mesh {
     // ═══════════════════════════════════════════════════════════════════════════
     // Transformation
     // ═══════════════════════════════════════════════════════════════════════════
-
-    /// Transforms every vertex in place and drop the triangle caches; always true.
+    /// Transform every vertex in place and drop the triangle caches; always true.
     pub fn transform(&mut self, xf: &Xform) -> bool {
         for vdata in self.vertex.values_mut() {
-            let mut pt = Point::new(vdata.x, vdata.y, vdata.z);
-            pt.transform(xf);
-            vdata.set_position(pt);
+            let mut point = vdata.position();
+            point.transform(xf);
+            vdata.set_position(point);
         }
 
         self.clear_triangle_bvh();
@@ -4944,7 +5234,7 @@ impl Mesh {
         true
     }
 
-    /// Returns a transformed copy.
+    /// Return a transformed copy.
     pub fn transformed(&self, xf: &Xform) -> Self {
         let mut result = self.clone();
         result.transform(xf);
@@ -4953,9 +5243,191 @@ impl Mesh {
     }
 
     // ═══════════════════════════════════════════════════════════════════════════
+    // Cutting
+    // ═══════════════════════════════════════════════════════════════════════════
+    /// Return the part on the side the plane normal points to, every section loop capped by one n-gon face, so a closed mesh stays closed; empty when nothing lies on that side, a copy when everything does.
+    pub fn cut_by_plane(&self, plane: &Plane) -> Mesh {
+        let big = f64::MAX;
+        let mut low = Point::new(big, big, big);
+        let mut high = Point::new(-big, -big, -big);
+        let mut points: BTreeMap<usize, Point> = BTreeMap::new();
+
+        for (vk, vd) in &self.vertex {
+            let point = vd.position();
+
+            for k in 0..3 {
+                low[k] = low[k].min(point[k]);
+                high[k] = high[k].max(point[k]);
+            }
+
+            points.insert(*vk, point);
+        }
+
+        let tolerance = 1e-9 * low.distance(&high, None);
+        let mut distance: BTreeMap<usize, f64> = BTreeMap::new();
+        let mut lowest = 0.0f64;
+        let mut highest = 0.0f64;
+
+        for (vk, point) in &points {
+            let d = (point - &plane.origin()).dot(&plane.z_axis());
+            let value = if d.abs() <= tolerance { 0.0 } else { d };
+            distance.insert(*vk, value);
+            lowest = lowest.min(value);
+            highest = highest.max(value);
+        }
+
+        if lowest >= 0.0 {
+            let mut copy = self.clone();
+            copy.refresh_guid();
+
+            return copy;
+        }
+
+        if highest <= 0.0 {
+            return Mesh::new();
+        }
+
+        let mut crossings: BTreeMap<(usize, usize), usize> = BTreeMap::new();
+        let mut output: BTreeMap<usize, CutFace> = BTreeMap::new();
+        let mut count = self.max_face;
+        let mut keys: Vec<usize> = self.face.keys().copied().collect();
+        keys.sort();
+
+        for fk in keys {
+            let ring = &self.face[&fk];
+            let normal = newell_normal(&cut_points(ring, &points));
+            let mut rings = vec![ring.clone()];
+
+            if let Some(holes) = self.face_holes.get(&fk) {
+                for hole in holes {
+                    rings.push(hole.clone());
+
+                    if newell_normal(&cut_points(hole, &points)).dot(&normal) > 0.0 {
+                        rings.last_mut().unwrap().reverse();
+                    }
+                }
+            }
+
+            let mut above = false;
+            let mut below = false;
+
+            for r in &rings {
+                for key in r {
+                    above = above || distance[key] > 0.0;
+                    below = below || distance[key] < 0.0;
+                }
+            }
+
+            if !above {
+                continue;
+            }
+
+            if !below {
+                output.insert(
+                    fk,
+                    CutFace {
+                        rings,
+                        parent: Some(fk),
+                    },
+                );
+                continue;
+            }
+
+            let mut xaxis = plane.z_axis() - &normal * plane.z_axis().dot(&normal);
+
+            if !xaxis.normalize_self() {
+                continue;
+            }
+
+            let mut split: Vec<Vec<usize>> = Vec::new();
+
+            for r in &rings {
+                let mut walk = Vec::with_capacity(r.len());
+
+                for i in 0..r.len() {
+                    let edge = (r[i], r[(i + 1) % r.len()]);
+                    walk.push(edge.0);
+
+                    if distance[&edge.0] * distance[&edge.1] < 0.0 {
+                        walk.push(cut_crossing(
+                            edge,
+                            &mut crossings,
+                            &mut distance,
+                            &mut points,
+                            self.max_vertex,
+                        ));
+                    }
+                }
+
+                split.push(walk);
+            }
+
+            let pieces = cut_pieces(&split, &normal, &xaxis, &distance, &points, tolerance);
+
+            for (i, mut piece) in pieces.into_iter().enumerate() {
+                piece.parent = Some(fk);
+
+                if i == 0 {
+                    output.insert(fk, piece);
+                } else {
+                    output.insert(count, piece);
+                    count += 1;
+                }
+            }
+        }
+
+        for cap in cut_caps(&output, &distance, &points, plane) {
+            output.insert(count, cap);
+            count += 1;
+        }
+
+        let mut result = Mesh::new();
+        result.name = self.name.clone();
+        result.objectcolor = self.objectcolor.clone();
+        let mut used: BTreeSet<usize> = BTreeSet::new();
+
+        for piece in output.values() {
+            for r in &piece.rings {
+                used.extend(r.iter().copied());
+            }
+        }
+
+        for vk in used {
+            result.add_vertex(points[&vk].clone(), Some(vk));
+        }
+
+        for (fk, piece) in &output {
+            if result.add_face(piece.rings[0].clone(), Some(*fk)).is_none() {
+                continue;
+            }
+
+            let whole = piece
+                .parent
+                .is_some_and(|parent| piece.rings[0] == self.face[&parent]);
+
+            if piece.rings.len() > 1 {
+                result.set_face_holes(*fk, piece.rings[1..].to_vec());
+            }
+
+            if let Some(data) = piece.parent.and_then(|parent| self.facedata.get(&parent)) {
+                result.facedata.insert(*fk, data.clone());
+            }
+
+            if whole && self.triangulation.contains_key(fk) {
+                result.set_face_triangulation(*fk, self.triangulation[fk].clone());
+            }
+
+            if !whole && (piece.rings.len() > 1 || piece.rings[0].len() > 3) {
+                result.set_face_triangulation(*fk, cut_triangulation(piece, &points));
+            }
+        }
+
+        result
+    }
+
+    // ═══════════════════════════════════════════════════════════════════════════
     // JSON
     // ═══════════════════════════════════════════════════════════════════════════
-
     /// Colors as a flat [r, g, b, a, ...] array.
     fn colors_to_json(colors: &[Color]) -> Vec<f32> {
         let mut arr = Vec::with_capacity(colors.len() * 4);
@@ -4990,7 +5462,7 @@ impl Mesh {
         colors
     }
 
-    /// Serializes to a JSON string.
+    /// Serialize to a JSON object.
     pub fn jsondump(&self) -> serde_json::Value {
         let mut edgedata_json = serde_json::Map::new();
 
@@ -5076,7 +5548,7 @@ impl Mesh {
         })
     }
 
-    /// Deserializes from a JSON string.
+    /// Deserialize from a JSON object.
     pub fn jsonload(data: &serde_json::Value) -> Option<Self> {
         let mut mesh = Mesh::new();
 
@@ -5214,31 +5686,32 @@ impl Mesh {
         Some(mesh)
     }
 
-    /// Serializes to a JSON string.
+    /// Serialize to a JSON string.
     pub fn file_json_dumps(&self) -> String {
         let sorted = crate::file_encoders::sort_json_keys(self.jsondump());
 
         serde_json::to_string_pretty(&sorted).unwrap_or_default()
     }
 
-    /// Deserializes from a JSON string.
+    /// Deserialize from a JSON string.
     pub fn file_json_loads(json_string: &str) -> Self {
         let data: serde_json::Value = serde_json::from_str(json_string).unwrap_or_default();
 
         Self::jsonload(&data).unwrap_or_default()
     }
 
-    /// Writes to a JSON file.
+    /// Write to a JSON file.
     pub fn file_json_dump(&self, filename: &str) -> std::io::Result<()> {
         let sorted = crate::file_encoders::sort_json_keys(self.jsondump());
 
         std::fs::write(filename, serde_json::to_string_pretty(&sorted)?)
     }
 
-    /// Reads from a JSON file.
+    /// Read from a JSON file.
     pub fn file_json_load(filename: &str) -> std::io::Result<Self> {
         let content = std::fs::read_to_string(filename)?;
         let data: serde_json::Value = serde_json::from_str(&content)?;
+
         Self::jsonload(&data).ok_or_else(|| {
             std::io::Error::new(std::io::ErrorKind::InvalidData, "Invalid mesh data")
         })
@@ -5247,7 +5720,6 @@ impl Mesh {
     // ═══════════════════════════════════════════════════════════════════════════
     // Protobuf
     // ═══════════════════════════════════════════════════════════════════════════
-
     /// Colors as flat r, g, b, a floats.
     fn colors_to_rgba(colors: &[Color]) -> Vec<f32> {
         let mut rgba = Vec::with_capacity(colors.len() * 4);
@@ -5275,34 +5747,7 @@ impl Mesh {
         colors
     }
 
-    /// Serializes to protobuf bytes.
-    pub fn pb_dumps(&self) -> Vec<u8> {
-        use prost::Message;
-
-        self.to_proto().encode_to_vec()
-    }
-
-    /// Deserializes from protobuf bytes.
-    pub fn pb_loads(data: &[u8]) -> Result<Self, Box<dyn std::error::Error>> {
-        use prost::Message;
-
-        Ok(Self::from_proto(crate::proto::Mesh::decode(data)?))
-    }
-
-    /// Writes to a protobuf file.
-    pub fn pb_dump(&self, filepath: &str) {
-        let data = self.pb_dumps();
-        std::fs::write(filepath, data).expect("Failed to write protobuf file");
-    }
-
-    /// Reads from a protobuf file.
-    pub fn pb_load(filepath: &str) -> Self {
-        let data = std::fs::read(filepath).expect("Failed to read protobuf file");
-
-        Self::pb_loads(&data).expect("Failed to parse protobuf")
-    }
-
-    /// The proto struct itself; pb_dumps encodes it and Session embeds it.
+    /// Convert to the protobuf message.
     pub fn to_proto(&self) -> crate::proto::Mesh {
         let mut vertices: HashMap<u64, crate::proto::VertexData> =
             HashMap::with_capacity(self.vertex.len());
@@ -5417,20 +5862,13 @@ impl Mesh {
             facecolors_rgba: Mesh::colors_to_rgba(&self.facecolors),
             linecolors_rgba: Mesh::colors_to_rgba(&self.linecolors),
             widths: self.widths.clone(),
-            objectcolor: Some(crate::proto::Color {
-                guid: self.objectcolor.guid().to_string(),
-                name: self.objectcolor.name.clone(),
-                r: self.objectcolor.r,
-                g: self.objectcolor.g,
-                b: self.objectcolor.b,
-                a: self.objectcolor.a,
-            }),
+            objectcolor: Some(self.objectcolor.to_proto()),
             color_mode: self.color_mode.to_i32(),
             triangulation,
         }
     }
 
-    /// Builds from an already-decoded proto; pb_loads decodes then calls this.
+    /// Construct from the protobuf message.
     pub fn from_proto(proto: crate::proto::Mesh) -> Self {
         let mut mesh = Self::new();
 
@@ -5508,10 +5946,8 @@ impl Mesh {
         mesh.linecolors = Mesh::colors_from_rgba(&proto.linecolors_rgba);
         mesh.widths = proto.widths;
 
-        if let Some(oc) = proto.objectcolor {
-            mesh.objectcolor = Color::new(oc.r, oc.g, oc.b, oc.a);
-            mesh.objectcolor.set_guid(oc.guid.clone());
-            mesh.objectcolor.name = oc.name;
+        if let Some(color) = proto.objectcolor {
+            mesh.objectcolor = Color::from_proto(color);
         }
 
         mesh.color_mode = ColorMode::from_i32(proto.color_mode);
@@ -5530,11 +5966,37 @@ impl Mesh {
         mesh
     }
 
-    // ═══════════════════════════════════════════════════════════════════════════
-    // String Representation
-    // ═══════════════════════════════════════════════════════════════════════════
+    /// Serialize to protobuf bytes.
+    pub fn pb_dumps(&self) -> Vec<u8> {
+        use prost::Message;
 
-    /// Returns the "Mesh(name=..., vertices=..., faces=...)" form.
+        self.to_proto().encode_to_vec()
+    }
+
+    /// Deserialize from protobuf bytes.
+    pub fn pb_loads(data: &[u8]) -> Result<Self, Box<dyn std::error::Error>> {
+        use prost::Message;
+
+        Ok(Self::from_proto(crate::proto::Mesh::decode(data)?))
+    }
+
+    /// Write to a protobuf file.
+    pub fn pb_dump(&self, filepath: &str) {
+        let data = self.pb_dumps();
+        std::fs::write(filepath, data).expect("Failed to write protobuf file");
+    }
+
+    /// Read from a protobuf file.
+    pub fn pb_load(filepath: &str) -> Self {
+        let data = std::fs::read(filepath).expect("Failed to read protobuf file");
+
+        Self::pb_loads(&data).expect("Failed to parse protobuf")
+    }
+
+    // ═══════════════════════════════════════════════════════════════════════════
+    // String
+    // ═══════════════════════════════════════════════════════════════════════════
+    /// Return the "Mesh(name=..., vertices=..., faces=...)" form.
     pub fn str(&self) -> String {
         format!(
             "Mesh(name={}, vertices={}, faces={})",
@@ -5544,7 +6006,7 @@ impl Mesh {
         )
     }
 
-    /// Returns the multi-line form with name, vertices, faces and edges.
+    /// Return the multi-line form with name, vertices, faces and edges.
     pub fn repr(&self) -> String {
         format!(
             "Mesh(\n  name={},\n  vertices={},\n  faces={},\n  edges={}\n)",
@@ -5556,10 +6018,51 @@ impl Mesh {
     }
 
     // ═══════════════════════════════════════════════════════════════════════════
+    // Private helpers
+    // ═══════════════════════════════════════════════════════════════════════════
+    /// Return every directed edge (u, v) some face ring walks.
+    fn directed_face_edges(&self) -> HashSet<(usize, usize)> {
+        let mut s = HashSet::with_capacity(self.face.len() * 4);
+
+        for verts in self.face.values() {
+            let n = verts.len();
+
+            for i in 0..n {
+                s.insert((verts[i], verts[(i + 1) % n]));
+            }
+        }
+
+        s
+    }
+
+    /// Return the face-derived halfedge connectivity, computed without mutating.
+    fn compute_halfedges(&self) -> HashMap<usize, HashMap<usize, Option<usize>>> {
+        let mut he: HashMap<usize, HashMap<usize, Option<usize>>> =
+            HashMap::with_capacity(self.vertex.len());
+
+        for vkey in self.vertex.keys() {
+            he.insert(*vkey, HashMap::new());
+        }
+
+        for fkey in self.faces() {
+            let verts = &self.face[&fkey];
+            let n = verts.len();
+
+            for i in 0..n {
+                let u = verts[i];
+                let v = verts[(i + 1) % n];
+                he.entry(u).or_default().insert(v, Some(fkey));
+                he.entry(v).or_default().entry(u).or_insert(None);
+            }
+        }
+
+        he
+    }
+
+    // ═══════════════════════════════════════════════════════════════════════════
     // SESSION_VIEWER
     // ═══════════════════════════════════════════════════════════════════════════
-
-    /// Makes windings consistent and, on a closed mesh, outward, so the viewer can trust a face normal.
+    /// Make windings consistent and, on a closed mesh, outward, so the viewer can trust a face normal.
     fn orient_faces(&mut self) {
         if self.face.len() < 2 {
             return;
@@ -5634,7 +6137,7 @@ impl Mesh {
         total
     }
 
-    /// Fills triangulation for every n-gon a fan from vertex 0 would render wrong.
+    /// Fill triangulation for every n-gon a fan from vertex 0 would render wrong.
     fn triangulate_faces(&mut self) {
         for face_key in self.faces() {
             if self.triangulation.contains_key(&face_key) {
@@ -5714,7 +6217,7 @@ impl Mesh {
         self.tri_bvh.is_some() && !self.tri_tris.is_empty() && !self.tri_vertices.is_empty()
     }
 
-    /// Returns the nearest hit along a ray, building the triangle BVH first.
+    /// Return the nearest hit along a ray, building the triangle BVH first.
     pub fn ray_cast_bvh(&mut self, ray: &Line, epsilon: f64) -> Option<Point> {
         self.build_triangle_bvh(false);
 
@@ -5763,7 +6266,7 @@ impl Mesh {
         best_p
     }
 
-    /// Drops halfedges, colors and widths once the GPU buffers hold them.
+    /// Drop halfedges, colors and widths once the GPU buffers hold them.
     pub fn strip_render_data(&mut self) {
         self.halfedge.clear();
         self.pointcolors.clear();
@@ -5802,33 +6305,33 @@ impl Mesh {
         out
     }
 
-    /// Returns the edge widths.
+    /// Return the edge widths.
     pub fn widths(&self) -> &[f64] {
         &self.widths
     }
 
-    /// Returns the object color.
+    /// Return the object color.
     pub fn objectcolor(&self) -> &Color {
         &self.objectcolor
     }
 }
 
 impl std::fmt::Display for Mesh {
-    /// Writes the str() form to a formatter.
+    /// Write the str() form to a formatter.
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{}", self.str())
     }
 }
 
 impl std::fmt::Debug for Mesh {
-    /// Writes the repr() form to a formatter.
+    /// Write the repr() form to a formatter.
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{}", self.repr())
     }
 }
 
 impl PartialEq for Mesh {
-    /// Compares name, vertices and faces; guid ignored.
+    /// Compare name, vertices and faces; guid ignored.
     fn eq(&self, other: &Self) -> bool {
         self.name == other.name && self.vertex == other.vertex && self.face == other.face
     }

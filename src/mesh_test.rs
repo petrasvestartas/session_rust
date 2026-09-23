@@ -29,18 +29,22 @@ pub fn run_mesh_constructor() -> TestResult {
         MINI_CHECK!(mesh.color_mode == ColorMode::OBJECTCOLOR);
 
         let mut pc: Vec<Color> = Vec::with_capacity(mesh.number_of_vertices());
+
         for i in 0..mesh.number_of_vertices() {
             pc.push(palette[i % palette.len()].clone());
         }
+
         mesh.set_pointcolors(pc);
 
         MINI_CHECK!(mesh.color_mode == ColorMode::POINTCOLORS);
         MINI_CHECK!(mesh.get_pointcolors().len() == mesh.number_of_vertices());
 
         let mut fc: Vec<Color> = Vec::with_capacity(mesh.number_of_faces());
+
         for i in 0..mesh.number_of_faces() {
             fc.push(palette[i % palette.len()].clone());
         }
+
         mesh.set_facecolors(fc);
 
         MINI_CHECK!(mesh.color_mode == ColorMode::FACECOLORS);
@@ -48,9 +52,11 @@ pub fn run_mesh_constructor() -> TestResult {
 
         let mut lc: Vec<Color> = Vec::with_capacity(mesh.number_of_edges());
         let lw: Vec<f64> = vec![0.1; mesh.number_of_edges()];
+
         for i in 0..mesh.number_of_edges() {
             lc.push(palette[i % palette.len()].clone());
         }
+
         mesh.set_linecolors(lc, lw);
 
         MINI_CHECK!(mesh.color_mode == ColorMode::FACECOLORS);
@@ -464,6 +470,7 @@ pub fn run_mesh_from_polygon_with_holes_many() -> TestResult {
         use crate::Point;
 
         let mut inputs: Vec<Vec<Vec<Point>>> = Vec::new();
+
         for i in 0..4 {
             let x = i as f64 * 7.0;
             inputs.push(vec![
@@ -481,6 +488,7 @@ pub fn run_mesh_from_polygon_with_holes_many() -> TestResult {
                 ],
             ]);
         }
+
         let meshes = Mesh::from_polygon_with_holes_many(inputs.clone(), false, true);
 
         MINI_CHECK!(meshes[0].is_valid());
@@ -500,6 +508,7 @@ pub fn run_mesh_loft_many() -> TestResult {
         use crate::Polyline;
 
         let mut loft_inputs: Vec<(Vec<Polyline>, Vec<Polyline>)> = Vec::new();
+
         for i in 0..6 {
             let x = i as f64 * 3.0;
             let b = Polyline::new(vec![
@@ -518,6 +527,7 @@ pub fn run_mesh_loft_many() -> TestResult {
             ]);
             loft_inputs.push((vec![b], vec![t]));
         }
+
         let meshes = Mesh::loft_many(loft_inputs.clone(), true, true, true);
 
         MINI_CHECK!(meshes[0].is_valid());
@@ -672,6 +682,7 @@ pub fn run_mesh_loft_panels() -> TestResult {
 
         for panel in panels.iter_mut() {
             let mut face_colors: Vec<Color> = Vec::new();
+
             for role in panel.face_roles.values() {
                 let color = match *role {
                     LoftFaceRole::TopCap => Color::blue(),
@@ -681,6 +692,7 @@ pub fn run_mesh_loft_panels() -> TestResult {
                 };
                 face_colors.push(color);
             }
+
             panel.mesh.set_facecolors(face_colors);
         }
 
@@ -961,6 +973,7 @@ pub fn run_mesh_vertex_and_face_operations() -> TestResult {
         for v in &verts {
             mesh.add_vertex(v.clone(), None);
         }
+
         for f in &faces {
             mesh.add_face(f.clone(), None);
         }
@@ -988,6 +1001,7 @@ pub fn run_mesh_vertex_and_face_operations() -> TestResult {
         for v in &verts {
             mesh.add_vertex(v.clone(), None);
         }
+
         for f in &faces {
             mesh.add_face(f.clone(), None);
         }
@@ -1280,6 +1294,7 @@ pub fn run_mesh_geometric_properties() -> TestResult {
         }
 
         let mut centroids = Vec::new();
+
         for f in mesh.faces() {
             centroids.push(mesh.face_centroid(f).unwrap());
         }
@@ -1345,6 +1360,7 @@ pub fn run_mesh_geometric_properties() -> TestResult {
         ));
 
         let face_normals = mesh.face_normals();
+
         for f in mesh.faces() {
             let fn_ = mesh.face_normal(f);
 
@@ -1414,6 +1430,7 @@ pub fn run_mesh_geometric_properties() -> TestResult {
 
         for f in mesh.faces() {
             let fv = mesh.face_vertices(f).unwrap().clone();
+
             for v in fv {
                 let angle = mesh.vertex_angle_in_face(v, f);
 
@@ -1423,6 +1440,7 @@ pub fn run_mesh_geometric_properties() -> TestResult {
         }
 
         let vertex_normals = mesh.vertex_normals();
+
         for v in mesh.vertices() {
             let vn = mesh.vertex_normal(v);
 
@@ -1535,6 +1553,7 @@ pub fn run_mesh_geometric_properties() -> TestResult {
         ));
 
         let vertex_normals_weighted = mesh.vertex_normals_weighted(NormalWeighting::Angle);
+
         for v in mesh.vertices() {
             let vnw = mesh.vertex_normal_weighted(v, NormalWeighting::Angle);
 
@@ -1692,6 +1711,77 @@ pub fn run_mesh_transformation() -> TestResult {
     })
 }
 
+pub fn run_mesh_cut_by_plane() -> TestResult {
+    MINI_TEST!("Cut By Plane", {
+        use crate::Mesh;
+        use crate::Plane;
+        use crate::Point;
+        use crate::Polyline;
+        use crate::Vector;
+
+        let bx = Mesh::create_box(2.0, 2.0, 2.0);
+        let half = bx.cut_by_plane(&Plane::from_point_normal(
+            Point::new(0.0, 0.0, 0.0),
+            Vector::new(0.0, 0.0, 1.0),
+            None,
+        ));
+        let copy = bx.cut_by_plane(&Plane::from_point_normal(
+            Point::new(0.0, 0.0, 5.0),
+            Vector::new(0.0, 0.0, -1.0),
+            None,
+        ));
+        let empty = bx.cut_by_plane(&Plane::from_point_normal(
+            Point::new(0.0, 0.0, 5.0),
+            Vector::new(0.0, 0.0, 1.0),
+            None,
+        ));
+
+        MINI_CHECK!(half.is_closed());
+        MINI_CHECK!(half.number_of_vertices() == 8);
+        MINI_CHECK!(half.number_of_faces() == 6);
+        MINI_CHECK!(TOLERANCE.is_close(half.volume(), 4.0));
+        MINI_CHECK!(copy == bx);
+        MINI_CHECK!(empty.is_empty());
+
+        let bottom = Polyline::new(vec![
+            Point::new(0.0, 0.0, 0.0),
+            Point::new(2.0, 0.0, 0.0),
+            Point::new(2.0, 1.0, 0.0),
+            Point::new(1.0, 1.0, 0.0),
+            Point::new(1.0, 2.0, 0.0),
+            Point::new(0.0, 2.0, 0.0),
+            Point::new(0.0, 0.0, 0.0),
+        ]);
+        let top = Polyline::new(vec![
+            Point::new(0.0, 0.0, 1.0),
+            Point::new(2.0, 0.0, 1.0),
+            Point::new(2.0, 1.0, 1.0),
+            Point::new(1.0, 1.0, 1.0),
+            Point::new(1.0, 2.0, 1.0),
+            Point::new(0.0, 2.0, 1.0),
+            Point::new(0.0, 0.0, 1.0),
+        ]);
+        let prism = Mesh::loft(&[bottom], &[top], true, true);
+        let upper = prism.cut_by_plane(&Plane::from_point_normal(
+            Point::new(0.0, 0.0, 0.5),
+            Vector::new(0.0, 0.0, 1.0),
+            None,
+        ));
+        let corners = prism.cut_by_plane(&Plane::from_point_normal(
+            Point::new(1.25, 1.25, 0.0),
+            Vector::new(1.0, 1.0, 0.0),
+            None,
+        ));
+
+        MINI_CHECK!(upper.is_closed());
+        MINI_CHECK!(upper.number_of_faces() == 8);
+        MINI_CHECK!(TOLERANCE.is_close(upper.volume(), 1.5));
+        MINI_CHECK!(corners.is_closed());
+        MINI_CHECK!(corners.number_of_faces() == 10);
+        MINI_CHECK!(TOLERANCE.is_close(corners.volume(), 0.25));
+    })
+}
+
 pub fn run_mesh_json_roundtrip() -> TestResult {
     MINI_TEST!("Json Roundtrip", {
         use crate::Mesh;
@@ -1774,9 +1864,11 @@ pub fn run_mesh_protobuf_roundtrip() -> TestResult {
             .join("test_mesh.bin");
         mesh.pb_dump(filename.to_str().unwrap());
         let loaded_file = Mesh::pb_load(filename.to_str().unwrap());
+        let converted = Mesh::from_proto(mesh.to_proto());
 
         MINI_CHECK!(loaded_string == mesh);
         MINI_CHECK!(loaded_file == mesh);
+        MINI_CHECK!(converted == mesh);
 
         let polys = vec![vec![
             Point::new(0.0, 0.0, 0.0),
@@ -2497,6 +2589,234 @@ pub fn run_mesh_assignment_keeps_objectcolor() -> TestResult {
     })
 }
 
+pub fn run_mesh_from_polyline_pairs() -> TestResult {
+    MINI_TEST!("From Polyline Pairs", {
+        use crate::Mesh;
+        use crate::Point;
+        use crate::Polyline;
+
+        let top = Polyline::new(vec![
+            Point::new(0.0, 0.0, 1.0),
+            Point::new(1.0, 0.0, 1.0),
+            Point::new(1.0, 1.0, 1.0),
+            Point::new(0.0, 1.0, 1.0),
+            Point::new(0.0, 0.0, 1.0),
+        ]);
+        let bot = Polyline::new(vec![
+            Point::new(0.0, 0.0, 0.0),
+            Point::new(1.0, 0.0, 0.0),
+            Point::new(1.0, 1.0, 0.0),
+            Point::new(0.0, 1.0, 0.0),
+            Point::new(0.0, 0.0, 0.0),
+        ]);
+        let mesh = Mesh::from_polyline_pairs(&[top, bot], 2.0);
+
+        MINI_CHECK!(mesh.is_closed());
+        MINI_CHECK!(mesh.number_of_faces() == 6);
+        MINI_CHECK!(TOLERANCE.is_close(mesh.volume(), 0.125));
+    })
+}
+
+pub fn run_mesh_from_polyline_pairs_vnf() -> TestResult {
+    MINI_TEST!("From Polyline Pairs Vnf", {
+        use crate::Mesh;
+        use crate::Point;
+        use crate::Polyline;
+
+        let top = Polyline::new(vec![
+            Point::new(0.0, 0.0, 1.0),
+            Point::new(1.0, 0.0, 1.0),
+            Point::new(1.0, 1.0, 1.0),
+            Point::new(0.0, 1.0, 1.0),
+            Point::new(0.0, 0.0, 1.0),
+        ]);
+        let bot = Polyline::new(vec![
+            Point::new(0.0, 0.0, 0.0),
+            Point::new(1.0, 0.0, 0.0),
+            Point::new(1.0, 1.0, 0.0),
+            Point::new(0.0, 1.0, 0.0),
+            Point::new(0.0, 0.0, 0.0),
+        ]);
+        let (vertices, normals, triangles) = Mesh::from_polyline_pairs_vnf(&[top, bot], 1.0);
+
+        MINI_CHECK!(triangles.len() == 36);
+        MINI_CHECK!(vertices.len() == 108);
+        MINI_CHECK!(normals.len() == 108);
+        MINI_CHECK!(triangles[35] == 35);
+    })
+}
+
+pub fn run_mesh_reflex_fold() -> TestResult {
+    MINI_TEST!("Reflex Fold", {
+        use crate::Mesh;
+        use crate::Point;
+        use crate::Polyline;
+
+        let cross_section = Polyline::new(vec![
+            Point::new(0.0, 0.0, 0.0),
+            Point::new(1.0, 0.0, 0.0),
+            Point::new(2.0, 1.0, 0.0),
+        ]);
+        let profile = Polyline::new(vec![
+            Point::new(0.0, -1.0, 0.0),
+            Point::new(0.0, 0.0, 1.0),
+            Point::new(0.0, 1.0, 0.0),
+        ]);
+        let mesh = Mesh::reflex_fold(&cross_section, &profile);
+
+        MINI_CHECK!(mesh.is_valid());
+        MINI_CHECK!(mesh.number_of_vertices() == 9);
+        MINI_CHECK!(mesh.number_of_faces() == 4);
+    })
+}
+
+pub fn run_mesh_miter_contours() -> TestResult {
+    MINI_TEST!("Miter Contours", {
+        use crate::Mesh;
+        use crate::Vector;
+
+        let shell = Mesh::create_box(2.0, 2.0, 2.0);
+        let contours = Mesh::miter_contours(&shell, 0.1, 0.0, 0.0, false, 90.0);
+
+        MINI_CHECK!(contours.len() == 6);
+        MINI_CHECK!(contours[0].0.len() == 4);
+        MINI_CHECK!(contours[0].1.len() == 4);
+        MINI_CHECK!(contours[0].2.len() == 4);
+        MINI_CHECK!(contours[0].3.len() == 4);
+        MINI_CHECK!(TOLERANCE.is_vector_close(&contours[0].4, &Vector::new(0.0, 0.0, -1.0)));
+    })
+}
+
+pub fn run_mesh_set_face_triangulation() -> TestResult {
+    MINI_TEST!("Set Face Triangulation", {
+        use crate::Mesh;
+
+        let mut mesh = Mesh::create_box(1.0, 1.0, 1.0);
+        mesh.set_face_triangulation(0, vec![[0, 3, 2], [0, 2, 1]]);
+
+        MINI_CHECK!(mesh.get_triangulation()[&0].len() == 2);
+        MINI_CHECK!(mesh.get_triangulation()[&0][1] == [0, 2, 1]);
+    })
+}
+
+pub fn run_mesh_set_face_holes() -> TestResult {
+    MINI_TEST!("Set Face Holes", {
+        use crate::Mesh;
+
+        let mut mesh = Mesh::create_box(1.0, 1.0, 1.0);
+        mesh.set_face_holes(0, vec![vec![4, 5, 6]]);
+
+        MINI_CHECK!(mesh.get_face_holes()[&0].len() == 1);
+        MINI_CHECK!(mesh.get_face_holes()[&0][0] == vec![4, 5, 6]);
+    })
+}
+
+pub fn run_mesh_rebuild_halfedges() -> TestResult {
+    MINI_TEST!("Rebuild Halfedges", {
+        use crate::Mesh;
+
+        let mut mesh = Mesh::create_box(1.0, 1.0, 1.0);
+        let halfedge = mesh.halfedge.clone();
+        mesh.halfedge.clear();
+        mesh.rebuild_halfedges();
+
+        MINI_CHECK!(mesh.halfedge == halfedge);
+    })
+}
+
+pub fn run_mesh_ensure_halfedges() -> TestResult {
+    MINI_TEST!("Ensure Halfedges", {
+        use crate::Mesh;
+
+        let mut mesh = Mesh::create_box(1.0, 1.0, 1.0);
+        mesh.halfedge.clear();
+        mesh.ensure_halfedges();
+
+        MINI_CHECK!(mesh.halfedge.len() == 8);
+        MINI_CHECK!(mesh.halfedge_face((0, 3)).is_some());
+    })
+}
+
+pub fn run_mesh_edge_face_map() -> TestResult {
+    MINI_TEST!("Edge Face Map", {
+        use crate::Mesh;
+
+        let mesh = Mesh::create_box(1.0, 1.0, 1.0);
+        let efm = mesh.edge_face_map();
+
+        MINI_CHECK!(efm.len() == 24);
+        MINI_CHECK!(efm[&(0, 3)] == 0);
+        MINI_CHECK!(efm[&(3, 0)] == 4);
+    })
+}
+
+pub fn run_mesh_face_outlines() -> TestResult {
+    MINI_TEST!("Face Outlines", {
+        use crate::Mesh;
+
+        let mesh = Mesh::create_box(1.0, 1.0, 1.0);
+        let outlines = mesh.face_outlines();
+
+        MINI_CHECK!(outlines.len() == 6);
+        MINI_CHECK!(outlines[0].point_count() == 5);
+        MINI_CHECK!(outlines[0].is_closed());
+    })
+}
+
+pub fn run_mesh_dihedral_angle() -> TestResult {
+    MINI_TEST!("Dihedral Angle", {
+        use crate::Mesh;
+
+        let mesh = Mesh::create_box(1.0, 1.0, 1.0);
+        let angle = mesh.dihedral_angle(0, 1);
+
+        MINI_CHECK!(angle.is_some());
+        MINI_CHECK!(TOLERANCE.is_close(angle.unwrap(), 90.0));
+    })
+}
+
+pub fn run_mesh_triangle_bvh() -> TestResult {
+    MINI_TEST!("Triangle Bvh", {
+        use crate::Mesh;
+        use crate::Point;
+        use crate::Vector;
+
+        let mut mesh = Mesh::create_box(2.0, 2.0, 2.0);
+        mesh.build_triangle_bvh(false);
+        let mut ids: Vec<usize> = Vec::new();
+        let hit = mesh.triangle_bvh_ray_cast(
+            &Point::new(0.1, 0.2, -10.0),
+            &Vector::new(0.0, 0.0, 1.0),
+            &mut ids,
+            true,
+        );
+        let found = mesh.get_triangle_by_id(ids[0]);
+
+        MINI_CHECK!(mesh.get_cached_bvh().is_some());
+        MINI_CHECK!(hit);
+        MINI_CHECK!(ids.len() == 4);
+        MINI_CHECK!(found.is_some());
+        MINI_CHECK!(found.as_ref().unwrap().0 < 2);
+        MINI_CHECK!(TOLERANCE.is_close(found.as_ref().unwrap().2[2].abs(), 1.0));
+
+        mesh.clear_triangle_bvh();
+
+        MINI_CHECK!(mesh.get_cached_bvh().is_none());
+    })
+}
+
+pub fn run_mesh_triangle_aabb_tree() -> TestResult {
+    MINI_TEST!("Triangle Aabb Tree", {
+        use crate::Mesh;
+
+        let mut mesh = Mesh::create_box(2.0, 2.0, 2.0);
+        mesh.build_triangle_aabb_tree(false);
+
+        MINI_CHECK!(mesh.get_cached_aabb_tree().is_some());
+        MINI_CHECK!(mesh.get_cached_bvh().is_some());
+    })
+}
+
 REGISTER_MINI_TEST!(
     "Mesh",
     "Constructor",
@@ -2566,6 +2886,11 @@ REGISTER_MINI_TEST!(
     "Mesh",
     "Transformation",
     crate::mesh_test::run_mesh_transformation
+);
+REGISTER_MINI_TEST!(
+    "Mesh",
+    "Cut By Plane",
+    crate::mesh_test::run_mesh_cut_by_plane
 );
 REGISTER_MINI_TEST!(
     "Mesh",
@@ -2731,4 +3056,69 @@ REGISTER_MINI_TEST!(
     "Mesh",
     "Assignment Keeps Objectcolor",
     crate::mesh_test::run_mesh_assignment_keeps_objectcolor
+);
+REGISTER_MINI_TEST!(
+    "Mesh",
+    "From Polyline Pairs",
+    crate::mesh_test::run_mesh_from_polyline_pairs
+);
+REGISTER_MINI_TEST!(
+    "Mesh",
+    "From Polyline Pairs Vnf",
+    crate::mesh_test::run_mesh_from_polyline_pairs_vnf
+);
+REGISTER_MINI_TEST!(
+    "Mesh",
+    "Reflex Fold",
+    crate::mesh_test::run_mesh_reflex_fold
+);
+REGISTER_MINI_TEST!(
+    "Mesh",
+    "Miter Contours",
+    crate::mesh_test::run_mesh_miter_contours
+);
+REGISTER_MINI_TEST!(
+    "Mesh",
+    "Set Face Triangulation",
+    crate::mesh_test::run_mesh_set_face_triangulation
+);
+REGISTER_MINI_TEST!(
+    "Mesh",
+    "Set Face Holes",
+    crate::mesh_test::run_mesh_set_face_holes
+);
+REGISTER_MINI_TEST!(
+    "Mesh",
+    "Rebuild Halfedges",
+    crate::mesh_test::run_mesh_rebuild_halfedges
+);
+REGISTER_MINI_TEST!(
+    "Mesh",
+    "Ensure Halfedges",
+    crate::mesh_test::run_mesh_ensure_halfedges
+);
+REGISTER_MINI_TEST!(
+    "Mesh",
+    "Edge Face Map",
+    crate::mesh_test::run_mesh_edge_face_map
+);
+REGISTER_MINI_TEST!(
+    "Mesh",
+    "Face Outlines",
+    crate::mesh_test::run_mesh_face_outlines
+);
+REGISTER_MINI_TEST!(
+    "Mesh",
+    "Dihedral Angle",
+    crate::mesh_test::run_mesh_dihedral_angle
+);
+REGISTER_MINI_TEST!(
+    "Mesh",
+    "Triangle Bvh",
+    crate::mesh_test::run_mesh_triangle_bvh
+);
+REGISTER_MINI_TEST!(
+    "Mesh",
+    "Triangle Aabb Tree",
+    crate::mesh_test::run_mesh_triangle_aabb_tree
 );
