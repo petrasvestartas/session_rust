@@ -2325,6 +2325,16 @@ pub fn get_all_tests() -> Vec<RegisteredTest> {
         // Closest tests
         RegisteredTest {
             group: "Closest",
+            name: "Curve Point",
+            func: run_closest_curve_point,
+        },
+        RegisteredTest {
+            group: "Closest",
+            name: "Curve Curve",
+            func: run_closest_curve_curve,
+        },
+        RegisteredTest {
+            group: "Closest",
             name: "Line Point",
             func: run_closest_line_point,
         },
@@ -2335,13 +2345,13 @@ pub fn get_all_tests() -> Vec<RegisteredTest> {
         },
         RegisteredTest {
             group: "Closest",
-            name: "Curve Point",
-            func: run_closest_curve_point,
+            name: "Surface Point",
+            func: run_closest_surface_point,
         },
         RegisteredTest {
             group: "Closest",
-            name: "Surface Point",
-            func: run_closest_surface_point,
+            name: "Surface Curve",
+            func: run_closest_surface_curve,
         },
         RegisteredTest {
             group: "Closest",
@@ -2357,11 +2367,6 @@ pub fn get_all_tests() -> Vec<RegisteredTest> {
             group: "Closest",
             name: "Pointcloud Point",
             func: run_closest_pointcloud_point,
-        },
-        RegisteredTest {
-            group: "Closest",
-            name: "Surface Curve",
-            func: run_closest_surface_curve,
         },
         RegisteredTest {
             group: "Closest",

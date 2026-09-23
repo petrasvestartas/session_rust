@@ -93,13 +93,14 @@ pub fn run_spatial_aabbtree_mesh_point_aabb() -> TestResult {
         use crate::Point;
         use crate::Primitives;
 
-        let m = Primitives::cube(2.0);
-        let (cp1, _fk1, d1) = Closest::mesh_point_aabb(&m, &Point::new(0.0, 0.0, 2.0));
+        let mut m = Primitives::cube(2.0);
+
+        let (cp1, _fk1, d1) = Closest::mesh_point_aabb(&mut m, &Point::new(0.0, 0.0, 2.0));
 
         MINI_CHECK!(TOLERANCE.is_close(cp1[2], 1.0));
         MINI_CHECK!(TOLERANCE.is_close(d1, 1.0));
 
-        let (_cp2, _fk2, d2) = Closest::mesh_point_aabb(&m, &Point::new(1.0, 1.0, 1.0));
+        let d2 = Closest::mesh_point_aabb(&mut m, &Point::new(1.0, 1.0, 1.0)).2;
 
         MINI_CHECK!(TOLERANCE.is_close(d2, 0.0));
     })
@@ -111,10 +112,12 @@ pub fn run_spatial_aabbtree_mesh_point_aabb_matches_bvh() -> TestResult {
         use crate::Point;
         use crate::Primitives;
 
-        let m = Primitives::cube(2.0);
+        let mut m = Primitives::cube(2.0);
         let tp = Point::new(0.3, 0.7, 1.5);
-        let (cp_bvh, _fk_bvh, d_bvh) = Closest::mesh_point(&m, &tp);
-        let (cp_aabb, _fk_aabb, d_aabb) = Closest::mesh_point_aabb(&m, &tp);
+
+        let (cp_bvh, _fk_bvh, d_bvh) = Closest::mesh_point(&mut m, &tp);
+
+        let (cp_aabb, _fk_aabb, d_aabb) = Closest::mesh_point_aabb(&mut m, &tp);
 
         MINI_CHECK!(TOLERANCE.is_close(d_bvh, d_aabb));
         MINI_CHECK!(TOLERANCE.is_close(cp_bvh[0], cp_aabb[0]));
