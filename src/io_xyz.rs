@@ -1,23 +1,30 @@
-use crate::{Point, PointCloud};
+use crate::Point;
+use crate::PointCloud;
 use std::io;
 
-/// Returns the cloud points as "x y z" lines at full double precision.
+// ═══════════════════════════════════════════════════════════════════════════
+// Write
+// ═══════════════════════════════════════════════════════════════════════════
+/// Return the cloud points as "x y z" lines at full double precision.
 pub fn write_xyz_to_string(cloud: &PointCloud) -> String {
-    let mut s = String::new();
+    let mut out = String::new();
 
     for p in cloud.get_points().iter() {
-        s.push_str(&format!("{} {} {}\n", p[0], p[1], p[2]));
+        out.push_str(&format!("{} {} {}\n", p[0], p[1], p[2]));
     }
 
-    s
+    out
 }
 
-/// Writes the cloud points as "x y z" lines to filepath.
+/// Write the cloud points as "x y z" lines to filepath.
 pub fn write_xyz(cloud: &PointCloud, filepath: &str) -> io::Result<()> {
     std::fs::write(filepath, write_xyz_to_string(cloud))
 }
 
-/// Returns the cloud read from "x y z" lines; blank and # lines skipped.
+// ═══════════════════════════════════════════════════════════════════════════
+// Read
+// ═══════════════════════════════════════════════════════════════════════════
+/// Return the cloud read from "x y z" lines; blank and # lines skipped.
 pub fn read_xyz_from_str(content: &str) -> PointCloud {
     let mut cloud = PointCloud::default();
 
@@ -46,7 +53,7 @@ pub fn read_xyz_from_str(content: &str) -> PointCloud {
     cloud
 }
 
-/// Returns the cloud read from an .xyz file.
+/// Return the cloud read from an .xyz file.
 pub fn read_xyz(filepath: &str) -> io::Result<PointCloud> {
     let content = std::fs::read_to_string(filepath)?;
 
