@@ -739,60 +739,55 @@ fn loft_drop_degenerate(tris: &[[usize; 3]], mesh: &Mesh, frame: &LoftFrame) -> 
     kept
 }
 
-/// One n-gon cap with stored CDT triangulation and hole rings; reversed for the bottom.
-fn loft_cap(
-    mesh: &mut Mesh,
-    frame: &LoftFrame,
-    rings: &[LoftRing],
-    pts: &[Point],
-    vkeys: &[usize],
-    reverse: bool,
-    fix_collinear: bool,
-) {
-    let mut border_2d: Vec<Point> = Vec::new();
+/// Point indices of the outer ring, skipping consecutive points that share a vertex key.
+fn loft_cap_outer(ring: &LoftRing, vkeys: &[usize]) -> Vec<usize> {
     let mut outer: Vec<usize> = Vec::new();
 
-    for i in 0..rings[0].n {
-        let vi = rings[0].off + i;
+    for i in 0..ring.n {
+        let vi = ring.off + i;
 
         if !outer.is_empty() && vkeys[vi] == vkeys[outer[outer.len() - 1]] {
             continue;
         }
 
-        let (u, v) = loft_project(frame, &pts[vi]);
-        border_2d.push(Point::new(u, v, 0.0));
         outer.push(vi);
     }
 
-    let mut flat = outer.clone();
+    outer
+}
+
+/// CDT triangles of the outer ring with its holes as vertex keys, reversed for the bottom.
+fn loft_cap_triangles(
+    frame: &LoftFrame,
+    rings: &[LoftRing],
+    pts: &[Point],
+    vkeys: &[usize],
+    outer: &[usize],
+    reverse: bool,
+) -> Vec<[usize; 3]> {
+    let mut border_2d: Vec<Point> = Vec::new();
+
+    for &vi in outer {
+        let (u, v) = loft_project(frame, &pts[vi]);
+        border_2d.push(Point::new(u, v, 0.0));
+    }
+
+    let mut flat = outer.to_vec();
     let mut holes_2d: Vec<Vec<Point>> = Vec::new();
-    let mut hole_rings: Vec<Vec<usize>> = Vec::new();
 
     for r in &rings[1..] {
         let mut hole = Vec::new();
-        let mut ring = Vec::new();
 
         for i in r.off..r.off + r.n {
             let (u, v) = loft_project(frame, &pts[i]);
             hole.push(Point::new(u, v, 0.0));
             flat.push(i);
-            ring.push(vkeys[i]);
         }
 
         holes_2d.push(hole);
-        hole_rings.push(ring);
     }
 
     let tris = remesh_cdt::cdt_triangulate(&border_2d, &holes_2d);
-    let mut fvkeys = Vec::with_capacity(outer.len());
-
-    for i in 0..outer.len() {
-        fvkeys.push(vkeys[outer[if reverse { outer.len() - 1 - i } else { i }]]);
-    }
-
-    let Some(fk) = mesh.add_face(fvkeys.clone(), None) else {
-        return;
-    };
     let mut tri_list: Vec<[usize; 3]> = Vec::with_capacity(tris.len());
 
     for &(a, b, c) in &tris {
@@ -803,11 +798,54 @@ fn loft_cap(
         }
     }
 
+    tri_list
+}
+
+/// Vertex keys of the hole rings, every ring after the first.
+fn loft_cap_holes(rings: &[LoftRing], vkeys: &[usize]) -> Vec<Vec<usize>> {
+    let mut hole_rings: Vec<Vec<usize>> = Vec::new();
+
+    for r in &rings[1..] {
+        let mut ring = Vec::new();
+
+        for i in r.off..r.off + r.n {
+            ring.push(vkeys[i]);
+        }
+
+        hole_rings.push(ring);
+    }
+
+    hole_rings
+}
+
+/// One n-gon cap with stored CDT triangulation and hole rings; reversed for the bottom.
+fn loft_cap(
+    mesh: &mut Mesh,
+    frame: &LoftFrame,
+    rings: &[LoftRing],
+    pts: &[Point],
+    vkeys: &[usize],
+    reverse: bool,
+    fix_collinear: bool,
+) {
+    let outer = loft_cap_outer(&rings[0], vkeys);
+    let mut tri_list = loft_cap_triangles(frame, rings, pts, vkeys, &outer, reverse);
+    let mut fvkeys = Vec::with_capacity(outer.len());
+
+    for i in 0..outer.len() {
+        fvkeys.push(vkeys[outer[if reverse { outer.len() - 1 - i } else { i }]]);
+    }
+
+    let Some(fk) = mesh.add_face(fvkeys.clone(), None) else {
+        return;
+    };
+
     if fix_collinear {
         loft_fix_collinear(&mut tri_list, &fvkeys);
         tri_list = loft_drop_degenerate(&tri_list, mesh, frame);
     }
 
+    let hole_rings = loft_cap_holes(rings, vkeys);
     let has_holes = !hole_rings.is_empty() && !tri_list.is_empty();
     mesh.set_face_triangulation(fk, tri_list);
 
@@ -999,6 +1037,30 @@ fn loft_walls(
     } else {
         loft_walls_zipper(mesh, poly, start, bpts, tpts, bot_vkeys, top_vkeys);
     }
+}
+
+/// Polygon order with the border polygon first and the rest in input order.
+fn loft_order(n: usize, border_idx: usize) -> Vec<usize> {
+    let mut order: Vec<usize> = vec![border_idx];
+
+    for i in 0..n {
+        if i != border_idx {
+            order.push(i);
+        }
+    }
+
+    order
+}
+
+/// Top or bottom rings of every lofted polygon.
+fn loft_rings(polys: &[LoftPoly], top: bool) -> Vec<LoftRing> {
+    let mut rings: Vec<LoftRing> = Vec::new();
+
+    for poly in polys {
+        rings.push(if top { poly.top } else { poly.bot });
+    }
+
+    rings
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -2318,6 +2380,51 @@ impl Mesh {
         min_idx
     }
 
+    /// Sort and dedupe every neighbor list counter-clockwise by angle around its vertex.
+    fn lines_sort_neighbors(adj: &mut HashMap<usize, Vec<usize>>, verts: &[Point]) {
+        for (v, nbrs) in adj.iter_mut() {
+            nbrs.sort();
+            nbrs.dedup();
+            let vx = verts[*v][0];
+            let vy = verts[*v][1];
+            nbrs.sort_by(|&a, &b| {
+                let aa = (verts[a][1] - vy).atan2(verts[a][0] - vx);
+                let ba = (verts[b][1] - vy).atan2(verts[b][0] - vx);
+                aa.partial_cmp(&ba).unwrap_or(std::cmp::Ordering::Equal)
+            });
+        }
+    }
+
+    /// CDT triangles of one face cycle as mesh vertex keys, counter-clockwise in xy.
+    fn lines_cycle_triangles(cycle: &[usize], verts: &[Point], vkeys: &[usize]) -> Vec<[usize; 3]> {
+        let mut ordered: Vec<usize> = cycle.to_vec();
+        let mut bpts: Vec<(f64, f64)> = Vec::with_capacity(ordered.len());
+
+        for &vid in &ordered {
+            bpts.push((verts[vid][0], verts[vid][1]));
+        }
+
+        if signed_area_2d(&bpts) < 0.0 {
+            bpts.reverse();
+            ordered.reverse();
+        }
+
+        let mut bpts2d: Vec<Point> = Vec::with_capacity(bpts.len());
+
+        for b in &bpts {
+            bpts2d.push(Point::new(b.0, b.1, 0.0));
+        }
+
+        let tris = remesh_cdt::cdt_triangulate(&bpts2d, &[]);
+        let mut tri_list: Vec<[usize; 3]> = Vec::with_capacity(tris.len());
+
+        for &(a, b, c) in &tris {
+            tri_list.push([vkeys[ordered[a]], vkeys[ordered[b]], vkeys[ordered[c]]]);
+        }
+
+        tri_list
+    }
+
     /// Construct a planar mesh from a line network, optionally without its outer boundary face.
     pub fn from_lines(lines: &[Line], delete_boundary_face: bool, precision: Option<f64>) -> Self {
         if lines.is_empty() {
@@ -2348,17 +2455,7 @@ impl Mesh {
             adj.entry(b).or_default().push(a);
         }
 
-        for (v, nbrs) in adj.iter_mut() {
-            nbrs.sort();
-            nbrs.dedup();
-            let vx = verts[*v][0];
-            let vy = verts[*v][1];
-            nbrs.sort_by(|&a, &b| {
-                let aa = (verts[a][1] - vy).atan2(verts[a][0] - vx);
-                let ba = (verts[b][1] - vy).atan2(verts[b][0] - vx);
-                aa.partial_cmp(&ba).unwrap_or(std::cmp::Ordering::Equal)
-            });
-        }
+        Mesh::lines_sort_neighbors(&mut adj, &verts);
 
         let mut cycles = Mesh::lines_face_cycles(&adj, verts.len());
 
@@ -2381,35 +2478,10 @@ impl Mesh {
                 fvkeys.push(vkeys[vid]);
             }
 
-            let Some(fk) = mesh.add_face(fvkeys, None) else {
-                continue;
-            };
-            let mut ordered: Vec<usize> = cycle.clone();
-            let mut bpts: Vec<(f64, f64)> = Vec::with_capacity(ordered.len());
-
-            for &vid in &ordered {
-                bpts.push((verts[vid][0], verts[vid][1]));
+            if let Some(fk) = mesh.add_face(fvkeys, None) {
+                mesh.triangulation
+                    .insert(fk, Mesh::lines_cycle_triangles(cycle, &verts, &vkeys));
             }
-
-            if signed_area_2d(&bpts) < 0.0 {
-                bpts.reverse();
-                ordered.reverse();
-            }
-
-            let mut bpts2d: Vec<Point> = Vec::with_capacity(bpts.len());
-
-            for b in &bpts {
-                bpts2d.push(Point::new(b.0, b.1, 0.0));
-            }
-
-            let tris = remesh_cdt::cdt_triangulate(&bpts2d, &[]);
-            let mut tri_list: Vec<[usize; 3]> = Vec::with_capacity(tris.len());
-
-            for &(a, b, c) in &tris {
-                tri_list.push([vkeys[ordered[a]], vkeys[ordered[b]], vkeys[ordered[c]]]);
-            }
-
-            mesh.triangulation.insert(fk, tri_list);
         }
 
         mesh
@@ -2447,14 +2519,7 @@ impl Mesh {
 
         let border_idx = loft_border_index(polylines0);
         let frame = loft_frame(&polylines0[border_idx], &polylines1[border_idx]);
-        let mut order: Vec<usize> = vec![border_idx];
-
-        for i in 0..polylines0.len() {
-            if i != border_idx {
-                order.push(i);
-            }
-        }
-
+        let order = loft_order(polylines0.len(), border_idx);
         let mut polys: Vec<LoftPoly> = Vec::new();
         let mut all_bot: Vec<Point> = Vec::new();
         let mut all_top: Vec<Point> = Vec::new();
@@ -2488,18 +2553,10 @@ impl Mesh {
         let top_vkeys = loft_add_vkeys(&mut mesh, &all_top);
 
         if cap {
-            let mut bot_rings: Vec<LoftRing> = Vec::new();
-            let mut top_rings: Vec<LoftRing> = Vec::new();
-
-            for poly in &polys {
-                bot_rings.push(poly.bot);
-                top_rings.push(poly.top);
-            }
-
             loft_cap(
                 &mut mesh,
                 &frame,
-                &bot_rings,
+                &loft_rings(&polys, false),
                 &all_bot,
                 &bot_vkeys,
                 true,
@@ -2508,7 +2565,7 @@ impl Mesh {
             loft_cap(
                 &mut mesh,
                 &frame,
-                &top_rings,
+                &loft_rings(&polys, true),
                 &all_top,
                 &top_vkeys,
                 false,
