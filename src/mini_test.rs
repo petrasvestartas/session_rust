@@ -3623,13 +3623,63 @@ pub fn get_all_tests() -> Vec<RegisteredTest> {
         },
         RegisteredTest {
             group: "Graph",
-            name: "Node Attribute",
-            func: run_graph_node_attribute,
+            name: "Node Label",
+            func: run_graph_node_label,
+        },
+        RegisteredTest {
+            group: "Graph",
+            name: "Edge Label",
+            func: run_graph_edge_label,
+        },
+        RegisteredTest {
+            group: "Graph",
+            name: "Update Default Vertex Attributes",
+            func: run_graph_update_default_vertex_attributes,
+        },
+        RegisteredTest {
+            group: "Graph",
+            name: "Update Default Edge Attributes",
+            func: run_graph_update_default_edge_attributes,
+        },
+        RegisteredTest {
+            group: "Graph",
+            name: "Vertex Attribute",
+            func: run_graph_vertex_attribute,
+        },
+        RegisteredTest {
+            group: "Graph",
+            name: "Set Vertex Attribute",
+            func: run_graph_set_vertex_attribute,
         },
         RegisteredTest {
             group: "Graph",
             name: "Edge Attribute",
             func: run_graph_edge_attribute,
+        },
+        RegisteredTest {
+            group: "Graph",
+            name: "Set Edge Attribute",
+            func: run_graph_set_edge_attribute,
+        },
+        RegisteredTest {
+            group: "Graph",
+            name: "Vertices Where",
+            func: run_graph_vertices_where,
+        },
+        RegisteredTest {
+            group: "Graph",
+            name: "Edges Where",
+            func: run_graph_edges_where,
+        },
+        RegisteredTest {
+            group: "Graph",
+            name: "Vertices Where Predicate",
+            func: run_graph_vertices_where_predicate,
+        },
+        RegisteredTest {
+            group: "Graph",
+            name: "Edges Where Predicate",
+            func: run_graph_edges_where_predicate,
         },
         RegisteredTest {
             group: "Graph",
