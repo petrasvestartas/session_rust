@@ -11,25 +11,22 @@ use std::collections::HashSet;
 // Integer geometry
 // ═══════════════════════════════════════════════════════════════════════════
 
-type Point64 = [i64; 2];
-type Triangle64 = [Point64; 3];
-
 const NULL_IDX: usize = usize::MAX;
 const MAX_COORD64: f64 = 9e17;
 const MAX_PRECISION: i32 = 6;
 
-/// Rounds to the nearest int64.
+/// Round to the nearest int64.
 fn to_int64(x: f64) -> i64 {
     x.round() as i64
 }
 
-/// Scales a 2D point to integer coordinates.
-fn to_point64(p: &Point, scale: f64) -> Point64 {
+/// Scale a 2D point to integer coordinates.
+fn to_point64(p: &Point, scale: f64) -> [i64; 2] {
     [to_int64(p[0] * scale), to_int64(p[1] * scale)]
 }
 
 /// Sign of the turn p1 -> p2 -> p3.
-fn cross_sign(p1: Point64, p2: Point64, p3: Point64) -> i32 {
+fn cross_sign(p1: [i64; 2], p2: [i64; 2], p3: [i64; 2]) -> i32 {
     let cp = (p2[0] - p1[0]) as f64 * (p3[1] - p2[1]) as f64
         - (p2[1] - p1[1]) as f64 * (p3[0] - p2[0]) as f64;
 
@@ -45,17 +42,17 @@ fn cross_sign(p1: Point64, p2: Point64, p3: Point64) -> i32 {
 }
 
 /// True when p1 -> p2 -> p3 turns left.
-fn left_turning(p1: Point64, p2: Point64, p3: Point64) -> bool {
+fn left_turning(p1: [i64; 2], p2: [i64; 2], p3: [i64; 2]) -> bool {
     cross_sign(p1, p2, p3) < 0
 }
 
 /// True when p1 -> p2 -> p3 turns right.
-fn right_turning(p1: Point64, p2: Point64, p3: Point64) -> bool {
+fn right_turning(p1: [i64; 2], p2: [i64; 2], p3: [i64; 2]) -> bool {
     cross_sign(p1, p2, p3) > 0
 }
 
 /// True when a is swept before b: higher y first, then lower x.
-fn sweep_before(a: Point64, b: Point64) -> bool {
+fn sweep_before(a: [i64; 2], b: [i64; 2]) -> bool {
     if a[1] == b[1] {
         return a[0] < b[0];
     }
@@ -64,7 +61,7 @@ fn sweep_before(a: Point64, b: Point64) -> bool {
 }
 
 /// Squared distance between two integer points.
-fn dist_sqr(a: Point64, b: Point64) -> f64 {
+fn dist_sqr(a: [i64; 2], b: [i64; 2]) -> f64 {
     let dx = (a[0] - b[0]) as f64;
     let dy = (a[1] - b[1]) as f64;
 
@@ -72,7 +69,7 @@ fn dist_sqr(a: Point64, b: Point64) -> f64 {
 }
 
 /// Positive when d lies inside the circumcircle of the counter-clockwise triangle a, b, c.
-fn in_circle(a: Point64, b: Point64, c: Point64, d: Point64) -> f64 {
+fn in_circle(a: [i64; 2], b: [i64; 2], c: [i64; 2], d: [i64; 2]) -> f64 {
     let m00 = (a[0] - d[0]) as f64;
     let m01 = (a[1] - d[1]) as f64;
     let m02 = m00 * m00 + m01 * m01;
@@ -87,7 +84,7 @@ fn in_circle(a: Point64, b: Point64, c: Point64, d: Point64) -> f64 {
 }
 
 /// Squared distance from p to the segment a-b.
-fn dist_sqr_segment(p: Point64, a: Point64, b: Point64) -> f64 {
+fn dist_sqr_segment(p: [i64; 2], a: [i64; 2], b: [i64; 2]) -> f64 {
     let dx = (b[0] - a[0]) as f64;
     let dy = (b[1] - a[1]) as f64;
     let ax = (p[0] - a[0]) as f64;
@@ -106,7 +103,7 @@ fn dist_sqr_segment(p: Point64, a: Point64, b: Point64) -> f64 {
 }
 
 /// True when a1-a2 and b1-b2 cross strictly inside both segments.
-fn segments_intersect(a1: Point64, a2: Point64, b1: Point64, b2: Point64) -> bool {
+fn segments_intersect(a1: [i64; 2], a2: [i64; 2], b1: [i64; 2], b2: [i64; 2]) -> bool {
     if a1 == b1 || a2 == b1 || a2 == b2 || a1 == b2 {
         return false;
     }
@@ -141,7 +138,7 @@ fn segments_intersect(a1: Point64, a2: Point64, b1: Point64, b2: Point64) -> boo
 }
 
 /// Even-odd test of an integer point against an integer ring.
-fn inside_path64(p: Point64, poly: &[Point64]) -> bool {
+fn inside_path64(p: [i64; 2], poly: &[[i64; 2]]) -> bool {
     let mut inside = false;
     let n = poly.len();
     let mut j = n - 1;
@@ -177,8 +174,8 @@ fn next_index(i: usize, n: usize) -> usize {
     (i + 1) % n
 }
 
-/// Advances i to the next vertex that ends a rising run and starts a falling one; false when the path is flat.
-fn find_loc_min(path: &[Point64], i: &mut usize) -> bool {
+/// Advance i to the next vertex that ends a rising run and starts a falling one; false when the path is flat.
+fn find_loc_min(path: &[[i64; 2]], i: &mut usize) -> bool {
     let n = path.len();
 
     if n < 3 {
@@ -212,14 +209,14 @@ fn find_loc_min(path: &[Point64], i: &mut usize) -> bool {
 /// Boundary side of an edge, or loose for a diagonal.
 #[derive(Clone, Copy, PartialEq)]
 enum EdgeKind {
-    Loose,
-    Ascend,
-    Descend,
+    Loose,   // Diagonal between two boundary edges.
+    Ascend,  // Boundary edge on the left side.
+    Descend, // Boundary edge on the right side.
 }
 
 /// Sweep vertex with its incident edges.
 struct Vertex {
-    pt: Point64,       // Integer position.
+    pt: [i64; 2],      // Integer position.
     edges: Vec<usize>, // Edges touching the vertex.
     inner_lm: bool,    // True at a local minimum of a hole.
 }
@@ -256,7 +253,7 @@ struct Delaunay {
 }
 
 impl Delaunay {
-    /// Constructs an empty sweep graph.
+    /// Construct an empty sweep graph.
     fn new() -> Self {
         Delaunay {
             vs: Vec::new(),
@@ -297,8 +294,8 @@ impl Delaunay {
         }
     }
 
-    /// Appends a vertex and return its index.
-    fn add_vertex(&mut self, p: Point64) -> usize {
+    /// Append a vertex and return its index.
+    fn add_vertex(&mut self, p: [i64; 2]) -> usize {
         self.vs.push(Vertex {
             pt: p,
             edges: Vec::new(),
@@ -308,7 +305,7 @@ impl Delaunay {
         self.vs.len() - 1
     }
 
-    /// Prepends e to the doubly-linked active list.
+    /// Prepend e to the doubly-linked active list.
     fn add_active(&mut self, e: usize) {
         if self.es[e].active {
             return;
@@ -325,10 +322,11 @@ impl Delaunay {
         self.first_active = e;
     }
 
-    /// Unlinks e from the active list and from both endpoint edge lists.
+    /// Unlink e from the active list and from both endpoint edge lists.
     fn remove_active(&mut self, e: usize) {
         self.remove_from_vertex(self.es[e].vb, e);
         self.remove_from_vertex(self.es[e].vt, e);
+
         let prev = self.es[e].prev;
         let next = self.es[e].next;
 
@@ -347,7 +345,7 @@ impl Delaunay {
         }
     }
 
-    /// Drops e from the edge list of v.
+    /// Drop e from the edge list of v.
     fn remove_from_vertex(&mut self, v: usize, e: usize) {
         let edges = &mut self.vs[v].edges;
 
@@ -361,6 +359,7 @@ impl Delaunay {
         let e = self.es.len();
         let p1 = self.vs[v1].pt;
         let p2 = self.vs[v2].pt;
+
         self.es.push(Edge {
             vl: if p1[0] <= p2[0] { v1 } else { v2 },
             vr: if p1[0] <= p2[0] { v2 } else { v1 },
@@ -373,6 +372,7 @@ impl Delaunay {
             next: NULL_IDX,
             prev: NULL_IDX,
         });
+
         self.vs[v1].edges.push(e);
         self.vs[v2].edges.push(e);
 
@@ -387,6 +387,7 @@ impl Delaunay {
     /// New triangle on three edges; an edge leaves the active list when it is completed.
     fn create_tri(&mut self, e1: usize, e2: usize, e3: usize) -> usize {
         let t = self.ts.len();
+
         self.ts.push(Tri {
             edges: [e1, e2, e3],
         });
@@ -407,10 +408,11 @@ impl Delaunay {
         t
     }
 
-    /// Shortens long_e to end at short_e's top and continue it with a new edge to the old top.
+    /// Shorten long_e to end at short_e's top and continue it with a new edge to the old top.
     fn split_edge(&mut self, long_e: usize, short_e: usize) {
         let old_t = self.es[long_e].vt;
         let new_t = self.es[short_e].vt;
+
         self.remove_from_vertex(old_t, long_e);
         self.es[long_e].vt = new_t;
 
@@ -456,7 +458,7 @@ impl Delaunay {
         }
     }
 
-    /// Merges coincident vertices that are neighbours in sweep order into the first one.
+    /// Merge coincident vertices that are neighbours in sweep order into the first one.
     fn merge_duplicates(&mut self, order: &[usize]) {
         let mut v1 = order[0];
 
@@ -606,7 +608,7 @@ impl Delaunay {
         best
     }
 
-    /// Connects a hole local minimum to the visible vertex of the nearest active edge below it.
+    /// Connect a hole local minimum to the visible vertex of the nearest active edge below it.
     fn create_loc_min_edge(&mut self, v_above: usize) -> usize {
         let below = self.edge_below(v_above);
 
@@ -659,7 +661,7 @@ impl Delaunay {
         (v_alt, e_alt)
     }
 
-    /// Fans triangles around pivot on one side of edge, walking onto each new diagonal, never below min_y.
+    /// Fan triangles around pivot on one side of edge, walking onto each new diagonal, never below min_y.
     fn triangulate_fan(&mut self, edge: usize, pivot: usize, min_y: i64, left: bool) {
         let mut edge = edge;
         let mut pivot = pivot;
@@ -750,7 +752,7 @@ impl Delaunay {
         (far, a, b)
     }
 
-    /// Gives tri the edges (edge, e1, e2) and move e1/e2 from the other triangle onto it.
+    /// Give tri the edges (edge, e1, e2) and move e1/e2 from the other triangle onto it.
     fn rewire(&mut self, tri: usize, other: usize, edge: usize, e1: usize, e2: usize) {
         self.ts[tri].edges = [edge, e1, e2];
 
@@ -771,7 +773,7 @@ impl Delaunay {
         }
     }
 
-    /// Flips edge when the far vertex of one triangle lies inside the circumcircle of the other.
+    /// Flip edge when the far vertex of one triangle lies inside the circumcircle of the other.
     fn force_legal(&mut self, edge: usize) {
         let ta = self.es[edge].tri_a;
         let tb = self.es[edge].tri_b;
@@ -812,8 +814,8 @@ impl Delaunay {
         self.rewire(tb, ta, edge, b1, b2);
     }
 
-    /// Walks the path from i back round to i0 creating boundary edges; false when the step budget of a degenerate path is blown.
-    fn walk_path(&mut self, path: &[Point64], i0: usize, i: usize, v0: usize) -> bool {
+    /// Walk the path from i back round to i0 creating boundary edges; false when the step budget of a degenerate path is blown.
+    fn walk_path(&mut self, path: &[[i64; 2]], i0: usize, i: usize, v0: usize) -> bool {
         let n = path.len();
         let budget = 16 * n + 256;
         let mut steps = 0;
@@ -822,6 +824,7 @@ impl Delaunay {
 
         while steps < budget {
             steps += 1;
+
             self.loc_mins.push(v_prev);
 
             if self.lowermost == NULL_IDX
@@ -845,6 +848,7 @@ impl Delaunay {
                 }
 
                 let v = self.add_vertex(path[i]);
+
                 self.create_edge(v_prev, v, EdgeKind::Ascend);
                 v_prev = v;
                 i = i_next;
@@ -872,6 +876,7 @@ impl Delaunay {
                 }
 
                 let v = self.add_vertex(path[i]);
+
                 self.create_edge(v, v_prev, EdgeKind::Descend);
                 v_prev_prev = v_prev;
                 v_prev = v;
@@ -904,15 +909,15 @@ impl Delaunay {
         false
     }
 
-    /// Detaches the edges of every vertex added since from.
+    /// Detach the edges of every vertex added since start.
     fn discard(&mut self, start: usize) {
         for v in start..self.vs.len() {
             self.vs[v].edges.clear();
         }
     }
 
-    /// Registers one closed path; paths that are flat, degenerate or too tiny to hold a triangle are dropped.
-    fn add_path(&mut self, path: &[Point64]) {
+    /// Register one closed path; paths that are flat, degenerate or too tiny to hold a triangle are dropped.
+    fn add_path(&mut self, path: &[[i64; 2]]) {
         let n = path.len();
         let mut i = 0;
 
@@ -961,13 +966,14 @@ impl Delaunay {
             && (dist_sqr(self.vs[start].pt, self.vs[start + 1].pt) <= 1.0
                 || dist_sqr(self.vs[start + 1].pt, self.vs[start + 2].pt) <= 1.0
                 || dist_sqr(self.vs[start + 2].pt, self.vs[start].pt) <= 1.0);
+
         if count < 3 || tiny {
             self.discard(start);
         }
     }
 
-    /// Registers every path; false when none survives.
-    fn add_paths(&mut self, paths: &[Vec<Point64>]) -> bool {
+    /// Register every path; false when none survives.
+    fn add_paths(&mut self, paths: &[Vec<[i64; 2]>]) -> bool {
         let mut total = 0;
 
         for path in paths {
@@ -1003,7 +1009,7 @@ impl Delaunay {
         }
     }
 
-    /// Connects and fan the hole local minima collected on the finished row; false when one cannot be reached.
+    /// Connect and fan the hole local minima collected on the finished row; false when one cannot be reached.
     fn sweep_loc_mins(&mut self, curr_y: i64) -> bool {
         while let Some(lm) = self.loc_mins.pop() {
             let e = self.create_loc_min_edge(lm);
@@ -1035,7 +1041,7 @@ impl Delaunay {
         true
     }
 
-    /// Fans the horizontal edges deferred from the finished row.
+    /// Fan the horizontal edges deferred from the finished row.
     fn sweep_horizontals(&mut self, curr_y: i64) {
         while let Some(e) = self.horz.pop() {
             if self.completed(e) {
@@ -1052,7 +1058,7 @@ impl Delaunay {
         }
     }
 
-    /// Activates the boundary edges starting at v and fan the ones ending at it.
+    /// Activate the boundary edges starting at v and fan the ones ending at it.
     fn sweep_vertex(&mut self, v: usize) {
         for i in (0..self.vs[v].edges.len()).rev() {
             if i >= self.vs[v].edges.len() {
@@ -1084,7 +1090,7 @@ impl Delaunay {
         }
     }
 
-    /// Sweeps the vertices top to bottom filling triangles row by row; false when a hole cannot be connected.
+    /// Sweep the vertices top to bottom filling triangles row by row; false when a hole cannot be connected.
     fn sweep(&mut self, order: &[usize]) -> bool {
         let mut curr_y = self.vs[order[0]].pt[1];
 
@@ -1118,7 +1124,7 @@ impl Delaunay {
         true
     }
 
-    /// Flips loose edges until Delaunay, capped so near-cocircular integer points cannot flip-flop forever.
+    /// Flip loose edges until Delaunay, capped so near-cocircular integer points cannot flip-flop forever.
     fn legalize(&mut self) {
         let max_flips = 64 * self.vs.len() + 4096;
 
@@ -1126,12 +1132,13 @@ impl Delaunay {
             let Some(e) = self.pending.pop() else {
                 return;
             };
+
             self.force_legal(e);
         }
     }
 
     /// Both ends of edge 0 and the far end of edge 1.
-    fn tri_points(&self, t: &Tri) -> Triangle64 {
+    fn tri_points(&self, t: &Tri) -> [[i64; 2]; 3] {
         let e0 = &self.es[t.edges[0]];
         let e1 = &self.es[t.edges[1]];
         let p0 = self.vs[e0.vl].pt;
@@ -1146,7 +1153,7 @@ impl Delaunay {
     }
 
     /// Counter-clockwise triangles, flat ones dropped.
-    fn triangles(&self) -> Vec<Triangle64> {
+    fn triangles(&self) -> Vec<[[i64; 2]; 3]> {
         let mut res = Vec::with_capacity(self.ts.len());
 
         for t in &self.ts {
@@ -1168,7 +1175,7 @@ impl Delaunay {
     }
 
     /// Triangles of the paths, empty when they hold no polygon or a hole cannot be connected.
-    fn execute(&mut self, paths: &[Vec<Point64>]) -> Vec<Triangle64> {
+    fn execute(&mut self, paths: &[Vec<[i64; 2]>]) -> Vec<[[i64; 2]; 3]> {
         if !self.add_paths(paths) {
             return Vec::new();
         }
@@ -1178,6 +1185,7 @@ impl Delaunay {
         }
 
         self.loc_mins.clear();
+
         let mut order: Vec<usize> = (0..self.vs.len()).collect();
         order.sort_by(|&a, &b| {
             if sweep_before(self.vs[a].pt, self.vs[b].pt) {
@@ -1188,6 +1196,7 @@ impl Delaunay {
                 Ordering::Equal
             }
         });
+
         self.merge_duplicates(&order);
 
         if !self.sweep(&order) {
@@ -1251,7 +1260,7 @@ fn shift_hole_rows(border_2d: &[Point], holes_2d: &[Vec<Point>], scale: f64) -> 
 }
 
 /// Integer ring, closing duplicate dropped.
-fn to_path64(pts: &[Point], scale: f64) -> Vec<Point64> {
+fn to_path64(pts: &[Point], scale: f64) -> Vec<[i64; 2]> {
     let mut path = Vec::with_capacity(pts.len());
 
     for p in pts {
@@ -1266,8 +1275,8 @@ fn to_path64(pts: &[Point], scale: f64) -> Vec<Point64> {
 }
 
 /// Index of every integer point in the flat list [border..., hole0..., hole1...], first occurrence wins.
-fn index_map(border_2d: &[Point], holes_2d: &[Vec<Point>], scale: f64) -> HashMap<Point64, usize> {
-    let mut indices: HashMap<Point64, usize> = HashMap::new();
+fn index_map(border_2d: &[Point], holes_2d: &[Vec<Point>], scale: f64) -> HashMap<[i64; 2], usize> {
+    let mut indices: HashMap<[i64; 2], usize> = HashMap::new();
     let mut index = 0;
 
     for p in border_2d {
@@ -1286,7 +1295,11 @@ fn index_map(border_2d: &[Point], holes_2d: &[Vec<Point>], scale: f64) -> HashMa
 }
 
 /// A triangle lies in a hole when all its corners are on one hole ring or its centroid is outside the border or inside a hole.
-fn inside_hole(tri: &Triangle64, paths: &[Vec<Point64>], hole_sets: &[HashSet<Point64>]) -> bool {
+fn inside_hole(
+    tri: &[[i64; 2]; 3],
+    paths: &[Vec<[i64; 2]>],
+    hole_sets: &[HashSet<[i64; 2]>],
+) -> bool {
     for set in hole_sets {
         if set.contains(&tri[0]) && set.contains(&tri[1]) && set.contains(&tri[2]) {
             return true;
@@ -1311,9 +1324,9 @@ fn inside_hole(tri: &Triangle64, paths: &[Vec<Point64>], hole_sets: &[HashSet<Po
     false
 }
 
-/// Drops the triangles the sweep filled inside the holes; edge midpoints are not tested because valid triangles touch the hole rings.
-fn remove_hole_triangles(tris: &mut Vec<Triangle64>, paths: &[Vec<Point64>]) {
-    let mut hole_sets: Vec<HashSet<Point64>> = Vec::new();
+/// Drop the triangles the sweep filled inside the holes; edge midpoints are not tested because valid triangles touch the hole rings.
+fn remove_hole_triangles(tris: &mut Vec<[[i64; 2]; 3]>, paths: &[Vec<[i64; 2]>]) {
+    let mut hole_sets: Vec<HashSet<[i64; 2]>> = Vec::new();
 
     for path in &paths[1..] {
         hole_sets.push(path.iter().copied().collect());
@@ -1326,13 +1339,14 @@ fn remove_hole_triangles(tris: &mut Vec<Triangle64>, paths: &[Vec<Point64>]) {
             kept.push(*tri);
         }
     }
+
     *tris = kept;
 }
 
 /// Corner indices into the flat list, triangles with an unknown corner dropped.
 fn to_indices(
-    tris: &[Triangle64],
-    indices: &HashMap<Point64, usize>,
+    tris: &[[[i64; 2]; 3]],
+    indices: &HashMap<[i64; 2], usize>,
 ) -> Vec<(usize, usize, usize)> {
     let mut out = Vec::with_capacity(tris.len());
 
@@ -1383,6 +1397,7 @@ pub(crate) fn signed_area(pts: &[Point]) -> f64 {
 
     for i in 0..n {
         let j = (i + 1) % n;
+
         area += pts[i][0] * pts[j][1] - pts[j][0] * pts[i][1];
     }
 
@@ -1435,6 +1450,7 @@ pub(crate) fn project_2d(
         let dx = p[0] - origin[0];
         let dy = p[1] - origin[1];
         let dz = p[2] - origin[2];
+
         out.push(Point::new(
             dx * xaxis[0] + dy * xaxis[1] + dz * xaxis[2],
             dx * yaxis[0] + dy * yaxis[1] + dz * yaxis[2],
@@ -1487,6 +1503,7 @@ fn build_mesh(border: &[Point], holes: &[Vec<Point>], tris: &[(usize, usize, usi
     let Some(fkey) = mesh.add_face(ring, None) else {
         return mesh;
     };
+
     let mut tri_list: Vec<[usize; 3]> = Vec::new();
 
     for &(a, b, c) in tris {
@@ -1547,6 +1564,10 @@ pub(crate) fn cdt_triangulate(
 pub struct RemeshCDT;
 
 impl RemeshCDT {
+    // ═══════════════════════════════════════════════════════════════════════════
+    // Triangulation
+    // ═══════════════════════════════════════════════════════════════════════════
+
     /// Triangle index triples into the flat list [border..., hole0..., hole1...], closing duplicates stripped.
     pub fn triangulate(polylines: &[Polyline]) -> Vec<(usize, usize, usize)> {
         if polylines.is_empty() {

@@ -1,5 +1,7 @@
 use crate::mini_test::TestResult;
-use crate::{MINI_CHECK, MINI_TEST, REGISTER_MINI_TEST};
+use crate::MINI_CHECK;
+use crate::MINI_TEST;
+use crate::REGISTER_MINI_TEST;
 
 pub fn run_remesh_cdt_triangulate() -> TestResult {
     MINI_TEST!("Triangulate", {
@@ -22,22 +24,27 @@ pub fn run_remesh_cdt_triangulate() -> TestResult {
         ]);
         let tris = RemeshCDT::triangulate(&[border.clone(), hole.clone()]);
         let mut flat = Vec::new();
+
         for p in border.get_points() {
             flat.push(p);
         }
+
         for p in hole.get_points() {
             flat.push(p);
         }
-        let mut m = Mesh::new();
+
+        let mut mesh = Mesh::new();
         let mut vkeys = Vec::new();
+
         for p in &flat {
-            vkeys.push(m.add_vertex(p.clone(), None));
-        }
-        for t in &tris {
-            m.add_face(vec![vkeys[t.0], vkeys[t.1], vkeys[t.2]], None);
+            vkeys.push(mesh.add_vertex(p.clone(), None));
         }
 
-        MINI_CHECK!(m.is_valid());
+        for t in &tris {
+            mesh.add_face(vec![vkeys[t.0], vkeys[t.1], vkeys[t.2]], None);
+        }
+
+        MINI_CHECK!(mesh.is_valid());
     })
 }
 
@@ -47,14 +54,14 @@ pub fn run_remesh_cdt_triangle() -> TestResult {
         use crate::Point;
         use crate::Polyline;
 
-        let pl = Polyline::new(vec![
+        let polyline = Polyline::new(vec![
             Point::new(0.0, 0.0, 0.0),
             Point::new(1.0, 0.0, 0.0),
             Point::new(0.0, 1.0, 0.0),
         ]);
-        let m = RemeshCDT::from_polylines(&[pl], false, true);
+        let mesh = RemeshCDT::from_polylines(&[polyline], false, true);
 
-        MINI_CHECK!(m.is_valid());
+        MINI_CHECK!(mesh.is_valid());
     })
 }
 
@@ -64,15 +71,15 @@ pub fn run_remesh_cdt_rectangle() -> TestResult {
         use crate::Point;
         use crate::Polyline;
 
-        let pl = Polyline::new(vec![
+        let polyline = Polyline::new(vec![
             Point::new(3.0, 0.0, 0.0),
             Point::new(5.0, 0.0, 0.0),
             Point::new(5.0, 2.0, 0.0),
             Point::new(3.0, 2.0, 0.0),
         ]);
-        let m = RemeshCDT::from_polylines(&[pl], false, true);
+        let mesh = RemeshCDT::from_polylines(&[polyline], false, true);
 
-        MINI_CHECK!(m.is_valid());
+        MINI_CHECK!(mesh.is_valid());
     })
 }
 
@@ -82,7 +89,7 @@ pub fn run_remesh_cdt_l_shape() -> TestResult {
         use crate::Point;
         use crate::Polyline;
 
-        let pl = Polyline::new(vec![
+        let polyline = Polyline::new(vec![
             Point::new(7.0, 0.0, 0.0),
             Point::new(10.0, 0.0, 0.0),
             Point::new(10.0, 1.0, 0.0),
@@ -90,9 +97,9 @@ pub fn run_remesh_cdt_l_shape() -> TestResult {
             Point::new(8.0, 3.0, 0.0),
             Point::new(7.0, 3.0, 0.0),
         ]);
-        let m = RemeshCDT::from_polylines(&[pl], false, true);
+        let mesh = RemeshCDT::from_polylines(&[polyline], false, true);
 
-        MINI_CHECK!(m.is_valid());
+        MINI_CHECK!(mesh.is_valid());
     })
 }
 
@@ -102,7 +109,7 @@ pub fn run_remesh_cdt_u_shape() -> TestResult {
         use crate::Point;
         use crate::Polyline;
 
-        let pl = Polyline::new(vec![
+        let polyline = Polyline::new(vec![
             Point::new(25.0, 0.0, 0.0),
             Point::new(31.0, 0.0, 0.0),
             Point::new(31.0, 4.0, 0.0),
@@ -112,9 +119,9 @@ pub fn run_remesh_cdt_u_shape() -> TestResult {
             Point::new(27.0, 4.0, 0.0),
             Point::new(25.0, 4.0, 0.0),
         ]);
-        let m = RemeshCDT::from_polylines(&[pl], false, true);
+        let mesh = RemeshCDT::from_polylines(&[polyline], false, true);
 
-        MINI_CHECK!(m.is_valid());
+        MINI_CHECK!(mesh.is_valid());
     })
 }
 
@@ -124,11 +131,11 @@ pub fn run_remesh_cdt_octagon() -> TestResult {
         use crate::Polyline;
         use crate::Vector;
 
-        let mut pl = Polyline::from_sides(8, 1.5, false);
-        pl += &Vector::new(14.0, 1.5, 0.0);
-        let m = RemeshCDT::from_polylines(&[pl], false, true);
+        let mut polyline = Polyline::from_sides(8, 1.5, false);
+        polyline += &Vector::new(14.0, 1.5, 0.0);
+        let mesh = RemeshCDT::from_polylines(&[polyline], false, true);
 
-        MINI_CHECK!(m.is_valid());
+        MINI_CHECK!(mesh.is_valid());
     })
 }
 
@@ -150,9 +157,9 @@ pub fn run_remesh_cdt_rectangle_with_rectangle_hole() -> TestResult {
             Point::new(3.0, 3.0, 0.0),
             Point::new(3.0, 1.0, 0.0),
         ]);
-        let m = RemeshCDT::from_polylines(&[border, hole], false, true);
+        let mesh = RemeshCDT::from_polylines(&[border, hole], false, true);
 
-        MINI_CHECK!(m.is_valid());
+        MINI_CHECK!(mesh.is_valid());
     })
 }
 
@@ -162,7 +169,7 @@ pub fn run_remesh_cdt_duplicate_vertices() -> TestResult {
         use crate::Point;
         use crate::Polyline;
 
-        let pl = Polyline::new(vec![
+        let polyline = Polyline::new(vec![
             Point::new(33.0, 0.0, 0.0),
             Point::new(36.0, 0.0, 0.0),
             Point::new(37.0, 2.0, 0.0),
@@ -170,9 +177,9 @@ pub fn run_remesh_cdt_duplicate_vertices() -> TestResult {
             Point::new(33.0, 2.0, 0.0),
             Point::new(33.0, 0.0, 0.0),
         ]);
-        let m = RemeshCDT::from_polylines(&[pl], false, true);
+        let mesh = RemeshCDT::from_polylines(&[polyline], false, true);
 
-        MINI_CHECK!(m.is_valid());
+        MINI_CHECK!(mesh.is_valid());
     })
 }
 
@@ -194,9 +201,9 @@ pub fn run_remesh_cdt_tilted_rectangle_with_rectangle_hole() -> TestResult {
             Point::new(61.0, 3.0, 1.5),
             Point::new(56.0, 3.0, 1.5),
         ]);
-        let m = RemeshCDT::from_polylines(&[border, hole], false, false);
+        let mesh = RemeshCDT::from_polylines(&[border, hole], false, false);
 
-        MINI_CHECK!(m.is_valid());
+        MINI_CHECK!(mesh.is_valid());
     })
 }
 
@@ -256,9 +263,9 @@ pub fn run_remesh_cdt_irregular_tilted_polyline() -> TestResult {
             Point::new(129.662786, 15.027072, -12.81958),
             Point::new(125.390575, 14.236865, -16.468853),
         ];
-        let m = RemeshCDT::from_polylines(&[Polyline::new(border)], false, true);
+        let mesh = RemeshCDT::from_polylines(&[Polyline::new(border)], false, true);
 
-        MINI_CHECK!(m.is_valid());
+        MINI_CHECK!(mesh.is_valid());
     })
 }
 
@@ -374,7 +381,7 @@ pub fn run_remesh_cdt_irregular_tilted_polyline_with_holes() -> TestResult {
             Point::new(77.272732, 16.707375, 0.0),
             Point::new(78.759389, 19.25978, 0.0),
         ];
-        let m = RemeshCDT::from_polylines(
+        let mesh = RemeshCDT::from_polylines(
             &[
                 Polyline::new(border),
                 Polyline::new(h1),
@@ -386,7 +393,7 @@ pub fn run_remesh_cdt_irregular_tilted_polyline_with_holes() -> TestResult {
             false,
         );
 
-        MINI_CHECK!(m.is_valid());
+        MINI_CHECK!(mesh.is_valid());
     })
 }
 
@@ -410,16 +417,17 @@ pub fn run_remesh_cdt_degenerate_hole_keeps_flat_indices() -> TestResult {
             Point::new(3.0, 1.0, 0.0),
         ]);
         let tris = RemeshCDT::triangulate(&[border, degen, hole]);
-        let mut mx = 0;
+        let mut max_index = 0;
+
         for t in &tris {
             for k in [t.0, t.1, t.2] {
-                if k > mx {
-                    mx = k;
+                if k > max_index {
+                    max_index = k;
                 }
             }
         }
 
-        MINI_CHECK!(!tris.is_empty() && mx == 9);
+        MINI_CHECK!(!tris.is_empty() && max_index == 9);
     })
 }
 
@@ -492,7 +500,7 @@ pub fn run_remesh_cdt_plate_four_holes() -> TestResult {
             Point::new(223.854739, -1566.236493, 335.782108),
             Point::new(219.882876, -1531.572963, 353.83603),
         ];
-        let m = RemeshCDT::from_polylines(
+        let mesh = RemeshCDT::from_polylines(
             &[
                 Polyline::new(border),
                 Polyline::new(h1),
@@ -504,7 +512,7 @@ pub fn run_remesh_cdt_plate_four_holes() -> TestResult {
             false,
         );
 
-        MINI_CHECK!(m.is_valid());
+        MINI_CHECK!(mesh.is_valid());
     })
 }
 
