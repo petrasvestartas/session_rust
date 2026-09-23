@@ -3179,6 +3179,11 @@ pub fn get_all_tests() -> Vec<RegisteredTest> {
         // SpatialBVH tests
         RegisteredTest {
             group: "SpatialBVH",
+            name: "Constructor",
+            func: run_bvh_constructor,
+        },
+        RegisteredTest {
+            group: "SpatialBVH",
             name: "Expand Bits",
             func: run_bvh_expand_bits,
         },
@@ -3239,6 +3244,11 @@ pub fn get_all_tests() -> Vec<RegisteredTest> {
         },
         RegisteredTest {
             group: "SpatialBVH",
+            name: "Nearest Neighbors",
+            func: run_bvh_nearest_neighbors,
+        },
+        RegisteredTest {
+            group: "SpatialBVH",
             name: "Merge Aabb",
             func: run_bvh_merge_aabb,
         },
@@ -3251,11 +3261,6 @@ pub fn get_all_tests() -> Vec<RegisteredTest> {
             group: "SpatialBVH",
             name: "Query Aabb",
             func: run_bvh_query_aabb,
-        },
-        RegisteredTest {
-            group: "SpatialBVH",
-            name: "Nearest Neighbors",
-            func: run_bvh_nearest_neighbors,
         },
         RegisteredTest {
             group: "SpatialBVH",
@@ -3284,8 +3289,8 @@ pub fn get_all_tests() -> Vec<RegisteredTest> {
         },
         RegisteredTest {
             group: "SpatialBVH",
-            name: "Constructor",
-            func: run_bvh_constructor,
+            name: "Ray Cast",
+            func: run_bvh_ray_cast,
         },
         // Quaternion tests
         RegisteredTest {
