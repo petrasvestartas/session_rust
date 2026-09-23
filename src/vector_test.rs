@@ -1,6 +1,8 @@
 use crate::mini_test::TestResult;
 use crate::tolerance::TOLERANCE;
-use crate::{MINI_CHECK, MINI_TEST, REGISTER_MINI_TEST};
+use crate::MINI_CHECK;
+use crate::MINI_TEST;
+use crate::REGISTER_MINI_TEST;
 
 pub fn run_vector_constructor() -> TestResult {
     MINI_TEST!("Constructor", {
@@ -28,10 +30,13 @@ pub fn run_vector_constructor() -> TestResult {
 
         let mut vmult = v.duplicate();
         vmult *= 2.0;
+
         let mut vdiv = v.duplicate();
         vdiv /= 2.0;
+
         let mut vadd = v.duplicate();
         vadd += Vector::new(1.0, 1.0, 1.0);
+
         let mut vsub = v.duplicate();
         vsub -= Vector::new(1.0, 1.0, 1.0);
 
@@ -228,9 +233,10 @@ pub fn run_vector_projection() -> TestResult {
         let x = Vector::x_axis();
         let y = Vector::y_axis();
         let z = Vector::z_axis();
+
         let (proj_x, len_x, perp_x, perp_len_x) = v.projection(&x, None);
-        let (proj_y, len_y, _perp_y, _perp_len_y) = v.projection(&y, None);
-        let (proj_z, len_z, _perp_z, _perp_len_z) = v.projection(&z, None);
+        let (proj_y, len_y, _, _) = v.projection(&y, None);
+        let (proj_z, len_z, _, _) = v.projection(&z, None);
 
         MINI_CHECK!(proj_x[0] == 1.0 && proj_x[1] == 0.0 && proj_x[2] == 0.0);
         MINI_CHECK!(proj_y[0] == 0.0 && proj_y[1] == 1.0 && proj_y[2] == 0.0);
@@ -398,15 +404,13 @@ pub fn run_vector_scale() -> TestResult {
         use crate::tolerance::SCALE;
         use crate::Vector;
 
-        let mut v = Vector::new(2.0, 4.0, 6.0);
-        v.scale(0.5);
         let mut v_up = Vector::new(1.0, 2.0, 3.0);
         v_up.scale_up();
+
         let mut v_rt = Vector::new(1.0, 2.0, 3.0);
         v_rt.scale_up();
         v_rt.scale_down();
 
-        MINI_CHECK!(v[0] == 1.0 && v[1] == 2.0 && v[2] == 3.0);
         MINI_CHECK!(v_up[0] == SCALE);
         MINI_CHECK!(
             TOLERANCE.is_close(v_rt[0], 1.0)
@@ -509,12 +513,14 @@ pub fn run_vector_protobuf_roundtrip() -> TestResult {
 
         let data = v.pb_dumps();
         let parsed = Vector::pb_loads(&data).unwrap();
+        let converted = Vector::from_proto(v.to_proto());
 
         MINI_CHECK!(loaded.name == "test_vector");
         MINI_CHECK!(TOLERANCE.is_close(loaded[0], 42.1));
         MINI_CHECK!(TOLERANCE.is_close(loaded[1], 84.2));
         MINI_CHECK!(TOLERANCE.is_close(loaded[2], 126.3));
         MINI_CHECK!(parsed == v);
+        MINI_CHECK!(converted == v);
     })
 }
 

@@ -697,6 +697,11 @@ pub fn get_all_tests() -> Vec<RegisteredTest> {
         },
         RegisteredTest {
             group: "Vector",
+            name: "Transformation",
+            func: run_vector_transformation,
+        },
+        RegisteredTest {
+            group: "Vector",
             name: "Magnitude",
             func: run_vector_magnitude,
         },
@@ -767,21 +772,6 @@ pub fn get_all_tests() -> Vec<RegisteredTest> {
         },
         RegisteredTest {
             group: "Vector",
-            name: "Json Roundtrip",
-            func: run_vector_json_roundtrip,
-        },
-        RegisteredTest {
-            group: "Vector",
-            name: "Protobuf Roundtrip",
-            func: run_vector_protobuf_roundtrip,
-        },
-        RegisteredTest {
-            group: "Vector",
-            name: "Transformation",
-            func: run_vector_transformation,
-        },
-        RegisteredTest {
-            group: "Vector",
             name: "Scale",
             func: run_vector_scale,
         },
@@ -799,6 +789,16 @@ pub fn get_all_tests() -> Vec<RegisteredTest> {
             group: "Vector",
             name: "Average Normal Polyline",
             func: run_vector_average_normal_polyline,
+        },
+        RegisteredTest {
+            group: "Vector",
+            name: "Json Roundtrip",
+            func: run_vector_json_roundtrip,
+        },
+        RegisteredTest {
+            group: "Vector",
+            name: "Protobuf Roundtrip",
+            func: run_vector_protobuf_roundtrip,
         },
         // Tolerance tests
         RegisteredTest {
