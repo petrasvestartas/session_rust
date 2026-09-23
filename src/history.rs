@@ -1,4 +1,4 @@
-use crate::session::{Geometry, Session};
+use crate::session::{Geometry, Item, Session};
 use crate::tree::TreeNode;
 use crate::xform::Xform;
 use std::cell::RefCell;
@@ -24,6 +24,14 @@ pub fn clone(obj: &Geometry) -> Geometry {
     }
 }
 
+/// Returns a deep copy of geometry or an instance that keeps the guid.
+pub fn clone_item(obj: &Item) -> Item {
+    match obj {
+        Item::Geometry(g) => Item::Geometry(clone(g)),
+        Item::InstanceRef(i) => Item::InstanceRef(Rc::new((**i).clone())),
+    }
+}
+
 // ═══════════════════════════════════════════════════════════════════════════
 // Records
 // ═══════════════════════════════════════════════════════════════════════════
@@ -32,15 +40,15 @@ pub fn clone(obj: &Geometry) -> Geometry {
 #[derive(Debug, Clone)]
 pub struct Tombstone {
     pub guid: String,         // The object's guid; the clone carries the same one.
-    pub obj: Geometry,        // A clone() of the object, never the live instance.
-    pub collection: String,   // The Objects list it lives in: "points", "lines", ... "components".
+    pub obj: Item,            // A clone_item() of the object, never the live one.
+    pub collection: String,   // The Objects list it lives in: "points", "lines", ... "instances".
     pub obj_index: i64, // Its position in that list, so the order() sequence survives a round trip.
     pub xform: Option<Xform>, // Its local transform, None when none was set.
     pub parent_guid: Option<String>, // Name of its tree parent, None when it was added without one.
     pub index: usize,   // Its position among the parent's children.
     pub node: Option<Rc<RefCell<TreeNode>>>, // The detached tree node with its whole subtree, None for an add.
     pub attribute: String,                   // Its graph node attribute.
-    pub edges: Vec<(String, String, bool)>,  // Incident edges as (guid, attribute, forward).
+    pub edges: Vec<(String, String, bool, String)>, // Incident edges as (other guid, attribute, forward, edge guid or "").
 }
 
 impl Tombstone {
@@ -48,7 +56,7 @@ impl Tombstone {
     #[allow(clippy::too_many_arguments)]
     pub fn new(
         guid: String,
-        obj: Geometry,
+        obj: Item,
         collection: String,
         obj_index: i64,
         xform: Option<Xform>,
@@ -56,7 +64,7 @@ impl Tombstone {
         index: usize,
         node: Option<Rc<RefCell<TreeNode>>>,
         attribute: String,
-        edges: Vec<(String, String, bool)>,
+        edges: Vec<(String, String, bool, String)>,
     ) -> Self {
         Self {
             guid,
@@ -111,6 +119,25 @@ impl XformOp {
     }
 }
 
+/// A definition added (None before), removed (None after) or replaced.
+#[derive(Debug, Clone)]
+pub struct DefinitionOp {
+    pub guid: String,             // The definition's guid.
+    pub before: Option<Geometry>, // Snapshot before, None when it was added.
+    pub after: Option<Geometry>,  // Snapshot after, None when it was removed.
+}
+
+impl DefinitionOp {
+    /// Constructs from the guid and the before and after snapshots.
+    pub fn new(guid: String, before: Option<Geometry>, after: Option<Geometry>) -> Self {
+        Self {
+            guid,
+            before,
+            after,
+        }
+    }
+}
+
 /// One recorded op; `Add` and `Remove` share the tombstone, undone by detaching or attaching the kit.
 #[derive(Debug, Clone)]
 pub enum Op {
@@ -118,16 +145,18 @@ pub enum Op {
     Remove(Tombstone),
     Replace(ReplaceOp),
     Xform(XformOp),
+    Definition(DefinitionOp),
 }
 
 impl Op {
-    /// Returns "add", "remove", "replace" or "xform".
+    /// Returns "add", "remove", "replace", "xform" or "definition".
     pub fn kind(&self) -> &str {
         match self {
             Op::Add(_) => "add",
             Op::Remove(_) => "remove",
             Op::Replace(_) => "replace",
             Op::Xform(_) => "xform",
+            Op::Definition(_) => "definition",
         }
     }
 
@@ -137,6 +166,7 @@ impl Op {
             Op::Add(op) | Op::Remove(op) => &op.guid,
             Op::Replace(op) => &op.guid,
             Op::Xform(op) => &op.guid,
+            Op::Definition(op) => &op.guid,
         }
     }
 }
@@ -293,6 +323,7 @@ impl History {
             Op::Remove(op) => session._attach(op),
             Op::Replace(op) => session._swap(&op.guid, clone(&op.before)),
             Op::Xform(op) => session._place(&op.guid, op.before.as_ref()),
+            Op::Definition(op) => session._define(&op.guid, op.before.as_ref().map(clone)),
         }
     }
 
@@ -306,6 +337,7 @@ impl History {
 
             Op::Replace(op) => session._swap(&op.guid, clone(&op.after)),
             Op::Xform(op) => session._place(&op.guid, op.after.as_ref()),
+            Op::Definition(op) => session._define(&op.guid, op.after.as_ref().map(clone)),
         }
     }
 }

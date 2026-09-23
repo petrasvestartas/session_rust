@@ -3122,6 +3122,11 @@ pub fn get_all_tests() -> Vec<RegisteredTest> {
             name: "Clear",
             func: run_history_clear,
         },
+        RegisteredTest {
+            group: "History",
+            name: "Undo Definition",
+            func: run_history_undo_definition,
+        },
         // SessionConfig tests
         RegisteredTest {
             group: "SessionConfig",
