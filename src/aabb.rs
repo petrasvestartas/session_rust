@@ -1,6 +1,14 @@
 use crate::tolerance::Tolerance;
 use crate::tolerance::TOLERANCE;
-use crate::{Line, Mesh, NurbsCurve, NurbsSurface, Point, PointCloud, Polyline, Vector, Xform};
+use crate::Line;
+use crate::Mesh;
+use crate::NurbsCurve;
+use crate::NurbsSurface;
+use crate::Point;
+use crate::PointCloud;
+use crate::Polyline;
+use crate::Vector;
+use crate::Xform;
 use std::fmt;
 
 const NUM_SAMPLES: usize = 20; // Samples per span when searching curve extrema.
@@ -18,7 +26,10 @@ pub struct AABB {
 }
 
 impl AABB {
-    /// Constructs from center and half-size.
+    // ═══════════════════════════════════════════════════════════════════════════
+    // Constructors
+    // ═══════════════════════════════════════════════════════════════════════════
+    /// Construct from center and half-size.
     pub fn new(cx: f64, cy: f64, cz: f64, hx: f64, hy: f64, hz: f64) -> Self {
         AABB {
             cx,
@@ -33,13 +44,12 @@ impl AABB {
     // ═══════════════════════════════════════════════════════════════════════════
     // Static constructors
     // ═══════════════════════════════════════════════════════════════════════════
-
-    /// Constructs the box of half-size inflate around point.
+    /// Construct the box of half-size inflate around point.
     pub fn from_point(point: &Point, inflate: f64) -> Self {
         AABB::new(point[0], point[1], point[2], inflate, inflate, inflate)
     }
 
-    /// Constructs the tight box of points grown by inflate.
+    /// Construct the tight box of points grown by inflate.
     pub fn from_points(points: &[Point], inflate: f64) -> Self {
         if points.is_empty() {
             return AABB::default();
@@ -48,9 +58,9 @@ impl AABB {
         let mut min_x = f64::MAX;
         let mut min_y = f64::MAX;
         let mut min_z = f64::MAX;
-        let mut max_x = f64::NEG_INFINITY;
-        let mut max_y = f64::NEG_INFINITY;
-        let mut max_z = f64::NEG_INFINITY;
+        let mut max_x = f64::MIN;
+        let mut max_y = f64::MIN;
+        let mut max_z = f64::MIN;
 
         for pt in points {
             min_x = min_x.min(pt[0]);
@@ -71,29 +81,27 @@ impl AABB {
         )
     }
 
-    /// Constructs the tight box of the two ends grown by inflate.
+    /// Construct the tight box of the two ends grown by inflate.
     pub fn from_line(line: &Line, inflate: f64) -> Self {
         Self::from_points(&[line.start(), line.end()], inflate)
     }
 
-    /// Constructs the tight box of the vertices grown by inflate.
+    /// Construct the tight box of the vertices grown by inflate.
     pub fn from_polyline(polyline: &Polyline, inflate: f64) -> Self {
         Self::from_points(&polyline.get_points(), inflate)
     }
 
-    /// Constructs the tight box of the vertices grown by inflate.
+    /// Construct the tight box of the vertices grown by inflate.
     pub fn from_mesh(mesh: &Mesh, inflate: f64) -> Self {
-        let (vertices, _faces) = mesh.to_vertices_and_faces();
-
-        Self::from_points(&vertices, inflate)
+        Self::from_points(&mesh.to_vertices_and_faces().0, inflate)
     }
 
-    /// Constructs the tight box of the points grown by inflate.
+    /// Construct the tight box of the points grown by inflate.
     pub fn from_pointcloud(pointcloud: &PointCloud, inflate: f64) -> Self {
         Self::from_points(&pointcloud.get_points(), inflate)
     }
 
-    /// Constructs the box of the control points, or of the curve extrema when tight.
+    /// Construct the box of the control points, or of the curve extrema when tight.
     pub fn from_nurbscurve(curve: &NurbsCurve, inflate: f64, tight: bool) -> Self {
         if !curve.is_valid() || curve.cv_count() == 0 {
             return AABB::default();
@@ -111,7 +119,9 @@ impl AABB {
             return Self::from_points(&points, inflate);
         }
 
-        let (t0, t1) = curve.domain();
+        let t0 = curve.domain_start();
+        let t1 = curve.domain_end();
+
         points.push(curve.point_at(t0));
         points.push(curve.point_at(t1));
 
@@ -147,7 +157,7 @@ impl AABB {
         Self::from_points(&points, inflate)
     }
 
-    /// Constructs the box of the control points grown by inflate.
+    /// Construct the box of the control points grown by inflate.
     pub fn from_nurbssurface(surface: &NurbsSurface, inflate: f64) -> Self {
         if !surface.is_valid() || surface.cv_count(0) == 0 || surface.cv_count(1) == 0 {
             return AABB::default();
@@ -166,7 +176,7 @@ impl AABB {
         Self::from_points(&points, inflate)
     }
 
-    /// Constructs the box enclosing both a and b; an invalid box contributes nothing.
+    /// Construct the box enclosing both a and b; an invalid box contributes nothing.
     #[inline(always)]
     pub fn merge(a: &AABB, b: &AABB) -> AABB {
         if !a.is_valid() {
@@ -183,6 +193,7 @@ impl AABB {
         let max_x = (a.cx + a.hx).max(b.cx + b.hx);
         let max_y = (a.cy + a.hy).max(b.cy + b.hy);
         let max_z = (a.cz + a.hz).max(b.cz + b.hz);
+
         AABB::new(
             (min_x + max_x) * 0.5,
             (min_y + max_y) * 0.5,
@@ -193,22 +204,19 @@ impl AABB {
         )
     }
 
-    /// Constructs the box nothing has grown yet: negative half-sizes, so is_valid is false.
+    /// Construct the box nothing has grown yet: negative half-sizes, so is_valid is false.
     pub fn empty() -> Self {
         AABB::new(0.0, 0.0, 0.0, -1.0, -1.0, -1.0)
     }
 
-    /// Returns the parameter in [t_lo, t_hi] where the axis derivative crosses zero, by Newton steps bracketed by bisection.
+    /// Return the parameter in [t_lo, t_hi] where the axis derivative crosses zero, by Newton steps bracketed by bisection.
     fn compute_extremum(
         curve: &NurbsCurve,
         axis: usize,
-        t_lo: f64,
-        t_hi: f64,
-        d_start: f64,
+        mut t_lo: f64,
+        mut t_hi: f64,
+        mut d_start: f64,
     ) -> f64 {
-        let mut t_lo = t_lo;
-        let mut t_hi = t_hi;
-        let mut d_start = d_start;
         let mut t_root = (t_lo + t_hi) * 0.5;
 
         for _ in 0..MAX_ITER {
@@ -218,20 +226,20 @@ impl AABB {
                 break;
             }
 
-            let f = deriv[1][axis];
-            let fp = deriv[2][axis];
+            let d1 = deriv[1][axis];
+            let d2 = deriv[2][axis];
 
-            if f.abs() < 1e-12 {
+            if d1.abs() < 1e-12 {
                 break;
             }
 
-            if fp.abs() > 1e-14 {
-                let t_new = t_root - f / fp;
+            if d2.abs() > 1e-14 {
+                let t_new = t_root - d1 / d2;
 
                 if t_new >= t_lo && t_new <= t_hi {
                     t_root = t_new;
                 } else {
-                    if f * d_start < 0.0 {
+                    if d1 * d_start < 0.0 {
                         t_hi = t_root;
                     } else {
                         t_lo = t_root;
@@ -249,44 +257,60 @@ impl AABB {
                 continue;
             }
 
-            let f_check = deriv_check[1][axis];
+            let d_check = deriv_check[1][axis];
 
-            if f_check * d_start < 0.0 {
+            if d_check * d_start < 0.0 {
                 t_hi = t_root;
             } else {
                 t_lo = t_root;
-                d_start = f_check;
+                d_start = d_check;
             }
         }
 
         t_root
     }
+}
 
+// ═══════════════════════════════════════════════════════════════════════════
+// Operators
+// ═══════════════════════════════════════════════════════════════════════════
+impl PartialEq for AABB {
+    /// Compare center and half-size to 1e-6.
+    fn eq(&self, other: &Self) -> bool {
+        (self.cx * 1000000.0).round() == (other.cx * 1000000.0).round()
+            && (self.cy * 1000000.0).round() == (other.cy * 1000000.0).round()
+            && (self.cz * 1000000.0).round() == (other.cz * 1000000.0).round()
+            && (self.hx * 1000000.0).round() == (other.hx * 1000000.0).round()
+            && (self.hy * 1000000.0).round() == (other.hy * 1000000.0).round()
+            && (self.hz * 1000000.0).round() == (other.hz * 1000000.0).round()
+    }
+}
+
+impl AABB {
     // ═══════════════════════════════════════════════════════════════════════════
     // Geometry
     // ═══════════════════════════════════════════════════════════════════════════
-
-    /// Returns the min corner.
+    /// Return the min corner.
     pub fn min_point(&self) -> Point {
         Point::new(self.cx - self.hx, self.cy - self.hy, self.cz - self.hz)
     }
 
-    /// Returns the max corner.
+    /// Return the max corner.
     pub fn max_point(&self) -> Point {
         Point::new(self.cx + self.hx, self.cy + self.hy, self.cz + self.hz)
     }
 
-    /// Returns the center.
+    /// Return the center.
     pub fn center(&self) -> Point {
         Point::new(self.cx, self.cy, self.cz)
     }
 
-    /// Returns the surface area.
+    /// Return the surface area.
     pub fn area(&self) -> f64 {
         8.0 * (self.hx * self.hy + self.hy * self.hz + self.hz * self.hx)
     }
 
-    /// Returns the length of the space diagonal.
+    /// Return the length of the space diagonal, 0 when invalid.
     pub fn diagonal(&self) -> f64 {
         if !self.is_valid() {
             return 0.0;
@@ -295,26 +319,26 @@ impl AABB {
         2.0 * (self.hx * self.hx + self.hy * self.hy + self.hz * self.hz).sqrt()
     }
 
-    /// Returns the volume.
+    /// Return the volume.
     pub fn volume(&self) -> f64 {
         8.0 * self.hx * self.hy * self.hz
     }
 
-    /// Returns whether no half-size is negative.
+    /// Return whether no half-size is negative.
     pub fn is_valid(&self) -> bool {
         self.hx >= 0.0 && self.hy >= 0.0 && self.hz >= 0.0
     }
 
-    /// Returns pt clamped to the box.
+    /// Return pt clamped to the box.
     pub fn closest_point(&self, pt: &Point) -> Point {
-        let x = (self.cx - self.hx).max((self.cx + self.hx).min(pt[0]));
-        let y = (self.cy - self.hy).max((self.cy + self.hy).min(pt[1]));
-        let z = (self.cz - self.hz).max((self.cz + self.hz).min(pt[2]));
-
-        Point::new(x, y, z)
+        Point::new(
+            (self.cx - self.hx).max((self.cx + self.hx).min(pt[0])),
+            (self.cy - self.hy).max((self.cy + self.hy).min(pt[1])),
+            (self.cz - self.hz).max((self.cz + self.hz).min(pt[2])),
+        )
     }
 
-    /// Returns whether pt is inside or on the box.
+    /// Return whether pt is inside or on the box.
     pub fn contains(&self, pt: &Point) -> bool {
         pt[0] >= self.cx - self.hx
             && pt[0] <= self.cx + self.hx
@@ -324,7 +348,7 @@ impl AABB {
             && pt[2] <= self.cz + self.hz
     }
 
-    /// Returns whether the boxes overlap or touch.
+    /// Return whether the boxes overlap or touch.
     #[inline(always)]
     pub fn intersects(&self, other: &AABB) -> bool {
         self.cx - self.hx <= other.cx + other.hx
@@ -335,7 +359,7 @@ impl AABB {
             && self.cz + self.hz >= other.cz - other.hz
     }
 
-    /// Returns the corner picked by the sign of each half-size.
+    /// Return the corner picked by the sign of each half-size.
     pub fn corner(&self, x_max: bool, y_max: bool, z_max: bool) -> Point {
         Point::new(
             self.cx + if x_max { self.hx } else { -self.hx },
@@ -344,7 +368,7 @@ impl AABB {
         )
     }
 
-    /// Returns the bottom loop then top loop, counter-clockwise from +x+y.
+    /// Return the bottom loop then top loop, counter-clockwise from +x+y.
     pub fn corners(&self) -> [Point; 8] {
         [
             Point::new(self.cx + self.hx, self.cy + self.hy, self.cz - self.hz),
@@ -358,48 +382,49 @@ impl AABB {
         ]
     }
 
-    /// Returns the bottom loop then top loop, counter-clockwise from +x+y.
+    /// Return the bottom loop then top loop, counter-clockwise from +x+y.
     pub fn get_corners(&self) -> [Point; 8] {
         self.corners()
     }
 
-    /// Returns the bottom loop, top loop, then the four verticals.
+    /// Return the bottom loop, top loop, then the four verticals.
     pub fn get_edges(&self) -> Vec<Line> {
-        let c = self.corners();
+        let points = self.corners();
+
         vec![
-            Line::from_points(&c[0], &c[1]),
-            Line::from_points(&c[1], &c[2]),
-            Line::from_points(&c[2], &c[3]),
-            Line::from_points(&c[3], &c[0]),
-            Line::from_points(&c[4], &c[5]),
-            Line::from_points(&c[5], &c[6]),
-            Line::from_points(&c[6], &c[7]),
-            Line::from_points(&c[7], &c[4]),
-            Line::from_points(&c[0], &c[4]),
-            Line::from_points(&c[1], &c[5]),
-            Line::from_points(&c[2], &c[6]),
-            Line::from_points(&c[3], &c[7]),
+            Line::from_points(&points[0], &points[1]),
+            Line::from_points(&points[1], &points[2]),
+            Line::from_points(&points[2], &points[3]),
+            Line::from_points(&points[3], &points[0]),
+            Line::from_points(&points[4], &points[5]),
+            Line::from_points(&points[5], &points[6]),
+            Line::from_points(&points[6], &points[7]),
+            Line::from_points(&points[7], &points[4]),
+            Line::from_points(&points[0], &points[4]),
+            Line::from_points(&points[1], &points[5]),
+            Line::from_points(&points[2], &points[6]),
+            Line::from_points(&points[3], &points[7]),
         ]
     }
 
-    /// Returns the center offset by x, y, z.
+    /// Return the center offset by x, y, z.
     pub fn point_at(&self, x: f64, y: f64, z: f64) -> Point {
         Point::new(self.cx + x, self.cy + y, self.cz + z)
     }
 
-    /// Grows every half-size by amount.
+    /// Grow every half-size by amount.
     pub fn inflate(&mut self, amount: f64) {
         self.hx += amount;
         self.hy += amount;
         self.hz += amount;
     }
 
-    /// Grows to enclose other; an invalid box contributes nothing.
+    /// Grow to enclose other; an invalid box contributes nothing.
     pub fn union_with(&mut self, other: &AABB) {
         *self = AABB::merge(self, other);
     }
 
-    /// Grows to enclose (x, y, z); coordinates, not a Point, so a vertex loop allocates nothing.
+    /// Grow to enclose (x, y, z); coordinates, not a Point, so a vertex loop allocates nothing.
     pub fn union_with_point(&mut self, x: f64, y: f64, z: f64) {
         *self = AABB::merge(self, &AABB::new(x, y, z, 0.0, 0.0, 0.0));
     }
@@ -407,13 +432,12 @@ impl AABB {
     // ═══════════════════════════════════════════════════════════════════════════
     // Transformation
     // ═══════════════════════════════════════════════════════════════════════════
-
-    /// Replaces the box by the box of its eight transformed corners.
+    /// Replace the box by the box of its eight transformed corners.
     pub fn transform(&mut self, xform: &Xform) {
         *self = self.transformed(xform);
     }
 
-    /// Returns the box of the eight transformed corners; an invalid box stays invalid.
+    /// Return the box of the eight transformed corners; an invalid box stays invalid.
     pub fn transformed(&self, xform: &Xform) -> AABB {
         if !self.is_valid() {
             return *self;
@@ -421,9 +445,9 @@ impl AABB {
 
         let mut out = AABB::empty();
 
-        for corner in self.corners() {
-            let p = xform.transform_point(&corner);
-            out.union_with_point(p[0], p[1], p[2]);
+        for point in self.corners() {
+            let moved = xform.transform_point(&point);
+            out.union_with_point(moved[0], moved[1], moved[2]);
         }
 
         out
@@ -432,10 +456,10 @@ impl AABB {
     // ═══════════════════════════════════════════════════════════════════════════
     // String
     // ═══════════════════════════════════════════════════════════════════════════
-
-    /// "cx, cy, cz, hx, hy, hz"
+    /// Return "cx, cy, cz, hx, hy, hz".
     pub fn str(&self) -> String {
         let prec = Tolerance::ROUNDING;
+
         format!(
             "{}, {}, {}, {}, {}, {}",
             TOLERANCE.format_number(self.cx, prec),
@@ -447,7 +471,7 @@ impl AABB {
         )
     }
 
-    /// Returns "AABB(cx, cy, cz, hx, hy, hz)".
+    /// Return "AABB(cx, cy, cz, hx, hy, hz)".
     pub fn repr(&self) -> String {
         format!("AABB({})", self.str())
     }
@@ -455,26 +479,9 @@ impl AABB {
     // ═══════════════════════════════════════════════════════════════════════════
     // SESSION_VIEWER
     // ═══════════════════════════════════════════════════════════════════════════
-
     /// Returns the 8 box corners as f32 [x, y, z] rows for a wireframe-box buffer, same winding as corners.
     pub fn corners_f32(&self) -> [[f32; 3]; 8] {
         self.corners().map(|p| p.to_f32())
-    }
-}
-
-// ═══════════════════════════════════════════════════════════════════════════
-// Operators
-// ═══════════════════════════════════════════════════════════════════════════
-
-impl PartialEq for AABB {
-    /// Compares center and half-size to 1e-6.
-    fn eq(&self, other: &Self) -> bool {
-        (self.cx * 1000000.0).round() == (other.cx * 1000000.0).round()
-            && (self.cy * 1000000.0).round() == (other.cy * 1000000.0).round()
-            && (self.cz * 1000000.0).round() == (other.cz * 1000000.0).round()
-            && (self.hx * 1000000.0).round() == (other.hx * 1000000.0).round()
-            && (self.hy * 1000000.0).round() == (other.hy * 1000000.0).round()
-            && (self.hz * 1000000.0).round() == (other.hz * 1000000.0).round()
     }
 }
 
