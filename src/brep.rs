@@ -14,6 +14,7 @@ use crate::vector::Vector;
 use crate::xform::Xform;
 use serde::ser::SerializeMap;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
+use std::cmp::Ordering;
 use std::collections::BTreeMap;
 use std::collections::HashMap;
 
@@ -24,10 +25,10 @@ use std::collections::HashMap;
 /// TopAbs_Orientation: carried by the parent -> child reference, never by the shape
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum BRepOrientation {
-    Forward = 0,
-    Reversed = 1,
-    Internal = 2,
-    External = 3,
+    Forward = 0,  // Same direction as the shape.
+    Reversed = 1, // Opposite direction.
+    Internal = 2, // Inside the parent, both sides.
+    External = 3, // Outside the parent, no side.
 }
 
 /// TopAbs::Reverse
@@ -35,9 +36,11 @@ pub fn brep_reverse(o: BRepOrientation) -> BRepOrientation {
     if o == BRepOrientation::Forward {
         return BRepOrientation::Reversed;
     }
+
     if o == BRepOrientation::Reversed {
         return BRepOrientation::Forward;
     }
+
     o
 }
 
@@ -46,52 +49,71 @@ pub fn brep_compose(a: BRepOrientation, b: BRepOrientation) -> BRepOrientation {
     if a == BRepOrientation::Internal || a == BRepOrientation::External {
         return a;
     }
+
     if a == BRepOrientation::Forward {
         return b;
     }
+
     brep_reverse(b)
 }
 
 const F: BRepOrientation = BRepOrientation::Forward;
 const R: BRepOrientation = BRepOrientation::Reversed;
 
+/// JSON name of an orientation
 fn orientation_to_str(o: BRepOrientation) -> &'static str {
     if o == BRepOrientation::Reversed {
         return "reversed";
     }
+
     if o == BRepOrientation::Internal {
         return "internal";
     }
+
     if o == BRepOrientation::External {
         return "external";
     }
+
     "forward"
 }
 
+/// Orientation of a JSON name, Forward when unknown
 fn orientation_from_str(s: &str) -> BRepOrientation {
     if s == "reversed" {
         return BRepOrientation::Reversed;
     }
+
     if s == "internal" {
         return BRepOrientation::Internal;
     }
+
     if s == "external" {
         return BRepOrientation::External;
     }
+
     BRepOrientation::Forward
 }
 
+/// Orientation of a proto enum value, Forward when unknown
 fn orientation_from_i32(v: i32) -> BRepOrientation {
     if v == 1 {
         return BRepOrientation::Reversed;
     }
+
     if v == 2 {
         return BRepOrientation::Internal;
     }
+
     if v == 3 {
         return BRepOrientation::External;
     }
+
     BRepOrientation::Forward
+}
+
+/// True when `index` addresses one of `count` table entries
+fn in_range(index: i32, count: usize) -> bool {
+    index >= 0 && (index as usize) < count
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -101,11 +123,12 @@ fn orientation_from_i32(v: i32) -> BRepOrientation {
 /// TopoDS_Shape: an oriented reference to a sub-shape (index into the owning table)
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct BRepRef {
-    pub index: i32,
-    pub orientation: BRepOrientation,
+    pub index: i32,                   // Index into the owning table.
+    pub orientation: BRepOrientation, // Orientation of this use.
 }
 
 impl BRepRef {
+    /// Reference to entry `index` used with `orientation`.
     pub fn new(index: i32, orientation: BRepOrientation) -> Self {
         BRepRef { index, orientation }
     }
@@ -114,54 +137,54 @@ impl BRepRef {
 /// BRep_TVertex
 #[derive(Debug, Clone, PartialEq)]
 pub struct BRepVertex {
-    pub point: Point,
-    pub tolerance: f64,
+    pub point: Point,   // Position.
+    pub tolerance: f64, // Vertex tolerance.
 }
 
 /// BRep_CurveOnSurface: curve_2d_index_2 is the pcurve of the REVERSED use on a closed surface (seam), -1 otherwise; pcurves run in the edge's own direction
 #[derive(Debug, Clone, PartialEq)]
 pub struct BRepCurveOnSurface {
-    pub surface_index: i32,
-    pub curve_2d_index: i32,
-    pub curve_2d_index_2: i32,
+    pub surface_index: i32,    // Surface the pcurve lies on.
+    pub curve_2d_index: i32,   // Pcurve of the forward use.
+    pub curve_2d_index_2: i32, // Reversed use on a seam, else -1.
 }
 
 /// BRep_TEdge: curve_3d_index is -1 for a degenerated edge (sphere pole, cone apex)
 #[derive(Debug, Clone, PartialEq)]
 pub struct BRepEdge {
-    pub curve_3d_index: i32,
-    pub start_vertex: i32,
-    pub end_vertex: i32,
-    pub tolerance: f64,
-    pub degenerated: bool,
-    pub pcurves: Vec<BRepCurveOnSurface>,
+    pub curve_3d_index: i32,              // 3D curve, -1 when degenerated.
+    pub start_vertex: i32,                // Start vertex.
+    pub end_vertex: i32,                  // End vertex.
+    pub tolerance: f64,                   // Edge tolerance.
+    pub degenerated: bool,                // True for a pole or apex edge.
+    pub pcurves: Vec<BRepCurveOnSurface>, // One per surface.
 }
 
 /// TopoDS_TWire
 #[derive(Debug, Clone, PartialEq)]
 pub struct BRepWire {
-    pub edges: Vec<BRepRef>,
+    pub edges: Vec<BRepRef>, // Traversal order.
 }
 
 /// BRep_TFace: the first wire is the outer boundary; facecolor None means unset
 #[derive(Debug, Clone, PartialEq)]
 pub struct BRepFace {
-    pub surface_index: i32,
-    pub wires: Vec<BRepRef>,
-    pub tolerance: f64,
-    pub facecolor: Option<Color>,
+    pub surface_index: i32,       // Underlying surface.
+    pub wires: Vec<BRepRef>,      // Outer wire first, then holes.
+    pub tolerance: f64,           // Face tolerance.
+    pub facecolor: Option<Color>, // Display color, None when unset.
 }
 
 /// TopoDS_TShell
 #[derive(Debug, Clone, PartialEq)]
 pub struct BRepShell {
-    pub faces: Vec<BRepRef>,
+    pub faces: Vec<BRepRef>, // Oriented faces.
 }
 
 /// TopoDS_TSolid
 #[derive(Debug, Clone, PartialEq)]
 pub struct BRepSolid {
-    pub shells: Vec<BRepRef>,
+    pub shells: Vec<BRepRef>, // Outer first.
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -175,6 +198,7 @@ fn bilinear_patch(p00: &Point, p10: &Point, p01: &Point, p11: &Point) -> NurbsSu
     srf.set_cv(1, 0, p10);
     srf.set_cv(0, 1, p01);
     srf.set_cv(1, 1, p11);
+
     srf
 }
 
@@ -190,67 +214,74 @@ fn uv_line(u0: f64, v0: f64, u1: f64, v1: f64) -> NurbsCurve {
 /// Exact pcurve of a 3D curve lying on a bilinear planar patch: the affine image of its CVs
 fn project_to_patch(crv: &NurbsCurve, srf: &NurbsSurface) -> NurbsCurve {
     let p00 = srf.get_cv(0, 0).unwrap_or_default();
-    let p10 = srf.get_cv(1, 0).unwrap_or_default();
-    let p01 = srf.get_cv(0, 1).unwrap_or_default();
-    let eu = [p10[0] - p00[0], p10[1] - p00[1], p10[2] - p00[2]];
-    let ev = [p01[0] - p00[0], p01[1] - p00[1], p01[2] - p00[2]];
-    let eu2 = eu[0] * eu[0] + eu[1] * eu[1] + eu[2] * eu[2];
-    let ev2 = ev[0] * ev[0] + ev[1] * ev[1] + ev[2] * ev[2];
+    let eu = &srf.get_cv(1, 0).unwrap_or_default() - &p00;
+    let ev = &srf.get_cv(0, 1).unwrap_or_default() - &p00;
+    let eu2 = eu.dot(&eu);
+    let ev2 = ev.dot(&ev);
     let mut c2 = NurbsCurve::new(3, crv.is_rational(), crv.order(), crv.cv_count());
+
     for i in 0..crv.nurbsknot_count() {
         c2.set_nurbsknot(i, crv.nurbsknot(i).unwrap_or(0.0));
     }
+
     for i in 0..crv.cv_count() {
         let (wx, wy, wz, w) = crv.get_cv_4d(i).unwrap_or((0.0, 0.0, 0.0, 1.0));
-        let dx = wx / w - p00[0];
-        let dy = wy / w - p00[1];
-        let dz = wz / w - p00[2];
-        let u = (dx * eu[0] + dy * eu[1] + dz * eu[2]) / eu2;
-        let v = (dx * ev[0] + dy * ev[1] + dz * ev[2]) / ev2;
+        let d = &Point::new(wx / w, wy / w, wz / w) - &p00;
+        let u = d.dot(&eu) / eu2;
+        let v = d.dot(&ev) / ev2;
+
         if crv.is_rational() {
             c2.set_cv_4d(i, u * w, v * w, 0.0, w);
         } else {
             c2.set_cv(i, &Point::new(u, v, 0.0));
         }
     }
+
     c2
 }
 
 /// Signed area of a closed pcurve's sampled polygon (positive = counter-clockwise)
 fn uv_signed_area(c2d: &NurbsCurve) -> f64 {
     let pts = c2d.divide_by_count((c2d.cv_count() * 4).max(16), true).0;
-    let mut a = 0.0;
+    let mut area = 0.0;
+
     for i in 0..pts.len().saturating_sub(1) {
-        a += pts[i][0] * pts[i + 1][1] - pts[i + 1][0] * pts[i][1];
+        area += pts[i][0] * pts[i + 1][1] - pts[i + 1][0] * pts[i][1];
     }
-    0.5 * a
+
+    0.5 * area
 }
 
 /// Signed area of a closed UV polygon (positive = counter-clockwise)
 fn polygon_signed_area(pts: &[Point]) -> f64 {
     let n = pts.len();
-    let mut a = 0.0;
+    let mut area = 0.0;
+
     for i in 0..n {
         let p = &pts[i];
         let q = &pts[(i + 1) % n];
-        a += p[0] * q[1] - q[0] * p[1];
+        area += p[0] * q[1] - q[0] * p[1];
     }
-    0.5 * a
+
+    0.5 * area
 }
 
 /// Diagonal of the control point bounding box
-fn bbox_diagonal(s: &NurbsSurface) -> f64 {
+fn bbox_diagonal(srf: &NurbsSurface) -> f64 {
     let mut lo = Point::new(1e30, 1e30, 1e30);
     let mut hi = Point::new(-1e30, -1e30, -1e30);
-    for i in 0..s.cv_count(0) {
-        for j in 0..s.cv_count(1) {
-            let p = s.get_cv(i, j).unwrap_or_default();
+
+    for i in 0..srf.cv_count(0) {
+        for j in 0..srf.cv_count(1) {
+            let p = srf.get_cv(i, j).unwrap_or_default();
+
             for k in 0..3 {
                 lo[k] = lo[k].min(p[k]);
                 hi[k] = hi[k].max(p[k]);
             }
         }
     }
+
     hi.distance(&lo, None)
 }
 
@@ -260,22 +291,26 @@ fn bbox_diagonal(s: &NurbsSurface) -> f64 {
 
 /// Planar polygon faces from a vertex table: edges run lo -> hi vertex and are shared, a face lists its vertices counter-clockwise seen from outside so the patch normal points outward
 struct PolyFaceBuilder {
-    edge_map: HashMap<(usize, usize), usize>,
+    edge_map: HashMap<(usize, usize), usize>, // Edge per (lo, hi) pair.
 }
 
 impl PolyFaceBuilder {
+    /// Builder with no edges yet
     fn new() -> Self {
         PolyFaceBuilder {
             edge_map: HashMap::new(),
         }
     }
 
+    /// Straight edge between two vertices, shared by every face that uses it
     fn edge(&mut self, b: &mut BRep, v0: usize, v1: usize) -> usize {
         let lo = v0.min(v1);
         let hi = v0.max(v1);
+
         if let Some(&ei) = self.edge_map.get(&(lo, hi)) {
             return ei;
         }
+
         let line = NurbsCurve::create(
             false,
             1,
@@ -287,6 +322,7 @@ impl PolyFaceBuilder {
         let ci = b.add_curve_3d(&line);
         let ei = b.add_edge(ci as i32, lo as i32, hi as i32);
         self.edge_map.insert((lo, hi), ei);
+
         ei
     }
 
@@ -294,6 +330,7 @@ impl PolyFaceBuilder {
     fn wire_refs(&mut self, b: &mut BRep, si: usize, vi: &[usize]) -> Vec<BRepRef> {
         let n = vi.len();
         let mut refs = Vec::new();
+
         for i in 0..n {
             let va = vi[i];
             let vb = vi[(i + 1) % n];
@@ -311,23 +348,27 @@ impl PolyFaceBuilder {
             };
             refs.push(BRepRef::new(ei as i32, o));
         }
+
         refs
     }
 
-    /// Face on `srf` bounded by the vertex cycle `vi`; returns the face index
-    fn face(&mut self, b: &mut BRep, srf: &NurbsSurface, vi: &[usize]) -> usize {
-        self.face_with_holes(b, srf, vi, &[])
-    }
-
     /// Face on `srf` bounded by the vertex cycle `vi`, with one inner wire per hole cycle; returns the face index
-    fn face_with_holes(&mut self, b: &mut BRep, srf: &NurbsSurface, vi: &[usize], holes: &[Vec<usize>]) -> usize {
+    fn face(
+        &mut self,
+        b: &mut BRep,
+        srf: &NurbsSurface,
+        vi: &[usize],
+        holes: &[Vec<usize>],
+    ) -> usize {
         let si = b.add_surface(srf);
         let refs = self.wire_refs(b, si, vi);
         let mut wires = vec![BRepRef::new(b.add_wire(&refs) as i32, F)];
+
         for hole in holes {
             let hole_refs = self.wire_refs(b, si, hole);
             wires.push(BRepRef::new(b.add_wire(&hole_refs) as i32, F));
         }
+
         b.add_face(si as i32, &wires, 0.0)
     }
 }
@@ -351,10 +392,12 @@ fn quad_patch(b: &BRep, fv: &[usize; 4]) -> NurbsSurface {
     )
 }
 
+/// The eight corners of an origin-centered box, bottom ring then top ring
 fn box_corners(b: &mut BRep, sx: f64, sy: f64, sz: f64) {
     let hx = sx * 0.5;
     let hy = sy * 0.5;
     let hz = sz * 0.5;
+
     b.add_vertex(&Point::new(-hx, -hy, -hz), 0.0);
     b.add_vertex(&Point::new(hx, -hy, -hz), 0.0);
     b.add_vertex(&Point::new(hx, hy, -hz), 0.0);
@@ -375,6 +418,7 @@ fn cap_patch(r: f64, z: f64, up: bool) -> NurbsSurface {
             &Point::new(r, r, z),
         );
     }
+
     bilinear_patch(
         &Point::new(-r, -r, z),
         &Point::new(-r, r, z),
@@ -391,6 +435,7 @@ fn cap_face(b: &mut BRep, cap: &NurbsSurface, edge: usize) -> usize {
     let ci = b.add_curve_2d(&c2d);
     b.add_pcurve(edge, si, ci as i32, -1);
     let wi = b.add_wire(&[BRepRef::new(edge as i32, o)]);
+
     b.add_face(si as i32, &[BRepRef::new(wi as i32, F)], 0.0)
 }
 
@@ -398,6 +443,7 @@ fn cap_face(b: &mut BRep, cap: &NurbsSurface, edge: usize) -> usize {
 fn body_face(b: &mut BRep, si: usize, e_bot: usize, e_seam: usize, e_top: usize) -> usize {
     let (u0, u1) = b.m_surfaces[si].domain(0).unwrap_or((0.0, 1.0));
     let (v0, v1) = b.m_surfaces[si].domain(1).unwrap_or((0.0, 1.0));
+
     let c_bot = b.add_curve_2d(&uv_line(u0, v0, u1, v0));
     b.add_pcurve(e_bot, si, c_bot as i32, -1);
     let c_top = b.add_curve_2d(&uv_line(u0, v1, u1, v1));
@@ -411,16 +457,13 @@ fn body_face(b: &mut BRep, si: usize, e_bot: usize, e_seam: usize, e_top: usize)
         BRepRef::new(e_top as i32, R),
         BRepRef::new(e_seam as i32, R),
     ]);
+
     b.add_face(si as i32, &[BRepRef::new(wi as i32, F)], 0.0)
 }
 
 /// Point of the plane (org, xa, ya) at (u, v)
 fn plane_point(org: &Point, xa: &Vector, ya: &Vector, u: f64, v: f64) -> Point {
-    Point::new(
-        org[0] + u * xa[0] + v * ya[0],
-        org[1] + u * xa[1] + v * ya[1],
-        org[2] + u * xa[2] + v * ya[2],
-    )
+    org + xa * u + ya * v
 }
 
 /// Padded bilinear patch through `pts` in the plane (org, xa, ya)
@@ -429,22 +472,23 @@ fn planar_patch_through(pts: &[Point], org: &Point, xa: &Vector, ya: &Vector) ->
     let mut umax: f64 = -1e30;
     let mut vmin: f64 = 1e30;
     let mut vmax: f64 = -1e30;
+
     for p in pts {
-        let dx = p[0] - org[0];
-        let dy = p[1] - org[1];
-        let dz = p[2] - org[2];
-        let u = dx * xa[0] + dy * xa[1] + dz * xa[2];
-        let v = dx * ya[0] + dy * ya[1] + dz * ya[2];
+        let d = p - org;
+        let u = d.dot(xa);
+        let v = d.dot(ya);
         umin = umin.min(u);
         umax = umax.max(u);
         vmin = vmin.min(v);
         vmax = vmax.max(v);
     }
+
     let pad = (umax - umin).max(vmax - vmin) * 0.01;
     umin -= pad;
     umax += pad;
     vmin -= pad;
     vmax += pad;
+
     bilinear_patch(
         &plane_point(org, xa, ya, umin, vmin),
         &plane_point(org, xa, ya, umax, vmin),
@@ -457,42 +501,51 @@ fn planar_patch_through(pts: &[Point], org: &Point, xa: &Vector, ya: &Vector) ->
 fn signed_area_in_plane(pts: &[Point], org: &Point, xa: &Vector, ya: &Vector) -> f64 {
     let mut area = 0.0;
     let n = pts.len();
+
     for i in 0..n {
-        let a = &pts[i];
-        let b = &pts[(i + 1) % n];
-        let au = (a[0] - org[0]) * xa[0] + (a[1] - org[1]) * xa[1] + (a[2] - org[2]) * xa[2];
-        let av = (a[0] - org[0]) * ya[0] + (a[1] - org[1]) * ya[1] + (a[2] - org[2]) * ya[2];
-        let bu = (b[0] - org[0]) * xa[0] + (b[1] - org[1]) * xa[1] + (b[2] - org[2]) * xa[2];
-        let bv = (b[0] - org[0]) * ya[0] + (b[1] - org[1]) * ya[1] + (b[2] - org[2]) * ya[2];
-        area += au * bv - bu * av;
+        let a = &pts[i] - org;
+        let b = &pts[(i + 1) % n] - org;
+        area += a.dot(xa) * b.dot(ya) - b.dot(xa) * a.dot(ya);
     }
+
     area * 0.5
 }
 
 /// The vertices of a polyline without the closing duplicate
 fn open_points(pl: &Polyline) -> Vec<Point> {
     let pts = pl.get_points();
-    let n = if pl.is_closed() { pts.len().saturating_sub(1) } else { pts.len() };
+    let n = if pl.is_closed() {
+        pts.len().saturating_sub(1)
+    } else {
+        pts.len()
+    };
+
     pts[..n].to_vec()
 }
 
+/// Index of the first vertex within `tol` of `p`, a new vertex when none is
 fn find_or_add_vertex(b: &mut BRep, p: &Point, tol: f64) -> usize {
     for i in 0..b.m_vertices.len() {
         if b.m_vertices[i].point.distance(p, None) < tol {
             return i;
         }
     }
+
     b.add_vertex(p, 0.0)
 }
 
+/// Euclidean control points of a curve, zero weights skipped
 fn cv_points(c: &NurbsCurve) -> Vec<Point> {
     let mut pts = Vec::new();
+
     for k in 0..c.cv_count() {
         let (wx, wy, wz, w) = c.get_cv_4d(k).unwrap_or((0.0, 0.0, 0.0, 0.0));
+
         if w != 0.0 {
             pts.push(Point::new(wx / w, wy / w, wz / w));
         }
     }
+
     pts
 }
 
@@ -510,6 +563,7 @@ fn curve_wire(b: &mut BRep, crv: &NurbsCurve, si: usize, tol: f64) -> usize {
     let ei = b.add_edge(ci as i32, vs as i32, ve as i32);
     let c2 = b.add_curve_2d(&project_to_patch(crv, &b.m_surfaces[si]));
     b.add_pcurve(ei, si, c2 as i32, -1);
+
     b.add_wire(&[BRepRef::new(ei as i32, F)])
 }
 
@@ -517,11 +571,22 @@ fn curve_wire(b: &mut BRep, crv: &NurbsCurve, si: usize, tol: f64) -> usize {
 // Sewing helpers
 // ═══════════════════════════════════════════════════════════════════════════
 
+/// Face keys of a mesh in ascending order
+fn sorted_face_keys(mesh: &Mesh) -> Vec<usize> {
+    let mut keys: Vec<usize> = mesh.face.keys().copied().collect();
+    keys.sort();
+
+    keys
+}
+
 /// Signed volume of face meshes (positive when the windings point outward)
 fn signed_volume(meshes: &[Mesh]) -> f64 {
     let mut total = 0.0;
+
     for fm in meshes {
-        for fverts in fm.face.values() {
+        for fk in sorted_face_keys(fm) {
+            let fverts = &fm.face[&fk];
+
             for k in 1..fverts.len().saturating_sub(1) {
                 let a = fm.vertex[&fverts[0]].position();
                 let b = fm.vertex[&fverts[k]].position();
@@ -531,12 +596,14 @@ fn signed_volume(meshes: &[Mesh]) -> f64 {
             }
         }
     }
+
     total / 6.0
 }
 
 /// Face uses of every edge as (face, composed orientation); empty when some edge is not used exactly twice
 fn edge_uses(b: &BRep) -> Vec<Vec<(usize, BRepOrientation)>> {
     let mut uses: Vec<Vec<(usize, BRepOrientation)>> = vec![Vec::new(); b.m_edges.len()];
+
     for fi in 0..b.face_count() {
         for wr in &b.m_faces[fi].wires {
             for er in b.wire_edges(wr) {
@@ -544,11 +611,13 @@ fn edge_uses(b: &BRep) -> Vec<Vec<(usize, BRepOrientation)>> {
             }
         }
     }
-    for u in &uses {
-        if u.len() != 2 {
+
+    for use_ in &uses {
+        if use_.len() != 2 {
             return Vec::new();
         }
     }
+
     uses
 }
 
@@ -561,21 +630,26 @@ fn face_components(
     let nf = b.face_count();
     let mut seen = vec![false; nf];
     let mut components: Vec<Vec<usize>> = Vec::new();
+
     for seed in 0..nf {
         if seen[seed] {
             continue;
         }
+
         let mut comp = Vec::new();
         let mut stack = vec![seed];
         seen[seed] = true;
+
         while let Some(fi) = stack.pop() {
             comp.push(fi);
+
             for wr in &b.m_faces[fi].wires {
                 for er in b.wire_edges(wr) {
                     for &(g, og) in &uses[er.index as usize] {
                         if g == fi || seen[g] {
                             continue;
                         }
+
                         fo[g] = if og == er.orientation {
                             brep_reverse(fo[fi])
                         } else {
@@ -587,41 +661,55 @@ fn face_components(
                 }
             }
         }
+
         components.push(comp);
     }
+
     components
 }
 
 /// BRepBuilderAPI_Sewing + MakeSolid for free faces: when every edge is shared by exactly two face uses, one shell per connected component wound outward and one solid per shell
 fn close_free_faces(b: &mut BRep) {
     let nf = b.face_count();
+
     if nf == 0 {
         return;
     }
+
     let uses = edge_uses(b);
+
     if uses.is_empty() {
         return;
     }
+
     let mut fo = vec![F; nf];
     let mut shells = Vec::new();
+
     for comp in face_components(b, &uses, &mut fo) {
         let mut refs = Vec::new();
+
         for fi in comp {
             refs.push(BRepRef::new(fi as i32, fo[fi]));
         }
+
         shells.push(BRepRef::new(b.add_shell(&refs) as i32, F));
     }
+
     let fm = b.face_meshes();
+
     for sr in shells {
         let mut part = Vec::new();
+
         for fr in &b.m_shells[sr.index as usize].faces {
             part.push(fm[fr.index as usize].clone());
         }
+
         if signed_volume(&part) < 0.0 {
             for fr in &mut b.m_shells[sr.index as usize].faces {
                 fr.orientation = brep_reverse(fr.orientation);
             }
         }
+
         b.add_solid(&[sr]);
     }
 }
@@ -630,26 +718,31 @@ fn close_free_faces(b: &mut BRep) {
 // Planar face helpers
 // ═══════════════════════════════════════════════════════════════════════════
 
-/// Samples per curved edge of a planar face (a rounded corner, a circular boss)
-const CURVED_EDGE_SAMPLES: usize = 16;
+const CURVED_EDGE_SAMPLES: usize = 16; // Samples per curved edge of a planar face.
 
 /// Open outline of a face's outer wire in wire order: vertices of straight edges, samples of curved ones
 fn face_outline(b: &BRep, fi: usize) -> Vec<Point> {
     let mut points: Vec<Point> = Vec::new();
+
     for er in b.wire_edges(&b.m_faces[fi].wires[0]) {
         if er.index < 0 || er.index as usize >= b.m_edges.len() {
             continue;
         }
+
         let edge = &b.m_edges[er.index as usize];
+
         if edge.degenerated {
             continue;
         }
+
         let reversed = er.orientation == BRepOrientation::Reversed;
         let curved =
             edge.curve_3d_index >= 0 && b.m_curves_3d[edge.curve_3d_index as usize].degree() > 1;
+
         if curved {
             let c = &b.m_curves_3d[edge.curve_3d_index as usize];
             let (d0, d1) = c.domain();
+
             for s in 0..CURVED_EDGE_SAMPLES {
                 let u = s as f64 / CURVED_EDGE_SAMPLES as f64;
                 let t = if reversed {
@@ -665,23 +758,29 @@ fn face_outline(b: &BRep, fi: usize) -> Vec<Point> {
             } else {
                 edge.start_vertex
             };
+
             if start >= 0 && (start as usize) < b.m_vertices.len() {
                 points.push(b.m_vertices[start as usize].point.clone());
             }
         }
     }
+
     points
 }
 
 /// Signed volume enclosed by closed outlines (tetrahedra fans from the origin), positive when wound outward
 fn outline_volume(polylines: &[Polyline]) -> f64 {
     let mut total = 0.0;
+
     for pl in polylines {
         let pts = pl.get_points();
+
         if pts.len() < 3 {
             continue;
         }
+
         let p0 = &pts[0];
+
         for k in 1..pts.len() - 1 {
             let p1 = &pts[k];
             let p2 = &pts[k + 1];
@@ -690,6 +789,7 @@ fn outline_volume(polylines: &[Polyline]) -> f64 {
                 + p0[2] * (p1[0] * p2[1] - p1[1] * p2[0]);
         }
     }
+
     total / 6.0
 }
 
@@ -697,27 +797,36 @@ fn outline_volume(polylines: &[Polyline]) -> f64 {
 fn planar_faces(b: &BRep) -> (Vec<Polyline>, Vec<Plane>) {
     let mut polylines = Vec::new();
     let mut planes = Vec::new();
+
     for fi in 0..b.face_count() {
         let face = &b.m_faces[fi];
+
         if face.surface_index < 0 || face.wires.is_empty() {
             continue;
         }
+
         if !b.m_surfaces[face.surface_index as usize].is_planar(None, Tolerance::ZERO_TOLERANCE) {
             continue;
         }
+
         let mut points = face_outline(b, fi);
+
         if points.len() < 3 {
             continue;
         }
+
         let origin = Point::centroid(&points);
         let mut normal = Vector::average_normal(&points);
+
         if b.face_orientation(fi) == BRepOrientation::Reversed {
             normal.reverse();
         }
+
         points.push(points[0].clone());
         polylines.push(Polyline::new(points));
         planes.push(Plane::from_point_normal(origin, normal, None));
     }
+
     if b.is_solid() && outline_volume(&polylines) < 0.0 {
         for pl in planes.iter_mut() {
             let mut n = pl.z_axis();
@@ -725,6 +834,7 @@ fn planar_faces(b: &BRep) -> (Vec<Polyline>, Vec<Plane>) {
             *pl = Plane::from_point_normal(pl.origin(), n, None);
         }
     }
+
     (polylines, planes)
 }
 
@@ -732,30 +842,53 @@ fn planar_faces(b: &BRep) -> (Vec<Polyline>, Vec<Plane>) {
 // Meshing helpers
 // ═══════════════════════════════════════════════════════════════════════════
 
-/// Boundary sample: pcurve parameter, uv point, model point
-type Sample = (f64, Point, Point);
-
-/// Edge use of a trim loop: edge index, loop index, first sample index in the loop, sample count
-type EdgeUse = (usize, usize, usize, usize);
-
 /// Canonical boundary of every shared edge: model points, the (face, pcurve, parameters) that produced them, and refined (t, uv) samples
 #[derive(Default)]
 struct EdgeBoundary {
-    points: HashMap<usize, Vec<Point>>,
-    basis: BTreeMap<usize, (usize, usize, Vec<f64>)>,
-    samples: HashMap<usize, Vec<(f64, Point)>>,
+    points: HashMap<usize, Vec<Point>>, // Canonical model points per edge.
+    basis: BTreeMap<usize, (usize, usize, Vec<f64>)>, // (face, pcurve, parameters) per edge.
+    samples: HashMap<usize, Vec<(f64, Point)>>, // Refined (t, uv) samples per edge.
+}
+
+/// Order (parameter, point) pairs by parameter
+fn parameter_order(a: &(f64, Point), b: &(f64, Point)) -> Ordering {
+    a.0.total_cmp(&b.0)
+}
+
+/// Same parameter of two (parameter, point) pairs
+fn parameter_equal(a: &mut (f64, Point), b: &mut (f64, Point)) -> bool {
+    a.0 == b.0
+}
+
+/// Order boundary samples (t, uv, point) by t
+fn sample_order(a: &(f64, Point, Point), b: &(f64, Point, Point)) -> Ordering {
+    a.0.total_cmp(&b.0)
+}
+
+/// Same t of two boundary samples
+fn sample_equal(a: &mut (f64, Point, Point), b: &mut (f64, Point, Point)) -> bool {
+    a.0 == b.0
+}
+
+/// Order UV points by u, then v
+fn uv_order(a: &Point, b: &Point) -> Ordering {
+    a[0].total_cmp(&b[0]).then(a[1].total_cmp(&b[1]))
 }
 
 /// UV polygon of one wire of a face (pcurves sampled in traversal order)
 fn wire_uv_points(b: &BRep, face_index: usize, wire: &BRepRef) -> Vec<Point> {
     let mut pts = Vec::new();
+
     for er in b.wire_edges(wire) {
         let ci = b.pcurve_index(er.index as usize, face_index, er.orientation);
+
         if ci < 0 {
             continue;
         }
+
         let crv = &b.m_curves_2d[ci as usize];
         let mut seg: Vec<Point> = Vec::new();
+
         if crv.degree() <= 1 && !crv.is_rational() {
             for k in 0..crv.cv_count() {
                 seg.push(crv.get_cv(k).unwrap_or_default());
@@ -763,22 +896,27 @@ fn wire_uv_points(b: &BRep, face_index: usize, wire: &BRepRef) -> Vec<Point> {
         } else {
             seg = crv.divide_by_count((crv.cv_count() * 4).max(16), true).0;
         }
+
         if er.orientation == BRepOrientation::Reversed {
             seg.reverse();
         }
+
         for uv in seg.iter().take(seg.len().saturating_sub(1)) {
             pts.push(uv.clone());
         }
     }
+
     pts
 }
 
 /// Distance from `point` to the surface point the pcurve reaches at t
 fn lifted_distance(surface: &NurbsSurface, curve: &NurbsCurve, point: &Point, t: f64) -> f64 {
     let uv = curve.point_at(t);
-    surface
-        .point_at(uv[0], uv[1])
-        .map_or(f64::INFINITY, |p| p.distance(point, None))
+
+    match surface.point_at(uv[0], uv[1]) {
+        Some(lifted) => lifted.distance(point, None),
+        None => f64::INFINITY,
+    }
 }
 
 /// Parameter of the lifted pcurve closest to `point`: a coarse scan then 64 golden-section steps in the best cell
@@ -788,6 +926,7 @@ fn boundary_parameter(surface: &NurbsSurface, curve: &NurbsCurve, point: &Point)
     let step = (end - start) / count as f64;
     let mut best = start;
     let mut error = lifted_distance(surface, curve, point, start);
+
     for index in 1..=count {
         let t = if index == count {
             end
@@ -795,11 +934,13 @@ fn boundary_parameter(surface: &NurbsSurface, curve: &NurbsCurve, point: &Point)
             start + index as f64 * step
         };
         let candidate = lifted_distance(surface, curve, point, t);
+
         if candidate < error {
             best = t;
             error = candidate;
         }
     }
+
     let mut left = (best - step).max(start);
     let mut right = (best + step).min(end);
     let ratio = (5.0f64.sqrt() - 1.0) * 0.5;
@@ -807,6 +948,7 @@ fn boundary_parameter(surface: &NurbsSurface, curve: &NurbsCurve, point: &Point)
     let mut b = left + ratio * (right - left);
     let mut da = lifted_distance(surface, curve, point, a);
     let mut db = lifted_distance(surface, curve, point, b);
+
     for _ in 0..64 {
         if da < db {
             right = b;
@@ -822,13 +964,16 @@ fn boundary_parameter(surface: &NurbsSurface, curve: &NurbsCurve, point: &Point)
             db = lifted_distance(surface, curve, point, b);
         }
     }
+
     if da < error {
         best = a;
         error = da;
     }
+
     if db < error {
         best = b;
     }
+
     best
 }
 
@@ -842,20 +987,26 @@ fn boundary_normal(
     for at in [t, t + (toward - t) * 1e-6] {
         let uv = curve.point_at(at);
         let derivatives = surface.evaluate(uv[0], uv[1], 1);
+
         if derivatives.len() < 3 {
             continue;
         }
+
         let mut n = derivatives[1].cross(&derivatives[2]);
         let scale = n[0].abs().max(n[1].abs()).max(n[2].abs());
+
         if !scale.is_finite() || scale == 0.0 {
             continue;
         }
+
         n /= scale;
         let length = n.magnitude();
+
         if length.is_finite() && length > 0.0 {
             return Some(n / length);
         }
     }
+
     None
 }
 
@@ -873,16 +1024,19 @@ fn boundary_turns(
         boundary_normal(surface, curve, t, ta),
         boundary_normal(surface, curve, tb, ta),
     ];
+
     for j in 0..3 {
         for k in j + 1..3 {
             let (Some(n), Some(m)) = (&normals[j], &normals[k]) else {
                 continue;
             };
-            if n[0] * m[0] + n[1] * m[1] + n[2] * m[2] < cosine {
+
+            if n.dot(m) < cosine {
                 return true;
             }
         }
     }
+
     false
 }
 
@@ -890,19 +1044,22 @@ fn boundary_turns(
 fn refine_surface_boundary(
     surface: &NurbsSurface,
     curve: &NurbsCurve,
-    samples: &[Sample],
+    samples: &[(f64, Point, Point)],
     angle: f64,
     chord: f64,
-) -> Vec<Sample> {
+) -> Vec<(f64, Point, Point)> {
     if samples.len() < 2 {
         return samples.to_vec();
     }
+
     let tolerance = bbox_diagonal(surface) * chord;
     let cosine = (angle.clamp(0.1, 179.0) * PI / 180.0).cos();
     let mut result = Vec::new();
     let mut added = 0;
+
     for i in 1..samples.len() {
         let mut stack = vec![(samples[i - 1].clone(), samples[i].clone(), 0)];
+
         while let Some((a, b, depth)) = stack.pop() {
             let t = (a.0 + b.0) * 0.5;
             let uv = curve.point_at(t);
@@ -921,17 +1078,21 @@ fn refine_surface_boundary(
                 || boundary_turns(surface, curve, a.0, t, b.0, cosine))
                 && depth < 8
                 && added < 4096;
+
             if !split {
                 result.push(a);
                 continue;
             }
+
             added += 1;
             let middle = (t, uv, point);
             stack.push((middle.clone(), b, depth + 1));
             stack.push((a, middle, depth + 1));
         }
     }
+
     result.push(samples[samples.len() - 1].clone());
+
     result
 }
 
@@ -943,60 +1104,113 @@ fn same_boundary_point(a: &Point, b: &Point) -> bool {
 /// Phase 1: the outer wire is the full UV rectangle (straight pcurves enclosing the whole domain, no holes), so the face meshes directly on the surface grid
 fn direct_face(b: &BRep, fi: usize) -> bool {
     let face = &b.m_faces[fi];
+
     if face.wires.len() != 1 {
         return false;
     }
+
     for er in b.wire_edges(&face.wires[0]) {
         let ci = b.pcurve_index(er.index as usize, fi, er.orientation);
+
         if ci < 0 {
             continue;
         }
+
         if b.m_curves_2d[ci as usize].degree() > 1 || b.m_curves_2d[ci as usize].is_rational() {
             return false;
         }
     }
+
     let outer = wire_uv_points(b, fi, &face.wires[0]);
+
     if outer.len() < 3 {
         return false;
     }
+
     let srf = &b.m_surfaces[face.surface_index as usize];
     let (u0, u1) = srf.domain(0).unwrap_or((0.0, 1.0));
     let (v0, v1) = srf.domain(1).unwrap_or((0.0, 1.0));
+
     for er in b.wire_edges(&face.wires[0]) {
         let ci = b.pcurve_index(er.index as usize, fi, er.orientation);
+
         if ci < 0 {
             continue;
         }
+
         let curve = &b.m_curves_2d[ci as usize];
+
         for k in [0, curve.cv_count().saturating_sub(1)] {
             let p = curve.get_cv(k).unwrap_or_default();
             let corner_u = (p[0] - u0).abs().min((p[0] - u1).abs()) <= (u1 - u0) * 1e-9;
             let corner_v = (p[1] - v0).abs().min((p[1] - v1).abs()) <= (v1 - v0) * 1e-9;
+
             if !corner_u || !corner_v {
                 return false;
             }
         }
     }
+
     let domain_area = (u1 - u0) * (v1 - v0);
+
     (polygon_signed_area(&outer).abs() - domain_area).abs() < 1e-3 * domain_area
+}
+
+/// Grid vertices on the domain sides flagged by (at_v0, at_v1, at_u0, at_u1), as (parameter along the side, model point) sorted and unique
+fn grid_side_points(
+    grid: &Mesh,
+    srf: &NurbsSurface,
+    at_v0: bool,
+    at_v1: bool,
+    at_u0: bool,
+    at_u1: bool,
+) -> Vec<(f64, Point)> {
+    let (u0, u1) = srf.domain(0).unwrap_or((0.0, 1.0));
+    let (v0, v1) = srf.domain(1).unwrap_or((0.0, 1.0));
+    let utol = (u1 - u0) * 0.001;
+    let vtol = (v1 - v0) * 0.001;
+    let mut pts: Vec<(f64, Point)> = Vec::new();
+
+    for vd in grid.vertex.values() {
+        let (Some(&iu), Some(&iv)) = (vd.attributes.get("u"), vd.attributes.get("v")) else {
+            continue;
+        };
+
+        if (at_v0 && (iv - v0).abs() < vtol * 0.1) || (at_v1 && (iv - v1).abs() < vtol * 0.1) {
+            pts.push((iu, vd.position()));
+        } else if (at_u0 && (iu - u0).abs() < utol * 0.1) || (at_u1 && (iu - u1).abs() < utol * 0.1)
+        {
+            pts.push((iv, vd.position()));
+        }
+    }
+
+    pts.sort_by(parameter_order);
+    pts.dedup_by(parameter_equal);
+
+    pts
 }
 
 /// Phase 2: grid vertices of a direct face along a shared edge that runs on a domain side, as (pcurve parameter, model point) sorted along the edge; empty elsewhere
 fn grid_edge_samples(b: &BRep, fi: usize, grid: &Mesh, er: &BRepRef) -> Vec<(f64, Point)> {
     let mut samples: Vec<(f64, Point)> = Vec::new();
     let mut shared = false;
+
     for fr in b.edge_faces(er.index as usize) {
         if fr.index as usize != fi {
             shared = true;
         }
     }
+
     if !shared {
         return samples;
     }
+
     let ci = b.pcurve_index(er.index as usize, fi, er.orientation);
+
     if ci < 0 {
         return samples;
     }
+
     let srf = &b.m_surfaces[b.m_faces[fi].surface_index as usize];
     let (u0, u1) = srf.domain(0).unwrap_or((0.0, 1.0));
     let (v0, v1) = srf.domain(1).unwrap_or((0.0, 1.0));
@@ -1010,68 +1224,68 @@ fn grid_edge_samples(b: &BRep, fi: usize, grid: &Mesh, er: &BRepRef) -> Vec<(f64
     let at_v1 = (sp[1] - v1).abs() < vtol && (ep[1] - v1).abs() < vtol;
     let at_u0 = (sp[0] - u0).abs() < utol && (ep[0] - u0).abs() < utol;
     let at_u1 = (sp[0] - u1).abs() < utol && (ep[0] - u1).abs() < utol;
+
     if !at_v0 && !at_v1 && !at_u0 && !at_u1 {
         return samples;
     }
-    let mut pts: Vec<(f64, Point)> = Vec::new();
-    for vd in grid.vertex.values() {
-        let (Some(&iu), Some(&iv)) = (vd.attributes.get("u"), vd.attributes.get("v")) else {
-            continue;
-        };
-        if (at_v0 && (iv - v0).abs() < vtol * 0.1) || (at_v1 && (iv - v1).abs() < vtol * 0.1) {
-            pts.push((iu, vd.position()));
-        } else if (at_u0 && (iu - u0).abs() < utol * 0.1) || (at_u1 && (iu - u1).abs() < utol * 0.1)
-        {
-            pts.push((iv, vd.position()));
-        }
-    }
-    pts.sort_by(|x, y| x.0.total_cmp(&y.0));
-    pts.dedup_by(|x, y| x.0 == y.0);
+
+    let pts = grid_side_points(grid, srf, at_v0, at_v1, at_u0, at_u1);
+
     if pts.len() < 2 {
         return samples;
     }
+
     let varying = if at_v0 || at_v1 { 0 } else { 1 };
     let (t0, t1) = c2d.domain();
+
     for (p, pt) in pts {
         samples.push((
             t0 + (p - sp[varying]) / (ep[varying] - sp[varying]) * (t1 - t0),
             pt,
         ));
     }
+
     samples
 }
 
 /// Phase 2: the first incident grid supplies the canonical polygon of every shared edge; true when this face's grid disagrees with an earlier one and must be rebuilt
 fn grid_boundaries(b: &BRep, fi: usize, grid: &Mesh, boundary: &mut EdgeBoundary) -> bool {
     let mut rebuild = false;
+
     for er in b.wire_edges(&b.m_faces[fi].wires[0]) {
         let eidx = er.index as usize;
         let samples = grid_edge_samples(b, fi, grid, &er);
+
         if samples.is_empty() {
             continue;
         }
+
         let mut parameters = Vec::new();
         let mut bnd = Vec::new();
+
         for (t, pt) in samples {
             parameters.push(t);
             bnd.push(pt);
         }
+
         let Some(canonical) = boundary.points.get(&eidx) else {
             boundary.points.insert(eidx, bnd);
             let ci = b.pcurve_index(eidx, fi, er.orientation) as usize;
             boundary.basis.insert(eidx, (fi, ci, parameters));
             continue;
         };
-        let mut matches = canonical.len() == bnd.len();
         let mut forward = true;
         let mut backward = true;
+
         for k in 0..canonical.len().min(bnd.len()) {
             forward = forward && same_boundary_point(&canonical[k], &bnd[k]);
             backward = backward && same_boundary_point(&canonical[k], &bnd[bnd.len() - 1 - k]);
         }
-        matches = matches && (forward || backward);
+
+        let matches = canonical.len() == bnd.len() && (forward || backward);
         rebuild = rebuild || !matches;
     }
+
     rebuild
 }
 
@@ -1086,6 +1300,7 @@ fn refine_shared_boundaries(
 ) {
     for (&edge, (face, pcurve, parameters)) in &boundary.basis {
         let mut curved_cdt = false;
+
         for incident in b.edge_faces(edge) {
             let fi = incident.index as usize;
             let cdt = !face_direct[fi] || rebuild_grid[fi];
@@ -1093,13 +1308,16 @@ fn refine_shared_boundaries(
                 || (cdt
                     && !b.m_surfaces[b.m_faces[fi].surface_index as usize].is_planar(None, 0.0));
         }
+
         if !curved_cdt {
             continue;
         }
+
         let surface = &b.m_surfaces[b.m_faces[*face].surface_index as usize];
         let curve = &b.m_curves_2d[*pcurve];
         let points = &boundary.points[&edge];
-        let mut samples: Vec<Sample> = Vec::new();
+        let mut samples: Vec<(f64, Point, Point)> = Vec::new();
+
         for i in 0..parameters.len() {
             samples.push((
                 parameters[i],
@@ -1107,25 +1325,34 @@ fn refine_shared_boundaries(
                 points[i].clone(),
             ));
         }
-        samples.sort_by(|x, y| x.0.total_cmp(&y.0));
-        if b.m_edges[edge].start_vertex == b.m_edges[edge].end_vertex {
-            let end = curve.domain().1;
-            if !samples.is_empty() && samples[samples.len() - 1].0 < end {
-                samples.push((end, curve.point_at(end), samples[0].2.clone()));
-            }
+
+        samples.sort_by(sample_order);
+        let end = curve.domain().1;
+
+        if b.m_edges[edge].start_vertex == b.m_edges[edge].end_vertex
+            && !samples.is_empty()
+            && samples[samples.len() - 1].0 < end
+        {
+            samples.push((end, curve.point_at(end), samples[0].2.clone()));
         }
+
         let refined = refine_surface_boundary(surface, curve, &samples, angle, chord);
+
         if refined.len() <= samples.len() {
             continue;
         }
+
         let mut refined_points = Vec::new();
         let mut refined_samples = Vec::new();
+
         for (t, uv, p) in refined {
             refined_points.push(p);
             refined_samples.push((t, uv));
         }
+
         boundary.points.insert(edge, refined_points);
         boundary.samples.insert(edge, refined_samples);
+
         for incident in b.edge_faces(edge) {
             rebuild_grid[incident.index as usize] = true;
         }
@@ -1137,33 +1364,43 @@ fn grid_interior_uv(srf: &NurbsSurface, grid: &Mesh) -> Vec<Point> {
     let (u0, u1) = srf.domain(0).unwrap_or((0.0, 1.0));
     let (v0, v1) = srf.domain(1).unwrap_or((0.0, 1.0));
     let mut seeds = Vec::new();
+
     for vertex in grid.vertex.values() {
         let (Some(&u), Some(&v)) = (vertex.attributes.get("u"), vertex.attributes.get("v")) else {
             continue;
         };
+
         if u > u0 && u < u1 && v > v0 && v < v1 {
             seeds.push(Point::new(u, v, 0.0));
         }
     }
-    seeds.sort_by(|x, y| x[0].total_cmp(&y[0]).then(x[1].total_cmp(&y[1])));
+
+    seeds.sort_by(uv_order);
+
     seeds
 }
 
-/// Phase 3: map the canonical points of edge `ei` onto pcurve `ci` of face `fi`, checked in model space; false when a point cannot be lifted
 /// Planarity tolerance for a surface of any size: 1e-9 of its control-point bounding box diagonal, never below the zero tolerance
 fn planar_patch_tolerance(srf: &NurbsSurface) -> f64 {
     let mut lo: [f64; 3] = [1e300; 3];
     let mut hi: [f64; 3] = [-1e300; 3];
+
     for i in 0..srf.cv_count(0) {
         for j in 0..srf.cv_count(1) {
             let p = srf.get_cv(i, j).unwrap_or_default();
+
             for k in 0..3 {
                 lo[k] = lo[k].min(p[k]);
                 hi[k] = hi[k].max(p[k]);
             }
         }
     }
-    let diagonal = ((hi[0] - lo[0]).powi(2) + (hi[1] - lo[1]).powi(2) + (hi[2] - lo[2]).powi(2)).sqrt();
+
+    let diagonal = ((hi[0] - lo[0]) * (hi[0] - lo[0])
+        + (hi[1] - lo[1]) * (hi[1] - lo[1])
+        + (hi[2] - lo[2]) * (hi[2] - lo[2]))
+        .sqrt();
+
     (1e-9 * diagonal).max(Tolerance::ZERO_TOLERANCE)
 }
 
@@ -1177,25 +1414,34 @@ fn planar_patch_uv(srf: &NurbsSurface, p: &Point) -> Option<(f64, f64)> {
     if srf.degree(0) != 1 || srf.degree(1) != 1 || srf.cv_count(0) != 2 || srf.cv_count(1) != 2 {
         return None;
     }
+
     let p00 = srf.get_cv(0, 0)?;
     let p10 = srf.get_cv(1, 0)?;
     let p01 = srf.get_cv(0, 1)?;
     let p11 = srf.get_cv(1, 1)?;
-    let eu = p10.clone() - p00.clone();
-    let ev = p01.clone() - p00.clone();
+    let eu = &p10 - &p00;
+    let ev = &p01 - &p00;
     let skew = (p11 - p10) - ev.clone();
+
     if skew.magnitude() > planar_patch_tolerance(srf) {
         return None;
     }
+
     let eu2 = eu.dot(&eu);
     let ev2 = ev.dot(&ev);
+
     if eu2 <= 0.0 || ev2 <= 0.0 {
         return None;
     }
-    let d = p.clone() - p00;
+
+    let d = p - &p00;
     let (u0, u1) = srf.domain(0)?;
     let (v0, v1) = srf.domain(1)?;
-    Some((u0 + d.dot(&eu) / eu2 * (u1 - u0), v0 + d.dot(&ev) / ev2 * (v1 - v0)))
+
+    Some((
+        u0 + d.dot(&eu) / eu2 * (u1 - u0),
+        v0 + d.dot(&ev) / ev2 * (v1 - v0),
+    ))
 }
 
 /// Parameter of the closest point on a two-point degree-1 pcurve by one projection; None for any other curve
@@ -1203,48 +1449,69 @@ fn linear_pcurve_parameter(crv: &NurbsCurve, uv: (f64, f64)) -> Option<f64> {
     if crv.degree() != 1 || crv.is_rational() || crv.cv_count() != 2 {
         return None;
     }
+
     let c0 = crv.get_cv(0)?;
     let c1 = crv.get_cv(1)?;
     let dx = c1[0] - c0[0];
     let dy = c1[1] - c0[1];
     let length_squared = dx * dx + dy * dy;
+
     if length_squared <= 0.0 {
         return None;
     }
+
     let fraction = (((uv.0 - c0[0]) * dx + (uv.1 - c0[1]) * dy) / length_squared).clamp(0.0, 1.0);
     let (t0, t1) = crv.domain();
+
     Some(t0 + fraction * (t1 - t0))
 }
 
+/// True when the pcurve point `q` lifts onto the surface farther than `tolerance` from `p`, or cannot be lifted
+fn lift_misses(srf: &NurbsSurface, q: &Point, p: &Point, tolerance: f64) -> bool {
+    match srf.point_at(q[0], q[1]) {
+        Some(lifted) => lifted.distance(p, None) > tolerance,
+        None => true,
+    }
+}
+
+/// Phase 3: map the canonical points of edge `ei` onto pcurve `ci` of face `fi`, checked in model space; false when a point cannot be lifted
 fn lift_canonical(
     b: &BRep,
     fi: usize,
     ei: usize,
     ci: usize,
     boundary: &EdgeBoundary,
-    samples: &mut Vec<Sample>,
+    samples: &mut Vec<(f64, Point, Point)>,
 ) -> bool {
     let face = &b.m_faces[fi];
     let edge = &b.m_edges[ei];
     let srf = &b.m_surfaces[face.surface_index as usize];
     let crv = &b.m_curves_2d[ci];
-    let planar = is_planar_patch(srf);
-    let cached = boundary
-        .basis
-        .get(&ei)
-        .is_some_and(|basis| basis.0 == fi && basis.1 == ci)
-        && boundary.samples.contains_key(&ei);
+    let cached = match boundary.basis.get(&ei) {
+        Some(basis) => basis.0 == fi && basis.1 == ci && boundary.samples.contains_key(&ei),
+        None => false,
+    };
     let points = &boundary.points[&ei];
+    let planar = is_planar_patch(srf);
+
     for (index, p) in points.iter().enumerate() {
         let (mut t, mut q) = if cached {
             boundary.samples[&ei][index].clone()
         } else {
-            let patch_uv = if planar { planar_patch_uv(srf, p) } else { None };
+            let patch_uv = if planar {
+                planar_patch_uv(srf, p)
+            } else {
+                None
+            };
             let (u, v) = match patch_uv {
                 Some(uv) => uv,
                 None => srf.closest_parameters(p),
             };
-            let t = match patch_uv.and_then(|uv| linear_pcurve_parameter(crv, uv)) {
+            let linear = match patch_uv {
+                Some(uv) => linear_pcurve_parameter(crv, uv),
+                None => None,
+            };
+            let t = match linear {
                 Some(t) => t,
                 None => crv.closest_parameter(&Point::new(u, v, 0.0)),
             };
@@ -1255,42 +1522,49 @@ fn lift_canonical(
             .tolerance
             .max(face.tolerance)
             .max(f64::EPSILON.sqrt() * scale);
-        if srf
-            .point_at(q[0], q[1])
-            .is_none_or(|lifted| lifted.distance(p, None) > tolerance)
-        {
+
+        if lift_misses(srf, &q, p, tolerance) {
             t = boundary_parameter(srf, crv, p);
             q = crv.point_at(t);
-            if srf
-                .point_at(q[0], q[1])
-                .is_none_or(|lifted| lifted.distance(p, None) > tolerance)
-            {
+
+            if lift_misses(srf, &q, p, tolerance) {
                 return false;
             }
         }
+
         samples.push((t, q, p.clone()));
     }
-    samples.sort_by(|x, y| x.0.total_cmp(&y.0));
-    samples.dedup_by(|x, y| x.0 == y.0);
+
+    samples.sort_by(sample_order);
+    samples.dedup_by(sample_equal);
+
     true
 }
 
 /// Phase 3: fresh samples of a pcurve nobody has sampled yet, refined to the face's angle and chord; empty when the surface cannot be evaluated
-fn fresh_samples(srf: &NurbsSurface, crv: &NurbsCurve, angle: f64, chord: f64) -> Vec<Sample> {
-    let count = (crv.cv_count() * 4)
-        .max((360.0 / angle.max(0.1)).ceil() as usize)
-        .min(4096);
+fn fresh_samples(
+    srf: &NurbsSurface,
+    crv: &NurbsCurve,
+    angle: f64,
+    chord: f64,
+) -> Vec<(f64, Point, Point)> {
     let mut points = Vec::new();
     let mut parameters = Vec::new();
+
     if crv.degree() <= 1 && !crv.is_rational() && is_planar_patch(srf) {
         for k in 0..crv.cv_count() {
             points.push(crv.get_cv(k).unwrap_or_default());
             parameters.push(crv.greville_abcissa(k));
         }
     } else {
+        let count = (crv.cv_count() * 4)
+            .max((360.0 / angle.max(0.1)).ceil() as usize)
+            .min(4096);
         (points, parameters) = crv.divide_by_count(count, true);
     }
-    let mut samples: Vec<Sample> = Vec::new();
+
+    let mut samples: Vec<(f64, Point, Point)> = Vec::new();
+
     for k in 0..points.len() {
         let q = points[k].clone();
         let Some(p) = srf.point_at(q[0], q[1]) else {
@@ -1298,6 +1572,7 @@ fn fresh_samples(srf: &NurbsSurface, crv: &NurbsCurve, angle: f64, chord: f64) -
         };
         samples.push((parameters[k], q, p));
     }
+
     refine_surface_boundary(srf, crv, &samples, angle, chord)
 }
 
@@ -1309,16 +1584,19 @@ fn edge_use_samples(
     boundary: &mut EdgeBoundary,
     angle: f64,
     chord: f64,
-    samples: &mut Vec<Sample>,
+    samples: &mut Vec<(f64, Point, Point)>,
 ) -> bool {
     let ei = er.index as usize;
     let edge = &b.m_edges[ei];
     let ci = b.pcurve_index(ei, fi, er.orientation);
+
     if ci < 0 {
         return false;
     }
+
     let crv = &b.m_curves_2d[ci as usize];
     let canonical = boundary.points.contains_key(&ei);
+
     if canonical {
         if !lift_canonical(b, fi, ei, ci as usize, boundary, samples) {
             return false;
@@ -1331,20 +1609,26 @@ fn edge_use_samples(
             chord,
         );
         let mut positions = Vec::new();
+
         for sample in samples.iter() {
             positions.push(sample.2.clone());
         }
+
         boundary.points.insert(ei, positions);
     }
+
     if edge.start_vertex == edge.end_vertex && samples.len() > 1 {
         let first = samples[0].clone();
+
         if !same_boundary_point(&first.2, &samples[samples.len() - 1].2) {
             samples.push((crv.domain().1, first.1, first.2));
         }
     }
+
     if er.orientation == BRepOrientation::Reversed {
         samples.reverse();
     }
+
     samples.len() >= 2
 }
 
@@ -1356,123 +1640,174 @@ fn trim_loops(
     angle: f64,
     chord: f64,
     loops: &mut TrimLoops,
-    uses: &mut Vec<EdgeUse>,
+    uses: &mut Vec<(usize, usize, usize, usize)>,
 ) -> bool {
     let face = &b.m_faces[fi];
+
     for wi in 0..face.wires.len() {
         let mut uv = Vec::new();
         let mut xyz = Vec::new();
+
         for er in b.wire_edges(&face.wires[wi]) {
-            let mut samples: Vec<Sample> = Vec::new();
+            let mut samples: Vec<(f64, Point, Point)> = Vec::new();
+
             if !edge_use_samples(b, fi, &er, boundary, angle, chord, &mut samples) {
                 return false;
             }
+
             uses.push((er.index as usize, wi, uv.len(), samples.len()));
-            for sample in samples.iter().take(samples.len() - 1) {
+
+            for sample in samples.iter().take(samples.len().saturating_sub(1)) {
                 uv.push(sample.1.clone());
                 xyz.push(sample.2.clone());
             }
         }
+
         loops.uv.push(uv);
         loops.xyz.push(xyz);
     }
+
     true
 }
 
-/// Tag every boundary vertex of a CDT mesh with the edge use it samples; each use keeps both ends, including the next edge's start
+/// Set every vertex normal and tag every loop vertex boundary/{loop}/{sample} as mesh_loops does
+fn tag_loop_vertices(mesh: &mut Mesh, loops: &TrimLoops, normal: &Vector) {
+    let mut lookup: HashMap<(u64, u64, u64), (usize, usize)> = HashMap::new();
+
+    for li in 0..loops.xyz.len() {
+        for k in 0..loops.xyz[li].len() {
+            let p = &loops.xyz[li][k];
+            lookup
+                .entry((p[0].to_bits(), p[1].to_bits(), p[2].to_bits()))
+                .or_insert((li, k));
+        }
+    }
+
+    for vd in mesh.vertex.values_mut() {
+        vd.set_normal(normal[0], normal[1], normal[2]);
+        let position = vd.position();
+
+        if let Some(&(li, k)) = lookup.get(&(
+            position[0].to_bits(),
+            position[1].to_bits(),
+            position[2].to_bits(),
+        )) {
+            vd.attributes.insert(format!("boundary/{li}/{k}"), 1.0);
+        }
+    }
+}
+
 /// Phase 3 for a planar face: the sampled loops triangulated as one polygon with holes, wound to the surface normal, every loop vertex tagged boundary/{loop}/{sample} as mesh_loops does; no grid, no surface evaluation
 fn planar_loops_mesh(srf: &NurbsSurface, loops: &TrimLoops) -> Mesh {
-    use crate::remesh_cdt::{cdt_triangulate, project_2d, signed_area};
+    use crate::remesh_cdt::cdt_triangulate;
+    use crate::remesh_cdt::project_2d;
+    use crate::remesh_cdt::signed_area;
+
     let mut mesh = Mesh::new();
+
     if loops.xyz.is_empty() || loops.xyz[0].len() < 3 {
         return mesh;
     }
+
     let mut all_pts: Vec<Point> = Vec::new();
+
     for loop_pts in &loops.xyz {
         all_pts.extend(loop_pts.iter().cloned());
     }
+
     let (origin, xaxis, yaxis, _zaxis) = Polyline::new(all_pts).get_average_plane();
     let mut border = loops.xyz[0].clone();
     let mut border_2d = project_2d(&border, &origin, &xaxis, &yaxis);
+
     if signed_area(&border_2d) < 0.0 {
         border.reverse();
         border_2d.reverse();
     }
+
     let mut holes: Vec<Vec<Point>> = Vec::new();
     let mut holes_2d: Vec<Vec<Point>> = Vec::new();
-    for loop_pts in loops.xyz.iter().skip(1) {
-        if loop_pts.len() < 3 {
+
+    for li in 1..loops.xyz.len() {
+        if loops.xyz[li].len() < 3 {
             continue;
         }
-        let mut hole = loop_pts.clone();
+
+        let mut hole = loops.xyz[li].clone();
         let mut hole_2d = project_2d(&hole, &origin, &xaxis, &yaxis);
+
         if signed_area(&hole_2d) > 0.0 {
             hole.reverse();
             hole_2d.reverse();
         }
+
         holes.push(hole);
         holes_2d.push(hole_2d);
     }
+
     let mut vkeys = Vec::new();
+
     for p in &border {
         vkeys.push(mesh.add_vertex(p.clone(), None));
     }
+
     for hole in &holes {
         for p in hole {
             vkeys.push(mesh.add_vertex(p.clone(), None));
         }
     }
+
     for (a, b, c) in cdt_triangulate(&border_2d, &holes_2d) {
         if a != b && b != c && c != a {
             mesh.add_face(vec![vkeys[a], vkeys[b], vkeys[c]], None);
         }
     }
+
     let (u0, u1) = srf.domain(0).unwrap_or((0.0, 1.0));
     let (v0, v1) = srf.domain(1).unwrap_or((0.0, 1.0));
     let normal = srf.normal_at(0.5 * (u0 + u1), 0.5 * (v0 + v1));
-    let first: Option<Vec<usize>> = mesh.face.values().next().cloned();
-    if let Some(fverts) = first {
+
+    if let Some(fk) = sorted_face_keys(&mesh).first() {
+        let fverts = &mesh.face[fk];
         let a = mesh.vertex[&fverts[0]].position();
         let b = mesh.vertex[&fverts[1]].position();
         let c = mesh.vertex[&fverts[2]].position();
-        if (b.clone() - a.clone()).cross(&(c - a)).dot(&normal) < 0.0 {
+
+        if (&b - &a).cross(&(&c - &a)).dot(&normal) < 0.0 {
             mesh.flip();
         }
     }
-    let mut lookup: HashMap<(u64, u64, u64), (usize, usize)> = HashMap::new();
-    for (li, loop_pts) in loops.xyz.iter().enumerate() {
-        for (k, p) in loop_pts.iter().enumerate() {
-            lookup.entry((p[0].to_bits(), p[1].to_bits(), p[2].to_bits())).or_insert((li, k));
-        }
-    }
-    for vd in mesh.vertex.values_mut() {
-        vd.set_normal(normal[0], normal[1], normal[2]);
-        if let Some(&(li, k)) = lookup.get(&(vd.x.to_bits(), vd.y.to_bits(), vd.z.to_bits())) {
-            vd.attributes.insert(format!("boundary/{li}/{k}"), 1.0);
-        }
-    }
+
+    tag_loop_vertices(&mut mesh, loops, &normal);
+
     mesh
 }
 
-fn tag_edge_uses(mesh: &mut Mesh, loops: &TrimLoops, uses: &[EdgeUse]) {
+/// Tag every boundary vertex of a CDT mesh with the edge use it samples; each use keeps both ends, including the next edge's start
+fn tag_edge_uses(mesh: &mut Mesh, loops: &TrimLoops, uses: &[(usize, usize, usize, usize)]) {
     for (use_id, &(edge, li, start, count)) in uses.iter().enumerate() {
         let length = loops.uv[li].len();
+
         if length == 0 {
             continue;
         }
+
         for sample in 0..count {
             let key = format!("boundary/{li}/{}", (start + sample) % length);
             let tag = format!("brep_edge/{edge}/{use_id}/{sample}");
+
             for vd in mesh.vertex.values_mut() {
                 if vd.attributes.contains_key(&key) {
                     vd.attributes.insert(tag.clone(), 1.0);
                 }
             }
+
             if sample + 1 >= count {
                 continue;
             }
+
             let interval = format!("boundary_interval/{li}/{}", (start + sample) % length);
             let interval_tag = format!("brep_edge_interval/{edge}/{use_id}/{sample}");
+
             for vd in mesh.vertex.values_mut() {
                 if let Some(&t) = vd.attributes.get(&interval) {
                     vd.attributes.insert(interval_tag.clone(), t);
@@ -1482,118 +1817,307 @@ fn tag_edge_uses(mesh: &mut Mesh, loops: &TrimLoops, uses: &[EdgeUse]) {
     }
 }
 
+/// Flip every face mesh of a face Reversed in its shell, vertex normals included
+fn flip_reversed_faces(b: &BRep, fmesh: &mut [Mesh]) {
+    for (fi, fm) in fmesh.iter_mut().enumerate() {
+        if b.face_orientation(fi) != BRepOrientation::Reversed {
+            continue;
+        }
+
+        fm.flip();
+
+        for vd in fm.vertex.values_mut() {
+            if let Some(n) = vd.normal() {
+                vd.set_normal(-n[0], -n[1], -n[2]);
+            }
+        }
+    }
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Cutting helpers
+// ═══════════════════════════════════════════════════════════════════════════
+
+/// Vertex rings of every face in one mesh keyed by BRep vertex index, outer rings wound to the face normal, holes as face holes; false when some face or edge is curved
+fn face_rings(b: &BRep, rings: &mut Mesh) -> bool {
+    let mut planar = true;
+
+    for vi in 0..b.vertex_count() {
+        rings.add_vertex(b.m_vertices[vi].point.clone(), Some(vi));
+    }
+
+    for fi in 0..b.face_count() {
+        let surface = &b.m_surfaces[b.m_faces[fi].surface_index as usize];
+        let u = surface.domain(0).unwrap_or((0.0, 1.0));
+        let v = surface.domain(1).unwrap_or((0.0, 1.0));
+        let frame = Plane::from_point_normal(
+            Point::new(0.0, 0.0, 0.0),
+            b.normal_at(fi, (u.0 + u.1) * 0.5, (v.0 + v.1) * 0.5),
+            None,
+        );
+        let mut loops: Vec<Vec<usize>> = Vec::new();
+        let mut outer: Vec<Point> = Vec::new();
+        planar = planar && is_planar_patch(surface);
+
+        for wire in &b.m_faces[fi].wires {
+            let mut ring: Vec<usize> = Vec::new();
+
+            for er in b.wire_edges(wire) {
+                let edge = &b.m_edges[er.index as usize];
+
+                if edge.degenerated {
+                    continue;
+                }
+
+                planar = planar && b.m_curves_3d[edge.curve_3d_index as usize].degree() == 1;
+                let start = if er.orientation == BRepOrientation::Reversed {
+                    edge.end_vertex
+                } else {
+                    edge.start_vertex
+                };
+                ring.push(start as usize);
+            }
+
+            loops.push(ring);
+        }
+
+        for vi in &loops[0] {
+            outer.push(b.m_vertices[*vi].point.clone());
+        }
+
+        if signed_area_in_plane(&outer, &frame.origin(), &frame.x_axis(), &frame.y_axis()) < 0.0 {
+            loops[0].reverse();
+        }
+
+        let fk = rings.add_face(loops[0].clone(), None);
+
+        if let Some(fk) = fk {
+            if loops.len() > 1 {
+                rings.set_face_holes(fk, loops[1..].to_vec());
+            }
+        }
+    }
+
+    planar
+}
+
+/// Closed polyline through the positions of a vertex ring of `mesh`
+fn ring_polyline(mesh: &Mesh, ring: &[usize]) -> Polyline {
+    let mut points: Vec<Point> = Vec::with_capacity(ring.len() + 1);
+
+    for vk in ring {
+        points.push(mesh.vertex[vk].position());
+    }
+
+    points.push(points[0].clone());
+
+    Polyline::new(points)
+}
+
 // ═══════════════════════════════════════════════════════════════════════════
 // Serialization helpers
 // ═══════════════════════════════════════════════════════════════════════════
 
 #[derive(Serialize, Deserialize)]
 struct RefJson {
-    index: i32,
-    orientation: String,
+    index: i32,          // Index into the owning table.
+    orientation: String, // Orientation name.
 }
 
+/// JSON array of oriented references
 fn refs_to_json(refs: &[BRepRef]) -> Vec<RefJson> {
     let mut arr = Vec::new();
+
     for r in refs {
         arr.push(RefJson {
             index: r.index,
             orientation: orientation_to_str(r.orientation).to_string(),
         });
     }
+
     arr
 }
 
+/// Oriented references of a JSON array
 fn refs_from_json(arr: &[RefJson]) -> Vec<BRepRef> {
     let mut refs = Vec::new();
+
     for r in arr {
         refs.push(BRepRef::new(r.index, orientation_from_str(&r.orientation)));
     }
+
     refs
 }
 
 #[derive(Serialize, Deserialize)]
 struct PCurveJson {
-    curve_2d_index: i32,
-    curve_2d_index_2: i32,
-    surface_index: i32,
+    curve_2d_index: i32,   // Pcurve of the forward use.
+    curve_2d_index_2: i32, // Pcurve of the reversed use.
+    surface_index: i32,    // Surface the pcurve lies on.
 }
 
 #[derive(Serialize, Deserialize)]
 struct EdgeJson {
-    curve_3d_index: i32,
-    degenerated: bool,
-    end_vertex: i32,
-    pcurves: Vec<PCurveJson>,
-    start_vertex: i32,
-    tolerance: f64,
+    curve_3d_index: i32,      // 3D curve.
+    degenerated: bool,        // Pole or apex edge.
+    end_vertex: i32,          // End vertex.
+    pcurves: Vec<PCurveJson>, // Pcurve records.
+    start_vertex: i32,        // Start vertex.
+    tolerance: f64,           // Edge tolerance.
 }
 
 #[derive(Serialize, Deserialize)]
 struct FaceJson {
     #[serde(skip_serializing_if = "Option::is_none")]
     #[serde(default)]
-    facecolor: Option<Color>,
-    surface_index: i32,
-    tolerance: f64,
-    wires: Vec<RefJson>,
+    facecolor: Option<Color>, // Display color when set.
+    surface_index: i32,  // Underlying surface.
+    tolerance: f64,      // Face tolerance.
+    wires: Vec<RefJson>, // Outer wire first, then holes.
 }
 
 #[derive(Serialize, Deserialize)]
 struct ShellJson {
-    faces: Vec<RefJson>,
+    faces: Vec<RefJson>, // Oriented faces.
 }
 
 #[derive(Serialize, Deserialize)]
 struct SolidJson {
-    shells: Vec<RefJson>,
+    shells: Vec<RefJson>, // Oriented shells.
 }
 
 #[derive(Serialize, Deserialize)]
 struct VertexJson {
-    point: [f64; 3],
-    tolerance: f64,
+    point: [f64; 3], // Position.
+    tolerance: f64,  // Vertex tolerance.
 }
 
 #[derive(Serialize, Deserialize)]
 struct WireJson {
-    edges: Vec<RefJson>,
+    edges: Vec<RefJson>, // Oriented edges.
 }
 
+/// Oriented references as a repeated proto field
 fn refs_to_proto(refs: &[BRepRef]) -> Vec<crate::proto::BRepRef> {
     let mut out = Vec::new();
+
     for r in refs {
         out.push(crate::proto::BRepRef {
             index: r.index,
             orientation: r.orientation as i32,
         });
     }
+
     out
 }
 
+/// Oriented references of a repeated proto field
 fn refs_from_proto(refs: &[crate::proto::BRepRef]) -> Vec<BRepRef> {
     let mut out = Vec::new();
+
     for r in refs {
         out.push(BRepRef::new(r.index, orientation_from_i32(r.orientation)));
     }
+
     out
 }
+
+/// Proto message of an edge
+fn edge_to_proto(e: &BRepEdge) -> crate::proto::BRepEdge {
+    let mut p = crate::proto::BRepEdge {
+        curve_3d_index: e.curve_3d_index,
+        start_vertex: e.start_vertex,
+        end_vertex: e.end_vertex,
+        tolerance: e.tolerance,
+        degenerated: e.degenerated,
+        pcurves: Vec::new(),
+    };
+
+    for pc in &e.pcurves {
+        p.pcurves.push(crate::proto::BRepCurveOnSurface {
+            surface_index: pc.surface_index,
+            curve_2d_index: pc.curve_2d_index,
+            curve_2d_index_2: pc.curve_2d_index_2,
+        });
+    }
+
+    p
+}
+
+/// Edge of a proto message
+fn edge_from_proto(e: &crate::proto::BRepEdge) -> BRepEdge {
+    let mut be = BRepEdge {
+        curve_3d_index: e.curve_3d_index,
+        start_vertex: e.start_vertex,
+        end_vertex: e.end_vertex,
+        tolerance: e.tolerance,
+        degenerated: e.degenerated,
+        pcurves: Vec::new(),
+    };
+
+    for pc in &e.pcurves {
+        be.pcurves.push(BRepCurveOnSurface {
+            surface_index: pc.surface_index,
+            curve_2d_index: pc.curve_2d_index,
+            curve_2d_index_2: pc.curve_2d_index_2,
+        });
+    }
+
+    be
+}
+
+/// Proto message of a face, facecolor only when set
+fn face_to_proto(f: &BRepFace) -> crate::proto::BRepFace {
+    let mut p = crate::proto::BRepFace {
+        surface_index: f.surface_index,
+        wires: refs_to_proto(&f.wires),
+        tolerance: f.tolerance,
+        facecolor: None,
+    };
+
+    if let Some(fc) = &f.facecolor {
+        p.facecolor = Some(fc.to_proto());
+    }
+
+    p
+}
+
+/// Face of a proto message
+fn face_from_proto(f: &crate::proto::BRepFace) -> BRepFace {
+    let mut bf = BRepFace {
+        surface_index: f.surface_index,
+        wires: refs_from_proto(&f.wires),
+        tolerance: f.tolerance,
+        facecolor: None,
+    };
+
+    if let Some(fc) = &f.facecolor {
+        bf.facecolor = Some(Color::from_proto(fc.clone()));
+    }
+
+    bf
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// BRep
+// ═══════════════════════════════════════════════════════════════════════════
 
 /// Boundary representation after OCCT's TopoDS/BRep model: geometry pools, indexed shape tables, every parent -> child link a BRepRef carrying the orientation
 #[derive(Debug, Clone)]
 pub struct BRep {
-    guid: std::sync::OnceLock<String>,
-    pub name: String,
-    pub width: f64,
-    pub surfacecolor: Color,
-    pub m_surfaces: Vec<NurbsSurface>,
-    pub m_curves_3d: Vec<NurbsCurve>,
-    pub m_curves_2d: Vec<NurbsCurve>,
-    pub m_vertices: Vec<BRepVertex>,
-    pub m_edges: Vec<BRepEdge>,
-    pub m_wires: Vec<BRepWire>,
-    pub m_faces: Vec<BRepFace>,
-    pub m_shells: Vec<BRepShell>,
-    pub m_solids: Vec<BRepSolid>,
+    guid: std::sync::OnceLock<String>, // Lazily minted GUID.
+    pub name: String,                  // BRep name.
+    pub width: f64,                    // Display width.
+    pub surfacecolor: Color,           // Display color of the faces.
+    pub m_surfaces: Vec<NurbsSurface>, // Surface pool.
+    pub m_curves_3d: Vec<NurbsCurve>,  // 3D edge curve pool.
+    pub m_curves_2d: Vec<NurbsCurve>,  // Pcurve pool.
+    pub m_vertices: Vec<BRepVertex>,   // Vertex table.
+    pub m_edges: Vec<BRepEdge>,        // Edge table.
+    pub m_wires: Vec<BRepWire>,        // Wire table.
+    pub m_faces: Vec<BRepFace>,        // Face table.
+    pub m_shells: Vec<BRepShell>,      // Shell table.
+    pub m_solids: Vec<BRepSolid>,      // Solid table.
 }
 
 impl Default for BRep {
@@ -1603,6 +2127,11 @@ impl Default for BRep {
 }
 
 impl BRep {
+    // ═══════════════════════════════════════════════════════════════════════════
+    // Constructors
+    // ═══════════════════════════════════════════════════════════════════════════
+
+    /// Construct an empty BRep.
     pub fn new() -> Self {
         BRep {
             guid: std::sync::OnceLock::new(),
@@ -1621,28 +2150,12 @@ impl BRep {
         }
     }
 
-    /// Copy (new guid, same data)
+    /// Copy with a new guid and the same data.
     pub fn duplicate(&self) -> Self {
         let mut copy = self.clone();
         copy.guid = std::sync::OnceLock::new();
+
         copy
-    }
-
-    pub fn has_guid(&self) -> bool {
-        self.guid.get().is_some()
-    }
-
-    pub fn guid(&self) -> &str {
-        self.guid.get_or_init(|| uuid::Uuid::new_v4().to_string())
-    }
-
-    pub fn set_guid(&self, g: String) {
-        let _ = self.guid.set(g);
-    }
-
-    /// Clear the guid so a fresh one mints lazily on next read
-    pub fn refresh_guid(&mut self) {
-        self.guid = std::sync::OnceLock::new();
     }
 
     // ═══════════════════════════════════════════════════════════════════════════
@@ -1656,12 +2169,15 @@ impl BRep {
         box_corners(&mut b, sx, sy, sz);
         let mut pb = PolyFaceBuilder::new();
         let mut faces = Vec::new();
+
         for fv in &BOX_FACES {
             let srf = quad_patch(&b, fv);
-            faces.push(BRepRef::new(pb.face(&mut b, &srf, fv) as i32, F));
+            faces.push(BRepRef::new(pb.face(&mut b, &srf, fv, &[]) as i32, F));
         }
+
         let sh = b.add_shell(&faces);
         b.add_solid(&[BRepRef::new(sh as i32, F)]);
+
         b
     }
 
@@ -1690,6 +2206,7 @@ impl BRep {
             BRepRef::new(f_top as i32, F),
         ]);
         b.add_solid(&[BRepRef::new(sh as i32, F)]);
+
         b
     }
 
@@ -1723,6 +2240,7 @@ impl BRep {
         let fi = b.add_face(si as i32, &[BRepRef::new(wi as i32, F)], 0.0);
         let sh = b.add_shell(&[BRepRef::new(fi as i32, F)]);
         b.add_solid(&[BRepRef::new(sh as i32, F)]);
+
         b
     }
 
@@ -1748,6 +2266,7 @@ impl BRep {
             BRepRef::new(f_base as i32, F),
         ]);
         b.add_solid(&[BRepRef::new(sh as i32, F)]);
+
         b
     }
 
@@ -1764,7 +2283,8 @@ impl BRep {
         let mut pb = PolyFaceBuilder::new();
         let fv = [0usize, 3, 2, 1];
         let base_srf = quad_patch(&b, &fv);
-        let mut faces = vec![BRepRef::new(pb.face(&mut b, &base_srf, &fv) as i32, F)];
+        let mut faces = vec![BRepRef::new(pb.face(&mut b, &base_srf, &fv, &[]) as i32, F)];
+
         for i in 0..4usize {
             let a = i;
             let c = (i + 1) % 4;
@@ -1803,8 +2323,10 @@ impl BRep {
                 F,
             ));
         }
+
         let sh = b.add_shell(&faces);
         b.add_solid(&[BRepRef::new(sh as i32, F)]);
+
         b
     }
 
@@ -1836,6 +2358,7 @@ impl BRep {
         let fi = b.add_face(si as i32, &[BRepRef::new(wi as i32, F)], 0.0);
         let sh = b.add_shell(&[BRepRef::new(fi as i32, F)]);
         b.add_solid(&[BRepRef::new(sh as i32, F)]);
+
         b
     }
 
@@ -1847,10 +2370,12 @@ impl BRep {
         box_corners(&mut b, sx, sy, sz);
         let mut pb = PolyFaceBuilder::new();
         let mut faces = Vec::new();
+
         for fv in &BOX_FACES[2..] {
             let srf = quad_patch(&b, fv);
-            faces.push(BRepRef::new(pb.face(&mut b, &srf, fv) as i32, F));
+            faces.push(BRepRef::new(pb.face(&mut b, &srf, fv, &[]) as i32, F));
         }
+
         let p_bot = Point::new(hole_radius, 0.0, -hz);
         let p_top = Point::new(hole_radius, 0.0, hz);
         let v_bot = b.add_vertex(&p_bot, 0.0) as i32;
@@ -1867,6 +2392,7 @@ impl BRep {
             body_face(&mut b, si_bore, e_bot, e_seam, e_top) as i32,
             R,
         ));
+
         for (fi, fv) in BOX_FACES.iter().enumerate().take(2) {
             let cap = quad_patch(&b, fv);
             let si = b.add_surface(&cap);
@@ -1887,8 +2413,10 @@ impl BRep {
             ];
             faces.push(BRepRef::new(b.add_face(si as i32, &wires, 0.0) as i32, F));
         }
+
         let sh = b.add_shell(&faces);
         b.add_solid(&[BRepRef::new(sh as i32, F)]);
+
         b
     }
 
@@ -1898,45 +2426,61 @@ impl BRep {
         b.name = "polysurface".to_string();
         let tol = 1e-6;
         let mut pb = PolyFaceBuilder::new();
-        for (pi, pl) in polylines.iter().enumerate() {
-            let pts = open_points(pl);
+
+        for pi in 0..polylines.len() {
+            let pts = open_points(&polylines[pi]);
+
             if pts.len() < 3 {
                 continue;
             }
-            let (org, plane) = pl.get_fast_plane();
+
+            let (org, plane) = polylines[pi].get_fast_plane();
+
             if !plane.is_valid() {
                 continue;
             }
+
             let xa = plane.x_axis();
             let ya = plane.y_axis();
             let outer_area = signed_area_in_plane(&pts, &org, &xa, &ya);
             let mut vi = Vec::new();
+
             for pt in &pts {
                 vi.push(find_or_add_vertex(&mut b, pt, tol));
             }
+
             let mut all_pts = pts.clone();
             let mut hole_cycles: Vec<Vec<usize>> = Vec::new();
+
             if pi < holes.len() {
                 for h in &holes[pi] {
                     let mut hp = open_points(h);
+
                     if hp.len() < 3 {
                         continue;
                     }
+
                     if signed_area_in_plane(&hp, &org, &xa, &ya) * outer_area > 0.0 {
                         hp.reverse();
                     }
+
                     let mut cycle = Vec::new();
+
                     for pt in &hp {
                         cycle.push(find_or_add_vertex(&mut b, pt, tol));
                     }
+
                     hole_cycles.push(cycle);
                     all_pts.extend(hp);
                 }
             }
+
             let srf = planar_patch_through(&all_pts, &org, &xa, &ya);
-            pb.face_with_holes(&mut b, &srf, &vi, &hole_cycles);
+            pb.face(&mut b, &srf, &vi, &hole_cycles);
         }
+
         close_free_faces(&mut b);
+
         b
     }
 
@@ -1945,23 +2489,31 @@ impl BRep {
         let mut b = BRep::new();
         b.name = "polysurface".to_string();
         let tol = 1e-6;
-        for (ci, crv) in curves.iter().enumerate() {
+
+        for ci in 0..curves.len() {
+            let crv = &curves[ci];
             let mut pts = cv_points(crv);
+
             if pts.len() >= 2 && pts[0].distance(&pts[pts.len() - 1], None) < tol {
                 pts.pop();
             }
+
             if pts.len() < 3 {
                 continue;
             }
+
             let (org, plane) = Polyline::new(pts.clone()).get_fast_plane();
+
             if !plane.is_valid() {
                 continue;
             }
+
             if ci < holes.len() {
                 for h in &holes[ci] {
                     pts.extend(cv_points(h));
                 }
             }
+
             let si = b.add_surface(&planar_patch_through(
                 &pts,
                 &org,
@@ -1969,14 +2521,18 @@ impl BRep {
                 &plane.y_axis(),
             ));
             let mut wires = vec![BRepRef::new(curve_wire(&mut b, crv, si, tol) as i32, F)];
+
             if ci < holes.len() {
                 for h in &holes[ci] {
                     wires.push(BRepRef::new(curve_wire(&mut b, h, si, tol) as i32, F));
                 }
             }
+
             b.add_face(si as i32, &wires, 0.0);
         }
+
         close_free_faces(&mut b);
+
         b
     }
 
@@ -1984,26 +2540,52 @@ impl BRep {
     // Accessors
     // ═══════════════════════════════════════════════════════════════════════════
 
+    /// Return whether the lazy guid has been created.
+    pub fn has_guid(&self) -> bool {
+        self.guid.get().is_some()
+    }
+
+    /// Return the guid, creating it on first access.
+    pub fn guid(&self) -> &str {
+        self.guid.get_or_init(|| uuid::Uuid::new_v4().to_string())
+    }
+
+    /// Set the guid when none has been minted yet.
+    pub fn set_guid(&self, g: String) {
+        let _ = self.guid.set(g);
+    }
+
+    /// Clear the guid so a fresh one mints lazily on next read
+    pub fn refresh_guid(&mut self) {
+        self.guid = std::sync::OnceLock::new();
+    }
+
+    /// Return the number of vertices.
     pub fn vertex_count(&self) -> usize {
         self.m_vertices.len()
     }
 
+    /// Return the number of edges.
     pub fn edge_count(&self) -> usize {
         self.m_edges.len()
     }
 
+    /// Return the number of wires.
     pub fn wire_count(&self) -> usize {
         self.m_wires.len()
     }
 
+    /// Return the number of faces.
     pub fn face_count(&self) -> usize {
         self.m_faces.len()
     }
 
+    /// Return the number of shells.
     pub fn shell_count(&self) -> usize {
         self.m_shells.len()
     }
 
+    /// Return the number of solids.
     pub fn solid_count(&self) -> usize {
         self.m_solids.len()
     }
@@ -2013,61 +2595,73 @@ impl BRep {
         if self.m_faces.is_empty() {
             return false;
         }
-        let ok = |i: i32, n: usize| i >= 0 && (i as usize) < n;
+
         for e in &self.m_edges {
-            if !ok(e.start_vertex, self.m_vertices.len())
-                || !ok(e.end_vertex, self.m_vertices.len())
+            if !in_range(e.start_vertex, self.m_vertices.len())
+                || !in_range(e.end_vertex, self.m_vertices.len())
             {
                 return false;
             }
-            if !e.degenerated && !ok(e.curve_3d_index, self.m_curves_3d.len()) {
+
+            if !e.degenerated && !in_range(e.curve_3d_index, self.m_curves_3d.len()) {
                 return false;
             }
+
             for pc in &e.pcurves {
-                if !ok(pc.surface_index, self.m_surfaces.len())
-                    || !ok(pc.curve_2d_index, self.m_curves_2d.len())
+                if !in_range(pc.surface_index, self.m_surfaces.len())
+                    || !in_range(pc.curve_2d_index, self.m_curves_2d.len())
                 {
                     return false;
                 }
-                if pc.curve_2d_index_2 >= 0 && !ok(pc.curve_2d_index_2, self.m_curves_2d.len()) {
+
+                if pc.curve_2d_index_2 >= 0
+                    && !in_range(pc.curve_2d_index_2, self.m_curves_2d.len())
+                {
                     return false;
                 }
             }
         }
+
         for w in &self.m_wires {
             if w.edges.is_empty() {
                 return false;
             }
+
             for r in &w.edges {
-                if !ok(r.index, self.m_edges.len()) {
+                if !in_range(r.index, self.m_edges.len()) {
                     return false;
                 }
             }
         }
+
         for f in &self.m_faces {
-            if !ok(f.surface_index, self.m_surfaces.len()) || f.wires.is_empty() {
+            if !in_range(f.surface_index, self.m_surfaces.len()) || f.wires.is_empty() {
                 return false;
             }
+
             for r in &f.wires {
-                if !ok(r.index, self.m_wires.len()) {
+                if !in_range(r.index, self.m_wires.len()) {
                     return false;
                 }
             }
         }
+
         for s in &self.m_shells {
             for r in &s.faces {
-                if !ok(r.index, self.m_faces.len()) {
+                if !in_range(r.index, self.m_faces.len()) {
                     return false;
                 }
             }
         }
+
         for s in &self.m_solids {
             for r in &s.shells {
-                if !ok(r.index, self.m_shells.len()) {
+                if !in_range(r.index, self.m_shells.len()) {
                     return false;
                 }
             }
         }
+
         true
     }
 
@@ -2076,7 +2670,9 @@ impl BRep {
         if shell_index >= self.m_shells.len() {
             return false;
         }
+
         let mut uses = vec![0usize; self.m_edges.len()];
+
         for fr in &self.m_shells[shell_index].faces {
             for wr in &self.m_faces[fr.index as usize].wires {
                 for er in self.wire_edges(wr) {
@@ -2084,11 +2680,13 @@ impl BRep {
                 }
             }
         }
+
         for (i, e) in self.m_edges.iter().enumerate() {
             if !e.degenerated && uses[i] != 0 && uses[i] != 2 {
                 return false;
             }
         }
+
         !self.m_shells[shell_index].faces.is_empty()
     }
 
@@ -2097,6 +2695,7 @@ impl BRep {
         if self.m_solids.is_empty() {
             return false;
         }
+
         for s in &self.m_solids {
             for r in &s.shells {
                 if !self.is_closed(r.index as usize) {
@@ -2104,6 +2703,7 @@ impl BRep {
                 }
             }
         }
+
         true
     }
 
@@ -2116,6 +2716,7 @@ impl BRep {
                 }
             }
         }
+
         BRepOrientation::Forward
     }
 
@@ -2126,44 +2727,58 @@ impl BRep {
         face_index: usize,
         orientation: BRepOrientation,
     ) -> i32 {
-        if edge_index >= self.m_edges.len() || face_index >= self.m_faces.len() {
+        if edge_index >= self.m_edges.len() {
             return -1;
         }
+
+        if face_index >= self.m_faces.len() {
+            return -1;
+        }
+
         let si = self.m_faces[face_index].surface_index;
+
         for pc in &self.m_edges[edge_index].pcurves {
             if pc.surface_index == si {
                 if orientation == BRepOrientation::Reversed && pc.curve_2d_index_2 >= 0 {
                     return pc.curve_2d_index_2;
                 }
+
                 return pc.curve_2d_index;
             }
         }
+
         -1
     }
 
     /// The edges of a wire composed with the wire's own orientation (a Reversed wire is traversed backwards with every edge reversed)
     pub fn wire_edges(&self, wire: &BRepRef) -> Vec<BRepRef> {
         let mut out = Vec::new();
+
         if wire.index < 0 || wire.index as usize >= self.m_wires.len() {
             return out;
         }
+
         for r in &self.m_wires[wire.index as usize].edges {
             out.push(BRepRef::new(
                 r.index,
                 brep_compose(wire.orientation, r.orientation),
             ));
         }
+
         if wire.orientation == BRepOrientation::Reversed {
             out.reverse();
         }
+
         out
     }
 
     /// Faces sharing an edge, each with the orientation of that edge use
     pub fn edge_faces(&self, edge_index: usize) -> Vec<BRepRef> {
         let mut out = Vec::new();
+
         for fi in 0..self.m_faces.len() {
             let fo = self.face_orientation(fi);
+
             for wr in &self.m_faces[fi].wires {
                 for er in self.wire_edges(wr) {
                     if er.index as usize == edge_index {
@@ -2172,15 +2787,18 @@ impl BRep {
                 }
             }
         }
+
         out
     }
 
     /// Vertex positions, in vertex order
     pub fn vertex_points(&self) -> Vec<Point> {
         let mut pts = Vec::new();
+
         for v in &self.m_vertices {
             pts.push(v.point.clone());
         }
+
         pts
     }
 
@@ -2197,39 +2815,48 @@ impl BRep {
     /// BRepLib::UpdateTolerances: raise every edge tolerance to the worst gap between its curve ends (3D and lifted pcurves) and its vertices, every vertex to its worst edge; returns the largest
     pub fn update_tolerances(&mut self) -> f64 {
         let mut worst: f64 = 0.0;
+
         for ei in 0..self.m_edges.len() {
             let vs_i = self.m_edges[ei].start_vertex as usize;
             let ve_i = self.m_edges[ei].end_vertex as usize;
             let vs = self.m_vertices[vs_i].point.clone();
             let ve = self.m_vertices[ve_i].point.clone();
             let mut tol: f64 = self.m_edges[ei].tolerance;
+
             if self.m_edges[ei].curve_3d_index >= 0 {
                 let c = &self.m_curves_3d[self.m_edges[ei].curve_3d_index as usize];
                 tol = tol.max(c.point_at(c.domain().0).distance(&vs, None));
                 tol = tol.max(c.point_at(c.domain().1).distance(&ve, None));
             }
+
             for pc in &self.m_edges[ei].pcurves {
                 let srf = &self.m_surfaces[pc.surface_index as usize];
+
                 for ci in [pc.curve_2d_index, pc.curve_2d_index_2] {
                     if ci < 0 {
                         continue;
                     }
+
                     let c2 = &self.m_curves_2d[ci as usize];
                     let a = c2.point_at(c2.domain().0);
                     let z = c2.point_at(c2.domain().1);
+
                     if let Some(p) = srf.point_at(a[0], a[1]) {
                         tol = tol.max(p.distance(&vs, None));
                     }
+
                     if let Some(p) = srf.point_at(z[0], z[1]) {
                         tol = tol.max(p.distance(&ve, None));
                     }
                 }
             }
+
             self.m_edges[ei].tolerance = tol;
             self.m_vertices[vs_i].tolerance = self.m_vertices[vs_i].tolerance.max(tol);
             self.m_vertices[ve_i].tolerance = self.m_vertices[ve_i].tolerance.max(tol);
             worst = worst.max(tol);
         }
+
         worst
     }
 
@@ -2242,18 +2869,24 @@ impl BRep {
     // Building
     // ═══════════════════════════════════════════════════════════════════════════
 
+    /// Append a surface to the pool; returns its index.
     pub fn add_surface(&mut self, srf: &NurbsSurface) -> usize {
         self.m_surfaces.push(srf.clone());
+
         self.m_surfaces.len() - 1
     }
 
+    /// Append a 3D curve to the pool; returns its index.
     pub fn add_curve_3d(&mut self, crv: &NurbsCurve) -> usize {
         self.m_curves_3d.push(crv.clone());
+
         self.m_curves_3d.len() - 1
     }
 
+    /// Append a pcurve to the pool; returns its index.
     pub fn add_curve_2d(&mut self, crv: &NurbsCurve) -> usize {
         self.m_curves_2d.push(crv.clone());
+
         self.m_curves_2d.len() - 1
     }
 
@@ -2263,6 +2896,7 @@ impl BRep {
             point: pt.clone(),
             tolerance,
         });
+
         self.m_vertices.len() - 1
     }
 
@@ -2276,6 +2910,7 @@ impl BRep {
             degenerated: curve_3d_index < 0,
             pcurves: Vec::new(),
         });
+
         self.m_edges.len() - 1
     }
 
@@ -2294,6 +2929,7 @@ impl BRep {
                 return;
             }
         }
+
         self.m_edges[edge_index].pcurves.push(BRepCurveOnSurface {
             surface_index: surface_index as i32,
             curve_2d_index,
@@ -2306,6 +2942,7 @@ impl BRep {
         self.m_wires.push(BRepWire {
             edges: edges.to_vec(),
         });
+
         self.m_wires.len() - 1
     }
 
@@ -2317,6 +2954,7 @@ impl BRep {
             tolerance,
             facecolor: None,
         });
+
         self.m_faces.len() - 1
     }
 
@@ -2325,6 +2963,7 @@ impl BRep {
         self.m_shells.push(BRepShell {
             faces: faces.to_vec(),
         });
+
         self.m_shells.len() - 1
     }
 
@@ -2333,6 +2972,7 @@ impl BRep {
         self.m_solids.push(BRepSolid {
             shells: shells.to_vec(),
         });
+
         self.m_solids.len() - 1
     }
 
@@ -2343,15 +2983,19 @@ impl BRep {
     /// One welded triangle mesh of every face, wound to the face's outward orientation
     pub fn mesh(&self) -> Mesh {
         let mut polygons: Vec<Vec<Point>> = Vec::new();
+
         for fm in self.face_meshes() {
-            for fverts in fm.face.values() {
+            for fk in sorted_face_keys(&fm) {
                 let mut poly = Vec::new();
-                for vi in fverts {
+
+                for vi in &fm.face[&fk] {
                     poly.push(fm.vertex[vi].position());
                 }
+
                 polygons.push(poly);
             }
         }
+
         Mesh::from_polylines(polygons, Some(1e-6))
     }
 
@@ -2360,24 +3004,25 @@ impl BRep {
         self.face_meshes_q(None)
     }
 
-    /// As face_meshes with a tessellation-quality (max_angle_deg, chord_factor) override for the grid-meshed faces
+    /// As face_meshes with a tessellation-quality override (max_angle_deg, chord_factor) when given
     pub fn face_meshes_q(&self, quality: Option<(f64, f64)>) -> Vec<Mesh> {
         let nf = self.m_faces.len();
         let (angle, chord) = quality.unwrap_or((20.0, 0.005));
         let mut face_direct = vec![false; nf];
-        for (fi, direct) in face_direct.iter_mut().enumerate() {
-            *direct = direct_face(self, fi);
-        }
         let mut rebuild_grid = vec![false; nf];
         let mut fmesh: Vec<Mesh> = Vec::new();
-        for _ in 0..nf {
+        let mut boundary = EdgeBoundary::default();
+
+        for (fi, direct) in face_direct.iter_mut().enumerate() {
+            *direct = direct_face(self, fi);
             fmesh.push(Mesh::new());
         }
-        let mut boundary = EdgeBoundary::default();
+
         for fi in 0..nf {
             if !face_direct[fi] {
                 continue;
             }
+
             let srf = &self.m_surfaces[self.m_faces[fi].surface_index as usize];
             fmesh[fi] = match quality {
                 Some((a, c)) => RemeshNurbsSurfaceGrid::from_u_v_q(srf.clone(), 0, 0, a, c),
@@ -2385,6 +3030,7 @@ impl BRep {
             };
             rebuild_grid[fi] = grid_boundaries(self, fi, &fmesh[fi], &mut boundary);
         }
+
         refine_shared_boundaries(
             self,
             &face_direct,
@@ -2393,24 +3039,31 @@ impl BRep {
             angle,
             chord,
         );
+
         for fi in 0..nf {
             if rebuild_grid[fi] {
                 face_direct[fi] = false;
             }
         }
+
         for fi in 0..nf {
             if face_direct[fi] {
                 continue;
             }
+
             let srf = &self.m_surfaces[self.m_faces[fi].surface_index as usize];
             let mut loops = TrimLoops::default();
+
             if rebuild_grid[fi] {
                 loops.interior_uv = grid_interior_uv(srf, &fmesh[fi]);
             }
-            let mut uses: Vec<EdgeUse> = Vec::new();
+
+            let mut uses: Vec<(usize, usize, usize, usize)> = Vec::new();
+
             if !trim_loops(self, fi, &mut boundary, angle, chord, &mut loops, &mut uses) {
                 continue;
             }
+
             if loops.interior_uv.is_empty() && is_planar_patch(srf) {
                 fmesh[fi] = planar_loops_mesh(srf, &loops);
             } else {
@@ -2418,19 +3071,12 @@ impl BRep {
                 ts.m_surface = srf.clone();
                 fmesh[fi] = ts.mesh_loops(&loops, angle, chord);
             }
+
             tag_edge_uses(&mut fmesh[fi], &loops, &uses);
         }
-        for (fi, fm) in fmesh.iter_mut().enumerate() {
-            if self.face_orientation(fi) != BRepOrientation::Reversed {
-                continue;
-            }
-            fm.flip();
-            for vd in fm.vertex.values_mut() {
-                if let Some(n) = vd.normal() {
-                    vd.set_normal(-n[0], -n[1], -n[2]);
-                }
-            }
-        }
+
+        flip_reversed_faces(self, &mut fmesh);
+
         fmesh
     }
 
@@ -2443,6 +3089,7 @@ impl BRep {
         if face_index >= self.m_faces.len() {
             return Point::new(0.0, 0.0, 0.0);
         }
+
         self.m_surfaces[self.m_faces[face_index].surface_index as usize]
             .point_at(u, v)
             .unwrap_or_default()
@@ -2453,10 +3100,13 @@ impl BRep {
         if face_index >= self.m_faces.len() {
             return Vector::new(0.0, 0.0, 0.0);
         }
+
         let n = self.m_surfaces[self.m_faces[face_index].surface_index as usize].normal_at(u, v);
+
         if self.face_orientation(face_index) == BRepOrientation::Reversed {
-            return Vector::new(-n[0], -n[1], -n[2]);
+            return -n;
         }
+
         n
     }
 
@@ -2469,9 +3119,11 @@ impl BRep {
         for srf in &mut self.m_surfaces {
             srf.transform(xform);
         }
+
         for crv in &mut self.m_curves_3d {
             crv.transform(xform);
         }
+
         for v in &mut self.m_vertices {
             v.point = xform.transform_point(&v.point);
         }
@@ -2481,34 +3133,94 @@ impl BRep {
     pub fn transformed(&self, xform: &Xform) -> Self {
         let mut b = self.duplicate();
         b.transform(xform);
+
         b
+    }
+
+    // ═══════════════════════════════════════════════════════════════════════════
+    // Cutting
+    // ═══════════════════════════════════════════════════════════════════════════
+
+    /// Return the part on the side the plane normal points to, every section loop capped by one planar face; a copy when everything lies on that side, empty when the plane cuts a BRep with a curved face or edge
+    pub fn cut_by_plane(&self, plane: &Plane) -> Self {
+        let mut rings = Mesh::new();
+
+        if !face_rings(self, &mut rings) {
+            let tessellation = self.mesh();
+
+            return if tessellation.cut_by_plane(plane) == tessellation {
+                self.duplicate()
+            } else {
+                BRep::new()
+            };
+        }
+
+        let cut = rings.cut_by_plane(plane);
+
+        if cut == rings {
+            return self.duplicate();
+        }
+
+        if cut.is_empty() {
+            return BRep::new();
+        }
+
+        let mut polylines: Vec<Polyline> = Vec::new();
+        let mut holes: Vec<Vec<Polyline>> = Vec::new();
+
+        for fk in sorted_face_keys(&cut) {
+            let mut face_holes: Vec<Polyline> = Vec::new();
+
+            if let Some(hole_rings) = cut.face_holes.get(&fk) {
+                for hole in hole_rings {
+                    face_holes.push(ring_polyline(&cut, hole));
+                }
+            }
+
+            polylines.push(ring_polyline(&cut, &cut.face[&fk]));
+            holes.push(face_holes);
+        }
+
+        let mut result = BRep::from_polylines(&polylines, &holes);
+        result.name = self.name.clone();
+        result.width = self.width;
+        result.surfacecolor = self.surfacecolor.clone();
+
+        result
     }
 
     // ═══════════════════════════════════════════════════════════════════════════
     // JSON
     // ═══════════════════════════════════════════════════════════════════════════
 
+    /// Serialize to a JSON string with sorted keys.
     pub fn jsondump(&self) -> Result<String, Box<dyn std::error::Error>> {
         crate::file_encoders::sorted_json_string(self)
     }
 
+    /// Deserialize from a JSON string.
     pub fn jsonload(json_data: &str) -> Result<Self, Box<dyn std::error::Error>> {
         Ok(serde_json::from_str(json_data)?)
     }
 
+    /// Serialize to a JSON string, empty on failure.
     pub fn file_json_dumps(&self) -> String {
         self.jsondump().unwrap_or_default()
     }
 
+    /// Deserialize from a JSON string, an empty BRep on failure.
     pub fn file_json_loads(json_string: &str) -> Self {
         Self::jsonload(json_string).unwrap_or_default()
     }
 
+    /// Write to a JSON file.
     pub fn file_json_dump(&self, filepath: &str) -> Result<(), Box<dyn std::error::Error>> {
         std::fs::write(filepath, self.jsondump()?)?;
+
         Ok(())
     }
 
+    /// Read from a JSON file.
     pub fn file_json_load(filepath: &str) -> Result<Self, Box<dyn std::error::Error>> {
         Self::jsonload(&std::fs::read_to_string(filepath)?)
     }
@@ -2517,50 +3229,27 @@ impl BRep {
     // Protobuf
     // ═══════════════════════════════════════════════════════════════════════════
 
-    pub fn pb_dumps(&self) -> Vec<u8> {
-        use prost::Message;
-        self.to_proto().encode_to_vec()
-    }
-
-    pub fn pb_loads(data: &[u8]) -> Result<Self, Box<dyn std::error::Error>> {
-        use prost::Message;
-        Self::from_proto(crate::proto::BRep::decode(data)?)
-    }
-
-    pub fn pb_dump(&self, filepath: &str) {
-        let data = self.pb_dumps();
-        std::fs::write(filepath, data).expect("Failed to write protobuf file");
-    }
-
-    pub fn pb_load(filepath: &str) -> Self {
-        let data = std::fs::read(filepath).expect("Failed to read protobuf file");
-        Self::pb_loads(&data).expect("Failed to parse protobuf")
-    }
-
-    /// The proto message; pb_dumps encodes it and Session embeds it
+    /// Convert to the protobuf message.
     pub fn to_proto(&self) -> crate::proto::BRep {
-        use prost::Message;
         let mut proto = crate::proto::BRep {
             guid: self.guid.get().cloned().unwrap_or_default(),
             name: self.name.clone(),
             width: self.width,
             ..Default::default()
         };
+
         for c in &self.m_curves_2d {
-            proto.curves_2d.push(
-                crate::proto::NurbsCurve::decode(c.pb_dumps().as_slice()).unwrap_or_default(),
-            );
+            proto.curves_2d.push(c.to_proto());
         }
+
         for c in &self.m_curves_3d {
-            proto.curves_3d.push(
-                crate::proto::NurbsCurve::decode(c.pb_dumps().as_slice()).unwrap_or_default(),
-            );
+            proto.curves_3d.push(c.to_proto());
         }
+
         for s in &self.m_surfaces {
-            proto.surfaces.push(
-                crate::proto::NurbsSurface::decode(s.pb_dumps().as_slice()).unwrap_or_default(),
-            );
+            proto.surfaces.push(s.to_proto());
         }
+
         for v in &self.m_vertices {
             proto.vertices.push(crate::proto::BRepVertex {
                 point: Some(crate::proto::Point {
@@ -2572,152 +3261,137 @@ impl BRep {
                 tolerance: v.tolerance,
             });
         }
+
         for e in &self.m_edges {
-            let mut p = crate::proto::BRepEdge {
-                curve_3d_index: e.curve_3d_index,
-                start_vertex: e.start_vertex,
-                end_vertex: e.end_vertex,
-                tolerance: e.tolerance,
-                degenerated: e.degenerated,
-                pcurves: Vec::new(),
-            };
-            for pc in &e.pcurves {
-                p.pcurves.push(crate::proto::BRepCurveOnSurface {
-                    surface_index: pc.surface_index,
-                    curve_2d_index: pc.curve_2d_index,
-                    curve_2d_index_2: pc.curve_2d_index_2,
-                });
-            }
-            proto.edges.push(p);
+            proto.edges.push(edge_to_proto(e));
         }
+
         for w in &self.m_wires {
             proto.wires.push(crate::proto::BRepWire {
                 edges: refs_to_proto(&w.edges),
             });
         }
+
         for f in &self.m_faces {
-            let mut p = crate::proto::BRepFace {
-                surface_index: f.surface_index,
-                wires: refs_to_proto(&f.wires),
-                tolerance: f.tolerance,
-                facecolor: None,
-            };
-            if let Some(fc) = &f.facecolor {
-                p.facecolor = Some(crate::proto::Color {
-                    r: fc.r,
-                    g: fc.g,
-                    b: fc.b,
-                    a: fc.a,
-                    ..Default::default()
-                });
-            }
-            proto.faces.push(p);
+            proto.faces.push(face_to_proto(f));
         }
+
         for s in &self.m_shells {
             proto.shells.push(crate::proto::BRepShell {
                 faces: refs_to_proto(&s.faces),
             });
         }
+
         for s in &self.m_solids {
             proto.solids.push(crate::proto::BRepSolid {
                 shells: refs_to_proto(&s.shells),
             });
         }
-        proto.surfacecolor = Some(crate::proto::Color {
-            guid: self.surfacecolor.guid().to_string(),
-            name: self.surfacecolor.name.clone(),
-            r: self.surfacecolor.r,
-            g: self.surfacecolor.g,
-            b: self.surfacecolor.b,
-            a: self.surfacecolor.a,
-        });
+
+        proto.surfacecolor = Some(self.surfacecolor.to_proto());
+
         proto
     }
 
-    /// BRep from a decoded proto message
+    /// Construct from the protobuf message.
     pub fn from_proto(proto: crate::proto::BRep) -> Result<Self, Box<dyn std::error::Error>> {
-        use prost::Message;
         let mut b = BRep::new();
+
         if !proto.guid.is_empty() {
             b.set_guid(proto.guid.clone());
         }
+
         b.name = proto.name;
         b.width = proto.width;
-        for c in &proto.curves_2d {
-            b.m_curves_2d
-                .push(NurbsCurve::pb_loads(&c.encode_to_vec())?);
+
+        for c in proto.curves_2d {
+            b.m_curves_2d.push(NurbsCurve::from_proto(c));
         }
-        for c in &proto.curves_3d {
-            b.m_curves_3d
-                .push(NurbsCurve::pb_loads(&c.encode_to_vec())?);
+
+        for c in proto.curves_3d {
+            b.m_curves_3d.push(NurbsCurve::from_proto(c));
         }
-        for s in &proto.surfaces {
-            b.m_surfaces
-                .push(NurbsSurface::pb_loads(&s.encode_to_vec())?);
+
+        for s in proto.surfaces {
+            b.m_surfaces.push(NurbsSurface::from_proto(s)?);
         }
+
         for v in &proto.vertices {
-            let p = v
-                .point
-                .as_ref()
-                .map(|p| Point::new(p.x, p.y, p.z))
-                .unwrap_or_default();
+            let point = match &v.point {
+                Some(p) => Point::new(p.x, p.y, p.z),
+                None => Point::default(),
+            };
             b.m_vertices.push(BRepVertex {
-                point: p,
+                point,
                 tolerance: v.tolerance,
             });
         }
+
         for e in &proto.edges {
-            let mut be = BRepEdge {
-                curve_3d_index: e.curve_3d_index,
-                start_vertex: e.start_vertex,
-                end_vertex: e.end_vertex,
-                tolerance: e.tolerance,
-                degenerated: e.degenerated,
-                pcurves: Vec::new(),
-            };
-            for pc in &e.pcurves {
-                be.pcurves.push(BRepCurveOnSurface {
-                    surface_index: pc.surface_index,
-                    curve_2d_index: pc.curve_2d_index,
-                    curve_2d_index_2: pc.curve_2d_index_2,
-                });
-            }
-            b.m_edges.push(be);
+            b.m_edges.push(edge_from_proto(e));
         }
+
         for w in &proto.wires {
             b.m_wires.push(BRepWire {
                 edges: refs_from_proto(&w.edges),
             });
         }
+
         for f in &proto.faces {
-            b.m_faces.push(BRepFace {
-                surface_index: f.surface_index,
-                wires: refs_from_proto(&f.wires),
-                tolerance: f.tolerance,
-                facecolor: f.facecolor.as_ref().map(|c| Color::new(c.r, c.g, c.b, c.a)),
-            });
+            b.m_faces.push(face_from_proto(f));
         }
+
         for s in &proto.shells {
             b.m_shells.push(BRepShell {
                 faces: refs_from_proto(&s.faces),
             });
         }
+
         for s in &proto.solids {
             b.m_solids.push(BRepSolid {
                 shells: refs_from_proto(&s.shells),
             });
         }
+
         if let Some(c) = proto.surfacecolor {
-            b.surfacecolor = Color::with_name(c.r, c.g, c.b, c.a, &c.name);
-            b.surfacecolor.set_guid(c.guid);
+            b.surfacecolor = Color::from_proto(c);
         }
+
         Ok(b)
+    }
+
+    /// Serialize to protobuf bytes.
+    pub fn pb_dumps(&self) -> Vec<u8> {
+        use prost::Message;
+
+        self.to_proto().encode_to_vec()
+    }
+
+    /// Deserialize from protobuf bytes.
+    pub fn pb_loads(data: &[u8]) -> Result<Self, Box<dyn std::error::Error>> {
+        use prost::Message;
+
+        Self::from_proto(crate::proto::BRep::decode(data)?)
+    }
+
+    /// Write to a protobuf file.
+    pub fn pb_dump(&self, filepath: &str) {
+        let data = self.pb_dumps();
+        std::fs::write(filepath, data).expect("Failed to write protobuf file");
+    }
+
+    /// Read from a protobuf file.
+    pub fn pb_load(filepath: &str) -> Self {
+        let data = std::fs::read(filepath).expect("Failed to read protobuf file");
+
+        Self::pb_loads(&data).expect("Failed to parse protobuf")
     }
 
     // ═══════════════════════════════════════════════════════════════════════════
     // String
     // ═══════════════════════════════════════════════════════════════════════════
 
+    /// Return "BRep(name=..., faces=..., edges=..., vertices=...)".
     pub fn str(&self) -> String {
         format!(
             "BRep(name={}, faces={}, edges={}, vertices={})",
@@ -2728,6 +3402,7 @@ impl BRep {
         )
     }
 
+    /// Return the multi-line form with the solid flag.
     pub fn repr(&self) -> String {
         format!(
             "BRep(\n  name={},\n  faces={},\n  edges={},\n  vertices={},\n  solid={}\n)",
@@ -2745,6 +3420,7 @@ impl BRep {
 // ═══════════════════════════════════════════════════════════════════════════
 
 impl PartialEq for BRep {
+    /// Compare name, width, color and table sizes; guid ignored.
     fn eq(&self, other: &Self) -> bool {
         self.name == other.name
             && self.width == other.width
@@ -2760,6 +3436,7 @@ impl PartialEq for BRep {
 }
 
 impl std::fmt::Display for BRep {
+    /// Write the str() form.
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{}", self.str())
     }
@@ -2778,8 +3455,10 @@ impl Serialize for BRep {
         map.serialize_entry("curves_2d", &self.m_curves_2d)?;
         map.serialize_entry("curves_3d", &self.m_curves_3d)?;
         let mut edges: Vec<EdgeJson> = Vec::new();
+
         for e in &self.m_edges {
             let mut pcurves = Vec::new();
+
             for pc in &e.pcurves {
                 pcurves.push(PCurveJson {
                     curve_2d_index: pc.curve_2d_index,
@@ -2787,6 +3466,7 @@ impl Serialize for BRep {
                     surface_index: pc.surface_index,
                 });
             }
+
             edges.push(EdgeJson {
                 curve_3d_index: e.curve_3d_index,
                 degenerated: e.degenerated,
@@ -2796,8 +3476,10 @@ impl Serialize for BRep {
                 tolerance: e.tolerance,
             });
         }
+
         map.serialize_entry("edges", &edges)?;
         let mut faces: Vec<FaceJson> = Vec::new();
+
         for f in &self.m_faces {
             faces.push(FaceJson {
                 facecolor: f.facecolor.clone(),
@@ -2806,42 +3488,52 @@ impl Serialize for BRep {
                 wires: refs_to_json(&f.wires),
             });
         }
+
         map.serialize_entry("faces", &faces)?;
         map.serialize_entry("guid", &self.guid())?;
         map.serialize_entry("name", &self.name)?;
         let mut shells: Vec<ShellJson> = Vec::new();
+
         for s in &self.m_shells {
             shells.push(ShellJson {
                 faces: refs_to_json(&s.faces),
             });
         }
+
         map.serialize_entry("shells", &shells)?;
         let mut solids: Vec<SolidJson> = Vec::new();
+
         for s in &self.m_solids {
             solids.push(SolidJson {
                 shells: refs_to_json(&s.shells),
             });
         }
+
         map.serialize_entry("solids", &solids)?;
         map.serialize_entry("surfacecolor", &self.surfacecolor)?;
         map.serialize_entry("surfaces", &self.m_surfaces)?;
         map.serialize_entry("type", "BRep")?;
         let mut vertices: Vec<VertexJson> = Vec::new();
+
         for v in &self.m_vertices {
             vertices.push(VertexJson {
                 point: [v.point[0], v.point[1], v.point[2]],
                 tolerance: v.tolerance,
             });
         }
+
         map.serialize_entry("vertices", &vertices)?;
         map.serialize_entry("width", &self.width)?;
         let mut wires: Vec<WireJson> = Vec::new();
+
         for w in &self.m_wires {
             wires.push(WireJson {
                 edges: refs_to_json(&w.edges),
             });
         }
+
         map.serialize_entry("wires", &wires)?;
+
         map.end()
     }
 }
@@ -2883,27 +3575,34 @@ impl<'de> Deserialize<'de> for BRep {
 
         let data = BRepData::deserialize(deserializer)?;
         let mut b = BRep::new();
+
         if let Some(g) = data.guid {
             b.set_guid(g);
         }
+
         if let Some(n) = data.name {
             b.name = n;
         }
+
         if let Some(w) = data.width {
             b.width = w;
         }
+
         if let Some(c) = data.surfacecolor {
             b.surfacecolor = c;
         }
+
         b.m_curves_2d = data.curves_2d;
         b.m_curves_3d = data.curves_3d;
         b.m_surfaces = data.surfaces;
+
         for v in &data.vertices {
             b.m_vertices.push(BRepVertex {
                 point: Point::new(v.point[0], v.point[1], v.point[2]),
                 tolerance: v.tolerance,
             });
         }
+
         for e in &data.edges {
             let mut be = BRepEdge {
                 curve_3d_index: e.curve_3d_index,
@@ -2913,6 +3612,7 @@ impl<'de> Deserialize<'de> for BRep {
                 degenerated: e.degenerated,
                 pcurves: Vec::new(),
             };
+
             for pc in &e.pcurves {
                 be.pcurves.push(BRepCurveOnSurface {
                     surface_index: pc.surface_index,
@@ -2920,13 +3620,16 @@ impl<'de> Deserialize<'de> for BRep {
                     curve_2d_index_2: pc.curve_2d_index_2,
                 });
             }
+
             b.m_edges.push(be);
         }
+
         for w in &data.wires {
             b.m_wires.push(BRepWire {
                 edges: refs_from_json(&w.edges),
             });
         }
+
         for f in data.faces {
             b.m_faces.push(BRepFace {
                 surface_index: f.surface_index,
@@ -2935,16 +3638,19 @@ impl<'de> Deserialize<'de> for BRep {
                 facecolor: f.facecolor,
             });
         }
+
         for s in &data.shells {
             b.m_shells.push(BRepShell {
                 faces: refs_from_json(&s.faces),
             });
         }
+
         for s in &data.solids {
             b.m_solids.push(BRepSolid {
                 shells: refs_from_json(&s.shells),
             });
         }
+
         Ok(b)
     }
 }

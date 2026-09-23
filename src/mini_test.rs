@@ -479,6 +479,11 @@ pub fn get_all_tests() -> Vec<RegisteredTest> {
         },
         RegisteredTest {
             group: "BRep",
+            name: "Cut By Plane",
+            func: run_brep_cut_by_plane,
+        },
+        RegisteredTest {
+            group: "BRep",
             name: "Json Roundtrip",
             func: run_brep_json_roundtrip,
         },

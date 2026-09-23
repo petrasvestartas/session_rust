@@ -1,6 +1,7 @@
 use crate::mini_test::TestResult;
 use crate::tolerance::PI;
 use crate::{MINI_CHECK, MINI_TEST, REGISTER_MINI_TEST};
+use std::cmp::Ordering;
 
 /// Every non-degenerated edge of a solid is used by exactly two faces with opposite composed orientations
 fn edges_manifold(b: &crate::BRep) -> bool {
@@ -8,26 +9,41 @@ fn edges_manifold(b: &crate::BRep) -> bool {
         if b.m_edges[ei].degenerated {
             continue;
         }
+
         let uses = b.edge_faces(ei);
+
         if uses.len() != 2 {
             return false;
         }
+
         if uses[0].orientation == uses[1].orientation {
             return false;
         }
     }
+
     true
+}
+
+/// Lexicographic order of two points
+fn point_order(a: &[f64; 3], b: &[f64; 3]) -> Ordering {
+    a[0].total_cmp(&b[0])
+        .then(a[1].total_cmp(&b[1]))
+        .then(a[2].total_cmp(&b[2]))
 }
 
 /// Sorted positions of the mesh vertices on the v = 0 side
 fn boundary_points(mesh: &crate::Mesh) -> Vec<[f64; 3]> {
     let mut points: Vec<[f64; 3]> = Vec::new();
+
     for v in mesh.vertex.values() {
         if v.attributes.get("v") == Some(&0.0) {
-            points.push([v.x, v.y, v.z]);
+            let position = v.position();
+            points.push([position[0], position[1], position[2]]);
         }
     }
-    points.sort_by(|a, b| a[0].total_cmp(&b[0]));
+
+    points.sort_by(point_order);
+
     points
 }
 
@@ -51,10 +67,13 @@ fn build_quad_face(b: &mut crate::BRep) -> usize {
         Point::new(1.0, 1.0, 0.0),
         Point::new(0.0, 1.0, 0.0),
     ];
+
     for corner in &corners {
         b.add_vertex(corner, 0.0);
     }
+
     let mut refs = Vec::new();
+
     for i in 0..4usize {
         let j = (i + 1) % 4;
         let ci = b.add_curve_3d(&NurbsCurve::create(
@@ -71,7 +90,9 @@ fn build_quad_face(b: &mut crate::BRep) -> usize {
         b.add_pcurve(ei, si, c2 as i32, -1);
         refs.push(BRepRef::new(ei as i32, BRepOrientation::Forward));
     }
+
     let wi = b.add_wire(&refs);
+
     b.add_face(
         si as i32,
         &[BRepRef::new(wi as i32, BRepOrientation::Forward)],
@@ -92,8 +113,10 @@ pub fn run_brep_shared_grid_boundary() -> TestResult {
 
         let mut b = BRep::new();
         let mut surfaces = Vec::new();
+
         for face in 0..2 {
             let mut points = Vec::new();
+
             for i in 0..3 {
                 for j in 0..2 {
                     let z = if i != 1 {
@@ -110,24 +133,31 @@ pub fn run_brep_shared_grid_boundary() -> TestResult {
                     ));
                 }
             }
+
             let surface = NurbsSurface::create(false, false, 2, 1, 3, 2, &points).unwrap();
             let si = b.add_surface(&surface);
             let corners = [[0.0, 0.0], [1.0, 0.0], [1.0, 1.0], [0.0, 1.0]];
             let mut vertices = Vec::new();
+
             for corner in &corners {
                 vertices.push(b.add_vertex(&surface.point_at(corner[0], corner[1]).unwrap(), 0.0));
             }
+
             let mut edges = Vec::new();
+
             for side in 0..4 {
                 let a = corners[side];
                 let z = corners[(side + 1) % 4];
                 let mut edge = 0;
+
                 if side != 0 || face != 1 {
                     let dir = if a[0] != z[0] { 0 } else { 1 };
                     let mut curve = surface.iso_curve(dir, a[1 - dir]).unwrap();
+
                     if a[dir] > z[dir] {
                         curve.reverse();
                     }
+
                     let ci = b.add_curve_3d(&curve);
                     edge = b.add_edge(
                         ci as i32,
@@ -135,6 +165,7 @@ pub fn run_brep_shared_grid_boundary() -> TestResult {
                         vertices[(side + 1) % 4] as i32,
                     );
                 }
+
                 let pc = NurbsCurve::create(
                     false,
                     1,
@@ -144,6 +175,7 @@ pub fn run_brep_shared_grid_boundary() -> TestResult {
                 b.add_pcurve(edge, si, ci as i32, -1);
                 edges.push(BRepRef::new(edge as i32, BRepOrientation::Forward));
             }
+
             let wi = b.add_wire(&edges);
             b.add_face(
                 si as i32,
@@ -152,7 +184,9 @@ pub fn run_brep_shared_grid_boundary() -> TestResult {
             );
             surfaces.push(surface);
         }
+
         let mut original: Vec<Mesh> = Vec::new();
+
         for s in &surfaces {
             original.push(RemeshNurbsSurfaceGrid::from_u_v_q(
                 s.clone(),
@@ -162,38 +196,51 @@ pub fn run_brep_shared_grid_boundary() -> TestResult {
                 0.005,
             ));
         }
+
         MINI_CHECK!(
             boundary_points(&original[0]).len() == 7 && boundary_points(&original[1]).len() == 11
         );
+
         let mut meshes = b.face_meshes_q(Some((20.0, 0.005)));
         let mut first = boundary_points(&meshes[0]);
         let second = boundary_points(&meshes[1]);
+
         MINI_CHECK!(first == second && first.len() == 7);
         MINI_CHECK!(meshes[0].face.len() == original[0].face.len() && !meshes[1].face.is_empty());
+
         let mut maximum = 0.0f64;
+
         for i in 0..first.len() - 1 {
             let a = first[i];
             let z = first[i + 1];
             let actual = surfaces[0].point_at((a[0] + z[0]) * 0.5, 0.0).unwrap();
             let mut sag = 0.0f64;
+
             for d in 0..3 {
                 sag += (actual[d] - (a[d] + z[d]) * 0.5).powi(2);
             }
+
             maximum = maximum.max(sag.sqrt());
         }
+
         MINI_CHECK!(maximum <= 0.005 * 1.5);
+
         let refined = RemeshNurbsSurfaceGrid::from_u_v_q(surfaces[0].clone(), 0, 0, 5.0, 0.001);
         meshes = b.face_meshes_q(Some((5.0, 0.001)));
         first = boundary_points(&meshes[0]);
+
         MINI_CHECK!(
             first == boundary_points(&meshes[1])
                 && !meshes[0].face.is_empty()
                 && !meshes[1].face.is_empty()
         );
+
         for point in boundary_points(&refined) {
             MINI_CHECK!(first.contains(&point));
         }
+
         let cosine = (5.0 * PI / 180.0).cos();
+
         for i in 0..first.len() - 1 {
             let a = surfaces[0].normal_at(first[i][0], 0.0);
             let z = surfaces[0].normal_at(first[i + 1][0], 0.0);
@@ -292,9 +339,11 @@ pub fn run_brep_add_face() -> TestResult {
             Point::new(0.0, 1.0, 0.0),
         ];
         let mut refs = Vec::new();
+
         for corner in &corners {
             b.add_vertex(corner, 0.0);
         }
+
         for i in 0..4usize {
             let j = (i + 1) % 4;
             let ci = b.add_curve_3d(&NurbsCurve::create(
@@ -311,6 +360,7 @@ pub fn run_brep_add_face() -> TestResult {
             b.add_pcurve(ei, si, c2 as i32, -1);
             refs.push(BRepRef::new(ei as i32, BRepOrientation::Forward));
         }
+
         let wi = b.add_wire(&refs);
         let fi = b.add_face(
             si as i32,
@@ -481,6 +531,7 @@ pub fn run_brep_update_tolerances() -> TestResult {
         bent.m_vertices[0].point = Point::new(-1.0, -1.5, -2.01);
         let worst_bent = bent.update_tolerances();
         let mut worst_prims: f64 = 0.0;
+
         for mut p in [
             BRep::create_cylinder(1.0, 2.0),
             BRep::create_sphere(1.0),
@@ -533,8 +584,10 @@ pub fn run_brep_transform_roundtrip() -> TestResult {
         let moved = b.transformed(&rot).transformed(&tr);
 
         let mut matched = true;
+
         for i in 0..b.m_vertices.len() {
             let expect = tr.transform_point(&rot.transform_point(&b.m_vertices[i].point));
+
             if moved.m_vertices[i].point.distance(&expect, None) > 1e-9 {
                 matched = false;
             }
@@ -545,6 +598,7 @@ pub fn run_brep_transform_roundtrip() -> TestResult {
             .transformed(&rot.inverse().unwrap());
 
         let mut restored = true;
+
         for i in 0..b.m_vertices.len() {
             if back.m_vertices[i]
                 .point
@@ -559,6 +613,41 @@ pub fn run_brep_transform_roundtrip() -> TestResult {
         MINI_CHECK!(restored);
         MINI_CHECK!(back.is_solid());
         MINI_CHECK!(back.update_tolerances() < 1e-9);
+    })
+}
+
+pub fn run_brep_cut_by_plane() -> TestResult {
+    MINI_TEST!("Cut By Plane", {
+        use crate::BRep;
+        use crate::Plane;
+        use crate::Point;
+        use crate::Vector;
+        use crate::Xform;
+
+        let b = BRep::create_box(2.0, 2.0, 2.0);
+        let half = b.cut_by_plane(&Plane::from_point_normal(
+            Point::new(0.0, 0.0, 0.0),
+            Vector::new(0.0, 0.0, 1.0),
+            None,
+        ));
+
+        let far = Xform::translation(100000.0, 200000.0, 30000.0)
+            * Xform::rotation(&Vector::new(1.0, 2.0, 3.0), 40.0, true);
+        let beam = BRep::create_box(200.0, 100.0, 600.0).transformed(&far);
+        let piece = beam.cut_by_plane(&Plane::from_point_normal(
+            far.transform_point(&Point::new(0.0, 0.0, 0.0)),
+            far.transform_vector(&Vector::new(0.0, 0.0, 1.0)),
+            None,
+        ));
+
+        MINI_CHECK!(half.is_solid());
+        MINI_CHECK!(half.vertex_count() == 8);
+        MINI_CHECK!(half.edge_count() == 12);
+        MINI_CHECK!(half.face_count() == 6);
+        MINI_CHECK!((half.volume() - 4.0).abs() < 1e-9);
+        MINI_CHECK!(piece.is_solid());
+        MINI_CHECK!(piece.face_count() == 6);
+        MINI_CHECK!((piece.volume() - 6000000.0).abs() < 0.01);
     })
 }
 
@@ -706,7 +795,9 @@ pub fn run_brep_from_polylines() -> TestResult {
         use crate::Point;
         use crate::Polyline;
 
-        let (hx, hy, hz) = (1.0, 1.5, 2.0);
+        let hx = 1.0;
+        let hy = 1.5;
+        let hz = 2.0;
         let c = [
             Point::new(-hx, -hy, -hz),
             Point::new(hx, -hy, -hz),
@@ -782,7 +873,9 @@ pub fn run_brep_from_nurbscurves() -> TestResult {
         use crate::NurbsCurve;
         use crate::Point;
 
-        let (hx, hy, hz) = (1.0, 1.5, 2.0);
+        let hx = 1.0;
+        let hy = 1.5;
+        let hz = 2.0;
         let c = [
             Point::new(-hx, -hy, -hz),
             Point::new(hx, -hy, -hz),
@@ -907,19 +1000,32 @@ pub fn run_brep_from_nurbscurves_holes() -> TestResult {
     })
 }
 
+/// Closed square ring at height z through the (x, y) corners
+fn ring(pts: &[(f64, f64)], z: f64) -> crate::Polyline {
+    use crate::Point;
+    use crate::Polyline;
+
+    let mut v: Vec<Point> = Vec::new();
+
+    for p in pts {
+        v.push(Point::new(p.0, p.1, z));
+    }
+
+    v.push(Point::new(pts[0].0, pts[0].1, z));
+
+    Polyline::new(v)
+}
+
 /// 4 x 4 x 2 box with a 1 x 1 through-hole along z: bottom and top with a hole, four outer and four inner side quads
 fn box_with_square_hole() -> (Vec<crate::Polyline>, Vec<Vec<crate::Polyline>>) {
     use crate::Point;
     use crate::Polyline;
-    let ring = |pts: &[(f64, f64)], z: f64| {
-        let mut v: Vec<Point> = pts.iter().map(|(x, y)| Point::new(*x, *y, z)).collect();
-        v.push(Point::new(pts[0].0, pts[0].1, z));
-        Polyline::new(v)
-    };
+
     let outer = [(-2.0, -2.0), (2.0, -2.0), (2.0, 2.0), (-2.0, 2.0)];
     let inner = [(-0.5, -0.5), (0.5, -0.5), (0.5, 0.5), (-0.5, 0.5)];
     let mut faces = vec![ring(&outer, 0.0), ring(&outer, 2.0)];
     let mut holes = vec![vec![ring(&inner, 0.0)], vec![ring(&inner, 2.0)]];
+
     for pts in [outer, inner] {
         for i in 0..4 {
             let a = pts[i];
@@ -934,6 +1040,7 @@ fn box_with_square_hole() -> (Vec<crate::Polyline>, Vec<Vec<crate::Polyline>>) {
             holes.push(Vec::new());
         }
     }
+
     (faces, holes)
 }
 
@@ -943,6 +1050,7 @@ pub fn run_brep_from_polylines_holes() -> TestResult {
 
         let (faces, holes) = box_with_square_hole();
         let b = BRep::from_polylines(&faces, &holes);
+
         MINI_CHECK!(b.face_count() == 10);
         MINI_CHECK!(b.m_faces[0].wires.len() == 2);
         MINI_CHECK!(b.is_solid());
@@ -957,20 +1065,27 @@ pub fn run_brep_planar_fast_path() -> TestResult {
         let (faces, holes) = box_with_square_hole();
         let b = BRep::from_polylines(&faces, &holes);
         let fm = b.face_meshes();
-        MINI_CHECK!(fm.len() == 10);
-        MINI_CHECK!(fm[0].vertex.len() == 8 && fm[0].face.len() == 8);
-        MINI_CHECK!(fm[2].vertex.len() == 4 && fm[2].face.len() == 2);
         let mut total = 0.0;
+
         for m in &fm {
             total += m.area();
         }
-        MINI_CHECK!((total - 70.0).abs() < 1e-6);
+
         let mut tagged = 0;
+
         for vd in fm[0].vertex.values() {
-            if vd.attributes.keys().any(|key| key.starts_with("brep_edge/")) {
-                tagged += 1;
+            for key in vd.attributes.keys() {
+                if key.starts_with("brep_edge/") {
+                    tagged += 1;
+                    break;
+                }
             }
         }
+
+        MINI_CHECK!(fm.len() == 10);
+        MINI_CHECK!(fm[0].vertex.len() == 8 && fm[0].face.len() == 8);
+        MINI_CHECK!(fm[2].vertex.len() == 4 && fm[2].face.len() == 2);
+        MINI_CHECK!((total - 70.0).abs() < 1e-6);
         MINI_CHECK!(tagged == 8);
     })
 }
@@ -999,6 +1114,8 @@ pub fn run_brep_protobuf_roundtrip() -> TestResult {
         b.width = 2.0;
         b.surfacecolor = Color::new(1.0, 0.5, 0.25, 1.0);
 
+        let loaded_proto = BRep::from_proto(b.to_proto()).unwrap();
+
         let proto_bytes = b.pb_dumps();
         let loaded_proto_string = BRep::pb_loads(&proto_bytes).unwrap();
 
@@ -1007,6 +1124,7 @@ pub fn run_brep_protobuf_roundtrip() -> TestResult {
         b.pb_dump(filename.to_str().unwrap());
         let loaded = BRep::pb_load(filename.to_str().unwrap());
 
+        MINI_CHECK!(loaded_proto == b);
         MINI_CHECK!(loaded_proto_string == b);
         MINI_CHECK!(loaded == b);
         MINI_CHECK!(loaded.is_solid());
@@ -1022,7 +1140,9 @@ pub fn run_brep_volume() -> TestResult {
         let bx = BRep::create_box(2.0, 3.0, 4.0);
         let cyl = BRep::create_cylinder(1.0, 4.0);
         let sph = BRep::create_sphere(2.0);
-        let (vbox, vcyl, vsph) = (bx.volume(), cyl.volume(), sph.volume());
+        let vbox = bx.volume();
+        let vcyl = cyl.volume();
+        let vsph = sph.volume();
 
         MINI_CHECK!((vbox - 24.0).abs() < 1e-9);
         MINI_CHECK!((vcyl - 4.0 * PI).abs() / (4.0 * PI) < 0.05);
@@ -1037,10 +1157,12 @@ pub fn run_brep_face_polylines_box() -> TestResult {
         let b = BRep::create_box(2.0, 2.0, 2.0);
         let pls = b.face_polylines();
         let pls_planes = b.face_planes();
+
         MINI_CHECK!(pls.len() == 6);
         MINI_CHECK!(pls_planes.len() == pls.len());
 
         let mut seen = [[false, false], [false, false], [false, false]];
+
         for fi in 0..pls.len() {
             let p = &pls[fi];
             let pl = &pls_planes[fi];
@@ -1049,25 +1171,30 @@ pub fn run_brep_face_polylines_box() -> TestResult {
 
             let mut axis = 3;
             let mut sign = 0.0;
+
             for a in 0..3 {
                 let mut constant = true;
+
                 for i in 1..p.point_count() {
                     if (p[i][a] - p[0][a]).abs() > 1e-9 {
                         constant = false;
                         break;
                     }
                 }
+
                 if constant && (p[0][a].abs() - 1.0).abs() < 1e-9 {
                     axis = a;
                     sign = if p[0][a] > 0.0 { 1.0 } else { -1.0 };
                     break;
                 }
             }
+
             MINI_CHECK!(axis < 3);
             MINI_CHECK!((pl.origin()[axis] - sign).abs() < 1e-9);
 
             let n = pl.z_axis();
             MINI_CHECK!((n[axis].abs() - 1.0).abs() < 1e-6);
+
             for a2 in 0..3 {
                 if a2 != axis {
                     MINI_CHECK!(n[a2].abs() < 1e-6);
@@ -1078,9 +1205,10 @@ pub fn run_brep_face_polylines_box() -> TestResult {
             MINI_CHECK!(!seen[axis][normal_sign]);
             seen[axis][normal_sign] = true;
         }
-        for axis in &seen {
-            for sign in axis {
-                MINI_CHECK!(*sign);
+
+        for axis_seen in &seen {
+            for sign_seen in axis_seen {
+                MINI_CHECK!(*sign_seen);
             }
         }
     })
@@ -1091,6 +1219,7 @@ pub fn run_brep_face_polylines_cylinder_caps_only() -> TestResult {
         use crate::BRep;
 
         let b = BRep::create_cylinder(1.0, 4.0);
+
         MINI_CHECK!(b.face_count() == 3);
         MINI_CHECK!(b.face_polylines().len() == 2);
         MINI_CHECK!(b.face_planes().len() == 2);
@@ -1103,10 +1232,13 @@ pub fn run_brep_face_polylines_ignores_holes() -> TestResult {
 
         let b = BRep::create_block_with_hole(4.0, 4.0, 2.0, 1.0);
         let pls = b.face_polylines();
+
         MINI_CHECK!(pls.len() == 6);
         MINI_CHECK!(pls.len() == b.face_planes().len());
+
         for p in &pls {
             MINI_CHECK!(p.point_count() == 5);
+
             for i in 0..p.point_count() {
                 let pt = &p[i];
                 let on_bounds = (pt[0].abs() - 2.0).abs() < 1e-6
@@ -1125,6 +1257,7 @@ pub fn run_brep_face_polylines_no_planar_faces() -> TestResult {
         use crate::BRep;
 
         let b = BRep::create_sphere(1.0);
+
         MINI_CHECK!(b.face_polylines().is_empty());
         MINI_CHECK!(b.face_planes().is_empty());
     })
@@ -1147,6 +1280,7 @@ pub fn run_brep_face_planes_reversed_flip() -> TestResult {
 
         let planes = b.face_planes();
         MINI_CHECK!(planes.len() == 2);
+
         let n_forward = planes[0].z_axis();
         let n_reversed = planes[1].z_axis();
         MINI_CHECK!((n_forward[0] + n_reversed[0]).abs() < 1e-9);
@@ -1162,6 +1296,7 @@ pub fn run_brep_face_planes_point_outward() -> TestResult {
         let bx = BRep::create_box(2.0, 2.0, 2.0);
         let box_planes = bx.face_planes();
         MINI_CHECK!(box_planes.len() == 6);
+
         for pl in &box_planes {
             let o = pl.origin();
             let n = pl.z_axis();
@@ -1172,6 +1307,7 @@ pub fn run_brep_face_planes_point_outward() -> TestResult {
         let cyl = BRep::create_cylinder(1.0, 4.0);
         let cyl_planes = cyl.face_planes();
         MINI_CHECK!(cyl_planes.len() == 2);
+
         for pl in &cyl_planes {
             let o = pl.origin();
             let n = pl.z_axis();
@@ -1188,9 +1324,11 @@ pub fn run_brep_face_planes_outward_block_with_hole() -> TestResult {
 
         let b = BRep::create_block_with_hole(4.0, 4.0, 2.0, 1.0);
         MINI_CHECK!(b.is_solid());
+
         let solid_centroid = Point::centroid(&b.vertex_points());
         let planes = b.face_planes();
         MINI_CHECK!(planes.len() == 6);
+
         for pl in &planes {
             let o = pl.origin();
             let n = pl.z_axis();
@@ -1229,6 +1367,7 @@ pub fn run_brep_face_planes_outward_under_mirrored_winding() -> TestResult {
             MINI_CHECK!(d > 0.0);
 
             let mut expected = Vec::new();
+
             for er in b.wire_edges(&b.m_faces[fi].wires[0]) {
                 let edge = &b.m_edges[er.index as usize];
                 let reversed = er.orientation == BRepOrientation::Reversed;
@@ -1239,10 +1378,12 @@ pub fn run_brep_face_planes_outward_under_mirrored_winding() -> TestResult {
                 };
                 expected.push(b.m_vertices[start as usize].point.clone());
             }
+
             expected.push(expected[0].clone());
 
             let actual = pls[fi].get_points();
             MINI_CHECK!(actual.len() == expected.len());
+
             for k in 0..actual.len() {
                 MINI_CHECK!(actual[k] == expected[k]);
             }
@@ -1261,16 +1402,6 @@ REGISTER_MINI_TEST!(
     crate::brep_test::run_brep_constructor
 );
 REGISTER_MINI_TEST!("BRep", "Create Box", crate::brep_test::run_brep_create_box);
-REGISTER_MINI_TEST!(
-    "BRep",
-    "From Polylines Holes",
-    crate::brep_test::run_brep_from_polylines_holes
-);
-REGISTER_MINI_TEST!(
-    "BRep",
-    "Planar Fast Path",
-    crate::brep_test::run_brep_planar_fast_path
-);
 REGISTER_MINI_TEST!("BRep", "Accessors", crate::brep_test::run_brep_accessors);
 REGISTER_MINI_TEST!("BRep", "Add Face", crate::brep_test::run_brep_add_face);
 REGISTER_MINI_TEST!("BRep", "Mesh", crate::brep_test::run_brep_mesh);
@@ -1293,6 +1424,11 @@ REGISTER_MINI_TEST!(
     "BRep",
     "Transform Roundtrip",
     crate::brep_test::run_brep_transform_roundtrip
+);
+REGISTER_MINI_TEST!(
+    "BRep",
+    "Cut By Plane",
+    crate::brep_test::run_brep_cut_by_plane
 );
 REGISTER_MINI_TEST!(
     "BRep",
@@ -1343,6 +1479,16 @@ REGISTER_MINI_TEST!(
     "BRep",
     "From Nurbscurves Holes",
     crate::brep_test::run_brep_from_nurbscurves_holes
+);
+REGISTER_MINI_TEST!(
+    "BRep",
+    "From Polylines Holes",
+    crate::brep_test::run_brep_from_polylines_holes
+);
+REGISTER_MINI_TEST!(
+    "BRep",
+    "Planar Fast Path",
+    crate::brep_test::run_brep_planar_fast_path
 );
 REGISTER_MINI_TEST!(
     "BRep",
