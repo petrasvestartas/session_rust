@@ -2669,6 +2669,11 @@ pub fn get_all_tests() -> Vec<RegisteredTest> {
         },
         RegisteredTest {
             group: "Intersection",
+            name: "Plane Plane To Line Canonical",
+            func: run_intersection_plane_plane_to_line_canonical,
+        },
+        RegisteredTest {
+            group: "Intersection",
             name: "Line Plane",
             func: run_intersection_line_plane,
         },
@@ -2784,6 +2789,31 @@ pub fn get_all_tests() -> Vec<RegisteredTest> {
         },
         RegisteredTest {
             group: "Intersection",
+            name: "Curve Plane",
+            func: run_intersection_curve_plane,
+        },
+        RegisteredTest {
+            group: "Intersection",
+            name: "Curve Plane Bezier Clipping",
+            func: run_intersection_curve_plane_bezier_clipping,
+        },
+        RegisteredTest {
+            group: "Intersection",
+            name: "Curve Plane Algebraic",
+            func: run_intersection_curve_plane_algebraic,
+        },
+        RegisteredTest {
+            group: "Intersection",
+            name: "Curve Plane Production",
+            func: run_intersection_curve_plane_production,
+        },
+        RegisteredTest {
+            group: "Intersection",
+            name: "Curve Closest Point",
+            func: run_intersection_curve_closest_point,
+        },
+        RegisteredTest {
+            group: "Intersection",
             name: "Surface Plane",
             func: run_intersection_surface_plane,
         },
@@ -2811,6 +2841,11 @@ pub fn get_all_tests() -> Vec<RegisteredTest> {
             group: "Intersection",
             name: "Surface Surface Accuracy",
             func: run_intersection_surface_surface_accuracy,
+        },
+        RegisteredTest {
+            group: "Intersection",
+            name: "Cut Curves On Surface",
+            func: run_intersection_cut_curves_on_surface,
         },
         RegisteredTest {
             group: "Intersection",
@@ -2844,6 +2879,11 @@ pub fn get_all_tests() -> Vec<RegisteredTest> {
         },
         RegisteredTest {
             group: "Intersection",
+            name: "Line Two Planes",
+            func: run_intersection_line_two_planes,
+        },
+        RegisteredTest {
+            group: "Intersection",
             name: "Scale Vector To Distance Of 2 Planes",
             func: run_intersection_scale_vector_to_distance_of_2planes,
         },
@@ -2856,6 +2896,21 @@ pub fn get_all_tests() -> Vec<RegisteredTest> {
             group: "Intersection",
             name: "Line Line 3D",
             func: run_intersection_line_line_3d,
+        },
+        RegisteredTest {
+            group: "Intersection",
+            name: "Polyline Boolean",
+            func: run_intersection_polyline_boolean,
+        },
+        RegisteredTest {
+            group: "Intersection",
+            name: "Offset In 3D",
+            func: run_intersection_offset_in_3d,
+        },
+        RegisteredTest {
+            group: "Intersection",
+            name: "Polyline Boolean 2D In Plane",
+            func: run_intersection_polyline_boolean_2d_in_plane,
         },
         RegisteredTest {
             group: "Intersection",
@@ -2876,6 +2931,16 @@ pub fn get_all_tests() -> Vec<RegisteredTest> {
             group: "Intersection",
             name: "Closed And Open Paths 2D",
             func: run_intersection_closed_and_open_paths_2d,
+        },
+        RegisteredTest {
+            group: "Intersection",
+            name: "Face To Face",
+            func: run_intersection_face_to_face,
+        },
+        RegisteredTest {
+            group: "Intersection",
+            name: "Adjacency Search",
+            func: run_intersection_adjacency_search,
         },
         RegisteredTest {
             group: "Intersection",

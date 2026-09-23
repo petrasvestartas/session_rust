@@ -1,5 +1,43 @@
+use crate::aabb::AABB;
 use crate::closest::Closest;
-use crate::{Line, Point};
+use crate::element::Element;
+use crate::line::Line;
+use crate::mesh::Mesh;
+use crate::nurbscurve::NurbsCurve;
+use crate::nurbsknot::CurveInterpStyle;
+use crate::nurbsknot::CurveNurbsKnotStyle;
+use crate::nurbssurface::NurbsSurface;
+use crate::obb::OBB;
+use crate::plane::Plane;
+use crate::point::Point;
+use crate::polyline::Polyline;
+use crate::spatial_bvh::SpatialBVH;
+use crate::tolerance::Tolerance;
+use crate::vector::Vector;
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Lines and planes
+// ═══════════════════════════════════════════════════════════════════════════
+
+/// Signed plane equation value at a point.
+fn plane_value_at(plane: &Plane, point: &Point) -> f64 {
+    plane.a() * point[0] + plane.b() * point[1] + plane.c() * point[2] + plane.d()
+}
+
+/// Intersection point of two segments, the midpoint of closest approach within tolerance.
+pub fn line_line(line0: &Line, line1: &Line, tolerance: f64) -> Option<Point> {
+    let result = line_line_parameters(line0, line1, tolerance, true, false)?;
+
+    let (t0, t1) = result;
+    let p0 = line0.point_at(t0);
+    let p1 = line1.point_at(t1);
+
+    Some(Point::new(
+        (p0[0] + p1[0]) * 0.5,
+        (p0[1] + p1[1]) * 0.5,
+        (p0[2] + p1[2]) * 0.5,
+    ))
+}
 
 /// Parameters of closest approach of two lines, clamped to the segments when requested.
 pub fn line_line_parameters(
@@ -90,23 +128,8 @@ pub fn line_line_parameters(
     Some((t0, t1))
 }
 
-/// Intersection point of two segments, the midpoint of closest approach within tolerance.
-pub fn line_line(line0: &Line, line1: &Line, tolerance: f64) -> Option<Point> {
-    let result = line_line_parameters(line0, line1, tolerance, true, false)?;
-
-    let (t0, t1) = result;
-    let p0 = line0.point_at(t0);
-    let p1 = line1.point_at(t1);
-
-    Some(Point::new(
-        (p0[0] + p1[0]) * 0.5,
-        (p0[1] + p1[1]) * 0.5,
-        (p0[2] + p1[2]) * 0.5,
-    ))
-}
-
 /// Intersection line of two planes, anchored on plane0's origin.
-pub fn plane_plane(plane0: &crate::Plane, plane1: &crate::Plane) -> Option<Line> {
+pub fn plane_plane(plane0: &Plane, plane1: &Plane) -> Option<Line> {
     let d = plane1.z_axis().cross(&plane0.z_axis());
 
     let origin0 = plane0.origin();
@@ -117,7 +140,7 @@ pub fn plane_plane(plane0: &crate::Plane, plane1: &crate::Plane) -> Option<Line>
         (origin0[2] + origin1[2]) * 0.5,
     );
 
-    let plane2 = crate::Plane::from_point_normal(p, d.clone(), None);
+    let plane2 = Plane::from_point_normal(p, d.clone(), None);
 
     let output_p = plane_plane_plane(plane0, plane1, &plane2)?;
 
@@ -132,10 +155,10 @@ pub fn plane_plane(plane0: &crate::Plane, plane1: &crate::Plane) -> Option<Line>
 }
 
 /// Intersection line of two planes, anchored at the foot of the world origin.
-pub fn plane_plane_to_line_canonical(plane0: &crate::Plane, plane1: &crate::Plane) -> Option<Line> {
+pub fn plane_plane_to_line_canonical(plane0: &Plane, plane1: &Plane) -> Option<Line> {
     let n0 = plane0.z_axis();
     let n1 = plane1.z_axis();
-    let d = crate::Vector::new(
+    let d = Vector::new(
         n1[1] * n0[2] - n1[2] * n0[1],
         n1[2] * n0[0] - n1[0] * n0[2],
         n1[0] * n0[1] - n1[1] * n0[0],
@@ -172,13 +195,8 @@ pub fn plane_plane_to_line_canonical(plane0: &crate::Plane, plane1: &crate::Plan
     ))
 }
 
-/// Evaluates the plane equation at a point.
-fn plane_value_at(plane: &crate::Plane, point: &Point) -> f64 {
-    plane.a() * point[0] + plane.b() * point[1] + plane.c() * point[2] + plane.d()
-}
-
 /// Intersection point of a line and a plane.
-pub fn line_plane(line: &Line, plane: &crate::Plane, is_finite: bool) -> Option<Point> {
+pub fn line_plane(line: &Line, plane: &Plane, is_finite: bool) -> Option<Point> {
     let pt0 = line.start();
     let pt1 = line.end();
 
@@ -238,11 +256,7 @@ pub fn line_plane(line: &Line, plane: &crate::Plane, is_finite: bool) -> Option<
 }
 
 /// Intersection point of three planes.
-pub fn plane_plane_plane(
-    plane0: &crate::Plane,
-    plane1: &crate::Plane,
-    plane2: &crate::Plane,
-) -> Option<Point> {
+pub fn plane_plane_plane(plane0: &Plane, plane1: &Plane, plane2: &Plane) -> Option<Point> {
     let n0 = plane0.z_axis();
     let n1 = plane1.z_axis();
     let n2 = plane2.z_axis();
@@ -263,8 +277,12 @@ pub fn plane_plane_plane(
     Some(Point::new(p[0], p[1], p[2]))
 }
 
+// ═══════════════════════════════════════════════════════════════════════════
+// Rays
+// ═══════════════════════════════════════════════════════════════════════════
+
 /// Ray-box slab test returning the entry and exit parameters.
-pub fn ray_box(line: &Line, box_: &crate::OBB, t0: f64, t1: f64) -> Option<Vec<Point>> {
+pub fn ray_box(line: &Line, box_: &OBB, t0: f64, t1: f64) -> Option<Vec<Point>> {
     let origin = line.start();
     let direction = line.to_vector();
 
@@ -429,13 +447,138 @@ pub fn ray_triangle(
     Some(&origin + &direction * t)
 }
 
-// ═══════════════════════════════════════════════════════════════════════════
-// NURBS curve plane helpers
-// ═══════════════════════════════════════════════════════════════════════════
+/// Ray-mesh hits by brute force, sorted by t.
+pub fn ray_mesh(line: &Line, mesh: &Mesh, epsilon: f64, find_all: bool) -> Option<Vec<Point>> {
+    let (vertices, faces) = mesh.to_vertices_and_faces();
+    let mut tris: Vec<(Point, Point, Point)> = Vec::new();
 
-use crate::nurbsknot::CurveInterpStyle;
-use crate::nurbsknot::CurveNurbsKnotStyle;
-use crate::{NurbsCurve, NurbsSurface, Plane, Tolerance, Vector};
+    for face in &faces {
+        if face.len() < 3 {
+            continue;
+        }
+
+        let v0 = &vertices[face[0]];
+
+        for j in 1..face.len() - 1 {
+            tris.push((
+                v0.clone(),
+                vertices[face[j]].clone(),
+                vertices[face[j + 1]].clone(),
+            ));
+        }
+    }
+
+    if tris.is_empty() {
+        return None;
+    }
+
+    let origin = line.start();
+    let direction = line.to_vector().normalized();
+    let mut hits: Vec<(f64, Point)> = Vec::new();
+
+    for (v0, v1, v2) in &tris {
+        if let Some(p) = ray_triangle(line, v0, v1, v2, epsilon) {
+            let t = (p[0] - origin[0]) * direction[0]
+                + (p[1] - origin[1]) * direction[1]
+                + (p[2] - origin[2]) * direction[2];
+
+            if t >= 0.0 {
+                hits.push((t, p));
+            }
+        }
+    }
+
+    if hits.is_empty() {
+        return None;
+    }
+
+    hits.sort_by(|a, b| a.0.partial_cmp(&b.0).unwrap());
+
+    if find_all {
+        Some(hits.into_iter().map(|(_, p)| p).collect())
+    } else {
+        Some(vec![hits[0].1.clone()])
+    }
+}
+
+/// Ray-mesh hits through the mesh's triangle BVH, sorted by t.
+pub fn ray_mesh_bvh(line: &Line, mesh: &Mesh, epsilon: f64, find_all: bool) -> Option<Vec<Point>> {
+    let (vertices, faces) = mesh.to_vertices_and_faces();
+    let mut tris: Vec<(Point, Point, Point)> = Vec::new();
+
+    for face in &faces {
+        if face.len() < 3 {
+            continue;
+        }
+
+        let v0 = &vertices[face[0]];
+
+        for j in 1..face.len() - 1 {
+            tris.push((
+                v0.clone(),
+                vertices[face[j]].clone(),
+                vertices[face[j + 1]].clone(),
+            ));
+        }
+    }
+
+    if tris.is_empty() {
+        return None;
+    }
+
+    let tri_boxes: Vec<OBB> = tris
+        .iter()
+        .map(|(v0, v1, v2)| OBB::from_points(&[v0.clone(), v1.clone(), v2.clone()], 0.0, None))
+        .collect();
+
+    let world_size = SpatialBVH::compute_world_size(&tri_boxes);
+    let bvh = SpatialBVH::from_boxes(&tri_boxes, world_size);
+
+    let origin = line.start();
+    let direction = line.to_vector().normalized();
+    let mut candidate_ids: Vec<usize> = Vec::new();
+    let found = bvh.ray_cast(&origin, &direction, &mut candidate_ids, true);
+
+    if !found {
+        return None;
+    }
+
+    let mut hits: Vec<(f64, Point)> = Vec::new();
+
+    for idx in candidate_ids {
+        if idx >= tris.len() {
+            continue;
+        }
+
+        let (ref v0, ref v1, ref v2) = tris[idx];
+
+        if let Some(p) = ray_triangle(line, v0, v1, v2, epsilon) {
+            let t = (p[0] - origin[0]) * direction[0]
+                + (p[1] - origin[1]) * direction[1]
+                + (p[2] - origin[2]) * direction[2];
+
+            if t >= 0.0 {
+                hits.push((t, p));
+            }
+        }
+    }
+
+    if hits.is_empty() {
+        return None;
+    }
+
+    hits.sort_by(|a, b| a.0.partial_cmp(&b.0).unwrap());
+
+    if find_all {
+        Some(hits.into_iter().map(|(_, p)| p).collect())
+    } else {
+        Some(vec![hits[0].1.clone()])
+    }
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// NURBS curve helpers
+// ═══════════════════════════════════════════════════════════════════════════
 
 /// Signed distance of a point to the plane.
 fn curve_signed_distance_to_plane(pt: &Point, plane: &Plane) -> f64 {
@@ -533,8 +676,338 @@ fn curve_refine_intersection_newton(
     curve_signed_distance_to_plane(&curve.point_at(*t), plane).abs() < tolerance * 2.0
 }
 
+/// Bezier-clipping recursion of the curve-plane distance on [ta, tb].
+fn curve_plane_clip(
+    curve: &NurbsCurve,
+    plane: &Plane,
+    tolerance: f64,
+    ta: f64,
+    tb: f64,
+    depth: i32,
+    results: &mut Vec<f64>,
+) {
+    if depth > 50 {
+        let tm = (ta + tb) * 0.5;
+        let pm = curve.point_at(tm);
+        let dist = curve_signed_distance_to_plane(&pm, plane);
+
+        if dist.abs() < tolerance {
+            results.push(tm);
+        }
+
+        return;
+    }
+
+    if (tb - ta).abs() < tolerance * 0.01 {
+        let tm = (ta + tb) * 0.5;
+        let pm = curve.point_at(tm);
+        let dist = curve_signed_distance_to_plane(&pm, plane);
+
+        if dist.abs() < tolerance {
+            let mut t = tm;
+
+            for _ in 0..10 {
+                let pt = curve.point_at(t);
+                let tangent = curve.tangent_at(t);
+                let f = curve_signed_distance_to_plane(&pt, plane);
+                let df = tangent.dot(&plane.z_axis());
+
+                if df.abs() < 1e-12 {
+                    break;
+                }
+
+                let dt = -f / df;
+                t += dt;
+
+                if dt.abs() < tolerance * 0.01 {
+                    break;
+                }
+
+                if t < ta || t > tb {
+                    t = tm;
+                    break;
+                }
+            }
+
+            let pt_final = curve.point_at(t);
+
+            if curve_signed_distance_to_plane(&pt_final, plane).abs() < tolerance
+                && t >= ta
+                && t <= tb
+            {
+                results.push(t);
+            }
+        }
+
+        return;
+    }
+
+    let num_samples = (curve.order() + 1).min(10);
+    let mut distances = Vec::new();
+    let mut params = Vec::new();
+    let dt = (tb - ta) / (num_samples - 1) as f64;
+
+    for i in 0..num_samples {
+        let t = ta + i as f64 * dt;
+        let p = curve.point_at(t);
+        distances.push(curve_signed_distance_to_plane(&p, plane));
+        params.push(t);
+    }
+
+    let mut d_min = distances[0];
+    let mut d_max = distances[0];
+
+    for d in &distances {
+        if *d < d_min {
+            d_min = *d;
+        }
+
+        if *d > d_max {
+            d_max = *d;
+        }
+    }
+
+    if d_min > tolerance || d_max < -tolerance {
+        return;
+    }
+
+    let mut t_min = ta;
+    let mut t_max = tb;
+
+    for i in 0..distances.len() - 1 {
+        if distances[i] * distances[i + 1] < 0.0 {
+            let d0 = distances[i];
+            let d1 = distances[i + 1];
+            let t_clip = params[i] - d0 * (params[i + 1] - params[i]) / (d1 - d0);
+
+            if d0 > 0.0 {
+                t_max = t_max.min(t_clip + (tb - ta) * 0.1);
+            } else {
+                t_min = t_min.max(t_clip - (tb - ta) * 0.1);
+            }
+        }
+    }
+
+    if t_min >= t_max {
+        t_min = ta;
+        t_max = tb;
+    }
+
+    t_min = ta.max(t_min);
+    t_max = tb.min(t_max);
+    let reduction = (t_max - t_min) / (tb - ta);
+
+    if reduction > 0.8 || (t_max - t_min) < tolerance * 0.1 {
+        let tm = (ta + tb) * 0.5;
+        curve_plane_clip(curve, plane, tolerance, ta, tm, depth + 1, results);
+        curve_plane_clip(curve, plane, tolerance, tm, tb, depth + 1, results);
+    } else {
+        curve_plane_clip(curve, plane, tolerance, t_min, t_max, depth + 1, results);
+    }
+}
+
+/// Hodograph subdivision of one span with Newton polishing of the crossings.
+fn curve_plane_subdivide_algebraic(
+    curve: &NurbsCurve,
+    plane: &Plane,
+    tolerance: f64,
+    a: f64,
+    b: f64,
+    depth: i32,
+    results: &mut Vec<f64>,
+) {
+    if depth > 30 {
+        return;
+    }
+
+    let p_a = curve.point_at(a);
+    let p_b = curve.point_at(b);
+    let normal = plane.z_axis();
+    let f_a = normal.dot(&(&p_a - &plane.origin()));
+    let f_b = normal.dot(&(&p_b - &plane.origin()));
+
+    if f_a * f_b > 0.0 {
+        return;
+    }
+
+    let mid_t = (a + b) * 0.5;
+    let p_mid = curve.point_at(mid_t);
+    let mut line_dir = &p_b - &p_a;
+    let line_len = line_dir.magnitude();
+
+    if line_len > 1e-14 {
+        line_dir = &line_dir / line_len;
+    }
+
+    let deviation = (&p_mid - &p_a).cross(&line_dir).magnitude().abs();
+
+    if deviation < tolerance * 10.0 || (b - a) < tolerance * 10.0 {
+        let mut t = mid_t;
+        let mut converged = false;
+
+        for _ in 0..10 {
+            let p = curve.point_at(t);
+            let f = normal.dot(&(&p - &plane.origin()));
+
+            if f.abs() < tolerance {
+                converged = true;
+                break;
+            }
+
+            let tangent = curve.tangent_at(t);
+            let df = normal.dot(&tangent);
+
+            if df.abs() < 1e-14 {
+                t = (a + b) * 0.5;
+                break;
+            }
+
+            let mut t_new = t - f / df;
+
+            if t_new < a || t_new > b {
+                t_new = (a + b) * 0.5;
+            }
+
+            if (t_new - t).abs() < tolerance {
+                t = t_new;
+                converged = true;
+                break;
+            }
+
+            t = t_new;
+        }
+
+        if converged && t >= a && t <= b {
+            let mut is_duplicate = false;
+
+            for existing in results.iter() {
+                if (existing - t).abs() < tolerance * 10.0 {
+                    is_duplicate = true;
+                    break;
+                }
+            }
+
+            if !is_duplicate {
+                results.push(t);
+            }
+        }
+    } else {
+        curve_plane_subdivide_algebraic(curve, plane, tolerance, a, mid_t, depth + 1, results);
+        curve_plane_subdivide_algebraic(curve, plane, tolerance, mid_t, b, depth + 1, results);
+    }
+}
+
+/// True when the chord of [a, b] deviates less than ten tolerances from the curve.
+fn curve_nearly_linear(curve: &NurbsCurve, tolerance: f64, a: f64, b: f64) -> bool {
+    let p_a = curve.point_at(a);
+    let p_b = curve.point_at(b);
+    let p_mid = curve.point_at((a + b) * 0.5);
+    let ab = &p_b - &p_a;
+    let line_length = ab.magnitude();
+
+    if line_length < 1e-14 {
+        return true;
+    }
+
+    let am = &p_mid - &p_a;
+    let cross_mag = ab.cross(&am).magnitude();
+    let deviation = cross_mag / line_length;
+
+    deviation < tolerance * 10.0
+}
+
+/// Span subdivision to nearly linear pieces with Newton polishing of the crossings.
+fn curve_plane_subdivide_production(
+    curve: &NurbsCurve,
+    plane: &Plane,
+    tolerance: f64,
+    a: f64,
+    b: f64,
+    depth: i32,
+    results: &mut Vec<f64>,
+) {
+    if depth > 30 {
+        return;
+    }
+
+    let mut a = a;
+    let mut b = b;
+    let p_a = curve.point_at(a);
+    let p_b = curve.point_at(b);
+    let normal = plane.z_axis();
+    let mut f_a = normal.dot(&(&p_a - &plane.origin()));
+    let f_b = normal.dot(&(&p_b - &plane.origin()));
+
+    if f_a * f_b > 0.0 {
+        return;
+    }
+
+    if curve_nearly_linear(curve, tolerance, a, b) || (b - a) < tolerance * 10.0 {
+        let mut t = (a + b) * 0.5;
+        let mut converged = false;
+
+        for _ in 0..10 {
+            let p = curve.point_at(t);
+            let f = normal.dot(&(&p - &plane.origin()));
+
+            if f.abs() < tolerance {
+                converged = true;
+                break;
+            }
+
+            let tangent = curve.tangent_at(t);
+            let df = normal.dot(&tangent);
+
+            if df.abs() < 1e-14 {
+                if f * f_a < 0.0 {
+                    b = t;
+                } else {
+                    a = t;
+                    f_a = f;
+                }
+
+                t = (a + b) * 0.5;
+                continue;
+            }
+
+            let mut t_new = t - f / df;
+
+            if t_new < a || t_new > b {
+                t_new = (a + b) * 0.5;
+            }
+
+            if (t_new - t).abs() < tolerance {
+                t = t_new;
+                converged = true;
+                break;
+            }
+
+            t = t_new;
+        }
+
+        if converged && t >= a && t <= b {
+            let mut is_duplicate = false;
+
+            for existing in results.iter() {
+                if (existing - t).abs() < tolerance * 10.0 {
+                    is_duplicate = true;
+                    break;
+                }
+            }
+
+            if !is_duplicate {
+                results.push(t);
+            }
+        }
+    } else {
+        let mid = (a + b) * 0.5;
+        curve_plane_subdivide_production(curve, plane, tolerance, a, mid, depth + 1, results);
+        curve_plane_subdivide_production(curve, plane, tolerance, mid, b, depth + 1, results);
+    }
+}
+
 // ═══════════════════════════════════════════════════════════════════════════
-// NURBS curve plane
+// NURBS curves
 // ═══════════════════════════════════════════════════════════════════════════
 
 /// Curve-plane intersection parameters by sampling, bisection and Newton refinement.
@@ -650,140 +1123,18 @@ pub fn curve_plane_bezier_clipping(
     plane: &Plane,
     tolerance: Option<f64>,
 ) -> Vec<f64> {
-    let tol = tolerance.unwrap_or(Tolerance::ZERO_TOLERANCE);
+    let mut results = Vec::new();
 
     if !curve.is_valid() {
-        return Vec::new();
+        return results;
     }
 
-    let mut results = Vec::new();
+    let tolerance = tolerance.unwrap_or(Tolerance::ZERO_TOLERANCE);
     let (t0, t1) = curve.domain();
-
-    fn clip_recursive(
-        curve: &NurbsCurve,
-        plane: &Plane,
-        ta: f64,
-        tb: f64,
-        depth: i32,
-        tol: f64,
-        results: &mut Vec<f64>,
-    ) {
-        if depth > 50 {
-            let tm = (ta + tb) * 0.5;
-            let pm = curve.point_at(tm);
-            let dist = curve_signed_distance_to_plane(&pm, plane);
-
-            if dist.abs() < tol {
-                results.push(tm);
-            }
-
-            return;
-        }
-
-        if (tb - ta).abs() < tol * 0.01 {
-            let tm = (ta + tb) * 0.5;
-            let pm = curve.point_at(tm);
-            let dist = curve_signed_distance_to_plane(&pm, plane);
-
-            if dist.abs() < tol {
-                let mut t = tm;
-
-                for _ in 0..10 {
-                    let pt = curve.point_at(t);
-                    let tan = curve.tangent_at(t);
-                    let f = curve_signed_distance_to_plane(&pt, plane);
-                    let df = tan.dot(&plane.z_axis());
-
-                    if df.abs() < 1e-12 {
-                        break;
-                    }
-
-                    let dt = -f / df;
-                    t += dt;
-
-                    if dt.abs() < tol * 0.01 {
-                        break;
-                    }
-
-                    if t < ta || t > tb {
-                        t = tm;
-                        break;
-                    }
-                }
-
-                let pt_final = curve.point_at(t);
-
-                if curve_signed_distance_to_plane(&pt_final, plane).abs() < tol
-                    && ta <= t
-                    && t <= tb
-                {
-                    results.push(t);
-                }
-            }
-
-            return;
-        }
-
-        let num_samples = (curve.order() + 1).min(10);
-        let mut distances = Vec::new();
-        let mut params = Vec::new();
-
-        let dt = (tb - ta) / (num_samples - 1) as f64;
-
-        for i in 0..num_samples {
-            let t = ta + i as f64 * dt;
-            let p = curve.point_at(t);
-            distances.push(curve_signed_distance_to_plane(&p, plane));
-            params.push(t);
-        }
-
-        let d_min = distances.iter().cloned().fold(f64::INFINITY, f64::min);
-        let d_max = distances.iter().cloned().fold(f64::NEG_INFINITY, f64::max);
-
-        if d_min > tol || d_max < -tol {
-            return;
-        }
-
-        let mut t_min = ta;
-        let mut t_max = tb;
-
-        for i in 0..(distances.len() - 1) {
-            if distances[i] * distances[i + 1] < 0.0 {
-                let d0 = distances[i];
-                let d1 = distances[i + 1];
-                let t_clip = params[i] - d0 * (params[i + 1] - params[i]) / (d1 - d0);
-
-                if d0 > 0.0 {
-                    t_max = t_max.min(t_clip + (tb - ta) * 0.1);
-                } else {
-                    t_min = t_min.max(t_clip - (tb - ta) * 0.1);
-                }
-            }
-        }
-
-        if t_min >= t_max {
-            t_min = ta;
-            t_max = tb;
-        }
-
-        t_min = t_min.max(ta);
-        t_max = t_max.min(tb);
-
-        let reduction = (t_max - t_min) / (tb - ta);
-
-        if reduction > 0.8 || (t_max - t_min) < tol * 0.1 {
-            let tm = (ta + tb) * 0.5;
-            clip_recursive(curve, plane, ta, tm, depth + 1, tol, results);
-            clip_recursive(curve, plane, tm, tb, depth + 1, tol, results);
-        } else {
-            clip_recursive(curve, plane, t_min, t_max, depth + 1, tol, results);
-        }
-    }
-
-    clip_recursive(curve, plane, t0, t1, 0, tol, &mut results);
+    curve_plane_clip(curve, plane, tolerance, t0, t1, 0, &mut results);
 
     results.sort_by(|a, b| a.partial_cmp(b).unwrap());
-    results.dedup_by(|a, b| (*a - *b).abs() < tol * 2.0);
+    results.dedup_by(|a, b| (*a - *b).abs() < tolerance * 2.0);
 
     results
 }
@@ -794,105 +1145,31 @@ pub fn curve_plane_algebraic(
     plane: &Plane,
     tolerance: Option<f64>,
 ) -> Vec<f64> {
-    let tol = tolerance.unwrap_or(Tolerance::ZERO_TOLERANCE);
-
     if !curve.is_valid() {
         return Vec::new();
     }
 
+    let tolerance = tolerance.unwrap_or(Tolerance::ZERO_TOLERANCE);
     let mut results = Vec::new();
     let spans = curve.get_span_vector();
 
-    for span_idx in 0..(spans.len() - 1) {
-        let span_t0 = spans[span_idx];
-        let span_t1 = spans[span_idx + 1];
+    if spans.len() < 2 {
+        return Vec::new();
+    }
 
-        if (span_t1 - span_t0).abs() < tol {
+    for i in 0..spans.len() - 1 {
+        let span_t0 = spans[i];
+        let span_t1 = spans[i + 1];
+
+        if (span_t1 - span_t0).abs() < tolerance {
             continue;
         }
 
-        let d0 = curve_signed_distance_to_plane(&curve.point_at(span_t0), plane);
-        let d1 = curve_signed_distance_to_plane(&curve.point_at(span_t1), plane);
-
-        if d0 * d1 > tol * tol {
-            continue;
-        }
-
-        let mut ta = span_t0;
-        let mut tb = span_t1;
-        let mut da = d0;
-
-        for _ in 0..20 {
-            if (tb - ta).abs() < tol * 0.1 {
-                break;
-            }
-
-            let tm = (ta + tb) * 0.5;
-            let dm = curve_signed_distance_to_plane(&curve.point_at(tm), plane);
-
-            if dm.abs() < tol {
-                ta = tm;
-                tb = tm;
-                break;
-            }
-
-            if da * dm < 0.0 {
-                tb = tm;
-            } else {
-                ta = tm;
-                da = dm;
-            }
-        }
-
-        let mut t = (ta + tb) * 0.5;
-
-        for _ in 0..15 {
-            let pt = curve.point_at(t);
-            let f = curve_signed_distance_to_plane(&pt, plane);
-
-            if f.abs() < tol {
-                break;
-            }
-
-            let tan = curve.tangent_at(t);
-            let df = plane.z_axis().dot(&tan);
-
-            if df.abs() < 1e-10 {
-                if f * da < 0.0 {
-                    t = (ta + t) * 0.5;
-                } else {
-                    t = (t + tb) * 0.5;
-                }
-
-                continue;
-            }
-
-            let dt = -f / df;
-            let t_new = t + dt;
-            let t_new = t_new.max(span_t0).min(span_t1);
-
-            if dt.abs() < tol * 0.01 {
-                t = t_new;
-                break;
-            }
-
-            t = t_new;
-        }
-
-        let pt_final = curve.point_at(t);
-
-        if curve_signed_distance_to_plane(&pt_final, plane).abs() < tol {
-            let is_duplicate = results
-                .iter()
-                .any(|&existing_t: &f64| (t - existing_t).abs() < tol * 2.0);
-
-            if !is_duplicate {
-                results.push(t);
-            }
-        }
+        curve_plane_subdivide_algebraic(curve, plane, tolerance, span_t0, span_t1, 0, &mut results);
     }
 
     results.sort_by(|a, b| a.partial_cmp(b).unwrap());
+    results.dedup_by(|a, b| (*a - *b).abs() < tolerance * 10.0);
 
     results
 }
@@ -903,161 +1180,39 @@ pub fn curve_plane_production(
     plane: &Plane,
     tolerance: Option<f64>,
 ) -> Vec<f64> {
-    let tol = tolerance.unwrap_or(Tolerance::ZERO_TOLERANCE);
-
     if !curve.is_valid() {
         return Vec::new();
     }
 
+    let tolerance = tolerance.unwrap_or(Tolerance::ZERO_TOLERANCE);
     let mut results = Vec::new();
     let spans = curve.get_span_vector();
 
-    for span_idx in 0..(spans.len() - 1) {
-        let span_t0 = spans[span_idx];
-        let span_t1 = spans[span_idx + 1];
+    if spans.len() < 2 {
+        return Vec::new();
+    }
 
-        if (span_t1 - span_t0).abs() < tol {
+    for i in 0..spans.len() - 1 {
+        let span_t0 = spans[i];
+        let span_t1 = spans[i + 1];
+
+        if (span_t1 - span_t0).abs() < tolerance {
             continue;
         }
 
-        fn subdivide_and_solve(
-            curve: &NurbsCurve,
-            plane: &Plane,
-            ta: f64,
-            tb: f64,
-            depth: i32,
-            tol: f64,
-            results: &mut Vec<f64>,
-        ) {
-            if depth > 30 {
-                return;
-            }
-
-            let pa = curve.point_at(ta);
-            let pb = curve.point_at(tb);
-            let da = curve_signed_distance_to_plane(&pa, plane);
-            let db = curve_signed_distance_to_plane(&pb, plane);
-
-            if da * db > tol * tol {
-                return;
-            }
-
-            let segment_length = pa.distance(&pb, None);
-
-            if segment_length < tol * 10.0 || (tb - ta).abs() < tol * 0.001 {
-                let t_init = if (db - da).abs() > tol {
-                    (ta - da * (tb - ta) / (db - da)).max(ta).min(tb)
-                } else {
-                    (ta + tb) * 0.5
-                };
-
-                let mut t = t_init;
-
-                for _ in 0..5 {
-                    let pt = curve.point_at(t);
-                    let f = curve_signed_distance_to_plane(&pt, plane);
-
-                    if f.abs() < tol {
-                        if ta <= t && t <= tb {
-                            let is_duplicate = results.iter().any(|&e| (t - e).abs() < tol * 2.0);
-
-                            if !is_duplicate {
-                                results.push(t);
-                            }
-                        }
-
-                        return;
-                    }
-
-                    let df = curve.tangent_at(t).dot(&plane.z_axis());
-
-                    if df.abs() < 1e-10 {
-                        t = (ta + tb) * 0.5;
-                        break;
-                    }
-
-                    let dt = -f / df;
-                    t = (t + dt).max(ta).min(tb);
-
-                    if dt.abs() < tol * 0.001 {
-                        break;
-                    }
-                }
-
-                let pt_final = curve.point_at(t);
-
-                if curve_signed_distance_to_plane(&pt_final, plane).abs() < tol
-                    && ta <= t
-                    && t <= tb
-                {
-                    let is_duplicate = results.iter().any(|&e| (t - e).abs() < tol * 2.0);
-
-                    if !is_duplicate {
-                        results.push(t);
-                    }
-                }
-
-                return;
-            }
-
-            let tm = (ta + tb) * 0.5;
-            let pm = curve.point_at(tm);
-
-            let v = &pb - &pa;
-            let w = &pm - &pa;
-
-            if v.magnitude() > Tolerance::ZERO_TOLERANCE {
-                let t_proj = w.dot(&v) / v.dot(&v);
-                let p_proj = Point::new(
-                    pa[0] + t_proj * v[0],
-                    pa[1] + t_proj * v[1],
-                    pa[2] + t_proj * v[2],
-                );
-                let deviation = pm.distance(&p_proj, None);
-
-                if deviation < tol * 10.0 {
-                    if (db - da).abs() > tol {
-                        let mut t_root = (ta - da * (tb - ta) / (db - da)).max(ta).min(tb);
-
-                        for _ in 0..3 {
-                            let pt = curve.point_at(t_root);
-                            let f = curve_signed_distance_to_plane(&pt, plane);
-
-                            if f.abs() < tol {
-                                break;
-                            }
-
-                            let df = curve.tangent_at(t_root).dot(&plane.z_axis());
-
-                            if df.abs() > 1e-10 {
-                                t_root = (t_root - f / df).max(ta).min(tb);
-                            }
-                        }
-
-                        if curve_signed_distance_to_plane(&curve.point_at(t_root), plane).abs()
-                            < tol
-                        {
-                            let is_duplicate =
-                                results.iter().any(|&e| (t_root - e).abs() < tol * 2.0);
-
-                            if !is_duplicate {
-                                results.push(t_root);
-                            }
-                        }
-                    }
-
-                    return;
-                }
-            }
-
-            subdivide_and_solve(curve, plane, ta, tm, depth + 1, tol, results);
-            subdivide_and_solve(curve, plane, tm, tb, depth + 1, tol, results);
-        }
-
-        subdivide_and_solve(curve, plane, span_t0, span_t1, 0, tol, &mut results);
+        curve_plane_subdivide_production(
+            curve,
+            plane,
+            tolerance,
+            span_t0,
+            span_t1,
+            0,
+            &mut results,
+        );
     }
 
     results.sort_by(|a, b| a.partial_cmp(b).unwrap());
+    results.dedup_by(|a, b| (*a - *b).abs() < tolerance * 10.0);
 
     results
 }
@@ -1067,149 +1222,8 @@ pub fn curve_closest_point(curve: &NurbsCurve, test_point: &Point, t0: f64, t1: 
     Closest::curve_point(curve, test_point, t0, t1)
 }
 
-/// Ray-mesh hits by brute force, sorted by t.
-pub fn ray_mesh(
-    line: &Line,
-    mesh: &crate::Mesh,
-    epsilon: f64,
-    find_all: bool,
-) -> Option<Vec<Point>> {
-    let (vertices, faces) = mesh.to_vertices_and_faces();
-    let mut tris: Vec<(Point, Point, Point)> = Vec::new();
-
-    for face in &faces {
-        if face.len() < 3 {
-            continue;
-        }
-
-        let v0 = &vertices[face[0]];
-
-        for j in 1..face.len() - 1 {
-            tris.push((
-                v0.clone(),
-                vertices[face[j]].clone(),
-                vertices[face[j + 1]].clone(),
-            ));
-        }
-    }
-
-    if tris.is_empty() {
-        return None;
-    }
-
-    let origin = line.start();
-    let direction = line.to_vector().normalized();
-    let mut hits: Vec<(f64, Point)> = Vec::new();
-
-    for (v0, v1, v2) in &tris {
-        if let Some(p) = ray_triangle(line, v0, v1, v2, epsilon) {
-            let t = (p[0] - origin[0]) * direction[0]
-                + (p[1] - origin[1]) * direction[1]
-                + (p[2] - origin[2]) * direction[2];
-
-            if t >= 0.0 {
-                hits.push((t, p));
-            }
-        }
-    }
-
-    if hits.is_empty() {
-        return None;
-    }
-
-    hits.sort_by(|a, b| a.0.partial_cmp(&b.0).unwrap());
-
-    if find_all {
-        Some(hits.into_iter().map(|(_, p)| p).collect())
-    } else {
-        Some(vec![hits[0].1.clone()])
-    }
-}
-
-/// Ray-mesh hits through the mesh's triangle BVH, sorted by t.
-pub fn ray_mesh_bvh(
-    line: &Line,
-    mesh: &crate::Mesh,
-    epsilon: f64,
-    find_all: bool,
-) -> Option<Vec<Point>> {
-    let (vertices, faces) = mesh.to_vertices_and_faces();
-    let mut tris: Vec<(Point, Point, Point)> = Vec::new();
-
-    for face in &faces {
-        if face.len() < 3 {
-            continue;
-        }
-
-        let v0 = &vertices[face[0]];
-
-        for j in 1..face.len() - 1 {
-            tris.push((
-                v0.clone(),
-                vertices[face[j]].clone(),
-                vertices[face[j + 1]].clone(),
-            ));
-        }
-    }
-
-    if tris.is_empty() {
-        return None;
-    }
-
-    let tri_boxes: Vec<crate::OBB> = tris
-        .iter()
-        .map(|(v0, v1, v2)| {
-            crate::OBB::from_points(&[v0.clone(), v1.clone(), v2.clone()], 0.0, None)
-        })
-        .collect();
-
-    let world_size = crate::SpatialBVH::compute_world_size(&tri_boxes);
-    let bvh = crate::SpatialBVH::from_boxes(&tri_boxes, world_size);
-
-    let origin = line.start();
-    let direction = line.to_vector().normalized();
-    let mut candidate_ids: Vec<usize> = Vec::new();
-    let found = bvh.ray_cast(&origin, &direction, &mut candidate_ids, true);
-
-    if !found {
-        return None;
-    }
-
-    let mut hits: Vec<(f64, Point)> = Vec::new();
-
-    for idx in candidate_ids {
-        if idx >= tris.len() {
-            continue;
-        }
-
-        let (ref v0, ref v1, ref v2) = tris[idx];
-
-        if let Some(p) = ray_triangle(line, v0, v1, v2, epsilon) {
-            let t = (p[0] - origin[0]) * direction[0]
-                + (p[1] - origin[1]) * direction[1]
-                + (p[2] - origin[2]) * direction[2];
-
-            if t >= 0.0 {
-                hits.push((t, p));
-            }
-        }
-    }
-
-    if hits.is_empty() {
-        return None;
-    }
-
-    hits.sort_by(|a, b| a.0.partial_cmp(&b.0).unwrap());
-
-    if find_all {
-        Some(hits.into_iter().map(|(_, p)| p).collect())
-    } else {
-        Some(vec![hits[0].1.clone()])
-    }
-}
-
 // ═══════════════════════════════════════════════════════════════════════════
-// NURBS surface plane tracing
+// NURBS surface helpers
 // ═══════════════════════════════════════════════════════════════════════════
 
 /// Seed and trace surface/plane intersection curves in UV space.
@@ -1298,6 +1312,7 @@ fn surface_plane_traces(
             if mag2 < 1e-28 {
                 return false;
             }
+
             *u -= val * gu / mag2;
             *v -= val * gv / mag2;
             *u = wrap_u(*u);
@@ -2048,726 +2063,6 @@ fn surface_plane_fit_3d(
     crv
 }
 
-/// Surface-plane section curves.
-pub fn surface_plane(
-    surface: &NurbsSurface,
-    plane: &Plane,
-    tolerance: Option<f64>,
-) -> Vec<NurbsCurve> {
-    if !surface.is_valid() {
-        return vec![];
-    }
-
-    let tolerance = tolerance
-        .unwrap_or(Tolerance::ZERO_TOLERANCE)
-        .max(Tolerance::ZERO_TOLERANCE);
-
-    let (traces, step, uv_to_3d, uv_to_3d_min) = surface_plane_traces(surface, plane, tolerance);
-
-    let mut result: Vec<NurbsCurve> = Vec::new();
-
-    for (uv_trace, _uv_unwrapped, is_loop) in &traces {
-        let all_pts: Vec<Point> = uv_trace
-            .iter()
-            .map(|&(u, v)| surface.point_at(u, v).unwrap_or(Point::new(0.0, 0.0, 0.0)))
-            .collect();
-
-        let crv = surface_plane_fit_3d(
-            &all_pts,
-            *is_loop,
-            plane,
-            step,
-            uv_to_3d,
-            uv_to_3d_min,
-            true,
-        );
-
-        if !crv.is_valid() {
-            continue;
-        }
-
-        let (ct0, ct1) = crv.domain();
-        let dup_tol = step * uv_to_3d * 3.0;
-        let mut dup = false;
-
-        for existing in &result {
-            let (et0, et1) = existing.domain();
-            let mut all_close = true;
-
-            for &f in &[0.25, 0.5, 0.75] {
-                let cp = crv.point_at(ct0 + (ct1 - ct0) * f);
-                let ep = existing.point_at(et0 + (et1 - et0) * f);
-                let em = existing.point_at((et0 + et1) * 0.5);
-                let d = cp.distance(&ep, None).min(cp.distance(&em, None));
-
-                if d > dup_tol {
-                    all_close = false;
-                    break;
-                }
-            }
-
-            if all_close {
-                dup = true;
-                break;
-            }
-        }
-
-        if !dup {
-            result.push(crv);
-        }
-    }
-
-    result
-}
-
-/// Keep the pcurve sub-segments whose lifted 3D point lies inside the cutter footprint.
-fn clip_pcurve_to_cutter(
-    target: &NurbsSurface,
-    pc: &NurbsCurve,
-    cutter: &NurbsSurface,
-) -> Vec<NurbsCurve> {
-    let n = (pc.cv_count() * 4).max(16);
-    let (d0, d1) = pc.domain();
-    let (cu0, cu1) = cutter.domain(0).unwrap_or((0.0, 1.0));
-    let (cv0, cv1) = cutter.domain(1).unwrap_or((0.0, 1.0));
-    let zero = crate::point::Point::new(0.0, 0.0, 0.0);
-    let c00 = cutter.point_at(cu0, cv0).unwrap_or(zero.clone());
-    let c11 = cutter.point_at(cu1, cv1).unwrap_or(zero.clone());
-    let on_tol = (1e-7f64).max(c00.distance(&c11, None) * 1e-4);
-
-    let q00 = cutter.point_at(cu0, cv0).unwrap_or(zero.clone());
-    let q10 = cutter.point_at(cu1, cv0).unwrap_or(zero.clone());
-    let q01 = cutter.point_at(cu0, cv1).unwrap_or(zero.clone());
-    let eu = crate::vector::Vector::new(q10[0] - q00[0], q10[1] - q00[1], q10[2] - q00[2]);
-    let ev = crate::vector::Vector::new(q01[0] - q00[0], q01[1] - q00[1], q01[2] - q00[2]);
-    let eu2 = eu[0] * eu[0] + eu[1] * eu[1] + eu[2] * eu[2];
-    let ev2 = ev[0] * ev[0] + ev[1] * ev[1] + ev[2] * ev[2];
-    let fast_planar = eu2 > 1e-28 && ev2 > 1e-28;
-    let gap = |t: f64| -> f64 {
-        let uv = pc.point_at(t);
-        let p3 = target
-            .point_at(uv[0], uv[1])
-            .unwrap_or(crate::point::Point::new(0.0, 0.0, 0.0));
-
-        if fast_planar {
-            let (dx, dy, dz) = (p3[0] - q00[0], p3[1] - q00[1], p3[2] - q00[2]);
-            let a = ((dx * eu[0] + dy * eu[1] + dz * eu[2]) / eu2).clamp(0.0, 1.0);
-            let b = ((dx * ev[0] + dy * ev[1] + dz * ev[2]) / ev2).clamp(0.0, 1.0);
-            let cx = q00[0] + a * eu[0] + b * ev[0];
-            let cy = q00[1] + a * eu[1] + b * ev[1];
-            let cz = q00[2] + a * eu[2] + b * ev[2];
-
-            return ((p3[0] - cx).powi(2) + (p3[1] - cy).powi(2) + (p3[2] - cz).powi(2)).sqrt();
-        }
-
-        crate::closest::Closest::surface_point(cutter, &p3, 0.0, 0.0, 0.0, 0.0).2
-    };
-    let refine = |t_in: f64, t_out: f64| -> f64 {
-        let (mut a, mut b) = (t_in, t_out);
-
-        for _ in 0..20 {
-            let tm = (a + b) * 0.5;
-
-            if gap(tm) < on_tol {
-                a = tm;
-            } else {
-                b = tm;
-            }
-        }
-
-        b
-    };
-
-    let mut flags: Vec<(f64, bool)> = Vec::with_capacity(n + 1);
-
-    for i in 0..=n {
-        let t = d0 + (d1 - d0) * i as f64 / n as f64;
-        flags.push((t, gap(t) < on_tol));
-    }
-
-    let mut pieces = Vec::new();
-    let mut i = 0;
-
-    while i <= n {
-        if flags[i].1 {
-            let mut j = i;
-
-            while j < n && flags[j + 1].1 {
-                j += 1;
-            }
-
-            let ta = if i == 0 {
-                flags[i].0
-            } else {
-                refine(flags[i].0, flags[i - 1].0)
-            };
-            let tb = if j == n {
-                flags[j].0
-            } else {
-                refine(flags[j].0, flags[j + 1].0)
-            };
-
-            if tb - ta > (d1 - d0) * 1e-6 {
-                let mut piece = pc.duplicate();
-
-                if piece.trim(ta, tb) && piece.is_valid() {
-                    pieces.push(piece);
-                }
-            }
-
-            i = j + 1;
-        } else {
-            i += 1;
-        }
-    }
-
-    pieces
-}
-
-/// UV pcurves of the cutter's section on the target, clipped to the cutter footprint.
-pub fn cut_curves_on_surface(
-    target: &NurbsSurface,
-    cutter: &NurbsSurface,
-    tolerance: Option<f64>,
-) -> Vec<NurbsCurve> {
-    let cutter_planar = cutter.is_planar(None, 1e-6);
-    let rtol = tolerance.unwrap_or(1e-7).max(1e-7) * 1e4;
-    let rt = recognize_surface(target, rtol);
-    let mut out = Vec::new();
-
-    for tr in surface_surface(target, cutter, tolerance) {
-        let c3d = &tr.0;
-        let pa_an = rt.as_ref().and_then(|r| analytic_pcurve(target, r, c3d));
-        let pcs: Vec<NurbsCurve> = if let Some(pa) = pa_an {
-            vec![pa]
-        } else if matches!(rt.as_ref(), Some(RecSurf::Sphere(..))) {
-            let mut v = analytic_sphere_pullback(target, rt.as_ref().unwrap(), c3d);
-
-            if v.is_empty() {
-                v = Closest::surface_curve(target, c3d, 0.0, 0.0, tolerance.unwrap_or(0.0));
-            }
-
-            if v.is_empty() {
-                v.push(tr.1.clone());
-            }
-
-            v
-        } else {
-            let mut v = Closest::surface_curve(target, c3d, 0.0, 0.0, tolerance.unwrap_or(0.0));
-
-            if v.is_empty() {
-                v.push(tr.1.clone());
-            }
-
-            v
-        };
-
-        for pc in pcs {
-            if cutter_planar {
-                out.extend(clip_pcurve_to_cutter(target, &pc, cutter));
-            } else {
-                out.push(pc);
-            }
-        }
-    }
-
-    out
-}
-
-/// Surface-plane section curves paired with their UV pcurves.
-pub fn surface_plane_uv(
-    surface: &NurbsSurface,
-    plane: &Plane,
-    tolerance: Option<f64>,
-) -> Vec<(NurbsCurve, NurbsCurve)> {
-    if !surface.is_valid() {
-        return vec![];
-    }
-
-    let tolerance = tolerance
-        .unwrap_or(Tolerance::ZERO_TOLERANCE)
-        .max(Tolerance::ZERO_TOLERANCE);
-
-    let (u0, u1) = match surface.domain(0) {
-        Some(d) => d,
-        None => return vec![],
-    };
-    let (v0, v1) = match surface.domain(1) {
-        Some(d) => d,
-        None => return vec![],
-    };
-    let range_u = u1 - u0;
-    let range_v = v1 - v0;
-    let closed_u = surface.is_closed(0);
-    let closed_v = surface.is_closed(1);
-
-    let wrap_u = |u: f64| -> f64 {
-        if closed_u {
-            let mut t = (u - u0) % range_u;
-
-            if t < 0.0 {
-                t += range_u;
-            }
-
-            return u0 + t;
-        }
-
-        u.max(u0).min(u1)
-    };
-    let wrap_v = |v: f64| -> f64 {
-        if closed_v {
-            let mut t = (v - v0) % range_v;
-
-            if t < 0.0 {
-                t += range_v;
-            }
-
-            return v0 + t;
-        }
-
-        v.max(v0).min(v1)
-    };
-
-    let pn = plane.z_axis();
-    let p0 = plane.origin();
-
-    let g_and_grad = |u: f64, v: f64| -> (f64, f64, f64) {
-        let derivs = surface.evaluate(wrap_u(u), wrap_v(v), 1);
-
-        if derivs.len() < 3 {
-            return (0.0, 0.0, 0.0);
-        }
-
-        let s = &derivs[0];
-        let su = &derivs[2];
-        let sv = &derivs[1];
-        let val = (s[0] - p0[0]) * pn[0] + (s[1] - p0[1]) * pn[1] + (s[2] - p0[2]) * pn[2];
-        let gu = su[0] * pn[0] + su[1] * pn[1] + su[2] * pn[2];
-        let gv = sv[0] * pn[0] + sv[1] * pn[1] + sv[2] * pn[2];
-        (val, gu, gv)
-    };
-
-    let seam_newton = |mut cu: f64, mut cv_: f64, axis: i32| -> (f64, f64) {
-        for _ in 0..10 {
-            let (val, gu, gv) = g_and_grad(cu, cv_);
-
-            if val.abs() < tolerance {
-                break;
-            }
-
-            if axis == 0 {
-                if gv.abs() < 1e-14 {
-                    break;
-                }
-
-                cv_ -= val / gv;
-            } else {
-                if gu.abs() < 1e-14 {
-                    break;
-                }
-
-                cu -= val / gu;
-            }
-        }
-
-        (cu, cv_)
-    };
-
-    let (traces, step, uv_to_3d, uv_to_3d_min) = surface_plane_traces(surface, plane, tolerance);
-
-    let fit_tol = step * (uv_to_3d + uv_to_3d_min) * 0.5;
-    let dup_tol = step * uv_to_3d * 3.0;
-
-    let mut result: Vec<(NurbsCurve, NurbsCurve)> = Vec::new();
-    let mut kept_pts3: Vec<Vec<Point>> = Vec::new();
-
-    for (uv_trace, uv_unwrapped, is_loop) in &traces {
-        let is_loop = *is_loop;
-        let m = uv_trace.len();
-        let trace_pts3: Vec<Point> = uv_trace
-            .iter()
-            .map(|&(u, v)| surface.point_at(u, v).unwrap_or(Point::new(0.0, 0.0, 0.0)))
-            .collect();
-
-        let mut dup = false;
-
-        for other in &kept_pts3 {
-            let mut all_close = true;
-
-            for &f in &[0.25, 0.5, 0.75] {
-                let cp = &trace_pts3[((m - 1) as f64 * f) as usize];
-                let mut dmin = dup_tol + 1.0;
-
-                for k in (0..other.len()).step_by(5) {
-                    dmin = dmin.min(cp.distance(&other[k], None));
-                }
-
-                if dmin > dup_tol {
-                    all_close = false;
-                    break;
-                }
-            }
-
-            if all_close {
-                dup = true;
-                break;
-            }
-        }
-
-        if dup {
-            continue;
-        }
-
-        kept_pts3.push(trace_pts3);
-
-        let mut pts: Vec<(f64, f64)> = uv_unwrapped.clone();
-        let mut closure_du = 0.0;
-        let mut closure_dv = 0.0;
-
-        if is_loop && pts.len() >= 2 {
-            let mut du_j = pts[0].0 - pts[pts.len() - 1].0;
-            let mut dv_j = pts[0].1 - pts[pts.len() - 1].1;
-
-            if closed_u {
-                while du_j > range_u * 0.5 {
-                    du_j -= range_u;
-                }
-
-                while du_j < -range_u * 0.5 {
-                    du_j += range_u;
-                }
-            }
-
-            if closed_v {
-                while dv_j > range_v * 0.5 {
-                    dv_j -= range_v;
-                }
-
-                while dv_j < -range_v * 0.5 {
-                    dv_j += range_v;
-                }
-            }
-
-            closure_du = (pts[pts.len() - 1].0 + du_j) - pts[0].0;
-            closure_dv = (pts[pts.len() - 1].1 + dv_j) - pts[0].1;
-            pts.push((pts[0].0 + closure_du, pts[0].1 + closure_dv));
-        }
-
-        let mut out_pts: Vec<(f64, f64)> = vec![pts[0]];
-        let mut cross_idx: Vec<usize> = Vec::new();
-
-        for i in 1..pts.len() {
-            let pa = pts[i - 1];
-            let pb = pts[i];
-            let mut crossings: Vec<(f64, i32, f64)> = Vec::new();
-
-            if closed_u && (pb.0 - pa.0).abs() > 1e-15 {
-                let k0 = ((pa.0 - u0) / range_u).floor() as i64;
-                let k1 = ((pb.0 - u0) / range_u).floor() as i64;
-
-                for k in (k0.min(k1) + 1)..=(k0.max(k1)) {
-                    let l = u0 + k as f64 * range_u;
-                    let t = (l - pa.0) / (pb.0 - pa.0);
-
-                    if 0.0 < t && t < 1.0 {
-                        crossings.push((t, 0, l));
-                    }
-                }
-            }
-
-            if closed_v && (pb.1 - pa.1).abs() > 1e-15 {
-                let k0 = ((pa.1 - v0) / range_v).floor() as i64;
-                let k1 = ((pb.1 - v0) / range_v).floor() as i64;
-
-                for k in (k0.min(k1) + 1)..=(k0.max(k1)) {
-                    let l = v0 + k as f64 * range_v;
-                    let t = (l - pa.1) / (pb.1 - pa.1);
-
-                    if 0.0 < t && t < 1.0 {
-                        crossings.push((t, 1, l));
-                    }
-                }
-            }
-
-            crossings.sort_by(|a, b| a.partial_cmp(b).unwrap());
-
-            for &(t, axis, l) in &crossings {
-                let mut cu = pa.0 + (pb.0 - pa.0) * t;
-                let mut cv_ = pa.1 + (pb.1 - pa.1) * t;
-
-                if axis == 0 {
-                    let (_cu_r, cv_r) = seam_newton(l, cv_, 0);
-                    cu = l;
-                    cv_ = cv_r;
-                } else {
-                    let (cu_r, _cv_r) = seam_newton(cu, l, 1);
-                    cu = cu_r;
-                    cv_ = l;
-                }
-
-                out_pts.push((cu, cv_));
-                cross_idx.push(out_pts.len() - 1);
-            }
-
-            out_pts.push((pb.0, pb.1));
-
-            if i < pts.len() - 1 {
-                let mut on_seam = false;
-
-                if closed_u {
-                    let k = ((pb.0 - u0) / range_u).round();
-                    let l = u0 + k * range_u;
-
-                    if (pb.0 - l).abs() < range_u * 1e-9 && (pb.0 - pa.0).abs() > range_u * 1e-9 {
-                        out_pts.last_mut().unwrap().0 = l;
-                        on_seam = true;
-                    }
-                }
-
-                if closed_v {
-                    let k = ((pb.1 - v0) / range_v).round();
-                    let l = v0 + k * range_v;
-
-                    if (pb.1 - l).abs() < range_v * 1e-9 && (pb.1 - pa.1).abs() > range_v * 1e-9 {
-                        out_pts.last_mut().unwrap().1 = l;
-                        on_seam = true;
-                    }
-                }
-
-                if on_seam {
-                    cross_idx.push(out_pts.len() - 1);
-                }
-            }
-        }
-
-        let wrap_drift = closure_du.abs() > range_u * 0.5 || closure_dv.abs() > range_v * 0.5;
-        let mut pieces: Vec<(Vec<(f64, f64)>, bool)> = Vec::new();
-
-        if cross_idx.is_empty() {
-            pieces.push((out_pts.clone(), is_loop && !wrap_drift));
-        } else if is_loop {
-            for w in cross_idx.windows(2) {
-                let (a, b) = (w[0], w[1]);
-                pieces.push((out_pts[a..=b].to_vec(), false));
-            }
-
-            let mut wrap_piece: Vec<(f64, f64)> =
-                out_pts[cross_idx[cross_idx.len() - 1]..].to_vec();
-
-            for p in &out_pts[1..=cross_idx[0]] {
-                wrap_piece.push((p.0 + closure_du, p.1 + closure_dv));
-            }
-
-            pieces.push((wrap_piece, false));
-        } else {
-            let mut bounds: Vec<usize> = vec![0];
-
-            for &c in &cross_idx {
-                bounds.push(c);
-            }
-
-            bounds.push(out_pts.len() - 1);
-
-            for w in bounds.windows(2) {
-                let (a, b) = (w[0], w[1]);
-
-                if b > a {
-                    pieces.push((out_pts[a..=b].to_vec(), false));
-                }
-            }
-        }
-
-        for (mut piece_pts, piece_loop) in pieces {
-            if piece_pts.len() < 2 {
-                continue;
-            }
-
-            let mid = piece_pts[piece_pts.len() / 2];
-
-            if closed_u {
-                let k_u = ((mid.0 - u0) / range_u).floor();
-
-                if k_u != 0.0 {
-                    for p in piece_pts.iter_mut() {
-                        p.0 -= k_u * range_u;
-                    }
-                }
-            }
-
-            if closed_v {
-                let k_v = ((mid.1 - v0) / range_v).floor();
-
-                if k_v != 0.0 {
-                    for p in piece_pts.iter_mut() {
-                        p.1 -= k_v * range_v;
-                    }
-                }
-            }
-
-            let pts3: Vec<Point> = piece_pts
-                .iter()
-                .map(|&(u, v)| {
-                    surface
-                        .point_at(wrap_u(u), wrap_v(v))
-                        .unwrap_or(Point::new(0.0, 0.0, 0.0))
-                })
-                .collect();
-
-            let mut crv3 = surface_plane_fit_3d(
-                &pts3,
-                piece_loop,
-                plane,
-                step,
-                uv_to_3d,
-                uv_to_3d_min,
-                false,
-            );
-
-            if !crv3.is_valid() {
-                crv3 = if piece_loop {
-                    NurbsCurve::create_interpolated(
-                        &pts3,
-                        CurveNurbsKnotStyle::ChordPeriodic,
-                        CurveInterpStyle::Rhino,
-                    )
-                } else {
-                    NurbsCurve::create_interpolated(
-                        &pts3,
-                        CurveNurbsKnotStyle::Chord,
-                        CurveInterpStyle::Rhino,
-                    )
-                };
-            }
-
-            if !crv3.is_valid() {
-                continue;
-            }
-
-            let pts_uv: Vec<Point> = piece_pts
-                .iter()
-                .map(|&(u, v)| Point::new(u, v, 0.0))
-                .collect();
-
-            let mp = pts_uv.len();
-            let fit_tol_uv = step;
-            let mut total_turning = 0.0f64;
-
-            for i in 1..(mp - 1) {
-                let dx1 = pts_uv[i][0] - pts_uv[i - 1][0];
-                let dy1 = pts_uv[i][1] - pts_uv[i - 1][1];
-                let dx2 = pts_uv[i + 1][0] - pts_uv[i][0];
-                let dy2 = pts_uv[i + 1][1] - pts_uv[i][1];
-                let l1 = f64::hypot(dx1, dy1);
-                let l2 = f64::hypot(dx2, dy2);
-
-                if l1 > 1e-14 && l2 > 1e-14 {
-                    let c = ((dx1 * dx2 + dy1 * dy2) / (l1 * l2)).clamp(-1.0, 1.0);
-                    total_turning += c.acos();
-                }
-            }
-
-            let mut chords = vec![0.0f64; mp];
-            let mut total_len = 0.0f64;
-
-            for i in 1..mp {
-                total_len += pts_uv[i].distance(&pts_uv[i - 1], None);
-                chords[i] = total_len;
-            }
-
-            if piece_loop && mp > 1 {
-                total_len += pts_uv[0].distance(&pts_uv[mp - 1], None);
-            }
-
-            if total_len > 1e-14 {
-                for i in 1..mp {
-                    chords[i] /= total_len;
-                }
-            }
-
-            let mut target_cvs = 8_i32.max((total_turning / 0.5) as i32 + 6);
-            let max_cvs = (mp as i32) - 1;
-            let mut pcurve = NurbsCurve::new(3, false, 4, 0);
-
-            for _ in 0..5 {
-                if target_cvs > max_cvs {
-                    break;
-                }
-
-                pcurve = NurbsCurve::create_fitted(&pts_uv, target_cvs as usize, 3, piece_loop);
-
-                if !pcurve.is_valid() {
-                    break;
-                }
-
-                let (ft0, ft1) = pcurve.domain();
-                let mut max_dev = 0.0f64;
-
-                for i in 0..mp {
-                    let t = ft0 + (ft1 - ft0) * chords[i];
-                    max_dev = max_dev.max(pcurve.point_at(t).distance(&pts_uv[i], None));
-                }
-
-                if max_dev < fit_tol_uv {
-                    break;
-                }
-
-                target_cvs = (target_cvs * 2).min(max_cvs);
-            }
-
-            if !pcurve.is_valid() {
-                pcurve = if piece_loop {
-                    NurbsCurve::create_interpolated(
-                        &pts_uv,
-                        CurveNurbsKnotStyle::ChordPeriodic,
-                        CurveInterpStyle::Rhino,
-                    )
-                } else {
-                    NurbsCurve::create_interpolated(
-                        &pts_uv,
-                        CurveNurbsKnotStyle::Chord,
-                        CurveInterpStyle::Rhino,
-                    )
-                };
-            }
-
-            if !pcurve.is_valid() {
-                continue;
-            }
-
-            crv3.set_domain(0.0, 1.0);
-            pcurve.set_domain(0.0, 1.0);
-
-            let vali_tol = (10.0 * tolerance).max(fit_tol * 2.0);
-            let mut max_off = 0.0f64;
-
-            for i in 0..17 {
-                let t = i as f64 / 16.0;
-                let pc = pcurve.point_at(t);
-                let (val, _gu, _gv) = g_and_grad(pc[0], pc[1]);
-                max_off = max_off.max(val.abs());
-            }
-
-            if max_off > vali_tol && target_cvs * 2 <= max_cvs {
-                let mut refit =
-                    NurbsCurve::create_fitted(&pts_uv, (target_cvs * 2) as usize, 3, piece_loop);
-
-                if refit.is_valid() {
-                    refit.set_domain(0.0, 1.0);
-                    pcurve = refit;
-                }
-            }
-
-            result.push((crv3, pcurve));
-        }
-    }
-
-    result
-}
-
-// ═══════════════════════════════════════════════════════════════════════════
-// Analytic quadric surface intersection
-// ═══════════════════════════════════════════════════════════════════════════
-
 /// Solve an n x n linear system by Gaussian elimination with partial pivoting.
 fn solve_gauss(m: &[Vec<f64>], rhs: &[f64], n: usize) -> Option<Vec<f64>> {
     let mut a: Vec<Vec<f64>> = (0..n)
@@ -2819,6 +2114,35 @@ fn solve_gauss(m: &[Vec<f64>], rhs: &[f64], n: usize) -> Option<Vec<f64>> {
     Some(x)
 }
 
+// ═══════════════════════════════════════════════════════════════════════════
+// Analytic quadric surface intersection
+// ═══════════════════════════════════════════════════════════════════════════
+
+#[inline]
+fn vdot(a: [f64; 3], b: [f64; 3]) -> f64 {
+    a[0] * b[0] + a[1] * b[1] + a[2] * b[2]
+}
+
+#[inline]
+fn vcross(u: [f64; 3], v: [f64; 3]) -> [f64; 3] {
+    [
+        u[1] * v[2] - u[2] * v[1],
+        u[2] * v[0] - u[0] * v[2],
+        u[0] * v[1] - u[1] * v[0],
+    ]
+}
+
+#[inline]
+fn vunit(v: [f64; 3]) -> [f64; 3] {
+    let l = (v[0] * v[0] + v[1] * v[1] + v[2] * v[2]).sqrt();
+
+    if l > 1e-300 {
+        [v[0] / l, v[1] / l, v[2] / l]
+    } else {
+        v
+    }
+}
+
 /// Two unit vectors spanning the plane perpendicular to unit n.
 fn ortho_basis(n: [f64; 3]) -> ([f64; 3], [f64; 3]) {
     let ax = if n[0].abs() <= n[1].abs() && n[0].abs() <= n[2].abs() {
@@ -2861,6 +2185,39 @@ fn exact_circle(cx: f64, cy: f64, cz: f64, xa: [f64; 3], ya: [f64; 3], radius: f
         let x = cx + radius * (px[i] * xa[0] + py[i] * ya[0]);
         let y = cy + radius * (px[i] * xa[1] + py[i] * ya[1]);
         let z = cz + radius * (px[i] * xa[2] + py[i] * ya[2]);
+        crv.set_cv_4d(i, x * wts[i], y * wts[i], z * wts[i], wts[i]);
+    }
+
+    crv.set_domain(0.0, 1.0);
+
+    crv
+}
+
+/// Exact 9-CV rational NURBS ellipse.
+fn exact_ellipse(
+    cx: f64,
+    cy: f64,
+    cz: f64,
+    ea: [f64; 3],
+    eb: [f64; 3],
+    semi_a: f64,
+    semi_b: f64,
+) -> NurbsCurve {
+    let w = (2.0_f64).sqrt() / 2.0;
+    let px = [1.0, 1.0, 0.0, -1.0, -1.0, -1.0, 0.0, 1.0, 1.0];
+    let py = [0.0, 1.0, 1.0, 1.0, 0.0, -1.0, -1.0, -1.0, 0.0];
+    let wts = [1.0, w, 1.0, w, 1.0, w, 1.0, w, 1.0];
+    let mut crv = NurbsCurve::new(3, true, 3, 9);
+    let knots = [0.0, 0.0, 1.0, 1.0, 2.0, 2.0, 3.0, 3.0, 4.0, 4.0];
+
+    for i in 0..10 {
+        crv.set_nurbsknot(i, knots[i]);
+    }
+
+    for i in 0..9 {
+        let x = cx + semi_a * px[i] * ea[0] + semi_b * py[i] * eb[0];
+        let y = cy + semi_a * px[i] * ea[1] + semi_b * py[i] * eb[1];
+        let z = cz + semi_a * px[i] * ea[2] + semi_b * py[i] * eb[2];
         crv.set_cv_4d(i, x * wts[i], y * wts[i], z * wts[i], wts[i]);
     }
 
@@ -2923,37 +2280,13 @@ fn jacobi_eig3(m: &[[f64; 3]; 3]) -> ([f64; 3], [[f64; 3]; 3]) {
     (eigvals, eigvecs)
 }
 
-/// Exact 9-CV rational NURBS ellipse.
-fn exact_ellipse(
-    cx: f64,
-    cy: f64,
-    cz: f64,
-    ea: [f64; 3],
-    eb: [f64; 3],
-    semi_a: f64,
-    semi_b: f64,
-) -> NurbsCurve {
-    let w = (2.0_f64).sqrt() / 2.0;
-    let px = [1.0, 1.0, 0.0, -1.0, -1.0, -1.0, 0.0, 1.0, 1.0];
-    let py = [0.0, 1.0, 1.0, 1.0, 0.0, -1.0, -1.0, -1.0, 0.0];
-    let wts = [1.0, w, 1.0, w, 1.0, w, 1.0, w, 1.0];
-    let mut crv = NurbsCurve::new(3, true, 3, 9);
-    let knots = [0.0, 0.0, 1.0, 1.0, 2.0, 2.0, 3.0, 3.0, 4.0, 4.0];
-
-    for i in 0..10 {
-        crv.set_nurbsknot(i, knots[i]);
-    }
-
-    for i in 0..9 {
-        let x = cx + semi_a * px[i] * ea[0] + semi_b * py[i] * eb[0];
-        let y = cy + semi_a * px[i] * ea[1] + semi_b * py[i] * eb[1];
-        let z = cz + semi_a * px[i] * ea[2] + semi_b * py[i] * eb[2];
-        crv.set_cv_4d(i, x * wts[i], y * wts[i], z * wts[i], wts[i]);
-    }
-
-    crv.set_domain(0.0, 1.0);
-
-    crv
+/// Recognized analytic surface type.
+enum RecSurf {
+    Plane([f64; 3], [f64; 3]),
+    Sphere([f64; 3], f64),
+    Cylinder([f64; 3], [f64; 3], f64),
+    Cone([f64; 3], [f64; 3], f64),
+    Torus([f64; 3], [f64; 3], f64, f64),
 }
 
 /// Recognize a cylinder from surface samples: axis point, axis direction and radius.
@@ -3337,15 +2670,6 @@ fn fit_torus(surface: &NurbsSurface, tol: f64) -> Option<([f64; 3], [f64; 3], f6
     Some((center, w, rr, r))
 }
 
-/// Recognized analytic surface type.
-enum RecSurf {
-    Plane([f64; 3], [f64; 3]),
-    Sphere([f64; 3], f64),
-    Cylinder([f64; 3], [f64; 3], f64),
-    Cone([f64; 3], [f64; 3], f64),
-    Torus([f64; 3], [f64; 3], f64, f64),
-}
-
 /// Classify a surface as plane, cylinder, cone, sphere or torus within tol.
 fn recognize_surface(surface: &NurbsSurface, tol: f64) -> Option<RecSurf> {
     if surface.is_planar(None, tol) {
@@ -3376,29 +2700,36 @@ fn recognize_surface(surface: &NurbsSurface, tol: f64) -> Option<RecSurf> {
     None
 }
 
-#[inline]
-fn vunit(v: [f64; 3]) -> [f64; 3] {
-    let l = (v[0] * v[0] + v[1] * v[1] + v[2] * v[2]).sqrt();
+/// Solve ((X-V).w)^2 - cos^2a |X-V|^2 = 0 along X = x0 + t d. Returns roots.
+fn line_cone(x0: [f64; 3], d: [f64; 3], v: [f64; 3], w: [f64; 3], alpha: f64) -> Vec<f64> {
+    let ca2 = alpha.cos().powi(2);
+    let e = [x0[0] - v[0], x0[1] - v[1], x0[2] - v[2]];
+    let aa = e[0] * w[0] + e[1] * w[1] + e[2] * w[2];
+    let bb = d[0] * w[0] + d[1] * w[1] + d[2] * w[2];
+    let cc = e[0] * e[0] + e[1] * e[1] + e[2] * e[2];
+    let dd = e[0] * d[0] + e[1] * d[1] + e[2] * d[2];
+    let ee = d[0] * d[0] + d[1] * d[1] + d[2] * d[2];
+    let qa = bb * bb - ca2 * ee;
+    let qb = 2.0 * aa * bb - 2.0 * ca2 * dd;
+    let qc = aa * aa - ca2 * cc;
 
-    if l > 1e-300 {
-        [v[0] / l, v[1] / l, v[2] / l]
-    } else {
-        v
+    if qa.abs() < 1e-14 {
+        return if qb.abs() < 1e-300 {
+            vec![]
+        } else {
+            vec![-qc / qb]
+        };
     }
-}
 
-#[inline]
-fn vcross(u: [f64; 3], v: [f64; 3]) -> [f64; 3] {
-    [
-        u[1] * v[2] - u[2] * v[1],
-        u[2] * v[0] - u[0] * v[2],
-        u[0] * v[1] - u[1] * v[0],
-    ]
-}
+    let disc = qb * qb - 4.0 * qa * qc;
 
-#[inline]
-fn vdot(a: [f64; 3], b: [f64; 3]) -> f64 {
-    a[0] * b[0] + a[1] * b[1] + a[2] * b[2]
+    if disc < 0.0 {
+        return vec![];
+    }
+
+    let sq = disc.sqrt();
+
+    vec![(-qb - sq) / (2.0 * qa), (-qb + sq) / (2.0 * qa)]
 }
 
 /// Exact plane-sphere section: a circle or nothing.
@@ -3454,38 +2785,6 @@ fn plane_cylinder(
         r / wn.abs(),
         r,
     ))
-}
-
-/// Solve ((X-V).w)^2 - cos^2a |X-V|^2 = 0 along X = x0 + t d. Returns roots.
-fn line_cone(x0: [f64; 3], d: [f64; 3], v: [f64; 3], w: [f64; 3], alpha: f64) -> Vec<f64> {
-    let ca2 = alpha.cos().powi(2);
-    let e = [x0[0] - v[0], x0[1] - v[1], x0[2] - v[2]];
-    let aa = e[0] * w[0] + e[1] * w[1] + e[2] * w[2];
-    let bb = d[0] * w[0] + d[1] * w[1] + d[2] * w[2];
-    let cc = e[0] * e[0] + e[1] * e[1] + e[2] * e[2];
-    let dd = e[0] * d[0] + e[1] * d[1] + e[2] * d[2];
-    let ee = d[0] * d[0] + d[1] * d[1] + d[2] * d[2];
-    let qa = bb * bb - ca2 * ee;
-    let qb = 2.0 * aa * bb - 2.0 * ca2 * dd;
-    let qc = aa * aa - ca2 * cc;
-
-    if qa.abs() < 1e-14 {
-        return if qb.abs() < 1e-300 {
-            vec![]
-        } else {
-            vec![-qc / qb]
-        };
-    }
-
-    let disc = qb * qb - 4.0 * qa * qc;
-
-    if disc < 0.0 {
-        return vec![];
-    }
-
-    let sq = disc.sqrt();
-
-    vec![(-qb - sq) / (2.0 * qa), (-qb + sq) / (2.0 * qa)]
 }
 
 /// Plane-cone section: exact ellipse when closed, fitted arcs otherwise.
@@ -3654,6 +2953,7 @@ fn ssi_plane_plane(
         if ta > tb {
             std::mem::swap(&mut ta, &mut tb);
         }
+
         *t0 = (*t0).max(ta);
         *t1 = (*t1).min(tb);
         true
@@ -5128,6 +4428,572 @@ fn analytic_ssi(
     Some(triples)
 }
 
+// ═══════════════════════════════════════════════════════════════════════════
+// NURBS surfaces
+// ═══════════════════════════════════════════════════════════════════════════
+
+/// Surface-plane section curves.
+pub fn surface_plane(
+    surface: &NurbsSurface,
+    plane: &Plane,
+    tolerance: Option<f64>,
+) -> Vec<NurbsCurve> {
+    if !surface.is_valid() {
+        return vec![];
+    }
+
+    let tolerance = tolerance
+        .unwrap_or(Tolerance::ZERO_TOLERANCE)
+        .max(Tolerance::ZERO_TOLERANCE);
+
+    let (traces, step, uv_to_3d, uv_to_3d_min) = surface_plane_traces(surface, plane, tolerance);
+
+    let mut result: Vec<NurbsCurve> = Vec::new();
+
+    for (uv_trace, _uv_unwrapped, is_loop) in &traces {
+        let all_pts: Vec<Point> = uv_trace
+            .iter()
+            .map(|&(u, v)| surface.point_at(u, v).unwrap_or(Point::new(0.0, 0.0, 0.0)))
+            .collect();
+
+        let crv = surface_plane_fit_3d(
+            &all_pts,
+            *is_loop,
+            plane,
+            step,
+            uv_to_3d,
+            uv_to_3d_min,
+            true,
+        );
+
+        if !crv.is_valid() {
+            continue;
+        }
+
+        let (ct0, ct1) = crv.domain();
+        let dup_tol = step * uv_to_3d * 3.0;
+        let mut dup = false;
+
+        for existing in &result {
+            let (et0, et1) = existing.domain();
+            let mut all_close = true;
+
+            for &f in &[0.25, 0.5, 0.75] {
+                let cp = crv.point_at(ct0 + (ct1 - ct0) * f);
+                let ep = existing.point_at(et0 + (et1 - et0) * f);
+                let em = existing.point_at((et0 + et1) * 0.5);
+                let d = cp.distance(&ep, None).min(cp.distance(&em, None));
+
+                if d > dup_tol {
+                    all_close = false;
+                    break;
+                }
+            }
+
+            if all_close {
+                dup = true;
+                break;
+            }
+        }
+
+        if !dup {
+            result.push(crv);
+        }
+    }
+
+    result
+}
+
+/// Surface-plane section curves paired with their UV pcurves.
+pub fn surface_plane_uv(
+    surface: &NurbsSurface,
+    plane: &Plane,
+    tolerance: Option<f64>,
+) -> Vec<(NurbsCurve, NurbsCurve)> {
+    if !surface.is_valid() {
+        return vec![];
+    }
+
+    let tolerance = tolerance
+        .unwrap_or(Tolerance::ZERO_TOLERANCE)
+        .max(Tolerance::ZERO_TOLERANCE);
+
+    let (u0, u1) = match surface.domain(0) {
+        Some(d) => d,
+        None => return vec![],
+    };
+    let (v0, v1) = match surface.domain(1) {
+        Some(d) => d,
+        None => return vec![],
+    };
+    let range_u = u1 - u0;
+    let range_v = v1 - v0;
+    let closed_u = surface.is_closed(0);
+    let closed_v = surface.is_closed(1);
+
+    let wrap_u = |u: f64| -> f64 {
+        if closed_u {
+            let mut t = (u - u0) % range_u;
+
+            if t < 0.0 {
+                t += range_u;
+            }
+
+            return u0 + t;
+        }
+
+        u.max(u0).min(u1)
+    };
+    let wrap_v = |v: f64| -> f64 {
+        if closed_v {
+            let mut t = (v - v0) % range_v;
+
+            if t < 0.0 {
+                t += range_v;
+            }
+
+            return v0 + t;
+        }
+
+        v.max(v0).min(v1)
+    };
+
+    let pn = plane.z_axis();
+    let p0 = plane.origin();
+
+    let g_and_grad = |u: f64, v: f64| -> (f64, f64, f64) {
+        let derivs = surface.evaluate(wrap_u(u), wrap_v(v), 1);
+
+        if derivs.len() < 3 {
+            return (0.0, 0.0, 0.0);
+        }
+
+        let s = &derivs[0];
+        let su = &derivs[2];
+        let sv = &derivs[1];
+        let val = (s[0] - p0[0]) * pn[0] + (s[1] - p0[1]) * pn[1] + (s[2] - p0[2]) * pn[2];
+        let gu = su[0] * pn[0] + su[1] * pn[1] + su[2] * pn[2];
+        let gv = sv[0] * pn[0] + sv[1] * pn[1] + sv[2] * pn[2];
+        (val, gu, gv)
+    };
+
+    let seam_newton = |mut cu: f64, mut cv_: f64, axis: i32| -> (f64, f64) {
+        for _ in 0..10 {
+            let (val, gu, gv) = g_and_grad(cu, cv_);
+
+            if val.abs() < tolerance {
+                break;
+            }
+
+            if axis == 0 {
+                if gv.abs() < 1e-14 {
+                    break;
+                }
+
+                cv_ -= val / gv;
+            } else {
+                if gu.abs() < 1e-14 {
+                    break;
+                }
+
+                cu -= val / gu;
+            }
+        }
+
+        (cu, cv_)
+    };
+
+    let (traces, step, uv_to_3d, uv_to_3d_min) = surface_plane_traces(surface, plane, tolerance);
+
+    let fit_tol = step * (uv_to_3d + uv_to_3d_min) * 0.5;
+    let dup_tol = step * uv_to_3d * 3.0;
+
+    let mut result: Vec<(NurbsCurve, NurbsCurve)> = Vec::new();
+    let mut kept_pts3: Vec<Vec<Point>> = Vec::new();
+
+    for (uv_trace, uv_unwrapped, is_loop) in &traces {
+        let is_loop = *is_loop;
+        let m = uv_trace.len();
+        let trace_pts3: Vec<Point> = uv_trace
+            .iter()
+            .map(|&(u, v)| surface.point_at(u, v).unwrap_or(Point::new(0.0, 0.0, 0.0)))
+            .collect();
+
+        let mut dup = false;
+
+        for other in &kept_pts3 {
+            let mut all_close = true;
+
+            for &f in &[0.25, 0.5, 0.75] {
+                let cp = &trace_pts3[((m - 1) as f64 * f) as usize];
+                let mut dmin = dup_tol + 1.0;
+
+                for k in (0..other.len()).step_by(5) {
+                    dmin = dmin.min(cp.distance(&other[k], None));
+                }
+
+                if dmin > dup_tol {
+                    all_close = false;
+                    break;
+                }
+            }
+
+            if all_close {
+                dup = true;
+                break;
+            }
+        }
+
+        if dup {
+            continue;
+        }
+
+        kept_pts3.push(trace_pts3);
+
+        let mut pts: Vec<(f64, f64)> = uv_unwrapped.clone();
+        let mut closure_du = 0.0;
+        let mut closure_dv = 0.0;
+
+        if is_loop && pts.len() >= 2 {
+            let mut du_j = pts[0].0 - pts[pts.len() - 1].0;
+            let mut dv_j = pts[0].1 - pts[pts.len() - 1].1;
+
+            if closed_u {
+                while du_j > range_u * 0.5 {
+                    du_j -= range_u;
+                }
+
+                while du_j < -range_u * 0.5 {
+                    du_j += range_u;
+                }
+            }
+
+            if closed_v {
+                while dv_j > range_v * 0.5 {
+                    dv_j -= range_v;
+                }
+
+                while dv_j < -range_v * 0.5 {
+                    dv_j += range_v;
+                }
+            }
+
+            closure_du = (pts[pts.len() - 1].0 + du_j) - pts[0].0;
+            closure_dv = (pts[pts.len() - 1].1 + dv_j) - pts[0].1;
+            pts.push((pts[0].0 + closure_du, pts[0].1 + closure_dv));
+        }
+
+        let mut out_pts: Vec<(f64, f64)> = vec![pts[0]];
+        let mut cross_idx: Vec<usize> = Vec::new();
+
+        for i in 1..pts.len() {
+            let pa = pts[i - 1];
+            let pb = pts[i];
+            let mut crossings: Vec<(f64, i32, f64)> = Vec::new();
+
+            if closed_u && (pb.0 - pa.0).abs() > 1e-15 {
+                let k0 = ((pa.0 - u0) / range_u).floor() as i64;
+                let k1 = ((pb.0 - u0) / range_u).floor() as i64;
+
+                for k in (k0.min(k1) + 1)..=(k0.max(k1)) {
+                    let l = u0 + k as f64 * range_u;
+                    let t = (l - pa.0) / (pb.0 - pa.0);
+
+                    if 0.0 < t && t < 1.0 {
+                        crossings.push((t, 0, l));
+                    }
+                }
+            }
+
+            if closed_v && (pb.1 - pa.1).abs() > 1e-15 {
+                let k0 = ((pa.1 - v0) / range_v).floor() as i64;
+                let k1 = ((pb.1 - v0) / range_v).floor() as i64;
+
+                for k in (k0.min(k1) + 1)..=(k0.max(k1)) {
+                    let l = v0 + k as f64 * range_v;
+                    let t = (l - pa.1) / (pb.1 - pa.1);
+
+                    if 0.0 < t && t < 1.0 {
+                        crossings.push((t, 1, l));
+                    }
+                }
+            }
+
+            crossings.sort_by(|a, b| a.partial_cmp(b).unwrap());
+
+            for &(t, axis, l) in &crossings {
+                let mut cu = pa.0 + (pb.0 - pa.0) * t;
+                let mut cv_ = pa.1 + (pb.1 - pa.1) * t;
+
+                if axis == 0 {
+                    let (_cu_r, cv_r) = seam_newton(l, cv_, 0);
+                    cu = l;
+                    cv_ = cv_r;
+                } else {
+                    let (cu_r, _cv_r) = seam_newton(cu, l, 1);
+                    cu = cu_r;
+                    cv_ = l;
+                }
+
+                out_pts.push((cu, cv_));
+                cross_idx.push(out_pts.len() - 1);
+            }
+
+            out_pts.push((pb.0, pb.1));
+
+            if i < pts.len() - 1 {
+                let mut on_seam = false;
+
+                if closed_u {
+                    let k = ((pb.0 - u0) / range_u).round();
+                    let l = u0 + k * range_u;
+
+                    if (pb.0 - l).abs() < range_u * 1e-9 && (pb.0 - pa.0).abs() > range_u * 1e-9 {
+                        out_pts.last_mut().unwrap().0 = l;
+                        on_seam = true;
+                    }
+                }
+
+                if closed_v {
+                    let k = ((pb.1 - v0) / range_v).round();
+                    let l = v0 + k * range_v;
+
+                    if (pb.1 - l).abs() < range_v * 1e-9 && (pb.1 - pa.1).abs() > range_v * 1e-9 {
+                        out_pts.last_mut().unwrap().1 = l;
+                        on_seam = true;
+                    }
+                }
+
+                if on_seam {
+                    cross_idx.push(out_pts.len() - 1);
+                }
+            }
+        }
+
+        let wrap_drift = closure_du.abs() > range_u * 0.5 || closure_dv.abs() > range_v * 0.5;
+        let mut pieces: Vec<(Vec<(f64, f64)>, bool)> = Vec::new();
+
+        if cross_idx.is_empty() {
+            pieces.push((out_pts.clone(), is_loop && !wrap_drift));
+        } else if is_loop {
+            for w in cross_idx.windows(2) {
+                let (a, b) = (w[0], w[1]);
+                pieces.push((out_pts[a..=b].to_vec(), false));
+            }
+
+            let mut wrap_piece: Vec<(f64, f64)> =
+                out_pts[cross_idx[cross_idx.len() - 1]..].to_vec();
+
+            for p in &out_pts[1..=cross_idx[0]] {
+                wrap_piece.push((p.0 + closure_du, p.1 + closure_dv));
+            }
+
+            pieces.push((wrap_piece, false));
+        } else {
+            let mut bounds: Vec<usize> = vec![0];
+
+            for &c in &cross_idx {
+                bounds.push(c);
+            }
+
+            bounds.push(out_pts.len() - 1);
+
+            for w in bounds.windows(2) {
+                let (a, b) = (w[0], w[1]);
+
+                if b > a {
+                    pieces.push((out_pts[a..=b].to_vec(), false));
+                }
+            }
+        }
+
+        for (mut piece_pts, piece_loop) in pieces {
+            if piece_pts.len() < 2 {
+                continue;
+            }
+
+            let mid = piece_pts[piece_pts.len() / 2];
+
+            if closed_u {
+                let k_u = ((mid.0 - u0) / range_u).floor();
+
+                if k_u != 0.0 {
+                    for p in piece_pts.iter_mut() {
+                        p.0 -= k_u * range_u;
+                    }
+                }
+            }
+
+            if closed_v {
+                let k_v = ((mid.1 - v0) / range_v).floor();
+
+                if k_v != 0.0 {
+                    for p in piece_pts.iter_mut() {
+                        p.1 -= k_v * range_v;
+                    }
+                }
+            }
+
+            let pts3: Vec<Point> = piece_pts
+                .iter()
+                .map(|&(u, v)| {
+                    surface
+                        .point_at(wrap_u(u), wrap_v(v))
+                        .unwrap_or(Point::new(0.0, 0.0, 0.0))
+                })
+                .collect();
+
+            let mut crv3 = surface_plane_fit_3d(
+                &pts3,
+                piece_loop,
+                plane,
+                step,
+                uv_to_3d,
+                uv_to_3d_min,
+                false,
+            );
+
+            if !crv3.is_valid() {
+                crv3 = if piece_loop {
+                    NurbsCurve::create_interpolated(
+                        &pts3,
+                        CurveNurbsKnotStyle::ChordPeriodic,
+                        CurveInterpStyle::Rhino,
+                    )
+                } else {
+                    NurbsCurve::create_interpolated(
+                        &pts3,
+                        CurveNurbsKnotStyle::Chord,
+                        CurveInterpStyle::Rhino,
+                    )
+                };
+            }
+
+            if !crv3.is_valid() {
+                continue;
+            }
+
+            let pts_uv: Vec<Point> = piece_pts
+                .iter()
+                .map(|&(u, v)| Point::new(u, v, 0.0))
+                .collect();
+
+            let mp = pts_uv.len();
+            let fit_tol_uv = step;
+            let mut total_turning = 0.0f64;
+
+            for i in 1..(mp - 1) {
+                let dx1 = pts_uv[i][0] - pts_uv[i - 1][0];
+                let dy1 = pts_uv[i][1] - pts_uv[i - 1][1];
+                let dx2 = pts_uv[i + 1][0] - pts_uv[i][0];
+                let dy2 = pts_uv[i + 1][1] - pts_uv[i][1];
+                let l1 = f64::hypot(dx1, dy1);
+                let l2 = f64::hypot(dx2, dy2);
+
+                if l1 > 1e-14 && l2 > 1e-14 {
+                    let c = ((dx1 * dx2 + dy1 * dy2) / (l1 * l2)).clamp(-1.0, 1.0);
+                    total_turning += c.acos();
+                }
+            }
+
+            let mut chords = vec![0.0f64; mp];
+            let mut total_len = 0.0f64;
+
+            for i in 1..mp {
+                total_len += pts_uv[i].distance(&pts_uv[i - 1], None);
+                chords[i] = total_len;
+            }
+
+            if piece_loop && mp > 1 {
+                total_len += pts_uv[0].distance(&pts_uv[mp - 1], None);
+            }
+
+            if total_len > 1e-14 {
+                for i in 1..mp {
+                    chords[i] /= total_len;
+                }
+            }
+
+            let mut target_cvs = 8_i32.max((total_turning / 0.5) as i32 + 6);
+            let max_cvs = (mp as i32) - 1;
+            let mut pcurve = NurbsCurve::new(3, false, 4, 0);
+
+            for _ in 0..5 {
+                if target_cvs > max_cvs {
+                    break;
+                }
+
+                pcurve = NurbsCurve::create_fitted(&pts_uv, target_cvs as usize, 3, piece_loop);
+
+                if !pcurve.is_valid() {
+                    break;
+                }
+
+                let (ft0, ft1) = pcurve.domain();
+                let mut max_dev = 0.0f64;
+
+                for i in 0..mp {
+                    let t = ft0 + (ft1 - ft0) * chords[i];
+                    max_dev = max_dev.max(pcurve.point_at(t).distance(&pts_uv[i], None));
+                }
+
+                if max_dev < fit_tol_uv {
+                    break;
+                }
+
+                target_cvs = (target_cvs * 2).min(max_cvs);
+            }
+
+            if !pcurve.is_valid() {
+                pcurve = if piece_loop {
+                    NurbsCurve::create_interpolated(
+                        &pts_uv,
+                        CurveNurbsKnotStyle::ChordPeriodic,
+                        CurveInterpStyle::Rhino,
+                    )
+                } else {
+                    NurbsCurve::create_interpolated(
+                        &pts_uv,
+                        CurveNurbsKnotStyle::Chord,
+                        CurveInterpStyle::Rhino,
+                    )
+                };
+            }
+
+            if !pcurve.is_valid() {
+                continue;
+            }
+
+            crv3.set_domain(0.0, 1.0);
+            pcurve.set_domain(0.0, 1.0);
+
+            let vali_tol = (10.0 * tolerance).max(fit_tol * 2.0);
+            let mut max_off = 0.0f64;
+
+            for i in 0..17 {
+                let t = i as f64 / 16.0;
+                let pc = pcurve.point_at(t);
+                let (val, _gu, _gv) = g_and_grad(pc[0], pc[1]);
+                max_off = max_off.max(val.abs());
+            }
+
+            if max_off > vali_tol && target_cvs * 2 <= max_cvs {
+                let mut refit =
+                    NurbsCurve::create_fitted(&pts_uv, (target_cvs * 2) as usize, 3, piece_loop);
+
+                if refit.is_valid() {
+                    refit.set_domain(0.0, 1.0);
+                    pcurve = refit;
+                }
+            }
+
+            result.push((crv3, pcurve));
+        }
+    }
+
+    result
+}
+
 /// Surface-surface section curves with their UV pcurves on both surfaces.
 pub fn surface_surface(
     a: &NurbsSurface,
@@ -6270,7 +6136,163 @@ pub fn surface_surface(
     result
 }
 
-use crate::Polyline;
+/// Keep the pcurve sub-segments whose lifted 3D point lies inside the cutter footprint.
+fn clip_pcurve_to_cutter(
+    target: &NurbsSurface,
+    pc: &NurbsCurve,
+    cutter: &NurbsSurface,
+) -> Vec<NurbsCurve> {
+    let n = (pc.cv_count() * 4).max(16);
+    let (d0, d1) = pc.domain();
+    let (cu0, cu1) = cutter.domain(0).unwrap_or((0.0, 1.0));
+    let (cv0, cv1) = cutter.domain(1).unwrap_or((0.0, 1.0));
+    let zero = Point::new(0.0, 0.0, 0.0);
+    let c00 = cutter.point_at(cu0, cv0).unwrap_or(zero.clone());
+    let c11 = cutter.point_at(cu1, cv1).unwrap_or(zero.clone());
+    let on_tol = (1e-7f64).max(c00.distance(&c11, None) * 1e-4);
+
+    let q00 = cutter.point_at(cu0, cv0).unwrap_or(zero.clone());
+    let q10 = cutter.point_at(cu1, cv0).unwrap_or(zero.clone());
+    let q01 = cutter.point_at(cu0, cv1).unwrap_or(zero.clone());
+    let eu = Vector::new(q10[0] - q00[0], q10[1] - q00[1], q10[2] - q00[2]);
+    let ev = Vector::new(q01[0] - q00[0], q01[1] - q00[1], q01[2] - q00[2]);
+    let eu2 = eu[0] * eu[0] + eu[1] * eu[1] + eu[2] * eu[2];
+    let ev2 = ev[0] * ev[0] + ev[1] * ev[1] + ev[2] * ev[2];
+    let fast_planar = eu2 > 1e-28 && ev2 > 1e-28;
+    let gap = |t: f64| -> f64 {
+        let uv = pc.point_at(t);
+        let p3 = target
+            .point_at(uv[0], uv[1])
+            .unwrap_or(Point::new(0.0, 0.0, 0.0));
+
+        if fast_planar {
+            let (dx, dy, dz) = (p3[0] - q00[0], p3[1] - q00[1], p3[2] - q00[2]);
+            let a = ((dx * eu[0] + dy * eu[1] + dz * eu[2]) / eu2).clamp(0.0, 1.0);
+            let b = ((dx * ev[0] + dy * ev[1] + dz * ev[2]) / ev2).clamp(0.0, 1.0);
+            let cx = q00[0] + a * eu[0] + b * ev[0];
+            let cy = q00[1] + a * eu[1] + b * ev[1];
+            let cz = q00[2] + a * eu[2] + b * ev[2];
+
+            return ((p3[0] - cx).powi(2) + (p3[1] - cy).powi(2) + (p3[2] - cz).powi(2)).sqrt();
+        }
+
+        Closest::surface_point(cutter, &p3, 0.0, 0.0, 0.0, 0.0).2
+    };
+    let refine = |t_in: f64, t_out: f64| -> f64 {
+        let (mut a, mut b) = (t_in, t_out);
+
+        for _ in 0..20 {
+            let tm = (a + b) * 0.5;
+
+            if gap(tm) < on_tol {
+                a = tm;
+            } else {
+                b = tm;
+            }
+        }
+
+        b
+    };
+
+    let mut flags: Vec<(f64, bool)> = Vec::with_capacity(n + 1);
+
+    for i in 0..=n {
+        let t = d0 + (d1 - d0) * i as f64 / n as f64;
+        flags.push((t, gap(t) < on_tol));
+    }
+
+    let mut pieces = Vec::new();
+    let mut i = 0;
+
+    while i <= n {
+        if flags[i].1 {
+            let mut j = i;
+
+            while j < n && flags[j + 1].1 {
+                j += 1;
+            }
+
+            let ta = if i == 0 {
+                flags[i].0
+            } else {
+                refine(flags[i].0, flags[i - 1].0)
+            };
+            let tb = if j == n {
+                flags[j].0
+            } else {
+                refine(flags[j].0, flags[j + 1].0)
+            };
+
+            if tb - ta > (d1 - d0) * 1e-6 {
+                let mut piece = pc.duplicate();
+
+                if piece.trim(ta, tb) && piece.is_valid() {
+                    pieces.push(piece);
+                }
+            }
+
+            i = j + 1;
+        } else {
+            i += 1;
+        }
+    }
+
+    pieces
+}
+
+/// UV pcurves of the cutter's section on the target, clipped to the cutter footprint.
+pub fn cut_curves_on_surface(
+    target: &NurbsSurface,
+    cutter: &NurbsSurface,
+    tolerance: Option<f64>,
+) -> Vec<NurbsCurve> {
+    let cutter_planar = cutter.is_planar(None, 1e-6);
+    let rtol = tolerance.unwrap_or(1e-7).max(1e-7) * 1e4;
+    let rt = recognize_surface(target, rtol);
+    let mut out = Vec::new();
+
+    for tr in surface_surface(target, cutter, tolerance) {
+        let c3d = &tr.0;
+        let pa_an = rt.as_ref().and_then(|r| analytic_pcurve(target, r, c3d));
+        let pcs: Vec<NurbsCurve> = if let Some(pa) = pa_an {
+            vec![pa]
+        } else if matches!(rt.as_ref(), Some(RecSurf::Sphere(..))) {
+            let mut v = analytic_sphere_pullback(target, rt.as_ref().unwrap(), c3d);
+
+            if v.is_empty() {
+                v = Closest::surface_curve(target, c3d, 0.0, 0.0, tolerance.unwrap_or(0.0));
+            }
+
+            if v.is_empty() {
+                v.push(tr.1.clone());
+            }
+
+            v
+        } else {
+            let mut v = Closest::surface_curve(target, c3d, 0.0, 0.0, tolerance.unwrap_or(0.0));
+
+            if v.is_empty() {
+                v.push(tr.1.clone());
+            }
+
+            v
+        };
+
+        for pc in pcs {
+            if cutter_planar {
+                out.extend(clip_pcurve_to_cutter(target, &pc, cutter));
+            } else {
+                out.push(pc);
+            }
+        }
+    }
+
+    out
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Polylines and plane sets
+// ═══════════════════════════════════════════════════════════════════════════
 
 /// Whether two vectors are parallel within angle_tol.
 fn vectors_nearly_parallel(v0: &Vector, v1: &Vector, angle_tol: f64) -> bool {
@@ -6308,6 +6330,27 @@ pub fn plane_plane_plane_check(
     plane_plane_plane(p0, p1, p2)
 }
 
+/// Linear remap of val from [from1, to1] to [from2, to2].
+pub fn remap(val: f64, from1: f64, to1: f64, from2: f64, to2: f64) -> f64 {
+    let span = to1 - from1;
+
+    if span.abs() < Tolerance::ZERO_TOLERANCE {
+        return from2;
+    }
+
+    let t = (val - from1) / span;
+
+    from2 + t * (to2 - from2)
+}
+
+/// Closest point on a finite segment and its parameter in [0, 1].
+pub fn closest_point_on_segment(pt: &Point, seg: &Line) -> (Point, f64) {
+    let mut t = Polyline::closest_point_to_line(pt, &seg.start(), &seg.end());
+    t = t.clamp(0.0, 1.0);
+
+    (seg.point_at(t), t)
+}
+
 /// Closed quad of the main plane cut by four ordered boundary planes.
 pub fn plane_4planes(main: &Plane, planes: &[Plane; 4]) -> Option<Polyline> {
     let p0 = plane_plane_plane_check(&planes[0], &planes[1], main, 0.1)?;
@@ -6338,486 +6381,6 @@ pub fn plane_4lines(plane: &Plane, l0: &Line, l1: &Line, l2: &Line, l3: &Line) -
     let p3 = line_plane(l3, plane, false)?;
 
     Some(Polyline::new(vec![p0.clone(), p1, p2, p3, p0]))
-}
-
-/// Joint quad from a collision face and two bounding planes, used by `face_to_face_wood`.
-fn get_quad_from_line_topbottomplanes(
-    face_plane: &Plane,
-    line: &Line,
-    plane0: &Plane,
-    plane1: &Plane,
-) -> Option<Polyline> {
-    let dir = line.to_vector();
-    let s = line.start();
-    let e = line.end();
-    let lp0 = Plane::from_point_normal(s, dir.clone(), None);
-    let lp1 = Plane::from_point_normal(e, dir, None);
-    let p0 = plane_plane_plane_check(&lp0, plane0, face_plane, 0.1)?;
-    let p1 = plane_plane_plane_check(&lp0, plane1, face_plane, 0.1)?;
-    let p2 = plane_plane_plane_check(&lp1, plane1, face_plane, 0.1)?;
-    let p3 = plane_plane_plane_check(&lp1, plane0, face_plane, 0.1)?;
-
-    Some(Polyline::new(vec![p0.clone(), p1, p2, p3, p0]))
-}
-
-/// Direction scaled to span the distance between two planes.
-pub fn scale_vector_to_distance_of_2planes(dir: &Vector, p0: &Plane, p1: &Plane) -> Option<Vector> {
-    if dir.magnitude() < Tolerance::ZERO_TOLERANCE {
-        return None;
-    }
-
-    let origin = Point::new(0.0, 0.0, 0.0);
-    let tip = Point::new(dir[0], dir[1], dir[2]);
-    let ray = Line::new(origin[0], origin[1], origin[2], tip[0], tip[1], tip[2]);
-    let q0 = line_plane(&ray, p0, false)?;
-    let q1 = line_plane(&ray, p1, false)?;
-    let output = &q1 - &q0;
-    let n1 = p1.z_axis();
-    let n1_mag = n1.magnitude();
-
-    if n1_mag < Tolerance::ZERO_TOLERANCE {
-        return None;
-    }
-
-    let o0 = p0.origin();
-    let d = (o0[0] - p1.origin()[0]) * n1[0] / n1_mag
-        + (o0[1] - p1.origin()[1]) * n1[1] / n1_mag
-        + (o0[2] - p1.origin()[2]) * n1[2] / n1_mag;
-
-    let dist_ortho_sq = d * d;
-
-    if dist_ortho_sq < Tolerance::ZERO_TOLERANCE {
-        return None;
-    }
-
-    let dist_sq = output.dot(&output);
-
-    if dist_sq / dist_ortho_sq >= 10.0 {
-        return None;
-    }
-
-    Some(output)
-}
-
-/// Orthogonal vector between two plane-pair lines, used by `face_to_face_wood`.
-fn get_orthogonal_vector_between_two_plane_pairs(
-    pp0_0: &Plane,
-    pp1_0: &Plane,
-    pp1_1: &Plane,
-) -> Option<Vector> {
-    let l0 = plane_plane(pp0_0, pp1_0)?;
-    let l1 = plane_plane(pp0_0, pp1_1)?;
-    let (t0, t1) = line_line_parameters(&l0, &l1, 0.0, false, true)?;
-    let pt0 = l0.point_at(t0);
-    let pt1 = l1.point_at(t1);
-    Some(Vector::new(
-        pt1[0] - pt0[0],
-        pt1[1] - pt0[1],
-        pt1[2] - pt0[2],
-    ))
-}
-
-// ═══════════════════════════════════════════════════════════════════════════
-// Plane 2D helpers
-// ═══════════════════════════════════════════════════════════════════════════
-
-type P2 = [f64; 2];
-
-/// Projects a point into plane coordinates.
-fn plane_to_2d(p: &Point, origin: &Point, xax: &Vector, yax: &Vector) -> P2 {
-    let d = p - origin;
-
-    [d.dot(xax), d.dot(yax)]
-}
-
-/// Lift plane coordinates back to a point.
-fn plane_to_3d(p: &P2, origin: &Point, xax: &Vector, yax: &Vector) -> Point {
-    origin + xax * p[0] + yax * p[1]
-}
-
-/// Squared distance of two 2D points.
-fn distance_sq_2d(a: &P2, b: &P2) -> f64 {
-    let dx = a[0] - b[0];
-    let dy = a[1] - b[1];
-
-    dx * dx + dy * dy
-}
-
-/// Signed area of a 2D ring, positive when counter-clockwise.
-fn signed_area_2d(ring: &[P2]) -> f64 {
-    let mut area = 0.0;
-    let n = ring.len();
-
-    for i in 0..n {
-        area += ring[i][0] * ring[(i + 1) % n][1] - ring[(i + 1) % n][0] * ring[i][1];
-    }
-
-    area
-}
-
-/// Projects a polyline into plane coordinates.
-fn polyline_to_2d(polyline: &Polyline, origin: &Point, xax: &Vector, yax: &Vector) -> Vec<P2> {
-    let mut ring: Vec<P2> = Vec::with_capacity(polyline.point_count());
-
-    for i in 0..polyline.point_count() {
-        ring.push(plane_to_2d(
-            &polyline.get_point(i).unwrap(),
-            origin,
-            xax,
-            yax,
-        ));
-    }
-
-    if ring.len() > 1 && distance_sq_2d(&ring[0], ring.last().unwrap()) < 1e-12 {
-        ring.pop();
-    }
-
-    ring
-}
-
-/// Lift a 2D ring back to a polyline.
-fn polyline_to_3d(ring: &[P2], origin: &Point, xax: &Vector, yax: &Vector) -> Polyline {
-    let mut pts: Vec<Point> = Vec::with_capacity(ring.len() + 1);
-
-    for p in ring {
-        pts.push(plane_to_3d(p, origin, xax, yax));
-    }
-
-    pts.push(pts[0].clone());
-
-    Polyline::new(pts)
-}
-
-/// Even-odd point in polygon test.
-fn point_in_polygon_2d(ring: &[P2], p: &P2) -> bool {
-    let mut wn = 0i32;
-    let n = ring.len();
-
-    for i in 0..n {
-        let a = ring[i];
-        let b = ring[(i + 1) % n];
-        let e = (b[0] - a[0]) * (p[1] - a[1]) - (p[0] - a[0]) * (b[1] - a[1]);
-
-        if a[1] <= p[1] && b[1] > p[1] && e > 0.0 {
-            wn += 1;
-        } else if a[1] > p[1] && b[1] <= p[1] && e < 0.0 {
-            wn -= 1;
-        }
-    }
-
-    wn != 0
-}
-
-/// Segment-segment crossing with parameters on both.
-fn seg_seg_2d(s0: &P2, s1: &P2, e0: &P2, e1: &P2) -> Option<(f64, f64)> {
-    let sx = s1[0] - s0[0];
-    let sy = s1[1] - s0[1];
-    let ex = e1[0] - e0[0];
-    let ey = e1[1] - e0[1];
-    let denom = sx * ey - sy * ex;
-
-    if denom.abs() < 1e-20 {
-        return None;
-    }
-
-    let dx = e0[0] - s0[0];
-    let dy = e0[1] - s0[1];
-
-    Some(((dx * ey - dy * ex) / denom, (dx * sy - dy * sx) / denom))
-}
-
-/// Overlap range of two collinear segments on the first.
-fn collinear_overlap_2d(s0: &P2, s1: &P2, e0: &P2, e1: &P2) -> Option<(f64, f64)> {
-    let sx = s1[0] - s0[0];
-    let sy = s1[1] - s0[1];
-    let ex = e1[0] - e0[0];
-    let ey = e1[1] - e0[1];
-    let sl2 = sx * sx + sy * sy;
-    let el2 = ex * ex + ey * ey;
-
-    if sl2 < 1e-20 || el2 < 1e-20 {
-        return None;
-    }
-
-    if ((sx * ey - sy * ex) / (sl2 * el2).sqrt()).abs() > 1e-4 {
-        return None;
-    }
-
-    let apx = s0[0] - e0[0];
-    let apy = s0[1] - e0[1];
-
-    if ((apx * ey - apy * ex) / el2.sqrt()).abs() > 1e-3 {
-        return None;
-    }
-
-    let ts0 = (apx * ex + apy * ey) / el2;
-    let ts1 = ((s1[0] - e0[0]) * ex + (s1[1] - e0[1]) * ey) / el2;
-    let ov_min = ts0.min(ts1).max(0.0);
-    let ov_max = ts0.max(ts1).min(1.0);
-
-    if ov_max - ov_min < 1e-9 {
-        return None;
-    }
-
-    let tsr = ts1 - ts0;
-
-    if tsr.abs() < 1e-20 {
-        return None;
-    }
-
-    let t_enter = ((ov_min - ts0) / tsr).min((ov_max - ts0) / tsr).max(0.0);
-    let t_exit = ((ov_min - ts0) / tsr).max((ov_max - ts0) / tsr).min(1.0);
-
-    if t_exit - t_enter <= 1e-9 {
-        return None;
-    }
-
-    Some((t_enter, t_exit))
-}
-
-/// Parameter of the closest point on segment ab to p.
-fn closest_param_2d(p: &P2, a: &P2, b: &P2) -> f64 {
-    let abx = b[0] - a[0];
-    let aby = b[1] - a[1];
-    let l2 = abx * abx + aby * aby;
-
-    if l2 < 1e-20 {
-        return 0.0;
-    }
-
-    (((p[0] - a[0]) * abx + (p[1] - a[1]) * aby) / l2).clamp(0.0, 1.0)
-}
-
-/// Squared distance from p to segment ab.
-fn distance_sq_seg_2d(p: &P2, a: &P2, b: &P2) -> f64 {
-    let t = closest_param_2d(p, a, b);
-
-    distance_sq_2d(p, &[a[0] + t * (b[0] - a[0]), a[1] + t * (b[1] - a[1])])
-}
-
-/// Parameters along one joint segment where it crosses or overlaps the plate edges.
-fn segment_plate_parameters_2d(
-    plate: &[P2],
-    p0: &P2,
-    p1: &P2,
-    coll_ranges: &mut Vec<(f64, f64)>,
-) -> Vec<f64> {
-    const EPS: f64 = 1e-9;
-    let mut ts: Vec<f64> = vec![0.0];
-
-    for i in 0..plate.len() {
-        let a = plate[i];
-        let b = plate[(i + 1) % plate.len()];
-
-        if let Some((t_s, t_e)) = seg_seg_2d(p0, p1, &a, &b) {
-            if t_s > EPS && t_s < 1.0 - EPS && (-EPS..=1.0 + EPS).contains(&t_e) {
-                ts.push(t_s);
-            }
-        }
-
-        let overlap = collinear_overlap_2d(p0, p1, &a, &b);
-
-        if overlap.is_none() {
-            continue;
-        }
-
-        let (t_in, t_out) = overlap.unwrap();
-        coll_ranges.push((t_in, t_out));
-
-        if t_in > EPS && t_in < 1.0 - EPS {
-            ts.push(t_in);
-        }
-
-        if t_out > EPS && t_out < 1.0 - EPS {
-            ts.push(t_out);
-        }
-    }
-
-    ts.push(1.0);
-    ts.sort_by(|a, b| a.partial_cmp(b).unwrap());
-    ts.dedup_by(|a, b| (*a - *b).abs() < EPS);
-
-    ts
-}
-
-/// Whether t falls in any of the ranges.
-fn in_ranges_2d(ranges: &[(f64, f64)], t: f64) -> bool {
-    for r in ranges {
-        if t >= r.0 - 1e-9 && t <= r.1 + 1e-9 {
-            return true;
-        }
-    }
-
-    false
-}
-
-/// Sub-segments of the open joint path inside the plate, as separate pieces.
-fn clip_open_path_2d(plate: &[P2], joint: &[P2]) -> Vec<Vec<P2>> {
-    let mut pieces: Vec<Vec<P2>> = Vec::new();
-
-    for s in 0..joint.len() - 1 {
-        let p0 = joint[s];
-        let p1 = joint[s + 1];
-        let mut coll_ranges: Vec<(f64, f64)> = Vec::new();
-        let ts = segment_plate_parameters_2d(plate, &p0, &p1, &mut coll_ranges);
-        let mut current: Vec<P2> = Vec::new();
-
-        for i in 0..ts.len() - 1 {
-            let t_mid = 0.5 * (ts[i] + ts[i + 1]);
-            let mid = [
-                p0[0] + (p1[0] - p0[0]) * t_mid,
-                p0[1] + (p1[1] - p0[1]) * t_mid,
-            ];
-            let include = point_in_polygon_2d(plate, &mid) || in_ranges_2d(&coll_ranges, t_mid);
-
-            if !include {
-                if !current.is_empty() {
-                    pieces.push(std::mem::take(&mut current));
-                }
-
-                current.clear();
-                continue;
-            }
-
-            let sub_a = [
-                p0[0] + (p1[0] - p0[0]) * ts[i],
-                p0[1] + (p1[1] - p0[1]) * ts[i],
-            ];
-            let sub_b = [
-                p0[0] + (p1[0] - p0[0]) * ts[i + 1],
-                p0[1] + (p1[1] - p0[1]) * ts[i + 1],
-            ];
-
-            if !current.is_empty() && distance_sq_2d(current.last().unwrap(), &sub_a) >= 1e-18 {
-                pieces.push(std::mem::take(&mut current));
-                current.clear();
-            }
-
-            if current.is_empty() {
-                current.push(sub_a);
-            }
-
-            current.push(sub_b);
-        }
-
-        if !current.is_empty() {
-            pieces.push(current);
-        }
-    }
-
-    pieces
-}
-
-/// Chains clipped pieces end to end into one path.
-fn chain_pieces_2d(pieces: &[Vec<P2>]) -> Vec<P2> {
-    const DISTANCE_SQ: f64 = 0.01;
-    let mut chain: Vec<P2> = Vec::new();
-
-    for piece in pieces {
-        if piece.len() <= 1 {
-            continue;
-        }
-
-        if chain.is_empty() {
-            chain = piece.clone();
-            continue;
-        }
-
-        let mut pts = piece.clone();
-
-        if distance_sq_2d(chain.last().unwrap(), &pts[0]) > DISTANCE_SQ
-            && distance_sq_2d(chain.last().unwrap(), pts.last().unwrap()) > DISTANCE_SQ
-        {
-            chain.reverse();
-        }
-
-        if distance_sq_2d(chain.last().unwrap(), &pts[0])
-            > distance_sq_2d(chain.last().unwrap(), pts.last().unwrap())
-        {
-            pts.reverse();
-        }
-
-        for j in 1..pts.len() {
-            chain.push(pts[j]);
-        }
-    }
-
-    chain
-}
-
-/// Plate edge parameters of the chain ends, or -1 when an end is off the plate.
-fn chain_plate_parameters_2d(plate: &[P2], chain: &[P2]) -> (f64, f64) {
-    let mut t0 = -1.0_f64;
-    let mut t1 = -1.0_f64;
-
-    for i in 0..plate.len() {
-        let a = plate[i];
-        let b = plate[(i + 1) % plate.len()];
-
-        if distance_sq_seg_2d(&chain[0], &a, &b) < 1.0 {
-            t0 = i as f64 + closest_param_2d(&chain[0], &a, &b);
-        }
-
-        if distance_sq_seg_2d(chain.last().unwrap(), &a, &b) < 1.0 {
-            t1 = i as f64 + closest_param_2d(chain.last().unwrap(), &a, &b);
-        }
-
-        if t0 >= 0.0 && t1 >= 0.0 {
-            return (t0, t1);
-        }
-    }
-
-    (t0, t1)
-}
-
-/// Miter offset of a closed 2D ring by delta along the edge normals.
-fn offset_ring_2d(ring: &[P2], delta: f64, concave_notch: bool) -> Vec<P2> {
-    let n = ring.len();
-    let mut normals: Vec<P2> = Vec::with_capacity(n);
-
-    for i in 0..n {
-        let ex = ring[(i + 1) % n][0] - ring[i][0];
-        let ey = ring[(i + 1) % n][1] - ring[i][1];
-        let len = (ex * ex + ey * ey).sqrt();
-
-        if len < 1e-12 {
-            normals.push([0.0, 0.0]);
-        } else {
-            normals.push([ey / len, -ex / len]);
-        }
-    }
-
-    let mut out: Vec<P2> = Vec::with_capacity(n * 3);
-
-    for i in 0..n {
-        let np = normals[(i + n - 1) % n];
-        let nn = normals[i];
-        let p = ring[i];
-        let cos_a = np[0] * nn[0] + np[1] * nn[1];
-        let sin_a = np[0] * nn[1] - np[1] * nn[0];
-        let denom = 1.0 + cos_a;
-
-        if cos_a > -0.999 && sin_a * delta < 0.0 && concave_notch {
-            out.push([p[0] + np[0] * delta, p[1] + np[1] * delta]);
-            out.push(p);
-            out.push([p[0] + nn[0] * delta, p[1] + nn[1] * delta]);
-        } else if denom.abs() < 1e-9 {
-            let bx = np[0] + nn[0];
-            let by = np[1] + nn[1];
-            let bl = (bx * bx + by * by).sqrt();
-
-            if bl < 1e-12 {
-                out.push([p[0] + nn[0] * delta, p[1] + nn[1] * delta]);
-            } else {
-                out.push([p[0] + (bx / bl) * delta, p[1] + (by / bl) * delta]);
-            }
-        } else {
-            let k = delta / denom;
-            out.push([p[0] + (np[0] + nn[0]) * k, p[1] + (np[1] + nn[1]) * k]);
-        }
-    }
-
-    out
 }
 
 /// Clips a segment to the two plane intersections.
@@ -6887,6 +6450,614 @@ pub fn polyline_plane(poly: &Polyline, plane: &Plane) -> Option<(Vec<Point>, Vec
 
     Some((points, edge_ids))
 }
+
+/// Closest approach point on the infinite cutter to the segment.
+pub fn line_line_3d(cutter: &Line, seg: &Line) -> Option<Point> {
+    let (t0, _) = line_line_parameters(cutter, seg, 0.0, false, false)?;
+
+    Some(cutter.point_at(t0))
+}
+
+/// Direction scaled to span the distance between two planes.
+pub fn scale_vector_to_distance_of_2planes(dir: &Vector, p0: &Plane, p1: &Plane) -> Option<Vector> {
+    if dir.magnitude() < Tolerance::ZERO_TOLERANCE {
+        return None;
+    }
+
+    let origin = Point::new(0.0, 0.0, 0.0);
+    let tip = Point::new(dir[0], dir[1], dir[2]);
+    let ray = Line::new(origin[0], origin[1], origin[2], tip[0], tip[1], tip[2]);
+    let q0 = line_plane(&ray, p0, false)?;
+    let q1 = line_plane(&ray, p1, false)?;
+    let output = &q1 - &q0;
+    let n1 = p1.z_axis();
+    let n1_mag = n1.magnitude();
+
+    if n1_mag < Tolerance::ZERO_TOLERANCE {
+        return None;
+    }
+
+    let o0 = p0.origin();
+    let d = (o0[0] - p1.origin()[0]) * n1[0] / n1_mag
+        + (o0[1] - p1.origin()[1]) * n1[1] / n1_mag
+        + (o0[2] - p1.origin()[2]) * n1[2] / n1_mag;
+
+    let dist_ortho_sq = d * d;
+
+    if dist_ortho_sq < Tolerance::ZERO_TOLERANCE {
+        return None;
+    }
+
+    let dist_sq = output.dot(&output);
+
+    if dist_sq / dist_ortho_sq >= 10.0 {
+        return None;
+    }
+
+    Some(output)
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Plane 2D helpers
+// ═══════════════════════════════════════════════════════════════════════════
+
+/// Projects a point into plane coordinates.
+fn plane_to_2d(p: &Point, origin: &Point, xax: &Vector, yax: &Vector) -> [f64; 2] {
+    let d = p - origin;
+
+    [d.dot(xax), d.dot(yax)]
+}
+
+/// Lift plane coordinates back to a point.
+fn plane_to_3d(p: &[f64; 2], origin: &Point, xax: &Vector, yax: &Vector) -> Point {
+    origin + xax * p[0] + yax * p[1]
+}
+
+/// Squared distance of two 2D points.
+fn distance_sq_2d(a: &[f64; 2], b: &[f64; 2]) -> f64 {
+    let dx = a[0] - b[0];
+    let dy = a[1] - b[1];
+
+    dx * dx + dy * dy
+}
+
+/// Signed area of a 2D ring, positive when counter-clockwise.
+fn signed_area_2d(ring: &[[f64; 2]]) -> f64 {
+    let mut area = 0.0;
+    let n = ring.len();
+
+    for i in 0..n {
+        area += ring[i][0] * ring[(i + 1) % n][1] - ring[(i + 1) % n][0] * ring[i][1];
+    }
+
+    area
+}
+
+/// Projects a polyline into plane coordinates.
+fn polyline_to_2d(
+    polyline: &Polyline,
+    origin: &Point,
+    xax: &Vector,
+    yax: &Vector,
+) -> Vec<[f64; 2]> {
+    let mut ring: Vec<[f64; 2]> = Vec::with_capacity(polyline.point_count());
+
+    for i in 0..polyline.point_count() {
+        ring.push(plane_to_2d(
+            &polyline.get_point(i).unwrap(),
+            origin,
+            xax,
+            yax,
+        ));
+    }
+
+    if ring.len() > 1 && distance_sq_2d(&ring[0], ring.last().unwrap()) < 1e-12 {
+        ring.pop();
+    }
+
+    ring
+}
+
+/// Lift a 2D ring back to a polyline.
+fn polyline_to_3d(ring: &[[f64; 2]], origin: &Point, xax: &Vector, yax: &Vector) -> Polyline {
+    let mut pts: Vec<Point> = Vec::with_capacity(ring.len() + 1);
+
+    for p in ring {
+        pts.push(plane_to_3d(p, origin, xax, yax));
+    }
+
+    pts.push(pts[0].clone());
+
+    Polyline::new(pts)
+}
+
+/// Even-odd point in polygon test.
+fn point_in_polygon_2d(ring: &[[f64; 2]], p: &[f64; 2]) -> bool {
+    let mut wn = 0i32;
+    let n = ring.len();
+
+    for i in 0..n {
+        let a = ring[i];
+        let b = ring[(i + 1) % n];
+        let e = (b[0] - a[0]) * (p[1] - a[1]) - (p[0] - a[0]) * (b[1] - a[1]);
+
+        if a[1] <= p[1] && b[1] > p[1] && e > 0.0 {
+            wn += 1;
+        } else if a[1] > p[1] && b[1] <= p[1] && e < 0.0 {
+            wn -= 1;
+        }
+    }
+
+    wn != 0
+}
+
+/// Segment-segment crossing with parameters on both.
+fn seg_seg_2d(s0: &[f64; 2], s1: &[f64; 2], e0: &[f64; 2], e1: &[f64; 2]) -> Option<(f64, f64)> {
+    let sx = s1[0] - s0[0];
+    let sy = s1[1] - s0[1];
+    let ex = e1[0] - e0[0];
+    let ey = e1[1] - e0[1];
+    let denom = sx * ey - sy * ex;
+
+    if denom.abs() < 1e-20 {
+        return None;
+    }
+
+    let dx = e0[0] - s0[0];
+    let dy = e0[1] - s0[1];
+
+    Some(((dx * ey - dy * ex) / denom, (dx * sy - dy * sx) / denom))
+}
+
+/// Overlap range of two collinear segments on the first.
+fn collinear_overlap_2d(
+    s0: &[f64; 2],
+    s1: &[f64; 2],
+    e0: &[f64; 2],
+    e1: &[f64; 2],
+) -> Option<(f64, f64)> {
+    let sx = s1[0] - s0[0];
+    let sy = s1[1] - s0[1];
+    let ex = e1[0] - e0[0];
+    let ey = e1[1] - e0[1];
+    let sl2 = sx * sx + sy * sy;
+    let el2 = ex * ex + ey * ey;
+
+    if sl2 < 1e-20 || el2 < 1e-20 {
+        return None;
+    }
+
+    if ((sx * ey - sy * ex) / (sl2 * el2).sqrt()).abs() > 1e-4 {
+        return None;
+    }
+
+    let apx = s0[0] - e0[0];
+    let apy = s0[1] - e0[1];
+
+    if ((apx * ey - apy * ex) / el2.sqrt()).abs() > 1e-3 {
+        return None;
+    }
+
+    let ts0 = (apx * ex + apy * ey) / el2;
+    let ts1 = ((s1[0] - e0[0]) * ex + (s1[1] - e0[1]) * ey) / el2;
+    let ov_min = ts0.min(ts1).max(0.0);
+    let ov_max = ts0.max(ts1).min(1.0);
+
+    if ov_max - ov_min < 1e-9 {
+        return None;
+    }
+
+    let tsr = ts1 - ts0;
+
+    if tsr.abs() < 1e-20 {
+        return None;
+    }
+
+    let t_enter = ((ov_min - ts0) / tsr).min((ov_max - ts0) / tsr).max(0.0);
+    let t_exit = ((ov_min - ts0) / tsr).max((ov_max - ts0) / tsr).min(1.0);
+
+    if t_exit - t_enter <= 1e-9 {
+        return None;
+    }
+
+    Some((t_enter, t_exit))
+}
+
+/// Parameter of the closest point on segment ab to p.
+fn closest_param_2d(p: &[f64; 2], a: &[f64; 2], b: &[f64; 2]) -> f64 {
+    let abx = b[0] - a[0];
+    let aby = b[1] - a[1];
+    let l2 = abx * abx + aby * aby;
+
+    if l2 < 1e-20 {
+        return 0.0;
+    }
+
+    (((p[0] - a[0]) * abx + (p[1] - a[1]) * aby) / l2).clamp(0.0, 1.0)
+}
+
+/// Squared distance from p to segment ab.
+fn distance_sq_seg_2d(p: &[f64; 2], a: &[f64; 2], b: &[f64; 2]) -> f64 {
+    let t = closest_param_2d(p, a, b);
+
+    distance_sq_2d(p, &[a[0] + t * (b[0] - a[0]), a[1] + t * (b[1] - a[1])])
+}
+
+/// Parameters along one joint segment where it crosses or overlaps the plate edges.
+fn segment_plate_parameters_2d(
+    plate: &[[f64; 2]],
+    p0: &[f64; 2],
+    p1: &[f64; 2],
+    coll_ranges: &mut Vec<(f64, f64)>,
+) -> Vec<f64> {
+    const EPS: f64 = 1e-9;
+    let mut ts: Vec<f64> = vec![0.0];
+
+    for i in 0..plate.len() {
+        let a = plate[i];
+        let b = plate[(i + 1) % plate.len()];
+
+        if let Some((t_s, t_e)) = seg_seg_2d(p0, p1, &a, &b) {
+            if t_s > EPS && t_s < 1.0 - EPS && (-EPS..=1.0 + EPS).contains(&t_e) {
+                ts.push(t_s);
+            }
+        }
+
+        let overlap = collinear_overlap_2d(p0, p1, &a, &b);
+
+        if overlap.is_none() {
+            continue;
+        }
+
+        let (t_in, t_out) = overlap.unwrap();
+        coll_ranges.push((t_in, t_out));
+
+        if t_in > EPS && t_in < 1.0 - EPS {
+            ts.push(t_in);
+        }
+
+        if t_out > EPS && t_out < 1.0 - EPS {
+            ts.push(t_out);
+        }
+    }
+
+    ts.push(1.0);
+    ts.sort_by(|a, b| a.partial_cmp(b).unwrap());
+    ts.dedup_by(|a, b| (*a - *b).abs() < EPS);
+
+    ts
+}
+
+/// Whether t falls in any of the ranges.
+fn in_ranges_2d(ranges: &[(f64, f64)], t: f64) -> bool {
+    for r in ranges {
+        if t >= r.0 - 1e-9 && t <= r.1 + 1e-9 {
+            return true;
+        }
+    }
+
+    false
+}
+
+/// Sub-segments of the open joint path inside the plate, as separate pieces.
+fn clip_open_path_2d(plate: &[[f64; 2]], joint: &[[f64; 2]]) -> Vec<Vec<[f64; 2]>> {
+    let mut pieces: Vec<Vec<[f64; 2]>> = Vec::new();
+
+    for s in 0..joint.len() - 1 {
+        let p0 = joint[s];
+        let p1 = joint[s + 1];
+        let mut coll_ranges: Vec<(f64, f64)> = Vec::new();
+        let ts = segment_plate_parameters_2d(plate, &p0, &p1, &mut coll_ranges);
+        let mut current: Vec<[f64; 2]> = Vec::new();
+
+        for i in 0..ts.len() - 1 {
+            let t_mid = 0.5 * (ts[i] + ts[i + 1]);
+            let mid = [
+                p0[0] + (p1[0] - p0[0]) * t_mid,
+                p0[1] + (p1[1] - p0[1]) * t_mid,
+            ];
+            let include = point_in_polygon_2d(plate, &mid) || in_ranges_2d(&coll_ranges, t_mid);
+
+            if !include {
+                if !current.is_empty() {
+                    pieces.push(std::mem::take(&mut current));
+                }
+
+                current.clear();
+                continue;
+            }
+
+            let sub_a = [
+                p0[0] + (p1[0] - p0[0]) * ts[i],
+                p0[1] + (p1[1] - p0[1]) * ts[i],
+            ];
+            let sub_b = [
+                p0[0] + (p1[0] - p0[0]) * ts[i + 1],
+                p0[1] + (p1[1] - p0[1]) * ts[i + 1],
+            ];
+
+            if !current.is_empty() && distance_sq_2d(current.last().unwrap(), &sub_a) >= 1e-18 {
+                pieces.push(std::mem::take(&mut current));
+                current.clear();
+            }
+
+            if current.is_empty() {
+                current.push(sub_a);
+            }
+
+            current.push(sub_b);
+        }
+
+        if !current.is_empty() {
+            pieces.push(current);
+        }
+    }
+
+    pieces
+}
+
+/// Chains clipped pieces end to end into one path.
+fn chain_pieces_2d(pieces: &[Vec<[f64; 2]>]) -> Vec<[f64; 2]> {
+    const DISTANCE_SQ: f64 = 0.01;
+    let mut chain: Vec<[f64; 2]> = Vec::new();
+
+    for piece in pieces {
+        if piece.len() <= 1 {
+            continue;
+        }
+
+        if chain.is_empty() {
+            chain = piece.clone();
+            continue;
+        }
+
+        let mut pts = piece.clone();
+
+        if distance_sq_2d(chain.last().unwrap(), &pts[0]) > DISTANCE_SQ
+            && distance_sq_2d(chain.last().unwrap(), pts.last().unwrap()) > DISTANCE_SQ
+        {
+            chain.reverse();
+        }
+
+        if distance_sq_2d(chain.last().unwrap(), &pts[0])
+            > distance_sq_2d(chain.last().unwrap(), pts.last().unwrap())
+        {
+            pts.reverse();
+        }
+
+        for j in 1..pts.len() {
+            chain.push(pts[j]);
+        }
+    }
+
+    chain
+}
+
+/// Plate edge parameters of the chain ends, or -1 when an end is off the plate.
+fn chain_plate_parameters_2d(plate: &[[f64; 2]], chain: &[[f64; 2]]) -> (f64, f64) {
+    let mut t0 = -1.0_f64;
+    let mut t1 = -1.0_f64;
+
+    for i in 0..plate.len() {
+        let a = plate[i];
+        let b = plate[(i + 1) % plate.len()];
+
+        if distance_sq_seg_2d(&chain[0], &a, &b) < 1.0 {
+            t0 = i as f64 + closest_param_2d(&chain[0], &a, &b);
+        }
+
+        if distance_sq_seg_2d(chain.last().unwrap(), &a, &b) < 1.0 {
+            t1 = i as f64 + closest_param_2d(chain.last().unwrap(), &a, &b);
+        }
+
+        if t0 >= 0.0 && t1 >= 0.0 {
+            return (t0, t1);
+        }
+    }
+
+    (t0, t1)
+}
+
+/// Miter offset of a closed 2D ring by delta along the edge normals.
+fn offset_ring_2d(ring: &[[f64; 2]], delta: f64, concave_notch: bool) -> Vec<[f64; 2]> {
+    let n = ring.len();
+    let mut normals: Vec<[f64; 2]> = Vec::with_capacity(n);
+
+    for i in 0..n {
+        let ex = ring[(i + 1) % n][0] - ring[i][0];
+        let ey = ring[(i + 1) % n][1] - ring[i][1];
+        let len = (ex * ex + ey * ey).sqrt();
+
+        if len < 1e-12 {
+            normals.push([0.0, 0.0]);
+        } else {
+            normals.push([ey / len, -ex / len]);
+        }
+    }
+
+    let mut out: Vec<[f64; 2]> = Vec::with_capacity(n * 3);
+
+    for i in 0..n {
+        let np = normals[(i + n - 1) % n];
+        let nn = normals[i];
+        let p = ring[i];
+        let cos_a = np[0] * nn[0] + np[1] * nn[1];
+        let sin_a = np[0] * nn[1] - np[1] * nn[0];
+        let denom = 1.0 + cos_a;
+
+        if cos_a > -0.999 && sin_a * delta < 0.0 && concave_notch {
+            out.push([p[0] + np[0] * delta, p[1] + np[1] * delta]);
+            out.push(p);
+            out.push([p[0] + nn[0] * delta, p[1] + nn[1] * delta]);
+        } else if denom.abs() < 1e-9 {
+            let bx = np[0] + nn[0];
+            let by = np[1] + nn[1];
+            let bl = (bx * bx + by * by).sqrt();
+
+            if bl < 1e-12 {
+                out.push([p[0] + nn[0] * delta, p[1] + nn[1] * delta]);
+            } else {
+                out.push([p[0] + (bx / bl) * delta, p[1] + (by / bl) * delta]);
+            }
+        } else {
+            let k = delta / denom;
+            out.push([p[0] + (np[0] + nn[0]) * k, p[1] + (np[1] + nn[1]) * k]);
+        }
+    }
+
+    out
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Polyline booleans
+// ═══════════════════════════════════════════════════════════════════════════
+
+/// Boolean of two closed planar polylines, clip_type 0 intersection, 1 union, 2 difference.
+pub fn polyline_boolean(a: &Polyline, b: &Polyline, clip_type: i32) -> Vec<Polyline> {
+    Polyline::boolean_op(a, b, clip_type, None)
+}
+
+/// Miter offset of a closed polyline in the plane's 2D frame, positive outward, in place.
+pub fn offset_in_3d(polyline: &mut Polyline, plane: &Plane, offset: f64) -> bool {
+    if polyline.point_count() < 3 {
+        return false;
+    }
+
+    let origin = polyline.get_point(0).unwrap();
+    let xax = plane.base1();
+    let yax = plane.base2();
+    let ring = polyline_to_2d(polyline, &origin, &xax, &yax);
+
+    if ring.len() < 3 {
+        return false;
+    }
+
+    let delta = if signed_area_2d(&ring) < 0.0 {
+        -offset
+    } else {
+        offset
+    };
+    let mut out = offset_ring_2d(&ring, delta, offset > 0.0);
+
+    if out.len() < 3 {
+        return false;
+    }
+
+    if signed_area_2d(&out).abs() * 0.5 < 0.0001 {
+        return false;
+    }
+
+    let mut cp = 0usize;
+
+    for i in 1..out.len() {
+        if distance_sq_2d(&out[i], &ring[0]) < distance_sq_2d(&out[cp], &ring[0]) {
+            cp = i;
+        }
+    }
+
+    out.rotate_left(cp);
+    *polyline = polyline_to_3d(&out, &origin, &xax, &yax);
+
+    true
+}
+
+/// Boolean in the plane's 2D frame, intersection_type 0 intersect, 1 union, 2 difference, 3 xor.
+pub fn polyline_boolean_2d_in_plane(
+    polyline0: &Polyline,
+    polyline1: &Polyline,
+    plane: &Plane,
+    intersection_type: i32,
+    include_triangles: bool,
+    min_area: f64,
+    collapse_eps: f64,
+) -> Option<Polyline> {
+    if polyline0.point_count() < 3 || polyline1.point_count() < 3 {
+        return None;
+    }
+
+    let origin = polyline0.get_point(0)?;
+    let xax = plane.base1();
+    let yax = plane.base2();
+    let flat_origin = Point::new(0.0, 0.0, 0.0);
+    let flat_x = Vector::new(1.0, 0.0, 0.0);
+    let flat_y = Vector::new(0.0, 1.0, 0.0);
+    let a2d = polyline_to_3d(
+        &polyline_to_2d(polyline0, &origin, &xax, &yax),
+        &flat_origin,
+        &flat_x,
+        &flat_y,
+    );
+    let b2d = polyline_to_3d(
+        &polyline_to_2d(polyline1, &origin, &xax, &yax),
+        &flat_origin,
+        &flat_x,
+        &flat_y,
+    );
+    let result_2d: Vec<Polyline> = if (0..=2).contains(&intersection_type) {
+        Polyline::boolean_op(&a2d, &b2d, intersection_type, None)
+    } else if intersection_type == 3 {
+        let u = Polyline::boolean_op(&a2d, &b2d, 1, None);
+        let inter = Polyline::boolean_op(&a2d, &b2d, 0, None);
+
+        if u.is_empty() {
+            return None;
+        }
+
+        if inter.is_empty() {
+            u
+        } else {
+            Polyline::boolean_op(&u[0], &inter[0], 2, None)
+        }
+    } else {
+        return None;
+    };
+
+    if result_2d.is_empty() {
+        return None;
+    }
+
+    let mut ring = polyline_to_2d(&result_2d[0], &flat_origin, &flat_x, &flat_y);
+
+    if ring.len() < 3 {
+        return None;
+    }
+
+    if collapse_eps > 0.0 {
+        let eps_sq = collapse_eps * collapse_eps;
+        let mut collapsed: Vec<[f64; 2]> = Vec::with_capacity(ring.len());
+
+        for p in &ring {
+            if collapsed.is_empty() || distance_sq_2d(p, collapsed.last().unwrap()) >= eps_sq {
+                collapsed.push(*p);
+            }
+        }
+
+        if collapsed.len() >= 2 && distance_sq_2d(collapsed.last().unwrap(), &collapsed[0]) < eps_sq
+        {
+            collapsed.pop();
+        }
+
+        ring = collapsed;
+
+        if ring.len() < 3 {
+            return None;
+        }
+    }
+
+    if ring.len() == 3 && !include_triangles {
+        return None;
+    }
+
+    if signed_area_2d(&ring).abs() * 0.5 <= min_area {
+        return None;
+    }
+
+    Some(polyline_to_3d(&ring, &origin, &xax, &yax))
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Joints
+// ═══════════════════════════════════════════════════════════════════════════
 
 /// Polyline-plane crossings as one line oriented from align_start.
 pub fn polyline_plane_to_line(poly: &Polyline, plane: &Plane, align_start: &Point) -> Option<Line> {
@@ -6972,7 +7143,7 @@ pub fn closed_and_open_paths_2d(
         return None;
     }
 
-    let mut joint2d: Vec<P2> = Vec::with_capacity(joint.point_count());
+    let mut joint2d: Vec<[f64; 2]> = Vec::with_capacity(joint.point_count());
 
     for i in 0..joint.point_count() {
         joint2d.push(plane_to_2d(&joint.get_point(i)?, &origin, &xax, &yax));
@@ -7013,11 +7184,182 @@ pub fn closed_and_open_paths_2d(
     Some((Polyline::new(out_pts), (t0, t1)))
 }
 
-/// Closest approach point on the infinite cutter to the segment.
-pub fn line_line_3d(cutter: &Line, seg: &Line) -> Option<Point> {
-    let (t0, _) = line_line_parameters(cutter, seg, 0.0, false, false)?;
+// ═══════════════════════════════════════════════════════════════════════════
+// Elements
+// ═══════════════════════════════════════════════════════════════════════════
 
-    Some(cutter.point_at(t0))
+/// Face-to-face contacts (a, b, face_a, face_b, type, polyline) with type 0 side-side, 1 side-top, 2 top-top.
+pub fn face_to_face(
+    adjacency: &[i32],
+    polylines: &[Vec<Polyline>],
+    planes: &[Vec<Plane>],
+    coplanar_tolerance: f64,
+) -> Vec<(i32, i32, i32, i32, i32, Polyline)> {
+    let mut results = Vec::new();
+    let mut face_boxes: Vec<Vec<[f64; 6]>> = Vec::with_capacity(polylines.len());
+
+    for faces in polylines {
+        let mut boxes: Vec<[f64; 6]> = Vec::with_capacity(faces.len());
+
+        for f in faces {
+            let mut bx = [
+                f64::INFINITY,
+                f64::INFINITY,
+                f64::INFINITY,
+                f64::NEG_INFINITY,
+                f64::NEG_INFINITY,
+                f64::NEG_INFINITY,
+            ];
+            let c = &f.coords;
+            let mut k = 0;
+
+            while k + 2 < c.len() {
+                bx[0] = bx[0].min(c[k]);
+                bx[3] = bx[3].max(c[k]);
+                bx[1] = bx[1].min(c[k + 1]);
+                bx[4] = bx[4].max(c[k + 1]);
+                bx[2] = bx[2].min(c[k + 2]);
+                bx[5] = bx[5].max(c[k + 2]);
+                k += 3;
+            }
+
+            for k in 0..3 {
+                bx[k] -= coplanar_tolerance;
+                bx[k + 3] += coplanar_tolerance;
+            }
+
+            boxes.push(bx);
+        }
+
+        face_boxes.push(boxes);
+    }
+
+    let mut idx = 0;
+
+    while idx + 1 < adjacency.len() {
+        let a = adjacency[idx] as usize;
+        let b = adjacency[idx + 1] as usize;
+        let mut found = false;
+        let mut i = 0;
+
+        while i < planes[a].len() && !found {
+            let oa = planes[a][i].origin();
+            let za = planes[a][i].z_axis();
+            let ba = &face_boxes[a][i];
+
+            for j in 0..planes[b].len() {
+                let bb = &face_boxes[b][j];
+
+                if ba[0] > bb[3]
+                    || bb[0] > ba[3]
+                    || ba[1] > bb[4]
+                    || bb[1] > ba[4]
+                    || ba[2] > bb[5]
+                    || bb[2] > ba[5]
+                {
+                    continue;
+                }
+
+                if !Plane::is_coplanar_from_normals(
+                    &oa,
+                    &za,
+                    &planes[b][j].origin(),
+                    &planes[b][j].z_axis(),
+                    false,
+                    coplanar_tolerance,
+                ) {
+                    continue;
+                }
+
+                let pts_i = polylines[a][i].get_points();
+                let mut edge = Vector::new(
+                    pts_i[1][0] - pts_i[0][0],
+                    pts_i[1][1] - pts_i[0][1],
+                    pts_i[1][2] - pts_i[0][2],
+                );
+                edge.normalize_self();
+                let zax = za.clone();
+                let mut yax = zax.cross(&edge);
+                yax.normalize_self();
+                let pln = Plane::from_frame(pts_i[0].clone(), edge, yax, zax);
+                let bools = Polyline::boolean_op(&polylines[a][i], &polylines[b][j], 0, Some(&pln));
+
+                if bools.is_empty() || bools[0].point_count() < 3 {
+                    continue;
+                }
+
+                let typ = (if i > 1 { 0 } else { 1 }) + (if j > 1 { 0 } else { 1 });
+                let jpl = if bools[0].is_closed() {
+                    bools[0].clone()
+                } else {
+                    bools[0].closed()
+                };
+                results.push((a as i32, b as i32, i as i32, j as i32, typ, jpl));
+                found = true;
+                break;
+            }
+
+            i += 1;
+        }
+
+        idx += 4;
+    }
+
+    results
+}
+
+/// Adjacent element pairs by BVH broad phase and OBB narrow phase.
+pub fn adjacency_search(elements: &mut [Element], inflate: f64) -> Vec<i32> {
+    let n = elements.len();
+    let mut obbs: Vec<OBB> = Vec::with_capacity(n);
+
+    for element in elements.iter_mut() {
+        let mut pts: Vec<Point> = Vec::new();
+
+        for pl in element.polylines() {
+            for p in pl.get_points() {
+                pts.push(p);
+            }
+        }
+
+        obbs.push(OBB::from_points(&pts, inflate, None));
+    }
+
+    let mut aabbs: Vec<AABB> = Vec::with_capacity(n);
+
+    for obb in &obbs {
+        aabbs.push(obb.aabb());
+    }
+
+    let mut ws = 0.0_f64;
+
+    for a in &aabbs {
+        ws = ws.max((a.cx + a.hx).abs());
+        ws = ws.max((a.cy + a.hy).abs());
+        ws = ws.max((a.cz + a.hz).abs());
+        ws = ws.max((a.cx - a.hx).abs());
+        ws = ws.max((a.cy - a.hy).abs());
+        ws = ws.max((a.cz - a.hz).abs());
+    }
+
+    let mut bvh = SpatialBVH::new();
+    bvh.build_from_aabbs(&aabbs, ws * 2.0);
+    let mut adjacency: Vec<i32> = Vec::new();
+
+    for i in 0..n {
+        let hits = bvh.query_aabb(&aabbs[i]);
+
+        for j in hits {
+            if i < j && obbs[i].collides_with(&obbs[j]) {
+                adjacency.push(i as i32);
+                adjacency.push(j as i32);
+                adjacency.push(-1);
+                adjacency.push(-1);
+            }
+        }
+    }
+
+    adjacency
 }
 
 /// Classifies two segments as end-to-end, side-to-end or cross with closest points and directions.
@@ -7060,6 +7402,7 @@ pub fn line_line_classified(
             if (&ends0[i] - &ends1[j]).magnitude_squared() >= DIST_SQ {
                 continue;
             }
+
             *p0 = ends0[i].clone();
             *p1 = ends0[i].clone();
             *v0 = &ends0[1 - i] - &ends0[i];
@@ -7099,6 +7442,7 @@ pub fn line_line_classified(
         if s1.closest_point(p1, false).0 > 0.5 {
             *v1 = -v1.clone();
         }
+
         *type0 = false;
         *type1 = false;
 
@@ -7144,1355 +7488,4 @@ pub fn line_line_classified(
     }
 
     true
-}
-
-/// Closest point on a finite segment and its parameter in [0, 1].
-pub fn closest_point_on_segment(pt: &Point, seg: &Line) -> (Point, f64) {
-    let mut t = Polyline::closest_point_to_line(pt, &seg.start(), &seg.end());
-    t = t.clamp(0.0, 1.0);
-
-    (seg.point_at(t), t)
-}
-
-/// Linear remap of val from [from1, to1] to [from2, to2].
-pub fn remap(val: f64, from1: f64, to1: f64, from2: f64, to2: f64) -> f64 {
-    let span = to1 - from1;
-
-    if span.abs() < Tolerance::ZERO_TOLERANCE {
-        return from2;
-    }
-
-    let t = (val - from1) / span;
-
-    from2 + t * (to2 - from2)
-}
-
-/// Face-to-face contacts (a, b, face_a, face_b, type, polyline) with type 0 side-side, 1 side-top, 2 top-top.
-pub fn face_to_face(
-    adjacency: &[i32],
-    polylines: &[Vec<crate::polyline::Polyline>],
-    planes: &[Vec<crate::plane::Plane>],
-    coplanar_tolerance: f64,
-) -> Vec<(i32, i32, i32, i32, i32, crate::polyline::Polyline)> {
-    use crate::plane::Plane;
-    use crate::polyline::Polyline;
-    use crate::vector::Vector;
-
-    let tol = if coplanar_tolerance < 0.0 {
-        crate::tolerance::Tolerance::APPROXIMATION
-    } else {
-        coplanar_tolerance
-    };
-    let face_boxes: Vec<Vec<[f64; 6]>> = polylines
-        .iter()
-        .map(|faces| {
-            faces
-                .iter()
-                .map(|f| {
-                    let mut bx = [
-                        f64::INFINITY,
-                        f64::INFINITY,
-                        f64::INFINITY,
-                        f64::NEG_INFINITY,
-                        f64::NEG_INFINITY,
-                        f64::NEG_INFINITY,
-                    ];
-                    for p in f.coords.chunks_exact(3) {
-                        bx[0] = bx[0].min(p[0]);
-                        bx[3] = bx[3].max(p[0]);
-                        bx[1] = bx[1].min(p[1]);
-                        bx[4] = bx[4].max(p[1]);
-                        bx[2] = bx[2].min(p[2]);
-                        bx[5] = bx[5].max(p[2]);
-                    }
-                    for k in 0..3 {
-                        bx[k] -= tol;
-                        bx[k + 3] += tol;
-                    }
-                    bx
-                })
-                .collect()
-        })
-        .collect();
-
-    let mut results = Vec::new();
-    let mut idx = 0;
-
-    while idx + 1 < adjacency.len() {
-        let a = adjacency[idx] as usize;
-        let b = adjacency[idx + 1] as usize;
-        idx += 4;
-
-        let mut found = false;
-
-        for i in 0..planes[a].len() {
-            if found {
-                break;
-            }
-
-            let oa = planes[a][i].origin();
-            let za = planes[a][i].z_axis();
-            let ba = &face_boxes[a][i];
-
-            for j in 0..planes[b].len() {
-                let bb = &face_boxes[b][j];
-
-                if ba[0] > bb[3]
-                    || bb[0] > ba[3]
-                    || ba[1] > bb[4]
-                    || bb[1] > ba[4]
-                    || ba[2] > bb[5]
-                    || bb[2] > ba[5]
-                {
-                    continue;
-                }
-
-                let ob = planes[b][j].origin();
-                let zb = planes[b][j].z_axis();
-
-                if !Plane::is_coplanar_from_normals(&oa, &za, &ob, &zb, false, coplanar_tolerance) {
-                    continue;
-                }
-
-                let pts_i = polylines[a][i].get_points();
-
-                if pts_i.len() < 2 {
-                    continue;
-                }
-
-                let mut edge = Vector::new(
-                    pts_i[1][0] - pts_i[0][0],
-                    pts_i[1][1] - pts_i[0][1],
-                    pts_i[1][2] - pts_i[0][2],
-                );
-                edge.normalize_self();
-                let zax = planes[a][i].z_axis();
-                let mut yax = zax.cross(&edge);
-                yax.normalize_self();
-                let pln = Plane::from_frame(pts_i[0].clone(), edge, yax, zax);
-
-                let bools = Polyline::boolean_op(&polylines[a][i], &polylines[b][j], 0, Some(&pln));
-
-                if bools.is_empty() || bools[0].point_count() < 3 {
-                    continue;
-                }
-
-                let typ = (if i > 1 { 0 } else { 1 }) + (if j > 1 { 0 } else { 1 });
-                let jpl = if bools[0].is_closed() {
-                    bools[0].clone()
-                } else {
-                    bools[0].closed()
-                };
-                results.push((a as i32, b as i32, i as i32, j as i32, typ, jpl));
-                found = true;
-                break;
-            }
-        }
-    }
-
-    results
-}
-
-// ═══════════════════════════════════════════════════════════════════════════
-// WOOD: timber-joint topology
-// ═══════════════════════════════════════════════════════════════════════════
-
-/// Tunable parameters for `face_to_face_wood`.
-#[derive(Clone, Debug)]
-pub struct WoodConfig {
-    pub joint_volume_extension: Vec<f64>, // Extension parameters in triples (width, height, line).
-    pub limit_min_joint_length: f64,      // Shortest accepted alignment line.
-    pub distance_squared: f64,            // Squared distance below which a line is degenerate.
-    pub face_to_face_side_to_side_joints_dihedral_angle: f64, // Out-of-plane cutoff in degrees.
-    pub face_to_face_side_to_side_joints_all_treated_as_rotated: bool, // Force the rotated branch.
-    pub face_to_face_side_to_side_joints_rotated_joint_as_average: bool, // Average both alignment lines.
-}
-
-impl Default for WoodConfig {
-    /// Constructs the default wood parameters.
-    fn default() -> Self {
-        Self {
-            joint_volume_extension: vec![0.0, 0.0, 0.0],
-            limit_min_joint_length: 0.0,
-            distance_squared: 1e-6,
-            face_to_face_side_to_side_joints_dihedral_angle: 150.0,
-            face_to_face_side_to_side_joints_all_treated_as_rotated: false,
-            face_to_face_side_to_side_joints_rotated_joint_as_average: true,
-        }
-    }
-}
-
-/// One detected timber joint.
-#[derive(Clone, Debug)]
-pub struct WoodJoint {
-    pub el_ids: (i32, i32), // Element pair, swapped when the male side is the second element.
-    pub face_ids: ([i32; 2], [i32; 2]), // Face indices per element.
-    pub joint_type: i32,    // 11, 12, 13 side-side, 20 top-side, 40 top-top.
-    pub joint_area: crate::Polyline, // Overlap area of the two faces.
-    pub joint_lines: [Line; 2], // Alignment lines of the joint.
-    pub joint_volumes_pair_a_pair_b: [Option<crate::Polyline>; 4], // Male pair 0, 1 and female pair 2, 3.
-}
-
-/// Unsigned dihedral angle in degrees of the edge pq between the triangles pqr and pqs.
-fn approximate_dihedral_angle(p: &Point, q: &Point, r: &Point, s: &Point) -> f64 {
-    use crate::Vector;
-    let pq = Vector::new(q[0] - p[0], q[1] - p[1], q[2] - p[2]);
-    let pr = Vector::new(r[0] - p[0], r[1] - p[1], r[2] - p[2]);
-    let ps = Vector::new(s[0] - p[0], s[1] - p[1], s[2] - p[2]);
-    let n1 = pq.cross(&pr);
-    let n2 = pq.cross(&ps);
-    let m1 = n1.magnitude();
-    let m2 = n2.magnitude();
-
-    if m1 < crate::tolerance::Tolerance::ZERO_TOLERANCE
-        || m2 < crate::tolerance::Tolerance::ZERO_TOLERANCE
-    {
-        return 0.0;
-    }
-
-    let cos_theta = (n1.dot(&n2) / (m1 * m2)).clamp(-1.0, 1.0);
-
-    cos_theta.acos().to_degrees()
-}
-
-/// Average overlap segment of two near-parallel 3D line segments.
-fn line_line_overlap_average(l0: &Line, l1: &Line) -> Option<Line> {
-    use crate::Vector;
-    let s0 = l0.start();
-    let e0 = l0.end();
-    let s1 = l1.start();
-    let e1 = l1.end();
-
-    let d0 = Vector::new(e0[0] - s0[0], e0[1] - s0[1], e0[2] - s0[2]);
-    let len0_sq = d0.dot(&d0);
-
-    if len0_sq < crate::tolerance::Tolerance::ZERO_TOLERANCE {
-        return None;
-    }
-
-    let proj = |p: &Point| -> f64 {
-        let dx = p[0] - s0[0];
-        let dy = p[1] - s0[1];
-        let dz = p[2] - s0[2];
-        (dx * d0[0] + dy * d0[1] + dz * d0[2]) / len0_sq
-    };
-    let t_a = 0.0_f64;
-    let t_b = 1.0_f64;
-    let t_c = proj(&s1);
-    let t_d = proj(&e1);
-
-    let (lo0, hi0) = (t_a.min(t_b), t_a.max(t_b));
-    let (lo1, hi1) = (t_c.min(t_d), t_c.max(t_d));
-    let lo = lo0.max(lo1);
-    let hi = hi0.min(hi1);
-
-    if hi <= lo {
-        return None;
-    }
-
-    let pt0_lo = Point::new(s0[0] + lo * d0[0], s0[1] + lo * d0[1], s0[2] + lo * d0[2]);
-    let pt0_hi = Point::new(s0[0] + hi * d0[0], s0[1] + hi * d0[1], s0[2] + hi * d0[2]);
-
-    let closest_on_l1 = |pt: &Point| -> Point {
-        let d1 = Vector::new(e1[0] - s1[0], e1[1] - s1[1], e1[2] - s1[2]);
-        let len1_sq = d1.dot(&d1);
-
-        if len1_sq < crate::tolerance::Tolerance::ZERO_TOLERANCE {
-            return s1.clone();
-        }
-
-        let dx = pt[0] - s1[0];
-        let dy = pt[1] - s1[1];
-        let dz = pt[2] - s1[2];
-        let t = ((dx * d1[0] + dy * d1[1] + dz * d1[2]) / len1_sq).clamp(0.0, 1.0);
-        Point::new(s1[0] + t * d1[0], s1[1] + t * d1[1], s1[2] + t * d1[2])
-    };
-    let pt1_lo = closest_on_l1(&pt0_lo);
-    let pt1_hi = closest_on_l1(&pt0_hi);
-
-    let avg_lo = Point::new(
-        (pt0_lo[0] + pt1_lo[0]) * 0.5,
-        (pt0_lo[1] + pt1_lo[1]) * 0.5,
-        (pt0_lo[2] + pt1_lo[2]) * 0.5,
-    );
-    let avg_hi = Point::new(
-        (pt0_hi[0] + pt1_hi[0]) * 0.5,
-        (pt0_hi[1] + pt1_hi[1]) * 0.5,
-        (pt0_hi[2] + pt1_hi[2]) * 0.5,
-    );
-
-    Some(Line::from_points(&avg_lo, &avg_hi))
-}
-
-/// Slide the two endpoints of polyline edge `edge_idx` outward (or inward,.
-fn extend_polyline_edge_equally(poly: &mut crate::Polyline, edge_idx: usize, distance: f64) {
-    let n = poly.point_count();
-
-    if n < 2 || edge_idx + 1 >= n {
-        return;
-    }
-
-    let i = edge_idx;
-    let j = edge_idx + 1;
-    let pi = match poly.get_point(i) {
-        Some(p) => p,
-        None => return,
-    };
-    let pj = match poly.get_point(j) {
-        Some(p) => p,
-        None => return,
-    };
-    let dx = pj[0] - pi[0];
-    let dy = pj[1] - pi[1];
-    let dz = pj[2] - pi[2];
-    let len = (dx * dx + dy * dy + dz * dz).sqrt();
-
-    if len < 1e-12 {
-        return;
-    }
-
-    let inv_len = 1.0 / len;
-    let ux = dx * inv_len * distance;
-    let uy = dy * inv_len * distance;
-    let uz = dz * inv_len * distance;
-    let new_pi = Point::new(pi[0] - ux, pi[1] - uy, pi[2] - uz);
-    let new_pj = Point::new(pj[0] + ux, pj[1] + uy, pj[2] + uz);
-    poly.set_point(i, &new_pi);
-    poly.set_point(j, &new_pj);
-
-    if i == 0 {
-        poly.set_point(n - 1, &new_pi);
-    }
-
-    if j == n - 1 {
-        poly.set_point(0, &new_pj);
-    }
-}
-
-/// Point transformed by an xform.
-fn xform_apply_point(xform: &crate::Xform, p: &Point) -> Point {
-    let m = &xform.m;
-    let (x, y, z) = (p[0], p[1], p[2]);
-    let w = m[3] * x + m[7] * y + m[11] * z + m[15];
-    let w_inv = if w.abs() > 1e-10 { 1.0 / w } else { 1.0 };
-    Point::new(
-        (m[0] * x + m[4] * y + m[8] * z + m[12]) * w_inv,
-        (m[1] * x + m[5] * y + m[9] * z + m[13]) * w_inv,
-        (m[2] * x + m[6] * y + m[10] * z + m[14]) * w_inv,
-    )
-}
-
-/// Detailed face-to-face joint detection between two timber elements.
-#[allow(clippy::too_many_arguments)]
-pub fn face_to_face_wood(
-    joint_id: usize,
-    polylines_0: &[crate::Polyline],
-    polylines_1: &[crate::Polyline],
-    planes_0: &[crate::Plane],
-    planes_1: &[crate::Plane],
-    insertion_vectors_0: &[crate::Vector],
-    insertion_vectors_1: &[crate::Vector],
-    el_ids_in: (i32, i32),
-    config: &WoodConfig,
-) -> Option<WoodJoint> {
-    use crate::{Plane, Polyline, Vector, Xform};
-
-    let extension_variables_count = if config.joint_volume_extension.len() / 3 == 0 {
-        0
-    } else {
-        (config.joint_volume_extension.len() / 3) - 1
-    };
-    let extension_id = if extension_variables_count == 0 {
-        0
-    } else {
-        joint_id.min(extension_variables_count) * 3
-    };
-    let ext = |k: usize| -> f64 {
-        config
-            .joint_volume_extension
-            .get(k + extension_id)
-            .copied()
-            .unwrap_or(0.0)
-    };
-    let ext_w = ext(0);
-    let ext_h = ext(1);
-    let ext_l = ext(2);
-
-    let mut el_ids = el_ids_in;
-    let mut face_ids: ([i32; 2], [i32; 2]) = ([0; 2], [0; 2]);
-
-    for i in 0..planes_0.len() {
-        for j in 0..planes_1.len() {
-            let coplanar = Plane::is_coplanar_from_normals(
-                &planes_0[i].origin(),
-                &planes_0[i].z_axis(),
-                &planes_1[j].origin(),
-                &planes_1[j].z_axis(),
-                false,
-                crate::tolerance::Tolerance::APPROXIMATION,
-            );
-
-            if !coplanar {
-                continue;
-            }
-
-            let isect_results =
-                Polyline::boolean_op(&polylines_0[i], &polylines_1[j], 0, Some(&planes_0[i]));
-
-            if isect_results.is_empty() {
-                continue;
-            }
-
-            let joint_area_open = isect_results.into_iter().next().unwrap();
-
-            if joint_area_open.point_count() < 3 {
-                continue;
-            }
-
-            let joint_area = if joint_area_open.is_closed() {
-                joint_area_open
-            } else {
-                joint_area_open.closed()
-            };
-
-            face_ids.0[0] = i as i32;
-            face_ids.0[1] = i as i32;
-            face_ids.1[0] = j as i32;
-            face_ids.1[1] = j as i32;
-
-            let type0: i32 = if i > 1 { 0 } else { 1 };
-            let type1: i32 = if j > 1 { 0 } else { 1 };
-            let mut joint_type: i32 = type0 + type1;
-
-            let mut joint_line0 =
-                Line::from_points(&Point::new(0.0, 0.0, 0.0), &Point::new(0.0, 0.0, 0.0));
-
-            let avg_plane_0 = Plane::from_point_normal(
-                Point::mid_point(&polylines_0[0].get_point(0)?, &polylines_0[1].get_point(0)?),
-                planes_0[0].z_axis(),
-                None,
-            );
-            let mut joint_quads0: Option<Polyline> = None;
-
-            if i > 1 {
-                let a0 = polylines_0[0].get_point(i - 2)?;
-                let a1 = polylines_0[1].get_point(i - 2)?;
-                let b0 = polylines_0[0].get_point(i - 1)?;
-                let b1 = polylines_0[1].get_point(i - 1)?;
-                let alignment_segment =
-                    Line::from_points(&Point::mid_point(&a0, &a1), &Point::mid_point(&b0, &b1));
-
-                let line_opt =
-                    polyline_plane_to_line(&joint_area, &avg_plane_0, &alignment_segment.start());
-
-                let line = line_opt?;
-
-                if line.squared_length() <= config.distance_squared {
-                    return None;
-                }
-
-                joint_line0 = line;
-                joint_quads0 = get_quad_from_line_topbottomplanes(
-                    &planes_0[i],
-                    &joint_line0,
-                    &planes_0[0],
-                    &planes_0[1],
-                );
-                joint_quads0.as_ref()?;
-            }
-
-            let mut joint_line1 =
-                Line::from_points(&Point::new(0.0, 0.0, 0.0), &Point::new(0.0, 0.0, 0.0));
-
-            let avg_plane_1 = Plane::from_point_normal(
-                Point::mid_point(&polylines_1[0].get_point(0)?, &polylines_1[1].get_point(0)?),
-                planes_1[0].z_axis(),
-                None,
-            );
-            let mut joint_quads1: Option<Polyline> = None;
-
-            if j > 1 {
-                let a0 = polylines_1[0].get_point(j - 2)?;
-                let a1 = polylines_1[1].get_point(j - 2)?;
-                let b0 = polylines_1[0].get_point(j - 1)?;
-                let b1 = polylines_1[1].get_point(j - 1)?;
-                let alignment_segment =
-                    Line::from_points(&Point::mid_point(&a0, &a1), &Point::mid_point(&b0, &b1));
-
-                let line_opt =
-                    polyline_plane_to_line(&joint_area, &avg_plane_1, &alignment_segment.start());
-
-                let line = line_opt?;
-
-                if line.squared_length() <= config.distance_squared {
-                    return None;
-                }
-
-                joint_line1 = line;
-                joint_quads1 = get_quad_from_line_topbottomplanes(
-                    &planes_1[j],
-                    &joint_line1,
-                    &planes_1[0],
-                    &planes_1[1],
-                );
-                joint_quads1.as_ref()?;
-            }
-
-            if joint_type < 2 {
-                let joint_line_extension_limit = (ext_l * 2.0).powi(2);
-                let limit_min_squared = config.limit_min_joint_length.powi(2);
-
-                if i > 1
-                    && joint_line_extension_limit > joint_line0.squared_length() - limit_min_squared
-                {
-                    return None;
-                }
-
-                if j > 1
-                    && joint_line_extension_limit > joint_line1.squared_length() - limit_min_squared
-                {
-                    return None;
-                }
-
-                joint_line0.extend_equally(ext_l, 0.0);
-                joint_line1.extend_equally(ext_l, 0.0);
-            }
-
-            let mut dir = Vector::new(0.0, 0.0, 0.0);
-            let mut dir_set = false;
-
-            if !insertion_vectors_0.is_empty() && !insertion_vectors_1.is_empty() {
-                dir = if i > j {
-                    insertion_vectors_0[i].clone()
-                } else {
-                    insertion_vectors_1[j].clone()
-                };
-                dir_set = (dir[0].abs() + dir[1].abs() + dir[2].abs()) > 0.01;
-            }
-
-            let mut joint_lines = [
-                Line::from_points(&Point::new(0.0, 0.0, 0.0), &Point::new(0.0, 0.0, 0.0)),
-                Line::from_points(&Point::new(0.0, 0.0, 0.0), &Point::new(0.0, 0.0, 0.0)),
-            ];
-            let mut joint_volumes: [Option<Polyline>; 4] = [None, None, None, None];
-
-            if joint_type == 0 {
-                joint_lines[0] = joint_line0.clone();
-                joint_lines[1] = joint_line1.clone();
-
-                let v0 = Vector::new(
-                    joint_line0.start()[0] - joint_line0.end()[0],
-                    joint_line0.start()[1] - joint_line0.end()[1],
-                    joint_line0.start()[2] - joint_line0.end()[2],
-                );
-                let v1 = Vector::new(
-                    joint_line1.start()[0] - joint_line1.end()[0],
-                    joint_line1.start()[1] - joint_line1.end()[1],
-                    joint_line1.start()[2] - joint_line1.end()[2],
-                );
-                let parallel = v0.is_parallel_to(&v1);
-
-                if parallel == 0 || config.face_to_face_side_to_side_joints_all_treated_as_rotated {
-                    let average_segment =
-                        if Point::distance(&joint_line0.start(), &joint_line1.start(), None)
-                            < Point::distance(&joint_line0.start(), &joint_line1.end(), None)
-                        {
-                            Line::from_points(
-                                &Point::mid_point(&joint_line0.start(), &joint_line1.start()),
-                                &Point::mid_point(&joint_line0.end(), &joint_line1.end()),
-                            )
-                        } else {
-                            Line::from_points(
-                                &Point::mid_point(&joint_line0.start(), &joint_line1.end()),
-                                &Point::mid_point(&joint_line0.end(), &joint_line1.start()),
-                            )
-                        };
-
-                    let axis_segment =
-                        if config.face_to_face_side_to_side_joints_rotated_joint_as_average {
-                            average_segment
-                        } else {
-                            joint_line0.clone()
-                        };
-
-                    let o = axis_segment.start();
-                    let mut x = axis_segment.to_vector();
-                    let z = planes_0[i].z_axis();
-                    let mut y = z.cross(&x);
-                    y.normalize_self();
-
-                    let mut z = z;
-
-                    if !config.face_to_face_side_to_side_joints_rotated_joint_as_average {
-                        y = planes_0[0].z_axis();
-                        z = x.cross(&y);
-                    }
-
-                    let center_pt = polylines_0[i].center();
-                    let thickness_a = (planes_0[0]
-                        .origin()
-                        .distance(&planes_0[1].project(&planes_0[0].origin()), None))
-                    .max(
-                        planes_1[0]
-                            .origin()
-                            .distance(&planes_1[1].project(&planes_1[0].origin()), None),
-                    );
-                    let mut y_scaled = y.clone();
-                    y_scaled = Vector::new(
-                        y_scaled[0] * (thickness_a * 2.0),
-                        y_scaled[1] * (thickness_a * 2.0),
-                        y_scaled[2] * (thickness_a * 2.0),
-                    );
-                    let y_line = Line::from_points(
-                        &Point::new(
-                            center_pt[0] + y_scaled[0],
-                            center_pt[1] + y_scaled[1],
-                            center_pt[2] + y_scaled[2],
-                        ),
-                        &Point::new(
-                            center_pt[0] - y_scaled[0],
-                            center_pt[1] - y_scaled[1],
-                            center_pt[2] - y_scaled[2],
-                        ),
-                    );
-
-                    if let Some(clipped) = line_two_planes(&y_line, &planes_0[0], &planes_1[1]) {
-                        y = Vector::new(
-                            clipped.end()[0] - clipped.start()[0],
-                            clipped.end()[1] - clipped.start()[1],
-                            clipped.end()[2] - clipped.start()[2],
-                        );
-                    }
-
-                    x = y.cross(&z);
-
-                    let xform = Xform::world_to_frame(&o, &x, &y, &z);
-
-                    let pts3d = joint_area.get_points();
-                    let proj_pts: Vec<Point> =
-                        pts3d.iter().map(|p| xform_apply_point(&xform, p)).collect();
-
-                    if proj_pts.is_empty() {
-                        return None;
-                    }
-
-                    let mut xmin = proj_pts[0][0];
-                    let mut xmax = xmin;
-                    let mut ymin = proj_pts[0][1];
-                    let mut ymax = ymin;
-
-                    for p in &proj_pts[1..] {
-                        if p[0] < xmin {
-                            xmin = p[0];
-                        } else if p[0] > xmax {
-                            xmax = p[0];
-                        }
-
-                        if p[1] < ymin {
-                            ymin = p[1];
-                        } else if p[1] > ymax {
-                            ymax = p[1];
-                        }
-                    }
-
-                    let zmin = proj_pts[0][2];
-                    let r0 = Point::new(xmax, ymax, zmin);
-                    let r1 = Point::new(xmin, ymax, zmin);
-                    let r2 = Point::new(xmin, ymin, zmin);
-                    let r3 = Point::new(xmax, ymin, zmin);
-                    let xform_inv = xform.inverse()?;
-                    let r0_3d = xform_apply_point(&xform_inv, &r0);
-                    let r1_3d = xform_apply_point(&xform_inv, &r1);
-                    let r2_3d = xform_apply_point(&xform_inv, &r2);
-                    let r3_3d = xform_apply_point(&xform_inv, &r3);
-                    let average_rectangle = [r0_3d, r1_3d, r2_3d, r3_3d];
-
-                    let mut offset_vector = if dir_set { dir.clone() } else { z.clone() };
-                    offset_vector.normalize_self();
-                    let d0 = 0.5
-                        * planes_0[0]
-                            .origin()
-                            .distance(&planes_0[1].project(&planes_0[0].origin()), None);
-
-                    offset_vector = Vector::new(
-                        offset_vector[0] * d0,
-                        offset_vector[1] * d0,
-                        offset_vector[2] * d0,
-                    );
-
-                    let mk = |a: &Point, ov: &Vector| -> Polyline {
-                        Polyline::new(vec![
-                            Point::new(a[0] + ov[0], a[1] + ov[1], a[2] + ov[2]),
-                            Point::new(a[0] - ov[0], a[1] - ov[1], a[2] - ov[2]),
-                            Point::new(a[0] - ov[0], a[1] - ov[1], a[2] - ov[2]),
-                            Point::new(a[0] + ov[0], a[1] + ov[1], a[2] + ov[2]),
-                            Point::new(a[0] + ov[0], a[1] + ov[1], a[2] + ov[2]),
-                        ])
-                    };
-                    let mut vol0 = Polyline::new(vec![
-                        Point::new(
-                            average_rectangle[3][0] + offset_vector[0],
-                            average_rectangle[3][1] + offset_vector[1],
-                            average_rectangle[3][2] + offset_vector[2],
-                        ),
-                        Point::new(
-                            average_rectangle[3][0] - offset_vector[0],
-                            average_rectangle[3][1] - offset_vector[1],
-                            average_rectangle[3][2] - offset_vector[2],
-                        ),
-                        Point::new(
-                            average_rectangle[0][0] - offset_vector[0],
-                            average_rectangle[0][1] - offset_vector[1],
-                            average_rectangle[0][2] - offset_vector[2],
-                        ),
-                        Point::new(
-                            average_rectangle[0][0] + offset_vector[0],
-                            average_rectangle[0][1] + offset_vector[1],
-                            average_rectangle[0][2] + offset_vector[2],
-                        ),
-                        Point::new(
-                            average_rectangle[3][0] + offset_vector[0],
-                            average_rectangle[3][1] + offset_vector[1],
-                            average_rectangle[3][2] + offset_vector[2],
-                        ),
-                    ]);
-                    let mut vol1 = Polyline::new(vec![
-                        Point::new(
-                            average_rectangle[2][0] + offset_vector[0],
-                            average_rectangle[2][1] + offset_vector[1],
-                            average_rectangle[2][2] + offset_vector[2],
-                        ),
-                        Point::new(
-                            average_rectangle[2][0] - offset_vector[0],
-                            average_rectangle[2][1] - offset_vector[1],
-                            average_rectangle[2][2] - offset_vector[2],
-                        ),
-                        Point::new(
-                            average_rectangle[1][0] - offset_vector[0],
-                            average_rectangle[1][1] - offset_vector[1],
-                            average_rectangle[1][2] - offset_vector[2],
-                        ),
-                        Point::new(
-                            average_rectangle[1][0] + offset_vector[0],
-                            average_rectangle[1][1] + offset_vector[1],
-                            average_rectangle[1][2] + offset_vector[2],
-                        ),
-                        Point::new(
-                            average_rectangle[2][0] + offset_vector[0],
-                            average_rectangle[2][1] + offset_vector[1],
-                            average_rectangle[2][2] + offset_vector[2],
-                        ),
-                    ]);
-
-                    for &k in &[0_usize, 2] {
-                        extend_polyline_edge_equally(&mut vol0, k, ext_w);
-                        extend_polyline_edge_equally(&mut vol1, k, ext_w);
-                    }
-
-                    for &k in &[1_usize, 3] {
-                        extend_polyline_edge_equally(&mut vol0, k, ext_h);
-                        extend_polyline_edge_equally(&mut vol1, k, ext_h);
-                    }
-
-                    joint_volumes[0] = Some(vol0);
-                    joint_volumes[1] = Some(vol1);
-                    joint_type = 13;
-                    let _ = mk;
-
-                    return Some(WoodJoint {
-                        el_ids,
-                        face_ids,
-                        joint_type,
-                        joint_area,
-                        joint_lines,
-                        joint_volumes_pair_a_pair_b: joint_volumes,
-                    });
-                } else {
-                    let lj = line_line_overlap_average(&joint_line0, &joint_line1)?;
-                    joint_lines[0] = lj.clone();
-                    joint_lines[1] = lj.clone();
-
-                    let mut pl_end0 = Plane::from_point_normal(lj.start(), lj.to_vector(), None);
-
-                    if dir_set {
-                        pl_end0 = Plane::from_point_normal(lj.start(), dir.clone(), None);
-                    }
-
-                    let pl_end1 = Plane::from_point_normal(lj.end(), pl_end0.z_axis(), None);
-
-                    let center0 = avg_plane_0.project(&polylines_0[0].center());
-                    let center1 = avg_plane_1.project(&polylines_1[0].center());
-                    let dihedral =
-                        approximate_dihedral_angle(&lj.start(), &lj.end(), &center0, &center1);
-
-                    if dihedral < 20.0 {
-                        return None;
-                    } else if dihedral <= config.face_to_face_side_to_side_joints_dihedral_angle {
-                        let connection_normal = planes_0[i].z_axis();
-                        let lj_normal = lj.to_vector();
-                        let lj_v_90_unscaled = lj_normal.cross(&connection_normal);
-                        let lj_v_90 = Vector::new(
-                            lj_v_90_unscaled[0] * 0.5,
-                            lj_v_90_unscaled[1] * 0.5,
-                            lj_v_90_unscaled[2] * 0.5,
-                        );
-                        let lj_l_90 = Line::new(
-                            lj.start()[0],
-                            lj.start()[1],
-                            lj.start()[2],
-                            lj.start()[0] + lj_v_90[0],
-                            lj.start()[1] + lj_v_90[1],
-                            lj.start()[2] + lj_v_90[2],
-                        );
-                        let pl0_0_p = line_plane(&lj_l_90, &planes_0[0], false)?;
-                        let pl1_0_p = line_plane(&lj_l_90, &planes_1[0], false)?;
-                        let pl1_1_p = line_plane(&lj_l_90, &planes_1[1], false)?;
-
-                        let d_to_pl1_0 = Point::distance(&pl0_0_p, &pl1_0_p, None);
-                        let d_to_pl1_1 = Point::distance(&pl0_0_p, &pl1_1_p, None);
-                        let larger_to_pl1_0 = d_to_pl1_0 > d_to_pl1_1;
-                        let planes4: [Plane; 4] = if larger_to_pl1_0 {
-                            [
-                                planes_1[1].clone(),
-                                planes_0[0].clone(),
-                                planes_1[0].clone(),
-                                planes_0[1].clone(),
-                            ]
-                        } else {
-                            [
-                                planes_1[0].clone(),
-                                planes_0[0].clone(),
-                                planes_1[1].clone(),
-                                planes_0[1].clone(),
-                            ]
-                        };
-
-                        let mut vol0 = plane_4planes_open(&pl_end0, &planes4)?;
-                        let mut vol1 = plane_4planes_open(&pl_end1, &planes4)?;
-
-                        let need_rotate = {
-                            let p1 = vol0.get_point(1).unwrap();
-                            !planes_0[i].has_on_negative_side(&p1)
-                        };
-
-                        if need_rotate {
-                            let pts0: Vec<Point> = (0..vol0.point_count())
-                                .map(|k| vol0.get_point(k).unwrap())
-                                .collect();
-
-                            let pts1: Vec<Point> = (0..vol1.point_count())
-                                .map(|k| vol1.get_point(k).unwrap())
-                                .collect();
-
-                            let n0 = pts0.len();
-                            let n1 = pts1.len();
-                            let mut rot0 = Vec::with_capacity(n0);
-
-                            for k in 0..n0 {
-                                rot0.push(pts0[(k + 2) % n0].clone());
-                            }
-
-                            let mut rot1 = Vec::with_capacity(n1);
-
-                            for k in 0..n1 {
-                                rot1.push(pts1[(k + 2) % n1].clone());
-                            }
-
-                            vol0 = Polyline::new(rot0);
-                            vol1 = Polyline::new(rot1);
-                        }
-
-                        let pts0: Vec<Point> = (0..vol0.point_count())
-                            .map(|k| vol0.get_point(k).unwrap())
-                            .rev()
-                            .collect();
-
-                        let pts1: Vec<Point> = (0..vol1.point_count())
-                            .map(|k| vol1.get_point(k).unwrap())
-                            .rev()
-                            .collect();
-
-                        let n0 = pts0.len();
-                        let n1 = pts1.len();
-                        let mut rot0 = Vec::with_capacity(n0);
-
-                        for k in 0..n0 {
-                            rot0.push(pts0[(k + 3) % n0].clone());
-                        }
-
-                        let mut rot1 = Vec::with_capacity(n1);
-
-                        for k in 0..n1 {
-                            rot1.push(pts1[(k + 3) % n1].clone());
-                        }
-
-                        vol0 = Polyline::new(rot0);
-                        vol1 = Polyline::new(rot1);
-                        el_ids = (el_ids.1, el_ids.0);
-                        face_ids = (face_ids.1, face_ids.0);
-                        joint_lines.reverse();
-
-                        let p0_0 = vol0.get_point(0).unwrap();
-                        vol0.add_point(p0_0);
-                        let p0_1 = vol1.get_point(0).unwrap();
-                        vol1.add_point(p0_1);
-
-                        for &k in &[0_usize, 2] {
-                            extend_polyline_edge_equally(&mut vol0, k, ext_w);
-                            extend_polyline_edge_equally(&mut vol1, k, ext_w);
-                        }
-
-                        for &k in &[1_usize, 3] {
-                            extend_polyline_edge_equally(&mut vol0, k, ext_h);
-                            extend_polyline_edge_equally(&mut vol1, k, ext_h);
-                        }
-
-                        joint_volumes[0] = Some(vol0);
-                        joint_volumes[1] = Some(vol1);
-                        joint_type = 11;
-
-                        return Some(WoodJoint {
-                            el_ids,
-                            face_ids,
-                            joint_type,
-                            joint_area,
-                            joint_lines,
-                            joint_volumes_pair_a_pair_b: joint_volumes,
-                        });
-                    } else {
-                        let d0 = 0.5
-                            * planes_0[0]
-                                .origin()
-                                .distance(&planes_0[1].project(&planes_0[0].origin()), None);
-
-                        let offset_plane_0 = planes_0[i].translate_by_normal(-d0);
-                        let offset_plane_1 = planes_0[i].translate_by_normal(d0);
-
-                        let pt00 = planes_0[0].origin();
-                        let proj00 = planes_1[0].project(&pt00);
-                        let proj01 = planes_1[1].project(&pt00);
-                        let w0 = Point::distance(&pt00, &proj00, None);
-                        let w1 = Point::distance(&pt00, &proj01, None);
-                        let (p1_0, p1_1) = if w0 > w1 {
-                            (planes_1[1].clone(), planes_1[0].clone())
-                        } else {
-                            (planes_1[0].clone(), planes_1[1].clone())
-                        };
-
-                        let loop_planes_0: [Plane; 4] = [
-                            offset_plane_0.clone(),
-                            planes_0[0].clone(),
-                            offset_plane_1.clone(),
-                            planes_0[1].clone(),
-                        ];
-                        let loop_planes_1: [Plane; 4] =
-                            [offset_plane_0.clone(), p1_0, offset_plane_1.clone(), p1_1];
-
-                        let mut vol0 = plane_4planes(&pl_end0, &loop_planes_0)?;
-                        let mut vol1 = plane_4planes(&pl_end1, &loop_planes_0)?;
-                        let mut vol2 = plane_4planes(&pl_end0, &loop_planes_1)?;
-                        let mut vol3 = plane_4planes(&pl_end1, &loop_planes_1)?;
-
-                        for vol in [&mut vol0, &mut vol1, &mut vol2, &mut vol3].iter_mut() {
-                            for &k in &[0_usize, 2] {
-                                extend_polyline_edge_equally(vol, k, ext_w);
-                            }
-
-                            for &k in &[1_usize, 3] {
-                                extend_polyline_edge_equally(vol, k, ext_h);
-                            }
-                        }
-
-                        joint_volumes[0] = Some(vol0);
-                        joint_volumes[1] = Some(vol1);
-                        joint_volumes[2] = Some(vol2);
-                        joint_volumes[3] = Some(vol3);
-                        joint_type = 12;
-
-                        return Some(WoodJoint {
-                            el_ids,
-                            face_ids,
-                            joint_type,
-                            joint_area,
-                            joint_lines,
-                            joint_volumes_pair_a_pair_b: joint_volumes,
-                        });
-                    }
-                }
-            } else if joint_type == 1 {
-                let male_or_female = i > j;
-                let joint_line_for_volumes = if male_or_female {
-                    joint_line0.clone()
-                } else {
-                    joint_line1.clone()
-                };
-                joint_lines[0] = joint_line_for_volumes.clone();
-                joint_lines[1] = joint_line_for_volumes;
-
-                let plane0_0 = if male_or_female {
-                    planes_0[0].clone()
-                } else {
-                    planes_1[0].clone()
-                };
-                let plane1_0 = if !male_or_female {
-                    planes_0[i].clone()
-                } else {
-                    planes_1[j].clone()
-                };
-                let other_idx = if !male_or_female {
-                    (i as i32 - 1).unsigned_abs() as usize
-                } else {
-                    (j as i32 - 1).unsigned_abs() as usize
-                };
-                let plane1_1 = if !male_or_female {
-                    planes_0[other_idx].clone()
-                } else {
-                    planes_1[other_idx].clone()
-                };
-                let quad_0_owned = if male_or_female {
-                    joint_quads0.clone()
-                } else {
-                    joint_quads1.clone()
-                };
-                let quad_0 = quad_0_owned?;
-
-                let mut offset_vector =
-                    get_orthogonal_vector_between_two_plane_pairs(&plane0_0, &plane1_0, &plane1_1)?;
-
-                if dir_set {
-                    if let Some(scaled) =
-                        scale_vector_to_distance_of_2planes(&dir, &plane1_0, &plane1_1)
-                    {
-                        offset_vector = scaled;
-                    }
-                }
-
-                if !male_or_female {
-                    el_ids = (el_ids.1, el_ids.0);
-                    face_ids = (face_ids.1, face_ids.0);
-                }
-
-                let m_id = if male_or_female { 0 } else { 1 };
-                let f_id = if male_or_female { 1 } else { 0 };
-                let q0 = quad_0.get_point(0)?;
-                let q1 = quad_0.get_point(1)?;
-                let q2 = quad_0.get_point(2)?;
-                let q3 = quad_0.get_point(3)?;
-
-                let mk_quad = |a: &Point, b: &Point, ov: &Vector| -> Polyline {
-                    Polyline::new(vec![
-                        a.clone(),
-                        b.clone(),
-                        Point::new(b[0] + ov[0], b[1] + ov[1], b[2] + ov[2]),
-                        Point::new(a[0] + ov[0], a[1] + ov[1], a[2] + ov[2]),
-                        a.clone(),
-                    ])
-                };
-                let mut male_vol = mk_quad(&q0, &q1, &offset_vector);
-                let mut female_vol = mk_quad(&q3, &q2, &offset_vector);
-
-                for &k in &[0_usize, 2] {
-                    extend_polyline_edge_equally(&mut male_vol, k, ext_w);
-                    extend_polyline_edge_equally(&mut female_vol, k, ext_w);
-                }
-
-                for &k in &[1_usize, 3] {
-                    extend_polyline_edge_equally(&mut male_vol, k, ext_h);
-                    extend_polyline_edge_equally(&mut female_vol, k, ext_h);
-                }
-
-                joint_volumes[m_id] = Some(male_vol);
-                joint_volumes[f_id] = Some(female_vol);
-                joint_type = 20;
-
-                return Some(WoodJoint {
-                    el_ids,
-                    face_ids,
-                    joint_type,
-                    joint_area,
-                    joint_lines,
-                    joint_volumes_pair_a_pair_b: joint_volumes,
-                });
-            } else {
-                let rect = Polyline::bounding_rectangle(&joint_area)?;
-                let mut vol_a = rect.clone();
-                let mut vol_b = rect;
-
-                let mut dir0 = if dir_set {
-                    if i < insertion_vectors_0.len() {
-                        insertion_vectors_0[i].clone()
-                    } else {
-                        planes_0[i].z_axis()
-                    }
-                } else {
-                    planes_0[i].z_axis()
-                };
-                dir0.normalize_self();
-                let dir1_pre = Vector::new(-dir0[0], -dir0[1], -dir0[2]);
-                let dir0 = Vector::new(-dir0[0], -dir0[1], -dir0[2]);
-                let dir1 = Vector::new(-dir1_pre[0], -dir1_pre[1], -dir1_pre[2]);
-
-                let next_plane_0 = if i == 0 { 1 } else { 0 };
-                let next_plane_1 = if j == 0 { 1 } else { 0 };
-                let dist_0 = planes_0[i]
-                    .origin()
-                    .distance(&planes_0[next_plane_0].project(&planes_0[i].origin()), None);
-
-                let dist_1 = planes_1[j]
-                    .origin()
-                    .distance(&planes_1[next_plane_1].project(&planes_1[j].origin()), None);
-
-                let dir0 = Vector::new(dir0[0] * dist_0, dir0[1] * dist_0, dir0[2] * dist_0);
-                let dir1 = Vector::new(dir1[0] * dist_1, dir1[1] * dist_1, dir1[2] * dist_1);
-
-                for k in 0..vol_a.point_count() {
-                    let p = vol_a.get_point(k).unwrap();
-                    vol_a.set_point(
-                        k,
-                        &Point::new(p[0] + dir0[0], p[1] + dir0[1], p[2] + dir0[2]),
-                    );
-                }
-
-                for k in 0..vol_b.point_count() {
-                    let p = vol_b.get_point(k).unwrap();
-                    vol_b.set_point(
-                        k,
-                        &Point::new(p[0] + dir1[0], p[1] + dir1[1], p[2] + dir1[2]),
-                    );
-                }
-
-                let a0 = vol_a.get_point(0)?;
-                let a1 = vol_a.get_point(1)?;
-                let a2 = vol_a.get_point(2)?;
-                let a3 = vol_a.get_point(3)?;
-                let b0 = vol_b.get_point(0)?;
-                let b1 = vol_b.get_point(1)?;
-                let b2 = vol_b.get_point(2)?;
-                let b3 = vol_b.get_point(3)?;
-
-                let mut temp0 = Polyline::new(vec![
-                    a0.clone(),
-                    a1.clone(),
-                    b1.clone(),
-                    b0.clone(),
-                    a0.clone(),
-                ]);
-                let mut temp1 = Polyline::new(vec![
-                    a3.clone(),
-                    a2.clone(),
-                    b2.clone(),
-                    b3.clone(),
-                    a3.clone(),
-                ]);
-
-                for &k in &[0_usize, 2] {
-                    extend_polyline_edge_equally(&mut temp0, k, ext_w);
-                    extend_polyline_edge_equally(&mut temp1, k, ext_w);
-                }
-
-                for &k in &[1_usize, 3] {
-                    extend_polyline_edge_equally(&mut temp0, k, ext_h);
-                    extend_polyline_edge_equally(&mut temp1, k, ext_h);
-                }
-
-                joint_volumes[0] = Some(temp0);
-                joint_volumes[1] = Some(temp1);
-                joint_type = 40;
-
-                return Some(WoodJoint {
-                    el_ids,
-                    face_ids,
-                    joint_type,
-                    joint_area,
-                    joint_lines,
-                    joint_volumes_pair_a_pair_b: joint_volumes,
-                });
-            }
-        }
-    }
-
-    None
-}
-
-/// Boolean of two closed planar polylines, clip_type 0 intersection, 1 union, 2 difference.
-pub fn polyline_boolean(a: &Polyline, b: &Polyline, clip_type: i32) -> Vec<Polyline> {
-    Polyline::boolean_op(a, b, clip_type, None)
-}
-
-/// Boolean in the plane's 2D frame, intersection_type 0 intersect, 1 union, 2 difference, 3 xor.
-pub fn polyline_boolean_2d_in_plane(
-    polyline0: &Polyline,
-    polyline1: &Polyline,
-    plane: &crate::Plane,
-    intersection_type: i32,
-    include_triangles: bool,
-    min_area: f64,
-    collapse_eps: f64,
-) -> Option<Polyline> {
-    if polyline0.point_count() < 3 || polyline1.point_count() < 3 {
-        return None;
-    }
-
-    let origin = polyline0.get_point(0)?;
-    let xax = plane.base1();
-    let yax = plane.base2();
-    let flat_origin = Point::new(0.0, 0.0, 0.0);
-    let flat_x = Vector::new(1.0, 0.0, 0.0);
-    let flat_y = Vector::new(0.0, 1.0, 0.0);
-    let a2d = polyline_to_3d(
-        &polyline_to_2d(polyline0, &origin, &xax, &yax),
-        &flat_origin,
-        &flat_x,
-        &flat_y,
-    );
-    let b2d = polyline_to_3d(
-        &polyline_to_2d(polyline1, &origin, &xax, &yax),
-        &flat_origin,
-        &flat_x,
-        &flat_y,
-    );
-    let result_2d: Vec<Polyline> = if (0..=2).contains(&intersection_type) {
-        Polyline::boolean_op(&a2d, &b2d, intersection_type, None)
-    } else if intersection_type == 3 {
-        let u = Polyline::boolean_op(&a2d, &b2d, 1, None);
-        let inter = Polyline::boolean_op(&a2d, &b2d, 0, None);
-
-        if u.is_empty() {
-            return None;
-        }
-
-        if inter.is_empty() {
-            u
-        } else {
-            Polyline::boolean_op(&u[0], &inter[0], 2, None)
-        }
-    } else {
-        return None;
-    };
-
-    if result_2d.is_empty() {
-        return None;
-    }
-
-    let mut ring = polyline_to_2d(&result_2d[0], &flat_origin, &flat_x, &flat_y);
-
-    if ring.len() < 3 {
-        return None;
-    }
-
-    if collapse_eps > 0.0 {
-        let eps_sq = collapse_eps * collapse_eps;
-        let mut collapsed: Vec<P2> = Vec::with_capacity(ring.len());
-
-        for p in &ring {
-            if collapsed.is_empty() || distance_sq_2d(p, collapsed.last().unwrap()) >= eps_sq {
-                collapsed.push(*p);
-            }
-        }
-
-        if collapsed.len() >= 2 && distance_sq_2d(collapsed.last().unwrap(), &collapsed[0]) < eps_sq
-        {
-            collapsed.pop();
-        }
-
-        ring = collapsed;
-
-        if ring.len() < 3 {
-            return None;
-        }
-    }
-
-    if ring.len() == 3 && !include_triangles {
-        return None;
-    }
-
-    if signed_area_2d(&ring).abs() * 0.5 <= min_area {
-        return None;
-    }
-
-    Some(polyline_to_3d(&ring, &origin, &xax, &yax))
-}
-
-/// Miter offset of a closed polyline in the plane's 2D frame, positive outward, in place.
-pub fn offset_in_3d(polyline: &mut Polyline, plane: &crate::Plane, offset: f64) -> bool {
-    if polyline.point_count() < 3 {
-        return false;
-    }
-
-    let origin = polyline.get_point(0).unwrap();
-    let xax = plane.base1();
-    let yax = plane.base2();
-    let ring = polyline_to_2d(polyline, &origin, &xax, &yax);
-
-    if ring.len() < 3 {
-        return false;
-    }
-
-    let delta = if signed_area_2d(&ring) < 0.0 {
-        -offset
-    } else {
-        offset
-    };
-    let mut out = offset_ring_2d(&ring, delta, offset > 0.0);
-
-    if out.len() < 3 {
-        return false;
-    }
-
-    if signed_area_2d(&out).abs() * 0.5 < 0.0001 {
-        return false;
-    }
-
-    let mut cp = 0usize;
-
-    for i in 1..out.len() {
-        if distance_sq_2d(&out[i], &ring[0]) < distance_sq_2d(&out[cp], &ring[0]) {
-            cp = i;
-        }
-    }
-
-    out.rotate_left(cp);
-    *polyline = polyline_to_3d(&out, &origin, &xax, &yax);
-
-    true
-}
-
-/// Adjacent element pairs by BVH broad phase and OBB narrow phase.
-pub fn adjacency_search(elements: &mut [crate::element::Element], inflate: f64) -> Vec<i32> {
-    use crate::obb::OBB;
-    use crate::spatial_bvh::SpatialBVH;
-
-    let n = elements.len();
-    let mut obbs: Vec<OBB> = Vec::with_capacity(n);
-
-    for elem in elements.iter_mut() {
-        let mut pts: Vec<Point> = Vec::new();
-
-        for pl in elem.polylines() {
-            for p in pl.get_points() {
-                pts.push(p);
-            }
-        }
-
-        obbs.push(OBB::from_points(&pts, inflate, None));
-    }
-
-    let mut bvh = SpatialBVH::new();
-    bvh.build(&obbs);
-    let mut adjacency: Vec<i32> = Vec::new();
-
-    for i in 0..n {
-        let hits = bvh.query_obb(&obbs[i]);
-
-        for j in hits {
-            if (i as i32) < (j as i32) && obbs[i].collides_with(&obbs[j]) {
-                adjacency.push(i as i32);
-                adjacency.push(j as i32);
-                adjacency.push(-1);
-                adjacency.push(-1);
-            }
-        }
-    }
-
-    adjacency
 }
