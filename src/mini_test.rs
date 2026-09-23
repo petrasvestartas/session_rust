@@ -1503,6 +1503,11 @@ pub fn get_all_tests() -> Vec<RegisteredTest> {
         },
         RegisteredTest {
             group: "Xform",
+            name: "From Axes",
+            func: run_xform_from_axes,
+        },
+        RegisteredTest {
+            group: "Xform",
             name: "Translation",
             func: run_xform_translation,
         },
@@ -1538,8 +1543,28 @@ pub fn get_all_tests() -> Vec<RegisteredTest> {
         },
         RegisteredTest {
             group: "Xform",
+            name: "From Change Of Basis",
+            func: run_xform_from_change_of_basis,
+        },
+        RegisteredTest {
+            group: "Xform",
             name: "Plane To Plane",
             func: run_xform_plane_to_plane,
+        },
+        RegisteredTest {
+            group: "Xform",
+            name: "World To Frame",
+            func: run_xform_world_to_frame,
+        },
+        RegisteredTest {
+            group: "Xform",
+            name: "Frame To World",
+            func: run_xform_frame_to_world,
+        },
+        RegisteredTest {
+            group: "Xform",
+            name: "To Frame",
+            func: run_xform_to_frame,
         },
         RegisteredTest {
             group: "Xform",
@@ -1555,6 +1580,11 @@ pub fn get_all_tests() -> Vec<RegisteredTest> {
             group: "Xform",
             name: "Scale Non Uniform",
             func: run_xform_scale_non_uniform,
+        },
+        RegisteredTest {
+            group: "Xform",
+            name: "Axis Rotation",
+            func: run_xform_axis_rotation,
         },
         RegisteredTest {
             group: "Xform",
@@ -1588,8 +1618,13 @@ pub fn get_all_tests() -> Vec<RegisteredTest> {
         },
         RegisteredTest {
             group: "Xform",
-            name: "Inverse",
-            func: run_xform_inverse,
+            name: "Transform Point",
+            func: run_xform_transform_point,
+        },
+        RegisteredTest {
+            group: "Xform",
+            name: "Transform Vector",
+            func: run_xform_transform_vector,
         },
         RegisteredTest {
             group: "Xform",
@@ -1598,23 +1633,8 @@ pub fn get_all_tests() -> Vec<RegisteredTest> {
         },
         RegisteredTest {
             group: "Xform",
-            name: "Json Roundtrip",
-            func: run_xform_json_roundtrip,
-        },
-        RegisteredTest {
-            group: "Xform",
-            name: "Protobuf Roundtrip",
-            func: run_xform_protobuf_roundtrip,
-        },
-        RegisteredTest {
-            group: "Xform",
-            name: "Transform Point",
-            func: run_xform_transform_point,
-        },
-        RegisteredTest {
-            group: "Xform",
-            name: "Transform Vector",
-            func: run_xform_transform_vector,
+            name: "Inverse",
+            func: run_xform_inverse,
         },
         RegisteredTest {
             group: "Xform",
@@ -1638,18 +1658,13 @@ pub fn get_all_tests() -> Vec<RegisteredTest> {
         },
         RegisteredTest {
             group: "Xform",
-            name: "From Change Of Basis",
-            func: run_xform_from_change_of_basis,
+            name: "Json Roundtrip",
+            func: run_xform_json_roundtrip,
         },
         RegisteredTest {
             group: "Xform",
-            name: "World To Frame",
-            func: run_xform_world_to_frame,
-        },
-        RegisteredTest {
-            group: "Xform",
-            name: "Frame To World",
-            func: run_xform_frame_to_world,
+            name: "Protobuf Roundtrip",
+            func: run_xform_protobuf_roundtrip,
         },
         // Mesh tests
         RegisteredTest {

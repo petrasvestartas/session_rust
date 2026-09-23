@@ -1,64 +1,44 @@
 use crate::tolerance::Tolerance;
-use crate::{Line, Plane, Point, Polyline, Vector};
+use crate::Line;
+use crate::Plane;
+use crate::Point;
+use crate::Polyline;
+use crate::Vector;
 use serde::ser::SerializeMap;
-use serde::{Deserialize, Deserializer, Serializer};
+use serde::Deserialize;
+use serde::Deserializer;
+use serde::Serializer;
 use std::fmt;
-use std::ops::{Index, IndexMut, Mul, MulAssign};
+use std::ops::Index;
+use std::ops::IndexMut;
+use std::ops::Mul;
+use std::ops::MulAssign;
 use std::sync::OnceLock;
 
 /// A 4x4 column-major transformation matrix.
 #[derive(Clone)]
 pub struct Xform {
-    guid: OnceLock<String>,
-    pub name: String, // Xform name.
-    pub m: [f64; 16], // Column-major values.
+    guid: OnceLock<String>, // Lazily minted GUID.
+    pub name: String,       // Xform name.
+    pub m: [f64; 16],       // Column-major values.
 }
 
 impl Xform {
-    /// Constructs the identity.
-    pub fn new() -> Self {
-        Xform {
-            guid: OnceLock::new(),
-            name: "my_xform".to_string(),
-            m: [
-                1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0,
-            ],
-        }
-    }
-
-    /// Returns whether the lazy guid has been created.
-    pub fn has_guid(&self) -> bool {
-        self.guid.get().is_some()
-    }
-
-    /// Returns the guid, creating it on first access.
-    pub fn guid(&self) -> &str {
-        self.guid.get_or_init(|| uuid::Uuid::new_v4().to_string())
-    }
-
-    /// Sets the guid if it has not already been created.
-    pub fn set_guid(&self, g: String) {
-        let _ = self.guid.set(g);
-    }
-
     // ═══════════════════════════════════════════════════════════════════════════
     // Constructors
     // ═══════════════════════════════════════════════════════════════════════════
+    /// Construct the identity.
+    pub fn new() -> Self {
+        let mut m = [0.0; 16];
+        m[0] = 1.0;
+        m[5] = 1.0;
+        m[10] = 1.0;
+        m[15] = 1.0;
 
-    /// Constructs the identity.
-    pub fn identity() -> Self {
-        Self::new()
+        Self::from_matrix(m)
     }
 
-    /// Constructs from column-major values.
-    pub fn from_matrix(matrix: [f64; 16]) -> Self {
-        let mut xform = Self::new();
-        xform.m = matrix;
-
-        xform
-    }
-
-    /// Copies with a new guid and the same data.
+    /// Copy with a new guid and the same data.
     pub fn duplicate(&self) -> Self {
         let mut copy = Self::from_matrix(self.m);
         copy.name = self.name.clone();
@@ -66,11 +46,126 @@ impl Xform {
         copy
     }
 
+    /// Construct the identity.
+    pub fn identity() -> Self {
+        Self::new()
+    }
+
+    /// Construct from column-major values.
+    pub fn from_matrix(matrix: [f64; 16]) -> Self {
+        Xform {
+            guid: OnceLock::new(),
+            name: "my_xform".to_string(),
+            m: matrix,
+        }
+    }
+
+    // ═══════════════════════════════════════════════════════════════════════════
+    // Accessors
+    // ═══════════════════════════════════════════════════════════════════════════
+    /// Return whether the lazy guid has been created.
+    pub fn has_guid(&self) -> bool {
+        self.guid.get().is_some()
+    }
+
+    /// Return the guid, creating it on first access.
+    pub fn guid(&self) -> &str {
+        self.guid.get_or_init(|| uuid::Uuid::new_v4().to_string())
+    }
+
+    /// Set the guid if it has not already been created.
+    pub fn set_guid(&self, guid: String) {
+        let _ = self.guid.set(guid);
+    }
+}
+
+impl Default for Xform {
+    /// Construct the identity.
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Operators
+// ═══════════════════════════════════════════════════════════════════════════
+impl Mul for &Xform {
+    type Output = Xform;
+
+    /// Multiply two transforms.
+    fn mul(self, other: &Xform) -> Xform {
+        let mut result = Xform::new();
+
+        for i in 0..4 {
+            for j in 0..4 {
+                let mut sum = 0.0;
+
+                for k in 0..4 {
+                    sum += self.m[k * 4 + i] * other.m[j * 4 + k];
+                }
+
+                result.m[j * 4 + i] = sum;
+            }
+        }
+
+        result
+    }
+}
+
+impl Mul for Xform {
+    type Output = Xform;
+
+    /// Multiply two transforms.
+    fn mul(self, other: Xform) -> Xform {
+        &self * &other
+    }
+}
+
+impl MulAssign for Xform {
+    /// Multiply in place.
+    fn mul_assign(&mut self, other: Xform) {
+        *self = &*self * &other;
+    }
+}
+
+impl Index<(usize, usize)> for Xform {
+    type Output = f64;
+
+    /// Return the element at (row, col).
+    fn index(&self, (row, col): (usize, usize)) -> &f64 {
+        assert!(row < 4 && col < 4, "Index out of bounds: ({row}, {col})");
+
+        &self.m[col * 4 + row]
+    }
+}
+
+impl IndexMut<(usize, usize)> for Xform {
+    /// Return the mutable element at (row, col).
+    fn index_mut(&mut self, (row, col): (usize, usize)) -> &mut f64 {
+        assert!(row < 4 && col < 4, "Index out of bounds: ({row}, {col})");
+
+        &mut self.m[col * 4 + row]
+    }
+}
+
+impl PartialEq for Xform {
+    /// Compare all elements within tolerance.
+    fn eq(&self, other: &Self) -> bool {
+        for i in 0..16 {
+            if (self.m[i] - other.m[i]).abs() > 1e-10 {
+                return false;
+            }
+        }
+
+        true
+    }
+}
+
+impl Xform {
     // ═══════════════════════════════════════════════════════════════════════════
     // Transformations
     // ═══════════════════════════════════════════════════════════════════════════
-
-    /// Constructs a pure rotation from three column axis vectors.
+    /// Construct a pure rotation from three column axis vectors.
     pub fn from_axes(col_x: &Vector, col_y: &Vector, col_z: &Vector) -> Self {
         let mut xform = Self::new();
         xform.m[0] = col_x[0];
@@ -86,7 +181,7 @@ impl Xform {
         xform
     }
 
-    /// Constructs a translation.
+    /// Construct a translation.
     pub fn translation(x: f64, y: f64, z: f64) -> Self {
         let mut xform = Self::new();
         xform.m[12] = x;
@@ -96,16 +191,16 @@ impl Xform {
         xform
     }
 
-    /// Constructs a rotation about the x axis.
-    pub fn rotation_x(angle: f64, degrees: bool) -> Self {
-        let angle = if degrees {
-            angle * Tolerance::TO_RADIANS
-        } else {
-            angle
-        };
-        let mut xform = Self::new();
+    /// Construct a rotation about the x axis.
+    pub fn rotation_x(mut angle: f64, degrees: bool) -> Self {
+        if degrees {
+            angle *= Tolerance::TO_RADIANS;
+        }
+
         let cos_angle = angle.cos();
         let sin_angle = angle.sin();
+
+        let mut xform = Self::new();
         xform.m[5] = cos_angle;
         xform.m[6] = sin_angle;
         xform.m[9] = -sin_angle;
@@ -114,16 +209,16 @@ impl Xform {
         xform
     }
 
-    /// Constructs a rotation about the y axis.
-    pub fn rotation_y(angle: f64, degrees: bool) -> Self {
-        let angle = if degrees {
-            angle * Tolerance::TO_RADIANS
-        } else {
-            angle
-        };
-        let mut xform = Self::new();
+    /// Construct a rotation about the y axis.
+    pub fn rotation_y(mut angle: f64, degrees: bool) -> Self {
+        if degrees {
+            angle *= Tolerance::TO_RADIANS;
+        }
+
         let cos_angle = angle.cos();
         let sin_angle = angle.sin();
+
+        let mut xform = Self::new();
         xform.m[0] = cos_angle;
         xform.m[2] = -sin_angle;
         xform.m[8] = sin_angle;
@@ -132,16 +227,16 @@ impl Xform {
         xform
     }
 
-    /// Constructs a rotation about the z axis.
-    pub fn rotation_z(angle: f64, degrees: bool) -> Self {
-        let angle = if degrees {
-            angle * Tolerance::TO_RADIANS
-        } else {
-            angle
-        };
-        let mut xform = Self::new();
+    /// Construct a rotation about the z axis.
+    pub fn rotation_z(mut angle: f64, degrees: bool) -> Self {
+        if degrees {
+            angle *= Tolerance::TO_RADIANS;
+        }
+
         let cos_angle = angle.cos();
         let sin_angle = angle.sin();
+
+        let mut xform = Self::new();
         xform.m[0] = cos_angle;
         xform.m[1] = sin_angle;
         xform.m[4] = -sin_angle;
@@ -150,14 +245,11 @@ impl Xform {
         xform
     }
 
-    /// Constructs a rotation about an arbitrary axis through the origin.
-    pub fn rotation(axis: &Vector, angle: f64, degrees: bool) -> Self {
-        let angle = if degrees {
-            angle * Tolerance::TO_RADIANS
-        } else {
-            angle
-        };
-        let mut xform = Self::new();
+    /// Construct a rotation about an arbitrary axis through the origin.
+    pub fn rotation(axis: &Vector, mut angle: f64, degrees: bool) -> Self {
+        if degrees {
+            angle *= Tolerance::TO_RADIANS;
+        }
 
         if axis.is_zero() {
             return Self::identity();
@@ -173,6 +265,8 @@ impl Xform {
         let yy = unit[1] * unit[1];
         let yz = unit[1] * unit[2];
         let zz = unit[2] * unit[2];
+
+        let mut xform = Self::new();
         xform.m[0] = cos_angle + xx * one_minus_cos;
         xform.m[1] = xy * one_minus_cos + unit[2] * sin_angle;
         xform.m[2] = xz * one_minus_cos - unit[1] * sin_angle;
@@ -186,7 +280,7 @@ impl Xform {
         xform
     }
 
-    /// Constructs a rotation about a line.
+    /// Construct a rotation about a line.
     pub fn rotation_around_line(line: &Line, angle: f64, degrees: bool) -> Self {
         let p = line.start();
         let d = line.to_direction();
@@ -197,7 +291,7 @@ impl Xform {
         t1 * (r * t0)
     }
 
-    /// Constructs a change of basis from frame 1 to frame 0.
+    /// Construct a change of basis from frame 1 to frame 0.
     #[allow(clippy::needless_range_loop, clippy::too_many_arguments)]
     pub fn change_basis(
         origin_1: &Point,
@@ -365,7 +459,7 @@ impl Xform {
         t2 * (m_xform * t0)
     }
 
-    /// Maps the unit cube [-0.5, 0.5]^3 to the joint volume frame spanned by rect0 (x, y) and rect1[0] (z).
+    /// Map the unit cube [-0.5, 0.5]^3 to the joint volume frame spanned by rect0 (x, y) and rect1[0] (z).
     pub fn from_change_of_basis(rect0: &Polyline, rect1: &Polyline) -> Self {
         if rect0.point_count() < 4 || rect1.point_count() < 1 {
             return Self::identity();
@@ -379,12 +473,13 @@ impl Xform {
         let x_axis_0 = &rect0.get_point(1).unwrap() - &origin_0;
         let y_axis_0 = &rect0.get_point(3).unwrap() - &origin_0;
         let z_axis_0 = &rect1.get_point(0).unwrap() - &origin_0;
+
         Self::change_basis(
             &origin_1, &x_axis_1, &y_axis_1, &z_axis_1, &origin_0, &x_axis_0, &y_axis_0, &z_axis_0,
         )
     }
 
-    /// Constructs the transform taking one plane to another.
+    /// Construct the transform taking one plane to another.
     pub fn plane_to_plane(plane_from: &Plane, plane_to: &Plane) -> Self {
         let x0 = plane_from.x_axis().normalized();
         let y0 = plane_from.y_axis().normalized();
@@ -395,7 +490,6 @@ impl Xform {
         let origin_0 = plane_from.origin();
         let origin_1 = plane_to.origin();
 
-        let t0 = Self::translation(-origin_0[0], -origin_0[1], -origin_0[2]);
         let mut f0 = Self::new();
         f0.m[0] = x0[0];
         f0.m[1] = x0[1];
@@ -406,6 +500,7 @@ impl Xform {
         f0.m[8] = z0[0];
         f0.m[9] = z0[1];
         f0.m[10] = z0[2];
+
         let mut f1 = Self::new();
         f1.m[0] = x1[0];
         f1.m[4] = x1[1];
@@ -416,13 +511,15 @@ impl Xform {
         f1.m[2] = z1[0];
         f1.m[6] = z1[1];
         f1.m[10] = z1[2];
+
+        let t0 = Self::translation(-origin_0[0], -origin_0[1], -origin_0[2]);
         let r = f1 * f0;
         let t1 = Self::translation(origin_1[0], origin_1[1], origin_1[2]);
 
         t1 * (r * t0)
     }
 
-    /// Constructs the world point to frame coordinates transform (axes as rows).
+    /// Construct the world point to frame coordinates transform (axes as rows).
     pub fn world_to_frame(
         origin: &Point,
         x_axis: &Vector,
@@ -432,6 +529,7 @@ impl Xform {
         let x = x_axis.normalized();
         let y = y_axis.normalized();
         let z = z_axis.normalized();
+
         let mut f = Self::new();
         f.m[0] = x[0];
         f.m[4] = x[1];
@@ -442,12 +540,13 @@ impl Xform {
         f.m[2] = z[0];
         f.m[6] = z[1];
         f.m[10] = z[2];
+
         let t = Self::translation(-origin[0], -origin[1], -origin[2]);
 
         f * t
     }
 
-    /// Constructs the frame coordinates to world point transform (axes as columns).
+    /// Construct the frame coordinates to world point transform (axes as columns).
     pub fn frame_to_world(
         origin: &Point,
         x_axis: &Vector,
@@ -457,6 +556,7 @@ impl Xform {
         let x = x_axis.normalized();
         let y = y_axis.normalized();
         let z = z_axis.normalized();
+
         let mut f = Self::new();
         f.m[0] = x[0];
         f.m[1] = x[1];
@@ -467,35 +567,37 @@ impl Xform {
         f.m[8] = z[0];
         f.m[9] = z[1];
         f.m[10] = z[2];
+
         let t = Self::translation(origin[0], origin[1], origin[2]);
 
         t * f
     }
 
-    /// Constructs the world XY to frame plane transform (COMPAS from_frame).
+    /// Construct the world XY to frame plane transform (COMPAS from_frame).
     pub fn to_frame(frame: &Plane) -> Self {
         let x = frame.x_axis().normalized();
         let y = frame.y_axis().normalized();
         let z = frame.z_axis().normalized();
         let o = frame.origin();
-        let mut xf = Self::new();
-        xf.m[0] = x[0];
-        xf.m[4] = y[0];
-        xf.m[8] = z[0];
-        xf.m[12] = o[0];
-        xf.m[1] = x[1];
-        xf.m[5] = y[1];
-        xf.m[9] = z[1];
-        xf.m[13] = o[1];
-        xf.m[2] = x[2];
-        xf.m[6] = y[2];
-        xf.m[10] = z[2];
-        xf.m[14] = o[2];
 
-        xf
+        let mut xform = Self::new();
+        xform.m[0] = x[0];
+        xform.m[4] = y[0];
+        xform.m[8] = z[0];
+        xform.m[12] = o[0];
+        xform.m[1] = x[1];
+        xform.m[5] = y[1];
+        xform.m[9] = z[1];
+        xform.m[13] = o[1];
+        xform.m[2] = x[2];
+        xform.m[6] = y[2];
+        xform.m[10] = z[2];
+        xform.m[14] = o[2];
+
+        xform
     }
 
-    /// Constructs a scale about the origin.
+    /// Construct a scale about the origin.
     pub fn scale_xyz(scale_x: f64, scale_y: f64, scale_z: f64) -> Self {
         let mut xform = Self::new();
         xform.m[0] = scale_x;
@@ -505,7 +607,7 @@ impl Xform {
         xform
     }
 
-    /// Constructs a uniform scale about a point.
+    /// Construct a uniform scale about a point.
     pub fn scale_uniform(origin: &Point, scale_value: f64) -> Self {
         let t0 = Self::translation(-origin[0], -origin[1], -origin[2]);
         let t1 = Self::scale_xyz(scale_value, scale_value, scale_value);
@@ -514,7 +616,7 @@ impl Xform {
         t2 * (t1 * t0)
     }
 
-    /// Constructs a non-uniform scale about a point.
+    /// Construct a non-uniform scale about a point.
     pub fn scale_non_uniform(origin: &Point, scale_x: f64, scale_y: f64, scale_z: f64) -> Self {
         let t0 = Self::translation(-origin[0], -origin[1], -origin[2]);
         let t1 = Self::scale_xyz(scale_x, scale_y, scale_z);
@@ -523,19 +625,19 @@ impl Xform {
         t2 * (t1 * t0)
     }
 
-    /// Constructs a Rodrigues rotation about a unit axis.
-    pub fn axis_rotation(angle: f64, axis: &Vector, degrees: bool) -> Self {
-        let angle = if degrees {
-            angle * Tolerance::TO_RADIANS
-        } else {
-            angle
-        };
+    /// Construct a Rodrigues rotation about a unit axis.
+    pub fn axis_rotation(mut angle: f64, axis: &Vector, degrees: bool) -> Self {
+        if degrees {
+            angle *= Tolerance::TO_RADIANS;
+        }
+
         let c = angle.cos();
         let s = angle.sin();
+        let t = 1.0 - c;
         let ux = axis[0];
         let uy = axis[1];
         let uz = axis[2];
-        let t = 1.0 - c;
+
         let mut xform = Self::new();
         xform.m[0] = t * ux * ux + c;
         xform.m[4] = t * ux * uy - uz * s;
@@ -550,34 +652,18 @@ impl Xform {
         xform
     }
 
-    /// Constructs a right-handed view matrix looking at a target (camera looks down -Z, up must not be parallel to the view).
+    /// Construct a right-handed view matrix looking at a target (camera looks down -Z, up must not be parallel to the view).
     pub fn look_at_right_handed(eye: &Point, target: &Point, up: &Vector) -> Self {
-        let f = (target - eye).normalized();
-        let s = f.cross(&up.normalized()).normalized();
-        let u = s.cross(&f);
-        let mut xform = Self::new();
-        xform.m[0] = s[0];
-        xform.m[4] = s[1];
-        xform.m[8] = s[2];
-        xform.m[1] = u[0];
-        xform.m[5] = u[1];
-        xform.m[9] = u[2];
-        xform.m[2] = -f[0];
-        xform.m[6] = -f[1];
-        xform.m[10] = -f[2];
-        let eye_vec = Vector::new(eye[0], eye[1], eye[2]);
-        xform.m[12] = -s.dot(&eye_vec);
-        xform.m[13] = -u.dot(&eye_vec);
-        xform.m[14] = f.dot(&eye_vec);
-
-        xform
+        Self::look_to_right_handed(eye, &(target - eye), up)
     }
 
-    /// Constructs a right-handed view matrix looking along a direction.
+    /// Construct a right-handed view matrix looking along a direction.
     pub fn look_to_right_handed(eye: &Point, direction: &Vector, up: &Vector) -> Self {
         let f = direction.normalized();
         let s = f.cross(&up.normalized()).normalized();
         let u = s.cross(&f);
+        let eye_vector = Vector::new(eye[0], eye[1], eye[2]);
+
         let mut xform = Self::new();
         xform.m[0] = s[0];
         xform.m[4] = s[1];
@@ -588,18 +674,18 @@ impl Xform {
         xform.m[2] = -f[0];
         xform.m[6] = -f[1];
         xform.m[10] = -f[2];
-        let eye_vec = Vector::new(eye[0], eye[1], eye[2]);
-        xform.m[12] = -s.dot(&eye_vec);
-        xform.m[13] = -u.dot(&eye_vec);
-        xform.m[14] = f.dot(&eye_vec);
+        xform.m[12] = -s.dot(&eye_vector);
+        xform.m[13] = -u.dot(&eye_vector);
+        xform.m[14] = f.dot(&eye_vector);
 
         xform
     }
 
-    /// Constructs a right-handed perspective projection with depth [0, 1].
+    /// Construct a right-handed perspective projection with depth [0, 1].
     pub fn perspective(fov_y: f64, aspect: f64, near: f64, far: f64) -> Self {
         let f = 1.0 / (fov_y / 2.0).tan();
         let nf = near - far;
+
         let mut xform = Self::from_matrix([0.0; 16]);
         xform.m[0] = f / aspect;
         xform.m[5] = f;
@@ -610,11 +696,12 @@ impl Xform {
         xform
     }
 
-    /// Constructs a right-handed orthographic projection with depth [0, 1].
+    /// Construct a right-handed orthographic projection with depth [0, 1].
     pub fn orthographic(left: f64, right: f64, bottom: f64, top: f64, near: f64, far: f64) -> Self {
         let rl = right - left;
         let tb = top - bottom;
         let nf = near - far;
+
         let mut xform = Self::from_matrix([0.0; 16]);
         xform.m[0] = 2.0 / rl;
         xform.m[5] = 2.0 / tb;
@@ -627,12 +714,15 @@ impl Xform {
         xform
     }
 
-    /// Constructs an orthogonal projection onto a plane.
+    /// Construct an orthogonal projection onto a plane.
     pub fn project_to_plane(plane: &Plane) -> Self {
         let n = plane.z_axis();
         let o = plane.origin();
-        let (nx, ny, nz) = (n[0], n[1], n[2]);
+        let nx = n[0];
+        let ny = n[1];
+        let nz = n[2];
         let d = o[0] * nx + o[1] * ny + o[2] * nz;
+
         let mut xform = Self::new();
         xform.m[0] = 1.0 - nx * nx;
         xform.m[4] = -nx * ny;
@@ -650,14 +740,19 @@ impl Xform {
         xform
     }
 
-    /// Constructs a projection onto a plane along a direction.
+    /// Construct a projection onto a plane along a direction.
     pub fn project_to_plane_by_axis(plane: &Plane, direction: &Vector) -> Self {
         let n = plane.z_axis();
         let o = plane.origin();
-        let (nx, ny, nz) = (n[0], n[1], n[2]);
-        let (dx, dy, dz) = (direction[0], direction[1], direction[2]);
+        let nx = n[0];
+        let ny = n[1];
+        let nz = n[2];
+        let dx = direction[0];
+        let dy = direction[1];
+        let dz = direction[2];
         let s = 1.0 / (nx * dx + ny * dy + nz * dz);
         let d = o[0] * nx + o[1] * ny + o[2] * nz;
+
         let mut xform = Self::new();
         xform.m[0] = 1.0 - dx * s * nx;
         xform.m[4] = -dx * s * ny;
@@ -676,10 +771,9 @@ impl Xform {
     }
 
     // ═══════════════════════════════════════════════════════════════════════════
-    // Apply Transformations
+    // Apply transformations
     // ═══════════════════════════════════════════════════════════════════════════
-
-    /// Transforms a point with a homogeneous multiply, dividing by w when projective.
+    /// Transform a point with a homogeneous multiply, dividing by w when projective.
     pub fn transform_point(&self, p: &Point) -> Point {
         let x = self.m[0] * p[0] + self.m[4] * p[1] + self.m[8] * p[2] + self.m[12];
         let y = self.m[1] * p[0] + self.m[5] * p[1] + self.m[9] * p[2] + self.m[13];
@@ -693,7 +787,7 @@ impl Xform {
         Point::new(x / w, y / w, z / w)
     }
 
-    /// Transforms a vector with rotation and scale only.
+    /// Transform a vector with rotation and scale only.
     pub fn transform_vector(&self, v: &Vector) -> Vector {
         let x = self.m[0] * v[0] + self.m[4] * v[1] + self.m[8] * v[2];
         let y = self.m[1] * v[0] + self.m[5] * v[1] + self.m[9] * v[2];
@@ -705,8 +799,7 @@ impl Xform {
     // ═══════════════════════════════════════════════════════════════════════════
     // Details
     // ═══════════════════════════════════════════════════════════════════════════
-
-    /// Returns the inverse, or None when singular.
+    /// Return the inverse, or None when singular.
     pub fn inverse(&self) -> Option<Xform> {
         let s0 = self.m[0] * self.m[5] - self.m[1] * self.m[4];
         let s1 = self.m[0] * self.m[9] - self.m[1] * self.m[8];
@@ -727,41 +820,34 @@ impl Xform {
         }
 
         let inv_det = 1.0 / det;
-        let mut res = Self::new();
-        res.m[0] = (self.m[5] * c5 - self.m[9] * c4 + self.m[13] * c3) * inv_det;
-        res.m[4] = (-self.m[4] * c5 + self.m[8] * c4 - self.m[12] * c3) * inv_det;
-        res.m[8] = (self.m[7] * s5 - self.m[11] * s4 + self.m[15] * s3) * inv_det;
-        res.m[12] = (-self.m[6] * s5 + self.m[10] * s4 - self.m[14] * s3) * inv_det;
-        res.m[1] = (-self.m[1] * c5 + self.m[9] * c2 - self.m[13] * c1) * inv_det;
-        res.m[5] = (self.m[0] * c5 - self.m[8] * c2 + self.m[12] * c1) * inv_det;
-        res.m[9] = (-self.m[3] * s5 + self.m[11] * s2 - self.m[15] * s1) * inv_det;
-        res.m[13] = (self.m[2] * s5 - self.m[10] * s2 + self.m[14] * s1) * inv_det;
-        res.m[2] = (self.m[1] * c4 - self.m[5] * c2 + self.m[13] * c0) * inv_det;
-        res.m[6] = (-self.m[0] * c4 + self.m[4] * c2 - self.m[12] * c0) * inv_det;
-        res.m[10] = (self.m[3] * s4 - self.m[7] * s2 + self.m[15] * s0) * inv_det;
-        res.m[14] = (-self.m[2] * s4 + self.m[6] * s2 - self.m[14] * s0) * inv_det;
-        res.m[3] = (-self.m[1] * c3 + self.m[5] * c1 - self.m[9] * c0) * inv_det;
-        res.m[7] = (self.m[0] * c3 - self.m[4] * c1 + self.m[8] * c0) * inv_det;
-        res.m[11] = (-self.m[3] * s3 + self.m[7] * s1 - self.m[11] * s0) * inv_det;
-        res.m[15] = (self.m[2] * s3 - self.m[6] * s1 + self.m[10] * s0) * inv_det;
 
-        Some(res)
+        let mut result = Self::new();
+        result.m[0] = (self.m[5] * c5 - self.m[9] * c4 + self.m[13] * c3) * inv_det;
+        result.m[4] = (-self.m[4] * c5 + self.m[8] * c4 - self.m[12] * c3) * inv_det;
+        result.m[8] = (self.m[7] * s5 - self.m[11] * s4 + self.m[15] * s3) * inv_det;
+        result.m[12] = (-self.m[6] * s5 + self.m[10] * s4 - self.m[14] * s3) * inv_det;
+        result.m[1] = (-self.m[1] * c5 + self.m[9] * c2 - self.m[13] * c1) * inv_det;
+        result.m[5] = (self.m[0] * c5 - self.m[8] * c2 + self.m[12] * c1) * inv_det;
+        result.m[9] = (-self.m[3] * s5 + self.m[11] * s2 - self.m[15] * s1) * inv_det;
+        result.m[13] = (self.m[2] * s5 - self.m[10] * s2 + self.m[14] * s1) * inv_det;
+        result.m[2] = (self.m[1] * c4 - self.m[5] * c2 + self.m[13] * c0) * inv_det;
+        result.m[6] = (-self.m[0] * c4 + self.m[4] * c2 - self.m[12] * c0) * inv_det;
+        result.m[10] = (self.m[3] * s4 - self.m[7] * s2 + self.m[15] * s0) * inv_det;
+        result.m[14] = (-self.m[2] * s4 + self.m[6] * s2 - self.m[14] * s0) * inv_det;
+        result.m[3] = (-self.m[1] * c3 + self.m[5] * c1 - self.m[9] * c0) * inv_det;
+        result.m[7] = (self.m[0] * c3 - self.m[4] * c1 + self.m[8] * c0) * inv_det;
+        result.m[11] = (-self.m[3] * s3 + self.m[7] * s1 - self.m[11] * s0) * inv_det;
+        result.m[15] = (self.m[2] * s3 - self.m[6] * s1 + self.m[10] * s0) * inv_det;
+
+        Some(result)
     }
 
-    /// Returns whether the matrix is the identity.
+    /// Return whether the matrix is the identity.
     pub fn is_identity(&self) -> bool {
-        let identity = Self::new();
-
-        for i in 0..16 {
-            if (self.m[i] - identity.m[i]).abs() > 1e-10 {
-                return false;
-            }
-        }
-
-        true
+        *self == Self::new()
     }
 
-    /// Returns four columns of four rows.
+    /// Return four columns of four rows.
     pub fn to_cols(&self) -> [[f64; 4]; 4] {
         [
             [self.m[0], self.m[1], self.m[2], self.m[3]],
@@ -771,20 +857,20 @@ impl Xform {
         ]
     }
 
-    /// Returns the length of the first column: the uniform scale the matrix applies.
+    /// Return the length of the first column: the uniform scale the matrix applies.
     pub fn uniform_scale(&self) -> f64 {
         (self.m[0] * self.m[0] + self.m[1] * self.m[1] + self.m[2] * self.m[2]).sqrt()
     }
 
-    /// Returns the eye of a view-projection: where clip x, y and w vanish at once; orthographic has none, so the view direction pushed far back.
+    /// Return the eye of a view-projection: where clip x, y and w vanish at once; orthographic has none, so the view direction pushed far back.
     pub fn eye(&self) -> Point {
         let rows = [
-            [self[(0, 0)], self[(0, 1)], self[(0, 2)]],
-            [self[(1, 0)], self[(1, 1)], self[(1, 2)]],
-            [self[(3, 0)], self[(3, 1)], self[(3, 2)]],
+            [self.m[0], self.m[4], self.m[8]],
+            [self.m[1], self.m[5], self.m[9]],
+            [self.m[3], self.m[7], self.m[11]],
         ];
-        let rhs = [-self[(0, 3)], -self[(1, 3)], -self[(3, 3)]];
-        let d = Xform::det3(&rows);
+        let rhs = [-self.m[12], -self.m[13], -self.m[15]];
+        let d = Self::det3(&rows);
         let mut norm = 1.0;
 
         for row in rows {
@@ -792,15 +878,14 @@ impl Xform {
         }
 
         if d.abs() <= 1e-9 * norm.max(1e-30) {
-            let fx = self[(2, 0)];
-            let fy = self[(2, 1)];
-            let fz = self[(2, 2)];
-            let length = (fx * fx + fy * fy + fz * fz).sqrt().max(1e-30);
+            let length = (self.m[2] * self.m[2] + self.m[6] * self.m[6] + self.m[10] * self.m[10])
+                .sqrt()
+                .max(1e-30);
 
             return Point::new(
-                fx / length * 1.0e9,
-                fy / length * 1.0e9,
-                fz / length * 1.0e9,
+                self.m[2] / length * 1.0e9,
+                self.m[6] / length * 1.0e9,
+                self.m[10] / length * 1.0e9,
             );
         }
 
@@ -813,23 +898,21 @@ impl Xform {
                 replaced[row][k] = rhs[row];
             }
 
-            eye[k] = Xform::det3(&replaced) / d;
+            eye[k] = Self::det3(&replaced) / d;
         }
 
         Point::new(eye[0], eye[1], eye[2])
     }
 
-    /// Returns the half-height of an orthographic view-projection in world units, 0 in perspective.
+    /// Return the half-height of an orthographic view-projection in world units, 0 in perspective.
     pub fn ortho_half_height(&self) -> f64 {
-        let w2 =
-            self[(3, 0)] * self[(3, 0)] + self[(3, 1)] * self[(3, 1)] + self[(3, 2)] * self[(3, 2)];
+        let w2 = self.m[3] * self.m[3] + self.m[7] * self.m[7] + self.m[11] * self.m[11];
 
         if w2 > 1e-12 {
             return 0.0;
         }
 
-        let r1 =
-            self[(1, 0)] * self[(1, 0)] + self[(1, 1)] * self[(1, 1)] + self[(1, 2)] * self[(1, 2)];
+        let r1 = self.m[1] * self.m[1] + self.m[5] * self.m[5] + self.m[9] * self.m[9];
 
         if r1 <= 1e-30 {
             return 0.0;
@@ -838,72 +921,62 @@ impl Xform {
         1.0 / r1.sqrt()
     }
 
-    /// Returns the determinant of a 3x3 given by rows.
-    fn det3(m: &[[f64; 3]; 3]) -> f64 {
-        m[0][0] * (m[1][1] * m[2][2] - m[1][2] * m[2][1])
-            - m[0][1] * (m[1][0] * m[2][2] - m[1][2] * m[2][0])
-            + m[0][2] * (m[1][0] * m[2][1] - m[1][1] * m[2][0])
+    /// Return the determinant of a 3x3 given by rows.
+    fn det3(rows: &[[f64; 3]; 3]) -> f64 {
+        rows[0][0] * (rows[1][1] * rows[2][2] - rows[1][2] * rows[2][1])
+            - rows[0][1] * (rows[1][0] * rows[2][2] - rows[1][2] * rows[2][0])
+            + rows[0][2] * (rows[1][0] * rows[2][1] - rows[1][1] * rows[2][0])
     }
 
     // ═══════════════════════════════════════════════════════════════════════════
     // JSON
     // ═══════════════════════════════════════════════════════════════════════════
-
-    /// Serializes to a JSON string.
+    /// Serialize to a sorted JSON string.
     pub fn jsondump(&self) -> Result<String, Box<dyn std::error::Error>> {
         crate::file_encoders::sorted_json_string(self)
     }
 
-    /// Deserializes from a JSON string.
+    /// Deserialize from a JSON string.
     pub fn jsonload(json_data: &str) -> Result<Self, Box<dyn std::error::Error>> {
         Ok(serde_json::from_str(json_data)?)
     }
 
-    /// Writes to a JSON file.
+    /// Serialize to a JSON string.
+    pub fn file_json_dumps(&self) -> String {
+        self.jsondump().expect("Failed to serialize Xform JSON")
+    }
+
+    /// Deserialize from a JSON string.
+    pub fn file_json_loads(json_string: &str) -> Self {
+        Self::jsonload(json_string).expect("Failed to parse Xform JSON")
+    }
+
+    /// Write JSON to a file.
     pub fn file_json_dump(&self, filepath: &str) -> Result<(), Box<dyn std::error::Error>> {
-        let json = self.jsondump()?;
-        std::fs::write(filepath, json)?;
+        std::fs::write(filepath, self.jsondump()?)?;
 
         Ok(())
     }
 
-    /// Reads from a JSON file.
+    /// Read JSON from a file.
     pub fn file_json_load(filepath: &str) -> Result<Self, Box<dyn std::error::Error>> {
-        let json = std::fs::read_to_string(filepath)?;
-
-        Self::jsonload(&json)
-    }
-
-    /// Serializes to a JSON string.
-    pub fn file_json_dumps(&self) -> String {
-        self.jsondump().unwrap_or_default()
-    }
-
-    /// Deserializes from a JSON string.
-    pub fn file_json_loads(json_string: &str) -> Self {
-        Self::jsonload(json_string).unwrap_or_else(|_| Self::new())
+        Self::jsonload(&std::fs::read_to_string(filepath)?)
     }
 
     // ═══════════════════════════════════════════════════════════════════════════
     // Protobuf
     // ═══════════════════════════════════════════════════════════════════════════
-
-    /// Serializes to protobuf bytes.
-    pub fn pb_dumps(&self) -> Vec<u8> {
-        use prost::Message;
-        let proto = crate::proto::Xform {
+    /// Convert to the protobuf message.
+    pub fn to_proto(&self) -> crate::proto::Xform {
+        crate::proto::Xform {
             guid: self.guid.get().cloned().unwrap_or_default(),
             name: self.name.clone(),
             matrix: self.m.to_vec(),
-        };
-
-        proto.encode_to_vec()
+        }
     }
 
-    /// Deserializes from protobuf bytes.
-    pub fn pb_loads(data: &[u8]) -> Result<Self, Box<dyn std::error::Error>> {
-        use prost::Message;
-        let proto = crate::proto::Xform::decode(data)?;
+    /// Construct from the protobuf message.
+    pub fn from_proto(proto: crate::proto::Xform) -> Self {
         let mut xform = Self::new();
 
         if !proto.guid.is_empty() {
@@ -916,16 +989,29 @@ impl Xform {
             xform.m[i] = proto.matrix[i];
         }
 
-        Ok(xform)
+        xform
     }
 
-    /// Writes to a protobuf file.
+    /// Serialize to protobuf bytes.
+    pub fn pb_dumps(&self) -> Vec<u8> {
+        use prost::Message;
+
+        self.to_proto().encode_to_vec()
+    }
+
+    /// Deserialize from protobuf bytes.
+    pub fn pb_loads(data: &[u8]) -> Result<Self, Box<dyn std::error::Error>> {
+        use prost::Message;
+
+        Ok(Self::from_proto(crate::proto::Xform::decode(data)?))
+    }
+
+    /// Write protobuf bytes to a file.
     pub fn pb_dump(&self, filepath: &str) {
-        let data = self.pb_dumps();
-        std::fs::write(filepath, data).expect("Failed to write protobuf file");
+        std::fs::write(filepath, self.pb_dumps()).expect("Failed to write protobuf file");
     }
 
-    /// Reads from a protobuf file.
+    /// Read protobuf bytes from a file.
     pub fn pb_load(filepath: &str) -> Self {
         let data = std::fs::read(filepath).expect("Failed to read protobuf file");
 
@@ -933,10 +1019,9 @@ impl Xform {
     }
 
     // ═══════════════════════════════════════════════════════════════════════════
-    // String Representations
+    // String
     // ═══════════════════════════════════════════════════════════════════════════
-
-    /// Returns the four matrix rows.
+    /// Return the four matrix rows.
     pub fn str(&self) -> String {
         let mut rows: Vec<String> = Vec::new();
 
@@ -953,7 +1038,7 @@ impl Xform {
         rows.join("\n")
     }
 
-    /// Returns the name and guid prefix.
+    /// Return the name and guid prefix.
     pub fn repr(&self) -> String {
         format!("Xform({}, {})", self.name, &self.guid()[..8])
     }
@@ -961,95 +1046,21 @@ impl Xform {
     // ═══════════════════════════════════════════════════════════════════════════
     // SESSION_VIEWER
     // ═══════════════════════════════════════════════════════════════════════════
-
-    /// Returns a column-major f32 copy for a GPU uniform.
+    /// Return a column-major f32 copy for a GPU uniform.
     pub fn to_f32(&self) -> [f32; 16] {
         std::array::from_fn(|i| self.m[i] as f32)
     }
 }
 
-// ═══════════════════════════════════════════════════════════════════════════
-// Operators
-// ═══════════════════════════════════════════════════════════════════════════
-
-impl Default for Xform {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
-impl Mul for &Xform {
-    type Output = Xform;
-    fn mul(self, other: &Xform) -> Xform {
-        let mut result = Xform::new();
-
-        for i in 0..4 {
-            for j in 0..4 {
-                let mut sum = 0.0;
-
-                for k in 0..4 {
-                    sum += self.m[k * 4 + i] * other.m[j * 4 + k];
-                }
-
-                result.m[j * 4 + i] = sum;
-            }
-        }
-
-        result
-    }
-}
-
-impl Mul for Xform {
-    type Output = Xform;
-    fn mul(self, other: Xform) -> Xform {
-        &self * &other
-    }
-}
-
-impl MulAssign for Xform {
-    fn mul_assign(&mut self, other: Xform) {
-        *self = &*self * &other;
-    }
-}
-
-impl Index<(usize, usize)> for Xform {
-    type Output = f64;
-
-    /// Element at (row, col)
-    fn index(&self, (row, col): (usize, usize)) -> &f64 {
-        assert!(row < 4 && col < 4, "Index out of bounds: ({row}, {col})");
-
-        &self.m[col * 4 + row]
-    }
-}
-
-impl IndexMut<(usize, usize)> for Xform {
-    fn index_mut(&mut self, (row, col): (usize, usize)) -> &mut f64 {
-        assert!(row < 4 && col < 4, "Index out of bounds: ({row}, {col})");
-
-        &mut self.m[col * 4 + row]
-    }
-}
-
-impl PartialEq for Xform {
-    fn eq(&self, other: &Self) -> bool {
-        for i in 0..16 {
-            if (self.m[i] - other.m[i]).abs() > 1e-10 {
-                return false;
-            }
-        }
-
-        true
-    }
-}
-
 impl fmt::Display for Xform {
+    /// Write the four matrix rows to a formatter.
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "{}", self.str())
     }
 }
 
 impl fmt::Debug for Xform {
+    /// Write the name and guid prefix to a formatter.
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "{}", self.repr())
     }
@@ -1058,7 +1069,6 @@ impl fmt::Debug for Xform {
 // ═══════════════════════════════════════════════════════════════════════════
 // Serde
 // ═══════════════════════════════════════════════════════════════════════════
-
 impl serde::Serialize for Xform {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
     where
@@ -1084,24 +1094,24 @@ impl<'de> Deserialize<'de> for Xform {
             #[serde(default)]
             guid: Option<String>,
             #[serde(default)]
-            name: Option<String>,
-            #[serde(default)]
             m: Option<[f64; 16]>,
+            #[serde(default)]
+            name: Option<String>,
         }
 
-        let d = XformData::deserialize(deserializer)?;
+        let data = XformData::deserialize(deserializer)?;
         let mut xform = Xform::new();
 
-        if let Some(guid) = d.guid {
+        if let Some(guid) = data.guid {
             xform.set_guid(guid);
         }
 
-        if let Some(name) = d.name {
-            xform.name = name;
+        if let Some(m) = data.m {
+            xform.m = m;
         }
 
-        if let Some(m) = d.m {
-            xform.m = m;
+        if let Some(name) = data.name {
+            xform.name = name;
         }
 
         Ok(xform)
