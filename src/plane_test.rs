@@ -52,11 +52,13 @@ pub fn run_plane_constructor() -> TestResult {
         let offset = Vector::new(1.0, 2.0, 3.0);
         let mut pl_iadd = Plane::xy_plane();
         pl_iadd += offset.clone();
+
         let mut pl_isub = Plane::xy_plane();
         pl_isub -= offset.clone();
+
         let pl_base = Plane::xy_plane();
         let pl_add = pl_base.clone() + offset.clone();
-        let pl_sub = pl_base.clone() - offset.clone();
+        let pl_sub = pl_base.clone() - offset;
 
         MINI_CHECK!(pl.name == "my_plane" && !pl.guid().is_empty());
         MINI_CHECK!(
@@ -83,6 +85,7 @@ pub fn run_plane_constructor() -> TestResult {
         MINI_CHECK!(plstr == "0.000000, 0.000000, 0.000000\n1.000000, 0.000000, 0.000000\n0.000000, 1.000000, 0.000000\n0.000000, 0.000000, 1.000000");
         MINI_CHECK!(plrepr == "Plane(my_plane, 0.000000, 0.000000, 0.000000, 0.000000, 0.000000, 1.000000, Color(blue, 0.0, 0.0, 1.0, 1.0))");
         MINI_CHECK!(plcopy == pl && plcopy.guid() != pl.guid());
+        MINI_CHECK!(xy != yz);
         MINI_CHECK!(
             TOLERANCE.is_close(pl_pn.origin()[2], 5.0)
                 && TOLERANCE.is_close(pl_pn.z_axis()[2], 1.0)
@@ -219,6 +222,7 @@ pub fn run_plane_base1_base2() -> TestResult {
         let xy = Plane::xy_plane();
         let b1 = xy.base1();
         let b2 = xy.base2();
+
         MINI_CHECK!(TOLERANCE.is_close(b1.dot(&xy.z_axis()).abs(), 0.0));
         MINI_CHECK!(TOLERANCE.is_close(b2.dot(&xy.z_axis()).abs(), 0.0));
         MINI_CHECK!(TOLERANCE.is_close(b1.dot(&b2), 0.0));
@@ -265,12 +269,18 @@ pub fn run_plane_json_roundtrip() -> TestResult {
         let mut pl = Plane::xy_plane();
         pl.name = "test_plane".to_string();
 
+        let guid = pl.guid().to_string();
         let fname = "serialization/test_plane.json";
         pl.file_json_dump(fname).unwrap();
+
         let loaded = Plane::file_json_load(fname).unwrap();
+        let parsed = Plane::file_json_loads(&pl.file_json_dumps());
 
         MINI_CHECK!(loaded.name == "test_plane");
         MINI_CHECK!(TOLERANCE.is_close(loaded.c(), 1.0));
+        MINI_CHECK!(parsed == pl);
+        MINI_CHECK!(loaded.guid() == guid);
+        MINI_CHECK!(parsed.guid() == guid);
     })
 }
 
@@ -278,15 +288,28 @@ pub fn run_plane_protobuf_roundtrip() -> TestResult {
     MINI_TEST!("Protobuf Roundtrip", {
         use crate::Plane;
 
+        let fresh = Plane::default();
+        let fresh_proto = fresh.to_proto();
         let mut pl = Plane::xy_plane();
         pl.name = "test_plane".to_string();
 
+        let guid = pl.guid().to_string();
         let fname = "serialization/test_plane.bin";
         pl.pb_dump(fname);
-        let loaded = Plane::pb_load(fname);
 
+        let loaded = Plane::pb_load(fname);
+        let parsed = Plane::pb_loads(&pl.pb_dumps()).unwrap();
+        let converted = Plane::from_proto(pl.to_proto());
+
+        MINI_CHECK!(!fresh.has_guid());
+        MINI_CHECK!(fresh_proto.guid.is_empty());
         MINI_CHECK!(loaded.name == "test_plane");
         MINI_CHECK!(TOLERANCE.is_close(loaded.c(), 1.0));
+        MINI_CHECK!(parsed == pl);
+        MINI_CHECK!(loaded.guid() == guid);
+        MINI_CHECK!(parsed.guid() == guid);
+        MINI_CHECK!(converted == pl);
+        MINI_CHECK!(converted.guid() == guid);
     })
 }
 
@@ -324,7 +347,8 @@ pub fn run_plane_axis_point() -> TestResult {
         use crate::Point;
         use crate::Vector;
 
-        let pl = Plane::from_point_normal(Point::new(1.0, 2.0, 3.0), Vector::new(0.0, 0.0, 1.0), None);
+        let pl =
+            Plane::from_point_normal(Point::new(1.0, 2.0, 3.0), Vector::new(0.0, 0.0, 1.0), None);
         let p = pl.axis_point();
 
         MINI_CHECK!(TOLERANCE.is_close(p[0], 0.0));
@@ -388,7 +412,6 @@ REGISTER_MINI_TEST!(
     "Protobuf Roundtrip",
     crate::plane_test::run_plane_protobuf_roundtrip
 );
-
 REGISTER_MINI_TEST!(
     "Plane",
     "Has On Negative Side",
@@ -399,4 +422,8 @@ REGISTER_MINI_TEST!(
     "Squared Distance",
     crate::plane_test::run_plane_squared_distance
 );
-REGISTER_MINI_TEST!("Plane", "Axis Point", crate::plane_test::run_plane_axis_point);
+REGISTER_MINI_TEST!(
+    "Plane",
+    "Axis Point",
+    crate::plane_test::run_plane_axis_point
+);
