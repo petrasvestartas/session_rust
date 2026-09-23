@@ -1,27 +1,38 @@
 use crate::tolerance::Tolerance;
 use crate::tolerance::PI;
-use crate::{Color, Line, Plane, Point, Vector, Xform};
-use serde::{Deserialize, Deserializer, Serialize};
+use crate::Color;
+use crate::Line;
+use crate::Plane;
+use crate::Point;
+use crate::Vector;
+use crate::Xform;
+use serde::Deserialize;
+use serde::Deserializer;
+use serde::Serialize;
 use std::collections::BinaryHeap;
 use std::fmt;
-use std::ops::{
-    Add, AddAssign, Div, DivAssign, Index, IndexMut, Mul, MulAssign, Neg, Sub, SubAssign,
-};
+use std::ops::Add;
+use std::ops::AddAssign;
+use std::ops::Div;
+use std::ops::DivAssign;
+use std::ops::Index;
+use std::ops::IndexMut;
+use std::ops::Mul;
+use std::ops::MulAssign;
+use std::ops::Neg;
+use std::ops::Sub;
+use std::ops::SubAssign;
 use std::sync::OnceLock;
 
 // ═══════════════════════════════════════════════════════════════════════════
 // 2D helpers
 // ═══════════════════════════════════════════════════════════════════════════
-
-/// A closed 2D ring of the polylabel polygon.
-type Ring2 = Vec<[f64; 2]>;
-
-/// Returns the cross product sign of (b - a) x (p - a).
+/// Return the cross product sign of (b - a) x (p - a).
 fn ccw_2d(ax: f64, ay: f64, bx: f64, by: f64, px: f64, py: f64) -> f64 {
     (bx - ax) * (py - ay) - (by - ay) * (px - ax)
 }
 
-/// Returns the squared distance from (px, py) to the segment (a, b).
+/// Return the squared distance from (px, py) to the segment (a, b).
 fn seg_dist_sq(px: f64, py: f64, ax: f64, ay: f64, bx: f64, by: f64) -> f64 {
     let mut x = ax;
     let mut y = ay;
@@ -46,8 +57,8 @@ fn seg_dist_sq(px: f64, py: f64, ax: f64, ay: f64, bx: f64, by: f64) -> f64 {
     dx * dx + dy * dy
 }
 
-/// Returns the signed distance to the polygon rings, positive inside.
-fn point_to_polygon_dist(px: f64, py: f64, polygon: &[Ring2]) -> f64 {
+/// Return the signed distance to the polygon rings, positive inside.
+fn point_to_polygon_dist(px: f64, py: f64, polygon: &[Vec<[f64; 2]>]) -> f64 {
     let mut inside = false;
     let mut min_dist_sq = f64::INFINITY;
 
@@ -89,9 +100,10 @@ struct PCell {
 }
 
 impl PCell {
-    /// Constructs the cell at (cx, cy) with half size h against polygon.
-    fn new(cx: f64, cy: f64, h: f64, polygon: &[Ring2]) -> Self {
+    /// Construct the cell at (cx, cy) with half size h against polygon.
+    fn new(cx: f64, cy: f64, h: f64, polygon: &[Vec<[f64; 2]>]) -> Self {
         let d = point_to_polygon_dist(cx, cy, polygon);
+
         PCell {
             cx,
             cy,
@@ -103,7 +115,7 @@ impl PCell {
 }
 
 impl PartialEq for PCell {
-    /// Compares cells by upper bound.
+    /// Compare cells by upper bound.
     fn eq(&self, o: &Self) -> bool {
         self.mx == o.mx
     }
@@ -112,14 +124,14 @@ impl PartialEq for PCell {
 impl Eq for PCell {}
 
 impl PartialOrd for PCell {
-    /// Orders cells by upper bound.
+    /// Order cells by upper bound.
     fn partial_cmp(&self, o: &Self) -> Option<std::cmp::Ordering> {
         Some(self.cmp(o))
     }
 }
 
 impl Ord for PCell {
-    /// Orders cells by upper bound so the heap pops the most promising cell.
+    /// Order by the upper bound so the priority queue pops the most promising cell.
     fn cmp(&self, o: &Self) -> std::cmp::Ordering {
         self.mx
             .partial_cmp(&o.mx)
@@ -127,8 +139,8 @@ impl Ord for PCell {
     }
 }
 
-/// Returns the cell at the centroid of the outer ring.
-fn centroid_cell(polygon: &[Ring2]) -> PCell {
+/// Return the cell at the centroid of the outer ring.
+fn centroid_cell(polygon: &[Vec<[f64; 2]>]) -> PCell {
     let mut area = 0.0;
     let mut cx = 0.0;
     let mut cy = 0.0;
@@ -155,8 +167,8 @@ fn centroid_cell(polygon: &[Ring2]) -> PCell {
     PCell::new(cx / area, cy / area, 0.0, polygon)
 }
 
-/// Returns the center and radius of the largest inscribed circle in 2D (Mapbox polylabel).
-fn mapbox_polylabel(polygon: &[Ring2], precision: f64) -> [f64; 3] {
+/// Return the center and radius of the largest inscribed circle in 2D (Mapbox polylabel).
+fn mapbox_polylabel(polygon: &[Vec<[f64; 2]>], precision: f64) -> [f64; 3] {
     let mut min_x = f64::INFINITY;
     let mut min_y = f64::INFINITY;
     let mut max_x = f64::NEG_INFINITY;
@@ -227,41 +239,28 @@ fn mapbox_polylabel(polygon: &[Ring2], precision: f64) -> [f64; 3] {
 #[serde(tag = "type", rename = "Polyline")]
 pub struct Polyline {
     #[serde(serialize_with = "crate::guid_serde::serialize")]
-    guid: OnceLock<String>, // Lazy guid.
+    guid: OnceLock<String>, // Lazily minted GUID.
+    #[serde(skip)]
+    plane_dirty: bool, // True until get_plane recomputes.
     pub name: String,     // Polyline name.
     pub coords: Vec<f64>, // Flat [x, y, z, ...].
     #[serde(skip)]
     pub plane: Plane, // Lazily computed plane, see get_plane.
-    #[serde(skip)]
-    plane_dirty: bool, // True until get_plane recomputes.
     pub width: f64,       // Display width.
     pub dash: Vec<f64>,   // Dash pattern lengths.
     pub linecolor: Color, // Display color.
 }
 
-impl Default for Polyline {
-    /// Constructs an empty polyline.
-    fn default() -> Self {
-        Self {
-            guid: OnceLock::new(),
-            name: "my_polyline".to_string(),
-            coords: Vec::new(),
-            plane: Plane::default(),
-            plane_dirty: true,
-            width: 1.0,
-            dash: Vec::new(),
-            linecolor: Color::black(),
-        }
-    }
-}
-
 impl Polyline {
-    /// Constructs from points.
-    pub fn new(pts: Vec<Point>) -> Self {
+    // ═══════════════════════════════════════════════════════════════════════════
+    // Constructors
+    // ═══════════════════════════════════════════════════════════════════════════
+    /// Construct from points.
+    pub fn new(points: Vec<Point>) -> Self {
         let mut polyline = Self::default();
-        polyline.coords.reserve(pts.len() * 3);
+        polyline.coords.reserve(points.len() * 3);
 
-        for p in &pts {
+        for p in &points {
             polyline.coords.push(p[0]);
             polyline.coords.push(p[1]);
             polyline.coords.push(p[2]);
@@ -272,7 +271,7 @@ impl Polyline {
         polyline
     }
 
-    /// Copy (new guid, same data)
+    /// Copy with a new guid and the same data.
     pub fn duplicate(&self) -> Self {
         let mut copy = self.clone();
         copy.guid = OnceLock::new();
@@ -280,58 +279,37 @@ impl Polyline {
         copy
     }
 
-    /// Returns whether the lazy guid has been created.
-    pub fn has_guid(&self) -> bool {
-        self.guid.get().is_some()
-    }
-
-    /// Returns the guid, creating it on first access.
-    pub fn guid(&self) -> &str {
-        self.guid.get_or_init(|| uuid::Uuid::new_v4().to_string())
-    }
-
-    /// Sets the guid if it has not already been created.
-    pub fn set_guid(&self, g: String) {
-        let _ = self.guid.set(g);
-    }
-
-    /// Clears the guid so a fresh one mints lazily on the next read.
-    pub fn refresh_guid(&mut self) {
-        self.guid = OnceLock::new();
-    }
-
     // ═══════════════════════════════════════════════════════════════════════════
     // Static constructors
     // ═══════════════════════════════════════════════════════════════════════════
-
-    /// Constructs from flat [x, y, z, ...] coordinates.
+    /// Construct from flat [x, y, z, ...] coordinates.
     pub fn from_coords(coords: Vec<f64>) -> Self {
-        let mut pl = Self {
+        let mut polyline = Self {
             coords,
             ..Default::default()
         };
-        pl.recompute_plane_if_needed();
+        polyline.recompute_plane_if_needed();
 
-        pl
+        polyline
     }
 
-    /// Constructs a regular polygon of sides around the origin in the XY plane.
+    /// Construct a regular polygon of sides around the origin in the XY plane.
     pub fn from_sides(sides: usize, radius: f64, close: bool) -> Self {
-        let mut pts = Vec::with_capacity(if close { sides + 1 } else { sides });
+        let mut points = Vec::with_capacity(if close { sides + 1 } else { sides });
 
         for i in 0..sides {
             let angle = 2.0 * PI * i as f64 / sides as f64;
-            pts.push(Point::new(radius * angle.cos(), radius * angle.sin(), 0.0));
+            points.push(Point::new(radius * angle.cos(), radius * angle.sin(), 0.0));
         }
 
         if close {
-            pts.push(pts[0].clone());
+            points.push(points[0].clone());
         }
 
-        Self::new(pts)
+        Self::new(points)
     }
 
-    /// Constructs a rectangle with its corner at origin, sides along x_axis and y_axis.
+    /// Construct a rectangle with its corner at origin, sides along x_axis and y_axis.
     pub fn rectangle(
         origin: &Point,
         x_axis: &Vector,
@@ -344,20 +322,20 @@ impl Polyline {
         let o = plane.origin();
         let x = plane.x_axis() * width;
         let y = plane.y_axis() * height;
-        let mut pts = vec![o.clone(), &o + &x, &(&o + &x) + &y, &o + &y];
+        let mut points = vec![o.clone(), &o + &x, &(&o + &x) + &y, &o + &y];
 
         if close {
-            pts.push(pts[0].clone());
+            points.push(points[0].clone());
         }
 
-        Self::new(pts)
+        Self::new(points)
     }
 
-    /// Constructs the quadratic Bezier through p0, p1, p2 sampled at divisions points.
+    /// Construct the quadratic Bezier through p0, p1, p2 sampled at divisions points.
     pub fn quadratic_points(p0: &Point, p1: &Point, p2: &Point, divisions: usize) -> Self {
         let n = divisions.max(2);
         let d = (n - 1) as f64;
-        let mut pts = Vec::with_capacity(n);
+        let mut points = Vec::with_capacity(n);
 
         for k in 0..n {
             let t = k as f64 / d;
@@ -365,47 +343,67 @@ impl Polyline {
             let s2 = s * s;
             let ts = 2.0 * s * t;
             let t2 = t * t;
-            pts.push(Point::new(
+            points.push(Point::new(
                 s2 * p0[0] + ts * p1[0] + t2 * p2[0],
                 s2 * p0[1] + ts * p1[1] + t2 * p2[1],
                 s2 * p0[2] + ts * p1[2] + t2 * p2[2],
             ));
         }
 
-        Self::new(pts)
+        Self::new(points)
     }
 
     // ═══════════════════════════════════════════════════════════════════════════
     // Accessors
     // ═══════════════════════════════════════════════════════════════════════════
+    /// Return whether the lazy guid has been created.
+    pub fn has_guid(&self) -> bool {
+        self.guid.get().is_some()
+    }
 
-    /// Returns the number of points.
+    /// Return the guid, creating it on first access.
+    pub fn guid(&self) -> &str {
+        self.guid.get_or_init(|| uuid::Uuid::new_v4().to_string())
+    }
+
+    /// Set the guid if it has not already been created.
+    pub fn set_guid(&self, guid: String) {
+        let _ = self.guid.set(guid);
+    }
+
+    /// Clear the guid so a fresh one mints lazily on the next read.
+    pub fn refresh_guid(&mut self) {
+        self.guid = OnceLock::new();
+    }
+
+    /// Return the number of points.
     pub fn point_count(&self) -> usize {
         self.coords.len() / 3
     }
 
-    /// Returns the number of points.
+    /// Return the number of points.
     pub fn len(&self) -> usize {
         self.point_count()
     }
 
-    /// Returns whether the polyline has no points.
+    /// Return whether the polyline has no points.
     pub fn is_empty(&self) -> bool {
         self.coords.is_empty()
     }
 
-    /// Returns the number of segments.
+    /// Return the number of segments.
     pub fn segment_count(&self) -> usize {
         self.point_count().saturating_sub(1)
     }
 
-    /// Returns the point at index, or the origin when out of range.
+    /// Return the point at index, or None when out of range.
     pub fn get_point(&self, index: usize) -> Option<Point> {
         if index >= self.point_count() {
             return None;
         }
 
         let idx = index * 3;
+
         Some(Point::new(
             self.coords[idx],
             self.coords[idx + 1],
@@ -413,7 +411,7 @@ impl Polyline {
         ))
     }
 
-    /// Returns all points.
+    /// Return all points.
     pub fn get_points(&self) -> Vec<Point> {
         let mut points = Vec::with_capacity(self.point_count());
 
@@ -428,7 +426,7 @@ impl Polyline {
         points
     }
 
-    /// Returns one line per segment.
+    /// Return one line per segment.
     pub fn get_lines(&self) -> Vec<Line> {
         let mut lines = Vec::with_capacity(self.segment_count());
 
@@ -448,7 +446,7 @@ impl Polyline {
         lines
     }
 
-    /// Returns the plane from the first non-collinear triple, computed on first access.
+    /// Return the plane from the first non-collinear triple, computed on first access.
     pub fn get_plane(&mut self) -> &Plane {
         if !self.plane_dirty || self.point_count() < 3 {
             return &self.plane;
@@ -498,7 +496,7 @@ impl Polyline {
         &self.plane
     }
 
-    /// Returns the total length.
+    /// Return the total length.
     pub fn length(&self) -> f64 {
         let mut total = 0.0;
 
@@ -511,7 +509,7 @@ impl Polyline {
         total
     }
 
-    /// Returns the sum of squared segment lengths.
+    /// Return the sum of squared segment lengths.
     pub fn length_squared(&self) -> f64 {
         let mut total = 0.0;
 
@@ -522,7 +520,7 @@ impl Polyline {
         total
     }
 
-    /// Returns whether the first and last points coincide.
+    /// Return whether the first and last points coincide.
     pub fn is_closed(&self) -> bool {
         if self.point_count() < 2 {
             return false;
@@ -533,7 +531,7 @@ impl Polyline {
             < Tolerance::ZERO_TOLERANCE
     }
 
-    /// Returns a copy with the first point appended when open.
+    /// Return a copy with the first point appended when open.
     pub fn closed(&self) -> Self {
         if self.is_closed() {
             return Self::from_coords(self.coords.clone());
@@ -547,7 +545,7 @@ impl Polyline {
         Self::from_coords(coords)
     }
 
-    /// Returns the average of the points, closing duplicate excluded.
+    /// Return the average of the points, closing duplicate excluded.
     pub fn center(&self) -> Point {
         if self.coords.is_empty() {
             return Point::new(0.0, 0.0, 0.0);
@@ -571,7 +569,7 @@ impl Polyline {
         Point::new(x / n as f64, y / n as f64, z / n as f64)
     }
 
-    /// Computes the frame with origin at center, x along the first segment, z the average normal.
+    /// Compute the frame with origin at center, x along the first segment, z the average normal.
     pub fn get_average_plane(&self) -> (Point, Vector, Vector, Vector) {
         let origin = self.center();
         let mut x_axis = if self.point_count() >= 2 {
@@ -587,7 +585,7 @@ impl Polyline {
         (origin, x_axis, y_axis, z_axis)
     }
 
-    /// Computes the plane with origin at the first point, normal the average normal.
+    /// Compute the plane with origin at the first point, normal the average normal.
     pub fn get_fast_plane(&self) -> (Point, Plane) {
         if self.coords.is_empty() {
             return (Point::new(0.0, 0.0, 0.0), Plane::default());
@@ -600,7 +598,7 @@ impl Polyline {
         (origin, pln)
     }
 
-    /// Computes one flag per corner, true when convex against the average normal.
+    /// Compute one flag per corner, true when convex against the average normal.
     pub fn get_convex_corners(&self) -> Vec<bool> {
         if self.point_count() < 3 {
             return Vec::new();
@@ -629,7 +627,7 @@ impl Polyline {
         convex_or_concave
     }
 
-    /// Returns the shoelace sign of the points projected onto pln.
+    /// Return the shoelace sign of the points projected onto pln.
     pub fn is_clockwise(&self, pln: &Plane) -> bool {
         let n = self.point_count();
 
@@ -656,7 +654,7 @@ impl Polyline {
         area > 0.0
     }
 
-    /// Returns the winding-number test on x and y.
+    /// Return the winding-number test on x and y.
     pub fn point_in_polygon_2d(&self, p: &Point) -> bool {
         let px = p[0];
         let py = p[1];
@@ -681,7 +679,7 @@ impl Polyline {
         winding != 0
     }
 
-    /// Returns the distance to the nearest segment, with its index and the closest point.
+    /// Return the distance to the nearest segment, with its index and the closest point.
     pub fn closest_distance_and_point(&self, point: &Point) -> (f64, usize, Point) {
         let mut edge_id = 0;
         let mut closest_distance = f64::MAX;
@@ -711,8 +709,7 @@ impl Polyline {
     // ═══════════════════════════════════════════════════════════════════════════
     // Mutators
     // ═══════════════════════════════════════════════════════════════════════════
-
-    /// Sets the point at index.
+    /// Set the point at index.
     pub fn set_point(&mut self, index: usize, point: &Point) {
         if index >= self.point_count() {
             return;
@@ -724,7 +721,7 @@ impl Polyline {
         self.coords[idx + 2] = point[2];
     }
 
-    /// Appends a point.
+    /// Append a point.
     pub fn add_point(&mut self, point: Point) {
         self.coords.push(point[0]);
         self.coords.push(point[1]);
@@ -735,7 +732,7 @@ impl Polyline {
         }
     }
 
-    /// Inserts a point at index.
+    /// Insert a point at index.
     pub fn insert_point(&mut self, index: usize, point: Point) {
         if index > self.point_count() {
             return;
@@ -749,7 +746,7 @@ impl Polyline {
         }
     }
 
-    /// Removes the point at index into out_point; false when out of range.
+    /// Remove and return the point at index; None when out of range.
     pub fn remove_point(&mut self, index: usize) -> Option<Point> {
         if index >= self.point_count() {
             return None;
@@ -766,7 +763,7 @@ impl Polyline {
         Some(out_point)
     }
 
-    /// Reverses the point order in place.
+    /// Reverse the point order in place.
     pub fn reverse(&mut self) {
         let n = self.point_count();
         let mut coords = Vec::with_capacity(self.coords.len());
@@ -782,7 +779,7 @@ impl Polyline {
         self.plane.reverse();
     }
 
-    /// Returns a reversed copy.
+    /// Return a reversed copy.
     pub fn reversed(&self) -> Self {
         let mut result = self.duplicate();
         result.reverse();
@@ -790,7 +787,7 @@ impl Polyline {
         result
     }
 
-    /// Rotates the points by times positions, keeping the closing duplicate.
+    /// Rotate the points by times positions, keeping the closing duplicate.
     pub fn shift(&mut self, times: i32) {
         if self.coords.is_empty() {
             return;
@@ -830,12 +827,12 @@ impl Polyline {
         }
     }
 
-    /// Translates in place.
+    /// Translate in place.
     pub fn translate(&mut self, v: &Vector) {
         *self += v;
     }
 
-    /// Returns a translated copy.
+    /// Return a translated copy.
     pub fn translated(&self, v: &Vector) -> Self {
         let mut result = self.duplicate();
         result.translate(v);
@@ -843,7 +840,7 @@ impl Polyline {
         result
     }
 
-    /// Moves the segment ends by dist0 and dist1, or by proportions of its length when non-zero.
+    /// Move the segment ends by dist0 and dist1, or by proportions of its length when non-zero.
     pub fn extend_segment(
         &mut self,
         segment_id: usize,
@@ -888,7 +885,7 @@ impl Polyline {
         }
     }
 
-    /// Moves both segment ends by dist, or by proportion of its length when non-zero.
+    /// Move both segment ends by dist, or by proportion of its length when non-zero.
     pub fn extend_segment_equally(&mut self, segment_id: usize, dist: f64, proportion: f64) {
         if segment_id >= self.segment_count() {
             return;
@@ -911,7 +908,7 @@ impl Polyline {
         }
     }
 
-    /// Slides both ends of edge edge_idx outward by distance, keeping the closing duplicate in sync.
+    /// Slide both ends of edge edge_idx outward by distance, keeping the closing duplicate in sync.
     pub fn extend_edge_equally(&mut self, edge_idx: usize, distance: f64) {
         let n = self.point_count();
 
@@ -945,26 +942,26 @@ impl Polyline {
         }
     }
 
-    /// Drops points whose neighbours are collinear within tol; closed polylines wrap around.
+    /// Drop points whose neighbours are collinear within tol; closed polylines wrap around.
     pub fn merge_collinear(&mut self, tol: f64) {
         let closed = self.is_closed();
-        let mut pts = self.get_points();
+        let mut points = self.get_points();
 
-        if closed && pts.len() > 1 {
-            pts.pop();
+        if closed && points.len() > 1 {
+            points.pop();
         }
 
         let zt2 = Tolerance::ZERO_TOLERANCE * Tolerance::ZERO_TOLERANCE;
-        let max_pass = pts.len();
+        let max_pass = points.len();
         let mut changed = true;
 
         for _ in 0..max_pass {
-            if !changed || pts.len() < 3 {
+            if !changed || points.len() < 3 {
                 break;
             }
 
             changed = false;
-            let m = pts.len();
+            let m = points.len();
             let mut out = Vec::new();
 
             for i in 0..m {
@@ -972,34 +969,34 @@ impl Polyline {
                 let nx = (i + 1) % m;
 
                 if !closed && (i == 0 || i == m - 1) {
-                    out.push(pts[i].clone());
+                    out.push(points[i].clone());
                     continue;
                 }
 
-                let a = &pts[i] - &pts[p];
-                let b = &pts[nx] - &pts[i];
+                let a = &points[i] - &points[p];
+                let b = &points[nx] - &points[i];
                 let a2 = a.magnitude_squared();
                 let b2 = b.magnitude_squared();
 
                 if a2 < zt2 || b2 < zt2 || a.cross(&b).magnitude_squared() < tol * tol * a2 * b2 {
                     changed = true;
                 } else {
-                    out.push(pts[i].clone());
+                    out.push(points[i].clone());
                 }
             }
 
-            pts = out;
+            points = out;
         }
 
-        if closed && !pts.is_empty() {
-            pts.push(pts[0].clone());
+        if closed && !points.is_empty() {
+            points.push(points[0].clone());
         }
 
-        self.coords = Polyline::new(pts).coords;
+        self.coords = Polyline::new(points).coords;
         self.recompute_plane_if_needed();
     }
 
-    /// Drops consecutive points closer than tol.
+    /// Drop consecutive points closer than tol.
     pub fn remove_consecutive_duplicates(&mut self, tol: f64) {
         let tol_sq = tol * tol;
         let mut cleaned: Vec<Point> = Vec::with_capacity(self.point_count());
@@ -1015,12 +1012,12 @@ impl Polyline {
         self.recompute_plane_if_needed();
     }
 
-    /// Returns a Ramer-Douglas-Peucker copy.
+    /// Return a Ramer-Douglas-Peucker copy.
     pub fn simplify(&self, tolerance: f64) -> Polyline {
         Polyline::new(Self::simplify_points(&self.get_points(), tolerance))
     }
 
-    /// Returns the part on one side of plane; flip picks the normal side, unset keeps the arc-length midpoint side.
+    /// Return the part on one side of plane; flip picks the normal side, unset keeps the arc-length midpoint side.
     pub fn cut_by_plane(&self, plane: &Plane, flip: Option<bool>) -> Self {
         let n = self.point_count();
 
@@ -1031,21 +1028,12 @@ impl Polyline {
         let normal = plane.z_axis();
         let origin = plane.origin();
         let keep_sign = match flip {
-            Some(f) => {
-                if f {
-                    1.0
-                } else {
-                    -1.0
-                }
+            Some(true) => 1.0,
+            Some(false) => -1.0,
+            None if normal.dot(&(&self.point_at_length(self.length() * 0.5) - &origin)) >= 0.0 => {
+                1.0
             }
-
-            None => {
-                if normal.dot(&(&self.point_at_length(self.length() * 0.5) - &origin)) >= 0.0 {
-                    1.0
-                } else {
-                    -1.0
-                }
-            }
+            None => -1.0,
         };
         let mut result = Vec::new();
 
@@ -1075,21 +1063,262 @@ impl Polyline {
 
         cut
     }
+}
 
+impl Default for Polyline {
+    /// Construct an empty polyline.
+    fn default() -> Self {
+        Self {
+            guid: OnceLock::new(),
+            plane_dirty: true,
+            name: "my_polyline".to_string(),
+            coords: Vec::new(),
+            plane: Plane::default(),
+            width: 1.0,
+            dash: Vec::new(),
+            linecolor: Color::black(),
+        }
+    }
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Operators
+// ═══════════════════════════════════════════════════════════════════════════
+impl PartialEq for Polyline {
+    /// Compare name, coordinates to 1e-6, width and linecolor; guid ignored.
+    fn eq(&self, other: &Self) -> bool {
+        if self.name != other.name {
+            return false;
+        }
+
+        if self.point_count() != other.point_count() {
+            return false;
+        }
+
+        let r = 10f64.powi(Tolerance::ROUNDING);
+
+        for i in 0..self.coords.len() {
+            if (self.coords[i] * r).round() != (other.coords[i] * r).round() {
+                return false;
+            }
+        }
+
+        if (self.width * r).round() != (other.width * r).round() {
+            return false;
+        }
+
+        self.linecolor == other.linecolor
+    }
+}
+
+impl Index<usize> for Polyline {
+    type Output = [f64];
+
+    /// Return the [x, y, z] slice of the point at index.
+    fn index(&self, index: usize) -> &Self::Output {
+        if index >= self.point_count() {
+            panic!("Index out of range");
+        }
+
+        let idx = index * 3;
+
+        &self.coords[idx..idx + 3]
+    }
+}
+
+impl IndexMut<usize> for Polyline {
+    /// Return the mutable [x, y, z] slice of the point at index.
+    fn index_mut(&mut self, index: usize) -> &mut Self::Output {
+        if index >= self.point_count() {
+            panic!("Index out of range");
+        }
+
+        let idx = index * 3;
+
+        &mut self.coords[idx..idx + 3]
+    }
+}
+
+impl AddAssign<&Vector> for Polyline {
+    /// Translate in place.
+    fn add_assign(&mut self, v: &Vector) {
+        for i in 0..self.point_count() {
+            self.coords[i * 3] += v[0];
+            self.coords[i * 3 + 1] += v[1];
+            self.coords[i * 3 + 2] += v[2];
+        }
+
+        self.plane = Plane::new(
+            &self.plane.origin() + v,
+            self.plane.x_axis(),
+            self.plane.y_axis(),
+        );
+    }
+}
+
+impl SubAssign<&Vector> for Polyline {
+    /// Translate back in place.
+    fn sub_assign(&mut self, v: &Vector) {
+        for i in 0..self.point_count() {
+            self.coords[i * 3] -= v[0];
+            self.coords[i * 3 + 1] -= v[1];
+            self.coords[i * 3 + 2] -= v[2];
+        }
+
+        self.plane = Plane::new(
+            &self.plane.origin() - v,
+            self.plane.x_axis(),
+            self.plane.y_axis(),
+        );
+    }
+}
+
+impl MulAssign<f64> for Polyline {
+    /// Scale every point in place.
+    fn mul_assign(&mut self, factor: f64) {
+        for i in 0..self.coords.len() {
+            self.coords[i] *= factor;
+        }
+    }
+}
+
+impl DivAssign<f64> for Polyline {
+    /// Divide every point in place.
+    fn div_assign(&mut self, factor: f64) {
+        for i in 0..self.coords.len() {
+            self.coords[i] /= factor;
+        }
+    }
+}
+
+impl Add<&Vector> for Polyline {
+    type Output = Polyline;
+
+    /// Return a translated copy.
+    fn add(self, v: &Vector) -> Polyline {
+        let mut result = self;
+        result += v;
+
+        result
+    }
+}
+
+impl Sub<&Vector> for Polyline {
+    type Output = Polyline;
+
+    /// Return a copy translated back.
+    fn sub(self, v: &Vector) -> Polyline {
+        let mut result = self;
+        result -= v;
+
+        result
+    }
+}
+
+impl Mul<f64> for Polyline {
+    type Output = Polyline;
+
+    /// Return a scaled copy.
+    fn mul(self, factor: f64) -> Polyline {
+        let mut result = self;
+        result *= factor;
+
+        result
+    }
+}
+
+impl Div<f64> for Polyline {
+    type Output = Polyline;
+
+    /// Return a divided copy.
+    fn div(self, factor: f64) -> Polyline {
+        let mut result = self;
+        result /= factor;
+
+        result
+    }
+}
+
+impl Neg for Polyline {
+    type Output = Polyline;
+
+    /// Return a reversed copy.
+    fn neg(self) -> Polyline {
+        self.reversed()
+    }
+}
+
+impl Add<&Vector> for &Polyline {
+    type Output = Polyline;
+
+    /// Return a translated copy.
+    fn add(self, v: &Vector) -> Polyline {
+        let mut result = self.duplicate();
+        result += v;
+
+        result
+    }
+}
+
+impl Sub<&Vector> for &Polyline {
+    type Output = Polyline;
+
+    /// Return a copy translated back.
+    fn sub(self, v: &Vector) -> Polyline {
+        let mut result = self.duplicate();
+        result -= v;
+
+        result
+    }
+}
+
+impl Mul<f64> for &Polyline {
+    type Output = Polyline;
+
+    /// Return a scaled copy.
+    fn mul(self, factor: f64) -> Polyline {
+        let mut result = self.duplicate();
+        result *= factor;
+
+        result
+    }
+}
+
+impl Div<f64> for &Polyline {
+    type Output = Polyline;
+
+    /// Return a divided copy.
+    fn div(self, factor: f64) -> Polyline {
+        let mut result = self.duplicate();
+        result /= factor;
+
+        result
+    }
+}
+
+impl Neg for &Polyline {
+    type Output = Polyline;
+
+    /// Return a reversed copy.
+    fn neg(self) -> Polyline {
+        self.reversed()
+    }
+}
+
+impl Polyline {
     // ═══════════════════════════════════════════════════════════════════════════
     // Transformation
     // ═══════════════════════════════════════════════════════════════════════════
-
-    /// Transforms in place.
+    /// Transform in place.
     pub fn transform(&mut self, xform: &Xform) {
         for i in 0..self.point_count() {
-            let mut pt = self.point(i);
-            pt.transform(xform);
-            self.set_point(i, &pt);
+            let mut point = self.point(i);
+            point.transform(xform);
+            self.set_point(i, &point);
         }
     }
 
-    /// Returns a transformed copy.
+    /// Return a transformed copy.
     pub fn transformed(&self, xform: &Xform) -> Self {
         let mut result = self.duplicate();
         result.transform(xform);
@@ -1100,10 +1329,10 @@ impl Polyline {
     // ═══════════════════════════════════════════════════════════════════════════
     // Segment utilities
     // ═══════════════════════════════════════════════════════════════════════════
-
-    /// Returns the point at parameter t (0 = start, 1 = end).
+    /// Return the point at parameter t (0 = start, 1 = end).
     pub fn point_at(start: &Point, end: &Point, t: f64) -> Point {
         let s = 1.0 - t;
+
         Point::new(
             if start[0] == end[0] {
                 start[0]
@@ -1123,7 +1352,7 @@ impl Polyline {
         )
     }
 
-    /// Computes the parameter t of the closest point on the line through line_start and line_end.
+    /// Compute the parameter t of the closest point on the line through line_start and line_end.
     pub fn closest_point_to_line(point: &Point, line_start: &Point, line_end: &Point) -> f64 {
         let d = line_end - line_start;
         let dod = d.magnitude_squared();
@@ -1142,7 +1371,7 @@ impl Polyline {
         1.0 + to_end.dot(&d) / dod
     }
 
-    /// Computes the collinear overlap of two segments; false when none or a single point.
+    /// Compute the collinear overlap of two segments; None when none or a single point.
     pub fn line_line_overlap(
         line0_start: &Point,
         line0_end: &Point,
@@ -1159,28 +1388,20 @@ impl Polyline {
         Some((overlap_start, overlap_end))
     }
 
-    /// Computes the midpoints of the paired starts and ends.
+    /// Compute the midpoints of the paired starts and ends.
     pub fn line_line_average(
         line0_start: &Point,
         line0_end: &Point,
         line1_start: &Point,
         line1_end: &Point,
     ) -> (Point, Point) {
-        let output_start = Point::new(
-            (line0_start[0] + line1_start[0]) * 0.5,
-            (line0_start[1] + line1_start[1]) * 0.5,
-            (line0_start[2] + line1_start[2]) * 0.5,
-        );
-        let output_end = Point::new(
-            (line0_end[0] + line1_end[0]) * 0.5,
-            (line0_end[1] + line1_end[1]) * 0.5,
-            (line0_end[2] + line1_end[2]) * 0.5,
-        );
+        let output_start = Point::mid_point(line0_start, line1_start);
+        let output_end = Point::mid_point(line0_end, line1_end);
 
         (output_start, output_end)
     }
 
-    /// Computes the longer of the two midpoint pairings of the mutual overlaps.
+    /// Compute the longer of the two midpoint pairings of the mutual overlaps.
     pub fn line_line_overlap_average(
         line0_start: &Point,
         line0_end: &Point,
@@ -1189,13 +1410,10 @@ impl Polyline {
     ) -> (Point, Point) {
         let (_, line_a_start, line_a_end) =
             Self::line_line_overlap_points(line0_start, line0_end, line1_start, line1_end);
-
         let (_, line_b_start, line_b_end) =
             Self::line_line_overlap_points(line1_start, line1_end, line0_start, line0_end);
-
         let (mid_line0_start, mid_line0_end) =
             Self::line_line_average(&line_a_start, &line_a_end, &line_b_start, &line_b_end);
-
         let (mid_line1_start, mid_line1_end) =
             Self::line_line_average(&line_a_start, &line_a_end, &line_b_end, &line_b_start);
 
@@ -1208,7 +1426,7 @@ impl Polyline {
         (mid_line1_start, mid_line1_end)
     }
 
-    /// Computes the extreme sub-segment of the line spanned by the projected points; false when a single point.
+    /// Compute the extreme sub-segment of the line spanned by the projected points; None when a single point.
     pub fn line_from_projected_points(
         line_start: &Point,
         line_end: &Point,
@@ -1258,7 +1476,7 @@ impl Polyline {
         }
     }
 
-    /// Moves start by d0 and end by d1 along the unit direction.
+    /// Move start by d0 and end by d1 along the unit direction.
     pub fn extend_line_segment(start: &mut Point, end: &mut Point, d0: f64, d1: f64) {
         let mut v = &*end - &*start;
         v.normalize_self();
@@ -1266,7 +1484,7 @@ impl Polyline {
         *end = &*end + &(&v * d1);
     }
 
-    /// Moves both ends inward by dist as a fraction of the length.
+    /// Move both ends inward by dist as a fraction of the length.
     pub fn shrink_line_segment(start: &mut Point, end: &mut Point, dist: f64) {
         let v = &*end - &*start;
         *start = &*start + &(&v * dist);
@@ -1276,8 +1494,7 @@ impl Polyline {
     // ═══════════════════════════════════════════════════════════════════════════
     // Polygon utilities
     // ═══════════════════════════════════════════════════════════════════════════
-
-    /// Returns the pointwise blend; polyline0 when the counts differ.
+    /// Return the pointwise blend; polyline0 when the counts differ.
     pub fn tween_two_polylines(
         polyline0: &Polyline,
         polyline1: &Polyline,
@@ -1299,14 +1516,15 @@ impl Polyline {
         result
     }
 
-    /// Returns steps points between from and to; kind 0 none, 1 both, 2 start endpoint.
+    /// Return steps points between from and to; kind 0 none, 1 both, 2 start endpoint.
     pub fn interpolate_points(from: &Point, to: &Point, steps: usize, kind: usize) -> Vec<Point> {
         Point::interpolate(from, to, steps, kind)
     }
 
-    /// Returns the convex hull in the polygon's average plane.
+    /// Return the convex hull in the polygon's average plane.
     pub fn quick_hull(polygon: &Polyline) -> Polyline {
-        let (origin, xa, ya, _za) = polygon.get_average_plane();
+        let (origin, xa, ya, _) = polygon.get_average_plane();
+
         let pts2d = polygon.project_to_plane(&origin, &xa, &ya);
         let mut ai = 0;
         let mut bi = 0;
@@ -1340,6 +1558,7 @@ impl Polyline {
         Self::quick_hull_recurse(&left, ax, ay, bx, by, &mut hull);
         hull.push([bx, by]);
         Self::quick_hull_recurse(&right, bx, by, ax, ay, &mut hull);
+
         let mut pts3d = Vec::with_capacity(hull.len());
 
         for h in &hull {
@@ -1349,7 +1568,7 @@ impl Polyline {
         Polyline::new(pts3d)
     }
 
-    /// Returns the minimum-area rectangle of the hull as a closed 5-point polyline.
+    /// Return the minimum-area rectangle of the hull as a closed 5-point polyline.
     pub fn bounding_rectangle(polygon: &Polyline) -> Option<Polyline> {
         let hull = Self::quick_hull(polygon);
 
@@ -1357,7 +1576,8 @@ impl Polyline {
             return None;
         }
 
-        let (origin, xa, ya, _za) = polygon.get_average_plane();
+        let (origin, xa, ya, _) = polygon.get_average_plane();
+
         let hull2d = hull.project_to_plane(&origin, &xa, &ya);
         let mut best_area = f64::MAX;
         let mut best_min_u = 0.0;
@@ -1430,7 +1650,7 @@ impl Polyline {
         Some(Polyline::new(pts3d))
     }
 
-    /// Returns a grid of interior points spaced div_dist, on the polygon miter-offset by offset_dist.
+    /// Return a grid of interior points spaced div_dist, on the polygon miter-offset by offset_dist.
     pub fn grid_of_points_in_polygon(
         polygon: &Polyline,
         offset_dist: f64,
@@ -1441,7 +1661,8 @@ impl Polyline {
             return Vec::new();
         }
 
-        let (origin, xa, ya, _za) = polygon.get_average_plane();
+        let (origin, xa, ya, _) = polygon.get_average_plane();
+
         let mut poly2d = polygon.project_to_plane(&origin, &xa, &ya);
 
         if poly2d.len() > 1
@@ -1490,14 +1711,15 @@ impl Polyline {
         result
     }
 
-    /// Returns the largest inscribed circle of polylines[0] minus the holes polylines[1..]: center, plane, radius.
+    /// Return the largest inscribed circle of polylines[0] minus the holes polylines[1..]: center, plane, radius.
     pub fn polylabel(polylines: &[Polyline], precision: f64) -> (Point, Plane, f64) {
         if polylines.is_empty() {
             return (Point::new(0.0, 0.0, 0.0), Plane::default(), 0.0);
         }
 
         let (origin, xa, ya, za) = polylines[0].get_average_plane();
-        let mut rings2d: Vec<Ring2> = Vec::with_capacity(polylines.len());
+
+        let mut rings2d: Vec<Vec<[f64; 2]>> = Vec::with_capacity(polylines.len());
         let mut sizes: Vec<f64> = Vec::with_capacity(polylines.len());
 
         for pl in polylines {
@@ -1524,16 +1746,17 @@ impl Polyline {
             sizes.push((mxx - mnx) * (mxx - mnx) + (mxy - mny) * (mxy - mny));
         }
 
-        let mut ids: Vec<usize> = (0..rings2d.len()).collect();
-        ids.sort_by(|&a, &b| {
-            sizes[b]
-                .partial_cmp(&sizes[a])
-                .unwrap_or(std::cmp::Ordering::Equal)
-        });
-        let mut polygon: Vec<Ring2> = Vec::with_capacity(rings2d.len());
+        let mut order: Vec<(f64, usize)> = Vec::with_capacity(rings2d.len());
 
-        for id in &ids {
-            polygon.push(rings2d[*id].clone());
+        for (i, size) in sizes.iter().enumerate() {
+            order.push((-size, i));
+        }
+
+        order.sort_by(|a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal));
+        let mut polygon: Vec<Vec<[f64; 2]>> = Vec::with_capacity(rings2d.len());
+
+        for item in &order {
+            polygon.push(std::mem::take(&mut rings2d[item.1]));
         }
 
         let cr = mapbox_polylabel(&polygon, precision);
@@ -1542,7 +1765,7 @@ impl Polyline {
         (center, Plane::from_frame(origin, xa, ya, za), cr[2])
     }
 
-    /// Returns division points on the polylabel circle scaled by scale, oriented to the closest edge or division_direction_in_3d.
+    /// Return division points on the polylabel circle scaled by scale, oriented to the closest edge or division_direction_in_3d.
     pub fn polylabel_circle_division_points(
         division_direction_in_3d: &Vector,
         polylines: &[Polyline],
@@ -1556,7 +1779,6 @@ impl Polyline {
         let is_direction_valid = division_direction_in_3d[0] != 0.0
             || division_direction_in_3d[1] != 0.0
             || division_direction_in_3d[2] != 0.0;
-
         let (found, edge_i, edge_j) = Self::closest_edge(&center, polylines);
         let found = orient_to_closest_edge && found;
         let mut x_axis = plane.x_axis();
@@ -1576,6 +1798,7 @@ impl Polyline {
         x_axis.normalize_self();
         y_axis.normalize_self();
         z_axis.normalize_self();
+
         let mut points = Vec::with_capacity(division);
         let chunk = 360.0 / division as f64;
 
@@ -1593,7 +1816,7 @@ impl Polyline {
         points
     }
 
-    /// Returns the Vatti boolean of two closed polylines on x and y; clip_type 0 intersection, 1 union, 2 a minus b.
+    /// Return the Vatti boolean of two closed polylines on x and y, or in plane's local frame; clip_type 0 intersection, 1 union, 2 a minus b.
     pub fn boolean_op(
         a: &Polyline,
         b: &Polyline,
@@ -1603,13 +1826,14 @@ impl Polyline {
         let Some(plane) = plane else {
             return crate::boolean_polyline::BooleanPolyline::compute(a, b, clip_type);
         };
+
         let mut pa2d = Self::boolean_project(a, plane);
         let mut pb2d = Self::boolean_project(b, plane);
         Self::ensure_ccw(&mut pa2d);
         Self::ensure_ccw(&mut pb2d);
+
         let mut results =
             crate::boolean_polyline::BooleanPolyline::compute(&pa2d, &pb2d, clip_type);
-
         let o = plane.origin();
         let x = plane.x_axis();
         let y = plane.y_axis();
@@ -1624,7 +1848,7 @@ impl Polyline {
         results
     }
 
-    /// Returns the Ramer-Douglas-Peucker simplification of a point list.
+    /// Return the Ramer-Douglas-Peucker simplification of a point list.
     pub fn simplify_points(points: &[Point], tolerance: f64) -> Vec<Point> {
         let n = points.len();
 
@@ -1636,6 +1860,7 @@ impl Polyline {
         keep[0] = true;
         keep[n - 1] = true;
         Self::simplify_rdp(points, 0, n - 1, tolerance, &mut keep);
+
         let mut result = Vec::new();
 
         for i in 0..n {
@@ -1647,7 +1872,7 @@ impl Polyline {
         result
     }
 
-    /// Computes male rect0 and female rect1 cross-sections of radius about p along segment_vector; flip_male rotates the corners.
+    /// Compute male rect0 and female rect1 cross-sections of radius about p along segment_vector; flip_male rotates the corners.
     pub fn two_rects_from_frame(
         p: &Point,
         segment_vector: &Vector,
@@ -1696,28 +1921,55 @@ impl Polyline {
         (rect0, rect1)
     }
 
-    /// Cuts two closed 5-point rectangles at plane, keeping the side on the positive half; false when a long edge misses the plane.
-    pub fn trim_rectangles_by_plane(first: &mut Polyline, second: &mut Polyline, plane: &Plane) -> bool {
+    /// Cut two closed 5-point rectangles at plane, keeping the side on the positive half; false when a long edge misses the plane.
+    pub fn trim_rectangles_by_plane(
+        first: &mut Polyline,
+        second: &mut Polyline,
+        plane: &Plane,
+    ) -> bool {
         if first.point_count() != 5 || second.point_count() != 5 {
             return false;
         }
 
-        let corner = |polyline: &Polyline, i: usize| polyline.get_point(i).unwrap_or_default();
         let hits = [
-            crate::intersection::line_plane(&Line::from_points(&corner(first, 0), &corner(first, 1)), plane, false),
-            crate::intersection::line_plane(&Line::from_points(&corner(first, 3), &corner(first, 2)), plane, false),
-            crate::intersection::line_plane(&Line::from_points(&corner(second, 0), &corner(second, 1)), plane, false),
-            crate::intersection::line_plane(&Line::from_points(&corner(second, 3), &corner(second, 2)), plane, false),
+            crate::intersection::line_plane(
+                &Line::from_points(&first.point(0), &first.point(1)),
+                plane,
+                false,
+            ),
+            crate::intersection::line_plane(
+                &Line::from_points(&first.point(3), &first.point(2)),
+                plane,
+                false,
+            ),
+            crate::intersection::line_plane(
+                &Line::from_points(&second.point(0), &second.point(1)),
+                plane,
+                false,
+            ),
+            crate::intersection::line_plane(
+                &Line::from_points(&second.point(3), &second.point(2)),
+                plane,
+                false,
+            ),
         ];
         let mut points: Vec<Point> = Vec::with_capacity(4);
+
         for hit in hits {
-            match hit {
-                Some(point) if (0..3).all(|i| point[i].is_finite()) => points.push(point),
-                _ => return false,
+            let Some(point) = hit else {
+                return false;
+            };
+
+            for i in 0..3 {
+                if !point[i].is_finite() {
+                    return false;
+                }
             }
+
+            points.push(point);
         }
 
-        if plane.has_on_negative_side(&corner(first, 0)) {
+        if plane.has_on_negative_side(&first.point(0)) {
             first.set_point(0, &points[0]);
             first.set_point(3, &points[1]);
             first.set_point(4, &points[0]);
@@ -1737,35 +1989,34 @@ impl Polyline {
     // ═══════════════════════════════════════════════════════════════════════════
     // JSON
     // ═══════════════════════════════════════════════════════════════════════════
-
-    /// Serializes to a JSON string.
+    /// Serialize to a JSON object.
     pub fn jsondump(&self) -> Result<String, Box<dyn std::error::Error>> {
         crate::file_encoders::sorted_json_string(self)
     }
 
-    /// Deserializes from a JSON string.
+    /// Deserialize from a JSON object.
     pub fn jsonload(json_data: &str) -> Result<Self, Box<dyn std::error::Error>> {
         Ok(serde_json::from_str(json_data)?)
     }
 
-    /// Serializes to a JSON string.
+    /// Serialize to a JSON string.
     pub fn file_json_dumps(&self) -> String {
-        self.jsondump().unwrap_or_default()
+        self.jsondump().expect("Failed to serialize Polyline JSON")
     }
 
-    /// Deserializes from a JSON string.
+    /// Deserialize from a JSON string.
     pub fn file_json_loads(json_string: &str) -> Self {
-        Self::jsonload(json_string).unwrap_or_default()
+        Self::jsonload(json_string).expect("Failed to parse Polyline JSON")
     }
 
-    /// Writes to a JSON file.
+    /// Write to a JSON file.
     pub fn file_json_dump(&self, filepath: &str) -> Result<(), Box<dyn std::error::Error>> {
         std::fs::write(filepath, self.jsondump()?)?;
 
         Ok(())
     }
 
-    /// Reads from a JSON file.
+    /// Read from a JSON file.
     pub fn file_json_load(filepath: &str) -> Result<Self, Box<dyn std::error::Error>> {
         Self::jsonload(&std::fs::read_to_string(filepath)?)
     }
@@ -1773,35 +2024,7 @@ impl Polyline {
     // ═══════════════════════════════════════════════════════════════════════════
     // Protobuf
     // ═══════════════════════════════════════════════════════════════════════════
-
-    /// Serializes to protobuf bytes.
-    pub fn pb_dumps(&self) -> Vec<u8> {
-        use prost::Message;
-
-        self.to_proto().encode_to_vec()
-    }
-
-    /// Deserializes from protobuf bytes.
-    pub fn pb_loads(data: &[u8]) -> Result<Self, prost::DecodeError> {
-        use prost::Message;
-
-        Ok(Self::from_proto(crate::proto::Polyline::decode(data)?))
-    }
-
-    /// Writes to a protobuf file.
-    pub fn pb_dump(&self, filepath: &str) {
-        let data = self.pb_dumps();
-        std::fs::write(filepath, data).expect("Failed to write protobuf file");
-    }
-
-    /// Reads from a protobuf file.
-    pub fn pb_load(filepath: &str) -> Self {
-        let data = std::fs::read(filepath).expect("Failed to read protobuf file");
-
-        Self::pb_loads(&data).expect("Failed to parse protobuf")
-    }
-
-    /// The proto message; pb_dumps encodes it and Session embeds it.
+    /// Convert to the protobuf message.
     pub fn to_proto(&self) -> crate::proto::Polyline {
         crate::proto::Polyline {
             guid: self.guid.get().cloned().unwrap_or_default(),
@@ -1809,47 +2032,64 @@ impl Polyline {
             coords: self.coords.clone(),
             width: self.width,
             dash: self.dash.clone(),
-            linecolor: Some(crate::proto::Color {
-                guid: self.linecolor.guid().to_string(),
-                name: self.linecolor.name.clone(),
-                r: self.linecolor.r,
-                g: self.linecolor.g,
-                b: self.linecolor.b,
-                a: self.linecolor.a,
-            }),
+            linecolor: Some(self.linecolor.to_proto()),
         }
     }
 
-    /// Polyline from a decoded proto message.
+    /// Construct from the protobuf message.
     pub fn from_proto(proto: crate::proto::Polyline) -> Self {
-        let mut pl = Self::from_coords(proto.coords);
+        let mut polyline = Self::from_coords(proto.coords);
 
         if !proto.guid.is_empty() {
-            pl.set_guid(proto.guid);
+            polyline.set_guid(proto.guid);
         }
 
-        pl.name = proto.name;
-        pl.width = proto.width;
-        pl.dash = proto.dash;
+        polyline.name = proto.name;
+        polyline.width = proto.width;
+        polyline.dash = proto.dash;
 
-        if let Some(c) = proto.linecolor {
-            pl.linecolor = Color::with_name(c.r, c.g, c.b, c.a, &c.name);
-            pl.linecolor.set_guid(c.guid);
+        if let Some(color) = proto.linecolor {
+            polyline.linecolor = Color::from_proto(color);
         }
 
-        pl
+        polyline
+    }
+
+    /// Serialize to protobuf bytes.
+    pub fn pb_dumps(&self) -> Vec<u8> {
+        use prost::Message;
+
+        self.to_proto().encode_to_vec()
+    }
+
+    /// Deserialize from protobuf bytes.
+    pub fn pb_loads(data: &[u8]) -> Result<Self, Box<dyn std::error::Error>> {
+        use prost::Message;
+
+        Ok(Self::from_proto(crate::proto::Polyline::decode(data)?))
+    }
+
+    /// Write to a protobuf file.
+    pub fn pb_dump(&self, filepath: &str) {
+        std::fs::write(filepath, self.pb_dumps()).expect("Failed to write protobuf file");
+    }
+
+    /// Read from a protobuf file.
+    pub fn pb_load(filepath: &str) -> Self {
+        let data = std::fs::read(filepath).expect("Failed to read protobuf file");
+
+        Self::pb_loads(&data).expect("Failed to parse protobuf")
     }
 
     // ═══════════════════════════════════════════════════════════════════════════
     // String
     // ═══════════════════════════════════════════════════════════════════════════
-
-    /// "[(x0, y0, z0), (x1, y1, z1), ...]"
+    /// Return "[(x0, y0, z0), (x1, y1, z1), ...]".
     pub fn str(&self) -> String {
-        let mut pts = Vec::with_capacity(self.point_count());
+        let mut points = Vec::with_capacity(self.point_count());
 
         for i in 0..self.point_count() {
-            pts.push(format!(
+            points.push(format!(
                 "({}, {}, {})",
                 self.coords[i * 3],
                 self.coords[i * 3 + 1],
@@ -1857,10 +2097,10 @@ impl Polyline {
             ));
         }
 
-        format!("[{}]", pts.join(", "))
+        format!("[{}]", points.join(", "))
     }
 
-    /// Returns "Polyline(name, N points)".
+    /// Return "Polyline(name, N points)".
     pub fn repr(&self) -> String {
         format!("Polyline({}, {} points)", self.name, self.point_count())
     }
@@ -1868,13 +2108,12 @@ impl Polyline {
     // ═══════════════════════════════════════════════════════════════════════════
     // Private helpers
     // ═══════════════════════════════════════════════════════════════════════════
-
-    /// Returns the point at index.
+    /// Return the point at index, or the origin when out of range.
     fn point(&self, index: usize) -> Point {
         self.get_point(index).unwrap_or_default()
     }
 
-    /// Recompute plane when _plane_dirty.
+    /// Mark the plane dirty so get_plane recomputes it.
     fn recompute_plane_if_needed(&mut self) {
         self.plane_dirty = true;
     }
@@ -1931,7 +2170,7 @@ impl Polyline {
     }
 
     /// Compute the 2D coordinates of the points in the frame (origin, x_axis, y_axis).
-    fn project_to_plane(&self, origin: &Point, x_axis: &Vector, y_axis: &Vector) -> Ring2 {
+    fn project_to_plane(&self, origin: &Point, x_axis: &Vector, y_axis: &Vector) -> Vec<[f64; 2]> {
         let mut pts2d = Vec::with_capacity(self.point_count());
 
         for i in 0..self.point_count() {
@@ -1944,14 +2183,10 @@ impl Polyline {
 
     /// Return the 3D point of (u, v) in the frame (origin, x_axis, y_axis).
     fn unproject(origin: &Point, x_axis: &Vector, y_axis: &Vector, u: f64, v: f64) -> Point {
-        Point::new(
-            origin[0] + u * x_axis[0] + v * y_axis[0],
-            origin[1] + u * x_axis[1] + v * y_axis[1],
-            origin[2] + u * x_axis[2] + v * y_axis[2],
-        )
+        &(origin + &(x_axis * u)) + &(y_axis * v)
     }
 
-    /// Computes the collinear overlap of two segments as points; None when none or a single point.
+    /// Compute the collinear overlap of two segments as points; false when none or a single point.
     fn line_line_overlap_points(
         line0_start: &Point,
         line0_end: &Point,
@@ -1971,7 +2206,14 @@ impl Polyline {
     }
 
     /// Add the hull points of pts right of the segment (a, b) to hull.
-    fn quick_hull_recurse(pts: &[[f64; 2]], ax: f64, ay: f64, bx: f64, by: f64, hull: &mut Ring2) {
+    fn quick_hull_recurse(
+        pts: &[[f64; 2]],
+        ax: f64,
+        ay: f64,
+        bx: f64,
+        by: f64,
+        hull: &mut Vec<[f64; 2]>,
+    ) {
         if pts.is_empty() {
             return;
         }
@@ -2009,7 +2251,7 @@ impl Polyline {
     }
 
     /// Miter-offset a 2D polygon in place by offset_dist.
-    fn offset_polygon_2d(poly2d: &mut Ring2, offset_dist: f64) {
+    fn offset_polygon_2d(poly2d: &mut Vec<[f64; 2]>, offset_dist: f64) {
         let n = poly2d.len();
 
         if offset_dist == 0.0 || n < 3 {
@@ -2029,7 +2271,7 @@ impl Polyline {
         } else {
             offset_dist
         };
-        let mut normals: Ring2 = Vec::with_capacity(n);
+        let mut normals: Vec<[f64; 2]> = Vec::with_capacity(n);
 
         for i in 0..n {
             let a = poly2d[i];
@@ -2045,7 +2287,7 @@ impl Polyline {
             }
         }
 
-        let mut out: Ring2 = Vec::with_capacity(n * 3);
+        let mut out: Vec<[f64; 2]> = Vec::with_capacity(n * 3);
 
         for i in 0..n {
             let np = normals[(i + n - 1) % n];
@@ -2246,7 +2488,7 @@ impl Polyline {
 }
 
 impl<'de> Deserialize<'de> for Polyline {
-    /// Deserializes from flat JSON fields.
+    /// Deserialize from flat JSON fields.
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
     where
         D: Deserializer<'de>,
@@ -2283,8 +2525,8 @@ impl<'de> Deserialize<'de> for Polyline {
         if let Some(coords) = data.coords {
             polyline.coords = coords;
         } else if let Some(points) = data.points {
-            for pt in points {
-                polyline.add_point(pt);
+            for point in points {
+                polyline.add_point(point);
             }
         }
 
@@ -2305,176 +2547,8 @@ impl<'de> Deserialize<'de> for Polyline {
 }
 
 impl fmt::Display for Polyline {
+    /// Write the polyline string to a formatter.
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "{}", self.repr())
-    }
-}
-
-// ═══════════════════════════════════════════════════════════════════════════
-// Operators
-// ═══════════════════════════════════════════════════════════════════════════
-
-impl Index<usize> for Polyline {
-    type Output = [f64];
-
-    /// Returns the [x, y, z] slice of the point at index.
-    fn index(&self, index: usize) -> &Self::Output {
-        if index >= self.point_count() {
-            panic!("Index out of range");
-        }
-
-        let idx = index * 3;
-
-        &self.coords[idx..idx + 3]
-    }
-}
-
-impl IndexMut<usize> for Polyline {
-    /// Returns the mutable [x, y, z] slice of the point at index.
-    fn index_mut(&mut self, index: usize) -> &mut Self::Output {
-        if index >= self.point_count() {
-            panic!("Index out of range");
-        }
-
-        let idx = index * 3;
-
-        &mut self.coords[idx..idx + 3]
-    }
-}
-
-/// Same name, coordinates to Tolerance::ROUNDING decimals, width and linecolor; guid ignored.
-impl PartialEq for Polyline {
-    /// Compares name, coordinates to 1e-6, width and linecolor; guid ignored.
-    fn eq(&self, other: &Self) -> bool {
-        if self.name != other.name {
-            return false;
-        }
-
-        if self.point_count() != other.point_count() {
-            return false;
-        }
-
-        let r = 10f64.powi(Tolerance::ROUNDING);
-
-        for i in 0..self.coords.len() {
-            if (self.coords[i] * r).round() != (other.coords[i] * r).round() {
-                return false;
-            }
-        }
-
-        if (self.width * r).round() != (other.width * r).round() {
-            return false;
-        }
-
-        self.linecolor == other.linecolor
-    }
-}
-
-impl AddAssign<&Vector> for Polyline {
-    /// Translates in place.
-    fn add_assign(&mut self, v: &Vector) {
-        for i in 0..self.point_count() {
-            self.coords[i * 3] += v[0];
-            self.coords[i * 3 + 1] += v[1];
-            self.coords[i * 3 + 2] += v[2];
-        }
-
-        self.plane = Plane::new(
-            &self.plane.origin() + v,
-            self.plane.x_axis(),
-            self.plane.y_axis(),
-        );
-    }
-}
-
-impl SubAssign<&Vector> for Polyline {
-    /// Translates back in place.
-    fn sub_assign(&mut self, v: &Vector) {
-        for i in 0..self.point_count() {
-            self.coords[i * 3] -= v[0];
-            self.coords[i * 3 + 1] -= v[1];
-            self.coords[i * 3 + 2] -= v[2];
-        }
-
-        self.plane = Plane::new(
-            &self.plane.origin() - v,
-            self.plane.x_axis(),
-            self.plane.y_axis(),
-        );
-    }
-}
-
-impl MulAssign<f64> for Polyline {
-    /// Scales every point in place.
-    fn mul_assign(&mut self, factor: f64) {
-        for i in 0..self.coords.len() {
-            self.coords[i] *= factor;
-        }
-    }
-}
-
-impl DivAssign<f64> for Polyline {
-    /// Divides every point in place.
-    fn div_assign(&mut self, factor: f64) {
-        for i in 0..self.coords.len() {
-            self.coords[i] /= factor;
-        }
-    }
-}
-
-impl Add<&Vector> for Polyline {
-    type Output = Polyline;
-
-    /// Returns a translated copy.
-    fn add(self, v: &Vector) -> Polyline {
-        let mut result = self;
-        result += v;
-
-        result
-    }
-}
-
-impl Sub<&Vector> for Polyline {
-    type Output = Polyline;
-
-    /// Returns a copy translated back.
-    fn sub(self, v: &Vector) -> Polyline {
-        let mut result = self;
-        result -= v;
-
-        result
-    }
-}
-
-impl Mul<f64> for Polyline {
-    type Output = Polyline;
-
-    /// Returns a scaled copy.
-    fn mul(self, factor: f64) -> Polyline {
-        let mut result = self;
-        result *= factor;
-
-        result
-    }
-}
-
-impl Div<f64> for Polyline {
-    type Output = Polyline;
-
-    /// Returns a divided copy.
-    fn div(self, factor: f64) -> Polyline {
-        let mut result = self;
-        result /= factor;
-
-        result
-    }
-}
-
-impl Neg for Polyline {
-    type Output = Polyline;
-
-    /// Returns a reversed copy.
-    fn neg(self) -> Polyline {
-        self.reversed()
     }
 }

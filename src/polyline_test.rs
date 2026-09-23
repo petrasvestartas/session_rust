@@ -41,10 +41,10 @@ pub fn run_polyline_constructor() -> TestResult {
         let mut plsub = pl.duplicate();
         plsub -= &Vector::new(1.0, 1.0, 1.0);
 
-        let rmul = pl.clone() * 2.0;
-        let rdiv = pl.clone() / 2.0;
-        let radd = pl.clone() + &Vector::new(1.0, 1.0, 1.0);
-        let rdif = pl.clone() - &Vector::new(1.0, 1.0, 1.0);
+        let rmul = &pl * 2.0;
+        let rdiv = &pl / 2.0;
+        let radd = &pl + &Vector::new(1.0, 1.0, 1.0);
+        let rdif = &pl - &Vector::new(1.0, 1.0, 1.0);
 
         let plneg = Polyline::new(vec![
             Point::new(0.0, 0.0, 0.0),
@@ -166,16 +166,29 @@ pub fn run_polyline_json_roundtrip() -> TestResult {
             Point::new(10.0, 11.0, 12.0),
         ]);
         pl.name = "test_polyline".to_string();
+        pl.dash = vec![3.0, 2.0];
+
+        let j = pl.jsondump().unwrap();
+        let loaded_j = Polyline::jsonload(&j).unwrap();
+
+        let s = pl.file_json_dumps();
+        let loaded_s = Polyline::file_json_loads(&s);
 
         let fname = "serialization/test_polyline.json";
         pl.file_json_dump(fname).unwrap();
         let loaded = Polyline::file_json_load(fname).unwrap();
 
+        MINI_CHECK!(loaded_j.name == "test_polyline");
+        MINI_CHECK!(TOLERANCE.is_close(loaded_j.get_point(0).unwrap()[0], 1.0));
+        MINI_CHECK!(loaded_s.name == "test_polyline");
+        MINI_CHECK!(TOLERANCE.is_close(loaded_s.get_point(0).unwrap()[0], 1.0));
         MINI_CHECK!(loaded.name == "test_polyline");
         MINI_CHECK!(loaded.len() == 4);
         MINI_CHECK!(TOLERANCE.is_close(loaded.get_point(0).unwrap()[0], 1.0));
         MINI_CHECK!(TOLERANCE.is_close(loaded.get_point(1).unwrap()[1], 5.0));
         MINI_CHECK!(TOLERANCE.is_close(loaded.get_point(2).unwrap()[2], 9.0));
+        MINI_CHECK!(loaded.dash == vec![3.0, 2.0]);
+        MINI_CHECK!(loaded.guid() == pl.guid());
     })
 }
 
@@ -191,16 +204,29 @@ pub fn run_polyline_protobuf_roundtrip() -> TestResult {
             Point::new(10.0, 11.0, 12.0),
         ]);
         pl.name = "test_polyline".to_string();
+        pl.dash = vec![3.0, 2.0];
+
+        let guid = pl.guid().to_string();
+        let s = pl.pb_dumps();
+        let loaded_s = Polyline::pb_loads(&s).unwrap();
 
         let fname = "serialization/test_polyline.bin";
         pl.pb_dump(fname);
         let loaded = Polyline::pb_load(fname);
+        let converted = Polyline::from_proto(pl.to_proto());
 
+        MINI_CHECK!(loaded_s.name == "test_polyline");
+        MINI_CHECK!(TOLERANCE.is_close(loaded_s.get_point(0).unwrap()[0], 1.0));
+        MINI_CHECK!(loaded_s.guid() == guid);
         MINI_CHECK!(loaded.name == "test_polyline");
         MINI_CHECK!(loaded.len() == 4);
         MINI_CHECK!(TOLERANCE.is_close(loaded.get_point(0).unwrap()[0], 1.0));
         MINI_CHECK!(TOLERANCE.is_close(loaded.get_point(1).unwrap()[1], 5.0));
         MINI_CHECK!(TOLERANCE.is_close(loaded.get_point(2).unwrap()[2], 9.0));
+        MINI_CHECK!(loaded.dash == vec![3.0, 2.0]);
+        MINI_CHECK!(loaded.guid() == guid);
+        MINI_CHECK!(converted == pl);
+        MINI_CHECK!(converted.guid() == guid);
     })
 }
 
@@ -369,13 +395,13 @@ pub fn run_polyline_line_line_overlap() -> TestResult {
         let result = Polyline::line_line_overlap(&s0, &e0, &s1, &e1);
 
         MINI_CHECK!(result.is_some());
-        let (os, oe) = result.unwrap();
-        MINI_CHECK!(TOLERANCE.is_close(os[0], 1.0));
-        MINI_CHECK!(TOLERANCE.is_close(oe[0], 2.0));
+        MINI_CHECK!(TOLERANCE.is_close(result.as_ref().unwrap().0[0], 1.0));
+        MINI_CHECK!(TOLERANCE.is_close(result.as_ref().unwrap().1[0], 2.0));
 
         let s2 = Point::new(5.0, 0.0, 0.0);
         let e2 = Point::new(6.0, 0.0, 0.0);
         let no_overlap = Polyline::line_line_overlap(&s0, &e0, &s2, &e2);
+
         MINI_CHECK!(no_overlap.is_none());
     })
 }
@@ -426,9 +452,8 @@ pub fn run_polyline_line_from_projected_points() -> TestResult {
         let result = Polyline::line_from_projected_points(&s, &e, &pts);
 
         MINI_CHECK!(result.is_some());
-        let (os, oe) = result.unwrap();
-        MINI_CHECK!(TOLERANCE.is_close(os[0], 1.0));
-        MINI_CHECK!(TOLERANCE.is_close(oe[0], 3.0));
+        MINI_CHECK!(TOLERANCE.is_close(result.as_ref().unwrap().0[0], 1.0));
+        MINI_CHECK!(TOLERANCE.is_close(result.as_ref().unwrap().1[0], 3.0));
     })
 }
 
@@ -471,7 +496,8 @@ pub fn run_polyline_trim_rectangles_by_plane() -> TestResult {
             Point::new(0.0, 1.0, 1.0),
             Point::new(0.0, 0.0, 1.0),
         ]);
-        let plane = Plane::from_point_normal(Point::new(3.0, 0.0, 0.0), Vector::new(-1.0, 0.0, 0.0), None);
+        let plane =
+            Plane::from_point_normal(Point::new(3.0, 0.0, 0.0), Vector::new(-1.0, 0.0, 0.0), None);
         let ok = Polyline::trim_rectangles_by_plane(&mut first, &mut second, &plane);
 
         MINI_CHECK!(ok);
@@ -767,6 +793,7 @@ pub fn run_polyline_interpolate_points() -> TestResult {
 
         let a = Point::new(0.0, 0.0, 0.0);
         let b = Point::new(4.0, 0.0, 0.0);
+
         let pts0 = Polyline::interpolate_points(&a, &b, 3, 0);
         let pts1 = Polyline::interpolate_points(&a, &b, 3, 1);
         let pts2 = Polyline::interpolate_points(&a, &b, 3, 2);
@@ -837,6 +864,7 @@ pub fn run_polyline_grid_of_points() -> TestResult {
         let pts = Polyline::grid_of_points_in_polygon(&poly, 0.0, 1.0, 100);
 
         MINI_CHECK!(!pts.is_empty());
+
         for p in &pts {
             MINI_CHECK!(p[0] >= 0.0 && p[0] <= 4.0);
             MINI_CHECK!(p[1] >= 0.0 && p[1] <= 4.0);
@@ -856,7 +884,7 @@ pub fn run_polyline_polylabel() -> TestResult {
             Point::new(0.0, 10.0, 0.0),
         ]);
         let polys = vec![poly];
-        let (c, _plane, r) = Polyline::polylabel(&polys, 0.5);
+        let (c, _, r) = Polyline::polylabel(&polys, 0.5);
 
         MINI_CHECK!((c[0] - 5.0).abs() < 0.6);
         MINI_CHECK!((c[1] - 5.0).abs() < 0.6);
@@ -881,6 +909,7 @@ pub fn run_polyline_polylabel_circle_division_points() -> TestResult {
         let pts = Polyline::polylabel_circle_division_points(&dir, &polys, 4, 0.5, 1.0, true);
 
         MINI_CHECK!(pts.len() == 4);
+
         for p in &pts {
             MINI_CHECK!(p[2].abs() < 1e-6);
         }
@@ -980,12 +1009,15 @@ pub fn run_polyline_boolean_op_plane() -> TestResult {
         MINI_CHECK!(isect.len() == 1);
         MINI_CHECK!(uni.len() == 1);
         MINI_CHECK!(diff.len() == 1);
+
         for p in isect[0].get_points() {
             MINI_CHECK!(TOLERANCE.is_close(p[2], 5.0));
         }
+
         for p in uni[0].get_points() {
             MINI_CHECK!(TOLERANCE.is_close(p[2], 5.0));
         }
+
         for p in diff[0].get_points() {
             MINI_CHECK!(TOLERANCE.is_close(p[2], 5.0));
         }
@@ -1017,12 +1049,14 @@ pub fn run_polyline_simplify_points() -> TestResult {
         use crate::Polyline;
 
         let mut pts = Vec::new();
+
         for i in 0..100 {
             let x = i as f64;
             let y = (i as f64 * 0.1).sin() * 0.001;
             let z = 0.0;
             pts.push(Point::new(x, y, z));
         }
+
         let result_tight = Polyline::simplify_points(&pts, 0.0001);
         let result_loose = Polyline::simplify_points(&pts, 0.01);
         let result_very_loose = Polyline::simplify_points(&pts, 1.0);
@@ -1041,16 +1075,18 @@ pub fn run_polyline_simplify() -> TestResult {
         use crate::Polyline;
 
         let mut pts = Vec::new();
+
         for i in 0..20 {
             let x = i as f64;
             let y = 0.0;
             let z = 0.0;
             pts.push(Point::new(x, y, z));
         }
+
         let pl = Polyline::new(pts);
         let result = pl.simplify(0.001);
 
-        MINI_CHECK!(result.len() == 2);
+        MINI_CHECK!(result.point_count() == 2);
         MINI_CHECK!(TOLERANCE.is_close(result.get_point(0).unwrap()[0], 0.0));
         MINI_CHECK!(TOLERANCE.is_close(result.get_point(1).unwrap()[0], 19.0));
     })
@@ -1082,12 +1118,14 @@ pub fn run_polyline_simplify_zigzag() -> TestResult {
         use crate::Polyline;
 
         let mut pts = Vec::new();
+
         for i in 0..10 {
             let x = i as f64;
             let y = if i % 2 == 1 { 1.0 } else { 0.0 };
             let z = 0.0;
             pts.push(Point::new(x, y, z));
         }
+
         let result_tight = Polyline::simplify_points(&pts, 0.1);
         let result_loose = Polyline::simplify_points(&pts, 2.0);
 
