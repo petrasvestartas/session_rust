@@ -23,6 +23,7 @@ pub fn run_remesh_nurbssurface_adaptive_parameters() -> TestResult {
 
         let s = Primitives::sphere_surface(0.0, 0.0, 0.0, 1.0);
         let mut ta = RemeshNurbsSurfaceAdaptive::new(s);
+
         ta.set_max_angle(15.0)
             .set_max_edge_length(2.0)
             .set_min_edge_length(0.1)
@@ -120,15 +121,23 @@ pub fn run_remesh_nurbssurface_adaptive_singular_triangle() -> TestResult {
         use crate::Point;
         use crate::RemeshNurbsSurfaceAdaptive;
 
-        let pts = vec![
-            Point::new(0.0, 0.0, 0.0),
-            Point::new(2.0, 0.0, 3.0),
-            Point::new(4.0, 0.0, 0.0),
-            Point::new(2.0, 4.0, 0.0),
-            Point::new(2.0, 4.0, 0.0),
-            Point::new(2.0, 4.0, 0.0),
-        ];
-        let s = NurbsSurface::create(false, false, 2, 1, 3, 2, &pts).unwrap();
+        let s = NurbsSurface::create(
+            false,
+            false,
+            2,
+            1,
+            3,
+            2,
+            &[
+                Point::new(0.0, 0.0, 0.0),
+                Point::new(2.0, 0.0, 3.0),
+                Point::new(4.0, 0.0, 0.0),
+                Point::new(2.0, 4.0, 0.0),
+                Point::new(2.0, 4.0, 0.0),
+                Point::new(2.0, 4.0, 0.0),
+            ],
+        )
+        .unwrap();
         let m = RemeshNurbsSurfaceAdaptive::new(s).mesh();
 
         MINI_CHECK!(m.is_valid());
@@ -142,18 +151,26 @@ pub fn run_remesh_nurbssurface_adaptive_double_curved_triangle() -> TestResult {
         use crate::Point;
         use crate::RemeshNurbsSurfaceAdaptive;
 
-        let pts = vec![
-            Point::new(0.0, 0.0, 0.0),
-            Point::new(2.0, 0.0, 3.0),
-            Point::new(4.0, 0.0, 0.0),
-            Point::new(0.0, 2.0, 2.0),
-            Point::new(2.0, 2.0, 5.0),
-            Point::new(4.0, 2.0, 2.0),
-            Point::new(2.0, 4.0, 0.0),
-            Point::new(2.0, 4.0, 0.0),
-            Point::new(2.0, 4.0, 0.0),
-        ];
-        let s = NurbsSurface::create(false, false, 2, 2, 3, 3, &pts).unwrap();
+        let s = NurbsSurface::create(
+            false,
+            false,
+            2,
+            2,
+            3,
+            3,
+            &[
+                Point::new(0.0, 0.0, 0.0),
+                Point::new(2.0, 0.0, 3.0),
+                Point::new(4.0, 0.0, 0.0),
+                Point::new(0.0, 2.0, 2.0),
+                Point::new(2.0, 2.0, 5.0),
+                Point::new(4.0, 2.0, 2.0),
+                Point::new(2.0, 4.0, 0.0),
+                Point::new(2.0, 4.0, 0.0),
+                Point::new(2.0, 4.0, 0.0),
+            ],
+        )
+        .unwrap();
         let m = RemeshNurbsSurfaceAdaptive::new(s).mesh();
 
         MINI_CHECK!(m.is_valid());
