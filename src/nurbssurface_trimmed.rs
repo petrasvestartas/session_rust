@@ -12,16 +12,17 @@ use crate::nurbssurface::NurbsSurface;
 use crate::point::Point;
 use crate::primitives::Primitives;
 use crate::remesh_nurbssurface_grid::RemeshNurbsSurfaceGrid;
+use crate::tolerance::PI;
 use crate::vector::Vector;
 use crate::xform::Xform;
 use serde::{Deserialize, Serialize};
+use std::collections::BTreeMap;
 use std::collections::HashMap;
 use std::collections::HashSet;
 
 // ═══════════════════════════════════════════════════════════════════════════
 // Helpers
 // ═══════════════════════════════════════════════════════════════════════════
-
 /// Normal on the side of a C0 knot line that belongs to the triangle around center.
 fn crease_side_normal(
     surface: &NurbsSurface,
@@ -153,7 +154,7 @@ fn span_subdivisions(
 
         if deg > 1 {
             let mut ma = 0.0_f64;
-            let mut pn = [0.0f64; 3];
+            let mut pn = Vector::new(0.0, 0.0, 0.0);
 
             for k in 0..=4 {
                 let t = t0 + k as f64 * (t1 - t0) / 4.0;
@@ -164,11 +165,11 @@ fn span_subdivisions(
                 };
 
                 if k > 0 {
-                    let d = (pn[0] * nm[0] + pn[1] * nm[1] + pn[2] * nm[2]).clamp(-1.0, 1.0);
-                    ma += d.acos() * 180.0 / std::f64::consts::PI;
+                    let d = pn.dot(&nm).clamp(-1.0, 1.0);
+                    ma += d.acos() * 180.0 / PI;
                 }
 
-                pn = [nm[0], nm[1], nm[2]];
+                pn = nm;
             }
 
             subs[i] = subs[i].max(1.max(((ma / max_angle_deg).ceil() as usize).min(64)));
@@ -232,7 +233,7 @@ fn span_parameters(sp: &[f64], subs: &[usize]) -> Vec<f64> {
 
 /// Unit normal as a plain array, or none when degenerate.
 fn unit3(n: &Vector) -> Option<[f64; 3]> {
-    let nl = (n[0] * n[0] + n[1] * n[1] + n[2] * n[2]).sqrt();
+    let nl = n.magnitude_squared().sqrt();
 
     if nl < 1e-12 {
         return None;
@@ -332,13 +333,9 @@ fn project_to_uv(
     u_len2: f64,
     v_len2: f64,
 ) -> Point {
-    let dx = pt[0] - p00[0];
-    let dy = pt[1] - p00[1];
-    let dz = pt[2] - p00[2];
-    let nu = (dx * u_axis[0] + dy * u_axis[1] + dz * u_axis[2]) / u_len2;
-    let nv = (dx * v_axis[0] + dy * v_axis[1] + dz * v_axis[2]) / v_len2;
+    let d = pt - p00;
 
-    Point::new(nu, nv, 0.0)
+    Point::new(d.dot(u_axis) / u_len2, d.dot(v_axis) / v_len2, 0.0)
 }
 
 /// Snap a UV point onto the domain border when within snap_uv of it.
@@ -363,7 +360,6 @@ fn snap_to_border(p: &mut [f64; 2], u0: f64, u1: f64, v0: f64, v1: f64, snap_uv:
 // ═══════════════════════════════════════════════════════════════════════════
 // VertexWelder
 // ═══════════════════════════════════════════════════════════════════════════
-
 /// Adds 3D points to a mesh, returning the existing vertex when one lies within tol.
 struct VertexWelder {
     tol: f64,                                             // Weld tolerance.
@@ -372,7 +368,7 @@ struct VertexWelder {
 }
 
 impl VertexWelder {
-    /// Constructs with a weld tolerance and a hash cell size.
+    /// Construct with a weld tolerance and a hash cell size.
     fn new(tol: f64, cell: f64) -> Self {
         Self {
             tol,
@@ -381,7 +377,7 @@ impl VertexWelder {
         }
     }
 
-    /// Welds a 3D point into the mesh, returning the existing vertex within tol or a new one.
+    /// Weld a 3D point, returning the existing vertex within tol or a new one.
     fn weld(&mut self, mesh: &mut Mesh, p: Point) -> usize {
         let ci = (p[0] / self.cell).floor() as i64;
         let cj = (p[1] / self.cell).floor() as i64;
@@ -395,11 +391,7 @@ impl VertexWelder {
                     };
 
                     for (q, vk) in bucket {
-                        let dx = q[0] - p[0];
-                        let dy = q[1] - p[1];
-                        let dz = q[2] - p[2];
-
-                        if dx * dx + dy * dy + dz * dz <= self.tol * self.tol {
+                        if (q - &p).magnitude_squared() <= self.tol * self.tol {
                             return *vk;
                         }
                     }
@@ -413,7 +405,7 @@ impl VertexWelder {
         vk
     }
 
-    /// Welds the surface point at (u, v); a new vertex gets the surface normal.
+    /// Weld the surface point at (u, v); a new vertex gets the surface normal.
     fn weld_surface(&mut self, mesh: &mut Mesh, srf: &NurbsSurface, u: f64, v: f64) -> usize {
         let before = mesh.number_of_vertices();
         let vk = self.weld(mesh, srf.point_at(u, v).unwrap_or_default());
@@ -433,7 +425,6 @@ impl VertexWelder {
 // ═══════════════════════════════════════════════════════════════════════════
 // UVGraph
 // ═══════════════════════════════════════════════════════════════════════════
-
 /// Snapped UV vertices of the split graph: points within snap of each other share one id.
 struct UVVertexPool {
     snap: f64,                              // Snap distance.
@@ -442,7 +433,7 @@ struct UVVertexPool {
 }
 
 impl UVVertexPool {
-    /// Constructs with the snap distance.
+    /// Construct with the snap distance.
     fn new(snap: f64) -> Self {
         Self {
             snap,
@@ -668,7 +659,6 @@ fn cycle_to_loop(
 // ═══════════════════════════════════════════════════════════════════════════
 // Delaunay2D
 // ═══════════════════════════════════════════════════════════════════════════
-
 /// UV vertex of the triangulation.
 struct Vertex2D {
     x: f64, // U coordinate.
@@ -715,6 +705,7 @@ impl Delaunay2D {
         let bdy = by - dy;
         let cdx = cx - dx;
         let cdy = cy - dy;
+
         (adx * adx + ady * ady) * (bdx * cdy - cdx * bdy)
             + (bdx * bdx + bdy * bdy) * (cdx * ady - adx * cdy)
             + (cdx * cdx + cdy * cdy) * (adx * bdy - bdx * ady)
@@ -725,7 +716,7 @@ impl Delaunay2D {
         (bx - ax) * (cy - ay) - (by - ay) * (cx - ax)
     }
 
-    /// Constructs with a super triangle around the box.
+    /// Construct with a super triangle around the box.
     fn new(xmin: f64, ymin: f64, xmax: f64, ymax: f64) -> Self {
         let dx = xmax - xmin;
         let dy = ymax - ymin;
@@ -764,7 +755,7 @@ impl Delaunay2D {
         dt
     }
 
-    /// Records the hull edges of triangle ti in the edge map.
+    /// Record the hull edges of triangle ti in the edge map.
     fn register_edges(&mut self, ti: i32) {
         for k in 0..3 {
             let a = self.triangles[ti as usize].v[(k + 1) % 3];
@@ -781,7 +772,7 @@ impl Delaunay2D {
         }
     }
 
-    /// Drops the hull edges of triangle ti from the edge map and its neighbours.
+    /// Drop the hull edges of triangle ti from the edge map and its neighbours.
     fn unregister_edges(&mut self, ti: i32) {
         for k in 0..3 {
             let a = self.triangles[ti as usize].v[(k + 1) % 3];
@@ -817,24 +808,24 @@ impl Delaunay2D {
         }
     }
 
-    /// Triangle containing (x, y) by walking from start, -1 when none.
-    fn locate(&self, x: f64, y: f64, mut start: i32) -> i32 {
-        if start < 0
-            || start >= self.triangles.len() as i32
-            || !self.triangles[start as usize].alive
+    /// Triangle containing (x, y) by walking from start_tri, -1 when none.
+    fn locate(&self, x: f64, y: f64, mut start_tri: i32) -> i32 {
+        if start_tri < 0
+            || start_tri >= self.triangles.len() as i32
+            || !self.triangles[start_tri as usize].alive
         {
-            start = self.triangles.len() as i32 - 1;
+            start_tri = self.triangles.len() as i32 - 1;
 
-            while start >= 0 && !self.triangles[start as usize].alive {
-                start -= 1;
+            while start_tri >= 0 && !self.triangles[start_tri as usize].alive {
+                start_tri -= 1;
             }
 
-            if start < 0 {
+            if start_tri < 0 {
                 return -1;
             }
         }
 
-        let mut cur = start;
+        let mut cur = start_tri;
         let max_iter = self.triangles.len() as i32;
 
         for _ in 0..max_iter {
@@ -871,7 +862,7 @@ impl Delaunay2D {
         cur
     }
 
-    /// Inserts a point and returns its vertex index, the existing one when coincident.
+    /// Insert a point and return its vertex index, the existing one when coincident.
     fn insert(&mut self, x: f64, y: f64) -> i32 {
         let start = self.locate(x, y, self.last_found);
 
@@ -973,7 +964,12 @@ impl Delaunay2D {
             return -1;
         }
 
-        let bad_set: HashSet<i32> = bad.iter().copied().collect();
+        let mut bad_set: HashSet<i32> = HashSet::new();
+
+        for &ti in &bad {
+            bad_set.insert(ti);
+        }
+
         let mut polygon: Vec<(i32, i32, bool)> = Vec::new();
 
         for &ti in &bad {
@@ -1023,7 +1019,7 @@ impl Delaunay2D {
         vi
     }
 
-    /// Forces the edge v0-v1 into the triangulation by flipping the edges it crosses.
+    /// Force the edge v0-v1 into the triangulation by flipping the edges it crosses.
     fn insert_constraint(&mut self, v0: i32, v1: i32) {
         if v0 == v1 {
             return;
@@ -1085,63 +1081,61 @@ impl Delaunay2D {
         let mut ivl = -1i32;
         let mut ivr = -1i32;
         let mut it = -1i32;
-        {
-            let mut ti = start_ti;
-            let guard = self.triangles.len() + 4;
+        let mut ti = start_ti;
+        let walk_guard = self.triangles.len() + 4;
 
-            for _g in 0..guard {
-                if !self.triangles[ti as usize].alive {
-                    break;
-                }
-
-                let mut k_v0 = -1i32;
-
-                for i in 0..3 {
-                    if self.triangles[ti as usize].v[i] == v0 {
-                        k_v0 = i as i32;
-                        break;
-                    }
-                }
-
-                if k_v0 < 0 {
-                    break;
-                }
-
-                let k = k_v0 as usize;
-                let ip2 = self.triangles[ti as usize].v[(k + 1) % 3];
-                let ip1 = self.triangles[ti as usize].v[(k + 2) % 3];
-                let op2 = Self::orient2d(
-                    ax,
-                    ay,
-                    bx,
-                    by,
-                    self.vertices[ip2 as usize].x,
-                    self.vertices[ip2 as usize].y,
-                );
-                let op1 = Self::orient2d(
-                    ax,
-                    ay,
-                    bx,
-                    by,
-                    self.vertices[ip1 as usize].x,
-                    self.vertices[ip1 as usize].y,
-                );
-
-                if op2 < 0.0 && op1 >= 0.0 {
-                    ivl = ip1;
-                    ivr = ip2;
-                    it = ti;
-                    break;
-                }
-
-                let next = self.triangles[ti as usize].adj[(k + 1) % 3];
-
-                if next < 0 || !self.triangles[next as usize].alive || next == start_ti {
-                    break;
-                }
-
-                ti = next;
+        for _ in 0..walk_guard {
+            if !self.triangles[ti as usize].alive {
+                break;
             }
+
+            let mut k_v0 = -1i32;
+
+            for i in 0..3 {
+                if self.triangles[ti as usize].v[i] == v0 {
+                    k_v0 = i as i32;
+                    break;
+                }
+            }
+
+            if k_v0 < 0 {
+                break;
+            }
+
+            let k = k_v0 as usize;
+            let ip2 = self.triangles[ti as usize].v[(k + 1) % 3];
+            let ip1 = self.triangles[ti as usize].v[(k + 2) % 3];
+            let op2 = Self::orient2d(
+                ax,
+                ay,
+                bx,
+                by,
+                self.vertices[ip2 as usize].x,
+                self.vertices[ip2 as usize].y,
+            );
+            let op1 = Self::orient2d(
+                ax,
+                ay,
+                bx,
+                by,
+                self.vertices[ip1 as usize].x,
+                self.vertices[ip1 as usize].y,
+            );
+
+            if op2 < 0.0 && op1 >= 0.0 {
+                ivl = ip1;
+                ivr = ip2;
+                it = ti;
+                break;
+            }
+
+            let next = self.triangles[ti as usize].adj[(k + 1) % 3];
+
+            if next < 0 || !self.triangles[next as usize].alive || next == start_ti {
+                break;
+            }
+
+            ti = next;
         }
 
         if it < 0 {
@@ -1153,9 +1147,9 @@ impl Delaunay2D {
         let mut intersected: Vec<i32> = vec![it];
         let mut iv = v0;
         let mut cur_it = it;
-        let guard = self.triangles.len() * 2 + 8;
+        let cross_guard = self.triangles.len() * 2 + 8;
 
-        for _g in 0..guard {
+        for _ in 0..cross_guard {
             if self.has_vertex(cur_it, v1) {
                 break;
             }
@@ -1310,7 +1304,7 @@ impl Delaunay2D {
         self.register_edges(new_ti);
     }
 
-    /// Drops the triangles touching the super triangle.
+    /// Drop the triangles touching the super triangle.
     fn cleanup(&mut self) {
         let sv = self.super_v;
 
@@ -1369,7 +1363,6 @@ impl Delaunay2D {
 // ═══════════════════════════════════════════════════════════════════════════
 // TrimLoops
 // ═══════════════════════════════════════════════════════════════════════════
-
 /// Trim wires of one face as UV polygons, optional 3D points per loop vertex shared bit for bit with the neighbouring face, and interior UV seeds.
 #[derive(Debug, Clone, Default)]
 pub struct TrimLoops {
@@ -1381,7 +1374,6 @@ pub struct TrimLoops {
 // ═══════════════════════════════════════════════════════════════════════════
 // NurbsSurfaceTrimmed
 // ═══════════════════════════════════════════════════════════════════════════
-
 /// A NURBS surface bounded by a closed outer loop and optional inner loops in its UV space.
 #[derive(Debug, Serialize, Deserialize, Clone)]
 #[serde(tag = "type", rename = "NurbsSurfaceTrimmed")]
@@ -1390,7 +1382,7 @@ pub struct NurbsSurfaceTrimmed {
         serialize_with = "crate::guid_serde::serialize",
         deserialize_with = "crate::guid_serde::deserialize"
     )]
-    guid: std::sync::OnceLock<String>, // Lazy guid.
+    guid: std::sync::OnceLock<String>, // Lazily minted GUID.
     pub name: String,        // Face name.
     pub width: f64,          // Display width.
     pub surfacecolor: Color, // Display color of the surface.
@@ -1412,8 +1404,18 @@ pub struct NurbsSurfaceTrimmed {
     pub cut_planes: Vec<(Point, Vector)>,
 }
 
+impl Default for NurbsSurfaceTrimmed {
+    /// Construct an empty untrimmed face.
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl NurbsSurfaceTrimmed {
-    /// Constructs an empty untrimmed face.
+    // ═══════════════════════════════════════════════════════════════════════════
+    // Constructors
+    // ═══════════════════════════════════════════════════════════════════════════
+    /// Construct an empty untrimmed face.
     pub fn new() -> Self {
         NurbsSurfaceTrimmed {
             guid: std::sync::OnceLock::new(),
@@ -1429,7 +1431,7 @@ impl NurbsSurfaceTrimmed {
         }
     }
 
-    /// Copies with a new guid and the same data.
+    /// Copy with a new guid and the same data.
     pub fn duplicate(&self) -> Self {
         let mut copy = self.clone();
         copy.guid = std::sync::OnceLock::new();
@@ -1437,25 +1439,9 @@ impl NurbsSurfaceTrimmed {
         copy
     }
 
-    /// Returns whether the lazy guid has been created.
-    pub fn has_guid(&self) -> bool {
-        self.guid.get().is_some()
-    }
-
-    /// Returns the guid, minting one on first read.
-    pub fn guid(&self) -> &str {
-        self.guid.get_or_init(|| uuid::Uuid::new_v4().to_string())
-    }
-
-    /// Sets the guid if it has not already been created.
-    pub fn set_guid(&self, g: String) {
-        let _ = self.guid.set(g);
-    }
-
     // ═══════════════════════════════════════════════════════════════════════════
     // Static constructors
     // ═══════════════════════════════════════════════════════════════════════════
-
     /// Surface with a closed outer loop given in its UV parameter space.
     pub fn create(surface: &NurbsSurface, outer_loop: &NurbsCurve) -> Self {
         let mut ts = Self::new();
@@ -1474,12 +1460,10 @@ impl NurbsSurfaceTrimmed {
         }
 
         let p00 = srf.get_cv(0, 0).unwrap_or_default();
-        let p10 = srf.get_cv(1, 0).unwrap_or_default();
-        let p01 = srf.get_cv(0, 1).unwrap_or_default();
-        let u_axis = &p10 - &p00;
-        let v_axis = &p01 - &p00;
-        let u_len2 = u_axis[0] * u_axis[0] + u_axis[1] * u_axis[1] + u_axis[2] * u_axis[2];
-        let v_len2 = v_axis[0] * v_axis[0] + v_axis[1] * v_axis[1] + v_axis[2] * v_axis[2];
+        let u_axis = &srf.get_cv(1, 0).unwrap_or_default() - &p00;
+        let v_axis = &srf.get_cv(0, 1).unwrap_or_default() - &p00;
+        let u_len2 = u_axis.magnitude_squared();
+        let v_len2 = v_axis.magnitude_squared();
 
         if u_len2 < 1e-28 || v_len2 < 1e-28 {
             return Self::new();
@@ -1500,10 +1484,9 @@ impl NurbsSurfaceTrimmed {
             }
         } else {
             let spans = boundary.get_span_vector();
+            let n_sub = 10;
 
             for si in 0..spans.len().saturating_sub(1) {
-                let n_sub = 10;
-
                 for k in 0..=n_sub {
                     let t = spans[si] + (spans[si + 1] - spans[si]) * k as f64 / n_sub as f64;
                     let uv = project_to_uv(
@@ -1516,11 +1499,7 @@ impl NurbsSurfaceTrimmed {
                     );
 
                     if uv_pts.is_empty()
-                        || (uv[0] - uv_pts[uv_pts.len() - 1][0])
-                            * (uv[0] - uv_pts[uv_pts.len() - 1][0])
-                            + (uv[1] - uv_pts[uv_pts.len() - 1][1])
-                                * (uv[1] - uv_pts[uv_pts.len() - 1][1])
-                            > 1e-24
+                        || (&uv - &uv_pts[uv_pts.len() - 1]).magnitude_squared() > 1e-24
                     {
                         uv_pts.push(uv);
                     }
@@ -1797,7 +1776,6 @@ impl NurbsSurfaceTrimmed {
                         let mut tb = b_poly.ts[ib] + (b_poly.ts[ib + 1] - b_poly.ts[ib]) * t;
                         let mut hu =
                             a_poly.pts[ia][0] + (a_poly.pts[ia + 1][0] - a_poly.pts[ia][0]) * s;
-
                         let mut hv =
                             a_poly.pts[ia][1] + (a_poly.pts[ia + 1][1] - a_poly.pts[ia][1]) * s;
 
@@ -1897,7 +1875,11 @@ impl NurbsSurfaceTrimmed {
         let mut alive = vec![true; edges.len()];
         let mut changed = true;
 
-        while changed {
+        for _ in 0..=edges.len() {
+            if !changed {
+                break;
+            }
+
             changed = false;
             let mut degree: HashMap<usize, usize> = HashMap::new();
 
@@ -1905,6 +1887,7 @@ impl NurbsSurfaceTrimmed {
                 if !alive[ei] {
                     continue;
                 }
+
                 *degree.entry(e.a).or_insert(0) += 1;
                 *degree.entry(e.b).or_insert(0) += 1;
             }
@@ -1960,13 +1943,19 @@ impl NurbsSurfaceTrimmed {
         }
 
         for vid in 0..out_map.len() {
-            out_map[vid].sort_by(|&ha, &hb| {
-                let aa = (verts[hes[ha].head][1] - verts[vid][1])
-                    .atan2(verts[hes[ha].head][0] - verts[vid][0]);
-                let ab = (verts[hes[hb].head][1] - verts[vid][1])
-                    .atan2(verts[hes[hb].head][0] - verts[vid][0]);
-                aa.partial_cmp(&ab).unwrap_or(std::cmp::Ordering::Equal)
-            });
+            let mut fan: Vec<(f64, usize)> = Vec::new();
+
+            for &hi in &out_map[vid] {
+                let angle = (verts[hes[hi].head][1] - verts[vid][1])
+                    .atan2(verts[hes[hi].head][0] - verts[vid][0]);
+                fan.push((angle, hi));
+            }
+
+            fan.sort_by(|x, y| x.partial_cmp(y).unwrap_or(std::cmp::Ordering::Equal));
+
+            for k in 0..fan.len() {
+                out_map[vid][k] = fan[k].1;
+            }
         }
 
         let mut next_he = vec![usize::MAX; hes.len()];
@@ -2132,7 +2121,7 @@ impl NurbsSurfaceTrimmed {
             }
 
             let mut ts = NurbsSurfaceTrimmed::new();
-            ts.m_surface = srf.clone();
+            ts.m_surface = srf.duplicate();
             let m = ts.mesh_by_planes(&cp, 20.0, 0.01);
 
             if m.number_of_faces() > 0 {
@@ -2146,30 +2135,74 @@ impl NurbsSurfaceTrimmed {
     }
 
     // ═══════════════════════════════════════════════════════════════════════════
+    // Transformation
+    // ═══════════════════════════════════════════════════════════════════════════
+    /// Transform the surface in place; the loops live in UV and stay.
+    pub fn transform(&mut self, xform: &Xform) {
+        self.m_surface.transform(xform);
+
+        // SESSION_VIEWER
+        if let Some(q0) = self.cut_q0.as_mut() {
+            q0.transform(xform);
+        }
+
+        if let Some(n) = self.cut_n.as_mut() {
+            n.transform(xform);
+        }
+
+        for (q, n) in self.cut_planes.iter_mut() {
+            q.transform(xform);
+            n.transform(xform);
+        }
+    }
+
+    /// Return a transformed copy.
+    pub fn transformed(&self, xform: &Xform) -> Self {
+        let mut ts = self.duplicate();
+        ts.transform(xform);
+
+        ts
+    }
+
+    // ═══════════════════════════════════════════════════════════════════════════
     // Accessors
     // ═══════════════════════════════════════════════════════════════════════════
+    /// Return whether the lazy guid has been created.
+    pub fn has_guid(&self) -> bool {
+        self.guid.get().is_some()
+    }
 
-    /// Returns the underlying surface.
+    /// Return the guid, creating it on first access.
+    pub fn guid(&self) -> &str {
+        self.guid.get_or_init(|| uuid::Uuid::new_v4().to_string())
+    }
+
+    /// Set the guid if it has not already been created.
+    pub fn set_guid(&self, g: String) {
+        let _ = self.guid.set(g);
+    }
+
+    /// Return the underlying surface.
     pub fn surface(&self) -> &NurbsSurface {
         &self.m_surface
     }
 
-    /// Returns the outer loop, None when untrimmed.
+    /// Return the outer loop, None when untrimmed.
     pub fn get_outer_loop(&self) -> Option<&NurbsCurve> {
         self.m_outer_loop.as_ref()
     }
 
-    /// Replaces the outer loop.
+    /// Replace the outer loop.
     pub fn set_outer_loop(&mut self, loop_crv: NurbsCurve) {
         self.m_outer_loop = Some(loop_crv);
     }
 
-    /// True when the outer loop is a valid curve.
+    /// Return whether the outer loop is a valid curve.
     pub fn is_trimmed(&self) -> bool {
         self.m_outer_loop.as_ref().is_some_and(|c| c.is_valid())
     }
 
-    /// True when the underlying surface is valid.
+    /// Return whether the underlying surface is valid.
     pub fn is_valid(&self) -> bool {
         self.m_surface.is_valid()
     }
@@ -2177,7 +2210,6 @@ impl NurbsSurfaceTrimmed {
     // ═══════════════════════════════════════════════════════════════════════════
     // Inner loops
     // ═══════════════════════════════════════════════════════════════════════════
-
     /// Hole given directly as a closed 2D curve in UV space.
     pub fn add_inner_loop(&mut self, loop_2d: NurbsCurve) {
         self.m_inner_loops.push(loop_2d);
@@ -2208,24 +2240,24 @@ impl NurbsSurfaceTrimmed {
         }
     }
 
-    /// Adds one hole per 3D curve pulled onto the surface.
+    /// Add one hole per 3D curve pulled onto the surface.
     pub fn add_holes(&mut self, curves_3d: &[NurbsCurve]) {
         for crv in curves_3d {
             self.add_hole(crv);
         }
     }
 
-    /// Returns the inner loop at index.
+    /// Return the inner loop at index.
     pub fn get_inner_loop(&self, index: usize) -> &NurbsCurve {
         &self.m_inner_loops[index]
     }
 
-    /// Returns the number of inner loops.
+    /// Return the number of inner loops.
     pub fn inner_loop_count(&self) -> usize {
         self.m_inner_loops.len()
     }
 
-    /// Removes every inner loop.
+    /// Remove every inner loop.
     pub fn clear_inner_loops(&mut self) {
         self.m_inner_loops.clear();
     }
@@ -2233,13 +2265,12 @@ impl NurbsSurfaceTrimmed {
     // ═══════════════════════════════════════════════════════════════════════════
     // Evaluation
     // ═══════════════════════════════════════════════════════════════════════════
-
-    /// Surface point at (u, v), None when the surface is invalid.
+    /// Return the surface point at (u, v), None when the surface is invalid.
     pub fn point_at(&self, u: f64, v: f64) -> Option<Point> {
         self.m_surface.point_at(u, v)
     }
 
-    /// Unit surface normal at (u, v).
+    /// Return the unit surface normal at (u, v).
     pub fn normal_at(&self, u: f64, v: f64) -> Vector {
         self.m_surface.normal_at(u, v)
     }
@@ -2247,43 +2278,9 @@ impl NurbsSurfaceTrimmed {
     // ═══════════════════════════════════════════════════════════════════════════
     // Meshing
     // ═══════════════════════════════════════════════════════════════════════════
-
-    /// mesh_q at 20 degrees and a chord factor of 0.005.
+    /// Return mesh_q at 20 degrees and a chord factor of 0.005.
     pub fn mesh(&self) -> Mesh {
         self.mesh_q(20.0, 0.005)
-    }
-
-    /// Diagonal of the control-point box, the scale every deflection tolerance is a fraction of.
-    fn bbox_diagonal(&self) -> f64 {
-        let mut bmin = [1e30f64; 3];
-        let mut bmax = [-1e30f64; 3];
-
-        for i in 0..self.m_surface.cv_count(0) {
-            for j in 0..self.m_surface.cv_count(1) {
-                let p = self.m_surface.get_cv(i, j).unwrap_or_default();
-
-                for k in 0..3 {
-                    if p[k] < bmin[k] {
-                        bmin[k] = p[k];
-                    }
-
-                    if p[k] > bmax[k] {
-                        bmax[k] = p[k];
-                    }
-                }
-            }
-        }
-
-        let bbox_diag = ((bmax[0] - bmin[0]) * (bmax[0] - bmin[0])
-            + (bmax[1] - bmin[1]) * (bmax[1] - bmin[1])
-            + (bmax[2] - bmin[2]) * (bmax[2] - bmin[2]))
-            .sqrt();
-
-        if bbox_diag < 1e-12 {
-            1.0
-        } else {
-            bbox_diag
-        }
     }
 
     /// Deflection-refined constrained Delaunay of the trim loops: angular bound in degrees, chord factor as a fraction of the bbox diagonal.
@@ -2305,81 +2302,6 @@ impl NurbsSurfaceTrimmed {
         }
 
         self.triangulate(&loops, max_angle_deg, chord_factor)
-    }
-
-    /// UV polygon of a trim loop: control points or samples, each edge split until its 3D chord is within deflection.
-    fn discretize_loop(&self, crv: &NurbsCurve, deflection: f64) -> Vec<Point> {
-        let mut raw: Vec<Point> = Vec::new();
-
-        if crv.degree() <= 1 && !crv.is_rational() {
-            for i in 0..crv.cv_count() {
-                raw.push(crv.get_cv(i).unwrap_or_default());
-            }
-        } else {
-            let n = (crv.cv_count() * 4).clamp(16, 2048);
-            let (sampled, _params) = crv.divide_by_count(n, true);
-            raw = sampled;
-        }
-
-        while raw.len() > 1 {
-            let dx = raw[0][0] - raw[raw.len() - 1][0];
-            let dy = raw[0][1] - raw[raw.len() - 1][1];
-
-            if dx * dx + dy * dy < 1e-20 {
-                raw.pop();
-            } else {
-                break;
-            }
-        }
-
-        if raw.len() < 2 {
-            return raw;
-        }
-
-        let mut out: Vec<Point> = Vec::with_capacity(raw.len() * 2);
-
-        for i in 0..raw.len() {
-            let mut stack: Vec<(Point, Point, i32)> =
-                vec![(raw[i].clone(), raw[(i + 1) % raw.len()].clone(), 0)];
-
-            while let Some((a, b, depth)) = stack.pop() {
-                let mu = (a[0] + b[0]) * 0.5;
-                let mv = (a[1] + b[1]) * 0.5;
-                let pa = eval3(&self.m_surface, a[0], a[1]);
-                let pb = eval3(&self.m_surface, b[0], b[1]);
-                let pm = eval3(&self.m_surface, mu, mv);
-                let ex = pb[0] - pa[0];
-                let ey = pb[1] - pa[1];
-                let ez = pb[2] - pa[2];
-                let l2 = ex * ex + ey * ey + ez * ez;
-                let dev = if l2 > 1e-30 {
-                    let t =
-                        ((pm[0] - pa[0]) * ex + (pm[1] - pa[1]) * ey + (pm[2] - pa[2]) * ez) / l2;
-
-                    let cx = pa[0] + t * ex;
-                    let cy = pa[1] + t * ey;
-                    let cz = pa[2] + t * ez;
-                    ((pm[0] - cx) * (pm[0] - cx)
-                        + (pm[1] - cy) * (pm[1] - cy)
-                        + (pm[2] - cz) * (pm[2] - cz))
-                        .sqrt()
-                } else {
-                    ((pm[0] - pa[0]) * (pm[0] - pa[0])
-                        + (pm[1] - pa[1]) * (pm[1] - pa[1])
-                        + (pm[2] - pa[2]) * (pm[2] - pa[2]))
-                        .sqrt()
-                };
-
-                if dev > deflection && depth < 6 {
-                    stack.push((Point::new(mu, mv, 0.0), b, depth + 1));
-                    stack.push((a, Point::new(mu, mv, 0.0), depth + 1));
-                } else {
-                    out.push(a);
-                }
-            }
-        }
-
-        out
     }
 
     /// Mesh sampled loops (outer first, then holes) keeping every loop vertex, tagged boundary/{loop}/{sample}; knot crossings add boundary_interval/{loop}/{segment}; empty mesh on invalid input.
@@ -2436,449 +2358,6 @@ impl NurbsSurfaceTrimmed {
         }
     }
 
-    /// Constrained Delaunay of the loops in UV, refined, trimmed, lifted and welded: the one body mesh_q and mesh_loops share.
-    fn triangulate(&self, loops: &TrimLoops, max_angle_deg: f64, chord_factor: f64) -> Mesh {
-        if loops.uv.is_empty() || loops.uv[0].len() < 3 {
-            return self.m_surface.mesh();
-        }
-
-        let outer_uv = &loops.uv[0];
-        let bbox_diag = self.bbox_diagonal();
-        let deflection = bbox_diag * chord_factor;
-        let cos_max_angle = (max_angle_deg.clamp(0.1, 179.0) * std::f64::consts::PI / 180.0).cos();
-
-        let mut bb_umin = 1e30_f64;
-        let mut bb_vmin = 1e30_f64;
-        let mut bb_umax = -1e30_f64;
-        let mut bb_vmax = -1e30_f64;
-
-        for p in outer_uv {
-            if p[0] < bb_umin {
-                bb_umin = p[0];
-            }
-
-            if p[1] < bb_vmin {
-                bb_vmin = p[1];
-            }
-
-            if p[0] > bb_umax {
-                bb_umax = p[0];
-            }
-
-            if p[1] > bb_vmax {
-                bb_vmax = p[1];
-            }
-        }
-
-        let mut crease_knots = [Vec::new(), Vec::new()];
-
-        for dir in 0..2 {
-            let Some((start, end)) = self.m_surface.domain(dir) else {
-                continue;
-            };
-            let knots = &self.m_surface.m_nurbsknot[dir];
-
-            for &knot in knots {
-                if knot <= start || knot >= end || crease_knots[dir].contains(&knot) {
-                    continue;
-                }
-
-                if knots.iter().filter(|&&value| value == knot).count()
-                    >= self.m_surface.degree(dir)
-                {
-                    crease_knots[dir].push(knot);
-                }
-            }
-        }
-
-        let mut dt = Delaunay2D::new(bb_umin, bb_vmin, bb_umax, bb_vmax);
-        let mut loop_vids: Vec<Vec<i32>> = Vec::new();
-        let mut boundary_intervals: HashMap<usize, (usize, usize, f64)> = HashMap::new();
-
-        for (li, pts) in loops.uv.iter().enumerate() {
-            let mut vis: Vec<i32> = Vec::new();
-
-            for p in pts {
-                vis.push(dt.insert(p[0], p[1]));
-            }
-
-            for i in 0..vis.len() {
-                let j = (i + 1) % vis.len();
-                let mut events = vec![(0.0, vis[i]), (1.0, vis[j])];
-
-                for dir in 0..2 {
-                    let delta = pts[j][dir] - pts[i][dir];
-
-                    if delta == 0.0 {
-                        continue;
-                    }
-
-                    for &knot in &crease_knots[dir] {
-                        let t = (knot - pts[i][dir]) / delta;
-
-                        if t <= 0.0 || t >= 1.0 {
-                            continue;
-                        }
-
-                        let mut uv = [
-                            pts[i][0] + t * (pts[j][0] - pts[i][0]),
-                            pts[i][1] + t * (pts[j][1] - pts[i][1]),
-                        ];
-                        uv[dir] = knot;
-                        let vi = dt.insert(uv[0], uv[1]);
-
-                        if vi >= 0 {
-                            boundary_intervals.insert(vi as usize, (li, i, t));
-                        }
-
-                        events.push((t, vi));
-                    }
-                }
-
-                events.sort_by(|a, b| a.0.total_cmp(&b.0));
-
-                for pair in events.windows(2) {
-                    if pair[0].1 >= 0 && pair[1].1 >= 0 && pair[0].1 != pair[1].1 {
-                        dt.insert_constraint(pair[0].1, pair[1].1);
-                    }
-                }
-            }
-
-            loop_vids.push(vis);
-        }
-
-        for &u in &crease_knots[0] {
-            for &v in &crease_knots[1] {
-                if inside_loops(u, v, &loops.uv) {
-                    dt.insert(u, v);
-                }
-            }
-        }
-
-        for dir in 0..2 {
-            for &knot in &crease_knots[dir] {
-                let mut nodes = Vec::new();
-
-                for (vi, vertex) in dt.vertices.iter().enumerate() {
-                    let uv = [vertex.x, vertex.y];
-
-                    if uv[dir] == knot {
-                        nodes.push((uv[1 - dir], vi as i32));
-                    }
-                }
-
-                nodes.sort_by(|a, b| a.0.total_cmp(&b.0));
-
-                for pair in nodes.windows(2) {
-                    let mut uv = [knot, knot];
-                    uv[1 - dir] = (pair[0].0 + pair[1].0) * 0.5;
-
-                    if inside_loops(uv[0], uv[1], &loops.uv) {
-                        dt.insert_constraint(pair[0].1, pair[1].1);
-                    }
-                }
-            }
-        }
-
-        for p in &loops.interior_uv {
-            if inside_loops(p[0], p[1], &loops.uv) {
-                dt.insert(p[0], p[1]);
-            }
-        }
-
-        const MAX_ITERS: i32 = 8;
-        const MAX_VERTS: usize = 200000;
-        let iters = MAX_ITERS;
-
-        for _iter in 0..iters {
-            let mut to_insert: Vec<[f64; 2]> = Vec::new();
-
-            for tri in &dt.triangles {
-                if !tri.alive {
-                    continue;
-                }
-
-                let a = &dt.vertices[tri.v[0] as usize];
-                let b = &dt.vertices[tri.v[1] as usize];
-                let c = &dt.vertices[tri.v[2] as usize];
-                let cu = (a.x + b.x + c.x) / 3.0;
-                let cv = (a.y + b.y + c.y) / 3.0;
-
-                if !inside_loops(cu, cv, &loops.uv) {
-                    continue;
-                }
-
-                let pa = eval3(&self.m_surface, a.x, a.y);
-                let pb = eval3(&self.m_surface, b.x, b.y);
-                let pc = eval3(&self.m_surface, c.x, c.y);
-                let pm = eval3(&self.m_surface, cu, cv);
-                let ux = pb[0] - pa[0];
-                let uy = pb[1] - pa[1];
-                let uz = pb[2] - pa[2];
-                let vx = pc[0] - pa[0];
-                let vy = pc[1] - pa[1];
-                let vz = pc[2] - pa[2];
-                let nx = uy * vz - uz * vy;
-                let ny = uz * vx - ux * vz;
-                let nz = ux * vy - uy * vx;
-                let nl = (nx * nx + ny * ny + nz * nz).sqrt();
-
-                if nl < 1e-30 {
-                    continue;
-                }
-
-                let dev = (((pm[0] - pa[0]) * nx + (pm[1] - pa[1]) * ny + (pm[2] - pa[2]) * nz)
-                    / nl)
-                    .abs();
-
-                let mut refine = dev > deflection;
-
-                if !refine {
-                    let na =
-                        crease_side_normal(&self.m_surface, &crease_knots, [cu, cv], [a.x, a.y]);
-
-                    let nb =
-                        crease_side_normal(&self.m_surface, &crease_knots, [cu, cv], [b.x, b.y]);
-
-                    let nc2 =
-                        crease_side_normal(&self.m_surface, &crease_knots, [cu, cv], [c.x, c.y]);
-
-                    let d1 = na[0] * nb[0] + na[1] * nb[1] + na[2] * nb[2];
-                    let d2 = nb[0] * nc2[0] + nb[1] * nc2[1] + nb[2] * nc2[2];
-                    let d3 = na[0] * nc2[0] + na[1] * nc2[1] + na[2] * nc2[2];
-                    let mind = d1.min(d2.min(d3));
-
-                    if mind < cos_max_angle {
-                        refine = true;
-                    }
-                }
-
-                if refine {
-                    to_insert.push([cu, cv]);
-                }
-            }
-
-            if to_insert.is_empty() {
-                break;
-            }
-
-            for uv in &to_insert {
-                if dt.vertices.len() >= MAX_VERTS {
-                    break;
-                }
-
-                dt.insert(uv[0], uv[1]);
-            }
-
-            if dt.vertices.len() >= MAX_VERTS {
-                break;
-            }
-        }
-
-        dt.cleanup();
-
-        for ti in 0..dt.triangles.len() {
-            if !dt.triangles[ti].alive {
-                continue;
-            }
-
-            let cu = (dt.vertices[dt.triangles[ti].v[0] as usize].x
-                + dt.vertices[dt.triangles[ti].v[1] as usize].x
-                + dt.vertices[dt.triangles[ti].v[2] as usize].x)
-                / 3.0;
-
-            let cv = (dt.vertices[dt.triangles[ti].v[0] as usize].y
-                + dt.vertices[dt.triangles[ti].v[1] as usize].y
-                + dt.vertices[dt.triangles[ti].v[2] as usize].y)
-                / 3.0;
-
-            if !inside_loops(cu, cv, &loops.uv) {
-                dt.triangles[ti].alive = false;
-            }
-        }
-
-        let tris = dt.get_triangles();
-
-        if tris.is_empty() {
-            return Mesh::new();
-        }
-
-        for tri in &tris {
-            for dir in 0..2 {
-                let mut low = f64::INFINITY;
-                let mut high = f64::NEG_INFINITY;
-
-                for &vi in tri {
-                    let value = [dt.vertices[vi as usize].x, dt.vertices[vi as usize].y][dir];
-                    low = low.min(value);
-                    high = high.max(value);
-                }
-
-                for &knot in &crease_knots[dir] {
-                    if low < knot && knot < high {
-                        return Mesh::new();
-                    }
-                }
-            }
-        }
-
-        let nv = dt.vertices.len();
-        let mut given: Vec<Option<(usize, usize)>> = vec![None; nv];
-
-        for (li, vids) in loop_vids.iter().enumerate() {
-            if li >= loops.xyz.len() {
-                break;
-            }
-
-            for (k, &vi) in vids.iter().enumerate() {
-                if vi >= 0 && k < loops.xyz[li].len() {
-                    given[vi as usize] = Some((li, k));
-                }
-            }
-        }
-
-        let mut result = Mesh::new();
-        let mut vert_map: Vec<Option<usize>> = vec![None; nv];
-        let weld_tol = if loops.xyz.is_empty() {
-            bbox_diag * 1e-5
-        } else {
-            0.0
-        };
-        let mut welder = VertexWelder::new(weld_tol, bbox_diag * 1e-5);
-
-        for &[a, b, c] in &tris {
-            for &vi in &[a, b, c] {
-                if vert_map[vi as usize].is_none() {
-                    let u = dt.vertices[vi as usize].x;
-                    let v = dt.vertices[vi as usize].y;
-                    let p3d = match given[vi as usize] {
-                        Some((li, k)) => loops.xyz[li][k].clone(),
-                        None => {
-                            if let Some(&(li, k, t)) = boundary_intervals.get(&(vi as usize)) {
-                                if let Some(points) = loops.xyz.get(li) {
-                                    let a = &points[k];
-                                    let b = &points[(k + 1) % points.len()];
-                                    Point::new(
-                                        a[0] + t * (b[0] - a[0]),
-                                        a[1] + t * (b[1] - a[1]),
-                                        a[2] + t * (b[2] - a[2]),
-                                    )
-                                } else {
-                                    self.m_surface.point_at(u, v).unwrap_or_default()
-                                }
-                            } else {
-                                self.m_surface.point_at(u, v).unwrap_or_default()
-                            }
-                        }
-                    };
-                    vert_map[vi as usize] = Some(welder.weld(&mut result, p3d));
-                }
-            }
-        }
-
-        for &[a, b, c] in &tris {
-            let v0 = vert_map[a as usize].unwrap();
-            let v1 = vert_map[b as usize].unwrap();
-            let v2 = vert_map[c as usize].unwrap();
-
-            if v0 == v1 || v1 == v2 || v2 == v0 {
-                continue;
-            }
-
-            result.add_face(vec![v0, v1, v2], None);
-        }
-
-        let mut fan: HashMap<usize, [f64; 3]> = HashMap::new();
-        let mut fkeys: Vec<usize> = result.face.keys().copied().collect();
-        fkeys.sort_unstable();
-
-        for fk in fkeys {
-            let verts = &result.face[&fk];
-            let a = result.vertex[&verts[0]].position();
-            let b = result.vertex[&verts[1]].position();
-            let c = result.vertex[&verts[2]].position();
-            let (e1, e2) = (
-                [b[0] - a[0], b[1] - a[1], b[2] - a[2]],
-                [c[0] - a[0], c[1] - a[1], c[2] - a[2]],
-            );
-            let n = [
-                e1[1] * e2[2] - e1[2] * e2[1],
-                e1[2] * e2[0] - e1[0] * e2[2],
-                e1[0] * e2[1] - e1[1] * e2[0],
-            ];
-
-            for &vk in verts {
-                let acc = fan.entry(vk).or_insert([0.0; 3]);
-                acc[0] += n[0];
-                acc[1] += n[1];
-                acc[2] += n[2];
-            }
-        }
-
-        for vi in 0..nv {
-            if let Some(vk) = vert_map[vi] {
-                let u = dt.vertices[vi].x;
-                let v = dt.vertices[vi].y;
-                let derivatives = self.m_surface.evaluate(u, v, 1);
-                let mut nrm = [0.0; 3];
-
-                if derivatives.len() >= 3 {
-                    let normal = derivatives[2].cross(&derivatives[1]);
-                    nrm = [normal[0], normal[1], normal[2]];
-                }
-
-                let nl = (nrm[0] * nrm[0] + nrm[1] * nrm[1] + nrm[2] * nrm[2]).sqrt();
-
-                if nl.is_finite() && nl > 0.0 {
-                    nrm = [nrm[0] / nl, nrm[1] / nl, nrm[2] / nl];
-                } else {
-                    let f = fan.get(&vk).copied().unwrap_or([0.0, 0.0, 1.0]);
-                    let fl = (f[0] * f[0] + f[1] * f[1] + f[2] * f[2]).sqrt();
-                    nrm = if fl.is_finite() && fl > 0.0 {
-                        [f[0] / fl, f[1] / fl, f[2] / fl]
-                    } else {
-                        [0.0, 0.0, 1.0]
-                    };
-                }
-
-                if let Some(vd) = result.vertex.get_mut(&vk) {
-                    vd.set_normal(nrm[0], nrm[1], nrm[2]);
-                    vd.attributes.insert("u".to_string(), u);
-                    vd.attributes.insert("v".to_string(), v);
-                }
-            }
-        }
-
-        for (li, vids) in loop_vids.iter().enumerate() {
-            for (k, &vi) in vids.iter().enumerate() {
-                if vi < 0 {
-                    continue;
-                }
-
-                if let Some(vk) = vert_map[vi as usize] {
-                    if let Some(vd) = result.vertex.get_mut(&vk) {
-                        vd.attributes.insert(format!("boundary/{li}/{k}"), 1.0);
-                    }
-                }
-            }
-        }
-
-        for (&vi, &(li, k, t)) in &boundary_intervals {
-            if let Some(vk) = vert_map[vi] {
-                result
-                    .vertex
-                    .get_mut(&vk)
-                    .unwrap()
-                    .attributes
-                    .insert(format!("boundary_interval/{li}/{k}"), t);
-            }
-        }
-
-        RemeshNurbsSurfaceGrid::split_crease_normals(&self.m_surface, &mut result);
-
-        result
-    }
-
     /// Mesh of the half (S-q0).n <= 0: span-adaptive grid, marching-squares clip with Newton-refined crossings, seams welded.
     pub fn mesh_by_plane(
         &self,
@@ -2917,11 +2396,11 @@ impl NurbsSurfaceTrimmed {
             return srf.mesh();
         }
 
-        let mut f_grid = vec![vec![0.0f64; nv]; nu];
+        let mut field = vec![vec![0.0f64; nv]; nu];
 
         for i in 0..nu {
             for j in 0..nv {
-                f_grid[i][j] = plane_field(srf, &q, &n, us[i], vs[j]);
+                field[i][j] = plane_field(srf, &q, &n, us[i], vs[j]);
             }
         }
 
@@ -2934,10 +2413,10 @@ impl NurbsSurfaceTrimmed {
                 let cu = [us[i], us[i + 1], us[i + 1], us[i]];
                 let cv = [vs[j], vs[j], vs[j + 1], vs[j + 1]];
                 let fc = [
-                    f_grid[i][j],
-                    f_grid[i + 1][j],
-                    f_grid[i + 1][j + 1],
-                    f_grid[i][j + 1],
+                    field[i][j],
+                    field[i + 1][j],
+                    field[i + 1][j + 1],
+                    field[i][j + 1],
                 ];
                 let inn = [fc[0] <= 0.0, fc[1] <= 0.0, fc[2] <= 0.0, fc[3] <= 0.0];
                 let cnt = inn[0] as i32 + inn[1] as i32 + inn[2] as i32 + inn[3] as i32;
@@ -3122,60 +2601,29 @@ impl NurbsSurfaceTrimmed {
     }
 
     // ═══════════════════════════════════════════════════════════════════════════
-    // Transformation
-    // ═══════════════════════════════════════════════════════════════════════════
-
-    /// Transforms the surface in place; the loops live in UV and stay.
-    pub fn transform(&mut self, xform: &Xform) {
-        self.m_surface.transform(xform);
-        // SESSION_VIEWER
-        if let Some(q0) = self.cut_q0.as_mut() {
-            q0.transform(xform);
-        }
-
-        if let Some(n) = self.cut_n.as_mut() {
-            n.transform(xform);
-        }
-
-        for (q, n) in self.cut_planes.iter_mut() {
-            q.transform(xform);
-            n.transform(xform);
-        }
-    }
-
-    /// Returns a transformed copy.
-    pub fn transformed(&self, xform: &Xform) -> Self {
-        let mut ts = self.duplicate();
-        ts.transform(xform);
-
-        ts
-    }
-
-    // ═══════════════════════════════════════════════════════════════════════════
     // JSON
     // ═══════════════════════════════════════════════════════════════════════════
-
-    /// Serializes to a JSON string.
+    /// Serialize to a sorted JSON string.
     pub fn jsondump(&self) -> Result<String, Box<dyn std::error::Error>> {
         crate::file_encoders::sorted_json_string(self)
     }
 
-    /// Deserializes from a JSON string.
+    /// Deserialize from a JSON string.
     pub fn jsonload(json_data: &str) -> Result<Self, Box<dyn std::error::Error>> {
         Ok(serde_json::from_str(json_data)?)
     }
 
-    /// Serializes to a JSON string.
+    /// Serialize to a JSON string.
     pub fn file_json_dumps(&self) -> String {
         self.jsondump().unwrap_or_default()
     }
 
-    /// Deserializes from a JSON string.
+    /// Deserialize from a JSON string.
     pub fn file_json_loads(json_string: &str) -> Self {
         Self::jsonload(json_string).unwrap_or_default()
     }
 
-    /// Writes to a JSON file.
+    /// Write to a JSON file.
     pub fn file_json_dump(&self, filepath: &str) -> Result<(), Box<dyn std::error::Error>> {
         let json = serde_json::to_string_pretty(self)?;
         std::fs::write(filepath, json)?;
@@ -3183,7 +2631,7 @@ impl NurbsSurfaceTrimmed {
         Ok(())
     }
 
-    /// Reads from a JSON file.
+    /// Read from a JSON file.
     pub fn file_json_load(filepath: &str) -> Result<Self, Box<dyn std::error::Error>> {
         let contents = std::fs::read_to_string(filepath)?;
 
@@ -3193,44 +2641,37 @@ impl NurbsSurfaceTrimmed {
     // ═══════════════════════════════════════════════════════════════════════════
     // Protobuf
     // ═══════════════════════════════════════════════════════════════════════════
-
-    /// Serializes to protobuf bytes.
-    pub fn pb_dumps(&self) -> Vec<u8> {
-        use prost::Message;
-        let mut proto = crate::proto::NurbsSurfaceTrimmed {
-            guid: self.guid.get().cloned().unwrap_or_default(),
-            name: self.name.clone(),
-            width: self.width,
-            surface: Some(self.m_surface.to_proto()),
-            outer_loop: None,
-            inner_loops: Vec::new(),
-            surfacecolor: Some(crate::proto::Color {
-                guid: String::new(),
-                name: self.surfacecolor.name.clone(),
-                r: self.surfacecolor.r,
-                g: self.surfacecolor.g,
-                b: self.surfacecolor.b,
-                a: self.surfacecolor.a,
-            }),
-        };
+    /// Convert to the protobuf message.
+    pub fn to_proto(&self) -> crate::proto::NurbsSurfaceTrimmed {
+        let mut outer_loop = None;
 
         if self.is_trimmed() {
             if let Some(outer) = self.m_outer_loop.as_ref() {
-                proto.outer_loop = Some(outer.to_proto());
+                outer_loop = Some(outer.to_proto());
             }
         }
 
+        let mut inner_loops = Vec::new();
+
         for inner in &self.m_inner_loops {
-            proto.inner_loops.push(inner.to_proto());
+            inner_loops.push(inner.to_proto());
         }
 
-        proto.encode_to_vec()
+        crate::proto::NurbsSurfaceTrimmed {
+            guid: self.guid.get().cloned().unwrap_or_default(),
+            name: self.name.clone(),
+            surface: Some(self.m_surface.to_proto()),
+            outer_loop,
+            inner_loops,
+            width: self.width,
+            surfacecolor: Some(self.surfacecolor.to_proto()),
+        }
     }
 
-    /// Deserializes from protobuf bytes.
-    pub fn pb_loads(data: &[u8]) -> Result<Self, Box<dyn std::error::Error>> {
-        use prost::Message;
-        let proto = crate::proto::NurbsSurfaceTrimmed::decode(data)?;
+    /// Construct from the protobuf message.
+    pub fn from_proto(
+        proto: crate::proto::NurbsSurfaceTrimmed,
+    ) -> Result<Self, Box<dyn std::error::Error>> {
         let mut ts = Self::new();
 
         if !proto.guid.is_empty() {
@@ -3240,31 +2681,43 @@ impl NurbsSurfaceTrimmed {
         ts.name = proto.name;
         ts.width = proto.width;
 
-        if let Some(srf_proto) = proto.surface {
-            ts.m_surface = NurbsSurface::from_proto(srf_proto)?;
+        if let Some(surface) = proto.surface {
+            ts.m_surface = NurbsSurface::from_proto(surface)?;
         }
 
-        if let Some(loop_proto) = proto.outer_loop {
-            ts.m_outer_loop = Some(NurbsCurve::from_proto(loop_proto));
+        if let Some(outer) = proto.outer_loop {
+            ts.m_outer_loop = Some(NurbsCurve::from_proto(outer));
         }
 
-        for loop_proto in proto.inner_loops {
-            ts.m_inner_loops.push(NurbsCurve::from_proto(loop_proto));
+        for inner in proto.inner_loops {
+            ts.m_inner_loops.push(NurbsCurve::from_proto(inner));
         }
 
-        if let Some(color) = proto.surfacecolor {
-            ts.surfacecolor = Color::with_name(color.r, color.g, color.b, color.a, &color.name);
-        }
+        ts.surfacecolor = Color::from_proto(proto.surfacecolor.unwrap_or_default());
 
         Ok(ts)
     }
 
-    /// Writes to a protobuf file.
+    /// Serialize to protobuf bytes.
+    pub fn pb_dumps(&self) -> Vec<u8> {
+        use prost::Message;
+
+        self.to_proto().encode_to_vec()
+    }
+
+    /// Deserialize from protobuf bytes.
+    pub fn pb_loads(data: &[u8]) -> Result<Self, Box<dyn std::error::Error>> {
+        use prost::Message;
+
+        Self::from_proto(crate::proto::NurbsSurfaceTrimmed::decode(data)?)
+    }
+
+    /// Write to a protobuf file.
     pub fn pb_dump(&self, filepath: &str) {
         let _ = std::fs::write(filepath, self.pb_dumps());
     }
 
-    /// Reads from a protobuf file.
+    /// Read from a protobuf file.
     pub fn pb_load(filepath: &str) -> Self {
         let data = std::fs::read(filepath).unwrap_or_default();
 
@@ -3274,8 +2727,7 @@ impl NurbsSurfaceTrimmed {
     // ═══════════════════════════════════════════════════════════════════════════
     // String
     // ═══════════════════════════════════════════════════════════════════════════
-
-    /// Returns "NurbsSurfaceTrimmed(name=..., trimmed=..., holes=...)".
+    /// Return "NurbsSurfaceTrimmed(name=..., trimmed=..., holes=...)".
     pub fn str(&self) -> String {
         format!(
             "NurbsSurfaceTrimmed(name={}, trimmed={}, holes={})",
@@ -3285,7 +2737,7 @@ impl NurbsSurfaceTrimmed {
         )
     }
 
-    /// Multi-line form with the surface.
+    /// Return the multi-line form with the surface.
     pub fn repr(&self) -> String {
         format!(
             "NurbsSurfaceTrimmed(\n  name={},\n  trimmed={},\n  holes={},\n  surface={}\n)",
@@ -3295,17 +2747,541 @@ impl NurbsSurfaceTrimmed {
             self.m_surface.str()
         )
     }
-}
 
-impl Default for NurbsSurfaceTrimmed {
-    /// Constructs an empty untrimmed face.
-    fn default() -> Self {
-        Self::new()
+    // ═══════════════════════════════════════════════════════════════════════════
+    // Private helpers
+    // ═══════════════════════════════════════════════════════════════════════════
+    /// Return the diagonal of the control-point box, the scale every deflection tolerance is a fraction of.
+    fn bbox_diagonal(&self) -> f64 {
+        let mut bmin = [1e30f64; 3];
+        let mut bmax = [-1e30f64; 3];
+
+        for i in 0..self.m_surface.cv_count(0) {
+            for j in 0..self.m_surface.cv_count(1) {
+                let p = self.m_surface.get_cv(i, j).unwrap_or_default();
+
+                for k in 0..3 {
+                    if p[k] < bmin[k] {
+                        bmin[k] = p[k];
+                    }
+
+                    if p[k] > bmax[k] {
+                        bmax[k] = p[k];
+                    }
+                }
+            }
+        }
+
+        let bbox_diag = ((bmax[0] - bmin[0]) * (bmax[0] - bmin[0])
+            + (bmax[1] - bmin[1]) * (bmax[1] - bmin[1])
+            + (bmax[2] - bmin[2]) * (bmax[2] - bmin[2]))
+            .sqrt();
+
+        if bbox_diag < 1e-12 {
+            1.0
+        } else {
+            bbox_diag
+        }
+    }
+
+    /// UV polygon of a trim loop: control points or samples, each edge split until its 3D chord is within deflection.
+    fn discretize_loop(&self, crv: &NurbsCurve, deflection: f64) -> Vec<Point> {
+        let mut raw: Vec<Point> = Vec::new();
+
+        if crv.degree() <= 1 && !crv.is_rational() {
+            for i in 0..crv.cv_count() {
+                raw.push(crv.get_cv(i).unwrap_or_default());
+            }
+        } else {
+            let n = (crv.cv_count() * 4).clamp(16, 2048);
+            raw = crv.divide_by_count(n, true).0;
+        }
+
+        while raw.len() > 1 {
+            let dx = raw[0][0] - raw[raw.len() - 1][0];
+            let dy = raw[0][1] - raw[raw.len() - 1][1];
+
+            if dx * dx + dy * dy < 1e-20 {
+                raw.pop();
+            } else {
+                break;
+            }
+        }
+
+        if raw.len() < 2 {
+            return raw;
+        }
+
+        let mut out: Vec<Point> = Vec::with_capacity(raw.len() * 2);
+
+        for i in 0..raw.len() {
+            let mut stack: Vec<(Point, Point, i32)> =
+                vec![(raw[i].clone(), raw[(i + 1) % raw.len()].clone(), 0)];
+
+            while let Some((a, b, depth)) = stack.pop() {
+                let mu = (a[0] + b[0]) * 0.5;
+                let mv = (a[1] + b[1]) * 0.5;
+                let pa = self.m_surface.point_at(a[0], a[1]).unwrap_or_default();
+                let pm = self.m_surface.point_at(mu, mv).unwrap_or_default();
+                let edge = &self.m_surface.point_at(b[0], b[1]).unwrap_or_default() - &pa;
+                let l2 = edge.magnitude_squared();
+                let dev = if l2 > 1e-30 {
+                    let t = (&pm - &pa).dot(&edge) / l2;
+                    (&pm - &(&pa + &(&edge * t))).magnitude_squared().sqrt()
+                } else {
+                    (&pm - &pa).magnitude_squared().sqrt()
+                };
+
+                if dev > deflection && depth < 6 {
+                    stack.push((Point::new(mu, mv, 0.0), b, depth + 1));
+                    stack.push((a, Point::new(mu, mv, 0.0), depth + 1));
+                } else {
+                    out.push(a);
+                }
+            }
+        }
+
+        out
+    }
+
+    /// Constrained Delaunay of the loops in UV, refined, trimmed, lifted and welded: the one body mesh_q and mesh_loops share.
+    fn triangulate(&self, loops: &TrimLoops, max_angle_deg: f64, chord_factor: f64) -> Mesh {
+        if loops.uv.is_empty() || loops.uv[0].len() < 3 {
+            return self.m_surface.mesh();
+        }
+
+        let outer_uv = &loops.uv[0];
+        let bbox_diag = self.bbox_diagonal();
+        let deflection = bbox_diag * chord_factor;
+        let cos_max_angle = (max_angle_deg.clamp(0.1, 179.0) * PI / 180.0).cos();
+
+        let mut bb_umin = 1e30_f64;
+        let mut bb_vmin = 1e30_f64;
+        let mut bb_umax = -1e30_f64;
+        let mut bb_vmax = -1e30_f64;
+
+        for p in outer_uv {
+            if p[0] < bb_umin {
+                bb_umin = p[0];
+            }
+
+            if p[1] < bb_vmin {
+                bb_vmin = p[1];
+            }
+
+            if p[0] > bb_umax {
+                bb_umax = p[0];
+            }
+
+            if p[1] > bb_vmax {
+                bb_vmax = p[1];
+            }
+        }
+
+        let mut crease_knots = [Vec::new(), Vec::new()];
+
+        for dir in 0..2 {
+            let Some((start, end)) = self.m_surface.domain(dir) else {
+                continue;
+            };
+            let knots = &self.m_surface.m_nurbsknot[dir];
+
+            for &knot in knots {
+                if knot <= start || knot >= end || crease_knots[dir].contains(&knot) {
+                    continue;
+                }
+
+                let mut multiplicity = 0;
+
+                for &value in knots {
+                    if value == knot {
+                        multiplicity += 1;
+                    }
+                }
+
+                if multiplicity >= self.m_surface.degree(dir) {
+                    crease_knots[dir].push(knot);
+                }
+            }
+        }
+
+        let mut dt = Delaunay2D::new(bb_umin, bb_vmin, bb_umax, bb_vmax);
+        let mut loop_vids: Vec<Vec<i32>> = Vec::new();
+        let mut boundary_intervals: BTreeMap<usize, (usize, usize, f64)> = BTreeMap::new();
+
+        for (li, pts) in loops.uv.iter().enumerate() {
+            let mut vis: Vec<i32> = Vec::new();
+
+            for p in pts {
+                vis.push(dt.insert(p[0], p[1]));
+            }
+
+            for i in 0..vis.len() {
+                let j = (i + 1) % vis.len();
+                let mut events = vec![(0.0, vis[i]), (1.0, vis[j])];
+
+                for dir in 0..2 {
+                    let delta = pts[j][dir] - pts[i][dir];
+
+                    if delta == 0.0 {
+                        continue;
+                    }
+
+                    for &knot in &crease_knots[dir] {
+                        let t = (knot - pts[i][dir]) / delta;
+
+                        if t <= 0.0 || t >= 1.0 {
+                            continue;
+                        }
+
+                        let mut uv = [
+                            pts[i][0] + t * (pts[j][0] - pts[i][0]),
+                            pts[i][1] + t * (pts[j][1] - pts[i][1]),
+                        ];
+                        uv[dir] = knot;
+                        let vi = dt.insert(uv[0], uv[1]);
+
+                        if vi >= 0 {
+                            boundary_intervals.insert(vi as usize, (li, i, t));
+                        }
+
+                        events.push((t, vi));
+                    }
+                }
+
+                events.sort_by(|x, y| x.partial_cmp(y).unwrap_or(std::cmp::Ordering::Equal));
+
+                for k in 1..events.len() {
+                    if events[k - 1].1 >= 0 && events[k].1 >= 0 && events[k - 1].1 != events[k].1 {
+                        dt.insert_constraint(events[k - 1].1, events[k].1);
+                    }
+                }
+            }
+
+            loop_vids.push(vis);
+        }
+
+        for &u in &crease_knots[0] {
+            for &v in &crease_knots[1] {
+                if inside_loops(u, v, &loops.uv) {
+                    dt.insert(u, v);
+                }
+            }
+        }
+
+        for dir in 0..2 {
+            for &knot in &crease_knots[dir] {
+                let mut nodes = Vec::new();
+
+                for (vi, vertex) in dt.vertices.iter().enumerate() {
+                    let uv = [vertex.x, vertex.y];
+
+                    if uv[dir] == knot {
+                        nodes.push((uv[1 - dir], vi as i32));
+                    }
+                }
+
+                nodes.sort_by(|x, y| x.partial_cmp(y).unwrap_or(std::cmp::Ordering::Equal));
+
+                for k in 1..nodes.len() {
+                    let mut uv = [knot, knot];
+                    uv[1 - dir] = (nodes[k - 1].0 + nodes[k].0) * 0.5;
+
+                    if inside_loops(uv[0], uv[1], &loops.uv) {
+                        dt.insert_constraint(nodes[k - 1].1, nodes[k].1);
+                    }
+                }
+            }
+        }
+
+        for p in &loops.interior_uv {
+            if inside_loops(p[0], p[1], &loops.uv) {
+                dt.insert(p[0], p[1]);
+            }
+        }
+
+        const MAX_ITERS: i32 = 8;
+        const MAX_VERTS: usize = 200000;
+        let iters = MAX_ITERS;
+
+        for _iter in 0..iters {
+            let mut to_insert: Vec<[f64; 2]> = Vec::new();
+
+            for tri in &dt.triangles {
+                if !tri.alive {
+                    continue;
+                }
+
+                let a = &dt.vertices[tri.v[0] as usize];
+                let b = &dt.vertices[tri.v[1] as usize];
+                let c = &dt.vertices[tri.v[2] as usize];
+                let cu = (a.x + b.x + c.x) / 3.0;
+                let cv = (a.y + b.y + c.y) / 3.0;
+
+                if !inside_loops(cu, cv, &loops.uv) {
+                    continue;
+                }
+
+                let pa = self.m_surface.point_at(a.x, a.y).unwrap_or_default();
+                let pb = self.m_surface.point_at(b.x, b.y).unwrap_or_default();
+                let pc = self.m_surface.point_at(c.x, c.y).unwrap_or_default();
+                let pm = self.m_surface.point_at(cu, cv).unwrap_or_default();
+                let n = (&pb - &pa).cross(&(&pc - &pa));
+                let nl = n.magnitude_squared().sqrt();
+
+                if nl < 1e-30 {
+                    continue;
+                }
+
+                let dev = ((&pm - &pa).dot(&n) / nl).abs();
+                let mut refine = dev > deflection;
+
+                if !refine {
+                    let na =
+                        crease_side_normal(&self.m_surface, &crease_knots, [cu, cv], [a.x, a.y]);
+
+                    let nb =
+                        crease_side_normal(&self.m_surface, &crease_knots, [cu, cv], [b.x, b.y]);
+
+                    let nc2 =
+                        crease_side_normal(&self.m_surface, &crease_knots, [cu, cv], [c.x, c.y]);
+
+                    let d1 = na.dot(&nb);
+                    let d2 = nb.dot(&nc2);
+                    let d3 = na.dot(&nc2);
+                    let mind = d1.min(d2.min(d3));
+
+                    if mind < cos_max_angle {
+                        refine = true;
+                    }
+                }
+
+                if refine {
+                    to_insert.push([cu, cv]);
+                }
+            }
+
+            if to_insert.is_empty() {
+                break;
+            }
+
+            for uv in &to_insert {
+                if dt.vertices.len() >= MAX_VERTS {
+                    break;
+                }
+
+                dt.insert(uv[0], uv[1]);
+            }
+
+            if dt.vertices.len() >= MAX_VERTS {
+                break;
+            }
+        }
+
+        dt.cleanup();
+
+        for ti in 0..dt.triangles.len() {
+            if !dt.triangles[ti].alive {
+                continue;
+            }
+
+            let cu = (dt.vertices[dt.triangles[ti].v[0] as usize].x
+                + dt.vertices[dt.triangles[ti].v[1] as usize].x
+                + dt.vertices[dt.triangles[ti].v[2] as usize].x)
+                / 3.0;
+
+            let cv = (dt.vertices[dt.triangles[ti].v[0] as usize].y
+                + dt.vertices[dt.triangles[ti].v[1] as usize].y
+                + dt.vertices[dt.triangles[ti].v[2] as usize].y)
+                / 3.0;
+
+            if !inside_loops(cu, cv, &loops.uv) {
+                dt.triangles[ti].alive = false;
+            }
+        }
+
+        let tris = dt.get_triangles();
+
+        if tris.is_empty() {
+            return Mesh::new();
+        }
+
+        for tri in &tris {
+            for dir in 0..2 {
+                let mut low = f64::INFINITY;
+                let mut high = f64::NEG_INFINITY;
+
+                for &vi in tri {
+                    let value = [dt.vertices[vi as usize].x, dt.vertices[vi as usize].y][dir];
+                    low = low.min(value);
+                    high = high.max(value);
+                }
+
+                for &knot in &crease_knots[dir] {
+                    if low < knot && knot < high {
+                        return Mesh::new();
+                    }
+                }
+            }
+        }
+
+        let nv = dt.vertices.len();
+        let mut given: Vec<Option<(usize, usize)>> = vec![None; nv];
+
+        for (li, vids) in loop_vids.iter().enumerate() {
+            if li >= loops.xyz.len() {
+                break;
+            }
+
+            for (k, &vi) in vids.iter().enumerate() {
+                if vi >= 0 && k < loops.xyz[li].len() {
+                    given[vi as usize] = Some((li, k));
+                }
+            }
+        }
+
+        let mut result = Mesh::new();
+        let mut vert_map: Vec<Option<usize>> = vec![None; nv];
+        let weld_tol = if loops.xyz.is_empty() {
+            bbox_diag * 1e-5
+        } else {
+            0.0
+        };
+        let mut welder = VertexWelder::new(weld_tol, bbox_diag * 1e-5);
+
+        for tri in &tris {
+            for &vi in tri {
+                if vert_map[vi as usize].is_some() {
+                    continue;
+                }
+
+                let interval = boundary_intervals.get(&(vi as usize));
+                let p = match (given[vi as usize], interval) {
+                    (Some((li, k)), _) => loops.xyz[li][k].clone(),
+                    (None, Some(&(li, segment, t))) if !loops.xyz.is_empty() => {
+                        let a = &loops.xyz[li][segment];
+                        let b = &loops.xyz[li][(segment + 1) % loops.xyz[li].len()];
+                        a + &(&(b - a) * t)
+                    }
+                    _ => self
+                        .m_surface
+                        .point_at(dt.vertices[vi as usize].x, dt.vertices[vi as usize].y)
+                        .unwrap_or_default(),
+                };
+                vert_map[vi as usize] = Some(welder.weld(&mut result, p));
+            }
+        }
+
+        for &[a, b, c] in &tris {
+            let v0 = vert_map[a as usize].unwrap();
+            let v1 = vert_map[b as usize].unwrap();
+            let v2 = vert_map[c as usize].unwrap();
+
+            if v0 == v1 || v1 == v2 || v2 == v0 {
+                continue;
+            }
+
+            result.add_face(vec![v0, v1, v2], None);
+        }
+
+        let mut fan: HashMap<usize, Vector> = HashMap::new();
+        let mut fkeys: Vec<usize> = Vec::new();
+
+        for &fk in result.face.keys() {
+            fkeys.push(fk);
+        }
+
+        fkeys.sort_unstable();
+
+        for fk in fkeys {
+            let verts = &result.face[&fk];
+            let a = result.vertex[&verts[0]].position();
+            let b = result.vertex[&verts[1]].position();
+            let c = result.vertex[&verts[2]].position();
+            let n = (&b - &a).cross(&(&c - &a));
+
+            for &vk in verts {
+                *fan.entry(vk).or_insert(Vector::new(0.0, 0.0, 0.0)) += &n;
+            }
+        }
+
+        for vi in 0..nv {
+            if let Some(vk) = vert_map[vi] {
+                let u = dt.vertices[vi].x;
+                let v = dt.vertices[vi].y;
+                let derivatives = self.m_surface.evaluate(u, v, 1);
+                let mut nrm = Vector::new(0.0, 0.0, 0.0);
+
+                if derivatives.len() >= 3 {
+                    nrm = derivatives[2].cross(&derivatives[1]);
+                }
+
+                let nl = nrm.magnitude_squared().sqrt();
+
+                if nl.is_finite() && nl > 0.0 {
+                    nrm = &nrm / nl;
+                } else {
+                    let f = fan.get(&vk).cloned().unwrap_or(Vector::new(0.0, 0.0, 1.0));
+                    let fl = f.magnitude_squared().sqrt();
+                    nrm = if fl.is_finite() && fl > 0.0 {
+                        &f / fl
+                    } else {
+                        Vector::new(0.0, 0.0, 1.0)
+                    };
+                }
+
+                if let Some(vd) = result.vertex.get_mut(&vk) {
+                    vd.set_normal(nrm[0], nrm[1], nrm[2]);
+                    vd.attributes.insert("u".to_string(), u);
+                    vd.attributes.insert("v".to_string(), v);
+                }
+            }
+        }
+
+        for (li, vids) in loop_vids.iter().enumerate() {
+            for (k, &vi) in vids.iter().enumerate() {
+                if vi < 0 {
+                    continue;
+                }
+
+                let key = format!("boundary/{li}/{k}");
+
+                if let Some(vk) = vert_map[vi as usize] {
+                    if let Some(vd) = result.vertex.get_mut(&vk) {
+                        vd.attributes.insert(key, 1.0);
+                    }
+                }
+            }
+        }
+
+        for (&vi, &(li, segment, t)) in &boundary_intervals {
+            let key = format!("boundary_interval/{li}/{segment}");
+
+            if let Some(vk) = vert_map[vi] {
+                if let Some(vd) = result.vertex.get_mut(&vk) {
+                    vd.attributes.insert(key, t);
+                }
+            }
+        }
+
+        RemeshNurbsSurfaceGrid::split_crease_normals(&self.m_surface, &mut result);
+
+        result
     }
 }
 
+impl std::fmt::Display for NurbsSurfaceTrimmed {
+    /// Stream the str() form.
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.str())
+    }
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Operators
+// ═══════════════════════════════════════════════════════════════════════════
 impl PartialEq for NurbsSurfaceTrimmed {
-    /// Same name, width, color, surface and loops; guid ignored.
+    /// Compare name, width, color and surface; guid and loops ignored.
     fn eq(&self, other: &Self) -> bool {
         if self.name != other.name {
             return false;
@@ -3324,12 +3300,5 @@ impl PartialEq for NurbsSurfaceTrimmed {
         }
 
         true
-    }
-}
-
-impl std::fmt::Display for NurbsSurfaceTrimmed {
-    /// Writes the face string to a formatter.
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}", self.str())
     }
 }
