@@ -29,7 +29,6 @@ use std::sync::OnceLock;
 // ═══════════════════════════════════════════════════════════════════════════
 // File helpers
 // ═══════════════════════════════════════════════════════════════════════════
-
 /// Repeat each distinct knot by its multiplicity.
 fn expand_nurbsknots(knots: &[f64], mults: &[usize]) -> Vec<f64> {
     let mut full = Vec::new();
@@ -152,7 +151,7 @@ fn colors_from_proto(field: &[crate::proto::Color]) -> Vec<Color> {
 /// A NURBS surface: OpenNURBS layout, nurbsknot count = order + cv_count - 2 per direction, homogeneous row-major CVs when rational.
 #[derive(Clone, Debug)]
 pub struct NurbsSurface {
-    guid: OnceLock<String>,         // Lazy guid.
+    guid: OnceLock<String>,         // Lazily minted GUID.
     pub name: String,               // Surface name.
     pub width: f64,                 // Display width.
     pub pointcolors: Vec<Color>,    // Display color per control point.
@@ -169,7 +168,7 @@ pub struct NurbsSurface {
 }
 
 impl Default for NurbsSurface {
-    /// Constructs an empty surface.
+    /// Construct an empty surface.
     fn default() -> Self {
         NurbsSurface {
             guid: OnceLock::new(),
@@ -191,7 +190,10 @@ impl Default for NurbsSurface {
 }
 
 impl NurbsSurface {
-    /// Constructs an unset surface with the given layout.
+    // ═══════════════════════════════════════════════════════════════════════════
+    // Constructors
+    // ═══════════════════════════════════════════════════════════════════════════
+    /// Construct an unset surface with the given layout.
     pub fn new(
         dimension: usize,
         is_rational: bool,
@@ -217,7 +219,7 @@ impl NurbsSurface {
         surface
     }
 
-    /// Copies with a new guid and the same data.
+    /// Copy with a new guid and the same data.
     pub fn duplicate(&self) -> Self {
         let mut copy = self.clone();
         copy.guid = OnceLock::new();
@@ -225,31 +227,10 @@ impl NurbsSurface {
         copy
     }
 
-    /// Returns whether the lazy guid has been created.
-    pub fn has_guid(&self) -> bool {
-        self.guid.get().is_some()
-    }
-
-    /// Returns the guid, minting one on first read.
-    pub fn guid(&self) -> &str {
-        self.guid.get_or_init(|| uuid::Uuid::new_v4().to_string())
-    }
-
-    /// Sets the guid if it has not already been created.
-    pub fn set_guid(&self, g: String) {
-        let _ = self.guid.set(g);
-    }
-
-    /// Clears the guid so a fresh one mints lazily on next read.
-    pub fn refresh_guid(&mut self) {
-        self.guid = OnceLock::new();
-    }
-
     // ═══════════════════════════════════════════════════════════════════════════
     // Static constructors
     // ═══════════════════════════════════════════════════════════════════════════
-
-    /// Clamped or periodic uniform surface through cv_count_u x cv_count_v points in row-major order (u slowest).
+    /// Construct a clamped or periodic uniform surface through cv_count_u x cv_count_v points in row-major order (u slowest).
     pub fn create(
         periodic_u: bool,
         periodic_v: bool,
@@ -317,7 +298,7 @@ impl NurbsSurface {
         Ok(surface)
     }
 
-    /// OCCT convention: points[iv][iu], weights[iv][iu], distinct knots with multiplicities per direction.
+    /// Construct from points[iv][iu], weights[iv][iu], distinct knots and multiplicities per direction (OCCT convention).
     pub fn create_from_parameters(
         points: &[Vec<Point>],
         weights: &[Vec<f64>],
@@ -395,15 +376,38 @@ impl NurbsSurface {
     }
 
     // ═══════════════════════════════════════════════════════════════════════════
+    // Transformation
+    // ═══════════════════════════════════════════════════════════════════════════
+    /// Transform every CV in place.
+    pub fn transform(&mut self, xform: &Xform) -> bool {
+        for i in 0..self.m_cv_count[0] {
+            for j in 0..self.m_cv_count[1] {
+                let mut p = self.get_cv(i, j).unwrap_or_default();
+                p.transform(xform);
+                self.set_cv(i, j, &p);
+            }
+        }
+
+        true
+    }
+
+    /// Return a transformed copy.
+    pub fn transformed(&self, xform: &Xform) -> Self {
+        let mut result = self.duplicate();
+        result.transform(xform);
+
+        result
+    }
+
+    // ═══════════════════════════════════════════════════════════════════════════
     // Initialization
     // ═══════════════════════════════════════════════════════════════════════════
-
-    /// Resets every field to the empty invalid surface.
+    /// Reset every field to the empty invalid surface.
     pub fn initialize(&mut self) {
         *self = Self::default();
     }
 
-    /// Allocates nurbsknots (clamped or periodic uniform) and zeroed CVs; false when order < 2 or cv_count < order.
+    /// Allocate nurbsknots (clamped or periodic uniform) and zeroed CVs; false when order < 2 or cv_count < order.
     pub fn create_raw(
         &mut self,
         dimension: usize,
@@ -449,7 +453,7 @@ impl NurbsSurface {
         true
     }
 
-    /// Non-rational surface with clamped uniform nurbsknots of the given spacing.
+    /// Allocate a non-rational surface with clamped uniform nurbsknots of the given spacing.
     pub fn create_clamped_uniform(
         &mut self,
         dimension: usize,
@@ -474,7 +478,7 @@ impl NurbsSurface {
         )
     }
 
-    /// Clears all data; is_valid() is false afterwards.
+    /// Clear all data; is_valid() is false afterwards.
     pub fn destroy(&mut self) {
         self.initialize();
     }
@@ -482,8 +486,7 @@ impl NurbsSurface {
     // ═══════════════════════════════════════════════════════════════════════════
     // Boolean queries
     // ═══════════════════════════════════════════════════════════════════════════
-
-    /// Orders >= 2, cv_count >= order, nurbsknot vectors of the right length and non-decreasing, CV array large enough.
+    /// Return whether orders >= 2, cv_count >= order, nurbsknot vectors are valid and the CV array is large enough.
     pub fn is_valid(&self) -> bool {
         if self.m_dim < 1 || self.m_order[0] < 2 || self.m_order[1] < 2 {
             return false;
@@ -500,7 +503,7 @@ impl NurbsSurface {
         self.m_cv.len() >= self.cv_count_total() * self.cv_size()
     }
 
-    /// Nurbsknot vector in dir has the right length and is non-decreasing.
+    /// Return whether the nurbsknot vector in dir has the right length and is non-decreasing.
     pub fn is_valid_nurbsknot_vector(&self, dir: usize) -> bool {
         if dir > 1 {
             return false;
@@ -521,12 +524,12 @@ impl NurbsSurface {
         true
     }
 
-    /// Returns whether the CVs carry weights.
+    /// Return whether the CVs carry weights.
     pub fn is_rational(&self) -> bool {
         self.m_is_rat
     }
 
-    /// First and last CV rows across dir coincide when clamped, else periodic.
+    /// Return whether the first and last CV rows across dir coincide when clamped, else whether dir is periodic.
     pub fn is_closed(&self, dir: usize) -> bool {
         if dir > 1 || !self.is_valid() {
             return false;
@@ -560,7 +563,7 @@ impl NurbsSurface {
         true
     }
 
-    /// Uniform nurbsknot spacing in dir and the first degree CV rows repeat the last.
+    /// Return whether dir has uniform nurbsknot spacing and the first degree CV rows repeat the last.
     pub fn is_periodic(&self, dir: usize) -> bool {
         if dir > 1 || !self.is_valid() {
             return false;
@@ -601,7 +604,7 @@ impl NurbsSurface {
         true
     }
 
-    /// Every CV within tolerance of one plane, written to plane when given.
+    /// Return whether every CV is within tolerance of one plane, written to plane when given.
     pub fn is_planar(&self, plane: Option<&mut Plane>, tolerance: f64) -> bool {
         if !self.is_valid() {
             return false;
@@ -614,7 +617,7 @@ impl NurbsSurface {
         for i in 0..self.m_cv_count[0] {
             for j in 0..self.m_cv_count[1] {
                 let p = self.get_cv(i, j).unwrap_or_default();
-                let v = Vector::new(p[0] - p0[0], p[1] - p0[1], p[2] - p0[2]);
+                let v = &p - &p0;
 
                 if va.magnitude() < 1e-14 {
                     va = v;
@@ -633,7 +636,7 @@ impl NurbsSurface {
         for i in 0..self.m_cv_count[0] {
             for j in 0..self.m_cv_count[1] {
                 let p = self.get_cv(i, j).unwrap_or_default();
-                let v = Vector::new(p[0] - p0[0], p[1] - p0[1], p[2] - p0[2]);
+                let v = &p - &p0;
 
                 if v.dot(&normal).abs() > tolerance {
                     return false;
@@ -648,7 +651,7 @@ impl NurbsSurface {
         true
     }
 
-    /// Clamped side collapsed to one point; side: 0 south (v0), 1 east (u1), 2 north (v1), 3 west (u0).
+    /// Return whether a clamped side collapses to one point; side: 0 south (v0), 1 east (u1), 2 north (v1), 3 west (u0).
     pub fn is_singular(&self, side: usize) -> bool {
         if side > 3 || !self.is_valid() {
             return false;
@@ -690,7 +693,7 @@ impl NurbsSurface {
         true
     }
 
-    /// Full end multiplicity in dir; end: 0 start, 1 end, 2 both.
+    /// Return whether dir has full end multiplicity; end: 0 start, 1 end, 2 both.
     pub fn is_clamped(&self, dir: usize, end: i32) -> bool {
         if dir > 1 {
             return false;
@@ -704,7 +707,7 @@ impl NurbsSurface {
         )
     }
 
-    /// Same layout, CVs and weights within tolerance; nurbsknots too unless ignore_parameterization.
+    /// Return whether layout, CVs and weights match within tolerance; nurbsknots too unless ignore_parameterization.
     pub fn is_duplicate(
         &self,
         other: &Self,
@@ -757,15 +760,34 @@ impl NurbsSurface {
     }
 
     // ═══════════════════════════════════════════════════════════════════════════
-    // Attributes
+    // Accessors
     // ═══════════════════════════════════════════════════════════════════════════
+    /// Return whether the lazy guid has been created.
+    pub fn has_guid(&self) -> bool {
+        self.guid.get().is_some()
+    }
 
-    /// Returns the coordinate dimension.
+    /// Return the guid, creating it on first access.
+    pub fn guid(&self) -> &str {
+        self.guid.get_or_init(|| uuid::Uuid::new_v4().to_string())
+    }
+
+    /// Set the guid if it has not already been created.
+    pub fn set_guid(&self, guid: String) {
+        let _ = self.guid.set(guid);
+    }
+
+    /// Clear the guid so a fresh one mints lazily on the next read.
+    pub fn refresh_guid(&mut self) {
+        self.guid = OnceLock::new();
+    }
+
+    /// Return the coordinate dimension.
     pub fn dimension(&self) -> usize {
         self.m_dim
     }
 
-    /// Returns the order (degree + 1) in dir.
+    /// Return the order (degree + 1) in dir.
     pub fn order(&self, dir: usize) -> usize {
         if dir < 2 {
             self.m_order[dir]
@@ -774,7 +796,7 @@ impl NurbsSurface {
         }
     }
 
-    /// Returns the degree in dir.
+    /// Return the degree in dir.
     pub fn degree(&self, dir: usize) -> usize {
         if dir < 2 && self.m_order[dir] > 0 {
             self.m_order[dir] - 1
@@ -783,7 +805,7 @@ impl NurbsSurface {
         }
     }
 
-    /// Returns the number of control vertices in dir.
+    /// Return the number of control vertices in dir.
     pub fn cv_count(&self, dir: usize) -> usize {
         if dir < 2 {
             self.m_cv_count[dir]
@@ -792,12 +814,12 @@ impl NurbsSurface {
         }
     }
 
-    /// Returns cv_count(0) * cv_count(1).
+    /// Return cv_count(0) * cv_count(1).
     pub fn cv_count_total(&self) -> usize {
         self.m_cv_count[0] * self.m_cv_count[1]
     }
 
-    /// Doubles per CV: dim + 1 when rational.
+    /// Return the doubles per CV: dimension + 1 when rational.
     pub fn cv_size(&self) -> usize {
         if self.m_is_rat {
             self.m_dim + 1
@@ -806,7 +828,7 @@ impl NurbsSurface {
         }
     }
 
-    /// Returns order + cv_count - 2 in dir.
+    /// Return order + cv_count - 2 in dir.
     pub fn nurbsknot_count(&self, dir: usize) -> usize {
         if dir < 2 && self.m_order[dir] + self.m_cv_count[dir] >= 2 {
             self.m_order[dir] + self.m_cv_count[dir] - 2
@@ -815,7 +837,7 @@ impl NurbsSurface {
         }
     }
 
-    /// Returns cv_count - order + 1 in dir.
+    /// Return cv_count - order + 1 in dir.
     pub fn span_count(&self, dir: usize) -> usize {
         if dir < 2 && self.m_cv_count[dir] + 1 >= self.m_order[dir] {
             self.m_cv_count[dir] + 1 - self.m_order[dir]
@@ -827,8 +849,7 @@ impl NurbsSurface {
     // ═══════════════════════════════════════════════════════════════════════════
     // Control vertex access
     // ═══════════════════════════════════════════════════════════════════════════
-
-    /// View of CV[i][j], cv_size() doubles (x*w, y*w, z*w, w when rational), None when out of range.
+    /// Return the pointer to CV[i][j], nullptr when out of range.
     pub fn cv(&self, i: usize, j: usize) -> Option<&[f64]> {
         if i >= self.m_cv_count[0] || j >= self.m_cv_count[1] {
             return None;
@@ -839,7 +860,7 @@ impl NurbsSurface {
         Some(&self.m_cv[idx..idx + self.cv_size()])
     }
 
-    /// Mutable view of CV[i][j], None when out of range.
+    /// Return the mutable pointer to CV[i][j], cv_size() doubles (x*w, y*w, z*w, w when rational), nullptr when out of range.
     pub fn cv_mut(&mut self, i: usize, j: usize) -> Option<&mut [f64]> {
         if i >= self.m_cv_count[0] || j >= self.m_cv_count[1] {
             return None;
@@ -851,14 +872,14 @@ impl NurbsSurface {
         Some(&mut self.m_cv[idx..idx + size])
     }
 
-    /// Euclidean CV (divided by weight when rational), origin when out of range.
+    /// Return the Euclidean CV (divided by weight when rational), None when out of range.
     pub fn get_cv(&self, i: usize, j: usize) -> Option<Point> {
         let cv_ptr = self.cv(i, j)?;
 
         Some(self.dehomogenize(cv_ptr))
     }
 
-    /// Homogeneous CV (x, y, z, w), w = 1 when non-rational.
+    /// Return the homogeneous CV (x, y, z, w), w = 1 when non-rational, None when out of range.
     pub fn get_cv_4d(&self, i: usize, j: usize) -> Option<(f64, f64, f64, f64)> {
         let cv_ptr = self.cv(i, j)?;
         let x = cv_ptr[0];
@@ -873,13 +894,14 @@ impl NurbsSurface {
         Some((x, y, z, w))
     }
 
-    /// Sets the Euclidean CV, keeping its weight.
+    /// Set the Euclidean CV, keeping its weight.
     pub fn set_cv(&mut self, i: usize, j: usize, point: &Point) -> bool {
         let dim = self.m_dim;
         let is_rat = self.m_is_rat;
         let Some(cv_ptr) = self.cv_mut(i, j) else {
             return false;
         };
+
         let w = if is_rat && cv_ptr[dim].abs() > 1e-14 {
             cv_ptr[dim]
         } else {
@@ -898,13 +920,14 @@ impl NurbsSurface {
         true
     }
 
-    /// Sets the homogeneous CV; w ignored when non-rational.
+    /// Set the homogeneous CV; w ignored when non-rational.
     pub fn set_cv_4d(&mut self, i: usize, j: usize, x: f64, y: f64, z: f64, w: f64) -> bool {
         let dim = self.m_dim;
         let is_rat = self.m_is_rat;
         let Some(cv_ptr) = self.cv_mut(i, j) else {
             return false;
         };
+
         cv_ptr[0] = x;
 
         if dim > 1 {
@@ -922,7 +945,7 @@ impl NurbsSurface {
         true
     }
 
-    /// Returns the weight of CV[i][j], 1 when non-rational.
+    /// Return the weight of CV[i][j], 1 when non-rational.
     pub fn weight(&self, i: usize, j: usize) -> f64 {
         match self.cv(i, j) {
             Some(cv_ptr) if self.m_is_rat => cv_ptr[self.m_dim],
@@ -930,7 +953,7 @@ impl NurbsSurface {
         }
     }
 
-    /// Rescales the homogeneous CV to the new weight so the Euclidean point stays; false when non-rational.
+    /// Rescale the homogeneous CV to the new weight so the Euclidean point stays; false when non-rational.
     pub fn set_weight(&mut self, i: usize, j: usize, w: f64) -> bool {
         let dim = self.m_dim;
 
@@ -941,6 +964,7 @@ impl NurbsSurface {
         let Some(cv_ptr) = self.cv_mut(i, j) else {
             return false;
         };
+
         let old_w = if cv_ptr[dim].abs() > 1e-14 {
             cv_ptr[dim]
         } else {
@@ -961,8 +985,7 @@ impl NurbsSurface {
     // ═══════════════════════════════════════════════════════════════════════════
     // NurbsKnot access
     // ═══════════════════════════════════════════════════════════════════════════
-
-    /// Returns the nurbsknot at nurbsknot_index in dir.
+    /// Return the nurbsknot at nurbsknot_index in dir, None when out of range.
     pub fn nurbsknot(&self, dir: usize, nurbsknot_index: usize) -> Option<f64> {
         if dir > 1 || nurbsknot_index >= self.m_nurbsknot[dir].len() {
             return None;
@@ -971,7 +994,7 @@ impl NurbsSurface {
         Some(self.m_nurbsknot[dir][nurbsknot_index])
     }
 
-    /// Sets the nurbsknot at nurbsknot_index in dir.
+    /// Set the nurbsknot at nurbsknot_index in dir.
     pub fn set_nurbsknot(
         &mut self,
         dir: usize,
@@ -987,7 +1010,7 @@ impl NurbsSurface {
         true
     }
 
-    /// Returns the multiplicity of the nurbsknot at nurbsknot_index in dir.
+    /// Return the multiplicity of the nurbsknot at nurbsknot_index in dir.
     pub fn nurbsknot_multiplicity(&self, dir: usize, nurbsknot_index: usize) -> usize {
         if dir > 1 {
             return 0;
@@ -1001,7 +1024,7 @@ impl NurbsSurface {
         )
     }
 
-    /// Returns a copy of the nurbsknot vector in dir.
+    /// Return a copy of the nurbsknot vector in dir.
     pub fn get_nurbsknots(&self, dir: usize) -> Vec<f64> {
         if dir < 2 {
             self.m_nurbsknot[dir].clone()
@@ -1010,7 +1033,7 @@ impl NurbsSurface {
         }
     }
 
-    /// Inserts a nurbsknot with the given multiplicity in dir without changing the shape.
+    /// Insert a nurbsknot with the given multiplicity in dir without changing the shape.
     pub fn insert_nurbsknot(
         &mut self,
         dir: usize,
@@ -1045,8 +1068,7 @@ impl NurbsSurface {
     // ═══════════════════════════════════════════════════════════════════════════
     // Domain
     // ═══════════════════════════════════════════════════════════════════════════
-
-    /// [nurbsknot[order - 2], nurbsknot[cv_count - 1]] in dir.
+    /// Return [nurbsknot[order - 2], nurbsknot[cv_count - 1]] in dir, None when invalid.
     pub fn domain(&self, dir: usize) -> Option<(f64, f64)> {
         if dir > 1 || !self.is_valid() {
             return None;
@@ -1081,7 +1103,7 @@ impl NurbsSurface {
         true
     }
 
-    /// Distinct nurbsknot values inside the domain of dir.
+    /// Return the distinct nurbsknot values inside the domain of dir.
     pub fn get_span_vector(&self, dir: usize) -> Vec<f64> {
         let mut spans = Vec::new();
 
@@ -1103,7 +1125,6 @@ impl NurbsSurface {
     // ═══════════════════════════════════════════════════════════════════════════
     // Division
     // ═══════════════════════════════════════════════════════════════════════════
-
     /// Points, normals and (u, v) on a (nu + 1) x (nv + 1) grid over the domain.
     pub fn divide_by_count_points(
         &self,
@@ -1205,8 +1226,7 @@ impl NurbsSurface {
     // ═══════════════════════════════════════════════════════════════════════════
     // Evaluation
     // ═══════════════════════════════════════════════════════════════════════════
-
-    /// S(u, v) by the tensor-product basis; origin when invalid.
+    /// Return S(u, v) by the tensor-product basis, None when invalid.
     pub fn point_at(&self, u: f64, v: f64) -> Option<Point> {
         if !self.is_valid() {
             return None;
@@ -1233,25 +1253,26 @@ impl NurbsSurface {
         Some(self.dehomogenize(&sum))
     }
 
-    /// (u, v) of the closest surface point (grid seed + Newton).
+    /// Return (u, v) of the closest surface point (grid seed + Newton).
     pub fn closest_parameters(&self, test_point: &Point) -> (f64, f64) {
         let hit = Closest::surface_point(self, test_point, 0.0, 0.0, 0.0, 0.0);
 
         (hit.0, hit.1)
     }
 
-    /// Returns the closest surface point to test_point.
+    /// Return the closest surface point to test_point.
     pub fn closest_point(&self, test_point: &Point) -> Point {
         let (u, v) = self.closest_parameters(test_point);
 
         self.point_at(u, v).unwrap_or_default()
     }
 
-    /// K = (LN - M^2) / (EG - F^2).
+    /// Return K = (LN - M^2) / (EG - F^2).
     pub fn gaussian_curvature(&self, u: f64, v: f64) -> f64 {
         let Some((e, f, g, l, m, n)) = self.fundamental_forms(u, v) else {
             return 0.0;
         };
+
         let denom = e * g - f * f;
 
         if denom.abs() < Tolerance::ZERO_TOLERANCE {
@@ -1261,11 +1282,12 @@ impl NurbsSurface {
         (l * n - m * m) / denom
     }
 
-    /// H = (EN - 2FM + GL) / (2(EG - F^2)), sign following Su x Sv.
+    /// Return H = (EN - 2FM + GL) / (2(EG - F^2)), sign following Su x Sv.
     pub fn mean_curvature(&self, u: f64, v: f64) -> f64 {
         let Some((e, f, g, l, m, n)) = self.fundamental_forms(u, v) else {
             return 0.0;
         };
+
         let denom = e * g - f * f;
 
         if denom.abs() < Tolerance::ZERO_TOLERANCE {
@@ -1275,7 +1297,7 @@ impl NurbsSurface {
         (e * n - 2.0 * f * m + g * l) / (2.0 * denom)
     }
 
-    /// Unit normal dS/dv x dS/du, z-axis at singular points.
+    /// Return the unit normal dS/dv x dS/du, z-axis at singular points.
     pub fn normal_at(&self, u: f64, v: f64) -> Vector {
         let derivs = self.evaluate(u, v, 1);
 
@@ -1293,7 +1315,7 @@ impl NurbsSurface {
         &normal / len
     }
 
-    /// Frame at (u, v): origin S, x-axis dS/du, y-axis dS/dv.
+    /// Return the frame at (u, v): origin S, x-axis dS/du, y-axis dS/dv.
     pub fn frame_at(&self, u: f64, v: f64) -> Plane {
         let derivs = self.evaluate(u, v, 1);
 
@@ -1312,7 +1334,7 @@ impl NurbsSurface {
         )
     }
 
-    /// Points where the infinite line pierces the surface (grid seed + Newton).
+    /// Return the points where the infinite line pierces the surface (grid seed + Newton).
     pub fn intersections_with_line(&self, line: &Line) -> Vec<Point> {
         let mut results: Vec<Point> = Vec::new();
 
@@ -1322,7 +1344,7 @@ impl NurbsSurface {
 
         let p0 = line.start();
         let pe = line.end();
-        let mut d = Vector::new(pe[0] - p0[0], pe[1] - p0[1], pe[2] - p0[2]);
+        let mut d = &pe - &p0;
 
         if d.magnitude() < 1e-14 {
             return results;
@@ -1351,7 +1373,7 @@ impl NurbsSurface {
                 }
 
                 let p = self.point_at(u, v).unwrap_or_default();
-                let r = Vector::new(p[0] - p0[0], p[1] - p0[1], p[2] - p0[2]);
+                let r = &p - &p0;
 
                 if n1.dot(&r).abs() > 1e-7 || n2.dot(&r).abs() > 1e-7 {
                     continue;
@@ -1374,7 +1396,7 @@ impl NurbsSurface {
         results
     }
 
-    /// Point and partials up to num_derivs (max 2) in (k, l) loop order: [S, Sv, Svv, Su, Suv, Suu].
+    /// Return the point and partials up to num_derivs (max 2) in (k, l) loop order: [S, Sv, Svv, Su, Suv, Suu].
     pub fn evaluate(&self, u: f64, v: f64, num_derivs: usize) -> Vec<Vector> {
         let mut result = Vec::new();
 
@@ -1424,7 +1446,7 @@ impl NurbsSurface {
         result
     }
 
-    /// Corner CV; u_end and v_end are 0 or 1.
+    /// Return the corner CV, None when out of range; u_end and v_end are 0 or 1.
     pub fn point_at_corner(&self, u_end: usize, v_end: usize) -> Option<Point> {
         let i = if u_end == 0 {
             0
@@ -1440,7 +1462,7 @@ impl NurbsSurface {
         self.get_cv(i, j)
     }
 
-    /// Iso-curve varying along dir at the other parameter c; rational surfaces give their exact rational curve.
+    /// Return the iso-curve along dir at the other parameter c, None when invalid; rational surfaces give their exact rational curve.
     pub fn iso_curve(&self, dir: usize, c: f64) -> Option<NurbsCurve> {
         if dir > 1 || !self.is_valid() {
             return None;
@@ -1494,10 +1516,9 @@ impl NurbsSurface {
     }
 
     // ═══════════════════════════════════════════════════════════════════════════
-    // Modification
+    // Modifications
     // ═══════════════════════════════════════════════════════════════════════════
-
-    /// Flips the parameterization in dir.
+    /// Flip the parameterization in dir.
     pub fn reverse(&mut self, dir: usize) -> bool {
         if dir > 1 || !self.is_valid() {
             return false;
@@ -1531,7 +1552,7 @@ impl NurbsSurface {
         true
     }
 
-    /// Swaps u and v.
+    /// Swap u and v.
     pub fn transpose(&mut self) -> bool {
         if !self.is_valid() {
             return false;
@@ -1557,7 +1578,7 @@ impl NurbsSurface {
         true
     }
 
-    /// Swaps two coordinate axes in every CV.
+    /// Swap two coordinate axes in every CV.
     pub fn swap_coordinates(&mut self, axis_i: usize, axis_j: usize) -> bool {
         if axis_i >= self.m_dim || axis_j >= self.m_dim {
             return false;
@@ -1574,7 +1595,7 @@ impl NurbsSurface {
         true
     }
 
-    /// Restricts dir to the sub-domain.
+    /// Restrict dir to the sub-domain.
     pub fn trim(&mut self, dir: usize, domain: (f64, f64)) -> bool {
         if dir > 1 || !self.is_valid() {
             return false;
@@ -1589,7 +1610,7 @@ impl NurbsSurface {
         self.from_curve(&crv, dir)
     }
 
-    /// Two surfaces split at c in dir; both invalid when c is outside the domain.
+    /// Return two surfaces split at c in dir; both None when c is outside the domain.
     pub fn split(&self, dir: usize, c: f64) -> (Option<Self>, Option<Self>) {
         if dir > 1 || !self.is_valid() {
             return (None, None);
@@ -1613,7 +1634,7 @@ impl NurbsSurface {
         (Some(lo), Some(hi))
     }
 
-    /// Adds weights of 1.
+    /// Add weights of 1.
     pub fn make_rational(&mut self) -> bool {
         if self.m_is_rat {
             return true;
@@ -1638,7 +1659,7 @@ impl NurbsSurface {
         true
     }
 
-    /// Drops weights, dividing each CV by its own.
+    /// Drop weights, dividing each CV by its own.
     pub fn make_non_rational(&mut self) -> bool {
         if !self.m_is_rat {
             return true;
@@ -1670,7 +1691,7 @@ impl NurbsSurface {
         true
     }
 
-    /// Elevates the degree in dir without changing the shape.
+    /// Elevate the degree in dir without changing the shape.
     pub fn increase_degree(&mut self, dir: usize, desired_degree: usize) -> bool {
         if dir > 1 || !self.is_valid() || desired_degree < self.degree(dir) {
             return false;
@@ -1690,35 +1711,9 @@ impl NurbsSurface {
     }
 
     // ═══════════════════════════════════════════════════════════════════════════
-    // Transformation
-    // ═══════════════════════════════════════════════════════════════════════════
-
-    /// Transforms every CV in place.
-    pub fn transform(&mut self, xform: &Xform) -> bool {
-        for i in 0..self.m_cv_count[0] {
-            for j in 0..self.m_cv_count[1] {
-                let mut p = self.get_cv(i, j).unwrap_or_default();
-                p.transform(xform);
-                self.set_cv(i, j, &p);
-            }
-        }
-
-        true
-    }
-
-    /// Returns a transformed copy.
-    pub fn transformed(&self, xform: &Xform) -> Self {
-        let mut result = self.duplicate();
-        result.transform(xform);
-
-        result
-    }
-
-    // ═══════════════════════════════════════════════════════════════════════════
     // Splitting
     // ═══════════════════════════════════════════════════════════════════════════
-
-    /// Trimmed faces on each side of the plane.
+    /// Return the trimmed faces on each side of the plane.
     pub fn split_by_plane(&self, plane: &Plane, tolerance: f64) -> Vec<NurbsSurfaceTrimmed> {
         let mut pcurves = Vec::new();
 
@@ -1729,7 +1724,7 @@ impl NurbsSurface {
         NurbsSurfaceTrimmed::split_by_uv_curves(self, &pcurves, tolerance)
     }
 
-    /// Trimmed faces cut by curves pulled onto the surface; off-surface curves are skipped.
+    /// Return the trimmed faces cut by curves pulled onto the surface; off-surface curves are skipped.
     pub fn split_by_curves(
         &self,
         curves: &[NurbsCurve],
@@ -1746,14 +1741,14 @@ impl NurbsSurface {
         NurbsSurfaceTrimmed::split_by_uv_curves(self, &pcurves, tolerance)
     }
 
-    /// Trimmed faces cut by a line pulled onto the surface.
+    /// Return the trimmed faces cut by a line pulled onto the surface.
     pub fn split_by_line(&self, line: &Line, tolerance: f64) -> Vec<NurbsSurfaceTrimmed> {
         let points = [line.start(), line.end()];
 
         self.split_by_curves(&[NurbsCurve::create(false, 1, &points)], tolerance)
     }
 
-    /// Trimmed faces cut by the surface/surface intersection.
+    /// Return the trimmed faces cut by the surface/surface intersection.
     pub fn split_by_surface(
         &self,
         cutter: &NurbsSurface,
@@ -1768,7 +1763,7 @@ impl NurbsSurface {
         NurbsSurfaceTrimmed::split_by_uv_curves(self, &pcurves, tolerance)
     }
 
-    /// Trimmed faces cut by every overlapping face of the brep.
+    /// Return the trimmed faces cut by every overlapping face of the brep.
     pub fn split_by_brep(&self, brep: &BRep, tolerance: f64) -> Vec<NurbsSurfaceTrimmed> {
         let target_bb = surface_aabb(self);
         let mut pcurves = Vec::new();
@@ -1789,8 +1784,7 @@ impl NurbsSurface {
     // ═══════════════════════════════════════════════════════════════════════════
     // Meshing
     // ═══════════════════════════════════════════════════════════════════════════
-
-    /// Quadtree subdivision in UV up to depth 8; cached in m_mesh.
+    /// Return m_mesh when cached, else the quadtree subdivision in UV up to depth 8.
     pub fn mesh_adaptive(
         &self,
         max_angle: f64,
@@ -1816,7 +1810,7 @@ impl NurbsSurface {
         mesher.mesh()
     }
 
-    /// Two triangles for a planar surface, else the span grid; cached in m_mesh.
+    /// Return m_mesh when cached, else two triangles for a planar surface or the span grid.
     pub fn mesh(&self) -> Mesh {
         if let Some(m) = &self.m_mesh {
             return m.clone();
@@ -1836,28 +1830,27 @@ impl NurbsSurface {
     // ═══════════════════════════════════════════════════════════════════════════
     // JSON
     // ═══════════════════════════════════════════════════════════════════════════
-
-    /// Serializes to a JSON string.
+    /// Serialize to a sorted JSON string.
     pub fn jsondump(&self) -> Result<String, Box<dyn std::error::Error>> {
         crate::file_encoders::sorted_json_string(self)
     }
 
-    /// Deserializes from a JSON string.
+    /// Deserialize from a JSON string.
     pub fn jsonload(json_data: &str) -> Result<Self, Box<dyn std::error::Error>> {
         Ok(serde_json::from_str(json_data)?)
     }
 
-    /// Serializes to a JSON string.
+    /// Serialize to a JSON string.
     pub fn file_json_dumps(&self) -> String {
         self.jsondump().unwrap_or_default()
     }
 
-    /// Deserializes from a JSON string.
+    /// Deserialize from a JSON string.
     pub fn file_json_loads(json_string: &str) -> Self {
         Self::jsonload(json_string).unwrap_or_default()
     }
 
-    /// Writes to a JSON file.
+    /// Write to a JSON file.
     pub fn file_json_dump(&self, filepath: &str) -> Result<(), Box<dyn std::error::Error>> {
         let json = serde_json::to_string_pretty(self)?;
         std::fs::write(filepath, json)?;
@@ -1865,7 +1858,7 @@ impl NurbsSurface {
         Ok(())
     }
 
-    /// Reads from a JSON file.
+    /// Read from a JSON file.
     pub fn file_json_load(filepath: &str) -> Result<Self, Box<dyn std::error::Error>> {
         let contents = std::fs::read_to_string(filepath)?;
 
@@ -1875,30 +1868,7 @@ impl NurbsSurface {
     // ═══════════════════════════════════════════════════════════════════════════
     // Protobuf
     // ═══════════════════════════════════════════════════════════════════════════
-
-    /// Serializes to protobuf bytes.
-    pub fn pb_dumps(&self) -> Vec<u8> {
-        self.to_proto().encode_to_vec()
-    }
-
-    /// Deserializes from protobuf bytes.
-    pub fn pb_loads(data: &[u8]) -> Result<Self, Box<dyn std::error::Error>> {
-        Self::from_proto(crate::proto::NurbsSurface::decode(data)?)
-    }
-
-    /// Writes to a protobuf file.
-    pub fn pb_dump(&self, filepath: &str) {
-        let _ = std::fs::write(filepath, self.pb_dumps());
-    }
-
-    /// Reads from a protobuf file.
-    pub fn pb_load(filepath: &str) -> Self {
-        let data = std::fs::read(filepath).unwrap_or_default();
-
-        Self::pb_loads(&data).unwrap_or_default()
-    }
-
-    /// Converts to the protobuf message.
+    /// Convert to the protobuf message.
     pub fn to_proto(&self) -> crate::proto::NurbsSurface {
         let mut cvs = Vec::new();
 
@@ -1938,7 +1908,7 @@ impl NurbsSurface {
         }
     }
 
-    /// Constructs from the protobuf message.
+    /// Construct from the protobuf message.
     pub fn from_proto(
         proto: crate::proto::NurbsSurface,
     ) -> Result<Self, Box<dyn std::error::Error>> {
@@ -2008,11 +1978,32 @@ impl NurbsSurface {
         Ok(surface)
     }
 
+    /// Serialize to protobuf bytes.
+    pub fn pb_dumps(&self) -> Vec<u8> {
+        self.to_proto().encode_to_vec()
+    }
+
+    /// Deserialize from protobuf bytes.
+    pub fn pb_loads(data: &[u8]) -> Result<Self, Box<dyn std::error::Error>> {
+        Self::from_proto(crate::proto::NurbsSurface::decode(data)?)
+    }
+
+    /// Write to a protobuf file.
+    pub fn pb_dump(&self, filepath: &str) {
+        let _ = std::fs::write(filepath, self.pb_dumps());
+    }
+
+    /// Read from a protobuf file.
+    pub fn pb_load(filepath: &str) -> Self {
+        let data = std::fs::read(filepath).unwrap_or_default();
+
+        Self::pb_loads(&data).unwrap_or_default()
+    }
+
     // ═══════════════════════════════════════════════════════════════════════════
     // String
     // ═══════════════════════════════════════════════════════════════════════════
-
-    /// Returns "NurbsSurface(name=..., degree=(u, v), cvs=(u, v))".
+    /// Return "NurbsSurface(name=..., degree=(u, v), cvs=(u, v))".
     pub fn str(&self) -> String {
         format!(
             "NurbsSurface(name={}, degree=({},{}), cvs=({},{}))",
@@ -2024,7 +2015,7 @@ impl NurbsSurface {
         )
     }
 
-    /// Multi-line form with every control point.
+    /// Return the multi-line form with every control point.
     pub fn repr(&self) -> String {
         let mut result = format!("NurbsSurface(\n  name={},\n  degree=({},{}),\n  cvs=({},{}),\n  rational={},\n  control_points=[\n", self.name, self.degree(0), self.degree(1), self.m_cv_count[0], self.m_cv_count[1], self.m_is_rat);
 
@@ -2043,7 +2034,7 @@ impl NurbsSurface {
     // ═══════════════════════════════════════════════════════════════════════════
     // Private helpers
     // ═══════════════════════════════════════════════════════════════════════════
-
+    /// Zero every CV, false when the layout is unset.
     fn zero_cvs(&mut self) -> bool {
         self.m_cv.fill(0.0);
 
@@ -2062,6 +2053,7 @@ impl NurbsSurface {
         true
     }
 
+    /// Fill the nurbsknot vector in dir with clamped uniform values of the given spacing.
     fn make_clamped_uniform_nurbsknot_vector(&mut self, dir: usize, delta: f64) -> bool {
         if dir > 1 || delta <= 0.0 {
             return false;
@@ -2073,6 +2065,7 @@ impl NurbsSurface {
         !self.m_nurbsknot[dir].is_empty()
     }
 
+    /// Fill the nurbsknot vector in dir with periodic uniform values of the given spacing.
     fn make_periodic_uniform_nurbsknot_vector(&mut self, dir: usize, delta: f64) -> bool {
         if dir > 1 || delta <= 0.0 {
             return false;
@@ -2084,13 +2077,14 @@ impl NurbsSurface {
         !self.m_nurbsknot[dir].is_empty()
     }
 
-    /// Euclidean point of a homogeneous CV or blend.
+    /// Return the Euclidean point of a homogeneous CV or blend.
     fn dehomogenize(&self, h: &[f64]) -> Point {
         let w = if self.m_is_rat && h[self.m_dim].abs() > 1e-14 {
             h[self.m_dim]
         } else {
             1.0
         };
+
         Point::new(
             h[0] / w,
             if self.m_dim > 1 { h[1] / w } else { 0.0 },
@@ -2098,7 +2092,7 @@ impl NurbsSurface {
         )
     }
 
-    /// Span index in dir containing t.
+    /// Return the span index in dir containing t.
     fn find_span(&self, dir: usize, t: f64) -> usize {
         nurbsknot::find_span(
             self.m_order[dir],
@@ -2110,7 +2104,7 @@ impl NurbsSurface {
         )
     }
 
-    /// Basis derivatives ders[k][j] of the order functions on the span (Piegl & Tiller A2.3).
+    /// Return the basis derivatives ders[k][j] of the order functions on the span (Piegl & Tiller A2.3).
     fn basis_functions_derivatives(
         &self,
         dir: usize,
@@ -2206,7 +2200,7 @@ impl NurbsSurface {
         ders
     }
 
-    /// Rational quotient rule on homogeneous partials in (k, l) loop order (Piegl & Tiller A4.4).
+    /// Apply the rational quotient rule to homogeneous partials in (k, l) loop order (Piegl & Tiller A4.4).
     fn rational_derivatives(&self, skl: &[Vec<f64>], num_derivs: usize) -> Vec<Vector> {
         let mut result: Vec<Vector> = Vec::new();
         let n = num_derivs;
@@ -2244,7 +2238,7 @@ impl NurbsSurface {
         result
     }
 
-    /// Newton on (n1, n2) . (S - p0) = 0 from (u, v); false when it leaves the domain or stalls.
+    /// Run Newton on (n1, n2) . (S - p0) = 0 from (u, v); false when it leaves the domain or stalls.
     fn line_newton(&self, u: &mut f64, v: &mut f64, p0: &Point, n1: &Vector, n2: &Vector) -> bool {
         let (u0, u1) = self.domain(0).unwrap_or((0.0, 0.0));
         let (v0, v1) = self.domain(1).unwrap_or((0.0, 0.0));
@@ -2291,7 +2285,7 @@ impl NurbsSurface {
         true
     }
 
-    /// First and second fundamental forms at (u, v); None at a singular point.
+    /// Compute the first and second fundamental forms at (u, v); None at a singular point.
     fn fundamental_forms(&self, u: f64, v: f64) -> Option<(f64, f64, f64, f64, f64, f64)> {
         let d = self.evaluate(u, v, 2);
 
@@ -2311,6 +2305,7 @@ impl NurbsSurface {
         }
 
         let n = cr.normalized();
+
         Some((
             su.dot(su),
             su.dot(sv),
@@ -2321,7 +2316,7 @@ impl NurbsSurface {
         ))
     }
 
-    /// Two triangles through the four corners with one shared normal.
+    /// Return two triangles through the four corners with one shared normal.
     fn mesh_planar(&self) -> Mesh {
         let mut result = Mesh::new();
         let p00 = self.point_at_corner(0, 0).unwrap_or_default();
@@ -2335,8 +2330,8 @@ impl NurbsSurface {
         let mut normal;
 
         if p00.distance(&p01, None) < 1e-10 {
-            let e1 = Vector::new(p10[0] - p00[0], p10[1] - p00[1], p10[2] - p00[2]);
-            let e2 = Vector::new(p11[0] - p00[0], p11[1] - p00[1], p11[2] - p00[2]);
+            let e1 = &p10 - &p00;
+            let e2 = &p11 - &p00;
             normal = e1.cross(&e2);
         } else {
             let v3 = result.add_vertex(p01.clone(), None);
@@ -2462,9 +2457,8 @@ impl fmt::Display for NurbsSurface {
 // ═══════════════════════════════════════════════════════════════════════════
 // Operators
 // ═══════════════════════════════════════════════════════════════════════════
-
 impl PartialEq for NurbsSurface {
-    /// Same name, width, colors, layout, nurbsknots and CVs; guid ignored.
+    /// Compare name, width, colors, layout, nurbsknots and CVs; guid ignored.
     fn eq(&self, other: &Self) -> bool {
         if self.name != other.name || self.width != other.width {
             return false;
@@ -2499,7 +2493,6 @@ impl PartialEq for NurbsSurface {
 // ═══════════════════════════════════════════════════════════════════════════
 // Serde
 // ═══════════════════════════════════════════════════════════════════════════
-
 impl Serialize for NurbsSurface {
     /// Serializes to flat JSON fields.
     fn serialize<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {

@@ -41,7 +41,7 @@ pub fn run_nurbssurface_constructor() -> TestResult {
         let srepr = s.repr();
 
         let scopy = s.duplicate();
-        let _sother = NurbsSurface::create(false, false, 3, 3, 4, 4, &points).unwrap();
+        let sother = NurbsSurface::create(false, false, 3, 3, 4, 4, &points).unwrap();
 
         MINI_CHECK!(s.is_valid());
         MINI_CHECK!(s.cv_count(0) == 4);
@@ -61,6 +61,8 @@ pub fn run_nurbssurface_constructor() -> TestResult {
         MINI_CHECK!(srepr == "NurbsSurface(\n  name=my_nurbssurface,\n  degree=(3,3),\n  cvs=(4,4),\n  rational=false,\n  control_points=[\n    0, 0, 0\n    -1, 0.75, 2\n    -1, 4.25, 2\n    0, 5, 0\n    0.75, -1, 2\n    1.25, 1.25, 4\n    1.25, 3.75, 4\n    0.75, 6, 2\n    4.25, -1, 2\n    3.75, 1.25, 4\n    3.75, 3.75, 4\n    4.25, 6, 2\n    5, 0, 0\n    6, 0.75, 2\n    6, 4.25, 2\n    5, 5, 0\n  ]\n)");
         MINI_CHECK!(scopy.cv_count_total() == s.cv_count_total());
         MINI_CHECK!(scopy.guid() != s.guid());
+        MINI_CHECK!(s == sother);
+        MINI_CHECK!(!(s != sother));
         MINI_CHECK!(TOLERANCE.is_point_close(
             &p[0][0],
             &Point::new(0.000000000000000, 0.000000000000000, 0.000000000000000)
@@ -502,14 +504,16 @@ pub fn run_nurbssurface_nurbsknot_access() -> TestResult {
         let mut s = NurbsSurface::create(false, false, 3, 3, 4, 4, &points).unwrap();
 
         let nurbsknots_u = s.get_nurbsknots(0);
-        for i in 0..s.nurbsknot_count(0) as usize {
+
+        for i in 0..s.nurbsknot_count(0) {
             let nurbsknot = s.nurbsknot(0, i).unwrap();
 
             MINI_CHECK!(nurbsknot == nurbsknots_u[i]);
         }
 
         let nurbsknots_v = s.get_nurbsknots(1);
-        for i in 0..s.nurbsknot_count(1) as usize {
+
+        for i in 0..s.nurbsknot_count(1) {
             let nurbsknot = s.nurbsknot(1, i).unwrap();
 
             MINI_CHECK!(nurbsknot == nurbsknots_v[i]);
@@ -1037,24 +1041,24 @@ pub fn run_nurbssurface_modification() -> TestResult {
 
         let s = NurbsSurface::create(false, false, 3, 3, 4, 4, &points).unwrap();
 
-        let mut s_rev = s.clone();
+        let mut s_rev = s.duplicate();
         s_rev.reverse(0);
 
         MINI_CHECK!(s_rev.point_at_corner(0, 0).unwrap() == s.point_at_corner(1, 0).unwrap());
         MINI_CHECK!(s_rev.normal_at(0.5, 0.5) == s.normal_at(0.5, 0.5) * -1.0);
 
-        let mut s_tr = s.clone();
+        let mut s_tr = s.duplicate();
         s_tr.transpose();
 
         MINI_CHECK!(s.point_at(0.0, 0.5).unwrap() == s_tr.point_at(0.5, 0.0).unwrap());
 
-        let mut s_swap = s.clone();
+        let mut s_swap = s.duplicate();
         s_swap.swap_coordinates(0, 2);
 
         MINI_CHECK!(s.point_at(0.5, 0.5).unwrap()[0] == s_swap.point_at(0.5, 0.5).unwrap()[2]);
         MINI_CHECK!(s.point_at(0.5, 0.5).unwrap()[2] == s_swap.point_at(0.5, 0.5).unwrap()[0]);
 
-        let mut s_trim = s.clone();
+        let mut s_trim = s.duplicate();
         s_trim.trim(0, (0.25, 0.75));
 
         MINI_CHECK!(TOLERANCE.is_close(s_trim.domain(0).unwrap().0, 0.25));
@@ -1086,7 +1090,7 @@ pub fn run_nurbssurface_modification() -> TestResult {
         MINI_CHECK!(TOLERANCE.is_point_close(&ew.point_at_corner(0, 1).unwrap(), &center));
         MINI_CHECK!(TOLERANCE.is_point_close(&ee.point_at_corner(0, 0).unwrap(), &center));
 
-        let mut s_rat = s.clone();
+        let mut s_rat = s.duplicate();
         s_rat.make_rational();
         s_rat.set_weight(2, 2, 3.0);
 
@@ -1095,7 +1099,7 @@ pub fn run_nurbssurface_modification() -> TestResult {
 
         MINI_CHECK!(s.point_at(0.5, 0.5).unwrap() == s_rat.point_at(0.5, 0.5).unwrap());
 
-        let mut s_deg = s.clone();
+        let mut s_deg = s.duplicate();
         s_deg.increase_degree(0, 6);
         s_deg.increase_degree(1, 6);
 
@@ -1370,6 +1374,7 @@ pub fn run_nurbssurface_split_by_plane() -> TestResult {
         let parts = cyl.split_by_plane(&plane, 0.0);
 
         MINI_CHECK!(parts.len() == 2);
+
         for ts in &parts {
             MINI_CHECK!(ts.is_trimmed());
             let m = ts.mesh_q(20.0, 0.005);
@@ -1398,6 +1403,7 @@ pub fn run_nurbssurface_split_by_curves() -> TestResult {
 
         let wave = Primitives::wave_surface(10.0, 1.0);
         let mut lift_pts = Vec::new();
+
         for i in 0..21 {
             let x = 10.0 * i as f64 / 20.0;
             let y = 5.0 + 2.0 * x.sin();
@@ -1405,6 +1411,7 @@ pub fn run_nurbssurface_split_by_curves() -> TestResult {
                 Closest::surface_point(&wave, &Point::new(x, y, 0.0), 0.0, 0.0, 0.0, 0.0);
             lift_pts.push(wave.point_at(u, v).unwrap());
         }
+
         let crv = NurbsCurve::create_interpolated(
             &lift_pts,
             CurveNurbsKnotStyle::Chord,
@@ -1472,6 +1479,7 @@ pub fn run_nurbssurface_split_by_surface() -> TestResult {
         let parts = cyl.split_by_surface(&flat, 0.0);
 
         MINI_CHECK!(parts.len() == 2);
+
         for ts in &parts {
             MINI_CHECK!(ts.is_trimmed());
             let m = ts.mesh_q(20.0, 0.005);
@@ -1507,6 +1515,7 @@ pub fn run_nurbssurface_split_by_brep() -> TestResult {
         let parts = flat.split_by_brep(&cutter, 0.0);
 
         MINI_CHECK!(parts.len() == 2);
+
         for ts in &parts {
             MINI_CHECK!(ts.is_trimmed());
             let m = ts.mesh_q(20.0, 0.005);
@@ -1584,17 +1593,21 @@ pub fn run_nurbssurface_protobuf_roundtrip() -> TestResult {
             Point::new(5.0, 5.0, 0.0),
         ];
         let surface = NurbsSurface::create(false, false, 3, 3, 4, 4, &points).unwrap();
-
-        let proto_string = surface.pb_dumps();
-        let loaded_proto_string = NurbsSurface::pb_loads(&proto_string).unwrap();
-
-        let src_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-        let filename = src_dir.join("serialization").join("test_nurbssurface.bin");
+        let guid = surface.guid().to_string();
+        let filename = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+            .join("serialization")
+            .join("test_nurbssurface.bin");
         surface.pb_dump(filename.to_str().unwrap());
+
+        let loaded_proto_string = NurbsSurface::pb_loads(&surface.pb_dumps()).unwrap();
         let loaded = NurbsSurface::pb_load(filename.to_str().unwrap());
+        let converted = NurbsSurface::from_proto(surface.to_proto()).unwrap();
 
         MINI_CHECK!(loaded_proto_string == surface);
         MINI_CHECK!(loaded == surface);
+        MINI_CHECK!(loaded.guid() == guid);
+        MINI_CHECK!(converted == surface);
+        MINI_CHECK!(converted.guid() == guid);
     })
 }
 
