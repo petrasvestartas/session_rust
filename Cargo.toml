@@ -22,6 +22,10 @@ wgpu = "29"
 # crate on four platforms with no clang install step, so it must not be a default dependency.
 [features]
 pdf = ["dep:mupdf", "dep:earcutr"]
+# Registers every mini-test at startup. A consumer that runs none (the viewer's wasm) turns it off,
+# and the linker then drops the test code: 6 MB of the viewer's 17 MB.
+default = ["minitests"]
+minitests = []
 
 # PDF deps are declared ONLY for non-wasm targets, so a wasm32 build cannot pull MuPDF even if
 # something enables `pdf` - the viewer is structurally safe rather than relying on flag discipline.

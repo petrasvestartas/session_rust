@@ -322,6 +322,7 @@ inventory::collect!(RegisteredTest);
 #[macro_export]
 macro_rules! REGISTER_MINI_TEST {
     ($group:expr, $name:expr, $func:path) => {
+        #[cfg(feature = "minitests")]
         inventory::submit! {
             $crate::mini_test::RegisteredTest {
                 group: $group,
@@ -335,6 +336,7 @@ macro_rules! REGISTER_MINI_TEST {
 #[macro_export]
 macro_rules! MINI_TEST_CASE {
     ($group:expr, $name:expr, $body:block) => {
+        #[cfg(feature = "minitests")]
         inventory::submit! {
             $crate::mini_test::RegisteredTest {
                 group: $group,
