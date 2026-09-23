@@ -1,21 +1,25 @@
 use crate::mini_test::TestResult;
 use crate::tolerance::TOLERANCE;
-use crate::{MINI_CHECK, MINI_TEST, REGISTER_MINI_TEST};
+use crate::MINI_CHECK;
+use crate::MINI_TEST;
+use crate::REGISTER_MINI_TEST;
 
 pub fn run_kdtree_constructor() -> TestResult {
     MINI_TEST!("Constructor", {
         use crate::Point;
         use crate::SpatialKDTree;
+
         let pts = vec![
             Point::new(0.0, 0.0, 0.0),
             Point::new(3.0, 0.0, 0.0),
             Point::new(10.0, 0.0, 0.0),
         ];
-        let tree = SpatialKDTree::new(pts);
-        let (idx, dist) = tree.nearest(&Point::new(2.0, 0.0, 0.0));
 
-        MINI_CHECK!(idx == 1);
-        MINI_CHECK!(TOLERANCE.is_close(dist, 1.0));
+        let tree = SpatialKDTree::new(pts);
+        let hit = tree.nearest(&Point::new(2.0, 0.0, 0.0));
+
+        MINI_CHECK!(hit.0 == 1);
+        MINI_CHECK!(TOLERANCE.is_close(hit.1, 1.0));
     })
 }
 
@@ -23,6 +27,7 @@ pub fn run_kdtree_nearest() -> TestResult {
     MINI_TEST!("Nearest", {
         use crate::Point;
         use crate::SpatialKDTree;
+
         let pts = vec![
             Point::new(0.0, 0.0, 0.0),
             Point::new(1.0, 0.0, 0.0),
@@ -30,12 +35,13 @@ pub fn run_kdtree_nearest() -> TestResult {
             Point::new(3.0, 0.0, 0.0),
             Point::new(4.0, 0.0, 0.0),
         ];
+
         let tree = SpatialKDTree::new(pts);
         let query = Point::new(1.1, 0.0, 0.0);
-        let (idx, dist) = tree.nearest(&query);
+        let hit = tree.nearest(&query);
 
-        MINI_CHECK!(idx == 1);
-        MINI_CHECK!(TOLERANCE.is_close(dist, 0.1));
+        MINI_CHECK!(hit.0 == 1);
+        MINI_CHECK!(TOLERANCE.is_close(hit.1, 0.1));
     })
 }
 
@@ -43,6 +49,7 @@ pub fn run_kdtree_nearest_k() -> TestResult {
     MINI_TEST!("Nearest K", {
         use crate::Point;
         use crate::SpatialKDTree;
+
         let pts = vec![
             Point::new(0.0, 0.0, 0.0),
             Point::new(1.0, 0.0, 0.0),
@@ -50,6 +57,7 @@ pub fn run_kdtree_nearest_k() -> TestResult {
             Point::new(3.0, 0.0, 0.0),
             Point::new(4.0, 0.0, 0.0),
         ];
+
         let tree = SpatialKDTree::new(pts);
         let query = Point::new(1.5, 0.0, 0.0);
         let result = tree.nearest_k(&query, 3);
@@ -65,12 +73,14 @@ pub fn run_kdtree_radius_search() -> TestResult {
     MINI_TEST!("Radius Search", {
         use crate::Point;
         use crate::SpatialKDTree;
+
         let pts = vec![
             Point::new(0.0, 0.0, 0.0),
             Point::new(1.0, 0.0, 0.0),
             Point::new(2.0, 0.0, 0.0),
             Point::new(5.0, 0.0, 0.0),
         ];
+
         let tree = SpatialKDTree::new(pts);
         let query = Point::new(0.5, 0.0, 0.0);
         let result = tree.radius_search(&query, 1.1);

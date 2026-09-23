@@ -22,7 +22,7 @@ struct Range {
 }
 
 impl Range {
-    /// Constructs a range.
+    /// Construct a range.
     fn new(lo: usize, hi: usize, depth: usize, parent: usize, is_left: bool) -> Self {
         Range {
             lo,
@@ -41,7 +41,6 @@ struct Visit {
     bound: f64,  // Lower bound on the squared distance to the node's half-space.
 }
 
-/// Filler for the build stack array.
 const EMPTY_RANGE: Range = Range {
     lo: 0,
     hi: 0,
@@ -50,14 +49,13 @@ const EMPTY_RANGE: Range = Range {
     is_left: false,
 };
 
-/// Filler for the query stack array.
 const EMPTY_VISIT: Visit = Visit {
     node: NULL_IDX,
     bound: 0.0,
 };
 
-/// Orders (index, distance) hits by distance.
-fn hit_order(a: &(usize, f64), b: &(usize, f64)) -> std::cmp::Ordering {
+/// Order two hits by distance.
+fn hit_before(a: &(usize, f64), b: &(usize, f64)) -> std::cmp::Ordering {
     a.1.total_cmp(&b.1)
 }
 
@@ -68,7 +66,10 @@ pub struct SpatialKDTree {
 }
 
 impl SpatialKDTree {
-    /// Constructs the tree over points.
+    // ═══════════════════════════════════════════════════════════════════════════
+    // Constructors
+    // ═══════════════════════════════════════════════════════════════════════════
+    /// Construct the tree over points.
     pub fn new(points: Vec<Point>) -> Self {
         let mut tree = SpatialKDTree {
             points,
@@ -79,97 +80,14 @@ impl SpatialKDTree {
         tree
     }
 
-    /// Builds the nodes by iterative median splits over an explicit stack.
-    fn build(&mut self) {
-        let n = self.points.len();
-        let mut indices: Vec<usize> = (0..n).collect();
-        self.nodes.reserve(n);
-        let mut stack = [EMPTY_RANGE; STACK_SIZE];
-        let mut top = 0;
-
-        if n > 0 {
-            stack[top] = Range::new(0, n, 0, NULL_IDX, false);
-            top += 1;
-        }
-
-        while top > 0 {
-            top -= 1;
-            let range = stack[top];
-            let axis = range.depth % 3;
-            let mid = range.lo + (range.hi - range.lo) / 2;
-            let points = &self.points;
-            indices[range.lo..range.hi].select_nth_unstable_by(mid - range.lo, |&a, &b| {
-                points[a][axis].total_cmp(&points[b][axis])
-            });
-            let node = self.nodes.len();
-            self.nodes.push(Node {
-                idx: indices[mid],
-                axis,
-                left: NULL_IDX,
-                right: NULL_IDX,
-            });
-
-            if range.parent != NULL_IDX && range.is_left {
-                self.nodes[range.parent].left = node;
-            }
-
-            if range.parent != NULL_IDX && !range.is_left {
-                self.nodes[range.parent].right = node;
-            }
-
-            if range.lo < mid {
-                assert!(top < STACK_SIZE);
-                stack[top] = Range::new(range.lo, mid, range.depth + 1, node, true);
-                top += 1;
-            }
-
-            if mid + 1 < range.hi {
-                assert!(top < STACK_SIZE);
-                stack[top] = Range::new(mid + 1, range.hi, range.depth + 1, node, false);
-                top += 1;
-            }
-        }
-    }
-
-    /// Pushes a node with its bound onto the visit stack.
-    fn push(&self, stack: &mut [Visit; STACK_SIZE], top: &mut usize, node: usize, bound: f64) {
-        if node == NULL_IDX {
-            return;
-        }
-
-        assert!(*top < STACK_SIZE);
-        stack[*top] = Visit { node, bound };
-        *top += 1;
-    }
-
-    /// Returns the squared distance between a and b.
-    fn dist_sq(&self, a: &Point, b: &Point) -> f64 {
-        let dx = a[0] - b[0];
-        let dy = a[1] - b[1];
-        let dz = a[2] - b[2];
-
-        dx * dx + dy * dy + dz * dz
-    }
-
-    /// Inserts (idx, d2) into best keeping it sorted and at most k long.
-    fn insert_sorted(&self, best: &mut Vec<(usize, f64)>, idx: usize, d2: f64, k: usize) {
-        let mut pos = best.len();
-
-        while pos > 0 && best[pos - 1].1 > d2 {
-            pos -= 1;
-        }
-
-        best.insert(pos, (idx, d2));
-
-        if best.len() > k {
-            best.pop();
-        }
-    }
-
-    /// Returns the index and distance of the nearest point.
+    // ═══════════════════════════════════════════════════════════════════════════
+    // Queries
+    // ═══════════════════════════════════════════════════════════════════════════
+    /// Return the index and distance of the nearest point.
     pub fn nearest(&self, query: &Point) -> (usize, f64) {
         let mut best = 0;
         let mut best_d2 = f64::INFINITY;
+
         let mut stack = [EMPTY_VISIT; STACK_SIZE];
         let mut top = 0;
 
@@ -196,6 +114,7 @@ impl SpatialKDTree {
             let diff = query[node.axis] - self.points[node.idx][node.axis];
             let near = if diff <= 0.0 { node.left } else { node.right };
             let far = if diff <= 0.0 { node.right } else { node.left };
+
             self.push(&mut stack, &mut top, far, diff * diff);
             self.push(&mut stack, &mut top, near, 0.0);
         }
@@ -203,7 +122,7 @@ impl SpatialKDTree {
         (best, best_d2.sqrt())
     }
 
-    /// Returns the k nearest (index, distance) pairs sorted by distance.
+    /// Return the k nearest (index, distance) pairs sorted by distance.
     pub fn nearest_k(&self, query: &Point, k: usize) -> Vec<(usize, f64)> {
         let mut best: Vec<(usize, f64)> = Vec::new();
 
@@ -237,6 +156,7 @@ impl SpatialKDTree {
             let diff = query[node.axis] - self.points[node.idx][node.axis];
             let near = if diff <= 0.0 { node.left } else { node.right };
             let far = if diff <= 0.0 { node.right } else { node.left };
+
             self.push(&mut stack, &mut top, far, diff * diff);
             self.push(&mut stack, &mut top, near, 0.0);
         }
@@ -248,10 +168,11 @@ impl SpatialKDTree {
         best
     }
 
-    /// Returns every (index, distance) pair within radius sorted by distance.
+    /// Return every (index, distance) pair within radius sorted by distance.
     pub fn radius_search(&self, query: &Point, radius: f64) -> Vec<(usize, f64)> {
         let mut result: Vec<(usize, f64)> = Vec::new();
         let r2 = radius * radius;
+
         let mut stack = [EMPTY_VISIT; STACK_SIZE];
         let mut top = 0;
 
@@ -277,12 +198,110 @@ impl SpatialKDTree {
             let diff = query[node.axis] - self.points[node.idx][node.axis];
             let near = if diff <= 0.0 { node.left } else { node.right };
             let far = if diff <= 0.0 { node.right } else { node.left };
+
             self.push(&mut stack, &mut top, far, diff * diff);
             self.push(&mut stack, &mut top, near, 0.0);
         }
 
-        result.sort_by(hit_order);
+        result.sort_by(hit_before);
 
         result
+    }
+
+    // ═══════════════════════════════════════════════════════════════════════════
+    // Build
+    // ═══════════════════════════════════════════════════════════════════════════
+    /// Build the nodes by iterative median splits over an explicit stack.
+    fn build(&mut self) {
+        let n = self.points.len();
+        let mut indices: Vec<usize> = (0..n).collect();
+
+        self.nodes.reserve(n);
+
+        let mut stack = [EMPTY_RANGE; STACK_SIZE];
+        let mut top = 0;
+
+        if n > 0 {
+            stack[top] = Range::new(0, n, 0, NULL_IDX, false);
+            top += 1;
+        }
+
+        while top > 0 {
+            top -= 1;
+            let range = stack[top];
+            let axis = range.depth % 3;
+            let mid = range.lo + (range.hi - range.lo) / 2;
+            let points = &self.points;
+
+            indices[range.lo..range.hi].select_nth_unstable_by(mid - range.lo, |&a, &b| {
+                points[a][axis].total_cmp(&points[b][axis])
+            });
+
+            let node = self.nodes.len();
+            self.nodes.push(Node {
+                idx: indices[mid],
+                axis,
+                left: NULL_IDX,
+                right: NULL_IDX,
+            });
+
+            if range.parent != NULL_IDX && range.is_left {
+                self.nodes[range.parent].left = node;
+            }
+
+            if range.parent != NULL_IDX && !range.is_left {
+                self.nodes[range.parent].right = node;
+            }
+
+            if range.lo < mid {
+                assert!(top < STACK_SIZE);
+                stack[top] = Range::new(range.lo, mid, range.depth + 1, node, true);
+                top += 1;
+            }
+
+            if mid + 1 < range.hi {
+                assert!(top < STACK_SIZE);
+                stack[top] = Range::new(mid + 1, range.hi, range.depth + 1, node, false);
+                top += 1;
+            }
+        }
+    }
+
+    // ═══════════════════════════════════════════════════════════════════════════
+    // Traversal
+    // ═══════════════════════════════════════════════════════════════════════════
+    /// Push a node with its bound onto the visit stack.
+    fn push(&self, stack: &mut [Visit; STACK_SIZE], top: &mut usize, node: usize, bound: f64) {
+        if node == NULL_IDX {
+            return;
+        }
+
+        assert!(*top < STACK_SIZE);
+        stack[*top] = Visit { node, bound };
+        *top += 1;
+    }
+
+    /// Return the squared distance between a and b.
+    fn dist_sq(&self, a: &Point, b: &Point) -> f64 {
+        let dx = a[0] - b[0];
+        let dy = a[1] - b[1];
+        let dz = a[2] - b[2];
+
+        dx * dx + dy * dy + dz * dz
+    }
+
+    /// Insert (idx, d2) into best keeping it sorted and at most k long.
+    fn insert_sorted(&self, best: &mut Vec<(usize, f64)>, idx: usize, d2: f64, k: usize) {
+        let mut pos = best.len();
+
+        while pos > 0 && best[pos - 1].1 > d2 {
+            pos -= 1;
+        }
+
+        best.insert(pos, (idx, d2));
+
+        if best.len() > k {
+            best.pop();
+        }
     }
 }
