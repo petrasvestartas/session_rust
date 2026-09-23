@@ -23,7 +23,6 @@ fn are_finite(values: &[f64], count: usize) -> bool {
 // ═══════════════════════════════════════════════════════════════════════════
 // Knot styles
 // ═══════════════════════════════════════════════════════════════════════════
-
 /// Parameter spacing for interpolated curves.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
 #[repr(u8)]
@@ -49,8 +48,7 @@ pub enum CurveInterpStyle {
 // ═══════════════════════════════════════════════════════════════════════════
 // Construction
 // ═══════════════════════════════════════════════════════════════════════════
-
-/// Returns the number of nurbsknots, or zero for invalid or overflowing counts.
+/// Return the number of nurbsknots for an order and control-point count.
 #[inline]
 pub fn nurbsknot_count(order: usize, cv_count: usize) -> usize {
     if order < 2 || cv_count < order {
@@ -60,7 +58,7 @@ pub fn nurbsknot_count(order: usize, cv_count: usize) -> usize {
     order.checked_add(cv_count - 2).unwrap_or(0)
 }
 
-/// Returns the floating-point tolerance associated with the domain interval `[a, b]`.
+/// Return the floating-point tolerance associated with the domain interval [a, b].
 #[inline]
 pub fn domain_tolerance(a: f64, b: f64) -> f64 {
     if a == b {
@@ -77,7 +75,7 @@ pub fn domain_tolerance(a: f64, b: f64) -> f64 {
     }
 }
 
-/// Returns a clamped uniform nurbsknot vector, or an empty vector for invalid arguments.
+/// Return a clamped uniform nurbsknot vector, or an empty vector for invalid arguments.
 pub fn make_clamped_uniform(order: usize, cv_count: usize, delta: f64) -> Vec<f64> {
     if order < 2 || cv_count < order || !delta.is_finite() || delta <= 0.0 {
         return Vec::new();
@@ -90,7 +88,6 @@ pub fn make_clamped_uniform(order: usize, cv_count: usize, delta: f64) -> Vec<f6
     }
 
     let mut nurbsknot = vec![0.0; kc];
-
     let mut k = 0.0;
 
     for value in nurbsknot.iter_mut().take(cv_count).skip(order - 2) {
@@ -98,11 +95,14 @@ pub fn make_clamped_uniform(order: usize, cv_count: usize, delta: f64) -> Vec<f6
         k += delta;
     }
 
-    clamp(order, cv_count, &mut nurbsknot, 2);
+    if !clamp(order, cv_count, &mut nurbsknot, 2) {
+        return Vec::new();
+    }
+
     nurbsknot
 }
 
-/// Returns a periodic uniform nurbsknot vector, or an empty vector for invalid arguments.
+/// Return a periodic uniform nurbsknot vector, or an empty vector for invalid arguments.
 pub fn make_periodic_uniform(order: usize, cv_count: usize, delta: f64) -> Vec<f64> {
     if order < 2 || cv_count < order || !delta.is_finite() || delta <= 0.0 {
         return Vec::new();
@@ -115,7 +115,6 @@ pub fn make_periodic_uniform(order: usize, cv_count: usize, delta: f64) -> Vec<f
     }
 
     let mut nurbsknot = vec![0.0; kc];
-
     let mut k = 0.0;
 
     for value in &mut nurbsknot {
@@ -126,7 +125,7 @@ pub fn make_periodic_uniform(order: usize, cv_count: usize, delta: f64) -> Vec<f
     nurbsknot
 }
 
-/// Clamps selected ends in place, where `end` is 0 for left, 1 for right, or 2 for both.
+/// Clamp the selected ends in place, where end is 0 for left, 1 for right, or 2 for both.
 pub fn clamp(order: usize, cv_count: usize, nurbsknot: &mut [f64], end: i32) -> bool {
     if order < 2 || cv_count < order || !(0..=2).contains(&end) {
         return false;
@@ -154,8 +153,7 @@ pub fn clamp(order: usize, cv_count: usize, nurbsknot: &mut [f64], end: i32) -> 
 // ═══════════════════════════════════════════════════════════════════════════
 // Queries
 // ═══════════════════════════════════════════════════════════════════════════
-
-/// Returns whether the vector has the required length, finite values, and valid spans.
+/// Return whether the vector has the required length, finite values, and valid spans.
 pub fn is_valid(order: usize, cv_count: usize, nurbsknot: &[f64]) -> bool {
     if order < 2 || cv_count < order {
         return false;
@@ -182,7 +180,7 @@ pub fn is_valid(order: usize, cv_count: usize, nurbsknot: &[f64]) -> bool {
     true
 }
 
-/// Returns whether selected ends contain `order - 1` equal nurbsknots.
+/// Return whether the selected ends contain order - 1 equal nurbsknots.
 pub fn is_clamped(order: usize, cv_count: usize, nurbsknot: &[f64], end: i32) -> bool {
     if order < 2 || cv_count < order || !(0..=2).contains(&end) {
         return false;
@@ -228,7 +226,7 @@ pub fn is_clamped(order: usize, cv_count: usize, nurbsknot: &[f64], end: i32) ->
     true
 }
 
-/// Returns whether the nurbsknot vector has finite, positive, uniform spacing.
+/// Return whether the nurbsknot vector has finite, positive, uniform spacing.
 pub fn is_periodic(order: usize, cv_count: usize, nurbsknot: &[f64]) -> bool {
     if order < 2 || cv_count < order {
         return false;
@@ -257,7 +255,7 @@ pub fn is_periodic(order: usize, cv_count: usize, nurbsknot: &[f64]) -> bool {
     true
 }
 
-/// Returns the finite domain endpoints, or `(0.0, 0.0)` when they cannot be read.
+/// Return the finite domain endpoints, or (0, 0) when the required entries cannot be read.
 pub fn get_domain(order: usize, cv_count: usize, nurbsknot: &[f64]) -> (f64, f64) {
     if order < 2 || cv_count < order {
         return (0.0, 0.0);
@@ -279,7 +277,7 @@ pub fn get_domain(order: usize, cv_count: usize, nurbsknot: &[f64]) -> (f64, f64
     (start, end)
 }
 
-/// Rescales the nurbsknot vector in place to the finite domain `[t0, t1]`.
+/// Rescale the nurbsknot vector in place to the finite domain [t0, t1].
 pub fn set_domain(order: usize, cv_count: usize, nurbsknot: &mut [f64], t0: f64, t1: f64) -> bool {
     if order < 2 || cv_count < order || !t0.is_finite() || !t1.is_finite() || t0 >= t1 {
         return false;
@@ -306,7 +304,7 @@ pub fn set_domain(order: usize, cv_count: usize, nurbsknot: &mut [f64], t0: f64,
     true
 }
 
-/// Reverses a finite nurbsknot vector in place while preserving its domain.
+/// Reverse a finite nurbsknot vector in place while preserving its domain.
 pub fn reverse(order: usize, cv_count: usize, nurbsknot: &mut [f64]) -> bool {
     if order < 2 || cv_count < order {
         return false;
@@ -330,7 +328,7 @@ pub fn reverse(order: usize, cv_count: usize, nurbsknot: &mut [f64]) -> bool {
     true
 }
 
-/// Returns the multiplicity at `nurbsknot_index`, or zero for invalid arguments.
+/// Return the multiplicity at nurbsknot_index, or zero for invalid arguments.
 pub fn multiplicity(
     order: usize,
     cv_count: usize,
@@ -350,7 +348,6 @@ pub fn multiplicity(
     let nurbsknot_value = nurbsknot[nurbsknot_index];
     let tol = PIVOT_TOLERANCE;
     let mut mult = 1;
-
     let mut i = nurbsknot_index;
 
     while i > 0 && (nurbsknot[i - 1] - nurbsknot_value).abs() < tol {
@@ -368,7 +365,7 @@ pub fn multiplicity(
     mult
 }
 
-/// Returns the number of non-empty spans, or zero for invalid arguments.
+/// Return the number of non-empty spans, or zero for invalid arguments.
 pub fn span_count(order: usize, cv_count: usize, nurbsknot: &[f64]) -> usize {
     if order < 2 || cv_count < order {
         return 0;
@@ -392,7 +389,7 @@ pub fn span_count(order: usize, cv_count: usize, nurbsknot: &[f64]) -> usize {
     count
 }
 
-/// Returns the index of the span containing finite parameter `t` in a valid nondecreasing nurbsknot vector.
+/// Return the index of the span containing finite parameter t in a valid nondecreasing nurbsknot vector.
 pub fn find_span(
     order: usize,
     cv_count: usize,
@@ -451,7 +448,7 @@ pub fn find_span(
     low
 }
 
-/// Returns the Greville abscissae, or an empty vector for invalid arguments.
+/// Return the Greville abscissae, or an empty vector for invalid arguments.
 pub fn get_greville_abcissae(
     order: usize,
     cv_count: usize,
@@ -492,8 +489,7 @@ pub fn get_greville_abcissae(
 // ═══════════════════════════════════════════════════════════════════════════
 // Interpolation
 // ═══════════════════════════════════════════════════════════════════════════
-
-/// Solves a finite tridiagonal system, returning `None` if invalid or singular.
+/// Solve a finite tridiagonal system with the Thomas algorithm, returning None if invalid or singular.
 pub fn solve_tridiagonal(
     dim: usize,
     n: usize,
@@ -562,7 +558,7 @@ pub fn solve_tridiagonal(
     Some(solution)
 }
 
-/// Returns one parameter per point from a flat `point_count` by `dim` coordinate array.
+/// Return one parameter per point from a flat point_count by dim coordinate array.
 pub fn compute_parameters(
     points: &[f64],
     point_count: usize,
@@ -594,7 +590,6 @@ pub fn compute_parameters(
         }
 
         dist = dist.sqrt();
-
         let mut delta = dist;
 
         if base_style == 0 {
@@ -609,7 +604,7 @@ pub fn compute_parameters(
     params
 }
 
-/// Returns a clamped interpolation nurbsknot vector with natural end conditions.
+/// Return a clamped interpolation nurbsknot vector with natural end conditions.
 pub fn build_interp_nurbsknots(params: &[f64], degree: usize) -> Vec<f64> {
     let n = params.len();
 
@@ -643,7 +638,7 @@ pub fn build_interp_nurbsknots(params: &[f64], degree: usize) -> Vec<f64> {
     nurbsknots
 }
 
-/// Returns the `order` nonzero B-spline basis values at `t` by Cox-de Boor evaluation over a finite span window.
+/// Return the order non-zero B-spline basis values at t by Cox-de Boor evaluation over a finite span window.
 pub fn eval_basis(order: usize, nurbsknot: &[f64], span: usize, t: f64) -> Vec<f64> {
     if order < 1 || !t.is_finite() {
         return Vec::new();
@@ -674,7 +669,6 @@ pub fn eval_basis(order: usize, nurbsknot: &[f64], span: usize, t: f64) -> Vec<f
     let mut basis = vec![0.0; order];
     let mut left = vec![0.0; order];
     let mut right = vec![0.0; order];
-
     let Some(k_offset) = span.checked_add(order - 2) else {
         return Vec::new();
     };
@@ -701,7 +695,6 @@ pub fn eval_basis(order: usize, nurbsknot: &[f64], span: usize, t: f64) -> Vec<f
 // ═══════════════════════════════════════════════════════════════════════════
 // Fitting
 // ═══════════════════════════════════════════════════════════════════════════
-
 fn build_fitted_nurbsknots(params: &[f64], num_cvs: usize, degree: usize) -> Vec<f64> {
     let m = params.len();
     let n_interior = num_cvs - degree - 1;
@@ -713,7 +706,6 @@ fn build_fitted_nurbsknots(params: &[f64], num_cvs: usize, degree: usize) -> Vec
     }
 
     let mut nurbsknots = vec![0.0; kc];
-
     nurbsknots[..degree].fill(params[0]);
 
     let d = m as f64 / (num_cvs - degree) as f64;
@@ -771,10 +763,11 @@ fn locate_target(params: &[f64], cum: &[f64], last: usize, target: f64) -> f64 {
     } else {
         0.0
     };
+
     params[lo] + frac * (params[lo + 1] - params[lo])
 }
 
-/// Returns a clamped fitting vector with denser nurbsknots where the points turn.
+/// Return a clamped fitting vector with denser nurbsknots where the points turn.
 pub fn build_fitted_nurbsknots_adaptive(
     params: &[f64],
     points: &[f64],
@@ -826,7 +819,6 @@ pub fn build_fitted_nurbsknots_adaptive(
     }
 
     let total = cum[m - 1];
-
     let n_interior = num_cvs - degree - 1;
     let order = degree + 1;
     let kc = nurbsknot_count(order, num_cvs);
@@ -852,7 +844,7 @@ pub fn build_fitted_nurbsknots_adaptive(
     nurbsknots
 }
 
-/// Returns a periodic fitting vector with denser nurbsknots where the closed points turn.
+/// Return a periodic fitting vector with denser nurbsknots where the closed points turn.
 pub fn build_fitted_nurbsknots_periodic_adaptive(
     params: &[f64],
     points: &[f64],
@@ -932,7 +924,6 @@ pub fn build_fitted_nurbsknots_periodic_adaptive(
     }
 
     let total = cum[n];
-
     let mut base = vec![0.0; num_cvs];
 
     for (j, value) in base.iter_mut().enumerate() {
@@ -958,7 +949,7 @@ pub fn build_fitted_nurbsknots_periodic_adaptive(
     nurbsknots
 }
 
-/// Solves a finite banded SPD system in place, returning false for invalid or indefinite input.
+/// Solve a finite banded symmetric positive-definite system in place with Cholesky factorization.
 pub fn solve_banded_spd(
     dim: usize,
     n: usize,
