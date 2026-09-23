@@ -1,6 +1,9 @@
 use crate::mini_test::TestResult;
-use crate::tolerance::{PI, TOLERANCE};
-use crate::{MINI_CHECK, MINI_TEST, REGISTER_MINI_TEST};
+use crate::tolerance::PI;
+use crate::tolerance::TOLERANCE;
+use crate::MINI_CHECK;
+use crate::MINI_TEST;
+use crate::REGISTER_MINI_TEST;
 
 pub fn run_quaternion_constructor() -> TestResult {
     MINI_TEST!("Constructor", {
@@ -14,6 +17,7 @@ pub fn run_quaternion_constructor() -> TestResult {
         q[1] = 0.0;
         q[2] = 1.0;
         q[3] = 0.0;
+
         let s_val = q[0];
         let x = q[1];
         let y = q[2];
@@ -118,6 +122,7 @@ pub fn run_quaternion_from_axis_angle() -> TestResult {
         MINI_CHECK!(TOLERANCE.is_close(q.vector[2], (PI / 4.0).sin()));
 
         let zero_axis = Quaternion::from_axis_angle(Vector::new(0.0, 0.0, 0.0), PI / 2.0);
+
         MINI_CHECK!(zero_axis == Quaternion::identity());
     })
 }
@@ -305,6 +310,7 @@ pub fn run_quaternion_slerp() -> TestResult {
 
         let antipodal = -Quaternion::identity();
         let same_rotation = q1.slerp(&antipodal, 0.5);
+
         MINI_CHECK!(TOLERANCE.is_close(same_rotation.scalar, 1.0));
         MINI_CHECK!(TOLERANCE.is_close(same_rotation.vector.magnitude(), 0.0));
     })
@@ -333,13 +339,19 @@ pub fn run_quaternion_json_roundtrip() -> TestResult {
         let mut q = Quaternion::from_axis_angle(Vector::new(0.0, 0.0, 1.0), PI / 2.0);
         q.name = "test_quaternion".to_string();
 
+        let guid = q.guid().to_string();
         let filename = "serialization/test_quaternion.json";
         q.file_json_dump(filename).unwrap();
+
         let loaded = Quaternion::file_json_load(filename).unwrap();
+        let parsed = Quaternion::file_json_loads(&q.file_json_dumps());
 
         MINI_CHECK!(loaded.name == "test_quaternion");
         MINI_CHECK!(TOLERANCE.is_close(loaded.scalar, q.scalar));
         MINI_CHECK!(TOLERANCE.is_close(loaded.vector[2], q.vector[2]));
+        MINI_CHECK!(parsed == q);
+        MINI_CHECK!(loaded.guid() == guid);
+        MINI_CHECK!(parsed.guid() == guid);
     })
 }
 
@@ -353,11 +365,16 @@ pub fn run_quaternion_protobuf_roundtrip() -> TestResult {
 
         let filename = "serialization/test_quaternion.bin";
         q.pb_dump(filename);
+
         let loaded = Quaternion::pb_load(filename);
+        let parsed = Quaternion::pb_loads(&q.pb_dumps()).unwrap();
+        let converted = Quaternion::from_proto(q.to_proto());
 
         MINI_CHECK!(loaded.name == "test_quaternion");
         MINI_CHECK!(TOLERANCE.is_close(loaded.scalar, q.scalar));
         MINI_CHECK!(TOLERANCE.is_close(loaded.vector[2], q.vector[2]));
+        MINI_CHECK!(parsed == q);
+        MINI_CHECK!(converted == q);
     })
 }
 
