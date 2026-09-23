@@ -1,7 +1,16 @@
-use crate::{
-    Line, Mesh, NurbsCurve, NurbsSurface, Plane, Point, PointCloud, Polyline, Vector, Xform, AABB,
-};
-use serde::{Deserialize, Serialize};
+use crate::Line;
+use crate::Mesh;
+use crate::NurbsCurve;
+use crate::NurbsSurface;
+use crate::Plane;
+use crate::Point;
+use crate::PointCloud;
+use crate::Polyline;
+use crate::Vector;
+use crate::Xform;
+use crate::AABB;
+use serde::Deserialize;
+use serde::Serialize;
 use std::fmt;
 use std::sync::OnceLock;
 
@@ -12,34 +21,24 @@ const MAX_ITER: usize = 20; // Newton iterations per extremum.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(tag = "type", rename = "OBB")]
 pub struct OBB {
-    pub center: Point,     // Box center.
-    pub x_axis: Vector,    // Unit x axis.
-    pub y_axis: Vector,    // Unit y axis.
-    pub z_axis: Vector,    // Unit z axis.
-    pub half_size: Vector, // Half extent along each axis.
     #[serde(
         serialize_with = "crate::guid_serde::serialize",
         deserialize_with = "crate::guid_serde::deserialize"
     )]
     guid: OnceLock<String>, // Lazy guid.
+    pub center: Point,     // Box center.
+    pub x_axis: Vector,    // Unit x axis.
+    pub y_axis: Vector,    // Unit y axis.
+    pub z_axis: Vector,    // Unit z axis.
+    pub half_size: Vector, // Half extent along each axis.
     pub name: String,      // Box name.
 }
 
-impl Default for OBB {
-    /// Constructs the unit box at the origin.
-    fn default() -> Self {
-        Self::new(
-            Point::new(0.0, 0.0, 0.0),
-            Vector::new(1.0, 0.0, 0.0),
-            Vector::new(0.0, 1.0, 0.0),
-            Vector::new(0.0, 0.0, 1.0),
-            Vector::new(0.5, 0.5, 0.5),
-        )
-    }
-}
-
 impl OBB {
-    /// Constructs from center, axes and half-size.
+    // ═══════════════════════════════════════════════════════════════════════════
+    // Constructors
+    // ═══════════════════════════════════════════════════════════════════════════
+    /// Construct from center, axes and half-size.
     pub fn new(
         center: Point,
         x_axis: Vector,
@@ -48,17 +47,51 @@ impl OBB {
         half_size: Vector,
     ) -> Self {
         Self {
+            guid: OnceLock::new(),
             center,
             x_axis,
             y_axis,
             z_axis,
             half_size,
-            guid: OnceLock::new(),
             name: "my_obb".to_string(),
         }
     }
 
-    /// Constructs on the plane frame with full sizes dx, dy, dz.
+    /// Copy with a new guid and the same data.
+    pub fn duplicate(&self) -> Self {
+        let mut copy = self.clone();
+        copy.guid = OnceLock::new();
+
+        copy
+    }
+
+    // ═══════════════════════════════════════════════════════════════════════════
+    // Accessors
+    // ═══════════════════════════════════════════════════════════════════════════
+    /// Return whether the lazy guid has been created.
+    pub fn has_guid(&self) -> bool {
+        self.guid.get().is_some()
+    }
+
+    /// Return the guid, creating it on first access.
+    pub fn guid(&self) -> &str {
+        self.guid.get_or_init(|| uuid::Uuid::new_v4().to_string())
+    }
+
+    /// Set the guid if it has not already been created.
+    pub fn set_guid(&self, guid: String) {
+        let _ = self.guid.set(guid);
+    }
+
+    /// Clear the guid so a fresh one mints lazily on the next read.
+    pub fn refresh_guid(&mut self) {
+        self.guid = OnceLock::new();
+    }
+
+    // ═══════════════════════════════════════════════════════════════════════════
+    // Static constructors
+    // ═══════════════════════════════════════════════════════════════════════════
+    /// Construct on the plane frame with full sizes dx, dy, dz.
     pub fn from_plane(plane: &Plane, dx: f64, dy: f64, dz: f64) -> Self {
         Self::new(
             plane.origin(),
@@ -69,40 +102,8 @@ impl OBB {
         )
     }
 
-    /// Copies with a new guid and the same data.
-    pub fn duplicate(&self) -> Self {
-        let mut copy = self.clone();
-        copy.guid = OnceLock::new();
-
-        copy
-    }
-
-    /// Returns whether the lazy guid has been created.
-    pub fn has_guid(&self) -> bool {
-        self.guid.get().is_some()
-    }
-
-    /// Returns the guid, creating it on first access.
-    pub fn guid(&self) -> &str {
-        self.guid.get_or_init(|| uuid::Uuid::new_v4().to_string())
-    }
-
-    /// Sets the guid if it has not already been created.
-    pub fn set_guid(&self, g: String) {
-        let _ = self.guid.set(g);
-    }
-
-    /// Clears the guid so a fresh one mints lazily on the next read.
-    pub fn refresh_guid(&mut self) {
-        self.guid = OnceLock::new();
-    }
-
-    // ═══════════════════════════════════════════════════════════════════════════
-    // Static constructors
-    // ═══════════════════════════════════════════════════════════════════════════
-
-    /// Constructs the world-aligned box with the center and half-size of aabb.
-    fn from_aabb(aabb: &AABB) -> Self {
+    /// Construct the world-aligned box with the center and half-size of aabb.
+    pub fn from_aabb(aabb: &AABB) -> Self {
         Self::new(
             Point::new(aabb.cx, aabb.cy, aabb.cz),
             Vector::new(1.0, 0.0, 0.0),
@@ -112,12 +113,12 @@ impl OBB {
         )
     }
 
-    /// Constructs the world-aligned box of half-size inflate around point.
+    /// Construct the world-aligned box of half-size inflate around point.
     pub fn from_point(point: &Point, inflate: f64) -> Self {
         Self::from_aabb(&AABB::from_point(point, inflate))
     }
 
-    /// Constructs the world-aligned tight box of points, or tight in the plane frame, grown by inflate.
+    /// Construct the world-aligned tight box of points, or tight in the plane frame, grown by inflate.
     pub fn from_points(points: &[Point], inflate: f64, plane: Option<&Plane>) -> Self {
         let Some(plane) = plane else {
             return Self::from_aabb(&AABB::from_points(points, inflate));
@@ -133,6 +134,7 @@ impl OBB {
         let z_axis = plane.z_axis();
         let world_to_local = Xform::world_to_frame(&origin, &x_axis, &y_axis, &z_axis);
         let local_to_world = Xform::frame_to_world(&origin, &x_axis, &y_axis, &z_axis);
+
         let mut min_x = f64::MAX;
         let mut min_y = f64::MAX;
         let mut min_z = f64::MAX;
@@ -142,6 +144,7 @@ impl OBB {
 
         for pt in points {
             let local = pt.transformed(&world_to_local);
+
             min_x = min_x.min(local[0]);
             min_y = min_y.min(local[1]);
             min_z = min_z.min(local[2]);
@@ -160,6 +163,7 @@ impl OBB {
             (max_y - min_y) * 0.5 + inflate,
             (max_z - min_z) * 0.5 + inflate,
         );
+
         Self::new(
             local_center.transformed(&local_to_world),
             x_axis,
@@ -169,7 +173,7 @@ impl OBB {
         )
     }
 
-    /// Constructs the tight box of the two ends, world-aligned or in the plane frame, grown by inflate.
+    /// Construct the tight box of the two ends, world-aligned or in the plane frame, grown by inflate.
     pub fn from_line(line: &Line, inflate: f64, plane: Option<&Plane>) -> Self {
         let Some(plane) = plane else {
             return Self::from_aabb(&AABB::from_line(line, inflate));
@@ -178,7 +182,7 @@ impl OBB {
         Self::from_points(&[line.start(), line.end()], inflate, Some(plane))
     }
 
-    /// Constructs the tight box of the vertices, world-aligned or in the plane frame, grown by inflate.
+    /// Construct the tight box of the vertices, world-aligned or in the plane frame, grown by inflate.
     pub fn from_polyline(polyline: &Polyline, inflate: f64, plane: Option<&Plane>) -> Self {
         let Some(plane) = plane else {
             return Self::from_aabb(&AABB::from_polyline(polyline, inflate));
@@ -187,17 +191,16 @@ impl OBB {
         Self::from_points(&polyline.get_points(), inflate, Some(plane))
     }
 
-    /// Constructs the tight box of the vertices, world-aligned or in the plane frame, grown by inflate.
+    /// Construct the tight box of the vertices, world-aligned or in the plane frame, grown by inflate.
     pub fn from_mesh(mesh: &Mesh, inflate: f64, plane: Option<&Plane>) -> Self {
         let Some(plane) = plane else {
             return Self::from_aabb(&AABB::from_mesh(mesh, inflate));
         };
-        let (vertices, _faces) = mesh.to_vertices_and_faces();
 
-        Self::from_points(&vertices, inflate, Some(plane))
+        Self::from_points(&mesh.to_vertices_and_faces().0, inflate, Some(plane))
     }
 
-    /// Constructs the tight box of the points, world-aligned or in the plane frame, grown by inflate.
+    /// Construct the tight box of the points, world-aligned or in the plane frame, grown by inflate.
     pub fn from_pointcloud(pointcloud: &PointCloud, inflate: f64, plane: Option<&Plane>) -> Self {
         let Some(plane) = plane else {
             return Self::from_aabb(&AABB::from_pointcloud(pointcloud, inflate));
@@ -206,7 +209,7 @@ impl OBB {
         Self::from_points(&pointcloud.get_points(), inflate, Some(plane))
     }
 
-    /// Constructs the box of the control points, or of the curve extrema when tight, world-aligned or in the plane frame.
+    /// Construct the box of the control points, or of the curve extrema when tight, world-aligned or in the plane frame.
     pub fn from_nurbscurve(
         curve: &NurbsCurve,
         inflate: f64,
@@ -233,7 +236,9 @@ impl OBB {
             return Self::from_points(&points, inflate, Some(plane));
         }
 
-        let (t0, t1) = curve.domain();
+        let t0 = curve.domain_start();
+        let t1 = curve.domain_end();
+
         points.push(curve.point_at(t0));
         points.push(curve.point_at(t1));
 
@@ -270,7 +275,7 @@ impl OBB {
         Self::from_points(&points, inflate, Some(plane))
     }
 
-    /// Constructs the box of the control points, world-aligned or in the plane frame, grown by inflate.
+    /// Construct the box of the control points, world-aligned or in the plane frame, grown by inflate.
     pub fn from_nurbssurface(surface: &NurbsSurface, inflate: f64, plane: Option<&Plane>) -> Self {
         let Some(plane) = plane else {
             return Self::from_aabb(&AABB::from_nurbssurface(surface, inflate));
@@ -293,7 +298,7 @@ impl OBB {
         Self::from_points(&points, inflate, Some(plane))
     }
 
-    /// Computes the parameter in [t_lo, t_hi] where the derivative along axis crosses zero, by Newton steps bracketed by bisection.
+    /// Compute the parameter in [t_lo, t_hi] where the derivative along axis crosses zero, by Newton steps bracketed by bisection.
     fn compute_extremum(
         curve: &NurbsCurve,
         axis: &Vector,
@@ -313,20 +318,20 @@ impl OBB {
                 break;
             }
 
-            let f = deriv[1].dot(axis);
-            let fp = deriv[2].dot(axis);
+            let d1 = deriv[1].dot(axis);
+            let d2 = deriv[2].dot(axis);
 
-            if f.abs() < 1e-12 {
+            if d1.abs() < 1e-12 {
                 break;
             }
 
-            if fp.abs() > 1e-14 {
-                let t_new = t_root - f / fp;
+            if d2.abs() > 1e-14 {
+                let t_new = t_root - d1 / d2;
 
                 if t_new >= t_lo && t_new <= t_hi {
                     t_root = t_new;
                 } else {
-                    if f * d_start < 0.0 {
+                    if d1 * d_start < 0.0 {
                         t_hi = t_root;
                     } else {
                         t_lo = t_root;
@@ -344,24 +349,74 @@ impl OBB {
                 continue;
             }
 
-            let f_check = deriv_check[1].dot(axis);
+            let d_check = deriv_check[1].dot(axis);
 
-            if f_check * d_start < 0.0 {
+            if d_check * d_start < 0.0 {
                 t_hi = t_root;
             } else {
                 t_lo = t_root;
-                d_start = f_check;
+                d_start = d_check;
             }
         }
 
         t_root
     }
+}
 
+impl Default for OBB {
+    /// Construct the unit box at the origin.
+    fn default() -> Self {
+        Self::new(
+            Point::new(0.0, 0.0, 0.0),
+            Vector::new(1.0, 0.0, 0.0),
+            Vector::new(0.0, 1.0, 0.0),
+            Vector::new(0.0, 0.0, 1.0),
+            Vector::new(0.5, 0.5, 0.5),
+        )
+    }
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Operators
+// ═══════════════════════════════════════════════════════════════════════════
+impl PartialEq for OBB {
+    /// Compare name, center, axes and half-size to 1e-6; guid ignored.
+    fn eq(&self, other: &Self) -> bool {
+        if self.name != other.name {
+            return false;
+        }
+
+        for i in 0..3 {
+            if (self.center[i] * 1000000.0).round() != (other.center[i] * 1000000.0).round() {
+                return false;
+            }
+
+            if (self.x_axis[i] * 1000000.0).round() != (other.x_axis[i] * 1000000.0).round() {
+                return false;
+            }
+
+            if (self.y_axis[i] * 1000000.0).round() != (other.y_axis[i] * 1000000.0).round() {
+                return false;
+            }
+
+            if (self.z_axis[i] * 1000000.0).round() != (other.z_axis[i] * 1000000.0).round() {
+                return false;
+            }
+
+            if (self.half_size[i] * 1000000.0).round() != (other.half_size[i] * 1000000.0).round() {
+                return false;
+            }
+        }
+
+        true
+    }
+}
+
+impl OBB {
     // ═══════════════════════════════════════════════════════════════════════════
     // Transformation
     // ═══════════════════════════════════════════════════════════════════════════
-
-    /// Transforms center and axes in place.
+    /// Transform center and axes in place.
     pub fn transform(&mut self, xform: &Xform) {
         self.center.transform(xform);
         self.x_axis.transform(xform);
@@ -369,7 +424,7 @@ impl OBB {
         self.z_axis.transform(xform);
     }
 
-    /// Returns a transformed copy.
+    /// Return a transformed copy.
     pub fn transformed(&self, xform: &Xform) -> Self {
         let mut result = self.duplicate();
         result.transform(xform);
@@ -380,8 +435,7 @@ impl OBB {
     // ═══════════════════════════════════════════════════════════════════════════
     // Geometry
     // ═══════════════════════════════════════════════════════════════════════════
-
-    /// Returns the world-aligned box enclosing the corners.
+    /// Return the world-aligned box enclosing the corners.
     pub fn aabb(&self) -> AABB {
         let ex = self.half_size[0];
         let ey = self.half_size[1];
@@ -393,17 +447,17 @@ impl OBB {
         AABB::new(self.center[0], self.center[1], self.center[2], hx, hy, hz)
     }
 
-    /// Returns the min corner of the world-aligned box.
+    /// Return the min corner of the world-aligned box.
     pub fn min_point(&self) -> Point {
         self.aabb().min_point()
     }
 
-    /// Returns the max corner of the world-aligned box.
+    /// Return the max corner of the world-aligned box.
     pub fn max_point(&self) -> Point {
         self.aabb().max_point()
     }
 
-    /// Returns the surface area.
+    /// Return the surface area.
     pub fn area(&self) -> f64 {
         let hx = self.half_size[0];
         let hy = self.half_size[1];
@@ -412,7 +466,7 @@ impl OBB {
         8.0 * (hx * hy + hy * hz + hz * hx)
     }
 
-    /// Returns the length of the space diagonal.
+    /// Return the length of the space diagonal.
     pub fn diagonal(&self) -> f64 {
         let hx = self.half_size[0];
         let hy = self.half_size[1];
@@ -421,48 +475,37 @@ impl OBB {
         2.0 * (hx * hx + hy * hy + hz * hz).sqrt()
     }
 
-    /// Returns the volume.
+    /// Return the volume.
     pub fn volume(&self) -> f64 {
         8.0 * self.half_size[0] * self.half_size[1] * self.half_size[2]
     }
 
-    /// Returns whether no half-size is negative.
+    /// Return whether no half-size is negative.
     pub fn is_valid(&self) -> bool {
         self.half_size[0] >= 0.0 && self.half_size[1] >= 0.0 && self.half_size[2] >= 0.0
     }
 
-    /// Returns pt clamped to the box in its own frame.
+    /// Return pt clamped to the box in its own frame.
     pub fn closest_point(&self, pt: &Point) -> Point {
-        let d = pt - &self.center;
-        let lx = d
-            .dot(&self.x_axis)
-            .max(-self.half_size[0])
-            .min(self.half_size[0]);
-
-        let ly = d
-            .dot(&self.y_axis)
-            .max(-self.half_size[1])
-            .min(self.half_size[1]);
-
-        let lz = d
-            .dot(&self.z_axis)
-            .max(-self.half_size[2])
-            .min(self.half_size[2]);
+        let offset = pt - &self.center;
+        let lx = (-self.half_size[0]).max(self.half_size[0].min(offset.dot(&self.x_axis)));
+        let ly = (-self.half_size[1]).max(self.half_size[1].min(offset.dot(&self.y_axis)));
+        let lz = (-self.half_size[2]).max(self.half_size[2].min(offset.dot(&self.z_axis)));
 
         self.point_at(lx, ly, lz)
     }
 
-    /// Returns whether pt lies inside or on the box.
+    /// Return whether pt lies inside or on the box.
     pub fn contains(&self, pt: &Point) -> bool {
-        let d = pt - &self.center;
-        let lx = d.dot(&self.x_axis).abs();
-        let ly = d.dot(&self.y_axis).abs();
-        let lz = d.dot(&self.z_axis).abs();
+        let offset = pt - &self.center;
+        let lx = offset.dot(&self.x_axis).abs();
+        let ly = offset.dot(&self.y_axis).abs();
+        let lz = offset.dot(&self.z_axis).abs();
 
         lx <= self.half_size[0] && ly <= self.half_size[1] && lz <= self.half_size[2]
     }
 
-    /// Returns the corner picked by the sign of each half-size.
+    /// Return the corner picked by the sign of each half-size.
     pub fn corner(&self, x_max: bool, y_max: bool, z_max: bool) -> Point {
         let ox = if x_max {
             self.half_size[0]
@@ -483,7 +526,7 @@ impl OBB {
         self.point_at(ox, oy, oz)
     }
 
-    /// Returns the bottom loop then the top loop, counter-clockwise from +x+y.
+    /// Return the bottom loop then the top loop, counter-clockwise from +x+y.
     pub fn corners(&self) -> [Point; 8] {
         [
             self.point_at(self.half_size[0], self.half_size[1], -self.half_size[2]),
@@ -497,31 +540,32 @@ impl OBB {
         ]
     }
 
-    /// Returns the bottom loop then the top loop, counter-clockwise from +x+y.
+    /// Return the bottom loop then the top loop, counter-clockwise from +x+y.
     pub fn get_corners(&self) -> [Point; 8] {
         self.corners()
     }
 
-    /// Returns the bottom loop, the top loop, then the four verticals.
+    /// Return the bottom loop, the top loop, then the four verticals.
     pub fn get_edges(&self) -> Vec<Line> {
-        let c = self.corners();
+        let points = self.corners();
+
         vec![
-            Line::from_points(&c[0], &c[1]),
-            Line::from_points(&c[1], &c[2]),
-            Line::from_points(&c[2], &c[3]),
-            Line::from_points(&c[3], &c[0]),
-            Line::from_points(&c[4], &c[5]),
-            Line::from_points(&c[5], &c[6]),
-            Line::from_points(&c[6], &c[7]),
-            Line::from_points(&c[7], &c[4]),
-            Line::from_points(&c[0], &c[4]),
-            Line::from_points(&c[1], &c[5]),
-            Line::from_points(&c[2], &c[6]),
-            Line::from_points(&c[3], &c[7]),
+            Line::from_points(&points[0], &points[1]),
+            Line::from_points(&points[1], &points[2]),
+            Line::from_points(&points[2], &points[3]),
+            Line::from_points(&points[3], &points[0]),
+            Line::from_points(&points[4], &points[5]),
+            Line::from_points(&points[5], &points[6]),
+            Line::from_points(&points[6], &points[7]),
+            Line::from_points(&points[7], &points[4]),
+            Line::from_points(&points[0], &points[4]),
+            Line::from_points(&points[1], &points[5]),
+            Line::from_points(&points[2], &points[6]),
+            Line::from_points(&points[3], &points[7]),
         ]
     }
 
-    /// Returns the bottom loop and the top loop, each closed by repeating its first corner.
+    /// Return the bottom loop and the top loop, each closed by repeating its first corner.
     pub fn two_rectangles(&self) -> [Point; 10] {
         [
             self.point_at(self.half_size[0], self.half_size[1], -self.half_size[2]),
@@ -537,17 +581,17 @@ impl OBB {
         ]
     }
 
-    /// Returns the center offset by x, y, z along the axes.
+    /// Return the center offset by x, y, z along the axes.
     pub fn point_at(&self, x: f64, y: f64, z: f64) -> Point {
         &self.center + &self.x_axis * x + &self.y_axis * y + &self.z_axis * z
     }
 
-    /// Grows every half-size by amount.
+    /// Grow every half-size by amount.
     pub fn inflate(&mut self, amount: f64) {
         self.half_size += Vector::new(amount, amount, amount);
     }
 
-    /// Grows in place to enclose the corners of other.
+    /// Grow in place to enclose the corners of other.
     pub fn union_with(&mut self, other: &OBB) {
         let mut min_x = -self.half_size[0];
         let mut min_y = -self.half_size[1];
@@ -556,11 +600,12 @@ impl OBB {
         let mut max_y = self.half_size[1];
         let mut max_z = self.half_size[2];
 
-        for c in &other.corners() {
-            let d = c - &self.center;
-            let lx = d.dot(&self.x_axis);
-            let ly = d.dot(&self.y_axis);
-            let lz = d.dot(&self.z_axis);
+        for point in &other.corners() {
+            let offset = point - &self.center;
+            let lx = offset.dot(&self.x_axis);
+            let ly = offset.dot(&self.y_axis);
+            let lz = offset.dot(&self.z_axis);
+
             min_x = min_x.min(lx);
             min_y = min_y.min(ly);
             min_z = min_z.min(lz);
@@ -584,13 +629,12 @@ impl OBB {
     // ═══════════════════════════════════════════════════════════════════════════
     // Collision
     // ═══════════════════════════════════════════════════════════════════════════
-
-    /// Returns whether the boxes overlap by the separating axis test (collides_with_rtcd).
+    /// Return whether the boxes overlap by the separating axis test (collides_with_rtcd).
     pub fn collides_with(&self, other: &OBB) -> bool {
         self.collides_with_rtcd(other)
     }
 
-    /// Returns whether the boxes overlap, rejecting by AABB before collides_with.
+    /// Return whether the boxes overlap, rejecting by AABB before collides_with.
     pub fn collides_with_broad(&self, other: &OBB) -> bool {
         if !self.aabb().intersects(&other.aabb()) {
             return false;
@@ -599,7 +643,7 @@ impl OBB {
         self.collides_with(other)
     }
 
-    /// Returns whether the boxes overlap by the fifteen-axis test in the frame of this box (Real-Time Collision Detection).
+    /// Return whether the boxes overlap by the fifteen-axis test in the frame of this box (Real-Time Collision Detection).
     pub fn collides_with_rtcd(&self, other: &OBB) -> bool {
         let eps = 1e-9;
         let a0 = self.half_size[0];
@@ -617,10 +661,10 @@ impl OBB {
         let r20 = self.z_axis.dot(&other.x_axis);
         let r21 = self.z_axis.dot(&other.y_axis);
         let r22 = self.z_axis.dot(&other.z_axis);
-        let d = &other.center - &self.center;
-        let t0 = d.dot(&self.x_axis);
-        let t1 = d.dot(&self.y_axis);
-        let t2 = d.dot(&self.z_axis);
+        let offset = &other.center - &self.center;
+        let t0 = offset.dot(&self.x_axis);
+        let t1 = offset.dot(&self.y_axis);
+        let t2 = offset.dot(&self.z_axis);
         let ar00 = r00.abs() + eps;
         let ar01 = r01.abs() + eps;
         let ar02 = r02.abs() + eps;
@@ -694,9 +738,9 @@ impl OBB {
         true
     }
 
-    /// Returns whether the boxes overlap by the fifteen-axis test on projected extents.
+    /// Return whether the boxes overlap by the fifteen-axis test on projected extents.
     pub fn collides_with_naive(&self, other: &OBB) -> bool {
-        let rp = &other.center - &self.center;
+        let offset = &other.center - &self.center;
         let axes = [
             self.x_axis.clone(),
             self.y_axis.clone(),
@@ -716,7 +760,7 @@ impl OBB {
         ];
 
         for axis in &axes {
-            if Self::separating_plane_exists(&rp, axis, self, other) {
+            if Self::separating_plane_exists(&offset, axis, self, other) {
                 return false;
             }
         }
@@ -724,7 +768,7 @@ impl OBB {
         true
     }
 
-    /// Returns whether the extents of both boxes projected on axis do not reach their center distance.
+    /// Return whether the extents of both boxes projected on axis do not reach their center distance.
     fn separating_plane_exists(
         relative_position: &Vector,
         axis: &Vector,
@@ -745,35 +789,34 @@ impl OBB {
     // ═══════════════════════════════════════════════════════════════════════════
     // JSON
     // ═══════════════════════════════════════════════════════════════════════════
-
-    /// Serializes to a JSON string.
+    /// Serialize to a JSON string.
     pub fn jsondump(&self) -> Result<String, Box<dyn std::error::Error>> {
         crate::file_encoders::sorted_json_string(self)
     }
 
-    /// Deserializes from a JSON string.
+    /// Deserialize from a JSON string.
     pub fn jsonload(json_data: &str) -> Result<Self, Box<dyn std::error::Error>> {
         Ok(serde_json::from_str(json_data)?)
     }
 
-    /// Serializes to a JSON string.
+    /// Serialize to a JSON string.
     pub fn file_json_dumps(&self) -> String {
         self.jsondump().unwrap_or_default()
     }
 
-    /// Deserializes from a JSON string.
+    /// Deserialize from a JSON string.
     pub fn file_json_loads(json_string: &str) -> Self {
         Self::jsonload(json_string).unwrap_or_default()
     }
 
-    /// Writes to a JSON file.
+    /// Write to a JSON file.
     pub fn file_json_dump(&self, filepath: &str) -> Result<(), Box<dyn std::error::Error>> {
         std::fs::write(filepath, self.jsondump()?)?;
 
         Ok(())
     }
 
-    /// Reads from a JSON file.
+    /// Read from a JSON file.
     pub fn file_json_load(filepath: &str) -> Result<Self, Box<dyn std::error::Error>> {
         Self::jsonload(&std::fs::read_to_string(filepath)?)
     }
@@ -781,74 +824,30 @@ impl OBB {
     // ═══════════════════════════════════════════════════════════════════════════
     // Protobuf
     // ═══════════════════════════════════════════════════════════════════════════
-
-    /// Serializes to protobuf bytes.
-    pub fn pb_dumps(&self) -> Vec<u8> {
-        use prost::Message;
-
-        self.to_proto().encode_to_vec()
-    }
-
-    /// Deserializes from protobuf bytes.
-    pub fn pb_loads(data: &[u8]) -> Result<Self, Box<dyn std::error::Error>> {
-        use prost::Message;
-
-        Self::from_proto(crate::proto::BoundingBox::decode(data)?)
-    }
-
-    /// Writes to a protobuf file.
-    pub fn pb_dump(&self, filepath: &str) {
-        let data = self.pb_dumps();
-        std::fs::write(filepath, data).expect("Failed to write protobuf file");
-    }
-
-    /// Reads from a protobuf file.
-    pub fn pb_load(filepath: &str) -> Self {
-        let data = std::fs::read(filepath).expect("Failed to read protobuf file");
-
-        Self::pb_loads(&data).expect("Failed to parse protobuf")
-    }
-
-    /// Returns the proto message; pb_dumps encodes it and Session embeds it.
+    /// Convert to the protobuf message.
     pub fn to_proto(&self) -> crate::proto::BoundingBox {
-        use prost::Message;
         crate::proto::BoundingBox {
-            center: crate::proto::Point::decode(self.center.pb_dumps().as_slice()).ok(),
-            x_axis: crate::proto::Vector::decode(self.x_axis.pb_dumps().as_slice()).ok(),
-            y_axis: crate::proto::Vector::decode(self.y_axis.pb_dumps().as_slice()).ok(),
-            z_axis: crate::proto::Vector::decode(self.z_axis.pb_dumps().as_slice()).ok(),
-            half_size: crate::proto::Vector::decode(self.half_size.pb_dumps().as_slice()).ok(),
+            center: Some(self.center.to_proto()),
+            x_axis: Some(self.x_axis.to_proto()),
+            y_axis: Some(self.y_axis.to_proto()),
+            z_axis: Some(self.z_axis.to_proto()),
+            half_size: Some(self.half_size.to_proto()),
             guid: self.guid.get().cloned().unwrap_or_default(),
             name: self.name.clone(),
         }
     }
 
-    /// Constructs from a decoded proto message.
+    /// Construct from the protobuf message.
     pub fn from_proto(
         proto: crate::proto::BoundingBox,
     ) -> Result<Self, Box<dyn std::error::Error>> {
-        use prost::Message;
-        let mut obb = OBB::default();
-
-        if let Some(p) = &proto.center {
-            obb.center = Point::pb_loads(&p.encode_to_vec())?;
-        }
-
-        if let Some(v) = &proto.x_axis {
-            obb.x_axis = Vector::pb_loads(&v.encode_to_vec())?;
-        }
-
-        if let Some(v) = &proto.y_axis {
-            obb.y_axis = Vector::pb_loads(&v.encode_to_vec())?;
-        }
-
-        if let Some(v) = &proto.z_axis {
-            obb.z_axis = Vector::pb_loads(&v.encode_to_vec())?;
-        }
-
-        if let Some(v) = &proto.half_size {
-            obb.half_size = Vector::pb_loads(&v.encode_to_vec())?;
-        }
+        let mut obb = Self::new(
+            Point::from_proto(proto.center.unwrap_or_default()),
+            Vector::from_proto(proto.x_axis.unwrap_or_default()),
+            Vector::from_proto(proto.y_axis.unwrap_or_default()),
+            Vector::from_proto(proto.z_axis.unwrap_or_default()),
+            Vector::from_proto(proto.half_size.unwrap_or_default()),
+        );
 
         if !proto.guid.is_empty() {
             obb.set_guid(proto.guid);
@@ -859,11 +858,36 @@ impl OBB {
         Ok(obb)
     }
 
+    /// Serialize to protobuf bytes.
+    pub fn pb_dumps(&self) -> Vec<u8> {
+        use prost::Message;
+
+        self.to_proto().encode_to_vec()
+    }
+
+    /// Deserialize from protobuf bytes.
+    pub fn pb_loads(data: &[u8]) -> Result<Self, Box<dyn std::error::Error>> {
+        use prost::Message;
+
+        Self::from_proto(crate::proto::BoundingBox::decode(data)?)
+    }
+
+    /// Write to a protobuf file.
+    pub fn pb_dump(&self, filepath: &str) {
+        std::fs::write(filepath, self.pb_dumps()).expect("Failed to write protobuf file");
+    }
+
+    /// Read from a protobuf file.
+    pub fn pb_load(filepath: &str) -> Self {
+        let data = std::fs::read(filepath).expect("Failed to read protobuf file");
+
+        Self::pb_loads(&data).expect("Failed to parse protobuf")
+    }
+
     // ═══════════════════════════════════════════════════════════════════════════
     // String
     // ═══════════════════════════════════════════════════════════════════════════
-
-    /// Returns "center\nx_axis\ny_axis\nz_axis\nhalf_size".
+    /// Return "center\nx_axis\ny_axis\nz_axis\nhalf_size".
     pub fn str(&self) -> String {
         format!(
             "{}\n{}\n{}\n{}\n{}",
@@ -875,7 +899,7 @@ impl OBB {
         )
     }
 
-    /// Returns "OBB(name, center, x_axis, y_axis, z_axis, half_size)".
+    /// Return "OBB(name, center, x_axis, y_axis, z_axis, half_size)".
     pub fn repr(&self) -> String {
         format!(
             "OBB({}, {}, {}, {}, {}, {})",
@@ -887,57 +911,21 @@ impl OBB {
             self.half_size.str()
         )
     }
-
-    // ═══════════════════════════════════════════════════════════════════════════
-    // SESSION_VIEWER
-    // ═══════════════════════════════════════════════════════════════════════════
-
-    /// Returns the 8 box corners as f32 [x, y, z] rows for a wireframe-box buffer, same winding as corners.
-    pub fn corners_f32(&self) -> [[f32; 3]; 8] {
-        self.corners().map(|p| p.to_f32())
-    }
-}
-
-// ═══════════════════════════════════════════════════════════════════════════
-// Operators
-// ═══════════════════════════════════════════════════════════════════════════
-
-impl PartialEq for OBB {
-    /// Compares name, center, axes and half-size to 1e-6; guid ignored.
-    fn eq(&self, other: &Self) -> bool {
-        if self.name != other.name {
-            return false;
-        }
-
-        for i in 0..3 {
-            if (self.center[i] * 1000000.0).round() != (other.center[i] * 1000000.0).round() {
-                return false;
-            }
-
-            if (self.x_axis[i] * 1000000.0).round() != (other.x_axis[i] * 1000000.0).round() {
-                return false;
-            }
-
-            if (self.y_axis[i] * 1000000.0).round() != (other.y_axis[i] * 1000000.0).round() {
-                return false;
-            }
-
-            if (self.z_axis[i] * 1000000.0).round() != (other.z_axis[i] * 1000000.0).round() {
-                return false;
-            }
-
-            if (self.half_size[i] * 1000000.0).round() != (other.half_size[i] * 1000000.0).round() {
-                return false;
-            }
-        }
-
-        true
-    }
 }
 
 impl fmt::Display for OBB {
-    /// Writes the str() form to a formatter.
+    /// Write the str() form to a formatter.
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "{}", self.str())
+    }
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// SESSION_VIEWER
+// ═══════════════════════════════════════════════════════════════════════════
+impl OBB {
+    /// Return the 8 box corners as f32 [x, y, z] rows for a wireframe-box buffer, same winding as corners.
+    pub fn corners_f32(&self) -> [[f32; 3]; 8] {
+        self.corners().map(|p| p.to_f32())
     }
 }

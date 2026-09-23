@@ -69,9 +69,9 @@ pub fn run_obb_constructor() -> TestResult {
         MINI_CHECK!(TOLERANCE.is_close(bb3.min_point()[0], -1.0));
         MINI_CHECK!(TOLERANCE.is_close(bb3.max_point()[0], 3.0));
 
-        MINI_CHECK!(!bb1.guid().is_empty());
         bb1.name = "test_bbox".to_string();
 
+        MINI_CHECK!(!bb1.guid().is_empty());
         MINI_CHECK!(bb1.name == "test_bbox");
     })
 }
@@ -105,7 +105,6 @@ pub fn run_obb_transformation() -> TestResult {
         let pts = vec![Point::new(0.0, 0.0, 0.0), Point::new(1.0, 1.0, 0.0)];
         let mut bb = OBB::from_points(&pts, 0.0, None);
         let bb_xf = Xform::translation(0.0, 0.0, 5.0);
-
         let bbt = bb.transformed(&bb_xf);
 
         MINI_CHECK!(TOLERANCE.is_close(bbt.center[2], 5.0));
@@ -124,22 +123,24 @@ pub fn run_obb_json_roundtrip() -> TestResult {
         let mut bb = OBB::from_point(&Point::new(1.0, 2.0, 3.0), 5.0);
         bb.name = "test_bbox".to_string();
 
-        let js = bb.jsondump().unwrap();
-        let loaded_j = OBB::jsonload(&js).unwrap();
+        let data = bb.jsondump().unwrap();
+        let loaded_j = OBB::jsonload(&data).unwrap();
 
         MINI_CHECK!(loaded_j.name == "test_bbox");
         MINI_CHECK!(TOLERANCE.is_close(loaded_j.center[0], 1.0));
 
-        let s = bb.file_json_dumps();
-        let loaded_s = OBB::file_json_loads(&s);
+        let text = bb.file_json_dumps();
+        let loaded_s = OBB::file_json_loads(&text);
 
         MINI_CHECK!(loaded_s.name == "test_bbox");
         MINI_CHECK!(TOLERANCE.is_close(loaded_s.half_size[0], 5.0));
 
-        let src_dir = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-        let fname = src_dir.join("serialization").join("test_obb.json");
-        let fname = fname.to_str().unwrap();
+        let path = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+            .join("serialization")
+            .join("test_obb.json");
+        let fname = path.to_str().unwrap();
         bb.file_json_dump(fname).unwrap();
+
         let loaded = OBB::file_json_load(fname).unwrap();
 
         MINI_CHECK!(loaded.name == "test_bbox");
@@ -157,17 +158,24 @@ pub fn run_obb_protobuf_roundtrip() -> TestResult {
         bb.name = "test_bbox_proto".to_string();
 
         let guid = bb.guid().to_string();
-        let b = bb.pb_dumps();
-        let loaded_s = OBB::pb_loads(&b).unwrap();
+        let data = bb.pb_dumps();
+        let loaded_s = OBB::pb_loads(&data).unwrap();
+        let proto = bb.to_proto();
+        let converted = OBB::from_proto(proto.clone()).unwrap();
 
         MINI_CHECK!(loaded_s.name == "test_bbox_proto");
         MINI_CHECK!(loaded_s.guid() == guid);
         MINI_CHECK!(TOLERANCE.is_close(loaded_s.center[0], 1.0));
+        MINI_CHECK!(proto.guid == guid);
+        MINI_CHECK!(converted == bb);
+        MINI_CHECK!(converted.guid() == guid);
 
-        let src_dir = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-        let fname = src_dir.join("serialization").join("test_obb.bin");
-        let fname = fname.to_str().unwrap();
+        let path = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+            .join("serialization")
+            .join("test_obb.bin");
+        let fname = path.to_str().unwrap();
         bb.pb_dump(fname);
+
         let loaded = OBB::pb_load(fname);
 
         MINI_CHECK!(loaded.name == "test_bbox_proto");
@@ -196,16 +204,19 @@ pub fn run_obb_accessors() -> TestResult {
         MINI_CHECK!(TOLERANCE.is_close(b.diagonal(), 2.0 * 14.0_f64.sqrt()));
         MINI_CHECK!(b.is_valid());
         MINI_CHECK!(TOLERANCE.is_close(b.volume(), 48.0));
+
         MINI_CHECK!(b.closest_point(&Point::new(1.0, 2.0, 3.0)) == Point::new(1.0, 2.0, 3.0));
         MINI_CHECK!(b.closest_point(&Point::new(10.0, 2.0, 3.0)) == Point::new(2.0, 2.0, 3.0));
         MINI_CHECK!(b.contains(&Point::new(1.0, 2.0, 3.0)));
         MINI_CHECK!(!b.contains(&Point::new(10.0, 2.0, 3.0)));
+
         MINI_CHECK!(b.corner(false, false, false) == Point::new(0.0, 0.0, 0.0));
         MINI_CHECK!(b.corner(true, true, true) == Point::new(2.0, 4.0, 6.0));
         MINI_CHECK!(b.get_corners().len() == 8);
         MINI_CHECK!(b.get_edges().len() == 12);
-        let c = OBB::from_point(&Point::new(5.0, 2.0, 3.0), 1.0);
-        b.union_with(&c);
+
+        let other = OBB::from_point(&Point::new(5.0, 2.0, 3.0), 1.0);
+        b.union_with(&other);
 
         MINI_CHECK!(TOLERANCE.is_close(b.half_size[0], 3.0));
     })
@@ -222,7 +233,14 @@ pub fn run_obb_from_geometry() -> TestResult {
         use crate::Polyline;
         use crate::Primitives;
         use crate::Vector;
+        use crate::AABB;
         use crate::OBB;
+
+        let bb_aabb = OBB::from_aabb(&AABB::new(1.0, 2.0, 3.0, 0.5, 1.0, 1.5));
+
+        MINI_CHECK!(bb_aabb.center == Point::new(1.0, 2.0, 3.0));
+        MINI_CHECK!(TOLERANCE.is_close(bb_aabb.half_size[2], 1.5));
+        MINI_CHECK!(TOLERANCE.is_close(bb_aabb.x_axis[0], 1.0));
 
         let bb_line = OBB::from_line(&Line::new(0.0, 0.0, 0.0, 4.0, 0.0, 0.0), 0.1, None);
 
@@ -294,22 +312,25 @@ pub fn run_obb_from_geometry() -> TestResult {
 
         MINI_CHECK!(bb_nc.is_valid());
 
-        let surf_ns = NurbsSurface::create(
-            false,
-            false,
-            1,
-            1,
-            2,
-            2,
-            &[
-                Point::new(0.0, 0.0, 0.0),
-                Point::new(2.0, 0.0, 0.0),
-                Point::new(0.0, 2.0, 0.0),
-                Point::new(2.0, 2.0, 2.0),
-            ],
-        )
-        .unwrap();
-        let bb_ns = OBB::from_nurbssurface(&surf_ns, 0.0, None);
+        let bb_ns = OBB::from_nurbssurface(
+            &NurbsSurface::create(
+                false,
+                false,
+                1,
+                1,
+                2,
+                2,
+                &[
+                    Point::new(0.0, 0.0, 0.0),
+                    Point::new(2.0, 0.0, 0.0),
+                    Point::new(0.0, 2.0, 0.0),
+                    Point::new(2.0, 2.0, 2.0),
+                ],
+            )
+            .unwrap(),
+            0.0,
+            None,
+        );
 
         MINI_CHECK!(bb_ns.is_valid());
     })
