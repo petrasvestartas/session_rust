@@ -1,6 +1,8 @@
 use crate::mini_test::TestResult;
 use crate::tolerance::TOLERANCE;
-use crate::{MINI_CHECK, MINI_TEST, REGISTER_MINI_TEST};
+use crate::MINI_CHECK;
+use crate::MINI_TEST;
+use crate::REGISTER_MINI_TEST;
 
 pub fn run_line_constructor() -> TestResult {
     MINI_TEST!("Constructor", {
@@ -9,41 +11,41 @@ pub fn run_line_constructor() -> TestResult {
         use crate::Point;
         use crate::Vector;
 
-        let mut l = Line::new(1.0, 2.0, 3.0, 4.0, 5.0, 6.0);
+        let mut line = Line::new(1.0, 2.0, 3.0, 4.0, 5.0, 6.0);
 
-        l[0] = 10.0;
-        l[1] = 20.0;
-        l[2] = 30.0;
-        l[3] = 40.0;
-        l[4] = 50.0;
-        l[5] = 60.0;
+        line[0] = 10.0;
+        line[1] = 20.0;
+        line[2] = 30.0;
+        line[3] = 40.0;
+        line[4] = 50.0;
+        line[5] = 60.0;
 
-        let x0 = l[0];
-        let y0 = l[1];
-        let z0 = l[2];
-        let x1 = l[3];
-        let y1 = l[4];
-        let z1 = l[5];
+        let x0 = line[0];
+        let y0 = line[1];
+        let z0 = line[2];
+        let x1 = line[3];
+        let y1 = line[4];
+        let z1 = line[5];
 
-        let lstr = l.str();
-        let lrepr = l.repr();
+        let lstr = line.str();
+        let lrepr = line.repr();
 
-        let lcopy = l.duplicate();
+        let lcopy = line.duplicate();
         let lother = Line::new(10.0, 20.0, 30.0, 40.0, 50.0, 60.0);
 
-        let mut lmult = l.duplicate();
+        let mut lmult = line.duplicate();
         lmult *= 2.0;
-        let mut ldiv = l.duplicate();
+        let mut ldiv = line.duplicate();
         ldiv /= 2.0;
-        let mut ladd = l.duplicate();
+        let mut ladd = line.duplicate();
         ladd += &Vector::new(1.0, 1.0, 1.0);
-        let mut lsub = l.duplicate();
+        let mut lsub = line.duplicate();
         lsub -= &Vector::new(1.0, 1.0, 1.0);
 
-        let rmul = &l * 2.0;
-        let rdiv = &l / 2.0;
-        let radd = &l + &Vector::new(1.0, 1.0, 1.0);
-        let rdif = &l - &Vector::new(1.0, 1.0, 1.0);
+        let rmul = &line * 2.0;
+        let rdiv = &line / 2.0;
+        let radd = &line + &Vector::new(1.0, 1.0, 1.0);
+        let rdif = &line - &Vector::new(1.0, 1.0, 1.0);
 
         let lneg = Line::new(1.0, 2.0, 3.0, 4.0, 5.0, 6.0);
         let neg = -&lneg;
@@ -73,18 +75,18 @@ pub fn run_line_constructor() -> TestResult {
             &Point::new(2.0, 2.0, 0.0),
         );
 
-        MINI_CHECK!(l.name == "my_line");
-        MINI_CHECK!(l[0] == 10.0 && l[1] == 20.0 && l[2] == 30.0);
-        MINI_CHECK!(l.width == 1.0);
-        MINI_CHECK!(l.linecolor == Color::black());
-        MINI_CHECK!(l.guid() != "");
+        MINI_CHECK!(line.name == "my_line");
+        MINI_CHECK!(line[0] == 10.0 && line[1] == 20.0 && line[2] == 30.0);
+        MINI_CHECK!(line.width == 1.0);
+        MINI_CHECK!(line.linecolor == Color::black());
+        MINI_CHECK!(line.guid() != "");
         MINI_CHECK!(
             x0 == 10.0 && y0 == 20.0 && z0 == 30.0 && x1 == 40.0 && y1 == 50.0 && z1 == 60.0
         );
         MINI_CHECK!(lstr == "10.000000, 20.000000, 30.000000, 40.000000, 50.000000, 60.000000");
         MINI_CHECK!(lrepr == "Line(my_line, 10.000000, 20.000000, 30.000000, 40.000000, 50.000000, 60.000000, Color(black, 0.0, 0.0, 0.0, 1.0), 1.000000)");
-        MINI_CHECK!(lcopy == l && lcopy.guid() != l.guid());
-        MINI_CHECK!(lother == l && lneg != l);
+        MINI_CHECK!(lcopy == line && lcopy.guid() != line.guid());
+        MINI_CHECK!(lother == line && lneg != line);
         MINI_CHECK!(lmult[0] == 20.0 && lmult[3] == 80.0);
         MINI_CHECK!(ldiv[0] == 5.0 && ldiv[3] == 20.0);
         MINI_CHECK!(ladd[0] == 11.0 && ladd[3] == 41.0);
@@ -110,13 +112,13 @@ pub fn run_line_transformation() -> TestResult {
         use crate::Line;
         use crate::Xform;
 
-        let mut l = Line::new(0.0, 0.0, 0.0, 1.0, 0.0, 0.0);
+        let mut line = Line::new(0.0, 0.0, 0.0, 1.0, 0.0, 0.0);
         let xform = Xform::translation(10.0, 0.0, 0.0);
-        let moved = l.transformed(&xform);
-        l.transform(&xform);
+        let moved = line.transformed(&xform);
+        line.transform(&xform);
 
         MINI_CHECK!(moved[0] == 10.0 && moved[3] == 11.0);
-        MINI_CHECK!(l[0] == 10.0 && l[3] == 11.0);
+        MINI_CHECK!(line[0] == 10.0 && line[3] == 11.0);
     })
 }
 
@@ -124,18 +126,18 @@ pub fn run_line_json_roundtrip() -> TestResult {
     MINI_TEST!("Json Roundtrip", {
         use crate::Line;
 
-        let mut l = Line::new(42.1, 84.2, 126.3, 168.4, 210.5, 252.6);
-        l.name = "test_line".to_string();
-        l.dash = vec![3.0, 2.0];
+        let mut line = Line::new(42.1, 84.2, 126.3, 168.4, 210.5, 252.6);
+        line.name = "test_line".to_string();
+        line.dash = vec![3.0, 2.0];
 
-        let j = l.jsondump().unwrap();
+        let j = line.jsondump().unwrap();
         let loaded_j = Line::jsonload(&j).unwrap();
 
-        let s = l.file_json_dumps();
+        let s = line.file_json_dumps();
         let loaded_s = Line::file_json_loads(&s);
 
         let fname = "serialization/test_line.json";
-        l.file_json_dump(fname).unwrap();
+        line.file_json_dump(fname).unwrap();
         let loaded = Line::file_json_load(fname).unwrap();
 
         MINI_CHECK!(loaded_j.name == "test_line");
@@ -157,17 +159,18 @@ pub fn run_line_protobuf_roundtrip() -> TestResult {
     MINI_TEST!("Protobuf Roundtrip", {
         use crate::Line;
 
-        let mut l = Line::new(42.1, 84.2, 126.3, 168.4, 210.5, 252.6);
-        l.name = "test_line".to_string();
-        l.dash = vec![3.0, 2.0];
+        let mut line = Line::new(42.1, 84.2, 126.3, 168.4, 210.5, 252.6);
+        line.name = "test_line".to_string();
+        line.dash = vec![3.0, 2.0];
 
-        let guid = l.guid().to_string();
-        let s = l.pb_dumps();
+        let guid = line.guid().to_string();
+        let s = line.pb_dumps();
         let loaded_s = Line::pb_loads(&s).unwrap();
 
         let fname = "serialization/test_line.bin";
-        l.pb_dump(fname);
+        line.pb_dump(fname);
         let loaded = Line::pb_load(fname);
+        let converted = Line::from_proto(line.to_proto());
 
         MINI_CHECK!(loaded_s.name == "test_line");
         MINI_CHECK!(TOLERANCE.is_close(loaded_s[0], 42.1));
@@ -181,6 +184,8 @@ pub fn run_line_protobuf_roundtrip() -> TestResult {
         MINI_CHECK!(TOLERANCE.is_close(loaded[5], 252.6));
         MINI_CHECK!(loaded.dash == vec![3.0, 2.0]);
         MINI_CHECK!(loaded.guid() == guid);
+        MINI_CHECK!(converted == line);
+        MINI_CHECK!(converted.guid() == guid);
     })
 }
 
@@ -188,9 +193,9 @@ pub fn run_line_length() -> TestResult {
     MINI_TEST!("Length", {
         use crate::Line;
 
-        let l = Line::new(0.0, 0.0, 0.0, 3.0, 4.0, 0.0);
-        let ln = l.length();
-        let lsq = l.squared_length();
+        let line = Line::new(0.0, 0.0, 0.0, 3.0, 4.0, 0.0);
+        let ln = line.length();
+        let lsq = line.squared_length();
 
         MINI_CHECK!(TOLERANCE.is_close(ln, 5.0));
         MINI_CHECK!(TOLERANCE.is_close(lsq, 25.0));
@@ -201,8 +206,8 @@ pub fn run_line_to_vector() -> TestResult {
     MINI_TEST!("To Vector", {
         use crate::Line;
 
-        let l = Line::new(1.0, 2.0, 3.0, 4.0, 6.0, 9.0);
-        let v = l.to_vector();
+        let line = Line::new(1.0, 2.0, 3.0, 4.0, 6.0, 9.0);
+        let v = line.to_vector();
 
         MINI_CHECK!(v[0] == 3.0 && v[1] == 4.0 && v[2] == 6.0);
     })
@@ -212,8 +217,8 @@ pub fn run_line_to_direction() -> TestResult {
     MINI_TEST!("To Direction", {
         use crate::Line;
 
-        let l = Line::new(0.0, 0.0, 0.0, 3.0, 4.0, 0.0);
-        let d = l.to_direction();
+        let line = Line::new(0.0, 0.0, 0.0, 3.0, 4.0, 0.0);
+        let d = line.to_direction();
 
         MINI_CHECK!(TOLERANCE.is_close(d[0], 0.6));
         MINI_CHECK!(TOLERANCE.is_close(d[1], 0.8));
@@ -226,10 +231,10 @@ pub fn run_line_point_at() -> TestResult {
     MINI_TEST!("Point At", {
         use crate::Line;
 
-        let l = Line::new(0.0, 0.0, 0.0, 10.0, 10.0, 10.0);
-        let ps = l.point_at(0.0);
-        let pm = l.point_at(0.5);
-        let pe = l.point_at(1.0);
+        let line = Line::new(0.0, 0.0, 0.0, 10.0, 10.0, 10.0);
+        let ps = line.point_at(0.0);
+        let pm = line.point_at(0.5);
+        let pe = line.point_at(1.0);
 
         MINI_CHECK!(ps[0] == 0.0 && ps[1] == 0.0 && ps[2] == 0.0);
         MINI_CHECK!(pm[0] == 5.0 && pm[1] == 5.0 && pm[2] == 5.0);
@@ -242,13 +247,13 @@ pub fn run_line_closest_point() -> TestResult {
         use crate::Line;
         use crate::Point;
 
-        let l = Line::new(0.0, 0.0, 0.0, 10.0, 0.0, 0.0);
+        let line = Line::new(0.0, 0.0, 0.0, 10.0, 0.0, 0.0);
         let p1 = Point::new(5.0, 5.0, 0.0);
         let p2 = Point::new(-5.0, 0.0, 0.0);
         let p3 = Point::new(15.0, 0.0, 0.0);
-        let (t1, cp1) = l.closest_point(&p1, true);
-        let (t2, cp2) = l.closest_point(&p2, true);
-        let (t3, cp3) = l.closest_point(&p3, true);
+        let (t1, cp1) = line.closest_point(&p1, true);
+        let (t2, cp2) = line.closest_point(&p2, true);
+        let (t3, cp3) = line.closest_point(&p3, true);
 
         MINI_CHECK!(cp1[0] == 5.0 && cp1[1] == 0.0 && cp1[2] == 0.0);
         MINI_CHECK!(cp2[0] == 0.0 && cp2[1] == 0.0 && cp2[2] == 0.0);
@@ -263,10 +268,10 @@ pub fn run_line_start_end_center() -> TestResult {
     MINI_TEST!("Start End Center", {
         use crate::Line;
 
-        let l = Line::new(1.0, 2.0, 3.0, 4.0, 5.0, 6.0);
-        let start = l.start();
-        let end = l.end();
-        let center = l.center();
+        let line = Line::new(1.0, 2.0, 3.0, 4.0, 5.0, 6.0);
+        let start = line.start();
+        let end = line.end();
+        let center = line.center();
 
         MINI_CHECK!(start[0] == 1.0 && start[1] == 2.0 && start[2] == 3.0);
         MINI_CHECK!(end[0] == 4.0 && end[1] == 5.0 && end[2] == 6.0);
@@ -298,6 +303,7 @@ pub fn run_line_fit_points() -> TestResult {
             ],
             None,
         );
+
         MINI_CHECK!(l_vertical.to_direction()[1].abs() > 0.99);
     })
 }
@@ -306,9 +312,9 @@ pub fn run_line_subdivide() -> TestResult {
     MINI_TEST!("Subdivide", {
         use crate::Line;
 
-        let l = Line::new(0.0, 0.0, 0.0, 10.0, 0.0, 0.0);
-        let pts = l.subdivide(3);
-        let pts_dist = l.subdivide_by_distance(2.5);
+        let line = Line::new(0.0, 0.0, 0.0, 10.0, 0.0, 0.0);
+        let pts = line.subdivide(3);
+        let pts_dist = line.subdivide_by_distance(2.5);
 
         MINI_CHECK!(pts.len() == 3);
         MINI_CHECK!(pts[0][0] == 0.0);
@@ -356,11 +362,11 @@ pub fn run_line_extend() -> TestResult {
         use crate::Line;
         use crate::Point;
 
-        let mut l = Line::from_points(&Point::new(0.0, 0.0, 0.0), &Point::new(10.0, 0.0, 0.0));
-        l.extend(1.0, 2.0);
+        let mut line = Line::from_points(&Point::new(0.0, 0.0, 0.0), &Point::new(10.0, 0.0, 0.0));
+        line.extend(1.0, 2.0);
 
-        MINI_CHECK!(TOLERANCE.is_close(l.start()[0], -1.0));
-        MINI_CHECK!(TOLERANCE.is_close(l.end()[0], 12.0));
+        MINI_CHECK!(TOLERANCE.is_close(line.start()[0], -1.0));
+        MINI_CHECK!(TOLERANCE.is_close(line.end()[0], 12.0));
     })
 }
 

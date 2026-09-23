@@ -1,11 +1,24 @@
 use crate::tolerance::Tolerance;
 use crate::tolerance::TOLERANCE;
-use crate::{Color, Point, Polyline, Vector, Xform};
-use serde::{Deserialize, Serialize};
+use crate::Color;
+use crate::Point;
+use crate::Polyline;
+use crate::Vector;
+use crate::Xform;
+use serde::Deserialize;
+use serde::Serialize;
 use std::fmt;
-use std::ops::{
-    Add, AddAssign, Div, DivAssign, Index, IndexMut, Mul, MulAssign, Neg, Sub, SubAssign,
-};
+use std::ops::Add;
+use std::ops::AddAssign;
+use std::ops::Div;
+use std::ops::DivAssign;
+use std::ops::Index;
+use std::ops::IndexMut;
+use std::ops::Mul;
+use std::ops::MulAssign;
+use std::ops::Neg;
+use std::ops::Sub;
+use std::ops::SubAssign;
 use std::sync::OnceLock;
 
 /// A 3D line segment with display width, dash pattern and color.
@@ -16,11 +29,7 @@ pub struct Line {
         serialize_with = "crate::guid_serde::serialize",
         deserialize_with = "crate::guid_serde::deserialize"
     )]
-    guid: OnceLock<String>, // Lazy guid.
-    pub name: String,     // Line name.
-    pub width: f64,       // Display width.
-    pub dash: Vec<f64>,   // Dash pattern lengths.
-    pub linecolor: Color, // Display color.
+    guid: OnceLock<String>, // Lazily minted GUID.
     #[serde(rename = "x0")]
     _x0: f64, // Start x.
     #[serde(rename = "y0")]
@@ -33,34 +42,34 @@ pub struct Line {
     _y1: f64, // End y.
     #[serde(rename = "z1")]
     _z1: f64, // End z.
-}
-
-impl Default for Line {
-    /// Constructs the unit segment from the origin along z.
-    fn default() -> Self {
-        Self::new(0.0, 0.0, 0.0, 0.0, 0.0, 1.0)
-    }
+    pub name: String,     // Line name.
+    pub width: f64,       // Display width.
+    pub dash: Vec<f64>,   // Dash pattern lengths.
+    pub linecolor: Color, // Display color.
 }
 
 impl Line {
-    /// Constructs from start and end coordinates.
+    // ═══════════════════════════════════════════════════════════════════════════
+    // Constructors
+    // ═══════════════════════════════════════════════════════════════════════════
+    /// Construct from start and end coordinates.
     pub fn new(x0: f64, y0: f64, z0: f64, x1: f64, y1: f64, z1: f64) -> Self {
         Self {
             guid: OnceLock::new(),
-            name: "my_line".to_string(),
-            width: 1.0,
-            dash: Vec::new(),
-            linecolor: Color::black(),
             _x0: x0,
             _y0: y0,
             _z0: z0,
             _x1: x1,
             _y1: y1,
             _z1: z1,
+            name: "my_line".to_string(),
+            width: 1.0,
+            dash: Vec::new(),
+            linecolor: Color::black(),
         }
     }
 
-    /// Copy (new guid, same data)
+    /// Copy with a new guid and the same data.
     pub fn duplicate(&self) -> Self {
         let mut copy = self.clone();
         copy.guid = OnceLock::new();
@@ -68,22 +77,25 @@ impl Line {
         copy
     }
 
-    /// Returns whether the lazy guid has been created.
+    // ═══════════════════════════════════════════════════════════════════════════
+    // Accessors
+    // ═══════════════════════════════════════════════════════════════════════════
+    /// Return whether the lazy guid has been created.
     pub fn has_guid(&self) -> bool {
         self.guid.get().is_some()
     }
 
-    /// Returns the guid, creating it on first access.
+    /// Return the guid, creating it on first access.
     pub fn guid(&self) -> &str {
         self.guid.get_or_init(|| uuid::Uuid::new_v4().to_string())
     }
 
-    /// Sets the guid if it has not already been created.
-    pub fn set_guid(&self, g: String) {
-        let _ = self.guid.set(g);
+    /// Set the guid if it has not already been created.
+    pub fn set_guid(&self, guid: String) {
+        let _ = self.guid.set(guid);
     }
 
-    /// Clears the guid so a fresh one mints lazily on the next read.
+    /// Clear the guid so a fresh one mints lazily on the next read.
     pub fn refresh_guid(&mut self) {
         self.guid = OnceLock::new();
     }
@@ -91,57 +103,29 @@ impl Line {
     // ═══════════════════════════════════════════════════════════════════════════
     // Static constructors
     // ═══════════════════════════════════════════════════════════════════════════
-
-    /// Constructs from two points.
+    /// Construct from two points.
     pub fn from_points(p1: &Point, p2: &Point) -> Self {
         Self::new(p1[0], p1[1], p1[2], p2[0], p2[1], p2[2])
     }
 
-    /// Constructs from point to point + vector.
+    /// Construct from point to point + vector.
     pub fn from_point_and_vector(point: &Point, vector: &Vector) -> Self {
-        Self::new(
-            point[0],
-            point[1],
-            point[2],
-            point[0] + vector[0],
-            point[1] + vector[1],
-            point[2] + vector[2],
-        )
+        Self::from_points(point, &(point + vector))
     }
 
-    /// Constructs from point along the normalized direction.
+    /// Construct from point along the normalized direction.
     pub fn from_point_direction_length(point: &Point, direction: &Vector, length: f64) -> Self {
-        let d = direction.normalized();
-        Self::new(
-            point[0],
-            point[1],
-            point[2],
-            point[0] + d[0] * length,
-            point[1] + d[1] * length,
-            point[2] + d[2] * length,
-        )
+        Self::from_points(point, &(point + &(&direction.normalized() * length)))
     }
 
-    /// Constructs the least-squares line through points by power-iteration PCA; length <= 0 spans the projected extent.
+    /// Construct the least-squares line through points by power-iteration PCA; length <= 0 spans the projected extent.
     pub fn fit_points(points: &[Point], length: Option<f64>) -> Self {
         if points.len() < 2 {
             panic!("At least 2 points are required for line fitting");
         }
 
-        let n = points.len() as f64;
-        let mut cx = 0.0;
-        let mut cy = 0.0;
-        let mut cz = 0.0;
-
-        for p in points {
-            cx += p[0];
-            cy += p[1];
-            cz += p[2];
-        }
-
-        cx /= n;
-        cy /= n;
-        cz /= n;
+        let length = length.unwrap_or(0.0);
+        let center = Point::centroid(points);
         let mut cxx = 0.0;
         let mut cyy = 0.0;
         let mut czz = 0.0;
@@ -150,52 +134,46 @@ impl Line {
         let mut cyz = 0.0;
 
         for p in points {
-            let dx = p[0] - cx;
-            let dy = p[1] - cy;
-            let dz = p[2] - cz;
-            cxx += dx * dx;
-            cyy += dy * dy;
-            czz += dz * dz;
-            cxy += dx * dy;
-            cxz += dx * dz;
-            cyz += dy * dz;
+            let d = p - &center;
+            cxx += d[0] * d[0];
+            cyy += d[1] * d[1];
+            czz += d[2] * d[2];
+            cxy += d[0] * d[1];
+            cxz += d[0] * d[2];
+            cyz += d[1] * d[2];
         }
 
-        let mut vx = 1.0;
-        let mut vy = 0.0;
-        let mut vz = 0.0;
+        let mut axis = Vector::new(1.0, 0.0, 0.0);
 
         if cyy > cxx && cyy >= czz {
-            vx = 0.0;
-            vy = 1.0;
+            axis = Vector::new(0.0, 1.0, 0.0);
         } else if czz > cxx && czz > cyy {
-            vx = 0.0;
-            vz = 1.0;
+            axis = Vector::new(0.0, 0.0, 1.0);
         }
 
         for _ in 0..100 {
-            let nx = cxx * vx + cxy * vy + cxz * vz;
-            let ny = cxy * vx + cyy * vy + cyz * vz;
-            let nz = cxz * vx + cyz * vy + czz * vz;
-            let mag = (nx * nx + ny * ny + nz * nz).sqrt();
+            let next = Vector::new(
+                cxx * axis[0] + cxy * axis[1] + cxz * axis[2],
+                cxy * axis[0] + cyy * axis[1] + cyz * axis[2],
+                cxz * axis[0] + cyz * axis[1] + czz * axis[2],
+            );
+            let mag = next.magnitude_squared().sqrt();
 
             if mag < 1e-15 {
                 break;
             }
 
-            vx = nx / mag;
-            vy = ny / mag;
-            vz = nz / mag;
+            axis = next / mag;
         }
 
-        let mut half = length.unwrap_or(0.0) / 2.0;
+        let mut half = length / 2.0;
 
-        if length.unwrap_or(0.0) <= 0.0 {
+        if length <= 0.0 {
             let mut t_min: f64 = 0.0;
             let mut t_max: f64 = 0.0;
 
             for p in points {
-                let t = (p[0] - cx) * vx + (p[1] - cy) * vy + (p[2] - cz) * vz;
+                let t = (p - &center).dot(&axis);
                 t_min = t_min.min(t);
                 t_max = t_max.max(t);
             }
@@ -207,45 +185,245 @@ impl Line {
             }
         }
 
-        Self::new(
-            cx - vx * half,
-            cy - vy * half,
-            cz - vz * half,
-            cx + vx * half,
-            cy + vy * half,
-            cz + vz * half,
-        )
+        Self::from_points(&(&center - &(&axis * half)), &(&center + &(&axis * half)))
     }
 
-    /// Constructs a named line from coordinates.
+    /// Construct a named line from coordinates.
     pub fn with_name(name: &str, x0: f64, y0: f64, z0: f64, x1: f64, y1: f64, z1: f64) -> Self {
         let mut line = Self::new(x0, y0, z0, x1, y1, z1);
         line.name = name.to_string();
 
         line
     }
+}
 
+impl Default for Line {
+    /// Construct the unit segment from the origin along z.
+    fn default() -> Self {
+        Self::new(0.0, 0.0, 0.0, 0.0, 0.0, 1.0)
+    }
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Operators
+// ═══════════════════════════════════════════════════════════════════════════
+impl Index<usize> for Line {
+    type Output = f64;
+
+    /// Return the coordinate by index (0=x0, 1=y0, 2=z0, 3=x1, 4=y1, 5=z1).
+    fn index(&self, index: usize) -> &Self::Output {
+        match index {
+            0 => &self._x0,
+            1 => &self._y0,
+            2 => &self._z0,
+            3 => &self._x1,
+            4 => &self._y1,
+            5 => &self._z1,
+            _ => panic!("Index out of bounds"),
+        }
+    }
+}
+
+impl IndexMut<usize> for Line {
+    /// Return the mutable coordinate by index (0=x0, 1=y0, 2=z0, 3=x1, 4=y1, 5=z1).
+    fn index_mut(&mut self, index: usize) -> &mut Self::Output {
+        match index {
+            0 => &mut self._x0,
+            1 => &mut self._y0,
+            2 => &mut self._z0,
+            3 => &mut self._x1,
+            4 => &mut self._y1,
+            5 => &mut self._z1,
+            _ => panic!("Index out of bounds"),
+        }
+    }
+}
+
+impl PartialEq for Line {
+    /// Compare name, coordinates to 1e-6, width and linecolor; guid ignored.
+    fn eq(&self, other: &Self) -> bool {
+        self.name == other.name
+            && (self._x0 * 1000000.0).round() == (other._x0 * 1000000.0).round()
+            && (self._y0 * 1000000.0).round() == (other._y0 * 1000000.0).round()
+            && (self._z0 * 1000000.0).round() == (other._z0 * 1000000.0).round()
+            && (self._x1 * 1000000.0).round() == (other._x1 * 1000000.0).round()
+            && (self._y1 * 1000000.0).round() == (other._y1 * 1000000.0).round()
+            && (self._z1 * 1000000.0).round() == (other._z1 * 1000000.0).round()
+            && (self.width * 1000000.0).round() == (other.width * 1000000.0).round()
+            && self.linecolor == other.linecolor
+    }
+}
+
+impl AddAssign<&Vector> for Line {
+    /// Translate in place.
+    fn add_assign(&mut self, other: &Vector) {
+        self._x0 += other[0];
+        self._y0 += other[1];
+        self._z0 += other[2];
+        self._x1 += other[0];
+        self._y1 += other[1];
+        self._z1 += other[2];
+    }
+}
+
+impl SubAssign<&Vector> for Line {
+    /// Translate back in place.
+    fn sub_assign(&mut self, other: &Vector) {
+        self._x0 -= other[0];
+        self._y0 -= other[1];
+        self._z0 -= other[2];
+        self._x1 -= other[0];
+        self._y1 -= other[1];
+        self._z1 -= other[2];
+    }
+}
+
+impl MulAssign<f64> for Line {
+    /// Scale both ends in place.
+    fn mul_assign(&mut self, factor: f64) {
+        self._x0 *= factor;
+        self._y0 *= factor;
+        self._z0 *= factor;
+        self._x1 *= factor;
+        self._y1 *= factor;
+        self._z1 *= factor;
+    }
+}
+
+impl DivAssign<f64> for Line {
+    /// Divide both ends in place.
+    fn div_assign(&mut self, factor: f64) {
+        self._x0 /= factor;
+        self._y0 /= factor;
+        self._z0 /= factor;
+        self._x1 /= factor;
+        self._y1 /= factor;
+        self._z1 /= factor;
+    }
+}
+
+impl Add<&Vector> for Line {
+    type Output = Line;
+
+    /// Return a translated copy.
+    fn add(self, other: &Vector) -> Line {
+        let mut result = self;
+        result += other;
+
+        result
+    }
+}
+
+impl Sub<&Vector> for Line {
+    type Output = Line;
+
+    /// Return a copy translated back.
+    fn sub(self, other: &Vector) -> Line {
+        let mut result = self;
+        result -= other;
+
+        result
+    }
+}
+
+impl Mul<f64> for Line {
+    type Output = Line;
+
+    /// Return a copy with both ends scaled.
+    fn mul(self, factor: f64) -> Line {
+        let mut result = self;
+        result *= factor;
+
+        result
+    }
+}
+
+impl Div<f64> for Line {
+    type Output = Line;
+
+    /// Return a copy with both ends divided.
+    fn div(self, factor: f64) -> Line {
+        let mut result = self;
+        result /= factor;
+
+        result
+    }
+}
+
+impl Neg for Line {
+    type Output = Line;
+
+    /// Return a flipped copy (end to start).
+    fn neg(self) -> Line {
+        Line::new(self._x1, self._y1, self._z1, self._x0, self._y0, self._z0)
+    }
+}
+
+impl Add<&Vector> for &Line {
+    type Output = Line;
+
+    /// Return a translated copy.
+    fn add(self, other: &Vector) -> Line {
+        self.duplicate() + other
+    }
+}
+
+impl Sub<&Vector> for &Line {
+    type Output = Line;
+
+    /// Return a copy translated back.
+    fn sub(self, other: &Vector) -> Line {
+        self.duplicate() - other
+    }
+}
+
+impl Mul<f64> for &Line {
+    type Output = Line;
+
+    /// Return a copy with both ends scaled.
+    fn mul(self, factor: f64) -> Line {
+        self.duplicate() * factor
+    }
+}
+
+impl Div<f64> for &Line {
+    type Output = Line;
+
+    /// Return a copy with both ends divided.
+    fn div(self, factor: f64) -> Line {
+        self.duplicate() / factor
+    }
+}
+
+impl Neg for &Line {
+    type Output = Line;
+
+    /// Return a flipped copy (end to start).
+    fn neg(self) -> Line {
+        Line::new(self._x1, self._y1, self._z1, self._x0, self._y0, self._z0)
+    }
+}
+
+impl Line {
     // ═══════════════════════════════════════════════════════════════════════════
     // Transformation
     // ═══════════════════════════════════════════════════════════════════════════
-
-    /// Transforms in place.
+    /// Transform in place.
     pub fn transform(&mut self, xform: &Xform) {
-        let mut start = Point::new(self._x0, self._y0, self._z0);
-        let mut end = Point::new(self._x1, self._y1, self._z1);
-        start.transform(xform);
-        end.transform(xform);
-        self._x0 = start[0];
-        self._y0 = start[1];
-        self._z0 = start[2];
-        self._x1 = end[0];
-        self._y1 = end[1];
-        self._z1 = end[2];
+        let s = self.start().transformed(xform);
+        let e = self.end().transformed(xform);
+
+        self._x0 = s[0];
+        self._y0 = s[1];
+        self._z0 = s[2];
+        self._x1 = e[0];
+        self._y1 = e[1];
+        self._z1 = e[2];
     }
 
-    /// Returns a transformed copy.
+    /// Return a transformed copy.
     pub fn transformed(&self, xform: &Xform) -> Self {
-        let mut result = self.clone();
+        let mut result = self.duplicate();
         result.transform(xform);
 
         result
@@ -254,22 +432,17 @@ impl Line {
     // ═══════════════════════════════════════════════════════════════════════════
     // Geometry
     // ═══════════════════════════════════════════════════════════════════════════
-
-    /// Returns the length.
+    /// Return the length.
     pub fn length(&self) -> f64 {
         self.squared_length().sqrt()
     }
 
-    /// Returns the squared length.
+    /// Return the squared length.
     pub fn squared_length(&self) -> f64 {
-        let dx = self._x1 - self._x0;
-        let dy = self._y1 - self._y0;
-        let dz = self._z1 - self._z0;
-
-        dx * dx + dy * dy + dz * dz
+        self.to_vector().magnitude_squared()
     }
 
-    /// Returns the vector from start to end.
+    /// Return the vector from start to end.
     pub fn to_vector(&self) -> Vector {
         Vector::new(
             self._x1 - self._x0,
@@ -278,22 +451,22 @@ impl Line {
         )
     }
 
-    /// Returns the unit vector from start to end.
+    /// Return the unit vector from start to end.
     pub fn to_direction(&self) -> Vector {
         self.to_vector().normalized()
     }
 
-    /// Returns the start point.
+    /// Return the start point.
     pub fn start(&self) -> Point {
         Point::new(self._x0, self._y0, self._z0)
     }
 
-    /// Returns the end point.
+    /// Return the end point.
     pub fn end(&self) -> Point {
         Point::new(self._x1, self._y1, self._z1)
     }
 
-    /// Returns the midpoint.
+    /// Return the midpoint.
     pub fn center(&self) -> Point {
         Point::new(
             (self._x0 + self._x1) * 0.5,
@@ -302,9 +475,10 @@ impl Line {
         )
     }
 
-    /// Returns the point at parameter t (0 = start, 1 = end).
+    /// Return the point at parameter t (0 = start, 1 = end).
     pub fn point_at(&self, t: f64) -> Point {
         let s = 1.0 - t;
+
         Point::new(
             s * self._x0 + t * self._x1,
             s * self._y0 + t * self._y1,
@@ -312,7 +486,7 @@ impl Line {
         )
     }
 
-    /// Returns n evenly spaced points including both ends.
+    /// Return n evenly spaced points including both ends.
     pub fn subdivide(&self, n: usize) -> Vec<Point> {
         if n < 2 {
             panic!("n must be at least 2");
@@ -327,7 +501,7 @@ impl Line {
         points
     }
 
-    /// Returns points spaced approximately distance apart including both ends.
+    /// Return points spaced approximately distance apart including both ends.
     pub fn subdivide_by_distance(&self, distance: f64) -> Vec<Point> {
         if distance <= 0.0 {
             panic!("distance must be positive");
@@ -344,20 +518,16 @@ impl Line {
         self.subdivide(n)
     }
 
-    /// Returns the parameter and closest point; limited clamps t to [0, 1].
+    /// Return the parameter and closest point; limited clamps t to [0, 1].
     pub fn closest_point(&self, point: &Point, limited: bool) -> (f64, Point) {
-        let dx = self._x1 - self._x0;
-        let dy = self._y1 - self._y0;
-        let dz = self._z1 - self._z0;
-        let len_sq = dx * dx + dy * dy + dz * dz;
+        let d = self.to_vector();
+        let len_sq = d.magnitude_squared();
 
         if len_sq < 1e-20 {
             return (0.0, self.start());
         }
 
-        let mut t =
-            ((point[0] - self._x0) * dx + (point[1] - self._y0) * dy + (point[2] - self._z0) * dz)
-                / len_sq;
+        let mut t = (point - &self.start()).dot(&d) / len_sq;
 
         if limited {
             t = t.clamp(0.0, 1.0);
@@ -366,7 +536,7 @@ impl Line {
         (t, self.point_at(t))
     }
 
-    /// Computes the line through the midpoints of the paired starts and ends.
+    /// Compute the midpoints of the paired starts and ends.
     pub fn get_middle_line(
         line0_start: &Point,
         line0_end: &Point,
@@ -378,6 +548,7 @@ impl Line {
             (line0_start[1] + line1_start[1]) * 0.5,
             (line0_start[2] + line1_start[2]) * 0.5,
         );
+
         let output_end = Point::new(
             (line0_end[0] + line1_end[0]) * 0.5,
             (line0_end[1] + line1_end[1]) * 0.5,
@@ -387,30 +558,32 @@ impl Line {
         (output_start, output_end)
     }
 
-    /// Computes the extreme sub-segment of line spanned by the projected points; None when empty.
+    /// Compute the extreme sub-segment of line spanned by the projected points; None when empty.
     pub fn from_projected_points(line: &Line, points: &[Point]) -> Option<Line> {
-        let result = Polyline::line_from_projected_points(&line.start(), &line.end(), points)?;
+        let (output_start, output_end) =
+            Polyline::line_from_projected_points(&line.start(), &line.end(), points)?;
 
-        Some(Line::from_points(&result.0, &result.1))
+        Some(Line::from_points(&output_start, &output_end))
     }
 
-    /// Computes the collinear overlap with other; None when none or a single point.
+    /// Compute the collinear overlap with other; None when none or a single point.
     pub fn overlap(&self, other: &Line) -> Option<Line> {
-        let result =
+        let (output_start, output_end) =
             Polyline::line_line_overlap(&self.start(), &self.end(), &other.start(), &other.end())?;
 
-        Some(Line::from_points(&result.0, &result.1))
+        Some(Line::from_points(&output_start, &output_end))
     }
 
-    /// Computes the longer of the two midpoint pairings of overlap(other) and other.overlap(self); None when empty.
+    /// Compute the longer of the two midpoint pairings of overlap(other) and other.overlap(self); None when empty.
     pub fn overlap_average(&self, other: &Line) -> Option<Line> {
-        let result = Polyline::line_line_overlap_average(
+        let (output_start, output_end) = Polyline::line_line_overlap_average(
             &self.start(),
             &self.end(),
             &other.start(),
             &other.end(),
         );
-        let out = Line::from_points(&result.0, &result.1);
+
+        let out = Line::from_points(&output_start, &output_end);
 
         if out.squared_length() <= 0.0 {
             return None;
@@ -419,11 +592,12 @@ impl Line {
         Some(out)
     }
 
-    /// Grows start by ext_start and end by ext_end.
+    /// Grow start by ext_start and end by ext_end.
     pub fn extend(&mut self, ext_start: f64, ext_end: f64) {
         let mut s = self.start();
         let mut e = self.end();
         Polyline::extend_line_segment(&mut s, &mut e, ext_start, ext_end);
+
         self._x0 = s[0];
         self._y0 = s[1];
         self._z0 = s[2];
@@ -432,7 +606,7 @@ impl Line {
         self._z1 = e[2];
     }
 
-    /// Grows both ends by dist, or by proportion of the length when non-zero.
+    /// Grow both ends by dist, or by proportion of the length when non-zero.
     pub fn extend_equally(&mut self, dist: f64, proportion: f64) {
         if dist == 0.0 && proportion == 0.0 {
             return;
@@ -441,6 +615,7 @@ impl Line {
         let mut s = self.start();
         let mut e = self.end();
         Polyline::extend_segment_equally_static(&mut s, &mut e, dist, proportion);
+
         self._x0 = s[0];
         self._y0 = s[1];
         self._z0 = s[2];
@@ -449,11 +624,12 @@ impl Line {
         self._z1 = e[2];
     }
 
-    /// Shrinks both ends by dist as a fraction of the length.
+    /// Shrink both ends by dist as a fraction of the length.
     pub fn scale(&mut self, dist: f64) {
         let mut s = self.start();
         let mut e = self.end();
         Polyline::shrink_line_segment(&mut s, &mut e, dist);
+
         self._x0 = s[0];
         self._y0 = s[1];
         self._z0 = s[2];
@@ -465,35 +641,34 @@ impl Line {
     // ═══════════════════════════════════════════════════════════════════════════
     // JSON
     // ═══════════════════════════════════════════════════════════════════════════
-
-    /// Serializes to a JSON string.
+    /// Serialize to a JSON object.
     pub fn jsondump(&self) -> Result<String, Box<dyn std::error::Error>> {
         crate::file_encoders::sorted_json_string(self)
     }
 
-    /// Deserializes from a JSON string.
+    /// Deserialize from a JSON object.
     pub fn jsonload(json_data: &str) -> Result<Self, Box<dyn std::error::Error>> {
         Ok(serde_json::from_str(json_data)?)
     }
 
-    /// Serializes to a JSON string.
+    /// Serialize to a JSON string.
     pub fn file_json_dumps(&self) -> String {
-        self.jsondump().unwrap_or_default()
+        self.jsondump().expect("Failed to serialize Line JSON")
     }
 
-    /// Deserializes from a JSON string.
+    /// Deserialize from a JSON string.
     pub fn file_json_loads(json_string: &str) -> Self {
-        Self::jsonload(json_string).unwrap_or_default()
+        Self::jsonload(json_string).expect("Failed to parse Line JSON")
     }
 
-    /// Writes to a JSON file.
+    /// Write to a JSON file.
     pub fn file_json_dump(&self, filepath: &str) -> Result<(), Box<dyn std::error::Error>> {
         std::fs::write(filepath, self.jsondump()?)?;
 
         Ok(())
     }
 
-    /// Reads from a JSON file.
+    /// Read from a JSON file.
     pub fn file_json_load(filepath: &str) -> Result<Self, Box<dyn std::error::Error>> {
         Self::jsonload(&std::fs::read_to_string(filepath)?)
     }
@@ -501,35 +676,7 @@ impl Line {
     // ═══════════════════════════════════════════════════════════════════════════
     // Protobuf
     // ═══════════════════════════════════════════════════════════════════════════
-
-    /// Serializes to protobuf bytes.
-    pub fn pb_dumps(&self) -> Vec<u8> {
-        use prost::Message;
-
-        self.to_proto().encode_to_vec()
-    }
-
-    /// Deserializes from protobuf bytes.
-    pub fn pb_loads(data: &[u8]) -> Result<Self, prost::DecodeError> {
-        use prost::Message;
-
-        Ok(Self::from_proto(crate::proto::Line::decode(data)?))
-    }
-
-    /// Writes to a protobuf file.
-    pub fn pb_dump(&self, filepath: &str) {
-        let data = self.pb_dumps();
-        std::fs::write(filepath, data).expect("Failed to write protobuf file");
-    }
-
-    /// Reads from a protobuf file.
-    pub fn pb_load(filepath: &str) -> Self {
-        let data = std::fs::read(filepath).expect("Failed to read protobuf file");
-
-        Self::pb_loads(&data).expect("Failed to parse protobuf")
-    }
-
-    /// Converts to the protobuf message.
+    /// Convert to the protobuf message.
     pub fn to_proto(&self) -> crate::proto::Line {
         crate::proto::Line {
             guid: self.guid.get().cloned().unwrap_or_default(),
@@ -547,7 +694,7 @@ impl Line {
         }
     }
 
-    /// Constructs from the protobuf message.
+    /// Construct from the protobuf message.
     pub fn from_proto(proto: crate::proto::Line) -> Self {
         let mut line = Self::default();
 
@@ -588,13 +735,39 @@ impl Line {
         line
     }
 
+    /// Serialize to protobuf bytes.
+    pub fn pb_dumps(&self) -> Vec<u8> {
+        use prost::Message;
+
+        self.to_proto().encode_to_vec()
+    }
+
+    /// Deserialize from protobuf bytes.
+    pub fn pb_loads(data: &[u8]) -> Result<Self, Box<dyn std::error::Error>> {
+        use prost::Message;
+
+        Ok(Self::from_proto(crate::proto::Line::decode(data)?))
+    }
+
+    /// Write to a protobuf file.
+    pub fn pb_dump(&self, filepath: &str) {
+        std::fs::write(filepath, self.pb_dumps()).expect("Failed to write protobuf file");
+    }
+
+    /// Read from a protobuf file.
+    pub fn pb_load(filepath: &str) -> Self {
+        let data = std::fs::read(filepath).expect("Failed to read protobuf file");
+
+        Self::pb_loads(&data).expect("Failed to parse protobuf")
+    }
+
     // ═══════════════════════════════════════════════════════════════════════════
     // String
     // ═══════════════════════════════════════════════════════════════════════════
-
-    /// "x0, y0, z0, x1, y1, z1"
+    /// Return "x0, y0, z0, x1, y1, z1".
     pub fn str(&self) -> String {
         let prec = Tolerance::ROUNDING;
+
         format!(
             "{}, {}, {}, {}, {}, {}",
             TOLERANCE.format_number(self._x0, prec),
@@ -606,9 +779,10 @@ impl Line {
         )
     }
 
-    /// Returns "Line(name, x0, y0, z0, x1, y1, z1, Color(...), width)".
+    /// Return "Line(name, x0, y0, z0, x1, y1, z1, Color(...), width)".
     pub fn repr(&self) -> String {
         let prec = Tolerance::ROUNDING;
+
         format!(
             "Line({}, {}, {}, {}, {}, {}, {}, {}, {})",
             self.name,
@@ -625,208 +799,8 @@ impl Line {
 }
 
 impl fmt::Display for Line {
+    /// Write the line string to a formatter.
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "{}", self.str())
-    }
-}
-
-// ═══════════════════════════════════════════════════════════════════════════
-// Operators
-// ═══════════════════════════════════════════════════════════════════════════
-
-impl Index<usize> for Line {
-    type Output = f64;
-
-    /// Returns the coordinate by index (0=x0, 1=y0, 2=z0, 3=x1, 4=y1, 5=z1).
-    fn index(&self, index: usize) -> &Self::Output {
-        match index {
-            0 => &self._x0,
-            1 => &self._y0,
-            2 => &self._z0,
-            3 => &self._x1,
-            4 => &self._y1,
-            5 => &self._z1,
-            _ => panic!("Index out of bounds"),
-        }
-    }
-}
-
-impl IndexMut<usize> for Line {
-    /// Returns the mutable coordinate by index (0=x0, 1=y0, 2=z0, 3=x1, 4=y1, 5=z1).
-    fn index_mut(&mut self, index: usize) -> &mut Self::Output {
-        match index {
-            0 => &mut self._x0,
-            1 => &mut self._y0,
-            2 => &mut self._z0,
-            3 => &mut self._x1,
-            4 => &mut self._y1,
-            5 => &mut self._z1,
-            _ => panic!("Index out of bounds"),
-        }
-    }
-}
-
-impl PartialEq for Line {
-    /// Compares name, coordinates to 1e-6, width and linecolor; guid ignored.
-    fn eq(&self, other: &Self) -> bool {
-        self.name == other.name
-            && (self._x0 * 1000000.0).round() == (other._x0 * 1000000.0).round()
-            && (self._y0 * 1000000.0).round() == (other._y0 * 1000000.0).round()
-            && (self._z0 * 1000000.0).round() == (other._z0 * 1000000.0).round()
-            && (self._x1 * 1000000.0).round() == (other._x1 * 1000000.0).round()
-            && (self._y1 * 1000000.0).round() == (other._y1 * 1000000.0).round()
-            && (self._z1 * 1000000.0).round() == (other._z1 * 1000000.0).round()
-            && (self.width * 1000000.0).round() == (other.width * 1000000.0).round()
-            && self.linecolor == other.linecolor
-    }
-}
-
-impl AddAssign<&Vector> for Line {
-    /// Translates in place.
-    fn add_assign(&mut self, other: &Vector) {
-        self._x0 += other[0];
-        self._y0 += other[1];
-        self._z0 += other[2];
-        self._x1 += other[0];
-        self._y1 += other[1];
-        self._z1 += other[2];
-    }
-}
-
-impl SubAssign<&Vector> for Line {
-    /// Translates back in place.
-    fn sub_assign(&mut self, other: &Vector) {
-        self._x0 -= other[0];
-        self._y0 -= other[1];
-        self._z0 -= other[2];
-        self._x1 -= other[0];
-        self._y1 -= other[1];
-        self._z1 -= other[2];
-    }
-}
-
-impl MulAssign<f64> for Line {
-    /// Scales both ends in place.
-    fn mul_assign(&mut self, factor: f64) {
-        self._x0 *= factor;
-        self._y0 *= factor;
-        self._z0 *= factor;
-        self._x1 *= factor;
-        self._y1 *= factor;
-        self._z1 *= factor;
-    }
-}
-
-impl DivAssign<f64> for Line {
-    /// Divides both ends in place.
-    fn div_assign(&mut self, factor: f64) {
-        self._x0 /= factor;
-        self._y0 /= factor;
-        self._z0 /= factor;
-        self._x1 /= factor;
-        self._y1 /= factor;
-        self._z1 /= factor;
-    }
-}
-
-impl Add<&Vector> for Line {
-    type Output = Line;
-
-    /// Returns a translated copy.
-    fn add(self, other: &Vector) -> Line {
-        let mut result = self;
-        result += other;
-
-        result
-    }
-}
-
-impl Sub<&Vector> for Line {
-    type Output = Line;
-
-    /// Returns a copy translated back.
-    fn sub(self, other: &Vector) -> Line {
-        let mut result = self;
-        result -= other;
-
-        result
-    }
-}
-
-impl Mul<f64> for Line {
-    type Output = Line;
-
-    /// Returns a copy with both ends scaled.
-    fn mul(self, factor: f64) -> Line {
-        let mut result = self;
-        result *= factor;
-
-        result
-    }
-}
-
-impl Div<f64> for Line {
-    type Output = Line;
-
-    /// Returns a copy with both ends divided.
-    fn div(self, factor: f64) -> Line {
-        let mut result = self;
-        result /= factor;
-
-        result
-    }
-}
-
-impl Neg for Line {
-    type Output = Line;
-
-    /// Returns a flipped copy (end to start).
-    fn neg(self) -> Line {
-        Line::new(self._x1, self._y1, self._z1, self._x0, self._y0, self._z0)
-    }
-}
-
-impl Add<&Vector> for &Line {
-    type Output = Line;
-
-    /// Returns a translated copy.
-    fn add(self, other: &Vector) -> Line {
-        self.clone() + other
-    }
-}
-
-impl Sub<&Vector> for &Line {
-    type Output = Line;
-
-    /// Returns a copy translated back.
-    fn sub(self, other: &Vector) -> Line {
-        self.clone() - other
-    }
-}
-
-impl Mul<f64> for &Line {
-    type Output = Line;
-
-    /// Returns a copy with both ends scaled.
-    fn mul(self, factor: f64) -> Line {
-        self.clone() * factor
-    }
-}
-
-impl Div<f64> for &Line {
-    type Output = Line;
-
-    /// Returns a copy with both ends divided.
-    fn div(self, factor: f64) -> Line {
-        self.clone() / factor
-    }
-}
-
-impl Neg for &Line {
-    type Output = Line;
-
-    /// Returns a flipped copy (end to start).
-    fn neg(self) -> Line {
-        Line::new(self._x1, self._y1, self._z1, self._x0, self._y0, self._z0)
     }
 }
