@@ -5,9 +5,6 @@ use std::collections::VecDeque;
 use std::fmt;
 use std::sync::OnceLock;
 
-/// Predicate over a vertex key and its merged attributes.
-pub type VertexPredicate<'a> = &'a dyn Fn(&str, &BTreeMap<String, f64>) -> bool;
-
 /// Predicate over an edge key and its merged attributes.
 pub type EdgePredicate<'a> = &'a dyn Fn((&str, &str), &BTreeMap<String, f64>) -> bool;
 
@@ -240,7 +237,7 @@ impl fmt::Display for Edge {
 // Graph
 // ═══════════════════════════════════════════════════════════════════════════
 
-/// An undirected graph with string vertices and string attributes.
+/// An undirected graph with string vertices, string labels and double attributes.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(tag = "type", rename = "Graph")]
 pub struct Graph {
@@ -481,11 +478,6 @@ impl Graph {
         result
     }
 
-    /// Alias for neighbors().
-    pub fn get_neighbors(&self, node: &str) -> Vec<String> {
-        self.neighbors(node)
-    }
-
     /// Return incident edges as (other, attribute, forward); forward when node is the edge's v0.
     pub fn edges_of(&self, node: &str) -> Vec<(String, String, bool)> {
         let mut result = Vec::new();
@@ -631,10 +623,15 @@ impl Graph {
         let mut result = Vec::new();
 
         for key in self.vertices.keys() {
-            if conditions
-                .iter()
-                .all(|(name, value)| self.vertex_attribute(key, name) == Some(*value))
-            {
+            let mut matched = true;
+
+            for (name, value) in conditions {
+                if self.vertex_attribute(key, name) != Some(*value) {
+                    matched = false;
+                }
+            }
+
+            if matched {
                 result.push(key.clone());
             }
         }
@@ -647,10 +644,15 @@ impl Graph {
         let mut result = Vec::new();
 
         for edge in self.get_edges() {
-            if conditions
-                .iter()
-                .all(|(name, value)| self.edge_attribute((&edge.0, &edge.1), name) == Some(*value))
-            {
+            let mut matched = true;
+
+            for (name, value) in conditions {
+                if self.edge_attribute((&edge.0, &edge.1), name) != Some(*value) {
+                    matched = false;
+                }
+            }
+
+            if matched {
                 result.push(edge);
             }
         }
@@ -659,7 +661,10 @@ impl Graph {
     }
 
     /// Return the vertices for which pred(key, attributes) is true.
-    pub fn vertices_where_predicate(&self, pred: VertexPredicate) -> Vec<String> {
+    pub fn vertices_where_predicate(
+        &self,
+        pred: &dyn Fn(&str, &BTreeMap<String, f64>) -> bool,
+    ) -> Vec<String> {
         let mut result = Vec::new();
 
         for (key, vertex) in &self.vertices {

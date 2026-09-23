@@ -346,20 +346,6 @@ pub fn run_graph_neighbors() -> TestResult {
     })
 }
 
-pub fn run_graph_get_neighbors() -> TestResult {
-    MINI_TEST!("Get Neighbors", {
-        use crate::Graph;
-
-        let mut g = Graph::new("g");
-        g.add_edge("a", "b", "");
-        g.add_edge("a", "c", "");
-
-        let neigh = g.get_neighbors("a");
-
-        MINI_CHECK!(neigh.len() == 2);
-    })
-}
-
 pub fn run_graph_number_of_vertices() -> TestResult {
     MINI_TEST!("Number Of Vertices", {
         use crate::Graph;
@@ -605,9 +591,10 @@ pub fn run_graph_edges_where_predicate() -> TestResult {
         let bc = ("b", "c");
         g.set_edge_attribute(bc, "weight", 5.0);
 
-        let heavy = g.edges_where_predicate(&|_: (&str, &str), attributes: &BTreeMap<String, f64>| {
-            attributes["weight"] > 4.0
-        });
+        let heavy =
+            g.edges_where_predicate(&|_: (&str, &str), attributes: &BTreeMap<String, f64>| {
+                attributes["weight"] > 4.0
+            });
 
         MINI_CHECK!(heavy.len() == 1);
         MINI_CHECK!((heavy[0].0.as_str(), heavy[0].1.as_str()) == bc);
@@ -784,11 +771,6 @@ REGISTER_MINI_TEST!("Graph", "Get Edges", crate::graph_test::run_graph_get_edges
 REGISTER_MINI_TEST!("Graph", "Neighbors", crate::graph_test::run_graph_neighbors);
 REGISTER_MINI_TEST!(
     "Graph",
-    "Get Neighbors",
-    crate::graph_test::run_graph_get_neighbors
-);
-REGISTER_MINI_TEST!(
-    "Graph",
     "Number Of Vertices",
     crate::graph_test::run_graph_number_of_vertices
 );
@@ -798,8 +780,16 @@ REGISTER_MINI_TEST!(
     crate::graph_test::run_graph_number_of_edges
 );
 REGISTER_MINI_TEST!("Graph", "Clear", crate::graph_test::run_graph_clear);
-REGISTER_MINI_TEST!("Graph", "Node Label", crate::graph_test::run_graph_node_label);
-REGISTER_MINI_TEST!("Graph", "Edge Label", crate::graph_test::run_graph_edge_label);
+REGISTER_MINI_TEST!(
+    "Graph",
+    "Node Label",
+    crate::graph_test::run_graph_node_label
+);
+REGISTER_MINI_TEST!(
+    "Graph",
+    "Edge Label",
+    crate::graph_test::run_graph_edge_label
+);
 REGISTER_MINI_TEST!(
     "Graph",
     "Update Default Vertex Attributes",

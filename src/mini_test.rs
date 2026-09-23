@@ -3755,11 +3755,6 @@ pub fn get_all_tests() -> Vec<RegisteredTest> {
         },
         RegisteredTest {
             group: "Graph",
-            name: "Get Neighbors",
-            func: run_graph_get_neighbors,
-        },
-        RegisteredTest {
-            group: "Graph",
             name: "Number Of Vertices",
             func: run_graph_number_of_vertices,
         },
