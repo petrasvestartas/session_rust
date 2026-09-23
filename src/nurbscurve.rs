@@ -169,9 +169,6 @@ impl NurbsCurve {
             return Self::default();
         }
 
-        let dim = 3;
-        let degree = 3;
-        let order = degree + 1;
         let periodic = matches!(
             parameterization,
             CurveNurbsKnotStyle::UniformPeriodic
@@ -188,224 +185,10 @@ impl NurbsCurve {
         }
 
         if periodic {
-            let cv_count = n + 3;
-            let kc = cv_count + order - 2;
-            let mut base_style = CurveNurbsKnotStyle::Chord;
-
-            if matches!(parameterization, CurveNurbsKnotStyle::UniformPeriodic) {
-                base_style = CurveNurbsKnotStyle::Uniform;
-            }
-
-            if matches!(
-                parameterization,
-                CurveNurbsKnotStyle::ChordSquareRootPeriodic
-            ) {
-                base_style = CurveNurbsKnotStyle::ChordSquareRoot;
-            }
-
-            let mut params = vec![0.0; n + 1];
-
-            if matches!(base_style, CurveNurbsKnotStyle::Uniform) {
-                for i in 1..=n {
-                    params[i] = i as f64;
-                }
-            } else {
-                for i in 1..n {
-                    let mut d = points[i - 1].distance(&points[i], None);
-
-                    if matches!(base_style, CurveNurbsKnotStyle::ChordSquareRoot) {
-                        d = d.sqrt();
-                    }
-
-                    params[i] = params[i - 1] + d;
-                }
-
-                let mut d_close = points[n - 1].distance(&points[0], None);
-
-                if matches!(base_style, CurveNurbsKnotStyle::ChordSquareRoot) {
-                    d_close = d_close.sqrt();
-                }
-
-                params[n] = params[n - 1] + d_close;
-            }
-
-            let mut dmin = 1e300;
-            let mut dmax = 0.0;
-
-            for i in 0..n {
-                let d = params[i + 1] - params[i];
-
-                if d < dmin {
-                    dmin = d;
-                }
-
-                if d > dmax {
-                    dmax = d;
-                }
-            }
-
-            if dmax <= 0.0 || dmax * SQRT_EPSILON >= dmin {
-                return Self::default();
-            }
-
-            let mut nurbsknots = vec![0.0; kc];
-
-            for i in 0..=n {
-                nurbsknots[i + 2] = params[i];
-            }
-
-            nurbsknots[cv_count] = nurbsknots[3] - nurbsknots[2] + nurbsknots[cv_count - 1];
-            nurbsknots[1] = nurbsknots[cv_count - 2] - nurbsknots[cv_count - 1] + nurbsknots[2];
-            nurbsknots[cv_count + 1] = nurbsknots[4] - nurbsknots[3] + nurbsknots[cv_count];
-            nurbsknots[0] = nurbsknots[cv_count - 3] - nurbsknots[cv_count - 2] + nurbsknots[1];
-
-            let mut a = vec![vec![0.0; n]; n];
-            let mut cv = vec![0.0; n * dim];
-
-            for i in 0..n {
-                let basis = nurbsknot::eval_basis(order, &nurbsknots, i, params[i]);
-                a[i][i % n] += basis[0];
-                a[i][(i + 1) % n] += basis[1];
-                a[i][(i + 2) % n] += basis[2];
-
-                for d in 0..dim {
-                    cv[i * dim + d] = points[i][d];
-                }
-            }
-
-            if !Self::solve_dense(&mut a, &mut cv, n, dim) {
-                return Self::default();
-            }
-
-            let mut curve = NurbsCurve::new(dim, false, order, cv_count);
-
-            for i in 0..kc {
-                curve.set_nurbsknot(i, nurbsknots[i]);
-            }
-
-            for i in 0..n {
-                curve.set_cv(i, &Point::new(cv[i * 3], cv[i * 3 + 1], cv[i * 3 + 2]));
-            }
-
-            let cv0 = curve.get_cv(0).unwrap_or_default();
-            let cv1 = curve.get_cv(1).unwrap_or_default();
-            let cv2 = curve.get_cv(2).unwrap_or_default();
-            curve.set_cv(n, &cv0);
-            curve.set_cv(n + 1, &cv1);
-            curve.set_cv(n + 2, &cv2);
-
-            return curve;
+            return Self::create_interpolated_periodic(points, parameterization);
         }
 
-        let cv_count = n + 2;
-        let mut pts = vec![0.0; n * dim];
-
-        for i in 0..n {
-            pts[i * 3] = points[i][0];
-            pts[i * 3 + 1] = points[i][1];
-            pts[i * 3 + 2] = points[i][2];
-        }
-
-        let params = nurbsknot::compute_parameters(&pts, n, dim, parameterization);
-        let nurbsknots = nurbsknot::build_interp_nurbsknots(&params, degree);
-        let kc = nurbsknots.len();
-
-        let tan_start;
-        let tan_end;
-        let s0;
-        let s1;
-
-        if matches!(end_condition, CurveInterpStyle::Occt) {
-            let deg_t = if n == 3 { 2 } else { 3 };
-            tan_start = Self::lagrange_tangent(points, &params, 0, deg_t + 1, params[0]);
-            tan_end =
-                Self::lagrange_tangent(points, &params, n - 1 - deg_t, deg_t + 1, params[n - 1]);
-
-            s0 = (params[1] - params[0]) / 3.0;
-            s1 = -(params[n - 1] - params[n - 2]) / 3.0;
-        } else {
-            tan_start = Self::bessel_tangent(points, 0, 1, 2);
-
-            let end_raw = Self::bessel_tangent(points, n - 1, n - 2, n - 3);
-            tan_end = -end_raw;
-            s0 = points[0].distance(&points[1], None) / 3.0;
-            s1 = -points[n - 1].distance(&points[n - 2], None) / 3.0;
-        }
-
-        let mut cv = vec![0.0; cv_count * dim];
-
-        for d in 0..dim {
-            cv[d] = points[0][d];
-        }
-
-        for d in 0..dim {
-            cv[dim + d] = points[0][d] + s0 * tan_start[d];
-        }
-
-        for i in 1..=(n - 2) {
-            for d in 0..dim {
-                cv[(i + 1) * dim + d] = points[i][d];
-            }
-        }
-
-        for d in 0..dim {
-            cv[n * dim + d] = points[n - 1][d] + s1 * tan_end[d];
-        }
-
-        for d in 0..dim {
-            cv[(n + 1) * dim + d] = points[n - 1][d];
-        }
-
-        let sys_n = n;
-        let mut lower = vec![0.0; sys_n];
-        let mut diag = vec![0.0; sys_n];
-        let mut upper = vec![0.0; sys_n];
-        let mut rhs = vec![0.0; sys_n * dim];
-        diag[0] = 1.0;
-
-        for d in 0..dim {
-            rhs[d] = cv[dim + d];
-        }
-
-        for i in 1..=(n - 2) {
-            let basis = nurbsknot::eval_basis(order, &nurbsknots, i, params[i]);
-            lower[i] = basis[0];
-            diag[i] = basis[1];
-            upper[i] = basis[2];
-
-            for d in 0..dim {
-                rhs[i * dim + d] = points[i][d];
-            }
-        }
-
-        diag[n - 1] = 1.0;
-
-        for d in 0..dim {
-            rhs[(n - 1) * dim + d] = cv[n * dim + d];
-        }
-
-        let solution = match nurbsknot::solve_tridiagonal(dim, sys_n, &lower, &diag, &upper, &rhs) {
-            Some(s) => s,
-            None => return Self::default(),
-        };
-
-        for i in 0..sys_n {
-            for d in 0..dim {
-                cv[(i + 1) * dim + d] = solution[i * dim + d];
-            }
-        }
-
-        let mut curve = NurbsCurve::new(dim, false, order, cv_count);
-
-        for i in 0..kc {
-            curve.set_nurbsknot(i, nurbsknots[i]);
-        }
-
-        for i in 0..cv_count {
-            curve.set_cv(i, &Point::new(cv[i * 3], cv[i * 3 + 1], cv[i * 3 + 2]));
-        }
-
-        curve
+        Self::create_interpolated_clamped(points, parameterization, end_condition)
     }
 
     /// Construct from poles, weights, distinct knots and multiplicities (OCCT convention).
@@ -487,198 +270,11 @@ impl NurbsCurve {
         degree: usize,
         is_periodic: bool,
     ) -> Self {
-        let m = points.len();
-        let dim = 3;
-        let order = degree + 1;
-
         if is_periodic {
-            let mut n = m;
-
-            if n >= 2 && points[0].distance(&points[n - 1], None) < 1e-10 {
-                n -= 1;
-            }
-
-            if n <= num_cvs || num_cvs < order {
-                if n < 3 {
-                    return Self::default();
-                }
-
-                return Self::create_interpolated(
-                    &points[..n],
-                    CurveNurbsKnotStyle::ChordPeriodic,
-                    CurveInterpStyle::Rhino,
-                );
-            }
-
-            let cv_count = num_cvs + degree;
-            let kc = cv_count + order - 2;
-            let mut params = vec![0.0; n + 1];
-
-            for i in 1..n {
-                params[i] = params[i - 1] + points[i - 1].distance(&points[i], None);
-            }
-
-            params[n] = params[n - 1] + points[n - 1].distance(&points[0], None);
-
-            if params[n] < 1e-14 {
-                return Self::default();
-            }
-
-            let mut ppts = vec![0.0; n * dim];
-
-            for i in 0..n {
-                ppts[i * 3] = points[i][0];
-                ppts[i * 3 + 1] = points[i][1];
-                ppts[i * 3 + 2] = points[i][2];
-            }
-
-            let nurbsknots = nurbsknot::build_fitted_nurbsknots_periodic_adaptive(
-                &params, &ppts, n, dim, num_cvs, degree, 3.0,
-            );
-
-            let mut ntn = vec![vec![0.0; num_cvs]; num_cvs];
-            let mut cv = vec![0.0; num_cvs * dim];
-
-            for k in 0..n {
-                let span = nurbsknot::find_span(order, cv_count, &nurbsknots, params[k], 0, 0);
-                let basis = nurbsknot::eval_basis(order, &nurbsknots, span, params[k]);
-
-                for a in 0..order {
-                    let ci = (span + a) % num_cvs;
-
-                    for d in 0..dim {
-                        cv[ci * dim + d] += basis[a] * points[k][d];
-                    }
-
-                    for b in 0..order {
-                        ntn[ci][(span + b) % num_cvs] += basis[a] * basis[b];
-                    }
-                }
-            }
-
-            if !Self::solve_dense(&mut ntn, &mut cv, num_cvs, dim) {
-                return Self::default();
-            }
-
-            let mut curve = NurbsCurve::new(dim, false, order, cv_count);
-
-            for i in 0..kc {
-                curve.set_nurbsknot(i, nurbsknots[i]);
-            }
-
-            for i in 0..num_cvs {
-                curve.set_cv(i, &Point::new(cv[i * 3], cv[i * 3 + 1], cv[i * 3 + 2]));
-            }
-
-            for i in 0..degree {
-                let p = curve.get_cv(i).unwrap_or_default();
-                curve.set_cv(num_cvs + i, &p);
-            }
-
-            return curve;
+            return Self::create_fitted_periodic(points, num_cvs, degree);
         }
 
-        if m <= num_cvs || num_cvs < order {
-            return Self::create_interpolated(
-                points,
-                CurveNurbsKnotStyle::Chord,
-                CurveInterpStyle::Rhino,
-            );
-        }
-
-        let mut pts = vec![0.0; m * dim];
-
-        for i in 0..m {
-            pts[i * 3] = points[i][0];
-            pts[i * 3 + 1] = points[i][1];
-            pts[i * 3 + 2] = points[i][2];
-        }
-
-        let params = nurbsknot::compute_parameters(&pts, m, dim, CurveNurbsKnotStyle::Chord);
-        let nurbsknots = nurbsknot::build_fitted_nurbsknots_adaptive(
-            &params, &pts, m, dim, num_cvs, degree, 3.0,
-        );
-        let n = num_cvs - 1;
-        let sys_n = num_cvs - 2;
-        let bw = degree;
-        let bw1 = bw + 1;
-        let mut band = vec![0.0; sys_n * bw1];
-        let mut rhs = vec![0.0; sys_n * dim];
-
-        for k in 1..(m - 1) {
-            let span = nurbsknot::find_span(order, num_cvs, &nurbsknots, params[k], 0, 0);
-            let basis = nurbsknot::eval_basis(order, &nurbsknots, span, params[k]);
-            let mut rk = [points[k][0], points[k][1], points[k][2]];
-
-            for a in 0..order {
-                let ci = span + a;
-
-                if ci == 0 {
-                    for d in 0..dim {
-                        rk[d] -= basis[a] * points[0][d];
-                    }
-                }
-
-                if ci == n {
-                    for d in 0..dim {
-                        rk[d] -= basis[a] * points[m - 1][d];
-                    }
-                }
-            }
-
-            for a in 0..order {
-                let ci = span + a;
-
-                if ci < 1 || ci > n - 1 {
-                    continue;
-                }
-
-                let ri = ci - 1;
-
-                for d in 0..dim {
-                    rhs[ri * dim + d] += basis[a] * rk[d];
-                }
-
-                for b in a..order {
-                    let cj = span + b;
-
-                    if cj < 1 || cj > n - 1 {
-                        continue;
-                    }
-
-                    let rj = cj - 1;
-                    band[rj * bw1 + (rj - ri)] += basis[a] * basis[b];
-                }
-            }
-        }
-
-        if !nurbsknot::solve_banded_spd(dim, sys_n, bw, &mut band, &mut rhs) {
-            return Self::create_interpolated(
-                points,
-                CurveNurbsKnotStyle::Chord,
-                CurveInterpStyle::Rhino,
-            );
-        }
-
-        let kc = nurbsknots.len();
-        let mut curve = NurbsCurve::new(dim, false, order, num_cvs);
-
-        for i in 0..kc {
-            curve.set_nurbsknot(i, nurbsknots[i]);
-        }
-
-        curve.set_cv(0, &points[0]);
-
-        for i in 0..sys_n {
-            curve.set_cv(
-                i + 1,
-                &Point::new(rhs[i * 3], rhs[i * 3 + 1], rhs[i * 3 + 2]),
-            );
-        }
-
-        curve.set_cv(n, &points[m - 1]);
-
-        curve
+        Self::create_fitted_clamped(points, num_cvs, degree)
     }
 
     /// Chain segments by endpoint matching, raise to a common degree and merge with C0 junctions.
@@ -692,187 +288,13 @@ impl NurbsCurve {
             }
         }
 
-        let mut any2 = false;
-        let mut any3 = false;
+        Self::promote_to_3d(&mut segs);
 
-        for c in &segs {
-            if c.m_dim == 2 {
-                any2 = true;
-            } else if c.m_dim == 3 {
-                any3 = true;
-            }
-        }
-
-        if any2 && any3 {
-            for c in segs.iter_mut() {
-                if c.m_dim != 2 {
-                    continue;
-                }
-
-                let os = c.m_cv_stride;
-                let ns = os + 1;
-                let mut cv = vec![0.0; c.m_cv_count * ns];
-
-                for i in 0..c.m_cv_count {
-                    cv[i * ns] = c.m_cv[i * os];
-                    cv[i * ns + 1] = c.m_cv[i * os + 1];
-
-                    if c.m_is_rat {
-                        cv[i * ns + 3] = c.m_cv[i * os + 2];
-                    }
-                }
-
-                c.m_cv = cv;
-                c.m_cv_stride = ns;
-                c.m_dim = 3;
-            }
-        }
-
-        let mut chains: Vec<Vec<NurbsCurve>> = Vec::new();
-        let mut used = vec![false; segs.len()];
-
-        for i in 0..segs.len() {
-            if used[i] {
-                continue;
-            }
-
-            used[i] = true;
-
-            let mut chain: Vec<NurbsCurve> = vec![segs[i].clone()];
-
-            if !segs[i].is_closed() {
-                let mut grown = true;
-
-                while grown {
-                    grown = false;
-                    let start = chain[0].point_at_start();
-                    let end = chain[chain.len() - 1].point_at_end();
-
-                    for j in 0..segs.len() {
-                        if used[j] || segs[j].is_closed() {
-                            continue;
-                        }
-
-                        let s = segs[j].point_at_start();
-                        let e = segs[j].point_at_end();
-
-                        if s.distance(&end, None) <= tolerance {
-                            chain.push(segs[j].clone());
-                        } else if e.distance(&end, None) <= tolerance {
-                            let mut r = segs[j].clone();
-                            r.reverse();
-                            chain.push(r);
-                        } else if e.distance(&start, None) <= tolerance {
-                            chain.insert(0, segs[j].clone());
-                        } else if s.distance(&start, None) <= tolerance {
-                            let mut r = segs[j].clone();
-                            r.reverse();
-                            chain.insert(0, r);
-                        } else {
-                            continue;
-                        }
-
-                        used[j] = true;
-                        grown = true;
-                        break;
-                    }
-                }
-            }
-
-            chains.push(chain);
-        }
-
+        let chains = Self::chain_segments(&segs, tolerance);
         let mut result: Vec<NurbsCurve> = Vec::new();
 
-        for mut chain in chains {
-            if chain.len() == 1 {
-                result.push(chain.remove(0));
-                continue;
-            }
-
-            let mut rational = false;
-            let mut max_degree = 1;
-
-            for c in &chain {
-                if c.is_rational() {
-                    rational = true;
-                }
-
-                if c.degree() > max_degree {
-                    max_degree = c.degree();
-                }
-            }
-
-            for c in chain.iter_mut() {
-                if rational {
-                    c.make_rational();
-                }
-
-                c.clamp_end(2);
-                c.increase_degree(max_degree);
-            }
-
-            let mut joined = chain[0].clone();
-
-            for ci in 1..chain.len() {
-                let c = &mut chain[ci];
-                let stride = joined.m_cv_stride;
-                let cvdim = joined.cv_size();
-                let a1 = joined.domain_end();
-                let (s0, s1) = c.domain();
-                c.set_domain(a1, a1 + (s1 - s0));
-
-                if rational {
-                    let w_end = joined.weight(joined.m_cv_count - 1);
-                    let w_start = c.weight(0);
-
-                    if w_start.abs() > Tolerance::ZERO_TOLERANCE {
-                        let scale = w_end / w_start;
-
-                        for k in 0..c.m_cv.len() {
-                            c.m_cv[k] *= scale;
-                        }
-                    }
-                }
-
-                let last = (joined.m_cv_count - 1) * stride;
-
-                if stride == 0
-                    || cvdim == 0
-                    || c.m_order != joined.m_order
-                    || c.m_cv_stride != stride
-                    || c.cv_size() != cvdim
-                    || joined.m_cv.len() < last + cvdim
-                    || c.m_cv.len() < c.m_cv_count * stride
-                    || c.m_cv.len() <= stride
-                    || c.m_nurbsknot.len() != c.m_cv_count + c.m_order - 2
-                {
-                    continue;
-                }
-
-                for k in 0..cvdim {
-                    joined.m_cv[last + k] = 0.5 * (joined.m_cv[last + k] + c.m_cv[k]);
-                }
-
-                joined
-                    .m_nurbsknot
-                    .extend_from_slice(&c.m_nurbsknot[(joined.m_order - 1)..]);
-
-                joined.m_cv.extend_from_slice(&c.m_cv[stride..]);
-                joined.m_cv_count = joined.m_cv_count + c.m_cv_count - 1;
-            }
-
-            if joined.m_cv.len() < (joined.m_cv_count - 1) * joined.m_cv_stride + joined.cv_size()
-                || joined.m_nurbsknot.len() != joined.m_cv_count + joined.m_order - 2
-            {
-                for c in chain {
-                    result.push(c);
-                }
-
-                continue;
-            }
-
-            result.push(joined);
+        for chain in chains {
+            Self::join_chain(chain, &mut result);
         }
 
         result
@@ -1221,36 +643,12 @@ impl NurbsCurve {
 
         let (t0, t1) = self.domain();
         let p0 = self.point_at(t0);
-        let p1 = self.point_at((t0 + t1) * 0.5);
-        let p2 = self.point_at(t1);
-        let d1 = &p1 - &p0;
-        let d2 = &p2 - &p1;
-        let mut normal = d1.cross(&d2);
-
-        if normal.magnitude() < Tolerance::ZERO_TOLERANCE {
+        let Some(center) =
+            Self::circle_center(&p0, &self.point_at((t0 + t1) * 0.5), &self.point_at(t1))
+        else {
             return false;
-        }
+        };
 
-        normal = normal.normalized();
-
-        let m1 = Point::sum(&p0, &p1) * 0.5;
-        let m2 = Point::sum(&p1, &p2) * 0.5;
-        let perp1 = d1.cross(&normal).normalized();
-        let perp2 = d2.cross(&normal).normalized();
-        let mut denom = perp1[0] * perp2[1] - perp1[1] * perp2[0];
-
-        if denom.abs() < Tolerance::ZERO_TOLERANCE {
-            denom = perp1[0] * perp2[2] - perp1[2] * perp2[0];
-        }
-
-        if denom.abs() < Tolerance::ZERO_TOLERANCE {
-            return false;
-        }
-
-        let dx = m2[0] - m1[0];
-        let dy = m2[1] - m1[1];
-        let s = (dx * perp2[1] - dy * perp2[0]) / denom;
-        let center = &m1 + &perp1 * s;
         let radius = center.distance(&p0, None);
 
         if radius < Tolerance::ZERO_TOLERANCE {
@@ -1723,8 +1121,8 @@ impl NurbsCurve {
             return false;
         }
 
-        if !self.m_is_rat && w != 1.0 {
-            self.make_rational();
+        if !self.m_is_rat && w != 1.0 && !self.make_rational() {
+            return false;
         }
 
         let dim = self.m_dim;
@@ -1904,21 +1302,11 @@ impl NurbsCurve {
         let tol = (d0.abs() + d1.abs() + (d1 - d0).abs()) * SQRT_EPSILON;
 
         for _ in 0..nurbsknot_multiplicity {
-            let n = self.m_cv_count - 1;
-            let full_nurbsknot_count = self.m_cv_count + self.m_order;
-            let mut u = vec![0.0; full_nurbsknot_count];
-            u[0] = self.m_nurbsknot[0];
-
-            for i in 0..self.m_nurbsknot.len() {
-                u[i + 1] = self.m_nurbsknot[i];
-            }
-
-            u[full_nurbsknot_count - 1] = self.m_nurbsknot[self.m_nurbsknot.len() - 1];
-
+            let u = self.full_nurbsknots();
             let mut mult = 0;
 
-            for i in 0..full_nurbsknot_count {
-                if (u[i] - nurbsknot_value).abs() <= tol {
+            for &knot in &u {
+                if (knot - nurbsknot_value).abs() <= tol {
                     mult += 1;
                 }
             }
@@ -1931,57 +1319,7 @@ impl NurbsCurve {
                 return false;
             }
 
-            let k = self.find_span(nurbsknot_value) + self.m_order - 1;
-            let new_cv_count = self.m_cv_count + 1;
-            let stride = self.m_cv_stride;
-            let mut u_new = vec![0.0; full_nurbsknot_count + 1];
-            let mut cv_new = vec![0.0; new_cv_count * stride];
-
-            for i in 0..=k {
-                u_new[i] = u[i];
-            }
-
-            u_new[k + 1] = nurbsknot_value;
-
-            for i in (k + 1)..full_nurbsknot_count {
-                u_new[i + 1] = u[i];
-            }
-
-            for i in 0..=(k - p) {
-                cv_new[i * stride..(i + 1) * stride]
-                    .copy_from_slice(&self.m_cv[i * stride..(i + 1) * stride]);
-            }
-
-            for i in (k + 1)..=(n + 1) {
-                cv_new[i * stride..(i + 1) * stride]
-                    .copy_from_slice(&self.m_cv[(i - 1) * stride..i * stride]);
-            }
-
-            for i in (k - p + 1)..=k {
-                let mut alpha = 0.0;
-                let denom = u[i + p] - u[i];
-
-                if denom != 0.0 {
-                    alpha = (nurbsknot_value - u[i]) / denom;
-                }
-
-                for d in 0..stride {
-                    cv_new[i * stride + d] = (1.0 - alpha) * self.m_cv[(i - 1) * stride + d]
-                        + alpha * self.m_cv[i * stride + d];
-                }
-            }
-
-            self.m_cv_count = new_cv_count;
-            self.m_cv = cv_new;
-
-            let kc = self.m_order + self.m_cv_count - 2;
-            let mut nurbsknot_new = vec![0.0; kc];
-
-            for i in 0..kc {
-                nurbsknot_new[i] = u_new[i + 1];
-            }
-
-            self.m_nurbsknot = nurbsknot_new;
+            self.insert_nurbsknot_once(nurbsknot_value, &u);
         }
 
         true
@@ -2241,7 +1579,6 @@ impl NurbsCurve {
         } else {
             angle_tolerance
         };
-        let (t0, t1) = self.domain();
         let curve_len = self.length(None);
         let max_edge_length = if max_edge_length <= 0.0 {
             curve_len / 10.0
@@ -2258,45 +1595,7 @@ impl NurbsCurve {
             min_edge_length = max_edge_length * 0.1;
         }
 
-        let mut samples: Vec<(f64, Point)> = vec![(t0, self.point_at(t0)), (t1, self.point_at(t1))];
-        let mut work_queue: Vec<(f64, f64)> = vec![(t0, t1)];
-        let max_iterations = 10000;
-        let mut iterations = 0;
-
-        while !work_queue.is_empty() && iterations < max_iterations {
-            iterations += 1;
-
-            let (ta, tb) = work_queue.pop().unwrap_or((t0, t1));
-            let pa = self.point_at(ta);
-            let pb = self.point_at(tb);
-            let chord_length = pa.distance(&pb, None);
-
-            if chord_length < min_edge_length {
-                continue;
-            }
-
-            let tm = (ta + tb) * 0.5;
-            let pm = self.point_at(tm);
-            let chord = &pb - &pa;
-            let to_mid = &pm - &pa;
-            let chord_len_sq = chord.dot(&chord);
-            let mut deviation = 0.0;
-
-            if chord_len_sq > 1e-20 {
-                let proj = to_mid.dot(&chord) / chord_len_sq;
-                deviation = pm.distance(&(&pa + &chord * proj), None);
-            }
-
-            let deviation_tolerance = chord_length * angle_tolerance * 0.5;
-
-            if deviation > deviation_tolerance || chord_length > max_edge_length {
-                samples.push((tm, pm));
-                work_queue.push((ta, tm));
-                work_queue.push((tm, tb));
-            }
-        }
-
-        samples.sort_by(sample_before);
+        let samples = self.adaptive_samples(angle_tolerance, min_edge_length, max_edge_length);
 
         for (t, p) in samples {
             points.push(p);
@@ -2447,28 +1746,7 @@ impl NurbsCurve {
         let max_derivs = derivative_count.min(self.degree());
         let span = self.find_span(t);
         let ders = self.basis_functions_derivatives(span, t, max_derivs);
-        let p = self.degree();
-        let mut aders = vec![[0.0; 4]; max_derivs + 1];
-
-        for k in 0..=max_derivs {
-            for j in 0..=p {
-                let Some(cv_ptr) = self.cv(span + j) else {
-                    continue;
-                };
-
-                let nx = ders[k][j];
-                aders[k][0] += nx * cv_ptr[0];
-                aders[k][1] += nx * if self.m_dim > 1 { cv_ptr[1] } else { 0.0 };
-                aders[k][2] += nx * if self.m_dim > 2 { cv_ptr[2] } else { 0.0 };
-                aders[k][3] += nx
-                    * if self.m_is_rat {
-                        cv_ptr[self.m_dim]
-                    } else {
-                        1.0
-                    };
-            }
-        }
-
+        let aders = self.homogeneous_derivatives(span, &ders);
         let mut cders = vec![[0.0; 3]; max_derivs + 1];
 
         if !self.m_is_rat {
@@ -2663,32 +1941,10 @@ impl NurbsCurve {
             t
         };
 
-        let derivs0 = self.evaluate(t0, 2);
-        let d1_0 = derivs0[1].clone();
-        let d2_0 = derivs0[2].clone();
-        let d1_0_mag = d1_0.magnitude();
-
-        if d1_0_mag < 1e-14 {
+        let Some((t_0, r0)) = self.start_frame() else {
             return Plane::invalid();
-        }
+        };
 
-        let t_0 = &d1_0 / d1_0_mag;
-        let d2_dot_d1 = d2_0.dot(&d1_0);
-        let d1_0_mag_sq = d1_0_mag * d1_0_mag;
-        let mut n0_unnorm = &d2_0 - &d1_0 * (d2_dot_d1 / d1_0_mag_sq);
-        let mut n0_mag = n0_unnorm.magnitude();
-
-        if n0_mag < 1e-14 {
-            n0_unnorm = Vector::new(0.0, 0.0, 1.0).cross(&t_0);
-            n0_mag = n0_unnorm.magnitude();
-
-            if n0_mag < 1e-14 {
-                n0_unnorm = Vector::new(0.0, 1.0, 0.0).cross(&t_0);
-                n0_mag = n0_unnorm.magnitude();
-            }
-        }
-
-        let r0 = &n0_unnorm / n0_mag;
         let origin = self.point_at(param);
 
         if (param - t0).abs() < 1e-14 {
@@ -2698,56 +1954,7 @@ impl NurbsCurve {
             return Plane::from_frame(origin, r0, s0, t_0);
         }
 
-        let num_steps = 10.max(((param - t0) / (t1 - t0) * 100.0) as i32) as usize;
-        let dt = (param - t0) / num_steps as f64;
-        let mut ri = r0;
-        let mut ti = t0;
-        let mut xi = self.point_at(ti);
-        let mut t_i = t_0;
-
-        for _ in 0..num_steps {
-            if ti >= param - 1e-14 {
-                break;
-            }
-
-            let ti_next = (ti + dt).min(param);
-            let xi_next = self.point_at(ti_next);
-            let mut t_i_next = self.tangent_at(ti_next);
-            t_i_next.normalize_self();
-
-            let v1 = &xi_next - &xi;
-            let c1 = v1.dot(&v1);
-
-            if c1 < 1e-28 {
-                ti = ti_next;
-                xi = xi_next;
-                t_i = t_i_next;
-                continue;
-            }
-
-            let ri_dot_v1 = ri.dot(&v1);
-            let r_l = &ri - &v1 * (2.0 * ri_dot_v1 / c1);
-            let t_i_dot_v1 = t_i.dot(&v1);
-            let t_l = &t_i - &v1 * (2.0 * t_i_dot_v1 / c1);
-            let v2 = &t_i_next - &t_l;
-            let c2 = v2.dot(&v2);
-
-            if c2 < 1e-28 {
-                ri = r_l;
-            } else {
-                let r_l_dot_v2 = r_l.dot(&v2);
-                ri = &r_l - &v2 * (2.0 * r_l_dot_v2 / c2);
-            }
-
-            if ri.magnitude() > 1e-14 {
-                ri.normalize_self();
-            }
-
-            ti = ti_next;
-            xi = xi_next;
-            t_i = t_i_next;
-        }
-
+        let mut ri = self.double_reflection(param, &r0, &t_0);
         let mut tangent = self.tangent_at(param);
         tangent.normalize_self();
 
@@ -2793,11 +2000,9 @@ impl NurbsCurve {
 
     /// Clamp and move the first CV.
     pub fn set_start_point(&mut self, start_point: &Point) -> bool {
-        if !self.is_valid() {
+        if !self.is_valid() || !self.clamp_end(2) {
             return false;
         }
-
-        self.clamp_end(2);
 
         let w = if self.m_is_rat { self.weight(0) } else { 1.0 };
 
@@ -2822,11 +2027,9 @@ impl NurbsCurve {
 
     /// Clamp and move the last CV.
     pub fn set_end_point(&mut self, end_point: &Point) -> bool {
-        if !self.is_valid() {
+        if !self.is_valid() || !self.clamp_end(2) {
             return false;
         }
-
-        self.clamp_end(2);
 
         let last = self.m_cv_count - 1;
         let w = if self.m_is_rat {
@@ -2963,89 +2166,7 @@ impl NurbsCurve {
             return false;
         }
 
-        let full_nurbsknot_count = self.m_cv_count + self.m_order;
-        let mut u = vec![0.0; full_nurbsknot_count];
-        u[0] = self.m_nurbsknot[0];
-
-        for i in 0..self.m_nurbsknot.len() {
-            u[i + 1] = self.m_nurbsknot[i];
-        }
-
-        u[full_nurbsknot_count - 1] = self.m_nurbsknot[self.m_nurbsknot.len() - 1];
-
-        let tol = Tolerance::ZERO_TOLERANCE;
-        let mut start_span: i64 = -1;
-
-        for i in (0..full_nurbsknot_count).rev() {
-            if (u[i] - t0).abs() < tol {
-                start_span = i as i64;
-                break;
-            }
-        }
-
-        let mut end_span: i64 = -1;
-
-        for i in 0..full_nurbsknot_count {
-            if (u[i] - t1).abs() < tol {
-                end_span = i as i64;
-                break;
-            }
-        }
-
-        if start_span < 0 || end_span < 0 || start_span >= end_span {
-            return false;
-        }
-
-        let start_span = start_span as usize;
-        let end_span = end_span as usize;
-
-        let first_cv = start_span.saturating_sub(p);
-        let last_cv = (end_span - 1).min(self.m_cv_count - 1);
-        let mut new_cv_count = last_cv - first_cv + 1;
-
-        if new_cv_count < self.m_order {
-            new_cv_count = self.m_order;
-
-            if first_cv + new_cv_count > self.m_cv_count {
-                return false;
-            }
-        }
-
-        let new_nurbsknot_count = new_cv_count + self.m_order - 2;
-        let mut new_nurbsknot = vec![0.0; new_nurbsknot_count];
-
-        for i in 0..(p - 1) {
-            new_nurbsknot[i] = t0;
-        }
-
-        let mid_count = new_nurbsknot_count as i64 - 2 * (p as i64 - 1);
-
-        for i in 0..mid_count.max(0) as usize {
-            let src_idx = start_span + i;
-            new_nurbsknot[p - 1 + i] = if src_idx < full_nurbsknot_count {
-                u[src_idx]
-            } else {
-                t1
-            };
-        }
-
-        for i in 0..(p - 1) {
-            new_nurbsknot[new_nurbsknot_count - p + 1 + i] = t1;
-        }
-
-        let stride = self.m_cv_stride;
-        let mut new_cv = vec![0.0; new_cv_count * stride];
-
-        for i in 0..new_cv_count {
-            new_cv[i * stride..(i + 1) * stride]
-                .copy_from_slice(&self.m_cv[(first_cv + i) * stride..(first_cv + i + 1) * stride]);
-        }
-
-        self.m_cv_count = new_cv_count;
-        self.m_cv = new_cv;
-        self.m_nurbsknot = new_nurbsknot;
-
-        true
+        self.keep_span_range(t0, t1)
     }
 
     /// Return trimmed copies on both sides of t.
@@ -3088,18 +2209,21 @@ impl NurbsCurve {
         let mut changed = false;
 
         if t0 < d0 {
-            self.clamp_end(0);
-            Self::evaluate_nurbs_de_boor(
-                cvdim,
-                order,
-                stride,
-                &mut self.m_cv,
-                0,
-                &self.m_nurbsknot,
-                0,
-                1,
-                t0,
-            );
+            if !self.clamp_end(0)
+                || !Self::evaluate_nurbs_de_boor(
+                    cvdim,
+                    order,
+                    stride,
+                    &mut self.m_cv,
+                    0,
+                    &self.m_nurbsknot,
+                    0,
+                    1,
+                    t0,
+                )
+            {
+                return false;
+            }
 
             for i in 0..(order - 1) {
                 self.m_nurbsknot[i] = t0;
@@ -3109,10 +2233,13 @@ impl NurbsCurve {
         }
 
         if t1 > d1 {
-            self.clamp_end(1);
+            if !self.clamp_end(1) {
+                return false;
+            }
 
             let i0 = self.m_cv_count - order;
-            Self::evaluate_nurbs_de_boor(
+
+            if !Self::evaluate_nurbs_de_boor(
                 cvdim,
                 order,
                 stride,
@@ -3122,7 +2249,9 @@ impl NurbsCurve {
                 i0,
                 -1,
                 t1,
-            );
+            ) {
+                return false;
+            }
 
             let kc = self.nurbsknot_count();
 
@@ -3333,159 +2462,30 @@ impl NurbsCurve {
         }
 
         let p = self.degree();
-        let order = self.m_order;
 
         if self.is_periodic() {
-            let mut sc = self.span_count();
-            let mut kc = self.nurbsknot_count();
+            let kc = self.nurbsknot_count();
 
-            if sc + 2 * p > kc {
-                let mut nurbsknot_index: i64 = -1;
-
-                for i in 0..kc {
-                    if self.m_nurbsknot[i] > t {
-                        nurbsknot_index = i as i64;
-                        break;
-                    }
-                }
+            if self.span_count() + 2 * p > kc {
+                let mut nurbsknot_index = self.first_nurbsknot_above(t);
 
                 if nurbsknot_index >= p as i64 && nurbsknot_index <= (kc - p) as i64 {
-                    let k0 = self.m_nurbsknot[nurbsknot_index as usize - 1];
-                    let k1 = self.m_nurbsknot[nurbsknot_index as usize];
-                    let d0 = t - k0;
-                    let d1 = k1 - t;
-                    let mut need_insert = true;
+                    nurbsknot_index = self.seam_nurbsknot_index(t, nurbsknot_index);
 
-                    if d0 <= d1 {
-                        if d0 < Tolerance::ZERO_TOLERANCE {
-                            nurbsknot_index -= 1;
-                            need_insert = false;
-                        }
-                    } else if d1 < Tolerance::ZERO_TOLERANCE {
-                        need_insert = false;
+                    if nurbsknot_index < 0 {
+                        return false;
                     }
 
-                    if need_insert {
-                        if !self.insert_nurbsknot(t, 1) {
-                            return false;
-                        }
-
-                        kc = self.nurbsknot_count();
-                        sc = self.span_count();
-                        nurbsknot_index = -1;
-
-                        for i in 0..kc {
-                            if self.m_nurbsknot[i] > t + Tolerance::ZERO_TOLERANCE {
-                                nurbsknot_index = i as i64;
-                                break;
-                            }
-                        }
-
-                        if nurbsknot_index < 0 {
-                            return false;
-                        }
-                    }
-
-                    if nurbsknot_index >= p as i64 && nurbsknot_index < (kc - p) as i64 {
-                        let nurbsknot_index = nurbsknot_index as usize;
-                        let cvc = self.m_cv_count;
-                        let distinct_cvc = cvc - p;
-                        let cvdim = self.cv_size();
-                        let old_nurbsknots = self.m_nurbsknot.clone();
-                        let old_cv = self.m_cv.clone();
-                        let mut curr = p - 1;
-
-                        for i in nurbsknot_index..(sc + p - 1) {
-                            self.m_nurbsknot[curr] = old_nurbsknots[i];
-                            curr += 1;
-                        }
-
-                        for i in 0..=(nurbsknot_index + 1 - p) {
-                            self.m_nurbsknot[curr] = old_nurbsknots[p - 1 + i] + dom_len;
-                            curr += 1;
-                        }
-
-                        for i in 0..(p - 1) {
-                            self.m_nurbsknot[curr + i] = self.m_nurbsknot[curr + i - 1]
-                                + self.m_nurbsknot[p + i]
-                                - self.m_nurbsknot[p + i - 1];
-
-                            self.m_nurbsknot[p - 2 - i] = self.m_nurbsknot[p - i - 1]
-                                - self.m_nurbsknot[curr - 1 - i]
-                                + self.m_nurbsknot[curr - 2 - i];
-                        }
-
-                        let cv_id = nurbsknot_index as i64 - p as i64 + 1;
-
-                        for i in 0..cvc {
-                            let mut src = (cv_id + i as i64) % distinct_cvc as i64;
-
-                            if src < 0 {
-                                src += distinct_cvc as i64;
-                            }
-
-                            let src = src as usize;
-
-                            for j in 0..cvdim {
-                                self.m_cv[i * self.m_cv_stride + j] =
-                                    old_cv[src * self.m_cv_stride + j];
-                            }
-                        }
-
-                        self.set_domain(t, t + dom_len);
-
-                        return true;
+                    if nurbsknot_index >= p as i64
+                        && nurbsknot_index < (self.nurbsknot_count() - p) as i64
+                    {
+                        return self.rotate_periodic_seam(nurbsknot_index as usize, t, dom_len);
                     }
                 }
             }
         }
 
-        let (left_crv, right_crv) = self.split(t);
-
-        if !left_crv.is_valid() || !right_crv.is_valid() {
-            return false;
-        }
-
-        let shift = t1 - t0;
-        let cvdim = self.cv_size();
-        let stride = self.m_cv_stride;
-        let new_cv_count = right_crv.m_cv_count + left_crv.m_cv_count - 1;
-        let new_kc = order + new_cv_count - 2;
-        let mut new_cv = vec![0.0; new_cv_count * stride];
-        let mut new_nurbsknots = vec![0.0; new_kc];
-
-        for i in 0..right_crv.m_cv_count {
-            for j in 0..cvdim {
-                new_cv[i * stride + j] = right_crv.m_cv[i * right_crv.m_cv_stride + j];
-            }
-        }
-
-        for i in 1..left_crv.m_cv_count {
-            let dst = right_crv.m_cv_count + i - 1;
-
-            for j in 0..cvdim {
-                new_cv[dst * stride + j] = left_crv.m_cv[i * left_crv.m_cv_stride + j];
-            }
-        }
-
-        let rkc = right_crv.nurbsknot_count();
-
-        for i in 0..rkc {
-            new_nurbsknots[i] = right_crv.m_nurbsknot[i];
-        }
-
-        let lkc = left_crv.nurbsknot_count();
-
-        for i in (order - 1)..lkc {
-            new_nurbsknots[rkc + i - (order - 1)] = left_crv.m_nurbsknot[i] + shift;
-        }
-
-        self.m_cv_count = new_cv_count;
-        self.m_cv = new_cv;
-        self.m_nurbsknot = new_nurbsknots;
-        self.set_domain(t, t + dom_len);
-
-        true
+        self.split_seam(t, dom_len)
     }
 
     // ═══════════════════════════════════════════════════════════════════════════
@@ -3830,27 +2830,7 @@ impl NurbsCurve {
         let p = self.degree();
         let n_der = deriv_order.min(p);
         let mut ders = vec![vec![0.0; p + 1]; n_der + 1];
-        let mut left = vec![0.0; p + 1];
-        let mut right = vec![0.0; p + 1];
-        let mut ndu = vec![vec![0.0; p + 1]; p + 1];
-        let offset = self.m_order - 2 + span;
-        ndu[0][0] = 1.0;
-
-        for j in 1..=p {
-            left[j] = t - self.m_nurbsknot[offset + 1 - j];
-            right[j] = self.m_nurbsknot[offset + j] - t;
-
-            let mut saved = 0.0;
-
-            for r in 0..j {
-                ndu[j][r] = right[r + 1] + left[j - r];
-                let temp = ndu[r][j - 1] / ndu[j][r];
-                ndu[r][j] = saved + right[r + 1] * temp;
-                saved = left[j - r] * temp;
-            }
-
-            ndu[j][j] = saved;
-        }
+        let ndu = self.basis_functions_ndu(span, t);
 
         for j in 0..=p {
             ders[0][j] = ndu[j][p];
@@ -3906,6 +2886,34 @@ impl NurbsCurve {
         ders
     }
 
+    /// Compute the triangular table of basis functions and nurbsknot differences (Piegl & Tiller A2.3).
+    fn basis_functions_ndu(&self, span: usize, t: f64) -> Vec<Vec<f64>> {
+        let p = self.degree();
+        let mut left = vec![0.0; p + 1];
+        let mut right = vec![0.0; p + 1];
+        let offset = self.m_order - 2 + span;
+        let mut ndu = vec![vec![0.0; p + 1]; p + 1];
+        ndu[0][0] = 1.0;
+
+        for j in 1..=p {
+            left[j] = t - self.m_nurbsknot[offset + 1 - j];
+            right[j] = self.m_nurbsknot[offset + j] - t;
+
+            let mut saved = 0.0;
+
+            for r in 0..j {
+                ndu[j][r] = right[r + 1] + left[j - r];
+                let temp = ndu[r][j - 1] / ndu[j][r];
+                ndu[r][j] = saved + right[r + 1] * temp;
+                saved = left[j - r] * temp;
+            }
+
+            ndu[j][j] = saved;
+        }
+
+        ndu
+    }
+
     /// Reshape one span's CVs so it starts (side > 0) or ends (side < 0) at t (OpenNURBS ON_EvaluateNurbsDeBoor).
     #[allow(clippy::too_many_arguments)]
     fn evaluate_nurbs_de_boor(
@@ -3920,48 +2928,84 @@ impl NurbsCurve {
         t: f64,
     ) -> bool {
         let degree = order - 1;
-        let t0 = nurbsknots[kn0 + degree - 1];
-        let t1 = nurbsknots[kn0 + degree];
 
-        if t0 == t1 {
+        if nurbsknots[kn0 + degree - 1] == nurbsknots[kn0 + degree] {
             return false;
         }
 
         if side < 0 {
-            if t == t1 && t1 == nurbsknots[kn0 + 2 * degree - 1] {
-                return true;
-            }
+            return Self::de_boor_end(cv_dim, order, cv_stride, cv, cv0, nurbsknots, kn0, t);
+        }
 
-            let fully_multiple = t0 == nurbsknots[kn0];
-            let kn = kn0 + degree - 1;
-            let mut delta_t = vec![0.0; degree];
+        Self::de_boor_start(cv_dim, order, cv_stride, cv, cv0, nurbsknots, kn0, t)
+    }
 
-            if !fully_multiple {
-                for idx in 0..degree {
-                    delta_t[idx] = t - nurbsknots[kn - idx];
-                }
-            }
+    /// Reshape one span's CVs so it ends at t.
+    #[allow(clippy::too_many_arguments)]
+    fn de_boor_end(
+        cv_dim: usize,
+        order: usize,
+        cv_stride: usize,
+        cv: &mut [f64],
+        cv0: usize,
+        nurbsknots: &[f64],
+        kn0: usize,
+        t: f64,
+    ) -> bool {
+        let degree = order - 1;
+        let t0 = nurbsknots[kn0 + degree - 1];
+        let t1 = nurbsknots[kn0 + degree];
 
-            for k in (1..order).rev() {
-                for i in (0..k).rev() {
-                    let di = k - 1 - i;
-                    let alpha1 = if fully_multiple {
-                        (t - t0) / (nurbsknots[kn + k - di] - t0)
-                    } else {
-                        delta_t[di] / (nurbsknots[kn + k - di] - nurbsknots[kn - di])
-                    };
-                    let alpha0 = 1.0 - alpha1;
-                    let row1 = cv0 + (order - k + i) * cv_stride;
-                    let row0 = row1 - cv_stride;
-
-                    for j in 0..cv_dim {
-                        cv[row1 + j] = cv[row0 + j] * alpha0 + cv[row1 + j] * alpha1;
-                    }
-                }
-            }
-
+        if t == t1 && t1 == nurbsknots[kn0 + 2 * degree - 1] {
             return true;
         }
+
+        let fully_multiple = t0 == nurbsknots[kn0];
+        let kn = kn0 + degree - 1;
+        let mut delta_t = vec![0.0; degree];
+
+        if !fully_multiple {
+            for idx in 0..degree {
+                delta_t[idx] = t - nurbsknots[kn - idx];
+            }
+        }
+
+        for k in (1..order).rev() {
+            for i in (0..k).rev() {
+                let di = k - 1 - i;
+                let alpha1 = if fully_multiple {
+                    (t - t0) / (nurbsknots[kn + k - di] - t0)
+                } else {
+                    delta_t[di] / (nurbsknots[kn + k - di] - nurbsknots[kn - di])
+                };
+                let alpha0 = 1.0 - alpha1;
+                let row1 = cv0 + (order - k + i) * cv_stride;
+                let row0 = row1 - cv_stride;
+
+                for j in 0..cv_dim {
+                    cv[row1 + j] = cv[row0 + j] * alpha0 + cv[row1 + j] * alpha1;
+                }
+            }
+        }
+
+        true
+    }
+
+    /// Reshape one span's CVs so it starts at t.
+    #[allow(clippy::too_many_arguments)]
+    fn de_boor_start(
+        cv_dim: usize,
+        order: usize,
+        cv_stride: usize,
+        cv: &mut [f64],
+        cv0: usize,
+        nurbsknots: &[f64],
+        kn0: usize,
+        t: f64,
+    ) -> bool {
+        let degree = order - 1;
+        let t0 = nurbsknots[kn0 + degree - 1];
+        let t1 = nurbsknots[kn0 + degree];
 
         if t == t0 && t0 == nurbsknots[kn0] {
             return true;
@@ -4240,6 +3284,1201 @@ impl NurbsCurve {
         }
 
         result
+    }
+
+    /// Construct the closed interpolated cubic through points, wrapped by three CVs.
+    fn create_interpolated_periodic(
+        points: &[Point],
+        parameterization: CurveNurbsKnotStyle,
+    ) -> Self {
+        let n = points.len();
+        let dim = 3;
+        let order = 4;
+        let cv_count = n + 3;
+        let kc = cv_count + order - 2;
+        let params = Self::periodic_interpolation_parameters(points, parameterization);
+        let mut dmin = 1e300;
+        let mut dmax = 0.0;
+
+        for i in 0..n {
+            let d = params[i + 1] - params[i];
+
+            if d < dmin {
+                dmin = d;
+            }
+
+            if d > dmax {
+                dmax = d;
+            }
+        }
+
+        if dmax <= 0.0 || dmax * SQRT_EPSILON >= dmin {
+            return Self::default();
+        }
+
+        let nurbsknots = Self::periodic_interpolation_nurbsknots(&params, cv_count);
+        let mut a = vec![vec![0.0; n]; n];
+        let mut cv = vec![0.0; n * dim];
+
+        for i in 0..n {
+            let basis = nurbsknot::eval_basis(order, &nurbsknots, i, params[i]);
+            a[i][i % n] += basis[0];
+            a[i][(i + 1) % n] += basis[1];
+            a[i][(i + 2) % n] += basis[2];
+
+            for d in 0..dim {
+                cv[i * dim + d] = points[i][d];
+            }
+        }
+
+        if !Self::solve_dense(&mut a, &mut cv, n, dim) {
+            return Self::default();
+        }
+
+        let mut curve = NurbsCurve::new(dim, false, order, cv_count);
+
+        for i in 0..kc {
+            curve.set_nurbsknot(i, nurbsknots[i]);
+        }
+
+        for i in 0..n {
+            curve.set_cv(i, &Point::new(cv[i * 3], cv[i * 3 + 1], cv[i * 3 + 2]));
+        }
+
+        let cv0 = curve.get_cv(0).unwrap_or_default();
+        let cv1 = curve.get_cv(1).unwrap_or_default();
+        let cv2 = curve.get_cv(2).unwrap_or_default();
+        curve.set_cv(n, &cv0);
+        curve.set_cv(n + 1, &cv1);
+        curve.set_cv(n + 2, &cv2);
+
+        curve
+    }
+
+    /// Return the n + 1 parameters of the closed point loop, uniform or (square root) chord spaced.
+    fn periodic_interpolation_parameters(
+        points: &[Point],
+        parameterization: CurveNurbsKnotStyle,
+    ) -> Vec<f64> {
+        let n = points.len();
+        let mut base_style = CurveNurbsKnotStyle::Chord;
+
+        if matches!(parameterization, CurveNurbsKnotStyle::UniformPeriodic) {
+            base_style = CurveNurbsKnotStyle::Uniform;
+        }
+
+        if matches!(
+            parameterization,
+            CurveNurbsKnotStyle::ChordSquareRootPeriodic
+        ) {
+            base_style = CurveNurbsKnotStyle::ChordSquareRoot;
+        }
+
+        let mut params = vec![0.0; n + 1];
+
+        if matches!(base_style, CurveNurbsKnotStyle::Uniform) {
+            for i in 1..=n {
+                params[i] = i as f64;
+            }
+
+            return params;
+        }
+
+        for i in 1..n {
+            let mut d = points[i - 1].distance(&points[i], None);
+
+            if matches!(base_style, CurveNurbsKnotStyle::ChordSquareRoot) {
+                d = d.sqrt();
+            }
+
+            params[i] = params[i - 1] + d;
+        }
+
+        let mut d_close = points[n - 1].distance(&points[0], None);
+
+        if matches!(base_style, CurveNurbsKnotStyle::ChordSquareRoot) {
+            d_close = d_close.sqrt();
+        }
+
+        params[n] = params[n - 1] + d_close;
+
+        params
+    }
+
+    /// Return the periodic nurbsknots over params, extended by the wrapped spans at both ends.
+    fn periodic_interpolation_nurbsknots(params: &[f64], cv_count: usize) -> Vec<f64> {
+        let n = params.len() - 1;
+        let mut nurbsknots = vec![0.0; cv_count + 2];
+
+        for i in 0..=n {
+            nurbsknots[i + 2] = params[i];
+        }
+
+        nurbsknots[cv_count] = nurbsknots[3] - nurbsknots[2] + nurbsknots[cv_count - 1];
+        nurbsknots[1] = nurbsknots[cv_count - 2] - nurbsknots[cv_count - 1] + nurbsknots[2];
+        nurbsknots[cv_count + 1] = nurbsknots[4] - nurbsknots[3] + nurbsknots[cv_count];
+        nurbsknots[0] = nurbsknots[cv_count - 3] - nurbsknots[cv_count - 2] + nurbsknots[1];
+
+        nurbsknots
+    }
+
+    /// Construct the open interpolated cubic through points with end tangents from end_condition.
+    fn create_interpolated_clamped(
+        points: &[Point],
+        parameterization: CurveNurbsKnotStyle,
+        end_condition: CurveInterpStyle,
+    ) -> Self {
+        let n = points.len();
+        let dim = 3;
+        let degree = 3;
+        let cv_count = n + 2;
+        let pts = Self::flatten_points(points, n);
+        let params = nurbsknot::compute_parameters(&pts, n, dim, parameterization);
+        let nurbsknots = nurbsknot::build_interp_nurbsknots(&params, degree);
+        let kc = nurbsknots.len();
+        let mut cv = Self::interpolation_end_cvs(points, &params, end_condition);
+
+        if !Self::solve_interpolation_cvs(points, &params, &nurbsknots, &mut cv) {
+            return Self::default();
+        }
+
+        let mut curve = NurbsCurve::new(dim, false, degree + 1, cv_count);
+
+        for i in 0..kc {
+            curve.set_nurbsknot(i, nurbsknots[i]);
+        }
+
+        for i in 0..cv_count {
+            curve.set_cv(i, &Point::new(cv[i * 3], cv[i * 3 + 1], cv[i * 3 + 2]));
+        }
+
+        curve
+    }
+
+    /// Return the n + 2 CVs: the points with an end tangent CV after the first and before the last.
+    fn interpolation_end_cvs(
+        points: &[Point],
+        params: &[f64],
+        end_condition: CurveInterpStyle,
+    ) -> Vec<f64> {
+        let n = points.len();
+        let dim = 3;
+        let tan_start;
+        let tan_end;
+        let s0;
+        let s1;
+
+        if matches!(end_condition, CurveInterpStyle::Occt) {
+            let deg_t = if n == 3 { 2 } else { 3 };
+            tan_start = Self::lagrange_tangent(points, params, 0, deg_t + 1, params[0]);
+            tan_end =
+                Self::lagrange_tangent(points, params, n - 1 - deg_t, deg_t + 1, params[n - 1]);
+
+            s0 = (params[1] - params[0]) / 3.0;
+            s1 = -(params[n - 1] - params[n - 2]) / 3.0;
+        } else {
+            tan_start = Self::bessel_tangent(points, 0, 1, 2);
+
+            let end_raw = Self::bessel_tangent(points, n - 1, n - 2, n - 3);
+            tan_end = -end_raw;
+            s0 = points[0].distance(&points[1], None) / 3.0;
+            s1 = -points[n - 1].distance(&points[n - 2], None) / 3.0;
+        }
+
+        let mut cv = vec![0.0; (n + 2) * dim];
+
+        for d in 0..dim {
+            cv[d] = points[0][d];
+        }
+
+        for d in 0..dim {
+            cv[dim + d] = points[0][d] + s0 * tan_start[d];
+        }
+
+        for i in 1..=(n - 2) {
+            for d in 0..dim {
+                cv[(i + 1) * dim + d] = points[i][d];
+            }
+        }
+
+        for d in 0..dim {
+            cv[n * dim + d] = points[n - 1][d] + s1 * tan_end[d];
+        }
+
+        for d in 0..dim {
+            cv[(n + 1) * dim + d] = points[n - 1][d];
+        }
+
+        cv
+    }
+
+    /// Solve the tridiagonal interpolation system and write the interior CVs into cv.
+    fn solve_interpolation_cvs(
+        points: &[Point],
+        params: &[f64],
+        nurbsknots: &[f64],
+        cv: &mut [f64],
+    ) -> bool {
+        let n = points.len();
+        let dim = 3;
+        let order = 4;
+        let sys_n = n;
+        let mut lower = vec![0.0; sys_n];
+        let mut diag = vec![0.0; sys_n];
+        let mut upper = vec![0.0; sys_n];
+        let mut rhs = vec![0.0; sys_n * dim];
+        diag[0] = 1.0;
+
+        for d in 0..dim {
+            rhs[d] = cv[dim + d];
+        }
+
+        for i in 1..=(n - 2) {
+            let basis = nurbsknot::eval_basis(order, nurbsknots, i, params[i]);
+            lower[i] = basis[0];
+            diag[i] = basis[1];
+            upper[i] = basis[2];
+
+            for d in 0..dim {
+                rhs[i * dim + d] = points[i][d];
+            }
+        }
+
+        diag[n - 1] = 1.0;
+
+        for d in 0..dim {
+            rhs[(n - 1) * dim + d] = cv[n * dim + d];
+        }
+
+        let Some(solution) = nurbsknot::solve_tridiagonal(dim, sys_n, &lower, &diag, &upper, &rhs)
+        else {
+            return false;
+        };
+
+        for i in 0..sys_n {
+            for d in 0..dim {
+                cv[(i + 1) * dim + d] = solution[i * dim + d];
+            }
+        }
+
+        true
+    }
+
+    /// Return the x, y, z of the first count points as one flat array.
+    fn flatten_points(points: &[Point], count: usize) -> Vec<f64> {
+        let mut flat = vec![0.0; count * 3];
+
+        for i in 0..count {
+            flat[i * 3] = points[i][0];
+            flat[i * 3 + 1] = points[i][1];
+            flat[i * 3 + 2] = points[i][2];
+        }
+
+        flat
+    }
+
+    /// Construct the closed least-squares fit with num_cvs distinct CVs.
+    fn create_fitted_periodic(points: &[Point], num_cvs: usize, degree: usize) -> Self {
+        let dim = 3;
+        let order = degree + 1;
+        let mut n = points.len();
+
+        if n >= 2 && points[0].distance(&points[n - 1], None) < 1e-10 {
+            n -= 1;
+        }
+
+        if n <= num_cvs || num_cvs < order {
+            if n < 3 {
+                return Self::default();
+            }
+
+            return Self::create_interpolated(
+                &points[..n],
+                CurveNurbsKnotStyle::ChordPeriodic,
+                CurveInterpStyle::Rhino,
+            );
+        }
+
+        let cv_count = num_cvs + degree;
+        let kc = cv_count + order - 2;
+        let mut params = vec![0.0; n + 1];
+
+        for i in 1..n {
+            params[i] = params[i - 1] + points[i - 1].distance(&points[i], None);
+        }
+
+        params[n] = params[n - 1] + points[n - 1].distance(&points[0], None);
+
+        if params[n] < 1e-14 {
+            return Self::default();
+        }
+
+        let ppts = Self::flatten_points(points, n);
+        let nurbsknots = nurbsknot::build_fitted_nurbsknots_periodic_adaptive(
+            &params, &ppts, n, dim, num_cvs, degree, 3.0,
+        );
+        let mut ntn = vec![vec![0.0; num_cvs]; num_cvs];
+        let mut cv = vec![0.0; num_cvs * dim];
+
+        for k in 0..n {
+            let span = nurbsknot::find_span(order, cv_count, &nurbsknots, params[k], 0, 0);
+            let basis = nurbsknot::eval_basis(order, &nurbsknots, span, params[k]);
+
+            for a in 0..order {
+                let ci = (span + a) % num_cvs;
+
+                for d in 0..dim {
+                    cv[ci * dim + d] += basis[a] * points[k][d];
+                }
+
+                for b in 0..order {
+                    ntn[ci][(span + b) % num_cvs] += basis[a] * basis[b];
+                }
+            }
+        }
+
+        if !Self::solve_dense(&mut ntn, &mut cv, num_cvs, dim) {
+            return Self::default();
+        }
+
+        let mut curve = NurbsCurve::new(dim, false, order, cv_count);
+
+        for i in 0..kc {
+            curve.set_nurbsknot(i, nurbsknots[i]);
+        }
+
+        for i in 0..num_cvs {
+            curve.set_cv(i, &Point::new(cv[i * 3], cv[i * 3 + 1], cv[i * 3 + 2]));
+        }
+
+        for i in 0..degree {
+            let p = curve.get_cv(i).unwrap_or_default();
+            curve.set_cv(num_cvs + i, &p);
+        }
+
+        curve
+    }
+
+    /// Construct the open least-squares fit through the first and last point.
+    fn create_fitted_clamped(points: &[Point], num_cvs: usize, degree: usize) -> Self {
+        let m = points.len();
+        let dim = 3;
+
+        if m <= num_cvs || num_cvs < degree + 1 {
+            return Self::create_interpolated(
+                points,
+                CurveNurbsKnotStyle::Chord,
+                CurveInterpStyle::Rhino,
+            );
+        }
+
+        let pts = Self::flatten_points(points, m);
+        let params = nurbsknot::compute_parameters(&pts, m, dim, CurveNurbsKnotStyle::Chord);
+        let nurbsknots = nurbsknot::build_fitted_nurbsknots_adaptive(
+            &params, &pts, m, dim, num_cvs, degree, 3.0,
+        );
+        let sys_n = num_cvs - 2;
+        let mut band = vec![0.0; sys_n * (degree + 1)];
+        let mut rhs = vec![0.0; sys_n * dim];
+        Self::fitted_band_system(
+            points,
+            &params,
+            &nurbsknots,
+            num_cvs,
+            degree,
+            &mut band,
+            &mut rhs,
+        );
+
+        if !nurbsknot::solve_banded_spd(dim, sys_n, degree, &mut band, &mut rhs) {
+            return Self::create_interpolated(
+                points,
+                CurveNurbsKnotStyle::Chord,
+                CurveInterpStyle::Rhino,
+            );
+        }
+
+        let kc = nurbsknots.len();
+        let mut curve = NurbsCurve::new(dim, false, degree + 1, num_cvs);
+
+        for i in 0..kc {
+            curve.set_nurbsknot(i, nurbsknots[i]);
+        }
+
+        curve.set_cv(0, &points[0]);
+
+        for i in 0..sys_n {
+            curve.set_cv(
+                i + 1,
+                &Point::new(rhs[i * 3], rhs[i * 3 + 1], rhs[i * 3 + 2]),
+            );
+        }
+
+        curve.set_cv(num_cvs - 1, &points[m - 1]);
+
+        curve
+    }
+
+    /// Accumulate the banded normal equations of the open fit, end CVs fixed.
+    fn fitted_band_system(
+        points: &[Point],
+        params: &[f64],
+        nurbsknots: &[f64],
+        num_cvs: usize,
+        degree: usize,
+        band: &mut [f64],
+        rhs: &mut [f64],
+    ) {
+        let m = points.len();
+        let dim = 3;
+        let order = degree + 1;
+        let n = num_cvs - 1;
+        let bw1 = degree + 1;
+
+        for k in 1..(m - 1) {
+            let span = nurbsknot::find_span(order, num_cvs, nurbsknots, params[k], 0, 0);
+            let basis = nurbsknot::eval_basis(order, nurbsknots, span, params[k]);
+            let mut rk = [points[k][0], points[k][1], points[k][2]];
+
+            for a in 0..order {
+                let ci = span + a;
+
+                if ci == 0 {
+                    for d in 0..dim {
+                        rk[d] -= basis[a] * points[0][d];
+                    }
+                }
+
+                if ci == n {
+                    for d in 0..dim {
+                        rk[d] -= basis[a] * points[m - 1][d];
+                    }
+                }
+            }
+
+            for a in 0..order {
+                let ci = span + a;
+
+                if ci < 1 || ci > n - 1 {
+                    continue;
+                }
+
+                let ri = ci - 1;
+
+                for d in 0..dim {
+                    rhs[ri * dim + d] += basis[a] * rk[d];
+                }
+
+                for b in a..order {
+                    let cj = span + b;
+
+                    if cj < 1 || cj > n - 1 {
+                        continue;
+                    }
+
+                    let rj = cj - 1;
+                    band[rj * bw1 + (rj - ri)] += basis[a] * basis[b];
+                }
+            }
+        }
+    }
+
+    /// Lift 2D segments to 3D when 2D and 3D segments are mixed.
+    fn promote_to_3d(segs: &mut [NurbsCurve]) {
+        let mut any2 = false;
+        let mut any3 = false;
+
+        for c in segs.iter() {
+            if c.m_dim == 2 {
+                any2 = true;
+            } else if c.m_dim == 3 {
+                any3 = true;
+            }
+        }
+
+        if !any2 || !any3 {
+            return;
+        }
+
+        for c in segs.iter_mut() {
+            if c.m_dim != 2 {
+                continue;
+            }
+
+            let os = c.m_cv_stride;
+            let ns = os + 1;
+            let mut cv = vec![0.0; c.m_cv_count * ns];
+
+            for i in 0..c.m_cv_count {
+                cv[i * ns] = c.m_cv[i * os];
+                cv[i * ns + 1] = c.m_cv[i * os + 1];
+
+                if c.m_is_rat {
+                    cv[i * ns + 3] = c.m_cv[i * os + 2];
+                }
+            }
+
+            c.m_cv = cv;
+            c.m_cv_stride = ns;
+            c.m_dim = 3;
+        }
+    }
+
+    /// Group segments into chains by endpoint matching, reversing where needed.
+    fn chain_segments(segs: &[NurbsCurve], tolerance: f64) -> Vec<Vec<NurbsCurve>> {
+        let mut chains: Vec<Vec<NurbsCurve>> = Vec::new();
+        let mut used = vec![false; segs.len()];
+
+        for i in 0..segs.len() {
+            if used[i] {
+                continue;
+            }
+
+            used[i] = true;
+
+            let mut chain: Vec<NurbsCurve> = vec![segs[i].clone()];
+            let mut grown = !segs[i].is_closed();
+
+            while grown {
+                grown = false;
+                let start = chain[0].point_at_start();
+                let end = chain[chain.len() - 1].point_at_end();
+
+                for j in 0..segs.len() {
+                    if used[j] || segs[j].is_closed() {
+                        continue;
+                    }
+
+                    let s = segs[j].point_at_start();
+                    let e = segs[j].point_at_end();
+
+                    if s.distance(&end, None) <= tolerance {
+                        chain.push(segs[j].clone());
+                    } else if e.distance(&end, None) <= tolerance {
+                        let mut r = segs[j].clone();
+                        r.reverse();
+                        chain.push(r);
+                    } else if e.distance(&start, None) <= tolerance {
+                        chain.insert(0, segs[j].clone());
+                    } else if s.distance(&start, None) <= tolerance {
+                        let mut r = segs[j].clone();
+                        r.reverse();
+                        chain.insert(0, r);
+                    } else {
+                        continue;
+                    }
+
+                    used[j] = true;
+                    grown = true;
+                    break;
+                }
+            }
+
+            chains.push(chain);
+        }
+
+        chains
+    }
+
+    /// Append the chain merged into one curve to result, or its segments when they cannot be merged.
+    fn join_chain(mut chain: Vec<NurbsCurve>, result: &mut Vec<NurbsCurve>) {
+        if chain.len() == 1 {
+            result.push(chain.remove(0));
+
+            return;
+        }
+
+        let mut rational = false;
+        let mut max_degree = 1;
+
+        for c in &chain {
+            if c.is_rational() {
+                rational = true;
+            }
+
+            if c.degree() > max_degree {
+                max_degree = c.degree();
+            }
+        }
+
+        let mut aligned = true;
+
+        for c in chain.iter_mut() {
+            if rational {
+                c.make_rational();
+            }
+
+            if !c.clamp_end(2) || !c.increase_degree(max_degree) {
+                aligned = false;
+            }
+        }
+
+        let mut joined = chain[0].clone();
+
+        if aligned {
+            for ci in 1..chain.len() {
+                Self::append_segment(&mut joined, &mut chain[ci], rational);
+            }
+        }
+
+        if !aligned
+            || joined.m_cv.len() < (joined.m_cv_count - 1) * joined.m_cv_stride + joined.cv_size()
+            || joined.m_nurbsknot.len() != joined.m_cv_count + joined.m_order - 2
+        {
+            for c in chain {
+                result.push(c);
+            }
+
+            return;
+        }
+
+        result.push(joined);
+    }
+
+    /// Append segment to joined with a C0 junction at the averaged shared CV.
+    fn append_segment(joined: &mut NurbsCurve, segment: &mut NurbsCurve, rational: bool) {
+        let stride = joined.m_cv_stride;
+        let cvdim = joined.cv_size();
+        let a1 = joined.domain_end();
+        let (s0, s1) = segment.domain();
+        segment.set_domain(a1, a1 + (s1 - s0));
+
+        if rational {
+            let w_end = joined.weight(joined.m_cv_count - 1);
+            let w_start = segment.weight(0);
+
+            if w_start.abs() > Tolerance::ZERO_TOLERANCE {
+                let scale = w_end / w_start;
+
+                for k in 0..segment.m_cv.len() {
+                    segment.m_cv[k] *= scale;
+                }
+            }
+        }
+
+        let last = (joined.m_cv_count - 1) * stride;
+
+        if stride == 0
+            || cvdim == 0
+            || segment.m_order != joined.m_order
+            || segment.m_cv_stride != stride
+            || segment.cv_size() != cvdim
+            || joined.m_cv.len() < last + cvdim
+            || segment.m_cv.len() < segment.m_cv_count * stride
+            || segment.m_cv.len() <= stride
+            || segment.m_nurbsknot.len() != segment.m_cv_count + segment.m_order - 2
+        {
+            return;
+        }
+
+        for k in 0..cvdim {
+            joined.m_cv[last + k] = 0.5 * (joined.m_cv[last + k] + segment.m_cv[k]);
+        }
+
+        joined
+            .m_nurbsknot
+            .extend_from_slice(&segment.m_nurbsknot[(joined.m_order - 1)..]);
+
+        joined.m_cv.extend_from_slice(&segment.m_cv[stride..]);
+        joined.m_cv_count = joined.m_cv_count + segment.m_cv_count - 1;
+    }
+
+    /// Return the center of the circle through three points, None when they are collinear.
+    fn circle_center(p0: &Point, p1: &Point, p2: &Point) -> Option<Point> {
+        let d1 = p1 - p0;
+        let d2 = p2 - p1;
+        let mut normal = d1.cross(&d2);
+
+        if normal.magnitude() < Tolerance::ZERO_TOLERANCE {
+            return None;
+        }
+
+        normal = normal.normalized();
+
+        let m1 = Point::sum(p0, p1) * 0.5;
+        let m2 = Point::sum(p1, p2) * 0.5;
+        let perp1 = d1.cross(&normal).normalized();
+        let perp2 = d2.cross(&normal).normalized();
+        let mut denom = perp1[0] * perp2[1] - perp1[1] * perp2[0];
+
+        if denom.abs() < Tolerance::ZERO_TOLERANCE {
+            denom = perp1[0] * perp2[2] - perp1[2] * perp2[0];
+        }
+
+        if denom.abs() < Tolerance::ZERO_TOLERANCE {
+            return None;
+        }
+
+        let dx = m2[0] - m1[0];
+        let dy = m2[1] - m1[1];
+        let s = (dx * perp2[1] - dy * perp2[0]) / denom;
+
+        Some(&m1 + &perp1 * s)
+    }
+
+    /// Return the nurbsknots padded with one superfluous value at each end.
+    fn full_nurbsknots(&self) -> Vec<f64> {
+        let full_nurbsknot_count = self.m_cv_count + self.m_order;
+        let mut u = vec![0.0; full_nurbsknot_count];
+        u[0] = self.m_nurbsknot[0];
+
+        for i in 0..self.m_nurbsknot.len() {
+            u[i + 1] = self.m_nurbsknot[i];
+        }
+
+        u[full_nurbsknot_count - 1] = self.m_nurbsknot[self.m_nurbsknot.len() - 1];
+
+        u
+    }
+
+    /// Insert one nurbsknot by Boehm, u the padded nurbsknots.
+    fn insert_nurbsknot_once(&mut self, nurbsknot_value: f64, u: &[f64]) {
+        let p = self.degree();
+        let n = self.m_cv_count - 1;
+        let full_nurbsknot_count = self.m_cv_count + self.m_order;
+        let k = self.find_span(nurbsknot_value) + self.m_order - 1;
+        let new_cv_count = self.m_cv_count + 1;
+        let stride = self.m_cv_stride;
+        let mut u_new = vec![0.0; full_nurbsknot_count + 1];
+        let mut cv_new = vec![0.0; new_cv_count * stride];
+
+        for i in 0..=k {
+            u_new[i] = u[i];
+        }
+
+        u_new[k + 1] = nurbsknot_value;
+
+        for i in (k + 1)..full_nurbsknot_count {
+            u_new[i + 1] = u[i];
+        }
+
+        for i in 0..=(k - p) {
+            cv_new[i * stride..(i + 1) * stride]
+                .copy_from_slice(&self.m_cv[i * stride..(i + 1) * stride]);
+        }
+
+        for i in (k + 1)..=(n + 1) {
+            cv_new[i * stride..(i + 1) * stride]
+                .copy_from_slice(&self.m_cv[(i - 1) * stride..i * stride]);
+        }
+
+        for i in (k - p + 1)..=k {
+            let mut alpha = 0.0;
+            let denom = u[i + p] - u[i];
+
+            if denom != 0.0 {
+                alpha = (nurbsknot_value - u[i]) / denom;
+            }
+
+            for d in 0..stride {
+                cv_new[i * stride + d] = (1.0 - alpha) * self.m_cv[(i - 1) * stride + d]
+                    + alpha * self.m_cv[i * stride + d];
+            }
+        }
+
+        self.m_cv_count = new_cv_count;
+        self.m_cv = cv_new;
+
+        let kc = self.m_order + self.m_cv_count - 2;
+        let mut nurbsknot_new = vec![0.0; kc];
+
+        for i in 0..kc {
+            nurbsknot_new[i] = u_new[i + 1];
+        }
+
+        self.m_nurbsknot = nurbsknot_new;
+    }
+
+    /// Return the (t, point) samples of the chord-deviation bisection, sorted by t.
+    fn adaptive_samples(
+        &self,
+        angle_tolerance: f64,
+        min_edge_length: f64,
+        max_edge_length: f64,
+    ) -> Vec<(f64, Point)> {
+        let (t0, t1) = self.domain();
+        let mut samples: Vec<(f64, Point)> = vec![(t0, self.point_at(t0)), (t1, self.point_at(t1))];
+        let mut work_queue: Vec<(f64, f64)> = vec![(t0, t1)];
+        let max_iterations = 10000;
+        let mut iterations = 0;
+
+        while !work_queue.is_empty() && iterations < max_iterations {
+            iterations += 1;
+
+            let (ta, tb) = work_queue.pop().unwrap_or((t0, t1));
+            let pa = self.point_at(ta);
+            let pb = self.point_at(tb);
+            let chord_length = pa.distance(&pb, None);
+
+            if chord_length < min_edge_length {
+                continue;
+            }
+
+            let tm = (ta + tb) * 0.5;
+            let pm = self.point_at(tm);
+            let chord = &pb - &pa;
+            let to_mid = &pm - &pa;
+            let chord_len_sq = chord.dot(&chord);
+            let mut deviation = 0.0;
+
+            if chord_len_sq > 1e-20 {
+                let proj = to_mid.dot(&chord) / chord_len_sq;
+                deviation = pm.distance(&(&pa + &chord * proj), None);
+            }
+
+            let deviation_tolerance = chord_length * angle_tolerance * 0.5;
+
+            if deviation > deviation_tolerance || chord_length > max_edge_length {
+                samples.push((tm, pm));
+                work_queue.push((ta, tm));
+                work_queue.push((tm, tb));
+            }
+        }
+
+        samples.sort_by(sample_before);
+
+        samples
+    }
+
+    /// Return the homogeneous derivatives (x, y, z, w) at span from the basis derivatives.
+    fn homogeneous_derivatives(&self, span: usize, ders: &[Vec<f64>]) -> Vec<[f64; 4]> {
+        let p = self.degree();
+        let count = ders.len();
+        let mut aders = vec![[0.0; 4]; count];
+
+        for k in 0..count {
+            for j in 0..=p {
+                let Some(cv_ptr) = self.cv(span + j) else {
+                    continue;
+                };
+
+                let nx = ders[k][j];
+                aders[k][0] += nx * cv_ptr[0];
+                aders[k][1] += nx * if self.m_dim > 1 { cv_ptr[1] } else { 0.0 };
+                aders[k][2] += nx * if self.m_dim > 2 { cv_ptr[2] } else { 0.0 };
+                aders[k][3] += nx
+                    * if self.m_is_rat {
+                        cv_ptr[self.m_dim]
+                    } else {
+                        1.0
+                    };
+            }
+        }
+
+        aders
+    }
+
+    /// Return the unit tangent and normal at the domain start, None when the derivative vanishes.
+    fn start_frame(&self) -> Option<(Vector, Vector)> {
+        let derivs0 = self.evaluate(self.domain_start(), 2);
+        let d1_0 = derivs0[1].clone();
+        let d2_0 = derivs0[2].clone();
+        let d1_0_mag = d1_0.magnitude();
+
+        if d1_0_mag < 1e-14 {
+            return None;
+        }
+
+        let t_0 = &d1_0 / d1_0_mag;
+        let d2_dot_d1 = d2_0.dot(&d1_0);
+        let d1_0_mag_sq = d1_0_mag * d1_0_mag;
+        let mut n0_unnorm = &d2_0 - &d1_0 * (d2_dot_d1 / d1_0_mag_sq);
+        let mut n0_mag = n0_unnorm.magnitude();
+
+        if n0_mag < 1e-14 {
+            n0_unnorm = Vector::new(0.0, 0.0, 1.0).cross(&t_0);
+            n0_mag = n0_unnorm.magnitude();
+
+            if n0_mag < 1e-14 {
+                n0_unnorm = Vector::new(0.0, 1.0, 0.0).cross(&t_0);
+                n0_mag = n0_unnorm.magnitude();
+            }
+        }
+
+        let r0 = &n0_unnorm / n0_mag;
+
+        Some((t_0, r0))
+    }
+
+    /// Return r0 carried from the domain start to param by double reflection.
+    fn double_reflection(&self, param: f64, r0: &Vector, t_0: &Vector) -> Vector {
+        let (t0, t1) = self.domain();
+        let num_steps = 10.max(((param - t0) / (t1 - t0) * 100.0) as i32) as usize;
+        let dt = (param - t0) / num_steps as f64;
+        let mut ri = r0.clone();
+        let mut ti = t0;
+        let mut xi = self.point_at(ti);
+        let mut t_i = t_0.clone();
+
+        for _ in 0..num_steps {
+            if ti >= param - 1e-14 {
+                break;
+            }
+
+            let ti_next = (ti + dt).min(param);
+            let xi_next = self.point_at(ti_next);
+            let mut t_i_next = self.tangent_at(ti_next);
+            t_i_next.normalize_self();
+
+            let v1 = &xi_next - &xi;
+            let c1 = v1.dot(&v1);
+
+            if c1 < 1e-28 {
+                ti = ti_next;
+                xi = xi_next;
+                t_i = t_i_next;
+                continue;
+            }
+
+            let ri_dot_v1 = ri.dot(&v1);
+            let r_l = &ri - &v1 * (2.0 * ri_dot_v1 / c1);
+            let t_i_dot_v1 = t_i.dot(&v1);
+            let t_l = &t_i - &v1 * (2.0 * t_i_dot_v1 / c1);
+            let v2 = &t_i_next - &t_l;
+            let c2 = v2.dot(&v2);
+
+            if c2 < 1e-28 {
+                ri = r_l;
+            } else {
+                let r_l_dot_v2 = r_l.dot(&v2);
+                ri = &r_l - &v2 * (2.0 * r_l_dot_v2 / c2);
+            }
+
+            if ri.magnitude() > 1e-14 {
+                ri.normalize_self();
+            }
+
+            ti = ti_next;
+            xi = xi_next;
+            t_i = t_i_next;
+        }
+
+        ri
+    }
+
+    /// Keep the CVs and nurbsknots between the full-multiplicity nurbsknots t0 and t1.
+    fn keep_span_range(&mut self, t0: f64, t1: f64) -> bool {
+        let p = self.degree();
+        let u = self.full_nurbsknots();
+        let full_nurbsknot_count = u.len();
+        let tol = Tolerance::ZERO_TOLERANCE;
+        let mut start_span: i64 = -1;
+
+        for i in (0..full_nurbsknot_count).rev() {
+            if (u[i] - t0).abs() < tol {
+                start_span = i as i64;
+                break;
+            }
+        }
+
+        let mut end_span: i64 = -1;
+
+        for i in 0..full_nurbsknot_count {
+            if (u[i] - t1).abs() < tol {
+                end_span = i as i64;
+                break;
+            }
+        }
+
+        if start_span < 0 || end_span < 0 || start_span >= end_span {
+            return false;
+        }
+
+        let start_span = start_span as usize;
+        let end_span = end_span as usize;
+        let first_cv = start_span.saturating_sub(p);
+        let last_cv = (end_span - 1).min(self.m_cv_count - 1);
+        let mut new_cv_count = last_cv - first_cv + 1;
+
+        if new_cv_count < self.m_order {
+            new_cv_count = self.m_order;
+
+            if first_cv + new_cv_count > self.m_cv_count {
+                return false;
+            }
+        }
+
+        let new_nurbsknot = self.trimmed_nurbsknots(&u, start_span, new_cv_count, t0, t1);
+        let stride = self.m_cv_stride;
+        let mut new_cv = vec![0.0; new_cv_count * stride];
+
+        for i in 0..new_cv_count {
+            new_cv[i * stride..(i + 1) * stride]
+                .copy_from_slice(&self.m_cv[(first_cv + i) * stride..(first_cv + i + 1) * stride]);
+        }
+
+        self.m_cv_count = new_cv_count;
+        self.m_cv = new_cv;
+        self.m_nurbsknot = new_nurbsknot;
+
+        true
+    }
+
+    /// Return the nurbsknots of the kept range, clamped at t0 and t1.
+    fn trimmed_nurbsknots(
+        &self,
+        u: &[f64],
+        start_span: usize,
+        new_cv_count: usize,
+        t0: f64,
+        t1: f64,
+    ) -> Vec<f64> {
+        let p = self.degree();
+        let full_nurbsknot_count = u.len();
+        let new_nurbsknot_count = new_cv_count + self.m_order - 2;
+        let mut new_nurbsknot = vec![0.0; new_nurbsknot_count];
+
+        for i in 0..(p - 1) {
+            new_nurbsknot[i] = t0;
+        }
+
+        let mid_count = new_nurbsknot_count as i64 - 2 * (p as i64 - 1);
+
+        for i in 0..mid_count.max(0) as usize {
+            let src_idx = start_span + i;
+            new_nurbsknot[p - 1 + i] = if src_idx < full_nurbsknot_count {
+                u[src_idx]
+            } else {
+                t1
+            };
+        }
+
+        for i in 0..(p - 1) {
+            new_nurbsknot[new_nurbsknot_count - p + 1 + i] = t1;
+        }
+
+        new_nurbsknot
+    }
+
+    /// Return the index of the first nurbsknot greater than value, -1 when none.
+    fn first_nurbsknot_above(&self, value: f64) -> i64 {
+        let kc = self.nurbsknot_count();
+
+        for i in 0..kc {
+            if self.m_nurbsknot[i] > value {
+                return i as i64;
+            }
+        }
+
+        -1
+    }
+
+    /// Return the seam nurbsknot index near t, snapping to an existing nurbsknot or inserting one; -1 on failure.
+    fn seam_nurbsknot_index(&mut self, t: f64, nurbsknot_index: i64) -> i64 {
+        let d0 = t - self.m_nurbsknot[nurbsknot_index as usize - 1];
+        let d1 = self.m_nurbsknot[nurbsknot_index as usize] - t;
+
+        if d0 <= d1 && d0 < Tolerance::ZERO_TOLERANCE {
+            return nurbsknot_index - 1;
+        }
+
+        if d0 > d1 && d1 < Tolerance::ZERO_TOLERANCE {
+            return nurbsknot_index;
+        }
+
+        if !self.insert_nurbsknot(t, 1) {
+            return -1;
+        }
+
+        self.first_nurbsknot_above(t + Tolerance::ZERO_TOLERANCE)
+    }
+
+    /// Rotate the nurbsknots and CVs of a periodic curve so the domain starts at t.
+    fn rotate_periodic_seam(&mut self, nurbsknot_index: usize, t: f64, dom_len: f64) -> bool {
+        let p = self.degree();
+        let sc = self.span_count();
+        let cvc = self.m_cv_count;
+        let distinct_cvc = cvc - p;
+        let cvdim = self.cv_size();
+        let old_nurbsknots = self.m_nurbsknot.clone();
+        let old_cv = self.m_cv.clone();
+        let mut curr = p - 1;
+
+        for i in nurbsknot_index..(sc + p - 1) {
+            self.m_nurbsknot[curr] = old_nurbsknots[i];
+            curr += 1;
+        }
+
+        for i in 0..=(nurbsknot_index + 1 - p) {
+            self.m_nurbsknot[curr] = old_nurbsknots[p - 1 + i] + dom_len;
+            curr += 1;
+        }
+
+        for i in 0..(p - 1) {
+            self.m_nurbsknot[curr + i] = self.m_nurbsknot[curr + i - 1] + self.m_nurbsknot[p + i]
+                - self.m_nurbsknot[p + i - 1];
+
+            self.m_nurbsknot[p - 2 - i] = self.m_nurbsknot[p - i - 1]
+                - self.m_nurbsknot[curr - 1 - i]
+                + self.m_nurbsknot[curr - 2 - i];
+        }
+
+        let cv_id = nurbsknot_index as i64 - p as i64 + 1;
+
+        for i in 0..cvc {
+            let mut src = (cv_id + i as i64) % distinct_cvc as i64;
+
+            if src < 0 {
+                src += distinct_cvc as i64;
+            }
+
+            let src = src as usize;
+
+            for j in 0..cvdim {
+                self.m_cv[i * self.m_cv_stride + j] = old_cv[src * self.m_cv_stride + j];
+            }
+        }
+
+        self.set_domain(t, t + dom_len)
+    }
+
+    /// Split at t and join the right part before the left so the domain starts at t.
+    fn split_seam(&mut self, t: f64, dom_len: f64) -> bool {
+        let (left_crv, right_crv) = self.split(t);
+
+        if !left_crv.is_valid() || !right_crv.is_valid() {
+            return false;
+        }
+
+        let order = self.m_order;
+        let cvdim = self.cv_size();
+        let stride = self.m_cv_stride;
+        let new_cv_count = right_crv.m_cv_count + left_crv.m_cv_count - 1;
+        let new_kc = order + new_cv_count - 2;
+        let mut new_cv = vec![0.0; new_cv_count * stride];
+        let mut new_nurbsknots = vec![0.0; new_kc];
+
+        for i in 0..right_crv.m_cv_count {
+            for j in 0..cvdim {
+                new_cv[i * stride + j] = right_crv.m_cv[i * right_crv.m_cv_stride + j];
+            }
+        }
+
+        for i in 1..left_crv.m_cv_count {
+            let dst = right_crv.m_cv_count + i - 1;
+
+            for j in 0..cvdim {
+                new_cv[dst * stride + j] = left_crv.m_cv[i * left_crv.m_cv_stride + j];
+            }
+        }
+
+        let rkc = right_crv.nurbsknot_count();
+
+        for i in 0..rkc {
+            new_nurbsknots[i] = right_crv.m_nurbsknot[i];
+        }
+
+        let lkc = left_crv.nurbsknot_count();
+
+        for i in (order - 1)..lkc {
+            new_nurbsknots[rkc + i - (order - 1)] = left_crv.m_nurbsknot[i] + dom_len;
+        }
+
+        self.m_cv_count = new_cv_count;
+        self.m_cv = new_cv;
+        self.m_nurbsknot = new_nurbsknots;
+
+        self.set_domain(t, t + dom_len)
     }
 
     /// Return the binomial coefficient C(n, k).
