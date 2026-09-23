@@ -7,6 +7,12 @@ use crate::point::Point;
 use crate::tolerance::Tolerance;
 use crate::vector::Vector;
 
+/// Grid mesh of a NURBS surface: spans split by normal turn and chord height, poles fanned, seams closed.
+pub struct RemeshNurbsSurfaceGrid;
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Helpers
+// ═══════════════════════════════════════════════════════════════════════════
 const MAX_SUBS: usize = 24;
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -76,6 +82,7 @@ fn span_angle(s: &NurbsSurface, dir: usize, t0: f64, t1: f64, osp: &[f64]) -> f6
 
     for si in 0..osp.len() - 1 {
         let fixed = (osp[si] + osp[si + 1]) * 0.5;
+
         let mut first = Vector::new(0.0, 0.0, 0.0);
         let mut last = Vector::new(0.0, 0.0, 0.0);
         let mut has_first = false;
@@ -103,6 +110,7 @@ fn span_angle(s: &NurbsSurface, dir: usize, t0: f64, t1: f64, osp: &[f64]) -> f6
         }
 
         let dot = first.dot(&last).clamp(-1.0, 1.0);
+
         max_angle = max_angle.max(dot.acos() * 180.0 / Tolerance::PI);
     }
 
@@ -122,6 +130,7 @@ fn span_deviation(s: &NurbsSurface, dir: usize, t0: f64, t1: f64, osp: &[f64]) -
         for k in 1..=3 {
             let frac = k as f64 / 4.0;
             let pm = point_along(s, dir, t0 + frac * (t1 - t0), fixed);
+
             max_dev = max_dev.max(norm(&(pm - (&p0 + (&p1 - &p0) * frac))));
         }
     }
@@ -144,6 +153,7 @@ fn span_subs(
     for i in 0..sp.len() - 1 {
         if degree > 1 {
             let angle = span_angle(s, dir, sp[i], sp[i + 1], osp);
+
             subs[i] = ((angle / max_angle_deg).ceil() as usize).clamp(1, MAX_SUBS);
         }
 
@@ -173,6 +183,7 @@ fn isocurve_length(s: &NurbsSurface, dir: usize, sp: &[f64], fixed: f64, n: usiz
             sp[0] + i as f64 * (sp[sp.len() - 1] - sp[0]) / n as f64,
             fixed,
         );
+
         length += norm(&(&next - &prev));
         prev = next;
     }
@@ -180,7 +191,7 @@ fn isocurve_length(s: &NurbsSurface, dir: usize, sp: &[f64], fixed: f64, n: usiz
     length
 }
 
-/// Scales up the curved direction whose spacing is more than twice the other's.
+/// Scale up the curved direction whose spacing is more than twice the other's.
 fn balance_subs(
     s: &NurbsSurface,
     usp: &[f64],
@@ -244,9 +255,9 @@ fn twist_subs(s: &NurbsSurface, usp: &[f64], vsp: &[f64], twist_tol: f64) -> usi
             let pm = s
                 .point_at((usp[i] + usp[i + 1]) * 0.5, (vsp[j] + vsp[j + 1]) * 0.5)
                 .unwrap_or_default();
-
             let p00 = s.point_at(usp[i], vsp[j]).unwrap_or_default();
             let p11 = s.point_at(usp[i + 1], vsp[j + 1]).unwrap_or_default();
+
             max_twist = max_twist.max(norm(&(pm - Point::sum(&p00, &p11) * 0.5)));
         }
     }
@@ -288,6 +299,7 @@ fn make_odd(subs: &mut [usize]) {
 /// n parameters spaced evenly by arc length along the iso-curve at fixed.
 fn arclen_params(s: &NurbsSurface, dir: usize, n: usize, sp: &[f64], fixed: f64) -> Vec<f64> {
     let nsample = (n * 20).max(200);
+
     let mut st = vec![0.0; nsample + 1];
     let mut sl = vec![0.0; nsample + 1];
     let mut prev = point_along(s, dir, sp[0], fixed);
@@ -300,6 +312,7 @@ fn arclen_params(s: &NurbsSurface, dir: usize, n: usize, sp: &[f64], fixed: f64)
         }
 
         let next = point_along(s, dir, st[k], fixed);
+
         sl[k] = sl[k - 1] + norm(&(&next - &prev));
         prev = next;
     }
@@ -320,6 +333,7 @@ fn arclen_params(s: &NurbsSurface, dir: usize, n: usize, sp: &[f64], fixed: f64)
         } else {
             0.0
         };
+
         params.push(st[a] + frac * (st[j] - st[a]));
     }
 
@@ -350,6 +364,7 @@ fn fix_closed_gap(params: &mut Vec<f64>, domain_end: f64) {
     }
 
     params.pop();
+
     let wrap_gap = domain_end - params[params.len() - 1];
     let mut max_gap = 0.0_f64;
 
@@ -376,17 +391,10 @@ fn fix_closed_gap(params: &mut Vec<f64>, domain_end: f64) {
 /// Vertex at S(u, v) tagged with its parameters.
 fn add_vertex_uv(s: &NurbsSurface, mesh: &mut Mesh, u: f64, v: f64) -> usize {
     let key = mesh.add_vertex(s.point_at(u, v).unwrap_or_default(), None);
-    mesh.vertex
-        .get_mut(&key)
-        .unwrap()
-        .attributes
-        .insert("u".to_string(), u);
+    let vd = mesh.vertex.get_mut(&key).unwrap();
 
-    mesh.vertex
-        .get_mut(&key)
-        .unwrap()
-        .attributes
-        .insert("v".to_string(), v);
+    vd.attributes.insert("u".to_string(), u);
+    vd.attributes.insert("v".to_string(), v);
 
     key
 }
@@ -499,8 +507,9 @@ fn set_normals(s: &NurbsSurface, mesh: &mut Mesh, south: Option<usize>, north: O
     let sums = fan_normals(mesh);
 
     for (&key, vd) in mesh.vertex.iter_mut() {
-        let mut n = Vector::new(0.0, 0.0, 1.0);
         let fan_length = norm(&sums[key]);
+
+        let mut n = Vector::new(0.0, 0.0, 1.0);
 
         if fan_length.is_finite() && fan_length > 0.0 {
             n = &sums[key] / fan_length;
@@ -533,26 +542,31 @@ fn crease_flags(s: &NurbsSurface, u: f64, v: f64) -> u32 {
     let mut flags = 0;
 
     for dir in 0..2 {
-        let (start, end) = s.domain(dir).unwrap_or_default();
+        let domain = s.domain(dir).unwrap_or_default();
         let value = uv[dir];
 
-        if value <= start || value >= end {
+        if value <= domain.0 || value >= domain.1 {
             continue;
         }
 
-        if s.m_nurbsknot[dir]
-            .iter()
-            .filter(|&&knot| knot == value)
-            .count()
-            < s.degree(dir)
-        {
+        let mut multiplicity = 0;
+
+        for &knot in &s.m_nurbsknot[dir] {
+            if knot == value {
+                multiplicity += 1;
+            }
+        }
+
+        if multiplicity < s.degree(dir) {
             continue;
         }
 
         let mut lo = [u, v];
         let mut hi = [u, v];
+
         lo[dir] = value.next_down();
         hi[dir] = value.next_up();
+
         let a = s.normal_at(lo[0], lo[1]);
         let b = s.normal_at(hi[0], hi[1]);
         let length = (a.magnitude_squared() * b.magnitude_squared()).sqrt();
@@ -617,20 +631,17 @@ fn crease_target(
     }
 
     let target = mesh.add_vertex(mesh.vertex[&key].position(), None);
+
     mesh.vertex.insert(target, mesh.vertex[&key].clone());
     copies.insert(identity, target);
 
     target
 }
 
-// ═══════════════════════════════════════════════════════════════════════════
-// RemeshNurbsSurfaceGrid
-// ═══════════════════════════════════════════════════════════════════════════
-
-/// Grid mesh of a NURBS surface: spans split by normal turn and chord height, poles fanned, seams closed.
-pub struct RemeshNurbsSurfaceGrid;
-
 impl RemeshNurbsSurfaceGrid {
+    // ═══════════════════════════════════════════════════════════════════════════
+    // Static constructors
+    // ═══════════════════════════════════════════════════════════════════════════
     /// Grid at 20 degrees and 0.5 percent of the bbox diagonal; max_u and max_v fix the parameter counts when positive.
     pub fn from_u_v(s: NurbsSurface, max_u: usize, max_v: usize) -> Mesh {
         Self::from_u_v_q(s, max_u, max_v, 20.0, 0.005)
@@ -648,9 +659,12 @@ impl RemeshNurbsSurfaceGrid {
         let vsp = s.get_span_vector(1);
         let bbox_diag = bbox_diagonal(&s);
         let chord_tol = bbox_diag * chord_factor;
+
         let mut u_subs = span_subs(&s, 0, &usp, &vsp, max_angle_deg, chord_tol);
         let mut v_subs = span_subs(&s, 1, &vsp, &usp, max_angle_deg, chord_tol);
+
         balance_subs(&s, &usp, &vsp, &mut u_subs, &mut v_subs);
+
         let sing_v0 = s.is_singular(0);
         let sing_v1 = s.is_singular(2);
 
@@ -684,6 +698,7 @@ impl RemeshNurbsSurfaceGrid {
 
         let u_mid = (usp[0] + usp[usp.len() - 1]) * 0.5;
         let v_mid = (vsp[0] + vsp[vsp.len() - 1]) * 0.5;
+
         let mut us = if max_u > 0 {
             arclen_params(&s, 0, max_u.max(2), &usp, v_mid)
         } else {
@@ -704,6 +719,7 @@ impl RemeshNurbsSurfaceGrid {
         }
 
         let nv = vs.len();
+
         let mut mesh = Mesh::new();
         let mut south = None;
         let mut north = None;
@@ -724,6 +740,7 @@ impl RemeshNurbsSurfaceGrid {
             if sing_v0 { 1 } else { 0 },
             if sing_v1 { nv - 1 } else { nv },
         );
+
         add_faces(
             &mut mesh,
             &grid,
@@ -739,6 +756,9 @@ impl RemeshNurbsSurfaceGrid {
         mesh
     }
 
+    // ═══════════════════════════════════════════════════════════════════════════
+    // Normals
+    // ═══════════════════════════════════════════════════════════════════════════
     /// Split shading vertices at internal C0 knots whose one-sided normals disagree.
     pub(crate) fn split_crease_normals(s: &NurbsSurface, mesh: &mut Mesh) {
         let mut candidates = HashMap::<usize, u32>::new();
@@ -747,6 +767,7 @@ impl RemeshNurbsSurfaceGrid {
             let (Some(&u), Some(&v)) = (vd.attributes.get("u"), vd.attributes.get("v")) else {
                 continue;
             };
+
             let flags = crease_flags(s, u, v);
 
             if flags != 0 {
@@ -760,6 +781,7 @@ impl RemeshNurbsSurfaceGrid {
 
         let mut copies = HashMap::<(usize, u32), usize>::new();
         let mut used = HashSet::<usize>::new();
+
         let mut face_keys: Vec<usize> = mesh.face.keys().copied().collect();
         face_keys.sort_unstable();
 
@@ -774,6 +796,7 @@ impl RemeshNurbsSurfaceGrid {
 
             center[0] /= vertices.len() as f64;
             center[1] /= vertices.len() as f64;
+
             let face_normal = mesh.face_normal(face_key);
 
             for slot in vertices.iter_mut() {
@@ -781,10 +804,12 @@ impl RemeshNurbsSurfaceGrid {
                 let Some(&flags) = candidates.get(&key) else {
                     continue;
                 };
+
                 let mut uv = [
                     *mesh.vertex[&key].attributes.get("u").unwrap(),
                     *mesh.vertex[&key].attributes.get("v").unwrap(),
                 ];
+
                 let side = crease_side(&center, &mut uv, flags);
                 let target = crease_target(mesh, &mut copies, &mut used, key, side);
                 let n = s.normal_at(uv[0], uv[1]);
@@ -792,15 +817,17 @@ impl RemeshNurbsSurfaceGrid {
 
                 if length.is_finite() && length > 0.0 {
                     let sign = match &face_normal {
-                        Some(f) if n.dot(f) < 0.0 => -1.0,
+                        Some(normal) if n.dot(normal) < 0.0 => -1.0,
                         _ => 1.0,
                     };
+
                     mesh.vertex.get_mut(&target).unwrap().set_normal(
                         sign * n[0] / length,
                         sign * n[1] / length,
                         sign * n[2] / length,
                     );
                 }
+
                 *slot = target;
             }
 
