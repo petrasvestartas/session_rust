@@ -3,6 +3,12 @@ use crate::point::Point;
 use crate::vector::Vector;
 use std::collections::BTreeSet;
 
+/// Convex hull: monotone chain in XY for 2D, quickhull for 3D.
+pub struct ConvexHull;
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Helpers
+// ═══════════════════════════════════════════════════════════════════════════
 /// Twice the signed area of o-a-b in XY, positive for a left turn.
 fn cross_2d(o: &Point, a: &Point, b: &Point) -> f64 {
     (a[0] - o[0]) * (b[1] - o[1]) - (a[1] - o[1]) * (b[0] - o[0])
@@ -47,7 +53,7 @@ fn visible_from(
     result
 }
 
-/// Index of the point highest above the face a-b-c, -1 when none is above.
+/// Index of the point highest above the face a-b-c, None when none is above.
 fn farthest_point(
     indices: &[usize],
     points: &[Point],
@@ -85,6 +91,7 @@ fn quickhull_faces(
 
         return;
     };
+
     quickhull_faces(
         points,
         &visible_from(&visible, points, &points[a], &points[b], &points[apex]),
@@ -111,10 +118,77 @@ fn quickhull_faces(
     );
 }
 
-/// Convex hull: monotone chain in XY for 2D, quickhull for 3D.
-pub struct ConvexHull;
+/// Corners of the starting tetrahedron with a-b-c facing away from d, none when the points are collinear or coplanar.
+fn initial_tetrahedron(points: &[Point]) -> Option<[usize; 4]> {
+    let n = points.len();
+
+    let mut p0 = 0;
+
+    for i in 1..n {
+        if points[i][0] < points[p0][0] {
+            p0 = i;
+        }
+    }
+
+    let mut p1 = 0;
+
+    for i in 1..n {
+        if (&points[i] - &points[p0]).magnitude_squared()
+            > (&points[p1] - &points[p0]).magnitude_squared()
+        {
+            p1 = i;
+        }
+    }
+
+    let axis: Vector = &points[p1] - &points[p0];
+
+    let mut p2 = 0;
+    let mut best_distance = -1.0;
+
+    for i in 0..n {
+        if i == p0 || i == p1 {
+            continue;
+        }
+
+        let distance = axis.cross(&(&points[i] - &points[p0])).magnitude_squared();
+
+        if distance > best_distance {
+            best_distance = distance;
+            p2 = i;
+        }
+    }
+
+    let mut p3 = 0;
+    let mut best_volume = -1.0;
+
+    for i in 0..n {
+        if i == p0 || i == p1 || i == p2 {
+            continue;
+        }
+
+        let volume = signed_volume(&points[p0], &points[p1], &points[p2], &points[i]).abs();
+
+        if volume > best_volume {
+            best_volume = volume;
+            p3 = i;
+        }
+    }
+
+    if best_distance <= 1e-20 || best_volume <= 1e-20 {
+        return None;
+    }
+
+    if signed_volume(&points[p0], &points[p1], &points[p2], &points[p3]) > 0.0 {
+        std::mem::swap(&mut p1, &mut p2);
+    }
+
+    Some([p0, p1, p2, p3])
+}
 
 impl ConvexHull {
+    // ═══════════════════════════════════════════════════════════════════════════
+    // Geometry
+    // ═══════════════════════════════════════════════════════════════════════════
     /// Counter-clockwise hull of the points projected to XY, collinear points dropped; fewer than three points come back as given.
     pub fn hull_2d(points: &[Point]) -> Vec<Point> {
         let n = points.len();
@@ -129,6 +203,7 @@ impl ConvexHull {
                 .total_cmp(&points[b][0])
                 .then(points[a][1].total_cmp(&points[b][1]))
         });
+
         let mut lower = Vec::new();
 
         for &i in &order {
@@ -143,6 +218,7 @@ impl ConvexHull {
 
         lower.pop();
         upper.pop();
+
         let mut hull = Vec::new();
 
         for &i in &lower {
@@ -175,68 +251,18 @@ impl ConvexHull {
             return mesh;
         }
 
-        let mut p0 = 0;
-
-        for i in 1..n {
-            if points[i][0] < points[p0][0] {
-                p0 = i;
-            }
-        }
-
-        let mut p1 = 0;
-
-        for i in 1..n {
-            if (&points[i] - &points[p0]).magnitude_squared()
-                > (&points[p1] - &points[p0]).magnitude_squared()
-            {
-                p1 = i;
-            }
-        }
-
-        let axis: Vector = &points[p1] - &points[p0];
-        let mut p2 = 0;
-        let mut best_distance = -1.0;
-
-        for i in 0..n {
-            if i == p0 || i == p1 {
-                continue;
-            }
-
-            let distance = axis.cross(&(&points[i] - &points[p0])).magnitude_squared();
-
-            if distance > best_distance {
-                best_distance = distance;
-                p2 = i;
-            }
-        }
-
-        let mut p3 = 0;
-        let mut best_volume = -1.0;
-
-        for i in 0..n {
-            if i == p0 || i == p1 || i == p2 {
-                continue;
-            }
-
-            let volume = signed_volume(&points[p0], &points[p1], &points[p2], &points[i]).abs();
-
-            if volume > best_volume {
-                best_volume = volume;
-                p3 = i;
-            }
-        }
-
-        if best_distance <= 1e-20 || best_volume <= 1e-20 {
+        let Some(corners) = initial_tetrahedron(points) else {
             for point in points {
                 mesh.add_vertex(point.clone(), None);
             }
 
             return mesh;
-        }
+        };
 
-        if signed_volume(&points[p0], &points[p1], &points[p2], &points[p3]) > 0.0 {
-            std::mem::swap(&mut p1, &mut p2);
-        }
+        let p0 = corners[0];
+        let p1 = corners[1];
+        let p2 = corners[2];
+        let p3 = corners[3];
 
         let mut rest = Vec::new();
 
@@ -247,10 +273,12 @@ impl ConvexHull {
         }
 
         let mut faces = Vec::new();
+
         quickhull_faces(points, &rest, p0, p1, p2, &mut faces);
         quickhull_faces(points, &rest, p0, p3, p1, &mut faces);
         quickhull_faces(points, &rest, p1, p3, p2, &mut faces);
         quickhull_faces(points, &rest, p2, p3, p0, &mut faces);
+
         let mut used: BTreeSet<usize> = BTreeSet::new();
 
         for face in &faces {
