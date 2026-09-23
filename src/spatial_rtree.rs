@@ -7,8 +7,8 @@ const STACK_SIZE: usize = 64; // Explicit traversal stack depth.
 /// Axis-aligned box.
 #[derive(Clone, Copy)]
 struct Rect {
-    m_min: [f64; 3],
-    m_max: [f64; 3],
+    m_min: [f64; 3], // Minimum corner.
+    m_max: [f64; 3], // Maximum corner.
 }
 
 const EMPTY_RECT: Rect = Rect {
@@ -19,9 +19,9 @@ const EMPTY_RECT: Rect = Rect {
 /// Child pointer or leaf datum with its cover.
 #[derive(Clone, Copy)]
 struct Branch {
-    m_rect: Rect,
-    m_child: usize,
-    m_data: i32,
+    m_rect: Rect,   // Cover of the child or datum.
+    m_child: usize, // Child node, NULL_IDX on leaves.
+    m_data: i32,    // Leaf datum.
 }
 
 const EMPTY_BRANCH: Branch = Branch {
@@ -32,12 +32,13 @@ const EMPTY_BRANCH: Branch = Branch {
 
 /// Inner or leaf node with up to MAXNODES + 1 branches during a split.
 struct Node {
-    m_count: i32,
-    m_level: i32,
-    m_branch: [Branch; MAXNODES + 1],
+    m_count: i32,                     // Branches in use.
+    m_level: i32,                     // 0 for leaves.
+    m_branch: [Branch; MAXNODES + 1], // Branch slots.
 }
 
 impl Node {
+    /// Construct with zeroed fields.
     fn new() -> Self {
         Node {
             m_count: 0,
@@ -55,8 +56,8 @@ impl Node {
 /// Traversal stack entry.
 #[derive(Clone, Copy)]
 struct Visit {
-    node: usize,
-    index: usize,
+    node: usize,  // Node being walked.
+    index: usize, // Next branch to visit.
 }
 
 const EMPTY_VISIT: Visit = Visit {
@@ -66,19 +67,20 @@ const EMPTY_VISIT: Visit = Visit {
 
 /// Scratch state for a quadratic split.
 struct PartitionVars {
-    m_partition: [i32; MAXNODES + 1],
-    m_total: i32,
-    m_min_fill: i32,
-    m_count: [i32; 2],
-    m_cover: [Rect; 2],
-    m_area: [f64; 2],
-    m_branch_buf: [Branch; MAXNODES + 1],
-    m_branch_count: i32,
-    m_cover_split: Rect,
-    m_cover_split_area: f64,
+    m_partition: [i32; MAXNODES + 1], // Group of each buffered branch.
+    m_total: i32,                     // Buffered branch count.
+    m_min_fill: i32,                  // Minimum branches per group.
+    m_count: [i32; 2],                // Branches per group.
+    m_cover: [Rect; 2],               // Cover per group.
+    m_area: [f64; 2],                 // Cover volume per group.
+    m_branch_buf: [Branch; MAXNODES + 1], // Branches being split.
+    m_branch_count: i32,              // Branches in the buffer.
+    m_cover_split: Rect,              // Cover of the whole buffer.
+    m_cover_split_area: f64,          // Volume of the whole buffer cover.
 }
 
 impl PartitionVars {
+    /// Construct with zeroed fields.
     fn new() -> Self {
         PartitionVars {
             m_partition: [NOT_TAKEN; MAXNODES + 1],
@@ -104,6 +106,9 @@ pub struct SpatialRTree {
 }
 
 impl SpatialRTree {
+    // ═══════════════════════════════════════════════════════════════════════════
+    // Constructors
+    // ═══════════════════════════════════════════════════════════════════════════
     /// Construct an empty tree with a single leaf root.
     pub fn new() -> Self {
         let mut tree = SpatialRTree {
@@ -113,14 +118,21 @@ impl SpatialRTree {
             m_size: 0,
         };
         tree.m_root = tree.alloc_node();
+
         tree
     }
 
+    // ═══════════════════════════════════════════════════════════════════════════
+    // Accessors
+    // ═══════════════════════════════════════════════════════════════════════════
     /// Number of stored items.
     pub fn count(&self) -> i32 {
         self.m_size
     }
 
+    // ═══════════════════════════════════════════════════════════════════════════
+    // Mutators
+    // ═══════════════════════════════════════════════════════════════════════════
     /// Insert an item with its bounding box.
     pub fn insert(&mut self, a_min: [f64; 3], a_max: [f64; 3], a_data: i32) {
         let branch = Branch {
@@ -128,6 +140,7 @@ impl SpatialRTree {
             m_child: NULL_IDX,
             m_data: a_data,
         };
+
         self.insert_branch_internal(branch, 0);
         self.m_size += 1;
     }
@@ -160,6 +173,7 @@ impl SpatialRTree {
         }
 
         self.m_size -= 1;
+
         true
     }
 
@@ -171,6 +185,9 @@ impl SpatialRTree {
         self.m_size = 0;
     }
 
+    // ═══════════════════════════════════════════════════════════════════════════
+    // Queries
+    // ═══════════════════════════════════════════════════════════════════════════
     /// Visit every item overlapping the box until the callback returns false; returns the visit count.
     pub fn search(
         &self,
@@ -223,6 +240,9 @@ impl SpatialRTree {
         count
     }
 
+    // ═══════════════════════════════════════════════════════════════════════════
+    // Node allocation
+    // ═══════════════════════════════════════════════════════════════════════════
     /// Allocate an empty leaf node.
     fn alloc_node(&mut self) -> usize {
         if let Some(idx) = self.free_list.pop() {
@@ -232,6 +252,7 @@ impl SpatialRTree {
         }
 
         self.nodes.push(Node::new());
+
         self.nodes.len() - 1
     }
 
@@ -240,20 +261,19 @@ impl SpatialRTree {
         self.free_list.push(node);
     }
 
+    // ═══════════════════════════════════════════════════════════════════════════
+    // Rect math
+    // ═══════════════════════════════════════════════════════════════════════════
     /// Build a rect from min and max corners.
     fn make_rect(&self, a_min: [f64; 3], a_max: [f64; 3]) -> Rect {
-        Rect {
-            m_min: [
-                a_min[0].min(a_max[0]),
-                a_min[1].min(a_max[1]),
-                a_min[2].min(a_max[2]),
-            ],
-            m_max: [
-                a_min[0].max(a_max[0]),
-                a_min[1].max(a_max[1]),
-                a_min[2].max(a_max[2]),
-            ],
+        let mut rect = EMPTY_RECT;
+
+        for i in 0..3 {
+            rect.m_min[i] = a_min[i].min(a_max[i]);
+            rect.m_max[i] = a_min[i].max(a_max[i]);
         }
+
+        rect
     }
 
     /// Volume of a rect.
@@ -301,6 +321,9 @@ impl SpatialRTree {
         rect
     }
 
+    // ═══════════════════════════════════════════════════════════════════════════
+    // Branches
+    // ═══════════════════════════════════════════════════════════════════════════
     /// Add a branch, splitting the node when full; returns the new sibling or none.
     fn add_branch(&mut self, branch: Branch, node: usize) -> Option<usize> {
         let count = self.nodes[node].m_count as usize;
@@ -311,6 +334,7 @@ impl SpatialRTree {
 
         self.nodes[node].m_branch[count] = branch;
         self.nodes[node].m_count += 1;
+
         None
     }
 
@@ -318,6 +342,7 @@ impl SpatialRTree {
     fn disconnect_branch(&mut self, node: usize, index: usize) {
         let last = self.nodes[node].m_count as usize - 1;
         assert!(index <= last);
+
         self.nodes[node].m_branch[index] = self.nodes[node].m_branch[last];
         self.nodes[node].m_count -= 1;
     }
@@ -344,6 +369,9 @@ impl SpatialRTree {
         best
     }
 
+    // ═══════════════════════════════════════════════════════════════════════════
+    // Quadratic split
+    // ═══════════════════════════════════════════════════════════════════════════
     /// Collect the node's branches plus one extra into the partition buffer.
     fn get_branches(&mut self, node: usize, branch: Branch, part_vars: &mut PartitionVars) {
         assert!(self.nodes[node].m_count as usize == MAXNODES);
@@ -432,6 +460,7 @@ impl SpatialRTree {
     /// Quadratic split of the partition buffer into two groups.
     fn choose_partition(&self, part_vars: &mut PartitionVars, min_fill: i32) {
         let branch_count = part_vars.m_branch_count;
+
         self.init_part_vars(part_vars, branch_count, min_fill);
         self.pick_seeds(part_vars);
 
@@ -450,7 +479,6 @@ impl SpatialRTree {
 
                 let r0 =
                     self.combine_rect(&part_vars.m_branch_buf[i].m_rect, &part_vars.m_cover[0]);
-
                 let r1 =
                     self.combine_rect(&part_vars.m_branch_buf[i].m_rect, &part_vars.m_cover[1]);
 
@@ -502,6 +530,7 @@ impl SpatialRTree {
             } else {
                 node_b
             };
+
             self.add_branch(part_vars.m_branch_buf[i], target);
         }
     }
@@ -511,12 +540,17 @@ impl SpatialRTree {
         let mut part_vars = PartitionVars::new();
         self.get_branches(node, branch, &mut part_vars);
         self.choose_partition(&mut part_vars, MINNODES as i32);
+
         let new_node = self.alloc_node();
         self.nodes[new_node].m_level = self.nodes[node].m_level;
         self.load_nodes(node, new_node, &mut part_vars);
+
         new_node
     }
 
+    // ═══════════════════════════════════════════════════════════════════════════
+    // Insertion
+    // ═══════════════════════════════════════════════════════════════════════════
     /// Insert a branch at a level; returns the root's new sibling or none.
     fn insert_rect_internal(&mut self, branch: Branch, level: i32) -> Option<usize> {
         let mut stack = [EMPTY_VISIT; STACK_SIZE];
@@ -526,6 +560,7 @@ impl SpatialRTree {
         while self.nodes[node].m_level != level {
             assert!(self.nodes[node].m_level > level);
             assert!(top < STACK_SIZE);
+
             let idx = self.pick_branch(&branch.m_rect, node);
             stack[top] = Visit { node, index: idx };
             top += 1;
@@ -537,21 +572,22 @@ impl SpatialRTree {
         for d in (0..top).rev() {
             let parent = stack[d].node;
             let idx = stack[d].index;
-            let child = self.nodes[parent].m_branch[idx].m_child;
 
-            if other.is_none() {
+            let Some(sibling) = other else {
                 self.nodes[parent].m_branch[idx].m_rect =
                     self.combine_rect(&self.nodes[parent].m_branch[idx].m_rect, &branch.m_rect);
-
                 continue;
-            }
+            };
 
-            self.nodes[parent].m_branch[idx].m_rect = self.node_cover(child);
+            self.nodes[parent].m_branch[idx].m_rect =
+                self.node_cover(self.nodes[parent].m_branch[idx].m_child);
+
             let new_b = Branch {
-                m_rect: self.node_cover(other.unwrap()),
-                m_child: other.unwrap(),
+                m_rect: self.node_cover(sibling),
+                m_child: sibling,
                 m_data: 0,
             };
+
             other = self.add_branch(new_b, parent);
         }
 
@@ -560,30 +596,34 @@ impl SpatialRTree {
 
     /// Insert a branch and grow the root when it splits.
     fn insert_branch_internal(&mut self, branch: Branch, level: i32) {
-        let new_node = self.insert_rect_internal(branch, level);
-
-        if new_node.is_none() {
+        let Some(new_node) = self.insert_rect_internal(branch, level) else {
             return;
-        }
+        };
 
         let old_root = self.m_root;
         self.m_root = self.alloc_node();
         self.nodes[self.m_root].m_level = self.nodes[old_root].m_level + 1;
+
         let b1 = Branch {
             m_rect: self.node_cover(old_root),
             m_child: old_root,
             m_data: 0,
         };
+
         let b2 = Branch {
-            m_rect: self.node_cover(new_node.unwrap()),
-            m_child: new_node.unwrap(),
+            m_rect: self.node_cover(new_node),
+            m_child: new_node,
             m_data: 0,
         };
+
         let root = self.m_root;
         self.add_branch(b1, root);
         self.add_branch(b2, root);
     }
 
+    // ═══════════════════════════════════════════════════════════════════════════
+    // Removal
+    // ═══════════════════════════════════════════════════════════════════════════
     /// Remove the matching leaf branch; underfull nodes go to the reinsert list.
     fn remove_rect_internal(
         &mut self,
@@ -628,7 +668,7 @@ impl SpatialRTree {
                 continue;
             }
 
-            self.disconnect_branch(visit.node, visit.index);
+            self.disconnect_branch(visit.node, stack[top - 1].index - 1);
 
             for d in (0..top - 1).rev() {
                 self.shrink_branch(stack[d].node, stack[d].index - 1, reinsert_list);
