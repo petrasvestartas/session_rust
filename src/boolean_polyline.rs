@@ -1,104 +1,185 @@
 use crate::Polyline;
 
-const VF_LOCAL_MAX: u32 = 4;
-const VF_LOCAL_MIN: u32 = 8;
+// ═══════════════════════════════════════════════════════════════════════════
+// Sweep structures
+// ═══════════════════════════════════════════════════════════════════════════
+
+const VF_NONE: u32 = 0; // Plain vertex.
+const VF_LOCAL_MAX: u32 = 4; // Local maximum in y.
+const VF_LOCAL_MIN: u32 = 8; // Local minimum in y.
 
 type OptIdx = Option<usize>;
 
 #[derive(Clone, Copy, Default, PartialEq, Eq)]
 struct BIVec2 {
-    x: i64,
-    y: i64,
+    x: i64, // Scaled integer x.
+    y: i64, // Scaled integer y.
+}
+
+fn v_cvt_to_i64(p: &[f64], scale: f64) -> BIVec2 {
+    BIVec2 {
+        x: (p[0] * scale).round_ties_even() as i64,
+        y: (p[1] * scale).round_ties_even() as i64,
+    }
+}
+
+fn v_cvt_to_dbl(dst: &mut Vec<f64>, pt: BIVec2, inv_scale: f64) {
+    dst.push(pt.x as f64 * inv_scale);
+    dst.push(pt.y as f64 * inv_scale);
+    dst.push(0.0);
 }
 
 #[derive(Clone, Default)]
 struct VVertex {
-    pt: BIVec2,
-    next: OptIdx,
-    prev: OptIdx,
-    flags: u32,
+    pt: BIVec2,   // Scaled position.
+    next: OptIdx, // Next vertex of the ring.
+    prev: OptIdx, // Previous vertex of the ring.
+    flags: u32,   // Local extremum flags.
 }
 
 #[derive(Clone)]
 struct VLocalMinima {
-    vertex: usize,
-    polytype: i8,
+    vertex: usize, // Vertex at the local minimum.
+    polytype: i8,  // 0 subject, 1 clip.
 }
 
 #[derive(Clone, Default)]
 struct VOutPt {
-    pt: BIVec2,
-    next: usize,
-    prev: usize,
-    outrec: usize,
-    horz: bool,
+    pt: BIVec2,    // Scaled output position.
+    next: usize,   // Next point of the output ring.
+    prev: usize,   // Previous point of the output ring.
+    outrec: usize, // Owning output ring.
+    horz: bool,    // Starts a horizontal segment.
 }
 
 #[derive(Clone, Default)]
 struct VOutRec {
-    idx: usize,
-    front_edge: OptIdx,
-    back_edge: OptIdx,
-    pts: OptIdx,
-    owner: OptIdx,
+    idx: usize,         // Index in the output list.
+    front_edge: OptIdx, // Edge adding points to the front.
+    back_edge: OptIdx,  // Edge adding points to the back.
+    pts: OptIdx,        // Entry point of the ring.
+    owner: OptIdx,      // Ring this one was merged into.
 }
 
 #[derive(Clone, Default)]
 struct VActive {
-    bot: BIVec2,
-    top: BIVec2,
-    curr_x: i64,
-    dx: f64,
-    wind_dx: i32,
-    wind_cnt: i32,
-    wind_cnt2: i32,
-    outrec: OptIdx,
-    prev_in_ael: OptIdx,
-    next_in_ael: OptIdx,
-    prev_in_sel: OptIdx,
-    next_in_sel: OptIdx,
-    jump: OptIdx,
-    vertex_top: OptIdx,
-    local_min: OptIdx,
-    is_left_bound: bool,
-    join_with: i8,
+    bot: BIVec2,         // Bottom of the edge.
+    top: BIVec2,         // Top of the edge.
+    curr_x: i64,         // x at the current scanline.
+    dx: f64,             // Inverse slope.
+    wind_dx: i32,        // Winding direction, 1 or -1.
+    wind_cnt: i32,       // Winding count of its own polytype.
+    wind_cnt2: i32,      // Winding count of the other polytype.
+    outrec: OptIdx,      // Output ring the edge contributes to.
+    prev_in_ael: OptIdx, // Previous edge in the active edge list.
+    next_in_ael: OptIdx, // Next edge in the active edge list.
+    prev_in_sel: OptIdx, // Previous edge in the sorted edge list.
+    next_in_sel: OptIdx, // Next edge in the sorted edge list.
+    jump: OptIdx,        // Merge sort run boundary.
+    vertex_top: OptIdx,  // Vertex at the top of the edge.
+    local_min: OptIdx,   // Local minimum the bound starts from.
+    is_left_bound: bool, // Left or right bound of its minimum.
+    join_with: i8,       // 0 none, 1 left, 2 right.
 }
 
 struct VIntersectNode {
-    pt: BIVec2,
-    edge1: usize,
-    edge2: usize,
+    pt: BIVec2,   // Intersection point.
+    edge1: usize, // Left edge.
+    edge2: usize, // Right edge.
 }
 
 #[derive(Clone)]
 struct VHorzSeg {
-    left_op: usize,
-    right_op: OptIdx,
-    left_to_right: bool,
+    left_op: usize,      // Left end of the segment.
+    right_op: OptIdx,    // Right end of the segment.
+    left_to_right: bool, // Direction of the output ring.
 }
 
 struct VHorzJoin {
-    op1: usize,
-    op2: usize,
+    op1: usize, // First point to join.
+    op2: usize, // Second point to join.
+}
+
+struct ScanlineHeap {
+    buf: Vec<i64>, // Max heap storage.
+}
+
+impl ScanlineHeap {
+    fn clear(&mut self) {
+        self.buf.clear();
+    }
+
+    fn empty(&self) -> bool {
+        self.buf.is_empty()
+    }
+
+    fn push(&mut self, y: i64) {
+        self.buf.push(y);
+        let mut i = self.buf.len() - 1;
+
+        while i > 0 {
+            let p = (i - 1) / 2;
+
+            if self.buf[p] >= self.buf[i] {
+                break;
+            }
+
+            self.buf.swap(p, i);
+            i = p;
+        }
+    }
+
+    fn top(&self) -> i64 {
+        self.buf[0]
+    }
+
+    fn pop(&mut self) {
+        let last = self.buf.len() - 1;
+        self.buf.swap(0, last);
+        self.buf.pop();
+        let sz = self.buf.len();
+        let mut i = 0;
+
+        loop {
+            let l = 2 * i + 1;
+            let r = l + 1;
+            let mut m = i;
+
+            if l < sz && self.buf[l] > self.buf[m] {
+                m = l;
+            }
+
+            if r < sz && self.buf[r] > self.buf[m] {
+                m = r;
+            }
+
+            if m == i {
+                break;
+            }
+
+            self.buf.swap(i, m);
+            i = m;
+        }
+    }
 }
 
 /// Arena of the sweep: every pointer of the C++ engine is an index into one of these pools.
 struct VattiScratch {
-    vtx_pool: Vec<VVertex>,
-    act_pool: Vec<VActive>,
-    opt_pool: Vec<VOutPt>,
-    orc_pool: Vec<VOutRec>,
-    locmin_list: Vec<VLocalMinima>,
-    intersect_nodes: Vec<VIntersectNode>,
-    horz_seg_list: Vec<VHorzSeg>,
-    horz_join_list: Vec<VHorzJoin>,
-    outrec_list: Vec<usize>,
-    scanline_list: Vec<i64>,
-    actives: OptIdx,
-    sel: OptIdx,
-    bot_y: i64,
-    locmin_idx: usize,
-    succeeded: bool,
+    vtx_pool: Vec<VVertex>,               // Vertices of both inputs.
+    act_pool: Vec<VActive>,               // Active edges.
+    opt_pool: Vec<VOutPt>,                // Output points.
+    orc_pool: Vec<VOutRec>,               // Output rings.
+    locmin_list: Vec<VLocalMinima>,       // Local minima of both inputs.
+    intersect_nodes: Vec<VIntersectNode>, // Intersections of the current scanbeam.
+    horz_seg_list: Vec<VHorzSeg>,         // Horizontal output segments of the current scanline.
+    horz_join_list: Vec<VHorzJoin>,       // Pending horizontal joins.
+    outrec_list: Vec<usize>,              // Output rings in creation order.
+    scanline_list: ScanlineHeap,          // Pending scanlines.
+    actives: OptIdx,                      // Head of the active edge list.
+    sel: OptIdx,                          // Head of the sorted edge list.
+    bot_y: i64,                           // Bottom of the current scanbeam.
+    locmin_idx: usize,                    // Next local minimum to insert.
+    succeeded: bool,                      // False once the sweep failed.
 }
 
 impl VattiScratch {
@@ -113,7 +194,7 @@ impl VattiScratch {
             horz_seg_list: Vec::new(),
             horz_join_list: Vec::new(),
             outrec_list: Vec::new(),
-            scanline_list: Vec::new(),
+            scanline_list: ScanlineHeap { buf: Vec::new() },
             actives: None,
             sel: None,
             bot_y: 0,
@@ -138,13 +219,14 @@ impl VattiScratch {
         self.bot_y = 0;
         self.locmin_idx = 0;
         self.succeeded = true;
+
         self.vtx_pool.reserve(total + 4);
         self.act_pool.reserve(total * 2 + 4);
         self.opt_pool.reserve(total * 4);
         self.orc_pool.reserve(total);
         self.locmin_list.reserve(total);
         self.outrec_list.reserve(total);
-        self.scanline_list.reserve(total * 2);
+        self.scanline_list.buf.reserve(total * 2);
     }
 
     fn new_active(&mut self) -> usize {
@@ -176,83 +258,6 @@ impl VattiScratch {
 
         i
     }
-
-    fn insert_scanline(&mut self, y: i64) {
-        self.scanline_list.push(y);
-        let mut i = self.scanline_list.len() - 1;
-
-        while i > 0 {
-            let p = (i - 1) / 2;
-
-            if self.scanline_list[p] >= self.scanline_list[i] {
-                break;
-            }
-
-            self.scanline_list.swap(p, i);
-            i = p;
-        }
-    }
-
-    fn pop_top(&mut self) {
-        let last = self.scanline_list.len() - 1;
-        self.scanline_list.swap(0, last);
-        self.scanline_list.pop();
-        let n = self.scanline_list.len();
-        let mut i = 0;
-
-        loop {
-            let l = 2 * i + 1;
-            let r = 2 * i + 2;
-            let mut m = i;
-
-            if l < n && self.scanline_list[l] > self.scanline_list[m] {
-                m = l;
-            }
-
-            if r < n && self.scanline_list[r] > self.scanline_list[m] {
-                m = r;
-            }
-
-            if m == i {
-                break;
-            }
-
-            self.scanline_list.swap(i, m);
-            i = m;
-        }
-    }
-
-    fn pop_scanline(&mut self) -> Option<i64> {
-        if self.scanline_list.is_empty() {
-            return None;
-        }
-
-        let y = self.scanline_list[0];
-        self.pop_top();
-
-        while !self.scanline_list.is_empty() && self.scanline_list[0] == y {
-            self.pop_top();
-        }
-
-        Some(y)
-    }
-
-    fn pop_locmin(&mut self, y: i64) -> Option<VLocalMinima> {
-        if self.locmin_idx >= self.locmin_list.len() {
-            return None;
-        }
-
-        let vertex = self.locmin_list[self.locmin_idx].vertex;
-
-        if self.vtx_pool[vertex].pt.y != y {
-            return None;
-        }
-
-        let lm = self.locmin_list[self.locmin_idx].clone();
-        self.locmin_idx += 1;
-
-        Some(lm)
-    }
 }
 
 thread_local! {
@@ -283,7 +288,7 @@ fn v_top_x(sc: &VattiScratch, e: usize, y: i64) -> i64 {
     } else if y == a.bot.y {
         a.bot.x
     } else {
-        a.bot.x + (a.dx * (y - a.bot.y) as f64).round() as i64
+        a.bot.x + (a.dx * (y - a.bot.y) as f64).round_ties_even() as i64
     }
 }
 
@@ -323,6 +328,10 @@ fn v_polytype(sc: &VattiScratch, e: usize) -> i8 {
 
 fn v_same_polytype(sc: &VattiScratch, e1: usize, e2: usize) -> bool {
     v_polytype(sc, e1) == v_polytype(sc, e2)
+}
+
+fn v_set_dx(sc: &mut VattiScratch, e: usize) {
+    sc.act_pool[e].dx = v_get_dx(sc.act_pool[e].bot, sc.act_pool[e].top);
 }
 
 fn v_next_vertex(sc: &VattiScratch, e: usize) -> OptIdx {
@@ -392,8 +401,8 @@ fn v_get_seg_isect_pt(a: BIVec2, b: BIVec2, c: BIVec2, d: BIVec2) -> Option<BIVe
         Some(b)
     } else {
         Some(BIVec2 {
-            x: a.x + (t * dx1).round() as i64,
-            y: a.y + (t * dy1).round() as i64,
+            x: a.x + (t * dx1).round_ties_even() as i64,
+            y: a.y + (t * dy1).round_ties_even() as i64,
         })
     }
 }
@@ -408,8 +417,8 @@ fn v_closest_pt_on_seg(pt: BIVec2, s1: BIVec2, s2: BIVec2) -> BIVec2 {
         .clamp(0.0, 1.0);
 
     BIVec2 {
-        x: s1.x + (q * dx).round() as i64,
-        y: s1.y + (q * dy).round() as i64,
+        x: s1.x + (q * dx).round_ties_even() as i64,
+        y: s1.y + (q * dy).round_ties_even() as i64,
     }
 }
 
@@ -560,15 +569,19 @@ fn v_find_local_minima(sc: &mut VattiScratch, head: usize, polytype: i8) {
     }
 }
 
-/// Links n scaled points into a circular vertex list; returns its head or None if degenerate.
+/// Link n scaled points into a circular vertex list and return its head, or None if degenerate.
 fn v_link_path(sc: &mut VattiScratch, pts: &[BIVec2], n: usize, polytype: i8) -> OptIdx {
     let base = sc.vtx_pool.len();
-    sc.vtx_pool.resize(base + n, VVertex::default());
+    let vertex = VVertex {
+        flags: VF_NONE,
+        ..Default::default()
+    };
+    sc.vtx_pool.resize(base + n, vertex);
     sc.vtx_pool[base].pt = pts[0];
     let mut prev_v = base;
     let mut cnt = 1;
 
-    for pt in pts.iter().take(n).skip(1) {
+    for pt in &pts[1..n] {
         if *pt == sc.vtx_pool[prev_v].pt {
             continue;
         }
@@ -600,39 +613,6 @@ fn v_link_path(sc: &mut VattiScratch, pts: &[BIVec2], n: usize, polytype: i8) ->
     Some(base)
 }
 
-fn v_bounds(v: &[BIVec2]) -> (i64, i64, i64, i64) {
-    let (mut min_x, mut max_x, mut min_y, mut max_y) = (v[0].x, v[0].x, v[0].y, v[0].y);
-
-    for p in v.iter().skip(1) {
-        if p.x < min_x {
-            min_x = p.x;
-        } else if p.x > max_x {
-            max_x = p.x;
-        }
-
-        if p.y < min_y {
-            min_y = p.y;
-        } else if p.y > max_y {
-            max_y = p.y;
-        }
-    }
-
-    (min_x, max_x, min_y, max_y)
-}
-
-fn v_cvt_to_i64(coords: &[f64], n: usize, bool_scale: f64) -> Vec<BIVec2> {
-    let mut pts = Vec::with_capacity(n);
-
-    for i in 0..n {
-        pts.push(BIVec2 {
-            x: (coords[i * 3] * bool_scale).round() as i64,
-            y: (coords[i * 3 + 1] * bool_scale).round() as i64,
-        });
-    }
-
-    pts
-}
-
 fn v_add_path_from_doubles(
     sc: &mut VattiScratch,
     coords: &[f64],
@@ -644,8 +624,14 @@ fn v_add_path_from_doubles(
         return (None, 0, 0, 0, 0);
     }
 
-    let pts = v_cvt_to_i64(coords, n, bool_scale);
+    let mut pts = Vec::with_capacity(n);
+
+    for i in 0..n {
+        pts.push(v_cvt_to_i64(&coords[i * 3..], bool_scale));
+    }
+
     let (min_x, max_x, min_y, max_y) = v_bounds(&pts);
+
     (
         v_link_path(sc, &pts, n, polytype),
         min_x,
@@ -716,77 +702,77 @@ fn v_get_prev_hot(sc: &VattiScratch, e: usize) -> OptIdx {
     None
 }
 
-fn v_is_valid_ael_order(sc: &VattiScratch, res: usize, new: usize) -> bool {
-    if sc.act_pool[new].curr_x != sc.act_pool[res].curr_x {
-        return sc.act_pool[new].curr_x > sc.act_pool[res].curr_x;
+fn v_is_valid_ael_order(sc: &VattiScratch, resident: usize, newcomer: usize) -> bool {
+    if sc.act_pool[newcomer].curr_x != sc.act_pool[resident].curr_x {
+        return sc.act_pool[newcomer].curr_x > sc.act_pool[resident].curr_x;
     }
 
     let d = v_cross_product(
-        sc.act_pool[res].top,
-        sc.act_pool[new].bot,
-        sc.act_pool[new].top,
+        sc.act_pool[resident].top,
+        sc.act_pool[newcomer].bot,
+        sc.act_pool[newcomer].top,
     );
 
     if d != 0.0 {
         return d < 0.0;
     }
 
-    if !v_is_maxima_e(sc, res) && sc.act_pool[res].top.y > sc.act_pool[new].top.y {
+    if !v_is_maxima_e(sc, resident) && sc.act_pool[resident].top.y > sc.act_pool[newcomer].top.y {
         return v_cross_product(
-            sc.act_pool[new].bot,
-            sc.act_pool[res].top,
-            sc.vtx_pool[v_next_vertex(sc, res).unwrap()].pt,
+            sc.act_pool[newcomer].bot,
+            sc.act_pool[resident].top,
+            sc.vtx_pool[v_next_vertex(sc, resident).unwrap()].pt,
         ) <= 0.0;
     }
 
-    if !v_is_maxima_e(sc, new) && sc.act_pool[new].top.y > sc.act_pool[res].top.y {
+    if !v_is_maxima_e(sc, newcomer) && sc.act_pool[newcomer].top.y > sc.act_pool[resident].top.y {
         return v_cross_product(
-            sc.act_pool[new].bot,
-            sc.act_pool[new].top,
-            sc.vtx_pool[v_next_vertex(sc, new).unwrap()].pt,
+            sc.act_pool[newcomer].bot,
+            sc.act_pool[newcomer].top,
+            sc.vtx_pool[v_next_vertex(sc, newcomer).unwrap()].pt,
         ) >= 0.0;
     }
 
-    let y = sc.act_pool[new].bot.y;
+    let y = sc.act_pool[newcomer].bot.y;
 
-    if sc.act_pool[res].bot.y != y
-        || sc.vtx_pool[sc.locmin_list[sc.act_pool[res].local_min.unwrap()].vertex]
+    if sc.act_pool[resident].bot.y != y
+        || sc.vtx_pool[sc.locmin_list[sc.act_pool[resident].local_min.unwrap()].vertex]
             .pt
             .y
             != y
     {
-        return sc.act_pool[new].is_left_bound;
+        return sc.act_pool[newcomer].is_left_bound;
     }
 
-    if sc.act_pool[res].is_left_bound != sc.act_pool[new].is_left_bound {
-        return sc.act_pool[new].is_left_bound;
+    if sc.act_pool[resident].is_left_bound != sc.act_pool[newcomer].is_left_bound {
+        return sc.act_pool[newcomer].is_left_bound;
     }
 
-    let pp_res = v_prev_prev_vertex(sc, res);
+    let pp_res = v_prev_prev_vertex(sc, resident);
 
     if pp_res.is_some()
         && v_is_collinear(
             sc.vtx_pool[pp_res.unwrap()].pt,
-            sc.act_pool[res].bot,
-            sc.act_pool[res].top,
+            sc.act_pool[resident].bot,
+            sc.act_pool[resident].top,
         )
     {
         return true;
     }
 
-    let pp_new = v_prev_prev_vertex(sc, new);
+    let pp_new = v_prev_prev_vertex(sc, newcomer);
 
     match (pp_res, pp_new) {
         (Some(pp_res), Some(pp_new)) => {
             (v_cross_product(
                 sc.vtx_pool[pp_res].pt,
-                sc.act_pool[new].bot,
+                sc.act_pool[newcomer].bot,
                 sc.vtx_pool[pp_new].pt,
             ) > 0.0)
-                == sc.act_pool[new].is_left_bound
+                == sc.act_pool[newcomer].is_left_bound
         }
 
-        _ => sc.act_pool[new].is_left_bound,
+        _ => sc.act_pool[newcomer].is_left_bound,
     }
 }
 
@@ -877,6 +863,55 @@ fn v_delete_from_ael(sc: &mut VattiScratch, e: usize) {
     if let Some(n) = next {
         sc.act_pool[n].prev_in_ael = prev;
     }
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Scanline
+// ═══════════════════════════════════════════════════════════════════════════
+
+fn v_insert_scanline(sc: &mut VattiScratch, y: i64) {
+    sc.scanline_list.push(y);
+}
+
+fn v_pop_scanline(sc: &mut VattiScratch) -> Option<i64> {
+    let sl = &mut sc.scanline_list;
+
+    if sl.empty() {
+        return None;
+    }
+
+    let y = sl.top();
+    sl.pop();
+
+    while !sl.empty() && y == sl.top() {
+        sl.pop();
+    }
+
+    Some(y)
+}
+
+fn v_pop_locmin(sc: &mut VattiScratch, y: i64) -> OptIdx {
+    if sc.locmin_idx >= sc.locmin_list.len()
+        || sc.vtx_pool[sc.locmin_list[sc.locmin_idx].vertex].pt.y != y
+    {
+        return None;
+    }
+
+    sc.locmin_idx += 1;
+
+    Some(sc.locmin_idx - 1)
+}
+
+fn v_push_horz(sc: &mut VattiScratch, e: usize) {
+    sc.act_pool[e].next_in_sel = sc.sel;
+    sc.sel = Some(e);
+}
+
+fn v_pop_horz(sc: &mut VattiScratch) -> OptIdx {
+    let e = sc.sel?;
+    sc.sel = sc.act_pool[e].next_in_sel;
+
+    Some(e)
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -1158,7 +1193,7 @@ fn v_add_local_max_poly(sc: &mut VattiScratch, e1: usize, e2: usize, pt: BIVec2)
 // Split and check join
 // ═══════════════════════════════════════════════════════════════════════════
 
-fn v_check_join_left(sc: &mut VattiScratch, e: usize, pt: BIVec2, check_cx: bool) {
+fn v_check_join_left(sc: &mut VattiScratch, e: usize, pt: BIVec2, check_curr_x: bool) {
     let prev = match sc.act_pool[e].prev_in_ael {
         Some(p) => p,
         None => return,
@@ -1178,7 +1213,7 @@ fn v_check_join_left(sc: &mut VattiScratch, e: usize, pt: BIVec2, check_cx: bool
         return;
     }
 
-    if check_cx {
+    if check_curr_x {
         if v_perpendic_dist_sq(pt, sc.act_pool[prev].bot, sc.act_pool[prev].top) > 0.25 {
             return;
         }
@@ -1212,7 +1247,7 @@ fn v_check_join_left(sc: &mut VattiScratch, e: usize, pt: BIVec2, check_cx: bool
     sc.act_pool[e].join_with = 1;
 }
 
-fn v_check_join_right(sc: &mut VattiScratch, e: usize, pt: BIVec2, check_cx: bool) {
+fn v_check_join_right(sc: &mut VattiScratch, e: usize, pt: BIVec2, check_curr_x: bool) {
     let next = match sc.act_pool[e].next_in_ael {
         Some(n) => n,
         None => return,
@@ -1232,7 +1267,7 @@ fn v_check_join_right(sc: &mut VattiScratch, e: usize, pt: BIVec2, check_cx: boo
         return;
     }
 
-    if check_cx {
+    if check_curr_x {
         if v_perpendic_dist_sq(pt, sc.act_pool[next].bot, sc.act_pool[next].top) > 0.35 {
             return;
         }
@@ -1270,6 +1305,26 @@ fn v_check_join_right(sc: &mut VattiScratch, e: usize, pt: BIVec2, check_cx: boo
 // Intersect edges
 // ═══════════════════════════════════════════════════════════════════════════
 
+/// Update the winding counts of two edges that cross.
+fn v_update_wind_counts(sc: &mut VattiScratch, e1: usize, e2: usize) {
+    if v_polytype(sc, e1) == v_polytype(sc, e2) {
+        if sc.act_pool[e1].wind_cnt + sc.act_pool[e2].wind_dx == 0 {
+            sc.act_pool[e1].wind_cnt = -sc.act_pool[e1].wind_cnt;
+        } else {
+            sc.act_pool[e1].wind_cnt += sc.act_pool[e2].wind_dx;
+        }
+
+        if sc.act_pool[e2].wind_cnt - sc.act_pool[e1].wind_dx == 0 {
+            sc.act_pool[e2].wind_cnt = -sc.act_pool[e2].wind_cnt;
+        } else {
+            sc.act_pool[e2].wind_cnt -= sc.act_pool[e1].wind_dx;
+        }
+    } else {
+        sc.act_pool[e1].wind_cnt2 += sc.act_pool[e2].wind_dx;
+        sc.act_pool[e2].wind_cnt2 -= sc.act_pool[e1].wind_dx;
+    }
+}
+
 fn v_intersect_edges(sc: &mut VattiScratch, e1: usize, e2: usize, pt: BIVec2, cliptype: i32) {
     if v_is_joined(sc, e1) {
         v_split(sc, e1, pt);
@@ -1279,32 +1334,20 @@ fn v_intersect_edges(sc: &mut VattiScratch, e1: usize, e2: usize, pt: BIVec2, cl
         v_split(sc, e2, pt);
     }
 
-    if v_polytype(sc, e1) == v_polytype(sc, e2) {
-        let (wc, wd, ewd) = (
-            sc.act_pool[e1].wind_cnt,
-            sc.act_pool[e2].wind_dx,
-            sc.act_pool[e1].wind_dx,
-        );
-        sc.act_pool[e1].wind_cnt = if wc + wd == 0 { -wc } else { wc + wd };
-        let (wc2, wd2) = (sc.act_pool[e2].wind_cnt, ewd);
-        sc.act_pool[e2].wind_cnt = if wc2 - wd2 == 0 { -wc2 } else { wc2 - wd2 };
-    } else {
-        sc.act_pool[e1].wind_cnt2 += sc.act_pool[e2].wind_dx;
-        sc.act_pool[e2].wind_cnt2 -= sc.act_pool[e1].wind_dx;
-    }
+    v_update_wind_counts(sc, e1, e2);
 
-    let ow1 = sc.act_pool[e1].wind_cnt.abs();
-    let ow2 = sc.act_pool[e2].wind_cnt.abs();
-    let in01_1 = ow1 == 0 || ow1 == 1;
-    let in01_2 = ow2 == 0 || ow2 == 1;
+    let old_e1_wc = sc.act_pool[e1].wind_cnt.abs();
+    let old_e2_wc = sc.act_pool[e2].wind_cnt.abs();
+    let e1_in01 = old_e1_wc == 0 || old_e1_wc == 1;
+    let e2_in01 = old_e2_wc == 0 || old_e2_wc == 1;
 
-    if (!v_is_hot(sc, e1) && !in01_1) || (!v_is_hot(sc, e2) && !in01_2) {
+    if (!v_is_hot(sc, e1) && !e1_in01) || (!v_is_hot(sc, e2) && !e2_in01) {
         return;
     }
 
     if v_is_hot(sc, e1) && v_is_hot(sc, e2) {
-        if (ow1 != 0 && ow1 != 1)
-            || (ow2 != 0 && ow2 != 1)
+        if (old_e1_wc != 0 && old_e1_wc != 1)
+            || (old_e2_wc != 0 && old_e2_wc != 1)
             || v_polytype(sc, e1) != v_polytype(sc, e2)
         {
             v_add_local_max_poly(sc, e1, e2, pt);
@@ -1323,28 +1366,28 @@ fn v_intersect_edges(sc: &mut VattiScratch, e1: usize, e2: usize, pt: BIVec2, cl
         v_add_outpt(sc, e2, pt);
         v_swap_outrecs(sc, e1, e2);
     } else {
-        let wc2_1 = sc.act_pool[e1].wind_cnt2.abs() as i64;
-        let wc2_2 = sc.act_pool[e2].wind_cnt2.abs() as i64;
+        let e1_wc2 = sc.act_pool[e1].wind_cnt2.abs() as i64;
+        let e2_wc2 = sc.act_pool[e2].wind_cnt2.abs() as i64;
 
         if !v_same_polytype(sc, e1, e2) {
             v_add_local_min_poly(sc, e1, e2, pt, false);
-        } else if ow1 == 1 && ow2 == 1 {
+        } else if old_e1_wc == 1 && old_e2_wc == 1 {
             match cliptype {
                 0 => {
-                    if wc2_1 > 0 && wc2_2 > 0 {
+                    if e1_wc2 > 0 && e2_wc2 > 0 {
                         v_add_local_min_poly(sc, e1, e2, pt, false);
                     }
                 }
 
                 1 => {
-                    if wc2_1 <= 0 && wc2_2 <= 0 {
+                    if e1_wc2 <= 0 && e2_wc2 <= 0 {
                         v_add_local_min_poly(sc, e1, e2, pt, false);
                     }
                 }
 
                 _ => {
-                    if (v_polytype(sc, e1) == 1 && wc2_1 > 0 && wc2_2 > 0)
-                        || (v_polytype(sc, e1) == 0 && wc2_1 <= 0 && wc2_2 <= 0)
+                    if (v_polytype(sc, e1) == 1 && e1_wc2 > 0 && e2_wc2 > 0)
+                        || (v_polytype(sc, e1) == 0 && e1_wc2 <= 0 && e2_wc2 <= 0)
                     {
                         v_add_local_min_poly(sc, e1, e2, pt, false);
                     }
@@ -1358,13 +1401,32 @@ fn v_intersect_edges(sc: &mut VattiScratch, e1: usize, e2: usize, pt: BIVec2, cl
 // Horizontal edges
 // ═══════════════════════════════════════════════════════════════════════════
 
+fn v_add_trial_horz_join(sc: &mut VattiScratch, op: usize) {
+    sc.horz_seg_list.push(VHorzSeg {
+        left_op: op,
+        right_op: None,
+        left_to_right: true,
+    });
+}
+
+fn v_get_last_op(sc: &VattiScratch, e: usize) -> usize {
+    let or = sc.act_pool[e].outrec.unwrap();
+    let pts = sc.orc_pool[or].pts.unwrap();
+
+    if sc.orc_pool[or].front_edge == Some(e) {
+        pts
+    } else {
+        sc.opt_pool[pts].next
+    }
+}
+
 fn v_update_edge_into_ael(sc: &mut VattiScratch, e: usize) {
     let nv = v_next_vertex(sc, e).unwrap();
     sc.act_pool[e].bot = sc.act_pool[e].top;
     sc.act_pool[e].vertex_top = Some(nv);
     sc.act_pool[e].top = sc.vtx_pool[nv].pt;
     sc.act_pool[e].curr_x = sc.act_pool[e].bot.x;
-    sc.act_pool[e].dx = v_get_dx(sc.act_pool[e].bot, sc.act_pool[e].top);
+    v_set_dx(sc, e);
 
     if v_is_joined(sc, e) {
         v_split(sc, e, sc.act_pool[e].bot);
@@ -1388,12 +1450,12 @@ fn v_update_edge_into_ael(sc: &mut VattiScratch, e: usize) {
             pt = sc.vtx_pool[v_next_vertex(sc, e).unwrap()].pt;
         }
 
-        sc.act_pool[e].dx = v_get_dx(sc.act_pool[e].bot, sc.act_pool[e].top);
+        v_set_dx(sc, e);
 
         return;
     }
 
-    sc.insert_scanline(sc.act_pool[e].top.y);
+    v_insert_scanline(sc, sc.act_pool[e].top.y);
     v_check_join_left(sc, e, sc.act_pool[e].bot, false);
     v_check_join_right(sc, e, sc.act_pool[e].bot, true);
 }
@@ -1417,7 +1479,7 @@ fn v_reset_horz_dir(sc: &VattiScratch, e: usize, max_v: OptIdx) -> (bool, i64, i
 fn v_do_horizontal(sc: &mut VattiScratch, horz: usize, cliptype: i32) {
     let y = sc.act_pool[horz].bot.y;
     let vertex_max = v_get_curr_y_maxima(sc, horz);
-    let (mut is_ltr, mut hl, mut hr) = v_reset_horz_dir(sc, horz, vertex_max);
+    let (mut is_ltr, mut horz_left, mut horz_right) = v_reset_horz_dir(sc, horz, vertex_max);
 
     if v_is_hot(sc, horz) {
         let op = v_add_outpt(
@@ -1428,11 +1490,7 @@ fn v_do_horizontal(sc: &mut VattiScratch, horz: usize, cliptype: i32) {
                 y,
             },
         );
-        sc.horz_seg_list.push(VHorzSeg {
-            left_op: op,
-            right_op: None,
-            left_to_right: true,
-        });
+        v_add_trial_horz_join(sc, op);
     }
 
     loop {
@@ -1468,7 +1526,8 @@ fn v_do_horizontal(sc: &mut VattiScratch, horz: usize, cliptype: i32) {
             }
 
             if vertex_max != sc.act_pool[horz].vertex_top {
-                if (is_ltr && sc.act_pool[e].curr_x > hr) || (!is_ltr && sc.act_pool[e].curr_x < hl)
+                if (is_ltr && sc.act_pool[e].curr_x > horz_right)
+                    || (!is_ltr && sc.act_pool[e].curr_x < horz_left)
                 {
                     break;
                 }
@@ -1508,21 +1567,8 @@ fn v_do_horizontal(sc: &mut VattiScratch, horz: usize, cliptype: i32) {
             }
 
             if sc.act_pool[horz].outrec.is_some() {
-                let last_op = {
-                    let or = sc.act_pool[horz].outrec.unwrap();
-                    let pts = sc.orc_pool[or].pts.unwrap();
-
-                    if sc.orc_pool[or].front_edge == Some(horz) {
-                        pts
-                    } else {
-                        sc.opt_pool[pts].next
-                    }
-                };
-                sc.horz_seg_list.push(VHorzSeg {
-                    left_op: last_op,
-                    right_op: None,
-                    left_to_right: true,
-                });
+                let last_op = v_get_last_op(sc, horz);
+                v_add_trial_horz_join(sc, last_op);
             }
         }
 
@@ -1537,19 +1583,12 @@ fn v_do_horizontal(sc: &mut VattiScratch, horz: usize, cliptype: i32) {
         }
 
         v_update_edge_into_ael(sc, horz);
-        let r = v_reset_horz_dir(sc, horz, vertex_max);
-        is_ltr = r.0;
-        hl = r.1;
-        hr = r.2;
+        (is_ltr, horz_left, horz_right) = v_reset_horz_dir(sc, horz, vertex_max);
     }
 
     if v_is_hot(sc, horz) {
         let op = v_add_outpt(sc, horz, sc.act_pool[horz].top);
-        sc.horz_seg_list.push(VHorzSeg {
-            left_op: op,
-            right_op: None,
-            left_to_right: true,
-        });
+        v_add_trial_horz_join(sc, op);
     }
 
     v_update_edge_into_ael(sc, horz);
@@ -1579,151 +1618,161 @@ fn v_dup_outpt(sc: &mut VattiScratch, op: usize, after: bool) -> usize {
     r
 }
 
-fn v_convert_horz_segs_to_joins(sc: &mut VattiScratch) {
-    let n = sc.horz_seg_list.len();
-
-    for i in 0..n {
-        let op = sc.horz_seg_list[i].left_op;
-        let mut or = sc.opt_pool[op].outrec;
-
-        while sc.orc_pool[or].pts.is_none() {
-            or = sc.orc_pool[or].owner.unwrap_or(or);
-
-            if sc.orc_pool[or].pts.is_some() || sc.orc_pool[or].owner.is_none() {
-                break;
-            }
-        }
-
-        if sc.orc_pool[or].pts.is_none() {
-            sc.horz_seg_list[i].right_op = None;
-            continue;
-        }
-
-        let has_edges = sc.orc_pool[or].front_edge.is_some();
-        let cy = sc.opt_pool[op].pt.y;
-        let mut op_p = op;
-        let mut op_n = op;
-
-        if has_edges {
-            let op_a = sc.orc_pool[or].pts.unwrap();
-            let op_z = sc.opt_pool[op_a].next;
-
-            while op_p != op_z && sc.opt_pool[sc.opt_pool[op_p].prev].pt.y == cy {
-                op_p = sc.opt_pool[op_p].prev;
-            }
-
-            while op_n != op_a && sc.opt_pool[sc.opt_pool[op_n].next].pt.y == cy {
-                op_n = sc.opt_pool[op_n].next;
-            }
-        } else {
-            while sc.opt_pool[op_p].prev != op_n && sc.opt_pool[sc.opt_pool[op_p].prev].pt.y == cy {
-                op_p = sc.opt_pool[op_p].prev;
-            }
-
-            while sc.opt_pool[op_n].next != op_p && sc.opt_pool[sc.opt_pool[op_n].next].pt.y == cy {
-                op_n = sc.opt_pool[op_n].next;
-            }
-        }
-
-        if sc.opt_pool[op_p].pt.x == sc.opt_pool[op_n].pt.x {
-            sc.horz_seg_list[i].right_op = None;
-            continue;
-        }
-
-        if sc.opt_pool[op_p].pt.x < sc.opt_pool[op_n].pt.x {
-            sc.horz_seg_list[i].left_op = op_p;
-            sc.horz_seg_list[i].right_op = Some(op_n);
-            sc.horz_seg_list[i].left_to_right = true;
-        } else {
-            sc.horz_seg_list[i].left_op = op_n;
-            sc.horz_seg_list[i].right_op = Some(op_p);
-            sc.horz_seg_list[i].left_to_right = false;
-        }
-
-        if sc.opt_pool[sc.horz_seg_list[i].left_op].horz {
-            sc.horz_seg_list[i].right_op = None;
-            continue;
-        }
-
-        sc.opt_pool[sc.horz_seg_list[i].left_op].horz = true;
+fn v_horz_seg_less(sc: &VattiScratch, a: &VHorzSeg, b: &VHorzSeg) -> std::cmp::Ordering {
+    if a.right_op.is_none() || b.right_op.is_none() {
+        return a.right_op.is_none().cmp(&b.right_op.is_none());
     }
 
-    let valid: usize = sc
-        .horz_seg_list
-        .iter()
-        .filter(|h| h.right_op.is_some())
-        .count();
+    sc.opt_pool[a.left_op]
+        .pt
+        .x
+        .cmp(&sc.opt_pool[b.left_op].pt.x)
+}
+
+/// Extend a trial segment to its full horizontal run and return whether it can join.
+fn v_update_horz_segment(sc: &mut VattiScratch, i: usize) -> bool {
+    let op = sc.horz_seg_list[i].left_op;
+    let mut outrec = Some(sc.opt_pool[op].outrec);
+
+    while outrec.is_some_and(|o| sc.orc_pool[o].pts.is_none()) {
+        outrec = sc.orc_pool[outrec.unwrap()].owner;
+    }
+
+    let Some(or) = outrec else {
+        sc.horz_seg_list[i].right_op = None;
+
+        return false;
+    };
+
+    let has_edges = sc.orc_pool[or].front_edge.is_some();
+    let cy = sc.opt_pool[op].pt.y;
+    let mut op_p = op;
+    let mut op_n = op;
+
+    if has_edges {
+        let op_a = sc.orc_pool[or].pts.unwrap();
+        let op_z = sc.opt_pool[op_a].next;
+
+        while op_p != op_z && sc.opt_pool[sc.opt_pool[op_p].prev].pt.y == cy {
+            op_p = sc.opt_pool[op_p].prev;
+        }
+
+        while op_n != op_a && sc.opt_pool[sc.opt_pool[op_n].next].pt.y == cy {
+            op_n = sc.opt_pool[op_n].next;
+        }
+    } else {
+        while sc.opt_pool[op_p].prev != op_n && sc.opt_pool[sc.opt_pool[op_p].prev].pt.y == cy {
+            op_p = sc.opt_pool[op_p].prev;
+        }
+
+        while sc.opt_pool[op_n].next != op_p && sc.opt_pool[sc.opt_pool[op_n].next].pt.y == cy {
+            op_n = sc.opt_pool[op_n].next;
+        }
+    }
+
+    let hs = &mut sc.horz_seg_list[i];
+
+    if sc.opt_pool[op_p].pt.x == sc.opt_pool[op_n].pt.x {
+        hs.right_op = None;
+
+        return false;
+    }
+
+    if sc.opt_pool[op_p].pt.x < sc.opt_pool[op_n].pt.x {
+        hs.left_op = op_p;
+        hs.right_op = Some(op_n);
+        hs.left_to_right = true;
+    } else {
+        hs.left_op = op_n;
+        hs.right_op = Some(op_p);
+        hs.left_to_right = false;
+    }
+
+    if sc.opt_pool[hs.left_op].horz {
+        hs.right_op = None;
+
+        return false;
+    }
+
+    sc.opt_pool[hs.left_op].horz = true;
+
+    true
+}
+
+/// Join two overlapping horizontal segments of opposite direction.
+fn v_add_horz_join(sc: &mut VattiScratch, i: usize, k: usize) {
+    let cy = sc.opt_pool[sc.horz_seg_list[i].left_op].pt.y;
+    let mut lo1 = sc.horz_seg_list[i].left_op;
+    let mut lo2 = sc.horz_seg_list[k].left_op;
+
+    if sc.horz_seg_list[i].left_to_right {
+        while sc.opt_pool[sc.opt_pool[lo1].next].pt.y == cy
+            && sc.opt_pool[sc.opt_pool[lo1].next].pt.x <= sc.opt_pool[lo2].pt.x
+        {
+            lo1 = sc.opt_pool[lo1].next;
+        }
+
+        while sc.opt_pool[sc.opt_pool[lo2].prev].pt.y == cy
+            && sc.opt_pool[sc.opt_pool[lo2].prev].pt.x <= sc.opt_pool[lo1].pt.x
+        {
+            lo2 = sc.opt_pool[lo2].prev;
+        }
+
+        let op1 = v_dup_outpt(sc, lo1, true);
+        let op2 = v_dup_outpt(sc, lo2, false);
+        sc.horz_join_list.push(VHorzJoin { op1, op2 });
+    } else {
+        while sc.opt_pool[sc.opt_pool[lo1].prev].pt.y == cy
+            && sc.opt_pool[sc.opt_pool[lo1].prev].pt.x <= sc.opt_pool[lo2].pt.x
+        {
+            lo1 = sc.opt_pool[lo1].prev;
+        }
+
+        while sc.opt_pool[sc.opt_pool[lo2].next].pt.y == cy
+            && sc.opt_pool[sc.opt_pool[lo2].next].pt.x <= sc.opt_pool[lo1].pt.x
+        {
+            lo2 = sc.opt_pool[lo2].next;
+        }
+
+        let op1 = v_dup_outpt(sc, lo2, true);
+        let op2 = v_dup_outpt(sc, lo1, false);
+        sc.horz_join_list.push(VHorzJoin { op1, op2 });
+    }
+
+    sc.horz_seg_list[i].left_op = lo1;
+    sc.horz_seg_list[k].left_op = lo2;
+}
+
+fn v_convert_horz_segs_to_joins(sc: &mut VattiScratch) {
+    let mut valid = 0;
+
+    for i in 0..sc.horz_seg_list.len() {
+        if v_update_horz_segment(sc, i) {
+            valid += 1;
+        }
+    }
 
     if valid < 2 {
         return;
     }
 
-    sc.horz_seg_list.sort_by(|a, b| {
-        if a.right_op.is_none() || b.right_op.is_none() {
-            return a.right_op.is_some().cmp(&b.right_op.is_some()).reverse();
-        }
-        sc.opt_pool[b.left_op]
-            .pt
-            .x
-            .cmp(&sc.opt_pool[a.left_op].pt.x)
-            .reverse()
-    });
-    let j = valid;
+    let mut list = std::mem::take(&mut sc.horz_seg_list);
+    list.sort_by(|a, b| v_horz_seg_less(sc, a, b));
+    sc.horz_seg_list = list;
 
-    for i in 0..j.saturating_sub(1) {
-        for k in (i + 1)..j {
-            let hs1_lo = sc.horz_seg_list[i].left_op;
-            let hs1_ro = sc.horz_seg_list[i].right_op.unwrap();
-            let hs2_lo = sc.horz_seg_list[k].left_op;
-            let hs2_ro = sc.horz_seg_list[k].right_op.unwrap();
+    for i in 0..valid - 1 {
+        for k in (i + 1)..valid {
+            let hs1 = &sc.horz_seg_list[i];
+            let hs2 = &sc.horz_seg_list[k];
 
-            if sc.opt_pool[hs2_lo].pt.x >= sc.opt_pool[hs1_ro].pt.x
-                || sc.horz_seg_list[k].left_to_right == sc.horz_seg_list[i].left_to_right
-                || sc.opt_pool[hs2_ro].pt.x <= sc.opt_pool[hs1_lo].pt.x
+            if sc.opt_pool[hs2.left_op].pt.x >= sc.opt_pool[hs1.right_op.unwrap()].pt.x
+                || hs2.left_to_right == hs1.left_to_right
+                || sc.opt_pool[hs2.right_op.unwrap()].pt.x <= sc.opt_pool[hs1.left_op].pt.x
             {
                 continue;
             }
 
-            let cy = sc.opt_pool[hs1_lo].pt.y;
-            let mut lo1 = sc.horz_seg_list[i].left_op;
-            let mut lo2 = sc.horz_seg_list[k].left_op;
-
-            if sc.horz_seg_list[i].left_to_right {
-                while sc.opt_pool[sc.opt_pool[lo1].next].pt.y == cy
-                    && sc.opt_pool[sc.opt_pool[lo1].next].pt.x <= sc.opt_pool[lo2].pt.x
-                {
-                    lo1 = sc.opt_pool[lo1].next;
-                }
-
-                while sc.opt_pool[sc.opt_pool[lo2].prev].pt.y == cy
-                    && sc.opt_pool[sc.opt_pool[lo2].prev].pt.x <= sc.opt_pool[lo1].pt.x
-                {
-                    lo2 = sc.opt_pool[lo2].prev;
-                }
-
-                let d1 = v_dup_outpt(sc, lo1, true);
-                let d2 = v_dup_outpt(sc, lo2, false);
-                sc.horz_join_list.push(VHorzJoin { op1: d1, op2: d2 });
-            } else {
-                while sc.opt_pool[sc.opt_pool[lo1].prev].pt.y == cy
-                    && sc.opt_pool[sc.opt_pool[lo1].prev].pt.x <= sc.opt_pool[lo2].pt.x
-                {
-                    lo1 = sc.opt_pool[lo1].prev;
-                }
-
-                while sc.opt_pool[sc.opt_pool[lo2].next].pt.y == cy
-                    && sc.opt_pool[sc.opt_pool[lo2].next].pt.x <= sc.opt_pool[lo1].pt.x
-                {
-                    lo2 = sc.opt_pool[lo2].next;
-                }
-
-                let d1 = v_dup_outpt(sc, lo2, true);
-                let d2 = v_dup_outpt(sc, lo1, false);
-                sc.horz_join_list.push(VHorzJoin { op1: d1, op2: d2 });
-            }
-
-            sc.horz_seg_list[i].left_op = lo1;
-            sc.horz_seg_list[k].left_op = lo2;
+            v_add_horz_join(sc, i, k);
         }
     }
 }
@@ -1787,6 +1836,49 @@ fn v_process_horz_joins(sc: &mut VattiScratch) {
 // Intersection detection
 // ═══════════════════════════════════════════════════════════════════════════
 
+fn v_adjust_curr_x_copy_to_sel(sc: &mut VattiScratch, top_y: i64) {
+    let mut e_opt = sc.actives;
+    sc.sel = e_opt;
+
+    while let Some(e) = e_opt {
+        sc.act_pool[e].prev_in_sel = sc.act_pool[e].prev_in_ael;
+        sc.act_pool[e].next_in_sel = sc.act_pool[e].next_in_ael;
+        sc.act_pool[e].jump = sc.act_pool[e].next_in_sel;
+
+        if sc.act_pool[e].join_with == 1 {
+            sc.act_pool[e].curr_x = sc.act_pool[sc.act_pool[e].prev_in_ael.unwrap()].curr_x;
+        } else {
+            sc.act_pool[e].curr_x = v_top_x(sc, e, top_y);
+        }
+
+        e_opt = sc.act_pool[e].next_in_ael;
+    }
+}
+
+fn v_extract_from_sel(sc: &mut VattiScratch, ae: usize) -> OptIdx {
+    let res = sc.act_pool[ae].next_in_sel;
+
+    if let Some(r) = res {
+        sc.act_pool[r].prev_in_sel = sc.act_pool[ae].prev_in_sel;
+    }
+
+    let prev = sc.act_pool[ae].prev_in_sel.unwrap();
+    sc.act_pool[prev].next_in_sel = res;
+
+    res
+}
+
+fn v_insert1_before2_in_sel(sc: &mut VattiScratch, a1: usize, a2: usize) {
+    sc.act_pool[a1].prev_in_sel = sc.act_pool[a2].prev_in_sel;
+
+    if let Some(p) = sc.act_pool[a1].prev_in_sel {
+        sc.act_pool[p].next_in_sel = Some(a1);
+    }
+
+    sc.act_pool[a1].next_in_sel = Some(a2);
+    sc.act_pool[a2].prev_in_sel = Some(a1);
+}
+
 fn v_add_new_isect_node(sc: &mut VattiScratch, e1: usize, e2: usize, top_y: i64) {
     let ip = match v_get_seg_isect_pt(
         sc.act_pool[e1].bot,
@@ -1838,86 +1930,51 @@ fn v_add_new_isect_node(sc: &mut VattiScratch, e1: usize, e2: usize, top_y: i64)
 }
 
 fn v_build_intersect_list(sc: &mut VattiScratch, top_y: i64) -> bool {
-    if sc.actives.is_none() {
+    let Some(first) = sc.actives else {
         return false;
-    }
-
-    let first = sc.actives.unwrap();
+    };
 
     if sc.act_pool[first].next_in_ael.is_none() {
         return false;
     }
 
-    let mut e_opt = sc.actives;
-    sc.sel = e_opt;
+    v_adjust_curr_x_copy_to_sel(sc, top_y);
+    let mut left = sc.sel;
 
-    while let Some(e) = e_opt {
-        sc.act_pool[e].prev_in_sel = sc.act_pool[e].prev_in_ael;
-        sc.act_pool[e].next_in_sel = sc.act_pool[e].next_in_ael;
-        sc.act_pool[e].jump = sc.act_pool[e].next_in_sel;
-
-        if sc.act_pool[e].join_with == 1 {
-            sc.act_pool[e].curr_x = sc.act_pool[sc.act_pool[e].prev_in_ael.unwrap()].curr_x;
-        } else {
-            sc.act_pool[e].curr_x = v_top_x(sc, e, top_y);
-        }
-
-        e_opt = sc.act_pool[e].next_in_ael;
-    }
-
-    let mut left_opt = sc.sel;
-
-    while left_opt.is_some() && sc.act_pool[left_opt.unwrap()].jump.is_some() {
+    while left.is_some_and(|l| sc.act_pool[l].jump.is_some()) {
         let mut prev_base: OptIdx = None;
 
-        while left_opt.is_some() && sc.act_pool[left_opt.unwrap()].jump.is_some() {
-            let left_start = left_opt.unwrap();
-            let mut curr_base = left_start;
-            let right_start = sc.act_pool[left_start].jump.unwrap();
-            let mut l_end: OptIdx = Some(right_start);
-            let r_end = sc.act_pool[right_start].jump;
-            sc.act_pool[left_start].jump = r_end;
-            let mut left = left_opt;
-            let mut right = Some(right_start);
+        while left.is_some_and(|l| sc.act_pool[l].jump.is_some()) {
+            let mut curr_base = left.unwrap();
+            let mut right = sc.act_pool[curr_base].jump;
+            let mut l_end = right;
+            let r_end = sc.act_pool[right.unwrap()].jump;
+            sc.act_pool[curr_base].jump = r_end;
 
             while left != l_end && right != r_end {
-                if sc.act_pool[right.unwrap()].curr_x < sc.act_pool[left.unwrap()].curr_x {
-                    let ri = right.unwrap();
-                    let mut tmp = sc.act_pool[ri].prev_in_sel;
+                let li = left.unwrap();
+                let ri = right.unwrap();
+
+                if sc.act_pool[ri].curr_x < sc.act_pool[li].curr_x {
+                    let mut tmp = sc.act_pool[ri].prev_in_sel.unwrap();
 
                     loop {
-                        let ti = tmp.unwrap();
-                        v_add_new_isect_node(sc, ti, ri, top_y);
+                        v_add_new_isect_node(sc, tmp, ri, top_y);
 
-                        if tmp == left {
+                        if tmp == li {
                             break;
                         }
 
-                        tmp = sc.act_pool[ti].prev_in_sel;
+                        tmp = sc.act_pool[tmp].prev_in_sel.unwrap();
                     }
 
-                    let ri_next = sc.act_pool[ri].next_in_sel;
-
-                    if let Some(rn) = ri_next {
-                        sc.act_pool[rn].prev_in_sel = sc.act_pool[ri].prev_in_sel;
-                    }
-
-                    let ri_prev = sc.act_pool[ri].prev_in_sel.unwrap();
-                    sc.act_pool[ri_prev].next_in_sel = ri_next;
-                    right = ri_next;
+                    tmp = ri;
+                    right = v_extract_from_sel(sc, tmp);
                     l_end = right;
-                    let li = left.unwrap();
-                    sc.act_pool[ri].prev_in_sel = sc.act_pool[li].prev_in_sel;
+                    v_insert1_before2_in_sel(sc, tmp, li);
 
-                    if let Some(p) = sc.act_pool[ri].prev_in_sel {
-                        sc.act_pool[p].next_in_sel = Some(ri);
-                    }
-
-                    sc.act_pool[ri].next_in_sel = Some(li);
-                    sc.act_pool[li].prev_in_sel = Some(ri);
-
-                    if left == Some(curr_base) {
-                        curr_base = ri;
+                    if li == curr_base {
+                        curr_base = tmp;
                         sc.act_pool[curr_base].jump = r_end;
 
                         match prev_base {
@@ -1926,15 +1983,15 @@ fn v_build_intersect_list(sc: &mut VattiScratch, top_y: i64) -> bool {
                         }
                     }
                 } else {
-                    left = sc.act_pool[left.unwrap()].next_in_sel;
+                    left = sc.act_pool[li].next_in_sel;
                 }
             }
 
             prev_base = Some(curr_base);
-            left_opt = r_end;
+            left = r_end;
         }
 
-        left_opt = sc.sel;
+        left = sc.sel;
     }
 
     !sc.intersect_nodes.is_empty()
@@ -1988,28 +2045,29 @@ fn v_process_intersect_list(sc: &mut VattiScratch, cliptype: i32) {
 // Local minima insertion
 // ═══════════════════════════════════════════════════════════════════════════
 
+/// New active edge leaving a local minimum, wind_dx -1 along prev and 1 along next.
+fn v_new_bound(sc: &mut VattiScratch, lm: usize, wind_dx: i32) -> usize {
+    let vertex = sc.locmin_list[lm].vertex;
+    let b = sc.new_active();
+    sc.act_pool[b].bot = sc.vtx_pool[vertex].pt;
+    sc.act_pool[b].curr_x = sc.act_pool[b].bot.x;
+    sc.act_pool[b].wind_dx = wind_dx;
+    sc.act_pool[b].vertex_top = if wind_dx < 0 {
+        sc.vtx_pool[vertex].prev
+    } else {
+        sc.vtx_pool[vertex].next
+    };
+    sc.act_pool[b].top = sc.vtx_pool[sc.act_pool[b].vertex_top.unwrap()].pt;
+    sc.act_pool[b].local_min = Some(lm);
+    v_set_dx(sc, b);
+
+    b
+}
+
 fn v_insert_local_minima_into_ael(sc: &mut VattiScratch, bot_y: i64, cliptype: i32) {
-    while let Some(lm) = sc.pop_locmin(bot_y) {
-        let locmin_idx = sc.locmin_idx - 1;
-        let lm_pt = sc.vtx_pool[lm.vertex].pt;
-        let lb = sc.new_active();
-        sc.act_pool[lb].bot = lm_pt;
-        sc.act_pool[lb].curr_x = lm_pt.x;
-        sc.act_pool[lb].wind_dx = -1;
-        sc.act_pool[lb].vertex_top = sc.vtx_pool[lm.vertex].prev;
-        sc.act_pool[lb].top = sc.vtx_pool[sc.act_pool[lb].vertex_top.unwrap()].pt;
-        sc.act_pool[lb].local_min = Some(locmin_idx);
-        sc.act_pool[lb].dx = v_get_dx(sc.act_pool[lb].bot, sc.act_pool[lb].top);
-        let rb = sc.new_active();
-        sc.act_pool[rb].bot = lm_pt;
-        sc.act_pool[rb].curr_x = lm_pt.x;
-        sc.act_pool[rb].wind_dx = 1;
-        sc.act_pool[rb].vertex_top = sc.vtx_pool[lm.vertex].next;
-        sc.act_pool[rb].top = sc.vtx_pool[sc.act_pool[rb].vertex_top.unwrap()].pt;
-        sc.act_pool[rb].local_min = Some(locmin_idx);
-        sc.act_pool[rb].dx = v_get_dx(sc.act_pool[rb].bot, sc.act_pool[rb].top);
-        let mut lb = lb;
-        let mut rb = rb;
+    while let Some(lm) = v_pop_locmin(sc, bot_y) {
+        let mut lb = v_new_bound(sc, lm, -1);
+        let mut rb = v_new_bound(sc, lm, 1);
 
         if v_is_horizontal(sc, lb) {
             if sc.act_pool[lb].dx == -f64::MAX {
@@ -2027,6 +2085,7 @@ fn v_insert_local_minima_into_ael(sc: &mut VattiScratch, bot_y: i64, cliptype: i
         v_insert_left_edge(sc, lb);
         v_set_wind_count(sc, lb);
         let contributing = v_is_contributing(sc, lb, cliptype);
+
         sc.act_pool[rb].is_left_bound = false;
         sc.act_pool[rb].wind_cnt = sc.act_pool[lb].wind_cnt;
         sc.act_pool[rb].wind_cnt2 = sc.act_pool[lb].wind_cnt2;
@@ -2049,24 +2108,22 @@ fn v_insert_local_minima_into_ael(sc: &mut VattiScratch, bot_y: i64, cliptype: i
         }
 
         if v_is_horizontal(sc, rb) {
-            sc.act_pool[rb].next_in_sel = sc.sel;
-            sc.sel = Some(rb);
+            v_push_horz(sc, rb);
         } else {
             v_check_join_right(sc, rb, sc.act_pool[rb].bot, false);
-            sc.insert_scanline(sc.act_pool[rb].top.y);
+            v_insert_scanline(sc, sc.act_pool[rb].top.y);
         }
 
         if v_is_horizontal(sc, lb) {
-            sc.act_pool[lb].next_in_sel = sc.sel;
-            sc.sel = Some(lb);
+            v_push_horz(sc, lb);
         } else {
-            sc.insert_scanline(sc.act_pool[lb].top.y);
+            v_insert_scanline(sc, sc.act_pool[lb].top.y);
         }
     }
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
-// Maxima and top of scanbeam
+// Maxima
 // ═══════════════════════════════════════════════════════════════════════════
 
 fn v_do_maxima(sc: &mut VattiScratch, e: usize, cliptype: i32) -> OptIdx {
@@ -2107,6 +2164,10 @@ fn v_do_maxima(sc: &mut VattiScratch, e: usize, cliptype: i32) -> OptIdx {
     }
 }
 
+// ═══════════════════════════════════════════════════════════════════════════
+// Top of scanbeam
+// ═══════════════════════════════════════════════════════════════════════════
+
 fn v_do_top_of_scanbeam(sc: &mut VattiScratch, y: i64, cliptype: i32) {
     sc.sel = None;
     let mut e_opt = sc.actives;
@@ -2127,8 +2188,7 @@ fn v_do_top_of_scanbeam(sc: &mut VattiScratch, y: i64, cliptype: i32) {
             v_update_edge_into_ael(sc, e);
 
             if v_is_horizontal(sc, e) {
-                sc.act_pool[e].next_in_sel = sc.sel;
-                sc.sel = Some(e);
+                v_push_horz(sc, e);
             }
         } else {
             sc.act_pool[e].curr_x = v_top_x(sc, e, y);
@@ -2311,33 +2371,37 @@ fn v_clean_collinear(sc: &mut VattiScratch, or_idx: usize) {
 // Sweep
 // ═══════════════════════════════════════════════════════════════════════════
 
+fn v_locmin_less(sc: &VattiScratch, a: &VLocalMinima, b: &VLocalMinima) -> std::cmp::Ordering {
+    let pa = sc.vtx_pool[a.vertex].pt;
+    let pb = sc.vtx_pool[b.vertex].pt;
+
+    if pb.y != pa.y {
+        return pb.y.cmp(&pa.y);
+    }
+
+    pa.x.cmp(&pb.x)
+}
+
 fn v_execute_internal(sc: &mut VattiScratch, cliptype: i32) -> bool {
-    sc.locmin_list.sort_by(|a, b| {
-        let ay = sc.vtx_pool[a.vertex].pt.y;
-        let by = sc.vtx_pool[b.vertex].pt.y;
-        if by != ay {
-            by.cmp(&ay)
-        } else {
-            sc.vtx_pool[a.vertex].pt.x.cmp(&sc.vtx_pool[b.vertex].pt.x)
-        }
-    });
+    let mut list = std::mem::take(&mut sc.locmin_list);
+    list.sort_by(|a, b| v_locmin_less(sc, a, b));
+    sc.locmin_list = list;
 
     for i in 0..sc.locmin_list.len() {
         let y = sc.vtx_pool[sc.locmin_list[i].vertex].pt.y;
-        sc.insert_scanline(y);
+        v_insert_scanline(sc, y);
     }
 
     sc.locmin_idx = 0;
-    let mut y = match sc.pop_scanline() {
-        Some(y) => y,
-        None => return true,
+
+    let Some(mut y) = v_pop_scanline(sc) else {
+        return true;
     };
 
     while sc.succeeded {
         v_insert_local_minima_into_ael(sc, y, cliptype);
 
-        while let Some(e) = sc.sel {
-            sc.sel = sc.act_pool[e].next_in_sel;
+        while let Some(e) = v_pop_horz(sc) {
             v_do_horizontal(sc, e, cliptype);
         }
 
@@ -2347,10 +2411,11 @@ fn v_execute_internal(sc: &mut VattiScratch, cliptype: i32) -> bool {
         }
 
         sc.bot_y = y;
-        y = match sc.pop_scanline() {
-            Some(y) => y,
+
+        match v_pop_scanline(sc) {
+            Some(next) => y = next,
             None => break,
-        };
+        }
 
         if sc.succeeded && v_build_intersect_list(sc, y) {
             v_process_intersect_list(sc, cliptype);
@@ -2359,8 +2424,7 @@ fn v_execute_internal(sc: &mut VattiScratch, cliptype: i32) -> bool {
 
         v_do_top_of_scanbeam(sc, y, cliptype);
 
-        while let Some(e) = sc.sel {
-            sc.sel = sc.act_pool[e].next_in_sel;
+        while let Some(e) = v_pop_horz(sc) {
             v_do_horizontal(sc, e, cliptype);
         }
     }
@@ -2376,7 +2440,7 @@ fn v_execute_internal(sc: &mut VattiScratch, cliptype: i32) -> bool {
 // Fast paths and extraction
 // ═══════════════════════════════════════════════════════════════════════════
 
-/// Drops a closing point that repeats the first one.
+/// Drop a closing point that repeats the first one.
 fn v_strip_closing(c: &[f64], n: usize) -> usize {
     if n < 2 {
         return n;
@@ -2488,6 +2552,26 @@ fn v_select_count(
     a_count as i32
 }
 
+fn v_bounds(v: &[BIVec2]) -> (i64, i64, i64, i64) {
+    let (mut min_x, mut max_x, mut min_y, mut max_y) = (v[0].x, v[0].x, v[0].y, v[0].y);
+
+    for p in &v[1..] {
+        if p.x < min_x {
+            min_x = p.x;
+        } else if p.x > max_x {
+            max_x = p.x;
+        }
+
+        if p.y < min_y {
+            min_y = p.y;
+        } else if p.y > max_y {
+            max_y = p.y;
+        }
+    }
+
+    (min_x, max_x, min_y, max_y)
+}
+
 fn v_any_cross(va: &[BIVec2], vb: &[BIVec2]) -> bool {
     let na = va.len();
     let nb = vb.len();
@@ -2535,7 +2619,7 @@ fn v_centroid(v: &[BIVec2]) -> BIVec2 {
     c
 }
 
-/// Containment of non-crossing polygons: vertex test, validated by the centroid, then the centroid nudged by one unit when it sits on the boundary.
+/// Containment of non-crossing polygons by vertex, centroid and nudged centroid tests.
 fn v_contains(va: &[BIVec2], vb: &[BIVec2]) -> (bool, bool) {
     let mut a_in_b = pip_i(va[0], vb);
     let mut b_in_a = pip_i(vb[0], va);
@@ -2597,26 +2681,26 @@ fn v_ring_start(sc: &mut VattiScratch, outrec: usize) -> OptIdx {
 
 fn v_extract(sc: &mut VattiScratch, inv_scale: f64) -> Vec<Polyline> {
     let mut out = Vec::new();
+    let mut i = 0;
 
-    for i in 0..sc.outrec_list.len() {
-        let op = match v_ring_start(sc, sc.outrec_list[i]) {
-            Some(op) => op,
-            None => continue,
+    while i < sc.outrec_list.len() {
+        let outrec = sc.outrec_list[i];
+        i += 1;
+
+        let Some(op) = v_ring_start(sc, outrec) else {
+            continue;
         };
+
         let mut coords = Vec::new();
         let mut o = sc.opt_pool[op].next;
         let mut last = sc.opt_pool[o].pt;
-        coords.push(last.x as f64 * inv_scale);
-        coords.push(last.y as f64 * inv_scale);
-        coords.push(0.0);
+        v_cvt_to_dbl(&mut coords, last, inv_scale);
         o = sc.opt_pool[o].next;
 
         while o != sc.opt_pool[op].next {
             if sc.opt_pool[o].pt != last {
                 last = sc.opt_pool[o].pt;
-                coords.push(last.x as f64 * inv_scale);
-                coords.push(last.y as f64 * inv_scale);
-                coords.push(0.0);
+                v_cvt_to_dbl(&mut coords, last, inv_scale);
             }
 
             o = sc.opt_pool[o].next;
@@ -2712,15 +2796,14 @@ fn v_flush(cur: &mut Vec<f64>, result: &mut Vec<Polyline>) {
     cur.clear();
 }
 
-// ═══════════════════════════════════════════════════════════════════════════
-// Boolean operations
-// ═══════════════════════════════════════════════════════════════════════════
-
 /// Vatti boolean operations on closed planar polylines.
 pub struct BooleanPolyline;
 
 impl BooleanPolyline {
-    /// Computes the Vatti boolean of two closed planar polylines; clip_type 0 intersection, 1 union, 2 a minus b.
+    // ═══════════════════════════════════════════════════════════════════════════
+    // Boolean operations
+    // ═══════════════════════════════════════════════════════════════════════════
+    /// Compute the Vatti boolean of two closed planar polylines with clip_type 0 intersection, 1 union, 2 a minus b.
     pub fn compute(a: &Polyline, b: &Polyline, clip_type: i32) -> Vec<Polyline> {
         let ca = &a.coords;
         let cb = &b.coords;
@@ -2732,22 +2815,37 @@ impl BooleanPolyline {
         }
 
         let bool_scale = v_bool_scale(ca, na, cb, nb);
+
         SCRATCH.with(|cell| {
             let sc = &mut *cell.borrow_mut();
             sc.reset(na + nb);
+
             if na * nb <= 400 {
-                let va = v_cvt_to_i64(ca, na, bool_scale);
-                let vb = v_cvt_to_i64(cb, nb, bool_scale);
+                let mut va = Vec::with_capacity(na);
+                let mut vb = Vec::with_capacity(nb);
+
+                for i in 0..na {
+                    va.push(v_cvt_to_i64(&ca[i * 3..], bool_scale));
+                }
+
+                for i in 0..nb {
+                    vb.push(v_cvt_to_i64(&cb[i * 3..], bool_scale));
+                }
+
                 let (a_min_x, a_max_x, a_min_y, a_max_y) = v_bounds(&va);
                 let (b_min_x, b_max_x, b_min_y, b_max_y) = v_bounds(&vb);
+
                 if a_max_x < b_min_x || b_max_x < a_min_x || a_max_y < b_min_y || b_max_y < a_min_y
                 {
                     return v_select(a, b, pip_i(va[0], &vb), pip_i(vb[0], &va), clip_type);
                 }
+
                 if !v_any_cross(&va, &vb) {
                     let (a_in_b, b_in_a) = v_contains(&va, &vb);
+
                     return v_select(a, b, a_in_b, b_in_a, clip_type);
                 }
+
                 v_add_path(sc, &va, na, 0);
                 v_add_path(sc, &vb, nb, 1);
             } else {
@@ -2755,25 +2853,29 @@ impl BooleanPolyline {
                     v_add_path_from_doubles(sc, ca, na, 0, bool_scale);
                 let (vb_head, b_min_x, b_max_x, b_min_y, b_max_y) =
                     v_add_path_from_doubles(sc, cb, nb, 1, bool_scale);
-                let (va_head, vb_head) = match (va_head, vb_head) {
-                    (Some(va_head), Some(vb_head)) => (va_head, vb_head),
-                    _ => return vec![],
+
+                let (Some(va_head), Some(vb_head)) = (va_head, vb_head) else {
+                    return vec![];
                 };
+
                 if a_max_x < b_min_x || b_max_x < a_min_x || a_max_y < b_min_y || b_max_y < a_min_y
                 {
                     let a_in_b = pip_vertex(sc, sc.vtx_pool[va_head].pt, vb_head);
                     let b_in_a = pip_vertex(sc, sc.vtx_pool[vb_head].pt, va_head);
+
                     return v_select(a, b, a_in_b, b_in_a, clip_type);
                 }
             }
+
             if !v_execute_internal(sc, clip_type) {
                 return vec![];
             }
+
             v_extract(sc, 1.0 / bool_scale)
         })
     }
 
-    /// Returns the number of output points of compute, without building polylines.
+    /// Return the number of output points of compute without building polylines.
     pub fn compute_count(a: &Polyline, b: &Polyline, clip_type: i32) -> i32 {
         let ca = &a.coords;
         let cb = &b.coords;
@@ -2785,6 +2887,7 @@ impl BooleanPolyline {
         }
 
         let bool_scale = v_bool_scale(ca, na, cb, nb);
+
         SCRATCH.with(|cell| {
             let sc = &mut *cell.borrow_mut();
             sc.reset(na + nb);
@@ -2792,41 +2895,53 @@ impl BooleanPolyline {
                 v_add_path_from_doubles(sc, ca, na, 0, bool_scale);
             let (vb_head, b_min_x, b_max_x, b_min_y, b_max_y) =
                 v_add_path_from_doubles(sc, cb, nb, 1, bool_scale);
-            if va_head.is_none() || vb_head.is_none() {
+
+            let (Some(va_head), Some(vb_head)) = (va_head, vb_head) else {
                 return 0;
-            }
+            };
+
             if a_max_x < b_min_x || b_max_x < a_min_x || a_max_y < b_min_y || b_max_y < a_min_y {
                 return v_select_count(
                     ca.len() / 3,
                     cb.len() / 3,
-                    pip_vertex(sc, sc.vtx_pool[va_head.unwrap()].pt, vb_head.unwrap()),
-                    pip_vertex(sc, sc.vtx_pool[vb_head.unwrap()].pt, va_head.unwrap()),
+                    pip_vertex(sc, sc.vtx_pool[va_head].pt, vb_head),
+                    pip_vertex(sc, sc.vtx_pool[vb_head].pt, va_head),
                     clip_type,
                 );
             }
+
             if !v_execute_internal(sc, clip_type) {
                 return 0;
             }
+
             let mut total = 0;
-            for i in 0..sc.outrec_list.len() {
-                let op = match v_ring_start(sc, sc.outrec_list[i]) {
-                    Some(op) => op,
-                    None => continue,
+            let mut i = 0;
+
+            while i < sc.outrec_list.len() {
+                let outrec = sc.outrec_list[i];
+                i += 1;
+
+                let Some(op) = v_ring_start(sc, outrec) else {
+                    continue;
                 };
+
                 let mut o = op;
+
                 loop {
                     total += 1;
                     o = sc.opt_pool[o].next;
+
                     if o == op {
                         break;
                     }
                 }
             }
+
             total
         })
     }
 
-    /// Computes on flat xy arrays; writes up to max_out result points to out_xy and returns the total.
+    /// Compute on flat xy arrays, write up to max_out result points to out_xy and return the total.
     pub fn compute_raw(
         a_xy: &[f64],
         na: usize,
@@ -2868,7 +2983,10 @@ impl BooleanPolyline {
         total as i32
     }
 
-    /// Returns the pieces of an open polyline that lie inside a closed clip polygon, in the xy plane.
+    // ═══════════════════════════════════════════════════════════════════════════
+    // Open subject against closed clip
+    // ═══════════════════════════════════════════════════════════════════════════
+    /// Return the pieces of an open polyline that lie inside a closed clip polygon in the xy plane.
     pub fn clip_open_against_closed(
         open_subject: &Polyline,
         closed_clip: &Polyline,

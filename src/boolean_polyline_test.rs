@@ -67,10 +67,12 @@ pub fn run_boolean_polyline_circle_vs_rectangle() -> TestResult {
         use crate::Polyline;
 
         let mut pts: Vec<Point> = Vec::new();
+
         for i in 0..64 {
             let a = PI2 * i as f64 / 64.0;
             pts.push(Point::new(5.0 + 1.5 * a.cos(), 1.5 * a.sin(), 0.0));
         }
+
         pts.push(pts[0].clone());
         let circle = Polyline::new(pts);
         let rect = Polyline::new(vec![
@@ -99,18 +101,22 @@ pub fn run_boolean_polyline_star_vs_circle() -> TestResult {
         use crate::Polyline;
 
         let mut star_pts: Vec<Point> = Vec::new();
+
         for i in 0..10 {
             let a = PI2 * i as f64 / 10.0;
             let r = if i % 2 == 0 { 2.0 } else { 0.8 };
             star_pts.push(Point::new(10.0 + r * a.cos(), r * a.sin(), 0.0));
         }
+
         star_pts.push(star_pts[0].clone());
         let star = Polyline::new(star_pts);
         let mut circ_pts: Vec<Point> = Vec::new();
+
         for i in 0..32 {
             let a = PI2 * i as f64 / 32.0;
             circ_pts.push(Point::new(10.5 + 1.2 * a.cos(), 0.5 + 1.2 * a.sin(), 0.0));
         }
+
         circ_pts.push(circ_pts[0].clone());
         let circle = Polyline::new(circ_pts);
         let isect = Polyline::boolean_op(&star, &circle, 0, None);
@@ -167,11 +173,13 @@ pub fn run_boolean_polyline_two_large_circles() -> TestResult {
 
         let mut pts_a: Vec<Point> = Vec::new();
         let mut pts_b: Vec<Point> = Vec::new();
+
         for i in 0..256 {
             let a = PI2 * i as f64 / 256.0;
             pts_a.push(Point::new(22.0 + 2.0 * a.cos(), 2.0 * a.sin(), 0.0));
             pts_b.push(Point::new(23.0 + 2.0 * a.cos(), 0.5 + 2.0 * a.sin(), 0.0));
         }
+
         pts_a.push(pts_a[0].clone());
         pts_b.push(pts_b[0].clone());
         let ca = Polyline::new(pts_a);
@@ -226,18 +234,22 @@ pub fn run_boolean_polyline_star_vs_star() -> TestResult {
         use crate::Polyline;
 
         let mut pts_a: Vec<Point> = Vec::new();
+
         for i in 0..12 {
             let a = PI2 * i as f64 / 12.0;
             let r = if i % 2 == 0 { 2.5 } else { 1.0 };
             pts_a.push(Point::new(36.0 + r * a.cos(), r * a.sin(), 0.0));
         }
+
         pts_a.push(pts_a[0].clone());
         let mut pts_b: Vec<Point> = Vec::new();
+
         for i in 0..10 {
             let a = PI2 * i as f64 / 10.0;
             let r = if i % 2 == 0 { 2.0 } else { 0.8 };
             pts_b.push(Point::new(37.0 + r * a.cos(), 0.5 + r * a.sin(), 0.0));
         }
+
         pts_b.push(pts_b[0].clone());
         let sa = Polyline::new(pts_a);
         let sb = Polyline::new(pts_b);
@@ -302,10 +314,12 @@ pub fn run_boolean_polyline_concave_arrow_vs_circle() -> TestResult {
             Point::new(49.0, 0.0, 0.0),
         ]);
         let mut pts: Vec<Point> = Vec::new();
+
         for i in 0..48 {
             let a = PI2 * i as f64 / 48.0;
             pts.push(Point::new(51.5 + 1.5 * a.cos(), 1.5 * a.sin(), 0.0));
         }
+
         pts.push(pts[0].clone());
         let circle = Polyline::new(pts);
         let isect = Polyline::boolean_op(&arrow, &circle, 0, None);
@@ -328,11 +342,13 @@ pub fn run_boolean_polyline_two_large_circles_1000() -> TestResult {
 
         let mut pts_a: Vec<Point> = Vec::new();
         let mut pts_b: Vec<Point> = Vec::new();
+
         for i in 0..1000 {
             let a = PI2 * i as f64 / 1000.0;
             pts_a.push(Point::new(58.0 + 3.0 * a.cos(), 3.0 * a.sin(), 0.0));
             pts_b.push(Point::new(59.5 + 3.0 * a.cos(), 3.0 * a.sin(), 0.0));
         }
+
         pts_a.push(pts_a[0].clone());
         pts_b.push(pts_b[0].clone());
         let ca = Polyline::new(pts_a);
@@ -400,6 +416,7 @@ pub fn run_boolean_polyline_open_horizontal_line_vs_unit_square() -> TestResult 
 
         MINI_CHECK!(out.len() == 1);
         MINI_CHECK!(out[0].point_count() == 2);
+
         let p0 = out[0].get_point(0).unwrap();
         let p1 = out[0].get_point(1).unwrap();
 
@@ -428,6 +445,7 @@ pub fn run_boolean_polyline_open_diagonal_line_vs_unit_square() -> TestResult {
 
         MINI_CHECK!(out.len() == 1);
         MINI_CHECK!(out[0].point_count() == 2);
+
         let p0 = out[0].get_point(0).unwrap();
         let p1 = out[0].get_point(1).unwrap();
 
