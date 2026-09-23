@@ -1,6 +1,8 @@
 use crate::mini_test::TestResult;
 use crate::tolerance::TOLERANCE;
-use crate::{MINI_CHECK, MINI_TEST, REGISTER_MINI_TEST};
+use crate::MINI_CHECK;
+use crate::MINI_TEST;
+use crate::REGISTER_MINI_TEST;
 
 pub fn run_color_constructor() -> TestResult {
     MINI_TEST!("Constructor", {
@@ -51,6 +53,7 @@ pub fn run_color_json_roundtrip() -> TestResult {
         let guid = c.guid().to_string();
         let filename = "serialization/test_color.json";
         c.file_json_dump(filename).unwrap();
+
         let loaded = Color::file_json_load(filename).unwrap();
         let parsed = Color::file_json_loads(&c.file_json_dumps());
 
@@ -76,6 +79,7 @@ pub fn run_color_protobuf_roundtrip() -> TestResult {
         let guid = c.guid().to_string();
         let filename = "serialization/test_color.bin";
         c.pb_dump(filename);
+
         let loaded = Color::pb_load(filename);
         let parsed = Color::pb_loads(&c.pb_dumps()).unwrap();
         let converted = Color::from_proto(c.to_proto());
@@ -139,6 +143,20 @@ pub fn run_color_presets() -> TestResult {
         let silver = Color::silver();
         let lightgrey = Color::lightgrey();
         let palette = Color::palette();
+        let expected = vec![
+            red.clone(),
+            orange.clone(),
+            yellow.clone(),
+            lime.clone(),
+            green.clone(),
+            mint.clone(),
+            cyan.clone(),
+            azure.clone(),
+            blue.clone(),
+            violet.clone(),
+            magenta.clone(),
+            pink.clone(),
+        ];
 
         MINI_CHECK!(white == Color::with_name(1.0, 1.0, 1.0, 1.0, "white"));
         MINI_CHECK!(black == Color::with_name(0.0, 0.0, 0.0, 1.0, "black"));
@@ -163,13 +181,7 @@ pub fn run_color_presets() -> TestResult {
         MINI_CHECK!(purple == Color::with_name(0.5, 0.0, 0.5, 1.0, "purple"));
         MINI_CHECK!(silver == Color::with_name(0.75, 0.75, 0.75, 1.0, "silver"));
         MINI_CHECK!(lightgrey == Color::with_name(0.94, 0.94, 0.94, 1.0, "lightgrey"));
-        MINI_CHECK!(
-            palette
-                == vec![
-                    red, orange, yellow, lime, green, mint, cyan, azure, blue, violet, magenta,
-                    pink,
-                ]
-        );
+        MINI_CHECK!(palette == expected);
     })
 }
 
