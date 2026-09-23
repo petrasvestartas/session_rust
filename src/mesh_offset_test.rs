@@ -1,12 +1,15 @@
 use crate::mini_test::TestResult;
 use crate::tolerance::TOLERANCE;
-use crate::{MINI_CHECK, MINI_TEST, REGISTER_MINI_TEST};
+use crate::MINI_CHECK;
+use crate::MINI_TEST;
+use crate::REGISTER_MINI_TEST;
 
 pub fn run_mesh_offset_from_mesh() -> TestResult {
     MINI_TEST!("From Mesh", {
         use crate::Mesh;
         use crate::MeshOffset;
         use crate::Point;
+
         let points = vec![
             Point::new(0.0, 0.0, 0.0),
             Point::new(1.0, 0.0, 0.0),
@@ -37,6 +40,7 @@ pub fn run_mesh_offset_from_mesh_grid() -> TestResult {
         use crate::Mesh;
         use crate::MeshOffset;
         use crate::Point;
+
         let points = vec![
             Point::new(0.0, 0.0, 0.0),
             Point::new(1.0, 0.0, 0.0),
@@ -75,6 +79,7 @@ pub fn run_mesh_offset_from_mesh_layers() -> TestResult {
         use crate::Mesh;
         use crate::MeshOffset;
         use crate::Point;
+
         let points = vec![
             Point::new(0.0, 0.0, 0.0),
             Point::new(1.0, 0.0, 0.0),
@@ -106,6 +111,7 @@ pub fn run_mesh_offset_offset_planes() -> TestResult {
         use crate::Mesh;
         use crate::MeshOffset;
         use crate::Point;
+
         let points = vec![
             Point::new(0.0, 0.0, 0.0),
             Point::new(1.0, 0.0, 0.0),
@@ -116,6 +122,7 @@ pub fn run_mesh_offset_offset_planes() -> TestResult {
         let planes = MeshOffset::offset_planes(&mesh, 1.0);
 
         MINI_CHECK!(planes.len() == 1);
+
         let plane = &planes[&0];
 
         MINI_CHECK!(TOLERANCE.is_close(plane.a(), 0.0));
@@ -137,6 +144,7 @@ pub fn run_mesh_offset_offset_vertices() -> TestResult {
         use crate::Mesh;
         use crate::MeshOffset;
         use crate::Point;
+
         let points = vec![
             Point::new(0.0, 0.0, 0.0),
             Point::new(1.0, 0.0, 0.0),
@@ -160,6 +168,7 @@ pub fn run_mesh_offset_offset_vertices() -> TestResult {
 
         MINI_CHECK!(planes.len() == 4);
         MINI_CHECK!(offsets.len() == 9);
+
         for vkey in 0..9 {
             MINI_CHECK!(TOLERANCE.is_close(offsets[&vkey][0], points[vkey][0]));
             MINI_CHECK!(TOLERANCE.is_close(offsets[&vkey][1], points[vkey][1]));
@@ -180,6 +189,7 @@ pub fn run_mesh_offset_json_roundtrip() -> TestResult {
         use crate::MeshOffset;
         use crate::Point;
         use std::path::PathBuf;
+
         let points = vec![
             Point::new(0.0, 0.0, 0.0),
             Point::new(1.0, 0.0, 0.0),
@@ -191,6 +201,7 @@ pub fn run_mesh_offset_json_roundtrip() -> TestResult {
         let filename = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
             .join("serialization")
             .join("test_mesh_offset.json");
+
         result.file_json_dump(filename.to_str().unwrap()).unwrap();
         let loaded = Mesh::file_json_load(filename.to_str().unwrap()).unwrap();
 
@@ -212,6 +223,7 @@ pub fn run_mesh_offset_protobuf_roundtrip() -> TestResult {
         use crate::MeshOffset;
         use crate::Point;
         use std::path::PathBuf;
+
         let points = vec![
             Point::new(0.0, 0.0, 0.0),
             Point::new(1.0, 0.0, 0.0),
@@ -223,6 +235,7 @@ pub fn run_mesh_offset_protobuf_roundtrip() -> TestResult {
         let filename = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
             .join("serialization")
             .join("test_mesh_offset.bin");
+
         result.pb_dump(filename.to_str().unwrap());
         let loaded = Mesh::pb_load(filename.to_str().unwrap());
 

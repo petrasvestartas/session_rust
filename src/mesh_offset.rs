@@ -9,13 +9,16 @@ use std::collections::HashSet;
 /// Thick shell of a mesh: original faces, offset faces, quads on naked edges.
 pub struct MeshOffset;
 
-/// The shell as three meshes: top, bottom and sides.
+/// Top, bottom and side meshes of a shell.
 pub struct MeshOffsetLayers {
     pub top: Mesh,    // Offset faces.
     pub bottom: Mesh, // Reversed original faces.
     pub sides: Mesh,  // One quad per naked edge.
 }
 
+// ═══════════════════════════════════════════════════════════════════════════
+// Helpers
+// ═══════════════════════════════════════════════════════════════════════════
 /// Least-squares point on the planes, fallback fills any free direction.
 fn intersect_planes(planes: &[Plane], fallback: &Point) -> Point {
     if planes.is_empty() {
@@ -27,14 +30,11 @@ fn intersect_planes(planes: &[Plane], fallback: &Point) -> Point {
         let t = -plane.d()
             - (plane.a() * fallback[0] + plane.b() * fallback[1] + plane.c() * fallback[2]);
 
-        return Point::new(
-            fallback[0] + t * plane.a(),
-            fallback[1] + t * plane.b(),
-            fallback[2] + t * plane.c(),
-        );
+        return fallback + plane.z_axis() * t;
     }
 
     let eps = 1e-8;
+
     let mut lhs = Matrix::new(3, 3);
     let mut rhs = Matrix::new(3, 1);
 
@@ -76,11 +76,11 @@ fn boundary_edges(mesh: &Mesh) -> Vec<(usize, usize)> {
 
     let mut edges = Vec::new();
 
-    for (u, v) in mesh.naked_edges(true) {
-        if directed.contains(&(u, v)) {
-            edges.push((u, v));
+    for edge in mesh.naked_edges(true) {
+        if directed.contains(&edge) {
+            edges.push(edge);
         } else {
-            edges.push((v, u));
+            edges.push((edge.1, edge.0));
         }
     }
 
@@ -88,10 +88,14 @@ fn boundary_edges(mesh: &Mesh) -> Vec<(usize, usize)> {
 }
 
 impl MeshOffset {
+    // ═══════════════════════════════════════════════════════════════════════════
+    // Static constructors
+    // ═══════════════════════════════════════════════════════════════════════════
     /// One closed mesh: reversed bottom, offset top, one quad per naked edge.
     pub fn from_mesh(mesh: &Mesh, distance: f64) -> Mesh {
         let planes = MeshOffset::offset_planes(mesh, distance);
         let offsets = MeshOffset::offset_vertices(mesh, &planes);
+
         let mut result = Mesh::new();
         let mut bottom: HashMap<usize, usize> = HashMap::new();
         let mut top: HashMap<usize, usize> = HashMap::new();
@@ -119,8 +123,11 @@ impl MeshOffset {
             result.add_face(top_face, None);
         }
 
-        for (u, v) in boundary_edges(mesh) {
-            result.add_face(vec![bottom[&u], bottom[&v], top[&v], top[&u]], None);
+        for edge in boundary_edges(mesh) {
+            result.add_face(
+                vec![bottom[&edge.0], bottom[&edge.1], top[&edge.1], top[&edge.0]],
+                None,
+            );
         }
 
         result
@@ -130,6 +137,7 @@ impl MeshOffset {
     pub fn from_mesh_layers(mesh: &Mesh, distance: f64) -> MeshOffsetLayers {
         let planes = MeshOffset::offset_planes(mesh, distance);
         let offsets = MeshOffset::offset_vertices(mesh, &planes);
+
         let mut layers = MeshOffsetLayers {
             top: Mesh::new(),
             bottom: Mesh::new(),
@@ -166,8 +174,8 @@ impl MeshOffset {
         let mut side_bottom: HashMap<usize, usize> = HashMap::new();
         let mut side_top: HashMap<usize, usize> = HashMap::new();
 
-        for (u, v) in boundary_edges(mesh) {
-            for vkey in [u, v] {
+        for edge in boundary_edges(mesh) {
+            for vkey in [edge.0, edge.1] {
                 if let Entry::Vacant(entry) = side_bottom.entry(vkey) {
                     entry.insert(
                         layers
@@ -182,7 +190,12 @@ impl MeshOffset {
             }
 
             layers.sides.add_face(
-                vec![side_bottom[&u], side_bottom[&v], side_top[&v], side_top[&u]],
+                vec![
+                    side_bottom[&edge.0],
+                    side_bottom[&edge.1],
+                    side_top[&edge.1],
+                    side_top[&edge.0],
+                ],
                 None,
             );
         }
@@ -190,6 +203,9 @@ impl MeshOffset {
         layers
     }
 
+    // ═══════════════════════════════════════════════════════════════════════════
+    // Geometry
+    // ═══════════════════════════════════════════════════════════════════════════
     /// Plane of each face translated by distance along its normal, by face key.
     pub fn offset_planes(mesh: &Mesh, distance: f64) -> HashMap<usize, Plane> {
         let mut planes = HashMap::new();
@@ -201,6 +217,7 @@ impl MeshOffset {
             let Some(normal) = mesh.face_normal(fkey) else {
                 continue;
             };
+
             planes.insert(
                 fkey,
                 Plane::from_point_normal(&centroid + &normal * distance, normal, None),
@@ -210,7 +227,7 @@ impl MeshOffset {
         planes
     }
 
-    /// Offsets position of each vertex: least-squares meet of its face planes, by vertex key.
+    /// Offset position of each vertex: least-squares meet of its face planes, by vertex key.
     pub fn offset_vertices(mesh: &Mesh, planes: &HashMap<usize, Plane>) -> HashMap<usize, Point> {
         let mut vertex_faces: HashMap<usize, Vec<usize>> = HashMap::new();
 
@@ -226,6 +243,7 @@ impl MeshOffset {
             let Some(point) = mesh.vertex_point(vkey) else {
                 continue;
             };
+
             let mut adjacent = Vec::new();
 
             for fkey in vertex_faces.entry(vkey).or_default().iter() {
