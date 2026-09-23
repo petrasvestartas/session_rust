@@ -1,10 +1,13 @@
 use crate::mini_test::TestResult;
 use crate::tolerance::TOLERANCE;
-use crate::{MINI_CHECK, MINI_TEST, REGISTER_MINI_TEST};
+use crate::MINI_CHECK;
+use crate::MINI_TEST;
+use crate::REGISTER_MINI_TEST;
 
 pub fn run_matrix_constructor() -> TestResult {
     MINI_TEST!("Constructor", {
         use crate::Matrix;
+
         let m = Matrix::zeros(2, 3);
         let eye = Matrix::identity(3);
         let ml = Matrix::from_vec(2, 2, vec![1.0, 2.0, 3.0, 4.0]);
@@ -41,6 +44,7 @@ pub fn run_matrix_constructor() -> TestResult {
 pub fn run_matrix_properties() -> TestResult {
     MINI_TEST!("Properties", {
         use crate::Matrix;
+
         let m1 = Matrix::identity(3);
         let m2 = Matrix::zeros(2, 3);
         let m3 = Matrix::from_vec(3, 3, vec![1.0, 2.0, 3.0, 2.0, 5.0, 6.0, 3.0, 6.0, 9.0]);
@@ -62,37 +66,36 @@ pub fn run_matrix_properties() -> TestResult {
 pub fn run_matrix_add() -> TestResult {
     MINI_TEST!("Add", {
         use crate::Matrix;
+
         let a = Matrix::from_vec(2, 2, vec![1.0, 2.0, 3.0, 4.0]);
         let b = Matrix::from_vec(2, 2, vec![5.0, 6.0, 7.0, 8.0]);
-        let c = a.add(&b);
-        let d = a.clone() + b;
+        let c = &a + &b;
 
         MINI_CHECK!(c[(0, 0)] == 6.0 && c[(0, 1)] == 8.0);
         MINI_CHECK!(c[(1, 0)] == 10.0 && c[(1, 1)] == 12.0);
-        MINI_CHECK!(c == d);
     })
 }
 
 pub fn run_matrix_subtract() -> TestResult {
     MINI_TEST!("Subtract", {
         use crate::Matrix;
+
         let a = Matrix::from_vec(2, 2, vec![5.0, 6.0, 7.0, 8.0]);
         let b = Matrix::from_vec(2, 2, vec![1.0, 2.0, 3.0, 4.0]);
-        let c = a.subtract(&b);
-        let d = a.clone() - b;
+        let c = &a - &b;
 
         MINI_CHECK!(c[(0, 0)] == 4.0 && c[(0, 1)] == 4.0);
         MINI_CHECK!(c[(1, 0)] == 4.0 && c[(1, 1)] == 4.0);
-        MINI_CHECK!(c == d);
     })
 }
 
 pub fn run_matrix_scale() -> TestResult {
     MINI_TEST!("Scale", {
         use crate::Matrix;
+
         let a = Matrix::from_vec(2, 2, vec![1.0, 2.0, 3.0, 4.0]);
-        let b = a.scale(2.0);
-        let c = a.scale(3.0);
+        let b = &a * 2.0;
+        let c = &a * 3.0;
 
         MINI_CHECK!(b[(0, 0)] == 2.0 && b[(0, 1)] == 4.0 && b[(1, 0)] == 6.0 && b[(1, 1)] == 8.0);
         MINI_CHECK!(c[(0, 0)] == 3.0 && c[(1, 1)] == 12.0);
@@ -102,21 +105,21 @@ pub fn run_matrix_scale() -> TestResult {
 pub fn run_matrix_multiply() -> TestResult {
     MINI_TEST!("Multiply", {
         use crate::Matrix;
+
         let a = Matrix::from_vec(2, 3, vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0]);
         let b = Matrix::from_vec(3, 2, vec![7.0, 8.0, 9.0, 10.0, 11.0, 12.0]);
-        let c = a.multiply(&b);
-        let d = a.clone() * b;
+        let c = &a * &b;
 
         MINI_CHECK!(c.rows == 2 && c.cols == 2);
         MINI_CHECK!(TOLERANCE.is_close(c[(0, 0)], 58.0) && TOLERANCE.is_close(c[(0, 1)], 64.0));
         MINI_CHECK!(TOLERANCE.is_close(c[(1, 0)], 139.0) && TOLERANCE.is_close(c[(1, 1)], 154.0));
-        MINI_CHECK!(c == d);
     })
 }
 
 pub fn run_matrix_transpose() -> TestResult {
     MINI_TEST!("Transpose", {
         use crate::Matrix;
+
         let a = Matrix::from_vec(2, 3, vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0]);
         let t = a.transpose();
 
@@ -129,6 +132,7 @@ pub fn run_matrix_transpose() -> TestResult {
 pub fn run_matrix_determinant() -> TestResult {
     MINI_TEST!("Determinant", {
         use crate::Matrix;
+
         let a1 = Matrix::from_vec(1, 1, vec![5.0]);
         let a2 = Matrix::from_vec(2, 2, vec![4.0, 7.0, 2.0, 6.0]);
         let a3 = Matrix::from_vec(3, 3, vec![1.0, 2.0, 3.0, 0.0, 1.0, 4.0, 5.0, 6.0, 0.0]);
@@ -144,14 +148,17 @@ pub fn run_matrix_determinant() -> TestResult {
 pub fn run_matrix_inverse() -> TestResult {
     MINI_TEST!("Inverse", {
         use crate::Matrix;
+
         let a = Matrix::from_vec(2, 2, vec![4.0, 7.0, 2.0, 6.0]);
         let inv = a.inverse();
         let singular = Matrix::from_vec(2, 2, vec![1.0, 2.0, 2.0, 4.0]);
         let inv_none = singular.inverse();
 
         MINI_CHECK!(inv.is_some());
-        let prod = a.multiply(inv.as_ref().unwrap());
+
         let inv = inv.unwrap();
+        let prod = &a * &inv;
+
         MINI_CHECK!(TOLERANCE.is_close(inv[(0, 0)], 0.6) && TOLERANCE.is_close(inv[(0, 1)], -0.7));
         MINI_CHECK!(TOLERANCE.is_close(inv[(1, 0)], -0.2) && TOLERANCE.is_close(inv[(1, 1)], 0.4));
         MINI_CHECK!(inv_none.is_none());
@@ -163,11 +170,13 @@ pub fn run_matrix_inverse() -> TestResult {
 pub fn run_matrix_solve() -> TestResult {
     MINI_TEST!("Solve", {
         use crate::Matrix;
+
         let a = Matrix::from_vec(2, 2, vec![2.0, 1.0, 1.0, 3.0]);
         let b = Matrix::from_vec(2, 1, vec![5.0, 10.0]);
         let x = a.solve(&b);
 
         MINI_CHECK!(x.is_some());
+
         let x = x.unwrap();
         let residual_0 = 2.0 * x[(0, 0)] + 1.0 * x[(1, 0)];
         let residual_1 = 1.0 * x[(0, 0)] + 3.0 * x[(1, 0)];
@@ -182,10 +191,11 @@ pub fn run_matrix_solve() -> TestResult {
 pub fn run_matrix_lu_decompose() -> TestResult {
     MINI_TEST!("Lu Decompose", {
         use crate::Matrix;
+
         let a = Matrix::from_vec(3, 3, vec![2.0, 1.0, 1.0, 4.0, 3.0, 3.0, 8.0, 7.0, 9.0]);
         let (lower, u, p) = a.lu_decompose();
-        let pa = p.multiply(&a);
-        let lu = lower.multiply(&u);
+        let pa = &p * &a;
+        let lu = &lower * &u;
 
         MINI_CHECK!(lower.rows == 3 && u.cols == 3);
         MINI_CHECK!(
@@ -206,6 +216,7 @@ pub fn run_matrix_lu_decompose() -> TestResult {
 pub fn run_matrix_qr_decompose() -> TestResult {
     MINI_TEST!("Qr Decompose", {
         use crate::Matrix;
+
         let a = Matrix::from_vec(
             3,
             3,
@@ -213,8 +224,8 @@ pub fn run_matrix_qr_decompose() -> TestResult {
         );
         let (q, r) = a.qr_decompose();
         let qt = q.transpose();
-        let qtq = qt.multiply(&q);
-        let qr_prod = q.multiply(&r);
+        let qtq = &qt * &q;
+        let qr_prod = &q * &r;
 
         MINI_CHECK!(TOLERANCE.is_close(qtq[(0, 0)], 1.0));
         MINI_CHECK!(TOLERANCE.is_close(qtq[(1, 1)], 1.0));
@@ -229,13 +240,15 @@ pub fn run_matrix_qr_decompose() -> TestResult {
 pub fn run_matrix_cholesky() -> TestResult {
     MINI_TEST!("Cholesky", {
         use crate::Matrix;
+
         let a = Matrix::from_vec(3, 3, vec![4.0, 2.0, 2.0, 2.0, 5.0, 3.0, 2.0, 3.0, 6.0]);
         let lower = a.cholesky();
 
         MINI_CHECK!(lower.is_some());
+
         let lower = lower.unwrap();
         let lt = lower.transpose();
-        let llt = lower.multiply(&lt);
+        let llt = &lower * &lt;
         let not_spd = Matrix::from_vec(2, 2, vec![1.0, 2.0, 2.0, 1.0]);
         let l_none = not_spd.cholesky();
 
@@ -249,10 +262,12 @@ pub fn run_matrix_cholesky() -> TestResult {
 pub fn run_matrix_eigenvalues() -> TestResult {
     MINI_TEST!("Eigenvalues", {
         use crate::Matrix;
+
         let a = Matrix::from_vec(3, 3, vec![3.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 2.0]);
         let mut evs = a.eigenvalues();
         let empty = Matrix::default().eigenvalues();
-        evs.sort_by(|a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal));
+
+        evs.sort_by(f64::total_cmp);
 
         MINI_CHECK!(evs.len() == 3);
         MINI_CHECK!(TOLERANCE.is_close(evs[0], 1.0));
@@ -265,9 +280,12 @@ pub fn run_matrix_eigenvalues() -> TestResult {
 pub fn run_matrix_svd() -> TestResult {
     MINI_TEST!("Svd", {
         use crate::Matrix;
+
         let a = Matrix::from_vec(3, 3, vec![1.0, 0.0, 0.0, 0.0, 2.0, 0.0, 0.0, 0.0, 3.0]);
         let (_u, mut sv, _vt) = a.svd();
-        sv.sort_by(|a, b| b.partial_cmp(a).unwrap_or(std::cmp::Ordering::Equal));
+
+        sv.sort_by(f64::total_cmp);
+        sv.reverse();
 
         MINI_CHECK!(sv.len() == 3);
         MINI_CHECK!(TOLERANCE.is_close(sv[0], 3.0));
@@ -279,6 +297,7 @@ pub fn run_matrix_svd() -> TestResult {
 pub fn run_matrix_norms() -> TestResult {
     MINI_TEST!("Norms", {
         use crate::Matrix;
+
         let a = Matrix::from_vec(2, 2, vec![1.0, -2.0, 3.0, -4.0]);
         let nf = a.norm_frobenius();
         let n1 = a.norm_1();
@@ -293,6 +312,7 @@ pub fn run_matrix_norms() -> TestResult {
 pub fn run_matrix_rank() -> TestResult {
     MINI_TEST!("Rank", {
         use crate::Matrix;
+
         let a = Matrix::identity(3);
         let b = Matrix::from_vec(3, 3, vec![1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 1.0, 1.0, 0.0]);
         let c = Matrix::zeros(3, 3);
@@ -306,9 +326,11 @@ pub fn run_matrix_rank() -> TestResult {
 pub fn run_matrix_json_roundtrip() -> TestResult {
     MINI_TEST!("Json Roundtrip", {
         use crate::Matrix;
+
         let mut a = Matrix::from_vec(2, 3, vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0]);
         a.name = "test_matrix".to_string();
         let filename = "serialization/test_matrix.json";
+
         a.file_json_dump(filename).unwrap();
         let loaded = Matrix::file_json_load(filename).unwrap();
         let parsed = Matrix::file_json_loads(&a.file_json_dumps());
@@ -325,12 +347,14 @@ pub fn run_matrix_json_roundtrip() -> TestResult {
 pub fn run_matrix_protobuf_roundtrip() -> TestResult {
     MINI_TEST!("Protobuf Roundtrip", {
         use crate::Matrix;
+
         let fresh = Matrix::default();
         let fresh_proto = fresh.to_proto();
         let mut a = Matrix::from_vec(2, 3, vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0]);
         a.name = "test_matrix_proto".to_string();
         let guid = a.guid().to_string();
         let filename = "serialization/test_matrix.bin";
+
         a.pb_dump(filename);
         let loaded = Matrix::pb_load(filename);
         let parsed = Matrix::pb_loads(&a.pb_dumps()).unwrap();
@@ -404,8 +428,7 @@ pub fn run_matrix_shape_errors() -> TestResult {
             let cols = std::panic::catch_unwind(|| Matrix::from_cols(&[vec![1.0, 2.0], vec![3.0]]))
                 .is_err();
             let multiply =
-                std::panic::catch_unwind(|| Matrix::new(2, 3).multiply(&Matrix::new(2, 2)))
-                    .is_err();
+                std::panic::catch_unwind(|| Matrix::new(2, 3) * Matrix::new(2, 2)).is_err();
 
             MINI_CHECK!(overflow);
             MINI_CHECK!(data_size);

@@ -1,15 +1,22 @@
 use crate::tolerance::Tolerance;
 use serde::ser::SerializeMap;
-use serde::{Deserialize, Deserializer, Serializer};
+use serde::Deserialize;
+use serde::Deserializer;
+use serde::Serializer;
+use std::cmp::Ordering;
 use std::fmt;
-use std::ops::{Add, Index, IndexMut, Mul, Sub};
+use std::ops::Add;
+use std::ops::Index;
+use std::ops::IndexMut;
+use std::ops::Mul;
+use std::ops::Sub;
 use std::sync::OnceLock;
 
 const COMPARISON_TOLERANCE: f64 = Tolerance::ABSOLUTE / 10.0;
 const PIVOT_TOLERANCE: f64 = Tolerance::ZERO_TOLERANCE / 100.0;
 const SINGULAR_TOLERANCE: f64 = Tolerance::ZERO_TOLERANCE;
 
-/// Returns the checked element count for C++-compatible dimensions.
+/// Return the checked element count for C++-compatible dimensions.
 fn matrix_size(rows: usize, cols: usize) -> Option<usize> {
     if rows > i32::MAX as usize || cols > i32::MAX as usize {
         return None;
@@ -18,20 +25,29 @@ fn matrix_size(rows: usize, cols: usize) -> Option<usize> {
     rows.checked_mul(cols)
 }
 
+/// Order (eigenvalue, eigenvector) pairs by descending eigenvalue.
+fn eigen_pair_greater(a: &(f64, Vec<f64>), b: &(f64, Vec<f64>)) -> Ordering {
+    b.0.partial_cmp(&a.0).unwrap_or(Ordering::Equal)
+}
+
 /// An NxM matrix with row-major storage.
 #[derive(Clone)]
 pub struct Matrix {
-    guid: OnceLock<String>,
-    pub name: String,   // Matrix name.
-    pub rows: usize,    // Row count.
-    pub cols: usize,    // Column count.
-    pub data: Vec<f64>, // Row-major values.
+    guid: OnceLock<String>, // Lazily minted GUID.
+    pub name: String,       // Matrix name.
+    pub rows: usize,        // Row count.
+    pub cols: usize,        // Column count.
+    pub data: Vec<f64>,     // Row-major values.
 }
 
 impl Matrix {
-    /// Constructs a rows x cols matrix of zeros.
+    // ═══════════════════════════════════════════════════════════════════════════
+    // Constructors
+    // ═══════════════════════════════════════════════════════════════════════════
+    /// Construct a rows x cols matrix of zeros; panics for invalid dimensions.
     pub fn new(rows: usize, cols: usize) -> Self {
         let size = matrix_size(rows, cols).expect("Matrix dimensions are too large");
+
         Matrix {
             guid: OnceLock::new(),
             name: "my_matrix".to_string(),
@@ -41,31 +57,12 @@ impl Matrix {
         }
     }
 
-    /// Returns whether the lazy GUID has been created.
-    pub fn has_guid(&self) -> bool {
-        self.guid.get().is_some()
-    }
-
-    /// Returns the GUID, creating it on first access.
-    pub fn guid(&self) -> &str {
-        self.guid.get_or_init(|| uuid::Uuid::new_v4().to_string())
-    }
-
-    /// Sets the GUID if it has not already been created.
-    pub fn set_guid(&self, g: String) {
-        let _ = self.guid.set(g);
-    }
-
-    // ═══════════════════════════════════════════════════════════════════════════
-    // Constructors
-    // ═══════════════════════════════════════════════════════════════════════════
-
-    /// Constructs a zero matrix.
+    /// Construct a rows x cols zero matrix.
     pub fn zeros(rows: usize, cols: usize) -> Self {
         Self::new(rows, cols)
     }
 
-    /// Constructs an identity matrix.
+    /// Construct an n x n identity matrix.
     pub fn identity(n: usize) -> Self {
         let mut m = Self::new(n, n);
 
@@ -76,7 +73,7 @@ impl Matrix {
         m
     }
 
-    /// Constructs a matrix from exact row-major values.
+    /// Construct from exact row-major data; panics when the size does not match.
     pub fn from_vec(rows: usize, cols: usize, data: Vec<f64>) -> Self {
         let size = matrix_size(rows, cols).expect("Matrix dimensions are too large");
         assert_eq!(
@@ -84,12 +81,14 @@ impl Matrix {
             size,
             "Matrix data size does not match its dimensions"
         );
+
         let mut m = Self::new(rows, cols);
         m.data = data;
+
         m
     }
 
-    /// Constructs a matrix from equal-length rows.
+    /// Construct from equal-length rows.
     pub fn from_rows(rows_list: &[Vec<f64>]) -> Self {
         let r = rows_list.len();
         let c = if r > 0 { rows_list[0].len() } else { 0 };
@@ -109,7 +108,7 @@ impl Matrix {
         m
     }
 
-    /// Constructs a matrix from equal-length columns.
+    /// Construct from equal-length columns.
     pub fn from_cols(cols_list: &[Vec<f64>]) -> Self {
         let c = cols_list.len();
         let r = if c > 0 { cols_list[0].len() } else { 0 };
@@ -129,16 +128,38 @@ impl Matrix {
         m
     }
 
+    /// Copy with a new guid and the same data.
+    pub fn duplicate(&self) -> Self {
+        let mut m = Self::from_vec(self.rows, self.cols, self.data.clone());
+        m.name = self.name.clone();
+
+        m
+    }
+
     // ═══════════════════════════════════════════════════════════════════════════
     // Accessors
     // ═══════════════════════════════════════════════════════════════════════════
+    /// Return whether the lazy guid has been created.
+    pub fn has_guid(&self) -> bool {
+        self.guid.get().is_some()
+    }
 
-    /// Returns whether the row and column counts are equal.
+    /// Return the guid, creating it on first access.
+    pub fn guid(&self) -> &str {
+        self.guid.get_or_init(|| uuid::Uuid::new_v4().to_string())
+    }
+
+    /// Set the guid if it has not already been created.
+    pub fn set_guid(&self, guid: String) {
+        let _ = self.guid.set(guid);
+    }
+
+    /// Return whether the matrix has equal row and column counts.
     pub fn is_square(&self) -> bool {
         self.rows == self.cols
     }
 
-    /// Returns whether the matrix is square and symmetric.
+    /// Return whether the matrix is square and symmetric.
     pub fn is_symmetric(&self) -> bool {
         if !self.is_square() {
             return false;
@@ -155,9 +176,10 @@ impl Matrix {
         true
     }
 
-    /// Returns the diagonal sum.
+    /// Return the diagonal sum; panics unless the matrix is square.
     pub fn trace(&self) -> f64 {
         assert!(self.is_square(), "Matrix trace requires a square matrix");
+
         let mut s = 0.0;
 
         for i in 0..self.rows {
@@ -166,25 +188,47 @@ impl Matrix {
 
         s
     }
+}
 
-    /// Returns a copy with a new GUID and the same data.
-    pub fn duplicate(&self) -> Self {
-        let mut m = Self::from_vec(self.rows, self.cols, self.data.clone());
-        m.name = self.name.clone();
-        m
+impl Default for Matrix {
+    /// Construct an empty matrix.
+    fn default() -> Self {
+        Self::new(0, 0)
     }
+}
 
-    // ═══════════════════════════════════════════════════════════════════════════
-    // Operations
-    // ═══════════════════════════════════════════════════════════════════════════
+// ═══════════════════════════════════════════════════════════════════════════
+// Operators
+// ═══════════════════════════════════════════════════════════════════════════
+impl Index<(usize, usize)> for Matrix {
+    type Output = f64;
 
-    /// Adds an equal-sized matrix.
-    pub fn add(&self, other: &Matrix) -> Matrix {
+    /// Return the element at (row, col).
+    fn index(&self, (r, c): (usize, usize)) -> &f64 {
+        &self.data[r * self.cols + c]
+    }
+}
+
+impl IndexMut<(usize, usize)> for Matrix {
+    /// Return the mutable element at (row, col).
+    fn index_mut(&mut self, (r, c): (usize, usize)) -> &mut f64 {
+        let idx = r * self.cols + c;
+
+        &mut self.data[idx]
+    }
+}
+
+impl Add<&Matrix> for &Matrix {
+    type Output = Matrix;
+
+    /// Add an equal-sized matrix.
+    fn add(self, other: &Matrix) -> Matrix {
         assert!(
             self.rows == other.rows && self.cols == other.cols,
             "Matrix dimensions must match for addition"
         );
-        let mut result = Self::new(self.rows, self.cols);
+
+        let mut result = Matrix::new(self.rows, self.cols);
 
         for i in 0..self.data.len() {
             result.data[i] = self.data[i] + other.data[i];
@@ -192,14 +236,28 @@ impl Matrix {
 
         result
     }
+}
 
-    /// Subtracts an equal-sized matrix.
-    pub fn subtract(&self, other: &Matrix) -> Matrix {
+impl Add for Matrix {
+    type Output = Matrix;
+
+    /// Add an equal-sized matrix.
+    fn add(self, other: Matrix) -> Matrix {
+        &self + &other
+    }
+}
+
+impl Sub<&Matrix> for &Matrix {
+    type Output = Matrix;
+
+    /// Subtract an equal-sized matrix.
+    fn sub(self, other: &Matrix) -> Matrix {
         assert!(
             self.rows == other.rows && self.cols == other.cols,
             "Matrix dimensions must match for subtraction"
         );
-        let mut result = Self::new(self.rows, self.cols);
+
+        let mut result = Matrix::new(self.rows, self.cols);
 
         for i in 0..self.data.len() {
             result.data[i] = self.data[i] - other.data[i];
@@ -207,25 +265,28 @@ impl Matrix {
 
         result
     }
+}
 
-    /// Returns a matrix with every value multiplied by `s`.
-    pub fn scale(&self, s: f64) -> Matrix {
-        let mut result = Self::new(self.rows, self.cols);
+impl Sub for Matrix {
+    type Output = Matrix;
 
-        for i in 0..self.data.len() {
-            result.data[i] = self.data[i] * s;
-        }
-
-        result
+    /// Subtract an equal-sized matrix.
+    fn sub(self, other: Matrix) -> Matrix {
+        &self - &other
     }
+}
 
-    /// Multiplies by a dimension-compatible matrix.
-    pub fn multiply(&self, other: &Matrix) -> Matrix {
+impl Mul<&Matrix> for &Matrix {
+    type Output = Matrix;
+
+    /// Multiply by a dimension-compatible matrix.
+    fn mul(self, other: &Matrix) -> Matrix {
         assert_eq!(
             self.cols, other.rows,
             "Matrix dimensions are incompatible for multiplication"
         );
-        let mut result = Self::new(self.rows, other.cols);
+
+        let mut result = Matrix::new(self.rows, other.cols);
 
         for i in 0..self.rows {
             for j in 0..other.cols {
@@ -241,8 +302,63 @@ impl Matrix {
 
         result
     }
+}
 
-    /// Returns the transpose.
+impl Mul for Matrix {
+    type Output = Matrix;
+
+    /// Multiply by a dimension-compatible matrix.
+    fn mul(self, other: Matrix) -> Matrix {
+        &self * &other
+    }
+}
+
+impl Mul<f64> for &Matrix {
+    type Output = Matrix;
+
+    /// Multiply every element by a scalar.
+    fn mul(self, s: f64) -> Matrix {
+        let mut result = Matrix::new(self.rows, self.cols);
+
+        for i in 0..self.data.len() {
+            result.data[i] = self.data[i] * s;
+        }
+
+        result
+    }
+}
+
+impl Mul<f64> for Matrix {
+    type Output = Matrix;
+
+    /// Multiply every element by a scalar.
+    fn mul(self, s: f64) -> Matrix {
+        &self * s
+    }
+}
+
+impl PartialEq for Matrix {
+    /// Compare dimensions and values within the matrix comparison tolerance.
+    fn eq(&self, other: &Self) -> bool {
+        if self.rows != other.rows || self.cols != other.cols {
+            return false;
+        }
+
+        for i in 0..self.data.len() {
+            if (self.data[i] - other.data[i]).abs() > COMPARISON_TOLERANCE {
+                return false;
+            }
+        }
+
+        true
+    }
+}
+
+impl Matrix {
+    // ═══════════════════════════════════════════════════════════════════════════
+    // Linear algebra
+    // ═══════════════════════════════════════════════════════════════════════════
+    /// Return the transpose.
     pub fn transpose(&self) -> Matrix {
         let mut result = Self::new(self.cols, self.rows);
 
@@ -255,11 +371,7 @@ impl Matrix {
         result
     }
 
-    // ═══════════════════════════════════════════════════════════════════════════
-    // Linear algebra
-    // ═══════════════════════════════════════════════════════════════════════════
-
-    /// (L, U, P, swaps) by partial pivoting
+    /// Return (L, U, P, swaps) by partial pivoting.
     fn _lu_internal(&self) -> (Matrix, Matrix, Matrix, usize) {
         let n = self.rows;
         let mut u = self.duplicate();
@@ -311,22 +423,25 @@ impl Matrix {
         (lower, u, p, swaps)
     }
 
-    /// Computes `(L, U, P)` such that `P * A = L * U`.
+    /// Return (L, U, P) with P * A = L * U; panics unless square.
     pub fn lu_decompose(&self) -> (Matrix, Matrix, Matrix) {
         assert!(
             self.is_square(),
             "LU decomposition requires a square matrix"
         );
+
         let (lower, u, p, _swaps) = self._lu_internal();
+
         (lower, u, p)
     }
 
-    /// Returns the determinant.
+    /// Return the determinant; panics unless the matrix is square.
     pub fn determinant(&self) -> f64 {
         assert!(
             self.is_square(),
             "Matrix determinant requires a square matrix"
         );
+
         let n = self.rows;
 
         if n == 1 {
@@ -348,7 +463,7 @@ impl Matrix {
         sign * prod
     }
 
-    /// Returns the inverse, or `None` for a non-square or singular matrix.
+    /// Return the inverse, or None for a non-square or singular matrix.
     pub fn inverse(&self) -> Option<Matrix> {
         if !self.is_square() {
             return None;
@@ -405,7 +520,7 @@ impl Matrix {
         Some(result)
     }
 
-    /// Solves `A * x = b`, where `b` is a column vector.
+    /// Return x with A * x = b, or None when no compatible unique solution exists.
     pub fn solve(&self, b: &Matrix) -> Option<Matrix> {
         if !self.is_square() || b.rows != self.rows || b.cols != 1 {
             return None;
@@ -459,7 +574,7 @@ impl Matrix {
         Some(result)
     }
 
-    /// Computes `(Q, R)` by Gram-Schmidt orthogonalization.
+    /// Return (Q, R) from Gram-Schmidt decomposition.
     pub fn qr_decompose(&self) -> (Matrix, Matrix) {
         let m = self.rows;
         let n = self.cols;
@@ -499,6 +614,7 @@ impl Matrix {
 
             norm = f64::sqrt(norm);
             r[(j, j)] = norm;
+
             let mut qcol = vec![0.0; m];
 
             if norm > PIVOT_TOLERANCE {
@@ -521,7 +637,7 @@ impl Matrix {
         (q, r)
     }
 
-    /// Returns lower `L` with `A = L * L^T` when it exists.
+    /// Return lower L with A = L * L^T, or None when not positive definite.
     pub fn cholesky(&self) -> Option<Matrix> {
         if !self.is_square() {
             return None;
@@ -553,18 +669,20 @@ impl Matrix {
         Some(lower)
     }
 
-    /// Returns eigenvalues computed by unshifted QR iteration.
+    /// Return eigenvalues by bounded unshifted QR iteration; panics unless square.
     pub fn eigenvalues(&self) -> Vec<f64> {
         assert!(
             self.is_square(),
             "Matrix eigenvalues require a square matrix"
         );
+
         let n = self.rows;
         let mut a = self.duplicate();
 
         for _ in 0..(1000 * n) {
             let (q, r) = a.qr_decompose();
-            a = r.multiply(&q);
+            a = &r * &q;
+
             let mut converged = true;
 
             for i in 1..n {
@@ -588,7 +706,7 @@ impl Matrix {
         ev
     }
 
-    /// (eigenvalue, eigenvector) pairs by QR iteration with accumulated Q
+    /// Return (eigenvalue, eigenvector) pairs by QR iteration with accumulated Q.
     fn _eigen_decompose_symmetric(&self) -> Vec<(f64, Vec<f64>)> {
         let n = self.rows;
         let mut a = self.duplicate();
@@ -596,8 +714,9 @@ impl Matrix {
 
         for _ in 0..(1000 * n) {
             let (q, r) = a.qr_decompose();
-            a = r.multiply(&q);
-            v = v.multiply(&q);
+            a = &r * &q;
+            v = &v * &q;
+
             let mut converged = true;
 
             for i in 1..n {
@@ -627,14 +746,15 @@ impl Matrix {
         pairs
     }
 
-    /// Computes `(U, singular values, V^T)`.
+    /// Return (U, singular values, V^T).
     pub fn svd(&self) -> (Matrix, Vec<f64>, Matrix) {
         let m = self.rows;
         let n = self.cols;
         let at = self.transpose();
-        let ata = at.multiply(self);
+        let ata = &at * self;
         let mut pairs = ata._eigen_decompose_symmetric();
-        pairs.sort_by(|a, b| b.0.partial_cmp(&a.0).unwrap_or(std::cmp::Ordering::Equal));
+        pairs.sort_by(eigen_pair_greater);
+
         let k = m.min(n);
         let mut sv = Vec::new();
         let mut v_cols: Vec<Vec<f64>> = Vec::new();
@@ -676,8 +796,7 @@ impl Matrix {
     // ═══════════════════════════════════════════════════════════════════════════
     // Norms
     // ═══════════════════════════════════════════════════════════════════════════
-
-    /// Returns the Frobenius norm.
+    /// Return the Frobenius norm.
     pub fn norm_frobenius(&self) -> f64 {
         let mut s = 0.0;
 
@@ -688,7 +807,7 @@ impl Matrix {
         f64::sqrt(s)
     }
 
-    /// Returns the maximum absolute column sum.
+    /// Return the maximum absolute column sum.
     pub fn norm_1(&self) -> f64 {
         let mut max_sum = 0.0;
 
@@ -707,7 +826,7 @@ impl Matrix {
         max_sum
     }
 
-    /// Returns the maximum absolute row sum.
+    /// Return the maximum absolute row sum.
     pub fn norm_inf(&self) -> f64 {
         let mut max_sum = 0.0;
 
@@ -726,7 +845,7 @@ impl Matrix {
         max_sum
     }
 
-    /// Returns the numerical rank.
+    /// Return the numerical rank.
     pub fn rank(&self) -> usize {
         let (_u, sv, _vt) = self.svd();
 
@@ -755,45 +874,45 @@ impl Matrix {
     // ═══════════════════════════════════════════════════════════════════════════
     // JSON
     // ═══════════════════════════════════════════════════════════════════════════
-
-    /// Serializes the matrix to a JSON string.
+    /// Serialize to an ordered JSON string.
     pub fn jsondump(&self) -> Result<String, Box<dyn std::error::Error>> {
         crate::file_encoders::sorted_json_string(self)
     }
 
-    /// Constructs a matrix from a JSON string.
+    /// Deserialize from a JSON string.
     pub fn jsonload(json_data: &str) -> Result<Self, Box<dyn std::error::Error>> {
         Ok(serde_json::from_str(json_data)?)
     }
 
-    /// Serializes the matrix to a JSON string.
+    /// Serialize to a JSON string.
     pub fn file_json_dumps(&self) -> String {
         self.jsondump().expect("Failed to serialize Matrix JSON")
     }
 
-    /// Constructs a matrix from a JSON string.
+    /// Deserialize from a JSON string.
     pub fn file_json_loads(json_string: &str) -> Self {
         Self::jsonload(json_string).expect("Failed to parse Matrix JSON")
     }
 
-    /// Serializes the matrix to a JSON file.
+    /// Write JSON to a file.
     pub fn file_json_dump(&self, filepath: &str) -> Result<(), Box<dyn std::error::Error>> {
         let json = self.jsondump()?;
         std::fs::write(filepath, json)?;
+
         Ok(())
     }
 
-    /// Constructs a matrix from a JSON file.
+    /// Read JSON from a file.
     pub fn file_json_load(filepath: &str) -> Result<Self, Box<dyn std::error::Error>> {
         let json = std::fs::read_to_string(filepath)?;
+
         Self::jsonload(&json)
     }
 
     // ═══════════════════════════════════════════════════════════════════════════
     // Protobuf
     // ═══════════════════════════════════════════════════════════════════════════
-
-    /// Returns the protobuf representation.
+    /// Convert to the protobuf message.
     pub fn to_proto(&self) -> crate::proto::Matrix {
         crate::proto::Matrix {
             guid: self.guid.get().cloned().unwrap_or_default(),
@@ -804,7 +923,7 @@ impl Matrix {
         }
     }
 
-    /// Constructs a matrix from a protobuf message.
+    /// Construct from a shape-valid protobuf message.
     pub fn from_proto(proto: crate::proto::Matrix) -> Result<Self, Box<dyn std::error::Error>> {
         if proto.rows < 0 || proto.cols < 0 {
             return Err(std::io::Error::new(
@@ -832,43 +951,47 @@ impl Matrix {
         }
 
         m.name = proto.name;
+
         Ok(m)
     }
 
-    /// Serializes the matrix to protobuf bytes.
+    /// Serialize to protobuf bytes.
     pub fn pb_dumps(&self) -> Vec<u8> {
         use prost::Message;
+
         self.to_proto().encode_to_vec()
     }
 
-    /// Constructs a matrix from protobuf bytes.
+    /// Deserialize from protobuf bytes.
     pub fn pb_loads(data: &[u8]) -> Result<Self, Box<dyn std::error::Error>> {
         use prost::Message;
+
         Self::from_proto(crate::proto::Matrix::decode(data)?)
     }
 
-    /// Serializes the matrix to a protobuf file.
+    /// Write protobuf bytes to a file.
     pub fn pb_dump(&self, filepath: &str) {
         let data = self.pb_dumps();
+
         std::fs::write(filepath, data).expect("Failed to write protobuf file");
     }
 
-    /// Constructs a matrix from a protobuf file.
+    /// Read protobuf bytes from a file.
     pub fn pb_load(filepath: &str) -> Self {
         let data = std::fs::read(filepath).expect("Failed to read protobuf file");
+
         Self::pb_loads(&data).expect("Failed to parse protobuf")
     }
 
     // ═══════════════════════════════════════════════════════════════════════════
     // String
     // ═══════════════════════════════════════════════════════════════════════════
-
-    /// Returns the compact shape description.
+    /// Return the compact dimension string.
     pub fn str(&self) -> String {
         format!("Matrix({}x{})", self.rows, self.cols)
     }
 
-    /// Returns the detailed representation.
+    /// Return the detailed representation.
     pub fn repr(&self) -> String {
         let mut rows_str: Vec<String> = Vec::new();
 
@@ -883,6 +1006,7 @@ impl Matrix {
         }
 
         let guid: String = self.guid().chars().take(8).collect();
+
         format!(
             "Matrix(name='{}', guid='{}...', rows={}, cols={}, data=[{}])",
             self.name,
@@ -891,69 +1015,6 @@ impl Matrix {
             self.cols,
             rows_str.join("; ")
         )
-    }
-}
-
-// ═══════════════════════════════════════════════════════════════════════════
-// Operators
-// ═══════════════════════════════════════════════════════════════════════════
-
-impl Default for Matrix {
-    fn default() -> Self {
-        Self::new(0, 0)
-    }
-}
-
-impl Index<(usize, usize)> for Matrix {
-    type Output = f64;
-
-    /// Element at (row, col)
-    fn index(&self, (r, c): (usize, usize)) -> &f64 {
-        &self.data[r * self.cols + c]
-    }
-}
-
-impl IndexMut<(usize, usize)> for Matrix {
-    fn index_mut(&mut self, (r, c): (usize, usize)) -> &mut f64 {
-        let idx = r * self.cols + c;
-        &mut self.data[idx]
-    }
-}
-
-impl Add for Matrix {
-    type Output = Matrix;
-    fn add(self, other: Matrix) -> Matrix {
-        Matrix::add(&self, &other)
-    }
-}
-
-impl Sub for Matrix {
-    type Output = Matrix;
-    fn sub(self, other: Matrix) -> Matrix {
-        Matrix::subtract(&self, &other)
-    }
-}
-
-impl Mul for Matrix {
-    type Output = Matrix;
-    fn mul(self, other: Matrix) -> Matrix {
-        Matrix::multiply(&self, &other)
-    }
-}
-
-impl PartialEq for Matrix {
-    fn eq(&self, other: &Self) -> bool {
-        if self.rows != other.rows || self.cols != other.cols {
-            return false;
-        }
-
-        for i in 0..self.data.len() {
-            if (self.data[i] - other.data[i]).abs() > COMPARISON_TOLERANCE {
-                return false;
-            }
-        }
-
-        true
     }
 }
 
@@ -972,7 +1033,6 @@ impl fmt::Debug for Matrix {
 // ═══════════════════════════════════════════════════════════════════════════
 // Serde
 // ═══════════════════════════════════════════════════════════════════════════
-
 impl serde::Serialize for Matrix {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
     where
@@ -1002,17 +1062,23 @@ impl<'de> Deserialize<'de> for Matrix {
             name: String,
             rows: usize,
         }
+
         let d = MatrixData::deserialize(deserializer)?;
+
         if matrix_size(d.rows, d.cols) != Some(d.data.len()) {
             return Err(serde::de::Error::custom(
                 "Matrix data size does not match its dimensions",
             ));
         }
+
         let mut m = Matrix::from_vec(d.rows, d.cols, d.data);
+
         if !d.guid.is_empty() {
             m.set_guid(d.guid);
         }
+
         m.name = d.name;
+
         Ok(m)
     }
 }
