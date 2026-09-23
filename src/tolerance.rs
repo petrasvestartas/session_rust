@@ -1,4 +1,5 @@
-use crate::{Point, Vector};
+use crate::Point;
+use crate::Vector;
 use once_cell::sync::Lazy;
 use parking_lot::RwLock;
 use serde::Deserialize;
@@ -15,14 +16,14 @@ pub const SCALE: f64 = 1e6; // Default coordinate-key scale.
 /// Tolerance settings for geometric comparisons
 #[derive(Debug, Clone)]
 pub struct Tolerance {
-    _unit: String,
-    _absolute: Option<f64>,
-    _relative: Option<f64>,
-    _angular: Option<f64>,
-    _approximation: Option<f64>,
-    _precision: Option<i32>,
-    _lineardeflection: Option<f64>,
-    _angulardeflection: Option<f64>,
+    _unit: String, // Unit system, "M" or "MM".
+    _absolute: Option<f64>, // Absolute tolerance override.
+    _relative: Option<f64>, // Relative tolerance override.
+    _angular: Option<f64>, // Angular tolerance override in radians.
+    _approximation: Option<f64>, // Approximation tolerance override.
+    _precision: Option<i32>, // Decimal precision override.
+    _lineardeflection: Option<f64>, // Linear deflection override.
+    _angulardeflection: Option<f64>, // Angular deflection override.
 }
 
 #[derive(Deserialize, Serialize)]
@@ -68,6 +69,9 @@ impl Tolerance {
     pub const ZERO_TOLERANCE: f64 = 1e-12; // Used heavily by algorithms; do not change.
     pub const ROUNDING: i32 = 6; // Default coordinate-key rounding.
 
+    // ═══════════════════════════════════════════════════════════════════════════
+    // Constructors
+    // ═══════════════════════════════════════════════════════════════════════════
     /// Construct tolerance with a unit system ("M" or "MM")
     pub fn new(unit: &str) -> Self {
         Self {
@@ -82,17 +86,9 @@ impl Tolerance {
         }
     }
 
-    /// Reset all overrides to default constants
-    pub fn reset(&mut self) {
-        self._absolute = None;
-        self._relative = None;
-        self._angular = None;
-        self._approximation = None;
-        self._precision = None;
-        self._lineardeflection = None;
-        self._angulardeflection = None;
-    }
-
+    // ═══════════════════════════════════════════════════════════════════════════
+    // Accessors
+    // ═══════════════════════════════════════════════════════════════════════════
     /// Current unit system
     pub fn unit(&self) -> String {
         self._unit.clone()
@@ -131,6 +127,20 @@ impl Tolerance {
     /// Angular deflection value (or default ANGULARDEFLECTION)
     pub fn angulardeflection(&self) -> f64 {
         self._angulardeflection.unwrap_or(Self::ANGULARDEFLECTION)
+    }
+
+    // ═══════════════════════════════════════════════════════════════════════════
+    // Mutators
+    // ═══════════════════════════════════════════════════════════════════════════
+    /// Reset all overrides to default constants
+    pub fn reset(&mut self) {
+        self._absolute = None;
+        self._relative = None;
+        self._angular = None;
+        self._approximation = None;
+        self._precision = None;
+        self._lineardeflection = None;
+        self._angulardeflection = None;
     }
 
     /// Set current unit system
@@ -181,6 +191,23 @@ impl Tolerance {
         self._angulardeflection = Some(value);
     }
 
+    /// Run a closure on a copy-restored tolerance
+    pub fn temporary<F, R>(&mut self, f: F) -> R
+    where
+        F: FnOnce(&mut Tolerance) -> R,
+    {
+        let saved = self.clone();
+        let guard = ToleranceReset {
+            target: self,
+            saved,
+        };
+
+        f(&mut *guard.target)
+    }
+
+    // ═══════════════════════════════════════════════════════════════════════════
+    // Comparison
+    // ═══════════════════════════════════════════════════════════════════════════
     /// Compute combined tolerance from relative and absolute components
     pub fn tolerance(&self, truevalue: f64, rtol: f64, atol: f64) -> f64 {
         rtol * truevalue.abs() + atol
@@ -209,6 +236,7 @@ impl Tolerance {
     /// Check if value is within a range with absolute tolerance
     pub fn is_between(&self, value: f64, minval: f64, maxval: f64) -> bool {
         let atol = self.absolute();
+
         minval - atol <= value && value <= maxval + atol
     }
 
@@ -232,6 +260,7 @@ impl Tolerance {
         let dx = b[0] - a[0];
         let dy = b[1] - a[1];
         let dz = b[2] - a[2];
+
         dx * dx + dy * dy + dz * dz <= self.absolute() * self.absolute()
     }
 
@@ -240,6 +269,7 @@ impl Tolerance {
         let dx = b[0] - a[0];
         let dy = b[1] - a[1];
         let dz = b[2] - a[2];
+
         dx * dx + dy * dy + dz * dz <= self.absolute() * self.absolute()
     }
 
@@ -261,19 +291,9 @@ impl Tolerance {
         true
     }
 
-    /// Run a closure on a copy-restored tolerance
-    pub fn temporary<F, R>(&mut self, f: F) -> R
-    where
-        F: FnOnce(&mut Tolerance) -> R,
-    {
-        let saved = self.clone();
-        let guard = ToleranceReset {
-            target: self,
-            saved,
-        };
-        f(&mut *guard.target)
-    }
-
+    // ═══════════════════════════════════════════════════════════════════════════
+    // Keys and formatting
+    // ═══════════════════════════════════════════════════════════════════════════
     /// Create a geometric key string for 3D point with optional precision
     pub fn key(&self, mut x: f64, mut y: f64, mut z: f64, precision: i32) -> String {
         let prec = if precision != -999 {
@@ -395,9 +415,33 @@ impl Tolerance {
             Some(pos) => pos,
             None => return 0,
         };
+
         text[pos + 2..].parse::<i32>().unwrap_or(0)
     }
 
+    // ═══════════════════════════════════════════════════════════════════════════
+    // Numeric conversion
+    // ═══════════════════════════════════════════════════════════════════════════
+    /// Convert degrees to radians
+    pub fn to_radians(degrees: f64) -> f64 {
+        degrees * Self::TO_RADIANS
+    }
+
+    /// Convert radians to degrees
+    pub fn to_degrees(radians: f64) -> f64 {
+        radians * Self::TO_DEGREES
+    }
+
+    /// Round a value to a given number of decimal places
+    pub fn round_to(value: f64, ndigits: i32) -> f64 {
+        let factor = 10.0_f64.powi(ndigits);
+
+        (value * factor).round() / factor
+    }
+
+    // ═══════════════════════════════════════════════════════════════════════════
+    // JSON
+    // ═══════════════════════════════════════════════════════════════════════════
     /// Serialize to sorted JSON.
     pub fn jsondump(&self) -> Result<String, Box<dyn std::error::Error>> {
         crate::file_encoders::sorted_json_string(&ToleranceData {
@@ -416,6 +460,7 @@ impl Tolerance {
     /// Deserialize from JSON.
     pub fn jsonload(data: &str) -> Result<Self, Box<dyn std::error::Error>> {
         let data: ToleranceData = serde_json::from_str(data)?;
+
         let mut tolerance = Self::new(&data.unit);
         tolerance.set_absolute(data.absolute);
         tolerance.set_angular(data.angular);
@@ -424,6 +469,7 @@ impl Tolerance {
         tolerance.set_lineardeflection(data.lineardeflection);
         tolerance.set_precision(data.precision);
         tolerance.set_relative(data.relative);
+
         Ok(tolerance)
     }
 
@@ -440,6 +486,7 @@ impl Tolerance {
     /// Write JSON to a file.
     pub fn file_json_dump(&self, filename: &str) -> Result<(), Box<dyn std::error::Error>> {
         std::fs::write(filename, self.jsondump()?)?;
+
         Ok(())
     }
 
@@ -448,6 +495,9 @@ impl Tolerance {
         Self::jsonload(&std::fs::read_to_string(filename)?)
     }
 
+    // ═══════════════════════════════════════════════════════════════════════════
+    // Protobuf
+    // ═══════════════════════════════════════════════════════════════════════════
     /// Convert to the protobuf message.
     pub fn to_proto(&self) -> crate::proto::Tolerance {
         crate::proto::Tolerance {
@@ -472,46 +522,34 @@ impl Tolerance {
         tolerance.set_precision(proto.precision);
         tolerance.set_lineardeflection(proto.lineardeflection);
         tolerance.set_angulardeflection(proto.angulardeflection);
+
         tolerance
     }
 
     /// Serialize to protobuf bytes.
     pub fn pb_dumps(&self) -> Vec<u8> {
         use prost::Message;
+
         self.to_proto().encode_to_vec()
     }
 
     /// Deserialize from protobuf bytes.
     pub fn pb_loads(data: &[u8]) -> Result<Self, Box<dyn std::error::Error>> {
         use prost::Message;
+
         Ok(Self::from_proto(crate::proto::Tolerance::decode(data)?))
     }
 
     /// Write protobuf bytes to a file.
     pub fn pb_dump(&self, filename: &str) -> Result<(), Box<dyn std::error::Error>> {
         std::fs::write(filename, self.pb_dumps())?;
+
         Ok(())
     }
 
     /// Read protobuf bytes from a file.
     pub fn pb_load(filename: &str) -> Result<Self, Box<dyn std::error::Error>> {
         Self::pb_loads(&std::fs::read(filename)?)
-    }
-
-    /// Convert degrees to radians
-    pub fn to_radians(degrees: f64) -> f64 {
-        degrees * Self::TO_RADIANS
-    }
-
-    /// Convert radians to degrees
-    pub fn to_degrees(radians: f64) -> f64 {
-        radians * Self::TO_DEGREES
-    }
-
-    /// Round a value to a given number of decimal places
-    pub fn round_to(value: f64, ndigits: i32) -> f64 {
-        let factor = 10.0_f64.powi(ndigits);
-        (value * factor).round() / factor
     }
 }
 
@@ -714,8 +752,7 @@ impl Default for GlobalTolerance {
     }
 }
 
-/// Global tolerance instance
-pub static TOLERANCE: Lazy<GlobalTolerance> = Lazy::new(GlobalTolerance::new);
+pub static TOLERANCE: Lazy<GlobalTolerance> = Lazy::new(GlobalTolerance::new); // Global tolerance instance.
 
 // ═══════════════════════════════════════════════════════════════════════════
 // Utilities
@@ -730,6 +767,7 @@ pub fn is_finite(x: f64) -> bool {
 pub fn unique_from_two_int(a: i32, b: i32) -> u64 {
     let lo = a.min(b) as u64;
     let hi = a.max(b) as u64;
+
     (hi << 32) | lo
 }
 

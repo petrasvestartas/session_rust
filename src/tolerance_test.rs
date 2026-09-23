@@ -1,9 +1,12 @@
 use crate::mini_test::TestResult;
-use crate::{MINI_CHECK, MINI_TEST, REGISTER_MINI_TEST};
+use crate::MINI_CHECK;
+use crate::MINI_TEST;
+use crate::REGISTER_MINI_TEST;
 
 pub fn run_tolerance_is_zero() -> TestResult {
     MINI_TEST!("Is Zero", {
         use crate::tolerance::TOLERANCE;
+
         let result = TOLERANCE.is_zero(1e-10);
 
         MINI_CHECK!(result);
@@ -13,6 +16,7 @@ pub fn run_tolerance_is_zero() -> TestResult {
 pub fn run_tolerance_is_close() -> TestResult {
     MINI_TEST!("Is Close", {
         use crate::tolerance::TOLERANCE;
+
         let result = TOLERANCE.is_close(1.0, 1.0 + 1e-7);
 
         MINI_CHECK!(result);
@@ -22,6 +26,7 @@ pub fn run_tolerance_is_close() -> TestResult {
 pub fn run_tolerance_is_positive() -> TestResult {
     MINI_TEST!("Is Positive", {
         use crate::tolerance::TOLERANCE;
+
         let result = TOLERANCE.is_positive(1.0);
 
         MINI_CHECK!(result);
@@ -31,6 +36,7 @@ pub fn run_tolerance_is_positive() -> TestResult {
 pub fn run_tolerance_is_negative() -> TestResult {
     MINI_TEST!("Is Negative", {
         use crate::tolerance::TOLERANCE;
+
         let result = TOLERANCE.is_negative(-1.0);
 
         MINI_CHECK!(result);
@@ -40,6 +46,7 @@ pub fn run_tolerance_is_negative() -> TestResult {
 pub fn run_tolerance_is_between() -> TestResult {
     MINI_TEST!("Is Between", {
         use crate::tolerance::TOLERANCE;
+
         let result = TOLERANCE.is_between(0.5, 0.0, 1.0);
 
         MINI_CHECK!(result);
@@ -50,6 +57,7 @@ pub fn run_tolerance_is_between() -> TestResult {
 pub fn run_tolerance_format_number() -> TestResult {
     MINI_TEST!("Format Number", {
         use crate::tolerance::TOLERANCE;
+
         let result = TOLERANCE.format_number(3.14159, 2);
 
         MINI_CHECK!(result == "3.14");
@@ -59,6 +67,7 @@ pub fn run_tolerance_format_number() -> TestResult {
 pub fn run_tolerance_key() -> TestResult {
     MINI_TEST!("Key", {
         use crate::tolerance::TOLERANCE;
+
         let result = TOLERANCE.key(1.0, 2.0, 3.0, -999);
 
         MINI_CHECK!(result == "1.000,2.000,3.000");
@@ -68,6 +77,7 @@ pub fn run_tolerance_key() -> TestResult {
 pub fn run_tolerance_to_radians() -> TestResult {
     MINI_TEST!("To Radians", {
         use crate::Tolerance;
+
         let r0 = Tolerance::to_radians(180.0);
         let r1 = Tolerance::to_radians(90.0);
         let r2 = Tolerance::to_radians(0.0);
@@ -81,6 +91,7 @@ pub fn run_tolerance_to_radians() -> TestResult {
 pub fn run_tolerance_to_degrees() -> TestResult {
     MINI_TEST!("To Degrees", {
         use crate::Tolerance;
+
         let d0 = Tolerance::to_degrees(Tolerance::PI);
         let d1 = Tolerance::to_degrees(Tolerance::PI / 2.0);
         let d2 = Tolerance::to_degrees(0.0);
@@ -104,17 +115,21 @@ pub fn run_tolerance_runtime_modification() -> TestResult {
 
         tolerance.set_absolute(1e-12);
         tolerance.set_relative(1e-12);
+
         MINI_CHECK!(tolerance.absolute() == 1e-12);
         MINI_CHECK!(tolerance.relative() == 1e-12);
 
         let close_with_tight = tolerance.is_close(1.0, 1.0 + 1e-11);
+
         MINI_CHECK!(!close_with_tight);
 
         tolerance.reset();
+
         MINI_CHECK!(tolerance.absolute() == 1e-9);
         MINI_CHECK!(tolerance.relative() == 1e-6);
 
         let close_with_default = tolerance.is_close(1.0, 1.0 + 1e-11);
+
         MINI_CHECK!(close_with_default);
     })
 }
@@ -134,6 +149,7 @@ pub fn run_tolerance_json_roundtrip() -> TestResult {
 
         let filename = "serialization/test_tolerance.json";
         tolerance.file_json_dump(filename).unwrap();
+
         let loaded = Tolerance::file_json_load(filename).unwrap();
         let parsed = Tolerance::file_json_loads(&tolerance.file_json_dumps().unwrap()).unwrap();
 
@@ -164,6 +180,7 @@ pub fn run_tolerance_protobuf_roundtrip() -> TestResult {
 
         let filename = "serialization/test_tolerance.bin";
         tolerance.pb_dump(filename).unwrap();
+
         let loaded = Tolerance::pb_load(filename).unwrap();
         let parsed = Tolerance::pb_loads(&tolerance.pb_dumps()).unwrap();
         let converted = Tolerance::from_proto(tolerance.to_proto());
@@ -199,6 +216,7 @@ pub fn run_tolerance_serialization_errors() -> TestResult {
 pub fn run_tolerance_unique_from_two_int() -> TestResult {
     MINI_TEST!("Unique From Two Int", {
         use crate::tolerance::unique_from_two_int;
+
         let r0 = unique_from_two_int(3, 7);
         let r1 = unique_from_two_int(7, 3);
 
@@ -210,6 +228,7 @@ pub fn run_tolerance_unique_from_two_int() -> TestResult {
 pub fn run_tolerance_wrap_index() -> TestResult {
     MINI_TEST!("Wrap Index", {
         use crate::tolerance::wrap_index;
+
         let r0 = wrap_index(0, 4);
         let r1 = wrap_index(3, 4);
         let r2 = wrap_index(4, 4);
@@ -227,10 +246,11 @@ pub fn run_tolerance_wrap_index() -> TestResult {
 pub fn run_tolerance_triangle_edge_by_angle() -> TestResult {
     MINI_TEST!("Triangle Edge By Angle", {
         use crate::tolerance::triangle_edge_by_angle;
+
         let r = triangle_edge_by_angle(1.0, 45.0);
+        let r2 = triangle_edge_by_angle(5.0, 0.0);
 
         MINI_CHECK!((r - 1.0).abs() < 1e-9);
-        let r2 = triangle_edge_by_angle(5.0, 0.0);
         MINI_CHECK!(r2.abs() < 1e-9);
     })
 }
@@ -240,6 +260,7 @@ pub fn run_tolerance_rad_deg() -> TestResult {
         use crate::tolerance::deg_to_rad;
         use crate::tolerance::rad_to_deg;
         use crate::Tolerance;
+
         let r0 = rad_to_deg(Tolerance::PI);
         let r1 = deg_to_rad(180.0);
         let r2 = deg_to_rad(rad_to_deg(1.234));
@@ -253,6 +274,7 @@ pub fn run_tolerance_rad_deg() -> TestResult {
 pub fn run_tolerance_count_digits() -> TestResult {
     MINI_TEST!("Count Digits", {
         use crate::tolerance::count_digits;
+
         let r0 = count_digits(0.0);
         let r1 = count_digits(1.0);
         let r2 = count_digits(9.9);
@@ -272,6 +294,7 @@ pub fn run_tolerance_count_digits() -> TestResult {
 pub fn run_tolerance_is_angle_zero() -> TestResult {
     MINI_TEST!("Is Angle Zero", {
         use crate::tolerance::TOLERANCE;
+
         let r0 = TOLERANCE.is_angle_zero(1e-8);
         let r1 = TOLERANCE.is_angle_zero(0.1);
 
@@ -283,6 +306,7 @@ pub fn run_tolerance_is_angle_zero() -> TestResult {
 pub fn run_tolerance_is_angles_close() -> TestResult {
     MINI_TEST!("Is Angles Close", {
         use crate::tolerance::TOLERANCE;
+
         let r0 = TOLERANCE.is_angles_close(1.0, 1.0 + 1e-8);
         let r1 = TOLERANCE.is_angles_close(1.0, 2.0);
 
@@ -308,6 +332,7 @@ pub fn run_tolerance_is_point_close() -> TestResult {
 pub fn run_tolerance_is_allclose() -> TestResult {
     MINI_TEST!("Is Allclose", {
         use crate::tolerance::TOLERANCE;
+
         let a = vec![1.0, 2.0, 3.0];
         let b = vec![1.0, 2.0, 3.0 + 1e-12];
         let c = vec![1.0, 2.0, 4.0];
@@ -320,6 +345,7 @@ pub fn run_tolerance_is_allclose() -> TestResult {
 pub fn run_tolerance_key_xy() -> TestResult {
     MINI_TEST!("Key Xy", {
         use crate::tolerance::TOLERANCE;
+
         let result = TOLERANCE.key_xy(1.0, 2.0, -999);
 
         MINI_CHECK!(result == "1.000,2.000");
@@ -330,6 +356,7 @@ pub fn run_tolerance_key_xy() -> TestResult {
 pub fn run_tolerance_round_to() -> TestResult {
     MINI_TEST!("Round To", {
         use crate::Tolerance;
+
         let r0 = Tolerance::round_to(3.14159, 2);
         let r1 = Tolerance::round_to(2.5, 0);
 
@@ -341,6 +368,7 @@ pub fn run_tolerance_round_to() -> TestResult {
 pub fn run_tolerance_precision_from_tolerance() -> TestResult {
     MINI_TEST!("Precision From Tolerance", {
         use crate::tolerance::TOLERANCE;
+
         let prec = TOLERANCE.precision_from_tolerance(-1.0);
 
         MINI_CHECK!(prec == 9);
@@ -350,6 +378,7 @@ pub fn run_tolerance_precision_from_tolerance() -> TestResult {
 pub fn run_tolerance_tolerance() -> TestResult {
     MINI_TEST!("Tolerance", {
         use crate::tolerance::TOLERANCE;
+
         let result = TOLERANCE.tolerance(1.0, 1e-6, 1e-9);
 
         MINI_CHECK!((result - (1e-6 + 1e-9)).abs() < 1e-18);
@@ -359,6 +388,7 @@ pub fn run_tolerance_tolerance() -> TestResult {
 pub fn run_tolerance_compare() -> TestResult {
     MINI_TEST!("Compare", {
         use crate::tolerance::TOLERANCE;
+
         let r0 = TOLERANCE.compare(1.0, 1.0 + 1e-7, 1e-6, 1e-9);
         let r1 = TOLERANCE.compare(1.0, 2.0, 1e-6, 1e-9);
 
@@ -370,6 +400,7 @@ pub fn run_tolerance_compare() -> TestResult {
 pub fn run_tolerance_is_finite() -> TestResult {
     MINI_TEST!("Is Finite", {
         use crate::tolerance::is_finite;
+
         let r0 = is_finite(1.0);
         let r1 = is_finite(f64::INFINITY);
 
@@ -398,10 +429,12 @@ pub fn run_tolerance_temporary() -> TestResult {
 
         let mut tolerance = Tolerance::default();
         let original = tolerance.absolute();
+
         let inside = tolerance.temporary(|guard| {
             guard.set_absolute(1e-12);
             guard.absolute() == 1e-12
         });
+
         let restored = tolerance.absolute() == original;
 
         MINI_CHECK!(inside);
