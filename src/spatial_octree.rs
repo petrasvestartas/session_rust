@@ -49,11 +49,14 @@ pub struct SpatialOctree {
 }
 
 impl SpatialOctree {
-    /// Constructs the tree over points.
-    pub fn new(points: Vec<Point>, root_spacing: f64, leaf_capacity: usize) -> Self {
+    // ═══════════════════════════════════════════════════════════════════════════
+    // Constructors
+    // ═══════════════════════════════════════════════════════════════════════════
+    /// Construct the tree over points.
+    pub fn new(points: &[Point], root_spacing: f64, leaf_capacity: usize) -> Self {
         let mut coords: Vec<f64> = Vec::with_capacity(points.len() * 3);
 
-        for p in &points {
+        for p in points {
             coords.push(p[0]);
             coords.push(p[1]);
             coords.push(p[2]);
@@ -68,7 +71,7 @@ impl SpatialOctree {
         tree
     }
 
-    /// Constructs the tree over flat [x, y, z, ...] coordinates.
+    /// Construct the tree over flat [x, y, z, ...] coordinates.
     pub fn from_coords(coords: &[f64], root_spacing: f64, leaf_capacity: usize) -> Self {
         let mut tree = SpatialOctree {
             nodes: Vec::new(),
@@ -79,7 +82,64 @@ impl SpatialOctree {
         tree
     }
 
-    /// Returns the min corner and edge length of the cube bounding coords.
+    // ═══════════════════════════════════════════════════════════════════════════
+    // Accessors
+    // ═══════════════════════════════════════════════════════════════════════════
+    /// Return the number of nodes.
+    pub fn node_count(&self) -> usize {
+        self.nodes.len()
+    }
+
+    /// Return the node cube center and edge length.
+    pub fn node_cube(&self, i: usize) -> (Point, f64) {
+        let node = &self.nodes[i];
+        let half = node.size * 0.5;
+
+        (
+            Point::new(node.min[0] + half, node.min[1] + half, node.min[2] + half),
+            node.size,
+        )
+    }
+
+    /// Return the node depth from the root.
+    pub fn node_level(&self, i: usize) -> usize {
+        self.nodes[i].level
+    }
+
+    /// Return the grid-accept spacing of a node.
+    pub fn node_spacing(&self, i: usize) -> f64 {
+        self.nodes[i].spacing
+    }
+
+    /// Return the node point range as (first, count) into order.
+    pub fn node_range(&self, i: usize) -> (usize, usize) {
+        let node = &self.nodes[i];
+
+        (node.first, node.count)
+    }
+
+    /// Return the present child node indices.
+    pub fn children(&self, i: usize) -> Vec<usize> {
+        let mut result: Vec<usize> = Vec::new();
+
+        for c in self.nodes[i].children {
+            if c != NULL_IDX {
+                result.push(c);
+            }
+        }
+
+        result
+    }
+
+    /// Return the point indices permuted so each node's points are contiguous.
+    pub fn order(&self) -> &[usize] {
+        &self.order
+    }
+
+    // ═══════════════════════════════════════════════════════════════════════════
+    // Build
+    // ═══════════════════════════════════════════════════════════════════════════
+    /// Return the min corner and edge length of the cube bounding coords.
     fn root_cube(&self, coords: &[f64]) -> ([f64; 3], f64) {
         let n = coords.len() / 3;
         let mut lo = [coords[0], coords[1], coords[2]];
@@ -107,7 +167,7 @@ impl SpatialOctree {
         (min, size)
     }
 
-    /// Builds the nodes by iterative subdivision over an explicit stack.
+    /// Build the nodes by iterative subdivision over an explicit stack.
     fn build(&mut self, coords: &[f64], root_spacing: f64, leaf_capacity: usize) {
         let n = coords.len() / 3;
 
@@ -119,6 +179,7 @@ impl SpatialOctree {
         let mut indices: Vec<usize> = (0..n).collect();
         let mut stack = [EMPTY_TASK; STACK_SIZE];
         let mut top = 0;
+
         self.push(
             &mut stack,
             &mut top,
@@ -138,6 +199,7 @@ impl SpatialOctree {
             top -= 1;
             let task = stack[top];
             let node = self.nodes.len();
+
             self.nodes.push(Node {
                 min: task.min,
                 size: task.size,
@@ -160,6 +222,7 @@ impl SpatialOctree {
 
             let bounds = self.accept(coords, &task, &mut indices);
             self.nodes[node].count = self.order.len() - self.nodes[node].first;
+
             let half = task.size * 0.5;
 
             for b in (0..8).rev() {
@@ -172,6 +235,7 @@ impl SpatialOctree {
                     task.min[1] + ((b >> 1) & 1) as f64 * half,
                     task.min[2] + ((b >> 2) & 1) as f64 * half,
                 ];
+
                 self.push(
                     &mut stack,
                     &mut top,
@@ -190,7 +254,7 @@ impl SpatialOctree {
         }
     }
 
-    /// Keeps one point per spacing cell in the node, buckets the rest by octant and returns the 9 octant bounds.
+    /// Keep one point per spacing cell in the node, bucket the rest by octant and return the 9 octant bounds.
     fn accept(&mut self, coords: &[f64], task: &Task, indices: &mut [usize]) -> [usize; 9] {
         let cells = ((task.size / task.spacing).ceil() as i64).max(1);
         let half = task.size * 0.5;
@@ -233,60 +297,10 @@ impl SpatialOctree {
         bounds
     }
 
-    /// Pushes a task onto the build stack.
+    /// Push a task onto the build stack.
     fn push(&self, stack: &mut [Task; STACK_SIZE], top: &mut usize, task: Task) {
         assert!(*top < STACK_SIZE);
         stack[*top] = task;
         *top += 1;
-    }
-
-    /// Returns the number of nodes.
-    pub fn node_count(&self) -> usize {
-        self.nodes.len()
-    }
-
-    /// Returns the node cube center and edge length.
-    pub fn node_cube(&self, i: usize) -> (Point, f64) {
-        let node = &self.nodes[i];
-        let half = node.size * 0.5;
-        (
-            Point::new(node.min[0] + half, node.min[1] + half, node.min[2] + half),
-            node.size,
-        )
-    }
-
-    /// Returns the node depth from the root.
-    pub fn node_level(&self, i: usize) -> usize {
-        self.nodes[i].level
-    }
-
-    /// Returns the grid-accept spacing of a node.
-    pub fn node_spacing(&self, i: usize) -> f64 {
-        self.nodes[i].spacing
-    }
-
-    /// Returns the node point range as (first, count) into order.
-    pub fn node_range(&self, i: usize) -> (usize, usize) {
-        let node = &self.nodes[i];
-
-        (node.first, node.count)
-    }
-
-    /// Returns the present child node indices.
-    pub fn children(&self, i: usize) -> Vec<usize> {
-        let mut result: Vec<usize> = Vec::new();
-
-        for c in self.nodes[i].children {
-            if c != NULL_IDX {
-                result.push(c);
-            }
-        }
-
-        result
-    }
-
-    /// Returns the point indices permuted so each node's points are contiguous.
-    pub fn order(&self) -> &[usize] {
-        &self.order
     }
 }
