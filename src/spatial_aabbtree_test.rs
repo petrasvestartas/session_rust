@@ -45,6 +45,7 @@ pub fn run_spatial_aabbtree_build_single() -> TestResult {
         use crate::AABB;
 
         let aabb = AABB::new(0.0, 0.0, 0.0, 1.0, 1.0, 1.0);
+
         let mut tree = SpatialAABBTree::new();
         tree.build(&[aabb]);
 
@@ -63,6 +64,7 @@ pub fn run_spatial_aabbtree_build_multiple() -> TestResult {
             AABB::new(5.0, 0.0, 0.0, 1.0, 1.0, 1.0),
             AABB::new(10.0, 0.0, 0.0, 1.0, 1.0, 1.0),
         ];
+
         let mut tree = SpatialAABBTree::new();
         tree.build(&aabbs);
 
@@ -77,9 +79,11 @@ pub fn run_spatial_aabbtree_node_count() -> TestResult {
         use crate::AABB;
 
         let mut aabbs: Vec<AABB> = Vec::new();
+
         for i in 0..100 {
             aabbs.push(AABB::new(i as f64, 0.0, 0.0, 0.5, 0.5, 0.5));
         }
+
         let mut tree = SpatialAABBTree::new();
         tree.build(&aabbs);
 
@@ -136,8 +140,10 @@ pub fn run_spatial_aabbtree_query_aabb() -> TestResult {
             AABB::new(5.0, 0.0, 0.0, 0.5, 0.5, 0.5),
             AABB::new(10.0, 0.0, 0.0, 0.5, 0.5, 0.5),
         ];
+
         let mut tree = SpatialAABBTree::new();
         tree.build(&aabbs);
+
         let hits = tree.query_aabb(&AABB::new(0.0, 0.0, 0.0, 1.0, 1.0, 1.0));
 
         MINI_CHECK!(hits.len() == 1);

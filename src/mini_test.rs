@@ -3844,6 +3844,11 @@ pub fn get_all_tests() -> Vec<RegisteredTest> {
         // SpatialAABBTree tests
         RegisteredTest {
             group: "SpatialAABBTree",
+            name: "Constructor",
+            func: run_spatial_aabbtree_constructor,
+        },
+        RegisteredTest {
+            group: "SpatialAABBTree",
             name: "Build Empty",
             func: run_spatial_aabbtree_build_empty,
         },
@@ -3871,11 +3876,6 @@ pub fn get_all_tests() -> Vec<RegisteredTest> {
             group: "SpatialAABBTree",
             name: "Mesh Point Aabb Matches Bvh",
             func: run_spatial_aabbtree_mesh_point_aabb_matches_bvh,
-        },
-        RegisteredTest {
-            group: "SpatialAABBTree",
-            name: "Constructor",
-            func: run_spatial_aabbtree_constructor,
         },
         RegisteredTest {
             group: "SpatialAABBTree",

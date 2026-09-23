@@ -3,14 +3,6 @@ use crate::aabb::AABB;
 const STACK_SIZE: usize = 64; // Depth bound of the explicit traversal stack.
 const NULL_IDX: i32 = -1; // Index of a missing child or object.
 
-/// Tree node.
-#[derive(Clone, Debug, Default)]
-pub struct Node {
-    pub aabb: AABB,     // Bounds of the subtree.
-    pub right: i32,     // Right child index, NULL_IDX on a leaf.
-    pub object_id: i32, // Primitive id on a leaf, NULL_IDX on an internal node.
-}
-
 /// Pending id range of the build stack.
 #[derive(Clone, Copy)]
 struct Range {
@@ -21,7 +13,7 @@ struct Range {
 }
 
 impl Range {
-    /// Constructs from id range, parent index and side.
+    /// Construct a range.
     fn new(lo: usize, hi: usize, parent: i32, is_left: bool) -> Self {
         Range {
             lo,
@@ -40,6 +32,14 @@ const EMPTY_RANGE: Range = Range {
     is_left: false,
 };
 
+/// Tree node.
+#[derive(Clone, Debug, Default)]
+pub struct Node {
+    pub aabb: AABB,     // Bounds of the subtree.
+    pub right: i32,     // Right child index, NULL_IDX on a leaf.
+    pub object_id: i32, // Primitive id on a leaf, NULL_IDX on an internal node.
+}
+
 /// Flat AABB tree with longest-axis median split; the left child of node i is i + 1, the right child is stored.
 #[derive(Clone, Debug, Default)]
 pub struct SpatialAABBTree {
@@ -47,27 +47,38 @@ pub struct SpatialAABBTree {
 }
 
 impl SpatialAABBTree {
-    /// Constructs an empty tree.
+    // ═══════════════════════════════════════════════════════════════════════════
+    // Constructors
+    // ═══════════════════════════════════════════════════════════════════════════
+    /// Construct an empty tree.
     pub fn new() -> Self {
         Self::default()
     }
 
-    /// Returns whether the tree has no nodes.
+    // ═══════════════════════════════════════════════════════════════════════════
+    // Accessors
+    // ═══════════════════════════════════════════════════════════════════════════
+    /// Return whether the tree has no nodes.
     pub fn empty(&self) -> bool {
         self.nodes.is_empty()
     }
 
-    /// Returns the node count.
+    /// Return the node count.
     pub fn size(&self) -> usize {
         self.nodes.len()
     }
 
-    /// Builds the tree over the boxes, one leaf per box.
+    // ═══════════════════════════════════════════════════════════════════════════
+    // Mutators
+    // ═══════════════════════════════════════════════════════════════════════════
+    /// Build the tree over the boxes, one leaf per box.
     pub fn build(&mut self, aabbs: &[AABB]) {
-        self.nodes.clear();
         let n = aabbs.len();
         let mut ids: Vec<usize> = (0..n).collect();
+
+        self.nodes.clear();
         self.nodes.reserve(2 * n);
+
         let mut stack = [EMPTY_RANGE; STACK_SIZE];
         let mut top = 0;
 
@@ -81,6 +92,7 @@ impl SpatialAABBTree {
             let range = stack[top];
             let node = self.nodes.len();
             let aabb = self.bounds(&ids, range.lo, range.hi, aabbs);
+
             self.nodes.push(Node {
                 aabb,
                 right: NULL_IDX,
@@ -98,10 +110,12 @@ impl SpatialAABBTree {
 
             let axis = self.longest_axis(&self.nodes[node].aabb);
             let mid = range.lo + (range.hi - range.lo) / 2;
+
             ids[range.lo..range.hi].select_nth_unstable_by(mid - range.lo, |&a, &b| {
                 self.center(&aabbs[a], axis)
                     .total_cmp(&self.center(&aabbs[b], axis))
             });
+
             assert!(top + 2 <= STACK_SIZE);
             stack[top] = Range::new(mid, range.hi, node as i32, false);
             top += 1;
@@ -110,9 +124,13 @@ impl SpatialAABBTree {
         }
     }
 
-    /// Returns the ids of every leaf box that intersects query.
+    // ═══════════════════════════════════════════════════════════════════════════
+    // Queries
+    // ═══════════════════════════════════════════════════════════════════════════
+    /// Return the ids of every leaf box that intersects query.
     pub fn query_aabb(&self, query: &AABB) -> Vec<i32> {
         let mut hits: Vec<i32> = Vec::new();
+
         let mut stack = [0usize; STACK_SIZE];
         let mut top = 0;
 
@@ -145,7 +163,10 @@ impl SpatialAABBTree {
         hits
     }
 
-    /// Returns the box enclosing ids[lo, hi).
+    // ═══════════════════════════════════════════════════════════════════════════
+    // Build
+    // ═══════════════════════════════════════════════════════════════════════════
+    /// Return the box enclosing ids[lo, hi).
     fn bounds(&self, ids: &[usize], lo: usize, hi: usize, aabbs: &[AABB]) -> AABB {
         let mut aabb = aabbs[ids[lo]];
 
@@ -156,7 +177,7 @@ impl SpatialAABBTree {
         aabb
     }
 
-    /// Returns the axis of the largest half-size.
+    /// Return the axis of the largest half-size.
     fn longest_axis(&self, aabb: &AABB) -> usize {
         if aabb.hx >= aabb.hy && aabb.hx >= aabb.hz {
             return 0;
@@ -169,7 +190,7 @@ impl SpatialAABBTree {
         2
     }
 
-    /// Returns the center coordinate of aabb along axis.
+    /// Return the center coordinate of aabb along axis.
     fn center(&self, aabb: &AABB, axis: usize) -> f64 {
         if axis == 0 {
             return aabb.cx;
