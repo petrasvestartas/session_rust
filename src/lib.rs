@@ -152,7 +152,7 @@ pub use quaternion::Quaternion;
 pub use remesh_nurbssurface_adaptive::RemeshNurbsSurfaceAdaptive;
 pub use remesh_nurbssurface_grid::RemeshNurbsSurfaceGrid;
 pub use render_mesh::{GpuCache, GpuMesh, RenderMesh, RenderVertex};
-pub use session::{Geometry, Session};
+pub use session::{Geometry, Item, Session};
 pub use session_config::SessionConfig;
 pub use spatial_aabbtree::SpatialAABBTree;
 pub use spatial_bvh::SpatialBVH;

@@ -954,7 +954,7 @@ pub fn run_session_undo_remove() -> TestResult {
         );
         MINI_CHECK!(session.graph.has_edge((&a_guid, &b_guid)));
         MINI_CHECK!(
-            session.graph.edge_attribute(&a_guid, &b_guid, None) == Some("connection".to_string())
+            session.graph.edge_label(&a_guid, &b_guid, None) == Some("connection".to_string())
         );
         MINI_CHECK!(session.xform(&b_guid) == shift);
 
@@ -1101,6 +1101,548 @@ pub fn run_session_history_capacity() -> TestResult {
         MINI_CHECK!(!session.history.can_undo());
         MINI_CHECK!(session.objects.points.len() == 6);
         MINI_CHECK!(TOLERANCE.is_close(session.objects.points[5][0], 5.0));
+    })
+}
+
+pub fn run_session_str_hierarchy() -> TestResult {
+    MINI_TEST!("Str Hierarchy", {
+        use crate::{Point, Session};
+
+        let mut session = Session::new("blocks");
+        let group = session.add_group("Group");
+        session.add_point(Point::new(0.0, 0.0, 0.0), Some(&group));
+        session.add_point(Point::new(1.0, 0.0, 0.0), Some(&group));
+        let text = session.str();
+
+        MINI_CHECK!(text.contains("Spatial Hierarchy"));
+        MINI_CHECK!(text.contains("Element Interactions"));
+        MINI_CHECK!(text.contains("\u{2514}\u{2500}\u{2500} "));
+        MINI_CHECK!(text.contains("<Tree with "));
+        MINI_CHECK!(text.contains("<Graph with "));
+        MINI_CHECK!(session.repr().starts_with("Session(name=blocks"));
+    })
+}
+
+pub fn run_session_add_definition() -> TestResult {
+    MINI_TEST!("Add Definition", {
+        use crate::{Geometry, Point, Session, Xform};
+        use std::rc::Rc;
+
+        let mut session = Session::default();
+        let bx = Geometry::Mesh(Rc::new(create_box(&Point::new(0.0, 0.0, 0.0), 2.0)));
+        let guid = session.add_definition(bx.clone());
+        let again = session.add_definition(bx.clone());
+        session.set_xform(&guid, Xform::translation(1.0, 0.0, 0.0));
+        let point = Point::new(1.0, 2.0, 3.0);
+        let point_guid = point.guid().to_string();
+        session.add_point(point, None);
+        let taken = session.add_definition(session.lookup[&point_guid].clone());
+
+        MINI_CHECK!(guid == bx.guid());
+        MINI_CHECK!(again == guid);
+        MINI_CHECK!(taken.is_empty());
+        MINI_CHECK!(session.definitions.meshes.len() == 1);
+        MINI_CHECK!(session.definition_lookup.contains_key(&guid));
+        MINI_CHECK!(!session.lookup.contains_key(&guid));
+        MINI_CHECK!(session.order().len() == 1);
+        MINI_CHECK!(!session.graph.has_node(&guid));
+        MINI_CHECK!(session.tree.get_node_by_name(&guid).is_none());
+        MINI_CHECK!(session.xforms.is_empty());
+    })
+}
+
+pub fn run_session_add_instance() -> TestResult {
+    MINI_TEST!("Add Instance", {
+        use crate::{Geometry, InstanceRef, Point, Session, Xform};
+        use std::rc::Rc;
+
+        let mut session = Session::default();
+        let group = session.add_group("bay");
+        let definition = session.add_definition(Geometry::Mesh(Rc::new(create_box(
+            &Point::new(0.0, 0.0, 0.0),
+            2.0,
+        ))));
+        let mut instance = InstanceRef::new(&definition, Xform::translation(0.0, 0.0, 3.0));
+        instance.name = "column".to_string();
+        let guid = instance.guid().to_string();
+        let node = session
+            .add_instance(instance, Xform::translation(10.0, 0.0, 0.0), Some(&group))
+            .unwrap();
+        let orphan = session.add_instance(
+            InstanceRef::new("missing", Xform::identity()),
+            Xform::identity(),
+            None,
+        );
+
+        MINI_CHECK!(node.borrow().name == guid);
+        MINI_CHECK!(group.borrow().children()[0].borrow().name == guid);
+        MINI_CHECK!(session.graph.node_label(&guid, None) == Some("instance_column".to_string()));
+        MINI_CHECK!(session.objects.instances.len() == 1);
+        MINI_CHECK!(session.instance_lookup[&guid].xform == Xform::identity());
+        MINI_CHECK!(session.xform(&guid) == Xform::translation(10.0, 0.0, 3.0));
+        MINI_CHECK!(orphan.is_none());
+        MINI_CHECK!(session.order().is_empty());
+    })
+}
+
+pub fn run_session_definition_of() -> TestResult {
+    MINI_TEST!("Definition Of", {
+        use crate::session::FromGeometry;
+        use crate::{Geometry, InstanceRef, Mesh, Point, Session, Xform};
+        use std::rc::Rc;
+
+        let mut session = Session::default();
+        let definition = session.add_definition(Geometry::Mesh(Rc::new(create_box(
+            &Point::new(0.0, 0.0, 0.0),
+            2.0,
+        ))));
+        let instance = InstanceRef::new(&definition, Xform::identity());
+        let guid = instance.guid().to_string();
+        session.add_instance(instance, Xform::identity(), None);
+        let found = session.definition_of(&guid);
+
+        MINI_CHECK!(found.is_some());
+        MINI_CHECK!(Mesh::from_geometry(found.as_ref().unwrap()).unwrap().guid() == definition);
+        MINI_CHECK!(session.definition_of(&definition).is_none());
+        MINI_CHECK!(session.definition_of("missing").is_none());
+    })
+}
+
+pub fn run_session_instances_of() -> TestResult {
+    MINI_TEST!("Instances Of", {
+        use crate::{Geometry, InstanceRef, Point, Session, Xform};
+        use std::rc::Rc;
+
+        let mut session = Session::default();
+        let definition = session.add_definition(Geometry::Mesh(Rc::new(create_box(
+            &Point::new(0.0, 0.0, 0.0),
+            2.0,
+        ))));
+        let first = InstanceRef::new(&definition, Xform::identity());
+        let second = InstanceRef::new(&definition, Xform::identity());
+        let first_guid = first.guid().to_string();
+        let second_guid = second.guid().to_string();
+        session.add_instance(first, Xform::identity(), None);
+        session.add_instance(second, Xform::identity(), None);
+        let guids = session.instances_of(&definition);
+
+        MINI_CHECK!(guids.len() == 2);
+        MINI_CHECK!(guids[0] == first_guid);
+        MINI_CHECK!(guids[1] == second_guid);
+        MINI_CHECK!(session.instances_of("missing").is_empty());
+    })
+}
+
+pub fn run_session_world_geometry() -> TestResult {
+    MINI_TEST!("World Geometry", {
+        use crate::session::FromGeometry;
+        use crate::{Geometry, InstanceRef, Mesh, Point, Session, Xform};
+        use std::rc::Rc;
+
+        let mut session = Session::default();
+        let definition = session.add_definition(Geometry::Mesh(Rc::new(create_box(
+            &Point::new(0.0, 0.0, 0.0),
+            2.0,
+        ))));
+        let mut instance = InstanceRef::new(&definition, Xform::identity());
+        instance.name = "box".to_string();
+        let guid = instance.guid().to_string();
+        session.add_instance(instance, Xform::translation(10.0, 0.0, 0.0), None);
+        let point = Point::new(1.0, 2.0, 3.0);
+        let point_guid = point.guid().to_string();
+        session.add_point(point, None);
+        session.set_xform(&point_guid, Xform::translation(0.0, 0.0, 5.0));
+
+        let resolved = session.world_geometry(&guid).unwrap();
+        let placed = session.world_geometry(&point_guid).unwrap();
+        let mesh = Mesh::from_geometry(&resolved).unwrap();
+        let moved = Point::from_geometry(&placed).unwrap();
+        let local = Mesh::from_geometry(&session.definition_lookup[&definition]).unwrap();
+
+        MINI_CHECK!(mesh.guid() == guid);
+        MINI_CHECK!(mesh.name == "box");
+        MINI_CHECK!(TOLERANCE.is_close(mesh.vertex_point(0).unwrap()[0], 9.0));
+        MINI_CHECK!(TOLERANCE.is_close(local.vertex_point(0).unwrap()[0], -1.0));
+        MINI_CHECK!(TOLERANCE.is_close(moved[2], 8.0));
+        MINI_CHECK!(TOLERANCE.is_close(
+            Point::from_geometry(&session.lookup[&point_guid]).unwrap()[2],
+            3.0
+        ));
+        MINI_CHECK!(session.world_geometry("missing").is_none());
+    })
+}
+
+pub fn run_session_get_geometry_resolves_instances() -> TestResult {
+    MINI_TEST!("Get Geometry Resolves Instances", {
+        use crate::{Geometry, InstanceRef, Point, Session, Xform};
+        use std::rc::Rc;
+
+        let mut session = Session::default();
+        let definition = session.add_definition(Geometry::Mesh(Rc::new(create_box(
+            &Point::new(0.0, 0.0, 0.0),
+            2.0,
+        ))));
+        let group = session.add_group("row");
+        session.set_xform("row", Xform::translation(0.0, 5.0, 0.0));
+        session.add_instance(
+            InstanceRef::new(&definition, Xform::identity()),
+            Xform::translation(10.0, 0.0, 0.0),
+            Some(&group),
+        );
+        session.add_instance(
+            InstanceRef::new(&definition, Xform::identity()),
+            Xform::translation(20.0, 0.0, 0.0),
+            Some(&group),
+        );
+
+        let geometry = session.get_geometry();
+        let corner = geometry.meshes[1].vertex_point(0).unwrap();
+
+        MINI_CHECK!(geometry.instances.is_empty());
+        MINI_CHECK!(geometry.meshes.len() == 2);
+        MINI_CHECK!(TOLERANCE.is_close(corner[0], 19.0));
+        MINI_CHECK!(TOLERANCE.is_close(corner[1], 4.0));
+        MINI_CHECK!(session.objects.instances.len() == 2);
+        MINI_CHECK!(session.objects.meshes.is_empty());
+    })
+}
+
+pub fn run_session_replace_definition() -> TestResult {
+    MINI_TEST!("Replace Definition", {
+        use crate::session::FromGeometry;
+        use crate::{Geometry, InstanceRef, Mesh, Point, Session, Xform};
+        use std::rc::Rc;
+
+        let mut session = Session::default();
+        let definition = session.add_definition(Geometry::Mesh(Rc::new(create_box(
+            &Point::new(0.0, 0.0, 0.0),
+            2.0,
+        ))));
+        let first = InstanceRef::new(&definition, Xform::identity());
+        let second = InstanceRef::new(&definition, Xform::identity());
+        let second_guid = second.guid().to_string();
+        session.add_instance(first, Xform::translation(10.0, 0.0, 0.0), None);
+        session.add_instance(second, Xform::translation(20.0, 0.0, 0.0), None);
+
+        let replaced = session.replace_definition(
+            &definition,
+            Geometry::Mesh(Rc::new(create_box(&Point::new(0.0, 0.0, 0.0), 4.0))),
+        );
+        let missing = session.replace_definition(
+            "missing",
+            Geometry::Mesh(Rc::new(create_box(&Point::new(0.0, 0.0, 0.0), 4.0))),
+        );
+        let resolved = session.world_geometry(&second_guid).unwrap();
+        let mesh = Mesh::from_geometry(&resolved).unwrap();
+
+        MINI_CHECK!(replaced);
+        MINI_CHECK!(!missing);
+        MINI_CHECK!(session.definitions.meshes.len() == 1);
+        MINI_CHECK!(session.definitions.meshes[0].guid() == definition);
+        MINI_CHECK!(TOLERANCE.is_close(mesh.vertex_point(0).unwrap()[0], 18.0));
+    })
+}
+
+pub fn run_session_remove_definition() -> TestResult {
+    MINI_TEST!("Remove Definition", {
+        use crate::{Geometry, InstanceRef, Point, Session, Xform};
+        use std::rc::Rc;
+
+        let mut session = Session::default();
+        let definition = session.add_definition(Geometry::Mesh(Rc::new(create_box(
+            &Point::new(0.0, 0.0, 0.0),
+            2.0,
+        ))));
+        let instance = InstanceRef::new(&definition, Xform::identity());
+        let guid = instance.guid().to_string();
+        session.add_instance(instance, Xform::identity(), None);
+
+        let refused = !session.remove_definition(&definition);
+        session.remove_object(&guid);
+        let removed = session.remove_definition(&definition);
+
+        MINI_CHECK!(refused);
+        MINI_CHECK!(removed);
+        MINI_CHECK!(session.definitions.meshes.is_empty());
+        MINI_CHECK!(session.definition_lookup.is_empty());
+        MINI_CHECK!(session.objects.instances.is_empty());
+        MINI_CHECK!(!session.remove_definition("missing"));
+    })
+}
+
+pub fn run_session_to_instance() -> TestResult {
+    MINI_TEST!("To Instance", {
+        use crate::session::FromGeometry;
+        use crate::{Geometry, Mesh, Point, Session, Xform};
+        use std::rc::Rc;
+
+        let mut session = Session::default();
+        let group = session.add_group("bay");
+        let definition = session.add_definition(Geometry::Mesh(Rc::new(create_box(
+            &Point::new(0.0, 0.0, 0.0),
+            2.0,
+        ))));
+        let point = Point::new(0.0, 0.0, 0.0);
+        let point_guid = point.guid().to_string();
+        let mut bx = create_box(&Point::new(5.0, 0.0, 0.0), 2.0);
+        bx.name = "column".to_string();
+        let guid = bx.guid().to_string();
+        session.add_point(point, Some(&group));
+        session.add_mesh(bx, Some(&group));
+        session.add_edge(&point_guid, &guid, "contact");
+        session.set_xform(&guid, Xform::translation(0.0, 0.0, 1.0));
+
+        let placed = session.world_geometry(&guid).unwrap();
+        let before = Mesh::from_geometry(&placed)
+            .unwrap()
+            .vertex_point(0)
+            .unwrap();
+        let converted = session.to_instance(&guid, &definition, Xform::translation(5.0, 0.0, 0.0));
+        let resolved = session.world_geometry(&guid).unwrap();
+        let after = Mesh::from_geometry(&resolved)
+            .unwrap()
+            .vertex_point(0)
+            .unwrap();
+
+        MINI_CHECK!(converted);
+        MINI_CHECK!(session.objects.meshes.is_empty());
+        MINI_CHECK!(session.instance_lookup[&guid].name == "column");
+        MINI_CHECK!(session.instance_lookup[&guid].definition_guid == definition);
+        MINI_CHECK!(group.borrow().children()[1].borrow().name == guid);
+        MINI_CHECK!(session.graph.has_edge((&point_guid, &guid)));
+        MINI_CHECK!(session.graph.node_label(&guid, None) == Some("instance_column".to_string()));
+        MINI_CHECK!(TOLERANCE.is_close(before[0], after[0]));
+        MINI_CHECK!(TOLERANCE.is_close(before[2], after[2]));
+        MINI_CHECK!(!session.to_instance(&guid, &definition, Xform::identity()));
+    })
+}
+
+pub fn run_session_explode() -> TestResult {
+    MINI_TEST!("Explode", {
+        use crate::element::ElementFeature;
+        use crate::session::FromGeometry;
+        use crate::{Element, Geometry, InstanceRef, Point, Polyline, Session, Xform};
+        use std::rc::Rc;
+
+        let mut session = Session::default();
+        let definition = session.add_definition(Geometry::Element(Rc::new(Element::from_mesh(
+            create_box(&Point::new(0.0, 0.0, 0.0), 2.0),
+            "plate",
+        ))));
+        let mut instance = InstanceRef::new(&definition, Xform::identity());
+        instance.name = "deck".to_string();
+        instance.features.push(ElementFeature::new(
+            "contact",
+            0,
+            vec![Polyline::new(vec![
+                Point::new(0.0, 0.0, 0.0),
+                Point::new(1.0, 0.0, 0.0),
+            ])],
+            "",
+        ));
+        let guid = instance.guid().to_string();
+        let feature = instance.features[0].guid().to_string();
+        let point = Point::new(0.0, 0.0, 0.0);
+        let point_guid = point.guid().to_string();
+        session.add_point(point, None);
+        session.add_instance(instance, Xform::translation(10.0, 0.0, 0.0), None);
+        session.add_edge(&point_guid, &guid, "contact");
+
+        let exploded = session.explode(&guid);
+        let element = Element::from_geometry(&session.lookup[&guid]).unwrap();
+
+        MINI_CHECK!(exploded);
+        MINI_CHECK!(session.objects.instances.is_empty());
+        MINI_CHECK!(element.name == "deck");
+        MINI_CHECK!(element.features().len() == 1);
+        MINI_CHECK!(element.features()[0].guid() == feature);
+        MINI_CHECK!(session.xform(&guid) == Xform::translation(10.0, 0.0, 0.0));
+        MINI_CHECK!(session.graph.has_edge((&point_guid, &guid)));
+        MINI_CHECK!(session.graph.node_label(&guid, None) == Some("element_deck".to_string()));
+        MINI_CHECK!(session.definitions.elements.len() == 1);
+        MINI_CHECK!(!session.explode(&guid));
+    })
+}
+
+pub fn run_session_undo_instance() -> TestResult {
+    MINI_TEST!("Undo Instance", {
+        use crate::{Geometry, InstanceRef, Point, Session, Xform};
+        use std::rc::Rc;
+
+        let mut session = Session::default();
+        let group = session.add_group("bay");
+        let definition = session.add_definition(Geometry::Mesh(Rc::new(create_box(
+            &Point::new(0.0, 0.0, 0.0),
+            2.0,
+        ))));
+        let point = Point::new(0.0, 0.0, 0.0);
+        let point_guid = point.guid().to_string();
+        let bx = create_box(&Point::new(0.0, 0.0, 0.0), 2.0);
+        let guid = bx.guid().to_string();
+        session.add_point(point, Some(&group));
+        session.add_mesh(bx, Some(&group));
+        session.add_edge(&point_guid, &guid, "contact");
+        let edge = session.graph.edges[&point_guid][&guid].guid().to_string();
+        let order = session.order();
+        let tree = session.tree.str();
+        let label = session.graph.node_label(&guid, None);
+
+        session.begin("to instance");
+        session.to_instance(&guid, &definition, Xform::identity());
+        session.commit();
+        session.begin("explode");
+        session.explode(&guid);
+        session.commit();
+        session.undo();
+        let instanced = session.instance_lookup.contains_key(&guid) && session.tree.str() == tree;
+        session.undo();
+
+        let instance = InstanceRef::new(&definition, Xform::identity());
+        let added = instance.guid().to_string();
+        session.begin("add");
+        session.add_instance(instance, Xform::translation(1.0, 0.0, 0.0), Some(&group));
+        session.commit();
+        session.undo();
+        let gone = session.instance_lookup.is_empty() && session.xforms.is_empty();
+        session.redo();
+
+        MINI_CHECK!(instanced);
+        MINI_CHECK!(gone);
+        MINI_CHECK!(session.objects.meshes[0].guid() == guid);
+        MINI_CHECK!(session.graph.has_edge((&point_guid, &guid)));
+        MINI_CHECK!(session.graph.edges[&guid][&point_guid].guid() == edge);
+        MINI_CHECK!(session.graph.node_label(&guid, None) == label);
+        MINI_CHECK!(session.order() == order);
+        MINI_CHECK!(session.xform(&added) == Xform::translation(1.0, 0.0, 0.0));
+        MINI_CHECK!(group.borrow().children()[2].borrow().name == added);
+    })
+}
+
+pub fn run_session_instance_json_roundtrip() -> TestResult {
+    MINI_TEST!("Instance Json Roundtrip", {
+        use crate::{Geometry, InstanceRef, Point, Session, Xform};
+        use std::rc::Rc;
+
+        let mut session = Session::default();
+        let definition = session.add_definition(Geometry::Mesh(Rc::new(create_box(
+            &Point::new(0.0, 0.0, 0.0),
+            2.0,
+        ))));
+        let instance = InstanceRef::new(&definition, Xform::identity());
+        let guid = instance.guid().to_string();
+        session.add_instance(instance, Xform::translation(10.0, 0.0, 0.0), None);
+
+        let fname = "serialization/test_session_instance.json";
+        session.file_json_dump(fname);
+        let loaded = Session::file_json_load(fname);
+        let mut data: serde_json::Value =
+            serde_json::from_str(&session.jsondump().unwrap()).unwrap();
+        data["objects"]["instances"][0]["xform"] =
+            serde_json::to_value(Xform::translation(0.0, 0.0, 1.0)).unwrap();
+        let folded = Session::jsonload(&data.to_string()).unwrap();
+
+        MINI_CHECK!(loaded.definitions.meshes.len() == 1);
+        MINI_CHECK!(loaded.instance_lookup.contains_key(&guid));
+        MINI_CHECK!(loaded.definition_of(&guid).is_some());
+        MINI_CHECK!(loaded.xform(&guid) == Xform::translation(10.0, 0.0, 0.0));
+        MINI_CHECK!(folded.xform(&guid) == Xform::translation(10.0, 0.0, 1.0));
+        MINI_CHECK!(folded.instance_lookup[&guid].xform == Xform::identity());
+    })
+}
+
+pub fn run_session_instance_protobuf_roundtrip() -> TestResult {
+    MINI_TEST!("Instance Protobuf Roundtrip", {
+        use crate::element::ElementFeature;
+        use crate::{Geometry, InstanceRef, Point, Polyline, Session, Xform};
+        use prost::Message;
+        use std::rc::Rc;
+
+        let mut session = Session::default();
+        let definition = session.add_definition(Geometry::Mesh(Rc::new(create_box(
+            &Point::new(0.0, 0.0, 0.0),
+            2.0,
+        ))));
+        let mut instance = InstanceRef::new(&definition, Xform::identity());
+        instance.features.push(ElementFeature::new(
+            "contact",
+            0,
+            vec![Polyline::new(vec![
+                Point::new(0.0, 0.0, 0.0),
+                Point::new(1.0, 0.0, 0.0),
+            ])],
+            "",
+        ));
+        let guid = instance.guid().to_string();
+        let feature = instance.features[0].guid().to_string();
+        session.add_instance(instance, Xform::translation(10.0, 0.0, 0.0), None);
+
+        let fname = "serialization/test_session_instance.bin";
+        session.pb_dump(fname);
+        let loaded = Session::pb_load(fname);
+        let plain =
+            crate::proto::Session::decode(Session::default().pb_dumps().as_slice()).unwrap();
+
+        MINI_CHECK!(loaded.definitions.meshes.len() == 1);
+        MINI_CHECK!(loaded.instance_lookup[&guid].features.len() == 1);
+        MINI_CHECK!(loaded.instance_lookup[&guid].features[0].guid() == feature);
+        MINI_CHECK!(loaded.definition_of(&guid).is_some());
+        MINI_CHECK!(loaded.xform(&guid) == Xform::translation(10.0, 0.0, 0.0));
+        MINI_CHECK!(plain.definitions.is_none());
+    })
+}
+
+pub fn run_session_get_collisions_instances() -> TestResult {
+    MINI_TEST!("Get Collisions Instances", {
+        use crate::{Geometry, InstanceRef, Point, Session, Xform};
+        use std::rc::Rc;
+
+        let mut session = Session::default();
+        let definition = session.add_definition(Geometry::Mesh(Rc::new(create_box(
+            &Point::new(0.0, 0.0, 0.0),
+            2.0,
+        ))));
+        let first = InstanceRef::new(&definition, Xform::identity());
+        let second = InstanceRef::new(&definition, Xform::identity());
+        let third = InstanceRef::new(&definition, Xform::identity());
+        let first_guid = first.guid().to_string();
+        let second_guid = second.guid().to_string();
+        let third_guid = third.guid().to_string();
+        session.add_instance(first, Xform::identity(), None);
+        session.add_instance(second, Xform::translation(1.0, 0.0, 0.0), None);
+        session.add_instance(third, Xform::translation(100.0, 0.0, 0.0), None);
+
+        let pairs = session.get_collisions();
+
+        MINI_CHECK!(pairs.len() == 1);
+        MINI_CHECK!(session.graph.has_edge((&first_guid, &second_guid)));
+        MINI_CHECK!(!session.graph.has_edge((&first_guid, &third_guid)));
+    })
+}
+
+pub fn run_session_ray_cast_instance() -> TestResult {
+    MINI_TEST!("Ray Cast Instance", {
+        use crate::{Geometry, InstanceRef, Point, Session, Vector, Xform};
+        use std::rc::Rc;
+
+        let mut session = Session::default();
+        let definition = session.add_definition(Geometry::Mesh(Rc::new(create_box(
+            &Point::new(0.0, 0.0, 0.0),
+            2.0,
+        ))));
+        let instance = InstanceRef::new(&definition, Xform::identity());
+        let guid = instance.guid().to_string();
+        session.add_instance(instance, Xform::translation(100.0, 0.0, 0.0), None);
+
+        let hits = session.ray_cast(
+            &Point::new(100.0, 0.0, 5.0),
+            &Vector::new(0.0, 0.0, -1.0),
+            1e-3,
+        );
+
+        MINI_CHECK!(hits.len() == 1);
+        MINI_CHECK!(hits[0].guid == guid);
+        MINI_CHECK!(TOLERANCE.is_close(hits[0].hit_point[0], 100.0));
+        MINI_CHECK!(TOLERANCE.is_close(hits[0].hit_point[2], 1.0));
     })
 }
 
@@ -1315,4 +1857,84 @@ REGISTER_MINI_TEST!(
     "Session",
     "History Capacity",
     crate::session_test::run_session_history_capacity
+);
+REGISTER_MINI_TEST!(
+    "Session",
+    "Str Hierarchy",
+    crate::session_test::run_session_str_hierarchy
+);
+REGISTER_MINI_TEST!(
+    "Session",
+    "Add Definition",
+    crate::session_test::run_session_add_definition
+);
+REGISTER_MINI_TEST!(
+    "Session",
+    "Add Instance",
+    crate::session_test::run_session_add_instance
+);
+REGISTER_MINI_TEST!(
+    "Session",
+    "Definition Of",
+    crate::session_test::run_session_definition_of
+);
+REGISTER_MINI_TEST!(
+    "Session",
+    "Instances Of",
+    crate::session_test::run_session_instances_of
+);
+REGISTER_MINI_TEST!(
+    "Session",
+    "World Geometry",
+    crate::session_test::run_session_world_geometry
+);
+REGISTER_MINI_TEST!(
+    "Session",
+    "Get Geometry Resolves Instances",
+    crate::session_test::run_session_get_geometry_resolves_instances
+);
+REGISTER_MINI_TEST!(
+    "Session",
+    "Replace Definition",
+    crate::session_test::run_session_replace_definition
+);
+REGISTER_MINI_TEST!(
+    "Session",
+    "Remove Definition",
+    crate::session_test::run_session_remove_definition
+);
+REGISTER_MINI_TEST!(
+    "Session",
+    "To Instance",
+    crate::session_test::run_session_to_instance
+);
+REGISTER_MINI_TEST!(
+    "Session",
+    "Explode",
+    crate::session_test::run_session_explode
+);
+REGISTER_MINI_TEST!(
+    "Session",
+    "Undo Instance",
+    crate::session_test::run_session_undo_instance
+);
+REGISTER_MINI_TEST!(
+    "Session",
+    "Instance Json Roundtrip",
+    crate::session_test::run_session_instance_json_roundtrip
+);
+REGISTER_MINI_TEST!(
+    "Session",
+    "Instance Protobuf Roundtrip",
+    crate::session_test::run_session_instance_protobuf_roundtrip
+);
+REGISTER_MINI_TEST!(
+    "Session",
+    "Get Collisions Instances",
+    crate::session_test::run_session_get_collisions_instances
+);
+REGISTER_MINI_TEST!(
+    "Session",
+    "Ray Cast Instance",
+    crate::session_test::run_session_ray_cast_instance
 );

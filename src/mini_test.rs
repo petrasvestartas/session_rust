@@ -3101,6 +3101,86 @@ pub fn get_all_tests() -> Vec<RegisteredTest> {
             name: "History Capacity",
             func: run_session_history_capacity,
         },
+        RegisteredTest {
+            group: "Session",
+            name: "Str Hierarchy",
+            func: run_session_str_hierarchy,
+        },
+        RegisteredTest {
+            group: "Session",
+            name: "Add Definition",
+            func: run_session_add_definition,
+        },
+        RegisteredTest {
+            group: "Session",
+            name: "Add Instance",
+            func: run_session_add_instance,
+        },
+        RegisteredTest {
+            group: "Session",
+            name: "Definition Of",
+            func: run_session_definition_of,
+        },
+        RegisteredTest {
+            group: "Session",
+            name: "Instances Of",
+            func: run_session_instances_of,
+        },
+        RegisteredTest {
+            group: "Session",
+            name: "World Geometry",
+            func: run_session_world_geometry,
+        },
+        RegisteredTest {
+            group: "Session",
+            name: "Get Geometry Resolves Instances",
+            func: run_session_get_geometry_resolves_instances,
+        },
+        RegisteredTest {
+            group: "Session",
+            name: "Replace Definition",
+            func: run_session_replace_definition,
+        },
+        RegisteredTest {
+            group: "Session",
+            name: "Remove Definition",
+            func: run_session_remove_definition,
+        },
+        RegisteredTest {
+            group: "Session",
+            name: "To Instance",
+            func: run_session_to_instance,
+        },
+        RegisteredTest {
+            group: "Session",
+            name: "Explode",
+            func: run_session_explode,
+        },
+        RegisteredTest {
+            group: "Session",
+            name: "Undo Instance",
+            func: run_session_undo_instance,
+        },
+        RegisteredTest {
+            group: "Session",
+            name: "Instance Json Roundtrip",
+            func: run_session_instance_json_roundtrip,
+        },
+        RegisteredTest {
+            group: "Session",
+            name: "Instance Protobuf Roundtrip",
+            func: run_session_instance_protobuf_roundtrip,
+        },
+        RegisteredTest {
+            group: "Session",
+            name: "Get Collisions Instances",
+            func: run_session_get_collisions_instances,
+        },
+        RegisteredTest {
+            group: "Session",
+            name: "Ray Cast Instance",
+            func: run_session_ray_cast_instance,
+        },
         // History tests
         RegisteredTest {
             group: "History",

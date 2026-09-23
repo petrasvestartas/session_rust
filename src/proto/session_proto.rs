@@ -444,7 +444,7 @@ impl BRepOrientation {
     }
 }
 /// Edge message representing a graph edge
-#[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
+#[derive(Clone, PartialEq, ::prost::Message)]
 pub struct Edge {
     /// Unique identifier
     #[prost(string, tag = "1")]
@@ -464,6 +464,12 @@ pub struct Edge {
     /// Integer index for the edge
     #[prost(int32, tag = "6")]
     pub index: i32,
+    /// Name -> value, overriding the graph defaults
+    #[prost(btree_map = "string, double", tag = "7")]
+    pub attributes: ::prost::alloc::collections::BTreeMap<
+        ::prost::alloc::string::String,
+        f64,
+    >,
 }
 /// Polyline message representing a connected sequence of points
 /// Stores coordinates as a flat array \[x0, y0, z0, x1, y1, z1, ...\] for efficiency
@@ -523,6 +529,11 @@ pub struct ElementFeature {
     /// Unique identifier, stable across a round trip
     #[prost(string, tag = "5")]
     pub guid: ::prost::alloc::string::String,
+    /// Whether a viewer draws the feature, so a package can switch one off without deleting it.
+    /// Written only when false: a file from before this field, and every visible feature, reads
+    /// back visible.
+    #[prost(bool, optional, tag = "6")]
+    pub visible: ::core::option::Option<bool>,
 }
 /// Element message wrapping geometry with metadata.
 ///
@@ -630,7 +641,7 @@ pub struct SerializedData {
     pub version: ::prost::alloc::string::String,
 }
 /// Vertex message representing a graph vertex
-#[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
+#[derive(Clone, PartialEq, ::prost::Message)]
 pub struct Vertex {
     /// Vertex name
     #[prost(string, tag = "1")]
@@ -644,6 +655,12 @@ pub struct Vertex {
     /// Integer index for the vertex
     #[prost(int32, tag = "4")]
     pub index: i32,
+    /// Name -> value, overriding the graph defaults
+    #[prost(btree_map = "string, double", tag = "5")]
+    pub attributes: ::prost::alloc::collections::BTreeMap<
+        ::prost::alloc::string::String,
+        f64,
+    >,
 }
 /// Graph message representing a graph data structure
 #[derive(Clone, PartialEq, ::prost::Message)]
@@ -669,6 +686,18 @@ pub struct Graph {
     /// Edge counter
     #[prost(int32, tag = "6")]
     pub edge_count: i32,
+    /// Default vertex attributes
+    #[prost(btree_map = "string, double", tag = "7")]
+    pub default_vertex_attributes: ::prost::alloc::collections::BTreeMap<
+        ::prost::alloc::string::String,
+        f64,
+    >,
+    /// Default edge attributes
+    #[prost(btree_map = "string, double", tag = "8")]
+    pub default_edge_attributes: ::prost::alloc::collections::BTreeMap<
+        ::prost::alloc::string::String,
+        f64,
+    >,
 }
 /// Xform message representing a 4x4 transformation matrix
 #[derive(Clone, PartialEq, ::prost::Message)]
@@ -695,15 +724,18 @@ pub struct InstanceRef {
     /// Guid of the definition this instance places
     #[prost(string, tag = "3")]
     pub definition_guid: ::prost::alloc::string::String,
-    /// Placement transform (the only per-instance data)
+    /// Unused inside a Session, where Session.xforms places the instance; identity is not written
     #[prost(message, optional, tag = "4")]
     pub xform: ::core::option::Option<Xform>,
-    /// Per-instance color override
+    /// Per-instance color, written only when flags has FLAG_COLOR
     #[prost(message, optional, tag = "5")]
     pub color: ::core::option::Option<Color>,
-    /// Reserved: selection / cull / visibility
+    /// Bits: 1 hidden, 2 locked, 4 color overrides the definition's
     #[prost(uint32, tag = "6")]
     pub flags: u32,
+    /// Per-instance features in the definition frame
+    #[prost(message, repeated, tag = "7")]
+    pub features: ::prost::alloc::vec::Vec<ElementFeature>,
 }
 /// Line message representing a line segment
 #[derive(Clone, PartialEq, ::prost::Message)]
@@ -991,6 +1023,9 @@ pub struct Objects {
     /// Collection of sheets
     #[prost(message, repeated, tag = "17")]
     pub sheets: ::prost::alloc::vec::Vec<Sheet>,
+    /// Instances; each places a definition of Session.definitions
+    #[prost(message, repeated, tag = "18")]
+    pub instances: ::prost::alloc::vec::Vec<InstanceRef>,
 }
 /// Quaternion message for representing rotations
 #[derive(Clone, PartialEq, ::prost::Message)]
@@ -1079,6 +1114,9 @@ pub struct Session {
     /// Local transforms in Session::order() sequence, identity omitted
     #[prost(message, repeated, tag = "7")]
     pub xforms: ::prost::alloc::vec::Vec<XformEntry>,
+    /// Shared geometry instances place, each in its own frame; absent when there is none
+    #[prost(message, optional, tag = "8")]
+    pub definitions: ::core::option::Option<Objects>,
 }
 /// Tolerance message for geometric comparisons
 #[derive(Clone, PartialEq, ::prost::Message)]

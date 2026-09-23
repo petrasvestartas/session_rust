@@ -64,6 +64,10 @@ fn main() {
     // HashMap for the read path, and `MeshEnc` in mesh.rs sorts them at encode time instead.
     cfg.btree_map([
         ".session_proto.Graph.vertices",
+        ".session_proto.Graph.default_vertex_attributes",
+        ".session_proto.Graph.default_edge_attributes",
+        ".session_proto.Vertex.attributes",
+        ".session_proto.Edge.attributes",
         ".session_proto.VertexData.attributes",
         ".session_proto.FaceData.attributes",
         ".session_proto.EdgeData.attributes",
