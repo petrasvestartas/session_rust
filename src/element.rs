@@ -19,16 +19,16 @@ use std::sync::OnceLock;
 #[allow(clippy::large_enum_variant)]
 #[derive(Debug, Clone)]
 pub enum ElementGeometry {
-    None,
-    Mesh(Mesh),
-    BRep(BRep),
+    None,       // No geometry.
+    Mesh(Mesh), // Mesh geometry.
+    BRep(BRep), // BRep geometry.
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
 // Hex encoding
 // ═══════════════════════════════════════════════════════════════════════════
 
-/// `element_data` is opaque bytes and JSON has none, so it travels as hex, identically in the three kernels.
+/// Encode bytes as hex text, since element_data is opaque and JSON carries no bytes.
 fn to_hex(bytes: &[u8]) -> String {
     let mut out = String::with_capacity(bytes.len() * 2);
 
@@ -39,7 +39,7 @@ fn to_hex(bytes: &[u8]) -> String {
     out
 }
 
-/// Decodes hex text back to bytes.
+/// Decode hex text back to bytes.
 fn from_hex(hex: &str) -> Vec<u8> {
     let mut out = Vec::with_capacity(hex.len() / 2);
 
@@ -60,21 +60,25 @@ fn from_hex(hex: &str) -> Vec<u8> {
 #[derive(Debug, Clone)]
 pub struct ElementFeature {
     guid: OnceLock<String>,      // Lazily minted guid.
-    pub name: String,            // Name.
+    pub name: String,            // Feature name.
     pub feature_type: String,    // The package's vocabulary: "cut", "drill", "joint".
     pub face_index: i32,         // Face of the host this applies to; -1 = whole element.
     pub outlines: Vec<Polyline>, // Closed outlines that bound the feature.
+    pub visible: bool,           // Whether a viewer draws it.
 }
 
 impl Default for ElementFeature {
-    /// Constructs an empty feature.
+    /// Construct an empty feature.
     fn default() -> Self {
         Self::new("", -1, Vec::new(), "")
     }
 }
 
 impl ElementFeature {
-    /// Constructs from type, host face, outlines and name.
+    // ═══════════════════════════════════════════════════════════════════════════
+    // Constructors
+    // ═══════════════════════════════════════════════════════════════════════════
+    /// Construct from type, host face, outlines and name.
     pub fn new(feature_type: &str, face_index: i32, outlines: Vec<Polyline>, name: &str) -> Self {
         Self {
             guid: OnceLock::new(),
@@ -82,34 +86,37 @@ impl ElementFeature {
             feature_type: feature_type.to_string(),
             face_index,
             outlines,
+            visible: true,
         }
     }
 
-    /// Returns whether the lazy guid has been created.
+    // ═══════════════════════════════════════════════════════════════════════════
+    // Accessors
+    // ═══════════════════════════════════════════════════════════════════════════
+    /// Return whether the lazy guid has been created.
     pub fn has_guid(&self) -> bool {
         self.guid.get().is_some()
     }
 
-    /// Returns the guid, creating it on first access.
+    /// Return the guid, creating it on first access.
     pub fn guid(&self) -> &str {
         self.guid.get_or_init(|| uuid::Uuid::new_v4().to_string())
     }
 
-    /// Sets the guid if it has not already been created.
+    /// Set the guid if it has not already been created.
     pub fn set_guid(&self, g: String) {
         let _ = self.guid.set(g);
     }
 
-    /// Clears the guid so a fresh one mints lazily on the next read.
+    /// Clear the guid so a fresh one mints lazily on the next read.
     pub fn refresh_guid(&mut self) {
         self.guid = OnceLock::new();
     }
 
     // ═══════════════════════════════════════════════════════════════════════════
-    // ElementFeature - JSON
+    // JSON
     // ═══════════════════════════════════════════════════════════════════════════
-
-    /// Serializes to a JSON string.
+    /// Serialize to a JSON object.
     pub fn jsondump(&self) -> serde_json::Value {
         let mut outs = Vec::new();
 
@@ -124,17 +131,19 @@ impl ElementFeature {
             "name": self.name,
             "outlines": outs,
             "type": "ElementFeature",
+            "visible": self.visible,
         })
     }
 
-    /// Deserializes from a JSON value.
-    pub fn jsonload_value(data: &serde_json::Value) -> Self {
+    /// Deserialize from a JSON object.
+    pub fn jsonload(data: &serde_json::Value) -> Self {
         let mut f = Self::new(
             data["feature_type"].as_str().unwrap_or(""),
             data["face_index"].as_i64().unwrap_or(-1) as i32,
             Vec::new(),
             data["name"].as_str().unwrap_or(""),
         );
+
         let g = data["guid"].as_str().unwrap_or("");
 
         if !g.is_empty() {
@@ -149,36 +158,33 @@ impl ElementFeature {
             }
         }
 
+        f.visible = data["visible"].as_bool().unwrap_or(true);
+
         f
     }
 
-    /// Deserializes from a JSON string.
-    pub fn jsonload(json_str: &str) -> Result<Self, Box<dyn std::error::Error>> {
-        let data: serde_json::Value = serde_json::from_str(json_str)?;
-
-        Ok(Self::jsonload_value(&data))
-    }
-
-    /// Serializes to a JSON string.
+    /// Serialize to a JSON string.
     pub fn file_json_dumps(&self) -> String {
         let sorted = crate::file_encoders::sort_json_keys(self.jsondump());
 
         serde_json::to_string(&sorted).unwrap_or_default()
     }
 
-    /// Deserializes from a JSON string.
+    /// Deserialize from a JSON string.
     pub fn file_json_loads(s: &str) -> Self {
-        Self::jsonload(s).unwrap_or_default()
+        let data: serde_json::Value = serde_json::from_str(s).unwrap_or_default();
+
+        Self::jsonload(&data)
     }
 
-    /// Writes to a JSON file.
+    /// Write to a JSON file.
     pub fn file_json_dump(&self, filepath: &str) {
         let sorted = crate::file_encoders::sort_json_keys(self.jsondump());
         let json = serde_json::to_string_pretty(&sorted).unwrap_or_default();
         fs::write(filepath, json).expect("Failed to write JSON file");
     }
 
-    /// Reads from a JSON file.
+    /// Read from a JSON file.
     pub fn file_json_load(filepath: &str) -> Self {
         let json = fs::read_to_string(filepath).expect("Failed to read JSON file");
 
@@ -186,15 +192,9 @@ impl ElementFeature {
     }
 
     // ═══════════════════════════════════════════════════════════════════════════
-    // ElementFeature - Protobuf
+    // Protobuf
     // ═══════════════════════════════════════════════════════════════════════════
-
-    /// Serializes to protobuf bytes.
-    pub fn pb_dumps(&self) -> Vec<u8> {
-        prost::Message::encode_to_vec(&self.to_proto())
-    }
-
-    /// Returns the proto message; pb_dumps encodes it and Element embeds it.
+    /// Convert to the protobuf message.
     pub fn to_proto(&self) -> crate::proto::ElementFeature {
         let mut outlines = Vec::new();
 
@@ -208,17 +208,11 @@ impl ElementFeature {
             feature_type: self.feature_type.clone(),
             face_index: self.face_index,
             outlines,
+            visible: (!self.visible).then_some(false),
         }
     }
 
-    /// Deserializes from protobuf bytes.
-    pub fn pb_loads(data: &[u8]) -> Result<Self, Box<dyn std::error::Error>> {
-        let proto: crate::proto::ElementFeature = prost::Message::decode(data)?;
-
-        Ok(Self::from_proto(proto))
-    }
-
-    /// Constructs from a decoded proto message.
+    /// Construct from the protobuf message.
     pub fn from_proto(proto: crate::proto::ElementFeature) -> Self {
         let mut f = Self::new(
             &proto.feature_type,
@@ -235,22 +229,39 @@ impl ElementFeature {
             f.outlines.push(Polyline::from_proto(o));
         }
 
+        f.visible = proto.visible.unwrap_or(true);
+
         f
     }
 
-    /// Writes to a protobuf file.
+    /// Serialize to protobuf bytes.
+    pub fn pb_dumps(&self) -> Vec<u8> {
+        prost::Message::encode_to_vec(&self.to_proto())
+    }
+
+    /// Deserialize from protobuf bytes.
+    pub fn pb_loads(data: &[u8]) -> Result<Self, Box<dyn std::error::Error>> {
+        let proto: crate::proto::ElementFeature = prost::Message::decode(data)?;
+
+        Ok(Self::from_proto(proto))
+    }
+
+    /// Write to a protobuf file.
     pub fn pb_dump(&self, filepath: &str) {
         fs::write(filepath, self.pb_dumps()).expect("Failed to write protobuf file");
     }
 
-    /// Reads from a protobuf file.
+    /// Read from a protobuf file.
     pub fn pb_load(filepath: &str) -> Result<Self, Box<dyn std::error::Error>> {
         let data = fs::read(filepath)?;
 
         Self::pb_loads(&data)
     }
 
-    /// Returns a string representation of the feature.
+    // ═══════════════════════════════════════════════════════════════════════════
+    // String
+    // ═══════════════════════════════════════════════════════════════════════════
+    /// Return a string representation of the feature.
     pub fn str(&self) -> String {
         format!(
             "ElementFeature({}, face {}, {} outline(s))",
@@ -260,24 +271,25 @@ impl ElementFeature {
         )
     }
 
-    /// Returns a string representation of the feature for debugging.
+    /// Return a string representation of the feature for debugging.
     pub fn repr(&self) -> String {
         self.str()
     }
 }
 
 impl PartialEq for ElementFeature {
-    /// Compares name, type, face and outlines; guid ignored.
+    /// Compare name, type, face, outlines and visibility; guid ignored.
     fn eq(&self, other: &Self) -> bool {
         self.name == other.name
             && self.feature_type == other.feature_type
             && self.face_index == other.face_index
             && self.outlines == other.outlines
+            && self.visible == other.visible
     }
 }
 
 impl fmt::Display for ElementFeature {
-    /// Writes the str() form to a formatter.
+    /// Write the feature string to a formatter.
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "{}", self.str())
     }
@@ -287,37 +299,41 @@ impl fmt::Display for ElementFeature {
 // Element
 // ═══════════════════════════════════════════════════════════════════════════
 
+/// Named geometry carrier with lazily cached boxes, features and a polymorphic type registry.
 #[derive(Debug, Clone)]
 pub struct Element {
     guid: OnceLock<String>,                   // Lazily minted guid.
-    pub name: String,                         // Name.
     geometry: ElementGeometry,                // Mesh, BRep or nothing.
-    geometry_ops: Vec<fn(Mesh) -> Mesh>,      // In-memory mesh operations, never written.
-    is_dirty: bool,                           // Whether the caches must be recomputed.
-    cached_aabb: Option<OBB>,                 // Cached axis-aligned box.
-    cached_obb: Option<OBB>,                  // Cached oriented box.
-    cached_collision_mesh: Option<Mesh>,      // Cached collision mesh.
-    cached_point: Option<Point>,              // Cached centroid.
-    cached_polylines: Option<Vec<Polyline>>,  // Cached face outlines.
-    cached_planes: Option<Vec<Plane>>,        // Cached face planes.
+    geometry_synced: bool, // Whether the slot holds what compute_geometry() would write.
+    is_dirty: bool,        // Whether the caches must be recomputed.
+    cached_aabb: Option<OBB>, // Cached axis-aligned box.
+    cached_obb: Option<OBB>, // Cached oriented box.
+    cached_collision_mesh: Option<Mesh>, // Cached collision mesh.
+    cached_point: Option<Point>, // Cached centroid.
+    cached_polylines: Option<Vec<Polyline>>, // Cached face outlines.
+    cached_planes: Option<Vec<Plane>>, // Cached face planes.
     cached_edge_vectors: Option<Vec<Vector>>, // Cached edge directions.
-    cached_axis: Option<Line>,                // Cached main axis.
-    // SESSION_VIEWER: read as fields by the viewer; `features()`, `insertion_vectors()`, `dimensions()` are the kernel names.
+    cached_axis: Option<Line>, // Cached main axis.
+    geometry_ops: Vec<fn(Mesh) -> Mesh>, // In-memory mesh operations, never written.
+    // SESSION_VIEWER
     pub features: Vec<ElementFeature>,  // Serialized modifications.
     pub insertion_vectors: Vec<Vector>, // One insertion direction per jointed face.
     pub dimensions: Option<Vector>,     // Authored nominal extents.
-    pub element_type: String, // The derived type name written to `element_type`; a package sets it in place of overriding `element_type_name`.
-    pub element_data: Vec<u8>, // The derived type's own state, opaque to the kernel and carried through untouched.
+    pub element_type: String,           // Derived type name this element was loaded with.
+    pub element_data: Vec<u8>,          // Opaque derived-type state.
+    pub name: String,                   // Element name.
 }
 
 impl Element {
-    /// Constructs an empty element with a name.
+    // ═══════════════════════════════════════════════════════════════════════════
+    // Constructors
+    // ═══════════════════════════════════════════════════════════════════════════
+    /// Construct an empty element with a name.
     pub fn new(name: &str) -> Self {
         Self {
             guid: OnceLock::new(),
-            name: name.to_string(),
             geometry: ElementGeometry::None,
-            geometry_ops: Vec::new(),
+            geometry_synced: false,
             is_dirty: true,
             cached_aabb: None,
             cached_obb: None,
@@ -327,15 +343,17 @@ impl Element {
             cached_planes: None,
             cached_edge_vectors: None,
             cached_axis: None,
+            geometry_ops: Vec::new(),
             features: Vec::new(),
             insertion_vectors: Vec::new(),
             dimensions: None,
             element_type: String::new(),
             element_data: Vec::new(),
+            name: name.to_string(),
         }
     }
 
-    /// Constructs from a mesh with a name.
+    /// Construct from a mesh with a name.
     pub fn from_mesh(geometry: Mesh, name: &str) -> Self {
         let mut e = Self::new(name);
         e.geometry = ElementGeometry::Mesh(geometry);
@@ -343,7 +361,7 @@ impl Element {
         e
     }
 
-    /// Constructs from a BRep with a name.
+    /// Construct from a BRep with a name.
     pub fn from_brep(geometry: BRep, name: &str) -> Self {
         let mut e = Self::new(name);
         e.geometry = ElementGeometry::BRep(geometry);
@@ -351,37 +369,60 @@ impl Element {
         e
     }
 
-    /// Returns whether the lazy guid has been created.
+    // ═══════════════════════════════════════════════════════════════════════════
+    // Accessors
+    // ═══════════════════════════════════════════════════════════════════════════
+    /// Return whether the lazy guid has been created.
     pub fn has_guid(&self) -> bool {
         self.guid.get().is_some()
     }
 
-    /// Returns the guid, creating it on first access.
+    /// Return the guid, creating it on first access.
     pub fn guid(&self) -> &str {
         self.guid.get_or_init(|| uuid::Uuid::new_v4().to_string())
     }
 
-    /// Sets the guid if it has not already been created.
+    /// Set the guid if it has not already been created.
     pub fn set_guid(&self, g: String) {
         let _ = self.guid.set(g);
     }
 
-    /// Clears the guid so a fresh one mints lazily on the next read.
+    /// Clear the guid so a fresh one mints lazily on the next read.
     pub fn refresh_guid(&mut self) {
         self.guid = OnceLock::new();
     }
 
-    /// Returns the local geometry.
+    /// Return the local geometry.
     pub fn geometry(&self) -> &ElementGeometry {
         &self.geometry
     }
 
-    /// Returns whether the element carries a mesh or a BRep.
+    /// Write the element's own geometry, features and dimensions onto the slot, a mesh when true, a BRep when false; skipped while the slot already holds that form.
+    pub fn compute_geometry(&mut self, mesh_or_brep: bool) {
+        if self.geometry_current(mesh_or_brep) {
+            return;
+        }
+
+        self.compute_geometry_impl(mesh_or_brep);
+        self.geometry_synced = true;
+    }
+
+    /// Return whether the slot already holds what compute_geometry() would write.
+    pub fn geometry_synced(&self) -> bool {
+        self.geometry_synced
+    }
+
+    /// Mark the slot stale, so the next compute_geometry() writes it again; a domain type overrides this to drop its own caches too.
+    pub fn invalidate_geometry(&mut self) {
+        self.geometry_synced = false;
+    }
+
+    /// Return whether the element carries a mesh or a BRep.
     pub fn has_geometry(&self) -> bool {
         !matches!(self.geometry, ElementGeometry::None)
     }
 
-    /// Returns "Mesh", "BRep" or "None".
+    /// Return "Mesh", "BRep" or "None".
     pub fn geometry_type_name(&self) -> &str {
         match &self.geometry {
             ElementGeometry::None => "None",
@@ -390,7 +431,7 @@ impl Element {
         }
     }
 
-    /// Returns the geometry placed by xform; the Session owns the placement, so pass identity for local geometry.
+    /// Return the geometry placed by xform; the Session owns the placement, so pass identity for local geometry.
     pub fn session_geometry(&self, xform: &Xform) -> ElementGeometry {
         match &self.geometry {
             ElementGeometry::None => ElementGeometry::None,
@@ -416,7 +457,7 @@ impl Element {
         }
     }
 
-    /// Returns the cached axis-aligned box, computing it when dirty.
+    /// Return the cached axis-aligned box, computing it when dirty.
     pub fn aabb(&mut self) -> OBB {
         if self.is_dirty || self.cached_aabb.is_none() {
             self.cached_aabb = Some(self.compute_aabb());
@@ -426,7 +467,7 @@ impl Element {
         self.cached_aabb.clone().unwrap()
     }
 
-    /// Returns the cached oriented box, computing it when dirty.
+    /// Return the cached oriented box, computing it when dirty.
     pub fn obb(&mut self) -> OBB {
         if self.is_dirty || self.cached_obb.is_none() {
             self.cached_obb = Some(self.compute_obb());
@@ -436,7 +477,7 @@ impl Element {
         self.cached_obb.clone().unwrap()
     }
 
-    /// Returns the cached collision mesh, computing it when dirty.
+    /// Return the cached collision mesh, computing it when dirty.
     pub fn collision_mesh(&mut self) -> Mesh {
         if self.is_dirty || self.cached_collision_mesh.is_none() {
             self.cached_collision_mesh = Some(self.compute_collision_mesh());
@@ -446,7 +487,7 @@ impl Element {
         self.cached_collision_mesh.clone().unwrap()
     }
 
-    /// Returns the cached centroid, computing it when dirty.
+    /// Return the cached centroid, computing it when dirty.
     pub fn point(&mut self) -> Point {
         if self.is_dirty || self.cached_point.is_none() {
             self.cached_point = Some(self.compute_point());
@@ -456,7 +497,7 @@ impl Element {
         self.cached_point.clone().unwrap()
     }
 
-    /// Returns the cached face outlines, computing them when dirty.
+    /// Return the cached face outlines, computing them when dirty.
     pub fn polylines(&mut self) -> Vec<Polyline> {
         if self.is_dirty || self.cached_polylines.is_none() {
             self.cached_polylines = Some(self.compute_polylines());
@@ -466,7 +507,7 @@ impl Element {
         self.cached_polylines.clone().unwrap()
     }
 
-    /// Returns the cached face planes, computing them when dirty.
+    /// Return the cached face planes, computing them when dirty.
     pub fn planes(&mut self) -> Vec<Plane> {
         if self.is_dirty || self.cached_planes.is_none() {
             self.cached_planes = Some(self.compute_planes());
@@ -476,7 +517,7 @@ impl Element {
         self.cached_planes.clone().unwrap()
     }
 
-    /// Returns the cached edge directions, computing them when dirty.
+    /// Return the cached edge directions, computing them when dirty.
     pub fn edge_vectors(&mut self) -> Vec<Vector> {
         if self.is_dirty || self.cached_edge_vectors.is_none() {
             self.cached_edge_vectors = Some(self.compute_edge_vectors());
@@ -486,7 +527,7 @@ impl Element {
         self.cached_edge_vectors.clone().unwrap()
     }
 
-    /// Returns the cached main axis, computing it when dirty.
+    /// Return the cached main axis, computing it when dirty.
     pub fn axis(&mut self) -> Option<Line> {
         if self.is_dirty || self.cached_axis.is_none() {
             self.cached_axis = self.compute_axis();
@@ -496,125 +537,137 @@ impl Element {
         self.cached_axis.clone()
     }
 
-    /// Returns whether the caches must be recomputed.
+    /// Return whether the caches must be recomputed.
     pub fn is_dirty(&self) -> bool {
         self.is_dirty
     }
 
-    /// Returns the cached axis-aligned box without computing it.
+    /// Return the cached axis-aligned box without computing it.
     pub fn cached_aabb(&self) -> &Option<OBB> {
         &self.cached_aabb
     }
 
-    /// Returns the cached oriented box without computing it.
+    /// Return the cached oriented box without computing it.
     pub fn cached_obb(&self) -> &Option<OBB> {
         &self.cached_obb
     }
 
-    /// Returns the cached collision mesh without computing it.
+    /// Return the cached collision mesh without computing it.
     pub fn cached_collision_mesh(&self) -> &Option<Mesh> {
         &self.cached_collision_mesh
     }
 
-    /// Returns the cached centroid without computing it.
+    /// Return the cached centroid without computing it.
     pub fn cached_point(&self) -> &Option<Point> {
         &self.cached_point
     }
 
-    /// Returns the number of in-memory geometry operations.
+    /// Return the number of in-memory geometry operations.
     pub fn geometry_ops_count(&self) -> usize {
         self.geometry_ops.len()
     }
 
-    /// Returns the number of features.
+    /// Return the number of features.
     pub fn features_count(&self) -> usize {
         self.features.len()
     }
 
-    /// Returns the modifications carried by this element and written with it; add_geometry_op is the in-memory counterpart that is not.
+    /// Return the modifications carried by this element and written with it; add_geometry_op is the in-memory counterpart that is not.
     pub fn features(&self) -> &[ElementFeature] {
         &self.features
     }
 
-    /// Returns the directions the element is inserted along when the assembly is put together, one per jointed face.
+    /// Return the directions the element is inserted along when the assembly is put together, one per jointed face.
     pub fn insertion_vectors(&self) -> &[Vector] {
         &self.insertion_vectors
     }
 
-    /// Returns the nominal extents in the element's own frame (plate: x/y outline, z thickness), authored intent rather than the measured obb; nullopt = never authored.
+    /// Return the nominal extents in the element's own frame (plate: x/y outline, z thickness), authored intent rather than the measured obb; None = never authored.
     pub fn dimensions(&self) -> &Option<Vector> {
         &self.dimensions
     }
 
-    /// Returns the derived type name this element was loaded with; a plain Element authored in memory returns "".
+    /// Return the derived type name this element was loaded with, written to element_type; a plain Element authored in memory returns "".
     pub fn element_type_name(&self) -> &str {
         &self.element_type
     }
 
-    /// Returns the derived type's own state, opaque to the kernel and carried through untouched.
+    /// Return the derived type's own state, opaque to the kernel and carried through untouched.
     pub fn element_data_dumps(&self) -> &[u8] {
         &self.element_data
     }
 
     // ═══════════════════════════════════════════════════════════════════════════
-    // Element - Mutators
+    // Mutators
     // ═══════════════════════════════════════════════════════════════════════════
-
-    /// Appends an in-memory mesh operation and invalidate the caches.
+    /// Append an in-memory mesh operation and invalidate the caches.
     pub fn add_geometry_op(&mut self, f: fn(Mesh) -> Mesh) {
         self.geometry_ops.push(f);
         self.reset();
     }
 
-    /// Replaces the features.
+    /// Replace the features.
     pub fn set_features(&mut self, features: Vec<ElementFeature>) {
         self.features = features;
     }
 
-    /// Appends a feature.
+    /// Append a feature.
     pub fn add_feature(&mut self, feature: ElementFeature) {
         self.features.push(feature);
     }
 
-    /// Replaces the insertion vectors.
+    /// Replace the insertion vectors.
     pub fn set_insertion_vectors(&mut self, v: Vec<Vector>) {
         self.insertion_vectors = v;
     }
 
-    /// Sets the nominal extents.
+    /// Set the nominal extents.
     pub fn set_dimensions(&mut self, d: Vector) {
         self.dimensions = Some(d);
     }
 
-    /// Bake a placement into the element's own geometry, invalidating the cached boxes.
+    /// Bake a placement into the geometry, the feature outlines and the insertion vectors, then drop the caches.
     pub fn place(&mut self, xform: &Xform) {
         self.geometry = self.session_geometry(xform);
+
+        for feature in &mut self.features {
+            for outline in &mut feature.outlines {
+                outline.transform(xform);
+            }
+        }
+
+        for direction in &mut self.insertion_vectors {
+            direction.transform(xform);
+        }
+
         self.reset();
     }
 
-    /// Replaces the geometry with a mesh and invalidates the caches.
+    /// Replace the geometry with a mesh and invalidate the caches.
     pub fn set_geometry(&mut self, geo: Mesh) {
         self.geometry = ElementGeometry::Mesh(geo);
         self.reset();
     }
 
-    /// Replaces the geometry with a BRep and invalidates the caches.
+    /// Replace the geometry with a BRep and invalidate the caches.
     pub fn set_brep_geometry(&mut self, geo: BRep) {
         self.geometry = ElementGeometry::BRep(geo);
         self.reset();
     }
 
-    /// Override the cached face outlines.
+    /// Override the cached face outlines, kept until the next reset.
     pub fn set_polylines(&mut self, polys: Vec<Polyline>) {
         self.cached_polylines = Some(polys);
+        self.is_dirty = false;
     }
 
-    /// Override the cached face planes.
+    /// Override the cached face planes, kept until the next reset.
     pub fn set_planes(&mut self, plns: Vec<Plane>) {
         self.cached_planes = Some(plns);
+        self.is_dirty = false;
     }
 
-    /// Drops every cache and mark the element dirty.
+    /// Drop every cache and mark the element dirty.
     pub fn reset(&mut self) {
         self.is_dirty = true;
         self.cached_aabb = None;
@@ -628,10 +681,9 @@ impl Element {
     }
 
     // ═══════════════════════════════════════════════════════════════════════════
-    // Element - Computation
+    // Utilities
     // ═══════════════════════════════════════════════════════════════════════════
-
-    /// Returns a copy with a new guid, as does every feature it carries.
+    /// Return a copy with a new guid, as does every feature it carries.
     pub fn duplicate(&self) -> Self {
         let mut result = self.clone();
         result.guid = OnceLock::new();
@@ -645,118 +697,10 @@ impl Element {
         result
     }
 
-    /// Computes the axis-aligned box of the placed geometry.
-    fn compute_aabb(&self) -> OBB {
-        Self::obb_from_geometry(&self.session_geometry(&Xform::identity()))
-    }
-
-    /// Computes the oriented box of the placed geometry.
-    fn compute_obb(&self) -> OBB {
-        Self::obb_from_geometry(&self.session_geometry(&Xform::identity()))
-    }
-
-    /// Computes the collision mesh; a BRep yields an empty mesh.
-    fn compute_collision_mesh(&self) -> Mesh {
-        if let ElementGeometry::Mesh(mesh) = self.session_geometry(&Xform::identity()) {
-            return mesh;
-        }
-
-        Mesh::new()
-    }
-
-    /// Computes the centroid of the placed geometry.
-    fn compute_point(&self) -> Point {
-        Point::centroid(&Self::points_from_geometry(
-            &self.session_geometry(&Xform::identity()),
-        ))
-    }
-
-    /// Computes the face outlines of a mesh solid; a domain type with its own face order overrides this.
-    fn compute_polylines(&self) -> Vec<Polyline> {
-        if let ElementGeometry::Mesh(mesh) = &self.geometry {
-            return mesh.face_outlines();
-        }
-
-        Vec::new()
-    }
-
-    /// Computes one plane per face outline: centroid origin, Newell normal, closing point dropped first.
-    fn compute_planes(&self) -> Vec<Plane> {
-        let mut planes = Vec::new();
-
-        for outline in self.compute_polylines() {
-            let mut points = outline.get_points();
-
-            if points.len() > 1 && points[0] == points[points.len() - 1] {
-                points.pop();
-            }
-
-            if points.len() < 3 {
-                continue;
-            }
-
-            planes.push(Plane::from_point_normal(
-                Point::centroid(&points),
-                Vector::average_normal(&points),
-                None,
-            ));
-        }
-
-        planes
-    }
-
-    /// Computes the edge directions; the base element has none.
-    fn compute_edge_vectors(&self) -> Vec<Vector> {
-        Vec::new()
-    }
-
-    /// Computes the main axis; the base element has none.
-    fn compute_axis(&self) -> Option<Line> {
-        None
-    }
-
-    /// Runs the in-memory operations over a mesh.
-    fn apply_geometry_ops(&self, mut geo: Mesh) -> Mesh {
-        for f in &self.geometry_ops {
-            geo = f(geo);
-        }
-
-        geo
-    }
-
-    /// Returns the vertices of a mesh or a BRep.
-    fn points_from_geometry(geo: &ElementGeometry) -> Vec<Point> {
-        let mut points = Vec::new();
-
-        if let ElementGeometry::Mesh(mesh) = geo {
-            for v in mesh.vertex.values() {
-                points.push(v.position());
-            }
-        }
-
-        if let ElementGeometry::BRep(brep) = geo {
-            points = brep.vertex_points();
-        }
-
-        points
-    }
-
-    /// Returns the world-aligned box of the geometry vertices, or a zero box when empty.
-    fn obb_from_geometry(geo: &ElementGeometry) -> OBB {
-        let points = Self::points_from_geometry(geo);
-
-        if points.is_empty() {
-            return OBB::from_point(&Point::new(0.0, 0.0, 0.0), 0.0);
-        }
-
-        OBB::from_points(&points, 0.0, None)
-    }
-
     // ═══════════════════════════════════════════════════════════════════════════
-    // Element - JSON
+    // JSON
     // ═══════════════════════════════════════════════════════════════════════════
-
-    /// Serializes to a JSON string.
+    /// Serialize to a JSON object.
     pub fn jsondump(&self) -> serde_json::Value {
         let mut geo_data = serde_json::Value::Null;
 
@@ -800,8 +744,8 @@ impl Element {
         })
     }
 
-    /// Deserializes from a JSON value.
-    pub fn jsonload_value(data: &serde_json::Value) -> Self {
+    /// Deserialize from a JSON object.
+    pub fn jsonload(data: &serde_json::Value) -> Self {
         let mut elem = Self::new("my_element");
         let geo_type = data["geometry_type"].as_str().unwrap_or("None");
         let has_data = !data["geometry_data"].is_null();
@@ -835,7 +779,7 @@ impl Element {
 
         if let Some(fs) = data["features"].as_array() {
             for f in fs {
-                elem.features.push(ElementFeature::jsonload_value(f));
+                elem.features.push(ElementFeature::jsonload(f));
             }
         }
 
@@ -850,33 +794,28 @@ impl Element {
         elem
     }
 
-    /// Deserializes from a JSON string.
-    pub fn jsonload(json_str: &str) -> Result<Self, Box<dyn std::error::Error>> {
-        let data: serde_json::Value = serde_json::from_str(json_str)?;
-
-        Ok(Self::jsonload_value(&data))
-    }
-
-    /// Serializes to a JSON string.
+    /// Serialize to a JSON string.
     pub fn file_json_dumps(&self) -> String {
         let sorted = crate::file_encoders::sort_json_keys(self.jsondump());
 
         serde_json::to_string(&sorted).unwrap_or_default()
     }
 
-    /// Deserializes from a JSON string.
+    /// Deserialize from a JSON string.
     pub fn file_json_loads(s: &str) -> Self {
-        Self::jsonload(s).unwrap_or_else(|_| Self::new("my_element"))
+        let data: serde_json::Value = serde_json::from_str(s).unwrap_or_default();
+
+        Self::jsonload(&data)
     }
 
-    /// Writes to a JSON file.
+    /// Write to a JSON file.
     pub fn file_json_dump(&self, filepath: &str) {
         let sorted = crate::file_encoders::sort_json_keys(self.jsondump());
         let json = serde_json::to_string_pretty(&sorted).unwrap_or_default();
         fs::write(filepath, json).expect("Failed to write JSON file");
     }
 
-    /// Reads from a JSON file.
+    /// Read from a JSON file.
     pub fn file_json_load(filepath: &str) -> Self {
         let json = fs::read_to_string(filepath).expect("Failed to read JSON file");
 
@@ -884,15 +823,9 @@ impl Element {
     }
 
     // ═══════════════════════════════════════════════════════════════════════════
-    // Element - Protobuf
+    // Protobuf
     // ═══════════════════════════════════════════════════════════════════════════
-
-    /// Serializes to protobuf bytes.
-    pub fn pb_dumps(&self) -> Vec<u8> {
-        prost::Message::encode_to_vec(&self.to_proto())
-    }
-
-    /// Returns the proto message; pb_dumps encodes it and Session embeds it.
+    /// Convert to the protobuf message.
     pub fn to_proto(&self) -> crate::proto::Element {
         let mut geometry_data = Vec::new();
 
@@ -939,14 +872,7 @@ impl Element {
         }
     }
 
-    /// Deserializes from protobuf bytes.
-    pub fn pb_loads(data: &[u8]) -> Result<Self, Box<dyn std::error::Error>> {
-        let proto: crate::proto::Element = prost::Message::decode(data)?;
-
-        Self::from_proto(proto)
-    }
-
-    /// Constructs from a decoded proto message.
+    /// Construct from the protobuf message.
     pub fn from_proto(proto: crate::proto::Element) -> Result<Self, Box<dyn std::error::Error>> {
         let mut elem = Self::new("my_element");
 
@@ -955,6 +881,7 @@ impl Element {
         }
 
         elem.name = proto.name;
+
         let has_data = !proto.geometry_data.is_empty();
 
         if proto.geometry_type == "Mesh" && has_data {
@@ -987,12 +914,24 @@ impl Element {
         Ok(elem)
     }
 
-    /// Writes to a protobuf file.
+    /// Serialize to protobuf bytes.
+    pub fn pb_dumps(&self) -> Vec<u8> {
+        prost::Message::encode_to_vec(&self.to_proto())
+    }
+
+    /// Deserialize from protobuf bytes.
+    pub fn pb_loads(data: &[u8]) -> Result<Self, Box<dyn std::error::Error>> {
+        let proto: crate::proto::Element = prost::Message::decode(data)?;
+
+        Self::from_proto(proto)
+    }
+
+    /// Write to a protobuf file.
     pub fn pb_dump(&self, filepath: &str) {
         fs::write(filepath, self.pb_dumps()).expect("Failed to write protobuf file");
     }
 
-    /// Reads from a protobuf file.
+    /// Read from a protobuf file.
     pub fn pb_load(filepath: &str) -> Result<Self, Box<dyn std::error::Error>> {
         let data = fs::read(filepath)?;
 
@@ -1000,10 +939,9 @@ impl Element {
     }
 
     // ═══════════════════════════════════════════════════════════════════════════
-    // Element - Polymorphic registry
+    // Polymorphic registry
     // ═══════════════════════════════════════════════════════════════════════════
-
-    /// Registers factory for type_name; re-registering the same name replaces it.
+    /// Register factory for type_name; re-registering the same name replaces it.
     pub fn register_type(type_name: &str, factory: ElementFactory) {
         if type_name.is_empty() {
             return;
@@ -1014,15 +952,16 @@ impl Element {
         }
     }
 
-    /// Returns whether a factory is registered for type_name.
+    /// Return whether a factory is registered for type_name.
     pub fn is_registered(type_name: &str) -> bool {
-        element_registry()
-            .lock()
-            .map(|registry| registry.contains_key(type_name))
-            .unwrap_or(false)
+        if let Ok(registry) = element_registry().lock() {
+            return registry.contains_key(type_name);
+        }
+
+        false
     }
 
-    /// Returns the registered type names.
+    /// Return the registered type names.
     pub fn registered_types() -> Vec<String> {
         let mut names = Vec::new();
 
@@ -1035,7 +974,7 @@ impl Element {
         names
     }
 
-    /// Loads through the registered factory, degrading to a base Element that still carries element_type and element_data when the type is unknown or the factory declines.
+    /// Load through the registered factory, degrading to a base Element that still carries element_type and element_data when the type is unknown or the factory declines.
     pub fn pb_loads_polymorphic(data: &[u8]) -> Result<Self, Box<dyn std::error::Error>> {
         let proto: crate::proto::Element = prost::Message::decode(data)?;
 
@@ -1043,10 +982,10 @@ impl Element {
             return Ok(derived);
         }
 
-        Self::pb_loads(data)
+        Self::from_proto(proto)
     }
 
-    /// Loads from JSON through the registered factory, re-encoded to proto bytes so one registration serves both formats.
+    /// Load from JSON through the registered factory, re-encoded to proto bytes so one registration serves both formats.
     pub fn file_json_loads_polymorphic(s: &str) -> Self {
         let base = Self::file_json_loads(s);
 
@@ -1057,12 +996,15 @@ impl Element {
         base
     }
 
-    /// Returns a string representation of the element.
+    // ═══════════════════════════════════════════════════════════════════════════
+    // String
+    // ═══════════════════════════════════════════════════════════════════════════
+    /// Return a string representation of the element.
     pub fn str(&self) -> String {
         format!("Element({}, {})", self.name, self.geometry_type_name())
     }
 
-    /// Returns a string representation of the element for debugging.
+    /// Return a string representation of the element for debugging.
     pub fn repr(&self) -> String {
         format!(
             "Element({}, {}, {})",
@@ -1070,6 +1012,132 @@ impl Element {
             self.name,
             self.geometry_type_name()
         )
+    }
+
+    // ═══════════════════════════════════════════════════════════════════════════
+    // Computation
+    // ═══════════════════════════════════════════════════════════════════════════
+    /// Return whether the slot already holds the requested form and nothing has invalidated it.
+    fn geometry_current(&self, mesh_or_brep: bool) -> bool {
+        if !self.geometry_synced {
+            return false;
+        }
+
+        if mesh_or_brep {
+            matches!(self.geometry, ElementGeometry::Mesh(_))
+        } else {
+            matches!(self.geometry, ElementGeometry::BRep(_))
+        }
+    }
+
+    /// Compute the element's own geometry, features and dimensions in the requested form; the base element has none, a domain type overrides it.
+    fn compute_geometry_impl(&mut self, _mesh_or_brep: bool) {}
+
+    /// Compute the axis-aligned box of the placed geometry.
+    fn compute_aabb(&self) -> OBB {
+        Self::obb_from_geometry(&self.session_geometry(&Xform::identity()))
+    }
+
+    /// Compute the oriented box of the placed geometry.
+    fn compute_obb(&self) -> OBB {
+        Self::obb_from_geometry(&self.session_geometry(&Xform::identity()))
+    }
+
+    /// Compute the collision mesh; a BRep yields an empty mesh.
+    fn compute_collision_mesh(&self) -> Mesh {
+        if let ElementGeometry::Mesh(mesh) = self.session_geometry(&Xform::identity()) {
+            return mesh;
+        }
+
+        Mesh::new()
+    }
+
+    /// Compute the centroid of the placed geometry.
+    fn compute_point(&self) -> Point {
+        Point::centroid(&Self::points_from_geometry(
+            &self.session_geometry(&Xform::identity()),
+        ))
+    }
+
+    /// Compute the face outlines of a mesh solid; a domain type with its own face order overrides this.
+    fn compute_polylines(&self) -> Vec<Polyline> {
+        if let ElementGeometry::Mesh(mesh) = &self.geometry {
+            return mesh.face_outlines();
+        }
+
+        Vec::new()
+    }
+
+    /// Compute one plane per face outline: centroid origin, Newell normal, closing point dropped first.
+    fn compute_planes(&self) -> Vec<Plane> {
+        let mut planes = Vec::new();
+
+        for outline in self.compute_polylines() {
+            let mut points = outline.get_points();
+
+            if points.len() > 1 && points[0] == points[points.len() - 1] {
+                points.pop();
+            }
+
+            if points.len() < 3 {
+                continue;
+            }
+
+            planes.push(Plane::from_point_normal(
+                Point::centroid(&points),
+                Vector::average_normal(&points),
+                None,
+            ));
+        }
+
+        planes
+    }
+
+    /// Compute the edge directions; the base element has none.
+    fn compute_edge_vectors(&self) -> Vec<Vector> {
+        Vec::new()
+    }
+
+    /// Compute the main axis; the base element has none.
+    fn compute_axis(&self) -> Option<Line> {
+        None
+    }
+
+    /// Run the in-memory operations over a mesh.
+    fn apply_geometry_ops(&self, mut geo: Mesh) -> Mesh {
+        for f in &self.geometry_ops {
+            geo = f(geo);
+        }
+
+        geo
+    }
+
+    /// Return the vertices of a mesh or a BRep.
+    fn points_from_geometry(geo: &ElementGeometry) -> Vec<Point> {
+        let mut points = Vec::new();
+
+        if let ElementGeometry::Mesh(mesh) = geo {
+            for v in mesh.vertex.values() {
+                points.push(v.position());
+            }
+        }
+
+        if let ElementGeometry::BRep(brep) = geo {
+            points = brep.vertex_points();
+        }
+
+        points
+    }
+
+    /// Return the world-aligned box of the geometry vertices, or a zero box when empty.
+    fn obb_from_geometry(geo: &ElementGeometry) -> OBB {
+        let points = Self::points_from_geometry(geo);
+
+        if points.is_empty() {
+            return OBB::from_point(&Point::new(0.0, 0.0, 0.0), 0.0);
+        }
+
+        OBB::from_points(&points, 0.0, None)
     }
 }
 
@@ -1097,7 +1165,7 @@ fn build_registered(type_name: &str, data: &[u8]) -> Option<Element> {
 }
 
 impl PartialEq for Element {
-    /// Compares every field that survives a round trip; guid ignored.
+    /// Compare every field that survives a round trip; guid ignored.
     fn eq(&self, other: &Self) -> bool {
         self.name == other.name
             && self.geometry_type_name() == other.geometry_type_name()
@@ -1110,24 +1178,24 @@ impl PartialEq for Element {
 }
 
 impl fmt::Display for Element {
-    /// Writes the str() form to a formatter.
+    /// Write the element string to a formatter.
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "{}", self.str())
     }
 }
 
 impl Serialize for Element {
-    /// Serializes through jsondump.
+    /// Serialize through jsondump.
     fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
         self.jsondump().serialize(serializer)
     }
 }
 
 impl<'de> Deserialize<'de> for Element {
-    /// Deserializes through jsonload_value.
+    /// Deserialize through jsonload.
     fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
         let value = serde_json::Value::deserialize(deserializer)?;
 
-        Ok(Self::jsonload_value(&value))
+        Ok(Self::jsonload(&value))
     }
 }

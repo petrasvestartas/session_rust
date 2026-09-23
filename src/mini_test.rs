@@ -4198,6 +4198,11 @@ pub fn get_all_tests() -> Vec<RegisteredTest> {
         },
         RegisteredTest {
             group: "Element",
+            name: "Place Moves Features",
+            func: run_element_place_moves_features,
+        },
+        RegisteredTest {
+            group: "Element",
             name: "Add Geometry Op",
             func: run_element_add_geometry_op,
         },
@@ -4245,6 +4250,11 @@ pub fn get_all_tests() -> Vec<RegisteredTest> {
             group: "Element",
             name: "Polylines",
             func: run_element_polylines,
+        },
+        RegisteredTest {
+            group: "Element",
+            name: "Set Polylines Sticks",
+            func: run_element_set_polylines_sticks,
         },
         RegisteredTest {
             group: "Element",
