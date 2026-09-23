@@ -1,5 +1,6 @@
 use crate::brep::BRep;
 use crate::element::Element;
+use crate::instance_ref::InstanceRef;
 use crate::line::Line;
 use crate::mesh::Mesh;
 use crate::nurbscurve::NurbsCurve;
@@ -96,6 +97,8 @@ pub struct Objects {
     pub breps: Vec<Rc<BRep>>,       // BReps.
     pub elements: Vec<Rc<Element>>, // Elements.
     pub components: Vec<Component>, // Components.
+    #[serde(default)]
+    pub instances: Vec<Rc<InstanceRef>>, // Instances, each placing a definition of Session::definitions by guid.
 }
 
 impl Default for Objects {
@@ -117,6 +120,7 @@ impl Default for Objects {
             breps: Vec::new(),
             elements: Vec::new(),
             components: Vec::new(),
+            instances: Vec::new(),
         }
     }
 }
@@ -258,6 +262,10 @@ impl Objects {
                 .push(crate::proto::Component::decode(c.pb_dumps().as_slice()).unwrap());
         }
 
+        for i in &self.instances {
+            proto.instances.push(i.to_proto());
+        }
+
         proto.encode_to_vec()
     }
 
@@ -342,6 +350,10 @@ impl Objects {
             objects
                 .components
                 .push(Component::pb_loads(&c.encode_to_vec())?);
+        }
+
+        for i in proto.instances {
+            objects.instances.push(Rc::new(InstanceRef::from_proto(i)));
         }
 
         Ok(objects)

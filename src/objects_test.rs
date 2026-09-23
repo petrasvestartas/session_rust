@@ -19,39 +19,55 @@ pub fn run_objects_json_roundtrip() -> TestResult {
     MINI_TEST!("Json Roundtrip", {
         use crate::file_encoders::file_json_dump;
         use crate::file_encoders::file_json_load;
+        use crate::InstanceRef;
         use crate::Objects;
         use crate::Point;
+        use crate::Xform;
         use std::rc::Rc;
         let mut original = Objects::new();
         let point1 = Rc::new(Point::new(1.0, 2.0, 3.0));
         let point2 = Rc::new(Point::new(4.0, 5.0, 6.0));
         original.points.push(point1);
         original.points.push(point2);
+        let instance = InstanceRef::new("def-abc", Xform::identity());
+        let guid = instance.guid().to_string();
+        original.instances.push(Rc::new(instance));
 
         let filename = "serialization/test_objects.json";
         file_json_dump(&original, filename, false).unwrap();
         let loaded = file_json_load::<Objects>(filename).unwrap();
 
         MINI_CHECK!(loaded.points.len() == original.points.len());
+        MINI_CHECK!(loaded.instances.len() == 1);
+        MINI_CHECK!(loaded.instances[0].guid() == guid);
+        MINI_CHECK!(loaded.instances[0].definition_guid == "def-abc");
     })
 }
 
 pub fn run_objects_protobuf_roundtrip() -> TestResult {
     MINI_TEST!("Protobuf Roundtrip", {
+        use crate::InstanceRef;
         use crate::Objects;
         use crate::Point;
+        use crate::Xform;
         use std::rc::Rc;
         let mut original = Objects::new();
         let point1 = Rc::new(Point::new(1.0, 2.0, 3.0));
         let point2 = Rc::new(Point::new(4.0, 5.0, 6.0));
         original.points.push(point1);
         original.points.push(point2);
+        let instance = InstanceRef::new("def-abc", Xform::identity());
+        let guid = instance.guid().to_string();
+        original.instances.push(Rc::new(instance));
 
         let filename = "serialization/test_objects.bin";
         original.pb_dump(filename);
         let loaded = Objects::pb_load(filename);
 
         MINI_CHECK!(loaded.points.len() == original.points.len());
+        MINI_CHECK!(loaded.instances.len() == 1);
+        MINI_CHECK!(loaded.instances[0].guid() == guid);
+        MINI_CHECK!(loaded.instances[0].definition_guid == "def-abc");
     })
 }
 
