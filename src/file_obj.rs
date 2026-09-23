@@ -1,13 +1,21 @@
-use crate::{Mesh, Point, Polyline};
+use crate::Mesh;
+use crate::Point;
+use crate::Polyline;
 use std::io;
 
-/// OBJ text of the mesh: one v line per vertex, one f line per face with 1-based indices.
+// ═══════════════════════════════════════════════════════════════════════════
+// Write
+// ═══════════════════════════════════════════════════════════════════════════
+/// Return the mesh as OBJ text: one v line per vertex, one f line per face with 1-based indices.
 pub fn write_file_obj_to_string(mesh: &Mesh) -> String {
-    let (vertices, faces) = mesh.to_vertices_and_faces();
-    let mut s = String::new();
+    let indexed = mesh.to_vertices_and_faces();
+    let vertices = &indexed.0;
+    let faces = &indexed.1;
+
+    let mut out = String::new();
 
     for p in vertices.iter() {
-        s.push_str(&format!("v {} {} {}\n", p[0], p[1], p[2]));
+        out.push_str(&format!("v {} {} {}\n", p[0], p[1], p[2]));
     }
 
     for face in faces.iter() {
@@ -15,24 +23,27 @@ pub fn write_file_obj_to_string(mesh: &Mesh) -> String {
             continue;
         }
 
-        s.push('f');
+        out.push('f');
 
         for i in face.iter() {
-            s.push_str(&format!(" {}", i + 1));
+            out.push_str(&format!(" {}", i + 1));
         }
 
-        s.push('\n');
+        out.push('\n');
     }
 
-    s
+    out
 }
 
-/// Writes the mesh as an OBJ file.
+/// Write the mesh as an OBJ file.
 pub fn write_file_obj(mesh: &Mesh, filepath: &str) -> io::Result<()> {
     std::fs::write(filepath, write_file_obj_to_string(mesh))
 }
 
-/// Mesh from OBJ text; v and f lines only, negative indices count from the end.
+// ═══════════════════════════════════════════════════════════════════════════
+// Read
+// ═══════════════════════════════════════════════════════════════════════════
+/// Return the mesh read from OBJ text; v and f lines only, negative indices count from the end.
 pub fn read_file_obj_from_str(content: &str) -> Mesh {
     let mut verts: Vec<Point> = Vec::new();
     let mut faces: Vec<Vec<usize>> = Vec::new();
@@ -73,6 +84,7 @@ pub fn read_file_obj_from_str(content: &str) -> Mesh {
                 } else {
                     verts.len() as i64 + idx
                 };
+
                 face.push(vidx as usize);
             }
 
@@ -85,14 +97,14 @@ pub fn read_file_obj_from_str(content: &str) -> Mesh {
     Mesh::from_vertices_and_faces(verts, faces)
 }
 
-/// Mesh from an OBJ file.
+/// Return the mesh read from an OBJ file.
 pub fn read_file_obj(filepath: &str) -> io::Result<Mesh> {
     let content = std::fs::read_to_string(filepath)?;
 
     Ok(read_file_obj_from_str(&content))
 }
 
-/// Polylines from the curv blocks of an OBJ file.
+/// Return the polylines read from the curv blocks of an OBJ file.
 pub fn read_file_obj_polylines(filepath: &str) -> io::Result<Vec<Polyline>> {
     let content = std::fs::read_to_string(filepath)?;
     let mut verts: Vec<Point> = Vec::new();
@@ -125,7 +137,10 @@ pub fn read_file_obj_polylines(filepath: &str) -> io::Result<Vec<Polyline>> {
             curv.clear();
 
             for tok in line.split_whitespace().skip(3) {
-                let Ok(idx) = tok.parse::<i64>() else { break };
+                let Ok(idx) = tok.parse::<i64>() else {
+                    break;
+                };
+
                 curv.push(idx);
             }
 
