@@ -1,6 +1,8 @@
 use crate::mini_test::TestResult;
 use crate::tolerance::TOLERANCE;
-use crate::{MINI_CHECK, MINI_TEST, REGISTER_MINI_TEST};
+use crate::MINI_CHECK;
+use crate::MINI_TEST;
+use crate::REGISTER_MINI_TEST;
 
 pub fn run_point_constructor() -> TestResult {
     MINI_TEST!("Constructor", {
@@ -26,10 +28,13 @@ pub fn run_point_constructor() -> TestResult {
 
         let mut pmult = p.duplicate();
         pmult *= 2.0;
+
         let mut pdiv = p.duplicate();
         pdiv /= 2.0;
+
         let mut padd = p.duplicate();
         padd += Vector::new(1.0, 1.0, 1.0);
+
         let mut psub = p.duplicate();
         psub -= Vector::new(1.0, 1.0, 1.0);
 
@@ -42,7 +47,7 @@ pub fn run_point_constructor() -> TestResult {
         let p1 = Point::new(1.0, 2.0, 3.0);
         let p2 = Point::new(4.0, 5.0, 6.0);
         let psum = Point::sum(&p1, &p2);
-        let pdif = Point::sub(&p2, &p1);
+        let pdif = &p2 - &p1;
 
         MINI_CHECK!(p.name == "my_point");
         MINI_CHECK!(p[0] == 10.0 && p[1] == 20.0 && p[2] == 30.0);
@@ -92,9 +97,12 @@ pub fn run_point_json_roundtrip() -> TestResult {
         p.width = 2.0;
         p.pointcolor = Color::new(1.0, 0.5, 0.25, 1.0);
 
+        let guid = p.guid().to_string();
         let filename = "serialization/test_point.json";
         p.file_json_dump(filename).unwrap();
+
         let loaded = Point::file_json_load(filename).unwrap();
+        let parsed = Point::file_json_loads(&p.file_json_dumps());
 
         MINI_CHECK!(loaded.name == "test_point");
         MINI_CHECK!(loaded[0] == 1.5 && loaded[1] == 2.5 && loaded[2] == 3.5);
@@ -103,6 +111,9 @@ pub fn run_point_json_roundtrip() -> TestResult {
         MINI_CHECK!(loaded.pointcolor[1] == 0.5);
         MINI_CHECK!(loaded.pointcolor[2] == 0.25);
         MINI_CHECK!(loaded.pointcolor[3] == 1.0);
+        MINI_CHECK!(parsed == p);
+        MINI_CHECK!(loaded.guid() == guid);
+        MINI_CHECK!(parsed.guid() == guid);
     })
 }
 
@@ -111,14 +122,22 @@ pub fn run_point_protobuf_roundtrip() -> TestResult {
         use crate::Color;
         use crate::Point;
 
+        let fresh = Point::default();
+        let fresh_proto = fresh.to_proto();
         let mut p = Point::with_name(1.5, 2.5, 3.5, "test_point");
         p.width = 2.0;
         p.pointcolor = Color::new(1.0, 0.5, 0.25, 1.0);
 
+        let guid = p.guid().to_string();
         let filename = "serialization/test_point.bin";
         p.pb_dump(filename);
-        let loaded = Point::pb_load(filename);
 
+        let loaded = Point::pb_load(filename);
+        let parsed = Point::pb_loads(&p.pb_dumps()).unwrap();
+        let converted = Point::from_proto(p.to_proto());
+
+        MINI_CHECK!(!fresh.has_guid());
+        MINI_CHECK!(fresh_proto.guid.is_empty());
         MINI_CHECK!(loaded.name == "test_point");
         MINI_CHECK!(loaded[0] == 1.5 && loaded[1] == 2.5 && loaded[2] == 3.5);
         MINI_CHECK!(loaded.width == 2.0);
@@ -126,6 +145,11 @@ pub fn run_point_protobuf_roundtrip() -> TestResult {
         MINI_CHECK!(loaded.pointcolor[1] == 0.5);
         MINI_CHECK!(loaded.pointcolor[2] == 0.25);
         MINI_CHECK!(loaded.pointcolor[3] == 1.0);
+        MINI_CHECK!(parsed == p);
+        MINI_CHECK!(loaded.guid() == guid);
+        MINI_CHECK!(parsed.guid() == guid);
+        MINI_CHECK!(converted == p);
+        MINI_CHECK!(converted.guid() == guid);
     })
 }
 
@@ -162,7 +186,7 @@ pub fn run_point_distance() -> TestResult {
 
         let p0 = Point::new(0.0, 2.0, 1.0);
         let p1 = Point::new(1.0, 5.0, 3.0);
-        let d = p0.distance(&p1, None);
+        let d = Point::distance(&p0, &p1, None);
 
         MINI_CHECK!(TOLERANCE.is_close(d, 3.741657));
     })
@@ -174,7 +198,7 @@ pub fn run_point_squared_distance() -> TestResult {
 
         let p0 = Point::new(0.0, 2.0, 1.0);
         let p1 = Point::new(1.0, 5.0, 3.0);
-        let d = p0.squared_distance(&p1, None);
+        let d = Point::squared_distance(&p0, &p1, None);
 
         MINI_CHECK!(TOLERANCE.is_close(d, 14.0));
     })
