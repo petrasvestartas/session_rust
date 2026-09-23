@@ -1377,33 +1377,18 @@ pub fn get_all_tests() -> Vec<RegisteredTest> {
         },
         RegisteredTest {
             group: "PointCloud",
+            name: "From Coords",
+            func: run_pointcloud_from_coords,
+        },
+        RegisteredTest {
+            group: "PointCloud",
             name: "Transform",
             func: run_pointcloud_transform,
         },
         RegisteredTest {
             group: "PointCloud",
-            name: "Build Lod",
-            func: run_pointcloud_build_lod,
-        },
-        RegisteredTest {
-            group: "PointCloud",
-            name: "Point Ids",
-            func: run_pointcloud_point_ids,
-        },
-        RegisteredTest {
-            group: "PointCloud",
-            name: "Json Roundtrip",
-            func: run_pointcloud_json_roundtrip,
-        },
-        RegisteredTest {
-            group: "PointCloud",
-            name: "Protobuf Roundtrip",
-            func: run_pointcloud_protobuf_roundtrip,
-        },
-        RegisteredTest {
-            group: "PointCloud",
-            name: "From Coords",
-            func: run_pointcloud_from_coords,
+            name: "Transformed",
+            func: run_pointcloud_transformed,
         },
         RegisteredTest {
             group: "PointCloud",
@@ -1442,6 +1427,11 @@ pub fn get_all_tests() -> Vec<RegisteredTest> {
         },
         RegisteredTest {
             group: "PointCloud",
+            name: "Coords",
+            func: run_pointcloud_coords,
+        },
+        RegisteredTest {
+            group: "PointCloud",
             name: "Color Count",
             func: run_pointcloud_color_count,
         },
@@ -1464,6 +1454,11 @@ pub fn get_all_tests() -> Vec<RegisteredTest> {
             group: "PointCloud",
             name: "Get Colors",
             func: run_pointcloud_get_colors,
+        },
+        RegisteredTest {
+            group: "PointCloud",
+            name: "Colors",
+            func: run_pointcloud_colors,
         },
         RegisteredTest {
             group: "PointCloud",
@@ -1492,8 +1487,28 @@ pub fn get_all_tests() -> Vec<RegisteredTest> {
         },
         RegisteredTest {
             group: "PointCloud",
-            name: "Transformed",
-            func: run_pointcloud_transformed,
+            name: "Normals",
+            func: run_pointcloud_normals,
+        },
+        RegisteredTest {
+            group: "PointCloud",
+            name: "Build Lod",
+            func: run_pointcloud_build_lod,
+        },
+        RegisteredTest {
+            group: "PointCloud",
+            name: "Point Ids",
+            func: run_pointcloud_point_ids,
+        },
+        RegisteredTest {
+            group: "PointCloud",
+            name: "Json Roundtrip",
+            func: run_pointcloud_json_roundtrip,
+        },
+        RegisteredTest {
+            group: "PointCloud",
+            name: "Protobuf Roundtrip",
+            func: run_pointcloud_protobuf_roundtrip,
         },
         // Xform tests
         RegisteredTest {
@@ -4484,17 +4499,6 @@ pub fn get_all_tests() -> Vec<RegisteredTest> {
             group: "SpatialKDTree",
             name: "Radius Search",
             func: run_kdtree_radius_search,
-        },
-        // PointCloud tests - were registered by macro only; see the drift guard in run_all.
-        RegisteredTest {
-            group: "PointCloud",
-            name: "Coords",
-            func: run_pointcloud_coords,
-        },
-        RegisteredTest {
-            group: "PointCloud",
-            name: "Colors",
-            func: run_pointcloud_colors,
         },
         // SpatialOctree tests - were registered by macro only; see the drift guard in run_all.
         RegisteredTest {
