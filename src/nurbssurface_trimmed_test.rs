@@ -40,6 +40,7 @@ pub fn run_nurbssurface_trimmed_singular_planar_normal() -> TestResult {
         let mesh = trimmed.mesh_loops(&loops, 5.0, 0.001);
 
         MINI_CHECK!(!mesh.face.is_empty());
+
         let mut apex = false;
 
         for vertex in mesh.vertex.values() {
@@ -47,6 +48,7 @@ pub fn run_nurbssurface_trimmed_singular_planar_normal() -> TestResult {
 
             MINI_CHECK!(normal[0].abs() < 1e-12 && normal[2].abs() < 1e-12);
             MINI_CHECK!((normal[1].abs() - 1.0).abs() < 1e-12);
+
             apex = apex || vertex.z == 1.0;
         }
 
@@ -95,6 +97,7 @@ pub fn run_nurbssurface_trimmed_crease_loops() -> TestResult {
         let mesh = ts.mesh_loops(&loops, 20.0, 0.005);
 
         MINI_CHECK!(mesh.vertex.len() == 16 && mesh.face.len() == 12);
+
         let mut flat = 0;
         let mut tilted = 0;
 
@@ -112,6 +115,7 @@ pub fn run_nurbssurface_trimmed_crease_loops() -> TestResult {
             }
 
             MINI_CHECK!(interval && vd.z == 0.0);
+
             let normal = vd.normal().unwrap();
 
             if normal[0].abs() < 1e-12 {
@@ -148,6 +152,7 @@ pub fn run_nurbssurface_trimmed_crease_loops() -> TestResult {
             }
 
             MINI_CHECK!(!(low < 1.0 && high > 1.0));
+
             u /= 3.0;
             v /= 3.0;
 
@@ -227,6 +232,7 @@ pub fn run_nurbssurface_trimmed_mesh_loops() -> TestResult {
                     for vd in mesh.vertex.values() {
                         if vd.attributes.contains_key(&key) {
                             MINI_CHECK!(vd.x == p[0] && vd.y == p[1] && vd.z == p[2]);
+
                             found = true;
                             break;
                         }
@@ -288,6 +294,8 @@ pub fn run_nurbssurface_trimmed_constructor() -> TestResult {
         let srepr = ts.repr();
 
         let tscopy = ts.duplicate();
+        let mut tshole = ts.duplicate();
+        tshole.add_inner_loop(outer.clone());
 
         MINI_CHECK!(ts.is_valid());
         MINI_CHECK!(ts.is_trimmed());
@@ -298,6 +306,7 @@ pub fn run_nurbssurface_trimmed_constructor() -> TestResult {
         MINI_CHECK!(tscopy.is_valid());
         MINI_CHECK!(tscopy.guid() != ts.guid());
         MINI_CHECK!(tscopy == ts);
+        MINI_CHECK!(tshole != ts);
     })
 }
 

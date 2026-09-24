@@ -134,6 +134,68 @@ fn refine_crossing(
     (u, v)
 }
 
+/// Normal turn in degrees along dir over [t0, t1] on the line smid of the other direction, summed over four steps.
+fn span_turn(srf: &NurbsSurface, dir: usize, t0: f64, t1: f64, smid: f64) -> f64 {
+    let mut ma = 0.0_f64;
+    let mut pn = Vector::new(0.0, 0.0, 0.0);
+
+    for k in 0..=4 {
+        let t = t0 + k as f64 * (t1 - t0) / 4.0;
+        let nm = if dir == 0 {
+            srf.normal_at(t, smid)
+        } else {
+            srf.normal_at(smid, t)
+        };
+
+        if k > 0 {
+            let d = pn.dot(&nm).clamp(-1.0, 1.0);
+            ma += d.acos() * 180.0 / PI;
+        }
+
+        pn = nm;
+    }
+
+    ma
+}
+
+/// Largest distance of the quarter points along dir over [t0, t1] on the line smid from their chord.
+fn span_deviation(srf: &NurbsSurface, dir: usize, t0: f64, t1: f64, smid: f64) -> f64 {
+    let p0 = if dir == 0 {
+        eval3(srf, t0, smid)
+    } else {
+        eval3(srf, smid, t0)
+    };
+    let p1 = if dir == 0 {
+        eval3(srf, t1, smid)
+    } else {
+        eval3(srf, smid, t1)
+    };
+    let mut dev = 0.0_f64;
+
+    for k in 1..=3 {
+        let fr = k as f64 / 4.0;
+        let tm = t0 + fr * (t1 - t0);
+        let pm = if dir == 0 {
+            eval3(srf, tm, smid)
+        } else {
+            eval3(srf, smid, tm)
+        };
+        let lx = p0[0] + fr * (p1[0] - p0[0]);
+        let ly = p0[1] + fr * (p1[1] - p0[1]);
+        let lz = p0[2] + fr * (p1[2] - p0[2]);
+        let dd = ((pm[0] - lx) * (pm[0] - lx)
+            + (pm[1] - ly) * (pm[1] - ly)
+            + (pm[2] - lz) * (pm[2] - lz))
+            .sqrt();
+
+        if dd > dev {
+            dev = dd;
+        }
+    }
+
+    dev
+}
+
 /// Subdivisions per span along dir from the normal turn (max_angle_deg) and the chord deviation (chord_tol) at the mid line of the other direction.
 fn span_subdivisions(
     srf: &NurbsSurface,
@@ -153,60 +215,11 @@ fn span_subdivisions(
         let t1 = sp[i + 1];
 
         if deg > 1 {
-            let mut ma = 0.0_f64;
-            let mut pn = Vector::new(0.0, 0.0, 0.0);
-
-            for k in 0..=4 {
-                let t = t0 + k as f64 * (t1 - t0) / 4.0;
-                let nm = if dir == 0 {
-                    srf.normal_at(t, smid)
-                } else {
-                    srf.normal_at(smid, t)
-                };
-
-                if k > 0 {
-                    let d = pn.dot(&nm).clamp(-1.0, 1.0);
-                    ma += d.acos() * 180.0 / PI;
-                }
-
-                pn = nm;
-            }
-
+            let ma = span_turn(srf, dir, t0, t1, smid);
             subs[i] = subs[i].max(1.max(((ma / max_angle_deg).ceil() as usize).min(64)));
         }
 
-        let p0 = if dir == 0 {
-            eval3(srf, t0, smid)
-        } else {
-            eval3(srf, smid, t0)
-        };
-        let p1 = if dir == 0 {
-            eval3(srf, t1, smid)
-        } else {
-            eval3(srf, smid, t1)
-        };
-        let mut dev = 0.0_f64;
-
-        for k in 1..=3 {
-            let fr = k as f64 / 4.0;
-            let tm = t0 + fr * (t1 - t0);
-            let pm = if dir == 0 {
-                eval3(srf, tm, smid)
-            } else {
-                eval3(srf, smid, tm)
-            };
-            let lx = p0[0] + fr * (p1[0] - p0[0]);
-            let ly = p0[1] + fr * (p1[1] - p0[1]);
-            let lz = p0[2] + fr * (p1[2] - p0[2]);
-            let dd = ((pm[0] - lx) * (pm[0] - lx)
-                + (pm[1] - ly) * (pm[1] - ly)
-                + (pm[2] - lz) * (pm[2] - lz))
-                .sqrt();
-
-            if dd > dev {
-                dev = dd;
-            }
-        }
+        let dev = span_deviation(srf, dir, t0, t1, smid);
 
         if dev > chord_tol {
             subs[i] = subs[i].max(((dev / chord_tol).sqrt().ceil() as usize).min(64));
@@ -229,6 +242,35 @@ fn span_parameters(sp: &[f64], subs: &[usize]) -> Vec<f64> {
     out.push(sp[sp.len() - 1]);
 
     out
+}
+
+/// Span-adaptive grid parameters in u and v; None when the surface has no span in a direction.
+fn span_grid(
+    srf: &NurbsSurface,
+    max_angle_deg: f64,
+    chord_tol: f64,
+) -> Option<(Vec<f64>, Vec<f64>)> {
+    let usp = srf.get_span_vector(0);
+    let vsp = srf.get_span_vector(1);
+
+    if usp.len() < 2 || vsp.len() < 2 {
+        return None;
+    }
+
+    let us = span_parameters(
+        &usp,
+        &span_subdivisions(srf, 0, &usp, &vsp, srf.degree(0), max_angle_deg, chord_tol),
+    );
+    let vs = span_parameters(
+        &vsp,
+        &span_subdivisions(srf, 1, &vsp, &usp, srf.degree(1), max_angle_deg, chord_tol),
+    );
+
+    if us.len() < 2 || vs.len() < 2 {
+        return None;
+    }
+
+    Some((us, vs))
 }
 
 /// Unit normal as a plain array, or none when degenerate.
@@ -338,25 +380,6 @@ fn project_to_uv(
     Point::new(d.dot(u_axis) / u_len2, d.dot(v_axis) / v_len2, 0.0)
 }
 
-/// Snap a UV point onto the domain border when within snap_uv of it.
-fn snap_to_border(p: &mut [f64; 2], u0: f64, u1: f64, v0: f64, v1: f64, snap_uv: f64) {
-    if (p[0] - u0).abs() < snap_uv {
-        p[0] = u0;
-    }
-
-    if (p[0] - u1).abs() < snap_uv {
-        p[0] = u1;
-    }
-
-    if (p[1] - v0).abs() < snap_uv {
-        p[1] = v0;
-    }
-
-    if (p[1] - v1).abs() < snap_uv {
-        p[1] = v1;
-    }
-}
-
 // ═══════════════════════════════════════════════════════════════════════════
 // VertexWelder
 // ═══════════════════════════════════════════════════════════════════════════
@@ -420,6 +443,145 @@ impl VertexWelder {
 
         vk
     }
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Plane clipping
+// ═══════════════════════════════════════════════════════════════════════════
+/// Welded polygon of the part of a grid cell where the field is <= 0: kept corners and Newton-refined edge crossings in order.
+fn clip_cell(
+    welder: &mut VertexWelder,
+    mesh: &mut Mesh,
+    srf: &NurbsSurface,
+    q: &[f64; 3],
+    n: &[f64; 3],
+    cu: &[f64; 4],
+    cv: &[f64; 4],
+    fc: &[f64; 4],
+) -> Vec<usize> {
+    let inn = [fc[0] <= 0.0, fc[1] <= 0.0, fc[2] <= 0.0, fc[3] <= 0.0];
+    let mut poly: Vec<usize> = Vec::new();
+
+    for k in 0..4 {
+        let kn = (k + 1) % 4;
+
+        if inn[k] {
+            poly.push(welder.weld_surface(mesh, srf, cu[k], cv[k]));
+        }
+
+        if inn[k] != inn[kn] {
+            let t = if (fc[k] - fc[kn]).abs() > 1e-30 {
+                fc[k] / (fc[k] - fc[kn])
+            } else {
+                0.5
+            };
+            let u = cu[k] + (cu[kn] - cu[k]) * t;
+            let v = cv[k] + (cv[kn] - cv[k]) * t;
+            let (u, v) = refine_crossing(srf, q, n, u, v);
+            poly.push(welder.weld_surface(mesh, srf, u, v));
+        }
+    }
+
+    poly
+}
+
+/// Fan a welded polygon into the mesh from its first vertex, skipping triangles with a repeated vertex.
+fn add_fan(mesh: &mut Mesh, poly: &[usize]) {
+    for t in 1..poly.len().saturating_sub(1) {
+        let a = poly[0];
+        let b = poly[t];
+        let c = poly[t + 1];
+
+        if a == b || b == c || c == a {
+            continue;
+        }
+
+        mesh.add_face(vec![a, b, c], None);
+    }
+}
+
+/// Two UV triangles per cell of the grid us x vs.
+fn grid_triangles(us: &[f64], vs: &[f64]) -> Vec<[[f64; 2]; 3]> {
+    let mut tris: Vec<[[f64; 2]; 3]> = Vec::with_capacity((us.len() - 1) * (vs.len() - 1) * 2);
+
+    for i in 0..us.len() - 1 {
+        for j in 0..vs.len() - 1 {
+            let a = [us[i], vs[j]];
+            let b = [us[i + 1], vs[j]];
+            let c = [us[i + 1], vs[j + 1]];
+            let d = [us[i], vs[j + 1]];
+            tris.push([a, b, c]);
+            tris.push([a, c, d]);
+        }
+    }
+
+    tris
+}
+
+/// UV triangles clipped to the half (S-q).n <= 1e-9, each kept part fanned from its first corner.
+fn clip_triangles(
+    srf: &NurbsSurface,
+    q: &[f64; 3],
+    n: &[f64; 3],
+    tris: &[[[f64; 2]; 3]],
+) -> Vec<[[f64; 2]; 3]> {
+    let eps = 1e-9;
+    let mut next: Vec<[[f64; 2]; 3]> = Vec::new();
+
+    for t in tris {
+        let mut poly: Vec<[f64; 2]> = Vec::new();
+
+        for e in 0..3 {
+            let p = t[e];
+            let r = t[(e + 1) % 3];
+            let fp = plane_field(srf, q, n, p[0], p[1]);
+            let fr = plane_field(srf, q, n, r[0], r[1]);
+            let pin = fp <= eps;
+            let rin = fr <= eps;
+
+            if pin {
+                poly.push(p);
+            }
+
+            if pin != rin {
+                let tt = if (fp - fr).abs() > 1e-30 {
+                    fp / (fp - fr)
+                } else {
+                    0.5
+                };
+                let cu = p[0] + (r[0] - p[0]) * tt;
+                let cv = p[1] + (r[1] - p[1]) * tt;
+                let (cu, cv) = refine_crossing(srf, q, n, cu, cv);
+                poly.push([cu, cv]);
+            }
+        }
+
+        for w in 1..poly.len().saturating_sub(1) {
+            next.push([poly[0], poly[w], poly[w + 1]]);
+        }
+    }
+
+    next
+}
+
+/// Mesh of UV triangles lifted onto the surface, seams welded within weld_tol, degenerate faces skipped.
+fn weld_triangles(srf: &NurbsSurface, tris: &[[[f64; 2]; 3]], weld_tol: f64) -> Mesh {
+    let mut result = Mesh::new();
+    let mut welder = VertexWelder::new(weld_tol, weld_tol);
+
+    for t in tris {
+        let a = welder.weld_surface(&mut result, srf, t[0][0], t[0][1]);
+        let b = welder.weld_surface(&mut result, srf, t[1][0], t[1][1]);
+        let c = welder.weld_surface(&mut result, srf, t[2][0], t[2][1]);
+
+        if a == b || b == c || c == a {
+            continue;
+        }
+
+        result.add_face(vec![a, b, c], None);
+    }
+
+    result
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -489,6 +651,576 @@ struct HalfEdge {
     fwd: bool,   // True when it runs a -> b.
 }
 
+/// UV domain of the split surface and the distance under which UV points snap together.
+#[derive(Clone, Copy)]
+struct SplitDomain {
+    u0: f64,   // Start of the u domain.
+    u1: f64,   // End of the u domain.
+    v0: f64,   // Start of the v domain.
+    v1: f64,   // End of the v domain.
+    snap: f64, // Snap distance in UV.
+}
+
+/// Sampled pcurve in UV with the parameter of each sample.
+struct UVPoly {
+    cidx: i32,          // Pcurve index, negative for a domain border.
+    pts: Vec<[f64; 2]>, // UV samples.
+    ts: Vec<f64>,       // Parameter per sample.
+}
+
+/// Consecutive half-edges of a cycle on one pcurve.
+struct Run {
+    cidx: i32, // Pcurve index, negative for a domain border.
+    va: usize, // First vertex.
+    vb: usize, // Last vertex.
+    ta: f64,   // Parameter at va.
+    tb: f64,   // Parameter at vb.
+}
+
+/// Domain of the surface with the snap distance: tolerance carried from 3D into UV, else 1e-7 of the shorter side.
+fn split_domain(srf: &NurbsSurface, tolerance: f64) -> SplitDomain {
+    let (u0, u1) = srf.domain(0).unwrap_or((0.0, 1.0));
+    let (v0, v1) = srf.domain(1).unwrap_or((0.0, 1.0));
+    let range_u = u1 - u0;
+    let range_v = v1 - v0;
+
+    let spans_u = srf.get_span_vector(0);
+    let spans_v = srf.get_span_vector(1);
+    let nu = spans_u.len().saturating_sub(1).max(1) * 4;
+    let nv = spans_v.len().saturating_sub(1).max(1) * 4;
+    let du = range_u / nu as f64;
+    let dv = range_v / nv as f64;
+    let mu = (u0 + u1) * 0.5;
+    let mv = (v0 + v1) * 0.5;
+    let pmid = srf.point_at(mu, mv).unwrap_or_default();
+    let uv_to_3d_u = pmid.distance(
+        &srf.point_at((mu + du).min(u1), mv).unwrap_or_default(),
+        None,
+    ) / du;
+    let uv_to_3d_v = pmid.distance(
+        &srf.point_at(mu, (mv + dv).min(v1)).unwrap_or_default(),
+        None,
+    ) / dv;
+    let mut uv_to_3d = uv_to_3d_u.max(uv_to_3d_v);
+
+    if uv_to_3d < 1e-10 {
+        uv_to_3d = 1.0;
+    }
+
+    let snap = if tolerance > 0.0 {
+        (tolerance / uv_to_3d).max(1e-9)
+    } else {
+        range_u.min(range_v) * 1e-7
+    };
+
+    SplitDomain {
+        u0,
+        u1,
+        v0,
+        v1,
+        snap,
+    }
+}
+
+/// Snap a UV point onto the domain border when within the snap distance of it.
+fn snap_to_border(p: &mut [f64; 2], dom: &SplitDomain) {
+    if (p[0] - dom.u0).abs() < dom.snap {
+        p[0] = dom.u0;
+    }
+
+    if (p[0] - dom.u1).abs() < dom.snap {
+        p[0] = dom.u1;
+    }
+
+    if (p[1] - dom.v0).abs() < dom.snap {
+        p[1] = dom.v0;
+    }
+
+    if (p[1] - dom.v1).abs() < dom.snap {
+        p[1] = dom.v1;
+    }
+}
+
+/// One pass inserting the parameter midpoint of every chord farther than samp_tol from the curve; the count inserted.
+fn refine_samples(crv: &NurbsCurve, entries: &mut Vec<[f64; 3]>, samp_tol: f64) -> usize {
+    let mut inserted = 0;
+    let mut i = 0;
+
+    while i + 1 < entries.len() {
+        let a = entries[i];
+        let b = entries[i + 1];
+        let tm = (a[0] + b[0]) * 0.5;
+        let pm = crv.point_at(tm);
+        let exu = b[1] - a[1];
+        let exv = b[2] - a[2];
+        let l2 = exu * exu + exv * exv;
+        let mut dev = 0.0;
+
+        if l2 > 1e-30 {
+            let s = ((pm[0] - a[1]) * exu + (pm[1] - a[2]) * exv) / l2;
+            let cx = a[1] + s * exu;
+            let cy = a[2] + s * exv;
+            dev = (pm[0] - cx).hypot(pm[1] - cy);
+        }
+
+        if dev > samp_tol && entries.len() < 4096 {
+            entries.insert(i + 1, [tm, pm[0], pm[1]]);
+            inserted += 1;
+            i += 2;
+        } else {
+            i += 1;
+        }
+    }
+
+    inserted
+}
+
+/// Samples (t, u, v) of a pcurve: uniform in t, then up to six passes of chord refinement.
+fn sample_pcurve(crv: &NurbsCurve, samp_tol: f64) -> Vec<[f64; 3]> {
+    let (ct0, ct1) = crv.domain();
+    let n = (crv.cv_count() * 4).clamp(16, 2048);
+    let mut entries: Vec<[f64; 3]> = Vec::new();
+
+    for i in 0..=n {
+        let t = ct0 + (ct1 - ct0) * i as f64 / n as f64;
+        let p = crv.point_at(t);
+        entries.push([t, p[0], p[1]]);
+    }
+
+    for _depth in 0..6 {
+        if refine_samples(crv, &mut entries, samp_tol) == 0 {
+            break;
+        }
+    }
+
+    entries
+}
+
+/// Polyline of pcurve cidx from its samples: clamped into the domain, snapped to the border, repeats dropped.
+fn clamp_samples(entries: &[[f64; 3]], cidx: i32, dom: &SplitDomain) -> UVPoly {
+    let mut poly = UVPoly {
+        cidx,
+        pts: Vec::new(),
+        ts: Vec::new(),
+    };
+
+    for e in entries {
+        let mut p = [e[1].max(dom.u0).min(dom.u1), e[2].max(dom.v0).min(dom.v1)];
+        snap_to_border(&mut p, dom);
+
+        if let Some(last) = poly.pts.last() {
+            if (p[0] - last[0]).abs() < 1e-15 && (p[1] - last[1]).abs() < 1e-15 {
+                continue;
+            }
+        }
+
+        poly.pts.push(p);
+        poly.ts.push(e[0]);
+    }
+
+    poly
+}
+
+/// True when every point lies within the snap distance of one domain side.
+fn on_border(pts: &[[f64; 2]], dom: &SplitDomain) -> bool {
+    let mut on_u0 = true;
+    let mut on_u1 = true;
+    let mut on_v0 = true;
+    let mut on_v1 = true;
+
+    for p in pts {
+        if (p[0] - dom.u0).abs() >= dom.snap {
+            on_u0 = false;
+        }
+
+        if (p[0] - dom.u1).abs() >= dom.snap {
+            on_u1 = false;
+        }
+
+        if (p[1] - dom.v0).abs() >= dom.snap {
+            on_v0 = false;
+        }
+
+        if (p[1] - dom.v1).abs() >= dom.snap {
+            on_v1 = false;
+        }
+    }
+
+    on_u0 || on_u1 || on_v0 || on_v1
+}
+
+/// Length of a UV polyline.
+fn polyline_length(pts: &[[f64; 2]]) -> f64 {
+    let mut ext = 0.0;
+
+    for k in 1..pts.len() {
+        ext += (pts[k][0] - pts[k - 1][0]).hypot(pts[k][1] - pts[k - 1][1]);
+    }
+
+    ext
+}
+
+/// Polylines of the valid pcurves that neither hug the border nor fall short of min_ext, then the four domain sides.
+fn uv_polylines(pcurves: &[NurbsCurve], dom: &SplitDomain) -> Vec<UVPoly> {
+    let range_u = dom.u1 - dom.u0;
+    let range_v = dom.v1 - dom.v0;
+    let samp_tol = range_u.max(range_v) * 2e-5;
+    let min_ext = (dom.snap * 8.0).max(range_u.min(range_v) * 1e-5);
+    let mut polylines: Vec<UVPoly> = Vec::new();
+
+    for (cidx, crv) in pcurves.iter().enumerate() {
+        if !crv.is_valid() {
+            continue;
+        }
+
+        let poly = clamp_samples(&sample_pcurve(crv, samp_tol), cidx as i32, dom);
+
+        if poly.pts.len() >= 2
+            && !on_border(&poly.pts, dom)
+            && polyline_length(&poly.pts) >= min_ext
+        {
+            polylines.push(poly);
+        }
+    }
+
+    polylines.push(UVPoly {
+        cidx: -1,
+        pts: vec![[dom.u0, dom.v0], [dom.u1, dom.v0]],
+        ts: vec![dom.u0, dom.u1],
+    });
+    polylines.push(UVPoly {
+        cidx: -2,
+        pts: vec![[dom.u1, dom.v0], [dom.u1, dom.v1]],
+        ts: vec![dom.v0, dom.v1],
+    });
+    polylines.push(UVPoly {
+        cidx: -3,
+        pts: vec![[dom.u1, dom.v1], [dom.u0, dom.v1]],
+        ts: vec![dom.u1, dom.u0],
+    });
+    polylines.push(UVPoly {
+        cidx: -4,
+        pts: vec![[dom.u0, dom.v1], [dom.u0, dom.v0]],
+        ts: vec![dom.v1, dom.v0],
+    });
+
+    polylines
+}
+
+/// UV bounds (umin, umax, vmin, vmax) of a polyline.
+fn uv_bounds(pts: &[[f64; 2]]) -> [f64; 4] {
+    let mut bounds = [pts[0][0], pts[0][0], pts[0][1], pts[0][1]];
+
+    for p in pts {
+        bounds[0] = bounds[0].min(p[0]);
+        bounds[1] = bounds[1].max(p[0]);
+        bounds[2] = bounds[2].min(p[1]);
+        bounds[3] = bounds[3].max(p[1]);
+    }
+
+    bounds
+}
+
+/// True when the bounds of B meet the bounds of A grown by snap.
+fn boxes_overlap(a_poly: &UVPoly, b_poly: &UVPoly, snap: f64) -> bool {
+    let a = uv_bounds(&a_poly.pts);
+    let b = uv_bounds(&b_poly.pts);
+
+    !(b[0] > a[1] + snap || b[1] < a[0] - snap || b[2] > a[3] + snap || b[3] < a[2] - snap)
+}
+
+/// Parameter of a point along domain side cidx: u on the bottom and top sides, v on the left and right.
+fn border_parameter(cidx: i32, hp: &[f64; 2]) -> f64 {
+    if cidx == -1 || cidx == -3 {
+        hp[0]
+    } else {
+        hp[1]
+    }
+}
+
+/// UV point of a crossing moved onto its pcurves, Newton-refined when both are pcurves, snapped to the border; ta and tb follow it.
+fn crossing_point(
+    acidx: i32,
+    mut ta: f64,
+    bcidx: i32,
+    mut tb: f64,
+    hit: [f64; 2],
+    pcurves: &[NurbsCurve],
+    dom: &SplitDomain,
+) -> ([f64; 2], f64, f64) {
+    let mut hp = hit;
+
+    if acidx >= 0 && bcidx >= 0 {
+        (ta, tb) = newton_curve_curve(
+            &pcurves[acidx as usize],
+            ta,
+            &pcurves[bcidx as usize],
+            tb,
+            dom.snap * 0.01,
+        );
+    }
+
+    if acidx >= 0 {
+        let pa = pcurves[acidx as usize].point_at(ta);
+        hp = [pa[0], pa[1]];
+    } else if bcidx >= 0 {
+        let pb = pcurves[bcidx as usize].point_at(tb);
+        hp = [pb[0], pb[1]];
+    }
+
+    snap_to_border(&mut hp, dom);
+
+    if bcidx < 0 {
+        tb = border_parameter(bcidx, &hp);
+    }
+
+    if acidx < 0 {
+        ta = border_parameter(acidx, &hp);
+    }
+
+    (hp, ta, tb)
+}
+
+/// Crossings of polylines pi and pj as events (fraction, u, v, parameter) on each crossed segment.
+fn add_crossings(
+    polylines: &[UVPoly],
+    pi: usize,
+    pj: usize,
+    pcurves: &[NurbsCurve],
+    dom: &SplitDomain,
+    splits: &mut HashMap<(usize, usize), Vec<(f64, f64, f64, f64)>>,
+) {
+    let a_poly = &polylines[pi];
+    let b_poly = &polylines[pj];
+
+    for ia in 0..a_poly.pts.len() - 1 {
+        for ib in 0..b_poly.pts.len() - 1 {
+            let Some((s, t)) = segment_intersection(
+                &a_poly.pts[ia],
+                &a_poly.pts[ia + 1],
+                &b_poly.pts[ib],
+                &b_poly.pts[ib + 1],
+            ) else {
+                continue;
+            };
+            let ta = a_poly.ts[ia] + (a_poly.ts[ia + 1] - a_poly.ts[ia]) * s;
+            let tb = b_poly.ts[ib] + (b_poly.ts[ib + 1] - b_poly.ts[ib]) * t;
+            let hit = [
+                a_poly.pts[ia][0] + (a_poly.pts[ia + 1][0] - a_poly.pts[ia][0]) * s,
+                a_poly.pts[ia][1] + (a_poly.pts[ia + 1][1] - a_poly.pts[ia][1]) * s,
+            ];
+            let (hp, ta, tb) = crossing_point(a_poly.cidx, ta, b_poly.cidx, tb, hit, pcurves, dom);
+            splits
+                .entry((pi, ia))
+                .or_default()
+                .push((s, hp[0], hp[1], ta));
+            splits
+                .entry((pj, ib))
+                .or_default()
+                .push((t, hp[0], hp[1], tb));
+        }
+    }
+}
+
+/// Crossing events of every pair of overlapping polylines with at least one pcurve, keyed by (polyline, segment).
+fn polyline_crossings(
+    polylines: &[UVPoly],
+    pcurves: &[NurbsCurve],
+    dom: &SplitDomain,
+) -> HashMap<(usize, usize), Vec<(f64, f64, f64, f64)>> {
+    let mut splits: HashMap<(usize, usize), Vec<(f64, f64, f64, f64)>> = HashMap::new();
+
+    for pi in 0..polylines.len() {
+        for pj in (pi + 1)..polylines.len() {
+            if (polylines[pi].cidx >= 0 || polylines[pj].cidx >= 0)
+                && boxes_overlap(&polylines[pi], &polylines[pj], dom.snap)
+            {
+                add_crossings(polylines, pi, pj, pcurves, dom, &mut splits);
+            }
+        }
+    }
+
+    splits
+}
+
+/// Graph edges along every polyline between consecutive pool vertices, its crossings inserted in order.
+fn split_edges(
+    polylines: &[UVPoly],
+    splits: &HashMap<(usize, usize), Vec<(f64, f64, f64, f64)>>,
+    pool: &mut UVVertexPool,
+) -> Vec<SplitEdge> {
+    let mut edges: Vec<SplitEdge> = Vec::new();
+
+    for (pi, poly) in polylines.iter().enumerate() {
+        let mut chain: Vec<(usize, f64)> = Vec::new();
+
+        for i in 0..poly.pts.len() {
+            chain.push((pool.id(poly.pts[i]), poly.ts[i]));
+
+            if i + 1 < poly.pts.len() {
+                if let Some(sp) = splits.get(&(pi, i)) {
+                    let mut evs = sp.clone();
+                    evs.sort_by(|x, y| x.partial_cmp(y).unwrap_or(std::cmp::Ordering::Equal));
+
+                    for ev in evs {
+                        chain.push((pool.id([ev.1, ev.2]), ev.3));
+                    }
+                }
+            }
+        }
+
+        for i in 0..chain.len().saturating_sub(1) {
+            let (a, ta) = chain[i];
+            let (b, tb) = chain[i + 1];
+
+            if a == b {
+                continue;
+            }
+
+            edges.push(SplitEdge {
+                a,
+                b,
+                cidx: poly.cidx,
+                ta,
+                tb,
+            });
+        }
+    }
+
+    edges
+}
+
+/// Edges left after repeatedly dropping every edge with an end of degree one.
+fn prune_dangling(edges: &[SplitEdge]) -> Vec<SplitEdge> {
+    let mut alive = vec![true; edges.len()];
+    let mut changed = true;
+
+    for _ in 0..=edges.len() {
+        if !changed {
+            break;
+        }
+
+        changed = false;
+        let mut degree: HashMap<usize, usize> = HashMap::new();
+
+        for (ei, e) in edges.iter().enumerate() {
+            if !alive[ei] {
+                continue;
+            }
+
+            *degree.entry(e.a).or_insert(0) += 1;
+            *degree.entry(e.b).or_insert(0) += 1;
+        }
+
+        for (ei, e) in edges.iter().enumerate() {
+            if !alive[ei] {
+                continue;
+            }
+
+            if degree.get(&e.a).copied().unwrap_or(0) == 1
+                || degree.get(&e.b).copied().unwrap_or(0) == 1
+            {
+                alive[ei] = false;
+                changed = true;
+            }
+        }
+    }
+
+    let mut live_edges: Vec<SplitEdge> = Vec::new();
+
+    for (ei, e) in edges.iter().enumerate() {
+        if alive[ei] {
+            live_edges.push(*e);
+        }
+    }
+
+    live_edges
+}
+
+/// Two opposite half-edges per edge, the forward one at the even index.
+fn half_edges(edges: &[SplitEdge]) -> Vec<HalfEdge> {
+    let mut hes: Vec<HalfEdge> = Vec::new();
+
+    for (ei, e) in edges.iter().enumerate() {
+        hes.push(HalfEdge {
+            tail: e.a,
+            head: e.b,
+            eidx: ei,
+            fwd: true,
+        });
+        hes.push(HalfEdge {
+            tail: e.b,
+            head: e.a,
+            eidx: ei,
+            fwd: false,
+        });
+    }
+
+    hes
+}
+
+/// Successor of every half-edge around its face: the twin of an outgoing half-edge continues with its predecessor in the angle-sorted fan.
+fn next_half_edges(hes: &[HalfEdge], verts: &[[f64; 2]]) -> Vec<usize> {
+    let mut out_map: Vec<Vec<usize>> = vec![Vec::new(); verts.len()];
+
+    for (hi, he) in hes.iter().enumerate() {
+        out_map[he.tail].push(hi);
+    }
+
+    for vid in 0..out_map.len() {
+        let mut fan: Vec<(f64, usize)> = Vec::new();
+
+        for &hi in &out_map[vid] {
+            let angle = (verts[hes[hi].head][1] - verts[vid][1])
+                .atan2(verts[hes[hi].head][0] - verts[vid][0]);
+            fan.push((angle, hi));
+        }
+
+        fan.sort_by(|x, y| x.partial_cmp(y).unwrap_or(std::cmp::Ordering::Equal));
+
+        for k in 0..fan.len() {
+            out_map[vid][k] = fan[k].1;
+        }
+    }
+
+    let mut next_he = vec![usize::MAX; hes.len()];
+
+    for outs in &out_map {
+        for pos in 0..outs.len() {
+            next_he[outs[pos] ^ 1] = outs[(pos + outs.len() - 1) % outs.len()];
+        }
+    }
+
+    next_he
+}
+
+/// Cycles of at least two half-edges traced through next_he, each half-edge in one cycle.
+fn face_cycles(next_he: &[usize]) -> Vec<Vec<usize>> {
+    let mut visited = vec![false; next_he.len()];
+    let mut faces: Vec<Vec<usize>> = Vec::new();
+
+    for hi in 0..next_he.len() {
+        if visited[hi] {
+            continue;
+        }
+
+        let mut cycle = Vec::new();
+        let mut cur = hi;
+
+        while cur != usize::MAX && !visited[cur] {
+            visited[cur] = true;
+            cycle.push(cur);
+            cur = next_he[cur];
+        }
+
+        if cycle.len() >= 2 {
+            faces.push(cycle);
+        }
+    }
+
+    faces
+}
+
 /// Signed area of a half-edge cycle.
 fn cycle_area(cycle: &[usize], hes: &[HalfEdge], verts: &[[f64; 2]]) -> f64 {
     let mut s = 0.0;
@@ -500,6 +1232,50 @@ fn cycle_area(cycle: &[usize], hes: &[HalfEdge], verts: &[[f64; 2]]) -> f64 {
     }
 
     s * 0.5
+}
+
+/// True when a cycle passes through a vertex of the domain border.
+fn touches_border(cycle: &[usize], hes: &[HalfEdge], border_vids: &HashSet<usize>) -> bool {
+    for &hi in cycle {
+        if border_vids.contains(&hes[hi].tail) {
+            return true;
+        }
+    }
+
+    false
+}
+
+/// Face cycles by orientation: counter-clockwise faces with their area, clockwise holes clear of the domain border.
+fn classify_faces(
+    faces: Vec<Vec<usize>>,
+    hes: &[HalfEdge],
+    verts: &[[f64; 2]],
+    edges: &[SplitEdge],
+    snap: f64,
+) -> (Vec<(Vec<usize>, f64)>, Vec<Vec<usize>>) {
+    let mut border_vids: HashSet<usize> = HashSet::new();
+
+    for e in edges {
+        if e.cidx < 0 {
+            border_vids.insert(e.a);
+            border_vids.insert(e.b);
+        }
+    }
+
+    let mut pos_faces: Vec<(Vec<usize>, f64)> = Vec::new();
+    let mut neg_faces: Vec<Vec<usize>> = Vec::new();
+
+    for cycle in faces {
+        let area = cycle_area(&cycle, hes, verts);
+
+        if area > snap * snap {
+            pos_faces.push((cycle, area));
+        } else if area < -snap * snap && !touches_border(&cycle, hes, &border_vids) {
+            neg_faces.push(cycle);
+        }
+    }
+
+    (pos_faces, neg_faces)
 }
 
 /// Even-odd test of p against a half-edge cycle.
@@ -520,6 +1296,115 @@ fn point_in_cycle(p: [f64; 2], cycle: &[usize], hes: &[HalfEdge], verts: &[[f64;
     inside
 }
 
+/// True when two cycles pass through the same set of vertices.
+fn same_vertices(a: &[usize], b: &[usize], hes: &[HalfEdge]) -> bool {
+    let mut a_vids: HashSet<usize> = HashSet::new();
+    let mut b_vids: HashSet<usize> = HashSet::new();
+
+    for &hi in a {
+        a_vids.insert(hes[hi].tail);
+    }
+
+    for &hi in b {
+        b_vids.insert(hes[hi].tail);
+    }
+
+    a_vids == b_vids
+}
+
+/// Holes per positive face: each hole goes to the smallest face that contains it and is not its own vertex ring.
+fn assign_holes(
+    neg_faces: &[Vec<usize>],
+    pos_faces: &[(Vec<usize>, f64)],
+    hes: &[HalfEdge],
+    verts: &[[f64; 2]],
+) -> Vec<Vec<Vec<usize>>> {
+    let mut holes_of: Vec<Vec<Vec<usize>>> = vec![Vec::new(); pos_faces.len()];
+
+    for cycle in neg_faces {
+        let sample = verts[hes[cycle[0]].tail];
+        let mut best: i32 = -1;
+        let mut best_area = f64::INFINITY;
+
+        for (fi, (fc, area)) in pos_faces.iter().enumerate() {
+            if *area < best_area
+                && point_in_cycle(sample, fc, hes, verts)
+                && !same_vertices(cycle, fc, hes)
+            {
+                best = fi as i32;
+                best_area = *area;
+            }
+        }
+
+        if best >= 0 {
+            holes_of[best as usize].push(cycle.clone());
+        }
+    }
+
+    holes_of
+}
+
+/// Runs of a cycle: consecutive half-edges on one pcurve merged.
+fn cycle_runs(cycle: &[usize], hes: &[HalfEdge], edges: &[SplitEdge]) -> Vec<Run> {
+    let mut runs: Vec<Run> = Vec::new();
+
+    for &hi in cycle {
+        let he = &hes[hi];
+        let e = edges[he.eidx];
+        let ta = if he.fwd { e.ta } else { e.tb };
+        let tb = if he.fwd { e.tb } else { e.ta };
+
+        if let Some(last) = runs.last_mut() {
+            if last.cidx == e.cidx && last.vb == he.tail {
+                last.vb = he.head;
+                last.tb = tb;
+                continue;
+            }
+        }
+
+        runs.push(Run {
+            cidx: e.cidx,
+            va: he.tail,
+            vb: he.head,
+            ta,
+            tb,
+        });
+    }
+
+    runs
+}
+
+/// Pcurve piece of a run, trimmed to its parameters and oriented along it; None when the run cannot be cut.
+fn run_piece(run: &Run, pcurves: &[NurbsCurve]) -> Option<NurbsCurve> {
+    if run.cidx < 0 {
+        return None;
+    }
+
+    let crv = &pcurves[run.cidx as usize];
+    let (c0, c1) = crv.domain();
+    let lo = c0.max(run.ta.min(run.tb));
+    let hi_ = c1.min(run.ta.max(run.tb));
+    let mut piece = crv.duplicate();
+
+    if hi_ - lo < (c1 - c0) - 1e-12 && hi_ - lo > 1e-14 {
+        if !piece.trim(lo, hi_) {
+            return None;
+        }
+    } else if hi_ - lo <= 1e-14 && !(run.va == run.vb && piece.is_closed()) {
+        return None;
+    }
+
+    if !piece.is_valid() {
+        return None;
+    }
+
+    if run.ta > run.tb && !piece.reverse() {
+        return None;
+    }
+
+    Some(piece)
+}
+
 /// Pieces of a cycle: trimmed pcurve runs, straight UV segments where a run cannot be cut.
 fn cycle_to_segments(
     cycle: &[usize],
@@ -528,86 +1413,44 @@ fn cycle_to_segments(
     verts: &[[f64; 2]],
     pcurves: &[NurbsCurve],
 ) -> Vec<NurbsCurve> {
-    struct Run {
-        cidx: i32,
-        va: usize,
-        vb: usize,
-        ta: f64,
-        tb: f64,
-    }
-
-    let mut runs: Vec<Run> = Vec::new();
-
-    for &hi in cycle {
-        let he = &hes[hi];
-        let e = edges[he.eidx];
-        let ta = if he.fwd { e.ta } else { e.tb };
-        let tb = if he.fwd { e.tb } else { e.ta };
-        let merged = match runs.last_mut() {
-            Some(last) if last.cidx == e.cidx && last.vb == he.tail => {
-                last.vb = he.head;
-                last.tb = tb;
-
-                true
-            }
-
-            _ => false,
-        };
-
-        if !merged {
-            runs.push(Run {
-                cidx: e.cidx,
-                va: he.tail,
-                vb: he.head,
-                ta,
-                tb,
-            });
-        }
-    }
-
     let mut pieces: Vec<NurbsCurve> = Vec::new();
 
-    for run in &runs {
-        let mut made = false;
-
-        if run.cidx >= 0 {
-            let crv = &pcurves[run.cidx as usize];
-            let (c0, c1) = crv.domain();
-            let lo = c0.max(run.ta.min(run.tb));
-            let hi_ = c1.min(run.ta.max(run.tb));
-            let mut piece = crv.duplicate();
-            let mut piece_ok = true;
-
-            if hi_ - lo < (c1 - c0) - 1e-12 && hi_ - lo > 1e-14 {
-                if !piece.trim(lo, hi_) {
-                    piece_ok = false;
-                }
-            } else if hi_ - lo <= 1e-14 && !(run.va == run.vb && piece.is_closed()) {
-                piece_ok = false;
-            }
-
-            if piece_ok && piece.is_valid() {
-                if run.ta > run.tb {
-                    piece.reverse();
-                }
-
-                pieces.push(piece);
-                made = true;
-            }
+    for run in &cycle_runs(cycle, hes, edges) {
+        if let Some(piece) = run_piece(run, pcurves) {
+            pieces.push(piece);
+            continue;
         }
 
-        if !made {
-            let pa = verts[run.va];
-            let pb = verts[run.vb];
+        let pa = verts[run.va];
+        let pb = verts[run.vb];
 
-            if (pb[0] - pa[0]).hypot(pb[1] - pa[1]) > 1e-14 {
-                let seg_pts = vec![Point::new(pa[0], pa[1], 0.0), Point::new(pb[0], pb[1], 0.0)];
-                pieces.push(NurbsCurve::create(false, 1, &seg_pts));
-            }
+        if (pb[0] - pa[0]).hypot(pb[1] - pa[1]) > 1e-14 {
+            let seg_pts = vec![Point::new(pa[0], pa[1], 0.0), Point::new(pb[0], pb[1], 0.0)];
+            pieces.push(NurbsCurve::create(false, 1, &seg_pts));
         }
     }
 
     pieces
+}
+
+/// Close a curve whose ends lie within tol by moving its last control point onto the first; true when it ends closed.
+fn close_curve(curve: &mut NurbsCurve, tol: f64) -> bool {
+    if curve.is_closed() {
+        return true;
+    }
+
+    if curve.point_at_start().distance(&curve.point_at_end(), None) > tol {
+        return false;
+    }
+
+    let last = curve.cv_count() - 1;
+    let (Some((x, y, z, _w)), Some((_xe, _ye, _ze, we))) =
+        (curve.get_cv_4d(0), curve.get_cv_4d(last))
+    else {
+        return false;
+    };
+
+    curve.set_cv_4d(last, x, y, z, we) && curve.is_closed()
 }
 
 /// Closed loop of a cycle: the joined pieces when they close, else the polygon through its vertices.
@@ -628,20 +1471,8 @@ fn cycle_to_loop(
     let join_tol = snap_uv * 4.0;
     let mut joined = NurbsCurve::join(&pieces, Some(join_tol));
 
-    if joined.len() == 1 && joined[0].is_valid() {
-        let j = &mut joined[0];
-
-        if !j.is_closed() && j.point_at_start().distance(&j.point_at_end(), None) <= join_tol {
-            if let Some((x, y, z, _w)) = j.get_cv_4d(0) {
-                if let Some((_xe, _ye, _ze, we)) = j.get_cv_4d(j.cv_count() - 1) {
-                    j.set_cv_4d(j.cv_count() - 1, x, y, z, we);
-                }
-            }
-        }
-
-        if j.is_closed() {
-            return joined.remove(0);
-        }
+    if joined.len() == 1 && joined[0].is_valid() && close_curve(&mut joined[0], join_tol) {
+        return joined.remove(0);
     }
 
     let mut loop_pts: Vec<Point> = Vec::new();
@@ -680,6 +1511,8 @@ struct Delaunay2D {
     super_v: [i32; 3],        // Super triangle vertices.
     edge_map: HashMap<(i32, i32), (i32, i32)>, // Hull edge -> (triangle, edge index).
     last_found: i32,          // Triangle the last locate ended in.
+    visit_epoch: i32,         // Stamp of the current search.
+    visit_stamp: Vec<i32>,    // Last search stamp per triangle.
 }
 
 impl Delaunay2D {
@@ -730,6 +1563,8 @@ impl Delaunay2D {
             super_v: [-1; 3],
             edge_map: HashMap::new(),
             last_found: 0,
+            visit_epoch: 0,
+            visit_stamp: Vec::new(),
         };
         dt.vertices.push(Vertex2D {
             x: cx - scale * d,
@@ -865,98 +1700,15 @@ impl Delaunay2D {
     /// Insert a point and return its vertex index, the existing one when coincident.
     fn insert(&mut self, x: f64, y: f64) -> i32 {
         let start = self.locate(x, y, self.last_found);
+        let existing = self.find_coincident(start, x, y);
 
-        if start >= 0 {
-            let t = &self.triangles[start as usize];
-
-            for k in 0..3 {
-                let vi2 = t.v[k];
-                let ddx = self.vertices[vi2 as usize].x - x;
-                let ddy = self.vertices[vi2 as usize].y - y;
-
-                if ddx * ddx + ddy * ddy < 1e-12 {
-                    return vi2;
-                }
-            }
+        if existing >= 0 {
+            return existing;
         }
 
         let vi = self.vertices.len() as i32;
         self.vertices.push(Vertex2D { x, y });
-        let mut bad: Vec<i32> = Vec::new();
-        let mut visited: HashSet<i32> = HashSet::new();
-
-        if start >= 0 {
-            bad.push(start);
-            visited.insert(start);
-        }
-
-        let mut bfs_front = 0;
-
-        while bfs_front < bad.len() {
-            let ti = bad[bfs_front];
-            bfs_front += 1;
-
-            if !self.triangles[ti as usize].alive {
-                continue;
-            }
-
-            let [v0, v1, v2] = self.triangles[ti as usize].v;
-            let ax = self.vertices[v0 as usize].x;
-            let ay = self.vertices[v0 as usize].y;
-            let bx = self.vertices[v1 as usize].x;
-            let by = self.vertices[v1 as usize].y;
-            let cx = self.vertices[v2 as usize].x;
-            let cy = self.vertices[v2 as usize].y;
-            let o = Self::orient2d(ax, ay, bx, by, cx, cy);
-            let ic = if o > 0.0 {
-                Self::in_circumcircle(ax, ay, bx, by, cx, cy, x, y)
-            } else {
-                Self::in_circumcircle(ax, ay, cx, cy, bx, by, x, y)
-            };
-
-            if ic > 0.0 {
-                for k in 0..3 {
-                    if self.triangles[ti as usize].constrained[k] {
-                        continue;
-                    }
-
-                    let nb = self.triangles[ti as usize].adj[k];
-
-                    if nb >= 0 && !visited.contains(&nb) {
-                        visited.insert(nb);
-                        bad.push(nb);
-                    }
-                }
-            }
-        }
-
-        let mut kept: Vec<i32> = Vec::new();
-
-        for &ti in &bad {
-            if !self.triangles[ti as usize].alive {
-                continue;
-            }
-
-            let [v0, v1, v2] = self.triangles[ti as usize].v;
-            let ax = self.vertices[v0 as usize].x;
-            let ay = self.vertices[v0 as usize].y;
-            let bx = self.vertices[v1 as usize].x;
-            let by = self.vertices[v1 as usize].y;
-            let cx = self.vertices[v2 as usize].x;
-            let cy = self.vertices[v2 as usize].y;
-            let o = Self::orient2d(ax, ay, bx, by, cx, cy);
-            let ic = if o > 0.0 {
-                Self::in_circumcircle(ax, ay, bx, by, cx, cy, x, y)
-            } else {
-                Self::in_circumcircle(ax, ay, cx, cy, bx, by, x, y)
-            };
-
-            if ic > 0.0 {
-                kept.push(ti);
-            }
-        }
-
-        let bad = kept;
+        let bad = self.collect_cavity(start, x, y);
 
         if bad.is_empty() {
             self.vertices.pop();
@@ -964,15 +1716,129 @@ impl Delaunay2D {
             return -1;
         }
 
+        let polygon = self.cavity_polygon(&bad);
+        self.fill_cavity(vi, &bad, &polygon);
+        self.last_found = self.triangles.len() as i32 - 1;
+
+        vi
+    }
+
+    /// Corner of triangle ti holding vertex v, -1 when none does.
+    fn vertex_index(&self, ti: i32, v: i32) -> i32 {
+        for k in 0..3 {
+            if self.triangles[ti as usize].v[k] == v {
+                return k as i32;
+            }
+        }
+
+        -1
+    }
+
+    /// Vertex of triangle ti across its edge shared with triangle nb, -1 when they are not neighbours.
+    fn opposite_vertex(&self, ti: i32, nb: i32) -> i32 {
+        for k in 0..3 {
+            if self.triangles[ti as usize].adj[k] == nb {
+                return self.triangles[ti as usize].v[k];
+            }
+        }
+
+        -1
+    }
+
+    /// Vertex of triangle start within 1e-6 of (x, y), -1 when none.
+    fn find_coincident(&self, start: i32, x: f64, y: f64) -> i32 {
+        if start < 0 || !self.triangles[start as usize].alive {
+            return -1;
+        }
+
+        for &vi in &self.triangles[start as usize].v {
+            let ddx = self.vertices[vi as usize].x - x;
+            let ddy = self.vertices[vi as usize].y - y;
+
+            if ddx * ddx + ddy * ddy < 1e-12 {
+                return vi;
+            }
+        }
+
+        -1
+    }
+
+    /// True when (x, y) lies inside the circumcircle of triangle ti.
+    fn circumcircle_contains(&self, ti: i32, x: f64, y: f64) -> bool {
+        let [v0, v1, v2] = self.triangles[ti as usize].v;
+        let ax = self.vertices[v0 as usize].x;
+        let ay = self.vertices[v0 as usize].y;
+        let bx = self.vertices[v1 as usize].x;
+        let by = self.vertices[v1 as usize].y;
+        let cx = self.vertices[v2 as usize].x;
+        let cy = self.vertices[v2 as usize].y;
+        let o = Self::orient2d(ax, ay, bx, by, cx, cy);
+        let ic = if o > 0.0 {
+            Self::in_circumcircle(ax, ay, bx, by, cx, cy, x, y)
+        } else {
+            Self::in_circumcircle(ax, ay, cx, cy, bx, by, x, y)
+        };
+
+        ic > 0.0
+    }
+
+    /// Triangles whose circumcircle holds (x, y), grown from start across unconstrained edges.
+    fn collect_cavity(&mut self, start: i32, x: f64, y: f64) -> Vec<i32> {
+        self.visit_epoch += 1;
+
+        if self.visit_stamp.len() < self.triangles.len() + 64 {
+            self.visit_stamp.resize(self.triangles.len() + 64, 0);
+        }
+
+        let mut bad: Vec<i32> = Vec::new();
+
+        if start >= 0 {
+            bad.push(start);
+            self.visit_stamp[start as usize] = self.visit_epoch;
+        }
+
+        let mut front = 0;
+
+        while front < bad.len() {
+            let ti = bad[front];
+            front += 1;
+
+            if !self.triangles[ti as usize].alive || !self.circumcircle_contains(ti, x, y) {
+                bad[front - 1] = -1;
+                continue;
+            }
+
+            for k in 0..3 {
+                let nb = self.triangles[ti as usize].adj[k];
+
+                if self.triangles[ti as usize].constrained[k]
+                    || nb < 0
+                    || self.visit_stamp[nb as usize] == self.visit_epoch
+                {
+                    continue;
+                }
+
+                self.visit_stamp[nb as usize] = self.visit_epoch;
+                bad.push(nb);
+            }
+        }
+
+        bad.retain(|&ti| ti >= 0);
+
+        bad
+    }
+
+    /// Edges of the bad triangles that face a good neighbour or the hull.
+    fn cavity_polygon(&self, bad: &[i32]) -> Vec<(i32, i32, bool)> {
         let mut bad_set: HashSet<i32> = HashSet::new();
 
-        for &ti in &bad {
+        for &ti in bad {
             bad_set.insert(ti);
         }
 
         let mut polygon: Vec<(i32, i32, bool)> = Vec::new();
 
-        for &ti in &bad {
+        for &ti in bad {
             let t = &self.triangles[ti as usize];
 
             for k in 0..3 {
@@ -984,12 +1850,17 @@ impl Delaunay2D {
             }
         }
 
-        for &ti in &bad {
+        polygon
+    }
+
+    /// Replace the bad triangles by a fan from vertex vi to the polygon edges.
+    fn fill_cavity(&mut self, vi: i32, bad: &[i32], polygon: &[(i32, i32, bool)]) {
+        for &ti in bad {
             self.unregister_edges(ti);
             self.triangles[ti as usize].alive = false;
         }
 
-        for (e0, e1, constr) in polygon {
+        for &(e0, e1, constr) in polygon {
             let o = Self::orient2d(
                 self.vertices[vi as usize].x,
                 self.vertices[vi as usize].y,
@@ -1013,18 +1884,34 @@ impl Delaunay2D {
             });
             self.register_edges(new_ti);
         }
-
-        self.last_found = self.triangles.len() as i32 - 1;
-
-        vi
     }
 
     /// Force the edge v0-v1 into the triangulation by flipping the edges it crosses.
     fn insert_constraint(&mut self, v0: i32, v1: i32) {
-        if v0 == v1 {
+        if v0 == v1 || self.constrain_existing(v0, v1) {
             return;
         }
 
+        let start_ti = self.first_triangle_at(v0);
+
+        if start_ti < 0 {
+            return;
+        }
+
+        let Some((it, ivl, ivr)) = self.first_crossed(start_ti, v0, v1) else {
+            return;
+        };
+        let mut poly_l: Vec<i32> = vec![v0, ivl];
+        let mut poly_r: Vec<i32> = vec![v0, ivr];
+        let mut intersected: Vec<i32> = vec![it];
+        self.walk_crossed(v0, v1, ivl, ivr, &mut poly_l, &mut poly_r, &mut intersected);
+        poly_l.push(v1);
+        poly_r.push(v1);
+        self.retriangulate(v0, v1, &poly_l, &poly_r, &intersected);
+    }
+
+    /// Mark v0-v1 constrained when it already is a triangle edge; false when it is not.
+    fn constrain_existing(&mut self, v0: i32, v1: i32) -> bool {
         for ti in 0..self.triangles.len() {
             if !self.triangles[ti].alive {
                 continue;
@@ -1034,134 +1921,110 @@ impl Delaunay2D {
                 let e0 = self.triangles[ti].v[(k + 1) % 3];
                 let e1 = self.triangles[ti].v[(k + 2) % 3];
 
-                if (e0 == v0 && e1 == v1) || (e0 == v1 && e1 == v0) {
-                    self.triangles[ti].constrained[k] = true;
-                    let nb = self.triangles[ti].adj[k];
+                if !((e0 == v0 && e1 == v1) || (e0 == v1 && e1 == v0)) {
+                    continue;
+                }
 
-                    if nb >= 0
-                        && (nb as usize) < self.triangles.len()
-                        && self.triangles[nb as usize].alive
-                    {
-                        for kk in 0..3 {
-                            if self.triangles[nb as usize].adj[kk] == ti as i32 {
-                                self.triangles[nb as usize].constrained[kk] = true;
-                                break;
-                            }
+                self.triangles[ti].constrained[k] = true;
+                let nb = self.triangles[ti].adj[k];
+
+                if nb >= 0
+                    && (nb as usize) < self.triangles.len()
+                    && self.triangles[nb as usize].alive
+                {
+                    for kk in 0..3 {
+                        if self.triangles[nb as usize].adj[kk] == ti as i32 {
+                            self.triangles[nb as usize].constrained[kk] = true;
+                            break;
                         }
                     }
-
-                    return;
                 }
+
+                return true;
             }
         }
 
-        let mut start_ti = -1i32;
+        false
+    }
 
-        for i in (0..self.triangles.len()).rev() {
-            if !self.triangles[i].alive {
-                continue;
-            }
-
-            for k in 0..3 {
-                if self.triangles[i].v[k] == v0 {
-                    start_ti = i as i32;
-                    break;
-                }
+    /// Lowest live triangle with vertex v, -1 when none.
+    fn first_triangle_at(&self, v: i32) -> i32 {
+        for ti in 0..self.triangles.len() {
+            if self.triangles[ti].alive && self.has_vertex(ti as i32, v) {
+                return ti as i32;
             }
         }
 
-        if start_ti < 0 {
-            return;
-        }
+        -1
+    }
 
+    /// Triangle around v0 whose opposite edge the segment v0-v1 crosses, with that edge's left and right ends; None when none.
+    fn first_crossed(&self, start_ti: i32, v0: i32, v1: i32) -> Option<(i32, i32, i32)> {
         let ax = self.vertices[v0 as usize].x;
         let ay = self.vertices[v0 as usize].y;
         let bx = self.vertices[v1 as usize].x;
         let by = self.vertices[v1 as usize].y;
-        let mut ivl = -1i32;
-        let mut ivr = -1i32;
-        let mut it = -1i32;
         let mut ti = start_ti;
-        let walk_guard = self.triangles.len() + 4;
 
-        for _ in 0..walk_guard {
+        for _ in 0..self.triangles.len() + 4 {
             if !self.triangles[ti as usize].alive {
-                break;
+                return None;
             }
 
-            let mut k_v0 = -1i32;
-
-            for i in 0..3 {
-                if self.triangles[ti as usize].v[i] == v0 {
-                    k_v0 = i as i32;
-                    break;
-                }
-            }
+            let k_v0 = self.vertex_index(ti, v0);
 
             if k_v0 < 0 {
-                break;
+                return None;
             }
 
             let k = k_v0 as usize;
             let ip2 = self.triangles[ti as usize].v[(k + 1) % 3];
             let ip1 = self.triangles[ti as usize].v[(k + 2) % 3];
-            let op2 = Self::orient2d(
-                ax,
-                ay,
-                bx,
-                by,
-                self.vertices[ip2 as usize].x,
-                self.vertices[ip2 as usize].y,
-            );
-            let op1 = Self::orient2d(
-                ax,
-                ay,
-                bx,
-                by,
-                self.vertices[ip1 as usize].x,
-                self.vertices[ip1 as usize].y,
-            );
+            let p2 = &self.vertices[ip2 as usize];
+            let p1 = &self.vertices[ip1 as usize];
+            let op2 = Self::orient2d(ax, ay, bx, by, p2.x, p2.y);
+            let op1 = Self::orient2d(ax, ay, bx, by, p1.x, p1.y);
 
             if op2 < 0.0 && op1 >= 0.0 {
-                ivl = ip1;
-                ivr = ip2;
-                it = ti;
-                break;
+                return Some((ti, ip1, ip2));
             }
 
             let next = self.triangles[ti as usize].adj[(k + 1) % 3];
 
             if next < 0 || !self.triangles[next as usize].alive || next == start_ti {
-                break;
+                return None;
             }
 
             ti = next;
         }
 
-        if it < 0 {
-            return;
-        }
+        None
+    }
 
-        let mut poly_l: Vec<i32> = vec![v0, ivl];
-        let mut poly_r: Vec<i32> = vec![v0, ivr];
-        let mut intersected: Vec<i32> = vec![it];
+    /// Walk the triangles crossed by v0-v1 from intersected[0], collecting the vertices left and right of it.
+    fn walk_crossed(
+        &self,
+        v0: i32,
+        v1: i32,
+        mut ivl: i32,
+        mut ivr: i32,
+        poly_l: &mut Vec<i32>,
+        poly_r: &mut Vec<i32>,
+        intersected: &mut Vec<i32>,
+    ) {
+        let ax = self.vertices[v0 as usize].x;
+        let ay = self.vertices[v0 as usize].y;
+        let bx = self.vertices[v1 as usize].x;
+        let by = self.vertices[v1 as usize].y;
         let mut iv = v0;
-        let mut cur_it = it;
-        let cross_guard = self.triangles.len() * 2 + 8;
+        let mut cur_it = intersected[0];
 
-        for _ in 0..cross_guard {
+        for _ in 0..self.triangles.len() * 2 + 8 {
             if self.has_vertex(cur_it, v1) {
                 break;
             }
 
-            let mut k_iv = -1i32;
-
-            for i in 0..3 {
-                if self.triangles[cur_it as usize].v[i] == iv {
-                    k_iv = i as i32;
-                    break;
-                }
-            }
+            let k_iv = self.vertex_index(cur_it, iv);
 
             if k_iv < 0 {
                 break;
@@ -1173,27 +2036,14 @@ impl Delaunay2D {
                 break;
             }
 
-            let mut i_vopo = -1i32;
-
-            for k in 0..3 {
-                if self.triangles[i_topo as usize].adj[k] == cur_it {
-                    i_vopo = self.triangles[i_topo as usize].v[k];
-                    break;
-                }
-            }
+            let i_vopo = self.opposite_vertex(i_topo, cur_it);
 
             if i_vopo < 0 {
                 break;
             }
 
-            let o = Self::orient2d(
-                ax,
-                ay,
-                bx,
-                by,
-                self.vertices[i_vopo as usize].x,
-                self.vertices[i_vopo as usize].y,
-            );
+            let p = &self.vertices[i_vopo as usize];
+            let o = Self::orient2d(ax, ay, bx, by, p.x, p.y);
 
             if o < 0.0 {
                 if i_vopo != v1 {
@@ -1214,15 +2064,23 @@ impl Delaunay2D {
             intersected.push(i_topo);
             cur_it = i_topo;
         }
+    }
 
-        poly_l.push(v1);
-        poly_r.push(v1);
-        let first_new = self.triangles.len() as i32;
-
-        for &ti in &intersected {
+    /// Replace the crossed triangles by the two fans on either side of v0-v1 and constrain it.
+    fn retriangulate(
+        &mut self,
+        v0: i32,
+        v1: i32,
+        poly_l: &[i32],
+        poly_r: &[i32],
+        intersected: &[i32],
+    ) {
+        for &ti in intersected {
             self.unregister_edges(ti);
             self.triangles[ti as usize].alive = false;
         }
+
+        let first_new = self.triangles.len();
 
         for i in 0..poly_l.len().saturating_sub(2) {
             self.add_triangle(v1, poly_l[i + 1], poly_l[i]);
@@ -1232,7 +2090,13 @@ impl Delaunay2D {
             self.add_triangle(v0, poly_r[i], poly_r[i + 1]);
         }
 
-        for new_ti in (first_new as usize)..self.triangles.len() {
+        self.inherit_constraints(first_new);
+        self.mark_edge(v0, v1);
+    }
+
+    /// Constrain every edge of a triangle from first_new on that its older neighbour holds constrained.
+    fn inherit_constraints(&mut self, first_new: usize) {
+        for new_ti in first_new..self.triangles.len() {
             if !self.triangles[new_ti].alive {
                 continue;
             }
@@ -1240,7 +2104,7 @@ impl Delaunay2D {
             for k in 0..3 {
                 let nb = self.triangles[new_ti].adj[k];
 
-                if nb < 0 || nb >= first_new || !self.triangles[nb as usize].alive {
+                if nb < 0 || nb as usize >= first_new || !self.triangles[nb as usize].alive {
                     continue;
                 }
 
@@ -1254,18 +2118,21 @@ impl Delaunay2D {
                 }
             }
         }
+    }
 
-        for ti in 0..self.triangles.len() {
-            if !self.triangles[ti].alive {
+    /// Mark the edge v0-v1 constrained in every live triangle that has it.
+    fn mark_edge(&mut self, v0: i32, v1: i32) {
+        for tri in &mut self.triangles {
+            if !tri.alive {
                 continue;
             }
 
             for k in 0..3 {
-                let e0 = self.triangles[ti].v[(k + 1) % 3];
-                let e1 = self.triangles[ti].v[(k + 2) % 3];
+                let e0 = tri.v[(k + 1) % 3];
+                let e1 = tri.v[(k + 2) % 3];
 
                 if (e0 == v0 && e1 == v1) || (e0 == v1 && e1 == v0) {
-                    self.triangles[ti].constrained[k] = true;
+                    tri.constrained[k] = true;
                 }
             }
         }
@@ -1357,6 +2224,593 @@ impl Delaunay2D {
         }
 
         result
+    }
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Triangulation
+// ═══════════════════════════════════════════════════════════════════════════
+/// Loop polygon in UV before refinement: the control points of a polyline, else samples, the closing repeat dropped.
+fn loop_points(crv: &NurbsCurve) -> Vec<Point> {
+    let mut raw: Vec<Point> = Vec::new();
+
+    if crv.degree() <= 1 && !crv.is_rational() {
+        for i in 0..crv.cv_count() {
+            raw.push(crv.get_cv(i).unwrap_or_default());
+        }
+    } else {
+        let n = (crv.cv_count() * 4).clamp(16, 2048);
+        raw = crv.divide_by_count(n, true).0;
+    }
+
+    while raw.len() > 1 {
+        let dx = raw[0][0] - raw[raw.len() - 1][0];
+        let dy = raw[0][1] - raw[raw.len() - 1][1];
+
+        if dx * dx + dy * dy < 1e-20 {
+            raw.pop();
+        } else {
+            break;
+        }
+    }
+
+    raw
+}
+
+/// Append the UV points of the edge start-end without end, halved up to six times until each 3D chord is within deflection.
+fn subdivide_edge(
+    srf: &NurbsSurface,
+    start: &Point,
+    end: &Point,
+    deflection: f64,
+    out: &mut Vec<Point>,
+) {
+    let mut stack: Vec<(Point, Point, i32)> = vec![(start.clone(), end.clone(), 0)];
+
+    while let Some((a, b, depth)) = stack.pop() {
+        let mu = (a[0] + b[0]) * 0.5;
+        let mv = (a[1] + b[1]) * 0.5;
+        let pa = srf.point_at(a[0], a[1]).unwrap_or_default();
+        let pm = srf.point_at(mu, mv).unwrap_or_default();
+        let edge = &srf.point_at(b[0], b[1]).unwrap_or_default() - &pa;
+        let l2 = edge.magnitude_squared();
+        let dev = if l2 > 1e-30 {
+            let t = (&pm - &pa).dot(&edge) / l2;
+            (&pm - &(&pa + &(&edge * t))).magnitude_squared().sqrt()
+        } else {
+            (&pm - &pa).magnitude_squared().sqrt()
+        };
+
+        if dev > deflection && depth < 6 {
+            stack.push((Point::new(mu, mv, 0.0), b, depth + 1));
+            stack.push((a, Point::new(mu, mv, 0.0), depth + 1));
+        } else {
+            out.push(a);
+        }
+    }
+}
+
+/// Interior knots per direction whose multiplicity reaches the degree: the C0 lines of the surface.
+fn find_crease_knots(surface: &NurbsSurface) -> [Vec<f64>; 2] {
+    let mut crease_knots = [Vec::new(), Vec::new()];
+
+    for dir in 0..2 {
+        let Some((start, end)) = surface.domain(dir) else {
+            continue;
+        };
+        let knots = &surface.m_nurbsknot[dir];
+
+        for &knot in knots {
+            if knot <= start || knot >= end || crease_knots[dir].contains(&knot) {
+                continue;
+            }
+
+            let mut multiplicity = 0;
+
+            for &value in knots {
+                if value == knot {
+                    multiplicity += 1;
+                }
+            }
+
+            if multiplicity >= surface.degree(dir) {
+                crease_knots[dir].push(knot);
+            }
+        }
+    }
+
+    crease_knots
+}
+
+/// UV bounds (umin, vmin, umax, vmax) of a loop polygon.
+fn loop_bounds(pts: &[Point]) -> [f64; 4] {
+    let mut bounds = [1e30_f64, 1e30_f64, -1e30_f64, -1e30_f64];
+
+    for p in pts {
+        if p[0] < bounds[0] {
+            bounds[0] = p[0];
+        }
+
+        if p[1] < bounds[1] {
+            bounds[1] = p[1];
+        }
+
+        if p[0] > bounds[2] {
+            bounds[2] = p[0];
+        }
+
+        if p[1] > bounds[3] {
+            bounds[3] = p[1];
+        }
+    }
+
+    bounds
+}
+
+/// Constrain loop edge i in pieces cut where it crosses a crease knot line, each crossing inserted and recorded.
+fn insert_loop_edge(
+    dt: &mut Delaunay2D,
+    pts: &[Point],
+    vis: &[i32],
+    li: usize,
+    i: usize,
+    crease_knots: &[Vec<f64>; 2],
+    boundary_intervals: &mut BTreeMap<usize, (usize, usize, f64)>,
+) {
+    let j = (i + 1) % vis.len();
+    let mut events = vec![(0.0, vis[i]), (1.0, vis[j])];
+
+    for dir in 0..2 {
+        let delta = pts[j][dir] - pts[i][dir];
+
+        if delta == 0.0 {
+            continue;
+        }
+
+        for &knot in &crease_knots[dir] {
+            let t = (knot - pts[i][dir]) / delta;
+
+            if t <= 0.0 || t >= 1.0 {
+                continue;
+            }
+
+            let mut uv = [
+                pts[i][0] + t * (pts[j][0] - pts[i][0]),
+                pts[i][1] + t * (pts[j][1] - pts[i][1]),
+            ];
+            uv[dir] = knot;
+            let vi = dt.insert(uv[0], uv[1]);
+
+            if vi >= 0 {
+                boundary_intervals.insert(vi as usize, (li, i, t));
+            }
+
+            events.push((t, vi));
+        }
+    }
+
+    events.sort_by(|x, y| x.partial_cmp(y).unwrap_or(std::cmp::Ordering::Equal));
+
+    for k in 1..events.len() {
+        if events[k - 1].1 >= 0 && events[k].1 >= 0 && events[k - 1].1 != events[k].1 {
+            dt.insert_constraint(events[k - 1].1, events[k].1);
+        }
+    }
+}
+
+/// Insert each loop's vertices, then constrain its edges; the vertex index of every loop sample.
+fn insert_loops(
+    dt: &mut Delaunay2D,
+    loops_uv: &[Vec<Point>],
+    crease_knots: &[Vec<f64>; 2],
+    boundary_intervals: &mut BTreeMap<usize, (usize, usize, f64)>,
+) -> Vec<Vec<i32>> {
+    let mut loop_vids: Vec<Vec<i32>> = Vec::new();
+
+    for (li, pts) in loops_uv.iter().enumerate() {
+        let mut vis: Vec<i32> = Vec::new();
+
+        for p in pts {
+            vis.push(dt.insert(p[0], p[1]));
+        }
+
+        for i in 0..vis.len() {
+            insert_loop_edge(dt, pts, &vis, li, i, crease_knots, boundary_intervals);
+        }
+
+        loop_vids.push(vis);
+    }
+
+    loop_vids
+}
+
+/// Insert the crease knot crossings inside the loops and constrain each knot line between consecutive vertices on it.
+fn insert_crease_lines(dt: &mut Delaunay2D, loops_uv: &[Vec<Point>], crease_knots: &[Vec<f64>; 2]) {
+    for &u in &crease_knots[0] {
+        for &v in &crease_knots[1] {
+            if inside_loops(u, v, loops_uv) {
+                dt.insert(u, v);
+            }
+        }
+    }
+
+    for dir in 0..2 {
+        for &knot in &crease_knots[dir] {
+            let mut nodes = Vec::new();
+
+            for (vi, vertex) in dt.vertices.iter().enumerate() {
+                let uv = [vertex.x, vertex.y];
+
+                if uv[dir] == knot {
+                    nodes.push((uv[1 - dir], vi as i32));
+                }
+            }
+
+            nodes.sort_by(|x, y| x.partial_cmp(y).unwrap_or(std::cmp::Ordering::Equal));
+
+            for k in 1..nodes.len() {
+                let mut uv = [knot, knot];
+                uv[1 - dir] = (nodes[k - 1].0 + nodes[k].0) * 0.5;
+
+                if inside_loops(uv[0], uv[1], loops_uv) {
+                    dt.insert_constraint(nodes[k - 1].1, nodes[k].1);
+                }
+            }
+        }
+    }
+}
+
+/// Smallest dot product between the crease-side normals at the corners of triangle abc around its centroid.
+fn min_normal_dot(
+    surface: &NurbsSurface,
+    crease_knots: &[Vec<f64>; 2],
+    center: [f64; 2],
+    a: &Vertex2D,
+    b: &Vertex2D,
+    c: &Vertex2D,
+) -> f64 {
+    let na = crease_side_normal(surface, crease_knots, center, [a.x, a.y]);
+    let nb = crease_side_normal(surface, crease_knots, center, [b.x, b.y]);
+    let nc2 = crease_side_normal(surface, crease_knots, center, [c.x, c.y]);
+    let d1 = na.dot(&nb);
+    let d2 = nb.dot(&nc2);
+    let d3 = na.dot(&nc2);
+
+    d1.min(d2.min(d3))
+}
+
+/// Centroids of the live triangles inside the loops whose chord leaves deflection or whose corner normals turn past the angle bound.
+fn refinement_points(
+    dt: &Delaunay2D,
+    surface: &NurbsSurface,
+    loops_uv: &[Vec<Point>],
+    crease_knots: &[Vec<f64>; 2],
+    deflection: f64,
+    cos_max_angle: f64,
+) -> Vec<[f64; 2]> {
+    let mut to_insert: Vec<[f64; 2]> = Vec::new();
+
+    for tri in &dt.triangles {
+        if !tri.alive {
+            continue;
+        }
+
+        let a = &dt.vertices[tri.v[0] as usize];
+        let b = &dt.vertices[tri.v[1] as usize];
+        let c = &dt.vertices[tri.v[2] as usize];
+        let cu = (a.x + b.x + c.x) / 3.0;
+        let cv = (a.y + b.y + c.y) / 3.0;
+
+        if !inside_loops(cu, cv, loops_uv) {
+            continue;
+        }
+
+        let pa = surface.point_at(a.x, a.y).unwrap_or_default();
+        let pb = surface.point_at(b.x, b.y).unwrap_or_default();
+        let pc = surface.point_at(c.x, c.y).unwrap_or_default();
+        let pm = surface.point_at(cu, cv).unwrap_or_default();
+        let n = (&pb - &pa).cross(&(&pc - &pa));
+        let nl = n.magnitude_squared().sqrt();
+
+        if nl < 1e-30 {
+            continue;
+        }
+
+        let dev = ((&pm - &pa).dot(&n) / nl).abs();
+
+        if dev > deflection
+            || min_normal_dot(surface, crease_knots, [cu, cv], a, b, c) < cos_max_angle
+        {
+            to_insert.push([cu, cv]);
+        }
+    }
+
+    to_insert
+}
+
+/// Insert refinement centroids for up to eight rounds, until none is needed or the vertex cap is hit.
+fn refine(
+    dt: &mut Delaunay2D,
+    surface: &NurbsSurface,
+    loops_uv: &[Vec<Point>],
+    crease_knots: &[Vec<f64>; 2],
+    deflection: f64,
+    cos_max_angle: f64,
+) {
+    const MAX_ITERS: i32 = 8;
+    const MAX_VERTS: usize = 200000;
+
+    for _iter in 0..MAX_ITERS {
+        let to_insert = refinement_points(
+            dt,
+            surface,
+            loops_uv,
+            crease_knots,
+            deflection,
+            cos_max_angle,
+        );
+
+        if to_insert.is_empty() {
+            break;
+        }
+
+        for uv in &to_insert {
+            if dt.vertices.len() >= MAX_VERTS {
+                break;
+            }
+
+            dt.insert(uv[0], uv[1]);
+        }
+
+        if dt.vertices.len() >= MAX_VERTS {
+            break;
+        }
+    }
+}
+
+/// Drop the super triangle and every triangle whose centroid lies outside the loops.
+fn trim_outside(dt: &mut Delaunay2D, loops_uv: &[Vec<Point>]) {
+    dt.cleanup();
+
+    for ti in 0..dt.triangles.len() {
+        if !dt.triangles[ti].alive {
+            continue;
+        }
+
+        let [v0, v1, v2] = dt.triangles[ti].v;
+        let cu =
+            (dt.vertices[v0 as usize].x + dt.vertices[v1 as usize].x + dt.vertices[v2 as usize].x)
+                / 3.0;
+        let cv =
+            (dt.vertices[v0 as usize].y + dt.vertices[v1 as usize].y + dt.vertices[v2 as usize].y)
+                / 3.0;
+
+        if !inside_loops(cu, cv, loops_uv) {
+            dt.triangles[ti].alive = false;
+        }
+    }
+}
+
+/// True when a triangle spans a crease knot line in either direction.
+fn crosses_crease(tris: &[[i32; 3]], dt: &Delaunay2D, crease_knots: &[Vec<f64>; 2]) -> bool {
+    for tri in tris {
+        for dir in 0..2 {
+            let mut low = f64::INFINITY;
+            let mut high = f64::NEG_INFINITY;
+
+            for &vi in tri {
+                let value = [dt.vertices[vi as usize].x, dt.vertices[vi as usize].y][dir];
+                low = low.min(value);
+                high = high.max(value);
+            }
+
+            for &knot in &crease_knots[dir] {
+                if low < knot && knot < high {
+                    return true;
+                }
+            }
+        }
+    }
+
+    false
+}
+
+/// Loop and sample of the 3D point given for each triangulation vertex, None where none is.
+fn given_points(
+    count: usize,
+    loops: &TrimLoops,
+    loop_vids: &[Vec<i32>],
+) -> Vec<Option<(usize, usize)>> {
+    let mut given: Vec<Option<(usize, usize)>> = vec![None; count];
+
+    for (li, vids) in loop_vids.iter().enumerate() {
+        if li >= loops.xyz.len() {
+            break;
+        }
+
+        for (k, &vi) in vids.iter().enumerate() {
+            if vi >= 0 && k < loops.xyz[li].len() {
+                given[vi as usize] = Some((li, k));
+            }
+        }
+    }
+
+    given
+}
+
+/// 3D point of triangulation vertex vi: its given loop point, the loop chord at a knot crossing, else the surface point.
+fn vertex_point(
+    surface: &NurbsSurface,
+    dt: &Delaunay2D,
+    vi: usize,
+    loops: &TrimLoops,
+    given: &[Option<(usize, usize)>],
+    boundary_intervals: &BTreeMap<usize, (usize, usize, f64)>,
+) -> Point {
+    if let Some((li, k)) = given[vi] {
+        return loops.xyz[li][k].clone();
+    }
+
+    if let Some(&(li, segment, t)) = boundary_intervals.get(&vi) {
+        if !loops.xyz.is_empty() {
+            let a = &loops.xyz[li][segment];
+            let b = &loops.xyz[li][(segment + 1) % loops.xyz[li].len()];
+
+            return a + &(&(b - a) * t);
+        }
+    }
+
+    surface
+        .point_at(dt.vertices[vi].x, dt.vertices[vi].y)
+        .unwrap_or_default()
+}
+
+/// Welded mesh vertex of every triangulation vertex a triangle uses, None for the others.
+fn weld_vertices(
+    welder: &mut VertexWelder,
+    mesh: &mut Mesh,
+    surface: &NurbsSurface,
+    dt: &Delaunay2D,
+    tris: &[[i32; 3]],
+    loops: &TrimLoops,
+    loop_vids: &[Vec<i32>],
+    boundary_intervals: &BTreeMap<usize, (usize, usize, f64)>,
+) -> Vec<Option<usize>> {
+    let given = given_points(dt.vertices.len(), loops, loop_vids);
+    let mut vert_map: Vec<Option<usize>> = vec![None; dt.vertices.len()];
+
+    for tri in tris {
+        for &vi in tri {
+            if vert_map[vi as usize].is_none() {
+                let p = vertex_point(surface, dt, vi as usize, loops, &given, boundary_intervals);
+                vert_map[vi as usize] = Some(welder.weld(mesh, p));
+            }
+        }
+    }
+
+    vert_map
+}
+
+/// One face per triangle over its welded vertices, collapsed ones skipped.
+fn add_faces(mesh: &mut Mesh, tris: &[[i32; 3]], vert_map: &[Option<usize>]) {
+    for &[a, b, c] in tris {
+        let (Some(v0), Some(v1), Some(v2)) = (
+            vert_map[a as usize],
+            vert_map[b as usize],
+            vert_map[c as usize],
+        ) else {
+            continue;
+        };
+
+        if v0 == v1 || v1 == v2 || v2 == v0 {
+            continue;
+        }
+
+        mesh.add_face(vec![v0, v1, v2], None);
+    }
+}
+
+/// Area-weighted sum of the face normals around each mesh vertex.
+fn fan_normals(mesh: &Mesh) -> HashMap<usize, Vector> {
+    let mut fan: HashMap<usize, Vector> = HashMap::new();
+    let mut fkeys: Vec<usize> = Vec::new();
+
+    for &fk in mesh.face.keys() {
+        fkeys.push(fk);
+    }
+
+    fkeys.sort_unstable();
+
+    for fk in fkeys {
+        let verts = &mesh.face[&fk];
+        let a = mesh.vertex[&verts[0]].position();
+        let b = mesh.vertex[&verts[1]].position();
+        let c = mesh.vertex[&verts[2]].position();
+        let n = (&b - &a).cross(&(&c - &a));
+
+        for &vk in verts {
+            *fan.entry(vk).or_insert(Vector::new(0.0, 0.0, 0.0)) += &n;
+        }
+    }
+
+    fan
+}
+
+/// Normal of every used vertex from the surface derivatives, the fan normal where they degenerate, and its u and v.
+fn set_vertex_normals(
+    mesh: &mut Mesh,
+    surface: &NurbsSurface,
+    dt: &Delaunay2D,
+    vert_map: &[Option<usize>],
+) {
+    let fan = fan_normals(mesh);
+
+    for vi in 0..vert_map.len() {
+        let Some(vk) = vert_map[vi] else {
+            continue;
+        };
+        let u = dt.vertices[vi].x;
+        let v = dt.vertices[vi].y;
+        let derivatives = surface.evaluate(u, v, 1);
+        let mut nrm = Vector::new(0.0, 0.0, 0.0);
+
+        if derivatives.len() >= 3 {
+            nrm = derivatives[2].cross(&derivatives[1]);
+        }
+
+        let nl = nrm.magnitude_squared().sqrt();
+
+        if nl.is_finite() && nl > 0.0 {
+            nrm = &nrm / nl;
+        } else {
+            let f = fan.get(&vk).cloned().unwrap_or(Vector::new(0.0, 0.0, 1.0));
+            let fl = f.magnitude_squared().sqrt();
+            nrm = if fl.is_finite() && fl > 0.0 {
+                &f / fl
+            } else {
+                Vector::new(0.0, 0.0, 1.0)
+            };
+        }
+
+        if let Some(vd) = mesh.vertex.get_mut(&vk) {
+            vd.set_normal(nrm[0], nrm[1], nrm[2]);
+            vd.attributes.insert("u".to_string(), u);
+            vd.attributes.insert("v".to_string(), v);
+        }
+    }
+}
+
+/// Tag loop vertices boundary/{loop}/{sample} and knot crossings boundary_interval/{loop}/{segment} with their chord parameter.
+fn tag_boundary(
+    mesh: &mut Mesh,
+    loop_vids: &[Vec<i32>],
+    boundary_intervals: &BTreeMap<usize, (usize, usize, f64)>,
+    vert_map: &[Option<usize>],
+) {
+    for (li, vids) in loop_vids.iter().enumerate() {
+        for (k, &vi) in vids.iter().enumerate() {
+            if vi < 0 {
+                continue;
+            }
+
+            let key = format!("boundary/{li}/{k}");
+
+            if let Some(vk) = vert_map[vi as usize] {
+                if let Some(vd) = mesh.vertex.get_mut(&vk) {
+                    vd.attributes.insert(key, 1.0);
+                }
+            }
+        }
+    }
+
+    for (&vi, &(li, segment, t)) in boundary_intervals {
+        let key = format!("boundary_interval/{li}/{segment}");
+
+        if let Some(vk) = vert_map[vi] {
+            if let Some(vd) = mesh.vertex.get_mut(&vk) {
+                vd.attributes.insert(key, t);
+            }
+        }
     }
 }
 
@@ -1527,561 +2981,38 @@ impl NurbsSurfaceTrimmed {
             return Vec::new();
         }
 
-        let (u0, u1) = srf.domain(0).unwrap_or((0.0, 1.0));
-        let (v0, v1) = srf.domain(1).unwrap_or((0.0, 1.0));
-        let range_u = u1 - u0;
-        let range_v = v1 - v0;
-
-        let spans_u = srf.get_span_vector(0);
-        let spans_v = srf.get_span_vector(1);
-        let nu = spans_u.len().saturating_sub(1).max(1) * 4;
-        let nv = spans_v.len().saturating_sub(1).max(1) * 4;
-        let du = range_u / nu as f64;
-        let dv = range_v / nv as f64;
-        let mu = (u0 + u1) * 0.5;
-        let mv = (v0 + v1) * 0.5;
-        let pmid = srf.point_at(mu, mv).unwrap_or_default();
-        let uv_to_3d_u = pmid.distance(
-            &srf.point_at((mu + du).min(u1), mv).unwrap_or_default(),
-            None,
-        ) / du;
-        let uv_to_3d_v = pmid.distance(
-            &srf.point_at(mu, (mv + dv).min(v1)).unwrap_or_default(),
-            None,
-        ) / dv;
-        let mut uv_to_3d = uv_to_3d_u.max(uv_to_3d_v);
-
-        if uv_to_3d < 1e-10 {
-            uv_to_3d = 1.0;
-        }
-
-        let snap_uv = if tolerance > 0.0 {
-            (tolerance / uv_to_3d).max(1e-9)
-        } else {
-            range_u.min(range_v) * 1e-7
-        };
-
-        let samp_tol = range_u.max(range_v) * 2e-5;
-        struct UVPoly {
-            cidx: i32,
-            pts: Vec<[f64; 2]>,
-            ts: Vec<f64>,
-        }
-
-        let mut polylines: Vec<UVPoly> = Vec::new();
-
-        for (cidx, crv) in pcurves.iter().enumerate() {
-            if !crv.is_valid() {
-                continue;
-            }
-
-            let (ct0, ct1) = crv.domain();
-            let mut entries: Vec<[f64; 3]> = Vec::new();
-            let n = (crv.cv_count() * 4).clamp(16, 2048);
-
-            for i in 0..=n {
-                let t = ct0 + (ct1 - ct0) * i as f64 / n as f64;
-                let p = crv.point_at(t);
-                entries.push([t, p[0], p[1]]);
-            }
-
-            let mut depth = 0;
-
-            while depth < 6 {
-                let mut inserted = 0;
-                let mut i = 0;
-
-                while i + 1 < entries.len() {
-                    let a = entries[i];
-                    let b = entries[i + 1];
-                    let tm = (a[0] + b[0]) * 0.5;
-                    let pm = crv.point_at(tm);
-                    let exu = b[1] - a[1];
-                    let exv = b[2] - a[2];
-                    let l2 = exu * exu + exv * exv;
-                    let dev = if l2 > 1e-30 {
-                        let s = ((pm[0] - a[1]) * exu + (pm[1] - a[2]) * exv) / l2;
-                        let cx = a[1] + s * exu;
-                        let cy = a[2] + s * exv;
-                        (pm[0] - cx).hypot(pm[1] - cy)
-                    } else {
-                        0.0
-                    };
-
-                    if dev > samp_tol && entries.len() < 4096 {
-                        entries.insert(i + 1, [tm, pm[0], pm[1]]);
-                        inserted += 1;
-                        i += 2;
-                    } else {
-                        i += 1;
-                    }
-                }
-
-                if inserted == 0 {
-                    break;
-                }
-
-                depth += 1;
-            }
-
-            let mut pts: Vec<[f64; 2]> = Vec::new();
-            let mut ts: Vec<f64> = Vec::new();
-
-            for e in &entries {
-                let mut p = [e[1].max(u0).min(u1), e[2].max(v0).min(v1)];
-                snap_to_border(&mut p, u0, u1, v0, v1, snap_uv);
-
-                if !pts.is_empty()
-                    && (p[0] - pts[pts.len() - 1][0]).abs() < 1e-15
-                    && (p[1] - pts[pts.len() - 1][1]).abs() < 1e-15
-                {
-                    continue;
-                }
-
-                pts.push(p);
-                ts.push(e[0]);
-            }
-
-            if pts.len() < 2 {
-                continue;
-            }
-
-            let mut on_u0 = true;
-            let mut on_u1 = true;
-            let mut on_v0 = true;
-            let mut on_v1 = true;
-
-            for p in &pts {
-                if (p[0] - u0).abs() >= snap_uv {
-                    on_u0 = false;
-                }
-
-                if (p[0] - u1).abs() >= snap_uv {
-                    on_u1 = false;
-                }
-
-                if (p[1] - v0).abs() >= snap_uv {
-                    on_v0 = false;
-                }
-
-                if (p[1] - v1).abs() >= snap_uv {
-                    on_v1 = false;
-                }
-            }
-
-            if on_u0 || on_u1 || on_v0 || on_v1 {
-                continue;
-            }
-
-            polylines.push(UVPoly {
-                cidx: cidx as i32,
-                pts,
-                ts,
-            });
-        }
-
-        polylines.push(UVPoly {
-            cidx: -1,
-            pts: vec![[u0, v0], [u1, v0]],
-            ts: vec![u0, u1],
-        });
-        polylines.push(UVPoly {
-            cidx: -2,
-            pts: vec![[u1, v0], [u1, v1]],
-            ts: vec![v0, v1],
-        });
-        polylines.push(UVPoly {
-            cidx: -3,
-            pts: vec![[u1, v1], [u0, v1]],
-            ts: vec![u1, u0],
-        });
-        polylines.push(UVPoly {
-            cidx: -4,
-            pts: vec![[u0, v1], [u0, v0]],
-            ts: vec![v1, v0],
-        });
-
-        let min_ext = (snap_uv * 8.0).max(range_u.min(range_v) * 1e-5);
-        let mut kept: Vec<UVPoly> = Vec::new();
-
-        for poly in polylines {
-            let mut ext = 0.0;
-
-            for k in 1..poly.pts.len() {
-                ext += (poly.pts[k][0] - poly.pts[k - 1][0])
-                    .hypot(poly.pts[k][1] - poly.pts[k - 1][1]);
-            }
-
-            if poly.cidx < 0 || ext >= min_ext {
-                kept.push(poly);
-            }
-        }
-
-        let polylines = kept;
-
-        let mut splits: HashMap<(usize, usize), Vec<(f64, f64, f64, f64)>> = HashMap::new();
-
-        for pi in 0..polylines.len() {
-            for pj in (pi + 1)..polylines.len() {
-                let a_poly = &polylines[pi];
-                let b_poly = &polylines[pj];
-
-                if a_poly.cidx < 0 && b_poly.cidx < 0 {
-                    continue;
-                }
-
-                let mut aminu = a_poly.pts[0][0];
-                let mut amaxu = a_poly.pts[0][0];
-                let mut aminv = a_poly.pts[0][1];
-                let mut amaxv = a_poly.pts[0][1];
-
-                for p in &a_poly.pts {
-                    aminu = aminu.min(p[0]);
-                    amaxu = amaxu.max(p[0]);
-                    aminv = aminv.min(p[1]);
-                    amaxv = amaxv.max(p[1]);
-                }
-
-                aminu -= snap_uv;
-                amaxu += snap_uv;
-                aminv -= snap_uv;
-                amaxv += snap_uv;
-                let mut bminu = b_poly.pts[0][0];
-                let mut bmaxu = b_poly.pts[0][0];
-                let mut bminv = b_poly.pts[0][1];
-                let mut bmaxv = b_poly.pts[0][1];
-
-                for p in &b_poly.pts {
-                    bminu = bminu.min(p[0]);
-                    bmaxu = bmaxu.max(p[0]);
-                    bminv = bminv.min(p[1]);
-                    bmaxv = bmaxv.max(p[1]);
-                }
-
-                if bminu > amaxu || bmaxu < aminu || bminv > amaxv || bmaxv < aminv {
-                    continue;
-                }
-
-                for ia in 0..a_poly.pts.len() - 1 {
-                    for ib in 0..b_poly.pts.len() - 1 {
-                        let Some((s, t)) = segment_intersection(
-                            &a_poly.pts[ia],
-                            &a_poly.pts[ia + 1],
-                            &b_poly.pts[ib],
-                            &b_poly.pts[ib + 1],
-                        ) else {
-                            continue;
-                        };
-                        let mut ta = a_poly.ts[ia] + (a_poly.ts[ia + 1] - a_poly.ts[ia]) * s;
-                        let mut tb = b_poly.ts[ib] + (b_poly.ts[ib + 1] - b_poly.ts[ib]) * t;
-                        let mut hu =
-                            a_poly.pts[ia][0] + (a_poly.pts[ia + 1][0] - a_poly.pts[ia][0]) * s;
-                        let mut hv =
-                            a_poly.pts[ia][1] + (a_poly.pts[ia + 1][1] - a_poly.pts[ia][1]) * s;
-
-                        if a_poly.cidx >= 0 && b_poly.cidx >= 0 {
-                            (ta, tb) = newton_curve_curve(
-                                &pcurves[a_poly.cidx as usize],
-                                ta,
-                                &pcurves[b_poly.cidx as usize],
-                                tb,
-                                snap_uv * 0.01,
-                            );
-                            let pa = pcurves[a_poly.cidx as usize].point_at(ta);
-                            hu = pa[0];
-                            hv = pa[1];
-                        } else if a_poly.cidx >= 0 {
-                            let pa = pcurves[a_poly.cidx as usize].point_at(ta);
-                            hu = pa[0];
-                            hv = pa[1];
-                        } else if b_poly.cidx >= 0 {
-                            let pb = pcurves[b_poly.cidx as usize].point_at(tb);
-                            hu = pb[0];
-                            hv = pb[1];
-                        }
-
-                        let mut hp = [hu, hv];
-                        snap_to_border(&mut hp, u0, u1, v0, v1, snap_uv);
-
-                        if b_poly.cidx < 0 {
-                            if b_poly.cidx == -1 || b_poly.cidx == -3 {
-                                tb = hp[0];
-                            } else {
-                                tb = hp[1];
-                            }
-                        }
-
-                        if a_poly.cidx < 0 {
-                            if a_poly.cidx == -1 || a_poly.cidx == -3 {
-                                ta = hp[0];
-                            } else {
-                                ta = hp[1];
-                            }
-                        }
-
-                        splits
-                            .entry((pi, ia))
-                            .or_default()
-                            .push((s, hp[0], hp[1], ta));
-
-                        splits
-                            .entry((pj, ib))
-                            .or_default()
-                            .push((t, hp[0], hp[1], tb));
-                    }
-                }
-            }
-        }
-
-        let mut pool = UVVertexPool::new(snap_uv);
-        let mut edges: Vec<SplitEdge> = Vec::new();
-
-        for (pi, poly) in polylines.iter().enumerate() {
-            let mut chain: Vec<(usize, f64)> = Vec::new();
-
-            for i in 0..poly.pts.len() {
-                chain.push((pool.id(poly.pts[i]), poly.ts[i]));
-
-                if i + 1 < poly.pts.len() {
-                    if let Some(sp) = splits.get(&(pi, i)) {
-                        let mut evs = sp.clone();
-                        evs.sort_by(|x, y| x.partial_cmp(y).unwrap_or(std::cmp::Ordering::Equal));
-
-                        for ev in evs {
-                            chain.push((pool.id([ev.1, ev.2]), ev.3));
-                        }
-                    }
-                }
-            }
-
-            for i in 0..chain.len().saturating_sub(1) {
-                let (a, ta) = chain[i];
-                let (b, tb) = chain[i + 1];
-
-                if a == b {
-                    continue;
-                }
-
-                edges.push(SplitEdge {
-                    a,
-                    b,
-                    cidx: poly.cidx,
-                    ta,
-                    tb,
-                });
-            }
-        }
-
-        let mut alive = vec![true; edges.len()];
-        let mut changed = true;
-
-        for _ in 0..=edges.len() {
-            if !changed {
-                break;
-            }
-
-            changed = false;
-            let mut degree: HashMap<usize, usize> = HashMap::new();
-
-            for (ei, e) in edges.iter().enumerate() {
-                if !alive[ei] {
-                    continue;
-                }
-
-                *degree.entry(e.a).or_insert(0) += 1;
-                *degree.entry(e.b).or_insert(0) += 1;
-            }
-
-            for (ei, e) in edges.iter().enumerate() {
-                if !alive[ei] {
-                    continue;
-                }
-
-                if degree.get(&e.a).copied().unwrap_or(0) == 1
-                    || degree.get(&e.b).copied().unwrap_or(0) == 1
-                {
-                    alive[ei] = false;
-                    changed = true;
-                }
-            }
-        }
-
-        let mut live_edges: Vec<SplitEdge> = Vec::new();
-
-        for (ei, e) in edges.iter().enumerate() {
-            if alive[ei] {
-                live_edges.push(*e);
-            }
-        }
+        let dom = split_domain(srf, tolerance);
+        let polylines = uv_polylines(pcurves, &dom);
+        let mut pool = UVVertexPool::new(dom.snap);
+        let splits = polyline_crossings(&polylines, pcurves, &dom);
+        let live_edges = prune_dangling(&split_edges(&polylines, &splits, &mut pool));
 
         if live_edges.is_empty() {
             return Vec::new();
         }
 
         let verts = &pool.verts;
-        let mut hes: Vec<HalfEdge> = Vec::new();
-
-        for (ei, e) in live_edges.iter().enumerate() {
-            hes.push(HalfEdge {
-                tail: e.a,
-                head: e.b,
-                eidx: ei,
-                fwd: true,
-            });
-            hes.push(HalfEdge {
-                tail: e.b,
-                head: e.a,
-                eidx: ei,
-                fwd: false,
-            });
-        }
-
-        let mut out_map: Vec<Vec<usize>> = vec![Vec::new(); verts.len()];
-
-        for (hi, he) in hes.iter().enumerate() {
-            out_map[he.tail].push(hi);
-        }
-
-        for vid in 0..out_map.len() {
-            let mut fan: Vec<(f64, usize)> = Vec::new();
-
-            for &hi in &out_map[vid] {
-                let angle = (verts[hes[hi].head][1] - verts[vid][1])
-                    .atan2(verts[hes[hi].head][0] - verts[vid][0]);
-                fan.push((angle, hi));
-            }
-
-            fan.sort_by(|x, y| x.partial_cmp(y).unwrap_or(std::cmp::Ordering::Equal));
-
-            for k in 0..fan.len() {
-                out_map[vid][k] = fan[k].1;
-            }
-        }
-
-        let mut next_he = vec![usize::MAX; hes.len()];
-
-        for outs in &out_map {
-            for (pos, &hi) in outs.iter().enumerate() {
-                let tw = hi ^ 1;
-                let nxt = outs[(pos + outs.len() - 1) % outs.len()];
-                next_he[tw] = nxt;
-            }
-        }
-
-        let mut visited = vec![false; hes.len()];
-        let mut faces: Vec<Vec<usize>> = Vec::new();
-
-        for hi in 0..hes.len() {
-            if visited[hi] {
-                continue;
-            }
-
-            let mut cycle = Vec::new();
-            let mut cur = hi;
-
-            while cur != usize::MAX && !visited[cur] {
-                visited[cur] = true;
-                cycle.push(cur);
-                cur = next_he[cur];
-            }
-
-            if cycle.len() >= 2 {
-                faces.push(cycle);
-            }
-        }
-
-        let mut border_vids: HashSet<usize> = HashSet::new();
-
-        for e in &live_edges {
-            if e.cidx < 0 {
-                border_vids.insert(e.a);
-                border_vids.insert(e.b);
-            }
-        }
-
-        let mut pos_faces: Vec<(Vec<usize>, f64)> = Vec::new();
-        let mut neg_faces: Vec<Vec<usize>> = Vec::new();
-
-        for cycle in faces {
-            let area = cycle_area(&cycle, &hes, verts);
-
-            if area > snap_uv * snap_uv {
-                pos_faces.push((cycle, area));
-            } else if area < -snap_uv * snap_uv {
-                let mut touches_border = false;
-
-                for &hi in &cycle {
-                    if border_vids.contains(&hes[hi].tail) {
-                        touches_border = true;
-                        break;
-                    }
-                }
-
-                if !touches_border {
-                    neg_faces.push(cycle);
-                }
-            }
-        }
-
-        let mut holes_of: Vec<Vec<Vec<usize>>> = vec![Vec::new(); pos_faces.len()];
-
-        for cycle in &neg_faces {
-            let sample = verts[hes[cycle[0]].tail];
-            let mut best: i32 = -1;
-            let mut best_area = f64::INFINITY;
-
-            for (fi, (fc, area)) in pos_faces.iter().enumerate() {
-                if *area < best_area && point_in_cycle(sample, fc, &hes, verts) {
-                    let mut hole_vids: HashSet<usize> = HashSet::new();
-                    let mut face_vids: HashSet<usize> = HashSet::new();
-
-                    for &hi in cycle {
-                        hole_vids.insert(hes[hi].tail);
-                    }
-
-                    for &hi in fc {
-                        face_vids.insert(hes[hi].tail);
-                    }
-
-                    if hole_vids == face_vids {
-                        continue;
-                    }
-
-                    best = fi as i32;
-                    best_area = *area;
-                }
-            }
-
-            if best >= 0 {
-                holes_of[best as usize].push(cycle.clone());
-            }
-        }
-
+        let hes = half_edges(&live_edges);
+        let faces = face_cycles(&next_half_edges(&hes, verts));
+        let (pos_faces, neg_faces) = classify_faces(faces, &hes, verts, &live_edges, dom.snap);
+        let holes_of = assign_holes(&neg_faces, &pos_faces, &hes, verts);
         let mut result: Vec<NurbsSurfaceTrimmed> = Vec::new();
 
         for (fi, (cycle, _area)) in pos_faces.iter().enumerate() {
-            let mut outer = cycle_to_loop(cycle, &hes, &live_edges, verts, pcurves, snap_uv);
+            let mut outer = cycle_to_loop(cycle, &hes, &live_edges, verts, pcurves, dom.snap);
 
-            if !outer.is_valid() {
+            if !outer.is_valid() || (loop_signed_area(&outer) < 0.0 && !outer.reverse()) {
                 continue;
-            }
-
-            if loop_signed_area(&outer) < 0.0 {
-                outer.reverse();
             }
 
             let mut ts = NurbsSurfaceTrimmed::create(srf, &outer);
 
             for hole_cycle in &holes_of[fi] {
                 let mut hole =
-                    cycle_to_loop(hole_cycle, &hes, &live_edges, verts, pcurves, snap_uv);
+                    cycle_to_loop(hole_cycle, &hes, &live_edges, verts, pcurves, dom.snap);
 
-                if !hole.is_valid() {
+                if !hole.is_valid() || (loop_signed_area(&hole) > 0.0 && !hole.reverse()) {
                     continue;
-                }
-
-                if loop_signed_area(&hole) > 0.0 {
-                    hole.reverse();
                 }
 
                 ts.add_inner_loop(hole);
@@ -2371,31 +3302,12 @@ impl NurbsSurfaceTrimmed {
             return srf.mesh();
         };
         let q = [q0[0], q0[1], q0[2]];
-
-        let usp = srf.get_span_vector(0);
-        let vsp = srf.get_span_vector(1);
-
-        if usp.len() < 2 || vsp.len() < 2 {
-            return srf.mesh();
-        }
-
         let bbox_diag = self.bbox_diagonal();
-        let chord_tol = bbox_diag * chord_factor;
-        let us = span_parameters(
-            &usp,
-            &span_subdivisions(srf, 0, &usp, &vsp, srf.degree(0), max_angle_deg, chord_tol),
-        );
-        let vs = span_parameters(
-            &vsp,
-            &span_subdivisions(srf, 1, &vsp, &usp, srf.degree(1), max_angle_deg, chord_tol),
-        );
+        let Some((us, vs)) = span_grid(srf, max_angle_deg, bbox_diag * chord_factor) else {
+            return srf.mesh();
+        };
         let nu = us.len();
         let nv = vs.len();
-
-        if nu < 2 || nv < 2 {
-            return srf.mesh();
-        }
-
         let mut field = vec![vec![0.0f64; nv]; nu];
 
         for i in 0..nu {
@@ -2418,46 +3330,8 @@ impl NurbsSurfaceTrimmed {
                     field[i + 1][j + 1],
                     field[i][j + 1],
                 ];
-                let inn = [fc[0] <= 0.0, fc[1] <= 0.0, fc[2] <= 0.0, fc[3] <= 0.0];
-                let cnt = inn[0] as i32 + inn[1] as i32 + inn[2] as i32 + inn[3] as i32;
-
-                if cnt == 0 {
-                    continue;
-                }
-
-                let mut poly: Vec<usize> = Vec::new();
-
-                for k in 0..4 {
-                    let kn = (k + 1) % 4;
-
-                    if inn[k] {
-                        poly.push(welder.weld_surface(&mut result, srf, cu[k], cv[k]));
-                    }
-
-                    if inn[k] != inn[kn] {
-                        let t = if (fc[k] - fc[kn]).abs() > 1e-30 {
-                            fc[k] / (fc[k] - fc[kn])
-                        } else {
-                            0.5
-                        };
-                        let u = cu[k] + (cu[kn] - cu[k]) * t;
-                        let v = cv[k] + (cv[kn] - cv[k]) * t;
-                        let (u, v) = refine_crossing(srf, &q, &n, u, v);
-                        poly.push(welder.weld_surface(&mut result, srf, u, v));
-                    }
-                }
-
-                for t in 1..poly.len().saturating_sub(1) {
-                    let a = poly[0];
-                    let b = poly[t];
-                    let c = poly[t + 1];
-
-                    if a == b || b == c || c == a {
-                        continue;
-                    }
-
-                    result.add_face(vec![a, b, c], None);
-                }
+                let poly = clip_cell(&mut welder, &mut result, srf, &q, &n, &cu, &cv, &fc);
+                add_fan(&mut result, &poly);
             }
         }
 
@@ -2489,84 +3363,14 @@ impl NurbsSurfaceTrimmed {
             return srf.mesh();
         }
 
-        let usp = srf.get_span_vector(0);
-        let vsp = srf.get_span_vector(1);
-
-        if usp.len() < 2 || vsp.len() < 2 {
-            return srf.mesh();
-        }
-
         let bbox_diag = self.bbox_diagonal();
-        let chord_tol = bbox_diag * chord_factor;
-        let us = span_parameters(
-            &usp,
-            &span_subdivisions(srf, 0, &usp, &vsp, srf.degree(0), max_angle_deg, chord_tol),
-        );
-        let vs = span_parameters(
-            &vsp,
-            &span_subdivisions(srf, 1, &vsp, &usp, srf.degree(1), max_angle_deg, chord_tol),
-        );
-        let nu = us.len();
-        let nv = vs.len();
-
-        if nu < 2 || nv < 2 {
+        let Some((us, vs)) = span_grid(srf, max_angle_deg, bbox_diag * chord_factor) else {
             return srf.mesh();
-        }
+        };
+        let mut tris = grid_triangles(&us, &vs);
 
-        let mut tris: Vec<[[f64; 2]; 3]> = Vec::with_capacity((nu - 1) * (nv - 1) * 2);
-
-        for i in 0..nu - 1 {
-            for j in 0..nv - 1 {
-                let a = [us[i], vs[j]];
-                let b = [us[i + 1], vs[j]];
-                let c = [us[i + 1], vs[j + 1]];
-                let d = [us[i], vs[j + 1]];
-                tris.push([a, b, c]);
-                tris.push([a, c, d]);
-            }
-        }
-
-        let eps = 1e-9;
-
-        for k in 0..pl.len() {
-            let q = pl[k].0;
-            let n = pl[k].1;
-            let mut next: Vec<[[f64; 2]; 3]> = Vec::new();
-
-            for t in &tris {
-                let mut poly: Vec<[f64; 2]> = Vec::new();
-
-                for e in 0..3 {
-                    let p = t[e];
-                    let r = t[(e + 1) % 3];
-                    let fp = plane_field(srf, &q, &n, p[0], p[1]);
-                    let fr = plane_field(srf, &q, &n, r[0], r[1]);
-                    let pin = fp <= eps;
-                    let rin = fr <= eps;
-
-                    if pin {
-                        poly.push(p);
-                    }
-
-                    if pin != rin {
-                        let tt = if (fp - fr).abs() > 1e-30 {
-                            fp / (fp - fr)
-                        } else {
-                            0.5
-                        };
-                        let cu = p[0] + (r[0] - p[0]) * tt;
-                        let cv = p[1] + (r[1] - p[1]) * tt;
-                        let (cu, cv) = refine_crossing(srf, &q, &n, cu, cv);
-                        poly.push([cu, cv]);
-                    }
-                }
-
-                for w in 1..poly.len().saturating_sub(1) {
-                    next.push([poly[0], poly[w], poly[w + 1]]);
-                }
-            }
-
-            tris = next;
+        for (q, n) in &pl {
+            tris = clip_triangles(srf, q, n, &tris);
 
             if tris.is_empty() {
                 break;
@@ -2577,21 +3381,7 @@ impl NurbsSurfaceTrimmed {
             return Mesh::new();
         }
 
-        let mut result = Mesh::new();
-        let weld_tol = bbox_diag * 1e-5;
-        let mut welder = VertexWelder::new(weld_tol, weld_tol);
-
-        for t in &tris {
-            let a = welder.weld_surface(&mut result, srf, t[0][0], t[0][1]);
-            let b = welder.weld_surface(&mut result, srf, t[1][0], t[1][1]);
-            let c = welder.weld_surface(&mut result, srf, t[2][0], t[2][1]);
-
-            if a == b || b == c || c == a {
-                continue;
-            }
-
-            result.add_face(vec![a, b, c], None);
-        }
+        let result = weld_triangles(srf, &tris, bbox_diag * 1e-5);
 
         if result.face.is_empty() {
             return Mesh::new();
@@ -2786,27 +3576,7 @@ impl NurbsSurfaceTrimmed {
 
     /// UV polygon of a trim loop: control points or samples, each edge split until its 3D chord is within deflection.
     fn discretize_loop(&self, crv: &NurbsCurve, deflection: f64) -> Vec<Point> {
-        let mut raw: Vec<Point> = Vec::new();
-
-        if crv.degree() <= 1 && !crv.is_rational() {
-            for i in 0..crv.cv_count() {
-                raw.push(crv.get_cv(i).unwrap_or_default());
-            }
-        } else {
-            let n = (crv.cv_count() * 4).clamp(16, 2048);
-            raw = crv.divide_by_count(n, true).0;
-        }
-
-        while raw.len() > 1 {
-            let dx = raw[0][0] - raw[raw.len() - 1][0];
-            let dy = raw[0][1] - raw[raw.len() - 1][1];
-
-            if dx * dx + dy * dy < 1e-20 {
-                raw.pop();
-            } else {
-                break;
-            }
-        }
+        let raw = loop_points(crv);
 
         if raw.len() < 2 {
             return raw;
@@ -2815,30 +3585,13 @@ impl NurbsSurfaceTrimmed {
         let mut out: Vec<Point> = Vec::with_capacity(raw.len() * 2);
 
         for i in 0..raw.len() {
-            let mut stack: Vec<(Point, Point, i32)> =
-                vec![(raw[i].clone(), raw[(i + 1) % raw.len()].clone(), 0)];
-
-            while let Some((a, b, depth)) = stack.pop() {
-                let mu = (a[0] + b[0]) * 0.5;
-                let mv = (a[1] + b[1]) * 0.5;
-                let pa = self.m_surface.point_at(a[0], a[1]).unwrap_or_default();
-                let pm = self.m_surface.point_at(mu, mv).unwrap_or_default();
-                let edge = &self.m_surface.point_at(b[0], b[1]).unwrap_or_default() - &pa;
-                let l2 = edge.magnitude_squared();
-                let dev = if l2 > 1e-30 {
-                    let t = (&pm - &pa).dot(&edge) / l2;
-                    (&pm - &(&pa + &(&edge * t))).magnitude_squared().sqrt()
-                } else {
-                    (&pm - &pa).magnitude_squared().sqrt()
-                };
-
-                if dev > deflection && depth < 6 {
-                    stack.push((Point::new(mu, mv, 0.0), b, depth + 1));
-                    stack.push((a, Point::new(mu, mv, 0.0), depth + 1));
-                } else {
-                    out.push(a);
-                }
-            }
+            subdivide_edge(
+                &self.m_surface,
+                &raw[i],
+                &raw[(i + 1) % raw.len()],
+                deflection,
+                &mut out,
+            );
         }
 
         out
@@ -2850,149 +3603,16 @@ impl NurbsSurfaceTrimmed {
             return self.m_surface.mesh();
         }
 
-        let outer_uv = &loops.uv[0];
         let bbox_diag = self.bbox_diagonal();
         let deflection = bbox_diag * chord_factor;
         let cos_max_angle = (max_angle_deg.clamp(0.1, 179.0) * PI / 180.0).cos();
+        let crease_knots = find_crease_knots(&self.m_surface);
+        let bounds = loop_bounds(&loops.uv[0]);
 
-        let mut bb_umin = 1e30_f64;
-        let mut bb_vmin = 1e30_f64;
-        let mut bb_umax = -1e30_f64;
-        let mut bb_vmax = -1e30_f64;
-
-        for p in outer_uv {
-            if p[0] < bb_umin {
-                bb_umin = p[0];
-            }
-
-            if p[1] < bb_vmin {
-                bb_vmin = p[1];
-            }
-
-            if p[0] > bb_umax {
-                bb_umax = p[0];
-            }
-
-            if p[1] > bb_vmax {
-                bb_vmax = p[1];
-            }
-        }
-
-        let mut crease_knots = [Vec::new(), Vec::new()];
-
-        for dir in 0..2 {
-            let Some((start, end)) = self.m_surface.domain(dir) else {
-                continue;
-            };
-            let knots = &self.m_surface.m_nurbsknot[dir];
-
-            for &knot in knots {
-                if knot <= start || knot >= end || crease_knots[dir].contains(&knot) {
-                    continue;
-                }
-
-                let mut multiplicity = 0;
-
-                for &value in knots {
-                    if value == knot {
-                        multiplicity += 1;
-                    }
-                }
-
-                if multiplicity >= self.m_surface.degree(dir) {
-                    crease_knots[dir].push(knot);
-                }
-            }
-        }
-
-        let mut dt = Delaunay2D::new(bb_umin, bb_vmin, bb_umax, bb_vmax);
-        let mut loop_vids: Vec<Vec<i32>> = Vec::new();
+        let mut dt = Delaunay2D::new(bounds[0], bounds[1], bounds[2], bounds[3]);
         let mut boundary_intervals: BTreeMap<usize, (usize, usize, f64)> = BTreeMap::new();
-
-        for (li, pts) in loops.uv.iter().enumerate() {
-            let mut vis: Vec<i32> = Vec::new();
-
-            for p in pts {
-                vis.push(dt.insert(p[0], p[1]));
-            }
-
-            for i in 0..vis.len() {
-                let j = (i + 1) % vis.len();
-                let mut events = vec![(0.0, vis[i]), (1.0, vis[j])];
-
-                for dir in 0..2 {
-                    let delta = pts[j][dir] - pts[i][dir];
-
-                    if delta == 0.0 {
-                        continue;
-                    }
-
-                    for &knot in &crease_knots[dir] {
-                        let t = (knot - pts[i][dir]) / delta;
-
-                        if t <= 0.0 || t >= 1.0 {
-                            continue;
-                        }
-
-                        let mut uv = [
-                            pts[i][0] + t * (pts[j][0] - pts[i][0]),
-                            pts[i][1] + t * (pts[j][1] - pts[i][1]),
-                        ];
-                        uv[dir] = knot;
-                        let vi = dt.insert(uv[0], uv[1]);
-
-                        if vi >= 0 {
-                            boundary_intervals.insert(vi as usize, (li, i, t));
-                        }
-
-                        events.push((t, vi));
-                    }
-                }
-
-                events.sort_by(|x, y| x.partial_cmp(y).unwrap_or(std::cmp::Ordering::Equal));
-
-                for k in 1..events.len() {
-                    if events[k - 1].1 >= 0 && events[k].1 >= 0 && events[k - 1].1 != events[k].1 {
-                        dt.insert_constraint(events[k - 1].1, events[k].1);
-                    }
-                }
-            }
-
-            loop_vids.push(vis);
-        }
-
-        for &u in &crease_knots[0] {
-            for &v in &crease_knots[1] {
-                if inside_loops(u, v, &loops.uv) {
-                    dt.insert(u, v);
-                }
-            }
-        }
-
-        for dir in 0..2 {
-            for &knot in &crease_knots[dir] {
-                let mut nodes = Vec::new();
-
-                for (vi, vertex) in dt.vertices.iter().enumerate() {
-                    let uv = [vertex.x, vertex.y];
-
-                    if uv[dir] == knot {
-                        nodes.push((uv[1 - dir], vi as i32));
-                    }
-                }
-
-                nodes.sort_by(|x, y| x.partial_cmp(y).unwrap_or(std::cmp::Ordering::Equal));
-
-                for k in 1..nodes.len() {
-                    let mut uv = [knot, knot];
-                    uv[1 - dir] = (nodes[k - 1].0 + nodes[k].0) * 0.5;
-
-                    if inside_loops(uv[0], uv[1], &loops.uv) {
-                        dt.insert_constraint(nodes[k - 1].1, nodes[k].1);
-                    }
-                }
-            }
-        }
+        let loop_vids = insert_loops(&mut dt, &loops.uv, &crease_knots, &mut boundary_intervals);
+        insert_crease_lines(&mut dt, &loops.uv, &crease_knots);
 
         for p in &loops.interior_uv {
             if inside_loops(p[0], p[1], &loops.uv) {
@@ -3000,270 +3620,41 @@ impl NurbsSurfaceTrimmed {
             }
         }
 
-        const MAX_ITERS: i32 = 8;
-        const MAX_VERTS: usize = 200000;
-        let iters = MAX_ITERS;
-
-        for _iter in 0..iters {
-            let mut to_insert: Vec<[f64; 2]> = Vec::new();
-
-            for tri in &dt.triangles {
-                if !tri.alive {
-                    continue;
-                }
-
-                let a = &dt.vertices[tri.v[0] as usize];
-                let b = &dt.vertices[tri.v[1] as usize];
-                let c = &dt.vertices[tri.v[2] as usize];
-                let cu = (a.x + b.x + c.x) / 3.0;
-                let cv = (a.y + b.y + c.y) / 3.0;
-
-                if !inside_loops(cu, cv, &loops.uv) {
-                    continue;
-                }
-
-                let pa = self.m_surface.point_at(a.x, a.y).unwrap_or_default();
-                let pb = self.m_surface.point_at(b.x, b.y).unwrap_or_default();
-                let pc = self.m_surface.point_at(c.x, c.y).unwrap_or_default();
-                let pm = self.m_surface.point_at(cu, cv).unwrap_or_default();
-                let n = (&pb - &pa).cross(&(&pc - &pa));
-                let nl = n.magnitude_squared().sqrt();
-
-                if nl < 1e-30 {
-                    continue;
-                }
-
-                let dev = ((&pm - &pa).dot(&n) / nl).abs();
-                let mut refine = dev > deflection;
-
-                if !refine {
-                    let na =
-                        crease_side_normal(&self.m_surface, &crease_knots, [cu, cv], [a.x, a.y]);
-
-                    let nb =
-                        crease_side_normal(&self.m_surface, &crease_knots, [cu, cv], [b.x, b.y]);
-
-                    let nc2 =
-                        crease_side_normal(&self.m_surface, &crease_knots, [cu, cv], [c.x, c.y]);
-
-                    let d1 = na.dot(&nb);
-                    let d2 = nb.dot(&nc2);
-                    let d3 = na.dot(&nc2);
-                    let mind = d1.min(d2.min(d3));
-
-                    if mind < cos_max_angle {
-                        refine = true;
-                    }
-                }
-
-                if refine {
-                    to_insert.push([cu, cv]);
-                }
-            }
-
-            if to_insert.is_empty() {
-                break;
-            }
-
-            for uv in &to_insert {
-                if dt.vertices.len() >= MAX_VERTS {
-                    break;
-                }
-
-                dt.insert(uv[0], uv[1]);
-            }
-
-            if dt.vertices.len() >= MAX_VERTS {
-                break;
-            }
-        }
-
-        dt.cleanup();
-
-        for ti in 0..dt.triangles.len() {
-            if !dt.triangles[ti].alive {
-                continue;
-            }
-
-            let cu = (dt.vertices[dt.triangles[ti].v[0] as usize].x
-                + dt.vertices[dt.triangles[ti].v[1] as usize].x
-                + dt.vertices[dt.triangles[ti].v[2] as usize].x)
-                / 3.0;
-
-            let cv = (dt.vertices[dt.triangles[ti].v[0] as usize].y
-                + dt.vertices[dt.triangles[ti].v[1] as usize].y
-                + dt.vertices[dt.triangles[ti].v[2] as usize].y)
-                / 3.0;
-
-            if !inside_loops(cu, cv, &loops.uv) {
-                dt.triangles[ti].alive = false;
-            }
-        }
-
+        refine(
+            &mut dt,
+            &self.m_surface,
+            &loops.uv,
+            &crease_knots,
+            deflection,
+            cos_max_angle,
+        );
+        trim_outside(&mut dt, &loops.uv);
         let tris = dt.get_triangles();
 
-        if tris.is_empty() {
+        if tris.is_empty() || crosses_crease(&tris, &dt, &crease_knots) {
             return Mesh::new();
         }
 
-        for tri in &tris {
-            for dir in 0..2 {
-                let mut low = f64::INFINITY;
-                let mut high = f64::NEG_INFINITY;
-
-                for &vi in tri {
-                    let value = [dt.vertices[vi as usize].x, dt.vertices[vi as usize].y][dir];
-                    low = low.min(value);
-                    high = high.max(value);
-                }
-
-                for &knot in &crease_knots[dir] {
-                    if low < knot && knot < high {
-                        return Mesh::new();
-                    }
-                }
-            }
-        }
-
-        let nv = dt.vertices.len();
-        let mut given: Vec<Option<(usize, usize)>> = vec![None; nv];
-
-        for (li, vids) in loop_vids.iter().enumerate() {
-            if li >= loops.xyz.len() {
-                break;
-            }
-
-            for (k, &vi) in vids.iter().enumerate() {
-                if vi >= 0 && k < loops.xyz[li].len() {
-                    given[vi as usize] = Some((li, k));
-                }
-            }
-        }
-
         let mut result = Mesh::new();
-        let mut vert_map: Vec<Option<usize>> = vec![None; nv];
         let weld_tol = if loops.xyz.is_empty() {
             bbox_diag * 1e-5
         } else {
             0.0
         };
         let mut welder = VertexWelder::new(weld_tol, bbox_diag * 1e-5);
-
-        for tri in &tris {
-            for &vi in tri {
-                if vert_map[vi as usize].is_some() {
-                    continue;
-                }
-
-                let interval = boundary_intervals.get(&(vi as usize));
-                let p = match (given[vi as usize], interval) {
-                    (Some((li, k)), _) => loops.xyz[li][k].clone(),
-                    (None, Some(&(li, segment, t))) if !loops.xyz.is_empty() => {
-                        let a = &loops.xyz[li][segment];
-                        let b = &loops.xyz[li][(segment + 1) % loops.xyz[li].len()];
-                        a + &(&(b - a) * t)
-                    }
-                    _ => self
-                        .m_surface
-                        .point_at(dt.vertices[vi as usize].x, dt.vertices[vi as usize].y)
-                        .unwrap_or_default(),
-                };
-                vert_map[vi as usize] = Some(welder.weld(&mut result, p));
-            }
-        }
-
-        for &[a, b, c] in &tris {
-            let v0 = vert_map[a as usize].unwrap();
-            let v1 = vert_map[b as usize].unwrap();
-            let v2 = vert_map[c as usize].unwrap();
-
-            if v0 == v1 || v1 == v2 || v2 == v0 {
-                continue;
-            }
-
-            result.add_face(vec![v0, v1, v2], None);
-        }
-
-        let mut fan: HashMap<usize, Vector> = HashMap::new();
-        let mut fkeys: Vec<usize> = Vec::new();
-
-        for &fk in result.face.keys() {
-            fkeys.push(fk);
-        }
-
-        fkeys.sort_unstable();
-
-        for fk in fkeys {
-            let verts = &result.face[&fk];
-            let a = result.vertex[&verts[0]].position();
-            let b = result.vertex[&verts[1]].position();
-            let c = result.vertex[&verts[2]].position();
-            let n = (&b - &a).cross(&(&c - &a));
-
-            for &vk in verts {
-                *fan.entry(vk).or_insert(Vector::new(0.0, 0.0, 0.0)) += &n;
-            }
-        }
-
-        for vi in 0..nv {
-            if let Some(vk) = vert_map[vi] {
-                let u = dt.vertices[vi].x;
-                let v = dt.vertices[vi].y;
-                let derivatives = self.m_surface.evaluate(u, v, 1);
-                let mut nrm = Vector::new(0.0, 0.0, 0.0);
-
-                if derivatives.len() >= 3 {
-                    nrm = derivatives[2].cross(&derivatives[1]);
-                }
-
-                let nl = nrm.magnitude_squared().sqrt();
-
-                if nl.is_finite() && nl > 0.0 {
-                    nrm = &nrm / nl;
-                } else {
-                    let f = fan.get(&vk).cloned().unwrap_or(Vector::new(0.0, 0.0, 1.0));
-                    let fl = f.magnitude_squared().sqrt();
-                    nrm = if fl.is_finite() && fl > 0.0 {
-                        &f / fl
-                    } else {
-                        Vector::new(0.0, 0.0, 1.0)
-                    };
-                }
-
-                if let Some(vd) = result.vertex.get_mut(&vk) {
-                    vd.set_normal(nrm[0], nrm[1], nrm[2]);
-                    vd.attributes.insert("u".to_string(), u);
-                    vd.attributes.insert("v".to_string(), v);
-                }
-            }
-        }
-
-        for (li, vids) in loop_vids.iter().enumerate() {
-            for (k, &vi) in vids.iter().enumerate() {
-                if vi < 0 {
-                    continue;
-                }
-
-                let key = format!("boundary/{li}/{k}");
-
-                if let Some(vk) = vert_map[vi as usize] {
-                    if let Some(vd) = result.vertex.get_mut(&vk) {
-                        vd.attributes.insert(key, 1.0);
-                    }
-                }
-            }
-        }
-
-        for (&vi, &(li, segment, t)) in &boundary_intervals {
-            let key = format!("boundary_interval/{li}/{segment}");
-
-            if let Some(vk) = vert_map[vi] {
-                if let Some(vd) = result.vertex.get_mut(&vk) {
-                    vd.attributes.insert(key, t);
-                }
-            }
-        }
-
+        let vert_map = weld_vertices(
+            &mut welder,
+            &mut result,
+            &self.m_surface,
+            &dt,
+            &tris,
+            loops,
+            &loop_vids,
+            &boundary_intervals,
+        );
+        add_faces(&mut result, &tris, &vert_map);
+        set_vertex_normals(&mut result, &self.m_surface, &dt, &vert_map);
+        tag_boundary(&mut result, &loop_vids, &boundary_intervals, &vert_map);
         RemeshNurbsSurfaceGrid::split_crease_normals(&self.m_surface, &mut result);
 
         result
@@ -3281,7 +3672,7 @@ impl std::fmt::Display for NurbsSurfaceTrimmed {
 // Operators
 // ═══════════════════════════════════════════════════════════════════════════
 impl PartialEq for NurbsSurfaceTrimmed {
-    /// Compare name, width, color and surface; guid and loops ignored.
+    /// Compare name, width, color, surface and trim loops; guid ignored.
     fn eq(&self, other: &Self) -> bool {
         if self.name != other.name {
             return false;
@@ -3299,6 +3690,10 @@ impl PartialEq for NurbsSurfaceTrimmed {
             return false;
         }
 
-        true
+        if self.m_outer_loop != other.m_outer_loop {
+            return false;
+        }
+
+        self.m_inner_loops == other.m_inner_loops
     }
 }
