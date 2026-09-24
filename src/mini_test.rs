@@ -4370,8 +4370,53 @@ pub fn get_all_tests() -> Vec<RegisteredTest> {
         },
         RegisteredTest {
             group: "Element",
-            name: "Session Geometry",
-            func: run_element_session_geometry,
+            name: "Session Geometry Mesh",
+            func: run_element_session_geometry_mesh,
+        },
+        RegisteredTest {
+            group: "Element",
+            name: "Element Geometry Mesh",
+            func: run_element_element_geometry_mesh,
+        },
+        RegisteredTest {
+            group: "Element",
+            name: "Element Geometry Brep",
+            func: run_element_element_geometry_brep,
+        },
+        RegisteredTest {
+            group: "Element",
+            name: "Model Geometry Mesh",
+            func: run_element_model_geometry_mesh,
+        },
+        RegisteredTest {
+            group: "Element",
+            name: "Model Geometry Brep",
+            func: run_element_model_geometry_brep,
+        },
+        RegisteredTest {
+            group: "Element",
+            name: "Geometry Mesh",
+            func: run_element_geometry_mesh,
+        },
+        RegisteredTest {
+            group: "Element",
+            name: "Geometry Brep",
+            func: run_element_geometry_brep,
+        },
+        RegisteredTest {
+            group: "Element",
+            name: "Session Geometry Brep",
+            func: run_element_session_geometry_brep,
+        },
+        RegisteredTest {
+            group: "Element",
+            name: "Compute Geometry Mesh",
+            func: run_element_compute_geometry_mesh,
+        },
+        RegisteredTest {
+            group: "Element",
+            name: "Compute Geometry Brep",
+            func: run_element_compute_geometry_brep,
         },
         RegisteredTest {
             group: "Element",

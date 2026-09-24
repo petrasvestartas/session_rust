@@ -232,10 +232,9 @@ pub fn run_element_obb() -> TestResult {
     })
 }
 
-pub fn run_element_session_geometry() -> TestResult {
-    MINI_TEST!("Session Geometry", {
+pub fn run_element_session_geometry_mesh() -> TestResult {
+    MINI_TEST!("Session Geometry Mesh", {
         use crate::element::Element;
-        use crate::element::ElementGeometry;
         use crate::Mesh;
         use crate::Point;
         use crate::Xform;
@@ -251,15 +250,267 @@ pub fn run_element_session_geometry() -> TestResult {
         );
         let e = Element::from_mesh(m, "my_element");
         let e_xf = Xform::translation(10.0, 0.0, 0.0);
-        let sg = e.session_geometry(&e_xf);
+        let mesh = e.session_geometry_mesh(&e_xf);
 
-        MINI_CHECK!(matches!(&sg, ElementGeometry::Mesh(_)));
+        MINI_CHECK!(TOLERANCE.is_close(mesh.vertex[&0].position()[0], 10.0));
+        MINI_CHECK!(TOLERANCE.is_close(mesh.vertex[&1].position()[0], 11.0));
+        MINI_CHECK!(!std::ptr::eq(e.geometry_mesh(), &mesh));
+    })
+}
 
-        if let ElementGeometry::Mesh(mesh) = &sg {
-            MINI_CHECK!(TOLERANCE.is_close(mesh.vertex[&0].position()[0], 10.0));
-            MINI_CHECK!(TOLERANCE.is_close(mesh.vertex[&1].position()[0], 11.0));
-            MINI_CHECK!(!std::ptr::eq(e.geometry(), &sg));
+pub fn run_element_element_geometry_mesh() -> TestResult {
+    MINI_TEST!("Element Geometry Mesh", {
+        use crate::BRep;
+        use crate::Element;
+        use crate::Mesh;
+        use crate::Point;
+
+        let mesh = Mesh::from_vertices_and_faces(
+            vec![
+                Point::new(0.0, 0.0, 0.0),
+                Point::new(1.0, 0.0, 0.0),
+                Point::new(0.0, 1.0, 0.0),
+            ],
+            vec![vec![0, 1, 2]],
+        );
+        let element = Element::from_mesh(mesh.clone(), "my_element");
+        let brep = Element::from_brep(BRep::create_box(1.0, 1.0, 1.0), "my_element");
+
+        MINI_CHECK!(*element.element_geometry_mesh() == mesh);
+        MINI_CHECK!(std::ptr::eq(
+            element.element_geometry_mesh(),
+            element.element_geometry_mesh()
+        ));
+        MINI_CHECK!(brep.element_geometry_mesh().number_of_faces() == 0);
+        MINI_CHECK!(brep.element_geometry_brep().face_count() == 6);
+    })
+}
+
+pub fn run_element_element_geometry_brep() -> TestResult {
+    MINI_TEST!("Element Geometry Brep", {
+        use crate::BRep;
+        use crate::Element;
+        use crate::Mesh;
+
+        let brep = BRep::create_box(1.0, 1.0, 1.0);
+        let element = Element::from_brep(brep.clone(), "my_element");
+        let mesh = Element::from_mesh(Mesh::new(), "my_element");
+
+        MINI_CHECK!(element.element_geometry_brep().vertex_points() == brep.vertex_points());
+        MINI_CHECK!(std::ptr::eq(
+            element.element_geometry_brep(),
+            element.element_geometry_brep()
+        ));
+        MINI_CHECK!(mesh.element_geometry_brep().face_count() == 0);
+        MINI_CHECK!(mesh.geometry_type_name() == "Mesh");
+    })
+}
+
+pub fn run_element_model_geometry_mesh() -> TestResult {
+    MINI_TEST!("Model Geometry Mesh", {
+        use crate::Element;
+        use crate::Mesh;
+        use crate::Point;
+        use crate::Xform;
+        use std::sync::atomic::AtomicUsize;
+        use std::sync::atomic::Ordering;
+
+        static OPERATIONS: AtomicUsize = AtomicUsize::new(0);
+
+        fn shift(mut geometry: Mesh) -> Mesh {
+            OPERATIONS.fetch_add(1, Ordering::SeqCst);
+            geometry.transform(&Xform::translation(10.0, 0.0, 0.0));
+
+            geometry
         }
+
+        let mesh = Mesh::from_vertices_and_faces(
+            vec![
+                Point::new(0.0, 0.0, 0.0),
+                Point::new(1.0, 0.0, 0.0),
+                Point::new(0.0, 1.0, 0.0),
+            ],
+            vec![vec![0, 1, 2]],
+        );
+        let mut element = Element::from_mesh(mesh.clone(), "my_element");
+        element.add_geometry_op(shift);
+        let model = element.model_geometry_mesh();
+        let guid = model.guid().to_string();
+
+        MINI_CHECK!(TOLERANCE.is_close(model.vertex[&0].position()[0], 10.0));
+        MINI_CHECK!(TOLERANCE.is_close(
+            element.element_geometry_mesh().vertex[&0].position()[0],
+            0.0
+        ));
+        MINI_CHECK!(element.model_geometry_mesh().guid() == guid);
+        MINI_CHECK!(element.model_geometry_brep().face_count() == 0);
+        MINI_CHECK!(element.model_geometry_mesh().guid() == guid);
+        MINI_CHECK!(OPERATIONS.load(Ordering::SeqCst) == 1);
+
+        element.invalidate_geometry();
+        MINI_CHECK!(element.model_geometry_mesh().guid() != guid);
+        MINI_CHECK!(OPERATIONS.load(Ordering::SeqCst) == 2);
+
+        element.set_geometry(mesh.transformed(&Xform::translation(5.0, 0.0, 0.0)));
+        MINI_CHECK!(
+            TOLERANCE.is_close(element.model_geometry_mesh().vertex[&0].position()[0], 15.0)
+        );
+        MINI_CHECK!(OPERATIONS.load(Ordering::SeqCst) == 3);
+    })
+}
+
+pub fn run_element_model_geometry_brep() -> TestResult {
+    MINI_TEST!("Model Geometry Brep", {
+        use crate::BRep;
+        use crate::Element;
+        use crate::Xform;
+
+        let mut element = Element::from_brep(BRep::create_box(1.0, 1.0, 1.0), "my_element");
+        let model = element.model_geometry_brep();
+        let guid = model.guid().to_string();
+        let points = model.vertex_points();
+
+        MINI_CHECK!(points == element.element_geometry_brep().vertex_points());
+        MINI_CHECK!(element.model_geometry_brep().guid() == guid);
+        MINI_CHECK!(element.model_geometry_mesh().number_of_faces() == 0);
+        MINI_CHECK!(element.model_geometry_brep().guid() == guid);
+
+        element.invalidate_geometry();
+        MINI_CHECK!(element.model_geometry_brep().guid() != guid);
+
+        element.place(&Xform::translation(10.0, 0.0, 0.0));
+        MINI_CHECK!(element.model_geometry_brep().vertex_points() != points);
+        MINI_CHECK!(
+            element.model_geometry_brep().vertex_points()
+                == element.element_geometry_brep().vertex_points()
+        );
+    })
+}
+
+pub fn run_element_geometry_mesh() -> TestResult {
+    MINI_TEST!("Geometry Mesh", {
+        use crate::BRep;
+        use crate::Element;
+        use crate::Mesh;
+        use crate::Point;
+
+        let mesh = Mesh::from_vertices_and_faces(
+            vec![
+                Point::new(0.0, 0.0, 0.0),
+                Point::new(1.0, 0.0, 0.0),
+                Point::new(0.0, 1.0, 0.0),
+            ],
+            vec![vec![0, 1, 2]],
+        );
+        let element = Element::from_mesh(mesh, "my_element");
+        let empty = Element::new("my_element");
+        let brep = Element::from_brep(BRep::create_box(1.0, 1.0, 1.0), "my_element");
+
+        MINI_CHECK!(element.geometry_mesh().number_of_faces() == 1);
+        MINI_CHECK!(std::ptr::eq(
+            element.geometry_mesh(),
+            element.geometry_mesh()
+        ));
+        MINI_CHECK!(empty.geometry_mesh().number_of_faces() == 0);
+        MINI_CHECK!(brep.geometry_mesh().number_of_faces() == 0);
+        MINI_CHECK!(brep.geometry_type_name() == "BRep");
+    })
+}
+
+pub fn run_element_geometry_brep() -> TestResult {
+    MINI_TEST!("Geometry Brep", {
+        use crate::BRep;
+        use crate::Element;
+        use crate::Mesh;
+
+        let element = Element::from_brep(BRep::create_box(1.0, 1.0, 1.0), "my_element");
+        let empty = Element::new("my_element");
+        let mesh = Element::from_mesh(Mesh::new(), "my_element");
+
+        MINI_CHECK!(element.geometry_brep().face_count() == 6);
+        MINI_CHECK!(std::ptr::eq(
+            element.geometry_brep(),
+            element.geometry_brep()
+        ));
+        MINI_CHECK!(empty.geometry_brep().face_count() == 0);
+        MINI_CHECK!(mesh.geometry_brep().face_count() == 0);
+        MINI_CHECK!(mesh.geometry_type_name() == "Mesh");
+    })
+}
+
+pub fn run_element_session_geometry_brep() -> TestResult {
+    MINI_TEST!("Session Geometry Brep", {
+        use crate::BRep;
+        use crate::Element;
+        use crate::Xform;
+
+        let element = Element::from_brep(BRep::create_box(1.0, 1.0, 1.0), "my_element");
+        let xform = Xform::translation(10.0, 20.0, 30.0);
+        let placed = element.session_geometry_brep(&xform);
+        let expected = element.geometry_brep().transformed(&xform);
+
+        MINI_CHECK!(placed.vertex_points() == expected.vertex_points());
+        MINI_CHECK!(placed.vertex_points() != element.geometry_brep().vertex_points());
+        MINI_CHECK!(
+            Element::new("my_element")
+                .session_geometry_brep(&xform)
+                .face_count()
+                == 0
+        );
+    })
+}
+
+pub fn run_element_compute_geometry_mesh() -> TestResult {
+    MINI_TEST!("Compute Geometry Mesh", {
+        use crate::Element;
+        use crate::Mesh;
+        use crate::Point;
+
+        let mesh = Mesh::from_vertices_and_faces(
+            vec![
+                Point::new(0.0, 0.0, 0.0),
+                Point::new(1.0, 0.0, 0.0),
+                Point::new(0.0, 1.0, 0.0),
+            ],
+            vec![vec![0, 1, 2]],
+        );
+        let mut element = Element::from_mesh(mesh, "my_element");
+        let before = element.geometry_synced();
+        element.compute_geometry_mesh();
+        element.compute_geometry_mesh();
+
+        MINI_CHECK!(!before);
+        MINI_CHECK!(element.geometry_synced());
+        MINI_CHECK!(element.geometry_type_name() == "Mesh");
+
+        element.invalidate_geometry();
+        let stale = element.geometry_synced();
+        let faces = element.geometry_mesh().number_of_faces();
+
+        MINI_CHECK!(!stale);
+        MINI_CHECK!(faces == 1);
+        MINI_CHECK!(element.geometry_synced());
+    })
+}
+
+pub fn run_element_compute_geometry_brep() -> TestResult {
+    MINI_TEST!("Compute Geometry Brep", {
+        use crate::BRep;
+        use crate::Element;
+
+        let mut element = Element::from_brep(BRep::create_box(1.0, 1.0, 1.0), "my_element");
+        element.compute_geometry_brep();
+        element.compute_geometry_brep();
+
+        MINI_CHECK!(element.geometry_synced());
+        MINI_CHECK!(element.geometry_type_name() == "BRep");
+
+        element.invalidate_geometry();
+        let loaded = Element::pb_loads(&element.pb_dumps()).unwrap();
+
+        MINI_CHECK!(element.geometry_synced());
+        MINI_CHECK!(loaded.geometry_type_name() == "BRep");
+        MINI_CHECK!(loaded.geometry_brep().face_count() == 6);
     })
 }
 
@@ -840,8 +1091,53 @@ REGISTER_MINI_TEST!("Element", "AABB", crate::element_test::run_element_aabb);
 REGISTER_MINI_TEST!("Element", "OBB", crate::element_test::run_element_obb);
 REGISTER_MINI_TEST!(
     "Element",
-    "Session Geometry",
-    crate::element_test::run_element_session_geometry
+    "Session Geometry Mesh",
+    crate::element_test::run_element_session_geometry_mesh
+);
+REGISTER_MINI_TEST!(
+    "Element",
+    "Element Geometry Mesh",
+    crate::element_test::run_element_element_geometry_mesh
+);
+REGISTER_MINI_TEST!(
+    "Element",
+    "Element Geometry Brep",
+    crate::element_test::run_element_element_geometry_brep
+);
+REGISTER_MINI_TEST!(
+    "Element",
+    "Model Geometry Mesh",
+    crate::element_test::run_element_model_geometry_mesh
+);
+REGISTER_MINI_TEST!(
+    "Element",
+    "Model Geometry Brep",
+    crate::element_test::run_element_model_geometry_brep
+);
+REGISTER_MINI_TEST!(
+    "Element",
+    "Geometry Mesh",
+    crate::element_test::run_element_geometry_mesh
+);
+REGISTER_MINI_TEST!(
+    "Element",
+    "Geometry Brep",
+    crate::element_test::run_element_geometry_brep
+);
+REGISTER_MINI_TEST!(
+    "Element",
+    "Session Geometry Brep",
+    crate::element_test::run_element_session_geometry_brep
+);
+REGISTER_MINI_TEST!(
+    "Element",
+    "Compute Geometry Mesh",
+    crate::element_test::run_element_compute_geometry_mesh
+);
+REGISTER_MINI_TEST!(
+    "Element",
+    "Compute Geometry Brep",
+    crate::element_test::run_element_compute_geometry_brep
 );
 REGISTER_MINI_TEST!("Element", "Reset", crate::element_test::run_element_reset);
 REGISTER_MINI_TEST!(

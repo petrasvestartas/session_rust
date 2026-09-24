@@ -9,6 +9,8 @@ use crate::Xform;
 use crate::OBB;
 use serde::Deserialize;
 use serde::Serialize;
+use std::cell::Cell;
+use std::cell::OnceCell;
 use std::collections::BTreeMap;
 use std::fmt;
 use std::fs;
@@ -304,16 +306,19 @@ impl fmt::Display for ElementFeature {
 pub struct Element {
     guid: OnceLock<String>,                   // Lazily minted guid.
     geometry: ElementGeometry,                // Mesh, BRep or nothing.
-    geometry_synced: bool, // Whether the slot holds what compute_geometry() would write.
-    is_dirty: bool,        // Whether the caches must be recomputed.
-    cached_aabb: Option<OBB>, // Cached axis-aligned box.
-    cached_obb: Option<OBB>, // Cached oriented box.
+    model_mesh_cache: OnceCell<Mesh>,         // Model mesh with in-memory operations applied.
+    model_brep_cache: OnceCell<BRep>,         // Model BRep, cached independently of the mesh.
+    geometry_synced: Cell<bool>, // Whether the slot holds what compute_geometry_mesh() would write.
+    computing_geometry: Cell<bool>, // Guards ensure_geometry() against re-entry from compute_geometry_mesh().
+    is_dirty: bool,                 // Whether the caches must be recomputed.
+    cached_aabb: Option<OBB>,       // Cached axis-aligned box.
+    cached_obb: Option<OBB>,        // Cached oriented box.
     cached_collision_mesh: Option<Mesh>, // Cached collision mesh.
-    cached_point: Option<Point>, // Cached centroid.
+    cached_point: Option<Point>,    // Cached centroid.
     cached_polylines: Option<Vec<Polyline>>, // Cached face outlines.
     cached_planes: Option<Vec<Plane>>, // Cached face planes.
     cached_edge_vectors: Option<Vec<Vector>>, // Cached edge directions.
-    cached_axis: Option<Line>, // Cached main axis.
+    cached_axis: Option<Line>,      // Cached main axis.
     geometry_ops: Vec<fn(Mesh) -> Mesh>, // In-memory mesh operations, never written.
     // SESSION_VIEWER
     pub features: Vec<ElementFeature>,  // Serialized modifications.
@@ -333,7 +338,10 @@ impl Element {
         Self {
             guid: OnceLock::new(),
             geometry: ElementGeometry::None,
-            geometry_synced: false,
+            model_mesh_cache: OnceCell::new(),
+            model_brep_cache: OnceCell::new(),
+            geometry_synced: Cell::new(false),
+            computing_geometry: Cell::new(false),
             is_dirty: true,
             cached_aabb: None,
             cached_obb: None,
@@ -392,38 +400,110 @@ impl Element {
         self.guid = OnceLock::new();
     }
 
-    /// Return the local geometry.
+    /// Return the local geometry, computing it first when a domain type left the slot stale.
     pub fn geometry(&self) -> &ElementGeometry {
+        self.ensure_geometry();
+
         &self.geometry
     }
 
-    /// Write the element's own geometry, features and dimensions onto the slot, a mesh when true, a BRep when false; skipped while the slot already holds that form.
-    pub fn compute_geometry(&mut self, mesh_or_brep: bool) {
-        if self.geometry_current(mesh_or_brep) {
+    /// Return the element's mesh before modifications; empty when no mesh exists.
+    pub fn element_geometry_mesh(&self) -> &Mesh {
+        self.geometry_mesh()
+    }
+
+    /// Return the element's BRep before modifications; empty when no BRep exists.
+    pub fn element_geometry_brep(&self) -> &BRep {
+        self.geometry_brep()
+    }
+
+    /// Return the model mesh with in-memory operations applied, cached until invalidation.
+    pub fn model_geometry_mesh(&self) -> &Mesh {
+        self.model_mesh_cache
+            .get_or_init(|| self.apply_geometry_ops(self.element_geometry_mesh().duplicate()))
+    }
+
+    /// Return the model BRep, cached independently until invalidation.
+    pub fn model_geometry_brep(&self) -> &BRep {
+        self.model_brep_cache
+            .get_or_init(|| self.element_geometry_brep().duplicate())
+    }
+
+    /// Return the local mesh, computing it on demand; empty when this element has no mesh.
+    pub fn geometry_mesh(&self) -> &Mesh {
+        static EMPTY: OnceLock<Mesh> = OnceLock::new();
+
+        self.compute_geometry_mesh();
+
+        match &self.geometry {
+            ElementGeometry::Mesh(mesh) => mesh,
+            _ => EMPTY.get_or_init(Mesh::new),
+        }
+    }
+
+    /// Return the local BRep, computing it on demand; empty when this element has no BRep.
+    pub fn geometry_brep(&self) -> &BRep {
+        static EMPTY: OnceLock<BRep> = OnceLock::new();
+
+        self.compute_geometry_brep();
+
+        match &self.geometry {
+            ElementGeometry::BRep(brep) => brep,
+            _ => EMPTY.get_or_init(BRep::new),
+        }
+    }
+
+    /// Write the element's mesh, features and dimensions into the session slot, reusing a current mesh.
+    pub fn compute_geometry_mesh(&self) {
+        if self.computing_geometry.get()
+            || (self.geometry_synced.get() && matches!(self.geometry, ElementGeometry::Mesh(_)))
+        {
             return;
         }
 
-        self.compute_geometry_impl(mesh_or_brep);
-        self.geometry_synced = true;
+        self.computing_geometry.set(true);
+        self.compute_geometry_mesh_impl();
+        self.computing_geometry.set(false);
+        self.geometry_synced.set(true);
     }
 
-    /// Return whether the slot already holds what compute_geometry() would write.
+    /// Write the element's BRep, features and dimensions into the session slot, reusing a current BRep.
+    pub fn compute_geometry_brep(&self) {
+        if self.computing_geometry.get()
+            || (self.geometry_synced.get() && matches!(self.geometry, ElementGeometry::BRep(_)))
+        {
+            return;
+        }
+
+        self.computing_geometry.set(true);
+        self.compute_geometry_brep_impl();
+        self.computing_geometry.set(false);
+        self.geometry_synced.set(true);
+    }
+
+    /// Return whether the slot already holds what compute_geometry_mesh() would write.
     pub fn geometry_synced(&self) -> bool {
-        self.geometry_synced
+        self.geometry_synced.get()
     }
 
-    /// Mark the slot stale, so the next compute_geometry() writes it again; a domain type overrides this to drop its own caches too.
+    /// Mark the slot stale, so the next read computes it again; a domain type overrides this to drop its own caches too.
     pub fn invalidate_geometry(&mut self) {
-        self.geometry_synced = false;
+        self.geometry_synced.set(false);
+        self.model_mesh_cache = OnceCell::new();
+        self.model_brep_cache = OnceCell::new();
     }
 
     /// Return whether the element carries a mesh or a BRep.
     pub fn has_geometry(&self) -> bool {
+        self.ensure_geometry();
+
         !matches!(self.geometry, ElementGeometry::None)
     }
 
     /// Return "Mesh", "BRep" or "None".
     pub fn geometry_type_name(&self) -> &str {
+        self.ensure_geometry();
+
         match &self.geometry {
             ElementGeometry::None => "None",
             ElementGeometry::Mesh(_) => "Mesh",
@@ -433,6 +513,8 @@ impl Element {
 
     /// Return the geometry placed by xform; the Session owns the placement, so pass identity for local geometry.
     pub fn session_geometry(&self, xform: &Xform) -> ElementGeometry {
+        self.ensure_geometry();
+
         match &self.geometry {
             ElementGeometry::None => ElementGeometry::None,
             ElementGeometry::Mesh(mesh) => {
@@ -455,6 +537,35 @@ impl Element {
                 ElementGeometry::BRep(geo)
             }
         }
+    }
+
+    /// Return the mesh with in-memory operations and placement applied, empty when no mesh exists.
+    pub fn session_geometry_mesh(&self, xform: &Xform) -> Mesh {
+        let local = self.geometry_mesh();
+
+        if !matches!(self.geometry, ElementGeometry::Mesh(_)) {
+            return Mesh::new();
+        }
+
+        let mut placed = self.apply_geometry_ops(local.duplicate());
+
+        if !xform.is_identity() {
+            placed.transform(xform);
+        }
+
+        placed
+    }
+
+    /// Return the BRep with placement applied, empty when no BRep exists.
+    pub fn session_geometry_brep(&self, xform: &Xform) -> BRep {
+        let local = self.geometry_brep();
+        let mut placed = local.duplicate();
+
+        if !xform.is_identity() {
+            placed.transform(xform);
+        }
+
+        placed
     }
 
     /// Return the cached axis-aligned box, computing it when dirty.
@@ -574,6 +685,8 @@ impl Element {
 
     /// Return the modifications carried by this element and written with it; add_geometry_op is the in-memory counterpart that is not.
     pub fn features(&self) -> &[ElementFeature] {
+        self.ensure_geometry();
+
         &self.features
     }
 
@@ -584,6 +697,8 @@ impl Element {
 
     /// Return the nominal extents in the element's own frame (plate: x/y outline, z thickness), authored intent rather than the measured obb; None = never authored.
     pub fn dimensions(&self) -> &Option<Vector> {
+        self.ensure_geometry();
+
         &self.dimensions
     }
 
@@ -655,6 +770,12 @@ impl Element {
         self.reset();
     }
 
+    /// Replace the geometry with a mesh, a BRep or nothing and invalidate the caches.
+    pub fn set_element_geometry(&mut self, geo: ElementGeometry) {
+        self.geometry = geo;
+        self.reset();
+    }
+
     /// Override the cached face outlines, kept until the next reset.
     pub fn set_polylines(&mut self, polys: Vec<Polyline>) {
         self.cached_polylines = Some(polys);
@@ -670,6 +791,8 @@ impl Element {
     /// Drop every cache and mark the element dirty.
     pub fn reset(&mut self) {
         self.is_dirty = true;
+        self.model_mesh_cache = OnceCell::new();
+        self.model_brep_cache = OnceCell::new();
         self.cached_aabb = None;
         self.cached_obb = None;
         self.cached_collision_mesh = None;
@@ -702,6 +825,8 @@ impl Element {
     // ═══════════════════════════════════════════════════════════════════════════
     /// Serialize to a JSON object.
     pub fn jsondump(&self) -> serde_json::Value {
+        self.ensure_geometry();
+
         let mut geo_data = serde_json::Value::Null;
 
         if let ElementGeometry::Mesh(mesh) = &self.geometry {
@@ -827,6 +952,8 @@ impl Element {
     // ═══════════════════════════════════════════════════════════════════════════
     /// Convert to the protobuf message.
     pub fn to_proto(&self) -> crate::proto::Element {
+        self.ensure_geometry();
+
         let mut geometry_data = Vec::new();
 
         if let ElementGeometry::Mesh(mesh) = &self.geometry {
@@ -1017,21 +1144,20 @@ impl Element {
     // ═══════════════════════════════════════════════════════════════════════════
     // Computation
     // ═══════════════════════════════════════════════════════════════════════════
-    /// Return whether the slot already holds the requested form and nothing has invalidated it.
-    fn geometry_current(&self, mesh_or_brep: bool) -> bool {
-        if !self.geometry_synced {
-            return false;
+    /// Run compute_geometry_mesh() once while the slot is stale, so every reader and the file see the current solid, features and dimensions.
+    fn ensure_geometry(&self) {
+        if self.geometry_synced.get() || self.computing_geometry.get() {
+            return;
         }
 
-        if mesh_or_brep {
-            matches!(self.geometry, ElementGeometry::Mesh(_))
-        } else {
-            matches!(self.geometry, ElementGeometry::BRep(_))
-        }
+        self.compute_geometry_mesh();
     }
 
-    /// Compute the element's own geometry, features and dimensions in the requested form; the base element has none, a domain type overrides it.
-    fn compute_geometry_impl(&mut self, _mesh_or_brep: bool) {}
+    /// Compute the mesh, features and dimensions; the base element has none.
+    fn compute_geometry_mesh_impl(&self) {}
+
+    /// Compute the BRep, features and dimensions; the base element has none.
+    fn compute_geometry_brep_impl(&self) {}
 
     /// Compute the axis-aligned box of the placed geometry.
     fn compute_aabb(&self) -> OBB {
