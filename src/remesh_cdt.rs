@@ -1538,10 +1538,7 @@ fn build_mesh(border: &[Point], holes: &[Vec<Point>], tris: &[(usize, usize, usi
 // ═══════════════════════════════════════════════════════════════════════════
 
 /// Triangle index triples of a counter-clockwise 2D border with clockwise holes into the flat list [border..., hole0..., hole1...].
-pub(crate) fn cdt_triangulate(
-    border_2d: &[Point],
-    holes_2d: &[Vec<Point>],
-) -> Vec<(usize, usize, usize)> {
+pub fn cdt_triangulate(border_2d: &[Point], holes_2d: &[Vec<Point>]) -> Vec<(usize, usize, usize)> {
     let scale = cdt_scale(border_2d, holes_2d);
     let holes = shift_hole_rows(border_2d, holes_2d, scale);
     let mut paths = vec![to_path64(border_2d, scale)];

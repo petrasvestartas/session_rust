@@ -21,7 +21,6 @@ use std::collections::HashMap;
 // ═══════════════════════════════════════════════════════════════════════════
 // Orientation
 // ═══════════════════════════════════════════════════════════════════════════
-
 /// TopAbs_Orientation: carried by the parent -> child reference, never by the shape
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum BRepOrientation {
@@ -119,7 +118,6 @@ fn in_range(index: i32, count: usize) -> bool {
 // ═══════════════════════════════════════════════════════════════════════════
 // Shapes
 // ═══════════════════════════════════════════════════════════════════════════
-
 /// TopoDS_Shape: an oriented reference to a sub-shape (index into the owning table)
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct BRepRef {
@@ -190,14 +188,17 @@ pub struct BRepSolid {
 // ═══════════════════════════════════════════════════════════════════════════
 // Geometry helpers
 // ═══════════════════════════════════════════════════════════════════════════
-
 /// Bilinear planar patch: u runs p00 -> p10, v runs p00 -> p01, natural normal = u x v
 fn bilinear_patch(p00: &Point, p10: &Point, p01: &Point, p11: &Point) -> NurbsSurface {
     let mut srf = NurbsSurface::new(3, false, 2, 2, 2, 2);
-    srf.set_cv(0, 0, p00);
-    srf.set_cv(1, 0, p10);
-    srf.set_cv(0, 1, p01);
-    srf.set_cv(1, 1, p11);
+
+    if !srf.set_cv(0, 0, p00)
+        || !srf.set_cv(1, 0, p10)
+        || !srf.set_cv(0, 1, p01)
+        || !srf.set_cv(1, 1, p11)
+    {
+        return NurbsSurface::default();
+    }
 
     srf
 }
@@ -221,7 +222,9 @@ fn project_to_patch(crv: &NurbsCurve, srf: &NurbsSurface) -> NurbsCurve {
     let mut c2 = NurbsCurve::new(3, crv.is_rational(), crv.order(), crv.cv_count());
 
     for i in 0..crv.nurbsknot_count() {
-        c2.set_nurbsknot(i, crv.nurbsknot(i).unwrap_or(0.0));
+        if !c2.set_nurbsknot(i, crv.nurbsknot(i).unwrap_or(0.0)) {
+            return NurbsCurve::default();
+        }
     }
 
     for i in 0..crv.cv_count() {
@@ -230,10 +233,14 @@ fn project_to_patch(crv: &NurbsCurve, srf: &NurbsSurface) -> NurbsCurve {
         let u = d.dot(&eu) / eu2;
         let v = d.dot(&ev) / ev2;
 
-        if crv.is_rational() {
-            c2.set_cv_4d(i, u * w, v * w, 0.0, w);
+        let written = if crv.is_rational() {
+            c2.set_cv_4d(i, u * w, v * w, 0.0, w)
         } else {
-            c2.set_cv(i, &Point::new(u, v, 0.0));
+            c2.set_cv(i, &Point::new(u, v, 0.0))
+        };
+
+        if !written {
+            return NurbsCurve::default();
         }
     }
 
@@ -288,7 +295,6 @@ fn bbox_diagonal(srf: &NurbsSurface) -> f64 {
 // ═══════════════════════════════════════════════════════════════════════════
 // Factory helpers
 // ═══════════════════════════════════════════════════════════════════════════
-
 /// Planar polygon faces from a vertex table: edges run lo -> hi vertex and are shared, a face lists its vertices counter-clockwise seen from outside so the patch normal points outward
 struct PolyFaceBuilder {
     edge_map: HashMap<(usize, usize), usize>, // Edge per (lo, hi) pair.
@@ -570,7 +576,6 @@ fn curve_wire(b: &mut BRep, crv: &NurbsCurve, si: usize, tol: f64) -> usize {
 // ═══════════════════════════════════════════════════════════════════════════
 // Sewing helpers
 // ═══════════════════════════════════════════════════════════════════════════
-
 /// Face keys of a mesh in ascending order
 fn sorted_face_keys(mesh: &Mesh) -> Vec<usize> {
     let mut keys: Vec<usize> = mesh.face.keys().copied().collect();
@@ -717,7 +722,6 @@ fn close_free_faces(b: &mut BRep) {
 // ═══════════════════════════════════════════════════════════════════════════
 // Planar face helpers
 // ═══════════════════════════════════════════════════════════════════════════
-
 const CURVED_EDGE_SAMPLES: usize = 16; // Samples per curved edge of a planar face.
 
 /// Open outline of a face's outer wire in wire order: vertices of straight edges, samples of curved ones
@@ -841,7 +845,6 @@ fn planar_faces(b: &BRep) -> (Vec<Polyline>, Vec<Plane>) {
 // ═══════════════════════════════════════════════════════════════════════════
 // Meshing helpers
 // ═══════════════════════════════════════════════════════════════════════════
-
 /// Canonical boundary of every shared edge: model points, the (face, pcurve, parameters) that produced them, and refined (t, uv) samples
 #[derive(Default)]
 struct EdgeBoundary {
@@ -1697,9 +1700,53 @@ fn tag_loop_vertices(mesh: &mut Mesh, loops: &TrimLoops, normal: &Vector) {
     }
 }
 
+/// Add the border and hole vertices and the CDT triangles of their 2D rings, degenerate triangles skipped
+fn add_ring_faces(
+    mesh: &mut Mesh,
+    border: &[Point],
+    holes: &[Vec<Point>],
+    border_2d: &[Point],
+    holes_2d: &[Vec<Point>],
+) {
+    use crate::remesh_cdt::cdt_triangulate;
+
+    let mut vkeys = Vec::new();
+
+    for p in border {
+        vkeys.push(mesh.add_vertex(p.clone(), None));
+    }
+
+    for hole in holes {
+        for p in hole {
+            vkeys.push(mesh.add_vertex(p.clone(), None));
+        }
+    }
+
+    for (a, b, c) in cdt_triangulate(border_2d, holes_2d) {
+        if a != b && b != c && c != a {
+            mesh.add_face(vec![vkeys[a], vkeys[b], vkeys[c]], None);
+        }
+    }
+}
+
+/// Flip the mesh when its first face winds against the normal
+fn wind_to_normal(mesh: &mut Mesh, normal: &Vector) {
+    if mesh.face.is_empty() {
+        return;
+    }
+
+    let fverts = &mesh.face[&sorted_face_keys(mesh)[0]];
+    let a = mesh.vertex[&fverts[0]].position();
+    let b = mesh.vertex[&fverts[1]].position();
+    let c = mesh.vertex[&fverts[2]].position();
+
+    if (&b - &a).cross(&(&c - &a)).dot(normal) < 0.0 {
+        mesh.flip();
+    }
+}
+
 /// Phase 3 for a planar face: the sampled loops triangulated as one polygon with holes, wound to the surface normal, every loop vertex tagged boundary/{loop}/{sample} as mesh_loops does; no grid, no surface evaluation
 fn planar_loops_mesh(srf: &NurbsSurface, loops: &TrimLoops) -> Mesh {
-    use crate::remesh_cdt::cdt_triangulate;
     use crate::remesh_cdt::project_2d;
     use crate::remesh_cdt::signed_area;
 
@@ -1744,39 +1791,12 @@ fn planar_loops_mesh(srf: &NurbsSurface, loops: &TrimLoops) -> Mesh {
         holes_2d.push(hole_2d);
     }
 
-    let mut vkeys = Vec::new();
-
-    for p in &border {
-        vkeys.push(mesh.add_vertex(p.clone(), None));
-    }
-
-    for hole in &holes {
-        for p in hole {
-            vkeys.push(mesh.add_vertex(p.clone(), None));
-        }
-    }
-
-    for (a, b, c) in cdt_triangulate(&border_2d, &holes_2d) {
-        if a != b && b != c && c != a {
-            mesh.add_face(vec![vkeys[a], vkeys[b], vkeys[c]], None);
-        }
-    }
+    add_ring_faces(&mut mesh, &border, &holes, &border_2d, &holes_2d);
 
     let (u0, u1) = srf.domain(0).unwrap_or((0.0, 1.0));
     let (v0, v1) = srf.domain(1).unwrap_or((0.0, 1.0));
     let normal = srf.normal_at(0.5 * (u0 + u1), 0.5 * (v0 + v1));
-
-    if let Some(fk) = sorted_face_keys(&mesh).first() {
-        let fverts = &mesh.face[fk];
-        let a = mesh.vertex[&fverts[0]].position();
-        let b = mesh.vertex[&fverts[1]].position();
-        let c = mesh.vertex[&fverts[2]].position();
-
-        if (&b - &a).cross(&(&c - &a)).dot(&normal) < 0.0 {
-            mesh.flip();
-        }
-    }
-
+    wind_to_normal(&mut mesh, &normal);
     tag_loop_vertices(&mut mesh, loops, &normal);
 
     mesh
@@ -1837,7 +1857,6 @@ fn flip_reversed_faces(b: &BRep, fmesh: &mut [Mesh]) {
 // ═══════════════════════════════════════════════════════════════════════════
 // Cutting helpers
 // ═══════════════════════════════════════════════════════════════════════════
-
 /// Vertex rings of every face in one mesh keyed by BRep vertex index, outer rings wound to the face normal, holes as face holes; false when some face or edge is curved
 fn face_rings(b: &BRep, rings: &mut Mesh) -> bool {
     let mut planar = true;
@@ -1917,7 +1936,6 @@ fn ring_polyline(mesh: &Mesh, ring: &[usize]) -> Polyline {
 // ═══════════════════════════════════════════════════════════════════════════
 // Serialization helpers
 // ═══════════════════════════════════════════════════════════════════════════
-
 #[derive(Serialize, Deserialize)]
 struct RefJson {
     index: i32,          // Index into the owning table.
@@ -2101,7 +2119,6 @@ fn face_from_proto(f: &crate::proto::BRepFace) -> BRepFace {
 // ═══════════════════════════════════════════════════════════════════════════
 // BRep
 // ═══════════════════════════════════════════════════════════════════════════
-
 /// Boundary representation after OCCT's TopoDS/BRep model: geometry pools, indexed shape tables, every parent -> child link a BRepRef carrying the orientation
 #[derive(Debug, Clone)]
 pub struct BRep {
@@ -2130,7 +2147,6 @@ impl BRep {
     // ═══════════════════════════════════════════════════════════════════════════
     // Constructors
     // ═══════════════════════════════════════════════════════════════════════════
-
     /// Construct an empty BRep.
     pub fn new() -> Self {
         BRep {
@@ -2161,7 +2177,6 @@ impl BRep {
     // ═══════════════════════════════════════════════════════════════════════════
     // Static constructors
     // ═══════════════════════════════════════════════════════════════════════════
-
     /// Axis-aligned box centered at the origin: 6 faces, 12 edges, 8 vertices, one solid
     pub fn create_box(sx: f64, sy: f64, sz: f64) -> Self {
         let mut b = BRep::new();
@@ -2539,7 +2554,6 @@ impl BRep {
     // ═══════════════════════════════════════════════════════════════════════════
     // Accessors
     // ═══════════════════════════════════════════════════════════════════════════
-
     /// Return whether the lazy guid has been created.
     pub fn has_guid(&self) -> bool {
         self.guid.get().is_some()
@@ -2868,7 +2882,6 @@ impl BRep {
     // ═══════════════════════════════════════════════════════════════════════════
     // Building
     // ═══════════════════════════════════════════════════════════════════════════
-
     /// Append a surface to the pool; returns its index.
     pub fn add_surface(&mut self, srf: &NurbsSurface) -> usize {
         self.m_surfaces.push(srf.clone());
@@ -2979,7 +2992,6 @@ impl BRep {
     // ═══════════════════════════════════════════════════════════════════════════
     // Meshing
     // ═══════════════════════════════════════════════════════════════════════════
-
     /// One welded triangle mesh of every face, wound to the face's outward orientation
     pub fn mesh(&self) -> Mesh {
         let mut polygons: Vec<Vec<Point>> = Vec::new();
@@ -3083,7 +3095,6 @@ impl BRep {
     // ═══════════════════════════════════════════════════════════════════════════
     // Evaluation
     // ═══════════════════════════════════════════════════════════════════════════
-
     /// Surface point of a face at (u, v)
     pub fn point_at(&self, face_index: usize, u: f64, v: f64) -> Point {
         if face_index >= self.m_faces.len() {
@@ -3113,7 +3124,6 @@ impl BRep {
     // ═══════════════════════════════════════════════════════════════════════════
     // Transformation
     // ═══════════════════════════════════════════════════════════════════════════
-
     /// Transform surfaces, 3D curves and vertices in place (pcurves are parametric, untouched)
     pub fn transform(&mut self, xform: &Xform) {
         for srf in &mut self.m_surfaces {
@@ -3140,7 +3150,6 @@ impl BRep {
     // ═══════════════════════════════════════════════════════════════════════════
     // Cutting
     // ═══════════════════════════════════════════════════════════════════════════
-
     /// Return the part on the side the plane normal points to, every section loop capped by one planar face; a copy when everything lies on that side, empty when the plane cuts a BRep with a curved face or edge
     pub fn cut_by_plane(&self, plane: &Plane) -> Self {
         let mut rings = Mesh::new();
@@ -3169,16 +3178,14 @@ impl BRep {
         let mut holes: Vec<Vec<Polyline>> = Vec::new();
 
         for fk in sorted_face_keys(&cut) {
-            let mut face_holes: Vec<Polyline> = Vec::new();
+            polylines.push(ring_polyline(&cut, &cut.face[&fk]));
+            holes.push(Vec::new());
 
             if let Some(hole_rings) = cut.face_holes.get(&fk) {
                 for hole in hole_rings {
-                    face_holes.push(ring_polyline(&cut, hole));
+                    holes.last_mut().unwrap().push(ring_polyline(&cut, hole));
                 }
             }
-
-            polylines.push(ring_polyline(&cut, &cut.face[&fk]));
-            holes.push(face_holes);
         }
 
         let mut result = BRep::from_polylines(&polylines, &holes);
@@ -3192,7 +3199,6 @@ impl BRep {
     // ═══════════════════════════════════════════════════════════════════════════
     // JSON
     // ═══════════════════════════════════════════════════════════════════════════
-
     /// Serialize to a JSON string with sorted keys.
     pub fn jsondump(&self) -> Result<String, Box<dyn std::error::Error>> {
         crate::file_encoders::sorted_json_string(self)
@@ -3228,7 +3234,6 @@ impl BRep {
     // ═══════════════════════════════════════════════════════════════════════════
     // Protobuf
     // ═══════════════════════════════════════════════════════════════════════════
-
     /// Convert to the protobuf message.
     pub fn to_proto(&self) -> crate::proto::BRep {
         let mut proto = crate::proto::BRep {
@@ -3390,7 +3395,6 @@ impl BRep {
     // ═══════════════════════════════════════════════════════════════════════════
     // String
     // ═══════════════════════════════════════════════════════════════════════════
-
     /// Return "BRep(name=..., faces=..., edges=..., vertices=...)".
     pub fn str(&self) -> String {
         format!(
@@ -3418,7 +3422,6 @@ impl BRep {
 // ═══════════════════════════════════════════════════════════════════════════
 // Operators
 // ═══════════════════════════════════════════════════════════════════════════
-
 impl PartialEq for BRep {
     /// Compare name, width, color and table sizes; guid ignored.
     fn eq(&self, other: &Self) -> bool {
@@ -3445,7 +3448,6 @@ impl std::fmt::Display for BRep {
 // ═══════════════════════════════════════════════════════════════════════════
 // Serde
 // ═══════════════════════════════════════════════════════════════════════════
-
 impl Serialize for BRep {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
     where

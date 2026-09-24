@@ -1197,6 +1197,7 @@ pub fn run_brep_face_polylines_box() -> TestResult {
 
             let normal_sign = if n[axis] > 0.0 { 1 } else { 0 };
             MINI_CHECK!(!seen[axis][normal_sign]);
+
             seen[axis][normal_sign] = true;
         }
 
@@ -1239,6 +1240,7 @@ pub fn run_brep_face_polylines_ignores_holes() -> TestResult {
                     || (pt[1].abs() - 2.0).abs() < 1e-6
                     || (pt[2].abs() - 1.0).abs() < 1e-6;
                 MINI_CHECK!(on_bounds);
+
                 let radius_to_z_axis = (pt[0] * pt[0] + pt[1] * pt[1]).sqrt();
                 MINI_CHECK!(radius_to_z_axis > 1.0 + 1e-6);
             }
