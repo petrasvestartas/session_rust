@@ -2844,8 +2844,48 @@ pub fn get_all_tests() -> Vec<RegisteredTest> {
         },
         RegisteredTest {
             group: "Intersection",
+            name: "Surface Surface Planes",
+            func: run_intersection_surface_surface_planes,
+        },
+        RegisteredTest {
+            group: "Intersection",
+            name: "Surface Surface Plane Cone",
+            func: run_intersection_surface_surface_plane_cone,
+        },
+        RegisteredTest {
+            group: "Intersection",
+            name: "Surface Surface Plane Torus",
+            func: run_intersection_surface_surface_plane_torus,
+        },
+        RegisteredTest {
+            group: "Intersection",
+            name: "Surface Surface Cylinders",
+            func: run_intersection_surface_surface_cylinders,
+        },
+        RegisteredTest {
+            group: "Intersection",
+            name: "Surface Surface Coaxial Quadrics",
+            func: run_intersection_surface_surface_coaxial_quadrics,
+        },
+        RegisteredTest {
+            group: "Intersection",
+            name: "Surface Surface Coaxial Tori",
+            func: run_intersection_surface_surface_coaxial_tori,
+        },
+        RegisteredTest {
+            group: "Intersection",
             name: "Cut Curves On Surface",
             func: run_intersection_cut_curves_on_surface,
+        },
+        RegisteredTest {
+            group: "Intersection",
+            name: "Cut Curves On Surface Pullbacks",
+            func: run_intersection_cut_curves_on_surface_pullbacks,
+        },
+        RegisteredTest {
+            group: "Intersection",
+            name: "Cut Curves On Surface Torus",
+            func: run_intersection_cut_curves_on_surface_torus,
         },
         RegisteredTest {
             group: "Intersection",

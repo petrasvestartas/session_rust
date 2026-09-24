@@ -81,6 +81,86 @@ fn distance_flat(p: &crate::Point) -> f64 {
     p[2].abs()
 }
 
+/// Planar degree-1 surface through four corner points.
+fn bilinear(
+    p00: crate::Point,
+    p01: crate::Point,
+    p10: crate::Point,
+    p11: crate::Point,
+) -> crate::NurbsSurface {
+    crate::NurbsSurface::create(false, false, 1, 1, 2, 2, &[p00, p01, p10, p11]).unwrap()
+}
+
+/// Worst distance of the pcurve lifted onto the surface from a reference shape.
+fn lifted_distance(
+    pcurve: &crate::NurbsCurve,
+    surface: &crate::NurbsSurface,
+    d: fn(&crate::Point) -> f64,
+) -> f64 {
+    let (t0, t1) = pcurve.domain();
+    let mut worst = 0.0f64;
+
+    for i in 0..=32 {
+        let uv = pcurve.point_at(t0 + (t1 - t0) * i as f64 / 32.0);
+        worst = worst.max(d(&surface.point_at(uv[0], uv[1]).unwrap()));
+    }
+
+    worst
+}
+
+/// Distance from the cone of base radius 1.5 at z = 0 and apex at z = 3.
+fn distance_cone(p: &crate::Point) -> f64 {
+    ((p[0] * p[0] + p[1] * p[1]).sqrt() - (3.0 - p[2]) * 0.5).abs()
+}
+
+/// Distance from the plane z = 0.5.
+fn distance_flat_half(p: &crate::Point) -> f64 {
+    (p[2] - 0.5).abs()
+}
+
+/// Distance from the plane x = 0.2.
+fn distance_wall(p: &crate::Point) -> f64 {
+    (p[0] - 0.2).abs()
+}
+
+/// Distance from the radius-1 cylinder on the z axis.
+fn distance_unit_cylinder(p: &crate::Point) -> f64 {
+    ((p[0] * p[0] + p[1] * p[1]).sqrt() - 1.0).abs()
+}
+
+/// Distance from the radius-1 cylinder on the x axis.
+fn distance_x_cylinder(p: &crate::Point) -> f64 {
+    ((p[1] * p[1] + p[2] * p[2]).sqrt() - 1.0).abs()
+}
+
+/// Distance from the radius-2.2 cylinder on the z axis.
+fn distance_wide_cylinder(p: &crate::Point) -> f64 {
+    ((p[0] * p[0] + p[1] * p[1]).sqrt() - 2.2).abs()
+}
+
+/// Distance from the torus of radii 1 and 0.3 at z = 1.
+fn distance_high_torus(p: &crate::Point) -> f64 {
+    let ring = (p[0] * p[0] + p[1] * p[1]).sqrt() - 1.0;
+
+    ((ring * ring + (p[2] - 1.0) * (p[2] - 1.0)).sqrt() - 0.3).abs()
+}
+
+/// Distance from the torus of radii 2.3 and 0.5 at z = 0.3.
+fn distance_wide_torus(p: &crate::Point) -> f64 {
+    let ring = (p[0] * p[0] + p[1] * p[1]).sqrt() - 2.3;
+
+    ((ring * ring + (p[2] - 0.3) * (p[2] - 0.3)).sqrt() - 0.5).abs()
+}
+
+/// Distance from the square of half size 1.6 at z = 0.5.
+fn distance_square(p: &crate::Point) -> f64 {
+    (p[2] - 0.5).abs().max(
+        0.0f64
+            .max(p[0].abs() - 1.6)
+            .max(0.0f64.max(p[1].abs() - 1.6)),
+    )
+}
+
 pub fn run_intersection_line_line() -> TestResult {
     MINI_TEST!("Line Line", {
         use crate::intersection;
@@ -1405,6 +1485,268 @@ pub fn run_intersection_surface_surface_accuracy() -> TestResult {
     })
 }
 
+pub fn run_intersection_surface_surface_planes() -> TestResult {
+    MINI_TEST!("Surface Surface Planes", {
+        use crate::intersection::surface_surface;
+        use crate::Point;
+
+        let flat = bilinear(
+            Point::new(-3.0, -3.0, 0.5),
+            Point::new(-3.0, 3.0, 0.5),
+            Point::new(3.0, -3.0, 0.5),
+            Point::new(3.0, 3.0, 0.5),
+        );
+        let wall = bilinear(
+            Point::new(0.2, -3.0, -3.0),
+            Point::new(0.2, -3.0, 3.0),
+            Point::new(0.2, 3.0, -3.0),
+            Point::new(0.2, 3.0, 3.0),
+        );
+        let far = bilinear(
+            Point::new(5.0, -3.0, -3.0),
+            Point::new(5.0, -3.0, 3.0),
+            Point::new(5.0, 3.0, -3.0),
+            Point::new(5.0, 3.0, 3.0),
+        );
+        let tr = surface_surface(&flat, &wall, None);
+
+        MINI_CHECK!(tr.len() == 1);
+
+        let c3 = &tr[0].0;
+        let start = c3.point_at_start();
+        let end = c3.point_at_end();
+
+        MINI_CHECK!(
+            TOLERANCE.is_close(start[0], 0.2)
+                && TOLERANCE.is_close(start[1], -3.0)
+                && TOLERANCE.is_close(start[2], 0.5)
+        );
+        MINI_CHECK!(
+            TOLERANCE.is_close(end[0], 0.2)
+                && TOLERANCE.is_close(end[1], 3.0)
+                && TOLERANCE.is_close(end[2], 0.5)
+        );
+        MINI_CHECK!(lies_on_curve(c3, &tr[0].1, &flat) < 1e-9);
+        MINI_CHECK!(lies_on_curve(c3, &tr[0].2, &wall) < 1e-9);
+        MINI_CHECK!(surface_surface(&flat, &far, None).is_empty());
+    })
+}
+
+pub fn run_intersection_surface_surface_plane_cone() -> TestResult {
+    MINI_TEST!("Surface Surface Plane Cone", {
+        use crate::intersection::surface_surface;
+        use crate::Point;
+        use crate::Primitives;
+
+        let cone = Primitives::cone_surface(0.0, 0.0, 0.0, 1.5, 3.0);
+        let flat = bilinear(
+            Point::new(-3.0, -3.0, 0.5),
+            Point::new(-3.0, 3.0, 0.5),
+            Point::new(3.0, -3.0, 0.5),
+            Point::new(3.0, 3.0, 0.5),
+        );
+        let steep = bilinear(
+            Point::new(1.1, -3.0, -3.0),
+            Point::new(1.1, 3.0, -3.0),
+            Point::new(-0.3, -3.0, 4.0),
+            Point::new(-0.3, 3.0, 4.0),
+        );
+        let slant = bilinear(
+            Point::new(-3.0, -3.0, 8.5),
+            Point::new(-3.0, 3.0, 8.5),
+            Point::new(3.0, -3.0, -3.5),
+            Point::new(3.0, 3.0, -3.5),
+        );
+        let axial = bilinear(
+            Point::new(0.0, -3.0, -3.0),
+            Point::new(0.0, -3.0, 4.0),
+            Point::new(0.0, 3.0, -3.0),
+            Point::new(0.0, 3.0, 4.0),
+        );
+        let circle = surface_surface(&cone, &flat, None);
+
+        MINI_CHECK!(circle.len() == 1);
+        MINI_CHECK!(on_both(&circle[0].0, distance_cone, distance_flat_half) < 1e-9);
+        MINI_CHECK!(lies_on_curve(&circle[0].0, &circle[0].1, &cone) < 1e-9);
+
+        let hyperbola = surface_surface(&cone, &steep, None);
+
+        MINI_CHECK!(hyperbola.len() == 1);
+        MINI_CHECK!(hyperbola[0].0.degree() == 2);
+        MINI_CHECK!(on_both(&hyperbola[0].0, distance_cone, distance_cone) < 1e-9);
+
+        let parabola = surface_surface(&cone, &slant, None);
+
+        MINI_CHECK!(parabola.len() == 1);
+        MINI_CHECK!(on_both(&parabola[0].0, distance_cone, distance_cone) < 1e-6);
+
+        let lines = surface_surface(&cone, &axial, None);
+
+        MINI_CHECK!(lines.len() == 2);
+
+        for line in &lines {
+            let apex = line.0.point_at_start();
+
+            MINI_CHECK!(
+                TOLERANCE.is_close(apex[0], 0.0)
+                    && TOLERANCE.is_close(apex[1], 0.0)
+                    && TOLERANCE.is_close(apex[2], 3.0)
+            );
+            MINI_CHECK!(on_both(&line.0, distance_cone, distance_cone) < 1e-9);
+        }
+    })
+}
+
+pub fn run_intersection_surface_surface_plane_torus() -> TestResult {
+    MINI_TEST!("Surface Surface Plane Torus", {
+        use crate::intersection::surface_surface;
+        use crate::Point;
+        use crate::Primitives;
+
+        let torus = Primitives::torus_surface(0.0, 0.0, 0.0, 2.0, 0.5);
+        let wall = bilinear(
+            Point::new(0.2, -3.0, -3.0),
+            Point::new(0.2, -3.0, 3.0),
+            Point::new(0.2, 3.0, -3.0),
+            Point::new(0.2, 3.0, 3.0),
+        );
+        let tr = surface_surface(&torus, &wall, None);
+
+        MINI_CHECK!(tr.len() == 2);
+
+        for t in &tr {
+            MINI_CHECK!(t.0.is_closed());
+            MINI_CHECK!(on_both(&t.0, distance_torus, distance_wall) < 1e-4);
+            MINI_CHECK!(lies_on_curve(&t.0, &t.2, &wall) < 1e-4);
+        }
+    })
+}
+
+pub fn run_intersection_surface_surface_cylinders() -> TestResult {
+    MINI_TEST!("Surface Surface Cylinders", {
+        use crate::intersection::surface_surface;
+        use crate::Primitives;
+        use crate::Tolerance;
+        use crate::Vector;
+        use crate::Xform;
+
+        let cyl = Primitives::cylinder_surface(0.0, 0.0, -2.0, 1.0, 4.0);
+        let beside = Primitives::cylinder_surface(1.5, 0.0, -2.0, 1.0, 4.0);
+        let across = Primitives::cylinder_surface(0.0, 0.0, -2.0, 1.0, 4.0).transformed(
+            &Xform::rotation(&Vector::new(0.0, 1.0, 0.0), Tolerance::HALF_PI, false),
+        );
+        let lines = surface_surface(&cyl, &beside, None);
+
+        MINI_CHECK!(lines.len() == 2);
+
+        for line in &lines {
+            let start = line.0.point_at_start();
+            let end = line.0.point_at_end();
+
+            MINI_CHECK!(TOLERANCE.is_close(start[0], 0.75) && TOLERANCE.is_close(end[0], 0.75));
+            MINI_CHECK!(
+                TOLERANCE.is_close(start[1].abs(), 0.4375f64.sqrt())
+                    && TOLERANCE.is_close(start[1], end[1])
+            );
+            MINI_CHECK!(lies_on_curve(&line.0, &line.1, &cyl) < 1e-9);
+        }
+
+        let ellipses = surface_surface(&cyl, &across, None);
+
+        MINI_CHECK!(ellipses.len() == 2);
+
+        for ellipse in &ellipses {
+            MINI_CHECK!(ellipse.0.is_closed());
+            MINI_CHECK!(on_both(&ellipse.0, distance_unit_cylinder, distance_x_cylinder) < 1e-9);
+        }
+    })
+}
+
+pub fn run_intersection_surface_surface_coaxial_quadrics() -> TestResult {
+    MINI_TEST!("Surface Surface Coaxial Quadrics", {
+        use crate::intersection::surface_surface;
+        use crate::Primitives;
+
+        let sphere = Primitives::sphere_surface(0.0, 0.0, 0.0, 2.0);
+        let cyl = Primitives::cylinder_surface(0.0, 0.0, -2.0, 1.0, 4.0);
+        let cone = Primitives::cone_surface(0.0, 0.0, 0.0, 1.5, 3.0);
+        let sphere_cyl = surface_surface(&sphere, &cyl, None);
+
+        MINI_CHECK!(sphere_cyl.len() == 2);
+
+        for t in &sphere_cyl {
+            MINI_CHECK!(TOLERANCE.is_close(t.0.point_at_start()[2].abs(), 3.0f64.sqrt()));
+            MINI_CHECK!(on_both(&t.0, distance_sphere, distance_unit_cylinder) < 1e-9);
+            MINI_CHECK!(lies_on_curve(&t.0, &t.1, &sphere) < 1e-9);
+            MINI_CHECK!(lies_on_curve(&t.0, &t.2, &cyl) < 1e-9);
+        }
+
+        let cyl_cone = surface_surface(&cyl, &cone, None);
+
+        MINI_CHECK!(cyl_cone.len() == 1);
+        MINI_CHECK!(TOLERANCE.is_close(cyl_cone[0].0.point_at_start()[2], 1.0));
+        MINI_CHECK!(on_both(&cyl_cone[0].0, distance_unit_cylinder, distance_cone) < 1e-9);
+        MINI_CHECK!(lies_on_curve(&cyl_cone[0].0, &cyl_cone[0].2, &cone) < 1e-9);
+
+        let cone_sphere = surface_surface(&cone, &sphere, None);
+
+        MINI_CHECK!(cone_sphere.len() == 2);
+
+        for t in &cone_sphere {
+            MINI_CHECK!(on_both(&t.0, distance_cone, distance_sphere) < 1e-9);
+        }
+    })
+}
+
+pub fn run_intersection_surface_surface_coaxial_tori() -> TestResult {
+    MINI_TEST!("Surface Surface Coaxial Tori", {
+        use crate::intersection::surface_surface;
+        use crate::Primitives;
+
+        let torus = Primitives::torus_surface(0.0, 0.0, 0.0, 2.0, 0.5);
+        let wide_cyl = Primitives::cylinder_surface(0.0, 0.0, -2.0, 2.2, 4.0);
+        let cone = Primitives::cone_surface(0.0, 0.0, 0.0, 1.5, 3.0);
+        let high_torus = Primitives::torus_surface(0.0, 0.0, 1.0, 1.0, 0.3);
+        let sphere = Primitives::sphere_surface(0.0, 0.0, 0.0, 2.0);
+        let wide_torus = Primitives::torus_surface(0.0, 0.0, 0.3, 2.3, 0.5);
+        let cyl_torus = surface_surface(&wide_cyl, &torus, None);
+
+        MINI_CHECK!(cyl_torus.len() == 2);
+
+        for t in &cyl_torus {
+            MINI_CHECK!(TOLERANCE.is_close(t.0.point_at_start()[2].abs(), 0.21f64.sqrt()));
+            MINI_CHECK!(on_both(&t.0, distance_wide_cylinder, distance_torus) < 1e-9);
+            MINI_CHECK!(lies_on_curve(&t.0, &t.2, &torus) < 1e-9);
+        }
+
+        let cone_torus = surface_surface(&cone, &high_torus, None);
+
+        MINI_CHECK!(cone_torus.len() == 2);
+
+        for t in &cone_torus {
+            MINI_CHECK!(on_both(&t.0, distance_cone, distance_high_torus) < 1e-9);
+            MINI_CHECK!(lies_on_curve(&t.0, &t.2, &high_torus) < 1e-9);
+        }
+
+        let sphere_torus = surface_surface(&sphere, &torus, None);
+
+        MINI_CHECK!(sphere_torus.len() == 2);
+
+        for t in &sphere_torus {
+            MINI_CHECK!(on_both(&t.0, distance_sphere, distance_torus) < 1e-9);
+        }
+
+        let torus_torus = surface_surface(&torus, &wide_torus, None);
+
+        MINI_CHECK!(torus_torus.len() == 2);
+
+        for t in &torus_torus {
+            MINI_CHECK!(on_both(&t.0, distance_torus, distance_wide_torus) < 1e-9);
+            MINI_CHECK!(lies_on_curve(&t.0, &t.1, &torus) < 1e-9);
+        }
+    })
+}
+
 pub fn run_intersection_cut_curves_on_surface() -> TestResult {
     MINI_TEST!("Cut Curves On Surface", {
         use crate::intersection;
@@ -1442,6 +1784,75 @@ pub fn run_intersection_cut_curves_on_surface() -> TestResult {
         }
 
         MINI_CHECK!(max_off < 1e-3);
+    })
+}
+
+pub fn run_intersection_cut_curves_on_surface_pullbacks() -> TestResult {
+    MINI_TEST!("Cut Curves On Surface Pullbacks", {
+        use crate::intersection::cut_curves_on_surface;
+        use crate::Point;
+        use crate::Primitives;
+
+        let sphere = Primitives::sphere_surface(0.0, 0.0, 0.0, 2.0);
+        let cone = Primitives::cone_surface(0.0, 0.0, 0.0, 1.5, 3.0);
+        let wall = bilinear(
+            Point::new(0.2, -3.0, -3.0),
+            Point::new(0.2, -3.0, 3.0),
+            Point::new(0.2, 3.0, -3.0),
+            Point::new(0.2, 3.0, 3.0),
+        );
+        let square = bilinear(
+            Point::new(-1.6, -1.6, 0.5),
+            Point::new(-1.6, 1.6, 0.5),
+            Point::new(1.6, -1.6, 0.5),
+            Point::new(1.6, 1.6, 0.5),
+        );
+        let sphere_cuts = cut_curves_on_surface(&sphere, &wall, None);
+
+        MINI_CHECK!(sphere_cuts.len() == 3);
+
+        for pc in &sphere_cuts {
+            MINI_CHECK!(lifted_distance(pc, &sphere, distance_wall) < 5e-3);
+        }
+
+        let cone_cuts = cut_curves_on_surface(&cone, &wall, None);
+
+        MINI_CHECK!(cone_cuts.len() == 2);
+
+        for pc in &cone_cuts {
+            MINI_CHECK!(lifted_distance(pc, &cone, distance_wall) < 1e-3);
+        }
+
+        let square_cuts = cut_curves_on_surface(&sphere, &square, None);
+
+        MINI_CHECK!(square_cuts.len() == 4);
+
+        for pc in &square_cuts {
+            MINI_CHECK!(lifted_distance(pc, &sphere, distance_square) < 2e-3);
+        }
+    })
+}
+
+pub fn run_intersection_cut_curves_on_surface_torus() -> TestResult {
+    MINI_TEST!("Cut Curves On Surface Torus", {
+        use crate::intersection::cut_curves_on_surface;
+        use crate::Point;
+        use crate::Primitives;
+
+        let torus = Primitives::torus_surface(0.0, 0.0, 0.0, 2.0, 0.5);
+        let wall = bilinear(
+            Point::new(0.2, -3.0, -3.0),
+            Point::new(0.2, -3.0, 3.0),
+            Point::new(0.2, 3.0, -3.0),
+            Point::new(0.2, 3.0, 3.0),
+        );
+        let cuts = cut_curves_on_surface(&torus, &wall, None);
+
+        MINI_CHECK!(cuts.len() == 4);
+
+        for pc in &cuts {
+            MINI_CHECK!(lifted_distance(pc, &torus, distance_wall) < 1e-5);
+        }
     })
 }
 
@@ -2383,8 +2794,48 @@ REGISTER_MINI_TEST!(
 );
 REGISTER_MINI_TEST!(
     "Intersection",
+    "Surface Surface Planes",
+    crate::intersection_test::run_intersection_surface_surface_planes
+);
+REGISTER_MINI_TEST!(
+    "Intersection",
+    "Surface Surface Plane Cone",
+    crate::intersection_test::run_intersection_surface_surface_plane_cone
+);
+REGISTER_MINI_TEST!(
+    "Intersection",
+    "Surface Surface Plane Torus",
+    crate::intersection_test::run_intersection_surface_surface_plane_torus
+);
+REGISTER_MINI_TEST!(
+    "Intersection",
+    "Surface Surface Cylinders",
+    crate::intersection_test::run_intersection_surface_surface_cylinders
+);
+REGISTER_MINI_TEST!(
+    "Intersection",
+    "Surface Surface Coaxial Quadrics",
+    crate::intersection_test::run_intersection_surface_surface_coaxial_quadrics
+);
+REGISTER_MINI_TEST!(
+    "Intersection",
+    "Surface Surface Coaxial Tori",
+    crate::intersection_test::run_intersection_surface_surface_coaxial_tori
+);
+REGISTER_MINI_TEST!(
+    "Intersection",
     "Cut Curves On Surface",
     crate::intersection_test::run_intersection_cut_curves_on_surface
+);
+REGISTER_MINI_TEST!(
+    "Intersection",
+    "Cut Curves On Surface Pullbacks",
+    crate::intersection_test::run_intersection_cut_curves_on_surface_pullbacks
+);
+REGISTER_MINI_TEST!(
+    "Intersection",
+    "Cut Curves On Surface Torus",
+    crate::intersection_test::run_intersection_cut_curves_on_surface_torus
 );
 REGISTER_MINI_TEST!(
     "Intersection",
