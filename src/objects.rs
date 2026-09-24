@@ -12,63 +12,140 @@ use crate::point::Point;
 use crate::pointcloud::PointCloud;
 use crate::polyline::Polyline;
 use prost::Message;
-use serde::{Deserialize, Serialize};
+use serde::Deserialize;
+use serde::Serialize;
 use std::collections::HashMap;
 use std::fmt;
-use std::fs;
 use std::rc::Rc;
+use std::sync::OnceLock;
+
+/// Convert every object of a list into a repeated proto field.
+fn dump_pb_list<T, P>(list: &[Rc<T>], to_proto: fn(&T) -> P) -> Vec<P> {
+    let mut out = Vec::with_capacity(list.len());
+
+    for item in list {
+        out.push(to_proto(item));
+    }
+
+    out
+}
+
+/// Load every message of a repeated proto field, keeping guids.
+fn load_pb_list<T, P>(repeated: Vec<P>, from_proto: fn(P) -> T) -> Vec<Rc<T>> {
+    let mut out = Vec::with_capacity(repeated.len());
+
+    for item in repeated {
+        out.push(Rc::new(from_proto(item)));
+    }
+
+    out
+}
+
+/// Load every message of a repeated proto field whose conversion can fail, keeping guids.
+fn try_load_pb_list<T, P>(
+    repeated: Vec<P>,
+    from_proto: fn(P) -> Result<T, Box<dyn std::error::Error>>,
+) -> Result<Vec<Rc<T>>, Box<dyn std::error::Error>> {
+    let mut out = Vec::with_capacity(repeated.len());
+
+    for item in repeated {
+        out.push(Rc::new(from_proto(item)?));
+    }
+
+    Ok(out)
+}
 
 /// A custom domain object stored generically in a Session; every field except type/guid/name lives in extra.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Component {
+    pub guid: String, // GUID.
     #[serde(rename = "type")]
     pub type_name: String, // Class name, e.g. "FloorBuilder".
-    pub guid: String, // Guid.
     pub name: String, // Human-readable name.
     #[serde(flatten)]
     pub extra: HashMap<String, serde_json::Value>, // All custom fields.
 }
 
+impl Default for Component {
+    /// Construct an empty component.
+    fn default() -> Self {
+        Self {
+            guid: uuid::Uuid::new_v4().to_string(),
+            type_name: String::new(),
+            name: "my_component".to_string(),
+            extra: HashMap::new(),
+        }
+    }
+}
+
 impl Component {
-    /// Returns the guid.
+    // ═══════════════════════════════════════════════════════════════════════════
+    // Constructors
+    // ═══════════════════════════════════════════════════════════════════════════
+    /// Construct an empty component.
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    // ═══════════════════════════════════════════════════════════════════════════
+    // Accessors
+    // ═══════════════════════════════════════════════════════════════════════════
+    /// Return whether the guid has been created.
+    pub fn has_guid(&self) -> bool {
+        !self.guid.is_empty()
+    }
+
+    /// Return the guid.
     pub fn guid(&self) -> &str {
         &self.guid
     }
 
-    /// Serializes to a JSON string.
+    // ═══════════════════════════════════════════════════════════════════════════
+    // JSON
+    // ═══════════════════════════════════════════════════════════════════════════
+    /// Serialize to a JSON object.
     pub fn jsondump(&self) -> Result<serde_json::Value, Box<dyn std::error::Error>> {
         Ok(serde_json::to_value(self)?)
     }
 
-    /// Deserializes from a JSON string.
+    /// Deserialize from a JSON object.
     pub fn jsonload(data: &serde_json::Value) -> Result<Self, Box<dyn std::error::Error>> {
         Ok(serde_json::from_value(data.clone())?)
     }
 
-    /// Serializes to protobuf bytes.
-    pub fn pb_dumps(&self) -> Vec<u8> {
-        let proto = crate::proto::Component {
+    // ═══════════════════════════════════════════════════════════════════════════
+    // Protobuf
+    // ═══════════════════════════════════════════════════════════════════════════
+    /// Convert to the protobuf message.
+    pub fn to_proto(&self) -> crate::proto::Component {
+        crate::proto::Component {
             type_name: self.type_name.clone(),
             guid: self.guid.clone(),
             name: self.name.clone(),
             json_data: serde_json::to_string(&self.extra).unwrap_or_default(),
-        };
-
-        proto.encode_to_vec()
+        }
     }
 
-    /// Deserializes from protobuf bytes.
-    pub fn pb_loads(data: &[u8]) -> Result<Self, Box<dyn std::error::Error>> {
-        let proto = crate::proto::Component::decode(data)?;
-        let extra: HashMap<String, serde_json::Value> =
-            serde_json::from_str(&proto.json_data).unwrap_or_default();
+    /// Construct from the protobuf message.
+    pub fn from_proto(proto: crate::proto::Component) -> Self {
+        let extra = serde_json::from_str(&proto.json_data).unwrap_or_default();
 
-        Ok(Component {
-            type_name: proto.type_name,
+        Self {
             guid: proto.guid,
+            type_name: proto.type_name,
             name: proto.name,
             extra,
-        })
+        }
+    }
+
+    /// Serialize to protobuf bytes.
+    pub fn pb_dumps(&self) -> Vec<u8> {
+        self.to_proto().encode_to_vec()
+    }
+
+    /// Deserialize from protobuf bytes.
+    pub fn pb_loads(data: &[u8]) -> Result<Self, Box<dyn std::error::Error>> {
+        Ok(Self::from_proto(crate::proto::Component::decode(data)?))
     }
 }
 
@@ -80,7 +157,7 @@ pub struct Objects {
         serialize_with = "crate::guid_serde::serialize",
         deserialize_with = "crate::guid_serde::deserialize"
     )]
-    guid: std::sync::OnceLock<String>, // Guid.
+    guid: OnceLock<String>, // Lazily minted GUID.
     pub name: String,                         // The name of the collection.
     pub points: Vec<Rc<Point>>,               // Points.
     pub lines: Vec<Rc<Line>>,                 // Lines.
@@ -102,10 +179,10 @@ pub struct Objects {
 }
 
 impl Default for Objects {
-    /// Constructs an empty collection with every list allocated.
+    /// Construct an empty collection with every list allocated.
     fn default() -> Self {
         Self {
-            guid: std::sync::OnceLock::new(),
+            guid: OnceLock::new(),
             name: "my_objects".to_string(),
             points: Vec::new(),
             lines: Vec::new(),
@@ -126,261 +203,184 @@ impl Default for Objects {
 }
 
 impl Objects {
-    /// Constructs an empty collection.
+    // ═══════════════════════════════════════════════════════════════════════════
+    // Constructors
+    // ═══════════════════════════════════════════════════════════════════════════
+    /// Construct an empty collection with every list allocated.
     pub fn new() -> Self {
         Self::default()
     }
 
-    /// Returns whether the lazy guid has been created.
+    /// Construct an empty named collection with every list allocated.
+    pub fn with_name(name: &str) -> Self {
+        Self {
+            name: name.to_string(),
+            ..Default::default()
+        }
+    }
+
+    // ═══════════════════════════════════════════════════════════════════════════
+    // Accessors
+    // ═══════════════════════════════════════════════════════════════════════════
+    /// Return whether the lazy guid has been created.
     pub fn has_guid(&self) -> bool {
         self.guid.get().is_some()
     }
 
-    /// Returns the guid, creating it on first access.
+    /// Return the guid, creating it on first access.
     pub fn guid(&self) -> &str {
         self.guid.get_or_init(|| uuid::Uuid::new_v4().to_string())
     }
 
-    /// Sets the guid if it has not already been created.
+    /// Set the guid if it has not already been created.
     pub fn set_guid(&self, guid: String) {
         let _ = self.guid.set(guid);
     }
 
     // ═══════════════════════════════════════════════════════════════════════════
-    // Serialization
+    // JSON
     // ═══════════════════════════════════════════════════════════════════════════
-
-    /// Serializes to a JSON string.
+    /// Serialize to a sorted JSON string.
     pub fn jsondump(&self) -> Result<String, Box<dyn std::error::Error>> {
         crate::file_encoders::sorted_json_string(self)
     }
 
-    /// Deserializes from a JSON string.
+    /// Deserialize from a JSON string.
     pub fn jsonload(json_data: &str) -> Result<Self, Box<dyn std::error::Error>> {
         Ok(serde_json::from_str(json_data)?)
     }
 
-    /// Serializes to a JSON string.
+    /// Serialize to a JSON string.
     pub fn file_json_dumps(&self) -> String {
-        self.jsondump().unwrap_or_default()
+        self.jsondump().expect("Failed to serialize Objects JSON")
     }
 
-    /// Deserializes from a JSON string.
-    pub fn file_json_loads(s: &str) -> Self {
-        Self::jsonload(s).unwrap_or_else(|_| Self::default())
+    /// Deserialize from a JSON string.
+    pub fn file_json_loads(json_string: &str) -> Self {
+        Self::jsonload(json_string).expect("Failed to parse Objects JSON")
     }
 
-    /// Writes to a JSON file.
-    pub fn file_json_dump(&self, filepath: &str) {
-        fs::write(filepath, self.file_json_dumps()).expect("Failed to write JSON file");
+    /// Write to a JSON file.
+    pub fn file_json_dump(&self, filepath: &str) -> Result<(), Box<dyn std::error::Error>> {
+        std::fs::write(filepath, self.jsondump()?)?;
+
+        Ok(())
     }
 
-    /// Reads from a JSON file.
-    pub fn file_json_load(filepath: &str) -> Self {
-        let json = fs::read_to_string(filepath).expect("Failed to read JSON file");
-
-        Self::file_json_loads(&json)
+    /// Read from a JSON file.
+    pub fn file_json_load(filepath: &str) -> Result<Self, Box<dyn std::error::Error>> {
+        Self::jsonload(&std::fs::read_to_string(filepath)?)
     }
 
-    /// Serializes to protobuf bytes.
-    pub fn pb_dumps(&self) -> Vec<u8> {
-        let mut proto = crate::proto::Objects {
+    // ═══════════════════════════════════════════════════════════════════════════
+    // Protobuf
+    // ═══════════════════════════════════════════════════════════════════════════
+    /// Convert to the protobuf message.
+    pub fn to_proto(&self) -> crate::proto::Objects {
+        let mut components = Vec::with_capacity(self.components.len());
+
+        for component in &self.components {
+            components.push(component.to_proto());
+        }
+
+        crate::proto::Objects {
             name: self.name.clone(),
             guid: self.guid.get().cloned().unwrap_or_default(),
+            points: dump_pb_list(&self.points, Point::to_proto),
+            lines: dump_pb_list(&self.lines, Line::to_proto),
+            planes: dump_pb_list(&self.planes, Plane::to_proto),
+            bboxes: dump_pb_list(&self.bboxes, OBB::to_proto),
+            polylines: dump_pb_list(&self.polylines, Polyline::to_proto),
+            pointclouds: dump_pb_list(&self.pointclouds, PointCloud::to_proto),
+            meshes: dump_pb_list(&self.meshes, Mesh::to_proto),
+            nurbscurves: dump_pb_list(&self.nurbscurves, NurbsCurve::to_proto),
+            nurbssurfaces: dump_pb_list(&self.nurbssurfaces, NurbsSurface::to_proto),
+            breps: dump_pb_list(&self.breps, BRep::to_proto),
+            elements: dump_pb_list(&self.elements, Element::to_proto),
+            components,
+            instances: dump_pb_list(&self.instances, InstanceRef::to_proto),
             ..Default::default()
-        };
-
-        for p in &self.points {
-            proto
-                .points
-                .push(crate::proto::Point::decode(p.pb_dumps().as_slice()).unwrap());
         }
-
-        for l in &self.lines {
-            proto
-                .lines
-                .push(crate::proto::Line::decode(l.pb_dumps().as_slice()).unwrap());
-        }
-
-        for pl in &self.planes {
-            proto
-                .planes
-                .push(crate::proto::Plane::decode(pl.pb_dumps().as_slice()).unwrap());
-        }
-
-        for b in &self.bboxes {
-            proto
-                .bboxes
-                .push(crate::proto::BoundingBox::decode(b.pb_dumps().as_slice()).unwrap());
-        }
-
-        for pl in &self.polylines {
-            proto
-                .polylines
-                .push(crate::proto::Polyline::decode(pl.pb_dumps().as_slice()).unwrap());
-        }
-
-        for pc in &self.pointclouds {
-            proto
-                .pointclouds
-                .push(crate::proto::PointCloud::decode(pc.pb_dumps().as_slice()).unwrap());
-        }
-
-        for m in &self.meshes {
-            proto
-                .meshes
-                .push(crate::proto::Mesh::decode(m.pb_dumps().as_slice()).unwrap());
-        }
-
-        for nc in &self.nurbscurves {
-            proto
-                .nurbscurves
-                .push(crate::proto::NurbsCurve::decode(nc.pb_dumps().as_slice()).unwrap());
-        }
-
-        for ns in &self.nurbssurfaces {
-            proto
-                .nurbssurfaces
-                .push(crate::proto::NurbsSurface::decode(ns.pb_dumps().as_slice()).unwrap());
-        }
-
-        for b in &self.breps {
-            proto
-                .breps
-                .push(crate::proto::BRep::decode(b.pb_dumps().as_slice()).unwrap());
-        }
-
-        for e in &self.elements {
-            proto
-                .elements
-                .push(crate::proto::Element::decode(e.pb_dumps().as_slice()).unwrap());
-        }
-
-        for c in &self.components {
-            proto
-                .components
-                .push(crate::proto::Component::decode(c.pb_dumps().as_slice()).unwrap());
-        }
-
-        for i in &self.instances {
-            proto.instances.push(i.to_proto());
-        }
-
-        proto.encode_to_vec()
     }
 
-    /// Deserializes from protobuf bytes.
-    pub fn pb_loads(data: &[u8]) -> Result<Self, Box<dyn std::error::Error>> {
-        let proto = crate::proto::Objects::decode(data)?;
-        let mut objects = Objects::new();
+    /// Construct from the protobuf message; elements load through the polymorphic registry.
+    pub fn from_proto(proto: crate::proto::Objects) -> Result<Self, Box<dyn std::error::Error>> {
+        let mut objects = Self::with_name(&proto.name);
 
         if !proto.guid.is_empty() {
-            objects.set_guid(proto.guid.clone());
+            objects.set_guid(proto.guid);
         }
 
-        objects.name = proto.name;
+        objects.points = load_pb_list(proto.points, Point::from_proto);
+        objects.lines = load_pb_list(proto.lines, Line::from_proto);
+        objects.planes = load_pb_list(proto.planes, Plane::from_proto);
+        objects.bboxes = try_load_pb_list(proto.bboxes, OBB::from_proto)?;
+        objects.polylines = load_pb_list(proto.polylines, Polyline::from_proto);
+        objects.pointclouds = load_pb_list(proto.pointclouds, PointCloud::from_proto);
+        objects.meshes = load_pb_list(proto.meshes, Mesh::from_proto);
+        objects.nurbscurves = load_pb_list(proto.nurbscurves, NurbsCurve::from_proto);
+        objects.nurbssurfaces = try_load_pb_list(proto.nurbssurfaces, NurbsSurface::from_proto)?;
+        objects.breps = try_load_pb_list(proto.breps, BRep::from_proto)?;
 
-        for p in &proto.points {
-            objects
-                .points
-                .push(Rc::new(Point::pb_loads(&p.encode_to_vec())?));
+        for element in proto.elements {
+            objects.elements.push(Rc::new(Element::pb_loads_polymorphic(
+                &element.encode_to_vec(),
+            )?));
         }
 
-        for l in &proto.lines {
-            objects
-                .lines
-                .push(Rc::new(Line::pb_loads(&l.encode_to_vec())?));
+        for component in proto.components {
+            objects.components.push(Component::from_proto(component));
         }
 
-        for pl in &proto.planes {
-            objects
-                .planes
-                .push(Rc::new(Plane::pb_loads(&pl.encode_to_vec())?));
-        }
-
-        for b in &proto.bboxes {
-            objects
-                .bboxes
-                .push(Rc::new(OBB::pb_loads(&b.encode_to_vec())?));
-        }
-
-        for pl in &proto.polylines {
-            objects
-                .polylines
-                .push(Rc::new(Polyline::pb_loads(&pl.encode_to_vec())?));
-        }
-
-        for pc in &proto.pointclouds {
-            objects
-                .pointclouds
-                .push(Rc::new(PointCloud::pb_loads(&pc.encode_to_vec())?));
-        }
-
-        for m in &proto.meshes {
-            objects
-                .meshes
-                .push(Rc::new(Mesh::pb_loads(&m.encode_to_vec())?));
-        }
-
-        for nc in &proto.nurbscurves {
-            objects
-                .nurbscurves
-                .push(Rc::new(NurbsCurve::pb_loads(&nc.encode_to_vec())?));
-        }
-
-        for ns in &proto.nurbssurfaces {
-            objects
-                .nurbssurfaces
-                .push(Rc::new(NurbsSurface::pb_loads(&ns.encode_to_vec())?));
-        }
-
-        for b in &proto.breps {
-            objects
-                .breps
-                .push(Rc::new(BRep::pb_loads(&b.encode_to_vec())?));
-        }
-
-        for e in &proto.elements {
-            objects
-                .elements
-                .push(Rc::new(Element::pb_loads(&e.encode_to_vec())?));
-        }
-
-        for c in &proto.components {
-            objects
-                .components
-                .push(Component::pb_loads(&c.encode_to_vec())?);
-        }
-
-        for i in proto.instances {
-            objects.instances.push(Rc::new(InstanceRef::from_proto(i)));
-        }
+        objects.instances = load_pb_list(proto.instances, InstanceRef::from_proto);
 
         Ok(objects)
     }
 
-    /// Writes to a protobuf file.
-    pub fn pb_dump(&self, filepath: &str) {
-        fs::write(filepath, self.pb_dumps()).expect("Failed to write protobuf file");
+    /// Serialize to protobuf bytes.
+    pub fn pb_dumps(&self) -> Vec<u8> {
+        self.to_proto().encode_to_vec()
     }
 
-    /// Reads from a protobuf file.
+    /// Deserialize from protobuf bytes.
+    pub fn pb_loads(data: &[u8]) -> Result<Self, Box<dyn std::error::Error>> {
+        Self::from_proto(crate::proto::Objects::decode(data)?)
+    }
+
+    /// Write to a protobuf file.
+    pub fn pb_dump(&self, filepath: &str) {
+        std::fs::write(filepath, self.pb_dumps()).expect("Failed to write protobuf file");
+    }
+
+    /// Read from a protobuf file.
     pub fn pb_load(filepath: &str) -> Self {
-        let data = fs::read(filepath).expect("Failed to read protobuf file");
+        let data = std::fs::read(filepath).expect("Failed to read protobuf file");
 
         Self::pb_loads(&data).expect("Failed to parse protobuf")
     }
-}
 
-impl fmt::Display for Objects {
-    /// Writes the collection string to a formatter.
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(
-            f,
+    // ═══════════════════════════════════════════════════════════════════════════
+    // String
+    // ═══════════════════════════════════════════════════════════════════════════
+    /// Return "Objects(name=..., guid=..., points=...)".
+    pub fn str(&self) -> String {
+        format!(
             "Objects(name={}, guid={}, points={})",
             self.name,
             self.guid(),
             self.points.len()
         )
+    }
+
+    /// Return "Objects(name=..., guid=..., points=...)".
+    pub fn repr(&self) -> String {
+        self.str()
+    }
+}
+
+impl fmt::Display for Objects {
+    /// Write the collection string to a formatter.
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}", self.str())
     }
 }

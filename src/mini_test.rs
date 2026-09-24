@@ -3906,13 +3906,13 @@ pub fn get_all_tests() -> Vec<RegisteredTest> {
         // Objects tests
         RegisteredTest {
             group: "Objects",
-            name: "Json Roundtrip",
-            func: run_objects_json_roundtrip,
+            name: "Constructor",
+            func: run_objects_constructor,
         },
         RegisteredTest {
             group: "Objects",
-            name: "Constructor",
-            func: run_objects_constructor,
+            name: "Json Roundtrip",
+            func: run_objects_json_roundtrip,
         },
         RegisteredTest {
             group: "Objects",
