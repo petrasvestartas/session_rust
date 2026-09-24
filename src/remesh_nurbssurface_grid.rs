@@ -384,6 +384,34 @@ fn fix_closed_gap(params: &mut Vec<f64>, domain_end: f64) {
     }
 }
 
+/// Parameters along dir: arc-length spaced when count is positive, else the span subdivisions; a closed direction made odd and its wrap gap filled.
+fn grid_params(
+    s: &NurbsSurface,
+    dir: usize,
+    count: usize,
+    sp: &[f64],
+    fixed: f64,
+    mut subs: Vec<usize>,
+) -> Vec<f64> {
+    let closed = s.is_closed(dir);
+
+    if closed && count == 0 {
+        make_odd(&mut subs);
+    }
+
+    let mut params = if count > 0 {
+        arclen_params(s, dir, count.max(2), sp, fixed)
+    } else {
+        span_params(sp, &subs)
+    };
+
+    if closed {
+        fix_closed_gap(&mut params, sp[sp.len() - 1]);
+    }
+
+    params
+}
+
 // ═══════════════════════════════════════════════════════════════════════════
 // Vertices and faces
 // ═══════════════════════════════════════════════════════════════════════════
@@ -643,13 +671,13 @@ impl RemeshNurbsSurfaceGrid {
     // Static constructors
     // ═══════════════════════════════════════════════════════════════════════════
     /// Grid at 20 degrees and 0.5 percent of the bbox diagonal; max_u and max_v fix the parameter counts when positive.
-    pub fn from_u_v(s: NurbsSurface, max_u: usize, max_v: usize) -> Mesh {
+    pub fn from_u_v(s: &NurbsSurface, max_u: usize, max_v: usize) -> Mesh {
         Self::from_u_v_q(s, max_u, max_v, 20.0, 0.005)
     }
 
     /// Grid with the normal turn per subdivision capped at max_angle_deg and the chord height at chord_factor of the bbox diagonal; vertex normals are unit surface normals on the fan side, fan normals at poles.
     pub fn from_u_v_q(
-        s: NurbsSurface,
+        s: &NurbsSurface,
         max_u: usize,
         max_v: usize,
         max_angle_deg: f64,
@@ -657,20 +685,20 @@ impl RemeshNurbsSurfaceGrid {
     ) -> Mesh {
         let usp = s.get_span_vector(0);
         let vsp = s.get_span_vector(1);
-        let bbox_diag = bbox_diagonal(&s);
+        let bbox_diag = bbox_diagonal(s);
         let chord_tol = bbox_diag * chord_factor;
 
-        let mut u_subs = span_subs(&s, 0, &usp, &vsp, max_angle_deg, chord_tol);
-        let mut v_subs = span_subs(&s, 1, &vsp, &usp, max_angle_deg, chord_tol);
+        let mut u_subs = span_subs(s, 0, &usp, &vsp, max_angle_deg, chord_tol);
+        let mut v_subs = span_subs(s, 1, &vsp, &usp, max_angle_deg, chord_tol);
 
-        balance_subs(&s, &usp, &vsp, &mut u_subs, &mut v_subs);
+        balance_subs(s, &usp, &vsp, &mut u_subs, &mut v_subs);
 
         let sing_v0 = s.is_singular(0);
         let sing_v1 = s.is_singular(2);
 
         if s.degree(0) == 1 && s.degree(1) == 1 && !sing_v0 && !sing_v1 {
             let twist = twist_subs(
-                &s,
+                s,
                 &usp,
                 &vsp,
                 if bbox_diag > 0.0 { chord_tol } else { 1e-6 },
@@ -685,55 +713,31 @@ impl RemeshNurbsSurfaceGrid {
             }
         }
 
-        let closed_u = s.is_closed(0);
-        let closed_v = s.is_closed(1);
-
-        if closed_u && max_u == 0 {
-            make_odd(&mut u_subs);
-        }
-
-        if closed_v && max_v == 0 {
-            make_odd(&mut v_subs);
-        }
-
         let u_mid = (usp[0] + usp[usp.len() - 1]) * 0.5;
         let v_mid = (vsp[0] + vsp[vsp.len() - 1]) * 0.5;
 
-        let mut us = if max_u > 0 {
-            arclen_params(&s, 0, max_u.max(2), &usp, v_mid)
-        } else {
-            span_params(&usp, &u_subs)
-        };
-        let mut vs = if max_v > 0 {
-            arclen_params(&s, 1, max_v.max(2), &vsp, u_mid)
-        } else {
-            span_params(&vsp, &v_subs)
-        };
-
-        if closed_u {
-            fix_closed_gap(&mut us, usp[usp.len() - 1]);
-        }
-
-        if closed_v {
-            fix_closed_gap(&mut vs, vsp[vsp.len() - 1]);
-        }
-
+        let us = grid_params(s, 0, max_u, &usp, v_mid, u_subs);
+        let vs = grid_params(s, 1, max_v, &vsp, u_mid, v_subs);
         let nv = vs.len();
+
+        if sing_v0 && sing_v1 && nv < 3 {
+            return Mesh::new();
+        }
 
         let mut mesh = Mesh::new();
         let mut south = None;
         let mut north = None;
 
         if sing_v0 {
-            south = Some(add_vertex_uv(&s, &mut mesh, us[0], vs[0]));
+            south = Some(add_vertex_uv(s, &mut mesh, us[0], vs[0]));
         }
 
         if sing_v1 {
-            north = Some(add_vertex_uv(&s, &mut mesh, us[0], vs[nv - 1]));
+            north = Some(add_vertex_uv(s, &mut mesh, us[0], vs[nv - 1]));
         }
 
         let grid = add_grid(
-            &s,
+            s,
             &mut mesh,
             &us,
             &vs,
@@ -745,13 +749,13 @@ impl RemeshNurbsSurfaceGrid {
             &mut mesh,
             &grid,
             us.len(),
-            closed_u,
-            closed_v && !sing_v0 && !sing_v1,
+            s.is_closed(0),
+            s.is_closed(1) && !sing_v0 && !sing_v1,
             south,
             north,
         );
-        set_normals(&s, &mut mesh, south, north);
-        Self::split_crease_normals(&s, &mut mesh);
+        set_normals(s, &mut mesh, south, north);
+        Self::split_crease_normals(s, &mut mesh);
 
         mesh
     }

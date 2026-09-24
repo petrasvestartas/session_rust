@@ -26,7 +26,7 @@ pub fn run_remesh_nurbssurface_grid_singular_planar_normal() -> TestResult {
             ],
         )
         .unwrap();
-        let mesh = RemeshNurbsSurfaceGrid::from_u_v_q(surface, 0, 0, 5.0, 0.001);
+        let mesh = RemeshNurbsSurfaceGrid::from_u_v_q(&surface, 0, 0, 5.0, 0.001);
         let mut apex = false;
 
         for face in mesh.face.values() {
@@ -44,6 +44,7 @@ pub fn run_remesh_nurbssurface_grid_singular_planar_normal() -> TestResult {
 
                 MINI_CHECK!(normal[0].abs() < 1e-12 && normal[2].abs() < 1e-12);
                 MINI_CHECK!((normal[1].abs() - 1.0).abs() < 1e-12);
+
                 apex = apex || vertex.z == 1.0;
             }
         }
@@ -75,7 +76,7 @@ pub fn run_remesh_nurbssurface_grid_crease_normals() -> TestResult {
             ],
         )
         .unwrap();
-        let mesh = RemeshNurbsSurfaceGrid::from_u_v(surface, 0, 0);
+        let mesh = RemeshNurbsSurfaceGrid::from_u_v(&surface, 0, 0);
 
         MINI_CHECK!(mesh.vertex.len() == 8);
         MINI_CHECK!(mesh.face.len() == 4);
@@ -116,7 +117,7 @@ pub fn run_remesh_nurbssurface_grid_analytic_normals() -> TestResult {
 
         for index in 0..surfaces.len() {
             let surface = &surfaces[index];
-            let mesh = RemeshNurbsSurfaceGrid::from_u_v_q(surface.clone(), 0, 0, 30.0, 0.01);
+            let mesh = RemeshNurbsSurfaceGrid::from_u_v_q(surface, 0, 0, 30.0, 0.01);
 
             for vd in mesh.vertex.values() {
                 let normal = vd.normal().unwrap();
@@ -141,11 +142,29 @@ pub fn run_remesh_nurbssurface_grid_sphere() -> TestResult {
         use crate::RemeshNurbsSurfaceGrid;
 
         let surface = Primitives::sphere_surface(0.0, 0.0, 0.0, 1.0);
-        let mesh = RemeshNurbsSurfaceGrid::from_u_v(surface, 0, 0);
+        let mesh = RemeshNurbsSurfaceGrid::from_u_v(&surface, 0, 0);
 
         MINI_CHECK!(mesh.is_valid());
         MINI_CHECK!(mesh.number_of_vertices() == 191);
         MINI_CHECK!(mesh.number_of_faces() == 378);
+    })
+}
+
+pub fn run_remesh_nurbssurface_grid_sphere_few_rows() -> TestResult {
+    MINI_TEST!("Sphere Few Rows", {
+        use crate::Primitives;
+        use crate::RemeshNurbsSurfaceGrid;
+
+        let surface = Primitives::sphere_surface(0.0, 0.0, 0.0, 1.0);
+        let one = RemeshNurbsSurfaceGrid::from_u_v(&surface, 0, 1);
+        let two = RemeshNurbsSurfaceGrid::from_u_v(&surface, 0, 2);
+        let three = RemeshNurbsSurfaceGrid::from_u_v(&surface, 0, 3);
+
+        MINI_CHECK!(one.number_of_vertices() == 0);
+        MINI_CHECK!(two.number_of_vertices() == 0);
+        MINI_CHECK!(three.is_valid());
+        MINI_CHECK!(three.number_of_vertices() == 23);
+        MINI_CHECK!(three.number_of_faces() == 42);
     })
 }
 
@@ -155,7 +174,7 @@ pub fn run_remesh_nurbssurface_grid_torus() -> TestResult {
         use crate::RemeshNurbsSurfaceGrid;
 
         let surface = Primitives::torus_surface(0.0, 0.0, 0.0, 3.0, 1.0);
-        let mesh = RemeshNurbsSurfaceGrid::from_u_v(surface, 0, 0);
+        let mesh = RemeshNurbsSurfaceGrid::from_u_v(&surface, 0, 0);
 
         MINI_CHECK!(mesh.is_valid());
         MINI_CHECK!(mesh.number_of_vertices() == 693);
@@ -169,7 +188,7 @@ pub fn run_remesh_nurbssurface_grid_cylinder() -> TestResult {
         use crate::RemeshNurbsSurfaceGrid;
 
         let surface = Primitives::cylinder_surface(0.0, 0.0, 0.0, 1.0, 5.0);
-        let mesh = RemeshNurbsSurfaceGrid::from_u_v(surface, 0, 0);
+        let mesh = RemeshNurbsSurfaceGrid::from_u_v(&surface, 0, 0);
 
         MINI_CHECK!(mesh.is_valid());
         MINI_CHECK!(mesh.number_of_vertices() == 42);
@@ -183,7 +202,7 @@ pub fn run_remesh_nurbssurface_grid_cone() -> TestResult {
         use crate::RemeshNurbsSurfaceGrid;
 
         let surface = Primitives::cone_surface(0.0, 0.0, 0.0, 1.0, 5.0);
-        let mesh = RemeshNurbsSurfaceGrid::from_u_v(surface, 0, 0);
+        let mesh = RemeshNurbsSurfaceGrid::from_u_v(&surface, 0, 0);
 
         MINI_CHECK!(mesh.is_valid());
         MINI_CHECK!(mesh.number_of_vertices() == 22);
@@ -197,7 +216,7 @@ pub fn run_remesh_nurbssurface_grid_doubly_curved() -> TestResult {
         use crate::RemeshNurbsSurfaceGrid;
 
         let surface = Primitives::wave_surface(1.0, 0.5);
-        let mesh = RemeshNurbsSurfaceGrid::from_u_v(surface, 0, 0);
+        let mesh = RemeshNurbsSurfaceGrid::from_u_v(&surface, 0, 0);
 
         MINI_CHECK!(mesh.is_valid());
         MINI_CHECK!(mesh.number_of_vertices() == 961);
@@ -211,8 +230,8 @@ pub fn run_remesh_nurbssurface_grid_grid_target() -> TestResult {
         use crate::RemeshNurbsSurfaceGrid;
 
         let surface = Primitives::wave_surface(1.0, 0.5);
-        let mesh_lo = RemeshNurbsSurfaceGrid::from_u_v(surface.clone(), 8, 8);
-        let mesh_hi = RemeshNurbsSurfaceGrid::from_u_v(surface, 32, 32);
+        let mesh_lo = RemeshNurbsSurfaceGrid::from_u_v(&surface, 8, 8);
+        let mesh_hi = RemeshNurbsSurfaceGrid::from_u_v(&surface, 32, 32);
 
         MINI_CHECK!(mesh_lo.is_valid());
         MINI_CHECK!(mesh_lo.number_of_vertices() == 64);
@@ -242,7 +261,7 @@ pub fn run_remesh_nurbssurface_grid_flat_quad() -> TestResult {
             ],
         )
         .unwrap();
-        let mesh = RemeshNurbsSurfaceGrid::from_u_v(surface, 0, 0);
+        let mesh = RemeshNurbsSurfaceGrid::from_u_v(&surface, 0, 0);
 
         MINI_CHECK!(mesh.is_valid());
         MINI_CHECK!(mesh.number_of_vertices() == 4);
@@ -271,7 +290,7 @@ pub fn run_remesh_nurbssurface_grid_flat_triangle() -> TestResult {
             ],
         )
         .unwrap();
-        let mesh = RemeshNurbsSurfaceGrid::from_u_v(surface, 0, 0);
+        let mesh = RemeshNurbsSurfaceGrid::from_u_v(&surface, 0, 0);
 
         MINI_CHECK!(mesh.is_valid());
         MINI_CHECK!(mesh.number_of_vertices() == 3);
@@ -305,7 +324,7 @@ pub fn run_remesh_nurbssurface_grid_double_curved_triangle() -> TestResult {
             ],
         )
         .unwrap();
-        let mesh = RemeshNurbsSurfaceGrid::from_u_v(surface, 0, 0);
+        let mesh = RemeshNurbsSurfaceGrid::from_u_v(&surface, 0, 0);
 
         MINI_CHECK!(mesh.is_valid());
         MINI_CHECK!(mesh.number_of_vertices() == 64);
@@ -332,6 +351,11 @@ REGISTER_MINI_TEST!(
     "RemeshNurbsSurfaceGrid",
     "Sphere",
     crate::remesh_nurbssurface_grid_test::run_remesh_nurbssurface_grid_sphere
+);
+REGISTER_MINI_TEST!(
+    "RemeshNurbsSurfaceGrid",
+    "Sphere Few Rows",
+    crate::remesh_nurbssurface_grid_test::run_remesh_nurbssurface_grid_sphere_few_rows
 );
 REGISTER_MINI_TEST!(
     "RemeshNurbsSurfaceGrid",

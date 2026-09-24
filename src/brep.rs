@@ -3025,7 +3025,7 @@ impl BRep {
 
             let srf = &self.m_surfaces[self.m_faces[fi].surface_index as usize];
             fmesh[fi] = match quality {
-                Some((a, c)) => RemeshNurbsSurfaceGrid::from_u_v_q(srf.clone(), 0, 0, a, c),
+                Some((a, c)) => RemeshNurbsSurfaceGrid::from_u_v_q(srf, 0, 0, a, c),
                 None => srf.mesh(),
             };
             rebuild_grid[fi] = grid_boundaries(self, fi, &fmesh[fi], &mut boundary);

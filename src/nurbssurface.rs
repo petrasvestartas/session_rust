@@ -1917,7 +1917,7 @@ impl NurbsSurface {
             return self.mesh_planar();
         }
 
-        RemeshNurbsSurfaceGrid::from_u_v(self.clone(), 0, 0)
+        RemeshNurbsSurfaceGrid::from_u_v(self, 0, 0)
     }
 
     // ═══════════════════════════════════════════════════════════════════════════

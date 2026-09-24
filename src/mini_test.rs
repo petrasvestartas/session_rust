@@ -4233,6 +4233,11 @@ pub fn get_all_tests() -> Vec<RegisteredTest> {
         },
         RegisteredTest {
             group: "RemeshNurbsSurfaceGrid",
+            name: "Sphere Few Rows",
+            func: run_remesh_nurbssurface_grid_sphere_few_rows,
+        },
+        RegisteredTest {
+            group: "RemeshNurbsSurfaceGrid",
             name: "Torus",
             func: run_remesh_nurbssurface_grid_torus,
         },

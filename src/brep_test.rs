@@ -188,13 +188,7 @@ pub fn run_brep_shared_grid_boundary() -> TestResult {
         let mut original: Vec<Mesh> = Vec::new();
 
         for s in &surfaces {
-            original.push(RemeshNurbsSurfaceGrid::from_u_v_q(
-                s.clone(),
-                0,
-                0,
-                20.0,
-                0.005,
-            ));
+            original.push(RemeshNurbsSurfaceGrid::from_u_v_q(s, 0, 0, 20.0, 0.005));
         }
 
         MINI_CHECK!(
@@ -225,7 +219,7 @@ pub fn run_brep_shared_grid_boundary() -> TestResult {
 
         MINI_CHECK!(maximum <= 0.005 * 1.5);
 
-        let refined = RemeshNurbsSurfaceGrid::from_u_v_q(surfaces[0].clone(), 0, 0, 5.0, 0.001);
+        let refined = RemeshNurbsSurfaceGrid::from_u_v_q(&surfaces[0], 0, 0, 5.0, 0.001);
         meshes = b.face_meshes_q(Some((5.0, 0.001)));
         first = boundary_points(&meshes[0]);
 
