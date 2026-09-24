@@ -32,8 +32,14 @@ pub fn run_file_step_nurbscurve_round_trip() -> TestResult {
         MINI_CHECK!(nc.degree() == 3);
         MINI_CHECK!(nc.cv_count() == 4);
 
-        file_step::write_file_step_nurbscurves(std::slice::from_ref(&nc), &path);
-
+        MINI_CHECK!(file_step::write_file_step_nurbscurves(
+            std::slice::from_ref(&nc),
+            &path
+        ));
+        MINI_CHECK!(!file_step::write_file_step_nurbscurves(
+            std::slice::from_ref(&nc),
+            &serialization_path("missing/test_step_nurbscurve.step")
+        ));
         MINI_CHECK!(std::path::Path::new(&path).exists());
 
         let curves = file_step::read_file_step_nurbscurves(&path);
@@ -96,8 +102,10 @@ pub fn run_file_step_nurbscurve_rational_round_trip() -> TestResult {
         MINI_CHECK!(nc.cv_count() == 3);
         MINI_CHECK!(nc.m_is_rat);
 
-        file_step::write_file_step_nurbscurves(std::slice::from_ref(&nc), &path);
-
+        MINI_CHECK!(file_step::write_file_step_nurbscurves(
+            std::slice::from_ref(&nc),
+            &path
+        ));
         MINI_CHECK!(std::path::Path::new(&path).exists());
 
         let curves = file_step::read_file_step_nurbscurves(&path);
@@ -154,8 +162,10 @@ pub fn run_file_step_nurbssurface_round_trip() -> TestResult {
         MINI_CHECK!(srf.cv_count(0) == 4);
         MINI_CHECK!(srf.cv_count(1) == 4);
 
-        file_step::write_file_step_nurbssurfaces(std::slice::from_ref(&srf), &path);
-
+        MINI_CHECK!(file_step::write_file_step_nurbssurfaces(
+            std::slice::from_ref(&srf),
+            &path
+        ));
         MINI_CHECK!(std::path::Path::new(&path).exists());
 
         let surfaces = file_step::read_file_step_nurbssurfaces(&path);
@@ -222,8 +232,10 @@ pub fn run_file_step_nurbssurface_rational_round_trip() -> TestResult {
         MINI_CHECK!(srf.is_valid());
         MINI_CHECK!(srf.m_is_rat);
 
-        file_step::write_file_step_nurbssurfaces(std::slice::from_ref(&srf), &path);
-
+        MINI_CHECK!(file_step::write_file_step_nurbssurfaces(
+            std::slice::from_ref(&srf),
+            &path
+        ));
         MINI_CHECK!(std::path::Path::new(&path).exists());
 
         let surfaces = file_step::read_file_step_nurbssurfaces(&path);
@@ -296,8 +308,10 @@ pub fn run_file_step_nurbssurface_trimmed_round_trip() -> TestResult {
 
         MINI_CHECK!(trimmed.m_surface.is_valid());
 
-        file_step::write_file_step_nurbssurfaces_trimmed(std::slice::from_ref(&trimmed), &path);
-
+        MINI_CHECK!(file_step::write_file_step_nurbssurfaces_trimmed(
+            std::slice::from_ref(&trimmed),
+            &path
+        ));
         MINI_CHECK!(std::path::Path::new(&path).exists());
 
         let surfaces = file_step::read_file_step_nurbssurfaces(&path);
@@ -315,6 +329,55 @@ pub fn run_file_step_nurbssurface_trimmed_round_trip() -> TestResult {
         let ncurves = file_step::read_file_step_nurbscurves(&path);
 
         MINI_CHECK!(!ncurves.is_empty());
+
+        let _ = std::fs::remove_file(&path);
+    })
+}
+
+pub fn run_file_step_nurbssurface_trimmed_read_vertex() -> TestResult {
+    MINI_TEST!("NurbsSurfaceTrimmed Read Vertex", {
+        use crate::file_step;
+
+        let path = serialization_path("test_step_trimmed_vertex.step");
+        let text = concat!(
+            "ISO-10303-21;\nHEADER;\nENDSEC;\nDATA;\n",
+            "#1=CARTESIAN_POINT('',(0.,0.,0.));\n",
+            "#2=CARTESIAN_POINT('',(0.,1.,0.));\n",
+            "#3=CARTESIAN_POINT('',(1.,0.,0.));\n",
+            "#4=CARTESIAN_POINT('',(1.,1.,0.));\n",
+            "#5=B_SPLINE_SURFACE_WITH_KNOTS('',1,1,((#1,#2),(#3,#4)),.UNSPECIFIED.,.F.,.F.,.F.,(2,2),(2,2),(0.,1.),(0.,1.),.UNSPECIFIED.);\n",
+            "#6=CARTESIAN_POINT('',(2.,3.,0.));\n",
+            "#7=CARTESIAN_POINT('',(4.,5.,0.));\n",
+            "#8=VERTEX_POINT('',#6);\n",
+            "#9=VERTEX_POINT('',#7);\n",
+            "#10=DIRECTION('',(1.,1.,0.));\n",
+            "#11=VECTOR('',#10,1.);\n",
+            "#12=LINE('',#6,#11);\n",
+            "#13=EDGE_CURVE('',#8,#9,#12,.T.);\n",
+            "#14=ORIENTED_EDGE('',*,*,#13,.T.);\n",
+            "#15=EDGE_LOOP('',(#14));\n",
+            "#16=FACE_OUTER_BOUND('',#15,.T.);\n",
+            "#17=ADVANCED_FACE('',(#16),#5,.T.);\n",
+            "ENDSEC;\nEND-ISO-10303-21;\n",
+        );
+
+        MINI_CHECK!(std::fs::write(&path, text).is_ok());
+
+        let trimmed = file_step::read_file_step_nurbssurfaces_trimmed(&path);
+
+        MINI_CHECK!(trimmed.len() == 1);
+
+        let outer = trimmed[0].m_outer_loop.clone().unwrap_or_default();
+
+        MINI_CHECK!(outer.cv_count() == 2);
+
+        let start = outer.get_cv(0).unwrap_or_default();
+        let end = outer.get_cv(1).unwrap_or_default();
+
+        MINI_CHECK!((start[0] - 2.0).abs() < 1e-10);
+        MINI_CHECK!((start[1] - 3.0).abs() < 1e-10);
+        MINI_CHECK!((end[0] - 4.0).abs() < 1e-10);
+        MINI_CHECK!((end[1] - 5.0).abs() < 1e-10);
 
         let _ = std::fs::remove_file(&path);
     })
@@ -379,7 +442,7 @@ pub fn run_file_step_brep_round_trip() -> TestResult {
         let mut cyl = BRep::create_cylinder(1.0, 2.0);
         cyl.name = "cylinder".to_string();
 
-        file_step::write_file_step_brep(&cyl, &path);
+        MINI_CHECK!(file_step::write_file_step_brep(&cyl, &path));
 
         let breps = file_step::read_file_step_breps(&path);
 
@@ -419,6 +482,11 @@ REGISTER_MINI_TEST!(
     "FileStep",
     "NurbsSurfaceTrimmed Round Trip",
     crate::file_step_test::run_file_step_nurbssurface_trimmed_round_trip
+);
+REGISTER_MINI_TEST!(
+    "FileStep",
+    "NurbsSurfaceTrimmed Read Vertex",
+    crate::file_step_test::run_file_step_nurbssurface_trimmed_read_vertex
 );
 REGISTER_MINI_TEST!(
     "FileStep",

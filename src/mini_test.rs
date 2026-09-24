@@ -3308,6 +3308,11 @@ pub fn get_all_tests() -> Vec<RegisteredTest> {
         },
         RegisteredTest {
             group: "FileStep",
+            name: "NurbsSurfaceTrimmed Read Vertex",
+            func: run_file_step_nurbssurface_trimmed_read_vertex,
+        },
+        RegisteredTest {
+            group: "FileStep",
             name: "BRep Read Schoring",
             func: run_file_step_brep_read_schoring,
         },

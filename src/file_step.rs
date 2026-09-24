@@ -234,7 +234,10 @@ fn parse_string(c: &mut Cursor) -> String {
 /// Read a parenthesised parameter list, recursing one level deeper.
 fn parse_params(c: &mut Cursor, depth: i32) -> Vec<StepParam> {
     let mut out = Vec::new();
-    consume(c, b'(');
+
+    if !consume(c, b'(') {
+        return out;
+    }
 
     while c.p < c.end {
         skip_ws(c);
@@ -251,7 +254,9 @@ fn parse_params(c: &mut Cursor, depth: i32) -> Vec<StepParam> {
         }
     }
 
-    consume(c, b')');
+    if c.p < c.end {
+        c.p += 1;
+    }
 
     out
 }
@@ -424,7 +429,10 @@ fn parse_step_string(content: &str, sf: &mut StepFile) {
                 ent.parts.push(parse_sub_entity(&mut c));
             }
 
-            consume(&mut c, b')');
+            if !consume(&mut c, b')') {
+                skip_statement(&mut c);
+                continue;
+            }
         } else {
             ent.parts.push(parse_sub_entity(&mut c));
         }
@@ -605,6 +613,117 @@ fn last_flag(params: &[StepParam], fallback: bool) -> bool {
     }
 
     out
+}
+
+/// Degree, control point ids and knots of a B-spline curve entity.
+#[derive(Default)]
+struct CurveParams {
+    degree: i32,       // Polynomial degree.
+    pt_refs: Vec<i32>, // CARTESIAN_POINT ids.
+    mults: Vec<i32>,   // Knot multiplicities.
+    knots: Vec<f64>,   // Distinct knot values.
+}
+
+/// Degrees, control point id grid and knots of a B-spline surface entity.
+#[derive(Default)]
+struct SurfaceParams {
+    u_deg: i32,              // Degree in u.
+    v_deg: i32,              // Degree in v.
+    ctrl_pts: Vec<Vec<i32>>, // CARTESIAN_POINT ids, rows along u.
+    u_mults: Vec<i32>,       // Knot multiplicities in u.
+    v_mults: Vec<i32>,       // Knot multiplicities in v.
+    u_knots: Vec<f64>,       // Distinct knot values in u.
+    v_knots: Vec<f64>,       // Distinct knot values in v.
+}
+
+/// B_SPLINE_CURVE_WITH_KNOTS parameters, simple or split across a complex instance; none when missing, short or empty.
+fn curve_params(e: &StepEntity) -> Option<CurveParams> {
+    let bsc = e.find("B_SPLINE_CURVE_WITH_KNOTS")?;
+    let mut cp = CurveParams::default();
+
+    match e.find("B_SPLINE_CURVE") {
+        None => {
+            let pp = &bsc.params;
+
+            if pp.len() < 8 {
+                return None;
+            }
+
+            cp.degree = pp[1].num as i32;
+            cp.pt_refs = all_refs(&pp[2].list);
+            cp.mults = int_list(&pp[6]);
+            cp.knots = dbl_list(&pp[7]);
+        }
+        Some(base) => {
+            let bp = &base.params;
+            let kp = &bsc.params;
+
+            if bp.len() < 2 || kp.len() < 2 {
+                return None;
+            }
+
+            cp.degree = bp[0].num as i32;
+            cp.pt_refs = all_refs(&bp[1].list);
+            cp.mults = int_list(&kp[0]);
+            cp.knots = dbl_list(&kp[1]);
+        }
+    }
+
+    if cp.pt_refs.is_empty() || cp.mults.is_empty() || cp.knots.is_empty() {
+        return None;
+    }
+
+    Some(cp)
+}
+
+/// B_SPLINE_SURFACE_WITH_KNOTS parameters, simple or split across a complex instance; none when missing, short or empty.
+fn surface_params(e: &StepEntity) -> Option<SurfaceParams> {
+    let bss = e.find("B_SPLINE_SURFACE_WITH_KNOTS")?;
+    let mut sp = SurfaceParams::default();
+
+    match e.find("B_SPLINE_SURFACE") {
+        None => {
+            let pp = &bss.params;
+
+            if pp.len() < 12 {
+                return None;
+            }
+
+            sp.u_deg = pp[1].num as i32;
+            sp.v_deg = pp[2].num as i32;
+            sp.ctrl_pts = ref_list_list(&pp[3]);
+            sp.u_mults = int_list(&pp[8]);
+            sp.v_mults = int_list(&pp[9]);
+            sp.u_knots = dbl_list(&pp[10]);
+            sp.v_knots = dbl_list(&pp[11]);
+        }
+        Some(base) => {
+            let bp = &base.params;
+            let kp = &bss.params;
+
+            if bp.len() < 3 || kp.len() < 4 {
+                return None;
+            }
+
+            sp.u_deg = bp[0].num as i32;
+            sp.v_deg = bp[1].num as i32;
+            sp.ctrl_pts = ref_list_list(&bp[2]);
+            sp.u_mults = int_list(&kp[0]);
+            sp.v_mults = int_list(&kp[1]);
+            sp.u_knots = dbl_list(&kp[2]);
+            sp.v_knots = dbl_list(&kp[3]);
+        }
+    }
+
+    if sp.ctrl_pts.is_empty()
+        || sp.ctrl_pts[0].is_empty()
+        || sp.u_mults.is_empty()
+        || sp.v_mults.is_empty()
+    {
+        return None;
+    }
+
+    Some(sp)
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -1313,6 +1432,18 @@ impl<'a> StepReader<'a> {
         pt
     }
 
+    /// Read the CARTESIAN_POINT of a VERTEX_POINT, none when missing.
+    fn get_vertex_point(&mut self, id: i32) -> Option<Point> {
+        let sub = find_in(self.get(id), "VERTEX_POINT")?;
+        let pt_ref = first_ref(&sub.params);
+
+        if pt_ref < 0 {
+            return None;
+        }
+
+        Some(self.get_point(pt_ref))
+    }
+
     /// Read a DIRECTION as a unit vector, caching by id.
     fn get_direction(&mut self, id: i32) -> Vector {
         if let Some(v) = self.dir_cache.get(&id) {
@@ -1391,68 +1522,29 @@ impl<'a> StepReader<'a> {
 
     /// B_SPLINE_CURVE_WITH_KNOTS, simple or complex with RATIONAL_B_SPLINE_CURVE; invalid when malformed.
     fn get_nurbs_curve(&mut self, id: i32) -> NurbsCurve {
-        let e = self.get(id);
-
-        let Some(bsc) = find_in(e, "B_SPLINE_CURVE_WITH_KNOTS") else {
+        let Some(e) = self.get(id) else {
             return NurbsCurve::default();
         };
 
-        let base = find_in(e, "B_SPLINE_CURVE");
-        let rat = find_in(e, "RATIONAL_B_SPLINE_CURVE");
-        let degree;
-        let pt_refs;
-        let mults;
-        let knots;
-
-        match base {
-            None => {
-                let pp = &bsc.params;
-
-                if pp.len() < 8 {
-                    return NurbsCurve::default();
-                }
-
-                degree = pp[1].num as i32;
-                pt_refs = all_refs(&pp[2].list);
-                mults = int_list(&pp[6]);
-                knots = dbl_list(&pp[7]);
-            }
-            Some(base) => {
-                let bp = &base.params;
-                let kp = &bsc.params;
-
-                if bp.len() < 2 || kp.len() < 2 {
-                    return NurbsCurve::default();
-                }
-
-                degree = bp[0].num as i32;
-                pt_refs = all_refs(&bp[1].list);
-                mults = int_list(&kp[0]);
-                knots = dbl_list(&kp[1]);
-            }
-        }
-
-        if pt_refs.is_empty() || mults.is_empty() || knots.is_empty() {
+        let Some(cp) = curve_params(e) else {
             return NurbsCurve::default();
-        }
+        };
 
-        let order = degree + 1;
-        let cv_count = pt_refs.len() as i32;
-        let full = expand_knots(&knots, &mults);
+        let order = cp.degree + 1;
+        let cv_count = cp.pt_refs.len() as i32;
+        let full = expand_knots(&cp.knots, &cp.mults);
 
         if full.len() as i32 != cv_count + order {
             return NurbsCurve::default();
         }
 
         let internal = internal_from_full(&full);
+        let rat = e.find("RATIONAL_B_SPLINE_CURVE");
         let is_rat = rat.is_some();
-        let mut weights = Vec::new();
-
-        if let Some(rat) = rat {
-            if !rat.params.is_empty() {
-                weights = dbl_list(&rat.params[0]);
-            }
-        }
+        let weights = match rat {
+            Some(rat) if !rat.params.is_empty() => dbl_list(&rat.params[0]),
+            _ => Vec::new(),
+        };
 
         let mut nc = NurbsCurve::new(3, is_rat, order as usize, cv_count as usize);
 
@@ -1463,7 +1555,7 @@ impl<'a> StepReader<'a> {
         nc.m_nurbsknot = internal;
 
         for i in 0..cv_count as usize {
-            let pt = self.get_point(pt_refs[i]);
+            let pt = self.get_point(cp.pt_refs[i]);
             let w = if is_rat && i < weights.len() {
                 weights[i]
             } else {
@@ -1480,84 +1572,36 @@ impl<'a> StepReader<'a> {
 
     /// B_SPLINE_SURFACE_WITH_KNOTS, simple or complex with RATIONAL_B_SPLINE_SURFACE; invalid when malformed.
     fn get_nurbs_surface(&mut self, id: i32) -> NurbsSurface {
-        let e = self.get(id);
-
-        let Some(bss) = find_in(e, "B_SPLINE_SURFACE_WITH_KNOTS") else {
+        let Some(e) = self.get(id) else {
             return NurbsSurface::default();
         };
 
-        let base = find_in(e, "B_SPLINE_SURFACE");
-        let rat = find_in(e, "RATIONAL_B_SPLINE_SURFACE");
-        let u_deg;
-        let v_deg;
-        let ctrl_pts;
-        let u_mults;
-        let v_mults;
-        let u_knots;
-        let v_knots;
+        let Some(sp) = surface_params(e) else {
+            return NurbsSurface::default();
+        };
 
-        match base {
-            None => {
-                let pp = &bss.params;
+        let cv_u = sp.ctrl_pts.len() as i32;
+        let cv_v = sp.ctrl_pts[0].len() as i32;
+        let full_u = expand_knots(&sp.u_knots, &sp.u_mults);
+        let full_v = expand_knots(&sp.v_knots, &sp.v_mults);
 
-                if pp.len() < 12 {
-                    return NurbsSurface::default();
-                }
-
-                u_deg = pp[1].num as i32;
-                v_deg = pp[2].num as i32;
-                ctrl_pts = ref_list_list(&pp[3]);
-                u_mults = int_list(&pp[8]);
-                v_mults = int_list(&pp[9]);
-                u_knots = dbl_list(&pp[10]);
-                v_knots = dbl_list(&pp[11]);
-            }
-            Some(base) => {
-                let bp = &base.params;
-                let kp = &bss.params;
-
-                if bp.len() < 3 || kp.len() < 4 {
-                    return NurbsSurface::default();
-                }
-
-                u_deg = bp[0].num as i32;
-                v_deg = bp[1].num as i32;
-                ctrl_pts = ref_list_list(&bp[2]);
-                u_mults = int_list(&kp[0]);
-                v_mults = int_list(&kp[1]);
-                u_knots = dbl_list(&kp[2]);
-                v_knots = dbl_list(&kp[3]);
-            }
-        }
-
-        if ctrl_pts.is_empty() || ctrl_pts[0].is_empty() || u_mults.is_empty() || v_mults.is_empty()
+        if full_u.len() as i32 != cv_u + sp.u_deg + 1 || full_v.len() as i32 != cv_v + sp.v_deg + 1
         {
             return NurbsSurface::default();
         }
 
-        let cv_u = ctrl_pts.len() as i32;
-        let cv_v = ctrl_pts[0].len() as i32;
-        let full_u = expand_knots(&u_knots, &u_mults);
-        let full_v = expand_knots(&v_knots, &v_mults);
-
-        if full_u.len() as i32 != cv_u + u_deg + 1 || full_v.len() as i32 != cv_v + v_deg + 1 {
-            return NurbsSurface::default();
-        }
-
+        let rat = e.find("RATIONAL_B_SPLINE_SURFACE");
         let is_rat = rat.is_some();
-        let mut weights = Vec::new();
-
-        if let Some(rat) = rat {
-            if !rat.params.is_empty() {
-                weights = dbl_list_list(&rat.params[0]);
-            }
-        }
+        let weights = match rat {
+            Some(rat) if !rat.params.is_empty() => dbl_list_list(&rat.params[0]),
+            _ => Vec::new(),
+        };
 
         let mut srf = NurbsSurface::new(
             3,
             is_rat,
-            (u_deg + 1) as usize,
-            (v_deg + 1) as usize,
+            (sp.u_deg + 1) as usize,
+            (sp.v_deg + 1) as usize,
             cv_u as usize,
             cv_v as usize,
         );
@@ -1565,8 +1609,8 @@ impl<'a> StepReader<'a> {
         srf.m_nurbsknot[1] = internal_from_full(&full_v);
 
         for u in 0..cv_u as usize {
-            for v in 0..(cv_v as usize).min(ctrl_pts[u].len()) {
-                let pt = self.get_point(ctrl_pts[u][v]);
+            for v in 0..(cv_v as usize).min(sp.ctrl_pts[u].len()) {
+                let pt = self.get_point(sp.ctrl_pts[u][v]);
                 let w = if is_rat && u < weights.len() && v < weights[u].len() {
                     weights[u][v]
                 } else {
@@ -2344,6 +2388,67 @@ fn analytic_window(loops: &[Loop], an: &AnFace) -> Option<Window> {
     Some(w)
 }
 
+/// Canonical (s, t) where the loop left off: the end of its last edge, else the first sample that projects; false when neither exists.
+fn st_start(an: &AnFace, lp: &Loop, ordered: &[Point]) -> (f64, f64, bool) {
+    if !lp.edges.is_empty() && !lp.edges[lp.edges.len() - 1].uv.is_empty() {
+        let pe = &lp.edges[lp.edges.len() - 1];
+        let q = if pe.reversed {
+            &pe.uv[0]
+        } else {
+            &pe.uv[pe.uv.len() - 1]
+        };
+
+        return (q[0], q[1], true);
+    }
+
+    for k in 0..ordered.len() {
+        let (s, t, ok) = an_st_of(an, &ordered[k]);
+
+        if ok {
+            return (s, t, true);
+        }
+    }
+
+    (0.0, 0.0, false)
+}
+
+/// Canonical (s, t) of 3D samples, s (and t on a torus) shifted by whole turns next to the sample before, the first next to (ps, pt).
+fn st_unwrapped(an: &AnFace, ordered: &[Point], ps: f64, pt: f64, have_prev: bool) -> Vec<Point> {
+    let mut st: Vec<Point> = Vec::new();
+
+    for k in 0..ordered.len() {
+        let (mut s, mut t, ok) = an_st_of(an, &ordered[k]);
+
+        if !ok && (k > 0 || have_prev) {
+            s = if k > 0 { st[k - 1][0] } else { ps };
+        }
+
+        let rs = if k > 0 {
+            st[k - 1][0]
+        } else if have_prev {
+            ps
+        } else {
+            s
+        };
+        s -= 2.0 * PI * ((s - rs) / (2.0 * PI)).round();
+
+        if an.kind == 5 {
+            let rt = if k > 0 {
+                st[k - 1][1]
+            } else if have_prev {
+                pt
+            } else {
+                t
+            };
+            t -= 2.0 * PI * ((t - rt) / (2.0 * PI)).round();
+        }
+
+        st.push(Point::new(s, t, 0.0));
+    }
+
+    st
+}
+
 /// BRep of one STEP shell, built face by face.
 struct BRepBuilder<'a, 'b> {
     r: &'b mut StepReader<'a>, // Entity reader.
@@ -2446,17 +2551,10 @@ impl<'a, 'b> BRepBuilder<'a, 'b> {
             return *vi;
         }
 
-        let id = match find_in(self.r.get(vp_id), "VERTEX_POINT") {
-            Some(sub) => first_ref(&sub.params),
-            None => -1,
-        };
-
-        let pt = if id >= 0 {
-            self.r.get_point(id)
-        } else {
-            Point::new(0.0, 0.0, 0.0)
-        };
-
+        let pt = self
+            .r
+            .get_vertex_point(vp_id)
+            .unwrap_or(Point::new(0.0, 0.0, 0.0));
         let vi = self.brep.add_vertex(&pt, 0.0);
         self.vmap.insert(vp_id, vi);
 
@@ -2541,69 +2639,8 @@ impl<'a, 'b> BRepBuilder<'a, 'b> {
             ordered.reverse();
         }
 
-        let mut ps = 0.0;
-        let mut pt = 0.0;
-        let mut have_prev = false;
-
-        if !lp.edges.is_empty() && !lp.edges[lp.edges.len() - 1].uv.is_empty() {
-            let pe = &lp.edges[lp.edges.len() - 1];
-            let q = if pe.reversed {
-                &pe.uv[0]
-            } else {
-                &pe.uv[pe.uv.len() - 1]
-            };
-            ps = q[0];
-            pt = q[1];
-            have_prev = true;
-        }
-
-        for k in 0..ordered.len() {
-            if have_prev {
-                break;
-            }
-
-            let (s2, t2, ok2) = an_st_of(an, &ordered[k]);
-
-            if !ok2 {
-                continue;
-            }
-
-            ps = s2;
-            pt = t2;
-            have_prev = true;
-        }
-
-        let mut st: Vec<Point> = Vec::new();
-
-        for k in 0..ordered.len() {
-            let (mut s, mut t, ok) = an_st_of(an, &ordered[k]);
-
-            if !ok && (k > 0 || have_prev) {
-                s = if k > 0 { st[k - 1][0] } else { ps };
-            }
-
-            let rs = if k > 0 {
-                st[k - 1][0]
-            } else if have_prev {
-                ps
-            } else {
-                s
-            };
-            s -= 2.0 * PI * ((s - rs) / (2.0 * PI)).round();
-
-            if an.kind == 5 {
-                let rt = if k > 0 {
-                    st[k - 1][1]
-                } else if have_prev {
-                    pt
-                } else {
-                    t
-                };
-                t -= 2.0 * PI * ((t - rt) / (2.0 * PI)).round();
-            }
-
-            st.push(Point::new(s, t, 0.0));
-        }
+        let (ps, pt, have_prev) = st_start(an, lp, &ordered);
+        let mut st = st_unwrapped(an, &ordered, ps, pt, have_prev);
 
         if rev {
             st.reverse();
@@ -2808,16 +2845,9 @@ impl<'a, 'b> BRepBuilder<'a, 'b> {
 
     /// Point of a VERTEX_POINT, far away when missing.
     fn step_point_of(&mut self, vp_id: i32) -> Point {
-        let id = match find_in(self.r.get(vp_id), "VERTEX_POINT") {
-            Some(sub) => first_ref(&sub.params),
-            None => -1,
-        };
-
-        if id >= 0 {
-            self.r.get_point(id)
-        } else {
-            Point::new(1e300, 1e300, 1e300)
-        }
+        self.r
+            .get_vertex_point(vp_id)
+            .unwrap_or(Point::new(1e300, 1e300, 1e300))
     }
 
     /// The file vertex at q when one of the given VERTEX_POINTs sits there, else a new vertex.
@@ -2831,6 +2861,119 @@ impl<'a, 'b> BRepBuilder<'a, 'b> {
         self.brep.add_vertex(q, 0.0)
     }
 
+    /// Kernel surface of a VERTEX_LOOP face: the whole sphere or torus, the B-spline itself, invalid otherwise.
+    fn vertex_loop_surface(&mut self, surface_ref: i32) -> NurbsSurface {
+        let an = self.r.get_analytic_srf(surface_ref);
+
+        if an.kind == 4 {
+            return build_analytic_nurbs(&an, 0, 4, 0.0, 0.0, -1, 2);
+        }
+
+        if an.kind == 5 {
+            return build_analytic_nurbs(&an, 0, 4, 0.0, 0.0, 0, 4);
+        }
+
+        if an.kind == 0 {
+            return self.r.get_nurbs_surface(surface_ref);
+        }
+
+        NurbsSurface::default()
+    }
+
+    /// Wire of a sphere-like surface: a degenerated edge at each pole and the seam used both ways; empty when the seam is invalid.
+    fn pole_wire(
+        &mut self,
+        srf: &NurbsSurface,
+        grid: &[Point],
+        vl_vertex_ids: &[i32],
+        tol: f64,
+    ) -> Vec<PendingEdge> {
+        let (u0, u1) = srf.domain(0).unwrap_or_default();
+        let (v0, v1) = srf.domain(1).unwrap_or_default();
+        let v_lo = self.topo_vertex_at(vl_vertex_ids, &grid[0], tol) as i32;
+        let v_hi = self.topo_vertex_at(vl_vertex_ids, &grid[NS - 1], tol) as i32;
+        let seam = srf.iso_curve(1, u0).unwrap_or_default();
+
+        if !seam.is_valid() {
+            return Vec::new();
+        }
+
+        let c_seam = self.brep.add_curve_3d(&seam);
+        let ei_seam = self.brep.add_edge(c_seam as i32, v_lo, v_hi);
+        let ei_lo = self.brep.add_edge(-1, v_lo, v_lo);
+        let ei_hi = self.brep.add_edge(-1, v_hi, v_hi);
+
+        vec![
+            PendingEdge {
+                edge: ei_lo,
+                reversed: false,
+                c2d: uv_line(u0, v0, u1, v0),
+            },
+            PendingEdge {
+                edge: ei_seam,
+                reversed: false,
+                c2d: uv_line(u1, v0, u1, v1),
+            },
+            PendingEdge {
+                edge: ei_hi,
+                reversed: false,
+                c2d: uv_line(u1, v1, u0, v1),
+            },
+            PendingEdge {
+                edge: ei_seam,
+                reversed: true,
+                c2d: uv_line(u0, v1, u0, v0),
+            },
+        ]
+    }
+
+    /// Wire of a torus-like surface: the u seam and the v seam each used both ways; empty when a seam is invalid.
+    fn seam_wire(
+        &mut self,
+        srf: &NurbsSurface,
+        grid: &[Point],
+        vl_vertex_ids: &[i32],
+        tol: f64,
+    ) -> Vec<PendingEdge> {
+        let (u0, u1) = srf.domain(0).unwrap_or_default();
+        let (v0, v1) = srf.domain(1).unwrap_or_default();
+        let vtx = self.topo_vertex_at(vl_vertex_ids, &grid[0], tol) as i32;
+        let c_u = srf.iso_curve(1, u0).unwrap_or_default();
+        let c_v = srf.iso_curve(0, v0).unwrap_or_default();
+
+        if !c_u.is_valid() || !c_v.is_valid() {
+            return Vec::new();
+        }
+
+        let cu = self.brep.add_curve_3d(&c_u);
+        let cv = self.brep.add_curve_3d(&c_v);
+        let ei_u = self.brep.add_edge(cu as i32, vtx, vtx);
+        let ei_v = self.brep.add_edge(cv as i32, vtx, vtx);
+
+        vec![
+            PendingEdge {
+                edge: ei_v,
+                reversed: false,
+                c2d: uv_line(u0, v0, u1, v0),
+            },
+            PendingEdge {
+                edge: ei_u,
+                reversed: false,
+                c2d: uv_line(u1, v0, u1, v1),
+            },
+            PendingEdge {
+                edge: ei_v,
+                reversed: true,
+                c2d: uv_line(u1, v1, u0, v1),
+            },
+            PendingEdge {
+                edge: ei_u,
+                reversed: true,
+                c2d: uv_line(u0, v1, u0, v0),
+            },
+        ]
+    }
+
     /// Face bounded only by VERTEX_LOOPs: the whole surface, with seam and pole edges read off the surface (sphere-like or torus-like).
     fn add_face_vertex_loop(
         &mut self,
@@ -2838,24 +2981,12 @@ impl<'a, 'b> BRepBuilder<'a, 'b> {
         surface_ref: i32,
         same_sense: bool,
     ) -> bool {
-        let an = self.r.get_analytic_srf(surface_ref);
-
-        let srf = if an.kind == 4 {
-            build_analytic_nurbs(&an, 0, 4, 0.0, 0.0, -1, 2)
-        } else if an.kind == 5 {
-            build_analytic_nurbs(&an, 0, 4, 0.0, 0.0, 0, 4)
-        } else if an.kind == 0 {
-            self.r.get_nurbs_surface(surface_ref)
-        } else {
-            NurbsSurface::default()
-        };
+        let srf = self.vertex_loop_surface(surface_ref);
 
         if !srf.is_valid() {
             return false;
         }
 
-        let (u0, u1) = srf.domain(0).unwrap_or_default();
-        let (v0, v1) = srf.domain(1).unwrap_or_default();
         let grid = surface_grid(&srf, NS);
         let tol = grid_scale(&grid) * 1e-7;
 
@@ -2873,74 +3004,14 @@ impl<'a, 'b> BRepBuilder<'a, 'b> {
         }
 
         let si = self.brep.add_surface(&srf);
-        let mut wire = Vec::new();
-
-        if degen_v0 && degen_v1 {
-            let v_lo = self.topo_vertex_at(vl_vertex_ids, &grid[0], tol) as i32;
-            let v_hi = self.topo_vertex_at(vl_vertex_ids, &grid[NS - 1], tol) as i32;
-            let seam = srf.iso_curve(1, u0).unwrap_or_default();
-
-            if !seam.is_valid() {
-                return false;
-            }
-
-            let c_seam = self.brep.add_curve_3d(&seam);
-            let ei_seam = self.brep.add_edge(c_seam as i32, v_lo, v_hi);
-            let ei_lo = self.brep.add_edge(-1, v_lo, v_lo);
-            let ei_hi = self.brep.add_edge(-1, v_hi, v_hi);
-            wire.push(PendingEdge {
-                edge: ei_lo,
-                reversed: false,
-                c2d: uv_line(u0, v0, u1, v0),
-            });
-            wire.push(PendingEdge {
-                edge: ei_seam,
-                reversed: false,
-                c2d: uv_line(u1, v0, u1, v1),
-            });
-            wire.push(PendingEdge {
-                edge: ei_hi,
-                reversed: false,
-                c2d: uv_line(u1, v1, u0, v1),
-            });
-            wire.push(PendingEdge {
-                edge: ei_seam,
-                reversed: true,
-                c2d: uv_line(u0, v1, u0, v0),
-            });
+        let wire = if degen_v0 && degen_v1 {
+            self.pole_wire(&srf, &grid, vl_vertex_ids, tol)
         } else {
-            let vtx = self.topo_vertex_at(vl_vertex_ids, &grid[0], tol) as i32;
-            let c_u = srf.iso_curve(1, u0).unwrap_or_default();
-            let c_v = srf.iso_curve(0, v0).unwrap_or_default();
+            self.seam_wire(&srf, &grid, vl_vertex_ids, tol)
+        };
 
-            if !c_u.is_valid() || !c_v.is_valid() {
-                return false;
-            }
-
-            let cu = self.brep.add_curve_3d(&c_u);
-            let cv = self.brep.add_curve_3d(&c_v);
-            let ei_u = self.brep.add_edge(cu as i32, vtx, vtx);
-            let ei_v = self.brep.add_edge(cv as i32, vtx, vtx);
-            wire.push(PendingEdge {
-                edge: ei_v,
-                reversed: false,
-                c2d: uv_line(u0, v0, u1, v0),
-            });
-            wire.push(PendingEdge {
-                edge: ei_u,
-                reversed: false,
-                c2d: uv_line(u1, v0, u1, v1),
-            });
-            wire.push(PendingEdge {
-                edge: ei_v,
-                reversed: true,
-                c2d: uv_line(u1, v1, u0, v1),
-            });
-            wire.push(PendingEdge {
-                edge: ei_u,
-                reversed: true,
-                c2d: uv_line(u0, v1, u0, v0),
-            });
+        if wire.is_empty() {
+            return false;
         }
 
         self.finish_face(si, !same_sense, &[wire]);
@@ -3435,7 +3506,9 @@ impl StepWriter {
             return -1;
         }
 
-        self.write_nurbs_curve(loop_2d);
+        if self.write_nurbs_curve(loop_2d) < 0 {
+            return -1;
+        }
 
         let ec = self.write_raw(&format!("EDGE_CURVE('',#{},#{},#{},.T.)", v0, v0, crv3d));
         let oe = self.write_raw(&format!("ORIENTED_EDGE('',*,*,#{},.T.)", ec));
@@ -3850,9 +3923,9 @@ fn vertex_diagonal(brep: &BRep) -> f64 {
     lo.distance(&hi, None)
 }
 
-/// Write the STEP text to a file.
-fn write_step_string(content: &str, filepath: &str) {
-    let _ = std::fs::write(filepath, content);
+/// Write the STEP text to a file; false when it cannot be written.
+fn write_step_string(content: &str, filepath: &str) -> bool {
+    std::fs::write(filepath, content).is_ok()
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -3922,8 +3995,12 @@ fn trimmed_outer_loop(r: &mut StepReader, bound_refs: &[i32]) -> NurbsCurve {
                 continue;
             }
 
-            let vs = r.get_point(ecr[0]);
-            let ve = r.get_point(ecr[1]);
+            let vs = r
+                .get_vertex_point(ecr[0])
+                .unwrap_or(Point::new(0.0, 0.0, 0.0));
+            let ve = r
+                .get_vertex_point(ecr[1])
+                .unwrap_or(Point::new(0.0, 0.0, 0.0));
 
             for s in r.sample_curve(ecr[2], &vs, &ve, 8) {
                 uv_pts.push(Point::new(s[0], s[1], 0.0));
@@ -4029,30 +4106,33 @@ pub fn read_file_step_breps(filepath: &str) -> Vec<BRep> {
     out
 }
 
-/// One file holding the curves as bare B_SPLINE_CURVE_WITH_KNOTS entities.
-pub fn write_file_step_nurbscurves(curves: &[NurbsCurve], filepath: &str) {
+/// One file holding the curves as bare B_SPLINE_CURVE_WITH_KNOTS entities; false when the file cannot be written.
+pub fn write_file_step_nurbscurves(curves: &[NurbsCurve], filepath: &str) -> bool {
     let mut w = StepWriter::new();
 
     for nc in curves {
         w.write_nurbs_curve(nc);
     }
 
-    write_step_string(&w.emit(), filepath);
+    write_step_string(&w.emit(), filepath)
 }
 
-/// One file holding the surfaces as bare B_SPLINE_SURFACE_WITH_KNOTS entities.
-pub fn write_file_step_nurbssurfaces(surfaces: &[NurbsSurface], filepath: &str) {
+/// One file holding the surfaces as bare B_SPLINE_SURFACE_WITH_KNOTS entities; false when the file cannot be written.
+pub fn write_file_step_nurbssurfaces(surfaces: &[NurbsSurface], filepath: &str) -> bool {
     let mut w = StepWriter::new();
 
     for srf in surfaces {
         w.write_nurbs_surface(srf);
     }
 
-    write_step_string(&w.emit(), filepath);
+    write_step_string(&w.emit(), filepath)
 }
 
-/// One file holding the trimmed surfaces as ADVANCED_FACEs of an open shell.
-pub fn write_file_step_nurbssurfaces_trimmed(trimmed: &[NurbsSurfaceTrimmed], filepath: &str) {
+/// One file holding the trimmed surfaces as ADVANCED_FACEs of an open shell; false when the file cannot be written.
+pub fn write_file_step_nurbssurfaces_trimmed(
+    trimmed: &[NurbsSurfaceTrimmed],
+    filepath: &str,
+) -> bool {
     let mut w = StepWriter::new();
     let mut face_ids = Vec::new();
 
@@ -4072,11 +4152,11 @@ pub fn write_file_step_nurbssurfaces_trimmed(trimmed: &[NurbsSurfaceTrimmed], fi
     }
 
     w.finish_product(&bodies, false, "trimmed", 1e-6, &[]);
-    write_step_string(&w.emit(), filepath);
+    write_step_string(&w.emit(), filepath)
 }
 
-/// One AP214 file holding the brep, one body per shell.
-pub fn write_file_step_brep(brep: &BRep, filepath: &str) {
+/// One AP214 file holding the brep, one body per shell; false when the file cannot be written.
+pub fn write_file_step_brep(brep: &BRep, filepath: &str) -> bool {
     let mut w = StepWriter::new();
     let mut bodies = Vec::new();
     let mut any_closed = false;
@@ -4102,11 +4182,11 @@ pub fn write_file_step_brep(brep: &BRep, filepath: &str) {
         vertex_diagonal(brep) * 1e-4,
         &[],
     );
-    write_step_string(&w.emit(), filepath);
+    write_step_string(&w.emit(), filepath)
 }
 
-/// One AP214 file holding several breps side by side, each face colored from its brep's surfacecolor.
-pub fn write_file_step_breps(breps: &[&BRep], name: &str, filepath: &str) {
+/// One AP214 file holding several breps side by side, each face colored from its brep's surfacecolor; false when the file cannot be written.
+pub fn write_file_step_breps(breps: &[&BRep], name: &str, filepath: &str) -> bool {
     let mut w = StepWriter::new();
     let mut bodies = Vec::new();
     let mut styled = Vec::new();
@@ -4139,5 +4219,5 @@ pub fn write_file_step_breps(breps: &[&BRep], name: &str, filepath: &str) {
     }
 
     w.finish_product(&bodies, any_closed, name, diag * 1e-4, &styled);
-    write_step_string(&w.emit(), filepath);
+    write_step_string(&w.emit(), filepath)
 }
