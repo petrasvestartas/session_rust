@@ -778,10 +778,10 @@ fn loft_cap_triangles(
     for r in &rings[1..] {
         let mut hole = Vec::new();
 
-        for i in r.off..r.off + r.n {
-            let (u, v) = loft_project(frame, &pts[i]);
+        for (k, p) in pts[r.off..r.off + r.n].iter().enumerate() {
+            let (u, v) = loft_project(frame, p);
             hole.push(Point::new(u, v, 0.0));
-            flat.push(i);
+            flat.push(r.off + k);
         }
 
         holes_2d.push(hole);
@@ -808,8 +808,8 @@ fn loft_cap_holes(rings: &[LoftRing], vkeys: &[usize]) -> Vec<Vec<usize>> {
     for r in &rings[1..] {
         let mut ring = Vec::new();
 
-        for i in r.off..r.off + r.n {
-            ring.push(vkeys[i]);
+        for vk in &vkeys[r.off..r.off + r.n] {
+            ring.push(*vk);
         }
 
         hole_rings.push(ring);
@@ -1363,6 +1363,36 @@ fn lp_add_top_triangles(
     }
 }
 
+/// Quad wall between bottom edge j and its matched top edge ti, recorded with the original keys it spans.
+fn lp_add_quad_wall(
+    panel: &mut LoftPanel,
+    top_vkeys: &[usize],
+    bot_vkeys: &[usize],
+    j: usize,
+    ti: usize,
+    edge_gap: f64,
+) {
+    let n = top_vkeys.len();
+    let m = bot_vkeys.len();
+    let b0 = panel.orig_bot_to_local[&bot_vkeys[j]];
+    let b1 = panel.orig_bot_to_local[&bot_vkeys[(j + 1) % m]];
+    let t0 = panel.orig_top_to_local[&top_vkeys[ti]];
+    let t1 = panel.orig_top_to_local[&top_vkeys[(ti + 1) % n]];
+    let Some(fk) = lp_add_quad(panel, b0, b1, t0, t1, edge_gap) else {
+        return;
+    };
+
+    panel.wall_faces.push(LoftWallFace {
+        face_key: fk,
+        is_quad: true,
+        top_v0: top_vkeys[ti],
+        top_v1: top_vkeys[(ti + 1) % n],
+        bot_v0: bot_vkeys[(j + 1) % m],
+        bot_v1: bot_vkeys[j],
+        ..Default::default()
+    });
+}
+
 /// Walls of one panel: a quad per mutually nearest edge pair, a triangle for every unmatched edge.
 #[allow(clippy::too_many_arguments)]
 fn lp_add_walls(
@@ -1407,21 +1437,7 @@ fn lp_add_walls(
         let ti = bot_to_top[j];
 
         if bot_dist[j] <= threshold && top_to_bot[ti] == j {
-            let t0 = panel.orig_top_to_local[&top_vkeys[ti]];
-            let t1 = panel.orig_top_to_local[&top_vkeys[(ti + 1) % n]];
-
-            if let Some(fk) = lp_add_quad(panel, b0, b1, t0, t1, edge_gap) {
-                panel.wall_faces.push(LoftWallFace {
-                    face_key: fk,
-                    is_quad: true,
-                    top_v0: top_vkeys[ti],
-                    top_v1: top_vkeys[(ti + 1) % n],
-                    bot_v0: bot_vkeys[(j + 1) % m],
-                    bot_v1: bot_vkeys[j],
-                    ..Default::default()
-                });
-            }
-
+            lp_add_quad_wall(panel, top_vkeys, bot_vkeys, j, ti, edge_gap);
             top_used[ti] = true;
         } else if !skip_triangles {
             let tv = panel.orig_top_to_local[&top_vkeys[lp_nearest(&bot_mids[j], top_pts)]];
@@ -1437,6 +1453,35 @@ fn lp_add_walls(
 
     if !skip_triangles {
         lp_add_top_triangles(panel, &top_mids, top_vkeys, bot_pts, bot_vkeys, &top_used);
+    }
+}
+
+/// Face index of every wall and the role of every wall and cap face.
+fn lp_assign_roles(panel: &mut LoftPanel) {
+    let mut fkey_to_idx: HashMap<usize, usize> = HashMap::new();
+
+    for (fi, fk) in panel.mesh.faces().into_iter().enumerate() {
+        fkey_to_idx.insert(fk, fi);
+    }
+
+    for w in panel.wall_faces.iter_mut() {
+        w.face_index = fkey_to_idx[&w.face_key];
+        panel.face_roles.insert(
+            w.face_key,
+            if w.is_quad {
+                LoftFaceRole::QuadWall
+            } else {
+                LoftFaceRole::TriWall
+            },
+        );
+    }
+
+    if let Some(fk) = panel.top_face_key {
+        panel.face_roles.insert(fk, LoftFaceRole::TopCap);
+    }
+
+    if let Some(fk) = panel.bot_face_key {
+        panel.face_roles.insert(fk, LoftFaceRole::BotCap);
     }
 }
 
@@ -1504,31 +1549,7 @@ fn lp_build_panel(
         panel.bot_face_key = lp_add_cap(&mut panel.mesh, &cap, &bot_pts);
     }
 
-    let mut fkey_to_idx: HashMap<usize, usize> = HashMap::new();
-
-    for (fi, fk) in panel.mesh.faces().into_iter().enumerate() {
-        fkey_to_idx.insert(fk, fi);
-    }
-
-    for w in panel.wall_faces.iter_mut() {
-        w.face_index = fkey_to_idx[&w.face_key];
-        panel.face_roles.insert(
-            w.face_key,
-            if w.is_quad {
-                LoftFaceRole::QuadWall
-            } else {
-                LoftFaceRole::TriWall
-            },
-        );
-    }
-
-    if let Some(fk) = panel.top_face_key {
-        panel.face_roles.insert(fk, LoftFaceRole::TopCap);
-    }
-
-    if let Some(fk) = panel.bot_face_key {
-        panel.face_roles.insert(fk, LoftFaceRole::BotCap);
-    }
+    lp_assign_roles(&mut panel);
 
     panel
 }
@@ -2077,6 +2098,173 @@ fn cut_caps(
     }
 
     cut_regions(&cut_loops(section, &uv), &uv)
+}
+
+/// Face ring followed by its hole rings, every hole turned against the face normal.
+fn cut_rings(
+    fk: usize,
+    ring: &[usize],
+    face_holes: &HashMap<usize, Vec<Vec<usize>>>,
+    normal: &Vector,
+    points: &BTreeMap<usize, Point>,
+) -> Vec<Vec<usize>> {
+    let mut rings = vec![ring.to_vec()];
+
+    if let Some(holes) = face_holes.get(&fk) {
+        for hole in holes {
+            rings.push(hole.clone());
+
+            if newell_normal(&cut_points(hole, points)).dot(normal) > 0.0 {
+                rings.last_mut().unwrap().reverse();
+            }
+        }
+    }
+
+    rings
+}
+
+/// Rings with the crossing vertex inserted after every edge that crosses the plane.
+fn cut_split_rings(
+    rings: &[Vec<usize>],
+    crossings: &mut BTreeMap<(usize, usize), usize>,
+    distance: &mut BTreeMap<usize, f64>,
+    points: &mut BTreeMap<usize, Point>,
+    first: usize,
+) -> Vec<Vec<usize>> {
+    let mut split: Vec<Vec<usize>> = Vec::new();
+
+    for r in rings {
+        let mut walk = Vec::with_capacity(r.len());
+
+        for i in 0..r.len() {
+            let edge = (r[i], r[(i + 1) % r.len()]);
+            walk.push(edge.0);
+
+            if distance[&edge.0] * distance[&edge.1] < 0.0 {
+                walk.push(cut_crossing(edge, crossings, distance, points, first));
+            }
+        }
+
+        split.push(walk);
+    }
+
+    split
+}
+
+/// Kept pieces of face fk: none below the plane, the whole face above it, the split pieces when it crosses.
+#[allow(clippy::too_many_arguments)]
+fn cut_face(
+    fk: usize,
+    rings: Vec<Vec<usize>>,
+    normal: &Vector,
+    plane: &Plane,
+    crossings: &mut BTreeMap<(usize, usize), usize>,
+    distance: &mut BTreeMap<usize, f64>,
+    points: &mut BTreeMap<usize, Point>,
+    first: usize,
+    tolerance: f64,
+) -> Vec<CutFace> {
+    let mut above = false;
+    let mut below = false;
+
+    for r in &rings {
+        for key in r {
+            above = above || distance[key] > 0.0;
+            below = below || distance[key] < 0.0;
+        }
+    }
+
+    if !above {
+        return Vec::new();
+    }
+
+    if !below {
+        return vec![CutFace {
+            rings,
+            parent: Some(fk),
+        }];
+    }
+
+    let mut xaxis = plane.z_axis() - normal * plane.z_axis().dot(normal);
+
+    if !xaxis.normalize_self() {
+        return Vec::new();
+    }
+
+    let split = cut_split_rings(&rings, crossings, distance, points, first);
+    let mut pieces = cut_pieces(&split, normal, &xaxis, distance, points, tolerance);
+
+    for piece in pieces.iter_mut() {
+        piece.parent = Some(fk);
+    }
+
+    pieces
+}
+
+/// Mesh of the kept pieces with the parent face data and the triangulation of every untouched face.
+fn cut_result(
+    output: &BTreeMap<usize, CutFace>,
+    points: &BTreeMap<usize, Point>,
+    face: &HashMap<usize, Vec<usize>>,
+    facedata: &HashMap<usize, HashMap<String, f64>>,
+    triangulation: &HashMap<usize, Vec<[usize; 3]>>,
+) -> Mesh {
+    let mut result = Mesh::new();
+    let mut used: BTreeSet<usize> = BTreeSet::new();
+
+    for piece in output.values() {
+        for r in &piece.rings {
+            used.extend(r.iter().copied());
+        }
+    }
+
+    for vk in used {
+        result.add_vertex(points[&vk].clone(), Some(vk));
+    }
+
+    for (fk, piece) in output {
+        if result.add_face(piece.rings[0].clone(), Some(*fk)).is_none() {
+            continue;
+        }
+
+        let whole = piece
+            .parent
+            .is_some_and(|parent| piece.rings[0] == face[&parent]);
+
+        if piece.rings.len() > 1 {
+            result.set_face_holes(*fk, piece.rings[1..].to_vec());
+        }
+
+        if let Some(data) = piece.parent.and_then(|parent| facedata.get(&parent)) {
+            result.facedata.insert(*fk, data.clone());
+        }
+
+        if whole && triangulation.contains_key(fk) {
+            result.set_face_triangulation(*fk, triangulation[fk].clone());
+        }
+
+        if !whole && (piece.rings.len() > 1 || piece.rings[0].len() > 3) {
+            result.set_face_triangulation(*fk, cut_triangulation(piece, points));
+        }
+    }
+
+    result
+}
+
+/// Snap distance of the plane test, 1e-9 of the bounding box diagonal.
+fn cut_tolerance(points: &BTreeMap<usize, Point>) -> f64 {
+    let big = f64::MAX;
+    let mut low = Point::new(big, big, big);
+    let mut high = Point::new(-big, -big, -big);
+
+    for point in points.values() {
+        for k in 0..3 {
+            low[k] = low[k].min(point[k]);
+            high[k] = high[k].max(point[k]);
+        }
+    }
+
+    1e-9 * low.distance(&high, None)
 }
 
 impl Mesh {
@@ -3625,6 +3813,32 @@ impl Mesh {
         x
     }
 
+    /// Join in the union-find forest every pair of positions closer than tolerance.
+    fn weld_union(parent: &mut [usize], positions: &[Point], tolerance: f64) {
+        let mut boxes: Vec<OBB> = Vec::with_capacity(positions.len());
+
+        for p in positions {
+            boxes.push(OBB::from_point(p, tolerance));
+        }
+
+        let ws = SpatialBVH::compute_world_size(&boxes);
+        let bvh = SpatialBVH::from_boxes(&boxes, ws);
+        let (pairs, _, _) = bvh.check_all_collisions(&boxes);
+
+        for (i, j) in pairs {
+            if positions[i].distance(&positions[j], None) > tolerance {
+                continue;
+            }
+
+            let ri = Mesh::weld_find(parent, i);
+            let rj = Mesh::weld_find(parent, j);
+
+            if ri != rj {
+                parent[ri] = rj;
+            }
+        }
+    }
+
     /// Copy with vertices closer than tolerance merged; degenerate faces are dropped.
     pub fn weld(&self, tolerance: f64) -> Mesh {
         if self.vertex.is_empty() {
@@ -3642,28 +3856,7 @@ impl Mesh {
         let mut parent: Vec<usize> = (0..n).collect();
 
         if tolerance > 0.0 {
-            let mut boxes: Vec<OBB> = Vec::with_capacity(n);
-
-            for p in &positions {
-                boxes.push(OBB::from_point(p, tolerance));
-            }
-
-            let ws = SpatialBVH::compute_world_size(&boxes);
-            let bvh = SpatialBVH::from_boxes(&boxes, ws);
-            let (pairs, _, _) = bvh.check_all_collisions(&boxes);
-
-            for (i, j) in pairs {
-                if positions[i].distance(&positions[j], None) > tolerance {
-                    continue;
-                }
-
-                let ri = Mesh::weld_find(&mut parent, i);
-                let rj = Mesh::weld_find(&mut parent, j);
-
-                if ri != rj {
-                    parent[ri] = rj;
-                }
-            }
+            Mesh::weld_union(&mut parent, &positions, tolerance);
         }
 
         let mut root_to_rep: HashMap<usize, usize> = HashMap::new();
@@ -3708,12 +3901,8 @@ impl Mesh {
         m
     }
 
-    /// Unify face winding by BFS; returns true when any face was flipped.
-    pub fn unify_winding(&mut self) -> bool {
-        if self.face.len() < 2 {
-            return false;
-        }
-
+    /// Faces on every undirected edge as (face key, u, v) in ring direction.
+    fn winding_edge_faces(&self) -> EdgeFaces {
         let mut edge_faces: EdgeFaces = HashMap::new();
 
         for fkey in self.faces() {
@@ -3730,6 +3919,11 @@ impl Mesh {
             }
         }
 
+        edge_faces
+    }
+
+    /// Faces to reverse so every face agrees with the neighbor it was first reached from.
+    fn winding_flipped(&self, edge_faces: &EdgeFaces) -> HashSet<usize> {
         let mut visited: HashSet<usize> = HashSet::new();
         let mut flipped: HashSet<usize> = HashSet::new();
 
@@ -3743,7 +3937,7 @@ impl Mesh {
 
             while let Some(f) = queue.pop() {
                 let is_flipped = flipped.contains(&f);
-                let verts = self.face[&f].clone();
+                let verts = &self.face[&f];
                 let n = verts.len();
 
                 for i in 0..n {
@@ -3754,12 +3948,10 @@ impl Mesh {
                     } else {
                         (u_orig, v_orig)
                     };
-                    let Some(adj_list) = edge_faces.get(&(u_orig.min(v_orig), u_orig.max(v_orig)))
-                    else {
-                        continue;
-                    };
 
-                    for &(adj_key, adj_u, adj_v) in adj_list {
+                    for &(adj_key, adj_u, adj_v) in
+                        &edge_faces[&(u_orig.min(v_orig), u_orig.max(v_orig))]
+                    {
                         if adj_key == f || visited.contains(&adj_key) {
                             continue;
                         }
@@ -3774,6 +3966,17 @@ impl Mesh {
                 }
             }
         }
+
+        flipped
+    }
+
+    /// Unify face winding by BFS; returns true when any face was flipped.
+    pub fn unify_winding(&mut self) -> bool {
+        if self.face.len() < 2 {
+            return false;
+        }
+
+        let flipped = self.winding_flipped(&self.winding_edge_faces());
 
         if flipped.is_empty() {
             return false;
@@ -4310,10 +4513,15 @@ impl Mesh {
             s = 1;
         }
 
+        let period: u64 = 1 << 31;
         let mut used = HashSet::new();
         let mut out = Vec::with_capacity(take);
 
-        while out.len() < take {
+        for _step in 0..period {
+            if out.len() >= take {
+                break;
+            }
+
             s = s.wrapping_mul(1103515245).wrapping_add(12345) & 0x7FFF_FFFF;
             let i = s as usize % n;
 
@@ -4786,6 +4994,54 @@ impl Mesh {
         Some(&d / len)
     }
 
+    /// Arc of arc_n + 1 points around mid from the arm toward c0 to the arm toward c1, empty when degenerate.
+    fn dihedral_arc(
+        ep0: &Point,
+        ep1: &Point,
+        mid: &Point,
+        c0: &Point,
+        c1: &Point,
+        scale: f64,
+        arc_n: usize,
+    ) -> Vec<Point> {
+        let mut edge = ep1 - ep0;
+
+        if edge.magnitude() < 1e-10 || !edge.normalize_self() {
+            return Vec::new();
+        }
+
+        let d0 = Mesh::dihedral_arm(c0, mid, &edge);
+        let d1 = Mesh::dihedral_arm(c1, mid, &edge);
+        let (Some(d0), Some(d1)) = (d0, d1) else {
+            return Vec::new();
+        };
+        let theta = d0.dot(&d1).clamp(-1.0, 1.0).acos();
+
+        if theta.sin().abs() < 1e-10 {
+            return Vec::new();
+        }
+
+        let mut arc_pts: Vec<Point> = Vec::with_capacity(arc_n + 1);
+
+        for j in 0..=arc_n {
+            let t = j as f64 / arc_n as f64;
+            let w1 = ((1.0 - t) * theta).sin() / theta.sin();
+            let w2 = (t * theta).sin() / theta.sin();
+            arc_pts.push(mid + (&d0 * w1 + &d1 * w2) * scale);
+        }
+
+        arc_pts
+    }
+
+    /// Label point at p named by the angle.
+    fn dihedral_label(p: &Point, angle: f64, color: &Color) -> Point {
+        let mut pt = Point::new(p[0], p[1], p[2]);
+        pt.name = angle.to_string();
+        pt.pointcolor = color.clone();
+
+        pt
+    }
+
     /// Return the dihedral angles of all interior edges as (angles, arcs, points); arcs and label points are built when asked.
     pub fn dihedral_angles(
         &self,
@@ -4813,42 +5069,26 @@ impl Mesh {
             );
 
             if scale == 0.0 {
-                if !with_points {
-                    continue;
+                if with_points {
+                    points.push(Mesh::dihedral_label(&mid, da, &label_color));
                 }
 
-                let mut pt = Point::new(mid[0], mid[1], mid[2]);
-                pt.name = da.to_string();
-                pt.pointcolor = label_color.clone();
-                points.push(pt);
                 continue;
             }
 
             let ef = self.edge_faces(u, v).unwrap();
-            let mut edge = &ep1 - &ep0;
+            let arc_pts = Mesh::dihedral_arc(
+                &ep0,
+                &ep1,
+                &mid,
+                &self.face_centroid(ef[0]).unwrap(),
+                &self.face_centroid(ef[1]).unwrap(),
+                scale,
+                arc_n,
+            );
 
-            if edge.magnitude() < 1e-10 || !edge.normalize_self() {
+            if arc_pts.is_empty() {
                 continue;
-            }
-
-            let d0 = Mesh::dihedral_arm(&self.face_centroid(ef[0]).unwrap(), &mid, &edge);
-            let d1 = Mesh::dihedral_arm(&self.face_centroid(ef[1]).unwrap(), &mid, &edge);
-            let (Some(d0), Some(d1)) = (d0, d1) else {
-                continue;
-            };
-            let theta = d0.dot(&d1).clamp(-1.0, 1.0).acos();
-
-            if theta.sin().abs() < 1e-10 {
-                continue;
-            }
-
-            let mut arc_pts: Vec<Point> = Vec::with_capacity(arc_n + 1);
-
-            for j in 0..=arc_n {
-                let t = j as f64 / arc_n as f64;
-                let w1 = ((1.0 - t) * theta).sin() / theta.sin();
-                let w2 = (t * theta).sin() / theta.sin();
-                arc_pts.push(&mid + (&d0 * w1 + &d1 * w2) * scale);
             }
 
             if with_arcs {
@@ -4859,14 +5099,7 @@ impl Mesh {
             }
 
             if with_points {
-                let mut pt = Point::new(
-                    arc_pts[arc_n / 2][0],
-                    arc_pts[arc_n / 2][1],
-                    arc_pts[arc_n / 2][2],
-                );
-                pt.name = da.to_string();
-                pt.pointcolor = label_color.clone();
-                points.push(pt);
+                points.push(Mesh::dihedral_label(&arc_pts[arc_n / 2], da, &label_color));
             }
         }
 
@@ -5304,23 +5537,13 @@ impl Mesh {
     // ═══════════════════════════════════════════════════════════════════════════
     /// Return the part on the side the plane normal points to, every section loop capped by one n-gon face, so a closed mesh stays closed; empty when nothing lies on that side, a copy when everything does.
     pub fn cut_by_plane(&self, plane: &Plane) -> Mesh {
-        let big = f64::MAX;
-        let mut low = Point::new(big, big, big);
-        let mut high = Point::new(-big, -big, -big);
         let mut points: BTreeMap<usize, Point> = BTreeMap::new();
 
         for (vk, vd) in &self.vertex {
-            let point = vd.position();
-
-            for k in 0..3 {
-                low[k] = low[k].min(point[k]);
-                high[k] = high[k].max(point[k]);
-            }
-
-            points.insert(*vk, point);
+            points.insert(*vk, vd.position());
         }
 
-        let tolerance = 1e-9 * low.distance(&high, None);
+        let tolerance = cut_tolerance(&points);
         let mut distance: BTreeMap<usize, f64> = BTreeMap::new();
         let mut lowest = 0.0f64;
         let mut highest = 0.0f64;
@@ -5353,77 +5576,20 @@ impl Mesh {
         for fk in keys {
             let ring = &self.face[&fk];
             let normal = newell_normal(&cut_points(ring, &points));
-            let mut rings = vec![ring.clone()];
+            let rings = cut_rings(fk, ring, &self.face_holes, &normal, &points);
+            let pieces = cut_face(
+                fk,
+                rings,
+                &normal,
+                plane,
+                &mut crossings,
+                &mut distance,
+                &mut points,
+                self.max_vertex,
+                tolerance,
+            );
 
-            if let Some(holes) = self.face_holes.get(&fk) {
-                for hole in holes {
-                    rings.push(hole.clone());
-
-                    if newell_normal(&cut_points(hole, &points)).dot(&normal) > 0.0 {
-                        rings.last_mut().unwrap().reverse();
-                    }
-                }
-            }
-
-            let mut above = false;
-            let mut below = false;
-
-            for r in &rings {
-                for key in r {
-                    above = above || distance[key] > 0.0;
-                    below = below || distance[key] < 0.0;
-                }
-            }
-
-            if !above {
-                continue;
-            }
-
-            if !below {
-                output.insert(
-                    fk,
-                    CutFace {
-                        rings,
-                        parent: Some(fk),
-                    },
-                );
-                continue;
-            }
-
-            let mut xaxis = plane.z_axis() - &normal * plane.z_axis().dot(&normal);
-
-            if !xaxis.normalize_self() {
-                continue;
-            }
-
-            let mut split: Vec<Vec<usize>> = Vec::new();
-
-            for r in &rings {
-                let mut walk = Vec::with_capacity(r.len());
-
-                for i in 0..r.len() {
-                    let edge = (r[i], r[(i + 1) % r.len()]);
-                    walk.push(edge.0);
-
-                    if distance[&edge.0] * distance[&edge.1] < 0.0 {
-                        walk.push(cut_crossing(
-                            edge,
-                            &mut crossings,
-                            &mut distance,
-                            &mut points,
-                            self.max_vertex,
-                        ));
-                    }
-                }
-
-                split.push(walk);
-            }
-
-            let pieces = cut_pieces(&split, &normal, &xaxis, &distance, &points, tolerance);
-
-            for (i, mut piece) in pieces.into_iter().enumerate() {
-                piece.parent = Some(fk);
-
+            for (i, piece) in pieces.into_iter().enumerate() {
                 if i == 0 {
                     output.insert(fk, piece);
                 } else {
@@ -5438,46 +5604,15 @@ impl Mesh {
             count += 1;
         }
 
-        let mut result = Mesh::new();
+        let mut result = cut_result(
+            &output,
+            &points,
+            &self.face,
+            &self.facedata,
+            &self.triangulation,
+        );
         result.name = self.name.clone();
         result.objectcolor = self.objectcolor.clone();
-        let mut used: BTreeSet<usize> = BTreeSet::new();
-
-        for piece in output.values() {
-            for r in &piece.rings {
-                used.extend(r.iter().copied());
-            }
-        }
-
-        for vk in used {
-            result.add_vertex(points[&vk].clone(), Some(vk));
-        }
-
-        for (fk, piece) in &output {
-            if result.add_face(piece.rings[0].clone(), Some(*fk)).is_none() {
-                continue;
-            }
-
-            let whole = piece
-                .parent
-                .is_some_and(|parent| piece.rings[0] == self.face[&parent]);
-
-            if piece.rings.len() > 1 {
-                result.set_face_holes(*fk, piece.rings[1..].to_vec());
-            }
-
-            if let Some(data) = piece.parent.and_then(|parent| self.facedata.get(&parent)) {
-                result.facedata.insert(*fk, data.clone());
-            }
-
-            if whole && self.triangulation.contains_key(fk) {
-                result.set_face_triangulation(*fk, self.triangulation[fk].clone());
-            }
-
-            if !whole && (piece.rings.len() > 1 || piece.rings[0].len() > 3) {
-                result.set_face_triangulation(*fk, cut_triangulation(piece, &points));
-            }
-        }
 
         result
     }
@@ -5519,6 +5654,56 @@ impl Mesh {
         colors
     }
 
+    /// Halfedge connectivity keyed by vertex, null where no face lies on the left.
+    fn halfedge_to_json(
+        halfedge: &HashMap<usize, HashMap<usize, Option<usize>>>,
+    ) -> serde_json::Value {
+        let mut halfedge_json = serde_json::Map::new();
+
+        for (u, neighbors) in halfedge {
+            let mut neighbor_json = serde_json::Map::new();
+
+            for (v, face_opt) in neighbors {
+                neighbor_json.insert(v.to_string(), serde_json::json!(face_opt));
+            }
+
+            halfedge_json.insert(u.to_string(), serde_json::Value::Object(neighbor_json));
+        }
+
+        serde_json::Value::Object(halfedge_json)
+    }
+
+    /// Triangles keyed by face as [a, b, c] arrays.
+    fn triangulation_to_json(triangulation: &HashMap<usize, Vec<[usize; 3]>>) -> serde_json::Value {
+        let mut triangulation_json = serde_json::Map::new();
+
+        for (fk, tris) in triangulation {
+            let mut tri_arr = Vec::with_capacity(tris.len());
+
+            for t in tris {
+                tri_arr.push(serde_json::json!([t[0], t[1], t[2]]));
+            }
+
+            triangulation_json.insert(fk.to_string(), serde_json::Value::Array(tri_arr));
+        }
+
+        serde_json::Value::Object(triangulation_json)
+    }
+
+    /// Vertex positions and attributes keyed by vertex.
+    fn vertex_to_json(vertex: &HashMap<usize, VertexData>) -> serde_json::Value {
+        let mut vertex_json = serde_json::Map::new();
+
+        for (key, vdata) in vertex {
+            vertex_json.insert(
+                key.to_string(),
+                serde_json::json!({"attributes": vdata.attributes, "x": vdata.x, "y": vdata.y, "z": vdata.z}),
+            );
+        }
+
+        serde_json::Value::Object(vertex_json)
+    }
+
     /// Serialize to a JSON object.
     pub fn jsondump(&self) -> serde_json::Value {
         let mut edgedata_json = serde_json::Map::new();
@@ -5550,35 +5735,6 @@ impl Mesh {
         } else {
             self.halfedge.clone()
         };
-        let mut halfedge_json = serde_json::Map::new();
-
-        for (u, neighbors) in &he {
-            let mut neighbor_json = serde_json::Map::new();
-
-            for (v, face_opt) in neighbors {
-                neighbor_json.insert(v.to_string(), serde_json::json!(face_opt));
-            }
-
-            halfedge_json.insert(u.to_string(), serde_json::Value::Object(neighbor_json));
-        }
-
-        let mut triangulation_json = serde_json::Map::new();
-
-        for (fk, tris) in &self.triangulation {
-            let mut tri_arr = Vec::with_capacity(tris.len());
-
-            for t in tris {
-                tri_arr.push(serde_json::json!([t[0], t[1], t[2]]));
-            }
-
-            triangulation_json.insert(fk.to_string(), serde_json::Value::Array(tri_arr));
-        }
-
-        let mut vertex_json = serde_json::Map::new();
-
-        for (key, vdata) in &self.vertex {
-            vertex_json.insert(key.to_string(), serde_json::json!({"attributes": vdata.attributes, "x": vdata.x, "y": vdata.y, "z": vdata.z}));
-        }
 
         serde_json::json!({
             "color_mode": self.color_mode.to_str(),
@@ -5591,60 +5747,61 @@ impl Mesh {
             "facecolors": Mesh::colors_to_json(&self.facecolors),
             "facedata": serde_json::Value::Object(facedata_json),
             "guid": self.guid(),
-            "halfedge": serde_json::Value::Object(halfedge_json),
+            "halfedge": Mesh::halfedge_to_json(&he),
             "linecolors": Mesh::colors_to_json(&self.linecolors),
             "max_face": self.max_face,
             "max_vertex": self.max_vertex,
             "name": self.name,
             "objectcolor": serde_json::to_value(&self.objectcolor).unwrap_or(serde_json::Value::Null),
             "pointcolors": Mesh::colors_to_json(&self.pointcolors),
-            "triangulation": serde_json::Value::Object(triangulation_json),
+            "triangulation": Mesh::triangulation_to_json(&self.triangulation),
             "type": "Mesh",
-            "vertex": serde_json::Value::Object(vertex_json),
+            "vertex": Mesh::vertex_to_json(&self.vertex),
             "widths": self.widths
         })
     }
 
-    /// Deserialize from a JSON object.
-    pub fn jsonload(data: &serde_json::Value) -> Option<Self> {
-        let mut mesh = Mesh::new();
+    /// Halfedge connectivity from a JSON object keyed by vertex.
+    fn halfedge_from_json(
+        halfedge_json: &serde_json::Value,
+    ) -> Option<HashMap<usize, HashMap<usize, Option<usize>>>> {
+        serde_json::from_value(halfedge_json.clone()).ok()
+    }
 
-        if let Some(guid) = data.get("guid").and_then(|v| v.as_str()) {
-            mesh.set_guid(guid.to_string());
+    /// Vertex positions and attributes from a JSON object keyed by vertex.
+    fn vertex_from_json(vertex_json: &serde_json::Value) -> Option<HashMap<usize, VertexData>> {
+        serde_json::from_value(vertex_json.clone()).ok()
+    }
+
+    /// Face rings from a JSON object keyed by face.
+    fn face_from_json(face_json: &serde_json::Value) -> Option<HashMap<usize, Vec<usize>>> {
+        serde_json::from_value(face_json.clone()).ok()
+    }
+
+    /// Triangles from a JSON object of [a, b, c] arrays keyed by face.
+    fn triangulation_from_json(
+        triangulation_json: &serde_json::Value,
+    ) -> HashMap<usize, Vec<[usize; 3]>> {
+        let mut triangulation: HashMap<usize, Vec<[usize; 3]>> = HashMap::new();
+        let Some(tri_obj) = triangulation_json.as_object() else {
+            return triangulation;
+        };
+
+        for (fk_str, tris_val) in tri_obj {
+            let Ok(fk) = fk_str.parse::<usize>() else {
+                continue;
+            };
+            let Ok(tris) = serde_json::from_value::<Vec<[usize; 3]>>(tris_val.clone()) else {
+                continue;
+            };
+            triangulation.insert(fk, tris);
         }
 
-        if let Some(name) = data.get("name").and_then(|v| v.as_str()) {
-            mesh.name = name.to_string();
-        }
+        triangulation
+    }
 
-        if let Some(halfedge_data) = data.get("halfedge") {
-            mesh.halfedge = serde_json::from_value(halfedge_data.clone()).ok()?;
-        }
-
-        if let Some(vertex_data) = data.get("vertex") {
-            mesh.vertex = serde_json::from_value(vertex_data.clone()).ok()?;
-
-            for key in mesh.vertex.keys() {
-                if data.get("halfedge").is_none() {
-                    mesh.halfedge.entry(*key).or_default();
-                }
-
-                if *key >= mesh.max_vertex {
-                    mesh.max_vertex = *key + 1;
-                }
-            }
-        }
-
-        if let Some(face_data) = data.get("face") {
-            mesh.face = serde_json::from_value(face_data.clone()).ok()?;
-
-            for key in mesh.face.keys() {
-                if *key >= mesh.max_face {
-                    mesh.max_face = *key + 1;
-                }
-            }
-        }
-
+    /// Read face holes, face data, edge data and default attributes into mesh.
+    fn jsonload_attributes(data: &serde_json::Value, mesh: &mut Mesh) -> Option<()> {
         if let Some(fh) = data.get("face_holes").and_then(|v| v.as_object()) {
             for (fk_str, rings_val) in fh {
                 let Ok(fk) = fk_str.parse::<usize>() else {
@@ -5688,6 +5845,49 @@ impl Mesh {
             mesh.default_edge_attributes = serde_json::from_value(v.clone()).ok()?;
         }
 
+        Some(())
+    }
+
+    /// Deserialize from a JSON object.
+    pub fn jsonload(data: &serde_json::Value) -> Option<Self> {
+        let mut mesh = Mesh::new();
+
+        if let Some(guid) = data.get("guid").and_then(|v| v.as_str()) {
+            mesh.set_guid(guid.to_string());
+        }
+
+        if let Some(name) = data.get("name").and_then(|v| v.as_str()) {
+            mesh.name = name.to_string();
+        }
+
+        if let Some(halfedge_json) = data.get("halfedge") {
+            mesh.halfedge = Mesh::halfedge_from_json(halfedge_json)?;
+        }
+
+        if let Some(vertex_json) = data.get("vertex") {
+            mesh.vertex = Mesh::vertex_from_json(vertex_json)?;
+        }
+
+        if data.get("halfedge").is_none() {
+            for key in mesh.vertex.keys() {
+                mesh.halfedge.entry(*key).or_default();
+            }
+        }
+
+        if let Some(&max_v) = mesh.vertex.keys().max() {
+            mesh.max_vertex = max_v + 1;
+        }
+
+        if let Some(face_json) = data.get("face") {
+            mesh.face = Mesh::face_from_json(face_json)?;
+        }
+
+        if let Some(&max_f) = mesh.face.keys().max() {
+            mesh.max_face = max_f + 1;
+        }
+
+        Mesh::jsonload_attributes(data, &mut mesh)?;
+
         if let Some(max_vertex) = data.get("max_vertex").and_then(|v| v.as_u64()) {
             mesh.max_vertex = max_vertex as usize;
         }
@@ -5728,16 +5928,8 @@ impl Mesh {
             mesh.color_mode = ColorMode::from_str(cm);
         }
 
-        if let Some(tri_obj) = data.get("triangulation").and_then(|v| v.as_object()) {
-            for (fk_str, tris_val) in tri_obj {
-                let Ok(fk) = fk_str.parse::<usize>() else {
-                    continue;
-                };
-                let Ok(tris) = serde_json::from_value::<Vec<[usize; 3]>>(tris_val.clone()) else {
-                    continue;
-                };
-                mesh.triangulation.insert(fk, tris);
-            }
+        if let Some(triangulation_json) = data.get("triangulation") {
+            mesh.triangulation = Mesh::triangulation_from_json(triangulation_json);
         }
 
         Some(mesh)
@@ -5804,12 +5996,14 @@ impl Mesh {
         colors
     }
 
-    /// Convert to the protobuf message.
-    pub fn to_proto(&self) -> crate::proto::Mesh {
+    /// Vertex positions and attributes as proto messages keyed by vertex.
+    fn vertices_to_proto(
+        vertex: &HashMap<usize, VertexData>,
+    ) -> HashMap<u64, crate::proto::VertexData> {
         let mut vertices: HashMap<u64, crate::proto::VertexData> =
-            HashMap::with_capacity(self.vertex.len());
+            HashMap::with_capacity(vertex.len());
 
-        for (&vkey, vdata) in &self.vertex {
+        for (&vkey, vdata) in vertex {
             let mut attrs: BTreeMap<String, f64> = BTreeMap::new();
 
             for (k, v) in &vdata.attributes {
@@ -5827,13 +6021,21 @@ impl Mesh {
             );
         }
 
-        let mut faces: HashMap<u64, crate::proto::FaceData> =
-            HashMap::with_capacity(self.face.len());
+        vertices
+    }
 
-        for (&fkey, fverts) in &self.face {
+    /// Face rings with their attributes and hole rings as proto messages keyed by face.
+    fn faces_to_proto(
+        face: &HashMap<usize, Vec<usize>>,
+        facedata: &HashMap<usize, HashMap<String, f64>>,
+        face_holes: &HashMap<usize, Vec<Vec<usize>>>,
+    ) -> HashMap<u64, crate::proto::FaceData> {
+        let mut faces: HashMap<u64, crate::proto::FaceData> = HashMap::with_capacity(face.len());
+
+        for (&fkey, fverts) in face {
             let mut attrs: BTreeMap<String, f64> = BTreeMap::new();
 
-            if let Some(fdata) = self.facedata.get(&fkey) {
+            if let Some(fdata) = facedata.get(&fkey) {
                 for (k, v) in fdata {
                     attrs.insert(k.clone(), *v);
                 }
@@ -5841,7 +6043,7 @@ impl Mesh {
 
             let mut holes: Vec<crate::proto::HoleRing> = Vec::new();
 
-            if let Some(rings) = self.face_holes.get(&fkey) {
+            if let Some(rings) = face_holes.get(&fkey) {
                 for ring in rings {
                     holes.push(crate::proto::HoleRing {
                         vertices: ring.iter().map(|&v| v as u64).collect(),
@@ -5859,6 +6061,13 @@ impl Mesh {
             );
         }
 
+        faces
+    }
+
+    /// Convert to the protobuf message.
+    pub fn to_proto(&self) -> crate::proto::Mesh {
+        let vertices = Mesh::vertices_to_proto(&self.vertex);
+        let faces = Mesh::faces_to_proto(&self.face, &self.facedata, &self.face_holes);
         let mut triangulation: HashMap<u64, crate::proto::TriList> =
             HashMap::with_capacity(self.triangulation.len());
 
@@ -5925,20 +6134,14 @@ impl Mesh {
         }
     }
 
-    /// Construct from the protobuf message.
-    pub fn from_proto(proto: crate::proto::Mesh) -> Self {
-        let mut mesh = Self::new();
+    /// Vertex positions and attributes of the proto vertices.
+    fn vertices_from_proto(
+        vertices: HashMap<u64, crate::proto::VertexData>,
+    ) -> HashMap<usize, VertexData> {
+        let mut vertex: HashMap<usize, VertexData> = HashMap::with_capacity(vertices.len());
 
-        if !proto.guid.is_empty() {
-            mesh.set_guid(proto.guid.clone());
-        }
-
-        mesh.name = proto.name;
-        mesh.vertex.reserve(proto.vertices.len());
-        mesh.face.reserve(proto.faces.len());
-
-        for (vkey, vdata) in proto.vertices {
-            mesh.vertex.insert(
+        for (vkey, vdata) in vertices {
+            vertex.insert(
                 vkey as usize,
                 VertexData {
                     x: vdata.x,
@@ -5949,7 +6152,14 @@ impl Mesh {
             );
         }
 
-        for (fkey, fdata) in proto.faces {
+        vertex
+    }
+
+    /// Read face rings with their attributes and hole rings into mesh.
+    fn faces_from_proto(faces: HashMap<u64, crate::proto::FaceData>, mesh: &mut Mesh) {
+        mesh.face.reserve(faces.len());
+
+        for (fkey, fdata) in faces {
             mesh.face.insert(
                 fkey as usize,
                 fdata.vertices.iter().map(|&v| v as usize).collect(),
@@ -5970,8 +6180,15 @@ impl Mesh {
                 mesh.face_holes.insert(fkey as usize, rings);
             }
         }
+    }
 
-        for (fkey, tri_list) in proto.triangulation {
+    /// Triangles of the proto keyed by face.
+    fn triangulation_from_proto(
+        tri_lists: HashMap<u64, crate::proto::TriList>,
+    ) -> HashMap<usize, Vec<[usize; 3]>> {
+        let mut triangulation: HashMap<usize, Vec<[usize; 3]>> = HashMap::new();
+
+        for (fkey, tri_list) in tri_lists {
             let vlist = &tri_list.vertices;
             let mut tris: Vec<[usize; 3]> = Vec::with_capacity(vlist.len() / 3);
             let mut i = 0;
@@ -5985,8 +6202,24 @@ impl Mesh {
                 i += 3;
             }
 
-            mesh.triangulation.insert(fkey as usize, tris);
+            triangulation.insert(fkey as usize, tris);
         }
+
+        triangulation
+    }
+
+    /// Construct from the protobuf message.
+    pub fn from_proto(proto: crate::proto::Mesh) -> Self {
+        let mut mesh = Self::new();
+
+        if !proto.guid.is_empty() {
+            mesh.set_guid(proto.guid.clone());
+        }
+
+        mesh.name = proto.name;
+        mesh.vertex = Mesh::vertices_from_proto(proto.vertices);
+        Mesh::faces_from_proto(proto.faces, &mut mesh);
+        mesh.triangulation = Mesh::triangulation_from_proto(proto.triangulation);
 
         for edata in proto.edge_data {
             mesh.edgedata.insert(

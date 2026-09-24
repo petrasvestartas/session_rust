@@ -20,6 +20,7 @@ pub fn run_mesh_constructor() -> TestResult {
         MINI_CHECK!(mcopy == mesh);
 
         MINI_CHECK!(mesh.is_valid());
+
         mesh.name = "hexagon".to_string();
 
         let palette = Color::palette();
@@ -65,6 +66,7 @@ pub fn run_mesh_constructor() -> TestResult {
         mesh.color_mode = ColorMode::FACECOLORS;
 
         MINI_CHECK!(mesh.color_mode == ColorMode::FACECOLORS);
+
         mesh.clear_facecolors();
 
         MINI_CHECK!(mesh.color_mode == ColorMode::OBJECTCOLOR);
@@ -73,6 +75,7 @@ pub fn run_mesh_constructor() -> TestResult {
         mesh.color_mode = ColorMode::FACECOLORS;
 
         MINI_CHECK!(mesh.color_mode == ColorMode::FACECOLORS);
+
         mesh.clear_pointcolors();
 
         MINI_CHECK!(mesh.color_mode == ColorMode::FACECOLORS);
@@ -495,6 +498,7 @@ pub fn run_mesh_from_polygon_with_holes_many() -> TestResult {
         MINI_CHECK!(meshes[1].is_valid());
         MINI_CHECK!(meshes[2].is_valid());
         MINI_CHECK!(meshes[3].is_valid());
+
         let meshes_seq = Mesh::from_polygon_with_holes_many(inputs, false, false);
 
         MINI_CHECK!(meshes_seq[0].number_of_faces() == meshes[0].number_of_faces());
@@ -542,6 +546,7 @@ pub fn run_mesh_loft_many() -> TestResult {
         MINI_CHECK!(meshes[4].is_closed());
         MINI_CHECK!(meshes[5].is_valid());
         MINI_CHECK!(meshes[5].is_closed());
+
         let meshes_seq = Mesh::loft_many(loft_inputs, true, false, true);
 
         MINI_CHECK!(meshes_seq[0].is_valid());
@@ -865,6 +870,7 @@ pub fn run_mesh_attributes() -> TestResult {
         MINI_CHECK!(vertices[5] == 5);
         MINI_CHECK!(vertices[6] == 6);
         MINI_CHECK!(vertices[7] == 7);
+
         let faces = mesh.faces();
 
         MINI_CHECK!(faces.len() == 6);
@@ -874,6 +880,7 @@ pub fn run_mesh_attributes() -> TestResult {
         MINI_CHECK!(faces[3] == 3);
         MINI_CHECK!(faces[4] == 4);
         MINI_CHECK!(faces[5] == 5);
+
         let edges = mesh.edges();
 
         MINI_CHECK!(edges.len() == 12);
@@ -892,23 +899,29 @@ pub fn run_mesh_attributes() -> TestResult {
 
         MINI_CHECK!(mesh.naked_edges(true).is_empty());
         MINI_CHECK!(mesh.naked_faces(false).len() == 6);
+
         mesh.remove_face(mesh.faces()[0]);
         let ne = mesh.naked_edges(true);
 
         MINI_CHECK!(ne.len() == 4);
         MINI_CHECK!(ne[0] == (0, 1));
+
         let ni = mesh.naked_edges(false);
 
         MINI_CHECK!(ni.len() == 8);
+
         let nv = mesh.naked_vertices(true);
 
         MINI_CHECK!(nv.len() == 4);
+
         let nvi = mesh.naked_vertices(false);
 
         MINI_CHECK!(nvi.len() == 4);
+
         let nf = mesh.naked_faces(true);
 
         MINI_CHECK!(nf.len() == 4);
+
         let nfi = mesh.naked_faces(false);
 
         MINI_CHECK!(nfi.len() == 1);
@@ -1009,10 +1022,12 @@ pub fn run_mesh_vertex_and_face_operations() -> TestResult {
         mesh = mesh.unweld();
 
         MINI_CHECK!(mesh.number_of_vertices() == 24);
+
         mesh = mesh.weld(0.001);
 
         MINI_CHECK!(mesh.number_of_vertices() == 8);
         MINI_CHECK!(mesh.number_of_faces() == 6);
+
         let fv0 = mesh.face_vertices(0).unwrap();
         let fv1 = mesh.face_vertices(1).unwrap();
         let fv2 = mesh.face_vertices(2).unwrap();
@@ -1913,6 +1928,7 @@ pub fn run_mesh_loft_plate_four_holes() -> TestResult {
         use crate::Mesh;
         use crate::Point;
         use crate::Polyline;
+
         let bot = vec![
             Polyline::new(vec![
                 Point::new(734.392021, -1906.59468, 1101.588031),
@@ -2018,6 +2034,7 @@ pub fn run_mesh_loft_plate_v2() -> TestResult {
         use crate::Mesh;
         use crate::Point;
         use crate::Polyline;
+
         let top = vec![
             Polyline::new(vec![
                 Point::new(734.392021, -28.40532, 1101.588031),
@@ -2109,6 +2126,7 @@ pub fn run_mesh_loft_plate_v3() -> TestResult {
         use crate::Mesh;
         use crate::Point;
         use crate::Polyline;
+
         let top = vec![
             Polyline::new(vec![
                 Point::new(734.392021, 352.59468, 1101.588031),
@@ -2198,6 +2216,7 @@ pub fn run_mesh_loft_plate_v3() -> TestResult {
 pub fn run_mesh_vertex_neighbors() -> TestResult {
     MINI_TEST!("Vertex Neighbors", {
         use crate::Mesh;
+
         let mesh = Mesh::create_box(1.0, 1.0, 1.0);
         let mut n0 = mesh.vertex_neighbors(0, false).unwrap();
         let mut n0v = mesh.vertex_vertices(0).unwrap();
@@ -2212,9 +2231,11 @@ pub fn run_mesh_vertex_neighbors() -> TestResult {
 pub fn run_mesh_vertices_on_boundary() -> TestResult {
     MINI_TEST!("Vertices On Boundary", {
         use crate::Mesh;
+
         let mut mesh = Mesh::create_box(1.0, 1.0, 1.0);
 
         MINI_CHECK!(mesh.vertices_on_boundary().is_empty());
+
         mesh.remove_face(mesh.faces()[0]);
 
         MINI_CHECK!(mesh.vertices_on_boundary().len() == 4);
@@ -2224,9 +2245,11 @@ pub fn run_mesh_vertices_on_boundary() -> TestResult {
 pub fn run_mesh_edges_on_boundary() -> TestResult {
     MINI_TEST!("Edges On Boundary", {
         use crate::Mesh;
+
         let mut mesh = Mesh::create_box(1.0, 1.0, 1.0);
 
         MINI_CHECK!(mesh.edges_on_boundary().is_empty());
+
         mesh.remove_face(mesh.faces()[0]);
 
         MINI_CHECK!(mesh.edges_on_boundary().len() == 4);
@@ -2236,9 +2259,11 @@ pub fn run_mesh_edges_on_boundary() -> TestResult {
 pub fn run_mesh_faces_on_boundary() -> TestResult {
     MINI_TEST!("Faces On Boundary", {
         use crate::Mesh;
+
         let mut mesh = Mesh::create_box(1.0, 1.0, 1.0);
 
         MINI_CHECK!(mesh.faces_on_boundary().is_empty());
+
         mesh.remove_face(mesh.faces()[0]);
 
         MINI_CHECK!(mesh.faces_on_boundary().len() == 4);
@@ -2248,11 +2273,13 @@ pub fn run_mesh_faces_on_boundary() -> TestResult {
 pub fn run_mesh_halfedge_face() -> TestResult {
     MINI_TEST!("Halfedge Face", {
         use crate::Mesh;
+
         let mut mesh = Mesh::create_box(1.0, 1.0, 1.0);
         let f = mesh.halfedge_face((0, 3));
 
         MINI_CHECK!(f.is_some());
         MINI_CHECK!(f.unwrap() == 0);
+
         mesh.remove_face(0);
 
         MINI_CHECK!(mesh.halfedge_face((0, 3)).is_none());
@@ -2262,6 +2289,7 @@ pub fn run_mesh_halfedge_face() -> TestResult {
 pub fn run_mesh_halfedge_after_before() -> TestResult {
     MINI_TEST!("Halfedge After Before", {
         use crate::Mesh;
+
         let mesh = Mesh::create_box(1.0, 1.0, 1.0);
         let after = mesh.halfedge_after((0, 3));
         let before = mesh.halfedge_before((0, 3));
@@ -2276,6 +2304,7 @@ pub fn run_mesh_halfedge_after_before() -> TestResult {
 pub fn run_mesh_halfedge_loop() -> TestResult {
     MINI_TEST!("Halfedge Loop", {
         use crate::Mesh;
+
         let mesh = Mesh::create_box(1.0, 1.0, 1.0);
         let loop_edges = mesh.halfedge_loop((0, 3));
 
@@ -2287,6 +2316,7 @@ pub fn run_mesh_halfedge_loop() -> TestResult {
 pub fn run_mesh_halfedge_strip() -> TestResult {
     MINI_TEST!("Halfedge Strip", {
         use crate::Mesh;
+
         let mesh = Mesh::create_box(1.0, 1.0, 1.0);
         let strip = mesh.halfedge_strip((0, 3));
 
@@ -2300,13 +2330,20 @@ pub fn run_mesh_vertex_sample() -> TestResult {
     MINI_TEST!("Vertex Sample", {
         use crate::Mesh;
         use std::collections::HashSet;
+
         let mesh = Mesh::create_box(1.0, 1.0, 1.0);
         let s = mesh.vertex_sample(3, 42);
 
         MINI_CHECK!(s.len() == 3);
-        let uniq: HashSet<usize> = s.iter().copied().collect();
+
+        let mut uniq: HashSet<usize> = HashSet::new();
+
+        for v in &s {
+            uniq.insert(*v);
+        }
 
         MINI_CHECK!(uniq.len() == 3);
+
         let s2 = mesh.vertex_sample(3, 42);
 
         MINI_CHECK!(s == s2);
@@ -2316,10 +2353,12 @@ pub fn run_mesh_vertex_sample() -> TestResult {
 pub fn run_mesh_edge_sample() -> TestResult {
     MINI_TEST!("Edge Sample", {
         use crate::Mesh;
+
         let mesh = Mesh::create_box(1.0, 1.0, 1.0);
         let s = mesh.edge_sample(2, 7);
 
         MINI_CHECK!(s.len() == 2);
+
         let s2 = mesh.edge_sample(2, 7);
 
         MINI_CHECK!(s == s2);
@@ -2329,10 +2368,12 @@ pub fn run_mesh_edge_sample() -> TestResult {
 pub fn run_mesh_face_sample() -> TestResult {
     MINI_TEST!("Face Sample", {
         use crate::Mesh;
+
         let mesh = Mesh::create_box(1.0, 1.0, 1.0);
         let s = mesh.face_sample(2, 11);
 
         MINI_CHECK!(s.len() == 2);
+
         let s2 = mesh.face_sample(2, 11);
 
         MINI_CHECK!(s == s2);
@@ -2342,6 +2383,7 @@ pub fn run_mesh_face_sample() -> TestResult {
 pub fn run_mesh_face_center() -> TestResult {
     MINI_TEST!("Face Center", {
         use crate::Mesh;
+
         let mesh = Mesh::create_box(2.0, 2.0, 2.0);
         let c = mesh.face_center(0).unwrap();
         let cc = mesh.face_centroid(0).unwrap();
@@ -2353,6 +2395,7 @@ pub fn run_mesh_face_center() -> TestResult {
 pub fn run_mesh_face_polygon() -> TestResult {
     MINI_TEST!("Face Polygon", {
         use crate::Mesh;
+
         let mesh = Mesh::create_box(1.0, 1.0, 1.0);
         let poly = mesh.face_polygon(0).unwrap();
         let pts = poly.get_points();
@@ -2366,6 +2409,7 @@ pub fn run_mesh_flip_cycles() -> TestResult {
     MINI_TEST!("Flip Cycles", {
         use crate::Mesh;
         use crate::Tolerance;
+
         let mut mesh = Mesh::create_box(1.0, 1.0, 1.0);
         let n0 = mesh.face_normal(0).unwrap();
         mesh.flip_cycles();
@@ -2381,6 +2425,7 @@ pub fn run_mesh_face_normal_unitized() -> TestResult {
     MINI_TEST!("Face Normal Unitized", {
         use crate::Mesh;
         use crate::Tolerance;
+
         let mesh = Mesh::create_box(2.0, 2.0, 2.0);
         let nu = mesh.face_normal_unitized(0, true).unwrap();
         let nn = mesh.face_normal_unitized(0, false).unwrap();
@@ -2393,6 +2438,7 @@ pub fn run_mesh_face_normal_unitized() -> TestResult {
 pub fn run_mesh_default_attributes() -> TestResult {
     MINI_TEST!("Default Attributes", {
         use crate::Mesh;
+
         let mut mesh = Mesh::create_box(1.0, 1.0, 1.0);
         mesh.update_default_vertex_attributes(&[("is_support", 0.0), ("load_z", 0.0)]);
         mesh.update_default_face_attributes(&[("stress", 0.0)]);
@@ -2408,6 +2454,7 @@ pub fn run_mesh_default_attributes() -> TestResult {
 pub fn run_mesh_vertex_attribute() -> TestResult {
     MINI_TEST!("Vertex Attribute", {
         use crate::Mesh;
+
         let mut mesh = Mesh::create_box(1.0, 1.0, 1.0);
         mesh.update_default_vertex_attributes(&[("is_support", 0.0)]);
         mesh.set_vertex_attribute(0, "is_support", 1.0);
@@ -2420,6 +2467,7 @@ pub fn run_mesh_vertex_attribute() -> TestResult {
 pub fn run_mesh_face_attribute() -> TestResult {
     MINI_TEST!("Face Attribute", {
         use crate::Mesh;
+
         let mut mesh = Mesh::create_box(1.0, 1.0, 1.0);
         mesh.update_default_face_attributes(&[("stress", 0.0)]);
         mesh.set_face_attribute(0, "stress", 2.5);
@@ -2432,6 +2480,7 @@ pub fn run_mesh_face_attribute() -> TestResult {
 pub fn run_mesh_edge_attribute() -> TestResult {
     MINI_TEST!("Edge Attribute", {
         use crate::Mesh;
+
         let mut mesh = Mesh::create_box(1.0, 1.0, 1.0);
         mesh.update_default_edge_attributes(&[("weight", 1.0)]);
         mesh.set_edge_attribute((0, 1), "weight", 5.0);
@@ -2444,6 +2493,7 @@ pub fn run_mesh_edge_attribute() -> TestResult {
 pub fn run_mesh_vertices_attribute_bulk() -> TestResult {
     MINI_TEST!("Vertices Attribute Bulk", {
         use crate::Mesh;
+
         let mut mesh = Mesh::create_box(1.0, 1.0, 1.0);
         mesh.update_default_vertex_attributes(&[("is_support", 0.0)]);
         let keys = vec![0, 1, 2];
@@ -2460,6 +2510,7 @@ pub fn run_mesh_vertices_attribute_bulk() -> TestResult {
 pub fn run_mesh_vertices_where() -> TestResult {
     MINI_TEST!("Vertices Where", {
         use crate::Mesh;
+
         let mut mesh = Mesh::create_box(1.0, 1.0, 1.0);
         mesh.update_default_vertex_attributes(&[("is_support", 0.0)]);
         let keys = vec![0, 2, 4];
@@ -2475,6 +2526,7 @@ pub fn run_mesh_vertices_where() -> TestResult {
 pub fn run_mesh_faces_where() -> TestResult {
     MINI_TEST!("Faces Where", {
         use crate::Mesh;
+
         let mut mesh = Mesh::create_box(1.0, 1.0, 1.0);
         mesh.update_default_face_attributes(&[("tag", 0.0)]);
         mesh.set_face_attribute(2, "tag", 7.0);
@@ -2489,6 +2541,7 @@ pub fn run_mesh_faces_where() -> TestResult {
 pub fn run_mesh_edges_where() -> TestResult {
     MINI_TEST!("Edges Where", {
         use crate::Mesh;
+
         let mut mesh = Mesh::create_box(1.0, 1.0, 1.0);
         mesh.update_default_edge_attributes(&[("weight", 0.0)]);
         mesh.set_edge_attribute((0, 1), "weight", 3.0);
@@ -2503,6 +2556,7 @@ pub fn run_mesh_vertices_where_predicate() -> TestResult {
     MINI_TEST!("Vertices Where Predicate", {
         use crate::Mesh;
         use std::collections::HashMap;
+
         let mut mesh = Mesh::create_box(1.0, 1.0, 1.0);
         mesh.update_default_vertex_attributes(&[("load", 0.0)]);
         mesh.set_vertex_attribute(0, "load", 5.0);
@@ -2520,6 +2574,7 @@ pub fn run_mesh_faces_where_predicate() -> TestResult {
     MINI_TEST!("Faces Where Predicate", {
         use crate::Mesh;
         use std::collections::HashMap;
+
         let mut mesh = Mesh::create_box(1.0, 1.0, 1.0);
         mesh.update_default_face_attributes(&[("area", 0.0)]);
         mesh.set_face_attribute(0, "area", 2.0);
@@ -2537,6 +2592,7 @@ pub fn run_mesh_edges_where_predicate() -> TestResult {
     MINI_TEST!("Edges Where Predicate", {
         use crate::Mesh;
         use std::collections::HashMap;
+
         let mut mesh = Mesh::create_box(1.0, 1.0, 1.0);
         mesh.update_default_edge_attributes(&[("weight", 0.0)]);
         mesh.set_edge_attribute((0, 1), "weight", 5.0);
@@ -2552,11 +2608,13 @@ pub fn run_mesh_edges_where_predicate() -> TestResult {
 pub fn run_mesh_refresh_guid() -> TestResult {
     MINI_TEST!("Refresh Guid", {
         use crate::Mesh;
+
         let mesh = Mesh::create_box(1.0, 1.0, 1.0);
         let original = mesh.guid().to_string();
         let mut copy = mesh.clone();
 
         MINI_CHECK!(copy.guid() == original);
+
         copy.refresh_guid();
 
         MINI_CHECK!(copy.guid() != original);
@@ -2569,6 +2627,7 @@ pub fn run_mesh_assignment_keeps_objectcolor() -> TestResult {
         use crate::Color;
         use crate::Mesh;
         use crate::Point;
+
         let mut source = Mesh::from_vertices_and_faces(
             vec![
                 Point::new(0.0, 0.0, 0.0),
