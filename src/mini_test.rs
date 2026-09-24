@@ -27,8 +27,8 @@ pub struct TestResult {
 }
 
 std::thread_local! {
-    static CURRENT_CHECKS: RefCell<Vec<CheckRecord>> = RefCell::new(Vec::new());
-    static CURRENT_ASSERTION_TIME: RefCell<f64> = RefCell::new(0.0);
+    static CURRENT_CHECKS: RefCell<Vec<CheckRecord>> = const { RefCell::new(Vec::new()) };
+    static CURRENT_ASSERTION_TIME: RefCell<f64> = const { RefCell::new(0.0) };
 }
 
 pub fn start_checks() {
@@ -200,8 +200,8 @@ pub fn extract_timed_body(file: &str, macro_line: u32, checks: &[CheckRecord]) -
             }
             // j is one past the closing brace line; check if body is empty
             let mut body_empty = true;
-            for k in (i + 1)..(j.saturating_sub(1)) {
-                if !code_lines[k].trim().is_empty() {
+            for line in code_lines.iter().take(j.saturating_sub(1)).skip(i + 1) {
+                if !line.trim().is_empty() {
                     body_empty = false;
                     break;
                 }
@@ -5048,10 +5048,10 @@ pub fn run_all(language: &str) -> Result<(), Box<dyn std::error::Error>> {
     for (file_stem, results) in &results_by_file {
         let filename = format!("{}.json", file_stem);
         let path = out_dir.join(&filename);
-        let tmp_path = out_dir.join(format!("{}.tmp", &filename));
+        let tmp_path = out_dir.join(format!("{}.tmp", filename));
         let json = serde_json::to_string_pretty(results)?;
         fs::write(&tmp_path, &json)?;
-        if let Err(_) = fs::rename(&tmp_path, &path) {
+        if fs::rename(&tmp_path, &path).is_err() {
             let _ = fs::remove_file(&path);
             fs::rename(&tmp_path, &path).or_else(|_| fs::write(&path, &json))?;
         }

@@ -39,6 +39,35 @@ pub fn line_line(line0: &Line, line1: &Line, tolerance: f64) -> Option<Point> {
     ))
 }
 
+/// Parameters (0 or 1) of an exactly shared endpoint of two segments, or None.
+fn shared_endpoint_parameters(line0: &Line, line1: &Line) -> Option<(f64, f64)> {
+    let ends0 = [line0.start(), line0.end()];
+    let ends1 = [line1.start(), line1.end()];
+
+    for (i, e0) in ends0.iter().enumerate() {
+        for (j, e1) in ends1.iter().enumerate() {
+            if e0[0] == e1[0] && e0[1] == e1[1] && e0[2] == e1[2] {
+                return Some((i as f64, j as f64));
+            }
+        }
+    }
+
+    None
+}
+
+/// Clamp a parameter to [0, 1].
+fn clamp_unit(t: f64) -> f64 {
+    if t < 0.0 {
+        return 0.0;
+    }
+
+    if t > 1.0 {
+        return 1.0;
+    }
+
+    t
+}
+
 /// Parameters of closest approach of two lines, clamped to the segments when requested.
 pub fn line_line_parameters(
     line0: &Line,
@@ -47,30 +76,13 @@ pub fn line_line_parameters(
     intersect_segments: bool,
     near_parallel_as_closest: bool,
 ) -> Option<(f64, f64)> {
-    let p0_start = line0.start();
-    let p0_end = line0.end();
-    let p1_start = line1.start();
-    let p1_end = line1.end();
-
-    if p0_start == p1_start {
-        return Some((0.0, 0.0));
-    }
-
-    if p0_start == p1_end {
-        return Some((0.0, 1.0));
-    }
-
-    if p0_end == p1_start {
-        return Some((1.0, 0.0));
-    }
-
-    if p0_end == p1_end {
-        return Some((1.0, 1.0));
+    if let Some(shared) = shared_endpoint_parameters(line0, line1) {
+        return Some(shared);
     }
 
     let a = line0.to_vector();
     let b = line1.to_vector();
-    let c = p1_start - p0_start;
+    let c = line1.start() - line0.start();
 
     let aa = a.dot(&a);
     let bb = b.dot(&b);
@@ -79,50 +91,31 @@ pub fn line_line_parameters(
     let bc = b.dot(&c);
 
     let det = aa * bb - ab * ab;
-
     let zero_tol = aa.max(bb) * f64::EPSILON;
+    let parallel = det.abs() < zero_tol;
 
-    if det.abs() < zero_tol {
-        if !near_parallel_as_closest {
-            return None;
-        }
-
-        let mut t0 = if aa > 0.0 { ac / aa } else { 0.0 };
-        let mut t1 = if bb > 0.0 { (bc + t0 * ab) / bb } else { 0.0 };
-
-        if intersect_segments {
-            t0 = t0.clamp(0.0, 1.0);
-            t1 = t1.clamp(0.0, 1.0);
-        }
-
-        if tolerance > 0.0 {
-            let pt0 = line0.point_at(t0);
-            let pt1 = line1.point_at(t1);
-
-            if pt0.distance(&pt1, None) > tolerance {
-                return None;
-            }
-        }
-
-        return Some((t0, t1));
+    if parallel && !near_parallel_as_closest {
+        return None;
     }
 
-    let inv_det = 1.0 / det;
-    let mut t0 = (bb * ac - ab * bc) * inv_det;
-    let mut t1 = (ab * ac - aa * bc) * inv_det;
+    let (mut t0, mut t1) = if parallel {
+        let t0 = if aa > 0.0 { ac / aa } else { 0.0 };
+        let t1 = if bb > 0.0 { (bc + t0 * ab) / bb } else { 0.0 };
+
+        (t0, t1)
+    } else {
+        let inv_det = 1.0 / det;
+
+        ((bb * ac - ab * bc) * inv_det, (ab * ac - aa * bc) * inv_det)
+    };
 
     if intersect_segments {
-        t0 = t0.clamp(0.0, 1.0);
-        t1 = t1.clamp(0.0, 1.0);
+        t0 = clamp_unit(t0);
+        t1 = clamp_unit(t1);
     }
 
-    if tolerance > 0.0 {
-        let pt0 = line0.point_at(t0);
-        let pt1 = line1.point_at(t1);
-
-        if pt0.distance(&pt1, None) > tolerance {
-            return None;
-        }
+    if tolerance > 0.0 && line0.point_at(t0).distance(&line1.point_at(t1), None) > tolerance {
+        return None;
     }
 
     Some((t0, t1))
@@ -281,44 +274,79 @@ pub fn plane_plane_plane(plane0: &Plane, plane1: &Plane, plane2: &Plane) -> Opti
 // Rays
 // ═══════════════════════════════════════════════════════════════════════════
 
-/// Ray-box slab test returning the entry and exit parameters.
-pub fn ray_box(line: &Line, box_: &OBB, t0: f64, t1: f64) -> Option<Vec<Point>> {
-    let origin = line.start();
-    let direction = line.to_vector();
+/// Ray-mesh hit.
+#[derive(Debug, Clone)]
+pub struct RayHit {
+    pub t: f64,          // Parameter along the ray.
+    pub point: Point,    // Hit point.
+    pub u: f64,          // Barycentric u.
+    pub v: f64,          // Barycentric v.
+    pub face_index: i32, // Hit face.
+}
 
+impl Default for RayHit {
+    /// Construct an empty miss.
+    fn default() -> Self {
+        RayHit::new(0.0, Point::default(), 0.0, 0.0, -1)
+    }
+}
+
+impl RayHit {
+    /// Construct from ray parameter, point, barycentrics and face.
+    pub fn new(t: f64, point: Point, u: f64, v: f64, face_index: i32) -> Self {
+        RayHit {
+            t,
+            point,
+            u,
+            v,
+            face_index,
+        }
+    }
+}
+
+/// Ray-box slab test returning the entry and exit parameters.
+pub fn ray_box_parameters(
+    origin: &Point,
+    direction: &Vector,
+    box_: &OBB,
+    t0: f64,
+    t1: f64,
+) -> (bool, f64, f64) {
     let box_min = box_.min_point();
     let box_max = box_.max_point();
 
-    let inv_dir_x = if direction[0] != 0.0 {
-        1.0 / direction[0]
-    } else {
-        f64::INFINITY
-    };
-    let inv_dir_y = if direction[1] != 0.0 {
-        1.0 / direction[1]
-    } else {
-        f64::INFINITY
-    };
-    let inv_dir_z = if direction[2] != 0.0 {
-        1.0 / direction[2]
-    } else {
-        f64::INFINITY
-    };
+    let inv_dir = Vector::new(
+        if direction[0] != 0.0 {
+            1.0 / direction[0]
+        } else {
+            f64::MAX
+        },
+        if direction[1] != 0.0 {
+            1.0 / direction[1]
+        } else {
+            f64::MAX
+        },
+        if direction[2] != 0.0 {
+            1.0 / direction[2]
+        } else {
+            f64::MAX
+        },
+    );
 
-    let tx1 = (box_min[0] - origin[0]) * inv_dir_x;
-    let tx2 = (box_max[0] - origin[0]) * inv_dir_x;
+    let tx1 = (box_min[0] - origin[0]) * inv_dir[0];
+    let tx2 = (box_max[0] - origin[0]) * inv_dir[0];
 
     let mut tmin = tx1.min(tx2);
     let mut tmax = tx1.max(tx2);
 
-    let ty1 = (box_min[1] - origin[1]) * inv_dir_y;
-    let ty2 = (box_max[1] - origin[1]) * inv_dir_y;
+    let ty1 = (box_min[1] - origin[1]) * inv_dir[1];
+    let ty2 = (box_max[1] - origin[1]) * inv_dir[1];
 
     tmin = tmin.max(ty1.min(ty2));
     tmax = tmax.min(ty1.max(ty2));
 
-    let tz1 = (box_min[2] - origin[2]) * inv_dir_z;
-    let tz2 = (box_max[2] - origin[2]) * inv_dir_z;
+    let tz1 = (box_min[2] - origin[2]) * inv_dir[2];
+    let tz2 = (box_max[2] - origin[2]) * inv_dir[2];
 
     tmin = tmin.max(tz1.min(tz2));
     tmax = tmax.min(tz1.max(tz2));
@@ -326,72 +354,125 @@ pub fn ray_box(line: &Line, box_: &OBB, t0: f64, t1: f64) -> Option<Vec<Point>> 
     tmin = tmin.max(t0);
     tmax = tmax.min(t1);
 
-    if tmax < tmin {
+    (tmax >= tmin, tmin, tmax)
+}
+
+/// Line-box entry and exit points.
+pub fn ray_box(line: &Line, box_: &OBB, t0: f64, t1: f64) -> Option<Vec<Point>> {
+    let origin = line.start();
+    let direction = line.to_vector();
+
+    let (hit, tmin, tmax) = ray_box_parameters(&origin, &direction, box_, t0, t1);
+
+    if !hit {
         return None;
     }
 
     let entry = &origin + &direction * tmin;
-
     let exit = &origin + &direction * tmax;
 
     Some(vec![entry, exit])
 }
 
 /// Ray-sphere parameters, returning the hit count.
-pub fn ray_sphere(line: &Line, center: &Point, radius: f64) -> Option<Vec<Point>> {
-    let origin = line.start();
-    let direction = line.to_vector();
-
-    let o_x = origin[0] - center[0];
-    let o_y = origin[1] - center[1];
-    let o_z = origin[2] - center[2];
-
-    let a = direction[0] * direction[0] + direction[1] * direction[1] + direction[2] * direction[2];
-    let b = 2.0 * (direction[0] * o_x + direction[1] * o_y + direction[2] * o_z);
-    let c = o_x * o_x + o_y * o_y + o_z * o_z - radius * radius;
-
+pub fn ray_sphere_parameters(
+    origin: &Point,
+    direction: &Vector,
+    center: &Point,
+    radius: f64,
+) -> (i32, f64, f64) {
+    let offset = origin - center;
+    let a = direction.dot(direction);
+    let b = 2.0 * direction.dot(&offset);
+    let c = offset.dot(&offset) - (radius * radius);
     let disc = b * b - 4.0 * a * c;
 
     if disc < 0.0 {
-        return None;
+        return (0, 0.0, 0.0);
     }
 
-    let dist_sqrt = disc.sqrt();
+    let root = disc.sqrt();
     let q = if b < 0.0 {
-        (-b - dist_sqrt) / 2.0
+        (-b - root) / 2.0
     } else {
-        (-b + dist_sqrt) / 2.0
+        (-b + root) / 2.0
     };
 
     let mut t0 = q / a;
     let mut t1 = c / q;
 
+    if t1 == t0 {
+        return (1, t0, t1);
+    }
+
     if t0 > t1 {
         std::mem::swap(&mut t0, &mut t1);
     }
 
-    let mut points = Vec::new();
+    (2, t0, t1)
+}
 
-    let p0 = Point::new(
-        origin[0] + direction[0] * t0,
-        origin[1] + direction[1] * t0,
-        origin[2] + direction[2] * t0,
-    );
-    points.push(p0);
+/// Line-sphere hit points.
+pub fn ray_sphere(line: &Line, center: &Point, radius: f64) -> Option<Vec<Point>> {
+    let origin = line.start();
+    let direction = line.to_vector();
 
-    if (t1 - t0).abs() > 1e-10 {
-        let p1 = Point::new(
-            origin[0] + direction[0] * t1,
-            origin[1] + direction[1] * t1,
-            origin[2] + direction[2] * t1,
-        );
-        points.push(p1);
+    let (hits, t0, t1) = ray_sphere_parameters(&origin, &direction, center, radius);
+
+    if hits == 0 {
+        return None;
+    }
+
+    let mut points = vec![&origin + &direction * t0];
+
+    if hits == 2 {
+        points.push(&origin + &direction * t1);
     }
 
     Some(points)
 }
 
-/// Moller-Trumbore ray-triangle test.
+/// Moller-Trumbore ray-triangle test returning (hit, t, u, v, parallel).
+pub fn ray_triangle_parameters(
+    origin: &Point,
+    direction: &Vector,
+    v0: &Point,
+    v1: &Point,
+    v2: &Point,
+    epsilon: f64,
+) -> (bool, f64, f64, f64, bool) {
+    let edge1 = v1 - v0;
+    let edge2 = v2 - v0;
+    let pvec = direction.cross(&edge2);
+
+    let det = edge1.dot(&pvec);
+
+    if det > -epsilon && det < epsilon {
+        return (false, 0.0, 0.0, 0.0, true);
+    }
+
+    let inv_det = 1.0 / det;
+
+    let tvec = origin - v0;
+    let u = tvec.dot(&pvec) * inv_det;
+
+    if u < 0.0 - epsilon || u > 1.0 + epsilon {
+        return (false, 0.0, u, 0.0, false);
+    }
+
+    let qvec = tvec.cross(&edge1);
+    let v = direction.dot(&qvec) * inv_det;
+
+    if v < 0.0 - epsilon || u + v > 1.0 + epsilon {
+        return (false, 0.0, u, v, false);
+    }
+
+    let t = edge2.dot(&qvec) * inv_det;
+
+    (true, t, u, v, false)
+}
+
+/// Line-triangle hit point.
 pub fn ray_triangle(
     line: &Line,
     v0: &Point,
@@ -402,189 +483,258 @@ pub fn ray_triangle(
     let origin = line.start();
     let direction = line.to_vector();
 
-    let edge1_x = v1[0] - v0[0];
-    let edge1_y = v1[1] - v0[1];
-    let edge1_z = v1[2] - v0[2];
+    let (hit, t, _, _, _) = ray_triangle_parameters(&origin, &direction, v0, v1, v2, epsilon);
 
-    let edge2_x = v2[0] - v0[0];
-    let edge2_y = v2[1] - v0[1];
-    let edge2_z = v2[2] - v0[2];
-
-    let pvec_x = direction[1] * edge2_z - direction[2] * edge2_y;
-    let pvec_y = direction[2] * edge2_x - direction[0] * edge2_z;
-    let pvec_z = direction[0] * edge2_y - direction[1] * edge2_x;
-
-    let det = edge1_x * pvec_x + edge1_y * pvec_y + edge1_z * pvec_z;
-
-    if det > -epsilon && det < epsilon {
+    if !hit {
         return None;
     }
-
-    let inv_det = 1.0 / det;
-
-    let tvec_x = origin[0] - v0[0];
-    let tvec_y = origin[1] - v0[1];
-    let tvec_z = origin[2] - v0[2];
-
-    let u = (tvec_x * pvec_x + tvec_y * pvec_y + tvec_z * pvec_z) * inv_det;
-
-    if u < -epsilon || u > 1.0 + epsilon {
-        return None;
-    }
-
-    let qvec_x = tvec_y * edge1_z - tvec_z * edge1_y;
-    let qvec_y = tvec_z * edge1_x - tvec_x * edge1_z;
-    let qvec_z = tvec_x * edge1_y - tvec_y * edge1_x;
-
-    let v = (direction[0] * qvec_x + direction[1] * qvec_y + direction[2] * qvec_z) * inv_det;
-
-    if v < -epsilon || u + v > 1.0 + epsilon {
-        return None;
-    }
-
-    let t = (edge2_x * qvec_x + edge2_y * qvec_y + edge2_z * qvec_z) * inv_det;
 
     Some(&origin + &direction * t)
 }
 
-/// Ray-mesh hits by brute force, sorted by t.
-pub fn ray_mesh(line: &Line, mesh: &Mesh, epsilon: f64, find_all: bool) -> Option<Vec<Point>> {
-    let (vertices, faces) = mesh.to_vertices_and_faces();
-    let mut tris: Vec<(Point, Point, Point)> = Vec::new();
+/// Whether hit a sorts before hit b: smaller t, ties within 1e-6 broken by the lower face index.
+fn ray_hit_before(a: &RayHit, b: &RayHit) -> bool {
+    let eps = 1e-6;
+    let dt = a.t - b.t;
 
-    for face in &faces {
-        if face.len() < 3 {
-            continue;
-        }
-
-        let v0 = &vertices[face[0]];
-
-        for j in 1..face.len() - 1 {
-            tris.push((
-                v0.clone(),
-                vertices[face[j]].clone(),
-                vertices[face[j + 1]].clone(),
-            ));
-        }
+    if dt.abs() <= eps {
+        return a.face_index < b.face_index;
     }
 
-    if tris.is_empty() {
-        return None;
-    }
-
-    let origin = line.start();
-    let direction = line.to_vector().normalized();
-    let mut hits: Vec<(f64, Point)> = Vec::new();
-
-    for (v0, v1, v2) in &tris {
-        if let Some(p) = ray_triangle(line, v0, v1, v2, epsilon) {
-            let t = (p[0] - origin[0]) * direction[0]
-                + (p[1] - origin[1]) * direction[1]
-                + (p[2] - origin[2]) * direction[2];
-
-            if t >= 0.0 {
-                hits.push((t, p));
-            }
-        }
-    }
-
-    if hits.is_empty() {
-        return None;
-    }
-
-    hits.sort_by(|a, b| a.0.partial_cmp(&b.0).unwrap());
-
-    if find_all {
-        Some(hits.into_iter().map(|(_, p)| p).collect())
-    } else {
-        Some(vec![hits[0].1.clone()])
-    }
+    a.t < b.t
 }
 
-/// Ray-mesh hits through the mesh's triangle BVH, sorted by t.
-pub fn ray_mesh_bvh(line: &Line, mesh: &Mesh, epsilon: f64, find_all: bool) -> Option<Vec<Point>> {
-    let (vertices, faces) = mesh.to_vertices_and_faces();
-    let mut tris: Vec<(Point, Point, Point)> = Vec::new();
+/// Three-way comparison built on ray_hit_before.
+fn ray_hit_order(a: &RayHit, b: &RayHit) -> std::cmp::Ordering {
+    if ray_hit_before(a, b) {
+        return std::cmp::Ordering::Less;
+    }
 
-    for face in &faces {
+    if ray_hit_before(b, a) {
+        return std::cmp::Ordering::Greater;
+    }
+
+    std::cmp::Ordering::Equal
+}
+
+/// Sorts hits by t and keeps only the nearest unless find_all; false when there is none.
+fn sort_ray_hits(hits: &mut Vec<RayHit>, find_all: bool) -> bool {
+    if hits.is_empty() {
+        return false;
+    }
+
+    hits.sort_by(ray_hit_order);
+
+    if !find_all {
+        hits.truncate(1);
+    }
+
+    true
+}
+
+/// Ray-mesh hits by brute force sorted by t, only the nearest unless find_all.
+pub fn ray_mesh_hits(
+    origin: &Point,
+    direction: &Vector,
+    mesh: &Mesh,
+    find_all: bool,
+    epsilon: f64,
+) -> (bool, Vec<RayHit>) {
+    let mut hits: Vec<RayHit> = Vec::new();
+
+    let (vertices, faces) = mesh.to_vertices_and_faces();
+
+    for (i, face) in faces.iter().enumerate() {
         if face.len() < 3 {
             continue;
         }
 
-        let v0 = &vertices[face[0]];
-
         for j in 1..face.len() - 1 {
-            tris.push((
-                v0.clone(),
-                vertices[face[j]].clone(),
-                vertices[face[j + 1]].clone(),
-            ));
+            let v0 = &vertices[face[0]];
+            let v1 = &vertices[face[j]];
+            let v2 = &vertices[face[j + 1]];
+
+            let (hit, t, u, v, _) = ray_triangle_parameters(origin, direction, v0, v1, v2, epsilon);
+
+            if !hit || t < 0.0 {
+                continue;
+            }
+
+            hits.push(RayHit::new(t, origin + &(direction * t), u, v, i as i32));
         }
     }
 
-    if tris.is_empty() {
-        return None;
+    (sort_ray_hits(&mut hits, find_all), hits)
+}
+
+/// Ray-mesh hits through the mesh's triangle BVH sorted by t, only the nearest unless find_all.
+pub fn ray_mesh_bvh_hits(
+    origin: &Point,
+    direction: &Vector,
+    mesh: &mut Mesh,
+    find_all: bool,
+    epsilon: f64,
+) -> (bool, Vec<RayHit>) {
+    let mut hits: Vec<RayHit> = Vec::new();
+
+    let mut candidates: Vec<usize> = Vec::new();
+
+    if !mesh.triangle_bvh_ray_cast(origin, direction, &mut candidates, find_all) {
+        return (false, hits);
     }
 
-    let tri_boxes: Vec<OBB> = tris
-        .iter()
-        .map(|(v0, v1, v2)| OBB::from_points(&[v0.clone(), v1.clone(), v2.clone()], 0.0, None))
-        .collect();
+    for tri_id in candidates {
+        let Some((face_idx, _, v0, v1, v2)) = mesh.get_triangle_by_id(tri_id) else {
+            continue;
+        };
 
-    let world_size = SpatialBVH::compute_world_size(&tri_boxes);
-    let bvh = SpatialBVH::from_boxes(&tri_boxes, world_size);
+        let (hit, t, u, v, _) = ray_triangle_parameters(origin, direction, &v0, &v1, &v2, epsilon);
 
-    let origin = line.start();
-    let direction = line.to_vector().normalized();
-    let mut candidate_ids: Vec<usize> = Vec::new();
-    let found = bvh.ray_cast(&origin, &direction, &mut candidate_ids, true);
+        if !hit || t < 0.0 {
+            continue;
+        }
+
+        hits.push(RayHit::new(
+            t,
+            origin + &(direction * t),
+            u,
+            v,
+            face_idx as i32,
+        ));
+    }
+
+    (sort_ray_hits(&mut hits, find_all), hits)
+}
+
+/// Line-mesh hit points by brute force sorted by t, only the nearest unless find_all.
+pub fn ray_mesh(line: &Line, mesh: &Mesh, epsilon: f64, find_all: bool) -> Option<Vec<Point>> {
+    let (found, hits) = ray_mesh_hits(&line.start(), &line.to_vector(), mesh, find_all, epsilon);
 
     if !found {
         return None;
     }
 
-    let mut hits: Vec<(f64, Point)> = Vec::new();
+    let mut result = Vec::new();
 
-    for idx in candidate_ids {
-        if idx >= tris.len() {
-            continue;
-        }
-
-        let (ref v0, ref v1, ref v2) = tris[idx];
-
-        if let Some(p) = ray_triangle(line, v0, v1, v2, epsilon) {
-            let t = (p[0] - origin[0]) * direction[0]
-                + (p[1] - origin[1]) * direction[1]
-                + (p[2] - origin[2]) * direction[2];
-
-            if t >= 0.0 {
-                hits.push((t, p));
-            }
-        }
+    for hit in hits {
+        result.push(hit.point);
     }
 
-    if hits.is_empty() {
+    Some(result)
+}
+
+/// Line-mesh hit points through the mesh's triangle BVH sorted by t, only the nearest unless find_all.
+pub fn ray_mesh_bvh(line: &Line, mesh: &Mesh, epsilon: f64, find_all: bool) -> Option<Vec<Point>> {
+    let mut cached = mesh.clone();
+    let (found, hits) = ray_mesh_bvh_hits(
+        &line.start(),
+        &line.to_vector(),
+        &mut cached,
+        find_all,
+        epsilon,
+    );
+
+    if !found {
         return None;
     }
 
-    hits.sort_by(|a, b| a.0.partial_cmp(&b.0).unwrap());
+    let mut result = Vec::new();
 
-    if find_all {
-        Some(hits.into_iter().map(|(_, p)| p).collect())
-    } else {
-        Some(vec![hits[0].1.clone()])
+    for hit in hits {
+        result.push(hit.point);
     }
+
+    Some(result)
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
 // NURBS curve helpers
 // ═══════════════════════════════════════════════════════════════════════════
 
+/// Sorted values without neighbours closer than tolerance to the last kept one.
+fn unique_sorted(values: &[f64], tolerance: f64) -> Vec<f64> {
+    let mut unique: Vec<f64> = Vec::new();
+
+    for &value in values {
+        if unique.is_empty() || (unique[unique.len() - 1] - value).abs() >= tolerance {
+            unique.push(value);
+        }
+    }
+
+    unique
+}
+
 /// Signed distance of a point to the plane.
 fn curve_signed_distance_to_plane(pt: &Point, plane: &Plane) -> f64 {
     let v = pt - &plane.origin();
 
     v.dot(&plane.z_axis())
+}
+
+/// Rate of change of the signed plane distance with the curve parameter.
+fn curve_plane_slope(curve: &NurbsCurve, plane: &Plane, t: f64) -> f64 {
+    let derivs = curve.evaluate(t, 1);
+
+    if derivs.len() < 2 {
+        return 0.0;
+    }
+
+    derivs[1].dot(&plane.z_axis())
+}
+
+/// Appends t unless a value within tolerance is already present.
+fn append_unique(values: &mut Vec<f64>, t: f64, tolerance: f64) {
+    for existing in values.iter() {
+        if (existing - t).abs() < tolerance {
+            return;
+        }
+    }
+
+    values.push(t);
+}
+
+/// Newton for the plane crossing in [a, b] from the midpoint, bisecting whenever a step is flat or leaves the bracket.
+fn curve_plane_newton_bracket(
+    curve: &NurbsCurve,
+    plane: &Plane,
+    tolerance: f64,
+    mut a: f64,
+    mut b: f64,
+) -> Option<f64> {
+    let mut f_a = curve_signed_distance_to_plane(&curve.point_at(a), plane);
+    let mut t = (a + b) * 0.5;
+
+    for _ in 0..10 {
+        let f = curve_signed_distance_to_plane(&curve.point_at(t), plane);
+
+        if f.abs() < tolerance {
+            return Some(t);
+        }
+
+        let df = curve_plane_slope(curve, plane, t);
+        let flat = df.abs() < 1e-14;
+        let t_new = if flat { t } else { t - f / df };
+
+        if flat || t_new < a || t_new > b {
+            if f * f_a < 0.0 {
+                b = t;
+            } else {
+                a = t;
+                f_a = f;
+            }
+
+            t = (a + b) * 0.5;
+            continue;
+        }
+
+        if (t_new - t).abs() < tolerance {
+            return Some(t_new);
+        }
+
+        t = t_new;
+    }
+
+    None
 }
 
 /// Bisect the plane crossing between t0 and t1 down to tolerance.
@@ -641,10 +791,9 @@ fn curve_refine_intersection_newton(
 
     for _ in 0..max_iterations {
         let pt = curve.point_at(*t);
-        let tangent = curve.tangent_at(*t);
 
         let f = curve_signed_distance_to_plane(&pt, plane);
-        let df = tangent.dot(&plane.z_axis());
+        let df = curve_plane_slope(curve, plane, *t);
 
         if f.abs() < tolerance {
             return true;
@@ -708,9 +857,8 @@ fn curve_plane_clip(
 
             for _ in 0..10 {
                 let pt = curve.point_at(t);
-                let tangent = curve.tangent_at(t);
                 let f = curve_signed_distance_to_plane(&pt, plane);
-                let df = tangent.dot(&plane.z_axis());
+                let df = curve_plane_slope(curve, plane, t);
 
                 if df.abs() < 1e-12 {
                     break;
@@ -842,53 +990,9 @@ fn curve_plane_subdivide_algebraic(
     let deviation = (&p_mid - &p_a).cross(&line_dir).magnitude().abs();
 
     if deviation < tolerance * 10.0 || (b - a) < tolerance * 10.0 {
-        let mut t = mid_t;
-        let mut converged = false;
-
-        for _ in 0..10 {
-            let p = curve.point_at(t);
-            let f = normal.dot(&(&p - &plane.origin()));
-
-            if f.abs() < tolerance {
-                converged = true;
-                break;
-            }
-
-            let tangent = curve.tangent_at(t);
-            let df = normal.dot(&tangent);
-
-            if df.abs() < 1e-14 {
-                t = (a + b) * 0.5;
-                break;
-            }
-
-            let mut t_new = t - f / df;
-
-            if t_new < a || t_new > b {
-                t_new = (a + b) * 0.5;
-            }
-
-            if (t_new - t).abs() < tolerance {
-                t = t_new;
-                converged = true;
-                break;
-            }
-
-            t = t_new;
-        }
-
-        if converged && t >= a && t <= b {
-            let mut is_duplicate = false;
-
-            for existing in results.iter() {
-                if (existing - t).abs() < tolerance * 10.0 {
-                    is_duplicate = true;
-                    break;
-                }
-            }
-
-            if !is_duplicate {
-                results.push(t);
+        if let Some(t) = curve_plane_newton_bracket(curve, plane, tolerance, a, b) {
+            if t >= a && t <= b {
+                append_unique(results, t, tolerance * 10.0);
             }
         }
     } else {
@@ -930,12 +1034,10 @@ fn curve_plane_subdivide_production(
         return;
     }
 
-    let mut a = a;
-    let mut b = b;
     let p_a = curve.point_at(a);
     let p_b = curve.point_at(b);
     let normal = plane.z_axis();
-    let mut f_a = normal.dot(&(&p_a - &plane.origin()));
+    let f_a = normal.dot(&(&p_a - &plane.origin()));
     let f_b = normal.dot(&(&p_b - &plane.origin()));
 
     if f_a * f_b > 0.0 {
@@ -943,60 +1045,9 @@ fn curve_plane_subdivide_production(
     }
 
     if curve_nearly_linear(curve, tolerance, a, b) || (b - a) < tolerance * 10.0 {
-        let mut t = (a + b) * 0.5;
-        let mut converged = false;
-
-        for _ in 0..10 {
-            let p = curve.point_at(t);
-            let f = normal.dot(&(&p - &plane.origin()));
-
-            if f.abs() < tolerance {
-                converged = true;
-                break;
-            }
-
-            let tangent = curve.tangent_at(t);
-            let df = normal.dot(&tangent);
-
-            if df.abs() < 1e-14 {
-                if f * f_a < 0.0 {
-                    b = t;
-                } else {
-                    a = t;
-                    f_a = f;
-                }
-
-                t = (a + b) * 0.5;
-                continue;
-            }
-
-            let mut t_new = t - f / df;
-
-            if t_new < a || t_new > b {
-                t_new = (a + b) * 0.5;
-            }
-
-            if (t_new - t).abs() < tolerance {
-                t = t_new;
-                converged = true;
-                break;
-            }
-
-            t = t_new;
-        }
-
-        if converged && t >= a && t <= b {
-            let mut is_duplicate = false;
-
-            for existing in results.iter() {
-                if (existing - t).abs() < tolerance * 10.0 {
-                    is_duplicate = true;
-                    break;
-                }
-            }
-
-            if !is_duplicate {
-                results.push(t);
+        if let Some(t) = curve_plane_newton_bracket(curve, plane, tolerance, a, b) {
+            if t >= a && t <= b {
+                append_unique(results, t, tolerance * 10.0);
             }
         }
     } else {
@@ -1009,6 +1060,125 @@ fn curve_plane_subdivide_production(
 // ═══════════════════════════════════════════════════════════════════════════
 // NURBS curves
 // ═══════════════════════════════════════════════════════════════════════════
+
+/// Appends t unless it lies within tolerance of the last parameter.
+fn append_parameter(params: &mut Vec<f64>, t: f64, tolerance: f64) {
+    if params.is_empty() || (params[params.len() - 1] - t).abs() >= tolerance {
+        params.push(t);
+    }
+}
+
+/// Crossing pairs hidden inside a span whose ends lie on one side, found on degree * 2 sub-intervals.
+fn curve_plane_hidden_pairs(
+    curve: &NurbsCurve,
+    plane: &Plane,
+    tolerance: f64,
+    t0: f64,
+    t1: f64,
+    intersections: &mut Vec<f64>,
+) {
+    let count = (curve.degree() * 2) as i32;
+    let dt = (t1 - t0) / count as f64;
+
+    for i in 0..count {
+        let s0 = t0 + i as f64 * dt;
+        let s1 = t0 + (i + 1) as f64 * dt;
+        let d0 = curve_signed_distance_to_plane(&curve.point_at(s0), plane);
+        let d1 = curve_signed_distance_to_plane(&curve.point_at(s1), plane);
+
+        if d0 * d1 < 0.0 {
+            if let Some(mut t_intersection) =
+                curve_find_root_bisection(curve, plane, s0, s1, tolerance)
+            {
+                curve_refine_intersection_newton(curve, plane, &mut t_intersection, tolerance);
+                intersections.push(t_intersection);
+            }
+        }
+    }
+}
+
+/// Crossings inside each knot span, plus span starts and the curve end lying on the plane.
+fn curve_plane_spans(
+    curve: &NurbsCurve,
+    plane: &Plane,
+    tolerance: f64,
+    intersections: &mut Vec<f64>,
+) {
+    let span_params = curve.get_span_vector();
+
+    for i in 0..(span_params.len() - 1) {
+        let t0 = span_params[i];
+        let t1 = span_params[i + 1];
+
+        if (t1 - t0).abs() < tolerance {
+            continue;
+        }
+
+        let d0 = curve_signed_distance_to_plane(&curve.point_at(t0), plane);
+        let d1 = curve_signed_distance_to_plane(&curve.point_at(t1), plane);
+
+        if d0 * d1 < 0.0 {
+            if let Some(mut t_intersection) =
+                curve_find_root_bisection(curve, plane, t0, t1, tolerance)
+            {
+                curve_refine_intersection_newton(curve, plane, &mut t_intersection, tolerance);
+                intersections.push(t_intersection);
+            }
+        } else if d0.abs() < tolerance {
+            append_parameter(intersections, t0, tolerance);
+        } else if curve.degree() > 1 {
+            curve_plane_hidden_pairs(curve, plane, tolerance, t0, t1, intersections);
+        }
+    }
+
+    let t_end = curve.domain().1;
+
+    if curve_signed_distance_to_plane(&curve.point_at(t_end), plane).abs() < tolerance {
+        append_parameter(intersections, t_end, tolerance);
+    }
+}
+
+/// Extra crossings of a high-degree curve found on degree * 4 uniform samples.
+fn curve_plane_samples(
+    curve: &NurbsCurve,
+    plane: &Plane,
+    tolerance: f64,
+    intersections: &mut Vec<f64>,
+) {
+    let (t_start, t_end) = curve.domain();
+    let num_samples = (curve.degree() * 4) as i32;
+    let dt = (t_end - t_start) / num_samples as f64;
+
+    for i in 0..num_samples {
+        let t0 = t_start + i as f64 * dt;
+        let t1 = t_start + (i + 1) as f64 * dt;
+        let d0 = curve_signed_distance_to_plane(&curve.point_at(t0), plane);
+        let d1 = curve_signed_distance_to_plane(&curve.point_at(t1), plane);
+        let mut crossing = None;
+
+        if d0 * d1 < 0.0 {
+            crossing = curve_find_root_bisection(curve, plane, t0, t1, tolerance);
+        }
+
+        let Some(mut t_intersection) = crossing else {
+            continue;
+        };
+
+        let mut is_new = true;
+
+        for &existing in intersections.iter() {
+            if (existing - t_intersection).abs() < tolerance * 2.0 {
+                is_new = false;
+                break;
+            }
+        }
+
+        if is_new {
+            curve_refine_intersection_newton(curve, plane, &mut t_intersection, tolerance);
+            intersections.push(t_intersection);
+        }
+    }
+}
 
 /// Curve-plane intersection parameters by sampling, bisection and Newton refinement.
 pub fn curve_plane(curve: &NurbsCurve, plane: &Plane, tolerance: Option<f64>) -> Vec<f64> {
@@ -1024,89 +1194,15 @@ pub fn curve_plane(curve: &NurbsCurve, plane: &Plane, tolerance: Option<f64>) ->
         tolerance.unwrap()
     };
 
-    let (t_start, t_end) = curve.domain();
-    let span_params = curve.get_span_vector();
-
-    for i in 0..(span_params.len() - 1) {
-        let t0 = span_params[i];
-        let t1 = span_params[i + 1];
-
-        if (t1 - t0).abs() < tol {
-            continue;
-        }
-
-        let d0 = curve_signed_distance_to_plane(&curve.point_at(t0), plane);
-        let d1 = curve_signed_distance_to_plane(&curve.point_at(t1), plane);
-
-        if d0 * d1 < 0.0 {
-            if let Some(mut t_intersection) = curve_find_root_bisection(curve, plane, t0, t1, tol) {
-                curve_refine_intersection_newton(curve, plane, &mut t_intersection, tol);
-                intersections.push(t_intersection);
-            }
-        } else if d0.abs() < tol {
-            let mut add = true;
-
-            if !intersections.is_empty() && (intersections.last().unwrap() - t0).abs() < tol {
-                add = false;
-            }
-
-            if add {
-                intersections.push(t0);
-            }
-        }
-    }
-
-    let d_end = curve_signed_distance_to_plane(&curve.point_at(t_end), plane);
-
-    if d_end.abs() < tol {
-        let mut add = true;
-
-        if !intersections.is_empty() && (intersections.last().unwrap() - t_end).abs() < tol {
-            add = false;
-        }
-
-        if add {
-            intersections.push(t_end);
-        }
-    }
+    curve_plane_spans(curve, plane, tol, &mut intersections);
 
     if curve.degree() > 3 && intersections.len() < curve.degree() {
-        let num_samples = (curve.degree() * 4) as i32;
-        let dt = (t_end - t_start) / num_samples as f64;
-
-        for i in 0..num_samples {
-            let t0 = t_start + i as f64 * dt;
-            let t1 = t_start + (i + 1) as f64 * dt;
-
-            let d0 = curve_signed_distance_to_plane(&curve.point_at(t0), plane);
-            let d1 = curve_signed_distance_to_plane(&curve.point_at(t1), plane);
-
-            if d0 * d1 < 0.0 {
-                if let Some(mut t_intersection) =
-                    curve_find_root_bisection(curve, plane, t0, t1, tol)
-                {
-                    let mut is_new = true;
-
-                    for &existing in &intersections {
-                        if (existing - t_intersection).abs() < tol * 2.0 {
-                            is_new = false;
-                            break;
-                        }
-                    }
-
-                    if is_new {
-                        curve_refine_intersection_newton(curve, plane, &mut t_intersection, tol);
-                        intersections.push(t_intersection);
-                    }
-                }
-            }
-        }
+        curve_plane_samples(curve, plane, tol, &mut intersections);
     }
 
     intersections.sort_by(|a, b| a.partial_cmp(b).unwrap());
-    intersections.dedup_by(|a, b| (*a - *b).abs() < tol * 2.0);
 
-    intersections
+    unique_sorted(&intersections, tol * 2.0)
 }
 
 /// Curve-plane intersection points.
@@ -1134,9 +1230,8 @@ pub fn curve_plane_bezier_clipping(
     curve_plane_clip(curve, plane, tolerance, t0, t1, 0, &mut results);
 
     results.sort_by(|a, b| a.partial_cmp(b).unwrap());
-    results.dedup_by(|a, b| (*a - *b).abs() < tolerance * 2.0);
 
-    results
+    unique_sorted(&results, tolerance * 10.0)
 }
 
 /// Curve-plane intersection parameters by hodograph subdivision.
@@ -1169,9 +1264,8 @@ pub fn curve_plane_algebraic(
     }
 
     results.sort_by(|a, b| a.partial_cmp(b).unwrap());
-    results.dedup_by(|a, b| (*a - *b).abs() < tolerance * 10.0);
 
-    results
+    unique_sorted(&results, tolerance * 10.0)
 }
 
 /// Curve-plane intersection parameters by span subdivision and Newton polishing.
@@ -1212,9 +1306,8 @@ pub fn curve_plane_production(
     }
 
     results.sort_by(|a, b| a.partial_cmp(b).unwrap());
-    results.dedup_by(|a, b| (*a - *b).abs() < tolerance * 10.0);
 
-    results
+    unique_sorted(&results, tolerance * 10.0)
 }
 
 /// Closest curve parameter and distance to a point, optionally within [t0, t1].
@@ -1226,84 +1319,185 @@ pub fn curve_closest_point(curve: &NurbsCurve, test_point: &Point, t0: f64, t1: 
 // NURBS surface helpers
 // ═══════════════════════════════════════════════════════════════════════════
 
-/// Seed and trace surface/plane intersection curves in UV space.
-fn surface_plane_traces(
-    surface: &NurbsSurface,
-    plane: &Plane,
-    tolerance: f64,
-) -> (Vec<(Vec<(f64, f64)>, Vec<(f64, f64)>, bool)>, f64, f64, f64) {
-    let (u0, u1) = match surface.domain(0) {
-        Some(d) => d,
-        None => return (Vec::new(), 0.0, 1.0, 1.0),
-    };
-    let (v0, v1) = match surface.domain(1) {
-        Some(d) => d,
-        None => return (Vec::new(), 0.0, 1.0, 1.0),
-    };
-    let range_u = u1 - u0;
-    let range_v = v1 - v0;
-    let closed_u = surface.is_closed(0);
-    let closed_v = surface.is_closed(1);
+/// One traced surface-plane curve in parameter space.
+struct SurfacePlaneTrace {
+    uv_trace: Vec<(f64, f64)>,     // Traced (u, v) samples.
+    uv_unwrapped: Vec<(f64, f64)>, // Samples with seam wraps undone.
+    is_loop: bool,                 // Whether the trace closes on itself.
+}
 
-    let wrap_u = |u: f64| -> f64 {
-        if closed_u {
-            let mut t = (u - u0) % range_u;
+/// All traces of one surface-plane section with the scales used.
+struct SurfacePlaneTraceResult {
+    traces: Vec<SurfacePlaneTrace>, // Traced curves.
+    step: f64,                      // uv step used.
+    uv_to_3d: f64,                  // Largest uv-to-3D scale seen.
+    uv_to_3d_min: f64,              // Smallest uv-to-3D scale seen.
+}
 
-            if t < 0.0 {
-                t += range_u;
-            }
+/// Grid crossing of the surface-plane distance, the start of one trace.
+struct SurfacePlaneSeed {
+    u: f64,     // Seed u.
+    v: f64,     // Seed v.
+    used: bool, // Whether a trace already passed the seed.
+}
 
-            return u0 + t;
+/// Signed surface-plane distance over the surface's UV domain with the tracing scales.
+struct SurfacePlaneField<'a> {
+    surface: &'a NurbsSurface, // Traced surface.
+    pn: Vector,                // Plane normal.
+    p0: Point,                 // Plane origin.
+    tolerance: f64,            // Newton tolerance.
+    u0: f64,                   // Domain start in u.
+    u1: f64,                   // Domain end in u.
+    v0: f64,                   // Domain start in v.
+    v1: f64,                   // Domain end in v.
+    range_u: f64,              // Domain length in u.
+    range_v: f64,              // Domain length in v.
+    closed_u: bool,            // Whether u wraps around a seam.
+    closed_v: bool,            // Whether v wraps around a seam.
+    nu: i32,                   // Grid cells in u.
+    nv: i32,                   // Grid cells in v.
+    du: f64,                   // Grid cell size in u.
+    dv: f64,                   // Grid cell size in v.
+    uv_to_3d: f64,             // Largest uv-to-3D scale.
+    uv_to_3d_min: f64,         // Smallest uv-to-3D scale.
+    step: f64,                 // Marching step in uv.
+    max_steps: i32,            // Marching step cap per direction.
+    close_tol_3d: f64,         // 3D distance that closes a loop.
+    consume_tol_3d: f64,       // 3D distance that consumes a seed.
+    join_tol: f64,             // 3D distance that joins two traces.
+}
+
+impl<'a> SurfacePlaneField<'a> {
+    /// Sample the domain and derive the tracing scales; None without a domain.
+    fn new(surface: &'a NurbsSurface, plane: &Plane, tolerance: f64) -> Option<Self> {
+        let (u0, u1) = surface.domain(0)?;
+        let (v0, v1) = surface.domain(1)?;
+        let spans_u = surface.get_span_vector(0);
+        let spans_v = surface.get_span_vector(1);
+        let nu = (spans_u.len() as i32 - 1).max(1) * 4;
+        let nv = (spans_v.len() as i32 - 1).max(1) * 4;
+        let range_u = u1 - u0;
+        let range_v = v1 - v0;
+
+        let mut field = SurfacePlaneField {
+            surface,
+            pn: plane.z_axis(),
+            p0: plane.origin(),
+            tolerance,
+            u0,
+            u1,
+            v0,
+            v1,
+            range_u,
+            range_v,
+            closed_u: surface.is_closed(0),
+            closed_v: surface.is_closed(1),
+            nu,
+            nv,
+            du: range_u / nu as f64,
+            dv: range_v / nv as f64,
+            uv_to_3d: 0.0,
+            uv_to_3d_min: 0.0,
+            step: 0.0,
+            max_steps: 0,
+            close_tol_3d: 0.0,
+            consume_tol_3d: 0.0,
+            join_tol: 0.0,
+        };
+
+        let du = field.du;
+        let dv = field.dv;
+        let mu = (u0 + u1) * 0.5;
+        let mv = (v0 + v1) * 0.5;
+        let pmid = field.point((mu, mv));
+        let uv_to_3d_u = pmid.distance(&field.point((field.wrap_u(mu + du), mv)), None) / du;
+        let uv_to_3d_v = pmid.distance(&field.point((mu, field.wrap_v(mv + dv))), None) / dv;
+        field.uv_to_3d = uv_to_3d_u.max(uv_to_3d_v);
+        field.uv_to_3d_min = uv_to_3d_u.min(uv_to_3d_v);
+
+        if field.uv_to_3d < 1e-10 {
+            field.uv_to_3d = 1.0;
         }
 
-        u.max(u0).min(u1)
-    };
-    let wrap_v = |v: f64| -> f64 {
-        if closed_v {
-            let mut t = (v - v0) % range_v;
-
-            if t < 0.0 {
-                t += range_v;
-            }
-
-            return v0 + t;
+        if field.uv_to_3d_min < 1e-10 {
+            field.uv_to_3d_min = 1.0;
         }
 
-        v.max(v0).min(v1)
-    };
+        field.step = du.min(dv) * 0.25;
+        field.max_steps = nu * nv * 32;
+        field.close_tol_3d = field.step * 4.0 * field.uv_to_3d_min;
+        field.consume_tol_3d = field.step * field.uv_to_3d * 2.0;
+        field.join_tol = du.max(dv) * field.uv_to_3d * 1.5;
 
-    let pn = plane.z_axis();
-    let p0 = plane.origin();
+        Some(field)
+    }
 
-    let g = |u: f64, v: f64| -> f64 {
-        let p = surface
-            .point_at(wrap_u(u), wrap_v(v))
-            .unwrap_or(Point::new(0.0, 0.0, 0.0));
+    /// Wrap u across a closed seam or clamp it to the domain.
+    fn wrap_u(&self, u: f64) -> f64 {
+        if self.closed_u {
+            let mut t = (u - self.u0) % self.range_u;
+
+            if t < 0.0 {
+                t += self.range_u;
+            }
+
+            return self.u0 + t;
+        }
+
+        self.u0.max(u.min(self.u1))
+    }
+
+    /// Wrap v across a closed seam or clamp it to the domain.
+    fn wrap_v(&self, v: f64) -> f64 {
+        if self.closed_v {
+            let mut t = (v - self.v0) % self.range_v;
+
+            if t < 0.0 {
+                t += self.range_v;
+            }
+
+            return self.v0 + t;
+        }
+
+        self.v0.max(v.min(self.v1))
+    }
+
+    /// Signed plane distance at (u, v).
+    fn value(&self, u: f64, v: f64) -> f64 {
+        let p = self.point((self.wrap_u(u), self.wrap_v(v)));
+        let p0 = &self.p0;
+        let pn = &self.pn;
 
         (p[0] - p0[0]) * pn[0] + (p[1] - p0[1]) * pn[1] + (p[2] - p0[2]) * pn[2]
-    };
+    }
 
-    let g_and_grad = |u: f64, v: f64| -> (f64, f64, f64) {
-        let derivs = surface.evaluate(wrap_u(u), wrap_v(v), 1);
+    /// Signed plane distance and its uv gradient at (u, v).
+    fn value_and_gradient(&self, u: f64, v: f64) -> (f64, f64, f64) {
+        let derivs = self.surface.evaluate(self.wrap_u(u), self.wrap_v(v), 1);
 
         if derivs.len() < 3 {
-            return (g(u, v), 0.0, 0.0);
+            return (self.value(u, v), 0.0, 0.0);
         }
 
         let s = &derivs[0];
         let su = &derivs[2];
         let sv = &derivs[1];
+        let p0 = &self.p0;
+        let pn = &self.pn;
         let val = (s[0] - p0[0]) * pn[0] + (s[1] - p0[1]) * pn[1] + (s[2] - p0[2]) * pn[2];
         let gu = su[0] * pn[0] + su[1] * pn[1] + su[2] * pn[2];
         let gv = sv[0] * pn[0] + sv[1] * pn[1] + sv[2] * pn[2];
+
         (val, gu, gv)
-    };
+    }
 
-    let newton_correct = |u: &mut f64, v: &mut f64| -> bool {
+    /// Newton-project (u, v) onto the zero set; false when it does not converge.
+    fn newton_correct(&self, u: &mut f64, v: &mut f64) -> bool {
         for _ in 0..10 {
-            let (val, gu, gv) = g_and_grad(*u, *v);
+            let (val, gu, gv) = self.value_and_gradient(*u, *v);
 
-            if val.abs() < tolerance {
+            if val.abs() < self.tolerance {
                 return true;
             }
 
@@ -1315,56 +1509,93 @@ fn surface_plane_traces(
 
             *u -= val * gu / mag2;
             *v -= val * gv / mag2;
-            *u = wrap_u(*u);
-            *v = wrap_v(*v);
+            *u = self.wrap_u(*u);
+            *v = self.wrap_v(*v);
         }
 
-        g(*u, *v).abs() < tolerance * 10.0
-    };
-
-    let spans_u = surface.get_span_vector(0);
-    let spans_v = surface.get_span_vector(1);
-    let nu = (spans_u.len() as i32 - 1).max(1) * 4;
-    let nv = (spans_v.len() as i32 - 1).max(1) * 4;
-    let du = range_u / nu as f64;
-    let dv = range_v / nv as f64;
-
-    let mu = (u0 + u1) * 0.5;
-    let mv = (v0 + v1) * 0.5;
-    let pmid = surface
-        .point_at(mu, mv)
-        .unwrap_or(Point::new(0.0, 0.0, 0.0));
-
-    let pmid_u = surface
-        .point_at(wrap_u(mu + du), mv)
-        .unwrap_or(Point::new(0.0, 0.0, 0.0));
-
-    let pmid_v = surface
-        .point_at(mu, wrap_v(mv + dv))
-        .unwrap_or(Point::new(0.0, 0.0, 0.0));
-
-    let uv_to_3d_u = pmid.distance(&pmid_u, None) / du;
-    let uv_to_3d_v = pmid.distance(&pmid_v, None) / dv;
-    let mut uv_to_3d = uv_to_3d_u.max(uv_to_3d_v);
-    let mut uv_to_3d_min = uv_to_3d_u.min(uv_to_3d_v);
-
-    if uv_to_3d < 1e-10 {
-        uv_to_3d = 1.0;
+        self.value(*u, *v).abs() < self.tolerance * 10.0
     }
 
-    if uv_to_3d_min < 1e-10 {
-        uv_to_3d_min = 1.0;
+    /// Unit uv tangent of the zero set at (u, v) in direction dir.
+    fn tangent(&self, u: f64, v: f64, dir: i32) -> Option<(f64, f64)> {
+        let (_, gu, gv) = self.value_and_gradient(u, v);
+        let mag = f64::hypot(gu, gv);
+
+        if mag < 1e-14 {
+            return None;
+        }
+
+        Some((-gv / mag * dir as f64, gu / mag * dir as f64))
     }
 
-    let cols = nv + 1;
-    let mut dist = vec![0.0f64; ((nu + 1) * cols) as usize];
+    /// Surface point at a uv sample.
+    fn point(&self, q: (f64, f64)) -> Point {
+        self.surface
+            .point_at(q.0, q.1)
+            .unwrap_or(Point::new(0.0, 0.0, 0.0))
+    }
 
-    for i in 0..=nu {
-        let u = u0 + du * i as f64;
+    /// Newton-slide (cu, cv) along one seam line, axis 0 moving v and axis 1 moving u.
+    fn seam_newton(&self, mut cu: f64, mut cv: f64, axis: i32) -> (f64, f64) {
+        for _ in 0..10 {
+            let (val, gu, gv) = self.value_and_gradient(cu, cv);
 
-        for j in 0..=nv {
-            let v = v0 + dv * j as f64;
-            let mut d = g(u, v);
+            if val.abs() < self.tolerance {
+                break;
+            }
+
+            if axis == 0 {
+                if gv.abs() < 1e-14 {
+                    break;
+                }
+
+                cv -= val / gv;
+            } else {
+                if gu.abs() < 1e-14 {
+                    break;
+                }
+
+                cu -= val / gu;
+            }
+        }
+
+        (cu, cv)
+    }
+
+    /// Newton-project (u, v) onto the zero set to 1e-12; false on a flat gradient.
+    fn polish(&self, u: &mut f64, v: &mut f64) -> bool {
+        for _ in 0..8 {
+            let (val, gu, gv) = self.value_and_gradient(*u, *v);
+
+            if val.abs() < 1e-12 {
+                return true;
+            }
+
+            let mag2 = gu * gu + gv * gv;
+
+            if mag2 < 1e-28 {
+                return false;
+            }
+
+            *u -= val * gu / mag2;
+            *v -= val * gv / mag2;
+        }
+
+        true
+    }
+}
+
+/// Signed plane distance on the (nu + 1) x (nv + 1) grid, exact zeros nudged negative.
+fn surface_plane_grid(field: &SurfacePlaneField) -> Vec<f64> {
+    let cols = field.nv + 1;
+    let mut dist = vec![0.0f64; ((field.nu + 1) * cols) as usize];
+
+    for i in 0..=field.nu {
+        let u = field.u0 + field.du * i as f64;
+
+        for j in 0..=field.nv {
+            let v = field.v0 + field.dv * j as f64;
+            let mut d = field.value(u, v);
 
             if d == 0.0 {
                 d = -1e-14;
@@ -1374,28 +1605,31 @@ fn surface_plane_traces(
         }
     }
 
-    struct Seed {
-        u: f64,
-        v: f64,
-        used: bool,
-    }
+    dist
+}
 
-    let mut seeds: Vec<Seed> = Vec::new();
+/// Newton-corrected sign changes along the grid edges, near duplicates marked used.
+fn surface_plane_seeds(field: &SurfacePlaneField, dist: &[f64]) -> Vec<SurfacePlaneSeed> {
+    let mut seeds: Vec<SurfacePlaneSeed> = Vec::new();
+    let cols = field.nv + 1;
+    let h_jmax = if field.closed_v {
+        field.nv - 1
+    } else {
+        field.nv
+    };
 
-    let h_jmax = if closed_v { nv - 1 } else { nv };
-
-    for i in 0..nu {
+    for i in 0..field.nu {
         for j in 0..=h_jmax {
             let d0 = dist[(i * cols + j) as usize];
             let d1 = dist[((i + 1) * cols + j) as usize];
 
             if d0 * d1 < 0.0 {
                 let t = d0 / (d0 - d1);
-                let mut su = u0 + du * (i as f64 + t);
-                let mut sv = v0 + dv * j as f64;
+                let mut su = field.u0 + field.du * (i as f64 + t);
+                let mut sv = field.v0 + field.dv * j as f64;
 
-                if newton_correct(&mut su, &mut sv) {
-                    seeds.push(Seed {
+                if field.newton_correct(&mut su, &mut sv) {
+                    seeds.push(SurfacePlaneSeed {
                         u: su,
                         v: sv,
                         used: false,
@@ -1405,20 +1639,24 @@ fn surface_plane_traces(
         }
     }
 
-    let v_imax = if closed_u { nu - 1 } else { nu };
+    let v_imax = if field.closed_u {
+        field.nu - 1
+    } else {
+        field.nu
+    };
 
     for i in 0..=v_imax {
-        for j in 0..nv {
+        for j in 0..field.nv {
             let d0 = dist[(i * cols + j) as usize];
             let d1 = dist[(i * cols + j + 1) as usize];
 
             if d0 * d1 < 0.0 {
                 let t = d0 / (d0 - d1);
-                let mut su = u0 + du * i as f64;
-                let mut sv = v0 + dv * (j as f64 + t);
+                let mut su = field.u0 + field.du * i as f64;
+                let mut sv = field.v0 + field.dv * (j as f64 + t);
 
-                if newton_correct(&mut su, &mut sv) {
-                    seeds.push(Seed {
+                if field.newton_correct(&mut su, &mut sv) {
+                    seeds.push(SurfacePlaneSeed {
                         u: su,
                         v: sv,
                         used: false,
@@ -1428,252 +1666,712 @@ fn surface_plane_traces(
         }
     }
 
-    let seed_tol_3d = (du.max(dv)) * uv_to_3d;
+    let seed_tol_3d = field.du.max(field.dv) * field.uv_to_3d;
 
     for i in 0..seeds.len() {
         if seeds[i].used {
             continue;
         }
 
-        let pi = surface
-            .point_at(seeds[i].u, seeds[i].v)
-            .unwrap_or(Point::new(0.0, 0.0, 0.0));
+        let pi = field.point((seeds[i].u, seeds[i].v));
 
-        for j in (i + 1)..seeds.len() {
-            if seeds[j].used {
+        for other in seeds.iter_mut().skip(i + 1) {
+            if other.used {
                 continue;
             }
 
-            let pj = surface
-                .point_at(seeds[j].u, seeds[j].v)
-                .unwrap_or(Point::new(0.0, 0.0, 0.0));
-
-            if pi.distance(&pj, None) < seed_tol_3d {
-                seeds[j].used = true;
+            if pi.distance(&field.point((other.u, other.v)), None) < seed_tol_3d {
+                other.used = true;
             }
         }
     }
 
-    let step = du.min(dv) * 0.25;
-    let max_steps = (nu * nv * 32) as usize;
-    let close_tol_3d = step * 4.0 * uv_to_3d_min;
-    let consume_tol_3d = step * uv_to_3d * 2.0;
+    seeds
+}
 
-    let mut traces: Vec<(Vec<(f64, f64)>, Vec<(f64, f64)>, bool)> = Vec::new();
+/// Step (u, v) by local_step along (tu, tv), pulled back onto an open domain boundary; true when clamped.
+fn domain_step(
+    field: &SurfacePlaneField,
+    u: f64,
+    v: f64,
+    local_step: f64,
+    tu: f64,
+    tv: f64,
+) -> (f64, f64, bool) {
+    let un = u + local_step * tu;
+    let vn = v + local_step * tv;
 
-    for seed_idx in 0..seeds.len() {
-        if seeds[seed_idx].used {
-            continue;
+    let out_u = !field.closed_u && (un < field.u0 || un > field.u1);
+    let out_v = !field.closed_v && (vn < field.v0 || vn > field.v1);
+
+    if !out_u && !out_v {
+        return (un, vn, false);
+    }
+
+    let mut tc = 1.0f64;
+
+    if !field.closed_u && tu > 0.0 && un > field.u1 {
+        tc = tc.min((field.u1 - u) / (local_step * tu));
+    }
+
+    if !field.closed_u && tu < 0.0 && un < field.u0 {
+        tc = tc.min((field.u0 - u) / (local_step * tu));
+    }
+
+    if !field.closed_v && tv > 0.0 && vn > field.v1 {
+        tc = tc.min((field.v1 - v) / (local_step * tv));
+    }
+
+    if !field.closed_v && tv < 0.0 && vn < field.v0 {
+        tc = tc.min((field.v0 - v) / (local_step * tv));
+    }
+
+    (u + tc * local_step * tu, v + tc * local_step * tv, true)
+}
+
+/// Retry a failed Newton projection with the step halved up to four times.
+fn newton_retry(
+    field: &SurfacePlaneField,
+    u: f64,
+    v: f64,
+    local_step: f64,
+    tu: f64,
+    tv: f64,
+) -> Option<(f64, f64)> {
+    let mut ls = local_step;
+
+    for _ in 0..4 {
+        ls *= 0.5;
+        let mut un = field.wrap_u(u + ls * tu);
+        let mut vn = field.wrap_v(v + ls * tv);
+
+        if field.newton_correct(&mut un, &mut vn) {
+            return Some((un, vn));
         }
+    }
 
-        seeds[seed_idx].used = true;
-        let seed_u = seeds[seed_idx].u;
-        let seed_v = seeds[seed_idx].v;
+    None
+}
 
-        let tangent_at_uv = |u: f64, v: f64, dir: f64| -> Option<(f64, f64)> {
-            let (_, gu, gv) = g_and_grad(u, v);
-            let mag = f64::hypot(gu, gv);
+/// Mark every unused seed within the consume distance of p as used.
+fn consume_seeds(field: &SurfacePlaneField, p: &Point, seeds: &mut [SurfacePlaneSeed]) {
+    for other in seeds.iter_mut() {
+        if !other.used && p.distance(&field.point((other.u, other.v)), None) < field.consume_tol_3d
+        {
+            other.used = true;
+        }
+    }
+}
 
-            if mag < 1e-14 {
-                return None;
-            }
+/// Step length for the turn between two unit tangents: a quarter or half step on sharp turns.
+fn turn_step(field: &SurfacePlaneField, tu: f64, tv: f64, prev_tu: f64, prev_tv: f64) -> f64 {
+    if f64::hypot(prev_tu, prev_tv) <= 1e-14 {
+        return field.step;
+    }
 
-            Some((-gv / mag * dir, gu / mag * dir))
-        };
+    let dot = (-1.0f64).max(1.0f64.min(tu * prev_tu + tv * prev_tv));
 
-        let trace_dir =
-            |su: f64, sv: f64, dir: f64, seeds: &mut Vec<Seed>| -> (Vec<(f64, f64)>, bool) {
-                let mut out: Vec<(f64, f64)> = Vec::new();
-                let mut u = su;
-                let mut v = sv;
-                let mut prev_tu = 0.0f64;
-                let mut prev_tv = 0.0f64;
-                let p_start = surface
-                    .point_at(su, sv)
-                    .unwrap_or(Point::new(0.0, 0.0, 0.0));
+    if dot < 0.95 {
+        return field.step * 0.25;
+    }
 
-                let mut p_prev = p_start.clone();
-                let mut dist_traveled = 0.0f64;
+    if dot < 0.985 {
+        return field.step * 0.5;
+    }
 
-                for _ in 0..max_steps {
-                    let (mut tu, mut tv) = match tangent_at_uv(u, v, dir) {
-                        Some(t) => t,
-                        None => {
-                            if f64::hypot(prev_tu, prev_tv) < 1e-14 {
-                                break;
-                            }
+    field.step
+}
 
-                            (prev_tu, prev_tv)
-                        }
-                    };
+/// March the zero set from (su, sv) in direction dir; true when it closes on its start.
+fn surface_plane_march(
+    field: &SurfacePlaneField,
+    su: f64,
+    sv: f64,
+    dir: i32,
+    seeds: &mut [SurfacePlaneSeed],
+    out: &mut Vec<(f64, f64)>,
+) -> bool {
+    let mut u = su;
+    let mut v = sv;
+    let mut prev_tu = 0.0f64;
+    let mut prev_tv = 0.0f64;
+    let p_start = field.point((su, sv));
+    let mut p_prev = p_start.clone();
+    let mut dist_traveled = 0.0f64;
 
-                    let mut local_step = step;
-
-                    if f64::hypot(prev_tu, prev_tv) > 1e-14 {
-                        let dot = (tu * prev_tu + tv * prev_tv).clamp(-1.0, 1.0);
-
-                        if dot < 0.95 {
-                            local_step = step * 0.25;
-                        } else if dot < 0.985 {
-                            local_step = step * 0.5;
-                        }
-                    }
-
-                    let u_mid = u + local_step * 0.5 * tu;
-                    let v_mid = v + local_step * 0.5 * tv;
-
-                    if let Some((tu2, tv2)) = tangent_at_uv(u_mid, v_mid, dir) {
-                        tu = tu2;
-                        tv = tv2;
-                    }
-
-                    prev_tu = tu;
-                    prev_tv = tv;
-
-                    let mut un = u + local_step * tu;
-                    let mut vn = v + local_step * tv;
-
-                    let mut hit_boundary = false;
-
-                    if (!closed_u && (un < u0 || un > u1)) || (!closed_v && (vn < v0 || vn > v1)) {
-                        let mut tc = 1.0f64;
-
-                        if !closed_u && tu > 0.0 && un > u1 {
-                            tc = tc.min((u1 - u) / (local_step * tu));
-                        }
-
-                        if !closed_u && tu < 0.0 && un < u0 {
-                            tc = tc.min((u0 - u) / (local_step * tu));
-                        }
-
-                        if !closed_v && tv > 0.0 && vn > v1 {
-                            tc = tc.min((v1 - v) / (local_step * tv));
-                        }
-
-                        if !closed_v && tv < 0.0 && vn < v0 {
-                            tc = tc.min((v0 - v) / (local_step * tv));
-                        }
-
-                        un = u + tc * local_step * tu;
-                        vn = v + tc * local_step * tv;
-                        hit_boundary = true;
-                    }
-
-                    un = wrap_u(un);
-                    vn = wrap_v(vn);
-
-                    if !newton_correct(&mut un, &mut vn) {
-                        break;
-                    }
-
-                    let p_cur = surface
-                        .point_at(un, vn)
-                        .unwrap_or(Point::new(0.0, 0.0, 0.0));
-
-                    dist_traveled += p_prev.distance(&p_cur, None);
-
-                    if dist_traveled > close_tol_3d * 3.0
-                        && p_start.distance(&p_cur, None) < close_tol_3d
-                    {
-                        out.push((un, vn));
-
-                        return (out, true);
-                    }
-
-                    out.push((un, vn));
-                    u = un;
-                    v = vn;
-                    p_prev = p_cur.clone();
-
-                    if hit_boundary {
-                        break;
-                    }
-
-                    for other in seeds.iter_mut() {
-                        if !other.used {
-                            let po = surface
-                                .point_at(other.u, other.v)
-                                .unwrap_or(Point::new(0.0, 0.0, 0.0));
-
-                            if p_cur.distance(&po, None) < consume_tol_3d {
-                                other.used = true;
-                            }
-                        }
-                    }
+    for _ in 0..field.max_steps {
+        let (mut tu, mut tv) = match field.tangent(u, v, dir) {
+            Some(t) => t,
+            None => {
+                if f64::hypot(prev_tu, prev_tv) < 1e-14 {
+                    break;
                 }
 
-                (out, false)
+                (prev_tu, prev_tv)
+            }
+        };
+
+        let local_step = turn_step(field, tu, tv, prev_tu, prev_tv);
+
+        if let Some((tu2, tv2)) =
+            field.tangent(u + local_step * 0.5 * tu, v + local_step * 0.5 * tv, dir)
+        {
+            tu = tu2;
+            tv = tv2;
+        }
+
+        prev_tu = tu;
+        prev_tv = tv;
+
+        let (un_raw, vn_raw, hit_boundary) = domain_step(field, u, v, local_step, tu, tv);
+        let mut un = field.wrap_u(un_raw);
+        let mut vn = field.wrap_v(vn_raw);
+
+        if !field.newton_correct(&mut un, &mut vn) {
+            let Some((ur, vr)) = newton_retry(field, u, v, local_step, tu, tv) else {
+                break;
             };
 
-        let (fwd, fwd_closed) = trace_dir(seed_u, seed_v, 1.0, &mut seeds);
-        let bwd = if !fwd_closed {
-            trace_dir(seed_u, seed_v, -1.0, &mut seeds).0
-        } else {
-            Vec::new()
-        };
-
-        let mut uv_trace: Vec<(f64, f64)> = Vec::with_capacity(bwd.len() + 1 + fwd.len());
-
-        for i in (0..bwd.len()).rev() {
-            uv_trace.push(bwd[i]);
+            un = ur;
+            vn = vr;
         }
 
-        uv_trace.push((seed_u, seed_v));
+        let p_cur = field.point((un, vn));
+        dist_traveled += p_prev.distance(&p_cur, None);
+        out.push((un, vn));
 
-        for p in &fwd {
-            uv_trace.push(*p);
+        if dist_traveled > field.close_tol_3d * 3.0
+            && p_start.distance(&p_cur, None) < field.close_tol_3d
+        {
+            return true;
         }
 
-        if uv_trace.len() < 4 {
-            continue;
+        u = un;
+        v = vn;
+        p_prev = p_cur.clone();
+
+        if hit_boundary {
+            break;
         }
 
-        let p_first = surface
-            .point_at(uv_trace[0].0, uv_trace[0].1)
-            .unwrap_or(Point::new(0.0, 0.0, 0.0));
-
-        let p_last = surface
-            .point_at(uv_trace.last().unwrap().0, uv_trace.last().unwrap().1)
-            .unwrap_or(Point::new(0.0, 0.0, 0.0));
-
-        let is_loop =
-            fwd_closed || (uv_trace.len() >= 6 && p_first.distance(&p_last, None) < close_tol_3d);
-
-        if is_loop {
-            uv_trace.pop();
-        }
-
-        if uv_trace.len() < 4 {
-            continue;
-        }
-
-        let mut uv_unwrapped = uv_trace.clone();
-
-        for i in 1..uv_unwrapped.len() {
-            let du_jump = uv_unwrapped[i].0 - uv_unwrapped[i - 1].0;
-            let dv_jump = uv_unwrapped[i].1 - uv_unwrapped[i - 1].1;
-
-            if closed_u {
-                if du_jump > range_u * 0.5 {
-                    uv_unwrapped[i].0 -= range_u;
-                } else if du_jump < -range_u * 0.5 {
-                    uv_unwrapped[i].0 += range_u;
-                }
-            }
-
-            if closed_v {
-                if dv_jump > range_v * 0.5 {
-                    uv_unwrapped[i].1 -= range_v;
-                } else if dv_jump < -range_v * 0.5 {
-                    uv_unwrapped[i].1 += range_v;
-                }
-            }
-        }
-
-        traces.push((uv_trace, uv_unwrapped, is_loop));
+        consume_seeds(field, &p_cur, seeds);
     }
 
-    (traces, step, uv_to_3d, uv_to_3d_min)
+    false
+}
+
+/// Undo the seam jumps of a closed domain in the unwrapped copy of a trace.
+fn unwrap_trace(field: &SurfacePlaneField, uv: &mut [(f64, f64)]) {
+    for i in 1..uv.len() {
+        let du_jump = uv[i].0 - uv[i - 1].0;
+        let dv_jump = uv[i].1 - uv[i - 1].1;
+
+        if field.closed_u {
+            if du_jump > field.range_u * 0.5 {
+                uv[i].0 -= field.range_u;
+            } else if du_jump < -field.range_u * 0.5 {
+                uv[i].0 += field.range_u;
+            }
+        }
+
+        if field.closed_v {
+            if dv_jump > field.range_v * 0.5 {
+                uv[i].1 -= field.range_v;
+            } else if dv_jump < -field.range_v * 0.5 {
+                uv[i].1 += field.range_v;
+            }
+        }
+    }
+}
+
+/// Trace one seed both ways into a trace; None when it is too short to keep.
+fn surface_plane_trace_seed(
+    field: &SurfacePlaneField,
+    seeds: &mut [SurfacePlaneSeed],
+    index: usize,
+) -> Option<SurfacePlaneTrace> {
+    let seed_u = seeds[index].u;
+    let seed_v = seeds[index].v;
+    let mut fwd: Vec<(f64, f64)> = Vec::new();
+    let mut bwd: Vec<(f64, f64)> = Vec::new();
+    let fwd_closed = surface_plane_march(field, seed_u, seed_v, 1, seeds, &mut fwd);
+
+    if !fwd_closed {
+        surface_plane_march(field, seed_u, seed_v, -1, seeds, &mut bwd);
+    }
+
+    let mut uv_trace: Vec<(f64, f64)> = Vec::with_capacity(bwd.len() + 1 + fwd.len());
+
+    for p in bwd.iter().rev() {
+        uv_trace.push(*p);
+    }
+
+    uv_trace.push((seed_u, seed_v));
+
+    for p in &fwd {
+        uv_trace.push(*p);
+    }
+
+    if uv_trace.len() < 4 {
+        return None;
+    }
+
+    let p_first = field.point(uv_trace[0]);
+    let p_last = field.point(uv_trace[uv_trace.len() - 1]);
+    let is_loop =
+        fwd_closed || (uv_trace.len() >= 6 && p_first.distance(&p_last, None) < field.close_tol_3d);
+
+    if is_loop {
+        uv_trace.pop();
+    }
+
+    if uv_trace.len() < 4 {
+        return None;
+    }
+
+    let mut uv_unwrapped = uv_trace.clone();
+    unwrap_trace(field, &mut uv_unwrapped);
+
+    Some(SurfacePlaneTrace {
+        uv_trace,
+        uv_unwrapped,
+        is_loop,
+    })
+}
+
+/// Whether every eighth sample of trace a lies within the join distance of trace b.
+fn trace_covered_by(
+    field: &SurfacePlaneField,
+    a: &SurfacePlaneTrace,
+    b: &SurfacePlaneTrace,
+) -> bool {
+    let stride = 1usize.max(a.uv_trace.len() / 8);
+    let mut k = 0;
+
+    while k < a.uv_trace.len() {
+        let q = field.point(a.uv_trace[k]);
+        let mut best = 1e300f64;
+
+        for r in &b.uv_trace {
+            best = best.min(q.distance(&field.point(*r), None));
+        }
+
+        if best > field.join_tol {
+            return false;
+        }
+
+        k += stride;
+    }
+
+    true
+}
+
+/// Empty every open trace that a trace at least as long already covers.
+fn drop_covered_traces(field: &SurfacePlaneField, traces: &mut [SurfacePlaneTrace]) {
+    for i in 0..traces.len() {
+        if traces[i].uv_trace.is_empty() || traces[i].is_loop {
+            continue;
+        }
+
+        for j in 0..traces.len() {
+            if i == j || traces[j].uv_trace.is_empty() {
+                continue;
+            }
+
+            if traces[j].uv_trace.len() < traces[i].uv_trace.len() {
+                continue;
+            }
+
+            if trace_covered_by(field, &traces[i], &traces[j]) {
+                traces[i].uv_trace.clear();
+                break;
+            }
+        }
+    }
+}
+
+/// Append trace j to the end of trace i, reversed when requested, and close i when it meets itself.
+fn append_trace(
+    field: &SurfacePlaneField,
+    traces: &mut [SurfacePlaneTrace],
+    i: usize,
+    j: usize,
+    reversed: bool,
+) {
+    let mut add = traces[j].uv_trace.clone();
+
+    if reversed {
+        add.reverse();
+    }
+
+    traces[i].uv_trace.extend_from_slice(&add);
+    traces[j].uv_trace.clear();
+
+    let a = &mut traces[i];
+    let first = field.point(a.uv_trace[0]);
+    let last = field.point(a.uv_trace[a.uv_trace.len() - 1]);
+
+    if first.distance(&last, None) < field.join_tol {
+        a.is_loop = true;
+        a.uv_trace.pop();
+    }
+
+    a.uv_unwrapped = a.uv_trace.clone();
+    unwrap_trace(field, &mut a.uv_unwrapped);
+}
+
+/// Join the first open trace pair whose end meets a start or end; false when none does.
+fn join_one_trace_pair(field: &SurfacePlaneField, traces: &mut [SurfacePlaneTrace]) -> bool {
+    for i in 0..traces.len() {
+        if traces[i].uv_trace.len() < 2 || traces[i].is_loop {
+            continue;
+        }
+
+        let ie = field.point(traces[i].uv_trace[traces[i].uv_trace.len() - 1]);
+
+        for j in 0..traces.len() {
+            if i == j || traces[j].uv_trace.len() < 2 || traces[j].is_loop {
+                continue;
+            }
+
+            let ja = field.point(traces[j].uv_trace[0]);
+            let jb = field.point(traces[j].uv_trace[traces[j].uv_trace.len() - 1]);
+            let fwd2 = ie.distance(&ja, None) < field.join_tol;
+            let rev2 = ie.distance(&jb, None) < field.join_tol;
+
+            if !fwd2 && !rev2 {
+                continue;
+            }
+
+            append_trace(field, traces, i, j, rev2);
+
+            return true;
+        }
+    }
+
+    false
+}
+
+/// Drop short traces and close the open ones whose ends meet.
+fn close_traces(field: &SurfacePlaneField, traces: &mut Vec<SurfacePlaneTrace>) {
+    let mut kept: Vec<SurfacePlaneTrace> = Vec::new();
+
+    for t in traces.drain(..) {
+        if t.uv_trace.len() >= 4 {
+            kept.push(t);
+        }
+    }
+
+    *traces = kept;
+
+    for t in traces.iter_mut() {
+        if t.is_loop || t.uv_trace.len() < 6 {
+            continue;
+        }
+
+        let first = field.point(t.uv_trace[0]);
+        let last = field.point(t.uv_trace[t.uv_trace.len() - 1]);
+
+        if first.distance(&last, None) < field.join_tol {
+            t.is_loop = true;
+            t.uv_trace.pop();
+            t.uv_unwrapped.pop();
+        }
+    }
+}
+
+/// Snap one open trace end within a grid cell of the domain boundary onto it.
+fn snap_trace_end(field: &SurfacePlaneField, q: &mut (f64, f64), qu: &mut (f64, f64)) {
+    if !field.closed_u {
+        if (q.0 - field.u0).abs() < field.du {
+            q.0 = field.u0;
+            qu.0 = field.u0;
+        }
+
+        if (q.0 - field.u1).abs() < field.du {
+            q.0 = field.u1;
+            qu.0 = field.u1;
+        }
+    } else if q.0 - field.u0 < field.du {
+        q.0 = field.u0;
+    } else if field.u1 - q.0 < field.du {
+        q.0 = field.u1;
+    }
+
+    if !field.closed_v {
+        if (q.1 - field.v0).abs() < field.dv {
+            q.1 = field.v0;
+            qu.1 = field.v0;
+        }
+
+        if (q.1 - field.v1).abs() < field.dv {
+            q.1 = field.v1;
+            qu.1 = field.v1;
+        }
+    } else if q.1 - field.v0 < field.dv {
+        q.1 = field.v0;
+    } else if field.v1 - q.1 < field.dv {
+        q.1 = field.v1;
+    }
+}
+
+/// Seed and trace surface/plane intersection curves in UV space.
+fn surface_plane_traces(
+    surface: &NurbsSurface,
+    plane: &Plane,
+    tolerance: f64,
+) -> SurfacePlaneTraceResult {
+    let Some(field) = SurfacePlaneField::new(surface, plane, tolerance) else {
+        return SurfacePlaneTraceResult {
+            traces: Vec::new(),
+            step: 0.0,
+            uv_to_3d: 1.0,
+            uv_to_3d_min: 1.0,
+        };
+    };
+
+    let dist = surface_plane_grid(&field);
+    let mut gmax = 0.0f64;
+
+    for d in &dist {
+        gmax = gmax.max(d.abs());
+    }
+
+    if gmax < tolerance.max(1e-9) * 10.0 {
+        return SurfacePlaneTraceResult {
+            traces: Vec::new(),
+            step: field.step,
+            uv_to_3d: field.uv_to_3d,
+            uv_to_3d_min: field.uv_to_3d_min,
+        };
+    }
+
+    let mut seeds = surface_plane_seeds(&field, &dist);
+    let mut traces: Vec<SurfacePlaneTrace> = Vec::new();
+
+    for i in 0..seeds.len() {
+        if seeds[i].used {
+            continue;
+        }
+
+        seeds[i].used = true;
+
+        if let Some(trace) = surface_plane_trace_seed(&field, &mut seeds, i) {
+            traces.push(trace);
+        }
+    }
+
+    drop_covered_traces(&field, &mut traces);
+
+    for _ in 0..traces.len() {
+        if !join_one_trace_pair(&field, &mut traces) {
+            break;
+        }
+    }
+
+    close_traces(&field, &mut traces);
+
+    for t in traces.iter_mut() {
+        if t.is_loop || t.uv_trace.is_empty() {
+            continue;
+        }
+
+        let last = t.uv_trace.len() - 1;
+        let last_unwrapped = t.uv_unwrapped.len() - 1;
+        snap_trace_end(&field, &mut t.uv_trace[0], &mut t.uv_unwrapped[0]);
+        snap_trace_end(
+            &field,
+            &mut t.uv_trace[last],
+            &mut t.uv_unwrapped[last_unwrapped],
+        );
+    }
+
+    SurfacePlaneTraceResult {
+        traces,
+        step: field.step,
+        uv_to_3d: field.uv_to_3d,
+        uv_to_3d_min: field.uv_to_3d_min,
+    }
+}
+
+/// Points projected into the plane's 2D frame, z = 0.
+fn plane_points_2d(pts: &[Point], plane: &Plane) -> Vec<Point> {
+    let ax = plane.x_axis();
+    let ay = plane.y_axis();
+    let po = plane.origin();
+    let mut pts_2d: Vec<Point> = Vec::with_capacity(pts.len());
+
+    for p in pts {
+        let dx = p[0] - po[0];
+        let dy = p[1] - po[1];
+        let dz = p[2] - po[2];
+        let px = dx * ax[0] + dy * ax[1] + dz * ax[2];
+        let py = dx * ay[0] + dy * ay[1] + dz * ay[2];
+        pts_2d.push(Point::new(px, py, 0.0));
+    }
+
+    pts_2d
+}
+
+/// Normalized cumulative chord length of each point, the closing chord included for loops.
+fn chord_parameters(pts: &[Point], is_loop: bool) -> Vec<f64> {
+    let m = pts.len();
+    let mut chords = vec![0.0f64; m];
+    let mut total_len = 0.0f64;
+
+    for i in 1..m {
+        total_len += pts[i].distance(&pts[i - 1], None);
+        chords[i] = total_len;
+    }
+
+    if is_loop && m > 1 {
+        total_len += pts[0].distance(&pts[m - 1], None);
+    }
+
+    if total_len > 1e-14 {
+        for chord in chords.iter_mut().skip(1) {
+            *chord /= total_len;
+        }
+    }
+
+    chords
+}
+
+/// Sum of the turning angles along a planar polyline.
+fn total_turning(pts: &[Point]) -> f64 {
+    let mut turning = 0.0f64;
+
+    for i in 1..pts.len().saturating_sub(1) {
+        let dx1 = pts[i][0] - pts[i - 1][0];
+        let dy1 = pts[i][1] - pts[i - 1][1];
+        let dx2 = pts[i + 1][0] - pts[i][0];
+        let dy2 = pts[i + 1][1] - pts[i][1];
+        let l1 = f64::hypot(dx1, dy1);
+        let l2 = f64::hypot(dx2, dy2);
+
+        if l1 > 1e-14 && l2 > 1e-14 {
+            let c = (-1.0f64).max(1.0f64.min((dx1 * dx2 + dy1 * dy2) / (l1 * l2)));
+            turning += c.acos();
+        }
+    }
+
+    turning
+}
+
+/// Largest distance from each point to the curve, found by ternary search around its chord parameter.
+fn fitted_max_deviation(cand: &NurbsCurve, pts: &[Point], chords: &[f64]) -> f64 {
+    let m = pts.len();
+    let (ft0, ft1) = cand.domain();
+    let mut max_dev = 0.0f64;
+
+    for (p, chord) in pts.iter().zip(chords) {
+        let t = ft0 + (ft1 - ft0) * chord;
+        let w2 = (ft1 - ft0) * 2.0 / (m as i32 - 1).max(1) as f64;
+        let mut lo = ft0.max(t - w2);
+        let mut hi = ft1.min(t + w2);
+
+        for _ in 0..20 {
+            let m1 = lo + (hi - lo) / 3.0;
+            let m2 = hi - (hi - lo) / 3.0;
+
+            if cand.point_at(m1).distance(p, None) < cand.point_at(m2).distance(p, None) {
+                hi = m2;
+            } else {
+                lo = m1;
+            }
+        }
+
+        max_dev = max_dev.max(cand.point_at(0.5 * (lo + hi)).distance(p, None));
+    }
+
+    max_dev
+}
+
+/// Cubic fitted to the points in the plane's frame, CVs doubled until within fit_tol, lifted back to 3D.
+fn fit_planar_freeform(
+    all_pts: &[Point],
+    is_loop: bool,
+    plane: &Plane,
+    fit_tol: f64,
+) -> NurbsCurve {
+    let m = all_pts.len() as i32;
+
+    if m < 4 {
+        return NurbsCurve::new(3, false, 4, 0);
+    }
+
+    let pts_2d = plane_points_2d(all_pts, plane);
+    let chords = chord_parameters(&pts_2d, is_loop);
+    let mut target_cvs = 8_i32.max((total_turning(&pts_2d) / 0.5) as i32 + 6);
+    let max_cvs = (m - 1).min(128);
+    let mut crv_2d = NurbsCurve::new(3, false, 4, 0);
+    let mut best_dev = 1e300f64;
+
+    for _ in 0..6 {
+        if target_cvs > max_cvs {
+            break;
+        }
+
+        let cand = NurbsCurve::create_fitted(&pts_2d, target_cvs as usize, 3, is_loop);
+
+        if !cand.is_valid() {
+            break;
+        }
+
+        let max_dev = fitted_max_deviation(&cand, &pts_2d, &chords);
+
+        if max_dev < best_dev {
+            best_dev = max_dev;
+            crv_2d = cand;
+        }
+
+        if max_dev < fit_tol {
+            break;
+        }
+
+        target_cvs = (target_cvs * 2).min(max_cvs + 1);
+    }
+
+    if !crv_2d.is_valid() {
+        crv_2d = if is_loop {
+            NurbsCurve::create_interpolated(
+                &pts_2d,
+                CurveNurbsKnotStyle::ChordPeriodic,
+                CurveInterpStyle::Rhino,
+            )
+        } else {
+            NurbsCurve::create_interpolated(
+                &pts_2d,
+                CurveNurbsKnotStyle::Chord,
+                CurveInterpStyle::Rhino,
+            )
+        };
+    }
+
+    if !crv_2d.is_valid() {
+        return NurbsCurve::new(3, false, 4, 0);
+    }
+
+    let ax = plane.x_axis();
+    let ay = plane.y_axis();
+    let po = plane.origin();
+
+    for i in 0..crv_2d.cv_count() {
+        if let Some(cv2) = crv_2d.get_cv(i) {
+            let cx = cv2[0];
+            let cy = cv2[1];
+            crv_2d.set_cv(
+                i,
+                &Point::new(
+                    po[0] + cx * ax[0] + cy * ay[0],
+                    po[1] + cx * ax[1] + cy * ay[1],
+                    po[2] + cx * ax[2] + cy * ay[2],
+                ),
+            );
+        }
+    }
+
+    crv_2d
 }
 
 /// Fits a 3D plane-constrained NurbsCurve to traced intersection points.
@@ -1741,8 +2439,8 @@ fn surface_plane_fit_3d(
                 crv = NurbsCurve::new(3, true, 3, 9);
                 let nurbsknots: [f64; 10] = [0.0, 0.0, 1.0, 1.0, 2.0, 2.0, 3.0, 3.0, 4.0, 4.0];
 
-                for i in 0..10 {
-                    crv.set_nurbsknot(i, nurbsknots[i]);
+                for (i, knot) in nurbsknots.iter().enumerate() {
+                    crv.set_nurbsknot(i, *knot);
                 }
 
                 for i in 0..9 {
@@ -1773,8 +2471,8 @@ fn surface_plane_fit_3d(
         let mut ata = [[0.0f64; 5]; 5];
         let mut atb = [0.0f64; 5];
 
-        for i in 0..n {
-            let (x, y) = to2d(&all_pts[i]);
+        for p in all_pts.iter().take(n) {
+            let (x, y) = to2d(p);
             let row = [x * x, x * y, y * y, x, y];
 
             for r in 0..5 {
@@ -1817,18 +2515,15 @@ fn surface_plane_fit_3d(
             }
 
             if pivot != col {
-                for j in col..=5 {
-                    let tmp = m_mat[col][j];
-                    m_mat[col][j] = m_mat[pivot][j];
-                    m_mat[pivot][j] = tmp;
-                }
+                m_mat.swap(col, pivot);
             }
 
             for r in (col + 1)..5 {
                 let f = m_mat[r][col] / m_mat[col][col];
+                let pivot_row = m_mat[col];
 
                 for j in col..=5 {
-                    m_mat[r][j] -= f * m_mat[col][j];
+                    m_mat[r][j] -= f * pivot_row[j];
                 }
             }
         }
@@ -1904,8 +2599,8 @@ fn surface_plane_fit_3d(
                     crv = NurbsCurve::new(3, true, 3, 9);
                     let nurbsknots: [f64; 10] = [0.0, 0.0, 1.0, 1.0, 2.0, 2.0, 3.0, 3.0, 4.0, 4.0];
 
-                    for i in 0..10 {
-                        crv.set_nurbsknot(i, nurbsknots[i]);
+                    for (i, knot) in nurbsknots.iter().enumerate() {
+                        crv.set_nurbsknot(i, *knot);
                     }
 
                     for i in 0..9 {
@@ -1939,128 +2634,506 @@ fn surface_plane_fit_3d(
     }
 
     if !crv.is_valid() {
-        let m = all_pts.len();
+        crv = fit_planar_freeform(
+            all_pts,
+            is_loop,
+            plane,
+            step * (uv_to_3d + uv_to_3d_min) * 0.5 * 5e-4,
+        );
+    }
 
-        if m < 4 {
-            return NurbsCurve::new(3, false, 4, 0);
-        }
+    crv
+}
 
-        let ax = plane.x_axis();
-        let ay = plane.y_axis();
-        let po = plane.origin();
-        let mut pts_2d: Vec<Point> = Vec::with_capacity(m);
+/// Seam-free run of uv samples cut from one trace.
+struct SurfacePlanePiece {
+    uv: Vec<(f64, f64)>, // Samples in parameter space.
+    is_loop: bool,       // Whether the piece still closes on itself.
+}
 
-        for i in 0..m {
-            let dx = all_pts[i][0] - po[0];
-            let dy = all_pts[i][1] - po[1];
-            let dz = all_pts[i][2] - po[2];
-            let px = dx * ax[0] + dy * ax[1] + dz * ax[2];
-            let py = dx * ay[0] + dy * ay[1] + dz * ay[2];
-            pts_2d.push(Point::new(px, py, 0.0));
-        }
+/// Whether the quarter, half and three-quarter samples of a trace all lie within dup_tol of one kept trace.
+fn is_duplicate_trace(trace_pts3: &[Point], kept_pts3: &[Vec<Point>], dup_tol: f64) -> bool {
+    let m = trace_pts3.len();
 
-        let mut chords = vec![0.0f64; m];
-        let mut total_len = 0.0f64;
+    for other in kept_pts3 {
+        let mut all_close = true;
 
-        for i in 1..m {
-            total_len += pts_2d[i].distance(&pts_2d[i - 1], None);
-            chords[i] = total_len;
-        }
+        for f in [0.25, 0.5, 0.75] {
+            let cp = &trace_pts3[((m - 1) as f64 * f) as usize];
+            let mut dmin = dup_tol + 1.0;
 
-        if is_loop && m > 1 {
-            total_len += pts_2d[0].distance(&pts_2d[m - 1], None);
-        }
-
-        if total_len > 1e-14 {
-            for i in 1..m {
-                chords[i] /= total_len;
+            for q in other.iter().step_by(5) {
+                dmin = dmin.min(cp.distance(q, None));
             }
-        }
 
-        let fit_tol = step * (uv_to_3d + uv_to_3d_min) * 0.5;
-        let mut total_turning = 0.0f64;
-
-        for i in 1..(m - 1) {
-            let dx1 = pts_2d[i][0] - pts_2d[i - 1][0];
-            let dy1 = pts_2d[i][1] - pts_2d[i - 1][1];
-            let dx2 = pts_2d[i + 1][0] - pts_2d[i][0];
-            let dy2 = pts_2d[i + 1][1] - pts_2d[i][1];
-            let l1 = f64::hypot(dx1, dy1);
-            let l2 = f64::hypot(dx2, dy2);
-
-            if l1 > 1e-14 && l2 > 1e-14 {
-                let c = ((dx1 * dx2 + dy1 * dy2) / (l1 * l2)).clamp(-1.0, 1.0);
-                total_turning += c.acos();
-            }
-        }
-
-        let mut target_cvs = 8_i32.max((total_turning / 0.5) as i32 + 6);
-        let max_cvs = (m as i32) - 1;
-        let mut crv_2d = NurbsCurve::new(3, false, 4, 0);
-
-        for _ in 0..5 {
-            if target_cvs > max_cvs {
+            if dmin > dup_tol {
+                all_close = false;
                 break;
             }
-
-            crv_2d = NurbsCurve::create_fitted(&pts_2d, target_cvs as usize, 3, is_loop);
-
-            if !crv_2d.is_valid() {
-                break;
-            }
-
-            let (ft0, ft1) = crv_2d.domain();
-            let mut max_dev = 0.0f64;
-
-            for i in 0..m {
-                let t = ft0 + (ft1 - ft0) * chords[i];
-                max_dev = max_dev.max(crv_2d.point_at(t).distance(&pts_2d[i], None));
-            }
-
-            if max_dev < fit_tol {
-                break;
-            }
-
-            target_cvs = (target_cvs * 2).min(max_cvs);
         }
 
-        if !crv_2d.is_valid() {
-            crv_2d = if is_loop {
-                NurbsCurve::create_interpolated(
-                    &pts_2d,
-                    CurveNurbsKnotStyle::ChordPeriodic,
-                    CurveInterpStyle::Rhino,
-                )
-            } else {
-                NurbsCurve::create_interpolated(
-                    &pts_2d,
-                    CurveNurbsKnotStyle::Chord,
-                    CurveInterpStyle::Rhino,
-                )
-            };
+        if all_close {
+            return true;
+        }
+    }
+
+    false
+}
+
+/// Append the loop start shifted by whole periods after the end; returns the shift (closure_du, closure_dv).
+fn close_unwrapped_loop(field: &SurfacePlaneField, pts: &mut Vec<(f64, f64)>) -> (f64, f64) {
+    let last = pts[pts.len() - 1];
+    let mut du_j = pts[0].0 - last.0;
+    let mut dv_j = pts[0].1 - last.1;
+
+    if field.closed_u {
+        while du_j > field.range_u * 0.5 {
+            du_j -= field.range_u;
         }
 
-        if crv_2d.is_valid() {
-            crv = crv_2d;
+        while du_j < -field.range_u * 0.5 {
+            du_j += field.range_u;
+        }
+    }
 
-            for i in 0..crv.cv_count() {
-                if let Some(cv2) = crv.get_cv(i) {
-                    let cx = cv2[0];
-                    let cy = cv2[1];
-                    crv.set_cv(
-                        i,
-                        &Point::new(
-                            po[0] + cx * ax[0] + cy * ay[0],
-                            po[1] + cx * ax[1] + cy * ay[1],
-                            po[2] + cx * ax[2] + cy * ay[2],
-                        ),
-                    );
-                }
+    if field.closed_v {
+        while dv_j > field.range_v * 0.5 {
+            dv_j -= field.range_v;
+        }
+
+        while dv_j < -field.range_v * 0.5 {
+            dv_j += field.range_v;
+        }
+    }
+
+    let closure_du = (last.0 + du_j) - pts[0].0;
+    let closure_dv = (last.1 + dv_j) - pts[0].1;
+    pts.push((pts[0].0 + closure_du, pts[0].1 + closure_dv));
+
+    (closure_du, closure_dv)
+}
+
+/// Seam crossings (t, axis, seam value) of the segment pa-pb, sorted by t.
+fn seam_crossings(
+    field: &SurfacePlaneField,
+    pa: (f64, f64),
+    pb: (f64, f64),
+) -> Vec<(f64, i32, f64)> {
+    let mut crossings: Vec<(f64, i32, f64)> = Vec::new();
+
+    if field.closed_u && (pb.0 - pa.0).abs() > 1e-15 {
+        let k0 = ((pa.0 - field.u0) / field.range_u).floor() as i32;
+        let k1 = ((pb.0 - field.u0) / field.range_u).floor() as i32;
+
+        for k in (k0.min(k1) + 1)..=k0.max(k1) {
+            let l = field.u0 + k as f64 * field.range_u;
+            let t = (l - pa.0) / (pb.0 - pa.0);
+
+            if 0.0 < t && t < 1.0 {
+                crossings.push((t, 0, l));
             }
         }
     }
 
-    crv
+    if field.closed_v && (pb.1 - pa.1).abs() > 1e-15 {
+        let k0 = ((pa.1 - field.v0) / field.range_v).floor() as i32;
+        let k1 = ((pb.1 - field.v0) / field.range_v).floor() as i32;
+
+        for k in (k0.min(k1) + 1)..=k0.max(k1) {
+            let l = field.v0 + k as f64 * field.range_v;
+            let t = (l - pa.1) / (pb.1 - pa.1);
+
+            if 0.0 < t && t < 1.0 {
+                crossings.push((t, 1, l));
+            }
+        }
+    }
+
+    crossings.sort_by(|a, b| a.partial_cmp(b).unwrap());
+
+    crossings
+}
+
+/// Snap q onto a seam it lies on within 1e-9 of the period after a real move from pa; true when snapped.
+fn snap_to_seam(field: &SurfacePlaneField, pa: (f64, f64), q: &mut (f64, f64)) -> bool {
+    let mut on_seam = false;
+
+    if field.closed_u {
+        let k = ((q.0 - field.u0) / field.range_u).round();
+        let l = field.u0 + k * field.range_u;
+
+        if (q.0 - l).abs() < field.range_u * 1e-9 && (q.0 - pa.0).abs() > field.range_u * 1e-9 {
+            q.0 = l;
+            on_seam = true;
+        }
+    }
+
+    if field.closed_v {
+        let k = ((q.1 - field.v0) / field.range_v).round();
+        let l = field.v0 + k * field.range_v;
+
+        if (q.1 - l).abs() < field.range_v * 1e-9 && (q.1 - pa.1).abs() > field.range_v * 1e-9 {
+            q.1 = l;
+            on_seam = true;
+        }
+    }
+
+    on_seam
+}
+
+/// Samples with the seam crossings inserted, and the indices of the samples on a seam.
+fn split_at_seams(field: &SurfacePlaneField, pts: &[(f64, f64)]) -> (Vec<(f64, f64)>, Vec<usize>) {
+    let mut cross_idx: Vec<usize> = Vec::new();
+    let mut out_pts: Vec<(f64, f64)> = vec![pts[0]];
+
+    for i in 1..pts.len() {
+        let pa = pts[i - 1];
+        let pb = pts[i];
+
+        for (t, axis, l) in seam_crossings(field, pa, pb) {
+            let mut cu = pa.0 + (pb.0 - pa.0) * t;
+            let mut cv_ = pa.1 + (pb.1 - pa.1) * t;
+
+            if axis == 0 {
+                cv_ = field.seam_newton(l, cv_, 0).1;
+                cu = l;
+            } else {
+                cu = field.seam_newton(cu, l, 1).0;
+                cv_ = l;
+            }
+
+            out_pts.push((cu, cv_));
+            cross_idx.push(out_pts.len() - 1);
+        }
+
+        let mut q = (pb.0, pb.1);
+        let on_seam = i < pts.len() - 1 && snap_to_seam(field, pa, &mut q);
+        out_pts.push(q);
+
+        if on_seam {
+            cross_idx.push(out_pts.len() - 1);
+        }
+    }
+
+    (out_pts, cross_idx)
+}
+
+/// Cut the samples at the seam indices; a loop's last piece wraps around to its first seam.
+fn seam_pieces(
+    out_pts: &[(f64, f64)],
+    cross_idx: &[usize],
+    is_loop: bool,
+    wrap_drift: bool,
+    closure_du: f64,
+    closure_dv: f64,
+) -> Vec<SurfacePlanePiece> {
+    let mut pieces: Vec<SurfacePlanePiece> = Vec::new();
+
+    if cross_idx.is_empty() {
+        pieces.push(SurfacePlanePiece {
+            uv: out_pts.to_vec(),
+            is_loop: is_loop && !wrap_drift,
+        });
+
+        return pieces;
+    }
+
+    if is_loop {
+        for ci in 0..cross_idx.len() - 1 {
+            pieces.push(SurfacePlanePiece {
+                uv: out_pts[cross_idx[ci]..=cross_idx[ci + 1]].to_vec(),
+                is_loop: false,
+            });
+        }
+
+        let mut wrap_piece: Vec<(f64, f64)> = out_pts[cross_idx[cross_idx.len() - 1]..].to_vec();
+
+        for p in &out_pts[1..=cross_idx[0]] {
+            wrap_piece.push((p.0 + closure_du, p.1 + closure_dv));
+        }
+
+        pieces.push(SurfacePlanePiece {
+            uv: wrap_piece,
+            is_loop: false,
+        });
+
+        return pieces;
+    }
+
+    let mut bounds: Vec<usize> = vec![0];
+
+    for &ci in cross_idx {
+        bounds.push(ci);
+    }
+
+    bounds.push(out_pts.len() - 1);
+
+    for bi in 0..bounds.len() - 1 {
+        if bounds[bi + 1] > bounds[bi] {
+            pieces.push(SurfacePlanePiece {
+                uv: out_pts[bounds[bi]..=bounds[bi + 1]].to_vec(),
+                is_loop: false,
+            });
+        }
+    }
+
+    pieces
+}
+
+/// Seam-free uv pieces of one trace.
+fn trace_pieces(field: &SurfacePlaneField, trace: &SurfacePlaneTrace) -> Vec<SurfacePlanePiece> {
+    let mut pts = trace.uv_unwrapped.clone();
+    let mut closure = (0.0, 0.0);
+
+    if trace.is_loop && pts.len() >= 2 {
+        closure = close_unwrapped_loop(field, &mut pts);
+    }
+
+    let (out_pts, cross_idx) = split_at_seams(field, &pts);
+    let wrap_drift = closure.0.abs() > field.range_u * 0.5 || closure.1.abs() > field.range_v * 0.5;
+
+    seam_pieces(
+        &out_pts,
+        &cross_idx,
+        trace.is_loop,
+        wrap_drift,
+        closure.0,
+        closure.1,
+    )
+}
+
+/// Shift a piece by whole periods so its middle sample lies in the base domain.
+fn shift_piece_to_domain(field: &SurfacePlaneField, piece_pts: &mut [(f64, f64)]) {
+    let mid = piece_pts[piece_pts.len() / 2];
+
+    if field.closed_u {
+        let k_u = ((mid.0 - field.u0) / field.range_u).floor() as i32;
+
+        if k_u != 0 {
+            for p in piece_pts.iter_mut() {
+                p.0 -= k_u as f64 * field.range_u;
+            }
+        }
+    }
+
+    if field.closed_v {
+        let k_v = ((mid.1 - field.v0) / field.range_v).floor() as i32;
+
+        if k_v != 0 {
+            for p in piece_pts.iter_mut() {
+                p.1 -= k_v as f64 * field.range_v;
+            }
+        }
+    }
+}
+
+/// Insert zero-set samples between a and b while the chord midpoint sags more than step * 1e-4, four levels deep.
+fn densify_segment(
+    field: &SurfacePlaneField,
+    au: f64,
+    av: f64,
+    bu: f64,
+    bv: f64,
+    depth: i32,
+    pts_uv: &mut Vec<Point>,
+) {
+    let mu = 0.5 * (au + bu);
+    let mv = 0.5 * (av + bv);
+    let mut cu = mu;
+    let mut cv2 = mv;
+
+    if !field.polish(&mut cu, &mut cv2) {
+        return;
+    }
+
+    let sag = f64::hypot(cu - mu, cv2 - mv);
+
+    if sag > field.step * 1e-4 && depth < 4 {
+        densify_segment(field, au, av, cu, cv2, depth + 1, pts_uv);
+        pts_uv.push(Point::new(cu, cv2, 0.0));
+        densify_segment(field, cu, cv2, bu, bv, depth + 1, pts_uv);
+    } else {
+        pts_uv.push(Point::new(cu, cv2, 0.0));
+    }
+}
+
+/// Piece samples with zero-set samples inserted where a segment sags.
+fn densify_piece(field: &SurfacePlaneField, piece_pts: &[(f64, f64)]) -> Vec<Point> {
+    let mut pts_uv: Vec<Point> = Vec::with_capacity(piece_pts.len() * 4);
+
+    for i in 1..piece_pts.len() {
+        let a = piece_pts[i - 1];
+        let b = piece_pts[i];
+        pts_uv.push(Point::new(a.0, a.1, 0.0));
+        densify_segment(field, a.0, a.1, b.0, b.1, 0, &mut pts_uv);
+    }
+
+    let last = piece_pts[piece_pts.len() - 1];
+    pts_uv.push(Point::new(last.0, last.1, 0.0));
+
+    pts_uv
+}
+
+/// Largest distance from each point to the curve at its chord parameter.
+fn chord_max_deviation(cand: &NurbsCurve, pts: &[Point], chords: &[f64]) -> f64 {
+    let (ft0, ft1) = cand.domain();
+    let mut max_dev = 0.0f64;
+
+    for (p, chord) in pts.iter().zip(chords) {
+        let t = ft0 + (ft1 - ft0) * chord;
+        max_dev = max_dev.max(cand.point_at(t).distance(p, None));
+    }
+
+    max_dev
+}
+
+/// Cubic pcurve through the uv samples, CVs doubled until within step * 2e-3, with the last CV count tried.
+fn fit_pcurve(pts_uv: &[Point], piece_loop: bool, step: f64) -> (NurbsCurve, i32) {
+    let mp = pts_uv.len() as i32;
+    let chords = chord_parameters(pts_uv, piece_loop);
+    let max_cvs = (mp - 1).min(96);
+    let mut pcurve = NurbsCurve::new(3, false, 4, 0);
+    let mut pcurve_dev = 1e300f64;
+    let mut target_cvs = 8_i32.max((total_turning(pts_uv) / 0.5) as i32 + 6);
+
+    for _ in 0..6 {
+        if target_cvs > max_cvs {
+            break;
+        }
+
+        let cand = NurbsCurve::create_fitted(pts_uv, target_cvs as usize, 3, piece_loop);
+
+        if !cand.is_valid() {
+            break;
+        }
+
+        let max_dev = chord_max_deviation(&cand, pts_uv, &chords);
+
+        if max_dev < pcurve_dev {
+            pcurve_dev = max_dev;
+            pcurve = cand;
+        }
+
+        if max_dev < step * 2e-3 {
+            break;
+        }
+
+        target_cvs = (target_cvs * 2).min(max_cvs + 1);
+    }
+
+    if !pcurve.is_valid() {
+        pcurve = if piece_loop {
+            NurbsCurve::create_interpolated(
+                pts_uv,
+                CurveNurbsKnotStyle::ChordPeriodic,
+                CurveInterpStyle::Rhino,
+            )
+        } else {
+            NurbsCurve::create_interpolated(
+                pts_uv,
+                CurveNurbsKnotStyle::Chord,
+                CurveInterpStyle::Rhino,
+            )
+        };
+    }
+
+    (pcurve, target_cvs)
+}
+
+/// Refit the pcurve with twice the CVs when it strays from the zero set by more than vali_tol.
+fn refit_pcurve(
+    field: &SurfacePlaneField,
+    pts_uv: &[Point],
+    piece_loop: bool,
+    target_cvs: i32,
+    vali_tol: f64,
+    pcurve: &mut NurbsCurve,
+) {
+    let max_cvs = (pts_uv.len() as i32 - 1).min(96);
+    let mut max_off = 0.0f64;
+
+    for i in 0..17 {
+        let pc = pcurve.point_at(i as f64 / 16.0);
+        let (val, _, _) = field.value_and_gradient(pc[0], pc[1]);
+        max_off = max_off.max(val.abs());
+    }
+
+    if max_off > vali_tol && target_cvs * 2 <= max_cvs {
+        let mut refit = NurbsCurve::create_fitted(pts_uv, (target_cvs * 2) as usize, 3, piece_loop);
+
+        if refit.is_valid() {
+            refit.set_domain(0.0, 1.0);
+            *pcurve = refit;
+        }
+    }
+}
+
+/// 3D section curve and uv pcurve of one seam-free piece; None when a fit fails.
+fn piece_curves(
+    field: &SurfacePlaneField,
+    plane: &Plane,
+    piece: &mut SurfacePlanePiece,
+) -> Option<(NurbsCurve, NurbsCurve)> {
+    shift_piece_to_domain(field, &mut piece.uv);
+
+    let pts_uv = densify_piece(field, &piece.uv);
+    let mut pts3: Vec<Point> = Vec::with_capacity(pts_uv.len());
+
+    for p in &pts_uv {
+        pts3.push(field.point((field.wrap_u(p[0]), field.wrap_v(p[1]))));
+    }
+
+    let mut crv3 = surface_plane_fit_3d(
+        &pts3,
+        piece.is_loop,
+        plane,
+        field.step,
+        field.uv_to_3d,
+        field.uv_to_3d_min,
+        false,
+    );
+
+    if !crv3.is_valid() {
+        crv3 = if piece.is_loop {
+            NurbsCurve::create_interpolated(
+                &pts3,
+                CurveNurbsKnotStyle::ChordPeriodic,
+                CurveInterpStyle::Rhino,
+            )
+        } else {
+            NurbsCurve::create_interpolated(
+                &pts3,
+                CurveNurbsKnotStyle::Chord,
+                CurveInterpStyle::Rhino,
+            )
+        };
+    }
+
+    if !crv3.is_valid() {
+        return None;
+    }
+
+    let (mut pcurve, target_cvs) = fit_pcurve(&pts_uv, piece.is_loop, field.step);
+
+    if !pcurve.is_valid() {
+        return None;
+    }
+
+    crv3.set_domain(0.0, 1.0);
+    pcurve.set_domain(0.0, 1.0);
+
+    let fit_tol = field.step * (field.uv_to_3d + field.uv_to_3d_min) * 0.5;
+    let vali_tol = (10.0 * field.tolerance).max(fit_tol * 2.0);
+    refit_pcurve(
+        field,
+        &pts_uv,
+        piece.is_loop,
+        target_cvs,
+        vali_tol,
+        &mut pcurve,
+    );
+
+    Some((crv3, pcurve))
 }
 
 /// Solve an n x n linear system by Gaussian elimination with partial pivoting.
@@ -2093,8 +3166,11 @@ fn solve_gauss(m: &[Vec<f64>], rhs: &[f64], n: usize) -> Option<Vec<f64>> {
         for r in (col + 1)..n {
             let f = a[r][col] / a[col][col];
 
+            let (upper, lower) = a.split_at_mut(r);
+            let pivot_row = &upper[col];
+
             for j in col..=n {
-                a[r][j] -= f * a[col][j];
+                lower[0][j] -= f * pivot_row[j];
             }
         }
     }
@@ -2177,8 +3253,8 @@ fn exact_circle(cx: f64, cy: f64, cz: f64, xa: [f64; 3], ya: [f64; 3], radius: f
     let mut crv = NurbsCurve::new(3, true, 3, 9);
     let knots = [0.0, 0.0, 1.0, 1.0, 2.0, 2.0, 3.0, 3.0, 4.0, 4.0];
 
-    for i in 0..10 {
-        crv.set_nurbsknot(i, knots[i]);
+    for (i, knot) in knots.iter().enumerate() {
+        crv.set_nurbsknot(i, *knot);
     }
 
     for i in 0..9 {
@@ -2210,8 +3286,8 @@ fn exact_ellipse(
     let mut crv = NurbsCurve::new(3, true, 3, 9);
     let knots = [0.0, 0.0, 1.0, 1.0, 2.0, 2.0, 3.0, 3.0, 4.0, 4.0];
 
-    for i in 0..10 {
-        crv.set_nurbsknot(i, knots[i]);
+    for (i, knot) in knots.iter().enumerate() {
+        crv.set_nurbsknot(i, *knot);
     }
 
     for i in 0..9 {
@@ -2250,22 +3326,24 @@ fn jacobi_eig3(m: &[[f64; 3]; 3]) -> ([f64; 3], [[f64; 3]; 3]) {
             let c = 1.0 / (t * t + 1.0).sqrt();
             let s = t * c;
 
-            for k in 0..3 {
-                let (akp, akq) = (a[k][p], a[k][q]);
-                a[k][p] = c * akp - s * akq;
-                a[k][q] = s * akp + c * akq;
+            for row in a.iter_mut() {
+                let (akp, akq) = (row[p], row[q]);
+                row[p] = c * akp - s * akq;
+                row[q] = s * akp + c * akq;
             }
 
-            for k in 0..3 {
-                let (apk, aqk) = (a[p][k], a[q][k]);
-                a[p][k] = c * apk - s * aqk;
-                a[q][k] = s * apk + c * aqk;
-            }
+            let row_p = a[p];
+            let row_q = a[q];
 
             for k in 0..3 {
-                let (vkp, vkq) = (v[k][p], v[k][q]);
-                v[k][p] = c * vkp - s * vkq;
-                v[k][q] = s * vkp + c * vkq;
+                a[p][k] = c * row_p[k] - s * row_q[k];
+                a[q][k] = s * row_p[k] + c * row_q[k];
+            }
+
+            for row in v.iter_mut() {
+                let (vkp, vkq) = (row[p], row[q]);
+                row[p] = c * vkp - s * vkq;
+                row[q] = s * vkp + c * vkq;
             }
         }
     }
@@ -4446,11 +5524,16 @@ pub fn surface_plane(
         .unwrap_or(Tolerance::ZERO_TOLERANCE)
         .max(Tolerance::ZERO_TOLERANCE);
 
-    let (traces, step, uv_to_3d, uv_to_3d_min) = surface_plane_traces(surface, plane, tolerance);
+    let traced = surface_plane_traces(surface, plane, tolerance);
+    let step = traced.step;
+    let uv_to_3d = traced.uv_to_3d;
+    let uv_to_3d_min = traced.uv_to_3d_min;
 
     let mut result: Vec<NurbsCurve> = Vec::new();
 
-    for (uv_trace, _uv_unwrapped, is_loop) in &traces {
+    for trace in &traced.traces {
+        let uv_trace = &trace.uv_trace;
+        let is_loop = &trace.is_loop;
         let all_pts: Vec<Point> = uv_trace
             .iter()
             .map(|&(u, v)| surface.point_at(u, v).unwrap_or(Point::new(0.0, 0.0, 0.0)))
@@ -4514,480 +5597,42 @@ pub fn surface_plane_uv(
         return vec![];
     }
 
-    let tolerance = tolerance
-        .unwrap_or(Tolerance::ZERO_TOLERANCE)
-        .max(Tolerance::ZERO_TOLERANCE);
-
-    let (u0, u1) = match surface.domain(0) {
-        Some(d) => d,
-        None => return vec![],
-    };
-    let (v0, v1) = match surface.domain(1) {
-        Some(d) => d,
-        None => return vec![],
-    };
-    let range_u = u1 - u0;
-    let range_v = v1 - v0;
-    let closed_u = surface.is_closed(0);
-    let closed_v = surface.is_closed(1);
-
-    let wrap_u = |u: f64| -> f64 {
-        if closed_u {
-            let mut t = (u - u0) % range_u;
-
-            if t < 0.0 {
-                t += range_u;
-            }
-
-            return u0 + t;
-        }
-
-        u.max(u0).min(u1)
-    };
-    let wrap_v = |v: f64| -> f64 {
-        if closed_v {
-            let mut t = (v - v0) % range_v;
-
-            if t < 0.0 {
-                t += range_v;
-            }
-
-            return v0 + t;
-        }
-
-        v.max(v0).min(v1)
+    let tolerance = match tolerance {
+        Some(t) if t > 0.0 => t,
+        _ => Tolerance::ZERO_TOLERANCE,
     };
 
-    let pn = plane.z_axis();
-    let p0 = plane.origin();
-
-    let g_and_grad = |u: f64, v: f64| -> (f64, f64, f64) {
-        let derivs = surface.evaluate(wrap_u(u), wrap_v(v), 1);
-
-        if derivs.len() < 3 {
-            return (0.0, 0.0, 0.0);
-        }
-
-        let s = &derivs[0];
-        let su = &derivs[2];
-        let sv = &derivs[1];
-        let val = (s[0] - p0[0]) * pn[0] + (s[1] - p0[1]) * pn[1] + (s[2] - p0[2]) * pn[2];
-        let gu = su[0] * pn[0] + su[1] * pn[1] + su[2] * pn[2];
-        let gv = sv[0] * pn[0] + sv[1] * pn[1] + sv[2] * pn[2];
-        (val, gu, gv)
+    let Some(field) = SurfacePlaneField::new(surface, plane, tolerance) else {
+        return vec![];
     };
 
-    let seam_newton = |mut cu: f64, mut cv_: f64, axis: i32| -> (f64, f64) {
-        for _ in 0..10 {
-            let (val, gu, gv) = g_and_grad(cu, cv_);
-
-            if val.abs() < tolerance {
-                break;
-            }
-
-            if axis == 0 {
-                if gv.abs() < 1e-14 {
-                    break;
-                }
-
-                cv_ -= val / gv;
-            } else {
-                if gu.abs() < 1e-14 {
-                    break;
-                }
-
-                cu -= val / gu;
-            }
-        }
-
-        (cu, cv_)
-    };
-
-    let (traces, step, uv_to_3d, uv_to_3d_min) = surface_plane_traces(surface, plane, tolerance);
-
-    let fit_tol = step * (uv_to_3d + uv_to_3d_min) * 0.5;
-    let dup_tol = step * uv_to_3d * 3.0;
+    let traced = surface_plane_traces(surface, plane, tolerance);
+    let dup_tol = traced.step * traced.uv_to_3d * 3.0;
 
     let mut result: Vec<(NurbsCurve, NurbsCurve)> = Vec::new();
     let mut kept_pts3: Vec<Vec<Point>> = Vec::new();
 
-    for (uv_trace, uv_unwrapped, is_loop) in &traces {
-        let is_loop = *is_loop;
-        let m = uv_trace.len();
-        let trace_pts3: Vec<Point> = uv_trace
-            .iter()
-            .map(|&(u, v)| surface.point_at(u, v).unwrap_or(Point::new(0.0, 0.0, 0.0)))
-            .collect();
+    for trace in &traced.traces {
+        let mut trace_pts3: Vec<Point> = Vec::with_capacity(trace.uv_trace.len());
 
-        let mut dup = false;
-
-        for other in &kept_pts3 {
-            let mut all_close = true;
-
-            for &f in &[0.25, 0.5, 0.75] {
-                let cp = &trace_pts3[((m - 1) as f64 * f) as usize];
-                let mut dmin = dup_tol + 1.0;
-
-                for k in (0..other.len()).step_by(5) {
-                    dmin = dmin.min(cp.distance(&other[k], None));
-                }
-
-                if dmin > dup_tol {
-                    all_close = false;
-                    break;
-                }
-            }
-
-            if all_close {
-                dup = true;
-                break;
-            }
+        for q in &trace.uv_trace {
+            trace_pts3.push(field.point(*q));
         }
 
-        if dup {
+        if is_duplicate_trace(&trace_pts3, &kept_pts3, dup_tol) {
             continue;
         }
 
         kept_pts3.push(trace_pts3);
 
-        let mut pts: Vec<(f64, f64)> = uv_unwrapped.clone();
-        let mut closure_du = 0.0;
-        let mut closure_dv = 0.0;
-
-        if is_loop && pts.len() >= 2 {
-            let mut du_j = pts[0].0 - pts[pts.len() - 1].0;
-            let mut dv_j = pts[0].1 - pts[pts.len() - 1].1;
-
-            if closed_u {
-                while du_j > range_u * 0.5 {
-                    du_j -= range_u;
-                }
-
-                while du_j < -range_u * 0.5 {
-                    du_j += range_u;
-                }
-            }
-
-            if closed_v {
-                while dv_j > range_v * 0.5 {
-                    dv_j -= range_v;
-                }
-
-                while dv_j < -range_v * 0.5 {
-                    dv_j += range_v;
-                }
-            }
-
-            closure_du = (pts[pts.len() - 1].0 + du_j) - pts[0].0;
-            closure_dv = (pts[pts.len() - 1].1 + dv_j) - pts[0].1;
-            pts.push((pts[0].0 + closure_du, pts[0].1 + closure_dv));
-        }
-
-        let mut out_pts: Vec<(f64, f64)> = vec![pts[0]];
-        let mut cross_idx: Vec<usize> = Vec::new();
-
-        for i in 1..pts.len() {
-            let pa = pts[i - 1];
-            let pb = pts[i];
-            let mut crossings: Vec<(f64, i32, f64)> = Vec::new();
-
-            if closed_u && (pb.0 - pa.0).abs() > 1e-15 {
-                let k0 = ((pa.0 - u0) / range_u).floor() as i64;
-                let k1 = ((pb.0 - u0) / range_u).floor() as i64;
-
-                for k in (k0.min(k1) + 1)..=(k0.max(k1)) {
-                    let l = u0 + k as f64 * range_u;
-                    let t = (l - pa.0) / (pb.0 - pa.0);
-
-                    if 0.0 < t && t < 1.0 {
-                        crossings.push((t, 0, l));
-                    }
-                }
-            }
-
-            if closed_v && (pb.1 - pa.1).abs() > 1e-15 {
-                let k0 = ((pa.1 - v0) / range_v).floor() as i64;
-                let k1 = ((pb.1 - v0) / range_v).floor() as i64;
-
-                for k in (k0.min(k1) + 1)..=(k0.max(k1)) {
-                    let l = v0 + k as f64 * range_v;
-                    let t = (l - pa.1) / (pb.1 - pa.1);
-
-                    if 0.0 < t && t < 1.0 {
-                        crossings.push((t, 1, l));
-                    }
-                }
-            }
-
-            crossings.sort_by(|a, b| a.partial_cmp(b).unwrap());
-
-            for &(t, axis, l) in &crossings {
-                let mut cu = pa.0 + (pb.0 - pa.0) * t;
-                let mut cv_ = pa.1 + (pb.1 - pa.1) * t;
-
-                if axis == 0 {
-                    let (_cu_r, cv_r) = seam_newton(l, cv_, 0);
-                    cu = l;
-                    cv_ = cv_r;
-                } else {
-                    let (cu_r, _cv_r) = seam_newton(cu, l, 1);
-                    cu = cu_r;
-                    cv_ = l;
-                }
-
-                out_pts.push((cu, cv_));
-                cross_idx.push(out_pts.len() - 1);
-            }
-
-            out_pts.push((pb.0, pb.1));
-
-            if i < pts.len() - 1 {
-                let mut on_seam = false;
-
-                if closed_u {
-                    let k = ((pb.0 - u0) / range_u).round();
-                    let l = u0 + k * range_u;
-
-                    if (pb.0 - l).abs() < range_u * 1e-9 && (pb.0 - pa.0).abs() > range_u * 1e-9 {
-                        out_pts.last_mut().unwrap().0 = l;
-                        on_seam = true;
-                    }
-                }
-
-                if closed_v {
-                    let k = ((pb.1 - v0) / range_v).round();
-                    let l = v0 + k * range_v;
-
-                    if (pb.1 - l).abs() < range_v * 1e-9 && (pb.1 - pa.1).abs() > range_v * 1e-9 {
-                        out_pts.last_mut().unwrap().1 = l;
-                        on_seam = true;
-                    }
-                }
-
-                if on_seam {
-                    cross_idx.push(out_pts.len() - 1);
-                }
-            }
-        }
-
-        let wrap_drift = closure_du.abs() > range_u * 0.5 || closure_dv.abs() > range_v * 0.5;
-        let mut pieces: Vec<(Vec<(f64, f64)>, bool)> = Vec::new();
-
-        if cross_idx.is_empty() {
-            pieces.push((out_pts.clone(), is_loop && !wrap_drift));
-        } else if is_loop {
-            for w in cross_idx.windows(2) {
-                let (a, b) = (w[0], w[1]);
-                pieces.push((out_pts[a..=b].to_vec(), false));
-            }
-
-            let mut wrap_piece: Vec<(f64, f64)> =
-                out_pts[cross_idx[cross_idx.len() - 1]..].to_vec();
-
-            for p in &out_pts[1..=cross_idx[0]] {
-                wrap_piece.push((p.0 + closure_du, p.1 + closure_dv));
-            }
-
-            pieces.push((wrap_piece, false));
-        } else {
-            let mut bounds: Vec<usize> = vec![0];
-
-            for &c in &cross_idx {
-                bounds.push(c);
-            }
-
-            bounds.push(out_pts.len() - 1);
-
-            for w in bounds.windows(2) {
-                let (a, b) = (w[0], w[1]);
-
-                if b > a {
-                    pieces.push((out_pts[a..=b].to_vec(), false));
-                }
-            }
-        }
-
-        for (mut piece_pts, piece_loop) in pieces {
-            if piece_pts.len() < 2 {
+        for mut piece in trace_pieces(&field, trace) {
+            if piece.uv.len() < 2 {
                 continue;
             }
 
-            let mid = piece_pts[piece_pts.len() / 2];
-
-            if closed_u {
-                let k_u = ((mid.0 - u0) / range_u).floor();
-
-                if k_u != 0.0 {
-                    for p in piece_pts.iter_mut() {
-                        p.0 -= k_u * range_u;
-                    }
-                }
+            if let Some(curves) = piece_curves(&field, plane, &mut piece) {
+                result.push(curves);
             }
-
-            if closed_v {
-                let k_v = ((mid.1 - v0) / range_v).floor();
-
-                if k_v != 0.0 {
-                    for p in piece_pts.iter_mut() {
-                        p.1 -= k_v * range_v;
-                    }
-                }
-            }
-
-            let pts3: Vec<Point> = piece_pts
-                .iter()
-                .map(|&(u, v)| {
-                    surface
-                        .point_at(wrap_u(u), wrap_v(v))
-                        .unwrap_or(Point::new(0.0, 0.0, 0.0))
-                })
-                .collect();
-
-            let mut crv3 = surface_plane_fit_3d(
-                &pts3,
-                piece_loop,
-                plane,
-                step,
-                uv_to_3d,
-                uv_to_3d_min,
-                false,
-            );
-
-            if !crv3.is_valid() {
-                crv3 = if piece_loop {
-                    NurbsCurve::create_interpolated(
-                        &pts3,
-                        CurveNurbsKnotStyle::ChordPeriodic,
-                        CurveInterpStyle::Rhino,
-                    )
-                } else {
-                    NurbsCurve::create_interpolated(
-                        &pts3,
-                        CurveNurbsKnotStyle::Chord,
-                        CurveInterpStyle::Rhino,
-                    )
-                };
-            }
-
-            if !crv3.is_valid() {
-                continue;
-            }
-
-            let pts_uv: Vec<Point> = piece_pts
-                .iter()
-                .map(|&(u, v)| Point::new(u, v, 0.0))
-                .collect();
-
-            let mp = pts_uv.len();
-            let fit_tol_uv = step;
-            let mut total_turning = 0.0f64;
-
-            for i in 1..(mp - 1) {
-                let dx1 = pts_uv[i][0] - pts_uv[i - 1][0];
-                let dy1 = pts_uv[i][1] - pts_uv[i - 1][1];
-                let dx2 = pts_uv[i + 1][0] - pts_uv[i][0];
-                let dy2 = pts_uv[i + 1][1] - pts_uv[i][1];
-                let l1 = f64::hypot(dx1, dy1);
-                let l2 = f64::hypot(dx2, dy2);
-
-                if l1 > 1e-14 && l2 > 1e-14 {
-                    let c = ((dx1 * dx2 + dy1 * dy2) / (l1 * l2)).clamp(-1.0, 1.0);
-                    total_turning += c.acos();
-                }
-            }
-
-            let mut chords = vec![0.0f64; mp];
-            let mut total_len = 0.0f64;
-
-            for i in 1..mp {
-                total_len += pts_uv[i].distance(&pts_uv[i - 1], None);
-                chords[i] = total_len;
-            }
-
-            if piece_loop && mp > 1 {
-                total_len += pts_uv[0].distance(&pts_uv[mp - 1], None);
-            }
-
-            if total_len > 1e-14 {
-                for i in 1..mp {
-                    chords[i] /= total_len;
-                }
-            }
-
-            let mut target_cvs = 8_i32.max((total_turning / 0.5) as i32 + 6);
-            let max_cvs = (mp as i32) - 1;
-            let mut pcurve = NurbsCurve::new(3, false, 4, 0);
-
-            for _ in 0..5 {
-                if target_cvs > max_cvs {
-                    break;
-                }
-
-                pcurve = NurbsCurve::create_fitted(&pts_uv, target_cvs as usize, 3, piece_loop);
-
-                if !pcurve.is_valid() {
-                    break;
-                }
-
-                let (ft0, ft1) = pcurve.domain();
-                let mut max_dev = 0.0f64;
-
-                for i in 0..mp {
-                    let t = ft0 + (ft1 - ft0) * chords[i];
-                    max_dev = max_dev.max(pcurve.point_at(t).distance(&pts_uv[i], None));
-                }
-
-                if max_dev < fit_tol_uv {
-                    break;
-                }
-
-                target_cvs = (target_cvs * 2).min(max_cvs);
-            }
-
-            if !pcurve.is_valid() {
-                pcurve = if piece_loop {
-                    NurbsCurve::create_interpolated(
-                        &pts_uv,
-                        CurveNurbsKnotStyle::ChordPeriodic,
-                        CurveInterpStyle::Rhino,
-                    )
-                } else {
-                    NurbsCurve::create_interpolated(
-                        &pts_uv,
-                        CurveNurbsKnotStyle::Chord,
-                        CurveInterpStyle::Rhino,
-                    )
-                };
-            }
-
-            if !pcurve.is_valid() {
-                continue;
-            }
-
-            crv3.set_domain(0.0, 1.0);
-            pcurve.set_domain(0.0, 1.0);
-
-            let vali_tol = (10.0 * tolerance).max(fit_tol * 2.0);
-            let mut max_off = 0.0f64;
-
-            for i in 0..17 {
-                let t = i as f64 / 16.0;
-                let pc = pcurve.point_at(t);
-                let (val, _gu, _gv) = g_and_grad(pc[0], pc[1]);
-                max_off = max_off.max(val.abs());
-            }
-
-            if max_off > vali_tol && target_cvs * 2 <= max_cvs {
-                let mut refit =
-                    NurbsCurve::create_fitted(&pts_uv, (target_cvs * 2) as usize, 3, piece_loop);
-
-                if refit.is_valid() {
-                    refit.set_domain(0.0, 1.0);
-                    pcurve = refit;
-                }
-            }
-
-            result.push((crv3, pcurve));
         }
     }
 
@@ -5146,9 +5791,8 @@ pub fn surface_surface(
                 let mut yl = f64::NEG_INFINITY;
                 let mut zl = f64::NEG_INFINITY;
 
-                for i in (2 * ci)..(2 * ci + 3) {
-                    for j in (2 * cj)..(2 * cj + 3) {
-                        let p = &s_grid[i][j];
+                for row in s_grid.iter().skip(2 * ci).take(3) {
+                    for p in row.iter().skip(2 * cj).take(3) {
                         xs = xs.min(p[0]);
                         ys = ys.min(p[1]);
                         zs = zs.min(p[2]);
@@ -5698,8 +6342,7 @@ pub fn surface_surface(
                 let cp = trace_pts3[((m - 1) as f64 * f) as usize];
                 let mut dmin = dup_tol + 1.0;
 
-                for k in 0..other.len() {
-                    let op = other[k];
+                for op in other {
                     dmin = dmin.min(
                         ((cp[0] - op[0]).powi(2)
                             + (cp[1] - op[1]).powi(2)
@@ -6046,8 +6689,8 @@ pub fn surface_surface(
                 }
 
                 if total_len > 1e-14 {
-                    for i in 1..mp {
-                        chords[i] /= total_len;
+                    for chord in chords.iter_mut().skip(1) {
+                        *chord /= total_len;
                     }
                 }
 
@@ -6345,10 +6988,26 @@ pub fn remap(val: f64, from1: f64, to1: f64, from2: f64, to2: f64) -> f64 {
 
 /// Closest point on a finite segment and its parameter in [0, 1].
 pub fn closest_point_on_segment(pt: &Point, seg: &Line) -> (Point, f64) {
-    let mut t = Polyline::closest_point_to_line(pt, &seg.start(), &seg.end());
-    t = t.clamp(0.0, 1.0);
+    let start = seg.start();
+    let end = seg.end();
+    let dx = end[0] - start[0];
+    let dy = end[1] - start[1];
+    let dz = end[2] - start[2];
+    let len_sq = dx * dx + dy * dy + dz * dz;
 
-    (seg.point_at(t), t)
+    if len_sq < 1e-20 {
+        return (start, 0.0);
+    }
+
+    let vx = pt[0] - start[0];
+    let vy = pt[1] - start[1];
+    let vz = pt[2] - start[2];
+    let t = clamp_unit((vx * dx + vy * dy + vz * dz) / len_sq);
+
+    (
+        Point::new(start[0] + t * dx, start[1] + t * dy, start[2] + t * dz),
+        t,
+    )
 }
 
 /// Closed quad of the main plane cut by four ordered boundary planes.
@@ -6825,8 +7484,8 @@ fn chain_pieces_2d(pieces: &[Vec<[f64; 2]>]) -> Vec<[f64; 2]> {
             pts.reverse();
         }
 
-        for j in 1..pts.len() {
-            chain.push(pts[j]);
+        for p in pts.iter().skip(1) {
+            chain.push(*p);
         }
     }
 
