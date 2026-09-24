@@ -5160,6 +5160,119 @@ fn face_frame(s: &NurbsSurface) -> FaceFrame {
     }
 }
 
+/// Boundary samples per side in one direction: cv_count - 1 when linear, else 4 * cv_count.
+fn boundary_steps(s: &NurbsSurface, dir: usize) -> usize {
+    if s.degree(dir) == 1 {
+        s.cv_count(dir) - 1
+    } else {
+        4 * s.cv_count(dir)
+    }
+}
+
+/// Surface boundary in loop order, each side split into boundary_steps pieces.
+fn cutter_boundary(cutter: &NurbsSurface) -> Vec<Point> {
+    let (cu0, cu1) = srf_domain(cutter, 0);
+    let (cv0, cv1) = srf_domain(cutter, 1);
+    let nu = boundary_steps(cutter, 0);
+    let nv = boundary_steps(cutter, 1);
+    let mut points = Vec::new();
+
+    for i in 0..nu {
+        points.push(srf_point(
+            cutter,
+            cu0 + (cu1 - cu0) * i as f64 / nu as f64,
+            cv0,
+        ));
+    }
+
+    for i in 0..nv {
+        points.push(srf_point(
+            cutter,
+            cu1,
+            cv0 + (cv1 - cv0) * i as f64 / nv as f64,
+        ));
+    }
+
+    for i in (1..=nu).rev() {
+        points.push(srf_point(
+            cutter,
+            cu0 + (cu1 - cu0) * i as f64 / nu as f64,
+            cv1,
+        ));
+    }
+
+    for i in (1..=nv).rev() {
+        points.push(srf_point(
+            cutter,
+            cu0,
+            cv0 + (cv1 - cv0) * i as f64 / nv as f64,
+        ));
+    }
+
+    points
+}
+
+/// Boundary polygon of a surface in the plane through it, empty without area: (outline, frame).
+fn boundary_outline(s: &NurbsSurface) -> (Polyline, Plane) {
+    let boundary = cutter_boundary(s);
+    let mut normal = Vector::new(0.0, 0.0, 0.0);
+
+    for i in 1..boundary.len().saturating_sub(1) {
+        normal += (&boundary[i] - &boundary[0]).cross(&(&boundary[i + 1] - &boundary[0]));
+    }
+
+    if normal.magnitude() < 1e-14 {
+        return (Polyline::default(), Plane::default());
+    }
+
+    let frame = Plane::from_point_normal(boundary[0].clone(), normal, None);
+    let mut outline = Polyline::default();
+
+    for p in &boundary {
+        let d = p - &frame.origin();
+        outline.add_point(Point::new(
+            d.dot(&frame.x_axis()),
+            d.dot(&frame.y_axis()),
+            0.0,
+        ));
+    }
+
+    (outline, frame)
+}
+
+/// Whether the surface is the parallelogram of its corner frame, mapped affinely, checked on the boundary grid.
+fn is_parallelogram_face(s: &NurbsSurface, f: &FaceFrame) -> bool {
+    if f.det.abs() < 1e-18 {
+        return false;
+    }
+
+    let (cu0, cu1) = srf_domain(s, 0);
+    let (cv0, cv1) = srf_domain(s, 1);
+    let nu = boundary_steps(s, 0);
+    let nv = boundary_steps(s, 1);
+    let tol = 1e-9 * (f.exx + f.eyy).sqrt();
+
+    for i in 0..=nu {
+        let a = i as f64 / nu as f64;
+
+        for j in 0..=nv {
+            let b = j as f64 / nv as f64;
+            let p = srf_point(s, cu0 + (cu1 - cu0) * a, cv0 + (cv1 - cv0) * b);
+            let q = Point::new(
+                f.o[0] + a * f.eu[0] + b * f.ev[0],
+                f.o[1] + a * f.eu[1] + b * f.ev[1],
+                f.o[2] + a * f.eu[2] + b * f.ev[2],
+            );
+
+            if p.distance(&q, None) > tol {
+                return false;
+            }
+        }
+    }
+
+    true
+}
+
 /// Narrow [t0, t1] to where c + t d lies in [0, 1]; false when d is zero and c is outside.
 fn clip_axis(c: f64, d: f64, t0: &mut f64, t1: &mut f64) -> bool {
     if d.abs() < 1e-15 {
@@ -5179,21 +5292,15 @@ fn clip_axis(c: f64, d: f64, t0: &mut f64, t1: &mut f64) -> bool {
     true
 }
 
-/// Narrow [tmin, tmax] to the part of the line inside the face; empty when it misses.
+/// Narrow [tmin, tmax] to the part of the line inside the parallelogram of the frame; empty when it misses.
 fn clip_line_to_face(
-    s: &NurbsSurface,
+    f: &FaceFrame,
     anchor: &[f64; 3],
     dir: &[f64; 3],
     tmin: &mut f64,
     tmax: &mut f64,
     empty: &mut bool,
 ) -> bool {
-    let f = face_frame(s);
-
-    if f.det.abs() < 1e-18 {
-        return false;
-    }
-
     let (a0, b0) = f.fraction(&[anchor[0] - f.o[0], anchor[1] - f.o[1], anchor[2] - f.o[2]]);
     let (da, db) = f.fraction(dir);
     let mut t0 = -1e300;
@@ -5211,21 +5318,111 @@ fn clip_line_to_face(
     true
 }
 
-/// Exact plane-plane line clipped to both finite faces: (curve, empty).
+/// Parameter spans of the line inside the boundary polygon of the face; false when the polygon has no area.
+fn clip_line_to_outline(
+    s: &NurbsSurface,
+    anchor: &[f64; 3],
+    dir: &[f64; 3],
+    spans: &mut Vec<(f64, f64)>,
+) -> bool {
+    let (outline, frame) = boundary_outline(s);
+
+    if outline.point_count() == 0 {
+        return false;
+    }
+
+    let offset = &Point::new(anchor[0], anchor[1], anchor[2]) - &frame.origin();
+    let direction = Vector::new(dir[0], dir[1], dir[2]);
+    let ax = offset.dot(&frame.x_axis());
+    let ay = offset.dot(&frame.y_axis());
+    let dx = direction.dot(&frame.x_axis());
+    let dy = direction.dot(&frame.y_axis());
+    let n = outline.point_count();
+    let mut ts = Vec::new();
+
+    for i in 0..n {
+        let a = &outline[i];
+        let b = &outline[(i + 1) % n];
+        let ex = b[0] - a[0];
+        let ey = b[1] - a[1];
+        let denom = dx * ey - dy * ex;
+
+        if denom.abs() < 1e-15 {
+            continue;
+        }
+
+        let wx = a[0] - ax;
+        let wy = a[1] - ay;
+        let along = (wx * dy - wy * dx) / denom;
+
+        if (-1e-12..=1.0 + 1e-12).contains(&along) {
+            ts.push((wx * ey - wy * ex) / denom);
+        }
+    }
+
+    ts.sort_by(f64::total_cmp);
+
+    for i in 0..ts.len().saturating_sub(1) {
+        let mid = 0.5 * (ts[i] + ts[i + 1]);
+
+        if ts[i + 1] - ts[i] <= 1e-9
+            || !outline.point_in_polygon_2d(&Point::new(ax + mid * dx, ay + mid * dy, 0.0))
+        {
+            continue;
+        }
+
+        match spans.last_mut() {
+            Some(last) if ts[i] - last.1 <= 1e-9 => last.1 = ts[i + 1],
+            _ => spans.push((ts[i], ts[i + 1])),
+        }
+    }
+
+    true
+}
+
+/// Parameter spans of the line inside the face: its corner parallelogram, else its boundary polygon; empty when it misses.
+fn clip_line_to_face_spans(
+    s: &NurbsSurface,
+    anchor: &[f64; 3],
+    dir: &[f64; 3],
+    spans: &mut Vec<(f64, f64)>,
+    empty: &mut bool,
+) -> bool {
+    let f = face_frame(s);
+
+    if !is_parallelogram_face(s, &f) {
+        return clip_line_to_outline(s, anchor, dir, spans);
+    }
+
+    let mut tmin = -1e300;
+    let mut tmax = 1e300;
+
+    if !clip_line_to_face(&f, anchor, dir, &mut tmin, &mut tmax, empty) {
+        return false;
+    }
+
+    spans.push((tmin, tmax));
+
+    true
+}
+
+/// Exact plane-plane line clipped to both finite faces.
 fn ssi_plane_plane(
     sa: &NurbsSurface,
     pa: &RecogSurface,
     sb: &NurbsSurface,
     pb: &RecogSurface,
-) -> (Option<NurbsCurve>, bool) {
-    let mut empty = false;
+    out: &mut Vec<NurbsCurve>,
+    empty: &mut bool,
+) -> bool {
+    *empty = false;
     let na = ssi_unit(&pa.p2);
     let nb = ssi_unit(&pb.p2);
     let v = ssi_cross(&na, &nb);
     let vl = ssi_dot(&v, &v).sqrt();
 
     if vl < 1e-9 {
-        return (None, empty);
+        return false;
     }
 
     let da = ssi_dot(&na, &pa.p1);
@@ -5239,33 +5436,43 @@ fn ssi_plane_plane(
         (da * nb_x_v[2] + db * v_x_na[2]) * inv,
     ];
     let dir = [v[0] / vl, v[1] / vl, v[2] / vl];
-    let mut tmin = -1e300;
-    let mut tmax = 1e300;
+    let mut spans_a = Vec::new();
+    let mut spans_b = Vec::new();
 
-    if !clip_line_to_face(sa, &anchor, &dir, &mut tmin, &mut tmax, &mut empty)
-        || !clip_line_to_face(sb, &anchor, &dir, &mut tmin, &mut tmax, &mut empty)
+    if !clip_line_to_face_spans(sa, &anchor, &dir, &mut spans_a, empty)
+        || !clip_line_to_face_spans(sb, &anchor, &dir, &mut spans_b, empty)
     {
-        return (None, empty);
+        return false;
     }
 
-    if tmax - tmin <= 1e-9 {
-        return (None, true);
+    for span_a in &spans_a {
+        for span_b in &spans_b {
+            let tmin = f64::max(span_a.0, span_b.0);
+            let tmax = f64::min(span_a.1, span_b.1);
+
+            if tmax - tmin <= 1e-9 {
+                continue;
+            }
+
+            let start = Point::new(
+                anchor[0] + tmin * dir[0],
+                anchor[1] + tmin * dir[1],
+                anchor[2] + tmin * dir[2],
+            );
+            let end = Point::new(
+                anchor[0] + tmax * dir[0],
+                anchor[1] + tmax * dir[1],
+                anchor[2] + tmax * dir[2],
+            );
+            let mut c3 = NurbsCurve::create(false, 1, &[start, end]);
+            c3.set_domain(0.0, 1.0);
+            out.push(c3);
+        }
     }
 
-    let start = Point::new(
-        anchor[0] + tmin * dir[0],
-        anchor[1] + tmin * dir[1],
-        anchor[2] + tmin * dir[2],
-    );
-    let end = Point::new(
-        anchor[0] + tmax * dir[0],
-        anchor[1] + tmax * dir[1],
-        anchor[2] + tmax * dir[2],
-    );
-    let mut c3 = NurbsCurve::create(false, 1, &[start, end]);
-    c3.set_domain(0.0, 1.0);
+    *empty = out.is_empty();
 
-    (Some(c3), false)
+    !*empty
 }
 /// Tri-state analytic result: not analytic, recognised empty, or curve triples.
 #[derive(Clone, Copy, PartialEq)]
@@ -5428,11 +5635,45 @@ fn bisect_height_v(
     Some(0.5 * (va + vb))
 }
 
-/// Plane pcurve: the curve's control points mapped to the face's bilinear parameters.
+/// Pcurve on a planar face that is not its corner parallelogram: a polyline through 65 inverted points, invalid when the curve leaves the face.
+fn inverted_plane_pcurve(srf: &NurbsSurface, f: &FaceFrame, c3d: &NurbsCurve) -> NurbsCurve {
+    let (t0, t1) = c3d.domain();
+    let tol = 1e-6 * (f.exx + f.eyy).sqrt();
+    let mut uvs = Vec::new();
+
+    for i in 0..=64 {
+        let p = c3d.point_at(t0 + (t1 - t0) * i as f64 / 64.0);
+        let closest = Closest::surface_point(srf, &p, 0.0, 0.0, 0.0, 0.0);
+
+        if closest.2 > tol {
+            return NurbsCurve::default();
+        }
+
+        uvs.push(Point::new(closest.0, closest.1, 0.0));
+    }
+
+    let mut pc = NurbsCurve::create(false, 1, &uvs);
+
+    if !pc.set_domain(t0, t1) {
+        return NurbsCurve::default();
+    }
+
+    pc
+}
+
+/// Plane pcurve: inverted points on a face that is not its corner parallelogram, else the control points mapped to its parameters.
 fn plane_pcurve(srf: &NurbsSurface, c3d: &NurbsCurve) -> NurbsCurve {
     let (u0, u1) = srf_domain(srf, 0);
     let (v0, v1) = srf_domain(srf, 1);
     let f = face_frame(srf);
+
+    if !is_parallelogram_face(srf, &f) {
+        let inverted = inverted_plane_pcurve(srf, &f, c3d);
+
+        if inverted.is_valid() {
+            return inverted;
+        }
+    }
 
     if f.det.abs() < 1e-18 {
         return NurbsCurve::default();
@@ -7358,11 +7599,9 @@ fn analytic_curves(
     out: &mut Vec<NurbsCurve>,
 ) -> bool {
     if ra.kind == RecogKind::Plane && rb.kind == RecogKind::Plane {
-        let (c3, empty) = ssi_plane_plane(a, ra, b, rb);
+        let mut empty = false;
 
-        if let Some(c3) = c3 {
-            out.push(c3);
-
+        if ssi_plane_plane(a, ra, b, rb, out, &mut empty) {
             return true;
         }
 
@@ -9009,57 +9248,6 @@ pub fn surface_surface(
     marched_section_triples(a, b, tolerance)
 }
 
-/// Cutter boundary in loop order, each side split into cv_count - 1 pieces when linear, else 4 * cv_count.
-fn cutter_boundary(cutter: &NurbsSurface) -> Vec<Point> {
-    let (cu0, cu1) = srf_domain(cutter, 0);
-    let (cv0, cv1) = srf_domain(cutter, 1);
-    let nu = if cutter.degree(0) == 1 {
-        cutter.cv_count(0) - 1
-    } else {
-        4 * cutter.cv_count(0)
-    };
-    let nv = if cutter.degree(1) == 1 {
-        cutter.cv_count(1) - 1
-    } else {
-        4 * cutter.cv_count(1)
-    };
-    let mut points = Vec::new();
-
-    for i in 0..nu {
-        points.push(srf_point(
-            cutter,
-            cu0 + (cu1 - cu0) * i as f64 / nu as f64,
-            cv0,
-        ));
-    }
-
-    for i in 0..nv {
-        points.push(srf_point(
-            cutter,
-            cu1,
-            cv0 + (cv1 - cv0) * i as f64 / nv as f64,
-        ));
-    }
-
-    for i in (1..=nu).rev() {
-        points.push(srf_point(
-            cutter,
-            cu0 + (cu1 - cu0) * i as f64 / nu as f64,
-            cv1,
-        ));
-    }
-
-    for i in (1..=nv).rev() {
-        points.push(srf_point(
-            cutter,
-            cu0,
-            cv0 + (cv1 - cv0) * i as f64 / nv as f64,
-        ));
-    }
-
-    points
-}
-
 /// Distance from a pcurve's lifted point to the cutter: clamped in the corner frame of a rectangle, else to the boundary polygon.
 struct CutterGap<'a> {
     target: &'a NurbsSurface, // Surface the pcurve lives on.
@@ -9098,7 +9286,13 @@ impl<'a> CutterGap<'a> {
         let parallelogram = q11.distance(&corner, None) <= 1e-9 * (eu2 + ev2).sqrt();
         let bilinear = cutter.cv_count(0) == 2 && cutter.cv_count(1) == 2;
         let rectangle = eu2 > 1e-28 && ev2 > 1e-28 && bilinear && square && parallelogram;
-        let mut gap = CutterGap {
+        let (outline, frame) = if rectangle {
+            (Polyline::default(), Plane::default())
+        } else {
+            boundary_outline(cutter)
+        };
+
+        CutterGap {
             target,
             pc,
             cutter,
@@ -9108,37 +9302,9 @@ impl<'a> CutterGap<'a> {
             eu2,
             ev2,
             rectangle,
-            frame: Plane::default(),
-            outline: Polyline::default(),
-        };
-
-        if rectangle {
-            return gap;
+            frame,
+            outline,
         }
-
-        let boundary = cutter_boundary(cutter);
-        let mut normal = Vector::new(0.0, 0.0, 0.0);
-
-        for i in 1..boundary.len().saturating_sub(1) {
-            normal += (&boundary[i] - &boundary[0]).cross(&(&boundary[i + 1] - &boundary[0]));
-        }
-
-        if normal.magnitude() < 1e-14 {
-            return gap;
-        }
-
-        gap.frame = Plane::from_point_normal(boundary[0].clone(), normal, None);
-
-        for p in &boundary {
-            let d = p - &gap.frame.origin();
-            gap.outline.add_point(Point::new(
-                d.dot(&gap.frame.x_axis()),
-                d.dot(&gap.frame.y_axis()),
-                0.0,
-            ));
-        }
-
-        gap
     }
 
     /// Distance to the cutter at pcurve parameter t.

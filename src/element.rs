@@ -297,6 +297,22 @@ impl fmt::Display for ElementFeature {
     }
 }
 
+impl Serialize for ElementFeature {
+    /// Serialize through jsondump.
+    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        self.jsondump().serialize(serializer)
+    }
+}
+
+impl<'de> Deserialize<'de> for ElementFeature {
+    /// Deserialize through jsonload.
+    fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        let value = serde_json::Value::deserialize(deserializer)?;
+
+        Ok(Self::jsonload(&value))
+    }
+}
+
 // ═══════════════════════════════════════════════════════════════════════════
 // Element
 // ═══════════════════════════════════════════════════════════════════════════

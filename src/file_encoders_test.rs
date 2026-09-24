@@ -327,6 +327,221 @@ pub fn run_encoders_decode_instance_ref() -> TestResult {
     })
 }
 
+pub fn run_encoders_decode_element_feature() -> TestResult {
+    MINI_TEST!("Decode Element Feature", {
+        use crate::element::ElementFeature;
+        use crate::file_encoders::file_json_dumps;
+        use crate::file_encoders::file_json_loads;
+        use crate::Point;
+        use crate::Polyline;
+
+        let outline = Polyline::new(vec![
+            Point::new(0.0, 0.0, 0.0),
+            Point::new(1.0, 0.0, 0.0),
+            Point::new(1.0, 1.0, 0.0),
+        ]);
+        let feature = ElementFeature::new("cut", 2, vec![outline], "notch");
+        let json_str = file_json_dumps(&feature, true).unwrap();
+        let loaded: ElementFeature = file_json_loads(&json_str).unwrap();
+
+        MINI_CHECK!(loaded.feature_type == "cut");
+        MINI_CHECK!(loaded.face_index == 2);
+        MINI_CHECK!(loaded.outlines.len() == 1);
+        MINI_CHECK!(loaded.outlines[0].point_count() == 3);
+    })
+}
+
+pub fn run_encoders_decode_component() -> TestResult {
+    MINI_TEST!("Decode Component", {
+        use crate::file_encoders::file_json_dumps;
+        use crate::file_encoders::file_json_loads;
+        use crate::Component;
+
+        let mut component = Component::new();
+        component.type_name = "FloorBuilder".to_string();
+        component.name = "floor".to_string();
+        component
+            .extra
+            .insert("height".to_string(), serde_json::json!(650));
+        let json_str = file_json_dumps(&component, true).unwrap();
+        let loaded: Component = file_json_loads(&json_str).unwrap();
+
+        MINI_CHECK!(loaded.type_name == "FloorBuilder");
+        MINI_CHECK!(loaded.name == "floor");
+        MINI_CHECK!(loaded.extra["height"] == serde_json::json!(650));
+    })
+}
+
+pub fn run_encoders_decode_nurbs_surface_trimmed() -> TestResult {
+    MINI_TEST!("Decode Nurbs Surface Trimmed", {
+        use crate::file_encoders::file_json_dumps;
+        use crate::file_encoders::file_json_loads;
+        use crate::NurbsCurve;
+        use crate::NurbsSurface;
+        use crate::NurbsSurfaceTrimmed;
+        use crate::Point;
+
+        let mut surface = NurbsSurface::new(3, false, 2, 2, 2, 2);
+        surface.set_cv(0, 0, &Point::new(0.0, 0.0, 0.0));
+        surface.set_cv(1, 0, &Point::new(5.0, 0.0, 0.0));
+        surface.set_cv(0, 1, &Point::new(0.0, 5.0, 0.0));
+        surface.set_cv(1, 1, &Point::new(5.0, 5.0, 0.0));
+
+        let outer = NurbsCurve::create(
+            true,
+            1,
+            &[
+                Point::new(0.1, 0.1, 0.0),
+                Point::new(0.9, 0.1, 0.0),
+                Point::new(0.9, 0.9, 0.0),
+                Point::new(0.1, 0.9, 0.0),
+            ],
+        );
+        let inner = NurbsCurve::create(
+            true,
+            1,
+            &[
+                Point::new(0.4, 0.4, 0.0),
+                Point::new(0.6, 0.4, 0.0),
+                Point::new(0.6, 0.6, 0.0),
+            ],
+        );
+
+        let mut trimmed = NurbsSurfaceTrimmed::create(&surface, &outer);
+        trimmed.add_inner_loop(inner);
+        trimmed.name = "trimmed".to_string();
+        let json_str = file_json_dumps(&trimmed, true).unwrap();
+        let loaded: NurbsSurfaceTrimmed = file_json_loads(&json_str).unwrap();
+
+        MINI_CHECK!(loaded.name == "trimmed");
+        MINI_CHECK!(loaded.is_trimmed());
+        MINI_CHECK!(loaded.inner_loop_count() == 1);
+    })
+}
+
+pub fn run_encoders_decode_nurbs_surface() -> TestResult {
+    MINI_TEST!("Decode Nurbs Surface", {
+        use crate::file_encoders::file_json_dumps;
+        use crate::file_encoders::file_json_loads;
+        use crate::NurbsSurface;
+        use crate::Point;
+
+        let mut surface = NurbsSurface::new(3, false, 2, 2, 2, 2);
+        surface.set_cv(0, 0, &Point::new(0.0, 0.0, 0.0));
+        surface.set_cv(1, 0, &Point::new(5.0, 0.0, 0.0));
+        surface.set_cv(0, 1, &Point::new(0.0, 5.0, 0.0));
+        surface.set_cv(1, 1, &Point::new(5.0, 5.0, 0.0));
+        let mesh = surface.mesh();
+        let json_str = file_json_dumps(&surface, true).unwrap();
+        let loaded: NurbsSurface = file_json_loads(&json_str).unwrap();
+
+        MINI_CHECK!(loaded.mesh().number_of_vertices() == mesh.number_of_vertices());
+        MINI_CHECK!(loaded.cv_count(0) == 2);
+        MINI_CHECK!(loaded.cv_count(1) == 2);
+    })
+}
+
+pub fn run_encoders_decode_brep() -> TestResult {
+    MINI_TEST!("Decode BRep", {
+        use crate::file_encoders::file_json_dumps;
+        use crate::file_encoders::file_json_loads;
+        use crate::BRep;
+
+        let brep = BRep::create_box(1.0, 2.0, 3.0);
+        let json_str = file_json_dumps(&brep, true).unwrap();
+        let loaded: BRep = file_json_loads(&json_str).unwrap();
+
+        MINI_CHECK!(loaded.face_count() == 6);
+    })
+}
+
+pub fn run_encoders_decode_element() -> TestResult {
+    MINI_TEST!("Decode Element", {
+        use crate::element::ElementFeature;
+        use crate::file_encoders::file_json_dumps;
+        use crate::file_encoders::file_json_loads;
+        use crate::Element;
+        use crate::Mesh;
+        use crate::Point;
+        use crate::Polyline;
+
+        let mesh = Mesh::from_vertices_and_faces(
+            vec![
+                Point::new(0.0, 0.0, 0.0),
+                Point::new(1.0, 0.0, 0.0),
+                Point::new(0.0, 1.0, 0.0),
+            ],
+            vec![vec![0, 1, 2]],
+        );
+        let outline = Polyline::new(vec![
+            Point::new(0.0, 0.0, 0.0),
+            Point::new(1.0, 0.0, 0.0),
+            Point::new(1.0, 1.0, 0.0),
+        ]);
+
+        let mut element = Element::from_mesh(mesh, "plate");
+        element.add_feature(ElementFeature::new("cut", 0, vec![outline], "notch"));
+        let json_str = file_json_dumps(&element, true).unwrap();
+        let loaded: Element = file_json_loads(&json_str).unwrap();
+
+        MINI_CHECK!(loaded.name == "plate");
+        MINI_CHECK!(loaded.features_count() == 1);
+    })
+}
+
+pub fn run_encoders_decode_objects() -> TestResult {
+    MINI_TEST!("Decode Objects", {
+        use crate::element::ElementFeature;
+        use crate::file_encoders::file_json_dumps;
+        use crate::file_encoders::file_json_loads;
+        use crate::Component;
+        use crate::InstanceRef;
+        use crate::Objects;
+        use crate::Point;
+        use crate::Polyline;
+        use crate::Xform;
+        use std::rc::Rc;
+
+        let mut component = Component::new();
+        component.type_name = "FloorBuilder".to_string();
+        let outline = Polyline::new(vec![
+            Point::new(0.0, 0.0, 0.0),
+            Point::new(1.0, 0.0, 0.0),
+            Point::new(1.0, 1.0, 0.0),
+        ]);
+        let mut instance = InstanceRef::new("def-abc", Xform::translation(1.0, 2.0, 3.0));
+        instance
+            .features
+            .push(ElementFeature::new("drill", 0, vec![outline], "hole"));
+
+        let mut objects = Objects::new();
+        objects.points.push(Rc::new(Point::new(1.0, 2.0, 3.0)));
+        objects.components.push(component);
+        objects.instances.push(Rc::new(instance));
+        let json_str = file_json_dumps(&objects, true).unwrap();
+        let loaded: Objects = file_json_loads(&json_str).unwrap();
+
+        MINI_CHECK!(loaded.points.len() == 1);
+        MINI_CHECK!(loaded.components.len() == 1);
+        MINI_CHECK!(loaded.instances.len() == 1);
+        MINI_CHECK!(loaded.instances[0].features.len() == 1);
+    })
+}
+
+pub fn run_encoders_decode_tolerance() -> TestResult {
+    MINI_TEST!("Decode Tolerance", {
+        use crate::Tolerance;
+
+        let mut tolerance = Tolerance::new("MM");
+        tolerance.set_absolute(0.01);
+        let json_str = tolerance.file_json_dumps().unwrap();
+        let loaded = Tolerance::file_json_loads(&json_str).unwrap();
+
+        MINI_CHECK!(loaded.unit() == "MM");
+        MINI_CHECK!(TOLERANCE.is_close(loaded.absolute(), 0.01));
+    })
+}
+
 pub fn run_encoders_list_in_list_in_list() -> TestResult {
     MINI_TEST!("List In List In List", {
         let data = vec![vec![vec![1, 2], vec![3, 4]], vec![vec![5, 6], vec![7, 8]]];
@@ -501,6 +716,46 @@ REGISTER_MINI_TEST!(
     "FileEncoders",
     "Decode Instance Ref",
     crate::file_encoders_test::run_encoders_decode_instance_ref
+);
+REGISTER_MINI_TEST!(
+    "FileEncoders",
+    "Decode Element Feature",
+    crate::file_encoders_test::run_encoders_decode_element_feature
+);
+REGISTER_MINI_TEST!(
+    "FileEncoders",
+    "Decode Component",
+    crate::file_encoders_test::run_encoders_decode_component
+);
+REGISTER_MINI_TEST!(
+    "FileEncoders",
+    "Decode Nurbs Surface Trimmed",
+    crate::file_encoders_test::run_encoders_decode_nurbs_surface_trimmed
+);
+REGISTER_MINI_TEST!(
+    "FileEncoders",
+    "Decode Nurbs Surface",
+    crate::file_encoders_test::run_encoders_decode_nurbs_surface
+);
+REGISTER_MINI_TEST!(
+    "FileEncoders",
+    "Decode BRep",
+    crate::file_encoders_test::run_encoders_decode_brep
+);
+REGISTER_MINI_TEST!(
+    "FileEncoders",
+    "Decode Element",
+    crate::file_encoders_test::run_encoders_decode_element
+);
+REGISTER_MINI_TEST!(
+    "FileEncoders",
+    "Decode Objects",
+    crate::file_encoders_test::run_encoders_decode_objects
+);
+REGISTER_MINI_TEST!(
+    "FileEncoders",
+    "Decode Tolerance",
+    crate::file_encoders_test::run_encoders_decode_tolerance
 );
 REGISTER_MINI_TEST!(
     "FileEncoders",

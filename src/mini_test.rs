@@ -2894,6 +2894,11 @@ pub fn get_all_tests() -> Vec<RegisteredTest> {
         },
         RegisteredTest {
             group: "Intersection",
+            name: "Cut Curves Plane Trapezoid",
+            func: run_intersection_cut_curves_plane_trapezoid,
+        },
+        RegisteredTest {
+            group: "Intersection",
             name: "Remap",
             func: run_intersection_remap,
         },
@@ -4167,6 +4172,46 @@ pub fn get_all_tests() -> Vec<RegisteredTest> {
             group: "FileEncoders",
             name: "Decode Instance Ref",
             func: run_encoders_decode_instance_ref,
+        },
+        RegisteredTest {
+            group: "FileEncoders",
+            name: "Decode Element Feature",
+            func: run_encoders_decode_element_feature,
+        },
+        RegisteredTest {
+            group: "FileEncoders",
+            name: "Decode Component",
+            func: run_encoders_decode_component,
+        },
+        RegisteredTest {
+            group: "FileEncoders",
+            name: "Decode Nurbs Surface Trimmed",
+            func: run_encoders_decode_nurbs_surface_trimmed,
+        },
+        RegisteredTest {
+            group: "FileEncoders",
+            name: "Decode Nurbs Surface",
+            func: run_encoders_decode_nurbs_surface,
+        },
+        RegisteredTest {
+            group: "FileEncoders",
+            name: "Decode BRep",
+            func: run_encoders_decode_brep,
+        },
+        RegisteredTest {
+            group: "FileEncoders",
+            name: "Decode Element",
+            func: run_encoders_decode_element,
+        },
+        RegisteredTest {
+            group: "FileEncoders",
+            name: "Decode Objects",
+            func: run_encoders_decode_objects,
+        },
+        RegisteredTest {
+            group: "FileEncoders",
+            name: "Decode Tolerance",
+            func: run_encoders_decode_tolerance,
         },
         RegisteredTest {
             group: "FileEncoders",

@@ -1887,6 +1887,59 @@ pub fn run_intersection_cut_curves_slanted_cutter() -> TestResult {
     })
 }
 
+pub fn run_intersection_cut_curves_plane_trapezoid() -> TestResult {
+    MINI_TEST!("Cut Curves Plane Trapezoid", {
+        use crate::intersection::cut_curves_on_surface;
+        use crate::Point;
+
+        let trapezoid = bilinear(
+            Point::new(-3.0, -3.0, 0.0),
+            Point::new(-1.0, 3.0, 0.0),
+            Point::new(3.0, -3.0, 0.0),
+            Point::new(7.0, 3.0, 0.0),
+        );
+        let wall = bilinear(
+            Point::new(6.0, -5.0, -1.0),
+            Point::new(6.0, 5.0, -1.0),
+            Point::new(6.0, -5.0, 1.0),
+            Point::new(6.0, 5.0, 1.0),
+        );
+        let target_cuts = cut_curves_on_surface(&trapezoid, &wall, None);
+        let cutter_cuts = cut_curves_on_surface(&wall, &trapezoid, None);
+
+        MINI_CHECK!(target_cuts.len() == 1);
+        MINI_CHECK!(cutter_cuts.len() == 1);
+
+        let target_domain = target_cuts[0].domain();
+        let target_uv0 = target_cuts[0].point_at(target_domain.0);
+        let target_uv1 = target_cuts[0].point_at(target_domain.1);
+        let target_p0 = trapezoid
+            .point_at(target_uv0[0], target_uv0[1])
+            .unwrap_or_default();
+        let target_p1 = trapezoid
+            .point_at(target_uv1[0], target_uv1[1])
+            .unwrap_or_default();
+
+        MINI_CHECK!((target_p0[0] - 6.0).abs() < 1e-3);
+        MINI_CHECK!((target_p1[0] - 6.0).abs() < 1e-3);
+        MINI_CHECK!((f64::min(target_p0[1], target_p1[1]) - 1.5).abs() < 1e-3);
+        MINI_CHECK!((f64::max(target_p0[1], target_p1[1]) - 3.0).abs() < 1e-3);
+
+        let cutter_domain = cutter_cuts[0].domain();
+        let cutter_uv0 = cutter_cuts[0].point_at(cutter_domain.0);
+        let cutter_uv1 = cutter_cuts[0].point_at(cutter_domain.1);
+        let cutter_p0 = wall
+            .point_at(cutter_uv0[0], cutter_uv0[1])
+            .unwrap_or_default();
+        let cutter_p1 = wall
+            .point_at(cutter_uv1[0], cutter_uv1[1])
+            .unwrap_or_default();
+
+        MINI_CHECK!((f64::min(cutter_p0[1], cutter_p1[1]) - 1.5).abs() < 1e-3);
+        MINI_CHECK!((f64::max(cutter_p0[1], cutter_p1[1]) - 3.0).abs() < 1e-3);
+    })
+}
+
 pub fn run_intersection_remap() -> TestResult {
     MINI_TEST!("Remap", {
         use crate::intersection;
@@ -2872,6 +2925,11 @@ REGISTER_MINI_TEST!(
     "Intersection",
     "Cut Curves Slanted Cutter",
     crate::intersection_test::run_intersection_cut_curves_slanted_cutter
+);
+REGISTER_MINI_TEST!(
+    "Intersection",
+    "Cut Curves Plane Trapezoid",
+    crate::intersection_test::run_intersection_cut_curves_plane_trapezoid
 );
 REGISTER_MINI_TEST!(
     "Intersection",
