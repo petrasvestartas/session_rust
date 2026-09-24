@@ -33,8 +33,6 @@ pub fn run_nurbssurface_constructor() -> TestResult {
 
         let s = NurbsSurface::create(false, false, 3, 3, 4, 4, &points).unwrap();
 
-        let _m = s.mesh();
-
         let (p, _v, _uv) = s.divide_by_count_points(4, 6);
 
         let sstr = s.to_string();
@@ -289,6 +287,7 @@ pub fn run_nurbssurface_create_from_parameters() -> TestResult {
         MINI_CHECK!(s.degree(0) == 3 && s.degree(1) == 3);
         MINI_CHECK!(s.cv_count(0) == 4 && s.cv_count(1) == 4);
         MINI_CHECK!(!s.is_rational());
+
         let (u0, u1) = s.domain(0).unwrap();
         let (v0, v1) = s.domain(1).unwrap();
 
@@ -311,6 +310,7 @@ pub fn run_nurbssurface_create_from_parameters() -> TestResult {
         let fr = s.frame_at(0.3, 0.4);
 
         MINI_CHECK!(TOLERANCE.is_point_close(&fr.origin(), &s.point_at(0.3, 0.4).unwrap()));
+
         let n = s.normal_at(0.3, 0.4);
         let za = fr.z_axis();
 
@@ -341,7 +341,7 @@ pub fn run_nurbssurface_booleans_queries() -> TestResult {
 
         let is_rational = s.is_rational();
 
-        let is_closed = s.is_closed(0) == true && s.is_closed(1) == false;
+        let is_closed = s.is_closed(0) && !s.is_closed(1);
 
         let is_periodic = s.is_periodic(0) && s.is_periodic(1);
 
@@ -449,6 +449,7 @@ pub fn run_nurbssurface_control_vertices_access() -> TestResult {
         let cv_slice = s.cv(0, 0).unwrap();
 
         MINI_CHECK!(cv_slice[2] == 0.0);
+
         let cv_mut_slice = s.cv_mut(0, 0).unwrap();
         cv_mut_slice[2] = 10.0;
 
@@ -457,6 +458,7 @@ pub fn run_nurbssurface_control_vertices_access() -> TestResult {
         let cv = s.get_cv(0, 0).unwrap();
 
         MINI_CHECK!(cv == Point::new(0.0, 0.0, 10.0));
+
         let (x, y, z, w) = s.get_cv_4d(0, 0).unwrap();
 
         MINI_CHECK!(x == 0.0 && y == 0.0 && z == 10.0 && w == 1.0);
@@ -464,6 +466,7 @@ pub fn run_nurbssurface_control_vertices_access() -> TestResult {
         s.set_cv(0, 0, &Point::new(0.0, 0.0, 5.0));
 
         MINI_CHECK!(s.get_cv(0, 0).unwrap() == Point::new(0.0, 0.0, 5.0));
+
         s.set_cv_4d(0, 0, 0.0, 0.0, 4.0, 0.5);
 
         MINI_CHECK!(s.get_cv(0, 0).unwrap() == Point::new(0.0, 0.0, 8.0));
@@ -523,6 +526,7 @@ pub fn run_nurbssurface_nurbsknot_access() -> TestResult {
 
         MINI_CHECK!(is_set);
         MINI_CHECK!(s.nurbsknot(0, 2).unwrap() == 0.5);
+
         let is_set = s.set_nurbsknot(0, 2, 0.0);
 
         MINI_CHECK!(is_set);
@@ -1095,6 +1099,7 @@ pub fn run_nurbssurface_modification() -> TestResult {
         s_rat.set_weight(2, 2, 3.0);
 
         MINI_CHECK!(s.point_at(0.5, 0.5).unwrap() != s_rat.point_at(0.5, 0.5).unwrap());
+
         s_rat.make_non_rational();
 
         MINI_CHECK!(s.point_at(0.5, 0.5).unwrap() == s_rat.point_at(0.5, 0.5).unwrap());
@@ -1376,9 +1381,9 @@ pub fn run_nurbssurface_split_by_plane() -> TestResult {
         MINI_CHECK!(parts.len() == 2);
 
         for ts in &parts {
-            MINI_CHECK!(ts.is_trimmed());
             let m = ts.mesh_q(20.0, 0.005);
 
+            MINI_CHECK!(ts.is_trimmed());
             MINI_CHECK!(m.number_of_faces() > 0);
         }
 
@@ -1481,9 +1486,9 @@ pub fn run_nurbssurface_split_by_surface() -> TestResult {
         MINI_CHECK!(parts.len() == 2);
 
         for ts in &parts {
-            MINI_CHECK!(ts.is_trimmed());
             let m = ts.mesh_q(20.0, 0.005);
 
+            MINI_CHECK!(ts.is_trimmed());
             MINI_CHECK!(m.number_of_faces() > 0);
         }
     })
@@ -1517,9 +1522,9 @@ pub fn run_nurbssurface_split_by_brep() -> TestResult {
         MINI_CHECK!(parts.len() == 2);
 
         for ts in &parts {
-            MINI_CHECK!(ts.is_trimmed());
             let m = ts.mesh_q(20.0, 0.005);
 
+            MINI_CHECK!(ts.is_trimmed());
             MINI_CHECK!(m.number_of_faces() > 0);
         }
     })

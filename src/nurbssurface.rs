@@ -53,9 +53,111 @@ fn binomial(n: usize, k: usize) -> f64 {
     r
 }
 
-/// Index of partial (k, l) in the (k, l) loop order of evaluate.
-fn skl_index(n: usize, k: usize, l: usize) -> usize {
-    k * (n + 1) - k * k.saturating_sub(1) / 2 + l
+/// Index of partial (k, m) in the (k, m) loop order of evaluate.
+fn skl_index(n: usize, k: usize, m: usize) -> usize {
+    k * (n + 1) - k * k.saturating_sub(1) / 2 + m
+}
+
+/// True when any weight differs from one.
+fn is_rational_weights(weights: &[Vec<f64>]) -> bool {
+    for row in weights {
+        for &w in row {
+            if (w - 1.0).abs() > Tolerance::ZERO_TOLERANCE {
+                return true;
+            }
+        }
+    }
+
+    false
+}
+
+/// Triangular table of basis values and knot differences (Piegl & Tiller A2.3).
+fn basis_table(knot: &[f64], degree: usize, base: usize, t: f64) -> Vec<Vec<f64>> {
+    let order = degree + 1;
+    let mut ndu = vec![vec![0.0; order]; order];
+    ndu[0][0] = 1.0;
+    let mut left = vec![0.0; order];
+    let mut right = vec![0.0; order];
+
+    for j in 1..=degree {
+        left[j] = t - knot[base - j];
+        right[j] = knot[base + j - 1] - t;
+        let mut saved = 0.0;
+
+        for r in 0..j {
+            ndu[j][r] = right[r + 1] + left[j - r];
+            let temp = ndu[r][j - 1] / ndu[j][r];
+            ndu[r][j] = saved + right[r + 1] * temp;
+            saved = left[j - r] * temp;
+        }
+
+        ndu[j][j] = saved;
+    }
+
+    ndu
+}
+
+/// Basis derivatives ders[k][j] from the triangular table (Piegl & Tiller A2.3).
+fn basis_table_derivatives(ndu: &[Vec<f64>], degree: usize, deriv_order: usize) -> Vec<Vec<f64>> {
+    let order = degree + 1;
+    let mut ders = vec![vec![0.0; order]; deriv_order + 1];
+
+    for j in 0..=degree {
+        ders[0][j] = ndu[j][degree];
+    }
+
+    let mut a = vec![vec![0.0; order]; 2];
+
+    for r in 0..=degree {
+        let mut s1 = 0;
+        let mut s2 = 1;
+        a[0][0] = 1.0;
+
+        for k in 1..=deriv_order {
+            let mut d = 0.0;
+            let rk = r as isize - k as isize;
+            let pk = degree as isize - k as isize;
+
+            if r >= k {
+                a[s2][0] = a[s1][0] / ndu[(pk + 1) as usize][rk as usize];
+                d = a[s2][0] * ndu[rk as usize][pk as usize];
+            }
+
+            let j1 = if rk >= -1 { 1 } else { (-rk) as usize };
+            let j2 = if r as isize - 1 <= pk {
+                k - 1
+            } else {
+                degree - r
+            };
+
+            for j in j1..=j2 {
+                a[s2][j] =
+                    (a[s1][j] - a[s1][j - 1]) / ndu[(pk + 1) as usize][(rk + j as isize) as usize];
+
+                d += a[s2][j] * ndu[(rk + j as isize) as usize][pk as usize];
+            }
+
+            if r as isize <= pk {
+                a[s2][k] = -a[s1][k - 1] / ndu[(pk + 1) as usize][r];
+                d += a[s2][k] * ndu[r][pk as usize];
+            }
+
+            ders[k][r] = d;
+            std::mem::swap(&mut s1, &mut s2);
+        }
+    }
+
+    let mut factor = degree as f64;
+
+    for k in 1..=deriv_order {
+        for j in 0..=degree {
+            ders[k][j] *= factor;
+        }
+
+        factor *= (degree as isize - k as isize) as f64;
+    }
+
+    ders
 }
 
 /// Bounding box of a 7 x 7 sample of the surface.
@@ -324,16 +426,7 @@ impl NurbsSurface {
             return Self::default();
         }
 
-        let mut rational = false;
-
-        for row in weights {
-            for &w in row {
-                if (w - 1.0).abs() > Tolerance::ZERO_TOLERANCE {
-                    rational = true;
-                }
-            }
-        }
-
+        let rational = is_rational_weights(weights);
         let full_u = expand_nurbsknots(knots_u, mults_u);
         let full_v = expand_nurbsknots(knots_v, mults_v);
         let kc_u = order_u + nu - 2;
@@ -1396,7 +1489,7 @@ impl NurbsSurface {
         results
     }
 
-    /// Return the point and partials up to num_derivs (max 2) in (k, l) loop order: [S, Sv, Svv, Su, Suv, Suu].
+    /// Return the point and partials up to num_derivs (max 2) in (k, m) loop order: [S, Sv, Svv, Su, Suv, Suu].
     pub fn evaluate(&self, u: f64, v: f64, num_derivs: usize) -> Vec<Vector> {
         let mut result = Vec::new();
 
@@ -1413,12 +1506,12 @@ impl NurbsSurface {
         let mut skl: Vec<Vec<f64>> = Vec::new();
 
         for k in 0..=n {
-            for l in 0..=n - k {
+            for m in 0..=n - k {
                 let mut sum = vec![0.0; size];
 
                 for i in 0..self.m_order[0] {
                     for j in 0..self.m_order[1] {
-                        let c = ders_u[k][i] * ders_v[l][j];
+                        let c = ders_u[k][i] * ders_v[m][j];
                         let cv_ptr = self.cv(span_u + i, span_v + j).unwrap_or(&[]);
 
                         for d in 0..size {
@@ -1912,24 +2005,39 @@ impl NurbsSurface {
     pub fn from_proto(
         proto: crate::proto::NurbsSurface,
     ) -> Result<Self, Box<dyn std::error::Error>> {
-        let mut surface = Self::new(
+        let mut surface = Self::default();
+        let created = surface.create_raw(
             proto.dimension as usize,
             proto.is_rational,
             proto.order_u as usize,
             proto.order_v as usize,
             proto.cv_count_u as usize,
             proto.cv_count_v as usize,
+            false,
+            false,
+            1.0,
+            1.0,
         );
-
-        if !surface.is_valid() {
-            return Err("NurbsSurface::from_proto: invalid layout".into());
-        }
 
         if !proto.guid.is_empty() {
             surface.set_guid(proto.guid.clone());
         }
 
         surface.name = proto.name;
+        surface.width = proto.width;
+        surface.pointcolors = colors_from_proto(&proto.pointcolors);
+        surface.facecolors = colors_from_proto(&proto.facecolors);
+        surface.linecolors = colors_from_proto(&proto.linecolors);
+
+        if let Some(cached) = proto.cached_mesh {
+            if !cached.vertices.is_empty() {
+                surface.m_mesh = Some(Mesh::from_proto(cached));
+            }
+        }
+
+        if !created {
+            return Ok(surface);
+        }
 
         for i in 0..proto.nurbsknots_u.len().min(surface.m_nurbsknot[0].len()) {
             surface.m_nurbsknot[0][i] = proto.nurbsknots_u[i];
@@ -1961,17 +2069,6 @@ impl NurbsSurface {
                         surface.m_cv[dst + d] = proto.cvs[src + d];
                     }
                 }
-            }
-        }
-
-        surface.width = proto.width;
-        surface.pointcolors = colors_from_proto(&proto.pointcolors);
-        surface.facecolors = colors_from_proto(&proto.facecolors);
-        surface.linecolors = colors_from_proto(&proto.linecolors);
-
-        if let Some(cached) = proto.cached_mesh {
-            if !cached.vertices.is_empty() {
-                surface.m_mesh = Some(Mesh::from_proto(cached));
             }
         }
 
@@ -2116,91 +2213,15 @@ impl NurbsSurface {
         let degree = order - 1;
         let knot = &self.m_nurbsknot[dir];
         let base = span + degree;
-        let mut ders = vec![vec![0.0; order]; deriv_order + 1];
 
         if knot[base - 1] == knot[base] {
-            return ders;
+            return vec![vec![0.0; order]; deriv_order + 1];
         }
 
-        let mut ndu = vec![vec![0.0; order]; order];
-        ndu[0][0] = 1.0;
-        let mut left = vec![0.0; order];
-        let mut right = vec![0.0; order];
-
-        for j in 1..=degree {
-            left[j] = t - knot[base - j];
-            right[j] = knot[base + j - 1] - t;
-            let mut saved = 0.0;
-
-            for r in 0..j {
-                ndu[j][r] = right[r + 1] + left[j - r];
-                let temp = ndu[r][j - 1] / ndu[j][r];
-                ndu[r][j] = saved + right[r + 1] * temp;
-                saved = left[j - r] * temp;
-            }
-
-            ndu[j][j] = saved;
-        }
-
-        for j in 0..=degree {
-            ders[0][j] = ndu[j][degree];
-        }
-
-        let mut a = vec![vec![0.0; order]; 2];
-
-        for r in 0..=degree {
-            let mut s1 = 0;
-            let mut s2 = 1;
-            a[0][0] = 1.0;
-
-            for k in 1..=deriv_order {
-                let mut d = 0.0;
-                let rk = r as isize - k as isize;
-                let pk = degree as isize - k as isize;
-
-                if r >= k {
-                    a[s2][0] = a[s1][0] / ndu[(pk + 1) as usize][rk as usize];
-                    d = a[s2][0] * ndu[rk as usize][pk as usize];
-                }
-
-                let j1 = if rk >= -1 { 1 } else { (-rk) as usize };
-                let j2 = if r as isize - 1 <= pk {
-                    k - 1
-                } else {
-                    degree - r
-                };
-
-                for j in j1..=j2 {
-                    a[s2][j] = (a[s1][j] - a[s1][j - 1])
-                        / ndu[(pk + 1) as usize][(rk + j as isize) as usize];
-
-                    d += a[s2][j] * ndu[(rk + j as isize) as usize][pk as usize];
-                }
-
-                if r as isize <= pk {
-                    a[s2][k] = -a[s1][k - 1] / ndu[(pk + 1) as usize][r];
-                    d += a[s2][k] * ndu[r][pk as usize];
-                }
-
-                ders[k][r] = d;
-                std::mem::swap(&mut s1, &mut s2);
-            }
-        }
-
-        let mut factor = degree as f64;
-
-        for k in 1..=deriv_order {
-            for j in 0..=degree {
-                ders[k][j] *= factor;
-            }
-
-            factor *= (degree as isize - k as isize) as f64;
-        }
-
-        ders
+        basis_table_derivatives(&basis_table(knot, degree, base, t), degree, deriv_order)
     }
 
-    /// Apply the rational quotient rule to homogeneous partials in (k, l) loop order (Piegl & Tiller A4.4).
+    /// Apply the rational quotient rule to homogeneous partials in (k, m) loop order (Piegl & Tiller A4.4).
     fn rational_derivatives(&self, skl: &[Vec<f64>], num_derivs: usize) -> Vec<Vector> {
         let mut result: Vec<Vector> = Vec::new();
         let n = num_derivs;
@@ -2211,8 +2232,8 @@ impl NurbsSurface {
         }
 
         for k in 0..=n {
-            for l in 0..=n - k {
-                let s = &skl[skl_index(n, k, l)];
+            for m in 0..=n - k {
+                let s = &skl[skl_index(n, k, m)];
                 let mut a = Vector::new(
                     s[0],
                     if self.m_dim > 1 { s[1] } else { 0.0 },
@@ -2220,14 +2241,14 @@ impl NurbsSurface {
                 );
 
                 for i in 0..=k {
-                    for j in 0..=l {
+                    for j in 0..=m {
                         if i == 0 && j == 0 {
                             continue;
                         }
 
                         let c =
-                            binomial(k, i) * binomial(l, j) * skl[skl_index(n, i, j)][self.m_dim];
-                        a -= &result[skl_index(n, k - i, l - j)] * c;
+                            binomial(k, i) * binomial(m, j) * skl[skl_index(n, i, j)][self.m_dim];
+                        a -= &result[skl_index(n, k - i, m - j)] * c;
                     }
                 }
 
@@ -2391,8 +2412,7 @@ impl NurbsSurface {
         }
 
         let mut srf = Self::default();
-
-        if dir == 0 {
+        let created = if dir == 0 {
             srf.create_raw(
                 self.m_dim,
                 self.m_is_rat,
@@ -2404,7 +2424,7 @@ impl NurbsSurface {
                 false,
                 1.0,
                 1.0,
-            );
+            )
         } else {
             srf.create_raw(
                 self.m_dim,
@@ -2417,7 +2437,11 @@ impl NurbsSurface {
                 false,
                 1.0,
                 1.0,
-            );
+            )
+        };
+
+        if !created {
+            return false;
         }
 
         srf.m_nurbsknot[dir] = crv.m_nurbsknot.clone();
@@ -2574,14 +2598,34 @@ impl<'de> Deserialize<'de> for NurbsSurface {
     /// Deserializes from flat JSON fields.
     fn deserialize<D: Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
         let data = NurbsSurfaceData::deserialize(deserializer)?;
-        let mut surface = NurbsSurface::new(
+        let mut surface = NurbsSurface::default();
+        let created = surface.create_raw(
             data.dimension,
             data.is_rational,
             data.order_u,
             data.order_v,
             data.cv_count_u,
             data.cv_count_v,
+            false,
+            false,
+            1.0,
+            1.0,
         );
+
+        if !data.guid.is_empty() {
+            surface.set_guid(data.guid);
+        }
+
+        surface.name = data.name.unwrap_or_else(|| "my_nurbssurface".to_string());
+        surface.width = data.width.unwrap_or(1.0);
+        surface.pointcolors = colors_from_json(&data.pointcolors);
+        surface.facecolors = colors_from_json(&data.facecolors);
+        surface.linecolors = colors_from_json(&data.linecolors);
+        surface.m_mesh = data.mesh;
+
+        if !created {
+            return Ok(surface);
+        }
 
         if !data.nurbsknots_u.is_empty() {
             surface.m_nurbsknot[0] = data.nurbsknots_u;
@@ -2594,17 +2638,6 @@ impl<'de> Deserialize<'de> for NurbsSurface {
         if !data.control_points.is_empty() {
             surface.m_cv = data.control_points;
         }
-
-        if !data.guid.is_empty() {
-            surface.set_guid(data.guid);
-        }
-
-        surface.name = data.name.unwrap_or_else(|| "my_nurbssurface".to_string());
-        surface.width = data.width.unwrap_or(1.0);
-        surface.pointcolors = colors_from_json(&data.pointcolors);
-        surface.facecolors = colors_from_json(&data.facecolors);
-        surface.linecolors = colors_from_json(&data.linecolors);
-        surface.m_mesh = data.mesh;
 
         Ok(surface)
     }
