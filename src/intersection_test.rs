@@ -161,6 +161,11 @@ fn distance_square(p: &crate::Point) -> f64 {
     )
 }
 
+/// Distance from the plane through the slanted cutter.
+fn distance_slanted(p: &crate::Point) -> f64 {
+    (-2.0 * p[0] + p[1] + 10.0 * p[2] - 3.0).abs() / 105.0f64.sqrt()
+}
+
 pub fn run_intersection_line_line() -> TestResult {
     MINI_TEST!("Line Line", {
         use crate::intersection;
@@ -1856,6 +1861,32 @@ pub fn run_intersection_cut_curves_on_surface_torus() -> TestResult {
     })
 }
 
+pub fn run_intersection_cut_curves_slanted_cutter() -> TestResult {
+    MINI_TEST!("Cut Curves Slanted Cutter", {
+        use crate::intersection::cut_curves_on_surface;
+        use crate::Point;
+        use crate::Primitives;
+
+        let cone = Primitives::cone_surface(0.0, 0.0, 0.0, 1.5, 3.0);
+        let slanted = bilinear(
+            Point::new(-3.0, -3.0, 0.0),
+            Point::new(-3.0, 3.0, -0.6),
+            Point::new(3.0, -3.0, 1.2),
+            Point::new(3.0, 3.0, 0.6),
+        );
+        let cuts = cut_curves_on_surface(&cone, &slanted, None);
+
+        MINI_CHECK!(cuts.len() == 2);
+
+        let domain = cuts[0].domain();
+        let uv = cuts[0].point_at((domain.0 + domain.1) * 0.5);
+        let p = cone.point_at(uv[0], uv[1]).unwrap_or_default();
+
+        MINI_CHECK!(distance_cone(&p) < 1e-3);
+        MINI_CHECK!(distance_slanted(&p) < 1e-3);
+    })
+}
+
 pub fn run_intersection_remap() -> TestResult {
     MINI_TEST!("Remap", {
         use crate::intersection;
@@ -2836,6 +2867,11 @@ REGISTER_MINI_TEST!(
     "Intersection",
     "Cut Curves On Surface Torus",
     crate::intersection_test::run_intersection_cut_curves_on_surface_torus
+);
+REGISTER_MINI_TEST!(
+    "Intersection",
+    "Cut Curves Slanted Cutter",
+    crate::intersection_test::run_intersection_cut_curves_slanted_cutter
 );
 REGISTER_MINI_TEST!(
     "Intersection",

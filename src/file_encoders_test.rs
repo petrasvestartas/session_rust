@@ -288,6 +288,45 @@ pub fn run_encoders_decode_dict() -> TestResult {
     })
 }
 
+pub fn run_encoders_decode_mesh() -> TestResult {
+    MINI_TEST!("Decode Mesh", {
+        use crate::file_encoders::file_json_dumps;
+        use crate::file_encoders::file_json_loads;
+        use crate::Mesh;
+        use crate::Point;
+
+        let mesh = Mesh::from_vertices_and_faces(
+            vec![
+                Point::new(0.0, 0.0, 0.0),
+                Point::new(1.0, 0.0, 0.0),
+                Point::new(0.0, 1.0, 0.0),
+            ],
+            vec![vec![0, 1, 2]],
+        );
+        let json_str = file_json_dumps(&mesh, true).unwrap();
+        let loaded: Mesh = file_json_loads(&json_str).unwrap();
+
+        MINI_CHECK!(loaded.number_of_vertices() == 3);
+        MINI_CHECK!(loaded.number_of_faces() == 1);
+    })
+}
+
+pub fn run_encoders_decode_instance_ref() -> TestResult {
+    MINI_TEST!("Decode Instance Ref", {
+        use crate::file_encoders::file_json_dumps;
+        use crate::file_encoders::file_json_loads;
+        use crate::InstanceRef;
+        use crate::Xform;
+
+        let instance = InstanceRef::new("def-abc", Xform::translation(1.0, 2.0, 3.0));
+        let json_str = file_json_dumps(&instance, true).unwrap();
+        let loaded: InstanceRef = file_json_loads(&json_str).unwrap();
+
+        MINI_CHECK!(loaded.definition_guid == "def-abc");
+        MINI_CHECK!(TOLERANCE.is_close(loaded[12], 1.0));
+    })
+}
+
 pub fn run_encoders_list_in_list_in_list() -> TestResult {
     MINI_TEST!("List In List In List", {
         let data = vec![vec![vec![1, 2], vec![3, 4]], vec![vec![5, 6], vec![7, 8]]];
@@ -452,6 +491,16 @@ REGISTER_MINI_TEST!(
     "FileEncoders",
     "Decode Dict",
     crate::file_encoders_test::run_encoders_decode_dict
+);
+REGISTER_MINI_TEST!(
+    "FileEncoders",
+    "Decode Mesh",
+    crate::file_encoders_test::run_encoders_decode_mesh
+);
+REGISTER_MINI_TEST!(
+    "FileEncoders",
+    "Decode Instance Ref",
+    crate::file_encoders_test::run_encoders_decode_instance_ref
 );
 REGISTER_MINI_TEST!(
     "FileEncoders",

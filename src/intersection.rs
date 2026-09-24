@@ -9009,7 +9009,58 @@ pub fn surface_surface(
     marched_section_triples(a, b, tolerance)
 }
 
-/// Distance from a pcurve's lifted point to the cutter, projected onto the corner frame when it is not degenerate.
+/// Cutter boundary in loop order, each side split into cv_count - 1 pieces when linear, else 4 * cv_count.
+fn cutter_boundary(cutter: &NurbsSurface) -> Vec<Point> {
+    let (cu0, cu1) = srf_domain(cutter, 0);
+    let (cv0, cv1) = srf_domain(cutter, 1);
+    let nu = if cutter.degree(0) == 1 {
+        cutter.cv_count(0) - 1
+    } else {
+        4 * cutter.cv_count(0)
+    };
+    let nv = if cutter.degree(1) == 1 {
+        cutter.cv_count(1) - 1
+    } else {
+        4 * cutter.cv_count(1)
+    };
+    let mut points = Vec::new();
+
+    for i in 0..nu {
+        points.push(srf_point(
+            cutter,
+            cu0 + (cu1 - cu0) * i as f64 / nu as f64,
+            cv0,
+        ));
+    }
+
+    for i in 0..nv {
+        points.push(srf_point(
+            cutter,
+            cu1,
+            cv0 + (cv1 - cv0) * i as f64 / nv as f64,
+        ));
+    }
+
+    for i in (1..=nu).rev() {
+        points.push(srf_point(
+            cutter,
+            cu0 + (cu1 - cu0) * i as f64 / nu as f64,
+            cv1,
+        ));
+    }
+
+    for i in (1..=nv).rev() {
+        points.push(srf_point(
+            cutter,
+            cu0,
+            cv0 + (cv1 - cv0) * i as f64 / nv as f64,
+        ));
+    }
+
+    points
+}
+
+/// Distance from a pcurve's lifted point to the cutter: clamped in the corner frame of a rectangle, else to the boundary polygon.
 struct CutterGap<'a> {
     target: &'a NurbsSurface, // Surface the pcurve lives on.
     pc: &'a NurbsCurve,       // Pcurve on the target.
@@ -9019,23 +9070,35 @@ struct CutterGap<'a> {
     ev: [f64; 3],             // Cutter edge to (u0, v1).
     eu2: f64,                 // Squared length of eu.
     ev2: f64,                 // Squared length of ev.
-    fast_planar: bool,        // Whether both edges are usable.
+    rectangle: bool,          // Whether the cutter is a 2 x 2 rectangle.
+    frame: Plane,             // Plane of the boundary polygon.
+    outline: Polyline,        // Boundary polygon in the frame, empty without area.
 }
 
 impl<'a> CutterGap<'a> {
-    /// Corner frame of the cutter.
+    /// Corner frame and boundary polygon of the cutter.
     fn new(target: &'a NurbsSurface, pc: &'a NurbsCurve, cutter: &'a NurbsSurface) -> Self {
         let (cu0, cu1) = srf_domain(cutter, 0);
         let (cv0, cv1) = srf_domain(cutter, 1);
         let q00 = srf_point(cutter, cu0, cv0);
         let q10 = srf_point(cutter, cu1, cv0);
         let q01 = srf_point(cutter, cu0, cv1);
+        let q11 = srf_point(cutter, cu1, cv1);
         let eu = [q10[0] - q00[0], q10[1] - q00[1], q10[2] - q00[2]];
         let ev = [q01[0] - q00[0], q01[1] - q00[1], q01[2] - q00[2]];
         let eu2 = eu[0] * eu[0] + eu[1] * eu[1] + eu[2] * eu[2];
         let ev2 = ev[0] * ev[0] + ev[1] * ev[1] + ev[2] * ev[2];
-
-        CutterGap {
+        let square =
+            (eu[0] * ev[0] + eu[1] * ev[1] + eu[2] * ev[2]).abs() <= 1e-9 * (eu2 * ev2).sqrt();
+        let corner = Point::new(
+            q00[0] + eu[0] + ev[0],
+            q00[1] + eu[1] + ev[1],
+            q00[2] + eu[2] + ev[2],
+        );
+        let parallelogram = q11.distance(&corner, None) <= 1e-9 * (eu2 + ev2).sqrt();
+        let bilinear = cutter.cv_count(0) == 2 && cutter.cv_count(1) == 2;
+        let rectangle = eu2 > 1e-28 && ev2 > 1e-28 && bilinear && square && parallelogram;
+        let mut gap = CutterGap {
             target,
             pc,
             cutter,
@@ -9044,8 +9107,38 @@ impl<'a> CutterGap<'a> {
             ev,
             eu2,
             ev2,
-            fast_planar: eu2 > 1e-28 && ev2 > 1e-28,
+            rectangle,
+            frame: Plane::default(),
+            outline: Polyline::default(),
+        };
+
+        if rectangle {
+            return gap;
         }
+
+        let boundary = cutter_boundary(cutter);
+        let mut normal = Vector::new(0.0, 0.0, 0.0);
+
+        for i in 1..boundary.len().saturating_sub(1) {
+            normal += (&boundary[i] - &boundary[0]).cross(&(&boundary[i + 1] - &boundary[0]));
+        }
+
+        if normal.magnitude() < 1e-14 {
+            return gap;
+        }
+
+        gap.frame = Plane::from_point_normal(boundary[0].clone(), normal, None);
+
+        for p in &boundary {
+            let d = p - &gap.frame.origin();
+            gap.outline.add_point(Point::new(
+                d.dot(&gap.frame.x_axis()),
+                d.dot(&gap.frame.y_axis()),
+                0.0,
+            ));
+        }
+
+        gap
     }
 
     /// Distance to the cutter at pcurve parameter t.
@@ -9053,10 +9146,19 @@ impl<'a> CutterGap<'a> {
         let uv = self.pc.point_at(t);
         let p3 = srf_point(self.target, uv[0], uv[1]);
 
-        if !self.fast_planar {
+        if self.rectangle {
+            return self.rectangle_gap(&p3);
+        }
+
+        if self.outline.point_count() == 0 {
             return Closest::surface_point(self.cutter, &p3, 0.0, 0.0, 0.0, 0.0).2;
         }
 
+        self.outline_gap(&p3)
+    }
+
+    /// Distance from p3 to the rectangle spanned by eu and ev.
+    fn rectangle_gap(&self, p3: &Point) -> f64 {
         let q00 = &self.q00;
         let eu = &self.eu;
         let ev = &self.ev;
@@ -9071,6 +9173,42 @@ impl<'a> CutterGap<'a> {
 
         ((p3[0] - cx) * (p3[0] - cx) + (p3[1] - cy) * (p3[1] - cy) + (p3[2] - cz) * (p3[2] - cz))
             .sqrt()
+    }
+
+    /// Distance from p3 to the region inside the boundary polygon.
+    fn outline_gap(&self, p3: &Point) -> f64 {
+        let d = p3 - &self.frame.origin();
+        let p = Point::new(
+            d.dot(&self.frame.x_axis()),
+            d.dot(&self.frame.y_axis()),
+            d.dot(&self.frame.z_axis()),
+        );
+
+        if self.outline.point_in_polygon_2d(&p) {
+            return p[2].abs();
+        }
+
+        let n = self.outline.point_count();
+        let mut d2 = f64::MAX;
+
+        for i in 0..n {
+            let a = &self.outline[i];
+            let b = &self.outline[(i + 1) % n];
+            let ex = b[0] - a[0];
+            let ey = b[1] - a[1];
+            let len2 = ex * ex + ey * ey;
+            let mut s = 0.0;
+
+            if len2 > 0.0 {
+                s = (((p[0] - a[0]) * ex + (p[1] - a[1]) * ey) / len2).clamp(0.0, 1.0);
+            }
+
+            let dx = p[0] - a[0] - s * ex;
+            let dy = p[1] - a[1] - s * ey;
+            d2 = f64::min(d2, dx * dx + dy * dy);
+        }
+
+        (d2 + p[2] * p[2]).sqrt()
     }
 }
 

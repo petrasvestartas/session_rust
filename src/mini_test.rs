@@ -2889,6 +2889,11 @@ pub fn get_all_tests() -> Vec<RegisteredTest> {
         },
         RegisteredTest {
             group: "Intersection",
+            name: "Cut Curves Slanted Cutter",
+            func: run_intersection_cut_curves_slanted_cutter,
+        },
+        RegisteredTest {
+            group: "Intersection",
             name: "Remap",
             func: run_intersection_remap,
         },
@@ -4152,6 +4157,16 @@ pub fn get_all_tests() -> Vec<RegisteredTest> {
             group: "FileEncoders",
             name: "Decode Dict",
             func: run_encoders_decode_dict,
+        },
+        RegisteredTest {
+            group: "FileEncoders",
+            name: "Decode Mesh",
+            func: run_encoders_decode_mesh,
+        },
+        RegisteredTest {
+            group: "FileEncoders",
+            name: "Decode Instance Ref",
+            func: run_encoders_decode_instance_ref,
         },
         RegisteredTest {
             group: "FileEncoders",
