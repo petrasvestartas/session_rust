@@ -91,7 +91,7 @@ pub fn run_primitives_nurbscurve_polyline() -> TestResult {
         MINI_CHECK!(curve.cv_count() == 5);
         MINI_CHECK!(curve.order() == 2);
         MINI_CHECK!(curve.degree() == 1);
-        MINI_CHECK!(curve.is_rational() == false);
+        MINI_CHECK!(!curve.is_rational());
         MINI_CHECK!(TOLERANCE.is_point_close(
             &curve.point_at(curve.domain_start()),
             &Point::new(0.0, 0.0, 0.0)
@@ -111,7 +111,7 @@ pub fn run_primitives_nurbscurve_circle() -> TestResult {
 
         MINI_CHECK!(curve.cv_count() == 9);
         MINI_CHECK!(curve.order() == 3);
-        MINI_CHECK!(curve.is_rational() == true);
+        MINI_CHECK!(curve.is_rational());
     })
 }
 
@@ -123,7 +123,7 @@ pub fn run_primitives_nurbscurve_ellipse() -> TestResult {
 
         MINI_CHECK!(curve.cv_count() == 9);
         MINI_CHECK!(curve.order() == 3);
-        MINI_CHECK!(curve.is_rational() == true);
+        MINI_CHECK!(curve.is_rational());
     })
 }
 
@@ -139,7 +139,7 @@ pub fn run_primitives_nurbscurve_arc() -> TestResult {
 
         MINI_CHECK!(curve.cv_count() == 3);
         MINI_CHECK!(curve.order() == 3);
-        MINI_CHECK!(curve.is_rational() == true);
+        MINI_CHECK!(curve.is_rational());
     })
 }
 
@@ -155,7 +155,7 @@ pub fn run_primitives_nurbscurve_parabola() -> TestResult {
 
         MINI_CHECK!(curve.cv_count() == 3);
         MINI_CHECK!(curve.order() == 3);
-        MINI_CHECK!(curve.is_rational() == false);
+        MINI_CHECK!(!curve.is_rational());
     })
 }
 
@@ -169,7 +169,7 @@ pub fn run_primitives_nurbscurve_hyperbola() -> TestResult {
 
         MINI_CHECK!(curve.cv_count() >= 4);
         MINI_CHECK!(curve.order() == 4);
-        MINI_CHECK!(curve.is_rational() == false);
+        MINI_CHECK!(!curve.is_rational());
     })
 }
 
@@ -181,7 +181,7 @@ pub fn run_primitives_nurbscurve_spiral() -> TestResult {
 
         MINI_CHECK!(curve.cv_count() >= 4);
         MINI_CHECK!(curve.order() == 4);
-        MINI_CHECK!(curve.is_rational() == false);
+        MINI_CHECK!(!curve.is_rational());
     })
 }
 
@@ -848,7 +848,7 @@ pub fn run_primitives_nurbssurface_extrusion() -> TestResult {
         MINI_CHECK!(s_circle.is_valid());
         MINI_CHECK!(s_circle.degree(0) == 2 && s_circle.degree(1) == 1);
         MINI_CHECK!(s_circle.is_rational());
-        MINI_CHECK!(s_circle.is_closed(0) == true && s_circle.is_closed(1) == false);
+        MINI_CHECK!(s_circle.is_closed(0) && !s_circle.is_closed(1));
         MINI_CHECK!(s_circle.cv_count(0) == 9 && s_circle.cv_count(1) == 2);
         MINI_CHECK!(m_circle.number_of_vertices() == 42);
         MINI_CHECK!(m_circle.number_of_faces() == 42);
@@ -1348,8 +1348,8 @@ pub fn run_primitives_nurbssurface_revolve() -> TestResult {
         let m_cone = s_cone.mesh();
 
         MINI_CHECK!(s_vase.is_valid());
-        MINI_CHECK!(s_vase.is_closed(0) == true);
-        MINI_CHECK!(s_vase.is_closed(1) == false);
+        MINI_CHECK!(s_vase.is_closed(0));
+        MINI_CHECK!(!s_vase.is_closed(1));
         MINI_CHECK!(s_vase.cv_count(0) == 9);
         MINI_CHECK!(s_vase.cv_count(1) == 7);
         MINI_CHECK!(m_vase.number_of_vertices() == 609);
@@ -1361,8 +1361,8 @@ pub fn run_primitives_nurbssurface_revolve() -> TestResult {
             TOLERANCE.is_point_close(&s_vase.get_cv(0, 6).unwrap(), &Point::new(1.8, 0.0, 5.0))
         );
         MINI_CHECK!(s_torus.is_valid());
-        MINI_CHECK!(s_torus.is_closed(0) == true);
-        MINI_CHECK!(s_torus.is_closed(1) == true);
+        MINI_CHECK!(s_torus.is_closed(0));
+        MINI_CHECK!(s_torus.is_closed(1));
         MINI_CHECK!(s_torus.cv_count(0) == 9);
         MINI_CHECK!(s_torus.cv_count(1) == 9);
         MINI_CHECK!(m_torus.number_of_vertices() == 693);
@@ -1371,8 +1371,8 @@ pub fn run_primitives_nurbssurface_revolve() -> TestResult {
             TOLERANCE.is_point_close(&s_torus.get_cv(0, 0).unwrap(), &Point::new(20.5, 0.0, 0.0))
         );
         MINI_CHECK!(s_elbow.is_valid());
-        MINI_CHECK!(s_elbow.is_closed(0) == false);
-        MINI_CHECK!(s_elbow.is_closed(1) == false);
+        MINI_CHECK!(!s_elbow.is_closed(0));
+        MINI_CHECK!(!s_elbow.is_closed(1));
         MINI_CHECK!(s_elbow.cv_count(0) == 3);
         MINI_CHECK!(s_elbow.cv_count(1) == 2);
         MINI_CHECK!(m_elbow.number_of_vertices() == 16);
@@ -1390,10 +1390,10 @@ pub fn run_primitives_nurbssurface_revolve() -> TestResult {
             TOLERANCE.is_point_close(&s_elbow.get_cv(2, 1).unwrap(), &Point::new(26.0, 3.0, 0.5))
         );
         MINI_CHECK!(s_sphere.is_valid());
-        MINI_CHECK!(s_sphere.is_closed(0) == true);
-        MINI_CHECK!(s_sphere.is_closed(1) == false);
-        MINI_CHECK!(s_sphere.is_singular(0) == true);
-        MINI_CHECK!(s_sphere.is_singular(2) == true);
+        MINI_CHECK!(s_sphere.is_closed(0));
+        MINI_CHECK!(!s_sphere.is_closed(1));
+        MINI_CHECK!(s_sphere.is_singular(0));
+        MINI_CHECK!(s_sphere.is_singular(2));
         MINI_CHECK!(s_sphere.cv_count(0) == 9);
         MINI_CHECK!(s_sphere.cv_count(1) == 5);
         MINI_CHECK!(m_sphere.number_of_vertices() == 191);
@@ -1407,10 +1407,10 @@ pub fn run_primitives_nurbssurface_revolve() -> TestResult {
             TOLERANCE.is_point_close(&s_sphere.get_cv(0, 4).unwrap(), &Point::new(36.0, 0.0, 2.0))
         );
         MINI_CHECK!(s_cone.is_valid());
-        MINI_CHECK!(s_cone.is_closed(0) == true);
-        MINI_CHECK!(s_cone.is_closed(1) == false);
-        MINI_CHECK!(s_cone.is_singular(0) == true);
-        MINI_CHECK!(s_cone.is_singular(2) == false);
+        MINI_CHECK!(s_cone.is_closed(0));
+        MINI_CHECK!(!s_cone.is_closed(1));
+        MINI_CHECK!(s_cone.is_singular(0));
+        MINI_CHECK!(!s_cone.is_singular(2));
         MINI_CHECK!(s_cone.cv_count(0) == 9);
         MINI_CHECK!(s_cone.cv_count(1) == 2);
         MINI_CHECK!(m_cone.number_of_vertices() == 22);
@@ -1855,6 +1855,7 @@ pub fn run_primitives_nurbssurface_sweep() -> TestResult {
             &s_sweep2.get_cv(2, 5).unwrap(),
             &Point::new(9.000000000000000, 4.000000000000000, 0.000000000000000)
         ));
+
         TOLERANCE.reset();
     })
 }
@@ -2082,7 +2083,7 @@ pub fn run_primitives_nurbscurve_interpolated() -> TestResult {
         MINI_CHECK!(curve.degree() == 3);
         MINI_CHECK!(curve.order() == 4);
         MINI_CHECK!(curve.cv_count() == 9);
-        MINI_CHECK!(curve.is_rational() == false);
+        MINI_CHECK!(!curve.is_rational());
 
         let (d0, d1) = curve.domain();
         let nurbsknots = curve.get_nurbsknots();
@@ -2113,6 +2114,7 @@ pub fn run_primitives_nurbscurve_interpolated() -> TestResult {
         MINI_CHECK!(c4.is_valid());
         MINI_CHECK!(c4.degree() == 3);
         MINI_CHECK!(c4.cv_count() == 6);
+
         let (d4_0, d4_1) = c4.domain();
 
         MINI_CHECK!(TOLERANCE.is_point_close(&c4.point_at(d4_0), &pts4[0]));

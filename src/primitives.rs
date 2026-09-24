@@ -188,10 +188,10 @@ fn nurbsknot_vectors_equal(a: &[f64], b: &[f64]) -> bool {
     true
 }
 
-/// Same degree, rationality, domain [0, 1] and nurbsknot vector for every curve.
-fn make_curves_compatible(curves: &mut [NurbsCurve]) {
+/// Same degree, rationality, domain [0, 1] and nurbsknot vector for every curve; false when a curve cannot be changed.
+fn unify_curves(curves: &mut [NurbsCurve]) -> bool {
     if curves.len() < 2 {
-        return;
+        return true;
     }
 
     let mut max_degree = 0;
@@ -203,12 +203,12 @@ fn make_curves_compatible(curves: &mut [NurbsCurve]) {
     }
 
     for c in curves.iter_mut() {
-        if c.degree() < max_degree {
-            c.increase_degree(max_degree);
+        if c.degree() < max_degree && !c.increase_degree(max_degree) {
+            return false;
         }
 
-        if any_rational {
-            c.make_rational();
+        if any_rational && !c.make_rational() {
+            return false;
         }
     }
 
@@ -223,11 +223,13 @@ fn make_curves_compatible(curves: &mut [NurbsCurve]) {
     }
 
     if compatible {
-        return;
+        return true;
     }
 
     for c in curves.iter_mut() {
-        c.set_domain(0.0, 1.0);
+        if !c.set_domain(0.0, 1.0) {
+            return false;
+        }
     }
 
     let mut unified = curves[0].get_nurbsknots();
@@ -250,6 +252,8 @@ fn make_curves_compatible(curves: &mut [NurbsCurve]) {
             }
         }
     }
+
+    true
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -402,6 +406,23 @@ fn loft_basis_row(nurbsknots: &[f64], order: usize, cv_count: usize, t: f64) -> 
     row
 }
 
+/// Right-hand side of column i: control point i of every section, homogeneous when rational.
+fn loft_column(curves: &[NurbsCurve], i: usize, is_rat: bool) -> Vec<Vec<f64>> {
+    let mut rhs = Vec::new();
+
+    for curve in curves {
+        if is_rat {
+            let (x, y, z, w) = curve.get_cv_4d(i).unwrap_or_default();
+            rhs.push(vec![x, y, z, w]);
+        } else {
+            let p = curve.get_cv(i).unwrap_or_default();
+            rhs.push(vec![p[0], p[1], p[2]]);
+        }
+    }
+
+    rhs
+}
+
 /// Solves a x = b by Gaussian elimination with partial pivoting, one right-hand side per column of b.
 fn solve_linear(a: &[Vec<f64>], b: &[Vec<f64>]) -> Vec<Vec<f64>> {
     let mut a = a.to_vec();
@@ -458,6 +479,64 @@ fn solve_linear(a: &[Vec<f64>], b: &[Vec<f64>]) -> Vec<Vec<f64>> {
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
+// Revolve helpers
+// ═══════════════════════════════════════════════════════════════════════════
+
+/// Number of quarter arcs, at most 4, that cover the angle.
+fn revolve_arc_count(angle: f64) -> usize {
+    if angle <= PI / 2.0 + 1e-10 {
+        return 1;
+    }
+
+    if angle <= PI + 1e-10 {
+        return 2;
+    }
+
+    if angle <= 3.0 * PI / 2.0 + 1e-10 {
+        return 3;
+    }
+
+    4
+}
+
+/// Column j of a surface of revolution: profile control point j swept around the axis in arcs of d_theta.
+fn set_revolve_column(
+    surface: &mut NurbsSurface,
+    profile: &NurbsCurve,
+    j: usize,
+    axis_origin: &Point,
+    axis: &Vector,
+    d_theta: f64,
+) {
+    let w_mid = (d_theta / 2.0).cos();
+    let p = profile.get_cv(j).unwrap_or_default();
+    let profile_w = if profile.is_rational() {
+        profile.weight(j)
+    } else {
+        1.0
+    };
+    let center = axis_origin + axis * (&p - axis_origin).dot(axis);
+    let mut x_local = &p - &center;
+    let r = x_local.magnitude();
+
+    if r > 1e-14 {
+        x_local /= r;
+    }
+
+    let y_local = axis.cross(&x_local);
+
+    for i in 0..surface.cv_count(0) {
+        let shoulder = i % 2 == 1;
+        let theta = (i / 2) as f64 * d_theta + if shoulder { d_theta / 2.0 } else { 0.0 };
+        let w = if shoulder { w_mid } else { 1.0 } * profile_w;
+        let q = &center
+            + (&x_local * theta.cos() + &y_local * theta.sin())
+                * if shoulder { r / w_mid } else { r };
+        surface.set_cv_4d(i, j, q[0] * w, q[1] * w, q[2] * w, w);
+    }
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
 // Sweep helpers
 // ═══════════════════════════════════════════════════════════════════════════
 
@@ -469,6 +548,33 @@ fn lerp_point(a: &Point, b: &Point, s: f64) -> Point {
 /// Vector at fraction s from a to b.
 fn lerp_vector(a: &Vector, b: &Vector, s: f64) -> Vector {
     a + (b - a) * s
+}
+
+/// Copy of a with every control point at fraction s toward the matching control point of b.
+fn blend_curves(a: &NurbsCurve, b: &NurbsCurve, s: f64) -> NurbsCurve {
+    let mut blend = a.duplicate();
+
+    for c in 0..blend.cv_count() {
+        blend.set_cv(
+            c,
+            &lerp_point(
+                &a.get_cv(c).unwrap_or_default(),
+                &b.get_cv(c).unwrap_or_default(),
+                s,
+            ),
+        );
+    }
+
+    blend
+}
+
+/// Plane at fraction s from a to b.
+fn blend_planes(a: &Plane, b: &Plane, s: f64) -> Plane {
+    Plane::new(
+        lerp_point(&a.origin(), &b.origin(), s),
+        lerp_vector(&a.x_axis(), &b.x_axis(), s),
+        lerp_vector(&a.y_axis(), &b.y_axis(), s),
+    )
 }
 
 /// World to the profile frame: centroid origin, x toward the start point, z the profile normal.
@@ -536,6 +642,41 @@ fn shape_width(shape: &NurbsCurve) -> f64 {
     }
 }
 
+/// Source plane onto the rail points p1 and p2, x toward p2, scaled from width to the rail distance.
+fn rail_xform(source: &Plane, width: f64, p1: &Point, p2: &Point, frame: &Plane) -> Xform {
+    let mut x_dir = p2 - p1;
+    let rail_dist = x_dir.magnitude();
+
+    if !x_dir.normalize_self() {
+        x_dir = frame.x_axis();
+    }
+
+    let mut y_dir = frame.z_axis().cross(&x_dir);
+
+    if !y_dir.normalize_self() {
+        y_dir = frame.y_axis();
+    }
+
+    if y_dir.dot(&source.y_axis()) < 0.0 {
+        y_dir = -y_dir;
+    }
+
+    let scale = if rail_dist > 1e-14 && width > 1e-14 {
+        rail_dist / width
+    } else {
+        1.0
+    };
+    let target = Plane::new(p1.clone(), x_dir, y_dir);
+    let to_source = Xform::world_to_frame(
+        &source.origin(),
+        &source.x_axis(),
+        &source.y_axis(),
+        &source.z_axis(),
+    );
+
+    &(&Xform::to_frame(&target) * &Xform::scale_xyz(scale, scale, scale)) * &to_source
+}
+
 // ═══════════════════════════════════════════════════════════════════════════
 // Edge helpers
 // ═══════════════════════════════════════════════════════════════════════════
@@ -599,6 +740,48 @@ fn normalized_greville(curve: &NurbsCurve) -> Vec<f64> {
     }
 
     grev
+}
+
+/// Control points of a Coons patch: boundary blends at the Greville abcissae minus the bilinear corners.
+fn set_coons_cvs(
+    surface: &mut NurbsSurface,
+    south: &NurbsCurve,
+    north: &NurbsCurve,
+    west: &NurbsCurve,
+    east: &NurbsCurve,
+) {
+    let cv_count_u = west.cv_count();
+    let cv_count_v = south.cv_count();
+    let u_grev = normalized_greville(west);
+    let v_grev = normalized_greville(south);
+    let c00 = south.get_cv(0).unwrap_or_default();
+    let c01 = south.get_cv(cv_count_v - 1).unwrap_or_default();
+    let c10 = north.get_cv(0).unwrap_or_default();
+    let c11 = north.get_cv(cv_count_v - 1).unwrap_or_default();
+
+    for i in 0..cv_count_u {
+        let ui = u_grev[i];
+        let wi = west.get_cv(i).unwrap_or_default();
+        let ei = east.get_cv(i).unwrap_or_default();
+
+        for j in 0..cv_count_v {
+            let vj = v_grev[j];
+            let sj = south.get_cv(j).unwrap_or_default();
+            let nj = north.get_cv(j).unwrap_or_default();
+            let mut q = [0.0; 3];
+
+            for axis in 0..3 {
+                q[axis] =
+                    (1.0 - ui) * sj[axis] + ui * nj[axis] + (1.0 - vj) * wi[axis] + vj * ei[axis]
+                        - (1.0 - ui) * (1.0 - vj) * c00[axis]
+                        - (1.0 - ui) * vj * c01[axis]
+                        - ui * (1.0 - vj) * c10[axis]
+                        - ui * vj * c11[axis];
+            }
+
+            surface.set_cv(i, j, &Point::new(q[0], q[1], q[2]));
+        }
+    }
 }
 
 /// Factory for primitive meshes, NURBS curves and NURBS surfaces.
@@ -1103,9 +1286,13 @@ impl Primitives {
         }
 
         let mut curves = vec![curve_a.duplicate(), curve_b.duplicate()];
-        curves[0].set_domain(0.0, 1.0);
-        curves[1].set_domain(0.0, 1.0);
-        make_curves_compatible(&mut curves);
+
+        if !curves[0].set_domain(0.0, 1.0)
+            || !curves[1].set_domain(0.0, 1.0)
+            || !unify_curves(&mut curves)
+        {
+            return NurbsSurface::default();
+        }
 
         let cv_count_u = curves[0].cv_count();
         let is_rat = curves[0].is_rational();
@@ -1222,7 +1409,9 @@ impl Primitives {
             curves.push(c.duplicate());
         }
 
-        make_curves_compatible(&mut curves);
+        if !unify_curves(&mut curves) {
+            return NurbsSurface::default();
+        }
 
         let n = curves.len();
         let cv_count_u = curves[0].cv_count();
@@ -1250,22 +1439,8 @@ impl Primitives {
             basis.push(loft_basis_row(&nurbsknots_v, order_v, n, v_params[k]));
         }
 
-        let dim = if is_rat { 4 } else { 3 };
-
         for i in 0..cv_count_u {
-            let mut rhs = vec![vec![0.0; dim]; n];
-
-            for k in 0..n {
-                if is_rat {
-                    let (x, y, z, w) = curves[k].get_cv_4d(i).unwrap_or_default();
-                    rhs[k] = vec![x, y, z, w];
-                } else {
-                    let p = curves[k].get_cv(i).unwrap_or_default();
-                    rhs[k] = vec![p[0], p[1], p[2]];
-                }
-            }
-
-            let q = solve_linear(&basis, &rhs);
+            let q = solve_linear(&basis, &loft_column(&curves, i, is_rat));
 
             for j in 0..n {
                 if is_rat {
@@ -1302,18 +1477,8 @@ impl Primitives {
             return NurbsSurface::default();
         }
 
-        let mut n_arcs = 4;
-
-        if angle <= PI / 2.0 + 1e-10 {
-            n_arcs = 1;
-        } else if angle <= PI + 1e-10 {
-            n_arcs = 2;
-        } else if angle <= 3.0 * PI / 2.0 + 1e-10 {
-            n_arcs = 3;
-        }
-
+        let n_arcs = revolve_arc_count(angle);
         let d_theta = angle / n_arcs as f64;
-        let w_mid = (d_theta / 2.0).cos();
         let n_u = 2 * n_arcs + 1;
         let cv_count_v = profile.cv_count();
         let mut surface = NurbsSurface::new(3, true, 3, profile.order(), n_u, cv_count_v);
@@ -1339,31 +1504,7 @@ impl Primitives {
         }
 
         for j in 0..cv_count_v {
-            let p = profile.get_cv(j).unwrap_or_default();
-            let profile_w = if profile.is_rational() {
-                profile.weight(j)
-            } else {
-                1.0
-            };
-            let center = axis_origin + &axis * (&p - axis_origin).dot(&axis);
-            let mut x_local = &p - &center;
-            let r = x_local.magnitude();
-
-            if r > 1e-14 {
-                x_local /= r;
-            }
-
-            let y_local = axis.cross(&x_local);
-
-            for i in 0..n_u {
-                let shoulder = i % 2 == 1;
-                let theta = (i / 2) as f64 * d_theta + if shoulder { d_theta / 2.0 } else { 0.0 };
-                let w = if shoulder { w_mid } else { 1.0 } * profile_w;
-                let q = &center
-                    + (&x_local * theta.cos() + &y_local * theta.sin())
-                        * if shoulder { r / w_mid } else { r };
-                surface.set_cv_4d(i, j, q[0] * w, q[1] * w, q[2] * w, w);
-            }
+            set_revolve_column(&mut surface, profile, j, axis_origin, &axis, d_theta);
         }
 
         surface
@@ -1416,7 +1557,9 @@ impl Primitives {
             compat.push(shape.duplicate());
         }
 
-        make_curves_compatible(&mut compat);
+        if !unify_curves(&mut compat) {
+            return NurbsSurface::default();
+        }
 
         let n_shapes = compat.len();
         let mut planes = Vec::new();
@@ -1455,59 +1598,11 @@ impl Primitives {
             } else {
                 (t * (n_shapes - 1) as f64 - j as f64).clamp(0.0, 1.0)
             };
-            let mut section = compat[j].duplicate();
-
-            for c in 0..section.cv_count() {
-                section.set_cv(
-                    c,
-                    &lerp_point(
-                        &compat[j].get_cv(c).unwrap_or_default(),
-                        &compat[j1].get_cv(c).unwrap_or_default(),
-                        s,
-                    ),
-                );
-            }
-
-            let source = Plane::new(
-                lerp_point(&planes[j].origin(), &planes[j1].origin(), s),
-                lerp_vector(&planes[j].x_axis(), &planes[j1].x_axis(), s),
-                lerp_vector(&planes[j].y_axis(), &planes[j1].y_axis(), s),
-            );
+            let mut section = blend_curves(&compat[j], &compat[j1], s);
+            let source = blend_planes(&planes[j], &planes[j1], s);
             let width = widths[j] * (1.0 - s) + widths[j1] * s;
-            let p1 = pts1[i].clone();
-            let mut x_dir = &pts2[i] - &p1;
-            let rail_dist = x_dir.magnitude();
 
-            if !x_dir.normalize_self() {
-                x_dir = frames[i].x_axis();
-            }
-
-            let mut y_dir = frames[i].z_axis().cross(&x_dir);
-
-            if !y_dir.normalize_self() {
-                y_dir = frames[i].y_axis();
-            }
-
-            if y_dir.dot(&source.y_axis()) < 0.0 {
-                y_dir = -y_dir;
-            }
-
-            let scale = if rail_dist > 1e-14 && width > 1e-14 {
-                rail_dist / width
-            } else {
-                1.0
-            };
-            let target = Plane::new(p1, x_dir, y_dir);
-            let to_source = Xform::world_to_frame(
-                &source.origin(),
-                &source.x_axis(),
-                &source.y_axis(),
-                &source.z_axis(),
-            );
-            section.transform(
-                &(&(&Xform::to_frame(&target) * &Xform::scale_xyz(scale, scale, scale))
-                    * &to_source),
-            );
+            section.transform(&rail_xform(&source, width, &pts1[i], &pts2[i], &frames[i]));
             sections.push(section);
         }
 
@@ -1537,26 +1632,27 @@ impl Primitives {
         }
 
         let mut v_pair = vec![chain[0].duplicate(), chain[2].duplicate()];
-        v_pair[1].reverse();
-        make_curves_compatible(&mut v_pair);
-
         let mut u_pair = vec![chain[3].duplicate(), chain[1].duplicate()];
-        u_pair[0].reverse();
-        make_curves_compatible(&mut u_pair);
+
+        if !v_pair[1].reverse()
+            || !u_pair[0].reverse()
+            || !unify_curves(&mut v_pair)
+            || !unify_curves(&mut u_pair)
+        {
+            return NurbsSurface::default();
+        }
 
         let south = &v_pair[0];
         let north = &v_pair[1];
         let west = &u_pair[0];
         let east = &u_pair[1];
-        let cv_count_u = west.cv_count();
-        let cv_count_v = south.cv_count();
         let mut surface = NurbsSurface::new(
             3,
             south.is_rational() || west.is_rational(),
             west.order(),
             south.order(),
-            cv_count_u,
-            cv_count_v,
+            west.cv_count(),
+            south.cv_count(),
         );
 
         if !surface.is_valid() {
@@ -1571,38 +1667,7 @@ impl Primitives {
             surface.set_nurbsknot(1, i, south.nurbsknot(i).unwrap_or_default());
         }
 
-        let u_grev = normalized_greville(west);
-        let v_grev = normalized_greville(south);
-        let c00 = south.get_cv(0).unwrap_or_default();
-        let c01 = south.get_cv(cv_count_v - 1).unwrap_or_default();
-        let c10 = north.get_cv(0).unwrap_or_default();
-        let c11 = north.get_cv(cv_count_v - 1).unwrap_or_default();
-
-        for i in 0..cv_count_u {
-            let ui = u_grev[i];
-            let wi = west.get_cv(i).unwrap_or_default();
-            let ei = east.get_cv(i).unwrap_or_default();
-
-            for j in 0..cv_count_v {
-                let vj = v_grev[j];
-                let sj = south.get_cv(j).unwrap_or_default();
-                let nj = north.get_cv(j).unwrap_or_default();
-                let mut q = [0.0; 3];
-
-                for axis in 0..3 {
-                    q[axis] = (1.0 - ui) * sj[axis]
-                        + ui * nj[axis]
-                        + (1.0 - vj) * wi[axis]
-                        + vj * ei[axis]
-                        - (1.0 - ui) * (1.0 - vj) * c00[axis]
-                        - (1.0 - ui) * vj * c01[axis]
-                        - ui * (1.0 - vj) * c10[axis]
-                        - ui * vj * c11[axis];
-                }
-
-                surface.set_cv(i, j, &Point::new(q[0], q[1], q[2]));
-            }
-        }
+        set_coons_cvs(&mut surface, south, north, west, east);
 
         surface
     }
