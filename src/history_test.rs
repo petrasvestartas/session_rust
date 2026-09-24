@@ -1,14 +1,16 @@
 use crate::mini_test::TestResult;
 use crate::tolerance::TOLERANCE;
-use crate::{MINI_CHECK, MINI_TEST, REGISTER_MINI_TEST};
+use crate::MINI_CHECK;
+use crate::MINI_TEST;
+use crate::REGISTER_MINI_TEST;
 
 pub fn run_history_constructor() -> TestResult {
     MINI_TEST!("Constructor", {
         use crate::History;
 
         let history = History::new();
-        let hstr = history.to_string();
-        let hrepr = format!("{history}");
+        let hstr = history.str();
+        let hrepr = history.repr();
 
         MINI_CHECK!(!history.can_undo());
         MINI_CHECK!(!history.can_redo());
@@ -54,6 +56,7 @@ pub fn run_history_undo_redo() -> TestResult {
         session.history.begin("add");
         session.add_point(point, None);
         session.history.commit();
+
         let undone = session.undo();
         let absent = !session.lookup.contains_key(&guid);
         let redone = session.redo();
@@ -66,7 +69,6 @@ pub fn run_history_undo_redo() -> TestResult {
             Point::from_geometry(&session.lookup[&guid]).unwrap()[2],
             3.0
         ));
-
         MINI_CHECK!(!session.history.can_redo());
         MINI_CHECK!(!session.redo());
     })
@@ -82,9 +84,11 @@ pub fn run_history_clear() -> TestResult {
         session.history.begin("a");
         session.add_point(Point::new(0.0, 0.0, 0.0), None);
         session.history.commit();
+
         session.history.begin("b");
         session.add_point(Point::new(1.0, 0.0, 0.0), None);
         session.history.commit();
+
         session.undo();
         session.history.clear();
 
@@ -110,12 +114,15 @@ pub fn run_history_undo_definition() -> TestResult {
         session.begin("define");
         session.add_definition(Geometry::Point(Rc::new(point)));
         session.commit();
+
         session.begin("replace");
         session.replace_definition(&guid, Geometry::Point(Rc::new(Point::new(9.0, 9.0, 9.0))));
         session.commit();
+
         session.begin("remove");
         session.remove_definition(&guid);
         session.commit();
+
         let removed = !session.definition_lookup.contains_key(&guid);
         session.undo();
         let replaced = Point::from_geometry(&session.definition_lookup[&guid]).unwrap()[0];

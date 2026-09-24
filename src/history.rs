@@ -7,7 +7,7 @@ use std::rc::Rc;
 
 pub const CAPACITY: usize = 64; // Committed transactions kept; past it the oldest is dropped.
 
-/// Returns a deep copy that keeps the guid: Geometry::clone only bumps the Rc, so the inner value is cloned into a fresh one.
+/// A deep copy of geometry that keeps its guid and type, element feature guids included.
 pub fn clone(obj: &Geometry) -> Geometry {
     match obj {
         Geometry::OBB(g) => Geometry::OBB(Rc::new((**g).clone())),
@@ -24,7 +24,7 @@ pub fn clone(obj: &Geometry) -> Geometry {
     }
 }
 
-/// Returns a deep copy of geometry or an instance that keeps the guid.
+/// A deep copy that keeps the guid, which `duplicate()` and most copy constructors would mint anew.
 pub fn clone_item(obj: &Item) -> Item {
     match obj {
         Item::Geometry(g) => Item::Geometry(clone(g)),
@@ -35,12 +35,11 @@ pub fn clone_item(obj: &Item) -> Item {
 // ═══════════════════════════════════════════════════════════════════════════
 // Records
 // ═══════════════════════════════════════════════════════════════════════════
-
 /// Everything needed to put one object back into every live table of a session.
 #[derive(Debug, Clone)]
 pub struct Tombstone {
     pub guid: String,         // The object's guid; the clone carries the same one.
-    pub obj: Item,            // A clone_item() of the object, never the live one.
+    pub obj: Item,            // A clone_item() of the object, never the live instance.
     pub collection: String,   // The Objects list it lives in: "points", "lines", ... "instances".
     pub obj_index: i64, // Its position in that list, so the order() sequence survives a round trip.
     pub xform: Option<Xform>, // Its local transform, None when none was set.
@@ -52,7 +51,7 @@ pub struct Tombstone {
 }
 
 impl Tombstone {
-    /// Constructs from every field of the kit.
+    /// Construct from every field of the kit.
     #[allow(clippy::too_many_arguments)]
     pub fn new(
         guid: String,
@@ -84,13 +83,13 @@ impl Tombstone {
 /// The object under `guid` was swapped: absolute before/after snapshots, never deltas.
 #[derive(Debug, Clone)]
 pub struct ReplaceOp {
-    pub guid: String,     // The object guid.
-    pub before: Geometry, // Snapshot before the change.
-    pub after: Geometry,  // Snapshot after the change.
+    pub guid: String,     // The object's guid.
+    pub before: Geometry, // Snapshot before the swap.
+    pub after: Geometry,  // Snapshot after the swap.
 }
 
 impl ReplaceOp {
-    /// Constructs from the guid and the before and after snapshots.
+    /// Construct from the guid and the before and after snapshots.
     pub fn new(guid: String, before: Geometry, after: Geometry) -> Self {
         Self {
             guid,
@@ -100,16 +99,16 @@ impl ReplaceOp {
     }
 }
 
-/// The local transform under `guid` changed; nullopt on either side means "none set".
+/// The local transform under `guid` changed; None on either side means "none set".
 #[derive(Debug, Clone)]
 pub struct XformOp {
-    pub guid: String,          // The object guid.
-    pub before: Option<Xform>, // Snapshot before the change.
-    pub after: Option<Xform>,  // Snapshot after the change.
+    pub guid: String,          // The object's guid.
+    pub before: Option<Xform>, // Transform before the change.
+    pub after: Option<Xform>,  // Transform after the change.
 }
 
 impl XformOp {
-    /// Constructs from the guid and the before and after transforms.
+    /// Construct from the guid and the before and after transforms.
     pub fn new(guid: String, before: Option<Xform>, after: Option<Xform>) -> Self {
         Self {
             guid,
@@ -128,7 +127,7 @@ pub struct DefinitionOp {
 }
 
 impl DefinitionOp {
-    /// Constructs from the guid and the before and after snapshots.
+    /// Construct from the guid and the before and after snapshots.
     pub fn new(guid: String, before: Option<Geometry>, after: Option<Geometry>) -> Self {
         Self {
             guid,
@@ -138,7 +137,7 @@ impl DefinitionOp {
     }
 }
 
-/// One recorded op; `Add` and `Remove` share the tombstone, undone by detaching or attaching the kit.
+/// Any one recorded op.
 #[derive(Debug, Clone)]
 pub enum Op {
     Add(Tombstone),
@@ -149,7 +148,7 @@ pub enum Op {
 }
 
 impl Op {
-    /// Returns "add", "remove", "replace", "xform" or "definition".
+    /// Return "add", "remove", "replace", "xform" or "definition".
     pub fn kind(&self) -> &str {
         match self {
             Op::Add(_) => "add",
@@ -160,7 +159,7 @@ impl Op {
         }
     }
 
-    /// Returns the guid of the object the op touched.
+    /// Return the guid of the object the op touched.
     pub fn guid(&self) -> &str {
         match self {
             Op::Add(op) | Op::Remove(op) => &op.guid,
@@ -169,12 +168,31 @@ impl Op {
             Op::Definition(op) => &op.guid,
         }
     }
+
+    /// Return a string representation of the record.
+    pub fn str(&self) -> String {
+        format!("{}({})", self.kind(), self.guid())
+    }
+
+    /// Return a string representation of the record for debugging.
+    pub fn repr(&self) -> String {
+        match self {
+            Op::Add(op) | Op::Remove(op) => format!(
+                "{}({}, {}[{}])",
+                self.kind(),
+                op.guid,
+                op.collection,
+                op.obj_index
+            ),
+            _ => self.str(),
+        }
+    }
 }
 
 impl fmt::Display for Op {
-    /// Writes the op string to a formatter.
+    /// Write the record string to a formatter.
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{}({})", self.kind(), self.guid())
+        write!(f, "{}", self.str())
     }
 }
 
@@ -186,33 +204,42 @@ pub struct Transaction {
 }
 
 impl Transaction {
-    /// Constructs an empty transaction with a label.
+    /// Construct an empty transaction with a label.
     pub fn new(label: &str) -> Self {
         Self {
             label: label.to_string(),
             ops: Vec::new(),
         }
     }
+
+    /// Return a string representation of the transaction.
+    pub fn str(&self) -> String {
+        format!("Transaction({}, {} ops)", self.label, self.ops.len())
+    }
+
+    /// Return a string representation of the transaction for debugging.
+    pub fn repr(&self) -> String {
+        format!("Transaction({}, {} ops)", self.label, self.ops.len())
+    }
 }
 
 impl Default for Transaction {
-    /// Constructs an empty transaction with the default label.
+    /// Construct an empty transaction with the default label.
     fn default() -> Self {
         Self::new("my_transaction")
     }
 }
 
 impl fmt::Display for Transaction {
-    /// Writes the transaction string to a formatter.
+    /// Write the transaction string to a formatter.
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "Transaction({}, {} ops)", self.label, self.ops.len())
+        write!(f, "{}", self.str())
     }
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
 // History
 // ═══════════════════════════════════════════════════════════════════════════
-
 /// CAD-style undo/redo over a Session, in memory only: records exist between `begin` and `commit`, every save purges them.
 #[derive(Debug, Clone, Default)]
 pub struct History {
@@ -222,26 +249,32 @@ pub struct History {
 }
 
 impl History {
-    /// Constructs an empty history.
+    /// Construct an empty history.
     pub fn new() -> Self {
         Self::default()
     }
 
-    /// Returns whether a committed transaction can be undone.
+    // ═══════════════════════════════════════════════════════════════════════════
+    // Accessors
+    // ═══════════════════════════════════════════════════════════════════════════
+    /// Return whether a committed transaction can be undone.
     pub fn can_undo(&self) -> bool {
         !self.undo_stack.is_empty()
     }
 
-    /// Returns whether an undone transaction can be redone.
+    /// Return whether an undone transaction can be redone.
     pub fn can_redo(&self) -> bool {
         !self.redo_stack.is_empty()
     }
 
-    /// Returns the number of committed transactions.
+    /// Return the number of committed transactions.
     pub fn depth(&self) -> usize {
         self.undo_stack.len()
     }
 
+    // ═══════════════════════════════════════════════════════════════════════════
+    // Transactions
+    // ═══════════════════════════════════════════════════════════════════════════
     /// Open a transaction; an already open one is committed first so no op is lost.
     pub fn begin(&mut self, label: &str) {
         self.commit();
@@ -266,17 +299,19 @@ impl History {
         }
     }
 
-    /// Appends an op to the open transaction; a no-op when none is open.
+    /// Append an op to the open transaction; a no-op when none is open.
     pub fn record(&mut self, op: Op) {
         let Some(current) = self.current.as_mut() else {
             return;
         };
+
         current.ops.push(op);
     }
 
     /// Revert the newest transaction, ops in reverse order, and park it for redo.
     pub fn undo(&mut self, session: &mut Session) -> bool {
         self.commit();
+
         let Some(transaction) = self.undo_stack.pop() else {
             return false;
         };
@@ -293,6 +328,7 @@ impl History {
     /// Re-apply the newest undone transaction, ops in their original order.
     pub fn redo(&mut self, session: &mut Session) -> bool {
         self.commit();
+
         let Some(transaction) = self.redo_stack.pop() else {
             return false;
         };
@@ -306,20 +342,19 @@ impl History {
         true
     }
 
-    /// Drops every transaction, open or committed.
+    /// Drop every transaction, open or committed.
     pub fn clear(&mut self) {
         self.undo_stack.clear();
         self.redo_stack.clear();
         self.current = None;
     }
 
-    /// Undoes one op against the session.
+    /// Undo one op against the session.
     fn _revert(&self, op: &Op, session: &mut Session) {
         match op {
             Op::Add(op) => {
                 session._detach(&op.guid);
             }
-
             Op::Remove(op) => session._attach(op),
             Op::Replace(op) => session._swap(&op.guid, clone(&op.before)),
             Op::Xform(op) => session._place(&op.guid, op.before.as_ref()),
@@ -327,29 +362,44 @@ impl History {
         }
     }
 
-    /// Redoes one op against the session.
+    /// Redo one op against the session.
     fn _apply(&self, op: &Op, session: &mut Session) {
         match op {
             Op::Add(op) => session._attach(op),
             Op::Remove(op) => {
                 session._detach(&op.guid);
             }
-
             Op::Replace(op) => session._swap(&op.guid, clone(&op.after)),
             Op::Xform(op) => session._place(&op.guid, op.after.as_ref()),
             Op::Definition(op) => session._define(&op.guid, op.after.as_ref().map(clone)),
         }
     }
-}
 
-impl fmt::Display for History {
-    /// Writes the history string to a formatter.
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(
-            f,
+    // ═══════════════════════════════════════════════════════════════════════════
+    // String
+    // ═══════════════════════════════════════════════════════════════════════════
+    /// Return a string representation of the history.
+    pub fn str(&self) -> String {
+        format!(
             "History({} undo, {} redo)",
             self.undo_stack.len(),
             self.redo_stack.len()
         )
+    }
+
+    /// Return a string representation of the history for debugging.
+    pub fn repr(&self) -> String {
+        format!(
+            "History({} undo, {} redo)",
+            self.undo_stack.len(),
+            self.redo_stack.len()
+        )
+    }
+}
+
+impl fmt::Display for History {
+    /// Write the history string to a formatter.
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}", self.str())
     }
 }
