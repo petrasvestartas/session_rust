@@ -465,8 +465,12 @@ impl Graph {
         result
     }
 
-    /// Return all neighbors of a node; an unknown node has none.
+    /// Return all neighbors of a node; panics for a node not in the graph.
     pub fn neighbors(&self, node: &str) -> Vec<String> {
+        if !self.has_node(node) {
+            panic!("Node {node} not in graph");
+        }
+
         let mut result = Vec::new();
 
         if let Some(neighbors) = self.edges.get(node) {

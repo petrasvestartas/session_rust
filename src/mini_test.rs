@@ -3015,8 +3015,18 @@ pub fn get_all_tests() -> Vec<RegisteredTest> {
         },
         RegisteredTest {
             group: "Session",
+            name: "Add OBB",
+            func: run_session_add_obb,
+        },
+        RegisteredTest {
+            group: "Session",
             name: "Add Polyline",
             func: run_session_add_polyline,
+        },
+        RegisteredTest {
+            group: "Session",
+            name: "Select By Type",
+            func: run_session_select_by_type,
         },
         RegisteredTest {
             group: "Session",
@@ -3027,6 +3037,21 @@ pub fn get_all_tests() -> Vec<RegisteredTest> {
             group: "Session",
             name: "Add Mesh",
             func: run_session_add_mesh,
+        },
+        RegisteredTest {
+            group: "Session",
+            name: "Add Nurbscurve",
+            func: run_session_add_nurbscurve,
+        },
+        RegisteredTest {
+            group: "Session",
+            name: "Add Nurbssurface",
+            func: run_session_add_nurbssurface,
+        },
+        RegisteredTest {
+            group: "Session",
+            name: "Add Brep",
+            func: run_session_add_brep,
         },
         RegisteredTest {
             group: "Session",
@@ -3065,8 +3090,33 @@ pub fn get_all_tests() -> Vec<RegisteredTest> {
         },
         RegisteredTest {
             group: "Session",
+            name: "Add Interaction",
+            func: run_session_add_interaction,
+        },
+        RegisteredTest {
+            group: "Session",
+            name: "Has Interaction",
+            func: run_session_has_interaction,
+        },
+        RegisteredTest {
+            group: "Session",
+            name: "Remove Interaction",
+            func: run_session_remove_interaction,
+        },
+        RegisteredTest {
+            group: "Session",
             name: "Get Neighbours",
             func: run_session_get_neighbours,
+        },
+        RegisteredTest {
+            group: "Session",
+            name: "Get Collisions",
+            func: run_session_get_collisions,
+        },
+        RegisteredTest {
+            group: "Session",
+            name: "Ray Cast",
+            func: run_session_ray_cast,
         },
         RegisteredTest {
             group: "Session",
@@ -3085,6 +3135,11 @@ pub fn get_all_tests() -> Vec<RegisteredTest> {
         },
         RegisteredTest {
             group: "Session",
+            name: "Get Geometry Is Pure",
+            func: run_session_get_geometry_is_pure,
+        },
+        RegisteredTest {
+            group: "Session",
             name: "Json Roundtrip",
             func: run_session_json_roundtrip,
         },
@@ -3092,6 +3147,16 @@ pub fn get_all_tests() -> Vec<RegisteredTest> {
             group: "Session",
             name: "Protobuf Roundtrip",
             func: run_session_protobuf_roundtrip,
+        },
+        RegisteredTest {
+            group: "Session",
+            name: "Lookup Mutation Roundtrip",
+            func: run_session_lookup_mutation_roundtrip,
+        },
+        RegisteredTest {
+            group: "Session",
+            name: "Order",
+            func: run_session_order,
         },
         RegisteredTest {
             group: "Session",
@@ -3115,46 +3180,6 @@ pub fn get_all_tests() -> Vec<RegisteredTest> {
         },
         RegisteredTest {
             group: "Session",
-            name: "Add OBB",
-            func: run_session_add_obb,
-        },
-        RegisteredTest {
-            group: "Session",
-            name: "Add Nurbscurve",
-            func: run_session_add_nurbscurve,
-        },
-        RegisteredTest {
-            group: "Session",
-            name: "Add Nurbssurface",
-            func: run_session_add_nurbssurface,
-        },
-        RegisteredTest {
-            group: "Session",
-            name: "Add Brep",
-            func: run_session_add_brep,
-        },
-        RegisteredTest {
-            group: "Session",
-            name: "Get Collisions",
-            func: run_session_get_collisions,
-        },
-        RegisteredTest {
-            group: "Session",
-            name: "Ray Cast",
-            func: run_session_ray_cast,
-        },
-        RegisteredTest {
-            group: "Session",
-            name: "Lookup Mutation Roundtrip",
-            func: run_session_lookup_mutation_roundtrip,
-        },
-        RegisteredTest {
-            group: "Session",
-            name: "Order",
-            func: run_session_order,
-        },
-        RegisteredTest {
-            group: "Session",
             name: "Add Component",
             func: run_session_add_component,
         },
@@ -3162,16 +3187,6 @@ pub fn get_all_tests() -> Vec<RegisteredTest> {
             group: "Session",
             name: "Component Json Roundtrip",
             func: run_session_component_json_roundtrip,
-        },
-        RegisteredTest {
-            group: "Session",
-            name: "Select By Type",
-            func: run_session_select_by_type,
-        },
-        RegisteredTest {
-            group: "Session",
-            name: "Get Geometry Is Pure",
-            func: run_session_get_geometry_is_pure,
         },
         RegisteredTest {
             group: "Session",

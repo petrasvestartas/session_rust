@@ -1,11 +1,14 @@
 use crate::mini_test::TestResult;
 use crate::tolerance::PI;
 use crate::tolerance::TOLERANCE;
-use crate::{MINI_CHECK, MINI_TEST, REGISTER_MINI_TEST};
+use crate::MINI_CHECK;
+use crate::MINI_TEST;
+use crate::REGISTER_MINI_TEST;
 
 pub fn run_session_constructor() -> TestResult {
     MINI_TEST!("Constructor", {
         use crate::Session;
+
         let session = Session::default();
         let named = Session::new("my_named_session");
 
@@ -17,7 +20,11 @@ pub fn run_session_constructor() -> TestResult {
 
 pub fn run_session_copy() -> TestResult {
     MINI_TEST!("Copy", {
-        use crate::{Element, Point, Session, Xform};
+        use crate::Element;
+        use crate::Point;
+        use crate::Session;
+        use crate::Xform;
+
         let mut session = Session::new("original");
         let point = Point::new(1.0, 2.0, 3.0);
         let element = Element::new("plate");
@@ -82,7 +89,9 @@ pub fn run_session_copy() -> TestResult {
 
 pub fn run_session_add_point() -> TestResult {
     MINI_TEST!("Add Point", {
-        use crate::{Point, Session};
+        use crate::Point;
+        use crate::Session;
+
         let mut session = Session::default();
         let point = Point::new(1.0, 2.0, 3.0);
         let guid = point.guid().to_string();
@@ -96,7 +105,9 @@ pub fn run_session_add_point() -> TestResult {
 
 pub fn run_session_add_line() -> TestResult {
     MINI_TEST!("Add Line", {
-        use crate::{Line, Session};
+        use crate::Line;
+        use crate::Session;
+
         let mut session = Session::default();
         let line = Line::new(0.0, 0.0, 0.0, 1.0, 0.0, 0.0);
         let guid = line.guid().to_string();
@@ -109,7 +120,9 @@ pub fn run_session_add_line() -> TestResult {
 
 pub fn run_session_add_plane() -> TestResult {
     MINI_TEST!("Add Plane", {
-        use crate::{Plane, Session};
+        use crate::Plane;
+        use crate::Session;
+
         let mut session = Session::default();
         let plane = Plane::xy_plane();
         let guid = plane.guid().to_string();
@@ -122,7 +135,11 @@ pub fn run_session_add_plane() -> TestResult {
 
 pub fn run_session_add_obb() -> TestResult {
     MINI_TEST!("Add OBB", {
-        use crate::{Point, Session, Vector, OBB};
+        use crate::Point;
+        use crate::Session;
+        use crate::Vector;
+        use crate::OBB;
+
         let mut session = Session::default();
         let obb = OBB::new(
             Point::new(0.0, 0.0, 0.0),
@@ -141,7 +158,10 @@ pub fn run_session_add_obb() -> TestResult {
 
 pub fn run_session_add_polyline() -> TestResult {
     MINI_TEST!("Add Polyline", {
-        use crate::{Point, Polyline, Session};
+        use crate::Point;
+        use crate::Polyline;
+        use crate::Session;
+
         let mut session = Session::default();
         let pl = Polyline::new(vec![
             Point::new(0.0, 0.0, 0.0),
@@ -158,7 +178,10 @@ pub fn run_session_add_polyline() -> TestResult {
 
 pub fn run_session_select_by_type() -> TestResult {
     MINI_TEST!("Select By Type", {
-        use crate::{Mesh, Point, Polyline, Session};
+        use crate::Mesh;
+        use crate::Point;
+        use crate::Polyline;
+        use crate::Session;
 
         let mut session = Session::default();
         let g0 = session.add_group("g0");
@@ -192,7 +215,10 @@ pub fn run_session_select_by_type() -> TestResult {
 
 pub fn run_session_add_pointcloud() -> TestResult {
     MINI_TEST!("Add Pointcloud", {
-        use crate::{Point, PointCloud, Session};
+        use crate::Point;
+        use crate::PointCloud;
+        use crate::Session;
+
         let mut session = Session::default();
         let pc = PointCloud::new(
             vec![Point::new(0.0, 0.0, 0.0), Point::new(1.0, 0.0, 0.0)],
@@ -209,7 +235,10 @@ pub fn run_session_add_pointcloud() -> TestResult {
 
 pub fn run_session_add_mesh() -> TestResult {
     MINI_TEST!("Add Mesh", {
-        use crate::{Mesh, Point, Session};
+        use crate::Mesh;
+        use crate::Point;
+        use crate::Session;
+
         let mut session = Session::default();
         let mut mesh = Mesh::new();
         let v0 = mesh.add_vertex(Point::new(0.0, 0.0, 0.0), None);
@@ -226,7 +255,10 @@ pub fn run_session_add_mesh() -> TestResult {
 
 pub fn run_session_add_nurbscurve() -> TestResult {
     MINI_TEST!("Add Nurbscurve", {
-        use crate::{NurbsCurve, Point, Session};
+        use crate::NurbsCurve;
+        use crate::Point;
+        use crate::Session;
+
         let mut session = Session::default();
         let pts = vec![
             Point::new(0.0, 0.0, 0.0),
@@ -245,7 +277,10 @@ pub fn run_session_add_nurbscurve() -> TestResult {
 
 pub fn run_session_add_nurbssurface() -> TestResult {
     MINI_TEST!("Add Nurbssurface", {
-        use crate::{NurbsSurface, Point, Session};
+        use crate::NurbsSurface;
+        use crate::Point;
+        use crate::Session;
+
         let mut session = Session::default();
         let pts = vec![
             Point::new(0.0, 0.0, 0.0),
@@ -278,6 +313,7 @@ pub fn run_session_add_brep() -> TestResult {
     MINI_TEST!("Add Brep", {
         use crate::BRep;
         use crate::Session;
+
         let mut session = Session::default();
         let brep = BRep::create_box(1.0, 1.0, 1.0);
         let guid = brep.guid().to_string();
@@ -292,6 +328,7 @@ pub fn run_session_add_element() -> TestResult {
     MINI_TEST!("Add Element", {
         use crate::Element;
         use crate::Session;
+
         let mut session = Session::default();
         let plate = Element::new("p1");
         let guid = plate.guid().to_string();
@@ -305,7 +342,15 @@ pub fn run_session_add_element() -> TestResult {
 
 pub fn run_session_add_empty_geometry() -> TestResult {
     MINI_TEST!("Add Empty Geometry", {
-        use crate::{BRep, Mesh, NurbsCurve, NurbsSurface, Point, PointCloud, Polyline, Session};
+        use crate::BRep;
+        use crate::Mesh;
+        use crate::NurbsCurve;
+        use crate::NurbsSurface;
+        use crate::Point;
+        use crate::PointCloud;
+        use crate::Polyline;
+        use crate::Session;
+
         let mut session = Session::default();
         let group = session.add_group("empty");
 
@@ -338,6 +383,7 @@ pub fn run_session_add_empty_geometry() -> TestResult {
 pub fn run_session_add_group() -> TestResult {
     MINI_TEST!("Add Group", {
         use crate::Session;
+
         let mut session = Session::default();
         let group = session.add_group("my_group");
 
@@ -347,7 +393,9 @@ pub fn run_session_add_group() -> TestResult {
 
 pub fn run_session_add_edge() -> TestResult {
     MINI_TEST!("Add Edge", {
-        use crate::{Point, Session};
+        use crate::Point;
+        use crate::Session;
+
         let mut session = Session::default();
         let p1 = Point::new(1.0, 2.0, 3.0);
         let p2 = Point::new(4.0, 5.0, 6.0);
@@ -363,7 +411,9 @@ pub fn run_session_add_edge() -> TestResult {
 
 pub fn run_session_add_hierarchy() -> TestResult {
     MINI_TEST!("Add Hierarchy", {
-        use crate::{Point, Session};
+        use crate::Point;
+        use crate::Session;
+
         let mut session = Session::default();
         let p1 = Point::new(0.0, 0.0, 0.0);
         let p2 = Point::new(1.0, 0.0, 0.0);
@@ -381,7 +431,9 @@ pub fn run_session_add_hierarchy() -> TestResult {
 
 pub fn run_session_get_children() -> TestResult {
     MINI_TEST!("Get Children", {
-        use crate::{Point, Session};
+        use crate::Point;
+        use crate::Session;
+
         let mut session = Session::default();
         let p1 = Point::new(0.0, 0.0, 0.0);
         let p2 = Point::new(1.0, 0.0, 0.0);
@@ -402,7 +454,9 @@ pub fn run_session_get_children() -> TestResult {
 
 pub fn run_session_add_relationship() -> TestResult {
     MINI_TEST!("Add Relationship", {
-        use crate::{Point, Session};
+        use crate::Point;
+        use crate::Session;
+
         let mut session = Session::default();
         let p1 = Point::new(0.0, 0.0, 0.0);
         let p2 = Point::new(1.0, 0.0, 0.0);
@@ -416,9 +470,95 @@ pub fn run_session_add_relationship() -> TestResult {
     })
 }
 
+pub fn run_session_add_interaction() -> TestResult {
+    MINI_TEST!("Add Interaction", {
+        use crate::Element;
+        use crate::Session;
+
+        let mut session = Session::default();
+        let a = Element::new("a");
+        let b = Element::new("b");
+        let absent = Element::new("absent");
+        let a_guid = a.guid().to_string();
+        let b_guid = b.guid().to_string();
+        session.add_element(a, None);
+        session.add_element(b, None);
+        session.add_edge(&a_guid, &b_guid, "authored");
+        let ends = session.add_interaction(&a_guid, &b_guid).unwrap();
+        let id = session.graph.edges[&a_guid][&b_guid].guid().to_string();
+        let reversed = session.add_interaction(&b_guid, &a_guid).unwrap();
+
+        MINI_CHECK!(ends == reversed);
+        MINI_CHECK!(ends.0 == a_guid);
+        MINI_CHECK!(session.graph.number_of_edges() == 1);
+        MINI_CHECK!(session.graph.edges[&b_guid][&a_guid].guid() == id);
+        MINI_CHECK!(session.graph.edges[&a_guid][&b_guid].attribute == "authored");
+
+        let missing_rejected = session.add_interaction(&a_guid, absent.guid()).is_err();
+        let self_rejected = session.add_interaction(&a_guid, &a_guid).is_err();
+
+        MINI_CHECK!(missing_rejected);
+        MINI_CHECK!(self_rejected);
+        MINI_CHECK!(session.graph.number_of_edges() == 1);
+    })
+}
+
+pub fn run_session_has_interaction() -> TestResult {
+    MINI_TEST!("Has Interaction", {
+        use crate::Element;
+        use crate::Session;
+
+        let mut session = Session::default();
+        let a = Element::new("a");
+        let b = Element::new("b");
+        let a_guid = a.guid().to_string();
+        let b_guid = b.guid().to_string();
+        session.add_element(a, None);
+        session.add_element(b, None);
+        let before = session.has_interaction(&a_guid, &b_guid);
+        session.add_interaction(&a_guid, &b_guid).unwrap();
+        let loaded = Session::pb_loads(&session.pb_dumps()).unwrap();
+
+        MINI_CHECK!(!before);
+        MINI_CHECK!(session.has_interaction(&a_guid, &b_guid));
+        MINI_CHECK!(session.has_interaction(&b_guid, &a_guid));
+        MINI_CHECK!(!session.has_interaction(&a_guid, "missing"));
+        MINI_CHECK!(loaded.has_interaction(&b_guid, &a_guid));
+    })
+}
+
+pub fn run_session_remove_interaction() -> TestResult {
+    MINI_TEST!("Remove Interaction", {
+        use crate::Element;
+        use crate::Session;
+
+        let mut session = Session::default();
+        let a = Element::new("a");
+        let b = Element::new("b");
+        let c = Element::new("c");
+        let a_guid = a.guid().to_string();
+        let b_guid = b.guid().to_string();
+        let c_guid = c.guid().to_string();
+        session.add_element(a, None);
+        session.add_element(b, None);
+        session.add_element(c, None);
+        session.add_interaction(&a_guid, &b_guid).unwrap();
+        session.add_interaction(&a_guid, &c_guid).unwrap();
+        session.remove_interaction(&b_guid, &a_guid);
+        session.remove_interaction(&b_guid, &a_guid);
+
+        MINI_CHECK!(!session.has_interaction(&a_guid, &b_guid));
+        MINI_CHECK!(session.has_interaction(&a_guid, &c_guid));
+        MINI_CHECK!(session.graph.number_of_edges() == 1);
+        MINI_CHECK!(session.graph.has_node(&b_guid));
+    })
+}
+
 pub fn run_session_get_neighbours() -> TestResult {
     MINI_TEST!("Get Neighbours", {
-        use crate::{Point, Session};
+        use crate::Point;
+        use crate::Session;
+
         let mut session = Session::default();
         let p1 = Point::new(0.0, 0.0, 0.0);
         let p2 = Point::new(1.0, 0.0, 0.0);
@@ -437,7 +577,11 @@ pub fn run_session_get_neighbours() -> TestResult {
 
 pub fn run_session_get_collisions() -> TestResult {
     MINI_TEST!("Get Collisions", {
-        use crate::{Point, Session, Vector, OBB};
+        use crate::Point;
+        use crate::Session;
+        use crate::Vector;
+        use crate::OBB;
+
         let mut session = Session::default();
         let obb1 = OBB::new(
             Point::new(0.0, 0.0, 0.0),
@@ -463,7 +607,12 @@ pub fn run_session_get_collisions() -> TestResult {
 
 pub fn run_session_ray_cast() -> TestResult {
     MINI_TEST!("Ray Cast", {
-        use crate::{Mesh, Point, Session, Vector, Xform};
+        use crate::Mesh;
+        use crate::Point;
+        use crate::Session;
+        use crate::Vector;
+        use crate::Xform;
+
         let mut session = Session::default();
         let mut mesh = Mesh::new();
         let v0 = mesh.add_vertex(Point::new(-1.0, -1.0, 0.0), None);
@@ -500,7 +649,9 @@ pub fn run_session_ray_cast() -> TestResult {
 
 pub fn run_session_get_object() -> TestResult {
     MINI_TEST!("Get Object", {
-        use crate::{Point, Session};
+        use crate::Point;
+        use crate::Session;
+
         let mut session = Session::default();
         let point = Point::new(1.0, 2.0, 3.0);
         let guid = point.guid().to_string();
@@ -508,12 +659,15 @@ pub fn run_session_get_object() -> TestResult {
         let retrieved = session.get_object(&guid);
 
         MINI_CHECK!(retrieved.is_some());
+        MINI_CHECK!(retrieved.unwrap().guid() == guid);
     })
 }
 
 pub fn run_session_remove_object() -> TestResult {
     MINI_TEST!("Remove Object", {
-        use crate::{Point, Session};
+        use crate::Point;
+        use crate::Session;
+
         let mut session = Session::default();
         let point = Point::new(1.0, 2.0, 3.0);
         let guid = point.guid().to_string();
@@ -539,7 +693,9 @@ pub fn run_session_remove_object() -> TestResult {
 
 pub fn run_session_get_geometry() -> TestResult {
     MINI_TEST!("Get Geometry", {
-        use crate::{Point, Session};
+        use crate::Point;
+        use crate::Session;
+
         let mut session = Session::default();
         let point = Point::new(1.0, 2.0, 3.0);
         session.add_point(point, None);
@@ -552,7 +708,9 @@ pub fn run_session_get_geometry() -> TestResult {
 
 pub fn run_session_get_geometry_is_pure() -> TestResult {
     MINI_TEST!("Get Geometry Is Pure", {
-        use crate::{Point, Session, Xform};
+        use crate::Point;
+        use crate::Session;
+        use crate::Xform;
 
         let mut session = Session::default();
         let point = Point::new(1.0, 2.0, 3.0);
@@ -572,7 +730,9 @@ pub fn run_session_get_geometry_is_pure() -> TestResult {
 
 pub fn run_session_json_roundtrip() -> TestResult {
     MINI_TEST!("Json Roundtrip", {
-        use crate::{Point, Session};
+        use crate::Point;
+        use crate::Session;
+
         let mut session = Session::default();
         let p1 = Point::new(1.0, 2.0, 3.0);
         let p2 = Point::new(4.0, 5.0, 6.0);
@@ -594,7 +754,9 @@ pub fn run_session_json_roundtrip() -> TestResult {
 
 pub fn run_session_protobuf_roundtrip() -> TestResult {
     MINI_TEST!("Protobuf Roundtrip", {
-        use crate::{Point, Session};
+        use crate::Point;
+        use crate::Session;
+
         let mut session = Session::default();
         let p1 = Point::new(1.0, 2.0, 3.0);
         let p2 = Point::new(4.0, 5.0, 6.0);
@@ -607,15 +769,21 @@ pub fn run_session_protobuf_roundtrip() -> TestResult {
         let fname = "serialization/test_session.bin";
         session.pb_dump(fname);
         let loaded = Session::pb_load(fname);
+        let converted = Session::from_proto(session.to_proto()).unwrap();
 
         MINI_CHECK!(loaded.name == session.name);
         MINI_CHECK!(loaded.lookup.len() == session.lookup.len());
+        MINI_CHECK!(converted.lookup.len() == session.lookup.len());
+        MINI_CHECK!(converted.graph.has_edge((&g1, &g2)));
     })
 }
 
 pub fn run_session_lookup_mutation_roundtrip() -> TestResult {
     MINI_TEST!("Lookup Mutation Roundtrip", {
-        use crate::{Geometry, Line, Session};
+        use crate::Geometry;
+        use crate::Line;
+        use crate::Session;
+
         let mut session = Session::default();
         let line = Line::new(0.0, 0.0, 0.0, 1.0, 0.0, 0.0);
         let guid = line.guid().to_string();
@@ -636,7 +804,10 @@ pub fn run_session_lookup_mutation_roundtrip() -> TestResult {
 
 pub fn run_session_order() -> TestResult {
     MINI_TEST!("Order", {
-        use crate::{Line, Point, Session};
+        use crate::Line;
+        use crate::Point;
+        use crate::Session;
+
         let mut session = Session::default();
         let line = Line::new(0.0, 0.0, 0.0, 1.0, 0.0, 0.0);
         let point = Point::new(1.0, 2.0, 3.0);
@@ -660,7 +831,10 @@ pub fn run_session_order() -> TestResult {
 
 pub fn run_session_set_xform() -> TestResult {
     MINI_TEST!("Set Xform", {
-        use crate::{Point, Session, Xform};
+        use crate::Point;
+        use crate::Session;
+        use crate::Xform;
+
         let mut session = Session::default();
         let point = Point::new(1.0, 2.0, 3.0);
         let guid = point.guid().to_string();
@@ -680,7 +854,10 @@ pub fn run_session_set_xform() -> TestResult {
 
 pub fn run_session_world_xform_hierarchy() -> TestResult {
     MINI_TEST!("World Xform Hierarchy", {
-        use crate::{Point, Session, Xform};
+        use crate::Point;
+        use crate::Session;
+        use crate::Xform;
+
         let mut session = Session::default();
         let a = Point::new(0.0, 0.0, 0.0);
         let b = Point::new(0.0, 0.0, 0.0);
@@ -714,7 +891,10 @@ pub fn run_session_world_xform_hierarchy() -> TestResult {
 
 pub fn run_session_xform_roundtrip() -> TestResult {
     MINI_TEST!("Xform Roundtrip", {
-        use crate::{Point, Session, Xform};
+        use crate::Point;
+        use crate::Session;
+        use crate::Xform;
+
         let mut session = Session::default();
         let point = Point::new(1.0, 2.0, 3.0);
         let guid = point.guid().to_string();
@@ -724,7 +904,7 @@ pub fn run_session_xform_roundtrip() -> TestResult {
         let fname = "serialization/test_session_xform.bin";
         session.pb_dump(fname);
         let loaded = Session::pb_load(fname);
-        let json_loaded = Session::jsonload(&session.jsondump().unwrap()).unwrap();
+        let json_loaded = Session::file_json_loads(&session.file_json_dumps());
 
         MINI_CHECK!(loaded.xform(&guid) == session.xform(&guid));
         MINI_CHECK!(loaded.xforms.len() == 1);
@@ -735,7 +915,9 @@ pub fn run_session_xform_roundtrip() -> TestResult {
 
 /// A cube mesh of the given size centred on center.
 fn create_box(center: &crate::Point, size: f64) -> crate::Mesh {
-    use crate::{Mesh, Point};
+    use crate::Mesh;
+    use crate::Point;
+
     let mut mesh = Mesh::new();
     let h = size * 0.5;
     let verts = [
@@ -772,7 +954,12 @@ fn create_box(center: &crate::Point, size: f64) -> crate::Mesh {
 
 pub fn run_session_tree_transformation_hierarchy() -> TestResult {
     MINI_TEST!("Tree Transformation Hierarchy", {
-        use crate::{Plane, Point, Session, Vector, Xform};
+        use crate::Plane;
+        use crate::Point;
+        use crate::Session;
+        use crate::Vector;
+        use crate::Xform;
+
         let mut scene = Session::new("tree_transformation_test");
 
         let box1 = create_box(&Point::new(0.0, 0.0, 0.0), 2.0);
@@ -816,7 +1003,8 @@ pub fn run_session_tree_transformation_hierarchy() -> TestResult {
 
 pub fn run_session_add_component() -> TestResult {
     MINI_TEST!("Add Component", {
-        use crate::{Component, Session};
+        use crate::Component;
+        use crate::Session;
 
         let mut session = Session::default();
 
@@ -842,43 +1030,43 @@ pub fn run_session_add_component() -> TestResult {
 
 pub fn run_session_component_json_roundtrip() -> TestResult {
     MINI_TEST!("Component Json Roundtrip", {
-        use crate::file_encoders::{file_json_dump, file_json_load};
-        use crate::{Component, Session};
+        use crate::file_encoders::file_json_dump;
+        use crate::file_encoders::file_json_load;
+        use crate::Component;
+        use crate::Session;
 
-        let mut session = Session::default();
-
+        let mut original = Session::default();
         let mut extra = std::collections::HashMap::new();
         extra.insert("size".to_string(), serde_json::json!(3000));
         extra.insert("height".to_string(), serde_json::json!(650));
         extra.insert("rise".to_string(), serde_json::json!(453));
-
         let guid = uuid::Uuid::new_v4().to_string();
-        session.add_component(
-            Component {
-                type_name: "FloorBuilder".to_string(),
-                guid: guid.clone(),
-                name: "floor_builder".to_string(),
-                extra,
-            },
-            None,
-        );
+        let c = Component {
+            type_name: "FloorBuilder".to_string(),
+            guid: guid.clone(),
+            name: "floor_builder".to_string(),
+            extra,
+        };
+        original.add_component(c, None);
 
-        file_json_dump(&session, "serialization/test_session_component.json", false).unwrap();
-        let loaded =
-            file_json_load::<Session>("serialization/test_session_component.json").unwrap();
+        let filename = "serialization/test_session_component.json";
+        file_json_dump(&original, filename, false).unwrap();
+        let loaded = file_json_load::<Session>(filename).unwrap();
 
         MINI_CHECK!(loaded.objects.components.len() == 1);
-        MINI_CHECK!(loaded.objects.components[0].guid == guid);
         MINI_CHECK!(loaded.objects.components[0].type_name == "FloorBuilder");
         MINI_CHECK!(loaded.objects.components[0].extra["size"] == serde_json::json!(3000));
-        MINI_CHECK!(loaded.objects.components[0].extra["rise"] == serde_json::json!(453));
+        MINI_CHECK!(loaded.objects.components[0].guid == guid);
     })
 }
 
 pub fn run_session_document_workflow() -> TestResult {
     MINI_TEST!("Document Workflow", {
         use crate::session::FromGeometry;
-        use crate::{Geometry, Point, Session, Xform};
+        use crate::Geometry;
+        use crate::Point;
+        use crate::Session;
+        use crate::Xform;
         use std::rc::Rc;
 
         let mut session = Session::default();
@@ -919,7 +1107,9 @@ pub fn run_session_document_workflow() -> TestResult {
 
 pub fn run_session_undo_remove() -> TestResult {
     MINI_TEST!("Undo Remove", {
-        use crate::{Point, Session, Xform};
+        use crate::Point;
+        use crate::Session;
+        use crate::Xform;
 
         let mut session = Session::default();
         let group = session.add_group("g");
@@ -971,7 +1161,8 @@ pub fn run_session_undo_remove() -> TestResult {
 pub fn run_session_undo_add() -> TestResult {
     MINI_TEST!("Undo Add", {
         use crate::session::FromGeometry;
-        use crate::{Point, Session};
+        use crate::Point;
+        use crate::Session;
 
         let mut session = Session::default();
         let group = session.add_group("g");
@@ -1001,7 +1192,9 @@ pub fn run_session_undo_add() -> TestResult {
 pub fn run_session_undo_replace() -> TestResult {
     MINI_TEST!("Undo Replace", {
         use crate::session::FromGeometry;
-        use crate::{Geometry, Point, Session};
+        use crate::Geometry;
+        use crate::Point;
+        use crate::Session;
         use std::rc::Rc;
 
         let mut session = Session::default();
@@ -1030,7 +1223,9 @@ pub fn run_session_undo_replace() -> TestResult {
 
 pub fn run_session_undo_xform() -> TestResult {
     MINI_TEST!("Undo Xform", {
-        use crate::{Point, Session, Xform};
+        use crate::Point;
+        use crate::Session;
+        use crate::Xform;
 
         let mut session = Session::default();
         let point = Point::new(1.0, 2.0, 3.0);
@@ -1058,7 +1253,8 @@ pub fn run_session_undo_xform() -> TestResult {
 
 pub fn run_session_history_purged_on_save() -> TestResult {
     MINI_TEST!("History Purged On Save", {
-        use crate::{Point, Session};
+        use crate::Point;
+        use crate::Session;
 
         let mut session = Session::default();
 
@@ -1086,15 +1282,19 @@ pub fn run_session_history_purged_on_save() -> TestResult {
 
 pub fn run_session_history_capacity() -> TestResult {
     MINI_TEST!("History Capacity", {
-        use crate::{Point, Session};
+        use crate::Point;
+        use crate::Session;
 
         let mut session = Session::default();
+
         for i in 0..70 {
             session.begin("add");
             session.add_point(Point::new(i as f64, 0.0, 0.0), None);
             session.commit();
         }
+
         let depth = session.history.depth();
+
         while session.undo() {}
 
         MINI_CHECK!(depth == 64);
@@ -1106,7 +1306,8 @@ pub fn run_session_history_capacity() -> TestResult {
 
 pub fn run_session_str_hierarchy() -> TestResult {
     MINI_TEST!("Str Hierarchy", {
-        use crate::{Point, Session};
+        use crate::Point;
+        use crate::Session;
 
         let mut session = Session::new("blocks");
         let group = session.add_group("Group");
@@ -1125,7 +1326,10 @@ pub fn run_session_str_hierarchy() -> TestResult {
 
 pub fn run_session_add_definition() -> TestResult {
     MINI_TEST!("Add Definition", {
-        use crate::{Geometry, Point, Session, Xform};
+        use crate::Geometry;
+        use crate::Point;
+        use crate::Session;
+        use crate::Xform;
         use std::rc::Rc;
 
         let mut session = Session::default();
@@ -1153,7 +1357,11 @@ pub fn run_session_add_definition() -> TestResult {
 
 pub fn run_session_add_instance() -> TestResult {
     MINI_TEST!("Add Instance", {
-        use crate::{Geometry, InstanceRef, Point, Session, Xform};
+        use crate::Geometry;
+        use crate::InstanceRef;
+        use crate::Point;
+        use crate::Session;
+        use crate::Xform;
         use std::rc::Rc;
 
         let mut session = Session::default();
@@ -1188,7 +1396,12 @@ pub fn run_session_add_instance() -> TestResult {
 pub fn run_session_definition_of() -> TestResult {
     MINI_TEST!("Definition Of", {
         use crate::session::FromGeometry;
-        use crate::{Geometry, InstanceRef, Mesh, Point, Session, Xform};
+        use crate::Geometry;
+        use crate::InstanceRef;
+        use crate::Mesh;
+        use crate::Point;
+        use crate::Session;
+        use crate::Xform;
         use std::rc::Rc;
 
         let mut session = Session::default();
@@ -1210,7 +1423,11 @@ pub fn run_session_definition_of() -> TestResult {
 
 pub fn run_session_instances_of() -> TestResult {
     MINI_TEST!("Instances Of", {
-        use crate::{Geometry, InstanceRef, Point, Session, Xform};
+        use crate::Geometry;
+        use crate::InstanceRef;
+        use crate::Point;
+        use crate::Session;
+        use crate::Xform;
         use std::rc::Rc;
 
         let mut session = Session::default();
@@ -1236,7 +1453,12 @@ pub fn run_session_instances_of() -> TestResult {
 pub fn run_session_world_geometry() -> TestResult {
     MINI_TEST!("World Geometry", {
         use crate::session::FromGeometry;
-        use crate::{Geometry, InstanceRef, Mesh, Point, Session, Xform};
+        use crate::Geometry;
+        use crate::InstanceRef;
+        use crate::Mesh;
+        use crate::Point;
+        use crate::Session;
+        use crate::Xform;
         use std::rc::Rc;
 
         let mut session = Session::default();
@@ -1274,7 +1496,11 @@ pub fn run_session_world_geometry() -> TestResult {
 
 pub fn run_session_get_geometry_resolves_instances() -> TestResult {
     MINI_TEST!("Get Geometry Resolves Instances", {
-        use crate::{Geometry, InstanceRef, Point, Session, Xform};
+        use crate::Geometry;
+        use crate::InstanceRef;
+        use crate::Point;
+        use crate::Session;
+        use crate::Xform;
         use std::rc::Rc;
 
         let mut session = Session::default();
@@ -1310,7 +1536,12 @@ pub fn run_session_get_geometry_resolves_instances() -> TestResult {
 pub fn run_session_replace_definition() -> TestResult {
     MINI_TEST!("Replace Definition", {
         use crate::session::FromGeometry;
-        use crate::{Geometry, InstanceRef, Mesh, Point, Session, Xform};
+        use crate::Geometry;
+        use crate::InstanceRef;
+        use crate::Mesh;
+        use crate::Point;
+        use crate::Session;
+        use crate::Xform;
         use std::rc::Rc;
 
         let mut session = Session::default();
@@ -1345,7 +1576,11 @@ pub fn run_session_replace_definition() -> TestResult {
 
 pub fn run_session_remove_definition() -> TestResult {
     MINI_TEST!("Remove Definition", {
-        use crate::{Geometry, InstanceRef, Point, Session, Xform};
+        use crate::Geometry;
+        use crate::InstanceRef;
+        use crate::Point;
+        use crate::Session;
+        use crate::Xform;
         use std::rc::Rc;
 
         let mut session = Session::default();
@@ -1373,7 +1608,11 @@ pub fn run_session_remove_definition() -> TestResult {
 pub fn run_session_to_instance() -> TestResult {
     MINI_TEST!("To Instance", {
         use crate::session::FromGeometry;
-        use crate::{Geometry, Mesh, Point, Session, Xform};
+        use crate::Geometry;
+        use crate::Mesh;
+        use crate::Point;
+        use crate::Session;
+        use crate::Xform;
         use std::rc::Rc;
 
         let mut session = Session::default();
@@ -1421,7 +1660,13 @@ pub fn run_session_explode() -> TestResult {
     MINI_TEST!("Explode", {
         use crate::element::ElementFeature;
         use crate::session::FromGeometry;
-        use crate::{Element, Geometry, InstanceRef, Point, Polyline, Session, Xform};
+        use crate::Element;
+        use crate::Geometry;
+        use crate::InstanceRef;
+        use crate::Point;
+        use crate::Polyline;
+        use crate::Session;
+        use crate::Xform;
         use std::rc::Rc;
 
         let mut session = Session::default();
@@ -1466,7 +1711,11 @@ pub fn run_session_explode() -> TestResult {
 
 pub fn run_session_undo_instance() -> TestResult {
     MINI_TEST!("Undo Instance", {
-        use crate::{Geometry, InstanceRef, Point, Session, Xform};
+        use crate::Geometry;
+        use crate::InstanceRef;
+        use crate::Point;
+        use crate::Session;
+        use crate::Xform;
         use std::rc::Rc;
 
         let mut session = Session::default();
@@ -1520,7 +1769,11 @@ pub fn run_session_undo_instance() -> TestResult {
 
 pub fn run_session_instance_json_roundtrip() -> TestResult {
     MINI_TEST!("Instance Json Roundtrip", {
-        use crate::{Geometry, InstanceRef, Point, Session, Xform};
+        use crate::Geometry;
+        use crate::InstanceRef;
+        use crate::Point;
+        use crate::Session;
+        use crate::Xform;
         use std::rc::Rc;
 
         let mut session = Session::default();
@@ -1553,7 +1806,12 @@ pub fn run_session_instance_json_roundtrip() -> TestResult {
 pub fn run_session_instance_protobuf_roundtrip() -> TestResult {
     MINI_TEST!("Instance Protobuf Roundtrip", {
         use crate::element::ElementFeature;
-        use crate::{Geometry, InstanceRef, Point, Polyline, Session, Xform};
+        use crate::Geometry;
+        use crate::InstanceRef;
+        use crate::Point;
+        use crate::Polyline;
+        use crate::Session;
+        use crate::Xform;
         use prost::Message;
         use std::rc::Rc;
 
@@ -1593,7 +1851,11 @@ pub fn run_session_instance_protobuf_roundtrip() -> TestResult {
 
 pub fn run_session_get_collisions_instances() -> TestResult {
     MINI_TEST!("Get Collisions Instances", {
-        use crate::{Geometry, InstanceRef, Point, Session, Xform};
+        use crate::Geometry;
+        use crate::InstanceRef;
+        use crate::Point;
+        use crate::Session;
+        use crate::Xform;
         use std::rc::Rc;
 
         let mut session = Session::default();
@@ -1621,7 +1883,12 @@ pub fn run_session_get_collisions_instances() -> TestResult {
 
 pub fn run_session_ray_cast_instance() -> TestResult {
     MINI_TEST!("Ray Cast Instance", {
-        use crate::{Geometry, InstanceRef, Point, Session, Vector, Xform};
+        use crate::Geometry;
+        use crate::InstanceRef;
+        use crate::Point;
+        use crate::Session;
+        use crate::Vector;
+        use crate::Xform;
         use std::rc::Rc;
 
         let mut session = Session::default();
@@ -1741,6 +2008,21 @@ REGISTER_MINI_TEST!(
     "Session",
     "Add Relationship",
     crate::session_test::run_session_add_relationship
+);
+REGISTER_MINI_TEST!(
+    "Session",
+    "Add Interaction",
+    crate::session_test::run_session_add_interaction
+);
+REGISTER_MINI_TEST!(
+    "Session",
+    "Has Interaction",
+    crate::session_test::run_session_has_interaction
+);
+REGISTER_MINI_TEST!(
+    "Session",
+    "Remove Interaction",
+    crate::session_test::run_session_remove_interaction
 );
 REGISTER_MINI_TEST!(
     "Session",

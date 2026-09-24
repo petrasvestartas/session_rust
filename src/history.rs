@@ -28,6 +28,7 @@ pub fn clone(obj: &Geometry) -> Geometry {
 pub fn clone_item(obj: &Item) -> Item {
     match obj {
         Item::Geometry(g) => Item::Geometry(clone(g)),
+        Item::Component(c) => Item::Component(c.clone()),
         Item::InstanceRef(i) => Item::InstanceRef(Rc::new((**i).clone())),
     }
 }
@@ -83,14 +84,14 @@ impl Tombstone {
 /// The object under `guid` was swapped: absolute before/after snapshots, never deltas.
 #[derive(Debug, Clone)]
 pub struct ReplaceOp {
-    pub guid: String,     // The object's guid.
-    pub before: Geometry, // Snapshot before the swap.
-    pub after: Geometry,  // Snapshot after the swap.
+    pub guid: String, // The object's guid.
+    pub before: Item, // Snapshot before the swap.
+    pub after: Item,  // Snapshot after the swap.
 }
 
 impl ReplaceOp {
     /// Construct from the guid and the before and after snapshots.
-    pub fn new(guid: String, before: Geometry, after: Geometry) -> Self {
+    pub fn new(guid: String, before: Item, after: Item) -> Self {
         Self {
             guid,
             before,
@@ -356,7 +357,7 @@ impl History {
                 session._detach(&op.guid);
             }
             Op::Remove(op) => session._attach(op),
-            Op::Replace(op) => session._swap(&op.guid, clone(&op.before)),
+            Op::Replace(op) => session._swap(&op.guid, clone_item(&op.before)),
             Op::Xform(op) => session._place(&op.guid, op.before.as_ref()),
             Op::Definition(op) => session._define(&op.guid, op.before.as_ref().map(clone)),
         }
@@ -369,7 +370,7 @@ impl History {
             Op::Remove(op) => {
                 session._detach(&op.guid);
             }
-            Op::Replace(op) => session._swap(&op.guid, clone(&op.after)),
+            Op::Replace(op) => session._swap(&op.guid, clone_item(&op.after)),
             Op::Xform(op) => session._place(&op.guid, op.after.as_ref()),
             Op::Definition(op) => session._define(&op.guid, op.after.as_ref().map(clone)),
         }

@@ -29,7 +29,7 @@ pub enum Geometry {
 }
 
 impl Geometry {
-    /// Returns the guid of the wrapped object.
+    /// Return the guid of the wrapped object.
     pub fn guid(&self) -> &str {
         match self {
             Geometry::OBB(g) => g.guid(),
@@ -46,7 +46,7 @@ impl Geometry {
         }
     }
 
-    /// Returns the name of the wrapped object.
+    /// Return the name of the wrapped object.
     pub fn name(&self) -> &str {
         match self {
             Geometry::OBB(g) => &g.name,
@@ -63,7 +63,7 @@ impl Geometry {
         }
     }
 
-    /// Overwrites the guid: a minted one is cleared first, since `set_guid` never replaces one.
+    /// Overwrite the guid: a minted one is cleared first, since `set_guid` never replaces one.
     pub fn set_guid(&mut self, guid: &str) {
         macro_rules! reset {
             ($rc:expr) => {{
@@ -88,7 +88,7 @@ impl Geometry {
         }
     }
 
-    /// Overwrites the name.
+    /// Overwrite the name.
     pub(crate) fn set_name(&mut self, name: &str) {
         macro_rules! rename {
             ($rc:expr) => {{
@@ -112,39 +112,42 @@ impl Geometry {
     }
 }
 
-/// Anything the history snapshots: geometry or an instance; components stay outside it.
+/// Anything an Objects collection holds: geometry, a Component or an InstanceRef.
 #[derive(Debug, Clone)]
 pub enum Item {
     Geometry(Geometry),
+    Component(Component),
     InstanceRef(Rc<InstanceRef>),
 }
 
 impl Item {
-    /// Returns the guid of the wrapped object.
+    /// Return the guid of the wrapped object.
     pub fn guid(&self) -> &str {
         match self {
             Item::Geometry(g) => g.guid(),
+            Item::Component(c) => c.guid(),
             Item::InstanceRef(i) => i.guid(),
         }
     }
 
-    /// Returns the name of the wrapped object.
+    /// Return the name of the wrapped object.
     pub fn name(&self) -> &str {
         match self {
             Item::Geometry(g) => g.name(),
+            Item::Component(c) => &c.name,
             Item::InstanceRef(i) => &i.name,
         }
     }
 }
 
 impl From<Geometry> for Item {
-    /// Wraps geometry.
+    /// Wrap geometry.
     fn from(geometry: Geometry) -> Self {
         Item::Geometry(geometry)
     }
 }
 
-/// Extracts a concrete geometry type out of a `Geometry` variant, what C++ gets from `std::get_if`.
+/// Extract a concrete geometry type out of a `Geometry` variant, what C++ gets from `std::get_if`.
 pub trait FromGeometry: Sized {
     /// The object inside `geometry`, or None when the variant holds another type.
     fn from_geometry(geometry: &Geometry) -> Option<&Self>;
@@ -195,7 +198,7 @@ pub const COLLECTIONS: [(&str, &str); 13] = [
     ("instances", "instance"),
 ];
 
-/// Runs `$op!(vec, Variant)` on the typed vector of that name, the Rust spelling of getattr(objects, collection).
+/// Run `$op!(vec, Variant)` on the typed vector of that name, the Rust spelling of getattr(objects, collection).
 macro_rules! typed {
     ($collection:expr, $objects:expr, $op:ident) => {
         match $collection {
@@ -369,7 +372,7 @@ fn collection_of(geometry: &Geometry) -> (&'static str, &'static str) {
     }
 }
 
-/// Puts an object into the vector of that name at index, clamped to its end, and returns where it went.
+/// Put an object into the vector of that name at index, clamped to its end, and return where it went.
 fn insert_at(objects: &mut Objects, collection: &str, index: usize, obj: &Item) -> usize {
     let mut at = 0;
     macro_rules! insert {
@@ -383,6 +386,11 @@ fn insert_at(objects: &mut Objects, collection: &str, index: usize, obj: &Item) 
 
     typed!(collection, objects, insert);
 
+    if let Item::Component(component) = obj {
+        at = index.min(objects.components.len());
+        objects.components.insert(at, component.clone());
+    }
+
     if let Item::InstanceRef(instance) = obj {
         at = index.min(objects.instances.len());
         objects.instances.insert(at, Rc::clone(instance));
@@ -391,7 +399,7 @@ fn insert_at(objects: &mut Objects, collection: &str, index: usize, obj: &Item) 
     at
 }
 
-/// Takes the object at index out of the vector of that name.
+/// Take the object at index out of the vector of that name.
 fn remove_at(objects: &mut Objects, collection: &str, index: usize) {
     macro_rules! remove {
         ($vec:expr, $variant:ident) => {{
@@ -401,12 +409,37 @@ fn remove_at(objects: &mut Objects, collection: &str, index: usize) {
 
     typed!(collection, objects, remove);
 
+    if collection == "components" {
+        objects.components.remove(index);
+    }
+
     if collection == "instances" {
         objects.instances.remove(index);
     }
 }
 
-/// Moves geometry in place: an element is placed, anything else transformed; identity leaves it untouched.
+/// Put an object in place of the one at index of the vector of that name.
+fn store_at(objects: &mut Objects, collection: &str, index: usize, obj: &Item) {
+    macro_rules! store {
+        ($vec:expr, $variant:ident) => {
+            if let Item::Geometry(Geometry::$variant(g)) = obj {
+                $vec[index] = Rc::clone(g);
+            }
+        };
+    }
+
+    typed!(collection, objects, store);
+
+    if let Item::Component(component) = obj {
+        objects.components[index] = component.clone();
+    }
+
+    if let Item::InstanceRef(instance) = obj {
+        objects.instances[index] = Rc::clone(instance);
+    }
+}
+
+/// Move geometry in place: an element is placed, anything else transformed; identity leaves it untouched.
 fn place(geometry: &mut Geometry, xform: &Xform) {
     if xform.is_identity() {
         return;
@@ -500,6 +533,134 @@ fn ray_point(ray: &Line, point: &Point, tolerance: f64) -> Option<Point> {
     Some(closest)
 }
 
+/// The segment hit closest to the ray start.
+fn ray_polyline(ray: &Line, polyline: &Polyline, tolerance: f64) -> Option<Point> {
+    let mut closest: Option<Point> = None;
+    let mut min_dist = f64::INFINITY;
+
+    for i in 0..polyline.segment_count() {
+        let segment = Line::from_points(&polyline.get_point(i)?, &polyline.get_point(i + 1)?);
+        let Some(hit) = line_line(ray, &segment, tolerance) else {
+            continue;
+        };
+        let dist = ray.start().distance(&hit, None);
+
+        if dist < min_dist {
+            min_dist = dist;
+            closest = Some(hit);
+        }
+    }
+
+    closest
+}
+
+/// The ray point closest to a cloud point within tolerance.
+fn ray_pointcloud(ray: &Line, pointcloud: &PointCloud, tolerance: f64) -> Option<Point> {
+    let mut closest: Option<Point> = None;
+    let mut min_dist = f64::INFINITY;
+
+    for point in pointcloud.get_points() {
+        let Some(hit) = ray_point(ray, &point, tolerance) else {
+            continue;
+        };
+        let dist = point.distance(&hit, None);
+
+        if dist < min_dist {
+            min_dist = dist;
+            closest = Some(hit);
+        }
+    }
+
+    closest
+}
+
+/// The first hit of the ray on the placed mesh, tested in the mesh frame.
+fn ray_mesh(ray: &Line, mesh: &Mesh, tolerance: f64, placement: &Xform) -> Option<Point> {
+    let inverse = placement.inverse()?;
+    let local_ray = Line::from_points(
+        &inverse.transform_point(&ray.start()),
+        &inverse.transform_point(&ray.end()),
+    );
+    let hits = ray_mesh_bvh(&local_ray, mesh, tolerance, true)?;
+
+    Some(placement.transform_point(hits.first()?))
+}
+
+/// The points whose box bounds a geometry: vertices, control points or surface samples.
+fn box_points(geometry: &Geometry) -> Vec<Point> {
+    let mut points: Vec<Point> = Vec::new();
+
+    match geometry {
+        Geometry::Line(line) => {
+            points.push(line.start());
+            points.push(line.end());
+        }
+
+        Geometry::Polyline(polyline) => points = polyline.get_points(),
+        Geometry::PointCloud(pointcloud) => points = pointcloud.get_points(),
+        Geometry::Mesh(mesh) => {
+            for vertex in mesh.vertex.values() {
+                points.push(vertex.position());
+            }
+        }
+
+        Geometry::BRep(brep) => {
+            for vertex in &brep.m_vertices {
+                points.push(vertex.point.clone());
+            }
+
+            for surface in &brep.m_surfaces {
+                let (Some((u0, u1)), Some((v0, v1))) = (surface.domain(0), surface.domain(1))
+                else {
+                    continue;
+                };
+
+                for i in 0..=2usize {
+                    for j in 0..=2usize {
+                        let u = u0 + (u1 - u0) * i as f64 / 2.0;
+                        let v = v0 + (v1 - v0) * j as f64 / 2.0;
+
+                        if let Some(point) = surface.point_at(u, v) {
+                            points.push(point);
+                        }
+                    }
+                }
+            }
+        }
+
+        Geometry::NurbsCurve(nurbscurve) => {
+            for i in 0..nurbscurve.cv_count() {
+                if let Some(point) = nurbscurve.get_cv(i) {
+                    points.push(point);
+                }
+            }
+        }
+
+        Geometry::NurbsSurface(nurbssurface) => {
+            for i in 0..nurbssurface.cv_count(0) {
+                for j in 0..nurbssurface.cv_count(1) {
+                    if let Some(point) = nurbssurface.get_cv(i, j) {
+                        points.push(point);
+                    }
+                }
+            }
+        }
+
+        _ => {}
+    }
+
+    points
+}
+
+/// Whether guid is a graph node held by an object, instance or component.
+fn registered(session: &Session, guid: &str) -> bool {
+    let held = session.lookup.contains_key(guid)
+        || session.instance_lookup.contains_key(guid)
+        || session.component_lookup.contains_key(guid);
+
+    session.graph.has_node(guid) && held
+}
+
 /// One object a ray touched: which one, where, and how far from the ray origin.
 #[derive(Debug, Clone)]
 pub struct RayHit {
@@ -548,14 +709,14 @@ pub struct Session {
 }
 
 impl Default for Session {
-    /// Constructs a session named "my_session".
+    /// Construct a session named "my_session".
     fn default() -> Self {
         Self::new("my_session")
     }
 }
 
 impl Clone for Session {
-    /// Copies every table and object, guids included; caches are rebuilt on demand and history starts empty.
+    /// Copy every table and object, guids included; caches are rebuilt on demand and history starts empty.
     fn clone(&self) -> Self {
         let mut session = Session::new(&self.name);
 
@@ -578,8 +739,7 @@ impl Session {
     // ═══════════════════════════════════════════════════════════════════════════
     // Constructors
     // ═══════════════════════════════════════════════════════════════════════════
-
-    /// Constructs an empty session whose tree root carries the session name.
+    /// Construct an empty session whose tree root carries the session name.
     pub fn new(name: &str) -> Self {
         let mut tree = Tree::new(&format!("{name}_tree"));
         tree.add(&TreeNode::new(name), None);
@@ -605,17 +765,17 @@ impl Session {
         }
     }
 
-    /// Returns whether the lazy guid has been created.
+    /// Return whether the lazy guid has been created.
     pub fn has_guid(&self) -> bool {
         self.guid.get().is_some()
     }
 
-    /// Returns the guid, creating it on first access.
+    /// Return the guid, creating it on first access.
     pub fn guid(&self) -> &str {
         self.guid.get_or_init(|| uuid::Uuid::new_v4().to_string())
     }
 
-    /// Sets the guid if it has not already been created.
+    /// Set the guid if it has not already been created.
     pub fn set_guid(&self, g: String) {
         let _ = self.guid.set(g);
     }
@@ -623,13 +783,12 @@ impl Session {
     // ═══════════════════════════════════════════════════════════════════════════
     // Accessors
     // ═══════════════════════════════════════════════════════════════════════════
-
-    /// Gets a geometry object by GUID, None when there is none.
+    /// Get a geometry object by GUID with type safety.
     pub fn get_object(&self, guid: &str) -> Option<&Geometry> {
         self.lookup.get(guid)
     }
 
-    /// Selects objects of one type, grouped by the top-level nodes of the tree.
+    /// Select objects of one type, grouped by the top-level nodes of the tree.
     pub fn select_by_type<T: FromGeometry + Clone>(&self) -> Vec<Vec<T>> {
         let mut groups: Vec<Vec<T>> = Vec::new();
         let Some(root) = self.tree.root() else {
@@ -657,7 +816,7 @@ impl Session {
         groups
     }
 
-    /// Finds an existing group by name; panics when there is none.
+    /// Find an existing group by name; panics when there is none.
     pub fn find_group(&self, group_name: &str) -> Rc<RefCell<TreeNode>> {
         if let Some(root) = self.tree.root() {
             for child in root.borrow().children() {
@@ -782,12 +941,12 @@ impl Session {
         out
     }
 
-    /// Gets the children of a parent GUID.
+    /// Get the children of a parent GUID.
     pub fn get_children(&self, obj_guid: &str) -> Vec<String> {
         self.tree.get_children_guids(obj_guid)
     }
 
-    /// Gets the neighbours of a GUID.
+    /// Get the neighbours of a GUID.
     pub fn get_neighbours(&self, obj_guid: &str) -> Vec<String> {
         self.graph.neighbors(obj_guid)
     }
@@ -891,8 +1050,7 @@ impl Session {
     // ═══════════════════════════════════════════════════════════════════════════
     // Geometry management
     // ═══════════════════════════════════════════════════════════════════════════
-
-    /// Adds a point.
+    /// Add a point.
     pub fn add_point(
         &mut self,
         point: Point,
@@ -901,7 +1059,7 @@ impl Session {
         self._add_object("points", Geometry::Point(Rc::new(point)), "point", parent)
     }
 
-    /// Adds a line.
+    /// Add a line.
     pub fn add_line(
         &mut self,
         line: Line,
@@ -910,7 +1068,7 @@ impl Session {
         self._add_object("lines", Geometry::Line(Rc::new(line)), "line", parent)
     }
 
-    /// Adds a plane.
+    /// Add a plane.
     pub fn add_plane(
         &mut self,
         plane: Plane,
@@ -919,12 +1077,12 @@ impl Session {
         self._add_object("planes", Geometry::Plane(Rc::new(plane)), "plane", parent)
     }
 
-    /// Adds a bounding box.
+    /// Add a bounding box.
     pub fn add_obb(&mut self, bbox: OBB) -> Rc<RefCell<TreeNode>> {
         self._add_object("bboxes", Geometry::OBB(Rc::new(bbox)), "bbox", None)
     }
 
-    /// Adds a polyline; fewer than two points adds nothing and returns None.
+    /// Add a polyline; fewer than two points adds nothing and returns None.
     pub fn add_polyline(
         &mut self,
         polyline: Polyline,
@@ -942,7 +1100,7 @@ impl Session {
         ))
     }
 
-    /// Adds a point cloud; no points adds nothing and returns None.
+    /// Add a point cloud; no points adds nothing and returns None.
     pub fn add_pointcloud(
         &mut self,
         pointcloud: PointCloud,
@@ -960,7 +1118,7 @@ impl Session {
         ))
     }
 
-    /// Adds a mesh; no faces adds nothing and returns None.
+    /// Add a mesh; no faces adds nothing and returns None.
     pub fn add_mesh(
         &mut self,
         mesh: Mesh,
@@ -973,7 +1131,7 @@ impl Session {
         Some(self._add_object("meshes", Geometry::Mesh(Rc::new(mesh)), "mesh", parent))
     }
 
-    /// Adds a curve; fewer than two control vertices adds nothing and returns None.
+    /// Add a curve; fewer than two control vertices adds nothing and returns None.
     pub fn add_nurbscurve(
         &mut self,
         nurbscurve: NurbsCurve,
@@ -991,7 +1149,7 @@ impl Session {
         ))
     }
 
-    /// Adds a surface; no control vertices adds nothing and returns None.
+    /// Add a surface; no control vertices adds nothing and returns None.
     pub fn add_nurbssurface(
         &mut self,
         nurbssurface: NurbsSurface,
@@ -1009,7 +1167,7 @@ impl Session {
         ))
     }
 
-    /// Adds a brep; no faces and no vertices adds nothing and returns None.
+    /// Add a brep; no faces and no vertices adds nothing and returns None.
     pub fn add_brep(
         &mut self,
         brep: BRep,
@@ -1022,7 +1180,7 @@ impl Session {
         Some(self._add_object("breps", Geometry::BRep(Rc::new(brep)), "brep", parent))
     }
 
-    /// Adds an element; an Element is a data record kept even without geometry.
+    /// Add an element; an Element is a data record kept even without geometry.
     pub fn add_element(
         &mut self,
         element: Element,
@@ -1036,27 +1194,21 @@ impl Session {
         )
     }
 
-    /// Adds a custom component (any object with type_name/guid/name/extra); it has no `Geometry` variant, so it is outside the history.
+    /// Add a custom component (any object with type_name/guid/name/extra).
     pub fn add_component(
         &mut self,
         component: Component,
         parent: Option<&Rc<RefCell<TreeNode>>>,
     ) -> Rc<RefCell<TreeNode>> {
-        let guid = component.guid().to_string();
-        let attribute = format!("component_{}", component.name);
-        self.objects.components.push(component.clone());
-        self.component_lookup.insert(guid.clone(), component);
-        self.graph.add_node(&guid, &attribute);
-        let node = TreeNode::new(&guid);
-
-        if let Some(p) = parent {
-            self.add(&node, Some(p));
-        }
-
-        node
+        self._add_object(
+            "components",
+            Item::Component(component),
+            "component",
+            parent,
+        )
     }
 
-    /// Adds a definition, geometry in its own frame that instances share; returns its guid, also when that guid is already defined, and "" for a guid an object, instance or component holds.
+    /// Add a definition, geometry in its own frame that instances share; returns its guid, also when that guid is already defined, and "" for a guid an object, instance or component holds.
     pub fn add_definition(&mut self, definition: Geometry) -> String {
         let guid = definition.guid().to_string();
 
@@ -1084,7 +1236,7 @@ impl Session {
         guid
     }
 
-    /// Adds an instance under parent, placed by xform relative to the parent with its own xform folded in; None when its definition_guid names no definition.
+    /// Add an instance under parent, placed by xform relative to the parent with its own xform folded in; None when its definition_guid names no definition.
     pub fn add_instance(
         &mut self,
         mut instance: InstanceRef,
@@ -1115,7 +1267,7 @@ impl Session {
         Some(node)
     }
 
-    /// Adds a TreeNode to the tree hierarchy, under the root when no parent is given.
+    /// Add a TreeNode to the tree hierarchy, under the root when no parent is given.
     pub fn add<'a>(
         &mut self,
         node: &Rc<RefCell<TreeNode>>,
@@ -1134,7 +1286,7 @@ impl Session {
         }
     }
 
-    /// Creates a named group (TreeNode) and adds it to the root of the tree.
+    /// Create a named group (TreeNode) and add it to the root of the tree.
     pub fn add_group(&mut self, group_name: &str) -> Rc<RefCell<TreeNode>> {
         let node = TreeNode::new(group_name);
         self.add(&node, None);
@@ -1142,22 +1294,64 @@ impl Session {
         node
     }
 
-    /// Adds an edge between two geometry objects in the graph.
+    /// Add an edge between two geometry objects in the graph.
     pub fn add_edge(&mut self, guid1: &str, guid2: &str, attribute: &str) {
         self.graph.add_edge(guid1, guid2, attribute);
     }
 
-    /// Adds a parent-child relationship in the tree.
+    /// Add or reuse an undirected interaction edge between registered objects; returns its stored endpoint order. Errs for missing objects or a self-pair. Preserves an existing edge's attributes and guid.
+    pub fn add_interaction(
+        &mut self,
+        a: &str,
+        b: &str,
+    ) -> Result<(String, String), Box<dyn std::error::Error>> {
+        if a == b || !registered(self, a) || !registered(self, b) {
+            return Err(
+                "Session::add_interaction: add two distinct objects to the session first".into(),
+            );
+        }
+
+        if !self.has_interaction(a, b) {
+            self.graph.add_edge(a, b, "");
+        }
+
+        let edge = &self.graph.edges[a][b];
+        edge.guid();
+        let edge = edge.clone();
+        let ends = (edge.v0.clone(), edge.v1.clone());
+
+        if let Some(row) = self.graph.edges.get_mut(b) {
+            row.insert(a.to_string(), edge);
+        }
+
+        Ok(ends)
+    }
+
+    /// True when the pair has an interaction edge in either order.
+    pub fn has_interaction(&self, a: &str, b: &str) -> bool {
+        self.graph.has_edge((a, b)) || self.graph.has_edge((b, a))
+    }
+
+    /// Remove the pair's edge in either order; a missing pair is a no-op.
+    pub fn remove_interaction(&mut self, a: &str, b: &str) {
+        if self.graph.has_edge((a, b)) {
+            self.graph.remove_edge((a, b));
+        } else if self.graph.has_edge((b, a)) {
+            self.graph.remove_edge((b, a));
+        }
+    }
+
+    /// Add a parent-child relationship in the tree.
     pub fn add_hierarchy(&mut self, parent_guid: &str, child_guid: &str) -> bool {
         self.tree.add_child_by_guid(parent_guid, child_guid)
     }
 
-    /// Adds a relationship edge in the graph.
+    /// Add a relationship edge in the graph.
     pub fn add_relationship(&mut self, from_guid: &str, to_guid: &str, relationship_type: &str) {
         self.graph.add_edge(from_guid, to_guid, relationship_type);
     }
 
-    /// Removes an object by its GUID from every live table at once; the removal record is the tombstone undo restores from.
+    /// Remove an object by its GUID from every live table at once; the removal record is the tombstone undo restores from.
     pub fn remove_object(&mut self, obj_guid: &str) -> bool {
         let Some(op) = self._detach(obj_guid) else {
             return false;
@@ -1167,7 +1361,7 @@ impl Session {
         true
     }
 
-    /// Swaps the object stored under guid for obj, which takes over that guid; the recorded edit undo and redo restore as absolute snapshots.
+    /// Swap the object stored under guid for obj, which takes over that guid; the recorded edit undo and redo restore as absolute snapshots.
     pub fn replace(&mut self, guid: &str, obj: Geometry) -> bool {
         let Some(before) = self.lookup.get(guid) else {
             return false;
@@ -1178,17 +1372,17 @@ impl Session {
         if self.history.current.is_some() {
             self.history.record(Op::Replace(ReplaceOp::new(
                 guid.to_string(),
-                clone(before),
-                clone(&obj),
+                Item::Geometry(clone(before)),
+                Item::Geometry(clone(&obj)),
             )));
         }
 
-        self._swap(guid, obj);
+        self._swap(guid, Item::Geometry(obj));
 
         true
     }
 
-    /// Swaps the geometry of a definition, which keeps its guid, so every instance of it changes at once; false when guid is no definition.
+    /// Swap the geometry of a definition, which keeps its guid, so every instance of it changes at once; false when guid is no definition.
     pub fn replace_definition(&mut self, guid: &str, definition: Geometry) -> bool {
         let Some(before) = self.definition_lookup.get(guid) else {
             return false;
@@ -1209,7 +1403,7 @@ impl Session {
         true
     }
 
-    /// Removes a definition; false when guid is no definition or an instance still names it.
+    /// Remove a definition; false when guid is no definition or an instance still names it.
     pub fn remove_definition(&mut self, guid: &str) -> bool {
         let Some(before) = self.definition_lookup.get(guid) else {
             return false;
@@ -1232,7 +1426,7 @@ impl Session {
         true
     }
 
-    /// Turns an object into an instance of a definition, keeping its guid, name, tree node and edges; frame maps the definition onto the object and is folded into its local transform.
+    /// Turn an object into an instance of a definition, keeping its guid, name, tree node and edges; frame maps the definition onto the object and is folded into its local transform.
     pub fn to_instance(&mut self, guid: &str, definition_guid: &str, frame: Xform) -> bool {
         let Some(object) = self.lookup.get(guid) else {
             return false;
@@ -1269,7 +1463,7 @@ impl Session {
         true
     }
 
-    /// Turns an instance into a standalone copy of its definition in the definition frame, keeping its guid, name, transform, tree node and edges, and on an element its features.
+    /// Turn an instance into a standalone copy of its definition in the definition frame, keeping its guid, name, transform, tree node and edges, and on an element its features.
     pub fn explode(&mut self, instance_guid: &str) -> bool {
         let Some(definition) = self.definition_of(instance_guid) else {
             return false;
@@ -1307,7 +1501,7 @@ impl Session {
         true
     }
 
-    /// Sets the LOCAL transform of an object, relative to its tree parent; a guid that names only a definition is ignored.
+    /// Set the LOCAL transform of an object, relative to its tree parent; a guid that names only a definition is ignored.
     pub fn set_xform(&mut self, guid: &str, xform: Xform) {
         if self.definition_lookup.contains_key(guid)
             && !self.lookup.contains_key(guid)
@@ -1329,7 +1523,7 @@ impl Session {
         self.bvh_cache_dirty = true;
     }
 
-    /// Removes an object's local transform, returning whether one was present.
+    /// Remove an object's local transform, returning whether one was present.
     pub fn remove_xform(&mut self, guid: &str) -> bool {
         let Some(before) = self.xforms.get(guid).cloned() else {
             return false;
@@ -1352,18 +1546,17 @@ impl Session {
     // ═══════════════════════════════════════════════════════════════════════════
     // History
     // ═══════════════════════════════════════════════════════════════════════════
-
-    /// Opens a history transaction: every add, remove, replace and xform change until commit becomes one undo step.
+    /// Open a history transaction: every add, remove, replace and xform change until commit becomes one undo step.
     pub fn begin(&mut self, label: &str) {
         self.history.begin(label);
     }
 
-    /// Closes the open transaction as one undo step.
+    /// Close the open transaction as one undo step.
     pub fn commit(&mut self) {
         self.history.commit();
     }
 
-    /// Reverts the latest committed transaction, returning whether there was one; the buffer is taken out for the call since it walks this session.
+    /// Revert the latest committed transaction, returning whether there was one.
     pub fn undo(&mut self) -> bool {
         let mut history = std::mem::take(&mut self.history);
         let undone = history.undo(self);
@@ -1372,7 +1565,7 @@ impl Session {
         undone
     }
 
-    /// Reapplies the latest undone transaction, returning whether there was one.
+    /// Reapply the latest undone transaction, returning whether there was one.
     pub fn redo(&mut self) -> bool {
         let mut history = std::mem::take(&mut self.history);
         let redone = history.redo(self);
@@ -1384,19 +1577,14 @@ impl Session {
     // ═══════════════════════════════════════════════════════════════════════════
     // Collision detection and ray casting
     // ═══════════════════════════════════════════════════════════════════════════
-
     /// Bounding box of an object in WORLD placement, inflated by tolerance.
     pub fn compute_bounding_box(geometry: &Geometry, xform: &Xform) -> OBB {
         let inflate = Tolerance::APPROXIMATION;
-        let mut points: Vec<Point> = Vec::new();
 
         match geometry {
-            Geometry::Point(point) => {
-                return OBB::from_point(&xform.transform_point(point), inflate);
-            }
-
+            Geometry::Point(point) => OBB::from_point(&xform.transform_point(point), inflate),
             Geometry::Plane(plane) => {
-                return OBB::from_point(&xform.transform_point(&plane.origin()), inflate * 10.0);
+                OBB::from_point(&xform.transform_point(&plane.origin()), inflate * 10.0)
             }
 
             Geometry::OBB(bbox) => {
@@ -1404,7 +1592,7 @@ impl Session {
                 inflated.half_size = &inflated.half_size + &Vector::new(inflate, inflate, inflate);
                 inflated.transform(xform);
 
-                return inflated;
+                inflated
             }
 
             Geometry::Element(element) => {
@@ -1412,69 +1600,14 @@ impl Session {
                 let mut bbox = copy.aabb();
                 bbox.transform(xform);
 
-                return bbox;
+                bbox
             }
 
-            Geometry::Line(line) => {
-                points.push(line.start());
-                points.push(line.end());
-            }
-
-            Geometry::Polyline(polyline) => points = polyline.get_points(),
-            Geometry::PointCloud(pointcloud) => points = pointcloud.get_points(),
-            Geometry::Mesh(mesh) => {
-                for vertex in mesh.vertex.values() {
-                    points.push(vertex.position());
-                }
-            }
-
-            Geometry::BRep(brep) => {
-                for vertex in &brep.m_vertices {
-                    points.push(vertex.point.clone());
-                }
-
-                for surface in &brep.m_surfaces {
-                    let (Some((u0, u1)), Some((v0, v1))) = (surface.domain(0), surface.domain(1))
-                    else {
-                        continue;
-                    };
-
-                    for i in 0..=2usize {
-                        for j in 0..=2usize {
-                            let u = u0 + (u1 - u0) * i as f64 / 2.0;
-                            let v = v0 + (v1 - v0) * j as f64 / 2.0;
-
-                            if let Some(point) = surface.point_at(u, v) {
-                                points.push(point);
-                            }
-                        }
-                    }
-                }
-            }
-
-            Geometry::NurbsCurve(nurbscurve) => {
-                for i in 0..nurbscurve.cv_count() {
-                    if let Some(point) = nurbscurve.get_cv(i) {
-                        points.push(point);
-                    }
-                }
-            }
-
-            Geometry::NurbsSurface(nurbssurface) => {
-                for i in 0..nurbssurface.cv_count(0) {
-                    for j in 0..nurbssurface.cv_count(1) {
-                        if let Some(point) = nurbssurface.get_cv(i, j) {
-                            points.push(point);
-                        }
-                    }
-                }
-            }
+            _ => placed_box(&box_points(geometry), xform, inflate),
         }
-
-        placed_box(&points, xform, inflate)
     }
 
-    /// Gets all collision pairs using SpatialBVH and adds them as graph edges.
+    /// Get all collision pairs using SpatialBVH and add them as graph edges.
     pub fn get_collisions(&mut self) -> Vec<(String, String)> {
         let mut guids: Vec<String> = Vec::new();
         let boxes = self._compute_boxes(&mut guids);
@@ -1499,7 +1632,7 @@ impl Session {
         guid_pairs
     }
 
-    /// Casts a ray through the scene, returning the hits within tolerance of the closest one.
+    /// Cast a ray through the scene, returning the hits within tolerance of the closest one.
     pub fn ray_cast(&mut self, origin: &Point, direction: &Vector, tolerance: f64) -> Vec<RayHit> {
         if self.bvh_cache_dirty {
             self._rebuild_ray_bvh_cache();
@@ -1558,10 +1691,9 @@ impl Session {
     }
 
     // ═══════════════════════════════════════════════════════════════════════════
-    // Serialization
+    // JSON
     // ═══════════════════════════════════════════════════════════════════════════
-
-    /// Serializes to a JSON string.
+    /// Serialize to a JSON string.
     pub fn jsondump(&self) -> Result<String, Box<dyn std::error::Error>> {
         let graph_json: serde_json::Value = serde_json::from_str(&self.graph.jsondump()?)?;
         let mut xforms_json: Vec<serde_json::Value> = Vec::new();
@@ -1594,7 +1726,7 @@ impl Session {
         Ok(String::from_utf8(buf)?)
     }
 
-    /// Deserializes from a JSON string.
+    /// Deserialize from a JSON string.
     pub fn jsonload(json_data: &str) -> Result<Self, Box<dyn std::error::Error>> {
         let json_obj: serde_json::Value = serde_json::from_str(json_data)?;
         let mut session = Session::new(json_obj["name"].as_str().unwrap_or("my_session"));
@@ -1634,247 +1766,97 @@ impl Session {
         Ok(session)
     }
 
-    /// Serializes to a JSON string, purging the history.
+    /// Serialize to a JSON string.
     pub fn file_json_dumps(&mut self) -> String {
         self.history.clear();
 
         self.jsondump().unwrap_or_default()
     }
 
-    /// Deserializes from a JSON string.
+    /// Deserialize from a JSON string.
     pub fn file_json_loads(json_string: &str) -> Self {
         Self::jsonload(json_string).unwrap_or_else(|_| Self::default())
     }
 
-    /// Writes to a JSON file.
+    /// Write to a JSON file.
     pub fn file_json_dump(&mut self, filename: &str) {
         self.history.clear();
         fs::write(filename, self.jsondump().unwrap_or_default())
             .expect("Failed to write JSON file");
     }
 
-    /// Reads from a JSON file.
+    /// Read from a JSON file.
     pub fn file_json_load(filename: &str) -> Self {
         let json = fs::read_to_string(filename).expect("Failed to read JSON file");
 
         Self::jsonload(&json).unwrap_or_else(|_| Self::default())
     }
 
-    /// Serializes to protobuf bytes.
-    pub fn pb_dumps(&mut self) -> Vec<u8> {
+    // ═══════════════════════════════════════════════════════════════════════════
+    // Protobuf
+    // ═══════════════════════════════════════════════════════════════════════════
+    /// Convert to the protobuf message.
+    pub fn to_proto(&self) -> crate::proto::Session {
         use prost::Message;
-        self.history.clear();
-        let objects = self.objects_synced();
-        let mut objects_proto = crate::proto::Objects {
-            name: objects.name.clone(),
-            guid: objects.guid().to_string(),
-            ..Default::default()
-        };
 
-        for point in &objects.points {
-            objects_proto.points.push(point.to_proto());
-        }
+        let mut xforms: Vec<crate::proto::XformEntry> = Vec::new();
 
-        for line in &objects.lines {
-            objects_proto.lines.push(line.to_proto());
-        }
-
-        for plane in &objects.planes {
-            objects_proto.planes.push(plane.to_proto());
-        }
-
-        for bbox in &objects.bboxes {
-            objects_proto.bboxes.push(bbox.to_proto());
-        }
-
-        for polyline in &objects.polylines {
-            objects_proto.polylines.push(polyline.to_proto());
-        }
-
-        for pointcloud in &objects.pointclouds {
-            objects_proto.pointclouds.push(pointcloud.to_proto());
-        }
-
-        for mesh in &objects.meshes {
-            objects_proto.meshes.push(mesh.to_proto());
-        }
-
-        for nurbscurve in &objects.nurbscurves {
-            objects_proto.nurbscurves.push(nurbscurve.to_proto());
-        }
-
-        for nurbssurface in &objects.nurbssurfaces {
-            objects_proto.nurbssurfaces.push(nurbssurface.to_proto());
-        }
-
-        for brep in &objects.breps {
-            objects_proto.breps.push(brep.to_proto());
-        }
-
-        for element in &objects.elements {
-            objects_proto.elements.push(element.to_proto());
-        }
-
-        for component in &objects.components {
-            objects_proto.components.push(
-                crate::proto::Component::decode(component.pb_dumps().as_slice())
-                    .unwrap_or_default(),
-            );
-        }
-
-        for instance in &objects.instances {
-            objects_proto.instances.push(instance.to_proto());
+        for (obj_guid, obj_xform) in self._xforms_ordered() {
+            xforms.push(crate::proto::XformEntry {
+                guid: obj_guid,
+                xform: Some(obj_xform.to_proto()),
+            });
         }
 
         let definitions = if self.definition_lookup.is_empty() {
             None
         } else {
-            let definitions = synced(&self.definitions, &self.definition_lookup);
-
-            crate::proto::Objects::decode(definitions.pb_dumps().as_slice()).ok()
+            Some(synced(&self.definitions, &self.definition_lookup).to_proto())
         };
 
-        let mut xforms_proto: Vec<crate::proto::XformEntry> = Vec::new();
-
-        for (obj_guid, obj_xform) in self._xforms_ordered() {
-            xforms_proto.push(crate::proto::XformEntry {
-                guid: obj_guid,
-                xform: Some(crate::proto::Xform {
-                    guid: obj_xform.guid().to_string(),
-                    name: obj_xform.name.clone(),
-                    matrix: obj_xform.m.to_vec(),
-                }),
-            });
-        }
-
-        let proto = crate::proto::Session {
+        crate::proto::Session {
             name: self.name.clone(),
             guid: self.guid.get().cloned().unwrap_or_default(),
-            objects: Some(objects_proto),
+            objects: Some(self.objects_synced().to_proto()),
             tree: crate::proto::Tree::decode(self.tree.pb_dumps().as_slice()).ok(),
             graph: Some(self.graph.to_proto()),
             bvh_boxes: Vec::new(),
-            xforms: xforms_proto,
+            xforms,
             definitions,
-        };
-
-        proto.encode_to_vec()
+        }
     }
 
-    /// Deserializes from protobuf bytes.
-    pub fn pb_loads(data: &[u8]) -> Result<Self, Box<dyn std::error::Error>> {
+    /// Construct from the protobuf message.
+    pub fn from_proto(proto: crate::proto::Session) -> Result<Self, Box<dyn std::error::Error>> {
         use prost::Message;
-        let proto = crate::proto::Session::decode(data)?;
+
         let mut session = Session::new(&proto.name);
 
         if !proto.guid.is_empty() {
-            session.set_guid(proto.guid.clone());
+            session.set_guid(proto.guid);
         }
 
-        if let Some(objects_proto) = proto.objects {
-            session.objects.set_guid(objects_proto.guid);
-            session.objects.name = objects_proto.name;
-
-            for point in objects_proto.points {
-                session
-                    .objects
-                    .points
-                    .push(Rc::new(Point::from_proto(point)));
-            }
-
-            for line in objects_proto.lines {
-                session.objects.lines.push(Rc::new(Line::from_proto(line)));
-            }
-
-            for plane in objects_proto.planes {
-                session
-                    .objects
-                    .planes
-                    .push(Rc::new(Plane::from_proto(plane)));
-            }
-
-            for bbox in objects_proto.bboxes {
-                session.objects.bboxes.push(Rc::new(OBB::from_proto(bbox)?));
-            }
-
-            for polyline in objects_proto.polylines {
-                session
-                    .objects
-                    .polylines
-                    .push(Rc::new(Polyline::from_proto(polyline)));
-            }
-
-            for pointcloud in objects_proto.pointclouds {
-                session
-                    .objects
-                    .pointclouds
-                    .push(Rc::new(PointCloud::from_proto(pointcloud)));
-            }
-
-            for mesh in objects_proto.meshes {
-                session.objects.meshes.push(Rc::new(Mesh::from_proto(mesh)));
-            }
-
-            for nurbscurve in objects_proto.nurbscurves {
-                session
-                    .objects
-                    .nurbscurves
-                    .push(Rc::new(NurbsCurve::from_proto(nurbscurve)));
-            }
-
-            for nurbssurface in objects_proto.nurbssurfaces {
-                session
-                    .objects
-                    .nurbssurfaces
-                    .push(Rc::new(NurbsSurface::from_proto(nurbssurface)?));
-            }
-
-            for brep in objects_proto.breps {
-                session.objects.breps.push(Rc::new(BRep::from_proto(brep)?));
-            }
-
-            for element in objects_proto.elements {
-                session
-                    .objects
-                    .elements
-                    .push(Rc::new(Element::from_proto(element)?));
-            }
-
-            for component in objects_proto.components {
-                session
-                    .objects
-                    .components
-                    .push(Component::pb_loads(&component.encode_to_vec())?);
-            }
-
-            for instance in objects_proto.instances {
-                session
-                    .objects
-                    .instances
-                    .push(Rc::new(InstanceRef::from_proto(instance)));
-            }
+        if let Some(objects) = proto.objects {
+            session.objects = Objects::from_proto(objects)?;
         }
 
-        if let Some(tree_proto) = &proto.tree {
-            session.tree = Tree::pb_loads(&tree_proto.encode_to_vec())?;
+        if let Some(tree) = proto.tree {
+            session.tree = Tree::pb_loads(&tree.encode_to_vec())?;
         }
 
-        if let Some(graph_proto) = &proto.graph {
-            session.graph = Graph::pb_loads(&graph_proto.encode_to_vec())?;
+        if let Some(graph) = proto.graph {
+            session.graph = Graph::from_proto(graph);
         }
 
-        if let Some(definitions_proto) = &proto.definitions {
-            session.definitions = Objects::pb_loads(&definitions_proto.encode_to_vec())?;
+        if let Some(definitions) = proto.definitions {
+            session.definitions = Objects::from_proto(definitions)?;
         }
 
-        for entry in &proto.xforms {
-            let Some(xform_proto) = &entry.xform else {
+        for entry in proto.xforms {
+            let Some(xform) = entry.xform else {
                 continue;
             };
-            session.xforms.insert(
-                entry.guid.clone(),
-                Xform::pb_loads(&xform_proto.encode_to_vec())?,
-            );
+            session.xforms.insert(entry.guid, Xform::from_proto(xform));
         }
 
         session._index_objects();
@@ -1882,13 +1864,28 @@ impl Session {
         Ok(session)
     }
 
-    /// Writes to a protobuf file.
-    pub fn pb_dump(&mut self, filename: &str) {
+    /// Serialize to protobuf bytes.
+    pub fn pb_dumps(&mut self) -> Vec<u8> {
+        use prost::Message;
+
         self.history.clear();
+
+        self.to_proto().encode_to_vec()
+    }
+
+    /// Deserialize from protobuf bytes.
+    pub fn pb_loads(data: &[u8]) -> Result<Self, Box<dyn std::error::Error>> {
+        use prost::Message;
+
+        Self::from_proto(crate::proto::Session::decode(data)?)
+    }
+
+    /// Write to a protobuf file.
+    pub fn pb_dump(&mut self, filename: &str) {
         fs::write(filename, self.pb_dumps()).expect("Failed to write protobuf file");
     }
 
-    /// Reads from a protobuf file.
+    /// Read from a protobuf file.
     pub fn pb_load(filename: &str) -> Self {
         let data = fs::read(filename).expect("Failed to read protobuf file");
 
@@ -1896,9 +1893,34 @@ impl Session {
     }
 
     // ═══════════════════════════════════════════════════════════════════════════
+    // String
+    // ═══════════════════════════════════════════════════════════════════════════
+    /// Return the spatial hierarchy and the element interactions as a banner block.
+    pub fn str(&self) -> String {
+        let bar = "=".repeat(80);
+
+        format!(
+            "{0}\nSpatial Hierarchy\n{0}\n{1}{0}\nElement Interactions\n{0}\n{2}\n{0}\n",
+            bar,
+            self.tree.str(),
+            self.graph.str()
+        )
+    }
+
+    /// Return "Session(name=..., objects=..., tree=..., graph=...)".
+    pub fn repr(&self) -> String {
+        format!(
+            "Session(name={}, objects={}, tree={}, graph={})",
+            self.name,
+            self.objects,
+            self.tree.repr(),
+            self.graph.repr()
+        )
+    }
+
+    // ═══════════════════════════════════════════════════════════════════════════
     // Details
     // ═══════════════════════════════════════════════════════════════════════════
-
     /// The objects vectors re-pointed at `lookup` and `instance_lookup`: `Rc::make_mut` on a lookup entry splits it from the vector, and the lookup is the mutable truth.
     fn objects_synced(&self) -> Objects {
         let mut objects = synced(&self.objects, &self.lookup);
@@ -1912,7 +1934,7 @@ impl Session {
         objects
     }
 
-    /// Stores an object in its typed vector, lookup, graph and tree, recording an AddOp when a transaction is open.
+    /// Store an object in its typed vector, lookup, graph and tree, recording an AddOp when a transaction is open.
     fn _add_object(
         &mut self,
         collection: &str,
@@ -1929,6 +1951,10 @@ impl Session {
         match obj {
             Item::Geometry(geometry) => {
                 self.lookup.insert(guid.clone(), geometry);
+            }
+
+            Item::Component(component) => {
+                self.component_lookup.insert(guid.clone(), component);
             }
 
             Item::InstanceRef(instance) => {
@@ -1972,11 +1998,14 @@ impl Session {
         locate(&self.objects, guid)
     }
 
-    /// Takes an object out of every live table, unrecorded, returning its tombstone.
+    /// Take an object out of every live table, unrecorded, returning its tombstone.
     pub(crate) fn _detach(&mut self, guid: &str) -> Option<Tombstone> {
-        let obj = match self.lookup.get(guid) {
-            Some(geometry) => Item::Geometry(clone(geometry)),
-            None => Item::InstanceRef(Rc::new((**self.instance_lookup.get(guid)?).clone())),
+        let obj = if let Some(geometry) = self.lookup.get(guid) {
+            Item::Geometry(clone(geometry))
+        } else if let Some(component) = self.component_lookup.get(guid) {
+            Item::Component(component.clone())
+        } else {
+            Item::InstanceRef(Rc::new((**self.instance_lookup.get(guid)?).clone()))
         };
         let (collection, obj_index) = self._locate(guid);
 
@@ -2034,7 +2063,7 @@ impl Session {
         ))
     }
 
-    /// Puts an object back from its tombstone, unrecorded: typed vector, lookup, xform, tree node with its subtree, graph node and edges.
+    /// Put an object back from its tombstone, unrecorded: typed vector, lookup, xform, tree node with its subtree, graph node and edges.
     pub(crate) fn _attach(&mut self, op: &Tombstone) {
         let obj = clone_item(&op.obj);
         insert_at(
@@ -2047,6 +2076,10 @@ impl Session {
         match obj {
             Item::Geometry(geometry) => {
                 self.lookup.insert(op.guid.clone(), geometry);
+            }
+
+            Item::Component(component) => {
+                self.component_lookup.insert(op.guid.clone(), component);
             }
 
             Item::InstanceRef(instance) => {
@@ -2098,24 +2131,15 @@ impl Session {
         }
     }
 
-    /// Stores obj under guid in its typed vector and lookup, unrecorded.
-    pub(crate) fn _swap(&mut self, guid: &str, obj: Geometry) {
+    /// Store obj under guid in its typed vector and lookup, unrecorded.
+    pub(crate) fn _swap(&mut self, guid: &str, obj: Item) {
         let (collection, obj_index) = self._locate(guid);
 
         if obj_index < 0 {
             return;
         }
 
-        let obj_index = obj_index as usize;
-        macro_rules! store {
-            ($vec:expr, $variant:ident) => {
-                if let Geometry::$variant(g) = &obj {
-                    $vec[obj_index] = Rc::clone(g);
-                }
-            };
-        }
-
-        typed!(collection.as_str(), self.objects, store);
+        store_at(&mut self.objects, &collection, obj_index as usize, &obj);
         let mut attribute = String::new();
 
         for (name, prefix) in COLLECTIONS {
@@ -2124,7 +2148,20 @@ impl Session {
             }
         }
 
-        self.lookup.insert(guid.to_string(), obj);
+        match obj {
+            Item::Geometry(geometry) => {
+                self.lookup.insert(guid.to_string(), geometry);
+            }
+
+            Item::Component(component) => {
+                self.component_lookup.insert(guid.to_string(), component);
+            }
+
+            Item::InstanceRef(instance) => {
+                self.instance_lookup.insert(guid.to_string(), instance);
+            }
+        }
+
         self.bvh_cache_dirty = true;
 
         if self.graph.has_node(guid) {
@@ -2132,7 +2169,7 @@ impl Session {
         }
     }
 
-    /// Points every lookup at the objects and definitions this session holds, folding a non-identity instance xform into xforms.
+    /// Point every lookup at the objects and definitions this session holds, folding a non-identity instance xform into xforms.
     fn _index_objects(&mut self) {
         self.lookup.clear();
         self.component_lookup.clear();
@@ -2162,7 +2199,7 @@ impl Session {
         self.objects.instances = instances;
     }
 
-    /// Sets or drops (None) a definition under guid, unrecorded.
+    /// Set or drops (None) a definition under guid, unrecorded.
     pub(crate) fn _define(&mut self, guid: &str, definition: Option<Geometry>) {
         let (collection, position) = locate(&self.definitions, guid);
 
@@ -2186,7 +2223,7 @@ impl Session {
         self.definition_lookup.insert(guid.to_string(), definition);
     }
 
-    /// Sets or drops (None) the local transform under guid, unrecorded.
+    /// Set or drops (None) the local transform under guid, unrecorded.
     pub(crate) fn _place(&mut self, guid: &str, xform: Option<&Xform>) {
         match xform {
             Some(xform) => {
@@ -2263,7 +2300,7 @@ impl Session {
         boxes
     }
 
-    /// Rebuilds the cached SpatialBVH for ray casting.
+    /// Rebuild the cached SpatialBVH for ray casting.
     fn _rebuild_ray_bvh_cache(&mut self) {
         let mut guids = std::mem::take(&mut self.cached_guids);
         self.cached_boxes = self._compute_boxes(&mut guids);
@@ -2277,7 +2314,7 @@ impl Session {
         }
     }
 
-    /// Tests ray intersection with a specific geometry object, returning the world hit.
+    /// Test ray intersection with a specific geometry object, returning the world hit.
     fn _ray_intersect_geometry(
         &self,
         ray: &Line,
@@ -2289,58 +2326,9 @@ impl Session {
             Geometry::Point(point) => ray_point(ray, point, tolerance),
             Geometry::Line(line) => line_line(ray, line, tolerance),
             Geometry::Plane(plane) => line_plane(ray, plane, true),
-            Geometry::Polyline(polyline) => {
-                let mut closest: Option<Point> = None;
-                let mut min_dist = f64::INFINITY;
-
-                for i in 0..polyline.segment_count() {
-                    let segment =
-                        Line::from_points(&polyline.get_point(i)?, &polyline.get_point(i + 1)?);
-
-                    let Some(hit) = line_line(ray, &segment, tolerance) else {
-                        continue;
-                    };
-                    let dist = ray.start().distance(&hit, None);
-
-                    if dist < min_dist {
-                        min_dist = dist;
-                        closest = Some(hit);
-                    }
-                }
-
-                closest
-            }
-
-            Geometry::PointCloud(pointcloud) => {
-                let mut closest: Option<Point> = None;
-                let mut min_dist = f64::INFINITY;
-
-                for point in pointcloud.get_points() {
-                    let Some(hit) = ray_point(ray, &point, tolerance) else {
-                        continue;
-                    };
-                    let dist = point.distance(&hit, None);
-
-                    if dist < min_dist {
-                        min_dist = dist;
-                        closest = Some(hit);
-                    }
-                }
-
-                closest
-            }
-
-            Geometry::Mesh(mesh) => {
-                let inverse = placement.inverse()?;
-                let local_ray = Line::from_points(
-                    &inverse.transform_point(&ray.start()),
-                    &inverse.transform_point(&ray.end()),
-                );
-                let hits = ray_mesh_bvh(&local_ray, mesh, tolerance, true)?;
-
-                Some(placement.transform_point(hits.first()?))
-            }
-
+            Geometry::Polyline(polyline) => ray_polyline(ray, polyline, tolerance),
+            Geometry::PointCloud(pointcloud) => ray_pointcloud(ray, pointcloud, tolerance),
+            Geometry::Mesh(mesh) => ray_mesh(ray, mesh, tolerance, placement),
             Geometry::OBB(bbox) => {
                 let hits = ray_box(ray, bbox, 0.0, 1.0)?;
 
@@ -2350,40 +2338,17 @@ impl Session {
             _ => None,
         }
     }
-
-    /// Returns the spatial hierarchy and the element interactions as a banner block.
-    pub fn str(&self) -> String {
-        let bar = "=".repeat(80);
-
-        format!(
-            "{0}\nSpatial Hierarchy\n{0}\n{1}{0}\nElement Interactions\n{0}\n{2}\n{0}\n",
-            bar,
-            self.tree.str(),
-            self.graph.str()
-        )
-    }
-
-    /// "Session(name, objects, tree, graph)".
-    pub fn repr(&self) -> String {
-        format!(
-            "Session(name={}, objects={}, tree={}, graph={})",
-            self.name,
-            self.objects,
-            self.tree.repr(),
-            self.graph.repr()
-        )
-    }
 }
 
 impl fmt::Display for Session {
-    /// Writes the session block to a formatter.
+    /// Write the session block to a formatter.
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "{}", self.str())
     }
 }
 
 impl fmt::Debug for Session {
-    /// Writes the one-line session string to a formatter.
+    /// Write the one-line session string to a formatter.
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "{}", self.repr())
     }
