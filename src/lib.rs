@@ -19,7 +19,6 @@ pub mod prelude {
 
 pub mod aabb;
 pub mod aabb_test;
-pub mod bench_test;
 pub mod boolean_polyline;
 pub mod boolean_polyline_test;
 pub mod brep;

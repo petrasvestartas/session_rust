@@ -3023,6 +3023,323 @@ pub fn run_session_unrecorded_remove() -> TestResult {
     })
 }
 
+pub fn run_session_remove_twin_keeps_slot() -> TestResult {
+    MINI_TEST!("Remove Twin Keeps Slot", {
+        use crate::Point;
+        use crate::Session;
+
+        let mut session = Session::default();
+        let x = Point::new(1.0, 0.0, 0.0);
+        let guid = x.guid().to_string();
+        let mut y = Point::new(2.0, 0.0, 0.0);
+        y.set_guid(guid.clone());
+        session.begin("add");
+        session.add_point(x, None);
+        session.commit();
+        session.add_point(y, None);
+        session.undo();
+
+        MINI_CHECK!(session.objects.points.get_slot(&guid) == Some(1));
+        MINI_CHECK!(session.objects.points.is_dead(0));
+        MINI_CHECK!(session.objects.points.len() == 1);
+        MINI_CHECK!(session.lookup.contains_key(&guid));
+
+        let removed = session.remove_object(&guid);
+        let bytes = session.pb_dumps();
+        let loaded = Session::pb_loads(&bytes).unwrap();
+
+        MINI_CHECK!(removed);
+        MINI_CHECK!(!session.lookup.contains_key(&guid));
+        MINI_CHECK!(session.objects.points.is_empty());
+        MINI_CHECK!(loaded.objects.points.is_empty());
+        MINI_CHECK!(loaded.lookup.is_empty());
+    })
+}
+
+pub fn run_session_purge_clears_history() -> TestResult {
+    MINI_TEST!("Purge Clears History", {
+        use crate::Point;
+        use crate::Session;
+
+        let mut session = Session::default();
+        let a = Point::new(0.0, 0.0, 0.0);
+        let b = Point::new(1.0, 0.0, 0.0);
+        let c = Point::new(2.0, 0.0, 0.0);
+        let a_guid = a.guid().to_string();
+        let b_guid = b.guid().to_string();
+        let c_guid = c.guid().to_string();
+        session.add_point(a, None);
+        session.add_point(b, None);
+        session.add_point(c, None);
+        session.begin("remove");
+        session.remove_object(&b_guid);
+        session.commit();
+        session.purge();
+        let undone = session.undo();
+        let mut indices: Vec<i32> = session
+            .graph
+            .get_vertices()
+            .iter()
+            .map(|v| v.index)
+            .collect();
+        indices.sort();
+
+        MINI_CHECK!(!undone);
+        MINI_CHECK!(session.history.depth() == 0);
+        MINI_CHECK!(session.order() == vec![a_guid, c_guid]);
+        MINI_CHECK!(indices == vec![0, 1]);
+        MINI_CHECK!(session.objects.points.number_of_slots() == 2);
+        MINI_CHECK!(session.number_of_dead() == 0);
+        MINI_CHECK!(session.tree.nodes().len() == 3);
+    })
+}
+
+pub fn run_session_checkpoint_tags() -> TestResult {
+    MINI_TEST!("Checkpoint Tags", {
+        use crate::proto;
+        use crate::session::TAGS;
+        use prost::Message;
+
+        let first = |bytes: Vec<u8>| -> u32 {
+            let mut slice = bytes.as_slice();
+
+            prost::encoding::decode_key(&mut slice).map_or(0, |(tag, _)| tag)
+        };
+        let session = |objects: bool, tree: bool, graph: bool, definitions: bool| {
+            proto::Session {
+                objects: objects.then(Default::default),
+                tree: tree.then(Default::default),
+                graph: graph.then(Default::default),
+                definitions: definitions.then(Default::default),
+                ..Default::default()
+            }
+            .encode_to_vec()
+        };
+        let sections = [
+            0,
+            first(session(true, false, false, false)),
+            first(session(false, true, false, false)),
+            first(session(false, false, true, false)),
+            0,
+            first(session(false, false, false, true)),
+            0,
+        ];
+        let root = proto::Tree {
+            root: Some(Default::default()),
+            ..Default::default()
+        };
+        let children = proto::TreeNode {
+            children: vec![Default::default()],
+            ..Default::default()
+        };
+        let lists = [
+            proto::Objects {
+                points: vec![Default::default()],
+                ..Default::default()
+            },
+            proto::Objects {
+                lines: vec![Default::default()],
+                ..Default::default()
+            },
+            proto::Objects {
+                planes: vec![Default::default()],
+                ..Default::default()
+            },
+            proto::Objects {
+                bboxes: vec![Default::default()],
+                ..Default::default()
+            },
+            proto::Objects {
+                polylines: vec![Default::default()],
+                ..Default::default()
+            },
+            proto::Objects {
+                pointclouds: vec![Default::default()],
+                ..Default::default()
+            },
+            proto::Objects {
+                meshes: vec![Default::default()],
+                ..Default::default()
+            },
+            proto::Objects {
+                nurbscurves: vec![Default::default()],
+                ..Default::default()
+            },
+            proto::Objects {
+                nurbssurfaces: vec![Default::default()],
+                ..Default::default()
+            },
+            proto::Objects {
+                breps: vec![Default::default()],
+                ..Default::default()
+            },
+            proto::Objects {
+                elements: vec![Default::default()],
+                ..Default::default()
+            },
+            proto::Objects {
+                components: vec![Default::default()],
+                ..Default::default()
+            },
+            proto::Objects {
+                instances: vec![Default::default()],
+                ..Default::default()
+            },
+        ];
+
+        MINI_CHECK!(TAGS.sections == sections);
+        MINI_CHECK!(TAGS.root == first(root.encode_to_vec()));
+        MINI_CHECK!(TAGS.children == first(children.encode_to_vec()));
+        MINI_CHECK!(TAGS.lists == lists.map(|message| first(message.encode_to_vec())));
+    })
+}
+
+pub fn run_session_checkpoint_after_purge_steps() -> TestResult {
+    MINI_TEST!("Checkpoint After Purge Steps", {
+        use crate::history::CAPACITY;
+        use crate::session::PURGE_WORK;
+        use crate::Point;
+        use crate::Session;
+        use crate::Xform;
+        use prost::Message;
+
+        let n = 40_000;
+        let bulk = 20_000;
+        let mut session = Session::default();
+        let group = session.add_group("flat");
+        let guids: Vec<String> = (0..n)
+            .map(|i| {
+                session
+                    .add_point(Point::new(i as f64, 0.0, 0.0), Some(&group))
+                    .borrow()
+                    .name
+                    .clone()
+            })
+            .collect();
+        session.begin("remove");
+
+        for guid in &guids[..bulk] {
+            session.remove_object(guid);
+        }
+
+        session.commit();
+
+        for step in 0..CAPACITY {
+            session.begin("move");
+            session.set_xform(&guids[n - 1], Xform::translation(step as f64, 0.0, 0.0));
+            session.commit();
+        }
+
+        let mut steps = 0;
+
+        while session.purge_step(PURGE_WORK) {
+            steps += 1;
+        }
+
+        let mut bytes = None;
+
+        while bytes.is_none() {
+            bytes = session.checkpoint(PURGE_WORK);
+        }
+
+        let bytes = bytes.unwrap();
+        let loaded = Session::pb_loads(&bytes).unwrap();
+
+        MINI_CHECK!(steps > 1);
+        MINI_CHECK!(loaded.objects.points.len() == n - bulk);
+        MINI_CHECK!(bytes == session.to_proto().encode_to_vec());
+        MINI_CHECK!(session.number_of_dead() == 0);
+        MINI_CHECK!(session.history.depth() == CAPACITY);
+    })
+}
+
+pub fn run_session_steady_state_bounds() -> TestResult {
+    MINI_TEST!("Steady State Bounds", {
+        use crate::history::CAPACITY;
+        use crate::session::PURGE_WORK;
+        use crate::Point;
+        use crate::Session;
+
+        let n = 2_000;
+        let cycles = 1_000;
+        let mut session = Session::default();
+        let group = session.add_group("flat");
+        let guids: Vec<String> = (0..n)
+            .map(|i| {
+                session
+                    .add_point(Point::new(i as f64, 0.0, 0.0), Some(&group))
+                    .borrow()
+                    .name
+                    .clone()
+            })
+            .collect();
+
+        for (cycle, guid) in guids.iter().enumerate().take(cycles) {
+            session.begin("remove");
+            session.remove_object(guid);
+            session.commit();
+            session.undo();
+            session.redo();
+            session.begin("add");
+            session.add_point(Point::new(cycle as f64, 1.0, 0.0), Some(&group));
+            session.commit();
+            session.purge_step(PURGE_WORK);
+        }
+
+        let bound = 2 * CAPACITY + 2 * (n / PURGE_WORK + 1);
+        let points = &session.objects.points;
+
+        MINI_CHECK!(points.len() == n);
+        MINI_CHECK!(session.history.bytes <= session.history.budget);
+        MINI_CHECK!(session.number_of_dead() <= bound);
+        MINI_CHECK!(points.number_of_slots() <= points.len() + bound);
+        MINI_CHECK!(group.borrow().children().len() <= points.len() + bound);
+    })
+}
+
+pub fn run_session_history_budget_bounds() -> TestResult {
+    MINI_TEST!("History Budget Bounds", {
+        use crate::history::CAPACITY;
+        use crate::Mesh;
+        use crate::Point;
+        use crate::Session;
+
+        let side = 30;
+        let vertices: Vec<Point> = (0..side * side)
+            .map(|at| Point::new((at / side) as f64, (at % side) as f64, 0.0))
+            .collect();
+        let faces: Vec<Vec<usize>> = (0..(side - 1) * (side - 1))
+            .map(|at| at / (side - 1) * side + at % (side - 1))
+            .map(|at| vec![at, at + side, at + side + 1, at + 1])
+            .collect();
+        let mut session = Session::default();
+        session.history.budget = 1 << 20;
+        let guids: Vec<String> = (0..200)
+            .map(|_| {
+                let mesh = Mesh::from_vertices_and_faces(vertices.clone(), faces.clone());
+                let guid = mesh.guid().to_string();
+                session.add_mesh(mesh, None);
+
+                guid
+            })
+            .collect();
+        let mut bounded = true;
+
+        for guid in &guids {
+            session.begin("remove");
+            session.remove_object(guid);
+            session.commit();
+            let newest = session.history.undo_stack[session.history.depth() - 1].bytes;
+            bounded &= session.history.bytes <= session.history.budget + newest;
+        }
+
+        MINI_CHECK!(bounded);
+        MINI_CHECK!(session.history.depth() < CAPACITY);
+        MINI_CHECK!(session.history.depth() > 1);
+        MINI_CHECK!(session.objects.meshes.is_empty());
+    })
+}
+
 REGISTER_MINI_TEST!(
     "Session",
     "Constructor",
@@ -3439,4 +3756,34 @@ REGISTER_MINI_TEST!(
     "Session",
     "Unrecorded Remove",
     crate::session_test::run_session_unrecorded_remove
+);
+REGISTER_MINI_TEST!(
+    "Session",
+    "Remove Twin Keeps Slot",
+    crate::session_test::run_session_remove_twin_keeps_slot
+);
+REGISTER_MINI_TEST!(
+    "Session",
+    "Purge Clears History",
+    crate::session_test::run_session_purge_clears_history
+);
+REGISTER_MINI_TEST!(
+    "Session",
+    "Checkpoint Tags",
+    crate::session_test::run_session_checkpoint_tags
+);
+REGISTER_MINI_TEST!(
+    "Session",
+    "Checkpoint After Purge Steps",
+    crate::session_test::run_session_checkpoint_after_purge_steps
+);
+REGISTER_MINI_TEST!(
+    "Session",
+    "Steady State Bounds",
+    crate::session_test::run_session_steady_state_bounds
+);
+REGISTER_MINI_TEST!(
+    "Session",
+    "History Budget Bounds",
+    crate::session_test::run_session_history_budget_bounds
 );

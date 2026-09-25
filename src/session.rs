@@ -1,3 +1,4 @@
+use crate::collection::Keyed;
 use crate::color::Color;
 use crate::history::clone;
 use crate::history::weight;
@@ -15,7 +16,10 @@ use crate::intersection::line_plane;
 use crate::intersection::ray_box;
 use crate::intersection::ray_mesh_bvh;
 use crate::objects::Component;
+use crate::tree::node_head;
+use crate::tree::node_tail;
 use crate::BRep;
+use crate::Collection;
 use crate::Element;
 use crate::Graph;
 use crate::InstanceRef;
@@ -98,47 +102,35 @@ impl Geometry {
 
     /// Overwrite the guid.
     pub fn set_guid(&mut self, guid: &str) {
-        macro_rules! reset {
-            ($rc:expr) => {{
-                Rc::make_mut($rc).set_guid(guid.to_string());
-            }};
-        }
-
         match self {
-            Geometry::OBB(g) => reset!(g),
-            Geometry::BRep(g) => reset!(g),
-            Geometry::Element(g) => reset!(g),
-            Geometry::Line(g) => reset!(g),
-            Geometry::Mesh(g) => reset!(g),
-            Geometry::NurbsCurve(g) => reset!(g),
-            Geometry::NurbsSurface(g) => reset!(g),
-            Geometry::Plane(g) => reset!(g),
-            Geometry::Point(g) => reset!(g),
-            Geometry::PointCloud(g) => reset!(g),
-            Geometry::Polyline(g) => reset!(g),
+            Geometry::OBB(g) => Rc::make_mut(g).set_guid(guid.to_string()),
+            Geometry::BRep(g) => Rc::make_mut(g).set_guid(guid.to_string()),
+            Geometry::Element(g) => Rc::make_mut(g).set_guid(guid.to_string()),
+            Geometry::Line(g) => Rc::make_mut(g).set_guid(guid.to_string()),
+            Geometry::Mesh(g) => Rc::make_mut(g).set_guid(guid.to_string()),
+            Geometry::NurbsCurve(g) => Rc::make_mut(g).set_guid(guid.to_string()),
+            Geometry::NurbsSurface(g) => Rc::make_mut(g).set_guid(guid.to_string()),
+            Geometry::Plane(g) => Rc::make_mut(g).set_guid(guid.to_string()),
+            Geometry::Point(g) => Rc::make_mut(g).set_guid(guid.to_string()),
+            Geometry::PointCloud(g) => Rc::make_mut(g).set_guid(guid.to_string()),
+            Geometry::Polyline(g) => Rc::make_mut(g).set_guid(guid.to_string()),
         }
     }
 
     /// Overwrite the name.
     pub(crate) fn set_name(&mut self, name: &str) {
-        macro_rules! rename {
-            ($rc:expr) => {{
-                Rc::make_mut($rc).name = name.to_string();
-            }};
-        }
-
         match self {
-            Geometry::OBB(g) => rename!(g),
-            Geometry::BRep(g) => rename!(g),
-            Geometry::Element(g) => rename!(g),
-            Geometry::Line(g) => rename!(g),
-            Geometry::Mesh(g) => rename!(g),
-            Geometry::NurbsCurve(g) => rename!(g),
-            Geometry::NurbsSurface(g) => rename!(g),
-            Geometry::Plane(g) => rename!(g),
-            Geometry::Point(g) => rename!(g),
-            Geometry::PointCloud(g) => rename!(g),
-            Geometry::Polyline(g) => rename!(g),
+            Geometry::OBB(g) => Rc::make_mut(g).name = name.to_string(),
+            Geometry::BRep(g) => Rc::make_mut(g).name = name.to_string(),
+            Geometry::Element(g) => Rc::make_mut(g).name = name.to_string(),
+            Geometry::Line(g) => Rc::make_mut(g).name = name.to_string(),
+            Geometry::Mesh(g) => Rc::make_mut(g).name = name.to_string(),
+            Geometry::NurbsCurve(g) => Rc::make_mut(g).name = name.to_string(),
+            Geometry::NurbsSurface(g) => Rc::make_mut(g).name = name.to_string(),
+            Geometry::Plane(g) => Rc::make_mut(g).name = name.to_string(),
+            Geometry::Point(g) => Rc::make_mut(g).name = name.to_string(),
+            Geometry::PointCloud(g) => Rc::make_mut(g).name = name.to_string(),
+            Geometry::Polyline(g) => Rc::make_mut(g).name = name.to_string(),
         }
     }
 }
@@ -229,51 +221,168 @@ pub const COLLECTIONS: [(&str, &str); 13] = [
     ("instances", "instance"),
 ];
 
-/// Run `$op!(vec, Variant)` on the typed vector of that name, the Rust spelling of getattr(objects, collection).
-macro_rules! typed {
-    ($collection:expr, $objects:expr, $op:ident) => {
-        match $collection {
-            "points" => $op!($objects.points, Point),
-            "lines" => $op!($objects.lines, Line),
-            "planes" => $op!($objects.planes, Plane),
-            "bboxes" => $op!($objects.bboxes, OBB),
-            "polylines" => $op!($objects.polylines, Polyline),
-            "pointclouds" => $op!($objects.pointclouds, PointCloud),
-            "meshes" => $op!($objects.meshes, Mesh),
-            "nurbscurves" => $op!($objects.nurbscurves, NurbsCurve),
-            "nurbssurfaces" => $op!($objects.nurbssurfaces, NurbsSurface),
-            "breps" => $op!($objects.breps, BRep),
-            "elements" => $op!($objects.elements, Element),
-            _ => {}
-        }
-    };
+/// The slot bookkeeping every Collection shares, whatever it holds.
+trait Slots {
+    /// Return the slot of a live guid.
+    fn get_slot(&self, guid: &str) -> Option<usize>;
+
+    /// Return the guid in a slot, dead or alive.
+    fn key_at(&self, slot: usize) -> &str;
+
+    /// Return whether a slot is dead.
+    fn is_dead(&self, slot: usize) -> bool;
+
+    /// Kill or revive a slot.
+    fn set_dead(&mut self, slot: usize, dead: bool);
+
+    /// Return the tomb pinning a slot while a record still holds it.
+    fn get_tomb(&self, slot: usize) -> Option<Rc<Tomb>>;
+
+    /// Pin a slot to a tomb.
+    fn set_tomb(&mut self, slot: usize, tomb: &Rc<Tomb>);
+
+    /// Return the number of dead slots not yet purged.
+    fn number_of_dead(&self) -> usize;
+
+    /// Return the number of raw slots, dead ones included.
+    fn number_of_slots(&self) -> usize;
+
+    /// Return whether a compaction is part way.
+    fn is_compacting(&self) -> bool;
+
+    /// Purge unpinned dead slots for at most `work` slots; returns the slots examined.
+    fn compact_step(&mut self, work: usize) -> usize;
+}
+
+impl<E: Keyed> Slots for Collection<E> {
+    fn get_slot(&self, guid: &str) -> Option<usize> {
+        Collection::get_slot(self, guid)
+    }
+
+    fn key_at(&self, slot: usize) -> &str {
+        self.get_item(slot).key()
+    }
+
+    fn is_dead(&self, slot: usize) -> bool {
+        Collection::is_dead(self, slot)
+    }
+
+    fn set_dead(&mut self, slot: usize, dead: bool) {
+        Collection::set_dead(self, slot, dead)
+    }
+
+    fn get_tomb(&self, slot: usize) -> Option<Rc<Tomb>> {
+        Collection::get_tomb(self, slot)
+    }
+
+    fn set_tomb(&mut self, slot: usize, tomb: &Rc<Tomb>) {
+        Collection::set_tomb(self, slot, tomb)
+    }
+
+    fn number_of_dead(&self) -> usize {
+        Collection::number_of_dead(self)
+    }
+
+    fn number_of_slots(&self) -> usize {
+        Collection::number_of_slots(self)
+    }
+
+    fn is_compacting(&self) -> bool {
+        Collection::is_compacting(self)
+    }
+
+    fn compact_step(&mut self, work: usize) -> usize {
+        Collection::compact_step(self, work)
+    }
+}
+
+/// The Collection of that name, the Rust spelling of getattr(objects, collection).
+fn list<'a>(objects: &'a Objects, collection: &str) -> Option<&'a dyn Slots> {
+    match collection {
+        "points" => Some(&objects.points),
+        "lines" => Some(&objects.lines),
+        "planes" => Some(&objects.planes),
+        "bboxes" => Some(&objects.bboxes),
+        "polylines" => Some(&objects.polylines),
+        "pointclouds" => Some(&objects.pointclouds),
+        "meshes" => Some(&objects.meshes),
+        "nurbscurves" => Some(&objects.nurbscurves),
+        "nurbssurfaces" => Some(&objects.nurbssurfaces),
+        "breps" => Some(&objects.breps),
+        "elements" => Some(&objects.elements),
+        "components" => Some(&objects.components),
+        "instances" => Some(&objects.instances),
+        _ => None,
+    }
+}
+
+/// The Collection of that name, mutable.
+fn list_mut<'a>(objects: &'a mut Objects, collection: &str) -> Option<&'a mut dyn Slots> {
+    match collection {
+        "points" => Some(&mut objects.points),
+        "lines" => Some(&mut objects.lines),
+        "planes" => Some(&mut objects.planes),
+        "bboxes" => Some(&mut objects.bboxes),
+        "polylines" => Some(&mut objects.polylines),
+        "pointclouds" => Some(&mut objects.pointclouds),
+        "meshes" => Some(&mut objects.meshes),
+        "nurbscurves" => Some(&mut objects.nurbscurves),
+        "nurbssurfaces" => Some(&mut objects.nurbssurfaces),
+        "breps" => Some(&mut objects.breps),
+        "elements" => Some(&mut objects.elements),
+        "components" => Some(&mut objects.components),
+        "instances" => Some(&mut objects.instances),
+        _ => None,
+    }
+}
+
+/// A deep copy of a list, every object cloned, guids included.
+fn deep<T: Clone>(list: &Collection<Rc<T>>) -> Collection<Rc<T>>
+where
+    Rc<T>: Keyed,
+{
+    list.iter().map(|item| Rc::new((**item).clone())).collect()
+}
+
+/// A copy of a list with each object's world placement baked into its coordinates.
+fn baked<T: Clone>(
+    list: &Collection<Rc<T>>,
+    world: &HashMap<String, Xform>,
+    bake: impl Fn(&mut T, &Xform),
+) -> Collection<Rc<T>>
+where
+    Rc<T>: Keyed,
+{
+    list.iter()
+        .map(|item| {
+            let mut copy = (**item).clone();
+
+            if let Some(xform) = world.get(item.key()) {
+                if !xform.is_identity() {
+                    bake(&mut copy, xform);
+                }
+            }
+
+            Rc::new(copy)
+        })
+        .collect()
 }
 
 /// A deep copy of every vector and every object in it, guids included.
 fn clone_objects(objects: &Objects) -> Objects {
     let mut out = objects.clone();
-    macro_rules! deep {
-        ($field:ident) => {
-            out.$field = objects
-                .$field
-                .iter()
-                .map(|item| Rc::new((**item).clone()))
-                .collect();
-        };
-    }
-
-    deep!(points);
-    deep!(lines);
-    deep!(planes);
-    deep!(bboxes);
-    deep!(polylines);
-    deep!(pointclouds);
-    deep!(meshes);
-    deep!(nurbscurves);
-    deep!(nurbssurfaces);
-    deep!(breps);
-    deep!(elements);
-    deep!(instances);
+    out.points = deep(&objects.points);
+    out.lines = deep(&objects.lines);
+    out.planes = deep(&objects.planes);
+    out.bboxes = deep(&objects.bboxes);
+    out.polylines = deep(&objects.polylines);
+    out.pointclouds = deep(&objects.pointclouds);
+    out.meshes = deep(&objects.meshes);
+    out.nurbscurves = deep(&objects.nurbscurves);
+    out.nurbssurfaces = deep(&objects.nurbssurfaces);
+    out.breps = deep(&objects.breps);
+    out.elements = deep(&objects.elements);
+    out.instances = deep(&objects.instances);
 
     out
 }
@@ -286,61 +395,73 @@ fn synced(objects: &Objects, lookup: &HashMap<String, Geometry>) -> Objects {
     objects
 }
 
+/// Point the live slot of guid at held when it stores another pointer.
+fn resync<T>(list: &mut Collection<Rc<T>>, guid: &str, held: &Rc<T>)
+where
+    Rc<T>: Keyed,
+{
+    let Some(slot) = list.get_slot(guid) else {
+        return;
+    };
+
+    if !Rc::ptr_eq(list.get_item(slot), held) {
+        list.set_item(slot, Rc::clone(held));
+    }
+}
+
 /// Point every live slot whose guid lookup holds with another value at the lookup value.
 fn repoint(objects: &mut Objects, lookup: &HashMap<String, Geometry>) {
     for (guid, geometry) in lookup {
-        let (collection, _) = collection_of(geometry);
-        macro_rules! sync {
-            ($vec:expr, $variant:ident) => {
-                if let (Some(slot), Geometry::$variant(g)) = ($vec.get_slot(guid), geometry) {
-                    if !Rc::ptr_eq($vec.get_item(slot), g) {
-                        $vec.set_item(slot, Rc::clone(g));
-                    }
-                }
-            };
+        match geometry {
+            Geometry::Point(g) => resync(&mut objects.points, guid, g),
+            Geometry::Line(g) => resync(&mut objects.lines, guid, g),
+            Geometry::Plane(g) => resync(&mut objects.planes, guid, g),
+            Geometry::OBB(g) => resync(&mut objects.bboxes, guid, g),
+            Geometry::Polyline(g) => resync(&mut objects.polylines, guid, g),
+            Geometry::PointCloud(g) => resync(&mut objects.pointclouds, guid, g),
+            Geometry::Mesh(g) => resync(&mut objects.meshes, guid, g),
+            Geometry::NurbsCurve(g) => resync(&mut objects.nurbscurves, guid, g),
+            Geometry::NurbsSurface(g) => resync(&mut objects.nurbssurfaces, guid, g),
+            Geometry::BRep(g) => resync(&mut objects.breps, guid, g),
+            Geometry::Element(g) => resync(&mut objects.elements, guid, g),
         }
+    }
+}
 
-        typed!(collection, objects, sync);
+/// Index every live entry of a list that lookup lacks, wrapped as its Geometry variant.
+fn index<T>(
+    list: &Collection<Rc<T>>,
+    lookup: &mut HashMap<String, Geometry>,
+    wrap: fn(Rc<T>) -> Geometry,
+) where
+    Rc<T>: Keyed,
+{
+    for item in list {
+        if !lookup.contains_key(item.key()) {
+            lookup.insert(item.key().to_string(), wrap(Rc::clone(item)));
+        }
     }
 }
 
 /// Index every live slot lookup lacks, then push every geometry only lookup holds, in guid order.
 fn adopt(objects: &mut Objects, lookup: &mut HashMap<String, Geometry>) {
-    macro_rules! index {
-        ($vec:expr, $variant:ident) => {
-            for item in &$vec {
-                if !lookup.contains_key(item.guid()) {
-                    lookup.insert(item.guid().to_string(), Geometry::$variant(Rc::clone(item)));
-                }
-            }
-        };
-    }
-
-    index!(objects.points, Point);
-    index!(objects.lines, Line);
-    index!(objects.planes, Plane);
-    index!(objects.bboxes, OBB);
-    index!(objects.polylines, Polyline);
-    index!(objects.pointclouds, PointCloud);
-    index!(objects.meshes, Mesh);
-    index!(objects.nurbscurves, NurbsCurve);
-    index!(objects.nurbssurfaces, NurbsSurface);
-    index!(objects.breps, BRep);
-    index!(objects.elements, Element);
+    index(&objects.points, lookup, Geometry::Point);
+    index(&objects.lines, lookup, Geometry::Line);
+    index(&objects.planes, lookup, Geometry::Plane);
+    index(&objects.bboxes, lookup, Geometry::OBB);
+    index(&objects.polylines, lookup, Geometry::Polyline);
+    index(&objects.pointclouds, lookup, Geometry::PointCloud);
+    index(&objects.meshes, lookup, Geometry::Mesh);
+    index(&objects.nurbscurves, lookup, Geometry::NurbsCurve);
+    index(&objects.nurbssurfaces, lookup, Geometry::NurbsSurface);
+    index(&objects.breps, lookup, Geometry::BRep);
+    index(&objects.elements, lookup, Geometry::Element);
     let mut orphans: Vec<&Geometry> = Vec::new();
 
     for geometry in lookup.values() {
         let (collection, _) = collection_of(geometry);
-        let mut held = false;
-        macro_rules! find {
-            ($vec:expr, $variant:ident) => {
-                held = $vec.get_slot(geometry.guid()).is_some()
-            };
-        }
 
-        typed!(collection, objects, find);
-
-        if !held {
+        if slot_of(objects, collection, geometry.guid()).is_none() {
             orphans.push(geometry);
         }
     }
@@ -348,8 +469,7 @@ fn adopt(objects: &mut Objects, lookup: &mut HashMap<String, Geometry>) {
     orphans.sort_by(|a, b| a.guid().cmp(b.guid()));
 
     for geometry in orphans {
-        let (collection, _) = collection_of(geometry);
-        push(objects, collection, &Item::Geometry(geometry.clone()));
+        push(objects, &Item::Geometry(geometry.clone()));
     }
 }
 
@@ -368,28 +488,6 @@ fn collection_of(geometry: &Geometry) -> (&'static str, &'static str) {
         Geometry::BRep(_) => ("breps", "brep"),
         Geometry::Element(_) => ("elements", "element"),
     }
-}
-
-/// Run `$op!(list)` on the Collection of that name, components and instances included.
-macro_rules! listed {
-    ($collection:expr, $objects:expr, $op:ident) => {
-        match $collection {
-            "points" => $op!($objects.points),
-            "lines" => $op!($objects.lines),
-            "planes" => $op!($objects.planes),
-            "bboxes" => $op!($objects.bboxes),
-            "polylines" => $op!($objects.polylines),
-            "pointclouds" => $op!($objects.pointclouds),
-            "meshes" => $op!($objects.meshes),
-            "nurbscurves" => $op!($objects.nurbscurves),
-            "nurbssurfaces" => $op!($objects.nurbssurfaces),
-            "breps" => $op!($objects.breps),
-            "elements" => $op!($objects.elements),
-            "components" => $op!($objects.components),
-            "instances" => $op!($objects.instances),
-            _ => {}
-        }
-    };
 }
 
 /// The COLLECTIONS entry whose list holds an item.
@@ -414,126 +512,104 @@ fn prefix_of(collection: &str) -> &'static str {
 
 /// The live slot of a guid in the list of that name.
 fn slot_of(objects: &Objects, collection: &str, guid: &str) -> Option<usize> {
-    let mut slot = None;
-    macro_rules! find {
-        ($list:expr) => {
-            slot = $list.get_slot(guid)
-        };
-    }
+    list(objects, collection)?.get_slot(guid)
+}
 
-    listed!(collection, objects, find);
-
-    slot
+/// The stored pointer in a slot of a list, dead or alive.
+fn held<T>(list: &Collection<Rc<T>>, slot: usize) -> Rc<T> {
+    Rc::clone(list.get_item(slot))
 }
 
 /// The item in a slot of the list of that name, dead or alive, as the stored pointer.
 fn item_at(objects: &Objects, collection: &str, slot: usize) -> Option<Item> {
-    let mut item = None;
-    macro_rules! get {
-        ($list:expr, $variant:ident) => {
-            item = Some(Item::Geometry(Geometry::$variant(Rc::clone(
-                $list.get_item(slot),
-            ))))
-        };
+    match collection {
+        "points" => Some(Geometry::Point(held(&objects.points, slot)).into()),
+        "lines" => Some(Geometry::Line(held(&objects.lines, slot)).into()),
+        "planes" => Some(Geometry::Plane(held(&objects.planes, slot)).into()),
+        "bboxes" => Some(Geometry::OBB(held(&objects.bboxes, slot)).into()),
+        "polylines" => Some(Geometry::Polyline(held(&objects.polylines, slot)).into()),
+        "pointclouds" => Some(Geometry::PointCloud(held(&objects.pointclouds, slot)).into()),
+        "meshes" => Some(Geometry::Mesh(held(&objects.meshes, slot)).into()),
+        "nurbscurves" => Some(Geometry::NurbsCurve(held(&objects.nurbscurves, slot)).into()),
+        "nurbssurfaces" => Some(Geometry::NurbsSurface(held(&objects.nurbssurfaces, slot)).into()),
+        "breps" => Some(Geometry::BRep(held(&objects.breps, slot)).into()),
+        "elements" => Some(Geometry::Element(held(&objects.elements, slot)).into()),
+        "components" => Some(Item::Component(objects.components.get_item(slot).clone())),
+        "instances" => Some(Item::InstanceRef(held(&objects.instances, slot))),
+        _ => None,
     }
-
-    typed!(collection, objects, get);
-
-    if collection == "components" {
-        item = Some(Item::Component(objects.components.get_item(slot).clone()));
-    }
-
-    if collection == "instances" {
-        item = Some(Item::InstanceRef(Rc::clone(
-            objects.instances.get_item(slot),
-        )));
-    }
-
-    item
 }
 
-/// Append an item to the list of that name and return its slot.
-fn push(objects: &mut Objects, collection: &str, obj: &Item) -> usize {
-    let mut slot = 0;
-    macro_rules! append {
-        ($list:expr, $variant:ident) => {
-            if let Item::Geometry(Geometry::$variant(g)) = obj {
-                $list.push(Rc::clone(g));
-                slot = $list.number_of_slots() - 1;
-            }
-        };
-    }
+/// Append an entry to a list and return its slot.
+fn pushed<E: Keyed>(list: &mut Collection<E>, item: E) -> usize {
+    list.push(item);
 
-    typed!(collection, objects, append);
-
-    if let Item::Component(component) = obj {
-        objects.components.push(component.clone());
-        slot = objects.components.number_of_slots() - 1;
-    }
-
-    if let Item::InstanceRef(instance) = obj {
-        objects.instances.push(Rc::clone(instance));
-        slot = objects.instances.number_of_slots() - 1;
-    }
-
-    slot
+    list.number_of_slots() - 1
 }
 
-/// Put an item in a slot of the list of that name.
+/// Append an item to the list of its type and return its slot.
+fn push(objects: &mut Objects, obj: &Item) -> usize {
+    match obj {
+        Item::Geometry(Geometry::Point(g)) => pushed(&mut objects.points, Rc::clone(g)),
+        Item::Geometry(Geometry::Line(g)) => pushed(&mut objects.lines, Rc::clone(g)),
+        Item::Geometry(Geometry::Plane(g)) => pushed(&mut objects.planes, Rc::clone(g)),
+        Item::Geometry(Geometry::OBB(g)) => pushed(&mut objects.bboxes, Rc::clone(g)),
+        Item::Geometry(Geometry::Polyline(g)) => pushed(&mut objects.polylines, Rc::clone(g)),
+        Item::Geometry(Geometry::PointCloud(g)) => pushed(&mut objects.pointclouds, Rc::clone(g)),
+        Item::Geometry(Geometry::Mesh(g)) => pushed(&mut objects.meshes, Rc::clone(g)),
+        Item::Geometry(Geometry::NurbsCurve(g)) => pushed(&mut objects.nurbscurves, Rc::clone(g)),
+        Item::Geometry(Geometry::NurbsSurface(g)) => {
+            pushed(&mut objects.nurbssurfaces, Rc::clone(g))
+        }
+        Item::Geometry(Geometry::BRep(g)) => pushed(&mut objects.breps, Rc::clone(g)),
+        Item::Geometry(Geometry::Element(g)) => pushed(&mut objects.elements, Rc::clone(g)),
+        Item::Component(component) => pushed(&mut objects.components, component.clone()),
+        Item::InstanceRef(instance) => pushed(&mut objects.instances, Rc::clone(instance)),
+    }
+}
+
+/// Put an item in a slot of the list of that name; an item of another type is left out.
 fn store(objects: &mut Objects, collection: &str, slot: usize, obj: &Item) {
-    macro_rules! set {
-        ($list:expr, $variant:ident) => {
-            if let Item::Geometry(Geometry::$variant(g)) = obj {
-                $list.set_item(slot, Rc::clone(g));
-            }
-        };
+    if collection_for(obj).0 != collection {
+        return;
     }
 
-    typed!(collection, objects, set);
-
-    if let Item::Component(component) = obj {
-        objects.components.set_item(slot, component.clone());
-    }
-
-    if let Item::InstanceRef(instance) = obj {
-        objects.instances.set_item(slot, Rc::clone(instance));
+    match obj {
+        Item::Geometry(Geometry::Point(g)) => objects.points.set_item(slot, Rc::clone(g)),
+        Item::Geometry(Geometry::Line(g)) => objects.lines.set_item(slot, Rc::clone(g)),
+        Item::Geometry(Geometry::Plane(g)) => objects.planes.set_item(slot, Rc::clone(g)),
+        Item::Geometry(Geometry::OBB(g)) => objects.bboxes.set_item(slot, Rc::clone(g)),
+        Item::Geometry(Geometry::Polyline(g)) => objects.polylines.set_item(slot, Rc::clone(g)),
+        Item::Geometry(Geometry::PointCloud(g)) => objects.pointclouds.set_item(slot, Rc::clone(g)),
+        Item::Geometry(Geometry::Mesh(g)) => objects.meshes.set_item(slot, Rc::clone(g)),
+        Item::Geometry(Geometry::NurbsCurve(g)) => objects.nurbscurves.set_item(slot, Rc::clone(g)),
+        Item::Geometry(Geometry::NurbsSurface(g)) => {
+            objects.nurbssurfaces.set_item(slot, Rc::clone(g))
+        }
+        Item::Geometry(Geometry::BRep(g)) => objects.breps.set_item(slot, Rc::clone(g)),
+        Item::Geometry(Geometry::Element(g)) => objects.elements.set_item(slot, Rc::clone(g)),
+        Item::Component(component) => objects.components.set_item(slot, component.clone()),
+        Item::InstanceRef(instance) => objects.instances.set_item(slot, Rc::clone(instance)),
     }
 }
 
 /// Kill or revive a slot of the list of that name.
 fn flag(objects: &mut Objects, collection: &str, slot: usize, dead: bool) {
-    macro_rules! set {
-        ($list:expr) => {
-            $list.set_dead(slot, dead)
-        };
+    if let Some(list) = list_mut(objects, collection) {
+        list.set_dead(slot, dead);
     }
-
-    listed!(collection, objects, set);
 }
 
 /// The tomb pinning a slot of the list of that name, while a record still holds it.
 fn tomb_at(objects: &Objects, collection: &str, slot: usize) -> Option<Rc<Tomb>> {
-    let mut tomb = None;
-    macro_rules! get {
-        ($list:expr) => {
-            tomb = $list.get_tomb(slot)
-        };
-    }
-
-    listed!(collection, objects, get);
-
-    tomb
+    list(objects, collection)?.get_tomb(slot)
 }
 
 /// Pin a slot of the list of that name to a tomb.
 fn pin(objects: &mut Objects, collection: &str, slot: usize, tomb: &Rc<Tomb>) {
-    macro_rules! set {
-        ($list:expr) => {
-            $list.set_tomb(slot, tomb)
-        };
+    if let Some(list) = list_mut(objects, collection) {
+        list.set_tomb(slot, tomb);
     }
-
-    listed!(collection, objects, set);
 }
 
 /// Whether two items are the same stored pointer; a component is never, so the map value is stored back.
@@ -575,24 +651,27 @@ fn place(geometry: &mut Geometry, xform: &Xform) {
         return;
     }
 
-    macro_rules! transform {
-        ($rc:expr) => {{
-            Rc::make_mut($rc).transform(xform);
-        }};
-    }
-
     match geometry {
         Geometry::Element(g) => Rc::make_mut(g).place(xform),
-        Geometry::OBB(g) => transform!(g),
-        Geometry::BRep(g) => transform!(g),
-        Geometry::Line(g) => transform!(g),
-        Geometry::Mesh(g) => transform!(g),
-        Geometry::NurbsCurve(g) => transform!(g),
-        Geometry::NurbsSurface(g) => transform!(g),
-        Geometry::Plane(g) => transform!(g),
-        Geometry::Point(g) => transform!(g),
-        Geometry::PointCloud(g) => transform!(g),
-        Geometry::Polyline(g) => transform!(g),
+        Geometry::OBB(g) => Rc::make_mut(g).transform(xform),
+        Geometry::BRep(g) => Rc::make_mut(g).transform(xform),
+        Geometry::Line(g) => Rc::make_mut(g).transform(xform),
+        Geometry::Mesh(g) => {
+            Rc::make_mut(g).transform(xform);
+        }
+
+        Geometry::NurbsCurve(g) => {
+            Rc::make_mut(g).transform(xform);
+        }
+
+        Geometry::NurbsSurface(g) => {
+            Rc::make_mut(g).transform(xform);
+        }
+
+        Geometry::Plane(g) => Rc::make_mut(g).transform(xform),
+        Geometry::Point(g) => Rc::make_mut(g).transform(xform),
+        Geometry::PointCloud(g) => Rc::make_mut(g).transform(xform),
+        Geometry::Polyline(g) => Rc::make_mut(g).transform(xform),
     }
 }
 
@@ -798,8 +877,40 @@ const INTERACTIONS: usize = 42; // Checkpoint phase: the interactions, by edge g
 const ASSEMBLY: usize = 43; // Checkpoint phase: the sections joined into one message.
 const CHUNK: usize = 64 << 10; // Bytes past which a finished tree node's chunks move instead of being copied.
 
-/// A tree node being written: the node, its next raw child and its bytes in chunks.
-type Frame = (Rc<RefCell<TreeNode>>, usize, Vec<Vec<u8>>);
+/// Field numbers the checkpoint writer frames by hand, mirrored from session.proto; the tests check them against the prost messages.
+pub(crate) struct Tags {
+    pub sections: [u32; 7], // Session field per section, 0 for one written framed: head, objects, tree, graph, xforms, definitions, interactions.
+    pub root: u32,          // Tree.root
+    pub children: u32,      // TreeNode.children
+    pub lists: [u32; 13],   // Objects field per COLLECTIONS entry.
+}
+
+pub(crate) const TAGS: Tags = Tags {
+    sections: [0, 3, 4, 5, 0, 8, 0],
+    root: 3,
+    children: 4,
+    lists: [3, 4, 5, 6, 7, 8, 9, 12, 13, 14, 15, 16, 18],
+};
+
+/// A tree node being written.
+struct Frame {
+    node: Rc<RefCell<TreeNode>>, // The node.
+    next: usize,                 // Its next raw child.
+    chunks: Vec<Vec<u8>>,        // Its bytes so far.
+}
+
+impl Frame {
+    /// Open a node with its head bytes.
+    fn new(node: Rc<RefCell<TreeNode>>) -> Self {
+        let head = node_head(&node.borrow());
+
+        Self {
+            node,
+            next: 0,
+            chunks: vec![head],
+        }
+    }
+}
 
 /// A resumable protobuf writer over a session: live entries only, the layout to_proto encodes.
 struct Checkpoint {
@@ -848,6 +959,42 @@ fn append(chunks: &mut Vec<Vec<u8>>, bytes: Vec<u8>) {
         Some(last) if bytes.len() <= CHUNK && last.len() < CHUNK => last.extend(bytes),
         _ => chunks.push(bytes),
     }
+}
+
+/// Encode the live entries of a list from slot `start` for at most `work` slots, each framed under tag; returns the end slot and the slot count.
+fn emit<E>(
+    list: &Collection<E>,
+    tag: u32,
+    start: usize,
+    work: usize,
+    buffer: &mut Vec<u8>,
+    entry: impl Fn(&E) -> Vec<u8>,
+) -> (usize, usize) {
+    let total = list.number_of_slots();
+    let end = total.min(start.saturating_add(work));
+
+    for slot in start..end {
+        if list.is_dead(slot) {
+            continue;
+        }
+
+        let bytes = entry(list.get_item(slot));
+        buffer.extend(prefix(tag, bytes.len()));
+        buffer.extend(bytes);
+    }
+
+    (end, total)
+}
+
+/// The lookup's pointer for an entry when it holds one of that type, else the entry itself.
+fn truth<'a, T: FromGeometry>(lookup: &'a HashMap<String, Geometry>, item: &'a Rc<T>) -> &'a T
+where
+    Rc<T>: Keyed,
+{
+    lookup
+        .get(item.key())
+        .and_then(T::from_geometry)
+        .unwrap_or(item.as_ref())
 }
 
 /// The name and guid fields of an Objects message.
@@ -1205,37 +1352,23 @@ impl Session {
         let objects = self.objects_synced();
         let mut out = objects.clone();
         let world = self.world_xforms();
-        macro_rules! bake {
-            ($field:ident, $method:ident) => {
-                out.$field = objects
-                    .$field
-                    .iter()
-                    .map(|item| {
-                        let mut copy = (**item).clone();
-
-                        if let Some(xform) = world.get(item.guid()) {
-                            if !xform.is_identity() {
-                                copy.$method(xform);
-                            }
-                        }
-
-                        Rc::new(copy)
-                    })
-                    .collect();
-            };
-        }
-
-        bake!(points, transform);
-        bake!(lines, transform);
-        bake!(planes, transform);
-        bake!(bboxes, transform);
-        bake!(polylines, transform);
-        bake!(pointclouds, transform);
-        bake!(meshes, transform);
-        bake!(nurbscurves, transform);
-        bake!(nurbssurfaces, transform);
-        bake!(breps, transform);
-        bake!(elements, place);
+        out.points = baked(&objects.points, &world, Point::transform);
+        out.lines = baked(&objects.lines, &world, Line::transform);
+        out.planes = baked(&objects.planes, &world, Plane::transform);
+        out.bboxes = baked(&objects.bboxes, &world, OBB::transform);
+        out.polylines = baked(&objects.polylines, &world, Polyline::transform);
+        out.pointclouds = baked(&objects.pointclouds, &world, PointCloud::transform);
+        out.meshes = baked(&objects.meshes, &world, |mesh, xform| {
+            mesh.transform(xform);
+        });
+        out.nurbscurves = baked(&objects.nurbscurves, &world, |curve, xform| {
+            curve.transform(xform);
+        });
+        out.nurbssurfaces = baked(&objects.nurbssurfaces, &world, |surface, xform| {
+            surface.transform(xform);
+        });
+        out.breps = baked(&objects.breps, &world, BRep::transform);
+        out.elements = baked(&objects.elements, &world, Element::place);
 
         for instance in &objects.instances {
             let Some(definition) = self.definition_lookup.get(&instance.definition_guid) else {
@@ -1246,8 +1379,7 @@ impl Session {
                 .cloned()
                 .unwrap_or_else(Xform::identity);
             let resolved = resolve(instance, definition, &placement);
-            let (collection, _) = collection_of(&resolved);
-            push(&mut out, collection, &Item::Geometry(resolved));
+            push(&mut out, &Item::Geometry(resolved));
         }
 
         out.instances.clear();
@@ -1467,11 +1599,7 @@ impl Session {
         }
 
         let (collection, _) = collection_of(&definition);
-        let slot = push(
-            &mut self.definitions,
-            collection,
-            &Item::Geometry(definition.clone()),
-        );
+        let slot = push(&mut self.definitions, &Item::Geometry(definition.clone()));
         self.definition_lookup.insert(guid.clone(), definition);
         self.bvh_cache_dirty = true;
         self.revision += 1;
@@ -1562,7 +1690,6 @@ impl Session {
             self._queue(&old);
         }
 
-        // a group comes back with its transform; an object's stays with its own tomb
         let tomb = node
             .borrow()
             .get_tomb()
@@ -1818,7 +1945,7 @@ impl Session {
             return false;
         };
         self._kill(&removed);
-        let slot = push(&mut self.objects, new, &Item::Geometry(obj.clone()));
+        let slot = push(&mut self.objects, &Item::Geometry(obj.clone()));
         let added = Tomb::new(new, false, slot, None);
         pin(&mut self.objects, new, slot, &added);
         self.lookup.insert(guid.to_string(), obj.clone());
@@ -1864,11 +1991,7 @@ impl Session {
             return false;
         };
         self._kill(&removed);
-        let slot = push(
-            &mut self.definitions,
-            new,
-            &Item::Geometry(definition.clone()),
-        );
+        let slot = push(&mut self.definitions, &Item::Geometry(definition.clone()));
         let added = Tomb::new(new, true, slot, None);
         pin(&mut self.definitions, new, slot, &added);
         self.definition_lookup.insert(guid.to_string(), definition);
@@ -1944,11 +2067,7 @@ impl Session {
         };
         self._kill(&removed);
         let instance = Rc::new(instance);
-        let slot = push(
-            &mut self.objects,
-            "instances",
-            &Item::InstanceRef(Rc::clone(&instance)),
-        );
+        let slot = push(&mut self.objects, &Item::InstanceRef(Rc::clone(&instance)));
         let added = Tomb::new("instances", false, slot, None);
         pin(&mut self.objects, "instances", slot, &added);
         self.instance_lookup.insert(guid.to_string(), instance);
@@ -1979,7 +2098,7 @@ impl Session {
             return false;
         };
         self._kill(&removed);
-        let slot = push(&mut self.objects, collection, &Item::Geometry(copy.clone()));
+        let slot = push(&mut self.objects, &Item::Geometry(copy.clone()));
         let added = Tomb::new(collection, false, slot, None);
         pin(&mut self.objects, collection, slot, &added);
         self.lookup.insert(instance_guid.to_string(), copy);
@@ -2152,15 +2271,10 @@ impl Session {
     /// Return the dead slots not yet purged, over the objects and the definitions lists.
     pub fn number_of_dead(&self) -> usize {
         let mut count = 0;
-        macro_rules! dead {
-            ($list:expr) => {
-                count += $list.number_of_dead()
-            };
-        }
 
         for (collection, _) in COLLECTIONS {
-            listed!(collection, self.objects, dead);
-            listed!(collection, self.definitions, dead);
+            count += list(&self.objects, collection).map_or(0, Slots::number_of_dead);
+            count += list(&self.definitions, collection).map_or(0, Slots::number_of_dead);
         }
 
         count
@@ -2192,11 +2306,11 @@ impl Session {
         self.purging.is_some()
     }
 
-    /// Purge everything no record reaches in one call: a whole cycle, every live tree node, dense graph indices; O(n + N + V log V + E log E).
+    /// Drop the history, then purge everything in one call: a whole cycle, every live tree node, dense graph indices no record could revive into; O(n + N + V log V + E log E).
     pub fn purge(&mut self) {
+        self.history.clear();
         self.writer = None;
 
-        // a running cycle already passed lists that may hold newly eligible dead slots
         if self.purging.is_some() {
             self._purge(usize::MAX);
         }
@@ -2467,7 +2581,6 @@ impl Session {
 
     /// Serialize to a JSON string.
     pub fn file_json_dumps(&mut self) -> String {
-        self.history.clear();
         self.purge();
 
         self.jsondump().unwrap_or_default()
@@ -2480,7 +2593,6 @@ impl Session {
 
     /// Write to a JSON file.
     pub fn file_json_dump(&mut self, filename: &str) {
-        self.history.clear();
         self.purge();
         fs::write(filename, self.jsondump().unwrap_or_default())
             .expect("Failed to write JSON file");
@@ -2595,7 +2707,6 @@ impl Session {
     pub fn pb_dumps(&mut self) -> Vec<u8> {
         use prost::Message;
 
-        self.history.clear();
         self.purge();
 
         self.to_proto().encode_to_vec()
@@ -2673,7 +2784,7 @@ impl Session {
         let obj: Item = obj.into();
         let guid = obj.guid().to_string();
         let attribute = format!("{type_prefix}_{}", obj.name());
-        let slot = push(&mut self.objects, collection, &obj);
+        let slot = push(&mut self.objects, &obj);
 
         match obj {
             Item::Geometry(geometry) => {
@@ -2780,7 +2891,7 @@ impl Session {
         let (collection, _) = collection_for(item);
         let slot = match slot_of(&self.objects, collection, guid) {
             Some(slot) => slot,
-            None => push(&mut self.objects, collection, item),
+            None => push(&mut self.objects, item),
         };
 
         if let Some(tomb) = tomb_at(&self.objects, collection, slot) {
@@ -2795,7 +2906,6 @@ impl Session {
                 node
             }
 
-            // an object outside the tree parks its transform and vertex on a detached node
             None => TreeNode::new(guid),
         };
         let tomb = Tomb::new(collection, false, slot, Some(Rc::clone(&node)));
@@ -2831,8 +2941,7 @@ impl Session {
         } else {
             &mut self.objects
         };
-        let slot =
-            slot_of(objects, collection, guid).unwrap_or_else(|| push(objects, collection, &item));
+        let slot = slot_of(objects, collection, guid).unwrap_or_else(|| push(objects, &item));
 
         if let Some(tomb) = tomb_at(objects, collection, slot) {
             if tomb.node.is_none() && tomb.definition == definition {
@@ -2933,16 +3042,14 @@ impl Session {
                 };
                 let mut spent = 0;
                 let mut done = true;
-                macro_rules! step {
-                    ($list:expr) => {
-                        if $list.number_of_dead() > 0 || $list.is_compacting() {
-                            spent = $list.compact_step(work);
-                            done = !$list.is_compacting();
-                        }
-                    };
+
+                if let Some(list) = list_mut(objects, COLLECTIONS[phase % 13].0) {
+                    if list.number_of_dead() > 0 || list.is_compacting() {
+                        spent = list.compact_step(work);
+                        done = !list.is_compacting();
+                    }
                 }
 
-                listed!(COLLECTIONS[phase % 13].0, objects, step);
                 work -= spent.min(work);
 
                 if done {
@@ -2971,7 +3078,6 @@ impl Session {
 
             self.sweep.pop();
 
-            // a parent still holding a pinned child stays queued for the next cycle
             if parent.borrow().has_dead() {
                 self.pinned.push(Rc::downgrade(&parent));
             } else {
@@ -3025,61 +3131,56 @@ impl Session {
         } else {
             (&self.objects, &self.lookup, OBJECTS, 1)
         };
+        let phase = writer.phase - first;
+        let tag = TAGS.lists[phase];
         let start = writer.cursor;
-        let end: usize;
-        let total: usize;
         let buffer = &mut writer.sections[section];
-        macro_rules! emit {
-            ($list:expr, $field:ident, $item:ident, $truth:expr) => {{
-                total = $list.number_of_slots();
-                end = total.min(start.saturating_add(work));
-
-                for slot in start..end {
-                    if $list.is_dead(slot) {
-                        continue;
-                    }
-
-                    let $item = $list.get_item(slot);
-                    crate::proto::Objects {
-                        $field: vec![$truth.to_proto()],
-                        ..Default::default()
-                    }
-                    .encode_raw(buffer);
-                }
-            }};
-        }
-        macro_rules! geometry {
-            ($list:expr, $field:ident, $variant:ident) => {
-                emit!($list, $field, item, {
-                    match lookup.get(item.guid()) {
-                        Some(Geometry::$variant(held)) => held,
-                        _ => item,
-                    }
-                })
-            };
-        }
-
-        match COLLECTIONS[writer.phase - first].0 {
-            "points" => geometry!(objects.points, points, Point),
-            "lines" => geometry!(objects.lines, lines, Line),
-            "planes" => geometry!(objects.planes, planes, Plane),
-            "bboxes" => geometry!(objects.bboxes, bboxes, OBB),
-            "polylines" => geometry!(objects.polylines, polylines, Polyline),
-            "pointclouds" => geometry!(objects.pointclouds, pointclouds, PointCloud),
-            "meshes" => geometry!(objects.meshes, meshes, Mesh),
-            "nurbscurves" => geometry!(objects.nurbscurves, nurbscurves, NurbsCurve),
-            "nurbssurfaces" => geometry!(objects.nurbssurfaces, nurbssurfaces, NurbsSurface),
-            "breps" => geometry!(objects.breps, breps, BRep),
-            "elements" => geometry!(objects.elements, elements, Element),
-            "components" => emit!(objects.components, components, item, item),
-            _ => emit!(objects.instances, instances, item, {
-                match (definition, self.instance_lookup.get(item.guid())) {
-                    (false, Some(held)) => held,
-                    _ => item,
-                }
+        let (end, total) = match COLLECTIONS[phase].0 {
+            "points" => emit(&objects.points, tag, start, work, buffer, |item| {
+                truth(lookup, item).to_proto().encode_to_vec()
             }),
-        }
+            "lines" => emit(&objects.lines, tag, start, work, buffer, |item| {
+                truth(lookup, item).to_proto().encode_to_vec()
+            }),
+            "planes" => emit(&objects.planes, tag, start, work, buffer, |item| {
+                truth(lookup, item).to_proto().encode_to_vec()
+            }),
+            "bboxes" => emit(&objects.bboxes, tag, start, work, buffer, |item| {
+                truth(lookup, item).to_proto().encode_to_vec()
+            }),
+            "polylines" => emit(&objects.polylines, tag, start, work, buffer, |item| {
+                truth(lookup, item).to_proto().encode_to_vec()
+            }),
+            "pointclouds" => emit(&objects.pointclouds, tag, start, work, buffer, |item| {
+                truth(lookup, item).to_proto().encode_to_vec()
+            }),
+            "meshes" => emit(&objects.meshes, tag, start, work, buffer, |item| {
+                truth(lookup, item).to_proto().encode_to_vec()
+            }),
+            "nurbscurves" => emit(&objects.nurbscurves, tag, start, work, buffer, |item| {
+                truth(lookup, item).to_proto().encode_to_vec()
+            }),
+            "nurbssurfaces" => emit(&objects.nurbssurfaces, tag, start, work, buffer, |item| {
+                truth(lookup, item).to_proto().encode_to_vec()
+            }),
+            "breps" => emit(&objects.breps, tag, start, work, buffer, |item| {
+                truth(lookup, item).to_proto().encode_to_vec()
+            }),
+            "elements" => emit(&objects.elements, tag, start, work, buffer, |item| {
+                truth(lookup, item).to_proto().encode_to_vec()
+            }),
+            "components" => emit(&objects.components, tag, start, work, buffer, |item| {
+                item.to_proto().encode_to_vec()
+            }),
+            _ => emit(&objects.instances, tag, start, work, buffer, |item| {
+                let held = self
+                    .instance_lookup
+                    .get(item.guid())
+                    .filter(|_| !definition);
 
+                held.unwrap_or(item).to_proto().encode_to_vec()
+            }),
+        };
         writer.cursor = end;
 
         if end >= total {
@@ -3092,8 +3193,6 @@ impl Session {
 
     /// Write the live tree depth first from an explicit stack, a finished node appended to its parent; returns the children examined.
     fn _write_tree(&self, writer: &mut Checkpoint, work: usize) -> usize {
-        use crate::tree::node_head;
-        use crate::tree::node_tail;
         use prost::Message;
 
         if writer.cursor == 0 {
@@ -3111,42 +3210,40 @@ impl Session {
             .encode_to_vec();
 
             if let Some(root) = self.tree.root() {
-                let head = node_head(&root.borrow());
-                writer.stack.push((root, 0, vec![head]));
+                writer.stack.push(Frame::new(root));
             }
         }
 
         let mut spent = 0;
 
         while spent < work {
-            let Some((node, next, _)) = writer.stack.last_mut() else {
+            let Some(frame) = writer.stack.last_mut() else {
                 break;
             };
-            let child = node.borrow().get_child(*next);
-            *next += 1;
+            let child = frame.node.borrow().get_child(frame.next);
+            frame.next += 1;
             spent += 1;
 
             if let Some(child) = child {
                 if !child.borrow().is_dead() {
-                    let head = node_head(&child.borrow());
-                    writer.stack.push((child, 0, vec![head]));
+                    writer.stack.push(Frame::new(child));
                 }
 
                 continue;
             }
 
-            let Some((node, _, mut chunks)) = writer.stack.pop() else {
+            let Some(frame) = writer.stack.pop() else {
                 break;
             };
-            append(&mut chunks, node_tail(&node.borrow()));
+            let mut chunks = frame.chunks;
+            append(&mut chunks, node_tail(&frame.node.borrow()));
             let length = chunks.iter().map(Vec::len).sum();
             let (tag, parent) = match writer.stack.last_mut() {
-                Some((_, _, parent)) => (4, parent),
-                None => (3, &mut writer.tree),
+                Some(frame) => (TAGS.children, &mut frame.chunks),
+                None => (TAGS.root, &mut writer.tree),
             };
             append(parent, prefix(tag, length));
 
-            // a large node moves its chunks, so no step copies a whole subtree
             for chunk in chunks {
                 append(parent, chunk);
             }
@@ -3254,26 +3351,21 @@ impl Session {
 
     /// Write the non-identity xforms of the live objects of one order() list; returns the slots examined.
     fn _write_ordered(&self, writer: &mut Checkpoint, work: usize) -> usize {
-        use crate::collection::Keyed;
-
         let start = writer.cursor;
         let mut end = start;
         let mut total = 0;
         let mut guids: Vec<String> = Vec::new();
-        macro_rules! walk {
-            ($list:expr) => {{
-                total = $list.number_of_slots();
-                end = total.min(start.saturating_add(work));
 
-                for slot in start..end {
-                    if !$list.is_dead(slot) {
-                        guids.push($list.get_item(slot).key().to_string());
-                    }
+        if let Some(list) = list(&self.objects, COLLECTIONS[writer.phase - ORDERED].0) {
+            total = list.number_of_slots();
+            end = total.min(start.saturating_add(work));
+
+            for slot in start..end {
+                if !list.is_dead(slot) {
+                    guids.push(list.key_at(slot).to_string());
                 }
-            }};
+            }
         }
-
-        listed!(COLLECTIONS[writer.phase - ORDERED].0, self.objects, walk);
 
         for guid in guids {
             let Some(xform) = self.xforms.get(&guid) else {
@@ -3400,11 +3492,10 @@ impl Session {
         if writer.phase == ASSEMBLY {
             let mut pieces = Vec::new();
 
-            // objects, tree, graph and definitions are message fields; head, xforms and interactions are written framed
             for (i, body) in std::mem::take(&mut writer.sections).into_iter().enumerate() {
-                let tag = [0, 3, 4, 5, 0, 8, 0][i];
+                let tag = TAGS.sections[i];
 
-                if tag == 8 && self.definition_lookup.is_empty() {
+                if i == 5 && self.definition_lookup.is_empty() {
                     continue;
                 }
 
@@ -3466,15 +3557,16 @@ impl Session {
             };
             let guid = stored.guid().to_string();
 
+            let owner = slot_of(&self.definitions, collection, &guid) == Some(slot);
+
             if let Some(held) = self.definition_lookup.get(&guid) {
                 let held = Item::Geometry(held.clone());
 
-                if !same(&held, &stored) {
+                if owner && !same(&held, &stored) {
                     store(&mut self.definitions, collection, slot, &held);
                 }
             }
 
-            let owner = slot_of(&self.definitions, collection, &guid) == Some(slot);
             flag(&mut self.definitions, collection, slot, true);
 
             if owner {
@@ -3492,9 +3584,8 @@ impl Session {
         let owner = held.as_ref().is_some_and(|held| same(held, &stored))
             || slot_of(&self.objects, collection, guid) == Some(slot);
 
-        // the map value is the truth; a twin that took the guid keeps its entry
         if let Some(held) = held {
-            if !same(&held, &stored) {
+            if owner && !same(&held, &stored) {
                 store(&mut self.objects, collection, slot, &held);
             }
 
@@ -3746,7 +3837,6 @@ impl Session {
         let was = op.node.borrow().is_dead();
         let live = self._is_live(name);
 
-        // the ghost takes the node's place, and that parent is swept
         if let Some(ghost) = &op.ghost {
             let from = op.node.borrow().parent();
             TreeNode::swap(&op.node, ghost);
@@ -3771,7 +3861,6 @@ impl Session {
             }
         }
 
-        // a live object keeps its transform, only a group parks it
         if dead && !was && !live {
             *op.tomb.xform.borrow_mut() = self.xforms.remove(name);
         }

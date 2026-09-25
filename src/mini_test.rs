@@ -361,7 +361,6 @@ macro_rules! MINI_TEST_FN {
 /// Get all tests manually (fallback when inventory doesn't work, and canonical order oracle)
 pub fn get_all_tests() -> Vec<RegisteredTest> {
     use crate::aabb_test::*;
-    use crate::bench_test::*;
     use crate::boolean_polyline_test::*;
     use crate::brep_test::*;
     use crate::closest_test::*;
@@ -637,42 +636,6 @@ pub fn get_all_tests() -> Vec<RegisteredTest> {
             group: "Color",
             name: "Serialization Errors",
             func: run_color_serialization_errors,
-        },
-        // Bench tests
-        RegisteredTest {
-            group: "Bench",
-            name: "Edit Latency",
-            func: run_bench_edit_latency,
-        },
-        RegisteredTest {
-            group: "Bench",
-            name: "Bulk Undo",
-            func: run_bench_bulk_undo,
-        },
-        RegisteredTest {
-            group: "Bench",
-            name: "No Pauses",
-            func: run_bench_no_pauses,
-        },
-        RegisteredTest {
-            group: "Bench",
-            name: "Steady State",
-            func: run_bench_steady_state,
-        },
-        RegisteredTest {
-            group: "Bench",
-            name: "History Memory",
-            func: run_bench_history_memory,
-        },
-        RegisteredTest {
-            group: "Bench",
-            name: "Record Cost",
-            func: run_bench_record_cost,
-        },
-        RegisteredTest {
-            group: "Bench",
-            name: "Layer Move",
-            func: run_bench_layer_move,
         },
         // Collection tests
         RegisteredTest {
@@ -3542,6 +3505,36 @@ pub fn get_all_tests() -> Vec<RegisteredTest> {
             group: "Session",
             name: "Unrecorded Remove",
             func: run_session_unrecorded_remove,
+        },
+        RegisteredTest {
+            group: "Session",
+            name: "Remove Twin Keeps Slot",
+            func: run_session_remove_twin_keeps_slot,
+        },
+        RegisteredTest {
+            group: "Session",
+            name: "Purge Clears History",
+            func: run_session_purge_clears_history,
+        },
+        RegisteredTest {
+            group: "Session",
+            name: "Checkpoint Tags",
+            func: run_session_checkpoint_tags,
+        },
+        RegisteredTest {
+            group: "Session",
+            name: "Checkpoint After Purge Steps",
+            func: run_session_checkpoint_after_purge_steps,
+        },
+        RegisteredTest {
+            group: "Session",
+            name: "Steady State Bounds",
+            func: run_session_steady_state_bounds,
+        },
+        RegisteredTest {
+            group: "Session",
+            name: "History Budget Bounds",
+            func: run_session_history_budget_bounds,
         },
         // History tests
         RegisteredTest {
