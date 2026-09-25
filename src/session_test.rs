@@ -2079,13 +2079,21 @@ pub fn run_session_get_node() -> TestResult {
         let mut session = Session::default();
         let node = session.add_point(Point::new(0.0, 0.0, 0.0), None);
         let guid = node.borrow().name.clone();
+        let child = session.add_point(Point::new(1.0, 0.0, 0.0), Some(&node));
+        let child_guid = child.borrow().name.clone();
         let found = session.get_node(&guid);
         session.begin("remove");
         session.remove_object(&guid);
         session.commit();
         let removed = session.get_node(&guid);
+        let orphaned = session.get_node(&child_guid);
         session.undo();
         let restored = session.get_node(&guid);
+        let reattached = session.get_node(&child_guid);
+        let indexed = session
+            .node_lookup
+            .get(&child_guid)
+            .is_some_and(|n| Rc::ptr_eq(n, &child));
         let mut tree = Tree::new("swapped");
         tree.add(&TreeNode::new("root"), None);
         let root = tree.root().unwrap();
@@ -2096,8 +2104,9 @@ pub fn run_session_get_node() -> TestResult {
         session.reindex();
 
         MINI_CHECK!(found.is_some_and(|n| Rc::ptr_eq(&n, &node)));
-        MINI_CHECK!(removed.is_none());
+        MINI_CHECK!(removed.is_none() && orphaned.is_none());
         MINI_CHECK!(restored.is_some_and(|n| Rc::ptr_eq(&n, &node)));
+        MINI_CHECK!(reattached.is_some_and(|n| Rc::ptr_eq(&n, &child)) && indexed);
         MINI_CHECK!(searched.is_some_and(|n| Rc::ptr_eq(&n, &swapped)));
         MINI_CHECK!(Rc::ptr_eq(&session.node_lookup[&guid], &swapped));
         MINI_CHECK!(session.get_node("missing").is_none());

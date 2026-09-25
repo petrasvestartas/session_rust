@@ -855,11 +855,7 @@ impl Session {
 
     /// The tree node of a live object in O(1) through node_lookup; a tree search when the index is stale, None for a guid that is no live object.
     pub fn get_node(&self, guid: &str) -> Option<Rc<RefCell<TreeNode>>> {
-        let live = self.lookup.contains_key(guid)
-            || self.component_lookup.contains_key(guid)
-            || self.instance_lookup.contains_key(guid);
-
-        if !live {
+        if !self._is_live(guid) {
             return None;
         }
 
@@ -1368,10 +1364,7 @@ impl Session {
         let guid = node.borrow().name.clone();
         self.revision += 1;
 
-        if self.get_object(&guid).is_some()
-            || self.component_lookup.contains_key(&guid)
-            || self.instance_lookup.contains_key(&guid)
-        {
+        if self._is_live(&guid) {
             self.node_lookup.insert(guid, Rc::clone(node));
         }
 
@@ -2184,6 +2177,13 @@ impl Session {
         locate(&self.objects, guid)
     }
 
+    /// Whether guid names a live object, component or instance.
+    fn _is_live(&self, guid: &str) -> bool {
+        self.lookup.contains_key(guid)
+            || self.component_lookup.contains_key(guid)
+            || self.instance_lookup.contains_key(guid)
+    }
+
     /// Take an object out of every live table, unrecorded, returning its tombstone.
     pub(crate) fn _detach(&mut self, guid: &str) -> Option<Tombstone> {
         let obj = if let Some(geometry) = self.lookup.get(guid) {
@@ -2221,6 +2221,18 @@ impl Session {
             }
 
             node = self.tree.remove(&found);
+
+            for child in found.borrow().descendants() {
+                let name = child.borrow().name.clone();
+
+                if self
+                    .node_lookup
+                    .get(&name)
+                    .is_some_and(|held| Rc::ptr_eq(held, &child))
+                {
+                    self.node_lookup.remove(&name);
+                }
+            }
         }
 
         let mut attribute = String::new();
@@ -2297,6 +2309,14 @@ impl Session {
         };
         self.node_lookup.insert(op.guid.clone(), Rc::clone(&node));
         self.revision += 1;
+
+        for child in node.borrow().descendants() {
+            let name = child.borrow().name.clone();
+
+            if self._is_live(&name) {
+                self.node_lookup.insert(name, child);
+            }
+        }
 
         if let Some(parent_guid) = &op.parent_guid {
             if let Some(parent) = self.tree.get_node_by_name(parent_guid) {
@@ -2475,11 +2495,8 @@ impl Session {
 
         for node in self.tree.nodes() {
             let guid = node.borrow().name.clone();
-            let live = self.lookup.contains_key(&guid)
-                || self.component_lookup.contains_key(&guid)
-                || self.instance_lookup.contains_key(&guid);
 
-            if live && !self.node_lookup.contains_key(&guid) {
+            if self._is_live(&guid) && !self.node_lookup.contains_key(&guid) {
                 self.node_lookup.insert(guid, node);
             }
         }
