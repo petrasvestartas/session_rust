@@ -4026,6 +4026,21 @@ pub fn get_all_tests() -> Vec<RegisteredTest> {
             name: "Cycle Basis",
             func: run_graph_cycle_basis,
         },
+        RegisteredTest {
+            group: "Graph",
+            name: "Take Node",
+            func: run_graph_take_node,
+        },
+        RegisteredTest {
+            group: "Graph",
+            name: "Put Node",
+            func: run_graph_put_node,
+        },
+        RegisteredTest {
+            group: "Graph",
+            name: "Renumber",
+            func: run_graph_renumber,
+        },
         // Objects tests
         RegisteredTest {
             group: "Objects",
@@ -4133,6 +4148,11 @@ pub fn get_all_tests() -> Vec<RegisteredTest> {
             name: "Get Children Guids",
             func: run_tree_get_children_guids,
         },
+        RegisteredTest {
+            group: "Tree",
+            name: "Dead Nodes",
+            func: run_tree_dead_nodes,
+        },
         // TreeNode tests
         RegisteredTest {
             group: "TreeNode",
@@ -4188,6 +4208,21 @@ pub fn get_all_tests() -> Vec<RegisteredTest> {
             group: "TreeNode",
             name: "Traverse",
             func: run_treenode_traverse,
+        },
+        RegisteredTest {
+            group: "TreeNode",
+            name: "Set Dead",
+            func: run_treenode_set_dead,
+        },
+        RegisteredTest {
+            group: "TreeNode",
+            name: "Compact",
+            func: run_treenode_compact,
+        },
+        RegisteredTest {
+            group: "TreeNode",
+            name: "Add Moves",
+            func: run_treenode_add_moves,
         },
         // Vertex tests
         RegisteredTest {

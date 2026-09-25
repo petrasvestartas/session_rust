@@ -399,6 +399,53 @@ impl Graph {
         self.reassign_edge_indices();
     }
 
+    /// Take a node and its incident edges out without renumbering, each edge once as stored under edges[v0][v1]; O(d log V).
+    pub fn take_node(&mut self, key: &str) -> Option<(Vertex, Vec<Edge>)> {
+        let vertex = self.vertices.remove(key)?;
+        let mut edges = Vec::new();
+
+        for (other, edge) in self.edges.remove(key).unwrap_or_default() {
+            let twin = self.edges.get_mut(&other).and_then(|n| n.remove(key));
+
+            if edge.v0 == key {
+                edges.push(edge);
+            } else {
+                edges.push(twin.unwrap_or(edge));
+            }
+        }
+
+        Some((vertex, edges))
+    }
+
+    /// Put back a taken node, adopting a bare vertex add_edge made meanwhile; an edge whose other end is gone, or taken by a newer edge, is skipped; O(d log V).
+    pub fn put_node(&mut self, vertex: Vertex, edges: Vec<Edge>) {
+        let key = vertex.name.clone();
+        self.vertices.insert(key.clone(), vertex);
+
+        for edge in edges {
+            let other = edge.other_vertex(&key);
+
+            if !self.has_node(&other) || self.has_edge((&key, &other)) {
+                continue;
+            }
+
+            self.edges
+                .entry(other.clone())
+                .or_default()
+                .insert(key.clone(), edge.clone());
+            self.edges
+                .entry(key.clone())
+                .or_default()
+                .insert(other, edge);
+        }
+    }
+
+    /// Make vertex and edge indices dense 0..n in their old order.
+    pub fn renumber(&mut self) {
+        self.reassign_indices();
+        self.reassign_edge_indices();
+    }
+
     /// Renumber vertex indices 0, 1, 2, ... keeping their relative order.
     fn reassign_indices(&mut self) {
         let mut list: Vec<(i32, String)> = Vec::new();
@@ -1184,22 +1231,24 @@ impl Graph {
     // ═══════════════════════════════════════════════════════════════════════════
     // String
     // ═══════════════════════════════════════════════════════════════════════════
-    /// "<Graph with V vertices, E edges: name>"
+    /// "<Graph with V vertices, E edges: name>", live counts.
     pub fn str(&self) -> String {
         format!(
             "<Graph with {} vertices, {} edges: {}>",
-            self.vertex_count, self.edge_count, self.name
+            self.number_of_vertices(),
+            self.number_of_edges(),
+            self.name
         )
     }
 
-    /// "Graph(guid, name, vertex_count, edge_count)"
+    /// "Graph(guid, name, V, E)", live counts.
     pub fn repr(&self) -> String {
         format!(
             "Graph({}, {}, {}, {})",
             self.guid(),
             self.name,
-            self.vertex_count,
-            self.edge_count
+            self.number_of_vertices(),
+            self.number_of_edges()
         )
     }
 }

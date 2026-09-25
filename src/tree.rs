@@ -1,4 +1,5 @@
 use crate::color::Color;
+use crate::history::Tomb;
 use serde::Deserialize;
 use serde::Serialize;
 use std::cell::RefCell;
@@ -19,6 +20,12 @@ pub struct TreeNode {
     weak_self: Weak<RefCell<TreeNode>>,      // Handle to this node's own cell.
     pub name: String,                        // Object guid or group label.
     pub color: Option<Color>,                // Display colour override.
+    dead: bool,                              // Hidden from every public walk.
+    tomb: Option<Weak<Tomb>>,                // Weak pin while a record holds it.
+    at: usize,                               // Raw index in the parent's children.
+    cursor: Option<(usize, usize)>,          // (read, write) while a compaction is part way.
+    #[allow(dead_code)]
+    queued: bool,     // Whether Session.sweep holds this parent.
 }
 
 impl TreeNode {
@@ -34,6 +41,11 @@ impl TreeNode {
             weak_self: Weak::new(),
             name: name.to_string(),
             color: None,
+            dead: false,
+            tomb: None,
+            at: 0,
+            cursor: None,
+            queued: false,
         }));
         node.borrow_mut().weak_self = Rc::downgrade(&node);
 
@@ -63,13 +75,17 @@ impl TreeNode {
         self.parent.is_none()
     }
 
-    /// Return whether this node has no children.
+    /// Return whether this node has no live children.
     pub fn is_leaf(&self) -> bool {
-        self.children.is_empty()
+        self.live().next().is_none()
     }
 
-    /// Return the parent node, or None when this is the root.
+    /// Return the parent node, or None for the root and for a dead node.
     pub fn parent(&self) -> Option<Rc<RefCell<TreeNode>>> {
+        if self.dead {
+            return None;
+        }
+
         self.parent.as_ref()?.upgrade()
     }
 
@@ -94,58 +110,184 @@ impl TreeNode {
         result
     }
 
-    /// Return the direct children of this node.
+    /// Return the live direct children of this node.
     pub fn children(&self) -> Vec<Rc<RefCell<TreeNode>>> {
-        let mut result = Vec::new();
+        self.live().cloned().collect()
+    }
 
-        for child in &self.children {
-            result.push(Rc::clone(child));
+    /// Return whether this node is dead.
+    pub fn is_dead(&self) -> bool {
+        self.dead
+    }
+
+    /// Return the tomb pinning this node while a record still holds it.
+    pub fn get_tomb(&self) -> Option<Rc<Tomb>> {
+        self.tomb.as_ref()?.upgrade()
+    }
+
+    /// Return whether a compaction of the children is part way.
+    pub fn is_compacting(&self) -> bool {
+        self.cursor.is_some()
+    }
+
+    /// Iterate the live children.
+    fn live(&self) -> impl Iterator<Item = &Rc<RefCell<TreeNode>>> {
+        self.children.iter().filter(|child| !child.borrow().dead)
+    }
+
+    /// Return the raw index of a child, O(1) through its `at`.
+    fn position(&self, child: &Rc<RefCell<TreeNode>>) -> Option<usize> {
+        let at = child.borrow().at;
+
+        if self
+            .children
+            .get(at)
+            .is_some_and(|raw| Rc::ptr_eq(raw, child))
+        {
+            return Some(at);
         }
 
-        result
+        self.children.iter().position(|raw| Rc::ptr_eq(raw, child))
     }
 
     // ═══════════════════════════════════════════════════════════════════════════
     // Mutators
     // ═══════════════════════════════════════════════════════════════════════════
-    /// Add a child node to this node.
-    pub fn add(&mut self, child: &Rc<RefCell<TreeNode>>) {
-        let Some(handle) = self.weak_self.upgrade() else {
-            return;
-        };
+    /// Append a child; a child placed elsewhere moves and leaves the returned dead ghost in its old slot.
+    pub fn add(&mut self, child: &Rc<RefCell<TreeNode>>) -> Option<Rc<RefCell<TreeNode>>> {
+        let handle = self.weak_self.upgrade()?;
 
         if Rc::ptr_eq(&handle, child) {
-            return;
+            return None;
         }
 
-        let mut ancestor = self.parent();
+        let mut ancestor = self.parent.as_ref().and_then(Weak::upgrade);
 
         while let Some(node) = ancestor {
             if Rc::ptr_eq(&node, child) {
-                return;
+                return None;
             }
 
-            ancestor = node.borrow().parent();
+            ancestor = node.borrow().parent.as_ref().and_then(Weak::upgrade);
+        }
+
+        let old = child.borrow().parent.as_ref().and_then(Weak::upgrade);
+        let mut ghost = None;
+
+        if let Some(old) = old {
+            if Rc::ptr_eq(&old, &handle) {
+                return None;
+            }
+
+            let at = old.borrow().position(child);
+
+            if let Some(at) = at {
+                let node = TreeNode::new("");
+                node.borrow_mut().dead = true;
+                node.borrow_mut().at = at;
+                node.borrow_mut().parent = Some(Rc::downgrade(&old));
+                old.borrow_mut().children[at] = Rc::clone(&node);
+                ghost = Some(node);
+            }
         }
 
         child.borrow_mut().parent = Some(self.weak_self.clone());
+        child.borrow_mut().at = self.children.len();
         self.children.push(Rc::clone(child));
+
+        ghost
     }
 
-    /// Remove a child node and returns it, or None when not found.
+    /// Remove a child node and returns it, or None when not found; aborts a running compaction.
     pub fn remove(&mut self, child: &Rc<RefCell<TreeNode>>) -> Option<Rc<RefCell<TreeNode>>> {
-        for i in 0..self.children.len() {
-            if !Rc::ptr_eq(&self.children[i], child) {
-                continue;
-            }
+        let i = self.position(child)?;
+        let removed = self.children.remove(i);
 
-            let removed = self.children.remove(i);
-            removed.borrow_mut().parent = None;
-
-            return Some(removed);
+        for later in &self.children[i..] {
+            later.borrow_mut().at -= 1;
         }
 
-        None
+        self.cursor = None;
+        removed.borrow_mut().parent = None;
+
+        Some(removed)
+    }
+
+    /// Kill or revive this node in O(1); a dead node hides itself and its subtree from every walk.
+    pub fn set_dead(&mut self, dead: bool) {
+        if let Some(parent) = self.parent.as_ref().and_then(Weak::upgrade) {
+            if let Ok(parent) = parent.try_borrow() {
+                if parent
+                    .cursor
+                    .is_some_and(|(r, w)| w <= self.at && self.at < r)
+                {
+                    return;
+                }
+            }
+        }
+
+        self.dead = dead;
+    }
+
+    /// Pin this node weakly to a tomb.
+    pub fn set_tomb(&mut self, tomb: &Rc<Tomb>) {
+        self.tomb = Some(Rc::downgrade(tomb));
+    }
+
+    /// Purge unpinned dead children for at most `work` children, resuming where the last call stopped; returns the children examined.
+    pub fn compact_step(&mut self, work: usize) -> usize {
+        if work == 0 {
+            return 0;
+        }
+
+        let (mut r, mut w) = self.cursor.unwrap_or((0, 0));
+        let mut examined = 0;
+
+        while examined < work && r < self.children.len() {
+            let child = self.children[r].borrow();
+            let pinned = child
+                .tomb
+                .as_ref()
+                .is_some_and(|tomb| tomb.strong_count() > 0);
+            let purged = child.dead && !pinned;
+            drop(child);
+
+            if !purged {
+                if w != r {
+                    self.children.swap(w, r);
+                    self.children[w].borrow_mut().at = w;
+                    self.children[r].borrow_mut().at = r;
+                }
+
+                w += 1;
+            }
+
+            r += 1;
+            examined += 1;
+        }
+
+        if r < self.children.len() {
+            self.cursor = Some((r, w));
+
+            return examined;
+        }
+
+        for child in self.children.drain(w..) {
+            child.borrow_mut().parent = None;
+        }
+
+        self.cursor = None;
+
+        examined
+    }
+
+    /// Finish a running compaction, then purge every unpinned dead child.
+    pub fn compact(&mut self) {
+        if self.cursor.is_some() {
+            self.compact_step(usize::MAX);
+        }
+
+        self.compact_step(usize::MAX);
     }
 
     // ═══════════════════════════════════════════════════════════════════════════
@@ -185,7 +327,7 @@ impl TreeNode {
             while let Some(current) = queue.pop_front() {
                 result.push(Rc::clone(&current));
 
-                for child in &current.borrow().children {
+                for child in current.borrow().live() {
                     queue.push_back(Rc::clone(child));
                 }
             }
@@ -216,7 +358,7 @@ impl TreeNode {
     // ═══════════════════════════════════════════════════════════════════════════
     /// Return the name and child count.
     pub fn str(&self) -> String {
-        format!("TreeNode({}, {} children)", self.name, self.children.len())
+        format!("TreeNode({}, {} children)", self.name, self.live().count())
     }
 
     /// Return the name, guid and child count.
@@ -225,7 +367,7 @@ impl TreeNode {
             "TreeNode({}, {}, {} children)",
             self.name,
             self.guid(),
-            self.children.len()
+            self.live().count()
         )
     }
 }
@@ -304,7 +446,7 @@ impl Tree {
         while let Some(current) = queue.pop_front() {
             result.push(Rc::clone(&current));
 
-            for child in &current.borrow().children {
+            for child in current.borrow().live() {
                 queue.push_back(Rc::clone(child));
             }
         }
@@ -359,7 +501,7 @@ impl Tree {
             return result;
         };
 
-        for child in &node.borrow().children {
+        for child in node.borrow().live() {
             result.push(child.borrow().guid().to_string());
         }
 
@@ -394,7 +536,7 @@ impl Tree {
             }
         }
 
-        let parent = node.borrow().parent()?;
+        let parent = node.borrow().parent.as_ref().and_then(Weak::upgrade)?;
         let removed = parent.borrow_mut().remove(node);
 
         removed
@@ -610,7 +752,7 @@ fn clone_node(node: &TreeNode) -> Rc<RefCell<TreeNode>> {
 
     copy.borrow_mut().color = node.color.clone();
 
-    for child in &node.children {
+    for child in node.live() {
         copy.borrow_mut().add(&clone_node(&child.borrow()));
     }
 
@@ -637,7 +779,7 @@ fn node_to_proto(node: &TreeNode) -> crate::proto::TreeNode {
         });
     }
 
-    for child in &node.children {
+    for child in node.live() {
         proto.children.push(node_to_proto(&child.borrow()));
     }
 
@@ -687,7 +829,7 @@ struct TreeSerde {
 fn node_to_serde(node: &TreeNode) -> TreeNodeSerde {
     let mut children = Vec::new();
 
-    for child in &node.children {
+    for child in node.live() {
         children.push(node_to_serde(&child.borrow()));
     }
 

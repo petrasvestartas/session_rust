@@ -191,6 +191,120 @@ pub fn run_treenode_traverse() -> TestResult {
     })
 }
 
+pub fn run_treenode_set_dead() -> TestResult {
+    MINI_TEST!("Set Dead", {
+        use crate::TreeNode;
+        use std::rc::Rc;
+
+        let p = TreeNode::new("p");
+        let a = TreeNode::new("a");
+        let b = TreeNode::new("b");
+        let c = TreeNode::new("c");
+        let d = TreeNode::new("d");
+        p.borrow_mut().add(&a);
+        p.borrow_mut().add(&b);
+        p.borrow_mut().add(&c);
+        b.borrow_mut().add(&d);
+        b.borrow_mut().set_dead(true);
+        let kids = p.borrow().children();
+        let ancestors = d.borrow().ancestors();
+
+        MINI_CHECK!(kids.len() == 2 && Rc::ptr_eq(&kids[0], &a) && Rc::ptr_eq(&kids[1], &c));
+        MINI_CHECK!(b.borrow().is_dead() && b.borrow().parent().is_none());
+        MINI_CHECK!(Rc::ptr_eq(&b.borrow().children()[0], &d));
+        MINI_CHECK!(Rc::ptr_eq(&d.borrow().parent().unwrap(), &b));
+        MINI_CHECK!(ancestors.len() == 1 && Rc::ptr_eq(&ancestors[0], &b));
+        MINI_CHECK!(!p.borrow().is_leaf());
+
+        a.borrow_mut().set_dead(true);
+        c.borrow_mut().set_dead(true);
+
+        MINI_CHECK!(p.borrow().is_leaf());
+
+        a.borrow_mut().set_dead(false);
+        b.borrow_mut().set_dead(false);
+        c.borrow_mut().set_dead(false);
+        let kids = p.borrow().children();
+
+        MINI_CHECK!(kids.len() == 3 && Rc::ptr_eq(&kids[1], &b));
+        MINI_CHECK!(Rc::ptr_eq(&b.borrow().parent().unwrap(), &p));
+    })
+}
+
+pub fn run_treenode_compact() -> TestResult {
+    MINI_TEST!("Compact", {
+        use crate::history::Tomb;
+        use crate::TreeNode;
+        use std::rc::Rc;
+
+        let p = TreeNode::new("p");
+        let mut kids = Vec::new();
+
+        for i in 0..6 {
+            kids.push(TreeNode::new(&format!("c{i}")));
+            p.borrow_mut().add(&kids[i]);
+        }
+
+        let tomb = Tomb::new("", false, 0, Some(Rc::clone(&kids[3])));
+        kids[1].borrow_mut().set_dead(true);
+        kids[3].borrow_mut().set_dead(true);
+        kids[4].borrow_mut().set_dead(true);
+        kids[3].borrow_mut().set_tomb(&tomb);
+        let before = p.borrow().children();
+        p.borrow_mut().compact();
+        let after = p.borrow().children();
+        let raw = p.borrow_mut().compact_step(usize::MAX);
+        let q = TreeNode::new("q");
+        q.borrow_mut().add(&kids[5]);
+        let moved = p.borrow().children();
+
+        MINI_CHECK!(raw == 4 && !p.borrow().is_compacting());
+        MINI_CHECK!(after.len() == 3 && after.iter().zip(&before).all(|(x, y)| Rc::ptr_eq(x, y)));
+        MINI_CHECK!(kids[3].borrow().is_dead() && kids[3].borrow().get_tomb().is_some());
+        MINI_CHECK!(kids[1].borrow().get_tomb().is_none());
+        MINI_CHECK!(
+            moved.len() == 2 && Rc::ptr_eq(&moved[0], &kids[0]) && Rc::ptr_eq(&moved[1], &kids[2])
+        );
+    })
+}
+
+pub fn run_treenode_add_moves() -> TestResult {
+    MINI_TEST!("Add Moves", {
+        use crate::Tree;
+        use crate::TreeNode;
+        use std::rc::Rc;
+
+        let mut tree = Tree::new("t");
+        let root = TreeNode::new("root");
+        let p1 = TreeNode::new("p1");
+        let p2 = TreeNode::new("p2");
+        let w = TreeNode::new("w");
+        let x = TreeNode::new("x");
+        let z = TreeNode::new("z");
+        let y = TreeNode::new("y");
+        tree.add(&root, None);
+        tree.add(&p1, Some(&root));
+        tree.add(&p2, Some(&root));
+        tree.add(&w, Some(&p1));
+        tree.add(&x, Some(&p1));
+        tree.add(&z, Some(&p1));
+        tree.add(&y, Some(&x));
+        let count = tree.nodes().len();
+        let ghost = p2.borrow_mut().add(&x).unwrap();
+        let again = p2.borrow_mut().add(&x);
+        let old = p1.borrow().children();
+        let new = p2.borrow().children();
+
+        MINI_CHECK!(ghost.borrow().is_dead() && ghost.borrow().name.is_empty());
+        MINI_CHECK!(old.len() == 2 && Rc::ptr_eq(&old[0], &w) && Rc::ptr_eq(&old[1], &z));
+        MINI_CHECK!(Rc::ptr_eq(new.last().unwrap(), &x));
+        MINI_CHECK!(Rc::ptr_eq(&x.borrow().parent().unwrap(), &p2));
+        MINI_CHECK!(Rc::ptr_eq(&y.borrow().parent().unwrap(), &x));
+        MINI_CHECK!(tree.nodes().len() == count);
+        MINI_CHECK!(again.is_none() && new.len() == 1);
+    })
+}
+
 // ═══════════════════════════════════════════════════════════════════════════
 // Tree
 // ═══════════════════════════════════════════════════════════════════════════
@@ -450,6 +564,56 @@ pub fn run_tree_get_children_guids() -> TestResult {
     })
 }
 
+pub fn run_tree_dead_nodes() -> TestResult {
+    MINI_TEST!("Dead Nodes", {
+        use crate::Tree;
+        use crate::TreeNode;
+
+        let mut tree = Tree::new("t");
+        let root = TreeNode::new("root");
+        let g = TreeNode::new("group");
+        let a = TreeNode::new("alpha");
+        let b = TreeNode::new("beta");
+        let c = TreeNode::new("gamma");
+        let d = TreeNode::new("delta");
+        tree.add(&root, None);
+        tree.add(&g, Some(&root));
+        tree.add(&a, Some(&g));
+        tree.add(&b, Some(&g));
+        tree.add(&c, Some(&b));
+        tree.add(&d, Some(&g));
+        b.borrow_mut().set_dead(true);
+        let b_guid = b.borrow().guid().to_string();
+        let c_guid = c.borrow().guid().to_string();
+        let g_guid = g.borrow().guid().to_string();
+        let names = |nodes: Vec<std::rc::Rc<std::cell::RefCell<TreeNode>>>| -> Vec<String> {
+            nodes.iter().map(|n| n.borrow().name.clone()).collect()
+        };
+        let json = tree.jsondump().unwrap();
+        let from_json = Tree::jsonload(&json).unwrap();
+        let from_pb = Tree::pb_loads(&tree.pb_dumps()).unwrap();
+        let expected = ["root", "group", "alpha", "delta"];
+
+        MINI_CHECK!(names(tree.nodes()) == expected);
+        MINI_CHECK!(names(tree.leaves()) == ["alpha", "delta"]);
+        MINI_CHECK!(
+            tree.get_node_by_name("beta").is_none() && tree.get_nodes_by_name("gamma").is_empty()
+        );
+        MINI_CHECK!(
+            tree.find_node_by_guid(&b_guid).is_none() && tree.find_node_by_guid(&c_guid).is_none()
+        );
+        MINI_CHECK!(tree.get_children_guids(&g_guid).len() == 2);
+        MINI_CHECK!(names(tree.traverse("depthfirst", "preorder")) == expected);
+        MINI_CHECK!(names(tree.traverse("breadthfirst", "preorder")) == expected);
+        MINI_CHECK!(!tree.str().contains("beta") && !tree.str().contains("gamma"));
+        MINI_CHECK!(
+            tree.repr() == "Tree(t, 4 nodes)" && g.borrow().str() == "TreeNode(group, 2 children)"
+        );
+        MINI_CHECK!(!json.contains("beta") && !json.contains("gamma"));
+        MINI_CHECK!(names(from_json.nodes()) == expected && names(from_pb.nodes()) == expected);
+    })
+}
+
 REGISTER_MINI_TEST!(
     "TreeNode",
     "Constructor",
@@ -539,3 +703,19 @@ REGISTER_MINI_TEST!(
     "Get Children Guids",
     crate::tree_test::run_tree_get_children_guids
 );
+REGISTER_MINI_TEST!(
+    "TreeNode",
+    "Set Dead",
+    crate::tree_test::run_treenode_set_dead
+);
+REGISTER_MINI_TEST!(
+    "TreeNode",
+    "Compact",
+    crate::tree_test::run_treenode_compact
+);
+REGISTER_MINI_TEST!(
+    "TreeNode",
+    "Add Moves",
+    crate::tree_test::run_treenode_add_moves
+);
+REGISTER_MINI_TEST!("Tree", "Dead Nodes", crate::tree_test::run_tree_dead_nodes);

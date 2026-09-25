@@ -705,6 +705,90 @@ pub fn run_graph_cycle_basis() -> TestResult {
     })
 }
 
+pub fn run_graph_take_node() -> TestResult {
+    MINI_TEST!("Take Node", {
+        use crate::Graph;
+
+        let mut g = Graph::new("g");
+        g.add_node("a", "");
+        g.add_node("b", "bee");
+        g.add_edge("a", "b", "ab");
+        g.add_edge("b", "c", "bc");
+        g.set_vertex_attribute("b", "load", 2.0);
+        g.set_edge_attribute(("a", "b"), "weight", 3.0);
+        let before = g.jsondump().unwrap();
+        let (vertex, edges) = g.take_node("b").unwrap();
+
+        MINI_CHECK!(
+            before.contains(vertex.guid()) && vertex.index == 1 && vertex.attribute == "bee"
+        );
+        MINI_CHECK!(vertex.attributes.get("load") == Some(&2.0));
+        MINI_CHECK!(edges.len() == 2 && edges.iter().all(|e| e.v0 == "b" || e.v1 == "b"));
+        MINI_CHECK!(edges
+            .iter()
+            .any(|e| e.attributes.get("weight") == Some(&3.0)));
+        MINI_CHECK!(!g.has_node("b") && !g.has_edge(("a", "b")) && !g.has_edge(("c", "b")));
+        MINI_CHECK!(g.vertex_count == 3 && g.edge_count == 2);
+        MINI_CHECK!(g.get_vertices()[0].index == 0 && g.get_vertices()[1].index == 2);
+        MINI_CHECK!(g.str() == "<Graph with 2 vertices, 0 edges: g>");
+        MINI_CHECK!(g.take_node("b").is_none());
+    })
+}
+
+pub fn run_graph_put_node() -> TestResult {
+    MINI_TEST!("Put Node", {
+        use crate::Graph;
+
+        let mut g = Graph::new("g");
+        g.add_edge("a", "b", "ab");
+        g.add_edge("b", "c", "bc");
+        g.set_vertex_attribute("b", "load", 2.0);
+        g.set_edge_attribute(("b", "c"), "weight", 3.0);
+        let before = g.jsondump().unwrap();
+        let (vertex, edges) = g.take_node("b").unwrap();
+        g.put_node(vertex, edges);
+        let after = g.jsondump().unwrap();
+        let ab = g.edges["a"]["b"].guid().to_string();
+        let (vertex, edges) = g.take_node("b").unwrap();
+        g.remove_node("c");
+        g.add_edge("b", "d", "bd");
+        let guid = vertex.guid().to_string();
+        g.put_node(vertex, edges);
+
+        MINI_CHECK!(before == after);
+        MINI_CHECK!(g.edges["a"]["b"].guid() == ab && g.edges["b"]["a"].guid() == ab);
+        MINI_CHECK!(!g.has_edge(("b", "c")) && g.has_edge(("b", "d")));
+        MINI_CHECK!(
+            g.get_vertices()[1].guid() == guid && g.vertex_attribute("b", "load") == Some(2.0)
+        );
+        MINI_CHECK!(g.number_of_edges() == 2);
+    })
+}
+
+pub fn run_graph_renumber() -> TestResult {
+    MINI_TEST!("Renumber", {
+        use crate::Graph;
+
+        let mut g = Graph::new("g");
+        g.add_edge("a", "b", "");
+        g.add_edge("a", "c", "");
+        g.add_edge("b", "d", "");
+        g.add_edge("c", "e", "");
+        g.add_edge("d", "e", "");
+        g.add_edge("a", "e", "");
+        g.take_node("b");
+        g.take_node("d");
+        g.renumber();
+        let indices: Vec<i32> = g.get_vertices().iter().map(|v| v.index).collect();
+
+        MINI_CHECK!(indices == [0, 1, 2]);
+        MINI_CHECK!(g.edges["a"]["c"].index == 0 && g.edges["e"]["c"].index == 1);
+        MINI_CHECK!(g.edges["a"]["e"].index == 2 && g.edges["e"]["a"].index == 2);
+        MINI_CHECK!(g.vertex_count as usize == g.number_of_vertices() && g.vertex_count == 3);
+        MINI_CHECK!(g.edge_count as usize == g.number_of_edges() && g.edge_count == 3);
+    })
+}
+
 REGISTER_MINI_TEST!(
     "Vertex",
     "Constructor",
@@ -858,3 +942,6 @@ REGISTER_MINI_TEST!(
     "Cycle Basis",
     crate::graph_test::run_graph_cycle_basis
 );
+REGISTER_MINI_TEST!("Graph", "Take Node", crate::graph_test::run_graph_take_node);
+REGISTER_MINI_TEST!("Graph", "Put Node", crate::graph_test::run_graph_put_node);
+REGISTER_MINI_TEST!("Graph", "Renumber", crate::graph_test::run_graph_renumber);
