@@ -364,6 +364,7 @@ pub fn get_all_tests() -> Vec<RegisteredTest> {
     use crate::boolean_polyline_test::*;
     use crate::brep_test::*;
     use crate::closest_test::*;
+    use crate::collection_test::*;
     use crate::color_test::*;
     use crate::convex_hull_test::*;
     use crate::element_test::*;
@@ -635,6 +636,37 @@ pub fn get_all_tests() -> Vec<RegisteredTest> {
             group: "Color",
             name: "Serialization Errors",
             func: run_color_serialization_errors,
+        },
+        // Collection tests
+        RegisteredTest {
+            group: "Collection",
+            name: "Constructor",
+            func: run_collection_constructor,
+        },
+        RegisteredTest {
+            group: "Collection",
+            name: "Set Dead",
+            func: run_collection_set_dead,
+        },
+        RegisteredTest {
+            group: "Collection",
+            name: "Index Skips Dead",
+            func: run_collection_index_skips_dead,
+        },
+        RegisteredTest {
+            group: "Collection",
+            name: "Compact",
+            func: run_collection_compact,
+        },
+        RegisteredTest {
+            group: "Collection",
+            name: "Compact Step",
+            func: run_collection_compact_step,
+        },
+        RegisteredTest {
+            group: "Collection",
+            name: "Json Roundtrip",
+            func: run_collection_json_roundtrip,
         },
         // Point tests
         RegisteredTest {
@@ -3373,6 +3405,11 @@ pub fn get_all_tests() -> Vec<RegisteredTest> {
             group: "Session",
             name: "Ray Cast Instance",
             func: run_session_ray_cast_instance,
+        },
+        RegisteredTest {
+            group: "Session",
+            name: "Get Node",
+            func: run_session_get_node,
         },
         // History tests
         RegisteredTest {

@@ -1,3 +1,4 @@
+use crate::collection::Collection;
 use crate::history::clone;
 use crate::history::clone_item;
 use crate::history::DefinitionOp;
@@ -40,6 +41,7 @@ use std::collections::HashMap;
 use std::fmt;
 use std::fs;
 use std::rc::Rc;
+use std::rc::Weak;
 
 /// All geometry types as a variant; a new type joins here and in the Objects vectors.
 #[derive(Debug, Clone)]
@@ -248,54 +250,28 @@ macro_rules! typed {
 /// A deep copy of every vector and every object in it, guids included.
 fn clone_objects(objects: &Objects) -> Objects {
     let mut out = objects.clone();
-
-    for item in out.points.iter_mut() {
-        *item = Rc::new((**item).clone());
+    macro_rules! deep {
+        ($field:ident) => {
+            out.$field = objects
+                .$field
+                .iter()
+                .map(|item| Rc::new((**item).clone()))
+                .collect();
+        };
     }
 
-    for item in out.lines.iter_mut() {
-        *item = Rc::new((**item).clone());
-    }
-
-    for item in out.planes.iter_mut() {
-        *item = Rc::new((**item).clone());
-    }
-
-    for item in out.bboxes.iter_mut() {
-        *item = Rc::new((**item).clone());
-    }
-
-    for item in out.polylines.iter_mut() {
-        *item = Rc::new((**item).clone());
-    }
-
-    for item in out.pointclouds.iter_mut() {
-        *item = Rc::new((**item).clone());
-    }
-
-    for item in out.meshes.iter_mut() {
-        *item = Rc::new((**item).clone());
-    }
-
-    for item in out.nurbscurves.iter_mut() {
-        *item = Rc::new((**item).clone());
-    }
-
-    for item in out.nurbssurfaces.iter_mut() {
-        *item = Rc::new((**item).clone());
-    }
-
-    for item in out.breps.iter_mut() {
-        *item = Rc::new((**item).clone());
-    }
-
-    for item in out.elements.iter_mut() {
-        *item = Rc::new((**item).clone());
-    }
-
-    for item in out.instances.iter_mut() {
-        *item = Rc::new((**item).clone());
-    }
+    deep!(points);
+    deep!(lines);
+    deep!(planes);
+    deep!(bboxes);
+    deep!(polylines);
+    deep!(pointclouds);
+    deep!(meshes);
+    deep!(nurbscurves);
+    deep!(nurbssurfaces);
+    deep!(breps);
+    deep!(elements);
+    deep!(instances);
 
     out
 }
@@ -303,39 +279,37 @@ fn clone_objects(objects: &Objects) -> Objects {
 /// The vectors of objects re-pointed at lookup: `Rc::make_mut` on a lookup entry splits it from its vector, and the lookup is the mutable truth.
 fn synced(objects: &Objects, lookup: &HashMap<String, Geometry>) -> Objects {
     let mut objects = objects.clone();
-    macro_rules! sync {
-        ($vec:expr, $variant:ident) => {
-            for item in $vec.iter_mut() {
-                if let Some(Geometry::$variant(g)) = lookup.get(item.guid()) {
-                    if !Rc::ptr_eq(item, g) {
-                        *item = Rc::clone(g);
-                    }
-                }
-            }
-        };
-    }
-
-    sync!(objects.points, Point);
-    sync!(objects.lines, Line);
-    sync!(objects.planes, Plane);
-    sync!(objects.bboxes, OBB);
-    sync!(objects.polylines, Polyline);
-    sync!(objects.pointclouds, PointCloud);
-    sync!(objects.meshes, Mesh);
-    sync!(objects.nurbscurves, NurbsCurve);
-    sync!(objects.nurbssurfaces, NurbsSurface);
-    sync!(objects.breps, BRep);
-    sync!(objects.elements, Element);
+    repoint(&mut objects, lookup);
 
     objects
 }
 
-/// Every geometry of objects under its guid.
-fn index_geometry(objects: &Objects, lookup: &mut HashMap<String, Geometry>) {
+/// Point every live slot whose guid lookup holds with another value at the lookup value.
+fn repoint(objects: &mut Objects, lookup: &HashMap<String, Geometry>) {
+    for (guid, geometry) in lookup {
+        let (collection, _) = collection_of(geometry);
+        macro_rules! sync {
+            ($vec:expr, $variant:ident) => {
+                if let (Some(slot), Geometry::$variant(g)) = ($vec.get_slot(guid), geometry) {
+                    if !Rc::ptr_eq($vec.get_item(slot), g) {
+                        $vec.set_item(slot, Rc::clone(g));
+                    }
+                }
+            };
+        }
+
+        typed!(collection, objects, sync);
+    }
+}
+
+/// Index every live slot lookup lacks, then push every geometry only lookup holds, in guid order.
+fn adopt(objects: &mut Objects, lookup: &mut HashMap<String, Geometry>) {
     macro_rules! index {
         ($vec:expr, $variant:ident) => {
             for item in &$vec {
-                lookup.insert(item.guid().to_string(), Geometry::$variant(Rc::clone(item)));
+                if !lookup.contains_key(item.guid()) {
+                    lookup.insert(item.guid().to_string(), Geometry::$variant(Rc::clone(item)));
+                }
             }
         };
     }
@@ -351,16 +325,43 @@ fn index_geometry(objects: &Objects, lookup: &mut HashMap<String, Geometry>) {
     index!(objects.nurbssurfaces, NurbsSurface);
     index!(objects.breps, BRep);
     index!(objects.elements, Element);
+    let mut orphans: Vec<&Geometry> = Vec::new();
+
+    for geometry in lookup.values() {
+        let (collection, _) = collection_of(geometry);
+        let mut held = false;
+        macro_rules! find {
+            ($vec:expr, $variant:ident) => {
+                held = $vec.get_slot(geometry.guid()).is_some()
+            };
+        }
+
+        typed!(collection, objects, find);
+
+        if !held {
+            orphans.push(geometry);
+        }
+    }
+
+    orphans.sort_by(|a, b| a.guid().cmp(b.guid()));
+
+    for geometry in orphans {
+        let (collection, _) = collection_of(geometry);
+        insert_at(
+            objects,
+            collection,
+            usize::MAX,
+            &Item::Geometry(geometry.clone()),
+        );
+    }
 }
 
 /// Which vector of objects holds a guid, and where; ("", -1) when none does.
 fn locate(objects: &Objects, guid: &str) -> (String, i64) {
     macro_rules! find {
         ($vec:expr, $name:expr) => {
-            for i in 0..$vec.len() {
-                if $vec[i].guid() == guid {
-                    return ($name.to_string(), i as i64);
-                }
+            if let Some(slot) = $vec.get_slot(guid) {
+                return ($name.to_string(), slot as i64);
             }
         };
     }
@@ -405,8 +406,7 @@ fn insert_at(objects: &mut Objects, collection: &str, index: usize, obj: &Item) 
     macro_rules! insert {
         ($vec:expr, $variant:ident) => {
             if let Item::Geometry(Geometry::$variant(g)) = obj {
-                at = index.min($vec.len());
-                $vec.insert(at, Rc::clone(g));
+                at = put(&mut $vec, index, Rc::clone(g));
             }
         };
     }
@@ -414,35 +414,59 @@ fn insert_at(objects: &mut Objects, collection: &str, index: usize, obj: &Item) 
     typed!(collection, objects, insert);
 
     if let Item::Component(component) = obj {
-        at = index.min(objects.components.len());
-        objects.components.insert(at, component.clone());
+        at = put(&mut objects.components, index, component.clone());
     }
 
     if let Item::InstanceRef(instance) = obj {
-        at = index.min(objects.instances.len());
-        objects.instances.insert(at, Rc::clone(instance));
+        at = put(&mut objects.instances, index, Rc::clone(instance));
     }
 
     at
+}
+
+/// Push item, or rebuild the list with it at index while index is inside; returns where it went.
+fn put<E: crate::collection::Keyed + Clone>(
+    list: &mut Collection<E>,
+    index: usize,
+    item: E,
+) -> usize {
+    if index >= list.len() {
+        list.push(item);
+
+        return list.len() - 1;
+    }
+
+    let mut items = list.to_vec();
+    items.insert(index, item);
+    *list = Collection::from(items);
+
+    index
 }
 
 /// Take the object at index out of the vector of that name.
 fn remove_at(objects: &mut Objects, collection: &str, index: usize) {
     macro_rules! remove {
         ($vec:expr, $variant:ident) => {{
-            $vec.remove(index);
+            take(&mut $vec, index)
         }};
     }
 
     typed!(collection, objects, remove);
 
     if collection == "components" {
-        objects.components.remove(index);
+        take(&mut objects.components, index);
     }
 
     if collection == "instances" {
-        objects.instances.remove(index);
+        take(&mut objects.instances, index);
     }
+}
+
+/// Rebuild the list without the entry at index.
+fn take<E: crate::collection::Keyed + Clone>(list: &mut Collection<E>, index: usize) {
+    let mut items = list.to_vec();
+    items.remove(index);
+    *list = Collection::from(items);
 }
 
 /// Put an object in place of the one at index of the vector of that name.
@@ -450,7 +474,7 @@ fn store_at(objects: &mut Objects, collection: &str, index: usize, obj: &Item) {
     macro_rules! store {
         ($vec:expr, $variant:ident) => {
             if let Item::Geometry(Geometry::$variant(g)) = obj {
-                $vec[index] = Rc::clone(g);
+                $vec.set_item(index, Rc::clone(g));
             }
         };
     }
@@ -458,11 +482,11 @@ fn store_at(objects: &mut Objects, collection: &str, index: usize, obj: &Item) {
     typed!(collection, objects, store);
 
     if let Item::Component(component) = obj {
-        objects.components[index] = component.clone();
+        objects.components.set_item(index, component.clone());
     }
 
     if let Item::InstanceRef(instance) = obj {
-        objects.instances[index] = Rc::clone(instance);
+        objects.instances.set_item(index, Rc::clone(instance));
     }
 }
 
@@ -735,6 +759,12 @@ pub struct Session {
     pub cached_boxes: Vec<OBB>, // Box per leaf of cached_ray_bvh.
     #[serde(skip)]
     pub bvh_cache_dirty: bool, // Flag to rebuild cached_ray_bvh.
+    #[serde(skip)]
+    pub node_lookup: HashMap<String, Rc<RefCell<TreeNode>>>, // Tree node per live object guid.
+    #[serde(skip)]
+    indexed: Option<Weak<RefCell<TreeNode>>>, // Tree root at the last reindex, stale after a wholesale tree swap.
+    #[serde(skip)]
+    pub revision: u64, // Bumped by every Session mutation.
 }
 
 impl Default for Session {
@@ -759,7 +789,7 @@ impl Clone for Session {
         session.graph = self.graph.clone();
         session.xforms = self.xforms.clone();
         session.interactions = self.interactions.clone();
-        session._index_objects();
+        session.reindex();
 
         session
     }
@@ -773,6 +803,7 @@ impl Session {
     pub fn new(name: &str) -> Self {
         let mut tree = Tree::new(&format!("{name}_tree"));
         tree.add(&TreeNode::new(name), None);
+        let indexed = tree.root().map(|root| Rc::downgrade(&root));
 
         Self {
             guid: std::sync::OnceLock::new(),
@@ -793,6 +824,9 @@ impl Session {
             cached_guids: Vec::new(),
             cached_boxes: Vec::new(),
             bvh_cache_dirty: true,
+            node_lookup: HashMap::new(),
+            indexed,
+            revision: 0,
         }
     }
 
@@ -817,6 +851,33 @@ impl Session {
     /// Get a geometry object by GUID with type safety.
     pub fn get_object(&self, guid: &str) -> Option<&Geometry> {
         self.lookup.get(guid)
+    }
+
+    /// The tree node of a live object in O(1) through node_lookup; a tree search when the index is stale, None for a guid that is no live object.
+    pub fn get_node(&self, guid: &str) -> Option<Rc<RefCell<TreeNode>>> {
+        let live = self.lookup.contains_key(guid)
+            || self.component_lookup.contains_key(guid)
+            || self.instance_lookup.contains_key(guid);
+
+        if !live {
+            return None;
+        }
+
+        let root = self.tree.root();
+        let fresh = match (&self.indexed, &root) {
+            (Some(indexed), Some(root)) => std::ptr::eq(indexed.as_ptr(), Rc::as_ptr(root)),
+            _ => false,
+        };
+
+        if let (true, Some(node)) = (fresh, self.node_lookup.get(guid)) {
+            let owned = node.borrow().name == guid && node.borrow().parent().is_some();
+
+            if owned {
+                return Some(Rc::clone(node));
+            }
+        }
+
+        self.tree.get_node_by_name(guid)
     }
 
     /// Select objects of one type, grouped by the top-level nodes of the tree.
@@ -922,7 +983,7 @@ impl Session {
     /// The CUMULATIVE placement of an object: every ancestor's transform multiplied down the tree onto its own.
     pub fn world_xform(&self, guid: &str) -> Xform {
         let mut acc = self.xform(guid);
-        let Some(node) = self.tree.get_node_by_name(guid) else {
+        let Some(node) = self.get_node(guid) else {
             return acc;
         };
 
@@ -985,42 +1046,39 @@ impl Session {
     /// All geometry with its hierarchical placement BAKED into the coordinates; each instance becomes its definition placed, in the definition's vector.
     pub fn get_geometry(&self) -> Objects {
         let objects = self.objects_synced();
-        let mut out = clone_objects(&objects);
+        let mut out = objects.clone();
         let world = self.world_xforms();
         macro_rules! bake {
-            ($vec:expr) => {
-                for item in $vec.iter_mut() {
-                    let Some(xform) = world.get(item.guid()) else {
-                        continue;
-                    };
+            ($field:ident, $method:ident) => {
+                out.$field = objects
+                    .$field
+                    .iter()
+                    .map(|item| {
+                        let mut copy = (**item).clone();
 
-                    if !xform.is_identity() {
-                        Rc::make_mut(item).transform(xform);
-                    }
-                }
+                        if let Some(xform) = world.get(item.guid()) {
+                            if !xform.is_identity() {
+                                copy.$method(xform);
+                            }
+                        }
+
+                        Rc::new(copy)
+                    })
+                    .collect();
             };
         }
 
-        bake!(out.points);
-        bake!(out.lines);
-        bake!(out.planes);
-        bake!(out.bboxes);
-        bake!(out.polylines);
-        bake!(out.pointclouds);
-        bake!(out.meshes);
-        bake!(out.nurbscurves);
-        bake!(out.nurbssurfaces);
-        bake!(out.breps);
-
-        for element in out.elements.iter_mut() {
-            let Some(xform) = world.get(element.guid()) else {
-                continue;
-            };
-
-            if !xform.is_identity() {
-                Rc::make_mut(element).place(xform);
-            }
-        }
+        bake!(points, transform);
+        bake!(lines, transform);
+        bake!(planes, transform);
+        bake!(bboxes, transform);
+        bake!(polylines, transform);
+        bake!(pointclouds, transform);
+        bake!(meshes, transform);
+        bake!(nurbscurves, transform);
+        bake!(nurbssurfaces, transform);
+        bake!(breps, transform);
+        bake!(elements, place);
 
         for instance in &objects.instances {
             let Some(definition) = self.definition_lookup.get(&instance.definition_guid) else {
@@ -1307,6 +1365,15 @@ impl Session {
         Rc<RefCell<TreeNode>>: 'a,
     {
         let parent = parent.into();
+        let guid = node.borrow().name.clone();
+        self.revision += 1;
+
+        if self.get_object(&guid).is_some()
+            || self.component_lookup.contains_key(&guid)
+            || self.instance_lookup.contains_key(&guid)
+        {
+            self.node_lookup.insert(guid, Rc::clone(node));
+        }
 
         if parent.is_none() {
             if let Some(root) = self.tree.root() {
@@ -1327,16 +1394,19 @@ impl Session {
 
     /// Add an edge between two geometry objects in the graph.
     pub fn add_edge(&mut self, guid1: &str, guid2: &str, attribute: &str) {
+        self.revision += 1;
         self.graph.add_edge(guid1, guid2, attribute);
     }
 
     /// Add a parent-child relationship in the tree.
     pub fn add_hierarchy(&mut self, parent_guid: &str, child_guid: &str) -> bool {
+        self.revision += 1;
         self.tree.add_child_by_guid(parent_guid, child_guid)
     }
 
     /// Add a relationship edge in the graph.
     pub fn add_relationship(&mut self, from_guid: &str, to_guid: &str, relationship_type: &str) {
+        self.revision += 1;
         self.graph.add_edge(from_guid, to_guid, relationship_type);
     }
 
@@ -1512,6 +1582,7 @@ impl Session {
 
         self.xforms.insert(guid.to_string(), xform);
         self.bvh_cache_dirty = true;
+        self.revision += 1;
     }
 
     /// Remove an object's local transform, returning whether one was present.
@@ -1530,6 +1601,7 @@ impl Session {
 
         self.xforms.remove(guid);
         self.bvh_cache_dirty = true;
+        self.revision += 1;
 
         true
     }
@@ -1556,6 +1628,8 @@ impl Session {
         if !self.graph.has_edge((first, second)) {
             self.graph.add_edge(first, second, "");
         }
+
+        self.revision += 1;
 
         let id = self.graph.edges[first][second].guid().to_string();
         let list = self.interactions.entry(id).or_default();
@@ -1590,6 +1664,7 @@ impl Session {
         }
 
         let id = self.graph.edges[a.guid()][b.guid()].guid().to_string();
+        self.revision += 1;
         self.interactions.remove(&id);
         self.graph.remove_edge((a.guid(), b.guid()));
     }
@@ -1609,6 +1684,7 @@ impl Session {
 
     /// Revert the latest committed transaction, returning whether there was one.
     pub fn undo(&mut self) -> bool {
+        self.revision += 1;
         let mut history = std::mem::take(&mut self.history);
         let undone = history.undo(self);
         self.history = history;
@@ -1618,6 +1694,7 @@ impl Session {
 
     /// Reapply the latest undone transaction, returning whether there was one.
     pub fn redo(&mut self) -> bool {
+        self.revision += 1;
         let mut history = std::mem::take(&mut self.history);
         let redone = history.redo(self);
         self.history = history;
@@ -1842,7 +1919,7 @@ impl Session {
             }
         }
 
-        session._index_objects();
+        session.reindex();
 
         Ok(session)
     }
@@ -1966,7 +2043,7 @@ impl Session {
             }
         }
 
-        session._index_objects();
+        session.reindex();
 
         Ok(session)
     }
@@ -2032,9 +2109,9 @@ impl Session {
     fn objects_synced(&self) -> Objects {
         let mut objects = synced(&self.objects, &self.lookup);
 
-        for item in objects.instances.iter_mut() {
-            if let Some(instance) = self.instance_lookup.get(item.guid()) {
-                *item = Rc::clone(instance);
+        for (guid, instance) in &self.instance_lookup {
+            if let Some(slot) = objects.instances.get_slot(guid) {
+                objects.instances.set_item(slot, Rc::clone(instance));
             }
         }
 
@@ -2072,6 +2149,8 @@ impl Session {
         self.graph.add_node(&guid, &attribute);
         self.bvh_cache_dirty = true;
         let node = TreeNode::new(&guid);
+        self.node_lookup.insert(guid.clone(), Rc::clone(&node));
+        self.revision += 1;
         let host = parent.cloned().or_else(|| self.tree.root());
         let mut parent_guid: Option<String> = None;
         let mut index: usize = 0;
@@ -2120,14 +2199,16 @@ impl Session {
             remove_at(&mut self.objects, &collection, obj_index as usize);
         }
 
+        let mut node = self.get_node(guid);
         self.lookup.remove(guid);
         self.component_lookup.remove(guid);
         self.instance_lookup.remove(guid);
+        self.node_lookup.remove(guid);
         let xform = self.xforms.remove(guid);
         self.bvh_cache_dirty = true;
+        self.revision += 1;
         let mut parent_guid: Option<String> = None;
         let mut index: usize = 0;
-        let mut node = self.tree.get_node_by_name(guid);
 
         if let Some(found) = node.take() {
             if let Some(parent) = found.borrow().parent() {
@@ -2214,6 +2295,8 @@ impl Session {
             Some(node) => Rc::clone(node),
             None => TreeNode::new(&op.guid),
         };
+        self.node_lookup.insert(op.guid.clone(), Rc::clone(&node));
+        self.revision += 1;
 
         if let Some(parent_guid) = &op.parent_guid {
             if let Some(parent) = self.tree.get_node_by_name(parent_guid) {
@@ -2281,6 +2364,7 @@ impl Session {
         }
 
         store_at(&mut self.objects, &collection, obj_index as usize, &obj);
+        self.revision += 1;
         let mut attribute = String::new();
 
         for (name, prefix) in COLLECTIONS {
@@ -2310,34 +2394,97 @@ impl Session {
         }
     }
 
-    /// Point every lookup at the objects and definitions this session holds, folding a non-identity instance xform into xforms.
-    fn _index_objects(&mut self) {
-        self.lookup.clear();
-        self.component_lookup.clear();
-        self.instance_lookup.clear();
-        self.definition_lookup.clear();
-        index_geometry(&self.objects, &mut self.lookup);
-        index_geometry(&self.definitions, &mut self.definition_lookup);
+    /// Rebuild every index from the tables in O(n + N): the maps win over the slots, map-only and slot-only entries are adopted, a non-identity instance xform folds into xforms, node_lookup is refilled from the live tree.
+    pub fn reindex(&mut self) {
+        repoint(&mut self.objects, &self.lookup);
+        adopt(&mut self.objects, &mut self.lookup);
+        repoint(&mut self.definitions, &self.definition_lookup);
+        adopt(&mut self.definitions, &mut self.definition_lookup);
 
-        for component in &self.objects.components {
-            self.component_lookup
-                .insert(component.guid().to_string(), component.clone());
-        }
-
-        let mut instances = std::mem::take(&mut self.objects.instances);
-
-        for instance in &mut instances {
-            if !instance.xform.is_identity() {
-                let folded = &self.xform(instance.guid()) * &instance.xform;
-                self.xforms.insert(instance.guid().to_string(), folded);
-                Rc::make_mut(instance).xform = Xform::identity();
+        for slot in 0..self.objects.components.number_of_slots() {
+            if self.objects.components.is_dead(slot) {
+                continue;
             }
 
-            self.instance_lookup
-                .insert(instance.guid().to_string(), Rc::clone(instance));
+            let guid = self.objects.components.get_item(slot).guid.clone();
+
+            match self.component_lookup.get(&guid) {
+                Some(component) => {
+                    let component = component.clone();
+                    self.objects.components.set_item(slot, component);
+                }
+
+                None => {
+                    let component = self.objects.components.get_item(slot).clone();
+                    self.component_lookup.insert(guid, component);
+                }
+            }
         }
 
-        self.objects.instances = instances;
+        let mut components: Vec<&Component> = Vec::new();
+
+        for (guid, component) in &self.component_lookup {
+            if self.objects.components.get_slot(guid).is_none() {
+                components.push(component);
+            }
+        }
+
+        components.sort_by(|a, b| a.guid.cmp(&b.guid));
+
+        for component in components {
+            self.objects.components.push(component.clone());
+        }
+
+        let mut instances: Vec<&Rc<InstanceRef>> = Vec::new();
+
+        for (guid, instance) in &self.instance_lookup {
+            if self.objects.instances.get_slot(guid).is_none() {
+                instances.push(instance);
+            }
+        }
+
+        instances.sort_by(|a, b| a.guid().cmp(b.guid()));
+
+        for instance in instances {
+            self.objects.instances.push(Rc::clone(instance));
+        }
+
+        for slot in 0..self.objects.instances.number_of_slots() {
+            if self.objects.instances.is_dead(slot) {
+                continue;
+            }
+
+            let mut instance = Rc::clone(self.objects.instances.get_item(slot));
+            let guid = instance.guid().to_string();
+
+            if let Some(truth) = self.instance_lookup.get(&guid) {
+                instance = Rc::clone(truth);
+            }
+
+            if !instance.xform.is_identity() {
+                let folded = &self.xform(&guid) * &instance.xform;
+                self.xforms.insert(guid.clone(), folded);
+                Rc::make_mut(&mut instance).xform = Xform::identity();
+            }
+
+            self.objects.instances.set_item(slot, Rc::clone(&instance));
+            self.instance_lookup.insert(guid, instance);
+        }
+
+        self.node_lookup.clear();
+
+        for node in self.tree.nodes() {
+            let guid = node.borrow().name.clone();
+            let live = self.lookup.contains_key(&guid)
+                || self.component_lookup.contains_key(&guid)
+                || self.instance_lookup.contains_key(&guid);
+
+            if live && !self.node_lookup.contains_key(&guid) {
+                self.node_lookup.insert(guid, node);
+            }
+        }
+
+        self.indexed = self.tree.root().map(|root| Rc::downgrade(&root));
     }
 
     /// Set or drops (None) a definition under guid, unrecorded.
@@ -2350,6 +2497,7 @@ impl Session {
 
         self.definition_lookup.remove(guid);
         self.bvh_cache_dirty = true;
+        self.revision += 1;
         let Some(definition) = definition else {
             return;
         };
@@ -2377,6 +2525,7 @@ impl Session {
         }
 
         self.bvh_cache_dirty = true;
+        self.revision += 1;
     }
 
     /// The xforms in canonical order() sequence, identity entries omitted, the exact sequence jsondump and pb_dumps write.

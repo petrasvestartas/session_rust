@@ -2068,6 +2068,42 @@ pub fn run_session_ray_cast_instance() -> TestResult {
     })
 }
 
+pub fn run_session_get_node() -> TestResult {
+    MINI_TEST!("Get Node", {
+        use crate::Point;
+        use crate::Session;
+        use crate::Tree;
+        use crate::TreeNode;
+        use std::rc::Rc;
+
+        let mut session = Session::default();
+        let node = session.add_point(Point::new(0.0, 0.0, 0.0), None);
+        let guid = node.borrow().name.clone();
+        let found = session.get_node(&guid);
+        session.begin("remove");
+        session.remove_object(&guid);
+        session.commit();
+        let removed = session.get_node(&guid);
+        session.undo();
+        let restored = session.get_node(&guid);
+        let mut tree = Tree::new("swapped");
+        tree.add(&TreeNode::new("root"), None);
+        let root = tree.root().unwrap();
+        let swapped = TreeNode::new(&guid);
+        tree.add(&swapped, Some(&root));
+        session.tree = tree;
+        let searched = session.get_node(&guid);
+        session.reindex();
+
+        MINI_CHECK!(found.is_some_and(|n| Rc::ptr_eq(&n, &node)));
+        MINI_CHECK!(removed.is_none());
+        MINI_CHECK!(restored.is_some_and(|n| Rc::ptr_eq(&n, &node)));
+        MINI_CHECK!(searched.is_some_and(|n| Rc::ptr_eq(&n, &swapped)));
+        MINI_CHECK!(Rc::ptr_eq(&session.node_lookup[&guid], &swapped));
+        MINI_CHECK!(session.get_node("missing").is_none());
+    })
+}
+
 REGISTER_MINI_TEST!(
     "Session",
     "Constructor",
@@ -2384,4 +2420,9 @@ REGISTER_MINI_TEST!(
     "Session",
     "Ray Cast Instance",
     crate::session_test::run_session_ray_cast_instance
+);
+REGISTER_MINI_TEST!(
+    "Session",
+    "Get Node",
+    crate::session_test::run_session_get_node
 );

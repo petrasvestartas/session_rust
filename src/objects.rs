@@ -1,4 +1,6 @@
 use crate::brep::BRep;
+use crate::collection::Collection;
+use crate::collection::Keyed;
 use crate::element::Element;
 use crate::instance_ref::InstanceRef;
 use crate::line::Line;
@@ -20,7 +22,7 @@ use std::rc::Rc;
 use std::sync::OnceLock;
 
 /// Convert every object of a list into a repeated proto field.
-fn dump_pb_list<T, P>(list: &[Rc<T>], to_proto: fn(&T) -> P) -> Vec<P> {
+fn dump_pb_list<T, P>(list: &Collection<Rc<T>>, to_proto: fn(&T) -> P) -> Vec<P> {
     let mut out = Vec::with_capacity(list.len());
 
     for item in list {
@@ -31,8 +33,11 @@ fn dump_pb_list<T, P>(list: &[Rc<T>], to_proto: fn(&T) -> P) -> Vec<P> {
 }
 
 /// Load every message of a repeated proto field, keeping guids.
-fn load_pb_list<T, P>(repeated: Vec<P>, from_proto: fn(P) -> T) -> Vec<Rc<T>> {
-    let mut out = Vec::with_capacity(repeated.len());
+fn load_pb_list<T, P>(repeated: Vec<P>, from_proto: fn(P) -> T) -> Collection<Rc<T>>
+where
+    Rc<T>: Keyed,
+{
+    let mut out = Collection::new();
 
     for item in repeated {
         out.push(Rc::new(from_proto(item)));
@@ -45,8 +50,11 @@ fn load_pb_list<T, P>(repeated: Vec<P>, from_proto: fn(P) -> T) -> Vec<Rc<T>> {
 fn try_load_pb_list<T, P>(
     repeated: Vec<P>,
     from_proto: fn(P) -> Result<T, Box<dyn std::error::Error>>,
-) -> Result<Vec<Rc<T>>, Box<dyn std::error::Error>> {
-    let mut out = Vec::with_capacity(repeated.len());
+) -> Result<Collection<Rc<T>>, Box<dyn std::error::Error>>
+where
+    Rc<T>: Keyed,
+{
+    let mut out = Collection::new();
 
     for item in repeated {
         out.push(Rc::new(from_proto(item)?));
@@ -158,24 +166,24 @@ pub struct Objects {
         deserialize_with = "crate::guid_serde::deserialize"
     )]
     guid: OnceLock<String>, // Lazily minted GUID.
-    pub name: String,                         // The name of the collection.
-    pub points: Vec<Rc<Point>>,               // Points.
-    pub lines: Vec<Rc<Line>>,                 // Lines.
-    pub planes: Vec<Rc<Plane>>,               // Planes.
-    pub bboxes: Vec<Rc<OBB>>,                 // Bounding boxes.
-    pub polylines: Vec<Rc<Polyline>>,         // Polylines.
-    pub pointclouds: Vec<Rc<PointCloud>>,     // Point clouds.
-    pub meshes: Vec<Rc<Mesh>>,                // Meshes.
-    pub nurbscurves: Vec<Rc<NurbsCurve>>,     // NURBS curves.
-    pub nurbssurfaces: Vec<Rc<NurbsSurface>>, // NURBS surfaces.
+    pub name: String,                                // The name of the collection.
+    pub points: Collection<Rc<Point>>,               // Points.
+    pub lines: Collection<Rc<Line>>,                 // Lines.
+    pub planes: Collection<Rc<Plane>>,               // Planes.
+    pub bboxes: Collection<Rc<OBB>>,                 // Bounding boxes.
+    pub polylines: Collection<Rc<Polyline>>,         // Polylines.
+    pub pointclouds: Collection<Rc<PointCloud>>,     // Point clouds.
+    pub meshes: Collection<Rc<Mesh>>,                // Meshes.
+    pub nurbscurves: Collection<Rc<NurbsCurve>>,     // NURBS curves.
+    pub nurbssurfaces: Collection<Rc<NurbsSurface>>, // NURBS surfaces.
     // SESSION_VIEWER
     #[serde(default)]
     pub nurbssurfacetrimmeds: Vec<Rc<NurbsSurfaceTrimmed>>,
-    pub breps: Vec<Rc<BRep>>,       // BReps.
-    pub elements: Vec<Rc<Element>>, // Elements.
-    pub components: Vec<Component>, // Components.
+    pub breps: Collection<Rc<BRep>>,       // BReps.
+    pub elements: Collection<Rc<Element>>, // Elements.
+    pub components: Collection<Component>, // Components.
     #[serde(default)]
-    pub instances: Vec<Rc<InstanceRef>>, // Instances, each placing a definition of Session::definitions by guid.
+    pub instances: Collection<Rc<InstanceRef>>, // Instances, each placing a definition of Session::definitions by guid.
 }
 
 impl Default for Objects {
@@ -184,20 +192,20 @@ impl Default for Objects {
         Self {
             guid: OnceLock::new(),
             name: "my_objects".to_string(),
-            points: Vec::new(),
-            lines: Vec::new(),
-            planes: Vec::new(),
-            bboxes: Vec::new(),
-            polylines: Vec::new(),
-            pointclouds: Vec::new(),
-            meshes: Vec::new(),
-            nurbscurves: Vec::new(),
-            nurbssurfaces: Vec::new(),
+            points: Collection::new(),
+            lines: Collection::new(),
+            planes: Collection::new(),
+            bboxes: Collection::new(),
+            polylines: Collection::new(),
+            pointclouds: Collection::new(),
+            meshes: Collection::new(),
+            nurbscurves: Collection::new(),
+            nurbssurfaces: Collection::new(),
             nurbssurfacetrimmeds: Vec::new(),
-            breps: Vec::new(),
-            elements: Vec::new(),
-            components: Vec::new(),
-            instances: Vec::new(),
+            breps: Collection::new(),
+            elements: Collection::new(),
+            components: Collection::new(),
+            instances: Collection::new(),
         }
     }
 }

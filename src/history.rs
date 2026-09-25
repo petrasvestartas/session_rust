@@ -1,9 +1,12 @@
+use crate::graph::Edge;
+use crate::graph::Vertex;
 use crate::interaction::Interaction;
 use crate::session::Geometry;
 use crate::session::Item;
 use crate::session::Session;
 use crate::tree::TreeNode;
 use crate::xform::Xform;
+use std::cell::Cell;
 use std::cell::RefCell;
 use std::collections::BTreeMap;
 use std::fmt;
@@ -40,6 +43,40 @@ pub fn clone_item(obj: &Item) -> Item {
 // ═══════════════════════════════════════════════════════════════════════════
 // Records
 // ═══════════════════════════════════════════════════════════════════════════
+/// One dead or revivable entity: where it lives and what it parked while dead; slots and nodes pin it weakly, records strongly.
+#[derive(Debug)]
+pub struct Tomb {
+    pub collection: String, // The Objects list of its slot, "" for a node-only tomb.
+    pub definition: bool,   // Whether the slot is in Session::definitions.
+    pub slot: Cell<usize>,  // Its raw slot, moved by compaction.
+    pub node: Option<Rc<RefCell<TreeNode>>>, // Its tree node, None for a slot-only tomb.
+    pub vertex: RefCell<Option<Vertex>>, // Its graph vertex while dead.
+    pub edges: RefCell<Vec<Edge>>, // Its incident edges while dead.
+    pub xform: RefCell<Option<Xform>>, // Its local transform while dead.
+    pub interactions: RefCell<BTreeMap<String, Vec<Box<dyn Interaction>>>>, // Its edges' interactions while dead, by edge guid.
+}
+
+impl Tomb {
+    /// Construct a tomb with nothing parked.
+    pub fn new(
+        collection: &str,
+        definition: bool,
+        slot: usize,
+        node: Option<Rc<RefCell<TreeNode>>>,
+    ) -> Rc<Tomb> {
+        Rc::new(Self {
+            collection: collection.to_string(),
+            definition,
+            slot: Cell::new(slot),
+            node,
+            vertex: RefCell::new(None),
+            edges: RefCell::new(Vec::new()),
+            xform: RefCell::new(None),
+            interactions: RefCell::new(BTreeMap::new()),
+        })
+    }
+}
+
 /// Everything needed to put one object back into every live table of a session.
 #[derive(Debug, Clone)]
 pub struct Tombstone {
