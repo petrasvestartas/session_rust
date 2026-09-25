@@ -443,34 +443,6 @@ impl BRepOrientation {
         }
     }
 }
-/// Edge message representing a graph edge
-#[derive(Clone, PartialEq, ::prost::Message)]
-pub struct Edge {
-    /// Unique identifier
-    #[prost(string, tag = "1")]
-    pub guid: ::prost::alloc::string::String,
-    /// Edge name
-    #[prost(string, tag = "2")]
-    pub name: ::prost::alloc::string::String,
-    /// First vertex identifier
-    #[prost(string, tag = "3")]
-    pub v0: ::prost::alloc::string::String,
-    /// Second vertex identifier
-    #[prost(string, tag = "4")]
-    pub v1: ::prost::alloc::string::String,
-    /// Edge attribute data as string
-    #[prost(string, tag = "5")]
-    pub attribute: ::prost::alloc::string::String,
-    /// Integer index for the edge
-    #[prost(int32, tag = "6")]
-    pub index: i32,
-    /// Name -> value, overriding the graph defaults
-    #[prost(btree_map = "string, double", tag = "7")]
-    pub attributes: ::prost::alloc::collections::BTreeMap<
-        ::prost::alloc::string::String,
-        f64,
-    >,
-}
 /// Polyline message representing a connected sequence of points
 /// Stores coordinates as a flat array \[x0, y0, z0, x1, y1, z1, ...\] for efficiency
 #[derive(Clone, PartialEq, ::prost::Message)]
@@ -657,6 +629,34 @@ pub struct Vertex {
     pub index: i32,
     /// Name -> value, overriding the graph defaults
     #[prost(btree_map = "string, double", tag = "5")]
+    pub attributes: ::prost::alloc::collections::BTreeMap<
+        ::prost::alloc::string::String,
+        f64,
+    >,
+}
+/// Edge message representing a graph edge
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct Edge {
+    /// Unique identifier
+    #[prost(string, tag = "1")]
+    pub guid: ::prost::alloc::string::String,
+    /// Edge name
+    #[prost(string, tag = "2")]
+    pub name: ::prost::alloc::string::String,
+    /// First vertex identifier
+    #[prost(string, tag = "3")]
+    pub v0: ::prost::alloc::string::String,
+    /// Second vertex identifier
+    #[prost(string, tag = "4")]
+    pub v1: ::prost::alloc::string::String,
+    /// Edge attribute data as string
+    #[prost(string, tag = "5")]
+    pub attribute: ::prost::alloc::string::String,
+    /// Integer index for the edge
+    #[prost(int32, tag = "6")]
+    pub index: i32,
+    /// Name -> value, overriding the graph defaults
+    #[prost(btree_map = "string, double", tag = "7")]
     pub attributes: ::prost::alloc::collections::BTreeMap<
         ::prost::alloc::string::String,
         f64,

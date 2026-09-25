@@ -12,6 +12,7 @@ use std::path::PathBuf;
 fn main() {
     println!("cargo:rerun-if-changed=build.rs");
     println!("cargo:rerun-if-env-changed=REGEN_PROTO");
+    println!("cargo:rerun-if-env-changed=PROTOC");
 
     let proto_dir = PathBuf::from("../session_proto");
     let out_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("src/proto");
@@ -44,9 +45,13 @@ fn main() {
 
     std::fs::create_dir_all(&out_dir).expect("create src/proto");
 
-    let protoc = protoc_bin_vendored::protoc_bin_path()
-        .expect("protoc-bin-vendored failed to locate bundled protoc");
-    std::env::set_var("PROTOC", &protoc);
+    // PROTOC names the pinned protoc (gen_proto.sh passes session_cpp's PROTOC_VERSION); without
+    // it the vendored one, older but producing the same code, keeps plain builds offline.
+    if std::env::var_os("PROTOC").is_none_or(|p| p.is_empty()) {
+        let protoc = protoc_bin_vendored::protoc_bin_path()
+            .expect("protoc-bin-vendored failed to locate bundled protoc");
+        std::env::set_var("PROTOC", &protoc);
+    }
 
     let staging = PathBuf::from(std::env::var("OUT_DIR").unwrap()).join("proto_staging");
     std::fs::create_dir_all(&staging).expect("create staging");
