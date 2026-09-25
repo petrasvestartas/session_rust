@@ -1428,39 +1428,43 @@ impl Session {
     // ═══════════════════════════════════════════════════════════════════════════
     // Geometry management
     // ═══════════════════════════════════════════════════════════════════════════
-    /// Add a point.
+    /// Add a point; a guid already live adds nothing and returns the node that guid has.
     pub fn add_point(
         &mut self,
         point: Point,
         parent: Option<&Rc<RefCell<TreeNode>>>,
     ) -> Rc<RefCell<TreeNode>> {
         self._add_object("points", Geometry::Point(Rc::new(point)), "point", parent)
+            .unwrap_or_else(|guid| self._node_of(&guid))
     }
 
-    /// Add a line.
+    /// Add a line; a guid already live adds nothing and returns the node that guid has.
     pub fn add_line(
         &mut self,
         line: Line,
         parent: Option<&Rc<RefCell<TreeNode>>>,
     ) -> Rc<RefCell<TreeNode>> {
         self._add_object("lines", Geometry::Line(Rc::new(line)), "line", parent)
+            .unwrap_or_else(|guid| self._node_of(&guid))
     }
 
-    /// Add a plane.
+    /// Add a plane; a guid already live adds nothing and returns the node that guid has.
     pub fn add_plane(
         &mut self,
         plane: Plane,
         parent: Option<&Rc<RefCell<TreeNode>>>,
     ) -> Rc<RefCell<TreeNode>> {
         self._add_object("planes", Geometry::Plane(Rc::new(plane)), "plane", parent)
+            .unwrap_or_else(|guid| self._node_of(&guid))
     }
 
-    /// Add a bounding box.
+    /// Add a bounding box; a guid already live adds nothing and returns the node that guid has.
     pub fn add_obb(&mut self, bbox: OBB) -> Rc<RefCell<TreeNode>> {
         self._add_object("bboxes", Geometry::OBB(Rc::new(bbox)), "bbox", None)
+            .unwrap_or_else(|guid| self._node_of(&guid))
     }
 
-    /// Add a polyline; fewer than two points adds nothing and returns None.
+    /// Add a polyline; fewer than two points, or a guid already live, adds nothing and returns None.
     pub fn add_polyline(
         &mut self,
         polyline: Polyline,
@@ -1470,15 +1474,16 @@ impl Session {
             return None;
         }
 
-        Some(self._add_object(
+        self._add_object(
             "polylines",
             Geometry::Polyline(Rc::new(polyline)),
             "polyline",
             parent,
-        ))
+        )
+        .ok()
     }
 
-    /// Add a point cloud; no points adds nothing and returns None.
+    /// Add a point cloud; no points, or a guid already live, adds nothing and returns None.
     pub fn add_pointcloud(
         &mut self,
         pointcloud: PointCloud,
@@ -1488,15 +1493,16 @@ impl Session {
             return None;
         }
 
-        Some(self._add_object(
+        self._add_object(
             "pointclouds",
             Geometry::PointCloud(Rc::new(pointcloud)),
             "pointcloud",
             parent,
-        ))
+        )
+        .ok()
     }
 
-    /// Add a mesh; no faces adds nothing and returns None.
+    /// Add a mesh; no faces, or a guid already live, adds nothing and returns None.
     pub fn add_mesh(
         &mut self,
         mesh: Mesh,
@@ -1506,10 +1512,11 @@ impl Session {
             return None;
         }
 
-        Some(self._add_object("meshes", Geometry::Mesh(Rc::new(mesh)), "mesh", parent))
+        self._add_object("meshes", Geometry::Mesh(Rc::new(mesh)), "mesh", parent)
+            .ok()
     }
 
-    /// Add a curve; fewer than two control vertices adds nothing and returns None.
+    /// Add a curve; fewer than two control vertices, or a guid already live, adds nothing and returns None.
     pub fn add_nurbscurve(
         &mut self,
         nurbscurve: NurbsCurve,
@@ -1519,15 +1526,16 @@ impl Session {
             return None;
         }
 
-        Some(self._add_object(
+        self._add_object(
             "nurbscurves",
             Geometry::NurbsCurve(Rc::new(nurbscurve)),
             "nurbscurve",
             parent,
-        ))
+        )
+        .ok()
     }
 
-    /// Add a surface; no control vertices adds nothing and returns None.
+    /// Add a surface; no control vertices, or a guid already live, adds nothing and returns None.
     pub fn add_nurbssurface(
         &mut self,
         nurbssurface: NurbsSurface,
@@ -1537,15 +1545,16 @@ impl Session {
             return None;
         }
 
-        Some(self._add_object(
+        self._add_object(
             "nurbssurfaces",
             Geometry::NurbsSurface(Rc::new(nurbssurface)),
             "nurbssurface",
             parent,
-        ))
+        )
+        .ok()
     }
 
-    /// Add a brep; no faces and no vertices adds nothing and returns None.
+    /// Add a brep; no faces and no vertices, or a guid already live, adds nothing and returns None.
     pub fn add_brep(
         &mut self,
         brep: BRep,
@@ -1555,10 +1564,11 @@ impl Session {
             return None;
         }
 
-        Some(self._add_object("breps", Geometry::BRep(Rc::new(brep)), "brep", parent))
+        self._add_object("breps", Geometry::BRep(Rc::new(brep)), "brep", parent)
+            .ok()
     }
 
-    /// Add an element; an Element is a data record kept even without geometry.
+    /// Add an element, a data record kept even without geometry; a guid already live adds nothing and returns the node that guid has.
     pub fn add_element(
         &mut self,
         element: Element,
@@ -1570,9 +1580,10 @@ impl Session {
             "element",
             parent,
         )
+        .unwrap_or_else(|guid| self._node_of(&guid))
     }
 
-    /// Add a custom component (any object with type_name/guid/name/extra).
+    /// Add a custom component (any object with type_name/guid/name/extra); a guid already live adds nothing and returns the node that guid has.
     pub fn add_component(
         &mut self,
         component: Component,
@@ -1584,6 +1595,7 @@ impl Session {
             "component",
             parent,
         )
+        .unwrap_or_else(|guid| self._node_of(&guid))
     }
 
     /// Add a definition, geometry in its own frame that instances share; returns its guid, also when that guid is already defined, and "" for a guid an object, instance or component holds.
@@ -1623,7 +1635,7 @@ impl Session {
         guid
     }
 
-    /// Add an instance under parent, placed by xform relative to the parent with its own xform folded in; None when its definition_guid names no definition.
+    /// Add an instance under parent, placed by xform relative to the parent with its own xform folded in; None when its definition_guid names no definition or its guid is already live.
     pub fn add_instance(
         &mut self,
         mut instance: InstanceRef,
@@ -1640,12 +1652,14 @@ impl Session {
         let placement = &xform * &instance.xform;
         instance.xform = Xform::identity();
         let guid = instance.guid().to_string();
-        let node = self._add_object(
-            "instances",
-            Item::InstanceRef(Rc::new(instance)),
-            "instance",
-            parent,
-        );
+        let node = self
+            ._add_object(
+                "instances",
+                Item::InstanceRef(Rc::new(instance)),
+                "instance",
+                parent,
+            )
+            .ok()?;
 
         if !placement.is_identity() {
             self.set_xform(&guid, placement);
@@ -2773,16 +2787,21 @@ impl Session {
         objects
     }
 
-    /// Store an object in its list, lookup, graph and tree, recording an add when a transaction is open.
+    /// Store an object in its list, lookup, graph and tree, recording an add when a transaction is open; Err carries a guid that is already live, which adds nothing.
     fn _add_object(
         &mut self,
         collection: &str,
         obj: impl Into<Item>,
         type_prefix: &str,
         parent: Option<&Rc<RefCell<TreeNode>>>,
-    ) -> Rc<RefCell<TreeNode>> {
+    ) -> Result<Rc<RefCell<TreeNode>>, String> {
         let obj: Item = obj.into();
         let guid = obj.guid().to_string();
+
+        if self._is_live(&guid) {
+            return Err(guid);
+        }
+
         let attribute = format!("{type_prefix}_{}", obj.name());
         let slot = push(&mut self.objects, &obj);
 
@@ -2831,7 +2850,32 @@ impl Session {
             );
         }
 
-        node
+        Ok(node)
+    }
+
+    /// The node of a live guid, a detached one named guid when the object is outside the tree.
+    fn _node_of(&self, guid: &str) -> Rc<RefCell<TreeNode>> {
+        self.get_node(guid).unwrap_or_else(|| TreeNode::new(guid))
+    }
+
+    /// Whether the live entry under guid, if any, is another entry than the one in a slot of the list of that name: one of another type, or of the same type at another slot.
+    fn _twin(&self, definition: bool, collection: &str, slot: usize, guid: &str) -> bool {
+        let (objects, held) = if definition {
+            let held = self
+                .definition_lookup
+                .get(guid)
+                .cloned()
+                .map(Item::Geometry);
+
+            (&self.definitions, held)
+        } else {
+            (&self.objects, self._item(guid))
+        };
+        let Some(held) = held else {
+            return false;
+        };
+
+        collection_for(&held).0 != collection || slot_of(objects, collection, guid) != Some(slot)
     }
 
     /// Whether guid names a live object, component or instance.
@@ -3556,8 +3600,7 @@ impl Session {
                 return;
             };
             let guid = stored.guid().to_string();
-
-            let owner = slot_of(&self.definitions, collection, &guid) == Some(slot);
+            let owner = !self._twin(true, collection, slot, &guid);
 
             if let Some(held) = self.definition_lookup.get(&guid) {
                 let held = Item::Geometry(held.clone());
@@ -3580,9 +3623,9 @@ impl Session {
             return;
         };
         let guid = stored.guid();
+        let owner = !self._twin(false, collection, slot, guid)
+            && (self._is_live(guid) || slot_of(&self.objects, collection, guid) == Some(slot));
         let held = self._take(guid);
-        let owner = held.as_ref().is_some_and(|held| same(held, &stored))
-            || slot_of(&self.objects, collection, guid) == Some(slot);
 
         if let Some(held) = held {
             if owner && !same(&held, &stored) {
@@ -3654,10 +3697,8 @@ impl Session {
                 return;
             };
             let guid = geometry.guid().to_string();
-            let twin = self.definition_lookup.contains_key(&guid)
-                && slot_of(&self.definitions, collection, &guid) != Some(slot);
 
-            if !twin {
+            if !self._twin(true, collection, slot, &guid) {
                 flag(&mut self.definitions, collection, slot, false);
                 self.definition_lookup.insert(guid, geometry);
             }
@@ -3670,7 +3711,7 @@ impl Session {
         };
         let guid = item.guid().to_string();
 
-        if self._is_live(&guid) && slot_of(&self.objects, collection, &guid) != Some(slot) {
+        if self._twin(false, collection, slot, &guid) {
             return;
         }
 

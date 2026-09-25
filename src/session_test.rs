@@ -1554,7 +1554,15 @@ pub fn run_session_purge_step() -> TestResult {
             session.commit();
         }
 
-        let mut expected: Vec<String> = guids.iter().skip(1).step_by(2).cloned().collect();
+        let mut odd: Vec<String> = Vec::new();
+
+        for (i, guid) in guids.iter().enumerate() {
+            if i % 2 == 1 {
+                odd.push(guid.clone());
+            }
+        }
+
+        let mut expected = odd.clone();
         let first = session.purge_step(64);
         let mut ordered = session.order() == expected;
         let mut calls = 1;
@@ -1571,7 +1579,7 @@ pub fn run_session_purge_step() -> TestResult {
 
             if calls == 20 {
                 session.undo();
-                expected = guids.iter().skip(1).step_by(2).cloned().collect();
+                expected = odd.clone();
             }
 
             if calls == 30 {
@@ -2407,12 +2415,11 @@ pub fn run_session_remove_keeps_slot() -> TestResult {
         MINI_CHECK!(pinned);
 
         session.undo();
-        let names: Vec<String> = g
-            .borrow()
-            .children()
-            .iter()
-            .map(|n| n.borrow().name.clone())
-            .collect();
+        let mut names: Vec<String> = Vec::new();
+
+        for child in g.borrow().children() {
+            names.push(child.borrow().name.clone());
+        }
 
         MINI_CHECK!(Rc::ptr_eq(session.objects.points.get_item(1), &stored));
         MINI_CHECK!(session.objects.points.get_slot(&b_guid) == Some(1));
@@ -2855,12 +2862,11 @@ pub fn run_session_deleted_parent_orphans_children() -> TestResult {
         session.begin("remove");
         session.remove_object(&e_guid);
         session.commit();
-        let names: Vec<String> = session
-            .tree
-            .nodes()
-            .iter()
-            .map(|n| n.borrow().name.clone())
-            .collect();
+        let mut names: Vec<String> = Vec::new();
+
+        for node in session.tree.nodes() {
+            names.push(node.borrow().name.clone());
+        }
 
         MINI_CHECK!(session.lookup.contains_key(&q_guid));
         MINI_CHECK!(session
@@ -2961,15 +2967,12 @@ pub fn run_session_live_views() -> TestResult {
             "gone_group",
         ];
         let world = session.world_xforms();
-        let groups: Vec<String> = session
-            .tree
-            .root()
-            .unwrap()
-            .borrow()
-            .children()
-            .iter()
-            .map(|n| n.borrow().name.clone())
-            .collect();
+        let mut groups: Vec<String> = Vec::new();
+
+        for child in session.tree.root().unwrap().borrow().children() {
+            groups.push(child.borrow().name.clone());
+        }
+
         let geometry = session.get_geometry();
         let collisions = session.get_collisions();
         let hits = session.ray_cast(
@@ -2980,21 +2983,32 @@ pub fn run_session_live_views() -> TestResult {
         let json = session.jsondump().unwrap();
         let derived = serde_json::to_string(&session).unwrap();
         let text = format!("{}{}", session.str(), session.repr());
+        let order = session.order();
+        let mut in_order = false;
+        let mut in_world = false;
+        let mut in_json = false;
+        let mut in_derived = false;
+        let mut in_text = false;
 
-        MINI_CHECK!(session
-            .order()
-            .iter()
-            .all(|guid| !gone.contains(&guid.as_str())));
-        MINI_CHECK!(gone.iter().all(|name| !world.contains_key(*name)));
+        for name in gone {
+            in_order |= order.contains(&name.to_string());
+            in_world |= world.contains_key(name);
+            in_json |= json.contains(name);
+            in_derived |= derived.contains(name);
+            in_text |= text.contains(name);
+        }
+
+        MINI_CHECK!(!in_order);
+        MINI_CHECK!(!in_world);
         MINI_CHECK!(session.select_by_type::<Point>().len() == 1);
         MINI_CHECK!(groups == vec!["kept".to_string()]);
         MINI_CHECK!(geometry.points.len() == 1 && geometry.meshes.is_empty());
         MINI_CHECK!(session.instances_of(&definition).is_empty());
         MINI_CHECK!(collisions.is_empty());
         MINI_CHECK!(hits.is_empty());
-        MINI_CHECK!(gone.iter().all(|name| !json.contains(*name)));
-        MINI_CHECK!(gone.iter().all(|name| !derived.contains(*name)));
-        MINI_CHECK!(gone.iter().all(|name| !text.contains(*name)));
+        MINI_CHECK!(!in_json);
+        MINI_CHECK!(!in_derived);
+        MINI_CHECK!(!in_text);
         MINI_CHECK!(session.undo());
         MINI_CHECK!(session.order().len() == 3);
     })
@@ -3027,6 +3041,7 @@ pub fn run_session_remove_twin_keeps_slot() -> TestResult {
     MINI_TEST!("Remove Twin Keeps Slot", {
         use crate::Point;
         use crate::Session;
+        use crate::Xform;
 
         let mut session = Session::default();
         let x = Point::new(1.0, 0.0, 0.0);
@@ -3036,13 +3051,18 @@ pub fn run_session_remove_twin_keeps_slot() -> TestResult {
         session.begin("add");
         session.add_point(x, None);
         session.commit();
+        session.undo();
         session.add_point(y, None);
+        session.set_xform(&guid, Xform::translation(0.0, 1.0, 0.0));
+        session.redo();
         session.undo();
 
         MINI_CHECK!(session.objects.points.get_slot(&guid) == Some(1));
         MINI_CHECK!(session.objects.points.is_dead(0));
         MINI_CHECK!(session.objects.points.len() == 1);
         MINI_CHECK!(session.lookup.contains_key(&guid));
+        MINI_CHECK!(session.xforms.contains_key(&guid));
+        MINI_CHECK!(session.graph.has_node(&guid));
 
         let removed = session.remove_object(&guid);
         let bytes = session.pb_dumps();
@@ -3053,6 +3073,7 @@ pub fn run_session_remove_twin_keeps_slot() -> TestResult {
         MINI_CHECK!(session.objects.points.is_empty());
         MINI_CHECK!(loaded.objects.points.is_empty());
         MINI_CHECK!(loaded.lookup.is_empty());
+        MINI_CHECK!(loaded.graph.number_of_vertices() == 0);
     })
 }
 
@@ -3070,8 +3091,8 @@ pub fn run_session_redo_twin_keeps_slot() -> TestResult {
         session.begin("add");
         session.add_point(x, None);
         session.commit();
-        session.add_point(y, None);
         session.undo();
+        session.add_point(y, None);
         session.redo();
         let mut held = 0.0;
 
@@ -3107,6 +3128,131 @@ pub fn run_session_redo_twin_keeps_slot() -> TestResult {
         MINI_CHECK!(loaded.objects.points.is_empty());
         MINI_CHECK!(loaded.lookup.is_empty());
         MINI_CHECK!(loaded.tree.nodes().len() == 1);
+    })
+}
+
+pub fn run_session_cross_type_twin() -> TestResult {
+    MINI_TEST!("Cross Type Twin", {
+        use crate::Geometry;
+        use crate::Line;
+        use crate::Point;
+        use crate::Session;
+        use crate::Xform;
+
+        let mut session = Session::default();
+        let x = Point::new(1.0, 0.0, 0.0);
+        let guid = x.guid().to_string();
+        let mut y = Line::new(0.0, 0.0, 0.0, 1.0, 0.0, 0.0);
+        y.set_guid(guid.clone());
+        session.begin("add");
+        session.add_point(x, None);
+        session.commit();
+        session.undo();
+        session.add_line(y, None);
+        session.set_xform(&guid, Xform::translation(0.0, 1.0, 0.0));
+        session.redo();
+        let redone = (
+            session.objects.points.is_dead(0),
+            session.objects.lines.get_slot(&guid),
+            matches!(session.lookup.get(&guid), Some(Geometry::Line(_))),
+        );
+        session.undo();
+        let undone = (
+            session.objects.lines.get_slot(&guid),
+            session.xforms.contains_key(&guid),
+            session.graph.has_node(&guid),
+        );
+        session.redo();
+
+        MINI_CHECK!(redone == (true, Some(0), true));
+        MINI_CHECK!(undone == (Some(0), true, true));
+        MINI_CHECK!(session.objects.points.is_empty());
+        MINI_CHECK!(session.objects.lines.len() == 1);
+        MINI_CHECK!(session.order() == vec![guid.clone()]);
+
+        let removed = session.remove_object(&guid);
+        let undone = session.undo();
+        let bytes = session.pb_dumps();
+        let loaded = Session::pb_loads(&bytes).unwrap();
+
+        MINI_CHECK!(removed);
+        MINI_CHECK!(undone);
+        MINI_CHECK!(!session.lookup.contains_key(&guid));
+        MINI_CHECK!(session.objects.lines.is_empty());
+        MINI_CHECK!(session.objects.points.is_empty());
+        MINI_CHECK!(loaded.objects.lines.is_empty());
+        MINI_CHECK!(loaded.objects.points.is_empty());
+        MINI_CHECK!(loaded.graph.number_of_vertices() == 0);
+        MINI_CHECK!(loaded.tree.nodes().len() == 1);
+    })
+}
+
+pub fn run_session_add_live_guid_refused() -> TestResult {
+    MINI_TEST!("Add Live Guid Refused", {
+        use crate::objects::Component;
+        use crate::Geometry;
+        use crate::InstanceRef;
+        use crate::Line;
+        use crate::Point;
+        use crate::Polyline;
+        use crate::Session;
+        use crate::Xform;
+        use std::rc::Rc;
+
+        let mut session = Session::default();
+        let x = Point::new(1.0, 0.0, 0.0);
+        let guid = x.guid().to_string();
+        let node = session.add_point(x, None);
+        let definition =
+            session.add_definition(Geometry::Point(Rc::new(Point::new(0.0, 0.0, 0.0))));
+        let revision = session.revision;
+        let mut point = Point::new(2.0, 0.0, 0.0);
+        point.set_guid(guid.clone());
+        let mut line = Line::new(0.0, 0.0, 0.0, 1.0, 0.0, 0.0);
+        line.set_guid(guid.clone());
+        let mut polyline = Polyline::new(vec![
+            Point::new(0.0, 0.0, 0.0),
+            Point::new(1.0, 0.0, 0.0),
+            Point::new(1.0, 1.0, 0.0),
+        ]);
+        polyline.set_guid(guid.clone());
+        let mut component = Component::new();
+        component.guid = guid.clone();
+        let mut instance = InstanceRef::new(&definition, Xform::identity());
+        instance.set_guid(guid.clone());
+        let same_point = Rc::ptr_eq(&session.add_point(point, None), &node);
+        let same_line = Rc::ptr_eq(&session.add_line(line, None), &node);
+        let no_polyline = session.add_polyline(polyline, None).is_none();
+        let same_component = Rc::ptr_eq(&session.add_component(component, None), &node);
+        let no_instance = session
+            .add_instance(instance, Xform::identity(), None)
+            .is_none();
+        let mut held = 0.0;
+
+        if let Some(Geometry::Point(point)) = session.lookup.get(&guid) {
+            held = point[0];
+        }
+
+        MINI_CHECK!(same_point && same_line && same_component);
+        MINI_CHECK!(no_polyline && no_instance);
+        MINI_CHECK!(held == 1.0);
+        MINI_CHECK!(session.objects.points.len() == 1);
+        MINI_CHECK!(session.objects.lines.is_empty());
+        MINI_CHECK!(session.objects.polylines.is_empty());
+        MINI_CHECK!(session.objects.components.is_empty());
+        MINI_CHECK!(session.objects.instances.is_empty());
+        MINI_CHECK!(session.revision == revision);
+        MINI_CHECK!(session.tree.nodes().len() == 2);
+
+        let mut again = Point::new(3.0, 0.0, 0.0);
+        again.set_guid(guid.clone());
+        session.begin("twin");
+        session.add_point(again, None);
+        session.commit();
+
+        MINI_CHECK!(session.history.depth() == 0);
+        MINI_CHECK!(!session.undo());
+        MINI_CHECK!(session.objects.points.len() == 1);
     })
 }
 
@@ -3253,8 +3399,8 @@ pub fn run_session_checkpoint_tags() -> TestResult {
         MINI_CHECK!(TAGS.children == first(children.encode_to_vec()));
         let mut tags = [0; 13];
 
-        for (tag, message) in tags.iter_mut().zip(&lists) {
-            *tag = first(message.encode_to_vec());
+        for (i, message) in lists.iter().enumerate() {
+            tags[i] = first(message.encode_to_vec());
         }
 
         MINI_CHECK!(TAGS.lists == tags);
@@ -3336,7 +3482,7 @@ pub fn run_session_steady_state_bounds() -> TestResult {
             guids.push(node.borrow().name.clone());
         }
 
-        for (cycle, guid) in guids.iter().enumerate().take(cycles) {
+        for (cycle, guid) in guids[..cycles].iter().enumerate() {
             session.begin("remove");
             session.remove_object(guid);
             session.commit();
@@ -3832,6 +3978,16 @@ REGISTER_MINI_TEST!(
     "Session",
     "Redo Twin Keeps Slot",
     crate::session_test::run_session_redo_twin_keeps_slot
+);
+REGISTER_MINI_TEST!(
+    "Session",
+    "Cross Type Twin",
+    crate::session_test::run_session_cross_type_twin
+);
+REGISTER_MINI_TEST!(
+    "Session",
+    "Add Live Guid Refused",
+    crate::session_test::run_session_add_live_guid_refused
 );
 REGISTER_MINI_TEST!(
     "Session",

@@ -3518,6 +3518,16 @@ pub fn get_all_tests() -> Vec<RegisteredTest> {
         },
         RegisteredTest {
             group: "Session",
+            name: "Cross Type Twin",
+            func: run_session_cross_type_twin,
+        },
+        RegisteredTest {
+            group: "Session",
+            name: "Add Live Guid Refused",
+            func: run_session_add_live_guid_refused,
+        },
+        RegisteredTest {
+            group: "Session",
             name: "Purge Clears History",
             func: run_session_purge_clears_history,
         },
