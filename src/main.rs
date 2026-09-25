@@ -1,7 +1,14 @@
-use session_rust::{
-    read_file_obj, Line, Mesh, NurbsCurve, Plane, Point, Session, SpatialBVH, Tolerance, Vector,
-    OBB,
-};
+use session_rust::read_file_obj;
+use session_rust::Line;
+use session_rust::Mesh;
+use session_rust::NurbsCurve;
+use session_rust::Plane;
+use session_rust::Point;
+use session_rust::Session;
+use session_rust::SpatialBVH;
+use session_rust::Tolerance;
+use session_rust::Vector;
+use session_rust::OBB;
 use std::path::Path;
 use std::time::Instant;
 

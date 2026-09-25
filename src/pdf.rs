@@ -1,133 +1,204 @@
-//! PDF -> Session (.pb), all Rust.
-//!   cargo run --release -- <file.pdf> <out_stem> [page]
-//!
-//! MuPDF is the same engine PyMuPDF wraps, so this replaces the python extractor exactly - but a
-//! device gets MORE than `get_drawings()` ever exposed: `fill_text` hands over the real font and
-//! its glyph outlines, so text no longer needs Ghostscript to flatten it, and the font NAME and
-//! the unicode of every character survive the import.
-//!
-//! What a page holds, and where it lands:
-//!   stroke paths -> Line (2 points) / Polyline (a chained run) / NurbsCurve (each cubic, exact)
-//!                   dashed strokes are expanded into their on-runs (dash pattern + phase honoured)
-//!   fill paths   -> Mesh, contours triangulated with holes, ONE mesh per (layer, colour)
-//!   text         -> the same fills, from `Font::outline_glyph_with_ctm`, cached per (font, glyph)
-//!   OCG layers   -> session tree groups, one per named CAD layer
-//!   page box     -> a closed Polyline, so a sheet's extents are the PAPER, not just its ink
-//!   white paths  -> dropped: white on white paper is a knockout mask, not geometry
-//!   images/shadings -> NOT imported, counted and warned about
-//! PDF y points down -> flipped here; 1 pt = 1 mm; z = 0. Widths are ABSOLUTE mm (a 0.35 pen
-//! stores 0.35); the viewer's planar-sheet lane treats them as world-mm lineweights.
-use std::cell::RefCell;
-use std::collections::{BTreeMap, HashMap};
-use std::rc::Rc;
-
-use crate::{Color, Line, Mesh, NurbsCurve, Point, Polyline, Session};
+use crate::tree::TreeNode;
+use crate::Color;
+use crate::Line;
+use crate::Mesh;
+use crate::NurbsCurve;
+use crate::Point;
+use crate::Polyline;
+use crate::Session;
 use mupdf::device::NativeDevice;
 use mupdf::path::PathWalker;
 use mupdf::pdf::PdfDocument;
-use mupdf::{
-    ColorParams, Colorspace, Device, Document, Image, Matrix, Path, Rect, Shade, StrokeState, Text,
-};
-use rayon::prelude::*;
+use mupdf::pdf::PdfObject;
+use mupdf::ColorParams;
+use mupdf::Colorspace;
+use mupdf::Device;
+use mupdf::Document;
+use mupdf::Matrix;
+use mupdf::Path;
+use mupdf::Rect;
+use mupdf::StrokeState;
+use mupdf::Text;
+use rayon::iter::IntoParallelRefIterator;
+use rayon::iter::ParallelIterator;
+use std::cell::RefCell;
+use std::collections::btree_map;
+use std::collections::hash_map;
+use std::collections::BTreeMap;
+use std::collections::HashMap;
+use std::rc::Rc;
 
-/// Control-polygon length, in points, per flattening sample - squared-scaled, see `bez_steps`.
-const BEZ_CHORD: f64 = 0.25;
-/// PDF width 0 means "thinnest renderable"; this is what it maps to, in mm.
-const HAIRLINE: f64 = 0.1;
-/// A path colour this close to white is a knockout mask, not ink.
-const WHITE: f32 = 0.99;
-
-type P = [f64; 2];
+// ═══════════════════════════════════════════════════════════════════════════
+// Rust-only PDF import
+// ═══════════════════════════════════════════════════════════════════════════
+const BEZ_CHORD: f64 = 0.25; // Control-polygon length in points per flattening sample, squared-scaled.
+const HAIRLINE: f64 = 0.1; // Width in mm of a PDF width 0.
+const WHITE: f32 = 0.99; // A colour this close to white is a knockout mask, not ink.
+const KIND_REGION: u8 = 0; // Bucket kind of a path fill, painted first.
+const KIND_TEXT: u8 = 1; // Bucket kind of a glyph fill, painted on top.
 
 /// One pen-down run: 2 points is a Line, more is a Polyline.
 struct Stroke {
-    layer: usize,
-    w: f64,
-    c: Color,
-    pts: Vec<P>,
+    layer: usize,       // Layer index.
+    w: f64,             // Width in mm.
+    c: Color,           // Stroke colour.
+    pts: Vec<[f64; 2]>, // Points in device space.
 }
-/// One cubic, kept ANALYTIC - the kernel has NurbsCurve, so a bezier need not be flattened.
+
+/// One cubic, kept analytic as a NurbsCurve.
 struct Curve {
-    layer: usize,
-    w: f64,
-    c: Color,
-    cv: [P; 4],
+    layer: usize,      // Layer index.
+    w: f64,            // Width in mm.
+    c: Color,          // Stroke colour.
+    cv: [[f64; 2]; 4], // Bezier control points.
 }
-/// One filled region: loops[0..] are border + holes, in any order (`islands` sorts them out).
+
+/// One filled region: border and holes in any order.
 struct Fill {
-    layer: usize,
-    c: Color,
-    loops: Vec<Vec<P>>,
+    layer: usize,              // Layer index.
+    c: Color,                  // Fill colour.
+    loops: Vec<Vec<[f64; 2]>>, // Closed contours.
 }
 
-/// One glyph, triangulated ONCE in glyph space (y negated by the flip-0 walk), reused per
-/// occurrence. `bad` = the area self-check failed at cache build.
+/// One glyph, triangulated once in glyph space and reused per occurrence.
 struct GlyphMesh {
-    islands: Vec<(Vec<P>, Vec<usize>)>,
-    bad: bool,
-    empty: bool,
+    islands: Vec<(Vec<[f64; 2]>, Vec<usize>)>, // Vertices and triangle indices per island.
 }
-/// One placed occurrence of a cached glyph: the full text matrix (trm + pen + ctm).
+
+/// One placed occurrence of a cached glyph.
 struct GlyphRef {
-    layer: usize,
-    c: Color,
-    m: [f64; 6],
-    g: Rc<GlyphMesh>,
+    layer: usize,     // Layer index.
+    c: Color,         // Fill colour.
+    m: [f64; 6],      // Text matrix with pen position and ctm.
+    g: Rc<GlyphMesh>, // Cached glyph.
 }
 
-#[derive(Default)]
-struct Fonts {
-    glyphs: BTreeMap<String, usize>,
+/// Merged triangles of one (layer, kind, colour).
+struct Bucket {
+    c: Color,             // Fill colour.
+    verts: Vec<[f64; 2]>, // Vertices in device space.
+    tris: Vec<usize>,     // Triangle indices.
 }
 
+/// Everything collected from one page.
 #[derive(Default)]
 struct State {
-    flip: f64, // y' = flip - y : PDF device space is y-down
-    layers: Vec<String>,
-    layer_stack: Vec<usize>,
-    strokes: Vec<Stroke>,
-    curves: Vec<Curve>,
-    fills: Vec<Fill>,
-    glyph_cache: HashMap<(String, i32), Option<Rc<GlyphMesh>>>,
-    glyph_refs: Vec<GlyphRef>,
-    fonts: Fonts,
-    chars: usize,
-    white: usize,
-    images: usize,
-    image_area: f64, // total placed image area, mm²
-    shades: usize,
-    no_outline: BTreeMap<String, usize>, // glyph occurrences with no outline, per font
-    // Transparency actually present in the file. Fills go down the triangle pipeline, which does
-    // NOT blend, so a translucent hatch would render solid - worth knowing before trusting a colour.
-    translucent_fills: usize,
-    translucent_strokes: usize,
-    min_alpha: f32,
+    flip: f64,               // y' = flip - y, PDF device space is y-down.
+    layers: Vec<String>,     // Layer names, index 0 unlayered.
+    layer_stack: Vec<usize>, // Open layer indices.
+    strokes: Vec<Stroke>,    // Straight pen-down runs.
+    curves: Vec<Curve>,      // Analytic cubics.
+    fills: Vec<Fill>,        // Filled regions.
+    glyph_cache: HashMap<(String, i32), Option<Rc<GlyphMesh>>>, // Glyph meshes per (font, glyph).
+    glyph_refs: Vec<GlyphRef>, // Placed glyphs.
 }
 
 impl State {
+    /// Current layer index.
     fn layer(&self) -> usize {
         *self.layer_stack.last().unwrap_or(&0)
     }
+
+    /// Store one straight run.
+    fn add_stroke(&mut self, layer: usize, w: f64, c: &Color, pts: Vec<[f64; 2]>) {
+        self.strokes.push(Stroke {
+            layer,
+            w,
+            c: c.clone(),
+            pts,
+        });
+    }
+
+    /// Store the dash on-runs of a stroked path.
+    fn add_dashes(
+        &mut self,
+        segs: &[Seg],
+        layer: usize,
+        w: f64,
+        c: &Color,
+        pat: &[f64],
+        phase: f64,
+    ) {
+        for chain in flatten_chains(segs) {
+            for run in dash_runs(&chain, pat, phase) {
+                self.add_stroke(layer, w, c, run);
+            }
+        }
+    }
+
+    /// Store a solid stroked path as straight runs and analytic cubics.
+    fn add_chains(&mut self, segs: &[Seg], layer: usize, w: f64, c: &Color) {
+        let mut chain: Vec<[f64; 2]> = Vec::new();
+        let mut start: Option<[f64; 2]> = None;
+
+        for s in segs {
+            match *s {
+                Seg::Move(p) => {
+                    if let Some(pts) = take_chain(&mut chain) {
+                        self.add_stroke(layer, w, c, pts);
+                    }
+
+                    chain.push(p);
+                    start = Some(p);
+                }
+                Seg::Line(p) => chain.push(p),
+                Seg::Curve(c1, c2, e) => {
+                    let a = *chain.last().unwrap_or(&c1);
+
+                    if let Some(pts) = take_chain(&mut chain) {
+                        self.add_stroke(layer, w, c, pts);
+                    }
+
+                    self.curves.push(Curve {
+                        layer,
+                        w,
+                        c: c.clone(),
+                        cv: [a, c1, c2, e],
+                    });
+                    chain.push(e);
+                }
+                Seg::Close => {
+                    close_chain(&mut chain, start);
+
+                    if let Some(pts) = take_chain(&mut chain) {
+                        self.add_stroke(layer, w, c, pts);
+                    }
+
+                    if let Some(s0) = start {
+                        chain.push(s0);
+                    }
+                }
+            }
+        }
+
+        if chain.len() >= 2 {
+            self.add_stroke(layer, w, c, chain);
+        }
+    }
 }
 
-/// One path op, already in DEVICE space (ctm applied, y flipped).
+// ═══════════════════════════════════════════════════════════════════════════
+// Path walking
+// ═══════════════════════════════════════════════════════════════════════════
+
+/// One path op in device space, ctm applied and y flipped.
 enum Seg {
-    Move(P),
-    Line(P),
-    Curve(P, P, P),
-    Close,
+    Move([f64; 2]),                      // Start a subpath.
+    Line([f64; 2]),                      // Straight segment.
+    Curve([f64; 2], [f64; 2], [f64; 2]), // Cubic with two control points and an end.
+    Close,                               // Close the subpath.
 }
 
-/// Collects a mupdf `Path` into ops. `walk` hands us user-space coordinates, so the ctm and the
-/// page flip are applied here, once, at the only place they are known.
+/// Collects a mupdf `Path` into ops in device space.
 struct Walk {
-    ctm: Matrix,
-    flip: f64,
-    out: Vec<Seg>,
+    ctm: Matrix,   // User to device transform.
+    flip: f64,     // y' = flip - y.
+    out: Vec<Seg>, // Collected ops.
 }
 
 impl Walk {
-    fn pt(&self, x: f32, y: f32) -> P {
+    /// Map a user-space point to device space.
+    fn pt(&self, x: f32, y: f32) -> [f64; 2] {
         let (x, y) = (x as f64, y as f64);
         let (a, b, c, d, e, f) = (
             self.ctm.a as f64,
@@ -146,19 +217,23 @@ impl PathWalker for &mut Walk {
         let p = self.pt(x, y);
         self.out.push(Seg::Move(p));
     }
+
     fn line_to(&mut self, x: f32, y: f32) {
         let p = self.pt(x, y);
         self.out.push(Seg::Line(p));
     }
+
     fn curve_to(&mut self, x1: f32, y1: f32, x2: f32, y2: f32, x3: f32, y3: f32) {
         let (c1, c2, e) = (self.pt(x1, y1), self.pt(x2, y2), self.pt(x3, y3));
         self.out.push(Seg::Curve(c1, c2, e));
     }
+
     fn close(&mut self) {
         self.out.push(Seg::Close);
     }
 }
 
+/// Walk a path into device-space ops.
 fn walk(path: &Path, ctm: Matrix, flip: f64) -> Vec<Seg> {
     let mut w = Walk {
         ctm,
@@ -169,24 +244,25 @@ fn walk(path: &Path, ctm: Matrix, flip: f64) -> Vec<Seg> {
     w.out
 }
 
-fn dist(a: P, b: P) -> f64 {
+// ═══════════════════════════════════════════════════════════════════════════
+// Flattening
+// ═══════════════════════════════════════════════════════════════════════════
+
+/// Distance between two points.
+fn dist(a: [f64; 2], b: [f64; 2]) -> f64 {
     ((a[0] - b[0]).powi(2) + (a[1] - b[1]).powi(2)).sqrt()
 }
 
-/// Samples for one cubic, from its own size. A glyph is ~5.6 pt across and its curves are
-/// fractions of that - 2 samples are already finer than a pixel - while a metre-long arc on the
-/// same sheet needs a dozen. Every extra vertex is also a face, a halfedge and a triangulation
-/// entry in the .pb, so a flat count either facets the big ones or bloats the file.
-fn bez_steps(a: P, c1: P, c2: P, b: P) -> usize {
+/// Samples for one cubic from its control-polygon length, 4 to 16.
+fn bez_steps(a: [f64; 2], c1: [f64; 2], c2: [f64; 2], b: [f64; 2]) -> usize {
     let d = dist(a, c1) + dist(c1, c2) + dist(c2, b);
-    // Floor of 4, not 2: a lowercase 'o' is four cubics, and at 2 samples each it triangulates
-    // into a visible octagon. Letters are the smallest curves on the sheet AND the ones the eye
-    // judges hardest.
     ((d / BEZ_CHORD).sqrt() as usize).clamp(4, 16)
 }
 
-fn bezier(a: P, c1: P, c2: P, b: P, out: &mut Vec<P>) {
+/// Append the samples of one cubic, excluding its start point.
+fn bezier(a: [f64; 2], c1: [f64; 2], c2: [f64; 2], b: [f64; 2], out: &mut Vec<[f64; 2]>) {
     let n = bez_steps(a, c1, c2, b);
+
     for i in 1..=n {
         let t = i as f64 / n as f64;
         let u = 1.0 - t;
@@ -198,24 +274,44 @@ fn bezier(a: P, c1: P, c2: P, b: P, out: &mut Vec<P>) {
     }
 }
 
-/// Closed contours, beziers flattened - what a filled region needs.
-fn contours(segs: &[Seg]) -> Vec<Vec<P>> {
-    let mut loops: Vec<Vec<P>> = Vec::new();
-    let mut cur: Vec<P> = Vec::new();
-    let close = |cur: &mut Vec<P>, loops: &mut Vec<Vec<P>>| {
-        if cur.len() > 2 {
-            if cur[0] != *cur.last().unwrap() {
-                cur.push(cur[0]);
-            }
-            loops.push(std::mem::take(cur));
-        } else {
-            cur.clear();
+/// Close the current contour into `loops` when it has more than two points.
+fn close_loop(cur: &mut Vec<[f64; 2]>, loops: &mut Vec<Vec<[f64; 2]>>) {
+    if cur.len() <= 2 {
+        cur.clear();
+        return;
+    }
+
+    if cur[0] != cur[cur.len() - 1] {
+        cur.push(cur[0]);
+    }
+
+    loops.push(std::mem::take(cur));
+}
+
+/// Drop consecutive points closer than 1e-9.
+fn dedup(points: &[[f64; 2]]) -> Vec<[f64; 2]> {
+    let mut out: Vec<[f64; 2]> = Vec::with_capacity(points.len());
+
+    for p in points {
+        if !out.is_empty() && dist(*p, out[out.len() - 1]) < 1e-9 {
+            continue;
         }
-    };
+
+        out.push(*p);
+    }
+
+    out
+}
+
+/// Closed contours with beziers flattened.
+fn contours(segs: &[Seg]) -> Vec<Vec<[f64; 2]>> {
+    let mut loops: Vec<Vec<[f64; 2]>> = Vec::new();
+    let mut cur: Vec<[f64; 2]> = Vec::new();
+
     for s in segs {
         match *s {
             Seg::Move(p) => {
-                close(&mut cur, &mut loops);
+                close_loop(&mut cur, &mut loops);
                 cur.push(p);
             }
             Seg::Line(p) => cur.push(p),
@@ -223,171 +319,200 @@ fn contours(segs: &[Seg]) -> Vec<Vec<P>> {
                 let a = *cur.last().unwrap_or(&c1);
                 bezier(a, c1, c2, e, &mut cur);
             }
-            Seg::Close => close(&mut cur, &mut loops),
+            Seg::Close => close_loop(&mut cur, &mut loops),
         }
     }
-    close(&mut cur, &mut loops);
-    // Flattening can emit points on top of each other (a tiny cubic sampled 4×, a contour that
-    // starts where the previous one ended). A zero-length constraint edge is a CDT degeneracy,
-    // and one degenerate edge takes the whole letter down with it.
-    for lp in loops.iter_mut() {
-        lp.dedup_by(|a, b| dist(*a, *b) < 1e-9);
+
+    close_loop(&mut cur, &mut loops);
+    let mut out: Vec<Vec<[f64; 2]>> = Vec::with_capacity(loops.len());
+
+    for lp in &loops {
+        let clean = dedup(lp);
+
+        if clean.len() > 3 {
+            out.push(clean);
+        }
     }
-    loops.retain(|lp| lp.len() > 3);
-    loops
+
+    out
 }
 
-/// Open pen-down chains, beziers flattened - what a dashed stroke needs.
-fn flatten_chains(segs: &[Seg]) -> Vec<Vec<P>> {
-    let mut out: Vec<Vec<P>> = Vec::new();
-    let mut cur: Vec<P> = Vec::new();
-    let mut start: Option<P> = None;
+/// Take the chain when it holds a segment, leaving it empty either way.
+fn take_chain(chain: &mut Vec<[f64; 2]>) -> Option<Vec<[f64; 2]>> {
+    if chain.len() < 2 {
+        chain.clear();
+        return None;
+    }
+
+    Some(std::mem::take(chain))
+}
+
+/// Close the chain back to its subpath start.
+fn close_chain(chain: &mut Vec<[f64; 2]>, start: Option<[f64; 2]>) {
+    if let Some(s0) = start {
+        if !chain.is_empty() && chain[chain.len() - 1] != s0 {
+            chain.push(s0);
+        }
+    }
+}
+
+/// Open pen-down chains with beziers flattened.
+fn flatten_chains(segs: &[Seg]) -> Vec<Vec<[f64; 2]>> {
+    let mut out: Vec<Vec<[f64; 2]>> = Vec::new();
+    let mut cur: Vec<[f64; 2]> = Vec::new();
+    let mut start: Option<[f64; 2]> = None;
+
     for s in segs {
         match *s {
             Seg::Move(p) => {
-                if cur.len() >= 2 {
-                    out.push(std::mem::take(&mut cur));
+                if let Some(chain) = take_chain(&mut cur) {
+                    out.push(chain);
                 }
-                cur.clear();
+
                 cur.push(p);
                 start = Some(p);
             }
             Seg::Line(p) => cur.push(p),
             Seg::Curve(c1, c2, e) => {
                 let a = *cur.last().unwrap_or(&c1);
+
                 if cur.is_empty() {
                     cur.push(a);
                 }
+
                 bezier(a, c1, c2, e, &mut cur);
             }
             Seg::Close => {
-                if let Some(s0) = start {
-                    if cur.last().map_or(false, |l| *l != s0) {
-                        cur.push(s0);
-                    }
+                close_chain(&mut cur, start);
+
+                if let Some(chain) = take_chain(&mut cur) {
+                    out.push(chain);
                 }
-                if cur.len() >= 2 {
-                    out.push(std::mem::take(&mut cur));
-                }
-                cur.clear();
+
                 if let Some(s0) = start {
                     cur.push(s0);
                 }
             }
         }
     }
+
     if cur.len() >= 2 {
         out.push(cur);
     }
+
     out
 }
 
-/// Split one flattened chain into its dash ON-runs. `pat` alternates on/off and repeats; an
-/// odd-length PDF dash array continues alternating, which duplicating the array reproduces.
-fn dash_runs(pts: &[P], pat: &[f64], phase: f64) -> Vec<Vec<P>> {
+/// Split one flattened chain into its dash on-runs.
+fn dash_runs(pts: &[[f64; 2]], pat: &[f64], phase: f64) -> Vec<Vec<[f64; 2]>> {
     let cycle: f64 = pat.iter().sum();
     let mut idx = 0;
     let mut pos = phase.rem_euclid(cycle);
-    loop {
-        if pos < pat[idx] {
-            break;
-        }
+
+    while pos >= pat[idx] {
         pos -= pat[idx];
         idx = (idx + 1) % pat.len();
     }
+
     let mut rem = pat[idx] - pos;
     let mut on = idx % 2 == 0;
-    let mut runs: Vec<Vec<P>> = Vec::new();
-    let mut cur: Vec<P> = Vec::new();
+    let mut runs: Vec<Vec<[f64; 2]>> = Vec::new();
+    let mut cur: Vec<[f64; 2]> = Vec::new();
+
     if on {
         cur.push(pts[0]);
     }
+
     for w2 in pts.windows(2) {
         let (a, b) = (w2[0], w2[1]);
         let len = dist(a, b);
+
         if len < 1e-12 {
             continue;
         }
+
         let mut done = 0.0;
+
         while rem < len - done {
             done += rem;
             let t = done / len;
             let p = [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t];
+
             if on {
                 cur.push(p);
-                if cur.len() >= 2 {
-                    runs.push(std::mem::take(&mut cur));
-                } else {
-                    cur.clear();
+
+                if let Some(run) = take_chain(&mut cur) {
+                    runs.push(run);
                 }
             } else {
                 cur.clear();
                 cur.push(p);
             }
+
             on = !on;
             idx = (idx + 1) % pat.len();
             rem = pat[idx];
         }
+
         rem -= len - done;
+
         if on {
             cur.push(b);
         }
     }
+
     if on && cur.len() >= 2 {
         runs.push(cur);
     }
+
     runs
 }
 
-/// Signed shoelace area of a closed contour (last point repeats the first).
-fn area_signed(loop_: &[P]) -> f64 {
+// ═══════════════════════════════════════════════════════════════════════════
+// Islands
+// ═══════════════════════════════════════════════════════════════════════════
+
+/// Signed shoelace area of a closed contour.
+fn area_signed(loop_: &[[f64; 2]]) -> f64 {
     let mut a = 0.0;
+
     for i in 0..loop_.len() {
         let (p, q) = (loop_[i], loop_[(i + 1) % loop_.len()]);
         a += p[0] * q[1] - q[0] * p[1];
     }
+
     a * 0.5
 }
 
-fn area(loop_: &[P]) -> f64 {
-    area_signed(loop_).abs()
-}
-
-/// What the fill SHOULD cover: border minus its holes.
-fn target_area(loops: &[Vec<P>]) -> f64 {
-    if loops.is_empty() {
-        return 0.0;
-    }
-    // loops[0] is not necessarily the border - take the largest, like the CDT does.
-    let all: Vec<f64> = loops.iter().map(|l| area(l)).collect();
-    let max = all.iter().cloned().fold(0.0, f64::max);
-    (2.0 * max - all.iter().sum::<f64>()).max(0.0)
-}
-
-/// Is `p` inside the closed polygon `poly`? Ray casting - the loops here are glyph contours and
-/// hatch outlines, tens of points each.
-fn inside(p: P, poly: &[P]) -> bool {
+/// Is `p` inside the closed polygon `poly` by ray casting?
+fn inside(p: [f64; 2], poly: &[[f64; 2]]) -> bool {
     let mut hit = false;
     let n = poly.len();
+
     for i in 0..n {
         let (a, b) = (poly[i], poly[(i + 1) % n]);
+
         if (a[1] > p[1]) != (b[1] > p[1]) {
             let t = (p[1] - a[1]) / (b[1] - a[1]);
+
             if p[0] < a[0] + t * (b[0] - a[0]) {
                 hit = !hit;
             }
         }
     }
+
     hit
 }
 
-/// Winding number of `p` in the closed polygon `poly` - the nonzero rule's `inside`.
-fn winding(p: P, poly: &[P]) -> i32 {
+/// Winding number of `p` in the closed polygon `poly`.
+fn winding(p: [f64; 2], poly: &[[f64; 2]]) -> i32 {
     let mut wn = 0;
     let n = poly.len();
+
     for i in 0..n {
         let (a, b) = (poly[i], poly[(i + 1) % n]);
         let cross = (b[0] - a[0]) * (p[1] - a[1]) - (p[0] - a[0]) * (b[1] - a[1]);
+
         if a[1] <= p[1] {
             if b[1] > p[1] && cross > 0.0 {
                 wn += 1;
@@ -396,91 +521,206 @@ fn winding(p: P, poly: &[P]) -> i32 {
             wn -= 1;
         }
     }
+
     wn
 }
 
-/// Split a path's contours into ISLANDS, each with the holes it actually contains.
-///
-/// The obvious rule - biggest contour is the border, everything else is a hole - is wrong for
-/// text, and that is exactly where it shows: the dot of an `i`, the two bars of an `=`, the
-/// umlaut of an `ä` are separate ISLANDS, not holes. `even_odd` picks the PDF fill rule:
-/// containment parity (even-odd) or winding numbers (nonzero) - under nonzero, a contour nested
-/// inside a same-orientation one is REDUNDANT, not a hole, which parity gets wrong.
-fn islands(loops: Vec<Vec<P>>, even_odd: bool) -> Vec<Vec<Vec<P>>> {
+/// Number of other contours that contain each contour.
+fn containment_depth(loops: &[Vec<[f64; 2]>]) -> Vec<usize> {
     let n = loops.len();
-    if n <= 1 {
-        return if loops.is_empty() {
-            Vec::new()
-        } else {
-            vec![loops]
-        };
-    }
-
-    // depth[i] = how many other contours contain contour i (hole->island assignment)
     let mut depth = vec![0usize; n];
+
     for i in 0..n {
         let probe = loops[i][0];
-        for j in 0..n {
-            if i != j && inside(probe, &loops[j]) {
+
+        for (j, other) in loops.iter().enumerate() {
+            if i != j && inside(probe, other) {
                 depth[i] += 1;
             }
         }
     }
 
-    // 0 = island, 1 = hole, 2 = dropped (nonzero: redundant or degenerate)
-    let class: Vec<u8> = (0..n)
-        .map(|i| {
-            if even_odd {
-                return (depth[i] % 2) as u8;
-            }
-            let probe = loops[i][0];
-            let wn_out: i32 = (0..n)
-                .filter(|&j| j != i)
-                .map(|j| winding(probe, &loops[j]))
-                .sum();
-            let wn_in = wn_out + if area_signed(&loops[i]) >= 0.0 { 1 } else { -1 };
-            match (wn_in != 0, wn_out != 0) {
-                (true, false) => 0,
-                (false, true) => 1,
-                _ => 2,
-            }
-        })
-        .collect();
+    depth
+}
 
-    // Each hole belongs to the deepest island that contains it.
-    let mut out: Vec<Vec<Vec<P>>> = Vec::new();
-    let mut index: Vec<Option<usize>> = vec![None; n];
+/// Classify contour `i` under the nonzero rule: 0 island, 1 hole, 2 dropped.
+fn nonzero_class(loops: &[Vec<[f64; 2]>], i: usize) -> u8 {
+    let probe = loops[i][0];
+    let mut wn_out = 0;
+
+    for (j, other) in loops.iter().enumerate() {
+        if j != i {
+            wn_out += winding(probe, other);
+        }
+    }
+
+    let wn_in = wn_out + if area_signed(&loops[i]) >= 0.0 { 1 } else { -1 };
+
+    match (wn_in != 0, wn_out != 0) {
+        (true, false) => 0,
+        (false, true) => 1,
+        _ => 2,
+    }
+}
+
+/// Split contours into islands, each with the holes it contains, under the even-odd or nonzero rule.
+fn islands(loops: Vec<Vec<[f64; 2]>>, even_odd: bool) -> Vec<Vec<Vec<[f64; 2]>>> {
+    let n = loops.len();
+
+    if n == 0 {
+        return Vec::new();
+    }
+
+    if n == 1 {
+        return vec![loops];
+    }
+
+    let depth = containment_depth(&loops);
+    let mut class: Vec<u8> = Vec::with_capacity(n);
+
+    for (i, d) in depth.iter().enumerate() {
+        if even_odd {
+            class.push((d % 2) as u8);
+        } else {
+            class.push(nonzero_class(&loops, i));
+        }
+    }
+
+    let mut out: Vec<Vec<Vec<[f64; 2]>>> = Vec::new();
+    let mut index = vec![0usize; n];
+
     for i in 0..n {
         if class[i] == 0 {
-            index[i] = Some(out.len());
+            index[i] = out.len();
             out.push(vec![loops[i].clone()]);
         }
     }
+
     for i in 0..n {
-        if class[i] == 1 {
-            let probe = loops[i][0];
-            let mut best: Option<(usize, usize)> = None; // (depth, island index)
-            for j in 0..n {
-                if i != j && class[j] == 0 && inside(probe, &loops[j]) {
-                    if best.map_or(true, |(d, _)| depth[j] > d) {
-                        best = Some((depth[j], index[j].unwrap()));
-                    }
-                }
+        if class[i] != 1 {
+            continue;
+        }
+
+        let probe = loops[i][0];
+        let mut best: Option<(usize, usize)> = None;
+
+        for j in 0..n {
+            if i == j || class[j] != 0 || !inside(probe, &loops[j]) {
+                continue;
             }
-            if let Some((_, k)) = best {
-                out[k].push(loops[i].clone());
+
+            let deeper = match best {
+                Some((d, _)) => depth[j] > d,
+                None => true,
+            };
+
+            if deeper {
+                best = Some((depth[j], index[j]));
             }
         }
+
+        if let Some((_, k)) = best {
+            out[k].push(loops[i].clone());
+        }
     }
+
     out
 }
 
+// ═══════════════════════════════════════════════════════════════════════════
+// Triangulation
+// ═══════════════════════════════════════════════════════════════════════════
+
+/// Triangulate one island (border + holes) with earcut into vertices and triangle indices.
+fn earcut_raw(loops: &[Vec<[f64; 2]>]) -> (Vec<[f64; 2]>, Vec<usize>) {
+    let mut flat: Vec<f64> = Vec::new();
+    let mut holes: Vec<usize> = Vec::new();
+
+    for (i, lp) in loops.iter().enumerate() {
+        let pts = if lp.len() > 1 && lp[0] == lp[lp.len() - 1] {
+            &lp[..lp.len() - 1]
+        } else {
+            &lp[..]
+        };
+
+        if pts.len() < 3 {
+            continue;
+        }
+
+        if i > 0 {
+            holes.push(flat.len() / 2);
+        }
+
+        for p in pts {
+            flat.push(p[0]);
+            flat.push(p[1]);
+        }
+    }
+
+    if flat.len() < 6 {
+        return (Vec::new(), Vec::new());
+    }
+
+    let Ok(tris) = earcutr::earcut(&flat, &holes, 2) else {
+        return (Vec::new(), Vec::new());
+    };
+    let mut verts: Vec<[f64; 2]> = Vec::with_capacity(flat.len() / 2);
+
+    for c in flat.chunks_exact(2) {
+        verts.push([c[0], c[1]]);
+    }
+
+    (verts, tris)
+}
+
+/// Triangulate one filled region.
+fn triangulate_fill(fill: &Fill) -> (Vec<[f64; 2]>, Vec<usize>) {
+    earcut_raw(&fill.loops)
+}
+
+/// Outline and triangulate one glyph in glyph space, None when mupdf has no outline for it.
+fn build_glyph(font: &mupdf::Font, gid: i32) -> Option<GlyphMesh> {
+    let outline = font
+        .outline_glyph_with_ctm(gid, &Matrix::IDENTITY)
+        .ok()
+        .flatten()?;
+    let loops = contours(&walk(&outline, Matrix::IDENTITY, 0.0));
+    let mut out: Vec<(Vec<[f64; 2]>, Vec<usize>)> = Vec::new();
+
+    for island in islands(loops, false) {
+        let (v, t) = earcut_raw(&island);
+
+        if !t.is_empty() {
+            out.push((v, t));
+        }
+    }
+
+    Some(GlyphMesh { islands: out })
+}
+
+/// Glyph vertices placed by the text matrix `m` into device space.
+fn place_glyph(verts: &[[f64; 2]], m: [f64; 6], flip: f64) -> Vec<[f64; 2]> {
+    let [a, b, c, d, e, f] = m;
+    let mut out: Vec<[f64; 2]> = Vec::with_capacity(verts.len());
+
+    for q in verts {
+        let (x, y) = (q[0], -q[1]);
+        out.push([a * x + c * y + e, flip - (b * x + d * y + f)]);
+    }
+
+    out
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Device
+// ═══════════════════════════════════════════════════════════════════════════
+
+/// Convert a device colour of any colorspace to RGB.
 fn to_color(cs: &Colorspace, color: &[f32], alpha: f32, cp: ColorParams) -> Color {
-    // Colorspaces on a CAD sheet are DeviceGray, DeviceRGB, DeviceCMYK and separations; mupdf
-    // converts any of them properly, which hand-rolled gray/cmyk arithmetic would not.
-    let rgb = cs
-        .convert_color(color, &Colorspace::device_rgb(), None, cp)
-        .unwrap_or_else(|_| vec![0.0, 0.0, 0.0]);
+    let rgb = match cs.convert_color(color, &Colorspace::device_rgb(), None, cp) {
+        Ok(rgb) => rgb,
+        Err(_) => vec![0.0, 0.0, 0.0],
+    };
     Color::new(
         rgb.first().copied().unwrap_or(0.0),
         rgb.get(1).copied().unwrap_or(0.0),
@@ -489,123 +729,13 @@ fn to_color(cs: &Colorspace, color: &[f32], alpha: f32, cp: ColorParams) -> Colo
     )
 }
 
+/// Is the colour a knockout white?
 fn is_white(c: &Color) -> bool {
     c.r >= WHITE && c.g >= WHITE && c.b >= WHITE
 }
 
-/// Triangulate one island (border + holes) with earcut, into raw verts + triangle indices.
-///
-/// Not the kernel CDT: `Mesh::from_polygon_with_holes` fits an average PLANE through the contour
-/// and inserts Delaunay constraints - right for a trimmed surface in 3D, wrong here. It
-/// mis-triangulated 28% of this sheet's glyph fills (measured by the area self-check below), and
-/// a letter that comes back half-covered is exactly the "scratched" look. Earcut is the algorithm
-/// fonts and maps use: ear-clipping with hole bridging, purely 2D, tolerant of contours that
-/// touch themselves - which subset glyph outlines routinely do.
-fn earcut_raw(loops: &[Vec<P>]) -> (Vec<P>, Vec<usize>) {
-    let mut flat: Vec<f64> = Vec::new();
-    let mut holes: Vec<usize> = Vec::new();
-    for (i, lp) in loops.iter().enumerate() {
-        // earcut wants OPEN rings: the closing duplicate would be a zero-length ear.
-        let pts = if lp.len() > 1 && lp[0] == *lp.last().unwrap() {
-            &lp[..lp.len() - 1]
-        } else {
-            &lp[..]
-        };
-        if pts.len() < 3 {
-            continue;
-        }
-        if i > 0 {
-            holes.push(flat.len() / 2);
-        }
-        for p in pts {
-            flat.push(p[0]);
-            flat.push(p[1]);
-        }
-    }
-    if flat.len() < 6 {
-        return (Vec::new(), Vec::new());
-    }
-    let Ok(tris) = earcutr::earcut(&flat, &holes, 2) else {
-        return (Vec::new(), Vec::new());
-    };
-    let verts = flat.chunks_exact(2).map(|c| [c[0], c[1]]).collect();
-    (verts, tris)
-}
-
-fn tri_area(v: &[P], t: &[usize]) -> f64 {
-    t.chunks_exact(3)
-        .map(|k| {
-            let (a, b, c) = (v[k[0]], v[k[1]], v[k[2]]);
-            ((b[0] - a[0]) * (c[1] - a[1]) - (c[0] - a[0]) * (b[1] - a[1])).abs() * 0.5
-        })
-        .sum()
-}
-
-/// Did the triangulation actually cover the polygon? Triangle area vs contour area catches a
-/// letter that came back scratched - the defect is invisible in the object count.
-fn area_off(loops: &[Vec<P>], v: &[P], t: &[usize]) -> bool {
-    let want = target_area(loops);
-    want > 1e-9 && (tri_area(v, t) - want).abs() > 0.02 * want
-}
-
-/// Outline + triangulate one glyph ONCE, in glyph space. None = mupdf has no outline for it
-/// (a Type 3 procstream glyph, or a broken font program).
-fn build_glyph(font: &mupdf::Font, gid: i32) -> Option<GlyphMesh> {
-    let outline = font
-        .outline_glyph_with_ctm(gid, &Matrix::IDENTITY)
-        .ok()
-        .flatten()?;
-    let loops = contours(&walk(&outline, Matrix::IDENTITY, 0.0));
-    let empty = loops.is_empty(); // an EMPTY outline (space-like glyph) is fine, not a failure
-    let mut out = Vec::new();
-    let mut bad = false;
-    // Glyph outlines fill by the NONZERO rule.
-    for island in islands(loops, false) {
-        let (v, t) = earcut_raw(&island);
-        if t.is_empty() {
-            bad = true;
-            continue;
-        }
-        if area_off(&island, &v, &t) {
-            bad = true;
-        }
-        out.push((v, t));
-    }
-    Some(GlyphMesh {
-        islands: out,
-        bad,
-        empty,
-    })
-}
-
+/// A mupdf device that records a page into `State`.
 struct Collector(Rc<RefCell<State>>);
-
-impl Collector {
-    /// A filled path -> islands in the current layer, under the path's fill rule.
-    fn add_fill(&self, path: &Path, ctm: Matrix, c: Color, even_odd: bool) {
-        let mut st = self.0.borrow_mut();
-        if is_white(&c) {
-            st.white += 1;
-            return;
-        }
-        if c.a < 0.999 {
-            st.translucent_fills += 1;
-            st.min_alpha = st.min_alpha.min(c.a);
-        }
-        let loops = contours(&walk(path, ctm, st.flip));
-        if loops.is_empty() {
-            return;
-        }
-        let layer = st.layer();
-        for island in islands(loops, even_odd) {
-            st.fills.push(Fill {
-                layer,
-                c: c.clone(),
-                loops: island,
-            });
-        }
-    }
-}
 
 impl NativeDevice for Collector {
     fn fill_path(
@@ -618,7 +748,23 @@ impl NativeDevice for Collector {
         alpha: f32,
         cp: ColorParams,
     ) {
-        self.add_fill(path, ctm, to_color(cs, color, alpha, cp), even_odd);
+        let c = to_color(cs, color, alpha, cp);
+
+        if is_white(&c) {
+            return;
+        }
+
+        let mut st = self.0.borrow_mut();
+        let loops = contours(&walk(path, ctm, st.flip));
+        let layer = st.layer();
+
+        for island in islands(loops, even_odd) {
+            st.fills.push(Fill {
+                layer,
+                c: c.clone(),
+                loops: island,
+            });
+        }
     }
 
     fn stroke_path(
@@ -632,114 +778,34 @@ impl NativeDevice for Collector {
         cp: ColorParams,
     ) {
         let c = to_color(cs, color, alpha, cp);
-        let mut st = self.0.borrow_mut();
+
         if is_white(&c) {
-            st.white += 1;
             return;
         }
-        if c.a < 0.999 {
-            st.translucent_strokes += 1;
-            st.min_alpha = st.min_alpha.min(c.a);
-        }
-        // Line width is in USER space; the ctm scales it. expansion() is the average scale factor
-        // mupdf itself uses for exactly this. Widths are stored as absolute mm (1 pt = 1 mm).
+
+        let mut st = self.0.borrow_mut();
         let exp = ctm.expansion() as f64;
         let w = stroke.line_width() as f64 * exp;
         let w = if w > 0.0 { w } else { HAIRLINE };
         let layer = st.layer();
         let segs = walk(path, ctm, st.flip);
+        let mut pat: Vec<f64> = Vec::new();
 
-        // Dash lengths are user-space too. mupdf does NOT pre-flatten dashes for a custom
-        // device, so the pattern is walked here; a dashed cubic cannot stay analytic.
-        let pat: Vec<f64> = stroke.dashes().iter().map(|d| *d as f64 * exp).collect();
+        for d in stroke.dashes() {
+            pat.push(d as f64 * exp);
+        }
+
         if !pat.is_empty() && pat.iter().sum::<f64>() > 1e-9 {
-            let pat: Vec<f64> = if pat.len() % 2 == 1 {
-                pat.iter().chain(&pat).cloned().collect()
-            } else {
-                pat
-            };
-            let phase = stroke.dash_phase() as f64 * exp;
-            for chain in flatten_chains(&segs) {
-                for run in dash_runs(&chain, &pat, phase) {
-                    st.strokes.push(Stroke {
-                        layer,
-                        w,
-                        c: c.clone(),
-                        pts: run,
-                    });
-                }
+            if pat.len() % 2 == 1 {
+                pat.extend_from_within(..);
             }
+
+            let phase = stroke.dash_phase() as f64 * exp;
+            st.add_dashes(&segs, layer, w, &c, &pat, phase);
             return;
         }
 
-        let mut chain: Vec<P> = Vec::new();
-        let mut start: Option<P> = None;
-        for s in &segs {
-            match *s {
-                Seg::Move(p) => {
-                    if chain.len() >= 2 {
-                        st.strokes.push(Stroke {
-                            layer,
-                            w,
-                            c: c.clone(),
-                            pts: std::mem::take(&mut chain),
-                        });
-                    }
-                    chain.clear();
-                    chain.push(p);
-                    start = Some(p);
-                }
-                Seg::Line(p) => chain.push(p),
-                // A cubic stays a cubic: the kernel HAS NurbsCurve, so nothing is flattened here.
-                Seg::Curve(c1, c2, e) => {
-                    let a = *chain.last().unwrap_or(&c1);
-                    if chain.len() >= 2 {
-                        st.strokes.push(Stroke {
-                            layer,
-                            w,
-                            c: c.clone(),
-                            pts: std::mem::take(&mut chain),
-                        });
-                    }
-                    chain.clear();
-                    st.curves.push(Curve {
-                        layer,
-                        w,
-                        c: c.clone(),
-                        cv: [a, c1, c2, e],
-                    });
-                    chain.push(e);
-                }
-                // Close back to the SUBPATH start - which a curve's chain reset must not lose.
-                Seg::Close => {
-                    if let Some(s0) = start {
-                        if chain.last().map_or(false, |l| *l != s0) {
-                            chain.push(s0);
-                        }
-                    }
-                    if chain.len() >= 2 {
-                        st.strokes.push(Stroke {
-                            layer,
-                            w,
-                            c: c.clone(),
-                            pts: std::mem::take(&mut chain),
-                        });
-                    }
-                    chain.clear();
-                    if let Some(s0) = start {
-                        chain.push(s0);
-                    }
-                }
-            }
-        }
-        if chain.len() >= 2 {
-            st.strokes.push(Stroke {
-                layer,
-                w,
-                c,
-                pts: chain,
-            });
-        }
+        st.add_chains(&segs, layer, w, &c);
     }
 
     fn fill_text(
@@ -752,52 +818,48 @@ impl NativeDevice for Collector {
         cp: ColorParams,
     ) {
         let c = to_color(cs, color, alpha, cp);
-        let mut st = self.0.borrow_mut();
+
         if is_white(&c) {
-            st.white += 1;
             return;
         }
-        if c.a < 0.999 {
-            st.translucent_fills += 1;
-            st.min_alpha = st.min_alpha.min(c.a);
-        }
+
+        let mut st = self.0.borrow_mut();
         let layer = st.layer();
+
         for span in text.spans() {
             let font = span.font();
             let name = font.name().to_string();
+
             for item in span.items() {
                 if item.gid() < 0 {
                     continue;
-                } // no glyph (a space, or an unmapped code)
-                  // The glyph's placement: the span's text matrix carries scale/rotation, the item
-                  // carries the pen position, and ctm puts it on the page.
+                }
+
                 let mut m = span.trm();
                 m.e = item.x();
                 m.f = item.y();
                 m.concat(ctm.clone());
-                let g = st
-                    .glyph_cache
-                    .entry((name.clone(), item.gid()))
-                    .or_insert_with(|| build_glyph(&font, item.gid()).map(Rc::new))
-                    .clone();
-                match g {
-                    Some(g) => st.glyph_refs.push(GlyphRef {
+                let glyph = match st.glyph_cache.entry((name.clone(), item.gid())) {
+                    hash_map::Entry::Occupied(entry) => entry.get().clone(),
+                    hash_map::Entry::Vacant(entry) => entry
+                        .insert(build_glyph(&font, item.gid()).map(Rc::new))
+                        .clone(),
+                };
+
+                if let Some(g) = glyph {
+                    st.glyph_refs.push(GlyphRef {
                         layer,
                         c: c.clone(),
                         m: [
                             m.a as f64, m.b as f64, m.c as f64, m.d as f64, m.e as f64, m.f as f64,
                         ],
                         g,
-                    }),
-                    None => *st.no_outline.entry(name.clone()).or_insert(0) += 1,
+                    });
                 }
-                *st.fonts.glyphs.entry(name.clone()).or_insert(0) += 1;
-                st.chars += 1;
             }
         }
     }
 
-    // A stroked glyph (outline text) is rare but real - treat it as a fill of the same outline.
     fn stroke_text(
         &mut self,
         text: &Text,
@@ -811,40 +873,21 @@ impl NativeDevice for Collector {
         self.fill_text(text, ctm, cs, color, alpha, cp);
     }
 
-    fn fill_image(&mut self, _img: &Image, cmt: Matrix, _alpha: f32, _cp: ColorParams) {
-        let mut st = self.0.borrow_mut();
-        st.images += 1;
-        // An image fills the unit square under its matrix; |det| is its placed area.
-        st.image_area += (cmt.a as f64 * cmt.d as f64 - cmt.b as f64 * cmt.c as f64).abs();
-    }
-
-    fn fill_image_mask(
-        &mut self,
-        _img: &Image,
-        cmt: Matrix,
-        _cs: &Colorspace,
-        _color: &[f32],
-        _alpha: f32,
-        _cp: ColorParams,
-    ) {
-        let mut st = self.0.borrow_mut();
-        st.images += 1;
-        st.image_area += (cmt.a as f64 * cmt.d as f64 - cmt.b as f64 * cmt.c as f64).abs();
-    }
-
-    fn fill_shade(&mut self, _shade: &Shade, _cmt: Matrix, _alpha: f32, _cp: ColorParams) {
-        self.0.borrow_mut().shades += 1;
-    }
-
     fn begin_layer(&mut self, name: &str) {
         let mut st = self.0.borrow_mut();
-        let id = match st.layers.iter().position(|l| l == name) {
-            Some(i) => i,
-            None => {
-                st.layers.push(name.to_string());
-                st.layers.len() - 1
+        let mut id = st.layers.len();
+
+        for (i, layer) in st.layers.iter().enumerate() {
+            if layer == name {
+                id = i;
+                break;
             }
-        };
+        }
+
+        if id == st.layers.len() {
+            st.layers.push(name.to_string());
+        }
+
         st.layer_stack.push(id);
     }
 
@@ -853,18 +896,53 @@ impl NativeDevice for Collector {
     }
 }
 
-/// Write out every font program the PDF embeds. A sheet names its faces (ArialMT, DINOffc-Light,
-/// subset-tagged WZLYOP+Arial) but the glyphs we import are OUTLINES - the font itself is the only
-/// way to ever re-typeset that text, so it is worth keeping next to the drawing.
-/// FontFile = Type1, FontFile2 = TrueType, FontFile3 = CFF/OpenType.
-fn dump_fonts(src: &str, dir: &std::path::Path) -> usize {
+// ═══════════════════════════════════════════════════════════════════════════
+// Fonts
+// ═══════════════════════════════════════════════════════════════════════════
+
+/// The face name of a font descriptor.
+fn font_name(obj: &PdfObject) -> Option<String> {
+    let name = obj.get_dict("FontName").ok().flatten()?;
+    let bytes = name.as_name().ok()?;
+    Some(String::from_utf8_lossy(&bytes).to_string())
+}
+
+/// A file-system-safe copy of a font name.
+fn safe_name(name: &str) -> String {
+    let mut safe = String::with_capacity(name.len());
+
+    for c in name.chars() {
+        if c.is_alphanumeric() || c == '-' || c == '+' {
+            safe.push(c);
+        } else {
+            safe.push('_');
+        }
+    }
+
+    safe
+}
+
+/// Write every embedded font program into `<assets>/fonts`, next to `<assets>/pb/<stem>.pb`.
+fn write_fonts(src: &str, stem: &str) {
+    let out_dir = std::path::Path::new(stem)
+        .parent()
+        .unwrap_or(std::path::Path::new("."));
+    let font_dir = match out_dir.parent() {
+        Some(parent) => parent.join("fonts"),
+        None => out_dir.join("fonts"),
+    };
+
+    if std::fs::create_dir_all(&font_dir).is_err() {
+        return;
+    }
+
     let Ok(doc) = PdfDocument::open(src) else {
-        return 0;
+        return;
     };
     let Ok(count) = doc.count_objects() else {
-        return 0;
+        return;
     };
-    let mut n = 0;
+
     for num in 1..count as i32 {
         let Ok(obj) = doc.new_indirect(num, 0) else {
             continue;
@@ -872,6 +950,7 @@ fn dump_fonts(src: &str, dir: &std::path::Path) -> usize {
         let Ok(Some(obj)) = obj.resolve() else {
             continue;
         };
+
         for (key, ext) in [
             ("FontFile", "pfb"),
             ("FontFile2", "ttf"),
@@ -883,40 +962,40 @@ fn dump_fonts(src: &str, dir: &std::path::Path) -> usize {
             let Ok(bytes) = ff.read_stream() else {
                 continue;
             };
+
             if bytes.is_empty() {
                 continue;
             }
-            // The descriptor names the face; fall back to the object number.
-            let name = obj
-                .get_dict("FontName")
-                .ok()
-                .flatten()
-                .and_then(|o| o.as_name().ok())
-                .map(|v| String::from_utf8_lossy(&v).to_string())
-                .unwrap_or_else(|| format!("font_{num}"));
-            let safe: String = name
-                .chars()
-                .map(|c| {
-                    if c.is_alphanumeric() || c == '-' || c == '+' {
-                        c
-                    } else {
-                        '_'
-                    }
-                })
-                .collect();
-            let path = dir.join(format!("{safe}.{ext}"));
-            if !path.exists() && std::fs::write(&path, &bytes).is_ok() {
-                n += 1;
+
+            let name = match font_name(&obj) {
+                Some(name) => name,
+                None => format!("font_{num}"),
+            };
+            let path = font_dir.join(format!("{}.{ext}", safe_name(&name)));
+
+            if !path.exists() {
+                std::fs::write(&path, &bytes).ok();
             }
         }
     }
-    n
 }
 
-fn points(p: &[P]) -> Vec<Point> {
-    p.iter().map(|q| Point::new(q[0], q[1], 0.0)).collect()
+// ═══════════════════════════════════════════════════════════════════════════
+// Session output
+// ═══════════════════════════════════════════════════════════════════════════
+
+/// Lift 2D points to z = 0.
+fn points(pts: &[[f64; 2]]) -> Vec<Point> {
+    let mut out: Vec<Point> = Vec::with_capacity(pts.len());
+
+    for q in pts {
+        out.push(Point::new(q[0], q[1], 0.0));
+    }
+
+    out
 }
 
+/// Colour quantized to bytes, the bucket key.
 fn ckey(c: &Color) -> [u8; 4] {
     [
         (c.r.clamp(0.0, 1.0) * 255.0).round() as u8,
@@ -926,189 +1005,159 @@ fn ckey(c: &Color) -> [u8; 4] {
     ]
 }
 
-/// Import one page of `src` into a Session, write `<stem>.pb`, and drop the embedded font
-/// programs next to it. The `pdf_import` bin is a thin CLI shim over this.
-pub fn import_pdf(src: &str, stem: &str, page_no: i32) {
-    let t0 = std::time::Instant::now();
-    let doc = Document::open(src).expect("cannot open pdf");
-    let page = doc.load_page(page_no).expect("no such page");
-    let Rect { x0, y0, x1, y1 } = page.bounds().expect("no page box");
-
-    let state = Rc::new(RefCell::new(State {
-        // Device space is y-down; the sheet is authored y-up. One flip, applied in `Walk::pt`.
-        flip: (y0 + y1) as f64,
-        layers: vec!["0 unlayered".to_string()],
-        min_alpha: 1.0,
-        ..Default::default()
-    }));
-    let device = Device::from_native(Collector(state.clone())).expect("device");
-    page.run(&device, &Matrix::IDENTITY).expect("run page");
-    drop(device);
-    let st = state.borrow();
-    let t_read = t0.elapsed();
-
-    // Path fills first: the triangulation is the long pole, and it is rayon-parallel.
-    // Glyphs were triangulated once each at cache build; here they only get placed.
-    let t1 = std::time::Instant::now();
-    let tri_fills: Vec<(Vec<P>, Vec<usize>, bool)> = st
-        .fills
-        .par_iter()
-        .map(|f| {
-            let (v, t) = earcut_raw(&f.loops);
-            let bad = !t.is_empty() && area_off(&f.loops, &v, &t);
-            (v, t, bad)
-        })
-        .collect();
-    let t_cdt = t1.elapsed();
-
-    let name = std::path::Path::new(stem)
-        .file_name()
-        .unwrap()
-        .to_string_lossy()
-        .to_string();
-    let mut s = Session::new(&name);
-    let mut groups: BTreeMap<usize, std::rc::Rc<std::cell::RefCell<crate::tree::TreeNode>>> =
-        BTreeMap::new();
-    macro_rules! group {
-        ($i:expr) => {{
-            let i = $i;
-            groups
-                .entry(i)
-                .or_insert_with(|| {
-                    s.add_group(
-                        st.layers
-                            .get(i)
-                            .map(|x| x.as_str())
-                            .unwrap_or("0 unlayered"),
-                    )
-                })
-                .clone()
-        }};
+/// The session group of a layer, created on first use.
+fn get_group(
+    session: &mut Session,
+    groups: &mut BTreeMap<usize, Rc<RefCell<TreeNode>>>,
+    layers: &[String],
+    layer: usize,
+) -> Rc<RefCell<TreeNode>> {
+    if let Some(group) = groups.get(&layer) {
+        return group.clone();
     }
 
-    let (mut n_lines, mut n_polylines) = (0, 0);
-    for sk in &st.strokes {
-        let g = group!(sk.layer);
-        let pts = points(&sk.pts);
-        if pts.len() == 2 {
-            let mut ln = Line::from_points(&pts[0], &pts[1]);
-            ln.linecolor = sk.c.clone();
-            ln.width = sk.w;
-            s.add_line(ln, Some(&g));
-            n_lines += 1;
-        } else {
-            let mut pl = Polyline::new(pts);
-            pl.linecolor = sk.c.clone();
-            pl.width = sk.w;
-            s.add_polyline(pl, Some(&g));
-            n_polylines += 1;
-        }
-    }
-
-    for cv in &st.curves {
-        let g = group!(cv.layer);
-        let mut nc = NurbsCurve::create(false, 3, &points(&cv.cv));
-        nc.linecolors = vec![cv.c.clone()]; // a curve carries a vec, not a single linecolor
-        nc.width = cv.w;
-        s.add_nurbscurve(nc, Some(&g));
-    }
-
-    // All fills of one (layer, colour) merge into ONE mesh: a sheet has tens of pens, not tens
-    // of thousands - per-object overhead (guid, graph node, xform, proto framing) was most of
-    // the .pb and most of the viewer's parse time.
-    let (mut n_dropped, mut n_bad) = (0, 0);
-    // KIND is part of the key, ahead of the colour, and TEXT sorts last: a page paints its
-    // regions and then its lettering on top, and merging both into one (layer, colour) bucket
-    // threw that away - the buckets came out in COLOUR order, so black lettering (0,0,0) was
-    // emitted first and every hatch painted over it. Every glyph is known to be a glyph right
-    // here (`st.glyph_refs`), so this is the document's own distinction, not a guess about what
-    // a black fill might be.
-    const KIND_REGION: u8 = 0;
-    const KIND_TEXT: u8 = 1;
-    let mut buckets: BTreeMap<(usize, u8, [u8; 4]), (Color, Vec<P>, Vec<usize>)> = BTreeMap::new();
-    let push_part = |buckets: &mut BTreeMap<(usize, u8, [u8; 4]), (Color, Vec<P>, Vec<usize>)>,
-                     layer: usize,
-                     kind: u8,
-                     c: &Color,
-                     verts: &[P],
-                     tris: &[usize]| {
-        let e = buckets
-            .entry((layer, kind, ckey(c)))
-            .or_insert_with(|| (c.clone(), Vec::new(), Vec::new()));
-        let base = e.1.len();
-        e.1.extend_from_slice(verts);
-        e.2.extend(tris.iter().map(|t| t + base));
+    let name = match layers.get(layer) {
+        Some(name) => name.as_str(),
+        None => "0 unlayered",
     };
-    for (f, (v, t, bad)) in st.fills.iter().zip(&tri_fills) {
-        if t.is_empty() {
-            n_dropped += 1;
-            continue;
-        }
-        if *bad {
-            n_bad += 1;
-        }
-        push_part(&mut buckets, f.layer, KIND_REGION, &f.c, v, t);
-    }
-    for gr in &st.glyph_refs {
-        if gr.g.islands.is_empty() {
-            if !gr.g.empty {
-                n_dropped += 1;
-            }
-            continue;
-        }
-        let [a, b, c2, d, e, f] = gr.m;
-        for (v, t) in &gr.g.islands {
-            let tv: Vec<P> = v
-                .iter()
-                .map(|q| {
-                    let (x, y) = (q[0], -q[1]); // cache space negated y (flip-0 walk)
-                    [a * x + c2 * y + e, st.flip - (b * x + d * y + f)]
-                })
-                .collect();
-            push_part(&mut buckets, gr.layer, KIND_TEXT, &gr.c, &tv, t);
-        }
-    }
-    n_bad += st.glyph_cache.values().flatten().filter(|g| g.bad).count();
+    let group = session.add_group(name);
+    groups.insert(layer, group.clone());
+    group
+}
 
-    let mut n_meshes = 0;
-    for ((layer, kind, _), (c, verts, tris)) in buckets {
-        let mut m = Mesh::new();
-        for p in &verts {
-            m.add_vertex(Point::new(p[0], p[1], 0.0), None);
-        }
-        for t in tris.chunks_exact(3) {
-            m.add_face(vec![t[0], t[1], t[2]], None);
-        }
-        if m.number_of_faces() == 0 {
+/// Add each stroke as a Line when it has two points, else as a Polyline.
+fn add_strokes(
+    session: &mut Session,
+    groups: &mut BTreeMap<usize, Rc<RefCell<TreeNode>>>,
+    st: &State,
+) {
+    for sk in &st.strokes {
+        let group = get_group(session, groups, &st.layers, sk.layer);
+        let pts = points(&sk.pts);
+
+        if pts.len() == 2 {
+            let mut line = Line::from_points(&pts[0], &pts[1]);
+            line.linecolor = sk.c.clone();
+            line.width = sk.w;
+            session.add_line(line, Some(&group));
             continue;
         }
-        // The viewer reads this name to put lettering in front of the ink lanes - a fill has no
-        // other channel to say what it is, and 21 names on a sheet cost nothing.
-        m.name = if kind == KIND_TEXT {
+
+        let mut polyline = Polyline::new(pts);
+        polyline.linecolor = sk.c.clone();
+        polyline.width = sk.w;
+        session.add_polyline(polyline, Some(&group));
+    }
+}
+
+/// Add each cubic as a degree-3 NurbsCurve.
+fn add_curves(
+    session: &mut Session,
+    groups: &mut BTreeMap<usize, Rc<RefCell<TreeNode>>>,
+    st: &State,
+) {
+    for cv in &st.curves {
+        let group = get_group(session, groups, &st.layers, cv.layer);
+        let mut curve = NurbsCurve::create(false, 3, &points(&cv.cv));
+        curve.linecolors = vec![cv.c.clone()];
+        curve.width = cv.w;
+        session.add_nurbscurve(curve, Some(&group));
+    }
+}
+
+/// Append one triangulated part to the bucket of its (layer, kind, colour).
+fn add_part(
+    buckets: &mut BTreeMap<(usize, u8, [u8; 4]), Bucket>,
+    layer: usize,
+    kind: u8,
+    c: &Color,
+    verts: &[[f64; 2]],
+    tris: &[usize],
+) {
+    let bucket = match buckets.entry((layer, kind, ckey(c))) {
+        btree_map::Entry::Occupied(entry) => entry.into_mut(),
+        btree_map::Entry::Vacant(entry) => entry.insert(Bucket {
+            c: c.clone(),
+            verts: Vec::new(),
+            tris: Vec::new(),
+        }),
+    };
+    let base = bucket.verts.len();
+    bucket.verts.extend_from_slice(verts);
+
+    for t in tris {
+        bucket.tris.push(t + base);
+    }
+}
+
+impl Bucket {
+    /// Flat-colour mesh named "text" or "fill", with one transparent zero-width edge colour.
+    fn to_mesh(&self, kind: u8) -> Mesh {
+        let mut mesh = Mesh::new();
+
+        for p in &self.verts {
+            mesh.add_vertex(Point::new(p[0], p[1], 0.0), None);
+        }
+
+        for t in self.tris.chunks_exact(3) {
+            mesh.add_face(vec![t[0], t[1], t[2]], None);
+        }
+
+        mesh.name = if kind == KIND_TEXT {
             "text".to_string()
         } else {
             "fill".to_string()
         };
-        m.set_objectcolor(c);
-        // A fill is flat colour: drop the auto-seeded per-vertex/per-face vecs, which would
-        // otherwise dominate the .pb.
-        m.clear_pointcolors();
-        m.clear_facecolors();
-        // ONE transparent, zero-width entry: the viewer broadcasts a single width to every edge,
-        // and reads width 0 as "no wireframe" - a letter renders solid, not outlined and dotted.
-        m.set_linecolors(vec![Color::new(0.0, 0.0, 0.0, 0.0)], vec![0.0]);
-        let g = group!(layer);
-        s.add_mesh(m, Some(&g));
-        n_meshes += 1;
+        mesh.set_objectcolor(self.c.clone());
+        mesh.clear_pointcolors();
+        mesh.clear_facecolors();
+        mesh.set_linecolors(vec![Color::new(0.0, 0.0, 0.0, 0.0)], vec![0.0]);
+        mesh
+    }
+}
+
+/// Merge path fills, then glyphs, into one mesh per (layer, kind, colour).
+fn add_meshes(
+    session: &mut Session,
+    groups: &mut BTreeMap<usize, Rc<RefCell<TreeNode>>>,
+    st: &State,
+    tri_fills: &[(Vec<[f64; 2]>, Vec<usize>)],
+) {
+    let mut buckets: BTreeMap<(usize, u8, [u8; 4]), Bucket> = BTreeMap::new();
+
+    for (f, (v, t)) in st.fills.iter().zip(tri_fills) {
+        if !t.is_empty() {
+            add_part(&mut buckets, f.layer, KIND_REGION, &f.c, v, t);
+        }
     }
 
-    // The sheet's paper edge, so extents are the PAPER and not the ink.
-    let page_group = s.add_group("page");
+    for gr in &st.glyph_refs {
+        for (v, t) in &gr.g.islands {
+            let placed = place_glyph(v, gr.m, st.flip);
+            add_part(&mut buckets, gr.layer, KIND_TEXT, &gr.c, &placed, t);
+        }
+    }
+
+    for ((layer, kind, _), bucket) in &buckets {
+        let mesh = bucket.to_mesh(*kind);
+
+        if mesh.number_of_faces() == 0 {
+            continue;
+        }
+
+        let group = get_group(session, groups, &st.layers, *layer);
+        session.add_mesh(mesh, Some(&group));
+    }
+}
+
+/// Add the paper edge as a closed Polyline in a "page" group.
+fn add_page_border(session: &mut Session, bounds: &Rect, flip: f64) {
+    let group = session.add_group("page");
     let (px0, py0, px1, py1) = (
-        x0 as f64,
-        st.flip - y1 as f64,
-        x1 as f64,
-        st.flip - y0 as f64,
+        bounds.x0 as f64,
+        flip - bounds.y1 as f64,
+        bounds.x1 as f64,
+        flip - bounds.y0 as f64,
     );
     let mut border = Polyline::new(vec![
         Point::new(px0, py0, 0.0),
@@ -1119,82 +1168,37 @@ pub fn import_pdf(src: &str, stem: &str, page_no: i32) {
     ]);
     border.linecolor = Color::black();
     border.width = 0.35;
-    s.add_polyline(border, Some(&page_group));
+    session.add_polyline(border, Some(&group));
+}
 
-    // Fonts land next to the .pb, in the assets tree: <assets>/pb/<sheet>.pb -> <assets>/fonts/
-    let out_dir = std::path::Path::new(stem)
-        .parent()
-        .unwrap_or(std::path::Path::new("."));
-    let font_dir = out_dir
-        .parent()
-        .map(|p| p.join("fonts"))
-        .unwrap_or_else(|| out_dir.join("fonts"));
-    std::fs::create_dir_all(&font_dir).ok();
-    let n_fonts = dump_fonts(src, &font_dir);
+/// Import one page of `src` into a Session, write `<stem>.pb` and the embedded fonts.
+pub fn import_pdf(src: &str, stem: &str, page_no: i32) {
+    let doc = Document::open(src).expect("cannot open pdf");
+    let page = doc.load_page(page_no).expect("no such page");
+    let bounds = page.bounds().expect("no page box");
+    let state = Rc::new(RefCell::new(State {
+        flip: (bounds.y0 + bounds.y1) as f64,
+        layers: vec!["0 unlayered".to_string()],
+        ..Default::default()
+    }));
+    let device = Device::from_native(Collector(state.clone())).expect("device");
+    page.run(&device, &Matrix::IDENTITY).expect("run page");
+    drop(device);
 
-    let t2 = std::time::Instant::now();
-    let out = format!("{stem}.pb");
-    s.pb_dump(&out);
-
-    println!(
-        "{name}: {n_lines} lines, {n_polylines} polylines, {} curves, {n_meshes} meshes, \
-              {} layers, {} chars ({} unique glyphs), {} white dropped",
-        st.curves.len(),
-        st.layers.len(),
-        st.chars,
-        st.glyph_cache.len(),
-        st.white
-    );
-    if st.translucent_fills + st.translucent_strokes > 0 {
-        println!(
-            "  alpha: {} translucent fills, {} translucent strokes, min alpha {:.2} \
-                  (fills do NOT blend in the viewer yet)",
-            st.translucent_fills, st.translucent_strokes, st.min_alpha
-        );
-    }
-    if st.images > 0 {
-        println!(
-            "  WARNING: {} raster images (≈{:.0} mm² of paper) NOT imported",
-            st.images, st.image_area
-        );
-    }
-    if st.shades > 0 {
-        println!("  WARNING: {} gradient shadings NOT imported", st.shades);
-    }
-    for (f, n) in &st.no_outline {
-        println!("  WARNING: {n} glyphs from font {f} have no outlines (Type 3?) and are MISSING");
-    }
-    if n_dropped > 0 {
-        println!(
-            "  WARNING: {n_dropped} fills failed to triangulate and are MISSING from the sheet"
-        );
-    }
-    if n_bad > 0 {
-        println!("  WARNING: {n_bad} fills triangulated badly (area off by >2%) - letters will look scratched");
-    }
-    let mut fonts: Vec<_> = st.fonts.glyphs.iter().collect();
-    fonts.sort_by_key(|(_, n)| std::cmp::Reverse(**n));
-    println!(
-        "  fonts: {}",
-        fonts
-            .iter()
-            .take(6)
-            .map(|(f, n)| format!("{f}×{n}"))
-            .collect::<Vec<_>>()
-            .join(", ")
-    );
-    if n_fonts > 0 {
-        println!(
-            "  fonts: {n_fonts} embedded programs -> {}",
-            font_dir.display()
-        );
-    }
-    println!(
-        "  page {:.0}×{:.0} pt · read {:.1}s · triangulate {:.1}s · write {:.1}s -> {out}",
-        px1 - px0,
-        py1 - py0,
-        t_read.as_secs_f64(),
-        t_cdt.as_secs_f64(),
-        t2.elapsed().as_secs_f64()
-    );
+    let st = state.take();
+    let tri_fills: Vec<(Vec<[f64; 2]>, Vec<usize>)> =
+        st.fills.par_iter().map(triangulate_fill).collect();
+    let name = std::path::Path::new(stem)
+        .file_name()
+        .unwrap()
+        .to_string_lossy()
+        .to_string();
+    let mut session = Session::new(&name);
+    let mut groups: BTreeMap<usize, Rc<RefCell<TreeNode>>> = BTreeMap::new();
+    add_strokes(&mut session, &mut groups, &st);
+    add_curves(&mut session, &mut groups, &st);
+    add_meshes(&mut session, &mut groups, &st, &tri_fills);
+    add_page_border(&mut session, &bounds, st.flip);
+    write_fonts(src, stem);
+    session.pb_dump(&format!("{stem}.pb"));
 }
