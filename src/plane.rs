@@ -210,18 +210,14 @@ impl Plane {
         Self::from_frame(points[0].clone(), x_axis, y_axis, z_axis)
     }
 
-    /// Construct the least-squares plane through points by power-iteration PCA.
-    pub fn from_points_pca(points: Vec<Point>) -> Self {
-        if points.len() < 3 {
-            return Self::default();
-        }
-
+    /// Mean of the points.
+    fn pca_centroid(points: &[Point]) -> Point {
         let n = points.len() as f64;
         let mut cx = 0.0;
         let mut cy = 0.0;
         let mut cz = 0.0;
 
-        for p in &points {
+        for p in points {
             cx += p[0];
             cy += p[1];
             cz += p[2];
@@ -231,6 +227,11 @@ impl Plane {
         cy /= n;
         cz /= n;
 
+        Point::new(cx, cy, cz)
+    }
+
+    /// Covariance matrix of the points about their centroid.
+    fn pca_covariance(points: &[Point], centroid: &Point) -> [[f64; 3]; 3] {
         let mut cxx = 0.0;
         let mut cyy = 0.0;
         let mut czz = 0.0;
@@ -238,10 +239,10 @@ impl Plane {
         let mut cxz = 0.0;
         let mut cyz = 0.0;
 
-        for p in &points {
-            let dx = p[0] - cx;
-            let dy = p[1] - cy;
-            let dz = p[2] - cz;
+        for p in points {
+            let dx = p[0] - centroid[0];
+            let dy = p[1] - centroid[1];
+            let dz = p[2] - centroid[2];
 
             cxx += dx * dx;
             cyy += dy * dy;
@@ -251,9 +252,13 @@ impl Plane {
             cyz += dy * dz;
         }
 
+        [[cxx, cxy, cxz], [cxy, cyy, cyz], [cxz, cyz, czz]]
+    }
+
+    /// Eigenvectors of a covariance matrix by power iteration with deflation, largest eigenvalue first.
+    fn pca_eigenvectors(mut cov: [[f64; 3]; 3]) -> [[f64; 3]; 3] {
         let mut eigvec = [[0.0; 3]; 3];
         let mut eigval = [0.0; 3];
-        let mut cov = [[cxx, cxy, cxz], [cxy, cyy, cyz], [cxz, cyz, czz]];
 
         for e in 0..3 {
             let mut vx = if e == 0 { 1.0 } else { 0.0 };
@@ -292,6 +297,18 @@ impl Plane {
             }
         }
 
+        eigvec
+    }
+
+    /// Construct the least-squares plane through points by power-iteration PCA.
+    pub fn from_points_pca(points: Vec<Point>) -> Self {
+        if points.len() < 3 {
+            return Self::default();
+        }
+
+        let centroid = Self::pca_centroid(&points);
+        let eigvec = Self::pca_eigenvectors(Self::pca_covariance(&points, &centroid));
+
         let mut x_axis = Vector::new(eigvec[0][0], eigvec[0][1], eigvec[0][2]);
         let mut y_axis = Vector::new(eigvec[1][0], eigvec[1][1], eigvec[1][2]);
 
@@ -302,7 +319,7 @@ impl Plane {
         y_axis.normalize_self();
         x_axis.normalize_self();
 
-        Self::from_frame(Point::new(cx, cy, cz), x_axis, y_axis, z_axis)
+        Self::from_frame(centroid, x_axis, y_axis, z_axis)
     }
 
     /// Construct the plane with x axis from point1 to point2.

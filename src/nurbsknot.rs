@@ -845,6 +845,62 @@ pub fn build_fitted_nurbsknots_adaptive(
     nurbsknots
 }
 
+/// Cumulative chord lengths around closed points, weighted up where the points turn.
+fn periodic_weighted_lengths(
+    params: &[f64],
+    points: &[f64],
+    n: usize,
+    dim: usize,
+    scale: f64,
+) -> Vec<f64> {
+    let mut turn = vec![0.0; n];
+
+    for (i, value) in turn.iter_mut().enumerate() {
+        *value = turn_angle(
+            points,
+            dim,
+            if i == 0 { n - 1 } else { i - 1 },
+            i,
+            (i + 1) % n,
+        );
+    }
+
+    let mut cum = vec![0.0; n + 1];
+
+    for i in 0..n {
+        let chord = (params[i + 1] - params[i]).max(PIVOT_TOLERANCE);
+        cum[i + 1] = cum[i] + chord * (1.0 + scale * (turn[i] + turn[(i + 1) % n]) * 0.5);
+    }
+
+    cum
+}
+
+/// Periodic nurbsknot intervals that split the weighted length into equal shares.
+fn periodic_intervals(
+    params: &[f64],
+    cum: &[f64],
+    n: usize,
+    num_cvs: usize,
+    period: f64,
+) -> Vec<f64> {
+    let total = cum[n];
+    let mut base = vec![0.0; num_cvs];
+
+    for (j, value) in base.iter_mut().enumerate() {
+        *value = locate_target(params, cum, n - 1, total * j as f64 / num_cvs as f64);
+    }
+
+    let mut intervals = vec![0.0; num_cvs];
+
+    for j in 0..(num_cvs - 1) {
+        intervals[j] = base[j + 1] - base[j];
+    }
+
+    intervals[num_cvs - 1] = period - base[num_cvs - 1];
+
+    intervals
+}
+
 /// Return a periodic fitting vector with denser nurbsknots where the closed points turn.
 pub fn build_fitted_nurbsknots_periodic_adaptive(
     params: &[f64],
@@ -905,39 +961,8 @@ pub fn build_fitted_nurbsknots_periodic_adaptive(
         return Vec::new();
     }
 
-    let mut turn = vec![0.0; n];
-
-    for (i, value) in turn.iter_mut().enumerate() {
-        *value = turn_angle(
-            points,
-            dim,
-            if i == 0 { n - 1 } else { i - 1 },
-            i,
-            (i + 1) % n,
-        );
-    }
-
-    let mut cum = vec![0.0; n + 1];
-
-    for i in 0..n {
-        let chord = (params[i + 1] - params[i]).max(PIVOT_TOLERANCE);
-        cum[i + 1] = cum[i] + chord * (1.0 + scale * (turn[i] + turn[(i + 1) % n]) * 0.5);
-    }
-
-    let total = cum[n];
-    let mut base = vec![0.0; num_cvs];
-
-    for (j, value) in base.iter_mut().enumerate() {
-        *value = locate_target(params, &cum, n - 1, total * j as f64 / num_cvs as f64);
-    }
-
-    let mut intervals = vec![0.0; num_cvs];
-
-    for j in 0..(num_cvs - 1) {
-        intervals[j] = base[j + 1] - base[j];
-    }
-
-    intervals[num_cvs - 1] = period - base[num_cvs - 1];
+    let cum = periodic_weighted_lengths(params, points, n, dim, scale);
+    let intervals = periodic_intervals(params, &cum, n, num_cvs, period);
 
     for i in 1..degree {
         nurbsknots[degree - 1 - i] = nurbsknots[degree - i] - intervals[num_cvs - i];
@@ -948,6 +973,70 @@ pub fn build_fitted_nurbsknots_periodic_adaptive(
     }
 
     nurbsknots
+}
+
+/// Cholesky factor of a banded symmetric matrix in place; false when it is not positive definite.
+fn banded_cholesky(n: usize, half_bw: usize, band: &mut [f64]) -> bool {
+    let bw1 = half_bw + 1;
+
+    for i in 0..n {
+        for j in i.saturating_sub(half_bw)..=i {
+            let mut sum = 0.0;
+
+            for k in i.saturating_sub(half_bw)..j {
+                sum += band[i * bw1 + (i - k)] * band[j * bw1 + (j - k)];
+            }
+
+            if i == j {
+                let val = band[i * bw1] - sum;
+
+                if val <= POSITIVE_DEFINITE_TOLERANCE {
+                    return false;
+                }
+
+                band[i * bw1] = val.sqrt();
+            } else {
+                band[i * bw1 + (i - j)] = (band[i * bw1 + (i - j)] - sum) / band[j * bw1];
+            }
+        }
+    }
+
+    true
+}
+
+/// Forward substitution with the lower banded Cholesky factor, in place on rhs.
+fn banded_forward_substitute(dim: usize, n: usize, half_bw: usize, band: &[f64], rhs: &mut [f64]) {
+    let bw1 = half_bw + 1;
+
+    for i in 0..n {
+        for d in 0..dim {
+            let mut sum = 0.0;
+
+            for k in i.saturating_sub(half_bw)..i {
+                sum += band[i * bw1 + (i - k)] * rhs[k * dim + d];
+            }
+
+            rhs[i * dim + d] = (rhs[i * dim + d] - sum) / band[i * bw1];
+        }
+    }
+}
+
+/// Back substitution with the transposed banded Cholesky factor, in place on rhs.
+fn banded_back_substitute(dim: usize, n: usize, half_bw: usize, band: &[f64], rhs: &mut [f64]) {
+    let bw1 = half_bw + 1;
+
+    for i in (0..n).rev() {
+        for d in 0..dim {
+            let mut sum = 0.0;
+            let upper = i.saturating_add(bw1).min(n);
+
+            for k in (i + 1)..upper {
+                sum += band[k * bw1 + (k - i)] * rhs[k * dim + d];
+            }
+
+            rhs[i * dim + d] = (rhs[i * dim + d] - sum) / band[i * bw1];
+        }
+    }
 }
 
 /// Solve a finite banded symmetric positive-definite system in place with Cholesky factorization.
@@ -972,52 +1061,12 @@ pub fn solve_banded_spd(
         return false;
     }
 
-    for i in 0..n {
-        for j in i.saturating_sub(half_bw)..=i {
-            let mut sum = 0.0;
-
-            for k in i.saturating_sub(half_bw)..j {
-                sum += band[i * bw1 + (i - k)] * band[j * bw1 + (j - k)];
-            }
-
-            if i == j {
-                let val = band[i * bw1] - sum;
-
-                if val <= POSITIVE_DEFINITE_TOLERANCE {
-                    return false;
-                }
-
-                band[i * bw1] = val.sqrt();
-            } else {
-                band[i * bw1 + (i - j)] = (band[i * bw1 + (i - j)] - sum) / band[j * bw1];
-            }
-        }
+    if !banded_cholesky(n, half_bw, band) {
+        return false;
     }
 
-    for i in 0..n {
-        for d in 0..dim {
-            let mut sum = 0.0;
-
-            for k in i.saturating_sub(half_bw)..i {
-                sum += band[i * bw1 + (i - k)] * rhs[k * dim + d];
-            }
-
-            rhs[i * dim + d] = (rhs[i * dim + d] - sum) / band[i * bw1];
-        }
-    }
-
-    for i in (0..n).rev() {
-        for d in 0..dim {
-            let mut sum = 0.0;
-            let upper = i.saturating_add(bw1).min(n);
-
-            for k in (i + 1)..upper {
-                sum += band[k * bw1 + (k - i)] * rhs[k * dim + d];
-            }
-
-            rhs[i * dim + d] = (rhs[i * dim + d] - sum) / band[i * bw1];
-        }
-    }
+    banded_forward_substitute(dim, n, half_bw, band, rhs);
+    banded_back_substitute(dim, n, half_bw, band, rhs);
 
     true
 }

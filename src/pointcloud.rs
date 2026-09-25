@@ -410,17 +410,8 @@ impl PointCloud {
     // ═══════════════════════════════════════════════════════════════════════════
     // LOD octree
     // ═══════════════════════════════════════════════════════════════════════════
-    /// Build the octree and permute the arrays into octree order, so a node is one contiguous range.
-    pub fn build_lod(&mut self, root_spacing: f64, leaf_capacity: usize) {
-        let tree = SpatialOctree::from_coords(&self._coords, root_spacing, leaf_capacity);
-        let order = tree.order();
-
-        if self._point_ids.is_empty() {
-            for i in 0..self.point_count() {
-                self._point_ids.push(i as u32);
-            }
-        }
-
+    /// Permute points, ids, colors and normals into the given order.
+    fn lod_reorder(&mut self, order: &[usize]) {
         let has_colors = self._colors.len() == order.len() * 4;
         let has_normals = self._normals.len() == order.len() * 3;
 
@@ -459,7 +450,10 @@ impl PointCloud {
         if has_normals {
             self._normals = normals;
         }
+    }
 
+    /// Replace the LOD node arrays with the nodes of tree.
+    fn lod_store_nodes(&mut self, tree: &SpatialOctree) {
         self._lod_min.clear();
         self._lod_size.clear();
         self._lod_spacing.clear();
@@ -488,6 +482,20 @@ impl PointCloud {
                     .push(if k < kids.len() { kids[k] as i32 } else { -1 });
             }
         }
+    }
+
+    /// Build the octree and permute the arrays into octree order, so a node is one contiguous range.
+    pub fn build_lod(&mut self, root_spacing: f64, leaf_capacity: usize) {
+        let tree = SpatialOctree::from_coords(&self._coords, root_spacing, leaf_capacity);
+
+        if self._point_ids.is_empty() {
+            for i in 0..self.point_count() {
+                self._point_ids.push(i as u32);
+            }
+        }
+
+        self.lod_reorder(tree.order());
+        self.lod_store_nodes(&tree);
     }
 
     /// Return whether an octree has been built.

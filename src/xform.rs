@@ -291,8 +291,46 @@ impl Xform {
         t1 * (r * t0)
     }
 
+    /// Scale row p to a unit pivot, then clear column p in rows a and b; false on a zero pivot.
+    #[allow(clippy::needless_range_loop)]
+    fn change_basis_pivot(r: &mut [[f64; 6]; 3], p: usize, a: usize, b: usize) -> bool {
+        if r[p][p] == 0.0 {
+            return false;
+        }
+
+        let mut d = 1.0 / r[p][p];
+
+        for j in 0..6 {
+            r[p][j] *= d;
+        }
+
+        r[p][p] = 1.0;
+
+        if r[a][p] != 0.0 {
+            d = -r[a][p];
+
+            for j in 0..6 {
+                r[a][j] += d * r[p][j];
+            }
+
+            r[a][p] = 0.0;
+        }
+
+        if r[b][p] != 0.0 {
+            d = -r[b][p];
+
+            for j in 0..6 {
+                r[b][j] += d * r[p][j];
+            }
+
+            r[b][p] = 0.0;
+        }
+
+        true
+    }
+
     /// Construct a change of basis from frame 1 to frame 0.
-    #[allow(clippy::needless_range_loop, clippy::too_many_arguments)]
+    #[allow(clippy::too_many_arguments)]
     pub fn change_basis(
         origin_1: &Point,
         x_axis_1: &Vector,
@@ -342,104 +380,20 @@ impl Xform {
         let mut i1 = (i0 + 1) % 3;
         let mut i2 = (i1 + 1) % 3;
 
-        if r[i0][i0] == 0.0 {
+        if !Self::change_basis_pivot(&mut r, i0, i1, i2) {
             return Self::identity();
-        }
-
-        let mut d = 1.0 / r[i0][i0];
-
-        for j in 0..6 {
-            r[i0][j] *= d;
-        }
-
-        r[i0][i0] = 1.0;
-
-        if r[i1][i0] != 0.0 {
-            d = -r[i1][i0];
-
-            for j in 0..6 {
-                r[i1][j] += d * r[i0][j];
-            }
-
-            r[i1][i0] = 0.0;
-        }
-
-        if r[i2][i0] != 0.0 {
-            d = -r[i2][i0];
-
-            for j in 0..6 {
-                r[i2][j] += d * r[i0][j];
-            }
-
-            r[i2][i0] = 0.0;
         }
 
         if r[i1][i1].abs() < r[i2][i2].abs() {
             std::mem::swap(&mut i1, &mut i2);
         }
 
-        if r[i1][i1] == 0.0 {
+        if !Self::change_basis_pivot(&mut r, i1, i0, i2) {
             return Self::identity();
         }
 
-        d = 1.0 / r[i1][i1];
-
-        for j in 0..6 {
-            r[i1][j] *= d;
-        }
-
-        r[i1][i1] = 1.0;
-
-        if r[i0][i1] != 0.0 {
-            d = -r[i0][i1];
-
-            for j in 0..6 {
-                r[i0][j] += d * r[i1][j];
-            }
-
-            r[i0][i1] = 0.0;
-        }
-
-        if r[i2][i1] != 0.0 {
-            d = -r[i2][i1];
-
-            for j in 0..6 {
-                r[i2][j] += d * r[i1][j];
-            }
-
-            r[i2][i1] = 0.0;
-        }
-
-        if r[i2][i2] == 0.0 {
+        if !Self::change_basis_pivot(&mut r, i2, i0, i1) {
             return Self::identity();
-        }
-
-        d = 1.0 / r[i2][i2];
-
-        for j in 0..6 {
-            r[i2][j] *= d;
-        }
-
-        r[i2][i2] = 1.0;
-
-        if r[i0][i2] != 0.0 {
-            d = -r[i0][i2];
-
-            for j in 0..6 {
-                r[i0][j] += d * r[i2][j];
-            }
-
-            r[i0][i2] = 0.0;
-        }
-
-        if r[i1][i2] != 0.0 {
-            d = -r[i1][i2];
-
-            for j in 0..6 {
-                r[i1][j] += d * r[i2][j];
-            }
-
-            r[i1][i2] = 0.0;
         }
 
         let mut m_xform = Self::new();

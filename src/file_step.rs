@@ -2335,6 +2335,51 @@ fn chart_eval(an: &AnFace, w: &Window, q: &Point) -> Point {
     )
 }
 
+/// Chart polyline of every edge of a loop, shifted by whole periods so consecutive edges of a projected loop meet.
+fn analytic_chains(lp: &Loop, an: &AnFace, w: &Window) -> Vec<Vec<Point>> {
+    let period = 4.0;
+    let mut chains: Vec<Vec<Point>> = Vec::new();
+
+    for le in &lp.edges {
+        let mut uv = Vec::new();
+
+        for p in &le.uv {
+            uv.push(chart_point(an, w, p));
+        }
+
+        if le.reversed {
+            uv.reverse();
+        }
+
+        chains.push(uv);
+    }
+
+    for k in 1..chains.len() {
+        if !lp.projected {
+            break;
+        }
+
+        if chains[k].is_empty() || chains[k - 1].is_empty() {
+            continue;
+        }
+
+        let prev = &chains[k - 1][chains[k - 1].len() - 1];
+        let n = ((prev[0] - chains[k][0][0]) / period).round() as i32;
+        let m = if an.kind == 5 {
+            ((prev[1] - chains[k][0][1]) / period).round() as i32
+        } else {
+            0
+        };
+
+        for p in chains[k].iter_mut() {
+            p[0] += n as f64 * period;
+            p[1] += m as f64 * period;
+        }
+    }
+
+    chains
+}
+
 /// Chart window of the loops; none when they are empty or wider than 16 quarter arcs.
 fn analytic_window(loops: &[Loop], an: &AnFace) -> Option<Window> {
     let (smin, smax, tmin, tmax) = loops_bounds(loops);
@@ -2711,46 +2756,7 @@ impl<'a, 'b> BRepBuilder<'a, 'b> {
         w: &Window,
         scale3: f64,
     ) -> Vec<PendingEdge> {
-        let period = 4.0;
-        let mut chains: Vec<Vec<Point>> = Vec::new();
-
-        for le in &lp.edges {
-            let mut uv = Vec::new();
-
-            for p in &le.uv {
-                uv.push(chart_point(an, w, p));
-            }
-
-            if le.reversed {
-                uv.reverse();
-            }
-
-            chains.push(uv);
-        }
-
-        for k in 1..chains.len() {
-            if !lp.projected {
-                break;
-            }
-
-            if chains[k].is_empty() || chains[k - 1].is_empty() {
-                continue;
-            }
-
-            let prev = &chains[k - 1][chains[k - 1].len() - 1];
-            let n = ((prev[0] - chains[k][0][0]) / period).round() as i32;
-            let m = if an.kind == 5 {
-                ((prev[1] - chains[k][0][1]) / period).round() as i32
-            } else {
-                0
-            };
-
-            for p in chains[k].iter_mut() {
-                p[0] += n as f64 * period;
-                p[1] += m as f64 * period;
-            }
-        }
-
+        let chains = analytic_chains(lp, an, w);
         let mut pl = Vec::new();
 
         for k in 0..lp.edges.len() {
@@ -3118,27 +3124,8 @@ impl<'a, 'b> BRepBuilder<'a, 'b> {
         }
     }
 
-    /// ADVANCED_FACE: vertex-loop face, analytic face, or projection onto the plane, cylinder chart or B-spline surface.
-    fn add_face(&mut self, face_id: i32) {
-        let Some(face) = find_in(self.r.get(face_id), "ADVANCED_FACE") else {
-            return;
-        };
-
-        let bound_refs = list_refs(&face.params);
-        let surface_ref = first_ref(&face.params);
-        let same_sense = last_flag(&face.params, true);
-        let vl_ids = self.vertex_loop_ids(&bound_refs);
-
-        if !vl_ids.is_empty() && self.add_face_vertex_loop(&vl_ids, surface_ref, same_sense) {
-            return;
-        }
-
-        let an = self.r.get_analytic_srf(surface_ref);
-
-        if an.kind >= 2 && self.add_face_analytic(&bound_refs, surface_ref, same_sense, &an) {
-            return;
-        }
-
+    /// Face projected onto its plane, cylinder chart or B-spline surface, with a filled surface when the projection has none.
+    fn add_face_projected(&mut self, bound_refs: &[i32], surface_ref: i32, same_sense: bool) {
         let proj = self.r.get_projector(surface_ref);
         let proj_srf = if proj.kind == 0 {
             self.r.fill_surface(surface_ref, 0.0, 1.0, 0.0, 1.0)
@@ -3147,7 +3134,7 @@ impl<'a, 'b> BRepBuilder<'a, 'b> {
         };
 
         let mut loops = Vec::new();
-        self.projected_loops(&bound_refs, &proj, &proj_srf, &mut loops);
+        self.projected_loops(bound_refs, &proj, &proj_srf, &mut loops);
 
         let (tau_u, tau_v) = surface_periods(&proj, &proj_srf);
         chain_loops(&mut loops, tau_u, tau_v);
@@ -3178,6 +3165,30 @@ impl<'a, 'b> BRepBuilder<'a, 'b> {
         }
 
         self.finish_face(srf_idx, !same_sense, &pending);
+    }
+
+    /// ADVANCED_FACE: vertex-loop face, analytic face, or projection onto the plane, cylinder chart or B-spline surface.
+    fn add_face(&mut self, face_id: i32) {
+        let Some(face) = find_in(self.r.get(face_id), "ADVANCED_FACE") else {
+            return;
+        };
+
+        let bound_refs = list_refs(&face.params);
+        let surface_ref = first_ref(&face.params);
+        let same_sense = last_flag(&face.params, true);
+        let vl_ids = self.vertex_loop_ids(&bound_refs);
+
+        if !vl_ids.is_empty() && self.add_face_vertex_loop(&vl_ids, surface_ref, same_sense) {
+            return;
+        }
+
+        let an = self.r.get_analytic_srf(surface_ref);
+
+        if an.kind >= 2 && self.add_face_analytic(&bound_refs, surface_ref, same_sense, &an) {
+            return;
+        }
+
+        self.add_face_projected(&bound_refs, surface_ref, same_sense);
     }
 
     /// BRep of a CLOSED_SHELL (one solid) or OPEN_SHELL (one shell), empty for anything else.

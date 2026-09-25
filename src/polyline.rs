@@ -1568,6 +1568,58 @@ impl Polyline {
         Polyline::new(pts3d)
     }
 
+    /// Return the extents (min_u, max_u, min_v, max_v) of pts2d in the frame rotated by cosine ca and sine sa.
+    fn rotated_extents_2d(pts2d: &[[f64; 2]], ca: f64, sa: f64) -> [f64; 4] {
+        let mut min_u = f64::MAX;
+        let mut max_u = -f64::MAX;
+        let mut min_v = f64::MAX;
+        let mut max_v = -f64::MAX;
+
+        for h in pts2d {
+            let u = h[0] * ca + h[1] * sa;
+            let v = -h[0] * sa + h[1] * ca;
+            min_u = min_u.min(u);
+            max_u = max_u.max(u);
+            min_v = min_v.min(v);
+            max_v = max_v.max(v);
+        }
+
+        [min_u, max_u, min_v, max_v]
+    }
+
+    /// Return the closed rectangle of extents rotated by angle in the frame (origin, x_axis, y_axis).
+    fn unproject_rectangle(
+        origin: &Point,
+        x_axis: &Vector,
+        y_axis: &Vector,
+        extents: &[f64; 4],
+        angle: f64,
+    ) -> Polyline {
+        let ca = angle.cos();
+        let sa = angle.sin();
+        let uv = [
+            [extents[0], extents[2]],
+            [extents[0], extents[3]],
+            [extents[1], extents[3]],
+            [extents[1], extents[2]],
+        ];
+        let mut pts3d = Vec::with_capacity(5);
+
+        for c in &uv {
+            pts3d.push(Self::unproject(
+                origin,
+                x_axis,
+                y_axis,
+                c[0] * ca - c[1] * sa,
+                c[0] * sa + c[1] * ca,
+            ));
+        }
+
+        pts3d.push(pts3d[0].clone());
+
+        Polyline::new(pts3d)
+    }
+
     /// Return the minimum-area rectangle of the hull as a closed 5-point polyline.
     pub fn bounding_rectangle(polygon: &Polyline) -> Option<Polyline> {
         let hull = Self::quick_hull(polygon);
@@ -1580,10 +1632,7 @@ impl Polyline {
 
         let hull2d = hull.project_to_plane(&origin, &xa, &ya);
         let mut best_area = f64::MAX;
-        let mut best_min_u = 0.0;
-        let mut best_max_u = 0.0;
-        let mut best_min_v = 0.0;
-        let mut best_max_v = 0.0;
+        let mut best_extents = [0.0; 4];
         let mut best_angle = 0.0;
         let hn = hull2d.len();
 
@@ -1597,57 +1646,23 @@ impl Polyline {
                 continue;
             }
 
-            let ca = ex / len;
-            let sa = ey / len;
-            let mut min_u = f64::MAX;
-            let mut max_u = -f64::MAX;
-            let mut min_v = f64::MAX;
-            let mut max_v = -f64::MAX;
-
-            for h in &hull2d {
-                let u = h[0] * ca + h[1] * sa;
-                let v = -h[0] * sa + h[1] * ca;
-                min_u = min_u.min(u);
-                max_u = max_u.max(u);
-                min_v = min_v.min(v);
-                max_v = max_v.max(v);
-            }
-
-            let area = (max_u - min_u) * (max_v - min_v);
+            let extents = Self::rotated_extents_2d(&hull2d, ex / len, ey / len);
+            let area = (extents[1] - extents[0]) * (extents[3] - extents[2]);
 
             if area < best_area {
                 best_area = area;
-                best_min_u = min_u;
-                best_max_u = max_u;
-                best_min_v = min_v;
-                best_max_v = max_v;
+                best_extents = extents;
                 best_angle = ey.atan2(ex);
             }
         }
 
-        let ca = best_angle.cos();
-        let sa = best_angle.sin();
-        let uv = [
-            [best_min_u, best_min_v],
-            [best_min_u, best_max_v],
-            [best_max_u, best_max_v],
-            [best_max_u, best_min_v],
-        ];
-        let mut pts3d = Vec::with_capacity(5);
-
-        for c in &uv {
-            pts3d.push(Self::unproject(
-                &origin,
-                &xa,
-                &ya,
-                c[0] * ca - c[1] * sa,
-                c[0] * sa + c[1] * ca,
-            ));
-        }
-
-        pts3d.push(pts3d[0].clone());
-
-        Some(Polyline::new(pts3d))
+        Some(Self::unproject_rectangle(
+            &origin,
+            &xa,
+            &ya,
+            &best_extents,
+            best_angle,
+        ))
     }
 
     /// Return a grid of interior points spaced div_dist, on the polygon miter-offset by offset_dist.
@@ -2250,27 +2265,23 @@ impl Polyline {
         Self::quick_hull_recurse(&right, fx, fy, bx, by, hull);
     }
 
-    /// Miter-offset a 2D polygon in place by offset_dist.
-    fn offset_polygon_2d(poly2d: &mut Vec<[f64; 2]>, offset_dist: f64) {
+    /// Return twice the signed area of a 2D polygon by the shoelace formula.
+    fn shoelace_2d(poly2d: &[[f64; 2]]) -> f64 {
         let n = poly2d.len();
-
-        if offset_dist == 0.0 || n < 3 {
-            return;
-        }
-
-        let mut signed_area = 0.0;
+        let mut area = 0.0;
 
         for i in 0..n {
             let a = poly2d[i];
             let b = poly2d[(i + 1) % n];
-            signed_area += a[0] * b[1] - b[0] * a[1];
+            area += a[0] * b[1] - b[0] * a[1];
         }
 
-        let delta = if signed_area < 0.0 {
-            -offset_dist
-        } else {
-            offset_dist
-        };
+        area
+    }
+
+    /// Return the unit normal of every edge of a 2D polygon, zero for a degenerate edge.
+    fn edge_normals_2d(poly2d: &[[f64; 2]]) -> Vec<[f64; 2]> {
+        let n = poly2d.len();
         let mut normals: Vec<[f64; 2]> = Vec::with_capacity(n);
 
         for i in 0..n {
@@ -2287,6 +2298,23 @@ impl Polyline {
             }
         }
 
+        normals
+    }
+
+    /// Miter-offset a 2D polygon in place by offset_dist.
+    fn offset_polygon_2d(poly2d: &mut Vec<[f64; 2]>, offset_dist: f64) {
+        let n = poly2d.len();
+
+        if offset_dist == 0.0 || n < 3 {
+            return;
+        }
+
+        let delta = if Self::shoelace_2d(poly2d) < 0.0 {
+            -offset_dist
+        } else {
+            offset_dist
+        };
+        let normals = Self::edge_normals_2d(poly2d);
         let mut out: Vec<[f64; 2]> = Vec::with_capacity(n * 3);
 
         for i in 0..n {
@@ -2314,15 +2342,7 @@ impl Polyline {
             }
         }
 
-        let mut out_area = 0.0;
-
-        for i in 0..out.len() {
-            let a = out[i];
-            let b = out[(i + 1) % out.len()];
-            out_area += a[0] * b[1] - b[0] * a[1];
-        }
-
-        if out.len() >= 3 && out_area.abs() > 1e-4 {
+        if out.len() >= 3 && Self::shoelace_2d(&out).abs() > 1e-4 {
             *poly2d = out;
         }
     }

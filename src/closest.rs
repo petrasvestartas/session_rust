@@ -957,6 +957,58 @@ fn mesh_face_keys(mesh: &Mesh) -> Vec<usize> {
     face_keys
 }
 
+/// Closest point, face key and distance on triangle object_id of mesh; infinite distance for an invalid id.
+fn mesh_triangle_point(
+    mesh: &Mesh,
+    face_keys: &[usize],
+    object_id: usize,
+    test_point: &Point,
+) -> (Point, usize, f64) {
+    let Some((face_idx, _sub_idx, v0, v1, v2)) = mesh.get_triangle_by_id(object_id) else {
+        return (Point::new(0.0, 0.0, 0.0), 0, f64::INFINITY);
+    };
+
+    let cp = closest_point_on_triangle(test_point, &v0, &v1, &v2);
+    let dist = cp.distance(test_point, None);
+
+    (cp, face_keys[face_idx], dist)
+}
+
+/// Push the children nearer than best_dist, the nearer one last so it pops first.
+fn push_nearer_last(
+    stack: &mut [usize; STACK_SIZE],
+    top: &mut usize,
+    left: usize,
+    right: usize,
+    ld: f64,
+    rd: f64,
+    best_dist: f64,
+) {
+    assert!(*top + 2 <= STACK_SIZE);
+
+    if ld <= rd {
+        if rd < best_dist {
+            stack[*top] = right;
+            *top += 1;
+        }
+
+        if ld < best_dist {
+            stack[*top] = left;
+            *top += 1;
+        }
+    } else {
+        if ld < best_dist {
+            stack[*top] = left;
+            *top += 1;
+        }
+
+        if rd < best_dist {
+            stack[*top] = right;
+            *top += 1;
+        }
+    }
+}
+
 /// Closest-point queries between points, curves, surfaces, meshes and clouds.
 pub struct Closest;
 
@@ -1246,19 +1298,11 @@ impl Closest {
             }
 
             if node.is_leaf() {
-                let Some((face_idx, _sub_idx, v0, v1, v2)) =
-                    mesh.get_triangle_by_id(node.object_id as usize)
-                else {
-                    continue;
-                };
+                let hit =
+                    mesh_triangle_point(mesh, &face_keys, node.object_id as usize, test_point);
 
-                let cp = closest_point_on_triangle(test_point, &v0, &v1, &v2);
-                let dist = cp.distance(test_point, None);
-
-                if dist < best_dist {
-                    best_dist = dist;
-                    best_point = cp;
-                    best_face_key = face_keys[face_idx];
+                if hit.2 < best_dist {
+                    (best_point, best_face_key, best_dist) = hit;
                 }
 
                 continue;
@@ -1267,29 +1311,15 @@ impl Closest {
             let ld = aabb_min_distance(&bvh.nodes[node.left as usize].aabb, test_point);
             let rd = aabb_min_distance(&bvh.nodes[node.right as usize].aabb, test_point);
 
-            assert!(top + 2 <= STACK_SIZE);
-
-            if ld <= rd {
-                if rd < best_dist {
-                    stack[top] = node.right as usize;
-                    top += 1;
-                }
-
-                if ld < best_dist {
-                    stack[top] = node.left as usize;
-                    top += 1;
-                }
-            } else {
-                if ld < best_dist {
-                    stack[top] = node.left as usize;
-                    top += 1;
-                }
-
-                if rd < best_dist {
-                    stack[top] = node.right as usize;
-                    top += 1;
-                }
-            }
+            push_nearer_last(
+                &mut stack,
+                &mut top,
+                node.left as usize,
+                node.right as usize,
+                ld,
+                rd,
+                best_dist,
+            );
         }
 
         (best_point, best_face_key, best_dist)
@@ -1330,19 +1360,11 @@ impl Closest {
             }
 
             if node.object_id >= 0 {
-                let Some((face_idx, _sub_idx, v0, v1, v2)) =
-                    mesh.get_triangle_by_id(node.object_id as usize)
-                else {
-                    continue;
-                };
+                let hit =
+                    mesh_triangle_point(mesh, &face_keys, node.object_id as usize, test_point);
 
-                let cp = closest_point_on_triangle(test_point, &v0, &v1, &v2);
-                let dist = cp.distance(test_point, None);
-
-                if dist < best_dist {
-                    best_dist = dist;
-                    best_point = cp;
-                    best_face_key = face_keys[face_idx];
+                if hit.2 < best_dist {
+                    (best_point, best_face_key, best_dist) = hit;
                 }
 
                 continue;
@@ -1353,29 +1375,7 @@ impl Closest {
             let ld = aabb_min_distance(&tree.nodes[left].aabb, test_point);
             let rd = aabb_min_distance(&tree.nodes[right].aabb, test_point);
 
-            assert!(top + 2 <= STACK_SIZE);
-
-            if ld <= rd {
-                if rd < best_dist {
-                    stack[top] = right;
-                    top += 1;
-                }
-
-                if ld < best_dist {
-                    stack[top] = left;
-                    top += 1;
-                }
-            } else {
-                if ld < best_dist {
-                    stack[top] = left;
-                    top += 1;
-                }
-
-                if rd < best_dist {
-                    stack[top] = right;
-                    top += 1;
-                }
-            }
+            push_nearer_last(&mut stack, &mut top, left, right, ld, rd, best_dist);
         }
 
         (best_point, best_face_key, best_dist)

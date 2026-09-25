@@ -118,14 +118,8 @@ impl Line {
         Self::from_points(point, &(point + &(&direction.normalized() * length)))
     }
 
-    /// Construct the least-squares line through points by power-iteration PCA; length <= 0 spans the projected extent.
-    pub fn fit_points(points: &[Point], length: Option<f64>) -> Self {
-        if points.len() < 2 {
-            panic!("At least 2 points are required for line fitting");
-        }
-
-        let length = length.unwrap_or(0.0);
-        let center = Point::centroid(points);
+    /// Principal direction of the points about center by power iteration on their covariance.
+    fn fit_points_axis(points: &[Point], center: &Point) -> Vector {
         let mut cxx = 0.0;
         let mut cyy = 0.0;
         let mut czz = 0.0;
@@ -134,7 +128,7 @@ impl Line {
         let mut cyz = 0.0;
 
         for p in points {
-            let d = p - &center;
+            let d = p - center;
             cxx += d[0] * d[0];
             cyy += d[1] * d[1];
             czz += d[2] * d[2];
@@ -166,6 +160,11 @@ impl Line {
             axis = next / mag;
         }
 
+        axis
+    }
+
+    /// Half length of the fitted line: length / 2, or the projected extent when length <= 0.
+    fn fit_points_half(points: &[Point], center: &Point, axis: &Vector, length: f64) -> f64 {
         let mut half = length / 2.0;
 
         if length <= 0.0 {
@@ -173,7 +172,7 @@ impl Line {
             let mut t_max: f64 = 0.0;
 
             for p in points {
-                let t = (p - &center).dot(&axis);
+                let t = (p - center).dot(axis);
                 t_min = t_min.min(t);
                 t_max = t_max.max(t);
             }
@@ -184,6 +183,20 @@ impl Line {
                 half = 0.5;
             }
         }
+
+        half
+    }
+
+    /// Construct the least-squares line through points by power-iteration PCA; length <= 0 spans the projected extent.
+    pub fn fit_points(points: &[Point], length: Option<f64>) -> Self {
+        if points.len() < 2 {
+            panic!("At least 2 points are required for line fitting");
+        }
+
+        let length = length.unwrap_or(0.0);
+        let center = Point::centroid(points);
+        let axis = Self::fit_points_axis(points, &center);
+        let half = Self::fit_points_half(points, &center, &axis, length);
 
         Self::from_points(&(&center - &(&axis * half)), &(&center + &(&axis * half)))
     }

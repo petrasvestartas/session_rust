@@ -1473,6 +1473,58 @@ fn validate(result: &BRep, original: &BRep, tolerance: f64) -> Result<(), String
     Ok(())
 }
 
+/// Parameter-space tolerance of a surface: tolerance over its larger world length per unit parameter.
+fn surface_uv_tolerance(surface: &NurbsSurface, tolerance: f64) -> Result<f64, String> {
+    let (u0, u1) = surface_domain(surface, 0)?;
+    let (v0, v1) = surface_domain(surface, 1)?;
+    let origin = surface_point(surface, u0, v0)?;
+    let scale = (origin.distance(&surface_point(surface, u1, v0)?, None) / (u1 - u0))
+        .max(origin.distance(&surface_point(surface, u0, v1)?, None) / (v1 - v0));
+    require(scale > EPSILON, "Cannot split a degenerate surface domain")?;
+
+    Ok(tolerance / scale)
+}
+
+/// Wires of every region, one new edge per run added to result.
+fn region_wires(
+    result: &mut BRep,
+    pieces: &mut Vec<Piece>,
+    brep: &BRep,
+    surface_index: usize,
+    sources: &[Source],
+    regions: &[Vec<Vec<Run>>],
+    tolerance: f64,
+) -> Result<Vec<Vec<BRepRef>>, String> {
+    let mut new_wires = Vec::<Vec<BRepRef>>::new();
+
+    for region in regions {
+        let mut wires = Vec::<BRepRef>::new();
+
+        for loop_ in region {
+            let mut refs = Vec::<BRepRef>::new();
+
+            for run in loop_ {
+                refs.push(add_run_edge(
+                    result,
+                    pieces,
+                    brep,
+                    surface_index,
+                    sources,
+                    run,
+                    tolerance,
+                )?);
+            }
+
+            let wi = result.add_wire(&refs);
+            wires.push(BRepRef::new(wi as i32, FORWARD));
+        }
+
+        new_wires.push(wires);
+    }
+
+    Ok(new_wires)
+}
+
 // ═══════════════════════════════════════════════════════════════════════════
 // Split
 // ═══════════════════════════════════════════════════════════════════════════
@@ -1554,13 +1606,7 @@ pub fn split_brep_face_by_curves(
     let surface = &brep.m_surfaces[face.surface_index as usize];
     check_surface(surface)?;
 
-    let (u0, u1) = surface_domain(surface, 0)?;
-    let (v0, v1) = surface_domain(surface, 1)?;
-    let origin = surface_point(surface, u0, v0)?;
-    let scale = (origin.distance(&surface_point(surface, u1, v0)?, None) / (u1 - u0))
-        .max(origin.distance(&surface_point(surface, u0, v1)?, None) / (v1 - v0));
-    require(scale > EPSILON, "Cannot split a degenerate surface domain")?;
-    let uv_tolerance = tolerance / scale;
+    let uv_tolerance = surface_uv_tolerance(surface, tolerance)?;
 
     let mut sources = Vec::<Source>::new();
     let original_loops = boundary_loops(brep, face_index, uv_tolerance, &mut sources)?;
@@ -1585,36 +1631,19 @@ pub fn split_brep_face_by_curves(
 
     let mut result = brep.clone();
     let mut pieces = Vec::<Piece>::new();
-    let mut new_wires = Vec::<Vec<BRepRef>>::new();
-
-    for region in &regions {
-        let mut wires = Vec::<BRepRef>::new();
-
-        for loop_ in region {
-            let mut refs = Vec::<BRepRef>::new();
-
-            for run in loop_ {
-                refs.push(add_run_edge(
-                    &mut result,
-                    &mut pieces,
-                    brep,
-                    face.surface_index as usize,
-                    &sources,
-                    run,
-                    tolerance,
-                )?);
-            }
-
-            let wi = result.add_wire(&refs);
-            wires.push(BRepRef::new(wi as i32, FORWARD));
-        }
-
-        new_wires.push(wires);
-    }
-
+    let new_wires = region_wires(
+        &mut result,
+        &mut pieces,
+        brep,
+        face.surface_index as usize,
+        &sources,
+        &regions,
+        tolerance,
+    )?;
     replace_wires(&mut result, brep, &sources, &pieces);
     add_faces(&mut result, face, face_index, &new_wires);
     validate(&result, brep, tolerance)?;
+
     Ok(result)
 }
 
