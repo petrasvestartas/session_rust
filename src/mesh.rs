@@ -5312,9 +5312,10 @@ impl Mesh {
         normals
     }
 
-    /// Return the enclosed volume of a closed mesh.
+    /// Return the enclosed volume of a closed mesh, fanned from its first vertex so a far-away solid keeps its precision.
     pub fn volume(&self) -> f64 {
         let mut total = 0.0;
+        let mut origin: Option<Point> = None;
 
         for fk in self.faces() {
             let vkeys = &self.face[&fk];
@@ -5327,15 +5328,16 @@ impl Mesh {
                 continue;
             };
 
+            let o: &Point = origin.get_or_insert(p0.clone());
+            let v0 = &p0 - o;
+
             for i in 1..vkeys.len() - 1 {
                 let (Some(p1), Some(p2)) =
                     (self.vertex_point(vkeys[i]), self.vertex_point(vkeys[i + 1]))
                 else {
                     continue;
                 };
-                total += p0[0] * (p1[1] * p2[2] - p1[2] * p2[1])
-                    + p0[1] * (p1[2] * p2[0] - p1[0] * p2[2])
-                    + p0[2] * (p1[0] * p2[1] - p1[1] * p2[0]);
+                total += v0.dot(&(&p1 - o).cross(&(&p2 - o)));
             }
         }
 

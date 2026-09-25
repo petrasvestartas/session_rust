@@ -89,6 +89,14 @@ impl ElementFeature {
         }
     }
 
+    /// Copy with a new guid and the same data.
+    pub fn duplicate(&self) -> Self {
+        let mut copy = self.clone();
+        copy.guid = OnceLock::new();
+
+        copy
+    }
+
     // ═══════════════════════════════════════════════════════════════════════════
     // Accessors
     // ═══════════════════════════════════════════════════════════════════════════
@@ -625,6 +633,7 @@ impl Element {
     /// Return the cached face outlines, computing them when dirty.
     pub fn polylines(&mut self) -> Vec<Polyline> {
         if self.is_dirty || self.cached_polylines.is_none() {
+            self.ensure_geometry();
             self.cached_polylines = Some(self.compute_polylines());
             self.is_dirty = false;
         }
@@ -635,6 +644,7 @@ impl Element {
     /// Return the cached face planes, computing them when dirty.
     pub fn planes(&mut self) -> Vec<Plane> {
         if self.is_dirty || self.cached_planes.is_none() {
+            self.ensure_geometry();
             self.cached_planes = Some(self.compute_planes());
             self.is_dirty = false;
         }
@@ -826,7 +836,7 @@ impl Element {
         result.guid = OnceLock::new();
 
         for f in &mut result.features {
-            f.refresh_guid();
+            *f = f.duplicate();
         }
 
         result.reset();

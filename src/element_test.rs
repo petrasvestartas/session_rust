@@ -718,6 +718,22 @@ pub fn run_element_polylines_empty_without_mesh() -> TestResult {
     })
 }
 
+pub fn run_element_planes_without_geometry_call() -> TestResult {
+    MINI_TEST!("Planes Without Geometry Call", {
+        use crate::Element;
+        use crate::Mesh;
+
+        let mut e = Element::from_mesh(Mesh::create_box(1.0, 1.0, 1.0), "my_element");
+        let before = e.geometry_synced();
+        let count = e.planes().len();
+
+        MINI_CHECK!(!before);
+        MINI_CHECK!(count == 6);
+        MINI_CHECK!(e.geometry_synced());
+        MINI_CHECK!(e.polylines().len() == 6);
+    })
+}
+
 // ═══════════════════════════════════════════════════════════════════════════
 // Element - Polymorphic registry
 // ═══════════════════════════════════════════════════════════════════════════
@@ -937,6 +953,8 @@ pub fn run_element_duplicate_keeps_every_field() -> TestResult {
         MINI_CHECK!(copy.insertion_vectors().len() == 1);
         MINI_CHECK!(copy.dimensions().is_some());
         MINI_CHECK!(copy.features().len() == 1);
+        MINI_CHECK!(copy.features()[0] == e.features()[0]);
+        MINI_CHECK!(copy.features()[0].guid() != e.features()[0].guid());
     })
 }
 
@@ -984,6 +1002,11 @@ pub fn run_element_feature_constructor() -> TestResult {
         MINI_CHECK!(f == same);
         MINI_CHECK!(!(f != same));
         MINI_CHECK!(f.guid() != same.guid());
+
+        let copy = f.duplicate();
+
+        MINI_CHECK!(copy == f);
+        MINI_CHECK!(copy.guid() != f.guid());
 
         let other = ElementFeature::new("drill", 2, vec![outline], "notch");
 
@@ -1171,6 +1194,11 @@ REGISTER_MINI_TEST!(
     "Element",
     "Polylines Empty Without Mesh",
     crate::element_test::run_element_polylines_empty_without_mesh
+);
+REGISTER_MINI_TEST!(
+    "Element",
+    "Planes Without Geometry Call",
+    crate::element_test::run_element_planes_without_geometry_call
 );
 REGISTER_MINI_TEST!(
     "Element",

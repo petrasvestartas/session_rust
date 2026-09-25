@@ -1799,6 +1799,18 @@ pub fn run_mesh_cut_by_plane() -> TestResult {
     })
 }
 
+pub fn run_mesh_volume_far_from_origin() -> TestResult {
+    MINI_TEST!("Volume Far From Origin", {
+        use crate::Mesh;
+        use crate::Xform;
+
+        let far = Xform::translation(1000000.1, 1000000.2, 1000000.3);
+        let bx = Mesh::create_box(2.0, 3.0, 4.0).transformed(&far);
+
+        MINI_CHECK!((bx.volume() / 24.0 - 1.0).abs() < 1e-9);
+    })
+}
+
 pub fn run_mesh_json_roundtrip() -> TestResult {
     MINI_TEST!("Json Roundtrip", {
         use crate::Mesh;
@@ -2952,6 +2964,11 @@ REGISTER_MINI_TEST!(
     "Mesh",
     "Cut By Plane",
     crate::mesh_test::run_mesh_cut_by_plane
+);
+REGISTER_MINI_TEST!(
+    "Mesh",
+    "Volume Far From Origin",
+    crate::mesh_test::run_mesh_volume_far_from_origin
 );
 REGISTER_MINI_TEST!(
     "Mesh",

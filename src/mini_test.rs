@@ -562,6 +562,11 @@ pub fn get_all_tests() -> Vec<RegisteredTest> {
         },
         RegisteredTest {
             group: "BRep",
+            name: "Volume Far From Origin",
+            func: run_brep_volume_far_from_origin,
+        },
+        RegisteredTest {
+            group: "BRep",
             name: "Face Polylines Box",
             func: run_brep_face_polylines_box,
         },
@@ -1784,6 +1789,11 @@ pub fn get_all_tests() -> Vec<RegisteredTest> {
             group: "Mesh",
             name: "Cut By Plane",
             func: run_mesh_cut_by_plane,
+        },
+        RegisteredTest {
+            group: "Mesh",
+            name: "Volume Far From Origin",
+            func: run_mesh_volume_far_from_origin,
         },
         RegisteredTest {
             group: "Mesh",
@@ -4588,6 +4598,11 @@ pub fn get_all_tests() -> Vec<RegisteredTest> {
             group: "Element",
             name: "Polylines Empty Without Mesh",
             func: run_element_polylines_empty_without_mesh,
+        },
+        RegisteredTest {
+            group: "Element",
+            name: "Planes Without Geometry Call",
+            func: run_element_planes_without_geometry_call,
         },
         RegisteredTest {
             group: "Element",

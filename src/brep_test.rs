@@ -1146,6 +1146,18 @@ pub fn run_brep_volume() -> TestResult {
     })
 }
 
+pub fn run_brep_volume_far_from_origin() -> TestResult {
+    MINI_TEST!("Volume Far From Origin", {
+        use crate::BRep;
+        use crate::Xform;
+
+        let far = Xform::translation(1000000.1, 1000000.2, 1000000.3);
+        let bx = BRep::create_box(2.0, 3.0, 4.0).transformed(&far);
+
+        MINI_CHECK!((bx.volume() / 24.0 - 1.0).abs() < 1e-9);
+    })
+}
+
 pub fn run_brep_face_polylines_box() -> TestResult {
     MINI_TEST!("Face Polylines Box", {
         use crate::BRep;
@@ -1499,6 +1511,11 @@ REGISTER_MINI_TEST!(
     crate::brep_test::run_brep_protobuf_roundtrip
 );
 REGISTER_MINI_TEST!("BRep", "Volume", crate::brep_test::run_brep_volume);
+REGISTER_MINI_TEST!(
+    "BRep",
+    "Volume Far From Origin",
+    crate::brep_test::run_brep_volume_far_from_origin
+);
 REGISTER_MINI_TEST!(
     "BRep",
     "Face Polylines Box",
