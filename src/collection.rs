@@ -26,15 +26,15 @@ use std::rc::Weak;
 /// The guid a Collection indexes an entry by.
 pub trait Keyed {
     /// Return the guid of the entry.
-    fn key(&self) -> String;
+    fn key(&self) -> &str;
 }
 
 macro_rules! impl_keyed {
     ($($type:ty),* $(,)?) => {
         $(impl Keyed for Rc<$type> {
             /// Return the guid.
-            fn key(&self) -> String {
-                self.guid().to_string()
+            fn key(&self) -> &str {
+                self.guid()
             }
         })*
     };
@@ -57,8 +57,8 @@ impl_keyed!(
 
 impl Keyed for Component {
     /// Return the guid.
-    fn key(&self) -> String {
-        self.guid.clone()
+    fn key(&self) -> &str {
+        &self.guid
     }
 }
 
@@ -302,7 +302,7 @@ impl<E: Keyed> Collection<E> {
     /// Append a live entry and index its guid, O(1) amortised.
     pub fn push(&mut self, item: E) {
         let slot = self.items.len();
-        self.slots.insert(item.key(), slot);
+        self.slots.insert(item.key().to_string(), slot);
         self.items.push(item);
         self.dead.push(false);
         self.live += 1;
@@ -317,11 +317,11 @@ impl<E: Keyed> Collection<E> {
         if !self.dead[slot] {
             let old = self.items[slot].key();
 
-            if self.slots.get(&old) == Some(&slot) {
-                self.slots.remove(&old);
+            if self.slots.get(old) == Some(&slot) {
+                self.slots.remove(old);
             }
 
-            self.slots.insert(item.key(), slot);
+            self.slots.insert(item.key().to_string(), slot);
         }
 
         self.items[slot] = item;
@@ -344,8 +344,8 @@ impl<E: Keyed> Collection<E> {
         *self.positions.get_mut() = None;
 
         if dead {
-            if self.slots.get(&key) == Some(&slot) {
-                self.slots.remove(&key);
+            if self.slots.get(key) == Some(&slot) {
+                self.slots.remove(key);
             }
 
             if self.count == 0 && self.cursor.is_none() {
@@ -356,7 +356,7 @@ impl<E: Keyed> Collection<E> {
             self.count += 1;
             self.low = self.low.min(slot);
         } else {
-            self.slots.insert(key, slot);
+            self.slots.insert(key.to_string(), slot);
             self.live += 1;
             self.count -= 1;
         }
@@ -399,7 +399,7 @@ impl<E: Keyed> Collection<E> {
                     }
 
                     if !self.dead[w] {
-                        self.slots.insert(self.items[w].key(), w);
+                        self.slots.insert(self.items[w].key().to_string(), w);
                     }
                 }
 
@@ -444,7 +444,7 @@ impl<E: Keyed> From<Vec<E>> for Collection<E> {
         let mut slots = HashMap::with_capacity(items.len());
 
         for (slot, item) in items.iter().enumerate() {
-            slots.insert(item.key(), slot);
+            slots.insert(item.key().to_string(), slot);
         }
 
         Self {

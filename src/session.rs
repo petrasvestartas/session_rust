@@ -1742,10 +1742,10 @@ impl Session {
 
     /// Kill an object in place: its slot, node, transform, vertex, edges and interactions flip dead until undo revives them; O(1 + d log V).
     pub fn remove_object(&mut self, obj_guid: &str) -> bool {
-        let Some(tomb) = self._tomb(obj_guid) else {
+        let Some(obj) = self._item(obj_guid) else {
             return false;
         };
-        let obj = self._item(obj_guid);
+        let tomb = self._tomb(obj_guid, &obj);
         let degree = self.graph.edges.get(obj_guid).map_or(0, BTreeMap::len);
         let node = tomb
             .node
@@ -1764,7 +1764,7 @@ impl Session {
             return true;
         }
 
-        let bytes = RECORD + obj.as_ref().map_or(0, weight) + 128 * degree;
+        let bytes = RECORD + weight(&obj) + 128 * degree;
         let collection = tomb.collection.clone();
         self.history.record(
             Op::Remove(Tombstone::new(
@@ -2730,6 +2730,36 @@ impl Session {
             || self.instance_lookup.contains_key(guid)
     }
 
+    /// Take the object, component or instance under guid out of its map, the pointer itself.
+    fn _take(&mut self, guid: &str) -> Option<Item> {
+        if let Some(geometry) = self.lookup.remove(guid) {
+            return Some(Item::Geometry(geometry));
+        }
+
+        if let Some(component) = self.component_lookup.remove(guid) {
+            return Some(Item::Component(component));
+        }
+
+        Some(Item::InstanceRef(self.instance_lookup.remove(guid)?))
+    }
+
+    /// Put an object, component or instance in its map under guid.
+    fn _hold(&mut self, guid: &str, item: Item) {
+        match item {
+            Item::Geometry(geometry) => {
+                self.lookup.insert(guid.to_string(), geometry);
+            }
+
+            Item::Component(component) => {
+                self.component_lookup.insert(guid.to_string(), component);
+            }
+
+            Item::InstanceRef(instance) => {
+                self.instance_lookup.insert(guid.to_string(), instance);
+            }
+        }
+    }
+
     /// The stored object, component or instance under guid, the pointer itself.
     fn _item(&self, guid: &str) -> Option<Item> {
         if let Some(geometry) = self.lookup.get(guid) {
@@ -2745,18 +2775,17 @@ impl Session {
         )))
     }
 
-    /// The object tomb of a live guid, reused while a record still holds it, else made and pinned on its slot and node; O(1).
-    fn _tomb(&mut self, guid: &str) -> Option<Rc<Tomb>> {
-        let item = self._item(guid)?;
-        let (collection, _) = collection_for(&item);
+    /// The object tomb of a live guid holding item, reused while a record still holds it, else made and pinned on its slot and node; O(1).
+    fn _tomb(&mut self, guid: &str, item: &Item) -> Rc<Tomb> {
+        let (collection, _) = collection_for(item);
         let slot = match slot_of(&self.objects, collection, guid) {
             Some(slot) => slot,
-            None => push(&mut self.objects, collection, &item),
+            None => push(&mut self.objects, collection, item),
         };
 
         if let Some(tomb) = tomb_at(&self.objects, collection, slot) {
             if tomb.node.is_some() {
-                return Some(tomb);
+                return tomb;
             }
         }
 
@@ -2773,7 +2802,7 @@ impl Session {
         pin(&mut self.objects, collection, slot, &tomb);
         node.borrow_mut().set_tomb(&tomb);
 
-        Some(tomb)
+        tomb
     }
 
     /// The node-only tomb pinned on a node, reused while a record still holds it.
@@ -3238,7 +3267,7 @@ impl Session {
 
                 for slot in start..end {
                     if !$list.is_dead(slot) {
-                        guids.push($list.get_item(slot).key());
+                        guids.push($list.get_item(slot).key().to_string());
                     }
                 }
             }};
@@ -3458,22 +3487,23 @@ impl Session {
         let Some(stored) = item_at(&self.objects, collection, slot) else {
             return;
         };
-        let guid = stored.guid().to_string();
+        let guid = stored.guid();
+        let held = self._take(guid);
+        let owner = held.as_ref().is_some_and(|held| same(held, &stored))
+            || slot_of(&self.objects, collection, guid) == Some(slot);
 
-        if let Some(held) = self._item(&guid) {
+        // the map value is the truth; a twin that took the guid keeps its entry
+        if let Some(held) = held {
             if !same(&held, &stored) {
                 store(&mut self.objects, collection, slot, &held);
             }
+
+            if !owner {
+                self._hold(guid, held);
+            }
         }
 
-        let owner = slot_of(&self.objects, collection, &guid) == Some(slot);
         flag(&mut self.objects, collection, slot, true);
-
-        if owner {
-            self.lookup.remove(&guid);
-            self.component_lookup.remove(&guid);
-            self.instance_lookup.remove(&guid);
-        }
 
         let Some(node) = &tomb.node else {
             return;
@@ -3482,21 +3512,19 @@ impl Session {
         node.borrow_mut().set_dead(true);
         node.borrow_mut().set_tomb(tomb);
 
-        if self
-            .node_lookup
-            .get(&guid)
-            .is_some_and(|held| Rc::ptr_eq(held, node))
-        {
-            self.node_lookup.remove(&guid);
+        if let Some((key, held)) = self.node_lookup.remove_entry(guid) {
+            if !Rc::ptr_eq(&held, node) {
+                self.node_lookup.insert(key, held);
+            }
         }
 
         if let Some(parent) = parent {
             self._queue(&parent);
         }
 
-        *tomb.xform.borrow_mut() = self.xforms.remove(&guid);
+        *tomb.xform.borrow_mut() = self.xforms.remove(guid);
 
-        if let Some((vertex, edges)) = self.graph.take_node(&guid) {
+        if let Some((vertex, edges)) = self.graph.take_node(guid) {
             for edge in &edges {
                 if !edge.has_guid() {
                     continue;
@@ -3541,22 +3569,7 @@ impl Session {
             return;
         };
         let guid = item.guid().to_string();
-
-        match &item {
-            Item::Geometry(geometry) => {
-                self.lookup.insert(guid.clone(), geometry.clone());
-            }
-
-            Item::Component(component) => {
-                self.component_lookup
-                    .insert(guid.clone(), component.clone());
-            }
-
-            Item::InstanceRef(instance) => {
-                self.instance_lookup
-                    .insert(guid.clone(), Rc::clone(instance));
-            }
-        }
+        self._hold(&guid, item.clone());
 
         let Some(node) = &tomb.node else {
             self._label(&guid, &format!("{}_{}", prefix_of(collection), item.name()));
@@ -3629,21 +3642,7 @@ impl Session {
             return;
         };
         store(&mut self.objects, collection, slot, &obj);
-
-        match obj {
-            Item::Geometry(geometry) => {
-                self.lookup.insert(guid.to_string(), geometry);
-            }
-
-            Item::Component(component) => {
-                self.component_lookup.insert(guid.to_string(), component);
-            }
-
-            Item::InstanceRef(instance) => {
-                self.instance_lookup.insert(guid.to_string(), instance);
-            }
-        }
-
+        self._hold(guid, obj);
         self._label(guid, &label);
     }
 
