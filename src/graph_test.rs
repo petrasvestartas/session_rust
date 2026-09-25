@@ -728,7 +728,7 @@ pub fn run_graph_take_node() -> TestResult {
             .iter()
             .any(|e| e.attributes.get("weight") == Some(&3.0)));
         MINI_CHECK!(!g.has_node("b") && !g.has_edge(("a", "b")) && !g.has_edge(("c", "b")));
-        MINI_CHECK!(g.vertex_count == 3 && g.edge_count == 2);
+        MINI_CHECK!(g.vertex_count == 3 && g.edge_count == 2 && g.edges.is_empty());
         MINI_CHECK!(g.get_vertices()[0].index == 0 && g.get_vertices()[1].index == 2);
         MINI_CHECK!(g.str() == "<Graph with 2 vertices, 0 edges: g>");
         MINI_CHECK!(g.take_node("b").is_none());

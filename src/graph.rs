@@ -399,13 +399,17 @@ impl Graph {
         self.reassign_edge_indices();
     }
 
-    /// Take a node and its incident edges out without renumbering, each edge once as stored under edges[v0][v1]; O(d log V).
+    /// Take a node and its incident edges out without renumbering, each edge once as stored under edges[v0][v1], dropping emptied neighbour maps; O(d log V).
     pub fn take_node(&mut self, key: &str) -> Option<(Vertex, Vec<Edge>)> {
         let vertex = self.vertices.remove(key)?;
         let mut edges = Vec::new();
 
         for (other, edge) in self.edges.remove(key).unwrap_or_default() {
             let twin = self.edges.get_mut(&other).and_then(|n| n.remove(key));
+
+            if self.edges.get(&other).is_some_and(BTreeMap::is_empty) {
+                self.edges.remove(&other);
+            }
 
             if edge.v0 == key {
                 edges.push(edge);
