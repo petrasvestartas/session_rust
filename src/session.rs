@@ -2181,6 +2181,12 @@ impl Session {
     /// Purge everything no record reaches in one call: a whole cycle, every live tree node, dense graph indices; O(n + N + V log V + E log E).
     pub fn purge(&mut self) {
         self.writer = None;
+
+        // a running cycle already passed lists that may hold newly eligible dead slots
+        if self.purging.is_some() {
+            self._purge(usize::MAX);
+        }
+
         self._purge(usize::MAX);
 
         for node in self.tree.nodes() {
@@ -2192,7 +2198,7 @@ impl Session {
     }
 
     /// Write the live session as protobuf bytes for at most `work` units, purging first when due; Some once done, history kept, restarted by any edit.
-    pub fn checkpoint(&mut self, work: usize) -> Option<Vec<u8>> {
+    pub fn checkpoint(&mut self, mut work: usize) -> Option<Vec<u8>> {
         if self
             .writer
             .as_ref()
@@ -2200,8 +2206,6 @@ impl Session {
         {
             self.writer = None;
         }
-
-        let mut work = work;
 
         if self.writer.is_none() && (self.purging.is_some() || self.purge_due()) {
             work = self._purge(work);
