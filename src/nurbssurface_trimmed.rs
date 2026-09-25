@@ -71,8 +71,12 @@ fn point_in_polygon_2d(u: f64, v: f64, poly: &[Point]) -> bool {
     winding != 0
 }
 
-/// True when (u, v) lies inside the outer loop and outside every hole.
-fn inside_loops(u: f64, v: f64, loops_uv: &[Vec<Point>]) -> bool {
+/// True when (u, v) lies inside the outer loop and outside every hole; bounds is the outer loop's UV box.
+fn inside_loops(u: f64, v: f64, loops_uv: &[Vec<Point>], bounds: &[f64; 4]) -> bool {
+    if u < bounds[0] || v < bounds[1] || u > bounds[2] || v > bounds[3] {
+        return false;
+    }
+
     if !point_in_polygon_2d(u, v, &loops_uv[0]) {
         return false;
     }
@@ -2426,10 +2430,15 @@ fn insert_loops(
 }
 
 /// Insert the crease knot crossings inside the loops and constrain each knot line between consecutive vertices on it.
-fn insert_crease_lines(dt: &mut Delaunay2D, loops_uv: &[Vec<Point>], crease_knots: &[Vec<f64>; 2]) {
+fn insert_crease_lines(
+    dt: &mut Delaunay2D,
+    loops_uv: &[Vec<Point>],
+    bounds: &[f64; 4],
+    crease_knots: &[Vec<f64>; 2],
+) {
     for &u in &crease_knots[0] {
         for &v in &crease_knots[1] {
-            if inside_loops(u, v, loops_uv) {
+            if inside_loops(u, v, loops_uv, bounds) {
                 dt.insert(u, v);
             }
         }
@@ -2453,7 +2462,7 @@ fn insert_crease_lines(dt: &mut Delaunay2D, loops_uv: &[Vec<Point>], crease_knot
                 let mut uv = [knot, knot];
                 uv[1 - dir] = (nodes[k - 1].0 + nodes[k].0) * 0.5;
 
-                if inside_loops(uv[0], uv[1], loops_uv) {
+                if inside_loops(uv[0], uv[1], loops_uv, bounds) {
                     dt.insert_constraint(nodes[k - 1].1, nodes[k].1);
                 }
             }
@@ -2485,6 +2494,7 @@ fn refinement_points(
     dt: &Delaunay2D,
     surface: &NurbsSurface,
     loops_uv: &[Vec<Point>],
+    bounds: &[f64; 4],
     crease_knots: &[Vec<f64>; 2],
     deflection: f64,
     cos_max_angle: f64,
@@ -2502,7 +2512,7 @@ fn refinement_points(
         let cu = (a.x + b.x + c.x) / 3.0;
         let cv = (a.y + b.y + c.y) / 3.0;
 
-        if !inside_loops(cu, cv, loops_uv) {
+        if !inside_loops(cu, cv, loops_uv, bounds) {
             continue;
         }
 
@@ -2534,6 +2544,7 @@ fn refine(
     dt: &mut Delaunay2D,
     surface: &NurbsSurface,
     loops_uv: &[Vec<Point>],
+    bounds: &[f64; 4],
     crease_knots: &[Vec<f64>; 2],
     deflection: f64,
     cos_max_angle: f64,
@@ -2546,6 +2557,7 @@ fn refine(
             dt,
             surface,
             loops_uv,
+            bounds,
             crease_knots,
             deflection,
             cos_max_angle,
@@ -2570,7 +2582,7 @@ fn refine(
 }
 
 /// Drop the super triangle and every triangle whose centroid lies outside the loops.
-fn trim_outside(dt: &mut Delaunay2D, loops_uv: &[Vec<Point>]) {
+fn trim_outside(dt: &mut Delaunay2D, loops_uv: &[Vec<Point>], bounds: &[f64; 4]) {
     dt.cleanup();
 
     for ti in 0..dt.triangles.len() {
@@ -2586,7 +2598,7 @@ fn trim_outside(dt: &mut Delaunay2D, loops_uv: &[Vec<Point>]) {
             (dt.vertices[v0 as usize].y + dt.vertices[v1 as usize].y + dt.vertices[v2 as usize].y)
                 / 3.0;
 
-        if !inside_loops(cu, cv, loops_uv) {
+        if !inside_loops(cu, cv, loops_uv, bounds) {
             dt.triangles[ti].alive = false;
         }
     }
@@ -3613,10 +3625,10 @@ impl NurbsSurfaceTrimmed {
         let mut dt = Delaunay2D::new(bounds[0], bounds[1], bounds[2], bounds[3]);
         let mut boundary_intervals: BTreeMap<usize, (usize, usize, f64)> = BTreeMap::new();
         let loop_vids = insert_loops(&mut dt, &loops.uv, &crease_knots, &mut boundary_intervals);
-        insert_crease_lines(&mut dt, &loops.uv, &crease_knots);
+        insert_crease_lines(&mut dt, &loops.uv, &bounds, &crease_knots);
 
         for p in &loops.interior_uv {
-            if inside_loops(p[0], p[1], &loops.uv) {
+            if inside_loops(p[0], p[1], &loops.uv, &bounds) {
                 dt.insert(p[0], p[1]);
             }
         }
@@ -3625,11 +3637,12 @@ impl NurbsSurfaceTrimmed {
             &mut dt,
             &self.m_surface,
             &loops.uv,
+            &bounds,
             &crease_knots,
             deflection,
             cos_max_angle,
         );
-        trim_outside(&mut dt, &loops.uv);
+        trim_outside(&mut dt, &loops.uv, &bounds);
         let tris = dt.get_triangles();
 
         if tris.is_empty() || crosses_crease(&tris, &dt, &crease_knots) {

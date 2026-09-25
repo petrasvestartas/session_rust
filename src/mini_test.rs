@@ -1012,6 +1012,11 @@ pub fn get_all_tests() -> Vec<RegisteredTest> {
         },
         RegisteredTest {
             group: "Line",
+            name: "Closest Point Unlimited",
+            func: run_line_closest_point_unlimited,
+        },
+        RegisteredTest {
+            group: "Line",
             name: "Start End Center",
             func: run_line_start_end_center,
         },
@@ -1019,6 +1024,11 @@ pub fn get_all_tests() -> Vec<RegisteredTest> {
             group: "Line",
             name: "Fit Points",
             func: run_line_fit_points,
+        },
+        RegisteredTest {
+            group: "Line",
+            name: "Fit Points Uneven",
+            func: run_line_fit_points_uneven,
         },
         RegisteredTest {
             group: "Line",
@@ -1039,6 +1049,11 @@ pub fn get_all_tests() -> Vec<RegisteredTest> {
             group: "Line",
             name: "Extend",
             func: run_line_extend,
+        },
+        RegisteredTest {
+            group: "Line",
+            name: "Extend Keeps Properties",
+            func: run_line_extend_keeps_properties,
         },
         // Polyline tests
         RegisteredTest {
@@ -2095,6 +2110,31 @@ pub fn get_all_tests() -> Vec<RegisteredTest> {
             group: "NurbsCurve",
             name: "Closest Point",
             func: run_nurbscurve_closest_point,
+        },
+        RegisteredTest {
+            group: "NurbsCurve",
+            name: "Length Repeated Knot",
+            func: run_nurbscurve_length_repeated_knot,
+        },
+        RegisteredTest {
+            group: "NurbsCurve",
+            name: "Span Vector Empty",
+            func: run_nurbscurve_span_vector_empty,
+        },
+        RegisteredTest {
+            group: "NurbsCurve",
+            name: "Periodic Too Few Points",
+            func: run_nurbscurve_periodic_too_few_points,
+        },
+        RegisteredTest {
+            group: "NurbsCurve",
+            name: "Polyline Adaptive Closed",
+            func: run_nurbscurve_polyline_adaptive_closed,
+        },
+        RegisteredTest {
+            group: "NurbsCurve",
+            name: "Circle Length",
+            func: run_nurbscurve_circle_length,
         },
         // NurbsSurface tests
         RegisteredTest {
@@ -4725,6 +4765,11 @@ pub fn get_all_tests() -> Vec<RegisteredTest> {
             group: "AABB",
             name: "From Geometry",
             func: run_aabb_from_geometry,
+        },
+        RegisteredTest {
+            group: "AABB",
+            name: "From Nurbscurve Tight",
+            func: run_aabb_from_nurbscurve_tight,
         },
         // Boolean Polyline tests
         RegisteredTest {

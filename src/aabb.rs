@@ -133,23 +133,27 @@ impl AABB {
 
         let dt = (t1 - t0) / NUM_SAMPLES as f64;
 
-        for axis in 0..3 {
-            for i in 0..NUM_SAMPLES {
-                let t_start = t0 + i as f64 * dt;
-                let t_end = t_start + dt;
-                let deriv_start: Vec<Vector> = curve.evaluate(t_start, 1);
-                let deriv_end: Vec<Vector> = curve.evaluate(t_end, 1);
+        for i in 0..NUM_SAMPLES {
+            let t_start = t0 + i as f64 * dt;
+            let t_end = t_start + dt;
+            let deriv_start: Vec<Vector> = curve.evaluate(t_start, 1);
+            let deriv_end: Vec<Vector> = curve.evaluate(t_end, 1);
 
-                if deriv_start.len() < 2 || deriv_end.len() < 2 {
-                    continue;
-                }
+            if deriv_start.len() < 2 || deriv_end.len() < 2 {
+                continue;
+            }
 
+            for axis in 0..3 {
                 let d_start = deriv_start[1][axis];
                 let d_end = deriv_end[1][axis];
 
                 if d_start * d_end < 0.0 {
                     let t_root = Self::compute_extremum(curve, axis, t_start, t_end, d_start);
                     points.push(curve.point_at(t_root));
+                } else if d_start == 0.0 && d_end != 0.0 {
+                    points.push(curve.point_at(t_start));
+                } else if d_end == 0.0 && d_start != 0.0 {
+                    points.push(curve.point_at(t_end));
                 }
             }
         }

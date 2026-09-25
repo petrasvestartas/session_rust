@@ -426,6 +426,10 @@ impl NurbsCurve {
     ) -> bool {
         let point_count = points.len();
 
+        if point_count < order {
+            return false;
+        }
+
         if !self.create_curve(dimension, false, order, point_count + order - 1) {
             return false;
         }
@@ -1463,6 +1467,10 @@ impl NurbsCurve {
 
     /// Return the distinct nurbsknot values inside the domain.
     pub fn get_span_vector(&self) -> Vec<f64> {
+        if !self.is_valid() {
+            return Vec::new();
+        }
+
         let mut spans = vec![self.m_nurbsknot[self.m_order - 2]];
 
         for i in (self.m_order - 1)..self.m_cv_count {
@@ -1533,7 +1541,7 @@ impl NurbsCurve {
 
         const SUBDIVISIONS: usize = 4;
         let mut total = 0.0;
-        let n_spans = self.span_count();
+        let n_spans = self.m_cv_count - self.m_order + 1;
 
         for span in 0..n_spans {
             let span_a = self.m_nurbsknot[self.m_order - 2 + span];
@@ -4102,6 +4110,16 @@ impl NurbsCurve {
         let (t0, t1) = self.domain();
         let mut samples: Vec<(f64, Point)> = vec![(t0, self.point_at(t0)), (t1, self.point_at(t1))];
         let mut work_queue: Vec<(f64, f64)> = vec![(t0, t1)];
+        let closed = samples[0].1.distance(&samples[1].1, None) < 1e-6;
+
+        if closed && self.length(None) > max_edge_length {
+            let t_third = t0 + (t1 - t0) / 3.0;
+            let t_two_thirds = t0 + 2.0 * (t1 - t0) / 3.0;
+            samples.push((t_third, self.point_at(t_third)));
+            samples.push((t_two_thirds, self.point_at(t_two_thirds)));
+            work_queue = vec![(t0, t_third), (t_third, t_two_thirds), (t_two_thirds, t1)];
+        }
+
         let max_iterations = 10000;
         let mut iterations = 0;
 

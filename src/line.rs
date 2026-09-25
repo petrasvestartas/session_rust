@@ -118,7 +118,31 @@ impl Line {
         Self::from_points(point, &(point + &(&direction.normalized() * length)))
     }
 
-    /// Principal direction of the points about center by power iteration on their covariance.
+    /// Power iteration on the covariance rows from seed: the unit axis and its eigenvalue estimate.
+    fn fit_points_power(
+        row0: &Vector,
+        row1: &Vector,
+        row2: &Vector,
+        seed: Vector,
+    ) -> (Vector, f64) {
+        let mut axis = seed;
+        let mut eigen = 0.0;
+
+        for _ in 0..100 {
+            let next = Vector::new(row0.dot(&axis), row1.dot(&axis), row2.dot(&axis));
+            eigen = next.magnitude_squared().sqrt();
+
+            if eigen < 1e-15 {
+                break;
+            }
+
+            axis = next / eigen;
+        }
+
+        (axis, eigen)
+    }
+
+    /// Principal direction of the points about center: power iteration from each of X, Y and Z, largest eigenvalue kept.
     fn fit_points_axis(points: &[Point], center: &Point) -> Vector {
         let mut cxx = 0.0;
         let mut cyy = 0.0;
@@ -137,54 +161,59 @@ impl Line {
             cyz += d[1] * d[2];
         }
 
-        let mut axis = Vector::new(1.0, 0.0, 0.0);
+        let row0 = Vector::new(cxx, cxy, cxz);
+        let row1 = Vector::new(cxy, cyy, cyz);
+        let row2 = Vector::new(cxz, cyz, czz);
+        let mut first = 0;
 
         if cyy > cxx && cyy >= czz {
-            axis = Vector::new(0.0, 1.0, 0.0);
+            first = 1;
         } else if czz > cxx && czz > cyy {
-            axis = Vector::new(0.0, 0.0, 1.0);
+            first = 2;
         }
 
-        for _ in 0..100 {
-            let next = Vector::new(
-                cxx * axis[0] + cxy * axis[1] + cxz * axis[2],
-                cxy * axis[0] + cyy * axis[1] + cyz * axis[2],
-                cxz * axis[0] + cyz * axis[1] + czz * axis[2],
-            );
-            let mag = next.magnitude_squared().sqrt();
+        let mut axis = Vector::new(1.0, 0.0, 0.0);
+        let mut best = -1.0;
 
-            if mag < 1e-15 {
-                break;
+        for k in 0..3 {
+            let mut seed = Vector::new(0.0, 0.0, 0.0);
+            seed[(first + k) % 3] = 1.0;
+            let power = Self::fit_points_power(&row0, &row1, &row2, seed);
+
+            if power.1 > best * (1.0 + Tolerance::RELATIVE) {
+                axis = power.0;
+                best = power.1;
             }
-
-            axis = next / mag;
         }
 
         axis
     }
 
-    /// Half length of the fitted line: length / 2, or the projected extent when length <= 0.
-    fn fit_points_half(points: &[Point], center: &Point, axis: &Vector, length: f64) -> f64 {
-        let mut half = length / 2.0;
-
-        if length <= 0.0 {
-            let mut t_min: f64 = 0.0;
-            let mut t_max: f64 = 0.0;
-
-            for p in points {
-                let t = (p - center).dot(axis);
-                t_min = t_min.min(t);
-                t_max = t_max.max(t);
-            }
-
-            half = t_min.abs().max(t_max.abs());
-
-            if half < 1e-10 {
-                half = 0.5;
-            }
+    /// Parameter range of the fitted line along axis: +-length / 2, or the projected extent when length <= 0.
+    fn fit_points_extent(
+        points: &[Point],
+        center: &Point,
+        axis: &Vector,
+        length: f64,
+    ) -> (f64, f64) {
+        if length > 0.0 {
+            return (-length / 2.0, length / 2.0);
         }
 
-        half
+        let mut t_min: f64 = 0.0;
+        let mut t_max: f64 = 0.0;
+
+        for p in points {
+            let t = (p - center).dot(axis);
+            t_min = t_min.min(t);
+            t_max = t_max.max(t);
+        }
+
+        if t_max - t_min < 1e-10 {
+            return (-0.5, 0.5);
+        }
+
+        (t_min, t_max)
     }
 
     /// Construct the least-squares line through points by power-iteration PCA; length <= 0 spans the projected extent.
@@ -196,9 +225,12 @@ impl Line {
         let length = length.unwrap_or(0.0);
         let center = Point::centroid(points);
         let axis = Self::fit_points_axis(points, &center);
-        let half = Self::fit_points_half(points, &center, &axis, length);
+        let extent = Self::fit_points_extent(points, &center, &axis, length);
 
-        Self::from_points(&(&center - &(&axis * half)), &(&center + &(&axis * half)))
+        Self::from_points(
+            &(&center + &(&axis * extent.0)),
+            &(&center + &(&axis * extent.1)),
+        )
     }
 
     /// Construct a named line from coordinates.

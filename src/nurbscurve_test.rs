@@ -1030,6 +1030,78 @@ pub fn run_nurbscurve_closest_point() -> TestResult {
     })
 }
 
+pub fn run_nurbscurve_length_repeated_knot() -> TestResult {
+    MINI_TEST!("Length Repeated Knot", {
+        use crate::NurbsCurve;
+        use crate::Point;
+
+        let points = vec![
+            Point::new(0.0, 0.0, 0.0),
+            Point::new(1.0, 2.0, 0.0),
+            Point::new(3.0, 2.0, 1.0),
+            Point::new(4.0, 0.0, 0.0),
+            Point::new(6.0, 1.0, 2.0),
+            Point::new(7.0, 3.0, 0.0),
+        ];
+
+        let mut curve = NurbsCurve::create(false, 3, &points);
+        let length = curve.length(None);
+        curve.insert_nurbsknot(1.5, 2);
+
+        MINI_CHECK!(curve.span_count() == 4);
+        MINI_CHECK!(TOLERANCE.is_close(curve.length(None), length));
+    })
+}
+
+pub fn run_nurbscurve_span_vector_empty() -> TestResult {
+    MINI_TEST!("Span Vector Empty", {
+        use crate::NurbsCurve;
+
+        let curve = NurbsCurve::default();
+
+        MINI_CHECK!(curve.get_span_vector().is_empty());
+    })
+}
+
+pub fn run_nurbscurve_periodic_too_few_points() -> TestResult {
+    MINI_TEST!("Periodic Too Few Points", {
+        use crate::NurbsCurve;
+        use crate::Point;
+
+        let mut curve = NurbsCurve::default();
+        let ok = curve.create_periodic_uniform(
+            3,
+            4,
+            &[Point::new(0.0, 0.0, 0.0), Point::new(1.0, 0.0, 0.0)],
+            1.0,
+        );
+
+        MINI_CHECK!(!ok);
+    })
+}
+
+pub fn run_nurbscurve_polyline_adaptive_closed() -> TestResult {
+    MINI_TEST!("Polyline Adaptive Closed", {
+        use crate::Primitives;
+
+        let circle = Primitives::circle(0.0, 0.0, 0.0, 2.0);
+        let polyline = circle.to_polyline_adaptive(0.1, 0.0, 0.0);
+
+        MINI_CHECK!(polyline.0.len() == 25);
+        MINI_CHECK!(TOLERANCE.is_point_close(&polyline.0[0], &polyline.0[polyline.0.len() - 1]));
+    })
+}
+
+pub fn run_nurbscurve_circle_length() -> TestResult {
+    MINI_TEST!("Circle Length", {
+        use crate::Primitives;
+
+        let circle = Primitives::circle(0.0, 0.0, 0.0, 2.0);
+
+        MINI_CHECK!((circle.length(None) - 4.0 * PI).abs() < 1e-9);
+    })
+}
+
 REGISTER_MINI_TEST!(
     "NurbsCurve",
     "Constructor",
@@ -1099,4 +1171,29 @@ REGISTER_MINI_TEST!(
     "NurbsCurve",
     "Closest Point",
     crate::nurbscurve_test::run_nurbscurve_closest_point
+);
+REGISTER_MINI_TEST!(
+    "NurbsCurve",
+    "Length Repeated Knot",
+    crate::nurbscurve_test::run_nurbscurve_length_repeated_knot
+);
+REGISTER_MINI_TEST!(
+    "NurbsCurve",
+    "Span Vector Empty",
+    crate::nurbscurve_test::run_nurbscurve_span_vector_empty
+);
+REGISTER_MINI_TEST!(
+    "NurbsCurve",
+    "Periodic Too Few Points",
+    crate::nurbscurve_test::run_nurbscurve_periodic_too_few_points
+);
+REGISTER_MINI_TEST!(
+    "NurbsCurve",
+    "Polyline Adaptive Closed",
+    crate::nurbscurve_test::run_nurbscurve_polyline_adaptive_closed
+);
+REGISTER_MINI_TEST!(
+    "NurbsCurve",
+    "Circle Length",
+    crate::nurbscurve_test::run_nurbscurve_circle_length
 );

@@ -211,6 +211,41 @@ pub fn run_aabb_from_geometry() -> TestResult {
     })
 }
 
+pub fn run_aabb_from_nurbscurve_tight() -> TestResult {
+    MINI_TEST!("From Nurbscurve Tight", {
+        use crate::NurbsCurve;
+        use crate::Point;
+        use crate::AABB;
+
+        let bulge = NurbsCurve::create(
+            false,
+            2,
+            &[
+                Point::new(0.0, 0.0, 0.0),
+                Point::new(1.0, 2.0, 0.0),
+                Point::new(2.0, 1.0, 0.0),
+            ],
+        );
+        let arch = NurbsCurve::create(
+            false,
+            2,
+            &[
+                Point::new(0.0, 0.0, 0.0),
+                Point::new(1.0, 2.0, 0.0),
+                Point::new(2.0, 0.0, 0.0),
+            ],
+        );
+        let hull = AABB::from_nurbscurve(&bulge, 0.0, false);
+        let tight = AABB::from_nurbscurve(&bulge, 0.0, true);
+        let boundary = AABB::from_nurbscurve(&arch, 0.0, true);
+
+        MINI_CHECK!(TOLERANCE.is_close(hull.max_point()[1], 2.0));
+        MINI_CHECK!(TOLERANCE.is_close(tight.max_point()[1], 4.0 / 3.0));
+        MINI_CHECK!(TOLERANCE.is_close(boundary.hy, 0.5));
+        MINI_CHECK!(TOLERANCE.is_close(boundary.cy, 0.5));
+    })
+}
+
 REGISTER_MINI_TEST!(
     "AABB",
     "Constructor",
@@ -222,4 +257,9 @@ REGISTER_MINI_TEST!(
     "AABB",
     "From Geometry",
     crate::aabb_test::run_aabb_from_geometry
+);
+REGISTER_MINI_TEST!(
+    "AABB",
+    "From Nurbscurve Tight",
+    crate::aabb_test::run_aabb_from_nurbscurve_tight
 );

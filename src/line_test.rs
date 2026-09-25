@@ -264,6 +264,22 @@ pub fn run_line_closest_point() -> TestResult {
     })
 }
 
+pub fn run_line_closest_point_unlimited() -> TestResult {
+    MINI_TEST!("Closest Point Unlimited", {
+        use crate::Line;
+        use crate::Point;
+
+        let line = Line::new(0.0, 0.0, 0.0, 10.0, 0.0, 0.0);
+        let before = line.closest_point(&Point::new(-5.0, 2.0, 0.0), false);
+        let after = line.closest_point(&Point::new(15.0, 3.0, 0.0), false);
+
+        MINI_CHECK!(TOLERANCE.is_close(before.0, -0.5));
+        MINI_CHECK!(TOLERANCE.is_point_close(&before.1, &Point::new(-5.0, 0.0, 0.0)));
+        MINI_CHECK!(TOLERANCE.is_close(after.0, 1.5));
+        MINI_CHECK!(TOLERANCE.is_point_close(&after.1, &Point::new(15.0, 0.0, 0.0)));
+    })
+}
+
 pub fn run_line_start_end_center() -> TestResult {
     MINI_TEST!("Start End Center", {
         use crate::Line;
@@ -305,6 +321,41 @@ pub fn run_line_fit_points() -> TestResult {
         );
 
         MINI_CHECK!(l_vertical.to_direction()[1].abs() > 0.99);
+
+        let l_skew = Line::fit_points(
+            &[
+                Point::new(3.0, 0.0, 0.0),
+                Point::new(-3.0, 0.0, 0.0),
+                Point::new(0.0, 2.4, 2.4),
+                Point::new(0.0, -2.4, -2.4),
+            ],
+            None,
+        );
+        let skew = l_skew.to_direction();
+
+        MINI_CHECK!(TOLERANCE.is_close(skew[0], 0.0));
+        MINI_CHECK!(TOLERANCE.is_close(skew[1].abs(), 0.5_f64.sqrt()));
+        MINI_CHECK!(TOLERANCE.is_close(skew[1], skew[2]));
+    })
+}
+
+pub fn run_line_fit_points_uneven() -> TestResult {
+    MINI_TEST!("Fit Points Uneven", {
+        use crate::Line;
+        use crate::Point;
+
+        let line = Line::fit_points(
+            &[
+                Point::new(0.0, 0.0, 0.0),
+                Point::new(0.0, 1.0, 0.0),
+                Point::new(0.0, 9.0, 0.0),
+            ],
+            None,
+        );
+
+        MINI_CHECK!(TOLERANCE.is_close(line.length(), 9.0));
+        MINI_CHECK!(TOLERANCE.is_point_close(&line.start(), &Point::new(0.0, 0.0, 0.0)));
+        MINI_CHECK!(TOLERANCE.is_point_close(&line.end(), &Point::new(0.0, 9.0, 0.0)));
     })
 }
 
@@ -370,6 +421,28 @@ pub fn run_line_extend() -> TestResult {
     })
 }
 
+pub fn run_line_extend_keeps_properties() -> TestResult {
+    MINI_TEST!("Extend Keeps Properties", {
+        use crate::Color;
+        use crate::Line;
+        use crate::Point;
+
+        let mut line = Line::from_points(&Point::new(0.0, 0.0, 0.0), &Point::new(10.0, 0.0, 0.0));
+        line.name = "beam".to_string();
+        line.width = 3.0;
+        line.dash = vec![2.0, 1.0];
+        line.linecolor = Color::red();
+        let guid = line.guid().to_string();
+        line.extend(1.0, 2.0);
+
+        MINI_CHECK!(line.name == "beam");
+        MINI_CHECK!(line.width == 3.0);
+        MINI_CHECK!(line.dash == vec![2.0, 1.0]);
+        MINI_CHECK!(line.linecolor == Color::red());
+        MINI_CHECK!(line.guid() == guid);
+    })
+}
+
 REGISTER_MINI_TEST!(
     "Line",
     "Constructor",
@@ -405,10 +478,20 @@ REGISTER_MINI_TEST!(
 );
 REGISTER_MINI_TEST!(
     "Line",
+    "Closest Point Unlimited",
+    crate::line_test::run_line_closest_point_unlimited
+);
+REGISTER_MINI_TEST!(
+    "Line",
     "Start End Center",
     crate::line_test::run_line_start_end_center
 );
 REGISTER_MINI_TEST!("Line", "Fit Points", crate::line_test::run_line_fit_points);
+REGISTER_MINI_TEST!(
+    "Line",
+    "Fit Points Uneven",
+    crate::line_test::run_line_fit_points_uneven
+);
 REGISTER_MINI_TEST!("Line", "Subdivide", crate::line_test::run_line_subdivide);
 REGISTER_MINI_TEST!("Line", "Overlap", crate::line_test::run_line_overlap);
 REGISTER_MINI_TEST!(
@@ -417,3 +500,8 @@ REGISTER_MINI_TEST!(
     crate::line_test::run_line_overlap_average
 );
 REGISTER_MINI_TEST!("Line", "Extend", crate::line_test::run_line_extend);
+REGISTER_MINI_TEST!(
+    "Line",
+    "Extend Keeps Properties",
+    crate::line_test::run_line_extend_keeps_properties
+);
