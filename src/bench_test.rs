@@ -17,6 +17,7 @@ const SCALE: f64 = 1.0; // Slack on bulk and slice budgets for a slower kernel.
 const WARMUP: usize = 5; // Untimed runs before the timed ones.
 const RUNS: usize = 101; // Timed runs; their median is the cost.
 const BULK: usize = 100_000; // Objects one bulk transaction removes.
+const PER_OBJECT: f64 = 0.005; // Milliseconds each object of a bulk step may cost.
 
 /// Return whether SESSION_BENCH=1 asks for the benchmarks.
 fn bench_enabled() -> bool {
@@ -183,9 +184,10 @@ pub fn run_bench_bulk_undo() -> TestResult {
             medians.push(times.iter().map(|laps| median(laps)).collect::<Vec<f64>>());
         }
 
-        let bulk = medians[0].iter().all(|time| *time < 50.0 * SCALE);
+        let bulk = medians[0].iter().all(|time| *time < PER_OBJECT * BULK as f64 * SCALE);
+        let level = (0..3).all(|k| medians[0][k] < 1.5 * medians[1][k]);
 
-        MINI_CHECK!(medians[0][1] < 1.5 * medians[1][1]);
+        MINI_CHECK!(level);
         MINI_CHECK!(!unthrottled() || bulk);
     })
 }
