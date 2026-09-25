@@ -1,7 +1,9 @@
 use crate::mini_test::TestResult;
 use crate::tolerance::PI;
 use crate::tolerance::TOLERANCE;
-use crate::{MINI_CHECK, MINI_TEST, REGISTER_MINI_TEST};
+use crate::MINI_CHECK;
+use crate::MINI_TEST;
+use crate::REGISTER_MINI_TEST;
 
 // ═══════════════════════════════════════════════════════════════════════════
 // Element
@@ -604,8 +606,8 @@ pub fn run_element_json_roundtrip() -> TestResult {
         let e = Element::from_mesh(m, "json_test");
 
         let fname = "serialization/test_element.json";
-        e.file_json_dump(fname);
-        let loaded = Element::file_json_load(fname);
+        e.file_json_dump(fname).unwrap();
+        let loaded = Element::file_json_load(fname).unwrap();
 
         MINI_CHECK!(loaded.name == "json_test");
         MINI_CHECK!(matches!(loaded.geometry(), ElementGeometry::Mesh(_)));
@@ -626,7 +628,7 @@ pub fn run_element_protobuf_roundtrip() -> TestResult {
         let e = Element::from_brep(b, "proto_test");
 
         let path = "serialization/test_element.bin";
-        e.pb_dump(path);
+        e.pb_dump(path).unwrap();
         let loaded = Element::pb_load(path).unwrap();
 
         MINI_CHECK!(loaded.name == "proto_test");
@@ -1023,8 +1025,8 @@ pub fn run_element_feature_json_roundtrip() -> TestResult {
         let feature_guid = f.guid().to_string();
 
         let fname = "serialization/test_element_feature.json";
-        f.file_json_dump(fname);
-        let loaded = ElementFeature::file_json_load(fname);
+        f.file_json_dump(fname).unwrap();
+        let loaded = ElementFeature::file_json_load(fname).unwrap();
 
         MINI_CHECK!(loaded == f);
         MINI_CHECK!(loaded.outlines.len() == 1);
@@ -1055,7 +1057,7 @@ pub fn run_element_feature_protobuf_roundtrip() -> TestResult {
         let feature_guid = f.guid().to_string();
 
         let path = "serialization/test_element_feature.bin";
-        f.pb_dump(path);
+        f.pb_dump(path).unwrap();
         let loaded = ElementFeature::pb_load(path).unwrap();
 
         MINI_CHECK!(loaded == f);

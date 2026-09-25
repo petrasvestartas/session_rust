@@ -1,5 +1,7 @@
 use crate::mini_test::TestResult;
-use crate::{MINI_CHECK, MINI_TEST, REGISTER_MINI_TEST};
+use crate::MINI_CHECK;
+use crate::MINI_TEST;
+use crate::REGISTER_MINI_TEST;
 
 // ═══════════════════════════════════════════════════════════════════════════
 // Vertex
@@ -180,9 +182,9 @@ pub fn run_graph_protobuf_roundtrip() -> TestResult {
 
         let guid = original.guid().to_string();
         let filename = "serialization/test_graph.bin";
-        original.pb_dump(filename);
+        original.pb_dump(filename).unwrap();
 
-        let loaded = Graph::pb_load(filename);
+        let loaded = Graph::pb_load(filename).unwrap();
         let converted = Graph::from_proto(original.to_proto());
 
         MINI_CHECK!(loaded.number_of_vertices() == 2);

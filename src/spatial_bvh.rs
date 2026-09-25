@@ -107,9 +107,9 @@ impl SpatialBVH {
         self.guid.get_or_init(|| uuid::Uuid::new_v4().to_string())
     }
 
-    /// Set the guid if it has not already been created.
-    pub fn set_guid(&self, guid: String) {
-        let _ = self.guid.set(guid);
+    /// Set the guid.
+    pub fn set_guid(&mut self, guid: String) {
+        self.guid = std::sync::OnceLock::from(guid);
     }
 
     /// Return whether the tree has no nodes.

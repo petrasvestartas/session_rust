@@ -508,8 +508,8 @@ pub fn run_vector_protobuf_roundtrip() -> TestResult {
         v.name = "test_vector".to_string();
 
         let filename = "serialization/test_vector.bin";
-        v.pb_dump(filename);
-        let loaded = Vector::pb_load(filename);
+        v.pb_dump(filename).unwrap();
+        let loaded = Vector::pb_load(filename).unwrap();
 
         let data = v.pb_dumps();
         let parsed = Vector::pb_loads(&data).unwrap();

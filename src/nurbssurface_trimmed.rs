@@ -15,7 +15,8 @@ use crate::remesh_nurbssurface_grid::RemeshNurbsSurfaceGrid;
 use crate::tolerance::PI;
 use crate::vector::Vector;
 use crate::xform::Xform;
-use serde::{Deserialize, Serialize};
+use serde::Deserialize;
+use serde::Serialize;
 use std::collections::BTreeMap;
 use std::collections::HashMap;
 use std::collections::HashSet;
@@ -3108,9 +3109,9 @@ impl NurbsSurfaceTrimmed {
         self.guid.get_or_init(|| uuid::Uuid::new_v4().to_string())
     }
 
-    /// Set the guid if it has not already been created.
-    pub fn set_guid(&self, g: String) {
-        let _ = self.guid.set(g);
+    /// Set the guid.
+    pub fn set_guid(&mut self, guid: String) {
+        self.guid = std::sync::OnceLock::from(guid);
     }
 
     /// Return the underlying surface.
@@ -3503,15 +3504,15 @@ impl NurbsSurfaceTrimmed {
     }
 
     /// Write to a protobuf file.
-    pub fn pb_dump(&self, filepath: &str) {
-        let _ = std::fs::write(filepath, self.pb_dumps());
+    pub fn pb_dump(&self, filepath: &str) -> Result<(), Box<dyn std::error::Error>> {
+        std::fs::write(filepath, self.pb_dumps())?;
+
+        Ok(())
     }
 
     /// Read from a protobuf file.
-    pub fn pb_load(filepath: &str) -> Self {
-        let data = std::fs::read(filepath).unwrap_or_default();
-
-        Self::pb_loads(&data).unwrap_or_default()
+    pub fn pb_load(filepath: &str) -> Result<Self, Box<dyn std::error::Error>> {
+        Self::pb_loads(&std::fs::read(filepath)?)
     }
 
     // ═══════════════════════════════════════════════════════════════════════════

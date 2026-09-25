@@ -2,10 +2,13 @@
 /// Run with: cargo test picking
 #[cfg(test)]
 mod picking_tests {
+    use crate::Color;
+    use crate::Mesh;
+    use crate::Point;
     use crate::Session;
     use crate::Tolerance;
+    use crate::Vector;
     use crate::Xform;
-    use crate::{Color, Mesh, Point, Vector};
 
     const MM_TO_UNIT: f64 = 0.001;
 

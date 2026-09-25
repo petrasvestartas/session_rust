@@ -78,9 +78,9 @@ pub fn run_color_protobuf_roundtrip() -> TestResult {
 
         let guid = c.guid().to_string();
         let filename = "serialization/test_color.bin";
-        c.pb_dump(filename);
+        c.pb_dump(filename).unwrap();
 
-        let loaded = Color::pb_load(filename);
+        let loaded = Color::pb_load(filename).unwrap();
         let parsed = Color::pb_loads(&c.pb_dumps()).unwrap();
         let converted = Color::from_proto(c.to_proto());
 
@@ -193,16 +193,12 @@ pub fn run_color_serialization_errors() -> TestResult {
         let malformed_json = Color::jsonload("{}").is_err();
         let malformed_pb = Color::pb_loads(&[0xff]).is_err();
         let json_write_failed = color.file_json_dump("").is_err();
+        let pb_write_failed = color.pb_dump("").is_err();
 
         MINI_CHECK!(malformed_json);
         MINI_CHECK!(malformed_pb);
         MINI_CHECK!(json_write_failed);
-
-        #[cfg(panic = "unwind")]
-        {
-            let pb_write_failed = std::panic::catch_unwind(|| color.pb_dump("")).is_err();
-            MINI_CHECK!(pb_write_failed);
-        }
+        MINI_CHECK!(pb_write_failed);
     })
 }
 

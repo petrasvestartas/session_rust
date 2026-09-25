@@ -151,7 +151,7 @@ pub fn run_tolerance_json_roundtrip() -> TestResult {
         tolerance.file_json_dump(filename).unwrap();
 
         let loaded = Tolerance::file_json_load(filename).unwrap();
-        let parsed = Tolerance::file_json_loads(&tolerance.file_json_dumps().unwrap()).unwrap();
+        let parsed = Tolerance::file_json_loads(&tolerance.file_json_dumps());
 
         MINI_CHECK!(loaded.unit() == "MM");
         MINI_CHECK!(loaded.absolute() == 1e-8);

@@ -1,4 +1,6 @@
-use serde::{Deserialize, Deserializer, Serializer};
+use serde::Deserialize;
+use serde::Deserializer;
+use serde::Serializer;
 use std::sync::OnceLock;
 
 pub fn serialize<S>(guid: &OnceLock<String>, s: S) -> Result<S::Ok, S::Error>

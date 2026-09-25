@@ -1,9 +1,11 @@
 use crate::color::Color;
-use serde::{Deserialize, Serialize};
+use serde::Deserialize;
+use serde::Serialize;
 use std::cell::RefCell;
 use std::collections::VecDeque;
 use std::fmt;
-use std::rc::{Rc, Weak};
+use std::rc::Rc;
+use std::rc::Weak;
 
 // ═══════════════════════════════════════════════════════════════════════════
 // TreeNode
@@ -52,9 +54,9 @@ impl TreeNode {
         self.guid.get_or_init(|| uuid::Uuid::new_v4().to_string())
     }
 
-    /// Set the guid if it has not already been created.
-    pub fn set_guid(&self, guid: String) {
-        let _ = self.guid.set(guid);
+    /// Set the guid.
+    pub fn set_guid(&mut self, guid: String) {
+        self.guid = std::sync::OnceLock::from(guid);
     }
 
     /// Return whether this node has no parent.
@@ -279,9 +281,9 @@ impl Tree {
         self.guid.get_or_init(|| uuid::Uuid::new_v4().to_string())
     }
 
-    /// Set the guid if it has not already been created.
-    pub fn set_guid(&self, guid: String) {
-        let _ = self.guid.set(guid);
+    /// Set the guid.
+    pub fn set_guid(&mut self, guid: String) {
+        self.guid = std::sync::OnceLock::from(guid);
     }
 
     /// Return the root node, or None when empty.
@@ -516,15 +518,15 @@ impl Tree {
     }
 
     /// Write to a protobuf file.
-    pub fn pb_dump(&self, filepath: &str) {
-        std::fs::write(filepath, self.pb_dumps()).expect("Failed to write protobuf file");
+    pub fn pb_dump(&self, filepath: &str) -> Result<(), Box<dyn std::error::Error>> {
+        std::fs::write(filepath, self.pb_dumps())?;
+
+        Ok(())
     }
 
     /// Read from a protobuf file.
-    pub fn pb_load(filepath: &str) -> Self {
-        let data = std::fs::read(filepath).expect("Failed to read protobuf file");
-
-        Self::pb_loads(&data).expect("Failed to parse protobuf")
+    pub fn pb_load(filepath: &str) -> Result<Self, Box<dyn std::error::Error>> {
+        Self::pb_loads(&std::fs::read(filepath)?)
     }
 
     // ═══════════════════════════════════════════════════════════════════════════
@@ -603,7 +605,7 @@ fn clone_node(node: &TreeNode) -> Rc<RefCell<TreeNode>> {
     let copy = TreeNode::new(&node.name);
 
     if node.has_guid() {
-        copy.borrow().set_guid(node.guid().to_string());
+        copy.borrow_mut().set_guid(node.guid().to_string());
     }
 
     copy.borrow_mut().color = node.color.clone();
@@ -645,7 +647,7 @@ fn node_to_proto(node: &TreeNode) -> crate::proto::TreeNode {
 /// Convert a protobuf node and its subtree to a TreeNode.
 fn proto_to_node(proto: &crate::proto::TreeNode) -> Rc<RefCell<TreeNode>> {
     let node = TreeNode::new(&proto.name);
-    node.borrow().set_guid(proto.guid.clone());
+    node.borrow_mut().set_guid(proto.guid.clone());
 
     if let Some(color) = &proto.color {
         if color.a > 0.0 {
@@ -701,7 +703,7 @@ fn node_to_serde(node: &TreeNode) -> TreeNodeSerde {
 /// Convert a serde mirror and its subtree to a TreeNode.
 fn serde_to_node(data: TreeNodeSerde) -> Rc<RefCell<TreeNode>> {
     let node = TreeNode::new(&data.name);
-    node.borrow().set_guid(data.guid);
+    node.borrow_mut().set_guid(data.guid);
     node.borrow_mut().color = data.color;
 
     for child in data.children {

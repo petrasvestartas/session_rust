@@ -1,5 +1,7 @@
 use crate::mini_test::TestResult;
-use crate::{MINI_CHECK, MINI_TEST, REGISTER_MINI_TEST};
+use crate::MINI_CHECK;
+use crate::MINI_TEST;
+use crate::REGISTER_MINI_TEST;
 
 pub fn run_pointcloud_constructor() -> TestResult {
     MINI_TEST!("Constructor", {
@@ -517,9 +519,9 @@ pub fn run_pointcloud_protobuf_roundtrip() -> TestResult {
 
         let guid = pc.guid().to_string();
         let filename = "serialization/test_pointcloud.bin";
-        pc.pb_dump(filename);
+        pc.pb_dump(filename).unwrap();
 
-        let loaded = PointCloud::pb_load(filename);
+        let loaded = PointCloud::pb_load(filename).unwrap();
         let parsed = PointCloud::pb_loads(&pc.pb_dumps()).unwrap();
         let converted = PointCloud::from_proto(pc.to_proto());
 

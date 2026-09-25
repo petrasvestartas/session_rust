@@ -5,7 +5,9 @@
 )]
 use crate::mini_test::TestResult;
 use crate::tolerance::TOLERANCE;
-use crate::{MINI_CHECK, MINI_TEST, REGISTER_MINI_TEST};
+use crate::MINI_CHECK;
+use crate::MINI_TEST;
+use crate::REGISTER_MINI_TEST;
 
 pub fn run_nurbssurface_constructor() -> TestResult {
     MINI_TEST!("Constructor", {
@@ -1602,10 +1604,10 @@ pub fn run_nurbssurface_protobuf_roundtrip() -> TestResult {
         let filename = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
             .join("serialization")
             .join("test_nurbssurface.bin");
-        surface.pb_dump(filename.to_str().unwrap());
+        surface.pb_dump(filename.to_str().unwrap()).unwrap();
 
         let loaded_proto_string = NurbsSurface::pb_loads(&surface.pb_dumps()).unwrap();
-        let loaded = NurbsSurface::pb_load(filename.to_str().unwrap());
+        let loaded = NurbsSurface::pb_load(filename.to_str().unwrap()).unwrap();
         let converted = NurbsSurface::from_proto(surface.to_proto()).unwrap();
 
         MINI_CHECK!(loaded_proto_string == surface);

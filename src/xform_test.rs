@@ -817,9 +817,9 @@ pub fn run_xform_protobuf_roundtrip() -> TestResult {
 
         let guid = xform.guid().to_string();
         let filename = "serialization/test_xform.bin";
-        xform.pb_dump(filename);
+        xform.pb_dump(filename).unwrap();
 
-        let loaded = Xform::pb_load(filename);
+        let loaded = Xform::pb_load(filename).unwrap();
         let converted = Xform::from_proto(xform.to_proto());
 
         MINI_CHECK!(loaded.name == "test_xform_proto");

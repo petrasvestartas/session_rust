@@ -534,8 +534,8 @@ pub fn run_encoders_decode_tolerance() -> TestResult {
 
         let mut tolerance = Tolerance::new("MM");
         tolerance.set_absolute(0.01);
-        let json_str = tolerance.file_json_dumps().unwrap();
-        let loaded = Tolerance::file_json_loads(&json_str).unwrap();
+        let json_str = tolerance.file_json_dumps();
+        let loaded = Tolerance::file_json_loads(&json_str);
 
         MINI_CHECK!(loaded.unit() == "MM");
         MINI_CHECK!(TOLERANCE.is_close(loaded.absolute(), 0.01));

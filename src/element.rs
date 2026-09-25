@@ -13,7 +13,6 @@ use std::cell::Cell;
 use std::cell::OnceCell;
 use std::collections::BTreeMap;
 use std::fmt;
-use std::fs;
 use std::sync::Mutex;
 use std::sync::OnceLock;
 
@@ -105,9 +104,9 @@ impl ElementFeature {
         self.guid.get_or_init(|| uuid::Uuid::new_v4().to_string())
     }
 
-    /// Set the guid if it has not already been created.
-    pub fn set_guid(&self, g: String) {
-        let _ = self.guid.set(g);
+    /// Set the guid.
+    pub fn set_guid(&mut self, guid: String) {
+        self.guid = OnceLock::from(guid);
     }
 
     /// Clear the guid so a fresh one mints lazily on the next read.
@@ -173,24 +172,26 @@ impl ElementFeature {
     }
 
     /// Deserialize from a JSON string.
-    pub fn file_json_loads(s: &str) -> Self {
-        let data: serde_json::Value = serde_json::from_str(s).unwrap_or_default();
+    pub fn file_json_loads(json_string: &str) -> Self {
+        let data: serde_json::Value = serde_json::from_str(json_string).unwrap_or_default();
 
         Self::jsonload(&data)
     }
 
     /// Write to a JSON file.
-    pub fn file_json_dump(&self, filepath: &str) {
+    pub fn file_json_dump(&self, filepath: &str) -> Result<(), Box<dyn std::error::Error>> {
         let sorted = crate::file_encoders::sort_json_keys(self.jsondump());
-        let json = serde_json::to_string_pretty(&sorted).unwrap_or_default();
-        fs::write(filepath, json).expect("Failed to write JSON file");
+
+        std::fs::write(filepath, serde_json::to_string_pretty(&sorted)?)?;
+
+        Ok(())
     }
 
     /// Read from a JSON file.
-    pub fn file_json_load(filepath: &str) -> Self {
-        let json = fs::read_to_string(filepath).expect("Failed to read JSON file");
+    pub fn file_json_load(filepath: &str) -> Result<Self, Box<dyn std::error::Error>> {
+        let data: serde_json::Value = serde_json::from_str(&std::fs::read_to_string(filepath)?)?;
 
-        Self::file_json_loads(&json)
+        Ok(Self::jsonload(&data))
     }
 
     // ═══════════════════════════════════════════════════════════════════════════
@@ -249,15 +250,15 @@ impl ElementFeature {
     }
 
     /// Write to a protobuf file.
-    pub fn pb_dump(&self, filepath: &str) {
-        fs::write(filepath, self.pb_dumps()).expect("Failed to write protobuf file");
+    pub fn pb_dump(&self, filepath: &str) -> Result<(), Box<dyn std::error::Error>> {
+        std::fs::write(filepath, self.pb_dumps())?;
+
+        Ok(())
     }
 
     /// Read from a protobuf file.
     pub fn pb_load(filepath: &str) -> Result<Self, Box<dyn std::error::Error>> {
-        let data = fs::read(filepath)?;
-
-        Self::pb_loads(&data)
+        Self::pb_loads(&std::fs::read(filepath)?)
     }
 
     // ═══════════════════════════════════════════════════════════════════════════
@@ -406,9 +407,9 @@ impl Element {
         self.guid.get_or_init(|| uuid::Uuid::new_v4().to_string())
     }
 
-    /// Set the guid if it has not already been created.
-    pub fn set_guid(&self, g: String) {
-        let _ = self.guid.set(g);
+    /// Set the guid.
+    pub fn set_guid(&mut self, guid: String) {
+        self.guid = OnceLock::from(guid);
     }
 
     /// Clear the guid so a fresh one mints lazily on the next read.
@@ -943,24 +944,26 @@ impl Element {
     }
 
     /// Deserialize from a JSON string.
-    pub fn file_json_loads(s: &str) -> Self {
-        let data: serde_json::Value = serde_json::from_str(s).unwrap_or_default();
+    pub fn file_json_loads(json_string: &str) -> Self {
+        let data: serde_json::Value = serde_json::from_str(json_string).unwrap_or_default();
 
         Self::jsonload(&data)
     }
 
     /// Write to a JSON file.
-    pub fn file_json_dump(&self, filepath: &str) {
+    pub fn file_json_dump(&self, filepath: &str) -> Result<(), Box<dyn std::error::Error>> {
         let sorted = crate::file_encoders::sort_json_keys(self.jsondump());
-        let json = serde_json::to_string_pretty(&sorted).unwrap_or_default();
-        fs::write(filepath, json).expect("Failed to write JSON file");
+
+        std::fs::write(filepath, serde_json::to_string_pretty(&sorted)?)?;
+
+        Ok(())
     }
 
     /// Read from a JSON file.
-    pub fn file_json_load(filepath: &str) -> Self {
-        let json = fs::read_to_string(filepath).expect("Failed to read JSON file");
+    pub fn file_json_load(filepath: &str) -> Result<Self, Box<dyn std::error::Error>> {
+        let data: serde_json::Value = serde_json::from_str(&std::fs::read_to_string(filepath)?)?;
 
-        Self::file_json_loads(&json)
+        Ok(Self::jsonload(&data))
     }
 
     // ═══════════════════════════════════════════════════════════════════════════
@@ -1070,15 +1073,15 @@ impl Element {
     }
 
     /// Write to a protobuf file.
-    pub fn pb_dump(&self, filepath: &str) {
-        fs::write(filepath, self.pb_dumps()).expect("Failed to write protobuf file");
+    pub fn pb_dump(&self, filepath: &str) -> Result<(), Box<dyn std::error::Error>> {
+        std::fs::write(filepath, self.pb_dumps())?;
+
+        Ok(())
     }
 
     /// Read from a protobuf file.
     pub fn pb_load(filepath: &str) -> Result<Self, Box<dyn std::error::Error>> {
-        let data = fs::read(filepath)?;
-
-        Self::pb_loads(&data)
+        Self::pb_loads(&std::fs::read(filepath)?)
     }
 
     // ═══════════════════════════════════════════════════════════════════════════

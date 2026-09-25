@@ -5,7 +5,9 @@
 )]
 use crate::mini_test::TestResult;
 use crate::tolerance::TOLERANCE;
-use crate::{MINI_CHECK, MINI_TEST, REGISTER_MINI_TEST};
+use crate::MINI_CHECK;
+use crate::MINI_TEST;
+use crate::REGISTER_MINI_TEST;
 
 pub fn run_nurbssurface_trimmed_singular_planar_normal() -> TestResult {
     MINI_TEST!("Singular Planar Normal", {
@@ -865,8 +867,8 @@ pub fn run_nurbssurface_trimmed_protobuf_roundtrip() -> TestResult {
         let filename = src_dir
             .join("serialization")
             .join("test_nurbssurface_trimmed.bin");
-        ts.pb_dump(filename.to_str().unwrap());
-        let loaded = NurbsSurfaceTrimmed::pb_load(filename.to_str().unwrap());
+        ts.pb_dump(filename.to_str().unwrap()).unwrap();
+        let loaded = NurbsSurfaceTrimmed::pb_load(filename.to_str().unwrap()).unwrap();
 
         MINI_CHECK!(loaded_proto_string == ts);
         MINI_CHECK!(loaded == ts);

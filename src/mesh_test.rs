@@ -1,6 +1,8 @@
 use crate::mini_test::TestResult;
 use crate::tolerance::TOLERANCE;
-use crate::{MINI_CHECK, MINI_TEST, REGISTER_MINI_TEST};
+use crate::MINI_CHECK;
+use crate::MINI_TEST;
+use crate::REGISTER_MINI_TEST;
 
 pub fn run_mesh_constructor() -> TestResult {
     MINI_TEST!("Constructor", {
@@ -1877,8 +1879,8 @@ pub fn run_mesh_protobuf_roundtrip() -> TestResult {
         let filename = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
             .join("serialization")
             .join("test_mesh.bin");
-        mesh.pb_dump(filename.to_str().unwrap());
-        let loaded_file = Mesh::pb_load(filename.to_str().unwrap());
+        mesh.pb_dump(filename.to_str().unwrap()).unwrap();
+        let loaded_file = Mesh::pb_load(filename.to_str().unwrap()).unwrap();
         let converted = Mesh::from_proto(mesh.to_proto());
 
         MINI_CHECK!(loaded_string == mesh);

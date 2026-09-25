@@ -2,9 +2,22 @@ use crate::polyline::Polyline;
 use crate::remesh_cdt;
 use crate::spatial_aabbtree::SpatialAABBTree;
 use crate::tolerance::PI;
-use crate::{Color, Line, Plane, Point, SpatialBVH, Tolerance, Vector, Xform, AABB, OBB};
-use serde::{Deserialize, Serialize};
-use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
+use crate::Color;
+use crate::Line;
+use crate::Plane;
+use crate::Point;
+use crate::SpatialBVH;
+use crate::Tolerance;
+use crate::Vector;
+use crate::Xform;
+use crate::AABB;
+use crate::OBB;
+use serde::Deserialize;
+use serde::Serialize;
+use std::collections::BTreeMap;
+use std::collections::BTreeSet;
+use std::collections::HashMap;
+use std::collections::HashSet;
 
 /// Predicate over a key and its merged attributes.
 pub type KeyPredicate<'a, K> = &'a dyn Fn(K, &HashMap<String, f64>) -> bool;
@@ -3187,9 +3200,9 @@ impl Mesh {
         self.guid.get_or_init(|| uuid::Uuid::new_v4().to_string())
     }
 
-    /// Set the guid if it has not already been created.
-    pub fn set_guid(&self, g: String) {
-        let _ = self.guid.set(g);
+    /// Set the guid.
+    pub fn set_guid(&mut self, guid: String) {
+        self.guid = std::sync::OnceLock::from(guid);
     }
 
     /// Clear the guid so a fresh one mints lazily on the next read.
@@ -5950,20 +5963,22 @@ impl Mesh {
     }
 
     /// Write to a JSON file.
-    pub fn file_json_dump(&self, filename: &str) -> std::io::Result<()> {
+    pub fn file_json_dump(&self, filepath: &str) -> Result<(), Box<dyn std::error::Error>> {
         let sorted = crate::file_encoders::sort_json_keys(self.jsondump());
 
-        std::fs::write(filename, serde_json::to_string_pretty(&sorted)?)
+        std::fs::write(filepath, serde_json::to_string_pretty(&sorted)?)?;
+
+        Ok(())
     }
 
     /// Read from a JSON file.
-    pub fn file_json_load(filename: &str) -> std::io::Result<Self> {
-        let content = std::fs::read_to_string(filename)?;
-        let data: serde_json::Value = serde_json::from_str(&content)?;
+    pub fn file_json_load(filepath: &str) -> Result<Self, Box<dyn std::error::Error>> {
+        let data: serde_json::Value = serde_json::from_str(&std::fs::read_to_string(filepath)?)?;
 
-        Self::jsonload(&data).ok_or_else(|| {
-            std::io::Error::new(std::io::ErrorKind::InvalidData, "Invalid mesh data")
-        })
+        match Self::jsonload(&data) {
+            Some(mesh) => Ok(mesh),
+            None => Err("Invalid mesh data".into()),
+        }
     }
 
     // ═══════════════════════════════════════════════════════════════════════════
@@ -6271,16 +6286,15 @@ impl Mesh {
     }
 
     /// Write to a protobuf file.
-    pub fn pb_dump(&self, filepath: &str) {
-        let data = self.pb_dumps();
-        std::fs::write(filepath, data).expect("Failed to write protobuf file");
+    pub fn pb_dump(&self, filepath: &str) -> Result<(), Box<dyn std::error::Error>> {
+        std::fs::write(filepath, self.pb_dumps())?;
+
+        Ok(())
     }
 
     /// Read from a protobuf file.
-    pub fn pb_load(filepath: &str) -> Self {
-        let data = std::fs::read(filepath).expect("Failed to read protobuf file");
-
-        Self::pb_loads(&data).expect("Failed to parse protobuf")
+    pub fn pb_load(filepath: &str) -> Result<Self, Box<dyn std::error::Error>> {
+        Self::pb_loads(&std::fs::read(filepath)?)
     }
 
     // ═══════════════════════════════════════════════════════════════════════════

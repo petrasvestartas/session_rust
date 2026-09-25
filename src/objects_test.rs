@@ -95,8 +95,8 @@ pub fn run_objects_protobuf_roundtrip() -> TestResult {
         original.instances.push(Rc::new(instance));
 
         let filename = "serialization/test_objects.bin";
-        original.pb_dump(filename);
-        let loaded = Objects::pb_load(filename);
+        original.pb_dump(filename).unwrap();
+        let loaded = Objects::pb_load(filename).unwrap();
         let parsed = Objects::pb_loads(&original.pb_dumps()).unwrap();
 
         MINI_CHECK!(parsed.points.len() == 2);
@@ -220,8 +220,8 @@ pub fn run_objects_component_protobuf_roundtrip() -> TestResult {
         original.components.push(component);
 
         let filename = "serialization/test_objects_component.bin";
-        original.pb_dump(filename);
-        let loaded = Objects::pb_load(filename);
+        original.pb_dump(filename).unwrap();
+        let loaded = Objects::pb_load(filename).unwrap();
 
         MINI_CHECK!(loaded.components.len() == 1);
         MINI_CHECK!(loaded.components[0].type_name == "FloorBuilder");

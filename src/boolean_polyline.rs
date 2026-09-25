@@ -2841,85 +2841,6 @@ fn v_extract(sc: &mut VattiScratch, inv_scale: f64) -> Vec<Polyline> {
     out
 }
 
-// ═══════════════════════════════════════════════════════════════════════════
-// Open subject against closed clip
-// ═══════════════════════════════════════════════════════════════════════════
-/// Even-odd ray cast of (px, py) against the first nc points of cc.
-fn v_point_in_poly(cc: &[f64], nc: usize, px: f64, py: f64) -> bool {
-    let mut inside = false;
-    let mut j = nc - 1;
-
-    for i in 0..nc {
-        let xi = cc[i * 3];
-        let yi = cc[i * 3 + 1];
-        let xj = cc[j * 3];
-        let yj = cc[j * 3 + 1];
-        j = i;
-
-        if (yi > py) == (yj > py) {
-            continue;
-        }
-
-        let xint = xj + (py - yj) * (xi - xj) / (yi - yj);
-
-        if px < xint {
-            inside = !inside;
-        }
-    }
-
-    inside
-}
-
-/// Sorted parameters in (0, 1] where segment (a, b) crosses an edge of the clip.
-fn v_crossings(cc: &[f64], nc: usize, ax: f64, ay: f64, dx: f64, dy: f64) -> Vec<f64> {
-    let mut ts: Vec<f64> = Vec::new();
-    let mut j = nc - 1;
-
-    for i in 0..nc {
-        let ex = cc[i * 3] - cc[j * 3];
-        let ey = cc[i * 3 + 1] - cc[j * 3 + 1];
-        let rx = cc[j * 3] - ax;
-        let ry = cc[j * 3 + 1] - ay;
-        j = i;
-        let denom = dy * ex - dx * ey;
-
-        if denom.abs() < 1e-18 {
-            continue;
-        }
-
-        let t = (ry * ex - rx * ey) / denom;
-        let u = (ry * dx - rx * dy) / denom;
-
-        if t > 1e-12 && t <= 1.0 + 1e-12 && (-1e-9..=1.0 + 1e-9).contains(&u) {
-            ts.push(t.clamp(0.0, 1.0));
-        }
-    }
-
-    ts.sort_by(|a, b| a.total_cmp(b));
-
-    ts
-}
-
-fn v_push_xy(cur: &mut Vec<f64>, x: f64, y: f64) {
-    let n = cur.len();
-
-    if n >= 3 && (cur[n - 3] - x).abs() < 1e-9 && (cur[n - 2] - y).abs() < 1e-9 {
-        return;
-    }
-
-    cur.push(x);
-    cur.push(y);
-    cur.push(0.0);
-}
-
-fn v_flush(cur: &mut Vec<f64>, result: &mut Vec<Polyline>) {
-    if cur.len() >= 6 {
-        result.push(Polyline::from_coords(cur.clone()));
-    }
-
-    cur.clear();
-}
-
 /// Vatti boolean operations on closed planar polylines.
 pub struct BooleanPolyline;
 
@@ -3126,4 +3047,80 @@ impl BooleanPolyline {
 
         result
     }
+}
+
+/// Even-odd ray cast of (px, py) against the first nc points of cc.
+fn v_point_in_poly(cc: &[f64], nc: usize, px: f64, py: f64) -> bool {
+    let mut inside = false;
+    let mut j = nc - 1;
+
+    for i in 0..nc {
+        let xi = cc[i * 3];
+        let yi = cc[i * 3 + 1];
+        let xj = cc[j * 3];
+        let yj = cc[j * 3 + 1];
+        j = i;
+
+        if (yi > py) == (yj > py) {
+            continue;
+        }
+
+        let xint = xj + (py - yj) * (xi - xj) / (yi - yj);
+
+        if px < xint {
+            inside = !inside;
+        }
+    }
+
+    inside
+}
+
+/// Sorted parameters in (0, 1] where segment (a, b) crosses an edge of the clip.
+fn v_crossings(cc: &[f64], nc: usize, ax: f64, ay: f64, dx: f64, dy: f64) -> Vec<f64> {
+    let mut ts: Vec<f64> = Vec::new();
+    let mut j = nc - 1;
+
+    for i in 0..nc {
+        let ex = cc[i * 3] - cc[j * 3];
+        let ey = cc[i * 3 + 1] - cc[j * 3 + 1];
+        let rx = cc[j * 3] - ax;
+        let ry = cc[j * 3 + 1] - ay;
+        j = i;
+        let denom = dy * ex - dx * ey;
+
+        if denom.abs() < 1e-18 {
+            continue;
+        }
+
+        let t = (ry * ex - rx * ey) / denom;
+        let u = (ry * dx - rx * dy) / denom;
+
+        if t > 1e-12 && t <= 1.0 + 1e-12 && (-1e-9..=1.0 + 1e-9).contains(&u) {
+            ts.push(t.clamp(0.0, 1.0));
+        }
+    }
+
+    ts.sort_by(|a, b| a.total_cmp(b));
+
+    ts
+}
+
+fn v_push_xy(cur: &mut Vec<f64>, x: f64, y: f64) {
+    let n = cur.len();
+
+    if n >= 3 && (cur[n - 3] - x).abs() < 1e-9 && (cur[n - 2] - y).abs() < 1e-9 {
+        return;
+    }
+
+    cur.push(x);
+    cur.push(y);
+    cur.push(0.0);
+}
+
+fn v_flush(cur: &mut Vec<f64>, result: &mut Vec<Polyline>) {
+    if cur.len() >= 6 {
+        result.push(Polyline::from_coords(cur.clone()));
+    }
+
+    cur.clear();
 }

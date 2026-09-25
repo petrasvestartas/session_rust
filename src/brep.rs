@@ -9,11 +9,15 @@ use crate::point::Point;
 use crate::polyline::Polyline;
 use crate::primitives::Primitives;
 use crate::remesh_nurbssurface_grid::RemeshNurbsSurfaceGrid;
-use crate::tolerance::{Tolerance, PI};
+use crate::tolerance::Tolerance;
+use crate::tolerance::PI;
 use crate::vector::Vector;
 use crate::xform::Xform;
 use serde::ser::SerializeMap;
-use serde::{Deserialize, Deserializer, Serialize, Serializer};
+use serde::Deserialize;
+use serde::Deserializer;
+use serde::Serialize;
+use serde::Serializer;
 use std::cmp::Ordering;
 use std::collections::BTreeMap;
 use std::collections::HashMap;
@@ -2564,9 +2568,9 @@ impl BRep {
         self.guid.get_or_init(|| uuid::Uuid::new_v4().to_string())
     }
 
-    /// Set the guid when none has been minted yet.
-    pub fn set_guid(&self, g: String) {
-        let _ = self.guid.set(g);
+    /// Set the guid.
+    pub fn set_guid(&mut self, guid: String) {
+        self.guid = std::sync::OnceLock::from(guid);
     }
 
     /// Clear the guid so a fresh one mints lazily on next read
@@ -3380,16 +3384,15 @@ impl BRep {
     }
 
     /// Write to a protobuf file.
-    pub fn pb_dump(&self, filepath: &str) {
-        let data = self.pb_dumps();
-        std::fs::write(filepath, data).expect("Failed to write protobuf file");
+    pub fn pb_dump(&self, filepath: &str) -> Result<(), Box<dyn std::error::Error>> {
+        std::fs::write(filepath, self.pb_dumps())?;
+
+        Ok(())
     }
 
     /// Read from a protobuf file.
-    pub fn pb_load(filepath: &str) -> Self {
-        let data = std::fs::read(filepath).expect("Failed to read protobuf file");
-
-        Self::pb_loads(&data).expect("Failed to parse protobuf")
+    pub fn pb_load(filepath: &str) -> Result<Self, Box<dyn std::error::Error>> {
+        Self::pb_loads(&std::fs::read(filepath)?)
     }
 
     // ═══════════════════════════════════════════════════════════════════════════

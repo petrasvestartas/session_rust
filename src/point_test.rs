@@ -49,6 +49,10 @@ pub fn run_point_constructor() -> TestResult {
         let psum = Point::sum(&p1, &p2);
         let pdif = &p2 - &p1;
 
+        let mut pguid = Point::new(1.0, 2.0, 3.0);
+        let minted = pguid.guid().to_string();
+        pguid.set_guid("custom_guid".to_string());
+
         MINI_CHECK!(p.name == "my_point");
         MINI_CHECK!(p[0] == 10.0 && p[1] == 20.0 && p[2] == 30.0);
         MINI_CHECK!(p.width == 1.0);
@@ -70,6 +74,7 @@ pub fn run_point_constructor() -> TestResult {
         MINI_CHECK!(result_diff[0] == 9.0 && result_diff[1] == 18.0 && result_diff[2] == 27.0);
         MINI_CHECK!(psum[0] == 5.0 && psum[1] == 7.0 && psum[2] == 9.0);
         MINI_CHECK!(pdif[0] == 3.0 && pdif[1] == 3.0 && pdif[2] == 3.0);
+        MINI_CHECK!(pguid.guid() != minted && pguid.guid() == "custom_guid");
     })
 }
 
@@ -130,9 +135,9 @@ pub fn run_point_protobuf_roundtrip() -> TestResult {
 
         let guid = p.guid().to_string();
         let filename = "serialization/test_point.bin";
-        p.pb_dump(filename);
+        p.pb_dump(filename).unwrap();
 
-        let loaded = Point::pb_load(filename);
+        let loaded = Point::pb_load(filename).unwrap();
         let parsed = Point::pb_loads(&p.pb_dumps()).unwrap();
         let converted = Point::from_proto(p.to_proto());
 

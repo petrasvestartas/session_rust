@@ -1,6 +1,8 @@
 use crate::mini_test::TestResult;
 use crate::tolerance::TOLERANCE;
-use crate::{MINI_CHECK, MINI_TEST, REGISTER_MINI_TEST};
+use crate::MINI_CHECK;
+use crate::MINI_TEST;
+use crate::REGISTER_MINI_TEST;
 
 pub fn run_obb_constructor() -> TestResult {
     MINI_TEST!("Constructor", {
@@ -174,9 +176,9 @@ pub fn run_obb_protobuf_roundtrip() -> TestResult {
             .join("serialization")
             .join("test_obb.bin");
         let fname = path.to_str().unwrap();
-        bb.pb_dump(fname);
+        bb.pb_dump(fname).unwrap();
 
-        let loaded = OBB::pb_load(fname);
+        let loaded = OBB::pb_load(fname).unwrap();
 
         MINI_CHECK!(loaded.name == "test_bbox_proto");
         MINI_CHECK!(loaded.guid() == guid);

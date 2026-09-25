@@ -1,5 +1,7 @@
 use crate::mini_test::TestResult;
-use crate::{MINI_CHECK, MINI_TEST, REGISTER_MINI_TEST};
+use crate::MINI_CHECK;
+use crate::MINI_TEST;
+use crate::REGISTER_MINI_TEST;
 
 // ═══════════════════════════════════════════════════════════════════════════
 // TreeNode
@@ -237,8 +239,8 @@ pub fn run_tree_protobuf_roundtrip() -> TestResult {
         original.add(&root_node, None);
 
         let fname = "serialization/test_tree.bin";
-        original.pb_dump(fname);
-        let loaded = Tree::pb_load(fname);
+        original.pb_dump(fname).unwrap();
+        let loaded = Tree::pb_load(fname).unwrap();
 
         MINI_CHECK!(loaded.name == original.name);
         MINI_CHECK!(loaded.nodes().len() == original.nodes().len());

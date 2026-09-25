@@ -1,5 +1,6 @@
 use crate::tolerance::Tolerance;
-use serde::{Deserialize, Serialize};
+use serde::Deserialize;
+use serde::Serialize;
 
 const KNOT_TOLERANCE: f64 = Tolerance::ABSOLUTE / 10.0;
 const PIVOT_TOLERANCE: f64 = Tolerance::ZERO_TOLERANCE / 100.0;

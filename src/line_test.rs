@@ -168,8 +168,8 @@ pub fn run_line_protobuf_roundtrip() -> TestResult {
         let loaded_s = Line::pb_loads(&s).unwrap();
 
         let fname = "serialization/test_line.bin";
-        line.pb_dump(fname);
-        let loaded = Line::pb_load(fname);
+        line.pb_dump(fname).unwrap();
+        let loaded = Line::pb_load(fname).unwrap();
         let converted = Line::from_proto(line.to_proto());
 
         MINI_CHECK!(loaded_s.name == "test_line");

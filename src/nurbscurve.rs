@@ -15,7 +15,10 @@ use crate::tolerance::TOLERANCE;
 use crate::vector::Vector;
 use crate::xform::Xform;
 use serde::ser::SerializeMap;
-use serde::{Deserialize, Deserializer, Serialize, Serializer};
+use serde::Deserialize;
+use serde::Deserializer;
+use serde::Serialize;
+use serde::Serializer;
 use std::fmt;
 use std::sync::OnceLock;
 
@@ -959,9 +962,9 @@ impl NurbsCurve {
         self.guid.get_or_init(|| uuid::Uuid::new_v4().to_string())
     }
 
-    /// Set the guid if it has not already been created.
-    pub fn set_guid(&self, guid: String) {
-        let _ = self.guid.set(guid);
+    /// Set the guid.
+    pub fn set_guid(&mut self, guid: String) {
+        self.guid = OnceLock::from(guid);
     }
 
     /// Clear the guid so a fresh one mints lazily on the next read.
@@ -2617,15 +2620,15 @@ impl NurbsCurve {
     }
 
     /// Write to a protobuf file.
-    pub fn pb_dump(&self, filepath: &str) {
-        let _ = std::fs::write(filepath, self.pb_dumps());
+    pub fn pb_dump(&self, filepath: &str) -> Result<(), Box<dyn std::error::Error>> {
+        std::fs::write(filepath, self.pb_dumps())?;
+
+        Ok(())
     }
 
     /// Read from a protobuf file.
-    pub fn pb_load(filepath: &str) -> Self {
-        let data = std::fs::read(filepath).unwrap_or_default();
-
-        Self::pb_loads(&data).unwrap_or_default()
+    pub fn pb_load(filepath: &str) -> Result<Self, Box<dyn std::error::Error>> {
+        Self::pb_loads(&std::fs::read(filepath)?)
     }
 
     // ═══════════════════════════════════════════════════════════════════════════

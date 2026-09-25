@@ -1,7 +1,10 @@
 #![allow(clippy::excessive_precision, clippy::needless_range_loop)]
 use crate::mini_test::TestResult;
-use crate::tolerance::{PI, TOLERANCE};
-use crate::{MINI_CHECK, MINI_TEST, REGISTER_MINI_TEST};
+use crate::tolerance::PI;
+use crate::tolerance::TOLERANCE;
+use crate::MINI_CHECK;
+use crate::MINI_TEST;
+use crate::REGISTER_MINI_TEST;
 
 pub fn run_nurbscurve_constructor() -> TestResult {
     MINI_TEST!("Constructor", {
@@ -905,10 +908,10 @@ pub fn run_nurbscurve_protobuf_roundtrip() -> TestResult {
         let filename = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
             .join("serialization")
             .join("test_nurbscurve.bin");
-        curve.pb_dump(filename.to_str().unwrap());
+        curve.pb_dump(filename.to_str().unwrap()).unwrap();
 
         let loaded_proto_string = NurbsCurve::pb_loads(&curve.pb_dumps()).unwrap();
-        let loaded = NurbsCurve::pb_load(filename.to_str().unwrap());
+        let loaded = NurbsCurve::pb_load(filename.to_str().unwrap()).unwrap();
         let converted = NurbsCurve::from_proto(curve.to_proto());
 
         MINI_CHECK!(loaded_proto_string == curve);

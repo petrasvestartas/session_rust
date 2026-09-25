@@ -1,6 +1,8 @@
 use crate::mini_test::TestResult;
 use crate::tolerance::PI;
-use crate::{MINI_CHECK, MINI_TEST, REGISTER_MINI_TEST};
+use crate::MINI_CHECK;
+use crate::MINI_TEST;
+use crate::REGISTER_MINI_TEST;
 use std::cmp::Ordering;
 
 /// Every non-degenerated edge of a solid is used by exactly two faces with opposite composed orientations
@@ -1115,8 +1117,8 @@ pub fn run_brep_protobuf_roundtrip() -> TestResult {
 
         let src_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
         let filename = src_dir.join("serialization").join("test_brep.bin");
-        b.pb_dump(filename.to_str().unwrap());
-        let loaded = BRep::pb_load(filename.to_str().unwrap());
+        b.pb_dump(filename.to_str().unwrap()).unwrap();
+        let loaded = BRep::pb_load(filename.to_str().unwrap()).unwrap();
 
         MINI_CHECK!(loaded_proto == b);
         MINI_CHECK!(loaded_proto_string == b);

@@ -22,7 +22,7 @@ pub fn run_matrix_constructor() -> TestResult {
         let sstr = m.str();
         let srepr = eye.repr();
         let d = ml.duplicate();
-        let short_guid = Matrix::default();
+        let mut short_guid = Matrix::default();
         short_guid.set_guid("id".to_string());
         let short_repr = short_guid.repr();
 
@@ -355,8 +355,8 @@ pub fn run_matrix_protobuf_roundtrip() -> TestResult {
         let guid = a.guid().to_string();
         let filename = "serialization/test_matrix.bin";
 
-        a.pb_dump(filename);
-        let loaded = Matrix::pb_load(filename);
+        a.pb_dump(filename).unwrap();
+        let loaded = Matrix::pb_load(filename).unwrap();
         let parsed = Matrix::pb_loads(&a.pb_dumps()).unwrap();
         let converted = Matrix::from_proto(a.to_proto()).unwrap();
 
@@ -381,16 +381,12 @@ pub fn run_matrix_serialization_errors() -> TestResult {
         let malformed_json = Matrix::jsonload("{}").is_err();
         let malformed_pb = Matrix::pb_loads(&[0xff]).is_err();
         let json_write_failed = matrix.file_json_dump("").is_err();
+        let pb_write_failed = matrix.pb_dump("").is_err();
 
         MINI_CHECK!(malformed_json);
         MINI_CHECK!(malformed_pb);
         MINI_CHECK!(json_write_failed);
-
-        #[cfg(panic = "unwind")]
-        {
-            let pb_write_failed = std::panic::catch_unwind(|| matrix.pb_dump("")).is_err();
-            MINI_CHECK!(pb_write_failed);
-        }
+        MINI_CHECK!(pb_write_failed);
     })
 }
 

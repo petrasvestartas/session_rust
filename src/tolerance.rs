@@ -16,13 +16,13 @@ pub const SCALE: f64 = 1e6; // Default coordinate-key scale.
 /// Tolerance settings for geometric comparisons
 #[derive(Debug, Clone)]
 pub struct Tolerance {
-    _unit: String, // Unit system, "M" or "MM".
-    _absolute: Option<f64>, // Absolute tolerance override.
-    _relative: Option<f64>, // Relative tolerance override.
-    _angular: Option<f64>, // Angular tolerance override in radians.
-    _approximation: Option<f64>, // Approximation tolerance override.
-    _precision: Option<i32>, // Decimal precision override.
-    _lineardeflection: Option<f64>, // Linear deflection override.
+    _unit: String,                   // Unit system, "M" or "MM".
+    _absolute: Option<f64>,          // Absolute tolerance override.
+    _relative: Option<f64>,          // Relative tolerance override.
+    _angular: Option<f64>,           // Angular tolerance override in radians.
+    _approximation: Option<f64>,     // Approximation tolerance override.
+    _precision: Option<i32>,         // Decimal precision override.
+    _lineardeflection: Option<f64>,  // Linear deflection override.
     _angulardeflection: Option<f64>, // Angular deflection override.
 }
 
@@ -474,25 +474,25 @@ impl Tolerance {
     }
 
     /// Serialize to a JSON string.
-    pub fn file_json_dumps(&self) -> Result<String, Box<dyn std::error::Error>> {
-        self.jsondump()
+    pub fn file_json_dumps(&self) -> String {
+        self.jsondump().expect("Failed to serialize Tolerance JSON")
     }
 
     /// Deserialize from a JSON string.
-    pub fn file_json_loads(json_string: &str) -> Result<Self, Box<dyn std::error::Error>> {
-        Self::jsonload(json_string)
+    pub fn file_json_loads(json_string: &str) -> Self {
+        Self::jsonload(json_string).expect("Failed to parse Tolerance JSON")
     }
 
     /// Write JSON to a file.
-    pub fn file_json_dump(&self, filename: &str) -> Result<(), Box<dyn std::error::Error>> {
-        std::fs::write(filename, self.jsondump()?)?;
+    pub fn file_json_dump(&self, filepath: &str) -> Result<(), Box<dyn std::error::Error>> {
+        std::fs::write(filepath, self.jsondump()?)?;
 
         Ok(())
     }
 
     /// Read JSON from a file.
-    pub fn file_json_load(filename: &str) -> Result<Self, Box<dyn std::error::Error>> {
-        Self::jsonload(&std::fs::read_to_string(filename)?)
+    pub fn file_json_load(filepath: &str) -> Result<Self, Box<dyn std::error::Error>> {
+        Self::jsonload(&std::fs::read_to_string(filepath)?)
     }
 
     // ═══════════════════════════════════════════════════════════════════════════
@@ -541,15 +541,15 @@ impl Tolerance {
     }
 
     /// Write protobuf bytes to a file.
-    pub fn pb_dump(&self, filename: &str) -> Result<(), Box<dyn std::error::Error>> {
-        std::fs::write(filename, self.pb_dumps())?;
+    pub fn pb_dump(&self, filepath: &str) -> Result<(), Box<dyn std::error::Error>> {
+        std::fs::write(filepath, self.pb_dumps())?;
 
         Ok(())
     }
 
     /// Read protobuf bytes from a file.
-    pub fn pb_load(filename: &str) -> Result<Self, Box<dyn std::error::Error>> {
-        Self::pb_loads(&std::fs::read(filename)?)
+    pub fn pb_load(filepath: &str) -> Result<Self, Box<dyn std::error::Error>> {
+        Self::pb_loads(&std::fs::read(filepath)?)
     }
 }
 

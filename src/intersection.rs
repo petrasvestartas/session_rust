@@ -4098,6 +4098,7 @@ fn recognize_surface(surface: &NurbsSurface, tol: f64) -> RecogSurface {
 
     rs
 }
+
 /// Solve ((X-V).w)^2 - cos^2a |X-V|^2 = 0 along X = x0 + t d. Returns roots.
 fn line_cone(x0: &[f64; 3], d: &[f64; 3], apex: &[f64; 3], w: &[f64; 3], alpha: f64) -> Vec<f64> {
     let ca2 = alpha.cos() * alpha.cos();
@@ -5474,6 +5475,7 @@ fn ssi_plane_plane(
 
     !*empty
 }
+
 /// Tri-state analytic result: not analytic, recognised empty, or curve triples.
 #[derive(Clone, Copy, PartialEq)]
 enum AnalyticStatus {

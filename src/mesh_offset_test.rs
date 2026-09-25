@@ -236,8 +236,8 @@ pub fn run_mesh_offset_protobuf_roundtrip() -> TestResult {
             .join("serialization")
             .join("test_mesh_offset.bin");
 
-        result.pb_dump(filename.to_str().unwrap());
-        let loaded = Mesh::pb_load(filename.to_str().unwrap());
+        result.pb_dump(filename.to_str().unwrap()).unwrap();
+        let loaded = Mesh::pb_load(filename.to_str().unwrap()).unwrap();
 
         MINI_CHECK!(loaded == result);
         MINI_CHECK!(loaded.number_of_vertices() == 8);

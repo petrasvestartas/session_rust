@@ -1,7 +1,9 @@
 use crate::mini_test::TestResult;
 use crate::tolerance::PI;
 use crate::tolerance::TOLERANCE;
-use crate::{MINI_CHECK, MINI_TEST, REGISTER_MINI_TEST};
+use crate::MINI_CHECK;
+use crate::MINI_TEST;
+use crate::REGISTER_MINI_TEST;
 
 pub fn run_plane_constructor() -> TestResult {
     MINI_TEST!("Constructor", {
@@ -295,9 +297,9 @@ pub fn run_plane_protobuf_roundtrip() -> TestResult {
 
         let guid = pl.guid().to_string();
         let fname = "serialization/test_plane.bin";
-        pl.pb_dump(fname);
+        pl.pb_dump(fname).unwrap();
 
-        let loaded = Plane::pb_load(fname);
+        let loaded = Plane::pb_load(fname).unwrap();
         let parsed = Plane::pb_loads(&pl.pb_dumps()).unwrap();
         let converted = Plane::from_proto(pl.to_proto());
 

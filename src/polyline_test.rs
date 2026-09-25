@@ -1,7 +1,9 @@
 use crate::mini_test::TestResult;
 use crate::tolerance::Tolerance;
 use crate::tolerance::TOLERANCE;
-use crate::{MINI_CHECK, MINI_TEST, REGISTER_MINI_TEST};
+use crate::MINI_CHECK;
+use crate::MINI_TEST;
+use crate::REGISTER_MINI_TEST;
 
 pub fn run_polyline_constructor() -> TestResult {
     MINI_TEST!("Constructor", {
@@ -211,8 +213,8 @@ pub fn run_polyline_protobuf_roundtrip() -> TestResult {
         let loaded_s = Polyline::pb_loads(&s).unwrap();
 
         let fname = "serialization/test_polyline.bin";
-        pl.pb_dump(fname);
-        let loaded = Polyline::pb_load(fname);
+        pl.pb_dump(fname).unwrap();
+        let loaded = Polyline::pb_load(fname).unwrap();
         let converted = Polyline::from_proto(pl.to_proto());
 
         MINI_CHECK!(loaded_s.name == "test_polyline");

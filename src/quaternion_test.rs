@@ -364,9 +364,9 @@ pub fn run_quaternion_protobuf_roundtrip() -> TestResult {
         q.name = "test_quaternion".to_string();
 
         let filename = "serialization/test_quaternion.bin";
-        q.pb_dump(filename);
+        q.pb_dump(filename).unwrap();
 
-        let loaded = Quaternion::pb_load(filename);
+        let loaded = Quaternion::pb_load(filename).unwrap();
         let parsed = Quaternion::pb_loads(&q.pb_dumps()).unwrap();
         let converted = Quaternion::from_proto(q.to_proto());
 
