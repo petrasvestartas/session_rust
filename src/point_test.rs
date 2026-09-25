@@ -109,6 +109,10 @@ pub fn run_point_json_roundtrip() -> TestResult {
         let loaded = Point::file_json_load(filename).unwrap();
         let parsed = Point::file_json_loads(&p.file_json_dumps());
 
+        let mut missing: serde_json::Value = serde_json::from_str(&p.file_json_dumps()).unwrap();
+        missing.as_object_mut().unwrap().remove("x");
+        let missing_failed = Point::jsonload(&missing.to_string()).is_err();
+
         MINI_CHECK!(loaded.name == "test_point");
         MINI_CHECK!(loaded[0] == 1.5 && loaded[1] == 2.5 && loaded[2] == 3.5);
         MINI_CHECK!(loaded.width == 2.0);
@@ -119,6 +123,7 @@ pub fn run_point_json_roundtrip() -> TestResult {
         MINI_CHECK!(parsed == p);
         MINI_CHECK!(loaded.guid() == guid);
         MINI_CHECK!(parsed.guid() == guid);
+        MINI_CHECK!(missing_failed);
     })
 }
 
