@@ -1,13 +1,42 @@
-use crate::history::{clone, clone_item, DefinitionOp, History, Op, ReplaceOp, Tombstone, XformOp};
-use crate::intersection::{line_line, line_plane, ray_box, ray_mesh_bvh};
+use crate::history::clone;
+use crate::history::clone_item;
+use crate::history::DefinitionOp;
+use crate::history::History;
+use crate::history::Op;
+use crate::history::ReplaceOp;
+use crate::history::Tombstone;
+use crate::history::XformOp;
+use crate::interaction::Interaction;
+use crate::intersection::line_line;
+use crate::intersection::line_plane;
+use crate::intersection::ray_box;
+use crate::intersection::ray_mesh_bvh;
 use crate::objects::Component;
-use crate::{
-    BRep, Element, Graph, InstanceRef, Line, Mesh, NurbsCurve, NurbsSurface, Objects, Plane, Point,
-    PointCloud, Polyline, SpatialBVH, Tolerance, Tree, TreeNode, Vector, Xform, OBB,
-};
-use serde::{Deserialize, Serialize};
+use crate::BRep;
+use crate::Element;
+use crate::Graph;
+use crate::InstanceRef;
+use crate::Line;
+use crate::Mesh;
+use crate::NurbsCurve;
+use crate::NurbsSurface;
+use crate::Objects;
+use crate::Plane;
+use crate::Point;
+use crate::PointCloud;
+use crate::Polyline;
+use crate::SpatialBVH;
+use crate::Tolerance;
+use crate::Tree;
+use crate::TreeNode;
+use crate::Vector;
+use crate::Xform;
+use crate::OBB;
+use serde::Deserialize;
+use serde::Serialize;
 use std::cell::RefCell;
-use std::collections::{BTreeMap, HashMap};
+use std::collections::BTreeMap;
+use std::collections::HashMap;
 use std::fmt;
 use std::fs;
 use std::rc::Rc;
@@ -63,13 +92,11 @@ impl Geometry {
         }
     }
 
-    /// Overwrite the guid: a minted one is cleared first, since `set_guid` never replaces one.
+    /// Overwrite the guid.
     pub fn set_guid(&mut self, guid: &str) {
         macro_rules! reset {
             ($rc:expr) => {{
-                let g = Rc::make_mut($rc);
-                g.refresh_guid();
-                g.set_guid(guid.to_string());
+                Rc::make_mut($rc).set_guid(guid.to_string());
             }};
         }
 
@@ -695,6 +722,8 @@ pub struct Session {
     #[serde(skip)]
     pub instance_lookup: HashMap<String, Rc<InstanceRef>>, // Instances by guid.
     #[serde(skip)]
+    pub interactions: BTreeMap<String, Vec<Box<dyn Interaction>>>, // Interactions per graph edge, by the edge's guid; a boxed implementor keeps its type.
+    #[serde(skip)]
     pub history: History, // Undo/redo buffer, in memory only; every save purges it.
     #[serde(skip)]
     pub bvh: SpatialBVH, // Bounding volume hierarchy for collision detection.
@@ -729,6 +758,7 @@ impl Clone for Session {
         session.tree = self.tree.clone();
         session.graph = self.graph.clone();
         session.xforms = self.xforms.clone();
+        session.interactions = self.interactions.clone();
         session._index_objects();
 
         session
@@ -756,6 +786,7 @@ impl Session {
             definitions: Objects::new(),
             definition_lookup: HashMap::new(),
             instance_lookup: HashMap::new(),
+            interactions: BTreeMap::new(),
             history: History::new(),
             bvh: SpatialBVH::new(),
             cached_ray_bvh: None,
@@ -775,9 +806,9 @@ impl Session {
         self.guid.get_or_init(|| uuid::Uuid::new_v4().to_string())
     }
 
-    /// Set the guid if it has not already been created.
-    pub fn set_guid(&self, g: String) {
-        let _ = self.guid.set(g);
+    /// Set the guid.
+    pub fn set_guid(&mut self, guid: String) {
+        self.guid = std::sync::OnceLock::from(guid);
     }
 
     // ═══════════════════════════════════════════════════════════════════════════
@@ -1299,48 +1330,6 @@ impl Session {
         self.graph.add_edge(guid1, guid2, attribute);
     }
 
-    /// Add or reuse an undirected interaction edge between registered objects; returns its stored endpoint order. Errs for missing objects or a self-pair. Preserves an existing edge's attributes and guid.
-    pub fn add_interaction(
-        &mut self,
-        a: &str,
-        b: &str,
-    ) -> Result<(String, String), Box<dyn std::error::Error>> {
-        if a == b || !registered(self, a) || !registered(self, b) {
-            return Err(
-                "Session::add_interaction: add two distinct objects to the session first".into(),
-            );
-        }
-
-        if !self.has_interaction(a, b) {
-            self.graph.add_edge(a, b, "");
-        }
-
-        let edge = &self.graph.edges[a][b];
-        edge.guid();
-        let edge = edge.clone();
-        let ends = (edge.v0.clone(), edge.v1.clone());
-
-        if let Some(row) = self.graph.edges.get_mut(b) {
-            row.insert(a.to_string(), edge);
-        }
-
-        Ok(ends)
-    }
-
-    /// True when the pair has an interaction edge in either order.
-    pub fn has_interaction(&self, a: &str, b: &str) -> bool {
-        self.graph.has_edge((a, b)) || self.graph.has_edge((b, a))
-    }
-
-    /// Remove the pair's edge in either order; a missing pair is a no-op.
-    pub fn remove_interaction(&mut self, a: &str, b: &str) {
-        if self.graph.has_edge((a, b)) {
-            self.graph.remove_edge((a, b));
-        } else if self.graph.has_edge((b, a)) {
-            self.graph.remove_edge((b, a));
-        }
-    }
-
     /// Add a parent-child relationship in the tree.
     pub fn add_hierarchy(&mut self, parent_guid: &str, child_guid: &str) -> bool {
         self.tree.add_child_by_guid(parent_guid, child_guid)
@@ -1444,7 +1433,7 @@ impl Session {
         let Some(removed) = self._detach(guid) else {
             return false;
         };
-        let added = Tombstone::new(
+        let mut added = Tombstone::new(
             guid.to_string(),
             Item::InstanceRef(Rc::new(instance)),
             "instances".to_string(),
@@ -1456,6 +1445,7 @@ impl Session {
             attribute,
             removed.edges.clone(),
         );
+        added.interactions = removed.interactions.clone();
         self.history.record(Op::Remove(removed));
         self._attach(&added);
         self.history.record(Op::Add(added));
@@ -1482,7 +1472,7 @@ impl Session {
         let Some(removed) = self._detach(instance_guid) else {
             return false;
         };
-        let added = Tombstone::new(
+        let mut added = Tombstone::new(
             instance_guid.to_string(),
             Item::Geometry(copy),
             collection.to_string(),
@@ -1494,6 +1484,7 @@ impl Session {
             format!("{prefix}_{}", instance.name),
             removed.edges.clone(),
         );
+        added.interactions = removed.interactions.clone();
         self.history.record(Op::Remove(removed));
         self._attach(&added);
         self.history.record(Op::Add(added));
@@ -1541,6 +1532,66 @@ impl Session {
         self.bvh_cache_dirty = true;
 
         true
+    }
+
+    // ═══════════════════════════════════════════════════════════════════════════
+    // Session - Interactions
+    // ═══════════════════════════════════════════════════════════════════════════
+    /// Make or reuse the pair's undirected edge, an existing edge keeping its attributes, and append interaction to its list; returns the stored interaction. Errs unless both elements are in the session and distinct.
+    pub fn add_interaction(
+        &mut self,
+        a: &Element,
+        b: &Element,
+        interaction: Box<dyn Interaction>,
+    ) -> Result<&dyn Interaction, Box<dyn std::error::Error>> {
+        let first = a.guid();
+        let second = b.guid();
+
+        if first == second || !registered(self, first) || !registered(self, second) {
+            return Err(
+                "Session::add_interaction: add two distinct elements to the session first".into(),
+            );
+        }
+
+        if !self.graph.has_edge((first, second)) {
+            self.graph.add_edge(first, second, "");
+        }
+
+        let id = self.graph.edges[first][second].guid().to_string();
+        let list = self.interactions.entry(id).or_default();
+        list.push(interaction);
+
+        Ok(list[list.len() - 1].as_ref())
+    }
+
+    /// The pair's interactions in either order, empty when there are none.
+    pub fn get_interaction(&self, a: &Element, b: &Element) -> &[Box<dyn Interaction>] {
+        if !self.graph.has_edge((a.guid(), b.guid())) {
+            return &[];
+        }
+
+        let id = self.graph.edges[a.guid()][b.guid()].guid();
+
+        match self.interactions.get(id) {
+            Some(list) => list,
+            None => &[],
+        }
+    }
+
+    /// True when the pair has an edge in either order.
+    pub fn has_interaction(&self, a: &Element, b: &Element) -> bool {
+        self.graph.has_edge((a.guid(), b.guid()))
+    }
+
+    /// Remove the pair's edge and all of its interactions in either order; a missing pair is a no-op.
+    pub fn remove_interaction(&mut self, a: &Element, b: &Element) {
+        if !self.graph.has_edge((a.guid(), b.guid())) {
+            return;
+        }
+
+        let id = self.graph.edges[a.guid()][b.guid()].guid().to_string();
+        self.interactions.remove(&id);
+        self.graph.remove_edge((a.guid(), b.guid()));
     }
 
     // ═══════════════════════════════════════════════════════════════════════════
@@ -1702,6 +1753,18 @@ impl Session {
             xforms_json.push(serde_json::json!({ "guid": obj_guid, "xform": obj_xform }));
         }
 
+        let mut interactions_json: Vec<serde_json::Value> = Vec::new();
+
+        for (edge, interactions) in &self.interactions {
+            let mut items: Vec<serde_json::Value> = Vec::new();
+
+            for interaction in interactions {
+                items.push(interaction.jsondump());
+            }
+
+            interactions_json.push(serde_json::json!({ "guid": edge, "interactions": items }));
+        }
+
         let mut json_obj = serde_json::json!({
             "type": "Session",
             "name": self.name,
@@ -1709,6 +1772,7 @@ impl Session {
             "objects": self.objects_synced(),
             "tree": self.tree,
             "graph": graph_json,
+            "interactions": interactions_json,
             "xforms": xforms_json
         });
 
@@ -1761,6 +1825,23 @@ impl Session {
             }
         }
 
+        if let Some(entries) = json_obj["interactions"].as_array() {
+            for entry in entries {
+                let guid = entry["guid"].as_str().unwrap_or("").to_string();
+                let Some(items) = entry["interactions"].as_array() else {
+                    continue;
+                };
+
+                for item in items {
+                    session
+                        .interactions
+                        .entry(guid.clone())
+                        .or_default()
+                        .push(<dyn Interaction>::jsonload(item));
+                }
+            }
+        }
+
         session._index_objects();
 
         Ok(session)
@@ -1808,6 +1889,21 @@ impl Session {
             });
         }
 
+        let mut interactions: Vec<crate::proto::InteractionEntry> = Vec::new();
+
+        for (edge, list) in &self.interactions {
+            let mut items: Vec<crate::proto::Interaction> = Vec::new();
+
+            for interaction in list {
+                items.push(interaction.to_proto());
+            }
+
+            interactions.push(crate::proto::InteractionEntry {
+                guid: edge.clone(),
+                interactions: items,
+            });
+        }
+
         let definitions = if self.definition_lookup.is_empty() {
             None
         } else {
@@ -1823,6 +1919,7 @@ impl Session {
             bvh_boxes: Vec::new(),
             xforms,
             definitions,
+            interactions,
         }
     }
 
@@ -1857,6 +1954,16 @@ impl Session {
                 continue;
             };
             session.xforms.insert(entry.guid, Xform::from_proto(xform));
+        }
+
+        for entry in proto.interactions {
+            for item in entry.interactions {
+                session
+                    .interactions
+                    .entry(entry.guid.clone())
+                    .or_default()
+                    .push(<dyn Interaction>::from_proto(item));
+            }
         }
 
         session._index_objects();
@@ -2049,7 +2156,15 @@ impl Session {
             self.graph.remove_node(guid);
         }
 
-        Some(Tombstone::new(
+        let mut interactions: BTreeMap<String, Vec<Box<dyn Interaction>>> = BTreeMap::new();
+
+        for (_, _, _, id) in &edges {
+            if let Some(list) = self.interactions.remove(id) {
+                interactions.insert(id.clone(), list);
+            }
+        }
+
+        let mut op = Tombstone::new(
             guid.to_string(),
             obj,
             collection,
@@ -2060,7 +2175,10 @@ impl Session {
             node,
             attribute,
             edges,
-        ))
+        );
+        op.interactions = interactions;
+
+        Some(op)
     }
 
     /// Put an object back from its tombstone, unrecorded: typed vector, lookup, xform, tree node with its subtree, graph node and edges.
@@ -2126,8 +2244,31 @@ impl Session {
                 continue;
             }
 
-            self.graph.edges[&op.guid][other].set_guid(id.clone());
-            self.graph.edges[other][&op.guid].set_guid(id.clone());
+            self.graph
+                .edges
+                .get_mut(&op.guid)
+                .unwrap()
+                .get_mut(other)
+                .unwrap()
+                .set_guid(id.clone());
+            self.graph
+                .edges
+                .get_mut(other)
+                .unwrap()
+                .get_mut(&op.guid)
+                .unwrap()
+                .set_guid(id.clone());
+
+            let Some(list) = op.interactions.get(id) else {
+                continue;
+            };
+
+            for interaction in list {
+                self.interactions
+                    .entry(id.clone())
+                    .or_default()
+                    .push(interaction.clone_box());
+            }
         }
     }
 

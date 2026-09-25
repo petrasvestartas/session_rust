@@ -373,6 +373,7 @@ pub fn get_all_tests() -> Vec<RegisteredTest> {
     use crate::graph_test::*;
     use crate::history_test::*;
     use crate::instance_ref_test::*;
+    use crate::interaction_test::*;
     use crate::intersection_test::*;
     use crate::io_xyz_test::*;
     use crate::line_test::*;
@@ -2230,13 +2231,13 @@ pub fn get_all_tests() -> Vec<RegisteredTest> {
         },
         RegisteredTest {
             group: "NurbsKnot",
-            name: "Make Clamped Uniform",
-            func: run_make_clamped_uniform,
+            name: "Compute Clamped Uniform",
+            func: run_compute_clamped_uniform,
         },
         RegisteredTest {
             group: "NurbsKnot",
-            name: "Make Periodic Uniform",
-            func: run_make_periodic_uniform,
+            name: "Compute Periodic Uniform",
+            func: run_compute_periodic_uniform,
         },
         RegisteredTest {
             group: "NurbsKnot",
@@ -3105,6 +3106,11 @@ pub fn get_all_tests() -> Vec<RegisteredTest> {
         },
         RegisteredTest {
             group: "Session",
+            name: "Get Interaction",
+            func: run_session_get_interaction,
+        },
+        RegisteredTest {
+            group: "Session",
             name: "Has Interaction",
             func: run_session_has_interaction,
         },
@@ -3112,6 +3118,11 @@ pub fn get_all_tests() -> Vec<RegisteredTest> {
             group: "Session",
             name: "Remove Interaction",
             func: run_session_remove_interaction,
+        },
+        RegisteredTest {
+            group: "Session",
+            name: "Undo Remove Interaction",
+            func: run_session_undo_remove_interaction,
         },
         RegisteredTest {
             group: "Session",
@@ -4818,6 +4829,32 @@ pub fn get_all_tests() -> Vec<RegisteredTest> {
             group: "InstanceRef",
             name: "Protobuf Roundtrip",
             func: run_instance_ref_protobuf_roundtrip,
+        },
+        // Interaction tests
+        RegisteredTest {
+            group: "Interaction",
+            name: "Constructor",
+            func: run_interaction_constructor,
+        },
+        RegisteredTest {
+            group: "Interaction",
+            name: "Abstract Base",
+            func: run_interaction_abstract_base,
+        },
+        RegisteredTest {
+            group: "Interaction",
+            name: "Json Roundtrip",
+            func: run_interaction_json_roundtrip,
+        },
+        RegisteredTest {
+            group: "Interaction",
+            name: "Protobuf Roundtrip",
+            func: run_interaction_protobuf_roundtrip,
+        },
+        RegisteredTest {
+            group: "Interaction",
+            name: "Registry Unknown Type",
+            func: run_interaction_registry_unknown_type,
         },
         // IoXyz tests
         RegisteredTest {

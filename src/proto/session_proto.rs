@@ -737,6 +737,22 @@ pub struct InstanceRef {
     #[prost(message, repeated, tag = "7")]
     pub features: ::prost::alloc::vec::Vec<ElementFeature>,
 }
+/// Interaction message: what joins two elements, stored on their graph edge
+#[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct Interaction {
+    /// Unique identifier
+    #[prost(string, tag = "1")]
+    pub guid: ::prost::alloc::string::String,
+    /// What joins the pair, e.g. "glue"; empty when unnamed
+    #[prost(string, tag = "2")]
+    pub name: ::prost::alloc::string::String,
+    /// Registered derived type name; empty for a plain Interaction
+    #[prost(string, tag = "3")]
+    pub interaction_type: ::prost::alloc::string::String,
+    /// Opaque derived-type state, carried through untouched
+    #[prost(bytes = "vec", tag = "4")]
+    pub interaction_data: ::prost::alloc::vec::Vec<u8>,
+}
 /// Line message representing a line segment
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct Line {
@@ -1090,6 +1106,16 @@ pub struct XformEntry {
     #[prost(message, optional, tag = "2")]
     pub xform: ::core::option::Option<Xform>,
 }
+/// The interactions of one graph edge, keyed like XformEntry for the same reason.
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct InteractionEntry {
+    /// Guid of the graph edge
+    #[prost(string, tag = "1")]
+    pub guid: ::prost::alloc::string::String,
+    /// The edge's interactions, in insertion order
+    #[prost(message, repeated, tag = "2")]
+    pub interactions: ::prost::alloc::vec::Vec<Interaction>,
+}
 /// Session message representing a complete session with geometry and hierarchy
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct Session {
@@ -1117,6 +1143,9 @@ pub struct Session {
     /// Shared geometry instances place, each in its own frame; absent when there is none
     #[prost(message, optional, tag = "8")]
     pub definitions: ::core::option::Option<Objects>,
+    /// Interactions per graph edge, in edge-guid order
+    #[prost(message, repeated, tag = "9")]
+    pub interactions: ::prost::alloc::vec::Vec<InteractionEntry>,
 }
 /// Tolerance message for geometric comparisons
 #[derive(Clone, PartialEq, ::prost::Message)]

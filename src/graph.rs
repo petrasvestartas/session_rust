@@ -170,9 +170,9 @@ impl Edge {
         self.guid.get_or_init(|| uuid::Uuid::new_v4().to_string())
     }
 
-    /// Set the GUID if it has not already been created.
-    pub fn set_guid(&self, guid: String) {
-        let _ = self.guid.set(guid);
+    /// Set the guid.
+    pub fn set_guid(&mut self, guid: String) {
+        self.guid = OnceLock::from(guid);
     }
 
     /// Return the (v0, v1) tuple.
@@ -354,6 +354,7 @@ impl Graph {
 
         let mut edge = Edge::new(u, v, attribute);
         edge.index = self.edge_count;
+        edge.set_guid(uuid::Uuid::new_v4().to_string());
 
         self.edges
             .entry(u.to_string())

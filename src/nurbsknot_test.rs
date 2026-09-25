@@ -29,8 +29,8 @@ pub fn run_domain_tolerance() -> TestResult {
     })
 }
 
-pub fn run_make_clamped_uniform() -> TestResult {
-    MINI_TEST!("Make Clamped Uniform", {
+pub fn run_compute_clamped_uniform() -> TestResult {
+    MINI_TEST!("Compute Clamped Uniform", {
         use crate::nurbsknot;
 
         let order = 4;
@@ -44,8 +44,8 @@ pub fn run_make_clamped_uniform() -> TestResult {
     })
 }
 
-pub fn run_make_periodic_uniform() -> TestResult {
-    MINI_TEST!("Make Periodic Uniform", {
+pub fn run_compute_periodic_uniform() -> TestResult {
+    MINI_TEST!("Compute Periodic Uniform", {
         use crate::nurbsknot;
 
         let order = 4;
@@ -559,13 +559,13 @@ REGISTER_MINI_TEST!(
 );
 REGISTER_MINI_TEST!(
     "NurbsKnot",
-    "Make Clamped Uniform",
-    crate::nurbsknot_test::run_make_clamped_uniform
+    "Compute Clamped Uniform",
+    crate::nurbsknot_test::run_compute_clamped_uniform
 );
 REGISTER_MINI_TEST!(
     "NurbsKnot",
-    "Make Periodic Uniform",
-    crate::nurbsknot_test::run_make_periodic_uniform
+    "Compute Periodic Uniform",
+    crate::nurbsknot_test::run_compute_periodic_uniform
 );
 REGISTER_MINI_TEST!("NurbsKnot", "Clamp", crate::nurbsknot_test::run_clamp);
 REGISTER_MINI_TEST!("NurbsKnot", "Is Valid", crate::nurbsknot_test::run_is_valid);

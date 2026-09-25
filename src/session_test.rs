@@ -470,32 +470,108 @@ pub fn run_session_add_relationship() -> TestResult {
     })
 }
 
+/// A test-only implementor: a named interaction with no state of its own.
+#[derive(Debug, Clone, Default)]
+struct NamedInteraction {
+    guid: std::sync::OnceLock<String>, // Lazily minted guid.
+    name: String,                      // What joins the pair.
+}
+
+impl NamedInteraction {
+    /// Construct from a name.
+    fn new(name: &str) -> Self {
+        Self {
+            guid: std::sync::OnceLock::new(),
+            name: name.to_string(),
+        }
+    }
+}
+
+impl crate::Interaction for NamedInteraction {
+    /// Return whether the lazy guid has been created.
+    fn has_guid(&self) -> bool {
+        self.guid.get().is_some()
+    }
+
+    /// Return the guid, creating it on first access.
+    fn guid(&self) -> &str {
+        self.guid.get_or_init(|| uuid::Uuid::new_v4().to_string())
+    }
+
+    /// Set the guid.
+    fn set_guid(&mut self, guid: String) {
+        self.guid = std::sync::OnceLock::from(guid);
+    }
+
+    /// Return the name.
+    fn name(&self) -> &str {
+        &self.name
+    }
+
+    /// Set the name.
+    fn set_name(&mut self, name: &str) {
+        self.name = name.to_string();
+    }
+
+    /// Return the registered type name.
+    fn interaction_type_name(&self) -> &str {
+        "NamedInteraction"
+    }
+
+    /// Return no state.
+    fn interaction_data_dumps(&self) -> Vec<u8> {
+        Vec::new()
+    }
+
+    /// Return a copy with the same guid.
+    fn clone_box(&self) -> Box<dyn crate::Interaction> {
+        self.guid();
+
+        Box::new(self.clone())
+    }
+}
+
+/// Build a NamedInteraction from its data.
+fn named_interaction(_data: &[u8]) -> Option<Box<dyn crate::Interaction>> {
+    Some(Box::new(NamedInteraction::default()))
+}
+
 pub fn run_session_add_interaction() -> TestResult {
     MINI_TEST!("Add Interaction", {
         use crate::Element;
         use crate::Session;
 
         let mut session = Session::default();
-        let a = Element::new("a");
-        let b = Element::new("b");
+        session.add_element(Element::new("a"), None);
+        session.add_element(Element::new("b"), None);
+        let a = session.objects.elements[0].clone();
+        let b = session.objects.elements[1].clone();
         let absent = Element::new("absent");
-        let a_guid = a.guid().to_string();
-        let b_guid = b.guid().to_string();
-        session.add_element(a, None);
-        session.add_element(b, None);
-        session.add_edge(&a_guid, &b_guid, "authored");
-        let ends = session.add_interaction(&a_guid, &b_guid).unwrap();
-        let id = session.graph.edges[&a_guid][&b_guid].guid().to_string();
-        let reversed = session.add_interaction(&b_guid, &a_guid).unwrap();
+        session.add_edge(a.guid(), b.guid(), "authored");
+        let glue = session
+            .add_interaction(&a, &b, Box::new(NamedInteraction::new("glue")))
+            .unwrap()
+            .clone_box();
+        let id = session.graph.edges[a.guid()][b.guid()].guid().to_string();
+        let screw = session
+            .add_interaction(&b, &a, Box::new(NamedInteraction::new("screw")))
+            .unwrap()
+            .clone_box();
 
-        MINI_CHECK!(ends == reversed);
-        MINI_CHECK!(ends.0 == a_guid);
+        MINI_CHECK!(session.interactions.len() == 1);
+        MINI_CHECK!(session.interactions[&id].len() == 2);
+        MINI_CHECK!(session.interactions[&id][0].guid() == glue.guid());
+        MINI_CHECK!(session.interactions[&id][1].guid() == screw.guid());
         MINI_CHECK!(session.graph.number_of_edges() == 1);
-        MINI_CHECK!(session.graph.edges[&b_guid][&a_guid].guid() == id);
-        MINI_CHECK!(session.graph.edges[&a_guid][&b_guid].attribute == "authored");
+        MINI_CHECK!(session.graph.edges[b.guid()][a.guid()].guid() == id);
+        MINI_CHECK!(session.graph.edges[a.guid()][b.guid()].attribute == "authored");
 
-        let missing_rejected = session.add_interaction(&a_guid, absent.guid()).is_err();
-        let self_rejected = session.add_interaction(&a_guid, &a_guid).is_err();
+        let missing_rejected = session
+            .add_interaction(&a, &absent, Box::new(NamedInteraction::default()))
+            .is_err();
+        let self_rejected = session
+            .add_interaction(&a, &a, Box::new(NamedInteraction::default()))
+            .is_err();
 
         MINI_CHECK!(missing_rejected);
         MINI_CHECK!(self_rejected);
@@ -503,27 +579,70 @@ pub fn run_session_add_interaction() -> TestResult {
     })
 }
 
+pub fn run_session_get_interaction() -> TestResult {
+    MINI_TEST!("Get Interaction", {
+        use crate::Element;
+        use crate::Interaction;
+        use crate::Session;
+
+        <dyn Interaction>::register_type("NamedInteraction", named_interaction);
+        let mut session = Session::default();
+        session.add_element(Element::new("a"), None);
+        session.add_element(Element::new("b"), None);
+        session.add_element(Element::new("c"), None);
+        let a = session.objects.elements[0].clone();
+        let b = session.objects.elements[1].clone();
+        let c = session.objects.elements[2].clone();
+        session.add_edge(a.guid(), c.guid(), "authored");
+        let before = session.get_interaction(&a, &b).to_vec();
+        let bare = session.get_interaction(&a, &c).to_vec();
+        let glue = session
+            .add_interaction(&a, &b, Box::new(NamedInteraction::new("glue")))
+            .unwrap()
+            .clone_box();
+        let id = session.graph.edges[a.guid()][b.guid()].guid().to_string();
+        let mut duplicate = session.clone();
+        duplicate.interactions.get_mut(&id).unwrap()[0].set_name("screw");
+        let loaded_b = Session::pb_loads(&session.pb_dumps()).unwrap();
+        let loaded_j = Session::file_json_loads(&session.file_json_dumps());
+
+        MINI_CHECK!(before.is_empty());
+        MINI_CHECK!(bare.is_empty());
+        MINI_CHECK!(session.get_interaction(&a, &b)[0].guid() == glue.guid());
+        MINI_CHECK!(session.get_interaction(&b, &a)[0].guid() == glue.guid());
+        MINI_CHECK!(session.get_interaction(&a, &b)[0].name() == "glue");
+        MINI_CHECK!(duplicate.get_interaction(&b, &a)[0].name() == "screw");
+        MINI_CHECK!(duplicate.get_interaction(&b, &a)[0].guid() == glue.guid());
+        MINI_CHECK!(*loaded_b.get_interaction(&b, &a)[0] == *glue);
+        MINI_CHECK!(loaded_b.get_interaction(&b, &a)[0].guid() == glue.guid());
+        MINI_CHECK!(*loaded_j.get_interaction(&b, &a)[0] == *glue);
+    })
+}
+
 pub fn run_session_has_interaction() -> TestResult {
     MINI_TEST!("Has Interaction", {
         use crate::Element;
+        use crate::Interaction;
         use crate::Session;
 
+        <dyn Interaction>::register_type("NamedInteraction", named_interaction);
         let mut session = Session::default();
-        let a = Element::new("a");
-        let b = Element::new("b");
-        let a_guid = a.guid().to_string();
-        let b_guid = b.guid().to_string();
-        session.add_element(a, None);
-        session.add_element(b, None);
-        let before = session.has_interaction(&a_guid, &b_guid);
-        session.add_interaction(&a_guid, &b_guid).unwrap();
+        session.add_element(Element::new("a"), None);
+        session.add_element(Element::new("b"), None);
+        let a = session.objects.elements[0].clone();
+        let b = session.objects.elements[1].clone();
+        let absent = Element::new("absent");
+        let before = session.has_interaction(&a, &b);
+        session
+            .add_interaction(&a, &b, Box::new(NamedInteraction::default()))
+            .unwrap();
         let loaded = Session::pb_loads(&session.pb_dumps()).unwrap();
 
         MINI_CHECK!(!before);
-        MINI_CHECK!(session.has_interaction(&a_guid, &b_guid));
-        MINI_CHECK!(session.has_interaction(&b_guid, &a_guid));
-        MINI_CHECK!(!session.has_interaction(&a_guid, "missing"));
-        MINI_CHECK!(loaded.has_interaction(&b_guid, &a_guid));
+        MINI_CHECK!(session.has_interaction(&a, &b));
+        MINI_CHECK!(session.has_interaction(&b, &a));
+        MINI_CHECK!(!session.has_interaction(&a, &absent));
+        MINI_CHECK!(loaded.has_interaction(&b, &a));
     })
 }
 
@@ -533,24 +652,60 @@ pub fn run_session_remove_interaction() -> TestResult {
         use crate::Session;
 
         let mut session = Session::default();
-        let a = Element::new("a");
-        let b = Element::new("b");
-        let c = Element::new("c");
-        let a_guid = a.guid().to_string();
-        let b_guid = b.guid().to_string();
-        let c_guid = c.guid().to_string();
-        session.add_element(a, None);
-        session.add_element(b, None);
-        session.add_element(c, None);
-        session.add_interaction(&a_guid, &b_guid).unwrap();
-        session.add_interaction(&a_guid, &c_guid).unwrap();
-        session.remove_interaction(&b_guid, &a_guid);
-        session.remove_interaction(&b_guid, &a_guid);
+        session.add_element(Element::new("a"), None);
+        session.add_element(Element::new("b"), None);
+        session.add_element(Element::new("c"), None);
+        let a = session.objects.elements[0].clone();
+        let b = session.objects.elements[1].clone();
+        let c = session.objects.elements[2].clone();
+        session
+            .add_interaction(&a, &b, Box::new(NamedInteraction::new("glue")))
+            .unwrap();
+        session
+            .add_interaction(&a, &c, Box::new(NamedInteraction::default()))
+            .unwrap();
+        session.remove_interaction(&b, &a);
+        session.remove_interaction(&b, &a);
 
-        MINI_CHECK!(!session.has_interaction(&a_guid, &b_guid));
-        MINI_CHECK!(session.has_interaction(&a_guid, &c_guid));
+        MINI_CHECK!(!session.has_interaction(&a, &b));
+        MINI_CHECK!(session.has_interaction(&a, &c));
+        MINI_CHECK!(session.get_interaction(&a, &b).is_empty());
+        MINI_CHECK!(session.interactions.len() == 1);
         MINI_CHECK!(session.graph.number_of_edges() == 1);
-        MINI_CHECK!(session.graph.has_node(&b_guid));
+        MINI_CHECK!(session.graph.has_node(b.guid()));
+    })
+}
+
+pub fn run_session_undo_remove_interaction() -> TestResult {
+    MINI_TEST!("Undo Remove Interaction", {
+        use crate::Element;
+        use crate::Session;
+
+        let mut session = Session::default();
+        session.add_element(Element::new("a"), None);
+        session.add_element(Element::new("b"), None);
+        let a = session.objects.elements[0].clone();
+        let b = session.objects.elements[1].clone();
+        let glue = session
+            .add_interaction(&a, &b, Box::new(NamedInteraction::new("glue")))
+            .unwrap()
+            .clone_box();
+        let id = session.graph.edges[a.guid()][b.guid()].guid().to_string();
+
+        session.begin("remove");
+        session.remove_object(b.guid());
+        session.commit();
+        let dropped = !session.interactions.contains_key(&id);
+        session.undo();
+
+        MINI_CHECK!(dropped);
+        MINI_CHECK!(session.get_interaction(&a, &b).len() == 1);
+        MINI_CHECK!(session.get_interaction(&a, &b)[0].guid() == glue.guid());
+        MINI_CHECK!(session.get_interaction(&a, &b)[0].name() == "glue");
+
+        session.redo();
+
+        MINI_CHECK!(!session.interactions.contains_key(&id));
     })
 }
 
@@ -2016,6 +2171,11 @@ REGISTER_MINI_TEST!(
 );
 REGISTER_MINI_TEST!(
     "Session",
+    "Get Interaction",
+    crate::session_test::run_session_get_interaction
+);
+REGISTER_MINI_TEST!(
+    "Session",
     "Has Interaction",
     crate::session_test::run_session_has_interaction
 );
@@ -2023,6 +2183,11 @@ REGISTER_MINI_TEST!(
     "Session",
     "Remove Interaction",
     crate::session_test::run_session_remove_interaction
+);
+REGISTER_MINI_TEST!(
+    "Session",
+    "Undo Remove Interaction",
+    crate::session_test::run_session_undo_remove_interaction
 );
 REGISTER_MINI_TEST!(
     "Session",

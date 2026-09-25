@@ -274,6 +274,7 @@ pub fn run_graph_add_edge() -> TestResult {
         MINI_CHECK!(g.number_of_edges() == 1);
         MINI_CHECK!(g.edge_count == 1);
         MINI_CHECK!(g.edge_label("a", "b", None).as_deref() == Some("updated"));
+        MINI_CHECK!(g.edges["a"]["b"].guid() == g.edges["b"]["a"].guid());
     })
 }
 

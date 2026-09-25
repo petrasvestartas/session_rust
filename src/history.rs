@@ -1,7 +1,11 @@
-use crate::session::{Geometry, Item, Session};
+use crate::interaction::Interaction;
+use crate::session::Geometry;
+use crate::session::Item;
+use crate::session::Session;
 use crate::tree::TreeNode;
 use crate::xform::Xform;
 use std::cell::RefCell;
+use std::collections::BTreeMap;
 use std::fmt;
 use std::rc::Rc;
 
@@ -49,6 +53,7 @@ pub struct Tombstone {
     pub node: Option<Rc<RefCell<TreeNode>>>, // The detached tree node with its whole subtree, None for an add.
     pub attribute: String,                   // Its graph node attribute.
     pub edges: Vec<(String, String, bool, String)>, // Incident edges as (other guid, attribute, forward, edge guid or "").
+    pub interactions: BTreeMap<String, Vec<Box<dyn Interaction>>>, // Those edges' interactions by edge guid.
 }
 
 impl Tombstone {
@@ -77,6 +82,7 @@ impl Tombstone {
             node,
             attribute,
             edges,
+            interactions: BTreeMap::new(),
         }
     }
 }
