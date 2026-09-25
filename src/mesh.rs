@@ -2266,6 +2266,27 @@ fn cut_result(
     result
 }
 
+/// Signed xy area of a face loop.
+fn arrangement_area(points: &[Point]) -> f64 {
+    let mut area = 0.0;
+
+    for i in 0..points.len() {
+        let a = &points[i];
+        let b = &points[(i + 1) % points.len()];
+        area += a[0] * b[1] - b[0] * a[1];
+    }
+
+    area / 2.0
+}
+
+/// Integer xy key of a point on the tolerance grid.
+fn arrangement_key(point: &Point, tolerance: f64) -> (i64, i64) {
+    (
+        (point[0] / tolerance).round() as i64,
+        (point[1] / tolerance).round() as i64,
+    )
+}
+
 /// Snap distance of the plane test, 1e-9 of the bounding box diagonal.
 fn cut_tolerance(points: &BTreeMap<usize, Point>) -> f64 {
     let big = f64::MAX;
@@ -2685,6 +2706,44 @@ impl Mesh {
                 mesh.triangulation
                     .insert(fk, Mesh::lines_cycle_triangles(cycle, &verts, &vkeys));
             }
+        }
+
+        mesh
+    }
+
+    /// Construct the planar faces of lines and boundary lines in xy split by Line::split_at_crossings, the outer face and faces under tolerance squared in area dropped; edge attribute line holds the index of the line an edge lies on, boundary lines numbered after lines, -1 when none.
+    pub fn from_arrangement(lines: &[Line], boundary: &[Line], tolerance: f64, merge: f64) -> Self {
+        let (pieces, sources) = Line::split_at_crossings(lines, boundary, tolerance, merge);
+        let mut mesh = Mesh::from_lines(&pieces, true, Some(tolerance * 0.1));
+
+        for face in mesh.faces() {
+            let mut points = Vec::new();
+
+            for key in mesh.face_vertices(face).unwrap().clone() {
+                points.push(mesh.vertex_point(key).unwrap());
+            }
+
+            if arrangement_area(&points).abs() < tolerance * tolerance {
+                mesh.remove_face(face);
+            }
+        }
+
+        let mut lookup: BTreeMap<[i64; 4], usize> = BTreeMap::new();
+
+        for i in 0..pieces.len() {
+            let a = arrangement_key(&pieces[i].start(), tolerance);
+            let b = arrangement_key(&pieces[i].end(), tolerance);
+            lookup.insert([a.min(b).0, a.min(b).1, a.max(b).0, a.max(b).1], sources[i]);
+        }
+
+        for edge in mesh.edges() {
+            let a = arrangement_key(&mesh.vertex_point(edge.0).unwrap(), tolerance);
+            let b = arrangement_key(&mesh.vertex_point(edge.1).unwrap(), tolerance);
+            let line = match lookup.get(&[a.min(b).0, a.min(b).1, a.max(b).0, a.max(b).1]) {
+                Some(source) => *source as f64,
+                None => -1.0,
+            };
+            mesh.set_edge_attribute(edge, "line", line);
         }
 
         mesh
@@ -5632,6 +5691,54 @@ impl Mesh {
         result.objectcolor = self.objectcolor.clone();
 
         result
+    }
+
+    /// Return the closed loops where the plane cuts the mesh: outer loops counter-clockwise about the plane normal, holes clockwise; empty when the mesh does not reach the plane.
+    pub fn section_by_plane(&self, plane: &Plane) -> Vec<Polyline> {
+        let below = self.cut_by_plane(&Plane::from_point_normal(
+            plane.origin(),
+            &plane.z_axis() * -1.0,
+            None,
+        ));
+        let mut loops = Vec::new();
+
+        for face in below.faces() {
+            let mut rings = vec![below.face[&face].clone()];
+            let mut flat = true;
+
+            if let Some(holes) = below.face_holes.get(&face) {
+                rings.extend(holes.iter().cloned());
+            }
+
+            for ring in &rings {
+                for key in ring {
+                    let distance =
+                        (&below.vertex[key].position() - &plane.origin()).dot(&plane.z_axis());
+                    flat = flat && distance.abs() <= Tolerance::APPROXIMATION;
+                }
+            }
+
+            if !flat {
+                continue;
+            }
+
+            for (i, ring) in rings.iter().enumerate() {
+                let mut points = Vec::new();
+
+                for key in ring {
+                    points.push(below.vertex[key].position());
+                }
+
+                if (newell_normal(&points).dot(&plane.z_axis()) > 0.0) != (i == 0) {
+                    points.reverse();
+                }
+
+                points.push(points[0].clone());
+                loops.push(Polyline::new(points));
+            }
+        }
+
+        loops
     }
 
     // ═══════════════════════════════════════════════════════════════════════════

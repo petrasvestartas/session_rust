@@ -223,6 +223,44 @@ pub fn run_mesh_from_lines() -> TestResult {
     })
 }
 
+pub fn run_mesh_from_arrangement() -> TestResult {
+    MINI_TEST!("From Arrangement", {
+        use crate::Line;
+        use crate::Mesh;
+        use crate::Point;
+
+        let lines = vec![
+            Line::from_points(&Point::new(-2.0, 5.0, 0.0), &Point::new(12.0, 5.0, 0.0)),
+            Line::from_points(&Point::new(5.0, 0.0, 0.0), &Point::new(5.0, 10.0, 0.0)),
+            Line::from_points(&Point::new(2.0, 0.0, 0.0), &Point::new(8.0, 0.0, 0.0)),
+            Line::from_points(&Point::new(0.3, 0.3, 0.0), &Point::new(5.0, 5.0, 0.0)),
+        ];
+        let boundary = vec![
+            Line::from_points(&Point::new(0.0, 0.0, 0.0), &Point::new(10.0, 0.0, 0.0)),
+            Line::from_points(&Point::new(10.0, 0.0, 0.0), &Point::new(10.0, 10.0, 0.0)),
+            Line::from_points(&Point::new(10.0, 10.0, 0.0), &Point::new(0.0, 10.0, 0.0)),
+            Line::from_points(&Point::new(0.0, 10.0, 0.0), &Point::new(0.0, 0.0, 0.0)),
+        ];
+        let mesh = Mesh::from_arrangement(&lines, &boundary, 0.01, 0.5);
+        let mut horizontal = 0;
+        let mut diagonal = 0;
+        let mut sides = 0;
+
+        for edge in mesh.edges() {
+            let line = mesh.edge_attribute(edge, "line").unwrap();
+            horizontal += if line == 0.0 { 1 } else { 0 };
+            diagonal += if line == 3.0 { 1 } else { 0 };
+            sides += if line >= 4.0 { 1 } else { 0 };
+        }
+
+        MINI_CHECK!(mesh.number_of_faces() == 5);
+        MINI_CHECK!(mesh.number_of_edges() == 13);
+        MINI_CHECK!(horizontal == 2);
+        MINI_CHECK!(diagonal == 1);
+        MINI_CHECK!(sides == 8);
+    })
+}
+
 pub fn run_mesh_from_polygon_with_holes() -> TestResult {
     MINI_TEST!("From Polygon With Holes", {
         use crate::Mesh;
@@ -1799,6 +1837,88 @@ pub fn run_mesh_cut_by_plane() -> TestResult {
     })
 }
 
+pub fn run_mesh_section_by_plane() -> TestResult {
+    MINI_TEST!("Section By Plane", {
+        use crate::Mesh;
+        use crate::Plane;
+        use crate::Point;
+        use crate::Polyline;
+        use crate::Vector;
+
+        let plane =
+            Plane::from_point_normal(Point::new(0.0, 0.0, 0.0), Vector::new(0.0, 0.0, 1.0), None);
+        let bx = Mesh::create_box(2.0, 2.0, 2.0);
+        let middle = bx.section_by_plane(&plane);
+        let down = bx.section_by_plane(&Plane::from_point_normal(
+            Point::new(0.0, 0.0, 0.0),
+            Vector::new(0.0, 0.0, -1.0),
+            None,
+        ));
+        let above = bx.section_by_plane(&Plane::from_point_normal(
+            Point::new(0.0, 0.0, 5.0),
+            Vector::new(0.0, 0.0, 1.0),
+            None,
+        ));
+
+        MINI_CHECK!(middle.len() == 1);
+        MINI_CHECK!(middle[0].point_count() == 5);
+        MINI_CHECK!(middle[0].is_closed());
+        MINI_CHECK!(!middle[0].is_clockwise(&plane));
+        MINI_CHECK!(down[0].is_clockwise(&plane));
+        MINI_CHECK!(above.is_empty());
+
+        let bottom = vec![
+            Polyline::rectangle(
+                &Point::new(0.0, 0.0, 0.0),
+                &Vector::new(1.0, 0.0, 0.0),
+                &Vector::new(0.0, 1.0, 0.0),
+                4.0,
+                4.0,
+                true,
+            ),
+            Polyline::rectangle(
+                &Point::new(1.0, 1.0, 0.0),
+                &Vector::new(1.0, 0.0, 0.0),
+                &Vector::new(0.0, 1.0, 0.0),
+                2.0,
+                2.0,
+                true,
+            )
+            .reversed(),
+        ];
+        let top = vec![
+            Polyline::rectangle(
+                &Point::new(0.0, 0.0, 2.0),
+                &Vector::new(1.0, 0.0, 0.0),
+                &Vector::new(0.0, 1.0, 0.0),
+                4.0,
+                4.0,
+                true,
+            ),
+            Polyline::rectangle(
+                &Point::new(1.0, 1.0, 2.0),
+                &Vector::new(1.0, 0.0, 0.0),
+                &Vector::new(0.0, 1.0, 0.0),
+                2.0,
+                2.0,
+                true,
+            )
+            .reversed(),
+        ];
+        let tube = Mesh::loft(&bottom, &top, true, true);
+        let rings = tube.section_by_plane(&Plane::from_point_normal(
+            Point::new(0.0, 0.0, 1.0),
+            Vector::new(0.0, 0.0, 1.0),
+            None,
+        ));
+
+        MINI_CHECK!(rings.len() == 2);
+        MINI_CHECK!(!rings[0].is_clockwise(&plane));
+        MINI_CHECK!(rings[1].is_clockwise(&plane));
+        MINI_CHECK!(TOLERANCE.is_close(rings[1].get_point(0).unwrap()[2], 1.0));
+    })
+}
+
 pub fn run_mesh_volume_far_from_origin() -> TestResult {
     MINI_TEST!("Volume Far From Origin", {
         use crate::Mesh;
@@ -2908,6 +3028,11 @@ REGISTER_MINI_TEST!(
 REGISTER_MINI_TEST!("Mesh", "From Lines", crate::mesh_test::run_mesh_from_lines);
 REGISTER_MINI_TEST!(
     "Mesh",
+    "From Arrangement",
+    crate::mesh_test::run_mesh_from_arrangement
+);
+REGISTER_MINI_TEST!(
+    "Mesh",
     "From Polygon With Holes",
     crate::mesh_test::run_mesh_from_polygon_with_holes
 );
@@ -2964,6 +3089,11 @@ REGISTER_MINI_TEST!(
     "Mesh",
     "Cut By Plane",
     crate::mesh_test::run_mesh_cut_by_plane
+);
+REGISTER_MINI_TEST!(
+    "Mesh",
+    "Section By Plane",
+    crate::mesh_test::run_mesh_section_by_plane
 );
 REGISTER_MINI_TEST!(
     "Mesh",

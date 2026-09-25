@@ -1087,6 +1087,11 @@ pub fn get_all_tests() -> Vec<RegisteredTest> {
             name: "Extend Keeps Properties",
             func: run_line_extend_keeps_properties,
         },
+        RegisteredTest {
+            group: "Line",
+            name: "Split At Crossings",
+            func: run_line_split_at_crossings,
+        },
         // Polyline tests
         RegisteredTest {
             group: "Polyline",
@@ -1342,6 +1347,11 @@ pub fn get_all_tests() -> Vec<RegisteredTest> {
             group: "Polyline",
             name: "Extend Edge Equally",
             func: run_polyline_extend_edge_equally,
+        },
+        RegisteredTest {
+            group: "Polyline",
+            name: "Offset Sides",
+            func: run_polyline_offset_sides,
         },
         // Plane tests
         RegisteredTest {
@@ -1764,6 +1774,11 @@ pub fn get_all_tests() -> Vec<RegisteredTest> {
         },
         RegisteredTest {
             group: "Mesh",
+            name: "From Arrangement",
+            func: run_mesh_from_arrangement,
+        },
+        RegisteredTest {
+            group: "Mesh",
             name: "From Polygon With Holes",
             func: run_mesh_from_polygon_with_holes,
         },
@@ -1836,6 +1851,11 @@ pub fn get_all_tests() -> Vec<RegisteredTest> {
             group: "Mesh",
             name: "Cut By Plane",
             func: run_mesh_cut_by_plane,
+        },
+        RegisteredTest {
+            group: "Mesh",
+            name: "Section By Plane",
+            func: run_mesh_section_by_plane,
         },
         RegisteredTest {
             group: "Mesh",

@@ -1064,6 +1064,48 @@ impl Polyline {
 
         cut
     }
+
+    /// Return the loop closed with side i moved right of its direction in xy by distances[i], outwards for a counter-clockwise loop; corners mitred, the larger distance where two sides are parallel.
+    pub fn offset_sides(&self, distances: &[f64]) -> Polyline {
+        let mut points = self.get_points();
+
+        if self.is_closed() {
+            points.pop();
+        }
+
+        let count = points.len();
+        let mut outward = Vec::new();
+
+        for i in 0..count {
+            let next = &points[(i + 1) % count];
+            outward.push(
+                Vector::new(next[1] - points[i][1], points[i][0] - next[0], 0.0).normalized(),
+            );
+        }
+
+        let mut result = Vec::new();
+
+        for i in 0..count {
+            let before = &outward[(i + count - 1) % count];
+            let after = &outward[i];
+            let a = distances[(i + count - 1) % count];
+            let b = distances[i];
+            let cosine = before.dot(after);
+
+            if 1.0 - cosine * cosine < 1e-9 {
+                result.push(&points[i] + &(before * a.max(b)));
+            } else {
+                result.push(
+                    &(&points[i] + &(before * ((a - cosine * b) / (1.0 - cosine * cosine))))
+                        + &(after * ((b - cosine * a) / (1.0 - cosine * cosine))),
+                );
+            }
+        }
+
+        result.push(result[0].clone());
+
+        Polyline::new(result)
+    }
 }
 
 impl Default for Polyline {

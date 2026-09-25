@@ -1187,6 +1187,41 @@ pub fn run_polyline_extend_edge_equally() -> TestResult {
     })
 }
 
+pub fn run_polyline_offset_sides() -> TestResult {
+    MINI_TEST!("Offset Sides", {
+        use crate::Point;
+        use crate::Polyline;
+
+        let square = Polyline::new(vec![
+            Point::new(0.0, 0.0, 0.0),
+            Point::new(2.0, 0.0, 0.0),
+            Point::new(2.0, 2.0, 0.0),
+            Point::new(0.0, 2.0, 0.0),
+            Point::new(0.0, 0.0, 0.0),
+        ]);
+        let split = Polyline::new(vec![
+            Point::new(0.0, 0.0, 0.0),
+            Point::new(1.0, 0.0, 0.0),
+            Point::new(2.0, 0.0, 0.0),
+            Point::new(2.0, 1.0, 0.0),
+            Point::new(0.0, 1.0, 0.0),
+            Point::new(0.0, 0.0, 0.0),
+        ]);
+        let moved = square.offset_sides(&[1.0, 0.0, 0.0, 0.0]);
+        let stepped = split.offset_sides(&[1.0, 2.0, 0.0, 0.0, 0.0]);
+
+        MINI_CHECK!(moved.point_count() == 5);
+        MINI_CHECK!(moved.is_closed());
+        MINI_CHECK!(TOLERANCE.is_close(moved.get_point(0).unwrap()[1], -1.0));
+        MINI_CHECK!(TOLERANCE.is_close(moved.get_point(1).unwrap()[0], 2.0));
+        MINI_CHECK!(TOLERANCE.is_close(moved.get_point(1).unwrap()[1], -1.0));
+        MINI_CHECK!(TOLERANCE.is_close(moved.get_point(2).unwrap()[1], 2.0));
+        MINI_CHECK!(TOLERANCE.is_close(stepped.get_point(0).unwrap()[1], -1.0));
+        MINI_CHECK!(TOLERANCE.is_close(stepped.get_point(1).unwrap()[1], -2.0));
+        MINI_CHECK!(TOLERANCE.is_close(stepped.get_point(2).unwrap()[1], -2.0));
+    })
+}
+
 REGISTER_MINI_TEST!(
     "Polyline",
     "Constructor",
@@ -1441,4 +1476,9 @@ REGISTER_MINI_TEST!(
     "Polyline",
     "Extend Edge Equally",
     crate::polyline_test::run_polyline_extend_edge_equally
+);
+REGISTER_MINI_TEST!(
+    "Polyline",
+    "Offset Sides",
+    crate::polyline_test::run_polyline_offset_sides
 );

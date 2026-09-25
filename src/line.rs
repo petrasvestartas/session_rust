@@ -7,6 +7,7 @@ use crate::Vector;
 use crate::Xform;
 use serde::Deserialize;
 use serde::Serialize;
+use std::collections::BTreeSet;
 use std::fmt;
 use std::ops::Add;
 use std::ops::AddAssign;
@@ -449,6 +450,282 @@ impl Neg for &Line {
     }
 }
 
+/// A piece of an input line while the crossings are computed.
+#[derive(Clone)]
+struct SplitSegment {
+    a: Point,                 // Start at z 0.
+    b: Point,                 // End at z 0.
+    source: usize,            // Index of the input line, boundary lines after lines.
+    boundary: bool,           // True for a boundary line.
+    alive: bool,              // False once a stronger collinear segment took it.
+    stops: Vec<(f64, usize)>, // Distance along it and index of each of its stops.
+}
+
+/// A point every piece ends on: a segment end or a crossing.
+struct SplitStop {
+    point: Point, // At z 0.
+    order: i32,   // Weld priority: 0 a boundary end, 1 a boundary crossing, 2 the rest.
+}
+
+/// Unit xy direction from a to b.
+fn split_direction(a: &Point, b: &Point) -> Vector {
+    Vector::new(b[0] - a[0], b[1] - a[1], 0.0).normalized()
+}
+
+/// Distance in xy from a to b.
+fn split_distance(a: &Point, b: &Point) -> f64 {
+    (b[0] - a[0]).hypot(b[1] - a[1])
+}
+
+/// True when segment a takes a collinear overlap from b: the boundary first, then the earlier line.
+fn split_is_stronger(a: &SplitSegment, b: &SplitSegment) -> bool {
+    if a.boundary != b.boundary {
+        return a.boundary;
+    }
+
+    a.source < b.source
+}
+
+/// Distance along a segment from its start to the foot of a point.
+fn split_parameter(segment: &SplitSegment, point: &Point) -> f64 {
+    (point - &segment.a).dot(&split_direction(&segment.a, &segment.b))
+}
+
+/// Collinear overlaps resolved: the weaker segment loses the overlapped stretch and keeps the rest as new pieces.
+fn split_overlaps(segments: &mut Vec<SplitSegment>, tolerance: f64) {
+    let mut i = 0;
+
+    while i < segments.len() {
+        let mut j = 0;
+
+        while j < segments.len() {
+            if i == j
+                || !segments[i].alive
+                || !segments[j].alive
+                || split_is_stronger(&segments[j], &segments[i])
+            {
+                j += 1;
+                continue;
+            }
+
+            let di = split_direction(&segments[i].a, &segments[i].b);
+            let dj = split_direction(&segments[j].a, &segments[j].b);
+
+            if di.cross(&dj)[2].abs() > 1e-6
+                || (&segments[j].a - &segments[i].a).cross(&di)[2].abs() > tolerance
+            {
+                j += 1;
+                continue;
+            }
+
+            let length = split_distance(&segments[j].a, &segments[j].b);
+            let low = 0.0f64.max(
+                split_parameter(&segments[j], &segments[i].a)
+                    .min(split_parameter(&segments[j], &segments[i].b)),
+            );
+            let high = length.min(
+                split_parameter(&segments[j], &segments[i].a)
+                    .max(split_parameter(&segments[j], &segments[i].b)),
+            );
+
+            if high - low <= tolerance {
+                j += 1;
+                continue;
+            }
+
+            let loser = segments[j].clone();
+            segments[j].alive = false;
+
+            if low > tolerance {
+                segments.push(SplitSegment {
+                    a: loser.a.clone(),
+                    b: &loser.a + &(&dj * low),
+                    source: loser.source,
+                    boundary: loser.boundary,
+                    alive: true,
+                    stops: Vec::new(),
+                });
+            }
+
+            if length - high > tolerance {
+                segments.push(SplitSegment {
+                    a: &loser.a + &(&dj * high),
+                    b: loser.b.clone(),
+                    source: loser.source,
+                    boundary: loser.boundary,
+                    alive: true,
+                    stops: Vec::new(),
+                });
+            }
+
+            j += 1;
+        }
+
+        i += 1;
+    }
+}
+
+/// The stops of every live segment: its ends, then every crossing with a later one.
+fn split_stops(segments: &mut [SplitSegment], tolerance: f64) -> Vec<SplitStop> {
+    let mut stops = Vec::new();
+
+    for segment in segments.iter_mut() {
+        if !segment.alive {
+            continue;
+        }
+
+        let order = if segment.boundary { 0 } else { 2 };
+        segment.stops.push((0.0, stops.len()));
+        stops.push(SplitStop {
+            point: segment.a.clone(),
+            order,
+        });
+        segment
+            .stops
+            .push((split_distance(&segment.a, &segment.b), stops.len()));
+        stops.push(SplitStop {
+            point: segment.b.clone(),
+            order,
+        });
+    }
+
+    for i in 0..segments.len() {
+        for j in i + 1..segments.len() {
+            if !segments[i].alive || !segments[j].alive {
+                continue;
+            }
+
+            let u = &segments[i].b - &segments[i].a;
+            let v = &segments[j].b - &segments[j].a;
+            let denominator = u.cross(&v)[2];
+
+            if denominator.abs() < 1e-9 * u.magnitude() * v.magnitude() {
+                continue;
+            }
+
+            let w = &segments[j].a - &segments[i].a;
+            let t = w.cross(&v)[2] / denominator;
+            let s = w.cross(&u)[2] / denominator;
+
+            if t < -tolerance / u.magnitude()
+                || t > 1.0 + tolerance / u.magnitude()
+                || s < -tolerance / v.magnitude()
+                || s > 1.0 + tolerance / v.magnitude()
+            {
+                continue;
+            }
+
+            let order = if segments[i].boundary || segments[j].boundary {
+                1
+            } else {
+                2
+            };
+            segments[i]
+                .stops
+                .push((t.clamp(0.0, 1.0) * u.magnitude(), stops.len()));
+            segments[j]
+                .stops
+                .push((s.clamp(0.0, 1.0) * v.magnitude(), stops.len()));
+            stops.push(SplitStop {
+                point: &segments[i].a + &(&u * t.clamp(0.0, 1.0)),
+                order,
+            });
+        }
+    }
+
+    stops
+}
+
+/// Stops within merge of an earlier stop in priority order welded onto it: the kept points and the kept index of every stop.
+fn split_welds(stops: &[SplitStop], merge: f64) -> (Vec<Point>, Vec<usize>) {
+    let mut points: Vec<Point> = Vec::new();
+    let mut kept = vec![0; stops.len()];
+
+    for order in 0..3 {
+        for index in 0..stops.len() {
+            if stops[index].order != order {
+                continue;
+            }
+
+            let mut found = points.len();
+
+            for (k, point) in points.iter().enumerate() {
+                if split_distance(point, &stops[index].point) <= merge {
+                    found = k;
+                    break;
+                }
+            }
+
+            if found == points.len() {
+                points.push(stops[index].point.clone());
+            }
+
+            kept[index] = found;
+        }
+    }
+
+    (points, kept)
+}
+
+/// Pieces of every live segment between consecutive stops as welded vertex pairs with their source, each pair once, then pieces with a dangling end removed until every end is shared.
+fn split_edges(
+    segments: &mut [SplitSegment],
+    canonical: &[usize],
+    vertices: usize,
+) -> (Vec<(usize, usize)>, Vec<usize>) {
+    let mut seen: BTreeSet<(usize, usize)> = BTreeSet::new();
+    let mut pairs: Vec<(usize, usize)> = Vec::new();
+    let mut sources: Vec<usize> = Vec::new();
+
+    for segment in segments.iter_mut() {
+        segment.stops.sort_by(|a, b| a.partial_cmp(b).unwrap());
+
+        if !segment.alive {
+            continue;
+        }
+
+        for k in 0..segment.stops.len().saturating_sub(1) {
+            let a = canonical[segment.stops[k].1];
+            let b = canonical[segment.stops[k + 1].1];
+            let piece = (a.min(b), a.max(b));
+
+            if piece.0 != piece.1 && seen.insert(piece) {
+                pairs.push(piece);
+                sources.push(segment.source);
+            }
+        }
+    }
+
+    for _ in 0..=pairs.len() {
+        let mut degree = vec![0; vertices];
+
+        for piece in &pairs {
+            degree[piece.0] += 1;
+            degree[piece.1] += 1;
+        }
+
+        let mut kept_pairs = Vec::new();
+        let mut kept_sources = Vec::new();
+
+        for k in 0..pairs.len() {
+            if degree[pairs[k].0] >= 2 && degree[pairs[k].1] >= 2 {
+                kept_pairs.push(pairs[k]);
+                kept_sources.push(sources[k]);
+            }
+        }
+
+        let pruned = kept_pairs.len() != pairs.len();
+        pairs = kept_pairs;
+        sources = kept_sources;
+
+        if !pruned {
+            break;
+        }
+    }
+
+    (pairs, sources)
+}
+
 impl Line {
     // ═══════════════════════════════════════════════════════════════════════════
     // Transformation
@@ -609,6 +886,45 @@ impl Line {
             Polyline::line_from_projected_points(&line.start(), &line.end(), points)?;
 
         Some(Line::from_points(&output_start, &output_end))
+    }
+
+    /// Split lines and boundary lines in xy at every crossing within tolerance, a collinear overlap kept by the boundary, else by the earlier line; split points within merge welded onto boundary ends, then boundary crossings, then the rest; dangling pieces dropped. Returns the pieces, a piece two lines share kept once, and the index of the line of each, boundary lines numbered after lines.
+    pub fn split_at_crossings(
+        lines: &[Line],
+        boundary: &[Line],
+        tolerance: f64,
+        merge: f64,
+    ) -> (Vec<Line>, Vec<usize>) {
+        let mut segments = Vec::new();
+
+        for i in 0..lines.len() + boundary.len() {
+            let line = if i < lines.len() {
+                &lines[i]
+            } else {
+                &boundary[i - lines.len()]
+            };
+            segments.push(SplitSegment {
+                a: Point::new(line.start()[0], line.start()[1], 0.0),
+                b: Point::new(line.end()[0], line.end()[1], 0.0),
+                source: i,
+                boundary: i >= lines.len(),
+                alive: true,
+                stops: Vec::new(),
+            });
+        }
+
+        split_overlaps(&mut segments, tolerance);
+        let stops = split_stops(&mut segments, tolerance);
+        let (points, kept) = split_welds(&stops, merge);
+        let (pairs, sources) = split_edges(&mut segments, &kept, points.len());
+
+        let mut pieces = Vec::new();
+
+        for pair in &pairs {
+            pieces.push(Line::from_points(&points[pair.0], &points[pair.1]));
+        }
+
+        (pieces, sources)
     }
 
     /// Compute the collinear overlap with other; None when none or a single point.
