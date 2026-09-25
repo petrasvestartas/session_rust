@@ -400,6 +400,66 @@ pub fn run_boolean_polyline_large_coords_auto_scale() -> TestResult {
     })
 }
 
+pub fn run_boolean_polyline_regions() -> TestResult {
+    MINI_TEST!("Regions", {
+        use crate::BooleanPolyline;
+        use crate::Plane;
+        use crate::Point;
+        use crate::Polyline;
+        use crate::Vector;
+
+        let plane = Plane::xy_plane();
+        let outer = Polyline::rectangle(
+            &Point::new(0.0, 0.0, 0.0),
+            &Vector::new(1.0, 0.0, 0.0),
+            &Vector::new(0.0, 1.0, 0.0),
+            10.0,
+            10.0,
+            true,
+        );
+        let inner = Polyline::rectangle(
+            &Point::new(3.0, 3.0, 0.0),
+            &Vector::new(1.0, 0.0, 0.0),
+            &Vector::new(0.0, 1.0, 0.0),
+            4.0,
+            4.0,
+            true,
+        );
+        let left = Polyline::rectangle(
+            &Point::new(0.0, -1.0, 0.0),
+            &Vector::new(1.0, 0.0, 0.0),
+            &Vector::new(0.0, 1.0, 0.0),
+            5.0,
+            12.0,
+            true,
+        );
+        let apart = Polyline::rectangle(
+            &Point::new(20.0, 0.0, 0.0),
+            &Vector::new(1.0, 0.0, 0.0),
+            &Vector::new(0.0, 1.0, 0.0),
+            10.0,
+            10.0,
+            true,
+        );
+        let frame = BooleanPolyline::compute_regions(std::slice::from_ref(&outer), &[inner], 2);
+        let half = BooleanPolyline::compute_regions(&frame, &[left], 0);
+        let both = BooleanPolyline::compute_regions(&[outer], &[apart], 1);
+        let mut clockwise = 0;
+
+        for ring in &frame {
+            clockwise += if ring.is_clockwise(&plane) { 1 } else { 0 };
+        }
+
+        MINI_CHECK!(frame.len() == 2);
+        MINI_CHECK!(frame[0].is_closed());
+        MINI_CHECK!(clockwise == 1);
+        MINI_CHECK!(half.len() == 1);
+        MINI_CHECK!(half[0].point_count() == 9);
+        MINI_CHECK!(!half[0].is_clockwise(&plane));
+        MINI_CHECK!(both.len() == 2);
+    })
+}
+
 pub fn run_boolean_polyline_open_horizontal_line_vs_unit_square() -> TestResult {
     MINI_TEST!("Horizontal Line Vs Unit Square", {
         use crate::BooleanPolyline;
@@ -535,6 +595,11 @@ REGISTER_MINI_TEST!(
     "Boolean Polyline",
     "Large Coords Auto Scale",
     crate::boolean_polyline_test::run_boolean_polyline_large_coords_auto_scale
+);
+REGISTER_MINI_TEST!(
+    "Boolean Polyline",
+    "Regions",
+    crate::boolean_polyline_test::run_boolean_polyline_regions
 );
 REGISTER_MINI_TEST!(
     "Boolean Polyline Open",

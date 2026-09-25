@@ -5084,6 +5084,11 @@ pub fn get_all_tests() -> Vec<RegisteredTest> {
             name: "Large Coords Auto Scale",
             func: run_boolean_polyline_large_coords_auto_scale,
         },
+        RegisteredTest {
+            group: "Boolean Polyline",
+            name: "Regions",
+            func: run_boolean_polyline_regions,
+        },
         // Boolean Polyline Open tests
         RegisteredTest {
             group: "Boolean Polyline Open",

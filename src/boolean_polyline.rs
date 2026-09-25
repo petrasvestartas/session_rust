@@ -2883,6 +2883,50 @@ impl BooleanPolyline {
         })
     }
 
+    /// Compute the nonzero Vatti boolean of two sets of closed rings in xy, holes clockwise, with clip_type 0 intersection, 1 union, 2 a minus b; closed rings, outer counter-clockwise, holes clockwise.
+    pub fn compute_regions(a: &[Polyline], b: &[Polyline], clip_type: i32) -> Vec<Polyline> {
+        let mut ca = Vec::new();
+        let mut cb = Vec::new();
+
+        for ring in a {
+            ca.extend_from_slice(&ring.coords);
+        }
+
+        for ring in b {
+            cb.extend_from_slice(&ring.coords);
+        }
+
+        let bool_scale = v_bool_scale(&ca, ca.len() / 3, &cb, cb.len() / 3);
+
+        SCRATCH.with(|cell| {
+            let sc = &mut *cell.borrow_mut();
+            sc.reset(ca.len() / 3 + cb.len() / 3);
+
+            for ring in a {
+                let n = v_strip_closing(&ring.coords, ring.coords.len() / 3);
+                v_add_path_from_doubles(sc, &ring.coords, n, 0, bool_scale);
+            }
+
+            for ring in b {
+                let n = v_strip_closing(&ring.coords, ring.coords.len() / 3);
+                v_add_path_from_doubles(sc, &ring.coords, n, 1, bool_scale);
+            }
+
+            if !v_execute_internal(sc, clip_type) {
+                return vec![];
+            }
+
+            let mut rings = v_extract(sc, 1.0 / bool_scale);
+
+            for ring in rings.iter_mut() {
+                let first = ring.get_point(0).unwrap();
+                ring.add_point(first);
+            }
+
+            rings
+        })
+    }
+
     /// Return the number of output points of compute without building polylines.
     pub fn compute_count(a: &Polyline, b: &Polyline, clip_type: i32) -> i32 {
         let ca = &a.coords;
