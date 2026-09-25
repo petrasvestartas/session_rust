@@ -268,7 +268,7 @@ fn twist_subs(s: &NurbsSurface, usp: &[f64], vsp: &[f64], twist_tol: f64) -> usi
 }
 
 /// One more subdivision on the largest span when the total is even, so a closed direction triangulates seamlessly.
-fn make_odd(subs: &mut [usize]) {
+fn set_odd_total(subs: &mut [usize]) {
     let mut total = 0;
 
     for sub in subs.iter() {
@@ -393,7 +393,7 @@ fn grid_params(
     let closed = s.is_closed(dir);
 
     if closed && count == 0 {
-        make_odd(&mut subs);
+        set_odd_total(&mut subs);
     }
 
     let mut params = if count > 0 {

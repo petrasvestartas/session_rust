@@ -26,18 +26,19 @@ pub struct Tolerance {
     _angulardeflection: Option<f64>, // Angular deflection override.
 }
 
+/// Resolved tolerance values in their JSON shape.
 #[derive(Deserialize, Serialize)]
 struct ToleranceData {
-    absolute: f64,
-    angular: f64,
-    angulardeflection: f64,
-    approximation: f64,
-    lineardeflection: f64,
-    precision: i32,
-    relative: f64,
+    absolute: f64,          // Absolute tolerance.
+    angular: f64,           // Angular tolerance in radians.
+    angulardeflection: f64, // Angular deflection.
+    approximation: f64,     // Approximation tolerance.
+    lineardeflection: f64,  // Linear deflection.
+    precision: i32,         // Decimal precision.
+    relative: f64,          // Relative tolerance.
     #[serde(rename = "type")]
-    kind: String,
-    unit: String,
+    kind: String, // Type tag, "Tolerance".
+    unit: String,           // Unit system, "M" or "MM".
 }
 
 struct ToleranceReset<'a> {
@@ -442,24 +443,14 @@ impl Tolerance {
     // ═══════════════════════════════════════════════════════════════════════════
     // JSON
     // ═══════════════════════════════════════════════════════════════════════════
-    /// Serialize to sorted JSON.
+    /// Serialize to a sorted JSON string.
     pub fn jsondump(&self) -> Result<String, Box<dyn std::error::Error>> {
-        crate::file_encoders::sorted_json_string(&ToleranceData {
-            absolute: self.absolute(),
-            angular: self.angular(),
-            angulardeflection: self.angulardeflection(),
-            approximation: self.approximation(),
-            lineardeflection: self.lineardeflection(),
-            precision: self.precision(),
-            relative: self.relative(),
-            kind: "Tolerance".to_string(),
-            unit: self.unit(),
-        })
+        crate::file_encoders::file_json_dumps(self, false)
     }
 
-    /// Deserialize from JSON.
-    pub fn jsonload(data: &str) -> Result<Self, Box<dyn std::error::Error>> {
-        let data: ToleranceData = serde_json::from_str(data)?;
+    /// Deserialize from a JSON string.
+    pub fn jsonload(json_data: &str) -> Result<Self, Box<dyn std::error::Error>> {
+        let data: ToleranceData = serde_json::from_str(json_data)?;
 
         let mut tolerance = Self::new(&data.unit);
         tolerance.set_absolute(data.absolute);
@@ -485,9 +476,7 @@ impl Tolerance {
 
     /// Write JSON to a file.
     pub fn file_json_dump(&self, filename: &str) -> Result<(), Box<dyn std::error::Error>> {
-        std::fs::write(filename, self.jsondump()?)?;
-
-        Ok(())
+        crate::file_encoders::file_json_dump(self, filename, true)
     }
 
     /// Read JSON from a file.
@@ -579,6 +568,24 @@ impl Tolerance {
 impl Default for Tolerance {
     fn default() -> Self {
         Self::new("M")
+    }
+}
+
+impl Serialize for Tolerance {
+    /// Serialize the resolved values with the type tag.
+    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        ToleranceData {
+            absolute: self.absolute(),
+            angular: self.angular(),
+            angulardeflection: self.angulardeflection(),
+            approximation: self.approximation(),
+            lineardeflection: self.lineardeflection(),
+            precision: self.precision(),
+            relative: self.relative(),
+            kind: "Tolerance".to_string(),
+            unit: self.unit(),
+        }
+        .serialize(serializer)
     }
 }
 

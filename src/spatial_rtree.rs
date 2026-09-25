@@ -136,7 +136,7 @@ impl SpatialRTree {
     /// Insert an item with its bounding box.
     pub fn insert(&mut self, a_min: [f64; 3], a_max: [f64; 3], a_data: i32) {
         let branch = Branch {
-            m_rect: self.make_rect(a_min, a_max),
+            m_rect: self.to_rect(a_min, a_max),
             m_child: NULL_IDX,
             m_data: a_data,
         };
@@ -147,7 +147,7 @@ impl SpatialRTree {
 
     /// Remove an item by its bounding box and data; false when not found.
     pub fn remove(&mut self, a_min: [f64; 3], a_max: [f64; 3], a_data: i32) -> bool {
-        let rect = self.make_rect(a_min, a_max);
+        let rect = self.to_rect(a_min, a_max);
         let mut reinsert_list: Vec<usize> = Vec::new();
 
         if !self.remove_rect_internal(&rect, a_data, &mut reinsert_list) {
@@ -195,7 +195,7 @@ impl SpatialRTree {
         a_max: [f64; 3],
         mut a_callback: impl FnMut(i32) -> bool,
     ) -> i32 {
-        let rect = self.make_rect(a_min, a_max);
+        let rect = self.to_rect(a_min, a_max);
         let mut stack = [EMPTY_VISIT; STACK_SIZE];
         let mut top = 0;
         stack[top] = Visit {
@@ -265,7 +265,7 @@ impl SpatialRTree {
     // Rect math
     // ═══════════════════════════════════════════════════════════════════════════
     /// Build a rect from min and max corners.
-    fn make_rect(&self, a_min: [f64; 3], a_max: [f64; 3]) -> Rect {
+    fn to_rect(&self, a_min: [f64; 3], a_max: [f64; 3]) -> Rect {
         let mut rect = EMPTY_RECT;
 
         for i in 0..3 {
@@ -523,7 +523,7 @@ impl SpatialRTree {
     }
 
     /// Move partitioned branches into the two nodes.
-    fn load_nodes(&mut self, node_a: usize, node_b: usize, part_vars: &mut PartitionVars) {
+    fn distribute_branches(&mut self, node_a: usize, node_b: usize, part_vars: &mut PartitionVars) {
         for i in 0..part_vars.m_total as usize {
             let target = if part_vars.m_partition[i] == 0 {
                 node_a
@@ -543,7 +543,7 @@ impl SpatialRTree {
 
         let new_node = self.alloc_node();
         self.nodes[new_node].m_level = self.nodes[node].m_level;
-        self.load_nodes(node, new_node, &mut part_vars);
+        self.distribute_branches(node, new_node, &mut part_vars);
 
         new_node
     }

@@ -14,7 +14,12 @@ pub fn file_json_dumps<T: Serialize>(
     let json = sort_json_keys(serde_json::to_value(data)?);
 
     if pretty {
-        return Ok(serde_json::to_string_pretty(&json)?);
+        let mut buffer = Vec::new();
+        let formatter = serde_json::ser::PrettyFormatter::with_indent(b"    ");
+        let mut serializer = serde_json::Serializer::with_formatter(&mut buffer, formatter);
+        json.serialize(&mut serializer)?;
+
+        return Ok(String::from_utf8(buffer)?);
     }
 
     Ok(serde_json::to_string(&json)?)
@@ -144,11 +149,5 @@ pub fn sort_json_keys(value: serde_json::Value) -> serde_json::Value {
 
 /// Serialize an object to a pretty JSON string with sorted keys and four-space indent.
 pub fn sorted_json_string<T: Serialize>(data: &T) -> Result<String, Box<dyn std::error::Error>> {
-    let sorted = sort_json_keys(serde_json::to_value(data)?);
-    let mut buffer = Vec::new();
-    let formatter = serde_json::ser::PrettyFormatter::with_indent(b"    ");
-    let mut serializer = serde_json::Serializer::with_formatter(&mut buffer, formatter);
-    sorted.serialize(&mut serializer)?;
-
-    Ok(String::from_utf8(buffer)?)
+    file_json_dumps(data, true)
 }

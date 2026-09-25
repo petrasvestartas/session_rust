@@ -63,6 +63,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let max = Point::new(694.0, 567.0, 796.0);
     let pts = vec![min.clone(), max.clone()];
     let bbox = OBB::from_points(&pts, 0.0, None);
+
     if let Some(intersection_points) = session_rust::intersection::ray_box(&l0, &bbox, 0.0, 1000.0)
     {
         if intersection_points.len() >= 2 {
@@ -74,13 +75,16 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     }
 
     let sphere_center_test = Point::new(457.0, 192.0, 207.0);
+
     if let Some(sphere_points) =
         session_rust::intersection::ray_sphere(&l0, &sphere_center_test, 265.0)
     {
         print!("7. ray_sphere: {} hits", sphere_points.len());
+
         for (i, p) in sphere_points.iter().enumerate() {
             print!(", p{i}={p}");
         }
+
         println!();
     } else {
         println!("7. ray_sphere: 0 hits");
@@ -89,6 +93,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let tp1 = Point::new(214.0, 567.0, 484.0);
     let tp2 = Point::new(214.0, 192.0, 796.0);
     let tp3 = Point::new(694.0, 192.0, 484.0);
+
     if let Some(tri_hit) =
         session_rust::intersection::ray_triangle(&l0, &tp1, &tp2, &tp3, Tolerance::APPROXIMATION)
     {
@@ -102,6 +107,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         "../../data/bunny.obj",
         "data/bunny.obj",
     ];
+
     for p in try_paths.iter() {
         if Path::new(p).exists() {
             if let Ok(m) = read_file_obj(p) {
@@ -110,6 +116,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             }
         }
     }
+
     if let Some(bunny) = bunny_opt {
         println!(
             "Bunny: {} vertices, {} faces",
@@ -121,9 +128,11 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         let tri_build_start = Instant::now();
         let mut tris: Vec<[usize; 3]> = Vec::new();
         let mut tri_boxes: Vec<OBB> = Vec::new();
+
         for face in faces.iter() {
             if face.len() >= 3 {
                 let v0 = face[0];
+
                 for i in 1..(face.len() - 1) {
                     let t = [v0, face[i], face[i + 1]];
                     tris.push(t);
@@ -136,6 +145,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 }
             }
         }
+
         let world_size = SpatialBVH::compute_world_size(&tri_boxes);
         let tri_bvh = SpatialBVH::from_boxes(&tri_boxes, world_size);
         let tri_build_end = Instant::now();
@@ -146,10 +156,12 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
         let brute_start = Instant::now();
         let mut mesh_hits = 0usize;
+
         for t in tris.iter() {
             let v0 = &vertices[t[0]];
             let v1 = &vertices[t[1]];
             let v2 = &vertices[t[2]];
+
             if session_rust::intersection::ray_triangle(
                 &zaxis,
                 v0,
@@ -162,6 +174,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 mesh_hits += 1;
             }
         }
+
         let brute_end = Instant::now();
         let mesh_time_ms = (brute_end - brute_start).as_secs_f64() * 1000.0;
         println!("Ray-mesh (brute): {mesh_hits} hits, {mesh_time_ms:.3} ms");
@@ -174,11 +187,13 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         let dir_unit = Vector::new(dir[0] / len, dir[1] / len, dir[2] / len);
         tri_bvh.ray_cast(&origin, &dir_unit, &mut candidate_ids, true);
         let mut bvh_hits = 0usize;
+
         for idx in candidate_ids.iter() {
             let t = tris[*idx];
             let v0 = &vertices[t[0]];
             let v1 = &vertices[t[1]];
             let v2 = &vertices[t[2]];
+
             if session_rust::intersection::ray_triangle(
                 &zaxis,
                 v0,
@@ -191,9 +206,11 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 bvh_hits += 1;
             }
         }
+
         let bvh_end = Instant::now();
         let bvh_time_ms = (bvh_end - bvh_start).as_secs_f64() * 1000.0;
         print!("Ray-mesh (SpatialBVH):   {bvh_hits} hits, {bvh_time_ms:.3} ms");
+
         if bvh_time_ms > 0.0 && mesh_time_ms > 0.0 {
             println!(" ({:.2}x faster)", mesh_time_ms / bvh_time_ms);
         } else {
@@ -205,14 +222,16 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     println!("\n=== SpatialBVH Collision Detection (Rust) ===");
     let box_counts = [100usize, 5000usize, 10000usize];
+
     for &box_count in box_counts.iter() {
         let world_size = 100.0f64;
         let min_size = 5.0f64;
         let max_size = 10.0f64;
-        unsafe { libc::srand(42) }; // match C++ seeding per dataset
-        let rand_max = 2147483647.0f64; // typical RAND_MAX on macOS
+        unsafe { libc::srand(42) };
+        let rand_max = 2147483647.0f64;
         let next_rand01 = || -> f64 { unsafe { (libc::rand() as i64) as f64 / rand_max } };
         let mut boxes: Vec<OBB> = Vec::with_capacity(box_count);
+
         for _ in 0..box_count {
             let x = (next_rand01() - 0.5) * world_size;
             let y = (next_rand01() - 0.5) * world_size;
@@ -230,6 +249,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 half,
             ));
         }
+
         let bvh_start = Instant::now();
         let bvh = SpatialBVH::from_boxes(&boxes, world_size);
         let bvh_end = Instant::now();
@@ -291,6 +311,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         let tolerance = 0.5;
         let hits = scene.ray_cast(&ray_origin, &ray_direction, tolerance);
         println!("{} hit(s):", hits.len());
+
         for h in hits.iter() {
             let name = if h.guid == pt1_guid {
                 pt1.name.clone()
@@ -315,8 +336,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         let world_size = 100.0f64;
         let mut scene = Session::new("perf_test");
         let mut pure_boxes: Vec<OBB> = Vec::with_capacity(object_count);
-        unsafe { libc::srand(42) }; // match C++
+        unsafe { libc::srand(42) };
         let rand_max = 2147483647.0f64;
+
         for i in 0..object_count {
             let x = (unsafe { libc::rand() } as f64 / rand_max - 0.5) * world_size;
             let y = (unsafe { libc::rand() } as f64 / rand_max - 0.5) * world_size;
@@ -332,6 +354,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 Vector::new(0.5, 0.5, 0.5),
             ));
         }
+
         let ray_origin = Point::new(0.0, 0.0, 0.0);
         let ray_dir_x = Vector::new(1.0, 0.0, 0.0);
         let ray_dir_y = Vector::new(0.0, 1.0, 0.0);
@@ -371,7 +394,6 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     println!("\n=== NURBS Curve-Plane Intersection Test (Rust) ===");
 
-    // Create NURBS curve from 3 points with degree 2
     let p0 = Point::new(0.0, 0.0, -453.0);
     let p1 = Point::new(1500.0, 0.0, -147.0);
     let p2 = Point::new(3000.0, 0.0, -147.0);
@@ -379,7 +401,6 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let points = vec![p0, p1, p2];
     let degree = 2;
 
-    // Create a clamped NURBS curve
     let curve = NurbsCurve::create(false, degree, &points);
     println!(
         "Created NURBS curve: degree={}, cv_count={}",
@@ -387,8 +408,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         curve.cv_count()
     );
 
-    // Create planes perpendicular to X-axis at regular intervals
     let mut planes = Vec::new();
+
     for i in 0..7 {
         let origin = Point::new(i as f64 * 500.0, 0.0, 0.0);
         let normal = Vector::new(1.0, 0.0, 0.0);
@@ -397,8 +418,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     println!("\nIntersecting curve with {} planes:", planes.len());
 
-    // Intersect curve with each plane using intersection module
     let mut sampled_points = Vec::new();
+
     for plane in &planes {
         let intersection_points =
             session_rust::intersection::curve_plane_points(&curve, plane, None);

@@ -1,8 +1,3 @@
-//! Cross-language geometry library with Point, Color, and Vector types.
-//! Supports JSON serialization for interoperability between Rust, Python, and C++.
-
-// Module declarations - makes modules publicly accessible
-// Usage: session_rust::point::Point
 #![allow(static_mut_refs)]
 
 pub mod proto {
@@ -10,11 +5,20 @@ pub mod proto {
 }
 
 pub mod prelude {
-    pub use crate::session::{Geometry, RayHit, Session};
-    pub use crate::{
-        Color, Line, Mesh, NurbsCurve, NurbsSurface, Plane, Point, PointCloud, Polyline, Vector,
-        OBB,
-    };
+    pub use crate::session::Geometry;
+    pub use crate::session::RayHit;
+    pub use crate::session::Session;
+    pub use crate::Color;
+    pub use crate::Line;
+    pub use crate::Mesh;
+    pub use crate::NurbsCurve;
+    pub use crate::NurbsSurface;
+    pub use crate::Plane;
+    pub use crate::Point;
+    pub use crate::PointCloud;
+    pub use crate::Polyline;
+    pub use crate::Vector;
+    pub use crate::OBB;
 }
 
 pub mod aabb;
@@ -101,6 +105,8 @@ pub mod session;
 pub mod session_config;
 pub mod session_config_test;
 pub mod session_test;
+pub mod simple_split;
+pub mod simple_split_test;
 pub mod spatial_aabbtree;
 pub mod spatial_aabbtree_test;
 pub mod spatial_bvh;
@@ -130,25 +136,36 @@ pub use collection::Collection;
 pub use color::Color;
 pub use convex_hull::ConvexHull;
 pub use element::Element;
-pub use file_obj::{
-    read_file_obj, read_file_obj_from_str, read_file_obj_polylines, write_file_obj,
-    write_file_obj_to_string,
-};
+pub use file_obj::read_file_obj;
+pub use file_obj::read_file_obj_from_str;
+pub use file_obj::read_file_obj_polylines;
+pub use file_obj::write_file_obj;
+pub use file_obj::write_file_obj_to_string;
+pub use graph::Edge;
+pub use graph::Graph;
 pub use graph::Vertex;
-pub use graph::{Edge, Graph};
 pub use history::History;
 pub use instance_ref::InstanceRef;
-pub use interaction::{Interaction, InteractionUnknown};
-pub use io_xyz::{read_xyz, read_xyz_from_str, write_xyz, write_xyz_to_string};
+pub use interaction::Interaction;
+pub use interaction::InteractionUnknown;
+pub use io_xyz::read_xyz;
+pub use io_xyz::read_xyz_from_str;
+pub use io_xyz::write_xyz;
+pub use io_xyz::write_xyz_to_string;
 pub use line::Line;
 pub use matrix::Matrix;
-pub use mesh::{LoftPanel, LoftWallFace, Mesh};
-pub use mesh_offset::{MeshOffset, MeshOffsetLayers};
+pub use mesh::LoftPanel;
+pub use mesh::LoftWallFace;
+pub use mesh::Mesh;
+pub use mesh_offset::MeshOffset;
+pub use mesh_offset::MeshOffsetLayers;
 pub use nurbscurve::NurbsCurve;
 pub use nurbssurface::NurbsSurface;
-pub use nurbssurface_trimmed::{NurbsSurfaceTrimmed, TrimLoops};
+pub use nurbssurface_trimmed::NurbsSurfaceTrimmed;
+pub use nurbssurface_trimmed::TrimLoops;
 pub use obb::OBB;
-pub use objects::{Component, Objects};
+pub use objects::Component;
+pub use objects::Objects;
 pub use plane::Plane;
 pub use point::Point;
 pub use pointcloud::PointCloud;
@@ -157,8 +174,13 @@ pub use primitives::Primitives;
 pub use quaternion::Quaternion;
 pub use remesh_nurbssurface_adaptive::RemeshNurbsSurfaceAdaptive;
 pub use remesh_nurbssurface_grid::RemeshNurbsSurfaceGrid;
-pub use render_mesh::{GpuCache, GpuMesh, RenderMesh, RenderVertex};
-pub use session::{Geometry, Item, Session};
+pub use render_mesh::GpuCache;
+pub use render_mesh::GpuMesh;
+pub use render_mesh::RenderMesh;
+pub use render_mesh::RenderVertex;
+pub use session::Geometry;
+pub use session::Item;
+pub use session::Session;
 pub use session_config::SessionConfig;
 pub use spatial_aabbtree::SpatialAABBTree;
 pub use spatial_bvh::SpatialBVH;
@@ -166,9 +188,7 @@ pub use spatial_kdtree::SpatialKDTree;
 pub use spatial_octree::SpatialOctree;
 pub use spatial_rtree::SpatialRTree;
 pub use tolerance::Tolerance;
-pub use tree::{Tree, TreeNode};
+pub use tree::Tree;
+pub use tree::TreeNode;
 pub use vector::Vector;
 pub use xform::Xform;
-
-pub mod simple_split;
-pub mod simple_split_test;

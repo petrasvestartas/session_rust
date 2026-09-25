@@ -1351,6 +1351,11 @@ pub fn get_all_tests() -> Vec<RegisteredTest> {
         },
         RegisteredTest {
             group: "Plane",
+            name: "Is Valid",
+            func: run_plane_is_valid,
+        },
+        RegisteredTest {
+            group: "Plane",
             name: "Reverse",
             func: run_plane_reverse,
         },
@@ -1366,31 +1371,6 @@ pub fn get_all_tests() -> Vec<RegisteredTest> {
         },
         RegisteredTest {
             group: "Plane",
-            name: "Is Coplanar",
-            func: run_plane_is_coplanar,
-        },
-        RegisteredTest {
-            group: "Plane",
-            name: "Transform",
-            func: run_plane_transform,
-        },
-        RegisteredTest {
-            group: "Plane",
-            name: "Json Roundtrip",
-            func: run_plane_json_roundtrip,
-        },
-        RegisteredTest {
-            group: "Plane",
-            name: "Protobuf Roundtrip",
-            func: run_plane_protobuf_roundtrip,
-        },
-        RegisteredTest {
-            group: "Plane",
-            name: "Is Valid",
-            func: run_plane_is_valid,
-        },
-        RegisteredTest {
-            group: "Plane",
             name: "Is Same Direction",
             func: run_plane_is_same_direction,
         },
@@ -1398,6 +1378,11 @@ pub fn get_all_tests() -> Vec<RegisteredTest> {
             group: "Plane",
             name: "Is Same Position",
             func: run_plane_is_same_position,
+        },
+        RegisteredTest {
+            group: "Plane",
+            name: "Is Coplanar",
+            func: run_plane_is_coplanar,
         },
         RegisteredTest {
             group: "Plane",
@@ -1411,8 +1396,23 @@ pub fn get_all_tests() -> Vec<RegisteredTest> {
         },
         RegisteredTest {
             group: "Plane",
+            name: "Transform",
+            func: run_plane_transform,
+        },
+        RegisteredTest {
+            group: "Plane",
             name: "Transformed",
             func: run_plane_transformed,
+        },
+        RegisteredTest {
+            group: "Plane",
+            name: "Json Roundtrip",
+            func: run_plane_json_roundtrip,
+        },
+        RegisteredTest {
+            group: "Plane",
+            name: "Protobuf Roundtrip",
+            func: run_plane_protobuf_roundtrip,
         },
         RegisteredTest {
             group: "Plane",
@@ -3855,11 +3855,6 @@ pub fn get_all_tests() -> Vec<RegisteredTest> {
         // Quaternion tests
         RegisteredTest {
             group: "Quaternion",
-            name: "Json Roundtrip",
-            func: run_quaternion_json_roundtrip,
-        },
-        RegisteredTest {
-            group: "Quaternion",
             name: "Constructor",
             func: run_quaternion_constructor,
         },
@@ -3942,6 +3937,11 @@ pub fn get_all_tests() -> Vec<RegisteredTest> {
             group: "Quaternion",
             name: "Nlerp",
             func: run_quaternion_nlerp,
+        },
+        RegisteredTest {
+            group: "Quaternion",
+            name: "Json Roundtrip",
+            func: run_quaternion_json_roundtrip,
         },
         RegisteredTest {
             group: "Quaternion",
@@ -4628,16 +4628,16 @@ pub fn get_all_tests() -> Vec<RegisteredTest> {
             name: "Double-Curved Triangle",
             func: run_remesh_nurbssurface_adaptive_double_curved_triangle,
         },
-        RegisteredTest {
-            group: "RemeshNurbsSurfaceGrid",
-            name: "Crease Normals",
-            func: run_remesh_nurbssurface_grid_crease_normals,
-        },
         // RemeshNurbsSurfaceGrid tests
         RegisteredTest {
             group: "RemeshNurbsSurfaceGrid",
             name: "Singular Planar Normal",
             func: run_remesh_nurbssurface_grid_singular_planar_normal,
+        },
+        RegisteredTest {
+            group: "RemeshNurbsSurfaceGrid",
+            name: "Crease Normals",
+            func: run_remesh_nurbssurface_grid_crease_normals,
         },
         RegisteredTest {
             group: "RemeshNurbsSurfaceGrid",
@@ -4697,6 +4697,11 @@ pub fn get_all_tests() -> Vec<RegisteredTest> {
         // SpatialRTree tests
         RegisteredTest {
             group: "SpatialRTree",
+            name: "Constructor",
+            func: run_rtree_constructor,
+        },
+        RegisteredTest {
+            group: "SpatialRTree",
             name: "Creation",
             func: run_rtree_creation,
         },
@@ -4749,11 +4754,6 @@ pub fn get_all_tests() -> Vec<RegisteredTest> {
             group: "SpatialRTree",
             name: "Search 100 Boxes",
             func: run_rtree_search_100_boxes,
-        },
-        RegisteredTest {
-            group: "SpatialRTree",
-            name: "Constructor",
-            func: run_rtree_constructor,
         },
         // Element tests
         RegisteredTest {

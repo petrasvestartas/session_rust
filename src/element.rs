@@ -39,17 +39,17 @@ fn to_hex(bytes: &[u8]) -> String {
     out
 }
 
-/// Decode hex text back to bytes.
-fn from_hex(hex: &str) -> Vec<u8> {
+/// Decode hex text back to bytes; bad hex is an error.
+fn from_hex(hex: &str) -> Result<Vec<u8>, Box<dyn std::error::Error>> {
     let mut out = Vec::with_capacity(hex.len() / 2);
 
     for i in (0..hex.len().saturating_sub(1)).step_by(2) {
-        if let Ok(b) = u8::from_str_radix(&hex[i..i + 2], 16) {
-            out.push(b);
-        }
+        let pair = hex.get(i..i + 2).ok_or("Invalid hex")?;
+
+        out.push(u8::from_str_radix(pair, 16)?);
     }
 
-    out
+    Ok(out)
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -124,7 +124,7 @@ impl ElementFeature {
     // JSON
     // ═══════════════════════════════════════════════════════════════════════════
     /// Serialize to a JSON object.
-    pub fn jsondump(&self) -> serde_json::Value {
+    fn to_json_value(&self) -> serde_json::Value {
         let mut outs = Vec::new();
 
         for o in &self.outlines {
@@ -143,7 +143,7 @@ impl ElementFeature {
     }
 
     /// Deserialize from a JSON object.
-    pub fn jsonload(data: &serde_json::Value) -> Self {
+    fn from_json_value(data: &serde_json::Value) -> Self {
         let mut f = Self::new(
             data["feature_type"].as_str().unwrap_or(""),
             data["face_index"].as_i64().unwrap_or(-1) as i32,
@@ -170,34 +170,35 @@ impl ElementFeature {
         f
     }
 
+    /// Serialize to a sorted JSON string.
+    pub fn jsondump(&self) -> Result<String, Box<dyn std::error::Error>> {
+        crate::file_encoders::file_json_dumps(self, false)
+    }
+
+    /// Deserialize from a JSON string.
+    pub fn jsonload(json_data: &str) -> Result<Self, Box<dyn std::error::Error>> {
+        Ok(serde_json::from_str(json_data)?)
+    }
+
     /// Serialize to a JSON string.
     pub fn file_json_dumps(&self) -> String {
-        let sorted = crate::file_encoders::sort_json_keys(self.jsondump());
-
-        serde_json::to_string(&sorted).unwrap_or_default()
+        self.jsondump()
+            .expect("Failed to serialize ElementFeature JSON")
     }
 
     /// Deserialize from a JSON string.
     pub fn file_json_loads(json_string: &str) -> Self {
-        let data: serde_json::Value = serde_json::from_str(json_string).unwrap_or_default();
-
-        Self::jsonload(&data)
+        Self::jsonload(json_string).expect("Failed to parse ElementFeature JSON")
     }
 
-    /// Write to a JSON file.
+    /// Write JSON to a file.
     pub fn file_json_dump(&self, filename: &str) -> Result<(), Box<dyn std::error::Error>> {
-        let sorted = crate::file_encoders::sort_json_keys(self.jsondump());
-
-        std::fs::write(filename, serde_json::to_string_pretty(&sorted)?)?;
-
-        Ok(())
+        crate::file_encoders::file_json_dump(self, filename, true)
     }
 
-    /// Read from a JSON file.
+    /// Read JSON from a file.
     pub fn file_json_load(filename: &str) -> Result<Self, Box<dyn std::error::Error>> {
-        let data: serde_json::Value = serde_json::from_str(&std::fs::read_to_string(filename)?)?;
-
-        Ok(Self::jsonload(&data))
+        Self::jsonload(&std::fs::read_to_string(filename)?)
     }
 
     // ═══════════════════════════════════════════════════════════════════════════
@@ -305,18 +306,18 @@ impl fmt::Display for ElementFeature {
 }
 
 impl Serialize for ElementFeature {
-    /// Serialize through jsondump.
+    /// Serialize through the JSON object.
     fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
-        self.jsondump().serialize(serializer)
+        self.to_json_value().serialize(serializer)
     }
 }
 
 impl<'de> Deserialize<'de> for ElementFeature {
-    /// Deserialize through jsonload.
+    /// Deserialize through the JSON object.
     fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
         let value = serde_json::Value::deserialize(deserializer)?;
 
-        Ok(Self::jsonload(&value))
+        Ok(Self::from_json_value(&value))
     }
 }
 
@@ -848,7 +849,7 @@ impl Element {
     // JSON
     // ═══════════════════════════════════════════════════════════════════════════
     /// Serialize to a JSON object.
-    pub fn jsondump(&self) -> serde_json::Value {
+    fn to_json_value(&self) -> serde_json::Value {
         self.ensure_geometry();
 
         let mut geo_data = serde_json::Value::Null;
@@ -870,7 +871,7 @@ impl Element {
         let mut feats = Vec::new();
 
         for f in &self.features {
-            feats.push(f.jsondump());
+            feats.push(f.to_json_value());
         }
 
         let mut ivs = Vec::new();
@@ -893,8 +894,8 @@ impl Element {
         })
     }
 
-    /// Deserialize from a JSON object.
-    pub fn jsonload(data: &serde_json::Value) -> Self {
+    /// Deserialize from a JSON object; bad element_data hex is an error.
+    fn from_json_value(data: &serde_json::Value) -> Result<Self, Box<dyn std::error::Error>> {
         let mut elem = Self::new("my_element");
         let geo_type = data["geometry_type"].as_str().unwrap_or("None");
         let has_data = !data["geometry_data"].is_null();
@@ -924,11 +925,11 @@ impl Element {
         }
 
         elem.element_type = data["element_type"].as_str().unwrap_or("").to_string();
-        elem.element_data = from_hex(data["element_data"].as_str().unwrap_or(""));
+        elem.element_data = from_hex(data["element_data"].as_str().unwrap_or(""))?;
 
         if let Some(fs) = data["features"].as_array() {
             for f in fs {
-                elem.features.push(ElementFeature::jsonload(f));
+                elem.features.push(ElementFeature::from_json_value(f));
             }
         }
 
@@ -940,37 +941,37 @@ impl Element {
             }
         }
 
-        elem
+        Ok(elem)
+    }
+
+    /// Serialize to a sorted JSON string.
+    pub fn jsondump(&self) -> Result<String, Box<dyn std::error::Error>> {
+        crate::file_encoders::file_json_dumps(self, false)
+    }
+
+    /// Deserialize from a JSON string.
+    pub fn jsonload(json_data: &str) -> Result<Self, Box<dyn std::error::Error>> {
+        Ok(serde_json::from_str(json_data)?)
     }
 
     /// Serialize to a JSON string.
     pub fn file_json_dumps(&self) -> String {
-        let sorted = crate::file_encoders::sort_json_keys(self.jsondump());
-
-        serde_json::to_string(&sorted).unwrap_or_default()
+        self.jsondump().expect("Failed to serialize Element JSON")
     }
 
     /// Deserialize from a JSON string.
     pub fn file_json_loads(json_string: &str) -> Self {
-        let data: serde_json::Value = serde_json::from_str(json_string).unwrap_or_default();
-
-        Self::jsonload(&data)
+        Self::jsonload(json_string).expect("Failed to parse Element JSON")
     }
 
-    /// Write to a JSON file.
+    /// Write JSON to a file.
     pub fn file_json_dump(&self, filename: &str) -> Result<(), Box<dyn std::error::Error>> {
-        let sorted = crate::file_encoders::sort_json_keys(self.jsondump());
-
-        std::fs::write(filename, serde_json::to_string_pretty(&sorted)?)?;
-
-        Ok(())
+        crate::file_encoders::file_json_dump(self, filename, true)
     }
 
-    /// Read from a JSON file.
+    /// Read JSON from a file.
     pub fn file_json_load(filename: &str) -> Result<Self, Box<dyn std::error::Error>> {
-        let data: serde_json::Value = serde_json::from_str(&std::fs::read_to_string(filename)?)?;
-
-        Ok(Self::jsonload(&data))
+        Self::jsonload(&std::fs::read_to_string(filename)?)
     }
 
     // ═══════════════════════════════════════════════════════════════════════════
@@ -1296,11 +1297,9 @@ impl Element {
 /// The factory a package registers for its own `element_type`: takes full serialized `session_proto.Element` bytes and returns `None` to decline.
 pub type ElementFactory = fn(&[u8]) -> Option<Element>;
 
-type Registry = Mutex<BTreeMap<String, ElementFactory>>;
-
 /// Function-local so a package registering from a static initializer finds it built.
-fn element_registry() -> &'static Registry {
-    static REGISTRY: OnceLock<Registry> = OnceLock::new();
+fn element_registry() -> &'static Mutex<BTreeMap<String, ElementFactory>> {
+    static REGISTRY: OnceLock<Mutex<BTreeMap<String, ElementFactory>>> = OnceLock::new();
 
     REGISTRY.get_or_init(|| Mutex::new(BTreeMap::new()))
 }
@@ -1337,17 +1336,17 @@ impl fmt::Display for Element {
 }
 
 impl Serialize for Element {
-    /// Serialize through jsondump.
+    /// Serialize through the JSON object.
     fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
-        self.jsondump().serialize(serializer)
+        self.to_json_value().serialize(serializer)
     }
 }
 
 impl<'de> Deserialize<'de> for Element {
-    /// Deserialize through jsonload.
+    /// Deserialize through the JSON object.
     fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
         let value = serde_json::Value::deserialize(deserializer)?;
 
-        Ok(Self::jsonload(&value))
+        Self::from_json_value(&value).map_err(serde::de::Error::custom)
     }
 }

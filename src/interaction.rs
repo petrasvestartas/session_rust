@@ -17,17 +17,17 @@ fn to_hex(bytes: &[u8]) -> String {
     out
 }
 
-/// Decode hex text back to bytes.
-fn from_hex(hex: &str) -> Vec<u8> {
+/// Decode hex text back to bytes; bad hex is an error.
+fn from_hex(hex: &str) -> Result<Vec<u8>, Box<dyn std::error::Error>> {
     let mut out = Vec::with_capacity(hex.len() / 2);
 
     for i in (0..hex.len().saturating_sub(1)).step_by(2) {
-        if let Ok(b) = u8::from_str_radix(&hex[i..i + 2], 16) {
-            out.push(b);
-        }
+        let pair = hex.get(i..i + 2).ok_or("Invalid hex")?;
+
+        out.push(u8::from_str_radix(pair, 16)?);
     }
 
-    out
+    Ok(out)
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -163,7 +163,8 @@ impl dyn Interaction {
     pub fn jsonload(data: &serde_json::Value) -> Box<dyn Interaction> {
         build_registered(
             data["interaction_type"].as_str().unwrap_or(""),
-            &from_hex(data["interaction_data"].as_str().unwrap_or("")),
+            &from_hex(data["interaction_data"].as_str().unwrap_or(""))
+                .expect("Invalid interaction_data hex"),
             data["guid"].as_str().unwrap_or(""),
             data["name"].as_str().unwrap_or(""),
         )
@@ -171,25 +172,21 @@ impl dyn Interaction {
 
     /// Serialize to a JSON string.
     pub fn file_json_dumps(&self) -> String {
-        let sorted = crate::file_encoders::sort_json_keys(self.jsondump());
-
-        serde_json::to_string(&sorted).unwrap_or_default()
+        crate::file_encoders::file_json_dumps(&self.jsondump(), false)
+            .expect("Failed to serialize Interaction JSON")
     }
 
     /// Deserialize from a JSON string through the registry; an unregistered type loads as an InteractionUnknown.
     pub fn file_json_loads(json_string: &str) -> Box<dyn Interaction> {
-        let data: serde_json::Value = serde_json::from_str(json_string).unwrap_or_default();
+        let data: serde_json::Value =
+            serde_json::from_str(json_string).expect("Failed to parse Interaction JSON");
 
         Self::jsonload(&data)
     }
 
     /// Write to a JSON file.
     pub fn file_json_dump(&self, filename: &str) -> Result<(), Box<dyn std::error::Error>> {
-        let sorted = crate::file_encoders::sort_json_keys(self.jsondump());
-
-        std::fs::write(filename, serde_json::to_string_pretty(&sorted)?)?;
-
-        Ok(())
+        crate::file_encoders::file_json_dump(&self.jsondump(), filename, true)
     }
 
     /// Read from a JSON file through the registry; an unregistered type loads as an InteractionUnknown.

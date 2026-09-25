@@ -302,56 +302,35 @@ impl VertexData {
 }
 
 /// A halfedge mesh data structure for representing polygonal surfaces.
-#[derive(Clone, Serialize, Deserialize)]
-#[serde(tag = "type", rename = "Mesh")]
+#[derive(Clone)]
 pub struct Mesh {
     pub halfedge: HashMap<usize, HashMap<usize, Option<usize>>>, // Halfedge connectivity.
     pub vertex: HashMap<usize, VertexData>,                      // Vertex data.
     pub face: HashMap<usize, Vec<usize>>,                        // Face vertex lists.
-    #[serde(skip)]
-    pub face_holes: HashMap<usize, Vec<Vec<usize>>>, // Face hole rings.
+    pub face_holes: HashMap<usize, Vec<Vec<usize>>>,             // Face hole rings.
     pub facedata: HashMap<usize, HashMap<String, f64>>,          // Face attributes.
     pub edgedata: HashMap<(usize, usize), HashMap<String, f64>>, // Edge attributes.
     pub default_vertex_attributes: HashMap<String, f64>,         // Default vertex attrs.
     pub default_face_attributes: HashMap<String, f64>,           // Default face attrs.
     pub default_edge_attributes: HashMap<String, f64>,           // Default edge attrs.
-    #[serde(
-        serialize_with = "crate::guid_serde::serialize",
-        deserialize_with = "crate::guid_serde::deserialize"
-    )]
-    guid: std::sync::OnceLock<String>, // Lazy guid.
+    guid: std::sync::OnceLock<String>,                           // Lazy guid.
     pub name: String,                                            // Mesh name.
-    #[serde(skip)]
-    pub color_mode: ColorMode,                 // Active color mode.
-    #[serde(skip)]
-    pointcolors: Vec<Color>,                   // Vertex colors.
-    #[serde(skip)]
-    facecolors: Vec<Color>,                    // Face colors.
-    #[serde(skip)]
-    linecolors: Vec<Color>,                    // Edge colors.
-    #[serde(skip)]
-    widths: Vec<f64>,                          // Edge widths.
-    #[serde(skip)]
-    objectcolor: Color,                        // Object color.
+    pub color_mode: ColorMode,                                   // Active color mode.
+    pointcolors: Vec<Color>,                                     // Vertex colors.
+    facecolors: Vec<Color>,                                      // Face colors.
+    linecolors: Vec<Color>,                                      // Edge colors.
+    widths: Vec<f64>,                                            // Edge widths.
+    objectcolor: Color,                                          // Object color.
     max_vertex: usize,                                           // Next vertex key.
     max_face: usize,                                             // Next face key.
-    #[serde(skip)]
-    pub triangulation: HashMap<usize, Vec<[usize; 3]>>, // Cached triangulations.
-    #[serde(skip)]
-    triangle_bvh_built: bool,                  // Whether the triangle caches are current.
-    #[serde(skip)]
-    pub tri_bvh: Option<SpatialBVH>,           // BVH over the cached triangle AABBs.
-    #[serde(skip)]
-    tri_aabbs: Vec<AABB>,                      // Per-triangle AABBs.
-    #[serde(skip)]
+    pub triangulation: HashMap<usize, Vec<[usize; 3]>>,          // Cached triangulations.
+    triangle_bvh_built: bool, // Whether the triangle caches are current.
+    pub tri_bvh: Option<SpatialBVH>, // BVH over the cached triangle AABBs.
+    tri_aabbs: Vec<AABB>,     // Per-triangle AABBs.
     pub tri_tris: Vec<[usize; 3]>, // Triangle vertex indices into tri_vertices; session_viewer reads it for memory accounting.
-    #[serde(skip)]
     tri_face_subidx: Vec<(usize, usize)>, // Face index and sub-triangle index per triangle.
-    #[serde(skip)]
     pub tri_vertices: Vec<Point>, // Sequential vertex positions; session_viewer reads it for memory accounting.
-    #[serde(skip)]
     tri_aabb_tree: Option<SpatialAABBTree>, // AABB tree over the cached triangle AABBs.
-    #[serde(skip)]
     pub(crate) gpu_cache: crate::render_mesh::GpuCache, // Cached GPU buffers, built by render_mesh and dropped on any geometry or color change.
 }
 
@@ -359,6 +338,25 @@ impl Default for Mesh {
     /// Construct an empty mesh.
     fn default() -> Self {
         Self::new()
+    }
+}
+
+impl Serialize for Mesh {
+    /// Serialize through the JSON object.
+    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        self.to_json_value().serialize(serializer)
+    }
+}
+
+impl<'de> Deserialize<'de> for Mesh {
+    /// Deserialize through the JSON object.
+    fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        let value = serde_json::Value::deserialize(deserializer)?;
+
+        match Mesh::from_json_value(&value) {
+            Some(mesh) => Ok(mesh),
+            None => Err(serde::de::Error::custom("Invalid mesh data")),
+        }
     }
 }
 
@@ -479,71 +477,75 @@ fn signed_area_2d(pts: &[(f64, f64)]) -> f64 {
 // ═══════════════════════════════════════════════════════════════════════════
 // Loft
 // ═══════════════════════════════════════════════════════════════════════════
+/// Role of a face inside a loft panel.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum LoftFaceRole {
-    TopCap,
-    BotCap,
-    QuadWall,
-    TriWall,
+    TopCap,   // Top cap face.
+    BotCap,   // Bottom cap face.
+    QuadWall, // Quad wall between matched edges.
+    TriWall,  // Triangle wall over an unmatched edge.
 }
 
 /// One wall face of a loft panel and the original vertices it spans.
 #[derive(Default)]
 pub struct LoftWallFace {
-    pub face_key: usize,
-    pub face_index: usize,
-    pub is_quad: bool,
-    pub top_v0: usize,
-    pub top_v1: usize,
-    pub bot_v0: usize,
-    pub bot_v1: usize,
+    pub face_key: usize,   // Local panel mesh face key.
+    pub face_index: usize, // Zero-based position of face_key in panel mesh.face.
+    pub is_quad: bool,     // Whether the wall is a quad rather than a triangle.
+    pub top_v0: usize,     // Original top-mesh vertex key.
+    pub top_v1: usize,     // Original top-mesh vertex key.
+    pub bot_v0: usize,     // Original bot-mesh vertex key, valid when is_quad.
+    pub bot_v1: usize,     // Original bot-mesh vertex key, valid when is_quad.
 }
 
 /// One lofted panel with its cap faces, walls and vertex maps.
 #[derive(Default)]
 pub struct LoftPanel {
-    pub mesh: Mesh,
-    pub top_face_key: Option<usize>,
-    pub bot_face_key: Option<usize>,
-    pub wall_faces: Vec<LoftWallFace>,
-    pub face_roles: HashMap<usize, LoftFaceRole>,
-    pub orig_top_to_local: HashMap<usize, usize>,
-    pub orig_bot_to_local: HashMap<usize, usize>,
-    pub top_vertices: Vec<usize>,
-    pub bot_vertices: Vec<usize>,
+    pub mesh: Mesh,                               // Panel mesh.
+    pub top_face_key: Option<usize>,              // Local key of top cap face.
+    pub bot_face_key: Option<usize>,              // Local key of bot cap face.
+    pub wall_faces: Vec<LoftWallFace>,            // Wall faces in order.
+    pub face_roles: HashMap<usize, LoftFaceRole>, // Face key to role for every face in mesh.
+    pub orig_top_to_local: HashMap<usize, usize>, // Original top vertex key to local key.
+    pub orig_bot_to_local: HashMap<usize, usize>, // Original bot vertex key to local key.
+    pub top_vertices: Vec<usize>,                 // Local keys of the top cap.
+    pub bot_vertices: Vec<usize>,                 // Local keys of the bot cap.
 }
 
 /// Two panel walls that face each other.
 pub struct LoftAdjPair {
-    pub pi: usize,
-    pub wi: usize,
-    pub pj: usize,
-    pub wj: usize,
+    pub pi: usize, // Panel index for side i.
+    pub wi: usize, // Wall face index for side i.
+    pub pj: usize, // Panel index for side j.
+    pub wj: usize, // Wall face index for side j.
 }
 
 /// Panels of loft_panels with their wall adjacency.
 pub struct LoftResult {
-    pub panels: Vec<LoftPanel>,
-    pub adjacency: Vec<LoftAdjPair>,
-    pub top_mesh: Mesh,
-    pub bot_mesh: Mesh,
+    pub panels: Vec<LoftPanel>,      // One panel per matched polygon pair.
+    pub adjacency: Vec<LoftAdjPair>, // Facing wall pairs.
+    pub top_mesh: Mesh,              // Top polygons of the matched panels, one face per panel.
+    pub bot_mesh: Mesh,              // Bot polygons of the matched panels, one face per panel.
 }
 
+/// Planar frame of a loft: origin and two in-plane axes.
 struct LoftFrame {
-    origin: Point,
-    xaxis: Vector,
-    yaxis: Vector,
+    origin: Point, // Frame origin.
+    xaxis: Vector, // Frame x axis.
+    yaxis: Vector, // Frame y axis.
 }
 
+/// Offset and length of one ring inside a flat point list.
 #[derive(Clone, Copy)]
 struct LoftRing {
-    off: usize,
-    n: usize,
+    off: usize, // Offset of the first point.
+    n: usize,   // Number of points.
 }
 
+/// Bottom and top rings of one lofted polygon.
 struct LoftPoly {
-    bot: LoftRing,
-    top: LoftRing,
+    bot: LoftRing, // Bottom ring.
+    top: LoftRing, // Top ring.
 }
 
 /// Return the 2D coordinates of p in the frame.
@@ -5720,7 +5722,7 @@ impl Mesh {
     }
 
     /// Serialize to a JSON object.
-    pub fn jsondump(&self) -> serde_json::Value {
+    fn to_json_value(&self) -> serde_json::Value {
         let mut edgedata_json = serde_json::Map::new();
 
         for ((u, v), attrs) in &self.edgedata {
@@ -5864,7 +5866,7 @@ impl Mesh {
     }
 
     /// Deserialize from a JSON object.
-    pub fn jsonload(data: &serde_json::Value) -> Option<Self> {
+    fn from_json_value(data: &serde_json::Value) -> Option<Self> {
         let mut mesh = Mesh::new();
 
         if let Some(guid) = data.get("guid").and_then(|v| v.as_str()) {
@@ -5950,37 +5952,34 @@ impl Mesh {
         Some(mesh)
     }
 
+    /// Serialize to a sorted JSON string.
+    pub fn jsondump(&self) -> Result<String, Box<dyn std::error::Error>> {
+        crate::file_encoders::file_json_dumps(self, false)
+    }
+
+    /// Deserialize from a JSON string.
+    pub fn jsonload(json_data: &str) -> Result<Self, Box<dyn std::error::Error>> {
+        Ok(serde_json::from_str(json_data)?)
+    }
+
     /// Serialize to a JSON string.
     pub fn file_json_dumps(&self) -> String {
-        let sorted = crate::file_encoders::sort_json_keys(self.jsondump());
-
-        serde_json::to_string_pretty(&sorted).unwrap_or_default()
+        self.jsondump().expect("Failed to serialize Mesh JSON")
     }
 
     /// Deserialize from a JSON string.
     pub fn file_json_loads(json_string: &str) -> Self {
-        let data: serde_json::Value = serde_json::from_str(json_string).unwrap_or_default();
-
-        Self::jsonload(&data).unwrap_or_default()
+        Self::jsonload(json_string).expect("Failed to parse Mesh JSON")
     }
 
-    /// Write to a JSON file.
+    /// Write JSON to a file.
     pub fn file_json_dump(&self, filename: &str) -> Result<(), Box<dyn std::error::Error>> {
-        let sorted = crate::file_encoders::sort_json_keys(self.jsondump());
-
-        std::fs::write(filename, serde_json::to_string_pretty(&sorted)?)?;
-
-        Ok(())
+        crate::file_encoders::file_json_dump(self, filename, true)
     }
 
-    /// Read from a JSON file.
+    /// Read JSON from a file.
     pub fn file_json_load(filename: &str) -> Result<Self, Box<dyn std::error::Error>> {
-        let data: serde_json::Value = serde_json::from_str(&std::fs::read_to_string(filename)?)?;
-
-        match Self::jsonload(&data) {
-            Some(mesh) => Ok(mesh),
-            None => Err("Invalid mesh data".into()),
-        }
+        Self::jsonload(&std::fs::read_to_string(filename)?)
     }
 
     // ═══════════════════════════════════════════════════════════════════════════

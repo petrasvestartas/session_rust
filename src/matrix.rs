@@ -874,9 +874,9 @@ impl Matrix {
     // ═══════════════════════════════════════════════════════════════════════════
     // JSON
     // ═══════════════════════════════════════════════════════════════════════════
-    /// Serialize to an ordered JSON string.
+    /// Serialize to a sorted JSON string.
     pub fn jsondump(&self) -> Result<String, Box<dyn std::error::Error>> {
-        crate::file_encoders::sorted_json_string(self)
+        crate::file_encoders::file_json_dumps(self, false)
     }
 
     /// Deserialize from a JSON string.
@@ -896,17 +896,12 @@ impl Matrix {
 
     /// Write JSON to a file.
     pub fn file_json_dump(&self, filename: &str) -> Result<(), Box<dyn std::error::Error>> {
-        let json = self.jsondump()?;
-        std::fs::write(filename, json)?;
-
-        Ok(())
+        crate::file_encoders::file_json_dump(self, filename, true)
     }
 
     /// Read JSON from a file.
     pub fn file_json_load(filename: &str) -> Result<Self, Box<dyn std::error::Error>> {
-        let json = std::fs::read_to_string(filename)?;
-
-        Self::jsonload(&json)
+        Self::jsonload(&std::fs::read_to_string(filename)?)
     }
 
     // ═══════════════════════════════════════════════════════════════════════════

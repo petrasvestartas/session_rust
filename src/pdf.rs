@@ -180,7 +180,6 @@ impl State {
 // ═══════════════════════════════════════════════════════════════════════════
 // Path walking
 // ═══════════════════════════════════════════════════════════════════════════
-
 /// One path op in device space, ctm applied and y flipped.
 enum Seg {
     Move([f64; 2]),                      // Start a subpath.
@@ -247,7 +246,6 @@ fn walk(path: &Path, ctm: Matrix, flip: f64) -> Vec<Seg> {
 // ═══════════════════════════════════════════════════════════════════════════
 // Flattening
 // ═══════════════════════════════════════════════════════════════════════════
-
 /// Distance between two points.
 fn dist(a: [f64; 2], b: [f64; 2]) -> f64 {
     ((a[0] - b[0]).powi(2) + (a[1] - b[1]).powi(2)).sqrt()
@@ -471,7 +469,6 @@ fn dash_runs(pts: &[[f64; 2]], pat: &[f64], phase: f64) -> Vec<Vec<[f64; 2]>> {
 // ═══════════════════════════════════════════════════════════════════════════
 // Islands
 // ═══════════════════════════════════════════════════════════════════════════
-
 /// Signed shoelace area of a closed contour.
 fn area_signed(loop_: &[[f64; 2]]) -> f64 {
     let mut a = 0.0;
@@ -630,7 +627,6 @@ fn islands(loops: Vec<Vec<[f64; 2]>>, even_odd: bool) -> Vec<Vec<Vec<[f64; 2]>>>
 // ═══════════════════════════════════════════════════════════════════════════
 // Triangulation
 // ═══════════════════════════════════════════════════════════════════════════
-
 /// Triangulate one island (border + holes) with earcut into vertices and triangle indices.
 fn earcut_raw(loops: &[Vec<[f64; 2]>]) -> (Vec<[f64; 2]>, Vec<usize>) {
     let mut flat: Vec<f64> = Vec::new();
@@ -714,7 +710,6 @@ fn place_glyph(verts: &[[f64; 2]], m: [f64; 6], flip: f64) -> Vec<[f64; 2]> {
 // ═══════════════════════════════════════════════════════════════════════════
 // Device
 // ═══════════════════════════════════════════════════════════════════════════
-
 /// Convert a device colour of any colorspace to RGB.
 fn to_color(cs: &Colorspace, color: &[f32], alpha: f32, cp: ColorParams) -> Color {
     let rgb = match cs.convert_color(color, &Colorspace::device_rgb(), None, cp) {
@@ -899,7 +894,6 @@ impl NativeDevice for Collector {
 // ═══════════════════════════════════════════════════════════════════════════
 // Fonts
 // ═══════════════════════════════════════════════════════════════════════════
-
 /// The face name of a font descriptor.
 fn font_name(obj: &PdfObject) -> Option<String> {
     let name = obj.get_dict("FontName").ok().flatten()?;
@@ -983,7 +977,6 @@ fn write_fonts(src: &str, stem: &str) {
 // ═══════════════════════════════════════════════════════════════════════════
 // Session output
 // ═══════════════════════════════════════════════════════════════════════════
-
 /// Lift 2D points to z = 0.
 fn points(pts: &[[f64; 2]]) -> Vec<Point> {
     let mut out: Vec<Point> = Vec::with_capacity(pts.len());

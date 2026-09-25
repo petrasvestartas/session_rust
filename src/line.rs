@@ -686,12 +686,12 @@ impl Line {
     // ═══════════════════════════════════════════════════════════════════════════
     // JSON
     // ═══════════════════════════════════════════════════════════════════════════
-    /// Serialize to a JSON object.
+    /// Serialize to a sorted JSON string.
     pub fn jsondump(&self) -> Result<String, Box<dyn std::error::Error>> {
-        crate::file_encoders::sorted_json_string(self)
+        crate::file_encoders::file_json_dumps(self, false)
     }
 
-    /// Deserialize from a JSON object.
+    /// Deserialize from a JSON string.
     pub fn jsonload(json_data: &str) -> Result<Self, Box<dyn std::error::Error>> {
         Ok(serde_json::from_str(json_data)?)
     }
@@ -706,14 +706,12 @@ impl Line {
         Self::jsonload(json_string).expect("Failed to parse Line JSON")
     }
 
-    /// Write to a JSON file.
+    /// Write JSON to a file.
     pub fn file_json_dump(&self, filename: &str) -> Result<(), Box<dyn std::error::Error>> {
-        std::fs::write(filename, self.jsondump()?)?;
-
-        Ok(())
+        crate::file_encoders::file_json_dump(self, filename, true)
     }
 
-    /// Read from a JSON file.
+    /// Read JSON from a file.
     pub fn file_json_load(filename: &str) -> Result<Self, Box<dyn std::error::Error>> {
         Self::jsonload(&std::fs::read_to_string(filename)?)
     }

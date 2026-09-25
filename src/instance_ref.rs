@@ -10,23 +10,6 @@ use std::ops::Index;
 use std::ops::IndexMut;
 use std::sync::OnceLock;
 
-/// Write features as their JSON objects.
-fn serialize_features<S: serde::Serializer>(
-    features: &[ElementFeature],
-    serializer: S,
-) -> Result<S::Ok, S::Error> {
-    serializer.collect_seq(features.iter().map(ElementFeature::jsondump))
-}
-
-/// Read features from their JSON objects.
-fn deserialize_features<'de, D: serde::Deserializer<'de>>(
-    deserializer: D,
-) -> Result<Vec<ElementFeature>, D::Error> {
-    let values: Vec<serde_json::Value> = Deserialize::deserialize(deserializer)?;
-
-    Ok(values.iter().map(ElementFeature::jsonload).collect())
-}
-
 /// A block reference: places a definition (by guid) at a transform.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(tag = "type", rename = "InstanceRef")]
@@ -42,11 +25,7 @@ pub struct InstanceRef {
     pub color: Color, // Display color, used when flags has FLAG_COLOR.
     #[serde(default)]
     pub flags: u32, // FLAG_* bits.
-    #[serde(
-        default,
-        serialize_with = "serialize_features",
-        deserialize_with = "deserialize_features"
-    )]
+    #[serde(default)]
     pub features: Vec<ElementFeature>, // Per-instance features in the definition frame, drawn after the definition's own.
 }
 
@@ -184,10 +163,10 @@ impl InstanceRef {
     // ═══════════════════════════════════════════════════════════════════════════
     /// Serialize to a sorted JSON string.
     pub fn jsondump(&self) -> Result<String, Box<dyn std::error::Error>> {
-        crate::file_encoders::sorted_json_string(self)
+        crate::file_encoders::file_json_dumps(self, false)
     }
 
-    /// Deserialize from a JSON string; missing flags and features default to none.
+    /// Deserialize from a JSON string.
     pub fn jsonload(json_data: &str) -> Result<Self, Box<dyn std::error::Error>> {
         Ok(serde_json::from_str(json_data)?)
     }
@@ -203,14 +182,12 @@ impl InstanceRef {
         Self::jsonload(json_string).expect("Failed to parse InstanceRef JSON")
     }
 
-    /// Write to a JSON file.
+    /// Write JSON to a file.
     pub fn file_json_dump(&self, filename: &str) -> Result<(), Box<dyn std::error::Error>> {
-        std::fs::write(filename, self.jsondump()?)?;
-
-        Ok(())
+        crate::file_encoders::file_json_dump(self, filename, true)
     }
 
-    /// Read from a JSON file.
+    /// Read JSON from a file.
     pub fn file_json_load(filename: &str) -> Result<Self, Box<dyn std::error::Error>> {
         Self::jsonload(&std::fs::read_to_string(filename)?)
     }

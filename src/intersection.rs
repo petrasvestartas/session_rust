@@ -44,7 +44,7 @@ fn max_pivot_3x3(rows: &[[f64; 3]; 3]) -> (f64, usize, usize) {
 }
 
 /// Rows of a 3x3 system in a 3x4 work array, row i swapped to the top.
-fn load_rows_3x3(rows: &[[f64; 3]; 3], ds: &[f64; 3], i: usize) -> [f64; 12] {
+fn to_work_array(rows: &[[f64; 3]; 3], ds: &[f64; 3], i: usize) -> [f64; 12] {
     let mut w = [0.0f64; 12];
     let mut src = [0usize, 1, 2];
     src.swap(0, i);
@@ -184,7 +184,7 @@ fn solve_3x3(
     let mut maxpiv = temp.abs();
     let mut minpiv = maxpiv;
     let mut slot = [0usize, 1, 2];
-    let mut w = load_rows_3x3(&rows, &[d0, d1, d2], i);
+    let mut w = to_work_array(&rows, &[d0, d1, d2], i);
 
     if j != 0 {
         swap_columns(&mut w, &mut slot, 0, j);

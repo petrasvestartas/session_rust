@@ -587,7 +587,7 @@ impl PointCloud {
 
     /// Serialize to a sorted JSON string.
     pub fn jsondump(&self) -> Result<String, Box<dyn std::error::Error>> {
-        crate::file_encoders::sorted_json_string(self)
+        crate::file_encoders::file_json_dumps(self, false)
     }
 
     /// Deserialize from a JSON string.
@@ -608,9 +608,7 @@ impl PointCloud {
 
     /// Write JSON to a file.
     pub fn file_json_dump(&self, filename: &str) -> Result<(), Box<dyn std::error::Error>> {
-        std::fs::write(filename, self.jsondump()?)?;
-
-        Ok(())
+        crate::file_encoders::file_json_dump(self, filename, true)
     }
 
     /// Read JSON from a file.

@@ -151,7 +151,7 @@ fn sample(s: &NurbsSurface, u: f64, v: f64) -> Corner {
 }
 
 /// Leaf cell over [u0, u1] x [v0, v1] from its sampled corners SW SE NE NW, centre sampled here.
-fn make_node(
+fn compute_node(
     s: &NurbsSurface,
     u0: f64,
     v0: f64,
@@ -319,7 +319,7 @@ fn split_node(q: &mut Quadtree, idx: usize, mids: &[Corner; 4], split_u: bool, s
     q.nodes[idx].leaf = false;
 
     if split_u && split_v {
-        q.nodes.push(make_node(
+        q.nodes.push(compute_node(
             s,
             p.u0,
             p.v0,
@@ -333,7 +333,7 @@ fn split_node(q: &mut Quadtree, idx: usize, mids: &[Corner; 4], split_u: bool, s
             ],
             depth,
         ));
-        q.nodes.push(make_node(
+        q.nodes.push(compute_node(
             s,
             um,
             p.v0,
@@ -347,7 +347,7 @@ fn split_node(q: &mut Quadtree, idx: usize, mids: &[Corner; 4], split_u: bool, s
             ],
             depth,
         ));
-        q.nodes.push(make_node(
+        q.nodes.push(compute_node(
             s,
             um,
             vm,
@@ -361,7 +361,7 @@ fn split_node(q: &mut Quadtree, idx: usize, mids: &[Corner; 4], split_u: bool, s
             ],
             depth,
         ));
-        q.nodes.push(make_node(
+        q.nodes.push(compute_node(
             s,
             p.u0,
             vm,
@@ -376,7 +376,7 @@ fn split_node(q: &mut Quadtree, idx: usize, mids: &[Corner; 4], split_u: bool, s
             depth,
         ));
     } else if split_u {
-        q.nodes.push(make_node(
+        q.nodes.push(compute_node(
             s,
             p.u0,
             p.v0,
@@ -390,7 +390,7 @@ fn split_node(q: &mut Quadtree, idx: usize, mids: &[Corner; 4], split_u: bool, s
             ],
             depth,
         ));
-        q.nodes.push(make_node(
+        q.nodes.push(compute_node(
             s,
             um,
             p.v0,
@@ -405,7 +405,7 @@ fn split_node(q: &mut Quadtree, idx: usize, mids: &[Corner; 4], split_u: bool, s
             depth,
         ));
     } else {
-        q.nodes.push(make_node(
+        q.nodes.push(compute_node(
             s,
             p.u0,
             p.v0,
@@ -419,7 +419,7 @@ fn split_node(q: &mut Quadtree, idx: usize, mids: &[Corner; 4], split_u: bool, s
             ],
             depth,
         ));
-        q.nodes.push(make_node(
+        q.nodes.push(compute_node(
             s,
             p.u0,
             vm,
@@ -499,7 +499,7 @@ fn build(q: &mut Quadtree) {
                 grid[i * nv + j + 1].clone(),
             ];
 
-            q.nodes.push(make_node(
+            q.nodes.push(compute_node(
                 q.s,
                 q.usp[i],
                 q.vsp[j],

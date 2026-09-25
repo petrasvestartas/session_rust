@@ -1821,7 +1821,7 @@ pub fn run_mesh_json_roundtrip() -> TestResult {
         let mut mesh = Mesh::create_box(1.0, 1.0, 1.0);
         mesh.name = "test_mesh".to_string();
 
-        let json = mesh.jsondump();
+        let json = mesh.jsondump().unwrap();
         let loaded_json = Mesh::jsonload(&json).unwrap();
 
         let json_string = mesh.file_json_dumps();
@@ -1844,7 +1844,7 @@ pub fn run_mesh_json_roundtrip() -> TestResult {
             Point::new(0.0, 1.0, 0.0),
         ]];
         let pmesh = Mesh::from_polylines(polys, None);
-        let loaded_tri = Mesh::jsonload(&pmesh.jsondump()).unwrap();
+        let loaded_tri = Mesh::jsonload(&pmesh.jsondump().unwrap()).unwrap();
         let fk = *pmesh.triangulation.keys().next().unwrap();
 
         MINI_CHECK!(!loaded_tri.triangulation.is_empty());
@@ -1867,7 +1867,7 @@ pub fn run_mesh_json_roundtrip() -> TestResult {
             ],
             true,
         );
-        let loaded_holes = Mesh::jsonload(&hmesh.jsondump()).unwrap();
+        let loaded_holes = Mesh::jsonload(&hmesh.jsondump().unwrap()).unwrap();
         let hfk = *hmesh.face_holes.keys().next().unwrap();
 
         MINI_CHECK!(!loaded_holes.face_holes.is_empty());
