@@ -180,13 +180,15 @@ pub fn run_history_budget() -> TestResult {
         }
 
         let newest = session.history.undo_stack[session.history.depth() - 1].bytes;
-        let pinned: usize = session
-            .history
-            .undo_stack
-            .iter()
-            .chain(&session.history.redo_stack)
-            .map(|transaction| transaction.bytes)
-            .sum();
+        let mut pinned = 0;
+
+        for transaction in &session.history.undo_stack {
+            pinned += transaction.bytes;
+        }
+
+        for transaction in &session.history.redo_stack {
+            pinned += transaction.bytes;
+        }
 
         MINI_CHECK!(session.history.depth() < 20);
         MINI_CHECK!(session.history.bytes <= session.history.budget + newest);

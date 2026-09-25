@@ -3616,6 +3616,21 @@ pub fn get_all_tests() -> Vec<RegisteredTest> {
             name: "History Budget Bounds",
             func: run_session_history_budget_bounds,
         },
+        RegisteredTest {
+            group: "Session",
+            name: "Purge Keeps Replaced Tomb",
+            func: run_session_purge_keeps_replaced_tomb,
+        },
+        RegisteredTest {
+            group: "Session",
+            name: "Checkpoint Twin Xform",
+            func: run_session_checkpoint_twin_xform,
+        },
+        RegisteredTest {
+            group: "Session",
+            name: "Checkpoint Keeps Replaced Definition",
+            func: run_session_checkpoint_keeps_replaced_definition,
+        },
         // History tests
         RegisteredTest {
             group: "History",

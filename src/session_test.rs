@@ -3698,6 +3698,135 @@ pub fn run_session_history_budget_bounds() -> TestResult {
     })
 }
 
+pub fn run_session_purge_keeps_replaced_tomb() -> TestResult {
+    MINI_TEST!("Purge Keeps Replaced Tomb", {
+        use crate::session::PURGE_WORK;
+        use crate::Geometry;
+        use crate::InstanceRef;
+        use crate::Point;
+        use crate::Session;
+        use crate::Xform;
+        use std::rc::Rc;
+
+        let mut session = Session::default();
+        let definition =
+            session.add_definition(Geometry::Point(Rc::new(Point::new(1.0, 2.0, 3.0))));
+        let first = InstanceRef::new(&definition, Xform::identity());
+        let second = InstanceRef::new(&definition, Xform::identity());
+        let first_guid = first.guid().to_string();
+        let second_guid = second.guid().to_string();
+        session.add_instance(first, Xform::identity(), None);
+        session.begin("add");
+        session.add_instance(second, Xform::identity(), None);
+        session.commit();
+        session.begin("explode");
+        session.explode(&second_guid);
+        session.commit();
+        session.remove_object(&first_guid);
+
+        while session.purge_step(PURGE_WORK) {}
+
+        let slots = session.objects.instances.number_of_slots();
+        let unexploded = session.undo();
+        let instances = session.objects.instances.len();
+        let unadded = session.undo();
+
+        MINI_CHECK!(slots == 1);
+        MINI_CHECK!(unexploded);
+        MINI_CHECK!(instances == 1);
+        MINI_CHECK!(unadded);
+        MINI_CHECK!(session.objects.instances.is_empty());
+        MINI_CHECK!(session.objects.points.is_empty());
+        MINI_CHECK!(!session.instance_lookup.contains_key(&second_guid));
+        MINI_CHECK!(session.redo());
+        MINI_CHECK!(session.redo());
+        MINI_CHECK!(session.objects.points.len() == 1);
+    })
+}
+
+pub fn run_session_checkpoint_twin_xform() -> TestResult {
+    MINI_TEST!("Checkpoint Twin Xform", {
+        use crate::Geometry;
+        use crate::InstanceRef;
+        use crate::Point;
+        use crate::Session;
+        use crate::Xform;
+        use prost::Message;
+        use std::rc::Rc;
+
+        let mut session = Session::default();
+        let definition =
+            session.add_definition(Geometry::Point(Rc::new(Point::new(1.0, 2.0, 3.0))));
+        let x = Point::new(0.0, 0.0, 0.0);
+        let guid = x.guid().to_string();
+        let mut y = Point::new(1.0, 0.0, 0.0);
+        y.set_guid(guid.clone());
+        let instance = InstanceRef::new(&definition, Xform::identity());
+        let instance_guid = instance.guid().to_string();
+        session.add_point(x, None);
+        session.add_point(y, None);
+        session.add_instance(instance, Xform::translation(0.0, 1.0, 0.0), None);
+        session.set_xform(&guid, Xform::translation(1.0, 0.0, 0.0));
+        let mut data = session.checkpoint(1);
+
+        while data.is_none() {
+            data = session.checkpoint(1);
+        }
+
+        let data = data.unwrap();
+        let loaded = Session::pb_loads(&data).unwrap();
+
+        MINI_CHECK!(data == session.to_proto().encode_to_vec());
+        MINI_CHECK!(loaded.xform(&guid) == session.xform(&guid));
+        MINI_CHECK!(loaded.xform(&instance_guid) == session.xform(&instance_guid));
+    })
+}
+
+pub fn run_session_checkpoint_keeps_replaced_definition() -> TestResult {
+    MINI_TEST!("Checkpoint Keeps Replaced Definition", {
+        use crate::Geometry;
+        use crate::Point;
+        use crate::Session;
+        use std::rc::Rc;
+
+        let mut session = Session::default();
+        let a = Rc::new(Point::new(0.0, 0.0, 0.0));
+        let b = Rc::new(Point::new(1.0, 0.0, 0.0));
+        let mut point = Point::new(2.0, 0.0, 0.0);
+        let guid = b.guid().to_string();
+        point.set_guid(guid.clone());
+        let c = Rc::new(point);
+        let a_guid = session.add_definition(Geometry::Point(a));
+        session.add_definition(Geometry::Point(b.clone()));
+        session.remove_definition(&a_guid);
+        session.begin("swap");
+        session.replace_definition(&guid, Geometry::Point(c.clone()));
+        session.commit();
+        let mut data = session.checkpoint(1);
+
+        while data.is_none() {
+            data = session.checkpoint(1);
+        }
+
+        let moved = session.definitions.points.get_slot(&guid) == Some(0);
+        let undone = session.undo();
+
+        MINI_CHECK!(moved);
+        MINI_CHECK!(undone);
+        MINI_CHECK!(
+            matches!(session.definition_lookup.get(&guid), Some(Geometry::Point(p)) if Rc::ptr_eq(p, &b))
+        );
+        MINI_CHECK!(Rc::ptr_eq(session.definitions.points.get_item(0), &b));
+
+        session.redo();
+
+        MINI_CHECK!(
+            matches!(session.definition_lookup.get(&guid), Some(Geometry::Point(p)) if Rc::ptr_eq(p, &c))
+        );
+        MINI_CHECK!(Rc::ptr_eq(session.definitions.points.get_item(0), &c));
+    })
+}
+
 REGISTER_MINI_TEST!(
     "Session",
     "Constructor",
@@ -4169,4 +4298,19 @@ REGISTER_MINI_TEST!(
     "Session",
     "History Budget Bounds",
     crate::session_test::run_session_history_budget_bounds
+);
+REGISTER_MINI_TEST!(
+    "Session",
+    "Purge Keeps Replaced Tomb",
+    crate::session_test::run_session_purge_keeps_replaced_tomb
+);
+REGISTER_MINI_TEST!(
+    "Session",
+    "Checkpoint Twin Xform",
+    crate::session_test::run_session_checkpoint_twin_xform
+);
+REGISTER_MINI_TEST!(
+    "Session",
+    "Checkpoint Keeps Replaced Definition",
+    crate::session_test::run_session_checkpoint_keeps_replaced_definition
 );

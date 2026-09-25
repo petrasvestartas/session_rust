@@ -149,11 +149,11 @@ impl Tombstone {
     }
 }
 
-/// The entry a replace was taken on: an object by its tree node at record time (None outside the tree) or a definition by its slot.
+/// The entry a replace was taken on: an object by its tree node at record time (None outside the tree) or a definition by the tomb pinning its slot.
 #[derive(Debug, Clone)]
 pub enum Entry {
     Object(Option<Rc<RefCell<TreeNode>>>),
-    Definition(usize),
+    Definition(Rc<Tomb>),
 }
 
 /// The object or definition under `guid` was swapped: the stored pointers before and after, never copies.

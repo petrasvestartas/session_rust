@@ -64,14 +64,14 @@ impl Keyed for Component {
 
 /// A list of objects that can hold dead slots: every public view skips them, in slot order.
 pub struct Collection<E> {
-    items: Vec<E>,                     // raw slots in canonical order, dead ones included
-    dead: Vec<bool>,                   // one flag per slot
-    slots: HashMap<String, usize>,     // live guid -> slot
-    tombs: HashMap<usize, Weak<Tomb>>, // sparse weak pin per slot
-    live: usize,                       // live count
-    count: usize,                      // dead slots not yet purged
-    low: usize,                        // lowest dead slot, where compaction starts
-    cursor: Option<(usize, usize)>,    // (read, write) while a compaction is part way
+    items: Vec<E>,                 // raw slots in canonical order, dead ones included
+    dead: Vec<bool>,               // one flag per slot
+    slots: HashMap<String, usize>, // live guid -> slot
+    tombs: HashMap<usize, Vec<Weak<Tomb>>>, // weak pins per slot, newest last
+    live: usize,                   // live count
+    count: usize,                  // dead slots not yet purged
+    low: usize,                    // lowest dead slot, where compaction starts
+    cursor: Option<(usize, usize)>, // (read, write) while a compaction is part way
     positions: RefCell<Option<Vec<usize>>>, // live slot positions, built lazily
 }
 
@@ -235,15 +235,24 @@ impl<E> Collection<E> {
         self.dead[slot]
     }
 
-    /// Return the tomb pinning a slot while a record still holds it.
+    /// Return the newest tomb pinning a slot while a record still holds it.
     pub fn get_tomb(&self, slot: usize) -> Option<Rc<Tomb>> {
-        self.tombs.get(&slot)?.upgrade()
+        held(self.tombs.get(&slot)).pop()
     }
 
-    /// Pin a slot weakly to a tomb and point the tomb at the slot.
+    /// Pin a slot weakly to a tomb and point the tomb at the slot; older pins a record still holds stay.
     pub fn set_tomb(&mut self, slot: usize, tomb: &Rc<Tomb>) {
         tomb.slot.set(slot);
-        self.tombs.insert(slot, Rc::downgrade(tomb));
+        let mut pins = Vec::new();
+
+        for pin in held(self.tombs.get(&slot)) {
+            if !Rc::ptr_eq(&pin, tomb) {
+                pins.push(Rc::downgrade(&pin));
+            }
+        }
+
+        pins.push(Rc::downgrade(tomb));
+        self.tombs.insert(slot, pins);
     }
 
     /// Return the number of dead slots not yet purged.
@@ -378,24 +387,24 @@ impl<E: Keyed> Collection<E> {
         *self.positions.get_mut() = None;
 
         while examined < work && r < self.items.len() {
-            let pinned = self
-                .tombs
-                .get(&r)
-                .is_some_and(|tomb| tomb.strong_count() > 0);
+            let pins = held(self.tombs.get(&r));
 
-            if self.dead[r] && !pinned {
+            if self.dead[r] && pins.is_empty() {
                 self.tombs.remove(&r);
                 self.count -= 1;
             } else {
                 if w != r {
                     self.items.swap(w, r);
                     self.dead.swap(w, r);
+                    self.tombs.remove(&r);
 
-                    if let Some(tomb) = self.tombs.remove(&r) {
-                        if let Some(held) = tomb.upgrade() {
-                            held.slot.set(w);
-                            self.tombs.insert(w, tomb);
-                        }
+                    for tomb in &pins {
+                        tomb.slot.set(w);
+                    }
+
+                    if !pins.is_empty() {
+                        self.tombs
+                            .insert(w, pins.iter().map(Rc::downgrade).collect());
                     }
 
                     if !self.dead[w] {
@@ -548,4 +557,17 @@ impl<'de, E: Deserialize<'de> + Keyed> Deserialize<'de> for Collection<E> {
     fn deserialize<D: Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
         Ok(Self::from(Vec::<E>::deserialize(deserializer)?))
     }
+}
+
+/// The tombs of a slot's pins that a record still holds, oldest first.
+fn held(pins: Option<&Vec<Weak<Tomb>>>) -> Vec<Rc<Tomb>> {
+    let mut held = Vec::new();
+
+    for pin in pins.into_iter().flatten() {
+        if let Some(tomb) = pin.upgrade() {
+            held.push(tomb);
+        }
+    }
+
+    held
 }

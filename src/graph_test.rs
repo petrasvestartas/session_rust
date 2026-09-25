@@ -718,15 +718,20 @@ pub fn run_graph_take_node() -> TestResult {
         g.set_edge_attribute(("a", "b"), "weight", 3.0);
         let before = g.jsondump().unwrap();
         let (vertex, edges) = g.take_node("b").unwrap();
+        let mut incident = true;
+        let mut weighted = false;
+
+        for e in &edges {
+            incident = incident && (e.v0 == "b" || e.v1 == "b");
+            weighted = weighted || e.attributes.get("weight") == Some(&3.0);
+        }
 
         MINI_CHECK!(
             before.contains(vertex.guid()) && vertex.index == 1 && vertex.attribute == "bee"
         );
         MINI_CHECK!(vertex.attributes.get("load") == Some(&2.0));
-        MINI_CHECK!(edges.len() == 2 && edges.iter().all(|e| e.v0 == "b" || e.v1 == "b"));
-        MINI_CHECK!(edges
-            .iter()
-            .any(|e| e.attributes.get("weight") == Some(&3.0)));
+        MINI_CHECK!(edges.len() == 2 && incident);
+        MINI_CHECK!(weighted);
         MINI_CHECK!(!g.has_node("b") && !g.has_edge(("a", "b")) && !g.has_edge(("c", "b")));
         MINI_CHECK!(g.vertex_count == 3 && g.edge_count == 2 && g.edges.is_empty());
         MINI_CHECK!(g.get_vertices()[0].index == 0 && g.get_vertices()[1].index == 2);
@@ -779,7 +784,11 @@ pub fn run_graph_renumber() -> TestResult {
         g.take_node("b");
         g.take_node("d");
         g.renumber();
-        let indices: Vec<i32> = g.get_vertices().iter().map(|v| v.index).collect();
+        let mut indices: Vec<i32> = Vec::new();
+
+        for vertex in g.get_vertices() {
+            indices.push(vertex.index);
+        }
 
         MINI_CHECK!(indices == [0, 1, 2]);
         MINI_CHECK!(g.edges["a"]["c"].index == 0 && g.edges["e"]["c"].index == 1);

@@ -587,7 +587,13 @@ pub fn run_tree_dead_nodes() -> TestResult {
         let c_guid = c.borrow().guid().to_string();
         let g_guid = g.borrow().guid().to_string();
         let names = |nodes: Vec<std::rc::Rc<std::cell::RefCell<TreeNode>>>| -> Vec<String> {
-            nodes.iter().map(|n| n.borrow().name.clone()).collect()
+            let mut result = Vec::new();
+
+            for node in &nodes {
+                result.push(node.borrow().name.clone());
+            }
+
+            result
         };
         let json = tree.jsondump().unwrap();
         let from_json = Tree::jsonload(&json).unwrap();

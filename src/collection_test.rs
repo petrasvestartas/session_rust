@@ -159,7 +159,14 @@ pub fn run_collection_compact_step() -> TestResult {
 
         loop {
             bounded &= points.compact_step(10) <= 10;
-            let expected: Vec<&Rc<Point>> = model.iter().filter(|m| m.1).map(|m| &m.0).collect();
+            let mut expected: Vec<&Rc<Point>> = Vec::new();
+
+            for m in &model {
+                if m.1 {
+                    expected.push(&m.0);
+                }
+            }
+
             exact &= points.len() == expected.len();
             exact &= points.iter().zip(&expected).all(|(p, q)| Rc::ptr_eq(p, q));
 

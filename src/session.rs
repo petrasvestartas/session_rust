@@ -1989,10 +1989,10 @@ impl Session {
         let bytes = RECORD + weight(&Item::Geometry(before.clone()));
 
         if old == new {
-            let Some(slot) = slot_of(&self.definitions, old, guid) else {
+            let Some(tomb) = self._half(true, old, guid) else {
                 return false;
             };
-            let entry = Entry::Definition(slot);
+            let entry = Entry::Definition(tomb);
 
             if self.history.current.is_some() {
                 self.history.record(
@@ -3802,18 +3802,18 @@ impl Session {
         let (collection, prefix) = collection_for(&obj);
 
         match entry {
-            Entry::Definition(slot) => {
+            Entry::Definition(tomb) => {
                 let Item::Geometry(geometry) = &obj else {
                     return;
                 };
+                let slot = tomb.slot.get();
 
-                if self._is_live(guid)
-                    || slot_of(&self.definitions, collection, guid) != Some(*slot)
+                if self._is_live(guid) || slot_of(&self.definitions, collection, guid) != Some(slot)
                 {
                     return;
                 }
 
-                store(&mut self.definitions, collection, *slot, &obj);
+                store(&mut self.definitions, collection, slot, &obj);
                 self.definition_lookup
                     .insert(guid.to_string(), geometry.clone());
             }
