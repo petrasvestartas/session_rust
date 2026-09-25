@@ -796,18 +796,20 @@ const REST: usize = 28; // Checkpoint phase: xforms outside order(), by guid.
 const DEFINITIONS: usize = 29; // Checkpoint phases 29..=41: the definitions lists.
 const INTERACTIONS: usize = 42; // Checkpoint phase: the interactions, by edge guid.
 const ASSEMBLY: usize = 43; // Checkpoint phase: the sections joined into one message.
+const CHUNK: usize = 64 << 10; // Bytes past which a finished tree node's chunks move instead of being copied.
 
 /// A resumable protobuf writer over a session: live entries only, the layout to_proto encodes.
 struct Checkpoint {
-    revision: u64,                                       // The revision it writes.
-    phase: usize,                                        // The section being written.
-    cursor: usize,                                       // Slot or entry count in the phase.
-    key: String,                                         // The last key or guid written.
-    stack: Vec<(Rc<RefCell<TreeNode>>, usize, Vec<u8>)>, // Node, next raw child, its bytes.
-    sections: Vec<Vec<u8>>,                              // The seven Session fields.
-    out: Vec<u8>,                                        // The joined message.
-    hits: usize,                                         // Xforms entries order() reached.
-    rest: Vec<String>,                                   // Xforms guids outside order().
+    revision: u64,                                            // The revision it writes.
+    phase: usize,                                             // The section being written.
+    cursor: usize,                                            // Slot or entry count in the phase.
+    key: String,                                              // The last key or guid written.
+    stack: Vec<(Rc<RefCell<TreeNode>>, usize, Vec<Vec<u8>>)>, // Node, next raw child, its bytes in chunks.
+    tree: Vec<Vec<u8>>,     // The framed root, in chunks after the Tree head.
+    sections: Vec<Vec<u8>>, // The seven Session fields.
+    out: Vec<u8>,           // The joined message.
+    hits: usize,            // Xforms entries order() reached.
+    rest: Vec<String>,      // Xforms guids outside order().
 }
 
 impl Checkpoint {
@@ -819,6 +821,7 @@ impl Checkpoint {
             cursor: 0,
             key: String::new(),
             stack: Vec::new(),
+            tree: Vec::new(),
             sections: vec![Vec::new(); 7],
             out: Vec::new(),
             hits: 0,
@@ -834,6 +837,14 @@ fn prefix(tag: u32, length: usize) -> Vec<u8> {
     prost::encoding::encode_varint(length as u64, &mut bytes);
 
     bytes
+}
+
+/// Append bytes to a chunked buffer: a small piece is copied into the last chunk, a large one moves whole.
+fn append(chunks: &mut Vec<Vec<u8>>, bytes: Vec<u8>) {
+    match chunks.last_mut() {
+        Some(last) if bytes.len() <= CHUNK && last.len() < CHUNK => last.extend(bytes),
+        _ => chunks.push(bytes),
+    }
 }
 
 /// The name and guid fields of an Objects message.
@@ -3069,7 +3080,7 @@ impl Session {
 
             if let Some(root) = self.tree.root() {
                 let head = node_head(&root.borrow());
-                writer.stack.push((root, 0, head));
+                writer.stack.push((root, 0, vec![head]));
             }
         }
 
@@ -3086,22 +3097,27 @@ impl Session {
             if let Some(child) = child {
                 if !child.borrow().is_dead() {
                     let head = node_head(&child.borrow());
-                    writer.stack.push((child, 0, head));
+                    writer.stack.push((child, 0, vec![head]));
                 }
 
                 continue;
             }
 
-            let Some((node, _, mut bytes)) = writer.stack.pop() else {
+            let Some((node, _, mut chunks)) = writer.stack.pop() else {
                 break;
             };
-            bytes.extend(node_tail(&node.borrow()));
+            append(&mut chunks, node_tail(&node.borrow()));
+            let length = chunks.iter().map(Vec::len).sum();
             let (tag, parent) = match writer.stack.last_mut() {
                 Some((_, _, parent)) => (4, parent),
-                None => (3, &mut writer.sections[2]),
+                None => (3, &mut writer.tree),
             };
-            parent.extend(prefix(tag, bytes.len()));
-            parent.extend(bytes);
+            append(parent, prefix(tag, length));
+
+            // a large node moves its chunks, so no step copies a whole subtree
+            for chunk in chunks {
+                append(parent, chunk);
+            }
         }
 
         if writer.stack.is_empty() {
@@ -3360,11 +3376,19 @@ impl Session {
                     continue;
                 }
 
+                let tree = if i == 2 {
+                    std::mem::take(&mut writer.tree)
+                } else {
+                    Vec::new()
+                };
+
                 if tag > 0 {
-                    pieces.push(prefix(tag, body.len()));
+                    let length = body.len() + tree.iter().map(Vec::len).sum::<usize>();
+                    pieces.push(prefix(tag, length));
                 }
 
                 pieces.push(body);
+                pieces.extend(tree);
             }
             writer.out.reserve_exact(pieces.iter().map(Vec::len).sum());
             writer.sections = pieces;

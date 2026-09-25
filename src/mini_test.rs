@@ -361,6 +361,7 @@ macro_rules! MINI_TEST_FN {
 /// Get all tests manually (fallback when inventory doesn't work, and canonical order oracle)
 pub fn get_all_tests() -> Vec<RegisteredTest> {
     use crate::aabb_test::*;
+    use crate::bench_test::*;
     use crate::boolean_polyline_test::*;
     use crate::brep_test::*;
     use crate::closest_test::*;
@@ -636,6 +637,42 @@ pub fn get_all_tests() -> Vec<RegisteredTest> {
             group: "Color",
             name: "Serialization Errors",
             func: run_color_serialization_errors,
+        },
+        // Bench tests
+        RegisteredTest {
+            group: "Bench",
+            name: "Edit Latency",
+            func: run_bench_edit_latency,
+        },
+        RegisteredTest {
+            group: "Bench",
+            name: "Bulk Undo",
+            func: run_bench_bulk_undo,
+        },
+        RegisteredTest {
+            group: "Bench",
+            name: "No Pauses",
+            func: run_bench_no_pauses,
+        },
+        RegisteredTest {
+            group: "Bench",
+            name: "Steady State",
+            func: run_bench_steady_state,
+        },
+        RegisteredTest {
+            group: "Bench",
+            name: "History Memory",
+            func: run_bench_history_memory,
+        },
+        RegisteredTest {
+            group: "Bench",
+            name: "Record Cost",
+            func: run_bench_record_cost,
+        },
+        RegisteredTest {
+            group: "Bench",
+            name: "Layer Move",
+            func: run_bench_layer_move,
         },
         // Collection tests
         RegisteredTest {
