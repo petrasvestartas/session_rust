@@ -10,7 +10,6 @@ use std::rc::Weak;
 // ═══════════════════════════════════════════════════════════════════════════
 // TreeNode
 // ═══════════════════════════════════════════════════════════════════════════
-
 /// A node of a tree; geometry nodes are named by their object's guid, group nodes by a label.
 #[derive(Debug)]
 pub struct TreeNode {
@@ -249,7 +248,6 @@ impl fmt::Display for TreeNode {
 // ═══════════════════════════════════════════════════════════════════════════
 // Tree
 // ═══════════════════════════════════════════════════════════════════════════
-
 /// A hierarchy of TreeNodes under one root.
 #[derive(Debug)]
 pub struct Tree {
@@ -602,7 +600,6 @@ impl fmt::Display for Tree {
 // ═══════════════════════════════════════════════════════════════════════════
 // Node helpers
 // ═══════════════════════════════════════════════════════════════════════════
-
 /// Duplicate one node and everything under it with the same names, guids and colours.
 fn clone_node(node: &TreeNode) -> Rc<RefCell<TreeNode>> {
     let copy = TreeNode::new(&node.name);
@@ -668,7 +665,6 @@ fn proto_to_node(proto: &crate::proto::TreeNode) -> Rc<RefCell<TreeNode>> {
 // ═══════════════════════════════════════════════════════════════════════════
 // Serde
 // ═══════════════════════════════════════════════════════════════════════════
-
 #[derive(Serialize, Deserialize)]
 #[serde(tag = "type", rename = "TreeNode")]
 struct TreeNodeSerde {

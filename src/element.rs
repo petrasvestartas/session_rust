@@ -28,7 +28,6 @@ pub enum ElementGeometry {
 // ═══════════════════════════════════════════════════════════════════════════
 // Hex encoding
 // ═══════════════════════════════════════════════════════════════════════════
-
 /// Encode bytes as hex text, since element_data is opaque and JSON carries no bytes.
 fn to_hex(bytes: &[u8]) -> String {
     let mut out = String::with_capacity(bytes.len() * 2);
@@ -56,7 +55,6 @@ fn from_hex(hex: &str) -> Vec<u8> {
 // ═══════════════════════════════════════════════════════════════════════════
 // ElementFeature
 // ═══════════════════════════════════════════════════════════════════════════
-
 /// One serializable modification of a host element - a cut, a drill, a joint pocket - that the kernel draws but never applies.
 #[derive(Debug, Clone)]
 pub struct ElementFeature {
@@ -317,7 +315,6 @@ impl<'de> Deserialize<'de> for ElementFeature {
 // ═══════════════════════════════════════════════════════════════════════════
 // Element
 // ═══════════════════════════════════════════════════════════════════════════
-
 /// Named geometry carrier with lazily cached boxes, features and a polymorphic type registry.
 #[derive(Debug, Clone)]
 pub struct Element {

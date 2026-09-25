@@ -18,7 +18,6 @@ const MAX_SUBS: usize = 24;
 // ═══════════════════════════════════════════════════════════════════════════
 // Sampling
 // ═══════════════════════════════════════════════════════════════════════════
-
 /// Euclidean length without the zero gate of magnitude().
 fn norm(v: &Vector) -> f64 {
     v.magnitude_squared().sqrt()
@@ -75,7 +74,6 @@ fn bbox_diagonal(s: &NurbsSurface) -> f64 {
 // ═══════════════════════════════════════════════════════════════════════════
 // Subdivisions
 // ═══════════════════════════════════════════════════════════════════════════
-
 /// Largest turn of the unit normal in degrees over [t0, t1], sampled at the span midpoints of the other direction.
 fn span_angle(s: &NurbsSurface, dir: usize, t0: f64, t1: f64, osp: &[f64]) -> f64 {
     let mut max_angle = 0.0_f64;
@@ -295,7 +293,6 @@ fn make_odd(subs: &mut [usize]) {
 // ═══════════════════════════════════════════════════════════════════════════
 // Parameters
 // ═══════════════════════════════════════════════════════════════════════════
-
 /// n parameters spaced evenly by arc length along the iso-curve at fixed.
 fn arclen_params(s: &NurbsSurface, dir: usize, n: usize, sp: &[f64], fixed: f64) -> Vec<f64> {
     let nsample = (n * 20).max(200);
@@ -415,7 +412,6 @@ fn grid_params(
 // ═══════════════════════════════════════════════════════════════════════════
 // Vertices and faces
 // ═══════════════════════════════════════════════════════════════════════════
-
 /// Vertex at S(u, v) tagged with its parameters.
 fn add_vertex_uv(s: &NurbsSurface, mesh: &mut Mesh, u: f64, v: f64) -> usize {
     let key = mesh.add_vertex(s.point_at(u, v).unwrap_or_default(), None);
@@ -503,7 +499,6 @@ fn add_faces(
 // ═══════════════════════════════════════════════════════════════════════════
 // Normals
 // ═══════════════════════════════════════════════════════════════════════════
-
 /// Sum of the unnormalized face normals around each vertex key, faces taken in key order.
 fn fan_normals(mesh: &Mesh) -> Vec<Vector> {
     let mut sums = vec![Vector::new(0.0, 0.0, 0.0); mesh.vertex.len()];

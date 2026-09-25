@@ -8,7 +8,6 @@ use crate::REGISTER_MINI_TEST;
 // ═══════════════════════════════════════════════════════════════════════════
 // Element
 // ═══════════════════════════════════════════════════════════════════════════
-
 pub fn run_element_constructor() -> TestResult {
     MINI_TEST!("Constructor", {
         use crate::element::Element;
@@ -644,7 +643,6 @@ pub fn run_element_protobuf_roundtrip() -> TestResult {
 // ═══════════════════════════════════════════════════════════════════════════
 // Element - Polylines
 // ═══════════════════════════════════════════════════════════════════════════
-
 pub fn run_element_polylines() -> TestResult {
     MINI_TEST!("Polylines", {
         use crate::Element;
@@ -723,7 +721,6 @@ pub fn run_element_polylines_empty_without_mesh() -> TestResult {
 // ═══════════════════════════════════════════════════════════════════════════
 // Element - Polymorphic registry
 // ═══════════════════════════════════════════════════════════════════════════
-
 /// Stand-in for a domain package's factory: Rust has no derived type to return, so it marks the element it built.
 fn test_plate(data: &[u8]) -> Option<crate::Element> {
     let mut e = crate::Element::pb_loads(data).ok()?;
@@ -962,7 +959,6 @@ pub fn run_element_equality_compares_carried_fields() -> TestResult {
 // ═══════════════════════════════════════════════════════════════════════════
 // ElementFeature
 // ═══════════════════════════════════════════════════════════════════════════
-
 pub fn run_element_feature_constructor() -> TestResult {
     MINI_TEST!("Constructor", {
         use crate::element::ElementFeature;
@@ -1072,7 +1068,6 @@ pub fn run_element_feature_protobuf_roundtrip() -> TestResult {
 // ═══════════════════════════════════════════════════════════════════════════
 // Registration
 // ═══════════════════════════════════════════════════════════════════════════
-
 REGISTER_MINI_TEST!(
     "Element",
     "Constructor",

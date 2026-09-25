@@ -780,7 +780,6 @@ pub static TOLERANCE: Lazy<GlobalTolerance> = Lazy::new(GlobalTolerance::new); /
 // ═══════════════════════════════════════════════════════════════════════════
 // Utilities
 // ═══════════════════════════════════════════════════════════════════════════
-
 /// Check if a number is finite
 pub fn is_finite(x: f64) -> bool {
     x.is_finite()

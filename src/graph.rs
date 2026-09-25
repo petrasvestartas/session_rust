@@ -12,7 +12,6 @@ pub type EdgePredicate<'a> = &'a dyn Fn((&str, &str), &BTreeMap<String, f64>) ->
 // ═══════════════════════════════════════════════════════════════════════════
 // Vertex
 // ═══════════════════════════════════════════════════════════════════════════
-
 /// A graph vertex with a name, attribute string and integer index.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(tag = "type", rename = "Vertex")]
@@ -110,7 +109,6 @@ impl fmt::Display for Vertex {
 // ═══════════════════════════════════════════════════════════════════════════
 // Edge
 // ═══════════════════════════════════════════════════════════════════════════
-
 /// A graph edge connecting two vertices by name.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(tag = "type", rename = "Edge")]
@@ -237,7 +235,6 @@ impl fmt::Display for Edge {
 // ═══════════════════════════════════════════════════════════════════════════
 // Graph
 // ═══════════════════════════════════════════════════════════════════════════
-
 /// An undirected graph with string vertices, string labels and double attributes.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(tag = "type", rename = "Graph")]

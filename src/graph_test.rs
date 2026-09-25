@@ -6,7 +6,6 @@ use crate::REGISTER_MINI_TEST;
 // ═══════════════════════════════════════════════════════════════════════════
 // Vertex
 // ═══════════════════════════════════════════════════════════════════════════
-
 pub fn run_vertex_constructor() -> TestResult {
     MINI_TEST!("Constructor", {
         use crate::Vertex;
@@ -44,7 +43,6 @@ pub fn run_vertex_json_roundtrip() -> TestResult {
 // ═══════════════════════════════════════════════════════════════════════════
 // Edge
 // ═══════════════════════════════════════════════════════════════════════════
-
 pub fn run_edge_constructor() -> TestResult {
     MINI_TEST!("Constructor", {
         use crate::Edge;
@@ -115,7 +113,6 @@ pub fn run_edge_other_vertex() -> TestResult {
 // ═══════════════════════════════════════════════════════════════════════════
 // Graph
 // ═══════════════════════════════════════════════════════════════════════════
-
 pub fn run_graph_constructor() -> TestResult {
     MINI_TEST!("Constructor", {
         use crate::Graph;

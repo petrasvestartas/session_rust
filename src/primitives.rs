@@ -16,7 +16,6 @@ use crate::xform::Xform;
 // ═══════════════════════════════════════════════════════════════════════════
 // Rational quadratic circle pattern
 // ═══════════════════════════════════════════════════════════════════════════
-
 const CIRCLE_W: f64 = std::f64::consts::FRAC_1_SQRT_2;
 const CIRCLE_X: [f64; 9] = [1.0, 1.0, 0.0, -1.0, -1.0, -1.0, 0.0, 1.0, 1.0];
 const CIRCLE_Y: [f64; 9] = [0.0, 1.0, 1.0, 1.0, 0.0, -1.0, -1.0, -1.0, 0.0];
@@ -46,7 +45,6 @@ fn set_circle_row(
 // ═══════════════════════════════════════════════════════════════════════════
 // Mesh helpers
 // ═══════════════════════════════════════════════════════════════════════════
-
 /// Appends n points of a circle of the given radius in the plane z.
 fn add_ring(vertices: &mut Vec<Point>, n: usize, radius: f64, z: f64) {
     for i in 0..n {
@@ -136,7 +134,6 @@ fn surface_mid_grid(
 // ═══════════════════════════════════════════════════════════════════════════
 // Curve compatibility
 // ═══════════════════════════════════════════════════════════════════════════
-
 /// Sorted union of two nurbsknot vectors, equal values kept once.
 fn merge_nurbsknot_vectors(a: &[f64], b: &[f64]) -> Vec<f64> {
     let tol = 1e-10;
@@ -259,7 +256,6 @@ fn unify_curves(curves: &mut [NurbsCurve]) -> bool {
 // ═══════════════════════════════════════════════════════════════════════════
 // Planar helpers
 // ═══════════════════════════════════════════════════════════════════════════
-
 /// Bilinear patch: u runs p00 to p10, v runs p00 to p01.
 fn bilinear_patch(p00: &Point, p10: &Point, p01: &Point, p11: &Point) -> NurbsSurface {
     let mut srf = NurbsSurface::new(3, false, 2, 2, 2, 2);
@@ -323,7 +319,6 @@ fn bounded_patch(pts: &[Point], origin: &Point, x_axis: &Vector, y_axis: &Vector
 // ═══════════════════════════════════════════════════════════════════════════
 // Loft helpers
 // ═══════════════════════════════════════════════════════════════════════════
-
 /// Section parameters in [0, 1] from the mean CV distance between consecutive sections.
 fn loft_section_params(curves: &[NurbsCurve]) -> Vec<f64> {
     let n = curves.len();
@@ -481,7 +476,6 @@ fn solve_linear(a: &[Vec<f64>], b: &[Vec<f64>]) -> Vec<Vec<f64>> {
 // ═══════════════════════════════════════════════════════════════════════════
 // Revolve helpers
 // ═══════════════════════════════════════════════════════════════════════════
-
 /// Number of quarter arcs, at most 4, that cover the angle.
 fn revolve_arc_count(angle: f64) -> usize {
     if angle <= PI / 2.0 + 1e-10 {
@@ -539,7 +533,6 @@ fn set_revolve_column(
 // ═══════════════════════════════════════════════════════════════════════════
 // Sweep helpers
 // ═══════════════════════════════════════════════════════════════════════════
-
 /// Point at fraction s from a to b.
 fn lerp_point(a: &Point, b: &Point, s: f64) -> Point {
     a + (b - a) * s
@@ -680,7 +673,6 @@ fn rail_xform(source: &Plane, width: f64, p1: &Point, p2: &Point, frame: &Plane)
 // ═══════════════════════════════════════════════════════════════════════════
 // Edge helpers
 // ═══════════════════════════════════════════════════════════════════════════
-
 /// Curves ordered head to tail, reversed where needed; empty when they do not close a loop.
 fn chain_curves(input: &[NurbsCurve]) -> Vec<NurbsCurve> {
     let tol = 1e-6;
@@ -791,7 +783,6 @@ impl Primitives {
     // ═══════════════════════════════════════════════════════════════════════════
     // Mesh primitives
     // ═══════════════════════════════════════════════════════════════════════════
-
     /// Arrow mesh along a line: cylinder body over 80% of the length, cone head of 1.5x radius over 20%.
     pub fn arrow_mesh(line: &Line, radius: f64) -> Mesh {
         let start = line.start();
@@ -989,7 +980,6 @@ impl Primitives {
     // ═══════════════════════════════════════════════════════════════════════════
     // Curve primitives
     // ═══════════════════════════════════════════════════════════════════════════
-
     /// Full circle as a rational quadratic NURBS (9 CVs).
     pub fn circle(cx: f64, cy: f64, cz: f64, radius: f64) -> NurbsCurve {
         Self::ellipse(cx, cy, cz, radius, radius)
@@ -1120,7 +1110,6 @@ impl Primitives {
     // ═══════════════════════════════════════════════════════════════════════════
     // Surface primitives
     // ═══════════════════════════════════════════════════════════════════════════
-
     /// Rational cylinder surface of degree 2x1 around the z axis through (cx, cy, cz).
     pub fn cylinder_surface(cx: f64, cy: f64, cz: f64, radius: f64, height: f64) -> NurbsSurface {
         let mut srf = NurbsSurface::new(3, true, 3, 2, 9, 2);
@@ -1278,7 +1267,6 @@ impl Primitives {
     // ═══════════════════════════════════════════════════════════════════════════
     // Surface factories
     // ═══════════════════════════════════════════════════════════════════════════
-
     /// Ruled surface between two curves.
     pub fn create_ruled(curve_a: &NurbsCurve, curve_b: &NurbsCurve) -> NurbsSurface {
         if !curve_a.is_valid() || !curve_b.is_valid() {
@@ -1675,7 +1663,6 @@ impl Primitives {
     // ═══════════════════════════════════════════════════════════════════════════
     // Surface to mesh
     // ═══════════════════════════════════════════════════════════════════════════
-
     /// Quad mesh sampled on a u_count x v_count grid.
     pub fn quad_mesh(surface: &NurbsSurface, u_count: usize, v_count: usize) -> Mesh {
         let mut mesh = Mesh::new();
@@ -1825,7 +1812,6 @@ impl Primitives {
     // ═══════════════════════════════════════════════════════════════════════════
     // Mesh geometry
     // ═══════════════════════════════════════════════════════════════════════════
-
     /// Ten-sided unit cylinder: radius 0.5, z from -0.5 to 0.5.
     fn unit_cylinder_geometry() -> (Vec<Point>, Vec<[usize; 3]>) {
         let n = 10;

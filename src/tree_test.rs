@@ -6,7 +6,6 @@ use crate::REGISTER_MINI_TEST;
 // ═══════════════════════════════════════════════════════════════════════════
 // TreeNode
 // ═══════════════════════════════════════════════════════════════════════════
-
 pub fn run_treenode_constructor() -> TestResult {
     MINI_TEST!("Constructor", {
         use crate::Color;
@@ -195,7 +194,6 @@ pub fn run_treenode_traverse() -> TestResult {
 // ═══════════════════════════════════════════════════════════════════════════
 // Tree
 // ═══════════════════════════════════════════════════════════════════════════
-
 pub fn run_tree_constructor() -> TestResult {
     MINI_TEST!("Constructor", {
         use crate::Tree;

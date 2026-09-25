@@ -15,7 +15,6 @@ use crate::REGISTER_MINI_TEST;
 // ═══════════════════════════════════════════════════════════════════════════
 // Mesh primitives
 // ═══════════════════════════════════════════════════════════════════════════
-
 pub fn run_primitives_mesh_arrow() -> TestResult {
     MINI_TEST!("Mesh Arrow", {
         use crate::Line;
@@ -70,7 +69,6 @@ pub fn run_primitives_mesh_edge_pipes() -> TestResult {
 // ═══════════════════════════════════════════════════════════════════════════
 // NurbsCurve primitives
 // ═══════════════════════════════════════════════════════════════════════════
-
 pub fn run_primitives_nurbscurve_polyline() -> TestResult {
     MINI_TEST!("Nurbscurve Polyline", {
         use crate::NurbsCurve;
@@ -188,7 +186,6 @@ pub fn run_primitives_nurbscurve_spiral() -> TestResult {
 // ═══════════════════════════════════════════════════════════════════════════
 // NurbsSurface primitives
 // ═══════════════════════════════════════════════════════════════════════════
-
 pub fn run_primitives_nurbssurface_cylinder() -> TestResult {
     MINI_TEST!("Nurbssurface Cylinder", {
         use crate::Primitives;
@@ -397,7 +394,6 @@ pub fn run_primitives_nurbssurface_quad_sphere() -> TestResult {
 // ═══════════════════════════════════════════════════════════════════════════
 // NurbsSurface factory methods
 // ═══════════════════════════════════════════════════════════════════════════
-
 pub fn run_primitives_nurbssurface_ruled() -> TestResult {
     MINI_TEST!("Nurbssurface Ruled", {
         use crate::NurbsCurve;
@@ -1969,7 +1965,6 @@ pub fn run_primitives_nurbssurface_edge() -> TestResult {
 // ═══════════════════════════════════════════════════════════════════════════
 // Surface-to-mesh subdivision
 // ═══════════════════════════════════════════════════════════════════════════
-
 pub fn run_primitives_mesh_quad_mesh() -> TestResult {
     MINI_TEST!("Mesh Quad Mesh", {
         use crate::Primitives;

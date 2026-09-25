@@ -133,7 +133,6 @@ struct Piece {
 // ═══════════════════════════════════════════════════════════════════════════
 // Validation
 // ═══════════════════════════════════════════════════════════════════════════
-
 /// Err with the message when the condition fails.
 fn require(condition: bool, message: &str) -> Result<(), String> {
     if !condition {
@@ -206,7 +205,6 @@ fn surface_domain(surface: &NurbsSurface, dir: usize) -> Result<(f64, f64), Stri
 // ═══════════════════════════════════════════════════════════════════════════
 // Curve parameters
 // ═══════════════════════════════════════════════════════════════════════════
-
 /// Copy of a curve trimmed to [a, b], clamped to its domain.
 fn interval(curve: &NurbsCurve, a: f64, b: f64) -> Result<NurbsCurve, String> {
     let mut result = curve.duplicate();
@@ -308,7 +306,6 @@ fn unique_parameters(mut values: Vec<f64>, lo: f64, hi: f64) -> Vec<f64> {
 // ═══════════════════════════════════════════════════════════════════════════
 // Curve intersection
 // ═══════════════════════════════════════════════════════════════════════════
-
 /// True when every control point lies within tolerance of the chord.
 fn flat(curve: &NurbsCurve, tolerance: f64) -> Result<bool, String> {
     let a = curve.point_at_start();
@@ -553,7 +550,6 @@ fn intersections(
 // ═══════════════════════════════════════════════════════════════════════════
 // Trim polygons
 // ═══════════════════════════════════════════════════════════════════════════
-
 /// Curves in surface parameter space, exact on a bilinear parallelogram patch.
 fn pullback(
     surface: &NurbsSurface,
@@ -700,7 +696,6 @@ fn inside_loops(p: &Point, loops: &[Vec<Point>]) -> bool {
 // ═══════════════════════════════════════════════════════════════════════════
 // Trim arrangement
 // ═══════════════════════════════════════════════════════════════════════════
-
 /// Knot spans of every source, cut at their mutual intersections.
 fn compute_spans(sources: &[Source], tolerance: f64) -> Result<Vec<Span>, String> {
     let mut spans = Vec::<Span>::new();
@@ -1019,7 +1014,6 @@ fn arrange(
 // ═══════════════════════════════════════════════════════════════════════════
 // BRep assembly
 // ═══════════════════════════════════════════════════════════════════════════
-
 /// Index of the BRep vertex at a point, added when none lies within tolerance.
 fn vertex(result: &mut BRep, p: &Point, tolerance: f64) -> usize {
     for (i, vertex) in result.m_vertices.iter().enumerate() {
@@ -1482,7 +1476,6 @@ fn validate(result: &BRep, original: &BRep, tolerance: f64) -> Result<(), String
 // ═══════════════════════════════════════════════════════════════════════════
 // Split
 // ═══════════════════════════════════════════════════════════════════════════
-
 /// Split a curve at isolated 3D intersections, retaining every piece and rejecting overlapping cutters.
 pub fn split_curve_by_curves(
     curve: &NurbsCurve,

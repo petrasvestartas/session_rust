@@ -16,7 +16,6 @@ const STACK_SIZE: usize = 64;
 // ═══════════════════════════════════════════════════════════════════════════
 // Curve helpers
 // ═══════════════════════════════════════════════════════════════════════════
-
 /// Parameter of the closest sample on a dense grid over [t0, t1].
 fn curve_seed(curve: &NurbsCurve, test_point: &Point, t0: f64, t1: f64) -> f64 {
     let num_samples = (curve.cv_count() * 10).max(50);
@@ -133,7 +132,6 @@ fn curve_curve_seed(curve0: &NurbsCurve, curve1: &NurbsCurve) -> (f64, f64) {
 // ═══════════════════════════════════════════════════════════════════════════
 // Surface helpers
 // ═══════════════════════════════════════════════════════════════════════════
-
 /// Surface point with the origin fallback of an invalid evaluation.
 fn surface_at(surface: &NurbsSurface, u: f64, v: f64) -> Point {
     surface.point_at(u, v).unwrap_or(Point::new(0.0, 0.0, 0.0))
@@ -252,7 +250,6 @@ fn surface_newton(
 // ═══════════════════════════════════════════════════════════════════════════
 // Pullback helpers
 // ═══════════════════════════════════════════════════════════════════════════
-
 /// Surface domain, trace step and tolerances shared by the surface_curve steps.
 #[derive(Default)]
 struct Pullback {
@@ -875,7 +872,6 @@ fn pullback_fit(pb: &Pullback, piece_pts: &mut [[f64; 2]], piece_loop: bool) -> 
 // ═══════════════════════════════════════════════════════════════════════════
 // Mesh helpers
 // ═══════════════════════════════════════════════════════════════════════════
-
 /// Closest point on triangle abc to p (Ericson, Real-Time Collision Detection 5.1.5).
 fn closest_point_on_triangle(p: &Point, a: &Point, b: &Point, c: &Point) -> Point {
     let ab = b - a;
@@ -968,7 +964,6 @@ impl Closest {
     // ═══════════════════════════════════════════════════════════════════════════
     // Curves
     // ═══════════════════════════════════════════════════════════════════════════
-
     /// Parameter and distance of the closest curve point within [t0, t1] (0 means the domain end).
     pub fn curve_point(curve: &NurbsCurve, test_point: &Point, t0: f64, t1: f64) -> (f64, f64) {
         if !curve.is_valid() {
@@ -1139,7 +1134,6 @@ impl Closest {
     // ═══════════════════════════════════════════════════════════════════════════
     // Surfaces
     // ═══════════════════════════════════════════════════════════════════════════
-
     /// Parameters and distance of the closest surface point within a uv window (0 means the domain end).
     pub fn surface_point(
         surface: &NurbsSurface,
@@ -1218,7 +1212,6 @@ impl Closest {
     // ═══════════════════════════════════════════════════════════════════════════
     // Meshes and clouds
     // ═══════════════════════════════════════════════════════════════════════════
-
     /// Return the closest point, face key and distance on a mesh via its triangle BVH.
     pub fn mesh_point(mesh: &mut Mesh, test_point: &Point) -> (Point, usize, f64) {
         let mut best_point = Point::new(0.0, 0.0, 0.0);
@@ -1433,7 +1426,6 @@ impl Closest {
     // ═══════════════════════════════════════════════════════════════════════════
     // Collections
     // ═══════════════════════════════════════════════════════════════════════════
-
     /// Return the index pairs of lines whose endpoints come within threshold of each other.
     pub fn lines_closest(lines: &[Line], threshold: f64) -> Vec<(usize, usize)> {
         let mut pairs = Vec::new();

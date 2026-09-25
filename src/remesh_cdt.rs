@@ -10,7 +10,6 @@ use std::collections::HashSet;
 // ═══════════════════════════════════════════════════════════════════════════
 // Integer geometry
 // ═══════════════════════════════════════════════════════════════════════════
-
 const NULL_IDX: usize = usize::MAX;
 const MAX_COORD64: f64 = 9e17;
 const MAX_PRECISION: i32 = 6;
@@ -205,7 +204,6 @@ fn find_loc_min(path: &[[i64; 2]], i: &mut usize) -> bool {
 // ═══════════════════════════════════════════════════════════════════════════
 // Sweep graph
 // ═══════════════════════════════════════════════════════════════════════════
-
 /// Boundary side of an edge, or loose for a diagonal.
 #[derive(Clone, Copy, PartialEq)]
 enum EdgeKind {
@@ -1212,7 +1210,6 @@ impl Delaunay {
 // ═══════════════════════════════════════════════════════════════════════════
 // Triangulation
 // ═══════════════════════════════════════════════════════════════════════════
-
 /// Power of ten keeping the largest coordinate inside int64 headroom.
 fn cdt_scale(border_2d: &[Point], holes_2d: &[Vec<Point>]) -> f64 {
     let mut max_coord = 1.0f64;
@@ -1372,7 +1369,6 @@ fn to_indices(
 // ═══════════════════════════════════════════════════════════════════════════
 // Mesh assembly
 // ═══════════════════════════════════════════════════════════════════════════
-
 /// Polyline points without the closing duplicate.
 fn strip_close(polyline: &Polyline) -> Vec<Point> {
     let mut pts = polyline.get_points();
@@ -1536,7 +1532,6 @@ fn build_mesh(border: &[Point], holes: &[Vec<Point>], tris: &[(usize, usize, usi
 // ═══════════════════════════════════════════════════════════════════════════
 // RemeshCDT
 // ═══════════════════════════════════════════════════════════════════════════
-
 /// Triangle index triples of a counter-clockwise 2D border with clockwise holes into the flat list [border..., hole0..., hole1...].
 pub fn cdt_triangulate(border_2d: &[Point], holes_2d: &[Vec<Point>]) -> Vec<(usize, usize, usize)> {
     let scale = cdt_scale(border_2d, holes_2d);
@@ -1564,7 +1559,6 @@ impl RemeshCDT {
     // ═══════════════════════════════════════════════════════════════════════════
     // Triangulation
     // ═══════════════════════════════════════════════════════════════════════════
-
     /// Triangle index triples into the flat list [border..., hole0..., hole1...], closing duplicates stripped.
     pub fn triangulate(polylines: &[Polyline]) -> Vec<(usize, usize, usize)> {
         if polylines.is_empty() {

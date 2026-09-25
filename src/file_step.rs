@@ -14,7 +14,6 @@ use std::collections::HashMap;
 // ═══════════════════════════════════════════════════════════════════════════
 // ISO 10303-21 parser
 // ═══════════════════════════════════════════════════════════════════════════
-
 /// Kind of value a StepParam holds.
 #[derive(Clone, Copy, PartialEq)]
 enum StepTag {
@@ -500,7 +499,6 @@ fn parse_step_file(filepath: &str) -> StepFile {
 // ═══════════════════════════════════════════════════════════════════════════
 // Parameter access
 // ═══════════════════════════════════════════════════════════════════════════
-
 /// Return the first reference parameter, or -1.
 fn first_ref(params: &[StepParam]) -> i32 {
     for p in params {
@@ -729,7 +727,6 @@ fn surface_params(e: &StepEntity) -> Option<SurfaceParams> {
 // ═══════════════════════════════════════════════════════════════════════════
 // Knot utilities
 // ═══════════════════════════════════════════════════════════════════════════
-
 /// Repeat each knot value by its multiplicity.
 fn expand_knots(vals: &[f64], mults: &[i32]) -> Vec<f64> {
     let mut flat = Vec::new();
@@ -786,7 +783,6 @@ fn internal_from_full(full: &[f64]) -> Vec<f64> {
 // ═══════════════════════════════════════════════════════════════════════════
 // Analytic geometry
 // ═══════════════════════════════════════════════════════════════════════════
-
 /// Orthonormal frame of an AXIS2_PLACEMENT_3D.
 #[derive(Clone)]
 struct Axis2 {
@@ -1184,7 +1180,6 @@ fn bilinear_projector(srf: &NurbsSurface) -> Proj {
 // ═══════════════════════════════════════════════════════════════════════════
 // Curve helpers
 // ═══════════════════════════════════════════════════════════════════════════
-
 /// n points evenly spaced in parameter over the curve domain.
 fn sample_nurbs(nc: &NurbsCurve, n: i32) -> Vec<Point> {
     let (tmin, tmax) = nc.domain();
@@ -1319,7 +1314,6 @@ fn unwrap_seam(uv: &mut [Point]) {
 // ═══════════════════════════════════════════════════════════════════════════
 // Surface grid
 // ═══════════════════════════════════════════════════════════════════════════
-
 /// ns x ns surface points over the domain, row-major with u slowest.
 fn surface_grid(srf: &NurbsSurface, ns: usize) -> Vec<Point> {
     let (u0, u1) = srf.domain(0).unwrap_or_default();
@@ -1384,7 +1378,6 @@ fn grid_degenerate(grid: &[Point], ns: usize, tol: f64, j: usize) -> bool {
 // ═══════════════════════════════════════════════════════════════════════════
 // StepReader
 // ═══════════════════════════════════════════════════════════════════════════
-
 /// Entity access over a parsed file with points, directions and frames cached by id.
 struct StepReader<'a> {
     sf: &'a StepFile,                // Parsed file.
@@ -1899,7 +1892,6 @@ impl<'a> StepReader<'a> {
 // ═══════════════════════════════════════════════════════════════════════════
 // Topology access
 // ═══════════════════════════════════════════════════════════════════════════
-
 /// One face bound: outer flag, orientation and the ORIENTED_EDGE ids of its EDGE_LOOP.
 struct Bound {
     is_outer: bool,    // Whether the bound is FACE_OUTER_BOUND.
@@ -1966,7 +1958,6 @@ fn edge_geom_id(r: &StepReader, ec_ref: i32) -> i32 {
 // ═══════════════════════════════════════════════════════════════════════════
 // BRep assembly from STEP
 // ═══════════════════════════════════════════════════════════════════════════
-
 /// One edge use in loop-traversal order; c2d is flipped into the edge direction when stored.
 struct PendingEdge {
     edge: usize,     // Brep edge index.
@@ -3224,7 +3215,6 @@ impl<'a, 'b> BRepBuilder<'a, 'b> {
 // ═══════════════════════════════════════════════════════════════════════════
 // StepWriter
 // ═══════════════════════════════════════════════════════════════════════════
-
 /// printf("%.15g"): shortest of fixed/exponential at 15 significant digits, trailing zeros stripped.
 fn fmt_g15(v: f64) -> String {
     if v == 0.0 {
@@ -3931,7 +3921,6 @@ fn write_step_string(content: &str, filepath: &str) -> bool {
 // ═══════════════════════════════════════════════════════════════════════════
 // Public API
 // ═══════════════════════════════════════════════════════════════════════════
-
 /// Every CARTESIAN_POINT of the file in entity-id order.
 pub fn read_file_step_points(filepath: &str) -> Vec<Point> {
     let sf = parse_step_file(filepath);

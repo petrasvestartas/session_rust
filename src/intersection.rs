@@ -22,7 +22,6 @@ use crate::vector::Vector;
 // ═══════════════════════════════════════════════════════════════════════════
 // Lines and planes
 // ═══════════════════════════════════════════════════════════════════════════
-
 /// Largest absolute coefficient of a 3x3 system with its row and column, the first one on ties.
 fn max_pivot_3x3(rows: &[[f64; 3]; 3]) -> (f64, usize, usize) {
     let mut temp = rows[0][0].abs();
@@ -469,7 +468,6 @@ pub fn plane_plane_plane(plane0: &Plane, plane1: &Plane, plane2: &Plane) -> Opti
 // ═══════════════════════════════════════════════════════════════════════════
 // Rays
 // ═══════════════════════════════════════════════════════════════════════════
-
 /// Ray-mesh hit.
 #[derive(Debug, Clone)]
 pub struct RayHit {
@@ -846,7 +844,6 @@ pub fn ray_mesh_bvh(line: &Line, mesh: &Mesh, epsilon: f64, find_all: bool) -> O
 // ═══════════════════════════════════════════════════════════════════════════
 // NURBS curve helpers
 // ═══════════════════════════════════════════════════════════════════════════
-
 /// Sorted values without neighbours closer than tolerance to the last kept one.
 fn unique_sorted(values: &[f64], tolerance: f64) -> Vec<f64> {
     let mut unique: Vec<f64> = Vec::new();
@@ -1256,7 +1253,6 @@ fn curve_plane_subdivide_production(
 // ═══════════════════════════════════════════════════════════════════════════
 // NURBS curves
 // ═══════════════════════════════════════════════════════════════════════════
-
 /// Appends t unless it lies within tolerance of the last parameter.
 fn append_parameter(params: &mut Vec<f64>, t: f64, tolerance: f64) {
     if params.is_empty() || (params[params.len() - 1] - t).abs() >= tolerance {
@@ -1514,7 +1510,6 @@ pub fn curve_closest_point(curve: &NurbsCurve, test_point: &Point, t0: f64, t1: 
 // ═══════════════════════════════════════════════════════════════════════════
 // NURBS surface helpers
 // ═══════════════════════════════════════════════════════════════════════════
-
 /// One traced surface-plane curve in parameter space.
 struct SurfacePlaneTrace {
     uv_trace: Vec<(f64, f64)>,     // Traced (u, v) samples.
@@ -3451,7 +3446,6 @@ fn solve_gauss(m: &[Vec<f64>], rhs: &[f64], n: usize) -> Option<Vec<f64>> {
 // ═══════════════════════════════════════════════════════════════════════════
 // Analytic quadric surface intersection
 // ═══════════════════════════════════════════════════════════════════════════
-
 /// Surface point at (u, v), the origin when the surface cannot evaluate.
 fn srf_point(srf: &NurbsSurface, u: f64, v: f64) -> Point {
     srf.point_at(u, v).unwrap_or_default()
@@ -6733,7 +6727,6 @@ fn analytic_pullback(
 // ═══════════════════════════════════════════════════════════════════════════
 // Coaxial quadric pairs
 // ═══════════════════════════════════════════════════════════════════════════
-
 /// Distance of p from the axis through apt along adir.
 fn point_axis_dist(apt: &[f64; 3], adir: &[f64; 3], p: &[f64; 3]) -> f64 {
     let u = ssi_unit(adir);
@@ -7681,7 +7674,6 @@ fn analytic_ssi(a: &NurbsSurface, b: &NurbsSurface, tolerance: f64) -> AnalyticR
 // ═══════════════════════════════════════════════════════════════════════════
 // NURBS surfaces
 // ═══════════════════════════════════════════════════════════════════════════
-
 /// Surface-plane section curves.
 pub fn surface_plane(
     surface: &NurbsSurface,
@@ -9580,7 +9572,6 @@ pub fn cut_curves_on_surface(
 // ═══════════════════════════════════════════════════════════════════════════
 // Polylines and plane sets
 // ═══════════════════════════════════════════════════════════════════════════
-
 /// Whether two vectors are parallel within angle_tol.
 fn vectors_nearly_parallel(v0: &Vector, v1: &Vector, angle_tol: f64) -> bool {
     let m0 = v0.magnitude();
@@ -9807,7 +9798,6 @@ pub fn scale_vector_to_distance_of_2planes(
 // ═══════════════════════════════════════════════════════════════════════════
 // Plane 2D helpers
 // ═══════════════════════════════════════════════════════════════════════════
-
 /// Projects a point into plane coordinates.
 fn plane_to_2d(p: &Point, origin: &Point, xax: &Vector, yax: &Vector) -> [f64; 2] {
     let d = p - origin;
@@ -10218,7 +10208,6 @@ fn offset_ring_2d(ring: &[[f64; 2]], delta: f64, concave_notch: bool) -> Vec<[f6
 // ═══════════════════════════════════════════════════════════════════════════
 // Polyline booleans
 // ═══════════════════════════════════════════════════════════════════════════
-
 /// Boolean of two closed planar polylines, clip_type 0 intersection, 1 union, 2 difference.
 pub fn polyline_boolean(a: &Polyline, b: &Polyline, clip_type: i32) -> Vec<Polyline> {
     Polyline::boolean_op(a, b, clip_type, None)
@@ -10365,7 +10354,6 @@ pub fn polyline_boolean_2d_in_plane(
 // ═══════════════════════════════════════════════════════════════════════════
 // Joints
 // ═══════════════════════════════════════════════════════════════════════════
-
 /// Polyline-plane crossings as one line oriented from align_start.
 pub fn polyline_plane_to_line(poly: &Polyline, plane: &Plane, align_start: &Point) -> Option<Line> {
     let (pts, _) = polyline_plane(poly, plane)?;
@@ -10494,7 +10482,6 @@ pub fn closed_and_open_paths_2d(
 // ═══════════════════════════════════════════════════════════════════════════
 // Elements
 // ═══════════════════════════════════════════════════════════════════════════
-
 /// Face-to-face contacts (a, b, face_a, face_b, type, polyline) with type 0 side-side, 1 side-top, 2 top-top.
 pub fn face_to_face(
     adjacency: &[i32],
