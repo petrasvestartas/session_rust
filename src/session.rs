@@ -798,13 +798,16 @@ const INTERACTIONS: usize = 42; // Checkpoint phase: the interactions, by edge g
 const ASSEMBLY: usize = 43; // Checkpoint phase: the sections joined into one message.
 const CHUNK: usize = 64 << 10; // Bytes past which a finished tree node's chunks move instead of being copied.
 
+/// A tree node being written: the node, its next raw child and its bytes in chunks.
+type Frame = (Rc<RefCell<TreeNode>>, usize, Vec<Vec<u8>>);
+
 /// A resumable protobuf writer over a session: live entries only, the layout to_proto encodes.
 struct Checkpoint {
-    revision: u64,                                            // The revision it writes.
-    phase: usize,                                             // The section being written.
-    cursor: usize,                                            // Slot or entry count in the phase.
-    key: String,                                              // The last key or guid written.
-    stack: Vec<(Rc<RefCell<TreeNode>>, usize, Vec<Vec<u8>>)>, // Node, next raw child, its bytes in chunks.
+    revision: u64,          // The revision it writes.
+    phase: usize,           // The section being written.
+    cursor: usize,          // Slot or entry count in the phase.
+    key: String,            // The last key or guid written.
+    stack: Vec<Frame>,      // Nodes being written, root first.
     tree: Vec<Vec<u8>>,     // The framed root, in chunks after the Tree head.
     sections: Vec<Vec<u8>>, // The seven Session fields.
     out: Vec<u8>,           // The joined message.

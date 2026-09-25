@@ -255,10 +255,10 @@ pub fn run_bench_steady_state() -> TestResult {
         let mut edits = Vec::new();
         let mut undos = Vec::new();
 
-        for cycle in 0..cycles {
+        for (cycle, guid) in guids.iter().enumerate().take(cycles) {
             edits.push(clock(|| {
                 session.begin("remove");
-                session.remove_object(&guids[cycle]);
+                session.remove_object(guid);
                 session.commit();
             }));
             undos.push(clock(|| {

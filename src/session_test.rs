@@ -2746,6 +2746,8 @@ pub fn run_session_tree_ops() -> TestResult {
         let absent = node.borrow().is_dead() && session.tree.get_node_by_name("L").is_none();
         let mut redone = Vec::new();
 
+        // the index mirrors the C++ and Python test, and the fourth redo has no snapshot
+        #[allow(clippy::needless_range_loop)]
         for i in 1..=4 {
             session.redo();
             redone.push(i == 4 || session.tree.str() == snapshots[i]);
