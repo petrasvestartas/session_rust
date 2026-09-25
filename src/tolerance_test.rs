@@ -109,9 +109,13 @@ pub fn run_tolerance_runtime_modification() -> TestResult {
         let mut tolerance = Tolerance::default();
         let original_absolute = tolerance.absolute();
         let original_relative = tolerance.relative();
+        let tstr = tolerance.str();
+        let trepr = tolerance.repr();
 
         MINI_CHECK!(original_absolute == 1e-9);
         MINI_CHECK!(original_relative == 1e-6);
+        MINI_CHECK!(tstr == "Tolerance(M)");
+        MINI_CHECK!(trepr.starts_with("Tolerance(unit='M', absolute="));
 
         tolerance.set_absolute(1e-12);
         tolerance.set_relative(1e-12);

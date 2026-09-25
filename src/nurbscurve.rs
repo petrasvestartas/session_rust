@@ -1124,7 +1124,7 @@ impl NurbsCurve {
             return false;
         }
 
-        if !self.m_is_rat && w != 1.0 && !self.make_rational() {
+        if !self.m_is_rat && w != 1.0 && !self.to_rational() {
             return false;
         }
 
@@ -1165,7 +1165,7 @@ impl NurbsCurve {
 
     /// Set the weight, making the curve rational first.
     pub fn set_weight(&mut self, cv_index: usize, weight: f64) -> bool {
-        if !self.m_is_rat && !self.make_rational() {
+        if !self.m_is_rat && !self.to_rational() {
             return false;
         }
 
@@ -2269,7 +2269,7 @@ impl NurbsCurve {
     }
 
     /// Add unit weights.
-    pub fn make_rational(&mut self) -> bool {
+    pub fn to_rational(&mut self) -> bool {
         if self.m_is_rat {
             return true;
         }
@@ -2293,7 +2293,7 @@ impl NurbsCurve {
     }
 
     /// Drop the weights; fails when they differ unless force.
-    pub fn make_non_rational(&mut self, force: bool) -> bool {
+    pub fn to_non_rational(&mut self, force: bool) -> bool {
         if !self.m_is_rat {
             return true;
         }
@@ -2515,16 +2515,16 @@ impl NurbsCurve {
     }
 
     /// Write to a JSON file.
-    pub fn file_json_dump(&self, filepath: &str) -> Result<(), Box<dyn std::error::Error>> {
+    pub fn file_json_dump(&self, filename: &str) -> Result<(), Box<dyn std::error::Error>> {
         let json = serde_json::to_string_pretty(self)?;
-        std::fs::write(filepath, json)?;
+        std::fs::write(filename, json)?;
 
         Ok(())
     }
 
     /// Read from a JSON file.
-    pub fn file_json_load(filepath: &str) -> Result<Self, Box<dyn std::error::Error>> {
-        let contents = std::fs::read_to_string(filepath)?;
+    pub fn file_json_load(filename: &str) -> Result<Self, Box<dyn std::error::Error>> {
+        let contents = std::fs::read_to_string(filename)?;
 
         Ok(serde_json::from_str(&contents)?)
     }
@@ -2620,15 +2620,15 @@ impl NurbsCurve {
     }
 
     /// Write to a protobuf file.
-    pub fn pb_dump(&self, filepath: &str) -> Result<(), Box<dyn std::error::Error>> {
-        std::fs::write(filepath, self.pb_dumps())?;
+    pub fn pb_dump(&self, filename: &str) -> Result<(), Box<dyn std::error::Error>> {
+        std::fs::write(filename, self.pb_dumps())?;
 
         Ok(())
     }
 
     /// Read from a protobuf file.
-    pub fn pb_load(filepath: &str) -> Result<Self, Box<dyn std::error::Error>> {
-        Self::pb_loads(&std::fs::read(filepath)?)
+    pub fn pb_load(filename: &str) -> Result<Self, Box<dyn std::error::Error>> {
+        Self::pb_loads(&std::fs::read(filename)?)
     }
 
     // ═══════════════════════════════════════════════════════════════════════════
@@ -3908,7 +3908,7 @@ impl NurbsCurve {
 
         for c in chain.iter_mut() {
             if rational {
-                c.make_rational();
+                c.to_rational();
             }
 
             if !c.clamp_end(2) || !c.increase_degree(max_degree) {

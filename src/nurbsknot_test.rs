@@ -35,12 +35,12 @@ pub fn run_make_clamped_uniform() -> TestResult {
 
         let order = 4;
         let cv_count = 5;
-        let nurbsknots = nurbsknot::make_clamped_uniform(order, cv_count, 1.0);
+        let nurbsknots = nurbsknot::compute_clamped_uniform(order, cv_count, 1.0);
 
         MINI_CHECK!(TOLERANCE.is_allclose(&nurbsknots, &[0.0, 0.0, 0.0, 1.0, 2.0, 2.0, 2.0]));
-        MINI_CHECK!(nurbsknot::make_clamped_uniform(1, cv_count, 1.0).is_empty());
-        MINI_CHECK!(nurbsknot::make_clamped_uniform(order, cv_count, f64::NAN).is_empty());
-        MINI_CHECK!(nurbsknot::make_clamped_uniform(usize::MAX, usize::MAX, 1.0).is_empty());
+        MINI_CHECK!(nurbsknot::compute_clamped_uniform(1, cv_count, 1.0).is_empty());
+        MINI_CHECK!(nurbsknot::compute_clamped_uniform(order, cv_count, f64::NAN).is_empty());
+        MINI_CHECK!(nurbsknot::compute_clamped_uniform(usize::MAX, usize::MAX, 1.0).is_empty());
     })
 }
 
@@ -50,11 +50,11 @@ pub fn run_make_periodic_uniform() -> TestResult {
 
         let order = 4;
         let cv_count = 5;
-        let nurbsknots = nurbsknot::make_periodic_uniform(order, cv_count, 1.0);
+        let nurbsknots = nurbsknot::compute_periodic_uniform(order, cv_count, 1.0);
 
         MINI_CHECK!(TOLERANCE.is_allclose(&nurbsknots, &[0.0, 1.0, 2.0, 3.0, 4.0, 5.0, 6.0]));
-        MINI_CHECK!(nurbsknot::make_periodic_uniform(order, cv_count, 0.0).is_empty());
-        MINI_CHECK!(nurbsknot::make_periodic_uniform(order, cv_count, f64::INFINITY).is_empty());
+        MINI_CHECK!(nurbsknot::compute_periodic_uniform(order, cv_count, 0.0).is_empty());
+        MINI_CHECK!(nurbsknot::compute_periodic_uniform(order, cv_count, f64::INFINITY).is_empty());
     })
 }
 
@@ -87,7 +87,7 @@ pub fn run_is_valid() -> TestResult {
 
         let order = 4;
         let cv_count = 5;
-        let nurbsknots_clamped = nurbsknot::make_clamped_uniform(order, cv_count, 1.0);
+        let nurbsknots_clamped = nurbsknot::compute_clamped_uniform(order, cv_count, 1.0);
         let nurbsknots_flat = vec![0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0];
         let mut nurbsknots_nan = nurbsknots_clamped.clone();
         nurbsknots_nan[3] = f64::NAN;
@@ -105,8 +105,8 @@ pub fn run_is_clamped() -> TestResult {
 
         let order = 4;
         let cv_count = 5;
-        let nurbsknots_periodic = nurbsknot::make_periodic_uniform(order, cv_count, 1.0);
-        let nurbsknots_clamped = nurbsknot::make_clamped_uniform(order, cv_count, 1.0);
+        let nurbsknots_periodic = nurbsknot::compute_periodic_uniform(order, cv_count, 1.0);
+        let nurbsknots_clamped = nurbsknot::compute_clamped_uniform(order, cv_count, 1.0);
         let is_not_clamped = nurbsknot::is_clamped(order, cv_count, &nurbsknots_periodic, 2);
         let is_clamped = nurbsknot::is_clamped(order, cv_count, &nurbsknots_clamped, 2);
 
@@ -138,8 +138,8 @@ pub fn run_is_periodic() -> TestResult {
 
         let order = 4;
         let cv_count = 5;
-        let mut nurbsknots_periodic = nurbsknot::make_periodic_uniform(order, cv_count, 1.0);
-        let nurbsknots_clamped = nurbsknot::make_clamped_uniform(order, cv_count, 1.0);
+        let mut nurbsknots_periodic = nurbsknot::compute_periodic_uniform(order, cv_count, 1.0);
+        let nurbsknots_clamped = nurbsknot::compute_clamped_uniform(order, cv_count, 1.0);
 
         MINI_CHECK!(nurbsknot::is_periodic(
             order,
@@ -168,7 +168,7 @@ pub fn run_get_domain() -> TestResult {
 
         let order = 4;
         let cv_count = 5;
-        let mut nurbsknots = nurbsknot::make_clamped_uniform(order, cv_count, 1.0);
+        let mut nurbsknots = nurbsknot::compute_clamped_uniform(order, cv_count, 1.0);
         let domain = nurbsknot::get_domain(order, cv_count, &nurbsknots);
 
         MINI_CHECK!(TOLERANCE.is_close(domain.0, 0.0));
@@ -190,7 +190,7 @@ pub fn run_set_domain() -> TestResult {
 
         let order = 4;
         let cv_count = 5;
-        let mut nurbsknots = nurbsknot::make_clamped_uniform(order, cv_count, 1.0);
+        let mut nurbsknots = nurbsknot::compute_clamped_uniform(order, cv_count, 1.0);
         let ok = nurbsknot::set_domain(order, cv_count, &mut nurbsknots, 0.0, 1.0);
 
         MINI_CHECK!(ok);
@@ -218,7 +218,7 @@ pub fn run_reverse() -> TestResult {
 
         let order = 4;
         let cv_count = 5;
-        let mut nurbsknots_sym = nurbsknot::make_clamped_uniform(order, cv_count, 1.0);
+        let mut nurbsknots_sym = nurbsknot::compute_clamped_uniform(order, cv_count, 1.0);
 
         MINI_CHECK!(nurbsknot::reverse(order, cv_count, &mut nurbsknots_sym));
         MINI_CHECK!(TOLERANCE.is_allclose(&nurbsknots_sym, &[0.0, 0.0, 0.0, 1.0, 2.0, 2.0, 2.0]));
@@ -242,7 +242,7 @@ pub fn run_multiplicity() -> TestResult {
 
         let order = 4;
         let cv_count = 5;
-        let mut nurbsknots = nurbsknot::make_clamped_uniform(order, cv_count, 1.0);
+        let mut nurbsknots = nurbsknot::compute_clamped_uniform(order, cv_count, 1.0);
 
         MINI_CHECK!(nurbsknot::multiplicity(order, cv_count, &nurbsknots, 0) == 3);
         MINI_CHECK!(nurbsknot::multiplicity(order, cv_count, &nurbsknots, 3) == 1);
@@ -260,7 +260,7 @@ pub fn run_span_count() -> TestResult {
 
         let order = 4;
         let cv_count = 5;
-        let mut nurbsknots = nurbsknot::make_clamped_uniform(order, cv_count, 1.0);
+        let mut nurbsknots = nurbsknot::compute_clamped_uniform(order, cv_count, 1.0);
 
         MINI_CHECK!(nurbsknot::span_count(order, cv_count, &nurbsknots) == 2);
 
@@ -276,7 +276,7 @@ pub fn run_find_span() -> TestResult {
 
         let order = 4;
         let cv_count = 5;
-        let nurbsknots_clamped = nurbsknot::make_clamped_uniform(order, cv_count, 1.0);
+        let nurbsknots_clamped = nurbsknot::compute_clamped_uniform(order, cv_count, 1.0);
         let spancount0 = nurbsknot::find_span(order, cv_count, &nurbsknots_clamped, 0.5, 0, 0);
         let spancount1 = nurbsknot::find_span(order, cv_count, &nurbsknots_clamped, 1.5, 0, 0);
 
@@ -296,7 +296,7 @@ pub fn run_get_greville_abcissae() -> TestResult {
 
         let order = 4;
         let cv_count = 5;
-        let mut nurbsknots = nurbsknot::make_clamped_uniform(order, cv_count, 1.0);
+        let mut nurbsknots = nurbsknot::compute_clamped_uniform(order, cv_count, 1.0);
         let greville = nurbsknot::get_greville_abcissae(order, cv_count, &nurbsknots, false);
         let periodic = nurbsknot::get_greville_abcissae(order, cv_count, &nurbsknots, true);
 
@@ -384,7 +384,7 @@ pub fn run_eval_basis() -> TestResult {
 
         let order = 4;
         let cv_count = 5;
-        let nurbsknots = nurbsknot::make_clamped_uniform(order, cv_count, 1.0);
+        let nurbsknots = nurbsknot::compute_clamped_uniform(order, cv_count, 1.0);
         let span = nurbsknot::find_span(order, cv_count, &nurbsknots, 0.5, 0, 0);
         let basis = nurbsknot::eval_basis(order, &nurbsknots, span, 0.5);
         let nan = f64::NAN;

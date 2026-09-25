@@ -535,15 +535,15 @@ impl NurbsSurface {
         self.zero_cvs();
 
         if is_periodic_u {
-            self.make_periodic_uniform_nurbsknot_vector(0, nurbsknot_delta_u);
+            self.set_periodic_uniform_nurbsknot_vector(0, nurbsknot_delta_u);
         } else {
-            self.make_clamped_uniform_nurbsknot_vector(0, nurbsknot_delta_u);
+            self.set_clamped_uniform_nurbsknot_vector(0, nurbsknot_delta_u);
         }
 
         if is_periodic_v {
-            self.make_periodic_uniform_nurbsknot_vector(1, nurbsknot_delta_v);
+            self.set_periodic_uniform_nurbsknot_vector(1, nurbsknot_delta_v);
         } else {
-            self.make_clamped_uniform_nurbsknot_vector(1, nurbsknot_delta_v);
+            self.set_clamped_uniform_nurbsknot_vector(1, nurbsknot_delta_v);
         }
 
         true
@@ -1050,7 +1050,7 @@ impl NurbsSurface {
     }
 
     /// Rescale the homogeneous CV to the new weight so the Euclidean point stays; false when non-rational.
-    pub fn set_weight(&mut self, i: usize, j: usize, w: f64) -> bool {
+    pub fn set_weight(&mut self, i: usize, j: usize, weight: f64) -> bool {
         let dim = self.m_dim;
 
         if !self.m_is_rat {
@@ -1066,7 +1066,7 @@ impl NurbsSurface {
         } else {
             1.0
         };
-        let new_w = if w.abs() > 1e-14 { w } else { 1.0 };
+        let new_w = if weight.abs() > 1e-14 { weight } else { 1.0 };
         let scale = new_w / old_w;
 
         for d in 0..dim {
@@ -1731,7 +1731,7 @@ impl NurbsSurface {
     }
 
     /// Add weights of 1.
-    pub fn make_rational(&mut self) -> bool {
+    pub fn to_rational(&mut self) -> bool {
         if self.m_is_rat {
             return true;
         }
@@ -1756,7 +1756,7 @@ impl NurbsSurface {
     }
 
     /// Drop weights, dividing each CV by its own.
-    pub fn make_non_rational(&mut self) -> bool {
+    pub fn to_non_rational(&mut self) -> bool {
         if !self.m_is_rat {
             return true;
         }
@@ -1947,16 +1947,16 @@ impl NurbsSurface {
     }
 
     /// Write to a JSON file.
-    pub fn file_json_dump(&self, filepath: &str) -> Result<(), Box<dyn std::error::Error>> {
+    pub fn file_json_dump(&self, filename: &str) -> Result<(), Box<dyn std::error::Error>> {
         let json = serde_json::to_string_pretty(self)?;
-        std::fs::write(filepath, json)?;
+        std::fs::write(filename, json)?;
 
         Ok(())
     }
 
     /// Read from a JSON file.
-    pub fn file_json_load(filepath: &str) -> Result<Self, Box<dyn std::error::Error>> {
-        let contents = std::fs::read_to_string(filepath)?;
+    pub fn file_json_load(filename: &str) -> Result<Self, Box<dyn std::error::Error>> {
+        let contents = std::fs::read_to_string(filename)?;
 
         Ok(serde_json::from_str(&contents)?)
     }
@@ -2089,15 +2089,15 @@ impl NurbsSurface {
     }
 
     /// Write to a protobuf file.
-    pub fn pb_dump(&self, filepath: &str) -> Result<(), Box<dyn std::error::Error>> {
-        std::fs::write(filepath, self.pb_dumps())?;
+    pub fn pb_dump(&self, filename: &str) -> Result<(), Box<dyn std::error::Error>> {
+        std::fs::write(filename, self.pb_dumps())?;
 
         Ok(())
     }
 
     /// Read from a protobuf file.
-    pub fn pb_load(filepath: &str) -> Result<Self, Box<dyn std::error::Error>> {
-        Self::pb_loads(&std::fs::read(filepath)?)
+    pub fn pb_load(filename: &str) -> Result<Self, Box<dyn std::error::Error>> {
+        Self::pb_loads(&std::fs::read(filename)?)
     }
 
     // ═══════════════════════════════════════════════════════════════════════════
@@ -2154,25 +2154,25 @@ impl NurbsSurface {
     }
 
     /// Fill the nurbsknot vector in dir with clamped uniform values of the given spacing.
-    fn make_clamped_uniform_nurbsknot_vector(&mut self, dir: usize, delta: f64) -> bool {
+    fn set_clamped_uniform_nurbsknot_vector(&mut self, dir: usize, delta: f64) -> bool {
         if dir > 1 || delta <= 0.0 {
             return false;
         }
 
         self.m_nurbsknot[dir] =
-            nurbsknot::make_clamped_uniform(self.m_order[dir], self.m_cv_count[dir], delta);
+            nurbsknot::compute_clamped_uniform(self.m_order[dir], self.m_cv_count[dir], delta);
 
         !self.m_nurbsknot[dir].is_empty()
     }
 
     /// Fill the nurbsknot vector in dir with periodic uniform values of the given spacing.
-    fn make_periodic_uniform_nurbsknot_vector(&mut self, dir: usize, delta: f64) -> bool {
+    fn set_periodic_uniform_nurbsknot_vector(&mut self, dir: usize, delta: f64) -> bool {
         if dir > 1 || delta <= 0.0 {
             return false;
         }
 
         self.m_nurbsknot[dir] =
-            nurbsknot::make_periodic_uniform(self.m_order[dir], self.m_cv_count[dir], delta);
+            nurbsknot::compute_periodic_uniform(self.m_order[dir], self.m_cv_count[dir], delta);
 
         !self.m_nurbsknot[dir].is_empty()
     }

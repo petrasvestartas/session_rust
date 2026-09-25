@@ -231,6 +231,9 @@ impl TreeNode {
     }
 }
 
+// ═══════════════════════════════════════════════════════════════════════════
+// Operators
+// ═══════════════════════════════════════════════════════════════════════════
 impl PartialEq for TreeNode {
     fn eq(&self, other: &Self) -> bool {
         self.guid() == other.guid()
@@ -468,15 +471,15 @@ impl Tree {
     }
 
     /// Write to a JSON file.
-    pub fn file_json_dump(&self, filepath: &str) -> Result<(), Box<dyn std::error::Error>> {
-        std::fs::write(filepath, self.jsondump()?)?;
+    pub fn file_json_dump(&self, filename: &str) -> Result<(), Box<dyn std::error::Error>> {
+        std::fs::write(filename, self.jsondump()?)?;
 
         Ok(())
     }
 
     /// Read from a JSON file.
-    pub fn file_json_load(filepath: &str) -> Result<Self, Box<dyn std::error::Error>> {
-        Self::jsonload(&std::fs::read_to_string(filepath)?)
+    pub fn file_json_load(filename: &str) -> Result<Self, Box<dyn std::error::Error>> {
+        Self::jsonload(&std::fs::read_to_string(filename)?)
     }
 
     // ═══════════════════════════════════════════════════════════════════════════
@@ -518,15 +521,15 @@ impl Tree {
     }
 
     /// Write to a protobuf file.
-    pub fn pb_dump(&self, filepath: &str) -> Result<(), Box<dyn std::error::Error>> {
-        std::fs::write(filepath, self.pb_dumps())?;
+    pub fn pb_dump(&self, filename: &str) -> Result<(), Box<dyn std::error::Error>> {
+        std::fs::write(filename, self.pb_dumps())?;
 
         Ok(())
     }
 
     /// Read from a protobuf file.
-    pub fn pb_load(filepath: &str) -> Result<Self, Box<dyn std::error::Error>> {
-        Self::pb_loads(&std::fs::read(filepath)?)
+    pub fn pb_load(filename: &str) -> Result<Self, Box<dyn std::error::Error>> {
+        Self::pb_loads(&std::fs::read(filename)?)
     }
 
     // ═══════════════════════════════════════════════════════════════════════════

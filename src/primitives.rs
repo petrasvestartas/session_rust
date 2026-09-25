@@ -207,7 +207,7 @@ fn unify_curves(curves: &mut [NurbsCurve]) -> bool {
             return false;
         }
 
-        if any_rational && !c.make_rational() {
+        if any_rational && !c.to_rational() {
             return false;
         }
     }
@@ -1392,41 +1392,41 @@ impl Primitives {
     }
 
     /// Loft through section curves, interpolating them in v.
-    pub fn create_loft(input_curves: &[NurbsCurve], degree_v: usize) -> NurbsSurface {
-        if input_curves.len() < 2 {
+    pub fn create_loft(curves: &[NurbsCurve], degree_v: usize) -> NurbsSurface {
+        if curves.len() < 2 {
             return NurbsSurface::default();
         }
 
-        for c in input_curves {
+        for c in curves {
             if !c.is_valid() {
                 return NurbsSurface::default();
             }
         }
 
-        let mut curves = Vec::new();
+        let mut sections = Vec::new();
 
-        for c in input_curves {
-            curves.push(c.duplicate());
+        for c in curves {
+            sections.push(c.duplicate());
         }
 
-        if !unify_curves(&mut curves) {
+        if !unify_curves(&mut sections) {
             return NurbsSurface::default();
         }
 
-        let n = curves.len();
-        let cv_count_u = curves[0].cv_count();
-        let is_rat = curves[0].is_rational();
+        let n = sections.len();
+        let cv_count_u = sections[0].cv_count();
+        let is_rat = sections[0].is_rational();
         let order_v = degree_v.clamp(1, n - 1) + 1;
-        let v_params = loft_section_params(&curves);
+        let v_params = loft_section_params(&sections);
         let nurbsknots_v = loft_nurbsknots(&v_params, order_v);
-        let mut surface = NurbsSurface::new(3, is_rat, curves[0].order(), order_v, cv_count_u, n);
+        let mut surface = NurbsSurface::new(3, is_rat, sections[0].order(), order_v, cv_count_u, n);
 
         if !surface.is_valid() {
             return NurbsSurface::default();
         }
 
         for i in 0..surface.nurbsknot_count(0) {
-            surface.set_nurbsknot(0, i, curves[0].nurbsknot(i).unwrap_or_default());
+            surface.set_nurbsknot(0, i, sections[0].nurbsknot(i).unwrap_or_default());
         }
 
         for i in 0..surface.nurbsknot_count(1) {
@@ -1440,7 +1440,7 @@ impl Primitives {
         }
 
         for i in 0..cv_count_u {
-            let q = solve_linear(&basis, &loft_column(&curves, i, is_rat));
+            let q = solve_linear(&basis, &loft_column(&sections, i, is_rat));
 
             for j in 0..n {
                 if is_rat {

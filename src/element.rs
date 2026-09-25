@@ -179,17 +179,17 @@ impl ElementFeature {
     }
 
     /// Write to a JSON file.
-    pub fn file_json_dump(&self, filepath: &str) -> Result<(), Box<dyn std::error::Error>> {
+    pub fn file_json_dump(&self, filename: &str) -> Result<(), Box<dyn std::error::Error>> {
         let sorted = crate::file_encoders::sort_json_keys(self.jsondump());
 
-        std::fs::write(filepath, serde_json::to_string_pretty(&sorted)?)?;
+        std::fs::write(filename, serde_json::to_string_pretty(&sorted)?)?;
 
         Ok(())
     }
 
     /// Read from a JSON file.
-    pub fn file_json_load(filepath: &str) -> Result<Self, Box<dyn std::error::Error>> {
-        let data: serde_json::Value = serde_json::from_str(&std::fs::read_to_string(filepath)?)?;
+    pub fn file_json_load(filename: &str) -> Result<Self, Box<dyn std::error::Error>> {
+        let data: serde_json::Value = serde_json::from_str(&std::fs::read_to_string(filename)?)?;
 
         Ok(Self::jsonload(&data))
     }
@@ -250,15 +250,15 @@ impl ElementFeature {
     }
 
     /// Write to a protobuf file.
-    pub fn pb_dump(&self, filepath: &str) -> Result<(), Box<dyn std::error::Error>> {
-        std::fs::write(filepath, self.pb_dumps())?;
+    pub fn pb_dump(&self, filename: &str) -> Result<(), Box<dyn std::error::Error>> {
+        std::fs::write(filename, self.pb_dumps())?;
 
         Ok(())
     }
 
     /// Read from a protobuf file.
-    pub fn pb_load(filepath: &str) -> Result<Self, Box<dyn std::error::Error>> {
-        Self::pb_loads(&std::fs::read(filepath)?)
+    pub fn pb_load(filename: &str) -> Result<Self, Box<dyn std::error::Error>> {
+        Self::pb_loads(&std::fs::read(filename)?)
     }
 
     // ═══════════════════════════════════════════════════════════════════════════
@@ -951,17 +951,17 @@ impl Element {
     }
 
     /// Write to a JSON file.
-    pub fn file_json_dump(&self, filepath: &str) -> Result<(), Box<dyn std::error::Error>> {
+    pub fn file_json_dump(&self, filename: &str) -> Result<(), Box<dyn std::error::Error>> {
         let sorted = crate::file_encoders::sort_json_keys(self.jsondump());
 
-        std::fs::write(filepath, serde_json::to_string_pretty(&sorted)?)?;
+        std::fs::write(filename, serde_json::to_string_pretty(&sorted)?)?;
 
         Ok(())
     }
 
     /// Read from a JSON file.
-    pub fn file_json_load(filepath: &str) -> Result<Self, Box<dyn std::error::Error>> {
-        let data: serde_json::Value = serde_json::from_str(&std::fs::read_to_string(filepath)?)?;
+    pub fn file_json_load(filename: &str) -> Result<Self, Box<dyn std::error::Error>> {
+        let data: serde_json::Value = serde_json::from_str(&std::fs::read_to_string(filename)?)?;
 
         Ok(Self::jsonload(&data))
     }
@@ -1073,15 +1073,15 @@ impl Element {
     }
 
     /// Write to a protobuf file.
-    pub fn pb_dump(&self, filepath: &str) -> Result<(), Box<dyn std::error::Error>> {
-        std::fs::write(filepath, self.pb_dumps())?;
+    pub fn pb_dump(&self, filename: &str) -> Result<(), Box<dyn std::error::Error>> {
+        std::fs::write(filename, self.pb_dumps())?;
 
         Ok(())
     }
 
     /// Read from a protobuf file.
-    pub fn pb_load(filepath: &str) -> Result<Self, Box<dyn std::error::Error>> {
-        Self::pb_loads(&std::fs::read(filepath)?)
+    pub fn pb_load(filename: &str) -> Result<Self, Box<dyn std::error::Error>> {
+        Self::pb_loads(&std::fs::read(filename)?)
     }
 
     // ═══════════════════════════════════════════════════════════════════════════

@@ -768,12 +768,12 @@ pub fn run_nurbscurve_modifications() -> TestResult {
 
         let mut curve_rational = curve.duplicate();
         let original_length = curve.length(None);
-        curve_rational.make_rational();
+        curve_rational.to_rational();
         curve_rational.set_weight(2, 10.0);
 
         MINI_CHECK!(curve_rational.length(None) != original_length);
 
-        curve_rational.make_non_rational(true);
+        curve_rational.to_non_rational(true);
 
         MINI_CHECK!(curve_rational.length(None) == original_length);
 

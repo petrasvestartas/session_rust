@@ -9655,22 +9655,22 @@ pub fn closest_point_on_segment(pt: &Point, seg: &Line) -> (Point, f64) {
 }
 
 /// Closed quad of the main plane cut by four ordered boundary planes.
-pub fn plane_4planes(main: &Plane, planes: &[Plane; 4]) -> Option<Polyline> {
-    let p0 = plane_plane_plane_check(&planes[0], &planes[1], main, 0.1)?;
-    let p1 = plane_plane_plane_check(&planes[1], &planes[2], main, 0.1)?;
-    let p2 = plane_plane_plane_check(&planes[2], &planes[3], main, 0.1)?;
-    let p3 = plane_plane_plane_check(&planes[3], &planes[0], main, 0.1)?;
+pub fn plane_4planes(main_plane: &Plane, planes: &[Plane; 4]) -> Option<Polyline> {
+    let p0 = plane_plane_plane_check(&planes[0], &planes[1], main_plane, 0.1)?;
+    let p1 = plane_plane_plane_check(&planes[1], &planes[2], main_plane, 0.1)?;
+    let p2 = plane_plane_plane_check(&planes[2], &planes[3], main_plane, 0.1)?;
+    let p3 = plane_plane_plane_check(&planes[3], &planes[0], main_plane, 0.1)?;
 
     Some(Polyline::new(vec![p0.clone(), p1, p2, p3, p0]))
 }
 
 /// Open four-point polyline of the main plane cut by four ordered boundary planes.
-pub fn plane_4planes_open(main: &Plane, planes: &[Plane; 4]) -> Option<Polyline> {
+pub fn plane_4planes_open(main_plane: &Plane, planes: &[Plane; 4]) -> Option<Polyline> {
     let mut corners: Vec<Point> = Vec::with_capacity(4);
 
     for i in 0..4 {
         let edge = plane_plane_to_line_canonical(&planes[i], &planes[(i + 1) % 4])?;
-        corners.push(line_plane(&edge, main, false)?);
+        corners.push(line_plane(&edge, main_plane, false)?);
     }
 
     Some(Polyline::new(corners))
@@ -9687,16 +9687,16 @@ pub fn plane_4lines(plane: &Plane, l0: &Line, l1: &Line, l2: &Line, l3: &Line) -
 }
 
 /// Clips a segment to the two plane intersections.
-pub fn line_two_planes(line: &Line, p0: &Plane, p1: &Plane) -> Option<Line> {
-    let q0 = line_plane(line, p0, true)?;
-    let q1 = line_plane(line, p1, true)?;
+pub fn line_two_planes(line: &Line, plane0: &Plane, plane1: &Plane) -> Option<Line> {
+    let q0 = line_plane(line, plane0, true)?;
+    let q1 = line_plane(line, plane1, true)?;
 
     Some(Line::new(q0[0], q0[1], q0[2], q1[0], q1[1], q1[2]))
 }
 
 /// Polyline edge crossings with a plane and their edge indices.
-pub fn polyline_plane(poly: &Polyline, plane: &Plane) -> Option<(Vec<Point>, Vec<usize>)> {
-    let n = poly.point_count();
+pub fn polyline_plane(polyline: &Polyline, plane: &Plane) -> Option<(Vec<Point>, Vec<usize>)> {
+    let n = polyline.point_count();
 
     if n < 2 {
         return None;
@@ -9706,8 +9706,8 @@ pub fn polyline_plane(poly: &Polyline, plane: &Plane) -> Option<(Vec<Point>, Vec
     let mut edge_ids: Vec<usize> = Vec::new();
 
     for i in 0..n - 1 {
-        let a = poly.get_point(i)?;
-        let b = poly.get_point(i + 1)?;
+        let a = polyline.get_point(i)?;
+        let b = polyline.get_point(i + 1)?;
         let va = plane_value_at(plane, &a);
         let vb = plane_value_at(plane, &b);
         let a_on = va.abs() < Tolerance::ZERO_TOLERANCE;
@@ -9725,7 +9725,7 @@ pub fn polyline_plane(poly: &Polyline, plane: &Plane) -> Option<(Vec<Point>, Vec
 
         if b_on {
             if i + 2 == n {
-                let front = poly.get_point(0)?;
+                let front = polyline.get_point(0)?;
                 let closes = (b[0] - front[0]).abs() < Tolerance::ZERO_TOLERANCE
                     && (b[1] - front[1]).abs() < Tolerance::ZERO_TOLERANCE
                     && (b[2] - front[2]).abs() < Tolerance::ZERO_TOLERANCE;
@@ -9762,28 +9762,32 @@ pub fn line_line_3d(cutter: &Line, seg: &Line) -> Option<Point> {
 }
 
 /// Direction scaled to span the distance between two planes.
-pub fn scale_vector_to_distance_of_2planes(dir: &Vector, p0: &Plane, p1: &Plane) -> Option<Vector> {
-    if dir.magnitude() < Tolerance::ZERO_TOLERANCE {
+pub fn scale_vector_to_distance_of_2planes(
+    direction: &Vector,
+    plane0: &Plane,
+    plane1: &Plane,
+) -> Option<Vector> {
+    if direction.magnitude() < Tolerance::ZERO_TOLERANCE {
         return None;
     }
 
     let origin = Point::new(0.0, 0.0, 0.0);
-    let tip = Point::new(dir[0], dir[1], dir[2]);
+    let tip = Point::new(direction[0], direction[1], direction[2]);
     let ray = Line::new(origin[0], origin[1], origin[2], tip[0], tip[1], tip[2]);
-    let q0 = line_plane(&ray, p0, false)?;
-    let q1 = line_plane(&ray, p1, false)?;
+    let q0 = line_plane(&ray, plane0, false)?;
+    let q1 = line_plane(&ray, plane1, false)?;
     let output = &q1 - &q0;
-    let n1 = p1.z_axis();
+    let n1 = plane1.z_axis();
     let n1_mag = n1.magnitude();
 
     if n1_mag < Tolerance::ZERO_TOLERANCE {
         return None;
     }
 
-    let o0 = p0.origin();
-    let d = (o0[0] - p1.origin()[0]) * n1[0] / n1_mag
-        + (o0[1] - p1.origin()[1]) * n1[1] / n1_mag
-        + (o0[2] - p1.origin()[2]) * n1[2] / n1_mag;
+    let o0 = plane0.origin();
+    let d = (o0[0] - plane1.origin()[0]) * n1[0] / n1_mag
+        + (o0[1] - plane1.origin()[1]) * n1[1] / n1_mag
+        + (o0[2] - plane1.origin()[2]) * n1[2] / n1_mag;
 
     let dist_ortho_sq = d * d;
 

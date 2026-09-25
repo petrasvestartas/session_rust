@@ -446,7 +446,7 @@ pub fn run_nurbssurface_control_vertices_access() -> TestResult {
         ];
 
         let mut s = NurbsSurface::create(false, false, 3, 3, 4, 4, &points).unwrap();
-        s.make_rational();
+        s.to_rational();
 
         let cv_slice = s.cv(0, 0).unwrap();
 
@@ -1097,12 +1097,12 @@ pub fn run_nurbssurface_modification() -> TestResult {
         MINI_CHECK!(TOLERANCE.is_point_close(&ee.point_at_corner(0, 0).unwrap(), &center));
 
         let mut s_rat = s.duplicate();
-        s_rat.make_rational();
+        s_rat.to_rational();
         s_rat.set_weight(2, 2, 3.0);
 
         MINI_CHECK!(s.point_at(0.5, 0.5).unwrap() != s_rat.point_at(0.5, 0.5).unwrap());
 
-        s_rat.make_non_rational();
+        s_rat.to_non_rational();
 
         MINI_CHECK!(s.point_at(0.5, 0.5).unwrap() == s_rat.point_at(0.5, 0.5).unwrap());
 

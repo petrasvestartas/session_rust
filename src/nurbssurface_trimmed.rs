@@ -3415,16 +3415,16 @@ impl NurbsSurfaceTrimmed {
     }
 
     /// Write to a JSON file.
-    pub fn file_json_dump(&self, filepath: &str) -> Result<(), Box<dyn std::error::Error>> {
+    pub fn file_json_dump(&self, filename: &str) -> Result<(), Box<dyn std::error::Error>> {
         let json = serde_json::to_string_pretty(self)?;
-        std::fs::write(filepath, json)?;
+        std::fs::write(filename, json)?;
 
         Ok(())
     }
 
     /// Read from a JSON file.
-    pub fn file_json_load(filepath: &str) -> Result<Self, Box<dyn std::error::Error>> {
-        let contents = std::fs::read_to_string(filepath)?;
+    pub fn file_json_load(filename: &str) -> Result<Self, Box<dyn std::error::Error>> {
+        let contents = std::fs::read_to_string(filename)?;
 
         Ok(serde_json::from_str(&contents)?)
     }
@@ -3504,15 +3504,15 @@ impl NurbsSurfaceTrimmed {
     }
 
     /// Write to a protobuf file.
-    pub fn pb_dump(&self, filepath: &str) -> Result<(), Box<dyn std::error::Error>> {
-        std::fs::write(filepath, self.pb_dumps())?;
+    pub fn pb_dump(&self, filename: &str) -> Result<(), Box<dyn std::error::Error>> {
+        std::fs::write(filename, self.pb_dumps())?;
 
         Ok(())
     }
 
     /// Read from a protobuf file.
-    pub fn pb_load(filepath: &str) -> Result<Self, Box<dyn std::error::Error>> {
-        Self::pb_loads(&std::fs::read(filepath)?)
+    pub fn pb_load(filename: &str) -> Result<Self, Box<dyn std::error::Error>> {
+        Self::pb_loads(&std::fs::read(filename)?)
     }
 
     // ═══════════════════════════════════════════════════════════════════════════

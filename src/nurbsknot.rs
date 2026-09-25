@@ -77,7 +77,7 @@ pub fn domain_tolerance(a: f64, b: f64) -> f64 {
 }
 
 /// Return a clamped uniform nurbsknot vector, or an empty vector for invalid arguments.
-pub fn make_clamped_uniform(order: usize, cv_count: usize, delta: f64) -> Vec<f64> {
+pub fn compute_clamped_uniform(order: usize, cv_count: usize, delta: f64) -> Vec<f64> {
     if order < 2 || cv_count < order || !delta.is_finite() || delta <= 0.0 {
         return Vec::new();
     }
@@ -104,7 +104,7 @@ pub fn make_clamped_uniform(order: usize, cv_count: usize, delta: f64) -> Vec<f6
 }
 
 /// Return a periodic uniform nurbsknot vector, or an empty vector for invalid arguments.
-pub fn make_periodic_uniform(order: usize, cv_count: usize, delta: f64) -> Vec<f64> {
+pub fn compute_periodic_uniform(order: usize, cv_count: usize, delta: f64) -> Vec<f64> {
     if order < 2 || cv_count < order || !delta.is_finite() || delta <= 0.0 {
         return Vec::new();
     }
