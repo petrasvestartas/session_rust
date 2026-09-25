@@ -1,3 +1,4 @@
+use crate::color::Color;
 use crate::graph::Edge;
 use crate::graph::Vertex;
 use crate::interaction::Interaction;
@@ -6,6 +7,8 @@ use crate::session::Item;
 use crate::session::Session;
 use crate::tree::TreeNode;
 use crate::xform::Xform;
+use crate::BRep;
+use crate::Mesh;
 use std::cell::Cell;
 use std::cell::RefCell;
 use std::collections::BTreeMap;
@@ -13,6 +16,8 @@ use std::fmt;
 use std::rc::Rc;
 
 pub const CAPACITY: usize = 64; // Committed transactions kept; past it the oldest is dropped.
+pub const BUDGET: usize = 256 << 20; // Bytes the stacks may pin; past it the oldest is dropped.
+pub const RECORD: usize = 256; // Bytes one record costs on top of what it pins.
 
 /// A deep copy of geometry that keeps its guid and type, element feature guids included.
 pub fn clone(obj: &Geometry) -> Geometry {
@@ -31,12 +36,47 @@ pub fn clone(obj: &Geometry) -> Geometry {
     }
 }
 
-/// A deep copy that keeps the guid, which `duplicate()` and most copy constructors would mint anew.
-pub fn clone_item(obj: &Item) -> Item {
-    match obj {
-        Item::Geometry(g) => Item::Geometry(clone(g)),
-        Item::Component(c) => Item::Component(c.clone()),
-        Item::InstanceRef(i) => Item::InstanceRef(Rc::new((**i).clone())),
+/// Bytes a mesh pins, from its counts.
+fn mesh_weight(mesh: &Mesh) -> usize {
+    128 + 64 * mesh.number_of_vertices() + 48 * mesh.number_of_faces()
+}
+
+/// Bytes a brep pins, from its table lengths.
+fn brep_weight(brep: &BRep) -> usize {
+    512 + 256 * brep.m_surfaces.len()
+        + 128 * (brep.m_curves_3d.len() + brep.m_curves_2d.len())
+        + 24 * brep.m_vertices.len()
+        + 64 * (brep.m_edges.len() + brep.m_faces.len())
+}
+
+/// An estimate of the bytes an item pins while a record holds it, O(1) from its container lengths.
+pub fn weight(item: &Item) -> usize {
+    match item {
+        Item::Geometry(Geometry::Point(_)) => 64,
+        Item::Geometry(Geometry::Line(_)) => 96,
+        Item::Geometry(Geometry::Plane(_)) => 160,
+        Item::Geometry(Geometry::OBB(_)) => 192,
+        Item::Geometry(Geometry::Polyline(g)) => 64 + 24 * g.point_count(),
+        Item::Geometry(Geometry::PointCloud(g)) => {
+            64 + 24 * g.point_count() + 24 * g.normal_count() + 16 * g.color_count()
+        }
+        Item::Geometry(Geometry::Mesh(g)) => mesh_weight(g),
+        Item::Geometry(Geometry::NurbsCurve(g)) => 96 + 32 * g.cv_count() + 8 * g.m_nurbsknot.len(),
+        Item::Geometry(Geometry::NurbsSurface(g)) => {
+            128 + 32 * g.cv_count_total() + 8 * (g.m_nurbsknot[0].len() + g.m_nurbsknot[1].len())
+        }
+        Item::Geometry(Geometry::BRep(g)) => brep_weight(g),
+        Item::Geometry(Geometry::Element(g)) => {
+            let geometry = match g.geometry() {
+                crate::element::ElementGeometry::Mesh(mesh) => mesh_weight(mesh),
+                crate::element::ElementGeometry::BRep(brep) => brep_weight(brep),
+                crate::element::ElementGeometry::None => 0,
+            };
+
+            256 + geometry + 128 * g.features.len()
+        }
+        Item::InstanceRef(i) => 256 + 128 * i.features.len(),
+        Item::Component(_) => 128,
     }
 }
 
@@ -77,63 +117,48 @@ impl Tomb {
     }
 }
 
-/// Everything needed to put one object back into every live table of a session.
+/// An object added or removed: the tomb that flips it and where its node sits.
 #[derive(Debug, Clone)]
 pub struct Tombstone {
-    pub guid: String,         // The object's guid; the clone carries the same one.
-    pub obj: Item,            // A clone_item() of the object, never the live instance.
-    pub collection: String,   // The Objects list it lives in: "points", "lines", ... "instances".
-    pub obj_index: i64, // Its position in that list, so the order() sequence survives a round trip.
-    pub xform: Option<Xform>, // Its local transform, None when none was set.
-    pub parent_guid: Option<String>, // Name of its tree parent, None when it was added without one.
-    pub index: usize,   // Its position among the parent's children.
-    pub node: Option<Rc<RefCell<TreeNode>>>, // The detached tree node with its whole subtree, None for an add.
-    pub attribute: String,                   // Its graph node attribute.
-    pub edges: Vec<(String, String, bool, String)>, // Incident edges as (other guid, attribute, forward, edge guid or "").
-    pub interactions: BTreeMap<String, Vec<Box<dyn Interaction>>>, // Those edges' interactions by edge guid.
+    pub guid: String,                        // The object's guid.
+    pub collection: String,                  // The Objects list it lives in, or "definitions".
+    pub parent_guid: Option<String>,         // Name of its tree parent, None when it has no node.
+    pub index: usize, // Its raw index among the parent's children at record time, a hint.
+    pub node: Option<Rc<RefCell<TreeNode>>>, // Its tree node, for adds too; None when it has none.
+    pub tomb: Rc<Tomb>, // The tomb undo and redo flip.
 }
 
 impl Tombstone {
-    /// Construct from every field of the kit.
-    #[allow(clippy::too_many_arguments)]
+    /// Construct from every field of the record.
     pub fn new(
         guid: String,
-        obj: Item,
         collection: String,
-        obj_index: i64,
-        xform: Option<Xform>,
         parent_guid: Option<String>,
         index: usize,
         node: Option<Rc<RefCell<TreeNode>>>,
-        attribute: String,
-        edges: Vec<(String, String, bool, String)>,
+        tomb: Rc<Tomb>,
     ) -> Self {
         Self {
             guid,
-            obj,
             collection,
-            obj_index,
-            xform,
             parent_guid,
             index,
             node,
-            attribute,
-            edges,
-            interactions: BTreeMap::new(),
+            tomb,
         }
     }
 }
 
-/// The object under `guid` was swapped: absolute before/after snapshots, never deltas.
+/// The object under `guid` was swapped: the stored pointers before and after, never copies.
 #[derive(Debug, Clone)]
 pub struct ReplaceOp {
     pub guid: String, // The object's guid.
-    pub before: Item, // Snapshot before the swap.
-    pub after: Item,  // Snapshot after the swap.
+    pub before: Item, // The object before the swap.
+    pub after: Item,  // The object after the swap.
 }
 
 impl ReplaceOp {
-    /// Construct from the guid and the before and after snapshots.
+    /// Construct from the guid and the before and after objects.
     pub fn new(guid: String, before: Item, after: Item) -> Self {
         Self {
             guid,
@@ -162,21 +187,47 @@ impl XformOp {
     }
 }
 
-/// A definition added (None before), removed (None after) or replaced.
+/// A tree node added, removed, moved, renamed or recoloured: its state before and after.
 #[derive(Debug, Clone)]
-pub struct DefinitionOp {
-    pub guid: String,             // The definition's guid.
-    pub before: Option<Geometry>, // Snapshot before, None when it was added.
-    pub after: Option<Geometry>,  // Snapshot after, None when it was removed.
+pub struct TreeOp {
+    pub guid: String,                         // The node name at record time.
+    pub node: Rc<RefCell<TreeNode>>,          // The node itself.
+    pub tomb: Rc<Tomb>,                       // Node-only; pins the ghost of a move, else the node.
+    pub ghost: Option<Rc<RefCell<TreeNode>>>, // The dead ghost a move left in the old slot.
+    pub name_before: String,                  // Name before.
+    pub name_after: String,                   // Name after.
+    pub color_before: Option<Color>,          // Colour before.
+    pub color_after: Option<Color>,           // Colour after.
+    pub dead_before: bool,                    // Whether it was dead or absent before.
+    pub dead_after: bool,                     // Whether it is dead after.
 }
 
-impl DefinitionOp {
-    /// Construct from the guid and the before and after snapshots.
-    pub fn new(guid: String, before: Option<Geometry>, after: Option<Geometry>) -> Self {
+impl TreeOp {
+    /// Construct from every field of the record.
+    #[allow(clippy::too_many_arguments)]
+    pub fn new(
+        guid: String,
+        node: Rc<RefCell<TreeNode>>,
+        tomb: Rc<Tomb>,
+        ghost: Option<Rc<RefCell<TreeNode>>>,
+        name_before: String,
+        name_after: String,
+        color_before: Option<Color>,
+        color_after: Option<Color>,
+        dead_before: bool,
+        dead_after: bool,
+    ) -> Self {
         Self {
             guid,
-            before,
-            after,
+            node,
+            tomb,
+            ghost,
+            name_before,
+            name_after,
+            color_before,
+            color_after,
+            dead_before,
+            dead_after,
         }
     }
 }
@@ -188,28 +239,28 @@ pub enum Op {
     Remove(Tombstone),
     Replace(ReplaceOp),
     Xform(XformOp),
-    Definition(DefinitionOp),
+    Tree(TreeOp),
 }
 
 impl Op {
-    /// Return "add", "remove", "replace", "xform" or "definition".
+    /// Return "add", "remove", "replace", "xform" or "tree".
     pub fn kind(&self) -> &str {
         match self {
             Op::Add(_) => "add",
             Op::Remove(_) => "remove",
             Op::Replace(_) => "replace",
             Op::Xform(_) => "xform",
-            Op::Definition(_) => "definition",
+            Op::Tree(_) => "tree",
         }
     }
 
-    /// Return the guid of the object the op touched.
+    /// Return the guid of the object or the node name the op touched.
     pub fn guid(&self) -> &str {
         match self {
             Op::Add(op) | Op::Remove(op) => &op.guid,
             Op::Replace(op) => &op.guid,
             Op::Xform(op) => &op.guid,
-            Op::Definition(op) => &op.guid,
+            Op::Tree(op) => &op.guid,
         }
     }
 
@@ -221,13 +272,9 @@ impl Op {
     /// Return a string representation of the record for debugging.
     pub fn repr(&self) -> String {
         match self {
-            Op::Add(op) | Op::Remove(op) => format!(
-                "{}({}, {}[{}])",
-                self.kind(),
-                op.guid,
-                op.collection,
-                op.obj_index
-            ),
+            Op::Add(op) | Op::Remove(op) => {
+                format!("{}({}, {})", self.kind(), op.guid, op.collection)
+            }
             _ => self.str(),
         }
     }
@@ -240,11 +287,12 @@ impl fmt::Display for Op {
     }
 }
 
-/// One undoable step: a label and the ops it made, in the order they happened.
+/// One undoable step: a label, the ops it made in the order they happened, and the bytes they pin.
 #[derive(Debug, Clone)]
 pub struct Transaction {
     pub label: String, // What the step did.
     pub ops: Vec<Op>,  // Ops in the order they happened.
+    pub bytes: usize,  // Bytes its records pin.
 }
 
 impl Transaction {
@@ -253,6 +301,7 @@ impl Transaction {
         Self {
             label: label.to_string(),
             ops: Vec::new(),
+            bytes: 0,
         }
     }
 
@@ -284,12 +333,29 @@ impl fmt::Display for Transaction {
 // ═══════════════════════════════════════════════════════════════════════════
 // History
 // ═══════════════════════════════════════════════════════════════════════════
-/// CAD-style undo/redo over a Session, in memory only: records exist between `begin` and `commit`, every save purges them.
-#[derive(Debug, Clone, Default)]
+/// CAD-style undo/redo over a Session, in memory only: records flip tombs in place, every save purges them.
+#[derive(Debug, Clone)]
 pub struct History {
-    pub undo_stack: Vec<Transaction>, // Committed transactions, oldest first; capped at CAPACITY.
+    pub undo_stack: Vec<Transaction>, // Committed transactions, oldest first; capped at CAPACITY and budget.
     pub redo_stack: Vec<Transaction>, // Undone transactions, cleared the moment a new transaction commits.
     pub current: Option<Transaction>, // The open transaction, None between commit and the next begin.
+    pub bytes: usize,                 // Bytes pinned by both stacks and the open transaction.
+    pub budget: usize,                // Bytes the stacks may pin before the oldest is dropped.
+    pub dropped: usize, // Ops dropped since the last purge cycle began, unrecorded kills included.
+}
+
+impl Default for History {
+    /// Construct an empty history with the default budget.
+    fn default() -> Self {
+        Self {
+            undo_stack: Vec::new(),
+            redo_stack: Vec::new(),
+            current: None,
+            bytes: 0,
+            budget: BUDGET,
+            dropped: 0,
+        }
+    }
 }
 
 impl History {
@@ -325,7 +391,7 @@ impl History {
         self.current = Some(Transaction::new(label));
     }
 
-    /// Close the open transaction. An empty one is dropped; a real one clears redo.
+    /// Close the open transaction. An empty one is dropped; a real one clears redo and trims the oldest past the caps.
     pub fn commit(&mut self) {
         let Some(transaction) = self.current.take() else {
             return;
@@ -336,20 +402,47 @@ impl History {
         }
 
         self.undo_stack.push(transaction);
-        self.redo_stack.clear();
 
-        if self.undo_stack.len() > CAPACITY {
-            self.undo_stack.remove(0);
+        for undone in self.redo_stack.drain(..) {
+            self.dropped += undone.ops.len();
+        }
+
+        self.bytes = self._pinned();
+
+        while self.undo_stack.len() > 1
+            && (self.undo_stack.len() > CAPACITY || self.bytes > self.budget)
+        {
+            let oldest = self.undo_stack.remove(0);
+            self.dropped += oldest.ops.len();
+            self.bytes -= oldest.bytes;
         }
     }
 
-    /// Append an op to the open transaction; a no-op when none is open.
-    pub fn record(&mut self, op: Op) {
+    /// Append an op pinning `bytes` to the open transaction; a no-op when none is open.
+    pub fn record(&mut self, op: Op, bytes: usize) {
         let Some(current) = self.current.as_mut() else {
             return;
         };
 
         current.ops.push(op);
+        current.bytes += bytes;
+        self.bytes += bytes;
+    }
+
+    /// Revert the open transaction's ops in reverse and drop it, leaving both stacks as they are; false when none is open.
+    pub fn abort(&mut self, session: &mut Session) -> bool {
+        let Some(transaction) = self.current.take() else {
+            return false;
+        };
+
+        for i in (0..transaction.ops.len()).rev() {
+            self._revert(&transaction.ops[i], session);
+        }
+
+        self.dropped += transaction.ops.len();
+        self.bytes = self._pinned();
+
+        true
     }
 
     /// Revert the newest transaction, ops in reverse order, and park it for redo.
@@ -386,36 +479,50 @@ impl History {
         true
     }
 
-    /// Drop every transaction, open or committed.
+    /// Drop every transaction, open or committed; what they pinned is purgeable now.
     pub fn clear(&mut self) {
+        for transaction in self.undo_stack.iter().chain(&self.redo_stack) {
+            self.dropped += transaction.ops.len();
+        }
+
+        if let Some(current) = &self.current {
+            self.dropped += current.ops.len();
+        }
+
         self.undo_stack.clear();
         self.redo_stack.clear();
         self.current = None;
+        self.bytes = 0;
+    }
+
+    /// Bytes pinned by both stacks.
+    fn _pinned(&self) -> usize {
+        self.undo_stack
+            .iter()
+            .chain(&self.redo_stack)
+            .map(|transaction| transaction.bytes)
+            .sum()
     }
 
     /// Undo one op against the session.
     fn _revert(&self, op: &Op, session: &mut Session) {
         match op {
-            Op::Add(op) => {
-                session._detach(&op.guid);
-            }
-            Op::Remove(op) => session._attach(op),
-            Op::Replace(op) => session._swap(&op.guid, clone_item(&op.before)),
+            Op::Add(op) => session._kill(&op.tomb),
+            Op::Remove(op) => session._revive(&op.tomb),
+            Op::Replace(op) => session._swap(&op.guid, op.before.clone()),
             Op::Xform(op) => session._place(&op.guid, op.before.as_ref()),
-            Op::Definition(op) => session._define(&op.guid, op.before.as_ref().map(clone)),
+            Op::Tree(op) => session._tree(op, true),
         }
     }
 
     /// Redo one op against the session.
     fn _apply(&self, op: &Op, session: &mut Session) {
         match op {
-            Op::Add(op) => session._attach(op),
-            Op::Remove(op) => {
-                session._detach(&op.guid);
-            }
-            Op::Replace(op) => session._swap(&op.guid, clone_item(&op.after)),
+            Op::Add(op) => session._revive(&op.tomb),
+            Op::Remove(op) => session._kill(&op.tomb),
+            Op::Replace(op) => session._swap(&op.guid, op.after.clone()),
             Op::Xform(op) => session._place(&op.guid, op.after.as_ref()),
-            Op::Definition(op) => session._define(&op.guid, op.after.as_ref().map(clone)),
+            Op::Tree(op) => session._tree(op, false),
         }
     }
 

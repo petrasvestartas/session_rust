@@ -3411,6 +3411,76 @@ pub fn get_all_tests() -> Vec<RegisteredTest> {
             name: "Get Node",
             func: run_session_get_node,
         },
+        RegisteredTest {
+            group: "Session",
+            name: "Remove Keeps Slot",
+            func: run_session_remove_keeps_slot,
+        },
+        RegisteredTest {
+            group: "Session",
+            name: "Redo Add Keeps Node",
+            func: run_session_redo_add_keeps_node,
+        },
+        RegisteredTest {
+            group: "Session",
+            name: "Replace Shares Geometry",
+            func: run_session_replace_shares_geometry,
+        },
+        RegisteredTest {
+            group: "Session",
+            name: "Replace Across Types",
+            func: run_session_replace_across_types,
+        },
+        RegisteredTest {
+            group: "Session",
+            name: "Undo Restores Graph",
+            func: run_session_undo_restores_graph,
+        },
+        RegisteredTest {
+            group: "Session",
+            name: "Undo Restores Interactions",
+            func: run_session_undo_restores_interactions,
+        },
+        RegisteredTest {
+            group: "Session",
+            name: "Dead Guid Reused",
+            func: run_session_dead_guid_reused,
+        },
+        RegisteredTest {
+            group: "Session",
+            name: "Remove Keeps Lookup Edit",
+            func: run_session_remove_keeps_lookup_edit,
+        },
+        RegisteredTest {
+            group: "Session",
+            name: "Tree Ops",
+            func: run_session_tree_ops,
+        },
+        RegisteredTest {
+            group: "Session",
+            name: "Move Node",
+            func: run_session_move_node,
+        },
+        RegisteredTest {
+            group: "Session",
+            name: "Deleted Parent Orphans Children",
+            func: run_session_deleted_parent_orphans_children,
+        },
+        RegisteredTest {
+            group: "Session",
+            name: "Copy Drops Dead",
+            func: run_session_copy_drops_dead,
+        },
+        RegisteredTest {
+            group: "Session",
+            name: "Live Views",
+            func: run_session_live_views,
+        },
+        RegisteredTest {
+            group: "Session",
+            name: "Unrecorded Remove",
+            func: run_session_unrecorded_remove,
+        },
         // History tests
         RegisteredTest {
             group: "History",
@@ -3436,6 +3506,21 @@ pub fn get_all_tests() -> Vec<RegisteredTest> {
             group: "History",
             name: "Undo Definition",
             func: run_history_undo_definition,
+        },
+        RegisteredTest {
+            group: "History",
+            name: "Budget",
+            func: run_history_budget,
+        },
+        RegisteredTest {
+            group: "History",
+            name: "Weight",
+            func: run_history_weight,
+        },
+        RegisteredTest {
+            group: "History",
+            name: "Abort",
+            func: run_history_abort,
         },
         // SessionConfig tests
         RegisteredTest {

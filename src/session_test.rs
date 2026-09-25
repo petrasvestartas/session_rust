@@ -41,6 +41,7 @@ pub fn run_session_copy() -> TestResult {
 
         MINI_CHECK!(copy.name == session.name);
         MINI_CHECK!(copy.guid() == guid);
+        MINI_CHECK!(copy.history.depth() == 0);
         MINI_CHECK!(copy.objects.points.len() == 1);
         MINI_CHECK!(copy.objects.elements.len() == 1);
         MINI_CHECK!(copy.lookup.len() == session.lookup.len());
@@ -699,6 +700,7 @@ pub fn run_session_undo_remove_interaction() -> TestResult {
         session.undo();
 
         MINI_CHECK!(dropped);
+        MINI_CHECK!(session.graph.edges[a.guid()][b.guid()].guid() == id);
         MINI_CHECK!(session.get_interaction(&a, &b).len() == 1);
         MINI_CHECK!(session.get_interaction(&a, &b)[0].guid() == glue.guid());
         MINI_CHECK!(session.get_interaction(&a, &b)[0].name() == "glue");
@@ -842,7 +844,11 @@ pub fn run_session_remove_object() -> TestResult {
         MINI_CHECK!(!session.lookup.contains_key(&guid));
         MINI_CHECK!(eremoved);
         MINI_CHECK!(session.objects.elements.is_empty());
+        MINI_CHECK!(session.objects.elements.number_of_slots() == 1);
+        MINI_CHECK!(session.objects.points.number_of_dead() == 1);
+        MINI_CHECK!(!session.graph.has_node(&eguid));
         MINI_CHECK!(!loaded.lookup.contains_key(&eguid));
+        MINI_CHECK!(loaded.objects.points.number_of_slots() == 0);
     })
 }
 
@@ -1257,6 +1263,8 @@ pub fn run_session_document_workflow() -> TestResult {
         ));
         MINI_CHECK!(loaded.xform(&a_guid) == shift);
         MINI_CHECK!(loaded.history.depth() == 0);
+        MINI_CHECK!(session.objects.points.len() == 2);
+        MINI_CHECK!(session.objects.points.number_of_slots() == 3);
     })
 }
 
@@ -1280,6 +1288,7 @@ pub fn run_session_undo_remove() -> TestResult {
         session.add_edge(&a_guid, &b_guid, "connection");
         let shift = Xform::translation(0.0, 5.0, 0.0);
         session.set_xform(&b_guid, shift.clone());
+        let stored = std::rc::Rc::clone(&session.objects.points[1]);
 
         session.begin("remove");
         session.remove_object(&b_guid);
@@ -1290,7 +1299,9 @@ pub fn run_session_undo_remove() -> TestResult {
         MINI_CHECK!(gone);
         MINI_CHECK!(session.lookup.contains_key(&b_guid));
         MINI_CHECK!(session.objects.points[1].guid() == b_guid);
+        MINI_CHECK!(std::rc::Rc::ptr_eq(&session.objects.points[1], &stored));
         MINI_CHECK!(group.borrow().children()[1].borrow().name == b_guid);
+        MINI_CHECK!(std::rc::Rc::ptr_eq(&group.borrow().children()[1], &b_node));
         MINI_CHECK!(
             group.borrow().children()[1].borrow().children()[0]
                 .borrow()
@@ -1335,6 +1346,7 @@ pub fn run_session_undo_add() -> TestResult {
         MINI_CHECK!(gone);
         MINI_CHECK!(session.lookup.contains_key(&guid));
         MINI_CHECK!(session.objects.points[1].guid() == guid);
+        MINI_CHECK!(session.objects.points.number_of_slots() == 2);
         MINI_CHECK!(group.borrow().children()[1].borrow().name == guid);
         MINI_CHECK!(session.graph.has_node(&guid));
         MINI_CHECK!(TOLERANCE.is_close(
@@ -1373,6 +1385,7 @@ pub fn run_session_undo_replace() -> TestResult {
         ));
         MINI_CHECK!(session.objects.points[0].guid() == guid);
         MINI_CHECK!(session.objects.points.len() == 1);
+        MINI_CHECK!(session.objects.points.number_of_slots() == 1);
     })
 }
 
@@ -1403,6 +1416,7 @@ pub fn run_session_undo_xform() -> TestResult {
         MINI_CHECK!(cleared);
         MINI_CHECK!(session.xform(&guid) == shift);
         MINI_CHECK!(session.xforms.len() == 1);
+        MINI_CHECK!(session.history.undo_stack[0].ops[0].kind() == "xform");
     })
 }
 
@@ -1455,6 +1469,8 @@ pub fn run_session_history_capacity() -> TestResult {
         MINI_CHECK!(depth == 64);
         MINI_CHECK!(!session.history.can_undo());
         MINI_CHECK!(session.objects.points.len() == 6);
+        MINI_CHECK!(session.objects.points.number_of_slots() == 70);
+        MINI_CHECK!(session.history.dropped == 6);
         MINI_CHECK!(TOLERANCE.is_close(session.objects.points[5][0], 5.0));
     })
 }
@@ -1754,6 +1770,7 @@ pub fn run_session_remove_definition() -> TestResult {
         MINI_CHECK!(refused);
         MINI_CHECK!(removed);
         MINI_CHECK!(session.definitions.meshes.is_empty());
+        MINI_CHECK!(session.definitions.meshes.number_of_dead() == 1);
         MINI_CHECK!(session.definition_lookup.is_empty());
         MINI_CHECK!(session.objects.instances.is_empty());
         MINI_CHECK!(!session.remove_definition("missing"));
@@ -1791,7 +1808,9 @@ pub fn run_session_to_instance() -> TestResult {
             .unwrap()
             .vertex_point(0)
             .unwrap();
+        session.begin("to instance");
         let converted = session.to_instance(&guid, &definition, Xform::translation(5.0, 0.0, 0.0));
+        session.commit();
         let resolved = session.world_geometry(&guid).unwrap();
         let after = Mesh::from_geometry(&resolved)
             .unwrap()
@@ -1800,6 +1819,8 @@ pub fn run_session_to_instance() -> TestResult {
 
         MINI_CHECK!(converted);
         MINI_CHECK!(session.objects.meshes.is_empty());
+        MINI_CHECK!(session.objects.meshes.number_of_slots() == 1);
+        MINI_CHECK!(session.history.can_undo());
         MINI_CHECK!(session.instance_lookup[&guid].name == "column");
         MINI_CHECK!(session.instance_lookup[&guid].definition_guid == definition);
         MINI_CHECK!(group.borrow().children()[1].borrow().name == guid);
@@ -1853,6 +1874,7 @@ pub fn run_session_explode() -> TestResult {
 
         MINI_CHECK!(exploded);
         MINI_CHECK!(session.objects.instances.is_empty());
+        MINI_CHECK!(session.objects.instances.number_of_dead() == 1);
         MINI_CHECK!(element.name == "deck");
         MINI_CHECK!(element.features().len() == 1);
         MINI_CHECK!(element.features()[0].guid() == feature);
@@ -1913,6 +1935,8 @@ pub fn run_session_undo_instance() -> TestResult {
         MINI_CHECK!(instanced);
         MINI_CHECK!(gone);
         MINI_CHECK!(session.objects.meshes[0].guid() == guid);
+        MINI_CHECK!(session.objects.meshes.number_of_slots() == 2);
+        MINI_CHECK!(session.objects.instances.len() == 1);
         MINI_CHECK!(session.graph.has_edge((&point_guid, &guid)));
         MINI_CHECK!(session.graph.edges[&guid][&point_guid].guid() == edge);
         MINI_CHECK!(session.graph.node_label(&guid, None) == label);
@@ -2104,12 +2128,642 @@ pub fn run_session_get_node() -> TestResult {
         session.reindex();
 
         MINI_CHECK!(found.is_some_and(|n| Rc::ptr_eq(&n, &node)));
-        MINI_CHECK!(removed.is_none() && orphaned.is_none());
+        MINI_CHECK!(removed.is_none());
+        MINI_CHECK!(orphaned.is_some_and(|n| Rc::ptr_eq(&n, &child)));
         MINI_CHECK!(restored.is_some_and(|n| Rc::ptr_eq(&n, &node)));
         MINI_CHECK!(reattached.is_some_and(|n| Rc::ptr_eq(&n, &child)) && indexed);
         MINI_CHECK!(searched.is_some_and(|n| Rc::ptr_eq(&n, &swapped)));
         MINI_CHECK!(Rc::ptr_eq(&session.node_lookup[&guid], &swapped));
         MINI_CHECK!(session.get_node("missing").is_none());
+    })
+}
+
+pub fn run_session_remove_keeps_slot() -> TestResult {
+    MINI_TEST!("Remove Keeps Slot", {
+        use crate::history::Op;
+        use crate::Point;
+        use crate::Session;
+        use crate::Xform;
+        use std::rc::Rc;
+
+        let mut session = Session::default();
+        let g = session.add_group("g");
+        let a = Point::new(1.0, 0.0, 0.0);
+        let b = Point::new(2.0, 0.0, 0.0);
+        let c = Point::new(3.0, 0.0, 0.0);
+        let a_guid = a.guid().to_string();
+        let b_guid = b.guid().to_string();
+        let c_guid = c.guid().to_string();
+        session.add_point(a, Some(&g));
+        let b_node = session.add_point(b, Some(&g));
+        session.add_point(c, Some(&g));
+        session.set_xform(&b_guid, Xform::translation(0.0, 1.0, 0.0));
+        let stored = Rc::clone(&session.objects.points[1]);
+
+        session.begin("remove");
+        session.remove_object(&b_guid);
+        session.commit();
+        let pinned = match &session.history.undo_stack[0].ops[0] {
+            Op::Remove(t) => t.tomb.node.as_ref().is_some_and(|n| Rc::ptr_eq(n, &b_node)),
+            _ => false,
+        };
+
+        MINI_CHECK!(session.objects.points.len() == 2);
+        MINI_CHECK!(session.objects.points.number_of_slots() == 3);
+        MINI_CHECK!(Rc::ptr_eq(session.objects.points.get_item(1), &stored));
+        MINI_CHECK!(!session.lookup.contains_key(&b_guid));
+        MINI_CHECK!(!session.xforms.contains_key(&b_guid));
+        MINI_CHECK!(!session.graph.has_node(&b_guid));
+        MINI_CHECK!(session.get_node(&b_guid).is_none());
+        MINI_CHECK!(pinned);
+
+        session.undo();
+        let names: Vec<String> = g
+            .borrow()
+            .children()
+            .iter()
+            .map(|n| n.borrow().name.clone())
+            .collect();
+
+        MINI_CHECK!(Rc::ptr_eq(session.objects.points.get_item(1), &stored));
+        MINI_CHECK!(session.objects.points.get_slot(&b_guid) == Some(1));
+        MINI_CHECK!(session.order() == vec![a_guid.clone(), b_guid.clone(), c_guid.clone()]);
+        MINI_CHECK!(names == vec![a_guid, b_guid, c_guid]);
+        MINI_CHECK!(Rc::ptr_eq(&g.borrow().children()[1], &b_node));
+        MINI_CHECK!(b_node.borrow().at() == 1);
+    })
+}
+
+pub fn run_session_redo_add_keeps_node() -> TestResult {
+    MINI_TEST!("Redo Add Keeps Node", {
+        use crate::Point;
+        use crate::Session;
+        use std::rc::Rc;
+
+        let mut session = Session::default();
+        let a = Point::new(1.0, 0.0, 0.0);
+        let a_guid = a.guid().to_string();
+
+        session.begin("add");
+        let node = session.add_point(a, None);
+        session.commit();
+        let node_guid = node.borrow().guid().to_string();
+        let stored = Rc::clone(&session.objects.points[0]);
+        session.undo();
+        let gone = session.get_node(&a_guid).is_none() && session.objects.points.is_empty();
+        session.redo();
+        let found = session.get_node(&a_guid);
+
+        MINI_CHECK!(gone);
+        MINI_CHECK!(found.is_some_and(|n| Rc::ptr_eq(&n, &node)));
+        MINI_CHECK!(node.borrow().guid() == node_guid);
+        MINI_CHECK!(Rc::ptr_eq(&session.objects.points[0], &stored));
+        MINI_CHECK!(session.objects.points.get_slot(&a_guid) == Some(0));
+        MINI_CHECK!(session.tree.root().unwrap().borrow().children().len() == 1);
+    })
+}
+
+pub fn run_session_replace_shares_geometry() -> TestResult {
+    MINI_TEST!("Replace Shares Geometry", {
+        use crate::history::Op;
+        use crate::Geometry;
+        use crate::Item;
+        use crate::Point;
+        use crate::Session;
+        use std::rc::Rc;
+
+        let mut session = Session::default();
+        let a = Point::new(1.0, 0.0, 0.0);
+        let a_guid = a.guid().to_string();
+        session.add_point(a, None);
+        let original = Rc::clone(&session.objects.points[0]);
+        let mut p2 = Point::new(9.0, 9.0, 9.0);
+        p2.set_guid(a_guid.clone());
+        let p2 = Rc::new(p2);
+
+        session.begin("replace");
+        session.replace(&a_guid, Geometry::Point(Rc::clone(&p2)));
+        session.commit();
+        let shared = match &session.history.undo_stack[0].ops[0] {
+            Op::Replace(op) => match (&op.before, &op.after) {
+                (Item::Geometry(Geometry::Point(x)), Item::Geometry(Geometry::Point(y))) => {
+                    Rc::ptr_eq(x, &original) && Rc::ptr_eq(y, &p2)
+                }
+                _ => false,
+            },
+            _ => false,
+        };
+        let swapped = Rc::ptr_eq(&session.objects.points[0], &p2);
+        session.undo();
+        let restored = Rc::ptr_eq(&session.objects.points[0], &original)
+            && session.objects.points.get_slot(&a_guid) == Some(0);
+        session.redo();
+
+        MINI_CHECK!(shared);
+        MINI_CHECK!(swapped);
+        MINI_CHECK!(restored);
+        MINI_CHECK!(Rc::ptr_eq(&session.objects.points[0], &p2));
+        MINI_CHECK!(matches!(&session.lookup[&a_guid], Geometry::Point(p) if Rc::ptr_eq(p, &p2)));
+    })
+}
+
+pub fn run_session_replace_across_types() -> TestResult {
+    MINI_TEST!("Replace Across Types", {
+        use crate::Geometry;
+        use crate::Line;
+        use crate::Point;
+        use crate::Session;
+        use std::rc::Rc;
+
+        let mut session = Session::default();
+        let a = Point::new(1.0, 0.0, 0.0);
+        let a_guid = a.guid().to_string();
+        let node = session.add_point(a, None);
+        let mut line = Line::new(0.0, 0.0, 0.0, 1.0, 0.0, 0.0);
+        line.name = "edge".to_string();
+
+        session.begin("replace");
+        let replaced = session.replace(&a_guid, Geometry::Line(Rc::new(line)));
+        session.commit();
+        let label = session.graph.node_label(&a_guid, None);
+        let same_node = session
+            .get_node(&a_guid)
+            .is_some_and(|n| Rc::ptr_eq(&n, &node));
+        let counts = (session.objects.points.len(), session.objects.lines.len());
+        session.undo();
+        let undone = (session.objects.points.len(), session.objects.lines.len());
+        let restored = session.graph.node_label(&a_guid, None);
+        session.redo();
+
+        MINI_CHECK!(replaced);
+        MINI_CHECK!(counts == (0, 1));
+        MINI_CHECK!(same_node);
+        MINI_CHECK!(label == Some("line_edge".to_string()));
+        MINI_CHECK!(undone == (1, 0));
+        MINI_CHECK!(restored == Some("point_my_point".to_string()));
+        MINI_CHECK!(session.objects.lines.len() == 1);
+        MINI_CHECK!(session.objects.points.is_empty());
+        MINI_CHECK!(matches!(session.lookup[&a_guid], Geometry::Line(_)));
+        MINI_CHECK!(session
+            .get_node(&a_guid)
+            .is_some_and(|n| Rc::ptr_eq(&n, &node)));
+    })
+}
+
+pub fn run_session_undo_restores_graph() -> TestResult {
+    MINI_TEST!("Undo Restores Graph", {
+        use crate::Point;
+        use crate::Session;
+
+        let mut session = Session::default();
+        let a = Point::new(0.0, 0.0, 0.0);
+        let b = Point::new(1.0, 0.0, 0.0);
+        let c = Point::new(2.0, 0.0, 0.0);
+        let a_guid = a.guid().to_string();
+        let b_guid = b.guid().to_string();
+        let c_guid = c.guid().to_string();
+        session.add_point(a, None);
+        session.add_point(b, None);
+        session.add_point(c, None);
+        session.graph.set_vertex_attribute(&a_guid, "mass", 2.0);
+        session.add_edge(&a_guid, &b_guid, "joint");
+        session
+            .graph
+            .set_edge_attribute((&a_guid, &b_guid), "load", 1.5);
+        session.add_edge(&a_guid, &c_guid, "contact");
+        session.add_edge(&b_guid, &c_guid, "contact");
+        let before = session.graph.jsondump().unwrap();
+
+        session.begin("remove");
+        session.remove_object(&a_guid);
+        session.commit();
+        let taken = !session.graph.has_node(&a_guid) && session.graph.number_of_edges() == 1;
+        session.undo();
+        let after = session.graph.jsondump().unwrap();
+        session.redo();
+
+        MINI_CHECK!(taken);
+        MINI_CHECK!(before == after);
+        MINI_CHECK!(!session.graph.has_node(&a_guid));
+        MINI_CHECK!(session.graph.has_edge((&b_guid, &c_guid)));
+        MINI_CHECK!(session.graph.number_of_vertices() == 2);
+    })
+}
+
+pub fn run_session_undo_restores_interactions() -> TestResult {
+    MINI_TEST!("Undo Restores Interactions", {
+        use crate::Element;
+        use crate::Session;
+
+        let mut session = Session::default();
+        session.add_element(Element::new("a"), None);
+        session.add_element(Element::new("b"), None);
+        session.add_element(Element::new("c"), None);
+        let a = session.objects.elements[0].clone();
+        let b = session.objects.elements[1].clone();
+        let c = session.objects.elements[2].clone();
+        let glue = session
+            .add_interaction(&a, &b, Box::new(NamedInteraction::new("glue")))
+            .unwrap()
+            .guid()
+            .to_string();
+        let nail = session
+            .add_interaction(&a, &c, Box::new(NamedInteraction::new("nail")))
+            .unwrap()
+            .guid()
+            .to_string();
+        let ab = session.graph.edges[a.guid()][b.guid()].guid().to_string();
+        let ac = session.graph.edges[a.guid()][c.guid()].guid().to_string();
+
+        session.begin("remove");
+        session.remove_object(a.guid());
+        session.commit();
+        let parked = session.interactions.is_empty();
+        session.undo();
+        session.redo();
+        session.undo();
+
+        MINI_CHECK!(parked);
+        MINI_CHECK!(session.interactions.len() == 2);
+        MINI_CHECK!(session.graph.edges[a.guid()][b.guid()].guid() == ab);
+        MINI_CHECK!(session.graph.edges[a.guid()][c.guid()].guid() == ac);
+        MINI_CHECK!(session.get_interaction(&a, &b)[0].guid() == glue);
+        MINI_CHECK!(session.get_interaction(&a, &c)[0].guid() == nail);
+        MINI_CHECK!(session.get_interaction(&a, &c)[0].name() == "nail");
+    })
+}
+
+pub fn run_session_dead_guid_reused() -> TestResult {
+    MINI_TEST!("Dead Guid Reused", {
+        use crate::session::FromGeometry;
+        use crate::Point;
+        use crate::Session;
+
+        let mut session = Session::default();
+        let x = Point::new(1.0, 0.0, 0.0);
+        let x_guid = x.guid().to_string();
+        session.add_point(x, None);
+        let mut again = Point::new(9.0, 0.0, 0.0);
+        again.set_guid(x_guid.clone());
+
+        session.begin("reuse");
+        session.remove_object(&x_guid);
+        session.add_point(again, None);
+        session.commit();
+        let first = Point::from_geometry(&session.lookup[&x_guid]).unwrap()[0];
+        let slots = (
+            session.objects.points.is_dead(0),
+            session.objects.points.get_slot(&x_guid),
+        );
+        let count = session.objects.points.len();
+        session.undo();
+        let second = Point::from_geometry(&session.lookup[&x_guid]).unwrap()[0];
+        let undone = (
+            session.objects.points.is_dead(1),
+            session.objects.points.get_slot(&x_guid),
+        );
+        let still = session.objects.points.len();
+        session.redo();
+
+        MINI_CHECK!(TOLERANCE.is_close(first, 9.0));
+        MINI_CHECK!(slots == (true, Some(1)));
+        MINI_CHECK!(count == 1);
+        MINI_CHECK!(TOLERANCE.is_close(second, 1.0));
+        MINI_CHECK!(undone == (true, Some(0)));
+        MINI_CHECK!(still == 1);
+        MINI_CHECK!(session.objects.points.get_slot(&x_guid) == Some(1));
+        MINI_CHECK!(session.objects.points.len() == 1);
+    })
+}
+
+pub fn run_session_remove_keeps_lookup_edit() -> TestResult {
+    MINI_TEST!("Remove Keeps Lookup Edit", {
+        use crate::session::FromGeometry;
+        use crate::Geometry;
+        use crate::Point;
+        use crate::Session;
+        use std::rc::Rc;
+
+        let mut session = Session::default();
+        let a = Point::new(1.0, 0.0, 0.0);
+        let a_guid = a.guid().to_string();
+        session.add_point(a, None);
+
+        if let Some(Geometry::Point(point)) = session.lookup.get_mut(&a_guid) {
+            Rc::make_mut(point)[0] = 7.0;
+        }
+
+        session.begin("remove");
+        session.remove_object(&a_guid);
+        session.commit();
+        session.undo();
+        let json = session.jsondump().unwrap();
+
+        MINI_CHECK!(TOLERANCE.is_close(
+            Point::from_geometry(&session.lookup[&a_guid]).unwrap()[0],
+            7.0
+        ));
+        MINI_CHECK!(TOLERANCE.is_close(session.objects.points[0][0], 7.0));
+        MINI_CHECK!(json.contains("7.0"));
+    })
+}
+
+pub fn run_session_tree_ops() -> TestResult {
+    MINI_TEST!("Tree Ops", {
+        use crate::Color;
+        use crate::Session;
+        use std::rc::Rc;
+
+        let mut session = Session::default();
+        session.add_group("A");
+        let root = session.tree.root().unwrap();
+        let mut snapshots = vec![session.tree.str()];
+
+        session.begin("group");
+        let node = session.add_group("L");
+        session.commit();
+        snapshots.push(session.tree.str());
+
+        session.begin("rename");
+        let renamed = session.rename_node(&node, "M");
+        session.commit();
+        snapshots.push(session.tree.str());
+
+        session.begin("colour");
+        let coloured = session.set_node_color(&node, Some(Color::new(1.0, 0.0, 0.0, 1.0)));
+        session.commit();
+        snapshots.push(session.tree.str());
+
+        session.begin("remove");
+        let removed = session.remove_group(&node);
+        session.commit();
+        let dead = node.borrow().is_dead() && root.borrow().children().len() == 1;
+        let mut restored = Vec::new();
+
+        for i in (0..4).rev() {
+            session.undo();
+            restored.push(session.tree.str() == snapshots[i]);
+        }
+
+        let absent = node.borrow().is_dead() && session.tree.get_node_by_name("L").is_none();
+        let mut redone = Vec::new();
+
+        for i in 1..=4 {
+            session.redo();
+            redone.push(i == 4 || session.tree.str() == snapshots[i]);
+        }
+
+        MINI_CHECK!(renamed && coloured && removed);
+        MINI_CHECK!(dead);
+        MINI_CHECK!(restored == vec![true, true, true, true]);
+        MINI_CHECK!(absent);
+        MINI_CHECK!(redone == vec![true, true, true, true]);
+        MINI_CHECK!(node.borrow().is_dead());
+        MINI_CHECK!(node.borrow().name == "M");
+        MINI_CHECK!(node.borrow().at() == 1);
+        MINI_CHECK!(node.borrow().color.is_some());
+        MINI_CHECK!(Rc::ptr_eq(&session.tree.root().unwrap(), &root));
+        MINI_CHECK!(session.history.undo_stack[3].ops[0].kind() == "tree");
+    })
+}
+
+pub fn run_session_move_node() -> TestResult {
+    MINI_TEST!("Move Node", {
+        use crate::Point;
+        use crate::Session;
+        use std::rc::Rc;
+
+        let mut session = Session::default();
+        let g1 = session.add_group("g1");
+        let g2 = session.add_group("g2");
+        session.add_point(Point::new(0.0, 0.0, 0.0), Some(&g1));
+        let x = session.add_point(Point::new(1.0, 0.0, 0.0), Some(&g1));
+        let y = session.add_point(Point::new(2.0, 0.0, 0.0), Some(&x));
+        let count = session.tree.nodes().len();
+
+        session.begin("move");
+        session.add(&x, Some(&g2));
+        session.commit();
+        let moved = g1.borrow().children().len() == 1
+            && g2
+                .borrow()
+                .children()
+                .last()
+                .is_some_and(|n| Rc::ptr_eq(n, &x))
+            && Rc::ptr_eq(&y.borrow().parent().unwrap(), &x);
+        let walked = session.tree.nodes().len();
+        session.undo();
+        let back = g1
+            .borrow()
+            .children()
+            .get(1)
+            .is_some_and(|n| Rc::ptr_eq(n, &x))
+            && g2.borrow().children().is_empty();
+        let text = session.tree.str();
+        session.redo();
+
+        MINI_CHECK!(moved);
+        MINI_CHECK!(walked == count);
+        MINI_CHECK!(back);
+        MINI_CHECK!(session.tree.nodes().len() == count);
+        MINI_CHECK!(!text.contains("TreeNode(, "));
+        MINI_CHECK!(g2.borrow().children().len() == 1);
+        MINI_CHECK!(g1.borrow().children().len() == 1);
+        MINI_CHECK!(Rc::ptr_eq(&x.borrow().parent().unwrap(), &g2));
+    })
+}
+
+pub fn run_session_deleted_parent_orphans_children() -> TestResult {
+    MINI_TEST!("Deleted Parent Orphans Children", {
+        use crate::Element;
+        use crate::Point;
+        use crate::Polyline;
+        use crate::Session;
+        use crate::TreeNode;
+        use crate::Xform;
+        use std::rc::Rc;
+
+        let mut session = Session::default();
+        let element = Element::new("E");
+        let e_guid = element.guid().to_string();
+        let e_node = session.add_element(element, None);
+        let attributes = TreeNode::new("attributes");
+        session.add(&attributes, Some(&e_node));
+        let q = Polyline::new(vec![Point::new(0.0, 0.0, 0.0), Point::new(1.0, 0.0, 0.0)]);
+        let q_guid = q.guid().to_string();
+        let q_node = session.add_polyline(q, Some(&attributes)).unwrap();
+        session.set_xform(&e_guid, Xform::translation(1.0, 0.0, 0.0));
+        session.set_xform(&q_guid, Xform::translation(0.0, 1.0, 0.0));
+        let composed = session.world_xform(&q_guid);
+
+        session.begin("remove");
+        session.remove_object(&e_guid);
+        session.commit();
+        let names: Vec<String> = session
+            .tree
+            .nodes()
+            .iter()
+            .map(|n| n.borrow().name.clone())
+            .collect();
+
+        MINI_CHECK!(session.lookup.contains_key(&q_guid));
+        MINI_CHECK!(session
+            .get_node(&q_guid)
+            .is_some_and(|n| Rc::ptr_eq(&n, &q_node)));
+        MINI_CHECK!(q_node
+            .borrow()
+            .parent()
+            .is_some_and(|n| Rc::ptr_eq(&n, &attributes)));
+        MINI_CHECK!(attributes
+            .borrow()
+            .parent()
+            .is_some_and(|n| Rc::ptr_eq(&n, &e_node)));
+        MINI_CHECK!(e_node.borrow().parent().is_none());
+        MINI_CHECK!(session.world_xform(&q_guid) == session.xform(&q_guid));
+        MINI_CHECK!(session.world_xforms().contains_key(&q_guid));
+        MINI_CHECK!(names == vec!["my_session".to_string()]);
+
+        session.undo();
+
+        MINI_CHECK!(session.world_xform(&q_guid) == composed);
+        MINI_CHECK!(session.tree.nodes().len() == 4);
+    })
+}
+
+pub fn run_session_copy_drops_dead() -> TestResult {
+    MINI_TEST!("Copy Drops Dead", {
+        use crate::Point;
+        use crate::Session;
+
+        let mut session = Session::default();
+        let g = session.add_group("g");
+        let a = Point::new(1.0, 0.0, 0.0);
+        let b = Point::new(2.0, 0.0, 0.0);
+        let b_guid = b.guid().to_string();
+        session.add_point(a, Some(&g));
+        session.add_point(b, Some(&g));
+
+        session.begin("remove");
+        session.remove_object(&b_guid);
+        session.commit();
+        let copy = session.clone();
+
+        MINI_CHECK!(copy.objects.points.number_of_slots() == copy.objects.points.len());
+        MINI_CHECK!(copy.objects.points.number_of_dead() == 0);
+        MINI_CHECK!(copy.objects.points.len() == 1);
+        MINI_CHECK!(copy.history.depth() == 0);
+        MINI_CHECK!(copy.order() == session.order());
+        MINI_CHECK!(copy.tree.str() == session.tree.str());
+        MINI_CHECK!(copy.graph.number_of_vertices() == 1);
+        MINI_CHECK!(session.undo());
+        MINI_CHECK!(session.objects.points.len() == 2);
+        MINI_CHECK!(copy.objects.points.len() == 1);
+    })
+}
+
+pub fn run_session_live_views() -> TestResult {
+    MINI_TEST!("Live Views", {
+        use crate::Geometry;
+        use crate::InstanceRef;
+        use crate::Point;
+        use crate::Session;
+        use crate::Vector;
+        use crate::Xform;
+        use std::rc::Rc;
+
+        let mut session = Session::default();
+        let g = session.add_group("gone_group");
+        let kept = session.add_group("kept");
+        let definition = session.add_definition(Geometry::Mesh(Rc::new(create_box(
+            &Point::new(0.0, 0.0, 0.0),
+            2.0,
+        ))));
+        let point = Point::new(0.0, 0.0, 0.0);
+        let point_guid = point.guid().to_string();
+        let mesh = create_box(&Point::new(5.0, 0.0, 0.0), 2.0);
+        let mesh_guid = mesh.guid().to_string();
+        let instance = InstanceRef::new(&definition, Xform::identity());
+        let instance_guid = instance.guid().to_string();
+        session.add_point(point, Some(&g));
+        session.add_mesh(mesh, Some(&g));
+        session.add_instance(instance, Xform::translation(10.0, 0.0, 0.0), Some(&g));
+        session.add_point(Point::new(20.0, 0.0, 0.0), Some(&kept));
+        session.set_xform(&point_guid, Xform::translation(0.0, 1.0, 0.0));
+        session.set_xform(&mesh_guid, Xform::translation(0.0, 1.0, 0.0));
+        session.set_xform("gone_group", Xform::translation(0.0, 0.0, 1.0));
+
+        session.begin("remove");
+        session.remove_object(&point_guid);
+        session.remove_object(&mesh_guid);
+        session.remove_object(&instance_guid);
+        session.remove_group(&g);
+        session.commit();
+        let gone = [
+            point_guid.as_str(),
+            mesh_guid.as_str(),
+            instance_guid.as_str(),
+            "gone_group",
+        ];
+        let world = session.world_xforms();
+        let groups: Vec<String> = session
+            .tree
+            .root()
+            .unwrap()
+            .borrow()
+            .children()
+            .iter()
+            .map(|n| n.borrow().name.clone())
+            .collect();
+        let geometry = session.get_geometry();
+        let collisions = session.get_collisions();
+        let hits = session.ray_cast(
+            &Point::new(5.0, 0.0, -10.0),
+            &Vector::new(0.0, 0.0, 1.0),
+            0.01,
+        );
+        let json = session.jsondump().unwrap();
+        let derived = serde_json::to_string(&session).unwrap();
+        let text = format!("{}{}", session.str(), session.repr());
+
+        MINI_CHECK!(session
+            .order()
+            .iter()
+            .all(|guid| !gone.contains(&guid.as_str())));
+        MINI_CHECK!(gone.iter().all(|name| !world.contains_key(*name)));
+        MINI_CHECK!(session.select_by_type::<Point>().len() == 1);
+        MINI_CHECK!(groups == vec!["kept".to_string()]);
+        MINI_CHECK!(geometry.points.len() == 1 && geometry.meshes.is_empty());
+        MINI_CHECK!(session.instances_of(&definition).is_empty());
+        MINI_CHECK!(collisions.is_empty());
+        MINI_CHECK!(hits.is_empty());
+        MINI_CHECK!(gone.iter().all(|name| !json.contains(*name)));
+        MINI_CHECK!(gone.iter().all(|name| !derived.contains(*name)));
+        MINI_CHECK!(gone.iter().all(|name| !text.contains(*name)));
+        MINI_CHECK!(session.undo());
+        MINI_CHECK!(session.order().len() == 3);
+    })
+}
+
+pub fn run_session_unrecorded_remove() -> TestResult {
+    MINI_TEST!("Unrecorded Remove", {
+        use crate::Point;
+        use crate::Session;
+
+        let mut session = Session::default();
+        let a = Point::new(1.0, 0.0, 0.0);
+        let a_guid = a.guid().to_string();
+        session.add_point(a, None);
+        session.add_point(Point::new(2.0, 0.0, 0.0), None);
+        let removed = session.remove_object(&a_guid);
+
+        MINI_CHECK!(removed);
+        MINI_CHECK!(!session.lookup.contains_key(&a_guid));
+        MINI_CHECK!(session.order().len() == 1);
+        MINI_CHECK!(session.tree.nodes().len() == 2);
+        MINI_CHECK!(session.objects.points.number_of_dead() == 1);
+        MINI_CHECK!(session.objects.points.get_tomb(0).is_none());
+        MINI_CHECK!(session.history.dropped == 1);
+        MINI_CHECK!(!session.undo());
     })
 }
 
@@ -2434,4 +3088,74 @@ REGISTER_MINI_TEST!(
     "Session",
     "Get Node",
     crate::session_test::run_session_get_node
+);
+REGISTER_MINI_TEST!(
+    "Session",
+    "Remove Keeps Slot",
+    crate::session_test::run_session_remove_keeps_slot
+);
+REGISTER_MINI_TEST!(
+    "Session",
+    "Redo Add Keeps Node",
+    crate::session_test::run_session_redo_add_keeps_node
+);
+REGISTER_MINI_TEST!(
+    "Session",
+    "Replace Shares Geometry",
+    crate::session_test::run_session_replace_shares_geometry
+);
+REGISTER_MINI_TEST!(
+    "Session",
+    "Replace Across Types",
+    crate::session_test::run_session_replace_across_types
+);
+REGISTER_MINI_TEST!(
+    "Session",
+    "Undo Restores Graph",
+    crate::session_test::run_session_undo_restores_graph
+);
+REGISTER_MINI_TEST!(
+    "Session",
+    "Undo Restores Interactions",
+    crate::session_test::run_session_undo_restores_interactions
+);
+REGISTER_MINI_TEST!(
+    "Session",
+    "Dead Guid Reused",
+    crate::session_test::run_session_dead_guid_reused
+);
+REGISTER_MINI_TEST!(
+    "Session",
+    "Remove Keeps Lookup Edit",
+    crate::session_test::run_session_remove_keeps_lookup_edit
+);
+REGISTER_MINI_TEST!(
+    "Session",
+    "Tree Ops",
+    crate::session_test::run_session_tree_ops
+);
+REGISTER_MINI_TEST!(
+    "Session",
+    "Move Node",
+    crate::session_test::run_session_move_node
+);
+REGISTER_MINI_TEST!(
+    "Session",
+    "Deleted Parent Orphans Children",
+    crate::session_test::run_session_deleted_parent_orphans_children
+);
+REGISTER_MINI_TEST!(
+    "Session",
+    "Copy Drops Dead",
+    crate::session_test::run_session_copy_drops_dead
+);
+REGISTER_MINI_TEST!(
+    "Session",
+    "Live Views",
+    crate::session_test::run_session_live_views
+);
+REGISTER_MINI_TEST!(
+    "Session",
+    "Unrecorded Remove",
+    crate::session_test::run_session_unrecorded_remove
 );

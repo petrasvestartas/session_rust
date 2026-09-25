@@ -24,8 +24,7 @@ pub struct TreeNode {
     tomb: Option<Weak<Tomb>>,                // Weak pin while a record holds it.
     at: usize,                               // Raw index in the parent's children.
     cursor: Option<(usize, usize)>,          // (read, write) while a compaction is part way.
-    #[allow(dead_code)]
-    queued: bool,     // Whether Session.sweep holds this parent.
+    queued: bool,                            // Whether Session.sweep holds this parent.
 }
 
 impl TreeNode {
@@ -130,6 +129,21 @@ impl TreeNode {
         self.cursor.is_some()
     }
 
+    /// Return the raw index in the parent's children, dead siblings counted.
+    pub fn at(&self) -> usize {
+        self.at
+    }
+
+    /// Return whether Session.sweep holds this node.
+    pub fn is_queued(&self) -> bool {
+        self.queued
+    }
+
+    /// Return whether a node is a child, dead or alive.
+    pub fn has_child(&self, child: &Rc<RefCell<TreeNode>>) -> bool {
+        self.position(child).is_some()
+    }
+
     /// Iterate the live children.
     fn live(&self) -> impl Iterator<Item = &Rc<RefCell<TreeNode>>> {
         self.children.iter().filter(|child| !child.borrow().dead)
@@ -232,6 +246,34 @@ impl TreeNode {
     /// Pin this node weakly to a tomb.
     pub fn set_tomb(&mut self, tomb: &Rc<Tomb>) {
         self.tomb = Some(Rc::downgrade(tomb));
+    }
+
+    /// Mark whether Session.sweep holds this node.
+    pub fn set_queued(&mut self, queued: bool) {
+        self.queued = queued;
+    }
+
+    /// Exchange the places of two nodes, each into the other's parent and raw slot; their subtrees travel with them.
+    pub fn swap(a: &Rc<RefCell<TreeNode>>, b: &Rc<RefCell<TreeNode>>) {
+        let (parent_a, at_a) = (a.borrow().parent.clone(), a.borrow().at);
+        let (parent_b, at_b) = (b.borrow().parent.clone(), b.borrow().at);
+
+        if let Some(parent) = parent_a.as_ref().and_then(Weak::upgrade) {
+            let mut parent = parent.borrow_mut();
+            parent.children[at_a] = Rc::clone(b);
+            parent.cursor = None;
+        }
+
+        if let Some(parent) = parent_b.as_ref().and_then(Weak::upgrade) {
+            let mut parent = parent.borrow_mut();
+            parent.children[at_b] = Rc::clone(a);
+            parent.cursor = None;
+        }
+
+        a.borrow_mut().parent = parent_b;
+        a.borrow_mut().at = at_b;
+        b.borrow_mut().parent = parent_a;
+        b.borrow_mut().at = at_a;
     }
 
     /// Purge unpinned dead children for at most `work` children, resuming where the last call stopped; returns the children examined.

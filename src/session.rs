@@ -1,12 +1,14 @@
-use crate::collection::Collection;
+use crate::color::Color;
 use crate::history::clone;
-use crate::history::clone_item;
-use crate::history::DefinitionOp;
+use crate::history::weight;
 use crate::history::History;
 use crate::history::Op;
 use crate::history::ReplaceOp;
+use crate::history::Tomb;
 use crate::history::Tombstone;
+use crate::history::TreeOp;
 use crate::history::XformOp;
+use crate::history::RECORD;
 use crate::interaction::Interaction;
 use crate::intersection::line_line;
 use crate::intersection::line_plane;
@@ -347,40 +349,8 @@ fn adopt(objects: &mut Objects, lookup: &mut HashMap<String, Geometry>) {
 
     for geometry in orphans {
         let (collection, _) = collection_of(geometry);
-        insert_at(
-            objects,
-            collection,
-            usize::MAX,
-            &Item::Geometry(geometry.clone()),
-        );
+        push(objects, collection, &Item::Geometry(geometry.clone()));
     }
-}
-
-/// Which vector of objects holds a guid, and where; ("", -1) when none does.
-fn locate(objects: &Objects, guid: &str) -> (String, i64) {
-    macro_rules! find {
-        ($vec:expr, $name:expr) => {
-            if let Some(slot) = $vec.get_slot(guid) {
-                return ($name.to_string(), slot as i64);
-            }
-        };
-    }
-
-    find!(objects.points, "points");
-    find!(objects.lines, "lines");
-    find!(objects.planes, "planes");
-    find!(objects.bboxes, "bboxes");
-    find!(objects.polylines, "polylines");
-    find!(objects.pointclouds, "pointclouds");
-    find!(objects.meshes, "meshes");
-    find!(objects.nurbscurves, "nurbscurves");
-    find!(objects.nurbssurfaces, "nurbssurfaces");
-    find!(objects.breps, "breps");
-    find!(objects.elements, "elements");
-    find!(objects.components, "components");
-    find!(objects.instances, "instances");
-
-    (String::new(), -1)
 }
 
 /// The COLLECTIONS entry whose vector holds the type of geometry.
@@ -400,93 +370,202 @@ fn collection_of(geometry: &Geometry) -> (&'static str, &'static str) {
     }
 }
 
-/// Put an object into the vector of that name at index, clamped to its end, and return where it went.
-fn insert_at(objects: &mut Objects, collection: &str, index: usize, obj: &Item) -> usize {
-    let mut at = 0;
-    macro_rules! insert {
-        ($vec:expr, $variant:ident) => {
-            if let Item::Geometry(Geometry::$variant(g)) = obj {
-                at = put(&mut $vec, index, Rc::clone(g));
-            }
+/// Run `$op!(list)` on the Collection of that name, components and instances included.
+macro_rules! listed {
+    ($collection:expr, $objects:expr, $op:ident) => {
+        match $collection {
+            "points" => $op!($objects.points),
+            "lines" => $op!($objects.lines),
+            "planes" => $op!($objects.planes),
+            "bboxes" => $op!($objects.bboxes),
+            "polylines" => $op!($objects.polylines),
+            "pointclouds" => $op!($objects.pointclouds),
+            "meshes" => $op!($objects.meshes),
+            "nurbscurves" => $op!($objects.nurbscurves),
+            "nurbssurfaces" => $op!($objects.nurbssurfaces),
+            "breps" => $op!($objects.breps),
+            "elements" => $op!($objects.elements),
+            "components" => $op!($objects.components),
+            "instances" => $op!($objects.instances),
+            _ => {}
+        }
+    };
+}
+
+/// The COLLECTIONS entry whose list holds an item.
+fn collection_for(item: &Item) -> (&'static str, &'static str) {
+    match item {
+        Item::Geometry(geometry) => collection_of(geometry),
+        Item::Component(_) => ("components", "component"),
+        Item::InstanceRef(_) => ("instances", "instance"),
+    }
+}
+
+/// The graph attribute prefix of the list of that name.
+fn prefix_of(collection: &str) -> &'static str {
+    for (name, prefix) in COLLECTIONS {
+        if name == collection {
+            return prefix;
+        }
+    }
+
+    ""
+}
+
+/// The live slot of a guid in the list of that name.
+fn slot_of(objects: &Objects, collection: &str, guid: &str) -> Option<usize> {
+    let mut slot = None;
+    macro_rules! find {
+        ($list:expr) => {
+            slot = $list.get_slot(guid)
         };
     }
 
-    typed!(collection, objects, insert);
+    listed!(collection, objects, find);
 
-    if let Item::Component(component) = obj {
-        at = put(&mut objects.components, index, component.clone());
-    }
-
-    if let Item::InstanceRef(instance) = obj {
-        at = put(&mut objects.instances, index, Rc::clone(instance));
-    }
-
-    at
+    slot
 }
 
-/// Push item, or rebuild the list with it at index while index is inside; returns where it went.
-fn put<E: crate::collection::Keyed + Clone>(
-    list: &mut Collection<E>,
-    index: usize,
-    item: E,
-) -> usize {
-    if index >= list.len() {
-        list.push(item);
-
-        return list.len() - 1;
+/// The item in a slot of the list of that name, dead or alive, as the stored pointer.
+fn item_at(objects: &Objects, collection: &str, slot: usize) -> Option<Item> {
+    let mut item = None;
+    macro_rules! get {
+        ($list:expr, $variant:ident) => {
+            item = Some(Item::Geometry(Geometry::$variant(Rc::clone(
+                $list.get_item(slot),
+            ))))
+        };
     }
 
-    let mut items = list.to_vec();
-    items.insert(index, item);
-    *list = Collection::from(items);
-
-    index
-}
-
-/// Take the object at index out of the vector of that name.
-fn remove_at(objects: &mut Objects, collection: &str, index: usize) {
-    macro_rules! remove {
-        ($vec:expr, $variant:ident) => {{
-            take(&mut $vec, index)
-        }};
-    }
-
-    typed!(collection, objects, remove);
+    typed!(collection, objects, get);
 
     if collection == "components" {
-        take(&mut objects.components, index);
+        item = Some(Item::Component(objects.components.get_item(slot).clone()));
     }
 
     if collection == "instances" {
-        take(&mut objects.instances, index);
+        item = Some(Item::InstanceRef(Rc::clone(
+            objects.instances.get_item(slot),
+        )));
     }
+
+    item
 }
 
-/// Rebuild the list without the entry at index.
-fn take<E: crate::collection::Keyed + Clone>(list: &mut Collection<E>, index: usize) {
-    let mut items = list.to_vec();
-    items.remove(index);
-    *list = Collection::from(items);
-}
-
-/// Put an object in place of the one at index of the vector of that name.
-fn store_at(objects: &mut Objects, collection: &str, index: usize, obj: &Item) {
-    macro_rules! store {
-        ($vec:expr, $variant:ident) => {
+/// Append an item to the list of that name and return its slot.
+fn push(objects: &mut Objects, collection: &str, obj: &Item) -> usize {
+    let mut slot = 0;
+    macro_rules! append {
+        ($list:expr, $variant:ident) => {
             if let Item::Geometry(Geometry::$variant(g)) = obj {
-                $vec.set_item(index, Rc::clone(g));
+                $list.push(Rc::clone(g));
+                slot = $list.number_of_slots() - 1;
             }
         };
     }
 
-    typed!(collection, objects, store);
+    typed!(collection, objects, append);
 
     if let Item::Component(component) = obj {
-        objects.components.set_item(index, component.clone());
+        objects.components.push(component.clone());
+        slot = objects.components.number_of_slots() - 1;
     }
 
     if let Item::InstanceRef(instance) = obj {
-        objects.instances.set_item(index, Rc::clone(instance));
+        objects.instances.push(Rc::clone(instance));
+        slot = objects.instances.number_of_slots() - 1;
+    }
+
+    slot
+}
+
+/// Put an item in a slot of the list of that name.
+fn store(objects: &mut Objects, collection: &str, slot: usize, obj: &Item) {
+    macro_rules! set {
+        ($list:expr, $variant:ident) => {
+            if let Item::Geometry(Geometry::$variant(g)) = obj {
+                $list.set_item(slot, Rc::clone(g));
+            }
+        };
+    }
+
+    typed!(collection, objects, set);
+
+    if let Item::Component(component) = obj {
+        objects.components.set_item(slot, component.clone());
+    }
+
+    if let Item::InstanceRef(instance) = obj {
+        objects.instances.set_item(slot, Rc::clone(instance));
+    }
+}
+
+/// Kill or revive a slot of the list of that name.
+fn flag(objects: &mut Objects, collection: &str, slot: usize, dead: bool) {
+    macro_rules! set {
+        ($list:expr) => {
+            $list.set_dead(slot, dead)
+        };
+    }
+
+    listed!(collection, objects, set);
+}
+
+/// The tomb pinning a slot of the list of that name, while a record still holds it.
+fn tomb_at(objects: &Objects, collection: &str, slot: usize) -> Option<Rc<Tomb>> {
+    let mut tomb = None;
+    macro_rules! get {
+        ($list:expr) => {
+            tomb = $list.get_tomb(slot)
+        };
+    }
+
+    listed!(collection, objects, get);
+
+    tomb
+}
+
+/// Pin a slot of the list of that name to a tomb.
+fn pin(objects: &mut Objects, collection: &str, slot: usize, tomb: &Rc<Tomb>) {
+    macro_rules! set {
+        ($list:expr) => {
+            $list.set_tomb(slot, tomb)
+        };
+    }
+
+    listed!(collection, objects, set);
+}
+
+/// Whether two items are the same stored pointer; a component is never, so the map value is stored back.
+fn same(a: &Item, b: &Item) -> bool {
+    match (a, b) {
+        (Item::Geometry(Geometry::OBB(x)), Item::Geometry(Geometry::OBB(y))) => Rc::ptr_eq(x, y),
+        (Item::Geometry(Geometry::BRep(x)), Item::Geometry(Geometry::BRep(y))) => Rc::ptr_eq(x, y),
+        (Item::Geometry(Geometry::Element(x)), Item::Geometry(Geometry::Element(y))) => {
+            Rc::ptr_eq(x, y)
+        }
+        (Item::Geometry(Geometry::Line(x)), Item::Geometry(Geometry::Line(y))) => Rc::ptr_eq(x, y),
+        (Item::Geometry(Geometry::Mesh(x)), Item::Geometry(Geometry::Mesh(y))) => Rc::ptr_eq(x, y),
+        (Item::Geometry(Geometry::NurbsCurve(x)), Item::Geometry(Geometry::NurbsCurve(y))) => {
+            Rc::ptr_eq(x, y)
+        }
+        (Item::Geometry(Geometry::NurbsSurface(x)), Item::Geometry(Geometry::NurbsSurface(y))) => {
+            Rc::ptr_eq(x, y)
+        }
+        (Item::Geometry(Geometry::Plane(x)), Item::Geometry(Geometry::Plane(y))) => {
+            Rc::ptr_eq(x, y)
+        }
+        (Item::Geometry(Geometry::Point(x)), Item::Geometry(Geometry::Point(y))) => {
+            Rc::ptr_eq(x, y)
+        }
+        (Item::Geometry(Geometry::PointCloud(x)), Item::Geometry(Geometry::PointCloud(y))) => {
+            Rc::ptr_eq(x, y)
+        }
+        (Item::Geometry(Geometry::Polyline(x)), Item::Geometry(Geometry::Polyline(y))) => {
+            Rc::ptr_eq(x, y)
+        }
+        (Item::InstanceRef(x), Item::InstanceRef(y)) => Rc::ptr_eq(x, y),
+        _ => false,
     }
 }
 
@@ -532,22 +611,6 @@ fn resolve(instance: &InstanceRef, definition: &Geometry, xform: &Xform) -> Geom
     place(&mut copy, xform);
 
     copy
-}
-
-/// The guid of the edge between a and b, from whichever stored copy has one; "" when neither was minted.
-fn edge_guid(graph: &Graph, a: &str, b: &str) -> String {
-    let forward = &graph.edges[a][b];
-    let backward = &graph.edges[b][a];
-
-    if forward.has_guid() {
-        return forward.guid().to_string();
-    }
-
-    if backward.has_guid() {
-        backward.guid().to_string()
-    } else {
-        String::new()
-    }
 }
 
 /// Inflated box around the placed points, around the origin when there are none.
@@ -765,6 +828,12 @@ pub struct Session {
     indexed: Option<Weak<RefCell<TreeNode>>>, // Tree root at the last reindex, stale after a wholesale tree swap.
     #[serde(skip)]
     pub revision: u64, // Bumped by every Session mutation.
+    #[serde(skip)]
+    pub sweep: Vec<Weak<RefCell<TreeNode>>>, // Parents whose children died, for the purge to compact.
+    #[serde(skip)]
+    pub pinned: Vec<Weak<RefCell<TreeNode>>>, // Parents the purge left while a record pinned a child.
+    #[serde(skip)]
+    pub purging: Option<usize>, // The list the purge cursor is in, None between cycles.
 }
 
 impl Default for Session {
@@ -775,7 +844,7 @@ impl Default for Session {
 }
 
 impl Clone for Session {
-    /// Copy every table and object, guids included; caches are rebuilt on demand and history starts empty.
+    /// Copy every live table and object into compacted lists, guids included; caches are rebuilt on demand and history starts empty.
     fn clone(&self) -> Self {
         let mut session = Session::new(&self.name);
 
@@ -783,10 +852,11 @@ impl Clone for Session {
             session.set_guid(self.guid().to_string());
         }
 
-        session.objects = clone_objects(&self.objects);
-        session.definitions = clone_objects(&self.definitions);
+        session.objects = clone_objects(&self.objects_synced());
+        session.definitions = clone_objects(&synced(&self.definitions, &self.definition_lookup));
         session.tree = self.tree.clone();
         session.graph = self.graph.clone();
+        session.graph.renumber();
         session.xforms = self.xforms.clone();
         session.interactions = self.interactions.clone();
         session.reindex();
@@ -827,6 +897,9 @@ impl Session {
             node_lookup: HashMap::new(),
             indexed,
             revision: 0,
+            sweep: Vec::new(),
+            pinned: Vec::new(),
+            purging: None,
         }
     }
 
@@ -1086,7 +1159,7 @@ impl Session {
                 .unwrap_or_else(Xform::identity);
             let resolved = resolve(instance, definition, &placement);
             let (collection, _) = collection_of(&resolved);
-            insert_at(&mut out, collection, usize::MAX, &Item::Geometry(resolved));
+            push(&mut out, collection, &Item::Geometry(resolved));
         }
 
         out.instances.clear();
@@ -1301,22 +1374,35 @@ impl Session {
             return guid;
         }
 
-        if self.lookup.contains_key(&guid)
-            || self.instance_lookup.contains_key(&guid)
-            || self.component_lookup.contains_key(&guid)
-        {
+        if self._is_live(&guid) {
             return String::new();
         }
 
-        if self.history.current.is_some() {
-            self.history.record(Op::Definition(DefinitionOp::new(
-                guid.clone(),
-                None,
-                Some(clone(&definition)),
-            )));
-        }
+        let (collection, _) = collection_of(&definition);
+        let slot = push(
+            &mut self.definitions,
+            collection,
+            &Item::Geometry(definition.clone()),
+        );
+        self.definition_lookup.insert(guid.clone(), definition);
+        self.bvh_cache_dirty = true;
+        self.revision += 1;
 
-        self._define(&guid, Some(definition));
+        if self.history.current.is_some() {
+            let tomb = Tomb::new(collection, true, slot, None);
+            pin(&mut self.definitions, collection, slot, &tomb);
+            self.history.record(
+                Op::Add(Tombstone::new(
+                    guid.clone(),
+                    "definitions".to_string(),
+                    None,
+                    0,
+                    None,
+                    tomb,
+                )),
+                RECORD,
+            );
+        }
 
         guid
     }
@@ -1352,7 +1438,7 @@ impl Session {
         Some(node)
     }
 
-    /// Add a TreeNode to the tree hierarchy, under the root when no parent is given.
+    /// Put a TreeNode under a parent, the root when none is given: a placed node moves and leaves a ghost, one already there is left alone.
     pub fn add<'a>(
         &mut self,
         node: &Rc<RefCell<TreeNode>>,
@@ -1360,21 +1446,63 @@ impl Session {
     ) where
         Rc<RefCell<TreeNode>>: 'a,
     {
-        let parent = parent.into();
-        let guid = node.borrow().name.clone();
+        let Some(parent) = parent.into().cloned().or_else(|| self.tree.root()) else {
+            return;
+        };
+        let name = node.borrow().name.clone();
+        let held = node
+            .borrow()
+            .parent()
+            .is_some_and(|held| Rc::ptr_eq(&held, &parent));
+
+        if held || Rc::ptr_eq(node, &parent) {
+            return;
+        }
+
+        let was_dead = node.borrow().is_dead();
+        let ghost = parent.borrow_mut().add(node);
+
+        if !parent.borrow().has_child(node) {
+            return;
+        }
+
+        node.borrow_mut().set_dead(false);
         self.revision += 1;
 
-        if self._is_live(&guid) {
-            self.node_lookup.insert(guid, Rc::clone(node));
+        if let (true, Some(tomb)) = (was_dead, node.borrow().get_tomb()) {
+            if let Some(xform) = tomb.xform.borrow_mut().take() {
+                self.xforms.insert(name.clone(), xform);
+            }
         }
 
-        if parent.is_none() {
-            if let Some(root) = self.tree.root() {
-                self.tree.add(node, Some(&root));
-            }
-        } else {
-            self.tree.add(node, parent);
+        if self._is_live(&name) {
+            self.node_lookup.insert(name.clone(), Rc::clone(node));
         }
+
+        if self.history.current.is_none() {
+            self.history.dropped += usize::from(ghost.is_some());
+
+            return;
+        }
+
+        let tomb = self._node_tomb(ghost.as_ref().unwrap_or(node));
+        let color = node.borrow().color.clone();
+        let dead_before = was_dead || ghost.is_none();
+        self.history.record(
+            Op::Tree(TreeOp::new(
+                name.clone(),
+                Rc::clone(node),
+                tomb,
+                ghost,
+                name.clone(),
+                name,
+                color.clone(),
+                color,
+                dead_before,
+                false,
+            )),
+            RECORD,
+        );
     }
 
     /// Create a named group (TreeNode) and add it to the root of the tree.
@@ -1383,6 +1511,116 @@ impl Session {
         self.add(&node, None);
 
         node
+    }
+
+    /// Rename a group node; false for an object node, a dead node or the same name.
+    pub fn rename_node(&mut self, node: &Rc<RefCell<TreeNode>>, name: &str) -> bool {
+        let before = node.borrow().name.clone();
+
+        if self._is_live(&before) || node.borrow().is_dead() || before == name {
+            return false;
+        }
+
+        node.borrow_mut().name = name.to_string();
+        self.revision += 1;
+
+        if self.history.current.is_some() {
+            let tomb = self._node_tomb(node);
+            let color = node.borrow().color.clone();
+            self.history.record(
+                Op::Tree(TreeOp::new(
+                    before.clone(),
+                    Rc::clone(node),
+                    tomb,
+                    None,
+                    before,
+                    name.to_string(),
+                    color.clone(),
+                    color,
+                    false,
+                    false,
+                )),
+                RECORD,
+            );
+        }
+
+        true
+    }
+
+    /// Set or clear (None) the display colour of a node; false for a dead node.
+    pub fn set_node_color(&mut self, node: &Rc<RefCell<TreeNode>>, color: Option<Color>) -> bool {
+        if node.borrow().is_dead() {
+            return false;
+        }
+
+        let before = node.borrow().color.clone();
+        node.borrow_mut().color = color.clone();
+        self.revision += 1;
+
+        if self.history.current.is_some() {
+            let name = node.borrow().name.clone();
+            let tomb = self._node_tomb(node);
+            self.history.record(
+                Op::Tree(TreeOp::new(
+                    name.clone(),
+                    Rc::clone(node),
+                    tomb,
+                    None,
+                    name.clone(),
+                    name,
+                    before,
+                    color,
+                    false,
+                    false,
+                )),
+                RECORD,
+            );
+        }
+
+        true
+    }
+
+    /// Kill a group node with everything below it, parking its transform; false for an object node, the root or a dead node.
+    pub fn remove_group(&mut self, node: &Rc<RefCell<TreeNode>>) -> bool {
+        let name = node.borrow().name.clone();
+        let Some(parent) = node.borrow().parent() else {
+            return false;
+        };
+
+        if self._is_live(&name) {
+            return false;
+        }
+
+        let tomb = self._node_tomb(node);
+        node.borrow_mut().set_dead(true);
+        *tomb.xform.borrow_mut() = self.xforms.remove(&name);
+        self._queue(&parent);
+        self.revision += 1;
+
+        if self.history.current.is_none() {
+            self.history.dropped += 1;
+
+            return true;
+        }
+
+        let color = node.borrow().color.clone();
+        self.history.record(
+            Op::Tree(TreeOp::new(
+                name.clone(),
+                Rc::clone(node),
+                tomb,
+                None,
+                name.clone(),
+                name,
+                color.clone(),
+                color,
+                false,
+                true,
+            )),
+            RECORD,
+        );
+
+        true
     }
 
     /// Add an edge between two geometry objects in the graph.
@@ -1403,61 +1641,151 @@ impl Session {
         self.graph.add_edge(from_guid, to_guid, relationship_type);
     }
 
-    /// Remove an object by its GUID from every live table at once; the removal record is the tombstone undo restores from.
+    /// Kill an object in place: its slot, node, transform, vertex, edges and interactions flip dead until undo revives them; O(1 + d log V).
     pub fn remove_object(&mut self, obj_guid: &str) -> bool {
-        let Some(op) = self._detach(obj_guid) else {
+        let Some(tomb) = self._tomb(obj_guid) else {
             return false;
         };
-        self.history.record(Op::Remove(op));
+        let obj = self._item(obj_guid);
+        let degree = self.graph.edges.get(obj_guid).map_or(0, BTreeMap::len);
+        let node = tomb.node.clone();
+        let index = node.as_ref().map_or(0, |node| node.borrow().at());
+        let parent_guid = node
+            .as_ref()
+            .and_then(|node| node.borrow().parent())
+            .map(|parent| parent.borrow().name.clone());
+        self._kill(&tomb);
+
+        if self.history.current.is_none() {
+            self.history.dropped += 1;
+
+            return true;
+        }
+
+        let bytes = RECORD + obj.as_ref().map_or(0, weight) + 128 * degree;
+        let collection = tomb.collection.clone();
+        self.history.record(
+            Op::Remove(Tombstone::new(
+                obj_guid.to_string(),
+                collection,
+                parent_guid,
+                index,
+                node,
+                tomb,
+            )),
+            bytes,
+        );
 
         true
     }
 
-    /// Swap the object stored under guid for obj, which takes over that guid; the recorded edit undo and redo restore as absolute snapshots.
+    /// Swap the object stored under guid for obj, which takes over that guid; a different type moves the guid to that type's list, the node and edges staying.
     pub fn replace(&mut self, guid: &str, obj: Geometry) -> bool {
-        let Some(before) = self.lookup.get(guid) else {
+        let Some(before) = self.lookup.get(guid).cloned() else {
             return false;
         };
         let mut obj = obj;
-        obj.set_guid(guid);
 
-        if self.history.current.is_some() {
-            self.history.record(Op::Replace(ReplaceOp::new(
-                guid.to_string(),
-                Item::Geometry(clone(before)),
-                Item::Geometry(clone(&obj)),
-            )));
+        if obj.guid() != guid {
+            obj.set_guid(guid);
         }
 
-        self._swap(guid, Item::Geometry(obj));
+        let (old, _) = collection_of(&before);
+        let (new, prefix) = collection_of(&obj);
+        let bytes = RECORD + weight(&Item::Geometry(before.clone()));
+
+        if old == new {
+            if self.history.current.is_some() {
+                self.history.record(
+                    Op::Replace(ReplaceOp::new(
+                        guid.to_string(),
+                        Item::Geometry(before),
+                        Item::Geometry(obj.clone()),
+                    )),
+                    bytes,
+                );
+            }
+
+            self._swap(guid, Item::Geometry(obj));
+
+            return true;
+        }
+
+        let node = self.get_node(guid);
+        let Some(removed) = self._half(false, old, guid) else {
+            return false;
+        };
+        self._kill(&removed);
+        let slot = push(&mut self.objects, new, &Item::Geometry(obj.clone()));
+        let added = Tomb::new(new, false, slot, None);
+        pin(&mut self.objects, new, slot, &added);
+        self.lookup.insert(guid.to_string(), obj.clone());
+        self._label(guid, &format!("{prefix}_{}", obj.name()));
+        self._pair(guid, old, new, node, removed, added, bytes);
 
         true
     }
 
     /// Swap the geometry of a definition, which keeps its guid, so every instance of it changes at once; false when guid is no definition.
     pub fn replace_definition(&mut self, guid: &str, definition: Geometry) -> bool {
-        let Some(before) = self.definition_lookup.get(guid) else {
+        let Some(before) = self.definition_lookup.get(guid).cloned() else {
             return false;
         };
         let mut definition = definition;
-        definition.set_guid(guid);
 
-        if self.history.current.is_some() {
-            self.history.record(Op::Definition(DefinitionOp::new(
-                guid.to_string(),
-                Some(clone(before)),
-                Some(clone(&definition)),
-            )));
+        if definition.guid() != guid {
+            definition.set_guid(guid);
         }
 
-        self._define(guid, Some(definition));
+        let (old, _) = collection_of(&before);
+        let (new, _) = collection_of(&definition);
+        let bytes = RECORD + weight(&Item::Geometry(before.clone()));
+
+        if old == new {
+            if self.history.current.is_some() {
+                self.history.record(
+                    Op::Replace(ReplaceOp::new(
+                        guid.to_string(),
+                        Item::Geometry(before),
+                        Item::Geometry(definition.clone()),
+                    )),
+                    bytes,
+                );
+            }
+
+            self._swap(guid, Item::Geometry(definition));
+
+            return true;
+        }
+
+        let Some(removed) = self._half(true, old, guid) else {
+            return false;
+        };
+        self._kill(&removed);
+        let slot = push(
+            &mut self.definitions,
+            new,
+            &Item::Geometry(definition.clone()),
+        );
+        let added = Tomb::new(new, true, slot, None);
+        pin(&mut self.definitions, new, slot, &added);
+        self.definition_lookup.insert(guid.to_string(), definition);
+        self._pair(
+            guid,
+            "definitions",
+            "definitions",
+            None,
+            removed,
+            added,
+            bytes,
+        );
 
         true
     }
 
     /// Remove a definition; false when guid is no definition or an instance still names it.
     pub fn remove_definition(&mut self, guid: &str) -> bool {
-        let Some(before) = self.definition_lookup.get(guid) else {
+        let Some(before) = self.definition_lookup.get(guid).cloned() else {
             return false;
         };
 
@@ -1465,22 +1793,36 @@ impl Session {
             return false;
         }
 
-        if self.history.current.is_some() {
-            self.history.record(Op::Definition(DefinitionOp::new(
-                guid.to_string(),
-                Some(clone(before)),
-                None,
-            )));
+        let (collection, _) = collection_of(&before);
+        let Some(tomb) = self._half(true, collection, guid) else {
+            return false;
+        };
+        self._kill(&tomb);
+
+        if self.history.current.is_none() {
+            self.history.dropped += 1;
+
+            return true;
         }
 
-        self._define(guid, None);
+        self.history.record(
+            Op::Remove(Tombstone::new(
+                guid.to_string(),
+                "definitions".to_string(),
+                None,
+                0,
+                None,
+                tomb,
+            )),
+            RECORD + weight(&Item::Geometry(before)),
+        );
 
         true
     }
 
     /// Turn an object into an instance of a definition, keeping its guid, name, tree node and edges; frame maps the definition onto the object and is folded into its local transform.
     pub fn to_instance(&mut self, guid: &str, definition_guid: &str, frame: Xform) -> bool {
-        let Some(object) = self.lookup.get(guid) else {
+        let Some(object) = self.lookup.get(guid).cloned() else {
             return false;
         };
 
@@ -1491,27 +1833,32 @@ impl Session {
         let mut instance = InstanceRef::new(definition_guid, Xform::identity());
         instance.set_guid(guid.to_string());
         instance.name = object.name().to_string();
-        let attribute = format!("instance_{}", instance.name);
+        let label = format!("instance_{}", instance.name);
         let placement = &self.xform(guid) * &frame;
-        let Some(removed) = self._detach(guid) else {
+        let (old, _) = collection_of(&object);
+        let node = self.get_node(guid);
+        let Some(removed) = self._half(false, old, guid) else {
             return false;
         };
-        let mut added = Tombstone::new(
-            guid.to_string(),
-            Item::InstanceRef(Rc::new(instance)),
-            "instances".to_string(),
-            self.objects.instances.len() as i64,
-            (!placement.is_identity()).then_some(placement),
-            removed.parent_guid.clone(),
-            removed.index,
-            removed.node.clone(),
-            attribute,
-            removed.edges.clone(),
+        self._kill(&removed);
+        let instance = Rc::new(instance);
+        let slot = push(
+            &mut self.objects,
+            "instances",
+            &Item::InstanceRef(Rc::clone(&instance)),
         );
-        added.interactions = removed.interactions.clone();
-        self.history.record(Op::Remove(removed));
-        self._attach(&added);
-        self.history.record(Op::Add(added));
+        let added = Tomb::new("instances", false, slot, None);
+        pin(&mut self.objects, "instances", slot, &added);
+        self.instance_lookup.insert(guid.to_string(), instance);
+        self._label(guid, &label);
+        let bytes = RECORD + weight(&Item::Geometry(object));
+        self._pair(guid, old, "instances", node, removed, added, bytes);
+
+        if placement.is_identity() {
+            self.remove_xform(guid);
+        } else {
+            self.set_xform(guid, placement);
+        }
 
         true
     }
@@ -1524,33 +1871,27 @@ impl Session {
         let instance = Rc::clone(&self.instance_lookup[instance_guid]);
         let copy = resolve(&instance, &definition, &Xform::identity());
         let (collection, prefix) = collection_of(&copy);
-        let mut size: i64 = 0;
-        macro_rules! count {
-            ($vec:expr, $variant:ident) => {
-                size = $vec.len() as i64
-            };
-        }
-
-        typed!(collection, self.objects, count);
-        let Some(removed) = self._detach(instance_guid) else {
+        let label = format!("{prefix}_{}", instance.name);
+        let node = self.get_node(instance_guid);
+        let Some(removed) = self._half(false, "instances", instance_guid) else {
             return false;
         };
-        let mut added = Tombstone::new(
-            instance_guid.to_string(),
-            Item::Geometry(copy),
-            collection.to_string(),
-            size,
-            removed.xform.clone(),
-            removed.parent_guid.clone(),
-            removed.index,
-            removed.node.clone(),
-            format!("{prefix}_{}", instance.name),
-            removed.edges.clone(),
+        self._kill(&removed);
+        let slot = push(&mut self.objects, collection, &Item::Geometry(copy.clone()));
+        let added = Tomb::new(collection, false, slot, None);
+        pin(&mut self.objects, collection, slot, &added);
+        self.lookup.insert(instance_guid.to_string(), copy);
+        self._label(instance_guid, &label);
+        let bytes = RECORD + weight(&Item::InstanceRef(instance));
+        self._pair(
+            instance_guid,
+            "instances",
+            collection,
+            node,
+            removed,
+            added,
+            bytes,
         );
-        added.interactions = removed.interactions.clone();
-        self.history.record(Op::Remove(removed));
-        self._attach(&added);
-        self.history.record(Op::Add(added));
 
         true
     }
@@ -1566,11 +1907,10 @@ impl Session {
 
         if self.history.current.is_some() {
             let before = self.xforms.get(guid).cloned();
-            self.history.record(Op::Xform(XformOp::new(
-                guid.to_string(),
-                before,
-                Some(xform.clone()),
-            )));
+            self.history.record(
+                Op::Xform(XformOp::new(guid.to_string(), before, Some(xform.clone()))),
+                RECORD,
+            );
         }
 
         self.xforms.insert(guid.to_string(), xform);
@@ -1585,11 +1925,10 @@ impl Session {
         };
 
         if self.history.current.is_some() {
-            self.history.record(Op::Xform(XformOp::new(
-                guid.to_string(),
-                Some(before),
-                None,
-            )));
+            self.history.record(
+                Op::Xform(XformOp::new(guid.to_string(), Some(before), None)),
+                RECORD,
+            );
         }
 
         self.xforms.remove(guid);
@@ -1693,6 +2032,16 @@ impl Session {
         self.history = history;
 
         redone
+    }
+
+    /// Revert and drop the open transaction, leaving the stacks as they are; false when none is open.
+    pub fn abort(&mut self) -> bool {
+        self.revision += 1;
+        let mut history = std::mem::take(&mut self.history);
+        let aborted = history.abort(self);
+        self.history = history;
+
+        aborted
     }
 
     // ═══════════════════════════════════════════════════════════════════════════
@@ -2111,7 +2460,7 @@ impl Session {
         objects
     }
 
-    /// Store an object in its typed vector, lookup, graph and tree, recording an AddOp when a transaction is open.
+    /// Store an object in its list, lookup, graph and tree, recording an add when a transaction is open.
     fn _add_object(
         &mut self,
         collection: &str,
@@ -2122,8 +2471,7 @@ impl Session {
         let obj: Item = obj.into();
         let guid = obj.guid().to_string();
         let attribute = format!("{type_prefix}_{}", obj.name());
-        let obj_index = insert_at(&mut self.objects, collection, usize::MAX, &obj) as i64;
-        let snapshot = self.history.current.is_some().then(|| clone_item(&obj));
+        let slot = push(&mut self.objects, collection, &obj);
 
         match obj {
             Item::Geometry(geometry) => {
@@ -2146,35 +2494,31 @@ impl Session {
         self.revision += 1;
         let host = parent.cloned().or_else(|| self.tree.root());
         let mut parent_guid: Option<String> = None;
-        let mut index: usize = 0;
 
-        if let Some(p) = &host {
-            self.add(&node, Some(p));
-            parent_guid = Some(p.borrow().name.clone());
-            index = p.borrow().children().len() - 1;
+        if let Some(host) = &host {
+            self.tree.add(&node, Some(host));
+            parent_guid = Some(host.borrow().name.clone());
         }
 
-        if let Some(obj) = snapshot {
-            self.history.record(Op::Add(Tombstone::new(
-                guid,
-                obj,
-                collection.to_string(),
-                obj_index,
-                None,
-                parent_guid,
-                index,
-                None,
-                attribute,
-                Vec::new(),
-            )));
+        if self.history.current.is_some() {
+            let tomb = Tomb::new(collection, false, slot, Some(Rc::clone(&node)));
+            pin(&mut self.objects, collection, slot, &tomb);
+            node.borrow_mut().set_tomb(&tomb);
+            let index = node.borrow().at();
+            self.history.record(
+                Op::Add(Tombstone::new(
+                    guid,
+                    collection.to_string(),
+                    parent_guid,
+                    index,
+                    Some(Rc::clone(&node)),
+                    tomb,
+                )),
+                RECORD,
+            );
         }
 
         node
-    }
-
-    /// Which Objects vector holds a guid, and where; ("", -1) when none does.
-    fn _locate(&self, guid: &str) -> (String, i64) {
-        locate(&self.objects, guid)
     }
 
     /// Whether guid names a live object, component or instance.
@@ -2184,214 +2528,366 @@ impl Session {
             || self.instance_lookup.contains_key(guid)
     }
 
-    /// Take an object out of every live table, unrecorded, returning its tombstone.
-    pub(crate) fn _detach(&mut self, guid: &str) -> Option<Tombstone> {
-        let obj = if let Some(geometry) = self.lookup.get(guid) {
-            Item::Geometry(clone(geometry))
-        } else if let Some(component) = self.component_lookup.get(guid) {
-            Item::Component(component.clone())
+    /// The stored object, component or instance under guid, the pointer itself.
+    fn _item(&self, guid: &str) -> Option<Item> {
+        if let Some(geometry) = self.lookup.get(guid) {
+            return Some(Item::Geometry(geometry.clone()));
+        }
+
+        if let Some(component) = self.component_lookup.get(guid) {
+            return Some(Item::Component(component.clone()));
+        }
+
+        Some(Item::InstanceRef(Rc::clone(
+            self.instance_lookup.get(guid)?,
+        )))
+    }
+
+    /// The object tomb of a live guid, reused while a record still holds it, else made and pinned on its slot and node; O(1).
+    fn _tomb(&mut self, guid: &str) -> Option<Rc<Tomb>> {
+        let item = self._item(guid)?;
+        let (collection, _) = collection_for(&item);
+        let slot = match slot_of(&self.objects, collection, guid) {
+            Some(slot) => slot,
+            None => push(&mut self.objects, collection, &item),
+        };
+
+        if let Some(tomb) = tomb_at(&self.objects, collection, slot) {
+            if tomb.node.is_some() {
+                return Some(tomb);
+            }
+        }
+
+        let node = self.get_node(guid);
+
+        if let Some(node) = &node {
+            self.node_lookup.insert(guid.to_string(), Rc::clone(node));
+        }
+
+        let tomb = Tomb::new(collection, false, slot, node);
+        pin(&mut self.objects, collection, slot, &tomb);
+
+        if let Some(node) = &tomb.node {
+            node.borrow_mut().set_tomb(&tomb);
+        }
+
+        Some(tomb)
+    }
+
+    /// The node-only tomb pinned on a node, reused while a record still holds it.
+    fn _node_tomb(&mut self, node: &Rc<RefCell<TreeNode>>) -> Rc<Tomb> {
+        if let Some(tomb) = node.borrow().get_tomb() {
+            if tomb.collection.is_empty() {
+                return tomb;
+            }
+        }
+
+        let tomb = Tomb::new("", false, 0, Some(Rc::clone(node)));
+        node.borrow_mut().set_tomb(&tomb);
+
+        tomb
+    }
+
+    /// A slot-only tomb on the live slot of guid in the list of that name, reused while a record still holds it; a map-only entry is pushed first.
+    fn _half(&mut self, definition: bool, collection: &str, guid: &str) -> Option<Rc<Tomb>> {
+        let item = if definition {
+            Item::Geometry(self.definition_lookup.get(guid)?.clone())
         } else {
-            Item::InstanceRef(Rc::new((**self.instance_lookup.get(guid)?).clone()))
+            self._item(guid)?
         };
-        let (collection, obj_index) = self._locate(guid);
+        let objects = if definition {
+            &mut self.definitions
+        } else {
+            &mut self.objects
+        };
+        let slot =
+            slot_of(objects, collection, guid).unwrap_or_else(|| push(objects, collection, &item));
 
-        if obj_index >= 0 {
-            remove_at(&mut self.objects, &collection, obj_index as usize);
-        }
-
-        let mut node = self.get_node(guid);
-        self.lookup.remove(guid);
-        self.component_lookup.remove(guid);
-        self.instance_lookup.remove(guid);
-        self.node_lookup.remove(guid);
-        let xform = self.xforms.remove(guid);
-        self.bvh_cache_dirty = true;
-        self.revision += 1;
-        let mut parent_guid: Option<String> = None;
-        let mut index: usize = 0;
-
-        if let Some(found) = node.take() {
-            if let Some(parent) = found.borrow().parent() {
-                parent_guid = Some(parent.borrow().name.clone());
-                let children = parent.borrow().children();
-                index = children
-                    .iter()
-                    .position(|child| Rc::ptr_eq(child, &found))
-                    .unwrap_or(0);
-            }
-
-            node = self.tree.remove(&found);
-
-            for child in found.borrow().descendants() {
-                let name = child.borrow().name.clone();
-
-                if self
-                    .node_lookup
-                    .get(&name)
-                    .is_some_and(|held| Rc::ptr_eq(held, &child))
-                {
-                    self.node_lookup.remove(&name);
-                }
+        if let Some(tomb) = tomb_at(objects, collection, slot) {
+            if tomb.node.is_none() && tomb.definition == definition {
+                return Some(tomb);
             }
         }
 
-        let mut attribute = String::new();
-        let mut edges: Vec<(String, String, bool, String)> = Vec::new();
+        let tomb = Tomb::new(collection, definition, slot, None);
+        pin(objects, collection, slot, &tomb);
 
-        if self.graph.has_node(guid) {
-            attribute = self.graph.node_label(guid, None).unwrap_or_default();
-
-            for (other, label, forward) in self.graph.edges_of(guid) {
-                let id = edge_guid(&self.graph, guid, &other);
-                edges.push((other, label, forward, id));
-            }
-
-            self.graph.remove_node(guid);
-        }
-
-        let mut interactions: BTreeMap<String, Vec<Box<dyn Interaction>>> = BTreeMap::new();
-
-        for (_, _, _, id) in &edges {
-            if let Some(list) = self.interactions.remove(id) {
-                interactions.insert(id.clone(), list);
-            }
-        }
-
-        let mut op = Tombstone::new(
-            guid.to_string(),
-            obj,
-            collection,
-            obj_index,
-            xform,
-            parent_guid,
-            index,
-            node,
-            attribute,
-            edges,
-        );
-        op.interactions = interactions;
-
-        Some(op)
+        Some(tomb)
     }
 
-    /// Put an object back from its tombstone, unrecorded: typed vector, lookup, xform, tree node with its subtree, graph node and edges.
-    pub(crate) fn _attach(&mut self, op: &Tombstone) {
-        let obj = clone_item(&op.obj);
-        insert_at(
-            &mut self.objects,
-            &op.collection,
-            op.obj_index.max(0) as usize,
-            &obj,
-        );
-
-        match obj {
-            Item::Geometry(geometry) => {
-                self.lookup.insert(op.guid.clone(), geometry);
-            }
-
-            Item::Component(component) => {
-                self.component_lookup.insert(op.guid.clone(), component);
-            }
-
-            Item::InstanceRef(instance) => {
-                self.instance_lookup.insert(op.guid.clone(), instance);
-            }
-        }
-
-        if let Some(xform) = &op.xform {
-            self.xforms.insert(op.guid.clone(), xform.clone());
-        }
-
-        self.bvh_cache_dirty = true;
-        let node = match &op.node {
-            Some(node) => Rc::clone(node),
-            None => TreeNode::new(&op.guid),
-        };
-        self.node_lookup.insert(op.guid.clone(), Rc::clone(&node));
+    /// Record the halves of a type change under one guid, or drop them when no transaction is open.
+    #[allow(clippy::too_many_arguments)]
+    fn _pair(
+        &mut self,
+        guid: &str,
+        old: &str,
+        new: &str,
+        node: Option<Rc<RefCell<TreeNode>>>,
+        removed: Rc<Tomb>,
+        added: Rc<Tomb>,
+        bytes: usize,
+    ) {
         self.revision += 1;
+        self.bvh_cache_dirty = true;
 
-        for child in node.borrow().descendants() {
-            let name = child.borrow().name.clone();
+        if self.history.current.is_none() {
+            self.history.dropped += 1;
 
-            if self._is_live(&name) {
-                self.node_lookup.insert(name, child);
-            }
-        }
-
-        if let Some(parent_guid) = &op.parent_guid {
-            if let Some(parent) = self.tree.get_node_by_name(parent_guid) {
-                self.tree.add(&node, Some(&parent));
-                let children = parent.borrow().children();
-
-                for child in &children[op.index.min(children.len() - 1)..children.len() - 1] {
-                    parent.borrow_mut().remove(child);
-                    parent.borrow_mut().add(child);
-                }
-            }
-        }
-
-        self.graph.add_node(&op.guid, &op.attribute);
-
-        for (other, attribute, forward, id) in &op.edges {
-            if !self.graph.has_node(other) {
-                continue;
-            }
-
-            if *forward {
-                self.graph.add_edge(&op.guid, other, attribute);
-            } else {
-                self.graph.add_edge(other, &op.guid, attribute);
-            }
-
-            if id.is_empty() {
-                continue;
-            }
-
-            self.graph
-                .edges
-                .get_mut(&op.guid)
-                .unwrap()
-                .get_mut(other)
-                .unwrap()
-                .set_guid(id.clone());
-            self.graph
-                .edges
-                .get_mut(other)
-                .unwrap()
-                .get_mut(&op.guid)
-                .unwrap()
-                .set_guid(id.clone());
-
-            let Some(list) = op.interactions.get(id) else {
-                continue;
-            };
-
-            for interaction in list {
-                self.interactions
-                    .entry(id.clone())
-                    .or_default()
-                    .push(interaction.clone_box());
-            }
-        }
-    }
-
-    /// Store obj under guid in its typed vector and lookup, unrecorded.
-    pub(crate) fn _swap(&mut self, guid: &str, obj: Item) {
-        let (collection, obj_index) = self._locate(guid);
-
-        if obj_index < 0 {
             return;
         }
 
-        store_at(&mut self.objects, &collection, obj_index as usize, &obj);
-        self.revision += 1;
-        let mut attribute = String::new();
+        let index = node.as_ref().map_or(0, |node| node.borrow().at());
+        let parent_guid = node
+            .as_ref()
+            .and_then(|node| node.borrow().parent())
+            .map(|parent| parent.borrow().name.clone());
+        self.history.record(
+            Op::Remove(Tombstone::new(
+                guid.to_string(),
+                old.to_string(),
+                parent_guid.clone(),
+                index,
+                node.clone(),
+                removed,
+            )),
+            bytes,
+        );
+        self.history.record(
+            Op::Add(Tombstone::new(
+                guid.to_string(),
+                new.to_string(),
+                parent_guid,
+                index,
+                node,
+                added,
+            )),
+            RECORD,
+        );
+    }
 
-        for (name, prefix) in COLLECTIONS {
-            if name == collection {
-                attribute = format!("{prefix}_{}", obj.name());
+    /// Relabel the graph vertex of guid, when it has one.
+    fn _label(&mut self, guid: &str, label: &str) {
+        if self.graph.has_node(guid) {
+            self.graph.node_label(guid, Some(label));
+        }
+    }
+
+    /// Remember a parent whose child died, once, for the sweep.
+    fn _queue(&mut self, parent: &Rc<RefCell<TreeNode>>) {
+        if parent.borrow().is_queued() {
+            return;
+        }
+
+        parent.borrow_mut().set_queued(true);
+        self.sweep.push(Rc::downgrade(parent));
+    }
+
+    /// Flip a tomb dead: its slot and map entry, and for an object tomb its node, transform, vertex, edges and interactions; O(1 + d log V).
+    pub(crate) fn _kill(&mut self, tomb: &Rc<Tomb>) {
+        if tomb.collection.is_empty() {
+            return;
+        }
+
+        let slot = tomb.slot.get();
+        let collection = tomb.collection.as_str();
+        self.revision += 1;
+        self.bvh_cache_dirty = true;
+
+        if tomb.definition {
+            let Some(stored) = item_at(&self.definitions, collection, slot) else {
+                return;
+            };
+            let guid = stored.guid().to_string();
+
+            if let Some(held) = self.definition_lookup.get(&guid) {
+                let held = Item::Geometry(held.clone());
+
+                if !same(&held, &stored) {
+                    store(&mut self.definitions, collection, slot, &held);
+                }
+            }
+
+            let owner = slot_of(&self.definitions, collection, &guid) == Some(slot);
+            flag(&mut self.definitions, collection, slot, true);
+
+            if owner {
+                self.definition_lookup.remove(&guid);
+            }
+
+            return;
+        }
+
+        let Some(stored) = item_at(&self.objects, collection, slot) else {
+            return;
+        };
+        let guid = stored.guid().to_string();
+
+        if let Some(held) = self._item(&guid) {
+            if !same(&held, &stored) {
+                store(&mut self.objects, collection, slot, &held);
             }
         }
+
+        let owner = slot_of(&self.objects, collection, &guid) == Some(slot);
+        flag(&mut self.objects, collection, slot, true);
+
+        if owner {
+            self.lookup.remove(&guid);
+            self.component_lookup.remove(&guid);
+            self.instance_lookup.remove(&guid);
+        }
+
+        let Some(node) = &tomb.node else {
+            return;
+        };
+        let parent = node.borrow().parent();
+        node.borrow_mut().set_dead(true);
+        node.borrow_mut().set_tomb(tomb);
+
+        if self
+            .node_lookup
+            .get(&guid)
+            .is_some_and(|held| Rc::ptr_eq(held, node))
+        {
+            self.node_lookup.remove(&guid);
+        }
+
+        if let Some(parent) = parent {
+            self._queue(&parent);
+        }
+
+        *tomb.xform.borrow_mut() = self.xforms.remove(&guid);
+
+        if let Some((vertex, edges)) = self.graph.take_node(&guid) {
+            for edge in &edges {
+                if !edge.has_guid() {
+                    continue;
+                }
+
+                if let Some(list) = self.interactions.remove(edge.guid()) {
+                    tomb.interactions
+                        .borrow_mut()
+                        .insert(edge.guid().to_string(), list);
+                }
+            }
+
+            *tomb.vertex.borrow_mut() = Some(vertex);
+            *tomb.edges.borrow_mut() = edges;
+        }
+    }
+
+    /// Flip a tomb live again: the same slot and pointer, and for an object tomb the same node, transform, vertex, edges and interactions; O(1 + d log V).
+    pub(crate) fn _revive(&mut self, tomb: &Rc<Tomb>) {
+        if tomb.collection.is_empty() {
+            return;
+        }
+
+        let slot = tomb.slot.get();
+        let collection = tomb.collection.as_str();
+        self.revision += 1;
+        self.bvh_cache_dirty = true;
+
+        if tomb.definition {
+            flag(&mut self.definitions, collection, slot, false);
+
+            if let Some(Item::Geometry(geometry)) = item_at(&self.definitions, collection, slot) {
+                self.definition_lookup
+                    .insert(geometry.guid().to_string(), geometry);
+            }
+
+            return;
+        }
+
+        flag(&mut self.objects, collection, slot, false);
+        let Some(item) = item_at(&self.objects, collection, slot) else {
+            return;
+        };
+        let guid = item.guid().to_string();
+
+        match &item {
+            Item::Geometry(geometry) => {
+                self.lookup.insert(guid.clone(), geometry.clone());
+            }
+
+            Item::Component(component) => {
+                self.component_lookup
+                    .insert(guid.clone(), component.clone());
+            }
+
+            Item::InstanceRef(instance) => {
+                self.instance_lookup
+                    .insert(guid.clone(), Rc::clone(instance));
+            }
+        }
+
+        let Some(node) = &tomb.node else {
+            self._label(&guid, &format!("{}_{}", prefix_of(collection), item.name()));
+
+            return;
+        };
+        node.borrow_mut().set_dead(false);
+        self.node_lookup.insert(guid.clone(), Rc::clone(node));
+
+        if let Some(xform) = tomb.xform.borrow_mut().take() {
+            self.xforms.insert(guid.clone(), xform);
+        }
+
+        let Some(vertex) = tomb.vertex.borrow_mut().take() else {
+            return;
+        };
+        let edges = std::mem::take(&mut *tomb.edges.borrow_mut());
+        let mut ids: Vec<(String, String)> = Vec::with_capacity(edges.len());
+
+        for edge in &edges {
+            if edge.has_guid() {
+                ids.push((edge.other_vertex(&guid), edge.guid().to_string()));
+            }
+        }
+
+        self.graph.put_node(vertex, edges);
+
+        for (other, id) in ids {
+            let back = self
+                .graph
+                .edges
+                .get(&guid)
+                .and_then(|neighbors| neighbors.get(&other))
+                .is_some_and(|edge| edge.guid() == id);
+
+            if !back {
+                continue;
+            }
+
+            if let Some(list) = tomb.interactions.borrow_mut().remove(&id) {
+                self.interactions.insert(id, list);
+            }
+        }
+    }
+
+    /// Store obj under guid in its slot and map, relabelling its vertex; a guid that is only a definition swaps in Session.definitions; O(1).
+    pub(crate) fn _swap(&mut self, guid: &str, obj: Item) {
+        let (collection, prefix) = collection_for(&obj);
+        let label = format!("{prefix}_{}", obj.name());
+        self.revision += 1;
+        self.bvh_cache_dirty = true;
+
+        if let (Item::Geometry(geometry), false) = (&obj, self._is_live(guid)) {
+            if self.definition_lookup.contains_key(guid) {
+                if let Some(slot) = slot_of(&self.definitions, collection, guid) {
+                    store(&mut self.definitions, collection, slot, &obj);
+                }
+
+                self.definition_lookup
+                    .insert(guid.to_string(), geometry.clone());
+            }
+
+            return;
+        }
+
+        let Some(slot) = slot_of(&self.objects, collection, guid) else {
+            return;
+        };
+        store(&mut self.objects, collection, slot, &obj);
 
         match obj {
             Item::Geometry(geometry) => {
@@ -2407,11 +2903,7 @@ impl Session {
             }
         }
 
-        self.bvh_cache_dirty = true;
-
-        if self.graph.has_node(guid) {
-            self.graph.node_label(guid, Some(&attribute));
-        }
+        self._label(guid, &label);
     }
 
     /// Rebuild every index from the tables in O(n + N): the maps win over the slots, map-only and slot-only entries are adopted, a non-identity instance xform folds into xforms, node_lookup is refilled from the live tree.
@@ -2504,29 +2996,54 @@ impl Session {
         self.indexed = self.tree.root().map(|root| Rc::downgrade(&root));
     }
 
-    /// Set or drops (None) a definition under guid, unrecorded.
-    pub(crate) fn _define(&mut self, guid: &str, definition: Option<Geometry>) {
-        let (collection, position) = locate(&self.definitions, guid);
+    /// Apply the before (back) or after state of a tree record: name, colour, liveness, and for a move the swap of node and ghost.
+    pub(crate) fn _tree(&mut self, op: &TreeOp, back: bool) {
+        let (name, color, dead) = if back {
+            (&op.name_before, &op.color_before, op.dead_before)
+        } else {
+            (&op.name_after, &op.color_after, op.dead_after)
+        };
+        let was = op.node.borrow().is_dead();
 
-        if position >= 0 {
-            remove_at(&mut self.definitions, &collection, position as usize);
+        if let Some(ghost) = &op.ghost {
+            TreeNode::swap(&op.node, ghost);
+            ghost.borrow_mut().set_tomb(&op.tomb);
         }
 
-        self.definition_lookup.remove(guid);
-        self.bvh_cache_dirty = true;
+        let parent = op.node.borrow().parent();
+        op.node.borrow_mut().name = name.clone();
+        op.node.borrow_mut().color = color.clone();
+        op.node.borrow_mut().set_dead(dead);
         self.revision += 1;
-        let Some(definition) = definition else {
+
+        if dead && !was {
+            op.node.borrow_mut().set_tomb(&op.tomb);
+            *op.tomb.xform.borrow_mut() = self.xforms.remove(name);
+
+            if let Some(parent) = parent {
+                self._queue(&parent);
+            }
+        }
+
+        if was && !dead {
+            if let Some(xform) = op.tomb.xform.borrow_mut().take() {
+                self.xforms.insert(name.clone(), xform);
+            }
+        }
+
+        if !self._is_live(name) {
             return;
-        };
-        let (collection, _) = collection_of(&definition);
-        let at = usize::try_from(position).unwrap_or(usize::MAX);
-        insert_at(
-            &mut self.definitions,
-            collection,
-            at,
-            &Item::Geometry(definition.clone()),
-        );
-        self.definition_lookup.insert(guid.to_string(), definition);
+        }
+
+        if !dead {
+            self.node_lookup.insert(name.clone(), Rc::clone(&op.node));
+        } else if self
+            .node_lookup
+            .get(name)
+            .is_some_and(|held| Rc::ptr_eq(held, &op.node))
+        {
+            self.node_lookup.remove(name);
+        }
     }
 
     /// Set or drops (None) the local transform under guid, unrecorded.
