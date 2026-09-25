@@ -497,7 +497,11 @@ impl History {
 
     /// Drop every transaction, open or committed; what they pinned is purgeable now.
     pub fn clear(&mut self) {
-        for transaction in self.undo_stack.iter().chain(&self.redo_stack) {
+        for transaction in &self.undo_stack {
+            self.dropped += transaction.ops.len();
+        }
+
+        for transaction in &self.redo_stack {
             self.dropped += transaction.ops.len();
         }
 
@@ -513,11 +517,17 @@ impl History {
 
     /// Bytes pinned by both stacks.
     fn _pinned(&self) -> usize {
-        self.undo_stack
-            .iter()
-            .chain(&self.redo_stack)
-            .map(|transaction| transaction.bytes)
-            .sum()
+        let mut pinned = 0;
+
+        for transaction in &self.undo_stack {
+            pinned += transaction.bytes;
+        }
+
+        for transaction in &self.redo_stack {
+            pinned += transaction.bytes;
+        }
+
+        pinned
     }
 
     /// Undo one op against the session.

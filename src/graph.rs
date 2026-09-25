@@ -405,10 +405,14 @@ impl Graph {
         let mut edges = Vec::new();
 
         for (other, edge) in self.edges.remove(key).unwrap_or_default() {
-            let twin = self.edges.get_mut(&other).and_then(|n| n.remove(key));
+            let mut twin = None;
 
-            if self.edges.get(&other).is_some_and(BTreeMap::is_empty) {
-                self.edges.remove(&other);
+            if let Some(neighbours) = self.edges.get_mut(&other) {
+                twin = neighbours.remove(key);
+
+                if neighbours.is_empty() {
+                    self.edges.remove(&other);
+                }
             }
 
             if edge.v0 == key {

@@ -3185,7 +3185,8 @@ impl Session {
 
                 OBJECTS..TREE => self._write_list(writer, false, work),
                 TREE => self._write_tree(writer, work),
-                VERTICES | EDGES => self._write_graph(writer, work),
+                VERTICES => self._write_vertices(writer, work),
+                EDGES => self._write_edges(writer, work),
                 ORDERED..REST => self._write_ordered(writer, work),
                 REST => self._write_rest(writer, work),
                 DEFINITIONS..INTERACTIONS => self._write_list(writer, true, work),
@@ -3333,9 +3334,8 @@ impl Session {
         spent
     }
 
-    /// Write the graph vertices, then its edges, each resuming after the last key written; returns the entries written.
-    fn _write_graph(&self, writer: &mut Checkpoint, work: usize) -> usize {
-        use crate::graph::edge_to_proto;
+    /// Write the graph head, then the vertices in name order after the last key written, at most work per call; returns the vertices written.
+    fn _write_vertices(&self, writer: &mut Checkpoint, work: usize) -> usize {
         use crate::graph::vertex_to_proto;
         use prost::Message;
 
@@ -3344,58 +3344,28 @@ impl Session {
         let mut spent = 0;
         let mut last = None;
 
-        if writer.phase == VERTICES {
-            if writer.cursor == 0 {
-                let guid = if self.graph.has_guid() {
-                    self.graph.guid().to_string()
-                } else {
-                    String::new()
-                };
-                *buffer = crate::proto::Graph {
-                    name: self.graph.name.clone(),
-                    guid,
-                    ..Default::default()
-                }
-                .encode_to_vec();
-            }
-
-            for (name, vertex) in self.graph.vertices_after(after).take(work) {
-                crate::proto::Graph {
-                    vertices: BTreeMap::from([(name.clone(), vertex_to_proto(vertex))]),
-                    ..Default::default()
-                }
-                .encode_raw(buffer);
-                last = Some(name.clone());
-                spent += 1;
-            }
-        } else {
-            let start = match after {
-                Some(key) => std::ops::Bound::Excluded(key),
-                None => std::ops::Bound::Unbounded,
+        if writer.cursor == 0 {
+            let guid = if self.graph.has_guid() {
+                self.graph.guid().to_string()
+            } else {
+                String::new()
             };
-
-            for (u, neighbors) in self
-                .graph
-                .edges
-                .range::<str, _>((start, std::ops::Bound::Unbounded))
-            {
-                if spent >= work {
-                    break;
-                }
-
-                for (v, edge) in neighbors {
-                    if u <= v {
-                        crate::proto::Graph {
-                            edges: vec![edge_to_proto(edge)],
-                            ..Default::default()
-                        }
-                        .encode_raw(buffer);
-                    }
-                }
-
-                last = Some(u.clone());
-                spent += neighbors.len().max(1);
+            *buffer = crate::proto::Graph {
+                name: self.graph.name.clone(),
+                guid,
+                ..Default::default()
             }
+            .encode_to_vec();
+        }
+
+        for (name, vertex) in self.graph.vertices_after(after).take(work) {
+            crate::proto::Graph {
+                vertices: BTreeMap::from([(name.clone(), vertex_to_proto(vertex))]),
+                ..Default::default()
+            }
+            .encode_raw(buffer);
+            last = Some(name.clone());
+            spent += 1;
         }
 
         if let Some(last) = last {
@@ -3407,20 +3377,70 @@ impl Session {
             }
         }
 
-        if writer.phase == EDGES {
-            crate::proto::Graph {
-                vertex_count: self.graph.vertex_count,
-                edge_count: self.graph.edge_count,
-                default_vertex_attributes: self.graph.default_vertex_attributes.clone(),
-                default_edge_attributes: self.graph.default_edge_attributes.clone(),
-                ..Default::default()
-            }
-            .encode_raw(buffer);
-        }
-
         writer.key.clear();
         writer.cursor = 0;
-        writer.phase += 1;
+        writer.phase = EDGES;
+
+        spent
+    }
+
+    /// Write the graph edges in vertex order after the last key written, at most work entries per call, then the counts and defaults; returns the entries examined.
+    fn _write_edges(&self, writer: &mut Checkpoint, work: usize) -> usize {
+        use crate::graph::edge_to_proto;
+        use prost::Message;
+
+        let start = if writer.cursor > 0 {
+            std::ops::Bound::Excluded(writer.key.as_str())
+        } else {
+            std::ops::Bound::Unbounded
+        };
+        let buffer = &mut writer.sections[3];
+        let mut spent = 0;
+        let mut last = None;
+
+        for (u, neighbors) in self
+            .graph
+            .edges
+            .range::<str, _>((start, std::ops::Bound::Unbounded))
+        {
+            if spent >= work {
+                break;
+            }
+
+            for (v, edge) in neighbors {
+                if u <= v {
+                    crate::proto::Graph {
+                        edges: vec![edge_to_proto(edge)],
+                        ..Default::default()
+                    }
+                    .encode_raw(buffer);
+                }
+            }
+
+            last = Some(u.clone());
+            spent += neighbors.len().max(1);
+        }
+
+        if let Some(last) = last {
+            writer.key = last;
+            writer.cursor += 1;
+
+            if spent >= work {
+                return spent;
+            }
+        }
+
+        crate::proto::Graph {
+            vertex_count: self.graph.vertex_count,
+            edge_count: self.graph.edge_count,
+            default_vertex_attributes: self.graph.default_vertex_attributes.clone(),
+            default_edge_attributes: self.graph.default_edge_attributes.clone(),
+            ..Default::default()
+        }
+        .encode_raw(buffer);
+        writer.key.clear();
+        writer.cursor = 0;
+        writer.phase = ORDERED;
 
         spent
     }
@@ -3628,25 +3648,7 @@ impl Session {
         self.bvh_cache_dirty = true;
 
         if tomb.definition {
-            let Some(stored) = item_at(&self.definitions, collection, slot) else {
-                return;
-            };
-            let guid = stored.guid().to_string();
-            let owner = !self._twin(true, collection, slot, &guid);
-
-            if let Some(held) = self.definition_lookup.get(&guid) {
-                let held = Item::Geometry(held.clone());
-
-                if owner && !same(&held, &stored) {
-                    store(&mut self.definitions, collection, slot, &held);
-                }
-            }
-
-            flag(&mut self.definitions, collection, slot, true);
-
-            if owner {
-                self.definition_lookup.remove(&guid);
-            }
+            self._kill_definition(tomb);
 
             return;
         }
@@ -3688,27 +3690,8 @@ impl Session {
             self._queue(&parent);
         }
 
-        if !owner {
-            return;
-        }
-
-        *tomb.xform.borrow_mut() = self.xforms.remove(guid);
-
-        if let Some((vertex, edges)) = self.graph.take_node(guid) {
-            for edge in &edges {
-                if !edge.has_guid() {
-                    continue;
-                }
-
-                if let Some(list) = self.interactions.remove(edge.guid()) {
-                    tomb.interactions
-                        .borrow_mut()
-                        .insert(edge.guid().to_string(), list);
-                }
-            }
-
-            *tomb.vertex.borrow_mut() = Some(vertex);
-            *tomb.edges.borrow_mut() = edges;
+        if owner {
+            self._park(tomb, guid);
         }
     }
 
@@ -3724,16 +3707,7 @@ impl Session {
         self.bvh_cache_dirty = true;
 
         if tomb.definition {
-            let Some(Item::Geometry(geometry)) = item_at(&self.definitions, collection, slot)
-            else {
-                return;
-            };
-            let guid = geometry.guid().to_string();
-
-            if !self._twin(true, collection, slot, &guid) {
-                flag(&mut self.definitions, collection, slot, false);
-                self.definition_lookup.insert(guid, geometry);
-            }
+            self._revive_definition(tomb);
 
             return;
         }
@@ -3761,8 +3735,79 @@ impl Session {
             self.node_lookup.insert(guid.clone(), Rc::clone(node));
         }
 
+        self._unpark(tomb, &guid);
+    }
+
+    /// Flip a definition tomb dead: its slot, and its map entry when it owns the guid; O(1).
+    fn _kill_definition(&mut self, tomb: &Rc<Tomb>) {
+        let slot = tomb.slot.get();
+        let collection = tomb.collection.as_str();
+        let Some(stored) = item_at(&self.definitions, collection, slot) else {
+            return;
+        };
+        let guid = stored.guid().to_string();
+        let owner = !self._twin(true, collection, slot, &guid);
+
+        if let Some(held) = self.definition_lookup.get(&guid) {
+            let held = Item::Geometry(held.clone());
+
+            if owner && !same(&held, &stored) {
+                store(&mut self.definitions, collection, slot, &held);
+            }
+        }
+
+        flag(&mut self.definitions, collection, slot, true);
+
+        if owner {
+            self.definition_lookup.remove(&guid);
+        }
+    }
+
+    /// Flip a definition tomb live again, unless a live twin owns its guid; O(1).
+    fn _revive_definition(&mut self, tomb: &Rc<Tomb>) {
+        let slot = tomb.slot.get();
+        let collection = tomb.collection.as_str();
+        let Some(Item::Geometry(geometry)) = item_at(&self.definitions, collection, slot) else {
+            return;
+        };
+        let guid = geometry.guid().to_string();
+
+        if self._twin(true, collection, slot, &guid) {
+            return;
+        }
+
+        flag(&mut self.definitions, collection, slot, false);
+        self.definition_lookup.insert(guid, geometry);
+    }
+
+    /// Move the transform, graph vertex, incident edges and their interactions of guid into its tomb; O(d log V).
+    fn _park(&mut self, tomb: &Rc<Tomb>, guid: &str) {
+        *tomb.xform.borrow_mut() = self.xforms.remove(guid);
+
+        let Some((vertex, edges)) = self.graph.take_node(guid) else {
+            return;
+        };
+
+        for edge in &edges {
+            if !edge.has_guid() {
+                continue;
+            }
+
+            if let Some(list) = self.interactions.remove(edge.guid()) {
+                tomb.interactions
+                    .borrow_mut()
+                    .insert(edge.guid().to_string(), list);
+            }
+        }
+
+        *tomb.vertex.borrow_mut() = Some(vertex);
+        *tomb.edges.borrow_mut() = edges;
+    }
+
+    /// Move a tomb's transform, vertex and edges back, with the interactions of every edge that returns; O(d log V).
+    fn _unpark(&mut self, tomb: &Rc<Tomb>, guid: &str) {
         if let Some(xform) = tomb.xform.borrow_mut().take() {
-            self.xforms.insert(guid.clone(), xform);
+            self.xforms.insert(guid.to_string(), xform);
         }
 
         let Some(vertex) = tomb.vertex.borrow_mut().take() else {
@@ -3773,21 +3818,21 @@ impl Session {
 
         for edge in &edges {
             if edge.has_guid() {
-                ids.push((edge.other_vertex(&guid), edge.guid().to_string()));
+                ids.push((edge.other_vertex(guid), edge.guid().to_string()));
             }
         }
 
         self.graph.put_node(vertex, edges);
 
         for (other, id) in ids {
-            let back = self
-                .graph
-                .edges
-                .get(&guid)
-                .and_then(|neighbors| neighbors.get(&other))
-                .is_some_and(|edge| edge.guid() == id);
+            let Some(neighbours) = self.graph.edges.get(guid) else {
+                continue;
+            };
+            let Some(back) = neighbours.get(&other) else {
+                continue;
+            };
 
-            if !back {
+            if !back.has_guid() || back.guid() != id {
                 continue;
             }
 
@@ -3842,7 +3887,23 @@ impl Session {
         adopt(&mut self.objects, &mut self.lookup);
         repoint(&mut self.definitions, &self.definition_lookup);
         adopt(&mut self.definitions, &mut self.definition_lookup);
+        self._reindex_components();
+        self._reindex_instances();
+        self.node_lookup.clear();
 
+        for node in self.tree.nodes() {
+            let guid = node.borrow().name.clone();
+
+            if self._is_live(&guid) && !self.node_lookup.contains_key(&guid) {
+                self.node_lookup.insert(guid, node);
+            }
+        }
+
+        self.indexed = self.tree.root().map(|root| Rc::downgrade(&root));
+    }
+
+    /// Adopt slot-only components into component_lookup and map-only ones into the slots, sorted by guid; the map wins a shared guid.
+    fn _reindex_components(&mut self) {
         for slot in 0..self.objects.components.number_of_slots() {
             if self.objects.components.is_dead(slot) {
                 continue;
@@ -3876,7 +3937,10 @@ impl Session {
         for component in components {
             self.objects.components.push(component.clone());
         }
+    }
 
+    /// Adopt map-only instances into the slots, sorted by guid, the map winning a shared guid; a non-identity instance xform folds into xforms.
+    fn _reindex_instances(&mut self) {
         let mut instances: Vec<&Rc<InstanceRef>> = Vec::new();
 
         for (guid, instance) in &self.instance_lookup {
@@ -3912,18 +3976,6 @@ impl Session {
             self.objects.instances.set_item(slot, Rc::clone(&instance));
             self.instance_lookup.insert(guid, instance);
         }
-
-        self.node_lookup.clear();
-
-        for node in self.tree.nodes() {
-            let guid = node.borrow().name.clone();
-
-            if self._is_live(&guid) && !self.node_lookup.contains_key(&guid) {
-                self.node_lookup.insert(guid, node);
-            }
-        }
-
-        self.indexed = self.tree.root().map(|root| Rc::downgrade(&root));
     }
 
     /// Apply the before (back) or after state of a tree record: name, colour, liveness, and for a move the swap of node and ghost.

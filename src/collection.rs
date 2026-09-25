@@ -64,22 +64,22 @@ impl Keyed for Component {
 
 /// A list of objects that can hold dead slots: every public view skips them, in slot order.
 pub struct Collection<E> {
-    items: Vec<E>,                 // raw slots in canonical order, dead ones included
-    dead: Vec<bool>,               // one flag per slot
-    slots: HashMap<String, usize>, // live guid -> slot
-    tombs: HashMap<usize, Vec<Weak<Tomb>>>, // weak pins per slot, newest last
-    live: usize,                   // live count
-    count: usize,                  // dead slots not yet purged
-    low: usize,                    // lowest dead slot, where compaction starts
-    cursor: Option<(usize, usize)>, // (read, write) while a compaction is part way
-    positions: RefCell<Option<Vec<usize>>>, // live slot positions, built lazily
+    items: Vec<E>,                 // Raw slots in canonical order, dead ones included.
+    dead: Vec<bool>,               // One flag per slot.
+    slots: HashMap<String, usize>, // Live guid -> slot.
+    tombs: HashMap<usize, Vec<Weak<Tomb>>>, // Weak pins per slot, newest last.
+    live: usize,                   // Live count.
+    count: usize,                  // Dead slots not yet purged.
+    low: usize,                    // Lowest dead slot, where compaction starts.
+    cursor: Option<(usize, usize)>, // (read, write) while a compaction is part way.
+    positions: RefCell<Option<Vec<usize>>>, // Live slot positions, built lazily.
 }
 
 /// Live entries of a Collection, in slot order.
 pub struct Iter<'a, E> {
-    items: std::slice::Iter<'a, E>,   // raw slots
-    dead: std::slice::Iter<'a, bool>, // their flags
-    remaining: usize,                 // live entries not yet yielded
+    items: std::slice::Iter<'a, E>,   // Raw slots.
+    dead: std::slice::Iter<'a, bool>, // Their flags.
+    remaining: usize,                 // Live entries not yet yielded.
 }
 
 impl<'a, E> Iterator for Iter<'a, E> {
@@ -377,12 +377,15 @@ impl<E: Keyed> Collection<E> {
             return 0;
         }
 
-        let (mut r, mut w) = self.cursor.unwrap_or_else(|| {
+        if self.cursor.is_none() {
             let start = self.low.min(self.items.len());
+            self.cursor = Some((start, start));
             self.low = usize::MAX;
+        }
 
-            (start, start)
-        });
+        let Some((mut r, mut w)) = self.cursor else {
+            return 0;
+        };
         let mut examined = 0;
         *self.positions.get_mut() = None;
 
