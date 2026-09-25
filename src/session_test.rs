@@ -844,8 +844,8 @@ pub fn run_session_remove_object() -> TestResult {
         MINI_CHECK!(!session.lookup.contains_key(&guid));
         MINI_CHECK!(eremoved);
         MINI_CHECK!(session.objects.elements.is_empty());
-        MINI_CHECK!(session.objects.elements.number_of_slots() == 1);
-        MINI_CHECK!(session.objects.points.number_of_dead() == 1);
+        MINI_CHECK!(session.objects.elements.number_of_slots() == 0);
+        MINI_CHECK!(session.number_of_dead() == 0);
         MINI_CHECK!(!session.graph.has_node(&eguid));
         MINI_CHECK!(!loaded.lookup.contains_key(&eguid));
         MINI_CHECK!(loaded.objects.points.number_of_slots() == 0);
@@ -1264,7 +1264,7 @@ pub fn run_session_document_workflow() -> TestResult {
         MINI_CHECK!(loaded.xform(&a_guid) == shift);
         MINI_CHECK!(loaded.history.depth() == 0);
         MINI_CHECK!(session.objects.points.len() == 2);
-        MINI_CHECK!(session.objects.points.number_of_slots() == 3);
+        MINI_CHECK!(session.objects.points.number_of_slots() == 2);
     })
 }
 
@@ -1444,8 +1444,237 @@ pub fn run_session_history_purged_on_save() -> TestResult {
         MINI_CHECK!(after_pb == 0);
         MINI_CHECK!(before_json == 1);
         MINI_CHECK!(session.history.depth() == 0);
+        MINI_CHECK!(session.number_of_dead() == 0);
         MINI_CHECK!(!session.undo());
         MINI_CHECK!(session.objects.points.len() == 2);
+    })
+}
+
+pub fn run_session_purge_on_save() -> TestResult {
+    MINI_TEST!("Purge On Save", {
+        use crate::Point;
+        use crate::Session;
+
+        let mut session = Session::default();
+        let mut guids: Vec<String> = Vec::new();
+
+        for i in 0..5 {
+            let node = session.add_point(Point::new(i as f64, 0.0, 0.0), None);
+            guids.push(node.borrow().name.clone());
+        }
+
+        for i in [1, 3] {
+            session.begin("remove");
+            session.remove_object(&guids[i]);
+            session.commit();
+        }
+
+        let bytes = session.pb_dumps();
+        let mut loaded = Session::pb_loads(&bytes).unwrap();
+        let mut indices: Vec<i32> = Vec::new();
+
+        for vertex in session.graph.get_vertices() {
+            indices.push(vertex.index);
+        }
+
+        indices.sort();
+
+        MINI_CHECK!(session.history.depth() == 0);
+        MINI_CHECK!(session.number_of_dead() == 0);
+        MINI_CHECK!(session.objects.points.number_of_slots() == 3);
+        MINI_CHECK!(indices == vec![0, 1, 2]);
+        MINI_CHECK!(loaded.order() == vec![guids[0].clone(), guids[2].clone(), guids[4].clone()]);
+        MINI_CHECK!(loaded.pb_dumps() == bytes);
+    })
+}
+
+pub fn run_session_purge_unreachable() -> TestResult {
+    MINI_TEST!("Purge Unreachable", {
+        use crate::session::PURGE_WORK;
+        use crate::Point;
+        use crate::Session;
+
+        let mut session = Session::default();
+        let mut guids: Vec<String> = Vec::new();
+
+        for i in 0..70 {
+            let node = session.add_point(Point::new(i as f64, 0.0, 0.0), None);
+            guids.push(node.borrow().name.clone());
+        }
+
+        for guid in &guids {
+            session.begin("remove");
+            session.remove_object(guid);
+            session.commit();
+        }
+
+        let due = session.purge_due();
+
+        while session.purge_step(PURGE_WORK) {}
+
+        let dead = session.number_of_dead();
+        let mut undone = 0;
+
+        while session.undo() {
+            undone += 1;
+        }
+
+        MINI_CHECK!(due);
+        MINI_CHECK!(dead == 64);
+        MINI_CHECK!(undone == 64);
+        MINI_CHECK!(session.objects.points.len() == 64);
+    })
+}
+
+pub fn run_session_purge_step() -> TestResult {
+    MINI_TEST!("Purge Step", {
+        use crate::Point;
+        use crate::Session;
+        use crate::Xform;
+
+        let mut session = Session::default();
+        let mut guids: Vec<String> = Vec::new();
+
+        for i in 0..10_000 {
+            let node = session.add_point(Point::new(i as f64, 0.0, 0.0), None);
+            guids.push(node.borrow().name.clone());
+        }
+
+        session.begin("remove");
+
+        for guid in guids.iter().step_by(2) {
+            session.remove_object(guid);
+        }
+
+        session.commit();
+
+        for i in 0..64 {
+            session.begin("move");
+            session.set_xform(&guids[1], Xform::translation(i as f64, 0.0, 0.0));
+            session.commit();
+        }
+
+        let mut expected: Vec<String> = guids.iter().skip(1).step_by(2).cloned().collect();
+        let first = session.purge_step(64);
+        let mut ordered = session.order() == expected;
+        let mut calls = 1;
+
+        while session.purge_step(64) {
+            calls += 1;
+
+            if calls == 10 {
+                session.begin("remove");
+                session.remove_object(&guids[3]);
+                session.commit();
+                expected.retain(|guid| guid != &guids[3]);
+            }
+
+            if calls == 20 {
+                session.undo();
+                expected = guids.iter().skip(1).step_by(2).cloned().collect();
+            }
+
+            if calls == 30 {
+                let node = session.add_point(Point::new(0.0, 1.0, 0.0), None);
+                expected.push(node.borrow().name.clone());
+            }
+
+            ordered &= session.order() == expected;
+        }
+
+        MINI_CHECK!(first);
+        MINI_CHECK!(calls > 30);
+        MINI_CHECK!(ordered);
+        MINI_CHECK!(session.order() == expected);
+        MINI_CHECK!(session.number_of_dead() == 0);
+        MINI_CHECK!(session.objects.points.number_of_slots() == session.objects.points.len());
+        MINI_CHECK!(session.tree.root().unwrap().borrow().children().len() == expected.len());
+    })
+}
+
+pub fn run_session_checkpoint_keeps_history() -> TestResult {
+    MINI_TEST!("Checkpoint Keeps History", {
+        use crate::Color;
+        use crate::Point;
+        use crate::Session;
+        use crate::Xform;
+        use prost::Message;
+
+        let mut session = Session::default();
+        let group = session.add_group("group");
+        let a = Point::new(0.0, 0.0, 0.0);
+        let b = Point::new(1.0, 0.0, 0.0);
+        let c = Point::new(2.0, 0.0, 0.0);
+        let a_guid = a.guid().to_string();
+        let b_guid = b.guid().to_string();
+        let c_guid = c.guid().to_string();
+        session.add_point(a, Some(&group));
+        session.add_point(b, Some(&group));
+        session.add_point(c, None);
+        session.set_node_color(&group, Some(Color::new(1.0, 0.0, 0.0, 1.0)));
+        session.set_xform("group", Xform::translation(0.0, 0.0, 1.0));
+        session.set_xform(&c_guid, Xform::translation(5.0, 0.0, 0.0));
+        session.add_edge(&a_guid, &c_guid, "touch");
+        let whole = session.checkpoint(usize::MAX).unwrap();
+        let copy = session.clone().pb_dumps();
+
+        session.begin("remove");
+        session.remove_object(&b_guid);
+        session.commit();
+        let mut bytes = None;
+        let mut calls = 0;
+
+        while bytes.is_none() {
+            bytes = session.checkpoint(16);
+            calls += 1;
+        }
+
+        let bytes = bytes.unwrap();
+        let loaded = Session::pb_loads(&bytes).unwrap();
+
+        MINI_CHECK!(whole == copy);
+        MINI_CHECK!(calls > 1);
+        MINI_CHECK!(bytes == session.to_proto().encode_to_vec());
+        MINI_CHECK!(session.history.can_undo());
+        MINI_CHECK!(!loaded.lookup.contains_key(&b_guid));
+        MINI_CHECK!(loaded.order() == session.order());
+        MINI_CHECK!(session.undo());
+        MINI_CHECK!(session.lookup.contains_key(&b_guid));
+    })
+}
+
+pub fn run_session_checkpoint_restarts_on_edit() -> TestResult {
+    MINI_TEST!("Checkpoint Restarts On Edit", {
+        use crate::Point;
+        use crate::Session;
+        use prost::Message;
+
+        let mut session = Session::default();
+        let mut guids: Vec<String> = Vec::new();
+
+        for i in 0..20 {
+            let node = session.add_point(Point::new(i as f64, 0.0, 0.0), None);
+            guids.push(node.borrow().name.clone());
+        }
+
+        let first = session.checkpoint(10);
+        session.begin("remove");
+        session.remove_object(&guids[5]);
+        session.commit();
+        let mut bytes = None;
+
+        while bytes.is_none() {
+            bytes = session.checkpoint(10);
+        }
+
+        let bytes = bytes.unwrap();
+        let loaded = Session::pb_loads(&bytes).unwrap();
+
+        MINI_CHECK!(first.is_none());
+        MINI_CHECK!(bytes == session.to_proto().encode_to_vec());
+        MINI_CHECK!(loaded.objects.points.len() == 19);
+        MINI_CHECK!(!loaded.lookup.contains_key(&guids[5]));
+        MINI_CHECK!(session.history.can_undo());
     })
 }
 
@@ -3023,6 +3252,31 @@ REGISTER_MINI_TEST!(
     "Session",
     "History Purged On Save",
     crate::session_test::run_session_history_purged_on_save
+);
+REGISTER_MINI_TEST!(
+    "Session",
+    "Purge On Save",
+    crate::session_test::run_session_purge_on_save
+);
+REGISTER_MINI_TEST!(
+    "Session",
+    "Purge Unreachable",
+    crate::session_test::run_session_purge_unreachable
+);
+REGISTER_MINI_TEST!(
+    "Session",
+    "Purge Step",
+    crate::session_test::run_session_purge_step
+);
+REGISTER_MINI_TEST!(
+    "Session",
+    "Checkpoint Keeps History",
+    crate::session_test::run_session_checkpoint_keeps_history
+);
+REGISTER_MINI_TEST!(
+    "Session",
+    "Checkpoint Restarts On Edit",
+    crate::session_test::run_session_checkpoint_restarts_on_edit
 );
 REGISTER_MINI_TEST!(
     "Session",

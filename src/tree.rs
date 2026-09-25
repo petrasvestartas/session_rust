@@ -25,6 +25,7 @@ pub struct TreeNode {
     at: usize,                               // Raw index in the parent's children.
     cursor: Option<(usize, usize)>,          // (read, write) while a compaction is part way.
     queued: bool,                            // Whether Session.sweep holds this parent.
+    kept: bool,                              // Whether the last compaction kept a dead child.
 }
 
 impl TreeNode {
@@ -45,6 +46,7 @@ impl TreeNode {
             at: 0,
             cursor: None,
             queued: false,
+            kept: false,
         }));
         node.borrow_mut().weak_self = Rc::downgrade(&node);
 
@@ -137,6 +139,16 @@ impl TreeNode {
     /// Return whether Session.sweep holds this node.
     pub fn is_queued(&self) -> bool {
         self.queued
+    }
+
+    /// Return whether the last finished compaction kept a dead child a record still pins.
+    pub fn has_dead(&self) -> bool {
+        self.kept
+    }
+
+    /// Return the raw child at an index, dead or alive.
+    pub(crate) fn get_child(&self, at: usize) -> Option<Rc<RefCell<TreeNode>>> {
+        self.children.get(at).cloned()
     }
 
     /// Return whether a node is a child, dead or alive.
@@ -282,6 +294,10 @@ impl TreeNode {
             return 0;
         }
 
+        if self.cursor.is_none() {
+            self.kept = false;
+        }
+
         let (mut r, mut w) = self.cursor.unwrap_or((0, 0));
         let mut examined = 0;
 
@@ -291,10 +307,12 @@ impl TreeNode {
                 .tomb
                 .as_ref()
                 .is_some_and(|tomb| tomb.strong_count() > 0);
-            let purged = child.dead && !pinned;
+            let dead = child.dead;
             drop(child);
 
-            if !purged {
+            if !dead || pinned {
+                self.kept |= dead;
+
                 if w != r {
                     self.children.swap(w, r);
                     self.children[w].borrow_mut().at = w;
@@ -811,21 +829,47 @@ fn node_to_proto(node: &TreeNode) -> crate::proto::TreeNode {
         children: Vec::new(),
     };
 
-    if let Some(color) = &node.color {
-        proto.color = Some(crate::proto::Color {
-            r: color.r,
-            g: color.g,
-            b: color.b,
-            a: color.a,
-            ..Default::default()
-        });
-    }
+    proto.color = node.color.as_ref().map(color_to_proto);
 
     for child in node.live() {
         proto.children.push(node_to_proto(&child.borrow()));
     }
 
     proto
+}
+
+/// Convert a display colour to protobuf.
+fn color_to_proto(color: &Color) -> crate::proto::Color {
+    crate::proto::Color {
+        r: color.r,
+        g: color.g,
+        b: color.b,
+        a: color.a,
+        ..Default::default()
+    }
+}
+
+/// The protobuf bytes of a node before its children: guid and name.
+pub(crate) fn node_head(node: &TreeNode) -> Vec<u8> {
+    use prost::Message;
+
+    crate::proto::TreeNode {
+        guid: node.guid().to_string(),
+        name: node.name.clone(),
+        ..Default::default()
+    }
+    .encode_to_vec()
+}
+
+/// The protobuf bytes of a node after its children: its colour.
+pub(crate) fn node_tail(node: &TreeNode) -> Vec<u8> {
+    use prost::Message;
+
+    crate::proto::TreeNode {
+        color: node.color.as_ref().map(color_to_proto),
+        ..Default::default()
+    }
+    .encode_to_vec()
 }
 
 /// Convert a protobuf node and its subtree to a TreeNode.

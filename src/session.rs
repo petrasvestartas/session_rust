@@ -783,6 +783,77 @@ pub struct RayHit {
     pub distance: f64,    // Distance from the ray origin.
 }
 
+/// Work units of one idle purge or checkpoint step, about 2 ms: one raw slot, child, vertex or entry each.
+pub const PURGE_WORK: usize = 16_384;
+
+const HEAD: usize = 0; // Checkpoint phase: the session name and guid.
+const OBJECTS: usize = 1; // Checkpoint phases 1..=13: the objects lists.
+const TREE: usize = 14; // Checkpoint phase: the tree, depth first.
+const VERTICES: usize = 15; // Checkpoint phase: the graph vertices.
+const EDGES: usize = 16; // Checkpoint phase: the graph edges.
+const ORDERED: usize = 17; // Checkpoint phases 17..=27: xforms in order() sequence.
+const REST: usize = 28; // Checkpoint phase: xforms outside order(), by guid.
+const DEFINITIONS: usize = 29; // Checkpoint phases 29..=41: the definitions lists.
+const INTERACTIONS: usize = 42; // Checkpoint phase: the interactions, by edge guid.
+const ASSEMBLY: usize = 43; // Checkpoint phase: the sections joined into one message.
+
+/// A resumable protobuf writer over a session: live entries only, the layout to_proto encodes.
+struct Checkpoint {
+    revision: u64,                                       // The revision it writes.
+    phase: usize,                                        // The section being written.
+    cursor: usize,                                       // Slot or entry count in the phase.
+    key: String,                                         // The last key or guid written.
+    stack: Vec<(Rc<RefCell<TreeNode>>, usize, Vec<u8>)>, // Node, next raw child, its bytes.
+    sections: Vec<Vec<u8>>,                              // The seven Session fields.
+    out: Vec<u8>,                                        // The joined message.
+    hits: usize,                                         // Xforms entries order() reached.
+    rest: Vec<String>,                                   // Xforms guids outside order().
+}
+
+impl Checkpoint {
+    /// Construct a writer at the first phase.
+    fn new(revision: u64) -> Self {
+        Self {
+            revision,
+            phase: HEAD,
+            cursor: 0,
+            key: String::new(),
+            stack: Vec::new(),
+            sections: vec![Vec::new(); 7],
+            out: Vec::new(),
+            hits: 0,
+            rest: Vec::new(),
+        }
+    }
+}
+
+/// The key and length of a length-delimited protobuf field.
+fn prefix(tag: u32, length: usize) -> Vec<u8> {
+    let mut bytes = Vec::new();
+    prost::encoding::encode_key(tag, prost::encoding::WireType::LengthDelimited, &mut bytes);
+    prost::encoding::encode_varint(length as u64, &mut bytes);
+
+    bytes
+}
+
+/// The name and guid fields of an Objects message.
+fn objects_head(objects: &Objects) -> Vec<u8> {
+    use prost::Message;
+
+    let guid = if objects.has_guid() {
+        objects.guid().to_string()
+    } else {
+        String::new()
+    };
+
+    crate::proto::Objects {
+        name: objects.name.clone(),
+        guid,
+        ..Default::default()
+    }
+    .encode_to_vec()
+}
+
 /// A session containing geometry objects.
 #[derive(Serialize, Deserialize)]
 #[serde(tag = "type", rename = "Session")]
@@ -829,11 +900,13 @@ pub struct Session {
     #[serde(skip)]
     pub revision: u64, // Bumped by every Session mutation.
     #[serde(skip)]
-    pub sweep: Vec<Weak<RefCell<TreeNode>>>, // Parents whose children died, for the purge to compact.
+    sweep: Vec<Weak<RefCell<TreeNode>>>, // Parents whose children died, for the purge to compact.
     #[serde(skip)]
-    pub pinned: Vec<Weak<RefCell<TreeNode>>>, // Parents the purge left while a record pinned a child.
+    pinned: Vec<Weak<RefCell<TreeNode>>>, // Parents the purge left while a record pinned a child.
     #[serde(skip)]
-    pub purging: Option<usize>, // The list the purge cursor is in, None between cycles.
+    purging: Option<usize>, // The purge phase: 0..=12 objects lists, 13..=25 definitions lists, 26 the tree; None between cycles.
+    #[serde(skip)]
+    writer: Option<Checkpoint>, // The checkpoint being written, stale once revision moves.
 }
 
 impl Default for Session {
@@ -900,6 +973,7 @@ impl Session {
             sweep: Vec::new(),
             pinned: Vec::new(),
             purging: None,
+            writer: None,
         }
     }
 
@@ -2059,6 +2133,99 @@ impl Session {
     }
 
     // ═══════════════════════════════════════════════════════════════════════════
+    // Purge
+    // ═══════════════════════════════════════════════════════════════════════════
+    /// Return the dead slots not yet purged, over the objects and the definitions lists.
+    pub fn number_of_dead(&self) -> usize {
+        let mut count = 0;
+        macro_rules! dead {
+            ($list:expr) => {
+                count += $list.number_of_dead()
+            };
+        }
+
+        for (collection, _) in COLLECTIONS {
+            listed!(collection, self.objects, dead);
+            listed!(collection, self.definitions, dead);
+        }
+
+        count
+    }
+
+    /// Return whether dropped records left dead entries or swept parents a purge cycle can free.
+    pub fn purge_due(&self) -> bool {
+        self.history.dropped > 0 && (self.number_of_dead() > 0 || !self.sweep.is_empty())
+    }
+
+    /// Return whether a purge cycle is part way.
+    pub fn is_purging(&self) -> bool {
+        self.purging.is_some()
+    }
+
+    /// Purge what no record reaches for at most `work` slots or children, resuming the running cycle; true while it is unfinished.
+    pub fn purge_step(&mut self, work: usize) -> bool {
+        let fresh = self
+            .writer
+            .as_ref()
+            .is_some_and(|writer| writer.revision == self.revision);
+
+        if fresh || (self.purging.is_none() && !self.purge_due()) {
+            return false;
+        }
+
+        self._purge(work);
+
+        self.purging.is_some()
+    }
+
+    /// Purge everything no record reaches in one call: a whole cycle, every live tree node, dense graph indices; O(n + N + V log V + E log E).
+    pub fn purge(&mut self) {
+        self.writer = None;
+        self._purge(usize::MAX);
+
+        for node in self.tree.nodes() {
+            node.borrow_mut().compact();
+        }
+
+        self.graph.renumber();
+        self.revision += 1;
+    }
+
+    /// Write the live session as protobuf bytes for at most `work` units, purging first when due; Some once done, history kept, restarted by any edit.
+    pub fn checkpoint(&mut self, work: usize) -> Option<Vec<u8>> {
+        if self
+            .writer
+            .as_ref()
+            .is_some_and(|writer| writer.revision != self.revision)
+        {
+            self.writer = None;
+        }
+
+        let mut work = work;
+
+        if self.writer.is_none() && (self.purging.is_some() || self.purge_due()) {
+            work = self._purge(work);
+        }
+
+        if self.purging.is_some() || work == 0 {
+            return None;
+        }
+
+        let mut writer = self
+            .writer
+            .take()
+            .unwrap_or_else(|| Checkpoint::new(self.revision));
+
+        if self._write(&mut writer, work) {
+            return Some(writer.out);
+        }
+
+        self.writer = Some(writer);
+
+        None
+    }
+
+    // ═══════════════════════════════════════════════════════════════════════════
     // Collision detection and ray casting
     // ═══════════════════════════════════════════════════════════════════════════
     /// Bounding box of an object in WORLD placement, inflated by tolerance.
@@ -2283,6 +2450,7 @@ impl Session {
     /// Serialize to a JSON string.
     pub fn file_json_dumps(&mut self) -> String {
         self.history.clear();
+        self.purge();
 
         self.jsondump().unwrap_or_default()
     }
@@ -2295,6 +2463,7 @@ impl Session {
     /// Write to a JSON file.
     pub fn file_json_dump(&mut self, filename: &str) {
         self.history.clear();
+        self.purge();
         fs::write(filename, self.jsondump().unwrap_or_default())
             .expect("Failed to write JSON file");
     }
@@ -2409,6 +2578,7 @@ impl Session {
         use prost::Message;
 
         self.history.clear();
+        self.purge();
 
         self.to_proto().encode_to_vec()
     }
@@ -2694,6 +2864,529 @@ impl Session {
 
         parent.borrow_mut().set_queued(true);
         self.sweep.push(Rc::downgrade(parent));
+    }
+
+    /// Run the purge cycle for at most `work` units, starting one when idle; returns the work left.
+    fn _purge(&mut self, mut work: usize) -> usize {
+        if self.purging.is_none() {
+            self.purging = Some(0);
+            self.history.dropped = 0;
+        }
+
+        while work > 0 {
+            let Some(phase) = self.purging else {
+                break;
+            };
+
+            if phase < 26 {
+                let objects = if phase < 13 {
+                    &mut self.objects
+                } else {
+                    &mut self.definitions
+                };
+                let mut spent = 0;
+                let mut done = true;
+                macro_rules! step {
+                    ($list:expr) => {
+                        if $list.number_of_dead() > 0 || $list.is_compacting() {
+                            spent = $list.compact_step(work);
+                            done = !$list.is_compacting();
+                        }
+                    };
+                }
+
+                listed!(COLLECTIONS[phase % 13].0, objects, step);
+                work -= spent.min(work);
+
+                if done {
+                    self.purging = Some(phase + 1);
+                }
+
+                continue;
+            }
+
+            let Some(weak) = self.sweep.last() else {
+                self.sweep = std::mem::take(&mut self.pinned);
+                self.purging = None;
+                break;
+            };
+            let Some(parent) = weak.upgrade() else {
+                self.sweep.pop();
+                work -= 1;
+                continue;
+            };
+            let spent = parent.borrow_mut().compact_step(work);
+            work -= spent.clamp(1, work);
+
+            if parent.borrow().is_compacting() {
+                continue;
+            }
+
+            self.sweep.pop();
+
+            // a parent still holding a pinned child stays queued for the next cycle
+            if parent.borrow().has_dead() {
+                self.pinned.push(Rc::downgrade(&parent));
+            } else {
+                parent.borrow_mut().set_queued(false);
+            }
+        }
+
+        work
+    }
+
+    /// Advance a checkpoint writer for at most `work` units; true once its message is complete.
+    fn _write(&self, writer: &mut Checkpoint, mut work: usize) -> bool {
+        use prost::Message;
+
+        while work > 0 {
+            let spent = match writer.phase {
+                HEAD => {
+                    writer.sections[0] = crate::proto::Session {
+                        name: self.name.clone(),
+                        guid: self.guid.get().cloned().unwrap_or_default(),
+                        ..Default::default()
+                    }
+                    .encode_to_vec();
+                    writer.sections[1] = objects_head(&self.objects);
+                    writer.phase = OBJECTS;
+
+                    1
+                }
+
+                OBJECTS..TREE => self._write_list(writer, false, work),
+                TREE => self._write_tree(writer, work),
+                VERTICES | EDGES => self._write_graph(writer, work),
+                ORDERED..REST => self._write_ordered(writer, work),
+                REST => self._write_rest(writer, work),
+                DEFINITIONS..INTERACTIONS => self._write_list(writer, true, work),
+                INTERACTIONS => self._write_interactions(writer, work),
+                _ => return self._assemble(writer, work),
+            };
+            work -= spent.clamp(1, work);
+        }
+
+        false
+    }
+
+    /// Write the live entries of one objects or definitions list from the cursor slot; returns the slots examined.
+    fn _write_list(&self, writer: &mut Checkpoint, definition: bool, work: usize) -> usize {
+        use prost::Message;
+
+        let (objects, lookup, first, section) = if definition {
+            (&self.definitions, &self.definition_lookup, DEFINITIONS, 5)
+        } else {
+            (&self.objects, &self.lookup, OBJECTS, 1)
+        };
+        let start = writer.cursor;
+        let end: usize;
+        let total: usize;
+        let buffer = &mut writer.sections[section];
+        macro_rules! emit {
+            ($list:expr, $field:ident, $item:ident, $truth:expr) => {{
+                total = $list.number_of_slots();
+                end = total.min(start.saturating_add(work));
+
+                for slot in start..end {
+                    if $list.is_dead(slot) {
+                        continue;
+                    }
+
+                    let $item = $list.get_item(slot);
+                    crate::proto::Objects {
+                        $field: vec![$truth.to_proto()],
+                        ..Default::default()
+                    }
+                    .encode_raw(buffer);
+                }
+            }};
+        }
+        macro_rules! geometry {
+            ($list:expr, $field:ident, $variant:ident) => {
+                emit!($list, $field, item, {
+                    match lookup.get(item.guid()) {
+                        Some(Geometry::$variant(held)) => held,
+                        _ => item,
+                    }
+                })
+            };
+        }
+
+        match COLLECTIONS[writer.phase - first].0 {
+            "points" => geometry!(objects.points, points, Point),
+            "lines" => geometry!(objects.lines, lines, Line),
+            "planes" => geometry!(objects.planes, planes, Plane),
+            "bboxes" => geometry!(objects.bboxes, bboxes, OBB),
+            "polylines" => geometry!(objects.polylines, polylines, Polyline),
+            "pointclouds" => geometry!(objects.pointclouds, pointclouds, PointCloud),
+            "meshes" => geometry!(objects.meshes, meshes, Mesh),
+            "nurbscurves" => geometry!(objects.nurbscurves, nurbscurves, NurbsCurve),
+            "nurbssurfaces" => geometry!(objects.nurbssurfaces, nurbssurfaces, NurbsSurface),
+            "breps" => geometry!(objects.breps, breps, BRep),
+            "elements" => geometry!(objects.elements, elements, Element),
+            "components" => emit!(objects.components, components, item, item),
+            _ => emit!(objects.instances, instances, item, {
+                match (definition, self.instance_lookup.get(item.guid())) {
+                    (false, Some(held)) => held,
+                    _ => item,
+                }
+            }),
+        }
+
+        writer.cursor = end;
+
+        if end >= total {
+            writer.cursor = 0;
+            writer.phase += 1;
+        }
+
+        end - start
+    }
+
+    /// Write the live tree depth first from an explicit stack, a finished node appended to its parent; returns the children examined.
+    fn _write_tree(&self, writer: &mut Checkpoint, work: usize) -> usize {
+        use crate::tree::node_head;
+        use crate::tree::node_tail;
+        use prost::Message;
+
+        if writer.cursor == 0 {
+            writer.cursor = 1;
+            let guid = if self.tree.has_guid() {
+                self.tree.guid().to_string()
+            } else {
+                String::new()
+            };
+            writer.sections[2] = crate::proto::Tree {
+                guid,
+                name: self.tree.name.clone(),
+                root: None,
+            }
+            .encode_to_vec();
+
+            if let Some(root) = self.tree.root() {
+                let head = node_head(&root.borrow());
+                writer.stack.push((root, 0, head));
+            }
+        }
+
+        let mut spent = 0;
+
+        while spent < work {
+            let Some((node, next, _)) = writer.stack.last_mut() else {
+                break;
+            };
+            let child = node.borrow().get_child(*next);
+            *next += 1;
+            spent += 1;
+
+            if let Some(child) = child {
+                if !child.borrow().is_dead() {
+                    let head = node_head(&child.borrow());
+                    writer.stack.push((child, 0, head));
+                }
+
+                continue;
+            }
+
+            let Some((node, _, mut bytes)) = writer.stack.pop() else {
+                break;
+            };
+            bytes.extend(node_tail(&node.borrow()));
+            let (tag, parent) = match writer.stack.last_mut() {
+                Some((_, _, parent)) => (4, parent),
+                None => (3, &mut writer.sections[2]),
+            };
+            parent.extend(prefix(tag, bytes.len()));
+            parent.extend(bytes);
+        }
+
+        if writer.stack.is_empty() {
+            writer.cursor = 0;
+            writer.phase = VERTICES;
+        }
+
+        spent
+    }
+
+    /// Write the graph vertices, then its edges, each resuming after the last key written; returns the entries written.
+    fn _write_graph(&self, writer: &mut Checkpoint, work: usize) -> usize {
+        use crate::graph::edge_to_proto;
+        use crate::graph::vertex_to_proto;
+        use prost::Message;
+
+        let after = (writer.cursor > 0).then_some(writer.key.as_str());
+        let buffer = &mut writer.sections[3];
+        let mut spent = 0;
+        let mut last = None;
+
+        if writer.phase == VERTICES {
+            if writer.cursor == 0 {
+                let guid = if self.graph.has_guid() {
+                    self.graph.guid().to_string()
+                } else {
+                    String::new()
+                };
+                *buffer = crate::proto::Graph {
+                    name: self.graph.name.clone(),
+                    guid,
+                    ..Default::default()
+                }
+                .encode_to_vec();
+            }
+
+            for (name, vertex) in self.graph.vertices_after(after).take(work) {
+                crate::proto::Graph {
+                    vertices: BTreeMap::from([(name.clone(), vertex_to_proto(vertex))]),
+                    ..Default::default()
+                }
+                .encode_raw(buffer);
+                last = Some(name.clone());
+                spent += 1;
+            }
+        } else {
+            let start = match after {
+                Some(key) => std::ops::Bound::Excluded(key),
+                None => std::ops::Bound::Unbounded,
+            };
+
+            for (u, neighbors) in self
+                .graph
+                .edges
+                .range::<str, _>((start, std::ops::Bound::Unbounded))
+            {
+                if spent >= work {
+                    break;
+                }
+
+                for (v, edge) in neighbors {
+                    if u <= v {
+                        crate::proto::Graph {
+                            edges: vec![edge_to_proto(edge)],
+                            ..Default::default()
+                        }
+                        .encode_raw(buffer);
+                    }
+                }
+
+                last = Some(u.clone());
+                spent += neighbors.len().max(1);
+            }
+        }
+
+        if let Some(last) = last {
+            writer.key = last;
+            writer.cursor += 1;
+
+            if spent >= work {
+                return spent;
+            }
+        }
+
+        if writer.phase == EDGES {
+            crate::proto::Graph {
+                vertex_count: self.graph.vertex_count,
+                edge_count: self.graph.edge_count,
+                default_vertex_attributes: self.graph.default_vertex_attributes.clone(),
+                default_edge_attributes: self.graph.default_edge_attributes.clone(),
+                ..Default::default()
+            }
+            .encode_raw(buffer);
+        }
+
+        writer.key.clear();
+        writer.cursor = 0;
+        writer.phase += 1;
+
+        spent
+    }
+
+    /// Write the non-identity xforms of the live objects of one order() list; returns the slots examined.
+    fn _write_ordered(&self, writer: &mut Checkpoint, work: usize) -> usize {
+        use crate::collection::Keyed;
+
+        let start = writer.cursor;
+        let mut end = start;
+        let mut total = 0;
+        let mut guids: Vec<String> = Vec::new();
+        macro_rules! walk {
+            ($list:expr) => {{
+                total = $list.number_of_slots();
+                end = total.min(start.saturating_add(work));
+
+                for slot in start..end {
+                    if !$list.is_dead(slot) {
+                        guids.push($list.get_item(slot).key());
+                    }
+                }
+            }};
+        }
+
+        listed!(COLLECTIONS[writer.phase - ORDERED].0, self.objects, walk);
+
+        for guid in guids {
+            let Some(xform) = self.xforms.get(&guid) else {
+                continue;
+            };
+            writer.hits += 1;
+
+            if !xform.is_identity() {
+                self._write_xform(writer, guid, xform);
+            }
+        }
+
+        writer.cursor = end;
+
+        if end >= total {
+            writer.cursor = 0;
+            writer.phase += 1;
+        }
+
+        end - start
+    }
+
+    /// Write the non-identity xforms of guids outside order(), sorted, after one scan of xforms that runs only when order() missed some; returns the entries examined.
+    fn _write_rest(&self, writer: &mut Checkpoint, work: usize) -> usize {
+        let mut spent = 0;
+
+        if writer.cursor == 0 && writer.hits < self.xforms.len() {
+            for (guid, xform) in &self.xforms {
+                let ordered = self.lookup.get(guid).is_some_and(|geometry| {
+                    slot_of(&self.objects, collection_of(geometry).0, guid).is_some()
+                });
+
+                if !ordered && !xform.is_identity() {
+                    writer.rest.push(guid.clone());
+                }
+            }
+
+            writer.rest.sort();
+            spent = self.xforms.len();
+        }
+
+        let start = writer.cursor;
+        let end = writer.rest.len().min(start.saturating_add(work));
+
+        for i in start..end {
+            let guid = writer.rest[i].clone();
+            let xform = &self.xforms[&guid];
+            self._write_xform(writer, guid, xform);
+        }
+
+        writer.cursor = end;
+
+        if end >= writer.rest.len() {
+            writer.cursor = 0;
+            writer.phase = if self.definition_lookup.is_empty() {
+                INTERACTIONS
+            } else {
+                writer.sections[5] = objects_head(&self.definitions);
+                DEFINITIONS
+            };
+        }
+
+        spent + end - start
+    }
+
+    /// Append one XformEntry to the xforms section.
+    fn _write_xform(&self, writer: &mut Checkpoint, guid: String, xform: &Xform) {
+        use prost::Message;
+
+        crate::proto::Session {
+            xforms: vec![crate::proto::XformEntry {
+                guid,
+                xform: Some(xform.to_proto()),
+            }],
+            ..Default::default()
+        }
+        .encode_raw(&mut writer.sections[4]);
+    }
+
+    /// Write the interactions per edge guid, resuming after the last guid written; returns the entries written.
+    fn _write_interactions(&self, writer: &mut Checkpoint, work: usize) -> usize {
+        use prost::Message;
+
+        let start = if writer.cursor > 0 {
+            std::ops::Bound::Excluded(writer.key.as_str())
+        } else {
+            std::ops::Bound::Unbounded
+        };
+        let mut spent = 0;
+        let mut last = None;
+
+        for (guid, list) in self
+            .interactions
+            .range::<str, _>((start, std::ops::Bound::Unbounded))
+            .take(work)
+        {
+            crate::proto::Session {
+                interactions: vec![crate::proto::InteractionEntry {
+                    guid: guid.clone(),
+                    interactions: list.iter().map(|item| item.to_proto()).collect(),
+                }],
+                ..Default::default()
+            }
+            .encode_raw(&mut writer.sections[6]);
+            last = Some(guid.clone());
+            spent += 1;
+        }
+
+        if let (Some(last), true) = (last, spent >= work) {
+            writer.key = last;
+            writer.cursor += 1;
+
+            return spent;
+        }
+
+        writer.phase = ASSEMBLY;
+        writer.cursor = 0;
+
+        spent
+    }
+
+    /// Join the sections into one Session message, copying at most `work` KiB; true once complete.
+    fn _assemble(&self, writer: &mut Checkpoint, work: usize) -> bool {
+        if writer.phase == ASSEMBLY {
+            let mut pieces = Vec::new();
+
+            // objects, tree, graph and definitions are message fields; head, xforms and interactions are written framed
+            for (i, body) in std::mem::take(&mut writer.sections).into_iter().enumerate() {
+                let tag = [0, 3, 4, 5, 0, 8, 0][i];
+
+                if tag == 8 && self.definition_lookup.is_empty() {
+                    continue;
+                }
+
+                if tag > 0 {
+                    pieces.push(prefix(tag, body.len()));
+                }
+
+                pieces.push(body);
+            }
+            writer.out.reserve_exact(pieces.iter().map(Vec::len).sum());
+            writer.sections = pieces;
+            writer.phase += 1;
+        }
+
+        let mut budget = work.saturating_mul(1024);
+        let mut skip = writer.out.len();
+
+        for piece in &writer.sections {
+            if skip >= piece.len() {
+                skip -= piece.len();
+                continue;
+            }
+
+            let end = piece.len().min(skip.saturating_add(budget));
+            writer.out.extend_from_slice(&piece[skip..end]);
+            budget -= end - skip;
+            skip = 0;
+
+            if budget == 0 {
+                break;
+            }
+        }
+
+        writer.out.len() == writer.sections.iter().map(Vec::len).sum::<usize>()
     }
 
     /// Flip a tomb dead: its slot and map entry, and for an object tomb its node, transform, vertex, edges and interactions; O(1 + d log V).

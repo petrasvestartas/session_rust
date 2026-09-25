@@ -1122,19 +1122,9 @@ impl Graph {
         }
 
         for (vertex_name, vertex) in &self.vertices {
-            let mut v = crate::proto::Vertex {
-                name: vertex.name.clone(),
-                guid: String::new(),
-                attribute: vertex.attribute.clone(),
-                index: vertex.index,
-                attributes: vertex.attributes.clone(),
-            };
-
-            if vertex.has_guid() {
-                v.guid = vertex.guid().to_string();
-            }
-
-            proto.vertices.insert(vertex_name.clone(), v);
+            proto
+                .vertices
+                .insert(vertex_name.clone(), vertex_to_proto(vertex));
         }
 
         for (u, neighbors) in &self.edges {
@@ -1143,25 +1133,25 @@ impl Graph {
                     continue;
                 }
 
-                let mut e = crate::proto::Edge {
-                    guid: String::new(),
-                    name: edge.name.clone(),
-                    v0: edge.v0.clone(),
-                    v1: edge.v1.clone(),
-                    attribute: edge.attribute.clone(),
-                    index: edge.index,
-                    attributes: edge.attributes.clone(),
-                };
-
-                if edge.has_guid() {
-                    e.guid = edge.guid().to_string();
-                }
-
-                proto.edges.push(e);
+                proto.edges.push(edge_to_proto(edge));
             }
         }
 
         proto
+    }
+
+    /// Iterate the vertices whose names follow key, in name order; every vertex when key is None.
+    pub(crate) fn vertices_after(
+        &self,
+        key: Option<&str>,
+    ) -> impl Iterator<Item = (&String, &Vertex)> {
+        let start = match key {
+            Some(key) => std::ops::Bound::Excluded(key),
+            None => std::ops::Bound::Unbounded,
+        };
+
+        self.vertices
+            .range::<str, _>((start, std::ops::Bound::Unbounded))
     }
 
     /// Construct from the protobuf message.
@@ -1262,4 +1252,40 @@ impl fmt::Display for Graph {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "{}", self.str())
     }
+}
+
+/// Convert a vertex to protobuf, its guid only when minted.
+pub(crate) fn vertex_to_proto(vertex: &Vertex) -> crate::proto::Vertex {
+    let mut proto = crate::proto::Vertex {
+        name: vertex.name.clone(),
+        guid: String::new(),
+        attribute: vertex.attribute.clone(),
+        index: vertex.index,
+        attributes: vertex.attributes.clone(),
+    };
+
+    if vertex.has_guid() {
+        proto.guid = vertex.guid().to_string();
+    }
+
+    proto
+}
+
+/// Convert an edge to protobuf, its guid only when minted.
+pub(crate) fn edge_to_proto(edge: &Edge) -> crate::proto::Edge {
+    let mut proto = crate::proto::Edge {
+        guid: String::new(),
+        name: edge.name.clone(),
+        v0: edge.v0.clone(),
+        v1: edge.v1.clone(),
+        attribute: edge.attribute.clone(),
+        index: edge.index,
+        attributes: edge.attributes.clone(),
+    };
+
+    if edge.has_guid() {
+        proto.guid = edge.guid().to_string();
+    }
+
+    proto
 }

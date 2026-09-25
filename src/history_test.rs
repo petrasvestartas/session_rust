@@ -91,14 +91,20 @@ pub fn run_history_clear() -> TestResult {
 
         session.undo();
         session.history.clear();
+        let dropped = session.history.dropped;
+        let due = session.purge_due();
+        let dead = session.number_of_dead();
+        session.purge();
 
         MINI_CHECK!(!session.history.can_undo());
         MINI_CHECK!(!session.history.can_redo());
         MINI_CHECK!(session.history.depth() == 0);
         MINI_CHECK!(session.history.bytes == 0);
-        MINI_CHECK!(session.history.dropped == 2);
+        MINI_CHECK!(dropped == 2);
         MINI_CHECK!(session.objects.points.len() == 1);
-        MINI_CHECK!(session.objects.points.number_of_dead() == 1);
+        MINI_CHECK!(dead == 1);
+        MINI_CHECK!(due);
+        MINI_CHECK!(session.objects.points.number_of_slots() == 1);
     })
 }
 

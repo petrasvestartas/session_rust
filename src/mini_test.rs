@@ -3323,6 +3323,31 @@ pub fn get_all_tests() -> Vec<RegisteredTest> {
         },
         RegisteredTest {
             group: "Session",
+            name: "Purge On Save",
+            func: run_session_purge_on_save,
+        },
+        RegisteredTest {
+            group: "Session",
+            name: "Purge Unreachable",
+            func: run_session_purge_unreachable,
+        },
+        RegisteredTest {
+            group: "Session",
+            name: "Purge Step",
+            func: run_session_purge_step,
+        },
+        RegisteredTest {
+            group: "Session",
+            name: "Checkpoint Keeps History",
+            func: run_session_checkpoint_keeps_history,
+        },
+        RegisteredTest {
+            group: "Session",
+            name: "Checkpoint Restarts On Edit",
+            func: run_session_checkpoint_restarts_on_edit,
+        },
+        RegisteredTest {
+            group: "Session",
             name: "History Capacity",
             func: run_session_history_capacity,
         },
