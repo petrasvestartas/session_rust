@@ -2347,6 +2347,12 @@ pub fn run_session_undo_restores_graph() -> TestResult {
         MINI_CHECK!(!session.graph.has_node(&a_guid));
         MINI_CHECK!(session.graph.has_edge((&b_guid, &c_guid)));
         MINI_CHECK!(session.graph.number_of_vertices() == 2);
+
+        let c_node = session.get_node(&c_guid).unwrap();
+        session.tree.remove(&c_node);
+        session.remove_object(&c_guid);
+
+        MINI_CHECK!(!session.graph.has_node(&c_guid));
     })
 }
 
@@ -2471,7 +2477,10 @@ pub fn run_session_remove_keeps_lookup_edit() -> TestResult {
 pub fn run_session_tree_ops() -> TestResult {
     MINI_TEST!("Tree Ops", {
         use crate::Color;
+        use crate::Point;
         use crate::Session;
+        use crate::TreeNode;
+        use crate::Xform;
         use std::rc::Rc;
 
         let mut session = Session::default();
@@ -2524,6 +2533,19 @@ pub fn run_session_tree_ops() -> TestResult {
         MINI_CHECK!(node.borrow().color.is_some());
         MINI_CHECK!(Rc::ptr_eq(&session.tree.root().unwrap(), &root));
         MINI_CHECK!(session.history.undo_stack[3].ops[0].kind() == "tree");
+
+        let point = Point::new(0.0, 0.0, 0.0);
+        let guid = point.guid().to_string();
+        let held = session.add_point(point, None);
+        session.tree.remove(&held);
+        session.set_xform(&guid, Xform::translation(1.0, 0.0, 0.0));
+        session.begin("adopt");
+        session.add(&TreeNode::new(&guid), None);
+        session.commit();
+        session.undo();
+
+        MINI_CHECK!(session.get_node(&guid).is_none());
+        MINI_CHECK!(session.xforms.contains_key(&guid));
     })
 }
 
@@ -2544,6 +2566,7 @@ pub fn run_session_move_node() -> TestResult {
         session.begin("move");
         session.add(&x, Some(&g2));
         session.commit();
+        let queued = g1.borrow().is_queued();
         let moved = g1.borrow().children().len() == 1
             && g2
                 .borrow()
@@ -2563,6 +2586,8 @@ pub fn run_session_move_node() -> TestResult {
         session.redo();
 
         MINI_CHECK!(moved);
+        MINI_CHECK!(queued);
+        MINI_CHECK!(g2.borrow().is_queued());
         MINI_CHECK!(walked == count);
         MINI_CHECK!(back);
         MINI_CHECK!(session.tree.nodes().len() == count);

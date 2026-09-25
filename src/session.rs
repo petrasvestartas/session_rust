@@ -1460,6 +1460,7 @@ impl Session {
         }
 
         let was_dead = node.borrow().is_dead();
+        let old = node.borrow().parent();
         let ghost = parent.borrow_mut().add(node);
 
         if !parent.borrow().has_child(node) {
@@ -1469,7 +1470,17 @@ impl Session {
         node.borrow_mut().set_dead(false);
         self.revision += 1;
 
-        if let (true, Some(tomb)) = (was_dead, node.borrow().get_tomb()) {
+        if let (Some(old), true) = (old, ghost.is_some()) {
+            self._queue(&old);
+        }
+
+        // a group comes back with its transform; an object's stays with its own tomb
+        let tomb = node
+            .borrow()
+            .get_tomb()
+            .filter(|tomb| tomb.collection.is_empty());
+
+        if let (true, Some(tomb)) = (was_dead, tomb) {
             if let Some(xform) = tomb.xform.borrow_mut().take() {
                 self.xforms.insert(name.clone(), xform);
             }
@@ -1648,7 +1659,10 @@ impl Session {
         };
         let obj = self._item(obj_guid);
         let degree = self.graph.edges.get(obj_guid).map_or(0, BTreeMap::len);
-        let node = tomb.node.clone();
+        let node = tomb
+            .node
+            .clone()
+            .filter(|node| node.borrow().parent().is_some());
         let index = node.as_ref().map_or(0, |node| node.borrow().at());
         let parent_guid = node
             .as_ref()
@@ -2558,18 +2572,18 @@ impl Session {
             }
         }
 
-        let node = self.get_node(guid);
+        let node = match self.get_node(guid) {
+            Some(node) => {
+                self.node_lookup.insert(guid.to_string(), Rc::clone(&node));
+                node
+            }
 
-        if let Some(node) = &node {
-            self.node_lookup.insert(guid.to_string(), Rc::clone(node));
-        }
-
-        let tomb = Tomb::new(collection, false, slot, node);
+            // an object outside the tree parks its transform and vertex on a detached node
+            None => TreeNode::new(guid),
+        };
+        let tomb = Tomb::new(collection, false, slot, Some(Rc::clone(&node)));
         pin(&mut self.objects, collection, slot, &tomb);
-
-        if let Some(node) = &tomb.node {
-            node.borrow_mut().set_tomb(&tomb);
-        }
+        node.borrow_mut().set_tomb(&tomb);
 
         Some(tomb)
     }
@@ -2826,7 +2840,10 @@ impl Session {
             return;
         };
         node.borrow_mut().set_dead(false);
-        self.node_lookup.insert(guid.clone(), Rc::clone(node));
+
+        if node.borrow().parent().is_some() {
+            self.node_lookup.insert(guid.clone(), Rc::clone(node));
+        }
 
         if let Some(xform) = tomb.xform.borrow_mut().take() {
             self.xforms.insert(guid.clone(), xform);
@@ -3004,10 +3021,17 @@ impl Session {
             (&op.name_after, &op.color_after, op.dead_after)
         };
         let was = op.node.borrow().is_dead();
+        let live = self._is_live(name);
 
+        // the ghost takes the node's place, and that parent is swept
         if let Some(ghost) = &op.ghost {
+            let from = op.node.borrow().parent();
             TreeNode::swap(&op.node, ghost);
             ghost.borrow_mut().set_tomb(&op.tomb);
+
+            if let Some(from) = from {
+                self._queue(&from);
+            }
         }
 
         let parent = op.node.borrow().parent();
@@ -3018,20 +3042,24 @@ impl Session {
 
         if dead && !was {
             op.node.borrow_mut().set_tomb(&op.tomb);
-            *op.tomb.xform.borrow_mut() = self.xforms.remove(name);
 
             if let Some(parent) = parent {
                 self._queue(&parent);
             }
         }
 
-        if was && !dead {
+        // a live object keeps its transform, only a group parks it
+        if dead && !was && !live {
+            *op.tomb.xform.borrow_mut() = self.xforms.remove(name);
+        }
+
+        if was && !dead && !live {
             if let Some(xform) = op.tomb.xform.borrow_mut().take() {
                 self.xforms.insert(name.clone(), xform);
             }
         }
 
-        if !self._is_live(name) {
+        if !live {
             return;
         }
 
