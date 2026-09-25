@@ -3513,6 +3513,11 @@ pub fn get_all_tests() -> Vec<RegisteredTest> {
         },
         RegisteredTest {
             group: "Session",
+            name: "Redo Twin Keeps Slot",
+            func: run_session_redo_twin_keeps_slot,
+        },
+        RegisteredTest {
+            group: "Session",
             name: "Purge Clears History",
             func: run_session_purge_clears_history,
         },

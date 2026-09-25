@@ -2746,12 +2746,12 @@ pub fn run_session_tree_ops() -> TestResult {
         let absent = node.borrow().is_dead() && session.tree.get_node_by_name("L").is_none();
         let mut redone = Vec::new();
 
-        // the index mirrors the C++ and Python test, and the fourth redo has no snapshot
-        #[allow(clippy::needless_range_loop)]
-        for i in 1..=4 {
+        for snapshot in &snapshots[1..] {
             session.redo();
-            redone.push(i == 4 || session.tree.str() == snapshots[i]);
+            redone.push(session.tree.str() == *snapshot);
         }
+
+        redone.push(session.redo());
 
         MINI_CHECK!(renamed && coloured && removed);
         MINI_CHECK!(dead);
@@ -3056,6 +3056,60 @@ pub fn run_session_remove_twin_keeps_slot() -> TestResult {
     })
 }
 
+pub fn run_session_redo_twin_keeps_slot() -> TestResult {
+    MINI_TEST!("Redo Twin Keeps Slot", {
+        use crate::Geometry;
+        use crate::Point;
+        use crate::Session;
+
+        let mut session = Session::default();
+        let x = Point::new(1.0, 0.0, 0.0);
+        let guid = x.guid().to_string();
+        let mut y = Point::new(2.0, 0.0, 0.0);
+        y.set_guid(guid.clone());
+        session.begin("add");
+        session.add_point(x, None);
+        session.commit();
+        session.add_point(y, None);
+        session.undo();
+        session.redo();
+        let mut held = 0.0;
+
+        if let Some(Geometry::Point(point)) = session.lookup.get(&guid) {
+            held = point[0];
+        }
+
+        MINI_CHECK!(session.objects.points.len() == 1);
+        MINI_CHECK!(session.objects.points.get_slot(&guid) == Some(1));
+        MINI_CHECK!(session.objects.points.is_dead(0));
+        MINI_CHECK!(held == 2.0);
+        MINI_CHECK!(session.graph.has_node(&guid));
+        MINI_CHECK!(session
+            .get_node(&guid)
+            .is_some_and(|node| !node.borrow().is_dead()));
+
+        session.undo();
+        session.redo();
+
+        MINI_CHECK!(session.objects.points.len() == 1);
+        MINI_CHECK!(session.objects.points.get_slot(&guid) == Some(1));
+
+        let removed = session.remove_object(&guid);
+        let undone = session.undo();
+        let bytes = session.pb_dumps();
+        let loaded = Session::pb_loads(&bytes).unwrap();
+
+        MINI_CHECK!(removed);
+        MINI_CHECK!(undone);
+        MINI_CHECK!(!session.lookup.contains_key(&guid));
+        MINI_CHECK!(!session.graph.has_node(&guid));
+        MINI_CHECK!(session.objects.points.is_empty());
+        MINI_CHECK!(loaded.objects.points.is_empty());
+        MINI_CHECK!(loaded.lookup.is_empty());
+        MINI_CHECK!(loaded.tree.nodes().len() == 1);
+    })
+}
+
 pub fn run_session_purge_clears_history() -> TestResult {
     MINI_TEST!("Purge Clears History", {
         use crate::Point;
@@ -3076,12 +3130,12 @@ pub fn run_session_purge_clears_history() -> TestResult {
         session.commit();
         session.purge();
         let undone = session.undo();
-        let mut indices: Vec<i32> = session
-            .graph
-            .get_vertices()
-            .iter()
-            .map(|v| v.index)
-            .collect();
+        let mut indices: Vec<i32> = Vec::new();
+
+        for vertex in session.graph.get_vertices() {
+            indices.push(vertex.index);
+        }
+
         indices.sort();
 
         MINI_CHECK!(!undone);
@@ -3100,28 +3154,35 @@ pub fn run_session_checkpoint_tags() -> TestResult {
         use crate::session::TAGS;
         use prost::Message;
 
-        let first = |bytes: Vec<u8>| -> u32 {
+        fn first(bytes: Vec<u8>) -> u32 {
             let mut slice = bytes.as_slice();
 
             prost::encoding::decode_key(&mut slice).map_or(0, |(tag, _)| tag)
+        }
+
+        let objects = proto::Session {
+            objects: Some(Default::default()),
+            ..Default::default()
         };
-        let session = |objects: bool, tree: bool, graph: bool, definitions: bool| {
-            proto::Session {
-                objects: objects.then(Default::default),
-                tree: tree.then(Default::default),
-                graph: graph.then(Default::default),
-                definitions: definitions.then(Default::default),
-                ..Default::default()
-            }
-            .encode_to_vec()
+        let tree = proto::Session {
+            tree: Some(Default::default()),
+            ..Default::default()
+        };
+        let graph = proto::Session {
+            graph: Some(Default::default()),
+            ..Default::default()
+        };
+        let definitions = proto::Session {
+            definitions: Some(Default::default()),
+            ..Default::default()
         };
         let sections = [
             0,
-            first(session(true, false, false, false)),
-            first(session(false, true, false, false)),
-            first(session(false, false, true, false)),
+            first(objects.encode_to_vec()),
+            first(tree.encode_to_vec()),
+            first(graph.encode_to_vec()),
             0,
-            first(session(false, false, false, true)),
+            first(definitions.encode_to_vec()),
             0,
         ];
         let root = proto::Tree {
@@ -3190,7 +3251,13 @@ pub fn run_session_checkpoint_tags() -> TestResult {
         MINI_CHECK!(TAGS.sections == sections);
         MINI_CHECK!(TAGS.root == first(root.encode_to_vec()));
         MINI_CHECK!(TAGS.children == first(children.encode_to_vec()));
-        MINI_CHECK!(TAGS.lists == lists.map(|message| first(message.encode_to_vec())));
+        let mut tags = [0; 13];
+
+        for (tag, message) in tags.iter_mut().zip(&lists) {
+            *tag = first(message.encode_to_vec());
+        }
+
+        MINI_CHECK!(TAGS.lists == tags);
     })
 }
 
@@ -3207,15 +3274,13 @@ pub fn run_session_checkpoint_after_purge_steps() -> TestResult {
         let bulk = 20_000;
         let mut session = Session::default();
         let group = session.add_group("flat");
-        let guids: Vec<String> = (0..n)
-            .map(|i| {
-                session
-                    .add_point(Point::new(i as f64, 0.0, 0.0), Some(&group))
-                    .borrow()
-                    .name
-                    .clone()
-            })
-            .collect();
+        let mut guids: Vec<String> = Vec::new();
+
+        for i in 0..n {
+            let node = session.add_point(Point::new(i as f64, 0.0, 0.0), Some(&group));
+            guids.push(node.borrow().name.clone());
+        }
+
         session.begin("remove");
 
         for guid in &guids[..bulk] {
@@ -3264,15 +3329,12 @@ pub fn run_session_steady_state_bounds() -> TestResult {
         let cycles = 1_000;
         let mut session = Session::default();
         let group = session.add_group("flat");
-        let guids: Vec<String> = (0..n)
-            .map(|i| {
-                session
-                    .add_point(Point::new(i as f64, 0.0, 0.0), Some(&group))
-                    .borrow()
-                    .name
-                    .clone()
-            })
-            .collect();
+        let mut guids: Vec<String> = Vec::new();
+
+        for i in 0..n {
+            let node = session.add_point(Point::new(i as f64, 0.0, 0.0), Some(&group));
+            guids.push(node.borrow().name.clone());
+        }
 
         for (cycle, guid) in guids.iter().enumerate().take(cycles) {
             session.begin("remove");
@@ -3305,24 +3367,28 @@ pub fn run_session_history_budget_bounds() -> TestResult {
         use crate::Session;
 
         let side = 30;
-        let vertices: Vec<Point> = (0..side * side)
-            .map(|at| Point::new((at / side) as f64, (at % side) as f64, 0.0))
-            .collect();
-        let faces: Vec<Vec<usize>> = (0..(side - 1) * (side - 1))
-            .map(|at| at / (side - 1) * side + at % (side - 1))
-            .map(|at| vec![at, at + side, at + side + 1, at + 1])
-            .collect();
+        let mut vertices: Vec<Point> = Vec::new();
+        let mut faces: Vec<Vec<usize>> = Vec::new();
+
+        for at in 0..side * side {
+            vertices.push(Point::new((at / side) as f64, (at % side) as f64, 0.0));
+        }
+
+        for cell in 0..(side - 1) * (side - 1) {
+            let at = cell / (side - 1) * side + cell % (side - 1);
+            faces.push(vec![at, at + side, at + side + 1, at + 1]);
+        }
+
         let mut session = Session::default();
         session.history.budget = 1 << 20;
-        let guids: Vec<String> = (0..200)
-            .map(|_| {
-                let mesh = Mesh::from_vertices_and_faces(vertices.clone(), faces.clone());
-                let guid = mesh.guid().to_string();
-                session.add_mesh(mesh, None);
+        let mut guids: Vec<String> = Vec::new();
 
-                guid
-            })
-            .collect();
+        for _ in 0..200 {
+            let mesh = Mesh::from_vertices_and_faces(vertices.clone(), faces.clone());
+            guids.push(mesh.guid().to_string());
+            session.add_mesh(mesh, None);
+        }
+
         let mut bounded = true;
 
         for guid in &guids {
@@ -3761,6 +3827,11 @@ REGISTER_MINI_TEST!(
     "Session",
     "Remove Twin Keeps Slot",
     crate::session_test::run_session_remove_twin_keeps_slot
+);
+REGISTER_MINI_TEST!(
+    "Session",
+    "Redo Twin Keeps Slot",
+    crate::session_test::run_session_redo_twin_keeps_slot
 );
 REGISTER_MINI_TEST!(
     "Session",

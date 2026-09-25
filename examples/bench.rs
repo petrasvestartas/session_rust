@@ -1,6 +1,3 @@
-// Undo/redo cost of the tombstone kernel, printed, never asserted.
-// Run: cargo run --release --example bench [largest flat size, default 1000000]
-
 use session_rust::history::CAPACITY;
 use session_rust::session::PURGE_WORK;
 use session_rust::Geometry;
@@ -13,6 +10,7 @@ use std::cell::RefCell;
 use std::rc::Rc;
 use std::time::Instant;
 
+const LARGEST: usize = 1_000_000; // The largest flat scene; the others are a tenth and a thousandth of it.
 const SCALE: f64 = 1.0; // Slack on bulk and slice budgets for a slower kernel.
 const WARMUP: usize = 5; // Untimed runs before the timed ones.
 const RUNS: usize = 101; // Timed runs; their median is the cost.
@@ -418,13 +416,8 @@ fn layer_move(unrelated_sizes: [usize; 2]) {
 }
 
 fn main() {
-    let largest: usize = std::env::args()
-        .nth(1)
-        .and_then(|arg| arg.parse().ok())
-        .unwrap_or(1_000_000)
-        .max(110_000);
-    let sizes = [largest / 1_000, largest / 10, largest];
-    let bulk = largest / 10;
+    let sizes = [LARGEST / 1_000, LARGEST / 10, LARGEST];
+    let bulk = LARGEST / 10;
     println!(
         "sizes {sizes:?}, bulk {bulk}, cpu {}",
         if unthrottled() {
@@ -434,10 +427,12 @@ fn main() {
         }
     );
     edit_latency(sizes);
-    bulk_undo(largest, bulk);
-    no_pauses(largest, bulk);
+    bulk_undo(LARGEST, bulk);
+    no_pauses(LARGEST, bulk);
     steady_state(sizes[1]);
     history_memory();
     record_cost(sizes[1]);
     layer_move([sizes[0], sizes[1]]);
 }
+
+// Undo/redo cost of the tombstone kernel, printed, never asserted: cargo run --release --example bench

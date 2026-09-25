@@ -3540,7 +3540,7 @@ impl Session {
         writer.out.len() == writer.sections.iter().map(Vec::len).sum::<usize>()
     }
 
-    /// Flip a tomb dead: its slot and map entry, and for an object tomb its node, transform, vertex, edges and interactions; O(1 + d log V).
+    /// Flip a tomb dead: its slot and map entry, and for an object tomb its node, transform, vertex, edges and interactions; a guid a live twin owns keeps those with the twin; O(1 + d log V).
     pub(crate) fn _kill(&mut self, tomb: &Rc<Tomb>) {
         if tomb.collection.is_empty() {
             return;
@@ -3613,6 +3613,10 @@ impl Session {
             self._queue(&parent);
         }
 
+        if !owner {
+            return;
+        }
+
         *tomb.xform.borrow_mut() = self.xforms.remove(guid);
 
         if let Some((vertex, edges)) = self.graph.take_node(guid) {
@@ -3633,7 +3637,7 @@ impl Session {
         }
     }
 
-    /// Flip a tomb live again: the same slot and pointer, and for an object tomb the same node, transform, vertex, edges and interactions; O(1 + d log V).
+    /// Flip a tomb live again: the same slot and pointer, and for an object tomb the same node, transform, vertex, edges and interactions; a guid a live twin owns stays dead; O(1 + d log V).
     pub(crate) fn _revive(&mut self, tomb: &Rc<Tomb>) {
         if tomb.collection.is_empty() {
             return;
@@ -3645,21 +3649,32 @@ impl Session {
         self.bvh_cache_dirty = true;
 
         if tomb.definition {
-            flag(&mut self.definitions, collection, slot, false);
+            let Some(Item::Geometry(geometry)) = item_at(&self.definitions, collection, slot)
+            else {
+                return;
+            };
+            let guid = geometry.guid().to_string();
+            let twin = self.definition_lookup.contains_key(&guid)
+                && slot_of(&self.definitions, collection, &guid) != Some(slot);
 
-            if let Some(Item::Geometry(geometry)) = item_at(&self.definitions, collection, slot) {
-                self.definition_lookup
-                    .insert(geometry.guid().to_string(), geometry);
+            if !twin {
+                flag(&mut self.definitions, collection, slot, false);
+                self.definition_lookup.insert(guid, geometry);
             }
 
             return;
         }
 
-        flag(&mut self.objects, collection, slot, false);
         let Some(item) = item_at(&self.objects, collection, slot) else {
             return;
         };
         let guid = item.guid().to_string();
+
+        if self._is_live(&guid) && slot_of(&self.objects, collection, &guid) != Some(slot) {
+            return;
+        }
+
+        flag(&mut self.objects, collection, slot, false);
         self._hold(&guid, item.clone());
 
         let Some(node) = &tomb.node else {
