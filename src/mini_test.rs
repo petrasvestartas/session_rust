@@ -3528,6 +3528,16 @@ pub fn get_all_tests() -> Vec<RegisteredTest> {
         },
         RegisteredTest {
             group: "Session",
+            name: "Twin Skips Recorded Edits",
+            func: run_session_twin_skips_recorded_edits,
+        },
+        RegisteredTest {
+            group: "Session",
+            name: "Definition Guid Is Live",
+            func: run_session_definition_guid_is_live,
+        },
+        RegisteredTest {
+            group: "Session",
             name: "Purge Clears History",
             func: run_session_purge_clears_history,
         },

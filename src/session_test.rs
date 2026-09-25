@@ -1542,8 +1542,8 @@ pub fn run_session_purge_step() -> TestResult {
 
         session.begin("remove");
 
-        for guid in guids.iter().step_by(2) {
-            session.remove_object(guid);
+        for i in (0..guids.len()).step_by(2) {
+            session.remove_object(&guids[i]);
         }
 
         session.commit();
@@ -1556,10 +1556,8 @@ pub fn run_session_purge_step() -> TestResult {
 
         let mut odd: Vec<String> = Vec::new();
 
-        for (i, guid) in guids.iter().enumerate() {
-            if i % 2 == 1 {
-                odd.push(guid.clone());
-            }
+        for i in (1..guids.len()).step_by(2) {
+            odd.push(guids[i].clone());
         }
 
         let mut expected = odd.clone();
@@ -3095,9 +3093,14 @@ pub fn run_session_redo_twin_keeps_slot() -> TestResult {
         session.add_point(y, None);
         session.redo();
         let mut held = 0.0;
+        let mut live_node = false;
 
         if let Some(Geometry::Point(point)) = session.lookup.get(&guid) {
             held = point[0];
+        }
+
+        if let Some(node) = session.get_node(&guid) {
+            live_node = !node.borrow().is_dead();
         }
 
         MINI_CHECK!(session.objects.points.len() == 1);
@@ -3105,9 +3108,7 @@ pub fn run_session_redo_twin_keeps_slot() -> TestResult {
         MINI_CHECK!(session.objects.points.is_dead(0));
         MINI_CHECK!(held == 2.0);
         MINI_CHECK!(session.graph.has_node(&guid));
-        MINI_CHECK!(session
-            .get_node(&guid)
-            .is_some_and(|node| !node.borrow().is_dead()));
+        MINI_CHECK!(live_node);
 
         session.undo();
         session.redo();
@@ -3256,6 +3257,123 @@ pub fn run_session_add_live_guid_refused() -> TestResult {
     })
 }
 
+pub fn run_session_twin_skips_recorded_edits() -> TestResult {
+    MINI_TEST!("Twin Skips Recorded Edits", {
+        use crate::Geometry;
+        use crate::InstanceRef;
+        use crate::Line;
+        use crate::Point;
+        use crate::Session;
+        use crate::Xform;
+        use std::rc::Rc;
+
+        let mut session = Session::default();
+        let x = Point::new(1.0, 0.0, 0.0);
+        let guid = x.guid().to_string();
+        let mut y = Line::new(0.0, 0.0, 0.0, 1.0, 0.0, 0.0);
+        y.set_guid(guid.clone());
+        let mut moved = Point::new(5.0, 0.0, 0.0);
+        moved.set_guid(guid.clone());
+        session.begin("edit");
+        session.add_point(x, None);
+        session.set_xform(&guid, Xform::translation(0.0, 0.0, 1.0));
+        session.replace(&guid, Geometry::Point(Rc::new(moved)));
+        session.commit();
+        session.undo();
+        session.add_line(y, None);
+        session.set_xform(&guid, Xform::translation(0.0, 1.0, 0.0));
+        let placed = Xform::translation(0.0, 1.0, 0.0);
+        session.redo();
+        let redone = (
+            matches!(session.lookup.get(&guid), Some(Geometry::Line(_))),
+            session.xform(&guid) == placed,
+        );
+        session.undo();
+        let undone = (
+            matches!(session.lookup.get(&guid), Some(Geometry::Line(_))),
+            session.xform(&guid) == placed,
+        );
+
+        MINI_CHECK!(redone == (true, true));
+        MINI_CHECK!(undone == (true, true));
+        MINI_CHECK!(session.objects.lines.len() == 1);
+        MINI_CHECK!(session.objects.points.is_empty());
+
+        let definition =
+            session.add_definition(Geometry::Point(Rc::new(Point::new(0.0, 0.0, 0.0))));
+        let instance = InstanceRef::new(&definition, Xform::identity());
+        let instance_guid = instance.guid().to_string();
+        let mut twin = Point::new(2.0, 0.0, 0.0);
+        twin.set_guid(instance_guid.clone());
+        session.begin("place");
+        session.add_instance(instance, Xform::translation(3.0, 0.0, 0.0), None);
+        session.commit();
+        session.undo();
+        session.add_point(twin, None);
+        session.redo();
+        let twin_placed = session.xforms.contains_key(&instance_guid);
+        session.undo();
+
+        MINI_CHECK!(!twin_placed);
+        MINI_CHECK!(!session.xforms.contains_key(&instance_guid));
+        MINI_CHECK!(session.lookup.contains_key(&instance_guid));
+        MINI_CHECK!(session.objects.instances.is_empty());
+    })
+}
+
+pub fn run_session_definition_guid_is_live() -> TestResult {
+    MINI_TEST!("Definition Guid Is Live", {
+        use crate::Geometry;
+        use crate::Point;
+        use crate::Session;
+        use std::rc::Rc;
+
+        let mut session = Session::default();
+        let definition =
+            session.add_definition(Geometry::Point(Rc::new(Point::new(0.0, 0.0, 0.0))));
+        let revision = session.revision;
+        let mut point = Point::new(1.0, 0.0, 0.0);
+        point.set_guid(definition.clone());
+        let node = session.add_point(point, None);
+
+        MINI_CHECK!(node.borrow().parent().is_none());
+        MINI_CHECK!(session.objects.points.is_empty());
+        MINI_CHECK!(!session.lookup.contains_key(&definition));
+        MINI_CHECK!(session.revision == revision);
+
+        let mut again = Point::new(2.0, 0.0, 0.0);
+        again.set_guid(definition.clone());
+        session.begin("define");
+        session.remove_definition(&definition);
+        session.commit();
+        session.add_point(again, None);
+        session.undo();
+
+        MINI_CHECK!(session.lookup.contains_key(&definition));
+        MINI_CHECK!(!session.definition_lookup.contains_key(&definition));
+        MINI_CHECK!(session.definitions.points.is_dead(0));
+
+        let x = Point::new(3.0, 0.0, 0.0);
+        let guid = x.guid().to_string();
+        session.begin("add");
+        session.add_point(x, None);
+        session.commit();
+        session.undo();
+        let defined = session.add_definition(Geometry::Point(Rc::new(Point::new(4.0, 0.0, 0.0))));
+        let mut shared = Point::new(5.0, 0.0, 0.0);
+        shared.set_guid(guid.clone());
+        let taken = session.add_definition(Geometry::Point(Rc::new(shared)));
+        session.redo();
+
+        MINI_CHECK!(defined != guid);
+        MINI_CHECK!(taken == guid);
+        MINI_CHECK!(!session.lookup.contains_key(&guid));
+        MINI_CHECK!(session.objects.points.get_slot(&guid).is_none());
+        MINI_CHECK!(session.objects.points.len() == 1);
+        MINI_CHECK!(session.definition_lookup.contains_key(&guid));
+    })
+}
+
 pub fn run_session_purge_clears_history() -> TestResult {
     MINI_TEST!("Purge Clears History", {
         use crate::Point;
@@ -3397,13 +3515,13 @@ pub fn run_session_checkpoint_tags() -> TestResult {
         MINI_CHECK!(TAGS.sections == sections);
         MINI_CHECK!(TAGS.root == first(root.encode_to_vec()));
         MINI_CHECK!(TAGS.children == first(children.encode_to_vec()));
-        let mut tags = [0; 13];
+        let mut tags: Vec<u32> = Vec::new();
 
-        for (i, message) in lists.iter().enumerate() {
-            tags[i] = first(message.encode_to_vec());
+        for message in &lists {
+            tags.push(first(message.encode_to_vec()));
         }
 
-        MINI_CHECK!(TAGS.lists == tags);
+        MINI_CHECK!(TAGS.lists.to_vec() == tags);
     })
 }
 
@@ -3482,14 +3600,15 @@ pub fn run_session_steady_state_bounds() -> TestResult {
             guids.push(node.borrow().name.clone());
         }
 
-        for (cycle, guid) in guids[..cycles].iter().enumerate() {
+        for guid in &guids[..cycles] {
             session.begin("remove");
             session.remove_object(guid);
             session.commit();
             session.undo();
             session.redo();
+            let x = session.objects.points.len() as f64;
             session.begin("add");
-            session.add_point(Point::new(cycle as f64, 1.0, 0.0), Some(&group));
+            session.add_point(Point::new(x, 1.0, 0.0), Some(&group));
             session.commit();
             session.purge_step(PURGE_WORK);
         }
@@ -3988,6 +4107,16 @@ REGISTER_MINI_TEST!(
     "Session",
     "Add Live Guid Refused",
     crate::session_test::run_session_add_live_guid_refused
+);
+REGISTER_MINI_TEST!(
+    "Session",
+    "Twin Skips Recorded Edits",
+    crate::session_test::run_session_twin_skips_recorded_edits
+);
+REGISTER_MINI_TEST!(
+    "Session",
+    "Definition Guid Is Live",
+    crate::session_test::run_session_definition_guid_is_live
 );
 REGISTER_MINI_TEST!(
     "Session",

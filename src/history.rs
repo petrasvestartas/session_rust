@@ -152,18 +152,25 @@ impl Tombstone {
 /// The object under `guid` was swapped: the stored pointers before and after, never copies.
 #[derive(Debug, Clone)]
 pub struct ReplaceOp {
-    pub guid: String, // The object's guid.
-    pub before: Item, // The object before the swap.
-    pub after: Item,  // The object after the swap.
+    pub guid: String,                        // The object's guid.
+    pub before: Item,                        // The object before the swap.
+    pub after: Item,                         // The object after the swap.
+    pub node: Option<Rc<RefCell<TreeNode>>>, // The entry's tree node at record time; None for a definition or an object outside the tree.
 }
 
 impl ReplaceOp {
-    /// Construct from the guid and the before and after objects.
-    pub fn new(guid: String, before: Item, after: Item) -> Self {
+    /// Construct from the guid, the before and after objects and the entry's node.
+    pub fn new(
+        guid: String,
+        before: Item,
+        after: Item,
+        node: Option<Rc<RefCell<TreeNode>>>,
+    ) -> Self {
         Self {
             guid,
             before,
             after,
+            node,
         }
     }
 }
@@ -171,18 +178,25 @@ impl ReplaceOp {
 /// The local transform under `guid` changed; None on either side means "none set".
 #[derive(Debug, Clone)]
 pub struct XformOp {
-    pub guid: String,          // The object's guid.
-    pub before: Option<Xform>, // Transform before the change.
-    pub after: Option<Xform>,  // Transform after the change.
+    pub guid: String,                        // The object's guid.
+    pub before: Option<Xform>,               // Transform before the change.
+    pub after: Option<Xform>,                // Transform after the change.
+    pub node: Option<Rc<RefCell<TreeNode>>>, // The entry's tree node at record time; None for a group or an object outside the tree.
 }
 
 impl XformOp {
-    /// Construct from the guid and the before and after transforms.
-    pub fn new(guid: String, before: Option<Xform>, after: Option<Xform>) -> Self {
+    /// Construct from the guid, the before and after transforms and the entry's node.
+    pub fn new(
+        guid: String,
+        before: Option<Xform>,
+        after: Option<Xform>,
+        node: Option<Rc<RefCell<TreeNode>>>,
+    ) -> Self {
         Self {
             guid,
             before,
             after,
+            node,
         }
     }
 }
@@ -509,8 +523,8 @@ impl History {
         match op {
             Op::Add(op) => session._kill(&op.tomb),
             Op::Remove(op) => session._revive(&op.tomb),
-            Op::Replace(op) => session._swap(&op.guid, op.before.clone()),
-            Op::Xform(op) => session._place(&op.guid, op.before.as_ref()),
+            Op::Replace(op) => session._swap(&op.guid, op.before.clone(), op.node.as_ref()),
+            Op::Xform(op) => session._place(&op.guid, op.before.as_ref(), op.node.as_ref()),
             Op::Tree(op) => session._tree(op, true),
         }
     }
@@ -520,8 +534,8 @@ impl History {
         match op {
             Op::Add(op) => session._revive(&op.tomb),
             Op::Remove(op) => session._kill(&op.tomb),
-            Op::Replace(op) => session._swap(&op.guid, op.after.clone()),
-            Op::Xform(op) => session._place(&op.guid, op.after.as_ref()),
+            Op::Replace(op) => session._swap(&op.guid, op.after.clone(), op.node.as_ref()),
+            Op::Xform(op) => session._place(&op.guid, op.after.as_ref(), op.node.as_ref()),
             Op::Tree(op) => session._tree(op, false),
         }
     }

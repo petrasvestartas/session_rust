@@ -1939,17 +1939,19 @@ impl Session {
 
         if old == new {
             if self.history.current.is_some() {
+                let node = self.get_node(guid);
                 self.history.record(
                     Op::Replace(ReplaceOp::new(
                         guid.to_string(),
                         Item::Geometry(before),
                         Item::Geometry(obj.clone()),
+                        node,
                     )),
                     bytes,
                 );
             }
 
-            self._swap(guid, Item::Geometry(obj));
+            self._swap(guid, Item::Geometry(obj), None);
 
             return true;
         }
@@ -1991,12 +1993,13 @@ impl Session {
                         guid.to_string(),
                         Item::Geometry(before),
                         Item::Geometry(definition.clone()),
+                        None,
                     )),
                     bytes,
                 );
             }
 
-            self._swap(guid, Item::Geometry(definition));
+            self._swap(guid, Item::Geometry(definition), None);
 
             return true;
         }
@@ -2142,8 +2145,14 @@ impl Session {
 
         if self.history.current.is_some() {
             let before = self.xforms.get(guid).cloned();
+            let node = self.get_node(guid);
             self.history.record(
-                Op::Xform(XformOp::new(guid.to_string(), before, Some(xform.clone()))),
+                Op::Xform(XformOp::new(
+                    guid.to_string(),
+                    before,
+                    Some(xform.clone()),
+                    node,
+                )),
                 RECORD,
             );
         }
@@ -2160,8 +2169,9 @@ impl Session {
         };
 
         if self.history.current.is_some() {
+            let node = self.get_node(guid);
             self.history.record(
-                Op::Xform(XformOp::new(guid.to_string(), Some(before), None)),
+                Op::Xform(XformOp::new(guid.to_string(), Some(before), None, node)),
                 RECORD,
             );
         }
@@ -2787,7 +2797,7 @@ impl Session {
         objects
     }
 
-    /// Store an object in its list, lookup, graph and tree, recording an add when a transaction is open; Err carries a guid that is already live, which adds nothing.
+    /// Store an object in its list, lookup, graph and tree, recording an add when a transaction is open; Err carries a guid that is already live, as an object or a definition, which adds nothing.
     fn _add_object(
         &mut self,
         collection: &str,
@@ -2798,7 +2808,7 @@ impl Session {
         let obj: Item = obj.into();
         let guid = obj.guid().to_string();
 
-        if self._is_live(&guid) {
+        if self._is_live(&guid) || self.definition_lookup.contains_key(&guid) {
             return Err(guid);
         }
 
@@ -2858,24 +2868,39 @@ impl Session {
         self.get_node(guid).unwrap_or_else(|| TreeNode::new(guid))
     }
 
-    /// Whether the live entry under guid, if any, is another entry than the one in a slot of the list of that name: one of another type, or of the same type at another slot.
+    /// Whether the live entry under guid, if any, is another entry than the one in a slot of the list of that name: one on the other side of the object/definition divide, of another type, or of the same type at another slot.
     fn _twin(&self, definition: bool, collection: &str, slot: usize, guid: &str) -> bool {
-        let (objects, held) = if definition {
+        let (objects, held, other) = if definition {
             let held = self
                 .definition_lookup
                 .get(guid)
                 .cloned()
                 .map(Item::Geometry);
 
-            (&self.definitions, held)
+            (&self.definitions, held, self._is_live(guid))
         } else {
-            (&self.objects, self._item(guid))
+            let other = self.definition_lookup.contains_key(guid);
+
+            (&self.objects, self._item(guid), other)
         };
+
+        if other {
+            return true;
+        }
+
         let Some(held) = held else {
             return false;
         };
 
         collection_for(&held).0 != collection || slot_of(objects, collection, guid) != Some(slot)
+    }
+
+    /// Whether the entry under guid is the one a record was taken on: any entry when no node was recorded, else the live entry whose node it is.
+    fn _owns(&self, guid: &str, node: Option<&Rc<RefCell<TreeNode>>>) -> bool {
+        node.is_none_or(|node| {
+            self.get_node(guid)
+                .is_some_and(|live| Rc::ptr_eq(&live, node))
+        })
     }
 
     /// Whether guid names a live object, component or instance.
@@ -3765,8 +3790,12 @@ impl Session {
         }
     }
 
-    /// Store obj under guid in its slot and map, relabelling its vertex; a guid that is only a definition swaps in Session.definitions; O(1).
-    pub(crate) fn _swap(&mut self, guid: &str, obj: Item) {
+    /// Store obj under guid in its slot and map, relabelling its vertex; a guid that is only a definition swaps in Session.definitions; a guid whose entry is not the recorded node is left alone; O(1).
+    pub(crate) fn _swap(&mut self, guid: &str, obj: Item, node: Option<&Rc<RefCell<TreeNode>>>) {
+        if !self._owns(guid, node) {
+            return;
+        }
+
         let (collection, prefix) = collection_for(&obj);
         let label = format!("{prefix}_{}", obj.name());
         self.revision += 1;
@@ -3942,8 +3971,17 @@ impl Session {
         }
     }
 
-    /// Set or drops (None) the local transform under guid, unrecorded.
-    pub(crate) fn _place(&mut self, guid: &str, xform: Option<&Xform>) {
+    /// Set or drops (None) the local transform under guid, unrecorded; a guid whose entry is not the recorded node is left alone.
+    pub(crate) fn _place(
+        &mut self,
+        guid: &str,
+        xform: Option<&Xform>,
+        node: Option<&Rc<RefCell<TreeNode>>>,
+    ) {
+        if !self._owns(guid, node) {
+            return;
+        }
+
         match xform {
             Some(xform) => {
                 self.xforms.insert(guid.to_string(), xform.clone());
