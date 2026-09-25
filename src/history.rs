@@ -149,28 +149,30 @@ impl Tombstone {
     }
 }
 
-/// The object under `guid` was swapped: the stored pointers before and after, never copies.
+/// The entry a replace was taken on: an object by its tree node at record time (None outside the tree) or a definition by its slot.
+#[derive(Debug, Clone)]
+pub enum Entry {
+    Object(Option<Rc<RefCell<TreeNode>>>),
+    Definition(usize),
+}
+
+/// The object or definition under `guid` was swapped: the stored pointers before and after, never copies.
 #[derive(Debug, Clone)]
 pub struct ReplaceOp {
-    pub guid: String,                        // The object's guid.
-    pub before: Item,                        // The object before the swap.
-    pub after: Item,                         // The object after the swap.
-    pub node: Option<Rc<RefCell<TreeNode>>>, // The entry's tree node at record time; None for a definition or an object outside the tree.
+    pub guid: String, // The entry's guid.
+    pub before: Item, // The entry before the swap.
+    pub after: Item,  // The entry after the swap.
+    pub entry: Entry, // The entry the swap was taken on.
 }
 
 impl ReplaceOp {
-    /// Construct from the guid, the before and after objects and the entry's node.
-    pub fn new(
-        guid: String,
-        before: Item,
-        after: Item,
-        node: Option<Rc<RefCell<TreeNode>>>,
-    ) -> Self {
+    /// Construct from the guid, the before and after items and the entry.
+    pub fn new(guid: String, before: Item, after: Item, entry: Entry) -> Self {
         Self {
             guid,
             before,
             after,
-            node,
+            entry,
         }
     }
 }
@@ -523,7 +525,7 @@ impl History {
         match op {
             Op::Add(op) => session._kill(&op.tomb),
             Op::Remove(op) => session._revive(&op.tomb),
-            Op::Replace(op) => session._swap(&op.guid, op.before.clone(), op.node.as_ref()),
+            Op::Replace(op) => session._swap(&op.guid, op.before.clone(), &op.entry),
             Op::Xform(op) => session._place(&op.guid, op.before.as_ref(), op.node.as_ref()),
             Op::Tree(op) => session._tree(op, true),
         }
@@ -534,7 +536,7 @@ impl History {
         match op {
             Op::Add(op) => session._revive(&op.tomb),
             Op::Remove(op) => session._kill(&op.tomb),
-            Op::Replace(op) => session._swap(&op.guid, op.after.clone(), op.node.as_ref()),
+            Op::Replace(op) => session._swap(&op.guid, op.after.clone(), &op.entry),
             Op::Xform(op) => session._place(&op.guid, op.after.as_ref(), op.node.as_ref()),
             Op::Tree(op) => session._tree(op, false),
         }

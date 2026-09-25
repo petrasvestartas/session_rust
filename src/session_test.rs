@@ -3318,6 +3318,33 @@ pub fn run_session_twin_skips_recorded_edits() -> TestResult {
         MINI_CHECK!(!session.xforms.contains_key(&instance_guid));
         MINI_CHECK!(session.lookup.contains_key(&instance_guid));
         MINI_CHECK!(session.objects.instances.is_empty());
+
+        let held = Point::new(0.0, 0.0, 0.0);
+        let held_guid = held.guid().to_string();
+        let mut swapped = Point::new(9.0, 0.0, 0.0);
+        swapped.set_guid(held_guid.clone());
+        let mut taker = Point::new(7.0, 0.0, 0.0);
+        taker.set_guid(held_guid.clone());
+        session.begin("define");
+        session.add_definition(Geometry::Point(Rc::new(held)));
+        session.commit();
+        session.begin("swap");
+        session.replace_definition(&held_guid, Geometry::Point(Rc::new(swapped)));
+        session.commit();
+        session.undo();
+        session.undo();
+        session.add_point(taker, None);
+        session.redo();
+        session.redo();
+        let taker_redone =
+            matches!(session.lookup.get(&held_guid), Some(Geometry::Point(p)) if p[0] == 7.0);
+        session.undo();
+        let taker_undone =
+            matches!(session.lookup.get(&held_guid), Some(Geometry::Point(p)) if p[0] == 7.0);
+
+        MINI_CHECK!(taker_redone);
+        MINI_CHECK!(taker_undone);
+        MINI_CHECK!(!session.definition_lookup.contains_key(&held_guid));
     })
 }
 

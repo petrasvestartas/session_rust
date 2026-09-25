@@ -2,6 +2,7 @@ use crate::collection::Keyed;
 use crate::color::Color;
 use crate::history::clone;
 use crate::history::weight;
+use crate::history::Entry;
 use crate::history::History;
 use crate::history::Op;
 use crate::history::ReplaceOp;
@@ -1938,20 +1939,21 @@ impl Session {
         let bytes = RECORD + weight(&Item::Geometry(before.clone()));
 
         if old == new {
+            let entry = Entry::Object(self.get_node(guid));
+
             if self.history.current.is_some() {
-                let node = self.get_node(guid);
                 self.history.record(
                     Op::Replace(ReplaceOp::new(
                         guid.to_string(),
                         Item::Geometry(before),
                         Item::Geometry(obj.clone()),
-                        node,
+                        entry.clone(),
                     )),
                     bytes,
                 );
             }
 
-            self._swap(guid, Item::Geometry(obj), None);
+            self._swap(guid, Item::Geometry(obj), &entry);
 
             return true;
         }
@@ -1987,19 +1989,24 @@ impl Session {
         let bytes = RECORD + weight(&Item::Geometry(before.clone()));
 
         if old == new {
+            let Some(slot) = slot_of(&self.definitions, old, guid) else {
+                return false;
+            };
+            let entry = Entry::Definition(slot);
+
             if self.history.current.is_some() {
                 self.history.record(
                     Op::Replace(ReplaceOp::new(
                         guid.to_string(),
                         Item::Geometry(before),
                         Item::Geometry(definition.clone()),
-                        None,
+                        entry.clone(),
                     )),
                     bytes,
                 );
             }
 
-            self._swap(guid, Item::Geometry(definition), None);
+            self._swap(guid, Item::Geometry(definition), &entry);
 
             return true;
         }
@@ -2603,7 +2610,7 @@ impl Session {
         Ok(session)
     }
 
-    /// Serialize to a JSON string.
+    /// Serialize to a JSON string; saving purges, which clears the history, so no undo crosses a save.
     pub fn file_json_dumps(&mut self) -> String {
         self.purge();
 
@@ -2727,7 +2734,7 @@ impl Session {
         Ok(session)
     }
 
-    /// Serialize to protobuf bytes.
+    /// Serialize to protobuf bytes; saving purges, which clears the history, so no undo crosses a save.
     pub fn pb_dumps(&mut self) -> Vec<u8> {
         use prost::Message;
 
@@ -3790,36 +3797,43 @@ impl Session {
         }
     }
 
-    /// Store obj under guid in its slot and map, relabelling its vertex; a guid that is only a definition swaps in Session.definitions; a guid whose entry is not the recorded node is left alone; O(1).
-    pub(crate) fn _swap(&mut self, guid: &str, obj: Item, node: Option<&Rc<RefCell<TreeNode>>>) {
-        if !self._owns(guid, node) {
-            return;
-        }
-
+    /// Store obj under guid in the slot and map of the recorded entry, relabelling an object's vertex; a guid now live on the other side, or on the same side as another entry, is left alone; O(1).
+    pub(crate) fn _swap(&mut self, guid: &str, obj: Item, entry: &Entry) {
         let (collection, prefix) = collection_for(&obj);
-        let label = format!("{prefix}_{}", obj.name());
-        self.revision += 1;
-        self.bvh_cache_dirty = true;
 
-        if let (Item::Geometry(geometry), false) = (&obj, self._is_live(guid)) {
-            if self.definition_lookup.contains_key(guid) {
-                if let Some(slot) = slot_of(&self.definitions, collection, guid) {
-                    store(&mut self.definitions, collection, slot, &obj);
+        match entry {
+            Entry::Definition(slot) => {
+                let Item::Geometry(geometry) = &obj else {
+                    return;
+                };
+
+                if self._is_live(guid)
+                    || slot_of(&self.definitions, collection, guid) != Some(*slot)
+                {
+                    return;
                 }
 
+                store(&mut self.definitions, collection, *slot, &obj);
                 self.definition_lookup
                     .insert(guid.to_string(), geometry.clone());
             }
 
-            return;
+            Entry::Object(node) => {
+                if self.definition_lookup.contains_key(guid) || !self._owns(guid, node.as_ref()) {
+                    return;
+                }
+
+                let Some(slot) = slot_of(&self.objects, collection, guid) else {
+                    return;
+                };
+                store(&mut self.objects, collection, slot, &obj);
+                self._label(guid, &format!("{prefix}_{}", obj.name()));
+                self._hold(guid, obj);
+            }
         }
 
-        let Some(slot) = slot_of(&self.objects, collection, guid) else {
-            return;
-        };
-        store(&mut self.objects, collection, slot, &obj);
-        self._hold(guid, obj);
-        self._label(guid, &label);
+        self.revision += 1;
+        self.bvh_cache_dirty = true;
     }
 
     /// Rebuild every index from the tables in O(n + N): the maps win over the slots, map-only and slot-only entries are adopted, a non-identity instance xform folds into xforms, node_lookup is refilled from the live tree.
