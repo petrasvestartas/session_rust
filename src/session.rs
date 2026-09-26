@@ -44,6 +44,7 @@ use serde::Deserialize;
 use serde::Serialize;
 use std::cell::RefCell;
 use std::collections::BTreeMap;
+use std::collections::BTreeSet;
 use std::collections::HashMap;
 use std::fmt;
 use std::fs;
@@ -923,8 +924,8 @@ struct Checkpoint {
     tree: Vec<Vec<u8>>,     // The framed root, in chunks after the Tree head.
     sections: Vec<Vec<u8>>, // The seven Session fields.
     out: Vec<u8>,           // The joined message.
-    hits: usize,            // Xforms entries order() reached.
-    rest: Vec<String>,      // Xforms guids outside order().
+    hits: usize,            // Xforms entries order() reached, every one once the rest scan is done.
+    rest: BTreeSet<String>, // Xforms guids outside order(), in guid order.
 }
 
 impl Checkpoint {
@@ -940,7 +941,7 @@ impl Checkpoint {
             sections: vec![Vec::new(); 7],
             out: Vec::new(),
             hits: 0,
-            rest: Vec::new(),
+            rest: BTreeSet::new(),
         }
     }
 }
@@ -3450,27 +3451,25 @@ impl Session {
         let start = writer.cursor;
         let mut end = start;
         let mut total = 0;
-        let mut guids: Vec<String> = Vec::new();
 
         if let Some(list) = list(&self.objects, COLLECTIONS[writer.phase - ORDERED].0) {
             total = list.number_of_slots();
             end = total.min(start.saturating_add(work));
 
             for slot in start..end {
-                if !list.is_dead(slot) {
-                    guids.push(list.key_at(slot).to_string());
+                if list.is_dead(slot) {
+                    continue;
                 }
-            }
-        }
 
-        for guid in guids {
-            let Some(xform) = self.xforms.get(&guid) else {
-                continue;
-            };
-            writer.hits += 1;
+                let guid = list.key_at(slot);
+                let Some(xform) = self.xforms.get(guid) else {
+                    continue;
+                };
+                writer.hits += 1;
 
-            if !xform.is_identity() {
-                self._write_xform(writer, guid, xform);
+                if !xform.is_identity() {
+                    self._write_xform(writer, guid.to_string(), xform);
+                }
             }
         }
 
@@ -3484,47 +3483,68 @@ impl Session {
         end - start
     }
 
-    /// Write the non-identity xforms of guids outside order(), sorted, after one scan of xforms that runs only when order() missed some; returns the entries examined.
+    /// Write the non-identity xforms of guids outside order() in guid order, after a scan of xforms in slices of `work` that runs only when order() missed some; returns the entries examined or written.
     fn _write_rest(&self, writer: &mut Checkpoint, work: usize) -> usize {
-        let mut spent = 0;
+        if writer.hits < self.xforms.len() {
+            let start = writer.cursor;
+            let end = self.xforms.len().min(start.saturating_add(work));
 
-        if writer.cursor == 0 && writer.hits < self.xforms.len() {
-            for (guid, xform) in &self.xforms {
+            for (guid, xform) in self.xforms.iter().skip(start).take(end - start) {
                 let ordered = self.lookup.get(guid).is_some_and(|geometry| {
                     slot_of(&self.objects, collection_of(geometry).0, guid).is_some()
                 });
 
                 if !ordered && !xform.is_identity() {
-                    writer.rest.push(guid.clone());
+                    writer.rest.insert(guid.clone());
                 }
             }
 
-            writer.rest.sort();
-            spent = self.xforms.len();
+            writer.cursor = end;
+
+            if end >= self.xforms.len() {
+                writer.hits = self.xforms.len();
+                writer.cursor = 0;
+            }
+
+            return end - start;
         }
 
-        let start = writer.cursor;
-        let end = writer.rest.len().min(start.saturating_add(work));
+        let start = if writer.cursor > 0 {
+            std::ops::Bound::Excluded(writer.key.as_str())
+        } else {
+            std::ops::Bound::Unbounded
+        };
+        let rest = std::mem::take(&mut writer.rest);
+        let mut spent = 0;
+        let mut last = None;
 
-        for i in start..end {
-            let guid = writer.rest[i].clone();
-            let xform = &self.xforms[&guid];
-            self._write_xform(writer, guid, xform);
+        for guid in rest
+            .range::<str, _>((start, std::ops::Bound::Unbounded))
+            .take(work)
+        {
+            self._write_xform(writer, guid.clone(), &self.xforms[guid]);
+            last = Some(guid.clone());
+            spent += 1;
         }
 
-        writer.cursor = end;
+        writer.rest = rest;
 
-        if end >= writer.rest.len() {
-            writer.cursor = 0;
-            writer.phase = if self.definition_lookup.is_empty() {
-                INTERACTIONS
-            } else {
-                writer.sections[5] = objects_head(&self.definitions);
-                DEFINITIONS
-            };
+        if let (Some(last), true) = (last, spent >= work) {
+            writer.key = last;
+            writer.cursor += 1;
+
+            return spent;
         }
 
-        spent + end - start
+        writer.cursor = 0;
+        writer.phase = if self.definition_lookup.is_empty() {
+            INTERACTIONS
+        } else {
+            writer.sections[5] = objects_head(&self.definitions);
+            DEFINITIONS
+        };
+
+        spent
     }
 
     /// Append one XformEntry to the xforms section.

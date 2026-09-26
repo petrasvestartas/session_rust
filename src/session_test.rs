@@ -1653,6 +1653,7 @@ pub fn run_session_checkpoint_restarts_on_edit() -> TestResult {
     MINI_TEST!("Checkpoint Restarts On Edit", {
         use crate::Point;
         use crate::Session;
+        use crate::Xform;
         use prost::Message;
 
         let mut session = Session::default();
@@ -1661,6 +1662,12 @@ pub fn run_session_checkpoint_restarts_on_edit() -> TestResult {
         for i in 0..20 {
             let node = session.add_point(Point::new(i as f64, 0.0, 0.0), None);
             guids.push(node.borrow().name.clone());
+        }
+
+        for i in 0..25 {
+            let group = session.add_group(&format!("group{i}"));
+            let name = group.borrow().name.clone();
+            session.set_xform(&name, Xform::translation(0.0, (i + 1) as f64, 0.0));
         }
 
         let first = session.checkpoint(10);
@@ -1679,6 +1686,7 @@ pub fn run_session_checkpoint_restarts_on_edit() -> TestResult {
         MINI_CHECK!(first.is_none());
         MINI_CHECK!(bytes == session.to_proto().encode_to_vec());
         MINI_CHECK!(loaded.objects.points.len() == 19);
+        MINI_CHECK!(loaded.xforms.len() == 25);
         MINI_CHECK!(!loaded.lookup.contains_key(&guids[5]));
         MINI_CHECK!(session.history.can_undo());
     })
@@ -3672,7 +3680,7 @@ pub fn run_session_history_budget_bounds() -> TestResult {
         }
 
         let mut session = Session::default();
-        session.history.budget = 1 << 20;
+        session.history.budget = 4 << 20;
         let mut guids: Vec<String> = Vec::new();
 
         for _ in 0..200 {

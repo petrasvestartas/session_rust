@@ -9,6 +9,8 @@ use crate::tree::TreeNode;
 use crate::xform::Xform;
 use crate::BRep;
 use crate::Mesh;
+use crate::NurbsCurve;
+use crate::NurbsSurface;
 use std::cell::Cell;
 use std::cell::RefCell;
 use std::collections::BTreeMap;
@@ -36,20 +38,43 @@ pub fn clone(obj: &Geometry) -> Geometry {
     }
 }
 
-/// Bytes a mesh pins, from its counts.
+/// Bytes a mesh pins, from its counts: a vertex owns its halfedge map, a face its vertex list (measured, triangle caches not counted).
 fn mesh_weight(mesh: &Mesh) -> usize {
-    128 + 64 * mesh.number_of_vertices() + 48 * mesh.number_of_faces()
+    128 + 768 * mesh.number_of_vertices() + 192 * mesh.number_of_faces()
 }
 
-/// Bytes a brep pins, from its table lengths.
+/// Bytes a curve pins, from its control point and knot counts.
+fn curve_weight(curve: &NurbsCurve) -> usize {
+    256 + 32 * curve.cv_count() + 8 * curve.m_nurbsknot.len()
+}
+
+/// Bytes a surface pins, from its control point and knot counts.
+fn surface_weight(surface: &NurbsSurface) -> usize {
+    1536 + 32 * surface.cv_count_total()
+        + 8 * (surface.m_nurbsknot[0].len() + surface.m_nurbsknot[1].len())
+}
+
+/// Bytes a brep pins: every surface and curve of its pools, plus its tables.
 fn brep_weight(brep: &BRep) -> usize {
-    512 + 256 * brep.m_surfaces.len()
-        + 128 * (brep.m_curves_3d.len() + brep.m_curves_2d.len())
-        + 24 * brep.m_vertices.len()
-        + 64 * (brep.m_edges.len() + brep.m_faces.len())
+    let mut bytes =
+        512 + 24 * brep.m_vertices.len() + 64 * (brep.m_edges.len() + brep.m_faces.len());
+
+    for surface in &brep.m_surfaces {
+        bytes += surface_weight(surface);
+    }
+
+    for curve in &brep.m_curves_3d {
+        bytes += curve_weight(curve);
+    }
+
+    for curve in &brep.m_curves_2d {
+        bytes += curve_weight(curve);
+    }
+
+    bytes
 }
 
-/// An estimate of the bytes an item pins while a record holds it, O(1) from its container lengths.
+/// An estimate of the bytes an item pins while a record holds it, from its container lengths.
 pub fn weight(item: &Item) -> usize {
     match item {
         Item::Geometry(Geometry::Point(_)) => 64,
@@ -61,10 +86,8 @@ pub fn weight(item: &Item) -> usize {
             64 + 24 * g.point_count() + 24 * g.normal_count() + 16 * g.color_count()
         }
         Item::Geometry(Geometry::Mesh(g)) => mesh_weight(g),
-        Item::Geometry(Geometry::NurbsCurve(g)) => 96 + 32 * g.cv_count() + 8 * g.m_nurbsknot.len(),
-        Item::Geometry(Geometry::NurbsSurface(g)) => {
-            128 + 32 * g.cv_count_total() + 8 * (g.m_nurbsknot[0].len() + g.m_nurbsknot[1].len())
-        }
+        Item::Geometry(Geometry::NurbsCurve(g)) => curve_weight(g),
+        Item::Geometry(Geometry::NurbsSurface(g)) => surface_weight(g),
         Item::Geometry(Geometry::BRep(g)) => brep_weight(g),
         Item::Geometry(Geometry::Element(g)) => {
             let geometry = match g.geometry() {
