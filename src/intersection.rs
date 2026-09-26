@@ -6913,9 +6913,13 @@ fn analytic_pullback(
 
 /// Degree-1 pcurves of the pull-back runs.
 fn run_curves(runs: &[PullbackRun]) -> Vec<NurbsCurve> {
-    runs.iter()
-        .map(|run| NurbsCurve::create(false, 1, &run.uv))
-        .collect()
+    let mut out = Vec::new();
+
+    for run in runs {
+        out.push(NurbsCurve::create(false, 1, &run.uv));
+    }
+
+    out
 }
 
 /// Run sample interpolated at 3D curve parameter t.
@@ -8540,7 +8544,15 @@ impl<'a> SurfaceSurfaceField<'a> {
     /// Newton-project x onto the section with parameter k held fixed; x is kept when it fails.
     fn correct_on_seam(&self, x: &mut [f64; 4], k: usize) -> bool {
         let mut y = *x;
-        let free: Vec<usize> = (0..4).filter(|&c| c != k).collect();
+        let mut free = [0usize; 3];
+        let mut j = 0;
+
+        for c in 0..4 {
+            if c != k {
+                free[j] = c;
+                j += 1;
+            }
+        }
 
         for _ in 0..8 {
             let (sa, sau, sav) = self.eval_a(y[0], y[1]);
@@ -8559,9 +8571,14 @@ impl<'a> SurfaceSurfaceField<'a> {
                 [-sbu[0], -sbu[1], -sbu[2]],
                 [-sbv[0], -sbv[1], -sbv[2]],
             ];
-            let jac: Vec<Vec<f64>> = (0..3)
-                .map(|r| (0..3).map(|c| cols[free[c]][r]).collect())
-                .collect();
+            let mut jac = vec![vec![0.0; 3]; 3];
+
+            for r in 0..3 {
+                for c in 0..3 {
+                    jac[r][c] = cols[free[c]][r];
+                }
+            }
+
             let dx = match solve_gauss(&jac, &res, 3) {
                 Some(dx) => dx,
                 None => return false,
