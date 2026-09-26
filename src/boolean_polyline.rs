@@ -3173,12 +3173,13 @@ fn v_flush(cur: &mut Vec<f64>, result: &mut Vec<Polyline>) {
 // ═══════════════════════════════════════════════════════════════════════════
 // Ring sets
 // ═══════════════════════════════════════════════════════════════════════════
-/// Signed xy area of the first n points of flat coordinates, positive counter-clockwise.
-fn v_ring_area(c: &[f64], n: usize) -> f64 {
+/// Signed xy area of the first count points of flat coordinates, positive counter-clockwise.
+fn v_ring_area(coords: &[f64], count: usize) -> f64 {
     let mut area = 0.0;
 
-    for i in 0..n {
-        area += c[i * 3] * c[((i + 1) % n) * 3 + 1] - c[((i + 1) % n) * 3] * c[i * 3 + 1];
+    for i in 0..count {
+        area += coords[i * 3] * coords[((i + 1) % count) * 3 + 1]
+            - coords[((i + 1) % count) * 3] * coords[i * 3 + 1];
     }
 
     area / 2.0
@@ -3189,18 +3190,18 @@ fn v_oriented(rings: &[Polyline]) -> Vec<Vec<f64>> {
     let mut flat: Vec<Vec<f64>> = Vec::new();
 
     for ring in rings {
-        let n = v_strip_closing(&ring.coords, ring.coords.len() / 3);
+        let count = v_strip_closing(&ring.coords, ring.coords.len() / 3);
 
-        if n >= 3 {
-            flat.push(ring.coords[..n * 3].to_vec());
+        if count >= 3 {
+            flat.push(ring.coords[..count * 3].to_vec());
         }
     }
 
     let mut oriented = flat.clone();
 
     for i in 0..flat.len() {
-        let n = flat[i].len() / 3;
-        let area = v_ring_area(&flat[i], n);
+        let count = flat[i].len() / 3;
+        let area = v_ring_area(&flat[i], count);
         let dx = flat[i][3] - flat[i][0];
         let dy = flat[i][4] - flat[i][1];
         let side = if area > 0.0 {
@@ -3222,9 +3223,9 @@ fn v_oriented(rings: &[Polyline]) -> Vec<Vec<f64>> {
             continue;
         }
 
-        for k in 0..n {
+        for k in 0..count {
             for axis in 0..3 {
-                oriented[i][k * 3 + axis] = flat[i][(n - 1 - k) * 3 + axis];
+                oriented[i][k * 3 + axis] = flat[i][(count - 1 - k) * 3 + axis];
             }
         }
     }

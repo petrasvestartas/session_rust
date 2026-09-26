@@ -1884,6 +1884,16 @@ pub fn get_all_tests() -> Vec<RegisteredTest> {
         },
         RegisteredTest {
             group: "Mesh",
+            name: "Section By Plane Vertex Ring",
+            func: run_mesh_section_by_plane_vertex_ring,
+        },
+        RegisteredTest {
+            group: "Mesh",
+            name: "Section By Plane Diagonal",
+            func: run_mesh_section_by_plane_diagonal,
+        },
+        RegisteredTest {
+            group: "Mesh",
             name: "Volume Far From Origin",
             func: run_mesh_volume_far_from_origin,
         },

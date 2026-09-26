@@ -2308,24 +2308,24 @@ fn section_sign(distance: f64) -> i32 {
 
 /// True when the ring passes from one side of the plane to the other through the on-plane run starting at vertex i.
 fn section_flips(ring: &[usize], distance: &BTreeMap<usize, f64>, i: usize) -> bool {
-    let n = ring.len();
+    let count = ring.len();
     let mut before = 0;
     let mut after = 0;
 
-    for k in 1..n {
+    for k in 1..count {
         if before != 0 {
             break;
         }
 
-        before = section_sign(distance[&ring[(i + n - k) % n]]);
+        before = section_sign(distance[&ring[(i + count - k) % count]]);
     }
 
-    for k in 1..n {
+    for k in 1..count {
         if after != 0 {
             break;
         }
 
-        after = section_sign(distance[&ring[(i + k) % n]]);
+        after = section_sign(distance[&ring[(i + k) % count]]);
     }
 
     before * after < 0
@@ -2342,11 +2342,11 @@ fn section_events(
     let mut events: Vec<(f64, (usize, usize))> = Vec::new();
 
     for ring in rings {
-        let n = ring.len();
+        let count = ring.len();
 
-        for i in 0..n {
+        for i in 0..count {
             let current = ring[i];
-            let following = ring[(i + 1) % n];
+            let following = ring[(i + 1) % count];
             let side = section_sign(distance[&current]);
 
             if side * section_sign(distance[&following]) < 0 {
@@ -2358,7 +2358,7 @@ fn section_events(
             }
 
             if side == 0
-                && section_sign(distance[&ring[(i + n - 1) % n]]) != 0
+                && section_sign(distance[&ring[(i + count - 1) % count]]) != 0
                 && section_flips(ring, distance, i)
             {
                 found.insert((current, current), points[&current].clone());
@@ -2458,7 +2458,48 @@ fn section_chains(links: &BTreeMap<(usize, usize), Vec<(usize, usize)>>) -> Sect
     chains
 }
 
-/// The section graph: every pair of events of a face crossing the plane linked, faces on one side or in the plane skipped.
+/// Links first and second once.
+fn section_link(
+    links: &mut BTreeMap<(usize, usize), Vec<(usize, usize)>>,
+    first: (usize, usize),
+    second: (usize, usize),
+) {
+    if first == second {
+        return;
+    }
+
+    if let Some(others) = links.get(&first) {
+        if others.contains(&second) {
+            return;
+        }
+    }
+
+    links.entry(first).or_default().push(second);
+    links.entry(second).or_default().push(first);
+}
+
+/// The ring edges lying in the plane marked with the sides the face reaches: 1 below, 2 above.
+fn section_edges(
+    rings: &[Vec<usize>],
+    distance: &BTreeMap<usize, f64>,
+    sides: i32,
+    edges: &mut BTreeMap<(usize, usize), i32>,
+) {
+    for ring in rings {
+        for i in 0..ring.len() {
+            let first = ring[i];
+            let second = ring[(i + 1) % ring.len()];
+
+            if distance[&first] == 0.0 && distance[&second] == 0.0 {
+                *edges
+                    .entry((first.min(second), first.max(second)))
+                    .or_insert(0) |= sides;
+            }
+        }
+    }
+}
+
+/// The section graph: the events of every face crossing the plane linked in pairs, then every edge in the plane where faces from both sides meet; faces lying in the plane skipped.
 fn section_links(
     faces: &HashMap<usize, Vec<usize>>,
     holes: &HashMap<usize, Vec<Vec<usize>>>,
@@ -2468,6 +2509,7 @@ fn section_links(
     found: &mut BTreeMap<(usize, usize), Point>,
 ) -> BTreeMap<(usize, usize), Vec<(usize, usize)>> {
     let mut links: BTreeMap<(usize, usize), Vec<(usize, usize)>> = BTreeMap::new();
+    let mut edges: BTreeMap<(usize, usize), i32> = BTreeMap::new();
     let mut keys: Vec<usize> = faces.keys().copied().collect();
     keys.sort();
 
@@ -2485,6 +2527,8 @@ fn section_links(
             }
         }
 
+        let sides = (if low < 0 { 1 } else { 0 }) | (if high > 0 { 2 } else { 0 });
+        section_edges(&rings, distance, sides, &mut edges);
         let mut direction = axis.cross(&normal);
 
         if low == 0 || high == 0 || !direction.normalize_self() {
@@ -2494,8 +2538,15 @@ fn section_links(
         let events = section_events(&rings, distance, points, &direction, found);
 
         for i in (0..events.len().saturating_sub(1)).step_by(2) {
-            links.entry(events[i]).or_default().push(events[i + 1]);
-            links.entry(events[i + 1]).or_default().push(events[i]);
+            section_link(&mut links, events[i], events[i + 1]);
+        }
+    }
+
+    for (edge, sides) in &edges {
+        if *sides == 3 {
+            found.insert((edge.0, edge.0), points[&edge.0].clone());
+            found.insert((edge.1, edge.1), points[&edge.1].clone());
+            section_link(&mut links, (edge.0, edge.0), (edge.1, edge.1));
         }
     }
 
@@ -2561,6 +2612,8 @@ fn section_polylines(
 
     section
 }
+
+const ARRANGEMENT_PRECISION: f64 = 0.1; // Vertex weld of from_lines as a share of the tolerance.
 
 /// Union-find root of a vertex key.
 fn arrangement_root(parent: &mut BTreeMap<usize, usize>, key: usize) -> usize {
@@ -2756,12 +2809,15 @@ fn arrangement_container(
     let mut container: Option<usize> = None;
 
     for (face, ring) in rings {
-        if owner[face] != component
-            && !skipped.contains(face)
-            && ring_inside_2d(point, ring)
-            && container.is_none_or(|kept| ring_area_2d(ring) < ring_area_2d(&rings[&kept]))
-        {
-            container = Some(*face);
+        if owner[face] != component && !skipped.contains(face) && ring_inside_2d(point, ring) {
+            let smaller = match container {
+                Some(kept) => ring_area_2d(ring) < ring_area_2d(&rings[&kept]),
+                None => true,
+            };
+
+            if smaller {
+                container = Some(*face);
+            }
         }
     }
 
@@ -3195,7 +3251,7 @@ impl Mesh {
     /// Construct the planar faces of lines and boundary lines in xy split by Line::split_at_crossings: the outer face of every connected component and faces under tolerance squared in area dropped, a component inside a face becoming a hole of it, a void when it holds only boundary lines; edge attribute line holds the index of the line an edge lies on, boundary lines numbered after lines, -1 when none.
     pub fn from_arrangement(lines: &[Line], boundary: &[Line], tolerance: f64, merge: f64) -> Self {
         let (pieces, split) = Line::split_at_crossings(lines, boundary, tolerance, merge);
-        let mut mesh = Mesh::from_lines(&pieces, false, Some(tolerance * 0.1));
+        let mut mesh = Mesh::from_lines(&pieces, false, Some(tolerance * ARRANGEMENT_PRECISION));
         let sources = arrangement_sources(&mesh, &pieces, &split, tolerance);
         let roots = arrangement_roots(&mesh);
         let mut lined: BTreeSet<usize> = BTreeSet::new();

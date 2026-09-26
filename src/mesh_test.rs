@@ -2020,6 +2020,67 @@ pub fn run_mesh_section_by_plane_open() -> TestResult {
     })
 }
 
+pub fn run_mesh_section_by_plane_vertex_ring() -> TestResult {
+    MINI_TEST!("Section By Plane Vertex Ring", {
+        use crate::Mesh;
+        use crate::Plane;
+        use crate::Point;
+        use crate::Vector;
+
+        let vertices = vec![
+            Point::new(0.0, 0.0, 0.0),
+            Point::new(2.0, 0.0, 0.0),
+            Point::new(2.0, 2.0, 0.0),
+            Point::new(0.0, 2.0, 0.0),
+            Point::new(0.0, 0.0, 1.0),
+            Point::new(2.0, 0.0, 1.0),
+            Point::new(2.0, 2.0, 1.0),
+            Point::new(0.0, 2.0, 1.0),
+            Point::new(0.0, 0.0, 2.0),
+            Point::new(2.0, 0.0, 2.0),
+            Point::new(2.0, 2.0, 2.0),
+            Point::new(0.0, 2.0, 2.0),
+        ];
+        let mut faces: Vec<Vec<usize>> = vec![vec![0, 3, 2, 1], vec![8, 9, 10, 11]];
+
+        for k in 0..4 {
+            faces.push(vec![k, (k + 1) % 4, 4 + (k + 1) % 4, 4 + k]);
+            faces.push(vec![4 + k, 4 + (k + 1) % 4, 8 + (k + 1) % 4, 8 + k]);
+        }
+
+        let prism = Mesh::from_vertices_and_faces(vertices, faces);
+        let ring = prism.section_by_plane(&Plane::from_point_normal(
+            Point::new(0.0, 0.0, 1.0),
+            Vector::new(0.0, 0.0, 1.0),
+            None,
+        ));
+
+        MINI_CHECK!(ring.len() == 1);
+        MINI_CHECK!(ring[0].is_closed());
+        MINI_CHECK!(ring[0].point_count() == 5);
+    })
+}
+
+pub fn run_mesh_section_by_plane_diagonal() -> TestResult {
+    MINI_TEST!("Section By Plane Diagonal", {
+        use crate::Mesh;
+        use crate::Plane;
+        use crate::Point;
+        use crate::Vector;
+
+        let bx = Mesh::create_box(2.0, 2.0, 2.0);
+        let diagonal = bx.section_by_plane(&Plane::from_point_normal(
+            Point::new(0.0, 0.0, 0.0),
+            Vector::new(1.0, -1.0, 0.0),
+            None,
+        ));
+
+        MINI_CHECK!(diagonal.len() == 1);
+        MINI_CHECK!(diagonal[0].is_closed());
+        MINI_CHECK!(diagonal[0].point_count() == 5);
+    })
+}
+
 pub fn run_mesh_volume_far_from_origin() -> TestResult {
     MINI_TEST!("Volume Far From Origin", {
         use crate::Mesh;
@@ -3210,6 +3271,16 @@ REGISTER_MINI_TEST!(
     "Mesh",
     "Section By Plane Open",
     crate::mesh_test::run_mesh_section_by_plane_open
+);
+REGISTER_MINI_TEST!(
+    "Mesh",
+    "Section By Plane Vertex Ring",
+    crate::mesh_test::run_mesh_section_by_plane_vertex_ring
+);
+REGISTER_MINI_TEST!(
+    "Mesh",
+    "Section By Plane Diagonal",
+    crate::mesh_test::run_mesh_section_by_plane_diagonal
 );
 REGISTER_MINI_TEST!(
     "Mesh",
