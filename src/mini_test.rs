@@ -1092,6 +1092,11 @@ pub fn get_all_tests() -> Vec<RegisteredTest> {
             name: "Split At Crossings",
             func: run_line_split_at_crossings,
         },
+        RegisteredTest {
+            group: "Line",
+            name: "Split At Crossings Zero Length",
+            func: run_line_split_at_crossings_zero_length,
+        },
         // Polyline tests
         RegisteredTest {
             group: "Polyline",
@@ -1352,6 +1357,11 @@ pub fn get_all_tests() -> Vec<RegisteredTest> {
             group: "Polyline",
             name: "Offset Sides",
             func: run_polyline_offset_sides,
+        },
+        RegisteredTest {
+            group: "Polyline",
+            name: "Offset Sides Degenerate",
+            func: run_polyline_offset_sides_degenerate,
         },
         // Plane tests
         RegisteredTest {
@@ -1779,6 +1789,11 @@ pub fn get_all_tests() -> Vec<RegisteredTest> {
         },
         RegisteredTest {
             group: "Mesh",
+            name: "From Arrangement Components",
+            func: run_mesh_from_arrangement_components,
+        },
+        RegisteredTest {
+            group: "Mesh",
             name: "From Polygon With Holes",
             func: run_mesh_from_polygon_with_holes,
         },
@@ -1856,6 +1871,16 @@ pub fn get_all_tests() -> Vec<RegisteredTest> {
             group: "Mesh",
             name: "Section By Plane",
             func: run_mesh_section_by_plane,
+        },
+        RegisteredTest {
+            group: "Mesh",
+            name: "Section By Plane Coplanar",
+            func: run_mesh_section_by_plane_coplanar,
+        },
+        RegisteredTest {
+            group: "Mesh",
+            name: "Section By Plane Open",
+            func: run_mesh_section_by_plane_open,
         },
         RegisteredTest {
             group: "Mesh",
@@ -5088,6 +5113,11 @@ pub fn get_all_tests() -> Vec<RegisteredTest> {
             group: "Boolean Polyline",
             name: "Regions",
             func: run_boolean_polyline_regions,
+        },
+        RegisteredTest {
+            group: "Boolean Polyline",
+            name: "Regions Orientation",
+            func: run_boolean_polyline_regions_orientation,
         },
         // Boolean Polyline Open tests
         RegisteredTest {

@@ -2266,17 +2266,317 @@ fn cut_result(
     result
 }
 
-/// Signed xy area of a face loop.
-fn arrangement_area(points: &[Point]) -> f64 {
+/// Even-odd test of a 2D point against a 2D ring.
+fn ring_inside_2d(point: (f64, f64), ring: &[(f64, f64)]) -> bool {
+    let mut inside = false;
+
+    for i in 0..ring.len() {
+        let first = ring[i];
+        let second = ring[(i + 1) % ring.len()];
+
+        if (first.1 > point.1) != (second.1 > point.1)
+            && point.0 < first.0 + (point.1 - first.1) * (second.0 - first.0) / (second.1 - first.1)
+        {
+            inside = !inside;
+        }
+    }
+
+    inside
+}
+
+/// Signed area of a 2D ring, positive counter-clockwise.
+fn ring_area_2d(ring: &[(f64, f64)]) -> f64 {
     let mut area = 0.0;
 
-    for i in 0..points.len() {
-        let a = &points[i];
-        let b = &points[(i + 1) % points.len()];
-        area += a[0] * b[1] - b[0] * a[1];
+    for i in 0..ring.len() {
+        area += ring[i].0 * ring[(i + 1) % ring.len()].1 - ring[(i + 1) % ring.len()].0 * ring[i].1;
     }
 
     area / 2.0
+}
+
+/// Sign of a snapped plane distance: -1, 0 or 1.
+fn section_sign(distance: f64) -> i32 {
+    if distance > 0.0 {
+        1
+    } else if distance < 0.0 {
+        -1
+    } else {
+        0
+    }
+}
+
+/// True when the ring passes from one side of the plane to the other through the on-plane run starting at vertex i.
+fn section_flips(ring: &[usize], distance: &BTreeMap<usize, f64>, i: usize) -> bool {
+    let n = ring.len();
+    let mut before = 0;
+    let mut after = 0;
+
+    for k in 1..n {
+        if before != 0 {
+            break;
+        }
+
+        before = section_sign(distance[&ring[(i + n - k) % n]]);
+    }
+
+    for k in 1..n {
+        if after != 0 {
+            break;
+        }
+
+        after = section_sign(distance[&ring[(i + k) % n]]);
+    }
+
+    before * after < 0
+}
+
+/// Where the rings of one crossing face change side of the plane, keyed (v, v) for a vertex on the plane and (low, high) for a crossed edge, sorted along direction.
+fn section_events(
+    rings: &[Vec<usize>],
+    distance: &BTreeMap<usize, f64>,
+    points: &BTreeMap<usize, Point>,
+    direction: &Vector,
+    found: &mut BTreeMap<(usize, usize), Point>,
+) -> Vec<(usize, usize)> {
+    let mut events: Vec<(f64, (usize, usize))> = Vec::new();
+
+    for ring in rings {
+        let n = ring.len();
+
+        for i in 0..n {
+            let current = ring[i];
+            let following = ring[(i + 1) % n];
+            let side = section_sign(distance[&current]);
+
+            if side * section_sign(distance[&following]) < 0 {
+                let key = (current.min(following), current.max(following));
+                let ratio = distance[&key.0] / (distance[&key.0] - distance[&key.1]);
+                let point = &points[&key.0] + &(&(&points[&key.1] - &points[&key.0]) * ratio);
+                events.push(((&point - &points[&ring[0]]).dot(direction), key));
+                found.insert(key, point);
+            }
+
+            if side == 0
+                && section_sign(distance[&ring[(i + n - 1) % n]]) != 0
+                && section_flips(ring, distance, i)
+            {
+                found.insert((current, current), points[&current].clone());
+                events.push((
+                    (&points[&current] - &points[&ring[0]]).dot(direction),
+                    (current, current),
+                ));
+            }
+        }
+    }
+
+    events.sort_by(|x, y| x.0.total_cmp(&y.0).then(x.1.cmp(&y.1)));
+    let mut keys = Vec::new();
+
+    for event in &events {
+        keys.push(event.1);
+    }
+
+    keys
+}
+
+/// The walk from start along unused links, marking each link used.
+fn section_walk(
+    links: &BTreeMap<(usize, usize), Vec<(usize, usize)>>,
+    start: (usize, usize),
+    used: &mut BTreeSet<[usize; 4]>,
+) -> Vec<(usize, usize)> {
+    let mut chain = vec![start];
+
+    for _ in 0..links.len() {
+        let last = chain[chain.len() - 1];
+        let mut following = None;
+
+        for other in &links[&last] {
+            let link = [
+                last.min(*other).0,
+                last.min(*other).1,
+                last.max(*other).0,
+                last.max(*other).1,
+            ];
+
+            if following.is_none() && !used.contains(&link) {
+                following = Some(*other);
+            }
+        }
+
+        let Some(next) = following else {
+            break;
+        };
+
+        used.insert([
+            last.min(next).0,
+            last.min(next).1,
+            last.max(next).0,
+            last.max(next).1,
+        ]);
+        chain.push(next);
+    }
+
+    chain
+}
+
+/// The closed and the open chains of a section graph.
+struct SectionChains {
+    closed: Vec<Vec<(usize, usize)>>, // Loops, each ending on its first key.
+    open: Vec<Vec<(usize, usize)>>,   // Chains between two dead ends.
+}
+
+/// The chains of a section graph: the open ones from every dead end, then the closed ones round what is left, each closed on its first key.
+fn section_chains(links: &BTreeMap<(usize, usize), Vec<(usize, usize)>>) -> SectionChains {
+    let mut used: BTreeSet<[usize; 4]> = BTreeSet::new();
+    let mut chains = SectionChains {
+        closed: Vec::new(),
+        open: Vec::new(),
+    };
+
+    for (key, others) in links {
+        let chain = if others.len() == 1 {
+            section_walk(links, *key, &mut used)
+        } else {
+            Vec::new()
+        };
+
+        if chain.len() > 1 {
+            chains.open.push(chain);
+        }
+    }
+
+    for key in links.keys() {
+        let chain = section_walk(links, *key, &mut used);
+
+        if chain.len() > 3 && chain[0] == chain[chain.len() - 1] {
+            chains.closed.push(chain);
+        }
+    }
+
+    chains
+}
+
+/// The section graph: every pair of events of a face crossing the plane linked, faces on one side or in the plane skipped.
+fn section_links(
+    faces: &HashMap<usize, Vec<usize>>,
+    holes: &HashMap<usize, Vec<Vec<usize>>>,
+    distance: &BTreeMap<usize, f64>,
+    points: &BTreeMap<usize, Point>,
+    axis: &Vector,
+    found: &mut BTreeMap<(usize, usize), Point>,
+) -> BTreeMap<(usize, usize), Vec<(usize, usize)>> {
+    let mut links: BTreeMap<(usize, usize), Vec<(usize, usize)>> = BTreeMap::new();
+    let mut keys: Vec<usize> = faces.keys().copied().collect();
+    keys.sort();
+
+    for face in keys {
+        let vertices = &faces[&face];
+        let normal = newell_normal(&cut_points(vertices, points));
+        let rings = cut_rings(face, vertices, holes, &normal, points);
+        let mut low = 0;
+        let mut high = 0;
+
+        for ring in &rings {
+            for key in ring {
+                low = low.min(section_sign(distance[key]));
+                high = high.max(section_sign(distance[key]));
+            }
+        }
+
+        let mut direction = axis.cross(&normal);
+
+        if low == 0 || high == 0 || !direction.normalize_self() {
+            continue;
+        }
+
+        let events = section_events(&rings, distance, points, &direction, found);
+
+        for i in (0..events.len().saturating_sub(1)).step_by(2) {
+            links.entry(events[i]).or_default().push(events[i + 1]);
+            links.entry(events[i + 1]).or_default().push(events[i]);
+        }
+    }
+
+    links
+}
+
+/// The chains as polylines: closed loops turned counter-clockwise about the plane normal at even nesting depth and clockwise at odd, then the open chains.
+fn section_polylines(
+    chains: &SectionChains,
+    found: &BTreeMap<(usize, usize), Point>,
+    plane: &Plane,
+) -> Vec<Polyline> {
+    let frame = LoftFrame {
+        origin: plane.origin(),
+        xaxis: plane.x_axis(),
+        yaxis: plane.y_axis(),
+    };
+    let mut flat: Vec<Vec<(f64, f64)>> = Vec::new();
+    let mut loops: Vec<Vec<Point>> = Vec::new();
+
+    for chain in &chains.closed {
+        let mut loop_points = Vec::new();
+        let mut loop_flat = Vec::new();
+
+        for key in &chain[..chain.len() - 1] {
+            loop_points.push(found[key].clone());
+            loop_flat.push(loft_project(&frame, &found[key]));
+        }
+
+        loops.push(loop_points);
+        flat.push(loop_flat);
+    }
+
+    let mut section = Vec::new();
+
+    for i in 0..loops.len() {
+        let mut depth = 0;
+
+        for (j, other) in flat.iter().enumerate() {
+            if j != i && ring_inside_2d(flat[i][0], other) {
+                depth += 1;
+            }
+        }
+
+        if (ring_area_2d(&flat[i]) > 0.0) != (depth % 2 == 0) {
+            loops[i].reverse();
+        }
+
+        let first = loops[i][0].clone();
+        loops[i].push(first);
+        section.push(Polyline::new(loops[i].clone()));
+    }
+
+    for chain in &chains.open {
+        let mut open_points = Vec::new();
+
+        for key in chain {
+            open_points.push(found[key].clone());
+        }
+
+        section.push(Polyline::new(open_points));
+    }
+
+    section
+}
+
+/// Union-find root of a vertex key.
+fn arrangement_root(parent: &mut BTreeMap<usize, usize>, key: usize) -> usize {
+    let mut key = key;
+
+    for _ in 0..parent.len() {
+        if parent[&key] == key {
+            break;
+        }
+
+        let grand = parent[&parent[&key]];
+        parent.insert(key, grand);
+        key = grand;
+    }
+
+    key
 }
 
 /// Integer xy key of a point on the tolerance grid.
@@ -2285,6 +2585,187 @@ fn arrangement_key(point: &Point, tolerance: f64) -> (i64, i64) {
         (point[0] / tolerance).round() as i64,
         (point[1] / tolerance).round() as i64,
     )
+}
+
+/// The source of every edge: the input line of the split piece it lies on, -1 when none.
+fn arrangement_sources(
+    mesh: &Mesh,
+    pieces: &[Line],
+    sources: &[usize],
+    tolerance: f64,
+) -> BTreeMap<(usize, usize), f64> {
+    let mut lookup: BTreeMap<[i64; 4], usize> = BTreeMap::new();
+    let mut result = BTreeMap::new();
+
+    for i in 0..pieces.len() {
+        let start = arrangement_key(&pieces[i].start(), tolerance);
+        let end = arrangement_key(&pieces[i].end(), tolerance);
+        lookup.insert(
+            [
+                start.min(end).0,
+                start.min(end).1,
+                start.max(end).0,
+                start.max(end).1,
+            ],
+            sources[i],
+        );
+    }
+
+    for edge in mesh.edges() {
+        let start = arrangement_key(&mesh.vertex_point(edge.0).unwrap(), tolerance);
+        let end = arrangement_key(&mesh.vertex_point(edge.1).unwrap(), tolerance);
+        let source = match lookup.get(&[
+            start.min(end).0,
+            start.min(end).1,
+            start.max(end).0,
+            start.max(end).1,
+        ]) {
+            Some(source) => *source as f64,
+            None => -1.0,
+        };
+        result.insert(edge, source);
+    }
+
+    result
+}
+
+/// The component root of every vertex, the vertices joined along the face edges.
+fn arrangement_roots(mesh: &Mesh) -> BTreeMap<usize, usize> {
+    let mut parent: BTreeMap<usize, usize> = BTreeMap::new();
+    let mut roots: BTreeMap<usize, usize> = BTreeMap::new();
+
+    for key in mesh.vertices() {
+        parent.insert(key, key);
+    }
+
+    for edge in mesh.edges() {
+        let root = arrangement_root(&mut parent, edge.0);
+        let other = arrangement_root(&mut parent, edge.1);
+        parent.insert(root, other);
+    }
+
+    for key in mesh.vertices() {
+        roots.insert(key, arrangement_root(&mut parent, key));
+    }
+
+    roots
+}
+
+/// Faces sorted by winding: slivers under tolerance squared removed, every clockwise outer face of a component listed, every other face's xy ring kept with its component.
+fn arrangement_faces(
+    mesh: &mut Mesh,
+    roots: &BTreeMap<usize, usize>,
+    tolerance: f64,
+    rings: &mut BTreeMap<usize, Vec<(f64, f64)>>,
+    owner: &mut BTreeMap<usize, usize>,
+) -> Vec<usize> {
+    let mut outer = Vec::new();
+
+    for face in mesh.faces() {
+        let vertices = mesh.face_vertices(face).unwrap().clone();
+        let mut ring = Vec::new();
+
+        for key in &vertices {
+            let point = mesh.vertex_point(*key).unwrap();
+            ring.push((point[0], point[1]));
+        }
+
+        owner.insert(face, roots[&vertices[0]]);
+
+        if ring_area_2d(&ring) <= -tolerance * tolerance {
+            outer.push(face);
+        } else if ring_area_2d(&ring).abs() < tolerance * tolerance {
+            mesh.remove_face(face);
+        } else {
+            rings.insert(face, ring);
+        }
+    }
+
+    outer
+}
+
+/// Every outer face removed, made a hole of the face holding it, and the faces of a boundary-only component inside a face removed as a void.
+fn arrangement_holes(
+    mesh: &mut Mesh,
+    outer: &[usize],
+    rings: &BTreeMap<usize, Vec<(f64, f64)>>,
+    owner: &BTreeMap<usize, usize>,
+    lined: &BTreeSet<usize>,
+) {
+    let mut points: BTreeMap<usize, Point> = BTreeMap::new();
+    let mut voids: BTreeSet<usize> = BTreeSet::new();
+    let mut holes: BTreeMap<usize, Vec<Vec<usize>>> = BTreeMap::new();
+
+    for key in mesh.vertices() {
+        points.insert(key, mesh.vertex_point(key).unwrap());
+    }
+
+    for face in outer {
+        let first = &points[&mesh.face_vertices(*face).unwrap()[0]];
+
+        if lined.contains(&owner[face])
+            || arrangement_container((first[0], first[1]), owner[face], rings, owner, &voids)
+                .is_none()
+        {
+            continue;
+        }
+
+        for (other, component) in owner {
+            if *component == owner[face] && rings.contains_key(other) {
+                voids.insert(*other);
+            }
+        }
+    }
+
+    for face in outer {
+        let vertices = mesh.face_vertices(*face).unwrap().clone();
+        let first = &points[&vertices[0]];
+
+        if let Some(container) =
+            arrangement_container((first[0], first[1]), owner[face], rings, owner, &voids)
+        {
+            holes.entry(container).or_default().push(vertices);
+        }
+
+        mesh.remove_face(*face);
+    }
+
+    for face in &voids {
+        mesh.remove_face(*face);
+    }
+
+    for (face, rings) in &holes {
+        let mut piece = CutFace {
+            rings: vec![mesh.face_vertices(*face).unwrap().clone()],
+            parent: Some(*face),
+        };
+        piece.rings.extend(rings.iter().cloned());
+        mesh.set_face_holes(*face, rings.clone());
+        mesh.set_face_triangulation(*face, cut_triangulation(&piece, &points));
+    }
+}
+
+/// The smallest face of another component whose ring holds the point, none when no face does.
+fn arrangement_container(
+    point: (f64, f64),
+    component: usize,
+    rings: &BTreeMap<usize, Vec<(f64, f64)>>,
+    owner: &BTreeMap<usize, usize>,
+    skipped: &BTreeSet<usize>,
+) -> Option<usize> {
+    let mut container: Option<usize> = None;
+
+    for (face, ring) in rings {
+        if owner[face] != component
+            && !skipped.contains(face)
+            && ring_inside_2d(point, ring)
+            && container.is_none_or(|kept| ring_area_2d(ring) < ring_area_2d(&rings[&kept]))
+        {
+            container = Some(*face);
+        }
+    }
+
+    container
 }
 
 /// Snap distance of the plane test, 1e-9 of the bounding box diagonal.
@@ -2711,39 +3192,27 @@ impl Mesh {
         mesh
     }
 
-    /// Construct the planar faces of lines and boundary lines in xy split by Line::split_at_crossings, the outer face and faces under tolerance squared in area dropped; edge attribute line holds the index of the line an edge lies on, boundary lines numbered after lines, -1 when none.
+    /// Construct the planar faces of lines and boundary lines in xy split by Line::split_at_crossings: the outer face of every connected component and faces under tolerance squared in area dropped, a component inside a face becoming a hole of it, a void when it holds only boundary lines; edge attribute line holds the index of the line an edge lies on, boundary lines numbered after lines, -1 when none.
     pub fn from_arrangement(lines: &[Line], boundary: &[Line], tolerance: f64, merge: f64) -> Self {
-        let (pieces, sources) = Line::split_at_crossings(lines, boundary, tolerance, merge);
-        let mut mesh = Mesh::from_lines(&pieces, true, Some(tolerance * 0.1));
+        let (pieces, split) = Line::split_at_crossings(lines, boundary, tolerance, merge);
+        let mut mesh = Mesh::from_lines(&pieces, false, Some(tolerance * 0.1));
+        let sources = arrangement_sources(&mesh, &pieces, &split, tolerance);
+        let roots = arrangement_roots(&mesh);
+        let mut lined: BTreeSet<usize> = BTreeSet::new();
 
-        for face in mesh.faces() {
-            let mut points = Vec::new();
-
-            for key in mesh.face_vertices(face).unwrap().clone() {
-                points.push(mesh.vertex_point(key).unwrap());
-            }
-
-            if arrangement_area(&points).abs() < tolerance * tolerance {
-                mesh.remove_face(face);
+        for (edge, source) in &sources {
+            if *source < lines.len() as f64 {
+                lined.insert(roots[&edge.0]);
             }
         }
 
-        let mut lookup: BTreeMap<[i64; 4], usize> = BTreeMap::new();
-
-        for i in 0..pieces.len() {
-            let a = arrangement_key(&pieces[i].start(), tolerance);
-            let b = arrangement_key(&pieces[i].end(), tolerance);
-            lookup.insert([a.min(b).0, a.min(b).1, a.max(b).0, a.max(b).1], sources[i]);
-        }
+        let mut rings: BTreeMap<usize, Vec<(f64, f64)>> = BTreeMap::new();
+        let mut owner: BTreeMap<usize, usize> = BTreeMap::new();
+        let outer = arrangement_faces(&mut mesh, &roots, tolerance, &mut rings, &mut owner);
+        arrangement_holes(&mut mesh, &outer, &rings, &owner, &lined);
 
         for edge in mesh.edges() {
-            let a = arrangement_key(&mesh.vertex_point(edge.0).unwrap(), tolerance);
-            let b = arrangement_key(&mesh.vertex_point(edge.1).unwrap(), tolerance);
-            let line = match lookup.get(&[a.min(b).0, a.min(b).1, a.max(b).0, a.max(b).1]) {
-                Some(source) => *source as f64,
-                None => -1.0,
-            };
-            mesh.set_edge_attribute(edge, "line", line);
+            mesh.set_edge_attribute(edge, "line", sources[&edge]);
         }
 
         mesh
@@ -5693,52 +6162,40 @@ impl Mesh {
         result
     }
 
-    /// Return the closed loops where the plane cuts the mesh: outer loops counter-clockwise about the plane normal, holes clockwise; empty when the mesh does not reach the plane.
+    /// Return where the plane cuts the faces crossing it: closed loops first, outer loops counter-clockwise about the plane normal and holes clockwise, then the open chains of an open surface; faces lying in the plane are skipped; empty when the mesh does not cross the plane.
     pub fn section_by_plane(&self, plane: &Plane) -> Vec<Polyline> {
-        let below = self.cut_by_plane(&Plane::from_point_normal(
-            plane.origin(),
-            &plane.z_axis() * -1.0,
-            None,
-        ));
-        let mut loops = Vec::new();
+        let mut points: BTreeMap<usize, Point> = BTreeMap::new();
 
-        for face in below.faces() {
-            let mut rings = vec![below.face[&face].clone()];
-            let mut flat = true;
-
-            if let Some(holes) = below.face_holes.get(&face) {
-                rings.extend(holes.iter().cloned());
-            }
-
-            for ring in &rings {
-                for key in ring {
-                    let distance =
-                        (&below.vertex[key].position() - &plane.origin()).dot(&plane.z_axis());
-                    flat = flat && distance.abs() <= Tolerance::APPROXIMATION;
-                }
-            }
-
-            if !flat {
-                continue;
-            }
-
-            for (i, ring) in rings.iter().enumerate() {
-                let mut points = Vec::new();
-
-                for key in ring {
-                    points.push(below.vertex[key].position());
-                }
-
-                if (newell_normal(&points).dot(&plane.z_axis()) > 0.0) != (i == 0) {
-                    points.reverse();
-                }
-
-                points.push(points[0].clone());
-                loops.push(Polyline::new(points));
-            }
+        for (key, data) in &self.vertex {
+            points.insert(*key, data.position());
         }
 
-        loops
+        let tolerance = cut_tolerance(&points);
+        let mut distance: BTreeMap<usize, f64> = BTreeMap::new();
+
+        for (key, point) in &points {
+            let offset = (point - &plane.origin()).dot(&plane.z_axis());
+            distance.insert(
+                *key,
+                if offset.abs() <= tolerance {
+                    0.0
+                } else {
+                    offset
+                },
+            );
+        }
+
+        let mut found: BTreeMap<(usize, usize), Point> = BTreeMap::new();
+        let links = section_links(
+            &self.face,
+            &self.face_holes,
+            &distance,
+            &points,
+            &plane.z_axis(),
+            &mut found,
+        );
+
+        section_polylines(&section_chains(&links), &found, plane)
     }
 
     // ═══════════════════════════════════════════════════════════════════════════

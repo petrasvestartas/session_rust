@@ -478,6 +478,33 @@ pub fn run_line_split_at_crossings() -> TestResult {
     })
 }
 
+pub fn run_line_split_at_crossings_zero_length() -> TestResult {
+    MINI_TEST!("Split At Crossings Zero Length", {
+        use crate::Line;
+        use crate::Point;
+
+        let lines = vec![
+            Line::from_points(&Point::new(-2.0, 5.0, 0.0), &Point::new(12.0, 5.0, 0.0)),
+            Line::from_points(&Point::new(5.0, 5.0, 0.0), &Point::new(5.0, 5.0, 0.0)),
+        ];
+        let boundary = vec![
+            Line::from_points(&Point::new(0.0, 0.0, 0.0), &Point::new(10.0, 0.0, 0.0)),
+            Line::from_points(&Point::new(10.0, 0.0, 0.0), &Point::new(10.0, 10.0, 0.0)),
+            Line::from_points(&Point::new(10.0, 10.0, 0.0), &Point::new(0.0, 10.0, 0.0)),
+            Line::from_points(&Point::new(0.0, 10.0, 0.0), &Point::new(0.0, 0.0, 0.0)),
+        ];
+        let split = Line::split_at_crossings(&lines, &boundary, 0.01, 0.5);
+        let mut zero = 0;
+
+        for i in 0..split.1.len() {
+            zero += if split.1[i] == 1 { 1 } else { 0 };
+        }
+
+        MINI_CHECK!(split.0.len() == 7);
+        MINI_CHECK!(zero == 0);
+    })
+}
+
 REGISTER_MINI_TEST!(
     "Line",
     "Constructor",
@@ -544,4 +571,9 @@ REGISTER_MINI_TEST!(
     "Line",
     "Split At Crossings",
     crate::line_test::run_line_split_at_crossings
+);
+REGISTER_MINI_TEST!(
+    "Line",
+    "Split At Crossings Zero Length",
+    crate::line_test::run_line_split_at_crossings_zero_length
 );

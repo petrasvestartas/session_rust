@@ -1065,7 +1065,7 @@ impl Polyline {
         cut
     }
 
-    /// Return the loop closed with side i moved right of its direction in xy by distances[i], outwards for a counter-clockwise loop; corners mitred, the larger distance where two sides are parallel.
+    /// Return the loop closed with side i moved right of its direction in xy by distances[i], outwards for a counter-clockwise loop; corners mitred, the larger distance where two sides are parallel; empty for fewer than three corners or distances than sides.
     pub fn offset_sides(&self, distances: &[f64]) -> Polyline {
         let mut points = self.get_points();
 
@@ -1074,12 +1074,22 @@ impl Polyline {
         }
 
         let count = points.len();
+
+        if count < 3 || distances.len() < count {
+            return Polyline::new(Vec::new());
+        }
+
         let mut outward = Vec::new();
 
         for i in 0..count {
-            let next = &points[(i + 1) % count];
+            let following = &points[(i + 1) % count];
             outward.push(
-                Vector::new(next[1] - points[i][1], points[i][0] - next[0], 0.0).normalized(),
+                Vector::new(
+                    following[1] - points[i][1],
+                    points[i][0] - following[0],
+                    0.0,
+                )
+                .normalized(),
             );
         }
 
@@ -1088,16 +1098,19 @@ impl Polyline {
         for i in 0..count {
             let before = &outward[(i + count - 1) % count];
             let after = &outward[i];
-            let a = distances[(i + count - 1) % count];
-            let b = distances[i];
+            let moved_before = distances[(i + count - 1) % count];
+            let moved_after = distances[i];
             let cosine = before.dot(after);
 
-            if 1.0 - cosine * cosine < 1e-9 {
-                result.push(&points[i] + &(before * a.max(b)));
+            if 1.0 - cosine * cosine < Tolerance::ABSOLUTE {
+                result.push(&points[i] + &(before * moved_before.max(moved_after)));
             } else {
                 result.push(
-                    &(&points[i] + &(before * ((a - cosine * b) / (1.0 - cosine * cosine))))
-                        + &(after * ((b - cosine * a) / (1.0 - cosine * cosine))),
+                    &(&points[i]
+                        + &(before
+                            * ((moved_before - cosine * moved_after) / (1.0 - cosine * cosine))))
+                        + &(after
+                            * ((moved_after - cosine * moved_before) / (1.0 - cosine * cosine))),
                 );
             }
         }

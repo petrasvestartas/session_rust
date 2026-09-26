@@ -1,3 +1,4 @@
+use crate::tolerance::Tolerance;
 use crate::Polyline;
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -2883,17 +2884,19 @@ impl BooleanPolyline {
         })
     }
 
-    /// Compute the nonzero Vatti boolean of two sets of closed rings in xy, holes clockwise, with clip_type 0 intersection, 1 union, 2 a minus b; closed rings, outer counter-clockwise, holes clockwise.
+    /// Compute the nonzero Vatti boolean of two sets of closed rings in xy with clip_type 0 intersection, 1 union, 2 a minus b, each set first turned outer counter-clockwise and holes clockwise by nesting depth; returns closed rings, outer counter-clockwise and holes clockwise, where compute returns open ones.
     pub fn compute_regions(a: &[Polyline], b: &[Polyline], clip_type: i32) -> Vec<Polyline> {
+        let rings_a = v_oriented(a);
+        let rings_b = v_oriented(b);
         let mut ca = Vec::new();
         let mut cb = Vec::new();
 
-        for ring in a {
-            ca.extend_from_slice(&ring.coords);
+        for ring in &rings_a {
+            ca.extend_from_slice(ring);
         }
 
-        for ring in b {
-            cb.extend_from_slice(&ring.coords);
+        for ring in &rings_b {
+            cb.extend_from_slice(ring);
         }
 
         let bool_scale = v_bool_scale(&ca, ca.len() / 3, &cb, cb.len() / 3);
@@ -2902,14 +2905,12 @@ impl BooleanPolyline {
             let sc = &mut *cell.borrow_mut();
             sc.reset(ca.len() / 3 + cb.len() / 3);
 
-            for ring in a {
-                let n = v_strip_closing(&ring.coords, ring.coords.len() / 3);
-                v_add_path_from_doubles(sc, &ring.coords, n, 0, bool_scale);
+            for ring in &rings_a {
+                v_add_path_from_doubles(sc, ring, ring.len() / 3, 0, bool_scale);
             }
 
-            for ring in b {
-                let n = v_strip_closing(&ring.coords, ring.coords.len() / 3);
-                v_add_path_from_doubles(sc, &ring.coords, n, 1, bool_scale);
+            for ring in &rings_b {
+                v_add_path_from_doubles(sc, ring, ring.len() / 3, 1, bool_scale);
             }
 
             if !v_execute_internal(sc, clip_type) {
@@ -3167,4 +3168,66 @@ fn v_flush(cur: &mut Vec<f64>, result: &mut Vec<Polyline>) {
     }
 
     cur.clear();
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Ring sets
+// ═══════════════════════════════════════════════════════════════════════════
+/// Signed xy area of the first n points of flat coordinates, positive counter-clockwise.
+fn v_ring_area(c: &[f64], n: usize) -> f64 {
+    let mut area = 0.0;
+
+    for i in 0..n {
+        area += c[i * 3] * c[((i + 1) % n) * 3 + 1] - c[((i + 1) % n) * 3] * c[i * 3 + 1];
+    }
+
+    area / 2.0
+}
+
+/// The rings of one operand as flat coordinates without closing points, outer counter-clockwise and holes clockwise by how many other rings hold a point just inside each.
+fn v_oriented(rings: &[Polyline]) -> Vec<Vec<f64>> {
+    let mut flat: Vec<Vec<f64>> = Vec::new();
+
+    for ring in rings {
+        let n = v_strip_closing(&ring.coords, ring.coords.len() / 3);
+
+        if n >= 3 {
+            flat.push(ring.coords[..n * 3].to_vec());
+        }
+    }
+
+    let mut oriented = flat.clone();
+
+    for i in 0..flat.len() {
+        let n = flat[i].len() / 3;
+        let area = v_ring_area(&flat[i], n);
+        let dx = flat[i][3] - flat[i][0];
+        let dy = flat[i][4] - flat[i][1];
+        let side = if area > 0.0 {
+            Tolerance::RELATIVE
+        } else {
+            -Tolerance::RELATIVE
+        };
+        let px = (flat[i][0] + flat[i][3]) * 0.5 - dy * side;
+        let py = (flat[i][1] + flat[i][4]) * 0.5 + dx * side;
+        let mut depth = 0;
+
+        for (j, other) in flat.iter().enumerate() {
+            if j != i && v_point_in_poly(other, other.len() / 3, px, py) {
+                depth += 1;
+            }
+        }
+
+        if (area > 0.0) == (depth % 2 == 0) {
+            continue;
+        }
+
+        for k in 0..n {
+            for axis in 0..3 {
+                oriented[i][k * 3 + axis] = flat[i][(n - 1 - k) * 3 + axis];
+            }
+        }
+    }
+
+    oriented
 }

@@ -261,6 +261,43 @@ pub fn run_mesh_from_arrangement() -> TestResult {
     })
 }
 
+pub fn run_mesh_from_arrangement_components() -> TestResult {
+    MINI_TEST!("From Arrangement Components", {
+        use crate::Line;
+        use crate::Mesh;
+        use crate::Point;
+
+        let lines = vec![
+            Line::from_points(&Point::new(-2.0, 8.5, 0.0), &Point::new(12.0, 8.5, 0.0)),
+            Line::from_points(&Point::new(25.0, -2.0, 0.0), &Point::new(25.0, 12.0, 0.0)),
+        ];
+        let boundary = vec![
+            Line::from_points(&Point::new(0.0, 0.0, 0.0), &Point::new(10.0, 0.0, 0.0)),
+            Line::from_points(&Point::new(10.0, 0.0, 0.0), &Point::new(10.0, 10.0, 0.0)),
+            Line::from_points(&Point::new(10.0, 10.0, 0.0), &Point::new(0.0, 10.0, 0.0)),
+            Line::from_points(&Point::new(0.0, 10.0, 0.0), &Point::new(0.0, 0.0, 0.0)),
+            Line::from_points(&Point::new(20.0, 0.0, 0.0), &Point::new(30.0, 0.0, 0.0)),
+            Line::from_points(&Point::new(30.0, 0.0, 0.0), &Point::new(30.0, 10.0, 0.0)),
+            Line::from_points(&Point::new(30.0, 10.0, 0.0), &Point::new(20.0, 10.0, 0.0)),
+            Line::from_points(&Point::new(20.0, 10.0, 0.0), &Point::new(20.0, 0.0, 0.0)),
+            Line::from_points(&Point::new(3.0, 3.0, 0.0), &Point::new(7.0, 3.0, 0.0)),
+            Line::from_points(&Point::new(7.0, 3.0, 0.0), &Point::new(7.0, 7.0, 0.0)),
+            Line::from_points(&Point::new(7.0, 7.0, 0.0), &Point::new(3.0, 7.0, 0.0)),
+            Line::from_points(&Point::new(3.0, 7.0, 0.0), &Point::new(3.0, 3.0, 0.0)),
+        ];
+        let mesh = Mesh::from_arrangement(&lines, &boundary, 0.01, 0.5);
+        let mut rings = 0;
+
+        for holes in mesh.get_face_holes().values() {
+            rings += holes.len();
+        }
+
+        MINI_CHECK!(mesh.number_of_faces() == 4);
+        MINI_CHECK!(mesh.get_face_holes().len() == 1);
+        MINI_CHECK!(rings == 1);
+    })
+}
+
 pub fn run_mesh_from_polygon_with_holes() -> TestResult {
     MINI_TEST!("From Polygon With Holes", {
         use crate::Mesh;
@@ -1919,6 +1956,70 @@ pub fn run_mesh_section_by_plane() -> TestResult {
     })
 }
 
+pub fn run_mesh_section_by_plane_coplanar() -> TestResult {
+    MINI_TEST!("Section By Plane Coplanar", {
+        use crate::Mesh;
+        use crate::Plane;
+        use crate::Point;
+        use crate::Vector;
+
+        let bx = Mesh::create_box(2.0, 2.0, 2.0);
+        let top = bx.section_by_plane(&Plane::from_point_normal(
+            Point::new(0.0, 0.0, 1.0),
+            Vector::new(0.0, 0.0, 1.0),
+            None,
+        ));
+        let bottom = bx.section_by_plane(&Plane::from_point_normal(
+            Point::new(0.0, 0.0, -1.0),
+            Vector::new(0.0, 0.0, 1.0),
+            None,
+        ));
+        let flipped = bx.section_by_plane(&Plane::from_point_normal(
+            Point::new(0.0, 0.0, 1.0),
+            Vector::new(0.0, 0.0, -1.0),
+            None,
+        ));
+
+        MINI_CHECK!(top.is_empty());
+        MINI_CHECK!(bottom.is_empty());
+        MINI_CHECK!(flipped.is_empty());
+    })
+}
+
+pub fn run_mesh_section_by_plane_open() -> TestResult {
+    MINI_TEST!("Section By Plane Open", {
+        use crate::Mesh;
+        use crate::Plane;
+        use crate::Point;
+        use crate::Vector;
+
+        let mut mesh = Mesh::create_box(2.0, 2.0, 2.0);
+        let low_start = mesh.add_vertex(Point::new(5.0, 0.0, -1.0), None);
+        let low_corner = mesh.add_vertex(Point::new(7.0, 0.0, -1.0), None);
+        let low_end = mesh.add_vertex(Point::new(7.0, 2.0, -1.0), None);
+        let high_start = mesh.add_vertex(Point::new(5.0, 0.0, 1.0), None);
+        let high_corner = mesh.add_vertex(Point::new(7.0, 0.0, 1.0), None);
+        let high_end = mesh.add_vertex(Point::new(7.0, 2.0, 1.0), None);
+        MINI_CHECK!(mesh
+            .add_face(vec![low_start, low_corner, high_corner, high_start], None)
+            .is_some());
+        MINI_CHECK!(mesh
+            .add_face(vec![low_corner, low_end, high_end, high_corner], None)
+            .is_some());
+        let section = mesh.section_by_plane(&Plane::from_point_normal(
+            Point::new(0.0, 0.0, 0.0),
+            Vector::new(0.0, 0.0, 1.0),
+            None,
+        ));
+
+        MINI_CHECK!(section.len() == 2);
+        MINI_CHECK!(section[0].is_closed());
+        MINI_CHECK!(section[0].point_count() == 5);
+        MINI_CHECK!(!section[1].is_closed());
+        MINI_CHECK!(section[1].point_count() == 3);
+    })
+}
+
 pub fn run_mesh_volume_far_from_origin() -> TestResult {
     MINI_TEST!("Volume Far From Origin", {
         use crate::Mesh;
@@ -3033,6 +3134,11 @@ REGISTER_MINI_TEST!(
 );
 REGISTER_MINI_TEST!(
     "Mesh",
+    "From Arrangement Components",
+    crate::mesh_test::run_mesh_from_arrangement_components
+);
+REGISTER_MINI_TEST!(
+    "Mesh",
     "From Polygon With Holes",
     crate::mesh_test::run_mesh_from_polygon_with_holes
 );
@@ -3094,6 +3200,16 @@ REGISTER_MINI_TEST!(
     "Mesh",
     "Section By Plane",
     crate::mesh_test::run_mesh_section_by_plane
+);
+REGISTER_MINI_TEST!(
+    "Mesh",
+    "Section By Plane Coplanar",
+    crate::mesh_test::run_mesh_section_by_plane_coplanar
+);
+REGISTER_MINI_TEST!(
+    "Mesh",
+    "Section By Plane Open",
+    crate::mesh_test::run_mesh_section_by_plane_open
 );
 REGISTER_MINI_TEST!(
     "Mesh",

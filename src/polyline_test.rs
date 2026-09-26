@@ -1222,6 +1222,26 @@ pub fn run_polyline_offset_sides() -> TestResult {
     })
 }
 
+pub fn run_polyline_offset_sides_degenerate() -> TestResult {
+    MINI_TEST!("Offset Sides Degenerate", {
+        use crate::Point;
+        use crate::Polyline;
+
+        let square = Polyline::new(vec![
+            Point::new(0.0, 0.0, 0.0),
+            Point::new(2.0, 0.0, 0.0),
+            Point::new(2.0, 2.0, 0.0),
+            Point::new(0.0, 2.0, 0.0),
+            Point::new(0.0, 0.0, 0.0),
+        ]);
+        let empty = Polyline::new(Vec::new()).offset_sides(&[1.0]);
+        let short_distances = square.offset_sides(&[1.0, 1.0]);
+
+        MINI_CHECK!(empty.point_count() == 0);
+        MINI_CHECK!(short_distances.point_count() == 0);
+    })
+}
+
 REGISTER_MINI_TEST!(
     "Polyline",
     "Constructor",
@@ -1481,4 +1501,9 @@ REGISTER_MINI_TEST!(
     "Polyline",
     "Offset Sides",
     crate::polyline_test::run_polyline_offset_sides
+);
+REGISTER_MINI_TEST!(
+    "Polyline",
+    "Offset Sides Degenerate",
+    crate::polyline_test::run_polyline_offset_sides_degenerate
 );

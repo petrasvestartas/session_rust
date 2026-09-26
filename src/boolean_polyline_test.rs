@@ -460,6 +460,45 @@ pub fn run_boolean_polyline_regions() -> TestResult {
     })
 }
 
+pub fn run_boolean_polyline_regions_orientation() -> TestResult {
+    MINI_TEST!("Regions Orientation", {
+        use crate::BooleanPolyline;
+        use crate::Plane;
+        use crate::Point;
+        use crate::Polyline;
+        use crate::Vector;
+
+        let plane = Plane::xy_plane();
+        let outer = Polyline::rectangle(
+            &Point::new(0.0, 0.0, 0.0),
+            &Vector::new(1.0, 0.0, 0.0),
+            &Vector::new(0.0, 1.0, 0.0),
+            10.0,
+            10.0,
+            true,
+        );
+        let inner = Polyline::rectangle(
+            &Point::new(3.0, 3.0, 0.0),
+            &Vector::new(1.0, 0.0, 0.0),
+            &Vector::new(0.0, 1.0, 0.0),
+            4.0,
+            4.0,
+            true,
+        );
+        let frame = BooleanPolyline::compute_regions(&[outer.clone(), inner.clone()], &[], 1);
+        let turned = BooleanPolyline::compute_regions(&[outer.reversed(), inner], &[], 1);
+        let mut clockwise = 0;
+
+        for ring in &frame {
+            clockwise += if ring.is_clockwise(&plane) { 1 } else { 0 };
+        }
+
+        MINI_CHECK!(frame.len() == 2);
+        MINI_CHECK!(clockwise == 1);
+        MINI_CHECK!(turned.len() == 2);
+    })
+}
+
 pub fn run_boolean_polyline_open_horizontal_line_vs_unit_square() -> TestResult {
     MINI_TEST!("Horizontal Line Vs Unit Square", {
         use crate::BooleanPolyline;
@@ -600,6 +639,11 @@ REGISTER_MINI_TEST!(
     "Boolean Polyline",
     "Regions",
     crate::boolean_polyline_test::run_boolean_polyline_regions
+);
+REGISTER_MINI_TEST!(
+    "Boolean Polyline",
+    "Regions Orientation",
+    crate::boolean_polyline_test::run_boolean_polyline_regions_orientation
 );
 REGISTER_MINI_TEST!(
     "Boolean Polyline Open",
