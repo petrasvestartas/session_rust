@@ -177,7 +177,7 @@ pub struct Objects {
     pub nurbscurves: Collection<Rc<NurbsCurve>>,     // NURBS curves.
     pub nurbssurfaces: Collection<Rc<NurbsSurface>>, // NURBS surfaces.
     // SESSION_VIEWER
-    #[serde(default)]
+    #[serde(skip)]
     pub nurbssurfacetrimmeds: Vec<Rc<NurbsSurfaceTrimmed>>,
     pub breps: Collection<Rc<BRep>>,       // BReps.
     pub elements: Collection<Rc<Element>>, // Elements.

@@ -397,22 +397,7 @@ impl<E: Keyed> Collection<E> {
                 self.count -= 1;
             } else {
                 if w != r {
-                    self.items.swap(w, r);
-                    self.dead.swap(w, r);
-                    self.tombs.remove(&r);
-
-                    for tomb in &pins {
-                        tomb.slot.set(w);
-                    }
-
-                    if !pins.is_empty() {
-                        self.tombs
-                            .insert(w, pins.iter().map(Rc::downgrade).collect());
-                    }
-
-                    if !self.dead[w] {
-                        self.slots.insert(self.items[w].key().to_string(), w);
-                    }
+                    self._move(r, w, &pins);
                 }
 
                 if self.dead[w] {
@@ -447,6 +432,29 @@ impl<E: Keyed> Collection<E> {
         }
 
         self.compact_step(usize::MAX);
+    }
+
+    // ═══════════════════════════════════════════════════════════════════════════
+    // Details
+    // ═══════════════════════════════════════════════════════════════════════════
+    /// Move the entry of slot r down to slot w with its dead flag and the pins a record holds.
+    fn _move(&mut self, r: usize, w: usize, pins: &[Rc<Tomb>]) {
+        self.items.swap(w, r);
+        self.dead.swap(w, r);
+        self.tombs.remove(&r);
+
+        for tomb in pins {
+            tomb.slot.set(w);
+        }
+
+        if !pins.is_empty() {
+            self.tombs
+                .insert(w, pins.iter().map(Rc::downgrade).collect());
+        }
+
+        if !self.dead[w] {
+            self.slots.insert(self.items[w].key().to_string(), w);
+        }
     }
 }
 

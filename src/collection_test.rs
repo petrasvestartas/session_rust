@@ -16,7 +16,11 @@ pub fn run_collection_constructor() -> TestResult {
         points.push(Rc::clone(&a));
         points.push(Rc::clone(&b));
         points.push(Rc::clone(&c));
-        let iterated: Vec<Rc<Point>> = points.iter().cloned().collect();
+        let mut iterated: Vec<Rc<Point>> = Vec::new();
+
+        for p in &points {
+            iterated.push(Rc::clone(p));
+        }
 
         MINI_CHECK!(points.len() == 3);
         MINI_CHECK!(Rc::ptr_eq(&points[0], &a) && Rc::ptr_eq(&points[1], &b));
@@ -168,12 +172,16 @@ pub fn run_collection_compact_step() -> TestResult {
             }
 
             exact &= points.len() == expected.len();
-            exact &= points.iter().zip(&expected).all(|(p, q)| Rc::ptr_eq(p, q));
+
+            for (p, q) in points.iter().zip(&expected) {
+                exact &= Rc::ptr_eq(p, q);
+            }
 
             for p in &points {
-                exact &= points
-                    .get_slot(p.guid())
-                    .is_some_and(|s| Rc::ptr_eq(points.get_item(s), p));
+                match points.get_slot(p.guid()) {
+                    Some(s) => exact &= Rc::ptr_eq(points.get_item(s), p),
+                    None => exact = false,
+                }
             }
 
             if !points.is_compacting() {

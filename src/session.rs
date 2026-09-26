@@ -781,6 +781,34 @@ fn ray_mesh(ray: &Line, mesh: &Mesh, tolerance: f64, placement: &Xform) -> Optio
     Some(placement.transform_point(hits.first()?))
 }
 
+/// The vertices of a BRep and a 3x3 sample of each of its surfaces.
+fn brep_points(brep: &BRep) -> Vec<Point> {
+    let mut points: Vec<Point> = Vec::new();
+
+    for vertex in &brep.m_vertices {
+        points.push(vertex.point.clone());
+    }
+
+    for surface in &brep.m_surfaces {
+        let (Some((u0, u1)), Some((v0, v1))) = (surface.domain(0), surface.domain(1)) else {
+            continue;
+        };
+
+        for i in 0..=2usize {
+            for j in 0..=2usize {
+                let u = u0 + (u1 - u0) * i as f64 / 2.0;
+                let v = v0 + (v1 - v0) * j as f64 / 2.0;
+
+                if let Some(point) = surface.point_at(u, v) {
+                    points.push(point);
+                }
+            }
+        }
+    }
+
+    points
+}
+
 /// The points whose box bounds a geometry: vertices, control points or surface samples.
 fn box_points(geometry: &Geometry) -> Vec<Point> {
     let mut points: Vec<Point> = Vec::new();
@@ -799,29 +827,7 @@ fn box_points(geometry: &Geometry) -> Vec<Point> {
             }
         }
 
-        Geometry::BRep(brep) => {
-            for vertex in &brep.m_vertices {
-                points.push(vertex.point.clone());
-            }
-
-            for surface in &brep.m_surfaces {
-                let (Some((u0, u1)), Some((v0, v1))) = (surface.domain(0), surface.domain(1))
-                else {
-                    continue;
-                };
-
-                for i in 0..=2usize {
-                    for j in 0..=2usize {
-                        let u = u0 + (u1 - u0) * i as f64 / 2.0;
-                        let v = v0 + (v1 - v0) * j as f64 / 2.0;
-
-                        if let Some(point) = surface.point_at(u, v) {
-                            points.push(point);
-                        }
-                    }
-                }
-            }
-        }
+        Geometry::BRep(brep) => points = brep_points(brep),
 
         Geometry::NurbsCurve(nurbscurve) => {
             for i in 0..nurbscurve.cv_count() {
@@ -997,6 +1003,55 @@ where
         .get(item.key())
         .and_then(T::from_geometry)
         .unwrap_or(item.as_ref())
+}
+
+/// Append the live entries of the geometry list of that name from slot `start` for at most `work` slots, each as its lookup entry; returns the end slot and the slot count.
+fn emit_geometry(
+    objects: &Objects,
+    lookup: &HashMap<String, Geometry>,
+    name: &str,
+    tag: u32,
+    start: usize,
+    work: usize,
+    buffer: &mut Vec<u8>,
+) -> (usize, usize) {
+    use prost::Message;
+
+    match name {
+        "points" => emit(&objects.points, tag, start, work, buffer, |item| {
+            truth(lookup, item).to_proto().encode_to_vec()
+        }),
+        "lines" => emit(&objects.lines, tag, start, work, buffer, |item| {
+            truth(lookup, item).to_proto().encode_to_vec()
+        }),
+        "planes" => emit(&objects.planes, tag, start, work, buffer, |item| {
+            truth(lookup, item).to_proto().encode_to_vec()
+        }),
+        "bboxes" => emit(&objects.bboxes, tag, start, work, buffer, |item| {
+            truth(lookup, item).to_proto().encode_to_vec()
+        }),
+        "polylines" => emit(&objects.polylines, tag, start, work, buffer, |item| {
+            truth(lookup, item).to_proto().encode_to_vec()
+        }),
+        "pointclouds" => emit(&objects.pointclouds, tag, start, work, buffer, |item| {
+            truth(lookup, item).to_proto().encode_to_vec()
+        }),
+        "meshes" => emit(&objects.meshes, tag, start, work, buffer, |item| {
+            truth(lookup, item).to_proto().encode_to_vec()
+        }),
+        "nurbscurves" => emit(&objects.nurbscurves, tag, start, work, buffer, |item| {
+            truth(lookup, item).to_proto().encode_to_vec()
+        }),
+        "nurbssurfaces" => emit(&objects.nurbssurfaces, tag, start, work, buffer, |item| {
+            truth(lookup, item).to_proto().encode_to_vec()
+        }),
+        "breps" => emit(&objects.breps, tag, start, work, buffer, |item| {
+            truth(lookup, item).to_proto().encode_to_vec()
+        }),
+        _ => emit(&objects.elements, tag, start, work, buffer, |item| {
+            truth(lookup, item).to_proto().encode_to_vec()
+        }),
+    }
 }
 
 /// The name and guid fields of an Objects message.
@@ -1718,33 +1773,10 @@ impl Session {
         }
 
         if self._is_live(&name) {
-            self.node_lookup.insert(name.clone(), Rc::clone(node));
+            self.node_lookup.insert(name, Rc::clone(node));
         }
 
-        if self.history.current.is_none() {
-            self.history.dropped += usize::from(ghost.is_some());
-
-            return;
-        }
-
-        let tomb = self._node_tomb(ghost.as_ref().unwrap_or(node));
-        let color = node.borrow().color.clone();
-        let dead_before = was_dead || ghost.is_none();
-        self.history.record(
-            Op::Tree(TreeOp::new(
-                name.clone(),
-                Rc::clone(node),
-                tomb,
-                ghost,
-                name.clone(),
-                name,
-                color.clone(),
-                color,
-                dead_before,
-                false,
-            )),
-            RECORD,
-        );
+        self._record_add(node, ghost, was_dead);
     }
 
     /// Create a named group (TreeNode) and add it to the root of the tree.
@@ -2634,10 +2666,8 @@ impl Session {
     }
 
     /// Read from a JSON file.
-    pub fn file_json_load(filename: &str) -> Self {
-        let json = fs::read_to_string(filename).expect("Failed to read JSON file");
-
-        Self::jsonload(&json).expect("Failed to parse Session JSON")
+    pub fn file_json_load(filename: &str) -> Result<Self, Box<dyn std::error::Error>> {
+        Self::jsonload(&fs::read_to_string(filename)?)
     }
 
     // ═══════════════════════════════════════════════════════════════════════════
@@ -2760,10 +2790,8 @@ impl Session {
     }
 
     /// Read from a protobuf file.
-    pub fn pb_load(filename: &str) -> Self {
-        let data = fs::read(filename).expect("Failed to read protobuf file");
-
-        Self::pb_loads(&data).expect("Failed to parse protobuf")
+    pub fn pb_load(filename: &str) -> Result<Self, Box<dyn std::error::Error>> {
+        Self::pb_loads(&fs::read(filename)?)
     }
 
     // ═══════════════════════════════════════════════════════════════════════════
@@ -2823,23 +2851,9 @@ impl Session {
             return Err(guid);
         }
 
-        let attribute = format!("{type_prefix}_{}", obj.name());
         let slot = push(&mut self.objects, &obj);
-
-        match obj {
-            Item::Geometry(geometry) => {
-                self.lookup.insert(guid.clone(), geometry);
-            }
-
-            Item::Component(component) => {
-                self.component_lookup.insert(guid.clone(), component);
-            }
-
-            Item::InstanceRef(instance) => {
-                self.instance_lookup.insert(guid.clone(), instance);
-            }
-        }
-
+        let attribute = format!("{type_prefix}_{}", obj.name());
+        self._hold(&guid, obj);
         self.graph.add_node(&guid, &attribute);
         self.bvh_cache_dirty = true;
         let node = TreeNode::new(&guid);
@@ -3009,6 +3023,40 @@ impl Session {
         tomb
     }
 
+    /// Record a tree add of node, which left ghost at its old parent or revived when was_dead; outside a transaction it only counts a dropped move.
+    fn _record_add(
+        &mut self,
+        node: &Rc<RefCell<TreeNode>>,
+        ghost: Option<Rc<RefCell<TreeNode>>>,
+        was_dead: bool,
+    ) {
+        if self.history.current.is_none() {
+            self.history.dropped += usize::from(ghost.is_some());
+
+            return;
+        }
+
+        let name = node.borrow().name.clone();
+        let tomb = self._node_tomb(ghost.as_ref().unwrap_or(node));
+        let color = node.borrow().color.clone();
+        let dead_before = was_dead || ghost.is_none();
+        self.history.record(
+            Op::Tree(TreeOp::new(
+                name.clone(),
+                Rc::clone(node),
+                tomb,
+                ghost,
+                name.clone(),
+                name,
+                color.clone(),
+                color,
+                dead_before,
+                false,
+            )),
+            RECORD,
+        );
+    }
+
     /// A slot-only tomb on the live slot of guid in the list of that name, reused while a record still holds it; a map-only entry is pushed first.
     fn _half(&mut self, definition: bool, collection: &str, guid: &str) -> Option<Rc<Tomb>> {
         let item = if definition {
@@ -3115,27 +3163,7 @@ impl Session {
             };
 
             if phase < 26 {
-                let objects = if phase < 13 {
-                    &mut self.objects
-                } else {
-                    &mut self.definitions
-                };
-                let mut spent = 0;
-                let mut done = true;
-
-                if let Some(list) = list_mut(objects, COLLECTIONS[phase % 13].0) {
-                    if list.number_of_dead() > 0 || list.is_compacting() {
-                        spent = list.compact_step(work);
-                        done = !list.is_compacting();
-                    }
-                }
-
-                work -= spent.min(work);
-
-                if done {
-                    self.purging = Some(phase + 1);
-                }
-
+                work = self._purge_list(phase, work);
                 continue;
             }
 
@@ -3166,6 +3194,30 @@ impl Session {
         }
 
         work
+    }
+
+    /// Compact the list of a purge phase (objects below 13, definitions from 13) for at most `work` slots, stepping to the next phase once it is done; returns the work left.
+    fn _purge_list(&mut self, phase: usize, work: usize) -> usize {
+        let objects = if phase < 13 {
+            &mut self.objects
+        } else {
+            &mut self.definitions
+        };
+        let mut spent = 0;
+        let mut done = true;
+
+        if let Some(list) = list_mut(objects, COLLECTIONS[phase % 13].0) {
+            if list.number_of_dead() > 0 || list.is_compacting() {
+                spent = list.compact_step(work);
+                done = !list.is_compacting();
+            }
+        }
+
+        if done {
+            self.purging = Some(phase + 1);
+        }
+
+        work - spent.min(work)
     }
 
     /// Advance a checkpoint writer for at most `work` units; true once its message is complete.
@@ -3217,43 +3269,10 @@ impl Session {
         let start = writer.cursor;
         let buffer = &mut writer.sections[section];
         let (end, total) = match COLLECTIONS[phase].0 {
-            "points" => emit(&objects.points, tag, start, work, buffer, |item| {
-                truth(lookup, item).to_proto().encode_to_vec()
-            }),
-            "lines" => emit(&objects.lines, tag, start, work, buffer, |item| {
-                truth(lookup, item).to_proto().encode_to_vec()
-            }),
-            "planes" => emit(&objects.planes, tag, start, work, buffer, |item| {
-                truth(lookup, item).to_proto().encode_to_vec()
-            }),
-            "bboxes" => emit(&objects.bboxes, tag, start, work, buffer, |item| {
-                truth(lookup, item).to_proto().encode_to_vec()
-            }),
-            "polylines" => emit(&objects.polylines, tag, start, work, buffer, |item| {
-                truth(lookup, item).to_proto().encode_to_vec()
-            }),
-            "pointclouds" => emit(&objects.pointclouds, tag, start, work, buffer, |item| {
-                truth(lookup, item).to_proto().encode_to_vec()
-            }),
-            "meshes" => emit(&objects.meshes, tag, start, work, buffer, |item| {
-                truth(lookup, item).to_proto().encode_to_vec()
-            }),
-            "nurbscurves" => emit(&objects.nurbscurves, tag, start, work, buffer, |item| {
-                truth(lookup, item).to_proto().encode_to_vec()
-            }),
-            "nurbssurfaces" => emit(&objects.nurbssurfaces, tag, start, work, buffer, |item| {
-                truth(lookup, item).to_proto().encode_to_vec()
-            }),
-            "breps" => emit(&objects.breps, tag, start, work, buffer, |item| {
-                truth(lookup, item).to_proto().encode_to_vec()
-            }),
-            "elements" => emit(&objects.elements, tag, start, work, buffer, |item| {
-                truth(lookup, item).to_proto().encode_to_vec()
-            }),
             "components" => emit(&objects.components, tag, start, work, buffer, |item| {
                 item.to_proto().encode_to_vec()
             }),
-            _ => emit(&objects.instances, tag, start, work, buffer, |item| {
+            "instances" => emit(&objects.instances, tag, start, work, buffer, |item| {
                 let held = self
                     .instance_lookup
                     .get(item.guid())
@@ -3261,6 +3280,7 @@ impl Session {
 
                 held.unwrap_or(item).to_proto().encode_to_vec()
             }),
+            name => emit_geometry(objects, lookup, name, tag, start, work, buffer),
         };
         writer.cursor = end;
 
@@ -3274,21 +3294,9 @@ impl Session {
 
     /// Write the live tree depth first from an explicit stack, a finished node appended to its parent; returns the children examined.
     fn _write_tree(&self, writer: &mut Checkpoint, work: usize) -> usize {
-        use prost::Message;
-
         if writer.cursor == 0 {
             writer.cursor = 1;
-            let guid = if self.tree.has_guid() {
-                self.tree.guid().to_string()
-            } else {
-                String::new()
-            };
-            writer.sections[2] = crate::proto::Tree {
-                guid,
-                name: self.tree.name.clone(),
-                root: None,
-            }
-            .encode_to_vec();
+            writer.sections[2] = self._tree_head();
 
             if let Some(root) = self.tree.root() {
                 writer.stack.push(Frame::new(root));
@@ -3336,6 +3344,24 @@ impl Session {
         }
 
         spent
+    }
+
+    /// The guid and name fields of the Tree message.
+    fn _tree_head(&self) -> Vec<u8> {
+        use prost::Message;
+
+        let guid = if self.tree.has_guid() {
+            self.tree.guid().to_string()
+        } else {
+            String::new()
+        };
+
+        crate::proto::Tree {
+            guid,
+            name: self.tree.name.clone(),
+            root: None,
+        }
+        .encode_to_vec()
     }
 
     /// Write the graph head, then the vertices in name order after the last key written, at most work per call; returns the vertices written.
@@ -3489,27 +3515,7 @@ impl Session {
     /// Write the non-identity xforms of guids outside order() in guid order, after a scan of xforms in slices of `work` that runs only when order() missed some; returns the entries examined or written.
     fn _write_rest(&self, writer: &mut Checkpoint, work: usize) -> usize {
         if writer.hits < self.xforms.len() {
-            let start = writer.cursor;
-            let end = self.xforms.len().min(start.saturating_add(work));
-
-            for (guid, xform) in self.xforms.iter().skip(start).take(end - start) {
-                let ordered = self.lookup.get(guid).is_some_and(|geometry| {
-                    slot_of(&self.objects, collection_of(geometry).0, guid).is_some()
-                });
-
-                if !ordered && !xform.is_identity() {
-                    writer.rest.insert(guid.clone());
-                }
-            }
-
-            writer.cursor = end;
-
-            if end >= self.xforms.len() {
-                writer.hits = self.xforms.len();
-                writer.cursor = 0;
-            }
-
-            return end - start;
+            return self._scan_rest(writer, work);
         }
 
         let start = if writer.cursor > 0 {
@@ -3548,6 +3554,31 @@ impl Session {
         };
 
         spent
+    }
+
+    /// Scan a slice of at most `work` xforms for non-identity ones whose guid order() misses, into the rest set; returns the entries scanned.
+    fn _scan_rest(&self, writer: &mut Checkpoint, work: usize) -> usize {
+        let start = writer.cursor;
+        let end = self.xforms.len().min(start.saturating_add(work));
+
+        for (guid, xform) in self.xforms.iter().skip(start).take(end - start) {
+            let ordered = self.lookup.get(guid).is_some_and(|geometry| {
+                slot_of(&self.objects, collection_of(geometry).0, guid).is_some()
+            });
+
+            if !ordered && !xform.is_identity() {
+                writer.rest.insert(guid.clone());
+            }
+        }
+
+        writer.cursor = end;
+
+        if end >= self.xforms.len() {
+            writer.hits = self.xforms.len();
+            writer.cursor = 0;
+        }
+
+        end - start
     }
 
     /// Append one XformEntry to the xforms section.
@@ -4086,13 +4117,13 @@ impl Session {
     }
 
     /// The xforms in canonical order() sequence, identity entries omitted, the exact sequence jsondump and pb_dumps write.
-    fn _xforms_ordered(&self) -> Vec<(String, Xform)> {
-        let mut ordered: Vec<(String, Xform)> = Vec::new();
-        let mut rest: BTreeMap<String, Xform> = BTreeMap::new();
+    fn _xforms_ordered(&self) -> Vec<(String, &Xform)> {
+        let mut ordered: Vec<(String, &Xform)> = Vec::new();
+        let mut rest: BTreeMap<String, &Xform> = BTreeMap::new();
 
         for (obj_guid, obj_xform) in &self.xforms {
             if !obj_xform.is_identity() {
-                rest.insert(obj_guid.clone(), obj_xform.clone());
+                rest.insert(obj_guid.clone(), obj_xform);
             }
         }
 

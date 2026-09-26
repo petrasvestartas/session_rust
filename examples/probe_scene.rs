@@ -5,7 +5,7 @@ use session_rust::{Point, Session, Xform};
 
 fn main() {
     for path in std::env::args().skip(1) {
-        let s = Session::pb_load(&path);
+        let s = Session::pb_load(&path).unwrap();
         let mut counts = std::collections::BTreeMap::<&str, usize>::new();
         let mut colors = std::collections::BTreeMap::<String, usize>::new();
         let mut widths = std::collections::BTreeMap::<String, usize>::new();

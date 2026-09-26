@@ -23,7 +23,7 @@ mod pdf_tests {
         import_pdf(pdf_path.to_str().unwrap(), stem.to_str().unwrap(), 0);
         let out = PathBuf::from(format!("{}.pb", stem.to_str().unwrap()));
         assert!(out.exists());
-        let session = Session::pb_load(out.to_str().unwrap());
+        let session = Session::pb_load(out.to_str().unwrap()).unwrap();
 
         assert!(session.objects.lines.len() == 1);
         assert!(session.objects.meshes.len() == 1);

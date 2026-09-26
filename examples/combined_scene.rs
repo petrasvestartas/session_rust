@@ -262,7 +262,7 @@ fn main() {
     // Load everything first: cell size is the WIDEST file, so one grid step fits them all.
     let mut files: Vec<(String, Session)> = vec![("colors_widths".into(), demo())];
     for path in DRAWINGS {
-        let s = Session::pb_load(path);
+        let s = Session::pb_load(path).unwrap_or_default();
         if s.lookup.is_empty() {
             println!("skip {path} - empty or missing");
             continue;

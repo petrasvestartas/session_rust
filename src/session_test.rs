@@ -838,7 +838,7 @@ pub fn run_session_remove_object() -> TestResult {
 
         let fname = "serialization/test_session_remove.bin";
         session.pb_dump(fname);
-        let loaded = Session::pb_load(fname);
+        let loaded = Session::pb_load(fname).unwrap();
 
         MINI_CHECK!(removed);
         MINI_CHECK!(!session.lookup.contains_key(&guid));
@@ -891,8 +891,12 @@ pub fn run_session_get_geometry_is_pure() -> TestResult {
 
 pub fn run_session_json_roundtrip() -> TestResult {
     MINI_TEST!("Json Roundtrip", {
+        use crate::Geometry;
+        use crate::InstanceRef;
         use crate::Point;
         use crate::Session;
+        use crate::Xform;
+        use std::rc::Rc;
 
         let mut session = Session::default();
         let p1 = Point::new(1.0, 2.0, 3.0);
@@ -902,14 +906,25 @@ pub fn run_session_json_roundtrip() -> TestResult {
         session.add_point(p1, None);
         session.add_point(p2, None);
         session.add_edge(&g1, &g2, "connection");
+        session.set_xform(&g1, Xform::translation(1.0, 0.0, 0.0));
+        let definition =
+            session.add_definition(Geometry::Point(Rc::new(Point::new(0.0, 0.0, 0.0))));
+        let instance = InstanceRef::new(&definition, Xform::translation(0.0, 1.0, 0.0));
+        let instance_guid = instance.guid().to_string();
+        session.add_instance(instance, Xform::translation(2.0, 0.0, 0.0), None);
 
         let fname = "serialization/test_session.json";
         session.file_json_dump(fname);
-        let loaded = Session::file_json_load(fname);
+        let loaded = Session::file_json_load(fname).unwrap();
 
         MINI_CHECK!(loaded.name == session.name);
         MINI_CHECK!(loaded.lookup.len() == session.lookup.len());
         MINI_CHECK!(loaded.graph.number_of_vertices() == session.graph.number_of_vertices());
+        MINI_CHECK!(loaded.xforms[&g1].guid() == session.xforms[&g1].guid());
+        MINI_CHECK!(loaded.xforms[&instance_guid].guid() == session.xforms[&instance_guid].guid());
+        MINI_CHECK!(
+            loaded.objects.instances[0].xform.guid() == session.objects.instances[0].xform.guid()
+        );
     })
 }
 
@@ -929,7 +944,7 @@ pub fn run_session_protobuf_roundtrip() -> TestResult {
 
         let fname = "serialization/test_session.bin";
         session.pb_dump(fname);
-        let loaded = Session::pb_load(fname);
+        let loaded = Session::pb_load(fname).unwrap();
         let converted = Session::from_proto(session.to_proto()).unwrap();
 
         MINI_CHECK!(loaded.name == session.name);
@@ -956,7 +971,7 @@ pub fn run_session_lookup_mutation_roundtrip() -> TestResult {
 
         let fname = "serialization/test_session_lookup.bin";
         session.pb_dump(fname);
-        let loaded = Session::pb_load(fname);
+        let loaded = Session::pb_load(fname).unwrap();
 
         MINI_CHECK!(loaded.objects.lines[0].width == 5.0);
         MINI_CHECK!(matches!(loaded.lookup.get(&guid), Some(Geometry::Line(l)) if l.width == 5.0));
@@ -981,7 +996,7 @@ pub fn run_session_order() -> TestResult {
 
         let fname = "serialization/test_session_order.bin";
         session.pb_dump(fname);
-        let loaded = Session::pb_load(fname);
+        let loaded = Session::pb_load(fname).unwrap();
 
         MINI_CHECK!(order.len() == 2);
         MINI_CHECK!(order[0] == point_guid);
@@ -1064,7 +1079,7 @@ pub fn run_session_xform_roundtrip() -> TestResult {
 
         let fname = "serialization/test_session_xform.bin";
         session.pb_dump(fname);
-        let loaded = Session::pb_load(fname);
+        let loaded = Session::pb_load(fname).unwrap();
         let json_loaded = Session::file_json_loads(&session.file_json_dumps());
 
         MINI_CHECK!(loaded.xform(&guid) == session.xform(&guid));
@@ -1251,7 +1266,7 @@ pub fn run_session_document_workflow() -> TestResult {
 
         let fname = "serialization/test_session_document.bin";
         session.pb_dump(fname);
-        let loaded = Session::pb_load(fname);
+        let loaded = Session::pb_load(fname).unwrap();
 
         MINI_CHECK!(loaded.lookup.len() == 2);
         MINI_CHECK!(loaded.lookup.contains_key(&a_guid));
@@ -2209,7 +2224,7 @@ pub fn run_session_instance_json_roundtrip() -> TestResult {
 
         let fname = "serialization/test_session_instance.json";
         session.file_json_dump(fname);
-        let loaded = Session::file_json_load(fname);
+        let loaded = Session::file_json_load(fname).unwrap();
         let mut data: serde_json::Value =
             serde_json::from_str(&session.jsondump().unwrap()).unwrap();
         data["objects"]["instances"][0]["xform"] =
@@ -2258,7 +2273,7 @@ pub fn run_session_instance_protobuf_roundtrip() -> TestResult {
 
         let fname = "serialization/test_session_instance.bin";
         session.pb_dump(fname);
-        let loaded = Session::pb_load(fname);
+        let loaded = Session::pb_load(fname).unwrap();
         let plain =
             crate::proto::Session::decode(Session::default().pb_dumps().as_slice()).unwrap();
 
@@ -2972,6 +2987,7 @@ pub fn run_session_live_views() -> TestResult {
             instance_guid.as_str(),
             "gone_group",
         ];
+        let order = session.order();
         let world = session.world_xforms();
         let mut groups: Vec<String> = Vec::new();
 
@@ -2987,34 +3003,29 @@ pub fn run_session_live_views() -> TestResult {
             0.01,
         );
         let json = session.jsondump().unwrap();
-        let derived = serde_json::to_string(&session).unwrap();
         let text = format!("{}{}", session.str(), session.repr());
-        let order = session.order();
-        let mut in_order = false;
-        let mut in_world = false;
-        let mut in_json = false;
-        let mut in_derived = false;
-        let mut in_text = false;
+        let mut ordered = true;
+        let mut placed = true;
+        let mut dumped = true;
+        let mut printed = true;
 
         for name in gone {
-            in_order |= order.contains(&name.to_string());
-            in_world |= world.contains_key(name);
-            in_json |= json.contains(name);
-            in_derived |= derived.contains(name);
-            in_text |= text.contains(name);
+            ordered = ordered && !order.contains(&name.to_string());
+            placed = placed && !world.contains_key(name);
+            dumped = dumped && !json.contains(name);
+            printed = printed && !text.contains(name);
         }
 
-        MINI_CHECK!(!in_order);
-        MINI_CHECK!(!in_world);
+        MINI_CHECK!(ordered);
+        MINI_CHECK!(placed);
         MINI_CHECK!(session.select_by_type::<Point>().len() == 1);
         MINI_CHECK!(groups == vec!["kept".to_string()]);
         MINI_CHECK!(geometry.points.len() == 1 && geometry.meshes.is_empty());
         MINI_CHECK!(session.instances_of(&definition).is_empty());
         MINI_CHECK!(collisions.is_empty());
         MINI_CHECK!(hits.is_empty());
-        MINI_CHECK!(!in_json);
-        MINI_CHECK!(!in_derived);
-        MINI_CHECK!(!in_text);
+        MINI_CHECK!(dumped);
+        MINI_CHECK!(printed);
         MINI_CHECK!(session.undo());
         MINI_CHECK!(session.order().len() == 3);
     })
@@ -3453,12 +3464,6 @@ pub fn run_session_checkpoint_tags() -> TestResult {
         use crate::session::TAGS;
         use prost::Message;
 
-        fn first(bytes: Vec<u8>) -> u32 {
-            let mut slice = bytes.as_slice();
-
-            prost::encoding::decode_key(&mut slice).map_or(0, |(tag, _)| tag)
-        }
-
         let objects = proto::Session {
             objects: Some(Default::default()),
             ..Default::default()
@@ -3475,15 +3480,6 @@ pub fn run_session_checkpoint_tags() -> TestResult {
             definitions: Some(Default::default()),
             ..Default::default()
         };
-        let sections = [
-            0,
-            first(objects.encode_to_vec()),
-            first(tree.encode_to_vec()),
-            first(graph.encode_to_vec()),
-            0,
-            first(definitions.encode_to_vec()),
-            0,
-        ];
         let root = proto::Tree {
             root: Some(Default::default()),
             ..Default::default()
@@ -3546,17 +3542,37 @@ pub fn run_session_checkpoint_tags() -> TestResult {
                 ..Default::default()
             },
         ];
+        let mut messages = vec![
+            objects.encode_to_vec(),
+            tree.encode_to_vec(),
+            graph.encode_to_vec(),
+            definitions.encode_to_vec(),
+            root.encode_to_vec(),
+            children.encode_to_vec(),
+        ];
 
-        MINI_CHECK!(TAGS.sections == sections);
-        MINI_CHECK!(TAGS.root == first(root.encode_to_vec()));
-        MINI_CHECK!(TAGS.children == first(children.encode_to_vec()));
-        let mut tags: Vec<u32> = Vec::new();
-
-        for message in &lists {
-            tags.push(first(message.encode_to_vec()));
+        for list in &lists {
+            messages.push(list.encode_to_vec());
         }
 
-        MINI_CHECK!(TAGS.lists.to_vec() == tags);
+        let mut fields: Vec<u32> = Vec::new();
+
+        for bytes in &messages {
+            let mut slice = bytes.as_slice();
+            fields.push(prost::encoding::decode_key(&mut slice).unwrap().0);
+        }
+
+        let sections = [0, fields[0], fields[1], fields[2], 0, fields[3], 0];
+        let mut tags = [0; 13];
+
+        for (i, tag) in tags.iter_mut().enumerate() {
+            *tag = fields[6 + i];
+        }
+
+        MINI_CHECK!(TAGS.sections == sections);
+        MINI_CHECK!(TAGS.root == fields[4]);
+        MINI_CHECK!(TAGS.children == fields[5]);
+        MINI_CHECK!(TAGS.lists == tags);
     })
 }
 

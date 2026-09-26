@@ -257,9 +257,14 @@ pub fn run_treenode_compact() -> TestResult {
         let q = TreeNode::new("q");
         q.borrow_mut().add(&kids[5]);
         let moved = p.borrow().children();
+        let mut same = after.len() == before.len();
+
+        for (x, y) in after.iter().zip(&before) {
+            same = same && Rc::ptr_eq(x, y);
+        }
 
         MINI_CHECK!(raw == 4 && !p.borrow().is_compacting());
-        MINI_CHECK!(after.len() == 3 && after.iter().zip(&before).all(|(x, y)| Rc::ptr_eq(x, y)));
+        MINI_CHECK!(after.len() == 3 && same);
         MINI_CHECK!(kids[3].borrow().is_dead() && kids[3].borrow().get_tomb().is_some());
         MINI_CHECK!(kids[1].borrow().get_tomb().is_none());
         MINI_CHECK!(
@@ -586,22 +591,37 @@ pub fn run_tree_dead_nodes() -> TestResult {
         let b_guid = b.borrow().guid().to_string();
         let c_guid = c.borrow().guid().to_string();
         let g_guid = g.borrow().guid().to_string();
-        let names = |nodes: Vec<std::rc::Rc<std::cell::RefCell<TreeNode>>>| -> Vec<String> {
-            let mut result = Vec::new();
-
-            for node in &nodes {
-                result.push(node.borrow().name.clone());
-            }
-
-            result
-        };
         let json = tree.jsondump().unwrap();
         let from_json = Tree::jsonload(&json).unwrap();
         let from_pb = Tree::pb_loads(&tree.pb_dumps()).unwrap();
         let expected = ["root", "group", "alpha", "delta"];
+        let orders = [
+            tree.nodes(),
+            tree.traverse("depthfirst", "preorder"),
+            tree.traverse("breadthfirst", "preorder"),
+            from_json.nodes(),
+            from_pb.nodes(),
+        ];
+        let mut ordered = true;
 
-        MINI_CHECK!(names(tree.nodes()) == expected);
-        MINI_CHECK!(names(tree.leaves()) == ["alpha", "delta"]);
+        for nodes in &orders {
+            let mut names: Vec<String> = Vec::new();
+
+            for node in nodes {
+                names.push(node.borrow().name.clone());
+            }
+
+            ordered = ordered && names == expected;
+        }
+
+        let mut leaves: Vec<String> = Vec::new();
+
+        for node in &tree.leaves() {
+            leaves.push(node.borrow().name.clone());
+        }
+
+        MINI_CHECK!(ordered);
+        MINI_CHECK!(leaves == ["alpha", "delta"]);
         MINI_CHECK!(
             tree.get_node_by_name("beta").is_none() && tree.get_nodes_by_name("gamma").is_empty()
         );
@@ -609,14 +629,11 @@ pub fn run_tree_dead_nodes() -> TestResult {
             tree.find_node_by_guid(&b_guid).is_none() && tree.find_node_by_guid(&c_guid).is_none()
         );
         MINI_CHECK!(tree.get_children_guids(&g_guid).len() == 2);
-        MINI_CHECK!(names(tree.traverse("depthfirst", "preorder")) == expected);
-        MINI_CHECK!(names(tree.traverse("breadthfirst", "preorder")) == expected);
         MINI_CHECK!(!tree.str().contains("beta") && !tree.str().contains("gamma"));
         MINI_CHECK!(
             tree.repr() == "Tree(t, 4 nodes)" && g.borrow().str() == "TreeNode(group, 2 children)"
         );
         MINI_CHECK!(!json.contains("beta") && !json.contains("gamma"));
-        MINI_CHECK!(names(from_json.nodes()) == expected && names(from_pb.nodes()) == expected);
     })
 }
 
@@ -664,6 +681,21 @@ REGISTER_MINI_TEST!(
     crate::tree_test::run_treenode_traverse
 );
 REGISTER_MINI_TEST!(
+    "TreeNode",
+    "Set Dead",
+    crate::tree_test::run_treenode_set_dead
+);
+REGISTER_MINI_TEST!(
+    "TreeNode",
+    "Compact",
+    crate::tree_test::run_treenode_compact
+);
+REGISTER_MINI_TEST!(
+    "TreeNode",
+    "Add Moves",
+    crate::tree_test::run_treenode_add_moves
+);
+REGISTER_MINI_TEST!(
     "Tree",
     "Constructor",
     crate::tree_test::run_tree_constructor
@@ -708,20 +740,5 @@ REGISTER_MINI_TEST!(
     "Tree",
     "Get Children Guids",
     crate::tree_test::run_tree_get_children_guids
-);
-REGISTER_MINI_TEST!(
-    "TreeNode",
-    "Set Dead",
-    crate::tree_test::run_treenode_set_dead
-);
-REGISTER_MINI_TEST!(
-    "TreeNode",
-    "Compact",
-    crate::tree_test::run_treenode_compact
-);
-REGISTER_MINI_TEST!(
-    "TreeNode",
-    "Add Moves",
-    crate::tree_test::run_treenode_add_moves
 );
 REGISTER_MINI_TEST!("Tree", "Dead Nodes", crate::tree_test::run_tree_dead_nodes);
