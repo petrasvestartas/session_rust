@@ -23,7 +23,7 @@ use std::ops::SubAssign;
 use std::sync::OnceLock;
 
 /// Which ends of a curve carry an arrowhead.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize)]
 #[serde(rename_all = "lowercase")]
 pub enum Arrowhead {
     #[default]
@@ -31,6 +31,18 @@ pub enum Arrowhead {
     START,
     END,
     BOTH,
+}
+
+impl<'de> Deserialize<'de> for Arrowhead {
+    /// Read the lowercase name, none when unknown.
+    fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        Ok(match String::deserialize(deserializer)?.as_str() {
+            "start" => Self::START,
+            "end" => Self::END,
+            "both" => Self::BOTH,
+            _ => Self::NONE,
+        })
+    }
 }
 
 impl Arrowhead {

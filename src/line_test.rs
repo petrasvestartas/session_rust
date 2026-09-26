@@ -145,6 +145,8 @@ pub fn run_line_json_roundtrip() -> TestResult {
 
         let j = line.jsondump().unwrap();
         let loaded_j = Line::jsonload(&j).unwrap();
+        let mut unknown: serde_json::Value = serde_json::from_str(&j).unwrap();
+        unknown["arrowhead"] = "sideways".into();
 
         let s = line.file_json_dumps();
         let loaded_s = Line::file_json_loads(&s);
@@ -167,6 +169,7 @@ pub fn run_line_json_roundtrip() -> TestResult {
         MINI_CHECK!(loaded.dash == vec![3.0, 2.0]);
         MINI_CHECK!(loaded.arrowhead == Arrowhead::END && loaded_j.arrowhead == Arrowhead::END);
         MINI_CHECK!(!Line::default().file_json_dumps().contains("arrowhead"));
+        MINI_CHECK!(Line::jsonload(&unknown.to_string()).unwrap().arrowhead == Arrowhead::NONE);
     })
 }
 
@@ -188,6 +191,8 @@ pub fn run_line_protobuf_roundtrip() -> TestResult {
         line.pb_dump(fname).unwrap();
         let loaded = Line::pb_load(fname).unwrap();
         let converted = Line::from_proto(line.to_proto());
+        let mut outside = line.to_proto();
+        outside.arrowhead = 9;
 
         MINI_CHECK!(loaded_s.name == "test_line");
         MINI_CHECK!(TOLERANCE.is_close(loaded_s[0], 42.1));
@@ -202,6 +207,7 @@ pub fn run_line_protobuf_roundtrip() -> TestResult {
         MINI_CHECK!(loaded.dash == vec![3.0, 2.0]);
         MINI_CHECK!(loaded.guid() == guid);
         MINI_CHECK!(loaded.arrowhead == Arrowhead::END);
+        MINI_CHECK!(Line::from_proto(outside).arrowhead == Arrowhead::NONE);
         MINI_CHECK!(converted == line);
         MINI_CHECK!(converted.guid() == guid);
     })
