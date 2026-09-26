@@ -314,6 +314,7 @@ pub fn run_split_surface_by_curves() -> TestResult {
 pub fn run_split_line_by_curves() -> TestResult {
     MINI_TEST!("Split Line By Curves", {
         use crate::simple_split::split_line_by_curves;
+        use crate::Arrowhead;
         use crate::Line;
         use crate::NurbsCurve;
         use crate::Point;
@@ -322,6 +323,7 @@ pub fn run_split_line_by_curves() -> TestResult {
         line.name = "retained".into();
         line.width = 3.0;
         line.dash = vec![1.0, 2.0];
+        line.arrowhead = Arrowhead::BOTH;
         let cutter = NurbsCurve::create(
             false,
             1,
@@ -347,6 +349,8 @@ pub fn run_split_line_by_curves() -> TestResult {
                 && pieces[0].width == line.width
                 && pieces[0].dash == line.dash
         );
+        MINI_CHECK!(pieces[0].arrowhead == Arrowhead::START);
+        MINI_CHECK!(pieces[1].arrowhead == Arrowhead::END);
         MINI_CHECK!(line.length() == 4.0);
     })
 }
@@ -354,6 +358,7 @@ pub fn run_split_line_by_curves() -> TestResult {
 pub fn run_split_polyline_by_curves() -> TestResult {
     MINI_TEST!("Split Polyline By Curves", {
         use crate::simple_split::split_polyline_by_curves;
+        use crate::Arrowhead;
         use crate::NurbsCurve;
         use crate::Point;
         use crate::Polyline;
@@ -366,6 +371,7 @@ pub fn run_split_polyline_by_curves() -> TestResult {
         polyline.name = "retained".into();
         polyline.width = 3.0;
         polyline.dash = vec![1.0, 2.0];
+        polyline.arrowhead = Arrowhead::END;
         let cutter = NurbsCurve::create(
             false,
             1,
@@ -394,6 +400,8 @@ pub fn run_split_polyline_by_curves() -> TestResult {
                 && pieces[0].width == polyline.width
                 && pieces[0].dash == polyline.dash
         );
+        MINI_CHECK!(pieces[0].arrowhead == Arrowhead::NONE);
+        MINI_CHECK!(pieces[1].arrowhead == Arrowhead::END);
         MINI_CHECK!(polyline.point_count() == 3);
     })
 }

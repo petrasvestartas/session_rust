@@ -1569,7 +1569,9 @@ pub fn split_curve_by_curves(
     let mut result = Vec::<NurbsCurve>::new();
 
     for i in 1..cuts.len() {
-        result.push(interval(curve, cuts[i - 1], cuts[i])?);
+        let mut piece = interval(curve, cuts[i - 1], cuts[i])?;
+        piece.arrowhead = curve.arrowhead.piece(i == 1, i + 1 == cuts.len());
+        result.push(piece);
     }
 
     if curve.is_closed() && result.len() > 1 && !cut_at_seam {
@@ -1706,7 +1708,8 @@ pub fn split_line_by_curves(
     cutters: &[NurbsCurve],
     tolerance: f64,
 ) -> Result<Vec<Line>, String> {
-    let curve = NurbsCurve::create(false, 1, &[line.point_at(0.0), line.point_at(1.0)]);
+    let mut curve = NurbsCurve::create(false, 1, &[line.point_at(0.0), line.point_at(1.0)]);
+    curve.arrowhead = line.arrowhead;
     let mut result = Vec::<Line>::new();
 
     for piece in split_curve_by_curves(&curve, cutters, tolerance)? {
@@ -1715,6 +1718,7 @@ pub fn split_line_by_curves(
         next.width = line.width;
         next.dash = line.dash.clone();
         next.linecolor = line.linecolor.clone();
+        next.arrowhead = piece.arrowhead;
         result.push(next);
     }
 
@@ -1727,7 +1731,8 @@ pub fn split_polyline_by_curves(
     cutters: &[NurbsCurve],
     tolerance: f64,
 ) -> Result<Vec<Polyline>, String> {
-    let curve = NurbsCurve::create(false, 1, &polyline.get_points());
+    let mut curve = NurbsCurve::create(false, 1, &polyline.get_points());
+    curve.arrowhead = polyline.arrowhead;
     let mut result = Vec::<Polyline>::new();
 
     for piece in split_curve_by_curves(&curve, cutters, tolerance)? {
@@ -1742,6 +1747,7 @@ pub fn split_polyline_by_curves(
         next.width = polyline.width;
         next.dash = polyline.dash.clone();
         next.linecolor = polyline.linecolor.clone();
+        next.arrowhead = piece.arrowhead;
         result.push(next);
     }
 

@@ -2202,6 +2202,8 @@ impl NurbsCurve {
 
         let mut left_curve = self.duplicate();
         let mut right_curve = self.duplicate();
+        left_curve.arrowhead = self.arrowhead.piece(true, false);
+        right_curve.arrowhead = self.arrowhead.piece(false, true);
 
         if !left_curve.trim(t0, t) {
             return (left_curve, right_curve);
@@ -3929,6 +3931,7 @@ impl NurbsCurve {
         }
 
         let mut joined = chain[0].clone();
+        joined.arrowhead = chain[0].arrowhead.joined(chain[chain.len() - 1].arrowhead);
 
         if aligned {
             for ci in 1..chain.len() {

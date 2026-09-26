@@ -55,6 +55,26 @@ impl Arrowhead {
         }
     }
 
+    /// Return this start head combined with the end head of last.
+    pub fn joined(self, last: Self) -> Self {
+        let start = matches!(self, Self::START | Self::BOTH);
+        let end = matches!(last, Self::END | Self::BOTH);
+
+        match (start, end) {
+            (true, true) => Self::BOTH,
+            (true, false) => Self::START,
+            (false, true) => Self::END,
+            (false, false) => Self::NONE,
+        }
+    }
+
+    /// Return the heads a split piece keeps: the start head when first, the end head when last.
+    pub fn piece(self, first: bool, last: bool) -> Self {
+        let none = Self::NONE;
+
+        (if first { self } else { none }).joined(if last { self } else { none })
+    }
+
     /// Return whether no end carries a head.
     pub(crate) fn is_none(&self) -> bool {
         *self == Self::NONE
