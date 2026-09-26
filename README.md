@@ -2,6 +2,8 @@
 
 Rust geometry kernel — mirrors the C++ and Python implementations with identical APIs.
 
+Undo, history and purge: [docs/history.md](docs/history.md).
+
 ## Build
 
 ```bash
