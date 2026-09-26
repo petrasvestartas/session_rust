@@ -403,7 +403,7 @@ impl TreeNode {
     // ═══════════════════════════════════════════════════════════════════════════
     /// Serialize to a JSON string.
     pub fn jsondump(&self) -> Result<String, Box<dyn std::error::Error>> {
-        crate::file_encoders::sorted_json_string(&node_to_serde(self))
+        crate::file_encoders::file_json_dumps(&node_to_serde(self), false)
     }
 
     /// Deserialize from a JSON string.
@@ -652,7 +652,7 @@ impl Tree {
     // ═══════════════════════════════════════════════════════════════════════════
     /// Serialize to a JSON string.
     pub fn jsondump(&self) -> Result<String, Box<dyn std::error::Error>> {
-        crate::file_encoders::sorted_json_string(self)
+        crate::file_encoders::file_json_dumps(self, false)
     }
 
     /// Deserialize from a JSON string.
@@ -662,19 +662,17 @@ impl Tree {
 
     /// Serialize to a JSON string.
     pub fn file_json_dumps(&self) -> String {
-        self.jsondump().unwrap_or_default()
+        self.jsondump().expect("Failed to serialize Tree JSON")
     }
 
     /// Deserialize from a JSON string.
     pub fn file_json_loads(json_string: &str) -> Self {
-        Self::jsonload(json_string).unwrap_or_default()
+        Self::jsonload(json_string).expect("Failed to parse Tree JSON")
     }
 
     /// Write to a JSON file.
     pub fn file_json_dump(&self, filename: &str) -> Result<(), Box<dyn std::error::Error>> {
-        std::fs::write(filename, self.jsondump()?)?;
-
-        Ok(())
+        crate::file_encoders::file_json_dump(self, filename, true)
     }
 
     /// Read from a JSON file.

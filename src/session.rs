@@ -2508,9 +2508,8 @@ impl Session {
     // ═══════════════════════════════════════════════════════════════════════════
     // JSON
     // ═══════════════════════════════════════════════════════════════════════════
-    /// Serialize to a JSON string.
-    pub fn jsondump(&self) -> Result<String, Box<dyn std::error::Error>> {
-        let graph_json: serde_json::Value = serde_json::from_str(&self.graph.jsondump()?)?;
+    /// Serialize to a JSON object.
+    fn to_json_value(&self) -> Result<serde_json::Value, Box<dyn std::error::Error>> {
         let mut xforms_json: Vec<serde_json::Value> = Vec::new();
 
         for (obj_guid, obj_xform) in self._xforms_ordered() {
@@ -2535,7 +2534,7 @@ impl Session {
             "guid": self.guid(),
             "objects": self.objects_synced(),
             "tree": self.tree,
-            "graph": graph_json,
+            "graph": self.graph.to_json_value()?,
             "interactions": interactions_json,
             "xforms": xforms_json
         });
@@ -2545,13 +2544,12 @@ impl Session {
                 serde_json::to_value(synced(&self.definitions, &self.definition_lookup))?;
         }
 
-        let sorted = crate::file_encoders::sort_json_keys(json_obj);
-        let mut buf: Vec<u8> = Vec::new();
-        let formatter = serde_json::ser::PrettyFormatter::with_indent(b"    ");
-        let mut ser = serde_json::Serializer::with_formatter(&mut buf, formatter);
-        serde::Serialize::serialize(&sorted, &mut ser)?;
+        Ok(json_obj)
+    }
 
-        Ok(String::from_utf8(buf)?)
+    /// Serialize to a sorted JSON string.
+    pub fn jsondump(&self) -> Result<String, Box<dyn std::error::Error>> {
+        crate::file_encoders::file_json_dumps(&self.to_json_value()?, false)
     }
 
     /// Deserialize from a JSON string.
@@ -2615,18 +2613,23 @@ impl Session {
     pub fn file_json_dumps(&mut self) -> String {
         self.purge();
 
-        self.jsondump().unwrap_or_default()
+        self.jsondump().expect("Failed to serialize Session JSON")
     }
 
     /// Deserialize from a JSON string.
     pub fn file_json_loads(json_string: &str) -> Self {
-        Self::jsonload(json_string).unwrap_or_else(|_| Self::default())
+        Self::jsonload(json_string).expect("Failed to parse Session JSON")
     }
 
     /// Write to a JSON file.
     pub fn file_json_dump(&mut self, filename: &str) {
         self.purge();
-        fs::write(filename, self.jsondump().unwrap_or_default())
+
+        let json_obj = self
+            .to_json_value()
+            .expect("Failed to serialize Session JSON");
+
+        crate::file_encoders::file_json_dump(&json_obj, filename, true)
             .expect("Failed to write JSON file");
     }
 
@@ -2634,7 +2637,7 @@ impl Session {
     pub fn file_json_load(filename: &str) -> Self {
         let json = fs::read_to_string(filename).expect("Failed to read JSON file");
 
-        Self::jsonload(&json).unwrap_or_else(|_| Self::default())
+        Self::jsonload(&json).expect("Failed to parse Session JSON")
     }
 
     // ═══════════════════════════════════════════════════════════════════════════

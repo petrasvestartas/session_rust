@@ -76,7 +76,7 @@ impl Vertex {
     // ═══════════════════════════════════════════════════════════════════════════
     /// Serialize to a sorted JSON string.
     pub fn jsondump(&self) -> Result<String, Box<dyn std::error::Error>> {
-        crate::file_encoders::sorted_json_string(self)
+        crate::file_encoders::file_json_dumps(self, false)
     }
 
     /// Deserialize from a JSON string.
@@ -201,7 +201,7 @@ impl Edge {
     // ═══════════════════════════════════════════════════════════════════════════
     /// Serialize to a sorted JSON string.
     pub fn jsondump(&self) -> Result<String, Box<dyn std::error::Error>> {
-        crate::file_encoders::sorted_json_string(self)
+        crate::file_encoders::file_json_dumps(self, false)
     }
 
     /// Deserialize from a JSON string.
@@ -1008,8 +1008,8 @@ impl Graph {
     // ═══════════════════════════════════════════════════════════════════════════
     // JSON
     // ═══════════════════════════════════════════════════════════════════════════
-    /// Serialize to a sorted JSON string.
-    pub fn jsondump(&self) -> Result<String, Box<dyn std::error::Error>> {
+    /// Serialize to a JSON object.
+    pub(crate) fn to_json_value(&self) -> Result<serde_json::Value, Box<dyn std::error::Error>> {
         let mut vertices_json = Vec::new();
 
         for vertex in self.vertices.values() {
@@ -1026,7 +1026,7 @@ impl Graph {
             }
         }
 
-        let data = serde_json::json!({
+        Ok(serde_json::json!({
             "default_edge_attributes": self.default_edge_attributes,
             "default_vertex_attributes": self.default_vertex_attributes,
             "edge_count": self.edge_count,
@@ -1036,9 +1036,12 @@ impl Graph {
             "type": "Graph",
             "vertex_count": self.vertex_count,
             "vertices": vertices_json,
-        });
+        }))
+    }
 
-        crate::file_encoders::sorted_json_string(&data)
+    /// Serialize to a sorted JSON string.
+    pub fn jsondump(&self) -> Result<String, Box<dyn std::error::Error>> {
+        crate::file_encoders::file_json_dumps(&self.to_json_value()?, false)
     }
 
     /// Deserialize from a JSON string.
@@ -1085,19 +1088,17 @@ impl Graph {
 
     /// Serialize to a JSON string.
     pub fn file_json_dumps(&self) -> String {
-        self.jsondump().unwrap_or_default()
+        self.jsondump().expect("Failed to serialize Graph JSON")
     }
 
     /// Deserialize from a JSON string.
     pub fn file_json_loads(json_string: &str) -> Self {
-        Self::jsonload(json_string).unwrap_or_default()
+        Self::jsonload(json_string).expect("Failed to parse Graph JSON")
     }
 
     /// Write JSON to a file.
     pub fn file_json_dump(&self, filename: &str) -> Result<(), Box<dyn std::error::Error>> {
-        std::fs::write(filename, self.jsondump()?)?;
-
-        Ok(())
+        crate::file_encoders::file_json_dump(&self.to_json_value()?, filename, true)
     }
 
     /// Read JSON from a file.
