@@ -10,14 +10,10 @@ pub fn run_file_obj_read_bunny() -> TestResult {
         use std::path::PathBuf;
 
         let bunny_path = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-            .parent()
-            .unwrap()
             .join("session_data")
             .join("bunny.obj");
 
-        if !bunny_path.exists() {
-            return Ok(());
-        }
+        MINI_CHECK!(bunny_path.exists());
 
         let mesh = read_file_obj(bunny_path.to_str().unwrap()).unwrap();
         let indexed = mesh.to_vertices_and_faces();
