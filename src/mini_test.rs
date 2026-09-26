@@ -5159,6 +5159,26 @@ pub fn get_all_tests() -> Vec<RegisteredTest> {
             name: "Regions Orientation",
             func: run_boolean_polyline_regions_orientation,
         },
+        RegisteredTest {
+            group: "Boolean Polyline",
+            name: "Adjacent Rectangles",
+            func: run_boolean_polyline_adjacent_rectangles,
+        },
+        RegisteredTest {
+            group: "Boolean Polyline",
+            name: "Partial Shared Edge",
+            func: run_boolean_polyline_partial_shared_edge,
+        },
+        RegisteredTest {
+            group: "Boolean Polyline",
+            name: "Collinear Overlap",
+            func: run_boolean_polyline_collinear_overlap,
+        },
+        RegisteredTest {
+            group: "Boolean Polyline",
+            name: "T Junction",
+            func: run_boolean_polyline_t_junction,
+        },
         // Boolean Polyline Open tests
         RegisteredTest {
             group: "Boolean Polyline Open",

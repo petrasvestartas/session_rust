@@ -356,10 +356,6 @@ fn v_cross_product(p1: BIVec2, p2: BIVec2, p3: BIVec2) -> f64 {
     (p2.x - p1.x) as f64 * (p3.y - p2.y) as f64 - (p2.y - p1.y) as f64 * (p3.x - p2.x) as f64
 }
 
-fn v_dot_product(p1: BIVec2, p2: BIVec2, p3: BIVec2) -> f64 {
-    (p2.x - p1.x) as f64 * (p3.x - p2.x) as f64 + (p2.y - p1.y) as f64 * (p3.y - p2.y) as f64
-}
-
 fn v_is_collinear(p1: BIVec2, s: BIVec2, p2: BIVec2) -> bool {
     (s.x - p1.x) as i128 * (p2.y - s.y) as i128 == (s.y - p1.y) as i128 * (p2.x - s.x) as i128
 }
@@ -426,6 +422,11 @@ fn v_sign_d(v: f64) -> i32 {
 fn v_segs_intersect(a: BIVec2, b: BIVec2, c: BIVec2, d: BIVec2) -> bool {
     (v_sign_d(v_cross_product(a, c, d)) * v_sign_d(v_cross_product(b, c, d)) < 0)
         && (v_sign_d(v_cross_product(c, a, b)) * v_sign_d(v_cross_product(d, a, b)) < 0)
+}
+
+fn v_segs_touch(a: BIVec2, b: BIVec2, c: BIVec2, d: BIVec2) -> bool {
+    (v_sign_d(v_cross_product(a, c, d)) * v_sign_d(v_cross_product(b, c, d)) <= 0)
+        && (v_sign_d(v_cross_product(c, a, b)) * v_sign_d(v_cross_product(d, a, b)) <= 0)
 }
 
 fn v_area_outpt(sc: &VattiScratch, start: usize) -> f64 {
@@ -2386,14 +2387,7 @@ fn v_clean_collinear(sc: &mut VattiScratch, or_idx: usize) {
             sc.opt_pool[prev].pt,
             sc.opt_pool[op2].pt,
             sc.opt_pool[next].pt,
-        ) && (sc.opt_pool[op2].pt == sc.opt_pool[prev].pt
-            || sc.opt_pool[op2].pt == sc.opt_pool[next].pt
-            || v_dot_product(
-                sc.opt_pool[prev].pt,
-                sc.opt_pool[op2].pt,
-                sc.opt_pool[next].pt,
-            ) < 0.0)
-        {
+        ) {
             if op2 == sc.orc_pool[or].pts.unwrap() {
                 sc.orc_pool[or].pts = Some(prev);
             }
@@ -2623,7 +2617,7 @@ fn v_bounds(v: &[BIVec2]) -> (i64, i64, i64, i64) {
     (min_x, max_x, min_y, max_y)
 }
 
-fn v_any_cross(va: &[BIVec2], vb: &[BIVec2]) -> bool {
+fn v_any_touch(va: &[BIVec2], vb: &[BIVec2]) -> bool {
     let na = va.len();
     let nb = vb.len();
 
@@ -2647,7 +2641,7 @@ fn v_any_cross(va: &[BIVec2], vb: &[BIVec2]) -> bool {
                 continue;
             }
 
-            if v_segs_intersect(a1, a2, b1, b2) {
+            if v_segs_touch(a1, a2, b1, b2) {
                 return true;
             }
         }
@@ -2656,65 +2650,7 @@ fn v_any_cross(va: &[BIVec2], vb: &[BIVec2]) -> bool {
     false
 }
 
-fn v_centroid(v: &[BIVec2]) -> BIVec2 {
-    let mut c = BIVec2 { x: 0, y: 0 };
-
-    for p in v {
-        c.x += p.x;
-        c.y += p.y;
-    }
-
-    c.x /= v.len() as i64;
-    c.y /= v.len() as i64;
-
-    c
-}
-
-/// Containment of non-crossing polygons by vertex, centroid and nudged centroid tests.
-fn v_contains(va: &[BIVec2], vb: &[BIVec2]) -> (bool, bool) {
-    let mut a_in_b = pip_i(va[0], vb);
-    let mut b_in_a = pip_i(vb[0], va);
-    let ca_cen = v_centroid(va);
-    let cb_cen = v_centroid(vb);
-
-    if a_in_b && !pip_i(ca_cen, vb) {
-        a_in_b = false;
-    }
-
-    if b_in_a && !pip_i(cb_cen, va) {
-        b_in_a = false;
-    }
-
-    if a_in_b || b_in_a {
-        return (a_in_b, b_in_a);
-    }
-
-    a_in_b = pip_i(ca_cen, vb);
-    b_in_a = pip_i(cb_cen, va);
-
-    if a_in_b || b_in_a {
-        return (a_in_b, b_in_a);
-    }
-
-    a_in_b = pip_i(
-        BIVec2 {
-            x: ca_cen.x + 1,
-            y: ca_cen.y + 1,
-        },
-        vb,
-    );
-    b_in_a = pip_i(
-        BIVec2 {
-            x: cb_cen.x + 1,
-            y: cb_cen.y + 1,
-        },
-        va,
-    );
-
-    (a_in_b, b_in_a)
-}
-
-/// Add both inputs through an integer copy, or return the result when they do not cross.
+/// Add both inputs through an integer copy, or return the result when their boundaries do not touch.
 fn v_add_small_paths(
     sc: &mut VattiScratch,
     a: &Polyline,
@@ -2748,10 +2684,14 @@ fn v_add_small_paths(
         ));
     }
 
-    if !v_any_cross(&va, &vb) {
-        let (a_in_b, b_in_a) = v_contains(&va, &vb);
-
-        return Some(v_select(a, b, a_in_b, b_in_a, clip_type));
+    if !v_any_touch(&va, &vb) {
+        return Some(v_select(
+            a,
+            b,
+            pip_i(va[0], &vb),
+            pip_i(vb[0], &va),
+            clip_type,
+        ));
     }
 
     v_add_path(sc, &va, na, 0);

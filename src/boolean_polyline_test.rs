@@ -507,6 +507,168 @@ pub fn run_boolean_polyline_regions_orientation() -> TestResult {
     })
 }
 
+pub fn run_boolean_polyline_adjacent_rectangles() -> TestResult {
+    MINI_TEST!("Adjacent Rectangles", {
+        use crate::BooleanPolyline;
+        use crate::Point;
+        use crate::Polyline;
+        use crate::Vector;
+
+        let a = Polyline::rectangle(
+            &Point::new(0.0, 0.0, 0.0),
+            &Vector::new(1.0, 0.0, 0.0),
+            &Vector::new(0.0, 1.0, 0.0),
+            1.0,
+            1.0,
+            true,
+        );
+        let b = Polyline::rectangle(
+            &Point::new(1.0, 0.0, 0.0),
+            &Vector::new(1.0, 0.0, 0.0),
+            &Vector::new(0.0, 1.0, 0.0),
+            1.0,
+            1.0,
+            true,
+        );
+        let isect = BooleanPolyline::compute(&a, &b, 0);
+        let uni = BooleanPolyline::compute(&a, &b, 1);
+        let diff = BooleanPolyline::compute(&a, &b, 2);
+
+        MINI_CHECK!(isect.is_empty());
+        MINI_CHECK!(uni.len() == 1);
+        MINI_CHECK!(uni[0].point_count() == 4);
+        MINI_CHECK!(uni[0].center() == Point::new(1.0, 0.5, 0.0));
+        MINI_CHECK!(diff.len() == 1);
+        MINI_CHECK!(diff[0].point_count() == 4);
+        MINI_CHECK!(diff[0].center() == Point::new(0.5, 0.5, 0.0));
+    })
+}
+
+pub fn run_boolean_polyline_partial_shared_edge() -> TestResult {
+    MINI_TEST!("Partial Shared Edge", {
+        use crate::BooleanPolyline;
+        use crate::Point;
+        use crate::Polyline;
+        use crate::Vector;
+
+        let a = Polyline::rectangle(
+            &Point::new(0.0, 0.0, 0.0),
+            &Vector::new(1.0, 0.0, 0.0),
+            &Vector::new(0.0, 1.0, 0.0),
+            2.0,
+            2.0,
+            true,
+        );
+        let b = Polyline::rectangle(
+            &Point::new(2.0, 1.0, 0.0),
+            &Vector::new(1.0, 0.0, 0.0),
+            &Vector::new(0.0, 1.0, 0.0),
+            1.0,
+            2.0,
+            true,
+        );
+        let isect = BooleanPolyline::compute(&a, &b, 0);
+        let uni = BooleanPolyline::compute(&a, &b, 1);
+        let diff = BooleanPolyline::compute(&a, &b, 2);
+
+        MINI_CHECK!(isect.is_empty());
+        MINI_CHECK!(uni.len() == 1);
+        MINI_CHECK!(uni[0].point_count() == 8);
+        MINI_CHECK!(uni[0].center() == Point::new(1.75, 1.5, 0.0));
+        MINI_CHECK!(diff.len() == 1);
+        MINI_CHECK!(diff[0].point_count() == 4);
+        MINI_CHECK!(diff[0].center() == Point::new(1.0, 1.0, 0.0));
+    })
+}
+
+pub fn run_boolean_polyline_collinear_overlap() -> TestResult {
+    MINI_TEST!("Collinear Overlap", {
+        use crate::BooleanPolyline;
+        use crate::Point;
+        use crate::Polyline;
+        use crate::Vector;
+
+        let a = Polyline::rectangle(
+            &Point::new(0.0, 0.0, 0.0),
+            &Vector::new(1.0, 0.0, 0.0),
+            &Vector::new(0.0, 1.0, 0.0),
+            2.0,
+            1.0,
+            true,
+        );
+        let b = Polyline::rectangle(
+            &Point::new(1.0, 0.0, 0.0),
+            &Vector::new(1.0, 0.0, 0.0),
+            &Vector::new(0.0, 1.0, 0.0),
+            2.0,
+            1.0,
+            true,
+        );
+        let corner = Polyline::rectangle(
+            &Point::new(0.0, 0.0, 0.0),
+            &Vector::new(1.0, 0.0, 0.0),
+            &Vector::new(0.0, 1.0, 0.0),
+            1.0,
+            1.0,
+            true,
+        );
+        let isect = BooleanPolyline::compute(&a, &b, 0);
+        let uni = BooleanPolyline::compute(&a, &b, 1);
+        let diff = BooleanPolyline::compute(&a, &b, 2);
+        let notch = BooleanPolyline::compute(&a, &corner, 2);
+
+        MINI_CHECK!(isect.len() == 1);
+        MINI_CHECK!(isect[0].point_count() == 4);
+        MINI_CHECK!(isect[0].center() == Point::new(1.5, 0.5, 0.0));
+        MINI_CHECK!(uni.len() == 1);
+        MINI_CHECK!(uni[0].point_count() == 4);
+        MINI_CHECK!(uni[0].center() == Point::new(1.5, 0.5, 0.0));
+        MINI_CHECK!(diff.len() == 1);
+        MINI_CHECK!(diff[0].point_count() == 4);
+        MINI_CHECK!(diff[0].center() == Point::new(0.5, 0.5, 0.0));
+        MINI_CHECK!(notch.len() == 1);
+        MINI_CHECK!(notch[0].point_count() == 4);
+        MINI_CHECK!(notch[0].center() == Point::new(1.5, 0.5, 0.0));
+    })
+}
+
+pub fn run_boolean_polyline_t_junction() -> TestResult {
+    MINI_TEST!("T Junction", {
+        use crate::BooleanPolyline;
+        use crate::Point;
+        use crate::Polyline;
+        use crate::Vector;
+
+        let a = Polyline::rectangle(
+            &Point::new(0.0, 0.0, 0.0),
+            &Vector::new(1.0, 0.0, 0.0),
+            &Vector::new(0.0, 1.0, 0.0),
+            4.0,
+            1.0,
+            true,
+        );
+        let b = Polyline::rectangle(
+            &Point::new(1.0, 1.0, 0.0),
+            &Vector::new(1.0, 0.0, 0.0),
+            &Vector::new(0.0, 1.0, 0.0),
+            1.0,
+            2.0,
+            true,
+        );
+        let isect = BooleanPolyline::compute(&a, &b, 0);
+        let uni = BooleanPolyline::compute(&a, &b, 1);
+        let diff = BooleanPolyline::compute(&a, &b, 2);
+
+        MINI_CHECK!(isect.is_empty());
+        MINI_CHECK!(uni.len() == 1);
+        MINI_CHECK!(uni[0].point_count() == 8);
+        MINI_CHECK!(uni[0].center() == Point::new(1.75, 1.25, 0.0));
+        MINI_CHECK!(diff.len() == 1);
+        MINI_CHECK!(diff[0].point_count() == 4);
+        MINI_CHECK!(diff[0].center() == Point::new(2.0, 0.5, 0.0));
+    })
+}
+
 pub fn run_boolean_polyline_open_horizontal_line_vs_unit_square() -> TestResult {
     MINI_TEST!("Horizontal Line Vs Unit Square", {
         use crate::BooleanPolyline;
@@ -652,6 +814,26 @@ REGISTER_MINI_TEST!(
     "Boolean Polyline",
     "Regions Orientation",
     crate::boolean_polyline_test::run_boolean_polyline_regions_orientation
+);
+REGISTER_MINI_TEST!(
+    "Boolean Polyline",
+    "Adjacent Rectangles",
+    crate::boolean_polyline_test::run_boolean_polyline_adjacent_rectangles
+);
+REGISTER_MINI_TEST!(
+    "Boolean Polyline",
+    "Partial Shared Edge",
+    crate::boolean_polyline_test::run_boolean_polyline_partial_shared_edge
+);
+REGISTER_MINI_TEST!(
+    "Boolean Polyline",
+    "Collinear Overlap",
+    crate::boolean_polyline_test::run_boolean_polyline_collinear_overlap
+);
+REGISTER_MINI_TEST!(
+    "Boolean Polyline",
+    "T Junction",
+    crate::boolean_polyline_test::run_boolean_polyline_t_junction
 );
 REGISTER_MINI_TEST!(
     "Boolean Polyline Open",
