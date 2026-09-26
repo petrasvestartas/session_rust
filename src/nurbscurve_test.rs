@@ -1128,15 +1128,20 @@ pub fn run_nurbscurve_insert_knot_periodic_wrap() -> TestResult {
         curve.set_domain(0.0, 1.0);
         let mut inside = curve.clone();
         let mut outside = curve.clone();
+        let mut doubled = curve.clone();
         let mut open_curve = NurbsCurve::create(false, 3, &points);
         let ok_inside = inside.insert_nurbsknot(0.3, 1);
         let ok_outside = outside.insert_nurbsknot(2.3, 1);
+        let ok_doubled = doubled.insert_nurbsknot(-0.4, 2);
         let ok_open = open_curve.insert_nurbsknot(open_curve.domain_end() + 0.5, 1);
 
         MINI_CHECK!(ok_inside);
         MINI_CHECK!(ok_outside);
+        MINI_CHECK!(ok_doubled);
         MINI_CHECK!(!ok_open);
         MINI_CHECK!(outside.cv_count() == 8);
+        MINI_CHECK!(doubled.cv_count() == 9);
+        MINI_CHECK!(doubled.is_valid());
         MINI_CHECK!(open_curve.cv_count() == 4);
 
         for i in 0..outside.nurbsknot_count() {
@@ -1161,6 +1166,7 @@ pub fn run_nurbscurve_insert_knot_periodic_wrap() -> TestResult {
             let t = 0.1 + 0.2 * i as f64;
 
             MINI_CHECK!(TOLERANCE.is_point_close(&outside.point_at(t), &curve.point_at(t)));
+            MINI_CHECK!(TOLERANCE.is_point_close(&doubled.point_at(t), &curve.point_at(t)));
         }
     })
 }

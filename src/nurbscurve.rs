@@ -4179,6 +4179,10 @@ impl NurbsCurve {
         let nurbsknot = &self.m_nurbsknot;
         let cv = &self.m_cv;
         let knot_at = |i: isize| {
+            if i > 0 && i as usize <= nurbsknot.len() {
+                return nurbsknot[i as usize - 1];
+            }
+
             nurbsknot[((i - 1) % period_cv_count) as usize]
                 + ((i - 1) / period_cv_count) as f64 * period
         };
@@ -4193,12 +4197,16 @@ impl NurbsCurve {
         for i in 0..new_period_cv_count + 2 * p - 1 {
             let q = (i - k).div_euclid(new_period_cv_count);
             let r = i - k - q * new_period_cv_count;
-            let knot = if r == 0 {
-                nurbsknot_value
+
+            if r != 0 {
+                nurbsknot_new.push(knot_at(k + r + q * period_cv_count));
+            } else if q == 0 {
+                nurbsknot_new.push(nurbsknot_value);
             } else {
-                knot_at(k + r)
-            };
-            nurbsknot_new.push(knot + q as f64 * period);
+                let lo = knot_at(k + q * period_cv_count);
+                let hi = knot_at(k + 1 + q * period_cv_count);
+                nurbsknot_new.push((lo + nurbsknot_value - knot_at(k)).max(lo).min(hi));
+            }
         }
 
         let mut cv_new = Vec::with_capacity((new_period_cv_count + p) as usize * stride);
