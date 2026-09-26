@@ -5,7 +5,7 @@ use std::io;
 // ═══════════════════════════════════════════════════════════════════════════
 // Write
 // ═══════════════════════════════════════════════════════════════════════════
-/// Return the shortest round-trip text of value like C++ fmt "{}": ties to even, exponent outside [1e-4, 1e16).
+/// Return the shortest round-trip text of value like C++ fmt "{}": closest digits, exponent outside [1e-4, 1e16).
 fn format_number(value: f64) -> String {
     if !value.is_finite() {
         return value.to_string().to_lowercase();
@@ -19,7 +19,12 @@ fn format_number(value: f64) -> String {
         .trim_start_matches('-')
         .replace('.', "")
         .len();
-    let scientific = format!("{:.*e}", digits - 1, value);
+    let rounded = format!("{:.*e}", digits - 1, value);
+    let scientific = if rounded.parse::<f64>() == Ok(value) {
+        rounded
+    } else {
+        shortest
+    };
     let (mantissa, exponent) = scientific.split_once('e').unwrap();
     let exponent: i32 = exponent.parse().unwrap();
 
