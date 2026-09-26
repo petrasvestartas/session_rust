@@ -85,6 +85,49 @@ pub fn run_io_xyz_string_roundtrip() -> TestResult {
     })
 }
 
+pub fn run_io_xyz_write_exact_text() -> TestResult {
+    MINI_TEST!("Write Exact Text", {
+        use crate::read_xyz;
+        use crate::write_xyz;
+        use crate::write_xyz_to_string;
+        use crate::Point;
+        use crate::PointCloud;
+
+        std::fs::create_dir_all("./serialization").unwrap();
+
+        let mut original = PointCloud::default();
+        original.add_point(&Point::new(1.0, 2.5, -3.0));
+        original.add_point(&Point::new(0.1, 1e-05, 1e+16));
+        original.add_point(&Point::new(123456.789, -0.0, 1.0 / 3.0));
+
+        let filepath = "./serialization/test_temp_exact.xyz";
+        write_xyz(&original, filepath).unwrap();
+        let text = std::fs::read_to_string(filepath).unwrap();
+        let loaded = read_xyz(filepath).unwrap();
+
+        MINI_CHECK!(text == "1 2.5 -3\n0.1 1e-05 1e+16\n123456.789 -0 0.3333333333333333\n");
+        MINI_CHECK!(write_xyz_to_string(&loaded) == text);
+        MINI_CHECK!(loaded.get_points()[2][2] == 1.0 / 3.0);
+
+        std::fs::remove_file(filepath).unwrap();
+    })
+}
+
+pub fn run_io_xyz_file_errors() -> TestResult {
+    MINI_TEST!("File Errors", {
+        use crate::read_xyz;
+        use crate::write_xyz;
+        use crate::PointCloud;
+
+        let cloud = PointCloud::default();
+        let read_failed = read_xyz("./serialization/test_temp_missing.xyz").is_err();
+        let write_failed = write_xyz(&cloud, "").is_err();
+
+        MINI_CHECK!(read_failed);
+        MINI_CHECK!(write_failed);
+    })
+}
+
 REGISTER_MINI_TEST!(
     "IoXyz",
     "Read Bunny",
@@ -99,4 +142,14 @@ REGISTER_MINI_TEST!(
     "IoXyz",
     "String Roundtrip",
     crate::io_xyz_test::run_io_xyz_string_roundtrip
+);
+REGISTER_MINI_TEST!(
+    "IoXyz",
+    "Write Exact Text",
+    crate::io_xyz_test::run_io_xyz_write_exact_text
+);
+REGISTER_MINI_TEST!(
+    "IoXyz",
+    "File Errors",
+    crate::io_xyz_test::run_io_xyz_file_errors
 );

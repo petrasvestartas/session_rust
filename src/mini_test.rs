@@ -5249,6 +5249,16 @@ pub fn get_all_tests() -> Vec<RegisteredTest> {
             name: "String Roundtrip",
             func: run_io_xyz_string_roundtrip,
         },
+        RegisteredTest {
+            group: "IoXyz",
+            name: "Write Exact Text",
+            func: run_io_xyz_write_exact_text,
+        },
+        RegisteredTest {
+            group: "IoXyz",
+            name: "File Errors",
+            func: run_io_xyz_file_errors,
+        },
         // Matrix tests
         RegisteredTest {
             group: "Matrix",
