@@ -8,6 +8,7 @@ use crate::REGISTER_MINI_TEST;
 
 pub fn run_nurbscurve_constructor() -> TestResult {
     MINI_TEST!("Constructor", {
+        use crate::Arrowhead;
         use crate::NurbsCurve;
         use crate::Point;
 
@@ -27,6 +28,10 @@ pub fn run_nurbscurve_constructor() -> TestResult {
         let ccopy = curve.duplicate();
         let cother = NurbsCurve::create(false, 2, &points);
 
+        let mut carrow = curve.duplicate();
+        carrow.arrowhead = Arrowhead::BOTH;
+        let carrowcopy = carrow.duplicate();
+
         MINI_CHECK!(curve.is_valid());
         MINI_CHECK!(curve.cv_count() == 4);
         MINI_CHECK!(curve.degree() == 2);
@@ -39,6 +44,7 @@ pub fn run_nurbscurve_constructor() -> TestResult {
         MINI_CHECK!(ccopy.guid() != curve.guid());
         MINI_CHECK!(ccopy == curve);
         MINI_CHECK!(cother != curve);
+        MINI_CHECK!(curve.arrowhead == Arrowhead::NONE && carrowcopy == carrow && carrow != curve);
     })
 }
 
@@ -720,6 +726,7 @@ pub fn run_nurbscurve_evaluation() -> TestResult {
 
 pub fn run_nurbscurve_modifications() -> TestResult {
     MINI_TEST!("Modifications", {
+        use crate::Arrowhead;
         use crate::NurbsCurve;
         use crate::Point;
 
@@ -734,11 +741,13 @@ pub fn run_nurbscurve_modifications() -> TestResult {
         let mut curve = NurbsCurve::create(false, 2, &points);
 
         let mut curve_reversed = curve.duplicate();
+        curve_reversed.arrowhead = Arrowhead::START;
         curve_reversed.reverse();
 
         MINI_CHECK!(
             TOLERANCE.is_point_close(&curve_reversed.point_at_start(), &curve.point_at_end())
         );
+        MINI_CHECK!(curve_reversed.arrowhead == Arrowhead::END);
 
         curve.swap_coordinates(0, 1);
 
@@ -821,6 +830,7 @@ pub fn run_nurbscurve_modifications() -> TestResult {
 
 pub fn run_nurbscurve_transformations() -> TestResult {
     MINI_TEST!("Transformations", {
+        use crate::Arrowhead;
         use crate::NurbsCurve;
         use crate::Point;
         use crate::Xform;
@@ -834,6 +844,7 @@ pub fn run_nurbscurve_transformations() -> TestResult {
         ];
 
         let mut curve1 = NurbsCurve::create(false, 2, &points);
+        curve1.arrowhead = Arrowhead::BOTH;
         let curve1_xf = Xform::translation(0.0, 0.0, 1.0);
         curve1.transform(&curve1_xf);
 
@@ -849,7 +860,7 @@ pub fn run_nurbscurve_transformations() -> TestResult {
         let x = Xform::translation(0.0, 0.0, 10.0);
         let curve4_transformed = curve4.transformed(&x);
 
-        MINI_CHECK!(curve1.cv(0).unwrap()[2] == 1.0);
+        MINI_CHECK!(curve1.cv(0).unwrap()[2] == 1.0 && curve1.arrowhead == Arrowhead::BOTH);
         MINI_CHECK!(curve2.cv(0).unwrap()[2] == 1.0);
         MINI_CHECK!(curve3_transformed.cv(0).unwrap()[2] == 10.0);
         MINI_CHECK!(curve4_transformed.cv(0).unwrap()[2] == 10.0);
@@ -858,6 +869,7 @@ pub fn run_nurbscurve_transformations() -> TestResult {
 
 pub fn run_nurbscurve_json_roundtrip() -> TestResult {
     MINI_TEST!("Json Roundtrip", {
+        use crate::Arrowhead;
         use crate::NurbsCurve;
         use crate::Point;
         use std::path::PathBuf;
@@ -870,7 +882,8 @@ pub fn run_nurbscurve_json_roundtrip() -> TestResult {
             Point::new(4.0, 0.0, 0.0),
         ];
 
-        let curve = NurbsCurve::create(false, 2, &points);
+        let mut curve = NurbsCurve::create(false, 2, &points);
+        curve.arrowhead = Arrowhead::END;
         let guid = curve.guid().to_string();
         let filename = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
             .join("serialization")
@@ -886,11 +899,14 @@ pub fn run_nurbscurve_json_roundtrip() -> TestResult {
         MINI_CHECK!(loaded_json_string == curve);
         MINI_CHECK!(loaded_from_file == curve);
         MINI_CHECK!(loaded_from_file.guid() == guid);
+        MINI_CHECK!(loaded_from_file.arrowhead == Arrowhead::END);
+        MINI_CHECK!(curve.file_json_dumps().contains("\"arrowhead\":\"end\""));
     })
 }
 
 pub fn run_nurbscurve_protobuf_roundtrip() -> TestResult {
     MINI_TEST!("Protobuf Roundtrip", {
+        use crate::Arrowhead;
         use crate::NurbsCurve;
         use crate::Point;
         use std::path::PathBuf;
@@ -903,7 +919,8 @@ pub fn run_nurbscurve_protobuf_roundtrip() -> TestResult {
             Point::new(4.0, 0.0, 0.0),
         ];
 
-        let curve = NurbsCurve::create(false, 2, &points);
+        let mut curve = NurbsCurve::create(false, 2, &points);
+        curve.arrowhead = Arrowhead::END;
         let guid = curve.guid().to_string();
         let filename = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
             .join("serialization")
@@ -917,6 +934,7 @@ pub fn run_nurbscurve_protobuf_roundtrip() -> TestResult {
         MINI_CHECK!(loaded_proto_string == curve);
         MINI_CHECK!(loaded == curve);
         MINI_CHECK!(loaded.guid() == guid);
+        MINI_CHECK!(loaded.arrowhead == Arrowhead::END);
         MINI_CHECK!(converted == curve);
         MINI_CHECK!(converted.guid() == guid);
     })

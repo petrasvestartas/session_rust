@@ -5,6 +5,7 @@
 )]
 use crate::closest::Closest;
 use crate::color::Color;
+use crate::line::Arrowhead;
 use crate::nurbsknot;
 use crate::nurbsknot::CurveInterpStyle;
 use crate::nurbsknot::CurveNurbsKnotStyle;
@@ -70,6 +71,7 @@ pub struct NurbsCurve {
     pub width: f64,              // Display width.
     pub pointcolors: Vec<Color>, // Display color per control point.
     pub linecolors: Vec<Color>,  // Display color per control polygon segment.
+    pub arrowhead: Arrowhead,    // Arrowhead ends.
     pub m_dim: usize,            // Coordinate dimension.
     pub m_is_rat: bool,          // True when rational.
     pub m_order: usize,          // Degree + 1.
@@ -88,6 +90,7 @@ impl Default for NurbsCurve {
             width: 1.0,
             pointcolors: Vec::new(),
             linecolors: Vec::new(),
+            arrowhead: Arrowhead::NONE,
             m_dim: 0,
             m_is_rat: false,
             m_order: 0,
@@ -2071,7 +2074,7 @@ impl NurbsCurve {
     // ═══════════════════════════════════════════════════════════════════════════
     // Modifications
     // ═══════════════════════════════════════════════════════════════════════════
-    /// Reverse the direction keeping the domain.
+    /// Reverse the direction keeping the domain and swap the arrowhead ends.
     pub fn reverse(&mut self) -> bool {
         if !self.is_valid() {
             return false;
@@ -2098,6 +2101,8 @@ impl NurbsCurve {
             self.set_cv_4d(i, xj, yj, zj, wj);
             self.set_cv_4d(j, xi, yi, zi, wi);
         }
+
+        self.arrowhead = self.arrowhead.flipped();
 
         true
     }
@@ -2577,6 +2582,7 @@ impl NurbsCurve {
             width: self.width,
             pointcolors,
             linecolors,
+            arrowhead: self.arrowhead.to_i32(),
         }
     }
 
@@ -2605,6 +2611,8 @@ impl NurbsCurve {
         for c in &proto.linecolors {
             curve.linecolors.push(Color::new(c.r, c.g, c.b, c.a));
         }
+
+        curve.arrowhead = Arrowhead::from_i32(proto.arrowhead);
 
         curve
     }
@@ -4530,7 +4538,7 @@ impl fmt::Display for NurbsCurve {
 // Operators
 // ═══════════════════════════════════════════════════════════════════════════
 impl PartialEq for NurbsCurve {
-    /// Compare name, width, colors, layout, nurbsknots and CVs to 1e-12; guid ignored.
+    /// Compare name, width, colors, arrowhead, layout, nurbsknots and CVs to 1e-12; guid ignored.
     fn eq(&self, other: &Self) -> bool {
         if self.m_dim != other.m_dim || self.m_is_rat != other.m_is_rat {
             return false;
@@ -4557,6 +4565,10 @@ impl PartialEq for NurbsCurve {
         }
 
         if self.linecolors != other.linecolors {
+            return false;
+        }
+
+        if self.arrowhead != other.arrowhead {
             return false;
         }
 
@@ -4614,7 +4626,12 @@ impl Serialize for NurbsCurve {
             pointcolors.extend_from_slice(&[c.r, c.g, c.b, c.a]);
         }
 
-        let mut map = serializer.serialize_map(Some(13))?;
+        let mut map = serializer.serialize_map(None)?;
+
+        if !self.arrowhead.is_none() {
+            map.serialize_entry("arrowhead", &self.arrowhead)?;
+        }
+
         map.serialize_entry("control_points", &control_points)?;
         map.serialize_entry("cv_count", &self.m_cv_count)?;
         map.serialize_entry("cv_stride", &self.m_cv_stride)?;
@@ -4636,6 +4653,8 @@ impl Serialize for NurbsCurve {
 /// Flat JSON fields for deserialization.
 #[derive(Deserialize)]
 struct NurbsCurveData {
+    #[serde(default)]
+    arrowhead: Arrowhead,
     #[serde(default)]
     control_points: Vec<Vec<f64>>,
     cv_count: usize,
@@ -4689,6 +4708,7 @@ impl<'de> Deserialize<'de> for NurbsCurve {
 
         curve.name = data.name.unwrap_or_else(|| "my_nurbscurve".to_string());
         curve.width = data.width.unwrap_or(1.0);
+        curve.arrowhead = data.arrowhead;
 
         let arr = data.pointcolors;
         let mut i = 0;

@@ -6,6 +6,7 @@ use crate::REGISTER_MINI_TEST;
 
 pub fn run_line_constructor() -> TestResult {
     MINI_TEST!("Constructor", {
+        use crate::Arrowhead;
         use crate::Color;
         use crate::Line;
         use crate::Point;
@@ -66,6 +67,11 @@ pub fn run_line_constructor() -> TestResult {
         lc.linecolor = Color::with_name(1.0, 0.0, 0.0, 1.0, "red");
         lc.width = 2.5;
 
+        let mut la = lc.duplicate();
+        la.arrowhead = Arrowhead::END;
+        let lacopy = la.duplicate();
+        let laneg = -&la;
+
         let lwn = Line::with_name("custom", 0.0, 0.0, 0.0, 1.0, 0.0, 0.0);
 
         let (ms, me) = Line::get_middle_line(
@@ -102,6 +108,8 @@ pub fn run_line_constructor() -> TestResult {
         MINI_CHECK!(l_pv[3] == 4.0 && l_pv[4] == 6.0 && l_pv[5] == 8.0);
         MINI_CHECK!(l_pdl[0] == 0.0 && l_pdl[3] == 5.0);
         MINI_CHECK!(lc.linecolor[0] == 1.0 && lc.linecolor[1] == 0.0 && lc.width == 2.5);
+        MINI_CHECK!(line.arrowhead == Arrowhead::NONE && lacopy == la && la != lc);
+        MINI_CHECK!(laneg.arrowhead == Arrowhead::START && laneg[0] == 1.0 && laneg[3] == 0.0);
         MINI_CHECK!(lwn.name == "custom" && lwn[3] == 1.0);
         MINI_CHECK!(TOLERANCE.is_close(ms[1], 1.0) && TOLERANCE.is_close(me[1], 1.0));
     })
@@ -109,26 +117,31 @@ pub fn run_line_constructor() -> TestResult {
 
 pub fn run_line_transformation() -> TestResult {
     MINI_TEST!("Transformation", {
+        use crate::Arrowhead;
         use crate::Line;
         use crate::Xform;
 
         let mut line = Line::new(0.0, 0.0, 0.0, 1.0, 0.0, 0.0);
+        line.arrowhead = Arrowhead::BOTH;
         let xform = Xform::translation(10.0, 0.0, 0.0);
         let moved = line.transformed(&xform);
         line.transform(&xform);
 
         MINI_CHECK!(moved[0] == 10.0 && moved[3] == 11.0);
         MINI_CHECK!(line[0] == 10.0 && line[3] == 11.0);
+        MINI_CHECK!(moved.arrowhead == Arrowhead::BOTH && line.arrowhead == Arrowhead::BOTH);
     })
 }
 
 pub fn run_line_json_roundtrip() -> TestResult {
     MINI_TEST!("Json Roundtrip", {
+        use crate::Arrowhead;
         use crate::Line;
 
         let mut line = Line::new(42.1, 84.2, 126.3, 168.4, 210.5, 252.6);
         line.name = "test_line".to_string();
         line.dash = vec![3.0, 2.0];
+        line.arrowhead = Arrowhead::END;
 
         let j = line.jsondump().unwrap();
         let loaded_j = Line::jsonload(&j).unwrap();
@@ -152,16 +165,20 @@ pub fn run_line_json_roundtrip() -> TestResult {
         MINI_CHECK!(TOLERANCE.is_close(loaded[4], 210.5));
         MINI_CHECK!(TOLERANCE.is_close(loaded[5], 252.6));
         MINI_CHECK!(loaded.dash == vec![3.0, 2.0]);
+        MINI_CHECK!(loaded.arrowhead == Arrowhead::END && loaded_j.arrowhead == Arrowhead::END);
+        MINI_CHECK!(!Line::default().file_json_dumps().contains("arrowhead"));
     })
 }
 
 pub fn run_line_protobuf_roundtrip() -> TestResult {
     MINI_TEST!("Protobuf Roundtrip", {
+        use crate::Arrowhead;
         use crate::Line;
 
         let mut line = Line::new(42.1, 84.2, 126.3, 168.4, 210.5, 252.6);
         line.name = "test_line".to_string();
         line.dash = vec![3.0, 2.0];
+        line.arrowhead = Arrowhead::END;
 
         let guid = line.guid().to_string();
         let s = line.pb_dumps();
@@ -184,6 +201,7 @@ pub fn run_line_protobuf_roundtrip() -> TestResult {
         MINI_CHECK!(TOLERANCE.is_close(loaded[5], 252.6));
         MINI_CHECK!(loaded.dash == vec![3.0, 2.0]);
         MINI_CHECK!(loaded.guid() == guid);
+        MINI_CHECK!(loaded.arrowhead == Arrowhead::END);
         MINI_CHECK!(converted == line);
         MINI_CHECK!(converted.guid() == guid);
     })

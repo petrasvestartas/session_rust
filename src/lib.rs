@@ -152,6 +152,7 @@ pub use io_xyz::read_xyz;
 pub use io_xyz::read_xyz_from_str;
 pub use io_xyz::write_xyz;
 pub use io_xyz::write_xyz_to_string;
+pub use line::Arrowhead;
 pub use line::Line;
 pub use matrix::Matrix;
 pub use mesh::LoftPanel;

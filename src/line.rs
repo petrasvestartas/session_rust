@@ -22,6 +22,48 @@ use std::ops::Sub;
 use std::ops::SubAssign;
 use std::sync::OnceLock;
 
+/// Which ends of a curve carry an arrowhead.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum Arrowhead {
+    #[default]
+    NONE,
+    START,
+    END,
+    BOTH,
+}
+
+impl Arrowhead {
+    /// Return the arrowhead with start and end swapped.
+    pub fn flipped(self) -> Self {
+        match self {
+            Self::START => Self::END,
+            Self::END => Self::START,
+            _ => self,
+        }
+    }
+
+    /// Return whether no end carries a head.
+    pub(crate) fn is_none(&self) -> bool {
+        *self == Self::NONE
+    }
+
+    /// Return the protobuf value.
+    pub(crate) fn to_i32(self) -> i32 {
+        self as i32
+    }
+
+    /// Return the arrowhead of a protobuf value, none when unknown.
+    pub(crate) fn from_i32(v: i32) -> Self {
+        match v {
+            1 => Self::START,
+            2 => Self::END,
+            3 => Self::BOTH,
+            _ => Self::NONE,
+        }
+    }
+}
+
 /// A 3D line segment with display width, dash pattern and color.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(tag = "type", rename = "Line")]
@@ -47,6 +89,8 @@ pub struct Line {
     pub width: f64,       // Display width.
     pub dash: Vec<f64>,   // Dash pattern lengths.
     pub linecolor: Color, // Display color.
+    #[serde(default, skip_serializing_if = "Arrowhead::is_none")]
+    pub arrowhead: Arrowhead, // Arrowhead ends.
 }
 
 impl Line {
@@ -67,6 +111,7 @@ impl Line {
             width: 1.0,
             dash: Vec::new(),
             linecolor: Color::black(),
+            arrowhead: Arrowhead::NONE,
         }
     }
 
@@ -286,7 +331,7 @@ impl IndexMut<usize> for Line {
 }
 
 impl PartialEq for Line {
-    /// Compare name, coordinates to 1e-6, width and linecolor; guid ignored.
+    /// Compare name, coordinates to 1e-6, width, linecolor and arrowhead; guid ignored.
     fn eq(&self, other: &Self) -> bool {
         self.name == other.name
             && (self._x0 * 1000000.0).round() == (other._x0 * 1000000.0).round()
@@ -297,6 +342,7 @@ impl PartialEq for Line {
             && (self._z1 * 1000000.0).round() == (other._z1 * 1000000.0).round()
             && (self.width * 1000000.0).round() == (other.width * 1000000.0).round()
             && self.linecolor == other.linecolor
+            && self.arrowhead == other.arrowhead
     }
 }
 
@@ -399,9 +445,9 @@ impl Div<f64> for Line {
 impl Neg for Line {
     type Output = Line;
 
-    /// Return a flipped copy (end to start).
+    /// Return a flipped copy (end to start, arrowhead ends swapped).
     fn neg(self) -> Line {
-        Line::new(self._x1, self._y1, self._z1, self._x0, self._y0, self._z0)
+        -&self
     }
 }
 
@@ -444,9 +490,15 @@ impl Div<f64> for &Line {
 impl Neg for &Line {
     type Output = Line;
 
-    /// Return a flipped copy (end to start).
+    /// Return a flipped copy (end to start, arrowhead ends swapped).
     fn neg(self) -> Line {
-        Line::new(self._x1, self._y1, self._z1, self._x0, self._y0, self._z0)
+        let mut result = self.duplicate();
+        std::mem::swap(&mut result._x0, &mut result._x1);
+        std::mem::swap(&mut result._y0, &mut result._y1);
+        std::mem::swap(&mut result._z0, &mut result._z1);
+        result.arrowhead = self.arrowhead.flipped();
+
+        result
     }
 }
 
@@ -780,6 +832,7 @@ impl Line {
                 self.linecolor.a,
             ],
             linecolor_name: self.linecolor.name.clone(),
+            arrowhead: self.arrowhead.to_i32(),
         }
     }
 
@@ -820,6 +873,8 @@ impl Line {
                 line.linecolor.name = proto.linecolor_name;
             }
         }
+
+        line.arrowhead = Arrowhead::from_i32(proto.arrowhead);
 
         line
     }

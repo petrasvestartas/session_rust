@@ -1,5 +1,6 @@
 use crate::tolerance::Tolerance;
 use crate::tolerance::PI;
+use crate::Arrowhead;
 use crate::Color;
 use crate::Line;
 use crate::Plane;
@@ -249,6 +250,8 @@ pub struct Polyline {
     pub width: f64,       // Display width.
     pub dash: Vec<f64>,   // Dash pattern lengths.
     pub linecolor: Color, // Display color.
+    #[serde(skip_serializing_if = "Arrowhead::is_none")]
+    pub arrowhead: Arrowhead, // Arrowhead ends.
 }
 
 impl Polyline {
@@ -763,7 +766,7 @@ impl Polyline {
         Some(out_point)
     }
 
-    /// Reverse the point order in place.
+    /// Reverse the point order and swap the arrowhead ends in place.
     pub fn reverse(&mut self) {
         let n = self.point_count();
         let mut coords = Vec::with_capacity(self.coords.len());
@@ -777,6 +780,7 @@ impl Polyline {
 
         self.coords = coords;
         self.plane.reverse();
+        self.arrowhead = self.arrowhead.flipped();
     }
 
     /// Return a reversed copy.
@@ -1133,6 +1137,7 @@ impl Default for Polyline {
             width: 1.0,
             dash: Vec::new(),
             linecolor: Color::black(),
+            arrowhead: Arrowhead::NONE,
         }
     }
 }
@@ -1141,7 +1146,7 @@ impl Default for Polyline {
 // Operators
 // ═══════════════════════════════════════════════════════════════════════════
 impl PartialEq for Polyline {
-    /// Compare name, coordinates to 1e-6, width and linecolor; guid ignored.
+    /// Compare name, coordinates to 1e-6, width, linecolor and arrowhead; guid ignored.
     fn eq(&self, other: &Self) -> bool {
         if self.name != other.name {
             return false;
@@ -1163,7 +1168,7 @@ impl PartialEq for Polyline {
             return false;
         }
 
-        self.linecolor == other.linecolor
+        self.linecolor == other.linecolor && self.arrowhead == other.arrowhead
     }
 }
 
@@ -2102,6 +2107,7 @@ impl Polyline {
             width: self.width,
             dash: self.dash.clone(),
             linecolor: Some(self.linecolor.to_proto()),
+            arrowhead: self.arrowhead.to_i32(),
         }
     }
 
@@ -2120,6 +2126,8 @@ impl Polyline {
         if let Some(color) = proto.linecolor {
             polyline.linecolor = Color::from_proto(color);
         }
+
+        polyline.arrowhead = Arrowhead::from_i32(proto.arrowhead);
 
         polyline
     }
@@ -2583,6 +2591,8 @@ impl<'de> Deserialize<'de> for Polyline {
             dash: Vec<f64>,
             #[serde(default)]
             linecolor: Option<Color>,
+            #[serde(default)]
+            arrowhead: Arrowhead,
         }
 
         let data = PolylineData::deserialize(deserializer)?;
@@ -2614,6 +2624,7 @@ impl<'de> Deserialize<'de> for Polyline {
             polyline.linecolor = linecolor;
         }
 
+        polyline.arrowhead = data.arrowhead;
         polyline.recompute_plane_if_needed();
 
         Ok(polyline)

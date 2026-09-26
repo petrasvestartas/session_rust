@@ -7,6 +7,7 @@ use crate::REGISTER_MINI_TEST;
 
 pub fn run_polyline_constructor() -> TestResult {
     MINI_TEST!("Constructor", {
+        use crate::Arrowhead;
         use crate::Color;
         use crate::Point;
         use crate::Polyline;
@@ -65,6 +66,10 @@ pub fn run_polyline_constructor() -> TestResult {
         plc.linecolor = Color::with_name(1.0, 0.0, 0.0, 1.0, "red");
         plc.width = 2.5;
 
+        let mut pla = plc.duplicate();
+        pla.arrowhead = Arrowhead::START;
+        let placopy = pla.duplicate();
+
         MINI_CHECK!(pl.name == "my_polyline" && !pl.guid().is_empty() && point_count == 4);
         MINI_CHECK!(segment_count == 3 && !is_empty);
         MINI_CHECK!(pt[0] == 1.0 && pt[1] == 0.0 && pt[2] == 0.0);
@@ -86,6 +91,7 @@ pub fn run_polyline_constructor() -> TestResult {
         MINI_CHECK!(rdif.get_point(0).unwrap()[0] == -1.0 && rdif.get_point(0).unwrap()[1] == -1.0);
         MINI_CHECK!(neg.get_point(0).unwrap()[0] == 3.0 && neg.get_point(3).unwrap()[0] == 0.0);
         MINI_CHECK!(plc.linecolor[0] == 1.0 && plc.linecolor[1] == 0.0 && plc.width == 2.5);
+        MINI_CHECK!(pl.arrowhead == Arrowhead::NONE && placopy == pla && pla != plc);
     })
 }
 
@@ -134,6 +140,7 @@ pub fn run_polyline_rectangle() -> TestResult {
 
 pub fn run_polyline_transformation() -> TestResult {
     MINI_TEST!("Transformation", {
+        use crate::Arrowhead;
         use crate::Point;
         use crate::Polyline;
         use crate::Xform;
@@ -144,6 +151,7 @@ pub fn run_polyline_transformation() -> TestResult {
             Point::new(1.0, 1.0, 0.0),
             Point::new(0.0, 1.0, 0.0),
         ]);
+        pl.arrowhead = Arrowhead::BOTH;
         let pl_xf = Xform::translation(10.0, 0.0, 0.0);
         let pl_transformed = pl.transformed(&pl_xf);
         pl.transform(&pl_xf);
@@ -153,11 +161,13 @@ pub fn run_polyline_transformation() -> TestResult {
                 && pl_transformed.get_point(1).unwrap()[0] == 11.0
         );
         MINI_CHECK!(pl.get_point(0).unwrap()[0] == 10.0 && pl.get_point(1).unwrap()[0] == 11.0);
+        MINI_CHECK!(pl_transformed.arrowhead == Arrowhead::BOTH && pl.arrowhead == Arrowhead::BOTH);
     })
 }
 
 pub fn run_polyline_json_roundtrip() -> TestResult {
     MINI_TEST!("Json Roundtrip", {
+        use crate::Arrowhead;
         use crate::Point;
         use crate::Polyline;
 
@@ -169,6 +179,7 @@ pub fn run_polyline_json_roundtrip() -> TestResult {
         ]);
         pl.name = "test_polyline".to_string();
         pl.dash = vec![3.0, 2.0];
+        pl.arrowhead = Arrowhead::END;
 
         let j = pl.jsondump().unwrap();
         let loaded_j = Polyline::jsonload(&j).unwrap();
@@ -191,11 +202,14 @@ pub fn run_polyline_json_roundtrip() -> TestResult {
         MINI_CHECK!(TOLERANCE.is_close(loaded.get_point(2).unwrap()[2], 9.0));
         MINI_CHECK!(loaded.dash == vec![3.0, 2.0]);
         MINI_CHECK!(loaded.guid() == pl.guid());
+        MINI_CHECK!(loaded.arrowhead == Arrowhead::END && loaded_j.arrowhead == Arrowhead::END);
+        MINI_CHECK!(!Polyline::default().file_json_dumps().contains("arrowhead"));
     })
 }
 
 pub fn run_polyline_protobuf_roundtrip() -> TestResult {
     MINI_TEST!("Protobuf Roundtrip", {
+        use crate::Arrowhead;
         use crate::Point;
         use crate::Polyline;
 
@@ -207,6 +221,7 @@ pub fn run_polyline_protobuf_roundtrip() -> TestResult {
         ]);
         pl.name = "test_polyline".to_string();
         pl.dash = vec![3.0, 2.0];
+        pl.arrowhead = Arrowhead::END;
 
         let guid = pl.guid().to_string();
         let s = pl.pb_dumps();
@@ -227,6 +242,7 @@ pub fn run_polyline_protobuf_roundtrip() -> TestResult {
         MINI_CHECK!(TOLERANCE.is_close(loaded.get_point(2).unwrap()[2], 9.0));
         MINI_CHECK!(loaded.dash == vec![3.0, 2.0]);
         MINI_CHECK!(loaded.guid() == guid);
+        MINI_CHECK!(loaded.arrowhead == Arrowhead::END);
         MINI_CHECK!(converted == pl);
         MINI_CHECK!(converted.guid() == guid);
     })
@@ -327,6 +343,7 @@ pub fn run_polyline_closed() -> TestResult {
 
 pub fn run_polyline_reverse() -> TestResult {
     MINI_TEST!("Reverse", {
+        use crate::Arrowhead;
         use crate::Point;
         use crate::Polyline;
 
@@ -336,6 +353,7 @@ pub fn run_polyline_reverse() -> TestResult {
             Point::new(2.0, 0.0, 0.0),
             Point::new(3.0, 0.0, 0.0),
         ]);
+        pl.arrowhead = Arrowhead::END;
 
         let rev = pl.reversed();
         let orig_first = pl.get_point(0).unwrap()[0];
@@ -347,6 +365,7 @@ pub fn run_polyline_reverse() -> TestResult {
         MINI_CHECK!(orig_first == 0.0);
         MINI_CHECK!(rev_first == 3.0);
         MINI_CHECK!(in_place_first == 3.0);
+        MINI_CHECK!(rev.arrowhead == Arrowhead::START && pl.arrowhead == Arrowhead::START);
     })
 }
 

@@ -306,6 +306,9 @@ pub struct NurbsCurve {
     /// Line colors (RGBA)
     #[prost(message, repeated, tag = "13")]
     pub linecolors: ::prost::alloc::vec::Vec<Color>,
+    /// Arrowhead ends (0=none, 1=start, 2=end, 3=both)
+    #[prost(int32, tag = "14")]
+    pub arrowhead: i32,
 }
 /// TopoDS_Shape: an oriented reference to a sub-shape (index into the owning table).
 #[derive(Clone, Copy, PartialEq, Eq, Hash, ::prost::Message)]
@@ -465,6 +468,9 @@ pub struct Polyline {
     /// Dash pattern: on/off lengths in mm, repeating; empty = solid
     #[prost(double, repeated, tag = "7")]
     pub dash: ::prost::alloc::vec::Vec<f64>,
+    /// Arrowhead ends (0=none, 1=start, 2=end, 3=both)
+    #[prost(int32, tag = "8")]
+    pub arrowhead: i32,
 }
 /// One modification applied to a host element - a cut, a drill, a joint pocket.
 ///
@@ -792,6 +798,9 @@ pub struct Line {
     pub linecolor_rgba: ::prost::alloc::vec::Vec<f32>,
     #[prost(string, tag = "11")]
     pub linecolor_name: ::prost::alloc::string::String,
+    /// Arrowhead ends (0=none, 1=start, 2=end, 3=both)
+    #[prost(int32, tag = "12")]
+    pub arrowhead: i32,
 }
 /// Matrix message representing an NxM matrix
 #[derive(Clone, PartialEq, ::prost::Message)]
