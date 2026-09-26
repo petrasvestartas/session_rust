@@ -1232,6 +1232,115 @@ pub fn run_primitives_nurbssurface_loft() -> TestResult {
     })
 }
 
+pub fn run_primitives_nurbssurface_loft_mixed_knots() -> TestResult {
+    MINI_TEST!("Nurbssurface Loft Mixed Knots", {
+        use crate::NurbsCurve;
+        use crate::Point;
+        use crate::Primitives;
+
+        let pts_bottom = [
+            Point::new(2.0, 0.0, 0.0),
+            Point::new(0.0, 2.0, 0.0),
+            Point::new(-2.0, 0.0, 0.0),
+            Point::new(0.0, -2.0, 0.0),
+        ];
+        let pts_top = [
+            Point::new(2.0, 0.0, 3.0),
+            Point::new(0.0, 2.0, 3.0),
+            Point::new(-2.0, 0.0, 3.0),
+            Point::new(0.0, -2.0, 3.0),
+        ];
+        let mut periodic = NurbsCurve::create(true, 3, &pts_bottom);
+        let mut clamped = NurbsCurve::create(true, 3, &pts_top);
+        periodic.set_domain(0.0, 1.0);
+        clamped.set_domain(0.0, 1.0);
+        clamped.clamp_end(2);
+
+        let pts_a = [
+            Point::new(0.0, 0.0, 0.0),
+            Point::new(1.0, 1.0, 0.0),
+            Point::new(2.0, 0.0, 0.0),
+            Point::new(3.0, 1.0, 0.0),
+            Point::new(4.0, 0.0, 0.0),
+        ];
+        let pts_b = [
+            Point::new(0.0, 0.0, 3.0),
+            Point::new(1.0, 1.0, 3.0),
+            Point::new(2.0, 0.0, 3.0),
+            Point::new(3.0, 1.0, 3.0),
+            Point::new(4.0, 0.0, 3.0),
+        ];
+        let mut single = NurbsCurve::create(false, 3, &pts_a);
+        let mut doubled = NurbsCurve::create(false, 3, &pts_b);
+        single.set_domain(0.0, 1.0);
+        doubled.set_domain(0.0, 1.0);
+        doubled.insert_nurbsknot(0.5, 2);
+
+        let srf_closed = Primitives::create_loft(&[periodic.clone(), clamped.clone()], 1);
+        let srf_open = Primitives::create_loft(&[single.clone(), doubled.clone()], 1);
+
+        MINI_CHECK!(srf_closed.is_valid());
+        MINI_CHECK!(srf_closed.cv_count(0) == 7);
+        MINI_CHECK!(srf_open.is_valid());
+        MINI_CHECK!(srf_open.cv_count(0) == 6);
+
+        for i in 0..=4 {
+            let t = i as f64 / 4.0;
+
+            MINI_CHECK!(TOLERANCE
+                .is_point_close(&srf_closed.point_at(t, 0.0).unwrap(), &periodic.point_at(t)));
+            MINI_CHECK!(TOLERANCE
+                .is_point_close(&srf_closed.point_at(t, 1.0).unwrap(), &clamped.point_at(t)));
+            MINI_CHECK!(
+                TOLERANCE.is_point_close(&srf_open.point_at(t, 0.0).unwrap(), &single.point_at(t))
+            );
+            MINI_CHECK!(
+                TOLERANCE.is_point_close(&srf_open.point_at(t, 1.0).unwrap(), &doubled.point_at(t))
+            );
+        }
+    })
+}
+
+pub fn run_primitives_nurbssurface_loft_periodic_sections() -> TestResult {
+    MINI_TEST!("Nurbssurface Loft Periodic Sections", {
+        use crate::NurbsCurve;
+        use crate::Point;
+        use crate::Primitives;
+
+        let pts_bottom = [
+            Point::new(2.0, 0.0, 0.0),
+            Point::new(0.0, 2.0, 0.0),
+            Point::new(-2.0, 0.0, 0.0),
+            Point::new(0.0, -2.0, 0.0),
+        ];
+        let pts_top = [
+            Point::new(2.0, 0.0, 3.0),
+            Point::new(1.0, 1.0, 3.0),
+            Point::new(0.0, 2.0, 3.0),
+            Point::new(-2.0, 0.0, 3.0),
+            Point::new(0.0, -2.0, 3.0),
+        ];
+        let mut bottom = NurbsCurve::create(true, 3, &pts_bottom);
+        let mut top = NurbsCurve::create(true, 3, &pts_top);
+        bottom.set_domain(0.0, 1.0);
+        top.set_domain(0.0, 1.0);
+
+        let srf = Primitives::create_loft(&[bottom.clone(), top.clone()], 1);
+
+        MINI_CHECK!(srf.is_valid());
+        MINI_CHECK!(srf.cv_count(0) == 11);
+
+        for i in 0..5 {
+            let t = 0.1 + 0.2 * i as f64;
+
+            MINI_CHECK!(
+                TOLERANCE.is_point_close(&srf.point_at(t, 0.0).unwrap(), &bottom.point_at(t))
+            );
+            MINI_CHECK!(TOLERANCE.is_point_close(&srf.point_at(t, 1.0).unwrap(), &top.point_at(t)));
+        }
+    })
+}
+
 pub fn run_primitives_nurbssurface_revolve() -> TestResult {
     MINI_TEST!("Nurbssurface Revolve", {
         use crate::NurbsCurve;
@@ -2277,6 +2386,16 @@ REGISTER_MINI_TEST!(
     "Primitives",
     "Nurbssurface Loft",
     crate::primitives_test::run_primitives_nurbssurface_loft
+);
+REGISTER_MINI_TEST!(
+    "Primitives",
+    "Nurbssurface Loft Mixed Knots",
+    crate::primitives_test::run_primitives_nurbssurface_loft_mixed_knots
+);
+REGISTER_MINI_TEST!(
+    "Primitives",
+    "Nurbssurface Loft Periodic Sections",
+    crate::primitives_test::run_primitives_nurbssurface_loft_periodic_sections
 );
 REGISTER_MINI_TEST!(
     "Primitives",

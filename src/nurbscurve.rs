@@ -1277,7 +1277,7 @@ impl NurbsCurve {
         nurbsknot_value: f64,
         nurbsknot_multiplicity: usize,
     ) -> bool {
-        if !self.is_valid() {
+        if !self.is_valid() || !nurbsknot_value.is_finite() {
             return false;
         }
 
@@ -1288,6 +1288,38 @@ impl NurbsCurve {
         }
 
         let (d0, d1) = self.domain();
+        let tol = (d0.abs() + d1.abs() + (d1 - d0).abs()) * SQRT_EPSILON;
+
+        if self.is_wrapped() {
+            let mut t = nurbsknot_value - ((nurbsknot_value - d0) / (d1 - d0)).floor() * (d1 - d0);
+
+            if t > d1 - tol {
+                t = d0;
+            }
+
+            if (t - d0).abs() <= tol {
+                if nurbsknot_multiplicity == p {
+                    return self.clamp_end(2);
+                }
+
+                return nurbsknot_multiplicity == 1;
+            }
+
+            let mut mult = 0;
+
+            for i in (p - 1)..(self.m_cv_count - 1) {
+                if (self.m_nurbsknot[i] - t).abs() <= tol {
+                    t = self.m_nurbsknot[i];
+                    mult += 1;
+                }
+            }
+
+            for _ in mult..nurbsknot_multiplicity {
+                self.insert_wrapped_nurbsknot_once(t);
+            }
+
+            return true;
+        }
 
         if nurbsknot_value < d0 || nurbsknot_value > d1 {
             return false;
@@ -1308,8 +1340,6 @@ impl NurbsCurve {
 
             return nurbsknot_multiplicity == 1;
         }
-
-        let tol = (d0.abs() + d1.abs() + (d1 - d0).abs()) * SQRT_EPSILON;
 
         for _ in 0..nurbsknot_multiplicity {
             let u = self.full_nurbsknots();
@@ -4104,6 +4134,93 @@ impl NurbsCurve {
             nurbsknot_new[i] = u_new[i + 1];
         }
 
+        self.m_nurbsknot = nurbsknot_new;
+    }
+
+    /// True when the last degree CVs repeat the first and the nurbsknot spacing repeats every period.
+    fn is_wrapped(&self) -> bool {
+        let p = self.degree();
+        let period_cv_count = self.m_cv_count - p;
+        let (d0, d1) = self.domain();
+        let period = d1 - d0;
+        let tol = (d0.abs() + d1.abs() + period) * SQRT_EPSILON;
+
+        if p < 2 || period_cv_count < p || period <= 0.0 {
+            return false;
+        }
+
+        for i in 0..p {
+            for d in 0..self.cv_size() {
+                let a = self.m_cv[i * self.m_cv_stride + d];
+                let b = self.m_cv[(i + period_cv_count) * self.m_cv_stride + d];
+
+                if (a - b).abs() > Tolerance::ZERO_TOLERANCE {
+                    return false;
+                }
+            }
+        }
+
+        for i in 0..self.nurbsknot_count() - period_cv_count {
+            if (self.m_nurbsknot[i + period_cv_count] - self.m_nurbsknot[i] - period).abs() > tol {
+                return false;
+            }
+        }
+
+        true
+    }
+
+    /// Insert one nurbsknot into a wrapped curve at every period, by Boehm on the periodic sequence.
+    fn insert_wrapped_nurbsknot_once(&mut self, nurbsknot_value: f64) {
+        let p = self.degree() as isize;
+        let period_cv_count = self.m_cv_count as isize - p;
+        let new_period_cv_count = period_cv_count + 1;
+        let period = self.domain_end() - self.domain_start();
+        let stride = self.m_cv_stride;
+        let nurbsknot = &self.m_nurbsknot;
+        let cv = &self.m_cv;
+        let knot_at = |i: isize| {
+            nurbsknot[((i - 1) % period_cv_count) as usize]
+                + ((i - 1) / period_cv_count) as f64 * period
+        };
+        let mut k = p;
+
+        while k < self.m_cv_count as isize - 1 && knot_at(k + 1) <= nurbsknot_value {
+            k += 1;
+        }
+
+        let mut nurbsknot_new = Vec::with_capacity((new_period_cv_count + 2 * p - 1) as usize);
+
+        for i in 0..new_period_cv_count + 2 * p - 1 {
+            let q = (i - k).div_euclid(new_period_cv_count);
+            let r = i - k - q * new_period_cv_count;
+            let knot = if r == 0 {
+                nurbsknot_value
+            } else {
+                knot_at(k + r)
+            };
+            nurbsknot_new.push(knot + q as f64 * period);
+        }
+
+        let mut cv_new = Vec::with_capacity((new_period_cv_count + p) as usize * stride);
+
+        for i in 0..new_period_cv_count + p {
+            let idx = i - (i - (k - p + 1)).div_euclid(new_period_cv_count) * new_period_cv_count;
+            let denom = knot_at(idx + p) - knot_at(idx);
+            let alpha = if idx <= k && denom > 0.0 {
+                (nurbsknot_value - knot_at(idx)) / denom
+            } else {
+                0.0
+            };
+            let a = ((idx - 1) % period_cv_count) as usize * stride;
+            let b = (idx % period_cv_count) as usize * stride;
+
+            for d in 0..stride {
+                cv_new.push((1.0 - alpha) * cv[a + d] + alpha * cv[b + d]);
+            }
+        }
+
+        self.m_cv_count = (new_period_cv_count + p) as usize;
+        self.m_cv = cv_new;
         self.m_nurbsknot = nurbsknot_new;
     }
 

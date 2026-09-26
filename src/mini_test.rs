@@ -2205,6 +2205,21 @@ pub fn get_all_tests() -> Vec<RegisteredTest> {
         },
         RegisteredTest {
             group: "NurbsCurve",
+            name: "Insert Knot Keeps Shape",
+            func: run_nurbscurve_insert_knot_keeps_shape,
+        },
+        RegisteredTest {
+            group: "NurbsCurve",
+            name: "Insert Knot Periodic Wrap",
+            func: run_nurbscurve_insert_knot_periodic_wrap,
+        },
+        RegisteredTest {
+            group: "NurbsCurve",
+            name: "Insert Knot Multiplicity Limit",
+            func: run_nurbscurve_insert_knot_multiplicity_limit,
+        },
+        RegisteredTest {
+            group: "NurbsCurve",
             name: "Span Vector Empty",
             func: run_nurbscurve_span_vector_empty,
         },
@@ -2703,6 +2718,16 @@ pub fn get_all_tests() -> Vec<RegisteredTest> {
             group: "Primitives",
             name: "Nurbssurface Loft",
             func: run_primitives_nurbssurface_loft,
+        },
+        RegisteredTest {
+            group: "Primitives",
+            name: "Nurbssurface Loft Mixed Knots",
+            func: run_primitives_nurbssurface_loft_mixed_knots,
+        },
+        RegisteredTest {
+            group: "Primitives",
+            name: "Nurbssurface Loft Periodic Sections",
+            func: run_primitives_nurbssurface_loft_periodic_sections,
         },
         RegisteredTest {
             group: "Primitives",

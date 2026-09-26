@@ -223,30 +223,63 @@ fn unify_curves(curves: &mut [NurbsCurve]) -> bool {
         return true;
     }
 
+    let mut periodic = true;
+
     for c in curves.iter_mut() {
         if !c.set_domain(0.0, 1.0) {
             return false;
         }
+
+        periodic = periodic && c.is_periodic();
     }
 
-    let mut unified = curves[0].get_nurbsknots();
+    for c in curves.iter_mut() {
+        if !periodic && !c.is_clamped(2) && !c.clamp_end(2) {
+            return false;
+        }
+    }
+
+    let span_nurbsknots = |c: &NurbsCurve| {
+        let nurbsknots = c.get_nurbsknots();
+
+        if !periodic {
+            return nurbsknots;
+        }
+
+        nurbsknots[c.degree() - 1..c.cv_count() - 1].to_vec()
+    };
+
+    let mut unified = span_nurbsknots(&curves[0]);
 
     for i in 1..curves.len() {
-        unified = merge_nurbsknot_vectors(&unified, &curves[i].get_nurbsknots());
+        unified = merge_nurbsknot_vectors(&unified, &span_nurbsknots(&curves[i]));
     }
 
     let tol = 1e-10;
 
     for c in curves.iter_mut() {
-        let nurbsknots = c.get_nurbsknots();
+        let nurbsknots = span_nurbsknots(c);
         let mut ci = 0;
+        let mut mult = 0;
 
         for ui in 0..unified.len() {
+            if ui == 0 || (unified[ui] - unified[ui - 1]).abs() >= tol {
+                mult = 0;
+            }
+
+            mult += 1;
+
             if ci < nurbsknots.len() && (nurbsknots[ci] - unified[ui]).abs() < tol {
                 ci += 1;
-            } else {
-                c.insert_nurbsknot(unified[ui], 1);
+            } else if !c.insert_nurbsknot(unified[ui], mult) {
+                return false;
             }
+        }
+    }
+
+    for c in curves.iter() {
+        if !nurbsknot_vectors_equal(&c.get_nurbsknots(), &curves[0].get_nurbsknots()) {
+            return false;
         }
     }
 
