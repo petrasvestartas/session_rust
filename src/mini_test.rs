@@ -3012,6 +3012,21 @@ pub fn get_all_tests() -> Vec<RegisteredTest> {
         },
         RegisteredTest {
             group: "Intersection",
+            name: "Surface Surface Cone Apex",
+            func: run_intersection_surface_surface_cone_apex,
+        },
+        RegisteredTest {
+            group: "Intersection",
+            name: "Surface Surface Seam Pieces",
+            func: run_intersection_surface_surface_seam_pieces,
+        },
+        RegisteredTest {
+            group: "Intersection",
+            name: "Surface Surface Seam Crossings",
+            func: run_intersection_surface_surface_seam_crossings,
+        },
+        RegisteredTest {
+            group: "Intersection",
             name: "Cut Curves On Surface",
             func: run_intersection_cut_curves_on_surface,
         },

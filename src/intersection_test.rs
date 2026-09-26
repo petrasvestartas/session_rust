@@ -166,6 +166,49 @@ fn distance_slanted(p: &crate::Point) -> f64 {
     (-2.0 * p[0] + p[1] + 10.0 * p[2] - 3.0).abs() / 105.0f64.sqrt()
 }
 
+/// Larger distance of the pcurve's lifted ends from the section curve's ends.
+fn pcurve_end_gap(
+    curve3d: &crate::NurbsCurve,
+    pcurve: &crate::NurbsCurve,
+    surface: &crate::NurbsSurface,
+) -> f64 {
+    let uv0 = pcurve.point_at_start();
+    let uv1 = pcurve.point_at_end();
+
+    f64::max(
+        surface
+            .point_at(uv0[0], uv0[1])
+            .unwrap()
+            .distance(&curve3d.point_at_start(), None),
+        surface
+            .point_at(uv1[0], uv1[1])
+            .unwrap()
+            .distance(&curve3d.point_at_end(), None),
+    )
+}
+
+/// Worst distance from the line of the pcurve lifted over its first and last twentieth, ends included.
+fn pcurve_line_deviation(
+    line: &crate::NurbsCurve,
+    pcurve: &crate::NurbsCurve,
+    surface: &crate::NurbsSurface,
+) -> f64 {
+    let (t0, t1) = pcurve.domain();
+    let a = line.point_at_start();
+    let d = line.point_at_end() - a.clone();
+    let mut worst = pcurve_end_gap(line, pcurve, surface);
+
+    for i in 0..=32 {
+        for f in [i as f64 / 640.0, 1.0 - i as f64 / 640.0] {
+            let uv = pcurve.point_at(t0 + (t1 - t0) * f);
+            let w = surface.point_at(uv[0], uv[1]).unwrap() - a.clone();
+            worst = worst.max(w.cross(&d).magnitude() / d.magnitude());
+        }
+    }
+
+    worst
+}
+
 pub fn run_intersection_line_line() -> TestResult {
     MINI_TEST!("Line Line", {
         use crate::intersection;
@@ -1658,11 +1701,12 @@ pub fn run_intersection_surface_surface_cylinders() -> TestResult {
 
         let ellipses = surface_surface(&cyl, &across, None);
 
-        MINI_CHECK!(ellipses.len() == 2);
+        MINI_CHECK!(ellipses.len() == 3);
 
         for ellipse in &ellipses {
-            MINI_CHECK!(ellipse.0.is_closed());
             MINI_CHECK!(on_both(&ellipse.0, distance_unit_cylinder, distance_x_cylinder) < 1e-9);
+            MINI_CHECK!(pcurve_end_gap(&ellipse.0, &ellipse.1, &cyl) < 1e-4);
+            MINI_CHECK!(pcurve_end_gap(&ellipse.0, &ellipse.2, &across) < 1e-4);
         }
     })
 }
@@ -1752,6 +1796,99 @@ pub fn run_intersection_surface_surface_coaxial_tori() -> TestResult {
     })
 }
 
+pub fn run_intersection_surface_surface_cone_apex() -> TestResult {
+    MINI_TEST!("Surface Surface Cone Apex", {
+        use crate::intersection::surface_surface;
+        use crate::Point;
+        use crate::Primitives;
+
+        let cone = Primitives::cone_surface(0.0, 0.0, 0.0, 1.5, 3.0);
+        let axial = bilinear(
+            Point::new(0.0, -3.0, -3.0),
+            Point::new(0.0, -3.0, 4.0),
+            Point::new(0.0, 3.0, -3.0),
+            Point::new(0.0, 3.0, 4.0),
+        );
+        let lines = surface_surface(&cone, &axial, None);
+
+        MINI_CHECK!(lines.len() == 2);
+
+        for line in &lines {
+            MINI_CHECK!(pcurve_line_deviation(&line.0, &line.1, &cone) < 1e-9);
+        }
+    })
+}
+
+pub fn run_intersection_surface_surface_seam_pieces() -> TestResult {
+    MINI_TEST!("Surface Surface Seam Pieces", {
+        use crate::intersection::surface_surface;
+        use crate::Point;
+        use crate::Primitives;
+        use crate::Tolerance;
+
+        let sphere = Primitives::sphere_surface(0.0, 0.0, 0.0, 2.0);
+        let cone = Primitives::cone_surface(0.0, 0.0, 0.0, 1.5, 3.0);
+        let wall = bilinear(
+            Point::new(0.2, -3.0, -3.0),
+            Point::new(0.2, -3.0, 3.0),
+            Point::new(0.2, 3.0, -3.0),
+            Point::new(0.2, 3.0, 3.0),
+        );
+        let slanted = bilinear(
+            Point::new(-3.0, -3.0, 0.0),
+            Point::new(-3.0, 3.0, -0.6),
+            Point::new(3.0, -3.0, 1.2),
+            Point::new(3.0, 3.0, 0.6),
+        );
+        let circle = surface_surface(&sphere, &wall, None);
+        let mut length = 0.0;
+
+        MINI_CHECK!(circle.len() == 2);
+
+        for t in &circle {
+            length += t.0.length(None);
+
+            MINI_CHECK!(pcurve_end_gap(&t.0, &t.1, &sphere) < 1e-9);
+            MINI_CHECK!(lifted_distance(&t.1, &sphere, distance_wall) < 5e-3);
+        }
+
+        MINI_CHECK!((length - 2.0 * Tolerance::PI * 3.96f64.sqrt()).abs() < 1e-4);
+
+        let conic = surface_surface(&cone, &slanted, None);
+
+        MINI_CHECK!(conic.len() == 2);
+
+        for t in &conic {
+            MINI_CHECK!(pcurve_end_gap(&t.0, &t.1, &cone) < 1e-4);
+            MINI_CHECK!(lifted_distance(&t.1, &cone, distance_slanted) < 1e-3);
+        }
+    })
+}
+
+pub fn run_intersection_surface_surface_seam_crossings() -> TestResult {
+    MINI_TEST!("Surface Surface Seam Crossings", {
+        use crate::intersection::surface_surface;
+        use crate::Primitives;
+
+        let sphere = Primitives::sphere_surface(0.0, 0.0, 0.0, 2.0);
+        let cyl = Primitives::cylinder_surface(1.3, 0.0, -3.0, 0.3, 6.0);
+        let tr = surface_surface(&sphere, &cyl, None);
+        let mut seam_gap = 0.0f64;
+
+        MINI_CHECK!(tr.len() == 4);
+
+        for t in &tr {
+            for uv in [t.1.point_at_start(), t.1.point_at_end()] {
+                seam_gap = seam_gap.max(f64::min(uv[0].abs(), (uv[0] - 4.0).abs()));
+            }
+
+            MINI_CHECK!(on_both(&t.0, distance_sphere, distance_cylinder) < 1e-5);
+        }
+
+        MINI_CHECK!(seam_gap < 1e-8);
+    })
+}
+
 pub fn run_intersection_cut_curves_on_surface() -> TestResult {
     MINI_TEST!("Cut Curves On Surface", {
         use crate::intersection;
@@ -1814,7 +1951,7 @@ pub fn run_intersection_cut_curves_on_surface_pullbacks() -> TestResult {
         );
         let sphere_cuts = cut_curves_on_surface(&sphere, &wall, None);
 
-        MINI_CHECK!(sphere_cuts.len() == 3);
+        MINI_CHECK!(sphere_cuts.len() == 2);
 
         for pc in &sphere_cuts {
             MINI_CHECK!(lifted_distance(pc, &sphere, distance_wall) < 5e-3);
@@ -1853,7 +1990,7 @@ pub fn run_intersection_cut_curves_on_surface_torus() -> TestResult {
         );
         let cuts = cut_curves_on_surface(&torus, &wall, None);
 
-        MINI_CHECK!(cuts.len() == 4);
+        MINI_CHECK!(cuts.len() == 2);
 
         for pc in &cuts {
             MINI_CHECK!(lifted_distance(pc, &torus, distance_wall) < 1e-5);
@@ -2905,6 +3042,21 @@ REGISTER_MINI_TEST!(
     "Intersection",
     "Surface Surface Coaxial Tori",
     crate::intersection_test::run_intersection_surface_surface_coaxial_tori
+);
+REGISTER_MINI_TEST!(
+    "Intersection",
+    "Surface Surface Cone Apex",
+    crate::intersection_test::run_intersection_surface_surface_cone_apex
+);
+REGISTER_MINI_TEST!(
+    "Intersection",
+    "Surface Surface Seam Pieces",
+    crate::intersection_test::run_intersection_surface_surface_seam_pieces
+);
+REGISTER_MINI_TEST!(
+    "Intersection",
+    "Surface Surface Seam Crossings",
+    crate::intersection_test::run_intersection_surface_surface_seam_crossings
 );
 REGISTER_MINI_TEST!(
     "Intersection",

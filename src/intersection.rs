@@ -6333,12 +6333,49 @@ fn sphere_refine_v(
     v
 }
 
-/// Degree-1 pcurves of (u, v) samples with u unwrapped, split where u crosses the seam.
-fn split_pullback_u(uv: &[[f64; 2]], u0: f64, range_u: f64) -> Vec<NurbsCurve> {
+/// Seam-free run of pull-back samples with the 3D curve parameter of each.
+#[derive(Clone, Default)]
+struct PullbackRun {
+    uv: Vec<Point>, // Samples in surface parameters.
+    ts: Vec<f64>,   // 3D curve parameter of each sample.
+}
+
+/// Append the sample (u, v) at 3D curve parameter t to the run.
+fn push_run_sample(run: &mut PullbackRun, u: f64, v: f64, t: f64) {
+    run.uv.push(Point::new(u, v, 0.0));
+    run.ts.push(t);
+}
+
+/// Drop an end run shorter than a hundredth of the sample step: an end sample lying just across a seam.
+fn drop_seam_slivers(runs: &mut Vec<PullbackRun>, step: f64) {
+    if runs.len() > 1 {
+        let last = &runs[runs.len() - 1];
+
+        if last.ts[last.ts.len() - 1] - last.ts[0] < step * 0.01 {
+            runs.pop();
+        }
+    }
+
+    if runs.len() > 1 {
+        let first = &runs[0];
+
+        if first.ts[first.ts.len() - 1] - first.ts[0] < step * 0.01 {
+            runs.remove(0);
+        }
+    }
+}
+
+/// Runs of (u, v, t) samples with u unwrapped, split where u crosses the seam.
+fn split_pullback_u(uv: &[[f64; 3]], u0: f64, range_u: f64) -> Vec<PullbackRun> {
     let mut out = Vec::new();
-    let mut seg = Vec::new();
+    let mut seg = PullbackRun::default();
     let mut cur_k = period_index(uv[0][0], u0, range_u);
-    seg.push(Point::new(uv[0][0] - cur_k as f64 * range_u, uv[0][1], 0.0));
+    push_run_sample(
+        &mut seg,
+        uv[0][0] - cur_k as f64 * range_u,
+        uv[0][1],
+        uv[0][2],
+    );
 
     for i in 1..uv.len() {
         let ki = period_index(uv[i][0], u0, range_u);
@@ -6355,23 +6392,34 @@ fn split_pullback_u(uv: &[[f64; 2]], u0: f64, range_u: f64) -> Vec<NurbsCurve> {
             };
             f = f.clamp(0.0, 1.0);
             let vc = uv[i - 1][1] + (uv[i][1] - uv[i - 1][1]) * f;
-            seg.push(Point::new(seam_cont - cur_k as f64 * range_u, vc, 0.0));
+            let tc = uv[i - 1][2] + (uv[i][2] - uv[i - 1][2]) * f;
+            push_run_sample(&mut seg, seam_cont - cur_k as f64 * range_u, vc, tc);
 
-            if seg.len() >= 2 {
-                out.push(NurbsCurve::create(false, 1, &seg));
+            if seg.uv.len() >= 2 {
+                out.push(seg);
             }
 
-            seg.clear();
-            seg.push(Point::new(seam_cont - nk as f64 * range_u, vc, 0.0));
+            seg = PullbackRun::default();
+            push_run_sample(&mut seg, seam_cont - nk as f64 * range_u, vc, tc);
             cur_k = nk;
         }
 
-        seg.push(Point::new(uv[i][0] - cur_k as f64 * range_u, uv[i][1], 0.0));
+        push_run_sample(
+            &mut seg,
+            uv[i][0] - cur_k as f64 * range_u,
+            uv[i][1],
+            uv[i][2],
+        );
     }
 
-    if seg.len() >= 2 {
-        out.push(NurbsCurve::create(false, 1, &seg));
+    if seg.uv.len() >= 2 {
+        out.push(seg);
     }
+
+    drop_seam_slivers(
+        &mut out,
+        (uv[uv.len() - 1][2] - uv[0][2]) / (uv.len() - 1) as f64,
+    );
 
     out
 }
@@ -6381,7 +6429,7 @@ fn analytic_sphere_pullback(
     srf: &NurbsSurface,
     recog: &RecogSurface,
     c3d: &NurbsCurve,
-) -> Vec<NurbsCurve> {
+) -> Vec<PullbackRun> {
     if recog.kind != RecogKind::Sphere {
         return vec![];
     }
@@ -6430,7 +6478,8 @@ fn analytic_sphere_pullback(
     let mut prev_u = 0.0;
 
     for i in 0..=n {
-        let p = c3d.point_at(t0 + (t1 - t0) * i as f64 / n as f64);
+        let t = t0 + (t1 - t0) * i as f64 / n as f64;
+        let p = c3d.point_at(t);
         let h = axis_height(&p, &frame.o, &frame.z);
         let mut u = map_parameter(&lon_map, frame_longitude(&frame, &p));
         let v = sphere_refine_v(srf, &frame, um, clamped_table(&tv, &th, h), h, v0, v1);
@@ -6440,13 +6489,60 @@ fn analytic_sphere_pullback(
         }
 
         prev_u = u;
-        uv.push([u, v]);
+        uv.push([u, v, t]);
     }
 
     split_pullback_u(&uv, u0, range_u)
 }
 
-/// Samples (u, v) of a curve on a cone or cylinder, u unwrapped and v linear in the axial height.
+/// Samples (u, v, t) with u unwrapped; an apex sample (u NaN) takes the u of the generator it lies on.
+fn fill_apex_samples(raw: &[[f64; 3]], u0: f64, range_u: f64) -> Vec<[f64; 3]> {
+    let mut uv: Vec<[f64; 3]> = Vec::new();
+
+    for i in 0..raw.len() {
+        let s = raw[i];
+
+        if !s[0].is_nan() {
+            let u = if uv.is_empty() {
+                s[0]
+            } else {
+                unwrap_period(s[0], uv[uv.len() - 1][0], range_u)
+            };
+            uv.push([u, s[1], s[2]]);
+            continue;
+        }
+
+        let mut j = i + 1;
+
+        while j < raw.len() && raw[j][0].is_nan() {
+            j += 1;
+        }
+
+        if uv.is_empty() {
+            uv.push([if j < raw.len() { raw[j][0] } else { u0 }, s[1], s[2]]);
+            continue;
+        }
+
+        let u_prev = uv[uv.len() - 1][0];
+        uv.push([u_prev, s[1], s[2]]);
+
+        if j != i + 1 || j == raw.len() {
+            continue;
+        }
+
+        let u_next = raw[j][0]
+            + (period_index(u_prev, u0, range_u) - period_index(raw[j][0], u0, range_u)) as f64
+                * range_u;
+
+        if (u_next - u_prev).abs() > range_u * 1e-12 {
+            uv.push([u_next, s[1], s[2]]);
+        }
+    }
+
+    uv
+}
+
+/// Samples (u, v, t) of a curve on a cone or cylinder, u unwrapped and v linear in the axial height.
 #[allow(clippy::too_many_arguments)]
 fn cone_pullback_samples(
     c3d: &NurbsCurve,
@@ -6456,38 +6552,29 @@ fn cone_pullback_samples(
     h1: f64,
     v0: f64,
     v1: f64,
-) -> Vec<[f64; 2]> {
+) -> Vec<[f64; 3]> {
     let (t0, t1) = c3d.domain();
-    let range_u = lon_map.hi - lon_map.lo;
+    let apex_tol = (h1 - h0).abs() * 1e-9;
     let n = usize::max(c3d.cv_count() * 8, 120);
-    let mut prev_lon = 0.0;
-    let mut uv = Vec::new();
-    let mut prev_u = 0.0;
+    let mut raw = Vec::new();
 
     for i in 0..=n {
-        let p = c3d.point_at(t0 + (t1 - t0) * i as f64 / n as f64);
+        let t = t0 + (t1 - t0) * i as f64 / n as f64;
+        let p = c3d.point_at(t);
         let r = [p[0] - frame.o[0], p[1] - frame.o[1], p[2] - frame.o[2]];
         let rx = ssi_dot(&r, &frame.x);
         let ry = ssi_dot(&r, &frame.y);
-        let rad = f64::max(0.0, rx * rx + ry * ry).sqrt();
-        let lon = if rad > 1e-12 { ry.atan2(rx) } else { prev_lon };
-        prev_lon = lon;
-        let mut u = if rad > 1e-12 {
-            map_parameter(lon_map, lon)
+        let rad = (rx * rx + ry * ry).sqrt();
+        let u = if rad > apex_tol {
+            map_parameter(lon_map, ry.atan2(rx))
         } else {
-            inverse_table(&lon_map.xs, &lon_map.ys, lon)
+            f64::NAN
         };
         let v = v0 + (ssi_dot(&r, &frame.z) - h0) / (h1 - h0) * (v1 - v0);
-
-        if i > 0 {
-            u = unwrap_period(u, prev_u, range_u);
-        }
-
-        prev_u = u;
-        uv.push([u, v]);
+        raw.push([u, v, t]);
     }
 
-    uv
+    fill_apex_samples(&raw, lon_map.lo, lon_map.hi - lon_map.lo)
 }
 
 /// Analytic pull-back of a 3D curve onto a recognized cone or cylinder.
@@ -6495,7 +6582,7 @@ fn analytic_cone_pullback(
     srf: &NurbsSurface,
     recog: &RecogSurface,
     c3d: &NurbsCurve,
-) -> Vec<NurbsCurve> {
+) -> Vec<PullbackRun> {
     if recog.kind != RecogKind::Cone && recog.kind != RecogKind::Cylinder {
         return vec![];
     }
@@ -6546,27 +6633,27 @@ struct PeriodGrid {
     swapped: bool, // Whether a is the surface v.
 }
 
-/// Append the point (a, b) shifted into cell (ka, kb) in surface (u, v) order.
-fn push_pullback_point(g: &PeriodGrid, seg: &mut Vec<Point>, a: f64, b: f64, ka: i32, kb: i32) {
-    let uu = a - ka as f64 * g.range_a;
-    let vv = b - kb as f64 * g.range_b;
+/// Append the sample (a, b, t) shifted into cell (ka, kb) in surface (u, v) order.
+fn push_pullback_point(g: &PeriodGrid, seg: &mut PullbackRun, p: &[f64; 3], ka: i32, kb: i32) {
+    let uu = p[0] - ka as f64 * g.range_a;
+    let vv = p[1] - kb as f64 * g.range_b;
 
     if g.swapped {
-        seg.push(Point::new(vv, uu, 0.0));
+        push_run_sample(seg, vv, uu, p[2]);
     } else {
-        seg.push(Point::new(uu, vv, 0.0));
+        push_run_sample(seg, uu, vv, p[2]);
     }
 }
 
 /// Split the step p -> q at its first cell boundary, advancing p; false when q is in the current cell.
 fn cross_period(
     g: &PeriodGrid,
-    p: &mut [f64; 2],
-    q: &[f64; 2],
+    p: &mut [f64; 3],
+    q: &[f64; 3],
     ka: &mut i32,
     kb: &mut i32,
-    seg: &mut Vec<Point>,
-    out: &mut Vec<NurbsCurve>,
+    seg: &mut PullbackRun,
+    out: &mut Vec<PullbackRun>,
 ) -> bool {
     let kqa = period_index(q[0], g.a0, g.range_a);
     let kqb = period_index(q[1], g.b0, g.range_b);
@@ -6602,25 +6689,26 @@ fn cross_period(
         };
     }
 
-    let c = if fa <= fb {
-        [
-            g.a0 + (if sa > 0 { *ka + 1 } else { *ka }) as f64 * g.range_a,
-            p[1] + (q[1] - p[1]) * fa.clamp(0.0, 1.0),
-        ]
+    let f = f64::min(fa, fb).clamp(0.0, 1.0);
+    let mut c = [
+        p[0] + (q[0] - p[0]) * f,
+        p[1] + (q[1] - p[1]) * f,
+        p[2] + (q[2] - p[2]) * f,
+    ];
+
+    if fa <= fb {
+        c[0] = g.a0 + (if sa > 0 { *ka + 1 } else { *ka }) as f64 * g.range_a;
     } else {
-        [
-            p[0] + (q[0] - p[0]) * fb.clamp(0.0, 1.0),
-            g.b0 + (if sb > 0 { *kb + 1 } else { *kb }) as f64 * g.range_b,
-        ]
-    };
-
-    push_pullback_point(g, seg, c[0], c[1], *ka, *kb);
-
-    if seg.len() >= 2 {
-        out.push(NurbsCurve::create(false, 1, seg));
+        c[1] = g.b0 + (if sb > 0 { *kb + 1 } else { *kb }) as f64 * g.range_b;
     }
 
-    seg.clear();
+    push_pullback_point(g, seg, &c, *ka, *kb);
+
+    if seg.uv.len() >= 2 {
+        out.push(std::mem::take(seg));
+    }
+
+    *seg = PullbackRun::default();
 
     if fa <= fb {
         *ka += sa;
@@ -6628,19 +6716,19 @@ fn cross_period(
         *kb += sb;
     }
 
-    push_pullback_point(g, seg, c[0], c[1], *ka, *kb);
+    push_pullback_point(g, seg, &c, *ka, *kb);
     *p = c;
 
     true
 }
 
-/// Degree-1 pcurves of (a, b) samples with a and b unwrapped, split at both seams.
-fn split_pullback_ab(ab: &[[f64; 2]], g: &PeriodGrid) -> Vec<NurbsCurve> {
+/// Runs of (a, b, t) samples with a and b unwrapped, split at both seams.
+fn split_pullback_ab(ab: &[[f64; 3]], g: &PeriodGrid) -> Vec<PullbackRun> {
     let mut out = Vec::new();
-    let mut seg = Vec::new();
+    let mut seg = PullbackRun::default();
     let mut ka = period_index(ab[0][0], g.a0, g.range_a);
     let mut kb = period_index(ab[0][1], g.b0, g.range_b);
-    push_pullback_point(g, &mut seg, ab[0][0], ab[0][1], ka, kb);
+    push_pullback_point(g, &mut seg, &ab[0], ka, kb);
 
     for i in 1..ab.len() {
         let mut p = ab[i - 1];
@@ -6651,12 +6739,17 @@ fn split_pullback_ab(ab: &[[f64; 2]], g: &PeriodGrid) -> Vec<NurbsCurve> {
             }
         }
 
-        push_pullback_point(g, &mut seg, ab[i][0], ab[i][1], ka, kb);
+        push_pullback_point(g, &mut seg, &ab[i], ka, kb);
     }
 
-    if seg.len() >= 2 {
-        out.push(NurbsCurve::create(false, 1, &seg));
+    if seg.uv.len() >= 2 {
+        out.push(seg);
     }
+
+    drop_seam_slivers(
+        &mut out,
+        (ab[ab.len() - 1][2] - ab[0][2]) / (ab.len() - 1) as f64,
+    );
 
     out
 }
@@ -6725,7 +6818,7 @@ fn analytic_torus_pullback(
     srf: &NurbsSurface,
     recog: &RecogSurface,
     c3d: &NurbsCurve,
-) -> Vec<NurbsCurve> {
+) -> Vec<PullbackRun> {
     let domain_u = srf_domain(srf, 0);
     let domain_v = srf_domain(srf, 1);
     let mut axis = recog.p2;
@@ -6778,7 +6871,8 @@ fn analytic_torus_pullback(
     let mut prev_b = 0.0;
 
     for i in 0..=n {
-        let q = c3d.point_at(t0 + (t1 - t0) * i as f64 / n as f64);
+        let t = t0 + (t1 - t0) * i as f64 / n as f64;
+        let q = c3d.point_at(t);
         let mut a = map_parameter(&lon_map, frame_longitude(&frame, &q));
         let mut b = map_parameter(&tube_map, frame_tube_angle(&frame, rmaj, rmin, &q));
 
@@ -6789,7 +6883,7 @@ fn analytic_torus_pullback(
 
         prev_a = a;
         prev_b = b;
-        ab.push([a, b]);
+        ab.push([a, b, t]);
     }
 
     let grid = PeriodGrid {
@@ -6808,13 +6902,89 @@ fn analytic_pullback(
     srf: &NurbsSurface,
     recog: &RecogSurface,
     c3d: &NurbsCurve,
-) -> Vec<NurbsCurve> {
+) -> Vec<PullbackRun> {
     match recog.kind {
         RecogKind::Torus => analytic_torus_pullback(srf, recog, c3d),
         RecogKind::Sphere => analytic_sphere_pullback(srf, recog, c3d),
         RecogKind::Cone | RecogKind::Cylinder => analytic_cone_pullback(srf, recog, c3d),
         _ => vec![],
     }
+}
+
+/// Degree-1 pcurves of the pull-back runs.
+fn run_curves(runs: &[PullbackRun]) -> Vec<NurbsCurve> {
+    runs.iter()
+        .map(|run| NurbsCurve::create(false, 1, &run.uv))
+        .collect()
+}
+
+/// Run sample interpolated at 3D curve parameter t.
+fn run_point(run: &PullbackRun, t: f64) -> Point {
+    for i in 0..run.ts.len() - 1 {
+        if t > run.ts[i + 1] {
+            continue;
+        }
+
+        let dt = run.ts[i + 1] - run.ts[i];
+        let f = if dt > 0.0 {
+            ((t - run.ts[i]) / dt).clamp(0.0, 1.0)
+        } else {
+            0.0
+        };
+
+        return Point::new(
+            run.uv[i][0] + (run.uv[i + 1][0] - run.uv[i][0]) * f,
+            run.uv[i][1] + (run.uv[i + 1][1] - run.uv[i][1]) * f,
+            0.0,
+        );
+    }
+
+    run.uv[run.uv.len() - 1].clone()
+}
+
+/// Samples of the run covering the 3D curve span [lo, hi], empty when none does.
+fn run_span_points(runs: &[PullbackRun], lo: f64, hi: f64) -> Vec<Point> {
+    let mid = 0.5 * (lo + hi);
+
+    for run in runs {
+        if mid < run.ts[0] || mid > run.ts[run.ts.len() - 1] {
+            continue;
+        }
+
+        let mut pts = vec![run_point(run, lo)];
+
+        for i in 0..run.ts.len() {
+            if run.ts[i] > lo && run.ts[i] < hi {
+                pts.push(run.uv[i].clone());
+            }
+        }
+
+        pts.push(run_point(run, hi));
+
+        return pts;
+    }
+
+    vec![]
+}
+
+/// Degree-1 pcurve of the runs over [lo, hi]; a span past the domain end wraps onto the start of the closed curve.
+fn run_span(runs: &[PullbackRun], domain: (f64, f64), lo: f64, hi: f64) -> NurbsCurve {
+    let period = domain.1 - domain.0;
+    let mut pts = run_span_points(runs, lo, f64::min(hi, domain.1));
+
+    if hi > domain.1 {
+        let head = run_span_points(runs, domain.0, hi - period);
+
+        if !head.is_empty() {
+            pts.extend_from_slice(&head[1..]);
+        }
+    }
+
+    if pts.len() < 2 {
+        return NurbsCurve::default();
+    }
+
+    NurbsCurve::create(false, 1, &pts)
 }
 // ═══════════════════════════════════════════════════════════════════════════
 // Coaxial quadric pairs
@@ -7719,20 +7889,42 @@ fn analytic_curves(
     quadric_section_curves(a, ra, b, rb, out)
 }
 
-/// Pcurve of an exact section on one recognized surface: analytic, pulled back, then projected.
-fn analytic_side_pcurve(srf: &NurbsSurface, recog: &RecogSurface, c3: &NurbsCurve) -> NurbsCurve {
-    let mut pc = analytic_pcurve(srf, recog, c3);
-
-    if !pc.is_valid() {
-        let v = analytic_pullback(srf, recog, c3);
-
-        if !v.is_empty() {
-            pc = v[0].clone();
-        }
+/// Pull-back runs of an exact section on one recognized surface, empty when the analytic pcurve applies.
+fn analytic_side_runs(
+    srf: &NurbsSurface,
+    recog: &RecogSurface,
+    c3: &NurbsCurve,
+) -> Vec<PullbackRun> {
+    if analytic_pcurve(srf, recog, c3).is_valid() {
+        return vec![];
     }
 
+    analytic_pullback(srf, recog, c3)
+}
+
+/// One recognized surface of an exact section with the pull-back runs of the section curve.
+struct SectionSide<'a> {
+    srf: &'a NurbsSurface,   // Recognized surface.
+    recog: &'a RecogSurface, // Its recognized kind and parameters.
+    runs: Vec<PullbackRun>,  // Pull-back runs, empty when the analytic pcurve applies.
+}
+
+/// Pcurve of the piece over [lo, hi] of a section curve with this domain: its pull-back runs, else analytic, then projected.
+fn analytic_side_pcurve(
+    side: &SectionSide<'_>,
+    piece: &NurbsCurve,
+    domain: (f64, f64),
+    lo: f64,
+    hi: f64,
+) -> NurbsCurve {
+    if !side.runs.is_empty() {
+        return run_span(&side.runs, domain, lo, hi);
+    }
+
+    let mut pc = analytic_pcurve(side.srf, side.recog, piece);
+
     if !pc.is_valid() {
-        let v = Closest::surface_curve(srf, c3, 0.0, 0.0, 0.0);
+        let v = Closest::surface_curve(side.srf, piece, 0.0, 0.0, 0.0);
 
         if !v.is_empty() {
             pc = v[0].clone();
@@ -7740,6 +7932,72 @@ fn analytic_side_pcurve(srf: &NurbsSurface, recog: &RecogSurface, c3: &NurbsCurv
     }
 
     pc
+}
+
+/// Parameters of c3 that cut it at every seam crossing of both sides' runs, the domain ends included.
+fn seam_cuts(c3: &NurbsCurve, runs_a: &[PullbackRun], runs_b: &[PullbackRun]) -> Vec<f64> {
+    let domain = c3.domain();
+    let eps = (domain.1 - domain.0) * 1e-9;
+    let mut ts = vec![domain.0, domain.1];
+
+    for runs in [runs_a, runs_b] {
+        for run in runs.iter().skip(1) {
+            ts.push(run.ts[0]);
+        }
+    }
+
+    ts.sort_by(|a, b| a.partial_cmp(b).unwrap());
+    let mut cuts = vec![ts[0]];
+
+    for &t in ts.iter().skip(1) {
+        if t - cuts[cuts.len() - 1] > eps {
+            cuts.push(t);
+        }
+    }
+
+    let last = cuts.len() - 1;
+    cuts[last] = domain.1;
+
+    cuts
+}
+
+/// Whether the runs end where they start, so the end piece of a closed curve continues onto its first.
+fn runs_close(runs: &[PullbackRun]) -> bool {
+    if runs.is_empty() {
+        return true;
+    }
+
+    let last = &runs[runs.len() - 1];
+
+    runs[0].uv[0].distance(&last.uv[last.uv.len() - 1], None) < 1e-9
+}
+
+/// Push the piece of c3 over [lo, hi] with both pcurves; hi past the domain end wraps the closed curve onto its start.
+fn push_section_piece(
+    sa: &SectionSide<'_>,
+    sb: &SectionSide<'_>,
+    c3: &NurbsCurve,
+    lo: f64,
+    hi: f64,
+    triples: &mut Vec<(NurbsCurve, NurbsCurve, NurbsCurve)>,
+) {
+    let domain = c3.domain();
+    let mut piece = c3.clone();
+
+    if hi > domain.1 && !piece.change_closed_curve_seam(lo) {
+        return;
+    }
+
+    if !piece.trim(lo, hi) {
+        return;
+    }
+
+    let pa = analytic_side_pcurve(sa, &piece, domain, lo, hi);
+    let pb = analytic_side_pcurve(sb, &piece, domain, lo, hi);
+
+    if pa.is_valid() && pb.is_valid() {
+        triples.push((piece, pa, pb));
+    }
 }
 
 /// Exact section of two recognized analytic surfaces, empty when no case applies.
@@ -7763,11 +8021,35 @@ fn analytic_ssi(a: &NurbsSurface, b: &NurbsSurface, tolerance: f64) -> AnalyticR
     }
 
     for cc3 in c3_list {
-        let pa = analytic_side_pcurve(a, &ra, &cc3);
-        let pb = analytic_side_pcurve(b, &rb, &cc3);
+        let sa = SectionSide {
+            srf: a,
+            recog: &ra,
+            runs: analytic_side_runs(a, &ra, &cc3),
+        };
+        let sb = SectionSide {
+            srf: b,
+            recog: &rb,
+            runs: analytic_side_runs(b, &rb, &cc3),
+        };
+        let cuts = seam_cuts(&cc3, &sa.runs, &sb.runs);
+        let wrap =
+            cuts.len() > 2 && cc3.is_closed() && runs_close(&sa.runs) && runs_close(&sb.runs);
+        let first = if wrap { 1 } else { 0 };
+        let last = cuts.len() - if wrap { 2 } else { 1 };
 
-        if pa.is_valid() && pb.is_valid() {
-            res.triples.push((cc3, pa, pb));
+        for k in first..last {
+            push_section_piece(&sa, &sb, &cc3, cuts[k], cuts[k + 1], &mut res.triples);
+        }
+
+        if wrap {
+            push_section_piece(
+                &sa,
+                &sb,
+                &cc3,
+                cuts[last],
+                cuts[first] + cuts[cuts.len() - 1] - cuts[0],
+                &mut res.triples,
+            );
         }
     }
 
@@ -8253,6 +8535,59 @@ impl<'a> SurfaceSurfaceField<'a> {
             .sqrt();
 
         g < self.conv_tol * 10.0
+    }
+
+    /// Newton-project x onto the section with parameter k held fixed; x is kept when it fails.
+    fn correct_on_seam(&self, x: &mut [f64; 4], k: usize) -> bool {
+        let mut y = *x;
+        let free: Vec<usize> = (0..4).filter(|&c| c != k).collect();
+
+        for _ in 0..8 {
+            let (sa, sau, sav) = self.eval_a(y[0], y[1]);
+            let (sb, sbu, sbv) = self.eval_b(y[2], y[3]);
+            let res = [sa[0] - sb[0], sa[1] - sb[1], sa[2] - sb[2]];
+
+            if (res[0] * res[0] + res[1] * res[1] + res[2] * res[2]).sqrt() < self.conv_tol {
+                *x = y;
+
+                return true;
+            }
+
+            let cols = [
+                sau,
+                sav,
+                [-sbu[0], -sbu[1], -sbu[2]],
+                [-sbv[0], -sbv[1], -sbv[2]],
+            ];
+            let jac: Vec<Vec<f64>> = (0..3)
+                .map(|r| (0..3).map(|c| cols[free[c]][r]).collect())
+                .collect();
+            let dx = match solve_gauss(&jac, &res, 3) {
+                Some(dx) => dx,
+                None => return false,
+            };
+
+            for c in 0..3 {
+                y[free[c]] -= dx[c];
+            }
+
+            self.clamp_open(&mut y);
+        }
+
+        let sa = self.eval_a(y[0], y[1]).0;
+        let sb = self.eval_b(y[2], y[3]).0;
+        let g = ((sa[0] - sb[0]) * (sa[0] - sb[0])
+            + (sa[1] - sb[1]) * (sa[1] - sb[1])
+            + (sa[2] - sb[2]) * (sa[2] - sb[2]))
+            .sqrt();
+
+        if g >= self.conv_tol * 10.0 {
+            return false;
+        }
+
+        *x = y;
+
+        true
     }
 
     /// Unit 3D section tangent at x in direction dir_sign, None at a tangency, and both surfaces' derivatives.
@@ -8963,7 +9298,6 @@ fn split_quad_at_seams(
     field: &SurfaceSurfaceField<'_>,
     quad: &[[f64; 4]],
 ) -> (Vec<[f64; 4]>, Vec<usize>) {
-    let dummy3 = [0.0f64; 3];
     let mut out_pts = vec![quad[0]];
     let mut cross_idx = Vec::new();
 
@@ -8979,7 +9313,7 @@ fn split_quad_at_seams(
             }
 
             cp[idx] = seam;
-            field.correct(&mut cp, false, &dummy3, &dummy3);
+            field.correct_on_seam(&mut cp, idx);
             out_pts.push(cp);
             cross_idx.push(out_pts.len() - 1);
         }
@@ -9641,7 +9975,7 @@ fn target_pcurves(
         return Closest::surface_curve(target, c3d, 0.0, 0.0, tolerance);
     }
 
-    let mut pcs = analytic_pullback(target, rt, c3d);
+    let mut pcs = run_curves(&analytic_pullback(target, rt, c3d));
 
     if pcs.is_empty() {
         pcs = Closest::surface_curve(target, c3d, 0.0, 0.0, tolerance);
