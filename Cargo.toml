@@ -63,3 +63,10 @@ lto = "thin"
 codegen-units = 1
 panic = "abort"
 strip = true
+
+# Local minitest builds: release speed without the LTO link, so a lib edit rebuilds in ~20 s, not ~90 s.
+[profile.quick]
+inherits = "release"
+lto = false
+codegen-units = 16
+incremental = true
