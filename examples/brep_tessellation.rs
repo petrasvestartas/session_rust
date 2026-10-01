@@ -17,6 +17,7 @@ struct Stats {
     degenerate: usize,
     empty_faces: usize,
     open_edges: usize,
+    segments: usize,
     wrong_winding: usize,
     seconds: f64,
 }
@@ -114,6 +115,7 @@ fn measure(fms: &[Mesh], stats: &mut Stats, verbose: bool) {
             if count > 0 {
                 *naked.entry(edge).or_default() += count;
                 owner.insert(edge, fi);
+                stats.segments += 1;
             }
         }
 
@@ -121,6 +123,8 @@ fn measure(fms: &[Mesh], stats: &mut Stats, verbose: bool) {
             println!("  face {fi:>3} tris {face_tris:>6} min_angle {face_min:>6.2} verts {:>5}", fm.vertex.len());
         }
     }
+
+    stats.segments /= 2;
 
     for ((a, b), count) in &naked {
         let reverse = naked.get(&(*b, *a)).copied().unwrap_or(0);
@@ -145,7 +149,7 @@ fn run(label: &str, b: &BRep, quality: (f64, f64), verbose: bool) -> Stats {
     };
     measure(&fms, &mut stats, verbose);
     println!(
-        "{label:<32} faces {:>4} tris {:>7} min_angle {:>6.2} slivers {:>5} degen {:>3} empty {:>2} open {:>4} wind {:>4} {:>8.1} ms",
+        "{label:<32} faces {:>4} tris {:>7} min_angle {:>6.2} slivers {:>5} degen {:>3} empty {:>2} open {:>4} segs {:>6} wind {:>4} {:>8.1} ms",
         stats.faces,
         stats.triangles,
         stats.min_angle,
@@ -153,6 +157,7 @@ fn run(label: &str, b: &BRep, quality: (f64, f64), verbose: bool) -> Stats {
         stats.degenerate,
         stats.empty_faces,
         stats.open_edges,
+        stats.segments,
         stats.wrong_winding,
         stats.seconds * 1e3
     );
@@ -211,6 +216,9 @@ fn main() {
         ("cone", BRep::create_cone(2.0, 5.0)),
         ("torus", BRep::create_torus(4.0, 1.0)),
         ("block_with_hole", BRep::create_block_with_hole(8.0, 6.0, 4.0, 1.5)),
+        ("cylinder_r150_h400", BRep::create_cylinder(150.0, 400.0)),
+        ("box100_bore_r10", BRep::create_block_with_hole(100.0, 100.0, 50.0, 10.0)),
+        ("rib4000_bore_r10", BRep::create_block_with_hole(4000.0, 200.0, 100.0, 10.0)),
     ];
 
     for (label, b) in &cases {
@@ -240,6 +248,7 @@ fn main() {
             total.degenerate += s.degenerate;
             total.empty_faces += s.empty_faces;
             total.open_edges += s.open_edges;
+            total.segments += s.segments;
             total.wrong_winding += s.wrong_winding;
             total.seconds += s.seconds;
         }
@@ -247,7 +256,7 @@ fn main() {
 
     if !files.is_empty() {
         println!(
-            "{:<32} faces {:>4} tris {:>7} min_angle {:>6.2} slivers {:>5} degen {:>3} empty {:>2} open {:>4} wind {:>4} {:>8.1} ms",
+            "{:<32} faces {:>4} tris {:>7} min_angle {:>6.2} slivers {:>5} degen {:>3} empty {:>2} open {:>4} segs {:>6} wind {:>4} {:>8.1} ms",
             "TOTAL(files)",
             total.faces,
             total.triangles,
@@ -256,6 +265,7 @@ fn main() {
             total.degenerate,
             total.empty_faces,
             total.open_edges,
+            total.segments,
             total.wrong_winding,
             total.seconds * 1e3
         );

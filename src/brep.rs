@@ -296,6 +296,31 @@ fn bbox_diagonal(srf: &NurbsSurface) -> f64 {
     hi.distance(&lo, None)
 }
 
+/// Diagonal of the bounding box of every surface's control points: the size a chord tolerance and a face's share of the sampling are measured against
+fn brep_diagonal(b: &BRep) -> f64 {
+    let mut lo = Point::new(1e30, 1e30, 1e30);
+    let mut hi = Point::new(-1e30, -1e30, -1e30);
+
+    for srf in &b.m_surfaces {
+        for i in 0..srf.cv_count(0) {
+            for j in 0..srf.cv_count(1) {
+                let p = srf.get_cv(i, j).unwrap_or_default();
+
+                for k in 0..3 {
+                    lo[k] = lo[k].min(p[k]);
+                    hi[k] = hi[k].max(p[k]);
+                }
+            }
+        }
+    }
+
+    if b.m_surfaces.is_empty() {
+        return 0.0;
+    }
+
+    hi.distance(&lo, None)
+}
+
 // ═══════════════════════════════════════════════════════════════════════════
 // Factory helpers
 // ═══════════════════════════════════════════════════════════════════════════
@@ -1071,11 +1096,12 @@ fn boundary_turns(
     false
 }
 
-/// Refine samples of a lifted pcurve until chord and angle hold; existing samples stay exact, eight split levels and 4096 added points per edge bound the work
+/// Refine samples of a lifted pcurve until chord and angle hold, the chord measured against the whole BRep's size `scale`; existing samples stay exact, eight split levels and 4096 added points per edge bound the work
 fn refine_surface_boundary(
     surface: &NurbsSurface,
     curve: &NurbsCurve,
     samples: &[(f64, Point, Point)],
+    scale: f64,
     angle: f64,
     chord: f64,
 ) -> Vec<(f64, Point, Point)> {
@@ -1083,7 +1109,7 @@ fn refine_surface_boundary(
         return samples.to_vec();
     }
 
-    let tolerance = bbox_diagonal(surface) * chord;
+    let tolerance = scale * chord;
     let cosine = (angle.clamp(0.1, 179.0) * PI / 180.0).cos();
     let mut result = Vec::new();
     let mut added = 0;
@@ -1384,6 +1410,7 @@ fn refine_shared_boundaries(
     face_direct: &[bool],
     rebuild_grid: &mut [bool],
     boundary: &mut EdgeBoundary,
+    scale: f64,
     angle: f64,
     chord: f64,
 ) {
@@ -1424,7 +1451,7 @@ fn refine_shared_boundaries(
             samples.push((end, curve.point_at(end), samples[0].2.clone()));
         }
 
-        let refined = refine_surface_boundary(surface, curve, &samples, angle, chord);
+        let refined = refine_surface_boundary(surface, curve, &samples, scale, angle, chord);
 
         if refined.len() <= samples.len() {
             continue;
@@ -1680,6 +1707,7 @@ fn fresh_samples(
     srf: &NurbsSurface,
     crv: &NurbsCurve,
     ends: &(Point, Point),
+    scale: f64,
     angle: f64,
     chord: f64,
 ) -> Vec<(f64, Point, Point)> {
@@ -1710,7 +1738,7 @@ fn fresh_samples(
 
     snap_sample_ends(&mut samples, ends);
 
-    refine_surface_boundary(srf, crv, &samples, angle, chord)
+    refine_surface_boundary(srf, crv, &samples, scale, angle, chord)
 }
 
 /// Phase 3: samples of one edge use of a CDT face in traversal direction, a closed edge repeating its first point at the end; false when the edge has no pcurve
@@ -1719,6 +1747,7 @@ fn edge_use_samples(
     fi: usize,
     er: &BRepRef,
     boundary: &mut EdgeBoundary,
+    scale: f64,
     angle: f64,
     chord: f64,
     samples: &mut Vec<(f64, Point, Point)>,
@@ -1741,6 +1770,7 @@ fn edge_use_samples(
             &b.m_surfaces[b.m_faces[fi].surface_index as usize],
             crv,
             &edge_ends(b, ei),
+            scale,
             angle,
             chord,
         );
@@ -1773,6 +1803,7 @@ fn trim_loops(
     b: &BRep,
     fi: usize,
     boundary: &mut EdgeBoundary,
+    scale: f64,
     angle: f64,
     chord: f64,
     loops: &mut TrimLoops,
@@ -1787,7 +1818,7 @@ fn trim_loops(
         for er in b.wire_edges(&face.wires[wi]) {
             let mut samples: Vec<(f64, Point, Point)> = Vec::new();
 
-            if !edge_use_samples(b, fi, &er, boundary, angle, chord, &mut samples) {
+            if !edge_use_samples(b, fi, &er, boundary, scale, angle, chord, &mut samples) {
                 return false;
             }
 
@@ -2106,12 +2137,18 @@ fn strip_steps(srf: &NurbsSurface, crv: &NurbsCurve) -> usize {
     steps
 }
 
-/// Phase 0: the steps of a strip: the angle's share of a turn and what the loops ask for, doubled until both loops sag within the chord tolerance
-fn strip_count(srf: &NurbsSurface, a: &NurbsCurve, c: &NurbsCurve, angle: f64, chord: f64) -> usize {
-    let tolerance = bbox_diagonal(srf) * chord;
-    let mut count = strip_steps(srf, a)
+/// Phase 0: the steps of a strip: the angle's share of a turn and what the loops ask for, scaled by the face's size against the whole BRep so a small bore in a large body keeps few steps, never under sixteen, doubled until both loops sag within the chord tolerance measured against the BRep
+fn strip_count(srf: &NurbsSurface, a: &NurbsCurve, c: &NurbsCurve, scale: f64, angle: f64, chord: f64) -> usize {
+    let tolerance = scale * chord;
+    let asked = strip_steps(srf, a)
         .max(strip_steps(srf, c))
         .max((360.0 / angle.max(0.1)).ceil() as usize);
+    let share = if scale > 0.0 {
+        (bbox_diagonal(srf) / scale).min(1.0)
+    } else {
+        1.0
+    };
+    let mut count = ((asked as f64 * share).ceil() as usize).max(16);
 
     while count < 4096 && tolerance > 0.0 && strip_sag(srf, a, count).max(strip_sag(srf, c, count)) > tolerance {
         count *= 2;
@@ -2136,13 +2173,13 @@ fn strip_vertex(srf: &NurbsSurface, mesh: &mut Mesh, sample: &(f64, Point, Point
 }
 
 /// Phase 0: the strip of a face: both loops sampled at the same steps, closed on their vertex, and made the canonical boundary of their edges, two triangles between every pair of steps, the vertices numbered as the keyhole polygon a CDT face runs (first loop, seam, second loop backwards, seam) so the edge uses tag as there; no surface refinement, no lifting
-fn strip_mesh(b: &BRep, fi: usize, boundary: &mut EdgeBoundary, angle: f64, chord: f64) -> Mesh {
+fn strip_mesh(b: &BRep, fi: usize, boundary: &mut EdgeBoundary, scale: f64, angle: f64, chord: f64) -> Mesh {
     let face = &b.m_faces[fi];
     let srf = &b.m_surfaces[face.surface_index as usize];
     let edges = b.wire_edges(&face.wires[0]);
     let a = &b.m_curves_2d[b.pcurve_index(edges[0].index as usize, fi, edges[0].orientation) as usize];
     let c = &b.m_curves_2d[b.pcurve_index(edges[2].index as usize, fi, edges[2].orientation) as usize];
-    let count = strip_count(srf, a, c, angle, chord);
+    let count = strip_count(srf, a, c, scale, angle, chord);
     let mut first = strip_samples(srf, a, count);
     let mut second = strip_samples(srf, c, count);
     snap_sample_ends(&mut first, &edge_ends(b, edges[0].index as usize));
@@ -3370,6 +3407,7 @@ impl BRep {
     pub fn face_meshes_q(&self, quality: Option<(f64, f64)>) -> Vec<Mesh> {
         let nf = self.m_faces.len();
         let (angle, chord) = quality.unwrap_or((20.0, 0.005));
+        let scale = brep_diagonal(self);
         let mut face_strip = vec![false; nf];
         let mut face_direct = vec![false; nf];
         let mut rebuild_grid = vec![false; nf];
@@ -3381,7 +3419,7 @@ impl BRep {
             fmesh.push(Mesh::new());
 
             if face_strip[fi] {
-                fmesh[fi] = strip_mesh(self, fi, &mut boundary, angle, chord);
+                fmesh[fi] = strip_mesh(self, fi, &mut boundary, scale, angle, chord);
             }
         }
 
@@ -3408,6 +3446,7 @@ impl BRep {
             &face_direct,
             &mut rebuild_grid,
             &mut boundary,
+            scale,
             angle,
             chord,
         );
@@ -3432,7 +3471,7 @@ impl BRep {
 
             let mut uses: Vec<(usize, usize, usize, usize)> = Vec::new();
 
-            if !trim_loops(self, fi, &mut boundary, angle, chord, &mut loops, &mut uses) {
+            if !trim_loops(self, fi, &mut boundary, scale, angle, chord, &mut loops, &mut uses) {
                 continue;
             }
 

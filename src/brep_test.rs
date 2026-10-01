@@ -1135,10 +1135,26 @@ pub fn run_brep_strip_fast_path() -> TestResult {
         let volume = bh.mesh().volume();
         let reference = 8.0 * 6.0 * 4.0 - PI * 1.5 * 1.5 * 4.0;
 
-        MINI_CHECK!(bore.face.len() == 72 && bore.vertex.len() == 74);
-        MINI_CHECK!(round == 74 && rim == 37 && seam == 4 && shared == 74);
+        MINI_CHECK!(bore.face.len() == 40 && bore.vertex.len() == 42);
+        MINI_CHECK!(round == 42 && rim == 21 && seam == 4 && shared == 42);
         MINI_CHECK!(body[0].face.len() == 72 && body[0].vertex.len() == 74);
         MINI_CHECK!((volume - reference).abs() / reference < 0.005);
+    })
+}
+
+pub fn run_brep_strip_step_share() -> TestResult {
+    MINI_TEST!("Strip Step Share", {
+        use crate::BRep;
+
+        let quality = Some((5.0, 0.001));
+        let body = BRep::create_cylinder(150.0, 400.0).face_meshes_q(quality);
+        let bore = BRep::create_block_with_hole(100.0, 100.0, 50.0, 10.0).face_meshes_q(quality);
+        let rib = BRep::create_block_with_hole(4000.0, 200.0, 100.0, 10.0).face_meshes_q(quality);
+
+        MINI_CHECK!(body[0].face.len() == 144 && body[0].vertex.len() == 146);
+        MINI_CHECK!(bore[4].face.len() == 56 && bore[4].vertex.len() == 58);
+        MINI_CHECK!(rib[4].face.len() == 32 && rib[4].vertex.len() == 34);
+        MINI_CHECK!(rib[5].vertex.len() == 20 && rib[6].vertex.len() == 20);
     })
 }
 
@@ -1641,6 +1657,11 @@ REGISTER_MINI_TEST!(
     "BRep",
     "Strip Fast Path",
     crate::brep_test::run_brep_strip_fast_path
+);
+REGISTER_MINI_TEST!(
+    "BRep",
+    "Strip Step Share",
+    crate::brep_test::run_brep_strip_step_share
 );
 REGISTER_MINI_TEST!(
     "BRep",
