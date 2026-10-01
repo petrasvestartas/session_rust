@@ -317,6 +317,7 @@ pub struct Mesh {
     guid: std::sync::OnceLock<String>,                           // Lazy guid.
     pub name: String,                                            // Mesh name.
     pub is_visible: bool,                                        // Whether a viewer draws it.
+    pub is_locked: bool,                                         // Whether a viewer keeps it from moving.
     pub color_mode: ColorMode,                                   // Active color mode.
     pointcolors: Vec<Color>,                                     // Vertex colors.
     facecolors: Vec<Color>,                                      // Face colors.
@@ -2941,6 +2942,7 @@ impl Mesh {
             guid: std::sync::OnceLock::new(),
             name: "my_mesh".to_string(),
             is_visible: true,
+            is_locked: false,
             color_mode: ColorMode::OBJECTCOLOR,
             pointcolors: Vec::new(),
             facecolors: Vec::new(),
@@ -6633,6 +6635,7 @@ impl Mesh {
             "linecolors": Mesh::colors_to_json(&self.linecolors),
             "max_face": self.max_face,
             "max_vertex": self.max_vertex,
+            "is_locked": self.is_locked,
             "is_visible": self.is_visible,
             "name": self.name,
             "objectcolor": serde_json::to_value(&self.objectcolor).unwrap_or(serde_json::Value::Null),
@@ -6744,6 +6747,7 @@ impl Mesh {
         }
 
         mesh.is_visible = data.get("is_visible").and_then(|v| v.as_bool()).unwrap_or(true);
+        mesh.is_locked = data.get("is_locked").and_then(|v| v.as_bool()).unwrap_or(false);
 
         if let Some(halfedge_json) = data.get("halfedge") {
             mesh.halfedge = Mesh::halfedge_from_json(halfedge_json)?;
@@ -6991,6 +6995,7 @@ impl Mesh {
             guid: self.guid.get().cloned().unwrap_or_default(),
             name: self.name.clone(),
             is_visible: (!self.is_visible).then_some(false),
+            is_locked: self.is_locked.then_some(true),
             vertices,
             faces,
             edge_data,
@@ -7103,6 +7108,7 @@ impl Mesh {
 
         mesh.name = proto.name;
         mesh.is_visible = proto.is_visible.unwrap_or(true);
+        mesh.is_locked = proto.is_locked.unwrap_or(false);
         mesh.vertex = Mesh::vertices_from_proto(proto.vertices);
         Mesh::faces_from_proto(proto.faces, &mut mesh);
         mesh.triangulation = Mesh::triangulation_from_proto(proto.triangulation);
@@ -7508,6 +7514,6 @@ impl std::fmt::Debug for Mesh {
 impl PartialEq for Mesh {
     /// Compare name, vertices and faces; guid ignored.
     fn eq(&self, other: &Self) -> bool {
-        self.name == other.name && self.is_visible == other.is_visible && self.vertex == other.vertex && self.face == other.face
+        self.name == other.name && self.is_visible == other.is_visible && self.is_locked == other.is_locked && self.vertex == other.vertex && self.face == other.face
     }
 }

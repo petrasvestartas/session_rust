@@ -624,3 +624,26 @@ REGISTER_MINI_TEST!(
     "Is Visible Round Trip",
     crate::line_test::run_line_is_visible_round_trip
 );
+
+pub fn run_line_is_locked_round_trip() -> TestResult {
+    MINI_TEST!("Is Locked Round Trip", {
+        use crate::Line;
+
+        let mut locked = Line::new(0.0, 0.0, 0.0, 1.0, 0.0, 0.0);
+
+        MINI_CHECK!(!locked.is_locked);
+
+        locked.is_locked = true;
+        let json = Line::file_json_loads(&locked.file_json_dumps());
+        let proto = Line::pb_loads(&locked.pb_dumps()).unwrap();
+
+        MINI_CHECK!(json.is_locked);
+        MINI_CHECK!(proto.is_locked);
+    })
+}
+
+REGISTER_MINI_TEST!(
+    "Line",
+    "Is Locked Round Trip",
+    crate::line_test::run_line_is_locked_round_trip
+);

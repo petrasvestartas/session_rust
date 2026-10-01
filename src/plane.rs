@@ -33,6 +33,7 @@ pub struct Plane {
     _d: f64,                // Plane equation coefficient d.
     pub name: String,       // Plane name.
     pub is_visible: bool,   // Whether a viewer draws it.
+    pub is_locked: bool,    // Whether a viewer keeps it from moving.
     pub width: f64,         // Display width.
     pub linecolor: Color,   // Display color.
 }
@@ -158,6 +159,7 @@ impl Plane {
             _d: 0.0,
             name: "my_plane".to_string(),
             is_visible: true,
+            is_locked: false,
             width: 1.0,
             linecolor: Color::blue(),
         };
@@ -435,6 +437,7 @@ impl PartialEq for Plane {
     fn eq(&self, other: &Self) -> bool {
         self.name == other.name
             && self.is_visible == other.is_visible
+            && self.is_locked == other.is_locked
             && self._origin == other._origin
             && self._x_axis == other._x_axis
             && self._y_axis == other._y_axis
@@ -790,6 +793,7 @@ impl Plane {
             guid: self.guid.get().cloned().unwrap_or_default(),
             name: self.name.clone(),
             is_visible: (!self.is_visible).then_some(false),
+            is_locked: self.is_locked.then_some(true),
             frame,
             width: self.width,
             linecolor: Some(self.linecolor.to_proto()),
@@ -815,6 +819,7 @@ impl Plane {
 
         plane.name = proto.name;
         plane.is_visible = proto.is_visible.unwrap_or(true);
+        plane.is_locked = proto.is_locked.unwrap_or(false);
 
         if proto.width > 0.0 {
             plane.width = proto.width;
@@ -921,6 +926,7 @@ impl Serialize for Plane {
         )?;
         map.serialize_entry("guid", self.guid())?;
         map.serialize_entry("linecolor", &self.linecolor)?;
+        map.serialize_entry("is_locked", &self.is_locked)?;
         map.serialize_entry("is_visible", &self.is_visible)?;
         map.serialize_entry("name", &self.name)?;
         map.serialize_entry("type", "Plane")?;
@@ -943,6 +949,8 @@ impl<'de> Deserialize<'de> for Plane {
             #[serde(default = "crate::file_encoders::default_visible")]
             is_visible: bool,
             #[serde(default)]
+            is_locked: bool,
+            #[serde(default)]
             linecolor: Option<Color>,
             name: String,
             #[serde(default = "default_width")]
@@ -964,6 +972,7 @@ impl<'de> Deserialize<'de> for Plane {
         plane.set_guid(data.guid);
         plane.name = data.name;
         plane.is_visible = data.is_visible;
+        plane.is_locked = data.is_locked;
         plane.width = data.width;
         plane.linecolor = data.linecolor.unwrap_or_else(Color::blue);
 

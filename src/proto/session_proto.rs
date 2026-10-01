@@ -48,6 +48,9 @@ pub struct Point {
     /// Whether a viewer draws it. Written only when false: older files read back visible.
     #[prost(bool, optional, tag = "9")]
     pub is_visible: ::core::option::Option<bool>,
+    /// Whether a viewer keeps it from being moved or edited. Written only when true.
+    #[prost(bool, optional, tag = "10")]
+    pub is_locked: ::core::option::Option<bool>,
 }
 /// Vector message representing a 3D vector
 #[derive(Clone, PartialEq, ::prost::Message)]
@@ -92,6 +95,9 @@ pub struct BoundingBox {
     /// Whether a viewer draws it. Written only when false: older files read back visible.
     #[prost(bool, optional, tag = "9")]
     pub is_visible: ::core::option::Option<bool>,
+    /// Whether a viewer keeps it from being moved or edited. Written only when true.
+    #[prost(bool, optional, tag = "10")]
+    pub is_locked: ::core::option::Option<bool>,
 }
 /// Vertex data for mesh
 #[derive(Clone, PartialEq, ::prost::Message)]
@@ -217,6 +223,9 @@ pub struct Mesh {
     /// Whether a viewer draws it. Written only when false: older files read back visible.
     #[prost(bool, optional, tag = "21")]
     pub is_visible: ::core::option::Option<bool>,
+    /// Whether a viewer keeps it from being moved or edited. Written only when true.
+    #[prost(bool, optional, tag = "22")]
+    pub is_locked: ::core::option::Option<bool>,
 }
 /// NurbsSurface message representing a Non-Uniform Rational B-Spline surface
 #[derive(Clone, PartialEq, ::prost::Message)]
@@ -278,6 +287,9 @@ pub struct NurbsSurface {
     /// Whether a viewer draws it. Written only when false: older files read back visible.
     #[prost(bool, optional, tag = "22")]
     pub is_visible: ::core::option::Option<bool>,
+    /// Whether a viewer keeps it from being moved or edited. Written only when true.
+    #[prost(bool, optional, tag = "23")]
+    pub is_locked: ::core::option::Option<bool>,
 }
 /// NurbsCurve message representing a Non-Uniform Rational B-Spline curve
 #[derive(Clone, PartialEq, ::prost::Message)]
@@ -324,6 +336,9 @@ pub struct NurbsCurve {
     /// Whether a viewer draws it. Written only when false: older files read back visible.
     #[prost(bool, optional, tag = "15")]
     pub is_visible: ::core::option::Option<bool>,
+    /// Whether a viewer keeps it from being moved or edited. Written only when true.
+    #[prost(bool, optional, tag = "16")]
+    pub is_locked: ::core::option::Option<bool>,
 }
 /// TopoDS_Shape: an oriented reference to a sub-shape (index into the owning table).
 #[derive(Clone, Copy, PartialEq, Eq, Hash, ::prost::Message)]
@@ -430,6 +445,9 @@ pub struct BRep {
     /// Whether a viewer draws it. Written only when false: older files read back visible.
     #[prost(bool, optional, tag = "15")]
     pub is_visible: ::core::option::Option<bool>,
+    /// Whether a viewer keeps it from being moved or edited. Written only when true.
+    #[prost(bool, optional, tag = "16")]
+    pub is_locked: ::core::option::Option<bool>,
 }
 /// TopAbs_Orientation: carried by the parent -> child reference, never by the shape.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord, ::prost::Enumeration)]
@@ -492,6 +510,9 @@ pub struct Polyline {
     /// Whether a viewer draws it. Written only when false: older files read back visible.
     #[prost(bool, optional, tag = "9")]
     pub is_visible: ::core::option::Option<bool>,
+    /// Whether a viewer keeps it from being moved or edited. Written only when true.
+    #[prost(bool, optional, tag = "10")]
+    pub is_locked: ::core::option::Option<bool>,
 }
 /// One modification applied to a host element - a cut, a drill, a joint pocket.
 ///
@@ -611,6 +632,9 @@ pub struct Element {
     /// before this field, and every visible element, reads back visible.
     #[prost(bool, optional, tag = "15")]
     pub is_visible: ::core::option::Option<bool>,
+    /// Whether a viewer keeps it from being moved or edited. Written only when true.
+    #[prost(bool, optional, tag = "16")]
+    pub is_locked: ::core::option::Option<bool>,
 }
 /// Encoders message for serialization metadata and options
 #[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
@@ -830,6 +854,9 @@ pub struct Line {
     /// Whether a viewer draws it. Written only when false: older files read back visible.
     #[prost(bool, optional, tag = "13")]
     pub is_visible: ::core::option::Option<bool>,
+    /// Whether a viewer keeps it from being moved or edited. Written only when true.
+    #[prost(bool, optional, tag = "14")]
+    pub is_locked: ::core::option::Option<bool>,
 }
 /// Matrix message representing an NxM matrix
 #[derive(Clone, PartialEq, ::prost::Message)]
@@ -898,6 +925,9 @@ pub struct Plane {
     /// Whether a viewer draws it. Written only when false: older files read back visible.
     #[prost(bool, optional, tag = "7")]
     pub is_visible: ::core::option::Option<bool>,
+    /// Whether a viewer keeps it from being moved or edited. Written only when true.
+    #[prost(bool, optional, tag = "8")]
+    pub is_locked: ::core::option::Option<bool>,
 }
 /// PointCloud message representing a collection of 3D points with optional colors and normals
 /// Stores data as flat arrays for efficient serialization
@@ -972,6 +1002,9 @@ pub struct PointCloud {
     /// Whether a viewer draws it. Written only when false: older files read back visible.
     #[prost(bool, optional, tag = "16")]
     pub is_visible: ::core::option::Option<bool>,
+    /// Whether a viewer keeps it from being moved or edited. Written only when true.
+    #[prost(bool, optional, tag = "17")]
+    pub is_locked: ::core::option::Option<bool>,
 }
 /// Sheet: one drawing's linework flattened to segments, published for RANGE reads.
 ///

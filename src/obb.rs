@@ -34,6 +34,8 @@ pub struct OBB {
     pub name: String,      // Box name.
     #[serde(default = "crate::file_encoders::default_visible")]
     pub is_visible: bool,  // Whether a viewer draws it.
+    #[serde(default)]
+    pub is_locked: bool,   // Whether a viewer keeps it from moving.
 }
 
 impl OBB {
@@ -57,6 +59,7 @@ impl OBB {
             half_size,
             name: "my_obb".to_string(),
             is_visible: true,
+            is_locked: false,
         }
     }
 
@@ -836,6 +839,7 @@ impl OBB {
             guid: self.guid.get().cloned().unwrap_or_default(),
             name: self.name.clone(),
             is_visible: (!self.is_visible).then_some(false),
+            is_locked: self.is_locked.then_some(true),
         }
     }
 
@@ -857,6 +861,7 @@ impl OBB {
 
         obb.name = proto.name;
         obb.is_visible = proto.is_visible.unwrap_or(true);
+        obb.is_locked = proto.is_locked.unwrap_or(false);
 
         Ok(obb)
     }

@@ -120,6 +120,8 @@ pub struct Line {
     pub name: String,     // Line name.
     #[serde(default = "crate::file_encoders::default_visible")]
     pub is_visible: bool, // Whether a viewer draws it.
+    #[serde(default)]
+    pub is_locked: bool,  // Whether a viewer keeps it from moving.
     pub width: f64,       // Display width.
     pub dash: Vec<f64>,   // Dash pattern lengths.
     pub linecolor: Color, // Display color.
@@ -143,6 +145,7 @@ impl Line {
             _z1: z1,
             name: "my_line".to_string(),
             is_visible: true,
+            is_locked: false,
             width: 1.0,
             dash: Vec::new(),
             linecolor: Color::black(),
@@ -370,6 +373,7 @@ impl PartialEq for Line {
     fn eq(&self, other: &Self) -> bool {
         self.name == other.name
             && self.is_visible == other.is_visible
+            && self.is_locked == other.is_locked
             && (self._x0 * 1000000.0).round() == (other._x0 * 1000000.0).round()
             && (self._y0 * 1000000.0).round() == (other._y0 * 1000000.0).round()
             && (self._z0 * 1000000.0).round() == (other._z0 * 1000000.0).round()
@@ -859,6 +863,7 @@ impl Line {
             guid: self.guid.get().cloned().unwrap_or_default(),
             name: self.name.clone(),
             is_visible: (!self.is_visible).then_some(false),
+            is_locked: self.is_locked.then_some(true),
             width: self.width,
             coords: vec![self._x0, self._y0, self._z0, self._x1, self._y1, self._z1],
             dash: self.dash.clone(),
@@ -894,6 +899,7 @@ impl Line {
 
         line.name = proto.name;
         line.is_visible = proto.is_visible.unwrap_or(true);
+        line.is_locked = proto.is_locked.unwrap_or(false);
 
         if proto.width > 0.0 {
             line.width = proto.width;

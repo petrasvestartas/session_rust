@@ -3780,3 +3780,26 @@ REGISTER_MINI_TEST!(
     "Is Visible Round Trip",
     crate::mesh_test::run_mesh_is_visible_round_trip
 );
+
+pub fn run_mesh_is_locked_round_trip() -> TestResult {
+    MINI_TEST!("Is Locked Round Trip", {
+        use crate::Mesh;
+
+        let mut locked = Mesh::create_box(1.0, 1.0, 1.0);
+
+        MINI_CHECK!(!locked.is_locked);
+
+        locked.is_locked = true;
+        let json = Mesh::file_json_loads(&locked.file_json_dumps());
+        let proto = Mesh::pb_loads(&locked.pb_dumps()).unwrap();
+
+        MINI_CHECK!(json.is_locked);
+        MINI_CHECK!(proto.is_locked);
+    })
+}
+
+REGISTER_MINI_TEST!(
+    "Mesh",
+    "Is Locked Round Trip",
+    crate::mesh_test::run_mesh_is_locked_round_trip
+);

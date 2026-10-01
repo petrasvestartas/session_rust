@@ -351,6 +351,7 @@ pub struct Element {
     pub element_data: Vec<u8>,          // Opaque derived-type state.
     pub name: String,                   // Element name.
     pub is_visible: bool,               // Whether a viewer draws it.
+    pub is_locked: bool,                // Whether a viewer keeps it from moving.
 }
 
 impl Element {
@@ -383,6 +384,7 @@ impl Element {
             element_data: Vec::new(),
             name: name.to_string(),
             is_visible: true,
+            is_locked: false,
         }
     }
 
@@ -891,6 +893,7 @@ impl Element {
             "geometry_type": self.geometry_type_name(),
             "guid": self.guid(),
             "insertion_vectors": ivs,
+            "is_locked": self.is_locked,
             "is_visible": self.is_visible,
             "name": self.name,
             "type": "Element",
@@ -923,6 +926,7 @@ impl Element {
 
         elem.name = data["name"].as_str().unwrap_or(&elem.name).to_string();
         elem.is_visible = data["is_visible"].as_bool().unwrap_or(true);
+        elem.is_locked = data["is_locked"].as_bool().unwrap_or(false);
 
         if !data["dimensions"].is_null() {
             elem.dimensions = serde_json::from_value(data["dimensions"].clone()).ok();
@@ -1028,6 +1032,7 @@ impl Element {
             dimensions,
             features,
             is_visible: (!self.is_visible).then_some(false),
+            is_locked: self.is_locked.then_some(true),
         }
     }
 
@@ -1041,6 +1046,7 @@ impl Element {
 
         elem.name = proto.name;
         elem.is_visible = proto.is_visible.unwrap_or(true);
+        elem.is_locked = proto.is_locked.unwrap_or(false);
 
         let has_data = !proto.geometry_data.is_empty();
 
@@ -1332,6 +1338,7 @@ impl PartialEq for Element {
             && self.dimensions == other.dimensions
             && self.features == other.features
             && self.is_visible == other.is_visible
+            && self.is_locked == other.is_locked
     }
 }
 

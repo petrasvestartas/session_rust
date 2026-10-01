@@ -452,3 +452,26 @@ REGISTER_MINI_TEST!(
     "Is Visible Round Trip",
     crate::plane_test::run_plane_is_visible_round_trip
 );
+
+pub fn run_plane_is_locked_round_trip() -> TestResult {
+    MINI_TEST!("Is Locked Round Trip", {
+        use crate::Plane;
+
+        let mut locked = Plane::xy_plane();
+
+        MINI_CHECK!(!locked.is_locked);
+
+        locked.is_locked = true;
+        let json = Plane::file_json_loads(&locked.file_json_dumps());
+        let proto = Plane::pb_loads(&locked.pb_dumps()).unwrap();
+
+        MINI_CHECK!(json.is_locked);
+        MINI_CHECK!(proto.is_locked);
+    })
+}
+
+REGISTER_MINI_TEST!(
+    "Plane",
+    "Is Locked Round Trip",
+    crate::plane_test::run_plane_is_locked_round_trip
+);

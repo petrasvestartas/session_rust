@@ -610,6 +610,11 @@ pub fn get_all_tests() -> Vec<RegisteredTest> {
             name: "Is Visible Round Trip",
             func: run_brep_is_visible_round_trip,
         },
+        RegisteredTest {
+            group: "BRep",
+            name: "Is Locked Round Trip",
+            func: run_brep_is_locked_round_trip,
+        },
         // Color tests
         RegisteredTest {
             group: "Color",
@@ -742,6 +747,11 @@ pub fn get_all_tests() -> Vec<RegisteredTest> {
             group: "Point",
             name: "Is Visible Round Trip",
             func: run_point_is_visible_round_trip,
+        },
+        RegisteredTest {
+            group: "Point",
+            name: "Is Locked Round Trip",
+            func: run_point_is_locked_round_trip,
         },
         // Vector tests
         RegisteredTest {
@@ -1111,6 +1121,11 @@ pub fn get_all_tests() -> Vec<RegisteredTest> {
             name: "Is Visible Round Trip",
             func: run_line_is_visible_round_trip,
         },
+        RegisteredTest {
+            group: "Line",
+            name: "Is Locked Round Trip",
+            func: run_line_is_locked_round_trip,
+        },
         // Polyline tests
         RegisteredTest {
             group: "Polyline",
@@ -1382,6 +1397,11 @@ pub fn get_all_tests() -> Vec<RegisteredTest> {
             name: "Is Visible Round Trip",
             func: run_polyline_is_visible_round_trip,
         },
+        RegisteredTest {
+            group: "Polyline",
+            name: "Is Locked Round Trip",
+            func: run_polyline_is_locked_round_trip,
+        },
         // Plane tests
         RegisteredTest {
             group: "Plane",
@@ -1472,6 +1492,11 @@ pub fn get_all_tests() -> Vec<RegisteredTest> {
             group: "Plane",
             name: "Is Visible Round Trip",
             func: run_plane_is_visible_round_trip,
+        },
+        RegisteredTest {
+            group: "Plane",
+            name: "Is Locked Round Trip",
+            func: run_plane_is_locked_round_trip,
         },
         // PointCloud tests
         RegisteredTest {
@@ -1618,6 +1643,11 @@ pub fn get_all_tests() -> Vec<RegisteredTest> {
             group: "PointCloud",
             name: "Is Visible Round Trip",
             func: run_pointcloud_is_visible_round_trip,
+        },
+        RegisteredTest {
+            group: "PointCloud",
+            name: "Is Locked Round Trip",
+            func: run_pointcloud_is_locked_round_trip,
         },
         // Xform tests
         RegisteredTest {
@@ -2196,6 +2226,11 @@ pub fn get_all_tests() -> Vec<RegisteredTest> {
             name: "Is Visible Round Trip",
             func: run_mesh_is_visible_round_trip,
         },
+        RegisteredTest {
+            group: "Mesh",
+            name: "Is Locked Round Trip",
+            func: run_mesh_is_locked_round_trip,
+        },
         // NurbsCurve tests
         RegisteredTest {
             group: "NurbsCurve",
@@ -2296,6 +2331,11 @@ pub fn get_all_tests() -> Vec<RegisteredTest> {
             group: "NurbsCurve",
             name: "Is Visible Round Trip",
             func: run_nurbscurve_is_visible_round_trip,
+        },
+        RegisteredTest {
+            group: "NurbsCurve",
+            name: "Is Locked Round Trip",
+            func: run_nurbscurve_is_locked_round_trip,
         },
         // NurbsSurface tests
         RegisteredTest {
@@ -2407,6 +2447,11 @@ pub fn get_all_tests() -> Vec<RegisteredTest> {
             group: "NurbsSurface",
             name: "Is Visible Round Trip",
             func: run_nurbssurface_is_visible_round_trip,
+        },
+        RegisteredTest {
+            group: "NurbsSurface",
+            name: "Is Locked Round Trip",
+            func: run_nurbssurface_is_locked_round_trip,
         },
         // Source-geometry split tests
         RegisteredTest {
@@ -4148,6 +4193,11 @@ pub fn get_all_tests() -> Vec<RegisteredTest> {
             name: "Is Visible Round Trip",
             func: run_obb_is_visible_round_trip,
         },
+        RegisteredTest {
+            group: "OBB",
+            name: "Is Locked Round Trip",
+            func: run_obb_is_locked_round_trip,
+        },
         // Edge tests
         RegisteredTest {
             group: "Edge",
@@ -5089,6 +5139,11 @@ pub fn get_all_tests() -> Vec<RegisteredTest> {
             group: "Element",
             name: "Is Visible Round Trip",
             func: run_element_is_visible_round_trip,
+        },
+        RegisteredTest {
+            group: "Element",
+            name: "Is Locked Round Trip",
+            func: run_element_is_locked_round_trip,
         },
         RegisteredTest {
             group: "ElementFeature",

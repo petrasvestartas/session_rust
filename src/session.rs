@@ -102,6 +102,23 @@ impl Geometry {
         }
     }
 
+    /// Return whether a viewer keeps the wrapped object from moving.
+    pub fn is_locked(&self) -> bool {
+        match self {
+            Geometry::OBB(g) => g.is_locked,
+            Geometry::BRep(g) => g.is_locked,
+            Geometry::Element(g) => g.is_locked,
+            Geometry::Line(g) => g.is_locked,
+            Geometry::Mesh(g) => g.is_locked,
+            Geometry::NurbsCurve(g) => g.is_locked,
+            Geometry::NurbsSurface(g) => g.is_locked,
+            Geometry::Plane(g) => g.is_locked,
+            Geometry::Point(g) => g.is_locked,
+            Geometry::PointCloud(g) => g.is_locked,
+            Geometry::Polyline(g) => g.is_locked,
+        }
+    }
+
     /// Return the name of the wrapped object.
     pub fn name(&self) -> &str {
         match self {

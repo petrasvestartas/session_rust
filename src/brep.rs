@@ -2129,6 +2129,7 @@ pub struct BRep {
     guid: std::sync::OnceLock<String>, // Lazily minted GUID.
     pub name: String,                  // BRep name.
     pub is_visible: bool,              // Whether a viewer draws it.
+    pub is_locked: bool,               // Whether a viewer keeps it from moving.
     pub width: f64,                    // Display width.
     pub surfacecolor: Color,           // Display color of the faces.
     pub m_surfaces: Vec<NurbsSurface>, // Surface pool.
@@ -2158,6 +2159,7 @@ impl BRep {
             guid: std::sync::OnceLock::new(),
             name: "my_brep".to_string(),
             is_visible: true,
+            is_locked: false,
             width: 1.0,
             surfacecolor: Color::lightgrey(),
             m_surfaces: Vec::new(),
@@ -3244,6 +3246,7 @@ impl BRep {
             guid: self.guid.get().cloned().unwrap_or_default(),
             name: self.name.clone(),
             is_visible: (!self.is_visible).then_some(false),
+            is_locked: self.is_locked.then_some(true),
             width: self.width,
             ..Default::default()
         };
@@ -3313,6 +3316,7 @@ impl BRep {
 
         b.name = proto.name;
         b.is_visible = proto.is_visible.unwrap_or(true);
+        b.is_locked = proto.is_locked.unwrap_or(false);
         b.width = proto.width;
 
         for c in proto.curves_2d {
@@ -3432,6 +3436,7 @@ impl PartialEq for BRep {
     fn eq(&self, other: &Self) -> bool {
         self.name == other.name
             && self.is_visible == other.is_visible
+            && self.is_locked == other.is_locked
             && self.width == other.width
             && self.surfacecolor == other.surfacecolor
             && self.m_surfaces.len() == other.m_surfaces.len()
@@ -3499,6 +3504,7 @@ impl Serialize for BRep {
 
         map.serialize_entry("faces", &faces)?;
         map.serialize_entry("guid", &self.guid())?;
+        map.serialize_entry("is_locked", &self.is_locked)?;
         map.serialize_entry("is_visible", &self.is_visible)?;
         map.serialize_entry("name", &self.name)?;
         let mut shells: Vec<ShellJson> = Vec::new();
@@ -3561,6 +3567,8 @@ impl<'de> Deserialize<'de> for BRep {
             #[serde(default)]
             is_visible: Option<bool>,
             #[serde(default)]
+            is_locked: Option<bool>,
+            #[serde(default)]
             width: Option<f64>,
             #[serde(default)]
             surfacecolor: Option<Color>,
@@ -3596,6 +3604,7 @@ impl<'de> Deserialize<'de> for BRep {
         }
 
         b.is_visible = data.is_visible.unwrap_or(true);
+        b.is_locked = data.is_locked.unwrap_or(false);
 
         if let Some(w) = data.width {
             b.width = w;

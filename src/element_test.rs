@@ -1278,6 +1278,35 @@ REGISTER_MINI_TEST!(
     "Is Visible Round Trip",
     crate::element_test::run_element_is_visible_round_trip
 );
+
+pub fn run_element_is_locked_round_trip() -> TestResult {
+    MINI_TEST!("Is Locked Round Trip", {
+        use crate::element::Element;
+
+        let mut locked = Element::from_mesh(unit_quad(), "joint");
+
+        MINI_CHECK!(!locked.is_locked);
+
+        locked.is_locked = true;
+        let json = Element::file_json_loads(&locked.file_json_dumps());
+        let proto = Element::pb_loads(&locked.pb_dumps()).unwrap();
+
+        MINI_CHECK!(json.is_locked);
+        MINI_CHECK!(proto.is_locked);
+        MINI_CHECK!(json == locked);
+        MINI_CHECK!(proto == locked);
+
+        let free = Element::from_mesh(unit_quad(), "joint");
+
+        MINI_CHECK!(free != locked);
+    })
+}
+
+REGISTER_MINI_TEST!(
+    "Element",
+    "Is Locked Round Trip",
+    crate::element_test::run_element_is_locked_round_trip
+);
 REGISTER_MINI_TEST!(
     "ElementFeature",
     "Constructor",

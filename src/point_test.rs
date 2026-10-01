@@ -363,3 +363,26 @@ REGISTER_MINI_TEST!(
     "Is Visible Round Trip",
     crate::point_test::run_point_is_visible_round_trip
 );
+
+pub fn run_point_is_locked_round_trip() -> TestResult {
+    MINI_TEST!("Is Locked Round Trip", {
+        use crate::Point;
+
+        let mut locked = Point::new(1.0, 2.0, 3.0);
+
+        MINI_CHECK!(!locked.is_locked);
+
+        locked.is_locked = true;
+        let json = Point::file_json_loads(&locked.file_json_dumps());
+        let proto = Point::pb_loads(&locked.pb_dumps()).unwrap();
+
+        MINI_CHECK!(json.is_locked);
+        MINI_CHECK!(proto.is_locked);
+    })
+}
+
+REGISTER_MINI_TEST!(
+    "Point",
+    "Is Locked Round Trip",
+    crate::point_test::run_point_is_locked_round_trip
+);
