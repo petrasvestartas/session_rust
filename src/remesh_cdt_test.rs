@@ -449,6 +449,37 @@ pub fn run_remesh_cdt_large_coordinates() -> TestResult {
     })
 }
 
+pub fn run_remesh_cdt_collinear_boundary_vertices() -> TestResult {
+    MINI_TEST!("Collinear Boundary Vertices", {
+        use crate::remesh_cdt::cdt_triangulate;
+        use crate::Point;
+
+        let border = vec![
+            Point::new(0.0, 0.0, 0.0),
+            Point::new(10.0, 0.0, 0.0),
+            Point::new(10.0, 10.0, 0.0),
+            Point::new(6.0, 10.0, 0.0),
+            Point::new(3.0, 10.0, 0.0),
+            Point::new(0.0, 10.0, 0.0),
+        ];
+        let tris = cdt_triangulate(&border, &[]);
+        let mut used = vec![false; border.len()];
+        let mut area = 0.0;
+
+        for (a, b, c) in &tris {
+            used[*a] = true;
+            used[*b] = true;
+            used[*c] = true;
+            let (p, q, r) = (&border[*a], &border[*b], &border[*c]);
+            area += 0.5 * ((q[0] - p[0]) * (r[1] - p[1]) - (q[1] - p[1]) * (r[0] - p[0]));
+        }
+
+        MINI_CHECK!(tris.len() == 4);
+        MINI_CHECK!(used.iter().all(|u| *u));
+        MINI_CHECK!((area - 100.0).abs() < 1e-9);
+    })
+}
+
 pub fn run_remesh_cdt_plate_four_holes() -> TestResult {
     MINI_TEST!("Plate Four Holes", {
         use crate::remesh_cdt::RemeshCDT;
@@ -580,6 +611,11 @@ REGISTER_MINI_TEST!(
     "RemeshCDT",
     "Large Coordinates",
     crate::remesh_cdt_test::run_remesh_cdt_large_coordinates
+);
+REGISTER_MINI_TEST!(
+    "RemeshCDT",
+    "Collinear Boundary Vertices",
+    crate::remesh_cdt_test::run_remesh_cdt_collinear_boundary_vertices
 );
 REGISTER_MINI_TEST!(
     "RemeshCDT",

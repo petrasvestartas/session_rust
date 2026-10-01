@@ -812,7 +812,19 @@ impl Delaunay {
         self.rewire(tb, ta, edge, b1, b2);
     }
 
-    /// Walk the path from i back round to i0 creating boundary edges; false when the step budget of a degenerate path is blown.
+    /// True when path vertex `cur` adds nothing between `prev` and `next`: it repeats `prev`, or `next` lies back along the way it came; a vertex that only continues straight on stays, since every input vertex must reach the triangulation.
+    fn redundant(prev: [i64; 2], cur: [i64; 2], next: [i64; 2]) -> bool {
+        if cross_sign(prev, cur, next) != 0 {
+            return false;
+        }
+
+        let dx = (cur[0] - prev[0]) as f64;
+        let dy = (cur[1] - prev[1]) as f64;
+
+        dx * (next[0] - cur[0]) as f64 + dy * (next[1] - cur[1]) as f64 <= 0.0
+    }
+
+    /// Walk the path from i back round to i0 creating boundary edges, keeping every vertex that continues the path; false when the step budget of a degenerate path is blown.
     fn walk_path(&mut self, path: &[[i64; 2]], i0: usize, i: usize, v0: usize) -> bool {
         let n = path.len();
         let budget = 16 * n + 256;
@@ -833,7 +845,7 @@ impl Delaunay {
 
             let mut i_next = next_index(i, n);
 
-            if cross_sign(self.vs[v_prev].pt, path[i], path[i_next]) == 0 {
+            if Self::redundant(self.vs[v_prev].pt, path[i], path[i_next]) {
                 i = i_next;
                 continue;
             }
@@ -852,7 +864,7 @@ impl Delaunay {
                 i = i_next;
                 i_next = next_index(i, n);
 
-                while cross_sign(self.vs[v_prev].pt, path[i], path[i_next]) == 0 {
+                while Self::redundant(self.vs[v_prev].pt, path[i], path[i_next]) {
                     steps += 1;
 
                     if steps > budget {
@@ -881,7 +893,7 @@ impl Delaunay {
                 i = i_next;
                 i_next = next_index(i, n);
 
-                while cross_sign(self.vs[v_prev].pt, path[i], path[i_next]) == 0 {
+                while Self::redundant(self.vs[v_prev].pt, path[i], path[i_next]) {
                     steps += 1;
 
                     if steps > budget {
