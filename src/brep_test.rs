@@ -1135,10 +1135,91 @@ pub fn run_brep_strip_fast_path() -> TestResult {
         let volume = bh.mesh().volume();
         let reference = 8.0 * 6.0 * 4.0 - PI * 1.5 * 1.5 * 4.0;
 
-        MINI_CHECK!(bore.face.len() == 36 && bore.vertex.len() == 74);
+        MINI_CHECK!(bore.face.len() == 72 && bore.vertex.len() == 74);
         MINI_CHECK!(round == 74 && rim == 37 && seam == 4 && shared == 74);
-        MINI_CHECK!(body[0].face.len() == 18 && body[0].vertex.len() == 38);
+        MINI_CHECK!(body[0].face.len() == 72 && body[0].vertex.len() == 74);
         MINI_CHECK!((volume - reference).abs() / reference < 0.005);
+    })
+}
+
+pub fn run_brep_mesh_watertight() -> TestResult {
+    MINI_TEST!("Mesh Watertight", {
+        use crate::BRep;
+        use std::collections::HashMap;
+
+        let bodies = vec![
+            BRep::create_box(8.0, 6.0, 4.0),
+            BRep::create_cylinder(2.0, 5.0),
+            BRep::create_sphere(2.0),
+            BRep::create_cone(2.0, 5.0),
+            BRep::create_torus(4.0, 1.0),
+            BRep::create_block_with_hole(8.0, 6.0, 4.0, 1.5),
+        ];
+        let key = |p: &crate::Point| [(p[0] + 0.0).to_bits(), (p[1] + 0.0).to_bits(), (p[2] + 0.0).to_bits()];
+        let mut empty = 0;
+        let mut open = 0;
+        let mut missing = 0;
+
+        for b in &bodies {
+            let fms = b.face_meshes_q(Some((10.0, 0.005)));
+            let mut edges: HashMap<([u64; 3], [u64; 3]), i32> = HashMap::new();
+
+            for fm in &fms {
+                if fm.face.is_empty() {
+                    empty += 1;
+                }
+
+                let mut local: HashMap<([u64; 3], [u64; 3]), i32> = HashMap::new();
+
+                for verts in fm.face.values() {
+                    let n = verts.len();
+
+                    for i in 0..n {
+                        let a = key(&fm.vertex[&verts[i]].position());
+                        let c = key(&fm.vertex[&verts[(i + 1) % n]].position());
+                        *local.entry((a, c)).or_default() += 1;
+                        *local.entry((c, a)).or_default() -= 1;
+                    }
+                }
+
+                for (edge, count) in local {
+                    if count > 0 {
+                        *edges.entry(edge).or_default() += count;
+                    }
+                }
+            }
+
+            for ((a, c), count) in &edges {
+                if edges.get(&(*c, *a)).copied().unwrap_or(0) != *count {
+                    open += 1;
+                }
+            }
+
+            for ei in 0..b.edge_count() {
+                if b.m_edges[ei].degenerated {
+                    continue;
+                }
+
+                for fr in b.edge_faces(ei) {
+                    for vi in [b.m_edges[ei].start_vertex, b.m_edges[ei].end_vertex] {
+                        let p = key(&b.m_vertices[vi as usize].point);
+                        let mut found = false;
+
+                        for vd in fms[fr.index as usize].vertex.values() {
+                            found = found || key(&vd.position()) == p;
+                        }
+
+                        if !found {
+                            missing += 1;
+                        }
+                    }
+                }
+            }
+        }
+
+        MINI_CHECK!(empty == 0);
+        MINI_CHECK!(open == 0);
+        MINI_CHECK!(missing == 0);
     })
 }
 
@@ -1560,6 +1641,11 @@ REGISTER_MINI_TEST!(
     "BRep",
     "Strip Fast Path",
     crate::brep_test::run_brep_strip_fast_path
+);
+REGISTER_MINI_TEST!(
+    "BRep",
+    "Mesh Watertight",
+    crate::brep_test::run_brep_mesh_watertight
 );
 REGISTER_MINI_TEST!(
     "BRep",

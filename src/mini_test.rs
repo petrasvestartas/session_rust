@@ -552,6 +552,11 @@ pub fn get_all_tests() -> Vec<RegisteredTest> {
         },
         RegisteredTest {
             group: "BRep",
+            name: "Mesh Watertight",
+            func: run_brep_mesh_watertight,
+        },
+        RegisteredTest {
+            group: "BRep",
             name: "Mesh Orientation",
             func: run_brep_mesh_orientation,
         },

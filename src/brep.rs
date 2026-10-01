@@ -926,30 +926,14 @@ fn lifted_distance(surface: &NurbsSurface, curve: &NurbsCurve, point: &Point, t:
     }
 }
 
-/// Parameter of the lifted pcurve closest to `point`: a coarse scan then 64 golden-section steps in the best cell
-fn boundary_parameter(surface: &NurbsSurface, curve: &NurbsCurve, point: &Point) -> f64 {
-    let (start, end) = curve.domain();
-    let count = (curve.cv_count() * 4).clamp(32, 4096);
-    let step = (end - start) / count as f64;
-    let mut best = start;
-    let mut error = lifted_distance(surface, curve, point, start);
-
-    for index in 1..=count {
-        let t = if index == count {
-            end
-        } else {
-            start + index as f64 * step
-        };
-        let candidate = lifted_distance(surface, curve, point, t);
-
-        if candidate < error {
-            best = t;
-            error = candidate;
-        }
-    }
-
-    let mut left = (best - step).max(start);
-    let mut right = (best + step).min(end);
+/// Parameter and distance of the lifted pcurve closest to `point` within [left, right] by 64 golden-section steps
+fn golden_parameter(
+    surface: &NurbsSurface,
+    curve: &NurbsCurve,
+    point: &Point,
+    mut left: f64,
+    mut right: f64,
+) -> (f64, f64) {
     let ratio = (5.0f64.sqrt() - 1.0) * 0.5;
     let mut a = right - ratio * (right - left);
     let mut b = left + ratio * (right - left);
@@ -972,13 +956,53 @@ fn boundary_parameter(surface: &NurbsSurface, curve: &NurbsCurve, point: &Point)
         }
     }
 
-    if da < error {
-        best = a;
-        error = da;
+    if da < db {
+        (a, da)
+    } else {
+        (b, db)
+    }
+}
+
+/// Parameter of the lifted pcurve closest to `point`: a coarse scan then golden-section steps in the best cell, and in the cell at the other end too when a closed pcurve scans best at an end, since both ends are one point
+fn boundary_parameter(surface: &NurbsSurface, curve: &NurbsCurve, point: &Point) -> f64 {
+    let (start, end) = curve.domain();
+    let count = (curve.cv_count() * 4).clamp(32, 4096);
+    let step = (end - start) / count as f64;
+    let mut best = start;
+    let mut error = lifted_distance(surface, curve, point, start);
+
+    for index in 1..=count {
+        let t = if index == count {
+            end
+        } else {
+            start + index as f64 * step
+        };
+        let candidate = lifted_distance(surface, curve, point, t);
+
+        if candidate < error {
+            best = t;
+            error = candidate;
+        }
     }
 
-    if db < error {
-        best = b;
+    let mut cells = vec![((best - step).max(start), (best + step).min(end))];
+    let closed = curve.point_at(start).distance(&curve.point_at(end), None) <= Tolerance::ZERO_TOLERANCE;
+
+    if closed && best == start {
+        cells.push((end - step, end));
+    }
+
+    if closed && best == end {
+        cells.push((start, start + step));
+    }
+
+    for (left, right) in cells {
+        let (t, distance) = golden_parameter(surface, curve, point, left, right);
+
+        if distance < error {
+            best = t;
+            error = distance;
+        }
     }
 
     best
@@ -1106,6 +1130,64 @@ fn refine_surface_boundary(
 /// Compare canonical boundary positions exactly, without tolerance
 fn same_boundary_point(a: &Point, b: &Point) -> bool {
     a[0] == b[0] && a[1] == b[1] && a[2] == b[2]
+}
+
+/// Positions of the start and end vertex of an edge: the one point every face must place at each end of the edge
+fn edge_ends(b: &BRep, ei: usize) -> (Point, Point) {
+    let edge = &b.m_edges[ei];
+
+    (
+        b.m_vertices[edge.start_vertex as usize].point.clone(),
+        b.m_vertices[edge.end_vertex as usize].point.clone(),
+    )
+}
+
+/// Place the first and last sample of an edge on its vertices, so every incident face meets there bit for bit
+fn snap_sample_ends(samples: &mut [(f64, Point, Point)], ends: &(Point, Point)) {
+    if samples.is_empty() {
+        return;
+    }
+
+    let last = samples.len() - 1;
+    samples[0].2 = ends.0.clone();
+    samples[last].2 = ends.1.clone();
+}
+
+/// Phase 1: move the grid vertices of a direct face that sit on a pcurve end onto that edge's vertex, as every other face does
+fn snap_grid_corners(b: &BRep, fi: usize, grid: &mut Mesh) {
+    let face = &b.m_faces[fi];
+    let srf = &b.m_surfaces[face.surface_index as usize];
+    let (u0, u1) = srf.domain(0).unwrap_or((0.0, 1.0));
+    let (v0, v1) = srf.domain(1).unwrap_or((0.0, 1.0));
+    let utol = (u1 - u0) * 1e-4;
+    let vtol = (v1 - v0) * 1e-4;
+    let mut corners: Vec<(Point, Point)> = Vec::new();
+
+    for er in b.wire_edges(&face.wires[0]) {
+        let ci = b.pcurve_index(er.index as usize, fi, er.orientation);
+
+        if ci < 0 {
+            continue;
+        }
+
+        let crv = &b.m_curves_2d[ci as usize];
+        let ends = edge_ends(b, er.index as usize);
+        corners.push((crv.get_cv(0).unwrap_or_default(), ends.0));
+        corners.push((crv.get_cv(crv.cv_count() - 1).unwrap_or_default(), ends.1));
+    }
+
+    for vd in grid.vertex.values_mut() {
+        let (Some(&u), Some(&v)) = (vd.attributes.get("u"), vd.attributes.get("v")) else {
+            continue;
+        };
+
+        for (uv, point) in &corners {
+            if (uv[0] - u).abs() <= utol && (uv[1] - v).abs() <= vtol {
+                vd.set_position(point.clone());
+                break;
+            }
+        }
+    }
 }
 
 /// Phase 1: the outer wire is the full UV rectangle (straight pcurves enclosing the whole domain, no holes), so the face meshes directly on the surface grid
@@ -1312,8 +1394,7 @@ fn refine_shared_boundaries(
             let fi = incident.index as usize;
             let cdt = !face_direct[fi] || rebuild_grid[fi];
             curved_cdt = curved_cdt
-                || (cdt
-                    && !b.m_surfaces[b.m_faces[fi].surface_index as usize].is_planar(None, 0.0));
+                || (cdt && !is_planar_patch(&b.m_surfaces[b.m_faces[fi].surface_index as usize]));
         }
 
         if !curved_cdt {
@@ -1481,7 +1562,68 @@ fn lift_misses(srf: &NurbsSurface, q: &Point, p: &Point, tolerance: f64) -> bool
     }
 }
 
-/// Phase 3: map the canonical points of edge `ei` onto pcurve `ci` of face `fi`, checked in model space; false when a point cannot be lifted
+/// Parameter of the pcurve closest to `uv` by Newton steps from `seed`, clamped to the domain; the model-space check of the caller decides whether it is the right one
+fn pcurve_newton(crv: &NurbsCurve, uv: &Point, seed: f64) -> f64 {
+    let (t0, t1) = crv.domain();
+    let mut t = seed.clamp(t0, t1);
+
+    for _ in 0..16 {
+        let d = crv.evaluate(t, 2);
+
+        if d.len() < 3 {
+            break;
+        }
+
+        let rx = d[0][0] - uv[0];
+        let ry = d[0][1] - uv[1];
+        let f = rx * d[1][0] + ry * d[1][1];
+        let df = d[1][0] * d[1][0] + d[1][1] * d[1][1] + rx * d[2][0] + ry * d[2][1];
+
+        if df == 0.0 {
+            break;
+        }
+
+        let next = (t - f / df).clamp(t0, t1);
+        let moved = (next - t).abs();
+        t = next;
+
+        if moved <= (t1 - t0) * 1e-14 {
+            break;
+        }
+    }
+
+    t
+}
+
+/// Phase 3: first guess of the pcurve parameter of a canonical point: two dot products on a planar patch with a straight pcurve, Newton from the seed when the previous points of the edge give one, else the full closest-point search
+fn canonical_parameter(srf: &NurbsSurface, crv: &NurbsCurve, p: &Point, planar: bool, seed: Option<f64>) -> f64 {
+    let patch_uv = if planar {
+        planar_patch_uv(srf, p)
+    } else {
+        None
+    };
+    let (u, v) = match patch_uv {
+        Some(uv) => uv,
+        None => srf.closest_parameters(p),
+    };
+    let linear = match patch_uv {
+        Some(uv) => linear_pcurve_parameter(crv, uv),
+        None => None,
+    };
+
+    if let Some(t) = linear {
+        return t;
+    }
+
+    let uv = Point::new(u, v, 0.0);
+
+    match seed {
+        Some(seed) => pcurve_newton(crv, &uv, seed),
+        None => crv.closest_parameter(&uv),
+    }
+}
+
+/// Phase 3: map the canonical points of edge `ei` onto pcurve `ci` of face `fi`, checked in model space, each point seeded by the parameters of the two before it since the points run along the edge; a point the pcurve cannot reach within tolerance keeps the nearest parameter, since the canonical position is what the face places and the parameter only orders the loop
 fn lift_canonical(
     b: &BRep,
     fi: usize,
@@ -1489,7 +1631,7 @@ fn lift_canonical(
     ci: usize,
     boundary: &EdgeBoundary,
     samples: &mut Vec<(f64, Point, Point)>,
-) -> bool {
+) {
     let face = &b.m_faces[fi];
     let edge = &b.m_edges[ei];
     let srf = &b.m_surfaces[face.surface_index as usize];
@@ -1500,28 +1642,18 @@ fn lift_canonical(
     };
     let points = &boundary.points[&ei];
     let planar = is_planar_patch(srf);
+    let mut lifted: Vec<f64> = Vec::new();
 
     for (index, p) in points.iter().enumerate() {
+        let seed = match lifted.len() {
+            0 => None,
+            1 => Some(lifted[0]),
+            n => Some(2.0 * lifted[n - 1] - lifted[n - 2]),
+        };
         let (mut t, mut q) = if cached {
             boundary.samples[&ei][index].clone()
         } else {
-            let patch_uv = if planar {
-                planar_patch_uv(srf, p)
-            } else {
-                None
-            };
-            let (u, v) = match patch_uv {
-                Some(uv) => uv,
-                None => srf.closest_parameters(p),
-            };
-            let linear = match patch_uv {
-                Some(uv) => linear_pcurve_parameter(crv, uv),
-                None => None,
-            };
-            let t = match linear {
-                Some(t) => t,
-                None => crv.closest_parameter(&Point::new(u, v, 0.0)),
-            };
+            let t = canonical_parameter(srf, crv, p, planar, seed);
             (t, crv.point_at(t))
         };
         let scale = p[0].abs().max(p[1].abs()).max(p[2].abs()).max(1.0);
@@ -1533,25 +1665,21 @@ fn lift_canonical(
         if lift_misses(srf, &q, p, tolerance) {
             t = boundary_parameter(srf, crv, p);
             q = crv.point_at(t);
-
-            if lift_misses(srf, &q, p, tolerance) {
-                return false;
-            }
         }
 
+        lifted.push(t);
         samples.push((t, q, p.clone()));
     }
 
     samples.sort_by(sample_order);
     samples.dedup_by(sample_equal);
-
-    true
 }
 
-/// Phase 3: fresh samples of a pcurve nobody has sampled yet, refined to the face's angle and chord; empty when the surface cannot be evaluated
+/// Phase 3: fresh samples of a pcurve nobody has sampled yet, its ends on the edge's vertices, refined to the face's angle and chord; empty when the surface cannot be evaluated
 fn fresh_samples(
     srf: &NurbsSurface,
     crv: &NurbsCurve,
+    ends: &(Point, Point),
     angle: f64,
     chord: f64,
 ) -> Vec<(f64, Point, Point)> {
@@ -1580,10 +1708,12 @@ fn fresh_samples(
         samples.push((parameters[k], q, p));
     }
 
+    snap_sample_ends(&mut samples, ends);
+
     refine_surface_boundary(srf, crv, &samples, angle, chord)
 }
 
-/// Phase 3: samples of one edge use of a CDT face in traversal direction, a closed edge repeating its first point at the end; false when the edge has no pcurve or cannot be lifted
+/// Phase 3: samples of one edge use of a CDT face in traversal direction, a closed edge repeating its first point at the end; false when the edge has no pcurve
 fn edge_use_samples(
     b: &BRep,
     fi: usize,
@@ -1605,13 +1735,12 @@ fn edge_use_samples(
     let canonical = boundary.points.contains_key(&ei);
 
     if canonical {
-        if !lift_canonical(b, fi, ei, ci as usize, boundary, samples) {
-            return false;
-        }
+        lift_canonical(b, fi, ei, ci as usize, boundary, samples);
     } else {
         *samples = fresh_samples(
             &b.m_surfaces[b.m_faces[fi].surface_index as usize],
             crv,
+            &edge_ends(b, ei),
             angle,
             chord,
         );
@@ -1806,8 +1935,26 @@ fn planar_loops_mesh(srf: &NurbsSurface, loops: &TrimLoops) -> Mesh {
     mesh
 }
 
+/// Vertex keys per boundary attribute name, so tagging edge uses touches only the vertices each sample owns
+fn boundary_lookup(mesh: &Mesh) -> HashMap<String, Vec<usize>> {
+    let mut lookup: HashMap<String, Vec<usize>> = HashMap::new();
+
+    for (vk, vd) in &mesh.vertex {
+        for name in vd.attributes.keys() {
+            if name.starts_with("boundary") {
+                lookup.entry(name.clone()).or_default().push(*vk);
+            }
+        }
+    }
+
+    lookup
+}
+
 /// Tag every boundary vertex of a CDT mesh with the edge use it samples; each use keeps both ends, including the next edge's start
 fn tag_edge_uses(mesh: &mut Mesh, loops: &TrimLoops, uses: &[(usize, usize, usize, usize)]) {
+    let lookup = boundary_lookup(mesh);
+    let none: Vec<usize> = Vec::new();
+
     for (use_id, &(edge, li, start, count)) in uses.iter().enumerate() {
         let length = loops.uv[li].len();
 
@@ -1819,10 +1966,8 @@ fn tag_edge_uses(mesh: &mut Mesh, loops: &TrimLoops, uses: &[(usize, usize, usiz
             let key = format!("boundary/{li}/{}", (start + sample) % length);
             let tag = format!("brep_edge/{edge}/{use_id}/{sample}");
 
-            for vd in mesh.vertex.values_mut() {
-                if vd.attributes.contains_key(&key) {
-                    vd.attributes.insert(tag.clone(), 1.0);
-                }
+            for vk in lookup.get(&key).unwrap_or(&none) {
+                mesh.vertex.get_mut(vk).unwrap().attributes.insert(tag.clone(), 1.0);
             }
 
             if sample + 1 >= count {
@@ -1832,7 +1977,9 @@ fn tag_edge_uses(mesh: &mut Mesh, loops: &TrimLoops, uses: &[(usize, usize, usiz
             let interval = format!("boundary_interval/{li}/{}", (start + sample) % length);
             let interval_tag = format!("brep_edge_interval/{edge}/{use_id}/{sample}");
 
-            for vd in mesh.vertex.values_mut() {
+            for vk in lookup.get(&interval).unwrap_or(&none) {
+                let vd = mesh.vertex.get_mut(vk).unwrap();
+
                 if let Some(&t) = vd.attributes.get(&interval) {
                     vd.attributes.insert(interval_tag.clone(), t);
                 }
@@ -1944,20 +2091,26 @@ fn strip_sag(srf: &NurbsSurface, crv: &NurbsCurve, count: usize) -> f64 {
     sag
 }
 
-/// Phase 0: the steps a pcurve asks for on its own: four per control point when curved, none when straight
-fn strip_steps(crv: &NurbsCurve) -> usize {
+/// Phase 0: the steps a loop asks for on its own: four per control point of its pcurve when that is curved, and four per control point of the surface across u when that is curved, as fresh samples ask of a curve
+fn strip_steps(srf: &NurbsSurface, crv: &NurbsCurve) -> usize {
+    let mut steps = 0;
+
     if crv.degree() > 1 {
-        crv.cv_count() * 4
-    } else {
-        0
+        steps = crv.cv_count() * 4;
     }
+
+    if srf.degree(0) > 1 {
+        steps = steps.max(srf.cv_count(0) * 4);
+    }
+
+    steps
 }
 
-/// Phase 0: the steps of a strip: the angle's share of a turn and what the pcurves ask for, doubled until both loops sag within the chord tolerance
+/// Phase 0: the steps of a strip: the angle's share of a turn and what the loops ask for, doubled until both loops sag within the chord tolerance
 fn strip_count(srf: &NurbsSurface, a: &NurbsCurve, c: &NurbsCurve, angle: f64, chord: f64) -> usize {
     let tolerance = bbox_diagonal(srf) * chord;
-    let mut count = strip_steps(a)
-        .max(strip_steps(c))
+    let mut count = strip_steps(srf, a)
+        .max(strip_steps(srf, c))
         .max((360.0 / angle.max(0.1)).ceil() as usize);
 
     while count < 4096 && tolerance > 0.0 && strip_sag(srf, a, count).max(strip_sag(srf, c, count)) > tolerance {
@@ -1982,7 +2135,7 @@ fn strip_vertex(srf: &NurbsSurface, mesh: &mut Mesh, sample: &(f64, Point, Point
     key
 }
 
-/// Phase 0: the strip of a face: both loops sampled at the same steps and made the canonical boundary of their edges, a quad between every pair of steps, the vertices numbered as the keyhole polygon a CDT face runs (first loop, seam, second loop backwards, seam) so the edge uses tag as there; no surface refinement, no lifting
+/// Phase 0: the strip of a face: both loops sampled at the same steps, closed on their vertex, and made the canonical boundary of their edges, two triangles between every pair of steps, the vertices numbered as the keyhole polygon a CDT face runs (first loop, seam, second loop backwards, seam) so the edge uses tag as there; no surface refinement, no lifting
 fn strip_mesh(b: &BRep, fi: usize, boundary: &mut EdgeBoundary, angle: f64, chord: f64) -> Mesh {
     let face = &b.m_faces[fi];
     let srf = &b.m_surfaces[face.surface_index as usize];
@@ -1990,8 +2143,10 @@ fn strip_mesh(b: &BRep, fi: usize, boundary: &mut EdgeBoundary, angle: f64, chor
     let a = &b.m_curves_2d[b.pcurve_index(edges[0].index as usize, fi, edges[0].orientation) as usize];
     let c = &b.m_curves_2d[b.pcurve_index(edges[2].index as usize, fi, edges[2].orientation) as usize];
     let count = strip_count(srf, a, c, angle, chord);
-    let first = strip_samples(srf, a, count);
-    let second = strip_samples(srf, c, count);
+    let mut first = strip_samples(srf, a, count);
+    let mut second = strip_samples(srf, c, count);
+    snap_sample_ends(&mut first, &edge_ends(b, edges[0].index as usize));
+    snap_sample_ends(&mut second, &edge_ends(b, edges[2].index as usize));
     let mut mesh = Mesh::new();
     let mut loops = TrimLoops::default();
     loops.uv.push(vec![Point::new(0.0, 0.0, 0.0); 2 * count + 2]);
@@ -2011,7 +2166,8 @@ fn strip_mesh(b: &BRep, fi: usize, boundary: &mut EdgeBoundary, angle: f64, chor
     }
 
     for k in 0..count {
-        mesh.add_face(vec![bottom[k], bottom[k + 1], top[k + 1], top[k]], None);
+        mesh.add_face(vec![bottom[k], bottom[k + 1], top[k + 1]], None);
+        mesh.add_face(vec![bottom[k], top[k + 1], top[k]], None);
     }
 
     let start = &first[0].1;
@@ -3243,6 +3399,7 @@ impl BRep {
                 Some((a, c)) => RemeshNurbsSurfaceGrid::from_u_v_q(srf, 0, 0, a, c),
                 None => srf.mesh(),
             };
+            snap_grid_corners(self, fi, &mut fmesh[fi]);
             rebuild_grid[fi] = grid_boundaries(self, fi, &fmesh[fi], &mut boundary);
         }
 
