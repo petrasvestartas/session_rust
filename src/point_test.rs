@@ -340,3 +340,26 @@ REGISTER_MINI_TEST!(
     "Dihedral Angle Deg",
     crate::point_test::run_point_dihedral_angle_deg
 );
+
+pub fn run_point_is_visible_round_trip() -> TestResult {
+    MINI_TEST!("Is Visible Round Trip", {
+        use crate::Point;
+
+        let mut hidden = Point::new(1.0, 2.0, 3.0);
+
+        MINI_CHECK!(hidden.is_visible);
+
+        hidden.is_visible = false;
+        let json = Point::file_json_loads(&hidden.file_json_dumps());
+        let proto = Point::pb_loads(&hidden.pb_dumps()).unwrap();
+
+        MINI_CHECK!(!json.is_visible);
+        MINI_CHECK!(!proto.is_visible);
+    })
+}
+
+REGISTER_MINI_TEST!(
+    "Point",
+    "Is Visible Round Trip",
+    crate::point_test::run_point_is_visible_round_trip
+);

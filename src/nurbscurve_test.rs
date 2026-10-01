@@ -1226,3 +1226,28 @@ REGISTER_MINI_TEST!(
     "Circle Length",
     crate::nurbscurve_test::run_nurbscurve_circle_length
 );
+
+pub fn run_nurbscurve_is_visible_round_trip() -> TestResult {
+    MINI_TEST!("Is Visible Round Trip", {
+        use crate::NurbsCurve;
+        use crate::Point;
+
+        let points = vec![Point::new(0.0, 0.0, 0.0), Point::new(1.0, 0.0, 0.0), Point::new(1.0, 1.0, 0.0)];
+        let mut hidden = NurbsCurve::create(false, 2, &points);
+
+        MINI_CHECK!(hidden.is_visible);
+
+        hidden.is_visible = false;
+        let json = NurbsCurve::file_json_loads(&hidden.file_json_dumps());
+        let proto = NurbsCurve::pb_loads(&hidden.pb_dumps()).unwrap();
+
+        MINI_CHECK!(!json.is_visible);
+        MINI_CHECK!(!proto.is_visible);
+    })
+}
+
+REGISTER_MINI_TEST!(
+    "NurbsCurve",
+    "Is Visible Round Trip",
+    crate::nurbscurve_test::run_nurbscurve_is_visible_round_trip
+);

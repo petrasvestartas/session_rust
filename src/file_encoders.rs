@@ -151,3 +151,8 @@ pub fn sort_json_keys(value: serde_json::Value) -> serde_json::Value {
 pub fn sorted_json_string<T: Serialize>(data: &T) -> Result<String, Box<dyn std::error::Error>> {
     file_json_dumps(data, true)
 }
+
+/// Default for an is_visible field missing from older JSON.
+pub fn default_visible() -> bool {
+    true
+}

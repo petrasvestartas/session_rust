@@ -32,6 +32,7 @@ pub struct Plane {
     _c: f64,                // Plane equation coefficient c.
     _d: f64,                // Plane equation coefficient d.
     pub name: String,       // Plane name.
+    pub is_visible: bool,   // Whether a viewer draws it.
     pub width: f64,         // Display width.
     pub linecolor: Color,   // Display color.
 }
@@ -156,6 +157,7 @@ impl Plane {
             _c: 0.0,
             _d: 0.0,
             name: "my_plane".to_string(),
+            is_visible: true,
             width: 1.0,
             linecolor: Color::blue(),
         };
@@ -432,6 +434,7 @@ impl PartialEq for Plane {
     /// Compare name, frame and linecolor; guid ignored.
     fn eq(&self, other: &Self) -> bool {
         self.name == other.name
+            && self.is_visible == other.is_visible
             && self._origin == other._origin
             && self._x_axis == other._x_axis
             && self._y_axis == other._y_axis
@@ -786,6 +789,7 @@ impl Plane {
         crate::proto::Plane {
             guid: self.guid.get().cloned().unwrap_or_default(),
             name: self.name.clone(),
+            is_visible: (!self.is_visible).then_some(false),
             frame,
             width: self.width,
             linecolor: Some(self.linecolor.to_proto()),
@@ -810,6 +814,7 @@ impl Plane {
         }
 
         plane.name = proto.name;
+        plane.is_visible = proto.is_visible.unwrap_or(true);
 
         if proto.width > 0.0 {
             plane.width = proto.width;
@@ -916,6 +921,7 @@ impl Serialize for Plane {
         )?;
         map.serialize_entry("guid", self.guid())?;
         map.serialize_entry("linecolor", &self.linecolor)?;
+        map.serialize_entry("is_visible", &self.is_visible)?;
         map.serialize_entry("name", &self.name)?;
         map.serialize_entry("type", "Plane")?;
         map.serialize_entry("width", &self.width)?;
@@ -934,6 +940,8 @@ impl<'de> Deserialize<'de> for Plane {
         struct PlaneData {
             frame: [f64; 12],
             guid: String,
+            #[serde(default = "crate::file_encoders::default_visible")]
+            is_visible: bool,
             #[serde(default)]
             linecolor: Option<Color>,
             name: String,
@@ -955,6 +963,7 @@ impl<'de> Deserialize<'de> for Plane {
 
         plane.set_guid(data.guid);
         plane.name = data.name;
+        plane.is_visible = data.is_visible;
         plane.width = data.width;
         plane.linecolor = data.linecolor.unwrap_or_else(Color::blue);
 

@@ -3757,3 +3757,26 @@ REGISTER_MINI_TEST!(
     "Offset Protobuf Roundtrip",
     crate::mesh_test::run_mesh_offset_protobuf_roundtrip
 );
+
+pub fn run_mesh_is_visible_round_trip() -> TestResult {
+    MINI_TEST!("Is Visible Round Trip", {
+        use crate::Mesh;
+
+        let mut hidden = Mesh::create_box(1.0, 1.0, 1.0);
+
+        MINI_CHECK!(hidden.is_visible);
+
+        hidden.is_visible = false;
+        let json = Mesh::file_json_loads(&hidden.file_json_dumps());
+        let proto = Mesh::pb_loads(&hidden.pb_dumps()).unwrap();
+
+        MINI_CHECK!(!json.is_visible);
+        MINI_CHECK!(!proto.is_visible);
+    })
+}
+
+REGISTER_MINI_TEST!(
+    "Mesh",
+    "Is Visible Round Trip",
+    crate::mesh_test::run_mesh_is_visible_round_trip
+);

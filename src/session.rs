@@ -85,6 +85,23 @@ impl Geometry {
         }
     }
 
+    /// Return whether a viewer draws the wrapped object.
+    pub fn is_visible(&self) -> bool {
+        match self {
+            Geometry::OBB(g) => g.is_visible,
+            Geometry::BRep(g) => g.is_visible,
+            Geometry::Element(g) => g.is_visible,
+            Geometry::Line(g) => g.is_visible,
+            Geometry::Mesh(g) => g.is_visible,
+            Geometry::NurbsCurve(g) => g.is_visible,
+            Geometry::NurbsSurface(g) => g.is_visible,
+            Geometry::Plane(g) => g.is_visible,
+            Geometry::Point(g) => g.is_visible,
+            Geometry::PointCloud(g) => g.is_visible,
+            Geometry::Polyline(g) => g.is_visible,
+        }
+    }
+
     /// Return the name of the wrapped object.
     pub fn name(&self) -> &str {
         match self {

@@ -32,6 +32,8 @@ pub struct OBB {
     pub z_axis: Vector,    // Unit z axis.
     pub half_size: Vector, // Half extent along each axis.
     pub name: String,      // Box name.
+    #[serde(default = "crate::file_encoders::default_visible")]
+    pub is_visible: bool,  // Whether a viewer draws it.
 }
 
 impl OBB {
@@ -54,6 +56,7 @@ impl OBB {
             z_axis,
             half_size,
             name: "my_obb".to_string(),
+            is_visible: true,
         }
     }
 
@@ -832,6 +835,7 @@ impl OBB {
             half_size: Some(self.half_size.to_proto()),
             guid: self.guid.get().cloned().unwrap_or_default(),
             name: self.name.clone(),
+            is_visible: (!self.is_visible).then_some(false),
         }
     }
 
@@ -852,6 +856,7 @@ impl OBB {
         }
 
         obb.name = proto.name;
+        obb.is_visible = proto.is_visible.unwrap_or(true);
 
         Ok(obb)
     }

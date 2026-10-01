@@ -244,6 +244,7 @@ pub struct Polyline {
     #[serde(skip)]
     plane_dirty: bool, // True until get_plane recomputes.
     pub name: String,     // Polyline name.
+    pub is_visible: bool, // Whether a viewer draws it.
     pub coords: Vec<f64>, // Flat [x, y, z, ...].
     #[serde(skip)]
     pub plane: Plane, // Lazily computed plane, see get_plane.
@@ -1132,6 +1133,7 @@ impl Default for Polyline {
             guid: OnceLock::new(),
             plane_dirty: true,
             name: "my_polyline".to_string(),
+            is_visible: true,
             coords: Vec::new(),
             plane: Plane::default(),
             width: 1.0,
@@ -2103,6 +2105,7 @@ impl Polyline {
         crate::proto::Polyline {
             guid: self.guid.get().cloned().unwrap_or_default(),
             name: self.name.clone(),
+            is_visible: (!self.is_visible).then_some(false),
             coords: self.coords.clone(),
             width: self.width,
             dash: self.dash.clone(),
@@ -2120,6 +2123,7 @@ impl Polyline {
         }
 
         polyline.name = proto.name;
+        polyline.is_visible = proto.is_visible.unwrap_or(true);
         polyline.width = proto.width;
         polyline.dash = proto.dash;
 
@@ -2582,6 +2586,8 @@ impl<'de> Deserialize<'de> for Polyline {
             #[serde(default)]
             name: Option<String>,
             #[serde(default)]
+            is_visible: Option<bool>,
+            #[serde(default)]
             coords: Option<Vec<f64>>,
             #[serde(default)]
             points: Option<Vec<Point>>,
@@ -2605,6 +2611,8 @@ impl<'de> Deserialize<'de> for Polyline {
         if let Some(name) = data.name {
             polyline.name = name;
         }
+
+        polyline.is_visible = data.is_visible.unwrap_or(true);
 
         if let Some(coords) = data.coords {
             polyline.coords = coords;

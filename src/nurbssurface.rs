@@ -258,6 +258,7 @@ fn colors_from_proto(field: &[crate::proto::Color]) -> Vec<Color> {
 pub struct NurbsSurface {
     guid: OnceLock<String>,         // Lazily minted GUID.
     pub name: String,               // Surface name.
+    pub is_visible: bool,           // Whether a viewer draws it.
     pub width: f64,                 // Display width.
     pub pointcolors: Vec<Color>,    // Display color per control point.
     pub facecolors: Vec<Color>,     // Display color per mesh face.
@@ -278,6 +279,7 @@ impl Default for NurbsSurface {
         NurbsSurface {
             guid: OnceLock::new(),
             name: "my_nurbssurface".to_string(),
+            is_visible: true,
             width: 1.0,
             pointcolors: Vec::new(),
             facecolors: Vec::new(),
@@ -1981,6 +1983,7 @@ impl NurbsSurface {
         crate::proto::NurbsSurface {
             guid: self.guid.get().cloned().unwrap_or_default(),
             name: self.name.clone(),
+            is_visible: (!self.is_visible).then_some(false),
             dimension: self.m_dim as i32,
             is_rational: self.m_is_rat,
             order_u: self.m_order[0] as i32,
@@ -2023,6 +2026,7 @@ impl NurbsSurface {
         }
 
         surface.name = proto.name;
+        surface.is_visible = proto.is_visible.unwrap_or(true);
         surface.width = proto.width;
         surface.pointcolors = colors_from_proto(&proto.pointcolors);
         surface.facecolors = colors_from_proto(&proto.facecolors);
@@ -2543,6 +2547,7 @@ impl Serialize for NurbsSurface {
             }
         }
 
+        map.serialize_entry("is_visible", &self.is_visible)?;
         map.serialize_entry("name", &self.name)?;
         map.serialize_entry("nurbsknots_u", &self.m_nurbsknot[0])?;
         map.serialize_entry("nurbsknots_v", &self.m_nurbsknot[1])?;
@@ -2577,6 +2582,8 @@ struct NurbsSurfaceData {
     linecolors: Vec<f32>,
     #[serde(default)]
     mesh: Option<Mesh>,
+    #[serde(default)]
+    is_visible: Option<bool>,
     #[serde(default)]
     name: Option<String>,
     #[serde(default)]
@@ -2616,6 +2623,7 @@ impl<'de> Deserialize<'de> for NurbsSurface {
         }
 
         surface.name = data.name.unwrap_or_else(|| "my_nurbssurface".to_string());
+        surface.is_visible = data.is_visible.unwrap_or(true);
         surface.width = data.width.unwrap_or(1.0);
         surface.pointcolors = colors_from_json(&data.pointcolors);
         surface.facecolors = colors_from_json(&data.facecolors);

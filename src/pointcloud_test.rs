@@ -572,3 +572,28 @@ REGISTER_MINI_TEST!(
     "Protobuf Roundtrip",
     run_pointcloud_protobuf_roundtrip
 );
+
+pub fn run_pointcloud_is_visible_round_trip() -> TestResult {
+    MINI_TEST!("Is Visible Round Trip", {
+        use crate::PointCloud;
+        use crate::Point;
+
+        let points = vec![Point::new(0.0, 0.0, 0.0), Point::new(1.0, 0.0, 0.0), Point::new(1.0, 1.0, 0.0)];
+        let mut hidden = PointCloud::new(points, Vec::new(), Vec::new());
+
+        MINI_CHECK!(hidden.is_visible);
+
+        hidden.is_visible = false;
+        let json = PointCloud::file_json_loads(&hidden.file_json_dumps());
+        let proto = PointCloud::pb_loads(&hidden.pb_dumps()).unwrap();
+
+        MINI_CHECK!(!json.is_visible);
+        MINI_CHECK!(!proto.is_visible);
+    })
+}
+
+REGISTER_MINI_TEST!(
+    "PointCloud",
+    "Is Visible Round Trip",
+    crate::pointcloud_test::run_pointcloud_is_visible_round_trip
+);

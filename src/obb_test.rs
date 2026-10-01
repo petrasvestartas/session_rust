@@ -420,3 +420,27 @@ REGISTER_MINI_TEST!(
     "Two Rectangles",
     crate::obb_test::run_obb_two_rectangles
 );
+
+pub fn run_obb_is_visible_round_trip() -> TestResult {
+    MINI_TEST!("Is Visible Round Trip", {
+        use crate::OBB;
+        use crate::Point;
+
+        let mut hidden = OBB::from_point(&Point::new(1.0, 2.0, 3.0), 5.0);
+
+        MINI_CHECK!(hidden.is_visible);
+
+        hidden.is_visible = false;
+        let json = OBB::file_json_loads(&hidden.file_json_dumps());
+        let proto = OBB::pb_loads(&hidden.pb_dumps()).unwrap();
+
+        MINI_CHECK!(!json.is_visible);
+        MINI_CHECK!(!proto.is_visible);
+    })
+}
+
+REGISTER_MINI_TEST!(
+    "OBB",
+    "Is Visible Round Trip",
+    crate::obb_test::run_obb_is_visible_round_trip
+);

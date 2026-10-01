@@ -34,6 +34,8 @@ pub struct Point {
     #[serde(rename = "z")]
     _z: f64, // Z coordinate.
     pub name: String,      // Point name.
+    #[serde(default = "crate::file_encoders::default_visible")]
+    pub is_visible: bool,  // Whether a viewer draws it.
     pub width: f64,        // Display width.
     pub pointcolor: Color, // Display color.
 }
@@ -55,6 +57,7 @@ impl Point {
             _y: y,
             _z: z,
             name: name.to_string(),
+            is_visible: true,
             width: 1.0,
             pointcolor: Color::black(),
         }
@@ -132,6 +135,7 @@ impl PartialEq for Point {
     /// Compare name, coordinates, width and color within rounding.
     fn eq(&self, other: &Self) -> bool {
         self.name == other.name
+            && self.is_visible == other.is_visible
             && (self._x * 1000000.0).round() == (other._x * 1000000.0).round()
             && (self._y * 1000000.0).round() == (other._y * 1000000.0).round()
             && (self._z * 1000000.0).round() == (other._z * 1000000.0).round()
@@ -537,6 +541,7 @@ impl Point {
         crate::proto::Point {
             guid: self.guid.get().cloned().unwrap_or_default(),
             name: self.name.clone(),
+            is_visible: (!self.is_visible).then_some(false),
             x: self._x,
             y: self._y,
             z: self._z,
@@ -554,6 +559,7 @@ impl Point {
         }
 
         point.name = proto.name;
+        point.is_visible = proto.is_visible.unwrap_or(true);
         point.width = proto.width;
 
         if let Some(color) = proto.pointcolor {

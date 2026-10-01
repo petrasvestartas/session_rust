@@ -45,6 +45,9 @@ pub struct Point {
     /// Color of the point
     #[prost(message, optional, tag = "7")]
     pub pointcolor: ::core::option::Option<Color>,
+    /// Whether a viewer draws it. Written only when false: older files read back visible.
+    #[prost(bool, optional, tag = "9")]
+    pub is_visible: ::core::option::Option<bool>,
 }
 /// Vector message representing a 3D vector
 #[derive(Clone, PartialEq, ::prost::Message)]
@@ -86,6 +89,9 @@ pub struct BoundingBox {
     /// Bounding box name
     #[prost(string, tag = "7")]
     pub name: ::prost::alloc::string::String,
+    /// Whether a viewer draws it. Written only when false: older files read back visible.
+    #[prost(bool, optional, tag = "9")]
+    pub is_visible: ::core::option::Option<bool>,
 }
 /// Vertex data for mesh
 #[derive(Clone, PartialEq, ::prost::Message)]
@@ -208,6 +214,9 @@ pub struct Mesh {
     pub facecolors_rgba: ::prost::alloc::vec::Vec<f32>,
     #[prost(float, repeated, tag = "20")]
     pub linecolors_rgba: ::prost::alloc::vec::Vec<f32>,
+    /// Whether a viewer draws it. Written only when false: older files read back visible.
+    #[prost(bool, optional, tag = "21")]
+    pub is_visible: ::core::option::Option<bool>,
 }
 /// NurbsSurface message representing a Non-Uniform Rational B-Spline surface
 #[derive(Clone, PartialEq, ::prost::Message)]
@@ -266,6 +275,9 @@ pub struct NurbsSurface {
     /// Cached tessellation mesh
     #[prost(message, optional, tag = "21")]
     pub cached_mesh: ::core::option::Option<Mesh>,
+    /// Whether a viewer draws it. Written only when false: older files read back visible.
+    #[prost(bool, optional, tag = "22")]
+    pub is_visible: ::core::option::Option<bool>,
 }
 /// NurbsCurve message representing a Non-Uniform Rational B-Spline curve
 #[derive(Clone, PartialEq, ::prost::Message)]
@@ -309,6 +321,9 @@ pub struct NurbsCurve {
     /// Arrowhead ends (0=none, 1=start, 2=end, 3=both)
     #[prost(int32, tag = "14")]
     pub arrowhead: i32,
+    /// Whether a viewer draws it. Written only when false: older files read back visible.
+    #[prost(bool, optional, tag = "15")]
+    pub is_visible: ::core::option::Option<bool>,
 }
 /// TopoDS_Shape: an oriented reference to a sub-shape (index into the owning table).
 #[derive(Clone, Copy, PartialEq, Eq, Hash, ::prost::Message)]
@@ -412,6 +427,9 @@ pub struct BRep {
     pub width: f64,
     #[prost(message, optional, tag = "13")]
     pub surfacecolor: ::core::option::Option<Color>,
+    /// Whether a viewer draws it. Written only when false: older files read back visible.
+    #[prost(bool, optional, tag = "15")]
+    pub is_visible: ::core::option::Option<bool>,
 }
 /// TopAbs_Orientation: carried by the parent -> child reference, never by the shape.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord, ::prost::Enumeration)]
@@ -471,6 +489,9 @@ pub struct Polyline {
     /// Arrowhead ends (0=none, 1=start, 2=end, 3=both)
     #[prost(int32, tag = "8")]
     pub arrowhead: i32,
+    /// Whether a viewer draws it. Written only when false: older files read back visible.
+    #[prost(bool, optional, tag = "9")]
+    pub is_visible: ::core::option::Option<bool>,
 }
 /// One modification applied to a host element - a cut, a drill, a joint pocket.
 ///
@@ -806,6 +827,9 @@ pub struct Line {
     /// Arrowhead ends (0=none, 1=start, 2=end, 3=both)
     #[prost(int32, tag = "12")]
     pub arrowhead: i32,
+    /// Whether a viewer draws it. Written only when false: older files read back visible.
+    #[prost(bool, optional, tag = "13")]
+    pub is_visible: ::core::option::Option<bool>,
 }
 /// Matrix message representing an NxM matrix
 #[derive(Clone, PartialEq, ::prost::Message)]
@@ -871,6 +895,9 @@ pub struct Plane {
     /// Color of the plane
     #[prost(message, optional, tag = "6")]
     pub linecolor: ::core::option::Option<Color>,
+    /// Whether a viewer draws it. Written only when false: older files read back visible.
+    #[prost(bool, optional, tag = "7")]
+    pub is_visible: ::core::option::Option<bool>,
 }
 /// PointCloud message representing a collection of 3D points with optional colors and normals
 /// Stores data as flat arrays for efficient serialization
@@ -942,6 +969,9 @@ pub struct PointCloud {
     /// rest of this message is built on.
     #[prost(fixed32, repeated, tag = "15")]
     pub point_ids: ::prost::alloc::vec::Vec<u32>,
+    /// Whether a viewer draws it. Written only when false: older files read back visible.
+    #[prost(bool, optional, tag = "16")]
+    pub is_visible: ::core::option::Option<bool>,
 }
 /// Sheet: one drawing's linework flattened to segments, published for RANGE reads.
 ///

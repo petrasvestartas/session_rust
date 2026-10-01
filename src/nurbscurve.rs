@@ -68,6 +68,7 @@ const GL_WEIGHTS: [f64; 5] = [
 pub struct NurbsCurve {
     guid: OnceLock<String>,      // Lazily minted GUID.
     pub name: String,            // Curve name.
+    pub is_visible: bool,        // Whether a viewer draws it.
     pub width: f64,              // Display width.
     pub pointcolors: Vec<Color>, // Display color per control point.
     pub linecolors: Vec<Color>,  // Display color per control polygon segment.
@@ -87,6 +88,7 @@ impl Default for NurbsCurve {
         NurbsCurve {
             guid: OnceLock::new(),
             name: "my_nurbscurve".to_string(),
+            is_visible: true,
             width: 1.0,
             pointcolors: Vec::new(),
             linecolors: Vec::new(),
@@ -2574,6 +2576,7 @@ impl NurbsCurve {
         crate::proto::NurbsCurve {
             guid: self.guid.get().cloned().unwrap_or_default(),
             name: self.name.clone(),
+            is_visible: (!self.is_visible).then_some(false),
             dimension: self.m_dim as i32,
             is_rational: self.m_is_rat,
             order: self.m_order as i32,
@@ -2602,6 +2605,7 @@ impl NurbsCurve {
         }
 
         curve.name = proto.name;
+        curve.is_visible = proto.is_visible.unwrap_or(true);
         curve.width = if proto.width != 0.0 { proto.width } else { 1.0 };
         curve.m_nurbsknot = proto.nurbsknots;
         curve.m_cv = proto.cvs;
@@ -4642,6 +4646,7 @@ impl Serialize for NurbsCurve {
         map.serialize_entry("guid", self.guid())?;
         map.serialize_entry("is_rational", &self.m_is_rat)?;
         map.serialize_entry("linecolors", &linecolors)?;
+        map.serialize_entry("is_visible", &self.is_visible)?;
         map.serialize_entry("name", &self.name)?;
         map.serialize_entry("nurbsknots", &self.m_nurbsknot)?;
         map.serialize_entry("order", &self.m_order)?;
@@ -4668,6 +4673,8 @@ struct NurbsCurveData {
     is_rational: bool,
     #[serde(default)]
     linecolors: Vec<f32>,
+    #[serde(default)]
+    is_visible: Option<bool>,
     #[serde(default)]
     name: Option<String>,
     #[serde(default)]
@@ -4710,6 +4717,7 @@ impl<'de> Deserialize<'de> for NurbsCurve {
         }
 
         curve.name = data.name.unwrap_or_else(|| "my_nurbscurve".to_string());
+        curve.is_visible = data.is_visible.unwrap_or(true);
         curve.width = data.width.unwrap_or(1.0);
         curve.arrowhead = data.arrowhead;
 

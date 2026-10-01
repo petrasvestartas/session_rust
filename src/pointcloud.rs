@@ -45,6 +45,8 @@ pub struct PointCloud {
     #[serde(rename = "point_ids", default)]
     _point_ids: Vec<u32>, // Stable point ids parallel to the points.
     pub name: String, // Cloud name.
+    #[serde(default = "crate::file_encoders::default_visible")]
+    pub is_visible: bool,// Whether a viewer draws it.
     #[serde(default = "PointCloud::default_point_size")]
     pub point_size: f64, // Display point size.
 }
@@ -127,6 +129,7 @@ impl PointCloud {
             _lod_children: Vec::new(),
             _point_ids: Vec::new(),
             name: "my_pointcloud".to_string(),
+            is_visible: true,
             point_size: 1.0,
         }
     }
@@ -146,6 +149,7 @@ impl PartialEq for PointCloud {
     /// Compare name, arrays, LOD ranges and point ids; guid ignored.
     fn eq(&self, other: &Self) -> bool {
         self.name == other.name
+            && self.is_visible == other.is_visible
             && self._coords == other._coords
             && self._colors == other._colors
             && self._normals == other._normals
@@ -630,6 +634,7 @@ impl PointCloud {
         crate::proto::PointCloud {
             guid: self.guid.get().cloned().unwrap_or_default(),
             name: self.name.clone(),
+            is_visible: (!self.is_visible).then_some(false),
             point_size: self.point_size,
             coords: self._coords.clone(),
             colors,
@@ -660,6 +665,7 @@ impl PointCloud {
         }
 
         cloud.name = proto.name;
+        cloud.is_visible = proto.is_visible.unwrap_or(true);
 
         if proto.point_size > 0.0 {
             cloud.point_size = proto.point_size;

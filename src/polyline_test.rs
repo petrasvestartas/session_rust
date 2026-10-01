@@ -1526,3 +1526,28 @@ REGISTER_MINI_TEST!(
     "Offset Sides Degenerate",
     crate::polyline_test::run_polyline_offset_sides_degenerate
 );
+
+pub fn run_polyline_is_visible_round_trip() -> TestResult {
+    MINI_TEST!("Is Visible Round Trip", {
+        use crate::Polyline;
+        use crate::Point;
+
+        let points = vec![Point::new(0.0, 0.0, 0.0), Point::new(1.0, 0.0, 0.0), Point::new(1.0, 1.0, 0.0)];
+        let mut hidden = Polyline::new(points);
+
+        MINI_CHECK!(hidden.is_visible);
+
+        hidden.is_visible = false;
+        let json = Polyline::file_json_loads(&hidden.file_json_dumps());
+        let proto = Polyline::pb_loads(&hidden.pb_dumps()).unwrap();
+
+        MINI_CHECK!(!json.is_visible);
+        MINI_CHECK!(!proto.is_visible);
+    })
+}
+
+REGISTER_MINI_TEST!(
+    "Polyline",
+    "Is Visible Round Trip",
+    crate::polyline_test::run_polyline_is_visible_round_trip
+);

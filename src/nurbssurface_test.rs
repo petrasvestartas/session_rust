@@ -1751,3 +1751,28 @@ REGISTER_MINI_TEST!(
     "Curvature",
     crate::nurbssurface_test::run_nurbssurface_curvature
 );
+
+pub fn run_nurbssurface_is_visible_round_trip() -> TestResult {
+    MINI_TEST!("Is Visible Round Trip", {
+        use crate::NurbsSurface;
+        use crate::Point;
+
+        let points = vec![Point::new(0.0, 0.0, 0.0), Point::new(1.0, 0.0, 0.0), Point::new(0.0, 1.0, 0.0), Point::new(1.0, 1.0, 0.0)];
+        let mut hidden = NurbsSurface::create(false, false, 1, 1, 2, 2, &points).unwrap();
+
+        MINI_CHECK!(hidden.is_visible);
+
+        hidden.is_visible = false;
+        let json = NurbsSurface::file_json_loads(&hidden.file_json_dumps());
+        let proto = NurbsSurface::pb_loads(&hidden.pb_dumps()).unwrap();
+
+        MINI_CHECK!(!json.is_visible);
+        MINI_CHECK!(!proto.is_visible);
+    })
+}
+
+REGISTER_MINI_TEST!(
+    "NurbsSurface",
+    "Is Visible Round Trip",
+    crate::nurbssurface_test::run_nurbssurface_is_visible_round_trip
+);

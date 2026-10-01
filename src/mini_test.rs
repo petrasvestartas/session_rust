@@ -605,6 +605,11 @@ pub fn get_all_tests() -> Vec<RegisteredTest> {
             name: "Face Planes Outward Under Mirrored Winding",
             func: run_brep_face_planes_outward_under_mirrored_winding,
         },
+        RegisteredTest {
+            group: "BRep",
+            name: "Is Visible Round Trip",
+            func: run_brep_is_visible_round_trip,
+        },
         // Color tests
         RegisteredTest {
             group: "Color",
@@ -732,6 +737,11 @@ pub fn get_all_tests() -> Vec<RegisteredTest> {
             group: "Point",
             name: "Dihedral Angle Deg",
             func: run_point_dihedral_angle_deg,
+        },
+        RegisteredTest {
+            group: "Point",
+            name: "Is Visible Round Trip",
+            func: run_point_is_visible_round_trip,
         },
         // Vector tests
         RegisteredTest {
@@ -1096,6 +1106,11 @@ pub fn get_all_tests() -> Vec<RegisteredTest> {
             name: "Split At Crossings Zero Length",
             func: run_line_split_at_crossings_zero_length,
         },
+        RegisteredTest {
+            group: "Line",
+            name: "Is Visible Round Trip",
+            func: run_line_is_visible_round_trip,
+        },
         // Polyline tests
         RegisteredTest {
             group: "Polyline",
@@ -1362,6 +1377,11 @@ pub fn get_all_tests() -> Vec<RegisteredTest> {
             name: "Offset Sides Degenerate",
             func: run_polyline_offset_sides_degenerate,
         },
+        RegisteredTest {
+            group: "Polyline",
+            name: "Is Visible Round Trip",
+            func: run_polyline_is_visible_round_trip,
+        },
         // Plane tests
         RegisteredTest {
             group: "Plane",
@@ -1447,6 +1467,11 @@ pub fn get_all_tests() -> Vec<RegisteredTest> {
             group: "Plane",
             name: "Axis Point",
             func: run_plane_axis_point,
+        },
+        RegisteredTest {
+            group: "Plane",
+            name: "Is Visible Round Trip",
+            func: run_plane_is_visible_round_trip,
         },
         // PointCloud tests
         RegisteredTest {
@@ -1588,6 +1613,11 @@ pub fn get_all_tests() -> Vec<RegisteredTest> {
             group: "PointCloud",
             name: "Protobuf Roundtrip",
             func: run_pointcloud_protobuf_roundtrip,
+        },
+        RegisteredTest {
+            group: "PointCloud",
+            name: "Is Visible Round Trip",
+            func: run_pointcloud_is_visible_round_trip,
         },
         // Xform tests
         RegisteredTest {
@@ -2161,6 +2191,11 @@ pub fn get_all_tests() -> Vec<RegisteredTest> {
             name: "Offset Protobuf Roundtrip",
             func: run_mesh_offset_protobuf_roundtrip,
         },
+        RegisteredTest {
+            group: "Mesh",
+            name: "Is Visible Round Trip",
+            func: run_mesh_is_visible_round_trip,
+        },
         // NurbsCurve tests
         RegisteredTest {
             group: "NurbsCurve",
@@ -2256,6 +2291,11 @@ pub fn get_all_tests() -> Vec<RegisteredTest> {
             group: "NurbsCurve",
             name: "Circle Length",
             func: run_nurbscurve_circle_length,
+        },
+        RegisteredTest {
+            group: "NurbsCurve",
+            name: "Is Visible Round Trip",
+            func: run_nurbscurve_is_visible_round_trip,
         },
         // NurbsSurface tests
         RegisteredTest {
@@ -2362,6 +2402,11 @@ pub fn get_all_tests() -> Vec<RegisteredTest> {
             group: "NurbsSurface",
             name: "Curvature",
             func: run_nurbssurface_curvature,
+        },
+        RegisteredTest {
+            group: "NurbsSurface",
+            name: "Is Visible Round Trip",
+            func: run_nurbssurface_is_visible_round_trip,
         },
         // Source-geometry split tests
         RegisteredTest {
@@ -4097,6 +4142,11 @@ pub fn get_all_tests() -> Vec<RegisteredTest> {
             group: "OBB",
             name: "Two Rectangles",
             func: run_obb_two_rectangles,
+        },
+        RegisteredTest {
+            group: "OBB",
+            name: "Is Visible Round Trip",
+            func: run_obb_is_visible_round_trip,
         },
         // Edge tests
         RegisteredTest {

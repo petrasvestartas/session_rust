@@ -429,3 +429,26 @@ REGISTER_MINI_TEST!(
     "Axis Point",
     crate::plane_test::run_plane_axis_point
 );
+
+pub fn run_plane_is_visible_round_trip() -> TestResult {
+    MINI_TEST!("Is Visible Round Trip", {
+        use crate::Plane;
+
+        let mut hidden = Plane::xy_plane();
+
+        MINI_CHECK!(hidden.is_visible);
+
+        hidden.is_visible = false;
+        let json = Plane::file_json_loads(&hidden.file_json_dumps());
+        let proto = Plane::pb_loads(&hidden.pb_dumps()).unwrap();
+
+        MINI_CHECK!(!json.is_visible);
+        MINI_CHECK!(!proto.is_visible);
+    })
+}
+
+REGISTER_MINI_TEST!(
+    "Plane",
+    "Is Visible Round Trip",
+    crate::plane_test::run_plane_is_visible_round_trip
+);

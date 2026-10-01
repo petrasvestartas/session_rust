@@ -1556,3 +1556,26 @@ REGISTER_MINI_TEST!(
     "Face Planes Outward Under Mirrored Winding",
     crate::brep_test::run_brep_face_planes_outward_under_mirrored_winding
 );
+
+pub fn run_brep_is_visible_round_trip() -> TestResult {
+    MINI_TEST!("Is Visible Round Trip", {
+        use crate::BRep;
+
+        let mut hidden = BRep::create_box(1.0, 1.0, 1.0);
+
+        MINI_CHECK!(hidden.is_visible);
+
+        hidden.is_visible = false;
+        let json = BRep::file_json_loads(&hidden.file_json_dumps());
+        let proto = BRep::pb_loads(&hidden.pb_dumps()).unwrap();
+
+        MINI_CHECK!(!json.is_visible);
+        MINI_CHECK!(!proto.is_visible);
+    })
+}
+
+REGISTER_MINI_TEST!(
+    "BRep",
+    "Is Visible Round Trip",
+    crate::brep_test::run_brep_is_visible_round_trip
+);

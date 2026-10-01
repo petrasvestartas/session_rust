@@ -601,3 +601,26 @@ REGISTER_MINI_TEST!(
     "Split At Crossings Zero Length",
     crate::line_test::run_line_split_at_crossings_zero_length
 );
+
+pub fn run_line_is_visible_round_trip() -> TestResult {
+    MINI_TEST!("Is Visible Round Trip", {
+        use crate::Line;
+
+        let mut hidden = Line::new(0.0, 0.0, 0.0, 1.0, 0.0, 0.0);
+
+        MINI_CHECK!(hidden.is_visible);
+
+        hidden.is_visible = false;
+        let json = Line::file_json_loads(&hidden.file_json_dumps());
+        let proto = Line::pb_loads(&hidden.pb_dumps()).unwrap();
+
+        MINI_CHECK!(!json.is_visible);
+        MINI_CHECK!(!proto.is_visible);
+    })
+}
+
+REGISTER_MINI_TEST!(
+    "Line",
+    "Is Visible Round Trip",
+    crate::line_test::run_line_is_visible_round_trip
+);

@@ -2128,6 +2128,7 @@ fn face_from_proto(f: &crate::proto::BRepFace) -> BRepFace {
 pub struct BRep {
     guid: std::sync::OnceLock<String>, // Lazily minted GUID.
     pub name: String,                  // BRep name.
+    pub is_visible: bool,              // Whether a viewer draws it.
     pub width: f64,                    // Display width.
     pub surfacecolor: Color,           // Display color of the faces.
     pub m_surfaces: Vec<NurbsSurface>, // Surface pool.
@@ -2156,6 +2157,7 @@ impl BRep {
         BRep {
             guid: std::sync::OnceLock::new(),
             name: "my_brep".to_string(),
+            is_visible: true,
             width: 1.0,
             surfacecolor: Color::lightgrey(),
             m_surfaces: Vec::new(),
@@ -3241,6 +3243,7 @@ impl BRep {
         let mut proto = crate::proto::BRep {
             guid: self.guid.get().cloned().unwrap_or_default(),
             name: self.name.clone(),
+            is_visible: (!self.is_visible).then_some(false),
             width: self.width,
             ..Default::default()
         };
@@ -3309,6 +3312,7 @@ impl BRep {
         }
 
         b.name = proto.name;
+        b.is_visible = proto.is_visible.unwrap_or(true);
         b.width = proto.width;
 
         for c in proto.curves_2d {
@@ -3427,6 +3431,7 @@ impl PartialEq for BRep {
     /// Compare name, width, color and table sizes; guid ignored.
     fn eq(&self, other: &Self) -> bool {
         self.name == other.name
+            && self.is_visible == other.is_visible
             && self.width == other.width
             && self.surfacecolor == other.surfacecolor
             && self.m_surfaces.len() == other.m_surfaces.len()
@@ -3494,6 +3499,7 @@ impl Serialize for BRep {
 
         map.serialize_entry("faces", &faces)?;
         map.serialize_entry("guid", &self.guid())?;
+        map.serialize_entry("is_visible", &self.is_visible)?;
         map.serialize_entry("name", &self.name)?;
         let mut shells: Vec<ShellJson> = Vec::new();
 
@@ -3553,6 +3559,8 @@ impl<'de> Deserialize<'de> for BRep {
             #[serde(default)]
             name: Option<String>,
             #[serde(default)]
+            is_visible: Option<bool>,
+            #[serde(default)]
             width: Option<f64>,
             #[serde(default)]
             surfacecolor: Option<Color>,
@@ -3586,6 +3594,8 @@ impl<'de> Deserialize<'de> for BRep {
         if let Some(n) = data.name {
             b.name = n;
         }
+
+        b.is_visible = data.is_visible.unwrap_or(true);
 
         if let Some(w) = data.width {
             b.width = w;
