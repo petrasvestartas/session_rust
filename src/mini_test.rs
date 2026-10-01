@@ -376,10 +376,9 @@ pub fn get_all_tests() -> Vec<RegisteredTest> {
     use crate::instance_ref_test::*;
     use crate::interaction_test::*;
     use crate::intersection_test::*;
-    use crate::io_xyz_test::*;
+    use crate::file_xyz_test::*;
     use crate::line_test::*;
     use crate::matrix_test::*;
-    use crate::mesh_offset_test::*;
     use crate::mesh_test::*;
     use crate::nurbscurve_test::*;
     use crate::nurbsknot_test::*;
@@ -398,7 +397,7 @@ pub fn get_all_tests() -> Vec<RegisteredTest> {
     use crate::remesh_nurbssurface_grid_test::*;
     use crate::session_config_test::*;
     use crate::session_test::*;
-    use crate::simple_split_test::*;
+    use crate::split_test::*;
     use crate::spatial_aabbtree_test::*;
     use crate::spatial_bvh_test::*;
     use crate::spatial_kdtree_test::*;
@@ -2127,6 +2126,41 @@ pub fn get_all_tests() -> Vec<RegisteredTest> {
             name: "Triangle Aabb Tree",
             func: run_mesh_triangle_aabb_tree,
         },
+        RegisteredTest {
+            group: "Mesh",
+            name: "Offset",
+            func: run_mesh_offset,
+        },
+        RegisteredTest {
+            group: "Mesh",
+            name: "Offset Grid",
+            func: run_mesh_offset_grid,
+        },
+        RegisteredTest {
+            group: "Mesh",
+            name: "Offset Layers",
+            func: run_mesh_offset_layers,
+        },
+        RegisteredTest {
+            group: "Mesh",
+            name: "Offset Planes",
+            func: run_mesh_offset_planes,
+        },
+        RegisteredTest {
+            group: "Mesh",
+            name: "Offset Vertices",
+            func: run_mesh_offset_vertices,
+        },
+        RegisteredTest {
+            group: "Mesh",
+            name: "Offset Json Roundtrip",
+            func: run_mesh_offset_json_roundtrip,
+        },
+        RegisteredTest {
+            group: "Mesh",
+            name: "Offset Protobuf Roundtrip",
+            func: run_mesh_offset_protobuf_roundtrip,
+        },
         // NurbsCurve tests
         RegisteredTest {
             group: "NurbsCurve",
@@ -2331,27 +2365,27 @@ pub fn get_all_tests() -> Vec<RegisteredTest> {
         },
         // Source-geometry split tests
         RegisteredTest {
-            group: "SimpleSplit",
+            group: "Split",
             name: "Split Curve By Curves",
             func: run_split_curve_by_curves,
         },
         RegisteredTest {
-            group: "SimpleSplit",
+            group: "Split",
             name: "Split BRep Face By Curves",
             func: run_split_brep_face_by_curves,
         },
         RegisteredTest {
-            group: "SimpleSplit",
+            group: "Split",
             name: "Split Surface By Curves",
             func: run_split_surface_by_curves,
         },
         RegisteredTest {
-            group: "SimpleSplit",
+            group: "Split",
             name: "Split Line By Curves",
             func: run_split_line_by_curves,
         },
         RegisteredTest {
-            group: "SimpleSplit",
+            group: "Split",
             name: "Split Polyline By Curves",
             func: run_split_polyline_by_curves,
         },
@@ -5002,6 +5036,11 @@ pub fn get_all_tests() -> Vec<RegisteredTest> {
             func: run_element_equality_compares_carried_fields,
         },
         RegisteredTest {
+            group: "Element",
+            name: "Is Visible Round Trip",
+            func: run_element_is_visible_round_trip,
+        },
+        RegisteredTest {
             group: "ElementFeature",
             name: "Constructor",
             func: run_element_feature_constructor,
@@ -5015,42 +5054,6 @@ pub fn get_all_tests() -> Vec<RegisteredTest> {
             group: "ElementFeature",
             name: "Protobuf Roundtrip",
             func: run_element_feature_protobuf_roundtrip,
-        },
-        // MeshOffset tests
-        RegisteredTest {
-            group: "MeshOffset",
-            name: "From Mesh",
-            func: run_mesh_offset_from_mesh,
-        },
-        RegisteredTest {
-            group: "MeshOffset",
-            name: "From Mesh Grid",
-            func: run_mesh_offset_from_mesh_grid,
-        },
-        RegisteredTest {
-            group: "MeshOffset",
-            name: "From Mesh Layers",
-            func: run_mesh_offset_from_mesh_layers,
-        },
-        RegisteredTest {
-            group: "MeshOffset",
-            name: "Offset Planes",
-            func: run_mesh_offset_offset_planes,
-        },
-        RegisteredTest {
-            group: "MeshOffset",
-            name: "Offset Vertices",
-            func: run_mesh_offset_offset_vertices,
-        },
-        RegisteredTest {
-            group: "MeshOffset",
-            name: "Json Roundtrip",
-            func: run_mesh_offset_json_roundtrip,
-        },
-        RegisteredTest {
-            group: "MeshOffset",
-            name: "Protobuf Roundtrip",
-            func: run_mesh_offset_protobuf_roundtrip,
         },
         // AABB tests
         RegisteredTest {
@@ -5233,21 +5236,21 @@ pub fn get_all_tests() -> Vec<RegisteredTest> {
             name: "Registry Unknown Type",
             func: run_interaction_registry_unknown_type,
         },
-        // IoXyz tests
+        // FileXyz tests
         RegisteredTest {
-            group: "IoXyz",
+            group: "FileXyz",
             name: "Read Bunny",
-            func: run_io_xyz_read_bunny,
+            func: run_file_xyz_read_bunny,
         },
         RegisteredTest {
-            group: "IoXyz",
+            group: "FileXyz",
             name: "Write Read Roundtrip",
-            func: run_io_xyz_write_read_roundtrip,
+            func: run_file_xyz_write_read_roundtrip,
         },
         RegisteredTest {
-            group: "IoXyz",
+            group: "FileXyz",
             name: "String Roundtrip",
-            func: run_io_xyz_string_roundtrip,
+            func: run_file_xyz_string_roundtrip,
         },
         // Matrix tests
         RegisteredTest {

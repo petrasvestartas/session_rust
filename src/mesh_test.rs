@@ -3517,3 +3517,243 @@ REGISTER_MINI_TEST!(
     "Triangle Aabb Tree",
     crate::mesh_test::run_mesh_triangle_aabb_tree
 );
+
+pub fn run_mesh_offset() -> TestResult {
+    MINI_TEST!("Offset", {
+        use crate::Mesh;
+        use crate::Point;
+
+        let points = vec![
+            Point::new(0.0, 0.0, 0.0),
+            Point::new(1.0, 0.0, 0.0),
+            Point::new(1.0, 1.0, 0.0),
+            Point::new(0.0, 1.0, 0.0),
+        ];
+        let mesh = Mesh::from_vertices_and_faces(points, vec![vec![0, 1, 2, 3]]);
+        let result = mesh.offset(1.0);
+        let copy = result.clone();
+
+        MINI_CHECK!(result.is_valid());
+        MINI_CHECK!(result.is_closed());
+        MINI_CHECK!(result == copy);
+        MINI_CHECK!(!(result != copy));
+        MINI_CHECK!(result.number_of_vertices() == 8);
+        MINI_CHECK!(result.number_of_faces() == 6);
+    })
+}
+
+REGISTER_MINI_TEST!(
+    "Mesh",
+    "Offset",
+    crate::mesh_test::run_mesh_offset
+);
+
+pub fn run_mesh_offset_grid() -> TestResult {
+    MINI_TEST!("Offset Grid", {
+        use crate::Mesh;
+        use crate::Point;
+
+        let points = vec![
+            Point::new(0.0, 0.0, 0.0),
+            Point::new(1.0, 0.0, 0.0),
+            Point::new(2.0, 0.0, 0.0),
+            Point::new(0.0, 1.0, 0.0),
+            Point::new(1.0, 1.0, 0.0),
+            Point::new(2.0, 1.0, 0.0),
+            Point::new(0.0, 2.0, 0.0),
+            Point::new(1.0, 2.0, 0.0),
+            Point::new(2.0, 2.0, 0.0),
+        ];
+        let faces = vec![
+            vec![0, 1, 4, 3],
+            vec![1, 2, 5, 4],
+            vec![3, 4, 7, 6],
+            vec![4, 5, 8, 7],
+        ];
+        let mesh = Mesh::from_vertices_and_faces(points, faces);
+        let result = mesh.offset(2.0);
+
+        MINI_CHECK!(result.is_valid());
+        MINI_CHECK!(result.is_closed());
+        MINI_CHECK!(result.number_of_vertices() == 18);
+        MINI_CHECK!(result.number_of_faces() == 16);
+    })
+}
+
+REGISTER_MINI_TEST!(
+    "Mesh",
+    "Offset Grid",
+    crate::mesh_test::run_mesh_offset_grid
+);
+
+pub fn run_mesh_offset_layers() -> TestResult {
+    MINI_TEST!("Offset Layers", {
+        use crate::Mesh;
+        use crate::Point;
+
+        let points = vec![
+            Point::new(0.0, 0.0, 0.0),
+            Point::new(1.0, 0.0, 0.0),
+            Point::new(1.0, 1.0, 0.0),
+            Point::new(0.0, 1.0, 0.0),
+        ];
+        let mesh = Mesh::from_vertices_and_faces(points, vec![vec![0, 1, 2, 3]]);
+        let layers = mesh.offset_layers(1.0);
+
+        MINI_CHECK!(layers.bottom.is_valid());
+        MINI_CHECK!(layers.top.is_valid());
+        MINI_CHECK!(layers.sides.is_valid());
+        MINI_CHECK!(layers.bottom.number_of_vertices() == 4);
+        MINI_CHECK!(layers.bottom.number_of_faces() == 1);
+        MINI_CHECK!(layers.top.number_of_vertices() == 4);
+        MINI_CHECK!(layers.top.number_of_faces() == 1);
+        MINI_CHECK!(layers.sides.number_of_faces() == 4);
+    })
+}
+
+REGISTER_MINI_TEST!(
+    "Mesh",
+    "Offset Layers",
+    crate::mesh_test::run_mesh_offset_layers
+);
+
+pub fn run_mesh_offset_planes() -> TestResult {
+    MINI_TEST!("Offset Planes", {
+        use crate::Mesh;
+        use crate::Point;
+
+        let points = vec![
+            Point::new(0.0, 0.0, 0.0),
+            Point::new(1.0, 0.0, 0.0),
+            Point::new(1.0, 1.0, 0.0),
+            Point::new(0.0, 1.0, 0.0),
+        ];
+        let mesh = Mesh::from_vertices_and_faces(points, vec![vec![0, 1, 2, 3]]);
+        let planes = mesh.offset_planes(1.0);
+
+        MINI_CHECK!(planes.len() == 1);
+
+        let plane = &planes[&0];
+
+        MINI_CHECK!(TOLERANCE.is_close(plane.a(), 0.0));
+        MINI_CHECK!(TOLERANCE.is_close(plane.b(), 0.0));
+        MINI_CHECK!(TOLERANCE.is_close(plane.c(), 1.0));
+        MINI_CHECK!(TOLERANCE.is_close(plane.d(), -1.0));
+        MINI_CHECK!(TOLERANCE.is_close(plane.origin()[2], 1.0));
+    })
+}
+
+REGISTER_MINI_TEST!(
+    "Mesh",
+    "Offset Planes",
+    crate::mesh_test::run_mesh_offset_planes
+);
+
+pub fn run_mesh_offset_vertices() -> TestResult {
+    MINI_TEST!("Offset Vertices", {
+        use crate::Mesh;
+        use crate::Point;
+
+        let points = vec![
+            Point::new(0.0, 0.0, 0.0),
+            Point::new(1.0, 0.0, 0.0),
+            Point::new(2.0, 0.0, 0.0),
+            Point::new(0.0, 1.0, 0.0),
+            Point::new(1.0, 1.0, 0.0),
+            Point::new(2.0, 1.0, 0.0),
+            Point::new(0.0, 2.0, 0.0),
+            Point::new(1.0, 2.0, 0.0),
+            Point::new(2.0, 2.0, 0.0),
+        ];
+        let faces = vec![
+            vec![0, 1, 4, 3],
+            vec![1, 2, 5, 4],
+            vec![3, 4, 7, 6],
+            vec![4, 5, 8, 7],
+        ];
+        let mesh = Mesh::from_vertices_and_faces(points.clone(), faces);
+        let planes = mesh.offset_planes(2.0);
+        let offsets = mesh.offset_vertices(&planes);
+
+        MINI_CHECK!(planes.len() == 4);
+        MINI_CHECK!(offsets.len() == 9);
+
+        for vkey in 0..9 {
+            MINI_CHECK!(TOLERANCE.is_close(offsets[&vkey][0], points[vkey][0]));
+            MINI_CHECK!(TOLERANCE.is_close(offsets[&vkey][1], points[vkey][1]));
+            MINI_CHECK!(TOLERANCE.is_close(offsets[&vkey][2], 2.0));
+        }
+    })
+}
+
+REGISTER_MINI_TEST!(
+    "Mesh",
+    "Offset Vertices",
+    crate::mesh_test::run_mesh_offset_vertices
+);
+
+pub fn run_mesh_offset_json_roundtrip() -> TestResult {
+    MINI_TEST!("Offset Json Roundtrip", {
+        use crate::Mesh;
+        use crate::Point;
+        use std::path::PathBuf;
+
+        let points = vec![
+            Point::new(0.0, 0.0, 0.0),
+            Point::new(1.0, 0.0, 0.0),
+            Point::new(1.0, 1.0, 0.0),
+            Point::new(0.0, 1.0, 0.0),
+        ];
+        let mesh = Mesh::from_vertices_and_faces(points, vec![vec![0, 1, 2, 3]]);
+        let result = mesh.offset(1.0);
+        let filename = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+            .join("serialization")
+            .join("test_mesh_offset.json");
+
+        result.file_json_dump(filename.to_str().unwrap()).unwrap();
+        let loaded = Mesh::file_json_load(filename.to_str().unwrap()).unwrap();
+
+        MINI_CHECK!(loaded == result);
+        MINI_CHECK!(loaded.number_of_vertices() == 8);
+        MINI_CHECK!(loaded.number_of_faces() == 6);
+    })
+}
+
+REGISTER_MINI_TEST!(
+    "Mesh",
+    "Offset Json Roundtrip",
+    crate::mesh_test::run_mesh_offset_json_roundtrip
+);
+
+pub fn run_mesh_offset_protobuf_roundtrip() -> TestResult {
+    MINI_TEST!("Offset Protobuf Roundtrip", {
+        use crate::Mesh;
+        use crate::Point;
+        use std::path::PathBuf;
+
+        let points = vec![
+            Point::new(0.0, 0.0, 0.0),
+            Point::new(1.0, 0.0, 0.0),
+            Point::new(1.0, 1.0, 0.0),
+            Point::new(0.0, 1.0, 0.0),
+        ];
+        let mesh = Mesh::from_vertices_and_faces(points, vec![vec![0, 1, 2, 3]]);
+        let result = mesh.offset(1.0);
+        let filename = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+            .join("serialization")
+            .join("test_mesh_offset.bin");
+
+        result.pb_dump(filename.to_str().unwrap()).unwrap();
+        let loaded = Mesh::pb_load(filename.to_str().unwrap()).unwrap();
+
+        MINI_CHECK!(loaded == result);
+        MINI_CHECK!(loaded.number_of_vertices() == 8);
+        MINI_CHECK!(loaded.number_of_faces() == 6);
+    })
+}
+
+REGISTER_MINI_TEST!(
+    "Mesh",
+    "Offset Protobuf Roundtrip",
+    crate::mesh_test::run_mesh_offset_protobuf_roundtrip
+);

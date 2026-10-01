@@ -974,6 +974,29 @@ pub fn run_element_equality_compares_carried_fields() -> TestResult {
     })
 }
 
+pub fn run_element_is_visible_round_trip() -> TestResult {
+    MINI_TEST!("Is Visible Round Trip", {
+        use crate::element::Element;
+
+        let mut hidden = Element::from_mesh(unit_quad(), "joint");
+
+        MINI_CHECK!(hidden.is_visible);
+
+        hidden.is_visible = false;
+        let json = Element::file_json_loads(&hidden.file_json_dumps());
+        let proto = Element::pb_loads(&hidden.pb_dumps()).unwrap();
+
+        MINI_CHECK!(!json.is_visible);
+        MINI_CHECK!(!proto.is_visible);
+        MINI_CHECK!(json == hidden);
+        MINI_CHECK!(proto == hidden);
+
+        let shown = Element::from_mesh(unit_quad(), "joint");
+
+        MINI_CHECK!(shown != hidden);
+    })
+}
+
 // ═══════════════════════════════════════════════════════════════════════════
 // ElementFeature
 // ═══════════════════════════════════════════════════════════════════════════
@@ -1249,6 +1272,11 @@ REGISTER_MINI_TEST!(
     "Element",
     "Equality Compares Carried Fields",
     crate::element_test::run_element_equality_compares_carried_fields
+);
+REGISTER_MINI_TEST!(
+    "Element",
+    "Is Visible Round Trip",
+    crate::element_test::run_element_is_visible_round_trip
 );
 REGISTER_MINI_TEST!(
     "ElementFeature",

@@ -585,6 +585,11 @@ pub struct Element {
     /// out one array at a time.
     #[prost(message, repeated, tag = "14")]
     pub features: ::prost::alloc::vec::Vec<ElementFeature>,
+    /// Whether a viewer draws the element, so a package can ship helpers - a joint, a guide - that
+    /// stay in the tree and graph but start switched off. Written only when false: a file from
+    /// before this field, and every visible element, reads back visible.
+    #[prost(bool, optional, tag = "15")]
+    pub is_visible: ::core::option::Option<bool>,
 }
 /// Encoders message for serialization metadata and options
 #[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]

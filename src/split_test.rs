@@ -11,7 +11,7 @@ fn mapped(surface: &crate::NurbsSurface, x: f64, y: f64) -> crate::Point {
 
 pub fn run_split_curve_by_curves() -> TestResult {
     MINI_TEST!("Split Curve By Curves", {
-        use crate::simple_split::split_curve_by_curves;
+        use crate::split::split_curve_by_curves;
         use crate::NurbsCurve;
         use crate::Point;
         use crate::Primitives;
@@ -122,7 +122,7 @@ pub fn run_split_curve_by_curves() -> TestResult {
 
 pub fn run_split_brep_face_by_curves() -> TestResult {
     MINI_TEST!("Split BRep Face By Curves", {
-        use crate::simple_split::split_brep_face_by_curves;
+        use crate::split::split_brep_face_by_curves;
         use crate::BRep;
         use crate::NurbsCurve;
         use crate::Point;
@@ -276,7 +276,7 @@ pub fn run_split_brep_face_by_curves() -> TestResult {
 
 pub fn run_split_surface_by_curves() -> TestResult {
     MINI_TEST!("Split Surface By Curves", {
-        use crate::simple_split::split_surface_by_curves;
+        use crate::split::split_surface_by_curves;
         use crate::BRep;
         use crate::NurbsCurve;
         use crate::Point;
@@ -313,7 +313,7 @@ pub fn run_split_surface_by_curves() -> TestResult {
 
 pub fn run_split_line_by_curves() -> TestResult {
     MINI_TEST!("Split Line By Curves", {
-        use crate::simple_split::split_line_by_curves;
+        use crate::split::split_line_by_curves;
         use crate::Arrowhead;
         use crate::Line;
         use crate::NurbsCurve;
@@ -357,7 +357,7 @@ pub fn run_split_line_by_curves() -> TestResult {
 
 pub fn run_split_polyline_by_curves() -> TestResult {
     MINI_TEST!("Split Polyline By Curves", {
-        use crate::simple_split::split_polyline_by_curves;
+        use crate::split::split_polyline_by_curves;
         use crate::Arrowhead;
         use crate::NurbsCurve;
         use crate::Point;
@@ -407,27 +407,27 @@ pub fn run_split_polyline_by_curves() -> TestResult {
 }
 
 REGISTER_MINI_TEST!(
-    "SimpleSplit",
+    "Split",
     "Split Curve By Curves",
-    crate::simple_split_test::run_split_curve_by_curves
+    crate::split_test::run_split_curve_by_curves
 );
 REGISTER_MINI_TEST!(
-    "SimpleSplit",
+    "Split",
     "Split BRep Face By Curves",
-    crate::simple_split_test::run_split_brep_face_by_curves
+    crate::split_test::run_split_brep_face_by_curves
 );
 REGISTER_MINI_TEST!(
-    "SimpleSplit",
+    "Split",
     "Split Surface By Curves",
-    crate::simple_split_test::run_split_surface_by_curves
+    crate::split_test::run_split_surface_by_curves
 );
 REGISTER_MINI_TEST!(
-    "SimpleSplit",
+    "Split",
     "Split Line By Curves",
-    crate::simple_split_test::run_split_line_by_curves
+    crate::split_test::run_split_line_by_curves
 );
 REGISTER_MINI_TEST!(
-    "SimpleSplit",
+    "Split",
     "Split Polyline By Curves",
-    crate::simple_split_test::run_split_polyline_by_curves
+    crate::split_test::run_split_polyline_by_curves
 );

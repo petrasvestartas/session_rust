@@ -350,6 +350,7 @@ pub struct Element {
     pub element_type: String,           // Derived type name this element was loaded with.
     pub element_data: Vec<u8>,          // Opaque derived-type state.
     pub name: String,                   // Element name.
+    pub is_visible: bool,               // Whether a viewer draws it.
 }
 
 impl Element {
@@ -381,6 +382,7 @@ impl Element {
             element_type: String::new(),
             element_data: Vec::new(),
             name: name.to_string(),
+            is_visible: true,
         }
     }
 
@@ -889,6 +891,7 @@ impl Element {
             "geometry_type": self.geometry_type_name(),
             "guid": self.guid(),
             "insertion_vectors": ivs,
+            "is_visible": self.is_visible,
             "name": self.name,
             "type": "Element",
         })
@@ -919,6 +922,7 @@ impl Element {
         }
 
         elem.name = data["name"].as_str().unwrap_or(&elem.name).to_string();
+        elem.is_visible = data["is_visible"].as_bool().unwrap_or(true);
 
         if !data["dimensions"].is_null() {
             elem.dimensions = serde_json::from_value(data["dimensions"].clone()).ok();
@@ -1023,6 +1027,7 @@ impl Element {
             insertion_vectors,
             dimensions,
             features,
+            is_visible: (!self.is_visible).then_some(false),
         }
     }
 
@@ -1035,6 +1040,7 @@ impl Element {
         }
 
         elem.name = proto.name;
+        elem.is_visible = proto.is_visible.unwrap_or(true);
 
         let has_data = !proto.geometry_data.is_empty();
 
@@ -1325,6 +1331,7 @@ impl PartialEq for Element {
             && self.insertion_vectors == other.insertion_vectors
             && self.dimensions == other.dimensions
             && self.features == other.features
+            && self.is_visible == other.is_visible
     }
 }
 

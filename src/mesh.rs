@@ -1,3 +1,4 @@
+use crate::matrix::Matrix;
 use crate::polyline::Polyline;
 use crate::remesh_cdt;
 use crate::spatial_aabbtree::SpatialAABBTree;
@@ -2838,6 +2839,81 @@ fn cut_tolerance(points: &BTreeMap<usize, Point>) -> f64 {
     }
 
     1e-9 * low.distance(&high, None)
+}
+
+/// Top, bottom and side meshes of a shell.
+pub struct MeshOffsetLayers {
+    pub top: Mesh,    // Offset faces.
+    pub bottom: Mesh, // Reversed original faces.
+    pub sides: Mesh,  // One quad per naked edge.
+}
+
+/// Least-squares point on the planes, fallback fills any free direction.
+fn offset_meet(planes: &[Plane], fallback: &Point) -> Point {
+    if planes.is_empty() {
+        return fallback.clone();
+    }
+
+    if planes.len() == 1 {
+        let plane = &planes[0];
+        let t = -plane.d()
+            - (plane.a() * fallback[0] + plane.b() * fallback[1] + plane.c() * fallback[2]);
+
+        return fallback + plane.z_axis() * t;
+    }
+
+    let eps = 1e-8;
+
+    let mut lhs = Matrix::new(3, 3);
+    let mut rhs = Matrix::new(3, 1);
+
+    for plane in planes {
+        let row = [plane.a(), plane.b(), plane.c()];
+
+        for i in 0..3 {
+            for j in 0..3 {
+                lhs[(i, j)] += row[i] * row[j];
+            }
+
+            rhs[(i, 0)] -= row[i] * plane.d();
+        }
+    }
+
+    for i in 0..3 {
+        lhs[(i, i)] += eps;
+        rhs[(i, 0)] += eps * fallback[i];
+    }
+
+    let Some(solution) = lhs.solve(&rhs) else {
+        return fallback.clone();
+    };
+
+    Point::new(solution[(0, 0)], solution[(1, 0)], solution[(2, 0)])
+}
+
+/// Naked edges wound the way their face walks them.
+fn offset_naked_edges(mesh: &Mesh) -> Vec<(usize, usize)> {
+    let mut directed: HashSet<(usize, usize)> = HashSet::new();
+
+    for fkey in mesh.faces() {
+        let vertices = &mesh.face[&fkey];
+
+        for i in 0..vertices.len() {
+            directed.insert((vertices[i], vertices[(i + 1) % vertices.len()]));
+        }
+    }
+
+    let mut edges = Vec::new();
+
+    for edge in mesh.naked_edges(true) {
+        if directed.contains(&edge) {
+            edges.push(edge);
+        } else {
+            edges.push((edge.1, edge.0));
+        }
+    }
+
+    edges
 }
 
 impl Mesh {
@@ -6252,6 +6328,173 @@ impl Mesh {
         );
 
         section_polylines(&section_chains(&links), &found, plane)
+    }
+
+    // ═══════════════════════════════════════════════════════════════════════════
+    // Offset
+    // ═══════════════════════════════════════════════════════════════════════════
+    /// Return one closed shell: reversed bottom, offset top, one quad per naked edge.
+    pub fn offset(&self, distance: f64) -> Mesh {
+        let planes = self.offset_planes(distance);
+        let offsets = self.offset_vertices(&planes);
+
+        let mut result = Mesh::new();
+        let mut bottom: HashMap<usize, usize> = HashMap::new();
+        let mut top: HashMap<usize, usize> = HashMap::new();
+
+        for vkey in self.vertices() {
+            bottom.insert(
+                vkey,
+                result.add_vertex(self.vertex_point(vkey).unwrap(), None),
+            );
+            top.insert(vkey, result.add_vertex(offsets[&vkey].clone(), None));
+        }
+
+        for fkey in self.faces() {
+            let ring = self.face_vertices(fkey).unwrap();
+            let mut bottom_face = Vec::new();
+            let mut top_face = Vec::new();
+
+            for vkey in ring {
+                bottom_face.push(bottom[vkey]);
+                top_face.push(top[vkey]);
+            }
+
+            bottom_face.reverse();
+            result.add_face(bottom_face, None);
+            result.add_face(top_face, None);
+        }
+
+        for edge in offset_naked_edges(self) {
+            result.add_face(
+                vec![bottom[&edge.0], bottom[&edge.1], top[&edge.1], top[&edge.0]],
+                None,
+            );
+        }
+
+        result
+    }
+
+    /// Return the same shell as three meshes: top, bottom and sides.
+    pub fn offset_layers(&self, distance: f64) -> MeshOffsetLayers {
+        let planes = self.offset_planes(distance);
+        let offsets = self.offset_vertices(&planes);
+
+        let mut layers = MeshOffsetLayers {
+            top: Mesh::new(),
+            bottom: Mesh::new(),
+            sides: Mesh::new(),
+        };
+        let mut bottom: HashMap<usize, usize> = HashMap::new();
+        let mut top: HashMap<usize, usize> = HashMap::new();
+
+        for vkey in self.vertices() {
+            bottom.insert(
+                vkey,
+                layers
+                    .bottom
+                    .add_vertex(self.vertex_point(vkey).unwrap(), None),
+            );
+            top.insert(vkey, layers.top.add_vertex(offsets[&vkey].clone(), None));
+        }
+
+        for fkey in self.faces() {
+            let ring = self.face_vertices(fkey).unwrap();
+            let mut bottom_face = Vec::new();
+            let mut top_face = Vec::new();
+
+            for vkey in ring {
+                bottom_face.push(bottom[vkey]);
+                top_face.push(top[vkey]);
+            }
+
+            bottom_face.reverse();
+            layers.bottom.add_face(bottom_face, None);
+            layers.top.add_face(top_face, None);
+        }
+
+        let mut side_bottom: HashMap<usize, usize> = HashMap::new();
+        let mut side_top: HashMap<usize, usize> = HashMap::new();
+
+        for edge in offset_naked_edges(self) {
+            for vkey in [edge.0, edge.1] {
+                if let std::collections::hash_map::Entry::Vacant(entry) = side_bottom.entry(vkey) {
+                    entry.insert(
+                        layers
+                            .sides
+                            .add_vertex(self.vertex_point(vkey).unwrap(), None),
+                    );
+                }
+
+                if let std::collections::hash_map::Entry::Vacant(entry) = side_top.entry(vkey) {
+                    entry.insert(layers.sides.add_vertex(offsets[&vkey].clone(), None));
+                }
+            }
+
+            layers.sides.add_face(
+                vec![
+                    side_bottom[&edge.0],
+                    side_bottom[&edge.1],
+                    side_top[&edge.1],
+                    side_top[&edge.0],
+                ],
+                None,
+            );
+        }
+
+        layers
+    }
+
+    /// Return the plane of each face translated by distance along its normal, by face key.
+    pub fn offset_planes(&self, distance: f64) -> HashMap<usize, Plane> {
+        let mut planes = HashMap::new();
+
+        for fkey in self.faces() {
+            let Some(centroid) = self.face_centroid(fkey) else {
+                continue;
+            };
+            let Some(normal) = self.face_normal(fkey) else {
+                continue;
+            };
+
+            planes.insert(
+                fkey,
+                Plane::from_point_normal(&centroid + &normal * distance, normal, None),
+            );
+        }
+
+        planes
+    }
+
+    /// Return the offset position of each vertex, the least-squares meet of its face planes, by vertex key.
+    pub fn offset_vertices(&self, planes: &HashMap<usize, Plane>) -> HashMap<usize, Point> {
+        let mut vertex_faces: HashMap<usize, Vec<usize>> = HashMap::new();
+
+        for fkey in self.faces() {
+            for vkey in &self.face[&fkey] {
+                vertex_faces.entry(*vkey).or_default().push(fkey);
+            }
+        }
+
+        let mut result = HashMap::new();
+
+        for vkey in self.vertices() {
+            let Some(point) = self.vertex_point(vkey) else {
+                continue;
+            };
+
+            let mut adjacent = Vec::new();
+
+            for fkey in vertex_faces.entry(vkey).or_default().iter() {
+                if let Some(plane) = planes.get(fkey) {
+                    adjacent.push(plane.clone());
+                }
+            }
+
+            result.insert(vkey, offset_meet(&adjacent, &point));
+        }
+
+        result
     }
 
     // ═══════════════════════════════════════════════════════════════════════════
