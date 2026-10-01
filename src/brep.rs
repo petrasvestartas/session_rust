@@ -1841,6 +1841,192 @@ fn tag_edge_uses(mesh: &mut Mesh, loops: &TrimLoops, uses: &[(usize, usize, usiz
     }
 }
 
+/// Phase 0: UV of a pcurve at a fraction of its domain
+fn strip_uv(crv: &NurbsCurve, fraction: f64) -> Point {
+    let (t0, t1) = crv.domain();
+
+    crv.point_at(t0 + fraction * (t1 - t0))
+}
+
+/// Phase 0: a face ruled between two closed loops along one seam, as a cylinder body or a drilled bore: one wire of a loop forward, the seam forward, a loop reversed and the seam reversed, on a surface straight across its rulings, both loops crossing the whole u domain at the same pace and neither sampled yet
+fn strip_face(b: &BRep, fi: usize, boundary: &EdgeBoundary) -> bool {
+    let face = &b.m_faces[fi];
+
+    if face.wires.len() != 1 {
+        return false;
+    }
+
+    let edges = b.wire_edges(&face.wires[0]);
+
+    if edges.len() != 4
+        || edges[1].index != edges[3].index
+        || edges[1].orientation == edges[3].orientation
+        || edges[0].index == edges[2].index
+    {
+        return false;
+    }
+
+    let srf = &b.m_surfaces[face.surface_index as usize];
+
+    if srf.degree(1) != 1 || srf.cv_count(1) != 2 || srf.is_singular(0) || srf.is_singular(2) {
+        return false;
+    }
+
+    let mut loops: Vec<&NurbsCurve> = Vec::new();
+
+    for k in [0, 2] {
+        let edge = &b.m_edges[edges[k].index as usize];
+        let ci = b.pcurve_index(edges[k].index as usize, fi, edges[k].orientation);
+
+        if edge.degenerated
+            || edge.start_vertex != edge.end_vertex
+            || ci < 0
+            || boundary.points.contains_key(&(edges[k].index as usize))
+        {
+            return false;
+        }
+
+        loops.push(&b.m_curves_2d[ci as usize]);
+    }
+
+    let (du0, du1) = srf.domain(0).unwrap_or((0.0, 1.0));
+    let tolerance = 1e-9 * (du1 - du0);
+    let u0 = strip_uv(loops[0], 0.0)[0];
+    let u1 = strip_uv(loops[0], 1.0)[0];
+
+    if (u0.min(u1) - du0).abs() > tolerance || (u0.max(u1) - du1).abs() > tolerance {
+        return false;
+    }
+
+    for k in 0..=8 {
+        let fraction = k as f64 / 8.0;
+
+        if (strip_uv(loops[0], fraction)[0] - strip_uv(loops[1], fraction)[0]).abs() > tolerance {
+            return false;
+        }
+    }
+
+    true
+}
+
+/// Phase 0: a loop sampled at count equal parameter steps as (t, uv, point), closed on its first point
+fn strip_samples(srf: &NurbsSurface, crv: &NurbsCurve, count: usize) -> Vec<(f64, Point, Point)> {
+    let (t0, t1) = crv.domain();
+    let mut samples: Vec<(f64, Point, Point)> = Vec::new();
+
+    for k in 0..=count {
+        let t = t0 + (t1 - t0) * k as f64 / count as f64;
+        let uv = crv.point_at(t);
+        let point = if k < count {
+            srf.point_at(uv[0], uv[1]).unwrap_or_default()
+        } else {
+            samples[0].2.clone()
+        };
+        samples.push((t, uv, point));
+    }
+
+    samples
+}
+
+/// Phase 0: how far the chords of a loop at count steps sag from it
+fn strip_sag(srf: &NurbsSurface, crv: &NurbsCurve, count: usize) -> f64 {
+    let coarse = strip_samples(srf, crv, count);
+    let fine = strip_samples(srf, crv, 2 * count);
+    let mut sag: f64 = 0.0;
+
+    for k in 0..count {
+        let a = &coarse[k].2;
+        let z = &coarse[k + 1].2;
+        let middle = Point::new((a[0] + z[0]) * 0.5, (a[1] + z[1]) * 0.5, (a[2] + z[2]) * 0.5);
+        sag = sag.max(fine[2 * k + 1].2.distance(&middle, None));
+    }
+
+    sag
+}
+
+/// Phase 0: the steps a pcurve asks for on its own: four per control point when curved, none when straight
+fn strip_steps(crv: &NurbsCurve) -> usize {
+    if crv.degree() > 1 {
+        crv.cv_count() * 4
+    } else {
+        0
+    }
+}
+
+/// Phase 0: the steps of a strip: the angle's share of a turn and what the pcurves ask for, doubled until both loops sag within the chord tolerance
+fn strip_count(srf: &NurbsSurface, a: &NurbsCurve, c: &NurbsCurve, angle: f64, chord: f64) -> usize {
+    let tolerance = bbox_diagonal(srf) * chord;
+    let mut count = strip_steps(a)
+        .max(strip_steps(c))
+        .max((360.0 / angle.max(0.1)).ceil() as usize);
+
+    while count < 4096 && tolerance > 0.0 && strip_sag(srf, a, count).max(strip_sag(srf, c, count)) > tolerance {
+        count *= 2;
+    }
+
+    count
+}
+
+/// Phase 0: a strip vertex at a sample, tagged with its parameters, its normal and its index in the keyhole loop
+fn strip_vertex(srf: &NurbsSurface, mesh: &mut Mesh, sample: &(f64, Point, Point), index: usize) -> usize {
+    let uv = &sample.1;
+    let normal = srf.normal_at(uv[0], uv[1]);
+    let key = mesh.add_vertex(sample.2.clone(), None);
+    let vd = mesh.vertex.get_mut(&key).unwrap();
+
+    vd.attributes.insert("u".to_string(), uv[0]);
+    vd.attributes.insert("v".to_string(), uv[1]);
+    vd.attributes.insert(format!("boundary/0/{index}"), 1.0);
+    vd.set_normal(normal[0], normal[1], normal[2]);
+
+    key
+}
+
+/// Phase 0: the strip of a face: both loops sampled at the same steps and made the canonical boundary of their edges, a quad between every pair of steps, the vertices numbered as the keyhole polygon a CDT face runs (first loop, seam, second loop backwards, seam) so the edge uses tag as there; no surface refinement, no lifting
+fn strip_mesh(b: &BRep, fi: usize, boundary: &mut EdgeBoundary, angle: f64, chord: f64) -> Mesh {
+    let face = &b.m_faces[fi];
+    let srf = &b.m_surfaces[face.surface_index as usize];
+    let edges = b.wire_edges(&face.wires[0]);
+    let a = &b.m_curves_2d[b.pcurve_index(edges[0].index as usize, fi, edges[0].orientation) as usize];
+    let c = &b.m_curves_2d[b.pcurve_index(edges[2].index as usize, fi, edges[2].orientation) as usize];
+    let count = strip_count(srf, a, c, angle, chord);
+    let first = strip_samples(srf, a, count);
+    let second = strip_samples(srf, c, count);
+    let mut mesh = Mesh::new();
+    let mut loops = TrimLoops::default();
+    loops.uv.push(vec![Point::new(0.0, 0.0, 0.0); 2 * count + 2]);
+    loops.xyz.push(vec![Point::new(0.0, 0.0, 0.0); 2 * count + 2]);
+    let mut bottom: Vec<usize> = Vec::new();
+    let mut top: Vec<usize> = Vec::new();
+
+    for k in 0..=count {
+        bottom.push(strip_vertex(srf, &mut mesh, &first[k], k));
+        top.push(strip_vertex(srf, &mut mesh, &second[k], 2 * count + 1 - k));
+        loops.uv[0][k] = first[k].1.clone();
+        loops.xyz[0][k] = first[k].2.clone();
+        loops.uv[0][2 * count + 1 - k] = second[k].1.clone();
+        loops.xyz[0][2 * count + 1 - k] = second[k].2.clone();
+        boundary.points.entry(edges[0].index as usize).or_default().push(first[k].2.clone());
+        boundary.points.entry(edges[2].index as usize).or_default().push(second[k].2.clone());
+    }
+
+    for k in 0..count {
+        mesh.add_face(vec![bottom[k], bottom[k + 1], top[k + 1], top[k]], None);
+    }
+
+    let start = &first[0].1;
+    wind_to_normal(&mut mesh, &srf.normal_at(start[0], start[1]));
+    let uses: Vec<(usize, usize, usize, usize)> = vec![
+        (edges[0].index as usize, 0, 0, count + 1),
+        (edges[1].index as usize, 0, count, 2),
+        (edges[2].index as usize, 0, count + 1, count + 1),
+        (edges[3].index as usize, 0, 2 * count + 1, 2),
+    ];
+    tag_edge_uses(&mut mesh, &loops, &uses);
+
+    mesh
+}
+
 /// Flip every face mesh of a face Reversed in its shell, vertex normals included
 fn flip_reversed_faces(b: &BRep, fmesh: &mut [Mesh]) {
     for (fi, fm) in fmesh.iter_mut().enumerate() {
@@ -3028,14 +3214,23 @@ impl BRep {
     pub fn face_meshes_q(&self, quality: Option<(f64, f64)>) -> Vec<Mesh> {
         let nf = self.m_faces.len();
         let (angle, chord) = quality.unwrap_or((20.0, 0.005));
+        let mut face_strip = vec![false; nf];
         let mut face_direct = vec![false; nf];
         let mut rebuild_grid = vec![false; nf];
         let mut fmesh: Vec<Mesh> = Vec::new();
         let mut boundary = EdgeBoundary::default();
 
-        for (fi, direct) in face_direct.iter_mut().enumerate() {
-            *direct = direct_face(self, fi);
+        for fi in 0..nf {
+            face_strip[fi] = strip_face(self, fi, &boundary);
             fmesh.push(Mesh::new());
+
+            if face_strip[fi] {
+                fmesh[fi] = strip_mesh(self, fi, &mut boundary, angle, chord);
+            }
+        }
+
+        for (fi, direct) in face_direct.iter_mut().enumerate() {
+            *direct = !face_strip[fi] && direct_face(self, fi);
         }
 
         for fi in 0..nf {
@@ -3067,7 +3262,7 @@ impl BRep {
         }
 
         for fi in 0..nf {
-            if face_direct[fi] {
+            if face_strip[fi] || face_direct[fi] {
                 continue;
             }
 

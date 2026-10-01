@@ -1086,6 +1086,62 @@ pub fn run_brep_planar_fast_path() -> TestResult {
     })
 }
 
+pub fn run_brep_strip_fast_path() -> TestResult {
+    MINI_TEST!("Strip Fast Path", {
+        use crate::BRep;
+
+        let bh = BRep::create_block_with_hole(8.0, 6.0, 4.0, 1.5);
+        let fm = bh.face_meshes_q(Some((10.0, 0.005)));
+        let bore = &fm[4];
+        let mut round = 0;
+        let mut rim = 0;
+        let mut seam = 0;
+        let mut shared = 0;
+
+        for vd in bore.vertex.values() {
+            let p = vd.position();
+
+            if ((p[0] * p[0] + p[1] * p[1]).sqrt() - 1.5).abs() < 1e-9
+                && vd.attributes.contains_key("u")
+                && vd.attributes.contains_key("v")
+            {
+                round += 1;
+            }
+
+            for key in vd.attributes.keys() {
+                if key.starts_with("brep_edge/12/0/") {
+                    rim += 1;
+                }
+
+                if key.starts_with("brep_edge/14/") {
+                    seam += 1;
+                }
+            }
+
+            let mut on_cap = false;
+
+            for cap in [5, 6] {
+                for other in fm[cap].vertex.values() {
+                    on_cap = on_cap || other.position().distance(&p, None) == 0.0;
+                }
+            }
+
+            if on_cap {
+                shared += 1;
+            }
+        }
+
+        let body = BRep::create_cylinder(1.0, 2.0).face_meshes();
+        let volume = bh.mesh().volume();
+        let reference = 8.0 * 6.0 * 4.0 - PI * 1.5 * 1.5 * 4.0;
+
+        MINI_CHECK!(bore.face.len() == 36 && bore.vertex.len() == 74);
+        MINI_CHECK!(round == 74 && rim == 37 && seam == 4 && shared == 74);
+        MINI_CHECK!(body[0].face.len() == 18 && body[0].vertex.len() == 38);
+        MINI_CHECK!((volume - reference).abs() / reference < 0.005);
+    })
+}
+
 pub fn run_brep_mesh_orientation() -> TestResult {
     MINI_TEST!("Mesh Orientation", {
         use crate::BRep;
@@ -1499,6 +1555,11 @@ REGISTER_MINI_TEST!(
     "BRep",
     "Planar Fast Path",
     crate::brep_test::run_brep_planar_fast_path
+);
+REGISTER_MINI_TEST!(
+    "BRep",
+    "Strip Fast Path",
+    crate::brep_test::run_brep_strip_fast_path
 );
 REGISTER_MINI_TEST!(
     "BRep",

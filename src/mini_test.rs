@@ -547,6 +547,11 @@ pub fn get_all_tests() -> Vec<RegisteredTest> {
         },
         RegisteredTest {
             group: "BRep",
+            name: "Strip Fast Path",
+            func: run_brep_strip_fast_path,
+        },
+        RegisteredTest {
+            group: "BRep",
             name: "Mesh Orientation",
             func: run_brep_mesh_orientation,
         },
