@@ -3947,6 +3947,11 @@ pub fn get_all_tests() -> Vec<RegisteredTest> {
         },
         RegisteredTest {
             group: "RemeshCDT",
+            name: "Collinear Boundary Runs",
+            func: run_remesh_cdt_collinear_boundary_runs,
+        },
+        RegisteredTest {
+            group: "RemeshCDT",
             name: "Plate Four Holes",
             func: run_remesh_cdt_plate_four_holes,
         },

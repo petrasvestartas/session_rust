@@ -1051,19 +1051,30 @@ impl Delaunay {
         true
     }
 
-    /// Fan the horizontal edges deferred from the finished row.
-    fn sweep_horizontals(&mut self, curr_y: i64) {
-        while let Some(e) = self.horz.pop() {
-            if self.completed(e) {
-                continue;
-            }
+    /// Fan the horizontal edges deferred from the finished row, passing over them again while a pass still adds triangles: on a straight run of horizontals each fan needs the diagonal the fan of its neighbour creates, whichever is visited first.
+    fn sweep_horizontals(&mut self, curr_y: i64, last_row: bool) {
+        let deferred = std::mem::take(&mut self.horz);
+        let mut progress = true;
 
-            if self.es[e].vb == self.es[e].vl {
-                if self.es[e].kind == EdgeKind::Ascend {
-                    self.triangulate_fan(e, self.es[e].vb, curr_y, true);
+        while progress {
+            progress = false;
+
+            for &e in &deferred {
+                if self.completed(e) {
+                    continue;
                 }
-            } else if self.es[e].kind == EdgeKind::Descend {
-                self.triangulate_fan(e, self.es[e].vb, curr_y, false);
+
+                let before = self.ts.len();
+
+                if self.es[e].vb == self.es[e].vl {
+                    if last_row || self.es[e].kind == EdgeKind::Ascend {
+                        self.triangulate_fan(e, self.es[e].vb, curr_y, true);
+                    }
+                } else if !last_row && self.es[e].kind == EdgeKind::Descend {
+                    self.triangulate_fan(e, self.es[e].vb, curr_y, false);
+                }
+
+                progress = progress || self.ts.len() > before;
             }
         }
     }
@@ -1114,7 +1125,7 @@ impl Delaunay {
                     return false;
                 }
 
-                self.sweep_horizontals(curr_y);
+                self.sweep_horizontals(curr_y, false);
                 curr_y = self.vs[v].pt[1];
             }
 
@@ -1125,11 +1136,7 @@ impl Delaunay {
             }
         }
 
-        while let Some(e) = self.horz.pop() {
-            if !self.completed(e) && self.es[e].vb == self.es[e].vl {
-                self.triangulate_fan(e, self.es[e].vb, curr_y, true);
-            }
-        }
+        self.sweep_horizontals(curr_y, true);
 
         true
     }

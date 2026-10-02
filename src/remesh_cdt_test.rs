@@ -480,6 +480,93 @@ pub fn run_remesh_cdt_collinear_boundary_vertices() -> TestResult {
     })
 }
 
+/// Points of a side from a to b with `inner` evenly spaced vertices between them, the end left to the next side
+fn run_side(a: [f64; 2], b: [f64; 2], inner: usize, out: &mut Vec<crate::Point>) {
+    for k in 0..=inner {
+        let t = k as f64 / (inner + 1) as f64;
+        out.push(crate::Point::new(a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t, 0.0));
+    }
+}
+
+/// Twice the signed area of a closed polygon
+fn run_area(pts: &[crate::Point]) -> f64 {
+    let mut area = 0.0;
+
+    for i in 0..pts.len() {
+        let p = &pts[i];
+        let q = &pts[(i + 1) % pts.len()];
+        area += p[0] * q[1] - q[0] * p[1];
+    }
+
+    area
+}
+
+/// True when the triangulation of border and holes uses every vertex and covers exactly their area
+fn run_covers(border: &[crate::Point], holes: &[Vec<crate::Point>]) -> bool {
+    use crate::remesh_cdt::cdt_triangulate;
+
+    let mut all: Vec<crate::Point> = border.to_vec();
+
+    for hole in holes {
+        all.extend(hole.iter().cloned());
+    }
+
+    let mut used = vec![false; all.len()];
+    let mut area = 0.0;
+
+    for (a, b, c) in cdt_triangulate(border, holes) {
+        used[a] = true;
+        used[b] = true;
+        used[c] = true;
+        let (p, q, r) = (&all[a], &all[b], &all[c]);
+        area += (q[0] - p[0]) * (r[1] - p[1]) - (q[1] - p[1]) * (r[0] - p[0]);
+    }
+
+    let mut expect = run_area(border).abs();
+
+    for hole in holes {
+        expect -= run_area(hole).abs();
+    }
+
+    (area - expect).abs() < 1e-6 * expect && used.iter().all(|u| *u)
+}
+
+pub fn run_remesh_cdt_collinear_boundary_runs() -> TestResult {
+    MINI_TEST!("Collinear Boundary Runs", {
+        use crate::Point;
+
+        let mut failures = 0;
+
+        for inner in 3..=12 {
+            for which in 0..5 {
+                let ins = |s: usize| if which == 4 || which == s { inner } else { 0 };
+                let mut border: Vec<Point> = Vec::new();
+                run_side([0.0, 0.0], [100.0, 0.0], ins(0), &mut border);
+                run_side([100.0, 0.0], [100.0, 10.0], ins(1), &mut border);
+                run_side([100.0, 10.0], [0.0, 10.0], ins(2), &mut border);
+                run_side([0.0, 10.0], [0.0, 0.0], ins(3), &mut border);
+                let mut hole: Vec<Point> = Vec::new();
+                run_side([30.0, 3.0], [30.0, 7.0], ins(0), &mut hole);
+                run_side([30.0, 7.0], [70.0, 7.0], ins(1), &mut hole);
+                run_side([70.0, 7.0], [70.0, 3.0], ins(2), &mut hole);
+                run_side([70.0, 3.0], [30.0, 3.0], ins(3), &mut hole);
+                let plain = vec![
+                    Point::new(0.0, 0.0, 0.0),
+                    Point::new(100.0, 0.0, 0.0),
+                    Point::new(100.0, 10.0, 0.0),
+                    Point::new(0.0, 10.0, 0.0),
+                ];
+
+                if !run_covers(&border, &[]) || !run_covers(&plain, &[hole.clone()]) || !run_covers(&border, &[hole]) {
+                    failures += 1;
+                }
+            }
+        }
+
+        MINI_CHECK!(failures == 0);
+    })
+}
+
 pub fn run_remesh_cdt_plate_four_holes() -> TestResult {
     MINI_TEST!("Plate Four Holes", {
         use crate::remesh_cdt::RemeshCDT;
@@ -616,6 +703,11 @@ REGISTER_MINI_TEST!(
     "RemeshCDT",
     "Collinear Boundary Vertices",
     crate::remesh_cdt_test::run_remesh_cdt_collinear_boundary_vertices
+);
+REGISTER_MINI_TEST!(
+    "RemeshCDT",
+    "Collinear Boundary Runs",
+    crate::remesh_cdt_test::run_remesh_cdt_collinear_boundary_runs
 );
 REGISTER_MINI_TEST!(
     "RemeshCDT",
