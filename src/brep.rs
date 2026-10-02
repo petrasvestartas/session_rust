@@ -2137,7 +2137,7 @@ fn strip_steps(srf: &NurbsSurface, crv: &NurbsCurve) -> usize {
     steps
 }
 
-/// Phase 0: the steps of a strip: the angle's share of a turn and what the loops ask for, scaled by the face's size against the whole BRep so a small bore in a large body keeps few steps, never under sixteen, doubled until both loops sag within the chord tolerance measured against the BRep
+/// Phase 0: the steps of a strip: the angle's share of a turn and what the loops ask for, scaled by the face's size against the whole BRep so a small bore in a large body keeps few steps, never under thirty-two so a bore still reads round up close, doubled until both loops sag within the chord tolerance measured against the BRep
 fn strip_count(srf: &NurbsSurface, a: &NurbsCurve, c: &NurbsCurve, scale: f64, angle: f64, chord: f64) -> usize {
     let tolerance = scale * chord;
     let asked = strip_steps(srf, a)
@@ -2148,7 +2148,7 @@ fn strip_count(srf: &NurbsSurface, a: &NurbsCurve, c: &NurbsCurve, scale: f64, a
     } else {
         1.0
     };
-    let mut count = ((asked as f64 * share).ceil() as usize).max(16);
+    let mut count = ((asked as f64 * share).ceil() as usize).max(32);
 
     while count < 4096 && tolerance > 0.0 && strip_sag(srf, a, count).max(strip_sag(srf, c, count)) > tolerance {
         count *= 2;
