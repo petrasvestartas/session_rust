@@ -253,7 +253,12 @@ fn project_to_patch(crv: &NurbsCurve, srf: &NurbsSurface) -> NurbsCurve {
 
 /// Signed area of a closed pcurve's sampled polygon (positive = counter-clockwise)
 fn uv_signed_area(c2d: &NurbsCurve) -> f64 {
-    let pts = c2d.divide_by_count((c2d.cv_count() * 4).max(16), true).0;
+    // even steps of the parameter: only the sign matters, so no arc-length integration
+    let count = (c2d.cv_count() * 4).max(16);
+    let (start, end) = c2d.domain();
+    let pts: Vec<Point> = (0..=count)
+        .map(|i| c2d.point_at(start + (end - start) * i as f64 / count as f64))
+        .collect();
     let mut area = 0.0;
 
     for i in 0..pts.len().saturating_sub(1) {
