@@ -3851,6 +3851,141 @@ pub fn run_session_checkpoint_keeps_replaced_definition() -> TestResult {
     })
 }
 
+pub fn run_session_merge() -> TestResult {
+    MINI_TEST!("Merge", {
+        use crate::Color;
+        use crate::Element;
+        use crate::Geometry;
+        use crate::Point;
+        use crate::Session;
+        use crate::Xform;
+        use std::rc::Rc;
+
+        let mut scene = Session::new("scene");
+        let mut floor = Session::new("floor");
+        let group = floor.add_group("floor_model");
+        floor.add_element(Element::new("a"), Some(&group));
+        floor.add_element(Element::new("b"), Some(&group));
+        let a = floor.objects.elements[0].clone();
+        let b = floor.objects.elements[1].clone();
+        floor.set_node_color(&group, Some(Color::red()));
+        floor.add_edge(a.guid(), b.guid(), "joint");
+        floor
+            .add_interaction(&a, &b, Box::new(NamedInteraction::new("glue")))
+            .unwrap();
+        floor.set_xform(b.guid(), Xform::translation(1.0, 0.0, 0.0));
+        scene.add_point(Point::new(0.0, 0.0, 0.0), None);
+        scene.merge(&floor).unwrap();
+        let id = scene.graph.edges[a.guid()][b.guid()].guid().to_string();
+        let children = scene.tree.root().unwrap().borrow().children();
+        let parent = scene.get_node(a.guid()).unwrap().borrow().parent().unwrap();
+
+        MINI_CHECK!(children.len() == 2);
+        MINI_CHECK!(children[1].borrow().name == "floor_model");
+        MINI_CHECK!(children[1].borrow().color == Some(Color::red()));
+        MINI_CHECK!(parent.borrow().name == "floor_model");
+        MINI_CHECK!(
+            !matches!(scene.get_object(a.guid()), Some(Geometry::Element(e)) if Rc::ptr_eq(e, &a))
+        );
+        MINI_CHECK!(scene.graph.edges[a.guid()][b.guid()].attribute == "joint");
+        MINI_CHECK!(scene.interactions[&id].len() == 1);
+        MINI_CHECK!(scene.world_xform(b.guid()) == Xform::translation(1.0, 0.0, 0.0));
+
+        let duplicate_rejected = scene.merge(&floor).is_err();
+
+        MINI_CHECK!(duplicate_rejected);
+    })
+}
+
+pub fn run_session_graft() -> TestResult {
+    MINI_TEST!("Graft", {
+        use crate::Point;
+        use crate::Session;
+        use std::rc::Rc;
+
+        let mut scene = Session::new("scene");
+        let mut floor = Session::new("floor");
+        let point = Point::new(1.0, 2.0, 3.0);
+        let guid = point.guid().to_string();
+        let group = floor.add_group("floor_model");
+        floor.add_point(point, Some(&group));
+        let level = scene.add_group("level_1");
+        scene.graft(&floor, Some(&level)).unwrap();
+        let parent = scene.get_node(&guid).unwrap().borrow().parent().unwrap();
+
+        MINI_CHECK!(scene.tree.root().unwrap().borrow().children().len() == 1);
+        MINI_CHECK!(parent.borrow().name == "floor_model");
+        MINI_CHECK!(Rc::ptr_eq(&parent.borrow().parent().unwrap(), &level));
+    })
+}
+
+pub fn run_session_flatten() -> TestResult {
+    MINI_TEST!("Flatten", {
+        use crate::Point;
+        use crate::Session;
+        use crate::Xform;
+        use std::rc::Rc;
+
+        let mut session = Session::default();
+        let a = Point::new(0.0, 0.0, 0.0);
+        let b = Point::new(0.0, 0.0, 0.0);
+        let a_guid = a.guid().to_string();
+        let b_guid = b.guid().to_string();
+        let group = session.add_group("group");
+        let a_node = session.add_point(a, Some(&group));
+        session.add_point(b, Some(&a_node));
+        session.set_xform(&a_guid, Xform::translation(1.0, 0.0, 0.0));
+        session.set_xform(&b_guid, Xform::translation(0.0, 2.0, 0.0));
+        session.flatten();
+        let root = session.tree.root().unwrap();
+        let b_node = session.get_node(&b_guid).unwrap();
+
+        MINI_CHECK!(root.borrow().children().len() == 2);
+        MINI_CHECK!(Rc::ptr_eq(&b_node.borrow().parent().unwrap(), &root));
+        MINI_CHECK!(session.world_xform(&a_guid) == Xform::translation(1.0, 0.0, 0.0));
+        MINI_CHECK!(session.world_xform(&b_guid) == Xform::translation(1.0, 2.0, 0.0));
+    })
+}
+
+pub fn run_session_get_branch() -> TestResult {
+    MINI_TEST!("Get Branch", {
+        use crate::Element;
+        use crate::Geometry;
+        use crate::Session;
+        use crate::Xform;
+        use std::rc::Rc;
+
+        let mut session = Session::default();
+        let quarter = session.add_group("quarter_0");
+        session.add_element(Element::new("a"), Some(&quarter));
+        session.add_element(Element::new("b"), Some(&quarter));
+        session.add_element(Element::new("c"), None);
+        let a = session.objects.elements[0].clone();
+        let b = session.objects.elements[1].clone();
+        let c = session.objects.elements[2].clone();
+        session
+            .add_interaction(&a, &b, Box::new(NamedInteraction::new("glue")))
+            .unwrap();
+        session
+            .add_interaction(&b, &c, Box::new(NamedInteraction::new("screw")))
+            .unwrap();
+        session.set_xform("quarter_0", Xform::translation(0.0, 0.0, 5.0));
+        session.set_xform(a.guid(), Xform::translation(1.0, 0.0, 0.0));
+        let part = session.get_branch("quarter_0").unwrap();
+
+        MINI_CHECK!(part.name == "quarter_0");
+        MINI_CHECK!(part.tree.root().unwrap().borrow().children().len() == 2);
+        MINI_CHECK!(part.lookup.contains_key(a.guid()) && !part.lookup.contains_key(c.guid()));
+        MINI_CHECK!(
+            !matches!(part.get_object(a.guid()), Some(Geometry::Element(e)) if Rc::ptr_eq(e, &a))
+        );
+        MINI_CHECK!(part.graph.number_of_edges() == 1 && part.interactions.len() == 1);
+        MINI_CHECK!(part.world_xform(a.guid()) == Xform::translation(1.0, 0.0, 5.0));
+        MINI_CHECK!(part.world_xform(b.guid()) == Xform::translation(0.0, 0.0, 5.0));
+        MINI_CHECK!(session.lookup.len() == 3 && session.graph.number_of_edges() == 2);
+    })
+}
+
 REGISTER_MINI_TEST!(
     "Session",
     "Constructor",
@@ -4337,4 +4472,24 @@ REGISTER_MINI_TEST!(
     "Session",
     "Checkpoint Keeps Replaced Definition",
     crate::session_test::run_session_checkpoint_keeps_replaced_definition
+);
+REGISTER_MINI_TEST!(
+    "Session",
+    "Merge",
+    crate::session_test::run_session_merge
+);
+REGISTER_MINI_TEST!(
+    "Session",
+    "Graft",
+    crate::session_test::run_session_graft
+);
+REGISTER_MINI_TEST!(
+    "Session",
+    "Flatten",
+    crate::session_test::run_session_flatten
+);
+REGISTER_MINI_TEST!(
+    "Session",
+    "Get Branch",
+    crate::session_test::run_session_get_branch
 );

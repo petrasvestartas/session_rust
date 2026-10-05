@@ -2922,6 +2922,239 @@ impl Session {
         Ok(node)
     }
 
+    /// Copy every live object of other with its tree, graph edges and their interactions, transforms, definitions and components into this session, other's top-level nodes beside this session's under the root; errs when an object guid of other is already live here.
+    pub fn merge(&mut self, other: &Session) -> Result<(), Box<dyn std::error::Error>> {
+        self.graft(other, None)
+    }
+
+    /// The same as merge, other's top-level nodes under parent instead of the root.
+    pub fn graft(
+        &mut self,
+        other: &Session,
+        parent: Option<&Rc<RefCell<TreeNode>>>,
+    ) -> Result<(), Box<dyn std::error::Error>> {
+        let mut copy = other.clone();
+
+        for guid in copy.node_lookup.keys() {
+            if copy._is_live(guid) && self._is_live(guid) {
+                return Err(format!("Session::graft: {guid} is already in the session").into());
+            }
+        }
+
+        for (guid, definition) in &copy.definition_lookup {
+            if !self.definition_lookup.contains_key(guid) {
+                self.add_definition(definition.clone());
+            }
+        }
+
+        let (Some(from), Some(host)) = (
+            copy.tree.root(),
+            parent.cloned().or_else(|| self.tree.root()),
+        ) else {
+            return Ok(());
+        };
+        self._graft_children(&copy, &from, &host);
+
+        for (u, v) in copy.graph.get_edges() {
+            let source = &copy.graph.edges[&u][&v];
+            self.add_edge(&u, &v, &source.attribute);
+
+            if let Some(found) = copy.interactions.remove(source.guid()) {
+                let id = self.graph.edges[&u][&v].guid().to_string();
+                self.interactions.entry(id).or_default().extend(found);
+            }
+        }
+
+        for (guid, xform) in &copy.xforms {
+            if !self.xforms.contains_key(guid) {
+                self.set_xform(guid, xform.clone());
+            }
+        }
+
+        Ok(())
+    }
+
+    /// Move every live object node directly under the root, its world placement its own transform, and remove the groups left behind.
+    pub fn flatten(&mut self) {
+        let Some(root) = self.tree.root() else {
+            return;
+        };
+        let mut groups = Vec::new();
+        let mut nodes = Vec::new();
+
+        for child in root.borrow().children() {
+            if !self._is_live(&child.borrow().name) {
+                groups.push(child);
+            }
+        }
+
+        for node in self.tree.traverse("depthfirst", "preorder") {
+            let name = node.borrow().name.clone();
+
+            if self._is_live(&name) {
+                nodes.push((node, self.world_xform(&name)));
+            }
+        }
+
+        for (node, xform) in nodes {
+            self.add(&node, &root);
+            let name = node.borrow().name.clone();
+
+            if xform.is_identity() {
+                self.remove_xform(&name);
+            } else {
+                self.set_xform(&name, xform);
+            }
+        }
+
+        for group in groups {
+            self.remove_group(&group);
+        }
+    }
+
+    /// A new session named name holding a copy of the branch under the first node of that name, any later one ignored, the node's children under its root: their objects, the graph edges and interactions between them, their transforms with the node's placement baked into the top-level children, and the definitions their instances use; this session is unchanged; errs when no node has that name.
+    pub fn get_branch(&self, name: &str) -> Result<Session, Box<dyn std::error::Error>> {
+        let node = match self.tree.get_node_by_name(name) {
+            Some(node) if !node.borrow().is_dead() => node,
+            _ => return Err(format!("Session::get_branch: no node named {name}").into()),
+        };
+
+        let mut copy = self.clone();
+        let mut path = Vec::new();
+        let mut at = Rc::clone(&node);
+        let ancestors = node.borrow().ancestors();
+
+        for parent in ancestors {
+            let siblings = parent.borrow().children();
+            let index = siblings.iter().position(|sibling| Rc::ptr_eq(sibling, &at));
+            path.insert(0, index.unwrap_or_default());
+            at = parent;
+        }
+
+        let mut part = Session::new(&node.borrow().name);
+        let Some(mut from) = copy.tree.root() else {
+            return Ok(part);
+        };
+
+        for index in path {
+            let next = Rc::clone(&from.borrow().children()[index]);
+            from = next;
+        }
+
+        let mut below = from.borrow().traverse("depthfirst", "preorder");
+        below.remove(0);
+
+        for child in &below {
+            let Some(instance) = copy.instance_lookup.get(&child.borrow().name) else {
+                continue;
+            };
+
+            if !part
+                .definition_lookup
+                .contains_key(&instance.definition_guid)
+            {
+                part.add_definition(copy.definition_lookup[&instance.definition_guid].clone());
+            }
+        }
+
+        let host = part
+            .tree
+            .root()
+            .unwrap_or_else(|| TreeNode::new(&part.name));
+        part._graft_children(&copy, &from, &host);
+
+        for (u, v) in copy.graph.get_edges() {
+            if !part._is_live(&u) || !part._is_live(&v) {
+                continue;
+            }
+
+            let source = &copy.graph.edges[&u][&v];
+            part.add_edge(&u, &v, &source.attribute);
+
+            if let Some(found) = copy.interactions.remove(source.guid()) {
+                part.interactions
+                    .insert(part.graph.edges[&u][&v].guid().to_string(), found);
+            }
+        }
+
+        for child in &below {
+            let name = child.borrow().name.clone();
+
+            if let Some(xform) = copy.xforms.get(&name) {
+                part.set_xform(&name, xform.clone());
+            }
+        }
+
+        let mut placement = Xform::identity();
+        let mut at = Some(Rc::clone(&from));
+
+        while let Some(node) = at {
+            if let Some(xform) = copy.xforms.get(&node.borrow().name) {
+                placement = xform * &placement;
+            }
+
+            at = node.borrow().parent();
+        }
+
+        if !placement.is_identity() {
+            for child in from.borrow().children() {
+                let name = child.borrow().name.clone();
+                let local = part
+                    .xforms
+                    .get(&name)
+                    .cloned()
+                    .unwrap_or_else(Xform::identity);
+                part.set_xform(&name, &placement * &local);
+            }
+        }
+
+        Ok(part)
+    }
+
+    /// Add the live children of from in source under host, objects through _add_object and groups as new groups, colours kept, then their children in turn.
+    fn _graft_children(
+        &mut self,
+        source: &Session,
+        from: &Rc<RefCell<TreeNode>>,
+        host: &Rc<RefCell<TreeNode>>,
+    ) {
+        let children = from.borrow().children();
+
+        for child in children {
+            let name = child.borrow().name.clone();
+            let node = if let Some(geometry) = source.lookup.get(&name) {
+                let (collection, prefix) = collection_of(geometry);
+                self._add_object(collection, geometry.clone(), prefix, Some(host))
+            } else if let Some(component) = source.component_lookup.get(&name) {
+                self._add_object(
+                    "components",
+                    Item::Component(component.clone()),
+                    "component",
+                    Some(host),
+                )
+            } else if let Some(instance) = source.instance_lookup.get(&name) {
+                self._add_object(
+                    "instances",
+                    Item::InstanceRef(Rc::clone(instance)),
+                    "instance",
+                    Some(host),
+                )
+            } else {
+                let node = TreeNode::new(&name);
+                self.add(&node, host);
+                Ok(node)
+            }
+            .unwrap_or_else(|guid| self._node_of(&guid));
+            let color = child.borrow().color.clone();
+
+            if color.is_some() {
+                self.set_node_color(&node, color);
+            }
+
+            self._graft_children(source, &child, &node);
+        }
+    }
+
     /// The node of a live guid, a detached one named guid when the object is outside the tree.
     fn _node_of(&self, guid: &str) -> Rc<RefCell<TreeNode>> {
         self.get_node(guid).unwrap_or_else(|| TreeNode::new(guid))

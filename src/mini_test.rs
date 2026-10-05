@@ -3770,6 +3770,26 @@ pub fn get_all_tests() -> Vec<RegisteredTest> {
             name: "Checkpoint Keeps Replaced Definition",
             func: run_session_checkpoint_keeps_replaced_definition,
         },
+        RegisteredTest {
+            group: "Session",
+            name: "Merge",
+            func: run_session_merge,
+        },
+        RegisteredTest {
+            group: "Session",
+            name: "Graft",
+            func: run_session_graft,
+        },
+        RegisteredTest {
+            group: "Session",
+            name: "Flatten",
+            func: run_session_flatten,
+        },
+        RegisteredTest {
+            group: "Session",
+            name: "Get Branch",
+            func: run_session_get_branch,
+        },
         // History tests
         RegisteredTest {
             group: "History",
