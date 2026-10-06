@@ -2922,22 +2922,72 @@ impl Session {
         Ok(node)
     }
 
-    /// Copy every live object of other with its tree, graph edges and their interactions, transforms, definitions and components into this session, other's top-level nodes beside this session's under the root; errs when an object guid of other is already live here.
+    /// Copy every live object of other with its tree, graph edges with their attributes and interactions, transforms, definitions and components into this session, other's top-level nodes beside this session's under the root with other's root transform folded into them; errs, changing nothing, when an object guid of other is live or a definition here, a definition guid of other is live here, or a group transform of other would land on a node name this session has.
     pub fn merge(&mut self, other: &Session) -> Result<(), Box<dyn std::error::Error>> {
         self.graft(other, None)
     }
 
-    /// The same as merge, other's top-level nodes under parent instead of the root.
+    /// The same as merge, other's top-level nodes under parent instead of the root; errs when parent is dead or outside this session's tree.
     pub fn graft(
         &mut self,
         other: &Session,
         parent: Option<&Rc<RefCell<TreeNode>>>,
     ) -> Result<(), Box<dyn std::error::Error>> {
+        let Some(root) = self.tree.root() else {
+            return Ok(());
+        };
+        let host = parent.cloned().unwrap_or_else(|| Rc::clone(&root));
+        let outside = "Session::graft: the parent is not a live node of this session";
+        let mut at = Some(Rc::clone(&host));
+
+        loop {
+            match at {
+                Some(node) if Rc::ptr_eq(&node, &root) => break,
+                Some(node) if !node.borrow().is_dead() => at = node.borrow().parent(),
+                _ => return Err(outside.into()),
+            }
+        }
+
         let mut copy = other.clone();
+        let Some(top) = copy.tree.root() else {
+            return Ok(());
+        };
+        let top_name = top.borrow().name.clone();
+        let mut placed = HashMap::new();
+
+        for (name, xform) in &copy.xforms {
+            if *name != top_name {
+                placed.insert(name.clone(), xform.clone());
+            }
+        }
+
+        if let Some(xform) = copy.xforms.get(&top_name) {
+            for child in top.borrow().children() {
+                let name = child.borrow().name.clone();
+                placed.insert(name.clone(), xform * &copy.xform(&name));
+            }
+        }
 
         for guid in copy.node_lookup.keys() {
-            if copy._is_live(guid) && self._is_live(guid) {
+            if copy._is_live(guid)
+                && (self._is_live(guid) || self.definition_lookup.contains_key(guid))
+            {
                 return Err(format!("Session::graft: {guid} is already in the session").into());
+            }
+        }
+
+        for guid in copy.definition_lookup.keys() {
+            if self._is_live(guid) {
+                return Err(format!("Session::graft: {guid} is already in the session").into());
+            }
+        }
+
+        for name in placed.keys() {
+            if !copy._is_live(name) && self.tree.get_node_by_name(name).is_some() {
+                return Err(format!(
+                    "Session::graft: the transform of {name} would move the node of that name"
+                )
+                .into());
             }
         }
 
@@ -2947,34 +2997,17 @@ impl Session {
             }
         }
 
-        let (Some(from), Some(host)) = (
-            copy.tree.root(),
-            parent.cloned().or_else(|| self.tree.root()),
-        ) else {
-            return Ok(());
-        };
-        self._graft_children(&copy, &from, &host);
+        self._graft_children(&copy, &top, &host);
+        self._graft_graph(&mut copy);
 
-        for (u, v) in copy.graph.get_edges() {
-            let source = &copy.graph.edges[&u][&v];
-            self.add_edge(&u, &v, &source.attribute);
-
-            if let Some(found) = copy.interactions.remove(source.guid()) {
-                let id = self.graph.edges[&u][&v].guid().to_string();
-                self.interactions.entry(id).or_default().extend(found);
-            }
-        }
-
-        for (guid, xform) in &copy.xforms {
-            if !self.xforms.contains_key(guid) {
-                self.set_xform(guid, xform.clone());
-            }
+        for (name, xform) in placed {
+            self.set_xform(&name, xform);
         }
 
         Ok(())
     }
 
-    /// Move every live object node directly under the root, its world placement its own transform, and remove the groups left behind.
+    /// Move every live object node directly under the root, its world placement its own transform, and remove every group left behind with its transform, and the root's transform.
     pub fn flatten(&mut self) {
         let Some(root) = self.tree.root() else {
             return;
@@ -2982,17 +3015,13 @@ impl Session {
         let mut groups = Vec::new();
         let mut nodes = Vec::new();
 
-        for child in root.borrow().children() {
-            if !self._is_live(&child.borrow().name) {
-                groups.push(child);
-            }
-        }
-
         for node in self.tree.traverse("depthfirst", "preorder") {
             let name = node.borrow().name.clone();
 
             if self._is_live(&name) {
                 nodes.push((node, self.world_xform(&name)));
+            } else if !Rc::ptr_eq(&node, &root) {
+                groups.push(node);
             }
         }
 
@@ -3007,9 +3036,12 @@ impl Session {
             }
         }
 
-        for group in groups {
-            self.remove_group(&group);
+        for group in groups.iter().rev() {
+            self.remove_group(group);
         }
+
+        let name = root.borrow().name.clone();
+        self.remove_xform(&name);
     }
 
     /// A new session named name holding a copy of the branch under the first node of that name, any later one ignored, the node's children under its root: their objects, the graph edges and interactions between them, their transforms with the node's placement baked into the top-level children, and the definitions their instances use; this session is unchanged; errs when no node has that name.
@@ -3062,20 +3094,7 @@ impl Session {
             .root()
             .unwrap_or_else(|| TreeNode::new(&part.name));
         part._graft_children(&copy, &from, &host);
-
-        for (u, v) in copy.graph.get_edges() {
-            if !part._is_live(&u) || !part._is_live(&v) {
-                continue;
-            }
-
-            let source = &copy.graph.edges[&u][&v];
-            part.add_edge(&u, &v, &source.attribute);
-
-            if let Some(found) = copy.interactions.remove(source.guid()) {
-                part.interactions
-                    .insert(part.graph.edges[&u][&v].guid().to_string(), found);
-            }
-        }
+        part._graft_graph(&mut copy);
 
         for child in &below {
             let name = child.borrow().name.clone();
@@ -3099,12 +3118,7 @@ impl Session {
         if !placement.is_identity() {
             for child in from.borrow().children() {
                 let name = child.borrow().name.clone();
-                let local = part
-                    .xforms
-                    .get(&name)
-                    .cloned()
-                    .unwrap_or_else(Xform::identity);
-                part.set_xform(&name, &placement * &local);
+                part.set_xform(&name, &placement * &copy.xform(&name));
             }
         }
 
@@ -3152,6 +3166,40 @@ impl Session {
             }
 
             self._graft_children(source, &child, &node);
+        }
+    }
+
+    /// Copy the graph vertex attributes of source's live objects live here, and source's edges between objects live here with their name, attributes and interactions.
+    fn _graft_graph(&mut self, source: &mut Session) {
+        for vertex in source.graph.get_vertices() {
+            if source._is_live(&vertex.name) && self._is_live(&vertex.name) {
+                for (key, value) in &vertex.attributes {
+                    self.graph.set_vertex_attribute(&vertex.name, key, *value);
+                }
+            }
+        }
+
+        for (u, v) in source.graph.get_edges() {
+            if !self._is_live(&u) || !self._is_live(&v) {
+                continue;
+            }
+
+            let from = source.graph.edges[&u][&v].clone();
+            self.add_edge(&u, &v, &from.attribute);
+            let edge = self.graph.edges.get_mut(&u).unwrap().get_mut(&v).unwrap();
+            edge.name = from.name.clone();
+            edge.attributes = from.attributes.clone();
+            let edge = edge.clone();
+            let id = edge.guid().to_string();
+            self.graph
+                .edges
+                .get_mut(&v)
+                .unwrap()
+                .insert(u.clone(), edge);
+
+            if let Some(found) = source.interactions.remove(from.guid()) {
+                self.interactions.entry(id).or_default().extend(found);
+            }
         }
     }
 

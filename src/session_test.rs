@@ -3986,6 +3986,234 @@ pub fn run_session_get_branch() -> TestResult {
     })
 }
 
+pub fn run_session_graft_parent_not_in_tree() -> TestResult {
+    MINI_TEST!("Graft Parent Not In Tree", {
+        use crate::Point;
+        use crate::Session;
+
+        let mut scene = Session::new("scene");
+        let mut floor = Session::new("floor");
+        let mut other = Session::new("other");
+        floor.add_point(Point::new(1.0, 2.0, 3.0), None);
+        let level = scene.add_group("level_1");
+        scene.remove_group(&level);
+        let dead_rejected = scene.graft(&floor, Some(&level)).is_err();
+        let foreign = other.add_group("level_2");
+        let foreign_rejected = scene.graft(&floor, Some(&foreign)).is_err();
+
+        MINI_CHECK!(dead_rejected);
+        MINI_CHECK!(foreign_rejected);
+        MINI_CHECK!(scene.lookup.is_empty() && other.lookup.is_empty());
+    })
+}
+
+pub fn run_session_merge_group_xform_clash() -> TestResult {
+    MINI_TEST!("Merge Group Xform Clash", {
+        use crate::Point;
+        use crate::Session;
+        use crate::Xform;
+
+        let mut scene = Session::new("floor");
+        let mut floor = Session::new("floor");
+        let mut level = Session::new("floor");
+        let a = Point::new(0.0, 0.0, 0.0);
+        let b = Point::new(0.0, 0.0, 0.0);
+        let c = Point::new(0.0, 0.0, 0.0);
+        let a_guid = a.guid().to_string();
+        let c_guid = c.guid().to_string();
+        let scene_group = scene.add_group("floor_model");
+        scene.add_point(a, Some(&scene_group));
+        let floor_group = floor.add_group("floor_model");
+        floor.add_point(b, Some(&floor_group));
+        floor.set_xform("floor_model", Xform::translation(0.0, 0.0, 3.0));
+        level.add_point(c, None);
+        level.set_xform("floor", Xform::translation(0.0, 0.0, 3.0));
+        let clash_rejected = scene.merge(&floor).is_err();
+        scene.merge(&level).unwrap();
+
+        MINI_CHECK!(clash_rejected);
+        MINI_CHECK!(scene.lookup.len() == 2);
+        MINI_CHECK!(scene.world_xform(&a_guid) == Xform::identity());
+        MINI_CHECK!(scene.world_xform(&c_guid) == Xform::translation(0.0, 0.0, 3.0));
+    })
+}
+
+pub fn run_session_get_branch_shared_child_name() -> TestResult {
+    MINI_TEST!("Get Branch Shared Child Name", {
+        use crate::Point;
+        use crate::Session;
+        use crate::TreeNode;
+        use crate::Xform;
+
+        let mut session = Session::default();
+        let a = Point::new(0.0, 0.0, 0.0);
+        let b = Point::new(0.0, 0.0, 0.0);
+        let a_guid = a.guid().to_string();
+        let b_guid = b.guid().to_string();
+        let level = session.add_group("level");
+        let first = TreeNode::new("floor_model");
+        let second = TreeNode::new("floor_model");
+        session.add(&first, &level);
+        session.add(&second, &level);
+        session.add_point(a, Some(&first));
+        session.add_point(b, Some(&second));
+        session.set_xform("level", Xform::translation(0.0, 0.0, 3.0));
+        let part = session.get_branch("level").unwrap();
+
+        MINI_CHECK!(part.world_xform(&a_guid) == Xform::translation(0.0, 0.0, 3.0));
+        MINI_CHECK!(part.world_xform(&b_guid) == Xform::translation(0.0, 0.0, 3.0));
+    })
+}
+
+pub fn run_session_flatten_root_xform() -> TestResult {
+    MINI_TEST!("Flatten Root Xform", {
+        use crate::Point;
+        use crate::Session;
+        use crate::Xform;
+
+        let mut session = Session::default();
+        let point = Point::new(0.0, 0.0, 0.0);
+        let guid = point.guid().to_string();
+        session.add_point(point, None);
+        let name = session.name.clone();
+        session.set_xform(&name, Xform::translation(0.0, 0.0, 3.0));
+        session.flatten();
+
+        MINI_CHECK!(session.world_xform(&guid) == Xform::translation(0.0, 0.0, 3.0));
+    })
+}
+
+pub fn run_session_graft_definition_guid() -> TestResult {
+    MINI_TEST!("Graft Definition Guid", {
+        use crate::Geometry;
+        use crate::Point;
+        use crate::Session;
+        use std::rc::Rc;
+
+        let mut scene = Session::new("scene");
+        let mut floor = Session::new("floor");
+        let mut library = Session::new("library");
+        let a = Point::new(0.0, 0.0, 0.0);
+        let b = Point::new(1.0, 0.0, 0.0);
+        a.guid();
+        b.guid();
+        scene.add_definition(Geometry::Point(Rc::new(a.clone())));
+        floor.add_point(a, None);
+        scene.add_point(b.clone(), None);
+        library.add_definition(Geometry::Point(Rc::new(b)));
+        let object_rejected = scene.merge(&floor).is_err();
+        let definition_rejected = scene.merge(&library).is_err();
+
+        MINI_CHECK!(object_rejected);
+        MINI_CHECK!(definition_rejected);
+        MINI_CHECK!(scene.lookup.len() == 1 && scene.definition_lookup.len() == 1);
+    })
+}
+
+pub fn run_session_add_value_keeps_guid() -> TestResult {
+    MINI_TEST!("Add Value Keeps Guid", {
+        use crate::Point;
+        use crate::Session;
+
+        let mut session = Session::default();
+        let point = Point::new(1.0, 2.0, 3.0);
+        let guid = point.guid().to_string();
+        session.add_point(point.clone(), None);
+        session.add_point(point, None);
+
+        MINI_CHECK!(session.get_node(&guid).is_some());
+        MINI_CHECK!(session.lookup.len() == 1);
+    })
+}
+
+pub fn run_session_merge_graph_attributes() -> TestResult {
+    MINI_TEST!("Merge Graph Attributes", {
+        use crate::Point;
+        use crate::Session;
+
+        let mut scene = Session::new("scene");
+        let mut floor = Session::new("floor");
+        let a = Point::new(0.0, 0.0, 0.0);
+        let b = Point::new(1.0, 0.0, 0.0);
+        let a_guid = a.guid().to_string();
+        let b_guid = b.guid().to_string();
+        floor.add_point(a, None);
+        floor.add_point(b, None);
+        floor.add_edge(&a_guid, &b_guid, "joint");
+        for (u, v) in [(&a_guid, &b_guid), (&b_guid, &a_guid)] {
+            let edge = floor.graph.edges.get_mut(u).unwrap().get_mut(v).unwrap();
+            edge.name = "seam".to_string();
+        }
+
+        floor
+            .graph
+            .set_edge_attribute((&a_guid, &b_guid), "stiffness", 5.0);
+        floor.graph.set_vertex_attribute(&a_guid, "mass", 2.0);
+        scene.merge(&floor).unwrap();
+        let part = floor.get_branch("floor").unwrap();
+
+        MINI_CHECK!(scene.graph.edges[&a_guid][&b_guid].name == "seam");
+        MINI_CHECK!(scene.graph.edge_attribute((&a_guid, &b_guid), "stiffness") == Some(5.0));
+        MINI_CHECK!(scene.graph.vertex_attribute(&a_guid, "mass") == Some(2.0));
+        MINI_CHECK!(part.graph.edges[&a_guid][&b_guid].name == "seam");
+        MINI_CHECK!(part.graph.edge_attribute((&a_guid, &b_guid), "stiffness") == Some(5.0));
+        MINI_CHECK!(part.graph.vertex_attribute(&a_guid, "mass") == Some(2.0));
+    })
+}
+
+pub fn run_session_flatten_nested_groups() -> TestResult {
+    MINI_TEST!("Flatten Nested Groups", {
+        use crate::Point;
+        use crate::Session;
+        use crate::TreeNode;
+        use crate::Xform;
+
+        let mut session = Session::default();
+        let a = Point::new(0.0, 0.0, 0.0);
+        let b = Point::new(0.0, 0.0, 0.0);
+        let b_guid = b.guid().to_string();
+        let inner = TreeNode::new("inner");
+        let held = TreeNode::new("held");
+        let outer = session.add_group("outer");
+        session.add(&inner, &outer);
+        let a_node = session.add_point(a, Some(&inner));
+        session.add(&held, &a_node);
+        session.add_point(b, Some(&held));
+        session.set_xform("inner", Xform::translation(0.0, 0.0, 3.0));
+        session.flatten();
+
+        MINI_CHECK!(!session.xforms.contains_key("inner"));
+        MINI_CHECK!(session.tree.get_node_by_name("held").is_none());
+        MINI_CHECK!(session.world_xform(&b_guid) == Xform::translation(0.0, 0.0, 3.0));
+    })
+}
+
+pub fn run_session_merge_keeps_feature_guids() -> TestResult {
+    MINI_TEST!("Merge Keeps Feature Guids", {
+        use crate::element::ElementFeature;
+        use crate::Element;
+        use crate::Geometry;
+        use crate::Session;
+
+        let mut scene = Session::new("scene");
+        let mut floor = Session::new("floor");
+        let mut element = Element::new("plate");
+        element.add_feature(ElementFeature::new("drill", -1, Vec::new(), "hole"));
+        let guid = element.features()[0].guid().to_string();
+        let element_guid = element.guid().to_string();
+        floor.add_element(element, None);
+        scene.merge(&floor).unwrap();
+        let part = floor.get_branch("floor").unwrap();
+
+        MINI_CHECK!(
+            matches!(scene.get_object(&element_guid), Some(Geometry::Element(e)) if e.features()[0].guid() == guid)
+        );
+        MINI_CHECK!(
+            matches!(part.get_object(&element_guid), Some(Geometry::Element(e)) if e.features()[0].guid() == guid)
+        );
+    })
+}
+
 REGISTER_MINI_TEST!(
     "Session",
     "Constructor",
@@ -4492,4 +4720,49 @@ REGISTER_MINI_TEST!(
     "Session",
     "Get Branch",
     crate::session_test::run_session_get_branch
+);
+REGISTER_MINI_TEST!(
+    "Session",
+    "Graft Parent Not In Tree",
+    crate::session_test::run_session_graft_parent_not_in_tree
+);
+REGISTER_MINI_TEST!(
+    "Session",
+    "Merge Group Xform Clash",
+    crate::session_test::run_session_merge_group_xform_clash
+);
+REGISTER_MINI_TEST!(
+    "Session",
+    "Get Branch Shared Child Name",
+    crate::session_test::run_session_get_branch_shared_child_name
+);
+REGISTER_MINI_TEST!(
+    "Session",
+    "Flatten Root Xform",
+    crate::session_test::run_session_flatten_root_xform
+);
+REGISTER_MINI_TEST!(
+    "Session",
+    "Graft Definition Guid",
+    crate::session_test::run_session_graft_definition_guid
+);
+REGISTER_MINI_TEST!(
+    "Session",
+    "Add Value Keeps Guid",
+    crate::session_test::run_session_add_value_keeps_guid
+);
+REGISTER_MINI_TEST!(
+    "Session",
+    "Merge Graph Attributes",
+    crate::session_test::run_session_merge_graph_attributes
+);
+REGISTER_MINI_TEST!(
+    "Session",
+    "Flatten Nested Groups",
+    crate::session_test::run_session_flatten_nested_groups
+);
+REGISTER_MINI_TEST!(
+    "Session",
+    "Merge Keeps Feature Guids",
+    crate::session_test::run_session_merge_keeps_feature_guids
 );

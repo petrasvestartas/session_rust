@@ -3790,6 +3790,51 @@ pub fn get_all_tests() -> Vec<RegisteredTest> {
             name: "Get Branch",
             func: run_session_get_branch,
         },
+        RegisteredTest {
+            group: "Session",
+            name: "Graft Parent Not In Tree",
+            func: run_session_graft_parent_not_in_tree,
+        },
+        RegisteredTest {
+            group: "Session",
+            name: "Merge Group Xform Clash",
+            func: run_session_merge_group_xform_clash,
+        },
+        RegisteredTest {
+            group: "Session",
+            name: "Get Branch Shared Child Name",
+            func: run_session_get_branch_shared_child_name,
+        },
+        RegisteredTest {
+            group: "Session",
+            name: "Flatten Root Xform",
+            func: run_session_flatten_root_xform,
+        },
+        RegisteredTest {
+            group: "Session",
+            name: "Graft Definition Guid",
+            func: run_session_graft_definition_guid,
+        },
+        RegisteredTest {
+            group: "Session",
+            name: "Add Value Keeps Guid",
+            func: run_session_add_value_keeps_guid,
+        },
+        RegisteredTest {
+            group: "Session",
+            name: "Merge Graph Attributes",
+            func: run_session_merge_graph_attributes,
+        },
+        RegisteredTest {
+            group: "Session",
+            name: "Flatten Nested Groups",
+            func: run_session_flatten_nested_groups,
+        },
+        RegisteredTest {
+            group: "Session",
+            name: "Merge Keeps Feature Guids",
+            func: run_session_merge_keeps_feature_guids,
+        },
         // History tests
         RegisteredTest {
             group: "History",
